@@ -1,0 +1,98 @@
+name: AdMob IQ — refresh (public runner)
+
+on:
+  schedule:
+    - cron: "37 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: "Days of AdMob history to pull (35 = normal run)"
+        required: false
+        default: "35"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admob-iq-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Pull data + config from the PRIVATE repo
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing"; exit 1; }
+          test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
+          git clone --depth=1 "https://x-access-token:$DATA_REPO_TOKEN@github.com/$DATA_REPO.git" _private \
+            > /dev/null 2>/tmp/clone.err || { sed -E 's#//[^@]*@#//***@#g' /tmp/clone.err; echo "::error::could not clone the private data repo"; exit 1; }
+          mkdir -p data site config
+          cp -a _private/data/.   data/   2>/dev/null || true
+          cp -a _private/site/.   site/   2>/dev/null || true
+          cp -a _private/config/. config/ 2>/dev/null || true
+          echo "pulled: $(ls -1 data 2>/dev/null | wc -l) data file(s)"
+
+      - name: Build dashboard + send alerts
+        env:
+          FETCH_MODE: live
+          ROLLING_REPULL_DAYS: ${{ github.event.inputs.backfill_days || '35' }}
+          BACKFILL_DAYS: "365"
+          REPORT_CURRENCY: "USD"
+          GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          ADMOB_ACCOUNTS_JSON:  ${{ secrets.ADMOB_ACCOUNTS_JSON }}
+          GOOGLE_ADS_DEVELOPER_TOKEN:   ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+          GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+          GOOGLE_ADS_REFRESH_TOKEN:     ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          GOOGLE_ADS_CLIENT_ID:         ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+          GOOGLE_ADS_CLIENT_SECRET:     ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+          NOTIFY_DRY_RUN:       ${{ vars.NOTIFY_DRY_RUN || 'true' }}
+          TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
+          SMTP_HOST:            ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:            ${{ secrets.SMTP_PORT }}
+          SMTP_USER:            ${{ secrets.SMTP_USER }}
+          SMTP_PASS:            ${{ secrets.SMTP_PASS }}
+          ALERT_EMAIL_TO:       ${{ secrets.ALERT_EMAIL_TO }}
+        run: |
+          if python -m admob_iq.build_static > /tmp/build.log 2>&1; then
+            echo "build complete"
+          else
+            echo "::error::build failed — tail below, digits masked for privacy"
+            tail -n 30 /tmp/build.log | sed -E 's/[0-9]{4,}/####/g'
+            exit 1
+          fi
+
+      - name: Push refreshed data + site back to the PRIVATE repo
+        run: |
+          cp -f frontend/index.html site/index.html 2>/dev/null || true
+          cd _private
+          git config user.name  "admob-iq-bot"
+          git config user.email "admob-iq-bot@users.noreply.github.com"
+          for i in 1 2 3 4 5; do
+            git fetch --depth=1 origin main > /dev/null 2>&1
+            git reset --hard origin/main    > /dev/null 2>&1
+            rm -rf data site && mkdir -p data site
+            cp -a ../data/. data/ 2>/dev/null || true
+            cp -a ../site/. site/ 2>/dev/null || true
+            git add -A data site
+            if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+            git commit -q -m "refresh $(date -u '+%F %H:%M') UTC"
+            if git push -q origin HEAD:main 2>/dev/null; then echo "pushed on attempt $i"; exit 0; fi
+            echo "push attempt $i rejected — retrying"; sleep 5
+          done
+          echo "::error::push failed after 5 attempts"; exit 1
