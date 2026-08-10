@@ -16,6 +16,7 @@ shows a working demo instead of crashing.
 
 import json
 import os
+import re
 import shutil
 import sys
 from datetime import date, datetime, timezone, timedelta
@@ -173,6 +174,106 @@ class _AppFilteredRepo:
         return {**nested,
                 "units": {u: m for u, m in units.items() if u in keep},
                 "data": {u: d for u, d in (nested.get("data") or {}).items() if u in keep}}
+
+    def fetch_adunit_country_monthly(self):
+        return self._nested(self._r.fetch_adunit_country_monthly())
+
+    def fetch_adunit_country_daily(self):
+        return self._nested(self._r.fetch_adunit_country_daily())
+
+
+class _DisambiguatedRepo:
+    """Read-only wrapper that makes app NAMES unique.
+
+    AdMob happily lets two different apps carry the SAME display name — this publisher has four
+    apps called "Gallery - Photo Gallery…" spread across accounts — so an alert, a mover or a
+    deduction row is impossible to trace back to the right app. Where a name is shared by more than
+    one app_id we append the owning account ("Gallery - Photo Gallery · pub-6124…").
+
+    Done here, at one choke point, so EVERY view (KPIs, alerts, movers, mediation, deductions,
+    baseline, ROAS, apps catalog) shows the same unambiguous name — and, unlike renaming the app
+    inside AdMob, it also fixes ALL historical rows instead of splitting an app's history in two.
+    Names that are already unique are left exactly as they are, so nothing gets noisier than needed.
+    """
+
+    SEP = " · "
+
+    def __init__(self, repo):
+        self._r = repo
+        self._map = {}                                   # app_id -> unique display name
+        try:
+            self._map = self._build_map(repo.fetch_network())
+            if self._map:
+                print("app-name disambiguation: %d app(s) renamed (duplicate names)" % len(self._map),
+                      file=sys.stderr)
+        except Exception as e:
+            print(f"app-name disambiguation skipped: {e}", file=sys.stderr)
+
+    @staticmethod
+    def _account_of(app_id, account_id):
+        acc = str(account_id or "")
+        if not acc:                                      # fall back to the pub- prefix of the app id
+            m = re.match(r"ca-app-(pub-\d+)~", str(app_id or ""))
+            acc = m.group(1) if m else ""
+        return acc
+
+    @classmethod
+    def _build_map(cls, rows):
+        by_name = {}                                     # name -> {app_id: account_id}
+        for r in rows:
+            aid, nm = r.get("app_id"), r.get("app_name")
+            if aid and nm:
+                by_name.setdefault(nm, {}).setdefault(aid, cls._account_of(aid, r.get("account_id")))
+        out = {}
+        for nm, apps in by_name.items():
+            if len(apps) < 2:
+                continue                                 # already unique — leave it alone
+            short = {aid: (acc[:8] + "…" if len(acc) > 9 else acc) for aid, acc in apps.items()}
+            if len(set(short.values())) < len(apps):     # shortened accounts clash — use them in full
+                short = dict(apps)
+            if len(set(short.values())) < len(apps):     # same name AND same account — use the app id
+                short = {aid: str(aid).split("~")[-1][-6:] for aid in apps}
+            for aid, tag in short.items():
+                if tag:
+                    out[aid] = nm + cls.SEP + tag
+        return out
+
+    def __getattr__(self, name):
+        return getattr(self._r, name)
+
+    def _rows(self, rows):
+        if not self._map:
+            return rows
+        return [({**r, "app_name": self._map[r["app_id"]]}
+                 if r.get("app_id") in self._map and r.get("app_name") else r) for r in rows]
+
+    def fetch_network(self):
+        return self._rows(self._r.fetch_network())
+
+    def fetch_mediation(self):
+        return self._rows(self._r.fetch_mediation())
+
+    def fetch_country(self):
+        return self._rows(self._r.fetch_country())
+
+    def fetch_placement_country(self):
+        return self._rows(self._r.fetch_placement_country())
+
+    def fetch_snapshots(self):
+        return self._rows(self._r.fetch_snapshots())
+
+    def _nested(self, nested):
+        # units[uid] = [app_id, unit_name, app_name, currency]
+        if not self._map or not isinstance(nested, dict) or "units" not in nested:
+            return nested
+        units = {}
+        for u, meta in (nested.get("units") or {}).items():
+            nn = self._map.get((meta or [None])[0])
+            if nn and isinstance(meta, (list, tuple)) and len(meta) > 2:
+                meta = list(meta)
+                meta[2] = nn
+            units[u] = meta
+        return {**nested, "units": units}
 
     def fetch_adunit_country_monthly(self):
         return self._nested(self._r.fetch_adunit_country_monthly())
@@ -416,6 +517,9 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     if repo.has_data():
         # Hide the user's UNSELECTED apps from EVERY built view (one choke point) — the real repo
         # still holds the data; the picker/catalog below still lists every app.
+        # Make duplicate app names unique BEFORE anything is built, so every view (and the apps
+        # catalog below) reads the same unambiguous name — including historical rows.
+        repo = _DisambiguatedRepo(repo)
         hidden = _hidden_app_ids(repo, data_dir)
         frepo = _AppFilteredRepo(repo, hidden) if hidden else repo
         dashboard = build_from_db(frepo, today=today)   # real data (today = the live/partial day)
