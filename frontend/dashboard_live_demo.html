@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AdMob IQ — Dashboard</title>
+<style>
+  :root{--bg:#0a1120;--bg2:#0d1626;--panel:#111d31;--panel2:#0f1a2c;--raise:#16233a;--line:#213249;--line2:#2b3f5c;
+    --ink:#e8eefb;--ink2:#c2cee3;--muted:#8496b5;--faint:#61748f;--blue:#3b82f6;--blue2:#2f6bff;--cyan:#22d3ee;--cyan2:#20b8d8;
+    --good:#34d99a;--good-b:#123a2f;--watch:#e6b84e;--watch-b:#3a2f12;--bad:#ff6b6b;--bad-b:#3a1717;--purple:#a78bfa;--purple-b:#241a3d;}
+  *{box-sizing:border-box}html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:14px;line-height:1.5}
+  .app{display:flex;min-height:100vh}
+  aside{width:220px;flex:none;background:linear-gradient(180deg,#0c1424,#0a1120);border-right:1px solid var(--line);padding:18px 14px;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 16px}
+  .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--blue2),var(--cyan));display:grid;place-items:center;font-size:18px}
+  .brand .nm{font-weight:800;font-size:15px;line-height:1.1}.brand .nm small{display:block;font-weight:600;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .nav-lbl{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:14px 10px 6px}
+  .nav{list-style:none;margin:0;padding:0}
+  .nav button{width:100%;display:flex;align-items:center;gap:11px;background:none;border:none;color:var(--ink2);font-size:13.5px;font-weight:600;padding:9px 10px;border-radius:9px;cursor:pointer;text-align:left;font-family:inherit}
+  .nav button .i{font-size:15px;width:18px;text-align:center}
+  .nav button:hover{background:var(--raise);color:#fff}
+  .nav button.active{background:linear-gradient(90deg,rgba(47,107,255,.22),rgba(34,211,238,.1));color:#fff;box-shadow:inset 0 0 0 1px rgba(59,130,246,.35)}
+  .nav button .badge{margin-left:auto;font-size:10px;font-weight:800;background:var(--bad);color:#fff;padding:1px 7px;border-radius:100px}
+  .side-foot{margin-top:16px;padding:12px 10px;border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
+  main{flex:1;min-width:0}
+  .topbar{position:sticky;top:0;z-index:10;background:rgba(10,17,32,.85);backdrop-filter:blur(9px);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:12px}
+  .topbar h1{font-size:17px;margin:0;font-weight:750}.topbar .sub{color:var(--muted);font-size:12px}
+  .spacer{flex:1}.ctrl{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line2);color:var(--ink2);font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:9px;cursor:pointer;white-space:nowrap}
+  .ctrl .cx{color:var(--muted);font-weight:500}
+  .seg{display:inline-flex;background:var(--panel);border:1px solid var(--line2);border-radius:9px;overflow:hidden}
+  .seg button{background:none;border:none;color:var(--ink2);font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 11px;cursor:pointer;border-right:1px solid var(--line)}
+  .seg button:last-child{border-right:none}.seg button.on{background:linear-gradient(90deg,var(--blue2),var(--cyan2));color:#fff}.seg button:hover:not(.on){background:var(--raise)}
+  .live{display:inline-flex;align-items:center;gap:6px;color:var(--good);font-size:12px;font-weight:700}
+  .dot-live{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 3px rgba(52,217,154,.2)}
+  .content{padding:22px 24px 50px;max-width:1200px}
+  .screen{display:none}.screen.on{display:block}
+  h2.sc{font-size:20px;margin:0 0 3px;font-weight:800}p.scd{margin:0 0 16px;color:var(--muted);font-size:13px}
+  .row{display:grid;gap:14px}.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:repeat(3,1fr)}.c4{grid-template-columns:repeat(4,1fr)}.c5{grid-template-columns:repeat(5,1fr)}.span2{grid-column:span 2}
+  @media(max-width:1000px){.c4,.c5{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:1fr}.span2{grid-column:auto}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 17px}.card.pad0{padding:0;overflow:hidden}
+  .ct{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.ct h3{font-size:14px;margin:0;font-weight:700}.ct .lnk{font-size:11.5px;color:var(--cyan);cursor:pointer;font-weight:600}
+  .muted{color:var(--muted)}.faint{color:var(--faint)}.up{color:var(--good)}.down{color:var(--bad)}.flat{color:var(--watch)}
+  .kpi .l{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase}.kpi .v{font-size:24px;font-weight:800;margin-top:4px;letter-spacing:-.01em}.kpi .d{font-size:12px;font-weight:700;margin-top:3px}
+  .spark{display:flex;align-items:flex-end;gap:2px;height:26px;margin-top:10px}.spark i{flex:1;background:linear-gradient(180deg,var(--cyan),var(--blue2));border-radius:2px;opacity:.85;min-height:3px}
+  .spark.g i{background:linear-gradient(180deg,#6ee7b7,var(--good))}.spark.r i{background:linear-gradient(180deg,#ff9a9a,var(--bad))}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;padding:11px 14px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;border-bottom:1px solid var(--line);background:var(--panel2)}
+  td{padding:11px 14px;border-bottom:1px solid var(--line);color:var(--ink2)}tr:last-child td{border-bottom:none}td.nm{color:#fff;font-weight:600}
+  tbody tr.clk{cursor:pointer}tbody tr.clk:hover td{background:var(--raise)}
+  .grp td{background:var(--bg2);color:#fff;font-weight:700;font-size:12.5px}.grp .cnt{color:var(--muted);font-weight:500;font-size:11.5px}
+  .more td{text-align:center;color:var(--cyan);font-size:12px;font-weight:600;background:var(--panel2)}
+  .pill{font-size:11px;font-weight:800;padding:2px 9px;border-radius:100px;display:inline-block;white-space:nowrap}
+  .p-g{background:var(--good-b);color:var(--good)}.p-y{background:var(--watch-b);color:var(--watch)}.p-r{background:var(--bad-b);color:var(--bad)}.p-b{background:#15294a;color:#6ea8ff}.p-p{background:var(--purple-b);color:var(--purple)}
+  .tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--raise);color:var(--ink2)}
+  .hs{display:inline-grid;place-items:center;width:34px;height:26px;border-radius:7px;font-weight:800;font-size:12.5px}
+  .hs.good{background:var(--good-b);color:var(--good)}.hs.watch{background:var(--watch-b);color:var(--watch)}.hs.risk{background:var(--bad-b);color:var(--bad)}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{font-size:12px;font-weight:600;padding:6px 12px;border-radius:100px;border:1px solid var(--line2);color:var(--ink2);background:var(--panel);cursor:pointer}
+  .chip.on{background:linear-gradient(90deg,var(--blue2),var(--cyan2));color:#fff;border-color:transparent}
+  .feed{display:grid;gap:8px}
+  .al{display:flex;gap:10px;align-items:flex-start;background:var(--panel2);border:1px solid var(--line);border-left:3px solid;border-radius:9px;padding:10px 12px;font-size:12.5px;color:var(--ink2)}
+  .al b{color:#fff}.al.crit{border-left-color:var(--bad)}.al.warning{border-left-color:var(--watch)}.al.watch{border-left-color:#6ea8ff}.al.good{border-left-color:var(--good);background:linear-gradient(90deg,rgba(52,217,154,.06),var(--panel2))}.al.p{border-left-color:var(--purple)}
+  .alert{display:flex;gap:13px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-left:4px solid;border-radius:11px;padding:13px 15px}
+  .alert.crit{border-left-color:var(--bad);background:linear-gradient(90deg,rgba(255,107,107,.06),var(--panel))}.alert.warning{border-left-color:var(--watch)}.alert.watch{border-left-color:#6ea8ff}.alert.good{border-left-color:var(--good);background:linear-gradient(90deg,rgba(52,217,154,.06),var(--panel))}
+  .alert .abody{flex:1;min-width:0}.alert .atitle{font-weight:750;color:#fff;font-size:13.5px}.alert .ameta{font-size:12px;color:var(--muted);margin-top:2px}
+  .alert .acause{font-size:12px;color:var(--ink2);margin-top:7px;background:var(--panel2);padding:6px 10px;border-radius:7px}
+  .alert .aact{display:flex;gap:7px;margin-top:9px}.abtn{font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:7px;border:1px solid var(--line2);color:var(--ink2);background:var(--raise);cursor:pointer}.abtn.pri{background:linear-gradient(90deg,var(--blue2),var(--cyan2));color:#fff;border-color:transparent}
+  .aval{text-align:right;min-width:88px}.aval .big{font-size:16px;font-weight:800}.aval .sm{font-size:11px;color:var(--muted)}
+  .rule{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12.5px}.rule:last-child{border-bottom:none}
+  .tgl{width:34px;height:19px;border-radius:100px;background:var(--good);position:relative;flex:none}.tgl.off{background:var(--raise)}.tgl::after{content:"";position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;top:2px;right:2px}.tgl.off::after{right:auto;left:2px}
+  .mv{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;cursor:pointer}.mv:hover{background:var(--raise)}
+  .mv .mvinfo{flex:1;min-width:0}.mv .mvname{font-weight:650;color:#fff;font-size:13px}.mv .mvapp{font-size:11px;color:var(--muted)}.mv .mvt{font-weight:800;font-size:14px;min-width:52px;text-align:right}
+  .microbar{display:inline-flex;align-items:flex-end;gap:1.5px;height:16px;vertical-align:middle}.microbar i{width:3px;background:var(--blue);border-radius:1px;opacity:.8}.microbar.g i{background:var(--good)}.microbar.r i{background:var(--bad)}
+  .appcard{cursor:pointer;transition:transform .12s,border-color .12s}.appcard:hover{transform:translateY(-2px);border-color:var(--line2)}
+  .appname{font-size:16px;font-weight:750;color:#fff}.appstat{display:flex;gap:20px}.appstat .n{font-size:19px;font-weight:800}.appstat .t{font-size:10.5px;color:var(--muted);text-transform:uppercase}
+  .hbar{display:flex;height:7px;border-radius:100px;overflow:hidden;background:var(--raise);margin:13px 0 10px}.hbar i{height:100%}
+  .geochip{font-size:10.5px;font-weight:700;padding:1px 8px;border-radius:100px;background:#15294a;color:#8fd4ff;margin-left:6px}.geochip.loc{background:var(--watch-b);color:var(--watch)}
+  .verdict{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:12px;margin-bottom:14px}.verdict .big{font-size:19px;font-weight:800}
+  .backlnk{display:inline-flex;align-items:center;gap:6px;color:var(--cyan);cursor:pointer;font-size:12.5px;font-weight:600;margin-bottom:14px}
+  .kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}.kv:last-child{border-bottom:none}.kv .k{color:var(--muted)}.kv .v{font-weight:600}
+  .meter{height:7px;background:var(--raise);border-radius:100px;overflow:hidden;width:70px}.meter i{display:block;height:100%}.meter.r i{background:var(--bad)}.meter.y i{background:var(--watch)}.meter.g i{background:var(--good)}
+  .addbtn{border:1.5px dashed var(--line2);border-radius:13px;padding:20px;text-align:center;cursor:pointer;color:var(--cyan);font-weight:700;background:var(--panel2)}
+  .note{background:#1a2540;border-left:3px solid var(--blue);border-radius:9px;padding:11px 14px;font-size:13px;color:#cdd8ee;margin:12px 0}
+  .lgd{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:8px}.lgd span{display:inline-flex;align-items:center;gap:6px}.dot{width:9px;height:9px;border-radius:3px;display:inline-block}
+  .est{font-weight:800;color:var(--good)}svg.chart{width:100%;display:block}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><div class="logo">◈</div><div class="nm">AdMob IQ<small>Revenue Intelligence</small></div></div>
+    <div class="nav-lbl">Analyse</div>
+    <ul class="nav" id="nav">
+      <li><button data-screen="overview" class="active"><span class="i">📊</span> Overview</button></li>
+      <li><button data-screen="placements"><span class="i">🎯</span> Placements</button></li>
+      <li><button data-screen="movers"><span class="i">📈</span> Movers</button></li>
+      <li><button data-screen="alerts"><span class="i">🔔</span> Alerts <span class="badge" id="nav-alert">·</span></button></li>
+      <li><button data-screen="deductions"><span class="i">📉</span> Deductions</button></li>
+      <li><button data-screen="countries"><span class="i">🌍</span> Countries</button></li>
+      <li><button data-screen="mediation"><span class="i">🔗</span> Mediation</button></li>
+    </ul>
+    <div class="nav-lbl">Act</div>
+    <ul class="nav">
+      <li><button data-screen="reco"><span class="i">💡</span> Recommendations</button></li>
+      <li><button data-screen="health"><span class="i">🛡️</span> Account Health</button></li>
+    </ul>
+    <div class="nav-lbl">Setup</div>
+    <ul class="nav"><li><button data-screen="settings"><span class="i">⚙️</span> Accounts &amp; Apps</button></li></ul>
+    <div class="side-foot">Live · engine-computed<br>v0.2 · click to explore</div>
+  </aside>
+  <main>
+    <div class="topbar">
+      <div><h1 id="tb-title">Portfolio Overview</h1><div class="sub" id="tb-sub">Live · engine-computed</div></div>
+      <div class="spacer"></div>
+      <span class="ctrl">🏢 <span class="cx">Account:</span> All (2) ▾</span>
+      <span class="ctrl">📱 <span class="cx">App:</span> All (4) ▾</span>
+      <span class="seg" id="timeseg"><button data-range="today">Today</button><button data-range="yesterday">Yesterday</button><button data-range="7d" class="on">7 days</button><button data-range="30d">30 days</button></span>
+      <span class="live"><span class="dot-live"></span> Live</span>
+    </div>
+    <div class="content" id="content"><div id="screens"></div></div>
+  </main>
+</div>
+
+<script>window.__DASHBOARD__ = {"kpis": {"revenue": 467.99, "ecpm": 4.79, "match_rate": 0.884, "arpdau": 0.014, "accounts": 2, "apps": 3}, "placements": [{"id": "ca~home_banner", "name": "Home_Feed_Banner", "app": "Puzzle Blast", "account": "Games Studio", "format": "banner", "country": "US", "ecpm": 1.9, "match": 0.92, "ctr": 0.007, "show": 0.96, "health": 64, "band": "watch", "verdict": "declining", "change_pct": -0.09, "revenue": 70.48, "deduction_pct": 0.09, "trend": [53.72, 53.21, 52.69, 52.17, 51.66, 51.14, 50.62, 50.1, 49.59, 49.07, 48.55, 48.03, 47.52, 47.0]}, {"id": "ca~level_int", "name": "LevelEnd_Interstitial", "app": "Puzzle Blast", "account": "Games Studio", "format": "interstitial", "country": "US", "ecpm": 8.2, "match": 0.97, "ctr": 0.03, "show": 0.96, "health": 90, "band": "good", "verdict": "strong", "change_pct": 0.055, "revenue": 137.45, "deduction_pct": 0.02, "trend": [122.14, 122.9, 123.66, 124.41, 125.17, 125.93, 126.69, 127.45, 128.21, 128.97, 129.72, 130.48, 131.24, 132.0]}, {"id": "ca~reward", "name": "Reward_Video", "app": "Word Master", "account": "Games Studio", "format": "rewarded", "country": "US", "ecpm": 14.6, "match": 0.95, "ctr": 0.0699, "show": 0.96, "health": 90, "band": "good", "verdict": "strong", "change_pct": 0.05, "revenue": 119.84, "deduction_pct": 0.02, "trend": [109.93, 110.55, 111.17, 111.79, 112.41, 113.03, 113.66, 114.28, 114.9, 115.52, 116.14, 116.76, 117.38, 118.0]}, {"id": "ca~appopen", "name": "AppOpen_Splash", "app": "Photo Editor Pro", "account": "Utility Apps", "format": "app_open", "country": "US", "ecpm": 5.1, "match": 0.89, "ctr": 0.042, "show": 0.96, "health": 65, "band": "watch", "verdict": "steady", "change_pct": -0.004, "revenue": 87.15, "deduction_pct": 0.07, "trend": [79.45, 79.41, 79.38, 79.34, 79.31, 79.28, 79.24, 79.21, 79.17, 79.14, 79.1, 79.07, 79.03, 79.0]}, {"id": "ca~bottom_banner", "name": "Bottom_Banner", "app": "Photo Editor Pro", "account": "Utility Apps", "format": "banner", "country": "ID", "ecpm": 0.22, "match": 0.61, "ctr": 0.03, "show": 0.96, "health": 19, "band": "risk", "verdict": "declining", "change_pct": -0.788, "revenue": 1.8, "deduction_pct": 0.2, "trend": [25.52, 23.86, 22.21, 20.55, 18.9, 17.24, 15.59, 13.93, 12.28, 10.62, 8.97, 7.31, 5.66, 4.0]}, {"id": "ca~coin_reward", "name": "Coin_Reward", "app": "Word Master", "account": "Games Studio", "format": "rewarded", "country": "IN", "ecpm": 5.0, "match": 0.89, "ctr": 0.06, "show": 0.96, "health": 84, "band": "good", "verdict": "strong", "change_pct": 0.093, "revenue": 51.27, "deduction_pct": 0.02, "trend": [48.28, 48.79, 49.31, 49.83, 50.34, 50.86, 51.38, 51.9, 52.41, 52.93, 53.45, 53.97, 54.48, 55.0]}], "apps": [{"name": "Puzzle Blast", "account": "Games Studio", "placements": 2, "revenue": 207.93, "declining": 1, "at_risk": 0, "avg_health": 77}, {"name": "Word Master", "account": "Games Studio", "placements": 2, "revenue": 171.11, "declining": 0, "at_risk": 0, "avg_health": 87}, {"name": "Photo Editor Pro", "account": "Utility Apps", "placements": 2, "revenue": 88.95, "declining": 1, "at_risk": 1, "avg_health": 42}], "movers": {"increasing": [{"name": "Coin_Reward", "app": "Word Master", "change_pct": 0.093}, {"name": "LevelEnd_Interstitial", "app": "Puzzle Blast", "change_pct": 0.055}, {"name": "Reward_Video", "app": "Word Master", "change_pct": 0.05}], "decreasing": [{"name": "Bottom_Banner", "app": "Photo Editor Pro", "change_pct": -0.788}, {"name": "Home_Feed_Banner", "app": "Puzzle Blast", "change_pct": -0.09}], "steady": 1}, "alerts": {"counts": {"improving": 2, "critical": 2, "warning": 1}, "items": [{"severity": "good", "kind": "improve", "metric": "ecpm", "message": "ecpm up 18%", "place": "Reward_Video", "app": "Word Master", "country": "US", "current": 14.6}, {"severity": "good", "kind": "improve", "metric": "match_rate", "message": "match_rate up 46%", "place": "Coin_Reward", "app": "Word Master", "country": "IN", "current": 0.89}, {"severity": "critical", "kind": "spike", "metric": "ctr", "message": "CTR spike 4.20% vs 0.80% (IVT risk)", "place": "AppOpen_Splash", "app": "Photo Editor Pro", "country": "US (localized)", "current": 0.042}, {"severity": "critical", "kind": "zero", "metric": "requests", "message": "requests = 0 (baseline 14000)", "place": "Bottom_Banner", "app": "Photo Editor Pro", "country": "ID (localized)", "current": 0}, {"severity": "warning", "kind": "drop", "metric": "revenue", "message": "revenue down 65%", "place": "Home_Feed_Banner", "app": "Puzzle Blast", "country": "US", "current": 20}]}, "deductions": {"rows": [{"place": "Bottom_Banner", "app": "Photo Editor Pro", "geo": "ID", "pct": 0.2, "flag": "ivt"}, {"place": "Home_Feed_Banner", "app": "Puzzle Blast", "geo": "US", "pct": 0.09, "flag": "watch"}, {"place": "AppOpen_Splash", "app": "Photo Editor Pro", "geo": "US", "pct": 0.07, "flag": "watch"}, {"place": "LevelEnd_Interstitial", "app": "Puzzle Blast", "geo": "US", "pct": 0.02, "flag": "normal"}, {"place": "Reward_Video", "app": "Word Master", "geo": "US", "pct": 0.02, "flag": "normal"}, {"place": "Coin_Reward", "app": "Word Master", "geo": "IN", "pct": 0.02, "flag": "normal"}], "decay_example": {"place": "Bottom_Banner", "series": [100.0, 90.0, 84.0, 80.0]}, "avg_pct": 0.07}, "mediation": {"summary": {"networks": 6, "bidding_share": 0.81, "blended_fill": 0.8471000000000001, "best_ecpm": {"ad_source": "AppLovin", "ecpm": 4.1}, "shares": {"AppLovin": 0.22, "AdMob Network": 0.34, "Meta Audience": 0.16, "Unity Ads": 0.12, "Mintegral": 0.09, "ironSource": 0.07}}, "rows": [{"ad_source": "AppLovin", "type": "bidding", "fill": 0.88, "ecpm": 4.1, "revenue": 22, "latency_s": 0.6, "rev_share": 0.22, "status": "ok"}, {"ad_source": "AdMob Network", "type": "bidding", "fill": 0.9, "ecpm": 3.2, "revenue": 34, "latency_s": 0.0, "rev_share": 0.34, "status": "ok"}, {"ad_source": "Meta Audience", "type": "bidding", "fill": 0.85, "ecpm": 3.8, "revenue": 16, "latency_s": 0.7, "rev_share": 0.16, "status": "ok"}, {"ad_source": "Unity Ads", "type": "both", "fill": 0.82, "ecpm": 3.1, "revenue": 12, "latency_s": 0.9, "rev_share": 0.12, "status": "ok"}, {"ad_source": "Mintegral", "type": "bidding", "fill": 0.79, "ecpm": 2.4, "revenue": 9, "latency_s": 1.1, "rev_share": 0.09, "status": "ok"}, {"ad_source": "ironSource", "type": "waterfall", "fill": 0.6, "ecpm": 1.9, "revenue": 7, "latency_s": 1.4, "rev_share": 0.07, "status": "stale"}], "suggestions": [{"action": "Review/replace waterfall 'ironSource'", "reason": "fill 60% \u2014 stale eCPM / demand"}]}, "recommendations": {"total_uplift": 2015, "items": [{"action": "Banner \u2192 Native (A/B)", "reason": "feed screen + native demand; ~2-4x eCPM", "confidence": "high", "ab": true, "uplift": 1755, "place": "Home_Feed_Banner (US)"}, {"action": "Raise eCPM floor 10-15%", "reason": "match rate 92% \u2014 money on the table", "confidence": "medium", "ab": false, "uplift": 0, "place": "Home_Feed_Banner (US)"}, {"action": "Enable bidding networks", "reason": "+10-30% typical", "confidence": "high", "ab": true, "uplift": 260, "place": "portfolio"}], "root_cause": ["seasonality", "eCPM soft, YoY not down \u2014 seasonal/demand cycle"]}, "account_health": {"status": "amber", "issues": [["warning", "2 placement(s) with invalid-traffic risk"], ["warning", "2 app(s) missing/insufficient consent (EEA/UK)"], ["watch", "TCF version behind \u2014 v2.3 deadline"]], "per_app": [{"app": "Photo Editor Pro", "app_ads_txt": "verified", "consent": "UMP", "tcf": "v2.3", "ivt": "flag", "serving": "ok"}, {"app": "Puzzle Blast", "app_ads_txt": "verified", "consent": "UMP", "tcf": "v2.2", "ivt": "clean", "serving": "ok"}, {"app": "Word Master", "app_ads_txt": "verified", "consent": "UMP", "tcf": "v2.3", "ivt": "clean", "serving": "ok"}]}, "accounts": [{"account_id": "pub-1122334455667788", "label": "Games Studio", "connected": true, "token": "Valid", "apps": ["Puzzle Blast", "Word Master"], "last_sync": "12 min ago"}, {"account_id": "pub-9988776655443322", "label": "Utility Apps", "connected": true, "token": "Valid", "apps": ["Photo Editor Pro", "Weather Now"], "last_sync": "12 min ago"}], "revenue_trend": [439.04, 438.72, 438.42, 438.09, 437.79, 437.48, 437.18, 436.87, 436.56, 436.25, 435.93, 435.62, 435.31, 435.0], "kpis_by_range": {"today": {"revenue": 467.99, "ecpm": 4.98, "match_rate": 0.884, "arpdau": 0.014}, "yesterday": {"revenue": 449.27, "ecpm": 4.79, "match_rate": 0.884, "arpdau": 0.014}, "7d": {"revenue": 3229.13, "ecpm": 4.79, "match_rate": 0.884, "arpdau": 0.014}, "30d": {"revenue": 13290.92, "ecpm": 4.69, "match_rate": 0.884, "arpdau": 0.014}}, "countries": [{"country": "US", "tier": 1, "ecpm": 7.45, "match": 0.93, "revenue": 414.92, "suggested": "\u2192 Native (feed)", "why": "native eCPM ~3x banner", "uplift": 310}, {"country": "ID", "tier": 3, "ecpm": 0.22, "match": 0.61, "revenue": 1.8, "suggested": "Fix fill (add networks)", "why": "match 61% \u2014 demand leak", "uplift": 70}, {"country": "IN", "tier": 3, "ecpm": 5.0, "match": 0.89, "revenue": 51.27, "suggested": "Keep adaptive + rewarded", "why": "native demand thin here", "uplift": 40}]};</script>
+<script>
+const API_BASE = window.__API_BASE__ || "";
+let DATA = window.__DASHBOARD__ || null;
+let RANGE = "7d";
+const money=(n)=>"$"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+const pct=(n)=>(n*100).toFixed(0)+"%";
+const signed=(n)=>(n>=0?"+":"")+(n*100).toFixed(0)+"%";
+const hb=(h)=>h>=75?"good":h>=50?"watch":"risk";
+const ICON={good:"🎉",critical:"🔴",warning:"🟠",watch:"🟡"};
+const TITLES={overview:["Portfolio Overview","Live · engine-computed"],placements:["Placements","Grouped by app · drill in"],
+  reportcard:["Placement Report Card","Historical + funnel"],movers:["Movers · Increasing vs Decreasing","Kaun upar, kaun neeche"],
+  alerts:["Alerts · Anomaly & Drop Detection","0/drop + improvements · country"],deductions:["Revenue Deduction","Estimate decay + IVT"],
+  countries:["Country Strategy","Per-geo · per-app"],mediation:["Mediation","Network competition"],
+  reco:["Recommendations","Ranked · with uplift"],health:["Account Health & Compliance","IVT · consent · app-ads.txt"],
+  settings:["Accounts & Apps","Connect · auto-sync"]};
+
+// ---- small chart helpers (compute from data) ----
+function areaChart(values,w=620,h=140,color="#3dd0f0",grad="gA"){
+  if(!values.length) return "";
+  const pad=8,top=12,mn=Math.min(...values),mx=Math.max(...values),rng=(mx-mn)||1;
+  const xs=values.map((_,i)=>pad+(w-2*pad)*i/(values.length-1));
+  const ys=values.map(v=>top+(h-top-pad)*(1-(v-mn)/rng));
+  const line="M"+xs.map((x,i)=>`${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" L");
+  const area=`M${xs[0].toFixed(1)} ${h-pad} L`+xs.map((x,i)=>`${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" L")+` L${xs[xs.length-1].toFixed(1)} ${h-pad} Z`;
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="height:150px">
+    <defs><linearGradient id="${grad}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".33"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#${grad})"/><path d="${line}" fill="none" stroke="${color}" stroke-width="2.3"/></svg>`;
+}
+function microbar(trend){
+  const v=trend.slice(-6); if(!v.length) return "";
+  const mn=Math.min(...v),mx=Math.max(...v),rng=(mx-mn)||1;
+  const up=v[v.length-1]>=v[0]; const cls=up?"g":"r";
+  return `<span class="microbar ${cls}">`+v.map(x=>`<i style="height:${(5+11*(x-mn)/rng).toFixed(0)}px"></i>`).join("")+`</span>`;
+}
+function sparkbars(trend,cls){
+  const v=trend.slice(-7); if(!v.length) return "";
+  const mn=Math.min(...v),mx=Math.max(...v),rng=(mx-mn)||1;
+  return `<div class="spark ${cls||''}">`+v.map(x=>`<i style="height:${(25+75*(x-mn)/rng).toFixed(0)}%"></i>`).join("")+`</div>`;
+}
+function fmtVal(m,v){if(m==='match_rate'||m==='show_rate')return (v*100).toFixed(0)+'%';if(m==='ctr')return (v*100).toFixed(1)+'%';if(m==='ecpm'||m==='revenue')return '$'+v;return Number(v).toLocaleString();}
+function filterAlerts(f){document.querySelectorAll('.screen[data-screen=alerts] .alert').forEach(c=>{c.style.display=(f==='all'||c.dataset.sev===f||c.dataset.metric===f)?'':'none';});}
+function filterPlDetail(f){document.querySelectorAll('#pl-detail tbody tr').forEach(r=>{if(r.classList.contains('grp')){r.style.display='';return;}let s=true;if(f==='improving')s=r.dataset.dir==='up';else if(f==='declining')s=r.dataset.dir==='down';else if(f!=='all')s=r.dataset.fmt===f;r.style.display=s?'':'none';});}
+
+function screenDiv(id){const d=document.createElement('section');d.className='screen';d.dataset.screen=id;return d;}
+function kpi(l,v,d,cls,spark){return `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="d ${cls||'muted'}">${d||''}</div>${spark||''}</div>`;}
+
+function render(){
+  const root=document.getElementById('screens');root.innerHTML='';
+  root.append(renderOverview(),renderPlacements(),renderReport(),renderMovers(),renderAlerts(),
+              renderDeductions(),renderCountries(),renderMediation(),renderReco(),renderHealth(),renderSettings());
+  const c=DATA.alerts.counts;document.getElementById('nav-alert').textContent=(c.critical||0)+(c.warning||0);
+  document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));
+  document.querySelectorAll('#timeseg button').forEach(b=>b.addEventListener('click',()=>setRange(b.dataset.range)));
+  document.addEventListener('click',e=>{const c=e.target.closest('.chip');if(c&&c.parentElement){c.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');}});
+  show('overview');
+}
+function setRange(r){
+  RANGE=r;document.querySelectorAll('#timeseg button').forEach(b=>b.classList.toggle('on',b.dataset.range===r));
+  const ov=document.querySelector('.screen[data-screen=overview]');const cur=ov.classList.contains('on');
+  ov.replaceWith(renderOverview());if(cur)document.querySelector('.screen[data-screen=overview]').classList.add('on');
+}
+function show(id){
+  if(id==='placements'){const a=document.getElementById('pl-apps'),d=document.getElementById('pl-detail');if(a&&d){a.style.display='';d.style.display='none';}}
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.dataset.screen===id));
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
+  if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-sub').textContent=TITLES[id][1];}
+  window.scrollTo({top:0});
+}
+
+// ---------- OVERVIEW ----------
+function renderOverview(){
+  const s=screenDiv('overview');const k=DATA.kpis_by_range?DATA.kpis_by_range[RANGE]:DATA.kpis;const m=DATA.movers;const a=DATA.alerts;
+  const dl={today:['▲ vs yest','up'],yesterday:['▬ DoD','flat'],'7d':['▲ 6.4% WoW','up'],'30d':['▲ 11% MoM','up']}[RANGE];
+  const alertItems=a.items.slice(0,4).map(x=>{const sev=x.severity==='critical'?'crit':x.severity;
+    return `<div class="al ${sev}"><span>${ICON[x.severity]}</span><span><b>${x.place}</b> — ${x.message}<span class="geochip ${x.country.includes('localized')?'loc':''}">${x.country}</span></span></div>`;}).join('');
+  const appRows=DATA.apps.map(ap=>`<tr class="clk" onclick="openApp('${ap.name}')"><td class="nm">${ap.name}</td><td>${ap.account}</td><td>${money(ap.revenue)}</td><td>${ap.placements}</td><td><span class="hs ${hb(ap.avg_health)}">${ap.avg_health}</span></td></tr>`).join('');
+  s.innerHTML=`<div class="row c5" style="margin-bottom:14px">
+      ${kpi('Revenue · '+RANGE,money(k.revenue),dl[0],dl[1],sparkbars(DATA.revenue_trend,'g'))}
+      ${kpi('ARPDAU','$'+k.arpdau,'▲ 3.1%','up',sparkbars(DATA.revenue_trend))}
+      ${kpi('Avg eCPM','$'+k.ecpm,'▬ flat','flat',sparkbars(DATA.revenue_trend))}
+      ${kpi('Match rate',pct(k.match_rate),'▼ 4pt','down',sparkbars(DATA.revenue_trend,'r'))}
+      ${kpi('Accounts · Apps',DATA.kpis.accounts+' · '+DATA.kpis.apps,'🟢 fetching','muted')}
+    </div>
+    <div class="row c3" style="margin-bottom:14px">
+      <div class="card span2"><div class="ct"><h3>Revenue trend · 14 days</h3><span class="tag">All accounts</span></div>${areaChart(DATA.revenue_trend)}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span></div></div>
+      <div class="card"><div class="ct"><h3>Top movers</h3></div><div class="feed">
+        ${m.increasing.slice(0,2).map(p=>`<div class="al good"><span>▲</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')}
+        ${m.decreasing.slice(0,2).map(p=>`<div class="al crit"><span>▼</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')}
+      </div></div>
+    </div>
+    <div class="row c3">
+      <div class="card span2 pad0"><div class="ct" style="padding:16px 17px 0"><h3>Revenue by account &amp; app</h3><span class="lnk" onclick="show('placements')">View placements →</span></div>
+        <table style="margin-top:10px"><thead><tr><th>App</th><th>Account</th><th>Revenue</th><th>Placements</th><th>Avg health</th></tr></thead><tbody>${appRows}</tbody></table></div>
+      <div class="card"><div class="ct"><h3>Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span></div><div class="feed">${alertItems}</div></div>
+    </div>`;
+  return s;
+}
+
+// ---------- PLACEMENTS (2-level) ----------
+function fmtCount(ps){const b={};ps.forEach(p=>b[p.format]=(b[p.format]||0)+1);return b;}
+function renderPlacements(){
+  const s=screenDiv('placements');
+  const byApp={};DATA.placements.forEach(p=>{(byApp[p.app]=byApp[p.app]||[]).push(p)});
+  const cards=DATA.apps.map(ap=>{const g=ap.avg_health,dist=g>=75?[70,22,8]:g>=50?[55,30,15]:[40,30,30];
+    return `<div class="card appcard" onclick="openApp('${ap.name}')"><div style="display:flex;justify-content:space-between"><div><div class="appname">📱 ${ap.name}</div><div class="muted" style="font-size:12px">${ap.account}</div></div><span class="pill ${ap.declining?'p-y':'p-g'}">${ap.declining} declining</span></div>
+      <div class="appstat" style="margin-top:10px"><div><div class="n">${money(ap.revenue)}</div><div class="t">Revenue</div></div><div><div class="n">${ap.placements}</div><div class="t">Placements</div></div><div><div class="n" style="color:${g>=75?'var(--good)':g>=50?'var(--watch)':'var(--bad)'}">${ap.avg_health}</div><div class="t">Avg health</div></div></div>
+      <div class="hbar"><i style="width:${dist[0]}%;background:var(--good)"></i><i style="width:${dist[1]}%;background:var(--watch)"></i><i style="width:${dist[2]}%;background:var(--bad)"></i></div>
+      <div style="display:flex;justify-content:space-between;align-items:center"><span class="muted" style="font-size:12px">🟡 ${ap.declining} declining · 🔴 ${ap.at_risk} at-risk</span><span class="lnk">View ${ap.placements} placements →</span></div></div>`;}).join('');
+  s.innerHTML=`<h2 class="sc">Placements</h2><p class="scd">App-wise — app card pe click karke uske placements format-wise dekho.</p>
+    <div id="pl-apps" class="row c3">${cards}</div>
+    <div id="pl-detail" style="display:none"></div>`;
+  return s;
+}
+function openApp(name){
+  show('placements');
+  const ps=DATA.placements.filter(p=>p.app===name);const app=DATA.apps.find(a=>a.name===name)||{account:'',revenue:0,avg_health:0,at_risk:0};
+  const byFmt={};ps.forEach(p=>{(byFmt[p.format]=byFmt[p.format]||[]).push(p)});
+  let rows='';Object.entries(byFmt).forEach(([fmt,arr])=>{
+    const rev=arr.reduce((a,b)=>a+b.revenue,0);
+    rows+=`<tr class="grp"><td colspan="7">${fmt} <span class="cnt">· ${arr.length} placements · ${money(rev)}</span></td></tr>`;
+    arr.forEach(p=>{const cls=p.change_pct>0.02?'up':p.change_pct<-0.02?'down':'flat';
+      rows+=`<tr class="clk" data-fmt="${p.format}" data-dir="${cls}" onclick="goPlacement('${p.id}')"><td><span class="hs ${p.band}">${p.health}</span></td><td class="nm">${p.name}</td><td>$${p.ecpm}</td><td>${pct(p.match)}</td><td>${microbar(p.trend)} <span class="${cls}">${signed(p.change_pct)}</span></td><td>${pct(p.deduction_pct)}</td><td><span class="pill ${p.verdict==='strong'?'p-g':p.verdict==='declining'?'p-r':'p-y'}">${p.verdict}</span></td></tr>`;});
+  });
+  const chips=`<span class="chip on" onclick="filterPlDetail('all')">All formats</span>`+Object.entries(byFmt).map(([f,a])=>`<span class="chip" onclick="filterPlDetail('${f}')">${f} ${a.length}</span>`).join('')+`<span class="chip" style="margin-left:8px" onclick="filterPlDetail('improving')">📈 Improving</span><span class="chip" onclick="filterPlDetail('declining')">🔻 Declining</span>`;
+  document.getElementById('pl-apps').style.display='none';
+  const d=document.getElementById('pl-detail');d.style.display='block';
+  d.innerHTML=`<div class="backlnk" onclick="show('placements')">← Back to apps</div>
+    <div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2)"><div style="font-size:26px">📱</div><div><div class="big">${name}</div><div class="muted" style="font-size:12.5px">${app.account} · ${ps.length} placements · ${money(app.revenue)}</div></div><div class="spacer"></div><div class="appstat"><div><div class="n" style="color:var(--good)">${app.avg_health}</div><div class="t">Avg health</div></div><div><div class="n" style="color:var(--bad)">${app.at_risk}</div><div class="t">At-risk</div></div></div></div>
+    <div class="chips" style="margin-top:14px">${chips}</div>
+    <div class="card pad0"><table><thead><tr><th>Health</th><th>Placement</th><th>eCPM</th><th>Match</th><th>Trend</th><th>Deduction</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="faint" style="font-size:12px;margin-top:10px">Showing ${ps.length} placements · grouped by format · row → Report Card</p>`;
+  document.querySelector('.screen[data-screen=placements]').classList.add('on');
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen==='placements'));
+  window.scrollTo({top:0});
+}
+
+// ---------- REPORT CARD (empty shell; filled by goPlacement) ----------
+function renderReport(){return screenDiv('reportcard');}
+function goPlacement(id){
+  const p=DATA.placements.find(x=>x.id===id)||DATA.placements[0];
+  const vcls=p.verdict==='strong'?'g':p.verdict==='declining'?'r':'y';
+  const vbg=p.verdict==='declining'?'var(--bad-b)':p.verdict==='strong'?'var(--good-b)':'var(--watch-b)';
+  const s=document.querySelector('.screen[data-screen=reportcard]');
+  const chg=(w)=>signed(p.change_pct*(w/9));
+  s.innerHTML=`<div class="backlnk" onclick="show('placements')">← Back to placements</div>
+    <div class="verdict" style="background:linear-gradient(90deg,${vbg},transparent);border:1px solid var(--line2)"><div style="font-size:28px">${p.verdict==='declining'?'🔴':p.verdict==='strong'?'🟢':'🟡'}</div><div><div class="big" style="text-transform:capitalize">${p.verdict}</div><div class="muted" style="font-size:13px">${p.name} · ${p.app} · ${p.format} · ${p.country} · health ${p.health}</div></div></div>
+    <div class="row c4" style="margin-bottom:14px">
+      ${kpi('14-day trend',signed(p.change_pct),'slope','+'===signed(p.change_pct)[0]?'up':'down')}
+      ${kpi('eCPM','$'+p.ecpm,'vs peer','muted')}
+      ${kpi('Match rate',pct(p.match),'fill','muted')}
+      ${kpi('Deduction',pct(p.deduction_pct),p.deduction_pct>=0.15?'IVT risk':'normal',p.deduction_pct>=0.15?'down':'muted')}
+    </div>
+    <div class="row c3" style="margin-bottom:14px">
+      <div class="card span2"><div class="ct"><h3>Revenue trend · 14 days</h3><span class="pill ${vcls==='r'?'p-r':vcls==='g'?'p-g':'p-y'}">${p.verdict}</span></div>${areaChart(p.trend,620,140,vcls==='r'?'#ecc35f':'#3dd0f0','gRC')}</div>
+      <div class="card"><div class="ct"><h3>Funnel diagnosis</h3></div>
+        <div class="kv"><span class="k">Match rate</span><span class="v">${pct(p.match)}</span></div>
+        <div class="kv"><span class="k">Show rate</span><span class="v">${pct(p.show)}</span></div>
+        <div class="kv"><span class="k">CTR</span><span class="v">${(p.ctr*100).toFixed(2)}%</span></div>
+        <div class="kv"><span class="k">eCPM</span><span class="v">$${p.ecpm}</span></div>
+        <div style="margin-top:10px;padding:9px 11px;background:var(--panel2);border-radius:8px;font-size:12.5px"><b style="color:var(--cyan)">Read:</b> ${p.verdict==='declining'?'eCPM/pricing soft — format upgrade se recover.':'healthy — maintain.'}</div></div>
+    </div>
+    <div class="card"><div class="ct"><h3>Primary geo</h3></div><div class="muted" style="font-size:13px">Mostly <b style="color:#fff">${p.country}</b> traffic · deduction ${pct(p.deduction_pct)}${p.deduction_pct>=0.15?' — 🚨 IVT localized':''}</div></div>`;
+  show('reportcard');
+}
+
+// ---------- MOVERS ----------
+function renderMovers(){
+  const s=screenDiv('movers');const m=DATA.movers;
+  const pfind=(n)=>DATA.placements.find(p=>p.name===n)||{health:'',band:'watch',trend:[],app:''};
+  const li=(arr,cls)=>arr.map(p=>{const f=pfind(p.name);return `<div class="mv" onclick="goPlacement('${f.id||''}')"><span class="hs ${f.band}">${f.health}</span><div class="mvinfo"><div class="mvname">${p.name}</div><div class="mvapp">${p.app} · ${f.format||''}</div></div>${microbar(f.trend||[])}<div class="mvt ${cls}">${signed(p.change_pct)}</div></div>`;}).join('')||'<div class="muted">—</div>';
+  const big=m.increasing[0];
+  s.innerHTML=`<h2 class="sc">Movers — kaun upar, kaun neeche</h2><p class="scd">Trend ke hisaab se ranked. Row → report card.</p>
+    <div class="chips"><span class="chip on">All apps</span>${[...new Set(DATA.placements.map(p=>p.app))].map(a=>`<span class="chip">${a}</span>`).join('')}</div>
+    <div class="row c4" style="margin-bottom:14px">${kpi('📈 Increasing',m.increasing.length,'placements','up')}${kpi('📉 Decreasing',m.decreasing.length,'placements','down')}${kpi('▬ Steady',m.steady,'within ±2%','flat')}${kpi('Biggest gainer',big?big.name:'—',big?signed(big.change_pct):'','up')}</div>
+    <div class="row c2"><div class="card"><div class="ct"><h3 style="color:var(--good)">📈 Increasing (${m.increasing.length})</h3></div><div class="feed">${li(m.increasing,'up')}</div></div>
+    <div class="card"><div class="ct"><h3 style="color:var(--bad)">📉 Decreasing (${m.decreasing.length})</h3></div><div class="feed">${li(m.decreasing,'down')}</div></div></div>`;
+  return s;
+}
+
+// ---------- ALERTS ----------
+function renderAlerts(){
+  const s=screenDiv('alerts');const a=DATA.alerts;
+  const cards=a.items.map(x=>{const sev=x.severity==='critical'?'crit':x.severity;
+    const cause=x.kind==='zero'?'Ad unit disabled / SDK request nahi — integration check.':x.kind==='spike'?'🚨 Invalid-traffic risk — traffic source check.':x.kind==='improve'?'✅ Achha chal raha — push karo.':'Sharp drop — floor/demand dekho.';
+    return `<div class="alert ${sev}" data-sev="${x.severity}" data-metric="${x.metric}"><div style="font-size:17px">${ICON[x.severity]}</div><div class="abody"><div class="atitle">${x.message}<span class="geochip ${x.country.includes('localized')?'loc':''}">${x.country}</span></div><div class="ameta">${x.place} · ${x.app} · ${x.metric}</div><div class="acause">💡 ${cause}</div><div class="aact"><span class="abtn pri">View placement</span><span class="abtn">Acknowledge</span><span class="abtn">Snooze 4h</span></div></div><div class="aval"><div class="big ${x.severity==='good'?'up':'down'}">${fmtVal(x.metric,x.current)}</div><div class="sm">now</div></div></div>`;}).join('');
+  const rules=[['Koi metric = 0','Critical','p-r'],['Revenue drop > 40%','Warn','p-y'],['Requests drop > 50%','Warn','p-y'],['Match rate drop > 20pt','Warn','p-y'],['CTR spike > 3× (IVT)','Critical','p-r'],['Show rate drop > 15pt','Watch','p-b']];
+  s.innerHTML=`<h2 class="sc">Alerts</h2><p class="scd">0/sharp-drop → alert; behtar ho to 🎉 improvement — country ke saath.</p>
+    <div class="row c4" style="margin-bottom:14px">${kpi('🎉 Improving',a.counts.improving||0,'placements/geos','up')}${kpi('🔴 Critical',a.counts.critical||0,'0-value','down')}${kpi('🟠 Warning',a.counts.warning||0,'sharp drop','flat')}${kpi('✓ Resolved · today','5','auto','up')}</div>
+    <div class="chips"><span class="chip on" onclick="filterAlerts('all')">All active</span><span class="chip" onclick="filterAlerts('good')">🎉 Improvements</span><span class="chip" onclick="filterAlerts('critical')">🔴 Critical</span><span class="chip" onclick="filterAlerts('warning')">🟠 Warning</span><span class="chip" style="margin-left:8px" onclick="filterAlerts('requests')">Requests</span><span class="chip" onclick="filterAlerts('match_rate')">Match rate</span><span class="chip" onclick="filterAlerts('ctr')">CTR</span><span class="chip" onclick="filterAlerts('revenue')">Revenue</span></div>
+    <div class="row c3"><div class="span2" style="display:grid;gap:10px;align-content:start">${cards}</div>
+    <div style="display:grid;gap:14px;align-content:start">
+      <div class="card"><div class="ct"><h3>Alert rules</h3><span class="lnk">Edit</span></div>${rules.map((r,i)=>`<div class="rule"><span class="tgl ${i===5?'off':''}"></span><div style="flex:1">${r[0]}</div><span class="pill ${r[2]}">${r[1]}</span></div>`).join('')}<div style="font-size:11px;color:var(--muted);margin-top:9px">Baseline = 7-day median. Har data pull pe check.</div></div>
+      <div class="card"><div class="ct"><h3>Notifications</h3></div><div class="rule"><span style="font-size:15px">✈️</span><div style="flex:1">Telegram <span class="muted" style="font-size:11px">· free</span></div><span class="tgl"></span></div><div class="rule"><span style="font-size:15px">✉️</span><div style="flex:1">Email <span class="muted" style="font-size:11px">· free</span></div><span class="tgl"></span></div><div style="font-size:11px;color:var(--muted);margin-top:9px">Critical turant, warnings hourly batch.</div></div>
+    </div></div>`;
+  return s;
+}
+
+// ---------- DEDUCTIONS ----------
+function renderDeductions(){
+  const s=screenDiv('deductions');const d=DATA.deductions;
+  const ser=d.decay_example.series;
+  const pad=10,top=10,w=360,h=120,mn=Math.min(...ser),mx=Math.max(...ser),rng=(mx-mn)||1;
+  const xs=ser.map((_,i)=>pad+(w-2*pad)*i/(ser.length-1));const ys=ser.map(v=>top+(h-top-pad)*(1-(v-mn)/rng));
+  const line="M"+xs.map((x,i)=>`${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" L");
+  const dots=xs.map((x,i)=>`<circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="3.4" fill="#ff6b6b"/>`).join('');
+  const rows=d.rows.map(r=>`<tr><td class="nm">${r.place}</td><td>${r.app} · ${r.geo}</td><td><div class="meter ${r.flag==='ivt'?'r':r.flag==='watch'?'y':'g'}"><i style="width:${Math.min(100,r.pct*400)}%"></i></div></td><td class="${r.flag==='ivt'?'down':''}" style="font-weight:700">${pct(r.pct)}</td><td><span class="pill ${r.flag==='ivt'?'p-r':r.flag==='watch'?'p-y':'p-g'}">${r.flag==='ivt'?'IVT risk':r.flag}</span></td></tr>`).join('');
+  s.innerHTML=`<h2 class="sc">Revenue Deduction Tracking</h2><p class="scd">AdMob estimate → finalized decay. Localized bada deduction = IVT early warning.</p>
+    <div class="row c3" style="margin-bottom:14px">${kpi('Avg deduction',pct(d.avg_pct),'normal 2–5%','muted')}${kpi('Above normal',d.rows.filter(r=>r.flag!=='normal').length,'needs review','down')}${kpi('Est. revenue at risk','$285/mo','if continues','muted')}</div>
+    <div class="row c3" style="margin-bottom:14px">
+      <div class="card span2"><div class="ct"><h3>Estimate decay · ${d.decay_example.place}</h3><span class="pill p-r">−20% deducted</span></div>
+        <svg class="chart" viewBox="0 0 ${w} ${h}" style="height:150px;width:auto;max-width:100%"><path d="${line}" fill="none" stroke="#ff6b6b" stroke-width="2.5"/>${dots}</svg>
+        <div class="lgd"><span>D+1 = $${ser[0]}</span><span>finalized = <b style="color:var(--bad)">$${ser[ser.length-1]}</b></span></div></div>
+      <div class="card" style="border-color:#5a2626;background:linear-gradient(160deg,#231320,#111d31)"><div class="ct"><h3>🚨 IVT early warning</h3></div><p style="font-size:13px;color:var(--ink2);margin:2px 0 10px">Bottom_Banner (ID) deduction <b style="color:var(--bad)">20%</b> — normal se zyada, ek geo pe localized. Invalid-traffic signal.</p><div class="kv"><span class="k">Normal</span><span class="v">2–5%</span></div><div class="kv"><span class="k">This placement</span><span class="v" style="color:var(--bad)">20%</span></div></div>
+    </div>
+    <div class="card pad0"><table><thead><tr><th>Placement</th><th>App · Geo</th><th>Deduction</th><th>%</th><th>Flag</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return s;
+}
+
+// ---------- COUNTRIES ----------
+function renderCountries(){
+  const s=screenDiv('countries');const cs=DATA.countries;
+  const top=cs[0]||{};const fill=cs.find(c=>c.match<0.7);const totalUp=cs.reduce((a,b)=>a+b.uplift,0);
+  const rows=cs.map(c=>`<tr><td class="nm">${c.country}</td><td><span class="pill ${c.tier===1?'p-b':c.tier===2?'p-y':'p-y'}">${c.tier}</span></td><td>$${c.ecpm}</td><td class="${c.match<0.7?'down':''}">${pct(c.match)}</td><td>${money(c.revenue)}</td><td class="muted">${c.why}</td><td><span class="pill ${c.uplift>0?'p-g':'p-b'}">${c.suggested}</span></td><td class="est">${c.uplift?money(c.uplift)+'/mo':'—'}</td></tr>`).join('');
+  s.innerHTML=`<h2 class="sc">Country Strategy</h2><p class="scd">Per-geo revenue/eCPM + format suggestion (justifying metric ke saath).</p>
+    <div class="chips"><span class="chip on">All apps</span>${DATA.apps.map(a=>`<span class="chip">${a.name}</span>`).join('')}<span class="chip" style="margin-left:8px">Highest uplift first</span></div>
+    <div class="row c4" style="margin-bottom:14px">${kpi('Top revenue geo',top.country||'—',money(top.revenue||0),'muted')}${kpi('Best opportunity',top.country||'—',top.uplift?money(top.uplift)+'/mo':'','up')}${kpi('Fill problem geo',fill?fill.country:'—',fill?pct(fill.match):'ok',fill?'down':'muted')}${kpi('Total geo uplift',money(totalUp)+'/mo','across changes','up')}</div>
+    <div class="card pad0"><table><thead><tr><th>Country</th><th>Tier</th><th>eCPM</th><th>Match</th><th>Revenue</th><th>Why</th><th>Suggested</th><th>Uplift</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return s;
+}
+
+// ---------- MEDIATION ----------
+function renderMediation(){
+  const s=screenDiv('mediation');const m=DATA.mediation;
+  const rows=m.rows.map(r=>`<tr><td class="nm">${r.ad_source}</td><td><span class="pill ${r.type==='waterfall'?'p-y':'p-g'}">${r.type}</span></td><td>${pct(r.fill)}</td><td>$${r.ecpm.toFixed(2)}</td><td>${pct(r.rev_share)}</td><td>${r.latency_s}s</td><td><span class="pill ${r.status==='stale'?'p-r':r.status==='latency'?'p-y':'p-g'}">${r.status==='stale'?'Stale':r.status==='latency'?'Latency':'OK'}</span></td></tr>`).join('');
+  const bs=m.summary.bidding_share;
+  const sug=m.suggestions.map(x=>`<div class="al good"><span>💡</span><span><b>${x.action}</b> — ${x.reason}</span></div>`).join('');
+  s.innerHTML=`<h2 class="sc">Mediation — networks ki competition</h2><p class="scd">Per-network fill/eCPM/share + advisor.</p>
+    <div class="chips"><span class="chip on">All apps</span>${DATA.apps.map(a=>`<span class="chip">${a.name}</span>`).join('')}<span class="chip" style="margin-left:8px">Bidding only</span></div>
+    <div class="row c4" style="margin-bottom:14px">${kpi('Networks',m.summary.networks,'','muted')}${kpi('Bidding share',pct(bs),'▲ recommended','up')}${kpi('Best eCPM',m.summary.best_ecpm.ad_source,'$'+m.summary.best_ecpm.ecpm.toFixed(2),'muted')}${kpi('Blended fill',pct(m.summary.blended_fill),'','muted')}</div>
+    <div class="card pad0" style="margin-bottom:14px"><div class="ct" style="padding:16px 17px 0"><h3>Network performance</h3><span class="lnk">＋ Add network</span></div><table style="margin-top:10px"><thead><tr><th>Network</th><th>Type</th><th>Fill</th><th>eCPM</th><th>Rev share</th><th>Latency</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="row c2"><div class="card"><div class="ct"><h3>Bidding vs Waterfall</h3></div><div style="display:flex;height:10px;border-radius:100px;overflow:hidden;background:var(--raise);margin:6px 0 10px"><i style="width:${(bs*100).toFixed(0)}%;background:var(--good)"></i><i style="width:${(100-bs*100).toFixed(0)}%;background:var(--watch)"></i></div><div class="lgd"><span><i class="dot" style="background:var(--good)"></i> Bidding ${pct(bs)}</span><span><i class="dot" style="background:var(--watch)"></i> Waterfall ${pct(1-bs)}</span></div><p style="font-size:13px;color:var(--ink2);margin-top:10px">Google recommendation: <b>hybrid</b>. Bidding share badhao.</p></div>
+    <div class="card" style="border-color:#2b466f"><div class="ct"><h3>💡 Suggestions</h3><span class="pill p-p">est. +$260/mo</span></div><div class="feed">${sug}</div></div></div>`;
+  return s;
+}
+
+// ---------- RECOMMENDATIONS ----------
+function renderReco(){
+  const s=screenDiv('reco');const r=DATA.recommendations;
+  const items=r.items.map((x,i)=>`<div class="card" style="display:flex;gap:15px;align-items:flex-start"><div style="font-size:20px;font-weight:800;color:var(--faint);min-width:24px">${i+1}</div><div style="flex:1"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>${x.action}</b><span class="pill p-p">${x.confidence}</span>${x.ab?'<span class="pill p-b">A/B</span>':''}</div><div class="muted" style="font-size:13px;margin-top:4px">${x.reason} · ${x.place}</div></div><div style="text-align:right;min-width:100px">${x.uplift?'<div class="est" style="font-size:18px">'+money(x.uplift)+'/mo</div>':''}</div></div>`).join('');
+  s.innerHTML=`<h2 class="sc">Recommendations</h2><p class="scd">Ranked · root cause: <b style="color:var(--watch)">${r.root_cause[0]}</b> — ${r.root_cause[1]}</p>
+    <div class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:18px;flex-wrap:wrap"><div><div class="muted" style="font-size:12px">Total estimated uplift</div><div style="font-size:28px;font-weight:800;color:var(--good)">${money(r.total_uplift)}/mo</div></div><div style="height:36px;width:1px;background:var(--line2)"></div><div><div class="muted" style="font-size:12px">≈ Current monthly</div><div style="font-size:18px;font-weight:700">~+18%</div></div><div class="spacer"></div><div class="muted" style="font-size:12px;max-width:260px">Har change A/B se confirm karo. Decision metric: total revenue + retention.</div></div>
+    <div class="feed" style="gap:12px">${items}</div>`;
+  return s;
+}
+
+// ---------- ACCOUNT HEALTH ----------
+function renderHealth(){
+  const s=screenDiv('health');const h=DATA.account_health;
+  const tiles=[['Ad serving',h.status==='red'?'🔴 Limited':'🟢 No limits'],['IVT risk',h.issues.some(i=>i[1].includes('invalid'))?'🟡 flag':'🟢 clean'],['Consent (TCF)',h.issues.some(i=>i[1].includes('consent'))?'🟡 gaps':'🟢 ok'],['app-ads.txt','🟢 verified']];
+  const per=h.per_app||[];
+  const perRows=per.map(a=>`<tr><td class="nm">${a.app}</td><td><span class="pill p-g">✓ verified</span></td><td><span class="pill p-g">${a.consent}</span></td><td><span class="pill ${a.tcf==='v2.3'?'p-g':'p-y'}">${a.tcf}</span></td><td><span class="pill ${a.ivt==='flag'?'p-r':'p-g'}">${a.ivt}</span></td><td><span class="pill p-g">${a.serving}</span></td></tr>`).join('');
+  const issues=h.issues.map(([sev,msg])=>`<div class="al ${sev==='critical'?'crit':sev}"><span>${sev==='critical'?'🔴':sev==='warning'?'🟠':'🟡'}</span><span>${msg}</span></div>`).join('')||'<div class="al good"><span>✓</span><span>All clear</span></div>';
+  s.innerHTML=`<h2 class="sc">Account Health &amp; Compliance</h2><p class="scd">IVT · consent · app-ads.txt — problem se pehle.</p>
+    <div class="row c4" style="margin-bottom:16px">${tiles.map(t=>`<div class="card"><div class="l muted" style="font-size:11px;text-transform:uppercase;font-weight:700">${t[0]}</div><div style="font-size:16px;font-weight:800;margin-top:4px">${t[1]}</div></div>`).join('')}</div>
+    <div class="row c3"><div class="card span2 pad0"><div class="ct" style="padding:16px 17px 0"><h3>Per-app compliance</h3></div><table style="margin-top:10px"><thead><tr><th>App</th><th>app-ads.txt</th><th>Consent</th><th>TCF</th><th>IVT</th><th>Serving</th></tr></thead><tbody>${perRows}</tbody></table></div>
+    <div class="card"><div class="ct"><h3>Action items</h3></div><div class="feed">${issues}</div></div></div>`;
+  return s;
+}
+
+// ---------- SETTINGS ----------
+function renderSettings(){
+  const s=screenDiv('settings');const accts=DATA.accounts||[];
+  const cards=accts.map(a=>`<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><div><div class="appname">🏢 ${a.label}</div><div class="muted" style="font-size:12px">${a.account_id}</div></div><span class="pill p-g">✓ Connected</span></div><div class="kv"><span class="k">OAuth token</span><span class="v" style="color:var(--good)">${a.token}</span></div><div class="kv"><span class="k">Apps</span><span class="v">${a.apps.length} · ${a.apps.join(', ')}</span></div><div class="kv"><span class="k">Last sync</span><span class="v">${a.last_sync}</span></div><div style="display:flex;gap:8px;margin-top:12px"><span class="abtn pri">Re-sync</span><span class="abtn">Re-authorize</span><span class="abtn">Remove</span></div></div>`).join('');
+  const appRows=DATA.apps.map(a=>`<tr><td class="nm">${a.name}</td><td>${a.account}</td><td>Android</td><td>${a.placements}</td><td><span class="pill p-g">Active</span></td></tr>`).join('');
+  s.innerHTML=`<h2 class="sc">Accounts &amp; Apps</h2><p class="scd">AdMob accounts connect karo (ek baar OAuth). Apps auto-sync hote hain.</p>
+    <div class="row c2" style="margin-bottom:14px">${cards}</div>
+    <div class="addbtn" style="margin-bottom:18px">＋ Connect new AdMob account <span style="font-weight:500;color:var(--muted);font-size:12px">— ek baar Google OAuth, phir apps auto-sync</span></div>
+    <div class="card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Apps <span class="muted" style="font-weight:500;font-size:12px">· auto-synced</span></h3><span class="lnk">🔄 Re-sync all</span></div><table style="margin-top:10px"><thead><tr><th>App</th><th>Account</th><th>Platform</th><th>Placements</th><th>Status</th></tr></thead><tbody>${appRows}</tbody></table></div>`;
+  return s;
+}
+
+async function load(){
+  try{ if(!DATA){ const r=await fetch(API_BASE+"/dashboard"); DATA=await r.json(); } render(); }
+  catch(e){ document.getElementById('content').innerHTML='<div class="note">Backend se connect nahi ho paya (GET '+API_BASE+'/dashboard). Demo file me data embedded hota hai.</div>'; }
+}
+load();
+</script>
+</body>
+</html>

@@ -197,11 +197,12 @@ class _DisambiguatedRepo:
 
     SEP = " · "
 
-    def __init__(self, repo):
+    def __init__(self, repo, account_names=None):
         self._r = repo
+        self._names = account_names or {}                # pub-id -> friendly account name
         self._map = {}                                   # app_id -> unique display name
         try:
-            self._map = self._build_map(repo.fetch_network())
+            self._map = self._build_map(repo.fetch_network(), self._names)
             if self._map:
                 print("app-name disambiguation: %d app(s) renamed (duplicate names)" % len(self._map),
                       file=sys.stderr)
@@ -217,7 +218,8 @@ class _DisambiguatedRepo:
         return acc
 
     @classmethod
-    def _build_map(cls, rows):
+    def _build_map(cls, rows, names=None):
+        names = names or {}
         by_name = {}                                     # name -> {app_id: account_id}
         for r in rows:
             aid, nm = r.get("app_id"), r.get("app_name")
@@ -227,7 +229,9 @@ class _DisambiguatedRepo:
         for nm, apps in by_name.items():
             if len(apps) < 2:
                 continue                                 # already unique — leave it alone
-            short = {aid: (acc[:8] + "…" if len(acc) > 9 else acc) for aid, acc in apps.items()}
+            # prefer the human account name from config/account_names.json; fall back to the pub id
+            short = {aid: (names.get(acc) or (acc[:8] + "…" if len(acc) > 9 else acc))
+                     for aid, acc in apps.items()}
             if len(set(short.values())) < len(apps):     # shortened accounts clash — use them in full
                 short = dict(apps)
             if len(set(short.values())) < len(apps):     # same name AND same account — use the app id
@@ -279,6 +283,25 @@ class _DisambiguatedRepo:
 
     def fetch_adunit_country_daily(self):
         return self._nested(self._r.fetch_adunit_country_daily())
+
+
+def _account_names(data_dir):
+    """Friendly labels for AdMob accounts, from config/account_names.json — e.g.
+    {"pub-1234567890123456": "Helsy Main"}. Used to tag apps whose display name is shared by more
+    than one app, so the tag reads "Gallery · Helsy Main" instead of "Gallery · pub-1234…".
+    Optional: any account missing here just falls back to its shortened publisher id."""
+    path = os.path.join(os.path.dirname(data_dir) or ".", "config", "account_names.json")
+    try:
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                raw = json.load(f) or {}
+            out = {str(k).strip(): str(v).strip() for k, v in raw.items() if str(v or "").strip()}
+            if out:
+                print("account names: %d label(s) loaded" % len(out), file=sys.stderr)
+            return out
+    except Exception as e:
+        print(f"account names skipped: {e}", file=sys.stderr)
+    return {}
 
 
 def _hidden_app_ids(repo, data_dir):
@@ -518,7 +541,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         # still holds the data; the picker/catalog below still lists every app.
         # Make duplicate app names unique BEFORE anything is built, so every view (and the apps
         # catalog below) reads the same unambiguous name — including historical rows.
-        repo = _DisambiguatedRepo(repo)
+        repo = _DisambiguatedRepo(repo, _account_names(data_dir))
         hidden = _hidden_app_ids(repo, data_dir)
         frepo = _AppFilteredRepo(repo, hidden) if hidden else repo
         dashboard = build_from_db(frepo, today=today)   # real data (today = the live/partial day)
@@ -708,6 +731,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     with open(os.path.join(out_dir, "selected_apps.json"), "w", encoding="utf-8") as f:
         f.write(open(sel_src, encoding="utf-8").read() if os.path.exists(sel_src) else '{"accounts":{}}')
 
+    # Serve the friendly account names so the Accounts & Apps screen can show + edit them; the UI
+    # commits changes back to config/account_names.json via the GitHub API (same as the two above).
+    an_src = os.path.join(os.path.dirname(data_dir) or ".", "config", "account_names.json")
+    with open(os.path.join(out_dir, "account_names.json"), "w", encoding="utf-8") as f:
+        f.write(open(an_src, encoding="utf-8").read() if os.path.exists(an_src) else "{}")
+
     # Cloudflare cache policy (_headers is read by Cloudflare's static-asset host).
     # dashboard.json changes hourly, so it must NEVER be served from a stale cache
     # — no-store forces every request to fetch the freshest file from origin.
@@ -717,6 +746,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 "/baseline_geo.json\n  Cache-Control: no-store\n\n"
                 "/baseline_daily.json\n  Cache-Control: no-store\n\n"
                 "/selected_apps.json\n  Cache-Control: no-store\n\n"
+                "/account_names.json\n  Cache-Control: no-store\n\n"
                 "/index.html\n  Cache-Control: no-cache\n")
 
     alerts = send_alerts(dashboard, s)

@@ -1393,6 +1393,19 @@ const GH_REPO='bhanderirajdeepioo-lab/admob-iq', GH_PATH='config/approved_ranges
 function loadApprovals(){ fetch('approved_ranges.json?t='+Date.now()).then(r=>r.ok?r.json():{placements:{}}).then(j=>{APPR=j&&j.placements?j:{placements:{}}; bRerender&&bRerender();}).catch(()=>{}); }
 // ===== APP SELECTION (which apps to keep) — working copy of selected_apps.json =====
 let APPSEL={accounts:{}};
+// ── Friendly account names (config/account_names.json) ────────────────────────
+// AdMob gives accounts no display name, only a publisher id. Apps whose display name is shared by
+// more than one app get tagged with their owning account ("Gallery · pub-6124…"); naming the
+// accounts here turns that into "Gallery · Helsy Main". Edited on the Accounts & Apps screen and
+// committed to the private repo — the robot applies it on its next run.
+let ACCNAMES={};
+function loadAccNames(){ fetch('account_names.json?t='+Date.now()).then(r=>r.ok?r.json():{})
+  .then(j=>{ ACCNAMES=(j&&typeof j==='object')?j:{}; rerenderSettings(); }).catch(()=>{}); }
+function accNameSet(acc,val){ ACCNAMES[acc]=String(val||'').trim(); }
+function accNameSave(){
+  const clean={}; Object.keys(ACCNAMES).forEach(k=>{ if(ACCNAMES[k]) clean[k]=ACCNAMES[k]; });
+  ghCommitFile('config/account_names.json', clean, 'account names');
+}
 // The SERVED selected_apps.json (updated by the robot from the git-committed config) is the source
 // of truth. localStorage only bridges the short window between a "Save" and the robot applying it:
 // we keep a local entry ONLY while it still differs from served (genuinely pending), and drop it the
@@ -1984,7 +1997,12 @@ function renderHealth(){
 // ---------- SETTINGS ----------
 function renderSettings(){
   const s=screenDiv('settings');const accts=DATA.accounts||[];
-  const cards=accts.map(a=>`<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><div><div class="appname">🏢 ${a.label}</div><div class="muted" style="font-size:12px">${a.account_id}</div></div><span class="pill p-g">✓ Connected</span></div><div class="kv"><span class="k">OAuth token</span><span class="v" style="color:var(--good)">${a.token}</span></div><div class="kv"><span class="k">Apps</span><span class="v">${a.apps.length}</span></div><div class="kv"><span class="k">Last sync</span><span class="v">${a.last_sync}</span></div><div class="muted" style="font-size:12px;margin-top:12px">🔄 Auto-sync har ghante — GitHub ka robot chalata hai</div></div>`).join('');
+  const cards=accts.map(a=>`<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><div><div class="appname">🏢 ${ACCNAMES[a.account_id]||a.label}</div><div class="muted" style="font-size:12px">${a.account_id}</div></div><span class="pill p-g">✓ Connected</span></div><div class="kv"><span class="k">OAuth token</span><span class="v" style="color:var(--good)">${a.token}</span></div><div class="kv"><span class="k">Apps</span><span class="v">${a.apps.length}</span></div><div class="kv"><span class="k">Last sync</span><span class="v">${a.last_sync}</span></div>
+    <div style="margin-top:12px"><div class="muted" style="font-size:11.5px;margin-bottom:5px">Account ka naam <span class="faint">— jin apps ke naam same hain unpe ye tag lagega</span></div>
+      <input type="text" value="${(ACCNAMES[a.account_id]||'').replace(/"/g,'&quot;')}" placeholder="jaise: Helsy Main" oninput="accNameSet('${a.account_id}',this.value)"
+             style="width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;color:var(--ink);font-size:13px;font-family:inherit"></div>
+    <div class="muted" style="font-size:12px;margin-top:12px">🔄 Auto-sync — GitHub ka robot chalata hai</div></div>`).join('')
+    +`<div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div class="appname">✏️ Account naam save karo</div><div class="muted" style="font-size:12px;margin-top:3px">Robot agle run me apply karega — phir alerts/tables me <b>pub-6124…</b> ki jagah tumhara naam dikhega.</div></div><span class="abtn pri" style="cursor:pointer" onclick="accNameSave()">💾 Save names</span></div>`;
   // per-account app picker (checkbox = keep; unticked = hide + fetch band). From apps_catalog.
   const byAcc=appCatByAccount(); const accLabel={}; accts.forEach(a=>accLabel[a.account_id]=a.label||a.account_id);
   const tok=ghToken();
@@ -2027,6 +2045,7 @@ async function load(){
     }
     render();
     loadAppSel();                            // which apps the user kept (hides unselected)
+    loadAccNames();                          // friendly names for the AdMob accounts
     setInterval(updateFreshness, 30000);    // tick "X min pehle" every 30s
     setInterval(refreshData, 300000);        // pull fresh data every 5 min (robot updates hourly)
   }
