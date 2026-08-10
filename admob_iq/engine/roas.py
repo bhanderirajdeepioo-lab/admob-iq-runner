@@ -29,9 +29,22 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
     # manual aliases: map a Google Ads store id straight to an AdMob app NAME. Needed when an AdMob
     # app has no linked store listing (blank store id) so it can't auto-match — its spend would be
     # 'unmatched'. Overrides the auto map so these campaigns attribute to the right app.
+    rev_by_name = {}
+    for c in (apps_catalog or []):
+        nm = c.get("app_name") or c.get("app_id")
+        if nm:
+            rev_by_name[nm] = rev_by_name.get(nm, 0) + (c.get("rev") or 0)
     for ga_sid, app_name in (aliases or {}).items():
-        if ga_sid and app_name:
-            by_store_app[str(ga_sid).strip()] = app_name
+        if not (ga_sid and app_name):
+            continue
+        target = app_name
+        if target not in rev_by_name:
+            # duplicate app names get a disambiguating suffix ("Name · pub-1234…") — so an alias
+            # written against the plain name still resolves; pick the highest-revenue match.
+            cand = [n for n in rev_by_name if n.startswith(app_name + " ")]
+            if cand:
+                target = max(cand, key=lambda n: rev_by_name.get(n, 0))
+        by_store_app[str(ga_sid).strip()] = target
     camps_by_sid = spend.get("campaigns") or {}
     by_app, unmatched = {}, 0
     unmatched_detail = {}                                # store_id -> {spend, campaigns} we couldn't attribute
