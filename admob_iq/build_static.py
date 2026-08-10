@@ -185,10 +185,9 @@ class _AppFilteredRepo:
 class _DisambiguatedRepo:
     """Read-only wrapper that makes app NAMES unique.
 
-    AdMob happily lets two different apps carry the SAME display name — this publisher has four
-    apps called "Gallery - Photo Gallery…" spread across accounts — so an alert, a mover or a
+    AdMob allows two different apps to carry the SAME display name, so an alert, a mover or a
     deduction row is impossible to trace back to the right app. Where a name is shared by more than
-    one app_id we append the owning account ("Gallery - Photo Gallery · pub-6124…").
+    one app_id we append the owning account ("<app name> · pub-1234…").
 
     Done here, at one choke point, so EVERY view (KPIs, alerts, movers, mediation, deductions,
     baseline, ROAS, apps catalog) shows the same unambiguous name — and, unlike renaming the app
