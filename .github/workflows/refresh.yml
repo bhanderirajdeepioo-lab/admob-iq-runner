@@ -1,8 +1,28 @@
 name: AdMob IQ — refresh (public runner)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# WHY THIS REPO IS PUBLIC
+# GitHub gives PUBLIC repos unlimited free Actions minutes; a private repo only
+# gets 2,000 min/month. So this repo holds ONLY CODE. It clones the PRIVATE data
+# repo, refreshes the AdMob + Google Ads data, and pushes the results back there.
+#
+# NO revenue data is ever stored in this public repo:
+#   * data/ and site/ are .gitignore'd here and are never committed to this repo
+#   * this workflow only ever pushes to the PRIVATE repo (DATA_REPO)
+#   * build output is suppressed, because Actions logs on a public repository are
+#     world-readable (see the "Build" step)
+#   * no artifacts are uploaded
+# Secrets are safe: GitHub never exposes secrets to forks or pull requests, and
+# this workflow only runs on a schedule or a manual click by a repo admin.
+# ─────────────────────────────────────────────────────────────────────────────
+
 on:
   schedule:
-    - cron: "37 */2 * * *"
+    # Every 30 minutes. Minutes are free (public repo) and AdMob's reporting quota
+    # is 900 reads/MINUTE — a run uses ~50 reads, so this is far inside it.
+    # :07/:37 rather than :00/:30 because GitHub throttles scheduled runs hardest
+    # on the hour and drops many of them.
+    - cron: "7,37 * * * *"
   workflow_dispatch:
     inputs:
       backfill_days:
@@ -11,7 +31,7 @@ on:
         default: "35"
 
 permissions:
-  contents: read
+  contents: read                 # this repo is never written to
 
 concurrency:
   group: admob-iq-refresh
@@ -21,7 +41,7 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4          # this repo = code only
 
       - uses: actions/setup-python@v5
         with:
@@ -36,7 +56,7 @@ jobs:
           DATA_REPO: ${{ secrets.DATA_REPO }}
           DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
         run: |
-          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing"; exit 1; }
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing (format: owner/repo)"; exit 1; }
           test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
           git clone --depth=1 "https://x-access-token:$DATA_REPO_TOKEN@github.com/$DATA_REPO.git" _private \
             > /dev/null 2>/tmp/clone.err || { sed -E 's#//[^@]*@#//***@#g' /tmp/clone.err; echo "::error::could not clone the private data repo"; exit 1; }
@@ -69,6 +89,10 @@ jobs:
           SMTP_PASS:            ${{ secrets.SMTP_PASS }}
           ALERT_EMAIL_TO:       ${{ secrets.ALERT_EMAIL_TO }}
         run: |
+          # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
+          # app ids and revenue totals. So its output goes to a file, never to the log. On
+          # failure we show only the tail with long digit runs masked, which keeps the error
+          # text readable ("OAuth fail", "PERMISSION_DENIED") while hiding ids and figures.
           if python -m admob_iq.build_static > /tmp/build.log 2>&1; then
             echo "build complete"
           else
@@ -83,6 +107,9 @@ jobs:
           cd _private
           git config user.name  "admob-iq-bot"
           git config user.email "admob-iq-bot@users.noreply.github.com"
+          # Race-proof: always rebuild on top of whatever is on the remote right now, then
+          # push. Retry a few times in case another run lands in between.
+          pushed=0
           for i in 1 2 3 4 5; do
             git fetch --depth=1 origin main > /dev/null 2>&1
             git reset --hard origin/main    > /dev/null 2>&1
@@ -90,9 +117,42 @@ jobs:
             cp -a ../data/. data/ 2>/dev/null || true
             cp -a ../site/. site/ 2>/dev/null || true
             git add -A data site
-            if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+            if git diff --cached --quiet; then echo "nothing to commit"; pushed=1; break; fi
             git commit -q -m "refresh $(date -u '+%F %H:%M') UTC"
-            if git push -q origin HEAD:main 2>/dev/null; then echo "pushed on attempt $i"; exit 0; fi
-            echo "push attempt $i rejected — retrying"; sleep 5
+            if git push -q origin HEAD:main 2>/dev/null; then echo "pushed on attempt $i"; pushed=1; break; fi
+            echo "push attempt $i rejected — retrying on latest main"; sleep 5
           done
-          echo "::error::push failed after 5 attempts"; exit 1
+          [ "$pushed" = 1 ] || { echo "::error::push to the private repo failed after 5 attempts"; exit 1; }
+
+      - name: Compact the private repo when it grows too big
+        if: success()
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          MAX_REPO_MB: "2500"          # compact past this; GitHub warns around 5 GB
+        run: |
+          # Every run rewrites ~57 MB of .gz data files, so the private repo's git history
+          # grows ~3 MB per run — at a 30-minute cadence that is ~4.7 GB/month. The HISTORY
+          # of those files carries no information: each file already holds the full time
+          # series. So once the repo passes MAX_REPO_MB we replace the history with a single
+          # commit containing the exact same working tree. Every tracked file survives
+          # (data, site, config, code, workflows) — only old git revisions are dropped.
+          size_kb=$(curl -fsS -H "Authorization: Bearer $DATA_REPO_TOKEN" \
+                         -H "Accept: application/vnd.github+json" \
+                         "https://api.github.com/repos/$DATA_REPO" 2>/dev/null \
+                    | python3 -c "import json,sys; print(int(json.load(sys.stdin).get('size') or 0))" 2>/dev/null || echo 0)
+          echo "private repo: $((size_kb/1024)) MB (compact above ${MAX_REPO_MB} MB)"
+          if [ "${size_kb:-0}" -le $((MAX_REPO_MB*1024)) ]; then echo "no compaction needed"; exit 0; fi
+          cd _private
+          # SAFETY: never force-push an empty or half-built tree over the real history.
+          test -s site/dashboard.json      || { echo "::warning::dashboard.json missing — compaction skipped"; exit 0; }
+          test -n "$(ls -A data 2>/dev/null)" || { echo "::warning::data/ is empty — compaction skipped"; exit 0; }
+          git checkout -q --orphan _compact
+          git add -A
+          git -c user.name="admob-iq-bot" -c user.email="admob-iq-bot@users.noreply.github.com" \
+              commit -q -m "compact history $(date -u '+%F') — same files, old git revisions dropped"
+          if git push -q --force origin _compact:main 2>/dev/null; then
+            echo "history compacted — repo back to roughly the size of one snapshot"
+          else
+            echo "::warning::compaction push failed — nothing lost, it will retry next run"
+          fi
