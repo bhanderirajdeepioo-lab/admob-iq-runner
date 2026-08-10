@@ -1,0 +1,19 @@
+# Core
+psycopg[binary]==3.2.3
+PyYAML==6.0.2
+python-dotenv==1.0.1
+
+# AdMob API (Google)
+google-api-python-client==2.149.0
+google-auth==2.35.0
+google-auth-oauthlib==1.2.1
+
+# API backend
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# Notifications
+requests==2.32.3
+
+# Dev / QA
+pytest==8.3.4

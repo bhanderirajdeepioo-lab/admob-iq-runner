@@ -1,0 +1,12 @@
+# One entry per AdMob account. Each account needs its own one-time OAuth consent
+# (there are NO service accounts for the AdMob API). Run:  python -m admob_iq.fetch.authorize
+# to produce a refresh token, then paste it here (or store encrypted in the DB).
+accounts:
+  - account_id: "pub-1122334455667788"
+    label: "Games Studio"
+    currency_code: "USD"
+    refresh_token: "PASTE_REFRESH_TOKEN_1"
+  - account_id: "pub-9988776655443322"
+    label: "Utility Apps"
+    currency_code: "USD"
+    refresh_token: "PASTE_REFRESH_TOKEN_2"
