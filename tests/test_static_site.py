@@ -549,3 +549,22 @@ def test_backfill_skips_decided_account_with_no_apps(monkeypatch, tmp_path):
         [{"account_id": "pub-empty"}], repo, datetime.date(2026, 7, 28),
         mode="live", client_id="x", client_secret="y", currency="USD", data_dir=str(d))
     assert hits == []                                    # never even constructed a client call for it
+
+
+def test_built_site_is_noindex_and_leaks_no_referrer(tmp_path):
+    """The dashboard sits on a public static host with no login, so the URL is the only thing
+    keeping it private. A crawler indexing it once would put revenue figures into search results
+    permanently — that must be impossible to regress into."""
+    out, data = str(tmp_path / "site"), str(tmp_path / "data")
+    build_static.build(out_dir=out, data_dir=data, today=date(2026, 7, 23), mode="mock")
+
+    robots = open(os.path.join(out, "robots.txt"), encoding="utf-8").read()
+    assert "User-agent: *" in robots and "Disallow: /" in robots
+
+    headers = open(os.path.join(out, "_headers"), encoding="utf-8").read()
+    assert headers.lstrip().startswith("/*"), "the noindex rule must cover EVERY path, not just one"
+    assert "noindex" in headers and "nofollow" in headers and "noarchive" in headers
+    assert "Referrer-Policy: no-referrer" in headers        # don't hand the URL to sites clicked through to
+    # the data files must still never be cached anywhere
+    for p in ("/dashboard.json", "/selected_apps.json", "/account_names.json", "/app_names.json"):
+        assert f"{p}\n  Cache-Control: no-store" in headers

@@ -1,0 +1,25 @@
+# ── THIS REPO IS PUBLIC. Nothing here may ever hold real AdMob data. ─────────
+# The workflow creates data/, site/ and config/ at runtime by cloning the
+# PRIVATE repo. Today the workflow cannot commit them (it runs with
+# `permissions: contents: read`), but if this repo is ever cloned to a laptop
+# and built there, a plain `git add -A` would push the entire revenue history
+# to the open internet. This file makes that impossible.
+data/
+site/
+config/*.json
+config/accounts.yaml
+config/accounts.yml
+*.json.gz
+*.log
+
+# secrets / local env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+__pycache__/
+*.pyc
+.DS_Store
+.pytest_cache/
