@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a1120">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AdMob IQ">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232f6bff'/%3E%3Cpath d='M50 24 L76 50 L50 76 L24 50 Z' fill='white'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%230a1120'/%3E%3Cpath d='M50 26 L74 50 L50 74 L26 50 Z' fill='%232f6bff'/%3E%3C/svg%3E">
 <title>AdMob IQ — Dashboard</title>
 <style>
   :root{--bg:#0a1120;--bg2:#0d1626;--panel:#111d31;--panel2:#0f1a2c;--raise:#16233a;--line:#213249;--line2:#2b3f5c;
@@ -179,6 +186,17 @@
     .mrev{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
     .mpl{font-size:12px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
     .mchev{color:var(--faint);font-size:20px;flex:none}
+  }
+  /* ===== Phase 3: touch polish + iOS/Android standalone (add-to-home-screen) ===== */
+  body{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}
+  @media(max-width:760px){
+    .hamb{display:none}                                     /* bottom-bar "More" opens the nav drawer now */
+    .topbar{padding-top:calc(9px + env(safe-area-inset-top,0px))}   /* clear the notch/status bar in standalone */
+    .content{-webkit-overflow-scrolling:touch}
+    tr.clk:active td{background:var(--raise)}
+    .nav button:active{background:var(--raise)}
+    .botbar .tabbtn:active{opacity:.55}
+    .ctrl:active{background:var(--raise)}
   }
 </style>
 </head>
