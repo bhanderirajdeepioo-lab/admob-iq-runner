@@ -7,7 +7,8 @@ name: AdMob IQ — refresh (public runner)
 # repo, refreshes the AdMob + Google Ads data, and pushes the results back there.
 #
 # NO revenue data is ever stored in this public repo:
-#   * data/ and site/ are .gitignore'd here and are never committed to this repo
+#   * data/ and site/ are .gitignore'd here, and this job runs with contents: read
+#     so it could not commit them even if it tried
 #   * this workflow only ever pushes to the PRIVATE repo (DATA_REPO)
 #   * build output is suppressed, because Actions logs on a public repository are
 #     world-readable (see the "Build" step)
@@ -97,7 +98,9 @@ jobs:
             echo "build complete"
           else
             echo "::error::build failed — tail below, digits masked for privacy"
-            tail -n 30 /tmp/build.log | sed -E 's/[0-9]{4,}/####/g'
+            # mask decimals FIRST (a revenue figure like 89.43 has no 4-digit run),
+            # then any long digit run (publisher ids, app ids, counts).
+            tail -n 30 /tmp/build.log | sed -E 's/[0-9]+\.[0-9]+/#.##/g; s/[0-9]{4,}/####/g'
             exit 1
           fi
 
