@@ -82,6 +82,44 @@ def test_fetch_app_spend_mock_shape():
     assert st == {"ENABLED", "PAUSED"}
 
 
+def test_aggregate_installs_sums_by_store_and_date():
+    rows = [
+        {"store_id": "com.x.a", "date": "2026-07-20", "installs": 12.0},
+        {"store_id": "com.x.a", "date": "2026-07-20", "installs": 3.0},   # second campaign, same day
+        {"store_id": "com.x.a", "date": "2026-07-21", "installs": 5.0},
+        {"store_id": "com.x.b", "date": "2026-07-20", "installs": 7.0},
+    ]
+    agg = google_ads._aggregate_installs(rows)
+    assert agg["com.x.a"] == {"2026-07-20": 15.0, "2026-07-21": 5.0}
+    assert agg["com.x.b"] == {"2026-07-20": 7.0}
+
+
+def test_build_roas_threads_installs_per_app():
+    spend = {"daily": {"com.x.a": {"2026-07-20": 1_000_000, "2026-07-21": 2_000_000}},
+             "installs": {"com.x.a": {"2026-07-20": 8.0, "2026-07-21": 4.0}},
+             "campaigns": {}, "currency_src": "USD", "fx": {}}
+    ids = {"app-a": "com.x.a"}
+    catalog = [{"app_id": "app-a", "app_name": "App A", "rev": 100}]
+    r = build_roas(spend, ids, catalog)
+    assert r["by_app"]["App A"]["installs_daily"] == {"2026-07-20": 8.0, "2026-07-21": 4.0}
+    # spend still intact alongside installs
+    assert r["by_app"]["App A"]["daily"] == {"2026-07-20": 1_000_000, "2026-07-21": 2_000_000}
+
+
+def test_build_roas_installs_absent_is_safe():
+    """Older spend payloads (no 'installs' key) must not crash the join; installs_daily just empty."""
+    spend = {"daily": {"com.x.a": {"2026-07-20": 1_000_000}}, "campaigns": {},
+             "currency_src": "USD", "fx": {}}
+    r = build_roas(spend, {"app-a": "com.x.a"}, [{"app_id": "app-a", "app_name": "App A", "rev": 1}])
+    assert r["by_app"]["App A"]["installs_daily"] == {}
+
+
+def test_mock_spend_carries_installs():
+    out = google_ads.fetch_app_spend({}, "2026-07-18", "2026-07-20", mode="mock")
+    assert out["installs"]["com.mock.1"]["2026-07-18"] == 50        # 50 + 0*20
+    assert out["installs"]["com.mock.2"]["2026-07-18"] == 70        # 50 + 1*20
+
+
 def test_norm_store_strips_platform_prefix():
     assert google_ads._norm_store("2:1234567") == "1234567"
     assert google_ads._norm_store(" com.x.y ") == "com.x.y"

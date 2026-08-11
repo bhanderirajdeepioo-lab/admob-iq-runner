@@ -51,6 +51,7 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
         target = max(hit, key=lambda n: rev_by_name.get(n, 0)) if hit else cands[0]
         by_store_app[str(ga_sid).strip()] = target
     camps_by_sid = spend.get("campaigns") or {}
+    installs_by_sid = spend.get("installs") or {}        # store_id -> {date: campaign-attributed installs}
     by_app, unmatched = {}, 0
     unmatched_detail = {}                                # store_id -> {spend, campaigns} we couldn't attribute
     for sid, dd in (spend.get("daily") or {}).items():
@@ -62,9 +63,11 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
             unmatched_detail[sid] = {"store_id": sid, "spend_usd_micros": s,
                                      "n_campaigns": len(camps_by_sid.get(sid, [])), "sample": names[:3]}
             continue
-        e = by_app.setdefault(app, {"store_id": sid, "daily": {}, "campaigns": []})
+        e = by_app.setdefault(app, {"store_id": sid, "daily": {}, "campaigns": [], "installs_daily": {}})
         for d, v in dd.items():
             e["daily"][d] = e["daily"].get(d, 0) + v
+        for d, v in (installs_by_sid.get(sid) or {}).items():   # installs window to the same period in the UI
+            e["installs_daily"][d] = e["installs_daily"].get(d, 0) + v
         e["campaigns"].extend(camps_by_sid.get(sid, []))
     # surface the biggest unmatched store ids so coverage gaps are visible + diagnosable (not a black-box sum)
     top_unmatched = sorted(unmatched_detail.values(), key=lambda x: -x["spend_usd_micros"])[:30]
