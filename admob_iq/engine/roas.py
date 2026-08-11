@@ -12,8 +12,9 @@ than silently dropped.
 def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
     """spend: fetch_app_spend output (or None). app_store_ids: {app_id: store_id}.
     apps_catalog: [{app_id, app_name, rev, ...}]. aliases: {google_ads_store_id: admob_app_name}
-    manual overrides for apps whose AdMob store listing isn't linked (blank store id) so they'd
-    otherwise land in 'unmatched'. Returns the roas.json payload."""
+    (or a LIST of candidate names, when the app has been renamed) — manual overrides for apps whose
+    AdMob store listing isn't linked (blank store id) so they'd otherwise land in 'unmatched'.
+    Returns the roas.json payload."""
     if spend is None:                                    # Google Ads not configured (secrets missing)
         return {"configured": False, "by_app": {}, "currency_src": "USD", "fx": {},
                 "unmatched_spend_usd": 0}
@@ -34,16 +35,20 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
         nm = c.get("app_name") or c.get("app_id")
         if nm:
             rev_by_name[nm] = rev_by_name.get(nm, 0) + (c.get("rev") or 0)
-    for ga_sid, app_name in (aliases or {}).items():
-        if not (ga_sid and app_name):
+    for ga_sid, alias in (aliases or {}).items():
+        if not (ga_sid and alias):
             continue
-        target = app_name
-        if target not in rev_by_name:
+        # an alias value may be one name, or (from the build) every name that app is now known by
+        # after a rename — pick whichever candidate actually carries revenue.
+        cands = [c for c in (alias if isinstance(alias, (list, tuple)) else [alias]) if c]
+        hit = [c for c in cands if c in rev_by_name]
+        if not hit:
             # duplicate app names get a disambiguating suffix ("Name · pub-1234…") — so an alias
-            # written against the plain name still resolves; pick the highest-revenue match.
-            cand = [n for n in rev_by_name if n.startswith(app_name + " ")]
-            if cand:
-                target = max(cand, key=lambda n: rev_by_name.get(n, 0))
+            # written against the plain name still resolves.
+            hit = [n for c in cands for n in rev_by_name if n.startswith(c + " ")]
+        if not (hit or cands):
+            continue
+        target = max(hit, key=lambda n: rev_by_name.get(n, 0)) if hit else cands[0]
         by_store_app[str(ga_sid).strip()] = target
     camps_by_sid = spend.get("campaigns") or {}
     by_app, unmatched = {}, 0

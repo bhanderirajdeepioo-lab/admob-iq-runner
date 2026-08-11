@@ -44,6 +44,7 @@
   .kpi .l{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase}.kpi .v{font-size:24px;font-weight:800;margin-top:4px;letter-spacing:-.01em}.kpi .d{font-size:12px;font-weight:700;margin-top:3px}
   .spark{display:flex;align-items:flex-end;gap:2px;height:26px;margin-top:10px}.spark i{flex:1;background:linear-gradient(180deg,var(--cyan),var(--blue2));border-radius:2px;opacity:.85;min-height:3px}
   .spark.g i{background:linear-gradient(180deg,#6ee7b7,var(--good))}.spark.r i{background:linear-gradient(180deg,#ff9a9a,var(--bad))}
+  .spark.o i{background:linear-gradient(180deg,#fcd34d,var(--watch))}   /* ad spend — its own colour, not "bad" */
   table{width:100%;border-collapse:collapse;font-size:13px}
   th{text-align:left;padding:11px 14px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;border-bottom:1px solid var(--line);background:var(--panel2)}
   td{padding:11px 14px;border-bottom:1px solid var(--line);color:var(--ink2)}tr:last-child td{border-bottom:none}td.nm{color:#fff;font-weight:600}
@@ -129,7 +130,11 @@
     /* Overview mobile: stack KPIs(bigger) → apps → chart → movers/attn tap-strips */
     .ov{display:flex;flex-direction:column;gap:12px}
     .ov-kpi{order:1}.ov-apps{order:2}.ov-chart{order:3}.ov-movers{order:4}.ov-attn{order:5}.ov-note{order:6}
-    .ov-kpi.row.c4{grid-template-columns:1fr 1fr;gap:10px}
+    /* KPIs stay 2-up on phones (bigger numbers). 3 classes so this still wins over the
+       .row.c4/.c5 → 1-column rule in the ≤430px block below. With Ad spend that's 5 tiles,
+       so the last one spans the full width instead of sitting alone in half. */
+    .ov-kpi.row.c4,.ov-kpi.row.c5{grid-template-columns:1fr 1fr;gap:10px}
+    .ov-kpi.row.c5>.kpi:nth-child(5){grid-column:1/-1}
     .ov-kpi .kpi{padding:15px 13px}
     .ov-kpi .kpi .v{font-size:25px;margin-top:5px}
     .ov-kpi .kpi .l{font-size:11.5px}
@@ -179,7 +184,7 @@
       <div><h1 id="tb-title">Portfolio Overview</h1><div class="sub" id="tb-sub">Live · engine-computed</div></div>
       <div class="spacer"></div>
       <label class="ctrl" style="cursor:pointer;gap:6px" title="Ek app choose karo — poora dashboard us app ka ho jayega">📱 <span class="cx">App:</span><select id="appsel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none;max-width:220px"></select></label>
-      <label class="ctrl" style="cursor:pointer;gap:6px" title="Time period — poora dashboard isi window ka data dikhata hai"><span class="cx">🗓 Period:</span><select id="rangesel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none"><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="90d">90 days</option><option value="month">This month</option><option value="all">All time</option><option value="custom">Custom…</option></select></label>
+      <label class="ctrl" style="cursor:pointer;gap:6px" title="Time period — poora dashboard isi window ka data dikhata hai"><span class="cx">🗓 Period:</span><select id="rangesel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none"><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="90d">90 days</option><option value="month">This month</option><option value="lastmonth">Last month</option><option value="all">All time</option><option value="custom">Custom…</option></select></label>
       <span class="ctrl" id="rangecustom" style="display:none;gap:6px"><input type="date" id="rc-from" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="cx">→</span><input type="date" id="rc-to" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="applyRangeCustom()">Apply</span></span>
       <span class="live" id="freshness" title="Data kab update hua"><span class="dot-live"></span> <span id="fresh-txt">Live</span></span>
       <span class="ctrl" id="tzchip" title="Ye numbers is time zone par hain — aapke AdMob account ke hisab se (isliye aapki AdMob app se match karte hain)" style="display:none">🕐 <span id="tz-txt"></span></span>
@@ -305,6 +310,17 @@ function windowDates(axis, range, cf, ct){
   const comp = T ? axis.filter(d=>d!==T) : axis.slice();     // complete days = axis minus partial today
   if(range==='all')   return comp;
   if(range==='month'){ const mo=(L||(comp.length?comp[comp.length-1]:"")).slice(0,7); return comp.filter(d=>d.slice(0,7)===mo); }
+  // Last month = the calendar month before the one we are IN, whole (1st to last day), so
+  // month-on-month comparisons are apples-to-apples instead of "30 days back from today".
+  // Anchored on today's DATE, not on the latest complete day: on the 1st of a month the latest
+  // complete day still sits in the old month, and anchoring there would silently show the month
+  // before last. (curWinLabel prints the actual dates, so which month it is stays visible.)
+  if(range==='lastmonth'){
+    const mo=(T||L||(comp.length?comp[comp.length-1]:"")).slice(0,7); if(!mo) return [];
+    const y=+mo.slice(0,4), m=+mo.slice(5,7);
+    const prev = m>1 ? y+'-'+String(m-1).padStart(2,'0') : (y-1)+'-12';
+    return comp.filter(d=>d.slice(0,7)===prev);
+  }
   const n = range==='7d'?7:range==='30d'?30:range==='90d'?90:7;
   return comp.slice(-n);
 }
@@ -317,7 +333,7 @@ function sumDaily(daily, winSet){
           // so the cross-source ratio can nudge >100% — cap at 100% (its conceptual ceiling).
           show: ma? Math.min(1, im/ma) : 0, ctr: im? ck/im : 0};
 }
-function pRangeLabel(r){return {today:'Today',yesterday:'Yesterday','7d':'7 days','30d':'30 days','90d':'90 days',month:'This month',all:'All time',custom:'Custom'}[r]||r;}
+function pRangeLabel(r){return {today:'Today',yesterday:'Yesterday','7d':'7 days','30d':'30 days','90d':'90 days',month:'This month',lastmonth:'Last month',all:'All time',custom:'Custom'}[r]||r;}
 // portfolio calendar axis (all placement dates), cached; invalidated each render()
 function gAxis(){ if(window.__ax) return window.__ax; window.__ax=[...new Set((DATA.placements||[]).flatMap(p=>(p.daily||[]).map(r=>r[0])))].sort(); return window.__ax; }
 function curWinArr(){ const ax=gAxis(); let cf=RCUSTOM.from,ct=RCUSTOM.to;
@@ -440,27 +456,52 @@ function renderOverview(){
   const trendTitle=ap?('Revenue trend · '+APP):'Revenue trend · portfolio';
   const inc=(DATA.movers.increasing||[]).filter(p=>!APP||p.app===APP);
   const dec=(DATA.movers.decreasing||[]).filter(p=>!APP||p.app===APP);
+  // Alert items carry {place, app, country, severity, metrics[], lost} — there is NO `message`
+  // field, so build the one-line summary from the first (worst) metric, the way the Alerts screen
+  // does. Also show which app it is: duplicate app names now carry their account tag.
+  const OVML={revenue:'Revenue',requests:'Requests',match_rate:'Match rate',show_rate:'Show rate',ctr:'CTR'};
   const alertItems=(a.items||[]).filter(x=>!APP||x.app===APP).slice(0,4).map(x=>{const sev=x.severity==='critical'?'crit':x.severity;
-    return `<div class="al ${sev}"><span>${ICON[x.severity]}</span><span><b>${x.place}</b> — ${x.message}<span class="geochip ${x.country.includes('localized')?'loc':''}">${cName(x.country)}</span></span></div>`;}).join('')||'<div class="al good"><span>✓</span><span>Koi alert nahi.</span></div>';
+    const m=(x.metrics||[])[0]||{};
+    // match_rate/show_rate move in POINTS, not percent — capture "29pt" too, else the number vanishes
+    const pctm=(String(m.message||'').match(/(\d+(?:\.\d+)?)(%|×|pt)/)||[])[0]||'';
+    const what=m.metric?`<span class="${m.kind==='spike'?'up':'down'}" style="font-weight:700">${m.kind==='spike'?'▲':'▼'} ${OVML[m.metric]||m.metric}${pctm?' '+pctm:''}</span>`:'';
+    const lost=(x.lost&&x.lost>0)?` <span class="down" style="font-weight:700">~${money(x.lost)}/day</span>`:'';
+    const geo=(x.country&&x.country!=='All')?`<span class="geochip ${String(x.country).includes('localized')?'loc':''}">${cName(x.country)}</span>`:'';
+    return `<div class="al ${sev}"><span>${ICON[x.severity]}</span><span><b>${x.place}</b> ${what}${lost}${geo}${x.app?`<div class="faint" style="font-size:11px;margin-top:2px">${x.app}</div>`:''}</span></div>`;}).join('')||'<div class="al good"><span>✓</span><span>Koi alert nahi.</span></div>';
   const appsShown=APP?DATA.apps.filter(x=>x.name===APP):DATA.apps;
   // per-app windowed revenue + eCPM (summed from that app's placements)
   const appAgg={};(DATA.placements||[]).forEach(p=>{const g=appAgg[p.app]=appAgg[p.app]||{e:0,i:0};const m=sumDaily(p.daily,winSet);g.e+=m.earn;g.i+=m.impr;});
+  // Google Ads marketing spend for the SAME window. Totalled only over the apps actually on screen,
+  // so the KPI always matches the table below it (and the app filter, when one is picked).
+  const SHOWSP=roasOn(), SPA=spendByApp(winSet);
+  const spendTot=appsShown.reduce((t,x)=>t+(SPA[x.name]||0),0);
+  const blended=spendTot>0?k.revenue/spendTot:null;
+  const unmatched=SHOWSP?((DATA.roas.unmatched_spend_usd||0)/1e6):0;
+  // daily spend over the SAME dates the revenue sparkline uses, so the two bars line up visually
+  const spendSeries=SHOWSP?trendDates.map(d=>{ let v=0; const by=DATA.roas.by_app||{};
+    appsShown.forEach(x=>{ const dd=(by[x.name]||{}).daily; if(dd&&dd[d])v+=dd[d]; });
+    return Math.round(v/1e6*100)/100; }):[];
+  const roasCell=(rv,sp)=>{ if(!(sp>0))return '<td><span class="faint">organic</span></td>';
+    const r=rv/sp; return `<td style="font-weight:700">${money(sp)}<div class="${r>=1?'up':'down'}" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div></td>`; };
   const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;
-    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}</span></span></td><td>${money(g.e/1e6)}</td><td>${g.i?csym()+ec.toFixed(2):'—'}</td><td class="${(ap2.change_pct||0)>=0?'up':'down'}">${ap2.change_pct!=null?signed(ap2.change_pct):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
+    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}</span></span></td><td>${money(g.e/1e6)}</td>${SHOWSP?roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${g.i?csym()+ec.toFixed(2):'—'}</td><td class="${(ap2.change_pct||0)>=0?'up':'down'}">${ap2.change_pct!=null?signed(ap2.change_pct):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
   const lastTile=ap?kpi('Placements',(ap.placements||fp.length),APP.slice(0,16),'muted'):kpi('Apps · Accounts',DATA.kpis.apps+' · '+DATA.kpis.accounts,'','muted');
   const moversBody=`${inc.slice(0,2).map(p=>`<div class="al good"><span>▲</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')}
         ${dec.slice(0,2).map(p=>`<div class="al crit"><span>▼</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')||(inc.length?'':'<div class="muted" style="font-size:12px">Is app me abhi mover nahi.</div>')}`;
   s.innerHTML=`${ap?`<div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div style="font-size:24px">📱</div><div><div class="big">${APP}</div><div class="muted" style="font-size:12.5px">Sirf is app ka data${ap.platform?' · '+ap.platform:''} · ${ap.placements} placements</div></div><div class="spacer"></div><span class="lnk" onclick="setApp('')">✕ Saari apps dikhao</span></div>`:''}
     <div class="ov">
-      <div class="ov-kpi row c4">
+      <div class="ov-kpi row ${SHOWSP?'c5':'c4'}">
         ${kpi('Revenue',money(k.revenue),dspan,'muted',sparkbars(trendSeries,'g'))}
+        ${SHOWSP?kpi('Ad spend',spendTot>0?money(spendTot):'—',
+            blended!=null?`ROAS ${blended.toFixed(2)}× · ${dspan}`:`is period me spend nahi · ${dspan}`,
+            blended==null?'muted':(blended>=1?'up':'down'),sparkbars(spendSeries,'o')):''}
         ${kpi('Avg eCPM',csym()+(k.ecpm.toFixed(2)),dspan,'muted',sparkbars(trendSeries))}
         ${kpi('Match rate',pct(k.match_rate||0),dspan,'muted',sparkbars(trendSeries,'g'))}
         ${lastTile}
       </div>
-      <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.</div>
+      <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'Ye app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe click → poori report</span></div>
-        <table style="margin-top:10px"><thead><tr><th>App</th><th>Revenue</th><th>eCPM</th><th>Trend</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
+        <table style="margin-top:10px"><thead><tr><th>App</th><th>Revenue</th>${SHOWSP?'<th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>eCPM</th><th>Trend</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
       <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v),xlab:fmtD,color:'#3dd0f0'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue · cursor pe value</span></div></div>
       <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
       <div class="ov-attn card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
@@ -518,7 +559,7 @@ function openApp(name){
   const d=document.getElementById('pl-detail');d.style.display='block';
   d.innerHTML=`<div class="backlnk" onclick="show('placements')">← Back to apps</div>
     <div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2)"><div style="font-size:26px">📱</div><div><div class="big">${name}</div><div class="muted" style="font-size:12.5px">${app.account} · ${ps.length} placements · <b style="color:var(--ink2)">${revCell(appTot)}</b> <span class="faint">(${winLbl})</span></div></div><div class="spacer"></div><div class="appstat"><div><div class="n" style="color:var(--good)">${app.avg_health}</div><div class="t">Avg health</div></div><div><div class="n" style="color:var(--bad)">${app.at_risk}</div><div class="t">At-risk</div></div></div></div>
-    <div class="note" style="margin:2px 0 12px">⏱ <b>${pRangeLabel(RANGE)}</b> — neeche har metric isi window ka hai. Upar "Period" se badlo (Today/Yesterday/7d/30d/90d/This month/All/Custom).</div>
+    <div class="note" style="margin:2px 0 12px">⏱ <b>${pRangeLabel(RANGE)}</b> — neeche har metric isi window ka hai. Upar "Period" se badlo (Today/Yesterday/7d/30d/90d/This month/Last month/All/Custom).</div>
     <div class="chips" style="margin-top:4px">${chips}</div>
     <div class="card pad0"><table><thead><tr><th>Health</th><th>Placement</th><th>Revenue</th><th>Impr</th><th>Req</th><th>Match</th><th>Show</th><th>CTR</th><th>eCPM</th><th>Trend</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="faint" style="font-size:12px;margin-top:10px">${ps.length} placements · ${winLbl} · row → Report Card. ${RANGE==='today'?'Aaj ka din abhi chal raha hai (live/partial).':RANGE==='custom'?'Custom range (literal dates).':'Poore complete din.'}</p>`;
@@ -558,7 +599,7 @@ function openAppDetail(name){
 
 
   // ----- period chip bar (drives the GLOBAL range) -----
-  const PERIODS=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['30d','30 days'],['90d','90 days'],['month','This month'],['all','All time'],['custom','Custom']];
+  const PERIODS=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['30d','30 days'],['90d','90 days'],['month','This month'],['lastmonth','Last month'],['all','All time'],['custom','Custom']];
   const perBar=PERIODS.map(([v,t])=>{const on=RANGE===v;
     return `<button onclick="adSetRange('${v}')" style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.16)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-weight:${on?650:400};font-size:12.5px;padding:5px 12px;border-radius:8px;cursor:pointer">${t}</button>`;}).join('');
 
@@ -614,8 +655,27 @@ function openAppDetail(name){
     }
   }
 
+  // ----- editable app name (✏️ right in the title) -----
+  // Writes config/app_names.json keyed by app_id; the robot applies it on its next run, so the new
+  // name lands in EVERY view at once (alerts, movers, mediation, ROAS) and history stays intact.
+  const _aid=appIdOf(name), _cust=(APPNAMES||{})[_aid]||'';
+  const nameBlock=`<div style="flex:1;min-width:0">
+      <div id="ad-nameview" class="big" style="display:flex;align-items:center;gap:9px;flex-wrap:wrap"><span>${name}</span>
+        <span onclick="appNameEdit(true)" title="App ka naam badlo" style="cursor:pointer;font-size:11.5px;font-weight:600;color:var(--ink2);border:1px solid var(--line2);background:var(--raise);border-radius:7px;padding:4px 9px;white-space:nowrap">✏️ Naam badlo</span></div>
+      <div id="ad-nameedit" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px">
+        <input id="ad-nameinput" maxlength="80" value="${hAttr(_cust||name)}" placeholder="jaise: Gallery (Main)"
+          onkeydown="if(event.key==='Enter'){appNameSave()}else if(event.key==='Escape'){appNameEdit(false)}"
+          style="background:var(--panel);border:1px solid var(--cyan);color:#fff;border-radius:8px;padding:7px 11px;font:inherit;font-size:15px;font-weight:650;outline:none;flex:1;min-width:210px">
+        <span class="abtn pri" onclick="appNameSave()">💾 Save</span>
+        <span class="abtn" onclick="appNameEdit(false)">Cancel</span>
+        ${_cust?`<span class="abtn" onclick="appNameReset()">↺ AdMob wala naam</span>`:''}
+        <div class="faint" style="font-size:11.5px;flex-basis:100%;line-height:1.55">Robot agle refresh me apply karega — phir alerts, movers, tables, ROAS <b style="color:var(--ink2)">sab jagah</b> yahi naam dikhega, aur purana data bhi isi naam pe rahega. Khaali karke Save = AdMob wala naam wapas.</div>
+      </div>
+      <div class="muted" style="font-size:12.5px">${app.account||''}${app.platform?' · '+app.platform:''} · ${ps.length} ad-units · <b style="color:var(--ink2)">${revCell(K.rev)}</b> <span class="faint">(${winLbl})</span></div>
+    </div>`;
+
   s.innerHTML=`<div class="backlnk" onclick="adBack()">← Overview</div>
-    <div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2)"><div>${appIcon(name,38)}</div><div><div class="big">${name}</div><div class="muted" style="font-size:12.5px">${app.account||''}${app.platform?' · '+app.platform:''} · ${ps.length} ad-units · <b style="color:var(--ink2)">${revCell(K.rev)}</b> <span class="faint">(${winLbl})</span></div></div><div class="spacer"></div><div class="appstat"><div><div class="n" style="color:${app.avg_health>=75?'var(--good)':app.avg_health>=50?'var(--watch)':'var(--bad)'}">${app.avg_health}</div><div class="t">Avg health</div></div><div><div class="n" style="color:var(--bad)">${app.at_risk||0}</div><div class="t">At-risk</div></div></div></div>
+    <div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2)"><div>${appIcon(name,38)}</div>${nameBlock}<div class="spacer"></div><div class="appstat"><div><div class="n" style="color:${app.avg_health>=75?'var(--good)':app.avg_health>=50?'var(--watch)':'var(--bad)'}">${app.avg_health}</div><div class="t">Avg health</div></div><div><div class="n" style="color:var(--bad)">${app.at_risk||0}</div><div class="t">At-risk</div></div></div></div>
     <div class="note" style="margin:2px 0 10px">⏱ <b>${pRangeLabel(RANGE)}</b> <span class="faint">(${winLbl})</span> — ye Overview wala hi period hai; yahan se ya upar "Period" se badlo.</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">${perBar}</div>
     <div class="row c5" style="margin-bottom:14px">
@@ -1404,8 +1464,37 @@ function loadAccNames(){ fetch('account_names.json?t='+Date.now()).then(r=>r.ok?
 function accNameSet(acc,val){ ACCNAMES[acc]=String(val||'').trim(); }
 function accNameSave(){
   const clean={}; Object.keys(ACCNAMES).forEach(k=>{ if(ACCNAMES[k]) clean[k]=ACCNAMES[k]; });
-  ghCommitFile('config/account_names.json', clean, 'account names');
+  ghCommitFile('config/account_names.json', clean, 'account names',
+    '✅ Account naam save — robot agle refresh me apply karega');
 }
+// ── Custom app names (config/app_names.json) ─────────────────────────────────
+// The ✏️ next to the app title on the App Report screen writes here. Keyed by app_id (never by
+// name) so the name can be edited again later, and so EVERY historical row follows it — unlike
+// renaming inside AdMob, which starts a fresh app and splits the history in two. Saved to the
+// private repo; the robot applies it on its next run, everywhere at once.
+let APPNAMES={};
+function loadAppNames(){ fetch('app_names.json?t='+Date.now()).then(r=>r.ok?r.json():{})
+  .then(j=>{ APPNAMES=(j&&typeof j==='object')?j:{}; }).catch(()=>{}); }
+// Names are made unique at build time, so one match is the norm. If two apps somehow still share a
+// name we return nothing rather than rename whichever one happened to be first in the list.
+function appIdOf(name){ const m=((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalog)||[]).filter(x=>x.app_name===name); return m.length===1?m[0].app_id:''; }
+function hAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function appNameEdit(on){ const v=document.getElementById('ad-nameview'), e=document.getElementById('ad-nameedit');
+  if(!v||!e) return; v.style.display=on?'none':'flex'; e.style.display=on?'flex':'none';
+  if(on){ const i=document.getElementById('ad-nameinput'); if(i){ i.focus(); i.select(); } } }
+function appNameSave(){
+  const i=document.getElementById('ad-nameinput'); if(!i) return;
+  const id=appIdOf(ADAPP);
+  if(!id){ bToast('Is app ka id saaf nahi mila — rename skip kiya (galat app ka naam badalne se accha)'); return; }
+  const v=String(i.value||'').trim().slice(0,80);
+  const next={}; Object.keys(APPNAMES).forEach(k=>{ if(APPNAMES[k]&&k!==id) next[k]=APPNAMES[k]; });
+  if(v) next[id]=v;                                  // khaali = override hata do (AdMob wala naam wapas)
+  APPNAMES=next; appNameEdit(false);
+  ghCommitFile('config/app_names.json', next, v?('rename app → '+v):'reset app name',
+    v?('✅ "'+v+'" save — agle refresh (~30 min) me poore dashboard me dikhega')
+     :'✅ Reset — agle refresh me AdMob wala naam wapas aa jayega');
+}
+function appNameReset(){ const i=document.getElementById('ad-nameinput'); if(i)i.value=''; appNameSave(); }
 // The SERVED selected_apps.json (updated by the robot from the git-committed config) is the source
 // of truth. localStorage only bridges the short window between a "Save" and the robot applying it:
 // we keep a local entry ONLY while it still differs from served (genuinely pending), and drop it the
@@ -1422,6 +1511,19 @@ function loadAppSel(){ fetch('selected_apps.json?t='+Date.now()).then(r=>r.ok?r.
     try{ if(Object.keys(pending).length) localStorage.setItem('app_sel',JSON.stringify({accounts:pending})); else localStorage.removeItem('app_sel'); }catch(e){}
     if(typeof DATA!=='undefined'&&DATA)render(); }).catch(()=>{ const local=appSelLocal(); if(local){APPSEL=local; if(typeof DATA!=='undefined'&&DATA)render();} }); }
 function appSelVisible(account_id,app_id){ const a=(APPSEL.accounts||{})[account_id]; if(!a||!a.decided)return true; return (a.selected||[]).includes(app_id); }
+// ── Marketing spend (Google Ads) per app, in USD, for the CURRENTLY selected period ──────────
+// The ROAS payload carries per-app DAILY spend, so any period the user picks is just a sum over
+// that window. Overview and the Marketing ROAS screen both read spend from here, so the two
+// screens can never disagree. Empty when Google Ads isn't connected (or its fetch failed).
+function roasOn(){ const R=(typeof DATA!=='undefined'&&DATA)?DATA.roas:null; return !!(R&&R.configured&&!R.error); }
+function spendByApp(winSet){
+  const out={}; if(!roasOn())return out;
+  const by=DATA.roas.by_app||{};
+  Object.keys(by).forEach(app=>{ const dd=(by[app]||{}).daily||{}; let s=0;
+    for(const d in dd){ if(winSet.has(d))s+=dd[d]; }
+    if(s>0)out[app]=s/1e6; });                       // stored as USD micros
+  return out;
+}
 function appVisibleByName(name){ const c=((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalog)||[]).find(x=>x.app_name===name); return c?appSelVisible(c.account_id,c.app_id):true; }
 function appCatByAccount(){ const m={}; ((DATA&&DATA.apps_catalog)||[]).forEach(x=>{(m[x.account_id]=m[x.account_id]||[]).push(x);}); return m; }
 function appPickToggle(acc,pid){ APPSEL.accounts=APPSEL.accounts||{};
@@ -1430,12 +1532,12 @@ function appPickToggle(acc,pid){ APPSEL.accounts=APPSEL.accounts||{};
 function appPickAll(acc,on){ APPSEL.accounts=APPSEL.accounts||{}; const ids=(DATA.apps_catalog||[]).filter(x=>x.account_id===acc).map(x=>x.app_id); APPSEL.accounts[acc]={decided:true, selected:on?ids.slice():[]}; appSelStore(); rerenderSettings(); }
 function appPickSave(){ appSelStore(); ghCommitFile('config/selected_apps.json', APPSEL, 'select apps'); if(typeof DATA!=='undefined'&&DATA)render(); }
 function rerenderSettings(){ const old=document.querySelector('.screen[data-screen=settings]'); if(old){const f=renderSettings(); if(old.classList.contains('on'))f.classList.add('on'); old.replaceWith(f);} }
-function ghCommitFile(path,obj,msg){ const tok=ghToken(); if(!tok){ bToast('Pehle 🔑 GitHub token daalo (Save ke pass)'); return; }
+function ghCommitFile(path,obj,msg,okMsg){ const tok=ghToken(); if(!tok){ bToast('Pehle 🔑 GitHub token daalo (Settings → Accounts & Apps)'); return; }
   const url=`https://api.github.com/repos/${GH_REPO}/contents/${path}`, hdr={Authorization:'Bearer '+tok,'Accept':'application/vnd.github+json'};
   bToast('⏳ Saving to GitHub…');
   fetch(url,{headers:hdr}).then(r=>r.ok?r.json():{}).then(cur=>{ const content=btoa(unescape(encodeURIComponent(JSON.stringify(obj,null,1))));
     return fetch(url,{method:'PUT',headers:{...hdr,'Content-Type':'application/json'},body:JSON.stringify({message:msg,content,sha:cur.sha})}); })
-   .then(r=>bToast(r.ok?'✅ Save ho gaya — robot agle run me poora apply karega (hide + fetch band)':'❌ Save fail — token me repo-write hai?')).catch(()=>bToast('❌ Save fail (network/token)')); }
+   .then(r=>bToast(r.ok?(okMsg||'✅ Save ho gaya — robot agle run me poora apply karega (hide + fetch band)'):'❌ Save fail — token me repo-write hai?')).catch(()=>bToast('❌ Save fail (network/token)')); }
 function ghToken(){ try{return localStorage.getItem('gh_tok')||''}catch(e){return''} }
 function ghSetToken(t){ try{localStorage.setItem('gh_tok',t)}catch(e){} }
 function ghForget(){ try{localStorage.removeItem('gh_tok')}catch(e){} bToast('Token bhula diya'); bRerender(); }
@@ -2046,6 +2148,7 @@ async function load(){
     render();
     loadAppSel();                            // which apps the user kept (hides unselected)
     loadAccNames();                          // friendly names for the AdMob accounts
+    loadAppNames();                          // the user's own names for apps (✏️ on App Report)
     setInterval(updateFreshness, 30000);    // tick "X min pehle" every 30s
     setInterval(refreshData, 300000);        // pull fresh data every 5 min (robot updates hourly)
   }
