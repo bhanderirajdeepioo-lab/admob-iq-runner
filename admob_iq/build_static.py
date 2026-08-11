@@ -792,11 +792,21 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     with open(os.path.join(out_dir, "app_names.json"), "w", encoding="utf-8") as f:
         f.write(open(apn_src, encoding="utf-8").read() if os.path.exists(apn_src) else "{}")
 
+    # Keep the dashboard out of every search index. It is served from a public static host, so the
+    # ONLY thing standing between the URL and the open internet is that nobody knows it — a crawler
+    # that finds it once would put revenue figures into search results permanently. Both belt and
+    # braces: robots.txt for well-behaved crawlers, X-Robots-Tag (below) for the ones that ignore it
+    # and for anything already fetched.
+    with open(os.path.join(out_dir, "robots.txt"), "w", encoding="utf-8") as f:
+        f.write("User-agent: *\nDisallow: /\n")
+
     # Cloudflare cache policy (_headers is read by Cloudflare's static-asset host).
     # dashboard.json changes hourly, so it must NEVER be served from a stale cache
     # — no-store forces every request to fetch the freshest file from origin.
     with open(os.path.join(out_dir, "_headers"), "w", encoding="utf-8") as f:
-        f.write("/dashboard.json\n  Cache-Control: no-store\n\n"
+        f.write("/*\n  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet\n"
+                "  Referrer-Policy: no-referrer\n\n"          # never leak the URL to sites you click through to
+                "/dashboard.json\n  Cache-Control: no-store\n\n"
                 "/baseline.json\n  Cache-Control: no-store\n\n"
                 "/baseline_geo.json\n  Cache-Control: no-store\n\n"
                 "/baseline_daily.json\n  Cache-Control: no-store\n\n"
