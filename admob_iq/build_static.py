@@ -183,31 +183,49 @@ class _AppFilteredRepo:
 
 
 class _DisambiguatedRepo:
-    """Read-only wrapper that makes app NAMES unique.
+    """Read-only wrapper that decides the app NAME every view shows.
 
-    AdMob allows two different apps to carry the SAME display name, so an alert, a mover or a
-    deduction row is impossible to trace back to the right app. Where a name is shared by more than
-    one app_id we append the owning account ("<app name> · pub-1234…").
+    Two jobs, in this order:
+      1. the user's OWN name for an app (config/app_names.json, typed via the pencil next to the
+         app title on the dashboard) replaces whatever AdMob reports;
+      2. AdMob then still allows two different apps to carry the SAME display name, so an alert, a
+         mover or a deduction row is impossible to trace back to the right app. Where a name is
+         still shared by more than one app_id we append the owning account ("<name> · pub-1234…").
 
     Done here, at one choke point, so EVERY view (KPIs, alerts, movers, mediation, deductions,
-    baseline, ROAS, apps catalog) shows the same unambiguous name — and, unlike renaming the app
-    inside AdMob, it also fixes ALL historical rows instead of splitting an app's history in two.
-    Names that are already unique are left exactly as they are, so nothing gets noisier than needed.
+    baseline, ROAS, apps catalog) shows the same name — and, unlike renaming the app inside AdMob,
+    it also fixes ALL historical rows instead of splitting an app's history in two. Names that are
+    already unique and uncustomised are left exactly as they are.
     """
 
     SEP = " · "
 
-    def __init__(self, repo, account_names=None):
+    def __init__(self, repo, account_names=None, app_names=None):
         self._r = repo
         self._names = account_names or {}                # pub-id -> friendly account name
-        self._map = {}                                   # app_id -> unique display name
+        self._custom = app_names or {}                   # app_id -> the name the user typed
+        self._map = {}                                   # app_id -> final display name
+        self._orig = {}                                  # AdMob's own name -> {final names}
         try:
-            self._map = self._build_map(repo.fetch_network(), self._names)
+            rows = repo.fetch_network()
+            self._map = self._build_map(rows, self._names, self._custom)
+            for r in rows:                               # so config written against AdMob's name
+                aid, nm = r.get("app_id"), r.get("app_name")   # can follow the rename — see
+                if aid and nm:                                 # rename_candidates. EVERY app that
+                    self._orig.setdefault(nm, set()).add(self._map.get(aid) or nm)   # shared that
+                                                               # name is a candidate, renamed or not
             if self._map:
-                print("app-name disambiguation: %d app(s) renamed (duplicate names)" % len(self._map),
-                      file=sys.stderr)
+                n_c = sum(1 for a in self._map if a in self._custom)
+                print("app names: %d renamed (%d custom, %d duplicate-name tags)"
+                      % (len(self._map), n_c, len(self._map) - n_c), file=sys.stderr)
         except Exception as e:
             print(f"app-name disambiguation skipped: {e}", file=sys.stderr)
+
+    def rename_candidates(self, name):
+        """Final display name(s) for the app AdMob calls `name` — [name] if nothing renamed it.
+        Config keyed by the raw AdMob name (the ROAS store-id aliases) resolves through this, so a
+        rename can't silently drop that app's spend into 'unmatched'."""
+        return sorted(self._orig.get(name) or [name])
 
     @staticmethod
     def _account_of(app_id, account_id):
@@ -218,14 +236,17 @@ class _DisambiguatedRepo:
         return acc
 
     @classmethod
-    def _build_map(cls, rows, names=None):
-        names = names or {}
-        by_name = {}                                     # name -> {app_id: account_id}
+    def _build_map(cls, rows, names=None, custom=None):
+        names, custom = names or {}, custom or {}
+        by_name, seen = {}, set()                        # effective name -> {app_id: account_id}
         for r in rows:
             aid, nm = r.get("app_id"), r.get("app_name")
             if aid and nm:
-                by_name.setdefault(nm, {}).setdefault(aid, cls._account_of(aid, r.get("account_id")))
-        out = {}
+                seen.add(aid)
+                eff = custom.get(aid) or nm              # the user's own name wins over AdMob's
+                by_name.setdefault(eff, {}).setdefault(aid, cls._account_of(aid, r.get("account_id")))
+        # every custom name applies, clash or not; ids no longer in the data are simply ignored
+        out = {aid: nm for aid, nm in custom.items() if aid in seen and nm}
         for nm, apps in by_name.items():
             if len(apps) < 2:
                 continue                                 # already unique — leave it alone
@@ -301,6 +322,28 @@ def _account_names(data_dir):
             return out
     except Exception as e:
         print(f"account names skipped: {e}", file=sys.stderr)
+    return {}
+
+
+def _app_names(data_dir):
+    """The user's OWN names for apps, from config/app_names.json — {app_id: "Gallery (Main)"}.
+    Written by the pencil next to the app title on the dashboard's App Report screen.
+
+    Keyed by app_id, never by name, so the name can be edited again later and so every historical
+    row follows it. Applied BEFORE duplicate-name tagging, so a renamed app only keeps a "· account"
+    tag if the NEW name still collides with another app."""
+    path = os.path.join(os.path.dirname(data_dir) or ".", "config", "app_names.json")
+    try:
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                raw = json.load(f) or {}
+            out = {str(k).strip(): str(v).strip()[:80] for k, v in raw.items()
+                   if str(k or "").strip() and str(v or "").strip()}
+            if out:
+                print("custom app names: %d loaded" % len(out), file=sys.stderr)
+            return out
+    except Exception as e:
+        print(f"custom app names skipped: {e}", file=sys.stderr)
     return {}
 
 
@@ -541,7 +584,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         # still holds the data; the picker/catalog below still lists every app.
         # Make duplicate app names unique BEFORE anything is built, so every view (and the apps
         # catalog below) reads the same unambiguous name — including historical rows.
-        repo = _DisambiguatedRepo(repo, _account_names(data_dir))
+        repo = _DisambiguatedRepo(repo, _account_names(data_dir), _app_names(data_dir))
         hidden = _hidden_app_ids(repo, data_dir)
         frepo = _AppFilteredRepo(repo, hidden) if hidden else repo
         dashboard = build_from_db(frepo, today=today)   # real data (today = the live/partial day)
@@ -650,6 +693,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                             roas_aliases = json.load(_f) or {}
                     except Exception as _e:
                         print(f"roas aliases skipped: {_e}", file=sys.stderr)
+            # an alias points at the app's AdMob name; if that app has since been renamed (custom
+            # name, or a duplicate-name tag) the alias must follow it, otherwise this app's ENTIRE
+            # marketing spend silently falls back to 'unmatched'.
+            _rc = getattr(repo, "rename_candidates", None)
+            if _rc and roas_aliases:
+                roas_aliases = {sid: _rc(nm) for sid, nm in roas_aliases.items() if sid and nm}
             dashboard["roas"] = build_roas(spend, store_ids, dashboard.get("apps_catalog"), roas_aliases)
             if spend is not None:
                 print(f"roas: spend for {len(dashboard['roas'].get('by_app', {}))} apps "
@@ -737,6 +786,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     with open(os.path.join(out_dir, "account_names.json"), "w", encoding="utf-8") as f:
         f.write(open(an_src, encoding="utf-8").read() if os.path.exists(an_src) else "{}")
 
+    # Serve the user's own app names so the pencil on the App Report screen starts from what is
+    # actually applied; the UI commits changes back to config/app_names.json (same as the above).
+    apn_src = os.path.join(os.path.dirname(data_dir) or ".", "config", "app_names.json")
+    with open(os.path.join(out_dir, "app_names.json"), "w", encoding="utf-8") as f:
+        f.write(open(apn_src, encoding="utf-8").read() if os.path.exists(apn_src) else "{}")
+
     # Cloudflare cache policy (_headers is read by Cloudflare's static-asset host).
     # dashboard.json changes hourly, so it must NEVER be served from a stale cache
     # — no-store forces every request to fetch the freshest file from origin.
@@ -747,6 +802,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 "/baseline_daily.json\n  Cache-Control: no-store\n\n"
                 "/selected_apps.json\n  Cache-Control: no-store\n\n"
                 "/account_names.json\n  Cache-Control: no-store\n\n"
+                "/app_names.json\n  Cache-Control: no-store\n\n"
                 "/index.html\n  Cache-Control: no-cache\n")
 
     alerts = send_alerts(dashboard, s)
