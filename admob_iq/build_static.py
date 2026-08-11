@@ -767,6 +767,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     ui = os.path.join(root, "frontend", "index.html")
     if os.path.exists(ui):
         shutil.copyfile(ui, os.path.join(out_dir, "index.html"))
+    # PWA assets: app icon (HELSY) + manifest. iOS/Android need a REAL file URL for the home-screen
+    # icon (data-URIs are ignored there), so these ship as static files alongside index.html.
+    for _asset in ("manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"):
+        _ap = os.path.join(root, "frontend", _asset)
+        if os.path.exists(_ap):
+            shutil.copyfile(_ap, os.path.join(out_dir, _asset))
 
     # Serve the current approved ranges so the dashboard can show + edit them (it commits changes
     # back to config/approved_ranges.json via the GitHub API using the user's token).
