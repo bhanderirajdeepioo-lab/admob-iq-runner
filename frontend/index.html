@@ -153,6 +153,33 @@
     .content{padding:13px 10px 36px}
     .topbar>label.ctrl,.topbar #rangecustom{flex:1 1 100%}
   }
+  /* ===== mobile app-shell: fixed bottom tab bar + table→card-list. Desktop untouched. ===== */
+  .botbar{display:none}
+  .only-mob{display:none}
+  @media(max-width:760px){
+    .content{padding-bottom:calc(92px + env(safe-area-inset-bottom,0px))}
+    .botbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:70;background:rgba(12,20,36,.97);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:7px 6px calc(7px + env(safe-area-inset-bottom,0px))}
+    .botbar .tabbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--faint);font-size:10.5px;font-weight:700;font-family:inherit;padding:4px 2px;cursor:pointer;position:relative}
+    .botbar .tabbtn .ti{font-size:20px;line-height:1}
+    .botbar .tabbtn.active{color:var(--cyan)}
+    .botbar .tbadge{position:absolute;top:-3px;left:calc(50% + 5px);min-width:15px;height:15px;line-height:15px;text-align:center;background:var(--bad);color:#fff;border-radius:8px;font-size:9.5px;font-weight:800;padding:0 4px;display:none}
+    .botbar .tbadge.on{display:block}
+    .only-desk{display:none}
+    .only-mob{display:block}
+    .mlist{padding:2px 0 4px}
+    .mrow{display:flex;align-items:center;gap:11px;padding:12px 15px;border-top:1px solid var(--line);cursor:pointer}
+    .mrow:first-child{border-top:none}
+    .mrow:active{background:var(--raise)}
+    .mic{flex:none;display:grid;place-items:center}
+    .mmid{flex:1;min-width:0}
+    .mname{font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mmeta{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mmeta .hs{width:26px;height:19px;font-size:10.5px;border-radius:6px;vertical-align:middle}
+    .mright{text-align:right;flex:none}
+    .mrev{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+    .mpl{font-size:12px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+    .mchev{color:var(--faint);font-size:20px;flex:none}
+  }
 </style>
 </head>
 <body>
@@ -192,6 +219,13 @@
     </div>
     <div class="content" id="content"><div id="banner"></div><div id="screens"></div></div>
   </main>
+  <nav class="botbar" aria-label="Primary">
+    <button class="tabbtn" data-screen="overview" onclick="show('overview')"><span class="ti">📊</span>Overview</button>
+    <button class="tabbtn" data-screen="mediation" onclick="show('mediation')"><span class="ti">🔗</span>Mediation</button>
+    <button class="tabbtn" data-screen="alerts" onclick="show('alerts')"><span class="ti">🔔</span>Alerts<span class="tbadge" id="tab-alert"></span></button>
+    <button class="tabbtn" data-screen="deductions" onclick="show('deductions')"><span class="ti">📉</span>Deductions</button>
+    <button class="tabbtn" onclick="toggleNav()"><span class="ti">⋯</span>More</button>
+  </nav>
 </div>
 
 <script>
@@ -359,6 +393,7 @@ function render(){
   root.append(renderOverview(),renderPlacements(),renderReport(),renderAppDetail(),renderMovers(),renderAlerts(),
               renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderReco(),renderHealth(),renderSettings());
   const c=DATA.alerts.counts;document.getElementById('nav-alert').textContent=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length);
+  {const _tb=document.getElementById('tab-alert');if(_tb){const _n=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length);_tb.textContent=_n;_tb.classList.toggle('on',_n>0);}}
   const sel=document.getElementById('appsel');
   const _vapps=(DATA.apps||[]).filter(a=>appVisibleByName(a.name));   // hide unselected apps from the filter
   if(sel) sel.innerHTML='<option value="">All apps ('+_vapps.length+')</option>'+_vapps.map(a=>`<option value="${a.name}"${a.name===APP?' selected':''}>${a.name}</option>`).join('');
@@ -433,6 +468,7 @@ function show(id){
   if(id==='placements'){const a=document.getElementById('pl-apps'),d=document.getElementById('pl-detail');if(a&&d){a.style.display='';d.style.display='none';}DETAIL_OPEN=false;}
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.dataset.screen===id));
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
+  document.querySelectorAll('.botbar .tabbtn').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-sub').textContent=TITLES[id][1];}
   window.scrollTo({top:0});
 }
@@ -493,6 +529,10 @@ function renderOverview(){
     const r=rv/sp; return `<td style="font-weight:700">${money(sp)}<div class="${r>=1?'up':'down'}" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div></td>`; };
   const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);
     return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?csym()+ec.toFixed(2):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
+  // mobile card-list of the SAME apps (shown ≤760px; desktop keeps the table). Nothing dropped.
+  const appCards=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const rev=g.e/1e6;const sp=SPA[ap2.name]||0;const pl=rev-sp;const inst=INST[ap2.name];const ec=g.i?g.e/(g.i*1000):0;
+    const meta=SHOWSP?`${inst!=null?Math.round(inst).toLocaleString()+' inst':'—'} · ${sp>0?money(sp)+' spend':'organic'} · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`:`${g.i?csym()+ec.toFixed(2)+' eCPM':'—'} · ${ap2.placements} pl · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`;
+    return `<div class="mrow" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><span class="mic">${appIcon(ap2.name,34)}</span><div class="mmid"><div class="mname">${ap2.name}</div><div class="mmeta">${meta}</div></div><div class="mright"><div class="mrev">${money(rev)}</div>${SHOWSP?`<div class="mpl ${pl>=0?'up':'down'}">${plFmt(pl)}</div>`:''}</div><span class="mchev">›</span></div>`;}).join('');
   const lastTile=ap?kpi('Placements',(ap.placements||fp.length),APP.slice(0,16),'muted'):kpi('Apps · Accounts',DATA.kpis.apps+' · '+DATA.kpis.accounts,'','muted');
   const moversBody=`${inc.slice(0,2).map(p=>`<div class="al good"><span>▲</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')}
         ${dec.slice(0,2).map(p=>`<div class="al crit"><span>▼</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')||(inc.length?'':'<div class="muted" style="font-size:12px">Is app me abhi mover nahi.</div>')}`;
@@ -511,7 +551,7 @@ function renderOverview(){
       </div>
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'Ye app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe click → poori report</span></div>
-        <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Revenue</th>${SHOWSP?'<th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
+        <table class="only-desk" style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Revenue</th>${SHOWSP?'<th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table><div class="mlist only-mob">${appCards}</div></div>
       <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v),xlab:fmtD,color:'#3dd0f0'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue · cursor pe value</span></div></div>
       <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
       <div class="ov-attn card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
