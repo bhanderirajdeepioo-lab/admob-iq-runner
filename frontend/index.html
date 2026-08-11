@@ -1666,7 +1666,7 @@ function bGeoTable(cs,label,uid){
   const hint=ed?'Har country ka har metric ALAG edit — ✎ edit dabao. Dot: 🟢 approved · 🔵 update · 🟡 pending.':'<b style="color:var(--ink2)">Range se bahar</b> = us country me movement.';
   return `<div class="faint" style="font-size:11.5px;padding:9px 4px">🌍 ${label} — country-wise standard range (min–max monthly avg) vs abhi · <b style="color:var(--ink2)">saari ${cs.length} countries</b>. ${hint}</div>
     <input placeholder="🔍 Country (US, IN…)" oninput="const q=this.value.toLowerCase();this.parentElement.querySelectorAll('.bgrow').forEach(r=>{r.style.display=r.querySelector('.nm').textContent.toLowerCase().includes(q)?'':'none'})" style="margin:0 4px 8px;background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:8px;padding:6px 10px;font:inherit;outline:none;max-width:240px">
-    <table style="margin:0"><thead><tr><th>Country</th><th>eCPM range → now</th><th>CTR</th><th>Match</th><th>Show</th><th>Revenue</th>${ed?'<th></th>':''}</tr></thead><tbody>${rows}</tbody></table>`;
+    <div style="overflow-x:auto"><table style="margin:0;min-width:520px"><thead><tr><th>Country</th><th>eCPM range → now</th><th>CTR</th><th>Match</th><th>Show</th><th>Revenue</th>${ed?'<th></th>':''}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 // per-country, per-metric edit panel (opened from the ✎ edit button in the ad-unit country table)
 function bCountryPanel(btnEl,uid,country){
