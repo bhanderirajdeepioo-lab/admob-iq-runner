@@ -1134,6 +1134,11 @@ function dedIvtPill(pctv,dedMicros){ const material=(dedMicros||0)>=20e6;
   return '<span class="pill p-g" style="font-size:10px">normal</span>'; }
 const _dedBackBtn=(lbl)=>`<button class="lnk" onclick="dedBack()" style="background:none;border:none;color:var(--cyan);cursor:pointer;font:inherit;font-size:13px;padding:0;margin-bottom:10px">← ${lbl}</button>`;
 
+function dedPeriodBar(){   // deduction window quick-pick, at the top of the tab. "All time" = full history.
+  const opts=[['7d','7 days'],['30d','30 days'],['90d','90 days'],['month','This month'],['all','All time']];
+  const btns=opts.map(([v,t])=>{const on=RANGE===v;return `<button onclick="setRange('${v}')" style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.14)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-weight:650;font-size:12.5px;padding:6px 13px;border-radius:8px;cursor:pointer">${t}</button>`;}).join('');
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px"><span class="muted" style="font-size:12px;font-weight:600">🗓 Deduction period:</span>${btns}</div>`;
+}
 function renderDeductions(){
   const s=screenDiv('deductions');
   const head=`<h2 class="sc">Revenue Deduction — pehle itna → ab itna</h2><p class="scd">AdMob din band hone ke baad estimate <b>revise (kam)</b> karta hai (invalid traffic hata ke). Hum har ghante snapshot lete hain, isliye "kitna ghata" pakad me aa jata hai. <b>Date → app → ad-unit → country</b> tak drill karo.</p>`;
@@ -1148,7 +1153,7 @@ function renderDeductions(){
   // Deduction only exists on CLOSED days. If the selected period (Today/Yesterday — still live) has
   // no observed decay, show an HONEST empty state — no big number — and point to 7d/30d.
   if(!hasInWin){
-    s.innerHTML=head+`<div class="card" style="text-align:center;padding:32px 20px">
+    s.innerHTML=head+dedPeriodBar()+`<div class="card" style="text-align:center;padding:32px 20px">
       <div style="font-size:15px;color:var(--ink);font-weight:650;margin-bottom:8px">⏱ "${pRangeLabel(RANGE)}" — abhi koi deduction nahi</div>
       <div class="muted" style="font-size:13.5px;max-width:640px;margin:0 auto 18px;line-height:1.5">Deduction sirf <b>band ho chuke</b> dino ka hota hai — AdMob us din ke baad estimate revise (kam) karta hai. Aaj/ye din abhi <b>live</b> hai, isliye iska deduction filhaal <b>$0</b>.${last5>0?` <span style="color:var(--ink2)">Pichhle 5 din me <b style="color:var(--bad)">−${_dcur(last5)}</b> observe hua tha — dekhne ke liye niche.</span>`:''}</div>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
@@ -1206,7 +1211,7 @@ function renderDeductions(){
   const drows=dedDateRows(keep); const periodDed=drows.reduce((a,x)=>a+x.ded,0);
   const rows=drows.map(x=>{const xp=_dpct(x.pehle,x.ab);
     return `<tr class="clk" onclick="dedOpenDate('${x.date}')"><td class="nm">${fmtD(x.date)}</td><td class="faint">${x.apps}</td><td>${_dm(x.pehle)}</td><td>${_dm(x.ab)}</td><td class="down" style="font-weight:700">−${_dm(x.ded)}</td><td class="${xp>=0.15?'down':''}" style="font-weight:600">${pct(xp)}</td></tr>`;}).join('')||`<tr><td colspan="6" class="muted" style="padding:16px">Is period me koi deduction observe nahi hua.</td></tr>`;
-  s.innerHTML=head+covNote+`<div class="row c3" style="margin-bottom:14px">${kpi('Is period deduction',(periodDed>0?'−':'')+_dcur(periodDed),curWinLabel(),'down')}${kpi('Last 5 days',(last5>0?'−':'')+_dcur(last5),'freshest decay','down')}${kpi('Din affected',drows.length,'is period me','muted')}</div>
+  s.innerHTML=head+dedPeriodBar()+covNote+`<div class="row c3" style="margin-bottom:14px">${kpi('Is period deduction',(periodDed>0?'−':'')+_dcur(periodDed),curWinLabel(),'down')}${kpi('Last 5 days',(last5>0?'−':'')+_dcur(last5),'freshest decay','down')}${kpi('Din affected',drows.length,'is period me','muted')}</div>
     <div class="card pad0"><div class="ct" style="padding:16px 17px 0"><h3>📅 Date-wise deduction — naya din upar</h3><span class="muted" style="font-size:12px">kisi date pe click → us din ki apps → ad-unit → country</span></div>
       <table style="margin-top:10px"><thead><tr><th>Date</th><th>Apps</th><th>Pehle (us din)</th><th>Ab</th><th>Deduction</th><th>%</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   return s;
