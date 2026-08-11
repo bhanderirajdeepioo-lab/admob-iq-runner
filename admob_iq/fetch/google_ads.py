@@ -108,6 +108,28 @@ def _app_spend_for(customer_id, login_customer_id, dev_token, access_token, star
     return out
 
 
+def _app_installs_for(customer_id, login_customer_id, dev_token, access_token, start, end):
+    """App-campaign INSTALL counts for ONE account over [start,end], keyed to the SAME store id as
+    spend. Deliberately a SEPARATE query from _app_spend_for so a metric/version problem here can
+    never break the (proven) spend pull — the caller runs it best-effort. These are Google Ads
+    campaign-attributed app installs, NOT the app's total install base (that lives in Play Console,
+    which this system never touches)."""
+    q = ("SELECT campaign.app_campaign_setting.app_id, "
+         "metrics.biddable_app_install_conversions, segments.date "
+         "FROM campaign WHERE segments.date BETWEEN '%s' AND '%s' "
+         "AND campaign.app_campaign_setting.app_id != '' "
+         "AND metrics.biddable_app_install_conversions > 0" % (start, end))
+    out = []
+    for row in _search(customer_id, login_customer_id, dev_token, access_token, q):
+        camp = row.get("campaign") or {}
+        sid = _norm_store(((camp.get("appCampaignSetting") or {}).get("appId")))
+        if not sid:
+            continue
+        out.append({"store_id": sid, "date": (row.get("segments") or {}).get("date"),
+                    "installs": float((row.get("metrics") or {}).get("biddableAppInstallConversions") or 0)})
+    return out
+
+
 def _fx_to_usd(ccy):
     if ccy == "USD" or not ccy:
         return 1.0
@@ -146,6 +168,15 @@ def _aggregate(rows, fx_fn=_fx_to_usd):
                       for sid, cc in camps.items()},
         "currency_src": src or "USD", "fx": fx,
     }
+
+
+def _aggregate_installs(rows):
+    """Sum campaign-attributed installs by store_id -> date (counts, no currency)."""
+    from collections import defaultdict
+    daily = defaultdict(lambda: defaultdict(float))
+    for r in rows:
+        daily[r["store_id"]][str(r.get("date"))] += float(r.get("installs") or 0)
+    return {sid: {d: round(v, 2) for d, v in dd.items()} for sid, dd in daily.items()}
 
 
 def fetch_app_spend(s, start, end, *, mode="live"):
@@ -196,9 +227,18 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     if not rows and errs:
         return {"error": "Spend query fail (%d/%d accounts): %s" % (len(errs), len(accounts), errs[0])}
     if not rows:
-        return {"daily": {}, "campaigns": {}, "currency_src": "USD", "fx": {},
+        return {"daily": {}, "campaigns": {}, "installs": {}, "currency_src": "USD", "fx": {},
                 "note": "connected — is window me koi app-campaign spend nahi mila"}
-    return _aggregate(rows)
+    agg = _aggregate(rows)
+    # Installs: best-effort + SEPARATE from spend, so it can never break the spend/ROAS numbers above.
+    inst_rows = []
+    for a in accounts:
+        try:
+            inst_rows.extend(_app_installs_for(a["id"], mcc, dev, token, start, end))
+        except Exception as e:
+            print("roas: installs skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
+    agg["installs"] = _aggregate_installs(inst_rows)
+    return agg
 
 
 def resolve_store_ids(accounts, data_dir, catalog, *, client_id, client_secret, currency,
@@ -245,16 +285,19 @@ def _mock_spend(start, end):
     from datetime import datetime, timedelta
     d0 = datetime.strptime(str(start), "%Y-%m-%d").date()
     d1 = datetime.strptime(str(end), "%Y-%m-%d").date()
-    daily, camps = {}, {}
+    daily, camps, installs = {}, {}, {}
     for i, sid in enumerate(["com.mock.1", "com.mock.2", "com.mock.3"]):
-        dd, day = {}, d0
+        dd, ins, day = {}, {}, d0
         while day <= d1:
             dd[day.isoformat()] = (500 + i * 350) * 1_000_000        # $500–1200/day
+            ins[day.isoformat()] = 50 + i * 20                       # demo installs/day
             day += timedelta(days=1)
         daily[sid] = dd
+        installs[sid] = ins
         tot = sum(dd.values())
         camps[sid] = [{"id": "c%d" % i, "name": "App install %d" % (i + 1), "status": "ENABLED",
                        "cost_micros": tot},
                       {"id": "c%dp" % i, "name": "Old campaign %d" % (i + 1), "status": "PAUSED",
                        "cost_micros": 0}]
-    return {"daily": daily, "campaigns": camps, "currency_src": "USD", "fx": {"USD": 1.0}}
+    return {"daily": daily, "campaigns": camps, "installs": installs,
+            "currency_src": "USD", "fx": {"USD": 1.0}}
