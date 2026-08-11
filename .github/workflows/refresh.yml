@@ -19,11 +19,11 @@ name: AdMob IQ — refresh (public runner)
 
 on:
   schedule:
-    # Every 30 minutes. Minutes are free (public repo) and AdMob's reporting quota
-    # is 900 reads/MINUTE — a run uses ~50 reads, so this is far inside it.
-    # :07/:37 rather than :00/:30 because GitHub throttles scheduled runs hardest
-    # on the hour and drops many of them.
-    - cron: "7,37 * * * *"
+    # Hourly. GitHub heavily throttles/drops public-repo scheduled runs, so a tighter
+    # schedule isn't actually honoured (observed real gaps ran 55–156 min). Hourly keeps
+    # AdMob far inside its 900 reads/MINUTE quota (~50 reads/run) AND preserves the hourly
+    # deduction snapshots. :17 (not :00) dodges the top-of-hour peak GitHub throttles hardest.
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       backfill_days:
