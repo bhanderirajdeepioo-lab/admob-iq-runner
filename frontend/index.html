@@ -36,8 +36,8 @@
   .content{padding:22px 24px 50px;max-width:1200px}
   .screen{display:none}.screen.on{display:block}
   h2.sc{font-size:20px;margin:0 0 3px;font-weight:800}p.scd{margin:0 0 16px;color:var(--muted);font-size:13px}
-  .row{display:grid;gap:14px}.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:repeat(3,1fr)}.c4{grid-template-columns:repeat(4,1fr)}.c5{grid-template-columns:repeat(5,1fr)}.span2{grid-column:span 2}
-  @media(max-width:1000px){.c4,.c5{grid-template-columns:repeat(2,1fr)}.c3{grid-template-columns:1fr}.span2{grid-column:auto}}
+  .row{display:grid;gap:14px}.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:repeat(3,1fr)}.c4{grid-template-columns:repeat(4,1fr)}.c5{grid-template-columns:repeat(5,1fr)}.c6{grid-template-columns:repeat(6,1fr)}.c7{grid-template-columns:repeat(7,1fr)}.span2{grid-column:span 2}
+  @media(max-width:1000px){.c4,.c5{grid-template-columns:repeat(2,1fr)}.c6,.c7{grid-template-columns:repeat(3,1fr)}.c3{grid-template-columns:1fr}.span2{grid-column:auto}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 17px}.card.pad0{padding:0;overflow:hidden}
   .ct{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.ct h3{font-size:14px;margin:0;font-weight:700}.ct .lnk{font-size:11.5px;color:var(--cyan);cursor:pointer;font-weight:600}
   .muted{color:var(--muted)}.faint{color:var(--faint)}.up{color:var(--good)}.down{color:var(--bad)}.flat{color:var(--watch)}
@@ -118,7 +118,7 @@
     .content{padding:15px 12px 40px;max-width:100%}
     h2.sc{font-size:18px}
     .row.c2,.row.c3{grid-template-columns:1fr}
-    .row.c4,.row.c5{grid-template-columns:1fr 1fr}
+    .row.c4,.row.c5,.row.c6,.row.c7{grid-template-columns:1fr 1fr}
     .span2{grid-column:auto}
     .kpi .v{font-size:21px}
     th,td{padding:9px 10px}
@@ -133,8 +133,9 @@
     /* KPIs stay 2-up on phones (bigger numbers). 3 classes so this still wins over the
        .row.c4/.c5 → 1-column rule in the ≤430px block below. With Ad spend that's 5 tiles,
        so the last one spans the full width instead of sitting alone in half. */
-    .ov-kpi.row.c4,.ov-kpi.row.c5{grid-template-columns:1fr 1fr;gap:10px}
+    .ov-kpi.row.c4,.ov-kpi.row.c5,.ov-kpi.row.c6,.ov-kpi.row.c7{grid-template-columns:1fr 1fr;gap:10px}
     .ov-kpi.row.c5>.kpi:nth-child(5){grid-column:1/-1}
+    .ov-kpi.row.c7>.kpi:nth-child(7){grid-column:1/-1}
     .ov-kpi .kpi{padding:15px 13px}
     .ov-kpi .kpi .v{font-size:25px;margin-top:5px}
     .ov-kpi .kpi .l{font-size:11.5px}
@@ -481,27 +482,36 @@ function renderOverview(){
   const spendSeries=SHOWSP?trendDates.map(d=>{ let v=0; const by=DATA.roas.by_app||{};
     appsShown.forEach(x=>{ const dd=(by[x.name]||{}).daily; if(dd&&dd[d])v+=dd[d]; });
     return Math.round(v/1e6*100)/100; }):[];
+  const instTot=appsShown.reduce((t,x)=>t+(INST[x.name]||0),0);           // Google Ads installs, this window
+  const plTot=k.revenue-spendTot;                                          // Profit/Loss = revenue − ad spend
+  const plFmt=(n)=>(n<0?'-':'')+csym()+Number(Math.abs(n)).toLocaleString(undefined,{maximumFractionDigits:0});
+  const instSeries=SHOWSP?trendDates.map(d=>{ let v=0; const by=DATA.roas.by_app||{};
+    appsShown.forEach(x=>{ const dd=(by[x.name]||{}).installs_daily; if(dd&&dd[d])v+=dd[d]; });
+    return Math.round(v*100)/100; }):[];
+  const plSeries=SHOWSP?trendSeries.map((r,i)=>Math.round((r-(spendSeries[i]||0))*100)/100):[];
   const roasCell=(rv,sp)=>{ if(!(sp>0))return '<td><span class="faint">organic</span></td>';
     const r=rv/sp; return `<td style="font-weight:700">${money(sp)}<div class="${r>=1?'up':'down'}" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div></td>`; };
-  const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;
-    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}</span></span></td>${SHOWSP?roasCell(g.e/1e6,SPA[ap2.name]||0)+`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`:''}<td>${money(g.e/1e6)}</td><td>${g.i?csym()+ec.toFixed(2):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
+  const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);
+    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}</span></span></td>${SHOWSP?roasCell(g.e/1e6,SPA[ap2.name]||0)+`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`:''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?csym()+ec.toFixed(2):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
   const lastTile=ap?kpi('Placements',(ap.placements||fp.length),APP.slice(0,16),'muted'):kpi('Apps · Accounts',DATA.kpis.apps+' · '+DATA.kpis.accounts,'','muted');
   const moversBody=`${inc.slice(0,2).map(p=>`<div class="al good"><span>▲</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')}
         ${dec.slice(0,2).map(p=>`<div class="al crit"><span>▼</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')||(inc.length?'':'<div class="muted" style="font-size:12px">Is app me abhi mover nahi.</div>')}`;
   s.innerHTML=`${ap?`<div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div style="font-size:24px">📱</div><div><div class="big">${APP}</div><div class="muted" style="font-size:12.5px">Sirf is app ka data${ap.platform?' · '+ap.platform:''} · ${ap.placements} placements</div></div><div class="spacer"></div><span class="lnk" onclick="setApp('')">✕ Saari apps dikhao</span></div>`:''}
     <div class="ov">
-      <div class="ov-kpi row ${SHOWSP?'c5':'c4'}">
+      <div class="ov-kpi row ${SHOWSP?'c7':'c4'}">
         ${kpi('Revenue',money(k.revenue),dspan,'muted',sparkbars(trendSeries,'g'))}
         ${SHOWSP?kpi('Ad spend',spendTot>0?money(spendTot):'—',
             blended!=null?`ROAS ${blended.toFixed(2)}× · ${dspan}`:`is period me spend nahi · ${dspan}`,
             blended==null?'muted':(blended>=1?'up':'down'),sparkbars(spendSeries,'o')):''}
+        ${SHOWSP?kpi('Profit / Loss',plFmt(plTot),(plTot>=0?'profit':'loss')+' · '+dspan,plTot>=0?'up':'down',sparkbars(plSeries)):''}
+        ${SHOWSP?kpi('Total installs',instTot?Math.round(instTot).toLocaleString():'—','Google Ads · '+dspan,'muted',sparkbars(instSeries,'o')):''}
         ${kpi('Avg eCPM',csym()+(k.ecpm.toFixed(2)),dspan,'muted',sparkbars(trendSeries))}
         ${kpi('Match rate',pct(k.match_rate||0),dspan,'muted',sparkbars(trendSeries,'g'))}
         ${lastTile}
       </div>
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'Ye app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe click → poori report</span></div>
-        <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th><th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th>':''}<th>Revenue</th><th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
+        <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th><th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th>':''}<th>Revenue</th>${SHOWSP?'<th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
       <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v),xlab:fmtD,color:'#3dd0f0'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue · cursor pe value</span></div></div>
       <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
       <div class="ov-attn card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
