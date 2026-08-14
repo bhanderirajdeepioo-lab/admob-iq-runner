@@ -529,7 +529,7 @@ function renderOverview(){
   const appAgg={};(DATA.placements||[]).forEach(p=>{const g=appAgg[p.app]=appAgg[p.app]||{e:0,i:0};const m=sumDaily(p.daily,winSet);g.e+=m.earn;g.i+=m.impr;});
   // Google Ads marketing spend for the SAME window. Totalled only over the apps actually on screen,
   // so the KPI always matches the table below it (and the app filter, when one is picked).
-  const SHOWSP=roasOn(), SPA=spendByApp(winSet), INST=installsByApp(winSet);
+  const SHOWSP=roasOn(), SPA=spendByApp(winSet), INST=installsByApp(winSet), CVAL=convvalByApp(winSet);
   const spendTot=appsShown.reduce((t,x)=>t+(SPA[x.name]||0),0);
   const blended=spendTot>0?k.revenue/spendTot:null;
   const unmatched=SHOWSP?((DATA.roas.unmatched_spend_usd||0)/1e6):0;
@@ -546,8 +546,8 @@ function renderOverview(){
   const plSeries=SHOWSP?trendSeries.map((r,i)=>Math.round((r-(spendSeries[i]||0))*100)/100):[];
   const roasCell=(rv,sp)=>{ if(!(sp>0))return '<td><span class="faint">organic</span></td>';
     const r=rv/sp; return `<td style="font-weight:700">${money(sp)}<div class="${r>=1?'up':'down'}" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div></td>`; };
-  const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);
-    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?csym()+ec.toFixed(2):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
+  const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);const gr=(SPA[ap2.name]>0&&CVAL[ap2.name]>0)?CVAL[ap2.name]/SPA[ap2.name]:null;
+    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0)+`<td class="${gr>=1?'up':'down'}">${gr!=null?gr.toFixed(2)+'×':'—'}</td>`:''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?csym()+ec.toFixed(2):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
   // mobile card-list of the SAME apps (shown ≤760px; desktop keeps the table). Nothing dropped.
   const appCards=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const rev=g.e/1e6;const sp=SPA[ap2.name]||0;const pl=rev-sp;const inst=INST[ap2.name];const ec=g.i?g.e/(g.i*1000):0;
     const meta=SHOWSP?`${inst!=null?Math.round(inst).toLocaleString()+' inst':'—'} · ${sp>0?money(sp)+' spend':'organic'} · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`:`${g.i?csym()+ec.toFixed(2)+' eCPM':'—'} · ${ap2.placements} pl · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`;
@@ -570,7 +570,7 @@ function renderOverview(){
       </div>
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'Ye app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe click → poori report</span></div>
-        <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Revenue</th>${SHOWSP?'<th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
+        <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th><th>GAds ROAS<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">conv.val ÷ spend</div></th>':''}<th>Revenue</th>${SHOWSP?'<th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
       <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v),xlab:fmtD,color:'#3dd0f0'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue · cursor pe value</span></div></div>
       <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
       <div class="ov-attn card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
@@ -1604,6 +1604,14 @@ function installsByApp(winSet){                       // Google Ads campaign-att
   Object.keys(by).forEach(app=>{ const dd=(by[app]||{}).installs_daily||{}; let s=0;
     for(const d in dd){ if(winSet.has(d))s+=dd[d]; }
     out[app]=s; });                                  // count (0 = has spend but no installs); apps not on Google Ads stay absent → '—'
+  return out;
+}
+function convvalByApp(winSet){                        // Google Ads conversion value (USD), windowed to period
+  const out={}; if(!roasOn())return out;
+  const by=DATA.roas.by_app||{};
+  Object.keys(by).forEach(app=>{ const dd=(by[app]||{}).convval_daily||{}; let s=0;
+    for(const d in dd){ if(winSet.has(d))s+=dd[d]; }
+    if(s>0)out[app]=s; });                            // USD; absent when no conversion value tracked
   return out;
 }
 function appVisibleByName(name){ const c=((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalog)||[]).find(x=>x.app_name===name); return c?appSelVisible(c.account_id,c.app_id):true; }

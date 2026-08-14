@@ -120,6 +120,37 @@ def test_mock_spend_carries_installs():
     assert out["installs"]["com.mock.2"]["2026-07-18"] == 70        # 50 + 1*20
 
 
+def test_aggregate_convval_sums_usd_by_store_and_date():
+    rows = [
+        {"store_id": "com.x.a", "date": "2026-07-20", "convval": 100.0, "currency": "INR"},
+        {"store_id": "com.x.a", "date": "2026-07-20", "convval": 50.0, "currency": "INR"},
+        {"store_id": "com.x.b", "date": "2026-07-20", "convval": 10.0, "currency": "USD"},
+    ]
+    agg = google_ads._aggregate_convval(rows, fx_fn=lambda ccy: 0.01 if ccy == "INR" else 1.0)
+    assert agg["com.x.a"] == {"2026-07-20": 1.5}     # (100+50) INR * 0.01 = 1.5 USD
+    assert agg["com.x.b"] == {"2026-07-20": 10.0}
+
+
+def test_build_roas_threads_convval_per_app():
+    spend = {"daily": {"com.x.a": {"2026-07-20": 1_000_000}},
+             "convval": {"com.x.a": {"2026-07-20": 2.5}},
+             "campaigns": {}, "currency_src": "USD", "fx": {}}
+    r = build_roas(spend, {"app-a": "com.x.a"}, [{"app_id": "app-a", "app_name": "App A", "rev": 1}])
+    assert r["by_app"]["App A"]["convval_daily"] == {"2026-07-20": 2.5}
+
+
+def test_build_roas_convval_absent_is_safe():
+    spend = {"daily": {"com.x.a": {"2026-07-20": 1_000_000}}, "campaigns": {},
+             "currency_src": "USD", "fx": {}}
+    r = build_roas(spend, {"app-a": "com.x.a"}, [{"app_id": "app-a", "app_name": "App A", "rev": 1}])
+    assert r["by_app"]["App A"]["convval_daily"] == {}
+
+
+def test_mock_spend_carries_convval():
+    out = google_ads.fetch_app_spend({}, "2026-07-18", "2026-07-20", mode="mock")
+    assert out["convval"]["com.mock.1"]["2026-07-18"] == round(500 * 1.3, 2)   # 650.0
+
+
 def test_norm_store_strips_platform_prefix():
     assert google_ads._norm_store("2:1234567") == "1234567"
     assert google_ads._norm_store(" com.x.y ") == "com.x.y"

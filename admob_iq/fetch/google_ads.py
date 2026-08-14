@@ -109,24 +109,26 @@ def _app_spend_for(customer_id, login_customer_id, dev_token, access_token, star
 
 
 def _app_installs_for(customer_id, login_customer_id, dev_token, access_token, start, end):
-    """App-campaign INSTALL counts for ONE account over [start,end], keyed to the SAME store id as
-    spend. Deliberately a SEPARATE query from _app_spend_for so a metric/version problem here can
-    never break the (proven) spend pull — the caller runs it best-effort. These are Google Ads
-    campaign-attributed app installs, NOT the app's total install base (that lives in Play Console,
-    which this system never touches)."""
+    """App-campaign INSTALLS + CONVERSION VALUE for ONE account over [start,end], keyed to the SAME
+    store id as spend. Deliberately a SEPARATE query from _app_spend_for so a metric/version problem
+    here can never break the (proven) spend pull — the caller runs it best-effort. Installs are
+    Google Ads campaign-attributed app installs (NOT the app's total install base). conversions_value
+    is the value Google Ads tracks for those conversions (in the account's currency) — with a
+    first-day (D0) tROAS setup this IS the first-day value, so value ÷ spend = the Google-Ads ROAS."""
     q = ("SELECT campaign.app_campaign_setting.app_id, "
-         "metrics.biddable_app_install_conversions, segments.date "
+         "metrics.biddable_app_install_conversions, metrics.conversions_value, segments.date "
          "FROM campaign WHERE segments.date BETWEEN '%s' AND '%s' "
-         "AND campaign.app_campaign_setting.app_id != '' "
-         "AND metrics.biddable_app_install_conversions > 0" % (start, end))
+         "AND campaign.app_campaign_setting.app_id != ''" % (start, end))
     out = []
     for row in _search(customer_id, login_customer_id, dev_token, access_token, q):
         camp = row.get("campaign") or {}
         sid = _norm_store(((camp.get("appCampaignSetting") or {}).get("appId")))
         if not sid:
             continue
+        m = row.get("metrics") or {}
         out.append({"store_id": sid, "date": (row.get("segments") or {}).get("date"),
-                    "installs": float((row.get("metrics") or {}).get("biddableAppInstallConversions") or 0)})
+                    "installs": float(m.get("biddableAppInstallConversions") or 0),
+                    "convval": float(m.get("conversionsValue") or 0)})
     return out
 
 
@@ -179,6 +181,20 @@ def _aggregate_installs(rows):
     return {sid: {d: round(v, 2) for d, v in dd.items()} for sid, dd in daily.items()}
 
 
+def _aggregate_convval(rows, fx_fn=_fx_to_usd):
+    """Sum Google Ads conversion VALUE by store_id -> date, converted to USD (value is in the
+    account's currency, like spend) so value ÷ USD-spend gives an apples-to-apples ROAS."""
+    from collections import defaultdict
+    fx = {}
+    daily = defaultdict(lambda: defaultdict(float))
+    for r in rows:
+        ccy = r.get("currency") or "USD"
+        if ccy not in fx:
+            fx[ccy] = fx_fn(ccy)
+        daily[r["store_id"]][str(r.get("date"))] += float(r.get("convval") or 0) * fx[ccy]
+    return {sid: {d: round(v, 2) for d, v in dd.items()} for sid, dd in daily.items()}
+
+
 def fetch_app_spend(s, start, end, *, mode="live"):
     """Return {daily:{store_id:{date:usd_micros}}, campaigns:{store_id:[...]}, currency_src, fx} or
     None when Google Ads isn't configured / a call fails. `s` is config.settings()."""
@@ -227,17 +243,20 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     if not rows and errs:
         return {"error": "Spend query fail (%d/%d accounts): %s" % (len(errs), len(accounts), errs[0])}
     if not rows:
-        return {"daily": {}, "campaigns": {}, "installs": {}, "currency_src": "USD", "fx": {},
-                "note": "connected — is window me koi app-campaign spend nahi mila"}
+        return {"daily": {}, "campaigns": {}, "installs": {}, "convval": {}, "currency_src": "USD",
+                "fx": {}, "note": "connected — is window me koi app-campaign spend nahi mila"}
     agg = _aggregate(rows)
-    # Installs: best-effort + SEPARATE from spend, so it can never break the spend/ROAS numbers above.
+    # Installs + conversion value: best-effort + SEPARATE from spend, so a problem here can never
+    # break the spend/ROAS numbers above.
     inst_rows = []
     for a in accounts:
         try:
-            inst_rows.extend(_app_installs_for(a["id"], mcc, dev, token, start, end))
+            for r in _app_installs_for(a["id"], mcc, dev, token, start, end):
+                r["currency"] = a["currency"]; inst_rows.append(r)
         except Exception as e:
-            print("roas: installs skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
+            print("roas: installs/convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
     agg["installs"] = _aggregate_installs(inst_rows)
+    agg["convval"] = _aggregate_convval(inst_rows)
     return agg
 
 
@@ -285,19 +304,21 @@ def _mock_spend(start, end):
     from datetime import datetime, timedelta
     d0 = datetime.strptime(str(start), "%Y-%m-%d").date()
     d1 = datetime.strptime(str(end), "%Y-%m-%d").date()
-    daily, camps, installs = {}, {}, {}
+    daily, camps, installs, convval = {}, {}, {}, {}
     for i, sid in enumerate(["com.mock.1", "com.mock.2", "com.mock.3"]):
-        dd, ins, day = {}, {}, d0
+        dd, ins, cv, day = {}, {}, {}, d0
         while day <= d1:
             dd[day.isoformat()] = (500 + i * 350) * 1_000_000        # $500–1200/day
             ins[day.isoformat()] = 50 + i * 20                       # demo installs/day
+            cv[day.isoformat()] = round((500 + i * 350) * 1.3, 2)    # demo conv value ≈ 1.3× spend
             day += timedelta(days=1)
         daily[sid] = dd
         installs[sid] = ins
+        convval[sid] = cv
         tot = sum(dd.values())
         camps[sid] = [{"id": "c%d" % i, "name": "App install %d" % (i + 1), "status": "ENABLED",
                        "cost_micros": tot},
                       {"id": "c%dp" % i, "name": "Old campaign %d" % (i + 1), "status": "PAUSED",
                        "cost_micros": 0}]
-    return {"daily": daily, "campaigns": camps, "installs": installs,
+    return {"daily": daily, "campaigns": camps, "installs": installs, "convval": convval,
             "currency_src": "USD", "fx": {"USD": 1.0}}
