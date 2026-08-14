@@ -675,12 +675,33 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # never touches the AdMob pull. Spend is fetched over a rolling window and converted to USD.
     if mode == "live" and has_creds and repo.has_data():
         try:
-            from .fetch.google_ads import fetch_app_spend, resolve_store_ids
+            from .fetch.google_ads import fetch_app_spend, resolve_store_ids, merge_spend
             from .fetch.fetcher import make_client
             from .engine.roas import build_roas
-            roas_days = int(os.getenv("ROAS_SPEND_DAYS", "120"))
-            spend = fetch_app_spend(s, (today - timedelta(days=roas_days)).isoformat(),
-                                    today.isoformat(), mode="live")
+            # Incremental spend cache: Google Ads restates spend for ~60 days, so re-pull only a recent
+            # window (60-day adjustment + ~1 buffer month) each run and keep the settled older history
+            # from the cache. First run (no cache) does a one-time full backfill of the whole history.
+            cache_path = os.path.join(data_dir, "roas_spend_cache.json")
+            cached_spend = None
+            try:
+                if os.path.exists(cache_path):
+                    with open(cache_path, encoding="utf-8") as _cf:
+                        cached_spend = json.load(_cf) or None
+            except Exception as _ce:
+                print(f"roas cache read skipped: {_ce}", file=sys.stderr)
+            backfill_days = int(os.getenv("ROAS_BACKFILL_DAYS", "550"))   # one-time full history pull
+            refetch_days = int(os.getenv("ROAS_REFETCH_DAYS", "90"))      # re-pulled every run (adjust + buffer)
+            win_days = refetch_days if cached_spend else backfill_days
+            refetch_start = (today - timedelta(days=win_days)).isoformat()
+            fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
+            spend = merge_spend(cached_spend, fresh_spend, refetch_start)
+            if spend is not None and not spend.get("error"):
+                try:
+                    os.makedirs(data_dir, exist_ok=True)
+                    with open(cache_path, "w", encoding="utf-8") as _cf:
+                        json.dump(spend, _cf)
+                except Exception as _ce:
+                    print(f"roas cache write skipped: {_ce}", file=sys.stderr)
             store_ids = resolve_store_ids(accounts, data_dir, dashboard.get("apps_catalog"),
                                           client_id=s["google_client_id"], client_secret=s["google_client_secret"],
                                           currency=s["report_currency"], make_client=make_client, mode="live")

@@ -260,6 +260,39 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     return agg
 
 
+def merge_spend(cached, fresh, refetch_start):
+    """Incremental spend cache. Google Ads restates spend/conversions for a while (~60 days), so we
+    only ever re-pull a recent window and keep the SETTLED older history from the cache. `fresh`
+    covers [refetch_start, today]; for every store, dates < refetch_start come from `cached`, dates
+    >= refetch_start come from `fresh` (so adjustments are captured, old data isn't re-fetched hourly).
+
+    - fresh is None      → Google Ads not configured: no ROAS (never serve stale cache).
+    - fresh has 'error'  → transient failure: keep the settled history we already have.
+    - cached is None     → first run / full backfill: just use fresh."""
+    if fresh is None:
+        return None
+    if fresh.get("error"):
+        return cached or fresh
+    if not cached:
+        return fresh
+    out = {"currency_src": fresh.get("currency_src") or cached.get("currency_src", "USD"),
+           "fx": fresh.get("fx") or cached.get("fx", {}), "note": fresh.get("note")}
+    for key in ("daily", "installs", "convval"):
+        cd = cached.get(key) or {}
+        fd = fresh.get(key) or {}
+        merged = {}
+        for sid in set(cd) | set(fd):
+            m = {d: v for d, v in (cd.get(sid) or {}).items() if d < refetch_start}  # settled history
+            m.update(fd.get(sid) or {})                                              # fresh recent window
+            if m:
+                merged[sid] = m
+        out[key] = merged
+    cc = cached.get("campaigns") or {}
+    fc = fresh.get("campaigns") or {}
+    out["campaigns"] = {sid: (fc.get(sid) or cc.get(sid) or []) for sid in set(cc) | set(fc)}
+    return out
+
+
 def resolve_store_ids(accounts, data_dir, catalog, *, client_id, client_secret, currency,
                       make_client, mode):
     """{app_id: store_id} for the ROAS join, cached in data/app_store_ids.json. Lists apps only for
