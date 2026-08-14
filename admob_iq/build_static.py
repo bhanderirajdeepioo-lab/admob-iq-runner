@@ -520,20 +520,23 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # so every later run is the cheap 35-day refresh. AdMob keeps older finished days and
     # FileRepo never deletes them, so the deep history persists across the hourly runs.
     base_rolling = s["rolling_days"]                       # normal 35-day refresh
-    backfill = int(os.getenv("BACKFILL_DAYS", "0") or "0")
+    _cap = int(os.getenv("AC_MAX_LOOKBACK_DAYS", "1300"))  # probe cap (~3.5yr; storage-safe)
     marker = os.path.join(data_dir, ".backfilled")
-    did_backfill = mode == "live" and backfill > base_rolling and not os.path.exists(marker)
-    rolling = backfill if did_backfill else base_rolling
+    # First run for this data dir → pull the FULL history. run_once now probes each account's real
+    # data start (dynamic auto-detect), so it captures however far back the data goes — NO fixed
+    # day-count. BACKFILL_DAYS stays only as a fallback window if that per-account probe ever fails.
+    did_backfill = mode == "live" and not os.path.exists(marker)
+    rolling = (int(os.getenv("BACKFILL_DAYS", "0") or "0") or _cap) if did_backfill else base_rolling
     if did_backfill:
-        print(f"one-time history backfill: pulling {rolling} days", file=sys.stderr)
+        print("one-time FULL-HISTORY backfill (auto-detect each account's start)", file=sys.stderr)
     # Country report gets its OWN one-time deep backfill (separate marker), because the first
     # attempt's single 365-day request hit the 100k cap and AdMob truncated it — dropping older
     # rows for some geos (e.g. US had 37 days while IN had 292). The chunked pull (60-day pieces,
     # each safely under the cap) fills every geo. A distinct-date count can't detect this (the
     # union already spans a year), so gate on a dedicated marker, not on span.
     country_marker = os.path.join(data_dir, ".country_backfilled")
-    do_country_backfill = mode == "live" and backfill > base_rolling and not os.path.exists(country_marker)
-    country_days = backfill if do_country_backfill else rolling
+    do_country_backfill = mode == "live" and not os.path.exists(country_marker)
+    country_days = (int(os.getenv("BACKFILL_DAYS", "0") or "0") or _cap) if do_country_backfill else rolling
     if do_country_backfill:
         print(f"country deep backfill (chunked): pulling {country_days} days", file=sys.stderr)
     # Ad-unit × country baseline: on the FIRST run for this data dir (marker absent) it pulls the
@@ -551,6 +554,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                               rolling_days=rolling, country_days=country_days,
                               adunit_country_days=adunit_country_days,
                               ac_full_history=do_ac_backfill,
+                              full_history=did_backfill,
                               client_id=s["google_client_id"],
                               client_secret=s["google_client_secret"],
                               currency=s["report_currency"])
@@ -689,10 +693,19 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                         cached_spend = json.load(_cf) or None
             except Exception as _ce:
                 print(f"roas cache read skipped: {_ce}", file=sys.stderr)
-            backfill_days = int(os.getenv("ROAS_BACKFILL_DAYS", "550"))   # one-time full history pull
             refetch_days = int(os.getenv("ROAS_REFETCH_DAYS", "90"))      # re-pulled every run (adjust + buffer)
-            win_days = refetch_days if cached_spend else backfill_days
-            refetch_start = (today - timedelta(days=win_days)).isoformat()
+            if cached_spend:
+                refetch_start = (today - timedelta(days=refetch_days)).isoformat()
+            else:
+                # First-run backfill: start from the EARLIEST AdMob data date (dynamic — however far back
+                # the revenue actually goes), NOT a fixed day-count. Spend before that is irrelevant (it
+                # has no revenue to sit against). Falls back to ROAS_BACKFILL_DAYS only if the probe fails.
+                try:
+                    _nd = [str(r.get("report_date")) for r in repo.fetch_network() if r.get("report_date")]
+                    _earliest = min(_nd) if _nd else None
+                except Exception:
+                    _earliest = None
+                refetch_start = _earliest or (today - timedelta(days=int(os.getenv("ROAS_BACKFILL_DAYS", "550")))).isoformat()
             fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
             spend = merge_spend(cached_spend, fresh_spend, refetch_start)
             if spend is not None and not spend.get("error"):
