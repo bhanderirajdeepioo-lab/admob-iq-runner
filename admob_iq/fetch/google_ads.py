@@ -263,8 +263,9 @@ def fetch_app_spend(s, start, end, *, mode="live"):
 def merge_spend(cached, fresh, refetch_start):
     """Incremental spend cache. Google Ads restates spend/conversions for a while (~60 days), so we
     only ever re-pull a recent window and keep the SETTLED older history from the cache. `fresh`
-    covers [refetch_start, today]; for every store, dates < refetch_start come from `cached`, dates
-    >= refetch_start come from `fresh` (so adjustments are captured, old data isn't re-fetched hourly).
+    covers [refetch_start, today] and is OVERLAID onto the cached history per store/date — it only
+    updates or adds, never erases. So Google Ads restatements are captured, old data isn't re-fetched
+    hourly, and a run whose fresh fetch is late/incomplete can't wipe a store's recent spend.
 
     - fresh is None      → Google Ads not configured: no ROAS (never serve stale cache).
     - fresh has 'error'  → transient failure: keep the settled history we already have.
@@ -282,8 +283,11 @@ def merge_spend(cached, fresh, refetch_start):
         fd = fresh.get(key) or {}
         merged = {}
         for sid in set(cd) | set(fd):
-            m = {d: v for d, v in (cd.get(sid) or {}).items() if d < refetch_start}  # settled history
-            m.update(fd.get(sid) or {})                                              # fresh recent window
+            # NON-destructive: keep the whole cached history, then overlay the fresh window (update/add).
+            # A run whose fresh fetch is late/missing a store (Google Ads reports recent spend with a lag)
+            # therefore can NEVER wipe that store's recent spend — which is what caused spend to flip in/out.
+            m = dict(cd.get(sid) or {})
+            m.update(fd.get(sid) or {})
             if m:
                 merged[sid] = m
         out[key] = merged
