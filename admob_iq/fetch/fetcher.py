@@ -95,7 +95,7 @@ def make_client(account: Dict, mode="mock", client_id=None, client_secret=None,
 
 def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
              rolling_days=7, country_days=None, adunit_country_days=None,
-             ac_full_history=False, client_id=None, client_secret=None, currency="USD") -> Dict:
+             ac_full_history=False, full_history=False, client_id=None, client_secret=None, currency="USD") -> Dict:
     start, end = date_window(today, rolling_days)
     # The country report can be backfilled DEEPER than network/mediation (its history often
     # lags), so it gets its own window.
@@ -110,11 +110,21 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
     truncations = []          # any slice the safe-fetch layer could NOT make complete (should stay empty)
     for acct in accounts:
         client = make_client(acct, mode, client_id, client_secret, currency)
+        # Full-history backfill: probe THIS account's real data start so network + country cover the
+        # whole history automatically — no fixed day-count. Mirrors the ad-unit×country backfill below.
+        n_start, cc_start = start, c_start
+        if full_history:
+            try:
+                _ds = client.data_start(today, max_lookback=adunit_country_days or 2555)
+            except Exception as _e:
+                import sys; print(f"data_start (network) probe failed for {acct.get('account_id')}: {_e}", file=sys.stderr); _ds = None
+            if _ds:
+                n_start = cc_start = _ds
         # Per-account isolation: a bad/expired token or auth error on ONE account (which surfaces
         # on its first API call) must NOT crash the whole run and freeze every other account's data.
         # Log it and move on — that account simply gets no fresh data this run; its old data stays.
         try:
-            for raw in client.network_report(start, end):
+            for raw in client.network_report(n_start, end):
                 repo.upsert_network(build_network_row(raw))
                 repo.append_snapshot(build_snapshot(raw, today))
                 totals["network"] += 1
@@ -131,7 +141,7 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
         # long history backfill never rides on one huge request, and a transient failure on
         # one chunk doesn't lose the rest (each chunk is best-effort). Never let a hiccup
         # here break the core revenue pull.
-        cs = c_start
+        cs = cc_start
         while cs <= c_end:
             ce = min(cs + timedelta(days=59), c_end)     # 60-day chunks: ~countries×apps×60 rows, safely < 100k cap
             try:
