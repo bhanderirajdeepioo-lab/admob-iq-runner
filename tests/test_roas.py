@@ -151,6 +151,27 @@ def test_mock_spend_carries_convval():
     assert out["convval"]["com.mock.1"]["2026-07-18"] == round(500 * 1.3, 2)   # 650.0
 
 
+def test_merge_spend_keeps_settled_history_and_refreshes_recent():
+    cached = {"daily": {"com.x.a": {"2026-01-01": 10, "2026-05-01": 20}},
+              "installs": {"com.x.a": {"2026-01-01": 5, "2026-05-01": 6}},
+              "convval": {}, "campaigns": {}, "currency_src": "USD", "fx": {}}
+    fresh = {"daily": {"com.x.a": {"2026-05-01": 99, "2026-05-02": 30}},   # 05-01 restated up, 05-02 new
+             "installs": {"com.x.a": {"2026-05-01": 7}}, "convval": {}, "campaigns": {},
+             "currency_src": "USD", "fx": {}}
+    m = google_ads.merge_spend(cached, fresh, refetch_start="2026-04-01")
+    # settled (< 04-01) kept from cache; recent (>= 04-01) taken fresh — old data never re-fetched
+    assert m["daily"]["com.x.a"] == {"2026-01-01": 10, "2026-05-01": 99, "2026-05-02": 30}
+    assert m["installs"]["com.x.a"] == {"2026-01-01": 5, "2026-05-01": 7}
+
+
+def test_merge_spend_edge_cases():
+    fresh = {"daily": {}, "installs": {}, "convval": {}, "campaigns": {}, "currency_src": "USD", "fx": {}}
+    assert google_ads.merge_spend(None, fresh, "2026-04-01") is fresh          # first run → fresh (backfill)
+    assert google_ads.merge_spend({"daily": {}}, None, "2026-04-01") is None    # not configured → no ROAS
+    cached = {"daily": {"com.x.a": {"2026-01-01": 10}}}
+    assert google_ads.merge_spend(cached, {"error": "boom"}, "2026-04-01") is cached  # transient error → keep history
+
+
 def test_norm_store_strips_platform_prefix():
     assert google_ads._norm_store("2:1234567") == "1234567"
     assert google_ads._norm_store(" com.x.y ") == "com.x.y"
