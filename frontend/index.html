@@ -102,7 +102,8 @@
   .ov-note{grid-column:1/-1;grid-row:2}
   .ov-chart{grid-column:1;grid-row:3}
   .ov-movers{grid-column:2;grid-row:3}
-  .ov-apps{grid-column:1;grid-row:4;overflow-x:auto;min-width:0}   /* min-width:0 lets the grid item shrink so overflow-x actually scrolls on desktop */
+  .ov-apps{grid-column:1;grid-row:4;min-width:0}                    /* min-width:0 lets the grid item shrink */
+  .ov-apps.card.pad0{overflow-x:auto}                               /* beats .card.pad0{overflow:hidden} so it scrolls, not clips */
   .ov-apps.card.pad0 table{min-width:960px}                 /* keep columns readable → proper horizontal scroll */
   .ov-apps th,.ov-apps td{border-right:1px solid var(--line)}   /* Excel-style column dividers */
   .ov-apps th:last-child,.ov-apps td:last-child{border-right:none}
@@ -900,7 +901,7 @@ function bTrendChart(months, values, opts){
   const hov=`<line class="bcg" x1="0" x2="0" y1="${mT}" y2="${(mT+ph).toFixed(1)}" stroke="#cfe8ff" stroke-opacity=".4" stroke-width="1" style="visibility:hidden;pointer-events:none"/>`
     +`<circle class="bch" r="4.8" fill="${col}" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
     +`<circle class="bch2" r="4.2" fill="#e6b84e" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
-    +`<g class="bct" style="visibility:hidden;pointer-events:none"><rect class="bctbg" rx="5" height="23" fill="#0b1220" stroke="#38507a" stroke-width="1"/><text class="bcttx" font-size="13.5" font-weight="700" fill="#eaf6ff"></text></g>`
+    +`<g class="bct" style="visibility:hidden;pointer-events:none"><rect class="bctbg" rx="7" fill="#0b1220" stroke="#38507a" stroke-width="1"/><text class="bctd" font-size="11" font-weight="600" fill="#8496b5"></text><circle class="bcrdot" r="3.4" fill="${col}"/><text class="bctr" font-size="13.5" font-weight="700" fill="#eaf6ff"></text><circle class="bcsdot" r="3.4" fill="#e6b84e"/><text class="bcts" font-size="13.5" font-weight="700" fill="#eaf6ff"></text></g>`
     +`<rect x="${mL}" y="${mT}" width="${pw}" height="${ph.toFixed(1)}" fill="transparent" style="cursor:crosshair" onmousemove="bChartHover(event,this)" onmouseleave="bChartLeave(this)"/>`;
   let spEl='';
   if(sp.length){ const scol=opts.spendColor||'#e6b84e';
@@ -923,11 +924,19 @@ function bChartHover(ev,ov){ const svg=ov.ownerSVGElement; if(!svg)return;
   const g=svg.querySelector('.bcg'); if(g){g.setAttribute('x1',best.x);g.setAttribute('x2',best.x);g.style.visibility='visible';}
   const dot=svg.querySelector('.bch'); if(dot){dot.setAttribute('cx',best.x);dot.setAttribute('cy',best.y);dot.style.visibility='visible';}
   const dot2=svg.querySelector('.bch2'); if(dot2){ if(best.sy!=null){dot2.setAttribute('cx',best.x);dot2.setAttribute('cy',best.sy);dot2.style.visibility='visible';} else dot2.style.visibility='hidden'; }
-  const tg=svg.querySelector('.bct'); if(tg){ const bg=tg.querySelector('.bctbg'), tx=tg.querySelector('.bcttx');
-    const s=best.l+'  ·  '+best.v+(best.s?'   spend '+best.s:''); tx.textContent=s; const tw=s.length*7.2+18;
-    let x=best.x-tw/2; x=Math.max(3,Math.min(x,W-tw-3)); let y=best.y-31; if(y<2)y=best.y+9;
-    bg.setAttribute('x',x);bg.setAttribute('y',y);bg.setAttribute('width',tw);
-    tx.setAttribute('x',x+9);tx.setAttribute('y',y+16); tg.style.visibility='visible'; }
+  const tg=svg.querySelector('.bct');
+  if(tg){ const bg=tg.querySelector('.bctbg'), td=tg.querySelector('.bctd'), tr=tg.querySelector('.bctr'), ts=tg.querySelector('.bcts'), rd=tg.querySelector('.bcrdot'), sd=tg.querySelector('.bcsdot');
+    const hasS=best.s!=null;
+    td.textContent=best.l; tr.textContent=best.v; ts.textContent=hasS?best.s:'';
+    const tw=Math.max(best.l.length, (''+best.v).length+2, hasS?(''+best.s).length+2:0)*7.7+28;
+    const th=hasS?58:38;
+    let x=best.x-tw/2; x=Math.max(3,Math.min(x,W-tw-3)); let y=best.y-th-10; if(y<2)y=best.y+12;
+    bg.setAttribute('x',x);bg.setAttribute('y',y);bg.setAttribute('width',tw);bg.setAttribute('height',th);
+    td.setAttribute('x',x+12);td.setAttribute('y',y+15);
+    rd.setAttribute('cx',x+15);rd.setAttribute('cy',y+31); tr.setAttribute('x',x+24);tr.setAttribute('y',y+35);
+    if(hasS){ sd.setAttribute('cx',x+15);sd.setAttribute('cy',y+49); ts.setAttribute('x',x+24);ts.setAttribute('y',y+53); sd.style.display='';ts.style.display=''; }
+    else { sd.style.display='none'; ts.style.display='none'; }
+    tg.style.visibility='visible'; }
 }
 function bChartLeave(ov){ const svg=ov.ownerSVGElement; if(!svg)return; ['.bcg','.bch','.bch2','.bct'].forEach(s=>{const el=svg.querySelector(s); if(el)el.style.visibility='hidden';}); }
 // app-level "where did the drop concentrate" — window vs the equal prior window, per country
