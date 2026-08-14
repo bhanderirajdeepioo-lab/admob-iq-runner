@@ -132,21 +132,6 @@ def _app_installs_for(customer_id, login_customer_id, dev_token, access_token, s
     return out
 
 
-def _debug_all_spend(customer_id, login_customer_id, dev_token, access_token, start, end):
-    """DIAGNOSTIC: every campaign with cost in [start,end] — name, channel type, app_id (if any), cost.
-    Reveals spend that never lands under an app because the campaign has no app_campaign_setting.app_id."""
-    q = ("SELECT campaign.name, campaign.advertising_channel_type, "
-         "campaign.app_campaign_setting.app_id, metrics.cost_micros, segments.date "
-         "FROM campaign WHERE segments.date BETWEEN '%s' AND '%s' AND metrics.cost_micros > 0" % (start, end))
-    out = []
-    for row in _search(customer_id, login_customer_id, dev_token, access_token, q):
-        camp = row.get("campaign") or {}
-        out.append({"name": camp.get("name"), "channel": camp.get("advertisingChannelType"),
-                    "app_id": (camp.get("appCampaignSetting") or {}).get("appId"),
-                    "cost_micros": int((row.get("metrics") or {}).get("costMicros") or 0)})
-    return out
-
-
 def _fx_to_usd(ccy):
     if ccy == "USD" or not ccy:
         return 1.0
@@ -272,27 +257,6 @@ def fetch_app_spend(s, start, end, *, mode="live"):
             print("roas: installs/convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
     agg["installs"] = _aggregate_installs(inst_rows)
     agg["convval"] = _aggregate_convval(inst_rows)
-    # DIAGNOSTIC (temporary): per account, split cost by has-app-id vs not — to find where spend lands.
-    try:
-        dbg = {"window": [start, end], "accounts": {}}
-        for a in accounts:
-            acc = {"cur": a.get("currency"), "with_app_usdcents": 0, "no_app_usdcents": 0, "no_app_top": {}}
-            try:
-                for r in _debug_all_spend(a["id"], mcc, dev, token, start, end):
-                    c = r.get("cost_micros") or 0
-                    if r.get("app_id"):
-                        acc["with_app_usdcents"] += c
-                    else:
-                        acc["no_app_usdcents"] += c
-                        k = ((r.get("name") or "?")[:44]) + " [" + str(r.get("channel")) + "]"
-                        acc["no_app_top"][k] = acc["no_app_top"].get(k, 0) + c
-            except Exception as e:
-                acc["err"] = str(e)[:160]
-            acc["no_app_top"] = dict(sorted(acc["no_app_top"].items(), key=lambda x: -x[1])[:8])
-            dbg["accounts"][str(a["id"])] = acc
-        agg["_debug"] = dbg
-    except Exception as e:
-        print("roas debug skipped: %s" % e, file=sys.stderr)
     return agg
 
 
