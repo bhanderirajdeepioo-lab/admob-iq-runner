@@ -43,6 +43,21 @@
   .dot-live{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 3px rgba(52,217,154,.2)}
   .content{padding:22px 24px 50px;max-width:1200px}
   .screen{display:none}.screen.on{display:block}
+  /* Boot loading state — shown while dashboard.json is being fetched, auto-replaced by render() */
+  @keyframes iqspin{to{transform:rotate(360deg)}}
+  @keyframes iqshim{100%{background-position:-200% 0}}
+  @keyframes iqpulse{0%,100%{opacity:.55}50%{opacity:1}}
+  .iqload{max-width:1200px}
+  .iqload .lhead{display:flex;align-items:center;gap:12px;margin:2px 0 4px}
+  .iqspin{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--line2);border-top-color:var(--cyan);animation:iqspin .8s linear infinite;flex:none}
+  .iqload h2{font-size:20px;margin:0;font-weight:800}
+  .iqload .lsub{color:var(--muted);font-size:13px;margin:0 0 20px}
+  .iqload .lsub b{color:var(--ink2);font-weight:700;animation:iqpulse 1.6s ease-in-out infinite}
+  .sk{background:linear-gradient(90deg,var(--panel) 25%,var(--raise) 37%,var(--panel) 63%);background-size:200% 100%;animation:iqshim 1.4s ease-in-out infinite;border-radius:8px}
+  .skcard{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 17px}
+  .skln{height:12px;border-radius:6px}
+  .skgrid{display:grid;gap:14px;grid-template-columns:repeat(4,1fr);margin-bottom:14px}
+  @media(max-width:1000px){.skgrid{grid-template-columns:repeat(2,1fr)}}
   h2.sc{font-size:20px;margin:0 0 3px;font-weight:800}p.scd{margin:0 0 16px;color:var(--muted);font-size:13px}
   .row{display:grid;gap:14px}.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:repeat(3,1fr)}.c4{grid-template-columns:repeat(4,1fr)}.c5{grid-template-columns:repeat(5,1fr)}.c6{grid-template-columns:repeat(6,1fr)}.c7{grid-template-columns:repeat(7,1fr)}.c8{grid-template-columns:repeat(8,1fr)}.c9{grid-template-columns:repeat(9,1fr)}.span2{grid-column:span 2}
   @media(max-width:1000px){.c4,.c5{grid-template-columns:repeat(2,1fr)}.c6,.c7,.c8,.c9{grid-template-columns:repeat(3,1fr)}.c3{grid-template-columns:1fr}.span2{grid-column:auto}}
@@ -242,7 +257,23 @@
       <span class="live" id="freshness" title="Data kab update hua"><span class="dot-live"></span> <span id="fresh-txt">Live</span></span>
       <span class="ctrl" id="tzchip" title="Ye numbers is time zone par hain — aapke AdMob account ke hisab se (isliye aapki AdMob app se match karte hain)" style="display:none">🕐 <span id="tz-txt"></span></span>
     </div>
-    <div class="content" id="content"><div id="banner"></div><div id="screens"></div></div>
+    <div class="content" id="content"><div id="banner"></div><div id="screens"><div class="iqload" id="bootload">
+      <div class="lhead"><div class="iqspin"></div><h2>Aapka dashboard taiyaar ho raha hai</h2></div>
+      <p class="lsub">AdMob se latest numbers la rahe hain — <b>ek moment…</b> Screen apne aap bhar jayegi.</p>
+      <div class="skgrid">
+        <div class="skcard"><div class="sk skln" style="width:45%;height:10px"></div><div class="sk skln" style="width:70%;height:22px;margin-top:12px"></div></div>
+        <div class="skcard"><div class="sk skln" style="width:45%;height:10px"></div><div class="sk skln" style="width:70%;height:22px;margin-top:12px"></div></div>
+        <div class="skcard"><div class="sk skln" style="width:45%;height:10px"></div><div class="sk skln" style="width:70%;height:22px;margin-top:12px"></div></div>
+        <div class="skcard"><div class="sk skln" style="width:45%;height:10px"></div><div class="sk skln" style="width:70%;height:22px;margin-top:12px"></div></div>
+      </div>
+      <div class="skcard" style="margin-bottom:14px"><div class="sk skln" style="width:30%;height:12px"></div><div class="sk" style="height:150px;border-radius:10px;margin-top:14px"></div></div>
+      <div class="skcard"><div class="sk skln" style="width:30%;height:12px"></div>
+        <div class="sk skln" style="width:100%;height:14px;margin-top:16px"></div>
+        <div class="sk skln" style="width:100%;height:14px;margin-top:12px"></div>
+        <div class="sk skln" style="width:100%;height:14px;margin-top:12px"></div>
+        <div class="sk skln" style="width:100%;height:14px;margin-top:12px"></div>
+      </div>
+    </div></div></div>
   </main>
   <nav class="botbar" aria-label="Primary">
     <button class="tabbtn" data-screen="overview" onclick="show('overview')"><span class="ti">📊</span>Overview</button>
