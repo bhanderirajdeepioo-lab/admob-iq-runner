@@ -895,10 +895,11 @@ function bTrendChart(months, values, opts){
     markEl=`<line x1="${mx}" y1="${mT}" x2="${mx}" y2="${(mT+ph).toFixed(1)}" stroke="#ffd479" stroke-width="1.4" stroke-dasharray="4 4"/><circle cx="${mx}" cy="${yv(vals[mi]).toFixed(1)}" r="5.5" fill="#ffd479"/><text x="${mx}" y="${(mT-3).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="700" fill="#ffd479">${fmt(vals[mi])}</text>`; } }
   bTrendChart._n=(bTrendChart._n||0)+1; const gid='gBT'+bTrendChart._n;   // unique gradient id per chart
   // hover layer: a transparent overlay snaps to the nearest point → guide line + dot + value label
-  const pts=vals.map((v,i)=>({x:+xi(i).toFixed(1),y:+yv(v).toFixed(1),l:xlab(months[i]),v:fmt(v)}));
+  const pts=vals.map((v,i)=>({x:+xi(i).toFixed(1),y:+yv(v).toFixed(1),l:xlab(months[i]),v:fmt(v),s:sp.length?fmt(sp[i]):null,sy:sp.length?+yv(sp[i]).toFixed(1):null}));
   const ptsAttr=JSON.stringify(pts).replace(/&/g,'&amp;').replace(/'/g,'&#39;');
   const hov=`<line class="bcg" x1="0" x2="0" y1="${mT}" y2="${(mT+ph).toFixed(1)}" stroke="#cfe8ff" stroke-opacity=".4" stroke-width="1" style="visibility:hidden;pointer-events:none"/>`
     +`<circle class="bch" r="4.8" fill="${col}" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
+    +`<circle class="bch2" r="4.2" fill="#e6b84e" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
     +`<g class="bct" style="visibility:hidden;pointer-events:none"><rect class="bctbg" rx="5" height="23" fill="#0b1220" stroke="#38507a" stroke-width="1"/><text class="bcttx" font-size="13.5" font-weight="700" fill="#eaf6ff"></text></g>`
     +`<rect x="${mL}" y="${mT}" width="${pw}" height="${ph.toFixed(1)}" fill="transparent" style="cursor:crosshair" onmousemove="bChartHover(event,this)" onmouseleave="bChartLeave(this)"/>`;
   let spEl='';
@@ -921,13 +922,14 @@ function bChartHover(ev,ov){ const svg=ov.ownerSVGElement; if(!svg)return;
   const W=(svg.viewBox&&svg.viewBox.baseVal&&svg.viewBox.baseVal.width)||1000;
   const g=svg.querySelector('.bcg'); if(g){g.setAttribute('x1',best.x);g.setAttribute('x2',best.x);g.style.visibility='visible';}
   const dot=svg.querySelector('.bch'); if(dot){dot.setAttribute('cx',best.x);dot.setAttribute('cy',best.y);dot.style.visibility='visible';}
+  const dot2=svg.querySelector('.bch2'); if(dot2){ if(best.sy!=null){dot2.setAttribute('cx',best.x);dot2.setAttribute('cy',best.sy);dot2.style.visibility='visible';} else dot2.style.visibility='hidden'; }
   const tg=svg.querySelector('.bct'); if(tg){ const bg=tg.querySelector('.bctbg'), tx=tg.querySelector('.bcttx');
-    const s=best.l+'  ·  '+best.v; tx.textContent=s; const tw=s.length*7.2+18;
+    const s=best.l+'  ·  '+best.v+(best.s?'   spend '+best.s:''); tx.textContent=s; const tw=s.length*7.2+18;
     let x=best.x-tw/2; x=Math.max(3,Math.min(x,W-tw-3)); let y=best.y-31; if(y<2)y=best.y+9;
     bg.setAttribute('x',x);bg.setAttribute('y',y);bg.setAttribute('width',tw);
     tx.setAttribute('x',x+9);tx.setAttribute('y',y+16); tg.style.visibility='visible'; }
 }
-function bChartLeave(ov){ const svg=ov.ownerSVGElement; if(!svg)return; ['.bcg','.bch','.bct'].forEach(s=>{const el=svg.querySelector(s); if(el)el.style.visibility='hidden';}); }
+function bChartLeave(ov){ const svg=ov.ownerSVGElement; if(!svg)return; ['.bcg','.bch','.bch2','.bct'].forEach(s=>{const el=svg.querySelector(s); if(el)el.style.visibility='hidden';}); }
 // app-level "where did the drop concentrate" — window vs the equal prior window, per country
 function dropByCountry(app, winArr){
   const cd=(DATA.countries_daily||{})[app]; if(!cd||!winArr||!winArr.length) return null;
