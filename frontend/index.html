@@ -597,7 +597,7 @@ function renderOverview(){
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'Ye app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe click → poori report</span></div>
         <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">existing</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
-      <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue · cursor pe value</span></div></div>
+      <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0',spend:SHOWSP?spendSeries:null,spendColor:'#e6b84e'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span>${SHOWSP?'<span><i class="dot" style="background:#e6b84e"></i> Ad spend</span>':''}<span class="faint" style="font-size:11px">· cursor pe revenue value</span></div></div>
       <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
       <div class="ov-attn card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
     </div>`;
@@ -873,7 +873,8 @@ function bTrendChart(months, values, opts){
   opts=opts||{}; const fmt=opts.fmt||(v=>''+v); const col=opts.color||'#3dd0f0'; const xlab=opts.xlab||bMon;
   const n=(months||[]).length; if(!n) return '<div class="muted" style="font-size:12px;padding:14px 4px">Trend data nahi</div>';
   const W=1000,H=260,mL=56,mR=18,mT=16,mB=30, pw=W-mL-mR, ph=H-mT-mB;
-  const vals=values.map(v=>+v||0); const vmax=(Math.max(...vals,0)*1.08)||1, vmin=0;
+  const vals=values.map(v=>+v||0); const sp=(opts.spend||[]).map(v=>+v||0);   // optional overlay (ad spend)
+  const vmax=(Math.max(...vals,...(sp.length?sp:[0]),0)*1.08)||1, vmin=0;
   const xi=i=> mL + (n<=1? pw/2 : pw*i/(n-1));
   const yv=v=> mT + ph*(1-(v-vmin)/((vmax-vmin)||1));
   const line=vals.map((v,i)=>`${xi(i).toFixed(1)} ${yv(v).toFixed(1)}`).join(' L');
@@ -900,9 +901,15 @@ function bTrendChart(months, values, opts){
     +`<circle class="bch" r="4.8" fill="${col}" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
     +`<g class="bct" style="visibility:hidden;pointer-events:none"><rect class="bctbg" rx="5" height="23" fill="#0b1220" stroke="#38507a" stroke-width="1"/><text class="bcttx" font-size="13.5" font-weight="700" fill="#eaf6ff"></text></g>`
     +`<rect x="${mL}" y="${mT}" width="${pw}" height="${ph.toFixed(1)}" fill="transparent" style="cursor:crosshair" onmousemove="bChartHover(event,this)" onmouseleave="bChartLeave(this)"/>`;
+  let spEl='';
+  if(sp.length){ const scol=opts.spendColor||'#e6b84e';
+    const sline=sp.map((v,i)=>`${xi(i).toFixed(1)} ${yv(v).toFixed(1)}`).join(' L');
+    const sdots=sp.map((v,i)=>`<circle cx="${xi(i).toFixed(1)}" cy="${yv(v).toFixed(1)}" r="${n>28?1.8:2.4}" fill="${scol}"/>`).join('');
+    const _sl=n-1;
+    spEl=`<path d="M${sline}" fill="none" stroke="${scol}" stroke-width="2" stroke-dasharray="5 3"/>${sdots}<circle cx="${xi(_sl).toFixed(1)}" cy="${yv(sp[_sl]).toFixed(1)}" r="4" fill="${scol}"/>`; }
   return `<svg viewBox="0 0 ${W} ${H}" data-pts='${ptsAttr}' style="width:100%;height:auto;display:block">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".26"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
-    ${grid}<path d="${area}" fill="url(#${gid})"/><path d="M${line}" fill="none" stroke="${col}" stroke-width="2.4"/>
+    ${grid}<path d="${area}" fill="url(#${gid})"/><path d="M${line}" fill="none" stroke="${col}" stroke-width="2.4"/>${spEl}
     ${xl}${dots}${markEl}${last}${hov}</svg>`;
 }
 // interactive tooltip for every bTrendChart: nearest-point snap with guide line, dot + value label
