@@ -164,6 +164,17 @@ def test_merge_spend_keeps_settled_history_and_refreshes_recent():
     assert m["installs"]["com.x.a"] == {"2026-01-01": 5, "2026-05-01": 7}
 
 
+def test_merge_spend_transient_gap_never_wipes_recent():
+    """If a run's fresh fetch is late/missing a store entirely (Google Ads reports recent spend with a
+    lag), its recent spend must NOT be erased — otherwise spend flip-flops in and out each run."""
+    cached = {"daily": {"com.x.a": {"2026-05-01": 20, "2026-08-13": 30}}, "installs": {}, "convval": {},
+              "campaigns": {}, "currency_src": "USD", "fx": {}}
+    fresh = {"daily": {}, "installs": {}, "convval": {}, "campaigns": {},   # this run returned nothing for the store
+             "currency_src": "USD", "fx": {}}
+    m = google_ads.merge_spend(cached, fresh, refetch_start="2026-05-16")
+    assert m["daily"]["com.x.a"] == {"2026-05-01": 20, "2026-08-13": 30}    # recent (08-13) kept, not wiped
+
+
 def test_merge_spend_edge_cases():
     fresh = {"daily": {}, "installs": {}, "convval": {}, "campaigns": {}, "currency_src": "USD", "fx": {}}
     assert google_ads.merge_spend(None, fresh, "2026-04-01") is fresh          # first run → fresh (backfill)
