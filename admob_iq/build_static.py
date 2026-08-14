@@ -707,6 +707,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                     _earliest = None
                 refetch_start = _earliest or (today - timedelta(days=int(os.getenv("ROAS_BACKFILL_DAYS", "550")))).isoformat()
             fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
+            if isinstance(fresh_spend, dict) and fresh_spend.get("_debug"):   # TEMP diagnostic dump
+                try:
+                    with open(os.path.join(data_dir, "roas_debug.json"), "w", encoding="utf-8") as _df:
+                        json.dump(fresh_spend["_debug"], _df)
+                except Exception as _de:
+                    print("roas_debug write skipped: %s" % _de, file=sys.stderr)
             spend = merge_spend(cached_spend, fresh_spend, refetch_start)
             if spend is not None and not spend.get("error"):
                 try:
