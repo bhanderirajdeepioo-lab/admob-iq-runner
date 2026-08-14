@@ -102,7 +102,7 @@
   .ov-note{grid-column:1/-1;grid-row:2}
   .ov-chart{grid-column:1;grid-row:3}
   .ov-movers{grid-column:2;grid-row:3}
-  .ov-apps{grid-column:1;grid-row:4;overflow-x:auto}
+  .ov-apps{grid-column:1;grid-row:4;overflow-x:auto;min-width:0}   /* min-width:0 lets the grid item shrink so overflow-x actually scrolls on desktop */
   .ov-apps.card.pad0 table{min-width:960px}                 /* keep columns readable → proper horizontal scroll */
   .ov-apps th,.ov-apps td{border-right:1px solid var(--line)}   /* Excel-style column dividers */
   .ov-apps th:last-child,.ov-apps td:last-child{border-right:none}
