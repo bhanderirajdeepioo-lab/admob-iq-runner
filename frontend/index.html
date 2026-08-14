@@ -237,6 +237,7 @@
       <label class="ctrl" style="cursor:pointer;gap:6px" title="Ek app choose karo — poora dashboard us app ka ho jayega">📱 <span class="cx">App:</span><select id="appsel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none;max-width:220px"></select></label>
       <label class="ctrl" style="cursor:pointer;gap:6px" title="Time period — poora dashboard isi window ka data dikhata hai"><span class="cx">🗓 Period:</span><select id="rangesel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none"><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="90d">90 days</option><option value="month">This month</option><option value="lastmonth">Last month</option><option value="all">All time</option><option value="custom">Custom…</option></select></label>
       <span class="ctrl" id="rangecustom" style="display:none;gap:6px"><input type="date" id="rc-from" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="cx">→</span><input type="date" id="rc-to" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="applyRangeCustom()">Apply</span></span>
+      <button class="ctrl" id="curtoggle" onclick="toggleCur()" title="Currency badlo — poora dashboard USD ⇄ INR" style="cursor:pointer;font:inherit;font-weight:700;color:var(--ink)">💱 <span id="cur-lbl">USD</span></button>
       <span class="live" id="freshness" title="Data kab update hua"><span class="dot-live"></span> <span id="fresh-txt">Live</span></span>
       <span class="ctrl" id="tzchip" title="Ye numbers is time zone par hain — aapke AdMob account ke hisab se (isliye aapki AdMob app se match karte hain)" style="display:none">🕐 <span id="tz-txt"></span></span>
     </div>
@@ -281,8 +282,25 @@ let BDUNIT = null;                       // unit BDMETS was initialised for (re-
 let BCULPRIT = 'yday';                    // culprit card lens: 'yday' (yesterday, default) or 'month'
 let BCEXPAND = false;                     // culprit card: show ALL affected countries vs top 6
 const CUR_SYM={USD:"$",INR:"₹",EUR:"€",GBP:"£",JPY:"¥",BRL:"R$",AUD:"A$",CAD:"C$",SGD:"S$"};
-const csym=()=>{const c=DATA&&DATA.currency;return c?(CUR_SYM[c]||(c==="USD"?"$":c+" ")):"$";};
-const money=(n)=>csym()+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+let CURVIEW=null;                                        // active display currency ('USD'/'INR'); boot sets it
+function baseCur(){ return (DATA&&DATA.currency)||"USD"; }
+function curView(){ return CURVIEW||baseCur(); }
+function cfx(){ const v=curView(), b=baseCur(); if(v===b) return 1;   // USD⇄INR display conversion factor
+  const r=(DATA&&DATA.usd_inr)||83;                     // USD→INR (fallback ~83 if backend fetch missing)
+  if(b==="USD"&&v==="INR") return r;
+  if(b==="INR"&&v==="USD") return 1/r;
+  return 1; }
+const csym=()=>{const c=curView();return CUR_SYM[c]||(c==="USD"?"$":c+" ");};
+const money=(n)=>csym()+Number(n*cfx()).toLocaleString(undefined,{maximumFractionDigits:0});
+const cm=(n,dp)=>csym()+(Number(n)*cfx()).toFixed(dp==null?2:dp);   // small money (eCPM/rates); converts
+function otherCur(){ return baseCur()==="INR" ? "USD" : "INR"; }
+function curSyncUI(){ const el=document.getElementById("cur-lbl"); if(el) el.textContent=curView();
+  const bt=document.getElementById("curtoggle"), r=(DATA&&DATA.usd_inr);
+  if(bt) bt.title = r ? ("Live rate: 1 USD = ₹"+Number(r).toFixed(2)+" (frankfurter.app, har run update) — tap: USD ⇄ INR")
+                      : "Switch currency — USD ⇄ INR"; }
+function toggleCur(){ CURVIEW = (curView()===baseCur()) ? otherCur() : baseCur();   // whole dashboard USD⇄INR
+  try{ localStorage.setItem("curview", CURVIEW); }catch(e){}
+  curSyncUI(); render(); }
 const pct=(n)=>(n*100).toFixed(0)+"%";
 // App icon: real store logo if the backend resolved one (DATA.app_icons: {app_name|app_id: url}),
 // else a clean per-app colored letter-avatar. Falls back to the avatar if the image fails to load.
@@ -543,7 +561,7 @@ function renderOverview(){
     return Math.round(v/1e6*100)/100; }):[];
   const instTot=appsShown.reduce((t,x)=>t+(INST[x.name]||0),0);           // Google Ads installs, this window
   const plTot=k.revenue-spendTot;                                          // Profit/Loss = revenue − ad spend
-  const plFmt=(n)=>(n<0?'-':'')+csym()+Number(Math.abs(n)).toLocaleString(undefined,{maximumFractionDigits:0});
+  const plFmt=(n)=>(n<0?'-':'')+csym()+Number(Math.abs(n)*cfx()).toLocaleString(undefined,{maximumFractionDigits:0});
   const newRevTot=appsShown.reduce((t,x)=>t+(CVAL[x.name]||0),0);         // new-user revenue = Google Ads conv value
   const oldRevTot=k.revenue-newRevTot;                                     // old/existing-user revenue = total − new
   const instSeries=SHOWSP?trendDates.map(d=>{ let v=0; const by=DATA.roas.by_app||{};
@@ -553,10 +571,10 @@ function renderOverview(){
   const roasCell=(rv,sp)=>{ if(!(sp>0))return '<td><span class="faint">organic</span></td>';
     const r=rv/sp; return `<td style="font-weight:700">${money(sp)}<div class="${r>=1?'up':'down'}" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div></td>`; };
   const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);const newr=CVAL[ap2.name]||0;const oldr=g.e/1e6-newr;
-    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td>${money(newr)}</td><td class="${oldr<0?'down':''}">${plFmt(oldr)}</td><td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?csym()+ec.toFixed(2):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
+    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td>${money(newr)}</td><td class="${oldr<0?'down':''}">${plFmt(oldr)}</td><td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?cm(ec):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
   // mobile card-list of the SAME apps (shown ≤760px; desktop keeps the table). Nothing dropped.
   const appCards=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const rev=g.e/1e6;const sp=SPA[ap2.name]||0;const pl=rev-sp;const inst=INST[ap2.name];const ec=g.i?g.e/(g.i*1000):0;
-    const meta=SHOWSP?`${inst!=null?Math.round(inst).toLocaleString()+' inst':'—'} · ${sp>0?money(sp)+' spend':'organic'} · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`:`${g.i?csym()+ec.toFixed(2)+' eCPM':'—'} · ${ap2.placements} pl · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`;
+    const meta=SHOWSP?`${inst!=null?Math.round(inst).toLocaleString()+' inst':'—'} · ${sp>0?money(sp)+' spend':'organic'} · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`:`${g.i?cm(ec)+' eCPM':'—'} · ${ap2.placements} pl · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`;
     return `<div class="mrow" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><span class="mic">${appIcon(ap2.name,34)}</span><div class="mmid"><div class="mname">${ap2.name}</div><div class="mmeta">${meta}</div></div><div class="mright"><div class="mrev">${money(rev)}</div>${SHOWSP?`<div class="mpl ${pl>=0?'up':'down'}">${plFmt(pl)}</div>`:''}</div><span class="mchev">›</span></div>`;}).join('');
   const lastTile=ap?kpi('Placements',(ap.placements||fp.length),APP.slice(0,16),'muted'):kpi('Apps · Accounts',DATA.kpis.apps+' · '+DATA.kpis.accounts,'','muted');
   const moversBody=`${inc.slice(0,2).map(p=>`<div class="al good"><span>▲</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')}
@@ -572,14 +590,14 @@ function renderOverview(){
         ${SHOWSP?kpi('Total installs',instTot?Math.round(instTot).toLocaleString():'—','Google Ads · '+dspan,'muted',sparkbars(instSeries,'o')):''}
         ${SHOWSP?kpi('New revenue',money(newRevTot),'new users (GAds) · '+dspan,'muted'):''}
         ${SHOWSP?kpi('Old revenue',plFmt(oldRevTot),'existing users · '+dspan,'muted'):''}
-        ${kpi('Avg eCPM',csym()+(k.ecpm.toFixed(2)),dspan,'muted',sparkbars(trendSeries))}
+        ${kpi('Avg eCPM',cm(k.ecpm),dspan,'muted',sparkbars(trendSeries))}
         ${kpi('Match rate',pct(k.match_rate||0),dspan,'muted',sparkbars(trendSeries,'g'))}
         ${lastTile}
       </div>
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'Ye app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe click → poori report</span></div>
         <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">existing</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
-      <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v),xlab:fmtD,color:'#3dd0f0'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue · cursor pe value</span></div></div>
+      <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue · cursor pe value</span></div></div>
       <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
       <div class="ov-attn card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
     </div>`;
@@ -594,7 +612,7 @@ function renderPlacements(){
   const cards=apps.map(ap=>{const g=ap.avg_health;const hd=ap.health_dist||[0,0,0];const tot=(hd[0]+hd[1]+hd[2])||1;
     const dist=[Math.round(hd[0]/tot*100),Math.round(hd[1]/tot*100),Math.round(hd[2]/tot*100)];
     return `<div class="card appcard" onclick="openApp('${ap.name.replace(/'/g,'')}')"><div style="display:flex;justify-content:space-between"><div><div class="appname">📱 ${ap.name}</div><div class="muted" style="font-size:12px">${ap.platform||''}</div></div><span class="pill ${(ap.change_pct||0)>=0?'p-g':'p-y'}">${signed(ap.change_pct||0)} WoW</span></div>
-      <div class="appstat" style="margin-top:10px"><div><div class="n">${money(ap.revenue)}</div><div class="t">Revenue</div></div><div><div class="n">${ap.ecpm!=null?csym()+ap.ecpm:'—'}</div><div class="t">eCPM</div></div><div><div class="n" style="color:${g>=75?'var(--good)':g>=50?'var(--watch)':'var(--bad)'}">${ap.avg_health}</div><div class="t">Avg health</div></div></div>
+      <div class="appstat" style="margin-top:10px"><div><div class="n">${money(ap.revenue)}</div><div class="t">Revenue</div></div><div><div class="n">${ap.ecpm!=null?cm(ap.ecpm):'—'}</div><div class="t">eCPM</div></div><div><div class="n" style="color:${g>=75?'var(--good)':g>=50?'var(--watch)':'var(--bad)'}">${ap.avg_health}</div><div class="t">Avg health</div></div></div>
       <div class="hbar"><i style="width:${dist[0]}%;background:var(--good)"></i><i style="width:${dist[1]}%;background:var(--watch)"></i><i style="width:${dist[2]}%;background:var(--bad)"></i></div>
       <div style="display:flex;justify-content:space-between;align-items:center"><span class="muted" style="font-size:12px">🟢 ${hd[0]} good · 🟡 ${hd[1]} watch · 🔴 ${hd[2]} risk</span><span class="lnk">Open ${ap.placements} placements →</span></div></div>`;}).join('');
   s.innerHTML=`<h2 class="sc">Placements${APP?' · '+APP:''}</h2><p class="scd">App card pe click karke uske placements format-wise dekho. Har row → Report Card.</p>
@@ -609,7 +627,7 @@ function openApp(name){
   const ps=DATA.placements.filter(p=>p.app===name);const app=DATA.apps.find(a=>a.name===name)||{account:'',revenue:0,avg_health:0,at_risk:0};
   const winSet=curWin();const winLbl=curWinLabel();               // GLOBAL top-bar window drives every metric
   const M=new Map();ps.forEach(p=>M.set(p.id,sumDaily(p.daily,winSet)));
-  const revCell=(v)=>v>=10?money(v):csym()+(+v).toFixed(2);       // cents for sub-$10 (single-day small placements)
+  const revCell=(v)=>v>=10?money(v):cm(+v);       // cents for sub-$10 (single-day small placements)
   const byFmt={};ps.forEach(p=>{(byFmt[p.format]=byFmt[p.format]||[]).push(p)});
   let rows='';Object.entries(byFmt).forEach(([fmt,arr])=>{
     arr.sort((a,b)=>M.get(b.id).revenue-M.get(a.id).revenue);            // biggest earner first
@@ -625,7 +643,7 @@ function openApp(name){
         `<td class="${m.req&&m.match<0.7?'down':''}">${m.req?pct(m.match):'—'}</td>`+
         `<td class="${m.matched&&m.show<0.6?'flat':''}">${m.matched?pct(m.show):'—'}</td>`+
         `<td>${m.impr?(m.ctr*100).toFixed(2)+'%':'—'}</td>`+
-        `<td>${m.impr?csym()+m.ecpm.toFixed(2):'—'}</td>`+
+        `<td>${m.impr?cm(m.ecpm):'—'}</td>`+
         `<td>${microbar(p.trend)} <span class="${cls}">${signed(p.change_pct)}</span></td>`+
         `<td><span class="pill ${p.verdict==='strong'?'p-g':p.verdict==='declining'?'p-r':'p-y'}">${p.verdict}</span></td>`+
       `</tr>`;});
@@ -666,7 +684,7 @@ function openAppDetail(name){
   const s=document.querySelector('.screen[data-screen=appdetail]'); if(!s) return;
   const app=DATA.apps.find(a=>a.name===name)||{account:'',avg_health:0,at_risk:0,platform:''};
   const winSet=curWin(), winLbl=curWinLabel(), winArr=curWinArr();
-  const revCell=(v)=>v>=10?money(v):csym()+(+v).toFixed(2);
+  const revCell=(v)=>v>=10?money(v):cm(+v);
   const ps=(DATA.placements||[]).filter(p=>p.app===name);
 
   // ----- app-level totals over the selected window (summed from each placement's per-day counts) -----
@@ -702,7 +720,7 @@ function openAppDetail(name){
         `<td class="${m.req&&m.match<0.7?'down':''}">${m.req?pct(m.match):'—'}</td>`+
         `<td>${m.matched?pct(m.show):'—'}</td>`+
         `<td>${m.impr?(m.ctr*100).toFixed(2)+'%':'—'}</td>`+
-        `<td>${m.impr?csym()+m.ecpm.toFixed(2):'—'}</td>`+
+        `<td>${m.impr?cm(m.ecpm):'—'}</td>`+
         `<td>${microbar(p.trend)} <span class="${cls}">${signed(p.change_pct)}</span></td>`+
         `<td>${p.format||''}</td></tr>`;}).join('');
     body=`<div class="faint" style="font-size:11.5px;padding:6px 4px 9px">🎯 Har <b style="color:var(--ink2)">ad-unit</b> ka is window ka data · revenue ke hisaab se sorted · row → poora Report Card.</div>
@@ -724,7 +742,7 @@ function openAppDetail(name){
           `<td class="${m.req&&m.match<0.7?'down':''}">${m.req?pct(m.match):'—'}</td>`+
           `<td>${m.matched?pct(m.show):'—'}</td>`+
           `<td>${m.impr?(m.ctr*100).toFixed(2)+'%':'—'}</td>`+
-          `<td>${m.impr?csym()+m.ecpm.toFixed(2):'—'}</td>`+
+          `<td>${m.impr?cm(m.ecpm):'—'}</td>`+
           `<td><span class="faint">${sh.toFixed(1)}%</span></td></tr>`;}).join('');
       body=`<div class="faint" style="font-size:11.5px;padding:6px 4px 9px">🌍 Is app ka <b style="color:var(--ink2)">country-wise</b> data (saari ad-units mila ke) · is window ka · revenue ke hisaab se sorted · <b style="color:var(--ink2)">${cr.length} countries</b>.</div>
         <div class="card pad0"><input placeholder="🔍 Country (US, IN…)" oninput="const q=this.value.toLowerCase();this.parentElement.querySelectorAll('.cgrow').forEach(r=>{r.style.display=r.querySelector('.nm').textContent.toLowerCase().includes(q)?'':'none'})" style="margin:10px 10px 6px;background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:8px;padding:6px 10px;font:inherit;outline:none;max-width:240px">
@@ -757,7 +775,7 @@ function openAppDetail(name){
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">${perBar}</div>
     <div class="row c5" style="margin-bottom:14px">
       ${kpi('Revenue',revCell(K.rev),winLbl,'muted')}
-      ${kpi('Avg eCPM',K.impr?csym()+K.ecpm.toFixed(2):'—',winLbl,'muted')}
+      ${kpi('Avg eCPM',K.impr?cm(K.ecpm):'—',winLbl,'muted')}
       ${kpi('Impressions',K.impr?fmtN(K.impr):'—',winLbl,'muted')}
       ${kpi('Requests',K.req?fmtN(K.req):'—',winLbl,'muted')}
       ${kpi('Match rate',K.req?pct(K.match):'—',winLbl,'muted')}
@@ -936,7 +954,7 @@ function goPlacement(id){
   const volLbl=p.volatility!=null?(p.volatility<0.15?'Low':p.volatility<0.35?'Medium':'High'):'—';
   // metrics over the GLOBAL selected window (from this placement's per-day counts)
   const m=sumDaily(p.daily,curWin());const winLbl=curWinLabel();const winArr=curWinArr();
-  const revCell=(v)=>v>=10?money(v):csym()+(+v).toFixed(2);
+  const revCell=(v)=>v>=10?money(v):cm(+v);
   // revenue-trend chart: daily $ over the last max(30, period) COMPLETE days + 7-day-median baseline
   const comp=(p.daily||[]).filter(r=>r[0]!==(DATA.today_date||''));
   const showN=Math.min(comp.length, Math.max(30, winArr.length));
@@ -947,7 +965,7 @@ function goPlacement(id){
   const dc=dropByCountry(p.app, winArr); let geoNote='';
   if(dc && dc.totalDrop>1){
     const drops=dc.rows.filter(r=>r.drop>0), t0=drops[0];
-    if(t0 && t0.drop/dc.totalDrop>=0.6) geoNote=`Zyadatar <b style="color:#fff">${cName(t0.country)}</b> me — window me ${csym()}${Math.round(t0.pre)} se ${csym()}${Math.round(t0.cur)} (localized)`;
+    if(t0 && t0.drop/dc.totalDrop>=0.6) geoNote=`Zyadatar <b style="color:#fff">${cName(t0.country)}</b> me — window me ${csym()}${Math.round(t0.pre*cfx())} se ${csym()}${Math.round(t0.cur*cfx())} (localized)`;
     else if(drops.length>=2 && (drops[0].drop+drops[1].drop)/dc.totalDrop>=0.75) geoNote=`Mostly <b style="color:#fff">${cName(drops[0].country)} + ${cName(drops[1].country)}</b> me (localized)`;
     else geoNote='Kaafi countries me faila hua (<b style="color:#fff">global</b>) — sirf ek geo ka issue nahi';
   }
@@ -965,7 +983,7 @@ function goPlacement(id){
       ${kpi('Revenue',revCell(m.revenue),winLbl,'muted')}
       ${kpi('Impressions',m.impr?fmtN(m.impr):'—',winLbl,'muted')}
       ${kpi('Requests',m.req?fmtN(m.req):'—',winLbl,'muted')}
-      ${kpi('eCPM',m.impr?csym()+m.ecpm.toFixed(2):'—',winLbl,'muted')}
+      ${kpi('eCPM',m.impr?cm(m.ecpm):'—',winLbl,'muted')}
       ${kpi('Deduction',pct(p.deduction_pct),p.deduction_pct>=0.15?'IVT risk':'normal',p.deduction_pct>=0.15?'down':'muted')}
     </div>
     <div class="row c4" style="margin-bottom:14px">
@@ -981,12 +999,12 @@ function goPlacement(id){
         <div class="kv"><span class="k">Match rate</span><span class="v">${m.req?pct(m.match):'—'}</span></div>
         <div class="kv"><span class="k">Show rate</span><span class="v">${m.matched?pct(m.show):'—'}</span></div>
         <div class="kv"><span class="k">CTR</span><span class="v">${m.impr?(m.ctr*100).toFixed(2)+'%':'—'}</span></div>
-        <div class="kv"><span class="k">eCPM</span><span class="v">${m.impr?csym()+m.ecpm.toFixed(2):'—'}</span></div>
+        <div class="kv"><span class="k">eCPM</span><span class="v">${m.impr?cm(m.ecpm):'—'}</span></div>
         <div style="margin-top:10px;padding:9px 11px;background:var(--panel2);border-radius:8px;font-size:12.5px"><b style="color:var(--cyan)">Root cause:</b> ${p.cause_text||'no dominant signal'}</div></div>
     </div>
-    ${geoNote?`<div class="card" style="margin-bottom:14px;border-color:#2b466f;background:linear-gradient(160deg,#12213a,var(--panel))"><div class="ct"><h3>🌍 Drop kahan hua? <span class="muted" style="font-weight:500;font-size:12px">· is app me (app-level)</span></h3></div><div style="font-size:14px;color:var(--ink2)">${geoNote}</div>${(dc&&dc.rows.filter(r=>r.drop>0).length)?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${dc.rows.filter(r=>r.drop>0).slice(0,5).map(r=>`<span class="tag">${cName(r.country)} <span class="down">−${csym()}${Math.round(r.drop)}</span></span>`).join('')}</div>`:''}<div class="faint" style="font-size:11.5px;margin-top:8px">Ye is placement ke <b>app</b> ka country comparison hai (is window vs pichhla equal window). Exact per-placement geo mix neeche hai.</div></div>`:''}
+    ${geoNote?`<div class="card" style="margin-bottom:14px;border-color:#2b466f;background:linear-gradient(160deg,#12213a,var(--panel))"><div class="ct"><h3>🌍 Drop kahan hua? <span class="muted" style="font-weight:500;font-size:12px">· is app me (app-level)</span></h3></div><div style="font-size:14px;color:var(--ink2)">${geoNote}</div>${(dc&&dc.rows.filter(r=>r.drop>0).length)?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${dc.rows.filter(r=>r.drop>0).slice(0,5).map(r=>`<span class="tag">${cName(r.country)} <span class="down">−${csym()}${Math.round(r.drop*cfx())}</span></span>`).join('')}</div>`:''}<div class="faint" style="font-size:11.5px;margin-top:8px">Ye is placement ke <b>app</b> ka country comparison hai (is window vs pichhla equal window). Exact per-placement geo mix neeche hai.</div></div>`:''}
     <div class="card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Performance by country ${geo.windowed?`<span class="pill p-g" style="font-size:10px;vertical-align:middle">${pRangeLabel(RANGE)}</span>`:`<span class="pill p-y" style="font-size:10px;vertical-align:middle">lifetime</span>`}</h3><span class="muted" style="font-size:12px">is placement ka geo mix · ${geo.windowed?`<b style="color:var(--ink2)">${winLbl}</b> ka`:(ACDLOADING?'⏳ period-wise load ho raha hai…':'<b>all-time</b> — is window ka granular data current mahine tak hi')}</span></div>
-      ${(geo.rows&&geo.rows.length)?`<table style="margin-top:10px"><thead><tr><th>Country</th><th>Revenue</th><th>eCPM</th><th>Match</th><th>Share</th></tr></thead><tbody>${geo.rows.map(c=>`<tr><td class="nm">${cName(c.country)} <span class="faint" style="font-size:10px">${c.country}</span></td><td style="font-weight:700">${c.revenue>=10?money(c.revenue):csym()+(+c.revenue).toFixed(2)}</td><td>${csym()}${(+c.ecpm).toFixed(2)}</td><td class="${c.match<0.7?'down':''}">${pct(c.match)}</td><td><div class="meter g" style="display:inline-block;width:60px;vertical-align:middle"><i style="width:${Math.round((c.share||0)*100)}%"></i></div> ${Math.round((c.share||0)*100)}%</td></tr>`).join('')}</tbody></table>`:`<div class="muted" style="font-size:13px;padding:14px 17px">${ACDLOADING?'⏳ country data load ho raha hai…':'Is window me is placement ka country data nahi — Period badal ke (jaise This month) dekho.'}</div>`}
+      ${(geo.rows&&geo.rows.length)?`<table style="margin-top:10px"><thead><tr><th>Country</th><th>Revenue</th><th>eCPM</th><th>Match</th><th>Share</th></tr></thead><tbody>${geo.rows.map(c=>`<tr><td class="nm">${cName(c.country)} <span class="faint" style="font-size:10px">${c.country}</span></td><td style="font-weight:700">${c.revenue>=10?money(c.revenue):cm(+c.revenue)}</td><td>${cm(+c.ecpm)}</td><td class="${c.match<0.7?'down':''}">${pct(c.match)}</td><td><div class="meter g" style="display:inline-block;width:60px;vertical-align:middle"><i style="width:${Math.round((c.share||0)*100)}%"></i></div> ${Math.round((c.share||0)*100)}%</td></tr>`).join('')}</tbody></table>`:`<div class="muted" style="font-size:13px;padding:14px 17px">${ACDLOADING?'⏳ country data load ho raha hai…':'Is window me is placement ka country data nahi — Period badal ke (jaise This month) dekho.'}</div>`}
     </div>`;
   show('reportcard');
 }
@@ -999,7 +1017,7 @@ function renderMovers(){
   // placement's per-day counts. Today (partial) is excluded so it's a fair complete-vs-complete read.
   const comp=gAxis().filter(d=>d!==(DATA.today_date||''));
   const curSet=new Set(comp.slice(-7)), prevSet=new Set(comp.slice(-14,-7));
-  const revCell=(v)=>{const a=Math.abs(v); return a>=10?money(a):csym()+a.toFixed(2);};   // always abs; caller adds the sign
+  const revCell=(v)=>{const a=Math.abs(v); return a>=10?money(a):cm(a);};   // always abs; caller adds the sign
   const pls=(DATA.placements||[]).filter(p=>!APP||p.app===APP);
   const data=pls.map(p=>{ let c=0,pr=0; (p.daily||[]).forEach(r=>{ if(curSet.has(r[0]))c+=r[1]; if(prevSet.has(r[0]))pr+=r[1]; });
     c/=1e6; pr/=1e6; const d=c-pr; return {p,cur:c,prev:pr,delta:d,pct:pr>0?d/pr:(c>0?null:0)}; });
@@ -1093,8 +1111,8 @@ function dedOpenDate(d){ DEDDATE=d; DEDAPP=null; DEDUNIT=null; dedRerender(); }
 function dedOpenApp(a){ DEDAPP=a; DEDUNIT=null; dedRerender(); }
 function dedOpenUnit(u){ DEDUNIT=u; if(ACD===null&&!ACDLOADING) loadACD(()=>dedRerender()); dedRerender(); }
 function dedBack(){ if(DEDUNIT)DEDUNIT=null; else if(DEDAPP)DEDAPP=null; else DEDDATE=null; dedRerender(); }
-const _dcur=(v)=>{v=(+v||0)/1e6; return v>=10?money(v):csym()+v.toFixed(2);};   // micros → money (compact, for KPIs)
-const _dm=(v)=>csym()+((+v||0)/1e6).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});  // exact 2-dp so pehle − ab === deduction in every row
+const _dcur=(v)=>{v=(+v||0)/1e6; return v>=10?money(v):cm(v);};   // micros → money (compact, for KPIs)
+const _dm=(v)=>csym()+(((+v||0)/1e6)*cfx()).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});  // exact 2-dp so pehle − ab === deduction in every row
 const _dpct=(f,l)=>f>0?(f-l)/f:0;
 // day-indices of DED.dates that fall inside the top-bar selected window (deduction is sparse, so
 // we window by INTERSECTION — show whatever decayed within the chosen period).
@@ -1261,7 +1279,7 @@ function renderCountries(){
   const rows=cs.map((c,i)=>`<tr data-c="${c.country} ${cName(c.country)}" style="display:${i<30?'':'none'}">
       <td class="nm">${cName(c.country)} <span class="faint" style="font-size:10px">${c.country}</span></td>
       <td><span class="pill ${c.tier===1?'p-b':c.tier===2?'p-y':'p-p'}">T${c.tier}</span></td>
-      <td>${csym()}${(c.ecpm||0).toFixed(2)}</td>
+      <td>${cm(c.ecpm||0)}</td>
       <td class="${c.match&&c.match<0.7?'down':''}">${c.match!=null?pct(c.match):'—'}</td>
       <td>${c.show!=null?pct(c.show):'—'}</td>
       <td>${c.ctr!=null?(c.ctr*100).toFixed(2)+'%':'—'}</td>
@@ -1274,7 +1292,7 @@ function renderCountries(){
     <div class="row c4" style="margin-bottom:14px">
       ${kpi('Top country',cName(top.country),money(top.revenue||0),'muted')}
       ${kpi('Countries earning',cs.length,winLbl,'muted')}
-      ${kpi('Best eCPM',cName(bestEc.country),csym()+((bestEc.ecpm||0).toFixed(2)),'up')}
+      ${kpi('Best eCPM',cName(bestEc.country),cm(bestEc.ecpm||0),'up')}
       ${kpi('Total revenue',money(totalRev),winLbl,'muted')}</div>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
       <input id="cty-search" placeholder="🔍 Country search (US, IN, Brazil…)" oninput="searchCountries(this.value)" style="flex:1;max-width:300px;background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:9px;padding:8px 12px;font:inherit;outline:none">
@@ -1337,7 +1355,7 @@ function renderMediation(){
     m={rows:m.rows||[], summary:m.summary||{networks:0,blended_fill:0,best_ecpm:null}, suggestions:m.suggestions||[]};
     byApp=m0.by_app||{};
   }
-  const rows=m.rows.length?m.rows.map(r=>`<tr><td class="nm">${r.ad_source}</td><td class="${r.fill<0.5?'down':''}">${pct(r.fill)}</td><td>${csym()}${(r.ecpm||0).toFixed(2)}</td><td style="font-weight:700">${money(r.revenue)}</td><td>${pct(r.rev_share)}</td><td><span class="pill ${r.status==='low fill'?'p-y':'p-g'}">${r.status==='low fill'?'Low fill':'OK'}</span></td></tr>`).join('')
+  const rows=m.rows.length?m.rows.map(r=>`<tr><td class="nm">${r.ad_source}</td><td class="${r.fill<0.5?'down':''}">${pct(r.fill)}</td><td>${cm(r.ecpm||0)}</td><td style="font-weight:700">${money(r.revenue)}</td><td>${pct(r.rev_share)}</td><td><span class="pill ${r.status==='low fill'?'p-y':'p-g'}">${r.status==='low fill'?'Low fill':'OK'}</span></td></tr>`).join('')
     :`<tr><td colspan="6" class="muted" style="padding:16px">Is period me${APP?' is app ka':''} mediation data nahi — Period badal ke dekho.</td></tr>`;
   const sug=m.suggestions.map(x=>`<div class="al good"><span>💡</span><span><b>${x.action}</b> — ${x.reason}</span></div>`).join('')||'<div class="al good"><span>✓</span><span>Setup theek lag raha hai — koi turant action nahi.</span></div>';
   const shareBar=m.rows.map((r,i)=>`<i style="width:${Math.round((r.rev_share||0)*100)}%;background:${CLR[i%6]}"></i>`).join('');
@@ -1366,7 +1384,7 @@ function renderMediation(){
     : `<span class="pill p-y" style="font-size:11px;vertical-align:middle">all-time</span> <span class="muted" style="font-size:12px">${MEDLOADING?'⏳ period-wise data load ho raha hai…':(['90d','all'].includes(RANGE)?'is lambe period ka granular mediation abhi utni history me nahi — poora aggregate dikha rahe hain':'daily mediation load hone par period-wise ho jayega')}</span>`;
   s.innerHTML=`<h2 class="sc">Mediation${APP?' · '+APP:''} — networks ki competition</h2><p class="scd">Har ad source ka fill, eCPM aur revenue share — sab real (AdMob + third-party).</p>
     <div style="margin:0 0 12px">${periodPill}</div>
-    <div class="row c4" style="margin-bottom:14px">${kpi('Ad sources',m.summary.networks,'earning','muted')}${kpi('Blended fill',pct(m.summary.blended_fill),'','muted')}${kpi('Best eCPM',m.summary.best_ecpm?m.summary.best_ecpm.ad_source:'—',m.summary.best_ecpm?csym()+m.summary.best_ecpm.ecpm.toFixed(2):'','up')}${kpi('Other mediation',othTotal>0?money(othTotal):'—',medTotal?((othTotal/medTotal*100).toFixed(1)+'% of total'):'AdMob-only','muted')}</div>
+    <div class="row c4" style="margin-bottom:14px">${kpi('Ad sources',m.summary.networks,'earning','muted')}${kpi('Blended fill',pct(m.summary.blended_fill),'','muted')}${kpi('Best eCPM',m.summary.best_ecpm?m.summary.best_ecpm.ad_source:'—',m.summary.best_ecpm?cm(m.summary.best_ecpm.ecpm):'','up')}${kpi('Other mediation',othTotal>0?money(othTotal):'—',medTotal?((othTotal/medTotal*100).toFixed(1)+'% of total'):'AdMob-only','muted')}</div>
     <div class="card pad0" style="margin-bottom:14px"><div class="ct" style="padding:16px 17px 0"><h3>Network performance</h3></div><table style="margin-top:10px"><thead><tr><th>Ad source</th><th>Fill</th><th>eCPM</th><th>Revenue</th><th>Rev share</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${appMedCard}
     <div class="row c2"><div class="card"><div class="ct"><h3>Revenue by ad source</h3></div><div style="display:flex;height:12px;border-radius:100px;overflow:hidden;background:var(--raise);margin:6px 0 12px">${shareBar}</div><div class="lgd" style="flex-wrap:wrap;gap:10px">${shareLgd}</div></div>
@@ -1375,8 +1393,8 @@ function renderMediation(){
 }
 
 // ---------- BASELINE / MARKET ----------
-function bR(r,k){ if(!r||r[0]==null)return'—'; return k==='ecpm'?csym()+(+r[0]).toFixed(2)+'–'+csym()+(+r[1]).toFixed(2):(r[0]*100).toFixed(1)+'–'+(r[1]*100).toFixed(1)+'%'; }
-function bV(v,k){ if(v==null)return'—'; return k==='ecpm'?csym()+(+v).toFixed(2):(v*100).toFixed(1)+'%'; }
+function bR(r,k){ if(!r||r[0]==null)return'—'; return k==='ecpm'?cm(+r[0])+'–'+cm(+r[1]):(r[0]*100).toFixed(1)+'–'+(r[1]*100).toFixed(1)+'%'; }
+function bV(v,k){ if(v==null)return'—'; return k==='ecpm'?cm(+v):(v*100).toFixed(1)+'%'; }
 function bSt(st){ if(!st||st==='na'||st==='in')return ''; const up=st==='above'; return `<span class="pill ${up?'p-b':'p-r'}" style="font-size:9px;padding:1px 5px;margin-left:3px">${up?'▲ upar':'▼ neeche'}</span>`; }
 function baseUnitRow(u,i){
   const moved=Object.values(u.status||{}).some(v=>v==='above'||v==='below');
@@ -1469,9 +1487,9 @@ const BDCFG=[{k:'ecpm',lab:'eCPM',col:'#3dd0f0'},{k:'rev',lab:'Revenue',col:'#4a
 const BDLAB={ecpm:'eCPM',rev:'Revenue',ctr:'CTR',match:'Match rate',show:'Show rate',req:'Requests'};
 function bDay(d){ if(!d)return''; const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; const p=(''+d).split('-'); if(p.length<3)return d; return (+p[2])+' '+(MO[(+p[1])-1]||p[1]); }
 function bDFmt(k,v){ if(v==null||isNaN(v))return'—';
-  if(k==='rev')return csym()+(+v).toLocaleString(undefined,{maximumFractionDigits:(+v<100?2:0)});
+  if(k==='rev')return csym()+(+v*cfx()).toLocaleString(undefined,{maximumFractionDigits:(+v*cfx()<100?2:0)});
   if(k==='req')return (+v).toLocaleString();
-  if(k==='ecpm')return csym()+(+v).toFixed(2);
+  if(k==='ecpm')return cm(+v);
   return (+v*100).toFixed(1)+'%'; }                 // ctr / match / show are fractions
 // which metrics come preselected: the placement's out-of-range APPROVED metrics (the alert), else eCPM+Revenue
 function bDailyDefaults(u){ const out=BMET.filter(k=>{const st=(u.status||{})[k];return (u.approved&&u.approved[k])&&(st==='above'||st==='below');}); return out.length?out.slice():['ecpm','rev']; }
@@ -1875,7 +1893,7 @@ function bCMode(m){ BCULPRIT=m; BCEXPAND=false; bRerender(); }
 function bCExpand(){ BCEXPAND=!BCEXPAND; bRerender(); }
 // how far the value sits outside its band: signed pp (rates) or $ (eCPM)
 function bCDiffN(k,val,band){ if(val==null||!band||band[0]==null)return null; const lo=band[0],hi=band[1]; if(val<lo)return val-lo; if(val>hi)return val-hi; return 0; }
-function bCDiffFmt(k,d){ if(d==null)return'—'; if(!d)return'band me'; const sg=d>0?'+':'−',a=Math.abs(d); return k==='ecpm'?sg+csym()+a.toFixed(2):sg+(a*100).toFixed(1)+'%'; }
+function bCDiffFmt(k,d){ if(d==null)return'—'; if(!d)return'band me'; const sg=d>0?'+':'−',a=Math.abs(d); return k==='ecpm'?sg+cm(a):sg+(a*100).toFixed(1)+'%'; }
 function bCDiff(k,val,band){ return bCDiffFmt(k,bCDiffN(k,val,band)); }
 function bCMean(a){ return a.length?a.reduce((s,x)=>s+x,0)/a.length:null; }
 // "Alert kahan se" — for each out-of-range metric on this placement, which countries drove it
@@ -1944,7 +1962,7 @@ function bUnitPage(s,b,tokenBar){
   else { countryTbl='<div class="muted" style="font-size:13px;padding:16px 4px">⏳ Countries load ho rahe hain…</div>'; loadBaselineGeo(()=>{ if(BUNIT)bRerender(); }); }
   const eser=(u.series&&u.series.mo&&u.series.mo.length)?u.series:null;
   const emax=eser?Math.max(...eser.ecpm,0):0;
-  const trend=eser?`<div class="card span2" style="margin-bottom:14px"><div class="ct"><h3>📈 ${u.name} · eCPM trend · ${eser.mo.length} months</h3></div>${bTrendChart(eser.mo,eser.ecpm,{fmt:v=>csym()+(+v).toFixed(emax<10?2:1),mark:BMONTH})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Monthly eCPM</span></div></div>`:'';
+  const trend=eser?`<div class="card span2" style="margin-bottom:14px"><div class="ct"><h3>📈 ${u.name} · eCPM trend · ${eser.mo.length} months</h3></div>${bTrendChart(eser.mo,eser.ecpm,{fmt:v=>cm(+v,emax<10?2:1),mark:BMONTH})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Monthly eCPM</span></div></div>`:'';
   const rngOf=(k)=>(u.approved&&u.approved[k])||u.range[k];
   const moved=Object.values(u.status||{}).filter(v=>v==='above'||v==='below').length;
   const revSub=BMONTH?bMon(BMONTH):(BPERIOD==='all'?'all-time (complete)':'last '+BWIN[BPERIOD]+' mo');
@@ -1983,7 +2001,7 @@ function renderBaseline(){
       :`<input id="ghtok" type="password" placeholder="github_pat_… / ghp_…" style="flex:1;min-width:200px;max-width:340px;background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:8px;padding:6px 11px;font:inherit;outline:none"><button onclick="ghSetToken(document.getElementById('ghtok').value.trim());bToast('Token saved (browser me)');bRerender()" style="border:1px solid var(--cyan);background:rgba(61,208,240,.14);color:#fff;font:inherit;font-weight:650;font-size:12.5px;padding:6px 13px;border-radius:8px;cursor:pointer">Save token</button>`}
     <span class="faint" style="font-size:11px;margin-left:auto">token aapke browser me rehta hai · repo-write chahiye</span></div>`;
   const trendCard=(mk,title)=>{ mk=bWinMarket(mk); const mpts=mk.months.map((m,i)=>({d:m,v:mk.ecpm[i]})); const eNZ=mk.ecpm.filter(x=>x>0); const emin=eNZ.length?Math.min(...eNZ):0,emax=mk.ecpm.length?Math.max(...mk.ecpm):0; const le=mk.ecpm[mk.ecpm.length-1]||0,pe=mk.ecpm[mk.ecpm.length-2]||0,mm=pe?((le-pe)/pe*100):0;
-    return `<div class="card span2" style="margin-bottom:14px"><div class="ct"><h3>📈 ${title} · ${mk.months.length} months</h3><span class="pill ${mm>=0?'p-g':'p-r'}">${(mm>=0?'+':'')+mm.toFixed(1)}% MoM</span></div>${bTrendChart(mk.months, mk.ecpm, {fmt:v=>csym()+(+v).toFixed(emax<10?2:1), mark:BMONTH})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Monthly eCPM</span><span class="faint">range ${csym()}${emin.toFixed(2)}–${csym()}${emax.toFixed(2)} · market/demand ka signal (setup se independent)</span></div></div>`; };
+    return `<div class="card span2" style="margin-bottom:14px"><div class="ct"><h3>📈 ${title} · ${mk.months.length} months</h3><span class="pill ${mm>=0?'p-g':'p-r'}">${(mm>=0?'+':'')+mm.toFixed(1)}% MoM</span></div>${bTrendChart(mk.months, mk.ecpm, {fmt:v=>cm(+v,emax<10?2:1), mark:BMONTH})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Monthly eCPM</span><span class="faint">range ${cm(emin)}–${cm(emax)} · market/demand ka signal (setup se independent)</span></div></div>`; };
 
   if(BUNIT){ const up=bUnitPage(s,b,tokenBar); if(up)return up; BUNIT=null; }   // ===== LEVEL 3: full ad-unit page =====
   if(!sel){                                              // ===== LEVEL 1: APP LIST =====
@@ -1997,7 +2015,7 @@ function renderBaseline(){
       return `<div class="card" style="cursor:pointer;border-color:${mv?'#5a3a3a':'var(--line2)'}" data-app="${(an||'').replace(/"/g,'&quot;')}" onclick="bDrill(this.dataset.app)">
         <div class="ct"><h3 style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${appIcon(an,18)} ${an}</h3><span class="lnk">open →</span></div>
         <div class="row c2" style="margin:2px 0 9px"><div><div class="big">${money(rev)}</div><div class="faint" style="font-size:11px">revenue${BMONTH?(' · '+bMon(BMONTH)):(isAll?(' · through '+(am.last||'')):(' · last '+BWIN[BPERIOD]+'mo'))}</div>${isAll&&cur?`<div class="up" style="font-size:10.5px">+${money(cur)} ${(b.data_range||{}).current_month} MTD → ${money(rev+cur)}</div>`:''}</div>
-          <div><div class="big">${csym()}${ae.toFixed(2)} <span class="pill ${amom>=0?'p-g':'p-r'}" style="font-size:10px">${(amom>=0?'+':'')+amom.toFixed(1)}%</span></div><div class="faint" style="font-size:11px">market eCPM · MoM</div></div></div>
+          <div><div class="big">${cm(ae)} <span class="pill ${amom>=0?'p-g':'p-r'}" style="font-size:10px">${(amom>=0?'+':'')+amom.toFixed(1)}%</span></div><div class="faint" style="font-size:11px">market eCPM · MoM</div></div></div>
         <div class="lgd" style="font-size:12px"><span>${us.length} placements</span>${mv?`<span class="down">${mv} range se bahar</span>`:'<span class="up">sab normal</span>'}</div></div>`;
     }).join('');
     s.innerHTML=`<h2 class="sc">Baseline & Market Intelligence</h2><p class="scd">Pehle <b>app</b> chuno → us app ke <b>placements</b> ka standard range → placement pe click → <b>country-wise</b> range 🌍. Range <b>approve</b> karo → wahi "normal" mana jayega.</p>
@@ -2038,7 +2056,7 @@ function renderBaseline(){
     ${!BMONTH?(()=>{const am=(b.apps_meta||{})[sel]||{};if(am.rev==null)return'';const cur=am.cur||0;const cm=(b.data_range||{}).current_month||'';return `<div class="al good" style="margin:0 0 12px"><span>💰</span><span><b>${money(am.rev)}</b> revenue (through ${am.last}, complete months)${cur?` + <b>${money(cur)}</b> ${cm} MTD = <b>${money(am.rev+cur)}</b> — AdMob ke lifetime se match ✓`:''}</span></div>`;})():''}
     <div class="row c5" style="margin-bottom:14px">
       ${kpi('Revenue',money(revVal),revSub,'muted')}
-      ${kpi(BMONTH?'Market eCPM':'Market eCPM (latest)',csym()+le.toFixed(2),eLbl,mom>=0?'up':'down')}
+      ${kpi(BMONTH?'Market eCPM':'Market eCPM (latest)',cm(le),eLbl,mom>=0?'up':'down')}
       ${kpi('MoM change',(mom>=0?'+':'')+mom.toFixed(1)+'%','vs pichhla mahina',mom>=0?'up':'down')}
       ${kpi('Placements',units.length,'is app me','muted')}
       ${kpi(BMONTH?(bMon(BMONTH)+' me bahar'):'Range se bahar',moved.length,'metric moved',moved.length?'down':'muted')}</div>
@@ -2116,7 +2134,7 @@ function renderReco(){
   const findPl=(placeStr,app)=>{const b=baseName(placeStr);const c=(DATA.placements||[]).filter(p=>p.name===b);return c.length<=1?c[0]:(c.find(p=>p.app===app)||c[0]);};
   const revOf=(placeStr,app)=>{const p=findPl(placeStr,app); return p?sumDaily(p.daily,wkSet).revenue:0;};
   const idOf=(placeStr,app)=>{const p=findPl(placeStr,app); return p?p.id:'';};
-  const revCell=(v)=>v>=10?money(v):csym()+(+v).toFixed(2);
+  const revCell=(v)=>v>=10?money(v):cm(+v);
   // Build UNIFIED, grouped, $-ranked recommendation cards from every signal we already have —
   // instead of 200 identical rows. Each card = one action, its affected placements ranked by the
   // money at stake, total $ impact, and why. (No extra fetch — all from shipped data.)
@@ -2243,6 +2261,8 @@ async function load(){
       if(!r.ok){ r = await fetch(API_BASE+"/dashboard", {cache:"no-store"}); }
       DATA = await r.json();
     }
+    try{ CURVIEW=localStorage.getItem("curview")||null; }catch(e){}   // restore chosen currency view
+    curSyncUI();
     render();
     loadAppSel();                            // which apps the user kept (hides unselected)
     loadAccNames();                          // friendly names for the AdMob accounts
