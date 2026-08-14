@@ -727,14 +727,15 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             print(f"roas build skipped: {e}", file=sys.stderr)
 
-    # USD→INR rate for the dashboard's currency toggle (fetched once here; the frontend converts
-    # client-side so it needs no network + works behind the login). Best-effort with a fallback.
+    # USD→INR rate for the dashboard's currency toggle. Reuse the SAME FX path the spend uses
+    # (requests → frankfurter, with fallback) — so the toggle is consistent with how spend was
+    # converted, and it never 403s the way a bare urllib call does (no User-Agent). INR→USD inverted.
     try:
-        import urllib.request
-        with urllib.request.urlopen("https://api.frankfurter.app/latest?from=USD&to=INR", timeout=10) as _r:
-            dashboard["usd_inr"] = float((json.loads(_r.read()).get("rates") or {}).get("INR") or 0) or None
+        from .fetch.google_ads import _fx_to_usd
+        _inr_usd = _fx_to_usd("INR")
+        dashboard["usd_inr"] = round(1.0 / _inr_usd, 4) if _inr_usd else None
     except Exception as _e:
-        print(f"usd_inr fetch skipped: {_e}", file=sys.stderr)
+        print(f"usd_inr derive skipped: {_e}", file=sys.stderr)
         dashboard["usd_inr"] = None
 
     os.makedirs(out_dir, exist_ok=True)
