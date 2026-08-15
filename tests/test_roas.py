@@ -4,7 +4,9 @@ from admob_iq.fetch import google_ads
 from admob_iq.engine.roas import build_roas
 
 
-def test_aggregate_converts_currency_and_sums_by_store():
+def test_aggregate_stores_raw_base_currency_and_sums_by_store():
+    """v2: spend is stored RAW in the source (base) currency — NO FX baked in. The one hop to USD /
+    display currency happens once, at build time, against a single rate (see build_static)."""
     rows = [
         {"store_id": "com.x.a", "campaign_id": "c1", "name": "Camp A", "status": "ENABLED",
          "date": "2026-07-20", "cost_micros": 100_000_000, "currency": "INR"},
@@ -13,13 +15,49 @@ def test_aggregate_converts_currency_and_sums_by_store():
         {"store_id": "com.x.b", "campaign_id": "c2", "name": "Camp B", "status": "PAUSED",
          "date": "2026-07-20", "cost_micros": 50_000_000, "currency": "INR"},
     ]
-    agg = google_ads._aggregate(rows, fx_fn=lambda ccy: 0.01)      # INR→USD = 0.01 (test rate)
+    agg = google_ads._aggregate(rows, fx_fn=lambda ccy: 0.01)      # fx unused: every row is the base currency
+    assert agg["v"] == google_ads.SPEND_CACHE_V
     assert agg["currency_src"] == "INR"
-    # com.x.a: (100 + 200) INR-micros * 0.01 = 3.0 USD, split across 2 dates
-    assert agg["daily"]["com.x.a"] == {"2026-07-20": 1_000_000, "2026-07-21": 2_000_000}
-    assert agg["daily"]["com.x.b"] == {"2026-07-20": 500_000}
+    # RAW INR micros kept verbatim (no 0.01 applied) — that's what kills the fetch-vs-display FX drift
+    assert agg["daily"]["com.x.a"] == {"2026-07-20": 100_000_000, "2026-07-21": 200_000_000}
+    assert agg["daily"]["com.x.b"] == {"2026-07-20": 50_000_000}
     camps = {c["id"]: c for c in agg["campaigns"]["com.x.a"]}
-    assert camps["c1"]["cost_micros"] == 3_000_000 and camps["c1"]["status"] == "ENABLED"
+    assert camps["c1"]["cost_micros"] == 300_000_000 and camps["c1"]["status"] == "ENABLED"
+
+
+def test_aggregate_converts_minority_currency_into_base():
+    """A minority account billed in another currency is folded into the base currency, so the stored
+    series stays single-currency (base = whichever currency carries the most spend — here INR)."""
+    rows = [
+        {"store_id": "com.x.a", "campaign_id": "c1", "name": "A", "status": "ENABLED",
+         "date": "2026-07-20", "cost_micros": 1_000_000_000, "currency": "INR"},   # majority → base
+        {"store_id": "com.x.b", "campaign_id": "c2", "name": "B", "status": "ENABLED",
+         "date": "2026-07-20", "cost_micros": 2_000_000, "currency": "USD"},        # minority → convert to INR
+    ]
+    # INR→USD=0.01 so USD→INR=100: USD 2_000_000 micros → 200_000_000 INR micros
+    agg = google_ads._aggregate(rows, fx_fn=lambda ccy: 0.01 if ccy == "INR" else 1.0)
+    assert agg["currency_src"] == "INR"
+    assert agg["daily"]["com.x.a"] == {"2026-07-20": 1_000_000_000}       # base, untouched
+    assert agg["daily"]["com.x.b"] == {"2026-07-20": 200_000_000}         # USD folded into INR
+
+
+def test_spend_to_usd_round_trips_to_exact_rupees():
+    """The core fix: RAW-INR spend → USD at build rate r, then shown ×(1/r) returns the EXACT original
+    rupees — with NO drift, whatever r is. (Before v2, spend was stored in USD at the fetch-time rate
+    while display used a different live rate, inflating INR ~13%.)"""
+    from admob_iq.build_static import _spend_to_usd
+    raw = {"v": 2, "daily": {"com.x.a": {"2026-08-14": 1_829_407_000_000}},   # ₹1,829,407 in micros
+           "convval": {"com.x.a": {"2026-08-14": 752_849.0}},
+           "campaigns": {"com.x.a": [{"id": "c1", "name": "A", "status": "ENABLED",
+                                      "cost_micros": 1_829_407_000_000}]},
+           "installs": {"com.x.a": {"2026-08-14": 80_709}},
+           "currency_src": "INR", "fx": {}}
+    for r in (0.0119, 0.010480, 0.011):                       # even a stale/"wrong" rate must round-trip
+        usd = _spend_to_usd(raw, r)
+        usd_inr = 1.0 / r                                     # the display toggle uses this SAME rate
+        got_rupees = usd["daily"]["com.x.a"]["2026-08-14"] * usd_inr / 1e6
+        assert abs(got_rupees - 1_829_407) < 1                # exact to the rupee
+        assert usd["installs"]["com.x.a"]["2026-08-14"] == 80_709   # counts untouched by FX
 
 
 def test_build_roas_joins_by_store_id_and_flags_unmatched():
@@ -120,15 +158,18 @@ def test_mock_spend_carries_installs():
     assert out["installs"]["com.mock.2"]["2026-07-18"] == 70        # 50 + 1*20
 
 
-def test_aggregate_convval_sums_usd_by_store_and_date():
+def test_aggregate_convval_sums_raw_base_by_store_and_date():
+    """v2: conversion value is stored RAW in the same base currency as spend (no FX baked in); a
+    minority-currency row is folded into the base. Converted to USD once at build time."""
     rows = [
         {"store_id": "com.x.a", "date": "2026-07-20", "convval": 100.0, "currency": "INR"},
         {"store_id": "com.x.a", "date": "2026-07-20", "convval": 50.0, "currency": "INR"},
         {"store_id": "com.x.b", "date": "2026-07-20", "convval": 10.0, "currency": "USD"},
     ]
-    agg = google_ads._aggregate_convval(rows, fx_fn=lambda ccy: 0.01 if ccy == "INR" else 1.0)
-    assert agg["com.x.a"] == {"2026-07-20": 1.5}     # (100+50) INR * 0.01 = 1.5 USD
-    assert agg["com.x.b"] == {"2026-07-20": 10.0}
+    # base=INR (matches spend); USD value folded into INR at USD→INR = 1/0.01 = 100 → 10 USD = 1000 INR
+    agg = google_ads._aggregate_convval(rows, base="INR", fx_fn=lambda ccy: 0.01 if ccy == "INR" else 1.0)
+    assert agg["com.x.a"] == {"2026-07-20": 150.0}    # raw INR value, no FX
+    assert agg["com.x.b"] == {"2026-07-20": 1000.0}   # USD folded into INR
 
 
 def test_build_roas_threads_convval_per_app():

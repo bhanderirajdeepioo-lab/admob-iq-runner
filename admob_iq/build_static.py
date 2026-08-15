@@ -31,6 +31,24 @@ from .alerting import notify as notifier
 _ICON = {"critical": "🔴", "warning": "🟠", "watch": "🟡", "good": "🎉"}
 
 
+def _spend_to_usd(spend, rate):
+    """Scale a RAW source-currency spend cache (v2) into USD (AdMob's base) with a single `rate`
+    (source→USD). installs are counts (untouched); daily / convval / campaign costs scale by `rate`.
+    The display USD⇄INR toggle is derived from this SAME rate, so INR spend round-trips to the exact
+    rupee Google Ads reports — no fetch-time-vs-display-time FX drift."""
+    if not isinstance(spend, dict) or spend.get("error") or not rate:
+        return spend
+    out = dict(spend)
+    out["daily"] = {sid: {d: int(round(v * rate)) for d, v in dd.items()}
+                    for sid, dd in (spend.get("daily") or {}).items()}
+    out["convval"] = {sid: {d: round(v * rate, 2) for d, v in dd.items()}
+                      for sid, dd in (spend.get("convval") or {}).items()}
+    out["campaigns"] = {sid: [{**c, "cost_micros": int(round((c.get("cost_micros") or 0) * rate))}
+                             for c in lst]
+                        for sid, lst in (spend.get("campaigns") or {}).items()}
+    return out
+
+
 def data_quality(repo, totals):
     """Post-fetch integrity check: confirm the stored data has no truncation holes.
     Runs verify_coverage over each report's OWN span (excluding the newest, partial day so a
@@ -677,9 +695,11 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # ROAS: Google Ads (MCC) marketing spend vs AdMob revenue, per app. OPTIONAL — only runs if the
     # GOOGLE_ADS_* secrets are set; otherwise the ROAS screen shows a setup hint. Separate API, so it
     # never touches the AdMob pull. Spend is fetched over a rolling window and converted to USD.
+    roas_inr_usd = None   # exact INR→USD rate used to convert spend, so the display toggle matches it
     if mode == "live" and has_creds and repo.has_data():
         try:
-            from .fetch.google_ads import fetch_app_spend, resolve_store_ids, merge_spend
+            from .fetch.google_ads import (fetch_app_spend, resolve_store_ids, merge_spend,
+                                           _fx_to_usd, SPEND_CACHE_V)
             from .fetch.fetcher import make_client
             from .engine.roas import build_roas
             # Incremental spend cache: Google Ads restates spend for ~60 days, so re-pull only a recent
@@ -693,6 +713,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                         cached_spend = json.load(_cf) or None
             except Exception as _ce:
                 print(f"roas cache read skipped: {_ce}", file=sys.stderr)
+            if cached_spend and cached_spend.get("v") != SPEND_CACHE_V:
+                # Pre-v2 cache baked fetch-time FX into the stored spend (caused INR to read ~13% high
+                # when a fetch fell back to a stale rate). Discard it → one-time raw (v2) re-backfill.
+                print(f"roas cache v{cached_spend.get('v')} != v{SPEND_CACHE_V} — discarding, will re-backfill raw",
+                      file=sys.stderr)
+                cached_spend = None
             refetch_days = int(os.getenv("ROAS_REFETCH_DAYS", "90"))      # re-pulled every run (adjust + buffer)
             if cached_spend:
                 refetch_start = (today - timedelta(days=refetch_days)).isoformat()
@@ -733,19 +759,27 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             _rc = getattr(repo, "rename_candidates", None)
             if _rc and roas_aliases:
                 roas_aliases = {sid: _rc(nm) for sid, nm in roas_aliases.items() if sid and nm}
-            dashboard["roas"] = build_roas(spend, store_ids, dashboard.get("apps_catalog"), roas_aliases)
+            # The cache holds RAW source-currency spend (v2). Convert it to USD (AdMob's base) here with
+            # ONE rate, and derive the USD⇄INR display toggle from that SAME rate below — so INR spend
+            # shown on the dashboard round-trips to the exact rupee Google Ads reports.
+            base_ccy = (spend or {}).get("currency_src") or "INR"
+            base_usd = _fx_to_usd(base_ccy)
+            if base_ccy == "INR":
+                roas_inr_usd = base_usd
+            spend_usd = _spend_to_usd(spend, base_usd)
+            dashboard["roas"] = build_roas(spend_usd, store_ids, dashboard.get("apps_catalog"), roas_aliases)
             if spend is not None:
                 print(f"roas: spend for {len(dashboard['roas'].get('by_app', {}))} apps "
-                      f"({spend.get('currency_src')}→USD)", file=sys.stderr)
+                      f"({base_ccy}→USD @ {base_usd})", file=sys.stderr)
         except Exception as e:
             print(f"roas build skipped: {e}", file=sys.stderr)
 
-    # USD→INR rate for the dashboard's currency toggle. Reuse the SAME FX path the spend uses
-    # (requests → frankfurter, with fallback) — so the toggle is consistent with how spend was
-    # converted, and it never 403s the way a bare urllib call does (no User-Agent). INR→USD inverted.
+    # USD→INR rate for the dashboard's currency toggle. Use the EXACT rate the spend was converted
+    # with (roas_inr_usd) when available, so INR spend round-trips to the precise rupee Google Ads
+    # shows. Fall back to a fresh lookup only when ROAS didn't run (no creds / no data).
     try:
         from .fetch.google_ads import _fx_to_usd
-        _inr_usd = _fx_to_usd("INR")
+        _inr_usd = roas_inr_usd or _fx_to_usd("INR")
         dashboard["usd_inr"] = round(1.0 / _inr_usd, 4) if _inr_usd else None
     except Exception as _e:
         print(f"usd_inr derive skipped: {_e}", file=sys.stderr)
