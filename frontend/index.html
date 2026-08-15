@@ -123,6 +123,13 @@
   .ov-apps th,.ov-apps td{border-right:1px solid var(--line)}   /* Excel-style column dividers */
   .ov-apps th:last-child,.ov-apps td:last-child{border-right:none}
   .ov-attn{grid-column:2;grid-row:4}
+  .ov-datewise{grid-column:1/-1;grid-row:5;min-width:0}
+  .ov-datewise.card.pad0{overflow-x:auto}                           /* horizontal scroll, matches Revenue-by-app table */
+  .dw-full{overflow-x:auto}
+  .ov-datewise table,.dw-full table{min-width:640px}
+  .ov-datewise th,.ov-datewise td,.dw-full th,.dw-full td{border-right:1px solid var(--line)}   /* Excel-style dividers */
+  .ov-datewise th:last-child,.ov-datewise td:last-child,.dw-full th:last-child,.dw-full td:last-child{border-right:none}
+  .dw-tot td{border-top:2px solid var(--line2);font-weight:700;background:var(--panel2)}
   .ov-chev{display:none}
   /* mobile menu button + drawer scrim (hidden on desktop) */
   .hamb{display:none;flex:none;align-items:center;justify-content:center;width:38px;height:38px;padding:0;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--ink);font-size:19px;cursor:pointer}
@@ -156,7 +163,7 @@
     .aval{min-width:70px}
     /* Overview mobile: stack KPIs(bigger) → apps → chart → movers/attn tap-strips */
     .ov{display:flex;flex-direction:column;gap:12px}
-    .ov-kpi{order:1}.ov-apps{order:2}.ov-chart{order:3}.ov-movers{order:4}.ov-attn{order:5}.ov-note{order:6}
+    .ov-kpi{order:1}.ov-apps{order:2}.ov-datewise{order:3}.ov-chart{order:4}.ov-movers{order:5}.ov-attn{order:6}.ov-note{order:7}
     /* KPIs stay 2-up on phones (bigger numbers). 3 classes so this still wins over the
        .row.c4/.c5 → 1-column rule in the ≤430px block below. With Ad spend that's 5 tiles,
        so the last one spans the full width instead of sitting alone in half. */
@@ -361,6 +368,7 @@ const TITLES={overview:["Portfolio Overview","Live · engine-computed"],placemen
   countries:["Country Strategy","Per-geo · per-app"],baseline:["Baseline & Market","Standard ranges · eCPM trend"],mediation:["Mediation","Network competition"],
   reco:["Recommendations","Ranked · with uplift"],health:["Account Health & Compliance","IVT · consent · app-ads.txt"],
   roas:["Marketing ROAS","Google Ads spend vs revenue"],
+  datewise:["Date-wise Report","Har din · spend · installs · revenue · P/L"],
   settings:["Accounts & Apps","Connect · auto-sync"]};
 
 // ---- small chart helpers (compute from data) ----
@@ -464,7 +472,7 @@ function render(){
   window.__ax=null;              // invalidate the cached calendar axis (data may have changed)
   const root=document.getElementById('screens');root.innerHTML='';
   root.append(renderOverview(),renderPlacements(),renderReport(),renderAppDetail(),renderMovers(),renderAlerts(),
-              renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderReco(),renderHealth(),renderSettings());
+              renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderDateWise(),renderReco(),renderHealth(),renderSettings());
   const c=DATA.alerts.counts;document.getElementById('nav-alert').textContent=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length);
   {const _tb=document.getElementById('tab-alert');if(_tb){const _n=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length);_tb.textContent=_n;_tb.classList.toggle('on',_n>0);}}
   const sel=document.getElementById('appsel');
@@ -547,6 +555,45 @@ function show(id){
 }
 
 // ---------- OVERVIEW ----------
+const DATEWISE_DEFAULT_DAYS=15;   // Overview mini-table shows the latest N complete days; full report uses the selected period
+// Per-date portfolio metrics (respects the APP filter + on-screen apps) for the date-wise report.
+// Revenue from placements' daily (USD micros); spend/installs/new-rev from Google Ads (roas.by_app),
+// summed the SAME way the Overview KPIs are — so the columns reconcile with the tiles above.
+function dateWiseRows(dates){
+  const fp=fPlace();
+  const appsShown=APP?DATA.apps.filter(x=>x.name===APP):DATA.apps;
+  const on=roasOn(), by=(DATA.roas&&DATA.roas.by_app)||{};
+  const dset=new Set(dates);
+  const rev={}, spend={}, inst={}, nrev={};
+  fp.forEach(p=>(p.daily||[]).forEach(r=>{ if(dset.has(r[0]))rev[r[0]]=(rev[r[0]]||0)+r[1]; }));   // USD micros
+  if(on) appsShown.forEach(x=>{ const e=by[x.name]||{};
+    const dd=e.daily||{};          for(const d in dd){ if(dset.has(d))spend[d]=(spend[d]||0)+dd[d]; }   // USD micros
+    const idl=e.installs_daily||{};for(const d in idl){if(dset.has(d))inst[d]=(inst[d]||0)+idl[d]; }    // count
+    const cd=e.convval_daily||{};  for(const d in cd){ if(dset.has(d))nrev[d]=(nrev[d]||0)+cd[d]; }     // USD
+  });
+  return dates.map(d=>{ const rv=(rev[d]||0)/1e6, sp=(spend[d]||0)/1e6, nr=(nrev[d]||0);
+    return {d, rev:rv, spend:sp, inst:(inst[d]||0), newrev:nr, oldrev:rv-nr, pl:rv-sp}; });   // all money in USD (money() → INR)
+}
+// Render the date-wise table (newest day first) with a totals footer. Spend/installs/new/old/P-L
+// columns only when ROAS (Google Ads) is configured — same gate as the app table.
+function dateWiseTable(rows){
+  const on=roasOn();
+  const plF=(n)=>(n<0?'-':'')+csym()+Number(Math.abs(n)*cfx()).toLocaleString(undefined,{maximumFractionDigits:0});
+  if(!rows.length) return '<div class="muted" style="font-size:13px;padding:16px 17px">Is range me kisi din ka data nahi.</div>';
+  const head=`<thead><tr><th>Date</th>${on?'<th>Spend</th><th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th>':''}<th>Revenue</th>${on?'<th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">existing</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}</tr></thead>`;
+  const body=rows.slice().reverse().map(r=>`<tr><td class="nm">${fmtD(r.d)}</td>${on?`<td>${r.spend>0?money(r.spend):'—'}</td><td>${r.inst?Math.round(r.inst).toLocaleString():'—'}</td>`:''}<td style="font-weight:700">${money(r.rev)}</td>${on?`<td>${r.newrev>0?money(r.newrev):'—'}</td><td class="${r.oldrev<0?'down':''}">${plF(r.oldrev)}</td><td class="${r.pl>=0?'up':'down'}">${plF(r.pl)}</td>`:''}</tr>`).join('');
+  const T=rows.reduce((t,r)=>({rev:t.rev+r.rev,spend:t.spend+r.spend,inst:t.inst+r.inst,newrev:t.newrev+r.newrev,oldrev:t.oldrev+r.oldrev,pl:t.pl+r.pl}),{rev:0,spend:0,inst:0,newrev:0,oldrev:0,pl:0});
+  const foot=`<tr class="dw-tot"><td class="nm">Total · ${rows.length}d</td>${on?`<td>${money(T.spend)}</td><td>${Math.round(T.inst).toLocaleString()}</td>`:''}<td>${money(T.rev)}</td>${on?`<td>${money(T.newrev)}</td><td class="${T.oldrev<0?'down':''}">${plF(T.oldrev)}</td><td class="${T.pl>=0?'up':'down'}">${plF(T.pl)}</td>`:''}</tr>`;
+  return `<table style="margin-top:10px">${head}<tbody>${body}${foot}</tbody></table>`;
+}
+// Full-screen date-wise report — windowed to the SELECTED period (curWin). Re-renders on period change.
+function renderDateWise(){
+  const s=screenDiv('datewise');
+  const rows=dateWiseRows(curWinArr());
+  s.innerHTML=`<div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div style="font-size:22px">📅</div><div><div class="big">Date-wise report</div><div class="muted" style="font-size:12.5px">Har din ka spend · installs · revenue · new/old · P/L — <b>${curWinLabel()}</b>${APP?(' · '+APP):''}. Period upar se badlo.</div></div><div class="spacer"></div><span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="show('overview')">← Overview</span></div>
+    <div class="card pad0 dw-full">${dateWiseTable(rows)}</div>`;
+  return s;
+}
 function renderOverview(){
   const s=screenDiv('overview');const a=DATA.alerts;
   const fp=fPlace();const ap=APP?(DATA.apps.find(x=>x.name===APP)||{}):null;
@@ -600,6 +647,9 @@ function renderOverview(){
     appsShown.forEach(x=>{ const dd=(by[x.name]||{}).installs_daily; if(dd&&dd[d])v+=dd[d]; });
     return Math.round(v*100)/100; }):[];
   const plSeries=SHOWSP?trendSeries.map((r,i)=>Math.round((r-(spendSeries[i]||0))*100)/100):[];
+  // date-wise mini-table: latest N COMPLETE days (partial today excluded), newest first. "View more" → full screen.
+  const dwDates=(()=>{const T=DATA.today_date||'';const comp=T?gAxis().filter(d=>d!==T):gAxis().slice();return comp.slice(-DATEWISE_DEFAULT_DAYS);})();
+  const dwRows=dateWiseRows(dwDates);
   const roasCell=(rv,sp)=>{ if(!(sp>0))return '<td><span class="faint">organic</span></td>';
     const r=rv/sp; return `<td style="font-weight:700">${money(sp)}<div class="${r>=1?'up':'down'}" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div></td>`; };
   const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);const newr=CVAL[ap2.name]||0;const oldr=g.e/1e6-newr;
@@ -629,6 +679,7 @@ function renderOverview(){
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'Ye app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe click → poori report</span></div>
         <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">existing</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
+      <div class="ov-datewise card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${dwRows.length} days</span></h3><span class="lnk" onclick="show('datewise')">View more →</span></div>${dateWiseTable(dwRows)}</div>
       <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0',spend:SHOWSP?spendSeries:null,spendColor:'#e6b84e'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span>${SHOWSP?'<span><i class="dot" style="background:#e6b84e"></i> Ad spend</span>':''}<span class="faint" style="font-size:11px">· cursor pe revenue value</span></div></div>
       <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
       <div class="ov-attn card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
