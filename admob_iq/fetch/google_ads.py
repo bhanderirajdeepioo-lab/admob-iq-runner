@@ -146,29 +146,58 @@ def _fx_to_usd(ccy):
     return _FX_FALLBACK.get(ccy, 1.0)
 
 
-def _aggregate(rows, fx_fn=_fx_to_usd):
-    """Convert each account's spend to USD and aggregate by store_id → {daily, campaigns}."""
+# Spend-cache schema version. v2 stores RAW source-currency micros (no FX baked in); the single hop
+# to USD / display currency happens ONCE at build time against one rate. v1 baked the fetch-time FX
+# into the stored numbers — when that fetch fell back to a stale INR rate but the display used the
+# live rate, spend showed ~13% too high. A v1 cache is discarded on read so it re-backfills as v2.
+SPEND_CACHE_V = 2
+
+
+def _pick_base(rows, amount_key):
+    """The currency carrying the most <amount_key> across rows — the single 'base' currency we store
+    the raw series in (MCC accounts normally all bill in one currency, so this is that currency)."""
     from collections import defaultdict
-    fx = {}
-    daily = defaultdict(lambda: defaultdict(int))                 # store_id -> date -> usd_micros
-    camps = defaultdict(dict)                                     # store_id -> campaign_id -> agg
-    src = None
+    tot = defaultdict(float)
     for r in rows:
-        ccy = r.get("currency") or "USD"; src = src or ccy
-        if ccy not in fx:
-            fx[ccy] = fx_fn(ccy)
-        usd = int(round((r.get("cost_micros") or 0) * fx[ccy]))
+        tot[r.get("currency") or "USD"] += float(r.get(amount_key) or 0)
+    return max(tot, key=tot.get) if tot else "USD"
+
+
+def _aggregate(rows, fx_fn=_fx_to_usd):
+    """Aggregate spend by store_id → {daily, campaigns} in the SOURCE currency as RAW micros — NO FX
+    baked in. Accounts under one MCC normally bill in a single currency; a minority billed in another
+    is converted into the majority ('base') currency here so the stored series is single-currency. The
+    hop to USD (AdMob's base) and to the display currency then happens ONCE, at build time, against a
+    single rate — so stored spend can't drift when the FX endpoint is briefly down (that drift was
+    inflating INR spend ~13% whenever a fetch fell back to a stale rate while display used the live one)."""
+    from collections import defaultdict
+    base = _pick_base(rows, "cost_micros")
+    fx = {}
+
+    def to_base(micros, ccy):
+        if not ccy or ccy == base:
+            return int(micros or 0)
+        for c in (ccy, base):
+            if c not in fx:
+                fx[c] = fx_fn(c)
+        return int(round((micros or 0) * fx[ccy] / (fx[base] or 1.0)))   # ccy→USD→base
+
+    daily = defaultdict(lambda: defaultdict(int))                 # store_id -> date -> base-currency micros
+    camps = defaultdict(dict)                                     # store_id -> campaign_id -> agg
+    for r in rows:
+        v = to_base(r.get("cost_micros") or 0, r.get("currency") or "USD")
         sid = r["store_id"]
-        daily[sid][str(r.get("date"))] += usd
+        daily[sid][str(r.get("date"))] += v
         c = camps[sid].setdefault(r["campaign_id"], {"name": None, "status": None, "cost": 0})
         c["name"] = r.get("name") or c["name"]; c["status"] = r.get("status") or c["status"]
-        c["cost"] += usd
+        c["cost"] += v
     return {
+        "v": SPEND_CACHE_V,
         "daily": {sid: dict(dd) for sid, dd in daily.items()},
         "campaigns": {sid: [{"id": cid, "name": c["name"], "status": c["status"],
                              "cost_micros": c["cost"]} for cid, c in cc.items()]
                       for sid, cc in camps.items()},
-        "currency_src": src or "USD", "fx": fx,
+        "currency_src": base, "fx": fx,
     }
 
 
@@ -181,17 +210,25 @@ def _aggregate_installs(rows):
     return {sid: {d: round(v, 2) for d, v in dd.items()} for sid, dd in daily.items()}
 
 
-def _aggregate_convval(rows, fx_fn=_fx_to_usd):
-    """Sum Google Ads conversion VALUE by store_id -> date, converted to USD (value is in the
-    account's currency, like spend) so value ÷ USD-spend gives an apples-to-apples ROAS."""
+def _aggregate_convval(rows, base=None, fx_fn=_fx_to_usd):
+    """Sum Google Ads conversion VALUE by store_id -> date in the BASE currency as RAW value — NO FX
+    baked in, matching how spend is stored. `base` should be the spend's base currency so value and
+    spend share one unit (inferred from these rows if omitted). Converted to USD once at build time,
+    so value ÷ USD-spend gives an apples-to-apples ROAS."""
     from collections import defaultdict
+    if base is None:
+        base = _pick_base(rows, "convval")
     fx = {}
     daily = defaultdict(lambda: defaultdict(float))
     for r in rows:
         ccy = r.get("currency") or "USD"
-        if ccy not in fx:
-            fx[ccy] = fx_fn(ccy)
-        daily[r["store_id"]][str(r.get("date"))] += float(r.get("convval") or 0) * fx[ccy]
+        val = float(r.get("convval") or 0)
+        if ccy and ccy != base:
+            for c in (ccy, base):
+                if c not in fx:
+                    fx[c] = fx_fn(c)
+            val = val * fx[ccy] / (fx[base] or 1.0)                       # ccy→USD→base
+        daily[r["store_id"]][str(r.get("date"))] += val
     return {sid: {d: round(v, 2) for d, v in dd.items()} for sid, dd in daily.items()}
 
 
@@ -243,8 +280,8 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     if not rows and errs:
         return {"error": "Spend query fail (%d/%d accounts): %s" % (len(errs), len(accounts), errs[0])}
     if not rows:
-        return {"daily": {}, "campaigns": {}, "installs": {}, "convval": {}, "currency_src": "USD",
-                "fx": {}, "note": "connected — is window me koi app-campaign spend nahi mila"}
+        return {"v": SPEND_CACHE_V, "daily": {}, "campaigns": {}, "installs": {}, "convval": {},
+                "currency_src": "USD", "fx": {}, "note": "connected — is window me koi app-campaign spend nahi mila"}
     agg = _aggregate(rows)
     # Installs + conversion value: best-effort + SEPARATE from spend, so a problem here can never
     # break the spend/ROAS numbers above.
@@ -256,7 +293,7 @@ def fetch_app_spend(s, start, end, *, mode="live"):
         except Exception as e:
             print("roas: installs/convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
     agg["installs"] = _aggregate_installs(inst_rows)
-    agg["convval"] = _aggregate_convval(inst_rows)
+    agg["convval"] = _aggregate_convval(inst_rows, base=agg["currency_src"])   # same base as spend
     return agg
 
 
@@ -276,7 +313,8 @@ def merge_spend(cached, fresh, refetch_start):
         return cached or fresh
     if not cached:
         return fresh
-    out = {"currency_src": fresh.get("currency_src") or cached.get("currency_src", "USD"),
+    out = {"v": SPEND_CACHE_V,
+           "currency_src": fresh.get("currency_src") or cached.get("currency_src", "USD"),
            "fx": fresh.get("fx") or cached.get("fx", {}), "note": fresh.get("note")}
     for key in ("daily", "installs", "convval"):
         cd = cached.get(key) or {}
@@ -357,5 +395,5 @@ def _mock_spend(start, end):
                        "cost_micros": tot},
                       {"id": "c%dp" % i, "name": "Old campaign %d" % (i + 1), "status": "PAUSED",
                        "cost_micros": 0}]
-    return {"daily": daily, "campaigns": camps, "installs": installs, "convval": convval,
-            "currency_src": "USD", "fx": {"USD": 1.0}}
+    return {"v": SPEND_CACHE_V, "daily": daily, "campaigns": camps, "installs": installs,
+            "convval": convval, "currency_src": "USD", "fx": {"USD": 1.0}}
