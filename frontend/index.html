@@ -2210,30 +2210,36 @@ function renderRoas(){
     let spend=0; const e=byApp[app]; if(e&&e.daily)Object.keys(e.daily).forEach(d=>{ if(winSet.has(d))spend+=e.daily[d]; });
     const rev=(revByApp[app]||0)/1e6; spend=spend/1e6;
     if(rev<=0&&spend<=0)return;
-    rows.push({app,rev,spend,roas:spend>0?rev/spend:null,net:rev-spend,camps:(e&&e.campaigns)||[]});
+    rows.push({app,rev,spend,roas:spend>0?rev/spend:null,net:rev-spend,camps:(e&&e.campaigns)||[],storeId:(e&&e.store_id)||''});
     totRev+=rev; totSpend+=spend;
   });
   rows.sort((a,b)=>b.spend-a.spend);
   const blended=totSpend>0?totRev/totSpend:null, net=totRev-totSpend, unmatched=(R.unmatched_spend_usd||0)/1e6;
   const roasPill=(v)=>v==null?'<span class="faint">organic</span>':`<span class="pill ${v>=1?'p-g':'p-r'}">${v.toFixed(2)}×</span>`;
-  const campCell=(cs)=>{ if(!cs.length)return '<span class="faint">—</span>'; const act=cs.filter(c=>String(c.status)==='ENABLED').length; const other=cs.length-act; return `${cs.length} <span class="faint" style="font-size:11px">(${act} active${other?' · '+other+' paused/removed':''})</span>`; };
-  const campBreak=(r,idx)=>{                                   // expandable per-campaign spend + Google Ads account
-    const cs=(r.camps||[]).slice().sort((a,b)=>(b.cost_micros||0)-(a.cost_micros||0));
-    if(!cs.length) return '';
-    const tot=cs.reduce((t,c)=>t+(c.cost_micros||0),0)||1;
-    const lines=cs.map(c=>{ const on=String(c.status)==='ENABLED'; const acc=c.account_name||c.account||'account —';
-      return `<div class="cbrk"><span class="cdot ${on?'on':'off'}"></span><span class="cbnm">${c.name||'(campaign)'} <span class="faint">— ${acc}</span></span><span class="cbamt">${money((c.cost_micros||0)/1e6)}</span><span class="cbpct faint">${Math.round((c.cost_micros||0)/tot*100)}%</span></div>`;
-    }).join('');
-    return `<tr class="rcamp" id="rcamp-${idx}" style="display:none"><td colspan="6" style="background:var(--panel2);padding:2px 17px 12px"><div class="cbhd faint">Campaign-wise spend (poore data-window ka total) · naam ke aage <b>Google Ads account</b> (1 account = 1 app)</div>${lines}</td></tr>`;
+  // group an app's campaigns by Google Ads (adwords) account — user's rule: 1 account = 1 app, so we
+  // total ALL of an account's campaigns together; >1 account on one app = a campaign pointing at the
+  // wrong app's store id (the thing we want to surface).
+  const accAgg=(cs)=>{ const m={}; (cs||[]).forEach(c=>{ const k=c.account||c.account_name||'—';
+      const a=m[k]=m[k]||{name:c.account_name||c.account||'account —', cost:0, n:0, active:0};
+      a.cost+=(c.cost_micros||0); a.n++; if(String(c.status)==='ENABLED')a.active++; });
+    return Object.values(m).sort((x,y)=>y.cost-x.cost); };
+  const accCell=(cs)=>{ const accs=accAgg(cs); if(!accs.length)return '<span class="faint">—</span>';
+    if(accs.length===1) return `<b>${accs[0].name}</b> <span class="faint" style="font-size:11px">· ${accs[0].n} camp${accs[0].n>1?'s':''}</span>`;
+    return `<span class="down" style="font-weight:700">⚠️ ${accs.length} accounts</span>`; };
+  const campBreak=(r,idx)=>{ const accs=accAgg(r.camps); if(!accs.length) return '';
+    const tot=accs.reduce((t,a)=>t+a.cost,0)||1;
+    const lines=accs.map(a=>`<div class="cbrk"><span class="cdot ${a.active?'on':'off'}"></span><span class="cbnm"><b>${a.name}</b> <span class="faint">· ${a.n} camp${a.n>1?'s':''}${a.active<a.n?' · '+a.active+' active':''}</span></span><span class="cbamt">${money(a.cost/1e6)}</span><span class="cbpct faint">${Math.round(a.cost/tot*100)}%</span></div>`).join('');
+    const warn=accs.length>1?` <span class="down">⚠️ ${accs.length} alag Google Ads accounts is app pe — normally 1 app = 1 account, matlab koi campaign galat app pe set hai</span>`:'';
+    return `<tr class="rcamp" id="rcamp-${idx}" style="display:none"><td colspan="6" style="background:var(--panel2);padding:2px 17px 12px"><div class="cbhd faint">App id <b>${r.storeId||'—'}</b> · <b>Adwords account</b>-wise spend (ek account ke saare campaigns ka total · data-window)${warn}</div>${lines}</td></tr>`;
   };
   const trows=rows.map((r,idx)=>{ const hasC=(r.camps||[]).length;
     return `<tr class="clk" onclick="openAppDetail('${(r.app||'').replace(/'/g,"\\'")}')">
-    <td class="nm">${appIcon(r.app,20)}${r.app}</td>
+    <td class="nm">${appIcon(r.app,20)}<span style="display:inline-block;vertical-align:middle">${r.app}${r.storeId?`<div class="faint" style="font-size:10px;font-weight:400">${r.storeId}</div>`:''}</span></td>
     <td style="font-weight:700">${money(r.rev)}</td>
     <td>${r.spend>0?money(r.spend):'<span class="faint">—</span>'}</td>
     <td>${roasPill(r.roas)}</td>
     <td class="${r.net>=0?'up':'down'}" style="font-weight:700">${r.net>=0?'+':'−'}${money(Math.abs(r.net))}</td>
-    <td class="faint" style="font-size:12px">${hasC?`<span class="ccampt" onclick="event.stopPropagation();roasCampToggle(${idx})">${campCell(r.camps)} <span class="cbchev" id="cbchev-${idx}">▸</span></span>`:campCell(r.camps)}</td></tr>${campBreak(r,idx)}`;
+    <td style="font-size:12px">${hasC?`<span class="ccampt" onclick="event.stopPropagation();roasCampToggle(${idx})">${accCell(r.camps)} <span class="cbchev" id="cbchev-${idx}">▸</span></span>`:accCell(r.camps)}</td></tr>${campBreak(r,idx)}`;
   }).join('')||`<tr><td colspan="6" class="muted" style="padding:16px">Is period me na spend na revenue.</td></tr>`;
   const uApps=R.unmatched_apps||[];
   const unmatchedNote=unmatched>0?`<div class="card pad0" style="margin-top:14px">
