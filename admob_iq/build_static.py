@@ -771,6 +771,45 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             if spend is not None:
                 print(f"roas: spend for {len(dashboard['roas'].get('by_app', {}))} apps "
                       f"({base_ccy}→USD @ {base_usd})", file=sys.stderr)
+            # Icon fallback via Google Ads: apps whose AdMob store listing is blank (so the main icon
+            # pass found nothing) often DO have a Play package via their Google Ads campaigns (roas
+            # by_app store_id). Resolve those icons from that package. Separate cache so it retries
+            # independently of the main app_icons '' markers.
+            try:
+                from .fetch.app_icons import resolve_icon
+                icons = dict(dashboard.get("app_icons") or {})
+                name_to_id = {}
+                for c in sorted(dashboard.get("apps_catalog") or [], key=lambda x: -(x.get("rev") or 0)):
+                    nm = c.get("app_name")
+                    if nm and nm not in name_to_id:
+                        name_to_id[nm] = c.get("app_id")
+                ricon_path = os.path.join(data_dir, "roas_app_icons.json")
+                ricache = {}
+                try:
+                    if os.path.exists(ricon_path):
+                        with open(ricon_path, encoding="utf-8") as _rf:
+                            ricache = json.load(_rf) or {}
+                except Exception:
+                    ricache = {}
+                changed = False
+                for app_name, e in (dashboard["roas"].get("by_app") or {}).items():
+                    aid = name_to_id.get(app_name); sid = e.get("store_id")
+                    if not aid or not sid or icons.get(aid):
+                        continue                                   # already has an icon, or nothing to resolve from
+                    if sid not in ricache:
+                        ricache[sid] = resolve_icon(sid, "ANDROID") or ""   # Play package → og:image
+                        changed = True
+                    if ricache.get(sid):
+                        icons[aid] = ricache[sid]
+                if changed:
+                    try:
+                        with open(ricon_path, "w", encoding="utf-8") as _rf:
+                            json.dump(ricache, _rf)
+                    except Exception as _re:
+                        print(f"roas icon cache write skipped: {_re}", file=sys.stderr)
+                dashboard["app_icons"] = icons
+            except Exception as _ie:
+                print(f"roas icon fill skipped: {_ie}", file=sys.stderr)
         except Exception as e:
             print(f"roas build skipped: {e}", file=sys.stderr)
 
