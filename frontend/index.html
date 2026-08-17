@@ -603,10 +603,19 @@ function dateWiseTable(rows){
   return `<table style="margin-top:10px">${head}<tbody>${body}${foot}</tbody></table>`;
 }
 // Full-screen date-wise report — windowed to the SELECTED period (curWin). Re-renders on period change.
+let DWAPP="";   // when set, the Date-wise Report screen is scoped to this ONE app (from an app's "View more")
+function openDateWise(app){ DWAPP=app||'';
+  const old=document.querySelector('.screen[data-screen=datewise]');   // re-render with the new scope (show() alone only toggles visibility)
+  if(old){ const f=renderDateWise(); old.replaceWith(f); }
+  show('datewise'); window.scrollTo({top:0}); }
 function renderDateWise(){
   const s=screenDiv('datewise');
-  const rows=dateWiseRows(curWinArr());
-  s.innerHTML=`<div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div style="font-size:22px">📅</div><div><div class="big">Date-wise report</div><div class="muted" style="font-size:12.5px">Har din ka spend · installs · revenue · new/old · P/L — <b>${curWinLabel()}</b>${APP?(' · '+APP):''}. Period upar se badlo.</div></div><div class="spacer"></div><span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="show('overview')">← Overview</span></div>
+  const app=DWAPP||'';
+  const rows=dateWiseRows(curWinArr(), app||undefined);
+  const scope=app?(' · '+app):(APP?(' · '+APP):'');
+  const back=app?`<span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="openAppDetail('${app.replace(/'/g,"\\'")}')">← ${app}</span>`
+                :`<span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="show('overview')">← Overview</span>`;
+  s.innerHTML=`<div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div style="font-size:22px">📅</div><div><div class="big">Date-wise report</div><div class="muted" style="font-size:12.5px">Har din ka spend · installs · revenue · new/old · P/L — <b>${curWinLabel()}</b>${scope}. Period upar se badlo.</div></div><div class="spacer"></div>${back}</div>
     <div class="card pad0 dw-full">${dateWiseTable(rows)}</div>`;
   return s;
 }
@@ -695,7 +704,7 @@ function renderOverview(){
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'Ye app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe click → poori report</span></div>
         <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">existing</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
-      <div class="ov-datewise card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${dwRows.length} days</span></h3><span class="lnk" onclick="show('datewise')">View more →</span></div>${dateWiseTable(dwRows)}</div>
+      <div class="ov-datewise card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${dwRows.length} days</span></h3><span class="lnk" onclick="openDateWise('')">View more →</span></div>${dateWiseTable(dwRows)}</div>
       <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0',spend:SHOWSP?spendSeries:null,spendColor:'#e6b84e'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span>${SHOWSP?'<span><i class="dot" style="background:#e6b84e"></i> Ad spend</span>':''}<span class="faint" style="font-size:11px">· cursor pe revenue value</span></div></div>
       <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
       <div class="ov-attn card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
@@ -788,7 +797,7 @@ function openAppDetail(name){
   // date-wise report for THIS app (latest N complete days) — same table as Overview, app-scoped
   const _dwT=DATA.today_date||''; const _dwComp=_dwT?gAxis().filter(d=>d!==_dwT):gAxis().slice();
   const _dwRows=dateWiseRows(_dwComp.slice(-DATEWISE_DEFAULT_DAYS),name);
-  const dwCard=`<div class="card pad0 dw-full" style="margin-top:14px"><div class="ct" style="padding:16px 17px 0"><h3>📅 Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${_dwRows.length} days · is app ka</span></h3></div>${dateWiseTable(_dwRows)}</div>`;
+  const dwCard=`<div class="card pad0 dw-full" style="margin-top:14px"><div class="ct" style="padding:16px 17px 0"><h3>📅 Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${_dwRows.length} days · is app ka</span></h3><span class="lnk" onclick="openDateWise('${name.replace(/'/g,"\\'")}')">View more →</span></div>${dateWiseTable(_dwRows)}</div>`;
 
   // ----- app-level totals over the selected window (summed from each placement's per-day counts) -----
   let E=0,I=0,Q=0,M=0,C=0;
