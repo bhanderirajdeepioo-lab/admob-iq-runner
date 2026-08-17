@@ -842,6 +842,20 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             print(f"daily series skipped: {e}", file=sys.stderr)
         geo = compact_geo(baseline_payload.pop("unit_geo", {}))
+        # Cloudflare Worker static assets cap EACH file at 25 MiB — a single oversized file FAILS the
+        # whole deploy (site freezes on the last good build). baseline_geo (per-ad-unit ALL countries)
+        # grows with every account/app, so keep it safely under the cap by trimming each ad-unit to
+        # its top-N countries by revenue (row[2]); the long tail is negligible revenue. Shrink N until
+        # it fits. (dashboard.json / adunit_country_daily are separately watched below.)
+        def _jbytes(o):
+            return len(json.dumps(o, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        _GEO_CAP = 23 * 1024 * 1024
+        if _jbytes(geo) > _GEO_CAP:
+            for _topn in (80, 50, 30, 20, 12, 8, 5):
+                geo = {uid: sorted(rows, key=lambda r: -(r[2] or 0))[:_topn] for uid, rows in geo.items()}
+                if _jbytes(geo) <= _GEO_CAP:
+                    print(f"baseline_geo trimmed to top-{_topn} countries/unit to fit 25MB deploy cap", file=sys.stderr)
+                    break
         with open(os.path.join(out_dir, "baseline.json"), "w", encoding="utf-8") as f:
             json.dump(baseline_payload, f, ensure_ascii=False, separators=(",", ":"))
         with open(os.path.join(out_dir, "baseline_geo.json"), "w", encoding="utf-8") as f:
