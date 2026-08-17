@@ -61,8 +61,12 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
             s = sum(dd.values())
             unmatched += s                              # spend we can't attribute to an AdMob app
             names = [c.get("name") for c in camps_by_sid.get(sid, []) if c.get("name")]
+            # keep full daily + campaigns so the UI can show each unmatched Google Ads app as its OWN
+            # app-row (windowed to the period, with its adwords account) — a live app with spend but no
+            # AdMob revenue linked in this account, rather than a black-box "unmatched" sum.
             unmatched_detail[sid] = {"store_id": sid, "spend_usd_micros": s,
-                                     "n_campaigns": len(camps_by_sid.get(sid, [])), "sample": names[:3]}
+                                     "n_campaigns": len(camps_by_sid.get(sid, [])), "sample": names[:3],
+                                     "daily": dict(dd), "campaigns": camps_by_sid.get(sid, [])}
             continue
         e = by_app.setdefault(app, {"store_id": sid, "daily": {}, "campaigns": [],
                                     "installs_daily": {}, "convval_daily": {}})
