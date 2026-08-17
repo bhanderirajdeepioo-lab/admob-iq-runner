@@ -366,15 +366,19 @@ def _app_names(data_dir):
 
 
 def _hidden_app_ids(repo, data_dir):
-    """The set of app_ids the user has UNSELECTED (decided accounts only). Derived from the network
-    report (which carries account_id + app_id) + config/selected_apps.json. Empty if no selection."""
+    """The set of app_ids to EXCLUDE from every built view. An UNSELECTED app in a decided account,
+    OR any app of a brand-NEW account (not in config/known_accounts.json) — the latter defaults to
+    hidden so a freshly-added account can't auto-bloat the build; the user opts its apps in. Empty
+    when nothing is configured (no selection AND no known-accounts file)."""
     try:
-        from .engine.app_select import load_selection, app_visible
-        sel = load_selection(os.path.join(os.path.dirname(data_dir) or ".", "config", "selected_apps.json"))
-        if not (sel.get("accounts") or {}):
+        from .engine.app_select import load_selection, app_visible, load_known_accounts
+        cfg = os.path.join(os.path.dirname(data_dir) or ".", "config")
+        sel = load_selection(os.path.join(cfg, "selected_apps.json"))
+        known = load_known_accounts(os.path.join(cfg, "known_accounts.json"))
+        if not (sel.get("accounts") or {}) and known is None:
             return set()
         return {r["app_id"] for r in repo.fetch_network()
-                if r.get("app_id") and not app_visible(sel, r.get("account_id"), r.get("app_id"))}
+                if r.get("app_id") and not app_visible(sel, r.get("account_id"), r.get("app_id"), known)}
     except Exception as e:
         print(f"hidden-app filter skipped: {e}", file=sys.stderr)
         return set()
@@ -652,9 +656,11 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # this as per-account checkboxes; unselected apps are hidden client-side (Phase A).
     if repo.has_data():
         try:
-            from .engine.app_select import load_selection, account_decided, app_visible
-            sel_path = os.path.join(os.path.dirname(data_dir) or ".", "config", "selected_apps.json")
-            _sel = load_selection(sel_path)
+            from .engine.app_select import load_selection, account_decided, app_visible, load_known_accounts
+            _cfg = os.path.join(os.path.dirname(data_dir) or ".", "config")
+            _sel = load_selection(os.path.join(_cfg, "selected_apps.json"))
+            _known = load_known_accounts(os.path.join(_cfg, "known_accounts.json"))
+            dashboard["known_accounts"] = sorted(_known) if _known is not None else None  # frontend opt-in gate
             _cat = {}
             for r in repo.fetch_network():
                 pid = r.get("app_id")
@@ -666,7 +672,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 e["name"] = r.get("app_name") or e["name"]
             catalog = [{"account_id": k[0], "app_id": k[1], "app_name": v["name"] or k[1],
                         "rev": round(v["rev"] / 1e6, 2),
-                        "selected": app_visible(_sel, k[0], k[1]),
+                        "selected": app_visible(_sel, k[0], k[1], _known),
                         "account_decided": account_decided(_sel, k[0])}
                        for k, v in _cat.items()]
             catalog.sort(key=lambda x: (x["account_id"] or "", -x["rev"]))

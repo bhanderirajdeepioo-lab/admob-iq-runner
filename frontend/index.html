@@ -1726,7 +1726,9 @@ function loadAppSel(){ fetch('selected_apps.json?t='+Date.now()).then(r=>r.ok?r.
     APPSEL={accounts:acc};                              // served base + still-pending local overlay
     try{ if(Object.keys(pending).length) localStorage.setItem('app_sel',JSON.stringify({accounts:pending})); else localStorage.removeItem('app_sel'); }catch(e){}
     if(typeof DATA!=='undefined'&&DATA)render(); }).catch(()=>{ const local=appSelLocal(); if(local){APPSEL=local; if(typeof DATA!=='undefined'&&DATA)render();} }); }
-function appSelVisible(account_id,app_id){ const a=(APPSEL.accounts||{})[account_id]; if(!a||!a.decided)return true; return (a.selected||[]).includes(app_id); }
+function appSelVisible(account_id,app_id){ const a=(APPSEL.accounts||{})[account_id]; if(a&&a.decided) return (a.selected||[]).includes(app_id);
+  // undecided: grandfathered (known) accounts stay visible; a brand-NEW account is hidden until you pick its apps (opt-in)
+  const kn=(typeof DATA!=='undefined'&&DATA&&DATA.known_accounts); if(!kn) return true; return kn.includes(account_id); }
 // ── Marketing spend (Google Ads) per app, in USD, for the CURRENTLY selected period ──────────
 // The ROAS payload carries per-app DAILY spend, so any period the user picks is just a sum over
 // that window. Overview and the Marketing ROAS screen both read spend from here, so the two

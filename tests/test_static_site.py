@@ -54,7 +54,7 @@ def test_static_build_writes_valid_site(tmp_path):
     assert r["revenue"] > 0
     # the file the static host serves
     dash = json.load(open(os.path.join(out, "dashboard.json")))
-    assert set(dash.keys()) == set(build_dashboard().keys()) | {"generated_at", "report_tz", "report_tz_label", "data_quality", "apps_catalog", "usd_inr"}   # frontend contract + freshness + timezone + integrity + app picker + currency-toggle rate
+    assert set(dash.keys()) == set(build_dashboard().keys()) | {"generated_at", "report_tz", "report_tz_label", "data_quality", "apps_catalog", "usd_inr", "known_accounts"}   # frontend contract + freshness + timezone + integrity + app picker + currency-toggle rate + opt-in known-accounts
     assert dash["generated_at"] and "T" in dash["generated_at"]  # ISO timestamp present
     assert dash["kpis"]["revenue"] > 0 and dash["placements"]
     assert os.path.exists(os.path.join(out, "index.html"))     # UI shipped alongside
