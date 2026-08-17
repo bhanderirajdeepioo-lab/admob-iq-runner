@@ -180,6 +180,25 @@ def test_build_roas_threads_convval_per_app():
     assert r["by_app"]["App A"]["convval_daily"] == {"2026-07-20": 2.5}
 
 
+def test_build_roas_threads_day1_convval_per_app():
+    """The frozen day-1 conversion value threads through per app (next to the live convval)."""
+    spend = {"daily": {"com.x.a": {"2026-07-20": 1_000_000}},
+             "convval": {"com.x.a": {"2026-07-20": 5.0}},        # matured (restated) value
+             "convval_day1": {"com.x.a": {"2026-07-20": 2.0}},   # frozen day-1 value
+             "campaigns": {}, "currency_src": "USD", "fx": {}}
+    r = build_roas(spend, {"app-a": "com.x.a"}, [{"app_id": "app-a", "app_name": "App A", "rev": 1}])
+    assert r["by_app"]["App A"]["convval_daily"] == {"2026-07-20": 5.0}
+    assert r["by_app"]["App A"]["convval_day1_daily"] == {"2026-07-20": 2.0}
+
+
+def test_build_roas_day1_absent_is_safe():
+    """Older payloads with no day-1 snapshot must not crash; convval_day1_daily just stays empty."""
+    spend = {"daily": {"com.x.a": {"2026-07-20": 1_000_000}}, "campaigns": {},
+             "currency_src": "USD", "fx": {}}
+    r = build_roas(spend, {"app-a": "com.x.a"}, [{"app_id": "app-a", "app_name": "App A", "rev": 1}])
+    assert r["by_app"]["App A"]["convval_day1_daily"] == {}
+
+
 def test_build_roas_convval_absent_is_safe():
     spend = {"daily": {"com.x.a": {"2026-07-20": 1_000_000}}, "campaigns": {},
              "currency_src": "USD", "fx": {}}

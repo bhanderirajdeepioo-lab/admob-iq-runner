@@ -53,6 +53,7 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
     camps_by_sid = spend.get("campaigns") or {}
     installs_by_sid = spend.get("installs") or {}        # store_id -> {date: campaign-attributed installs}
     convval_by_sid = spend.get("convval") or {}          # store_id -> {date: Google Ads conversion value (USD)}
+    convval_d1_by_sid = spend.get("convval_day1") or {}  # store_id -> {date: FROZEN day-1 conversion value (USD)}
     by_app, unmatched = {}, 0
     unmatched_detail = {}                                # store_id -> {spend, campaigns} we couldn't attribute
     for sid, dd in (spend.get("daily") or {}).items():
@@ -69,13 +70,15 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
                                      "daily": dict(dd), "campaigns": camps_by_sid.get(sid, [])}
             continue
         e = by_app.setdefault(app, {"store_id": sid, "daily": {}, "campaigns": [],
-                                    "installs_daily": {}, "convval_daily": {}})
+                                    "installs_daily": {}, "convval_daily": {}, "convval_day1_daily": {}})
         for d, v in dd.items():
             e["daily"][d] = e["daily"].get(d, 0) + v
         for d, v in (installs_by_sid.get(sid) or {}).items():   # installs window to the same period in the UI
             e["installs_daily"][d] = e["installs_daily"].get(d, 0) + v
         for d, v in (convval_by_sid.get(sid) or {}).items():    # Google Ads conversion value (USD), same window
             e["convval_daily"][d] = e["convval_daily"].get(d, 0) + v
+        for d, v in (convval_d1_by_sid.get(sid) or {}).items(): # FROZEN day-1 conversion value (USD), same window
+            e["convval_day1_daily"][d] = e["convval_day1_daily"].get(d, 0) + v
         e["campaigns"].extend(camps_by_sid.get(sid, []))
     # surface the biggest unmatched store ids so coverage gaps are visible + diagnosable (not a black-box sum)
     top_unmatched = sorted(unmatched_detail.values(), key=lambda x: -x["spend_usd_micros"])[:30]

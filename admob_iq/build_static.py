@@ -43,6 +43,8 @@ def _spend_to_usd(spend, rate):
                     for sid, dd in (spend.get("daily") or {}).items()}
     out["convval"] = {sid: {d: round(v * rate, 2) for d, v in dd.items()}
                       for sid, dd in (spend.get("convval") or {}).items()}
+    out["convval_day1"] = {sid: {d: round(v * rate, 2) for d, v in dd.items()}
+                           for sid, dd in (spend.get("convval_day1") or {}).items()}
     out["campaigns"] = {sid: [{**c, "cost_micros": int(round((c.get("cost_micros") or 0) * rate))}
                              for c in lst]
                         for sid, lst in (spend.get("campaigns") or {}).items()}
@@ -740,6 +742,18 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 refetch_start = _earliest or (today - timedelta(days=int(os.getenv("ROAS_BACKFILL_DAYS", "550")))).isoformat()
             fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
             spend = merge_spend(cached_spend, fresh_spend, refetch_start)
+            # Day-1 (install-day) conversion value: snapshot each (store,date) the FIRST time it is
+            # seen and NEVER revise it. Google restates conversion value for weeks, so 'new revenue'
+            # keeps moving on back-dates; this frozen copy lets the UI show what day-1 actually was
+            # next to the matured value. Only accurate for dates first seen AFTER this started (older
+            # ones inherit their already-restated value, since the true day-1 is no longer available).
+            if isinstance(spend, dict) and not spend.get("error"):
+                _d1 = spend.get("convval_day1") or {}
+                for _sid, _dd in (spend.get("convval") or {}).items():
+                    _s1 = _d1.setdefault(_sid, {})
+                    for _dt, _v in _dd.items():
+                        _s1.setdefault(_dt, _v)                  # first sight only → frozen forever
+                spend["convval_day1"] = _d1
             if spend is not None and not spend.get("error"):
                 try:
                     os.makedirs(data_dir, exist_ok=True)
