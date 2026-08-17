@@ -369,6 +369,12 @@ function appIcon(name,size){ size=size||20; const rad=Math.max(4,Math.round(size
     return `<span style="${box}"><img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="${fb}"></span>`; }
   return `<span style="${box};background:${col}22;color:${col};font-weight:800;font-size:${Math.round(size*0.5)}px">${ch}</span>`;
 }
+// Google Ads (adwords) account(s) that advertise this app — user's rule: 1 account = 1 app.
+function appAdAccounts(name){ const e=((typeof DATA!=='undefined'&&DATA&&DATA.roas&&DATA.roas.by_app)||{})[name];
+  if(!e||!e.campaigns) return []; const m={}; e.campaigns.forEach(c=>{ const k=c.account||c.account_name; if(k)m[k]=c.account_name||c.account; }); return Object.values(m); }
+function appAccTag(name){ const a=appAdAccounts(name); if(!a.length) return '';
+  return a.length===1 ? `<div class="faint" style="font-size:10px;font-weight:400">🅐 ${a[0]}</div>`
+                      : `<div class="down" style="font-size:10px;font-weight:600">⚠️ ${a.length} adwords accounts</div>`; }
 const signed=(n)=>(n>=0?"+":"")+(n*100).toFixed(0)+"%";
 const hb=(h)=>h>=75?"good":h>=50?"watch":"risk";
 const ICON={good:"🎉",critical:"🔴",warning:"🟠",watch:"🟡"};
@@ -663,11 +669,11 @@ function renderOverview(){
   const roasCell=(rv,sp)=>{ if(!(sp>0))return '<td><span class="faint">organic</span></td>';
     const r=rv/sp; return `<td style="font-weight:700">${money(sp)}<div class="${r>=1?'up':'down'}" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div></td>`; };
   const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);const newr=CVAL[ap2.name]||0;const oldr=g.e/1e6-newr;
-    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td>${money(newr)}</td><td class="${oldr<0?'down':''}">${plFmt(oldr)}</td><td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?cm(ec):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
+    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}${appAccTag(ap2.name)}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td>${money(newr)}</td><td class="${oldr<0?'down':''}">${plFmt(oldr)}</td><td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?cm(ec):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
   // mobile card-list of the SAME apps (shown ≤760px; desktop keeps the table). Nothing dropped.
   const appCards=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const rev=g.e/1e6;const sp=SPA[ap2.name]||0;const pl=rev-sp;const inst=INST[ap2.name];const ec=g.i?g.e/(g.i*1000):0;
     const meta=SHOWSP?`${inst!=null?Math.round(inst).toLocaleString()+' inst':'—'} · ${sp>0?money(sp)+' spend':'organic'} · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`:`${g.i?cm(ec)+' eCPM':'—'} · ${ap2.placements} pl · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`;
-    return `<div class="mrow" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><span class="mic">${appIcon(ap2.name,34)}</span><div class="mmid"><div class="mname">${ap2.name}</div><div class="mmeta">${meta}</div></div><div class="mright"><div class="mrev">${money(rev)}</div>${SHOWSP?`<div class="mpl ${pl>=0?'up':'down'}">${plFmt(pl)}</div>`:''}</div><span class="mchev">›</span></div>`;}).join('');
+    return `<div class="mrow" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><span class="mic">${appIcon(ap2.name,34)}</span><div class="mmid"><div class="mname">${ap2.name}</div>${appAccTag(ap2.name)}<div class="mmeta">${meta}</div></div><div class="mright"><div class="mrev">${money(rev)}</div>${SHOWSP?`<div class="mpl ${pl>=0?'up':'down'}">${plFmt(pl)}</div>`:''}</div><span class="mchev">›</span></div>`;}).join('');
   const lastTile=ap?kpi('Placements',(ap.placements||fp.length),APP.slice(0,16),'muted'):kpi('Apps · Accounts',DATA.kpis.apps+' · '+DATA.kpis.accounts,'','muted');
   const moversBody=`${inc.slice(0,2).map(p=>`<div class="al good"><span>▲</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')}
         ${dec.slice(0,2).map(p=>`<div class="al crit"><span>▼</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')||(inc.length?'':'<div class="muted" style="font-size:12px">Is app me abhi mover nahi.</div>')}`;
@@ -2241,17 +2247,27 @@ function renderRoas(){
     <td class="${r.net>=0?'up':'down'}" style="font-weight:700">${r.net>=0?'+':'−'}${money(Math.abs(r.net))}</td>
     <td style="font-size:12px">${hasC?`<span class="ccampt" onclick="event.stopPropagation();roasCampToggle(${idx})">${accCell(r.camps)} <span class="cbchev" id="cbchev-${idx}">▸</span></span>`:accCell(r.camps)}</td></tr>${campBreak(r,idx)}`;
   }).join('')||`<tr><td colspan="6" class="muted" style="padding:16px">Is period me na spend na revenue.</td></tr>`;
-  const uApps=R.unmatched_apps||[];
-  const unmatchedNote=unmatched>0?`<div class="card pad0" style="margin-top:14px">
-      <div class="ct" style="padding:16px 17px 0"><h3>⚠️ Unmatched spend · ${money(unmatched)}</h3><span class="muted" style="font-size:12px">${R.unmatched_count||uApps.length} apps/campaigns AdMob se link nahi hue</span></div>
-      <div class="muted" style="font-size:12px;padding:6px 17px 0;line-height:1.5">Ye Google Ads spend kisi AdMob app se match nahi ho paya — ya store-id AdMob me resolve nahi hua, ya app is AdMob account me nahi hai, ya iOS numeric id hai. Iska spend abhi ROAS me count nahi ho raha. Neeche jo campaign naam dikh rahe hain unse pehchano ye kaunsi app hai:</div>
-      ${uApps.length?`<table style="margin-top:10px"><thead><tr><th>Store ID (Google Ads app)</th><th>Spend</th><th>Camps</th></tr></thead><tbody>${uApps.map(u=>`<tr><td class="nm" style="font-size:11.5px;word-break:break-all">${u.store_id||'?'}${(u.sample&&u.sample.length)?`<div class="faint" style="font-size:10.5px;margin-top:2px">${u.sample.filter(Boolean).join(' · ')}</div>`:''}</td><td style="font-weight:700;white-space:nowrap">${money((u.spend_usd_micros||0)/1e6)}</td><td class="faint">${u.n_campaigns||0}</td></tr>`).join('')}</tbody></table>`:''}
-    </div>`:'';
+  // Live Play-Store apps that have Google Ads spend but no AdMob revenue linked in THIS account —
+  // show each as its OWN app-row (spend-only), windowed to the period, not a black-box "unmatched" sum.
+  const uList=(R.unmatched_apps||[]).map(u=>{ let sp=0; const dd=u.daily||{}; for(const dt in dd){ if(winSet.has(dt))sp+=dd[dt]; }
+      return {store:u.store_id, camps:(u.campaigns||[]), spend:sp/1e6}; })
+    .filter(u=>u.spend>0).sort((a,b)=>b.spend-a.spend);
+  const uSpend=uList.reduce((t,u)=>t+u.spend,0);
+  const uRows=uList.map((u,j)=>{ const idx=rows.length+j; const accs=accAgg(u.camps);
+    const label=accs.length===1?accs[0].name:(accs.length>1?(accs.length+' accounts'):(u.store||'?'));
+    return `<tr class="clk" onclick="roasCampToggle(${idx})">
+    <td class="nm">${appIcon(label,20)}<span style="display:inline-block;vertical-align:middle">${label}<div class="faint" style="font-size:10px;font-weight:400">${u.store||''}</div></span></td>
+    <td><span class="faint" style="font-size:11px" title="Is app ki AdMob revenue is account me link nahi hai">— link nahi</span></td>
+    <td style="font-weight:700">${money(u.spend)}</td>
+    <td><span class="faint">—</span></td>
+    <td class="down" style="font-weight:700">−${money(u.spend)}</td>
+    <td style="font-size:12px"><span class="ccampt">${accCell(u.camps)} <span class="cbchev" id="cbchev-${idx}">▸</span></span></td></tr>${campBreak({camps:u.camps,storeId:u.store},idx)}`;
+  }).join('');
+  const uDivider=uRows?`<tr><td colspan="6" style="background:var(--panel2);padding:9px 17px;font-size:11.5px" class="muted">📲 <b>Play-Store apps · AdMob revenue link nahi</b> — sirf Google Ads spend (${money(uSpend)} is period me). Inki revenue AdMob me match nahi (alag account ya store unlinked), isliye ROAS ke upar wale total me nahi.</td></tr>`:'';
   s.innerHTML=head+((totSpend<=0&&R.note)?`<div class="note" style="margin:0 0 12px;font-size:12.5px">🔗 Google Ads <b>connected</b> — par is period me koi app-campaign spend nahi mila (apps organic dikhenge).</div>`:'')+
     `<div class="row c4" style="margin-bottom:14px">${kpi('AdMob revenue',money(totRev),winLbl,'muted')}${kpi('Ad spend',money(totSpend),winLbl,'muted')}${kpi('Blended ROAS',blended!=null?blended.toFixed(2)+'×':'—',blended!=null?(blended>=1?'profitable':'below 1× — loss'):'no spend',blended!=null?(blended>=1?'up':'down'):'muted')}${kpi('Net profit',(net>=0?'+':'−')+money(Math.abs(net)),'revenue − spend',net>=0?'up':'down')}</div>
     <div class="card pad0"><div class="ct" style="padding:16px 17px 0"><h3>App-wise ROAS — sabse zyada spend upar</h3><span class="muted" style="font-size:12px">${winLbl} · ROAS 2× = har $1 spend pe $2 revenue · revenue = total AdMob (organic + paid)</span></div>
-      <table style="margin-top:10px"><thead><tr><th>App</th><th>Revenue</th><th>Spend</th><th>ROAS</th><th>Net</th><th>Campaigns</th></tr></thead><tbody>${trows}</tbody></table></div>
-    ${unmatchedNote}`;
+      <table style="margin-top:10px"><thead><tr><th>App</th><th>Revenue</th><th>Spend</th><th>ROAS</th><th>Net</th><th>Ad account</th></tr></thead><tbody>${trows}${uDivider}${uRows}</tbody></table></div>`;
   return s;
 }
 
