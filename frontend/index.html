@@ -130,6 +130,16 @@
   .ov-datewise th,.ov-datewise td,.dw-full th,.dw-full td{border-right:1px solid var(--line)}   /* Excel-style dividers */
   .ov-datewise th:last-child,.ov-datewise td:last-child,.dw-full th:last-child,.dw-full td:last-child{border-right:none}
   .dw-tot td{border-top:2px solid var(--line2);font-weight:700;background:var(--panel2)}
+  /* Marketing ROAS — per-app campaign breakdown (campaign + Google Ads account) */
+  .cbhd{font-size:11px;padding:6px 0 4px}
+  .cbrk{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .cbrk:last-child{border-bottom:none}
+  .cdot{width:8px;height:8px;border-radius:50%;flex:none}
+  .cdot.on{background:var(--good)}.cdot.off{background:var(--faint)}
+  .cbnm{flex:1;font-size:12.5px;color:var(--ink2);min-width:0}
+  .cbamt{font-weight:700;font-size:12.5px;white-space:nowrap}
+  .cbpct{font-size:11px;width:40px;text-align:right}
+  .ccampt{cursor:pointer;white-space:nowrap}.cbchev{color:var(--cyan);font-weight:700}
   .ov-chev{display:none}
   /* mobile menu button + drawer scrim (hidden on desktop) */
   .hamb{display:none;flex:none;align-items:center;justify-content:center;width:38px;height:38px;padding:0;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--ink);font-size:19px;cursor:pointer}
@@ -2168,6 +2178,8 @@ function renderBaseline(){
 
 // ---------- RECOMMENDATIONS ----------
 // ---------- MARKETING ROAS ----------
+function roasCampToggle(idx){ const row=document.getElementById('rcamp-'+idx), ch=document.getElementById('cbchev-'+idx);
+  if(!row) return; const open=row.style.display==='none'; row.style.display=open?'':'none'; if(ch)ch.textContent=open?'▾':'▸'; }
 function renderRoas(){
   const s=screenDiv('roas');
   const R=DATA.roas||{configured:false,by_app:{}};
@@ -2205,13 +2217,24 @@ function renderRoas(){
   const blended=totSpend>0?totRev/totSpend:null, net=totRev-totSpend, unmatched=(R.unmatched_spend_usd||0)/1e6;
   const roasPill=(v)=>v==null?'<span class="faint">organic</span>':`<span class="pill ${v>=1?'p-g':'p-r'}">${v.toFixed(2)}×</span>`;
   const campCell=(cs)=>{ if(!cs.length)return '<span class="faint">—</span>'; const act=cs.filter(c=>String(c.status)==='ENABLED').length; const other=cs.length-act; return `${cs.length} <span class="faint" style="font-size:11px">(${act} active${other?' · '+other+' paused/removed':''})</span>`; };
-  const trows=rows.map(r=>`<tr class="clk" onclick="openAppDetail('${(r.app||'').replace(/'/g,"\\'")}')">
+  const campBreak=(r,idx)=>{                                   // expandable per-campaign spend + Google Ads account
+    const cs=(r.camps||[]).slice().sort((a,b)=>(b.cost_micros||0)-(a.cost_micros||0));
+    if(!cs.length) return '';
+    const tot=cs.reduce((t,c)=>t+(c.cost_micros||0),0)||1;
+    const lines=cs.map(c=>{ const on=String(c.status)==='ENABLED'; const acc=c.account_name||c.account||'account —';
+      return `<div class="cbrk"><span class="cdot ${on?'on':'off'}"></span><span class="cbnm">${c.name||'(campaign)'} <span class="faint">— ${acc}</span></span><span class="cbamt">${money((c.cost_micros||0)/1e6)}</span><span class="cbpct faint">${Math.round((c.cost_micros||0)/tot*100)}%</span></div>`;
+    }).join('');
+    return `<tr class="rcamp" id="rcamp-${idx}" style="display:none"><td colspan="6" style="background:var(--panel2);padding:2px 17px 12px"><div class="cbhd faint">Campaign-wise spend (poore data-window ka total) · naam ke aage <b>Google Ads account</b> (1 account = 1 app)</div>${lines}</td></tr>`;
+  };
+  const trows=rows.map((r,idx)=>{ const hasC=(r.camps||[]).length;
+    return `<tr class="clk" onclick="openAppDetail('${(r.app||'').replace(/'/g,"\\'")}')">
     <td class="nm">${appIcon(r.app,20)}${r.app}</td>
     <td style="font-weight:700">${money(r.rev)}</td>
     <td>${r.spend>0?money(r.spend):'<span class="faint">—</span>'}</td>
     <td>${roasPill(r.roas)}</td>
     <td class="${r.net>=0?'up':'down'}" style="font-weight:700">${r.net>=0?'+':'−'}${money(Math.abs(r.net))}</td>
-    <td class="faint" style="font-size:12px">${campCell(r.camps)}</td></tr>`).join('')||`<tr><td colspan="6" class="muted" style="padding:16px">Is period me na spend na revenue.</td></tr>`;
+    <td class="faint" style="font-size:12px">${hasC?`<span class="ccampt" onclick="event.stopPropagation();roasCampToggle(${idx})">${campCell(r.camps)} <span class="cbchev" id="cbchev-${idx}">▸</span></span>`:campCell(r.camps)}</td></tr>${campBreak(r,idx)}`;
+  }).join('')||`<tr><td colspan="6" class="muted" style="padding:16px">Is period me na spend na revenue.</td></tr>`;
   const uApps=R.unmatched_apps||[];
   const unmatchedNote=unmatched>0?`<div class="card pad0" style="margin-top:14px">
       <div class="ct" style="padding:16px 17px 0"><h3>⚠️ Unmatched spend · ${money(unmatched)}</h3><span class="muted" style="font-size:12px">${R.unmatched_count||uApps.length} apps/campaigns AdMob se link nahi hue</span></div>
