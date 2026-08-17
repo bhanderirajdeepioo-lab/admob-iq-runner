@@ -76,15 +76,18 @@ def _search(customer_id, login_customer_id, dev_token, access_token, query):
 
 
 def _child_accounts(login_customer_id, dev_token, access_token):
-    """Non-manager client accounts under the MCC (id + currency)."""
-    q = ("SELECT customer_client.id, customer_client.currency_code, customer_client.manager "
-         "FROM customer_client")
+    """Non-manager client accounts under the MCC (id + currency + descriptive name). The name lets
+    the UI show which Google Ads account each campaign's spend comes from (user's rule: 1 account =
+    1 app), so a campaign pointing at the wrong app's store id is easy to spot."""
+    q = ("SELECT customer_client.id, customer_client.currency_code, customer_client.descriptive_name, "
+         "customer_client.manager FROM customer_client")
     out = []
     for row in _search(login_customer_id, login_customer_id, dev_token, access_token, q):
         cc = row.get("customerClient") or {}
         if cc.get("manager"):
             continue                                  # skip nested managers
-        out.append({"id": str(cc.get("id")), "currency": cc.get("currencyCode") or "USD"})
+        out.append({"id": str(cc.get("id")), "currency": cc.get("currencyCode") or "USD",
+                    "name": cc.get("descriptiveName") or ""})
     return out
 
 
@@ -188,14 +191,17 @@ def _aggregate(rows, fx_fn=_fx_to_usd):
         v = to_base(r.get("cost_micros") or 0, r.get("currency") or "USD")
         sid = r["store_id"]
         daily[sid][str(r.get("date"))] += v
-        c = camps[sid].setdefault(r["campaign_id"], {"name": None, "status": None, "cost": 0})
+        c = camps[sid].setdefault(r["campaign_id"], {"name": None, "status": None, "cost": 0,
+                                                     "acct": None, "acct_name": None})
         c["name"] = r.get("name") or c["name"]; c["status"] = r.get("status") or c["status"]
+        c["acct"] = r.get("account") or c["acct"]; c["acct_name"] = r.get("account_name") or c["acct_name"]
         c["cost"] += v
     return {
         "v": SPEND_CACHE_V,
         "daily": {sid: dict(dd) for sid, dd in daily.items()},
         "campaigns": {sid: [{"id": cid, "name": c["name"], "status": c["status"],
-                             "cost_micros": c["cost"]} for cid, c in cc.items()]
+                             "cost_micros": c["cost"], "account": c["acct"], "account_name": c["acct_name"]}
+                            for cid, c in cc.items()]
                       for sid, cc in camps.items()},
         "currency_src": base, "fx": fx,
     }
@@ -256,7 +262,7 @@ def fetch_app_spend(s, start, end, *, mode="live"):
                 if "unauthorized_client" in msg else ""
         return {"error": "OAuth fail — refresh token / client-id-secret check karo: %s%s" % (msg, extra)}
     try:
-        accounts = _child_accounts(mcc, dev, token) or [{"id": mcc, "currency": "USD"}]
+        accounts = _child_accounts(mcc, dev, token) or [{"id": mcc, "currency": "USD", "name": ""}]
     except Exception as e:
         em = str(e)[:450]
         low = em.lower()
@@ -274,7 +280,8 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     for a in accounts:
         try:
             for r in _app_spend_for(a["id"], mcc, dev, token, start, end):
-                r["currency"] = a["currency"]; rows.append(r)
+                r["currency"] = a["currency"]; r["account"] = a["id"]; r["account_name"] = a.get("name") or ""
+                rows.append(r)
         except Exception as e:
             errs.append(str(e)[:220])
     if not rows and errs:
