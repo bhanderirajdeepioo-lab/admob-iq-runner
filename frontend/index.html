@@ -575,9 +575,9 @@ const DATEWISE_DEFAULT_DAYS=15;   // Overview mini-table shows the latest N comp
 // Per-date portfolio metrics (respects the APP filter + on-screen apps) for the date-wise report.
 // Revenue from placements' daily (USD micros); spend/installs/new-rev from Google Ads (roas.by_app),
 // summed the SAME way the Overview KPIs are — so the columns reconcile with the tiles above.
-function dateWiseRows(dates){
-  const fp=fPlace();
-  const appsShown=APP?DATA.apps.filter(x=>x.name===APP):DATA.apps;
+function dateWiseRows(dates,appName){
+  const fp=appName?(DATA.placements||[]).filter(p=>p.app===appName):fPlace();
+  const appsShown=appName?[{name:appName}]:(APP?DATA.apps.filter(x=>x.name===APP):DATA.apps);
   const on=roasOn(), by=(DATA.roas&&DATA.roas.by_app)||{};
   const dset=new Set(dates);
   const rev={}, spend={}, inst={}, nrev={};
@@ -785,6 +785,10 @@ function openAppDetail(name){
   const winSet=curWin(), winLbl=curWinLabel(), winArr=curWinArr();
   const revCell=(v)=>v>=10?money(v):cm(+v);
   const ps=(DATA.placements||[]).filter(p=>p.app===name);
+  // date-wise report for THIS app (latest N complete days) — same table as Overview, app-scoped
+  const _dwT=DATA.today_date||''; const _dwComp=_dwT?gAxis().filter(d=>d!==_dwT):gAxis().slice();
+  const _dwRows=dateWiseRows(_dwComp.slice(-DATEWISE_DEFAULT_DAYS),name);
+  const dwCard=`<div class="card pad0 dw-full" style="margin-top:14px"><div class="ct" style="padding:16px 17px 0"><h3>📅 Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${_dwRows.length} days · is app ka</span></h3></div>${dateWiseTable(_dwRows)}</div>`;
 
   // ----- app-level totals over the selected window (summed from each placement's per-day counts) -----
   let E=0,I=0,Q=0,M=0,C=0;
@@ -880,6 +884,7 @@ function openAppDetail(name){
       ${kpi('Match rate',K.req?pct(K.match):'—',winLbl,'muted')}
     </div>
     ${adDailyPanel(name)}
+    ${dwCard}
     ${switchBar}
     ${body}`;
 
