@@ -768,21 +768,6 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 roas_inr_usd = base_usd
             spend_usd = _spend_to_usd(spend, base_usd)
             dashboard["roas"] = build_roas(spend_usd, store_ids, dashboard.get("apps_catalog"), roas_aliases)
-            # TEMP DEBUG (gallery merge investigation) — surfaced in dashboard.json, remove after diagnosis
-            try:
-                _gb = (dashboard["roas"].get("by_app") or {}).get("Gallery") or {}
-                dashboard["_dbg_gallery"] = {
-                    "spend_stores": [k for k in (spend_usd.get("daily") or {}) if "gallery.photos.albums" in k],
-                    "store_ids_gallery": {aid: sid for aid, sid in (store_ids or {}).items() if "gallery.photos.albums" in str(sid)},
-                    "store_ids_com_gallery": {aid: sid for aid, sid in (store_ids or {}).items() if sid == "com.gallery.photos.albums"},
-                    "catalog_gallery": [{"app_id": c.get("app_id"), "name": c.get("app_name"), "store_id": c.get("store_id")}
-                                        for c in (dashboard.get("apps_catalog") or []) if str(c.get("app_name","")).strip().lower() == "gallery"],
-                    "aliases_count": len(roas_aliases or {}),
-                    "result_store": _gb.get("store_id"),
-                    "result_camps": [c.get("account_name") for c in _gb.get("campaigns", [])],
-                }
-            except Exception as _de:
-                dashboard["_dbg_gallery"] = {"err": str(_de)}
             if spend is not None:
                 print(f"roas: spend for {len(dashboard['roas'].get('by_app', {}))} apps "
                       f"({base_ccy}→USD @ {base_usd})", file=sys.stderr)
