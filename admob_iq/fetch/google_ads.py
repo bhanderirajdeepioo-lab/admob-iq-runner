@@ -135,6 +135,30 @@ def _app_installs_for(customer_id, login_customer_id, dev_token, access_token, s
     return out
 
 
+def _app_convval_lag_for(customer_id, login_customer_id, dev_token, access_token, start, end):
+    """DAY-1 conversion value per store/date: the value from conversions that happened WITHIN ONE DAY
+    of the click (segments.conversion_lag_bucket = LESS_THAN_ONE_DAY). Google keeps this lag breakdown
+    for PAST dates too, so it's retroactive — it survives the later restatement of the full value, which
+    is exactly the 'day-1 vs matured' the UI wants. Best-effort + SEPARATE query (a version/field
+    problem here can never touch spend, installs, or the live convval)."""
+    q = ("SELECT campaign.app_campaign_setting.app_id, metrics.conversions_value, segments.date, "
+         "segments.conversion_lag_bucket "
+         "FROM campaign WHERE segments.date BETWEEN '%s' AND '%s' "
+         "AND campaign.app_campaign_setting.app_id != ''" % (start, end))
+    out = []
+    for row in _search(customer_id, login_customer_id, dev_token, access_token, q):
+        seg = row.get("segments") or {}
+        if str(seg.get("conversionLagBucket")) != "LESS_THAN_ONE_DAY":
+            continue                                          # keep only the <1-day (day-1) bucket
+        camp = row.get("campaign") or {}
+        sid = _norm_store(((camp.get("appCampaignSetting") or {}).get("appId")))
+        if not sid:
+            continue
+        out.append({"store_id": sid, "date": seg.get("date"),
+                    "convval": float((row.get("metrics") or {}).get("conversionsValue") or 0)})
+    return out
+
+
 def _fx_to_usd(ccy):
     if ccy == "USD" or not ccy:
         return 1.0
@@ -287,7 +311,7 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     if not rows and errs:
         return {"error": "Spend query fail (%d/%d accounts): %s" % (len(errs), len(accounts), errs[0])}
     if not rows:
-        return {"v": SPEND_CACHE_V, "daily": {}, "campaigns": {}, "installs": {}, "convval": {},
+        return {"v": SPEND_CACHE_V, "daily": {}, "campaigns": {}, "installs": {}, "convval": {}, "convval_day1": {},
                 "currency_src": "USD", "fx": {}, "note": "connected — is window me koi app-campaign spend nahi mila"}
     agg = _aggregate(rows)
     # Installs + conversion value: best-effort + SEPARATE from spend, so a problem here can never
@@ -301,6 +325,16 @@ def fetch_app_spend(s, start, end, *, mode="live"):
             print("roas: installs/convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
     agg["installs"] = _aggregate_installs(inst_rows)
     agg["convval"] = _aggregate_convval(inst_rows, base=agg["currency_src"])   # same base as spend
+    # Day-1 conversion value (retroactive, via conversion-lag bucket) — best-effort + separate, so a
+    # field/version problem here can never break spend/installs/convval above.
+    d1_rows = []
+    for a in accounts:
+        try:
+            for r in _app_convval_lag_for(a["id"], mcc, dev, token, start, end):
+                r["currency"] = a["currency"]; d1_rows.append(r)
+        except Exception as e:
+            print("roas: day-1 convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
+    agg["convval_day1"] = _aggregate_convval(d1_rows, base=agg["currency_src"])
     return agg
 
 
@@ -323,7 +357,7 @@ def merge_spend(cached, fresh, refetch_start):
     out = {"v": SPEND_CACHE_V,
            "currency_src": fresh.get("currency_src") or cached.get("currency_src", "USD"),
            "fx": fresh.get("fx") or cached.get("fx", {}), "note": fresh.get("note")}
-    for key in ("daily", "installs", "convval"):
+    for key in ("daily", "installs", "convval", "convval_day1"):
         cd = cached.get(key) or {}
         fd = fresh.get(key) or {}
         merged = {}
