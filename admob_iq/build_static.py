@@ -767,7 +767,22 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             if base_ccy == "INR":
                 roas_inr_usd = base_usd
             spend_usd = _spend_to_usd(spend, base_usd)
+            # TEMP DEBUG (gallery merge investigation) — remove after diagnosis
+            try:
+                _gk = [k for k in (spend_usd.get("daily") or {}) if "gallery.photos.albums" in k]
+                _gs = {aid: sid for aid, sid in (store_ids or {}).items() if "gallery.photos.albums" in str(sid)}
+                _gc = [c for c in (dashboard.get("apps_catalog") or []) if str(c.get("app_name","")).strip().lower() == "gallery"]
+                print("DEBUG-GALLERY: spend_stores=%s | store_ids_gallery=%s | catalog_gallery=%s | aliases=%s"
+                      % (_gk, _gs, [(c.get("app_id"), c.get("app_name")) for c in _gc], (roas_aliases or {})), file=sys.stderr)
+            except Exception as _de:
+                print("DEBUG-GALLERY err: %s" % _de, file=sys.stderr)
             dashboard["roas"] = build_roas(spend_usd, store_ids, dashboard.get("apps_catalog"), roas_aliases)
+            try:
+                _gb = (dashboard["roas"].get("by_app") or {}).get("Gallery") or {}
+                print("DEBUG-GALLERY-RESULT: store_id=%s camps=%s"
+                      % (_gb.get("store_id"), [c.get("account_name") for c in _gb.get("campaigns", [])]), file=sys.stderr)
+            except Exception:
+                pass
             if spend is not None:
                 print(f"roas: spend for {len(dashboard['roas'].get('by_app', {}))} apps "
                       f"({base_ccy}→USD @ {base_usd})", file=sys.stderr)
