@@ -1,6 +1,28 @@
 """QA for the per-account app selection layer (which apps are kept / hidden)."""
 
-from admob_iq.engine.app_select import (load_selection, app_visible, account_decided, selected_ids)
+from admob_iq.engine.app_select import (load_selection, app_visible, account_decided, selected_ids,
+                                        load_known_accounts)
+
+
+def test_new_account_opt_in_hidden_grandfathered_visible():
+    """With a known-accounts set, an UNDECIDED grandfathered account stays visible but a brand-NEW
+    account's apps default to HIDDEN (opt-in) — this stops a freshly-added account auto-bloating."""
+    sel = {"accounts": {}}
+    known = {"pub-old"}
+    assert app_visible(sel, "pub-old", "app-a", known) is True    # grandfathered undecided → visible
+    assert app_visible(sel, "pub-new", "app-a", known) is False   # brand-new undecided → hidden
+    assert app_visible(sel, "pub-new", "app-a", None) is True     # opt-in disabled (no file) → visible (back-compat)
+    sel2 = {"accounts": {"pub-new": {"decided": True, "selected": ["app-a"]}}}
+    assert app_visible(sel2, "pub-new", "app-a", known) is True   # decided new account → its picks show
+    assert app_visible(sel2, "pub-new", "app-b", known) is False
+
+
+def test_load_known_accounts(tmp_path):
+    assert load_known_accounts(str(tmp_path / "nope.json")) is None      # absent → None (opt-in off)
+    p = tmp_path / "known.json"; p.write_text('{"accounts": ["pub-1", "pub-2"]}')
+    assert load_known_accounts(str(p)) == {"pub-1", "pub-2"}
+    p.write_text('["pub-3"]')                                            # bare list also accepted
+    assert load_known_accounts(str(p)) == {"pub-3"}
 
 
 def test_absent_account_all_visible():

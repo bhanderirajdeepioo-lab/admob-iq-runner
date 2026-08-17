@@ -49,9 +49,31 @@ def selected_ids(sel, account_id):
     return set(a.get("selected") or [])
 
 
-def app_visible(sel, account_id, app_id):
-    """True if this app should be shown/fetched. Undecided account -> everything visible."""
+def load_known_accounts(path):
+    """Set of GRANDFATHERED account_ids (the accounts that existed when opt-in was enabled). Returns
+    None if the file is absent -> opt-in disabled, every undecided app visible (backward compatible).
+    When present, a brand-NEW account (not in this set, still undecided) defaults to HIDDEN, so adding
+    an account can't auto-pull all its apps and bloat the build — the user opts its apps in."""
+    if path and os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            ids = data.get("accounts") if isinstance(data, dict) else data
+            return set(ids or [])
+        except Exception:
+            pass
+    return None
+
+
+def app_visible(sel, account_id, app_id, known=None):
+    """True if this app should be shown/fetched.
+      - DECIDED account   -> only its selected app_ids.
+      - UNDECIDED account -> visible if it's a grandfathered (known) account; a brand-NEW account
+        (not in `known`) defaults to HIDDEN (opt-in). `known=None` disables this and keeps every
+        undecided app visible (backward compatible — no known-accounts file)."""
     ids = selected_ids(sel, account_id)
-    if ids is None:
+    if ids is not None:
+        return app_id in ids
+    if known is None:                       # opt-in disabled -> undecided means every app visible
         return True
-    return app_id in ids
+    return (account_id or "") in known      # undecided: only grandfathered accounts stay visible
