@@ -580,15 +580,16 @@ function dateWiseRows(dates,appName){
   const appsShown=appName?[{name:appName}]:(APP?DATA.apps.filter(x=>x.name===APP):DATA.apps);
   const on=roasOn(), by=(DATA.roas&&DATA.roas.by_app)||{};
   const dset=new Set(dates);
-  const rev={}, spend={}, inst={}, nrev={};
+  const rev={}, spend={}, inst={}, nrev={}, d1={};
   fp.forEach(p=>(p.daily||[]).forEach(r=>{ if(dset.has(r[0]))rev[r[0]]=(rev[r[0]]||0)+r[1]; }));   // USD micros
   if(on) appsShown.forEach(x=>{ const e=by[x.name]||{};
     const dd=e.daily||{};          for(const d in dd){ if(dset.has(d))spend[d]=(spend[d]||0)+dd[d]; }   // USD micros
     const idl=e.installs_daily||{};for(const d in idl){if(dset.has(d))inst[d]=(inst[d]||0)+idl[d]; }    // count
     const cd=e.convval_daily||{};  for(const d in cd){ if(dset.has(d))nrev[d]=(nrev[d]||0)+cd[d]; }     // USD
+    const c1=e.convval_day1_daily||{};for(const d in c1){if(dset.has(d))d1[d]=(d1[d]||0)+c1[d]; }        // day-1 (frozen)
   });
-  return dates.map(d=>{ const rv=(rev[d]||0)/1e6, sp=(spend[d]||0)/1e6, nr=(nrev[d]||0);
-    return {d, rev:rv, spend:sp, inst:(inst[d]||0), newrev:nr, oldrev:rv-nr, pl:rv-sp}; });   // all money in USD (money() → INR)
+  return dates.map(d=>{ const rv=(rev[d]||0)/1e6, sp=(spend[d]||0)/1e6, nr=(nrev[d]||0), dr=(d1[d]||0);
+    return {d, rev:rv, spend:sp, inst:(inst[d]||0), newrev:nr, day1:dr, oldrev:rv-dr, pl:rv-sp}; });   // Old = Total − DAY-1 (stable)
 }
 // Render the date-wise table (newest day first) with a totals footer. Spend/installs/new/old/P-L
 // columns only when ROAS (Google Ads) is configured — same gate as the app table.
@@ -596,7 +597,7 @@ function dateWiseTable(rows){
   const on=roasOn();
   const plF=(n)=>(n<0?'-':'')+csym()+Number(Math.abs(n)*cfx()).toLocaleString(undefined,{maximumFractionDigits:0});
   if(!rows.length) return '<div class="muted" style="font-size:13px;padding:16px 17px">Is range me kisi din ka data nahi.</div>';
-  const head=`<thead><tr><th>Date</th>${on?'<th>Spend</th><th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th>':''}<th>Revenue</th>${on?'<th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">existing</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}</tr></thead>`;
+  const head=`<thead><tr><th>Date</th>${on?'<th>Spend</th><th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th>':''}<th>Revenue</th>${on?'<th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Day-1</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}</tr></thead>`;
   const body=rows.slice().reverse().map(r=>`<tr><td class="nm">${fmtD(r.d)}</td>${on?`<td>${r.spend>0?money(r.spend):'—'}</td><td>${r.inst?Math.round(r.inst).toLocaleString():'—'}</td>`:''}<td style="font-weight:700">${money(r.rev)}</td>${on?`<td>${r.newrev>0?money(r.newrev):'—'}</td><td class="${r.oldrev<0?'down':''}">${plF(r.oldrev)}</td><td class="${r.pl>=0?'up':'down'}">${plF(r.pl)}</td>`:''}</tr>`).join('');
   const T=rows.reduce((t,r)=>({rev:t.rev+r.rev,spend:t.spend+r.spend,inst:t.inst+r.inst,newrev:t.newrev+r.newrev,oldrev:t.oldrev+r.oldrev,pl:t.pl+r.pl}),{rev:0,spend:0,inst:0,newrev:0,oldrev:0,pl:0});
   const foot=`<tr class="dw-tot"><td class="nm">Total · ${rows.length}d</td>${on?`<td>${money(T.spend)}</td><td>${Math.round(T.inst).toLocaleString()}</td>`:''}<td>${money(T.rev)}</td>${on?`<td>${money(T.newrev)}</td><td class="${T.oldrev<0?'down':''}">${plF(T.oldrev)}</td><td class="${T.pl>=0?'up':'down'}">${plF(T.pl)}</td>`:''}</tr>`;
@@ -667,7 +668,8 @@ function renderOverview(){
   const plTot=k.revenue-spendTot;                                          // Profit/Loss = revenue − ad spend
   const plFmt=(n)=>(n<0?'-':'')+csym()+Number(Math.abs(n)*cfx()).toLocaleString(undefined,{maximumFractionDigits:0});
   const newRevTot=appsShown.reduce((t,x)=>t+(CVAL[x.name]||0),0);         // new-user revenue = Google Ads conv value
-  const oldRevTot=k.revenue-newRevTot;                                     // old/existing-user revenue = total − new
+  const day1Tot=appsShown.reduce((t,x)=>t+(CVAL1[x.name]||0),0);
+  const oldRevTot=k.revenue-day1Tot;                                       // old = total − DAY-1 (stable, not the restating new rev)
   const instSeries=SHOWSP?trendDates.map(d=>{ let v=0; const by=DATA.roas.by_app||{};
     appsShown.forEach(x=>{ const dd=(by[x.name]||{}).installs_daily; if(dd&&dd[d])v+=dd[d]; });
     return Math.round(v*100)/100; }):[];
@@ -677,7 +679,7 @@ function renderOverview(){
   const dwRows=dateWiseRows(dwDates);
   const roasCell=(rv,sp)=>{ if(!(sp>0))return '<td><span class="faint">organic</span></td>';
     const r=rv/sp; return `<td style="font-weight:700">${money(sp)}<div class="${r>=1?'up':'down'}" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div></td>`; };
-  const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);const newr=CVAL[ap2.name]||0;const oldr=g.e/1e6-newr;const d1=CVAL1[ap2.name]||0;
+  const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);const newr=CVAL[ap2.name]||0;const oldr=g.e/1e6-(CVAL1[ap2.name]||0);const d1=CVAL1[ap2.name]||0;
     return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}${appAccTag(ap2.name)}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td>${d1>0?money(d1):'—'}</td><td>${money(newr)}</td><td class="${oldr<0?'down':''}">${plFmt(oldr)}</td><td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?cm(ec):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
   // mobile card-list of the SAME apps (shown ≤760px; desktop keeps the table). Nothing dropped.
   const appCards=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const rev=g.e/1e6;const sp=SPA[ap2.name]||0;const pl=rev-sp;const inst=INST[ap2.name];const ec=g.i?g.e/(g.i*1000):0;
@@ -696,14 +698,14 @@ function renderOverview(){
         ${SHOWSP?kpi('Profit / Loss',plFmt(plTot),(plTot>=0?'profit':'loss')+' · '+dspan,plTot>=0?'up':'down',sparkbars(plSeries)):''}
         ${SHOWSP?kpi('Total installs',instTot?Math.round(instTot).toLocaleString():'—','Google Ads · '+dspan,'muted',sparkbars(instSeries,'o')):''}
         ${SHOWSP?kpi('New revenue',money(newRevTot),'new users (GAds) · '+dspan,'muted'):''}
-        ${SHOWSP?kpi('Old revenue',plFmt(oldRevTot),'existing users · '+dspan,'muted'):''}
+        ${SHOWSP?kpi('Old revenue',plFmt(oldRevTot),'Rev − Day-1 · '+dspan,'muted'):''}
         ${kpi('Avg eCPM',cm(k.ecpm),dspan,'muted',sparkbars(trendSeries))}
         ${kpi('Match rate',pct(k.match_rate||0),dspan,'muted',sparkbars(trendSeries,'g'))}
         ${lastTile}
       </div>
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'Ye app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe click → poori report</span></div>
-        <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>Day-1 rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">frozen</div></th><th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users · live</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">existing</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
+        <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>Day-1 rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">frozen</div></th><th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users · live</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Day-1</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
       <div class="ov-datewise card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${dwRows.length} days</span></h3><span class="lnk" onclick="openDateWise('')">View more →</span></div>${dateWiseTable(dwRows)}</div>
       <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0',spend:SHOWSP?spendSeries:null,spendColor:'#e6b84e'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span>${SHOWSP?'<span><i class="dot" style="background:#e6b84e"></i> Ad spend</span>':''}<span class="faint" style="font-size:11px">· cursor pe revenue value</span></div></div>
       <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
