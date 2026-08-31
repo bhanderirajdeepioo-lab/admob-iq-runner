@@ -1,0 +1,7 @@
+name = "admob-iq-cron"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Hourly at :17. Cloudflare fires cron triggers on time (unlike GitHub's throttled schedule).
+[triggers]
+crons = ["17 * * * *"]
