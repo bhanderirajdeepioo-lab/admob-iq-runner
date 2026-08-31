@@ -31,6 +31,19 @@ from .alerting import notify as notifier
 _ICON = {"critical": "🔴", "warning": "🟠", "watch": "🟡", "good": "🎉"}
 
 
+def _shipgz(out_dir, name, obj):
+    """Write `obj` as a GZIPPED JSON file (name + '.gz') and delete any stale uncompressed copy — a
+    big lazy asset then stays under Cloudflare's 25MB/file cap WITHOUT trimming any data (JSON gzips
+    ~10x). The frontend fetches the .gz and inflates it in the browser (DecompressionStream)."""
+    import gzip
+    with gzip.open(os.path.join(out_dir, name + ".gz"), "wt", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, separators=(",", ":"))
+    try:
+        os.remove(os.path.join(out_dir, name))
+    except OSError:
+        pass
+
+
 def _spend_to_usd(spend, rate):
     """Scale a RAW source-currency spend cache (v2) into USD (AdMob's base) with a single `rate`
     (source→USD). installs are counts (untouched); daily / convval / campaign costs scale by `rate`.
@@ -852,32 +865,18 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             print(f"daily series skipped: {e}", file=sys.stderr)
         geo = compact_geo(baseline_payload.pop("unit_geo", {}))
-        # Cloudflare Worker static assets cap EACH file at 25 MiB — a single oversized file FAILS the
-        # whole deploy (site freezes on the last good build). baseline_geo (per-ad-unit ALL countries)
-        # grows with every account/app, so keep it safely under the cap by trimming each ad-unit to
-        # its top-N countries by revenue (row[2]); the long tail is negligible revenue. Shrink N until
-        # it fits. (dashboard.json / adunit_country_daily are separately watched below.)
-        def _jbytes(o):
-            return len(json.dumps(o, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-        _GEO_CAP = 23 * 1024 * 1024
-        if _jbytes(geo) > _GEO_CAP:
-            for _topn in (80, 50, 30, 20, 12, 8, 5):
-                geo = {uid: sorted(rows, key=lambda r: -(r[2] or 0))[:_topn] for uid, rows in geo.items()}
-                if _jbytes(geo) <= _GEO_CAP:
-                    print(f"baseline_geo trimmed to top-{_topn} countries/unit to fit 25MB deploy cap", file=sys.stderr)
-                    break
         with open(os.path.join(out_dir, "baseline.json"), "w", encoding="utf-8") as f:
             json.dump(baseline_payload, f, ensure_ascii=False, separators=(",", ":"))
-        with open(os.path.join(out_dir, "baseline_geo.json"), "w", encoding="utf-8") as f:
-            json.dump(geo, f, ensure_ascii=False, separators=(",", ":"))
+        # baseline_geo (per-ad-unit ALL countries) can exceed Cloudflare's 25MB/file cap. Ship it
+        # GZIPPED — lossless, FULL data, NOTHING trimmed (JSON gzips ~10x). Frontend inflates the .gz.
+        _shipgz(out_dir, "baseline_geo.json", geo)
         # Ad-unit × country DAILY (current month) — ALREADY fetched for the baseline, so NO extra
         # AdMob call. Shipped (lazy, hidden apps excluded via frepo) so the per-placement country
         # table can window to the SELECTED period; older windows fall back to the lifetime mix.
         try:
             acd = frepo.fetch_adunit_country_daily()
             if acd and acd.get("units"):
-                with open(os.path.join(out_dir, "adunit_country_daily.json"), "w", encoding="utf-8") as f:
-                    json.dump(acd, f, ensure_ascii=False, separators=(",", ":"))
+                _shipgz(out_dir, "adunit_country_daily.json", acd)   # gzipped (lossless, full data)
         except Exception as e:
             print(f"acd ship skipped: {e}", file=sys.stderr)
 
@@ -956,7 +955,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 "  Referrer-Policy: no-referrer\n\n"          # never leak the URL to sites you click through to
                 "/dashboard.json\n  Cache-Control: no-store\n\n"
                 "/baseline.json\n  Cache-Control: no-store\n\n"
-                "/baseline_geo.json\n  Cache-Control: no-store\n\n"
+                "/baseline_geo.json.gz\n  Cache-Control: no-store\n\n"
+                "/adunit_country_daily.json.gz\n  Cache-Control: no-store\n\n"
                 "/baseline_daily.json\n  Cache-Control: no-store\n\n"
                 "/selected_apps.json\n  Cache-Control: no-store\n\n"
                 "/account_names.json\n  Cache-Control: no-store\n\n"
