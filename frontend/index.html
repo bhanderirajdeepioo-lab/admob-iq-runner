@@ -1583,8 +1583,21 @@ const BMET=['ctr','match','show','ecpm'], BSTD=['in','above','below'], MN={ctr:'
 function geoDecode(a){ const o={country:a[0],months_n:a[1],rev_total:a[2],low_sample:!!a[3],range:{},latest:{},status:{}}; let i=4;
   for(const k of BMET){ o.range[k]=(a[i]==null?null:[a[i],a[i+1]]); o.latest[k]=a[i+2]; o.status[k]=BSTD[a[i+3]]||'in'; i+=4; } o.series=a[20]||null;
   o.yday=a[21]?{ctr:a[21][0],match:a[21][1],show:a[21][2],ecpm:a[21][3],rev:a[21][4]}:null; return o; }
+// Fetch a possibly-GZIPPED JSON asset. The big lazy files (baseline_geo, adunit_country_daily) are
+// shipped gzipped to stay under Cloudflare's 25MB/file cap WITHOUT trimming any data. If the bytes
+// are still gzip (magic 1f 8b) we inflate in the browser; if the CDN already inflated them (via
+// Content-Encoding) we parse directly — so it's robust either way.
+async function fetchGzJson(url){
+  const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error('http '+r.status);
+  const b=new Uint8Array(await r.arrayBuffer());
+  if(b.length>=2 && b[0]===0x1f && b[1]===0x8b){
+    const txt=await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+    return JSON.parse(txt);
+  }
+  return JSON.parse(new TextDecoder().decode(b));
+}
 function loadBaselineGeo(cb){ if(BGEO){cb&&cb();return;} if(BGLOADING)return; BGLOADING=true;
-  fetch('baseline_geo.json?t='+Date.now()).then(r=>r.ok?r.json():{}).then(j=>{BGEO=j||{};BGLOADING=false;cb&&cb();}).catch(()=>{BGLOADING=false;}); }
+  fetchGzJson('baseline_geo.json.gz?t='+Date.now()).then(j=>{BGEO=j||{};BGLOADING=false;cb&&cb();}).catch(()=>{BGLOADING=false;}); }
 
 // ===== PLACEMENT DAILY CHART (lazy baseline_daily.json — day-by-day per metric) =====
 // Straight from the network report already fetched hourly → NO extra AdMob calls.
@@ -1593,7 +1606,7 @@ function loadBaselineDaily(cb){ if(BDAILY){cb&&cb();return;} if(BDLOADING)return
 // ad-unit×country DAILY (current month) — lazy-loaded once, so the per-placement country table can
 // window to the SELECTED period. Already-fetched data (from baseline) — no extra AdMob call.
 function loadACD(cb){ if(ACD){cb&&cb();return;} if(ACDLOADING)return; ACDLOADING=true;
-  fetch('adunit_country_daily.json?t='+Date.now()).then(r=>r.ok?r.json():null).then(j=>{ACD=j||{dates:[],data:{}};ACDLOADING=false;cb&&cb();}).catch(()=>{ACDLOADING=false;}); }
+  fetchGzJson('adunit_country_daily.json.gz?t='+Date.now()).then(j=>{ACD=j||{dates:[],data:{}};ACDLOADING=false;cb&&cb();}).catch(()=>{ACDLOADING=false;}); }
 // Per-placement country breakdown: windowed to the selected period from acd when that period is
 // inside acd's coverage (the current month), else the lifetime by_country mix. {rows, windowed}.
 function placementGeo(p){
