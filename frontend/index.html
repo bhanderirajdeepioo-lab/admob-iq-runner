@@ -111,19 +111,19 @@
   .banner.empty{background:var(--panel);color:var(--muted);border:1px solid var(--line2)}
   .lgd{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:8px}.lgd span{display:inline-flex;align-items:center;gap:6px}.dot{width:9px;height:9px;border-radius:3px;display:inline-block}
   .est{font-weight:800;color:var(--good)}svg.chart{width:100%;display:block}
-  /* Overview layout grid — desktop unchanged: KPIs & note full width; chart|movers row, apps|attn row */
+  /* Overview layout grid — big tables span the FULL width so every column fits (no cut); movers+attn share one row up top */
   .ov{display:grid;grid-template-columns:2fr 1fr;gap:14px}
   .ov-kpi{grid-column:1/-1;grid-row:1;margin:0}
   .ov-note{grid-column:1/-1;grid-row:2}
-  .ov-chart{grid-column:1;grid-row:3}
-  .ov-movers{grid-column:2;grid-row:3}
-  .ov-apps{grid-column:1;grid-row:4;min-width:0}                    /* min-width:0 lets the grid item shrink */
+  .ov-chart{grid-column:1/-1;grid-row:3}
+  .ov-apps{grid-column:1/-1;grid-row:4;min-width:0}                 /* full width → all columns fit */
   .ov-apps.card.pad0{overflow-x:auto}                               /* beats .card.pad0{overflow:hidden} so it scrolls, not clips */
-  .ov-apps.card.pad0 table{min-width:960px}                 /* keep columns readable → proper horizontal scroll */
+  .ov-apps.card.pad0 table{min-width:960px}                 /* keep columns readable → proper horizontal scroll on narrow windows */
   .ov-apps th,.ov-apps td{border-right:1px solid var(--line)}   /* Excel-style column dividers */
   .ov-apps th:last-child,.ov-apps td:last-child{border-right:none}
-  .ov-attn{grid-column:2;grid-row:4}
   .ov-datewise{grid-column:1/-1;grid-row:5;min-width:0}
+  .ov-movers{grid-column:1;grid-row:6}
+  .ov-attn{grid-column:2;grid-row:6}
   .ov-datewise.card.pad0{overflow-x:auto}                           /* horizontal scroll, matches Revenue-by-app table */
   .dw-full{overflow-x:auto}
   .ov-datewise table,.dw-full table{min-width:640px}
