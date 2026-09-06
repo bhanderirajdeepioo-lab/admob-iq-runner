@@ -52,8 +52,9 @@ def test_static_build_writes_valid_site(tmp_path):
     out, data = str(tmp_path / "site"), str(tmp_path / "data")
     r = build_static.build(out_dir=out, data_dir=data, today=date(2026, 7, 23), mode="mock")
     assert r["revenue"] > 0
-    # the file the static host serves
-    dash = json.load(open(os.path.join(out, "dashboard.json")))
+    # the file the static host serves (gzipped — 25MB-safe, inflated by the frontend)
+    import gzip as _gz
+    dash = json.load(_gz.open(os.path.join(out, "dashboard.json.gz"), "rt", encoding="utf-8"))
     assert set(dash.keys()) == set(build_dashboard().keys()) | {"generated_at", "report_tz", "report_tz_label", "data_quality", "apps_catalog", "usd_inr", "known_accounts"}   # frontend contract + freshness + timezone + integrity + app picker + currency-toggle rate + opt-in known-accounts
     assert dash["generated_at"] and "T" in dash["generated_at"]  # ISO timestamp present
     assert dash["kpis"]["revenue"] > 0 and dash["placements"]
@@ -566,5 +567,5 @@ def test_built_site_is_noindex_and_leaks_no_referrer(tmp_path):
     assert "noindex" in headers and "nofollow" in headers and "noarchive" in headers
     assert "Referrer-Policy: no-referrer" in headers        # don't hand the URL to sites clicked through to
     # the data files must still never be cached anywhere
-    for p in ("/dashboard.json", "/selected_apps.json", "/account_names.json", "/app_names.json"):
+    for p in ("/dashboard.json.gz", "/selected_apps.json", "/account_names.json", "/app_names.json"):
         assert f"{p}\n  Cache-Control: no-store" in headers
