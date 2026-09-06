@@ -31,9 +31,9 @@ on:
         required: false
         default: "35"
       lookback_days:
-        description: "Full-history backfill probe cap (only used when markers are absent; 1300 = ~3.5yr, 2700 = back to ~2019)"
+        description: "Per-app / new-account backfill probe cap in days (apps are auto-detected from their real start up to this cap; 1300 = ~3.5yr)"
         required: false
-        default: "2700"
+        default: "1300"
 
 permissions:
   contents: read                 # this repo is never written to

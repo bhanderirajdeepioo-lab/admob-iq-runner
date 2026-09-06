@@ -75,6 +75,18 @@ def _app_filter(app_id: str) -> Dict:
     return {"dimension": "APP", "matchesAny": {"values": [app_id]}}
 
 
+def _filter_app_ids(dim_filters):
+    """Collect the APP ids named in a list of dimension filters (or None if no APP filter) —
+    lets the mock client honour per-app scoping so tests exercise the same path as production."""
+    if not dim_filters:
+        return None
+    ids = set()
+    for f in dim_filters:
+        if f.get("dimension") == "APP":
+            ids.update((f.get("matchesAny") or {}).get("values") or [])
+    return ids or None
+
+
 class MockAdMobClient:
     """Deterministic synthetic data — mirrors the shape of real parsed rows."""
 
@@ -115,11 +127,15 @@ class MockAdMobClient:
                 "impressions": impr, "clicks": clicks,
                 "estimated_earnings_micros": earnings_micros}
 
-    def network_report(self, start: date, end: date) -> Iterator[Dict]:
+    def network_report(self, start: date, end: date,
+                       dim_filters: List[Dict] = None) -> Iterator[Dict]:
         days = (end - start).days
+        keep = _filter_app_ids(dim_filters)     # None = all apps; else only these app_ids
         for i in range(days + 1):
             d = start + timedelta(days=i)
             for app_id, _, platform in self.APPS:
+                if keep is not None and app_id not in keep:
+                    continue
                 for unit, fmt in self.UNITS[app_id]:
                     for country in self.COUNTRIES:
                         raw = self._base(unit, country, i)
@@ -407,9 +423,13 @@ class AdMobClient:
                 "impression_rpm_micros": m("IMPRESSION_RPM"),
                 "observed_ecpm_micros": m("OBSERVED_ECPM")}
 
-    def network_report(self, start: date, end: date) -> Iterator[Dict]:
+    def network_report(self, start: date, end: date,
+                       dim_filters: List[Dict] = None) -> Iterator[Dict]:
+        # dim_filters (optional) scopes the pull to specific apps — used by the per-app revenue
+        # backfill so only the user's SELECTED (ticked) apps are fetched (less AdMob load, respects the pick).
         for r in self._fetch_range("networkReport", start, end,
-                                   NETWORK_DIMENSIONS, NETWORK_METRICS):
+                                   NETWORK_DIMENSIONS, NETWORK_METRICS,
+                                   dim_filters=dim_filters):
             r["account_id"] = self.account_id
             r["currency_code"] = self.currency
             yield r

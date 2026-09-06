@@ -513,6 +513,87 @@ def _backfill_missing_accounts_ac(accounts, repo, today, *, mode, client_id, cli
     return len(rollups)
 
 
+def _backfill_network_selected_apps(accounts, repo, today, *, mode, client_id, client_secret,
+                                    currency, max_lookback, data_dir):
+    """One-time-per-APP deep NETWORK (revenue) history pull for the user's SELECTED (ticked) apps, so
+    every ticked app's ALL-TIME revenue is complete — not just run_once's recent rolling window (which
+    is why a newly-added account's apps showed only ~recent revenue vs AdMob's all-time total).
+
+    Detection is at the APP level and IDEMPOTENT: an app whose full history was already pulled is listed
+    in data/network_bf_apps.json and skipped, so covered apps are never re-pulled AND ticking a NEW app
+    later auto-pulls its full history on the very next build. Scope mirrors the ad-unit×country backfill:
+    a DECIDED account contributes only its ticked app_ids (un-ticked apps are never fetched); an UNDECIDED
+    account (no pick yet) contributes every app it currently has. Probe finds each app's real start, so an
+    app up to `max_lookback` days old is fully captured with no fixed day-count. Best-effort; never crashes."""
+    import json as _json
+    from datetime import timedelta
+    from collections import defaultdict
+    from .fetch.fetcher import make_client, build_network_row
+    from .fetch.admob_client import _app_filter
+    from .engine.app_select import load_selection, selected_ids
+
+    done_path = os.path.join(data_dir, "network_bf_apps.json")
+    try:
+        done = set(_json.load(open(done_path)))
+    except Exception:
+        done = set()
+
+    apps_by_acct = defaultdict(set)            # apps currently present in the network data, per account
+    try:
+        for r in repo.fetch_network():
+            if r.get("account_id") and r.get("app_id"):
+                apps_by_acct[r["account_id"]].add(r["app_id"])
+    except Exception:
+        pass
+
+    sel = load_selection(os.path.join(os.path.dirname(data_dir) or ".", "config", "selected_apps.json"))
+
+    todo = []                                   # (account, app_id) still needing a deep revenue pull
+    for a in accounts:
+        aid = a.get("account_id")
+        if not aid:
+            continue
+        keep = selected_ids(sel, aid)           # None = undecided, set() = decided-but-none, set = picks
+        if keep is None:
+            apps = apps_by_acct.get(aid, set())         # undecided → every app it has
+        elif not keep:
+            continue                                    # decided with zero picks → fetch nothing
+        else:
+            apps = keep                                 # decided → only the ticked apps
+        for app_id in sorted(apps):
+            if app_id not in done:
+                todo.append((a, app_id))
+    if not todo:
+        return 0
+
+    n, newly = 0, set()
+    for a, app_id in todo:
+        aid = a["account_id"]
+        try:
+            client = make_client(a, mode, client_id, client_secret, currency)
+            flt = [_app_filter(app_id)]
+            ds = client.data_start(today, max_lookback=max_lookback, dim_filters=flt)
+            if ds is None:                              # app never earned → nothing to pull, mark done
+                newly.add(app_id)
+                continue
+            print(f"NETWORK revenue backfill: {aid} {app_id} from {ds}", file=sys.stderr)
+            for raw in client.network_report(ds, today, dim_filters=flt):
+                repo.upsert_network(build_network_row(raw))
+                n += 1
+            newly.add(app_id)
+        except Exception as e:
+            print(f"network backfill failed for {aid}/{app_id}: {e}", file=sys.stderr)
+    # Persist the pulled revenue BEFORE marking apps done, so an interrupted run just retries (never
+    # records an app as done without its data on disk).
+    if newly:
+        try:
+            repo.flush()
+            _json.dump(sorted(done | newly), open(done_path, "w"))
+        except Exception as e:
+            print(f"network_bf_apps save failed: {e}", file=sys.stderr)
+    return n
+
+
 def build(out_dir="site", data_dir="data", today=None, mode=None):
     s = settings()
     accounts = resolve_accounts()
@@ -605,6 +686,15 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                                           data_dir=data_dir)
         except Exception as e:
             print(f"new-account baseline backfill skipped: {e}", file=sys.stderr)
+        # Deep REVENUE (network) history for each SELECTED app that doesn't have it yet — so a ticked
+        # app's all-time total matches AdMob, and ticking a new app later auto-pulls its full history.
+        try:
+            _backfill_network_selected_apps(accounts, repo, today, mode=mode,
+                                            client_id=s["google_client_id"], client_secret=s["google_client_secret"],
+                                            currency=s["report_currency"], max_lookback=ac_max_lookback,
+                                            data_dir=data_dir)
+        except Exception as e:
+            print(f"per-app revenue backfill skipped: {e}", file=sys.stderr)
     repo.flush()          # persist the refreshed history to disk (committed by CI)
     if did_backfill and repo.has_data():           # mark done only after a successful deep pull
         os.makedirs(data_dir, exist_ok=True)
