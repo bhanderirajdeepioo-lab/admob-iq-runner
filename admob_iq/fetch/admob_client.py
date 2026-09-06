@@ -145,11 +145,15 @@ class MockAdMobClient:
                                "country": country, "format": fmt, "platform": platform,
                                "currency_code": "USD", **raw}
 
-    def mediation_report(self, start: date, end: date) -> Iterator[Dict]:
+    def mediation_report(self, start: date, end: date,
+                         dim_filters: List[Dict] = None) -> Iterator[Dict]:
         days = (end - start).days
+        keep = _filter_app_ids(dim_filters)     # None = all apps; else only these app_ids
         for i in range(days + 1):
             d = start + timedelta(days=i)
             for app_id, _, platform in self.APPS:
+                if keep is not None and app_id not in keep:
+                    continue
                 for unit, fmt in self.UNITS[app_id]:
                     for country in self.COUNTRIES:
                         for src in ("AdMob Network", "AppLovin"):
@@ -434,9 +438,13 @@ class AdMobClient:
             r["currency_code"] = self.currency
             yield r
 
-    def mediation_report(self, start: date, end: date) -> Iterator[Dict]:
+    def mediation_report(self, start: date, end: date,
+                         dim_filters: List[Dict] = None) -> Iterator[Dict]:
+        # dim_filters (optional) scopes to specific apps — the mediation report is the REVENUE
+        # source of truth (all ad sources), so the per-app revenue backfill must pull it per app too.
         for r in self._fetch_range("mediationReport", start, end,
-                                   MEDIATION_DIMENSIONS, MEDIATION_METRICS):
+                                   MEDIATION_DIMENSIONS, MEDIATION_METRICS,
+                                   dim_filters=dim_filters):
             r["account_id"] = self.account_id
             r["currency_code"] = self.currency
             yield r
