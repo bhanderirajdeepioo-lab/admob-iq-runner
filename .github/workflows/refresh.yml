@@ -31,9 +31,9 @@ on:
         required: false
         default: "35"
       lookback_days:
-        description: "Full-history backfill probe cap (only used when markers are absent; 1300 = ~3.5yr default, raise to ~2700 for back to 2019)"
+        description: "Full-history backfill probe cap (only used when markers are absent; 1300 = ~3.5yr, 2700 = back to ~2019)"
         required: false
-        default: "1300"
+        default: "2700"
 
 permissions:
   contents: read                 # this repo is never written to
