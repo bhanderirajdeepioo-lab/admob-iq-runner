@@ -589,6 +589,8 @@ def test_per_app_network_backfill_selected_only_and_idempotent(tmp_path):
     n = build_static._backfill_network_selected_apps(accts, repo, date(2026, 7, 23), **kw)
     assert n > 0
     assert {r["app_id"] for r in repo.network} == {"app~puzzle"}     # ticked only; 'app~photo' never pulled
+    # mediation (the REVENUE source of truth the dashboard reads) is backfilled per app too
+    assert {r["app_id"] for r in repo.fetch_mediation()} == {"app~puzzle"}
     done = set(json.load(open(os.path.join(str(data), "network_bf_apps.json"))))
     assert "app~puzzle" in done and "app~photo" not in done
     # idempotent: a second run re-pulls nothing (already recorded as done)

@@ -528,7 +528,7 @@ def _backfill_network_selected_apps(accounts, repo, today, *, mode, client_id, c
     import json as _json
     from datetime import timedelta
     from collections import defaultdict
-    from .fetch.fetcher import make_client, build_network_row
+    from .fetch.fetcher import make_client, build_network_row, build_mediation_row
     from .fetch.admob_client import _app_filter
     from .engine.app_select import load_selection, selected_ids
 
@@ -576,10 +576,15 @@ def _backfill_network_selected_apps(accounts, repo, today, *, mode, client_id, c
             if ds is None:                              # app never earned → nothing to pull, mark done
                 newly.add(app_id)
                 continue
-            print(f"NETWORK revenue backfill: {aid} {app_id} from {ds}", file=sys.stderr)
+            print(f"revenue backfill: {aid} {app_id} from {ds}", file=sys.stderr)
             for raw in client.network_report(ds, today, dim_filters=flt):
                 repo.upsert_network(build_network_row(raw))
                 n += 1
+            # Mediation is the REVENUE source of truth (all ad sources) that build_from_db /
+            # the dashboard app table read — so it MUST be backfilled per app too, else the app's
+            # all-time revenue stays shallow even when network is deep.
+            for raw in client.mediation_report(ds, today, dim_filters=flt):
+                repo.upsert_mediation(build_mediation_row(raw))
             newly.add(app_id)
         except Exception as e:
             print(f"network backfill failed for {aid}/{app_id}: {e}", file=sys.stderr)
