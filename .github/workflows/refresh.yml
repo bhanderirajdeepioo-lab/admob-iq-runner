@@ -30,6 +30,10 @@ on:
         description: "Days of AdMob history to pull (35 = normal run)"
         required: false
         default: "35"
+      lookback_days:
+        description: "Full-history backfill probe cap (only used when markers are absent; 1300 = ~3.5yr default, raise to ~2700 for back to 2019)"
+        required: false
+        default: "1300"
 
 permissions:
   contents: read                 # this repo is never written to
@@ -72,6 +76,7 @@ jobs:
           FETCH_MODE: live
           ROLLING_REPULL_DAYS: ${{ github.event.inputs.backfill_days || '35' }}
           BACKFILL_DAYS: "365"
+          AC_MAX_LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '1300' }}
           REPORT_CURRENCY: "USD"
           GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
