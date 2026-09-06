@@ -569,3 +569,27 @@ def test_built_site_is_noindex_and_leaks_no_referrer(tmp_path):
     # the data files must still never be cached anywhere
     for p in ("/dashboard.json.gz", "/selected_apps.json", "/account_names.json", "/app_names.json"):
         assert f"{p}\n  Cache-Control: no-store" in headers
+
+
+def test_per_app_network_backfill_selected_only_and_idempotent(tmp_path):
+    """Deep revenue backfill pulls ONLY the account's ticked apps and is idempotent — so an un-ticked
+    app is never fetched, and a newly-ticked app auto-backfills on the next run (its id isn't yet in
+    network_bf_apps.json), while an already-covered app is skipped."""
+    from admob_iq import build_static
+    from admob_iq.db import InMemoryRepo
+    data, cfg = tmp_path / "data", tmp_path / "config"
+    data.mkdir(); cfg.mkdir()
+    # DECIDED account with only 'app~puzzle' ticked (mock also has 'app~photo', which must stay unfetched)
+    (cfg / "selected_apps.json").write_text(json.dumps(
+        {"accounts": {"pub-mock": {"decided": True, "selected": ["app~puzzle"]}}}))
+    repo = InMemoryRepo()
+    accts = [{"account_id": "pub-mock"}]
+    kw = dict(mode="mock", client_id=None, client_secret=None, currency="USD",
+              max_lookback=400, data_dir=str(data))
+    n = build_static._backfill_network_selected_apps(accts, repo, date(2026, 7, 23), **kw)
+    assert n > 0
+    assert {r["app_id"] for r in repo.network} == {"app~puzzle"}     # ticked only; 'app~photo' never pulled
+    done = set(json.load(open(os.path.join(str(data), "network_bf_apps.json"))))
+    assert "app~puzzle" in done and "app~photo" not in done
+    # idempotent: a second run re-pulls nothing (already recorded as done)
+    assert build_static._backfill_network_selected_apps(accts, repo, date(2026, 7, 23), **kw) == 0
