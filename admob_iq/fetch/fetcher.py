@@ -110,8 +110,11 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
     truncations = []          # any slice the safe-fetch layer could NOT make complete (should stay empty)
     for acct in accounts:
         client = make_client(acct, mode, client_id, client_secret, currency)
-        # Full-history backfill: probe THIS account's real data start so network + country cover the
-        # whole history automatically — no fixed day-count. Mirrors the ad-unit×country backfill below.
+        # Full-history backfill: probe THIS account's real data start so the NETWORK report (revenue,
+        # which drives every app's all-time total) covers the whole history automatically — no fixed
+        # day-count. Country depth is DECOUPLED: it follows its own country_days window (deep only on a
+        # dedicated country backfill), because pulling country deep for every account is far heavier
+        # (chunked geo×app over years) and would blow the runner's time budget on a network-only backfill.
         n_start, cc_start = start, c_start
         if full_history:
             try:
@@ -119,7 +122,7 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
             except Exception as _e:
                 import sys; print(f"data_start (network) probe failed for {acct.get('account_id')}: {_e}", file=sys.stderr); _ds = None
             if _ds:
-                n_start = cc_start = _ds
+                n_start = _ds
         # Per-account isolation: a bad/expired token or auth error on ONE account (which surfaces
         # on its first API call) must NOT crash the whole run and freeze every other account's data.
         # Log it and move on — that account simply gets no fresh data this run; its old data stays.
