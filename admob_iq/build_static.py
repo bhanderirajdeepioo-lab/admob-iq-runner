@@ -532,7 +532,10 @@ def _backfill_network_selected_apps(accounts, repo, today, *, mode, client_id, c
     from .fetch.admob_client import _app_filter
     from .engine.app_select import load_selection, selected_ids
 
-    done_path = os.path.join(data_dir, "network_bf_apps.json")
+    # v2 tracker: the v1 pull backfilled only the network report; the revenue source of truth is
+    # mediation, so bump the filename to force a one-time re-pull that also fetches mediation. A
+    # fresh (absent) v2 name means no other build re-creates it mid-flight → no marker-delete race.
+    done_path = os.path.join(data_dir, "network_bf_apps_v2.json")
     try:
         done = set(_json.load(open(done_path)))
     except Exception:
