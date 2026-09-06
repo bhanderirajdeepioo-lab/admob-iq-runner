@@ -533,9 +533,8 @@ async function refreshData(){
   const active=document.querySelector('.screen.on');
   const cur=active?active.dataset.screen:'overview';
   try{
-    const url=(window.__DATA_URL__||"dashboard.json")+"?t="+Date.now();   // cache-bust for freshness
-    let r=await fetch(url,{cache:"no-store"}); if(!r.ok){ r=await fetch(API_BASE+"/dashboard",{cache:"no-store"}); }
-    DATA=await r.json();
+    try{ DATA=await loadDashboardData(); }                                 // gzipped primary (25MB-safe), plain fallback
+    catch(_){ const r=await fetch(API_BASE+"/dashboard",{cache:"no-store"}); DATA=await r.json(); }
     render();
     if(cur && cur!=='overview' && cur!=='reportcard') show(cur);          // stay where the user was
   }catch(e){ updateFreshness(); }                                          // network blip: keep last good data
@@ -1596,13 +1595,23 @@ async function fetchGzJson(url){
   }
   return JSON.parse(new TextDecoder().decode(b));
 }
+// Primary dashboard payload. Shipped GZIPPED (dashboard.json.gz) so it stays under Cloudflare's
+// 25MB/file cap no matter how much history the backfill adds — fetchGzJson handles gzip OR plain,
+// and we fall back to the plain name (transition / rollback) then to the live API.
+async function loadDashboardData(){
+  const bust="?t="+Date.now();
+  const custom=window.__DATA_URL__;
+  if(custom){ const r=await fetch(custom+bust,{cache:'no-store'}); if(!r.ok) throw new Error('http '+r.status); return r.json(); }
+  try{ return await fetchGzJson("dashboard.json.gz"+bust); }
+  catch(_){ return await fetchGzJson("dashboard.json"+bust); }
+}
 function loadBaselineGeo(cb){ if(BGEO){cb&&cb();return;} if(BGLOADING)return; BGLOADING=true;
   fetchGzJson('baseline_geo.json.gz?t='+Date.now()).then(j=>{BGEO=j||{};BGLOADING=false;cb&&cb();}).catch(()=>{BGLOADING=false;}); }
 
 // ===== PLACEMENT DAILY CHART (lazy baseline_daily.json — day-by-day per metric) =====
 // Straight from the network report already fetched hourly → NO extra AdMob calls.
 function loadBaselineDaily(cb){ if(BDAILY){cb&&cb();return;} if(BDLOADING)return; BDLOADING=true;
-  fetch('baseline_daily.json?t='+Date.now()).then(r=>r.ok?r.json():{units:{}}).then(j=>{BDAILY=(j&&j.units)||{};BDLOADING=false;cb&&cb();}).catch(()=>{BDLOADING=false;}); }
+  fetchGzJson('baseline_daily.json.gz?t='+Date.now()).catch(()=>fetchGzJson('baseline_daily.json?t='+Date.now())).then(j=>{BDAILY=(j&&j.units)||{};BDLOADING=false;cb&&cb();}).catch(()=>{BDLOADING=false;}); }
 // ad-unit×country DAILY (current month) — lazy-loaded once, so the per-placement country table can
 // window to the SELECTED period. Already-fetched data (from baseline) — no extra AdMob call.
 function loadACD(cb){ if(ACD){cb&&cb();return;} if(ACDLOADING)return; ACDLOADING=true;
@@ -2440,10 +2449,8 @@ async function load(){
     if(!DATA){
       // Static host: read dashboard.json sitting next to this page.
       // Live API host: set window.__DATA_URL__ or fall back to /dashboard.
-      const url = (window.__DATA_URL__ || "dashboard.json")+"?t="+Date.now();  // cache-bust the FIRST load too, so a hard refresh always pulls the newest data
-      let r = await fetch(url, {cache:"no-store"});
-      if(!r.ok){ r = await fetch(API_BASE+"/dashboard", {cache:"no-store"}); }
-      DATA = await r.json();
+      try{ DATA = await loadDashboardData(); }                                 // gzipped primary (25MB-safe), plain fallback
+      catch(_){ const r = await fetch(API_BASE+"/dashboard", {cache:"no-store"}); DATA = await r.json(); }
     }
     try{ CURVIEW=localStorage.getItem("curview")||null; }catch(e){}   // restore chosen currency view
     curSyncUI();

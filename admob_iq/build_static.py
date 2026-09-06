@@ -848,8 +848,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         dashboard["usd_inr"] = None
 
     os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, "dashboard.json"), "w", encoding="utf-8") as f:
-        json.dump(dashboard, f, ensure_ascii=False)
+    # dashboard.json is the primary payload and GROWS with history depth (placements + countries_daily),
+    # so it can cross Cloudflare's 25MB/file cap after a deep backfill. Ship it GZIPPED (lossless, full
+    # data — JSON gzips ~10x). The frontend's loadDashboardData() inflates the .gz (fetchGzJson).
+    _shipgz(out_dir, "dashboard.json", dashboard)
     # Separate, lazy-loaded baseline payload (kept OUT of dashboard.json to keep first load light).
     # Two tiers: baseline.json (summaries + app-level country view) loads when the tab opens;
     # baseline_geo.json (per-ad-unit ALL countries) loads only on the first ad-unit drill.
@@ -860,8 +862,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         try:
             keep_ids = {u["id"] for u in baseline_payload.get("units", [])}
             daily = build_daily_series(repo.fetch_network(), keep_ids=keep_ids)
-            with open(os.path.join(out_dir, "baseline_daily.json"), "w", encoding="utf-8") as f:
-                json.dump({"units": daily}, f, ensure_ascii=False, separators=(",", ":"))
+            # Per-ad-unit DAILY series — grows with backfill depth, so ship GZIPPED (25MB-safe, lossless).
+            _shipgz(out_dir, "baseline_daily.json", {"units": daily})
         except Exception as e:
             print(f"daily series skipped: {e}", file=sys.stderr)
         geo = compact_geo(baseline_payload.pop("unit_geo", {}))
@@ -953,11 +955,11 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     with open(os.path.join(out_dir, "_headers"), "w", encoding="utf-8") as f:
         f.write("/*\n  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet\n"
                 "  Referrer-Policy: no-referrer\n\n"          # never leak the URL to sites you click through to
-                "/dashboard.json\n  Cache-Control: no-store\n\n"
+                "/dashboard.json.gz\n  Cache-Control: no-store\n\n"
                 "/baseline.json\n  Cache-Control: no-store\n\n"
                 "/baseline_geo.json.gz\n  Cache-Control: no-store\n\n"
                 "/adunit_country_daily.json.gz\n  Cache-Control: no-store\n\n"
-                "/baseline_daily.json\n  Cache-Control: no-store\n\n"
+                "/baseline_daily.json.gz\n  Cache-Control: no-store\n\n"
                 "/selected_apps.json\n  Cache-Control: no-store\n\n"
                 "/account_names.json\n  Cache-Control: no-store\n\n"
                 "/app_names.json\n  Cache-Control: no-store\n\n"
