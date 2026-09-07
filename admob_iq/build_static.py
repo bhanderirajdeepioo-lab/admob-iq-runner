@@ -828,6 +828,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     if mode == "live" and has_creds and repo.has_data():
         try:
             from .fetch.google_ads import (fetch_app_spend, resolve_store_ids, merge_spend,
+                                           fetch_campaign_accounts, apply_campaign_accounts,
                                            _fx_to_usd, SPEND_CACHE_V)
             from .fetch.fetcher import make_client
             from .engine.roas import build_roas
@@ -863,6 +864,13 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 refetch_start = _earliest or (today - timedelta(days=int(os.getenv("ROAS_BACKFILL_DAYS", "550")))).isoformat()
             fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
             spend = merge_spend(cached_spend, fresh_spend, refetch_start)
+            # Backfill the adwords account onto OLD/paused campaigns the windowed spend fetch didn't
+            # re-tag (they showed a '?' account). A cheap roster query maps campaign→account for all.
+            try:
+                _cmap = fetch_campaign_accounts(s, mode="live")
+                apply_campaign_accounts(spend, _cmap)
+            except Exception as _ce2:
+                print(f"campaign account backfill skipped: {_ce2}", file=sys.stderr)
             # (day-1 conversion value now comes RETROACTIVELY from Google's conversion-lag bucket in
             # fetch_app_spend — no forward-only snapshot needed.)
             if spend is not None and not spend.get("error"):
