@@ -850,17 +850,31 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                       file=sys.stderr)
                 cached_spend = None
             refetch_days = int(os.getenv("ROAS_REFETCH_DAYS", "90"))      # re-pulled every run (adjust + buffer)
+            # Earliest AdMob revenue date — spend should cover from here (spend before it has no revenue
+            # to sit against). Dynamic, so if the revenue history is later extended further back (e.g. an
+            # app's network gets backfilled to 2023), the spend follows.
+            try:
+                _nd = [str(r.get("report_date")) for r in repo.fetch_network() if r.get("report_date")]
+                _earliest = min(_nd) if _nd else None
+            except Exception:
+                _earliest = None
             if cached_spend:
-                refetch_start = (today - timedelta(days=refetch_days)).isoformat()
-            else:
-                # First-run backfill: start from the EARLIEST AdMob data date (dynamic — however far back
-                # the revenue actually goes), NOT a fixed day-count. Spend before that is irrelevant (it
-                # has no revenue to sit against). Falls back to ROAS_BACKFILL_DAYS only if the probe fails.
+                # If the revenue now reaches FURTHER back than the cached spend covers (network was
+                # backfilled deeper AFTER the spend was first cached), re-pull spend from that new earliest
+                # ONCE to fill the gap — else the app's all-time spend/ROAS stays undercounted. Otherwise
+                # the cheap recent-window refetch.
                 try:
-                    _nd = [str(r.get("report_date")) for r in repo.fetch_network() if r.get("report_date")]
-                    _earliest = min(_nd) if _nd else None
+                    _cd = [d for dd in (cached_spend.get("daily") or {}).values() for d in dd]
+                    _cache_earliest = min(_cd) if _cd else None
                 except Exception:
-                    _earliest = None
+                    _cache_earliest = None
+                if _earliest and _cache_earliest and _earliest < _cache_earliest:
+                    refetch_start = _earliest
+                    print(f"spend re-backfill: revenue reaches {_earliest} < cached spend start {_cache_earliest} — filling the gap", file=sys.stderr)
+                else:
+                    refetch_start = (today - timedelta(days=refetch_days)).isoformat()
+            else:
+                # First-run backfill: from the earliest revenue date (dynamic). Falls back to ROAS_BACKFILL_DAYS.
                 refetch_start = _earliest or (today - timedelta(days=int(os.getenv("ROAS_BACKFILL_DAYS", "550")))).isoformat()
             fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
             spend = merge_spend(cached_spend, fresh_spend, refetch_start)
