@@ -351,7 +351,7 @@ function curSyncUI(){ const el=document.getElementById("cur-lbl"); if(el) el.tex
                       : "Switch currency — USD ⇄ INR"; }
 function toggleCur(){ CURVIEW = (curView()===baseCur()) ? otherCur() : baseCur();   // whole dashboard USD⇄INR
   try{ localStorage.setItem("curview", CURVIEW); }catch(e){}
-  curSyncUI(); render(); }
+  curSyncUI(); rerender(); }                       // rerender (not render) → STAY on the current screen
 const pct=(n)=>(n*100).toFixed(0)+"%";
 // App icon: real store logo if the backend resolved one (DATA.app_icons: {app_name|app_id: url}),
 // else a clean per-app colored letter-avatar. Falls back to the avatar if the image fails to load.
@@ -556,7 +556,10 @@ async function refreshData(){
     try{ DATA=await loadDashboardData(); }                                 // gzipped primary (25MB-safe), plain fallback
     catch(_){ const r=await fetch(API_BASE+"/dashboard",{cache:"no-store"}); DATA=await r.json(); }
     render();
-    if(cur && cur!=='overview' && cur!=='reportcard') show(cur);          // stay where the user was
+    if(cur==='appdetail'&&ADAPP) openAppDetail(ADAPP);                     // stay where the user was
+    else if(cur==='reportcard'&&PPID) goPlacement(PPID);
+    else if(cur==='placements'&&DETAIL_OPEN&&POPEN) openApp(POPEN);
+    else if(cur && cur!=='overview') show(cur);
   }catch(e){ updateFreshness(); }                                          // network blip: keep last good data
 }
 function setRange(r){
@@ -587,6 +590,27 @@ function show(id){
   document.querySelectorAll('.botbar .tabbtn').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-sub').textContent=TITLES[id][1];}
   window.scrollTo({top:0});
+  _navSave();                               // remember where we are (restored on reload / tab return)
+}
+// ---- Remember & restore the current view across a page reload or a mobile tab-discard, so coming back
+// keeps you on the SAME screen (and app/period) instead of snapping to Overview. ----
+function _navSave(){
+  try{
+    const on=document.querySelector('.screen.on'); const screen=on?on.dataset.screen:'overview';
+    localStorage.setItem('navstate', JSON.stringify({screen, app:APP, range:RANGE,
+      adapp:(typeof ADAPP!=='undefined'?ADAPP:''), ppid:(typeof PPID!=='undefined'?PPID:''), t:Date.now()}));
+  }catch(e){}
+}
+function _navRestore(){
+  let n=null; try{ n=JSON.parse(localStorage.getItem('navstate')||'null'); }catch(e){}
+  if(!n||!n.screen||(n.t&&Date.now()-n.t>12*3600*1000)){ render(); return; }   // none/stale → normal (Overview)
+  if(n.app!=null) APP=n.app; if(n.range) RANGE=n.range;
+  render();                                   // rebuild every screen with the restored app/period (ends on Overview)
+  try{
+    if(n.screen==='appdetail' && n.adapp && (DATA.apps||[]).some(a=>a.name===n.adapp)){ openAppDetail(n.adapp); return; }
+    if(n.screen==='reportcard' && n.ppid){ goPlacement(n.ppid); return; }
+    if(n.screen && n.screen!=='overview'){ show(n.screen); return; }
+  }catch(e){}
 }
 
 // ---------- OVERVIEW ----------
@@ -800,7 +824,7 @@ function renderAppDetail(){return screenDiv('appdetail');}
 // switch the view (ad-units ↔ countries) without touching the period
 function adSetView(v){ ADVIEW=v; if(ADAPP) openAppDetail(ADAPP); }
 // go back to the portfolio overview
-function adBack(){ show('overview'); }
+function adBack(){ show(AD_ORIGIN||'overview'); }   // return to the screen we opened the app FROM
 // change THIS page's period — it drives the SAME global RANGE the whole dashboard uses,
 // so whatever was picked in Overview is the default here, and a change here sticks everywhere.
 function adSetRange(r){
@@ -808,7 +832,10 @@ function adSetRange(r){
   RANGE=r; const sel=document.getElementById('rangesel'); if(sel) sel.value=r;
   if(ADAPP) openAppDetail(ADAPP);
 }
+let AD_ORIGIN="overview";                 // the screen an app was opened FROM, so ← Back returns there
 function openAppDetail(name){
+  const _adon=document.querySelector('.screen.on'); const _adcur=_adon?_adon.dataset.screen:'overview';
+  if(_adcur!=='appdetail') AD_ORIGIN=_adcur;   // remember origin (skip on self re-render/auto-refresh)
   ADAPP=name;
   const s=document.querySelector('.screen[data-screen=appdetail]'); if(!s) return;
   const app=DATA.apps.find(a=>a.name===name)||{account:'',avg_health:0,at_risk:0,platform:''};
@@ -902,7 +929,7 @@ function openAppDetail(name){
       <div class="muted" style="font-size:12.5px">${app.account||''}${app.platform?' · '+app.platform:''} · ${ps.length} ad-units · <b style="color:var(--ink2)">${revCell(K.rev)}</b> <span class="faint">(${winLbl})</span></div>
     </div>`;
 
-  s.innerHTML=`<div class="backlnk" onclick="adBack()">← Overview</div>
+  s.innerHTML=`<div class="backlnk" onclick="adBack()">← Back</div>
     <div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2)"><div>${appIcon(name,38)}</div>${nameBlock}<div class="spacer"></div><div class="appstat"><div><div class="n" style="color:${app.avg_health>=75?'var(--good)':app.avg_health>=50?'var(--watch)':'var(--bad)'}">${app.avg_health}</div><div class="t">Avg health</div></div><div><div class="n" style="color:var(--bad)">${app.at_risk||0}</div><div class="t">At-risk</div></div></div></div>
     <div class="note" style="margin:2px 0 10px">⏱ <b>${pRangeLabel(RANGE)}</b> <span class="faint">(${winLbl})</span> — ye Overview wala hi period hai; yahan se ya upar "Period" se badlo.</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">${perBar}</div>
@@ -1783,7 +1810,7 @@ function loadAppSel(){ fetch('selected_apps.json?t='+Date.now()).then(r=>r.ok?r.
       if(JSON.stringify(local.accounts[a])!==JSON.stringify((served.accounts||{})[a]||null)){ acc[a]=local.accounts[a]; pending[a]=local.accounts[a]; } } }
     APPSEL={accounts:acc};                              // served base + still-pending local overlay
     try{ if(Object.keys(pending).length) localStorage.setItem('app_sel',JSON.stringify({accounts:pending})); else localStorage.removeItem('app_sel'); }catch(e){}
-    if(typeof DATA!=='undefined'&&DATA)render(); }).catch(()=>{ const local=appSelLocal(); if(local){APPSEL=local; if(typeof DATA!=='undefined'&&DATA)render();} }); }
+    if(typeof DATA!=='undefined'&&DATA)rerender(); }).catch(()=>{ const local=appSelLocal(); if(local){APPSEL=local; if(typeof DATA!=='undefined'&&DATA)rerender();} }); }
 function appSelVisible(account_id,app_id){ const a=(APPSEL.accounts||{})[account_id]; if(a&&a.decided) return (a.selected||[]).includes(app_id);
   // undecided: grandfathered (known) accounts stay visible; a brand-NEW account is hidden until you pick its apps (opt-in)
   const kn=(typeof DATA!=='undefined'&&DATA&&DATA.known_accounts); if(!kn) return true; return kn.includes(account_id); }
@@ -1830,7 +1857,7 @@ function appPickToggle(acc,pid){ APPSEL.accounts=APPSEL.accounts||{};
   let a=APPSEL.accounts[acc]; if(!a||!a.decided){ a=APPSEL.accounts[acc]={decided:true, selected:((DATA.apps_catalog||[]).filter(x=>x.account_id===acc).map(x=>x.app_id))}; }
   const i=(a.selected||[]).indexOf(pid); if(i>=0)a.selected.splice(i,1); else (a.selected=a.selected||[]).push(pid); appSelStore(); rerenderSettings(); }
 function appPickAll(acc,on){ APPSEL.accounts=APPSEL.accounts||{}; const ids=(DATA.apps_catalog||[]).filter(x=>x.account_id===acc).map(x=>x.app_id); APPSEL.accounts[acc]={decided:true, selected:on?ids.slice():[]}; appSelStore(); rerenderSettings(); }
-function appPickSave(){ appSelStore(); ghCommitFile('config/selected_apps.json', APPSEL, 'select apps'); if(typeof DATA!=='undefined'&&DATA)render(); }
+function appPickSave(){ appSelStore(); ghCommitFile('config/selected_apps.json', APPSEL, 'select apps'); if(typeof DATA!=='undefined'&&DATA)rerender(); }
 function rerenderSettings(){ const old=document.querySelector('.screen[data-screen=settings]'); if(old){const f=renderSettings(); if(old.classList.contains('on'))f.classList.add('on'); old.replaceWith(f);} }
 function ghCommitFile(path,obj,msg,okMsg){ const tok=ghToken(); if(!tok){ bToast('Pehle 🔑 GitHub token daalo (Settings → Accounts & Apps)'); return; }
   const url=`https://api.github.com/repos/${GH_REPO}/contents/${path}`, hdr={Authorization:'Bearer '+tok,'Accept':'application/vnd.github+json'};
@@ -2474,12 +2501,14 @@ async function load(){
     }
     try{ CURVIEW=localStorage.getItem("curview")||null; }catch(e){}   // restore chosen currency view
     curSyncUI();
-    render();
+    _navRestore();                           // restore the LAST screen (app/period too) if recent, else Overview
     loadAppSel();                            // which apps the user kept (hides unselected)
     loadAccNames();                          // friendly names for the AdMob accounts
     loadAppNames();                          // the user's own names for apps (✏️ on App Report)
     setInterval(updateFreshness, 30000);    // tick "X min pehle" every 30s
     setInterval(refreshData, 300000);        // pull fresh data every 5 min (robot updates hourly)
+    window.addEventListener('pagehide', _navSave);   // save view before unload / mobile tab-discard
+    document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden') _navSave(); });
   }
   catch(e){ document.getElementById('content').innerHTML='<div class="note">Data load nahi ho paya (dashboard.json / '+API_BASE+'/dashboard). Robot chalne ke baad yahan aapka data aa jayega.</div>'; }
 }
