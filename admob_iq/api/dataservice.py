@@ -677,7 +677,9 @@ def build_from_db(repo, today=None):
         # custom) and derive revenue, impr, req, match, show, ctr, ecpm for that window.
         # [date, earn_micros, impressions, ad_requests, matched_requests, clicks]
         daily = [[d, drev[d], _da[d]["impr"], _da[d]["req"], _da[d]["matched"], _da[d]["clicks"]]
-                 for d in dates[-400:]]        # cap ~13 months so the payload stays bounded as history grows
+                 for d in dates]              # FULL history — the app-table "All time" sums this, so an
+                                              # older app must keep every day (dashboard.json is gzipped, so
+                                              # the bigger payload stays well under the 25MB cap; no trim)
         pv.append(dict(id=unit, name=pname, app=aname,
                        account=(lr[0].get("account_id") or "—"),
                        platform=(lr[0].get("platform") or ""),
@@ -942,7 +944,7 @@ def build_from_db(repo, today=None):
         ranked = sorted(cc.items(), key=lambda kv: sum(v["e"] for v in kv[1].values()), reverse=True)
         top = [(cn, days) for cn, days in ranked if sum(v["e"] for v in days.values()) > 0][:50]
         countries_daily[appn] = {cn: [[d, days[d]["e"], days[d]["i"], days[d]["q"], days[d]["m"], days[d]["c"]]
-                                      for d in sorted(days)[-400:]] for cn, days in top}
+                                      for d in sorted(days)] for cn, days in top}   # full history (gzipped payload; no time trim)
     country_tier = {cn: TIER.get(cn, 3) for app in countries_daily.values() for cn in app}
 
     # Recommendations from REAL placement signals (biggest-revenue placements first).
