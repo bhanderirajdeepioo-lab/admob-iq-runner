@@ -262,6 +262,53 @@ def _aggregate_convval(rows, base=None, fx_fn=_fx_to_usd):
     return {sid: {d: round(v, 2) for d, v in dd.items()} for sid, dd in daily.items()}
 
 
+def fetch_campaign_accounts(s, *, mode="live"):
+    """Map campaign_id -> {account, account_name} for EVERY app campaign (paused/removed included), via a
+    lightweight roster query (NO date/cost filter) per child account. Lets the build backfill the adwords
+    account onto OLD cached campaigns stored before account-tagging existed — or paused ones with no recent
+    spend, which the windowed spend fetch never re-tags (that's the '?' account label on some app rows).
+    Best-effort: returns {} if not configured or on error, never raising."""
+    if mode == "mock":
+        return {}
+    dev = s.get("google_ads_dev_token"); mcc = s.get("google_ads_login_customer_id")
+    rt = s.get("google_ads_refresh_token")
+    cid = s.get("google_ads_client_id") or s.get("google_client_id")
+    csec = s.get("google_ads_client_secret") or s.get("google_client_secret")
+    if not (dev and mcc and rt and cid and csec):
+        return {}
+    try:
+        token = _access_token(cid, csec, rt)
+        accounts = _child_accounts(mcc, dev, token) or []
+    except Exception as e:
+        import sys; print(f"campaign roster auth/accounts skipped: {str(e)[:200]}", file=sys.stderr)
+        return {}
+    q = "SELECT campaign.id FROM campaign WHERE campaign.app_campaign_setting.app_id != ''"
+    cmap = {}
+    for a in accounts:
+        try:
+            for row in _search(a["id"], mcc, dev, token, q):
+                cid_ = str(((row.get("campaign") or {}).get("id")) or "")
+                if cid_:
+                    cmap[cid_] = {"account": a["id"], "account_name": a.get("name") or ""}
+        except Exception as e:
+            import sys; print(f"campaign roster skipped for {a.get('id')}: {str(e)[:160]}", file=sys.stderr)
+    return cmap
+
+
+def apply_campaign_accounts(spend, cmap):
+    """Fill missing account/account_name on a spend dict's cached campaigns from the roster map (in place)."""
+    if not spend or not cmap:
+        return spend
+    for _sid, camps in (spend.get("campaigns") or {}).items():
+        for c in camps:
+            if not c.get("account"):
+                m = cmap.get(str(c.get("id")))
+                if m:
+                    c["account"] = m["account"]
+                    c["account_name"] = c.get("account_name") or m["account_name"]
+    return spend
+
+
 def fetch_app_spend(s, start, end, *, mode="live"):
     """Return {daily:{store_id:{date:usd_micros}}, campaigns:{store_id:[...]}, currency_src, fx} or
     None when Google Ads isn't configured / a call fails. `s` is config.settings()."""
