@@ -102,6 +102,8 @@
   .geochip{font-size:10.5px;font-weight:700;padding:1px 8px;border-radius:100px;background:#15294a;color:#8fd4ff;margin-left:6px}.geochip.loc{background:var(--watch-b);color:var(--watch)}
   .verdict{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:12px;margin-bottom:14px}.verdict .big{font-size:19px;font-weight:800}
   .backlnk{display:inline-flex;align-items:center;gap:6px;color:var(--cyan);cursor:pointer;font-size:12.5px;font-weight:600;margin-bottom:14px}
+  .applink{cursor:pointer;text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:2px;text-decoration-thickness:1px}
+  .applink:hover{color:var(--cyan);text-decoration-color:var(--cyan)}
   .kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}.kv:last-child{border-bottom:none}.kv .k{color:var(--muted)}.kv .v{font-weight:600}
   .meter{height:7px;background:var(--raise);border-radius:100px;overflow:hidden;width:70px}.meter i{display:block;height:100%}.meter.r i{background:var(--bad)}.meter.y i{background:var(--watch)}.meter.g i{background:var(--good)}
   .addbtn{border:1.5px dashed var(--line2);border-radius:13px;padding:20px;text-align:center;cursor:pointer;color:var(--cyan);font-weight:700;background:var(--panel2)}
@@ -369,6 +371,19 @@ function appIcon(name,size){ size=size||20; const rad=Math.max(4,Math.round(size
     return `<span style="${box}"><img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="${fb}"></span>`; }
   return `<span style="${box};background:${col}22;color:${col};font-weight:800;font-size:${Math.round(size*0.5)}px">${ch}</span>`;
 }
+// Play Store URL for an app NAME → its highest-revenue app_id → package (DATA.app_store_ids).
+function _appStoreUrl(name){
+  const sid=(typeof DATA!=='undefined'&&DATA&&DATA.app_store_ids)||{};
+  const cands=((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalog)||[]).filter(x=>x.app_name===name).sort((a,b)=>(b.rev||0)-(a.rev||0));
+  for(const c of cands){ const pkg=sid[c.app_id]; if(pkg) return 'https://play.google.com/store/apps/details?id='+encodeURIComponent(pkg); }
+  return null;
+}
+// Open the app's Play Store page in a new tab; stopPropagation so it does NOT also trigger the row's
+// "open app detail" click — name → Play Store, rest of the row → in-app detail screen (both work).
+function openStore(ev,name){ try{ev.stopPropagation();}catch(e){} const u=_appStoreUrl(name); if(u) window.open(u,'_blank','noopener'); }
+// Render an app NAME as a Play-Store link when we have its package, else plain text (works anywhere).
+function appNm(name){ if(!name) return name||''; if(!_appStoreUrl(name)) return name;
+  return `<span class="applink" title="Play Store me kholo ↗" onclick="openStore(event,'${(name+'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${name}</span>`; }
 // Google Ads (adwords) account(s) that advertise this app — user's rule: 1 account = 1 app.
 function appAdAccounts(name){ const e=((typeof DATA!=='undefined'&&DATA&&DATA.roas&&DATA.roas.by_app)||{})[name];
   if(!e||!e.campaigns) return []; const m={}; e.campaigns.forEach(c=>{ const k=c.account||c.account_name; if(k)m[k]=c.account_name||c.account; }); return Object.values(m); }
@@ -679,11 +694,11 @@ function renderOverview(){
   const roasCell=(rv,sp)=>{ if(!(sp>0))return '<td><span class="faint">organic</span></td>';
     const r=rv/sp; return `<td style="font-weight:700">${money(sp)}<div class="${r>=1?'up':'down'}" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div></td>`; };
   const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);const newr=CVAL[ap2.name]||0;const oldr=g.e/1e6-(CVAL1[ap2.name]||0);const d1=CVAL1[ap2.name]||0;
-    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}${appAccTag(ap2.name)}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td>${d1>0?money(d1):'—'}</td><td>${money(newr)}</td><td class="${oldr<0?'down':''}">${plFmt(oldr)}</td><td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?cm(ec):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
+    return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${appNm(ap2.name)}${appAccTag(ap2.name)}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${money(g.e/1e6)}</td>${SHOWSP?`<td>${d1>0?money(d1):'—'}</td><td>${money(newr)}</td><td class="${oldr<0?'down':''}">${plFmt(oldr)}</td><td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?cm(ec):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
   // mobile card-list of the SAME apps (shown ≤760px; desktop keeps the table). Nothing dropped.
   const appCards=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const rev=g.e/1e6;const sp=SPA[ap2.name]||0;const pl=rev-sp;const inst=INST[ap2.name];const ec=g.i?g.e/(g.i*1000):0;
     const meta=SHOWSP?`${inst!=null?Math.round(inst).toLocaleString()+' inst':'—'} · ${sp>0?money(sp)+' spend':'organic'} · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`:`${g.i?cm(ec)+' eCPM':'—'} · ${ap2.placements} pl · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`;
-    return `<div class="mrow" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><span class="mic">${appIcon(ap2.name,34)}</span><div class="mmid"><div class="mname">${ap2.name}</div>${appAccTag(ap2.name)}<div class="mmeta">${meta}</div></div><div class="mright"><div class="mrev">${money(rev)}</div>${SHOWSP?`<div class="mpl ${pl>=0?'up':'down'}">${plFmt(pl)}</div>`:''}</div><span class="mchev">›</span></div>`;}).join('');
+    return `<div class="mrow" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><span class="mic">${appIcon(ap2.name,34)}</span><div class="mmid"><div class="mname">${appNm(ap2.name)}</div>${appAccTag(ap2.name)}<div class="mmeta">${meta}</div></div><div class="mright"><div class="mrev">${money(rev)}</div>${SHOWSP?`<div class="mpl ${pl>=0?'up':'down'}">${plFmt(pl)}</div>`:''}</div><span class="mchev">›</span></div>`;}).join('');
   const lastTile=ap?kpi('Placements',(ap.placements||fp.length),APP.slice(0,16),'muted'):kpi('Apps · Accounts',DATA.kpis.apps+' · '+DATA.kpis.accounts,'','muted');
   const moversBody=`${inc.slice(0,2).map(p=>`<div class="al good"><span>▲</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')}
         ${dec.slice(0,2).map(p=>`<div class="al crit"><span>▼</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${p.app}</span></div>`).join('')||(inc.length?'':'<div class="muted" style="font-size:12px">Is app me abhi mover nahi.</div>')}`;
@@ -868,7 +883,7 @@ function openAppDetail(name){
   // name lands in EVERY view at once (alerts, movers, mediation, ROAS) and history stays intact.
   const _aid=appIdOf(name), _cust=(APPNAMES||{})[_aid]||'';
   const nameBlock=`<div style="flex:1;min-width:0">
-      <div id="ad-nameview" class="big" style="display:flex;align-items:center;gap:9px;flex-wrap:wrap"><span>${name}</span>
+      <div id="ad-nameview" class="big" style="display:flex;align-items:center;gap:9px;flex-wrap:wrap"><span>${appNm(name)}</span>
         <span onclick="appNameEdit(true)" title="App ka naam badlo" style="cursor:pointer;font-size:11.5px;font-weight:600;color:var(--ink2);border:1px solid var(--line2);background:var(--raise);border-radius:7px;padding:4px 9px;white-space:nowrap">✏️ Naam badlo</span></div>
       <div id="ad-nameedit" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px">
         <input id="ad-nameinput" maxlength="80" value="${hAttr(_cust||name)}" placeholder="jaise: Gallery (Main)"
@@ -1344,7 +1359,7 @@ function renderDeductions(){
     const rows=units.map(x=>{const xp=_dpct(x.first,x.latest);
       return `<tr class="clk" onclick="dedOpenUnit('${(x.uid||'').replace(/'/g,"\\'")}')"><td class="nm">${x.name}</td><td>${_dm(x.first)}</td><td>${_dm(x.latest)}</td><td class="down" style="font-weight:700">−${_dm(x.ded)}</td><td class="${xp>=0.15?'down':''}" style="font-weight:600">${pct(xp)}</td><td>${dedIvtPill(xp,x.ded)}</td></tr>`;}).join('')||`<tr><td colspan="6" class="muted" style="padding:16px">Is din is app ka koi ad-unit decay nahi.</td></tr>`;
     s.innerHTML=head+_dedBackBtn(APP?fmtD(DEDDATE):`${fmtD(DEDDATE)} ki apps`)+
-      `<div class="card" style="margin-bottom:14px"><div class="ct"><h3>${appIcon(effApp,22)}${effApp} <span class="faint" style="font-weight:400;font-size:12px">· ${fmtD(DEDDATE)}</span></h3><span class="muted" style="font-size:12px">ad-unit pe click → country</span></div>
+      `<div class="card" style="margin-bottom:14px"><div class="ct"><h3>${appIcon(effApp,22)}${appNm(effApp)} <span class="faint" style="font-weight:400;font-size:12px">· ${fmtD(DEDDATE)}</span></h3><span class="muted" style="font-size:12px">ad-unit pe click → country</span></div>
         <div class="row c3" style="margin-top:4px">${kpi('Pehle',_dm(af),fmtD(DEDDATE),'muted')}${kpi('Ab',_dm(al),'','muted')}${kpi('Deduction',(af-al>0?'−':'')+_dm(af-al),pct(ap)+' ghata','down')}</div></div>
       <div class="card pad0"><table><thead><tr><th>Ad-unit</th><th>Pehle</th><th>Ab</th><th>Deduction</th><th>%</th><th>Flag</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     return s;
@@ -1355,7 +1370,7 @@ function renderDeductions(){
     const apps=dedAppsForDate(di); const dateDed=apps.reduce((a,x)=>a+x.ded,0);
     const dayRev=(dedDayRevenue()[DEDDATE]||0); const pehle=dayRev+dateDed;
     const rows=apps.map(x=>{const xp=_dpct(x.first,x.latest);
-      return `<tr class="clk" onclick="dedOpenApp('${(x.app||'').replace(/'/g,"\\'")}')"><td class="nm">${appIcon(x.app,20)}${x.app}</td><td class="faint">${x.units}</td><td>${_dm(x.first)}</td><td>${_dm(x.latest)}</td><td class="down" style="font-weight:700">−${_dm(x.ded)}</td><td class="${xp>=0.15?'down':''}" style="font-weight:600">${pct(xp)}</td><td>${dedIvtPill(xp,x.ded)}</td></tr>`;}).join('')||`<tr><td colspan="7" class="muted" style="padding:16px">Is din koi app decay nahi.</td></tr>`;
+      return `<tr class="clk" onclick="dedOpenApp('${(x.app||'').replace(/'/g,"\\'")}')"><td class="nm">${appIcon(x.app,20)}${appNm(x.app)}</td><td class="faint">${x.units}</td><td>${_dm(x.first)}</td><td>${_dm(x.latest)}</td><td class="down" style="font-weight:700">−${_dm(x.ded)}</td><td class="${xp>=0.15?'down':''}" style="font-weight:600">${pct(xp)}</td><td>${dedIvtPill(xp,x.ded)}</td></tr>`;}).join('')||`<tr><td colspan="7" class="muted" style="padding:16px">Is din koi app decay nahi.</td></tr>`;
     s.innerHTML=head+covNote+_dedBackBtn('Saari dates')+
       `<div class="card" style="margin-bottom:14px"><div class="ct"><h3>📅 ${fmtD(DEDDATE)} — us din kitna ghata</h3><span class="muted" style="font-size:12px">app pe click → ad-unit → country</span></div>
         <div class="row c3" style="margin-top:4px">${kpi('Us din pehle',_dm(pehle),'total revenue','muted')}${kpi('Ab',_dm(dayRev),'','muted')}${kpi('Deduction',(dateDed>0?'−':'')+_dm(dateDed),pct(_dpct(pehle,dayRev))+' ghata','down')}</div></div>
@@ -1501,7 +1516,7 @@ function renderMediation(){
   }).filter(x=>x.tot>0).sort((a,b)=>b.oth-a.oth);
   const othTotal=appMed.reduce((a,x)=>a+x.oth,0), medTotal=appMed.reduce((a,x)=>a+x.tot,0);
   const appMedRows=appMed.length?appMed.map(x=>`<tr class="clk" onclick="openAppDetail('${(x.app||'').replace(/'/g,'')}')">
-      <td class="nm">${appIcon(x.app,20)}${x.app}</td>
+      <td class="nm">${appIcon(x.app,20)}${appNm(x.app)}</td>
       <td style="font-weight:700">${money(x.tot)}</td>
       <td>${money(x.adm)}</td>
       <td style="font-weight:700;color:${x.oth>0?'#a78bfa':'var(--ink2)'}">${x.oth>0?money(x.oth):'—'}</td>
@@ -2288,7 +2303,7 @@ function renderRoas(){
   };
   const trows=rows.map((r,idx)=>{ const hasC=(r.camps||[]).length;
     return `<tr class="clk" onclick="openAppDetail('${(r.app||'').replace(/'/g,"\\'")}')">
-    <td class="nm">${appIcon(r.app,20)}<span style="display:inline-block;vertical-align:middle">${r.app}${r.storeId?`<div class="faint" style="font-size:10px;font-weight:400">${r.storeId}</div>`:''}</span></td>
+    <td class="nm">${appIcon(r.app,20)}<span style="display:inline-block;vertical-align:middle">${appNm(r.app)}${r.storeId?`<div class="faint" style="font-size:10px;font-weight:400">${r.storeId}</div>`:''}</span></td>
     <td style="font-weight:700">${money(r.rev)}</td>
     <td>${r.spend>0?money(r.spend):'<span class="faint">—</span>'}</td>
     <td>${roasPill(r.roas)}</td>
