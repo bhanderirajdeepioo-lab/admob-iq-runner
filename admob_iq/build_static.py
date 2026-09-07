@@ -793,6 +793,16 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             print(f"apps catalog skipped: {e}", file=sys.stderr)
 
+    # Play Store package per app_id (from the resolved store-id cache) so the UI can turn every app
+    # NAME into a Play Store link. Small map; shipped for the apps in the catalog only.
+    try:
+        _sid = json.load(open(os.path.join(data_dir, "app_store_ids.json"), encoding="utf-8")).get("by_id", {})
+        _ids = {c["app_id"] for c in (dashboard.get("apps_catalog") or []) if c.get("app_id")}
+        dashboard["app_store_ids"] = {aid: pkg for aid, pkg in _sid.items() if aid in _ids and pkg}
+    except Exception as e:
+        print(f"app_store_ids map skipped: {e}", file=sys.stderr)
+        dashboard["app_store_ids"] = {}
+
     # Real store icons per app (Play / App Store), resolved once & cached in data/app_icons.json —
     # a metadata lookup, SEPARATE from the reporting quota and zero ongoing load. Best-effort: any
     # app we can't resolve just keeps its letter-avatar in the UI.
