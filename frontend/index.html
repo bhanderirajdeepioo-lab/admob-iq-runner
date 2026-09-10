@@ -272,7 +272,7 @@
       <label class="ctrl" style="cursor:pointer;gap:6px" title="Ek app choose karo — poora dashboard us app ka ho jayega">📱 <span class="cx">App:</span><select id="appsel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none;max-width:220px"></select></label>
       <label class="ctrl" style="cursor:pointer;gap:6px" title="Time period — poora dashboard isi window ka data dikhata hai"><span class="cx">🗓 Period:</span><select id="rangesel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none"><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="90d">90 days</option><option value="month">This month</option><option value="lastmonth">Last month</option><option value="all">All time</option><option value="custom">Custom…</option></select></label>
       <span class="ctrl" id="rangecustom" style="display:none;gap:6px"><input type="date" id="rc-from" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="cx">→</span><input type="date" id="rc-to" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="applyRangeCustom()">Apply</span></span>
-      <button class="ctrl" id="curtoggle" onclick="toggleCur()" title="Currency badlo — poora dashboard USD ⇄ INR" style="cursor:pointer;font:inherit;font-weight:700;color:var(--ink)">💱 <span id="cur-lbl">USD</span></button>
+      <button class="ctrl" id="curtoggle" onclick="toggleCur()" title="Currency badlo — poora dashboard USD ⇄ INR" style="cursor:pointer;font:inherit;font-weight:700;color:var(--ink)">💱 <span id="cur-lbl">USD</span><span id="fx-rate" style="font-weight:600;color:var(--muted);font-size:11px;margin-left:7px;white-space:nowrap"></span></button>
       <span class="live" id="freshness" title="Data kab update hua"><span class="dot-live"></span> <span id="fresh-txt">Live</span></span>
       <span class="ctrl" id="tzchip" title="Ye numbers is time zone par hain — aapke AdMob account ke hisab se (isliye aapki AdMob app se match karte hain)" style="display:none">🕐 <span id="tz-txt"></span></span>
     </div>
@@ -347,7 +347,9 @@ const cm=(n,dp)=>csym()+(Number(n)*cfx()).toFixed(dp==null?2:dp);   // small mon
 function otherCur(){ return baseCur()==="INR" ? "USD" : "INR"; }
 function curSyncUI(){ const el=document.getElementById("cur-lbl"); if(el) el.textContent=curView();
   const bt=document.getElementById("curtoggle"), r=(DATA&&DATA.usd_inr);
-  if(bt) bt.title = r ? ("Live rate: 1 USD = ₹"+Number(r).toFixed(2)+" (frankfurter.app, har run update) — tap: USD ⇄ INR")
+  const fr=document.getElementById("fx-rate");                        // always-visible rate used for conversion
+  if(fr) fr.textContent = r ? ("· $1 = ₹"+Number(r).toFixed(2)) : "";
+  if(bt) bt.title = r ? ("Is rate pe convert hua: 1 USD = ₹"+Number(r).toFixed(2)+" (live frankfurter.dev, har run update) — tap: USD ⇄ INR")
                       : "Switch currency — USD ⇄ INR"; }
 function toggleCur(){ CURVIEW = (curView()===baseCur()) ? otherCur() : baseCur();   // whole dashboard USD⇄INR
   try{ localStorage.setItem("curview", CURVIEW); }catch(e){}
