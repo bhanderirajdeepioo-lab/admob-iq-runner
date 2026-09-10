@@ -19,7 +19,9 @@ import sys
 API_VERSION = "v24"                    # supported as of 2026 (v25 is newest); v17 was sunset → 404
 _BASE = "https://googleads.googleapis.com/%s" % API_VERSION
 # offline fallback rates (→USD) if the free FX endpoint is unreachable; only used when != USD
-_FX_FALLBACK = {"USD": 1.0, "INR": 0.0119, "EUR": 1.08, "GBP": 1.27, "AUD": 0.66,
+# Last-resort rates if BOTH frankfurter hosts are unreachable — kept close to live so a rare miss
+# doesn't skew the dashboard (INR 0.0105 ≈ ₹95/USD, matching the live rate; refresh if it drifts).
+_FX_FALLBACK = {"USD": 1.0, "INR": 0.0105, "EUR": 1.08, "GBP": 1.27, "AUD": 0.66,
                 "CAD": 0.73, "JPY": 0.0065, "BRL": 0.18, "AED": 0.27, "SGD": 0.74}
 
 
@@ -159,17 +161,61 @@ def _app_convval_lag_for(customer_id, login_customer_id, dev_token, access_token
     return out
 
 
+def _fx_cache_path():
+    import os
+    return os.getenv("FX_CACHE_PATH", os.path.join("data", "fx_cache.json"))
+
+
+def _fx_load_cache():
+    import json
+    try:
+        with open(_fx_cache_path(), encoding="utf-8") as f:
+            return json.load(f) or {}
+    except Exception:
+        return {}
+
+
+def _fx_save_cache(ccy, rate):
+    """Persist the last GOOD rate so an offline build reuses it instead of a stale hardcoded constant.
+    Lives in data/fx_cache.json, which the workflow commits each run → survives across builds."""
+    import os, json, time
+    try:
+        c = _fx_load_cache()
+        c[ccy] = float(rate); c["_ts_" + ccy] = int(time.time())
+        p = _fx_cache_path(); d = os.path.dirname(p)
+        if d:
+            os.makedirs(d, exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(c, f)
+    except Exception:
+        pass
+
+
 def _fx_to_usd(ccy):
     if ccy == "USD" or not ccy:
         return 1.0
     try:
         import requests
-        r = requests.get("https://api.frankfurter.app/latest?from=%s&to=USD" % ccy, timeout=10)
-        rate = (r.json().get("rates") or {}).get("USD")
-        if rate:
-            return float(rate)
+        # frankfurter.app now 301-redirects to frankfurter.dev — hit the canonical .dev host DIRECTLY
+        # (the redirect was intermittently failing on the runner → it fell back to the stale hardcoded
+        # rate, so the WHOLE dashboard's USD⇄INR read ~12% off). Try .dev, then .app.
+        for _url in ("https://api.frankfurter.dev/v1/latest?from=%s&to=USD" % ccy,
+                     "https://api.frankfurter.app/latest?from=%s&to=USD" % ccy):
+            try:
+                r = requests.get(_url, timeout=10)
+                rate = (r.json().get("rates") or {}).get("USD")
+                if rate:
+                    _fx_save_cache(ccy, rate)       # remember the last good rate for offline builds
+                    return float(rate)
+            except Exception:
+                continue
     except Exception:
         pass
+    # Both hosts unreachable → the LAST successfully-fetched rate (persisted, at most a few hours old),
+    # and only if that's missing too, the hardcoded near-live constant. Never a silently-stale value.
+    cached = _fx_load_cache().get(ccy)
+    if cached:
+        return float(cached)
     return _FX_FALLBACK.get(ccy, 1.0)
 
 

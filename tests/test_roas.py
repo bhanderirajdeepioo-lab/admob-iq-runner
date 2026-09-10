@@ -279,3 +279,25 @@ def test_fetch_app_spend_falls_back_to_admob_client(monkeypatch):
          "google_client_secret": "admob-sec"}                     # no google_ads_client_* → fall back
     google_ads.fetch_app_spend(s, "2026-07-01", "2026-07-10", mode="live")
     assert seen["cid"] == "admob-cid"
+
+
+def test_fx_caches_live_rate_and_reuses_it_offline(tmp_path, monkeypatch):
+    """FX must never silently use a stale hardcoded rate: a good fetch is cached, and if BOTH
+    frankfurter hosts are unreachable the LAST cached rate is reused before the constant fallback."""
+    monkeypatch.setenv("FX_CACHE_PATH", str(tmp_path / "fx_cache.json"))
+
+    class _Resp:
+        def json(self): return {"rates": {"USD": 0.01051}}
+    monkeypatch.setattr(google_ads, "requests", type("R", (), {"get": staticmethod(lambda *a, **k: _Resp())}), raising=False)
+    # live fetch → correct rate, and it gets cached
+    assert round(1 / google_ads._fx_to_usd("INR"), 1) == 95.1
+    assert google_ads._fx_load_cache().get("INR") == 0.01051
+
+    # both hosts now fail → reuse the cached 0.01051 (NOT the hardcoded 0.0105 fallback)
+    def _boom(*a, **k): raise RuntimeError("network down")
+    monkeypatch.setattr(google_ads, "requests", type("R", (), {"get": staticmethod(_boom)}), raising=False)
+    assert google_ads._fx_to_usd("INR") == 0.01051
+
+    # no cache at all + hosts down → hardcoded near-live fallback (~95), never the old 84
+    monkeypatch.setenv("FX_CACHE_PATH", str(tmp_path / "empty.json"))
+    assert round(1 / google_ads._fx_to_usd("INR")) == 95
