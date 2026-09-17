@@ -474,7 +474,7 @@ def resolve_store_ids(accounts, data_dir, catalog, *, client_id, client_secret, 
     """{app_id: store_id} for the ROAS join, cached in data/app_store_ids.json. Lists apps only for
     app_ids not yet resolved (needs admob.readonly; a report-only token yields no store id for that
     account's apps → those apps simply can't be matched to Google Ads spend). Best-effort."""
-    import json, os
+    import json, os, time
     cache_path = os.path.join(data_dir, "app_store_ids.json")
     cache = {}
     try:
@@ -483,9 +483,20 @@ def resolve_store_ids(accounts, data_dir, catalog, *, client_id, client_secret, 
                 cache = json.load(f) or {}
     except Exception:
         cache = {}
-    by_id = cache.setdefault("by_id", {})                # app_id -> store_id ("" = tried, none)
-    missing = [c.get("app_id") for c in (catalog or [])
-               if c.get("app_id") and c.get("app_id") not in by_id]
+    by_id = cache.setdefault("by_id", {})                # app_id -> store_id ("" = tried, none yet)
+    # A blank ("") means we asked once and AdMob had no store listing linked THEN. That can change
+    # later (the user links/verifies the Play listing), so blanks must be RE-ASKED — otherwise the
+    # app can never match Google Ads spend and shows "organic" forever (real case: Arrow Escape).
+    # Throttled so we don't re-list apps every 30-min run when nothing has changed.
+    _now = int(time.time())
+    _blank_retry_after = int(os.getenv("STORE_ID_BLANK_RETRY_SEC", "21600"))      # 6h
+    _due = (_now - int(cache.get("_blank_retry_ts") or 0)) >= _blank_retry_after
+    absent = [c.get("app_id") for c in (catalog or [])
+              if c.get("app_id") and c.get("app_id") not in by_id]
+    blanks = [c.get("app_id") for c in (catalog or [])
+              if c.get("app_id") and c.get("app_id") in by_id and not by_id[c.get("app_id")]]
+    retry_blanks = blanks if _due else []
+    missing = absent + retry_blanks
     if missing:
         store = {}
         for a in accounts:
@@ -497,7 +508,12 @@ def resolve_store_ids(accounts, data_dir, catalog, *, client_id, client_secret, 
             except Exception as e:
                 print("store-ids: list_apps failed for %s: %s" % (a.get("account_id"), e), file=sys.stderr)
         for a in missing:
-            by_id[a] = store.get(a) or ""
+            _new = store.get(a) or ""
+            if _new and not by_id.get(a):
+                print("store-ids: resolved %s -> %s (was blank)" % (a, _new), file=sys.stderr)
+            by_id[a] = _new
+        if retry_blanks:
+            cache["_blank_retry_ts"] = _now                 # throttle the next blank re-ask
         try:
             os.makedirs(data_dir, exist_ok=True)
             with open(cache_path, "w", encoding="utf-8") as f:

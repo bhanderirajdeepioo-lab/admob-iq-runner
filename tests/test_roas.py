@@ -284,20 +284,47 @@ def test_fetch_app_spend_falls_back_to_admob_client(monkeypatch):
 def test_fx_caches_live_rate_and_reuses_it_offline(tmp_path, monkeypatch):
     """FX must never silently use a stale hardcoded rate: a good fetch is cached, and if BOTH
     frankfurter hosts are unreachable the LAST cached rate is reused before the constant fallback."""
+    import sys, types
     monkeypatch.setenv("FX_CACHE_PATH", str(tmp_path / "fx_cache.json"))
+
+    def _fake_requests(get):                 # _fx_to_usd does `import requests` INSIDE the function,
+        m = types.ModuleType("requests")     # so the mock must live in sys.modules, not on the module
+        m.get = get
+        return m
 
     class _Resp:
         def json(self): return {"rates": {"USD": 0.01051}}
-    monkeypatch.setattr(google_ads, "requests", type("R", (), {"get": staticmethod(lambda *a, **k: _Resp())}), raising=False)
-    # live fetch → correct rate, and it gets cached
-    assert round(1 / google_ads._fx_to_usd("INR"), 1) == 95.1
-    assert google_ads._fx_load_cache().get("INR") == 0.01051
+    monkeypatch.setitem(sys.modules, "requests", _fake_requests(lambda *a, **k: _Resp()))
+    assert google_ads._fx_to_usd("INR") == 0.01051                 # live fetch wins
+    assert google_ads._fx_load_cache().get("INR") == 0.01051       # ...and is cached
 
-    # both hosts now fail → reuse the cached 0.01051 (NOT the hardcoded 0.0105 fallback)
     def _boom(*a, **k): raise RuntimeError("network down")
-    monkeypatch.setattr(google_ads, "requests", type("R", (), {"get": staticmethod(_boom)}), raising=False)
-    assert google_ads._fx_to_usd("INR") == 0.01051
+    monkeypatch.setitem(sys.modules, "requests", _fake_requests(_boom))
+    assert google_ads._fx_to_usd("INR") == 0.01051                 # both hosts down → cached rate
 
-    # no cache at all + hosts down → hardcoded near-live fallback (~95), never the old 84
     monkeypatch.setenv("FX_CACHE_PATH", str(tmp_path / "empty.json"))
-    assert round(1 / google_ads._fx_to_usd("INR")) == 95
+    assert google_ads._fx_to_usd("INR") == 0.0105                  # no cache → near-live constant (~Rs95)
+
+
+def test_blank_store_id_is_retried_when_the_play_listing_gets_linked(tmp_path):
+    """A store id cached as "" means "AdMob had no listing linked THEN" — once the user links/verifies
+    the Play listing it must be picked up, else the app can never match spend and reads 'organic'."""
+    import json, os
+    data = str(tmp_path)
+    catalog = [{"app_id": "app~arrow"}]
+    json.dump({"by_id": {"app~arrow": ""}}, open(os.path.join(data, "app_store_ids.json"), "w"))
+
+    class _C:
+        def list_apps(self): return [{"app_id": "app~arrow", "store_id": "com.arrow.puzzle.logicline"}]
+    mk = lambda *a, **k: _C()
+    got = google_ads.resolve_store_ids([{"account_id": "pub-1"}], data, catalog, client_id="c",
+                                       client_secret="s", currency="USD", make_client=mk, mode="live")
+    assert got == {"app~arrow": "com.arrow.puzzle.logicline"}      # blank was re-asked and resolved
+
+    # throttle: a second run right away must NOT re-list (cache already holds the resolved id)
+    calls = {"n": 0}
+    class _C2:
+        def list_apps(self): calls["n"] += 1; return []
+    google_ads.resolve_store_ids([{"account_id": "pub-1"}], data, catalog, client_id="c",
+                                 client_secret="s", currency="USD", make_client=lambda *a, **k: _C2(), mode="live")
+    assert calls["n"] == 0
