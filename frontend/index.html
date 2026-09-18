@@ -695,7 +695,7 @@ function renderOverview(){
     const what=m.metric?`<span class="${m.kind==='spike'?'up':'down'}" style="font-weight:700">${m.kind==='spike'?'▲':'▼'} ${OVML[m.metric]||m.metric}${pctm?' '+pctm:''}</span>`:'';
     const lost=(x.lost&&x.lost>0)?` <span class="down" style="font-weight:700">~${money(x.lost)}/day</span>`:'';
     const geo=(x.country&&x.country!=='All')?`<span class="geochip ${String(x.country).includes('localized')?'loc':''}">${cName(x.country)}</span>`:'';
-    return `<div class="al ${sev}"><span>${ICON[x.severity]}</span><span><b>${x.place}</b> ${what}${lost}${geo}${x.app?`<div class="faint" style="font-size:11px;margin-top:2px">${x.app}</div>`:''}</span></div>`;}).join('')||'<div class="al good"><span>✓</span><span>Koi alert nahi.</span></div>';
+    return `<div class="al ${sev}"><span>${ICON[x.severity]}</span><span><b>${x.place}</b> ${what}${lost}${geo}${x.app?`<div class="faint" style="font-size:11px;margin-top:3px;display:flex;align-items:center;gap:5px">${appIcon(x.app,14)}${x.app}</div>`:''}</span></div>`;}).join('')||'<div class="al good"><span>✓</span><span>Koi alert nahi.</span></div>';
   const appsShown=APP?DATA.apps.filter(x=>x.name===APP):DATA.apps;
   // per-app windowed revenue + eCPM (summed from that app's placements)
   const appAgg={};(DATA.placements||[]).forEach(p=>{const g=appAgg[p.app]=appAgg[p.app]||{e:0,i:0};const m=sumDaily(p.daily,winSet);g.e+=m.earn;g.i+=m.impr;});
@@ -1241,7 +1241,7 @@ function rangeAlertCard(){ const ra=(DATA.range_alerts||[]).filter(x=>!APP||x.ap
   const rows=ra.slice(0,12).map(a=>{ const up=a.dir==='above'; const col=up?'#6ea8ff':'#ff9a9a';
     return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-top:1px solid var(--line);cursor:pointer" onclick="bGotoUnit('${a.id}')" title="is placement ka page kholo →">
       <span style="font-size:13px">${a.severity==='warning'?'🟠':'🟡'}</span>
-      <b style="color:#fff;font-size:13px">${a.place}</b><span class="faint" style="font-size:11px">${a.app||''}</span>
+      ${a.app?appIcon(a.app,18):''}<b style="color:#fff;font-size:13px">${a.place}</b><span class="faint" style="font-size:11px">${a.app||''}</span>
       <span style="color:${col};font-weight:700;font-size:12.5px">${a.message}</span><span class="lnk" style="font-size:11.5px;margin-left:auto">kholo →</span></div>`; }).join('');
   return `<div class="card" style="margin-bottom:14px;border-color:#5a3a3a;background:linear-gradient(160deg,#241320,var(--panel))">
     <div class="ct"><h3>⚠️ ${ra.length} placement apni <b>approved range</b> se bahar</h3><span class="lnk" onclick="show('baseline')">Baseline me kholo →</span></div>
@@ -1263,7 +1263,7 @@ function renderAlerts(){
       const arrow=m.kind==='spike'?'▲':'▼';
       return `<div style="font-size:12.5px;display:flex;gap:7px;align-items:baseline"><span class="${m.kind==='spike'?'up':'down'}" style="font-weight:800">${arrow}</span><span style="min-width:78px;color:#fff;font-weight:650">${mlabel[m.metric]||m.metric}</span><span class="${m.kind==='spike'?'up':'down'}" style="font-weight:700">${pctm}</span><span class="muted">· ${detail}${ml}</span></div>`;}).join('');
     const metricList=(x.metrics||[]).map(m=>m.metric).join(' ');
-    return `<div class="alert ${sev}" data-sev="${x.severity}" data-metrics="${metricList}"><div style="font-size:17px">${ICON[x.severity]}</div><div class="abody"><div class="atitle">${x.place}${lost}${x.country&&x.country!=='All'?`<span class="geochip ${(x.country||'').includes('localized')?'loc':''}">${x.country}</span>`:''}</div><div class="ameta">${x.app} · <b style="color:var(--ink2)">${size}</b></div><div style="margin:9px 0 2px;display:grid;gap:5px">${rows}</div><div class="acause" style="margin-top:8px">💡 ${cause}</div><div class="aact"><span class="abtn pri" onclick="goPlacement('${x.id||pidOf(x.place)}')">View placement →</span></div></div></div>`;}).join('')||`<div class="card" style="text-align:center;padding:26px"><div style="font-size:28px">✅</div><div style="font-weight:750;color:#fff;margin-top:6px">Sab theek — koi badi placement me dikkat nahi</div><div class="muted" style="font-size:13px;margin-top:4px">Chhoti $1-5/day placements ka noise hata diya hai. Jab bhi kisi ${APP||'badi'} placement me revenue/requests sharp gire ya IVT ka signal aaye, wahi yahan dikhega.</div></div>`;
+    return `<div class="alert ${sev}" data-sev="${x.severity}" data-metrics="${metricList}"><div style="font-size:17px">${ICON[x.severity]}</div><div class="abody"><div class="atitle">${x.place}${lost}${x.country&&x.country!=='All'?`<span class="geochip ${(x.country||'').includes('localized')?'loc':''}">${x.country}</span>`:''}</div><div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appIcon(x.app,18)}<span>${x.app} · <b style="color:var(--ink2)">${size}</b></span></div><div style="margin:9px 0 2px;display:grid;gap:5px">${rows}</div><div class="acause" style="margin-top:8px">💡 ${cause}</div><div class="aact"><span class="abtn pri" onclick="goPlacement('${x.id||pidOf(x.place)}')">View placement →</span></div></div></div>`;}).join('')||`<div class="card" style="text-align:center;padding:26px"><div style="font-size:28px">✅</div><div style="font-weight:750;color:#fff;margin-top:6px">Sab theek — koi badi placement me dikkat nahi</div><div class="muted" style="font-size:13px;margin-top:4px">Chhoti $1-5/day placements ka noise hata diya hai. Jab bhi kisi ${APP||'badi'} placement me revenue/requests sharp gire ya IVT ka signal aaye, wahi yahan dikhega.</div></div>`;
   const pctTxt=((a.min_share||0.005)*100).toFixed(1)+'%';
   const minU=a.min_usd?money(a.min_usd):null;
   const appFloor=(APP&&a.floor&&typeof a.floor==='object')?a.floor[APP]:null;
@@ -2059,7 +2059,7 @@ function bAlertBanner(units){
   al.sort((a,c)=>(c.u.rev_total||0)-(a.u.rev_total||0));
   const rows=al.slice(0,8).map(a=>{ const ap=a.u.approved[a.k]; const up=a.dir==='above'; const col=up?'#6ea8ff':'#ff9a9a';
     return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line);cursor:pointer" onclick="bOpenUnit('${a.u.id}')" title="placement kholo">
-      <b style="color:#fff;font-size:12.5px">${a.u.name}</b><span class="faint" style="font-size:11px">${a.u.app||''}</span>
+      ${a.u.app?appIcon(a.u.app,18):''}<b style="color:#fff;font-size:12.5px">${a.u.name}</b><span class="faint" style="font-size:11px">${a.u.app||''}</span>
       <span style="color:${col};font-size:12px;font-weight:700">${MN[a.k]} ${up?'▲ upar':'▼ neeche'}</span>
       <span class="faint" style="font-size:11.5px">ab <b style="color:var(--ink2)">${bV(a.u.latest[a.k],a.k)}</b> · approved ${bR(ap,a.k)}</span></div>`; }).join('');
   return `<div class="card" style="margin-bottom:14px;border-color:#5a3a3a;background:linear-gradient(160deg,#241320,var(--panel))">
