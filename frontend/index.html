@@ -860,6 +860,8 @@ function openAppDetail(name){
   let E=0,I=0,Q=0,M=0,C=0;
   ps.forEach(p=>{const m=sumDaily(p.daily,winSet);E+=m.earn;I+=m.impr;Q+=m.req;M+=m.matched;C+=m.clicks;});
   const K={rev:E/1e6, ecpm:I?E/(I*1000):0, match:Q?Math.min(1,M/Q):0, impr:I, req:Q};
+  // Google Ads marketing spend for THIS app over the SAME window (same source as Overview's table)
+  const ADSP=roasOn(), adSpend=ADSP?(spendByApp(winSet)[name]||0):0, adRoas=adSpend>0?K.rev/adSpend:null;
 
 
   // ----- period chip bar (drives the GLOBAL range) -----
@@ -942,8 +944,11 @@ function openAppDetail(name){
     <div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2)"><div>${appIcon(name,38)}</div>${nameBlock}<div class="spacer"></div><div class="appstat"><div><div class="n" style="color:${app.avg_health>=75?'var(--good)':app.avg_health>=50?'var(--watch)':'var(--bad)'}">${app.avg_health}</div><div class="t">Avg health</div></div><div><div class="n" style="color:var(--bad)">${app.at_risk||0}</div><div class="t">At-risk</div></div></div></div>
     <div class="note" style="margin:2px 0 10px">⏱ <b>${pRangeLabel(RANGE)}</b> <span class="faint">(${winLbl})</span> — ye Overview wala hi period hai; yahan se ya upar "Period" se badlo.</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">${perBar}</div>
-    <div class="row c5" style="margin-bottom:14px">
+    <div class="row ${ADSP?'c6':'c5'}" style="margin-bottom:14px">
       ${kpi('Revenue',revCell(K.rev),winLbl,'muted')}
+      ${ADSP?kpi('Ad spend',adSpend>0?money(adSpend):'—',
+          adRoas!=null?`ROAS ${adRoas.toFixed(2)}× · ${winLbl}`:`is period me spend nahi · ${winLbl}`,
+          adRoas==null?'muted':(adRoas>=1?'up':'down')):''}
       ${kpi('Avg eCPM',K.impr?cm(K.ecpm):'—',winLbl,'muted')}
       ${kpi('Impressions',K.impr?fmtN(K.impr):'—',winLbl,'muted')}
       ${kpi('Requests',K.req?fmtN(K.req):'—',winLbl,'muted')}
