@@ -52,15 +52,19 @@ jobs:
           # written OUTSIDE _private: the push step resets _private to the latest remote
           # main before copying this in, which would otherwise wipe it
           GA4_PROBE_OUT: ga4_out/probe.json
-          # the refresh token only works with the OAuth client that minted it: GA4_CLIENT_* is
-          # saved by `authorize --ga4 --save-secret`; GOOGLE_CLIENT_* is the fallback
+          # a refresh token only works with the OAuth client that minted it: GA4_CLIENT_* is saved
+          # next to the tokens by the ga4-auth exchange; GOOGLE_CLIENT_* is the fallback
           GA4_CLIENT_ID:        ${{ secrets.GA4_CLIENT_ID }}
           GA4_CLIENT_SECRET:    ${{ secrets.GA4_CLIENT_SECRET }}
           GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          # one token per Google account that owns some of the apps' GA4 accounts ({email: token}),
+          # plus the older single token (used as owner "legacy"; duplicates are read once)
+          GA4_REFRESH_TOKENS:   ${{ secrets.GA4_REFRESH_TOKENS }}
           GA4_REFRESH_TOKEN:    ${{ secrets.GA4_REFRESH_TOKEN }}
         run: |
-          test -n "$GA4_REFRESH_TOKEN" || { echo "::error::GA4_REFRESH_TOKEN secret missing"; exit 1; }
+          test -n "$GA4_REFRESH_TOKENS" || test -n "$GA4_REFRESH_TOKEN" \
+            || { echo "::error::neither GA4_REFRESH_TOKENS nor GA4_REFRESH_TOKEN secret is set"; exit 1; }
           # stdout = aggregate counts only (by design). stderr (library warnings, which could
           # echo request details) is kept off the public log.
           python -m admob_iq.ga4_probe 2>/tmp/probe.err

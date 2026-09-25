@@ -8,6 +8,10 @@ EVERY report goes through Ga4App, which forces the request onto ONE app's Androi
 (platform == "Android" AND streamId == <id>): a GA4 property often holds several apps (and iOS/web
 streams), and without that filter one app's uninstalls would silently include another's.
 
+Several Google accounts own the apps' GA4 accounts, so there is one refresh token per owner
+(GA4_REFRESH_TOKENS, parsed by parse_token_map) — each app's reports use the token of an owner that
+can see its property.
+
 The probe_* functions each answer one "can GA4 give us X for this app?" question and return a small
 dict with an "ok" verdict plus the evidence. They RAISE on API errors — the probe wraps each one so a
 failure is recorded in the report instead of stopping the run. Nothing here prints anything: ids,
@@ -26,7 +30,14 @@ PAUSE = 0.2                           # seconds between calls — stay far from 
 LAG_DAYS = 2                          # GA4 daily data (and Play-reported app_remove) settles over 24–48h,
                                       # so every window ends at today-2 in the property timezone
 MAX_PAGES = 100                       # Admin API paging safety cap
+PAGE_ROWS = 10000                     # Data API rows per page (the API allows up to 250,000 per call)
+MAX_REPORT_PAGES = 100                # Data API paging safety cap (1M rows); hitting it shows as "truncated"
 NOT_SET = {"", "(not set)", "(other)", "(none)"}
+CHURN_DAYS = (0, 1, 3, 7, 14, 30, 60)  # T13 headline checkpoints (D0 = same day — often the biggest loss)
+CHURN_COHORTS = 120                   # T13 cohorts: 60 complete for D60, plus room for the change window
+CHANGE_RECENT, CHANGE_BASE = 7, 28    # newest week of complete cohorts vs the 4 weeks before (same weekdays)
+CHANGE_Z = 3.0                        # |z| >= 3 happens ~1 in 370 by pure chance — a real move, not noise
+CHANGE_MIN_PP = 0.5                   # ... AND >= 0.5 points: big cohorts make even tiny moves "significant"
 
 
 def _sleep(s):
@@ -39,20 +50,35 @@ def access_token(client_id, client_secret, refresh_token):
     return _access_token(client_id, client_secret, refresh_token)
 
 
+class _Pairs(list):
+    """A JSON object as its raw (key, value) pairs — so a key written twice can't silently drop a token."""
+
+
 def parse_token_map(raw):
     """GA4_REFRESH_TOKENS secret — JSON {owner email: refresh_token} — → (map, problems).
     Missing/empty → ({}, 0); unparseable or not a JSON object → ({}, 1). A malformed entry (non-string
-    or empty token) is dropped and counted on its own: one bad value never costs the rest of the map."""
+    or empty token) is dropped and counted on its own: one bad value never costs the rest of the map.
+    A usable token under a blank key, or under a key another token already holds (a duplicate, or one
+    that only differs by spaces), is kept as "unlabelled-<n>" — never lost."""
     if not (raw or "").strip():
         return {}, 0
     try:
-        m = json.loads(raw)
+        m = json.loads(raw, object_pairs_hook=_Pairs)
     except ValueError:
         return {}, 1
-    if not isinstance(m, dict):
+    if not isinstance(m, _Pairs):
         return {}, 1
-    out = {str(k).strip(): v.strip() for k, v in m.items() if isinstance(v, str) and v.strip() and str(k).strip()}
-    return out, len(m) - len(out)
+    out, problems, n = {}, 0, 0
+    for k, v in m:
+        if not isinstance(v, str) or not v.strip():
+            problems += 1
+            continue
+        key = str(k).strip()
+        while not key or out.get(key, v.strip()) != v.strip():
+            n += 1
+            key = "unlabelled-%d" % n
+        out[key] = v.strip()
+    return out, problems
 
 
 def _err(r):
@@ -190,6 +216,7 @@ class Ga4App:
         self.realtime_quota = None
         self.calls = 0
         self.last_row_count = None     # rowCount of the last runReport (total rows, ignoring limit)
+        self.last_pages = None         # pages report_all() fetched for its last report
 
     def _post(self, method, body):
         if self.calls:
@@ -204,6 +231,28 @@ class Ga4App:
         self.quota = j.get("propertyQuota") or self.quota
         rows = _rows(j)
         self.last_row_count = _num(j["rowCount"]) if "rowCount" in j else len(rows)
+        return rows
+
+    def report_all(self, body, event=None, events=None, extra=None):
+        """EVERY row of a report: PAGE_ROWS at a time, offset += limit while offset < rowCount, so nothing
+        is ever cut silently. Stops early only at MAX_REPORT_PAGES (or on an empty page) — truncated()
+        then says so, since rowCount still holds the full total. Every page is asked for in one TOTAL
+        order (the caller's orderBys, then each remaining dimension ascending): with ties left to the
+        API, two pages could repeat or skip a row and the row count would never show it."""
+        order = list(body.get("orderBys") or [])
+        have = {(o.get("dimension") or {}).get("dimensionName") for o in order}
+        order += [{"dimension": {"dimensionName": d["name"]}} for d in body.get("dimensions") or []
+                  if d["name"] not in have]
+        body = dict(body, orderBys=order) if order else body
+        rows, offset, pages = [], 0, 0
+        while pages < MAX_REPORT_PAGES:
+            page = self.report(dict(body, limit=PAGE_ROWS, offset=offset), event, events, extra)
+            pages += 1
+            rows.extend(page)
+            offset += PAGE_ROWS
+            if not page or offset >= (self.last_row_count or 0):
+                break
+        self.last_pages = pages
         return rows
 
     def truncated(self, rows):
@@ -294,11 +343,11 @@ def probe_base(ga, end):
 def probe_t1(ga, end):
     """app_remove by date+appVersion and by date+country — version/country-wise uninstalls."""
     rng = [_range(end, 30)]
-    v = ga.report({"dateRanges": rng, "dimensions": _dim("date", "appVersion"),
-                   "metrics": _dim("eventCount", "totalUsers"), "limit": 10000}, event="app_remove")
+    v = ga.report_all({"dateRanges": rng, "dimensions": _dim("date", "appVersion"),
+                       "metrics": _dim("eventCount", "totalUsers")}, event="app_remove")
     v_cut, v_n = ga.truncated(v), ga.last_row_count
-    c = ga.report({"dateRanges": rng, "dimensions": _dim("date", "country"),
-                   "metrics": _dim("eventCount", "totalUsers"), "limit": 10000}, event="app_remove")
+    c = ga.report_all({"dateRanges": rng, "dimensions": _dim("date", "country"),
+                       "metrics": _dim("eventCount", "totalUsers")}, event="app_remove")
     c_cut, c_n = ga.truncated(c), ga.last_row_count
     real = [r for r in v if r.get("appVersion") not in NOT_SET]
     ev = sum(r["eventCount"] for r in v)
@@ -314,12 +363,13 @@ def probe_t1(ga, end):
 
 def probe_t1b(ga, end):
     """app_remove users by the user's FIRST Google Ads campaign — campaign-wise wasted spend."""
-    rows = ga.report({"dateRanges": [_range(end, 30)], "dimensions": _dim("firstUserGoogleAdsCampaignId"),
-                      "metrics": _dim("totalUsers"), "limit": 1000}, event="app_remove")
+    rows = ga.report_all({"dateRanges": [_range(end, 30)], "dimensions": _dim("firstUserGoogleAdsCampaignId"),
+                          "metrics": _dim("totalUsers")}, event="app_remove")
+    cut, n = ga.truncated(rows), ga.last_row_count
     users = sum(r["totalUsers"] for r in rows)
     tagged = [r for r in rows if r.get("firstUserGoogleAdsCampaignId") not in NOT_SET]
     share = round(sum(r["totalUsers"] for r in tagged) / users, 4) if users else None
-    return {"ok": bool(tagged), "rows": len(rows),
+    return {"ok": bool(tagged), "rows": len(rows), "row_count": n, "truncated": cut,
             "set_row_share": round(len(tagged) / len(rows), 4) if rows else None, "set_user_share": share,
             "by_campaign": _top(_sum_by(rows, "firstUserGoogleAdsCampaignId", "totalUsers"))}
 
@@ -328,7 +378,7 @@ def probe_t2(ga, end, days=30):
     """app_remove by firstSessionDate × date → how many NEW users uninstall on D0 / D1 / D2–7.
     Only users whose first session is inside the window: old installs would add hundreds of
     firstSessionDate values per day and push the result past `limit` (the API cuts silently).
-    Newest cohorts first, so if anything is ever cut it is the oldest, not the ones T13 uses."""
+    Newest cohorts first, so if anything is ever cut it is the oldest (and "truncated" says so)."""
     first = [(end - timedelta(days=i)).strftime("%Y%m%d") for i in range(days)]
     rows = ga.report({"dateRanges": [_range(end, days)], "dimensions": _dim("firstSessionDate", "date"),
                       "metrics": _dim("totalUsers"), "limit": 10000,
@@ -394,8 +444,8 @@ def probe_t3(ga, end):
 
 def probe_t4(ga, end):
     """GA4-side ad revenue by version — for 'future revenue lost' per uninstalled user."""
-    rows = ga.report({"dateRanges": [_range(end, 30)], "dimensions": _dim("date", "appVersion"),
-                      "metrics": _dim("totalAdRevenue", "publisherAdImpressions"), "limit": 10000})
+    rows = ga.report_all({"dateRanges": [_range(end, 30)], "dimensions": _dim("date", "appVersion"),
+                          "metrics": _dim("totalAdRevenue", "publisherAdImpressions")})
     cut, n = ga.truncated(rows), ga.last_row_count
     rev = round(sum(r["totalAdRevenue"] for r in rows), 2)
     return {"ok": rev > 0, "rows": len(rows), "row_count": n, "truncated": cut, "revenue_30d": rev,
@@ -491,25 +541,108 @@ def probe_t12(ga, end, days=56):
             "change_pct_last7_vs_prev7": change, "median_daily_rate": med, "spike_days": spikes}
 
 
-def probe_t13(t2, t3, end):
-    """Point 9, from T2 + T3 (no extra calls): of new users who churned by D7 (not active on day 7),
-    how many actually UNINSTALLED vs went dormant — per cohort, and how that ratio CHANGES
-    (older half of cohorts vs newer half)."""
-    if not (t2.get("ok") or t2.get("accepted")) or not t3.get("cohorts"):
-        return {"ok": False, "reason": "needs T2 and T3"}
-    per = {}
-    for k, c in sorted(t3["cohorts"].items()):
-        d = _d(k)
-        if not d or d + timedelta(days=7) > end or not c.get("total"):
-            continue                                   # D7 not complete yet
-        churned = c["total"] - c["active"].get("7", 0)
-        un = sum((t2.get("by_cohort") or {}).get(k, {}).values())
-        per[k] = {"new": c["total"], "churned_by_d7": churned, "uninstalled_by_d7": un,
-                  "uninstall_share_of_churn": round(un / churned, 4) if churned > 0 else None}
-    shares = [v["uninstall_share_of_churn"] for v in per.values() if v["uninstall_share_of_churn"] is not None]
-    h = len(shares) // 2
-    older = round(sum(shares[:h]) / h, 4) if h else None
-    newer = round(sum(shares[h:]) / (len(shares) - h), 4) if len(shares) - h else None
-    return {"ok": bool(shares), "cohorts": per, "avg_share": round(sum(shares) / len(shares), 4) if shares else None,
-            "older_half_share": older, "newer_half_share": newer,
-            "change_pts": round((newer - older) * 100, 2) if older is not None and newer is not None else None}
+def _z2(x1, n1, x2, n2):
+    """Two-proportion z score (pooled standard error) of x1/n1 vs x2/n2; None when it can't be computed."""
+    if not n1 or not n2:
+        return None
+    p = (x1 + x2) / (n1 + n2)
+    se = (p * (1 - p) * (1 / n1 + 1 / n2)) ** 0.5 if 0 < p < 1 else 0
+    return round((x1 / n1 - x2 / n2) / se, 2) if se else None
+
+
+def _pooled(cohorts):
+    """[(day, new, uninstalled)] → {cohorts, new_users, uninstalled, rate = Σuninstalled / Σnew}."""
+    new, un = sum(c[1] for c in cohorts), sum(c[2] for c in cohorts)
+    return {"cohorts": len(cohorts), "new_users": new, "uninstalled": un,
+            "rate": round(un / new, 4) if new else None}
+
+
+def cohort_change(done):
+    """Newest CHANGE_RECENT complete cohorts vs the CHANGE_BASE right before them ([(day, new, uninstalled)],
+    newest first) → both pooled rates, delta in points, relative %, two-proportion z and a flag:
+    "up" / "down" when |z| >= CHANGE_Z AND |delta| >= CHANGE_MIN_PP, else None."""
+    need = CHANGE_RECENT + CHANGE_BASE
+    if len(done) < need:
+        return {"flag": None, "reason": "needs %d complete cohorts, has %d" % (need, len(done))}
+    rec, base = done[:CHANGE_RECENT], done[CHANGE_RECENT:need]
+    r, b = _pooled(rec), _pooled(base)
+    r.update({"from": rec[-1][0].isoformat(), "to": rec[0][0].isoformat()})
+    b.update({"from": base[-1][0].isoformat(), "to": base[0][0].isoformat()})
+    p1, p2 = r["uninstalled"] / r["new_users"], b["uninstalled"] / b["new_users"]
+    delta = round((p1 - p2) * 100, 6)          # rounded so float dust can't decide a flag at the boundary
+    z = _z2(r["uninstalled"], r["new_users"], b["uninstalled"], b["new_users"])
+    flag = None
+    if z is not None and abs(z) >= CHANGE_Z and abs(delta) >= CHANGE_MIN_PP:
+        flag = "up" if delta > 0 else "down"
+    return {"recent": r, "base": b, "delta_pp": round(delta, 2),
+            "relative_pct": round((p1 - p2) / p2 * 100, 1) if p2 else None, "z": z, "flag": flag}
+
+
+def probe_t13(ga, end, days=CHURN_COHORTS):
+    """Point 9 — uninstall churn per INSTALL COHORT: of the users whose first session was day c, the
+    cumulative share that uninstalled (app_remove) by day 0 / 1 / 3 / 7 / 14 / 30 / 60 after it. Per N: the
+    pooled rate, a per-ISO-week cohort series, and whether the newest week of cohorts moved vs the 4 weeks
+    before (cohort_change). A cohort counts for N only once complete (c + N <= end): one whose day N is
+    still ahead would read low and fake a drop. Also the FULL daily curve (every day N the window can show)
+    and each cohort's raw uninstalls per lag day: which checkpoints to display is decided later from each
+    app's history, installs and how fast its curve still moves, so no day is dropped here."""
+    first = [(end - timedelta(days=i)).strftime("%Y%m%d") for i in range(days)]
+    # Numerator: app_remove users by firstSessionDate × date. Only cohorts inside the window (≈ days·(days+1)/2
+    # rows), newest first, then by date — a stable order, so offset paging never skips or repeats a row.
+    rows = ga.report_all({"dateRanges": [_range(end, days)], "dimensions": _dim("firstSessionDate", "date"),
+                          "metrics": _dim("totalUsers"),
+                          "orderBys": [{"dimension": {"dimensionName": "firstSessionDate"}, "desc": True},
+                                       {"dimension": {"dimensionName": "date"}}]},
+                         event="app_remove", extra=[_in_list("firstSessionDate", first)])
+    cut, n, pages = ga.truncated(rows), ga.last_row_count, ga.last_pages
+    # Denominator: newUsers by date, same stream. GA4 counts an app instance as new once, on its first_open —
+    # the day of its first session, i.e. exactly the firstSessionDate the numerator groups it under — so
+    # both sides count the same app instances against the same cohort day.
+    nu = ga.report_all({"dateRanges": [_range(end, days)], "dimensions": _dim("date"),
+                        "metrics": _dim("newUsers")})
+    nu_cut = ga.truncated(nu)
+    new = {}
+    for r in nu:
+        d = _d(r.get("date"))
+        if d:
+            new[d] = new.get(d, 0) + r["newUsers"]
+    removed, unplaced = {}, 0                  # cohort day → {lag in days: users}
+    for r in rows:
+        f, d = _d(r.get("firstSessionDate")), _d(r.get("date"))
+        if not f or not d or d < f or not new.get(f):
+            unplaced += r["totalUsers"]        # no usable lag or no cohort size: kept visible, not guessed
+            continue
+        c = removed.setdefault(f, {})
+        c[(d - f).days] = c.get((d - f).days, 0) + r["totalUsers"]
+
+    cohorts, by_day, alerts = {}, {}, {}
+    for f in sorted((d for d in new if new[d] > 0), reverse=True):          # newest first
+        lags = removed.get(f, {})
+        cohorts[f] = {k: sum(u for lag, u in lags.items() if lag <= k)
+                      for k in CHURN_DAYS if f + timedelta(days=k) <= end}  # complete days only
+    for k in CHURN_DAYS:
+        done = [(f, new[f], c[k]) for f, c in cohorts.items() if k in c]
+        weeks = {}
+        for c in done:
+            iso = c[0].isocalendar()
+            weeks.setdefault("%d-W%02d" % (iso[0], iso[1]), []).append(c)
+        key = "D%d" % k
+        by_day[key] = dict(_pooled(done), weekly={w: _pooled(v) for w, v in sorted(weeks.items())},
+                           change=cohort_change(done))
+        if by_day[key]["change"]["flag"]:
+            alerts[key] = by_day[key]["change"]["flag"]
+    curve = {}                                 # every day N: pooled over the cohorts complete for N
+    for k in range(days):
+        done = [(f, new[f], sum(u for lag, u in removed.get(f, {}).items() if lag <= k))
+                for f in new if new[f] > 0 and f + timedelta(days=k) <= end]
+        if done:
+            curve["D%d" % k] = _pooled(done)
+    return {"ok": bool(rows) and any(v["rate"] is not None for v in by_day.values()), "accepted": True,
+            "rows": len(rows), "row_count": n, "truncated": cut, "pages": pages,
+            "new_users_rows": len(nu), "new_users_truncated": nu_cut,
+            "first_cohort": first[-1], "last_cohort": first[0], "unplaced_uninstall_users": unplaced,
+            "by_day": by_day, "alerts": alerts, "daily_curve": curve,
+            "cohorts": {f.strftime("%Y%m%d"): dict({"new": new[f]}, **{"D%d" % k: v for k, v in c.items()},
+                                                   removed_by_lag={str(lag): u for lag, u in
+                                                                   sorted(removed.get(f, {}).items())})
+                        for f, c in cohorts.items()}}
