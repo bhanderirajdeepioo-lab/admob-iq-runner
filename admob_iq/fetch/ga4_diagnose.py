@@ -94,6 +94,16 @@ def main():
     out = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "apps": {},
            "discovery": {"tokens": len(tokens), "owners": owners, "properties": len(props), "streams": len(streams),
                          "stream_errors": errors, "packages_seen": sorted(by_pkg)}}
+    if want.get("retention"):                  # each property's data-retention setting (Admin API, read-only)
+        ret = {}
+        for p in props:
+            pid = p["property_id"]
+            tok = token_of.get(pid) or (readers.get(pid) or [(None, None)])[0][1]
+            r = requests.get("%s/properties/%s/dataRetentionSettings" % (ga4.ADMIN, pid), timeout=30,
+                             headers={"Authorization": "Bearer " + tok})
+            ret[pid] = {"http": r.status_code, "settings": r.json() if r.status_code == 200 else r.text[:200],
+                        "packages": sorted(s.get("package") for s in streams if s.get("property_id") == pid)}
+        out["retention"] = ret
     for pkg in want.get("packages") or []:
         s = by_pkg.get(pkg)
         if not s:
