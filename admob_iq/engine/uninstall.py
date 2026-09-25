@@ -48,6 +48,11 @@ day × lag); output is what the tab shows and which alerts are open.
   * INCOMPLETE DAYS — days whose install-day cells GA4 never returned in full (the store's
     flags.incomplete_days, see fetch.ga4_uninstall) feed no baseline, and no cohort comparison counts an
     install day whose checkpoint window touches one: shown ("data adhoora"), never alerted on.
+  * EVENTS-SCALED DAYS — old days whose install-day split GA4 keeps only for app_remove EVENTS (the store's
+    cell_src: "events_scaled" — the events' split by install day, scaled to that day's users on the scale of
+    the app's users cells, so an old day and a recent one compare like with like) are complete: USED like any
+    other day (survival, triangle, averages, alert baselines), only counted and shown (flags.cell_days,
+    "uninstall ginti (events) se andaza").
   * LATENESS — how much of a day's uninstalls / installs are in at each age, measured from the fetch's
     day-to-day re-reads (store["revisions"]) — see lateness().
 
@@ -1344,6 +1349,9 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     sv = survival_out(cd, late, cp["list"])
     fl = store.get("flags") or {}
     inc = {k: v for k, v in sorted((fl.get("incomplete_days") or {}).items()) if cd["hs"] <= _d(k) <= E}
+    lo, hi = _iso(cd["hs"]), _iso(E)                 # days whose cells are an events estimate (used, just shown)
+    evd = sorted(k for k, v in (store.get("cell_src") or {}).items()
+                 if lo <= k <= hi and (v or {}).get("src") == "events_scaled" and k not in inc)
     detail = {"app_id": app_id, "app": app, "package": package or store.get("package"), "key": key,
               "tz": store.get("time_zone") or "UTC", "den": store.get("den") or "a28",
               "history_start": _iso(cd["hs"]), "data_till": _iso(E), "settled_till": _iso(S), "late_days": late,
@@ -1352,7 +1360,11 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
               "flags": {"truncated": sorted(fl.get("truncated") or []), "thresholded": bool(fl.get("thresholded")),
                         "unplaced_users": cd["flags"]["unplaced_users"], "over_100": cd["flags"]["over_100"],
                         "kept_old_before": fl.get("kept_old_before"), "incomplete_days": inc,
-                        "outdated": bool(outdated)},
+                        "outdated": bool(outdated),
+                        # per day of the history, where its install-day cells came from: the users report, an
+                        # events estimate (used), or incomplete (flagged, not alerted on)
+                        "cell_days": {"users": H - len(evd) - len(inc), "events": len(evd), "incomplete": len(inc)},
+                        "events_span": [evd[0], evd[-1]] if evd else None},
               "daily": {"start": _iso(ds["start"]), "new": ds["new"], "un": ds["un"], "a28": ds["den"],
                         "upd": ds["upd"], "rate": ds["rate"], "med": ds["med"], "lo": ds["lo"], "hi": ds["hi"],
                         "breaks": [_iso(ds["start"] + timedelta(days=i)) for i in range(ds["n"]) if ds["broken"][i]]},

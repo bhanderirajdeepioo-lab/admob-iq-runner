@@ -2861,6 +2861,9 @@ function uniDetail(id,viaApp){
   if(F.over_100>0) fl.push('⚠️ kuch dino ka GA4 count 100% se upar');
   const incN=uniIncDays(a).length;   // install-day cells GA4 never returned in full — shown, never alerted on
   if(incN) fl.push(`<span title="${hAttr('GA4 ne '+uniIncDays(a).map(fmtD).join(', ')+' ke install-din numbers poore nahi diye — un dino ko chhoone wale install din kisi alert me nahi gine jaate')}">⚠️ ${incN} din ka data adhoora</span>`);
+  // old days whose install-day users GA4 no longer keeps: estimated from the app_remove events — used, just said
+  const evN=(F.cell_days&&F.cell_days.events)||0, evS=F.events_span;
+  if(evN) fl.push(`<span title="${hAttr('GA4 purane dino ke install-din users poore nahi rakhta — '+(evS?uniSpan(evS[0],evS[1])+' ke beech ke ':'')+'un dino ke numbers uninstall ginti (events) se thoda andaza hain: har din ka total us din ke uninstall users jitna, naye dino ke hisaab se. Ye din sab jagah gine jaate hain, alerts me bhi')}">ℹ️ ${evN} purane din ka data uninstall ginti (events) se andaza</span>`);
   if(F.outdated) fl.push('⏳ purana data — poora GA4 data dobara aa raha hai (tab tak koi alert nahi bhejte)');
   const got=relTime(a.fetched_at);
   const hdr=back+`<div class="uni-hd" style="margin-bottom:4px"><span style="font-size:18px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>

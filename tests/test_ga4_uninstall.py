@@ -409,9 +409,15 @@ def test_rebuilds_are_staggered_and_a_thin_rebuild_keeps_the_old_store(world, tm
 
 # ── cells checked against the events report ──────────────────────────────────────────────────────
 
-def _cells_asked(log):
+def _cells_asked(log, metric="totalUsers"):
+    """The cells ranges asked, in order: the users report's (default), or the events path's ("eventCount")."""
     return [(date.fromisoformat(b["dateRanges"][0]["startDate"]), date.fromisoformat(b["dateRanges"][0]["endDate"]))
-            for _, _, b in log if [x["name"] for x in b["dimensions"]] == ["firstSessionDate", "date"]]
+            for _, _, b in log if [x["name"] for x in b["dimensions"]] == ["firstSessionDate", "date"]
+            and [x["name"] for x in b["metrics"]] == [metric]]
+
+
+def _events_asked(log):
+    return _cells_asked(log, "eventCount")
 
 
 def test_a_long_cells_range_that_undercounts_is_split_until_complete_and_the_size_is_remembered():
@@ -424,8 +430,11 @@ def test_a_long_cells_range_that_undercounts_is_split_until_complete_and_the_siz
     assert st["flags"]["incomplete_days"] == {} and st["flags"]["truncated"] == []       # lost, nothing twice
     assert st["cells_chunk_days"] == 11                            # the longest size that verified
     asked = _cells_asked(log)
+    assert asked[1] == (t.start, t.start) and st["users_ok_days"] is None   # short: its oldest day asked ALONE —
+    del asked[1]                                                   # complete, so the slice's LENGTH, no loss by age
     assert asked[:4] == [(t.start, t.start + timedelta(days=89)), (t.start, t.start + timedelta(days=44)),
                          (t.start, t.start + timedelta(days=21)), (t.start, t.start + timedelta(days=10))]  # halves
+    assert _events_asked(log) == []                                # nothing short: nothing re-read by events
     rest = [(s, e) for s, e in asked if s > t.start + timedelta(days=89)]
     assert len(rest) == 10 and all((e - s).days + 1 == 11 for s, e in rest[:-1])   # then straight at what worked
     log2 = []                                                      # the next fetch starts at 11: no short slice
@@ -513,24 +522,29 @@ def _silent(st, t):
 
 
 def test_a_shortfall_at_every_size_is_flagged_day_by_day_at_a_bounded_cost():
-    # GA4 itself returns 85% of EVERY day's cells, even asked alone (thresholding, say): splitting can't help —
-    # after 3 such days a slice that reads like them is kept and flagged day by day, not split to single days
+    # GA4 itself returns 85% of EVERY day's cells, users and events alike, even asked alone (thresholding, say):
+    # splitting can't help. The oldest day alone is short, and so is every age the halving probes: users cells
+    # are trusted at no age (edge −1), every day goes by events — as short — and after 3 such days a slice that
+    # reads like them is kept and flagged day by day, not split to single days
     t = Truth(END - timedelta(days=999), END, 1000, old_per_day=30)
     t.short_day = {END - timedelta(days=i): 0.85 for i in range(1000)}
     log = []
     st = gu.fetch_full(_stub(t, log=log), END, 1300)
     inc = st["flags"]["incomplete_days"]
-    assert len(_cells_asked(log)) <= 30                            # was 1,988 (every slice down to single days)
+    assert st["users_ok_days"] == -1 and len(_cells_asked(log)) <= 1 + 2 * 11   # the first slice + ≤ 11 probes,
+                                                                                # each short one confirmed
+    assert len(_events_asked(log)) <= 30                           # was 1,988 (every slice down to single days)
     assert len(inc) == 1000 and all(0.8 < c <= 0.85 for c in inc.values()) and _silent(st, t) == []
-    assert st["cells_chunk_days"] == gu.FULL_CHUNK_DAYS            # shorter slices would not help
+    assert st["cells_chunk_days"] == st["events_chunk_days"] == gu.FULL_CHUNK_DAYS   # shorter slices would not help
     log = []
     gu.fetch_incr(_stub(t, log=log), st, END, 14)
-    assert len(_cells_asked(log)) <= 10 and len(st["flags"]["incomplete_days"]) == 1000     # was 27, every day
+    assert len(_cells_asked(log) + _events_asked(log)) <= 10                                         # was 27
+    assert len(st["flags"]["incomplete_days"]) == 1000
     # a length limit on top of it is still found (11 days: 85%, longer: a third of that) and used
     t.short = lambda s, e: 1.0 if (e - s).days + 1 <= 11 else 0.3
     log = []
     st = gu.fetch_full(_stub(t, log=log), END, 1300)
-    assert st["cells_chunk_days"] == 11 and len(_cells_asked(log)) < 150
+    assert st["events_chunk_days"] == 11 and len(_cells_asked(log) + _events_asked(log)) < 150
     assert all(0.8 < c <= 0.85 for c in st["flags"]["incomplete_days"].values()) and _silent(st, t) == []
 
 
@@ -547,7 +561,9 @@ def test_past_the_call_cap_or_the_run_budget_a_short_slice_is_kept_and_flagged_n
     monkeypatch.setattr(gu, "CELLS_MAX_CALLS", -90)                # a 200-day window: splitting stops at 10 slices
     log = []
     st = gu.fetch_full(_stub(t, log=log), END, 1300)
-    late = [a + timedelta(days=i) for a, b in _cells_asked(log)[9:] for i in range((b - a).days + 1)]
+    asked = _cells_asked(log)
+    assert asked[1] == D(0, 0)                                     # (the first slice read short: its oldest day
+    late = [a + timedelta(days=i) for a, b in asked[10:] for i in range((b - a).days + 1)]   # asked alone — fine)
     assert len(late) == len(set(late))                             # from the 10th slice on, none split again …
     assert st["flags"]["incomplete_days"] and _silent(st, t) == []  # … the short ones kept, their days flagged
     assert st["cells_chunk_days"] == 3                             # and the next fetch starts at what verified
@@ -714,3 +730,405 @@ def test_lateness_is_measured_from_the_daily_re_reads(world, tmp_path):
         t.asof += timedelta(days=2)
     world.run(tmp_path, now=NOW + timedelta(days=7))
     assert sorted(gu.load_store(gu.store_path(str(tmp_path), A1))["revisions"])[-1] == "2026-09-30"
+
+
+# ── users lost by age: the events path, the best read per day, the v2 repair ────────────────────────
+
+def _aged(days, new, lost_after=70, lost=0.03, recent_ev=0.85, old_ev=1.0, old_per_day=100):
+    """The live picture: install-day USERS come back at `lost` of the truth for event days older than
+    `lost_after` days before t.today — at ANY range, even one day — while install-day EVENTS come back at
+    `recent_ev` of the truth up to that age (~85% on some apps) and `old_ev` past it."""
+    t = Truth(END - timedelta(days=days - 1), END, new, old_per_day=old_per_day)
+    t.today = END
+    t.users_day = lambda d: 1.0 if (t.today - d).days <= lost_after else lost
+    t.events_day = lambda d: recent_ev if (t.today - d).days <= lost_after else old_ev
+    return t
+
+
+def _off(st, t, tol=0.03):
+    """Event days (not flagged incomplete) whose stored cell users are more than `tol` off the truth's."""
+    want = {d.isoformat(): u for d, u in t.un_by_day().items() if d <= date.fromisoformat(st["window_end"])}
+    got = gu._day_totals(st, sorted(want))
+    inc = st["flags"]["incomplete_days"]
+    return sorted(k for k, u in want.items() if k not in inc and u and abs(got[k] - u) > tol * u)
+
+
+def _asked_days(ranges):
+    return {(a + timedelta(days=i)).isoformat() for a, b in ranges for i in range((b - a).days + 1)}
+
+
+def _src(st, kind):
+    return {k for k, s in st["cell_src"].items() if s["src"] == kind}
+
+
+def _as_v2(t, end=END):
+    """What the v2 code wrote for `t`: users cells only (no age probe, no events path), the short days flagged."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(gu, "_probe", lambda *a, **k: (None, None))
+        mp.setattr(gu, "_events_pass", lambda ga, p, start, end, place_from, cut, echunk, *a, **k: echunk)
+        st = gu.fetch_full(_stub(t), end, 1300)
+    for k in ("cell_src", "users_ok_days", "events_chunk_days"):
+        del st[k]
+    del st["flags"]["users_k"]
+    st["v"] = 2
+    return st
+
+
+def test_users_lost_by_age_come_from_the_events_path_and_recent_days_stay_users():
+    t = _aged(400, 3000)
+    log = []
+    st = gu.fetch_full(_stub(t, log=log), END, 1300)
+    days = [d.isoformat() for d in gu._days(t.start, END)]
+    young = {k for k in days if (END - date.fromisoformat(k)).days <= 70}
+    assert st["users_ok_days"] == 70 and st["flags"]["incomplete_days"] == {}      # the edge, to the day
+    assert _src(st, "users") == young and _src(st, "events_scaled") == set(days) - young
+    assert _off(st, t) == []                                       # every day within 3% of the truth
+    # the cost: the first (oldest) slice, its oldest day alone + halving to the edge (one day a probe, a short one
+    # confirmed by the day past it), ONE users slice over the young days and 90-day events slices over the old
+    assert len(_cells_asked(log)) <= 1 + 10 + 6 + 1                # ones — the recent days' 85% events never read:
+                                                                   # users are complete there
+    assert len(_events_asked(log)) == 4 and _asked_days(_events_asked(log)) == set(days) - young
+    log = []
+    gu.fetch_incr(_stub(t, log=log), st, END, 14)                  # the daily re-read: users, nothing by events
+    assert len(_cells_asked(log)) == 1 and _events_asked(log) == [] and _off(st, t) == []
+    assert _src(st, "users") == young and st["users_ok_days"] == 70
+
+
+def test_events_are_scaled_to_users_by_the_days_ratio_in_whole_users():
+    got = gu._scale_day([(("2026-01-01", "0"), 105), (("2026-01-01", "3"), 10), (None, 1)], 0.95)
+    assert got == {("2026-01-01", "0"): 100, ("2026-01-01", "3"): 9, None: 1}     # 116 × 0.95 = 110.2 → 110
+    assert sum(gu._scale_day([(i, 21) for i in range(7)], 20 / 21).values()) == 140   # the day adds up
+
+
+def test_a_rebuild_never_overwrites_a_day_verified_from_users_while_it_was_young():
+    t = _aged(1000, 3000)
+    t.today = END - timedelta(days=28)
+    old = gu.fetch_full(_stub(t), END - timedelta(days=28), 1300)
+    young = _src(old, "users")                                     # verified from users 28 days ago …
+    held = gu._day_totals(old, sorted(young))
+    assert len(young) == 71 and _off(old, t) == []
+    t.today = END                                                  # … the oldest 28 of them are past the edge now:
+    log = []                                                       # GA4 answers them short by users
+    new = gu.fetch_full(_stub(t, log=log), END, 1300, old_store=json.loads(json.dumps(old)))
+    assert not _asked_days(_events_asked(log)) & young             # nothing could beat them: never even asked
+    assert len(_cells_asked(log)) == 2 and new["users_ok_days"] == 70   # one probe past the edge (short) + 1 slice
+    st, ok = gu.apply_rebuild(json.loads(json.dumps(old)), new)
+    assert ok and young <= _src(st, "users") and gu._day_totals(st, sorted(young)) == held
+    assert st["flags"]["incomplete_days"] == {} and _off(st, t) == []
+    # a re-pull that asks for them anyway (nothing to go by): neither an events estimate nor a short read wins
+    for ev in (1.0, 0.5):
+        t.events_day = lambda d, ev=ev: 0.85 if (t.today - d).days <= 70 else ev
+        new = gu.fetch_full(_stub(t), END, 1300)
+        assert young - _src(new, "users")                          # (read as events / short this time)
+        st, ok = gu.apply_rebuild(json.loads(json.dumps(old)), new)
+        assert ok and young <= _src(st, "users") and gu._day_totals(st, sorted(young)) == held
+        assert st["flags"]["incomplete_days"] == {} and _off(st, t) == []   # older: the complete estimate held
+
+
+def test_a_known_edge_moves_when_the_day_past_it_reads_complete():
+    t = _aged(400, 3000)
+    old = gu.fetch_full(_stub(t), END, 1300)
+    old["users_ok_days"] = 30                                      # learned too young (say, a GA4 hiccup)
+    log = []
+    new = gu.fetch_full(_stub(t, log=log), END, 1300, old_store=old)
+    assert new["users_ok_days"] == 70 and len(_cells_asked(log)) <= 2 + 9 + 2 + 5   # probe 31, the oldest, halving
+                                                                                    # (a short probe confirmed)
+    assert _src(new, "users") == {k for k in new["cell_src"] if (END - date.fromisoformat(k)).days <= 70}
+    old.pop("users_ok_days")                                       # a v2 store: read off its flags — never a young
+    old["flags"]["incomplete_days"] = {(END - timedelta(days=i)).isoformat(): 0.5 for i in range(20)}   # run
+    assert gu._stored_edge(old) is None
+    old["flags"]["incomplete_days"] = {k: 0.03 for k in old["daily"] if (END - date.fromisoformat(k)).days > 70}
+    assert gu._stored_edge(old) == 70
+
+
+def test_a_day_short_by_users_and_by_events_stays_flagged():
+    t = _aged(300, 3000, old_ev=0.5)                               # old days: users 3%, events 50% — both short
+    glitch = END - timedelta(days=20)
+    t.short_day = {glitch: 0.4}                                    # and one young day GA4 answers at 40%, both ways
+    st = gu.fetch_full(_stub(t), END, 1300)
+    inc = st["flags"]["incomplete_days"]
+    old = {d.isoformat() for d in gu._days(t.start, END) if (END - d).days > 70}
+    assert set(inc) == old | {glitch.isoformat()} and _silent(st, t) == [] and _off(st, t) == []
+    assert all(0.45 < inc[k] <= 0.5 for k in old) and old <= _src(st, "events_scaled")   # the better short read
+    assert 0.37 < inc[glitch.isoformat()] <= 0.4 and glitch.isoformat() in _src(st, "users")   # 40% × 85% < 40%
+    from admob_iq.engine import uninstall as eng
+    d, _ = eng.evaluate_app(st, A1, "One", {}, "2026-09-25T12:00:00Z")
+    assert d["flags"]["cell_days"] == {"users": 300 - len(inc), "events": 0, "incomplete": len(inc)}
+
+
+def test_an_old_events_day_sits_on_the_users_cells_scale_so_a_stable_app_raises_no_alert():
+    # users cells are sketches: a complete users day reads ~98–107% of the day's app_remove users (un), app by
+    # app. An events day scaled to un alone (or left at its events coverage) sits a few % under the recent users
+    # days every alert compares it with — a stable app then shows a false "all-time normal se zyada"
+    from admob_iq.engine import uninstall as eng
+
+    def fetch(users, old_ev):
+        t = _aged(600, 3000, old_ev=old_ev)
+        t.users_day = lambda d: users if (t.today - d).days <= 70 else 0.03
+        return t, gu.fetch_full(_stub(t), END, 1300)
+    for users, old_ev in ((1.03, 1.0), (1.0, 0.98)):
+        t, st = fetch(users, old_ev)
+        k = st["flags"]["users_k"]
+        assert st["users_ok_days"] == 70 and st["flags"]["incomplete_days"] == {} and abs(k - users) < 0.005
+        old = sorted(_src(st, "events_scaled"))
+        un, tot = t.un_by_day(), gu._day_totals(st, old)
+        assert len(old) == 529 and all(abs(tot[x] - un[date.fromisoformat(x)] * k) <= 0.5 for x in old)
+        assert {st["cell_src"][x]["k"] for x in old} == {k}        # the scale each day was put on, kept
+        d, _ = eng.evaluate_app(st, A1, "One", {}, "2026-09-25T12:00:00Z")
+        assert d["alerts"] == [], (users, old_ev)
+    with pytest.MonkeyPatch.context() as mp:                       # (the same app with every events day on un
+        mp.setattr(gu, "_users_k", lambda p, held=None: 1.0)       #  alone: the false alert this prevents)
+        _, st = fetch(1.03, 1.0)
+    d, _ = eng.evaluate_app(st, A1, "One", {}, "2026-09-25T12:00:00Z")
+    assert d["alerts"] and "all-time normal se zyada" in d["alerts"][0]["text"]
+
+
+def test_old_events_days_nearly_complete_are_taken_whole_far_short_ones_stay_flagged():
+    # eventCount is an exact count (a complete read is 100%), judged at EVENTS_MIN_COVERAGE: old days read 96.8%
+    # live (taken — the day scaled as one to its users) and 77% (flagged, its shortfall in sight)
+    t = _aged(300, 3000, old_ev=0.968)
+    st = gu.fetch_full(_stub(t), END, 1300)
+    old = sorted(_src(st, "events_scaled"))
+    un, tot = t.un_by_day(), gu._day_totals(st, old)
+    assert len(old) == 229 and st["flags"]["incomplete_days"] == {}
+    assert all(tot[x] == un[date.fromisoformat(x)] for x in old)          # the day's users (its scale is 1 here)
+    assert all(0.95 < st["cell_src"][x]["cov"] < 0.97 for x in old)       # and what the read held of it, kept
+    t = _aged(300, 3000, old_ev=0.77)
+    st = gu.fetch_full(_stub(t), END, 1300)
+    inc = st["flags"]["incomplete_days"]
+    assert set(inc) == set(old) and all(0.75 < c <= 0.77 for c in inc.values()) and _silent(st, t) == []
+
+
+def test_late_data_leaves_a_held_users_day_short_so_a_complete_events_read_replaces_it_else_it_is_flagged():
+    t = Truth(END - timedelta(days=199), END, 3000)
+    t.late = lambda age: 1.0 if age > 3 else {2: 0.909, 3: 1.0}.get(age, 0.8)
+    day = END - timedelta(days=1)
+    k = day.isoformat()
+    for ev_share in (1.0, 0.5):
+        t.asof, t.users_day, t.events_day = END + timedelta(days=1), None, None
+        st = gu.fetch_full(_stub(t), END, 1300)                    # the day read complete at 2 days old (91% of it
+        held = gu._day_totals(st, [k])[k]                          # is in by then) …
+        assert held == st["daily"][k]["un"] and k not in st["flags"]["incomplete_days"]
+        t.asof = END + timedelta(days=2)                           # … a day later its late 10% is in, and GA4
+        t.users_day = lambda d: 0.5 if d == day else 1.0           # answers its users at half
+        t.events_day = lambda d, e=ev_share: e if d == day else 1.0
+        gu.fetch_incr(_stub(t), st, END, 14)
+        un, got = st["daily"][k]["un"], gu._day_totals(st, [k])[k]
+        assert un > 1.09 * held
+        if ev_share == 1.0:                                        # its events read complete: that replaces ours
+            assert got == un and st["cell_src"][k]["src"] == "events_scaled"
+            assert k not in st["flags"]["incomplete_days"]
+        else:                                                      # short too: ours stays — FLAGGED at what it
+            assert got == held and st["flags"]["incomplete_days"][k] == round(held / un, 4)   # holds now
+            assert st["cell_src"][k]["src"] == "users" and st["cell_src"][k]["cov"] == round(held / un, 4)
+
+
+def test_a_complete_re_read_lower_than_the_day_we_hold_does_not_replace_it():
+    # late data only adds: a re-read still "complete" that holds less of the day than ours lost something
+    t = _aged(300, 3000)
+    old = gu.fetch_full(_stub(t), END, 1300)
+    ev_days = sorted(_src(old, "events_scaled"))[:4]
+    us_days = sorted(_src(old, "users"))[20:24]                    # users days past any late data
+    t.events_day = lambda d: 0.96 if d.isoformat() in ev_days else 0.85 if (t.today - d).days <= 70 else 1.0
+    t.users_day = lambda d: 0.975 if d.isoformat() in us_days else 1.0 if (t.today - d).days <= 70 else 0.03
+    new = gu.fetch_full(_stub(t), END, 1300)                       # (nothing held: every day asked again)
+    assert new["flags"]["incomplete_days"] == {} and all(new["cell_src"][x]["cov"] < 0.97 for x in ev_days + us_days)
+    st, ok = gu.apply_rebuild(json.loads(json.dumps(old)), new)
+    assert ok and st["flags"]["incomplete_days"] == {}
+    assert gu._day_totals(st, ev_days + us_days) == gu._day_totals(old, ev_days + us_days)   # ours stayed …
+    assert all(st["cell_src"][x]["cov"] == 1.0 for x in ev_days + us_days)                    # … with their source
+
+
+def test_one_day_short_at_any_range_does_not_move_the_users_edge():
+    # a day GA4 answers short at ANY range (seen live) is no loss by age: a probe landing on it is confirmed by the
+    # day past it — complete there, so the edge stays where users really go short and only that day is flagged
+    for ages in ((49,), (49, 24, 12), (61, 30)):
+        t = _aged(400, 3000)
+        t.short_day = {END - timedelta(days=a): 0.6 for a in ages}
+        st = gu.fetch_full(_stub(t), END, 1300)
+        assert st["users_ok_days"] == 70, ages
+        assert set(st["flags"]["incomplete_days"]) == {(END - timedelta(days=a)).isoformat() for a in ages}
+        assert _off(st, t) == [] and _silent(st, t) == []
+    t = _aged(400, 3000, lost_after=10)                            # a users loss that young is something else: the
+    st = gu.fetch_full(_stub(t), END, 1300)                        # edge never goes under EDGE_MIN_DAYS (the days
+    assert st["users_ok_days"] == gu.EDGE_MIN_DAYS                 # past the loss read short go by events anyway)
+    assert st["flags"]["incomplete_days"] == {} and _off(st, t) == []
+
+
+def test_launch_weeks_too_small_to_judge_still_lead_to_the_users_edge_at_a_bounded_cost():
+    # an app's first weeks often hold < CELLS_MIN_USERS uninstalls even 7 days together: the probe goes to the
+    # oldest day that CAN be judged — never "no loss by age" for want of one (that read all 1,000 days by users)
+    t = _aged(1000, lambda c: 5 if (c - (END - timedelta(days=999))).days < 20 else 3000, old_per_day=0)
+    log = []
+    st = gu.fetch_full(_stub(t, log=log), END, 1300)
+    assert st["users_ok_days"] == 70 and len(log) <= 40 and _off(st, t) == [] and _silent(st, t) == []
+    for edge in (None, 60):                                        # a store that learned 1-day slices, with no edge
+        old = json.loads(json.dumps(st))                           # / one the property's longer data retention
+        old.update(users_ok_days=edge, cells_chunk_days=1)         # has moved since: 1,014 calls before
+        log = []
+        new = gu.fetch_full(_stub(t, log=log), END, 1300, old_store=old)
+        assert new["users_ok_days"] == 70 and len(log) <= 65, edge
+    t = Truth(END - timedelta(days=299), END, 1000)                # no loss at all, but 1-day slices learned: the
+    old = gu.fetch_full(_stub(t), END, 1300)                       # base slices, too, stay within the call cap —
+    old["cells_chunk_days"] = 1                                    # the rest read in longer ones, every day read
+    for stop, most in ((None, gu.CELLS_MAX_CALLS + 300 // 2 + 1), (lambda: True, 4)):   # (run budget spent: in
+        log = []                                                                        #  90-day ones)
+        st = gu.fetch_full(_stub(t, log=log), END, 1300, old_store=old, stop=stop)
+        assert len(_cells_asked(log)) <= most and st["cohorts"] == _cells_of(t) and st["flags"]["incomplete_days"] == {}
+
+
+def test_a_day_with_users_but_no_app_remove_event_is_not_taken_from_the_events_unchecked():
+    t = _aged(300, 3000)
+    st = _as_v2(t)
+    day = sorted(st["flags"]["incomplete_days"])[100]
+    flag = st["flags"]["incomplete_days"][day]
+    st["daily"][day]["un_ev"] = 0                                  # the events report: users, but no event
+    gu.fetch_repair(_stub(t), st)
+    assert st["flags"]["incomplete_days"] == {day: flag} and st["cell_src"][day]["src"] == "users"
+
+
+def test_a_v2_store_is_repaired_reading_only_its_incomplete_days_by_events():
+    t = _aged(1000, 3000)
+    st = _as_v2(t)
+    inc = set(st["flags"]["incomplete_days"])
+    old = {d.isoformat() for d in gu._days(t.start, END) if (END - d).days > 70}
+    assert inc == old                                              # the live picture: every old day short
+    verified = {(c, lag): u for c, lags in st["cohorts"].items() for lag, u in lags.items()
+                if (date.fromisoformat(c) + timedelta(days=int(lag))).isoformat() not in inc}
+    st["cells_chunk_days"] = 1                                     # (v2 took the loss by age for a length limit)
+    log = []
+    moved = gu.fetch_repair(_stub(t, log=log), st, at="2026-09-26")
+    assert len(log) == len(_events_asked(log)) <= 11               # events cells only: no daily / events / versions
+    assert _asked_days(_events_asked(log)) == inc                   # / users call, and only the days it lacked
+    assert st["flags"]["incomplete_days"] == {} and _off(st, t) == [] and st["users_ok_days"] == 70
+    assert _src(st, "events_scaled") == inc
+    assert _src(st, "users") == {d.isoformat() for d in gu._days(t.start, END)} - inc
+    assert {(c, lag): u for c, lags in st["cohorts"].items() for lag, u in lags.items()
+            if (date.fromisoformat(c) + timedelta(days=int(lag))).isoformat() not in inc} == verified   # untouched
+    assert moved > 0.9 * sum(u for d, u in t.un_by_day().items() if d.isoformat() in inc)
+    log = []
+    assert gu.fetch_repair(_stub(t, log=log), st) == 0 and log == []     # nothing short left: no call
+    assert st["cells_chunk_days"] == gu.FULL_CHUNK_DAYS            # its users slices start over: the daily re-read
+    log = []                                                       # is ONE users slice, not 14 one-day ones
+    gu.fetch_incr(_stub(t, log=log), st, END, 14)
+    assert len(log) == 4 and len(_cells_asked(log)) == 1
+
+
+def _world_v2(world, tmp_path, lost_after=100):
+    """A world whose v2 run already happened: every store as the v2 code wrote it (A1's install-day users lost
+    past `lost_after` days, its old days flagged), and some alert history for A1, A2, A5."""
+    world.truths[(PID, S1)].users_day = lambda d: 1.0 if (END - d).days <= lost_after else 0.03
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(gu, "_probe", lambda *a, **k: (None, None))
+        mp.setattr(gu, "_events_pass", lambda ga, p, start, end, place_from, cut, echunk, *a, **k: echunk)
+        world.run(tmp_path)
+    state = gu.load_state(str(tmp_path))
+    for a in (A1, A2, A5):
+        path = gu.store_path(str(tmp_path), a)
+        st = gu.load_store(path)
+        for k in ("cell_src", "users_ok_days", "events_chunk_days"):
+            st.pop(k, None)
+        st["flags"].pop("users_k", None)
+        st["v"] = 2
+        gu.save_store(path, st)
+        state["fetch"][a]["meta"] = gu.store_meta(st)
+        state["eval"][a] = {"end": END.isoformat(), "stage": "stable", "stable_hold": 7, "streak": {}}
+        state["episodes"]["%s|cohort|up" % a] = {"id": a + "|x", "app_id": a, "family": "cohort", "dir": "up"}
+    gu.save_state(str(tmp_path), state)
+    return state
+
+
+def test_a_v2_store_is_repaired_at_once_and_its_alerts_start_over_only_if_that_moved_its_cells(world, tmp_path):
+    _world_v2(world, tmp_path)
+    path = gu.store_path(str(tmp_path), A1)
+    before = gu.load_store(path)
+    assert len(before["flags"]["incomplete_days"]) == 99           # 200 days, the oldest 99 lost by users
+    n = len(world.log)
+    out = world.run(tmp_path, now=NOW + timedelta(hours=1))        # 1h later — far inside min_hours
+    assert out["apps"] == {A1: "fetched", A2: "fetched", A5: "fetched"} and out["counts"]["repair"] == 3
+    assert out["counts"]["full"] == 0
+    calls = world.log[n:]
+    assert calls and all([m["name"] for m in b["metrics"]] == ["eventCount"] for _, _, b in calls)
+    assert {s for _, s, _ in calls} == {S1}                        # A2, A5 had nothing short: no call at all
+    st = gu.load_store(path)
+    assert st["v"] == gu.STORE_V and st["flags"]["incomplete_days"] == {} and st["users_ok_days"] == 100
+    assert _off(st, world.truths[(PID, S1)]) == [] and len(_src(st, "events_scaled")) == 99
+    assert st["fetched_at"] == before["fetched_at"] and st["window_end"] == before["window_end"]   # no new day
+    state = gu.load_state(str(tmp_path))
+    assert A1 not in state["eval"] and not [e for e in state["episodes"].values() if e["app_id"] == A1]   # moved
+    assert A2 in state["eval"] and A5 in state["eval"] and "%s|cohort|up" % A5 in state["episodes"]       # didn't
+    assert state["fetch"][A1]["last_kind"] == "repair" and state["fetch"][A1]["last_ok"] == "2026-09-25T12:00:00Z"
+    out = world.run(tmp_path, now=NOW + timedelta(hours=2))        # repaired: nothing due until the next day
+    assert set(out["apps"].values()) == {"fresh"}
+    out = world.run(tmp_path, now=NOW + timedelta(hours=21))       # the day moved: the usual incremental
+    assert out["apps"] == {A1: "fetched", A2: "fetched", A5: "fetched"} and out["counts"]["repair"] == 0
+    assert gu.load_state(str(tmp_path))["fetch"][A1]["last_kind"] == "incr"
+    assert gu.load_store(path)["flags"]["incomplete_days"] == {}
+
+
+def test_quota_running_low_mid_repair_keeps_the_v2_store(world, tmp_path):
+    _world_v2(world, tmp_path)
+    path = gu.store_path(str(tmp_path), A1)
+    before = open(path, "rb").read()
+    world.truths[(PID, S1)].short = lambda s, e: 1.0 if (e - s).days + 1 <= 3 else 0.5   # events slices split …
+    world.quota = lambda ga: {"tokensPerHour": {"consumed": 30, "remaining": 1000}}      # … with the quota low
+    out = world.run(tmp_path, now=NOW + timedelta(hours=1))
+    assert out["apps"][A1] == "failed" and gu.load_state(str(tmp_path))["fetch"][A1]["fail"] == "quota"
+    assert open(path, "rb").read() == before                        # the old store, as it was
+    assert A1 in gu.load_state(str(tmp_path))["eval"]              # and its alert history
+
+
+def test_a_repair_that_keeps_failing_is_tried_once_a_day_and_the_incrementals_go_on(world, tmp_path):
+    _world_v2(world, tmp_path)
+
+    def fail(body):                                                # every events-path request rejected
+        if [m["name"] for m in body["metrics"]] == ["eventCount"]:
+            raise RuntimeError("HTTP 400: INVALID_ARGUMENT")
+    world.fail = fail
+    tried = []
+    for h in range(1, 52):                                         # every hour for two days
+        n = len(world.log)
+        world.run(tmp_path, now=NOW + timedelta(hours=h))
+        if any([m["name"] for m in b["metrics"]] == ["eventCount"] for _, _, b in world.log[n:]):
+            tried.append(h)
+    st = gu.load_store(gu.store_path(str(tmp_path), A1))
+    assert tried == [1, 25, 49]                                    # the repair: once a day …
+    assert st["v"] == 2 and st["window_end"] == (END + timedelta(days=2)).isoformat()   # … the new days: every day
+    assert len(st["flags"]["incomplete_days"]) == 99               # (its short days still flagged, never hidden)
+
+
+def test_a_repair_that_makes_no_day_usable_keeps_the_alert_history(world, tmp_path):
+    _world_v2(world, tmp_path)
+    t = world.truths[(PID, S1)]
+    t.events_day = lambda d: 0.77 if (END - d).days > 100 else 1.0   # its old days' events: 77% (seen live)
+    world.run(tmp_path, now=NOW + timedelta(hours=1))
+    st = gu.load_store(gu.store_path(str(tmp_path), A1))
+    assert st["v"] == gu.STORE_V and len(st["flags"]["incomplete_days"]) == 99 and _silent(st, t) == []
+    assert len(_src(st, "events_scaled")) == 99                    # a better short read of each, still flagged …
+    state = gu.load_state(str(tmp_path))
+    assert A1 in state["eval"] and "%s|cohort|up" % A1 in state["episodes"]   # … no alert can use them: kept
+
+
+def test_ga4_calls_for_a_1000_day_big_app():
+    # 1,000 days × 3,000 installs, users lost past 70 days, events 85% on the recent ones. Two GA4 shapes: long
+    # slices fine, or (worst case) every slice over 11 days short — users and events alike
+    eleven = lambda s, e: 1.0 if (e - s).days + 1 <= 11 else 0.3                               # noqa: E731
+    for short, first_max, rebuild_max, repair_max in ((None, 36, 6, 11), (eleven, 135, 20, 115)):
+        t = _aged(1000, 3000)
+        t.short = short
+        t.today = END - timedelta(days=28)
+        log = []
+        st = gu.fetch_full(_stub(t, log=log), END - timedelta(days=28), 1300)
+        assert len(log) <= first_max and _off(st, t) == [] and st["flags"]["incomplete_days"] == {}
+        t.today = END
+        log = []
+        gu.fetch_incr(_stub(t, log=log), st, END - timedelta(days=27), 14)
+        assert len(log) <= 5                                       # daily, events, versions + users cells
+        log = []
+        new = gu.fetch_full(_stub(t, log=log), END, 1300, old_store=json.loads(json.dumps(st)))
+        st, ok = gu.apply_rebuild(st, new)                         # (the old days it holds complete are not
+        assert ok and len(log) <= rebuild_max and _off(st, t) == [] and st["flags"]["incomplete_days"] == {}
+        v2 = _as_v2(t)                                             #  asked again: a re-read ties at best) — and
+        log = []                                                   # the v2 store of the same app, repaired
+        gu.fetch_repair(_stub(t, log=log), v2)
+        assert len(log) <= repair_max and _silent(v2, t) == []

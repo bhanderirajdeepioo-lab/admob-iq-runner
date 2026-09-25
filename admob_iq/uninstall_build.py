@@ -139,11 +139,12 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
         st = state["fetch"].setdefault(aid, {})
         st["meta"] = gu.store_meta(store)               # planning always follows the store actually on disk
         stale = gu._hours_since(store.get("fetched_at"), now) > eng.STALE_HOURS
-        # an older store format (its clean re-pull still pending — quota, a failure) is shown and flagged, but
-        # whatever it opens is seeded, never sent: no alert from unchecked data ever goes out
+        # an unchecked store format (v1: its clean re-pull still pending — quota, a failure) is shown and flagged,
+        # but whatever it opens is seeded, never sent: no alert from unchecked data ever goes out. A v2 store
+        # waiting for its repair is checked data: evaluated as ever (its incomplete days still left out)
         detail, row = eng.evaluate_app(store, aid, a["app_name"], state, now_iso, stale=stale, key=key,
                                        package=a.get("package") or store.get("package"), late=cfg["late_days"],
-                                       outdated=gu._store_v(store) < gu.STORE_V)
+                                       outdated=gu._store_v(store) < gu.CHECKED_V)
         eng.revision_sums(store, late_sums)
         name = COHORT_PREFIX + key + ".json.gz"
         sig = _sig(path)
@@ -191,9 +192,9 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
                               "asset_v": asset_v, "data_till_min": till[0] if till else None,
                               "data_till_max": till[-1] if till else None, "counts": counts, "apps": rows,
                               "alerts": alerts, "alert_counts": ac}
-    print("ga4 uninstall: apps %d, with GA4 %d, fetched %d (full %d), fresh %d, failed %d, deferred %d, "
+    print("ga4 uninstall: apps %d, with GA4 %d, fetched %d (full %d, repair %d), fresh %d, failed %d, deferred %d, "
           "open alerts %d (new %d)" % (counts["selected"], counts["with_ga4"], sc.get("fetched", 0),
-                                       sc.get("full", 0), sc.get("fresh", 0), counts["failed"],
+                                       sc.get("full", 0), sc.get("repair", 0), sc.get("fresh", 0), counts["failed"],
                                        counts["deferred"], len(alerts), sum(1 for al in alerts if al["notify"])),
           file=sys.stderr)
     return files

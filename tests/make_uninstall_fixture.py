@@ -15,7 +15,11 @@ The apps cover what the tab has to show:
   * Demo Caller – Test App  big + stable, a new version (zoom), D1 uninstall rising  → watch (sent 21 Sep, "kaccha")
                                                                                        — ONE alert while it
                                                                                        lasts, though its newest
-                                                                                       installs still read low
+                                                                                       installs still read low;
+                                                                                       GA4 keeps its install-day
+                                                                                       USERS 150 days only: the
+                                                                                       older days come from the
+                                                                                       events ("(events) se andaza")
   * Demo Flashlight         growing, D0 uninstall falling since 25 Aug (settled)    → good; the summary verdict:
                                                                                        more kept 7 days after
                                                                                        install than the month before
@@ -116,6 +120,8 @@ def truths():
     z.cells = {k: v for k, v in z.cells.items() if k[1] != gap}
     z.old[gap] = 0
     t["200000006"].short_day = {date(2026, 9, 3): 0.6}                  # cells short at ANY range: incomplete
+    caller = t["200000001"]                                              # install-day USERS kept 150 days only
+    caller.users_day = lambda day: 1.0 if (caller.asof - day).days <= 150 else 0.04
     for x in t.values():                                                 # Firebase-like late app_remove
         x.late = lambda age: 1.0 if age > 7 else LATE_SHARE.get(age, 0.8)
     return t

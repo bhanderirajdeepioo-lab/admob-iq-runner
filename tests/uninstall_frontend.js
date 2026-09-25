@@ -183,6 +183,9 @@ console.log(JSON.stringify({
     kaccha_tag: has('portfolio_30d', '>kaccha</span>'),
     old_title_gone: !Object.values(out).some(v => v.includes('Har checkpoint') || v.includes('(cumulative)')),
     worse_app: T('verdict_worse').includes('⚠️ Pichhle mahine se 5 kam bache (7 din baad)'),
+    events_note: has('detail|Demo Caller – Test App|all|30|cp|false', 'ℹ️ 85 purane din ka data uninstall ginti (events) se andaza')
+      && !apps.some(a => a.app !== 'Demo Caller – Test App' && has(`detail|${a.app}|all|30|cp|false`, '(events) se andaza')),
+    adhoora_kept: has('detail|Demo Launcher|all|30|cp|false', '1 din ka data adhoora'),
     worse_portfolio: /⚠️ 1 app me pichhle mahine se kam bache \(7 din baad\): \S.* \(−5\)/.test(T('verdict_worse')),
   },
 }, null, 1));
