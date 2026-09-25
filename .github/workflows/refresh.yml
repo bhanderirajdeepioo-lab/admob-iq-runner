@@ -155,6 +155,9 @@ jobs:
           # Compact the LATEST remote tree, not this run's copy — keeps anything another job pushed
           # after our push (e.g. the ga4/ probe output), so the force-push never drops a file.
           git fetch -q --depth=1 origin main && git reset -q --hard origin/main
+          # remember what main was, so the force-push below is refused if anyone (e.g. the ga4
+          # probe) pushed in between — instead of silently dropping their commit
+          base=$(git rev-parse origin/main)
           # SAFETY: never force-push an empty or half-built tree over the real history.
           # (dashboard ships gzipped since 2026-09 — the old plain-name check skipped EVERY
           #  compaction and let the repo grow to ~62 GB; accept either name.)
@@ -165,8 +168,8 @@ jobs:
           git add -A
           git -c user.name="admob-iq-bot" -c user.email="admob-iq-bot@users.noreply.github.com" \
               commit -q -m "compact history $(date -u '+%F') — same files, old git revisions dropped"
-          if git push -q --force origin _compact:main 2>/dev/null; then
+          if git push -q --force-with-lease=main:"$base" origin _compact:main 2>/dev/null; then
             echo "history compacted — repo back to roughly the size of one snapshot"
           else
-            echo "::warning::compaction push failed — nothing lost, it will retry next run"
+            echo "::warning::compaction push failed (or main moved meanwhile) — nothing lost, it will retry next run"
           fi

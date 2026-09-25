@@ -1,0 +1,89 @@
+name: GA4 probe (Phase 0, manual)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# One-off capability probe for the Uninstall dashboard: which uninstall / retention
+# data can GA4 actually give for our apps? Read-only against GA4 (analytics.readonly).
+#
+# PUBLIC REPO → PUBLIC LOGS. The probe prints ONLY aggregate counts ("T1 ok 20/22");
+# every name, id, number and API error text goes into ga4/probe.json, which is pushed
+# to the PRIVATE repo only. It pushes ONLY ga4/ — data/ and site/ belong to the
+# refresh job and are never touched here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4          # this repo = code only
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Pull the PRIVATE repo (app catalog + package map)
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing (format: owner/repo)"; exit 1; }
+          test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
+          git clone --depth=1 "https://x-access-token:$DATA_REPO_TOKEN@github.com/$DATA_REPO.git" _private \
+            > /dev/null 2>/tmp/clone.err || { sed -E 's#//[^@]*@#//***@#g' /tmp/clone.err; echo "::error::could not clone the private data repo"; exit 1; }
+          echo "private repo cloned"
+
+      - name: Run the probe
+        env:
+          PRIVATE_DIR: _private
+          # written OUTSIDE _private: the push step resets _private to the latest remote
+          # main before copying this in, which would otherwise wipe it
+          GA4_PROBE_OUT: ga4_out/probe.json
+          # the refresh token only works with the OAuth client that minted it: GA4_CLIENT_* is
+          # saved by `authorize --ga4 --save-secret`; GOOGLE_CLIENT_* is the fallback
+          GA4_CLIENT_ID:        ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET:    ${{ secrets.GA4_CLIENT_SECRET }}
+          GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GA4_REFRESH_TOKEN:    ${{ secrets.GA4_REFRESH_TOKEN }}
+        run: |
+          test -n "$GA4_REFRESH_TOKEN" || { echo "::error::GA4_REFRESH_TOKEN secret missing"; exit 1; }
+          # stdout = aggregate counts only (by design). stderr (library warnings, which could
+          # echo request details) is kept off the public log.
+          python -m admob_iq.ga4_probe 2>/tmp/probe.err
+
+      - name: Push ONLY ga4/ back to the PRIVATE repo
+        # also after a failed probe run: the report then holds the (private) failure reason
+        if: ${{ !cancelled() && hashFiles('ga4_out/probe.json') != '' }}
+        run: |
+          cd _private
+          git config user.name  "admob-iq-bot"
+          git config user.email "admob-iq-bot@users.noreply.github.com"
+          # Race-proof: the hourly refresh job pushes to the same repo. Always rebuild on top of
+          # whatever is on the remote right now, add ONLY ga4/, push; retry if another run lands.
+          pushed=0
+          for i in 1 2 3 4 5; do
+            git fetch --depth=1 origin main > /dev/null 2>&1
+            git reset --hard origin/main    > /dev/null 2>&1
+            mkdir -p ga4
+            cp -f ../ga4_out/probe.json ga4/probe.json
+            git add ga4
+            if git diff --cached --quiet; then echo "nothing to commit"; pushed=1; break; fi
+            git commit -q -m "ga4 probe $(date -u '+%F %H:%M') UTC"
+            if git push -q origin HEAD:main 2>/dev/null; then echo "pushed on attempt $i"; pushed=1; break; fi
+            echo "push attempt $i rejected — retrying on latest main"; sleep 5
+          done
+          [ "$pushed" = 1 ] || { echo "::error::push to the private repo failed after 5 attempts"; exit 1; }
