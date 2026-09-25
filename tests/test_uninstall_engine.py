@@ -3,6 +3,7 @@ the comparable headline curve, the install-week triangle, adaptive checkpoints, 
 every checkpoint (vs the 4 weeks before and vs all-time, both directions, no spam), the daily rate band
 (spikes + slow drift), alert episodes and the Hinglish messages."""
 
+import copy
 import random
 import re
 from datetime import date, timedelta
@@ -176,7 +177,9 @@ def test_owner_example_d1_72_to_79_gives_exactly_the_message():
     assert len(al) == 1
     a = al[0]
     assert a["message"] == ("Phone Call – Caller ID: D1 uninstall 72% → 79% (+7 point) — 12–18 Sep ke installs, "
-                            "pichhle 4 hafte se zyada")
+                            "pichhle 4 hafte se zyada · abhi ka data kaccha — number aur badh sakta hai")
+    assert a["provisional"] is True                     # 12–18 Sep's day 1 = 13–19 Sep: still filling in (late data
+                                                        # only ADDS uninstalls — the rise is real, it can only grow)
     assert a["text"] == a["message"].split(": ", 1)[1]
     assert a["severity"] == "warning" and a["dir"] == "up" and a["checkpoint"] == "D1" and a["n"] == 1
     assert a["vs"] == ["prev"] and a["also"] == [] and a["unit"] == "pct"
@@ -235,11 +238,21 @@ def test_a_big_app_alerts_on_the_second_daily_evaluation_only():
     assert len(a) == 1 and a[0]["checkpoint"] == "D0" and a[0]["notify"] and a[0]["fresh"]
 
 
-def test_a_drop_is_good_news():
-    d, _, _ = evaluate(make_store(42, 1000, bump=lambda c: {1: -70, 2: 70} if c >= SEP(12) else None))
+def test_a_drop_is_good_news_only_on_settled_data():
+    # the drop from 12 Sep: its day 1 (13–19 Sep) is still PROVISIONAL (settled till 12 Sep) — a low reading
+    # there may just be late app_remove still to come, so no "good news" yet
+    d, row, _ = evaluate(make_store(42, 1000, bump=lambda c: {1: -70, 2: 70} if c >= SEP(12) else None))
+    assert cohort_alerts(d) == [] and d["settled_till"] == "2026-09-12"
+    assert row["head4"]["D1"]["dir"] is None and row["head4"]["D1"]["prov"] is True     # no ▼ from kaccha data
+    t1 = [t for t in d["table"] if t["n"] == 1][0]
+    assert t1["recent"]["p"] == 0.65 and t1["prov"] and t1["dir"] is None             # shown, marked kaccha
+    # from 5 Sep: 5–11 Sep's day 1 is settled → good news, about exactly those install days
+    d, row, _ = evaluate(make_store(42, 1000, bump=lambda c: {1: -70, 2: 70} if c >= SEP(5) else None))
     a = cohort_alerts(d)
-    assert len(a) == 1 and a[0]["severity"] == "good" and a[0]["dir"] == "down"
-    assert a[0]["text"] == "D1 uninstall 72% → 65% (−7 point) — 12–18 Sep ke installs, pichhle 4 hafte se kam"
+    assert len(a) == 1 and a[0]["severity"] == "good" and a[0]["dir"] == "down" and a[0]["provisional"] is False
+    assert a[0]["text"] == "D1 uninstall 72% → 65% (−7 point) — 5–11 Sep ke installs, pichhle 4 hafte se kam"
+    h = row["head4"]["D1"]
+    assert h["dir"] == "down" and h["alert"] and not h["prov"] and (h["from"], h["to"]) == ("2026-09-05", "2026-09-11")
 
 
 def test_a_move_only_against_all_time_says_all_time_normal():
@@ -248,7 +261,8 @@ def test_a_move_only_against_all_time_says_all_time_normal():
     d, _, _ = evaluate(st)
     a = cohort_alerts(d)
     assert len(a) == 1 and a[0]["vs"] == ["all"] and a[0]["checkpoint"] == "D1"
-    assert a[0]["text"] == "D1 uninstall 74.8% → 78.0% (+3.2 point) — 12–18 Sep ke installs, all-time normal se zyada"
+    assert a[0]["text"] == ("D1 uninstall 74.8% → 78.0% (+3.2 point) — 12–18 Sep ke installs, all-time normal se zyada"
+                            + eng.PROV_NOTE)
     t1 = [t for t in d["table"] if t["n"] == 1][0]
     assert not t1["prev"]["fires"] and t1["all"]["fires"]
 
@@ -259,7 +273,7 @@ def test_a_day_0_jump_is_one_alert_headlined_d0_with_the_rest_in_also():
     assert len(a) == 1 and a[0]["checkpoint"] == "D0"
     assert a[0]["also"] == ["D1", "D2", "D3"]                   # D4: only 3 moved install days in view
     assert a[0]["text"] == ("D0 uninstall 60% → 70% (+10 point) — 13–19 Sep ke installs, pichhle 4 hafte se zyada"
-                            " · D1, D2, D3 bhi upar")
+                            " · D1, D2, D3 bhi upar · abhi ka data kaccha — number aur badh sakta hai")
     assert all(t["alert"] for t in d["table"] if "D%d" % t["n"] in ["D0"] + a[0]["also"])
 
 
@@ -363,35 +377,37 @@ def rate_alerts(d):
     return [a for a in d["alerts"] if a["family"].startswith("rate")]
 
 
-def test_a_spike_day_above_the_band_is_a_warning_and_a_dip_is_good_news_a_day_later():
+def test_a_spike_day_above_the_band_is_a_warning_and_a_dip_is_good_news_once_settled():
     d, _, _ = evaluate(_rate_store(8.0))
     sp = [a for a in d["alerts"] if a["family"] == "rate_spike"]
     assert len(sp) == 1 and sp[0]["dir"] == "up" and sp[0]["severity"] == "warning" and sp[0]["unit"] == "per1k"
-    assert sp[0]["text"] == "19 Sep ko uninstall rate 8.0 /1k active (normal 3.4–7.5) — achanak zyada (800 uninstalls)"
+    assert sp[0]["text"] == ("19 Sep ko uninstall rate 8.0 /1k active (normal 3.4–7.5) — achanak zyada (800 uninstalls)"
+                             " · abhi ka data kaccha — number aur badh sakta hai")
     assert sp[0]["day"] == "2026-09-19" and sp[0]["now"] == 8.0 and sp[0]["before"] == 5.0
     assert d["daily"]["hi"][-1] == 7.459 and d["daily"]["lo"][-1] == 3.352 and d["daily"]["med"][-1] == 5.0
     assert d["rate_now"]["out_of_band"] is False and d["rate_now"]["dir"] == "flat"  # 7-day pooled: +9%
     assert (d["rate_now"]["med"], d["rate_now"]["lo"], d["rate_now"]["hi"]) == (5.0, 3.352, 7.459)
     d, _, _ = evaluate(_rate_store(12.0))
     assert d["rate_now"]["dir"] == "up" and d["rate_now"]["last7"] == 6.0      # +20% vs its normal level
-    dip = _rate_store(2.0, day=END - timedelta(days=1))
-    d, _, _ = evaluate(dip, E=END - timedelta(days=1))                         # the newest day: may still fill in
-    assert rate_alerts(d) == []
-    d, _, _ = evaluate(dip)
+    dip = _rate_store(2.0, day=END - timedelta(days=7))
+    for k in range(7, 0, -1):                                                  # 6 days old or younger: may still fill in
+        d, _, _ = evaluate(dip, E=END - timedelta(days=k))
+        assert rate_alerts(d) == [], k
+    d, _, _ = evaluate(dip)                                                    # 7 days old: settled
     sp = [a for a in d["alerts"] if a["family"] == "rate_spike"]
-    assert len(sp) == 1 and sp[0]["dir"] == "down" and sp[0]["severity"] == "good"
-    assert sp[0]["text"].startswith("18 Sep ko") and sp[0]["text"].endswith("— achanak kam (200 uninstalls)")
+    assert len(sp) == 1 and sp[0]["dir"] == "down" and sp[0]["severity"] == "good" and not sp[0]["provisional"]
+    assert sp[0]["text"].startswith("12 Sep ko") and sp[0]["text"].endswith("— achanak kam (200 uninstalls)")
 
 
-def test_a_zero_day_is_a_tracking_watch_once_it_is_no_longer_the_newest_day():
-    st = _rate_store(0.0, day=END - timedelta(days=1))
-    d, _, _ = evaluate(st, E=END - timedelta(days=1))
-    assert rate_alerts(d) == []
+def test_a_zero_day_is_a_tracking_watch_once_it_is_settled():
+    st = _rate_store(0.0, day=END - timedelta(days=7))
+    d, _, _ = evaluate(st, E=END - timedelta(days=1))                          # 6 days old: late data may fill it
+    assert rate_alerts(d) == [] and d["daily"]["breaks"] == ["2026-09-12"]    # (shown as a gap meanwhile)
     d, _, _ = evaluate(st)
     z = [a for a in d["alerts"] if a["family"] == "rate_zero"]
     assert len(z) == 1 and z[0]["severity"] == "watch"
-    assert z[0]["text"] == "18 Sep ko ek bhi uninstall record nahi hua (normal ~500/din) — GA4/Firebase tracking check karo"
-    assert d["daily"]["breaks"] == ["2026-09-18"]
+    assert z[0]["text"] == "12 Sep ko ek bhi uninstall record nahi hua (normal ~500/din) — GA4/Firebase tracking check karo"
+    assert d["daily"]["breaks"] == ["2026-09-12"]
 
 
 def test_no_band_and_no_rate_alert_in_an_apps_first_4_weeks():
@@ -401,12 +417,14 @@ def test_no_band_and_no_rate_alert_in_an_apps_first_4_weeks():
     assert d["daily"]["un"][0] == 500                                     # the counts themselves are all there
     d, _, _ = evaluate(_rate_store(20.0, days=28, capped=True))            # full actives: a rate from day 1 …
     assert d["daily"]["rate"][0] == 5.0 and d["daily"]["med"] == [None] * 28   # … the band still needs 4 weeks
-    d, _, _ = evaluate(_rate_store(20.0, days=29))
-    assert round(d["daily"]["med"][28], 1) == 5.0 and [a["family"] for a in d["alerts"]] == ["rate_spike"]
+    d, _, _ = evaluate(_rate_store(20.0, days=34))                        # a band needs 14 SETTLED judged days
+    assert d["daily"]["med"][33] is None
+    d, _, _ = evaluate(_rate_store(20.0, days=35))
+    assert round(d["daily"]["med"][34], 1) == 5.0 and [a["family"] for a in d["alerts"]] == ["rate_spike"]
 
 
 def test_a_tracking_break_day_is_not_good_news():
-    br = END - timedelta(days=2)
+    br = END - timedelta(days=9)                                            # settled: a real break, not late data
     st = make_store(90, 1000, rate_fn=lambda c: 0.0 if c == br else 5.0,
                     bump=lambda c: {0: -600, 1: -120, 2: -80} if c == br else None)   # no app_remove that day at all
     for c, lags in st["cohorts"].items():                                  # ... from ANY install day
@@ -415,9 +433,11 @@ def test_a_tracking_break_day_is_not_good_news():
                 del lags[lag]
     d, _, _ = evaluate(st)
     assert [a["family"] for a in d["alerts"]] == ["rate_zero"]              # no drift / cohort "good news"
-    assert d["daily"]["rate"][-3] == 0.0 and d["rate_now"]["last7"] == 5.0
-    t0 = [t for t in d["table"] if t["n"] == 0][0]
-    assert t0["recent"]["p"] == 0.6 and t0["recent"]["users"] == 6000       # the broken install day left out
+    assert d["daily"]["rate"][-10] == 0.0 and d["rate_now"]["last7"] == 5.0
+    cd = eng.cohort_data(st)
+    eng.mark_breaks(cd, eng.daily_series(st, None, cd)["broken"])
+    row = eng.compare(cd, 0, late=eng.LATE_DAYS)                            # D0 on settled days: 6–12 Sep
+    assert row["recent"]["p"] == 0.6 and row["recent"]["users"] == 6000     # the broken install day left out
 
 
 def _drift_store(noise=None, spike_day=None):
@@ -442,7 +462,7 @@ def test_a_slow_step_is_drift_since_its_first_day_not_a_row_of_spikes():
     al = [a for a in d["alerts"] if a["family"].startswith("rate")]
     assert [a["family"] for a in al] == ["rate_drift"]                       # the spikes inside it fold away
     assert al[0]["message"] == ("Phone Call – Caller ID: 3 Sep se uninstall rate 4.1 → 5.6 /1k active (+37%) — "
-                                "dheere dheere badh raha hai")
+                                "dheere dheere badh raha hai · abhi ka data kaccha — number aur badh sakta hai")
     assert al[0]["since"] == "2026-09-03" and d["rate_now"]["drift"]["since"] == "2026-09-03"
 
 
@@ -546,3 +566,152 @@ def test_detail_carries_every_day_and_nothing_is_capped():
     assert d["lifetime"]["un"] == sum(sum(v.values()) for v in st["cohorts"].values())
     assert [t["n"] for t in d["table"]] == d["checkpoints"]
     assert set(row["head4"]) == {"D0", "D1", "D7", "D30"}
+
+
+# ── late data (Firebase adds app_remove for ~7 days) and incomplete days ──────────────────────────
+
+LATE_SHARE = {0: 0.80, 1: 0.88, 2: 0.93, 3: 0.96, 4: 0.98, 5: 0.99}   # by days before E: what GA4 shows so far
+
+
+def late_view(store, E=END, share=LATE_SHARE):
+    """`store` as GA4 shows it at E while the newest days are still filling: each of those days' app_remove
+    (daily users and every cell on that event day) scaled down — late data only ever adds, never removes."""
+    st = copy.deepcopy(dict(store, window_end=E.isoformat()))
+    for c, lags in st["cohorts"].items():
+        for lag in lags:
+            k = (E - (date.fromisoformat(c) + timedelta(days=int(lag)))).days
+            if k in share:
+                lags[lag] = int(lags[lag] * share[k])
+    for d, r in st["daily"].items():
+        k = (E - date.fromisoformat(d)).days
+        if k in share:
+            r["un"] = r["un_ev"] = int(r["un"] * share[k])
+    return st
+
+
+def test_late_data_is_never_read_as_good_news():
+    st = late_view(make_store(120, 1000, rate_fn=lambda c: 9.3))
+    d, row, _ = evaluate(st)
+    assert d["alerts"] == [] and d["rate_now"]["dir"] != "down"              # nothing "kam" from a day still filling
+    assert all(h["dir"] != "down" for h in row["head4"].values() if h)
+    t0 = [t for t in d["table"] if t["n"] == 0][0]
+    assert t0["prov"] and t0["recent"]["p"] < 0.58 and t0["dir"] is None     # shown as it is — marked kaccha
+    full = evaluate(make_store(120, 1000, rate_fn=lambda c: 9.3))[0]
+    assert d["curve"] == full["curve"]                                      # the curve: settled days only
+    assert d["daily"]["med"][-1] == full["daily"]["med"][-1]                # … and so is every normal band
+    old_rule, _ = eng.evaluate_app(st, AID, APP, {}, NOW, late=0)           # without the rule: false good news
+    assert any(a["dir"] == "down" and a["family"] == "cohort" for a in old_rule["alerts"])
+
+
+def test_a_rise_shows_through_late_data_with_the_kaccha_note():
+    st = late_view(make_store(120, 1000, bump=lambda c: {0: 100} if c >= END - timedelta(days=10) else None))
+    a = cohort_alerts(evaluate(st)[0])
+    assert len(a) == 1 and a[0]["dir"] == "up" and a[0]["checkpoint"] == "D0" and a[0]["provisional"]
+    assert a[0]["installs_to"] == END.isoformat() and a[0]["text"].endswith(eng.PROV_NOTE)
+
+
+def test_a_moderate_rise_hidden_by_late_data_is_alerted_from_settled_days():
+    # from 3 Sep, installs leave on day 0 instead of day 1: only D0 moves (+6 points) — and the newest D0
+    # days read ~7% low while their late data is still coming, which hides it there
+    st = late_view(make_store(120, 1000, bump=lambda c: {0: 60, 1: -60} if c >= END - timedelta(days=16) else None))
+    cd = eng.cohort_data(st)
+    eng.mark_breaks(cd, eng.daily_series(st, None, cd)["broken"])
+    assert not eng._fires(eng.compare(cd, 0), "up") and eng._fires(eng.compare(cd, 0, late=7), "up")
+    d, row, _ = evaluate(st)
+    t0 = [t for t in d["table"] if t["n"] == 0][0]
+    a = cohort_alerts(d)
+    assert len(a) == 1 and a[0]["dir"] == "up" and a[0]["checkpoint"] == "D0" and not a[0]["provisional"]
+    assert (a[0]["installs_from"], a[0]["installs_to"]) == ("2026-09-06", "2026-09-12")   # settled installs
+    assert not a[0]["text"].endswith(eng.PROV_NOTE)
+    assert t0["dir"] == "up" and t0["alert"] and not t0["prov"] and t0["recent"]["to"] == "2026-09-12"   # same numbers
+    assert row["head4"]["D0"]["dir"] == "up" and row["head4"]["D0"]["to"] == "2026-09-12"
+
+
+def test_a_falling_rate_is_drift_only_once_its_days_are_settled():
+    st = make_store(90, 1000, rate_fn=lambda c: 3.0 if c >= SEP(10) else 5.0, end=SEP(24))
+    d, _, _ = evaluate(st, E=SEP(19))                                        # 10–19 Sep: mostly provisional
+    assert not [a for a in d["alerts"] if a["family"] == "rate_drift"] and d["rate_now"]["drift"] is None
+    assert [a["family"] for a in eng.evaluate_app(dict(st, window_end="2026-09-19"), AID, APP, {}, NOW, late=0)[0]
+            ["alerts"]].count("rate_drift") == 1                            # (the old rule would call it already)
+    d, _, _ = evaluate(st)                                                   # 24 Sep: 10–17 Sep settled
+    dr = [a for a in d["alerts"] if a["family"] == "rate_drift"]
+    assert len(dr) == 1 and dr[0]["dir"] == "down" and dr[0]["severity"] == "good" and not dr[0]["provisional"]
+    assert dr[0]["since"] == "2026-09-10" and d["rate_now"]["drift"]["prov"] is False
+    assert d["rate_now"]["dir"] == "down" and d["rate_now"]["to"] == "2026-09-17" and not d["rate_now"]["prov"]
+
+
+def test_an_incomplete_day_blinds_the_install_days_it_touches_and_never_alerts():
+    from admob_iq.fetch import ga4_uninstall as gu
+    from tests.uninstall_synth import UniStub
+    t = Truth(END - timedelta(days=119), END, 1000, old_per_day=100)
+    bad = END - timedelta(days=10)
+    t.short_day = {bad: 0.2}                                               # GA4 never returns that day in full
+    st = gu.fetch_full(UniStub(t, "tok", "p", "s"), END, 1300)
+    st.update(app_id=AID, fetched_at="2026-09-21T01:00:00Z")
+    assert list(st["flags"]["incomplete_days"]) == [bad.isoformat()]
+    d, _, _ = evaluate(st)
+    assert d["alerts"] == [] and list(d["flags"]["incomplete_days"]) == [bad.isoformat()]
+    rows = [t for t in d["table"] if t["inc_day"]]
+    assert rows and all(t["inc_day"] == bad.isoformat() for t in rows)
+    for t_ in rows:                                                          # every install day it touched: left out
+        assert t_["recent"]["users"] < 7000
+    blind = copy.deepcopy(st)
+    blind["flags"]["incomplete_days"] = {}                                   # if it were NOT flagged: false good news
+    assert any(a["dir"] == "down" for a in evaluate(blind)[0]["alerts"])
+
+
+def test_a_provisional_week_reading_under_the_band_is_not_shown_as_good_news():
+    harsh = {k: 0.3 + 0.07 * k for k in range(7)}                  # Firebase far behind: the newest week reads ~half
+    rn = evaluate(late_view(make_store(120, 1000, rate_fn=lambda c: 9.3), share=harsh))[0]["rate_now"]
+    assert rn["prov"] and rn["last7"] < rn["lo"]                   # it does read under the band …
+    assert rn["out_of_band"] is False and rn["dir"] != "down"      # … which is no news yet ("▼ range se kam")
+    hot = make_store(120, 1000, rate_fn=lambda c: 12.0 if c > END - timedelta(days=7) else 5.0)
+    rn = evaluate(hot)[0]["rate_now"]
+    assert rn["prov"] and rn["last7"] > rn["hi"] and rn["out_of_band"] is True     # above it: real (only grows)
+
+
+def test_a_closed_alert_no_longer_says_kaccha():
+    st = late_view(make_store(120, 1000, bump=lambda c: {0: 100} if c >= END - timedelta(days=10) else None))
+    _, _, state = evaluate(st)
+    ep = [e for e in state["episodes"].values() if e["family"] == "cohort"][0]
+    a = eng.alert_obj(ep, APP, END)
+    assert a["provisional"] and a["text"].endswith(eng.PROV_NOTE)
+    a = eng.alert_obj(dict(ep, closed="2026-10-02"), APP, date(2026, 10, 2))     # history: those days settled
+    assert not a["provisional"] and not a["text"].endswith(eng.PROV_NOTE) and a["notify"] is False
+
+
+def test_an_older_store_format_sends_nothing_not_even_an_alert_whose_send_failed():
+    st = make_store(42, 1000, bump=owner_bump(70))
+    _, _, state = evaluate(st)                                      # (seeded) …
+    for e in state["episodes"].values():
+        e.update(notified_at=None, seeded=False)                    # … say it opened on a later run and its send
+    d, _, _ = evaluate(st, copy.deepcopy(state))                    # failed: still due — sent by the next run
+    assert [a["notify"] for a in cohort_alerts(d)] == [True]
+    d, _ = eng.evaluate_app(st, AID, APP, state, NOW, outdated=True)  # but not from an older store format
+    assert cohort_alerts(d) and not any(a["notify"] for a in d["alerts"]) and d["flags"]["outdated"] is True
+    assert all(e["seeded"] and e["notified_at"] == NOW for e in state["episodes"].values())
+
+
+def test_install_days_held_only_while_provisional_are_not_told():
+    # bad installs 20–24 Aug: while the days after them are still provisional they can't tell yet, so they keep
+    # the alert open ("held") — claimed like the rest (the alert ends as it always did: a new bad week soon after
+    # is news again), but never TOLD: once settled, a rise of their own counts them in
+    bad = lambda c: date(2026, 8, 20) <= c <= date(2026, 8, 24)                      # noqa: E731
+    st = make_store(200, 1000, bump=lambda c: {0: 100} if bad(c) else None, end=date(2026, 10, 15))
+    sent, state = run_daily(st, date(2026, 8, 22), date(2026, 9, 6))
+    ev = state["eval"][AID]
+    assert len(sent) == 1 and ev["claimed"] == {"up": [["2026-08-17", "2026-08-27"]]}
+    assert ev["held"] == {"up": [["2026-08-25", "2026-08-27"]]}                     # 25–27 Aug: normal, not told
+    later = lambda c: date(2026, 8, 25) <= c <= date(2026, 8, 31)                    # noqa: E731
+    st2 = make_store(200, 1000, bump=lambda c: {0: 100} if bad(c) else {0: 150} if later(c) else None,
+                     end=date(2026, 10, 15))
+    for E in (date(2026, 9, 7), date(2026, 9, 8)):                  # their late data is in: 25–31 Aug were bad too
+        d, _ = eng.evaluate_app(dict(st2, window_end=E.isoformat()), AID, APP, state, NOW)
+    a = cohort_alerts(d)
+    assert len(a) == 1 and a[0]["notify"] and a[0]["installs_from"] == "2026-08-26"   # 26–27 Aug counted in
+    assert "held" not in a[0] and "held" not in state["episodes"][AID + "|cohort|up"]["last"]
+    b0 = date(2026, 8, 31)                                          # a second bad week a week later: news again
+    two = lambda c: bad(c) or b0 <= c <= b0 + timedelta(days=4)     # noqa: E731
+    sent, _ = run_daily(make_store(200, 1000, bump=lambda c: {0: 100} if two(c) else None, end=date(2026, 10, 15)),
+                        date(2026, 8, 22), date(2026, 9, 30))
+    assert [x[0] for x in sent] == ["2026-08-24", "2026-09-04"]

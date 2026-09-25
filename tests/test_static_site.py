@@ -168,7 +168,7 @@ def test_settings_tolerates_empty_github_secrets(monkeypatch):
     for k in ["SMTP_PORT", "REPORT_CURRENCY", "ROLLING_REPULL_DAYS", "NOTIFY_DRY_RUN", "FETCH_MODE",
               "GA4_CLIENT_ID", "GA4_CLIENT_SECRET", "GA4_REFRESH_TOKENS", "GA4_REFRESH_TOKEN", "GA4_ENABLED",
               "GA4_MIN_HOURS", "GA4_RETRY_HOURS", "GA4_REFETCH_DAYS", "GA4_REBUILD_DAYS", "GA4_MAX_HISTORY_DAYS",
-              "GA4_RUN_BUDGET_SEC", "GA4_STREAMS_TTL_HOURS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]:
+              "GA4_RUN_BUDGET_SEC", "GA4_STREAMS_TTL_HOURS", "GA4_LATE_DAYS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]:
         monkeypatch.setenv(k, "")
     from admob_iq.config import settings
     s = settings()
@@ -176,7 +176,7 @@ def test_settings_tolerates_empty_github_secrets(monkeypatch):
     assert s["rolling_days"] == 35 and s["notify_dry_run"] is True and s["fetch_mode"] == "mock"
     assert s["ga4_enabled"] is True and s["ga4_min_hours"] == 20.0 and s["ga4_retry_hours"] == 3.0
     assert (s["ga4_refetch_days"], s["ga4_rebuild_days"], s["ga4_max_history_days"], s["ga4_run_budget_sec"]) \
-        == (10, 28, 1300, 900) and s["ga4_streams_ttl_hours"] == 168.0
+        == (14, 28, 1300, 900) and s["ga4_streams_ttl_hours"] == 168.0 and s["ga4_late_days"] == 7
     assert s["ga4_client_id"] is None and s["ga4_client_secret"] is None and not s["ga4_refresh_tokens"]
 
 

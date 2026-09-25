@@ -52,7 +52,8 @@ def ga4_cfg(s):
     return {"client_id": s["ga4_client_id"], "client_secret": s["ga4_client_secret"],
             "refresh_tokens": s.get("ga4_refresh_tokens") or "", "refresh_token": s.get("ga4_refresh_token") or "",
             "min_hours": s.get("ga4_min_hours", 20.0), "retry_hours": s.get("ga4_retry_hours", 3.0),
-            "refetch_days": s.get("ga4_refetch_days", 10), "rebuild_days": s.get("ga4_rebuild_days", 28),
+            "refetch_days": s.get("ga4_refetch_days", 14), "rebuild_days": s.get("ga4_rebuild_days", 28),
+            "late_days": s.get("ga4_late_days", eng.LATE_DAYS),
             "max_history_days": s.get("ga4_max_history_days", 1300),
             "run_budget_sec": s.get("ga4_run_budget_sec", 900),
             "streams_ttl_hours": s.get("ga4_streams_ttl_hours", 168.0)}
@@ -125,6 +126,7 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
     state = gu.load_state(data_dir)
     os.makedirs(out_dir, exist_ok=True)
     details, rows, no_ga4, files = [], [], [], [ASSET]
+    late_sums = {"un": {}, "new": {}, "fetches": 0}          # every app's late-data re-reads, pooled
     for a in sorted(apps, key=lambda x: (x["app_name"].casefold(), x["app_id"])):
         aid, path = a["app_id"], gu.store_path(data_dir, a["app_id"])
         store = gu.load_store(path) if os.path.exists(path) and not a.get("same_as") else None
@@ -137,8 +139,12 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
         st = state["fetch"].setdefault(aid, {})
         st["meta"] = gu.store_meta(store)               # planning always follows the store actually on disk
         stale = gu._hours_since(store.get("fetched_at"), now) > eng.STALE_HOURS
+        # an older store format (its clean re-pull still pending — quota, a failure) is shown and flagged, but
+        # whatever it opens is seeded, never sent: no alert from unchecked data ever goes out
         detail, row = eng.evaluate_app(store, aid, a["app_name"], state, now_iso, stale=stale, key=key,
-                                       package=a.get("package") or store.get("package"))
+                                       package=a.get("package") or store.get("package"), late=cfg["late_days"],
+                                       outdated=gu._store_v(store) < gu.STORE_V)
+        eng.revision_sums(store, late_sums)
         name = COHORT_PREFIX + key + ".json.gz"
         sig = _sig(path)
         if st.get("c_sig") != sig or not os.path.exists(os.path.join(out_dir, name)):
@@ -162,8 +168,9 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
              "consts": {"lag_days": eng.LAG_DAYS, "band_days": eng.BAND_DAYS, "band_k": eng.BAND_K,
                         "recent_k": eng.RECENT_K, "prev_k": eng.PREV_K, "head_k": eng.HEAD_K, "z": eng.Z_MIN,
                         "min_pp": eng.MIN_PP, "min_rel": eng.MIN_REL, "min_recent_users": eng.MIN_RECENT_USERS,
-                        "big_recent_users": eng.BIG_RECENT_USERS, "zoom_days": eng.ZOOM_DAYS},
-             "apps": details, "no_ga4": no_ga4}
+                        "big_recent_users": eng.BIG_RECENT_USERS, "zoom_days": eng.ZOOM_DAYS,
+                        "late_days": cfg["late_days"]},
+             "lateness": eng.lateness(late_sums), "apps": details, "no_ga4": no_ga4}
     write_json_gz_stable(os.path.join(out_dir, ASSET), asset)
     asset_v = hashlib.sha1(json.dumps(asset, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
                            .encode("utf-8")).hexdigest()[:12]

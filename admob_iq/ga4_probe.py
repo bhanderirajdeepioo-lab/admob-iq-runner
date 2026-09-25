@@ -263,12 +263,15 @@ def coverage(selected, pkg_of, by_pkg, streams, matched, stream_errors=None, own
 
 
 def capability(apps):
-    """How many probed apps pass / error on each test."""
+    """How many probed apps pass / error on each test — and, for a test that checks its own completeness
+    (T13's cells vs the events report), how many answers were flagged incomplete."""
     out = {}
     for key in ORDER:
         res = [a["tests"].get(key) or {} for a in apps.values()]
         out[key] = {"ok": sum(1 for r in res if r.get("ok")), "errors": sum(1 for r in res if r.get("error")),
                     "of": len(res)}
+        if any("incomplete" in r for r in res):
+            out[key]["incomplete"] = sum(1 for r in res if r.get("incomplete"))
     return out
 
 
@@ -354,6 +357,9 @@ def summary_lines(report):
     lines.append(" | ".join("%s ok %d/%d" % (k, cap[k]["ok"], cap[k]["of"]) for k in ORDER if k in cap))
     errs = ["%s %d" % (k, cap[k]["errors"]) for k in ORDER if cap.get(k, {}).get("errors")]
     lines.append("tests with API errors: " + (", ".join(errs) if errs else "none"))
+    inc = ["%s %d/%d" % (k, cap[k]["incomplete"], cap[k]["of"]) for k in ORDER if "incomplete" in cap.get(k, {})]
+    if inc:                                    # an undercounting GA4 answer is said out loud, never silent
+        lines.append("incomplete GA4 answers (flagged in the private report): " + ", ".join(inc))
     lines.append("report calls %d" % sum(a.get("report_calls") or 0 for a in (report.get("apps") or {}).values()))
     return lines
 

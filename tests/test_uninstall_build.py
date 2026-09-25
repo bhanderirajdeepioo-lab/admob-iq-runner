@@ -34,7 +34,10 @@ LOG_LINE = re.compile(r"^ga4 uninstall: apps \d+, with GA4 \d+, fetched \d+ \(fu
 
 
 def _bump(delta):
-    return lambda c: {1: delta, 2: -delta} if c >= END - timedelta(days=7) else None
+    # a rise shows on the newest installs (provisional days: late data only adds — real); a fall only once
+    # its days are settled, so the "good" app's change started a week earlier
+    since = END - timedelta(days=7 if delta > 0 else 14)
+    return lambda c: {1: delta, 2: -delta} if c >= since else None
 
 
 def seed(data_dir, first_eval=False):
@@ -137,7 +140,9 @@ def test_summary_asset_and_cohort_files_follow_the_contract(site):
         (N4, "no_stream", PKG[A4]), (N3, "no_package", None)]
     assert all(n["text"] for n in asset["no_ga4"])
     by = {a["app_id"]: a for a in summary["alerts"]}
-    assert by[A1]["message"] == N1 + ": D1 uninstall 72% → 79% (+7 point) — 12–18 Sep ke installs, pichhle 4 hafte se zyada"
+    assert by[A1]["message"] == (N1 + ": D1 uninstall 72% → 79% (+7 point) — 12–18 Sep ke installs, pichhle 4 hafte se "
+                                 "zyada · abhi ka data kaccha — number aur badh sakta hai") and by[A1]["provisional"]
+    assert by[A2]["installs_to"] == (END - timedelta(days=8)).isoformat() and not by[A2]["provisional"]   # settled
     assert (by[A1]["severity"], by[A2]["severity"], by[A6]["severity"]) == ("warning", "good", "watch")
     assert by[A2]["app"] == N2 and by[A2]["message"].startswith(N2 + ": D1 uninstall 72% → 65% (−7 point)")
     assert [a["severity"] for a in summary["alerts"]] == ["warning", "watch", "good"]
@@ -389,18 +394,84 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     check_asset(asset, s)
     for d in asset["apps"]:
         check_cohort_file(fx["cohort_files"]["uninstall_c_%s.json.gz" % d["key"]], d)
-    fam = {(a["app"], a["family"], a["severity"], a["notify"]) for a in s["alerts"]}
-    assert ("Demo Launcher", "rate_spike", "warning", True) in fam
-    assert ("Demo Caller – Test App", "cohort", "watch", True) in fam
-    assert ("Demo Weather", "rate_drift", "warning", False) in fam
-    assert ("Demo Wallpapers", "rate_zero", "watch", False) in fam
-    assert ("Demo Flashlight", "cohort", "good", False) in fam and len(fam) == 5      # no noise alerts
+    fam = {(a["app"], a["family"], a["severity"], a["notify"], a["provisional"]) for a in s["alerts"]}
+    assert ("Demo Launcher", "rate_spike", "warning", True, True) in fam                # today's day: "kaccha"
+    assert ("Demo Caller – Test App", "cohort", "watch", False, True) in fam            # one alert while it lasts
+    assert ("Demo Weather", "rate_drift", "warning", False, True) in fam
+    assert ("Demo Wallpapers", "rate_zero", "watch", False, False) in fam               # a zero day once SETTLED
+    assert ("Demo Flashlight", "cohort", "good", False, False) in fam and len(fam) == 5   # good news: settled only
+    assert sum(1 for x in fx["sent"] if x["telegram"] or x["email"]) == 3               # sent once each, no flood
     assert {n["reason"] for n in asset["no_ga4"]} == {"no_package", "no_stream", "fetch_failed", "not_fetched_yet",
                                                       "same_package"}
     wall = [a for a in asset["apps"] if a["app"] == "Demo Wallpapers"][0]
-    assert wall["daily"]["breaks"] == ["2026-09-21"] and any(t["break_day"] == "2026-09-21" for t in wall["table"])
+    assert wall["daily"]["breaks"] == ["2026-09-14"] and any(t["break_day"] == "2026-09-14" for t in wall["table"])
+    # Firebase-like late app_remove: the re-reads measure it (80% there at 2 days old, 99% at 7)
+    late = asset["lateness"]
+    assert [round(x, 2) for x in late["un"][:6]] == [0.8, 0.88, 0.93, 0.96, 0.98, 0.99] and late["new"][0] == 1.0
+    assert late["ages"][0] == 2 and late["final_age"] == 15 and late["un"][6:] == [1.0] * 8
+    assert all(a["settled_till"] == "2026-09-16" and a["lateness"] for a in asset["apps"])
+    lau = [a for a in asset["apps"] if a["app"] == "Demo Launcher"][0]               # a day GA4 never returns in full:
+    assert list(lau["flags"]["incomplete_days"]) == ["2026-09-03"]                  # flagged, shown, no alert from it
+    assert any(t["inc_day"] == "2026-09-03" for t in lau["table"])
+    assert all(not a["flags"]["incomplete_days"] for a in asset["apps"] if a["app"] != "Demo Launcher")
     assert {a["stage"] for a in asset["apps"]} == {"naya", "badh_raha", "stable"}
     assert all(LOG_LINE.match(line) for line in fx["public_log"]) and len(fx["public_log"]) == 7
     with open(OUT, encoding="utf-8") as f:
         committed = f.read()
     assert committed == fixture_json(fx), "regenerate: python -m tests.make_uninstall_fixture"
+
+
+# ── the store-format bump (v1 → v2): no alert from the undercounted data is ever sent ──────────────
+
+def test_a_v1_store_never_sends_an_alert_and_its_clean_re_pull_starts_the_alerts_over(tmp_path, monkeypatch):
+    from tests import test_ga4_uninstall as tg
+    w = tg.World(monkeypatch)
+    data, out = str(tmp_path / "data"), str(tmp_path / "site")
+    os.makedirs(data)
+    with open(os.path.join(data, "app_store_ids.json"), "w", encoding="utf-8") as f:
+        json.dump({"by_id": {tg.A1: tg.PKG1}}, f)
+    s = ga4_settings(ga4_client_id="cid", ga4_client_secret="sec",
+                     ga4_refresh_tokens=json.dumps({tg.EMAIL_A: tg.RT_A, tg.EMAIL_B: tg.RT_B}))
+    dash = lambda: {"apps_catalog": [{"app_id": tg.A1, "app_name": "One", "account_id": "p", "selected": True}],  # noqa: E731
+                    "kpis": {}, "alerts": {"items": []}}
+
+    def build(now):
+        d = dash()
+        ub.run_uninstall(d, data, out, s, now=now)
+        res = build_static.send_alerts(d, s)
+        build_static._uninstall_mark_sent(d, data, s, res)
+        return d, _gz(os.path.join(out, ASSET))["apps"][0]
+    d, a = build(tg.NOW)                                            # first ever: full v2 fetch, seeded
+    assert not any(x["notify"] for x in d["uninstall"]["alerts"]) and a["flags"]["outdated"] is False
+    # what the first production run left: a v1 store whose older cohorts GA4 undercounted (~2%)
+    path = gu.store_path(data, tg.A1)
+    st = gu.load_store(path)
+    cut = (tg.END - timedelta(days=10)).isoformat()
+    st["v"] = 1
+    for c, lags in st["cohorts"].items():
+        if c < cut:
+            for k in lags:
+                lags[k] = lags[k] // 50
+    gu.save_store(path, st)
+    state = gu.load_state(data)
+    state["fetch"][tg.A1]["meta"] = gu.store_meta(st)
+    state["eval"][tg.A1].update(end=(tg.END - timedelta(days=1)).isoformat(), streak={"cohort|up": 1})   # held yesterday
+    day = (tg.END - timedelta(days=1)).isoformat()                 # an alert a v1 run opened whose send FAILED:
+    state["episodes"][tg.A1 + "|rate_spike|up|" + day] = {          # still due
+        "id": "pending-v1", "app_id": tg.A1, "family": "rate_spike", "dir": "up", "opened": day, "last_true": day,
+        "misses": 0, "notified_at": None, "notified_dry": False, "seeded": False, "day": day, "last_day": day,
+        "last": {"day": day, "now": 9.0, "before": 5.0, "lo": 3.5, "hi": 6.5, "users": 900, "severity": "warning"}}
+    gu.save_state(data, state)
+    w.fail = lambda body: (_ for _ in ()).throw(RuntimeError("HTTP 500: INTERNAL"))   # the re-pull fails for now
+    d, a = build(tg.NOW + timedelta(hours=21))
+    assert a["flags"]["outdated"] is True and d["uninstall"]["alerts"]              # the bad data looks alarming …
+    assert not any(x["notify"] for x in d["uninstall"]["alerts"])                  # … but nothing goes out —
+    assert "pending-v1" in {x["id"] for x in d["uninstall"]["alerts"]}             # not even the one still due
+    assert gu.load_state(data)["fetch"][tg.A1]["fail"] == "http"
+    w.fail = None
+    d, a = build(tg.NOW + timedelta(hours=25))                     # 3h later: the clean re-pull, alerts start over
+    assert gu.load_store(path)["v"] == gu.STORE_V and a["flags"]["outdated"] is False
+    state = gu.load_state(data)
+    assert state["fetch"][tg.A1]["last_kind"] == "full" and not state["closed"]
+    assert not any(x["notify"] for x in d["uninstall"]["alerts"])                  # a first evaluation: seeded
+    assert all(e["seeded"] for e in state["episodes"].values())
