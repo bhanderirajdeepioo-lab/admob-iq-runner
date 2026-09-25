@@ -23,3 +23,6 @@ __pycache__/
 *.pyc
 .DS_Store
 .pytest_cache/
+
+# local python env for one-time helpers (authorize --ga4)
+.venv/
