@@ -14,7 +14,7 @@ on:
       redirect_uri:
         description: "exact redirect_uri used in the consent URL (exchange mode)"
         required: false
-        default: "http://localhost:8765"
+        default: "http://127.0.0.1:8765"
 
 permissions:
   contents: read                 # this repo is never written to
@@ -39,6 +39,8 @@ jobs:
           MODE: ${{ github.event.inputs.mode }}
           REDIRECT_URI: ${{ github.event.inputs.redirect_uri }}
           REPO: ${{ github.repository }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GA4_AUTH_CODE: ${{ secrets.GA4_AUTH_CODE }}

@@ -4,11 +4,11 @@ Lets the owner authorize GA4 without anyone ever seeing the OAuth client secret:
 GitHub Actions secrets, and only a one-time authorization code travels (as a GitHub secret, never
 printed). This repo's Actions logs are PUBLIC — print only generic status and counts.
 
-  MODE=client-id  store GOOGLE_CLIENT_ID (public by nature: it appears in every consent URL) in the
-                  PRIVATE repo at ga4/oauth_client_id.txt, so the consent URL uses the very same client.
-  MODE=exchange   swap secret GA4_AUTH_CODE (+ REDIRECT_URI) for a refresh token with GOOGLE_CLIENT_ID/
-                  SECRET, prove it reads GA4, save GA4_REFRESH_TOKEN + GA4_CLIENT_ID/SECRET as Actions
-                  secrets, delete GA4_AUTH_CODE, and write counts-only ga4/auth_status.json privately.
+  MODE=client-id  store GA4_CLIENT_ID (else GOOGLE_CLIENT_ID) — public by nature, it appears in every consent
+                  URL — in the PRIVATE repo at ga4/oauth_client_id.txt, so the consent URL uses that very client.
+  MODE=exchange   swap secret GA4_AUTH_CODE (+ REDIRECT_URI) for a refresh token with that same client, save
+                  GA4_REFRESH_TOKEN + GA4_CLIENT_ID/SECRET as Actions secrets, delete GA4_AUTH_CODE, prove it
+                  reads GA4, and write counts-only ga4/auth_status.json privately.
 """
 
 import base64
@@ -45,9 +45,11 @@ def _delete_secret(name, repo, tok):
 
 def main():
     mode = os.environ.get("MODE", "")
-    cid, csec = os.environ.get("GOOGLE_CLIENT_ID", ""), os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    # Prefer the dedicated GA4 client (Internal/External Desktop app) once it exists; the AdMob client is the fallback.
+    cid = os.environ.get("GA4_CLIENT_ID") or os.environ.get("GOOGLE_CLIENT_ID", "")
+    csec = os.environ.get("GA4_CLIENT_SECRET") or os.environ.get("GOOGLE_CLIENT_SECRET", "")
     if not cid or not csec:
-        sys.exit("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET secrets are missing")
+        sys.exit("GA4_CLIENT_ID/SECRET (or GOOGLE_CLIENT_ID/SECRET) secrets are missing")
 
     if mode == "client-id":
         _put_private_file("ga4/oauth_client_id.txt", cid + "\n", "ga4 auth: oauth client id")
