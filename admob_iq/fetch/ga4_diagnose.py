@@ -86,12 +86,14 @@ def main():
     sec = env.get("GA4_CLIENT_SECRET") or env.get("GOOGLE_CLIENT_SECRET")
     tokens, _ = ga4_probe.owner_tokens(env)
     paging = {}
-    _, props, readers = ga4_probe.discover_owners(cid, sec, tokens, paging)
-    streams, token_of, _, _ = ga4_probe.list_streams(props, readers, paging)
+    owners, props, readers = ga4_probe.discover_owners(cid, sec, tokens, paging)
+    streams, token_of, errors, _ = ga4_probe.list_streams(props, readers, paging)
     by_pkg = {}
     for s in streams:
         by_pkg.setdefault(s.get("package"), s)
-    out = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "apps": {}}
+    out = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "apps": {},
+           "discovery": {"tokens": len(tokens), "owners": owners, "properties": len(props), "streams": len(streams),
+                         "stream_errors": errors, "packages_seen": sorted(by_pkg)}}
     for pkg in want.get("packages") or []:
         s = by_pkg.get(pkg)
         if not s:
