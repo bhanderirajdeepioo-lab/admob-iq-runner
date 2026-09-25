@@ -1,7 +1,8 @@
 # One-time GA4 authorization without anyone handling the OAuth client secret.
 # See admob_iq/fetch/ga4_auth_exchange.py. Logs of this PUBLIC repo show only generic status/counts.
 #   mode=client-id : put GOOGLE_CLIENT_ID in the PRIVATE repo (ga4/oauth_client_id.txt) for the consent URL
-#   mode=exchange  : swap secret GA4_AUTH_CODE for a refresh token and save GA4_REFRESH_TOKEN (+ client) secrets
+#   mode=exchange  : swap secret GA4_AUTH_CODE for a refresh token, add it to GA4_REFRESH_TOKENS under the
+#                    consenting email and save that + GA4_REFRESH_TOKEN (latest, back-compat) + client secrets
 name: ga4-auth
 
 on:
@@ -44,6 +45,10 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GA4_AUTH_CODE: ${{ secrets.GA4_AUTH_CODE }}
+          # the owner-token map this consent is added to, and the older single token — kept in the map as
+          # "legacy" before it is overwritten, so the owner who minted it doesn't have to consent again
+          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
           DATA_REPO: ${{ secrets.DATA_REPO }}
           DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
         run: python -m admob_iq.fetch.ga4_auth_exchange
