@@ -34,6 +34,21 @@ def settings() -> dict:
         "smtp": {"host": _env("SMTP_HOST"), "port": int(_env("SMTP_PORT", "587")),
                  "user": _env("SMTP_USER"), "pass": _env("SMTP_PASS"),
                  "to": _env("ALERT_EMAIL_TO")},
+        # GA4 (uninstall tab). The OAuth client is taken as a PAIR — a refresh token only works with the
+        # client that minted it: the GA4_* pair when GA4_CLIENT_ID is set, else the AdMob GOOGLE_* pair.
+        "ga4_client_id": (_env("GA4_CLIENT_ID") or _env("GOOGLE_CLIENT_ID")) or None,
+        "ga4_client_secret": (_env("GA4_CLIENT_SECRET") if _env("GA4_CLIENT_ID")
+                              else _env("GOOGLE_CLIENT_SECRET")) or None,
+        "ga4_refresh_tokens": _env("GA4_REFRESH_TOKENS"),    # JSON {owner email: refresh token}
+        "ga4_refresh_token": _env("GA4_REFRESH_TOKEN"),      # older single token ("legacy")
+        "ga4_enabled": _env("GA4_ENABLED", "true").lower() == "true",
+        "ga4_min_hours": float(_env("GA4_MIN_HOURS", "20")),        # fetch each app at most once per ~day
+        "ga4_retry_hours": float(_env("GA4_RETRY_HOURS", "3")),     # wait after a failed fetch
+        "ga4_refetch_days": int(_env("GA4_REFETCH_DAYS", "10")),    # recent days re-pulled (late GA4 data)
+        "ga4_rebuild_days": int(_env("GA4_REBUILD_DAYS", "28")),    # full self-healing re-pull every ~4 weeks
+        "ga4_max_history_days": int(_env("GA4_MAX_HISTORY_DAYS", "1300")),
+        "ga4_run_budget_sec": int(_env("GA4_RUN_BUDGET_SEC", "900")),     # stop starting new apps after this
+        "ga4_streams_ttl_hours": float(_env("GA4_STREAMS_TTL_HOURS", "168")),   # re-list GA4 streams weekly
     }
 
 

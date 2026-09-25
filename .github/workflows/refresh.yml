@@ -94,6 +94,14 @@ jobs:
           SMTP_USER:            ${{ secrets.SMTP_USER }}
           SMTP_PASS:            ${{ secrets.SMTP_PASS }}
           ALERT_EMAIL_TO:       ${{ secrets.ALERT_EMAIL_TO }}
+          # GA4 (Uninstall tab) — fetched inside the build, at most once per ~20h per app; without these
+          # the dashboard builds exactly as before. GA4_ENABLED=false (repo variable) switches it off.
+          GA4_CLIENT_ID:        ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET:    ${{ secrets.GA4_CLIENT_SECRET }}
+          GA4_REFRESH_TOKENS:   ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN:    ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_ENABLED:          ${{ vars.GA4_ENABLED || 'true' }}
+          GA4_MIN_HOURS:        ${{ vars.GA4_MIN_HOURS || '20' }}
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On

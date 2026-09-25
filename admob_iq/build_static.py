@@ -143,9 +143,35 @@ def alert_lines(dashboard):
     return lines
 
 
+TG_MAX = 4000       # Telegram rejects a message over 4,096 characters (HTTP 400): a longer list goes out in parts
+
+
+def _tg_parts(items):
+    """[(ids, line)] → [(text, ids)], each text ≤ TG_MAX characters of whole lines (one over-long line is
+    cut into pieces rather than dropped)."""
+    parts, cur, ids = [], "", []
+    for i, line in items:
+        pieces = [line[k:k + TG_MAX] for k in range(0, len(line), TG_MAX)] or [""]
+        for piece in pieces:
+            if cur and len(cur) + 1 + len(piece) > TG_MAX:
+                parts.append((cur, ids))
+                cur, ids = "", []
+            cur = cur + "\n" + piece if cur else piece
+            ids = ids + [x for x in i if x not in ids]
+    if cur:
+        parts.append((cur, ids))
+    return parts
+
+
+def _urgent(line):
+    return "[CRITICAL]" in line or "[WARNING]" in line or line.startswith("🎉")
+
+
 def send_alerts(dashboard, s):
     """Telegram gets the urgent ones live; email gets the full daily digest.
-    dry_run (the default until creds are set) just formats — nothing leaks."""
+    dry_run (the default until creds are set) just formats — nothing leaks.
+    A GA4 uninstall alert is sent ONCE, so its results carry `uninstall_ids` (see uninstall_delivered);
+    its urgent lines go in their OWN Telegram message(s), so a long AdMob list can never sink them."""
     lines = alert_lines(dashboard)
     # out-of-range (approved-range breach) alerts — separate list, folded into the digest
     for a in dashboard.get("range_alerts", []):
@@ -153,17 +179,77 @@ def send_alerts(dashboard, s):
         sev = str(a.get("severity", "")).upper()
         geo = a.get("country") or "all countries"
         lines.append(f'{icon} [{sev}] {a.get("place", "?")} — {a.get("message", "")} · approved-range breach · {geo}')
-    if not lines:
+    # GA4 uninstall alerts: only the ones not sent yet — each episode goes out ONCE (mark_notified after)
+    uni = []
+    for a in (dashboard.get("uninstall") or {}).get("alerts", []):
+        if not a.get("notify"):
+            continue
+        icon = _ICON.get(a.get("severity"), "•")
+        sev = str(a.get("severity", "")).upper()
+        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · uninstall (GA4)'))
+    if not lines and not uni:
         return []
     dry = s["notify_dry_run"]
     results = []
-    urgent = [l for l in lines if "[CRITICAL]" in l or "[WARNING]" in l or l.startswith("🎉")]
-    if urgent:
-        results.append(notifier.send_telegram("\n".join(urgent), s["telegram_token"],
-                                               s["telegram_chat"], dry))
-    results.append(notifier.send_email("AdMob IQ — daily alerts", "\n".join(lines),
-                                        s["smtp"], dry))
+    urgent = [l for l in lines if _urgent(l)]
+    for text, _ in _tg_parts([((), l) for l in urgent]):
+        results.append(notifier.send_telegram(text, s["telegram_token"], s["telegram_chat"], dry))
+    u_urgent = [((i,), l) for i, l in uni if _urgent(l)]
+    for text, ids in _tg_parts(u_urgent):
+        try:
+            r = notifier.send_telegram(text, s["telegram_token"], s["telegram_chat"], dry)
+        except Exception:                          # network error: not sent → it stays due for the next run
+            r = {"channel": "telegram", "status": "error"}
+        results.append(dict(r, uninstall_ids=ids))
+    r = notifier.send_email("AdMob IQ — daily alerts", "\n".join(lines + [l for _, l in uni]), s["smtp"], dry)
+    # the digest is the channel of a watch — and of an urgent one while no Telegram bot is set up
+    tg_off = not s.get("telegram_token")
+    results.append(dict(r, uninstall_ids=[i for i, l in uni if tg_off or not _urgent(l)]) if uni else r)
     return results
+
+
+def uninstall_delivered(results, s):
+    """The uninstall alert ids whose channel took them: a dry run counts as sent (switching NOTIFY_DRY_RUN
+    off never dumps a backlog); otherwise Telegram answered 2xx or the email went out. A failed / refused
+    send (e.g. HTTP 400 / 429, no bot token or SMTP host yet) is NOT sent — the alert stays due."""
+    got = set()
+    for r in results or []:
+        ids = r.get("uninstall_ids") or []
+        if r.get("dry_run"):
+            ok = bool(s["notify_dry_run"])
+        elif r.get("channel") == "telegram":
+            ok = isinstance(r.get("status"), int) and 200 <= r["status"] < 300
+        else:
+            ok = r.get("status") == "sent"
+        if ok:
+            got.update(ids)
+    return got
+
+
+def _uninstall_step(dashboard, data_dir, out_dir, s):
+    """GA4 Uninstall tab (admob_iq.uninstall_build) → the site file names it wrote. OPTIONAL: on ANY failure
+    the dashboard is left exactly as the AdMob build made it, and the log gets the error TYPE only (GA4
+    error texts can carry property / stream ids, and this log is public)."""
+    try:
+        from .uninstall_build import run_uninstall
+        return run_uninstall(dashboard, data_dir, out_dir, s) or []
+    except Exception as e:
+        dashboard.pop("uninstall", None)
+        print(f"ga4 uninstall skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
+def _uninstall_mark_sent(dashboard, data_dir, s, results=None):
+    """After send_alerts: record which uninstall alerts went out (`results` = send_alerts' — only those whose
+    channel took them), so each one is sent ONCE and a failed send is tried again next run."""
+    if not dashboard.get("uninstall"):
+        return
+    try:
+        from .uninstall_build import mark_notified
+        ids = None if results is None else uninstall_delivered(results, s)
+        mark_notified(data_dir, dashboard["uninstall"], dry=s["notify_dry_run"], ids=ids)
+    except Exception as e:
+        print(f"ga4 uninstall notify-mark skipped: {type(e).__name__}", file=sys.stderr)
 
 
 class _AppFilteredRepo:
@@ -977,6 +1063,13 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         print(f"usd_inr derive skipped: {_e}", file=sys.stderr)
         dashboard["usd_inr"] = None
 
+    # GA4 Uninstall tab: fetch what is due (≤ once/~20h per app), evaluate, write its lazy assets and only
+    # then add the small dashboard["uninstall"] summary. OPTIONAL — without GA4 secrets (or on any failure)
+    # the AdMob dashboard builds exactly as before.
+    uni_files = []
+    if mode == "live" and has_creds and repo.has_data():
+        uni_files = _uninstall_step(dashboard, data_dir, out_dir, s)
+
     os.makedirs(out_dir, exist_ok=True)
     # dashboard.json is the primary payload and GROWS with history depth (placements + countries_daily),
     # so it can cross Cloudflare's 25MB/file cap after a deep backfill. Ship it GZIPPED (lossless, full
@@ -1093,9 +1186,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 "/selected_apps.json\n  Cache-Control: no-store\n\n"
                 "/account_names.json\n  Cache-Control: no-store\n\n"
                 "/app_names.json\n  Cache-Control: no-store\n\n"
-                "/index.html\n  Cache-Control: no-cache\n")
+                "/uninstall.json.gz\n  Cache-Control: no-store\n\n"
+                + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in uni_files if n != "uninstall.json.gz")
+                + "/index.html\n  Cache-Control: no-cache\n")
 
     alerts = send_alerts(dashboard, s)
+    _uninstall_mark_sent(dashboard, data_dir, s, alerts)
     return {"mode": mode, "fetch": totals, "alerts_sent": len(alerts),
             "out": out_dir, "revenue": dashboard["kpis"]["revenue"]}
 

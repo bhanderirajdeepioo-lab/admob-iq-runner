@@ -83,7 +83,13 @@ def load_catalog(private_dir):
             by_id = (json.load(f) or {}).get("by_id") or {}
     except Exception:
         by_id = {}
-    dash = _load_dashboard(private_dir)
+    return catalog_from(by_id, _load_dashboard(private_dir))
+
+
+def catalog_from(by_id, dash):
+    """load_catalog without the files: `by_id` = app_store_ids.json's {app_id: package}, `dash` = a built
+    dashboard (its apps_catalog + roas.by_app). The build calls this with the dashboard still in memory."""
+    by_id, dash = by_id or {}, dash or {}
     catalog = [c for c in (dash.get("apps_catalog") or []) if c.get("app_id")]
     pkg_of = {aid: str(p).strip() for aid, p in by_id.items() if p and str(p).strip()}
     # fallback: ROAS knows a store_id per app NAME (from Google Ads) — map it back to app_ids

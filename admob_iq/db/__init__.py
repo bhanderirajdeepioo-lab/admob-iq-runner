@@ -13,6 +13,7 @@
 import os
 import json
 import gzip
+import zlib
 import datetime as _dt
 
 
@@ -300,6 +301,30 @@ def _write_json_gz(path, obj, **dump_kw):
             os.remove(path)
         except OSError:
             pass
+
+
+def write_json_gz_stable(path, obj):
+    """Write obj to `path` (the full .gz name) as DETERMINISTIC gzip — sorted keys, compact JSON, no
+    timestamp or file name in the gzip header — and only when the content changed. Returns True when
+    the file was (re)written. The hourly build then leaves an unchanged file's bytes alone, so the
+    private repo's git history doesn't grow by a fresh copy of every file on every run."""
+    import io
+    raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    try:
+        with open(path, "rb") as f:
+            if gzip.decompress(f.read()) == raw:      # inflating is far cheaper than compressing again
+                return False
+    except (OSError, EOFError, ValueError, zlib.error):
+        pass                                          # missing or damaged (a bad deflate stream is zlib.error) → write a fresh one
+    buf = io.BytesIO()
+    with gzip.GzipFile(filename="", mode="wb", fileobj=buf, mtime=0) as g:
+        g.write(raw)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(buf.getvalue())
+    os.replace(tmp, path)
+    return True
 
 
 class FileRepo:
