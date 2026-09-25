@@ -38,6 +38,17 @@ def _put_private_file(path, text, message):
     sys.exit("private repo write failed (HTTP %s)" % r.status_code)
 
 
+def _consented_as(tok_response):
+    """Email of the Google account that clicked Allow (from the id_token, present when the consent URL asked for
+    `openid email`). Goes only to the PRIVATE status file — never to this public log."""
+    idt = tok_response.get("id_token", "")
+    try:
+        payload = idt.split(".")[1]
+        return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))).get("email", "")
+    except (IndexError, ValueError):
+        return ""
+
+
 def _delete_secret(name, repo, tok):
     requests.delete("https://api.github.com/repos/%s/actions/secrets/%s" % (repo, name), timeout=30,
                     headers={"Authorization": "token " + tok, "Accept": "application/vnd.github+json"})
@@ -79,16 +90,17 @@ def main():
     save_github_secret("GA4_REFRESH_TOKEN", j["refresh_token"], repo=repo, gh_token=gh)
     save_github_secret("GA4_CLIENT_ID", cid, repo=repo, gh_token=gh)
     save_github_secret("GA4_CLIENT_SECRET", csec, repo=repo, gh_token=gh)
+    who = _consented_as(j)
     try:
         accounts, properties = ga4_visible_counts(j["access_token"])
     except RuntimeError as e:
         msg = str(e)
         hint = "admin_api_disabled" if ("SERVICE_DISABLED" in msg or "has not been used" in msg) else "ga4_check_failed"
         _put_private_file("ga4/auth_status.json", json.dumps({"ok": False, "token_saved": True, "error": hint,
-                          "detail": msg[:300]}), "ga4 auth: token saved, check failed")
+                          "detail": msg[:300], "consented_as": who}), "ga4 auth: token saved, check failed")
         sys.exit("GA4 token saved, but the check failed: %s (details in the private repo)" % hint)
     _put_private_file("ga4/auth_status.json", json.dumps({
-        "ok": True, "accounts": accounts, "properties": properties,
+        "ok": True, "accounts": accounts, "properties": properties, "consented_as": who,
         "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}), "ga4 auth: ok")
     print("GA4 token saved: %d account(s), %d propert(y/ies) visible" % (accounts, properties))
 
