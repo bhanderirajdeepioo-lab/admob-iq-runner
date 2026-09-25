@@ -169,7 +169,9 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
                         "recent_k": eng.RECENT_K, "prev_k": eng.PREV_K, "head_k": eng.HEAD_K, "z": eng.Z_MIN,
                         "min_pp": eng.MIN_PP, "min_rel": eng.MIN_REL, "min_recent_users": eng.MIN_RECENT_USERS,
                         "big_recent_users": eng.BIG_RECENT_USERS, "zoom_days": eng.ZOOM_DAYS,
-                        "late_days": cfg["late_days"]},
+                        "late_days": cfg["late_days"], "thin_min_days": eng.THIN_MIN_DAYS,
+                        "thin_min_users": eng.THIN_MIN_USERS, "surv_recent_days": eng.SURV_RECENT_DAYS,
+                        "verdict_k": eng.VERDICT_K, "tri_avg_weeks": eng.TRI_AVG_WEEKS},
              "lateness": eng.lateness(late_sums), "apps": details, "no_ga4": no_ga4}
     write_json_gz_stable(os.path.join(out_dir, ASSET), asset)
     asset_v = hashlib.sha1(json.dumps(asset, ensure_ascii=False, separators=(",", ":"), sort_keys=True)

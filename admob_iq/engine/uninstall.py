@@ -17,8 +17,14 @@ day × lag); output is what the tab shows and which alerts are open.
     share that uninstalled by day N after it. A cohort counts for N only once complete (c + N <= E, the
     last settled GA4 day), so per cohort the curve can only rise. Every lag is kept — no day dropped.
   * HEADLINE CURVE — per N, the 28 newest complete install days: the same count for every N, but NOT the
-    same install days, so the curve may dip (older installs had a different mix). The install-week
-    TRIANGLE compares like with like.
+    same install days, so it may dip (older installs had a different mix). Only the checkpoint choice reads
+    it now; the tab shows the SURVIVAL curve instead. The install-week TRIANGLE compares like with like.
+  * SURVIVAL — "of 100 installs, how many still have the app N days later": a life table (chain ladder).
+    h(N) = Σ uninstalls ON day N ÷ Σ users still installed when day N began, over every install day that
+    reached N (settled, clean); S(N) = Π (1 − h). It never rises, never passes 100%, and every N uses all the
+    data that reached it. Per app for every install day ("hamesha") and the last 90 days of installs ("abhi"),
+    and a VERDICT: the newest 4 settled weeks of installs vs the 4 weeks before (the alert rules decide
+    whether the gap is real). Shown only — no alert reads it.
   * CHECKPOINTS — which N to show and alert on, per app: every day while the app is new / small / still
     losing users fast, a sparse 1, 3, 7, 14, 30… ladder once it is big and stable, and daily detail again
     after a release or an alert. The curve is cumulative, so a change at a skipped N still shows at the
@@ -100,6 +106,20 @@ HEAD_MIN_COHORTS = 7      # a checkpoint needs ≥1 full week of complete instal
 WILSON_Z = 1.96           # 95% interval
 BREAK_MIN_PP = 0.5        # a tracking break only spoils an install day if it hit a day-after-install still
                           # losing ≥0.5% of installs (later days lose ~0.1%: leaving it in costs nothing)
+
+# ── survival ("100 me se kitne bache") ──
+SURV_RECENT_DAYS = 90     # "abhi": the installs of the last 90 days — vs "hamesha": every install day
+THIN_MIN_DAYS = 7         # a day N reached by fewer than a week of install days …
+THIN_MIN_USERS = 300      # … or by fewer than 300 installs is "kam data": still shown (faded), never cut
+VERDICT_K = 28            # the summary verdict: the newest 4 settled weeks of installs vs the 4 weeks before
+VERDICT_DAYS = (7, 3, 1, 0)   # judged 7 days after install; a younger app on the latest of these both windows have
+VERDICT_MIN_DAYS = 14     # each window needs ≥2 weeks of clean install days (one incomplete day costs ~8 of 28)
+                          # big app: the alerts' breadth rule (BREADTH_MIN of RECENT_K) scaled to the verdict's
+                          # window — ≥4/7 of its install days on the moved side (16 of 28) — and the gap must stay
+                          # ≥ MIN_PP without its single biggest install day: one campaign day can't carry it
+KEY_DAYS = (1, 7, 30, 90, 0, 3, 14, 60, 180, 365)   # the summary's "N din baad" days, most wanted first …
+KEY_MAX = 4               # … at most 4, each one the app shows and that enough installs reached
+TRI_AVG_WEEKS = 4         # the triangle's "Pichhle 4 hafte ka average" row: the 4 newest settled full weeks
 
 # ── adaptive checkpoints ──
 NEW_DAYS = 30; STABLE_DAYS = 90
@@ -594,14 +614,30 @@ def compare(cd, N, skip=None, late=0):
     return row
 
 
-def triangle(cd, cols):
+def triangle(cd, cols, late=0, surv=None):
     """Install ISO-week × checkpoint grid, newest week first, EVERY week. A cell is shown only when every
-    install day of that week is complete for N; ref[N] = all-time pooled value (the heat reference)."""
+    install day of that week is complete for N; ref[N] = the all-time normal (the heat reference) = 1 − the
+    "hamesha" survival at N (surv, default survival(cd, late)) over ref_users installs that reached N — the
+    summary's "N din baad X bache" exactly, so it never goes down from one column to the next (a column pooled
+    on its own mixes in a different set of install days); None past the last day the survival reached.
+    avg4[N] = the TRI_AVG_WEEKS newest FULL weeks whose day N is settled (Sunday + N ≤ E − late), pooled like
+    the cells → {p, users, from, to}, or None while fewer such weeks exist."""
     E, hs, H = cd["E"], cd["hs"], cd["H"]
-    ref = []
+    surv = survival(cd, late) if surv is None else surv
+    ref, ref_users, avg4 = [], [], []
     for N in cols:
-        x, n, _ = _pool(cd, 0, H - 1, N)
-        ref.append(_r(x / n, 5) if n else None)
+        ok = N < len(surv["left"])
+        ref.append(_r(1 - surv["left"][N], 5) if ok else None)
+        ref_users.append(surv["n"][N] if ok else 0)
+        # the newest full week settled for N ends on the last Sunday ≤ E − late − N
+        last = E - timedelta(days=late + N)
+        b = last - timedelta(days=(last.weekday() + 1) % 7)
+        a = b - timedelta(days=7 * TRI_AVG_WEEKS - 1)
+        if a < hs:
+            avg4.append(None)
+            continue
+        x, n, _ = _pool(cd, (a - hs).days, (b - hs).days, N)
+        avg4.append({"p": _r(x / n, 5), "users": n, "from": _iso(a), "to": _iso(b)} if n else None)
     rows = []
     if H:
         wk = E - timedelta(days=E.weekday())            # Monday of E's week
@@ -620,7 +656,7 @@ def triangle(cd, cols):
             rows.append({"week": "%d-W%02d" % (iso[0], iso[1]), "from": _iso(a), "to": _iso(b),
                          "days": i1 - i0 + 1, "users": users, "partial": i1 - i0 + 1 < 7, "p": p})
             wk -= timedelta(days=7)
-    return {"cols": list(cols), "ref": ref, "rows": rows}
+    return {"cols": list(cols), "ref": ref, "ref_users": ref_users, "avg4": avg4, "rows": rows}
 
 
 def lifetime(cd, ds):
@@ -629,6 +665,144 @@ def lifetime(cd, ds):
     n = sum(cd["n"])
     rates = [r for r, b in zip(ds["rate"], ds["broken"]) if r is not None and not b]
     return {"p": _r(x / n, 5) if n else None, "users": n, "un": x, "rate_all_med": _r(median(rates), 3)}
+
+
+def _drop_day(cd, i, late):
+    """Install day i counts in a survival curve for days-after-install 0..d−1 → d. Day N must be SETTLED
+    (i + N ≤ E − late), and — the rules of every alert comparison (_pool clean) — an incomplete day in i..i+N or
+    a tracking break in i..i+min(N, lmat) leaves it out from that N on. Every rule only grows with N, so an
+    install day that stops counting never comes back: the installs behind a day N only ever shrink."""
+    H = cd["H"]
+    d = H - late - i
+    ni, nb, lmat = cd.get("ni"), cd.get("nb"), cd.get("lmat", 0)
+    if ni and ni[i] < H:
+        d = min(d, ni[i] - i)
+    if nb and nb[i] < H and nb[i] - i <= lmat:
+        d = min(d, nb[i] - i)
+    return max(0, d)
+
+
+def survival(cd, late=0, i0=0, i1=None):
+    """Life table (chain ladder) of the install days [i0, i1]: of every 100 installs, how many still have the
+    app N days after install. Per day N: h(N) = Σ uninstalls ON day N ÷ Σ users still installed when day N
+    began (installs − uninstalls on days 0..N−1), over EVERY install day that counts for N (_drop_day);
+    S(N) = Π_{k≤N} (1 − h(k)). So it never rises and never passes 100%, and each N uses all the install days
+    that reached it — a day only older installs reached still sits on the same curve (when every install day
+    reached N, S(N) is exactly 1 − their pooled uninstall share). GA4 counts are approximate: a day whose
+    uninstalls pass the users left is taken as everyone gone (h = 1) and listed in "clipped", never hidden.
+    → {from, to, installs, x, r, n, k, left, lo, hi, gone, thin_from, clipped}; per N: x = uninstalls on day N,
+    r = users at risk, n / k = installs / install days that reached N, left = S(N), lo / hi = its 95% range
+    (Greenwood), gone = S(N−1) − S(N) as a share of the ORIGINAL installs (so the bars add up to the line);
+    thin_from = the first N reached by under THIN_MIN_DAYS install days or THIN_MIN_USERS installs ("kam data"
+    from there on — shown faded), None when every N has enough. Arrays end at the last N any install reached."""
+    H = cd["H"]
+    i0, i1 = max(0, i0), H - 1 if i1 is None else min(i1, H - 1)
+    dn, dk, dgone, x = [0] * (H + 2), [0] * (H + 2), [0] * (H + 2), [0] * (H + 1)
+    reach, installs = 0, 0
+    for i in range(i0, i1 + 1):
+        nc = cd["n"][i]
+        installs += nc
+        d = _drop_day(cd, i, late) if nc else 0
+        if d <= 0:
+            continue
+        reach = max(reach, d)
+        dn[0], dn[d], dk[0], dk[d] = dn[0] + nc, dn[d] - nc, dk[0] + 1, dk[d] - 1
+        for lag, u in cd["raw"][i].items():
+            if lag < d:
+                x[lag] += u
+                dgone[lag + 1] += u          # gone on day `lag`: no longer at risk on days lag+1 .. d−1
+                dgone[d] -= u
+    f, t = _win(cd, i0, i1)
+    out = {"from": f, "to": t, "installs": installs, "thin_from": None, "clipped": []}
+    cols = {k: [] for k in ("x", "r", "n", "k", "left", "lo", "hi", "gone")}
+    S, gw, shown = 1.0, 0.0, 1.0
+    n_run = k_run = g_run = 0
+    for N in range(reach):
+        n_run, k_run, g_run = n_run + dn[N], k_run + dk[N], g_run + dgone[N]
+        r, xN = n_run - g_run, x[N]
+        h = xN / r if r > 0 else 0.0
+        if xN > 0 and (r <= 0 or xN > r):            # more uninstalls than users left (r ≤ 0 too): all gone, listed
+            h = 1.0
+            out["clipped"].append(N)
+        S *= 1 - h
+        if 0 < h < 1:
+            gw += xN / (r * (r - xN))
+        se = S * math.sqrt(gw)
+        left = round(S, 5)
+        cols["x"].append(xN), cols["r"].append(r), cols["n"].append(n_run), cols["k"].append(k_run)
+        cols["left"].append(left)
+        cols["lo"].append(round(max(0.0, S - WILSON_Z * se), 5)), cols["hi"].append(round(min(1.0, S + WILSON_Z * se), 5))
+        cols["gone"].append(round(shown - left, 5))
+        shown = left
+        if out["thin_from"] is None and (k_run < THIN_MIN_DAYS or n_run < THIN_MIN_USERS):
+            out["thin_from"] = N
+    out.update(cols)
+    return out
+
+
+def verdict(cd, late=0):
+    """The summary's one line: at day N (7; a younger app the latest of VERDICT_DAYS both windows have), the
+    VERDICT_K newest install days whose day N is SETTLED vs the VERDICT_K before them — how many of 100 still
+    have the app. Every one of those install days reached N, so this IS the survival at N (1 − the pooled
+    uninstall share), judged by the alert rules (compare): enough users, |z| ≥ Z_MIN after the day-to-day
+    swings of the earlier window (dispersion), ≥ MIN_PP points and ≥ MIN_REL of the smaller side, and on a big
+    app the breadth rule scaled to the window: ≥ BREADTH_MIN/RECENT_K of its install days on the moved side (16
+    of 28 — 4 of 28 would pass on noise alone), and the gap still ≥ MIN_PP without the biggest install day (one
+    campaign day can't carry it). Settled days only, so both ways can be news. → {n, recent, prev, delta_pp
+    (kept, points), z, fires, dir ("worse" = fewer kept, "better", None), low_sample}, or None while no day has
+    both windows (each needs VERDICT_MIN_DAYS clean install days)."""
+    H = cd["H"]
+    for N in VERDICT_DAYS:
+        top = H - 1 - N - late
+        r0, p1 = top - VERDICT_K + 1, top - VERDICT_K
+        p0 = p1 - VERDICT_K + 1
+        xr, nr, kr, each = _pool(cd, r0, top, N, per=True, clean=True)
+        xb, nb, kb = _pool(cd, p0, p1, N, clean=True)
+        if kr < VERDICT_MIN_DAYS or kb < VERDICT_MIN_DAYS or not nr or not nb:
+            continue
+        pr, pb = xr / nr, xb / nb
+        sample = (nr >= MIN_RECENT_USERS and min(xr, nr - xr, xb, nb - xb) >= MIN_EVENTS)
+        phi = max(1.0, dispersion(cd, p0, p1, N))
+        z = z2(xr, nr, xb, nb)
+        z = None if z is None else round(z / math.sqrt(phi), 2)
+        dpp = round((pr - pb) * 100, 6)
+        small = min(pb, 1 - pb)
+        relsm = abs(pr - pb) / small if small > 0 else float("inf")
+        fires = bool(sample and z is not None and abs(z) >= Z_MIN and abs(dpp) >= MIN_PP and relsm >= MIN_REL)
+        if fires and nr >= BIG_RECENT_USERS:
+            moved = sum(1 for xc, nc, _ in each if (xc / nc > pb if dpp > 0 else xc / nc < pb))
+            xm, nm, _ = max(each, key=lambda e: e[1])              # the biggest install day, left out
+            loo = ((xr - xm) / (nr - nm) - pb) * 100 if nr > nm else 0.0
+            fires = (moved >= math.ceil(BREADTH_MIN * kr / RECENT_K)
+                     and abs(loo) >= MIN_PP and (loo > 0) == (dpp > 0))
+        rf, rt = _win(cd, r0, top)
+        bf, bt = _win(cd, p0, p1)
+        return {"n": N, "recent": {"from": rf, "to": rt, "users": nr, "k": kr, "left": _r(1 - pr, 5)},
+                "prev": {"from": bf, "to": bt, "users": nb, "k": kb, "left": _r(1 - pb, 5)},
+                "delta_pp": round((pb - pr) * 100, 1), "z": z, "fires": bool(fires),
+                "dir": ("worse" if dpp > 0 else "better") if fires else None, "low_sample": not sample}
+    return None
+
+
+def key_days(curve, cps):
+    """The summary sentence's days: at most KEY_MAX of KEY_DAYS (most wanted first), each one the app shows
+    (its checkpoints) and that the curve reached with enough installs (before thin_from) — sorted. A tiny app
+    whose whole curve is "kam data" (no such day) gets the days the curve reached instead — shown, marked "kam
+    data" on the page, never hidden."""
+    reach, cp = len(curve["left"]), set(cps)
+    solid = reach if curve["thin_from"] is None else curve["thin_from"]
+    got = [N for N in KEY_DAYS if N < solid and N in cp][:KEY_MAX]
+    return sorted(got or [N for N in KEY_DAYS if N < reach and N in cp][:KEY_MAX])
+
+
+def survival_out(cd, late, cps):
+    """The detail's "survival": every install day ("all" — hamesha), the last SURV_RECENT_DAYS days of installs
+    ("recent" — abhi; None when the app is no older than that: it would be the same curve), the verdict, and
+    the summary's key days (from "all")."""
+    H = cd["H"]
+    curve = survival(cd, late)
+    recent = survival(cd, late, H - SURV_RECENT_DAYS) if H > SURV_RECENT_DAYS else None
+    return {"all": curve, "recent": recent, "verdict": verdict(cd, late), "key_days": key_days(curve, cps)}
 
 
 def releases(store, ds):
@@ -711,17 +885,18 @@ def checkpoints(cd, curve, H, rels, open_eps, prev_eval, advanced):
     cps = sorted(N for N in cps if 0 <= N <= nmax)
     per_day = round(sum(cd["n"][-28:]) / max(1, min(28, H)))
     if stage == "naya":
-        why = "Sirf %d din ka data — isliye har din ka checkpoint" % H
+        why = "Sirf %d din ka data — isliye har din dekhte hain" % H
     elif stage == "stable":
-        why = "%d din ka data, roz ~%d installs, D%d ke baad curve dheemi — isliye 1, 3, 7, 14, 30…" % (H, per_day, dsteep)
+        why = "%d din ka data, roz ~%d installs, %d din ke baad hatna dheema — isliye 1, 3, 7, 14, 30… din" % (
+            H, per_day, dsteep)
     elif raw == "stable":
         why = "Stable ho raha hai — %d/%d din pakka, tab tak pehle hafte har din" % (hold, STAGE_HOLD)
     elif H < STABLE_DAYS:
-        why = "Abhi %d din ka data — 90 din ke baad checkpoints door-door ho sakte hain" % H
+        why = "Abhi %d din ka data — 90 din ke baad din door-door ho sakte hain" % H
     elif not ci_ok:
         why = "Roz ~%d installs — uninstall %% me ±1 point se zyada ghat-badh, isliye pehle hafte har din" % per_day
     else:
-        why = "D%d tak roz 2%%+ installs hat rahe — isliye pehle hafte har din" % dsteep
+        why = "%d din tak roz 2%%+ installs hat rahe — isliye pehle hafte har din" % dsteep
     return {"stage": stage, "raw": raw, "stable_hold": hold, "list": cps, "nmax": nmax, "dsteep": dsteep,
             "ci_ok": ci_ok, "zoom": zoom, "why": why}
 
@@ -1166,6 +1341,7 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     for a in alerts:
         counts[a["severity"]] = counts.get(a["severity"], 0) + 1
     rn = _rate_now(ds, drift)
+    sv = survival_out(cd, late, cp["list"])
     fl = store.get("flags") or {}
     inc = {k: v for k, v in sorted((fl.get("incomplete_days") or {}).items()) if cd["hs"] <= _d(k) <= E}
     detail = {"app_id": app_id, "app": app, "package": package or store.get("package"), "key": key,
@@ -1182,7 +1358,8 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
                         "breaks": [_iso(ds["start"] + timedelta(days=i)) for i in range(ds["n"]) if ds["broken"][i]]},
               "rate_now": rn, "stage": cp["stage"], "stage_why": cp["why"], "zoom": cp["zoom"],
               "checkpoints": cp["list"], "nmax": cp["nmax"], "curve": curve, "table": table, "head4": head4,
-              "lifetime": lifetime(cd, ds), "triangle": triangle(cd, cp["list"]), "releases": rels,
+              "lifetime": lifetime(cd, ds), "triangle": triangle(cd, cp["list"], late, (sv or {}).get("all")),
+              "survival": sv, "releases": rels,
               "lateness": lateness(revision_sums(store)), "alerts": alerts, "alerts_closed": closed}
     summary = {"app_id": app_id, "app": app, "data_till": _iso(E), "stale": bool(stale), "ready": cp["nmax"] >= 0,
                "stage": cp["stage"], "rate7": rn["last7"], "rate_med": rn["med"], "rate_dir": rn["dir"],
