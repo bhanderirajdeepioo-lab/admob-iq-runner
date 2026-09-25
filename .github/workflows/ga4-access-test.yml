@@ -1,0 +1,33 @@
+# One-off: can the GA4 token read properties it does not see in accountSummaries (Firebase-inherited access)?
+# Property ids come from the PRIVATE repo (ga4/test_properties.txt). Logs of this PUBLIC repo show status only.
+name: ga4-access-test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-access-test
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q requests pynacl
+      - name: Run
+        env:
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: python -m admob_iq.fetch.ga4_access_test
