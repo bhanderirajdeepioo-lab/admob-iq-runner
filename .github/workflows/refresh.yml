@@ -152,8 +152,14 @@ jobs:
           echo "private repo: $((size_kb/1024)) MB (compact above ${MAX_REPO_MB} MB)"
           if [ "${size_kb:-0}" -le $((MAX_REPO_MB*1024)) ]; then echo "no compaction needed"; exit 0; fi
           cd _private
+          # Compact the LATEST remote tree, not this run's copy — keeps anything another job pushed
+          # after our push (e.g. the ga4/ probe output), so the force-push never drops a file.
+          git fetch -q --depth=1 origin main && git reset -q --hard origin/main
           # SAFETY: never force-push an empty or half-built tree over the real history.
-          test -s site/dashboard.json      || { echo "::warning::dashboard.json missing — compaction skipped"; exit 0; }
+          # (dashboard ships gzipped since 2026-09 — the old plain-name check skipped EVERY
+          #  compaction and let the repo grow to ~62 GB; accept either name.)
+          { test -s site/dashboard.json.gz || test -s site/dashboard.json; } \
+            || { echo "::warning::dashboard.json(.gz) missing — compaction skipped"; exit 0; }
           test -n "$(ls -A data 2>/dev/null)" || { echo "::warning::data/ is empty — compaction skipped"; exit 0; }
           git checkout -q --orphan _compact
           git add -A
