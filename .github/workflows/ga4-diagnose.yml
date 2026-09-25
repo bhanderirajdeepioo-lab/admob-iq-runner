@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install
-        run: pip install -q requests pynacl
+        run: pip install -q -r requirements.txt pynacl
       - name: Run
         env:
           GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
