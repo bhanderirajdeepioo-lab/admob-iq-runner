@@ -30,8 +30,20 @@ day × lag); output is what the tab shows and which alerts are open.
     after 3 quiet daily evaluations → a re-open notifies again. The install days an alert was about are
     remembered per direction: the curve is cumulative, so the same bad install week shows again at D30,
     D45, D60… — that is old news and never re-alerts; only installs not alerted on yet can open a new one.
-  * GOOD NEWS WAITS A DAY — GA4's newest day can still be filling in, and late data only ever makes a
-    day read LOW: a "kam" (down) alert or a 0-uninstall day is confirmed on the next daily evaluation.
+  * LATE DATA — Firebase keeps adding events for up to LATE_DAYS (~7) days (mostly app_remove, which Play
+    reports late), and late data only ever ADDS. So the newest LATE_DAYS days are PROVISIONAL (S = E −
+    LATE_DAYS is the last settled day): nothing that treats a LOW reading as news uses them — a "kam"
+    (down) cohort alert counts install day c for N only if c + N <= S, a dip or a 0-uninstall day needs
+    day <= S, a downward drift ends at S, a ▼ arrow comes from settled data, and no normal band, baseline or
+    headline curve is built from them. A rise already visible in them is real (it can only grow), so "up"
+    alerts may use them — their message says the newest days are still filling in (PROV_NOTE). Every "up"
+    test also runs on the settled days: the provisional ones read LOW, so a moderate rise shows there only
+    once its late data is in — about LATE_DAYS later, but never missed.
+  * INCOMPLETE DAYS — days whose install-day cells GA4 never returned in full (the store's
+    flags.incomplete_days, see fetch.ga4_uninstall) feed no baseline, and no cohort comparison counts an
+    install day whose checkpoint window touches one: shown ("data adhoora"), never alerted on.
+  * LATENESS — how much of a day's uninstalls / installs are in at each age, measured from the fetch's
+    day-to-day re-reads (store["revisions"]) — see lateness().
 
 Dates are datetime.date inside, ISO strings in and out. Fractions 0–1 (5 dp), rates per 1,000 (3 dp),
 points = percentage points.
@@ -43,6 +55,10 @@ from datetime import date, timedelta
 from ..alerting.rules import fingerprint
 
 LAG_DAYS = 2              # GA4 settles in ~48h (mirrors fetch.ga4.LAG_DAYS without importing requests)
+LATE_DAYS = 7             # Firebase adds events (mostly app_remove) up to ~7 days late: the newest 7 days are
+                          # PROVISIONAL — they can only grow (config GA4_LATE_DAYS; the build passes it in)
+PROV_NOTE = " · abhi ka data kaccha — number aur badh sakta hai"   # on an "up" alert that uses provisional days
+LATE_MIN_USERS = 50       # lateness: an age needs ≥50 re-read users before its share is shown (fewer is noise)
 NOT_SET = {"", "(not set)", "(other)", "(none)"}
 
 # ── daily rate + normal band ──
@@ -58,7 +74,8 @@ SPREAD_SIGMA = 1.2533     # scales the MEAN absolute deviation to a standard dev
 BAND_REL_FLOOR = 0.10     # spread never below 10%, so a flat series (spread 0) doesn't flag wobbles
 ARROW_REL = 0.10          # arrow: pooled last-7 rate at least ±10% vs its normal level
 
-SPIKE_LOOKBACK = 3        # late GA4 data or a missed run can't hide a spike
+SPIKE_LOOKBACK = 3        # the 3 settled days before the provisional ones are judged too (a missed run can't hide
+                          # a spike); a rise is looked for in every provisional day as well (late data can raise one)
 SPIKE_MIN_USERS = 15      # tiny apps: 3 vs 1 uninstalls is not news
 ZERO_MIN_EXPECTED = 20    # 0 on a day that should have ≥20 is a tracking break, not good news
 SPIKE_KEEP_DAYS = 7       # a spike alert stays up a week after its (last) day
@@ -208,7 +225,7 @@ def shown_pct(old, new):
 
 # ── daily rate, normal band, spikes, drift ──────────────────────────────────────────────────────
 
-def daily_series(store, E=None, cd=None):
+def daily_series(store, E=None, cd=None, late=LATE_DAYS):
     """Columnar day-by-day arrays from history_start to E: new installs, uninstalling users, the rate
     denominator (active28DayUsers, or activeUsers when the store's den is "dau"), app_update users, the
     rate per 1,000 and its normal band. A day outside every fetched range is unknown (null), never 0.
@@ -218,9 +235,16 @@ def daily_series(store, E=None, cd=None):
     zs[i] = how far the day sits from it in robust sigmas (log scale), med/lo/hi = exp and its band in
     rate units. Every step only looks at days BEFORE i. A day with NO uninstall where ≥ZERO_MIN_EXPECTED
     were expected is a tracking break (broken[i]): shown as 0 and alerted as rate_zero, but never
-    counted into a band, a drift or a cohort comparison — it isn't news about users."""
+    counted into a band, a drift or a cohort comparison — it isn't news about users. Only BASE days —
+    good, settled (not among the last `late`) and not incomplete — go into a band or a baseline:
+    provisional days read low until their late data is in, an incomplete day's install-day split is wrong."""
     hs, E = _d(store["history_start"]), _d(E or store["window_end"])
     n = max(0, (E - hs).days + 1)
+    late = max(0, int(late or 0))
+    S = n - late                                # index of the first provisional day
+    inc = set()
+    for k in ((store.get("flags") or {}).get("incomplete_days") or {}):
+        inc.add((_d(k) - hs).days)
     covered = [(_d(a), _d(b)) for a, b in store.get("covered") or []]
     daily = store.get("daily") or {}
     dau = store.get("den") == "dau"
@@ -245,12 +269,12 @@ def daily_series(store, E=None, cd=None):
     # uninstalls by installs of the last K days (from the install-day cells) and by everyone older
     young = [sum(raw[i - L].get(L, 0) for L in range(min(K - 1, i) + 1)) for i in range(n)]
     old = [None if un[i] is None else max(0, un[i] - young[i]) for i in range(n)]
-    # running sums over the GOOD days only (known, not a tracking break): per lag L, users who left on
-    # day L after install (C) and those install days' installs (I) → the usual share leaving on day L
+    # running sums over the BASE days only (known, not a tracking break, settled, complete): per lag L, users
+    # who left on day L after install (C) and those install days' installs (I) → the usual share leaving on day L
     C = [[0] * (n + 1) for _ in range(K)]
     I = [[0] * (n + 1) for _ in range(K)]
     V = [0] * (n + 1)
-    q, dev, exp, zs, med, lo, hi, broken, good = [], [], [], [], [], [], [], [], []
+    q, dev, exp, zs, med, lo, hi, broken, good, base = [], [], [], [], [], [], [], [], [], []
     for i in range(n):
         a = max(0, i - BAND_DAYS)
         e0 = None
@@ -260,14 +284,14 @@ def daily_series(store, E=None, cd=None):
                 ib = I[L][i] - I[L][a]
                 if ib > 0 and new[i - L]:
                     ey += new[i - L] * (C[L][i] - C[L][a]) / ib
-            e0 = ey + median([old[j] for j in range(a, i) if good[j]])
+            e0 = ey + median([old[j] for j in range(a, i) if base[j]])
         q.append(math.log(max(un[i], 0.5) / e0) if e0 else None)     # 0.5: log of a 0-day stays finite
-        prior = [q[j] for j in range(a, i) if good[j] and q[j] is not None]
+        prior = [q[j] for j in range(a, i) if base[j] and q[j] is not None]
         m = e = z = None
         if e0 and len(prior) >= BAND_MIN_DAYS:
             mq = median(prior)
             e = e0 * math.exp(mq)                                    # what a normal day would have had
-            devs = [dev[j] for j in range(max(0, i - SCALE_DAYS), i) if good[j] and dev[j] is not None]
+            devs = [dev[j] for j in range(max(0, i - SCALE_DAYS), i) if base[j] and dev[j] is not None]
             sc = spread(devs, 0.0) if len(devs) >= BAND_DAYS else spread(prior, mq)
             sc = max(sc, BAND_REL_FLOOR, 1 / math.sqrt(max(e, 1)))
             z = (q[i] - mq) / sc
@@ -278,37 +302,41 @@ def daily_series(store, E=None, cd=None):
         med.append(m and m[0]), lo.append(m and m[1]), hi.append(m and m[2])
         broken.append(bool(e is not None and un[i] == 0 and e >= ZERO_MIN_EXPECTED))
         good.append(un[i] is not None and not broken[i])
-        V[i + 1] = V[i] + good[i]
+        base.append(good[i] and i < S and i not in inc)
+        V[i + 1] = V[i] + base[i]
         for L in range(K):
             c, iL = C[L], I[L]
             c[i + 1], iL[i + 1] = c[i], iL[i]
-            if good[i] and i >= L and new[i - L]:
+            if base[i] and i >= L and new[i - L]:
                 c[i + 1] += raw[i - L].get(L, 0)
                 iL[i + 1] += new[i - L]
     return {"start": hs, "end": E, "n": n, "new": new, "un": un, "den": den, "upd": upd, "rate": rate,
             "med": med, "lo": lo, "hi": hi, "broken": broken, "exp": exp, "zs": zs, "good": good,
-            "old": old, "C": C, "I": I}
+            "base": base, "late": late, "old": old, "C": C, "I": I}
 
 
 def rate_spikes(ds, n=None):
-    """Sudden days among the last SPIKE_LOOKBACK settled days (of the first n) that have a band →
-    conditions. A LOW reading (a dip, or 0) on the newest day waits: late GA4 data can still raise it."""
+    """Sudden days (of the first n) that have a band → conditions: the SPIKE_LOOKBACK settled days before the
+    provisional ones, and the provisional ones themselves. A LOW reading (a dip, or 0) counts only on a
+    settled day — late data can still raise a provisional one; a HIGH one counts on any of them (late data
+    only adds), marked prov when the day is still provisional."""
     out = []
     n = ds["n"] if n is None else n
-    for i in range(max(0, n - SPIKE_LOOKBACK), n):
+    S = n - ds.get("late", 0)                   # days before index S are settled
+    for i in range(max(0, S - SPIKE_LOOKBACK), n):
         r, m, x, e, z = ds["rate"][i], ds["med"][i], ds["un"][i], ds["exp"][i], ds["zs"][i]
         if r is None or m is None:
             continue
-        newest = i == n - 1
+        settled = i < S
         day = ds["start"] + timedelta(days=i)
         c = {"day": day, "now": r, "before": m, "lo": ds["lo"][i], "hi": ds["hi"][i], "users": x,
-             "expected": e, "z": round(z, 2), "rel": x / e - 1 if e else None}
+             "expected": e, "z": round(z, 2), "rel": x / e - 1 if e else None, "prov": not settled}
         if x == 0 and e >= ZERO_MIN_EXPECTED:
-            if not newest:
+            if settled:
                 out.append(dict(c, family="rate_zero", dir="down", severity="watch"))
         elif z >= BAND_K and x - e >= SPIKE_MIN_USERS:
             out.append(dict(c, family="rate_spike", dir="up", severity="warning"))
-        elif z <= -BAND_K and e - x >= SPIKE_MIN_USERS and not newest:
+        elif z <= -BAND_K and e - x >= SPIKE_MIN_USERS and settled:
             out.append(dict(c, family="rate_spike", dir="down", severity="good"))
     return out
 
@@ -322,7 +350,7 @@ def _expect_from(ds, a, s):
         return memo[(a, s)]
     K, C, I, new = YOUNG_DAYS, ds["C"], ds["I"], ds["new"]
     h = [(C[L][s] - C[L][a]) / (I[L][s] - I[L][a]) if I[L][s] > I[L][a] else 0.0 for L in range(K)]
-    eo = median([ds["old"][j] for j in range(a, s) if ds["good"][j]]) or 0
+    eo = median([ds["old"][j] for j in range(a, s) if ds["base"][j]]) or 0
     got = {}
 
     def f(i):
@@ -334,19 +362,20 @@ def _expect_from(ds, a, s):
     return f
 
 
-def rate_drift(ds, n=None):
+def rate_drift(ds, n=None, want=None):
     """A slow, steady change that ends at day n−1 (default E) → {since, before, now, rel, z, dir, …} or
     None. For every start s 7–42 days back, the days since s are judged against what the 4 weeks before
     s make expected (so the new level can't leak into its own baseline, and installs are allowed for):
     z = mean log(actual ÷ expected) after vs its median before, with the noise of BOTH. The largest |z|
-    wins (ties: the earlier s). before / now = rate per 1,000 expected at the old level vs actual."""
+    wins (ties: the earlier s). before / now = rate per 1,000 expected at the old level vs actual.
+    want = "up" / "down": only a change that way (see drift_now)."""
     n, best = ds["n"] if n is None else n, None
     for L in range(DRIFT_MIN_DAYS, DRIFT_MAX_DAYS + 1):
         s = n - L
         if s < BAND_MIN_DAYS:
             break
         a = max(0, s - BAND_DAYS)
-        bef = [j for j in range(a, s) if ds["good"][j]]
+        bef = [j for j in range(a, s) if ds["base"][j]]
         aft = [i for i in range(s, n) if ds["good"][i] and ds["rate"][i] is not None and ds["den"][i]]
         if len(aft) < DRIFT_COVER * L or len(bef) < BAND_MIN_DAYS:
             continue
@@ -368,6 +397,8 @@ def rate_drift(ds, n=None):
         rel = su / se_ - 1 if se_ else 0.0
         side = sum(1 for x in ra if (x > mb if shift > 0 else x < mb)) / len(ra)
         extra = abs(su - se_)
+        if want and (rel > 0) != (want == "up"):
+            continue
         if (abs(z) >= DRIFT_Z and abs(rel) >= DRIFT_MIN_REL and (rel > 0) == (shift > 0) and side >= DRIFT_SIDE
                 and extra >= DRIFT_MIN_USERS):
             if best is None or abs(z) >= abs(best["z"]):              # >= : a longer window = an earlier s
@@ -376,6 +407,20 @@ def rate_drift(ds, n=None):
                         "extra": round(extra), "base_from": ds["start"] + timedelta(days=a),
                         "base_to": ds["start"] + timedelta(days=s - 1)}
     return best
+
+
+def drift_now(ds, n=None):
+    """The drift at day n−1 (default E): a RISE may end on the provisional days (late data only adds
+    uninstalls — a rise already visible is real; marked prov; drift windows run up to 6 weeks, so the few
+    provisional days still reading low barely dilute it), a FALL is judged on settled days only, ending at
+    the last settled day. A rise wins over a fall (the bad news is the one to act on)."""
+    n = ds["n"] if n is None else n
+    late = ds.get("late", 0)
+    up = rate_drift(ds, n, "up")
+    if up:
+        return dict(up, prov=late > 0)
+    down = rate_drift(ds, n - late, "down")
+    return dict(down, prov=False) if down else None
 
 
 # ── cohort curve ────────────────────────────────────────────────────────────────────────────────
@@ -400,7 +445,9 @@ def cohort_data(store, E=None, broken=None):
         elif run > n[i]:
             over += 1                          # GA4 counts are approximate — shown, never clipped
         cum.append(row)
-    cd = {"hs": hs, "E": E, "H": H, "n": n, "cum": cum, "raw": raw,
+    inc = sorted(i for i in ((_d(k) - hs).days for k in (store.get("flags") or {}).get("incomplete_days") or {})
+                 if 0 <= i < H)
+    cd = {"hs": hs, "E": E, "H": H, "n": n, "cum": cum, "raw": raw, "inc": inc,
           "flags": {"unplaced_users": int(unplaced), "over_100": over}}
     mark_breaks(cd, broken)
     return cd
@@ -431,20 +478,30 @@ def mark_breaks(cd, broken):
             lmat = L
     cd["nb"], cd["lmat"] = nb, lmat
     cd["breaks"] = [i for i in range(H) if brk[i]]
+    # incomplete days (cells GA4 never returned in full): ni[i] = the first one ≥ install day i. Unlike a
+    # break it can hide a share of ANY day-after-install, so it spoils every checkpoint whose days it touches
+    inc, ni, nxt = set(cd.get("inc") or []), [H] * H, H
+    for i in range(H - 1, -1, -1):
+        if i in inc:
+            nxt = i
+        ni[i] = nxt
+    cd["ni"] = ni
     return cd
 
 
 def _pool(cd, i0, i1, N, per=False, clean=False, skip=None):
     """Σ uninstalled-by-N and Σ installs over the NON-EMPTY cohorts with index in [i0, i1] that are complete
     for N → (x, n, k[, [(x_c, n_c, i)]]). clean: also skip install days with a tracking break in days
-    0..min(N, lmat) (see mark_breaks). skip: install-day indexes left out as well."""
+    0..min(N, lmat) or an incomplete day in days 0..N (see mark_breaks). skip: install-day indexes left out
+    as well."""
     x = n = k = 0
     each = []
     nb = cd.get("nb") if clean else None
+    ni = cd.get("ni") if clean else None
     reach = min(N, cd.get("lmat", N))
     for i in range(max(0, i0), min(i1, cd["H"] - 1 - N) + 1):
         nc = cd["n"][i]
-        if not nc or (nb and nb[i] <= i + reach) or (skip and i in skip):
+        if not nc or (nb and nb[i] <= i + reach) or (ni and ni[i] <= i + N) or (skip and i in skip):
             continue
         xc = cd["cum"][i][N]
         x, n, k = x + xc, n + nc, k + 1
@@ -453,13 +510,15 @@ def _pool(cd, i0, i1, N, per=False, clean=False, skip=None):
     return (x, n, k, each) if per else (x, n, k)
 
 
-def headline_curve(cd):
+def headline_curve(cd, late=0):
     """For EVERY N in 0..H−1: the HEAD_K newest complete install days → p, Wilson lo/hi, users, cohorts k,
-    and inc = % of installs uninstalling ON day N (how steep the curve still is)."""
+    and inc = % of installs uninstalling ON day N (how steep the curve still is). late: an install day c
+    counts for N only once c + N is SETTLED (≤ E − late) — provisional days read low, and the curve (and the
+    checkpoints chosen from it) must not dip because of them."""
     H = cd["H"]
     out = {k: [] for k in ("p", "lo", "hi", "users", "k", "inc")}
     for N in range(H):
-        top = H - 1 - N
+        top = H - 1 - N - late
         x, n, k = _pool(cd, top - HEAD_K + 1, top, N)
         on = sum(cd["raw"][i].get(N, 0) for i in range(max(0, top - HEAD_K + 1), top + 1) if cd["n"][i])
         lo, hi = wilson(x, n)
@@ -488,14 +547,15 @@ def dispersion(cd, i0, i1, N):
     return sum((xc - nc * p) ** 2 / (nc * p * (1 - p)) for xc, nc, _ in each) / (k - 1)
 
 
-def compare(cd, N, skip=None):
+def compare(cd, N, skip=None, late=0):
     """Checkpoint N: the RECENT_K newest complete install days (R) vs the PREV_K before them (P) and vs
     every older install day (A, all-time). A base fires when the sample is big enough, the move is
     significant (|z| >= Z_MIN, z = two-proportion z ÷ √φ, φ = the day-to-day dispersion of the 4 weeks
     before, never below 1) AND real (>= MIN_PP points and >= MIN_REL of the smaller side), and — for a
     big app — at least BREADTH_MIN of the recent days individually sit on the moved side.
-    skip: install-day indexes left out of R (the ones an alert already covered — see evaluate_app)."""
-    top = cd["H"] - 1 - N
+    skip: install-day indexes left out of R (the ones an alert already covered — see evaluate_app).
+    late: "complete" means settled — c + N ≤ E − late (the "down" test; see the module docstring)."""
+    top = cd["H"] - 1 - N - late
     xr, nr, kr, each = _pool(cd, top - RECENT_K + 1, top, N, per=True, clean=True, skip=skip)
     pr = xr / nr if nr else None
     sample = kr >= RECENT_MIN and nr >= MIN_RECENT_USERS and xr >= MIN_EVENTS and nr - xr >= MIN_EVENTS
@@ -503,11 +563,13 @@ def compare(cd, N, skip=None):
     if skip and each:                                  # the install days actually in R
         f, t = _win(cd, each[0][2], each[-1][2])
     reach = min(N, cd.get("lmat", N))
-    lost = [cd["nb"][i] for i in range(max(0, top - RECENT_K + 1), top + 1)
-            if cd.get("nb") and cd["n"][i] and cd["nb"][i] <= i + reach]
-    row = {"n": N, "recent": {"p": _r(pr, 5), "users": nr, "from": f, "to": t, "k": kr, "x": xr},
+    rng = range(max(0, top - RECENT_K + 1), top + 1)
+    lost = [cd["nb"][i] for i in rng if cd.get("nb") and cd["n"][i] and cd["nb"][i] <= i + reach]
+    gap = [cd["ni"][i] for i in rng if cd.get("ni") and cd["n"][i] and cd["ni"][i] <= i + N]
+    row = {"n": N, "late": late, "recent": {"p": _r(pr, 5), "users": nr, "from": f, "to": t, "k": kr, "x": xr},
            "low_sample": not sample, "prev": None, "all": None,
-           "break_day": _iso(cd["hs"] + timedelta(days=min(lost))) if lost else None}
+           "break_day": _iso(cd["hs"] + timedelta(days=min(lost))) if lost else None,
+           "inc_day": _iso(cd["hs"] + timedelta(days=min(gap))) if gap else None}
     phi = max(1.0, dispersion(cd, top - RECENT_K - PREV_K + 1, top - RECENT_K, N))
     row["phi"] = round(phi, 3)
     for name, i0, need in (("prev", top - RECENT_K - PREV_K + 1, PREV_MIN), ("all", 0, ALL_MIN_COHORTS)):
@@ -696,7 +758,8 @@ def cohort_conditions(rows):
                    "now": now, "before": before, "delta_pp": round((now - before) * 100, 1), "rel": round(rel, 4),
                    "z": b["z"], "installs_from": row["recent"]["from"], "installs_to": row["recent"]["to"],
                    "base_from": b["from"], "base_to": b["to"], "since": None, "day": None,
-                   "users": row["recent"]["users"], "ns": sorted(ns)}
+                   "users": row["recent"]["users"], "ns": sorted(ns),
+                   "held": {k: by_n[k]["held"] for k in sorted(ns) if by_n[k].get("held")}}
     return out
 
 
@@ -712,7 +775,12 @@ def _cohort_text(s):
 
 
 def alert_text(family, dr, s):
-    """The Hinglish message (without the leading "{app}: ")."""
+    """The Hinglish message (without the leading "{app}: "); an "up" alert that rests on provisional days
+    says so (PROV_NOTE) — the number can still grow, never shrink."""
+    return _alert_text(family, dr, s) + (PROV_NOTE if s.get("prov") and dr == "up" else "")
+
+
+def _alert_text(family, dr, s):
     if family == "cohort":
         return _cohort_text(dict(s, dir=dr))
     if family == "rate_spike":
@@ -795,7 +863,8 @@ def alert_obj(ep, app, E):
     """Episode → the alert object the Alerts screen and the notifications read. The message is rebuilt
     every build, so a renamed app shows its new name."""
     s, E = ep["last"], _d(E)
-    text = alert_text(ep["family"], ep["dir"], s)
+    prov = bool(s.get("prov")) and ep["dir"] == "up" and "closed" not in ep    # history: its days have settled
+    text = alert_text(ep["family"], ep["dir"], dict(s, prov=prov))
     out = {"id": ep["id"], "source": "uninstall", "app_id": ep["app_id"], "app": app, "family": ep["family"],
            "dir": ep["dir"], "severity": s.get("severity") or "watch",
            "unit": "pct" if ep["family"] == "cohort" else "per1k",
@@ -805,6 +874,7 @@ def alert_obj(ep, app, E):
            "z": s.get("z"), "installs_from": s.get("installs_from"), "installs_to": s.get("installs_to"),
            "base_from": s.get("base_from"), "base_to": s.get("base_to"), "since": s.get("since"),
            "day": s.get("day"), "users": int(s.get("users") or 0), "opened": ep["opened"],
+           "provisional": prov,
            "last_seen": ep["last_true"], "fresh": (E - _d(ep["opened"])).days < FRESH_EVALS,
            "notify": ep.get("notified_at") is None, "data_till": _iso(E),
            "message": "%s: %s" % (app, text), "text": text}
@@ -821,38 +891,87 @@ def sort_alerts(alerts):
 
 # ── one app: evaluate → detail + summary ──────────────────────────────────────────────────────────
 
-def _head(row, alerted):
-    """One portfolio-table D cell: recent 7 install days vs the 28 before."""
-    if row is None or row["recent"]["p"] is None:
+def _delta(row, head):
+    """A comparison row's move in points: a portfolio D cell (head) = recent − the 4 weeks before, from the
+    shown values; a checkpoint-table row = vs the 4 weeks before, else vs all-time. None without a base."""
+    if row is None:
+        return None
+    if head:
+        b, p = row["prev"], row["recent"]["p"]
+        return round((p - b["p"]) * 100, 1) if b and p is not None else None
+    b = row["prev"] or row["all"]
+    return b["delta_pp"] if b else None
+
+
+def arrow(new, settled, head=False, lit=None):
+    """→ (▲ / ▼ / None, the comparison that says so — the one a cell SHOWS, so its numbers agree with the
+    arrow). ▲ from the newest comparison (late data only adds uninstalls: a rise already there is real), else
+    from the settled one (compare(.., late) — the newest reads low until its late data is in); ▼ only from
+    the settled one. lit = (dir, late) of an open alert at this checkpoint: its direction and its data."""
+    if lit:
+        return lit[0], (settled if lit[1] else new)
+    d = _delta(new, head)
+    if d is not None and d >= ARROW_PP:
+        return "up", new
+    d = _delta(settled, head)
+    if d is not None and abs(d) >= ARROW_PP:
+        return ("up" if d > 0 else "down"), settled
+    return None, new
+
+
+def _head(up, down, lit):
+    """One portfolio-table D cell: recent 7 install days vs the 28 before (▼ and its numbers: settled data)."""
+    if up is None:
+        return None
+    dr, row = arrow(up, down, True, lit)
+    prov = row is up and down is not up             # the newest comparison: its day N is still provisional
+    if row["recent"]["p"] is None:
         return None
     r, b = row["recent"], row["prev"]
-    d = round((r["p"] - b["p"]) * 100, 1) if b else None
-    return {"p": r["p"], "prev": b["p"] if b else None, "delta_pp": d,
-            "dir": ("up" if d > 0 else "down") if d is not None and abs(d) >= ARROW_PP else None,
-            "alert": alerted, "low_sample": row["low_sample"], "from": r["from"], "to": r["to"]}
+    return {"p": r["p"], "prev": b["p"] if b else None, "delta_pp": _delta(row, True), "dir": dr,
+            "alert": bool(lit), "low_sample": row["low_sample"], "from": r["from"], "to": r["to"],
+            "prov": prov}
 
 
-def _rate_now(ds, drift):
-    """The last 7 days: pooled rate vs the pooled normal level / band of the SAME days (the UI's Rate KPI
-    uses this same rule for any period). Days without a rate or with a tracking break are left out; once
-    any of them has a band, only the days with one count — rate and "normal" always cover the same days."""
-    n = ds["n"]
-    idx = [i for i in range(max(0, n - 7), n) if ds["rate"][i] is not None and not ds["broken"][i]]
+def _pooled_rate(ds, i0, i1):
+    """Days [i0, i1): pooled rate vs the pooled normal level / band of the SAME days → (rate, med, lo, hi,
+    rel). Days without a rate or with a tracking break are left out; once any of them has a band, only the
+    days with one count — rate and "normal" always cover the same days."""
+    idx = [i for i in range(max(0, i0), i1) if ds["rate"][i] is not None and not ds["broken"][i]]
     band = [i for i in idx if ds["med"][i] is not None]
     idx = band or idx
     sd = sum(ds["den"][i] for i in idx)
-    last7 = round(sum(ds["un"][i] for i in idx) * 1000 / sd, 3) if sd else None
+    rate = round(sum(ds["un"][i] for i in idx) * 1000 / sd, 3) if sd else None
     m = lo = hi = None
     if band and sd:
         m, lo, hi = (round(sum(ds[k][i] * ds["den"][i] for i in band) / sd, 3) for k in ("med", "lo", "hi"))
-    dr = None
-    if last7 is not None and m:
-        rel = (last7 - m) / m
-        dr = "up" if rel >= ARROW_REL else "down" if rel <= -ARROW_REL else "flat"
-    return {"last7": last7, "med": m, "lo": lo, "hi": hi, "dir": dr,
-            "out_of_band": bool(last7 is not None and lo is not None and not lo <= last7 <= hi),
+    return rate, m, lo, hi, ((rate - m) / m if rate is not None and m else None)
+
+
+def _rate_now(ds, drift):
+    """The last 7 days' pooled rate vs its normal (the UI's Rate KPI uses this same rule for any period).
+    Those are the provisional days: a rise (↑, ≥ ARROW_REL) is read there; otherwise the 7 SETTLED days
+    before them decide (↑ or ↓) — and then THOSE days are the ones shown (from / to, prov False). Out of
+    band UNDER it (good news) only when the days shown are settled."""
+    n, late = ds["n"], ds.get("late", 0)
+    f, t = n - 7, n
+    rate, m, lo, hi, rel = _pooled_rate(ds, f, t)
+    dr = None if rel is None else "up" if rel >= ARROW_REL else "flat"
+    if dr != "up" and late:
+        got = _pooled_rate(ds, n - late - 7, n - late)
+        if got[4] is not None and abs(got[4]) >= ARROW_REL:
+            (rate, m, lo, hi, rel), f, t = got, n - late - 7, n - late
+            dr = "up" if rel > 0 else "down"
+    elif dr == "flat" and rel <= -ARROW_REL:
+        dr = "down"
+    day = lambda i: _iso(ds["start"] + timedelta(days=max(0, i))) if n else None    # noqa: E731
+    prov = bool(late and t > n - late)
+    return {"last7": rate, "med": m, "lo": lo, "hi": hi, "dir": dr, "from": day(f), "to": day(t - 1), "prov": prov,
+            # under the band is good news: never from provisional days (they read low until their late data is in)
+            "out_of_band": bool(rate is not None and lo is not None and (rate > hi or (rate < lo and not prov))),
             "drift": ({"since": _iso(drift["since"]), "before": round(drift["before"], 3),
-                       "now": round(drift["now"], 3), "rel": round(drift["rel"], 4), "z": drift["z"]}
+                       "now": round(drift["now"], 3), "rel": round(drift["rel"], 4), "z": drift["z"],
+                       "prov": bool(drift.get("prov"))}
                       if drift else None)}
 
 
@@ -880,26 +999,33 @@ def _add_ranges(ranges, add):
     return [[_iso(a), _iso(b)] for a, b in out]
 
 
-def new_cohort_rows(cd, rows, dr, claimed, is_open):
+def new_cohort_rows(cd, rows, dr, claimed, is_open, late_days=0):
     """The checkpoint rows that are NEWS in direction dr. A firing row whose 7 install days include days an
     alert already covered (`claimed`) is judged again on the other days alone: still firing → news (its
     numbers are those days'); else, while the alert is still open, those days moving the same way by
-    ≥ MIN_PP keep it alive (the change goes on); else it is the old week showing again — dropped."""
+    ≥ MIN_PP keep it alive (the change goes on) — and so does a row whose other days are all still
+    PROVISIONAL at N (the last `late_days` days: they read low until their late data is in, so they can't
+    tell yet — not a miss; row["held"] = those days: claimed like the rest, so the alert ends as it would,
+    but not TOLD — see evaluate_app); else it is the old week showing again — dropped."""
     out = []
     for row in rows:
         if not _fires(row, dr):
             continue
-        top = cd["H"] - 1 - row["n"]
+        late, N = row.get("late", 0), row["n"]
+        top = cd["H"] - 1 - N - late
         if not any(i in claimed for i in range(top - RECENT_K + 1, top + 1)):
             out.append(row)
             continue
-        fresh = compare(cd, row["n"], skip=claimed)
+        fresh = compare(cd, N, skip=claimed, late=late)
+        free = [i for i in range(max(0, top - RECENT_K + 1), top + 1) if i not in claimed and cd["n"][i]]
         if _fires(fresh, dr):
             out.append(fresh)
         elif is_open and fresh["recent"]["k"] and any(
                 fresh[b] and (fresh[b]["exact_pp"] > 0) == (dr == "up") and abs(fresh[b]["exact_pp"]) >= MIN_PP
                 for b in ("prev", "all")):
             out.append(row)
+        elif is_open and late_days and free and all(i + N > cd["H"] - 1 - late_days for i in free):
+            out.append(dict(row, held=free))
     return out
 
 
@@ -926,7 +1052,7 @@ def rate_ready(ds, drift, app_id, streak, since, E, first, n=None):
                     "dir": drift["dir"], "severity": "warning" if drift["dir"] == "up" else "good",
                     "now": drift["now"], "before": drift["before"], "delta_pp": None, "rel": drift["rel"],
                     "z": drift["z"], "since": drift["since"], "day": None, "users": drift["users"],
-                    "base_from": drift["base_from"], "base_to": drift["base_to"],
+                    "base_from": drift["base_from"], "base_to": drift["base_to"], "prov": bool(drift.get("prov")),
                     "installs_from": None, "installs_to": None, "checkpoint": None, "n": None})
     for sp in rate_spikes(ds, n):
         if drift and sp["dir"] == drift["dir"] and sp["family"] == "rate_spike" and sp["day"] >= drift["since"]:
@@ -940,30 +1066,45 @@ def rate_ready(ds, drift, app_id, streak, since, E, first, n=None):
     return out
 
 
-def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=None):
+def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=None, late=LATE_DAYS,
+                 outdated=False):
     """Evaluate one app's store against its saved evaluation state → (detail, summary row). Updates
-    state["eval"][app_id] and this app's episodes in place (pure otherwise)."""
+    state["eval"][app_id] and this app's episodes in place (pure otherwise). late = the provisional days
+    (config GA4_LATE_DAYS). outdated = the store is an older format still waiting for its clean re-pull:
+    shown (and flagged), but whatever it opens is seeded, never sent."""
     E = _d(store["window_end"])
+    late = max(0, int(late or 0))
+    S = E - timedelta(days=late)                     # the last settled day
     prev = (state.get("eval") or {}).get(app_id)
     advanced, first = prev is None or E > _d(prev["end"]), prev is None
     cd = cohort_data(store, E)
-    ds = daily_series(store, E, cd)
+    ds = daily_series(store, E, cd, late)
     mark_breaks(cd, ds["broken"])
     H = cd["H"]
-    curve = headline_curve(cd)
+    curve = headline_curve(cd, late)
     rels = releases(store, ds)
     eps_before = state.get("episodes") or {}
     open_before = [e for e in eps_before.values() if e["app_id"] == app_id]
     cp = checkpoints(cd, curve, H, rels, open_before, prev, advanced)
-    rows = [compare(cd, N) for N in cp["list"]]
+    rows = [compare(cd, N) for N in cp["list"]]                               # newest: "up" tests, ▲
+    settled = [compare(cd, N, late=late) for N in cp["list"]] if late else rows   # settled only: "down", ▼
     claimed = {dr: list(r) for dr, r in ((prev or {}).get("claimed") or {}).items()}
+    held = {dr: list(r) for dr, r in ((prev or {}).get("held") or {}).items()}   # claimed only while provisional
     conds = {}
-    for dr in ("up", "down"):
-        news = new_cohort_rows(cd, rows, dr, _claimed(cd, claimed.get(dr)), "%s|cohort|%s" % (app_id, dr) in eps_before)
-        c = cohort_conditions(news).get(dr)
-        if c:
-            conds[dr] = c
-    drift = rate_drift(ds)
+    # up: the newest install days first (earliest signal), then the settled ones (the newest read low until
+    # their late data is in, so a moderate rise may show only once settled); down: settled only
+    for dr, sets in (("up", ((rows, 0), (settled, late))), ("down", ((settled, late),))):
+        for rs, lt in sets[:1] if not late else sets:
+            cl = _claimed(cd, claimed.get(dr))
+            if lt:                                   # settled: a HELD day (never told) can show its own rise now
+                cl -= _claimed(cd, held.get(dr))
+            news = new_cohort_rows(cd, rs, dr, cl, "%s|cohort|%s" % (app_id, dr) in eps_before, late)
+            c = cohort_conditions(news).get(dr)
+            if c:
+                c["late"], c["prov"] = lt, dr == "up" and _d(c["installs_to"]) + timedelta(days=c["n"]) > S
+                conds[dr] = c
+                break
+    drift = drift_now(ds)
     streak = dict((prev or {}).get("streak") or {})
     since = dict((prev or {}).get("since") or {})
     holding = {"cohort|up": "up" in conds, "cohort|down": "down" in conds,
@@ -972,62 +1113,125 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
         advance_streaks(streak, since, holding, E)
     ready = []
     for dr, c in conds.items():
-        # big apps: one run can't fire it; good news: the newest (maybe still filling) GA4 day can't either
-        need = PERSIST_BIG if c["users"] >= BIG_RECENT_USERS or dr == "down" else 1
+        hd = c.pop("held")                                                # {N: its held install days}
+        need = PERSIST_BIG if c["users"] >= BIG_RECENT_USERS else 1      # big apps: one run can't fire it
         if first or streak.get("cohort|" + dr, 0) >= need:
             ready.append(dict(c, key="%s|cohort|%s" % (app_id, dr)))
-            claimed[dr] = _add_ranges(claimed.get(dr), [
-                _win(cd, H - N - RECENT_K, H - 1 - N) for N in c["ns"]])   # these install days are told now
+            lt = c["late"]
+            told = {N: _win(cd, H - N - RECENT_K - lt, H - 1 - N - lt) for N in c["ns"]}
+            claimed[dr] = _add_ranges(claimed.get(dr), told.values())    # these install days are told now —
+            real = _claimed(cd, [w for N, w in told.items() if N not in hd])      # all but the provisional ones
+            keep = (_claimed(cd, held.get(dr)) | {i for f in hd.values() for i in f}) - real   # a row only held:
+            held[dr] = _add_ranges([], [_win(cd, i, i) for i in sorted(keep)])   # claimed, not told
     ready += rate_ready(ds, drift, app_id, streak, since, E, first)
-    eps = update_episodes(state, app_id, E, ready, advanced, first, now)
+    eps = update_episodes(state, app_id, E, ready, advanced, first or outdated, now)
+    if outdated:                                     # NOTHING goes out from an older store format — not even an
+        for e in eps:                                # episode opened earlier whose send failed (still due)
+            if e.get("notified_at") is None:
+                e.update(notified_at=now, seeded=True)
     state.setdefault("eval", {})[app_id] = {"end": _iso(E), "stage": cp["stage"], "stable_hold": cp["stable_hold"],
                                             "streak": streak, "since": since,
-                                            "claimed": {dr: r for dr, r in sorted(claimed.items()) if r}}
+                                            "claimed": {dr: r for dr, r in sorted(claimed.items()) if r},
+                                            "held": {dr: r for dr, r in sorted(held.items()) if r}}
     alerts = sort_alerts([alert_obj(e, app, E) for e in eps])
     closed = [alert_obj(e, app, E) for e in state.get("closed") or [] if e["app_id"] == app_id]
     closed.sort(key=lambda a: (a["closed"], a["opened"], a["id"]), reverse=True)
-    lit = {}
+    lit = {}                                         # checkpoint → (dir, late) of its open cohort alert
     for e in eps:
         if e["family"] == "cohort":
             for N in e["last"].get("ns") or [e["last"].get("n")]:
-                lit[N] = e["dir"]
+                lit[N] = (e["dir"], e["last"].get("late") or 0)
     table = []
-    for row in rows:
-        b = row["prev"] or row["all"]
-        d = b["delta_pp"] if b else None
-        dr = lit.get(row["n"]) or (("up" if d > 0 else "down") if d is not None and abs(d) >= ARROW_PP else None)
-        N = row["n"]
+    for up, dn in zip(rows, settled):
+        N = up["n"]
+        dr, row = arrow(up, dn, False, lit.get(N))
+        prov = row is up and dn is not up
         table.append({"n": N, "key": "D%d" % N,
                       "head": {"p": curve["p"][N], "lo": curve["lo"][N], "hi": curve["hi"][N], "users": curve["users"][N]},
                       "recent": {k: row["recent"][k] for k in ("p", "users", "from", "to")},
-                      "prev": _base_out(row["prev"]), "all": _base_out(row["all"]),
-                      "dir": dr, "alert": N in lit, "low_sample": row["low_sample"], "break_day": row["break_day"]})
+                      "prev": _base_out(row["prev"]), "all": _base_out(row["all"]), "prov": prov,
+                      "dir": dr, "alert": N in lit, "low_sample": row["low_sample"], "break_day": row["break_day"],
+                      "inc_day": row["inc_day"]})
     by_n = {row["n"]: row for row in rows}
-    head4 = {"D%d" % N: _head(by_n.get(N) or (compare(cd, N) if N <= cp["nmax"] else None), N in lit)
-             for N in HEAD4}
+    by_s = {row["n"]: row for row in settled}
+
+    def cell(N):
+        if N > cp["nmax"]:
+            return None
+        up = by_n.get(N) or compare(cd, N)
+        dn = (by_s.get(N) or compare(cd, N, late=late)) if late else up
+        return _head(up, dn, lit.get(N))
+    head4 = {"D%d" % N: cell(N) for N in HEAD4}
     counts = {"warning": 0, "watch": 0, "good": 0}
     for a in alerts:
         counts[a["severity"]] = counts.get(a["severity"], 0) + 1
     rn = _rate_now(ds, drift)
     fl = store.get("flags") or {}
+    inc = {k: v for k, v in sorted((fl.get("incomplete_days") or {}).items()) if cd["hs"] <= _d(k) <= E}
     detail = {"app_id": app_id, "app": app, "package": package or store.get("package"), "key": key,
               "tz": store.get("time_zone") or "UTC", "den": store.get("den") or "a28",
-              "history_start": _iso(cd["hs"]), "data_till": _iso(E), "fetched_at": store.get("fetched_at"),
+              "history_start": _iso(cd["hs"]), "data_till": _iso(E), "settled_till": _iso(S), "late_days": late,
+              "fetched_at": store.get("fetched_at"),
               "stale": bool(stale), "history_capped": bool(store.get("history_capped")),
               "flags": {"truncated": sorted(fl.get("truncated") or []), "thresholded": bool(fl.get("thresholded")),
                         "unplaced_users": cd["flags"]["unplaced_users"], "over_100": cd["flags"]["over_100"],
-                        "kept_old_before": fl.get("kept_old_before")},
+                        "kept_old_before": fl.get("kept_old_before"), "incomplete_days": inc,
+                        "outdated": bool(outdated)},
               "daily": {"start": _iso(ds["start"]), "new": ds["new"], "un": ds["un"], "a28": ds["den"],
                         "upd": ds["upd"], "rate": ds["rate"], "med": ds["med"], "lo": ds["lo"], "hi": ds["hi"],
                         "breaks": [_iso(ds["start"] + timedelta(days=i)) for i in range(ds["n"]) if ds["broken"][i]]},
               "rate_now": rn, "stage": cp["stage"], "stage_why": cp["why"], "zoom": cp["zoom"],
               "checkpoints": cp["list"], "nmax": cp["nmax"], "curve": curve, "table": table, "head4": head4,
               "lifetime": lifetime(cd, ds), "triangle": triangle(cd, cp["list"]), "releases": rels,
-              "alerts": alerts, "alerts_closed": closed}
+              "lateness": lateness(revision_sums(store)), "alerts": alerts, "alerts_closed": closed}
     summary = {"app_id": app_id, "app": app, "data_till": _iso(E), "stale": bool(stale), "ready": cp["nmax"] >= 0,
                "stage": cp["stage"], "rate7": rn["last7"], "rate_med": rn["med"], "rate_dir": rn["dir"],
                "head4": head4, "alerts": counts}
     return detail, summary
+
+
+# ── late data: how complete a day is at each age ──────────────────────────────────────────────────
+
+def revision_sums(store, into=None):
+    """store["revisions"] ({fetch day: {"un"|"new": {age: [before, after]}}}, fetch.ga4_uninstall) → summed
+    per metric and age {"un"|"new": {age: [Σbefore, Σafter, re-reads]}}, added into `into` when given (the
+    portfolio pools every app's)."""
+    out = into if into is not None else {"un": {}, "new": {}, "fetches": 0}
+    for rec in (store.get("revisions") or {}).values():
+        out["fetches"] = out.get("fetches", 0) + 1
+        for m in ("un", "new"):
+            for age, (b, a) in (rec.get(m) or {}).items():
+                s = out.setdefault(m, {}).setdefault(str(age), [0, 0, 0])
+                s[0], s[1], s[2] = s[0] + int(b), s[1] + int(a), s[2] + 1
+    return out
+
+
+def lateness(sums):
+    """How much of a day's final uninstalls (un) / installs (new) GA4 already shows at each age (days from
+    the day to the fetch): chained back from the oldest age measured, share[a] = share[a+1] × Σbefore ÷
+    Σafter of the re-reads at age a (what arrived between age a and a+1). An age with under LATE_MIN_USERS
+    re-read users ends the chain (None from there down). → {"ages", "un", "new", "final_age", "fetches"},
+    or None before any re-read."""
+    if not sums or not sums.get("fetches"):
+        return None
+    ages = sorted({int(a) for m in ("un", "new") for a in (sums.get(m) or {})})
+    if not ages:
+        return None
+    top = ages[-1] + 1                           # the oldest age a re-read reached: taken as "final"
+    span = list(range(ages[0], top + 1))
+    out = {"ages": span, "final_age": top, "fetches": int(sums["fetches"])}
+    for m in ("un", "new"):
+        got = sums.get(m) or {}
+        share, v = [None] * len(span), 1.0
+        share[-1] = 1.0
+        for j in range(len(span) - 2, -1, -1):
+            s = got.get(str(span[j]))
+            if not s or s[0] < LATE_MIN_USERS or s[1] <= 0:
+                break
+            v *= s[0] / s[1]
+            share[j] = round(v, 4)
+        out[m] = share
+    return out
 
 
 def _base_out(b):

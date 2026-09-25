@@ -7,18 +7,29 @@ Data API, tests.uninstall_synth) go through admob_iq.uninstall_build.run_uninsta
 build does: discovery, full then incremental fetches, evaluation, alert episodes, send_alerts (dry run) and
 mark_notified. Every app, name, package and id is made up; nothing here is real data.
 
+The fake GA4 answers like Firebase does: a day's app_remove arrives LATE (80% of it when the day is 2 days
+old, 99% at 7 — LATE_SHARE), so the newest 7 days are provisional (hatched in the tab), the incremental
+re-reads measure that lateness ("lateness" in the asset), and no good news is read into a day still filling.
+
 The apps cover what the tab has to show:
-  * Demo Caller – Test App  big + stable, a new version (zoom), D1 uninstall rising  → watch (new today)
-  * Demo Flashlight         growing, D0 uninstall falling                            → good
+  * Demo Caller – Test App  big + stable, a new version (zoom), D1 uninstall rising  → watch (sent 21 Sep, "kaccha")
+                                                                                       — ONE alert while it
+                                                                                       lasts, though its newest
+                                                                                       installs still read low
+  * Demo Flashlight         growing, D0 uninstall falling (settled installs)        → good
   * Demo Notes              20 days old (28-day actives still filling: no rate yet)  → "naya", every day
   * Demo QR Scanner         ~35 installs/day                                         → "kam data" rows
-  * Demo Weather            uninstall rate stepping up since 12 Sep                  → slow drift warning (it
-                                                                                       needs ~10 days to be pakka)
-  * Demo Launcher           one day with far more uninstalls                         → spike warning (new today)
-  * Demo Wallpapers         a day with no app_remove at all (21 Sep)                 → tracking watch (a day
-                                                                                       later), NO false "good
-                                                                                       news", and the D-rows it
-                                                                                       touches say so
+  * Demo Weather            uninstall rate stepping up since 12 Sep                  → slow drift warning
+  * Demo Launcher           one day with far more uninstalls                         → spike warning (new today,
+                                                                                       "kaccha": can only grow);
+                                                                                       and 3 Sep's install-day
+                                                                                       cells GA4 never returns in
+                                                                                       full → "data adhoora", no
+                                                                                       alert from it
+  * Demo Wallpapers         a day with no app_remove at all (14 Sep)                 → tracking watch once that
+                                                                                       day is settled, NO false
+                                                                                       "good news", and the
+                                                                                       D-rows it touches say so
   * no GA4: no package / no stream / a stream that errors / an app added today whose fetch was deferred /
     a second AdMob app for the Caller's Play package (fetched and alerted once, under the Caller)
 """
@@ -47,6 +58,7 @@ RT1, RT2, TOK1, TOK2 = "rt-demo-1", "rt-demo-2", "tok-demo-1", "tok-demo-2"
 P1, P2, P3 = "100000001", "100000002", "100000003"
 BIG_LAGS = {0: 300, 1: 40, 2: 25, 3: 15, 4: 10, **{n: 5 for n in range(5, 15)}, **{n: 2 for n in range(15, 31)},
             **{n: 1 for n in range(33, 121, 3)}}
+LATE_SHARE = {2: 0.80, 3: 0.88, 4: 0.93, 5: 0.96, 6: 0.98, 7: 0.99}     # of a day's app_remove GA4 shows at that age
 
 
 def _aid(n):
@@ -82,14 +94,14 @@ def truths():
 
     t = {
         "200000001": Truth(d(239), E, lambda c: int(5000 * wave(c)), lags=BIG_LAGS, old_per_day=400, noise=0.03,
-                           bump=lambda c: {1: 45} if c >= date(2026, 9, 16) else None,
+                           bump=lambda c: {1: 60} if c >= date(2026, 9, 11) else None,
                            upd=lambda c: 12000 if c == date(2026, 9, 10) else 800, versions=big_versions, seed=1),
         "200000002": Truth(d(74), E, lambda c: int(400 * wave(c)), noise=0.05, old_per_day=20, seed=2,
-                           bump=lambda c: {0: -100, 1: 20} if c >= date(2026, 9, 18) else None),
+                           bump=lambda c: {0: -100, 1: 20} if c >= date(2026, 9, 8) else None),
         "200000003": Truth(d(19), E, 150, noise=0.08, seed=3),
         "200000004": Truth(d(199), E, lambda c: int(35 * wave(c, 0.3)), noise=0.2, seed=4),
         "200000005": Truth(d(149), E, lambda c: int(1500 * wave(c)), noise=0.03, seed=5,
-                           old_per_day=lambda c: 450 if c >= date(2026, 9, 12) else 150),
+                           old_per_day=lambda c: 600 if c >= date(2026, 9, 12) else 150),
         "200000006": Truth(d(119), E, lambda c: int(800 * wave(c)), noise=0.04, seed=6,
                            old_per_day=lambda c: 960 if c == E else 60),
         "200000007": Truth(d(99), E, lambda c: int(300 * wave(c)), noise=0.05, old_per_day=10, seed=7),
@@ -97,10 +109,13 @@ def truths():
         "200000009": Truth(d(29), E, 100, seed=9),
         "200000012": Truth(d(29), E, 100, seed=12),
     }
-    gap = date(2026, 9, 21)                                              # a tracking break: no app_remove that day
+    gap = date(2026, 9, 14)                                              # a tracking break: no app_remove that day
     z = t["200000007"]
     z.cells = {k: v for k, v in z.cells.items() if k[1] != gap}
     z.old[gap] = 0
+    t["200000006"].short_day = {date(2026, 9, 3): 0.6}                  # cells short at ANY range: incomplete
+    for x in t.values():                                                 # Firebase-like late app_remove
+        x.late = lambda age: 1.0 if age > 7 else LATE_SHARE.get(age, 0.8)
     return t
 
 
@@ -129,7 +144,7 @@ def build_fixture(work_dir):
 
     s = dict(settings(), ga4_enabled=True, ga4_client_id="demo-cid", ga4_client_secret="demo-sec",
              ga4_refresh_tokens=json.dumps({OWNER1: RT1, OWNER2: RT2}), ga4_refresh_token="",
-             ga4_min_hours=20.0, ga4_retry_hours=3.0, ga4_refetch_days=10, ga4_rebuild_days=28,
+             ga4_min_hours=20.0, ga4_retry_hours=3.0, ga4_refetch_days=14, ga4_late_days=7, ga4_rebuild_days=28,
              ga4_max_history_days=1300, ga4_run_budget_sec=900, ga4_streams_ttl_hours=168.0, notify_dry_run=True)
     sent = []
     with contextlib.ExitStack() as st:
@@ -141,6 +156,8 @@ def build_fixture(work_dir):
         log = st.enter_context(contextlib.redirect_stderr(io.StringIO()))
         for i, now in enumerate(RUN_DAYS):
             final = i == len(RUN_DAYS) - 1
+            for x in tr.values():                                          # what GA4 has received by this run
+                x.asof = (now + timedelta(hours=5, minutes=30)).date()    # (the properties are on IST)
             catalog = [{"app_id": aid, "app_name": name, "account_id": "pub-demo",
                         "selected": aid != HIDDEN and (final or aid != JUST_ADDED)} for aid, name, _, _ in APPS]
             dashboard = {"apps_catalog": catalog, "kpis": {"revenue": 1.0}}

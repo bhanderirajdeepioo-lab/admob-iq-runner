@@ -44,7 +44,10 @@ def settings() -> dict:
         "ga4_enabled": _env("GA4_ENABLED", "true").lower() == "true",
         "ga4_min_hours": float(_env("GA4_MIN_HOURS", "20")),        # fetch each app at most once per ~day
         "ga4_retry_hours": float(_env("GA4_RETRY_HOURS", "3")),     # wait after a failed fetch
-        "ga4_refetch_days": int(_env("GA4_REFETCH_DAYS", "10")),    # recent days re-pulled (late GA4 data)
+        "ga4_refetch_days": int(_env("GA4_REFETCH_DAYS", "14")),    # recent days re-pulled: Firebase adds data up to
+                                                                    # ~7 days late, 14 re-reads each day to its end
+        "ga4_late_days": int(_env("GA4_LATE_DAYS", "7")),           # the newest 7 days are PROVISIONAL (can still
+                                                                    # grow): no "good news" alert from them
         "ga4_rebuild_days": int(_env("GA4_REBUILD_DAYS", "28")),    # full self-healing re-pull every ~4 weeks
         "ga4_max_history_days": int(_env("GA4_MAX_HISTORY_DAYS", "1300")),
         "ga4_run_budget_sec": int(_env("GA4_RUN_BUDGET_SEC", "900")),     # stop starting new apps after this

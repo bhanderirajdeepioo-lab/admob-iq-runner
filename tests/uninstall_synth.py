@@ -57,7 +57,8 @@ def make_store(days, new_per_day=1000, lags=None, bump=None, end=END, a28=100000
         daily[iso(c)] = {"new": n, "a1": a // 4, "a28": a, "un": un, "un_ev": un, "upd": upd(c) if upd else 0}
         if versions:
             vers[iso(c)] = versions(c)
-    return {"v": 1, "app_id": app_id, "package": package, "property_id": "p", "stream_id": "s",
+    from admob_iq.fetch.ga4_uninstall import STORE_V
+    return {"v": STORE_V, "app_id": app_id, "package": package, "property_id": "p", "stream_id": "s",
             "time_zone": "Asia/Kolkata", "den": "a28", "history_start": iso(hs), "window_end": iso(end),
             "history_capped": False, "covered": [[iso(hs), iso(end)]], "daily": daily, "cohorts": cohorts,
             "unplaced": {}, "versions": vers,
@@ -94,7 +95,7 @@ def rate_year(store, days=365):
     out = {"rate_drift": 0, "rate_spike": 0, "rate_zero": 0}
     for n in range(ds["n"] - days + 1, ds["n"] + 1):
         E = ds["start"] + timedelta(days=n - 1)
-        drift = eng.rate_drift(ds, n)
+        drift = eng.drift_now(ds, n)
         eng.advance_streaks(streak, since, {"drift|up": bool(drift and drift["dir"] == "up"),
                                             "drift|down": bool(drift and drift["dir"] == "down")}, E)
         first = n == ds["n"] - days + 1
@@ -143,13 +144,21 @@ def ymd(d):
 
 class Truth:
     """One app's GA4 reality from `start` to `end`. cells[(install day | "(other)" , event day)] = users.
-    Users whose first session is before `start` (old installs) uninstall too: `old[d]` per event day."""
+    Users whose first session is before `start` (old installs) uninstall too: `old[d]` per event day.
+    LATE DATA: with `asof` (the fetch's day) and `late` = fn(age in days) → share of a day's app_remove GA4
+    already shows (`late_new` the same for newUsers), every report answers with what has arrived by then.
+    `short` = fn(start, end) → share of the cells a firstSessionDate × date report over that range returns
+    (the live undercount of long ranges); `short_day` = {event day: share} short at ANY range; `other` =
+    fn(start, end) → share of every cell folded into one "(other)" row per event day (GA4's high-cardinality
+    answer: the users are all there, their install day is not)."""
 
     def __init__(self, start, end, new, lags=None, bump=None, old_per_day=0, hazard_x=None, upd=None,
                  versions=None, active_frac=0.25, a28_frac=0.5, base0=None, seed=7, noise=0.0):
         self.start, self.end = start, end
         self.reject_a28 = False
         self.thresholded = False
+        self.asof = self.late = self.late_new = self.short = self.other = None
+        self.short_day = {}
         self.new, self.cells, self.old, self.upd, self.vers = {}, {}, {}, {}, {}
         self.a1, self.a28 = {}, {}
         rnd = random.Random(seed)
@@ -188,21 +197,52 @@ class Truth:
             elif self.a1[d]:
                 self.vers[d] = {"1.0": self.a1[d]}
 
-    def un_by_day(self):
+    def un_by_day(self, cells=None, old=None):
         """app_remove users per event day (every install day + the old installs)."""
-        out = dict(self.old)
-        for (c, d), u in self.cells.items():
+        out = dict(self.old if old is None else old)
+        for (c, d), u in (self.cells if cells is None else cells).items():
             out[d] = out.get(d, 0) + u
         return out
+
+    def _share(self, fn, d):
+        return 1.0 if not (fn and self.asof) else min(1.0, max(0.0, fn((self.asof - d).days)))
+
+    def seen(self):
+        """(cells, old) as GA4 shows them on `asof`: each event day's app_remove users scaled to late(age),
+        spread over its cells by largest remainder, so a day's cells always add up to its events total."""
+        if not (self.late and self.asof):
+            return self.cells, self.old
+        by_day = {}
+        for k, u in self.cells.items():
+            by_day.setdefault(k[1], []).append((k, u))
+        for d, u in self.old.items():
+            if u:
+                by_day.setdefault(d, []).append((("old", d), u))
+        cells, old = {}, {}
+        for d, items in by_day.items():
+            tot = sum(u for _, u in items)
+            want = int(round(tot * self._share(self.late, d)))
+            raw = [(k, u * want / tot) for k, u in items]
+            got = {k: int(x) for k, x in raw}
+            for k, x in sorted(raw, key=lambda kx: (int(kx[1]) - kx[1], str(kx[0])))[:want - sum(got.values())]:
+                got[k] += 1
+            for k, v in got.items():
+                if k[0] == "old":
+                    old[d] = v
+                elif v:
+                    cells[k] = v
+        return cells, old
 
     def rows(self, dims, mets, start, end, events):
         """Every row GA4 would return (unsorted, unpaged) — zero rows are left out, as GA4 does."""
         days = [d for d in sorted(self.new) if start <= d <= end]
-        un = self.un_by_day()
+        cells, old = self.seen()
+        un = self.un_by_day(cells, old)
         out = []
         if dims == ["date"] and not events:
             for d in days:
-                vals = {"newUsers": self.new[d], "activeUsers": self.a1[d], "active28DayUsers": self.a28[d]}
+                vals = {"newUsers": int(round(self.new[d] * self._share(self.late_new, d))),
+                        "activeUsers": self.a1[d], "active28DayUsers": self.a28[d]}
                 if any(vals[m] for m in mets):
                     out.append(({"date": ymd(d)}, {m: vals[m] for m in mets}))
         elif dims == ["date", "eventName"]:
@@ -216,14 +256,22 @@ class Truth:
                                 {"totalUsers": self.upd[d], "eventCount": self.upd[d]}))
         elif dims == ["firstSessionDate", "date"]:
             assert events == ["app_remove"]
-            for (c, d), u in self.cells.items():
+            k = self.short(start, end) if self.short else 1.0          # a long range's silent undercount
+            fold, other = self.other(start, end) if self.other else 0.0, {}
+            for (c, d), u in cells.items():
                 if start <= d <= end:
-                    out.append(({"firstSessionDate": ymd(c) if isinstance(c, date) else c, "date": ymd(d)},
-                                {"totalUsers": u}))
+                    v = int(u * k * self.short_day.get(d, 1.0))
+                    h = int(v * fold)
+                    other[d] = other.get(d, 0) + h
+                    if v - h:
+                        out.append(({"firstSessionDate": ymd(c) if isinstance(c, date) else c, "date": ymd(d)},
+                                    {"totalUsers": v - h}))
+            out += [({"firstSessionDate": "(other)", "date": ymd(d)}, {"totalUsers": h}) for d, h in other.items() if h]
             for d in days:
-                if self.old.get(d):           # old installs: a first-session day before the data starts
+                v = int(old.get(d, 0) * k * self.short_day.get(d, 1.0))
+                if v:                         # old installs: a first-session day before the data starts
                     out.append(({"firstSessionDate": ymd(self.start - timedelta(days=400)), "date": ymd(d)},
-                                {"totalUsers": self.old[d]}))
+                                {"totalUsers": v}))
         elif dims == ["date", "appVersion"]:
             for d in days:
                 for v, u in sorted((self.vers.get(d) or {}).items()):
@@ -358,15 +406,17 @@ def _frac_or_none(v):
 def check_head(h, where):
     if h is None:
         return
-    _keys(h, ("p", "prev", "delta_pp", "dir", "alert", "low_sample", "from", "to"), where)
+    _keys(h, ("p", "prev", "delta_pp", "dir", "alert", "low_sample", "from", "to", "prov"), where)
     assert _frac_or_none(h["p"]) and _frac_or_none(h["prev"]) and (h["delta_pp"] is None or _num(h["delta_pp"]))
     assert h["dir"] in ("up", "down", None) and isinstance(h["alert"], bool) and isinstance(h["low_sample"], bool)
     assert _iso(h["from"]) and _iso(h["to"]), where
+    assert isinstance(h["prov"], bool) and not (h["dir"] == "down" and h["prov"]), where   # ▼ only from settled data
 
 
 ALERT_KEYS = ("id", "source", "app_id", "app", "family", "dir", "severity", "unit", "checkpoint", "n", "also", "vs",
               "now", "before", "delta_pp", "rel", "z", "installs_from", "installs_to", "base_from", "base_to",
-              "since", "day", "users", "opened", "last_seen", "fresh", "notify", "data_till", "message", "text")
+              "since", "day", "users", "opened", "last_seen", "fresh", "notify", "data_till", "message", "text",
+              "provisional")
 
 
 def check_alert(a, closed=False):
@@ -390,6 +440,8 @@ def check_alert(a, closed=False):
         assert a[k] is None or _iso(a[k])
     assert _iso(a["opened"]) and _iso(a["last_seen"]) and _iso(a["data_till"])
     assert isinstance(a["fresh"], bool) and isinstance(a["notify"], bool)
+    assert isinstance(a["provisional"], bool) and not (a["provisional"] and a["dir"] == "down")   # good news: settled
+    assert a["text"].endswith(" · abhi ka data kaccha — number aur badh sakta hai") == a["provisional"]
     assert a["message"] == a["app"] + ": " + a["text"]
     assert re.search("[%s-%s]" % (chr(0x900), chr(0x97F)), a["message"]) is None
     if closed:
@@ -424,29 +476,42 @@ def check_summary(s):
 
 
 def check_asset(asset, summary=None):
-    _keys(asset, ("v", "consts", "apps", "no_ga4"), "asset")
+    _keys(asset, ("v", "consts", "apps", "no_ga4", "lateness"), "asset")
     _keys(asset["consts"], ("lag_days", "band_days", "band_k", "recent_k", "prev_k", "head_k", "z", "min_pp",
-                            "min_rel", "min_recent_users", "big_recent_users", "zoom_days"), "consts")
+                            "min_rel", "min_recent_users", "big_recent_users", "zoom_days", "late_days"), "consts")
+    check_lateness(asset["lateness"])
     for n in asset["no_ga4"]:
         _keys(n, ("app_id", "app", "package", "reason", "text"), "no_ga4")
         assert n["reason"] in ("no_package", "no_stream", "stream_list_failed", "not_fetched_yet", "fetch_failed",
                                "same_package")
     for a in asset["apps"]:
-        _keys(a, ("app_id", "app", "package", "key", "tz", "den", "history_start", "data_till", "fetched_at", "stale",
-                  "history_capped", "flags", "daily", "rate_now", "stage", "stage_why", "zoom", "checkpoints", "nmax",
-                  "curve", "table", "head4", "lifetime", "triangle", "releases", "alerts", "alerts_closed"), "detail")
+        _keys(a, ("app_id", "app", "package", "key", "tz", "den", "history_start", "data_till", "settled_till",
+                  "late_days", "fetched_at", "stale", "history_capped", "flags", "daily", "rate_now", "stage", "stage_why",
+                  "zoom", "checkpoints", "nmax", "curve", "table", "head4", "lifetime", "triangle", "releases",
+                  "lateness", "alerts", "alerts_closed"), "detail")
         assert _HEX12.match(a["key"]) and a["den"] in ("a28", "dau") and _iso(a["history_start"]) and _iso(a["data_till"])
+        assert a["late_days"] == asset["consts"]["late_days"] and _iso(a["settled_till"])
+        assert (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["settled_till"])).days == a["late_days"]
         assert a["fetched_at"] is None or _TS.match(a["fetched_at"])
-        _keys(a["flags"], ("truncated", "thresholded", "unplaced_users", "over_100", "kept_old_before"), "flags")
+        _keys(a["flags"], ("truncated", "thresholded", "unplaced_users", "over_100", "kept_old_before",
+                           "incomplete_days", "outdated"), "flags")
+        assert isinstance(a["flags"]["outdated"], bool)
+        for d, cov in a["flags"]["incomplete_days"].items():             # {day: coverage}, inside the history
+            assert _iso(d) and a["history_start"] <= d <= a["data_till"] and _num(cov) and cov < 1
+        check_lateness(a["lateness"])
         H = (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["history_start"])).days + 1
         _keys(a["daily"], ("start", "new", "un", "a28", "upd", "rate", "med", "lo", "hi", "breaks"), "daily")
         assert a["daily"]["start"] == a["history_start"]
         assert all(_iso(b) and a["history_start"] <= b <= a["data_till"] for b in a["daily"]["breaks"])
         for k in ("new", "un", "a28", "upd", "rate", "med", "lo", "hi"):
             assert len(a["daily"][k]) == H, k                              # every day, through data_till
-        _keys(a["rate_now"], ("last7", "med", "lo", "hi", "dir", "out_of_band", "drift"), "rate_now")
-        if a["rate_now"]["drift"]:
-            _keys(a["rate_now"]["drift"], ("since", "before", "now", "rel", "z"), "drift")
+        _keys(a["rate_now"], ("last7", "med", "lo", "hi", "dir", "out_of_band", "drift", "from", "to", "prov"), "rate_now")
+        rn = a["rate_now"]
+        assert _iso(rn["from"]) and _iso(rn["to"]) and rn["from"] <= rn["to"] <= a["data_till"]
+        assert rn["prov"] == (rn["to"] > a["settled_till"]) and not (rn["dir"] == "down" and rn["prov"])
+        if rn["drift"]:
+            _keys(rn["drift"], ("since", "before", "now", "rel", "z", "prov"), "drift")
+            assert not (rn["drift"]["prov"] and rn["drift"]["now"] < rn["drift"]["before"])
         assert a["stage"] in ("naya", "badh_raha", "stable") and isinstance(a["stage_why"], str)
         if a["zoom"]:
             _keys(a["zoom"], ("until", "reason", "label"), "zoom")
@@ -457,9 +522,14 @@ def check_asset(asset, summary=None):
         assert all(len(v) == H for v in a["curve"].values())             # index = N, 0..H-1
         assert [t["n"] for t in a["table"]] == a["checkpoints"]
         for t in a["table"]:
-            _keys(t, ("n", "key", "head", "recent", "prev", "all", "dir", "alert", "low_sample", "break_day"),
-                  "table row")
+            _keys(t, ("n", "key", "head", "recent", "prev", "all", "dir", "alert", "low_sample", "break_day", "prov",
+                      "inc_day"), "table row")
             assert t["key"] == "D%d" % t["n"] and (t["break_day"] is None or t["break_day"] in a["daily"]["breaks"])
+            assert t["inc_day"] is None or t["inc_day"] in a["flags"]["incomplete_days"]
+            assert isinstance(t["prov"], bool) and not (t["dir"] == "down" and t["prov"])
+            if t["recent"]["to"]:                                          # prov = its day N is not settled yet
+                assert t["prov"] == ((date.fromisoformat(t["recent"]["to"]) + timedelta(days=t["n"])).isoformat()
+                                     > a["settled_till"]), t
             _keys(t["head"], ("p", "lo", "hi", "users"), "table head")
             _keys(t["recent"], ("p", "users", "from", "to"), "table recent")
             for b in ("prev", "all"):
@@ -485,6 +555,21 @@ def check_asset(asset, summary=None):
         assert sorted(al["id"] for a in asset["apps"] for al in a["alerts"]) == sorted(al["id"] for al in summary["alerts"])
         for a, r in zip(asset["apps"], summary["apps"]):
             assert a["head4"] == r["head4"] and a["app"] == r["app"]
+
+
+def check_lateness(L):
+    """None (nothing re-read yet) or {"ages", "un", "new", "final_age", "fetches"}: per age the share of the
+    final count already there — rising to 1.0 at final_age, None where too few re-reads to say."""
+    if L is None:
+        return
+    _keys(L, ("ages", "un", "new", "final_age", "fetches"), "lateness")
+    assert L["ages"] == list(range(L["ages"][0], L["final_age"] + 1)) and isinstance(L["fetches"], int)
+    for m in ("un", "new"):
+        v = L[m]
+        assert len(v) == len(L["ages"]) and v[-1] == 1.0
+        known = [x for x in v if x is not None]
+        assert all(_num(x) and x > 0 for x in known)
+        assert all(x is not None for x in v[v.index(known[0]):])        # the chain only ever stops at the young end
 
 
 def check_cohort_file(c, detail):

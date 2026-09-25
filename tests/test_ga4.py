@@ -179,6 +179,7 @@ EXPECTED_EVENT = {
     (REPORT, ("date",), ("activeUsers",)): None,                                            # T12 denominator
     (REPORT, ("date",), ("totalUsers",)): "app_remove",                                     # T12 numerator
     (REPORT, ("date",), ("newUsers",)): None,                                               # T13 denominator
+    (REPORT, ("date", "eventName"), ("totalUsers",)): "app_remove",                         # T13 coverage check
 }
 
 
@@ -213,7 +214,7 @@ def test_every_report_is_pinned_to_the_apps_android_stream(private, google):
     assert {b["dimensionFilter"]["andGroup"]["expressions"][1]["filter"]["stringFilter"]["value"]
             for _, b in google.posts} == {SID, SID2}
     per_app = report["apps"][AID]["report_calls"]
-    assert per_app <= 17
+    assert per_app <= 18
 
 
 def test_report_content_and_derived_tests(private, google):
@@ -231,6 +232,7 @@ def test_report_content_and_derived_tests(private, google):
     # starts before the window → no cohort size → counted as unplaced, not guessed)
     assert t["T13"]["ok"] and t["T13"]["by_day"]["D1"]["rate"] == 1.0 and t["T13"]["by_day"]["D60"]["cohorts"] == 60
     assert t["T13"]["unplaced_uninstall_users"] == 5 and t["T13"]["truncated"] is False
+    assert t["T13"]["coverage"] == 1.0 and t["T13"]["incomplete"] is False           # checked, and complete
     assert report["capability"]["T1"] == {"ok": 2, "errors": 0, "of": 2}
     assert report["quota"]["latest"]["tokensPerDay"]["consumed"] == 7
     assert report["discovery"]["selected_without_package"] == 1
@@ -279,7 +281,7 @@ def test_every_paged_report_asks_for_a_total_order(private, google):
     paged = [b for _, b in google.posts if "offset" in b]
     assert {tuple(d["name"] for d in b["dimensions"]) for b in paged} == {
         ("date", "appVersion"), ("date", "country"), ("firstUserGoogleAdsCampaignId",),        # T1, T4, T1b
-        ("firstSessionDate", "date"), ("date",)}                                               # T13
+        ("firstSessionDate", "date"), ("date",), ("date", "eventName")}                        # T13
     for b in paged:
         assert {o["dimension"]["dimensionName"] for o in b["orderBys"]} == {d["name"] for d in b["dimensions"]}
 
@@ -414,6 +416,47 @@ def test_uninstall_rate_change_is_measured():
     assert r["ok"] and r["prev7_rate"] == 5.0 and r["last7_rate"] == pytest.approx(12.857, abs=1e-3)
     assert r["change_pct_last7_vs_prev7"] == pytest.approx(157.1, abs=0.1)
     assert keys[-1] in r["spike_days"] and len(r["weekly_rate_per_1000"]) == 8
+
+
+class CoverStub(ga4.Ga4App):
+    """120 days, 1,000 app_remove users a day among the window's cohorts — of which the firstSessionDate ×
+    date report returns `share` (the live undercount of long ranges); `bad` = dates short on their own."""
+    def __init__(self, share, bad=()):
+        super().__init__(TOKEN, PID, SID)
+        self.share, self.bad = share, set(bad)
+
+    def _post(self, method, body):
+        dims, mets = [d["name"] for d in body["dimensions"]], [m["name"] for m in body["metrics"]]
+        r = body["dateRanges"][0]
+        a, b = (datetime.strptime(r[k], "%Y-%m-%d") for k in ("startDate", "endDate"))
+        days = [(a + timedelta(days=i)).strftime("%Y%m%d") for i in range((b - a).days + 1)]
+        if dims == ["firstSessionDate", "date"]:
+            rows = [({"firstSessionDate": d, "date": d}, {"totalUsers": int(1000 * self.share * (0.5 if d in self.bad else 1))})
+                    for d in days]
+        elif dims == ["date", "eventName"]:
+            rows = [({"date": d, "eventName": "app_remove"}, {"totalUsers": 1000}) for d in days]
+        else:
+            rows = [({"date": d}, {"newUsers": 2000}) for d in days]
+        page = rows if not body.get("offset") else []
+        return {"dimensionHeaders": [{"name": n} for n in dims], "metricHeaders": [{"name": n} for n in mets],
+                "rowCount": len(rows), "rows": [{"dimensionValues": [{"value": dv[n]} for n in dims],
+                                                 "metricValues": [{"value": str(mv[n])} for n in mets]} for dv, mv in page]}
+
+
+def test_t13_flags_cells_that_undercount_the_same_cohorts_uninstalls():
+    end = datetime(2026, 9, 23).date()
+    r = ga4.probe_t13(CoverStub(0.25), end)                         # a long range: a quarter came back, silently
+    assert r["coverage"] == 0.25 and r["incomplete"] is True and r["incomplete_days"] == 120
+    assert r["check_users"] == 120000 and r["truncated"] is False   # nothing else would have shown it
+    r = ga4.probe_t13(CoverStub(1.0), end)
+    assert r["coverage"] == 1.0 and r["incomplete"] is False and r["incomplete_days"] == 0
+    r = ga4.probe_t13(CoverStub(1.0, bad={"20260910"}), end)        # one short day hides in a full total
+    assert r["coverage"] > 0.99 and r["incomplete"] is True and r["incomplete_days"] == 1
+    rep = {"apps": {"a": {"tests": {"T13": {"ok": True, "incomplete": True}}}, "b": {"tests": {"T13": {"ok": True,
+           "incomplete": False}}}}, "discovery": {"owner_tokens": 1, "owners_ok": 1}}
+    rep["capability"] = ga4_probe.capability(rep["apps"])
+    assert rep["capability"]["T13"] == {"ok": 2, "errors": 0, "of": 2, "incomplete": 1}
+    assert "incomplete GA4 answers (flagged in the private report): T13 1/2" in ga4_probe.summary_lines(rep)
 
 
 def test_pearson():
@@ -797,8 +840,15 @@ class T13Stub(ga4.Ga4App):
     def _post(self, method, body):
         self.bodies.append(body)
         dims = [d["name"] for d in body["dimensions"]]
-        data = self.removes if dims[0] == "firstSessionDate" else \
-            [[(T13_END - timedelta(days=a)).strftime("%Y%m%d"), 1000] for a in range(120)]
+        if dims[0] == "firstSessionDate":
+            data = self.removes
+        elif dims == ["date", "eventName"]:                                  # the coverage check: same cohorts by date
+            by = {}
+            for _, d, u in self.removes:
+                by[d] = by.get(d, 0) + u
+            data = [[d, "app_remove", u] for d, u in sorted(by.items())]
+        else:
+            data = [[(T13_END - timedelta(days=a)).strftime("%Y%m%d"), 1000] for a in range(120)]
         page = data[body["offset"]:body["offset"] + body["limit"]]
         return {"dimensionHeaders": [{"name": n} for n in dims], "rowCount": len(data),
                 "metricHeaders": [{"name": m["name"]} for m in body["metrics"]],
@@ -833,6 +883,7 @@ def test_t13_counts_only_complete_cohorts_and_pages_through_every_row(monkeypatc
     assert [curve[k]["rate"] for k in ("D0", "D2", "D10", "D90", "D119")] == [0.02, 0.035, 0.044, 0.05, 0.05]
     assert r["cohorts"]["20260725"]["D60"] == 49
     assert r["ok"] and r["alerts"] == {} and r["unplaced_uninstall_users"] == 0
+    assert r["coverage"] == 1.0 and r["incomplete"] is False and r["check_users"] == sum(u for _, _, u in ga.removes)
 
 
 def test_t13_safety_cap_is_flagged_never_silent(monkeypatch):

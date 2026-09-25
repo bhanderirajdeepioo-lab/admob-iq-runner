@@ -38,6 +38,11 @@ CHURN_COHORTS = 120                   # T13 cohorts: 60 complete for D60, plus r
 CHANGE_RECENT, CHANGE_BASE = 7, 28    # newest week of complete cohorts vs the 4 weeks before (same weekdays)
 CHANGE_Z = 3.0                        # |z| >= 3 happens ~1 in 370 by pure chance — a real move, not noise
 CHANGE_MIN_PP = 0.5                   # ... AND >= 0.5 points: big cohorts make even tiny moves "significant"
+T13_MIN_COVERAGE = 0.97               # T13's cells must hold ≥97% of the same cohorts' app_remove users by date (the bar
+                                      # fetch.ga4_uninstall.CELLS_MIN_COVERAGE sets): long firstSessionDate × date
+                                      # ranges on big apps silently came back with 2–78% — flagged, never trusted
+T13_DAY_MIN_COVERAGE = 0.90           # … and a day under 90% (with ≥200 users) is counted as an incomplete day
+T13_MIN_USERS = 200                   # fewer app_remove users (window or day) is not judged: noise either way
 
 
 def _sleep(s):
@@ -584,6 +589,22 @@ def cohort_change(done):
             "relative_pct": round((p1 - p2) / p2 * 100, 1) if p2 else None, "z": z, "flag": flag}
 
 
+def t13_coverage(cells, check):
+    """T13's cells (firstSessionDate × date rows) vs the check report (date × eventName, same cohorts) →
+    {coverage: Σcells ÷ Σcheck (None when under T13_MIN_USERS), bad_days: days with ≥T13_MIN_USERS users
+    under T13_DAY_MIN_COVERAGE, incomplete: either, want: Σcheck}."""
+    got, want = {}, {}
+    for r in cells:
+        got[r.get("date")] = got.get(r.get("date"), 0) + (r.get("totalUsers") or 0)
+    for r in check:
+        want[r.get("date")] = want.get(r.get("date"), 0) + (r.get("totalUsers") or 0)
+    tot = sum(want.values())
+    cov = round(sum(got.get(d, 0) for d in want) / tot, 4) if tot >= T13_MIN_USERS else None
+    bad = sum(1 for d, u in want.items() if u >= T13_MIN_USERS and got.get(d, 0) < T13_DAY_MIN_COVERAGE * u)
+    return {"coverage": cov, "bad_days": bad, "want": tot,
+            "incomplete": bool(bad or (cov is not None and cov < T13_MIN_COVERAGE))}
+
+
 def probe_t13(ga, end, days=CHURN_COHORTS):
     """Point 9 — uninstall churn per INSTALL COHORT: of the users whose first session was day c, the
     cumulative share that uninstalled (app_remove) by day 0 / 1 / 3 / 7 / 14 / 30 / 60 after it. Per N: the
@@ -591,7 +612,9 @@ def probe_t13(ga, end, days=CHURN_COHORTS):
     before (cohort_change). A cohort counts for N only once complete (c + N <= end): one whose day N is
     still ahead would read low and fake a drop. Also the FULL daily curve (every day N the window can show)
     and each cohort's raw uninstalls per lag day: which checkpoints to display is decided later from each
-    app's history, installs and how fast its curve still moves, so no day is dropped here."""
+    app's history, installs and how fast its curve still moves, so no day is dropped here. The cells are
+    checked against the same cohorts' app_remove users by date (t13_coverage): a short answer says so
+    (coverage, incomplete) instead of passing for a real, lower churn."""
     first = [(end - timedelta(days=i)).strftime("%Y%m%d") for i in range(days)]
     # Numerator: app_remove users by firstSessionDate × date. Only cohorts inside the window (≈ days·(days+1)/2
     # rows), newest first, then by date — a stable order, so offset paging never skips or repeats a row.
@@ -601,6 +624,15 @@ def probe_t13(ga, end, days=CHURN_COHORTS):
                                        {"dimension": {"dimensionName": "date"}}]},
                          event="app_remove", extra=[_in_list("firstSessionDate", first)])
     cut, n, pages = ga.truncated(rows), ga.last_row_count, ga.last_pages
+    # Check: the SAME cohorts' app_remove users by date (date × eventName, same firstSessionDate filter — a
+    # small report GA4 answers in full) vs the numerator's per-date sums. A long firstSessionDate × date range
+    # on a big app can come back with a fraction of its rows and no sign of it: that is FLAGGED here
+    # (coverage, incomplete), never passed on as a real churn number.
+    chk = ga.report_all({"dateRanges": [_range(end, days)], "dimensions": _dim("date", "eventName"),
+                         "metrics": _dim("totalUsers")}, event="app_remove",
+                        extra=[_in_list("firstSessionDate", first)])
+    chk_cut = ga.truncated(chk)
+    cov = t13_coverage(rows, chk)
     # Denominator: newUsers by date, same stream. GA4 counts an app instance as new once, on its first_open —
     # the day of its first session, i.e. exactly the firstSessionDate the numerator groups it under — so
     # both sides count the same app instances against the same cohort day.
@@ -645,6 +677,8 @@ def probe_t13(ga, end, days=CHURN_COHORTS):
             curve["D%d" % k] = _pooled(done)
     return {"ok": bool(rows) and any(v["rate"] is not None for v in by_day.values()), "accepted": True,
             "rows": len(rows), "row_count": n, "truncated": cut, "pages": pages,
+            "coverage": cov["coverage"], "incomplete": cov["incomplete"], "incomplete_days": cov["bad_days"],
+            "check_users": cov["want"], "check_truncated": chk_cut,
             "new_users_rows": len(nu), "new_users_truncated": nu_cut,
             "first_cohort": first[-1], "last_cohort": first[0], "unplaced_uninstall_users": unplaced,
             "by_day": by_day, "alerts": alerts, "daily_curve": curve,
