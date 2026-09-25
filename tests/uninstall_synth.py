@@ -497,7 +497,8 @@ def check_asset(asset, summary=None):
     _keys(asset, ("v", "consts", "apps", "no_ga4", "lateness"), "asset")
     _keys(asset["consts"], ("lag_days", "band_days", "band_k", "recent_k", "prev_k", "head_k", "z", "min_pp",
                             "min_rel", "min_recent_users", "big_recent_users", "zoom_days", "late_days", "thin_min_days",
-                            "thin_min_users", "surv_recent_days", "verdict_k", "tri_avg_weeks"), "consts")
+                            "thin_min_users", "surv_recent_days", "verdict_k", "tri_avg_weeks", "alert_recent_days",
+                            "year_clear_days"), "consts")
     check_lateness(asset["lateness"])
     for n in asset["no_ga4"]:
         _keys(n, ("app_id", "app", "package", "reason", "text"), "no_ga4")
@@ -507,7 +508,7 @@ def check_asset(asset, summary=None):
         _keys(a, ("app_id", "app", "package", "key", "tz", "den", "history_start", "data_till", "settled_till",
                   "late_days", "fetched_at", "stale", "history_capped", "flags", "daily", "rate_now", "stage", "stage_why",
                   "zoom", "checkpoints", "nmax", "curve", "table", "head4", "lifetime", "triangle", "survival",
-                  "releases", "lateness", "alerts", "alerts_closed"), "detail")
+                  "releases", "lateness", "alerts", "alerts_closed", "launch", "old_changes"), "detail")
         assert _HEX12.match(a["key"]) and a["den"] in ("a28", "dau") and _iso(a["history_start"]) and _iso(a["data_till"])
         assert a["late_days"] == asset["consts"]["late_days"] and _iso(a["settled_till"])
         assert (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["settled_till"])).days == a["late_days"]
@@ -519,6 +520,15 @@ def check_asset(asset, summary=None):
             assert _iso(d) and a["history_start"] <= d <= a["data_till"] and _num(cov) and cov < 1
         check_lateness(a["lateness"])
         H = (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["history_start"])).days + 1
+        L = a["launch"]                                                    # test installs before it: hidden, kept
+        _keys(L, ("day", "hidden", "pre_installs", "pre_uninstalls", "installs", "sure"), "launch")
+        assert isinstance(L["sure"], bool) and (L["sure"] or L["hidden"])     # "shayad test": only about hidden ones
+        assert _iso(L["day"]) and a["history_start"] <= L["day"] <= a["data_till"] and isinstance(L["hidden"], bool)
+        assert all(isinstance(L[k], int) and L[k] >= 0 for k in ("pre_installs", "pre_uninstalls", "installs"))
+        assert L["hidden"] == (L["pre_installs"] > 0)
+        assert L["pre_installs"] <= 0.10 * (L["pre_installs"] + L["installs"])        # tests: a sliver, never history
+        start = L["day"] if L["hidden"] else a["history_start"]            # where every install-day number starts
+        Hp = (date.fromisoformat(a["data_till"]) - date.fromisoformat(start)).days + 1
         cdays, span = a["flags"]["cell_days"], a["flags"]["events_span"]   # every day: users | events | incomplete
         _keys(cdays, ("users", "events", "incomplete"), "cell_days")
         assert all(isinstance(v, int) and v >= 0 for v in cdays.values()) and sum(cdays.values()) == H
@@ -542,9 +552,9 @@ def check_asset(asset, summary=None):
             _keys(a["zoom"], ("until", "reason", "label"), "zoom")
             assert a["zoom"]["reason"] in ("release", "alert")
         assert a["checkpoints"] == sorted(set(a["checkpoints"])) and all(0 <= n <= a["nmax"] for n in a["checkpoints"])
-        assert a["nmax"] == H - 7
+        assert a["nmax"] == Hp - 7
         _keys(a["curve"], ("p", "lo", "hi", "users", "k", "inc"), "curve")
-        assert all(len(v) == H for v in a["curve"].values())             # index = N, 0..H-1
+        assert all(len(v) == Hp for v in a["curve"].values())            # index = N, 0..Hp-1 (from the launch)
         assert [t["n"] for t in a["table"]] == a["checkpoints"]
         for t in a["table"]:
             _keys(t, ("n", "key", "head", "recent", "prev", "all", "dir", "alert", "low_sample", "break_day", "prov",
@@ -563,24 +573,41 @@ def check_asset(asset, summary=None):
         _keys(a["head4"], ("D0", "D1", "D7", "D30"), "detail head4")
         _keys(a["lifetime"], ("p", "users", "un", "rate_all_med"), "lifetime")
         tri = a["triangle"]
-        _keys(tri, ("cols", "ref", "ref_users", "avg4", "rows"), "triangle")
+        _keys(tri, ("cols", "ref", "ref_users", "avg4", "avg4_set", "rows"), "triangle")
         assert tri["cols"] == a["checkpoints"] and len(tri["ref"]) == len(tri["ref_users"]) == len(tri["avg4"]) == len(tri["cols"])
-        for N, av in zip(tri["cols"], tri["avg4"]):                     # 4 full settled weeks (Mon–Sun) or None
-            if av is not None:
-                _keys(av, ("p", "users", "from", "to"), "triangle avg4")
-                f, t = date.fromisoformat(av["from"]), date.fromisoformat(av["to"])
-                assert f.weekday() == 0 and (t - f).days == 27 and (t + timedelta(days=N)).isoformat() <= a["settled_till"]
+        got = [(N, av) for N, av in zip(tri["cols"], tri["avg4"]) if av is not None]
+        for N, av in got:                                                 # ONE set: the 4 newest settled full weeks
+            _keys(av, ("p", "users", "from", "to", "prov"), "triangle avg4")
+            f, t = date.fromisoformat(av["from"]), date.fromisoformat(av["to"])
+            assert f.weekday() == 0 and (t - f).days == 27 and av["to"] <= a["settled_till"] and av["from"] >= start
+            assert (t + timedelta(days=N)).isoformat() <= a["data_till"]   # every one of them reached day N
+            assert av["prov"] == ((t + timedelta(days=N)).isoformat() > a["settled_till"])
+            assert (av["from"], av["to"], av["users"]) == (got[0][1]["from"], got[0][1]["to"], got[0][1]["users"])
+        assert all(x[1]["p"] <= y[1]["p"] for x, y in zip(got, got[1:]))   # never down, left to right
+        aset = tri["avg4_set"]                                           # the set on its own (named on every page)
+        if aset is not None:
+            _keys(aset, ("from", "to", "users"), "triangle avg4_set")
+            assert aset["from"] >= start and aset["to"] <= a["settled_till"]
+        assert all((av["from"], av["to"], av["users"]) == (aset["from"], aset["to"], aset["users"]) for _, av in got)
         check_survival(a["survival"], a, asset["consts"])
-        assert sum(r["days"] for r in tri["rows"]) == H                   # ALL rows, newest first
+        assert sum(r["days"] for r in tri["rows"]) == H                   # ALL rows, newest first (test weeks last)
+        assert sum(r["days"] for r in tri["rows"] if r["pre"]) == H - Hp
+        assert [r["pre"] for r in tri["rows"]] == sorted((r["pre"] for r in tri["rows"]))
         for r in tri["rows"]:
-            _keys(r, ("week", "from", "to", "days", "users", "partial", "p"), "triangle row")
-            assert len(r["p"]) == len(tri["cols"])
+            _keys(r, ("week", "from", "to", "days", "users", "partial", "p", "pre"), "triangle row")
+            assert len(r["p"]) == len(tri["cols"]) and (r["to"] < start) == r["pre"]
         for r in a["releases"]:
             _keys(r, ("date", "version", "kind"), "release")
+        old = (date.fromisoformat(a["data_till"]) - timedelta(days=asset["consts"]["alert_recent_days"])).isoformat()
         for al in a["alerts"]:
             check_alert(al)
+            assert al["family"] != "cohort" or al["installs_to"] >= old      # alerts: recent installs only
         for al in a["alerts_closed"]:
             check_alert(al, closed=True)
+        for o in a["old_changes"]:                                         # older ones: info only
+            _keys(o, ("n", "checkpoint", "dir", "vs", "now", "before", "delta_pp", "z", "users", "installs_from",
+                      "installs_to", "base_from", "base_to", "text"), "old change")
+            assert o["installs_to"] < old and o["dir"] in ("up", "down") and o["checkpoint"] == "D%d" % o["n"]
     if summary is not None:
         assert [a["app_id"] for a in asset["apps"]] == [r["app_id"] for r in summary["apps"]]
         assert sorted(al["id"] for a in asset["apps"] for al in a["alerts"]) == sorted(al["id"] for al in summary["alerts"])
@@ -588,7 +615,8 @@ def check_asset(asset, summary=None):
             assert a["head4"] == r["head4"] and a["app"] == r["app"]
 
 
-SURV_KEYS = ("from", "to", "installs", "x", "r", "n", "k", "left", "lo", "hi", "gone", "thin_from", "clipped")
+SURV_KEYS = ("from", "to", "installs", "gap_days", "gap_inc", "gap_brk", "x", "r", "n", "k", "left", "lo", "hi", "gone",
+             "thin_from", "clipped")
 
 
 def check_curve(c, consts):
@@ -606,6 +634,10 @@ def check_curve(c, consts):
         assert abs(run - (1 - v)) < 1e-6 * (L + 1)
     assert all(a >= b for a, b in zip(c["n"], c["n"][1:])) and all(a >= b for a, b in zip(c["k"], c["k"][1:]))
     assert all(k > 0 for k in c["k"]) and c["installs"] >= (c["n"][0] if L else 0)
+    assert isinstance(c["gap_days"], int) and c["gap_days"] == len(c["gap_inc"]) + len(c["gap_brk"])   # named by kind
+    assert all(_iso(d) and c["from"] <= d <= c["to"] for d in c["gap_inc"] + c["gap_brk"])
+    assert c["gap_inc"] == sorted(c["gap_inc"]) and c["gap_brk"] == sorted(c["gap_brk"])
+    assert not set(c["gap_inc"]) & set(c["gap_brk"])
     thin = [k < consts["thin_min_days"] or n < consts["thin_min_users"] for k, n in zip(c["k"], c["n"])]
     assert c["thin_from"] == (thin.index(True) if True in thin else None)
     assert all(thin[c["thin_from"]:]) if c["thin_from"] is not None else True
@@ -613,12 +645,20 @@ def check_curve(c, consts):
 
 
 def check_survival(sv, a, consts):
-    _keys(sv, ("all", "recent", "verdict", "key_days"), "survival")
+    _keys(sv, ("all", "recent", "verdict", "key_days", "with_test"), "survival")
     check_curve(sv["all"], consts)
-    assert sv["all"]["from"] == a["history_start"] and sv["all"]["to"] == a["data_till"]
-    # every day N counted only settled data: N ≤ settled_till − history_start
-    assert len(sv["all"]["left"]) <= (date.fromisoformat(a["settled_till"]) - date.fromisoformat(a["history_start"])).days + 1
-    H = (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["history_start"])).days + 1
+    start = a["launch"]["day"] if a["launch"]["hidden"] else a["history_start"]    # test installs: not in "all"
+    assert sv["all"]["from"] == start and sv["all"]["to"] == a["data_till"]
+    assert sv["all"]["installs"] == a["launch"]["installs"]
+    if a["launch"]["hidden"]:                                             # … kept in "with_test"
+        check_curve(sv["with_test"], consts)
+        assert sv["with_test"]["from"] == a["history_start"] and sv["with_test"]["to"] == a["data_till"]
+        assert sv["with_test"]["installs"] == sv["all"]["installs"] + a["launch"]["pre_installs"]
+    else:
+        assert sv["with_test"] is None
+    # every day N counted only settled data: N ≤ settled_till − the first install day counted
+    assert len(sv["all"]["left"]) <= (date.fromisoformat(a["settled_till"]) - date.fromisoformat(start)).days + 1
+    H = (date.fromisoformat(a["data_till"]) - date.fromisoformat(start)).days + 1
     if sv["recent"] is None:
         assert H <= consts["surv_recent_days"]
     else:
