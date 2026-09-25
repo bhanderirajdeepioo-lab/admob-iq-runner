@@ -1,0 +1,47 @@
+# One-time GA4 authorization without anyone handling the OAuth client secret.
+# See admob_iq/fetch/ga4_auth_exchange.py. Logs of this PUBLIC repo show only generic status/counts.
+#   mode=client-id : put GOOGLE_CLIENT_ID in the PRIVATE repo (ga4/oauth_client_id.txt) for the consent URL
+#   mode=exchange  : swap secret GA4_AUTH_CODE for a refresh token and save GA4_REFRESH_TOKEN (+ client) secrets
+name: ga4-auth
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "client-id or exchange"
+        required: true
+        default: "client-id"
+      redirect_uri:
+        description: "exact redirect_uri used in the consent URL (exchange mode)"
+        required: false
+        default: "http://localhost:8765"
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-auth
+  cancel-in-progress: false
+
+jobs:
+  auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q requests pynacl
+      - name: Run
+        env:
+          MODE: ${{ github.event.inputs.mode }}
+          REDIRECT_URI: ${{ github.event.inputs.redirect_uri }}
+          REPO: ${{ github.repository }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GA4_AUTH_CODE: ${{ secrets.GA4_AUTH_CODE }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: python -m admob_iq.fetch.ga4_auth_exchange
