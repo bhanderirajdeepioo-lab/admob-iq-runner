@@ -13,6 +13,7 @@ printed). This repo's Actions logs are PUBLIC — print only generic status and 
 
 GA4_REFRESH_TOKENS is JSON {owner email: refresh_token}: the apps' GA4 accounts belong to several Google accounts,
 so each one consents once and the probe reads with all of them. Each run adds or replaces ONE owner's entry.
+A map that is set but unreadable as a whole is never overwritten: the run stops before spending the code.
 """
 
 import base64
@@ -66,13 +67,32 @@ def merge_owner_token(stored, legacy, who, refresh_token, now=None):
     """→ the new {owner: refresh_token} map: `stored` plus this consent, added or replacing that owner's old
     token. Keyed by the consenting email ("unknown-<UTC time>" when Google sent none). The single-token
     GA4_REFRESH_TOKEN (`legacy`) is about to be overwritten with this token and its owner's email was never
-    recorded, so when the map does not hold it yet it is kept as "legacy" — never silently lost."""
+    recorded, so when the map does not hold it yet it is kept as "legacy" — never silently lost. (main() passes
+    it only after legacy_check: one Google rejects as expired / revoked, or that belongs to the very account
+    consenting now, is left out and recorded in the private status file.)"""
     owners = dict(stored)
     stamp = time.strftime("%Y%m%dT%H%M%SZ", now or time.gmtime())
     if legacy and legacy != refresh_token and legacy not in owners.values():
         owners["legacy" if "legacy" not in owners else "legacy-" + stamp] = legacy
     owners[(who or "").strip().lower() or "unknown-" + stamp] = refresh_token
     return owners
+
+
+def legacy_check(cid, csec, legacy):
+    """Refresh the old single GA4_REFRESH_TOKEN once before it is carried into the map → ("ok", its owner's email
+    when Google includes one), ("invalid_grant", "") when Google says it is expired or revoked, or
+    ("unchecked", "") on anything else. Only a definite invalid_grant may drop it: a network or server hiccup
+    must never cost a working token."""
+    try:
+        r = requests.post("https://oauth2.googleapis.com/token", timeout=30, data={
+            "grant_type": "refresh_token", "refresh_token": legacy, "client_id": cid, "client_secret": csec})
+        j = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    except (requests.RequestException, ValueError):
+        return "unchecked", ""
+    _mask(j.get("access_token"))
+    if r.status_code == 200 and j.get("access_token"):
+        return "ok", _consented_as(j).strip().lower()
+    return ("invalid_grant" if j.get("error") == "invalid_grant" else "unchecked"), ""
 
 
 def _delete_secret(name, repo, tok):
@@ -96,9 +116,14 @@ def main():
     if mode != "exchange":
         sys.exit("MODE must be client-id or exchange")
     repo, gh = os.environ["REPO"], os.environ["DATA_REPO_TOKEN"]
-    stored, map_problems = parse_token_map(os.environ.get("GA4_REFRESH_TOKENS"))
+    raw_map = os.environ.get("GA4_REFRESH_TOKENS", "")
+    stored, map_problems = parse_token_map(raw_map)
     legacy = os.environ.get("GA4_REFRESH_TOKEN", "").strip()
     _mask(legacy, *stored.values())                      # before anything else can print
+    if raw_map.strip() and map_problems and not stored:
+        # e.g. a trailing comma from a hand edit: saving a fresh map over it would delete every owner's token.
+        # Stop BEFORE the one-time code is spent, so the same consent works once the secret is fixed.
+        sys.exit("GA4_REFRESH_TOKENS is set but unreadable — fix or delete it, then run the exchange again")
     code, redirect = os.environ.get("GA4_AUTH_CODE", ""), os.environ.get("REDIRECT_URI", "")
     if not code or not redirect:
         sys.exit("GA4_AUTH_CODE secret or REDIRECT_URI input is missing")
@@ -114,6 +139,14 @@ def main():
                           "detail": j.get("error_description", "")}), "ga4 auth: failed")
         sys.exit("token exchange failed: %s" % err)
     who = _consented_as(j)
+    legacy_state = None
+    if legacy and legacy != j["refresh_token"] and legacy not in stored.values():
+        # about to be copied into the map as "legacy": only if it still works and is not this very account
+        legacy_state, legacy_email = legacy_check(cid, csec, legacy)
+        if legacy_state == "ok" and legacy_email and legacy_email == who.strip().lower():
+            legacy_state = "same_owner"                   # that account just consented again: the new token replaces it
+        if legacy_state in ("invalid_grant", "same_owner"):
+            legacy = ""
     owners = merge_owner_token(stored, legacy, who, j["refresh_token"])
     # Save FIRST: the token is valid even if the GA4 APIs aren't enabled yet, so enabling them later
     # must not force the owner to click Allow again.
@@ -123,9 +156,13 @@ def main():
     save_github_secret("GA4_CLIENT_SECRET", csec, repo=repo, gh_token=gh)
     if map_problems:
         print("::warning::%d unreadable GA4_REFRESH_TOKENS entr(y/ies) were dropped" % map_problems)
+    if legacy_state == "invalid_grant":
+        print("::warning::the old GA4_REFRESH_TOKEN no longer works (expired or revoked) and was not kept")
     # counts below are THIS consent's; "owners" lists every Google account with a stored token
     status = {"consented_as": who, "owners": sorted(owners), "token_map_problems": map_problems,
               "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    if legacy_state:
+        status["legacy_token"] = {"check": legacy_state, "kept": bool(legacy)}
     try:
         accounts, properties = ga4_visible_counts(j["access_token"])
     except RuntimeError as e:

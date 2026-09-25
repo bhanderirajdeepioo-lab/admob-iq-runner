@@ -46,9 +46,10 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GA4_AUTH_CODE: ${{ secrets.GA4_AUTH_CODE }}
           # the owner-token map this consent is added to, and the older single token — kept in the map as
-          # "legacy" before it is overwritten, so the owner who minted it doesn't have to consent again
-          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
-          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          # "legacy" before it is overwritten, so the owner who minted it doesn't have to consent again.
+          # exchange mode only: client-id never reads them, so it never holds every owner's token
+          GA4_REFRESH_TOKENS: ${{ github.event.inputs.mode == 'exchange' && secrets.GA4_REFRESH_TOKENS || '' }}
+          GA4_REFRESH_TOKEN: ${{ github.event.inputs.mode == 'exchange' && secrets.GA4_REFRESH_TOKEN || '' }}
           DATA_REPO: ${{ secrets.DATA_REPO }}
           DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
         run: python -m admob_iq.fetch.ga4_auth_exchange
