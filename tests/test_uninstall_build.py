@@ -29,8 +29,8 @@ A1, A2, A3, A4, A6, A9 = ("ca-app-pub-7777777777777777~%d" % i for i in (1, 2, 3
 N1, N2, N3, N4, N6 = "Demo Caller – Test App", "Beta Down App", "Gamma No Package", "Delta No Stream", "Epsilon Watch"
 PKG = {A1: "com.hidden.one", A2: "com.hidden.two", A4: "com.hidden.four", A6: "com.hidden.six"}
 SECRETS = test_ga4.SECRETS + [PID, SID, EMAIL, "rt-SECRET-x", A1, A2, A3, A4, A6, N1, N2, N3, N4, N6] + list(PKG.values())
-LOG_LINE = re.compile(r"^ga4 uninstall: apps \d+, with GA4 \d+, fetched \d+ \(full \d+\), fresh \d+, failed \d+, "
-                      r"deferred \d+, open alerts \d+ \(new \d+\)$")
+LOG_LINE = re.compile(r"^ga4 uninstall: apps \d+, with GA4 \d+, fetched \d+ \(full \d+, repair \d+\), fresh \d+, "
+                      r"failed \d+, deferred \d+, open alerts \d+ \(new \d+\)$")
 
 
 def _bump(delta):
@@ -337,8 +337,8 @@ def test_public_log_is_one_counts_line_and_site_files_hold_no_ids(site, capsys):
     assert got.out == ""
     lines = got.err.splitlines()
     assert len(lines) == 1 and LOG_LINE.match(lines[0]), lines
-    assert lines[0] == ("ga4 uninstall: apps 5, with GA4 3, fetched 0 (full 0), fresh 3, failed 0, deferred 0, "
-                        "open alerts 3 (new 3)")
+    assert lines[0] == ("ga4 uninstall: apps 5, with GA4 3, fetched 0 (full 0, repair 0), fresh 3, failed 0, "
+                        "deferred 0, open alerts 3 (new 3)")
     for s in SECRETS:
         assert s not in got.err
     shipped = json.dumps(dash["uninstall"], ensure_ascii=False)
@@ -414,6 +414,11 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     assert list(lau["flags"]["incomplete_days"]) == ["2026-09-03"]                  # flagged, shown, no alert from it
     assert any(t["inc_day"] == "2026-09-03" for t in lau["table"])
     assert all(not a["flags"]["incomplete_days"] for a in asset["apps"] if a["app"] != "Demo Launcher")
+    # GA4 keeps the Caller's install-day USERS 150 days only: its older days come from the events (used, shown)
+    cal = [a for a in asset["apps"] if a["app"] == "Demo Caller – Test App"][0]
+    assert cal["flags"]["cell_days"] == {"users": 155, "events": 85, "incomplete": 0}
+    assert cal["flags"]["events_span"] == [cal["history_start"], "2026-04-21"]
+    assert all(a["flags"]["cell_days"]["events"] == 0 for a in asset["apps"] if a is not cal)
     assert {a["stage"] for a in asset["apps"]} == {"naya", "badh_raha", "stable"}
     # "100 me se kitne bache": every app has its curve (check_asset: never rises, ≤100%, bars add up); the verdict
     # compares settled installs only — Flashlight kept more than the month before, the rest stayed alike
@@ -483,3 +488,59 @@ def test_a_v1_store_never_sends_an_alert_and_its_clean_re_pull_starts_the_alerts
     assert state["fetch"][tg.A1]["last_kind"] == "full" and not state["closed"]
     assert not any(x["notify"] for x in d["uninstall"]["alerts"])                  # a first evaluation: seeded
     assert all(e["seeded"] for e in state["episodes"].values())
+
+
+# ── the store-format bump (v2 → v3): checked data, repaired in place, alerts kept unless it moved ─────
+
+def test_a_v2_store_is_checked_data_while_its_repair_waits_and_a_repair_that_barely_moves_keeps_the_alerts(
+        tmp_path, monkeypatch):
+    from tests import test_ga4_uninstall as tg
+    w = tg.World(monkeypatch)
+    data, out = str(tmp_path / "data"), str(tmp_path / "site")
+    os.makedirs(data)
+    with open(os.path.join(data, "app_store_ids.json"), "w", encoding="utf-8") as f:
+        json.dump({"by_id": {tg.A1: tg.PKG1}}, f)
+    s = ga4_settings(ga4_client_id="cid", ga4_client_secret="sec",
+                     ga4_refresh_tokens=json.dumps({tg.EMAIL_A: tg.RT_A, tg.EMAIL_B: tg.RT_B}))
+
+    def build(now):
+        d = {"apps_catalog": [{"app_id": tg.A1, "app_name": "One", "account_id": "p", "selected": True}],
+             "kpis": {}, "alerts": {"items": []}}
+        ub.run_uninstall(d, data, out, s, now=now)
+        return d, _gz(os.path.join(out, ASSET))["apps"][0]
+    build(tg.NOW)                                                   # v3 from the start
+    path = gu.store_path(data, tg.A1)
+    st = gu.load_store(path)
+    for k in ("cell_src", "users_ok_days", "events_chunk_days"):   # what the v2 code wrote: one day GA4 answered
+        st.pop(k)                                                   # at half, flagged
+    st["flags"].pop("users_k")
+    st["v"] = 2
+    short = (END - timedelta(days=40)).isoformat()
+    for c, lags in st["cohorts"].items():
+        for lag in lags:
+            if (datetime.fromisoformat(c) + timedelta(days=int(lag))).date().isoformat() == short:
+                lags[lag] //= 2
+    st["flags"]["incomplete_days"] = {short: 0.5}
+    gu.save_store(path, st)
+    state = gu.load_state(data)
+    state["fetch"][tg.A1]["meta"] = gu.store_meta(st)
+    gu.save_state(data, state)
+    resets = []
+    real_reset = gu.reset_alerts
+    monkeypatch.setattr(gu, "reset_alerts", lambda state, aid: (resets.append(aid), real_reset(state, aid)))
+    w.fail = lambda body: (_ for _ in ()).throw(RuntimeError("HTTP 500: INTERNAL"))
+    d, a = build(tg.NOW + timedelta(hours=1))                      # the repair fails for now …
+    assert gu.load_store(path)["v"] == 2 and gu.load_state(data)["fetch"][tg.A1]["fail"] == "http"
+    assert a["flags"]["outdated"] is False                          # … a v2 store is checked data: evaluated and
+    assert list(a["flags"]["incomplete_days"]) == [short]           # alerted as ever, its short day left out
+    w.fail = None
+    d, a = build(tg.NOW + timedelta(hours=5))                      # 4h later: a failed repair waits a day (and
+    assert gu.load_store(path)["v"] == 2 and a["flags"]["incomplete_days"]   # no incremental is due yet)
+    d, a = build(tg.NOW + timedelta(hours=25))                     # a day after it: repaired — that one day, by
+    st = gu.load_store(path)                                        # events
+    assert st["v"] == gu.STORE_V and st["flags"]["incomplete_days"] == {}
+    assert st["cell_src"][short]["src"] == "events_scaled"
+    assert a["flags"]["cell_days"] == {"users": 199, "events": 1, "incomplete": 0}
+    assert gu.load_state(data)["fetch"][tg.A1]["last_kind"] == "repair"
+    assert resets == []                                             # half a day of 200 moved: < 1% — its alert
+                                                                    # history is kept

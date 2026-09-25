@@ -931,3 +931,24 @@ def test_the_survival_view_never_feeds_an_alert(monkeypatch):
     d2, r2, s2 = evaluate(st)
     assert cohort_alerts(d1) and d1["alerts"] == d2["alerts"] and s1 == s2
     assert d1["table"] == d2["table"] and r1 == r2
+
+
+def test_events_scaled_days_are_used_everywhere_and_only_counted():
+    # old days whose install-day cells are an events estimate (fetch.ga4_uninstall's cell_src) are complete:
+    # the survival, the triangle, the checkpoint table and the alert baselines use them like any other day
+    st = make_store(200, 1000, bump=lambda c: {0: 60} if c >= END - timedelta(days=6) else None)
+    old = sorted(d for d in st["daily"] if d < (END - timedelta(days=100)).isoformat())
+    plain, _, _ = evaluate(copy.deepcopy(st))
+    st["cell_src"] = {d: {"src": "events_scaled", "cov": 1.0, "at": "2026-09-20"} for d in old}
+    d, _, state = evaluate(st)
+    for k in ("survival", "triangle", "table", "head4", "lifetime", "curve", "daily", "alerts"):
+        assert d[k] == plain[k], k
+    assert cohort_alerts(d) and d["flags"]["incomplete_days"] == {}
+    assert d["flags"]["cell_days"] == {"users": 200 - len(old), "events": len(old), "incomplete": 0}
+    assert d["flags"]["events_span"] == [old[0], old[-1]]
+    flagged = copy.deepcopy(st)                                    # the same days flagged incomplete: left out
+    flagged["flags"]["incomplete_days"] = {k: 0.5 for k in old}
+    f, _, _ = evaluate(flagged)
+    assert f["survival"]["all"]["n"][0] < d["survival"]["all"]["n"][0]
+    assert f["flags"]["cell_days"] == {"users": 200 - len(old), "events": 0, "incomplete": len(old)}
+    assert f["flags"]["events_span"] is None

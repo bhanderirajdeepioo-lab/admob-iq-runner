@@ -150,14 +150,17 @@ class Truth:
     `short` = fn(start, end) → share of the cells a firstSessionDate × date report over that range returns
     (the live undercount of long ranges); `short_day` = {event day: share} short at ANY range; `other` =
     fn(start, end) → share of every cell folded into one "(other)" row per event day (GA4's high-cardinality
-    answer: the users are all there, their install day is not)."""
+    answer: the users are all there, their install day is not). Those three hit the users AND the events
+    (eventCount) cells alike. `users_day` = fn(event day) → share of the USERS cells only (the live loss of
+    users by install day on days older than ~2 months, at any range); `events_day` = fn(event day) → share of
+    the EVENTS cells only (~85% on recent days on some apps). A cell of u users has u + u // 20 events (ev)."""
 
     def __init__(self, start, end, new, lags=None, bump=None, old_per_day=0, hazard_x=None, upd=None,
                  versions=None, active_frac=0.25, a28_frac=0.5, base0=None, seed=7, noise=0.0):
         self.start, self.end = start, end
         self.reject_a28 = False
         self.thresholded = False
-        self.asof = self.late = self.late_new = self.short = self.other = None
+        self.asof = self.late = self.late_new = self.short = self.other = self.users_day = self.events_day = None
         self.short_day = {}
         self.new, self.cells, self.old, self.upd, self.vers = {}, {}, {}, {}, {}
         self.a1, self.a28 = {}, {}
@@ -246,32 +249,42 @@ class Truth:
                 if any(vals[m] for m in mets):
                     out.append(({"date": ymd(d)}, {m: vals[m] for m in mets}))
         elif dims == ["date", "eventName"]:
+            evs = {d: ev(u) for d, u in old.items()}             # a day's events = its cells' events, added up
+            for (c, d), u in cells.items():
+                evs[d] = evs.get(d, 0) + ev(u)
             for d in days:
                 if "app_remove" in events and un.get(d):
-                    u = un[d]
                     out.append(({"date": ymd(d), "eventName": "app_remove"},
-                                {"totalUsers": u, "eventCount": u + u // 20}))
+                                {"totalUsers": un[d], "eventCount": evs.get(d, 0)}))
                 if "app_update" in events and self.upd[d]:
                     out.append(({"date": ymd(d), "eventName": "app_update"},
                                 {"totalUsers": self.upd[d], "eventCount": self.upd[d]}))
         elif dims == ["firstSessionDate", "date"]:
-            assert events == ["app_remove"]
+            assert events == ["app_remove"] and len(mets) == 1 and mets[0] in ("totalUsers", "eventCount")
+            m = mets[0]
             k = self.short(start, end) if self.short else 1.0          # a long range's silent undercount
             fold, other = self.other(start, end) if self.other else 0.0, {}
+            only = self.events_day if m == "eventCount" else self.users_day
+
+            def share(d):
+                return k * self.short_day.get(d, 1.0) * (only(d) if only else 1.0)
+
+            def val(u):
+                return ev(u) if m == "eventCount" else u
             for (c, d), u in cells.items():
                 if start <= d <= end:
-                    v = int(u * k * self.short_day.get(d, 1.0))
+                    v = int(val(u) * share(d))
                     h = int(v * fold)
                     other[d] = other.get(d, 0) + h
                     if v - h:
                         out.append(({"firstSessionDate": ymd(c) if isinstance(c, date) else c, "date": ymd(d)},
-                                    {"totalUsers": v - h}))
-            out += [({"firstSessionDate": "(other)", "date": ymd(d)}, {"totalUsers": h}) for d, h in other.items() if h]
+                                    {m: v - h}))
+            out += [({"firstSessionDate": "(other)", "date": ymd(d)}, {m: h}) for d, h in other.items() if h]
             for d in days:
-                v = int(old.get(d, 0) * k * self.short_day.get(d, 1.0))
+                v = int(val(old.get(d, 0)) * share(d))
                 if v:                         # old installs: a first-session day before the data starts
                     out.append(({"firstSessionDate": ymd(self.start - timedelta(days=400)), "date": ymd(d)},
-                                {"totalUsers": v}))
+                                {m: v}))
         elif dims == ["date", "appVersion"]:
             for d in days:
                 for v, u in sorted((self.vers.get(d) or {}).items()):
@@ -280,6 +293,11 @@ class Truth:
         else:
             raise AssertionError("unexpected report %s" % dims)
         return out
+
+
+def ev(u):
+    """app_remove EVENTS of a cell of u uninstalling users: a few uninstall more than once (~5% on big cells)."""
+    return u + u // 20
 
 
 def _event_filter(body):
@@ -495,12 +513,18 @@ def check_asset(asset, summary=None):
         assert (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["settled_till"])).days == a["late_days"]
         assert a["fetched_at"] is None or _TS.match(a["fetched_at"])
         _keys(a["flags"], ("truncated", "thresholded", "unplaced_users", "over_100", "kept_old_before",
-                           "incomplete_days", "outdated"), "flags")
+                           "incomplete_days", "outdated", "cell_days", "events_span"), "flags")
         assert isinstance(a["flags"]["outdated"], bool)
         for d, cov in a["flags"]["incomplete_days"].items():             # {day: coverage}, inside the history
             assert _iso(d) and a["history_start"] <= d <= a["data_till"] and _num(cov) and cov < 1
         check_lateness(a["lateness"])
         H = (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["history_start"])).days + 1
+        cdays, span = a["flags"]["cell_days"], a["flags"]["events_span"]   # every day: users | events | incomplete
+        _keys(cdays, ("users", "events", "incomplete"), "cell_days")
+        assert all(isinstance(v, int) and v >= 0 for v in cdays.values()) and sum(cdays.values()) == H
+        assert cdays["incomplete"] == len(a["flags"]["incomplete_days"])
+        assert (span is None) == (cdays["events"] == 0)
+        assert span is None or (a["history_start"] <= span[0] <= span[1] <= a["data_till"])
         _keys(a["daily"], ("start", "new", "un", "a28", "upd", "rate", "med", "lo", "hi", "breaks"), "daily")
         assert a["daily"]["start"] == a["history_start"]
         assert all(_iso(b) and a["history_start"] <= b <= a["data_till"] for b in a["daily"]["breaks"])
