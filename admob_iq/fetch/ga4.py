@@ -217,6 +217,8 @@ class Ga4App:
         self.calls = 0
         self.last_row_count = None     # rowCount of the last runReport (total rows, ignoring limit)
         self.last_pages = None         # pages report_all() fetched for its last report
+        self.last_meta = {}            # response metadata of the last runReport
+        self.thresholded = False       # True once ANY report came back subject to GA4 thresholding
 
     def _post(self, method, body):
         if self.calls:
@@ -229,16 +231,20 @@ class Ga4App:
                     returnPropertyQuota=True)
         j = self._post("runReport", body)
         self.quota = j.get("propertyQuota") or self.quota
+        self.last_meta = j.get("metadata") or {}
+        # GA4 hides small user counts on some properties (Google signals) — never silent, callers show it
+        self.thresholded |= bool(self.last_meta.get("subjectToThresholding"))
         rows = _rows(j)
         self.last_row_count = _num(j["rowCount"]) if "rowCount" in j else len(rows)
         return rows
 
-    def report_all(self, body, event=None, events=None, extra=None):
-        """EVERY row of a report: PAGE_ROWS at a time, offset += limit while offset < rowCount, so nothing
-        is ever cut silently. Stops early only at MAX_REPORT_PAGES (or on an empty page) — truncated()
-        then says so, since rowCount still holds the full total. Every page is asked for in one TOTAL
-        order (the caller's orderBys, then each remaining dimension ascending): with ties left to the
-        API, two pages could repeat or skip a row and the row count would never show it."""
+    def report_all(self, body, event=None, events=None, extra=None, page_rows=None):
+        """EVERY row of a report: PAGE_ROWS (or `page_rows`) at a time, offset += limit while offset <
+        rowCount, so nothing is ever cut silently. Stops early only at MAX_REPORT_PAGES (or on an empty
+        page) — truncated() then says so, since rowCount still holds the full total. Every page is asked
+        for in one TOTAL order (the caller's orderBys, then each remaining dimension ascending): with ties
+        left to the API, two pages could repeat or skip a row and the row count would never show it."""
+        limit = page_rows or PAGE_ROWS
         order = list(body.get("orderBys") or [])
         have = {(o.get("dimension") or {}).get("dimensionName") for o in order}
         order += [{"dimension": {"dimensionName": d["name"]}} for d in body.get("dimensions") or []
@@ -246,10 +252,10 @@ class Ga4App:
         body = dict(body, orderBys=order) if order else body
         rows, offset, pages = [], 0, 0
         while pages < MAX_REPORT_PAGES:
-            page = self.report(dict(body, limit=PAGE_ROWS, offset=offset), event, events, extra)
+            page = self.report(dict(body, limit=limit, offset=offset), event, events, extra)
             pages += 1
             rows.extend(page)
-            offset += PAGE_ROWS
+            offset += limit
             if not page or offset >= (self.last_row_count or 0):
                 break
         self.last_pages = pages

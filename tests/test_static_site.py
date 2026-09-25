@@ -165,12 +165,19 @@ def test_demo_and_empty_flags():
 def test_settings_tolerates_empty_github_secrets(monkeypatch):
     """GitHub Actions passes UNSET secrets as '' (not absent) — settings() must not
     crash on int('') and must fall back to defaults. (This was the first live failure.)"""
-    for k in ["SMTP_PORT", "REPORT_CURRENCY", "ROLLING_REPULL_DAYS", "NOTIFY_DRY_RUN", "FETCH_MODE"]:
+    for k in ["SMTP_PORT", "REPORT_CURRENCY", "ROLLING_REPULL_DAYS", "NOTIFY_DRY_RUN", "FETCH_MODE",
+              "GA4_CLIENT_ID", "GA4_CLIENT_SECRET", "GA4_REFRESH_TOKENS", "GA4_REFRESH_TOKEN", "GA4_ENABLED",
+              "GA4_MIN_HOURS", "GA4_RETRY_HOURS", "GA4_REFETCH_DAYS", "GA4_REBUILD_DAYS", "GA4_MAX_HISTORY_DAYS",
+              "GA4_RUN_BUDGET_SEC", "GA4_STREAMS_TTL_HOURS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]:
         monkeypatch.setenv(k, "")
     from admob_iq.config import settings
     s = settings()
     assert s["smtp"]["port"] == 587 and s["report_currency"] == "USD"
     assert s["rolling_days"] == 35 and s["notify_dry_run"] is True and s["fetch_mode"] == "mock"
+    assert s["ga4_enabled"] is True and s["ga4_min_hours"] == 20.0 and s["ga4_retry_hours"] == 3.0
+    assert (s["ga4_refetch_days"], s["ga4_rebuild_days"], s["ga4_max_history_days"], s["ga4_run_budget_sec"]) \
+        == (10, 28, 1300, 900) and s["ga4_streams_ttl_hours"] == 168.0
+    assert s["ga4_client_id"] is None and s["ga4_client_secret"] is None and not s["ga4_refresh_tokens"]
 
 
 def test_range_kpis_carry_exact_date_window_and_full_30d():
@@ -567,7 +574,8 @@ def test_built_site_is_noindex_and_leaks_no_referrer(tmp_path):
     assert "noindex" in headers and "nofollow" in headers and "noarchive" in headers
     assert "Referrer-Policy: no-referrer" in headers        # don't hand the URL to sites clicked through to
     # the data files must still never be cached anywhere
-    for p in ("/dashboard.json.gz", "/selected_apps.json", "/account_names.json", "/app_names.json"):
+    for p in ("/dashboard.json.gz", "/selected_apps.json", "/account_names.json", "/app_names.json",
+              "/uninstall.json.gz"):
         assert f"{p}\n  Cache-Control: no-store" in headers
 
 
