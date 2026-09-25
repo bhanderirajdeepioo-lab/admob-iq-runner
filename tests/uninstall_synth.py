@@ -478,7 +478,8 @@ def check_summary(s):
 def check_asset(asset, summary=None):
     _keys(asset, ("v", "consts", "apps", "no_ga4", "lateness"), "asset")
     _keys(asset["consts"], ("lag_days", "band_days", "band_k", "recent_k", "prev_k", "head_k", "z", "min_pp",
-                            "min_rel", "min_recent_users", "big_recent_users", "zoom_days", "late_days"), "consts")
+                            "min_rel", "min_recent_users", "big_recent_users", "zoom_days", "late_days", "thin_min_days",
+                            "thin_min_users", "surv_recent_days", "verdict_k", "tri_avg_weeks"), "consts")
     check_lateness(asset["lateness"])
     for n in asset["no_ga4"]:
         _keys(n, ("app_id", "app", "package", "reason", "text"), "no_ga4")
@@ -487,8 +488,8 @@ def check_asset(asset, summary=None):
     for a in asset["apps"]:
         _keys(a, ("app_id", "app", "package", "key", "tz", "den", "history_start", "data_till", "settled_till",
                   "late_days", "fetched_at", "stale", "history_capped", "flags", "daily", "rate_now", "stage", "stage_why",
-                  "zoom", "checkpoints", "nmax", "curve", "table", "head4", "lifetime", "triangle", "releases",
-                  "lateness", "alerts", "alerts_closed"), "detail")
+                  "zoom", "checkpoints", "nmax", "curve", "table", "head4", "lifetime", "triangle", "survival",
+                  "releases", "lateness", "alerts", "alerts_closed"), "detail")
         assert _HEX12.match(a["key"]) and a["den"] in ("a28", "dau") and _iso(a["history_start"]) and _iso(a["data_till"])
         assert a["late_days"] == asset["consts"]["late_days"] and _iso(a["settled_till"])
         assert (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["settled_till"])).days == a["late_days"]
@@ -538,8 +539,14 @@ def check_asset(asset, summary=None):
         _keys(a["head4"], ("D0", "D1", "D7", "D30"), "detail head4")
         _keys(a["lifetime"], ("p", "users", "un", "rate_all_med"), "lifetime")
         tri = a["triangle"]
-        _keys(tri, ("cols", "ref", "rows"), "triangle")
-        assert tri["cols"] == a["checkpoints"] and len(tri["ref"]) == len(tri["cols"])
+        _keys(tri, ("cols", "ref", "ref_users", "avg4", "rows"), "triangle")
+        assert tri["cols"] == a["checkpoints"] and len(tri["ref"]) == len(tri["ref_users"]) == len(tri["avg4"]) == len(tri["cols"])
+        for N, av in zip(tri["cols"], tri["avg4"]):                     # 4 full settled weeks (Mon–Sun) or None
+            if av is not None:
+                _keys(av, ("p", "users", "from", "to"), "triangle avg4")
+                f, t = date.fromisoformat(av["from"]), date.fromisoformat(av["to"])
+                assert f.weekday() == 0 and (t - f).days == 27 and (t + timedelta(days=N)).isoformat() <= a["settled_till"]
+        check_survival(a["survival"], a, asset["consts"])
         assert sum(r["days"] for r in tri["rows"]) == H                   # ALL rows, newest first
         for r in tri["rows"]:
             _keys(r, ("week", "from", "to", "days", "users", "partial", "p"), "triangle row")
@@ -555,6 +562,61 @@ def check_asset(asset, summary=None):
         assert sorted(al["id"] for a in asset["apps"] for al in a["alerts"]) == sorted(al["id"] for al in summary["alerts"])
         for a, r in zip(asset["apps"], summary["apps"]):
             assert a["head4"] == r["head4"] and a["app"] == r["app"]
+
+
+SURV_KEYS = ("from", "to", "installs", "x", "r", "n", "k", "left", "lo", "hi", "gone", "thin_from", "clipped")
+
+
+def check_curve(c, consts):
+    """One survival curve: never rises, stays in 0..1, the bars (gone) add up to the line, the installs behind
+    a day only shrink, and "kam data" (thin_from) is a tail."""
+    _keys(c, SURV_KEYS, "survival curve")
+    L = len(c["left"])
+    assert all(len(c[k]) == L for k in ("x", "r", "n", "k", "left", "lo", "hi", "gone"))
+    assert all(0 <= v <= 1 for v in c["left"]) and all(a >= b for a, b in zip(c["left"], c["left"][1:]))
+    assert all(lo <= v <= hi for lo, v, hi in zip(c["lo"], c["left"], c["hi"]))
+    assert all(g >= 0 for g in c["gone"])
+    run = 0.0
+    for g, v in zip(c["gone"], c["left"]):
+        run += g
+        assert abs(run - (1 - v)) < 1e-6 * (L + 1)
+    assert all(a >= b for a, b in zip(c["n"], c["n"][1:])) and all(a >= b for a, b in zip(c["k"], c["k"][1:]))
+    assert all(k > 0 for k in c["k"]) and c["installs"] >= (c["n"][0] if L else 0)
+    thin = [k < consts["thin_min_days"] or n < consts["thin_min_users"] for k, n in zip(c["k"], c["n"])]
+    assert c["thin_from"] == (thin.index(True) if True in thin else None)
+    assert all(thin[c["thin_from"]:]) if c["thin_from"] is not None else True
+    assert _iso(c["from"]) and _iso(c["to"]) and c["from"] <= c["to"]
+
+
+def check_survival(sv, a, consts):
+    _keys(sv, ("all", "recent", "verdict", "key_days"), "survival")
+    check_curve(sv["all"], consts)
+    assert sv["all"]["from"] == a["history_start"] and sv["all"]["to"] == a["data_till"]
+    # every day N counted only settled data: N ≤ settled_till − history_start
+    assert len(sv["all"]["left"]) <= (date.fromisoformat(a["settled_till"]) - date.fromisoformat(a["history_start"])).days + 1
+    H = (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["history_start"])).days + 1
+    if sv["recent"] is None:
+        assert H <= consts["surv_recent_days"]
+    else:
+        check_curve(sv["recent"], consts)
+        assert sv["recent"]["to"] == a["data_till"]
+        assert (date.fromisoformat(a["data_till"]) - date.fromisoformat(sv["recent"]["from"])).days + 1 == consts["surv_recent_days"]
+    assert sv["key_days"] == sorted(sv["key_days"]) and len(sv["key_days"]) <= 4
+    assert set(sv["key_days"]) <= set(a["checkpoints"])
+    solid = sv["all"]["thin_from"] if sv["all"]["thin_from"] is not None else len(sv["all"]["left"])
+    # days with enough installs — or, for a tiny app with none, the days its curve reached (marked "kam data")
+    assert all(N < solid for N in sv["key_days"]) or (
+        all(N < len(sv["all"]["left"]) for N in sv["key_days"]) and not any(N < solid for N in a["checkpoints"]))
+    v = sv["verdict"]
+    if v is not None:
+        _keys(v, ("n", "recent", "prev", "delta_pp", "z", "fires", "dir", "low_sample"), "verdict")
+        for w in ("recent", "prev"):
+            _keys(v[w], ("from", "to", "users", "k", "left"), "verdict " + w)
+        assert v["n"] in (7, 3, 1, 0) and isinstance(v["fires"], bool) and isinstance(v["low_sample"], bool)
+        assert (date.fromisoformat(v["recent"]["to"]) + timedelta(days=v["n"])).isoformat() <= a["settled_till"]
+        assert v["prev"]["to"] < v["recent"]["from"]
+        assert v["dir"] == (("worse" if v["delta_pp"] < 0 else "better") if v["fires"] else None)
+        assert not (v["fires"] and v["low_sample"])
 
 
 def check_lateness(L):

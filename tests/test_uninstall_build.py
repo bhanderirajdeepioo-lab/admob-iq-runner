@@ -415,6 +415,14 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     assert any(t["inc_day"] == "2026-09-03" for t in lau["table"])
     assert all(not a["flags"]["incomplete_days"] for a in asset["apps"] if a["app"] != "Demo Launcher")
     assert {a["stage"] for a in asset["apps"]} == {"naya", "badh_raha", "stable"}
+    # "100 me se kitne bache": every app has its curve (check_asset: never rises, ≤100%, bars add up); the verdict
+    # compares settled installs only — Flashlight kept more than the month before, the rest stayed alike
+    sv = {a["app"]: a["survival"] for a in asset["apps"]}
+    flash = sv["Demo Flashlight"]["verdict"]
+    assert flash["fires"] and flash["dir"] == "better" and flash["n"] == 7
+    assert all(not v["verdict"]["fires"] for k, v in sv.items() if k not in ("Demo Flashlight", "Demo Notes"))
+    assert sv["Demo Notes"]["verdict"] is None and sv["Demo Notes"]["recent"] is None     # 20 days old
+    assert sv["Demo Caller – Test App"]["key_days"] == [1, 7, 30, 90] and sv["Demo Caller – Test App"]["recent"]
     assert all(LOG_LINE.match(line) for line in fx["public_log"]) and len(fx["public_log"]) == 7
     with open(OUT, encoding="utf-8") as f:
         committed = f.read()

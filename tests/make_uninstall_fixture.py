@@ -16,7 +16,9 @@ The apps cover what the tab has to show:
                                                                                        — ONE alert while it
                                                                                        lasts, though its newest
                                                                                        installs still read low
-  * Demo Flashlight         growing, D0 uninstall falling (settled installs)        → good
+  * Demo Flashlight         growing, D0 uninstall falling since 25 Aug (settled)    → good; the summary verdict:
+                                                                                       more kept 7 days after
+                                                                                       install than the month before
   * Demo Notes              20 days old (28-day actives still filling: no rate yet)  → "naya", every day
   * Demo QR Scanner         ~35 installs/day                                         → "kam data" rows
   * Demo Weather            uninstall rate stepping up since 12 Sep                  → slow drift warning
@@ -97,7 +99,7 @@ def truths():
                            bump=lambda c: {1: 60} if c >= date(2026, 9, 11) else None,
                            upd=lambda c: 12000 if c == date(2026, 9, 10) else 800, versions=big_versions, seed=1),
         "200000002": Truth(d(74), E, lambda c: int(400 * wave(c)), noise=0.05, old_per_day=20, seed=2,
-                           bump=lambda c: {0: -100, 1: 20} if c >= date(2026, 9, 8) else None),
+                           bump=lambda c: {0: -100, 1: 20} if c >= date(2026, 8, 25) else None),
         "200000003": Truth(d(19), E, 150, noise=0.08, seed=3),
         "200000004": Truth(d(199), E, lambda c: int(35 * wave(c, 0.3)), noise=0.2, seed=4),
         "200000005": Truth(d(149), E, lambda c: int(1500 * wave(c)), noise=0.03, seed=5,

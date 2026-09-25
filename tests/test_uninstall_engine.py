@@ -715,3 +715,219 @@ def test_install_days_held_only_while_provisional_are_not_told():
     sent, _ = run_daily(make_store(200, 1000, bump=lambda c: {0: 100} if two(c) else None, end=date(2026, 10, 15)),
                         date(2026, 8, 22), date(2026, 9, 30))
     assert [x[0] for x in sent] == ["2026-08-24", "2026-09-04"]
+
+
+# ── survival: "100 me se kitne bache" (life table), the verdict, the summary's key days ─────────────
+
+from tests.uninstall_synth import BASE_LAGS, check_curve                     # noqa: E402
+
+CONSTS = {"thin_min_days": eng.THIN_MIN_DAYS, "thin_min_users": eng.THIN_MIN_USERS}
+
+
+def true_left(lags, N):
+    """Every install day follows `lags` (per 1,000) exactly → the share still installed N days after install."""
+    return round(1 - sum(u for k, u in lags.items() if k <= N) / 1000, 5)
+
+
+def test_survival_is_the_true_curve_when_every_install_day_follows_the_same_hazard():
+    st = make_store(200, lambda c: 1000 * (1 + c.toordinal() % 3))          # 1,000–3,000 a day: exact cells
+    cd = eng.cohort_data(st)
+    for late in (0, 7):
+        s = eng.survival(cd, late)
+        check_curve(s, CONSTS)
+        L = 200 - late                                                       # day N needs install day + N settled
+        assert len(s["left"]) == L and s["left"] == [true_left(BASE_LAGS, N) for N in range(L)]
+        assert s["n"][0] == sum(cd["n"][:L]) and s["k"] == [L - N for N in range(L)]
+        assert s["gone"][0] == 0.6 and s["gone"][1] == 0.12                 # 60 of 100 leave on day 0, 12 on day 1
+        assert s["thin_from"] == L - eng.THIN_MIN_DAYS + 1 and s["clipped"] == []
+        assert all(lo <= v <= hi for lo, v, hi in zip(s["lo"], s["left"], s["hi"]))
+
+
+def test_survival_never_rises_when_older_installs_behaved_differently():
+    # older installs: 30 of 100 leave on day 0, 10 more on day 20; the newest 60 days: 70 leave on day 0, none later
+    split = END - timedelta(days=59)
+    st = make_store(210, 1000, lags={}, bump=lambda c: {0: 300, 20: 100} if c < split else {0: 700})
+    cd = eng.cohort_data(st)
+    head = eng.headline_curve(cd, 7)                                         # the old view: 28 newest days per N …
+    assert head["p"][60] < head["p"][10] - 0.25                              # … "gone" fell from 70% to 40%: kept ROSE
+    s = eng.survival(cd, 7)
+    check_curve(s, CONSTS)                                                   # never rises, never past 100%
+    assert s["left"][60] <= s["left"][10] <= s["left"][0] <= 1
+    x0 = sum(cd["raw"][i].get(0, 0) for i in range(203))                     # day 0: every settled install day, pooled
+    assert s["left"][0] == round(1 - x0 / sum(cd["n"][:203]), 5)
+    # day 20: only install days that reached it — old ones lose 10 of their 70 left, new ones nobody
+    old, new = (split - cd["hs"]).days, 203 - 20 - (split - cd["hs"]).days
+    h20 = old * 100 / (old * 700 + new * 300)
+    assert abs(s["left"][20] - s["left"][19] * (1 - h20)) < 1e-5
+
+
+def test_survival_counts_settled_days_only_and_leaves_out_what_an_incomplete_day_hides():
+    st = make_store(120, 1000)
+    d, _, _ = evaluate(st)
+    late, _, _ = evaluate(late_view(st))                                     # the newest days still filling in
+    assert late["survival"] == d["survival"]                                 # … change nothing: settled days only
+    bad = END - timedelta(days=30)
+    for c, lags in st["cohorts"].items():                                    # GA4 returned 20% of that day's cells
+        for lag in list(lags):
+            if date.fromisoformat(c) + timedelta(days=int(lag)) == bad:
+                lags[lag] = int(lags[lag] * 0.2)
+    blind = copy.deepcopy(st)
+    st["flags"]["incomplete_days"] = {bad.isoformat(): 0.2}
+    s = eng.survival(eng.cohort_data(st), 7)
+    assert s["left"] == [true_left(BASE_LAGS, N) for N in range(len(s["left"]))]     # the hidden share: left out
+    assert s["n"][40] < s["n"][0] - 30 * 1000                                         # (the days it touched)
+    sb = eng.survival(eng.cohort_data(blind), 7)                             # not flagged: too many "bache"
+    assert any(b > true_left(BASE_LAGS, N) + 0.001 for N, b in enumerate(sb["left"]))
+
+
+def test_the_tail_few_installs_reached_is_kam_data_and_still_shown():
+    big = eng.survival(eng.cohort_data(make_store(60, 1000)), 7)
+    assert len(big["left"]) == 53 and big["thin_from"] == 47 and big["k"][47] == eng.THIN_MIN_DAYS - 1
+    small = eng.survival(eng.cohort_data(make_store(60, 40)), 7)            # 40 a day: under 300 installs first
+    assert small["thin_from"] == 46 and small["n"][46] == 280 and len(small["left"]) == 53    # shown to the end
+    check_curve(small, CONSTS)
+
+
+def test_abhi_is_the_last_90_days_of_installs_and_only_for_an_older_app():
+    since = END - timedelta(days=89)
+    sv = evaluate(make_store(200, 1000, bump=lambda c: {0: 100} if c >= since else None))[0]["survival"]
+    r = sv["recent"]
+    assert (r["from"], r["to"]) == (since.isoformat(), END.isoformat()) and len(r["left"]) == 90 - 7
+    assert r["left"][0] == 0.3 and sv["all"]["left"][0] > 0.33                # abhi: 70 leave on day 0; hamesha: mixed
+    assert r["thin_from"] == 83 - eng.THIN_MIN_DAYS + 1
+    assert evaluate(make_store(90, 1000))[0]["survival"]["recent"] is None   # 90 days old: the same curve
+
+
+def test_verdict_is_jaisa_when_nothing_changed():
+    v = evaluate(make_store(120, 1000))[0]["survival"]["verdict"]
+    assert (v["n"], v["fires"], v["dir"], v["delta_pp"], v["low_sample"]) == (7, False, None, 0.0, False)
+    assert v["recent"]["to"] == (END - timedelta(days=14)).isoformat()      # day 7 of the newest ones is settled
+    assert v["recent"]["from"] == (END - timedelta(days=41)).isoformat() and v["recent"]["k"] == 28
+    assert v["prev"]["to"] == (END - timedelta(days=42)).isoformat() and v["prev"]["k"] == 28
+    assert v["recent"]["left"] == v["prev"]["left"] == true_left(BASE_LAGS, 7)
+
+
+def test_verdict_fewer_kept_is_worse_and_more_kept_is_better():
+    since = END - timedelta(days=41)                                         # exactly the newest settled 4 weeks
+    for bump, dr, dpp in ((60, "worse", -6.0), (-60, "better", 6.0)):
+        st = make_store(120, 1000, bump=lambda c, b=bump: {2: b} if c >= since else None)
+        d, _, _ = evaluate(st)
+        v = d["survival"]["verdict"]
+        assert v["fires"] and v["dir"] == dr and v["delta_pp"] == dpp and v["n"] == 7
+        cd = eng.cohort_data(st)                                            # it IS the survival of those installs
+        i0 = (date.fromisoformat(v["recent"]["from"]) - cd["hs"]).days
+        i1 = (date.fromisoformat(v["recent"]["to"]) - cd["hs"]).days
+        assert eng.survival(cd, 7, i0, i1)["left"][7] == v["recent"]["left"]
+
+
+def test_verdict_small_gaps_and_tiny_apps_stay_jaisa():
+    since = END - timedelta(days=41)
+    v = evaluate(make_store(120, 1000, bump=lambda c: {2: 10} if c >= since else None))[0]["survival"]["verdict"]
+    assert not v["fires"] and v["dir"] is None and v["delta_pp"] == -1.0    # 1 of 100: under MIN_PP
+    v = evaluate(make_store(120, 5, bump=lambda c: {2: 200} if c >= since else None))[0]["survival"]["verdict"]
+    assert v["low_sample"] and not v["fires"] and v["dir"] is None           # 140 installs a month: no verdict
+
+
+def test_verdict_one_big_campaign_day_is_not_a_change_on_a_big_app():
+    # 1,000 installs a day, and ONE campaign day of 20,000 installs of which 8 more per 100 leave on day 2: pooled,
+    # the newest 4 weeks keep ~3 fewer of 100 (big + significant) — but it is one install day, not the app
+    camp = END - timedelta(days=25)                                          # inside the newest settled 4 weeks
+    st = make_store(120, lambda c: 20000 if c == camp else 1000, bump=lambda c: {2: 80} if c == camp else None)
+    v = evaluate(st)[0]["survival"]["verdict"]
+    assert v["n"] == 7 and v["delta_pp"] <= -3 and abs(v["z"]) >= eng.Z_MIN
+    assert not v["fires"] and v["dir"] is None
+    # the same gap on EVERY install day of the window is a change
+    since = END - timedelta(days=41)
+    v = evaluate(make_store(120, 1000, bump=lambda c: {2: 35} if c >= since else None))[0]["survival"]["verdict"]
+    assert v["fires"] and v["dir"] == "worse"
+
+
+def test_verdict_breadth_scales_with_the_window_and_one_outlier_rarely_carries_it():
+    # noisy big app (±8 per 1,000 on day 2, every install day) + one campaign day: 4 of 28 days on the moved side
+    # happen by chance on almost every seed; the scaled rule (16 of 28) and the leave-one-out gap don't
+    fired = 0
+    for seed in range(12):
+        rnd, noise, camp = random.Random(seed), {}, END - timedelta(days=25)
+
+        def bump(c, rnd=rnd, noise=noise, camp=camp):
+            b = noise.setdefault(c, rnd.gauss(0, 8))
+            return {2: b + (80 if c == camp else 0)}
+        st = make_store(120, lambda c, camp=camp: 20000 if c == camp else 1000, bump=bump)
+        fired += eng.verdict(eng.cohort_data(st), 7)["fires"]
+    assert fired <= 1
+
+
+def test_verdict_on_a_young_app_uses_an_earlier_day_then_waits():
+    assert evaluate(make_store(56, 1000))[0]["survival"]["verdict"]["n"] == 7
+    assert evaluate(make_store(52, 1000))[0]["survival"]["verdict"]["n"] == 3
+    assert evaluate(make_store(45, 1000))[0]["survival"]["verdict"] is None
+
+
+def test_key_days_are_at_most_4_shown_days_enough_installs_reached():
+    assert evaluate(make_store(200, 1000))[0]["survival"]["key_days"] == [1, 7, 30, 90]
+    young = evaluate(make_store(20, 1000))[0]
+    assert young["stage"] == "naya" and young["survival"]["key_days"] == [0, 1, 3]    # day 7 is "kam data" yet
+    curve = {"left": [0.5] * 100, "thin_from": None}
+    assert eng.key_days(curve, [0, 1, 3, 14, 30]) == [0, 1, 3, 30]          # only days the app shows
+    assert eng.key_days(dict(curve, thin_from=20), list(range(100))) == [0, 1, 3, 7]
+    # a tiny app: its whole curve is "kam data" — the summary still says it (the page marks it), never hides it
+    assert eng.key_days(dict(curve, thin_from=0), [0, 1, 3, 7, 14, 30, 60, 90]) == [1, 7, 30, 90]
+    assert eng.key_days({"left": [], "thin_from": None}, [0, 1, 7]) == []
+    tiny = evaluate(make_store(150, 1))[0]["survival"]                      # 1 install a day: under 300 in all
+    assert tiny["all"]["thin_from"] == 0 and tiny["key_days"] == [1, 7, 30, 90]
+
+
+def test_uninstalls_past_the_users_left_are_listed_even_when_none_are_left():
+    # GA4 counts are approximate: an install day of 2 users with 3 uninstalls (2 on day 3, 1 more on day 5) —
+    # on day 5 nobody is left (r = 0) yet GA4 says 1 left: the curve says "all gone" and lists the day
+    st = make_store(40, 1000)
+    hs = date.fromisoformat(st["history_start"])
+    st["daily"][hs.isoformat()]["new"], st["cohorts"][hs.isoformat()] = 2, {"3": 2, "5": 1}
+    for i in range(1, 40):                                                   # every other install day: gone on day 0
+        st["cohorts"][(hs + timedelta(days=i)).isoformat()] = {"0": 1000}
+    s = eng.survival(eng.cohort_data(st), 7)
+    assert s["r"][5] <= 0 and s["x"][5] == 1
+    assert s["left"][5] == 0 and 5 in s["clipped"]
+
+
+def test_triangle_4_week_average_is_the_newest_settled_full_weeks():
+    st = make_store(100, lambda c: 1000 + (c.toordinal() % 5) * 10)
+    cd = eng.cohort_data(st)
+    cols = [0, 1, 7, 30]
+    tri = eng.triangle(cd, cols, late=7)
+    s = eng.survival(cd, 7)
+    S = END - timedelta(days=7)
+    for N, av, rf, ru in zip(cols, tri["avg4"], tri["ref"], tri["ref_users"]):
+        a, b = date.fromisoformat(av["from"]), date.fromisoformat(av["to"])
+        assert a.weekday() == 0 and b.weekday() == 6 and (b - a).days == 27
+        assert b + timedelta(days=N) <= S < b + timedelta(days=7 + N)     # the NEWEST full weeks settled for N
+        i0, i1 = (a - cd["hs"]).days, (b - cd["hs"]).days
+        x = sum(cd["cum"][i][N] for i in range(i0, i1 + 1))
+        assert av["p"] == round(x / sum(cd["n"][i0:i1 + 1]), 5) and av["users"] == sum(cd["n"][i0:i1 + 1])
+        assert rf == round(1 - s["left"][N], 5) and ru == s["n"][N]        # all-time normal = the summary's curve
+    assert eng.triangle(eng.cohort_data(make_store(30, 1000)), [0], late=7)["avg4"] == [None]
+
+
+def test_the_all_time_normal_row_is_the_survival_curve_and_never_goes_down():
+    # older installs: 30 of 100 gone on day 0; the newest 60 days: 70 gone on day 0; nobody leaves later. Pooled
+    # per column, day 90 (only older installs reach it) read 30% gone, day 10 (newer ones mixed in) 40%
+    split = END - timedelta(days=59)
+    st = make_store(210, 1000, lags={}, bump=lambda c: {0: 300} if c < split else {0: 700})
+    cd = eng.cohort_data(st)
+    cols = [0, 10, 30, 90]
+    pooled = [eng._pool(cd, 0, cd["H"] - 1, N) for N in cols]
+    assert pooled[3][0] / pooled[3][1] < pooled[1][0] / pooled[1][1] - 0.05  # the old per-column pooling: it fell
+    tri = eng.triangle(cd, cols, late=7)
+    s = eng.survival(cd, 7)
+    assert tri["ref"] == [round(1 - s["left"][N], 5) for N in cols]
+    assert all(a <= b for a, b in zip(tri["ref"], tri["ref"][1:]))
+    assert eng.triangle(cd, [len(s["left"])], late=7)["ref"] == [None]   # past the curve's last day: no normal
+
+
+def test_the_survival_view_never_feeds_an_alert(monkeypatch):
+    st = make_store(120, 1000, bump=owner_bump(70))
+    d1, r1, s1 = evaluate(st)
+    monkeypatch.setattr(eng, "survival_out", lambda *a, **k: None)
+    d2, r2, s2 = evaluate(st)
+    assert cohort_alerts(d1) and d1["alerts"] == d2["alerts"] and s1 == s2
+    assert d1["table"] == d2["table"] and r1 == r2
