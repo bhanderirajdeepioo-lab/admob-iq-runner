@@ -142,8 +142,15 @@ def main(argv=None):
         _ga4_selfcheck(creds)
     if a.save_secret:
         st = save_github_secret(a.save_secret, creds.refresh_token)
-        print("✅ Saved to GitHub secret %s (%s). The token was never displayed."
-              % (a.save_secret, "created" if st == 201 else "updated"))
+        if a.ga4:
+            # A refresh token only works with the SAME OAuth client that minted it, so store that
+            # client's id/secret next to it — the GA4 fetch then never depends on which client (or
+            # which of its secrets) happens to be in GOOGLE_CLIENT_ID/SECRET for AdMob.
+            save_github_secret("GA4_CLIENT_ID", cid)
+            save_github_secret("GA4_CLIENT_SECRET", csec)
+        print("✅ Saved to GitHub secret %s (%s)%s. The token was never displayed."
+              % (a.save_secret, "created" if st == 201 else "updated",
+                 " + GA4_CLIENT_ID / GA4_CLIENT_SECRET" if a.ga4 else ""))
     else:
         print("\nREFRESH TOKEN (store securely):\n", creds.refresh_token)
 
