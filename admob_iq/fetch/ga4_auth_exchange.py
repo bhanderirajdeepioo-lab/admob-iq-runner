@@ -72,17 +72,19 @@ def main():
         sys.exit("token exchange failed: %s" % err)
     print("::add-mask::" + j["refresh_token"])            # belt and braces: never let it reach the log
     print("::add-mask::" + j.get("access_token", ""))
+    # Save FIRST: the token is valid even if the GA4 APIs aren't enabled yet, so enabling them later
+    # must not force the owner to click Allow again.
+    save_github_secret("GA4_REFRESH_TOKEN", j["refresh_token"], repo=repo, gh_token=gh)
+    save_github_secret("GA4_CLIENT_ID", cid, repo=repo, gh_token=gh)
+    save_github_secret("GA4_CLIENT_SECRET", csec, repo=repo, gh_token=gh)
     try:
         accounts, properties = ga4_visible_counts(j["access_token"])
     except RuntimeError as e:
         msg = str(e)
         hint = "admin_api_disabled" if ("SERVICE_DISABLED" in msg or "has not been used" in msg) else "ga4_check_failed"
-        _put_private_file("ga4/auth_status.json", json.dumps({"ok": False, "error": hint, "detail": msg[:300]}),
-                          "ga4 auth: check failed")
-        sys.exit("GA4 check failed: %s (details in the private repo)" % hint)
-    save_github_secret("GA4_REFRESH_TOKEN", j["refresh_token"], repo=repo, gh_token=gh)
-    save_github_secret("GA4_CLIENT_ID", cid, repo=repo, gh_token=gh)
-    save_github_secret("GA4_CLIENT_SECRET", csec, repo=repo, gh_token=gh)
+        _put_private_file("ga4/auth_status.json", json.dumps({"ok": False, "token_saved": True, "error": hint,
+                          "detail": msg[:300]}), "ga4 auth: token saved, check failed")
+        sys.exit("GA4 token saved, but the check failed: %s (details in the private repo)" % hint)
     _put_private_file("ga4/auth_status.json", json.dumps({
         "ok": True, "accounts": accounts, "properties": properties,
         "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}), "ga4 auth: ok")
