@@ -14,6 +14,7 @@ failure is recorded in the report instead of stopping the run. Nothing here prin
 names and numbers must never reach the (public) Actions log.
 """
 
+import json
 import time
 from datetime import datetime, timedelta
 
@@ -36,6 +37,22 @@ def access_token(client_id, client_secret, refresh_token):
     """Same OAuth refresh as the Google Ads fetch (returns the bearer token string)."""
     from .google_ads import _access_token
     return _access_token(client_id, client_secret, refresh_token)
+
+
+def parse_token_map(raw):
+    """GA4_REFRESH_TOKENS secret — JSON {owner email: refresh_token} — → (map, problems).
+    Missing/empty → ({}, 0); unparseable or not a JSON object → ({}, 1). A malformed entry (non-string
+    or empty token) is dropped and counted on its own: one bad value never costs the rest of the map."""
+    if not (raw or "").strip():
+        return {}, 0
+    try:
+        m = json.loads(raw)
+    except ValueError:
+        return {}, 1
+    if not isinstance(m, dict):
+        return {}, 1
+    out = {str(k).strip(): v.strip() for k, v in m.items() if isinstance(v, str) and v.strip() and str(k).strip()}
+    return out, len(m) - len(out)
 
 
 def _err(r):
