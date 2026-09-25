@@ -26,3 +26,8 @@ __pycache__/
 
 # local python env for one-time helpers (authorize --ga4)
 .venv/
+
+# private-repo clone + GA4 probe output (workflow runtime only — never commit)
+/_private/
+/ga4/
+/ga4_out/
