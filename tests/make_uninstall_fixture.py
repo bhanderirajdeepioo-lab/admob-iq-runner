@@ -13,6 +13,9 @@ re-reads measure that lateness ("lateness" in the asset), and no good news is re
 
 The apps cover what the tab has to show:
   * Demo Caller – Test App  big + stable, a new version (zoom), D1 uninstall rising  → watch (sent 21 Sep, "kaccha")
+                            installs of 7–19 Mar left more 2 months later           → D180 moved: old installs, so
+                                                                                       info only ("Purane badlaav"),
+                                                                                       never an alert
                                                                                        — ONE alert while it
                                                                                        lasts, though its newest
                                                                                        installs still read low;
@@ -35,7 +38,10 @@ The apps cover what the tab has to show:
   * Demo Wallpapers         a day with no app_remove at all (14 Sep)                 → tracking watch once that
                                                                                        day is settled, NO false
                                                                                        "good news", and the
-                                                                                       D-rows it touches say so
+                                                                                       D-rows it touches say so;
+                            ~10 months of a few TEST installs before its launch      → launch 16 Jun 2026 found:
+                            (from 20 Aug 2025)                                         the test installs hidden
+                                                                                       by default ("dikhao"), kept
   * no GA4: no package / no stream / a stream that errors / an app added today whose fetch was deferred /
     a second AdMob app for the Caller's Play package (fetched and alerted once, under the Caller)
 """
@@ -100,7 +106,8 @@ def truths():
 
     t = {
         "200000001": Truth(d(239), E, lambda c: int(5000 * wave(c)), lags=BIG_LAGS, old_per_day=400, noise=0.03,
-                           bump=lambda c: {1: 60} if c >= date(2026, 9, 11) else None,
+                           bump=lambda c: ({1: 60} if c >= date(2026, 9, 11)
+                                           else {60: 70} if d(199) <= c <= d(187) else None),
                            upd=lambda c: 12000 if c == date(2026, 9, 10) else 800, versions=big_versions, seed=1),
         "200000002": Truth(d(74), E, lambda c: int(400 * wave(c)), noise=0.05, old_per_day=20, seed=2,
                            bump=lambda c: {0: -100, 1: 20} if c >= date(2026, 8, 25) else None),
@@ -119,6 +126,16 @@ def truths():
     z = t["200000007"]
     z.cells = {k: v for k, v in z.cells.items() if k[1] != gap}
     z.old[gap] = 0
+    t0 = E - timedelta(days=399)                                         # test installs long before the launch:
+    for i in range((z.start - t0).days):                                 # 0–2 a day on a few testers' phones
+        c = t0 + timedelta(days=i)
+        k = (c.toordinal() * 37) % 11
+        z.new[c] = 2 if k == 0 else 1 if k < 4 else 0
+        z.old[c], z.upd[c], z.a1[c], z.a28[c] = 0, 0, z.new[c] + 3, 6
+        z.vers[c] = {"1.0": z.a1[c]}
+        if z.new[c] and i % 3 == 0:
+            z.cells[(c, c + timedelta(days=2))] = 1                      # a tester removed it 2 days later
+    z.start = t0
     t["200000006"].short_day = {date(2026, 9, 3): 0.6}                  # cells short at ANY range: incomplete
     caller = t["200000001"]                                              # install-day USERS kept 150 days only
     caller.users_day = lambda day: 1.0 if (caller.asof - day).days <= 150 else 0.04

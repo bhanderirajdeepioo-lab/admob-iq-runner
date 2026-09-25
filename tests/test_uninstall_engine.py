@@ -890,21 +890,36 @@ def test_uninstalls_past_the_users_left_are_listed_even_when_none_are_left():
     assert s["left"][5] == 0 and 5 in s["clipped"]
 
 
-def test_triangle_4_week_average_is_the_newest_settled_full_weeks():
-    st = make_store(100, lambda c: 1000 + (c.toordinal() % 5) * 10)
+def test_triangle_4_week_average_is_one_fixed_set_of_weeks_and_never_goes_down():
+    # the owner saw "80% at 10 din, 73% at 11 din": each column pooled its OWN newest weeks, so a later column held
+    # older installs. Here the newest 6 weeks lose 70 of 100 on day 0, older ones 30 (and 1 a day for 2 weeks)
+    split = END - timedelta(days=41)
+    older = {0: 300, **{k: 10 for k in range(1, 15)}}
+    st = make_store(120, 1000, lags={}, bump=lambda c: {0: 700} if c >= split else older)
     cd = eng.cohort_data(st)
-    cols = [0, 1, 7, 30]
+    cols = list(range(15))
+    old_style = []                                                        # the old rule, per column
+    for N in cols:
+        last = END - timedelta(days=7 + N)
+        b = last - timedelta(days=(last.weekday() + 1) % 7)
+        x, n, _ = eng._pool(cd, (b - timedelta(days=27) - cd["hs"]).days, (b - cd["hs"]).days, N)
+        old_style.append(x / n)
+    assert any(y < x - 0.05 for x, y in zip(old_style, old_style[1:]))  # it DID go down
     tri = eng.triangle(cd, cols, late=7)
-    s = eng.survival(cd, 7)
-    S = END - timedelta(days=7)
-    for N, av, rf, ru in zip(cols, tri["avg4"], tri["ref"], tri["ref_users"]):
-        a, b = date.fromisoformat(av["from"]), date.fromisoformat(av["to"])
-        assert a.weekday() == 0 and b.weekday() == 6 and (b - a).days == 27
-        assert b + timedelta(days=N) <= S < b + timedelta(days=7 + N)     # the NEWEST full weeks settled for N
-        i0, i1 = (a - cd["hs"]).days, (b - cd["hs"]).days
+    S = END - timedelta(days=7)                                            # Sat 12 Sep: settled till here
+    b = S - timedelta(days=(S.weekday() + 1) % 7)                          # Sun 6 Sep: the newest settled full week
+    a = b - timedelta(days=27)
+    assert (a.weekday(), b.weekday()) == (0, 6)
+    i0, i1 = (a - cd["hs"]).days, (b - cd["hs"]).days
+    for N, av in zip(cols, tri["avg4"]):
+        if b + timedelta(days=N) > END:                                   # not every one of those weeks reached it
+            assert av is None
+            continue
         x = sum(cd["cum"][i][N] for i in range(i0, i1 + 1))
-        assert av["p"] == round(x / sum(cd["n"][i0:i1 + 1]), 5) and av["users"] == sum(cd["n"][i0:i1 + 1])
-        assert rf == round(1 - s["left"][N], 5) and ru == s["n"][N]        # all-time normal = the summary's curve
+        assert (av["from"], av["to"], av["users"]) == (a.isoformat(), b.isoformat(), 28000)   # ONE set of installs
+        assert av["p"] == round(x / 28000, 5) and av["prov"] == (b + timedelta(days=N) > S)
+    got = [av["p"] for av in tri["avg4"] if av]
+    assert len(got) == (END - b).days + 1 and got == sorted(got)            # 0..13 din, never down
     assert eng.triangle(eng.cohort_data(make_store(30, 1000)), [0], late=7)["avg4"] == [None]
 
 
@@ -952,3 +967,225 @@ def test_events_scaled_days_are_used_everywhere_and_only_counted():
     assert f["survival"]["all"]["n"][0] < d["survival"]["all"]["n"][0]
     assert f["flags"]["cell_days"] == {"users": 200 - len(old), "events": 0, "incomplete": len(old)}
     assert f["flags"]["events_span"] is None
+
+
+# ── launch: months of a few test installs before the app went live are hidden, never dropped ──────────
+
+def _trickle(days, seed=5, choices=(0, 0, 1, 1, 2, 3)):
+    rnd = random.Random(seed)
+    return [rnd.choice(choices) for _ in range(days)]
+
+
+def test_launch_is_found_after_a_long_test_trickle():
+    # ~1.2 test installs a day for 500 days, then the real launch (300, 600, … up to 3,000 a day)
+    n = _trickle(500) + [min(3000, 300 * (k + 1)) for k in range(200)]
+    assert eng.launch_day(n) == 500
+    n[493:496] = [9, 0, 12]                                   # a couple of tester days just before: still not it
+    assert eng.launch_day(n) == 500
+    assert eng.launch_day([0] * 30) == 0                      # no installs at all
+    assert eng.launch_day([0] * 10 + [100] * 100) == 10      # empty days before the first install
+
+
+def test_a_slow_ramp_keeps_its_first_days():
+    # 2 test installs a day for 300 days, then 10 a day growing 5% a day to 3,000: the early ramp (10–60 a day,
+    # far under 2% of the app's scale) is real — the launch is its first day
+    n = [2] * 300 + [min(3000, int(10 * 1.05 ** k)) for k in range(200)]
+    assert eng.launch_day(n) == 300
+
+
+def test_a_tiny_app_hides_nothing():
+    # 0–3 installs a day from its first day: test and real can't be told apart — nothing hidden
+    n = [0] * 3 + _trickle(400, seed=9)
+    first = next(i for i, v in enumerate(n) if v)
+    assert eng.launch_day(n) == first
+    n = _trickle(400, seed=11, choices=(0, 0, 0, 1))
+    assert eng.launch_day(n) == next(i for i, v in enumerate(n) if v)
+    assert eng.launch_day([1] + [0] * 6) == 0                  # too young to judge
+
+
+def test_a_relaunch_after_a_pause_keeps_the_first_launch():
+    # test trickle, a real launch (500 a day, 4 months), 2 months pulled from the store, relaunched (600 a day)
+    n = [1, 0] * 50 + [500] * 120 + [0, 1, 0] * 20 + [600] * 100
+    assert eng.launch_day(n) == 100
+
+
+def test_a_smaller_real_era_before_a_big_one_is_never_hidden():
+    # 200 a day for 300 days, then a viral 20,000 (or 100,000) a day: real users, not a test trickle
+    assert eng.launch_day([200] * 300 + [20000] * 60) == 0
+    assert eng.launch_day([200] * 300 + [100000] * 60) == 0
+    assert eng.launch_day([15] * 300 + [20000] * 60) == 0   # 15 a day for 10 months: more than testers install
+    # a modest app launched 100 days ago after 600 days of 2 test installs a day (2.3% of all its installs): hidden
+    assert eng.launch_day([2] * 600 + [500] * 100) == 600
+
+
+def test_the_tab_counts_from_the_launch_and_keeps_every_test_install():
+    launch = END - timedelta(days=150)
+    trickle = dict(zip((END - timedelta(days=699 - i) for i in range(550)), _trickle(550)))
+    st = make_store(700, lambda c: trickle[c] if c < launch else 1000)
+    d, row, _ = evaluate(st)
+    L, sv, tri = d["launch"], d["survival"], d["triangle"]
+    pre = sum(trickle.values())
+    assert L == {"day": launch.isoformat(), "hidden": True, "pre_installs": pre, "installs": 151 * 1000,
+                 "pre_uninstalls": L["pre_uninstalls"], "sure": True} and 0 < L["pre_uninstalls"] <= pre
+    assert d["history_start"] == st["history_start"] and len(d["daily"]["new"]) == 700      # every day kept
+    assert sum(d["daily"]["new"]) == pre + 151 * 1000
+    assert sv["all"]["from"] == launch.isoformat() and sv["all"]["installs"] == 151 * 1000   # the curves: from launch
+    assert sv["with_test"]["from"] == st["history_start"] and sv["with_test"]["installs"] == 151 * 1000 + pre
+    assert d["nmax"] == 151 - 7 and len(d["curve"]["p"]) == 151 and d["stage"] != "naya"
+    assert d["lifetime"]["users"] == 151 * 1000
+    post = [r for r in tri["rows"] if not r["pre"]]
+    assert post[-1]["from"] == launch.isoformat() and sum(r["days"] for r in post) == 151
+    assert sum(r["users"] for r in tri["rows"] if r["pre"]) == pre and tri["rows"][-1]["from"] == st["history_start"]
+    assert sum(r["days"] for r in tri["rows"]) == 700 and all(r["pre"] for r in tri["rows"][len(post):])
+    first = [i for i, b in enumerate(eng.daily_series(st, late=7, first=550)["base"]) if b]
+    assert first[0] == 550                                   # no normal band from the test days
+    plain, _, _ = evaluate(make_store(151, 1000, end=END))  # the same app without its test days: same numbers
+    for k in ("table", "head4", "curve", "checkpoints", "stage"):
+        assert d[k] == plain[k], k
+    assert d["survival"]["all"]["left"] == plain["survival"]["all"]["left"]
+    nothing = evaluate(make_store(200, 1000))[0]["launch"]
+    assert nothing == {"day": (END - timedelta(days=199)).isoformat(), "hidden": False, "pre_installs": 0,
+                       "pre_uninstalls": 0, "installs": 200000, "sure": True}
+
+
+def test_the_summary_counts_the_days_its_numbers_come_from():
+    st = make_store(120, 1000)
+    bad = [(END - timedelta(days=k)).isoformat() for k in (20, 40, 41)]
+    st["flags"]["incomplete_days"] = {k: 0.3 for k in bad}
+    c = evaluate(st)[0]["survival"]["all"]
+    assert c["gap_days"] == 3 and c["k"][0] == 120 - 7 - 3 and c["installs"] == 120000
+
+
+# ── alerts are about recent installs; far-day changes in old installs are information only ──────────
+
+OLD_BAD = lambda c: END - timedelta(days=343) <= c <= END - timedelta(days=330)       # noqa: E731
+
+
+def test_a_change_in_old_installs_is_info_never_an_alert():
+    # a big stable app: installs of ~11 months ago left more on day 0 — it moves the D330 checkpoint today
+    st = make_store(420, 1000, bump=lambda c: {0: 40} if OLD_BAD(c) else None)
+    d, _, _ = evaluate(st)
+    assert 330 in d["checkpoints"] and not cohort_alerts(d)
+    old = d["old_changes"]
+    assert old and {o["checkpoint"] for o in old} == {"D330"} and old[0]["dir"] == "up"
+    assert old[0]["installs_to"] == (END - timedelta(days=337)).isoformat()             # settled data
+    assert old[0]["text"].startswith("D330 uninstall ") and "Oct 2025 ke installs" in old[0]["text"]
+    sent, state = run_daily(st, END - timedelta(days=3), END)
+    assert not [x for x in sent if x[2] == "cohort"] and not state.get("episodes")
+    # the same change in RECENT installs is an alert
+    st = make_store(420, 1000, bump=lambda c: {0: 40} if c >= END - timedelta(days=10) else None)
+    d, _, _ = evaluate(st)
+    al = cohort_alerts(d)
+    assert al and al[0]["installs_to"] >= (END - timedelta(days=10)).isoformat() and not d["old_changes"]
+
+
+def test_an_open_alert_about_old_installs_closes_at_once_and_is_never_sent():
+    state = {}
+    far = dict(_cond(), installs_from="2025-10-22", installs_to="2025-10-28", checkpoint="D330", n=330, ns=[330])
+    eng.update_episodes(state, AID, END, [far], True, False, NOW)            # what an older build left open
+    assert state["episodes"]
+    d, _, _ = evaluate(make_store(420, 1000), state=state)
+    assert not d["alerts"] and not state["episodes"]
+    gone = d["alerts_closed"][0]
+    assert gone["installs_to"] == "2025-10-28" and gone["notify"] is False and gone["closed"] == END.isoformat()
+    assert "22–28 Oct 2025 ke installs" in gone["text"]
+
+
+def test_a_date_says_its_year_when_it_isnt_obvious():
+    ref = SEP(19)
+    assert eng.fmt_span(SEP(12), SEP(18), ref) == "12–18 Sep"
+    assert eng.fmt_span(date(2026, 3, 16), date(2026, 3, 22), ref) == "16–22 Mar 2026"      # 6 months back
+    assert eng.fmt_span(date(2025, 10, 22), date(2025, 10, 28), ref) == "22–28 Oct 2025"    # last year
+    assert eng.fmt_span(date(2025, 12, 29), date(2026, 1, 4), ref) == "29 Dec 2025–4 Jan 2026"
+    # across a year: BOTH ends say theirs — "29 Dec 2025–4 Jan" / "20 Aug 2025–16 Sep" read as one month
+    assert eng.fmt_span(date(2025, 12, 29), date(2026, 1, 4), date(2026, 1, 20)) == "29 Dec 2025–4 Jan 2026"
+    assert eng.fmt_span(date(2025, 8, 20), SEP(16), ref) == "20 Aug 2025–16 Sep 2026"
+    assert eng.fmt_span(date(2026, 5, 28), date(2026, 6, 3), ref) == "28 May–3 Jun"             # ≤ 4 months
+    assert eng.fmt_span(date(2026, 5, 14), date(2026, 6, 3), ref) == "14 May–3 Jun 2026"
+    assert eng.fmt_day(date(2026, 6, 1), ref) == "1 Jun" and eng.fmt_day(date(2026, 5, 1), ref) == "1 May 2026"
+    assert eng.fmt_day(date(2026, 12, 25), date(2027, 1, 5)) == "25 Dec 2026"                # across new year
+    assert eng.fmt_span(SEP(12), SEP(18)) == "12–18 Sep"                                     # no ref: as before
+
+
+# ── launch: every app's size — small and mid apps, tester bursts, closed tests (review of the launch rule) ─────────
+
+def test_a_small_or_mid_app_hides_its_test_trickle_too():
+    # the owner's case at every size: 600 days of ~1.5 test installs a day, then a real launch at 40 / 100 / 200 a day
+    # (a trickle is never "live" — not even where it is 4% of the app's day)
+    for per_day in (40, 100, 200):
+        assert eng.launch_day([1, 2] * 300 + [per_day] * 365) == 600, per_day
+    assert eng.launch_day([1, 2] * 300 + [200] * 200) == 600
+    rnd = random.Random(7)                                   # the same with day-to-day noise
+    n = [1 if rnd.random() < 0.5 else 2 for _ in range(600)] + [rnd.randint(30, 50) for _ in range(365)]
+    assert eng.launch_day(n) == 600
+    # still never a tiny app's own weeks, and never a smaller REAL era (17% of all installs here)
+    assert eng.launch_day([1, 2] * 300 + [12] * 365) == 0
+
+
+def test_a_tester_burst_long_before_the_launch_is_hidden_with_the_trickle():
+    rnd = random.Random(4)
+    trickle = lambda k, p: [1 if rnd.random() < p else 0 for _ in range(k)]           # noqa: E731
+    for burst in ((3, 5), (25, 35)):                        # 3 weeks of testers, small or big, then quiet again
+        n = trickle(300, 0.3) + [rnd.randint(*burst) for _ in range(21)] + trickle(100, 0.4) + \
+            [rnd.randint(60, 100) for _ in range(300)]
+        assert eng.launch_day(n) == 421, burst
+    # a closed test right before the launch (3 weeks at ~30 a day, then the real launch): hidden too
+    n = trickle(600, 0.8) + [rnd.randint(25, 35) for _ in range(21)] + [rnd.randint(20000, 40000) for _ in range(300)]
+    assert eng.launch_day(n) == 621
+    # … but a fast ramp keeps its first day, and a relaunch after a pause keeps the first launch
+    assert eng.launch_day([1, 2] * 150 + [min(20000, int(10 * 2 ** (k / 2))) for k in range(120)]) == 300
+    assert eng.launch_day([1, 0] * 50 + [500] * 120 + [0, 1, 0] * 20 + [600] * 100) == 100
+
+
+def test_hidden_installs_more_than_a_trickle_are_only_maybe_test():
+    whole = eng.cohort_data(make_store(500, lambda c: 8 if c < END - timedelta(days=99) else 2000))
+    L = eng.launch_day(whole["n"])
+    assert L == 400
+    assert eng.launch_out(whole, L, L)["sure"] is False     # 8 a day: could be early real users — "shayad test"
+    whole = eng.cohort_data(make_store(500, lambda c: 2 if c < END - timedelta(days=99) else 2000))
+    assert eng.launch_out(whole, 400, 400)["sure"] is True
+
+
+def test_an_alert_is_never_about_installs_older_than_the_recent_window_even_judged_again():
+    # the D60 row's install days end exactly at the 60-day edge; its newest 2 were alerted on before (claimed), so it is
+    # judged again on the 5 before — which end 62 days back: old news, never an alert (it would close the next day)
+    iso = lambda k: (END - timedelta(days=k)).isoformat()                               # noqa: E731
+    bad = lambda c: END - timedelta(days=66) <= c <= END - timedelta(days=60)          # noqa: E731
+    st = make_store(420, 1000, bump=lambda c: {0: 30} if bad(c) else None)
+    state = {"eval": {AID: {"end": iso(1), "stage": "stable", "stable_hold": 9, "streak": {"cohort|up": 3},
+                            "since": {"cohort|up": iso(4)}, "claimed": {"up": [[iso(61), iso(60)]]}}}}
+    cd = eng.cohort_data(st)
+    fresh = eng.compare(cd, 60, skip=eng._claimed(cd, [[iso(61), iso(60)]]))
+    assert eng._fires(fresh, "up") and fresh["recent"]["to"] == iso(62)                 # what it would have said
+    d, _, _ = evaluate(st, state=state)
+    assert 60 in d["checkpoints"] and not cohort_alerts(d) and not state.get("episodes")
+
+
+def test_the_triangle_names_its_4_week_set_even_where_no_column_reaches_it():
+    tri = eng.triangle(eng.cohort_data(make_store(120, 1000)), [0, 40, 60], late=7)
+    S = END - timedelta(days=7)
+    b = S - timedelta(days=(S.weekday() + 1) % 7)
+    assert tri["avg4"][1:] == [None, None]                                              # 40, 60 din: not reached yet
+    assert tri["avg4_set"] == {"from": (b - timedelta(days=27)).isoformat(), "to": b.isoformat(), "users": 28000}
+    assert (tri["avg4"][0]["from"], tri["avg4"][0]["to"]) == (tri["avg4_set"]["from"], tri["avg4_set"]["to"])
+    assert eng.triangle(eng.cohort_data(make_store(30, 1000)), [0], late=7)["avg4_set"] is None
+
+
+def test_an_old_install_change_names_the_weeks_it_is_compared_with():
+    st = make_store(420, 1000, bump=lambda c: {0: 40} if OLD_BAD(c) else None)
+    o = evaluate(st)[0]["old_changes"][0]
+    assert "pichhle 4 hafte" not in o["text"]
+    assert ("usse pehle ke 4 hafte (%s)" % eng.fmt_span(o["base_from"], o["base_to"], END)) in o["text"]
+    assert re.search(r"Oct 2025 ke installs, usse pehle ke 4 hafte \(\d+ \w+–\d+ \w+ 2025\)", o["text"])
+
+
+def test_the_summary_names_the_days_it_leaves_out_by_kind():
+    st = make_store(120, 1000)
+    inc = [(END - timedelta(days=k)).isoformat() for k in (40, 20)]
+    st["flags"]["incomplete_days"] = {k: 0.3 for k in inc}
+    gap = END - timedelta(days=30)                                                   # a tracking break: 0 uninstalls
+    st["cohorts"] = {c: {k: v for k, v in cells.items() if date.fromisoformat(c) + timedelta(days=int(k)) != gap}
+                     for c, cells in st["cohorts"].items()}
+    st["daily"][gap.isoformat()]["un"] = 0
+    c = evaluate(st)[0]["survival"]["all"]
+    assert c["gap_inc"] == sorted(inc) and c["gap_brk"] == [gap.isoformat()] and c["gap_days"] == 3

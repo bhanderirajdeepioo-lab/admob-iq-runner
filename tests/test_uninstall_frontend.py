@@ -51,6 +51,12 @@ def day(N):
     return "usi din" if N == 0 else "1 din baad" if N == 1 else "%d din baad" % N
 
 
+def day_txt(iso):
+    """The page's date (uniD) for a day of the fixture's own recent months: "14 Sep"."""
+    m = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    return "%d %s" % (int(iso[8:]), m[int(iso[5:7]) - 1])
+
+
 def test_every_uninstall_state_renders_without_errors(report):
     assert report["errors"] == [] and report["bad"] == []
     assert report["scenarios"] >= 70
@@ -138,3 +144,116 @@ def test_the_curve_labels_the_summarys_days_and_its_phone_tooltip_is_readable(re
 
 def test_the_summary_and_the_curve_name_the_same_installs(report):
     assert report["span_bad"] == []
+
+
+def test_an_apps_detail_puts_its_name_in_the_header_and_back_clears_it(report):
+    h = report["header"]
+    assert h["app"] == h["name"] and h["uniapp"] == h["id"] and h["calls"] == ["render", "show"]
+    assert '<option value="%s" selected>' % h["name"] in h["sel"]                     # the header's App selector
+    assert h["screen"].startswith('<span class="backlnk" onclick="uniBack()">← Saari apps</span>')
+    assert h["after"]["app"] == "" and h["after"]["uniapp"] == ""
+    assert h["after"]["sel"] == '<option value="">All apps (0)</option>' and "Uninstall" in h["after"]["screen"]
+    assert not any("✕ Saari apps dikhao" in v for k, v in report["texts"].items() if k != "overview_no_admob")
+
+
+def test_the_totals_line_says_every_install_since_the_launch_and_where_the_bache_numbers_come_from(report, fixture):
+    for a in fixture["asset"]["apps"]:
+        t, c, L = report["totals"][a["app"]], a["survival"]["all"], a["launch"]
+        head = ("Launch (%s)" if L["hidden"] else "GA4 data shuru (%s)") % t["day"]
+        want = "%s se ab tak %s installs" % (head, t["installs"])
+        if c["k"]:
+            want += ' · "100 me se kitne bache" %d din ke installs se' % c["k"][0]
+            gone = ["%s ka data %s" % (", ".join(day_txt(d) for d in L_), w) for L_, w in
+                    ((c["gap_inc"], "adhoora"), (c["gap_brk"], "gayab")) if L_]
+            if gone:
+                want += " (%s — %s is ginti me nahi)" % (", ".join(gone), "ye din" if c["gap_days"] > 1 else "woh din")
+        assert t["line"] == want, a["app"]
+    tx = report["texts"]                                    # a tracking break is "gayab", an incomplete day "adhoora"
+    assert "(14 Sep ka data gayab — woh din is ginti me nahi)" in tx["detail|Demo Wallpapers|all|30|cp|false"]
+    assert "(3 Sep ka data adhoora — woh din is ginti me nahi)" in tx["detail|Demo Launcher|all|30|cp|false"]
+
+
+def test_test_installs_before_the_launch_are_hidden_with_one_line_and_shown_on_a_tap(report, fixture):
+    wall = [a for a in fixture["asset"]["apps"] if a["launch"]["hidden"]]
+    assert [a["app"] for a in wall] == ["Demo Wallpapers"] and wall[0]["launch"]["pre_installs"] > 0
+    L, tx = wall[0]["launch"], report["texts"]
+    line = "🧪 Launch (16 Jun) se pehle ke %d test installs chhupaye · dikhao" % L["pre_installs"]
+    assert line in tx["detail|Demo Wallpapers|all|30|cp|false"]
+    assert not any("test installs chhupaye" in v for k, v in tx.items()
+                   if "Wallpapers" not in k and k not in ("no_verdict_young_launch", "maybe_test"))
+    for k in ("detail|Demo Wallpapers|all|30|cp|false", "detail|Demo Wallpapers|all|90|all|true"):
+        assert "· test" not in tx[k] and "Launch (16 Jun) se ab tak" in tx[k]           # hidden by default
+    for m in ("cp", "all"):
+        t = tx["pre|Demo Wallpapers|" + m]
+        assert "test installs bhi dikh rahe · chhupao" in t and "🧪 Test installs (launch 16 Jun se pehle)" in t
+        assert "installs · test" in t and "── 2025 ──" in t and "── 2026 ──" in t        # the test weeks + their year
+        assert "0 installs · test" not in t                                               # an empty test week: not a row
+        assert "GA4 data shuru (20 Aug 2025) se ab tak" in t and "20 Aug 2025–23 Sep 2026 · 400d" in t
+        assert "(launch 16 Jun 2026 se pehle ke test installs bhi)" in t                   # next to a 2025 date: its year
+    assert "(launch 16 Jun se; usse pehle ke test installs nahi)" in tx["detail|Demo Wallpapers|all|30|cp|false"]
+    # more than a trickle a day before the launch: only "shayad test" (could be early real users)
+    m = tx["maybe_test"]
+    assert "se pehle ke %d installs (shayad test) chhupaye · dikhao" % L["pre_installs"] in m
+    assert "🧪 Installs (shayad test) (launch 16 Jun se pehle)" in m and "installs · shayad test" in m
+
+
+def test_every_date_says_its_year_when_it_is_not_obvious(report):
+    tx = report["texts"]
+    cal = tx["detail|Demo Caller – Test App|all|30|cp|false"]
+    assert "Hamesha = 27 Jan–16 Sep 2026 ke saare pakke installs" in cal                 # 8 months back: the year
+    assert "── 2026 ──" in tx["detail|Demo Caller – Test App|all|90|all|true"]         # the triangle's year rows
+    assert "16–22 Sep ke installs" in cal                                                # this month: plain
+    wal = tx["pre|Demo Wallpapers|all"]                                                  # across a year: both years
+    assert "Hamesha = 20 Aug 2025–16 Sep 2026 ke saare pakke installs" in wal and "20 Aug 2025–23 Sep 2026 · 400d" in wal
+    assert "2025–16 Sep ke" not in wal and "2025–23 Sep ·" not in wal
+    assert "29 Dec 2025–4 Jan" in wal                  # a triangle week under its "── 2026 ──" row: the short form
+
+
+def test_old_install_changes_are_info_in_a_collapsed_list_never_counted(report, fixture):
+    tx, lines = report["texts"], report["portfolio_lines"]
+    olds = [(a["app"], o) for a in fixture["asset"]["apps"] for o in a["old_changes"]]
+    assert olds and all(o["checkpoint"] == "D180" for _, o in olds)
+    n_open = len(fixture["dashboard_uninstall"]["alerts"])
+    assert report["plain_kya_badla"] == str(n_open)                                      # not counted in "Kya badla?"
+    assert "Purane installs ke badlaav (%d) dikhao" % len(olds) in tx["portfolio_30d"] and "Mar 2026" not in lines
+    cal_closed = tx["detail|Demo Caller – Test App|all|30|cp|false"]
+    assert "Purane installs ke badlaav (1) dikhao" in cal_closed and "14–20 Mar 2026 ke installs" not in cal_closed
+    assert "Band ho chuke alerts" not in cal_closed                          # none closed: no such list
+    cal_open = tx["detail|Demo Caller – Test App|all|90|all|true"]
+    # March installs are compared with the 4 weeks before THEM — "pichhle 4 hafte" would read as the last 4 weeks
+    assert ("ℹ️ 14–20 Mar 2026 ke installs: 180 din ke andar 58% ne hataya — usse pehle ke 4 hafte (14 Feb–13 Mar "
+            "2026) me 52%") in cal_open
+    assert "60 din se purane installs ke badlaav — sirf jaankari" in cal_open
+    # the full table's 180-din row: the same change — "Purane installs", never "Normal" next to its arrow
+    assert re.search(r"180 din .*? ▲ \+6 point 14–20 Mar 2026 ℹ️ Purane installs 210 din", cal_open)
+
+
+def test_the_header_never_says_all_apps_over_one_apps_detail(report):
+    h = report["header2"]
+    # "All apps" picked in the header (here, or on another tab): the detail closes — the portfolio is shown
+    assert h["all"]["app"] == "" and h["all"]["uniapp"] == "" and h["all"]["sel"] == '<option value="">All apps (0)</option>'
+    assert h["all"]["screen"].startswith('<h2 class="sc">Uninstall</h2><p class="scd">')
+    # another app picked: that app's detail; then "All apps": the portfolio (never the first app's detail again)
+    assert h["other"]["app"] == h["B"] and h["other"]["uniapp"] == "" and "backlnk" in h["other"]["screen"]
+    assert h["back"]["app"] == "" and h["back"]["screen"].startswith('<h2 class="sc">Uninstall</h2><p class="scd">')
+    assert h["stale"]["screen"].startswith('<h2 class="sc">Uninstall</h2><p class="scd">')   # an old saved view
+
+
+def test_overview_says_an_uninstall_only_app_has_no_admob_data(report):
+    t = report["texts"]["overview_no_admob"]
+    assert "Is app ka AdMob (kamai) data nahi — iska sirf GA4 uninstall data hai." in t and "Saari apps dikhao" in t
+    assert "placements" not in t
+
+
+def test_every_har_din_page_names_the_4_weeks_and_no_page_is_only_test_installs(report):
+    t = report["texts"]["tripage1_caller"]
+    assert "4 hafte ka average 17 Aug–13 Sep ke installs abhi itne din tak nahi pahunche" in t
+    assert "Abhi 4 pakke hafte nahi" not in t
+    p = report["pages"]
+    assert p["hid"] == p["want_hid"] < p["all"] == p["want_all"]            # test installs hidden: fewer pages …
+    assert p["last_col"] == p["reach"]                                       # … ending at the day the launch reached
+
+
+def test_no_verdict_for_a_young_app_blames_its_age_not_the_data(report):
+    t = report["texts"]["no_verdict_young_launch"]
+    assert "Pichhle mahine se tulna ~2 mahine ke data ke baad" in t and "adhoora/gayab" not in t

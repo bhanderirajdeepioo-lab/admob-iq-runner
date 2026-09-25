@@ -472,7 +472,14 @@ function appRangeRev(fp,range){ if(range==='today') return fp.reduce((s,p)=>s+(p
   const t=appTrend(fp); if(!t.length) return 0; if(range==='yesterday') return t[t.length-1];
   return t.slice(-(range==='30d'?30:7)).reduce((a,b)=>a+b,0); }
 function appNote(){ return APP ? `<div class="card" style="margin-bottom:14px;border-color:#2b466f"><div class="muted" style="font-size:13px">📱 Filter: <b style="color:#fff">${APP}</b> — ye screen abhi portfolio-wide (saari apps) hai. Sirf is app ka data Overview, Placements, Movers aur Deductions me dikhta hai.</div></div>` : ''; }
-function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; APP=a; render(); show(cur==='reportcard'?'placements':cur); window.scrollTo({top:0}); }
+// the header's App selector: "All apps (N)" + every visible app — and the app in view (APP) even when it has no
+// AdMob row (an Uninstall-tab app), so the header always names the app on screen
+function appSelHtml(){ const _vapps=(DATA.apps||[]).filter(a=>appVisibleByName(a.name));   // hide unselected apps from the filter
+  const opt=n=>`<option value="${hAttr(n)}"${n===APP?' selected':''}>${hAttr(n)}</option>`;
+  return '<option value="">All apps ('+_vapps.length+')</option>'+(APP&&!_vapps.some(a=>a.name===APP)?opt(APP):'')+_vapps.map(a=>opt(a.name)).join(''); }
+function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; APP=a;
+  if(UNIAPP&&uniName(UNIAPP)!==a) UNIAPP='';   // the header left the app whose Uninstall detail was open: close it (never one app under "All apps")
+  render(); show(cur==='reportcard'?'placements':cur); window.scrollTo({top:0}); }
 function searchCountries(q){ q=(q||'').trim().toUpperCase(); document.querySelectorAll('#cty-tbody tr').forEach((r,i)=>{ const n=(r.getAttribute('data-c')||'').toUpperCase(); r.style.display=(q?n.includes(q):i<30)?'':'none'; }); }
 
 // ---- Placement time-window engine (per ad unit, over the raw daily counts each
@@ -538,8 +545,7 @@ function render(){
   const c=DATA.alerts.counts;document.getElementById('nav-alert').textContent=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length)+_uw;
   {const _tb=document.getElementById('tab-alert');if(_tb){const _n=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length)+_uw;_tb.textContent=_n;_tb.classList.toggle('on',_n>0);}}
   const sel=document.getElementById('appsel');
-  const _vapps=(DATA.apps||[]).filter(a=>appVisibleByName(a.name));   // hide unselected apps from the filter
-  if(sel) sel.innerHTML='<option value="">All apps ('+_vapps.length+')</option>'+_vapps.map(a=>`<option value="${a.name}"${a.name===APP?' selected':''}>${a.name}</option>`).join('');
+  if(sel) sel.innerHTML=appSelHtml();
   const rsel=document.getElementById('rangesel'); if(rsel) rsel.value=RANGE;
   const rcust=document.getElementById('rangecustom'); if(rcust) rcust.style.display=(RANGE==='custom'?'inline-flex':'none');
   if(!window.__wired){            // attach static listeners once (survives auto-refresh re-renders)
@@ -635,7 +641,7 @@ function _navRestore(){
   let n=null; try{ n=JSON.parse(localStorage.getItem('navstate')||'null'); }catch(e){}
   if(!n||!n.screen||(n.t&&Date.now()-n.t>12*3600*1000)){ render(); return; }   // none/stale → normal (Overview)
   if(n.app!=null) APP=n.app; if(n.range) RANGE=n.range;
-  if(n.uniapp!=null) UNIAPP=n.uniapp;         // Uninstall tab: the app whose detail was open (set before show('uninstall'))
+  if(n.uniapp!=null) UNIAPP=n.app?n.uniapp:'';   // Uninstall tab: the app whose detail was open — only with its header App
   render();                                  // rebuild every screen with the restored app/period (ends on Overview)
   try{
     if(n.screen==='appdetail' && n.adapp && (DATA.apps||[]).some(a=>a.name===n.adapp)){ openAppDetail(n.adapp); return; }
@@ -696,6 +702,8 @@ function renderDateWise(){
 }
 function renderOverview(){
   const s=screenDiv('overview');const a=DATA.alerts;
+  // an app picked from the Uninstall tab can have no AdMob row: say so — never $0 tiles that read like a revenue drop
+  if(APP&&!(DATA.apps||[]).some(x=>x.name===APP)){ s.innerHTML=`<div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div style="font-size:24px">📱</div><div><div class="big">${hAttr(APP)}</div><div class="muted" style="font-size:12.5px">Is app ka AdMob (kamai) data nahi — iska sirf GA4 uninstall data hai.</div></div><div class="spacer"></div><span class="lnk" onclick="show('uninstall')">Uninstall dekho →</span><span class="lnk" style="margin-left:12px" onclick="setApp('')">✕ Saari apps dikhao</span></div>`; return s; }
   const fp=fPlace();const ap=APP?(DATA.apps.find(x=>x.name===APP)||{}):null;
   const winSet=curWin();const dspan=curWinLabel();
   // portfolio (or app) totals summed from each placement's per-day raw counts over the window
@@ -2471,7 +2479,8 @@ function renderRoas(){
 // (mostly app_remove) for up to ~7 days: days after an app's settled_till are PROVISIONAL — drawn hatched /
 // lighter and called "kaccha", because their numbers can still grow (never shrink).
 let UNI=null, UNILOADING=false, UNIERR=false, UNIVER=null; let UNIAPP=''; let UNISORT={k:'alert',d:-1};
-let UNIDRANGE='90d', UNICSRC='all', UNICRANGE='90', UNITRI='cp', UNITRIPAGE=0, UNITRIEXP=false, UNIOLDEXP=false, UNICPEXP=false;
+let UNIDRANGE='90d', UNICSRC='all', UNICRANGE='90', UNITRI='cp', UNITRIPAGE=0, UNITRIEXP=false, UNIOLDEXP=false, UNICLEXP=false, UNICPEXP=false;
+let UNIPRE=false;   // true = also show the test installs before an app's launch (hidden by default, never dropped)
 let UNICOH={}, UNICOHL={}, UNICOHERR={};
 function loadUNI(cb){ const U=DATA&&DATA.uninstall; if(!U||!U.asset||UNI){cb&&cb();return;} if(UNILOADING)return; UNILOADING=true; UNIERR=false;
   fetchGzJson(U.asset+'?t='+Date.now()).then(j=>{UNI=(j&&typeof j==='object')?j:{apps:[],no_ga4:[]};UNIVER=U.asset_v;UNILOADING=false;cb&&cb();})
@@ -2480,9 +2489,14 @@ function loadUNICOH(key,cb){ if(UNICOH[key]){cb&&cb();return;} if(UNICOHL[key])r
   fetchGzJson('uninstall_c_'+key+'.json.gz?t='+Date.now()).then(j=>{UNICOH[key]=uniCohPrep(j);UNICOHL[key]=false;cb&&cb();})
     .catch(()=>{UNICOHERR[key]=true;UNICOHL[key]=false;cb&&cb();}); }
 function uniRerender(){ const old=document.querySelector('.screen[data-screen=uninstall]'); if(old){const f=renderUninstall(); if(old.classList.contains('on'))f.classList.add('on'); old.replaceWith(f);} }
-function uniOpen(id){ UNIAPP=id; UNITRIPAGE=0; UNITRIEXP=false; UNIOLDEXP=false; UNICPEXP=false; uniRerender(); window.scrollTo({top:0}); _navSave(); }
-function uniBack(){ UNIAPP=''; uniRerender(); window.scrollTo({top:0}); _navSave(); }
-function uniGo(id){ UNIAPP=id; UNITRIPAGE=0; UNITRIEXP=false; UNIOLDEXP=false; UNICPEXP=false; show('uninstall'); uniRerender(); }   // from an Alerts-screen card
+// an app's detail sets the header's App selector to that app (setApp re-renders every screen and stays on this one), so
+// the header never says "All apps" over one app; "← Saari apps" clears both
+function uniName(id){ const x=(((DATA&&DATA.uninstall)||{}).apps||[]).find(z=>z.app_id===id); return x?x.app:''; }
+function uniOpen(id){ UNIAPP=id; UNITRIPAGE=0; UNITRIEXP=false; UNIOLDEXP=false; UNICLEXP=false; UNICPEXP=false; UNIPRE=false;
+  const nm=uniName(id); if(nm&&APP!==nm){ setApp(nm); return; }
+  uniRerender(); window.scrollTo({top:0}); _navSave(); }
+function uniBack(){ UNIAPP=''; UNIOLDEXP=false; UNICLEXP=false; UNIPRE=false; if(APP){ setApp(''); return; } uniRerender(); window.scrollTo({top:0}); _navSave(); }
+function uniGo(id){ show('uninstall'); uniOpen(id); }   // from an Alerts-screen card
 function uniSort(k){ UNISORT=(UNISORT.k===k)?{k,d:-UNISORT.d}:{k,d:(k==='app'?1:-1)}; uniRerender(); }
 function uniDR(v){ UNIDRANGE=v; uniRerender(); }       // daily chart window (local; the top Period only drives the KPI sums)
 function uniCS(v){ UNICSRC=v; uniRerender(); }        // "kitne bache" curve: 'all' hamesha (every install) | 'recent' abhi (last 90 days of installs)
@@ -2491,13 +2505,34 @@ function uniCX(){ UNICPEXP=!UNICPEXP; uniRerender(); } // "Poori table dikhao" (
 function uniTM(v){ UNITRI=v; UNITRIPAGE=0; uniRerender(); }   // triangle: 'cp' khaas din | 'all' har din
 function uniTP(p){ UNITRIPAGE=Math.max(0,p); uniRerender(); }
 function uniTX(){ UNITRIEXP=!UNITRIEXP; uniRerender(); }
-function uniOX(){ UNIOLDEXP=!UNIOLDEXP; uniRerender(); }
+function uniOX(){ UNIOLDEXP=!UNIOLDEXP; uniRerender(); }   // "Purane installs ke badlaav" (info only, never alerts)
+function uniCLX(){ UNICLEXP=!UNICLEXP; uniRerender(); }  // an app's "Band ho chuke alerts"
+function uniPX(){ UNIPRE=!UNIPRE; UNITRIPAGE=0; uniRerender(); }   // "dikhao / chhupao" the test installs before the launch
 // ---- small helpers (dates are ISO YYYY-MM-DD, done in UTC so no local-timezone day shift) ----
 const _uD=s=>Date.parse(s+'T00:00:00Z');
 function uniAdd(s,n){ return new Date(_uD(s)+n*864e5).toISOString().slice(0,10); }
 function uniDiff(a,b){ return Math.round((_uD(b)-_uD(a))/864e5); }                  // days from a to b
-function uniSpan(a,b){ if(!a) return ''; if(!b||a===b) return fmtD(a);             // "12–18 Sep" · "28 Aug–3 Sep" · "12 Sep" · "20 Aug '25–23 Sep"
-  return (a.slice(0,4)!==b.slice(0,4)?fmtD(a)+" '"+a.slice(2,4):(a.slice(0,7)===b.slice(0,7)?String(+a.slice(8)):fmtD(a)))+'–'+fmtD(b); }
+// a date says its year when that isn't obvious: outside the current year, or more than ~4 months back (the engine's
+// YEAR_CLEAR_DAYS — alert texts follow the same rule): "12–18 Sep" · "16–22 Mar 2026" · "22–28 Oct 2025"
+function uniRef(){ return (DATA&&DATA.today_date)||(DATA&&DATA.uninstall&&DATA.uninstall.data_till_max)||new Date().toISOString().slice(0,10); }
+function uniYr(d){ const c=UNI&&UNI.consts, k=(c&&c.year_clear_days!=null)?+c.year_clear_days:120, R=uniRef();
+  return !!d&&(d.slice(0,4)!==R.slice(0,4)||uniDiff(d,R)>k); }
+function uniD(d){ return d?fmtD(d)+(uniYr(d)?' '+d.slice(0,4):''):''; }                    // "12 Sep" · "16 Mar 2026"
+// "12–18 Sep" · "28 Aug–3 Sep" · "12 Sep" · "16–22 Mar 2026" · across a year BOTH years: "29 Dec 2025–4 Jan 2026",
+// "20 Aug 2025–16 Sep 2026" ("…–16 Sep" alone reads as one month); noYr: a triangle row under its year separator row
+function uniSpan(a,b,noYr){ if(!a) return ''; if(!b||a===b) return noYr?fmtD(a):uniD(a);
+  if(a.slice(0,4)!==b.slice(0,4)) return fmtD(a)+' '+a.slice(0,4)+'–'+fmtD(b)+(noYr?'':' '+b.slice(0,4));
+  return (a.slice(0,7)===b.slice(0,7)?String(+a.slice(8)):fmtD(a))+'–'+fmtD(b)+(!noYr&&(uniYr(a)||uniYr(b))?' '+b.slice(0,4):''); }
+// the launch (engine launch_day): test installs before it are hidden unless UNIPRE — every install-day number starts here
+function uniLaunch(a){ const L=a&&a.launch; return (L&&L.hidden&&L.day)?L:null; }
+function uniFirst(a){ const L=uniLaunch(a); return (L&&!UNIPRE)?L.day:((a&&(a.history_start||(a.daily&&a.daily.start)))||''); }
+function uniSurvAll(a){ const SV=(a&&a.survival)||{}; return (UNIPRE&&uniLaunch(a)&&SV.with_test)?SV.with_test:SV.all; }
+// what the hidden installs are called: "test installs" — or "installs (shayad test)" when they averaged more than a
+// tester trickle a day (launch.sure false: could be early real users); cap = sentence start
+// the launch date; on a line that also shows the GA4 start with its year ("20 Aug 2025"), with its year too ("16 Jun"
+// alone could be either year)
+function uniLD(a,pre){ const L=uniLaunch(a); if(!L) return ''; return (pre&&uniYr(a.history_start)&&!uniYr(L.day))?fmtD(L.day)+' '+L.day.slice(0,4):uniD(L.day); }
+function uniTestWord(L,cap){ return L&&L.sure===false?(cap?'Installs':'installs')+' (shayad test)':(cap?'Test':'test')+' installs'; }
 function uniWeek(s){ const t=_uD(s), dow=(new Date(t).getUTCDay()+6)%7, th=t+(3-dow)*864e5, y=new Date(th).getUTCFullYear();   // ISO week (Mon–Sun)
   return y+'-W'+String(Math.ceil(((th-Date.UTC(y,0,1))/864e5+1)/7)).padStart(2,'0'); }
 function uniPct(p){ if(p==null||isNaN(p)) return '—'; const v=p*100; return v.toFixed(v<10?1:0)+'%'; }
@@ -2539,7 +2574,7 @@ function uniVerdict(a){
   const v=a&&a.survival&&a.survival.verdict, coh=uniCohAlerts(a);
   // an open install alert is about OTHER (newer) installs than the verdict: say so right here, in its own colour
   const news=coh.map(x=>({t:`${x.dir==='up'?'⚠️':'🟢'} ${uniSpan(x.installs_from,x.installs_to)} ke installs ${x.dir==='up'?'zyada':'kam'} hata rahe — neeche "Kya badla?" me`, c:uniAlertCol(x)}));
-  if(!v){ const old=a&&a.history_start&&a.settled_till&&uniDiff(a.history_start,a.settled_till)>=63;   // old enough: data gaps, not age
+  if(!v){ const st=(uniLaunch(a)||{}).day||(a&&a.history_start), old=st&&a.settled_till&&uniDiff(st,a.settled_till)>=63;   // old enough (since the launch — the verdict's installs start there): data gaps, not age
     return {t:old?'ℹ️ Pichhle mahine se tulna abhi nahi — kai din ka GA4 data adhoora/gayab hai, ya installs bahut kam':'ℹ️ Pichhle mahine se tulna ~2 mahine ke data ke baad', c:'var(--muted)', sub:'', news}; }
   const dl=uniDayLbl(v.n), r=v.recent||{}, p=v.prev||{}, g=uniVGap(v), gt=g?uniGapTxt(g):'thode', k=uniVKind(v);
   const sub=`Pichhle 4 pakke hafte (${uniSpan(r.from,r.to)}): ${dl} ${uni100(r.left)} bache · usse pehle ke 4 hafte (${uniSpan(p.from,p.to)}): ${uni100(p.left)}`;
@@ -2551,9 +2586,9 @@ function uniVerdict(a){
 // the daily uninstall rate in one line: the last 7 days vs their normal range + any open rate alert (a one-day
 // jhatka, a slow drift, a day with 0 uninstalls) — so the line never says "normal" while a rate alert is open
 function uniRateState(a){ const R=a.rate_now||{}, has=((a.daily&&a.daily.rate)||[]).some(v=>v!=null)&&R.last7!=null, up=[], dn=[], zero=[];
-  (a.alerts||[]).forEach(x=>{ if(x.family==='rate_zero') zero.push(fmtD(x.day)+' ko 0 record');
-    else if(x.family==='rate_spike') (x.dir==='up'?up:dn).push(fmtD(x.day)+' ko achanak '+(x.dir==='up'?'zyada':'kam'));
-    else if(x.family==='rate_drift') (x.dir==='up'?up:dn).push(fmtD(x.since)+' se dheere dheere '+(x.dir==='up'?'badh':'ghat')+' raha'); });
+  (a.alerts||[]).forEach(x=>{ if(x.family==='rate_zero') zero.push(uniD(x.day)+' ko 0 record');
+    else if(x.family==='rate_spike') (x.dir==='up'?up:dn).push(uniD(x.day)+' ko achanak '+(x.dir==='up'?'zyada':'kam'));
+    else if(x.family==='rate_drift') (x.dir==='up'?up:dn).push(uniD(x.since)+' se dheere dheere '+(x.dir==='up'?'badh':'ghat')+' raha'); });
   const band=R.lo!=null&&R.hi!=null, hiB=has&&R.out_of_band&&band&&R.last7>R.hi, loB=has&&R.out_of_band&&band&&R.last7<R.lo;
   return {has,band,hiB,loB,up:(hiB?['pichhle 7 din normal se zyada']:[]).concat(up),dn:(loB?['pichhle 7 din normal se kam']:[]).concat(dn),zero}; }
 function uniRateLine(a){ const R=a.rate_now||{}, S=uniRateState(a);
@@ -2564,7 +2599,7 @@ function uniRateLine(a){ const R=a.rate_now||{}, S=uniRateState(a);
   const st=(!S.band||ex.length)?'':(S.hiB?' <b style="color:var(--bad)">normal se zyada</b>':(S.loB?' <b style="color:var(--good)">normal se kam</b>':' <b>normal</b>'));
   return `📊 Roz ka uninstall rate${st}: har 1,000 active users me ${uniRate(R.last7)} ne app hataya ${S.band?`(normal range ${uniRate(R.lo)}–${uniRate(R.hi)})`:'(normal range abhi ban rahi)'} · ${uniSpan(R.from,R.to)}${R.prov?' <span class="pill p-b">kaccha</span>':''}${ex.length?' · '+ex.join(' · '):''}`; }
 function uniKacchaNote(settled,till){ if(!settled||!till||settled>=till) return '';
-  return `<div class="faint" style="font-size:11px;margin-top:9px;line-height:1.5">ℹ️ ${uniSpan(uniAdd(settled,1),till)} ka data abhi <b>kaccha</b> — Firebase late bhejta hai, number badh sakte hain. "Bache" wale number sirf pakke din (${fmtD(settled)} tak) se.</div>`; }
+  return `<div class="faint" style="font-size:11px;margin-top:9px;line-height:1.5">ℹ️ ${uniSpan(uniAdd(settled,1),till)} ka data abhi <b>kaccha</b> — Firebase late bhejta hai, number badh sakte hain. "Bache" wale number sirf pakke din (${uniD(settled)} tak) se.</div>`; }
 const uniQ=s=>String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');   // safe inside onclick="f('…')"
 function uniVis(id){ const c=((DATA&&DATA.apps_catalog)||[]).find(x=>x.app_id===id); return c?appSelVisible(c.account_id,c.app_id):true; }
 function uniAlertsFor(){ return ((DATA.uninstall&&DATA.uninstall.alerts)||[]).filter(x=>(!APP||x.app===APP)&&uniVis(x.app_id)); }
@@ -2582,12 +2617,12 @@ function uniReason(r){ return ({no_package:'Play Store package nahi mila — GA4
   stream_list_failed:'GA4 se apps ki list nahi aa payi — agle robot run me phir try hoga.',not_fetched_yet:'GA4 data abhi aaya nahi — agle robot run me aayega.',
   fetch_failed:'GA4 se data lene me dikkat — agle robot run me phir try hoga.',same_package:'Isi Play Store app ki doosri AdMob app me iska GA4 data dikhta hai.'})[r]||'GA4 data nahi.'; }
 // Top Period → this app's GA4 window. GA4 ends at data_till (≈ today−2), so "Today"/"Yesterday" mean
-// its latest settled day, and every window is clipped to [history_start, data_till].
+// its latest settled day, and every window is clipped to [launch (or history_start), data_till].
 function uniWindow(a){
-  const till=a&&a.data_till, hs=(a&&(a.history_start||(a.daily&&a.daily.start)))||till;
+  const till=a&&a.data_till, hs=uniFirst(a)||till;
   const none={from:'',to:'',days:0,label:'GA4 data nahi',empty:true}; if(!till) return none;
   const T=(DATA&&DATA.today_date)||till; let f=till, t=till, lab=null;
-  if(RANGE==='today'||RANGE==='yesterday') lab=fmtD(till)+' · latest GA4 din';
+  if(RANGE==='today'||RANGE==='yesterday') lab=uniD(till)+' · latest GA4 din';
   else if(RANGE==='7d'||RANGE==='30d'||RANGE==='90d') f=uniAdd(till,-(parseInt(RANGE,10)-1));
   else if(RANGE==='month') f=T.slice(0,7)+'-01';
   else if(RANGE==='lastmonth'){ const y=+T.slice(0,4), m=+T.slice(5,7); f=(m>1?y+'-'+String(m-1).padStart(2,'0'):(y-1)+'-12')+'-01'; t=uniAdd(T.slice(0,7)+'-01',-1); }
@@ -2637,21 +2672,28 @@ function uniCohPrep(j){ if(!j||!j.start||!Array.isArray(j.new)) throw new Error(
     for(let N=0;N<=age;N++){ while(k<L.length&&L[k][0]<=N){ s+=+L[k][1]||0; k++; } c[N]=s; } cum.push(c); }
   return {start:j.start,nE,n,cum}; }
 // "Har din" triangle: rows = ISO install weeks (newest first, ALL of them), cols N=a0..a1. A cell exists only when
-// every install day of that week is ≥N days old (same rule as the engine's triangle). avg4 = the 4 newest FULL
-// weeks (Mon–Sun) whose day N is settled (Sunday + N ≤ settled), pooled — the engine's "Pichhle 4 hafte" row.
-// ref = the "All-time normal" row = 1 − the app's "hamesha" survival (left) — the engine's triangle ref, the summary's
-// "N din baad X bache"; it never goes down across the columns. No survival at N → no normal ('·').
-function uniTriAll(C,a0,a1,settled,left){ const rows=[]; let i=Math.min(C.nE,C.n.length-1);
-  while(i>=0){ const d=uniAdd(C.start,i), i0=Math.max(0,i-(new Date(_uD(d)).getUTCDay()+6)%7); let users=0;
+// every install day of that week is ≥N days old (the engine's triangle rule). first = the launch day's index in C: the
+// weeks before it come last, flagged pre (test installs — shown on request). avg4 = ONE set of installs for every
+// column — the 4 newest full weeks (Mon–Sun) whose days are all settled — shown for a column only when every one of
+// them reached that day (so the row never goes down); prov = that day is still kaccha for the newest; set = those weeks. ref = the
+// "All-time normal" row = 1 − the app's "hamesha" survival (left) — the engine's ref, the summary's "N din baad X
+// bache"; it never goes down across the columns. No survival at N → no normal ('·').
+function uniTriAll(C,a0,a1,settled,left,first){ const rows=[], f0=Math.max(0,Math.min(first||0,C.n.length));
+  const seg=(hi,lo,pre)=>{ let i=hi; while(i>=lo){ const d=uniAdd(C.start,i), i0=Math.max(lo,i-(new Date(_uD(d)).getUTCDay()+6)%7); let users=0;
     for(let j=i0;j<=i;j++) if(C.n[j]>0) users+=C.n[j];
     const p=[]; for(let N=a0;N<=a1;N++){ if(i+N>C.nE||!users){ p.push(null); continue; } let x=0; for(let j=i0;j<=i;j++) if(C.n[j]>0) x+=C.cum[j][N]||0; p.push(x/users); }
-    rows.push({week:uniWeek(uniAdd(C.start,i0)),from:uniAdd(C.start,i0),to:d,days:i-i0+1,users,partial:(i-i0+1)<7,p}); i=i0-1; }
+    rows.push({week:uniWeek(uniAdd(C.start,i0)),from:uniAdd(C.start,i0),to:d,days:i-i0+1,users,partial:(i-i0+1)<7,p,pre}); i=i0-1; } };
+  seg(Math.min(C.nE,C.n.length-1),f0,false); if(f0>0) seg(f0-1,0,true);
   const L=Array.isArray(left)?left:[], ref=[]; for(let N=a0;N<=a1;N++) ref.push(N<L.length&&L[N]!=null?+(1-L[N]).toFixed(5):null);
+  let set=null;
+  if(settled){ const dow=(new Date(_uD(settled)).getUTCDay()+6)%7, b=uniAdd(settled,-((dow+1)%7)), f=uniAdd(b,-27), j0=uniDiff(C.start,f), j1=uniDiff(C.start,b);
+    if(j0>=f0) set={f,b,j0,j1}; }
   const avg4=[]; for(let N=a0;N<=a1;N++){ let v=null;
-    if(settled){ const last=uniAdd(settled,-N), dow=(new Date(_uD(last)).getUTCDay()+6)%7, b=uniAdd(last,-((dow+1)%7)), f=uniAdd(b,-27), j0=uniDiff(C.start,f), j1=uniDiff(C.start,b);
-      if(j0>=0){ let x=0,u=0; for(let j=j0;j<=j1&&j<C.n.length;j++) if(C.n[j]>0&&j+N<=C.nE){ x+=C.cum[j][N]||0; u+=C.n[j]; } if(u) v={p:x/u,users:u,from:f,to:b}; } }
+    if(set&&set.j1+N<=C.nE){ let x=0,u=0; for(let j=set.j0;j<=set.j1&&j<C.n.length;j++) if(C.n[j]>0){ x+=C.cum[j][N]||0; u+=C.n[j]; }
+      if(u) v={p:x/u,users:u,from:set.f,to:set.b,prov:uniAdd(set.b,N)>settled}; }
     avg4.push(v); }
-  return {rows,ref,avg4}; }
+  let su=0; if(set) for(let j=set.j0;j<=set.j1&&j<C.n.length;j++) su+=C.n[j]>0?C.n[j]:0;
+  return {rows,ref,avg4,set:set?{from:set.f,to:set.b,users:su}:null}; }   // set: named even on a page none of its columns reach
 // In (installs, up, green) vs out (uninstalls, down, red) from one zero line, SAME scale both ways so
 // the bars compare honestly. x positions match bTrendChart's, so the rate chart below lines up.
 function uniBarsChart(dates,ins,outs,pv){   // pv = index of the first provisional (kaccha) day, −1 = none
@@ -2676,10 +2718,10 @@ function uniBarsChart(dates,ins,outs,pv){   // pv = index of the first provision
   const step=Math.max(1,Math.ceil(n/8)), lastK=Math.floor((n-1)/step)*step; let xl='';
   for(let i=0;i<n;i++){ if(i%step!==0&&i!==n-1) continue; if(i===lastK&&i!==n-1&&xi(n-1)-xi(i)<46) continue;   // the end date wins a tight spot
     const x=xi(i).toFixed(1);
-    xl+=`<line x1="${x}" y1="${mT+ph}" x2="${x}" y2="${mT+ph+4}" stroke="#3a4a66" stroke-width="1"/><text x="${x}" y="${H-9}" text-anchor="middle" font-size="12.5" fill="#8496b5">${fmtD(dates[i])}</text>`; }
+    xl+=`<line x1="${x}" y1="${mT+ph}" x2="${x}" y2="${mT+ph+4}" stroke="#3a4a66" stroke-width="1"/><text x="${x}" y="${H-9}" text-anchor="middle" font-size="12.5" fill="#8496b5">${uniD(dates[i])}</text>`; }
   const loc=v=>v==null?'—':Math.round(v).toLocaleString();
   const pts=dates.map((d,i)=>{ const net=(I[i]!=null&&O[i]!=null)?I[i]-O[i]:null;
-    return {x:+xi(i).toFixed(1),y:+(y0-hh(I[i]||0)).toFixed(1),l:fmtD(d)+(kp&&i>=pv?' · kaccha':''),v:'+'+loc(I[i])+' / −'+loc(O[i]),s:'net '+(net==null?'—':(net<0?'−':'+')+Math.abs(net).toLocaleString()),sy:+(y0+hh(O[i]||0)).toFixed(1)}; });
+    return {x:+xi(i).toFixed(1),y:+(y0-hh(I[i]||0)).toFixed(1),l:uniD(d)+(kp&&i>=pv?' · kaccha':''),v:'+'+loc(I[i])+' / −'+loc(O[i]),s:'net '+(net==null?'—':(net<0?'−':'+')+Math.abs(net).toLocaleString()),sy:+(y0+hh(O[i]||0)).toFixed(1)}; });
   const ptsAttr=JSON.stringify(pts).replace(/&/g,'&amp;').replace(/'/g,'&#39;');
   const hov=`<line class="bcg" x1="0" x2="0" y1="${mT}" y2="${(mT+ph).toFixed(1)}" stroke="#cfe8ff" stroke-opacity=".4" stroke-width="1" style="visibility:hidden;pointer-events:none"/>`
     +`<circle class="bch" r="4.8" fill="#4ade80" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
@@ -2692,12 +2734,15 @@ function uniBarsChart(dates,ins,outs,pv){   // pv = index of the first provision
 function uniPlain(x){ const up=x.dir==='up';
   if(x.family==='cohort'){ const dp=uniDP(x.now,x.before), N=+x.n, vs=x.vs||[];
     const when=N===0?'install ke din hi':N+' din ke andar';
+    // installs of months ago: "pichhle 4 hafte" would read as the last 4 weeks — say which weeks they are compared with
+    if(x.old){ const bs=uniSpan(x.base_from,x.base_to), bw=(vs.length>1||vs[0]==='prev')?`usse pehle ke 4 hafte (${bs})`:`usse pehle ke saare installs (${bs})`;
+      return `ℹ️ ${uniSpan(x.installs_from,x.installs_to)} ke installs: ${when} ${uniPctDP(x.now,dp)} ne hataya — ${bw} me ${uniPctDP(x.before,dp)}${vs.length>1?` (usse purane saare installs se bhi ${up?'zyada':'kam'})`:''}`; }
     const basis=vs.length>1?'pichhle 4 hafte aur hamesha dono':(vs[0]==='prev'?'pichhle 4 hafte':'hamesha');
     return `${up?'⚠️':'🟢'} ${uniSpan(x.installs_from,x.installs_to)} ke installs: ${when} ${uniPctDP(x.now,dp)} ne hataya, normal ${uniPctDP(x.before,dp)} — ${basis} se ${up?'zyada':'kam'}`; }
-  if(x.family==='rate_zero') return `🟡 ${fmtD(x.day)}: ek bhi uninstall record nahi hua — GA4 / Firebase tracking check karo`;
-  if(x.family==='rate_spike') return `${up?'⚠️':'🟢'} ${fmtD(x.day)}: ek din me achanak ${up?'zyada':'kam'} uninstall — har 1,000 active users me ${uniRate(x.now)}, normal ~${uniRate(x.before)}`;
+  if(x.family==='rate_zero') return `🟡 ${uniD(x.day)}: ek bhi uninstall record nahi hua — GA4 / Firebase tracking check karo`;
+  if(x.family==='rate_spike') return `${up?'⚠️':'🟢'} ${uniD(x.day)}: ek din me achanak ${up?'zyada':'kam'} uninstall — har 1,000 active users me ${uniRate(x.now)}, normal ~${uniRate(x.before)}`;
   if(x.family==='rate_drift'){ const r=+x.rel||0;
-    return `${up?'⚠️':'🟢'} ${fmtD(x.since)} se roz ka uninstall dheere dheere ${up?'badh':'ghat'} raha — har 1,000 active users me ${uniRate(x.before)} → ${uniRate(x.now)} (${r>=0?'+':'−'}${Math.round(Math.abs(r)*100)}%)`; }
+    return `${up?'⚠️':'🟢'} ${uniD(x.since)} se roz ka uninstall dheere dheere ${up?'badh':'ghat'} raha — har 1,000 active users me ${uniRate(x.before)} → ${uniRate(x.now)} (${r>=0?'+':'−'}${Math.round(Math.abs(r)*100)}%)`; }
   return String(x.text||x.message||''); }
 // newest first: the day it opened, then the day(s) it is about
 function uniNewest(list){ const about=x=>x.installs_to||x.day||x.since||'';
@@ -2707,8 +2752,17 @@ function uniChangeRow(x,withApp,closed){
   const click=withApp?` onclick="uniOpen('${uniQ(x.app_id)}')"`:'';
   return `<div style="display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line);${withApp?'cursor:pointer;':''}${closed?'opacity:.62':''}"${click}>
     ${withApp?appChip(x.app,16):''}<span style="color:${uniAlertCol(x)};font-weight:650;font-size:13px;flex:1 1 240px;min-width:0;line-height:1.45">${hAttr(uniPlain(x))}</span>
-    ${x.provisional&&!closed?'<span class="pill p-b" title="Firebase ka late data abhi aa raha — ye number badh sakta hai">kaccha</span>':''}${x.fresh&&!closed?'<span class="pill p-b">naya</span>':''}${closed&&x.closed?`<span class="faint" style="font-size:11px">band · ${fmtD(x.closed)}</span>`:''}
+    ${x.provisional&&!closed?'<span class="pill p-b" title="Firebase ka late data abhi aa raha — ye number badh sakta hai">kaccha</span>':''}${x.fresh&&!closed?'<span class="pill p-b">naya</span>':''}${closed&&x.closed?`<span class="faint" style="font-size:11px">band · ${uniD(x.closed)}</span>`:''}
     ${withApp?'<span class="lnk" style="font-size:11.5px;margin-left:auto">kholo →</span>':''}</div>`; }
+// a change in OLD installs (the engine's old_changes: install window ended more than alert_recent_days ago) — one faded
+// info line in the collapsed "Purane badlaav" list; never an alert, never counted in a summary
+function uniOldRow(o,app,id){ const click=app?` onclick="uniOpen('${uniQ(id)}')"`:'';
+  return `<div style="display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line);opacity:.72${app?';cursor:pointer':''}"${click}>
+    ${app?appChip(app,16):''}<span class="muted" style="font-weight:600;font-size:12.5px;flex:1 1 240px;min-width:0;line-height:1.45">${hAttr(uniPlain(Object.assign({},o,{family:'cohort',old:true})))}</span>
+    <span class="pill p-b" title="Purane installs ka badlaav — sirf jaankari, iska alert nahi aata">purane installs</span>${app?'<span class="lnk" style="font-size:11.5px;margin-left:auto">kholo →</span>':''}</div>`; }
+function uniOldDays(){ const c=UNI&&UNI.consts; return (c&&c.alert_recent_days!=null)?+c.alert_recent_days:60; }
+function uniOldNote(){ const d=uniOldDays();
+  return `<div class="faint" style="font-size:11px;margin-top:6px;line-height:1.5">ℹ️ ${d} din se purane installs ke badlaav — sirf jaankari. Inka alert nahi aata, upar ki ginti me nahi.</div>`; }
 function uniTimingNote(){ const c=UNI&&UNI.consts, L=(c&&c.lag_days!=null)?+c.lag_days:2, LD=uniLateDays(), lt=uniLateTxt(UNI&&UNI.lateness);
   return `<div class="note" id="uni-timing">⏱️ <b>Kab pata chalega?</b> GA4 ka data ${L} din der se aata hai. Sabse jaldi <b>roz ka rate</b> batata hai (~${L} din). "N din me kitne gaye" ka badlav install ke N + ${L} din baad dikhta hai — 1 din wala ~${1+L} din baad, 7 din wala ~${7+L} din baad, 30 din wala ~${30+L} din baad. Firebase uninstall ka data <b>${LD} din tak late</b> bhejta hai, aur late data sirf <b>badhata</b> hai: isliye "zyada uninstall" ki khabar kacche data se bhi aa jaati hai (usme "kaccha" likha hota hai), par "kam uninstall" ki achhi khabar, 0-uninstall wala din aur ▼ sirf pakke data se (${LD} din baad).${lt?` Sab apps me naapa hua: ${lt} uninstalls aa chuke hote hain.`:''} Khabar tab aati hai jab kai din ke installs me badlav pakka ho — ek din ka jhatka nahi; ek install-hafte ki khabar ek hi baar aati hai. Roz ke rate ka dheere dheere badlav ~10 din me pakka hota hai.</div>`; }
 const UNI_STAGE={naya:['p-b','🆕 Naya app · har din'],badh_raha:['p-y','📈 Pehle hafte har din, phir 10/14/21/30…'],stable:['p-g','✅ Stable · 1, 3, 7, 14, 30, 45, 60…']};
@@ -2725,22 +2779,22 @@ function uniScreen(){
   if(!U) html=h2+`<div class="card" style="padding:24px 20px"><div class="muted" style="font-size:13.5px;line-height:1.6">🔌 GA4 abhi connect nahi (ya band) hai — uninstall data GA4 / Firebase se aata hai. Setup ke baad yahan dikhega.</div></div>`;
   else if(UNIERR||!U.asset) html=h2+`<div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Uninstall data load nahi hua — thodi der baad page refresh karo. <span class="lnk" onclick="UNIERR=false;uniRerender();loadUNI(()=>uniRerender())">Phir try karo</span></div></div>`;
   else if(!UNI) html=h2+`<div class="card"><div class="muted" style="font-size:14px;padding:20px">⏳ Uninstall data load ho raha hai…</div></div>`;
-  else if(APP){ const sm=(U.apps||[]).find(x=>x.app===APP); html=sm?uniDetail(sm.app_id,true):uniNoGa4(APP); }   // top App filter → that app straight away
-  else if(UNIAPP&&(U.apps||[]).some(x=>x.app_id===UNIAPP)) html=uniDetail(UNIAPP,false);
-  else html=uniPortfolio();
+  else if(APP){ const L=U.apps||[], sm=L.find(x=>x.app_id===UNIAPP&&x.app===APP)||L.find(x=>x.app===APP); html=sm?uniDetail(sm.app_id,true):uniNoGa4(APP); }   // top App filter → that app straight away
+  else html=uniPortfolio();   // "All apps" in the header → always the portfolio (an app's detail sets the header's App: uniOpen)
   return html;
 }
 function uniNoGa4(name){ const r=((UNI&&UNI.no_ga4)||[]).find(x=>x.app===name);
-  return `<span class="backlnk" onclick="UNIAPP='';setApp('')">✕ Saari apps dikhao</span>
+  return `<span class="backlnk" onclick="uniBack()">← Saari apps</span>
     <div class="card"><div class="uni-hd"><span style="font-size:17px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>
     <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">🔌 ${r?hAttr(r.text||uniReason(r.reason)):'Is app ka GA4 (Firebase) data nahi — ya to ye Android app kisi GA4 property se judi nahi, ya abhi select nahi.'}</div></div>`; }
 
 function uniPortfolio(){
+  UNIPRE=false;                                     // "dikhao" (test installs) is one app's view: never the portfolio's
   const U=DATA.uninstall, det={}; ((UNI&&UNI.apps)||[]).forEach(x=>{det[x.app_id]=x;});
   const rows=(U.apps||[]).filter(x=>uniVis(x.app_id)).map(x=>{ const a=det[x.app_id]||null, w=a?uniWindow(a):null; return {s:x,a,w,sm:a?uniSums(a,w):null}; });
   const tills=rows.map(r=>r.a&&r.a.data_till).filter(Boolean).sort();
   const tMin=tills[0]||U.data_till_min, tMax=tills[tills.length-1]||U.data_till_max;
-  const tillTxt=tMax?((tMin&&tMin!==tMax)?fmtD(tMin)+'–'+fmtD(tMax):fmtD(tMax)):'—';
+  const tillTxt=tMax?((tMin&&tMin!==tMax)?uniD(tMin)+'–'+uniD(tMax):uniD(tMax)):'—';
   const LD=uniLateDays();
   const head=`<h2 class="sc">Uninstall</h2><p class="scd">Kitne users app <b>install</b> karke <b>hata</b> rahe hain — <b>GA4</b> se. GA4 ka data <b>2 din der</b> se pakka hota hai, ${tMax?`isliye yahan <b>${tillTxt}</b> tak ka data hai.`:'abhi tak koi GA4 data nahi aaya.'} Firebase ka data <b>${LD} din tak late</b> aata hai — pichhle ${LD} din ke number abhi badh sakte hain (<b>kaccha</b>). <span class="faint">Period (upar) sirf installs / uninstalls / rate ke jod par lagta hai. "7 din baad bache" sirf pakke installs se; "… gaye" sabse naye 7 install-din se (<b>*</b> = kaccha).</span></p>`;
   // honest status line when some apps' GA4 data is old / missing / failed
@@ -2753,15 +2807,18 @@ function uniPortfolio(){
   // KPIs: each app summed over ITS OWN window (GA4 days can differ per app/time zone)
   // label: GA4 days differ per app → say so; else the widest window (a young app's window is just shorter)
   const ws=rows.filter(r=>r.w&&!r.w.empty).map(r=>r.w), wF=ws.map(w=>w.from).sort()[0], wT=ws.map(w=>w.to).sort().pop();
-  const lab=!ws.length?'is period ka GA4 data abhi nahi (2 din der)':(tMin&&tMax&&tMin!==tMax)?'GA4 '+fmtD(tMin)+'–'+fmtD(tMax)+' tak'
+  const lab=!ws.length?'is period ka GA4 data abhi nahi (2 din der)':(tMin&&tMax&&tMin!==tMax)?'GA4 '+uniD(tMin)+'–'+uniD(tMax)+' tak'
     :(RANGE==='today'||RANGE==='yesterday')?ws[0].label:uniSpan(wF,wT)+' · '+(uniDiff(wF,wT)+1)+'d';
   const kpis=uniKpiRow(rows.filter(r=>r.sm).map(r=>r.sm),lab+(rows.some(r=>r.a&&r.w&&!r.w.empty&&uniKaccha(r.a,r.w.to))?' · aakhri din kaccha':''));
   const dets=rows.map(r=>r.a).filter(a=>a&&a.data_till);
   let sum=''; try{ sum=dets.length?uniSumPortfolio(dets):''; }catch(e){ sum=''; }
   // what changed (open alerts), newest first — one plain sentence each
   const al=uniNewest(uniAlertsFor());
+  const olds=[]; dets.forEach(a=>(a.old_changes||[]).forEach(o=>olds.push([a,o])));   // old installs: info only, collapsed
+  olds.sort((p,q)=>(q[1].installs_to>p[1].installs_to?1:(q[1].installs_to<p[1].installs_to?-1:0)));
+  const oldL=olds.length?`<div style="margin-top:10px"><span class="lnk" style="font-size:12px" onclick="uniOX()">${UNIOLDEXP?'Purane installs ke badlaav chhupao':'Purane installs ke badlaav ('+olds.length+') dikhao'}</span></div>${UNIOLDEXP?uniOldNote()+olds.map(([a,o])=>uniOldRow(o,a.app,a.app_id)).join(''):''}`:'';
   const alCard=`<div class="card" id="uni-alerts" style="margin-bottom:14px"><div class="ct"><h3>🔔 Kya badla? (${al.length})</h3></div>
-    ${al.length?al.map(x=>uniChangeRow(x,true,false)).join(''):'<div style="font-size:13.5px;color:var(--good);font-weight:650">✅ Sab normal — koi badlaav nahi</div>'}</div>`;
+    ${al.length?al.map(x=>uniChangeRow(x,true,false)).join(''):'<div style="font-size:13.5px;color:var(--good);font-weight:650">✅ Sab normal — koi badlaav nahi</div>'}${oldL}</div>`;
   // every app with GA4 (sortable)
   const s7=a=>{ const c=a&&a.survival&&a.survival.all; return (c&&Array.isArray(c.left)&&c.left.length>7)?c.left[7]:null; };
   const TH=[['app','App'],['S7','7 din baad bache','100 me se kitne 7 din baad bhi app rakhte hain — saare pakke installs se'],
@@ -2849,7 +2906,7 @@ function uniSumPortfolio(dets){
 function uniDetail(id,viaApp){
   const U=DATA.uninstall, x=(U.apps||[]).find(z=>z.app_id===id)||{}, a=((UNI&&UNI.apps)||[]).find(z=>z.app_id===id);
   const name=(a&&a.app)||x.app||id;
-  const back=viaApp?`<span class="backlnk" onclick="UNIAPP='';setApp('')">✕ Saari apps dikhao</span>`:`<span class="backlnk" onclick="uniBack()">← Saari apps</span>`;
+  const back=`<span class="backlnk" onclick="uniBack()">← Saari apps</span>`;   // clears the header's App too
   if(!a||!a.daily||!a.data_till) return back+`<div class="card"><div class="uni-hd"><span style="font-size:17px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>
     <div class="muted" style="font-size:13px;margin-top:10px">⏳ Is app ka GA4 data abhi aaya nahi — robot pehli baar poori history laata hai, agle run me yahan dikhega.</div></div>`;
   const F=a.flags||{}, fl=[];
@@ -2860,14 +2917,14 @@ function uniDetail(id,viaApp){
   if(F.unplaced_users>0) fl.push(fmtN(F.unplaced_users)+' uninstalls kisi install din se jude nahi');
   if(F.over_100>0) fl.push('⚠️ kuch dino ka GA4 count 100% se upar');
   const incN=uniIncDays(a).length;   // install-day cells GA4 never returned in full — shown, never alerted on
-  if(incN) fl.push(`<span title="${hAttr('GA4 ne '+uniIncDays(a).map(fmtD).join(', ')+' ke install-din numbers poore nahi diye — un dino ko chhoone wale install din kisi alert me nahi gine jaate')}">⚠️ ${incN} din ka data adhoora</span>`);
+  if(incN) fl.push(`<span title="${hAttr('GA4 ne '+uniIncDays(a).map(uniD).join(', ')+' ke install-din numbers poore nahi diye — un dino ko chhoone wale install din kisi alert me nahi gine jaate')}">⚠️ ${incN} din ka data adhoora</span>`);
   // old days whose install-day users GA4 no longer keeps: estimated from the app_remove events — used, just said
   const evN=(F.cell_days&&F.cell_days.events)||0, evS=F.events_span;
   if(evN) fl.push(`<span title="${hAttr('GA4 purane dino ke install-din users poore nahi rakhta — '+(evS?uniSpan(evS[0],evS[1])+' ke beech ke ':'')+'un dino ke numbers uninstall ginti (events) se thoda andaza hain: har din ka total us din ke uninstall users jitna, naye dino ke hisaab se. Ye din sab jagah gine jaate hain, alerts me bhi')}">ℹ️ ${evN} purane din ka data uninstall ginti (events) se andaza</span>`);
   if(F.outdated) fl.push('⏳ purana data — poora GA4 data dobara aa raha hai (tab tak koi alert nahi bhejte)');
   const got=relTime(a.fetched_at);
   const hdr=back+`<div class="uni-hd" style="margin-bottom:4px"><span style="font-size:18px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>
-    <div class="faint" style="font-size:12px;margin:5px 0 14px;display:flex;gap:4px 12px;flex-wrap:wrap"><span>GA4 data <b style="color:var(--ink2)">${fmtD(a.data_till)}</b> tak${got?' · '+got+' laya':''}</span>${fl.map(t=>`<span>${t}</span>`).join('')}</div>`;
+    <div class="faint" style="font-size:12px;margin:5px 0 14px;display:flex;gap:4px 12px;flex-wrap:wrap"><span>GA4 data <b style="color:var(--ink2)">${uniD(a.data_till)}</b> tak${got?' · '+got+' laya':''}</span>${fl.map(t=>`<span>${t}</span>`).join('')}</div>`;
   const w=uniWindow(a), sm=uniSums(a,w);
   const kpis=uniKpiRow(sm?[sm]:[],w.label+(!w.empty&&uniKaccha(a,w.to)?' · aakhri din kaccha':''))+`<div class="faint" style="font-size:11px;margin:-6px 0 14px">Upar ke 4 number = Period (${pRangeLabel(RANGE)}). Baaki sab ka apna range hai — Period unpe nahi lagta.</div>`;
   const safe=f=>{ try{ return f(a)||''; }catch(e){ return '<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ Ye hissa abhi dikh nahi paya.</div>'; } };
@@ -2875,22 +2932,42 @@ function uniDetail(id,viaApp){
 }
 // "Ek nazar me": of 100 installs how many are left at a few key days, the verdict vs last month, the daily rate
 // (a tiny app — its whole curve "kam data" — still gets its sentence: marked, never hidden)
+// the honest totals: every install since the launch, and how many install DAYS the "bache" numbers come from (a day
+// whose GA4 data is broken is left out of them — said, with how many)
+function uniTotalsLine(a,C){ const L=a.launch||{}, Lh=uniLaunch(a), pre=!!(UNIPRE&&Lh);
+  const inst=L.installs!=null?(+L.installs||0)+(pre?(+L.pre_installs||0):0):((a.daily&&a.daily.new)||[]).reduce((t,v)=>t+(+v||0),0);
+  const ld=uniLD(a,pre);
+  const head=Lh&&!pre?`Launch (${ld}) se ab tak ${fmtN(inst)} installs`
+    :`GA4 data shuru (${uniD(pre?a.history_start:(L.day||a.history_start))}) se ab tak ${fmtN(inst)} installs${pre?` (launch ${ld} se pehle ke ${uniTestWord(Lh)} bhi)`:''}`;
+  const k0=(C&&Array.isArray(C.k)&&C.k.length)?+C.k[0]:0;
+  return head+(k0?` · "100 me se kitne bache" ${k0} din ke installs se${uniLeftOut(C)}`:''); }
+// the install days the "bache" numbers leave out, by name: GA4 cells incomplete ("adhoora") vs a tracking break ("gayab")
+function uniLeftOut(C){ const gi=(C&&C.gap_inc)||[], gb=(C&&C.gap_brk)||[], n=(C&&+C.gap_days)||0;
+  const say=(L,w)=>!L.length?'':(L.length<=2?L.map(uniD).join(', ')+' ka data '+w:L.length+' din ka data '+w);
+  const parts=[say(gi,'adhoora'),say(gb,'gayab')].filter(Boolean);
+  if(!parts.length) return n?` (${n} din ka data adhoora — woh is ginti me nahi)`:'';   // an older file: the count only
+  return ` (${parts.join(', ')} — ${gi.length+gb.length>1?'ye din':'woh din'} is ginti me nahi)`; }
+// one line when test installs before the launch are hidden (engine launch_day) — tap to show / hide them everywhere
+function uniPreLine(a){ const L=uniLaunch(a); if(!L) return '';
+  return `<div class="faint" id="uni-pre" style="font-size:11.5px;margin-top:3px">🧪 Launch (${uniD(L.day)}) se pehle ke ${Math.round(+L.pre_installs||0).toLocaleString()} ${uniTestWord(L)} ${UNIPRE?'bhi dikh rahe':'chhupaye'} · <span class="lnk" onclick="uniPX()">${UNIPRE?'chhupao':'dikhao'}</span></div>`; }
 function uniSumCard(a){
-  const SV=a.survival||{}, C=SV.all, days=(SV.key_days||[]).filter(N=>C&&Array.isArray(C.left)&&N<C.left.length&&C.left[N]!=null);
+  const SV=a.survival||{}, C=uniSurvAll(a), days=(SV.key_days||[]).filter(N=>C&&Array.isArray(C.left)&&N<C.left.length&&C.left[N]!=null);
   const thin=days.some(N=>N>=uniSolid(C));
   const keep=days.length?`👥 100 naye users me se: ${uniKeepLine(C,days)}${thin?` <span class="pill p-b">kam data — sirf ${fmtN((C.n||[])[days[0]])} installs</span>`:''}`:'👥 100 me se kitne bache — ~2 hafte ke pakke data ke baad dikhega';
   const V=uniVerdict(a);
   return `<div class="card" id="uni-sum" style="margin-bottom:14px"><div class="ct"><h3>📌 Ek nazar me</h3></div>
     <div style="font-size:14.5px;line-height:1.6;color:var(--ink2)">${keep}</div>
-    ${days.length?`<div class="faint" style="font-size:11.5px">ab tak ke saare pakke installs se (${uniSpan(C.from,a.settled_till||C.to)} · ${fmtN((C.n||[])[0])} installs)</div>`:''}
+    <div class="faint" id="uni-tot" style="font-size:11.5px;line-height:1.5">${uniTotalsLine(a,C)}</div>${uniPreLine(a)}
     <div style="font-size:13.5px;font-weight:700;margin-top:10px;color:${V.c}">${V.t}</div>${V.sub?`<div class="faint" style="font-size:11.5px;line-height:1.5">${V.sub}</div>`:''}
     ${(V.news||[]).map(n=>`<div style="font-size:13px;font-weight:700;margin-top:4px;color:${n.c}">${n.t}</div>`).join('')}
     <div style="font-size:12.5px;margin-top:10px;color:var(--ink2);line-height:1.5">${uniRateLine(a)}</div>${uniKacchaNote(a.settled_till,a.data_till)}</div>`; }
 // "Kya badla?": the app's open alerts as plain sentences (newest first), older ones and the full table on a tap
 function uniChangesCard(a){
-  const open=uniNewest(a.alerts||[]), closed=uniNewest(a.alerts_closed||[]);
+  const open=uniNewest(a.alerts||[]), closed=uniNewest(a.alerts_closed||[]), olds=a.old_changes||[];
   const body=open.length?open.map(z=>uniChangeRow(z,false,false)).join(''):'<div style="font-size:13.5px;color:var(--good);font-weight:650;padding:2px 0 4px">✅ Sab normal — koi badlaav nahi</div>';
-  const old=closed.length?`<div style="margin-top:10px"><span class="lnk" style="font-size:12px" onclick="uniOX()">${UNIOLDEXP?'Purane badlaav chhupao':'Purane badlaav ('+closed.length+') dikhao'}</span></div>${UNIOLDEXP?closed.map(z=>uniChangeRow(z,false,true)).join(''):''}`:'';
+  // two different things, two lists: alerts that were real (and sent) and have ended · changes in old installs (never sent)
+  const cl=closed.length?`<div style="margin-top:10px"><span class="lnk" style="font-size:12px" onclick="uniCLX()">${UNICLEXP?'Band ho chuke alerts chhupao':'Band ho chuke alerts ('+closed.length+') dikhao'}</span></div>${UNICLEXP?closed.map(z=>uniChangeRow(z,false,true)).join(''):''}`:'';
+  const old=cl+(olds.length?`<div style="margin-top:10px"><span class="lnk" style="font-size:12px" onclick="uniOX()">${UNIOLDEXP?'Purane installs ke badlaav chhupao':'Purane installs ke badlaav ('+olds.length+') dikhao'}</span></div>${UNIOLDEXP?uniOldNote()+olds.map(o=>uniOldRow(o)).join(''):''}`:'');
   const tbl=`<div style="margin-top:10px"><span class="lnk" style="font-size:12px" onclick="uniCX()">${UNICPEXP?'Poori table chhupao':'Poori table dikhao'}</span> <span class="faint" style="font-size:11px">— har din pe naye installs vs pehle ke installs</span></div>`;
   return `<div class="card" id="uni-app-alerts" style="margin-bottom:14px"><div class="ct"><h3>🔔 Kya badla? (${open.length})</h3></div>${body}${old}${tbl}</div>${UNICPEXP?uniCpCard(a):''}`; }
 
@@ -2899,7 +2976,7 @@ function uniDailyCard(a){
   const D=a.daily||{}, n=(D.new||D.un||[]).length;
   const hd='<div class="ct"><h3>📊 Roz ka hisaab — aaye vs gaye</h3></div>';
   if(!n||!D.start) return `<div class="card" id="uni-daily" style="margin-bottom:14px">${hd}<div class="muted" style="font-size:13px">Roz ka data abhi nahi.</div></div>`;
-  const k=UNIDRANGE==='30d'?30:(UNIDRANGE==='90d'?90:n), i0=Math.max(0,n-k), dates=[]; for(let i=i0;i<n;i++) dates.push(uniAdd(D.start,i));
+  const k=UNIDRANGE==='30d'?30:(UNIDRANGE==='90d'?90:n), i0=Math.max(0,n-k,Math.min(n-1,uniDiff(D.start,uniFirst(a)||D.start))), dates=[]; for(let i=i0;i<n;i++) dates.push(uniAdd(D.start,i));
   const sl=arr=>(arr||[]).slice(i0,n);
   const chips=[['30d','30 din'],['90d','3 mahine'],['all','All time']].map(([v,l])=>`<span class="chip${UNIDRANGE===v?' on':''}" onclick="uniDR('${v}')">${l}</span>`).join('');
   const inc=uniIncDays(a).filter(d=>d>=dates[0]);
@@ -2908,7 +2985,7 @@ function uniDailyCard(a){
     .concat(inc.map(d=>({x:d,color:'#ff9f43',label:'½'})));
   const pv=dates.findIndex(d=>uniKaccha(a,d)), LD=a.late_days!=null?+a.late_days:uniLateDays(), lt=uniLateTxt(a.lateness);
   // one short line: why the newest days are hatched, and how late this app's Firebase data really is (measured)
-  const late=a.settled_till?`<div class="faint" id="uni-late" style="font-size:11.5px;line-height:1.5;margin:0 0 8px">⏳ Firebase ka data ${LD} din tak late aata hai — pichhle ${LD} din (${fmtD(uniAdd(a.settled_till,1))} se) ke number abhi badh sakte hain (dhaari wale / halke din).${lt?` <span title="GA4 ke roz ke dobara padhne se naapa: kisi din ke kul uninstalls ka kitna hissa kitne din baad aa chuka tha">Is app me naapa hua: ${lt} uninstalls aa chuke.</span>`:''}</div>`:'';
+  const late=a.settled_till?`<div class="faint" id="uni-late" style="font-size:11.5px;line-height:1.5;margin:0 0 8px">⏳ Firebase ka data ${LD} din tak late aata hai — pichhle ${LD} din (${uniD(uniAdd(a.settled_till,1))} se) ke number abhi badh sakte hain (dhaari wale / halke din).${lt?` <span title="GA4 ke roz ke dobara padhne se naapa: kisi din ke kul uninstalls ka kitna hissa kitne din baad aa chuka tha">Is app me naapa hua: ${lt} uninstalls aa chuke.</span>`:''}</div>`:'';
   const R=a.rate_now||{};
   // "normal se zyada / kam" only when the 7-day rate is OUTSIDE its normal range; a ±10% lean inside it is
   // said against the normal level, so the line never contradicts the range printed next to it
@@ -2917,11 +2994,11 @@ function uniDailyCard(a){
     :(R.dir==='up'||R.dir==='down')&&pc!=null?` <span class="faint">${R.dir==='up'?'↗':'↘'} normal level ${uniRate(R.med)} se ${pc}% ${R.dir==='up'?'upar':'neeche'} · range ke andar</span>`
     :R.dir==='flat'?' <span class="faint">→ normal</span>':'';
   const hasRate=(D.rate||[]).some(v=>v!=null);   // a new app: 28-day actives still filling up → no rate yet
-  const dr=R.drift?` · ${R.drift.now>R.drift.before?'📈':'📉'} <b>${fmtD(R.drift.since)}</b> se ${uniRate(R.drift.before)} → ${uniRate(R.drift.now)} (${R.drift.rel>=0?'+':'−'}${Math.round(Math.abs(R.drift.rel)*100)}%)${R.drift.prov?' <span class="faint">(kaccha)</span>':''}`:'';
+  const dr=R.drift?` · ${R.drift.now>R.drift.before?'📈':'📉'} <b>${uniD(R.drift.since)}</b> se ${uniRate(R.drift.before)} → ${uniRate(R.drift.now)} (${R.drift.rel>=0?'+':'−'}${Math.round(Math.abs(R.drift.rel)*100)}%)${R.drift.prov?' <span class="faint">(kaccha)</span>':''}`:'';
   // ▼ "kam" is only ever read on SETTLED days: then those 7 days are the ones shown, not the newest
   const rl=(R.prov===false&&R.from&&R.to&&uniKaccha(a,uniAdd(R.to,1)))?`Pakke 7 din (${uniSpan(R.from,R.to)})`:'Pichhle 7 din'+(R.prov?' <span class="faint">(kaccha)</span>':'');
   const now=`<div style="font-size:12.5px;color:var(--ink2);margin:2px 0 8px">${rl}: <b style="color:#fff">${uniRate(R.last7)}</b> /1k active${(R.lo!=null&&R.hi!=null)?` · normal ${uniRate(R.lo)}–${uniRate(R.hi)}`:''}${dirT}${dr}${hasRate?'':' <span class="faint">· rate 28 din ke GA4 data ke baad aayega</span>'}</div>`;
-  const rateChart=hasRate?bTrendChart(dates,sl(D.rate),{xlab:fmtD,fmt:v=>(+v).toFixed(1),gaps:true,band:{lo:sl(D.lo),hi:sl(D.hi)},marks,shade:pv>=0?{from:pv,label:'kaccha →'}:null})
+  const rateChart=hasRate?bTrendChart(dates,sl(D.rate),{xlab:uniD,fmt:v=>(+v).toFixed(1),gaps:true,band:{lo:sl(D.lo),hi:sl(D.hi)},marks,shade:pv>=0?{from:pv,label:'kaccha →'}:null})
     :'<div class="muted" style="font-size:12.5px;line-height:1.6;padding:12px 4px">Rate 28 din ka GA4 data hone ke baad dikhega (28-din active users tab tak poore nahi hote). Tab tak upar ke installs / uninstalls dekho.</div>';
   const lgd=`<div class="lgd"><span><i class="dot" style="background:#4ade80"></i>Installs (aaye)</span><span><i class="dot" style="background:#ff6b6b"></i>Uninstalls (gaye)</span>
     <span><i style="display:inline-block;width:14px;height:2px;background:#3dd0f0"></i>Rate /1k active</span><span><i class="dot" style="background:rgba(61,208,240,.28)"></i>Normal range</span>
@@ -2937,7 +3014,7 @@ function uniDailyCard(a){
 // installed (starts at 100%, never rises). Saare laal bar + hari line = 100.
 function uniCurveCard(a){
   const SV=a.survival||{}, hasR=!!(SV.recent&&Array.isArray(SV.recent.left)&&SV.recent.left.length);
-  const src=(UNICSRC==='recent'&&hasR)?'recent':'all', C=SV[src]||{}, L=Array.isArray(C.left)?C.left.length:0;
+  const src=(UNICSRC==='recent'&&hasR)?'recent':'all', C=(src==='all'?uniSurvAll(a):SV.recent)||{}, L=Array.isArray(C.left)?C.left.length:0;
   const hd='<div class="ct"><h3>📉 100 me se kitne bache — install ke baad har din</h3></div>';
   const chip=(v,l,cur,f)=>`<span class="chip${cur===v?' on':''}" onclick="${f}('${v}')">${l}</span>`;
   const schips=hasR?`<div class="chips" style="margin-bottom:8px">${chip('all','Hamesha (saare installs)',src,'uniCS')}${chip('recent','Abhi ke installs (90 din)',src,'uniCS')}</div>`:'';
@@ -2947,12 +3024,12 @@ function uniCurveCard(a){
   const thin=C.thin_from!=null&&C.thin_from<=top;
   const lgd=`<div class="lgd"><span><i class="dot" style="background:#ff6b6b"></i>Us din kitne % gaye</span><span><i style="display:inline-block;width:14px;height:3px;background:#4ade80"></i>Kitne % bache</span><span><i class="dot" style="background:rgba(74,222,128,.28)"></i>Andaaza range</span>${thin?'<span><i style="display:inline-block;width:14px;height:0;border-top:2px dashed rgba(74,222,128,.55)"></i>Halka = kam data (itne din tak kam installs pahunche)</span>':''}</div>`;
   const upto=(a.settled_till&&C.to&&a.settled_till<C.to)?a.settled_till:C.to;   // only settled install days count (as in the summary)
-  const who=src==='recent'?`<b>Abhi</b> = ${uniSpan(C.from,upto)} ke pakke installs — ye ${L-1} din tak hi pahunche (aage ke din "Hamesha" me).`:`<b>Hamesha</b> = ${uniSpan(C.from,upto)} ke saare pakke installs.`;
+  const LA=uniLaunch(a), who=src==='recent'?`<b>Abhi</b> = ${uniSpan(C.from,upto)} ke pakke installs — ye ${L-1} din tak hi pahunche (aage ke din "Hamesha" me).`:`<b>Hamesha</b> = ${uniSpan(C.from,upto)} ke saare pakke installs${LA?(UNIPRE?` (launch ${uniLD(a,true)} se pehle ke ${uniTestWord(LA)} bhi)`:` (launch ${uniD(LA.day)} se; usse pehle ke ${uniTestWord(LA)} nahi)`):''}.`;
   const clip=(C.clipped||[]).length?` ⚠️ ${C.clipped.length} din GA4 ke uninstall bache users se zyada the — wahan sab gaye maana (GA4 ke number andaaze hote hain).`:'';
   return `<div class="card" id="uni-curve" style="margin-bottom:14px">${hd}
     <div style="display:flex;gap:6px 14px;flex-wrap:wrap">${schips}${rchips}</div>
     ${uniSurvChart(C,top,SV.key_days)}${lgd}
-    <div class="faint" style="font-size:10.5px;margin-top:6px;line-height:1.5">${who} Har din ka % un sab installs se jo us din tak pahunch chuke${a.settled_till?` (sirf pakke din — ${fmtD(a.settled_till)} tak)`:''}. Laal bar = us din kitne gaye · hari line = ab tak kitne bache · saare laal bar + hari line = 100%. Line kabhi upar nahi jaati.${clip}</div></div>`; }
+    <div class="faint" style="font-size:10.5px;margin-top:6px;line-height:1.5">${who} Har din ka % un sab installs se jo us din tak pahunch chuke${a.settled_till?` (sirf pakke din — ${uniD(a.settled_till)} tak)`:''}. Laal bar = us din kitne gaye · hari line = ab tak kitne bache · saare laal bar + hari line = 100%. Line kabhi upar nahi jaati.${clip}</div></div>`; }
 function uniSurvChart(C,L,keys){
   // a narrower drawing on a phone, so its text stays readable once the SVG is scaled down to the screen
   const nar=(typeof innerWidth==='number'&&innerWidth<700), W=nar?520:900, H=nar?330:300, fz=nar?16:14, ts=nar?1.5:1;   // ts: tooltip text scale
@@ -3006,13 +3083,15 @@ function uniCpCard(a){
   const rows=T.map(t=>{ const r=t.recent||{}, pv=t.prev, al=t.all;
     const hb=(pv&&pv.p!=null)?pv:((al&&al.p!=null)?al:null), dp=uniDP(r.p,hb&&hb.p);   // one precision per row → the row adds up
     const sD=b=>(b&&b.p!=null)?uniShownD(r.p,b.p,dp):null, dl=sD(hb), dA=(hb===pv)?sD(al):null;
-    const c=t.dir==='up'?'var(--bad)':(t.dir==='down'?'var(--good)':'var(--faint)'), ar=t.dir==='up'?'▲ ':(t.dir==='down'?'▼ ':'');
+    const oc=!t.alert&&(a.old_changes||[]).some(o=>o.n===t.n);   // moved, but in installs of months ago: info only
+    const c=oc?'var(--muted)':(t.dir==='up'?'var(--bad)':(t.dir==='down'?'var(--good)':'var(--faint)')), ar=t.dir==='up'?'▲ ':(t.dir==='down'?'▼ ':'');
     const bd=dl==null?'<span class="faint">—</span>':`<span style="color:${c};font-weight:${t.alert?800:600}">${ar}${uniPP(dl)} point</span>`
       +(dA!=null?`<div class="faint" style="font-size:10.5px">hamesha se ${uniPP(dA)} point</div>`:'');
     // a GA4 tracking break (a day with 0 uninstalls) left some install days out: say so, not just "kam data"
-    const brk=t.break_day?`<div class="faint" style="font-size:10.5px" title="Us din GA4 me ek bhi uninstall record nahi hua — uske aas-paas ke install din is row se bahar">⚠️ ${fmtD(t.break_day)} ka data gayab</div>`:'';
-    const inc=t.inc_day?`<div class="faint" style="font-size:10.5px" title="GA4 ne us din ke install-din numbers poore nahi diye — jin install dino ko wo chhoota hai wo is row se bahar">⚠️ ${fmtD(t.inc_day)} ka data adhoora</div>`:'';
+    const brk=t.break_day?`<div class="faint" style="font-size:10.5px" title="Us din GA4 me ek bhi uninstall record nahi hua — uske aas-paas ke install din is row se bahar">⚠️ ${uniD(t.break_day)} ka data gayab</div>`:'';
+    const inc=t.inc_day?`<div class="faint" style="font-size:10.5px" title="GA4 ne us din ke install-din numbers poore nahi diye — jin install dino ko wo chhoota hai wo is row se bahar">⚠️ ${uniD(t.inc_day)} ka data adhoora</div>`:'';
     const stt=(t.alert?(t.dir==='down'?'<span class="pill p-g">🎉 Behtar</span>':'<span class="pill p-y">🟠 Badla</span>')
+      :oc?`<span class="pill p-b" title="${hAttr(uniOldDays()+' din se purane installs — sirf jaankari, iska alert nahi aata')}">ℹ️ Purane installs</span>`
       :(t.low_sample?(t.break_day?'<span class="pill p-b">Data gayab</span>':(t.inc_day?'<span class="pill p-b">Data adhoora</span>':'<span class="pill p-b">Kam data</span>')):'<span class="faint">Normal</span>'))+brk+inc;
     const kk=t.prov?true:(a.settled_till&&r.to&&!uniKaccha(a,uniAdd(r.to,t.n))&&uniKaccha(a,a.data_till)?false:null);
     return `<tr><td class="nm">${uniDayCol(t.n)}</td><td class="uni-num"${tt(r)}>${cell(r,dp,kk)}</td><td class="uni-num"${tt(pv)}>${cell(pv,dp)}</td><td class="uni-num"${tt(al)}>${cell(al,dp)}</td>
@@ -3025,44 +3104,60 @@ function uniCpCard(a){
 
 function uniTriCard(a){
   const chips=[['cp','Khaas din'],['all','Har din']].map(([v,l])=>`<span class="chip${UNITRI===v?' on':''}" onclick="uniTM('${v}')">${l}</span>`).join('');
+  const left=(uniSurvAll(a)||{}).left, L=uniLaunch(a);
   let pager='', body;
-  if(UNITRI==='cp'){ const T=a.triangle||{}; body=uniTriTable(T.cols||[],T.ref||[],T.rows||[],a,T.avg4||[]); }
+  if(UNITRI==='cp'){ const T=a.triangle||{}, cols=T.cols||[];
+    // with the test installs shown, the normal row is the curve WITH them (the engine's ref is the one without)
+    const ref=(UNIPRE&&L&&Array.isArray(left))?cols.map(N=>N<left.length&&left[N]!=null?+(1-left[N]).toFixed(5):null):(T.ref||[]);
+    body=uniTriTable(cols,ref,T.rows||[],a,T.avg4||[],T.avg4_set); }
   else { const key=a.key, C=key?UNICOH[key]:null;
     if(!key) body='<div class="muted" style="font-size:13px;padding:14px 17px">Har din ka data abhi nahi.</div>';
     else if(!C){ if(UNICOHERR[key]) body=`<div class="muted" style="font-size:13px;padding:14px 17px">⚠️ Har din ka data load nahi hua. <span class="lnk" onclick="UNICOHERR['${uniQ(key)}']=false;uniRerender()">Phir try karo</span></div>`;
       else { if(key&&!UNICOHL[key]) loadUNICOH(key,()=>uniRerender()); body='<div class="muted" style="font-size:13px;padding:14px 17px">⏳ har din ka data load ho raha hai…</div>'; } }
-    else { const last=Math.floor(C.nE/31); if(UNITRIPAGE>last) UNITRIPAGE=last;
-      const a0=UNITRIPAGE*31, a1=Math.min(C.nE,a0+30), cols=[]; for(let N=a0;N<=a1;N++) cols.push(N);
-      const r=uniTriAll(C,a0,a1,a.settled_till,a.survival&&a.survival.all&&a.survival.all.left);
-      pager=`<div class="chips" style="align-items:center;margin:0 0 8px">${a0>0?`<span class="chip" onclick="uniTP(${UNITRIPAGE-1})">◀ ${a0-31}–${a0-1} din</span>`:''}<span class="faint" style="font-size:12px;font-weight:600">${a0}–${a1} din</span>${a1<C.nE?`<span class="chip" onclick="uniTP(${UNITRIPAGE+1})">${a1+1} din… ▶</span>`:''}</div>`;
-      body=uniTriTable(cols,r.ref,r.rows,a,r.avg4); } }
+    else { const f0=(L&&!UNIPRE)?Math.max(0,uniDiff(C.start,L.day)):0, last=Math.floor((C.nE-f0)/31); if(UNITRIPAGE>last) UNITRIPAGE=last;   // test installs hidden: no pages only they reach
+      const a0=UNITRIPAGE*31, a1=Math.min(C.nE-f0,a0+30), cols=[]; for(let N=a0;N<=a1;N++) cols.push(N);
+      const r=uniTriAll(C,a0,a1,a.settled_till,left,L?uniDiff(C.start,L.day):0);
+      pager=`<div class="chips" style="align-items:center;margin:0 0 8px">${a0>0?`<span class="chip" onclick="uniTP(${UNITRIPAGE-1})">◀ ${a0-31}–${a0-1} din</span>`:''}<span class="faint" style="font-size:12px;font-weight:600">${a0}–${a1} din</span>${UNITRIPAGE<last?`<span class="chip" onclick="uniTP(${UNITRIPAGE+1})">${a1+1} din… ▶</span>`:''}</div>`;
+      body=uniTriTable(cols,r.ref,r.rows,a,r.avg4,r.set); } }
   return `<div class="card pad0" id="uni-tri" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>🔺 Install hafta × din</h3><span class="faint" style="font-size:11.5px">Har row = ek hafte ke installs · laal = normal se zyada hate · hara = kam</span></div>
     <div style="padding:8px 17px 0;font-size:12px;color:var(--ink2);line-height:1.5">Har box = us hafte install karne walon me se us din tak kitne % ne app hata diya</div>
     <div style="padding:8px 17px 0"><div class="chips" style="margin-bottom:8px">${chips}</div>${pager}</div>${body}</div>`; }
-function uniTriTable(cols,ref,rows,a,avg4){
-  if(!rows.length||!cols.length) return '<div class="muted" style="font-size:12.5px;padding:4px 17px 16px">Abhi hafte-wise data nahi.</div>';
+function uniTriTable(cols,ref,rows,a,avg4,aset){
+  // the weeks before the launch (test installs) only when shown — a test week with no install at all has nothing to
+  // show (it stays in the data); year separator rows ("── 2026 ──") say each week's year
+  const vis=UNIPRE?rows.filter(r=>!r.pre||r.users>0):rows.filter(r=>!r.pre);
+  if(!vis.length||!cols.length) return '<div class="muted" style="font-size:12.5px;padding:4px 17px 16px">Abhi hafte-wise data nahi.</div>';
   // a cell whose day N reaches past settled_till is kaccha (halka: it can only grow); one whose install days × N
   // touch an incomplete day is "adhoora" (½: some uninstalls missing) — both shown as they are, both read LOW, so
   // neither is ever green (good news only from complete, settled data)
-  const shown=UNITRIEXP?rows:rows.slice(0,12);
+  const shown=UNITRIEXP?vis:vis.slice(0,12);
   const head=`<tr><th>Install hafta</th>${cols.map(N=>`<th style="text-align:center">${uniDayCol(N)}</th>`).join('')}</tr>`;
   const low=(p,rf)=>rf!=null&&p<rf;                          // under the normal = would be green
   // All-time normal = 1 − the app's "hamesha" curve (the summary's "N din baad X bache"): it never goes down
   const refRow=`<tr><td class="nm faint" style="font-size:11.5px;font-weight:600">All-time normal</td>${cols.map((N,j)=>`<td class="h" style="color:var(--muted)">${ref[j]==null?'·':uniPct(ref[j])}</td>`).join('')}</tr>`;
-  // the 4 newest settled full weeks, pooled per column (heat vs all-time: are recent installs above / below normal?)
-  // — per column the newest weeks that REACHED that day, so a later column is older installs: said under the name
-  const avRow=`<tr><td class="nm faint" style="font-size:11.5px;font-weight:600">Pichhle 4 hafte ka average<div class="faint" style="font-size:10.5px;font-weight:400;white-space:normal;max-width:160px">har din ke sabse naye 4 pakke hafte — bade din ke liye purane installs</div></td>${cols.map((N,j)=>{ const g=(avg4||[])[j];
-    if(!g||g.p==null) return '<td class="h" style="color:var(--muted)" title="abhi 4 pakke hafte nahi">·</td>';
-    const inc=uniIncIn(a,g.from,uniAdd(g.to,N)).length>0;
-    return `<td class="h" style="${inc&&low(g.p,ref[j])?'':uniHeat(g.p,ref[j])}" title="${hAttr(uniSpan(g.from,g.to)+' ke installs · '+fmtN(g.users)+' installs'+(inc?' · data adhoora — GA4 ne kuch din poore nahi diye':''))}">${uniPct(g.p)}${inc?'<sup>½</sup>':''}</td>`; }).join('')}</tr>`;
-  const body=shown.map(r=>`<tr><td class="nm" style="white-space:nowrap">${uniSpan(r.from,r.to)}${r.partial?` <span class="faint" style="font-weight:400">(sirf ${r.days} din)</span>`:''}<div class="faint" style="font-size:10.5px;font-weight:400">${fmtN(r.users)} installs</div></td>`
+  // ONE set of installs — the 4 newest settled full weeks — in every column, shown only up to the day they all
+  // reached: the same installs each day, so it can only go up (heat vs all-time: are recent installs above / below?).
+  // Named by its dates (not "pichhle 4 pakke hafte": the summary's verdict uses its own 4 weeks), on every page
+  const set=aset||(avg4||[]).find(g=>g&&g.from)||null, sp=set?uniSpan(set.from,set.to):'', reached=(avg4||[]).some(g=>g&&g.p!=null);
+  const avNote=!set?'Abhi 4 pakke hafte nahi':(reached?`${sp} ke installs — har column me yahi installs; · = abhi itne din nahi hue`:`${sp} ke installs abhi itne din tak nahi pahunche`);
+  const avRow=`<tr><td class="nm faint" style="font-size:11.5px;font-weight:600">4 hafte ka average<div class="faint" style="font-size:10.5px;font-weight:400;white-space:normal;max-width:170px">${avNote}</div></td>${cols.map((N,j)=>{ const g=(avg4||[])[j];
+    if(!g||g.p==null) return `<td class="h" style="color:var(--muted)" title="${hAttr(set?sp+' ke saare installs abhi itne din tak nahi pahunche':'abhi 4 pakke hafte nahi')}">·</td>`;
+    const inc=uniIncIn(a,g.from,uniAdd(g.to,N)).length>0, k=!!g.prov;
+    const tip=uniSpan(g.from,g.to)+' ke installs · '+fmtN(g.users)+' installs'+(k?' · kaccha — late data abhi aa raha, badh sakta hai':'')+(inc?' · data adhoora — GA4 ne kuch din poore nahi diye':'');
+    return `<td class="h" style="${(k||inc)&&low(g.p,ref[j])?'':uniHeat(g.p,ref[j])}${k?';opacity:.55':''}" title="${hAttr(tip)}">${uniPct(g.p)}${inc?'<sup>½</sup>':''}</td>`; }).join('')}</tr>`;
+  const sep=t=>`<tr class="uni-yr"><td class="nm" style="font-size:11px;font-weight:700;color:var(--muted);white-space:normal;max-width:170px;padding:6px 9px">${t}</td><td colspan="${cols.length}" style="padding:6px 0"></td></tr>`;
+  let yr='', pre=false; const LA=uniLaunch(a);
+  const body=shown.map(r=>{ let h='';
+    if(r.pre&&!pre){ pre=true; yr=''; h+=sep(`🧪 ${uniTestWord(LA,true)}${LA?' (launch '+uniD(LA.day)+' se pehle)':''}`); }
+    if(r.to.slice(0,4)!==yr){ yr=r.to.slice(0,4); h+=sep('── '+yr+' ──'); }
+    return h+`<tr${r.pre?' style="opacity:.62"':''}><td class="nm" style="white-space:nowrap">${uniSpan(r.from,r.to,true)}${r.partial?` <span class="faint" style="font-weight:400">(sirf ${r.days} din)</span>`:''}<div class="faint" style="font-size:10.5px;font-weight:400">${fmtN(r.users)} installs${r.pre?(LA&&LA.sure===false?' · shayad test':' · test'):''}</div></td>`
     +cols.map((N,j)=>{ const p=(r.p||[])[j]; if(p==null) return '<td class="h"><span class="faint">·</span></td>';
       const end=uniAdd(r.to,N), k=uniKaccha(a,end), inc=uniIncIn(a,r.from,end).length>0, rf=ref[j];
       const tip=(k?'kaccha — late data abhi aa raha, badh sakta hai':'')+(inc?(k?' · ':'')+'data adhoora — GA4 ne kuch din poore nahi diye':'');
-      const heat=((k||inc)&&low(p,rf))?'':uniHeat(p,rf);   // kaccha / adhoora read low: red (more) only, never green
-      return `<td class="h" style="${heat}${k?';opacity:.55':''}"${tip?` title="${hAttr(tip)}"`:''}>${uniPct(p)}${inc?'<sup>½</sup>':''}</td>`; }).join('')+'</tr>').join('');
-  const lg=a&&a.settled_till?`<div class="faint" style="font-size:10.5px;padding:8px 17px 0">Halka rang = kaccha (din ${fmtD(a.settled_till)} ke baad ka — late data abhi aa raha)${uniIncDays(a).length?' · ½ = data adhoora (GA4 ne kuch din poore nahi diye)':''} — dono kabhi hara nahi</div>`:'';
-  const more=lg+(rows.length>12?`<div style="padding:10px 17px 14px"><span class="lnk" style="font-size:12px" onclick="uniTX()">${UNITRIEXP?'Kam dikhao':'+'+(rows.length-12)+' aur hafte… sab dikhao'}</span></div>`:'<div style="height:6px"></div>');
+      const heat=(r.pre||((k||inc)&&low(p,rf)))?'':uniHeat(p,rf);   // kaccha / adhoora read low: red (more) only, never green; test weeks: no colour
+      return `<td class="h" style="${heat}${k?';opacity:.55':''}"${tip?` title="${hAttr(tip)}"`:''}>${uniPct(p)}${inc?'<sup>½</sup>':''}</td>`; }).join('')+'</tr>'; }).join('');
+  const lg=a&&a.settled_till?`<div class="faint" style="font-size:10.5px;padding:8px 17px 0">Halka rang = kaccha (din ${uniD(a.settled_till)} ke baad ka — late data abhi aa raha)${uniIncDays(a).length?' · ½ = data adhoora (GA4 ne kuch din poore nahi diye) — dono':' —'} kabhi hara nahi</div>`:'';
+  const more=lg+(vis.length>12?`<div style="padding:10px 17px 14px"><span class="lnk" style="font-size:12px" onclick="uniTX()">${UNITRIEXP?'Kam dikhao':'+'+(vis.length-12)+' aur hafte… sab dikhao'}</span></div>`:'<div style="height:6px"></div>');
   return `<div class="uni-scroll"><table class="uni-sticky uni-heat" style="margin-top:4px;min-width:${Math.max(480,190+cols.length*58)}px"><thead>${head}</thead><tbody>${refRow}${avRow}${body}</tbody></table></div>${more}`; }
 const UNI_SECTIONS=[uniDailyCard,uniCurveCard,uniTriCard];   // Step 4: push (a)=>html builders here
 

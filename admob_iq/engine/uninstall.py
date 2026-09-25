@@ -36,6 +36,15 @@ day × lag); output is what the tab shows and which alerts are open.
     after 3 quiet daily evaluations → a re-open notifies again. The install days an alert was about are
     remembered per direction: the curve is cumulative, so the same bad install week shows again at D30,
     D45, D60… — that is old news and never re-alerts; only installs not alerted on yet can open a new one.
+    And an alert is only ever about RECENT installs: its install window must end within ALERT_RECENT_DAYS of
+    E. A far checkpoint (D180, D330…) that moved is about installs from months ago — listed as information
+    ("old_changes", the tab's collapsed "Purane badlaav"), never an episode, never sent, never counted; an
+    episode about such old installs that an older build left open closes at once.
+  * LAUNCH — GA4 often holds months of a few TEST installs before an app went live (launch_day finds the first
+    day of sustained real installs). Every install-day number — curves, triangle, checkpoints, alerts, verdict,
+    summary — starts at the launch; the test days stay in the daily series, the cohort file, the triangle's
+    "pre" rows and survival["with_test"] (the tab hides them by default, one tap shows them). No normal band is
+    built from them either.
   * LATE DATA — Firebase keeps adding events for up to LATE_DAYS (~7) days (mostly app_remove, which Play
     reports late), and late data only ever ADDS. So the newest LATE_DAYS days are PROVISIONAL (S = E −
     LATE_DAYS is the last settled day): nothing that treats a LOW reading as news uses them — a "kam"
@@ -56,8 +65,9 @@ day × lag); output is what the tab shows and which alerts are open.
   * LATENESS — how much of a day's uninstalls / installs are in at each age, measured from the fetch's
     day-to-day re-reads (store["revisions"]) — see lateness().
 
-Dates are datetime.date inside, ISO strings in and out. Fractions 0–1 (5 dp), rates per 1,000 (3 dp),
-points = percentage points.
+Dates are datetime.date inside, ISO strings in and out; a date in a message says its year when it isn't
+obvious (outside E's year or older than YEAR_CLEAR_DAYS: "16–22 Mar 2026"). Fractions 0–1 (5 dp), rates per
+1,000 (3 dp), points = percentage points.
 """
 
 import math
@@ -124,7 +134,26 @@ VERDICT_MIN_DAYS = 14     # each window needs ≥2 weeks of clean install days (
                           # ≥ MIN_PP without its single biggest install day: one campaign day can't carry it
 KEY_DAYS = (1, 7, 30, 90, 0, 3, 14, 60, 180, 365)   # the summary's "N din baad" days, most wanted first …
 KEY_MAX = 4               # … at most 4, each one the app shows and that enough installs reached
-TRI_AVG_WEEKS = 4         # the triangle's "Pichhle 4 hafte ka average" row: the 4 newest settled full weeks
+TRI_AVG_WEEKS = 4         # the triangle's "Pichhle 4 hafte ka average" row: ONE set — the 4 newest settled full weeks,
+                          # a column only where every one of them reached that day (so it never goes down)
+
+# ── launch: GA4 often holds months of a few TEST installs before an app goes live (see launch_day) ──
+LAUNCH_PEAK_DAYS = 14     # the app's scale = its best 2 weeks' typical (median) day — one spike day can't set it
+LAUNCH_SHARE = 0.02       # a 7-day window is "live" with ≥2% of that scale × 7 installs, and more than testers ever
+                          # install (> LAUNCH_TEST_DAY a day): a trickle is never "live", not even in a small app …
+LAUNCH_SUSTAIN_DAYS = 14  # … 14 windows in a row: an era of real installs (a one-off burst of testers is not)
+LAUNCH_MIN_WEEK = 7       # the trickle before an era = its typical full week (never under 7 installs: noise) …
+LAUNCH_QUIET_X = 3.0      # … × 3: a week under that is test trickle. An era starts a launch only when it lifts the app
+                          # above it (a tiny app's run of busier weeks does not); the launch = the first day after
+                          # the last trickle week before the era (a slow ramp keeps its start) …
+LAUNCH_RUN_DAYS = 3       # … that begins 3 days in a row each above that level (a lone tester day before is not it)
+LAUNCH_JUMP_X = 10.0      # but a FLAT stretch there (a week within 3× the one before) followed by a week ≥10× it was a
+                          # closed test / QA round, not a ramp: the launch is that jump (a ramp never jumps 10× in a week)
+LAUNCH_TEST_DAY = 10      # test installs are a trickle: ≤10 a day on average before the launch — more is real users …
+LAUNCH_MAX_HIDDEN = 0.10  # … and never more than 10% of an app's installs: that much before the "launch" is real history
+LAUNCH_SURE_DAY = 3       # hidden installs averaging more than 3 a day may be early real users: the page says "shayad test"
+YEAR_CLEAR_DAYS = 120     # a date in the data's own year and ≤~4 months old reads without its year ("12–18 Sep"); any
+                          # other says it ("16–22 Mar 2026", "22–28 Oct 2025")
 
 # ── adaptive checkpoints ──
 NEW_DAYS = 30; STABLE_DAYS = 90
@@ -141,6 +170,7 @@ RELEASE_GAP_DAYS = 3      # an update surge this close to a release is that same
 
 # ── recent-change alerts ──
 RECENT_K = 7; PREV_K = 28; RECENT_MIN = 5; PREV_MIN = 21; ALL_MIN_COHORTS = 56  # all-time only when ≥8 weeks, else it equals "pehle"
+ALERT_RECENT_DAYS = 60    # alerts only on installs of the last ~2 months: what can still be acted on; older = info only
 Z_MIN = 3.0               # ~1 in 370 by chance (z already corrected for real day-to-day swings, see dispersion)
 MIN_PP = 2.0              # smaller moves aren't worth acting on
 MIN_REL = 0.10            # of the SMALLER side (uninstalled or kept): 72%→79% = 25% fewer kept → alerts; 72%→74% = 7% → no
@@ -202,19 +232,33 @@ def median(v):
     return (v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2) if n else None
 
 
-def fmt_day(d):
+def _yr(d, ref):
+    """Does date d need its year next to ref (the data's last day)? Yes outside ref's year or older than
+    YEAR_CLEAR_DAYS — the tab's page uses the same rule (uniYr)."""
+    return ref is not None and (d.year != ref.year or (ref - d).days > YEAR_CLEAR_DAYS)
+
+
+def fmt_day(d, ref=None):
+    """"12 Sep"; with ref, "16 Mar 2026" when the year isn't obvious (_yr)."""
     d = _d(d)
-    return "%d %s" % (d.day, MONTHS[d.month - 1])
+    ref = None if ref is None else _d(ref)
+    return "%d %s" % (d.day, MONTHS[d.month - 1]) + (" %d" % d.year if _yr(d, ref) else "")
 
 
-def fmt_span(a, b):
-    """"12–18 Sep"; across months "28 Aug–3 Sep"; a single day "12 Sep"."""
+def fmt_span(a, b, ref=None):
+    """"12–18 Sep"; across months "28 Aug–3 Sep"; a single day "12 Sep". With ref (the data's last day) the year
+    is said when it isn't obvious: "16–22 Mar 2026", "22–28 Oct 2025" — and on BOTH ends of a span that crosses a
+    year ("29 Dec 2025–4 Jan 2026", "20 Aug 2025–16 Sep 2026"): "20 Aug 2025–16 Sep" reads as one month."""
     a, b = _d(a), _d(b)
+    ref = None if ref is None else _d(ref)
     if a == b:
-        return fmt_day(a)
+        return fmt_day(a, ref)
+    if a.year != b.year and ref is not None:
+        return "%s %d–%s %d" % (fmt_day(a), a.year, fmt_day(b), b.year)
+    y = " %d" % b.year if _yr(a, ref) or _yr(b, ref) else ""
     if (a.year, a.month) == (b.year, b.month):
-        return "%d–%d %s" % (a.day, b.day, MONTHS[b.month - 1])
-    return fmt_day(a) + "–" + fmt_day(b)
+        return "%d–%d %s%s" % (a.day, b.day, MONTHS[b.month - 1], y)
+    return fmt_day(a) + "–" + fmt_day(b) + y
 
 
 def _minus(s):
@@ -250,7 +294,7 @@ def shown_pct(old, new):
 
 # ── daily rate, normal band, spikes, drift ──────────────────────────────────────────────────────
 
-def daily_series(store, E=None, cd=None, late=LATE_DAYS):
+def daily_series(store, E=None, cd=None, late=LATE_DAYS, first=0):
     """Columnar day-by-day arrays from history_start to E: new installs, uninstalling users, the rate
     denominator (active28DayUsers, or activeUsers when the store's den is "dau"), app_update users, the
     rate per 1,000 and its normal band. A day outside every fetched range is unknown (null), never 0.
@@ -262,7 +306,8 @@ def daily_series(store, E=None, cd=None, late=LATE_DAYS):
     were expected is a tracking break (broken[i]): shown as 0 and alerted as rate_zero, but never
     counted into a band, a drift or a cohort comparison — it isn't news about users. Only BASE days —
     good, settled (not among the last `late`) and not incomplete — go into a band or a baseline:
-    provisional days read low until their late data is in, an incomplete day's install-day split is wrong."""
+    provisional days read low until their late data is in, an incomplete day's install-day split is wrong.
+    first = the launch day's index (launch_day): the test days before it are shown, never a baseline."""
     hs, E = _d(store["history_start"]), _d(E or store["window_end"])
     n = max(0, (E - hs).days + 1)
     late = max(0, int(late or 0))
@@ -327,7 +372,7 @@ def daily_series(store, E=None, cd=None, late=LATE_DAYS):
         med.append(m and m[0]), lo.append(m and m[1]), hi.append(m and m[2])
         broken.append(bool(e is not None and un[i] == 0 and e >= ZERO_MIN_EXPECTED))
         good.append(un[i] is not None and not broken[i])
-        base.append(good[i] and i < S and i not in inc)
+        base.append(good[i] and first <= i < S and i not in inc)
         V[i + 1] = V[i] + base[i]
         for L in range(K):
             c, iL = C[L], I[L]
@@ -514,6 +559,78 @@ def mark_breaks(cd, broken):
     return cd
 
 
+def launch_day(n):
+    """Daily installs from history_start (n[i]; None = unknown, read as 0) → the index of the app's LAUNCH day:
+    the first day of sustained real installs. GA4 often holds months of a handful of test installs before an app
+    goes live; counted in, they stretch every table back years and put testers into the curves.
+      1. scale = the app's best LAUNCH_PEAK_DAYS days' median day (its own size; one spike can't set it);
+         live = a 7-day window with ≥ max(LAUNCH_SHARE × 7 × scale, 7 × LAUNCH_TEST_DAY) installs — more than
+         testers ever install, so a trickle is never live (in a 40-a-day app neither); an ERA = LAUNCH_SUSTAIN_DAYS
+         or more live windows in a row (fewer at the young end: every window left);
+      2. per era, from its first window L0: quiet = max(LAUNCH_MIN_WEEK, LAUNCH_QUIET_X × the typical full week
+         before L0). The era starts a launch only when there are such weeks and its own typical window (its first
+         LAUNCH_SUSTAIN_DAYS) is ≥ quiet — a clear step up from what came before (no step: a busier stretch of the
+         same app, never a launch). Its launch day is the first day after the last window under quiet before L0
+         that begins LAUNCH_RUN_DAYS days each > quiet ÷ 7 (by L0's first live week): a slow ramp keeps its first
+         days (they are above the trickle), a lone tester day followed by quiet ones is not it. Unless a flat week
+         or more above the trickle then jumps ≥ LAUNCH_JUMP_X in a week (a closed test / QA round right before the
+         launch — a ramp never does that): then the launch is the last such jump;
+      3. only a TEST trickle is hidden: on average ≤ LAUNCH_TEST_DAY installs a day before that day and ≤
+         LAUNCH_MAX_HIDDEN of all installs — else it was real history (a smaller era before a big one);
+      4. the launch = the LAST era's launch day that passes 3: a burst of testers before the real launch (its own
+         short era, then back to the trickle) is hidden with the trickle, while a relaunch after a pause keeps the
+         first launch (the first era's real installs fail 3 for the relaunch). None passes → the first day with
+         installs — nothing hidden when test and real can't be told apart (a tiny app never has a live window).
+    No installs at all → 0."""
+    n = [max(0, int(v or 0)) for v in n]
+    H = len(n)
+    first = next((i for i, v in enumerate(n) if v > 0), None)
+    if first is None:
+        return 0
+    if H - first < 7:
+        return first
+    run = [0]
+    for v in n:
+        run.append(run[-1] + v)
+    wk = [run[j + 7] - run[j] for j in range(H - 6)]           # installs of the 7 days from day j
+    w = min(LAUNCH_PEAK_DAYS, H - first)
+    scale = max(median(n[i - w + 1:i + 1]) for i in range(first + w - 1, H))
+    hi = max(LAUNCH_SHARE * 7 * scale, 7 * LAUNCH_TEST_DAY)
+    streak = [0] * (len(wk) + 1)                               # streak[j] = live windows in a row from j on
+    for j in range(len(wk) - 1, -1, -1):
+        streak[j] = streak[j + 1] + 1 if wk[j] >= hi else 0
+    launch = first
+    for L0 in range(first, len(wk)):
+        if not streak[L0] or (L0 > first and streak[L0 - 1]) or streak[L0] < min(LAUNCH_SUSTAIN_DAYS, len(wk) - L0):
+            continue                                           # not the first window of an era
+        before = wk[first:max(first, L0 - 6)]                  # full weeks that end before L0
+        if not before:
+            continue                                           # live from its first week: no trickle to hide
+        quiet = max(LAUNCH_MIN_WEEK, LAUNCH_QUIET_X * median(before))
+        if median(wk[L0:L0 + LAUNCH_SUSTAIN_DAYS]) < quiet:
+            continue                                           # no step up from the weeks before: not a launch
+        q = next((j for j in range(L0 - 1, first - 1, -1) if wk[j] < quiet), None)
+        start, lvl = (first if q is None else q + 1), quiet / 7
+        L = next((d for d in range(start, min(H, L0 + 7))      # L0 is a WINDOW's first day: the launch is in it
+                  if all(n[k] > lvl for k in range(d, min(H, d + LAUNCH_RUN_DAYS)))), L0)
+        jump = [d for d in range(max(L + 7, first + 14), min(len(wk), L0 + 7))  # a flat week or more, then a jump
+                if wk[d] >= LAUNCH_JUMP_X * max(wk[d - 7], 1) and wk[d - 7] <= LAUNCH_QUIET_X * max(wk[d - 14], 1)]
+        L = jump[-1] if jump else L
+        if L > first and run[L] <= LAUNCH_TEST_DAY * (L - first) and run[L] <= LAUNCH_MAX_HIDDEN * run[H]:
+            launch = L                                         # a test trickle before it (else real users: kept)
+    return launch
+
+
+def cut_cohorts(cd, i0):
+    """The install days from index i0 on (the launch) as cohort data of their own. Slices only: nothing is
+    copied or dropped — the days before stay in `cd` (shown on request, see evaluate_app)."""
+    if not i0:
+        return cd
+    return {"hs": cd["hs"] + timedelta(days=i0), "E": cd["E"], "H": cd["H"] - i0, "n": cd["n"][i0:],
+            "cum": cd["cum"][i0:], "raw": cd["raw"][i0:], "inc": [i - i0 for i in cd["inc"] if i >= i0],
+            "flags": cd["flags"]}
+
+
 def _pool(cd, i0, i1, N, per=False, clean=False, skip=None):
     """Σ uninstalled-by-N and Σ installs over the NON-EMPTY cohorts with index in [i0, i1] that are complete
     for N → (x, n, k[, [(x_c, n_c, i)]]). clean: also skip install days with a tracking break in days
@@ -619,56 +736,72 @@ def compare(cd, N, skip=None, late=0):
     return row
 
 
-def triangle(cd, cols, late=0, surv=None):
+def _tri_rows(cd, lo, hi, cols, pre=False):
+    """The triangle's ISO-week rows over install days [lo, hi] (dates inside cd), newest first; a week cut by lo
+    or hi is a partial row. pre: the rows are from before the launch (shown on request only)."""
+    E, hs, rows = cd["E"], cd["hs"], []
+    wk = hi - timedelta(days=hi.weekday())              # Monday of hi's week
+    while wk + timedelta(days=6) >= lo:
+        a, b = max(wk, lo), min(wk + timedelta(days=6), hi)
+        i0, i1 = (a - hs).days, (b - hs).days
+        p = []
+        for N in cols:
+            if (E - b).days < N:
+                p.append(None)
+                continue
+            x, n, _ = _pool(cd, i0, i1, N)
+            p.append(_r(x / n, 5) if n else None)
+        iso = wk.isocalendar()
+        rows.append({"week": "%d-W%02d" % (iso[0], iso[1]), "from": _iso(a), "to": _iso(b), "days": i1 - i0 + 1,
+                     "users": sum(cd["n"][i0:i1 + 1]), "partial": i1 - i0 + 1 < 7, "p": p, "pre": pre})
+        wk -= timedelta(days=7)
+    return rows
+
+
+def triangle(cd, cols, late=0, surv=None, pre=None):
     """Install ISO-week × checkpoint grid, newest week first, EVERY week. A cell is shown only when every
     install day of that week is complete for N; ref[N] = the all-time normal (the heat reference) = 1 − the
     "hamesha" survival at N (surv, default survival(cd, late)) over ref_users installs that reached N — the
     summary's "N din baad X bache" exactly, so it never goes down from one column to the next (a column pooled
     on its own mixes in a different set of install days); None past the last day the survival reached.
-    avg4[N] = the TRI_AVG_WEEKS newest FULL weeks whose day N is settled (Sunday + N ≤ E − late), pooled like
-    the cells → {p, users, from, to}, or None while fewer such weeks exist."""
+    avg4[N] = ONE fixed set of install days for every column — the TRI_AVG_WEEKS newest FULL weeks (Mon–Sun) whose
+    days are all settled (the last Sunday ≤ E − late and the 27 days before), pooled like the cells → {p, users,
+    from, to, prov}; None where not every one of those days reached day N yet (Sunday + N > E), or while the app
+    (cd) is younger than those weeks. The same install days in every column, each only ever losing more users:
+    the row can never go down from left to right. prov = day N of the newest ones is still provisional (kaccha).
+    avg4_set = that set on its own ({from, to, users}; None while the app is younger), so a page whose columns it has
+    not reached yet still names it. pre = the cohort data of the WHOLE history when cd starts at the launch (cut_cohorts): the weeks before it
+    are added as rows with "pre": True — kept, shown on request."""
     E, hs, H = cd["E"], cd["hs"], cd["H"]
     surv = survival(cd, late) if surv is None else surv
+    S = E - timedelta(days=late)
+    b = S - timedelta(days=(S.weekday() + 1) % 7)       # the last Sunday ≤ S: the newest settled full week ends there
+    a = b - timedelta(days=7 * TRI_AVG_WEEKS - 1)
     ref, ref_users, avg4 = [], [], []
     for N in cols:
         ok = N < len(surv["left"])
         ref.append(_r(1 - surv["left"][N], 5) if ok else None)
         ref_users.append(surv["n"][N] if ok else 0)
-        # the newest full week settled for N ends on the last Sunday ≤ E − late − N
-        last = E - timedelta(days=late + N)
-        b = last - timedelta(days=(last.weekday() + 1) % 7)
-        a = b - timedelta(days=7 * TRI_AVG_WEEKS - 1)
-        if a < hs:
+        if a < hs or b + timedelta(days=N) > E:
             avg4.append(None)
             continue
         x, n, _ = _pool(cd, (a - hs).days, (b - hs).days, N)
-        avg4.append({"p": _r(x / n, 5), "users": n, "from": _iso(a), "to": _iso(b)} if n else None)
-    rows = []
-    if H:
-        wk = E - timedelta(days=E.weekday())            # Monday of E's week
-        while wk + timedelta(days=6) >= hs:
-            a, b = max(wk, hs), min(wk + timedelta(days=6), E)
-            i0, i1 = (a - hs).days, (b - hs).days
-            users = sum(cd["n"][i0:i1 + 1])
-            p = []
-            for N in cols:
-                if (E - b).days < N:
-                    p.append(None)
-                    continue
-                x, n, _ = _pool(cd, i0, i1, N)
-                p.append(_r(x / n, 5) if n else None)
-            iso = wk.isocalendar()
-            rows.append({"week": "%d-W%02d" % (iso[0], iso[1]), "from": _iso(a), "to": _iso(b),
-                         "days": i1 - i0 + 1, "users": users, "partial": i1 - i0 + 1 < 7, "p": p})
-            wk -= timedelta(days=7)
-    return {"cols": list(cols), "ref": ref, "ref_users": ref_users, "avg4": avg4, "rows": rows}
+        avg4.append({"p": _r(x / n, 5), "users": n, "from": _iso(a), "to": _iso(b),
+                     "prov": b + timedelta(days=N) > S} if n else None)
+    rows = _tri_rows(cd, hs, E, cols) if H else []
+    if pre is not None and pre["hs"] < hs:
+        rows += _tri_rows(pre, pre["hs"], hs - timedelta(days=1), cols, pre=True)
+    aset = ({"from": _iso(a), "to": _iso(b), "users": sum(cd["n"][(a - hs).days:(b - hs).days + 1])}
+            if hs <= a else None)
+    return {"cols": list(cols), "ref": ref, "ref_users": ref_users, "avg4": avg4, "avg4_set": aset, "rows": rows}
 
 
-def lifetime(cd, ds):
-    """"All time": everyone ever installed (any age) who has uninstalled by now, + the all-time median rate."""
+def lifetime(cd, ds, first=0):
+    """"All time": everyone ever installed (any age) who has uninstalled by now, + the all-time median rate.
+    first = the launch day's index in ds (cd already starts there): the test days before it are not the app's."""
     x = sum(cd["cum"][i][-1] for i in range(cd["H"]) if cd["n"][i])
     n = sum(cd["n"])
-    rates = [r for r, b in zip(ds["rate"], ds["broken"]) if r is not None and not b]
+    rates = [r for r, b in zip(ds["rate"][first:], ds["broken"][first:]) if r is not None and not b]
     return {"p": _r(x / n, 5) if n else None, "users": n, "un": x, "rate_all_med": _r(median(rates), 3)}
 
 
@@ -695,7 +828,10 @@ def survival(cd, late=0, i0=0, i1=None):
     that reached it — a day only older installs reached still sits on the same curve (when every install day
     reached N, S(N) is exactly 1 − their pooled uninstall share). GA4 counts are approximate: a day whose
     uninstalls pass the users left is taken as everyone gone (h = 1) and listed in "clipped", never hidden.
-    → {from, to, installs, x, r, n, k, left, lo, hi, gone, thin_from, clipped}; per N: x = uninstalls on day N,
+    → {from, to, installs, gap_days, gap_inc, gap_brk, x, r, n, k, left, lo, hi, gone, thin_from, clipped};
+    installs = every install of [i0, i1]; gap_days = its SETTLED install days with installs that no day N counts,
+    said next to the curve by name: gap_inc = those whose GA4 cells are incomplete ("data adhoora"), gap_brk = those
+    with a tracking break ("data gayab", 0 uninstalls recorded) — ISO days; per N: x = uninstalls on day N,
     r = users at risk, n / k = installs / install days that reached N, left = S(N), lo / hi = its 95% range
     (Greenwood), gone = S(N−1) − S(N) as a share of the ORIGINAL installs (so the bars add up to the line);
     thin_from = the first N reached by under THIN_MIN_DAYS install days or THIN_MIN_USERS installs ("kam data"
@@ -703,12 +839,14 @@ def survival(cd, late=0, i0=0, i1=None):
     H = cd["H"]
     i0, i1 = max(0, i0), H - 1 if i1 is None else min(i1, H - 1)
     dn, dk, dgone, x = [0] * (H + 2), [0] * (H + 2), [0] * (H + 2), [0] * (H + 1)
-    reach, installs = 0, 0
+    reach, installs, gap, ni = 0, 0, ([], []), cd.get("ni")
     for i in range(i0, i1 + 1):
         nc = cd["n"][i]
         installs += nc
         d = _drop_day(cd, i, late) if nc else 0
         if d <= 0:
+            if nc and i < H - late:                          # settled, yet no day counts it: the day's own data is
+                gap[0 if ni and ni[i] == i else 1].append(_iso(cd["hs"] + timedelta(days=i)))   # incomplete / a break
             continue
         reach = max(reach, d)
         dn[0], dn[d], dk[0], dk[d] = dn[0] + nc, dn[d] - nc, dk[0] + 1, dk[d] - 1
@@ -718,7 +856,8 @@ def survival(cd, late=0, i0=0, i1=None):
                 dgone[lag + 1] += u          # gone on day `lag`: no longer at risk on days lag+1 .. d−1
                 dgone[d] -= u
     f, t = _win(cd, i0, i1)
-    out = {"from": f, "to": t, "installs": installs, "thin_from": None, "clipped": []}
+    out = {"from": f, "to": t, "installs": installs, "gap_days": len(gap[0]) + len(gap[1]), "gap_inc": gap[0],
+           "gap_brk": gap[1], "thin_from": None, "clipped": []}
     cols = {k: [] for k in ("x", "r", "n", "k", "left", "lo", "hi", "gone")}
     S, gw, shown = 1.0, 0.0, 1.0
     n_run = k_run = g_run = 0
@@ -800,14 +939,16 @@ def key_days(curve, cps):
     return sorted(got or [N for N in KEY_DAYS if N < reach and N in cp][:KEY_MAX])
 
 
-def survival_out(cd, late, cps):
-    """The detail's "survival": every install day ("all" — hamesha), the last SURV_RECENT_DAYS days of installs
-    ("recent" — abhi; None when the app is no older than that: it would be the same curve), the verdict, and
-    the summary's key days (from "all")."""
+def survival_out(cd, late, cps, whole=None):
+    """The detail's "survival": every install day since the launch ("all" — hamesha), the last SURV_RECENT_DAYS
+    days of installs ("recent" — abhi; None when the app is no older than that: it would be the same curve), the
+    verdict, the summary's key days (from "all") and — when test installs before the launch are hidden (whole =
+    the cohort data of the whole history) — the same curve WITH them ("with_test", shown on request; else None)."""
     H = cd["H"]
     curve = survival(cd, late)
     recent = survival(cd, late, H - SURV_RECENT_DAYS) if H > SURV_RECENT_DAYS else None
-    return {"all": curve, "recent": recent, "verdict": verdict(cd, late), "key_days": key_days(curve, cps)}
+    return {"all": curve, "recent": recent, "verdict": verdict(cd, late), "key_days": key_days(curve, cps),
+            "with_test": survival(whole, late) if whole is not None and whole is not cd else None}
 
 
 def releases(store, ds):
@@ -875,9 +1016,9 @@ def checkpoints(cd, curve, H, rels, open_eps, prev_eval, advanced):
         if until >= E:
             what = ("Naya version %s" % src["version"] if src.get("version") else "App update") \
                 if why == "release" else "Alert"
-            when = fmt_day(src["date"] if why == "release" else src["opened"])
+            when = fmt_day(src["date"] if why == "release" else src["opened"], E)
             zoom = {"until": _iso(until), "reason": why,
-                    "label": "%s (%s) — %s tak har din" % (what, when, fmt_day(until))}
+                    "label": "%s (%s) — %s tak har din" % (what, when, fmt_day(until, E))}
     if nmax < 0:
         cps = set()
     elif stage == "naya":
@@ -943,36 +1084,42 @@ def cohort_conditions(rows):
     return out
 
 
-def _cohort_text(s):
+def _cohort_text(s, ref=None):
     old, new, sd = shown_pct(s["before"], s["now"])
     vs = s.get("vs") or []
-    basis = ("pichhle 4 hafte aur all-time dono" if len(vs) > 1 else
-             "pichhle 4 hafte" if vs == ["prev"] else "all-time normal")
+    if s.get("old"):         # installs of months ago (old_changes): "pichhle 4 hafte" would read as the last 4 weeks
+        span = fmt_span(s["base_from"], s["base_to"], ref)
+        basis = ("usse pehle ke 4 hafte (%s) aur usse pehle ke saare installs dono" % span if len(vs) > 1 else
+                 "usse pehle ke 4 hafte (%s)" % span if vs == ["prev"] else "usse pehle ke saare installs (%s)" % span)
+    else:
+        basis = ("pichhle 4 hafte aur all-time dono" if len(vs) > 1 else
+                 "pichhle 4 hafte" if vs == ["prev"] else "all-time normal")
     also = (" · %s bhi %s" % (", ".join(s["also"]), "upar" if s["dir"] == "up" else "neeche")) if s.get("also") else ""
     return "%s uninstall %s → %s (%s point) — %s ke installs, %s se %s%s" % (
-        s["checkpoint"], old, new, fmt_pp(sd), fmt_span(s["installs_from"], s["installs_to"]), basis,
+        s["checkpoint"], old, new, fmt_pp(sd), fmt_span(s["installs_from"], s["installs_to"], ref), basis,
         "zyada" if s["dir"] == "up" else "kam", also)
 
 
-def alert_text(family, dr, s):
+def alert_text(family, dr, s, ref=None):
     """The Hinglish message (without the leading "{app}: "); an "up" alert that rests on provisional days
-    says so (PROV_NOTE) — the number can still grow, never shrink."""
-    return _alert_text(family, dr, s) + (PROV_NOTE if s.get("prov") and dr == "up" else "")
+    says so (PROV_NOTE) — the number can still grow, never shrink. ref = the data's last day: a date whose
+    year isn't obvious says it (fmt_span)."""
+    return _alert_text(family, dr, s, ref) + (PROV_NOTE if s.get("prov") and dr == "up" else "")
 
 
-def _alert_text(family, dr, s):
+def _alert_text(family, dr, s, ref=None):
     if family == "cohort":
-        return _cohort_text(dict(s, dir=dr))
+        return _cohort_text(dict(s, dir=dr), ref)
     if family == "rate_spike":
         return "%s ko uninstall rate %s /1k active (normal %s–%s) — achanak %s (%d uninstalls)" % (
-            fmt_day(s["day"]), fmt_rate(s["now"]), fmt_rate(s["lo"]), fmt_rate(s["hi"]),
+            fmt_day(s["day"], ref), fmt_rate(s["now"]), fmt_rate(s["lo"]), fmt_rate(s["hi"]),
             "zyada" if dr == "up" else "kam", s["users"])
     if family == "rate_zero":
         return "%s ko ek bhi uninstall record nahi hua (normal ~%d/din) — GA4/Firebase tracking check karo" % (
-            fmt_day(s["day"]), round(s["expected"]))
+            fmt_day(s["day"], ref), round(s["expected"]))
     if family == "rate_drift":
         return "%s se uninstall rate %s → %s /1k active (%s) — dheere dheere %s" % (
-            fmt_day(s["since"]), fmt_rate(s["before"]), fmt_rate(s["now"]), fmt_rel(s["rel"]),
+            fmt_day(s["since"], ref), fmt_rate(s["before"]), fmt_rate(s["now"]), fmt_rel(s["rel"]),
             "badh raha hai" if dr == "up" else "ghat raha hai")
     return str(s.get("text") or "")
 
@@ -989,11 +1136,13 @@ def _snap(c):
     return out
 
 
-def update_episodes(state, app_id, E, ready, advanced, first_eval, now):
+def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_before=None):
     """Open / refresh / close this app's episodes from the conditions that are READY now. Pure: it only
     changes `state`. A new key opens an episode (on the app's first-ever evaluation it is SEEDED: shown,
     not sent); spike days ≤SPIKE_MERGE_DAYS from an open spike of the same kind fold into it. Only an
-    evaluation whose E moved on counts misses / closes — the hourly runs in between change nothing."""
+    evaluation whose E moved on counts misses / closes — the hourly runs in between change nothing — except
+    an install (cohort) episode not seen now whose installs ended before `old_before` (ALERT_RECENT_DAYS): it
+    is old news, closed at once (never sent if it wasn't yet)."""
     eps, closed = state.setdefault("episodes", {}), state.setdefault("closed", [])
     E_iso, hit = _iso(_d(E)), set()
     for c in ready:
@@ -1026,6 +1175,10 @@ def update_episodes(state, app_id, E, ready, advanced, first_eval, now):
             else:
                 ep["last"] = snap
         hit.add(key)
+    if old_before is not None:
+        for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit and e["family"] == "cohort"
+                    and e["last"].get("installs_to") and _d(e["last"]["installs_to"]) < old_before]:
+            closed.append(dict(eps.pop(key), closed=E_iso))
     if advanced:
         for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit]:
             ep = eps[key]
@@ -1044,7 +1197,7 @@ def alert_obj(ep, app, E):
     every build, so a renamed app shows its new name."""
     s, E = ep["last"], _d(E)
     prov = bool(s.get("prov")) and ep["dir"] == "up" and "closed" not in ep    # history: its days have settled
-    text = alert_text(ep["family"], ep["dir"], dict(s, prov=prov))
+    text = alert_text(ep["family"], ep["dir"], dict(s, prov=prov), E)
     out = {"id": ep["id"], "source": "uninstall", "app_id": ep["app_id"], "app": app, "family": ep["family"],
            "dir": ep["dir"], "severity": s.get("severity") or "watch",
            "unit": "pct" if ep["family"] == "cohort" else "per1k",
@@ -1246,25 +1399,70 @@ def rate_ready(ds, drift, app_id, streak, since, E, first, n=None):
     return out
 
 
+def launch_out(whole, L, i0):
+    """The detail's "launch": day = the launch day (i0 > 0: the test installs before it are hidden) or, with
+    nothing to hide, the first day with installs; hidden = test installs are left out; pre_installs /
+    pre_uninstalls = those test installs and how many of them uninstalled so far; installs = every install from
+    the launch day through the last day (provisional ones too) — the summary's honest total; sure = the hidden
+    installs averaged ≤ LAUNCH_SURE_DAY a day (a tester trickle for sure — more may be early real users: the page
+    then says "shayad test")."""
+    n = whole["n"]
+    pre = sum(n[:i0])
+    f = next((i for i in range(i0) if n[i]), i0)             # the first day with (test) installs
+    return {"day": _iso(whole["hs"] + timedelta(days=L)), "hidden": bool(i0),
+            "pre_installs": pre, "pre_uninstalls": sum(whole["cum"][i][-1] for i in range(i0) if n[i]),
+            "installs": sum(n[i0:]) if i0 else sum(n), "sure": pre <= LAUNCH_SURE_DAY * (i0 - f)}
+
+
+def old_changes(rows, recent_from, skip, ref):
+    """What moved at checkpoints whose newest install days ended before recent_from (ALERT_RECENT_DAYS): info for
+    the "Purane badlaav" list only — never an episode, never sent, never counted. One item per firing (settled)
+    row and direction, newest installs first; skip = {dir: checkpoints the alert conditions already hold}."""
+    out = []
+    for row in rows:
+        t = row["recent"]["to"]
+        if not t or _d(t) >= recent_from:
+            continue
+        for dr in ("up", "down"):
+            if not _fires(row, dr) or row["n"] in skip.get(dr, ()):
+                continue
+            c = cohort_conditions([row])[dr]
+            item = {k: c[k] for k in ("n", "checkpoint", "dir", "vs", "now", "before", "delta_pp", "z", "users",
+                                      "installs_from", "installs_to", "base_from", "base_to")}
+            item["text"] = alert_text("cohort", dr, dict(c, old=True), ref)
+            out.append(item)
+    return sorted(out, key=lambda o: (o["installs_to"], -o["n"], o["dir"]), reverse=True)
+
+
 def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=None, late=LATE_DAYS,
                  outdated=False):
     """Evaluate one app's store against its saved evaluation state → (detail, summary row). Updates
     state["eval"][app_id] and this app's episodes in place (pure otherwise). late = the provisional days
     (config GA4_LATE_DAYS). outdated = the store is an older format still waiting for its clean re-pull:
-    shown (and flagged), but whatever it opens is seeded, never sent."""
+    shown (and flagged), but whatever it opens is seeded, never sent.
+    LAUNCH (launch_day): test installs before an app went live are left out of every install-day number — the
+    curves, the triangle, the checkpoints and their alerts, the summary — and kept: the daily series, the cohort
+    file, survival["with_test"] and the triangle's "pre" rows still hold them (the page shows them on a tap).
+    RECENT: an alert is only about installs whose window ends within ALERT_RECENT_DAYS; a checkpoint whose
+    newest installs are older than that and moved is listed in "old_changes" — info, never an episode."""
     E = _d(store["window_end"])
     late = max(0, int(late or 0))
     S = E - timedelta(days=late)                     # the last settled day
+    recent_from = E - timedelta(days=ALERT_RECENT_DAYS)
     prev = (state.get("eval") or {}).get(app_id)
     advanced, first = prev is None or E > _d(prev["end"]), prev is None
-    cd = cohort_data(store, E)
-    ds = daily_series(store, E, cd, late)
-    mark_breaks(cd, ds["broken"])
+    whole = cohort_data(store, E)
+    L = launch_day(whole["n"])
+    i0 = L if sum(whole["n"][:L]) else 0             # nothing to hide (only empty days before) → keep every day
+    ds = daily_series(store, E, whole, late, i0)
+    mark_breaks(whole, ds["broken"])
+    cd = mark_breaks(cut_cohorts(whole, i0), ds["broken"][i0:]) if i0 else whole
     H = cd["H"]
     curve = headline_curve(cd, late)
     rels = releases(store, ds)
     eps_before = state.get("episodes") or {}
-    open_before = [e for e in eps_before.values() if e["app_id"] == app_id]
+    open_before = [e for e in eps_before.values() if e["app_id"] == app_id and not (   # an old-installs one closes now
+        e["family"] == "cohort" and e["last"].get("installs_to") and _d(e["last"]["installs_to"]) < recent_from)]
     cp = checkpoints(cd, curve, H, rels, open_before, prev, advanced)
     rows = [compare(cd, N) for N in cp["list"]]                               # newest: "up" tests, ▲
     settled = [compare(cd, N, late=late) for N in cp["list"]] if late else rows   # settled only: "down", ▼
@@ -1273,13 +1471,16 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     conds = {}
     # up: the newest install days first (earliest signal), then the settled ones (the newest read low until
     # their late data is in, so a moderate rise may show only once settled); down: settled only
+    near = lambda r: bool(r["recent"]["to"]) and _d(r["recent"]["to"]) >= recent_from      # noqa: E731
     for dr, sets in (("up", ((rows, 0), (settled, late))), ("down", ((settled, late),))):
         for rs, lt in sets[:1] if not late else sets:
+            rs = [r for r in rs if near(r)]          # the install days alerts are about: the last ALERT_RECENT_DAYS
             cl = _claimed(cd, claimed.get(dr))
             if lt:                                   # settled: a HELD day (never told) can show its own rise now
                 cl -= _claimed(cd, held.get(dr))
             news = new_cohort_rows(cd, rs, dr, cl, "%s|cohort|%s" % (app_id, dr) in eps_before, late)
-            c = cohort_conditions(news).get(dr)
+            news = [r for r in news if near(r)]      # a row judged again without its claimed (newest) days can end
+            c = cohort_conditions(news).get(dr)       # older: it must still be about recent installs
             if c:
                 c["late"], c["prov"] = lt, dr == "up" and _d(c["installs_to"]) + timedelta(days=c["n"]) > S
                 conds[dr] = c
@@ -1304,7 +1505,7 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
             keep = (_claimed(cd, held.get(dr)) | {i for f in hd.values() for i in f}) - real   # a row only held:
             held[dr] = _add_ranges([], [_win(cd, i, i) for i in sorted(keep)])   # claimed, not told
     ready += rate_ready(ds, drift, app_id, streak, since, E, first)
-    eps = update_episodes(state, app_id, E, ready, advanced, first or outdated, now)
+    eps = update_episodes(state, app_id, E, ready, advanced, first or outdated, now, recent_from)
     if outdated:                                     # NOTHING goes out from an older store format — not even an
         for e in eps:                                # episode opened earlier whose send failed (still due)
             if e.get("notified_at") is None:
@@ -1346,15 +1547,15 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     for a in alerts:
         counts[a["severity"]] = counts.get(a["severity"], 0) + 1
     rn = _rate_now(ds, drift)
-    sv = survival_out(cd, late, cp["list"])
+    sv = survival_out(cd, late, cp["list"], whole)
     fl = store.get("flags") or {}
-    inc = {k: v for k, v in sorted((fl.get("incomplete_days") or {}).items()) if cd["hs"] <= _d(k) <= E}
-    lo, hi = _iso(cd["hs"]), _iso(E)                 # days whose cells are an events estimate (used, just shown)
+    inc = {k: v for k, v in sorted((fl.get("incomplete_days") or {}).items()) if whole["hs"] <= _d(k) <= E}
+    lo, hi = _iso(whole["hs"]), _iso(E)              # days whose cells are an events estimate (used, just shown)
     evd = sorted(k for k, v in (store.get("cell_src") or {}).items()
                  if lo <= k <= hi and (v or {}).get("src") == "events_scaled" and k not in inc)
     detail = {"app_id": app_id, "app": app, "package": package or store.get("package"), "key": key,
               "tz": store.get("time_zone") or "UTC", "den": store.get("den") or "a28",
-              "history_start": _iso(cd["hs"]), "data_till": _iso(E), "settled_till": _iso(S), "late_days": late,
+              "history_start": _iso(whole["hs"]), "data_till": _iso(E), "settled_till": _iso(S), "late_days": late,
               "fetched_at": store.get("fetched_at"),
               "stale": bool(stale), "history_capped": bool(store.get("history_capped")),
               "flags": {"truncated": sorted(fl.get("truncated") or []), "thresholded": bool(fl.get("thresholded")),
@@ -1363,15 +1564,18 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
                         "outdated": bool(outdated),
                         # per day of the history, where its install-day cells came from: the users report, an
                         # events estimate (used), or incomplete (flagged, not alerted on)
-                        "cell_days": {"users": H - len(evd) - len(inc), "events": len(evd), "incomplete": len(inc)},
+                        "cell_days": {"users": whole["H"] - len(evd) - len(inc), "events": len(evd),
+                                      "incomplete": len(inc)},
                         "events_span": [evd[0], evd[-1]] if evd else None},
               "daily": {"start": _iso(ds["start"]), "new": ds["new"], "un": ds["un"], "a28": ds["den"],
                         "upd": ds["upd"], "rate": ds["rate"], "med": ds["med"], "lo": ds["lo"], "hi": ds["hi"],
                         "breaks": [_iso(ds["start"] + timedelta(days=i)) for i in range(ds["n"]) if ds["broken"][i]]},
               "rate_now": rn, "stage": cp["stage"], "stage_why": cp["why"], "zoom": cp["zoom"],
               "checkpoints": cp["list"], "nmax": cp["nmax"], "curve": curve, "table": table, "head4": head4,
-              "lifetime": lifetime(cd, ds), "triangle": triangle(cd, cp["list"], late, (sv or {}).get("all")),
-              "survival": sv, "releases": rels,
+              "lifetime": lifetime(cd, ds, i0),
+              "triangle": triangle(cd, cp["list"], late, (sv or {}).get("all"), whole if i0 else None),
+              "survival": sv, "releases": rels, "launch": launch_out(whole, L, i0),
+              "old_changes": old_changes(settled, recent_from, {dr: c["ns"] for dr, c in conds.items()}, E),
               "lateness": lateness(revision_sums(store)), "alerts": alerts, "alerts_closed": closed}
     summary = {"app_id": app_id, "app": app, "data_till": _iso(E), "stale": bool(stale), "ready": cp["nmax"] >= 0,
                "stage": cp["stage"], "rate7": rn["last7"], "rate_med": rn["med"], "rate_dir": rn["dir"],

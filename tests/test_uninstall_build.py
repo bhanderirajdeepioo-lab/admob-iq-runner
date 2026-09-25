@@ -428,6 +428,17 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     assert all(not v["verdict"]["fires"] for k, v in sv.items() if k not in ("Demo Flashlight", "Demo Notes"))
     assert sv["Demo Notes"]["verdict"] is None and sv["Demo Notes"]["recent"] is None     # 20 days old
     assert sv["Demo Caller – Test App"]["key_days"] == [1, 7, 30, 90] and sv["Demo Caller – Test App"]["recent"]
+    # ~10 months of a few TEST installs before the Wallpapers' launch: found, left out of every install-day number, kept
+    wal = [a for a in asset["apps"] if a["app"] == "Demo Wallpapers"][0]
+    assert wal["launch"]["day"] == "2026-06-16" and wal["launch"]["hidden"] and wal["launch"]["pre_installs"] > 100
+    assert wal["history_start"] == "2025-08-20" and wal["survival"]["all"]["from"] == "2026-06-16"
+    assert wal["survival"]["with_test"]["from"] == "2025-08-20" and any(r["pre"] for r in wal["triangle"]["rows"])
+    assert all(not a["launch"]["hidden"] for a in asset["apps"] if a is not wal)
+    # the Caller's installs of March moved its D180: old installs — info ("Purane badlaav"), never an alert
+    assert [(o["checkpoint"], o["installs_from"], o["installs_to"]) for o in cal["old_changes"]] == [
+        ("D180", "2026-03-14", "2026-03-20")]
+    assert all(not a["old_changes"] for a in asset["apps"] if a is not cal)
+    assert all(al["installs_to"] >= "2026-07-25" for al in s["alerts"] if al["family"] == "cohort")
     assert all(LOG_LINE.match(line) for line in fx["public_log"]) and len(fx["public_log"]) == 7
     with open(OUT, encoding="utf-8") as f:
         committed = f.read()
