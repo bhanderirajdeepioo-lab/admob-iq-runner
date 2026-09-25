@@ -1,0 +1,41 @@
+# One-off per owner (owner-requested): set GA4 Event data retention to 14 months on every property that
+# owner sees. Uses a one-time analytics.edit code (secret GA4_EDIT_CODE); the edit token is never saved.
+# See admob_iq/fetch/ga4_retention.py. Logs of this PUBLIC repo show counts only.
+name: ga4-retention
+
+on:
+  workflow_dispatch:
+    inputs:
+      redirect_uri:
+        description: "exact redirect_uri used in the consent URL"
+        required: false
+        default: "http://127.0.0.1:8765"
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-retention
+  cancel-in-progress: false
+
+jobs:
+  retention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt pynacl
+      - name: Run
+        env:
+          REDIRECT_URI: ${{ github.event.inputs.redirect_uri }}
+          REPO: ${{ github.repository }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          GA4_EDIT_CODE: ${{ secrets.GA4_EDIT_CODE }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: python -m admob_iq.fetch.ga4_retention 2>/tmp/ret.err || { echo "::error::retention change failed (details kept off the public log)"; exit 1; }
