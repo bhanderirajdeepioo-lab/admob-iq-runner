@@ -43,7 +43,7 @@ def test_the_engine_constants_match_the_fetch_and_the_asset():
     for k in ("IMPACT_V", "COHORT_DAYS", "ACT_LATE_DAYS", "VUSE_MIN_SHARE", "COH_BATCH", "COH_MIN_USERS",
               "COH_MIN_COVERAGE", "COH_EDGE_RUN", "COH_MAX_CALLS"):
         assert getattr(imp, k) == getattr(gu, k), k
-    assert imp.CONSTS["dau_min_rel"] == 0.03 and len(imp.CONSTS) == 43 and all(k == k.lower() for k in imp.CONSTS)
+    assert imp.CONSTS["dau_min_rel"] == 0.03 and len(imp.CONSTS) == 44 and all(k == k.lower() for k in imp.CONSTS)
 
 
 # ── 1. windows ───────────────────────────────────────────────────────────────────────────────────
@@ -368,6 +368,220 @@ def test_without_admob_revenue_the_row_says_so_and_nothing_else_changes():
     assert "no_revenue" in b["notes"] and b["verdict"]["level"] == "continue" and with_rev["verdict"]["level"] == "halt"
     for k in ("returning_dau", "new_d1", "new_d7", "sessions", "time", "uninstall_d0"):
         assert b["rows"][k] == with_rev["rows"][k], k
+
+
+# ── 7b. a trend too steep to extrapolate (a launch / growth phase) ────────────────────────────────────
+
+def _burst(x, until=R0 - timedelta(days=8)):
+    """× x a week until `until` (the pre-release trend window's last day), flat after: a launch burst that settled."""
+    return lambda d: x ** ((min(d, until) - until).days / 7)
+
+
+def test_a_young_app_growing_fast_before_its_update_gets_no_expected_level_only_before_vs_after(monkeypatch):
+    # old users ×1.8 a week after the launch, flat from a week before the update (no return cohorts yet, like a store
+    # before its first cohort read): extrapolated, that trend "expects" ~2× the users — the plain change is ~0
+    hs = END - timedelta(days=69)
+    g = _burst(1.8)
+    st, rv = make_impact_store(70, new=300, old=lambda d: 20000 * g(d), ret_ok=lambda c: False,
+                               versions=rollout("1.0", [(R0, "1.1", 0.3)]))
+    assert hs + timedelta(days=7) < R0
+    d, row, _ = run(st, rv)
+    b = blk(d, R0)
+    r = b["rows"]["returning_dau"]
+    mu = r["extra"]["mu_week"]
+    assert mu > imp.TREND_MAX_WEEK and r["status"] == r["raw_status"] == "low" and r["z"] is None
+    assert r["reason"] == imp.trend_why(mu, "app") and r["reason"].startswith("Update se pehle app tez badh raha tha (~×1.")
+    assert r["reason"].endswith("normal trend pakka nahi, isliye sirf pehle vs baad")
+    assert r["expected"] is None and r["extra"]["expected_model"] > 1.5 * r["after"]        # the model's, kept aside
+    assert r["change"] == pytest.approx(r["after"] / r["before"] - 1, abs=0.001) and abs(r["change"]) < 0.05
+    assert r["change"] == pytest.approx(r["extra"]["raw_change"], abs=0.0001)
+    v = b["verdict"]
+    assert v["level"] == "continue" and "returning_dau" not in v["worse"] + v["better"] and not v["worse"] + v["better"]
+    assert next(u for u in row["updates"] if u["key"] == b["key"])["head"] is None    # nothing judged: no one-liner
+    # without the cap (as it was): a "−50%" vs an expected level from the launch trend, on a row nobody could judge
+    monkeypatch.setattr(imp, "TREND_MAX_WEEK", math.inf)
+    d0, row0, _ = run(st, rv)
+    r0 = blk(d0, R0)["rows"]["returning_dau"]
+    assert r0["status"] == "low" and r0["expected"] > 1.5 * r0["after"] and r0["change"] < -0.3
+    assert next(u for u in row0["updates"] if u["key"] == b["key"])["head"] is None     # the headline: worse / better only
+
+
+@pytest.mark.parametrize("kw", [
+    {},
+    {"new": 500, "old": 40000, "act": lambda d, v: 0.94 if d >= R0 + timedelta(days=1) else 1.0},     # worse
+    {"old": lambda d: 30000 * 1.1 ** ((d - R0).days / 7), "noise": 0.003},                             # +10% a week
+    {"ipu": lambda d, v: 3.52 if d >= R0 + timedelta(days=1) else 4.0},                                 # ads/user −12%
+    {"ecpm": lambda d: 1.76 if d >= R0 + timedelta(days=1) else 2.0},                                   # market
+    {"tpu": lambda d, v, n: 150.0 if n else 280.0 * 0.97 ** ((d - R0).days / 7), "noise": 0.004},      # −3% a week
+])
+def test_an_established_app_is_judged_exactly_as_without_the_cap(kw, monkeypatch):
+    st, rv = one(**kw)
+    d, row, _ = run(st, rv)
+    monkeypatch.setattr(imp, "TREND_MAX_WEEK", math.inf)
+    d0, row0, _ = run(st, rv)
+    assert d["impact"] == d0["impact"] and row["updates"] == row0["updates"] and d["alerts"] == d0["alerts"]
+    assert all(r["extra"]["expected_model"] is None for b in d["impact"]["updates"] for r in [b["rows"]["returning_dau"]])
+
+
+def test_ads_per_user_on_a_steep_trend_is_low_data_with_no_judged_number(monkeypatch):
+    # a new ad placement ramping: ads per user ×1.5 a week until a week before the update, flat after
+    for ecpm in (None, lambda d: 2.0 / _burst(1.5)(d)):          # revenue per user ramping too / flat (eCPM falling)
+        st, rv = one(ipu=lambda d, v: 4.0 * _burst(1.5)(d), ecpm=ecpm)
+        d, row, _ = run(st, rv)
+        b = blk(d, R0)
+        r = b["rows"]["arpdau"]
+        assert r["status"] == r["raw_status"] == "low" and r["z"] is None and r["extra"]["imp_adj"] is None, r
+        assert r["reason"] == "Update se pehle ads per user tez badh raha tha (~×1.5/hafta) — normal trend pakka nahi, " \
+                              "isliye sirf pehle vs baad"
+        assert r["change"] == pytest.approx(r["after"] / r["before"] - 1, abs=0.001)
+        assert b["verdict"]["level"] == "continue" and next(u for u in row["updates"] if u["key"] == b["key"])["head"] is None
+    monkeypatch.setattr(imp, "TREND_MAX_WEEK", math.inf)             # without the cap: a big "judged" drop that isn't
+    r0 = blk(run(*one(ipu=lambda d, v: 4.0 * _burst(1.5)(d)))[0], R0)["rows"]["arpdau"]
+    assert r0["extra"]["imp_adj"] < -0.25
+
+
+def test_revenue_per_user_on_a_steep_trend_leaves_ads_per_user_to_decide_alone():
+    # eCPM (the market's) ×1.5 a week before the update: the revenue test can't run — no Market / Maybe from it; a real
+    # −12% ads per user (its own trend flat) is still worse, and without it the row is Low data
+    a0 = R0 + timedelta(days=1)
+    for drop, want in ((0.88, "worse"), (1.0, "low")):
+        st, rv = one(ecpm=lambda d: 2.0 * _burst(1.5)(d), ipu=lambda d, v, x=drop: 4.0 * (x if d >= a0 else 1.0))
+        b = blk(run(st, rv)[0], R0)
+        r = b["rows"]["arpdau"]
+        assert r["status"] == r["raw_status"] == want, r
+        if want == "worse":
+            assert r["reason"] == imp.IMP_ONLY_WHY % "−12%" and r["extra"]["imp_adj"] == pytest.approx(-0.12, abs=0.005)
+            assert b["verdict"]["level"] == "halt" and b["verdict"]["worse"] == ["arpdau"]
+        else:
+            assert r["reason"].startswith("Update se pehle kamai per user tez badh raha tha (~×1.5/hafta)")
+            assert b["verdict"]["level"] == "continue"
+
+
+def test_ads_per_user_moving_past_the_minimum_with_its_noise_unmeasured_is_never_normal():
+    # ads per user ×1.4 a week until 5 weeks before the update (its pseudo-updates can't measure the noise), then +30%
+    # at the update while eCPM falls as much (revenue per user flat): the row can't say Normal next to "ads/user +30%"
+    a0 = R0 + timedelta(days=1)
+    gi, up = _burst(1.4, R0 - timedelta(days=36)), (lambda d: 1.3 if d >= a0 else 1.0)
+    st, rv = one(ipu=lambda d, v: 4.0 * gi(d) * up(d), ecpm=lambda d: 2.0 / (gi(d) * up(d)))
+    b = blk(run(st, rv)[0], R0)
+    r = b["rows"]["arpdau"]
+    assert r["extra"]["imp_adj"] == pytest.approx(0.3, abs=0.01) and abs(r["change"]) < 0.01
+    assert r["status"] == r["raw_status"] == "low" and r["z"] is None, r
+    assert r["reason"] == imp.LOW_NULL_TREND % "ads per user"
+    assert "arpdau" not in b["verdict"]["worse"] + b["verdict"]["better"]
+
+
+def test_sessions_per_user_on_a_steep_trend_is_low_data_with_no_trend_net_number():
+    st, rv = one(spu=lambda d, v, n: 1.6 if n else 2.4 * _burst(1.4)(d))
+    r = blk(run(st, rv)[0], R0)["rows"]["sessions"]
+    assert r["status"] == "low" and r["extra"]["adj_change"] is None and r["z"] is None
+    assert r["reason"].startswith("Update se pehle sessions per user tez badh raha tha (~×1.4/hafta)")
+    # a rise as a factor, a fall as a percentage a week (never "×0.05": nobody reads that as −95%)
+    assert imp.trend_why(-0.5, "app").startswith("Update se pehle app tez ghat raha tha (~−39%/hafta)")
+    assert "(~−95%/hafta)" in imp.trend_why(-3.0, "app") and "(~−99%/hafta)" in imp.trend_why(-9.0, "app")
+    assert "(~−27%/hafta)" in imp.trend_why(-0.31, "ads per user") and "×" not in imp.trend_why(-0.31, "app")
+    assert "×12/hafta" in imp.trend_why(math.log(12.4), "app") and "×2.6/hafta" in imp.trend_why(math.log(2.64), "app")
+
+
+def test_the_headline_and_the_alert_carry_the_change_a_per_user_row_was_judged_on():
+    # eCPM (the market's) climbing ×1.5 a week THROUGH the update and ads per user −12%: revenue per user still rose
+    # ~+40% — the row is Worse on ads per user, so its one-liner and its alert say −12%, never a red "+40%" (and the
+    # mirror case: a WIN on ads per user +12% while revenue per user fell)
+    a0 = R0 + timedelta(days=1)
+    for sg, level, want in ((1, "halt", "worse"), (-1, "win", "better")):
+        st, rv = one(ecpm=lambda d, s=sg: 2.0 * math.exp(s * 0.4 * (d - R0).days / 7),
+                     ipu=lambda d, v, s=sg: 4.0 * ((1 - 0.12 * s) if d >= a0 else 1.0))
+        d, row, _ = run(st, rv)
+        b = blk(d, R0)
+        r = b["rows"]["arpdau"]
+        assert r["status"] == want and b["verdict"]["level"] == level and r["extra"]["imp_adj"] == pytest.approx(
+            -0.12 * sg, abs=0.005)
+        assert r["change"] * sg > 0.2                                  # the plain revenue per user: the other way
+        head = next(u for u in row["updates"] if u["key"] == b["key"])["head"]
+        assert head["row"] == "arpdau" and head["change"] == pytest.approx(r["extra"]["imp_adj"], abs=1e-4)
+        a = next(a for a in d["alerts"] if a["family"] == "impact")
+        assert a["level"] == level and a["rel"] == pytest.approx(r["extra"]["imp_adj"], abs=0.0001)
+        assert a["text"].startswith("v1.1 (26 Aug) ke baad ads per user %s12%% (kamai per 1,000 users $" % (
+            "−" if sg > 0 else "+")), a["text"]                          # the alert opens on what was judged
+    # sessions per user on a normal +0.2 a week trend (under the cap) that stops at −15% net: the number still rose
+    st, rv = one(spu=lambda d, v, n: 1.6 if n else 2.4 * math.exp(0.2 * (d - R0).days / 7) * (0.85 if d >= a0 else 1.0))
+    d, row, _ = run(st, rv)
+    b = blk(d, R0)
+    r = b["rows"]["sessions"]
+    assert r["status"] == "worse" and r["extra"]["adj_change"] == pytest.approx(-0.15, abs=0.005) and r["change"] > 0.03
+    head = next(u for u in row["updates"] if u["key"] == b["key"])["head"]
+    assert head["row"] == "sessions" and head["change"] == pytest.approx(r["extra"]["adj_change"], abs=1e-4)
+    assert re.match(r"^Sessions per user normal trend hata ke 15% kam \(pehle se \d+% zyada\) — sirf ek taraf",
+                    b["verdict"]["why"]), b["verdict"]["why"]
+
+
+def test_a_maybe_whose_expected_level_and_plain_change_disagree_says_both():
+    # returning DAU (no return cohorts) growing +0.25 a week until the update, then flat and −4%: "expected se ~10% kam"
+    # while the users still went up — the CONTINUE line says both, never a bare "DAU −10%"
+    a0 = R0 + timedelta(days=1)
+    st, rv = one(old=lambda d: 20000 * math.exp(0.25 * (min(d, R0) - R0).days / 7), ret_ok=lambda c: False,
+                 act=lambda d, v: 0.96 if d >= a0 else 1.0)
+    b = blk(run(st, rv)[0], R0)
+    r = b["rows"]["returning_dau"]
+    assert r["status"] == "unsure" and r["change"] < -0.06 and r["extra"]["raw_change"] > 0.03
+    assert re.match(r"^Kuch farak dikh raha hai \(DAU expected se \d+% kam par pehle se \d+% zyada\), par abhi pakka "
+                    r"nahi — rollout chalne do$", b["verdict"]["why"]), b["verdict"]["why"]
+    assert imp.un_phrase("returning_dau", dict(r, change=-0.1, extra=dict(r["extra"], raw_change=-0.02))) == "DAU −10%"
+    # the alert / HOLD-HALT lines too: a judged change and a plain one pointing opposite ways are both said, the judged
+    # one first (never "DAU 9.8% gira" for users that went up); the same way round, the old wording
+    cx, row = {"currency": "USD"}, {"change": -0.098, "expected": 1000, "after": 902, "extra": {"raw_change": 0.025}}
+    assert imp.head_phrase("returning_dau", row, cx) == (
+        "purane users ka DAU expected se 9.8% kam (expected 1,000 → 902/din; pehle se 2% zyada)")
+    assert imp.why_phrase("returning_dau", row) == "purane users ka DAU expected se 9.8% kam (pehle se 2% zyada)"
+    row = dict(row, extra={"raw_change": -0.05})
+    assert imp.head_phrase("returning_dau", row, cx) == "purane users ka DAU 9.8% gira (expected 1,000 → 902/din)"
+    assert imp.why_phrase("returning_dau", row) == "purane users ka DAU expected se 9.8% kam"
+    ses = {"change": 0.17, "_eff": -0.07, "before": 2.4, "after": 2.8}
+    assert imp.head_phrase("sessions", ses, cx) == (
+        "purane users ke sessions per user normal trend hata ke −7% (2.4 → 2.8, seedha +17%)")
+    assert imp.head_phrase("sessions", dict(ses, change=-0.05, after=2.28), cx) == (
+        "purane users ke sessions per user 2.4 → 2.3 (−5%; normal trend hata ke −7%)")
+
+
+def test_too_few_calm_weeks_for_the_noise_says_so_not_that_the_history_is_short(monkeypatch):
+    # 120 days of history, but the old users (or sessions per user) grew ×1.8 (×1.4) a week until 5 weeks before the
+    # update, then flat; a true −15%: the pseudo-updates of that growth stretch can't measure the noise — Low data with
+    # THAT reason, never "needs ~10 weeks of data" (it has them); a history that is really short still says so
+    a0 = R0 + timedelta(days=1)
+    g, gs = _burst(1.8, R0 - timedelta(days=36)), _burst(1.4, R0 - timedelta(days=36))
+    st, rv = one(old=lambda d: 20000 * g(d), act=lambda d, v: 0.85 if d >= a0 else 1.0,
+                 spu=lambda d, v, n: 1.6 if n else 2.4 * gs(d) * (0.85 if d >= a0 else 1.0))
+    b = blk(run(st, rv)[0], R0)
+    r, rs = b["rows"]["returning_dau"], b["rows"]["sessions"]
+    assert abs(r["extra"]["mu_week"]) < imp.TREND_MAX_WEEK                  # its own trend: normal
+    assert r["status"] == "low" and r["reason"] == imp.LOW_NULL_TREND % "app" == (
+        "Update se pehle ke hafton me app tez badh / ghat raha tha (launch ya tez growth) — aam utaar-chadhaav napne "
+        "layak normal hafte kam")
+    assert rs["status"] == "low" and rs["reason"] == imp.LOW_NULL_TREND % "sessions per user"
+    monkeypatch.setattr(imp, "TREND_MAX_WEEK", math.inf)                     # the weeks were there
+    b0 = blk(run(st, rv)[0], R0)
+    assert b0["rows"]["returning_dau"]["status"] in ("unsure", "worse") and b0["rows"]["sessions"]["status"] != "low"
+    monkeypatch.undo()
+    st, rv = make_impact_store(60, versions=rollout("1.0", [(R0, "1.1", 0.3)]), act=lambda d, v: 0.85 if d >= a0 else 1.0)
+    r = blk(run(st, rv)[0], R0)["rows"]["returning_dau"]
+    assert r["status"] == "low" and r["reason"] == imp.LOW_NULL                  # 5 weeks before the update: short
+
+
+def test_a_block_where_nothing_could_be_measured_never_reads_as_checked():
+    # a young app growing fast, no usage / version / revenue data yet, few installs: every row Low data / No data — the
+    # verdict says nothing could be measured and the summary says judged 0 (the page: "Not enough data yet")
+    g = _burst(1.8)
+    st, _ = make_impact_store(70, new=30, old=lambda d: 20000 * g(d), ret_ok=lambda c: False,
+                              versions=rollout("1.0", [(R0, "1.1", 0.3)]))
+    d, row, _ = run(dict(st, usage={}, vuse={}), None)
+    b = blk(d, R0)
+    assert all(r["status"] in ("low", "na") for r in list(b["rows"].values()) + list(b["versions_cmp"]["rows"].values()))
+    assert b["verdict"]["level"] == "continue" and b["verdict"]["why"] == (
+        "Abhi koi number parkha nahi ja saka (data kam ya nahi) — rollout chalne do")
+    u = next(u for u in row["updates"] if u["key"] == b["key"])
+    assert u["judged"] == 0 and u["head"] is None
+    d2, row2, _ = run(*one())                                               # a normal block: all 9 judged
+    assert [u["judged"] for u in row2["updates"]] == [9]
 
 
 # ── 8. uninstall on install day ──────────────────────────────────────────────────────────────────

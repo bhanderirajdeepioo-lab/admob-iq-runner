@@ -32,7 +32,9 @@ Day-level noise ÷ √days is NOT used: the days of a week move together (live r
 and the next correlate 0.87; a 7-day mean varies 4× what 7 independent days would), which read plain noise as |z| ≥ 3
 on ~1 date in 4. A row is "worse" / "better" only when significant (|z| ≥ Z_FINAL, Z_EARLY until the week is settled),
 at least its minimum effect NET of the normal trend (the effect the z tests), and — before the block is final — the
-same on 2 daily evaluations (PERSIST). GA4's own limits are said, never hidden: user
+same on 2 daily evaluations (PERSIST). A normal weekly change steeper than TREND_MAX_WEEK (a launch / growth phase) is
+never extrapolated: the row is "Low data" with plain before vs after and no expected level (the headline, the alerts and
+the verdict only ever use worse / better rows). GA4's own limits are said, never hidden: user
 counts are estimates, consent-denied users are missing, user-level data older than GA4's retention reads short (the
 fetch finds that edge: ret_from) — rows it touches say "No data" with the reason, never a guess.
 """
@@ -76,6 +78,17 @@ NOISE_LAG = 7             # the weekly-change / noise reference ends a week befo
                           # contrast's own baseline — shared, it makes plain noise read as z ~1.2× (≈1% false rows at z 3)
 NULL_WEEKS = 8            # the week comparison's own noise: redone at every day of the 8 weeks before the release
 NULL_MIN = 21             # ≥3 weeks of such pseudo-updates to measure it (fewer: Low data — never the day-level guess)
+TREND_MAX_WEEK = 0.3      # the largest believable normal weekly change (log: ≈ ×1.35 a week). On live data (established
+                          # = ≥200 days after launch, ≥200 returning users a day) it is above ~99% of the RETURNING DAU
+                          # trends — at the releases and on every day (raw mode: no return cohorts read yet; cohort mode
+                          # trends an old-users-only series — re-measure once cohorts land) — and above ~99% of the
+                          # established releases' ads per user trends too. On every day ads per user passes it a few %
+                          # of the time (most of it one app, whose ARPDAU will often be Low data) and revenue per user
+                          # (eCPM, the market's) far more often — so a steep revenue trend alone never makes Low data:
+                          # ads per user decides.
+                          # A launch / growth phase goes far past it; extrapolated it makes no "expected" level: the row
+                          # is Low data, plain before vs after. The pseudo-updates (noise) skip days past it too — the
+                          # test would not have run there (too few left for that reason: LOW_NULL_TREND)
 RECENT_SWING = 0.05       # recent installs' returners moved >5 points of the returning users (ad spend): the per-user
                           # rows and the version table may be the users' mix → at most Maybe (installs_swing)
 BIAS_MIN = 3              # early-updater gap from the 3–6 …
@@ -97,7 +110,8 @@ CONSTS = {k.lower(): v for k, v in dict(
     RET_MIN_REL=RET_MIN_REL, USE_MIN_REL=USE_MIN_REL, ARPDAU_MIN_REL=ARPDAU_MIN_REL, IMP_MIN_REL=IMP_MIN_REL,
     VER_MIN_REL=VER_MIN_REL, BIG_X=BIG_X, PERSIST=PERSIST, MIN_DAU=MIN_DAU, MIN_INSTALLS=MIN_INSTALLS,
     MIN_EVENTS=MIN_EVENTS, VER_MIN_USERS=VER_MIN_USERS, INSTALL_SWING=INSTALL_SWING, NEWSHARE_SWING=NEWSHARE_SWING,
-    SIGMA_FLOOR=SIGMA_FLOOR, NOISE_LAG=NOISE_LAG, NULL_WEEKS=NULL_WEEKS, NULL_MIN=NULL_MIN, RECENT_SWING=RECENT_SWING,
+    SIGMA_FLOOR=SIGMA_FLOOR, NOISE_LAG=NOISE_LAG, NULL_WEEKS=NULL_WEEKS, NULL_MIN=NULL_MIN, TREND_MAX_WEEK=TREND_MAX_WEEK,
+    RECENT_SWING=RECENT_SWING,
     BIAS_MIN=BIAS_MIN, BIAS_MAX=BIAS_MAX, VUSE_MIN_SHARE=VUSE_MIN_SHARE, COH_BATCH=COH_BATCH,
     COH_MIN_USERS=COH_MIN_USERS, COH_MIN_COVERAGE=COH_MIN_COVERAGE, COH_EDGE_RUN=COH_EDGE_RUN,
     COH_MAX_CALLS=COH_MAX_CALLS, IMPACT_ALERT_DAYS=IMPACT_ALERT_DAYS, IMPACT_LIST_DAYS=IMPACT_LIST_DAYS,
@@ -114,7 +128,7 @@ ACT = {"halt": "HALT — staged rollout rok do, hotfix bhejo", "hold": "HOLD —
        "win": "WIN — isi disha me aage badho"}
 UNIT = {"returning_dau": "users", "new_d1": "pct", "new_d7": "pct", "sessions": "num", "time": "sec",
         "arpdau": "usd1k", "uninstall_d0": "pct"}
-EXTRA = {"returning_dau": ("raw_change", "mode", "k_days", "imputed_share", "mu_week"),
+EXTRA = {"returning_dau": ("raw_change", "mode", "k_days", "imputed_share", "mu_week", "expected_model"),
          "new_d1": ("installs_before", "installs_after", "swing", "cohorts_before", "cohorts_after", "phi"),
          "sessions": ("all_before", "all_after", "adj_change"),
          "arpdau": ("imp_change", "imp_adj", "ecpm_change", "newshare_before", "newshare_after", "tz_blend", "currency"),
@@ -122,6 +136,7 @@ EXTRA = {"returning_dau": ("raw_change", "mode", "k_days", "imputed_share", "mu_
 EXTRA["new_d7"], EXTRA["time"] = EXTRA["new_d1"], EXTRA["sessions"]
 DP = {"users": 0, "pct": 5, "num": 3, "sec": 1, "usd1k": 4}
 STATUSES = ("worse", "better", "same", "unsure", "low", "pending", "na", "market")
+JUDGED = ("worse", "better", "same", "unsure", "market")     # a status from the row's own test (the rest: not measured)
 NOTES = ("installs_swing", "newshare_swing", "diluted", "slow_rollout", "no_cohorts", "no_revenue", "tz_blend",
          "before_overlap", "cut_by_next", "prov", "est", "thresholded")
 
@@ -135,6 +150,7 @@ NA_NO_VER = "Is update ka version number nahi"
 WAIT_PERSIST = "pakka hone ke liye kal ka data bhi"
 RAW_WHY = ("Naye users ke wapas aane ka data nahi — seedha pichhle hafte se tulna (minimum 2×); installs ke badlaav ka "
            "asar alag nahi ho sakta, isliye sirf andaza")
+TREND_WHY = "Update se pehle %s tez %s raha tha (~%s/hafta) — normal trend pakka nahi, isliye sirf pehle vs baad"
 # RAW_WORST: without return cohorts the returning DAU is never "worse" / "better" — on the 28 live stores (no cohorts
 # read yet) 79 of 234 week-on-week DAU rows came out worse / better, 58 of them moving WITH the install volume (median
 # ±26–46% installs): ad spend, not the update
@@ -142,6 +158,22 @@ RAW_WHY = ("Naye users ke wapas aane ka data nahi — seedha pichhle hafte se tu
 
 def _d(s):
     return U._d(s)
+
+
+def _steep(mu):
+    """A normal weekly change (log) too steep to extrapolate (TREND_MAX_WEEK)."""
+    return mu is not None and abs(mu) > TREND_MAX_WEEK
+
+
+def trend_why(mu, what):
+    """The Low data reason of a row whose normal weekly change is too steep: a rise as a factor ("…tez badh raha tha
+    (~×2.6/hafta)…"), a fall as a percentage ("…tez ghat raha tha (~−30%/hafta)…" — never "×0.70")."""
+    f = math.exp(mu)
+    if mu > 0:
+        x = "×%d" % round(f) if f >= 10 else "×%.1f" % f
+    else:
+        x = U._minus("-%d%%" % min(99, round((1 - f) * 100)))
+    return TREND_WHY % (what, "badh" if mu > 0 else "ghat", x)
 
 
 def _iso(d):
@@ -435,6 +467,9 @@ def _shifts(R, days):
 
 # ≥ NULL_MIN pseudo-updates need ~10 weeks before the release: the first starts ≤10 days back, each looks 5 weeks further
 LOW_NULL = "Update se pehle ka ~%d hafte ka data chahiye (aam utaar-chadhaav napne ke liye)" % math.ceil((10 + NULL_MIN + 35) / 7)
+# …the data is there, but enough of those pseudo-updates sat in a launch / growth stretch (TREND_MAX_WEEK): said so
+LOW_NULL_TREND = ("Update se pehle ke hafton me %s tez badh / ghat raha tha (launch ya tez growth) — aam utaar-chadhaav "
+                  "napne layak normal hafte kam")
 
 
 def dau_row(cx, blk):
@@ -505,7 +540,8 @@ def dau_row(cx, blk):
                 bt.append(x)
         return bt
     mu = mu_at(R)
-    bt = backtest(R, mu)
+    steep = _steep(mu)                               # a launch / growth phase: no expected level (TREND_MAX_WEEK)
+    bt = [] if steep else backtest(R, mu)
     rb = [_ret_dau(cx, d) for d in _days(win["b0"], win["b1"])]
     rb = [x for x in rb if x is not None]
     ex["mu_week"] = round(mu, 5)
@@ -534,9 +570,15 @@ def dau_row(cx, blk):
     if used:
         row.update(before=srb / len(used), after=sr / len(used), expected=se / len(used), change=sr / se - 1)
         ex["raw_change"] = round(sr / srb - 1, 5) if srb else None
+        if steep:                                    # the model's level is kept aside, never shown as expected
+            ex["expected_model"] = row["expected"]
+            row.update(expected=None, change=sr / srb - 1 if srb else None)
     blk["_mix"] = _mix(cx, rho, Kx, used, bs)
     if len(win["settled"]) < IMPACT_MIN_DAYS:
         return _pending(row, win, win["a0"] + timedelta(days=IMPACT_MIN_DAYS - 1 + ACT_LATE_DAYS))
+    if steep:
+        row.update(status="low", raw_status="low", reason=trend_why(mu, "app"))
+        return row
     if (_mean(rb) or 0) < MIN_DAU:
         row.update(status="low", raw_status="low", reason="Roz %d se kam purane users — GA4 ginti ka noise zyada" % MIN_DAU)
         return row
@@ -550,16 +592,20 @@ def dau_row(cx, blk):
             row["reason"] = RAW_WHY
         return row
     shift = _mean(xa) - U.median(bt)
-    nulls = []                                       # the same comparison at every pseudo-update before the release
+    nulls, steep_n = [], 0                           # the same comparison at every pseudo-update before the release
     for dl in _shifts(R, used):
         Rq, D = R - timedelta(days=dl), timedelta(days=dl)
         mq = mu_at(Rq)
         bq = backtest(Rq, mq)
         xq = [_log(_ret_dau(cx, d - D), expd(d - D, b - D, w, mq)) for d, b, w in pat]
         if len(bq) >= 10 and all(x is not None for x in xq):
+            if _steep(mq):                           # the test would not run there (TREND_MAX_WEEK)
+                steep_n += 1
+                continue
             nulls.append(_mean(xq) - U.median(bq))
-    if len(nulls) < NULL_MIN:
-        row.update(status="low", raw_status="low", reason=LOW_NULL)
+    if len(nulls) < NULL_MIN:                        # (short only for the steep ones: not a short history)
+        row.update(status="low", raw_status="low",
+                   reason=LOW_NULL_TREND % "app" if len(nulls) + steep_n >= NULL_MIN else LOW_NULL)
         return row
     z = shift / _null_sd(nulls)
     row["z"] = z
@@ -678,12 +724,15 @@ def ret_row(cx, blk, N):
     return row
 
 
-def _pu_test(cx, blk, M, need=0.0):
+def _pu_test(cx, blk, M, need=0.0, what="ye number"):
     """The per-user test (§3.4d) of M (a per-user number by day): each settled after-day vs the same weekday before, net
     of the normal week-over-week change μ (the median of the 3 weeks before the before-week, NOISE_LAG); the noise = the
     same comparison at every pseudo-update before the release (_null_sd) — measured only when the effect reaches
-    `need` (the row's minimum: under it the row is Normal whatever the noise). → {used, bs, stat (the mean trend-net log
-    change), adj (its effect: e^stat − 1 — what is judged), z, why (None, "pending", or why there is no z)}."""
+    `need` (the row's minimum: under it the row is Normal whatever the noise). A normal weekly change steeper than
+    TREND_MAX_WEEK is never extrapolated (why = trend_why(μ, `what`), steep = μ; no stat / adj), nor measured as noise
+    (too few pseudo-updates left for that reason: LOW_NULL_TREND, else LOW_NULL). → {used, bs, stat (the
+    mean trend-net log change), adj (its effect: e^stat − 1 — what is judged), z, why (None, "pending", or why there is
+    no z), steep}."""
     win, R = blk["win"], blk["R"]
     memo, wmemo = {}, {}
 
@@ -710,37 +759,46 @@ def _pu_test(cx, blk, M, need=0.0):
             continue
         xa.append(x - mu * w)
         used.append(d), bs.append(b), pat.append((d, b, w))
-    out = {"used": used, "bs": bs, "stat": None, "adj": None, "z": None, "why": None}
+    out = {"used": used, "bs": bs, "stat": None, "adj": None, "z": None, "why": None, "steep": None}
     if len(win["settled"]) < IMPACT_MIN_DAYS:
         out["why"] = "pending"
         return out
     if nw < 10 or len(xa) < IMPACT_MIN_DAYS:
         out["why"] = "Update se pehle ke 3 hafte ka data kam"
         return out
+    if _steep(mu):
+        out["why"], out["steep"] = trend_why(mu, what), mu
+        return out
     out["stat"] = st = _mean(xa)
     out["adj"] = math.exp(st) - 1
     if abs(out["adj"]) < need:
         return out
-    nulls = []
+    nulls, steep_n = [], 0
     for dl in _shifts(R, used):
         D = timedelta(days=dl)
         mq, nq = mu_at(R - D)
+        if nq < 10:
+            continue
         xq = [_log(m(d - D), m(b - D)) for d, b, _ in pat]
-        if nq >= 10 and all(x is not None for x in xq):
+        if all(x is not None for x in xq):
+            if _steep(mq):                           # the test would not run there (TREND_MAX_WEEK)
+                steep_n += 1
+                continue
             nulls.append(_mean([x - mq * w for x, (_, _, w) in zip(xq, pat)]))
-    if len(nulls) < NULL_MIN:
-        out["why"] = LOW_NULL
+    if len(nulls) < NULL_MIN:                        # (short only for the steep ones: not a short history)
+        out["why"] = LOW_NULL_TREND % what if len(nulls) + steep_n >= NULL_MIN else LOW_NULL
         return out
     out["z"] = st / _null_sd(nulls)
     return out
 
 
-def _pu(cx, blk, row, M, num, den, mn):
+def _pu(cx, blk, row, M, num, den, mn, what="ye number"):
     """A per-user row: shown = pooled Σnum ÷ Σden after vs the matched before days (change = after ÷ before − 1, as
     the numbers read); judged = _pu_test's trend-net effect (adj) against the minimum `mn` — a trend the app was already
-    on never makes (or hides) a change. → (row, the test)."""
+    on never makes (or hides) a change; one too steep to extrapolate (TREND_MAX_WEEK) = Low data, the plain change
+    only. → (row, the test)."""
     win = blk["win"]
-    t = _pu_test(cx, blk, M, mn)
+    t = _pu_test(cx, blk, M, mn, what)
     used, bs = t["used"], t["bs"]
     sa = sum(num(d) for d in used)
     sda = sum(den(d) for d in used)
@@ -802,7 +860,7 @@ def use_row(cx, blk, key):
     def M(d):
         r = slot(d, "r")
         return r[j] / r[0] if r and r[0] and r[j] else None
-    row, t = _pu(cx, blk, row, M, num, den, USE_MIN_REL)
+    row, t = _pu(cx, blk, row, M, num, den, USE_MIN_REL, "%s per user" % key)
     used, bs = t["used"], t["bs"]
 
     def allu(days):
@@ -810,7 +868,7 @@ def use_row(cx, blk, key):
         a = sum(_dv(cx, d, "a1") or 0 for d in days)
         return n / a if a else None
     row["extra"].update(all_before=allu(bs), all_after=allu(used), adj_change=t["adj"])
-    if row["status"] not in ("pending", "na"):
+    if row["status"] not in ("pending", "na") and t["steep"] is None:     # (a steep trend: its own reason)
         mr = [den(d) for d in bs]
         if mr and _mean(mr) < MIN_DAU:
             row.update(status="low", raw_status="low", reason="Roz %d se kam purane users" % MIN_DAU)
@@ -819,13 +877,17 @@ def use_row(cx, blk, key):
 
 
 MARKET_WHY = "Sirf eCPM badla, ads per user wahi — market ka asar, update ka nahi"
+IMP_ONLY_WHY = ("Kamai per user pehle se tez badal rahi thi (eCPM — market) — faisla sirf ads per user (%s) se, uska "
+                "trend normal")
 
 
 def arpdau_row(cx, blk):
     """Ad revenue per 1,000 active users (AdMob revenue ÷ GA4 activeUsers), shown before / after. JUDGED on the part
     an update can move — ads (impressions) per active user, with its own trend-net test, minimum ARPDAU_MIN_REL and
     BIG_X: eCPM (the price per ad) is the market's. Revenue per user moving for sure while ads per user moved under
-    IMP_MIN_REL (or the other way) = "Market", never counted (§3.4f)."""
+    IMP_MIN_REL (or the other way) = "Market", never counted (§3.4f). A normal weekly change too steep to extrapolate
+    (TREND_MAX_WEEK): of ads per user = Low data, nothing judged; of revenue per user only (eCPM) = no Market / Maybe
+    from revenue — ads per user alone may still say Worse / Better, else Low data."""
     row = _row("arpdau")
     ex = row["extra"]
     ex.update(tz_blend=cx["tz_blend"], currency=cx["currency"])
@@ -856,7 +918,7 @@ def arpdau_row(cx, blk):
         a = sum(a1(d) for d in days)
         return fn(days) / a if a else None
     win = blk["win"]
-    row, t = _pu(cx, blk, row, M, lambda d: rev(d) * 1000, a1, ARPDAU_MIN_REL)
+    row, t = _pu(cx, blk, row, M, lambda d: rev(d) * 1000, a1, ARPDAU_MIN_REL, "kamai per user")
     used, bs = t["used"], t["bs"]
     ia, ib = pool(used, lambda ds: sum(imp(d) for d in ds)), pool(bs, lambda ds: sum(imp(d) for d in ds))
     ra, rb = sum(rev(d) for d in used), sum(rev(d) for d in bs)
@@ -864,7 +926,7 @@ def arpdau_row(cx, blk):
     eb = rb / sum(imp(d) for d in bs) if ib else None
     ns_b = pool(bs, lambda ds: sum(_dv(cx, d, "new") or 0 for d in ds))
     ns_a = pool(used, lambda ds: sum(_dv(cx, d, "new") or 0 for d in ds))
-    ti = _pu_test(cx, blk, Mi, IMP_MIN_REL)          # the update's part: ads per active user
+    ti = _pu_test(cx, blk, Mi, IMP_MIN_REL, "ads per user")      # the update's part: ads per active user
     ex.update(imp_change=round(ia / ib - 1, 4) if ia and ib else None, imp_adj=ti["adj"],
               ecpm_change=round(ea / eb - 1, 4) if ea and eb else None,
               newshare_before=None if ns_b is None else round(ns_b, 5),
@@ -873,6 +935,18 @@ def arpdau_row(cx, blk):
         row["_swing"] = True
     if row["n_after"] == 0 and row["status"] not in ("pending",) and any(f(d) is None for d in win["settled"]):
         return _na(row, NA_NO_REV)
+    if ti["steep"] is not None and row["status"] not in ("pending", "na"):    # ads per user (the update's part) on
+        row.update(status="low", raw_status="low", z=None, reason=ti["why"])    # a steep trend: nothing judged
+        row.pop("_ratio", None), row.pop("_eff", None)
+        return row
+    if t["steep"] is not None and row["status"] == "low":
+        # revenue per user on a steep trend (eCPM — the market's): its own test can't run, so no Market / Maybe from
+        # it; ads per user, judged on its own (believable) trend, still decides a Worse / Better by itself
+        st_i = _judge(ti["adj"], ARPDAU_MIN_REL, ti["z"], _zlevel(win)) if ti["adj"] is not None else "low"
+        if st_i in ("worse", "better"):
+            row.update(status=st_i, raw_status=st_i, z=ti["z"], reason=IMP_ONLY_WHY % U.fmt_rel(ti["adj"]))
+            row["_ratio"], row["_eff"] = abs(ti["adj"]) / ARPDAU_MIN_REL, ti["adj"]
+            return row
     if row["status"] in ("pending", "low", "na"):
         row.pop("_ratio", None), row.pop("_eff", None)
         return row
@@ -880,6 +954,10 @@ def arpdau_row(cx, blk):
     small = ti["adj"] is not None and abs(ti["adj"]) < IMP_MIN_REL      # ads per user ~flat (its noise not needed)
     if ti["adj"] is None or (ti["z"] is None and not small):     # ads per user can't be judged: revenue alone never
         st = "unsure" if st_r in ("worse", "better", "unsure") else st_r              # decides whose it is
+        if st == "same" and ti["adj"] is not None and abs(ti["adj"]) >= ARPDAU_MIN_REL:
+            st = "low"                               # ads per user moved past the minimum, its noise unmeasured:
+            row["reason"] = (ti["why"] if ti["why"] not in (None, "pending")    # never "Normal" next to that number
+                             else "Ads per user ka data kam — kamai ka farak update ka hai ya market ka, pakka nahi")
         row.update(status=st, raw_status=st, z=None)
         if st == "unsure":
             row["reason"] = "Ads per user ka data kam — kamai ka farak update ka hai ya market ka, pakka nahi"
@@ -1123,11 +1201,14 @@ def _signed_pct(x):
 
 
 def head_phrase(key, row, cx):
-    """The row's message phrase (alert text; spec §3.7)."""
+    """The row's message phrase (alert text; spec §3.7). A row whose judged change points the other way from its plain
+    before → after leads with the judged one (the alert never opens on a rise for a HALT)."""
     c = row.get("change")
     if key == "returning_dau":
-        return "purane users ka DAU %s %s (expected %s → %s/din)" % (
-            _pct(c), _dir(c, "badha", "gira"), _users(row["expected"]), _users(row["after"]))
+        pt = _plain_too(key, row, "; pehle se %s %s")
+        what = "expected se %s %s" % (_pct(c), _dir(c, "zyada", "kam")) if pt else "%s %s" % (
+            _pct(c), _dir(c, "badha", "gira"))
+        return "purane users ka DAU %s (expected %s → %s/din%s)" % (what, _users(row["expected"]), _users(row["after"]), pt)
     if key in ("new_d1", "new_d7", "uninstall_d0"):
         o, n, sd = U.shown_pct(row["before"], row["after"])
         lead = {"new_d1": "naye users me se agle din wapas aane wale", "new_d7": "naye users me se 7ve din wapas aane wale",
@@ -1135,14 +1216,19 @@ def head_phrase(key, row, cx):
         return "%s %s → %s (%s point)" % (lead, o, n, U.fmt_pp(sd))
     if key in ("sessions", "time"):
         e = _eff(key, row)
+        b, a = ((U._minus("%.1f" % row["before"]), U._minus("%.1f" % row["after"])) if key == "sessions"
+                else (fmt_dur(row["before"]), fmt_dur(row["after"])))
+        lead = "purane users ke sessions per user" if key == "sessions" else "purane users ka time per user"
+        if _plain_too(key, row):
+            return "%s normal trend hata ke %s (%s → %s, seedha %s)" % (lead, U.fmt_rel(e), b, a, U.fmt_rel(c))
         net = "" if e is None or abs(e - c) < 0.01 else "; normal trend hata ke %s" % U.fmt_rel(e)
-        if key == "sessions":
-            return "purane users ke sessions per user %s → %s (%s%s)" % (
-                U._minus("%.1f" % row["before"]), U._minus("%.1f" % row["after"]), U.fmt_rel(c), net)
-        return "purane users ka time per user %s → %s (%s%s)" % (fmt_dur(row["before"]), fmt_dur(row["after"]),
-                                                                U.fmt_rel(c), net)
+        return "%s %s → %s (%s%s)" % (lead, b, a, U.fmt_rel(c), net)
     if key == "arpdau":
         imp = _eff(key, row)
+        if imp and c and abs(c) >= 0.005 and (imp < 0) != (c < 0):
+            return "ads per user %s (kamai per 1,000 users %s → %s, %s)" % (
+                U.fmt_rel(imp), _money(row["before"], cx["currency"]), _money(row["after"], cx["currency"]),
+                U.fmt_rel(c))
         return "kamai per 1,000 users %s → %s (%s) — ads per user %s" % (
             _money(row["before"], cx["currency"]), _money(row["after"], cx["currency"]), U.fmt_rel(c),
             U.fmt_rel(imp) if imp is not None else "—")
@@ -1169,15 +1255,16 @@ def short_phrase(key, row):
 def why_phrase(key, row):
     """"purane users ka DAU expected se 5.6% kam" — the verdict's why line."""
     if key == "returning_dau":
-        return "purane users ka DAU expected se %s %s" % (_pct(row["change"]), _dir(row["change"], "zyada", "kam"))
+        return "purane users ka DAU expected se %s %s%s" % (_pct(row["change"]), _dir(row["change"], "zyada", "kam"),
+                                                            _plain_too(key, row))
     if key in ("new_d1", "new_d7", "uninstall_d0"):
         lead = {"new_d1": "agle din wapas aane wale naye users", "new_d7": "7ve din wapas aane wale naye users",
                 "uninstall_d0": "install ke din hi hataane wale"}[key]
         return "%s %s point %s" % (lead, U.fmt_pp(abs(row["change"])), _dir(row["change"], "zyada", "kam"))
     if key in ("sessions", "time"):
-        e = _eff(key, row)
-        return "%s %s %s" % ("sessions per user" if key == "sessions" else "time per user", _pct(e, 0),
-                             _dir(e, "zyada", "kam"))
+        e, pt = _eff(key, row), _plain_too(key, row)
+        return "%s%s %s %s%s" % ("sessions per user" if key == "sessions" else "time per user",
+                                 " normal trend hata ke" if pt else "", _pct(e, 0), _dir(e, "zyada", "kam"), pt)
     if key == "arpdau":
         e = _eff(key, row)
         return "ads per user %s %s (kamai per user %s)" % (_pct(e, 0), _dir(e, "zyada", "kam"), U.fmt_rel(row["change"]))
@@ -1278,10 +1365,43 @@ def verdict(blk, rows, vrows, cx):
                 (" — adoption kam, isliye WIN nahi" if diluted else " — abhi pakka nahi" if not final else "")
         elif un:
             out["why"] = "Kuch farak dikh raha hai (%s), par abhi pakka nahi — rollout chalne do" % ", ".join(
-                short_phrase(k, allr[k]) for k in _rank(un, allr)[:3])
+                un_phrase(k, allr[k]) for k in _rank(un, allr)[:3])
+        elif not any(allr[k]["status"] in JUDGED for k in ROWS + VROWS):
+            out["why"] = "Abhi koi number parkha nahi ja saka (data kam ya nahi) — rollout chalne do"
         else:
             out["why"] = "Koi pakka farak nahi — rollout chalne do"
     return out
+
+
+def _judged_plain(key, row):
+    """(the judged change, the plain before → after one) of a row judged on something else than its plain change —
+    Returning DAU (vs expected), sessions / time (net of the trend) — else (None, None)."""
+    if key == "returning_dau":
+        return row["change"], row["extra"].get("raw_change")
+    if key in ("sessions", "time"):
+        return _eff(key, row), row["change"]
+    return None, None
+
+
+def _plain_too(key, row, fmt=" (pehle se %s %s)"):
+    """" (pehle se 11% zyada)" when a row's judged change and its plain before → after point opposite ways (a DAU
+    "expected se 8% kam" that rose, sessions "8% kam" net of a trend while the number went up), else ""."""
+    e, p = _judged_plain(key, row)
+    if e and p and abs(p) >= 0.005 and (e < 0) != (p < 0):
+        return fmt % (_pct(p, 0), _dir(p, "zyada", "kam"))
+    return ""
+
+
+def un_phrase(key, row):
+    """A Maybe row in the CONTINUE why line: short_phrase — but one whose judged change points the other way from its
+    plain before → after says both: "DAU expected se 8% kam par pehle se 11% zyada" (a bare "DAU −8%" reads as a
+    fall)."""
+    pt = _plain_too(key, row, " par pehle se %s %s")
+    if pt:
+        e = _judged_plain(key, row)[0]
+        what = "DAU expected se" if key == "returning_dau" else "%s per user normal trend hata ke" % key
+        return "%s %s %s%s" % (what, _pct(e, 0), _dir(e, "zyada", "kam"), pt)
+    return short_phrase(key, row)
 
 
 def _rank(keys, allr):
@@ -1391,13 +1511,14 @@ def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, 
         allr = dict(rows, **vrows)
         level = vd["level"]
         head = None
-        hk = (_rank(vd["worse"], allr)[0] if vd["worse"] else _rank(vd["better"], allr)[0] if vd["better"]
-              else "returning_dau" if rows["returning_dau"]["change"] is not None else None)
+        # the update's one-line change: a worse / better row only — never a Normal / Maybe / Low data one — and the
+        # change it was JUDGED on (_eff: sessions / time net of the trend, ad revenue on ads per user; the plain change
+        # of a per-user row can point the other way)
+        hk = _rank(vd["worse"], allr)[0] if vd["worse"] else _rank(vd["better"], allr)[0] if vd["better"] else None
         if hk is not None:
             r = allr[hk]
-            head = {"row": hk, "change": _rd(r["adj"], 4) if hk in VROWS else
-                    _rd(r["change"], 2 if r["change_unit"] == "pp" else 4),
-                    "unit": "rel" if hk in VROWS else r["change_unit"]}
+            ch, unit = (r["adj"], "rel") if hk in VROWS else (_eff(hk, r), r["change_unit"])
+            head = {"row": hk, "change": _rd(ch, 2 if unit == "pp" else 4), "unit": unit}
         if level in ("halt", "hold", "win") and blk["R"] >= E - timedelta(days=IMPACT_ALERT_DAYS):
             keys = vd["better"] if level == "win" else vd["worse"]
             conds.append(_cond(app_id, blk, level, allr, keys, vd, seed, E, rows))
@@ -1416,7 +1537,9 @@ def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, 
             vd = blk["_out"]["verdict"]
             updates.append({"key": blk["key"], "label": blk["label"], "date": _iso(blk["R"]), "level": vd["level"],
                             "early": vd["early"], "final": vd["final"],
-                            "adoption": blk["_out"]["adoption"]["last"], "head": blk["_head"]})
+                            "adoption": blk["_out"]["adoption"]["last"], "head": blk["_head"],
+                            "judged": sum(r["status"] in JUDGED for r in list(blk["_out"]["rows"].values())
+                                          + list(blk["_out"]["versions_cmp"]["rows"].values()))})
     rf = store.get("ret_from")
     rev = "none" if cx["rev"] is None else "ok"
     if cx["rev"] is not None:
@@ -1490,9 +1613,9 @@ def _cond(app_id, blk, level, allr, keys, vd, seed, E, rows):
     elif r["change_unit"] == "pp":
         now, before, dpp = r["after"], r["before"], r["change"]
         rel = (r["after"] / r["before"] - 1) if r["before"] else 0.0
-    else:
+    else:                                             # rel: the change it was judged on (like the headline)
         now, before = r["after"], r["expected"] if hk == "returning_dau" else r["before"]
-        rel, dpp = r["change"], None
+        rel, dpp = _eff(hk, r), None
     bad = level in ("hold", "halt")
     dau = rows["returning_dau"]
     win = blk["win"]

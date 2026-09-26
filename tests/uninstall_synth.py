@@ -855,6 +855,19 @@ def check_asset(asset, summary=None):
         for a, r in zip(asset["apps"], summary["apps"]):                  # the All-apps list: the detail's newest blocks
             assert [(u["key"], u["level"]) for u in r["updates"]] == [
                 (b["key"], b["verdict"]["level"]) for b in a["impact"]["updates"] if b["key"] in {x["key"] for x in r["updates"]}]
+            blocks = {b["key"]: b for b in a["impact"]["updates"]}
+            for u in r["updates"]:                                    # the one-line change: a Worse / Better row only
+                b = blocks[u["key"]]
+                rows = dict(b["rows"], **b["versions_cmp"]["rows"])
+                wb = [k for k in IMPACT_ROWS + IMPACT_VROWS if rows[k]["status"] in ("worse", "better")]
+                assert (u["head"] is None) == (not wb), (u, wb)
+                assert u["head"] is None or u["head"]["row"] in wb
+                assert u["judged"] == sum(r["status"] in ("worse", "better", "same", "unsure", "market") for r in rows.values())
+                if u["head"] is not None:                             # …and the change it was JUDGED on
+                    hr, x = rows[u["head"]["row"]], rows[u["head"]["row"]].get("extra") or {}
+                    want = {"sessions": x.get("adj_change"), "time": x.get("adj_change"), "arpdau": x.get("imp_adj")}.get(
+                        u["head"]["row"], hr["adj"] if u["head"]["row"] in IMPACT_VROWS else hr["change"])
+                    assert abs(u["head"]["change"] - want) < 1e-4, (u, want)
         assert sorted(al["id"] for a in asset["apps"] for al in a["alerts"]) == sorted(al["id"] for al in summary["alerts"])
         for a, r in zip(asset["apps"], summary["apps"]):
             assert a["head4"] == r["head4"] and a["app"] == r["app"]
@@ -951,7 +964,7 @@ IMPACT_ROW_KEYS = ("before", "after", "expected", "after_prov", "change", "chang
                    "raw_status", "streak", "prov", "est", "n_before", "n_after", "from_b", "to_b", "from_a", "to_a",
                    "reason", "ready_on", "extra")
 IMPACT_VROW_KEYS = ("old", "new", "diff", "adj", "bias", "z", "status", "raw_status", "streak", "n_days", "reason", "prov")
-IMPACT_EXTRA = {"returning_dau": ("raw_change", "mode", "k_days", "imputed_share", "mu_week"),
+IMPACT_EXTRA = {"returning_dau": ("raw_change", "mode", "k_days", "imputed_share", "mu_week", "expected_model"),
                 "new_d1": ("installs_before", "installs_after", "swing", "cohorts_before", "cohorts_after", "phi"),
                 "new_d7": ("installs_before", "installs_after", "swing", "cohorts_before", "cohorts_after", "phi"),
                 "sessions": ("all_before", "all_after", "adj_change"), "time": ("all_before", "all_after", "adj_change"),
@@ -967,9 +980,11 @@ IMPACT_CONSTS = ("impact_v", "act_late_days", "cohort_days", "win_days", "pre_da
                  "adopt_low", "chain_days", "impact_min_days", "z_final", "z_early", "dau_min_rel", "ret_min_pp",
                  "ret_min_rel", "use_min_rel", "arpdau_min_rel", "imp_min_rel", "ver_min_rel", "big_x", "persist",
                  "min_dau", "min_installs", "min_events", "ver_min_users", "install_swing", "newshare_swing",
-                 "sigma_floor", "noise_lag", "null_weeks", "null_min", "recent_swing", "bias_min", "bias_max", "vuse_min_share", "coh_batch", "coh_min_users", "coh_min_coverage",
+                 "sigma_floor", "noise_lag", "null_weeks", "null_min", "trend_max_week", "recent_swing", "bias_min", "bias_max",
+                 "vuse_min_share", "coh_batch", "coh_min_users", "coh_min_coverage",
                  "coh_edge_run", "coh_max_calls", "impact_alert_days", "impact_list_days", "impact_show")
 IMPACT_LABEL = re.compile(r"^(v.+|App update)$")               # (a version name may hold a space: "v2.1 (45)")
+IMPACT_TREND = "normal trend pakka nahi, isliye sirf pehle vs baad"   # a trend too steep to extrapolate (TREND_MAX_WEEK)
 _DPS = {"users": 0, "pct": 5, "num": 3, "sec": 1, "usd1k": 4}
 
 
@@ -980,7 +995,8 @@ def _dp_ok(v, dp):
 def check_updates(ups, data_till):
     """A summary row's "updates" (the All apps "Recent updates" list)."""
     for u in ups:
-        _keys(u, ("key", "label", "date", "level", "early", "final", "adoption", "head"), "summary update")
+        _keys(u, ("key", "label", "date", "level", "early", "final", "adoption", "head", "judged"), "summary update")
+        assert isinstance(u["judged"], int) and 0 <= u["judged"] <= len(IMPACT_ROWS) + len(IMPACT_VROWS)
         assert IMPACT_LABEL.match(u["label"]) and _iso(u["date"]) and u["level"] in ("halt", "hold", "continue", "win", None)
         assert isinstance(u["early"], bool) and u["early"] == (not u["final"])
         assert u["adoption"] is None or 0 <= u["adoption"] <= 1.0001
@@ -1047,6 +1063,15 @@ def check_impact(imp, detail=None):
                 assert r["raw_status"] == r["status"] and r["change"] is not None and r["z"] is not None
             if r["status"] == "unsure" and r["raw_status"] in ("worse", "better"):
                 assert r["reason"] == "pakka hone ke liye kal ka data bhi"
+            # a trend too steep to extrapolate: Low data (never judged), no expected level, the plain change
+            if IMPACT_TREND in (r["reason"] or ""):
+                assert r["status"] == r["raw_status"] == "low" and r["z"] is None and r["expected"] is None, (k, r)
+            if k == "returning_dau" and r["extra"]["expected_model"] is not None:
+                assert r["expected"] is None and r["status"] in ("low", "pending"), r
+                if r["before"] and r["change"] is not None:
+                    assert abs(r["change"] - (r["after"] / r["before"] - 1)) < 0.01, r
+            if k == "arpdau" and IMPACT_TREND in (r["reason"] or "") and "ads per user" in r["reason"]:
+                assert r["extra"]["imp_adj"] is None, r
             for x in ("from_a", "to_a", "from_b", "to_b"):
                 assert r[x] is None or _iso(r[x])
             if r["from_a"]:
