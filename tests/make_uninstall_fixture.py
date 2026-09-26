@@ -29,12 +29,15 @@ The apps cover what the tab has to show:
   * Demo Notes              20 days old (28-day actives still filling: no rate yet)  → "naya", every day
   * Demo QR Scanner         ~35 installs/day                                         → "kam data" rows
   * Demo Weather            uninstall rate stepping up since 12 Sep                  → slow drift warning
+                            version 4.1 out from 15 Jul (mid-table)                  → a 📦 line in the install-
+                                                                                       week table (no zoom: old)
   * Demo Launcher           one day with far more uninstalls                         → spike warning (new today,
                                                                                        "kaccha": can only grow);
                                                                                        and 3 Sep's install-day
                                                                                        cells GA4 never returns in
                                                                                        full → "data adhoora", no
                                                                                        alert from it
+                            app_update users jump on 5 Aug (no new version)          → an "update" 📦 line
   * Demo Wallpapers         a day with no app_remove at all (14 Sep)                 → tracking watch once that
                                                                                        day is settled, NO false
                                                                                        "good news", and the
@@ -100,23 +103,28 @@ def truths():
     E = E_FINAL
     d = lambda n: E - timedelta(days=n)                                  # noqa: E731
 
-    def big_versions(day, a1):
-        s = 0.0 if day < date(2026, 9, 10) else min(0.9, 0.1 * ((day - date(2026, 9, 10)).days + 1))
-        return {"3.1": int(a1 * (1 - s)), "3.2": int(a1 * s)} if s else {"3.1": a1}
+    def rollout(old, new, start):                                       # `new` reaches 10% more of the day's
+        def versions(day, a1):                                           # active users every day from `start`
+            s = 0.0 if day < start else min(0.9, 0.1 * ((day - start).days + 1))
+            return {old: int(a1 * (1 - s)), new: int(a1 * s)} if s else {old: a1}
+        return versions
 
     t = {
         "200000001": Truth(d(239), E, lambda c: int(5000 * wave(c)), lags=BIG_LAGS, old_per_day=400, noise=0.03,
                            bump=lambda c: ({1: 60} if c >= date(2026, 9, 11)
                                            else {60: 70} if d(199) <= c <= d(187) else None),
-                           upd=lambda c: 12000 if c == date(2026, 9, 10) else 800, versions=big_versions, seed=1),
+                           upd=lambda c: 12000 if c == date(2026, 9, 10) else 800,
+                           versions=rollout("3.1", "3.2", date(2026, 9, 10)), seed=1),
         "200000002": Truth(d(74), E, lambda c: int(400 * wave(c)), noise=0.05, old_per_day=20, seed=2,
                            bump=lambda c: {0: -100, 1: 20} if c >= date(2026, 8, 25) else None),
         "200000003": Truth(d(19), E, 150, noise=0.08, seed=3),
         "200000004": Truth(d(199), E, lambda c: int(35 * wave(c, 0.3)), noise=0.2, seed=4),
         "200000005": Truth(d(149), E, lambda c: int(1500 * wave(c)), noise=0.03, seed=5,
-                           old_per_day=lambda c: 600 if c >= date(2026, 9, 12) else 150),
+                           old_per_day=lambda c: 600 if c >= date(2026, 9, 12) else 150,
+                           versions=rollout("4.0", "4.1", date(2026, 7, 15))),
         "200000006": Truth(d(119), E, lambda c: int(800 * wave(c)), noise=0.04, seed=6,
-                           old_per_day=lambda c: 960 if c == E else 60),
+                           old_per_day=lambda c: 960 if c == E else 60,
+                           upd=lambda c: 2400 if c == date(2026, 8, 5) else 200),
         "200000007": Truth(d(99), E, lambda c: int(300 * wave(c)), noise=0.05, old_per_day=10, seed=7),
         "200000008": Truth(d(99), E, 100, seed=8),
         "200000009": Truth(d(29), E, 100, seed=9),
