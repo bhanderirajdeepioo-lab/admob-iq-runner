@@ -9,6 +9,11 @@ run_uninstall, in this order:
      (each app's raw install-day × lag cells) — deterministic, rewritten only when they change,
   4. only then put the small summary (alerts, badge counts, one row per app) into dashboard["uninstall"].
 
+UPDATE IMPACT (engine.impact): every app update's before / after card rides in each app's detail (detail["impact"]) and
+summary row (row["updates"]); its HOLD / HALT / WIN alerts are uninstall alerts like any other (family "impact"). Its
+ARPDAU row needs the AdMob revenue build_static passes in (`revenue`, per AdMob app — summed over every selected AdMob
+app of the same Play package, since they are one GA4 stream).
+
 The notifications go through build_static.send_alerts like every other alert; mark_notified then records
 which uninstall alerts went out (their channel answered OK), so each one is sent ONCE and a failed send is
 tried again next run (a dry run counts as sent: switching NOTIFY_DRY_RUN off never dumps a backlog).
@@ -22,10 +27,11 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import ga4_probe
 from .db import write_json_gz_stable
+from .engine import impact as imp
 from .engine import uninstall as eng
 from .fetch import ga4_uninstall as gu
 
@@ -64,7 +70,8 @@ def _selected_apps(dashboard, data_dir):
     """Every SELECTED app → {app_id, app_name (the dashboard's display name), package|None, same_as|None}.
     Two selected apps with ONE Play package are one GA4 stream: only the app catalog_from picks for that
     package keeps it (fetched and alerted once); the other gets package None + same_as = that app's name
-    (listed under "GA4 data nahi", never fetched — no double quota, no duplicate alerts)."""
+    (listed under "GA4 data nahi", never fetched — no double quota, no duplicate alerts) + same_pkg = the package
+    (its AdMob revenue joins the fetched app's ARPDAU: one GA4 stream, one set of active users)."""
     try:
         with open(os.path.join(data_dir, "app_store_ids.json"), encoding="utf-8") as f:
             by_id = (json.load(f) or {}).get("by_id") or {}
@@ -77,7 +84,7 @@ def _selected_apps(dashboard, data_dir):
         first = by_pkg.get(pkg) if pkg else None
         if first and first["app_id"] != aid:
             out.append({"app_id": aid, "app_name": str(name or aid), "package": None,
-                        "same_as": str(first.get("app_name") or first["app_id"])})
+                        "same_as": str(first.get("app_name") or first["app_id"]), "same_pkg": pkg})
         else:
             out.append({"app_id": aid, "app_name": str(name or aid), "package": pkg})
     return out
@@ -111,9 +118,55 @@ def _status(details, counts, no_ga4, status, state):
     return "ok"
 
 
-def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
+def app_revenue(revenue, a, apps, package=None):
+    """The AdMob revenue of one fetched app's GA4 stream → {tz, currency, till, days: {day: [earnings micros,
+    impressions]}}: its own AdMob app (always — even when the app list lost its package; `package` = the store's) +
+    every selected AdMob app sharing its Play package (same_pkg), summed, in the app's OWN account's reporting timezone
+    (revenue["tz_by_app"], else revenue["tz"]). A same-package app of an account in another timezone is spread onto
+    this app's days by the share of each of its days that falls in them (impact._revenue_fn: every dollar kept), never
+    added day-to-day as if the days were the same. None without any."""
+    if not revenue:
+        return None
+    pkg = a.get("package") or package
+    ids = [a["app_id"]] + ([x["app_id"] for x in apps if x.get("same_pkg") and x["same_pkg"] == pkg] if pkg else [])
+    tzs, base = revenue.get("tz_by_app") or {}, revenue.get("tz") or "UTC"
+    tz = tzs.get(a["app_id"]) or base
+    days = {}
+
+    def add(d, e, n):
+        cur = days.setdefault(d, [0, 0])
+        cur[0], cur[1] = cur[0] + e, cur[1] + n
+    for aid in ids:
+        src = {d: v for d, v in ((revenue.get("apps") or {}).get(aid) or {}).items() if v is not None}
+        if not src:
+            continue
+        tz_x = tzs.get(aid) or base
+        if tz_x == tz:
+            for d, v in src.items():
+                add(d, int(v[0] or 0), int(v[1] or 0))
+            continue
+        lo, hi = imp._d(min(src)), imp._d(max(src))
+        till = revenue.get("till") or max(src)
+        pad = dict(src)                              # its span's edges earned 0 outside it: nothing cut at the ends
+        pad[(lo - timedelta(days=1)).isoformat()] = [0, 0]
+        if hi.isoformat() < till:
+            pad[(hi + timedelta(days=1)).isoformat()] = [0, 0]
+        f, _ = imp._revenue_fn({"tz": tz_x, "till": till, "days": pad}, tz)
+        for d in imp._days(lo - timedelta(days=1), hi + timedelta(days=1)):
+            v = f(d)
+            if v is not None and (v[0] or v[1]):
+                add(d.isoformat(), int(round(v[0] * 1e6)), int(round(v[1])))
+    if not days:
+        return None
+    return {"tz": tz, "currency": revenue.get("currency") or "USD",
+            "till": revenue.get("till") or max(days), "days": dict(sorted(days.items()))}
+
+
+def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue=None):
     """→ the site file names written for the tab (for _headers), or None when GA4 is off. Sets
-    dashboard["uninstall"] last, after every file is on disk."""
+    dashboard["uninstall"] last, after every file is on disk. revenue = build_static's AdMob revenue {tz, currency,
+    till, apps: {AdMob app id: {day: [earnings micros, impressions]}}, tz_by_app: {AdMob app id: its account's reporting
+    timezone, where it is not tz}} (the update-impact ARPDAU; None: none)."""
     cfg = ga4_cfg(s)
     if cfg is None:
         return None
@@ -127,7 +180,7 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
     state = gu.load_state(data_dir)
     os.makedirs(out_dir, exist_ok=True)
     details, rows, no_ga4, files = [], [], [], [ASSET]
-    late_sums = {"un": {}, "new": {}, "fetches": 0}          # every app's late-data re-reads, pooled
+    late_sums = {"un": {}, "new": {}, "a1": {}, "fetches": 0}    # every app's late-data re-reads, pooled
     for a in sorted(apps, key=lambda x: (x["app_name"].casefold(), x["app_id"])):
         aid, path = a["app_id"], gu.store_path(data_dir, a["app_id"])
         store = gu.load_store(path) if os.path.exists(path) and not a.get("same_as") else None
@@ -147,7 +200,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
         # waiting for its repair is checked data: evaluated as ever (its incomplete days still left out)
         detail, row = eng.evaluate_app(store, aid, a["app_name"], state, now_iso, stale=stale, key=key,
                                        package=a.get("package") or store.get("package"), late=cfg["late_days"],
-                                       outdated=gu._store_v(store) < gu.CHECKED_V)
+                                       outdated=gu._store_v(store) < gu.CHECKED_V,
+                                       revenue=app_revenue(revenue, a, apps, store.get("package")))
         eng.revision_sums(store, late_sums)
         name = COHORT_PREFIX + key + ".json.gz"
         sig = _sig(path)
@@ -177,7 +231,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
                         "thin_min_users": eng.THIN_MIN_USERS, "surv_recent_days": eng.SURV_RECENT_DAYS,
                         "verdict_k": eng.VERDICT_K, "tri_avg_weeks": eng.TRI_AVG_WEEKS,
                         "alert_recent_days": eng.ALERT_RECENT_DAYS, "year_clear_days": eng.YEAR_CLEAR_DAYS,
-                        "impute_min_coverage": eng.IMPUTE_MIN_COVERAGE, "est_mark_pp": eng.EST_MARK_PP},
+                        "impute_min_coverage": eng.IMPUTE_MIN_COVERAGE, "est_mark_pp": eng.EST_MARK_PP,
+                        "impact": dict(imp.CONSTS)},
              "lateness": eng.lateness(late_sums), "apps": details, "no_ga4": no_ga4}
     write_json_gz_stable(os.path.join(out_dir, ASSET), asset)
     asset_v = hashlib.sha1(json.dumps(asset, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
@@ -193,14 +248,22 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
     ac = {"warning": 0, "watch": 0, "good": 0}
     for al in alerts:
         ac[al["severity"]] = ac.get(al["severity"], 0) + 1
+    ic = dict.fromkeys(("halt", "hold", "continue", "win", "pending"), 0)    # the All-apps "Recent updates" chips
+    for r in rows:
+        for u in r["updates"]:
+            ic[u["level"] or "pending"] += 1
     dashboard["uninstall"] = {"v": 1, "status": _status(details, counts, no_ga4, status, state), "asset": ASSET,
                               "asset_v": asset_v, "data_till_min": till[0] if till else None,
                               "data_till_max": till[-1] if till else None, "counts": counts, "apps": rows,
-                              "alerts": alerts, "alert_counts": ac}
+                              "alerts": alerts, "alert_counts": ac, "impact_counts": ic}
+    ia = [al for al in alerts if al["family"] == "impact"]
+    early = sum(1 for r in rows for u in r["updates"] if u["early"])
     print("ga4 uninstall: apps %d, with GA4 %d, fetched %d (full %d, repair %d), fresh %d, failed %d, deferred %d, "
-          "open alerts %d (new %d)" % (counts["selected"], counts["with_ga4"], sc.get("fetched", 0),
-                                       sc.get("full", 0), sc.get("repair", 0), sc.get("fresh", 0), counts["failed"],
-                                       counts["deferred"], len(alerts), sum(1 for al in alerts if al["notify"])),
+          "open alerts %d (new %d), impact updates %d (halt %d, hold %d, win %d, early %d), impact alerts %d (new %d)"
+          % (counts["selected"], counts["with_ga4"], sc.get("fetched", 0), sc.get("full", 0), sc.get("repair", 0),
+             sc.get("fresh", 0), counts["failed"], counts["deferred"], len(alerts),
+             sum(1 for al in alerts if al["notify"]), sum(ic.values()), ic["halt"], ic["hold"], ic["win"], early,
+             len(ia), sum(1 for al in ia if al["notify"])),
           file=sys.stderr)
     return files
 

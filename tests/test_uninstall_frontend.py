@@ -367,7 +367,7 @@ def test_what_changed_rows_carry_severity_dates_tags_and_open(report, fixture):
     assert p.count("Open →") == len(fixture["dashboard_uninstall"]["alerts"])        # old changes: collapsed
     # an app's own rows: no app, the same pill / dates / tags, and Open → (to its table or chart)
     cal = report["texts"]["detail|Demo Caller – Test App|all|30|cp|false"]
-    assert re.search(r"What changed\? \(1\) Worse \d+ din ke andar [^→]*? Installs 16–22 Sep Provisional Open →", cal)
+    assert re.search(r"What changed\? \(2\) Worse \d+ din ke andar [^→]*? Installs 16–22 Sep Provisional Open →", cal)   # + v3.2's HALT
 
 
 def test_the_header_never_says_all_apps_over_one_apps_detail(report):
@@ -409,7 +409,7 @@ def test_app_updates_are_a_line_right_above_the_install_week_they_fell_in(report
     legend = "📦 = new update. Line ke upar wale hafte = naye version ke installs, neeche = purane version ke."
     for m in ("cp", "all"):                                  # the fixture's own updates (the engine's releases)
         cal, wea, lau, fla = (tx["rel|%s|%s|false|false" % (a, m)] for a in
-                              ("Demo Caller – Test App", "Demo Weather", "Demo Launcher", "Demo Flashlight"))
+                              ("Demo Caller – Test App", "Demo Weather", "Demo Launcher", "Demo QR Scanner"))
         assert "📦 New update v3.2 — 10 Sep (mid-week) 7–13 Sep 📦 " in cal and legend in cal
         assert re.search(r"14–20 Sep [^📦–]* 📦 New update v3\.2", cal)                   # between 14–20 and 7–13 Sep
         assert re.search(r"20–26 Jul [^📦–]* 📦 New update v4\.1 — 15 Jul \(mid-week\) 13–19 Jul 📦 ", wea)
@@ -441,3 +441,89 @@ def test_app_updates_are_a_line_right_above_the_install_week_they_fell_in(report
         assert r["pages"]["Demo Caller – Test App|all|%s|page2" % pre] == 1
         assert r["tips"]["Demo Caller – Test App|all|%s|page2" % pre] == ["New update v3.2 this week — 10 Sep"]
         assert r["tips"]["Demo Weather|all|%s|page2" % pre] == ["New update v4.1 this week — 15 Jul"]
+
+
+# ── 📦 Update impact: the owner's verify gate ──────────────────────────────────────────────────────
+
+IMPACT_ROWS = ["returning_dau", "new_d1", "new_d7", "sessions", "time", "arpdau", "uninstall_d0"]
+IMPACT_LABELS = ["Returning DAU", "New users back next day (D1)", "New users back after 7 days (D7)", "Sessions per user",
+                 "Time per user", "Ad revenue per user", "Uninstall on install day"]
+IMPACT_HEADER = re.compile(r"📦 (v\S+( → v\S+)?|App update) — \d{1,2} [A-Z][a-z]{2}( \d{4})? · Verdict: "
+                           r"(✅ WIN|👍 CONTINUE|⚠️ HOLD|🛑 HALT|⏳ Too early)")
+
+
+def test_every_update_block_shows_the_four_must_haves_the_install_day_row_the_version_table_and_a_verdict(report, fixture):
+    # the gate: each block of every app, rendered open, has EXACTLY the 7 rows (in the owner's order, English labels) +
+    # the 2 version rows + the verdict header + "Why:" — deleting any row from the page fails here
+    im = report["impact"]
+    want = [(a["app"], b["key"], b) for a in fixture["asset"]["apps"] for b in (a.get("impact") or {}).get("updates", [])]
+    assert len(want) >= 5 and [(b["app"], b["key"]) for b in im["blocks"]] == [(a, k) for a, k, _ in want]
+    kinds = set()
+    for blk, (_, _, b) in zip(im["blocks"], want):
+        assert blk["n_open"] == 1 and blk["open_key"] == b["key"], blk["key"]
+        assert blk["rows"] == IMPACT_ROWS and blk["vrows"] == ["ver_sessions", "ver_time"], blk["key"]
+        assert blk["labels"] == IMPACT_LABELS + ["Sessions per user", "Time per user"], blk["key"]
+        assert IMPACT_HEADER.search(blk["header"]), blk["header"]
+        assert blk["heads"][0] == "Metric" and blk["heads"][1] == "Before (7 days)" and blk["heads"][3:5] == ["Change", "Status"]
+        assert re.match(r"^After \((7 days|\d of 7 days)\)$", blk["heads"][2]), blk["heads"]
+        assert blk["heads"][5:] == ["Metric", "Older versions", b["versions_cmp"]["new_label"] or "New version", "Difference", "Status"]
+        assert blk["why"] and len(blk["statuses"]) == 9                # every row has its status pill
+        kinds.add((b["kind"], b["verdict"]["level"]))
+    assert {lv for _, lv in kinds} == {"halt", "hold", "continue", "win", None} and ("update", "continue") in kinds
+
+
+def test_every_update_line_in_the_install_week_table_opens_its_block(report):
+    im = report["impact"]
+    assert im["jumps"] and all(j["open"] == j["want"] and j["rendered"] == j["want"] for j in im["jumps"]), im["jumps"]
+    assert im["tri_keys"] and all(t["found"] for t in im["tri_keys"])
+    f = im["folded"]                                           # an older (folded) block: unfolded and opened
+    assert f["shut_fold"] and not f["shut_has"] and f["all"] and f["open"] == f["want"]
+    # from the Alerts screen / Recent updates with the header's App already that app: the page ends ON the block
+    j = im["jump_scroll"]
+    assert j["open"] == j["k"] and j["pending"] == "" and j["calls"] and j["calls"][-1] == {"top": 1843, "behavior": "smooth"}
+    assert {"top": 0} not in j["calls"]
+
+
+def test_recent_updates_count_every_verdict_and_each_chip_shows_only_its_updates(report, fixture):
+    counts = fixture["dashboard_uninstall"]["impact_counts"]
+    p = report["impact"]["portfolio"]
+    labels = {"halt": "🛑 HALT", "hold": "⚠️ HOLD", "continue": "👍 CONTINUE", "win": "✅ WIN", "pending": "⏳ Too early"}
+    assert {k: v["n"] for k, v in p[""]["chips"].items()} == counts
+    assert {k: v["label"] for k, v in p[""]["chips"].items()} == labels
+    assert sorted(p[""]["rows"]) == sorted(k for k, n in counts.items() for _ in range(n)) and p[""]["on"] == []
+    for k, n in counts.items():
+        assert p[k]["rows"] == [k] * n and p[k]["on"] == [k], k
+    assert "No app updates" not in p[""]["text"] and "updated" in p[""]["text"]
+
+
+def test_update_alerts_on_the_alerts_screen_open_their_update(report, fixture):
+    cards = report["alert_cards"]
+    al = [a for a in fixture["dashboard_uninstall"]["alerts"] if a["family"] == "impact"]
+    assert {a["level"] for a in al} == {"halt", "hold", "win"}
+    for a in al:
+        assert "📦 Update impact — " + a["release"]["label"] in cards
+        assert "uniImpGo('%s','%s')" % (a["app_id"], a["release"]["key"]) in cards
+    assert cards.count(">Update detail →</span>") == len(al)
+
+
+def test_update_cards_say_what_their_numbers_are_and_never_hide_a_failure(report):
+    im = report["impact"]
+    cal = next(b for b in im["blocks"] if b["key"] == "ver:3.2@2026-09-10")["html"]
+    # D1 / D7 tooltips: n = install DAYS (+ the installs of those days), never "7 installs"
+    assert 'title="Installs 13–19 Sep · 7 install din · 35.0k installs"' in cal and " · 7 installs\"" not in cal
+    assert 'title="Installs 3–9 Sep · 7 install din"' in cal and 'title=" · ' not in cal
+    # a pending row: the calendar day it is ready (GA4 data of 25 Sep arrives ~2 days later), the data day in its tooltip
+    assert re.search(r'<span title="GA4 ka data 25 Sep tak aane par \(data ~2 din der se aata hai\)">ready ~27 Sep</span>', cal)
+    # no earlier updates: the version table claims no "usual gap" correction
+    assert "usual early-updater gap not known yet" in cal and "after the usual early-updater gap" not in cal
+    assert "aam farak abhi pata nahi" in cal and "aam farak 0 pichhle" not in cal
+    # the alert pill: open (What changed?), not claimed "sent"; the adoption pill: the After week's newest day
+    assert 'title="Is update ka alert khula hai — What changed? me dekho">🔔 Alert' in cal and "bheja gaya" not in cal
+    assert re.search(r'title="After hafte ke sabse naye din \(\d+ [A-Z][a-z]{2}\) tak kitne active users naye version pe', cal)
+    # the judged effect under the change: sessions / time net of the trend (when it differs), ARPDAU on ads per user
+    assert re.search(r">[−+][\d.]+% net of the usual trend</div>", cal) or "net of the usual trend" not in cal
+    assert re.search(r">ads/user [−+]?[\d.]+%? \(judged\)</div>", cal)
+    n = im["never"]
+    assert '⏳ Too early' in n["h"] and 'title="Agla update bahut jaldi aa gaya"' in n["h"] and ">No verdict</span>" in n["h"]
+    assert ">No verdict</span>" in n["p"]
+    assert im["upd_throw"]
