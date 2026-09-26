@@ -20,7 +20,9 @@ from admob_iq import uninstall_build as ub
 from admob_iq.config import settings
 from admob_iq.fetch import ga4_uninstall as gu
 from tests import test_ga4
-from tests.uninstall_synth import END, check_asset, check_cohort_file, check_summary, make_store
+from admob_iq.engine import impact as imp
+from tests.uninstall_synth import (END, check_asset, check_cohort_file, check_impact, check_summary, make_impact_store,
+                                   make_store, rollout)
 
 NOW = datetime(2026, 9, 21, 6, 0, tzinfo=timezone.utc)
 ASSET = "uninstall.json.gz"
@@ -30,7 +32,8 @@ N1, N2, N3, N4, N6 = "Demo Caller – Test App", "Beta Down App", "Gamma No Pack
 PKG = {A1: "com.hidden.one", A2: "com.hidden.two", A4: "com.hidden.four", A6: "com.hidden.six"}
 SECRETS = test_ga4.SECRETS + [PID, SID, EMAIL, "rt-SECRET-x", A1, A2, A3, A4, A6, N1, N2, N3, N4, N6] + list(PKG.values())
 LOG_LINE = re.compile(r"^ga4 uninstall: apps \d+, with GA4 \d+, fetched \d+ \(full \d+, repair \d+\), fresh \d+, "
-                      r"failed \d+, deferred \d+, open alerts \d+ \(new \d+\)$")
+                      r"failed \d+, deferred \d+, open alerts \d+ \(new \d+\), impact updates \d+ \(halt \d+, "
+                      r"hold \d+, win \d+, early \d+\), impact alerts \d+ \(new \d+\)$")
 
 
 def _bump(delta):
@@ -338,7 +341,8 @@ def test_public_log_is_one_counts_line_and_site_files_hold_no_ids(site, capsys):
     lines = got.err.splitlines()
     assert len(lines) == 1 and LOG_LINE.match(lines[0]), lines
     assert lines[0] == ("ga4 uninstall: apps 5, with GA4 3, fetched 0 (full 0, repair 0), fresh 3, failed 0, "
-                        "deferred 0, open alerts 3 (new 3)")
+                        "deferred 0, open alerts 3 (new 3), impact updates 0 (halt 0, hold 0, win 0, early 0), "
+                        "impact alerts 0 (new 0)")
     for s in SECRETS:
         assert s not in got.err
     shipped = json.dumps(dash["uninstall"], ensure_ascii=False)
@@ -399,7 +403,10 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     assert ("Demo Caller – Test App", "cohort", "watch", False, True) in fam            # one alert while it lasts
     assert ("Demo Weather", "rate_drift", "warning", False, True) in fam
     assert ("Demo Wallpapers", "rate_zero", "watch", False, False) in fam               # a zero day once SETTLED
-    assert ("Demo Flashlight", "cohort", "good", False, False) in fam and len(fam) == 5   # good news: settled only
+    assert ("Demo Flashlight", "cohort", "good", False, False) in fam                   # good news: settled only
+    assert {("Demo Caller – Test App", "impact", "warning", False, False),              # 🛑 HALT (sent 21 Sep)
+            ("Demo Wallpapers", "impact", "watch", False, False),                       # ⚠️ HOLD (seeded)
+            ("Demo Flashlight", "impact", "good", False, False)} < fam and len(fam) == 8  # ✅ WIN (seeded)
     assert sum(1 for x in fx["sent"] if x["telegram"] or x["email"]) == 3               # sent once each, no flood
     assert {n["reason"] for n in asset["no_ga4"]} == {"no_package", "no_stream", "fetch_failed", "not_fetched_yet",
                                                       "same_package"}
@@ -454,6 +461,9 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     # Caller's 3.2, the Weather's 4.1 in the middle of its table, the Launcher's app_update jump (no new version)
     assert {a["app"]: a["releases"] for a in asset["apps"] if a["releases"]} == {
         "Demo Caller – Test App": [{"date": "2026-09-10", "version": "3.2", "kind": "version"}],
+        "Demo Flashlight": [{"date": "2026-09-01", "version": "1.2", "kind": "version"},
+                            {"date": "2026-09-19", "version": "1.3", "kind": "version"}],
+        "Demo Wallpapers": [{"date": "2026-09-01", "version": "2.0", "kind": "version"}],
         "Demo Weather": [{"date": "2026-07-15", "version": "4.1", "kind": "version"}],
         "Demo Launcher": [{"date": "2026-08-05", "version": None, "kind": "update"}]}
     for a in asset["apps"]:
@@ -464,6 +474,35 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     k = next(i for i, r in enumerate(wea["triangle"]["rows"]) if r["to"] == "2026-07-19")
     assert wea["triangle"]["rows"][k]["from"] == "2026-07-13" and 5 < k < len(wea["triangle"]["rows"]) - 5
     assert wea["zoom"]["reason"] == "alert"                        # an update 10 weeks old: no day-by-day zoom from it
+    # the "📦 Update impact" card: every update, the owner's four must-haves before vs after, a verdict
+    imp = {(a["app"], b["label"]): b for a in asset["apps"] for b in a["impact"]["updates"]}
+    assert {k: (b["verdict"]["level"], b["verdict"]["final"]) for k, b in imp.items()} == {
+        ("Demo Caller – Test App", "v3.2"): ("halt", False), ("Demo Flashlight", "v1.3"): (None, False),
+        ("Demo Flashlight", "v1.2"): ("win", True), ("Demo Wallpapers", "v2.0"): ("hold", True),
+        ("Demo Weather", "v4.1"): ("continue", True), ("Demo Launcher", "App update"): ("continue", True)}
+    b = imp[("Demo Caller – Test App", "v3.2")]                  # old users on 3.2: less DAU, less time — early
+    assert b["verdict"]["worse"] == ["returning_dau", "time"] and b["rows"]["new_d7"]["status"] == "pending"
+    assert b["rows"]["returning_dau"]["change"] < -0.06 and b["rows"]["time"]["change"] < -0.1
+    assert b["adoption"]["slow"] and "slow_rollout" in b["notes"] and b["versions_cmp"]["rows"]["ver_time"]["status"] == "unsure"
+    halt = [x["telegram"] for x in fx["sent"] if x["telegram"] and "update impact (GA4)" in x["telegram"]]
+    assert [x["run"] for x in fx["sent"] if x["telegram"] and "update impact (GA4)" in x["telegram"]] == ["2026-09-21T12:00Z"]
+    assert re.search(r"🟠 \[WARNING\] Demo Caller – Test App: v3\.2 \(10 Sep\) ke baad purane users ka DAU [\d.]+% gira "
+                     r"\(expected [\d,]+ → [\d,]+/din\) · aur 1 cheez kharab: time per user −\d+% · HALT — staged rollout "
+                     r"rok do, hotfix bhejo · shuruaati — D7 abhi baaki · update impact \(GA4\)", halt[0])
+    b = imp[("Demo Flashlight", "v1.2")]                         # new users come back more: a WIN (seeded: first eval)
+    assert b["verdict"]["better"] == ["new_d1"] and b["rows"]["new_d1"]["change"] > 5 and not b["verdict"]["worse"]
+    assert imp[("Demo Flashlight", "v1.3")]["verdict"]["why"].startswith("Abhi 1 pakka din")
+    b = imp[("Demo Wallpapers", "v2.0")]                          # a staged rollout stuck at 25%: fewer ads per user
+    r = b["rows"]["arpdau"]
+    assert r["status"] == "worse" and -0.1 < r["change"] < -0.05 and abs(r["extra"]["imp_change"] - r["change"]) < 0.01
+    assert {"diluted", "slow_rollout", "tz_blend"} <= set(b["notes"]) and b["adoption"]["mean"] < 0.3
+    b = imp[("Demo Weather", "v4.1")]                             # GA4 keeps its user data 60 days: said, not guessed
+    assert all(b["rows"][k]["reason"] == "GA4 ab itna purana user data nahi rakhta" for k in ("new_d1", "new_d7"))
+    assert wea["impact"]["flags"]["ret_from"] > "2026-07-01" and "no_cohorts" in b["notes"]
+    b = imp[("Demo Launcher", "App update")]
+    assert b["kind"] == "update" and all(r["status"] == "na" for r in b["versions_cmp"]["rows"].values())
+    assert s["impact_counts"] == {"halt": 1, "hold": 1, "continue": 1, "win": 1, "pending": 1}
+    assert all(a["impact"]["flags"]["revenue"] in ("ok", "partial") for a in asset["apps"])      # the AdMob revenue
     assert all(LOG_LINE.match(line) for line in fx["public_log"]) and len(fx["public_log"]) == 7
     with open(OUT, encoding="utf-8") as f:
         committed = f.read()
@@ -580,3 +619,187 @@ def test_a_v2_store_is_checked_data_while_its_repair_waits_and_a_repair_that_bar
     assert gu.load_state(data)["fetch"][tg.A1]["last_kind"] == "repair"
     assert resets == []                                             # half a day of 200 moved: < 1% — its alert
                                                                     # history is kept
+
+
+# ── update impact: the card rides the uninstall build, its alerts the notifications ─────────────────
+
+R_IMP = date(2026, 8, 26)
+
+
+def seed_impact(data_dir, fresh=False):
+    """A1: an update whose old users open the app 10% less (HALT); A2: an update that changes nothing (CONTINUE); both
+    with usage / vuse / return cohorts → the AdMob revenue {…, apps: {AdMob app id: {day: [micros, impressions]}}}."""
+    os.makedirs(os.path.join(data_dir, "ga4_uninstall"), exist_ok=True)
+    with open(os.path.join(data_dir, "app_store_ids.json"), "w", encoding="utf-8") as f:
+        json.dump({"by_id": {A1: PKG[A1], A2: PKG[A2], A9: PKG[A1]}}, f)
+    rev = {"tz": "Asia/Kolkata", "currency": "USD", "till": END.isoformat(), "apps": {}}
+    for aid, act in ((A1, 0.9), (A2, 1.0)):
+        st, rv = make_impact_store(120, new=500, old=40000, app_id=aid,
+                                   versions=rollout("1.0", [(R_IMP, "1.1", 0.3)]),
+                                   act=lambda d, v, x=act: x if v == "1.1" else 1.0)
+        st.update(property_id=PID, stream_id=SID, package=PKG[aid])
+        gu.save_store(gu.store_path(data_dir, aid), st)
+        rev["apps"][aid] = rv["days"]
+    rev["apps"][A9] = {k: [v[0] // 4, v[1] // 4] for k, v in rev["apps"][A1].items()}   # same Play package as A1
+    state = gu._state_default()
+    state["routes"].update(fetched_at="2026-09-21T01:00:00Z", by_package={
+        PKG[a]: {"property_id": PID, "stream_id": SID, "owner": EMAIL} for a in (A1, A2)})
+    state["tz"] = {PID: "Asia/Kolkata"}
+    if not fresh:
+        state["eval"] = {a: {"end": (END - timedelta(days=1)).isoformat(), "stage": "badh_raha", "stable_hold": 0,
+                             "impact": {"data": True, "blocks": {}}} for a in (A1, A2)}
+    gu.save_state(data_dir, state)
+    return rev
+
+
+def impact_dashboard():
+    return {"apps_catalog": [{"app_id": a, "app_name": n, "account_id": "pub-7", "selected": True}
+                             for a, n in ((A1, N1), (A2, N2), (A9, "Caller Copy"))],
+            "kpis": {"revenue": 12.5}, "alerts": {"items": []}}
+
+
+@pytest.fixture
+def isite(tmp_path, monkeypatch):
+    data, out = str(tmp_path / "data"), str(tmp_path / "site")
+    rev = seed_impact(data)
+    monkeypatch.setattr(gu, "refresh_all", lambda *a, **k: copy.deepcopy(dict(STATUS, apps={A1: "fresh", A2: "fresh"})))
+    return data, out, rev
+
+
+def irun(data, out, rev, now=NOW):
+    dash = impact_dashboard()
+    ub.run_uninstall(dash, data, out, ga4_settings(), now=now, revenue=rev)
+    return dash, _gz(os.path.join(out, ASSET))
+
+
+def test_every_app_update_gets_its_card_in_the_asset_and_the_summary(isite):
+    data, out, rev = isite
+    dash, asset = irun(data, out, rev)
+    s = dash["uninstall"]
+    check_summary(s)
+    check_asset(asset, s)                                           # check_impact on every detail (the 7 + 2 rows)
+    assert asset["consts"]["impact"] == imp.CONSTS
+    assert asset["lateness"] is None or "a1" in asset["lateness"]
+    by = {a["app_id"]: a for a in asset["apps"]}
+    b1, b2 = by[A1]["impact"]["updates"][0], by[A2]["impact"]["updates"][0]
+    assert (b1["verdict"]["level"], b2["verdict"]["level"]) == ("halt", "continue")
+    assert b1["rows"]["returning_dau"]["status"] == "worse" and b1["alert_id"]
+    assert s["impact_counts"] == {"halt": 1, "hold": 0, "continue": 1, "win": 0, "pending": 0}
+    rows = {r["app_id"]: r for r in s["apps"]}
+    assert rows[A1]["updates"] == [{"key": "ver:1.1@2026-08-26", "label": "v1.1", "date": "2026-08-26", "level": "halt",
+                                    "early": False, "final": True, "adoption": b1["adoption"]["last"],
+                                    "head": {"row": "returning_dau", "change": b1["rows"]["returning_dau"]["change"],
+                                             "unit": "rel"}}]
+    al = [a for a in s["alerts"] if a["family"] == "impact"]
+    assert [(a["app"], a["severity"], a["level"], a["notify"]) for a in al] == [(N1, "warning", "halt", True)]
+    assert al[0]["message"].startswith(N1 + ": v1.1 (26 Aug) ke baad purane users ka DAU ")
+
+
+def test_the_same_play_packages_admob_apps_revenue_is_summed_and_without_revenue_only_arpdau_changes(isite):
+    data, out, rev = isite
+    one = ub.app_revenue(rev, {"app_id": A1, "package": PKG[A1]}, [{"app_id": A9, "same_pkg": PKG[A1]}])
+    day = "2026-09-01"
+    assert one["days"][day] == [rev["apps"][A1][day][0] + rev["apps"][A9][day][0],
+                                rev["apps"][A1][day][1] + rev["apps"][A9][day][1]]
+    assert ub.app_revenue(rev, {"app_id": A2, "package": PKG[A2]}, [{"app_id": A9, "same_pkg": PKG[A1]}])["days"][day] == \
+        rev["apps"][A2][day]
+    assert ub.app_revenue(None, {"app_id": A1, "package": PKG[A1]}, []) is None
+    # an app the app list lost the package of: its OWN revenue still (the store's package joins its copies)
+    own = ub.app_revenue(rev, {"app_id": A1, "package": None}, [{"app_id": A9, "same_pkg": PKG[A1]}])
+    assert own["days"][day] == rev["apps"][A1][day]
+    assert ub.app_revenue(rev, {"app_id": A1, "package": None}, [{"app_id": A9, "same_pkg": PKG[A1]}],
+                          PKG[A1])["days"][day] == one["days"][day]
+    # the copy's account reports in another timezone: spread over this app's days — every dollar kept, none moved
+    # to a day as if the two days were one
+    other = "America/Los_Angeles" if rev["tz"] != "America/Los_Angeles" else "Asia/Kolkata"
+    ist = ub.app_revenue(dict(rev, tz_by_app={A9: other}), {"app_id": A1, "package": PKG[A1]},
+                         [{"app_id": A9, "same_pkg": PKG[A1]}])
+    assert ist["tz"] == rev["tz"] and ist["days"] != one["days"]
+    gap = sum(v[0] for v in one["days"].values()) - sum(v[0] for v in ist["days"].values())
+    assert 0 < gap < rev["apps"][A9][max(rev["apps"][A9])][0]      # only the part of its last day past `till` waits
+    assert max(ist["days"]) <= rev["till"]
+    assert ub.app_revenue(dict(rev, tz_by_app={A1: other}), {"app_id": A1, "package": PKG[A1]}, [])["tz"] == other
+    apps = ub._selected_apps(impact_dashboard(), data)
+    assert [a for a in apps if a["app_id"] == A9] == [{"app_id": A9, "app_name": "Caller Copy", "package": None,
+                                                       "same_as": N1, "same_pkg": PKG[A1]}]
+    _, asset = irun(data, out, rev)
+    with_rev = asset["apps"][[a["app_id"] for a in asset["apps"]].index(A1)]["impact"]["updates"][0]
+    assert with_rev["rows"]["arpdau"]["before"] == pytest.approx(8.0 * 1.25, abs=0.05)     # A1 + its copy (¼ of it)
+    seed_impact(data)
+    _, asset = irun(data, out, None)
+    b = asset["apps"][[a["app_id"] for a in asset["apps"]].index(A1)]["impact"]["updates"][0]
+    assert b["rows"]["arpdau"]["status"] == "na" and b["rows"]["arpdau"]["reason"] == "AdMob revenue nahi mila"
+    assert {k: r for k, r in b["rows"].items() if k != "arpdau"} == {
+        k: r for k, r in with_rev["rows"].items() if k != "arpdau"}
+    assert all(a["impact"]["flags"]["revenue"] == "none" for a in asset["apps"])
+
+
+def test_an_update_alert_goes_out_once_as_update_impact_and_its_log_line_is_counts_only(isite, capsys):
+    data, out, rev = isite
+    dash, _ = irun(data, out, rev)
+    err = capsys.readouterr().err.splitlines()
+    assert len(err) == 1 and LOG_LINE.match(err[0])
+    assert err[0].endswith("impact updates 2 (halt 1, hold 0, win 0, early 0), impact alerts 1 (new 1)")
+    for secret in (N1, N2, A1, A2, "1.1", "ver:", "Aug", PKG[A1]):
+        assert secret not in err[0]
+    res = build_static.send_alerts(dash, ga4_settings())
+    tele = next(r["text"] for r in res if r["channel"] == "telegram")
+    assert "🟠 [WARNING] " + N1 + ": v1.1 (26 Aug) ke baad" in tele and tele.count(" · update impact (GA4)") == 1
+    assert "uninstall (GA4)" not in tele
+    build_static._uninstall_mark_sent(dash, data, ga4_settings(), res)
+    for h in (1, 2):                                                # the hourly runs after it: shown, never re-sent
+        dash, _ = irun(data, out, rev, now=NOW + timedelta(hours=h))
+        assert [a["notify"] for a in dash["uninstall"]["alerts"] if a["family"] == "impact"] == [False]
+        assert build_static.send_alerts(dash, ga4_settings()) == []
+
+
+def test_the_first_impact_evaluation_is_shown_not_sent_and_re_runs_rewrite_nothing(tmp_path, monkeypatch):
+    data, out = str(tmp_path / "data"), str(tmp_path / "site")
+    rev = seed_impact(data, fresh=True)
+    monkeypatch.setattr(gu, "refresh_all", lambda *a, **k: copy.deepcopy(STATUS))
+    dash, asset = irun(data, out, rev)
+    al = [a for a in dash["uninstall"]["alerts"] if a["family"] == "impact"]
+    assert len(al) == 1 and not al[0]["notify"]                     # seeded
+    check_impact(asset["apps"][0]["impact"], asset["apps"][0])
+    irun(data, out, rev, now=NOW + timedelta(hours=1))
+
+    def snap():
+        files = {}
+        for root in (out, os.path.join(data, "ga4_uninstall")):
+            for n in sorted(os.listdir(root)):
+                p = os.path.join(root, n)
+                files[p] = (open(p, "rb").read(), os.stat(p).st_mtime_ns)
+        return files
+    a = snap()
+    irun(data, out, rev, now=NOW + timedelta(hours=2))
+    assert snap() == a                                              # the impact state too: same bytes, same mtime
+
+
+def test_the_build_hands_the_network_reports_revenue_to_the_uninstall_step(tmp_path, monkeypatch):
+    from admob_iq.db import FileRepo
+    repo = FileRepo(str(tmp_path / "d"))
+    repo.init_schema()
+    base = dict(account_id="pub-7", ad_unit_id="u", country="US", format="banner", platform="Android",
+                ad_requests=100, matched_requests=90, clicks=0)
+    for d, app, unit, imps, micros in (("2026-09-18", A1, "u1", 100, 250000), ("2026-09-18", A1, "u2", 50, 125000),
+                                       ("2026-09-19", A1, "u1", 80, 200000), ("2026-09-20", A1, "u1", 9, 9),
+                                       ("2026-09-18", A2, "u3", 10, 20000)):
+        repo.upsert_network(dict(base, report_date=d, app_id=app, ad_unit_id=unit, impressions=imps,
+                                 estimated_earnings_micros=micros))
+    got = []
+    monkeypatch.setattr(build_static, "_uninstall_step",
+                        lambda dash, data_dir, out_dir, s, revenue=None: got.append(revenue) or ["x"])
+    s = dict(ga4_settings(), report_currency="USD")
+    assert build_static._uninstall_with_revenue({}, repo, "data", "site", s, "America/Los_Angeles",
+                                                date(2026, 9, 20)) == ["x"]
+    assert got == [{"tz": "America/Los_Angeles", "currency": "USD", "till": "2026-09-19",   # today (20th) still filling
+                    "apps": {A1: {"2026-09-18": [375000, 150], "2026-09-19": [200000, 80]},
+                             A2: {"2026-09-18": [20000, 10]}}, "tz_by_app": {}}]
+    # a second account reporting in its own timezone: its apps are named, never read as Pacific days
+    got.clear()
+    build_static._uninstall_with_revenue({}, repo, "data", "site", s, "America/Los_Angeles", date(2026, 9, 20),
+                                         {"pub-7": "Asia/Kolkata"})
+    assert got[0]["tz_by_app"] == {A1: "Asia/Kolkata", A2: "Asia/Kolkata"}
+    assert build_static.account_tzs([{"account_id": "pub-1", "reporting_tz": "Asia/Kolkata"}, {"account_id": "pub-2"}],
+                                    s, "America/Los_Angeles", "mock", False) == {
+        "pub-1": "Asia/Kolkata", "pub-2": "America/Los_Angeles"}

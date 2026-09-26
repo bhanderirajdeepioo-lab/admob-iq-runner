@@ -74,6 +74,25 @@ def _stub(truth, sid=S1, log=None):
     return UniStub(truth, TOK_A, PID, sid, log=log if log is not None else [])
 
 
+IMPACT_DIMS = {("date", "newVsReturning"), ("date", "appVersion", "newVsReturning"), ("cohort", "cohortNthDay")}
+
+
+def _dims(b):
+    return tuple(x["name"] for x in b["dimensions"])
+
+
+def _uni(log):
+    """The uninstall requests of a log (daily, events, versions, cells) — without the update-impact ones."""
+    return [e for e in log if _dims(e[2]) not in IMPACT_DIMS]
+
+
+def _imp(log, kind=None):
+    """The update-impact requests of a log: "usage", "vuse", "ret" (cohorts) or all of them."""
+    k = {"usage": ("date", "newVsReturning"), "vuse": ("date", "appVersion", "newVsReturning"),
+         "ret": ("cohort", "cohortNthDay")}
+    return [e for e in log if _dims(e[2]) in IMPACT_DIMS and (kind is None or _dims(e[2]) == k[kind])]
+
+
 # ── full fetch ───────────────────────────────────────────────────────────────────────────────────
 
 def test_full_fetch_finds_the_history_pages_every_row_and_slices_cells_by_90_days(monkeypatch):
@@ -140,7 +159,8 @@ def test_incremental_takes_late_data_keeps_old_cells_frozen_and_fills_holes():
     assert gu.holes(st) == [(END - timedelta(days=60), END - timedelta(days=56))]
     log = []
     gu.fetch_incr(_stub(t, log=log), st, END, 10)
-    assert {b["dateRanges"][0]["startDate"] for _, _, b in log} == {(END - timedelta(days=60)).isoformat()}
+    assert {b["dateRanges"][0]["startDate"] for _, _, b in log if "dateRanges" in b} == {
+        (END - timedelta(days=60)).isoformat()}                    # every dated report over the same window
     assert st["window_end"] == END.isoformat() and gu.holes(st) == []
     assert st["covered"] == [[st["history_start"], END.isoformat()]]
     assert st["daily"][hole_day]["new"] == 1000
@@ -226,7 +246,9 @@ def test_every_request_is_pinned_to_the_stream_with_the_right_event_filter(world
     out = world.run(tmp_path)
     assert out["counts"]["fetched"] == 3 and out["counts"]["full"] == 3
     want = {("date",): None, ("date", "eventName"): ["app_remove", "app_update"],
-            ("firstSessionDate", "date"): ["app_remove"], ("date", "appVersion"): None}
+            ("firstSessionDate", "date"): ["app_remove"], ("date", "appVersion"): None,
+            ("date", "newVsReturning"): None, ("date", "appVersion", "newVsReturning"): None,
+            ("cohort", "cohortNthDay"): None}
     seen = set()
     for pid, sid, body in world.log:                               # UniStub asserts Android + streamId + quota
         dims = tuple(d["name"] for d in body["dimensions"])
@@ -236,7 +258,10 @@ def test_every_request_is_pinned_to_the_stream_with_the_right_event_filter(world
             assert len(ex) == 1 and ex[0]["fieldName"] == "eventName"
             got = [ex[0]["stringFilter"]["value"]] if "stringFilter" in ex[0] else ex[0]["inListFilter"]["values"]
         assert got == want[dims], dims
-        assert [o["dimension"]["dimensionName"] for o in body["orderBys"]][:1] == [dims[0]]
+        if dims == ("cohort", "cohortNthDay"):                     # a cohort request: no dateRanges, no paging order
+            assert "dateRanges" not in body and "orderBys" not in body and len(body["cohortSpec"]["cohorts"]) <= 14
+        else:
+            assert [o["dimension"]["dimensionName"] for o in body["orderBys"]][:1] == [dims[0]]
         seen.add(dims)
     assert seen == set(want)
     assert set(world.tokens_used) == {(TOK_A, PID), (TOK_B, PID_B)}   # each property with its owner's token
@@ -252,7 +277,11 @@ def test_a_run_fetches_what_is_due_then_nothing_until_the_next_day(world, tmp_pa
     assert st["app_id"] == A1 and st["time_zone"] == "Asia/Kolkata" and st["window_end"] == END.isoformat()
     state = gu.load_state(str(tmp_path))
     assert state["fetch"][A1]["last_kind"] == "full" and state["tz"] == {PID: "Asia/Kolkata", PID_B: "Asia/Kolkata"}
-    assert "token" not in json.dumps(state).lower() and RT_A not in json.dumps(state)
+    # no OAuth token anywhere — the only "tokens" are the private GA4 quota tokens the impact reads spent (counts)
+    assert all(set(f["tokens"]) == {"usage", "vuse", "ret"} and all(isinstance(v, int) for v in f["tokens"].values())
+               for f in state["fetch"].values())
+    bare = dict(state, fetch={a: {k: v for k, v in f.items() if k != "tokens"} for a, f in state["fetch"].items()})
+    assert "token" not in json.dumps(bare).lower() and RT_A not in json.dumps(state) and TOK_A not in json.dumps(state)
     n = len(world.log)
     admin = len(world.admin.calls)
     out = world.run(tmp_path, now=NOW + timedelta(hours=1))        # the next hourly run: nothing due
@@ -262,8 +291,11 @@ def test_a_run_fetches_what_is_due_then_nothing_until_the_next_day(world, tmp_pa
     assert out["apps"] == {A1: "fetched", A2: "fetched", A5: "fetched"} and out["counts"]["full"] == 0
     assert gu.load_state(str(tmp_path))["fetch"][A1]["last_kind"] == "incr"
     incr = world.log[n:]
-    assert len(incr) == 3 * 4                                      # 4 reports per app, one page each
-    assert {b["dateRanges"][0]["startDate"] for _, _, b in incr} == {(END - timedelta(days=8)).isoformat()}
+    assert len(_uni(incr)) == 3 * 4                                # 4 uninstall reports per app, one page each
+    assert len(_imp(incr, "usage")) == len(_imp(incr, "vuse")) == 3   # + usage / vuse, over the same window
+    assert len(_imp(incr, "ret")) <= 3 * gu.COH_MAX_CALLS          # + the return cohorts (maturing + backfill)
+    assert {b["dateRanges"][0]["startDate"] for _, _, b in incr if "dateRanges" in b} == {
+        (END - timedelta(days=8)).isoformat()}
 
 
 def test_a_failing_app_or_owner_never_stops_the_others(world, tmp_path):
@@ -767,9 +799,9 @@ def _as_v2(t, end=END):
         mp.setattr(gu, "_probe", lambda *a, **k: (None, None))
         mp.setattr(gu, "_events_pass", lambda ga, p, start, end, place_from, cut, echunk, *a, **k: echunk)
         st = gu.fetch_full(_stub(t), end, 1300)
-    for k in ("cell_src", "users_ok_days", "events_chunk_days"):
-        del st[k]
-    del st["flags"]["users_k"]
+    for k in ("cell_src", "users_ok_days", "events_chunk_days", "impact_v", "usage", "vuse", "ret", "ret_from", "ret_to"):
+        del st[k]                                                  # (nor the update-impact data: that came later)
+    del st["flags"]["users_k"], st["flags"]["impact"]
     st["v"] = 2
     return st
 
@@ -961,13 +993,14 @@ def test_launch_weeks_too_small_to_judge_still_lead_to_the_users_edge_at_a_bound
     t = _aged(1000, lambda c: 5 if (c - (END - timedelta(days=999))).days < 20 else 3000, old_per_day=0)
     log = []
     st = gu.fetch_full(_stub(t, log=log), END, 1300)
-    assert st["users_ok_days"] == 70 and len(log) <= 40 and _off(st, t) == [] and _silent(st, t) == []
+    assert st["users_ok_days"] == 70 and len(_uni(log)) <= 40 and _off(st, t) == [] and _silent(st, t) == []
+    assert len(_imp(log)) <= 2 + gu.COH_MAX_CALLS                  # usage + vuse + at most 12 cohort requests
     for edge in (None, 60):                                        # a store that learned 1-day slices, with no edge
         old = json.loads(json.dumps(st))                           # / one the property's longer data retention
         old.update(users_ok_days=edge, cells_chunk_days=1)         # has moved since: 1,014 calls before
         log = []
         new = gu.fetch_full(_stub(t, log=log), END, 1300, old_store=old)
-        assert new["users_ok_days"] == 70 and len(log) <= 65, edge
+        assert new["users_ok_days"] == 70 and len(_uni(log)) <= 65 and len(_imp(log)) <= 2 + gu.COH_MAX_CALLS, edge
     t = Truth(END - timedelta(days=299), END, 1000)                # no loss at all, but 1-day slices learned: the
     old = gu.fetch_full(_stub(t), END, 1300)                       # base slices, too, stay within the call cap —
     old["cells_chunk_days"] = 1                                    # the rest read in longer ones, every day read
@@ -1011,7 +1044,9 @@ def test_a_v2_store_is_repaired_reading_only_its_incomplete_days_by_events():
     assert st["cells_chunk_days"] == gu.FULL_CHUNK_DAYS            # its users slices start over: the daily re-read
     log = []                                                       # is ONE users slice, not 14 one-day ones
     gu.fetch_incr(_stub(t, log=log), st, END, 14)
-    assert len(log) == 4 and len(_cells_asked(log)) == 1
+    assert len(_uni(log)) == 4 and len(_cells_asked(log)) == 1
+    assert len(_imp(log, "usage")) == len(_imp(log, "vuse")) == 2     # the window + the history before it (backfill)
+    assert len(_imp(log, "ret")) <= gu.COH_MAX_CALLS and st["impact_v"] == gu.IMPACT_V
 
 
 def _world_v2(world, tmp_path, lost_after=100):
@@ -1119,16 +1154,270 @@ def test_ga4_calls_for_a_1000_day_big_app():
         t.today = END - timedelta(days=28)
         log = []
         st = gu.fetch_full(_stub(t, log=log), END - timedelta(days=28), 1300)
-        assert len(log) <= first_max and _off(st, t) == [] and st["flags"]["incomplete_days"] == {}
+        assert len(_uni(log)) <= first_max and _off(st, t) == [] and st["flags"]["incomplete_days"] == {}
+        assert len(_imp(log)) <= 2 + gu.COH_MAX_CALLS              # + usage, vuse and ≤ 12 cohort requests
         t.today = END
         log = []
         gu.fetch_incr(_stub(t, log=log), st, END - timedelta(days=27), 14)
-        assert len(log) <= 5                                       # daily, events, versions + users cells
+        assert len(_uni(log)) <= 5                                 # daily, events, versions + users cells
+        assert len(_imp(log)) <= 2 + gu.COH_MAX_CALLS              # (the cohort backfill still walking back)
         log = []
         new = gu.fetch_full(_stub(t, log=log), END, 1300, old_store=json.loads(json.dumps(st)))
         st, ok = gu.apply_rebuild(st, new)                         # (the old days it holds complete are not
-        assert ok and len(log) <= rebuild_max and _off(st, t) == [] and st["flags"]["incomplete_days"] == {}
+        assert ok and len(_uni(log)) <= rebuild_max and _off(st, t) == [] and st["flags"]["incomplete_days"] == {}
+        assert len(_imp(log)) <= 2 + gu.COH_MAX_CALLS
         v2 = _as_v2(t)                                             #  asked again: a re-read ties at best) — and
         log = []                                                   # the v2 store of the same app, repaired
         gu.fetch_repair(_stub(t, log=log), v2)
         assert len(log) <= repair_max and _silent(v2, t) == []
+
+
+# ── update impact: usage / vuse / return cohorts ────────────────────────────────────────────────────
+
+def _impact_truth(days=200, **kw):
+    """A truth whose actives are made of the installs, their return cohorts and the older users (Truth ret)."""
+    return Truth(END - timedelta(days=days - 1), END, 1000, ret=lambda c, k: 0.3 * k ** -0.5, **kw)
+
+
+def test_incremental_fetches_usage_and_vuse_over_its_window_and_they_add_up():
+    t = _impact_truth(versions=lambda d, a1: {"1.0": a1 - a1 // 3, "1.1": a1 // 3 - 5, "0.9": 5})
+    st = gu.fetch_full(_stub(t), END - timedelta(days=5), 1300)
+    assert st["impact_v"] == gu.IMPACT_V and st["flags"]["impact"]["vuse_split"] is True
+    log = []
+    gu.fetch_incr(_stub(t, log=log), st, END, 10)
+    for kind in ("usage", "vuse"):
+        (_, _, b), = _imp(log, kind)
+        assert b["dateRanges"] == [{"startDate": (END - timedelta(days=9)).isoformat(), "endDate": END.isoformat()}]
+        assert [m["name"] for m in b["metrics"]] == ["activeUsers", "sessions", "userEngagementDuration"]
+    k = END.isoformat()
+    u, a1, new = st["usage"][k], t.a1[END], t.new[END]
+    assert u["n"][0] == new and u["n"][0] + u["r"][0] == a1 and u["o"] == [0, 0, 0]
+    assert u["r"][1] == sum(x[4] for x in st["vuse"][k].values()) and u["n"][2] == sum(x[2] for x in st["vuse"][k].values())
+    assert set(st["vuse"][k]) == {"1.0", "1.1", "_rest"} and st["vuse"][k]["_rest"][0] + st["vuse"][k]["_rest"][3] == 5
+    assert sum(x[0] + x[3] for x in st["vuse"][k].values()) == a1           # pooled: every user still counted once
+
+
+def test_a_property_rejecting_new_vs_returning_by_version_is_asked_again_without_it():
+    t = _impact_truth(days=60)
+    t.reject_nvr = True
+    log = []
+    st = gu.fetch_full(_stub(t, log=log), END, 1300)
+    assert st["flags"]["impact"]["vuse_split"] is False and st["impact_v"] == gu.IMPACT_V
+    asked = [tuple(x["name"] for x in b["dimensions"]) for _, _, b in log]
+    assert ("date", "appVersion", "newVsReturning") in asked
+    assert sum(1 for a in asked if a == ("date", "appVersion") and True) == 2          # versions + vuse unsplit
+    v = st["vuse"][END.isoformat()]["1.0"]
+    assert v[:3] == [0, 0, 0] and v[3] == t.a1[END]                                    # all in the returning slots
+
+
+def test_rest_and_not_set_pooling_keeps_the_sums_exact():
+    p = {"daily": {"2026-09-01": {"a1": 10000}}, "vuse": {}, "vuse_split": True, "bad_rows": 0}
+    rows = [{"date": "20260901", "appVersion": v, "newVsReturning": n, "activeUsers": a, "sessions": s,
+             "userEngagementDuration": t} for v, n, a, s, t in (
+        ("2.0", "returning", 9000, 20000, 2.5e6), ("2.0", "new", 500, 800, 70000.4), ("1.9", "returning", 60, 90, 9000),
+        ("1.8", "returning", 30, 40, 3000), ("(not set)", "returning", 7, 9, 700), ("(other)", "new", 3, 3, 300),
+        ("2.1", "(not set)", 150, 300, 30000))]
+    gu._merge_vuse(p, rows)
+    v = p["vuse"]["2026-09-01"]
+    assert v == {"2.0": [500, 800, 70000, 9000, 20000, 2500000], "_rest": [0, 0, 0, 90, 130, 12000],
+                 "_x": [3, 3, 300, 7, 9, 700], "2.1": [0, 0, 0, 150, 300, 30000]}
+    assert sum(x[0] + x[3] for x in v.values()) == sum(r["activeUsers"] for r in rows)
+
+
+def test_a_lower_re_read_of_usage_never_replaces_the_day_we_hold():
+    held = {"usage": {"2026-09-01": {"n": [5, 8, 900], "r": [100, 300, 30000], "o": [0, 0, 0]},
+                      "2026-09-02": {"n": [5, 8, 900], "r": [100, 300, 30000], "o": [0, 0, 0]},
+                      "2026-09-03": {"n": [5, 8, 900], "r": [100, 300, 30000], "o": [0, 0, 0]}}}
+    fetched = {"usage": {"2026-09-01": {"n": [5, 8, 900], "r": [95, 285, 28000], "o": [0, 0, 0]},     # 5% lower
+                         "2026-09-02": {"n": [5, 8, 900], "r": [101, 305, 30100], "o": [0, 0, 0]}}}  # late data added
+    assert gu.keep_best_days(held, fetched, "usage", "2026-09-01", "2026-09-03") == 2   # the lower one + the missing one
+    assert fetched["usage"]["2026-09-01"] == held["usage"]["2026-09-01"]
+    assert fetched["usage"]["2026-09-02"]["r"][1] == 305 and fetched["usage"]["2026-09-03"] == held["usage"]["2026-09-03"]
+    t = _impact_truth(days=60)
+    st = gu.fetch_full(_stub(t), END, 1300)
+    k = (END - timedelta(days=3)).isoformat()
+    before = json.loads(json.dumps(st["usage"][k]))
+    t.spu = lambda d, v, new: 1.2 if d == END - timedelta(days=3) else (1.6 if new else 2.4)   # GA4 answers it degraded
+    gu.fetch_incr(_stub(t), st, END, 10)
+    assert st["usage"][k] == before and st["flags"]["impact"]["usage_kept"] == 1
+
+
+def test_cohorts_keep_only_their_settled_days_and_short_ones_are_flagged_small_ones_judged_together():
+    c0 = END - timedelta(days=3)
+    rows = [{"cohort": "c" + c0.strftime("%Y%m%d"), "cohortNthDay": "%04d" % n, "cohortActiveUsers": a,
+             "cohortTotalUsers": 1000} for n, a in ((0, 1000), (1, 300), (3, 170), (5, 130))]   # day 2 left out: empty
+    got = gu._ret_rows(rows, [c0, c0 - timedelta(days=1)], END)
+    assert got[c0.isoformat()] == {"t": 1000, "a": [1000, 300, 0, 170]}                        # day 5 past END: dropped
+    assert got[(c0 - timedelta(days=1)).isoformat()] == {"t": 0, "a": [0, 0, 0, 0, 0]}          # no row at all
+    daily = {(END - timedelta(days=i)).isoformat(): {"new": n} for i, n in enumerate((1000, 1000, 1000, 80, 90, 60))}
+    g = {k: {"t": t_, "a": [t_]} for k, t_ in zip(sorted(daily, reverse=True), (1000, 850, 1010, 70, 85, 50))}
+    judged, short = gu._ret_judge(g, daily, 1.0)
+    assert (judged, short) == (6, 4) and [g[k]["ok"] for k in sorted(g, reverse=True)] == [True, False, True] + [False] * 3
+    assert g[END.isoformat()]["cov"] == 1.0                           # (the 3 small ones: 205 of 230 = 89% together)
+    t = _impact_truth(days=80)
+    t.ret_day = lambda age: 1.0 if age != 20 else 0.5                  # one cohort GA4 answers at half
+    st = gu.fetch_full(_stub(t), END, 1300)
+    bad = (t.asof or END) if False else END - timedelta(days=20)
+    assert st["ret"][bad.isoformat()]["ok"] is False and st["flags"]["impact"]["ret_short"] == {bad.isoformat(): 0.5}
+    assert all(e["ok"] for k, e in st["ret"].items() if k != bad.isoformat())
+    e = st["ret"][(END - timedelta(days=40)).isoformat()]
+    assert len(e["a"]) == 31 and e["t"] == 1000 and e["a"][1] == 300 and st["ret_from"] == st["history_start"]
+
+
+def test_the_cohort_backfill_walks_back_finds_gas_user_data_edge_and_stops_quietly_at_the_call_cap_or_low_quota():
+    t = _impact_truth(days=400)
+    t.ret_day = lambda age: 1.0 if age <= 90 else 0.3                  # GA4 keeps user data ~3 months here
+    log = []
+    st = gu.fetch_full(_stub(t, log=log), END, 1300)
+    asked = [b["cohortSpec"]["cohorts"][0]["dateRange"]["startDate"] for _, _, b in _imp(log, "ret")]
+    assert len(_imp(log, "ret")) <= gu.COH_MAX_CALLS and asked == sorted(asked, reverse=True)   # newest → oldest
+    edge = END - timedelta(days=90)                                    # (asof = END: ages ≤ 90 complete)
+    assert st["ret_from"] == (edge).isoformat()                        # the day after the newest short cohort
+    assert all(e["ok"] for k, e in st["ret"].items() if k >= st["ret_from"])
+    assert st["ret_to"] < st["ret_from"] and st["flags"]["impact"]["ret_run"] == []
+    n = len(log)
+    gu.fetch_incr(_stub(t, log=log), st, END, 10)                      # edge found: only the maturing ones now
+    assert len(_imp(log[n:], "ret")) == 3
+    t2 = _impact_truth(days=400)
+    st2 = gu.fetch_full(_stub(t2), END, 1300)                          # no edge in 400 days: 12 calls, then resume
+    assert st2["ret_from"] is None and st2["ret_to"] == (END - timedelta(days=34 + 14 * 9)).isoformat()
+    log2 = []
+    gu.fetch_incr(_stub(t2, log=log2), st2, END, 10)
+    assert len(_imp(log2, "ret")) == gu.COH_MAX_CALLS and st2["ret_to"] < (END - timedelta(days=34 + 14 * 9)).isoformat()
+    for _ in range(3):
+        gu.fetch_incr(_stub(t2), st2, END, 10)
+    assert st2["ret_from"] == st2["history_start"]                    # reached the start: every cohort complete
+    low = {"tokensPerHour": {"consumed": 30, "remaining": 1000}}       # < 10% left: no cohort call, no failure
+    st3 = gu.fetch_full(UniStub(_impact_truth(days=100), TOK_A, PID, S1, quota=lambda ga: low), END, 1300)
+    assert st3["ret"] == {} and st3["ret_from"] is None and st3["impact_v"] == gu.IMPACT_V
+    st4 = gu.fetch_full(_stub(_impact_truth(days=100)), END, 1300, stop=lambda: True)   # run budget spent: the same
+    assert st4["ret"] == {} and st4["ret_to"] is None
+
+
+def test_a_fetch_cut_before_its_oldest_recent_cohorts_leaves_them_to_the_backfill_and_a_hole_is_repaired():
+    t = _impact_truth(days=100)
+    st = gu.fetch_full(_stub(t), END, 1300)
+    base = json.loads(json.dumps(st))
+    st.update(ret={}, ret_from=None, ret_to=None)
+    log = []
+    gu.fetch_ret(_stub(t, log=log), st, END, stop=lambda: len(_imp(log, "ret")) >= 1)   # budget: one call only
+    lo = END - timedelta(days=gu.COHORT_DAYS + gu.ACT_LATE_DAYS + 1)
+    assert len(_imp(log, "ret")) == 1 and st["ret_to"] == (END - timedelta(days=13)).isoformat()   # the oldest ASKED
+    assert (END - timedelta(days=14)).isoformat() not in st["ret"]      # (ret_to = lo would skip 14 days for good)
+    gu.fetch_ret(_stub(t), st, END + timedelta(days=1))                 # tomorrow: those days left the recent window …
+    assert all(d.isoformat() in st["ret"] for d in gu._days(lo, END))   # … the backfill read them
+    # a hole older than the recent window (left by a cut fetch before this rule): the repair reads it
+    hole = (END - timedelta(days=50)).isoformat()
+    st = json.loads(json.dumps(base))
+    assert st["ret_from"] and st["ret_from"] <= hole
+    del st["ret"][hole]
+    log = []
+    gu.fetch_ret(_stub(t, log=log), st, END)
+    assert hole in st["ret"] and st["ret"][hole]["ok"] and len(st["ret"][hole]["a"]) == gu.COHORT_DAYS + 1
+    gu.fetch_ret(_stub(t, log=log), st, END)                            # nothing left to repair: 3 recent calls only
+    assert len(_imp(log, "ret")) == 3 + 3 + 1
+
+
+def test_a_complete_cohort_is_never_replaced_by_a_short_re_read_and_a_maturing_one_gains_its_days():
+    t = _impact_truth(days=100)
+    st = gu.fetch_full(_stub(t), END - timedelta(days=10), 1300)
+    young = (END - timedelta(days=12)).isoformat()
+    assert len(st["ret"][young]["a"]) == 3                             # day 0..2 so far
+    k = (END - timedelta(days=30)).isoformat()
+    held = json.loads(json.dumps(st["ret"][k]))
+    t.ret_day = lambda age: 0.5 if age == 30 else 1.0                  # GA4 answers that cohort short now
+    gu.fetch_incr(_stub(t), st, END, 10)
+    assert st["ret"][k]["ok"] and st["ret"][k]["t"] == held["t"] and st["ret"][k]["a"][:len(held["a"])] == held["a"]
+    assert len(st["ret"][young]["a"]) == 13 and st["ret"][young]["ok"]   # the maturing one: now day 0..12
+
+
+def test_a_v3_store_from_before_the_impact_data_is_backfilled_at_its_next_fetch_and_keeps_its_alerts(world, tmp_path):
+    world.run(tmp_path)
+    path = gu.store_path(str(tmp_path), A1)
+    st = gu.load_store(path)
+    for k in ("impact_v", "usage", "vuse", "ret", "ret_from", "ret_to"):
+        st.pop(k)
+    st["flags"].pop("impact")
+    gu.save_store(path, st)
+    state = gu.load_state(str(tmp_path))
+    state["eval"][A1] = {"end": "2026-09-22", "streak": {"cohort|up": 1}}
+    state["episodes"]["x"] = {"id": "x", "app_id": A1, "family": "cohort", "dir": "up", "notified_at": None,
+                              "last": {}}
+    gu.save_state(str(tmp_path), state)
+    fail = {"on": True}
+
+    def boom(body):
+        if fail["on"] and [x["name"] for x in body["dimensions"]] == ["date", "newVsReturning"]:
+            raise RuntimeError("HTTP 500: INTERNAL")
+    world.fail = boom
+    world.run(tmp_path, now=NOW + timedelta(hours=21))                 # the impact read fails: uninstall saved anyway
+    st = gu.load_store(path)
+    assert "impact_v" not in st and st["window_end"] == (END + timedelta(days=1)).isoformat()
+    assert gu.load_state(str(tmp_path))["fetch"][A1]["fail"] is None
+    fail["on"] = False
+    n = len(world.log)
+    world.run(tmp_path, now=NOW + timedelta(hours=45))                 # next day: the whole history backfilled
+    st = gu.load_store(path)
+    assert st["impact_v"] == gu.IMPACT_V and min(st["usage"]) == st["history_start"] and st["v"] == gu.STORE_V
+    assert len([e for e in _imp(world.log[n:], "usage") if e[1] == S1]) == 2   # its window + the history before
+    state = gu.load_state(str(tmp_path))
+    assert state["eval"][A1]["streak"] == {"cohort|up": 1} and "x" in state["episodes"]   # no alert reset
+
+
+def test_revisions_record_daily_active_users_too(world, tmp_path):
+    for t in world.truths.values():
+        t.asof = END + timedelta(days=2)
+    world.run(tmp_path)
+    for t in world.truths.values():
+        t.asof += timedelta(days=1)
+    world.run(tmp_path, now=NOW + timedelta(days=1))
+    st = gu.load_store(gu.store_path(str(tmp_path), A1))
+    rec = list(st["revisions"].values())[-1]
+    assert set(rec) == {"un", "new", "a1"} and set(rec["a1"]) == set(rec["un"]) and all(
+        a == b for a, b in rec["a1"].values())
+
+
+def test_a_steady_daily_fetch_costs_at_most_5_more_calls(world, tmp_path):
+    for t in world.truths.values():
+        t.ret = None
+    world.run(tmp_path)
+    for i in range(1, 4):                                              # the cohort backfill finishes …
+        world.run(tmp_path, now=NOW + timedelta(hours=21 + 24 * i))
+    n = len(world.log)
+    world.run(tmp_path, now=NOW + timedelta(hours=21 + 24 * 4))       # … then a plain daily incremental
+    incr = world.log[n:]
+    per_app = {}
+    for pid, sid, b in incr:
+        per_app.setdefault(sid, []).append(b)
+    for sid, bodies in per_app.items():
+        uni = [b for b in bodies if tuple(x["name"] for x in b["dimensions"]) not in IMPACT_DIMS]
+        assert len(uni) == 4 and len(bodies) <= len(uni) + 5, (sid, len(bodies))   # + usage, vuse, 3 cohort requests
+    tok = gu.load_state(str(tmp_path))["fetch"][A1]["tokens"]
+    assert set(tok) == {"usage", "vuse", "ret"}
+
+
+def test_a_cohort_batch_ga4_refuses_is_halved_and_a_full_re_pull_sees_a_moved_edge():
+    t = _impact_truth(days=100)
+    sizes = []
+
+    def fail(body):
+        if "cohortSpec" in body:
+            n = len(body["cohortSpec"]["cohorts"])
+            sizes.append(n)
+            if n > 7:
+                raise RuntimeError("HTTP 400: INVALID_ARGUMENT: too many cohorts in cohortSpec")
+    st = gu.fetch_full(UniStub(t, TOK_A, PID, S1, fail=fail), END, 1300)
+    assert sizes[:3] == [14, 7, 7] and max(sizes) == 14 and len(sizes) <= gu.COH_MAX_CALLS
+    assert all(len(e["a"]) for e in st["ret"].values()) and st["ret"][END.isoformat()]["ok"]
+    t = _impact_truth(days=200)                                     # GA4 kept user data 60 days …
+    t.ret_day = lambda age: 1.0 if age <= 60 else 0.3
+    st = gu.fetch_full(_stub(t), END, 1300)                        # (the batch holding days 61–62 is not short: the
+    assert st["ret_from"] == (END - timedelta(days=62)).isoformat()  # edge sits after the first short one; those two
+    assert set(st["flags"]["impact"]["ret_short"]) >= {(END - timedelta(days=d)).isoformat() for d in (61, 62)}
+    t.ret_day = None                                                # stay flagged) … and keeps it longer now (14 months)
+    log = []
+    new = gu.fetch_full(_stub(t, log=log), END, 1300, old_store=json.loads(json.dumps(st)))
+    probe = [b for _, _, b in _imp(log, "ret") if b["cohortSpec"]["cohorts"][-1]["dateRange"]["startDate"]
+             == (END - timedelta(days=63)).isoformat()]
+    assert probe and (new["ret_from"] is None or new["ret_from"] < st["ret_from"])   # the edge moved back, backfill on
+    assert new["ret"][(END - timedelta(days=65)).isoformat()]["ok"]  # re-read complete: replaces the short one

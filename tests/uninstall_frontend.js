@@ -36,7 +36,7 @@ run(`DATA = {apps_catalog: [], today_date: '2026-09-25', alerts: {counts: {}, it
      for (const [n, j] of Object.entries(__FX.cohort_files || {})) UNICOH[n.slice(12, -8)] = uniCohPrep(j);`);
 const out = {};
 function scen(name, code) { try { out[name] = String(run(code)); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + (e.stack.match(/at [^\n]*/g) || []).slice(0, 4).join(' < ')); } }
-const RESET = `UNIAPP=''; APP=''; UNICSRC='all'; UNICRANGE='90'; UNITRI='cp'; UNITRIPAGE=0; UNITRIEXP=false; UNIOLDEXP=false; UNICLEXP=false; UNICPEXP=false; UNIDRANGE='90d'; UNIPRE=false; UNISTEXP=''; UNITIMEXP=false;`;
+const RESET = `UNIAPP=''; APP=''; UNICSRC='all'; UNICRANGE='90'; UNITRI='cp'; UNITRIPAGE=0; UNITRIEXP=false; UNIOLDEXP=false; UNICLEXP=false; UNICPEXP=false; UNIDRANGE='90d'; UNIPRE=false; UNISTEXP=''; UNITIMEXP=false; UNIIMPOPEN=''; UNIIMPALL=false; UNIIMPHOW=false; UNIUPF=''; UNIUPALL=false; UNIIMPJUMP='';`;
 for (const r of ['today', '7d', '30d', '90d', 'month', 'lastmonth', 'all', 'custom'])
   scen('portfolio_' + r, `${RESET} RANGE='${r}'; RCUSTOM={from:'2026-08-01',to:'2026-09-30'}; UNITRIEXP=${r === 'all'}; uniScreen()`);
 for (const k of ['app', 'ins', 'outs', 'net', 'rate', 'S7', 'D0', 'D1', 'D7', 'D30', 'alert'])
@@ -172,6 +172,80 @@ for (const tri of ['cp', 'all']) {
 for (const a of apps) for (const pre of [false, true])
   relCheck(`${a.app}|all|${pre}|page2`, a, `UNITRI='all'; UNITRIPAGE=1; UNIPRE=${pre}; UNITRIEXP=true;`);
 
+// ── 📦 Update impact: the owner's verify gate — every block of every app rendered OPEN (UNIIMPOPEN = its key): its
+// header, its 7 rows + the 2 version rows, its "Why:" footer; every release's key (the 📦 lines of the install-week
+// table call uniImp with it) opens the block holding it, a folded (older) one too; All apps "Recent updates" with
+// each verdict filter; the jump from another screen lands on the block (window.scrollTo recorded)
+const impact = { blocks: [], jumps: [], tri_keys: [], portfolio: {}, jump_scroll: null, how: null, folded: null };
+const itext = h => h.replace(/\son\w+="[^"]*"/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+const openPart = h => { const p = h.split('<div class="uni-imp-b').filter(x => x.includes('data-open="1"'));
+  return { n: p.length, html: p.length ? p[0].split('<div class="card"')[0] : '' }; };
+for (const a of apps) {
+  const id = JSON.stringify(a.app_id) + '; APP=' + JSON.stringify(a.app);
+  const B = (a.impact && a.impact.updates) || [];
+  for (const b of B) {
+    const name = `imp|${a.app}|${b.key}`;
+    scen(name, `${RESET} RANGE='30d'; UNIAPP=${id}; UNIIMPOPEN=${JSON.stringify(b.key)}; uniScreen()`);
+    const o = openPart(out[name] || ''), h = o.html;
+    const vt = (h.split('Same days: new version vs old versions')[1] || '');
+    impact.blocks.push({ app: a.app, key: b.key, n_open: o.n, open_key: (h.match(/data-key="([^"]*)"/) || [])[1] || null,
+      header: itext(((h.split('class="uni-imp-h"')[1] || '').split('</div>')[0]).replace(/^[^>]*>/, '')).trim(),
+      rows: [...(h.split('Same days: new version vs old versions')[0]).matchAll(/<tr data-row="([a-z_0-9]+)"/g)].map(m => m[1]),
+      vrows: [...vt.matchAll(/<tr data-row="([a-z_0-9]+)"/g)].map(m => m[1]),
+      labels: [...h.matchAll(/<td class="nm"[^>]*>([^<]*)/g)].map(m => m[1]),
+      heads: [...h.matchAll(/<th>([^<]*)<\/th>/g)].map(m => m[1]),
+      statuses: [...h.matchAll(/data-st="([a-z]+)"/g)].map(m => m[1]),
+      why: /<div class="uni-imp-why"><b>Why:<\/b> \S/.test(h), text: itext(h).slice(0, 3000), html: h });
+    for (const rk of b.rel_keys || []) {
+      let r = null;
+      try { r = JSON.parse(run(`(()=>{ ${RESET} UNIAPP=${id}; uniImp(${JSON.stringify(rk)}); const o=UNIIMPOPEN, all=UNIIMPALL, h=uniScreen();
+        return JSON.stringify({o, all, h}); })()`)); } catch (e) { errors.push('uniImp ' + rk + ': ' + e.message); continue; }
+      impact.jumps.push({ app: a.app, rk, want: b.key, open: r.o, rendered: (openPart(r.h).html.match(/data-key="([^"]*)"/) || [])[1] || null });
+    }
+  }
+  // the install-week table's 📦 lines / badges: each uniImp key they carry names a block of this app
+  for (const tri of ['cp', 'all']) {
+    const h = run(`(()=>{ ${RESET} const a=UNI.apps.find(x=>x.app_id===${JSON.stringify(a.app_id)}); UNITRI='${tri}'; UNITRIEXP=true; UNIPRE=true; return uniTriCard(a); })()`);
+    for (const m of h.matchAll(/uniImp\('([^']*)'\)/g))
+      impact.tri_keys.push({ app: a.app, k: m[1].replace(/&#39;/g, "'").replace(/\\'/g, "'"), found: B.some(b => b.key === m[1] || (b.rel_keys || []).includes(m[1])) });
+  }
+}
+// a folded block (older than IMPACT_SHOW — shown as 1 here): its key unfolds the older ones and opens it
+try { impact.folded = JSON.parse(run(`(()=>{ const a=UNI.apps.find(x=>uniImpBlocks(x).length>1), c=UNI.consts.impact, keep=c.impact_show;
+  c.impact_show=1; try{ ${RESET} UNIAPP=a.app_id; APP=a.app; const B=uniImpBlocks(a), k=B[B.length-1].rel_keys[0], shut=uniScreen();
+    uniImp(k); const h=uniScreen(); return JSON.stringify({k, want:B[B.length-1].key, all:UNIIMPALL, shut_has:shut.includes('id="uni-imp-'+B[B.length-1].key+'"'),
+      shut_fold:shut.includes('Show older updates ('+(B.length-1)+')'), open:(h.split('data-open="1"')[0].match(/id="uni-imp-([^"]*)"[^>]*$/)||[])[1]||null}); }
+  finally{ c.impact_show=keep; ${RESET} } })()`)); } catch (e) { errors.push('folded: ' + e.message); }
+scen('imp_how', `${RESET} UNIAPP=${JSON.stringify(apps[0].app_id)}; APP=${JSON.stringify(apps[0].app)}; UNIIMPHOW=true; uniScreen()`);
+impact.how = itext((out.imp_how || '').split('How we compare')[1] || '').slice(0, 2000);
+// a block the next update cut to under 3 days can never get a verdict: its chip says why (not "wait"), "No verdict"
+try { impact.never = JSON.parse(run(`(()=>{ const a=UNI.apps.find(x=>uniImpBlocks(x).length), b=uniImpBlocks(a)[0], keep=b.verdict;
+  b.verdict=Object.assign({},keep,{level:null,final:true,early:false,ready_on:null,why:'Agla update bahut jaldi aa gaya'});
+  try{ ${RESET} UNIAPP=a.app_id; APP=a.app; const h=uniScreen(); UNIAPP=''; APP=''; RANGE='30d'; const p=uniScreen();
+    return JSON.stringify({h:(h.split('id="uni-imp-'+b.key+'"')[1]||'').split('class="uni-imp-m"')[0], p:(p.split('id="uni-updates"')[1]||'').split('<div class="card')[0]}); }
+  finally{ b.verdict=keep; ${RESET} } })()`)); } catch (e) { errors.push('never: ' + e.message); }
+// the Recent updates card failing to render: a visible placeholder (never silently gone)
+scen('upd_throw', `${RESET} RANGE='30d'; (()=>{ const keep=uniUpdatesCard; uniUpdatesCard=()=>{ throw new Error('x'); };
+  try{ return uniScreen(); } finally{ uniUpdatesCard=keep; } })()`);
+impact.upd_throw = /<div class="card faint" id="uni-updates"[^>]*>⚠️ 📦 Recent updates — ye hissa abhi dikh nahi paya\.<\/div>/.test(out.upd_throw || '');
+// All apps "📦 Recent updates": the counts, and each verdict's rows alone
+for (const f of ['', 'halt', 'hold', 'continue', 'win', 'pending']) {
+  scen('upd|' + f, `${RESET} RANGE='30d'; UNIUPF='${f}'; uniScreen()`);
+  const h = ((out['upd|' + f] || '').split('id="uni-updates"')[1] || '').split('<div class="card')[0];
+  impact.portfolio[f] = { chips: Object.fromEntries([...h.matchAll(/data-uf="([a-z]+)"[^>]*>([^<]*)<b>\((\d+)\)<\/b>/g)].map(m => [m[1], { label: m[2].trim(), n: +m[3] }])),
+    rows: [...h.matchAll(/class="uni-upd" data-lv="([a-z]+)"/g)].map(m => m[1]), on: [...h.matchAll(/class="uni-sc [a-z]+ on" data-uf="([a-z]+)"/g)].map(m => m[1]),
+    text: itext(h).slice(0, 2500) };
+}
+// "Update detail →" (Alerts screen) / a Recent updates row with the header's App ALREADY that app: the page ends on the
+// block (it went back to the top: the jump was cancelled by uniOpen's scroll to the top)
+try { impact.jump_scroll = JSON.parse(run(`(()=>{ const keep={render, show, _navSave, doc:document, win:window}, calls=[];
+  const a=UNI.apps.find(x=>uniImpBlocks(x).length>1), B=uniImpBlocks(a), k=B[B.length-1].key;
+  render=function(){}; show=function(){}; _navSave=function(){};
+  document={getElementById:id=>id==='uni-imp-'+k?{getBoundingClientRect:()=>({top:1851,height:40})}:null, querySelector:()=>null};
+  window={scrollTo:o=>calls.push(o), scrollY:0, pageYOffset:0};
+  try{ ${RESET} APP=a.app; UNIAPP=a.app_id; uniImpGo(a.app_id,k); return JSON.stringify({k, calls, open:UNIIMPOPEN, pending:UNIIMPJUMP}); }
+  finally{ render=keep.render; show=keep.show; _navSave=keep._navSave; document=keep.doc; window=keep.win; ${RESET} } })()`)); } catch (e) { errors.push('jump_scroll: ' + e.message); }
+
 // ── what the page says ──
 const text = h => h.replace(/\son\w+="[^"]*"/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
 const uiText = h => h.replace(/\son\w+="[^"]*"/g, '').replace(/\sid="[^"]*"/g, '');   // markup + titles + chart labels, minus code
@@ -285,7 +359,7 @@ console.log(JSON.stringify({
   summary, pooled, xp, rate_states: rateStates, avg4: { checked: avg4Checked, bad: avg4Bad }, ref: { checked: refChecked, bad: refBad },
   rate_bad: rateBad, coh_bad: cohBad, gap_bad: gapBad, label_bad: labelBad, tip_big: tipBig, span_bad: spanBad,
   totals, header, header2, pages, texts: Object.fromEntries(Object.entries(out).filter(([k]) => /^(pre\||detail\|[^|]*\|all\|90\|all\|true|portfolio_30d|detail\|[^|]*\|all\|30\|cp\|false|overview_no_admob|tripage1_caller|no_verdict_young_launch|maybe_test|rel\|(two|newest|none|test)\||rel\|[^|]*\|(cp|all)\|false\|false$)/.test(k)).map(([k, v]) => [k, T(k)])),
-  rel,
+  rel, impact, alert_cards: out.alert_cards || '',
   plain_what_changed: (T('portfolio_30d').match(/What changed\? \((\d+)\)/) || [])[1],
   portfolio: T('portfolio_30d'),
   has: {

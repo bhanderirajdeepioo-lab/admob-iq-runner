@@ -79,8 +79,11 @@ day × lag); output is what the tab shows and which alerts are open.
     the app's users cells, so an old day and a recent one compare like with like) are complete: USED like any
     other day (survival, triangle, averages, alert baselines), only counted and shown (flags.cell_days,
     "uninstall ginti (events) se andaza").
-  * LATENESS — how much of a day's uninstalls / installs are in at each age, measured from the fetch's
+  * LATENESS — how much of a day's uninstalls / installs / active users are in at each age, measured from the fetch's
     day-to-day re-reads (store["revisions"]) — see lateness().
+  * UPDATE IMPACT — every app update's before / after card (returning DAU vs expected, new users back D1 / D7, sessions
+    and time per returning user, ad revenue per user, uninstall on install day, new vs old version on the same days) and
+    its HOLD / HALT / WIN alerts: engine.impact (evaluate_app calls it; its episodes join the app's alerts).
 
 Dates are datetime.date inside, ISO strings in and out; a date in a message says its year when it isn't
 obvious (outside E's year or older than YEAR_CLEAR_DAYS: "16–22 Mar 2026"). Fractions 0–1 (5 dp), rates per
@@ -1549,8 +1552,8 @@ def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_befo
         for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit and e["family"] == "cohort"
                     and e["last"].get("installs_to") and _d(e["last"]["installs_to"]) < old_before]:
             closed.append(dict(eps.pop(key), closed=E_iso))
-    if advanced:
-        for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit]:
+    if advanced:                                     # (update-impact episodes: impact.update_impact_episodes)
+        for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit and e["family"] != "impact"]:
             ep = eps[key]
             if ep["family"] in ("rate_spike", "rate_zero"):
                 done = (_d(E) - _d(ep["last_day"])).days > SPIKE_KEEP_DAYS
@@ -1570,7 +1573,7 @@ def alert_obj(ep, app, E):
     text = alert_text(ep["family"], ep["dir"], dict(s, prov=prov), E)
     out = {"id": ep["id"], "source": "uninstall", "app_id": ep["app_id"], "app": app, "family": ep["family"],
            "dir": ep["dir"], "severity": s.get("severity") or "watch",
-           "unit": "pct" if ep["family"] == "cohort" else "per1k",
+           "unit": {"cohort": "pct", "impact": "rel"}.get(ep["family"], "per1k"),
            "checkpoint": s.get("checkpoint"), "n": s.get("n"), "also": list(s.get("also") or []),
            "vs": list(s.get("vs") or []), "now": s.get("now"), "before": s.get("before"),
            "delta_pp": s.get("delta_pp"), "rel": s.get("rel") if s.get("rel") is not None else 0.0,
@@ -1581,6 +1584,9 @@ def alert_obj(ep, app, E):
            "last_seen": ep["last_true"], "fresh": (E - _d(ep["opened"])).days < FRESH_EVALS,
            "notify": ep.get("notified_at") is None, "data_till": _iso(E),
            "message": "%s: %s" % (app, text), "text": text}
+    if ep["family"] == "impact":                      # an update's impact (engine.impact): which update, its level, its rows
+        out.update(release=dict(s.get("release") or {}), level=s.get("level"),
+                   rows={k: list((s.get("rows") or {}).get(k) or []) for k in ("worse", "better")})
     if "closed" in ep:                                # history only: never "new", never (re)sent
         out.update(closed=ep["closed"], fresh=False, notify=False)
     return out
@@ -1815,7 +1821,7 @@ def old_changes(rows, recent_from, skip, ref):
 
 
 def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=None, late=LATE_DAYS,
-                 outdated=False):
+                 outdated=False, revenue=None):
     """Evaluate one app's store against its saved evaluation state → (detail, summary row). Updates
     state["eval"][app_id] and this app's episodes in place (pure otherwise). late = the provisional days
     (config GA4_LATE_DAYS). outdated = the store is an older format still waiting for its clean re-pull:
@@ -1826,7 +1832,10 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     RECENT: an alert is only about installs whose window ends within ALERT_RECENT_DAYS; a checkpoint whose
     newest installs are older than that and moved is listed in "old_changes" — info, never an episode.
     INCOMPLETE DAYS: read through fill_days — the near-complete ones filled (flags.estimated_days, used everywhere,
-    shown "≈"), the rest left out (flags.incomplete_days)."""
+    shown "≈"), the rest left out (flags.incomplete_days).
+    UPDATE IMPACT (engine.impact): every app update's before / after card (detail["impact"], summary["updates"]); its
+    HOLD / HALT / WIN episodes join the app's alerts. revenue = the app's AdMob revenue {tz, currency, till, days:
+    {day: [earnings micros, impressions]}} (None: no ARPDAU row)."""
     store = fill_days(store)
     E = _d(store["window_end"])
     late = max(0, int(late or 0))
@@ -1888,14 +1897,25 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
             held[dr] = _add_ranges([], [_win(cd, i, i) for i in sorted(keep)])   # claimed, not told
     ready += rate_ready(ds, drift, app_id, streak, since, E, first)
     eps = update_episodes(state, app_id, E, ready, advanced, first or outdated, now, recent_from)
+    from . import impact as imp                      # (lazy: impact imports this module)
+    impact, updates, iconds = imp.impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, first,
+                                             advanced, outdated, now)
+    eps = [e for e in eps if e["family"] != "impact"] + imp.update_impact_episodes(state, app_id, E, iconds,
+                                                                                   advanced, now)
     if outdated:                                     # NOTHING goes out from an older store format — not even an
         for e in eps:                                # episode opened earlier whose send failed (still due)
             if e.get("notified_at") is None:
                 e.update(notified_at=now, seeded=True)
+    by_block = {e["block"]: e["id"] for e in eps if e["family"] == "impact"}
+    for u in impact["updates"]:
+        u["alert_id"] = by_block.get(u["key"])
+    istate = ((state.get("eval") or {}).get(app_id) or {}).get("impact")
     state.setdefault("eval", {})[app_id] = {"end": _iso(E), "stage": cp["stage"], "stable_hold": cp["stable_hold"],
                                             "streak": streak, "since": since,
                                             "claimed": {dr: r for dr, r in sorted(claimed.items()) if r},
                                             "held": {dr: r for dr, r in sorted(held.items()) if r}}
+    if istate is not None:
+        state["eval"][app_id]["impact"] = istate
     alerts = sort_alerts([alert_obj(e, app, E) for e in eps])
     closed = [alert_obj(e, app, E) for e in state.get("closed") or [] if e["app_id"] == app_id]
     closed.sort(key=lambda a: (a["closed"], a["opened"], a["id"]), reverse=True)
@@ -1960,23 +1980,24 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
               "triangle": triangle(cd, cp["list"], late, (sv or {}).get("all"), whole if i0 else None),
               "survival": sv, "releases": rels, "launch": launch_out(whole, L, i0),
               "old_changes": old_changes(settled, recent_from, {dr: c["ns"] for dr, c in conds.items()}, E),
-              "lateness": lateness(revision_sums(store)), "alerts": alerts, "alerts_closed": closed}
+              "lateness": lateness(revision_sums(store)), "alerts": alerts, "alerts_closed": closed,
+              "impact": impact}
     summary = {"app_id": app_id, "app": app, "data_till": _iso(E), "stale": bool(stale), "ready": cp["nmax"] >= 0,
                "stage": cp["stage"], "rate7": rn["last7"], "rate_med": rn["med"], "rate_dir": rn["dir"],
-               "head4": head4, "alerts": counts}
+               "head4": head4, "alerts": counts, "updates": updates}
     return detail, summary
 
 
 # ── late data: how complete a day is at each age ──────────────────────────────────────────────────
 
 def revision_sums(store, into=None):
-    """store["revisions"] ({fetch day: {"un"|"new": {age: [before, after]}}}, fetch.ga4_uninstall) → summed
-    per metric and age {"un"|"new": {age: [Σbefore, Σafter, re-reads]}}, added into `into` when given (the
+    """store["revisions"] ({fetch day: {"un"|"new"|"a1": {age: [before, after]}}}, fetch.ga4_uninstall) → summed
+    per metric and age {"un"|"new"|"a1": {age: [Σbefore, Σafter, re-reads]}}, added into `into` when given (the
     portfolio pools every app's)."""
-    out = into if into is not None else {"un": {}, "new": {}, "fetches": 0}
+    out = into if into is not None else {"un": {}, "new": {}, "a1": {}, "fetches": 0}
     for rec in (store.get("revisions") or {}).values():
         out["fetches"] = out.get("fetches", 0) + 1
-        for m in ("un", "new"):
+        for m in ("un", "new", "a1"):
             for age, (b, a) in (rec.get(m) or {}).items():
                 s = out.setdefault(m, {}).setdefault(str(age), [0, 0, 0])
                 s[0], s[1], s[2] = s[0] + int(b), s[1] + int(a), s[2] + 1
@@ -1984,20 +2005,21 @@ def revision_sums(store, into=None):
 
 
 def lateness(sums):
-    """How much of a day's final uninstalls (un) / installs (new) GA4 already shows at each age (days from
+    """How much of a day's final uninstalls (un) / installs (new) / active users (a1: the update-impact card's activity —
+    days ≤ E − 3 final) GA4 already shows at each age (days from
     the day to the fetch): chained back from the oldest age measured, share[a] = share[a+1] × Σbefore ÷
     Σafter of the re-reads at age a (what arrived between age a and a+1). An age with under LATE_MIN_USERS
-    re-read users ends the chain (None from there down). → {"ages", "un", "new", "final_age", "fetches"},
+    re-read users ends the chain (None from there down). → {"ages", "un", "new", "a1", "final_age", "fetches"},
     or None before any re-read."""
     if not sums or not sums.get("fetches"):
         return None
-    ages = sorted({int(a) for m in ("un", "new") for a in (sums.get(m) or {})})
+    ages = sorted({int(a) for m in ("un", "new", "a1") for a in (sums.get(m) or {})})
     if not ages:
         return None
     top = ages[-1] + 1                           # the oldest age a re-read reached: taken as "final"
     span = list(range(ages[0], top + 1))
     out = {"ages": span, "final_age": top, "fetches": int(sums["fetches"])}
-    for m in ("un", "new"):
+    for m in ("un", "new", "a1"):
         got = sums.get(m) or {}
         share, v = [None] * len(span), 1.0
         share[-1] = 1.0

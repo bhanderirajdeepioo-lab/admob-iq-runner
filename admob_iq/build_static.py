@@ -186,7 +186,8 @@ def send_alerts(dashboard, s):
             continue
         icon = _ICON.get(a.get("severity"), "•")
         sev = str(a.get("severity", "")).upper()
-        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · uninstall (GA4)'))
+        what = "update impact (GA4)" if a.get("family") == "impact" else "uninstall (GA4)"
+        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · {what}'))
     if not lines and not uni:
         return []
     dry = s["notify_dry_run"]
@@ -226,17 +227,71 @@ def uninstall_delivered(results, s):
     return got
 
 
-def _uninstall_step(dashboard, data_dir, out_dir, s):
+def admob_revenue(rows, tz, currency, today, tz_by_account=None):
+    """The network report's rows → the update-impact ARPDAU input {tz, currency, till, apps: {AdMob app id: {day:
+    [earnings micros, impressions]}}, tz_by_app}: every app's revenue per AdMob day, up to yesterday (today − 1: today
+    is still filling). Exact AdMob numbers, nothing sampled. Each account's report is in THAT account's reporting
+    timezone (make_client: its own when not configured): tz_by_account {account id: timezone} names it, and every app
+    of an account whose timezone is not `tz` is listed in tz_by_app (so its days are never read as `tz` days)."""
+    till = (today - timedelta(days=1)).isoformat()
+    apps, tz_app = {}, {}
+    for r in rows:
+        aid, d = r.get("app_id"), str(r.get("report_date") or "")[:10]
+        if not aid or not d or d > till:
+            continue
+        cur = apps.setdefault(aid, {}).setdefault(d, [0, 0])
+        cur[0] += int(r.get("estimated_earnings_micros") or 0)
+        cur[1] += int(r.get("impressions") or 0)
+        t = (tz_by_account or {}).get(r.get("account_id"))
+        if t and t != tz:
+            tz_app[aid] = t
+    return {"tz": tz, "currency": currency, "till": till,
+            "apps": {a: dict(sorted(v.items())) for a, v in sorted(apps.items())},
+            "tz_by_app": dict(sorted(tz_app.items()))}
+
+
+def account_tzs(accounts, s, report_tz, mode, has_creds):
+    """{account id: its reporting timezone} — the timezone each account's AdMob report rows are in: the configured
+    reporting_tz, else (live) the account's own (account_meta, one small read each), else report_tz (as the rest of the
+    dashboard assumes). Never raises."""
+    out = {}
+    for a in accounts or []:
+        tz = a.get("reporting_tz") or ""
+        if not tz and mode == "live" and has_creds and a.get("refresh_token"):
+            try:
+                from .fetch.admob_client import AdMobClient
+                tz = (AdMobClient(a["account_id"], s["google_client_id"], s["google_client_secret"],
+                                  a.get("refresh_token")).account_meta().get("reporting_tz") or "")
+            except Exception as e:
+                print(f"account timezone for revenue skipped: {type(e).__name__}", file=sys.stderr)
+        out[a.get("account_id")] = tz or report_tz
+    return out
+
+
+def _uninstall_step(dashboard, data_dir, out_dir, s, revenue=None):
     """GA4 Uninstall tab (admob_iq.uninstall_build) → the site file names it wrote. OPTIONAL: on ANY failure
     the dashboard is left exactly as the AdMob build made it, and the log gets the error TYPE only (GA4
-    error texts can carry property / stream ids, and this log is public)."""
+    error texts can carry property / stream ids, and this log is public). revenue = admob_revenue (the update-impact
+    card's ARPDAU)."""
     try:
         from .uninstall_build import run_uninstall
-        return run_uninstall(dashboard, data_dir, out_dir, s) or []
+        return run_uninstall(dashboard, data_dir, out_dir, s, revenue=revenue) or []
     except Exception as e:
         dashboard.pop("uninstall", None)
         print(f"ga4 uninstall skipped: {type(e).__name__}", file=sys.stderr)
         return []
+
+
+def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today, tz_by_account=None):
+    """The uninstall step with the exact AdMob revenue per app per day (the update-impact card's ARPDAU) from the
+    network report already in `repo` — no extra report call (tz_by_account: account_tzs). A revenue failure only costs
+    that one row."""
+    try:
+        revenue = admob_revenue(repo.fetch_network(), report_tz, s["report_currency"], today, tz_by_account)
+    except Exception as e:
+        revenue = None
+        print(f"ga4 uninstall revenue skipped: {type(e).__name__}", file=sys.stderr)
+    return _uninstall_step(dashboard, data_dir, out_dir, s, revenue=revenue)
 
 
 def _uninstall_mark_sent(dashboard, data_dir, s, results=None):
@@ -1068,7 +1123,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # the AdMob dashboard builds exactly as before.
     uni_files = []
     if mode == "live" and has_creds and repo.has_data():
-        uni_files = _uninstall_step(dashboard, data_dir, out_dir, s)
+        uni_files = _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today,
+                                            account_tzs(accounts, s, report_tz, mode, has_creds))
 
     os.makedirs(out_dir, exist_ok=True)
     # dashboard.json is the primary payload and GROWS with history depth (placements + countries_daily),

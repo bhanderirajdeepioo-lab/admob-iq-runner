@@ -1,11 +1,23 @@
 """GA4 → per-app uninstall store (data/ga4_uninstall/), fetched inside the hourly build.
 
-Four Data API reports per app, all pinned to the app's Android stream by Ga4App:
+Data API reports per app, all pinned to the app's Android stream by Ga4App:
   * daily     date → newUsers, activeUsers, active28DayUsers           (installs + the rate denominator)
   * events    date × eventName → totalUsers, eventCount for app_remove / app_update
   * cells     firstSessionDate × date → app_remove users               (the install-cohort churn cells; app_remove
                                                                          EVENTS instead past the users edge, below)
   * versions  date × appVersion → activeUsers                          (releases; Step 4 version scorecard)
+  * usage     date × newVsReturning → activeUsers, sessions, userEngagementDuration     (update impact: per user)
+  * vuse      date × appVersion × newVsReturning → the same                              (update impact: new vs old
+                                                                                          version, same days)
+  * ret       cohortSpec DAILY by firstSessionDate, day 0..30 → cohortActiveUsers / cohortTotalUsers (update impact:
+              new users back next day / after 7 days; see fetch_ret)
+
+UPDATE IMPACT (engine.impact): usage and vuse are two more per-date REPORTS (sums only — ratios like sessionsPerUser
+are not additive; the engine divides the sums). A re-read replaces a day we hold only when it is not lower (late data
+only adds: keep_best_days). A v3 store from before them is backfilled at its next fetch (impact_v, no STORE_V bump, no
+alert reset); the new-user return cohorts are read newest → oldest, a few calls a fetch (fetch_ret), and GA4's
+user-data edge (retention was 2 months until Sep 2026) is found by self-check, never assumed. None of it ever fails the
+uninstall fetch: a failed impact read keeps what we hold and is tried again at the next fetch.
 
 FULL history on an app's first fetch (as far back as the property has data, ≤ GA4_MAX_HISTORY_DAYS), then
 INCREMENTAL: the last GA4_REFETCH_DAYS dates (14: Firebase keeps adding events for up to ~7 days) + any gap,
@@ -125,6 +137,20 @@ REPAIR_MATERIAL = 0.01      # a v2 → v3 upgrade that moved > 1% of the app's a
 REPAIR_RETRY_HOURS = 24     # a repair that failed is tried again a day later — incrementals go on meanwhile
 DIR = "ga4_uninstall"
 EVENTS = ["app_remove", "app_update"]
+# ── update impact (mirrored in engine.impact: the engine never imports this requests-based module) ──
+IMPACT_V = 1                # the impact data format: a store without it gets usage / vuse backfilled at its next fetch
+                            # (no STORE_V bump, its alert history stays)
+COHORT_DAYS = 30            # new-user return cohorts are kept for day 0..30 after install
+ACT_LATE_DAYS = 3           # activity days ≤ E−3 are final: the maturing cohorts re-read every fetch reach back that far
+VUSE_MIN_SHARE = 0.01       # a version under 1% of the day's active users is pooled into "_rest" (~55 versions a day live)
+COH_BATCH = 14              # cohorts per cohort request (the size ga4.cohort_body / probe_t3 ran live)
+COH_MIN_USERS = 200         # a cohort with fewer installs is judged pooled with the batch's other small ones
+COH_MIN_COVERAGE = 0.90     # a cohort holding < 90% of its installs (× the app's cohort scale ret_k) reads short
+COH_EDGE_RUN = 2            # 2 short batches in a row = GA4's user-data edge: the backfill stops there
+COH_MAX_CALLS = 12          # cohort requests per fetch at most (3 for the maturing ones + repair + backfill)
+COH_REPAIR_DAYS = 7         # a held short (or not yet mature) cohort is asked again at most once a week
+IMPACT_REPORTS = ("usage", "vuse")
+NVR_SLOT = {"new": "n", "returning": "r"}
 
 
 class NoData(RuntimeError):
@@ -269,6 +295,88 @@ def rep_versions(ga, start, end):
                           "metrics": ga4._dim("activeUsers")}, page_rows=UNI_PAGE_ROWS)
 
 
+USE_METS = ("activeUsers", "sessions", "userEngagementDuration")
+
+
+class _Unsplit(list):
+    """rep_vuse's rows asked WITHOUT newVsReturning (the property rejected the pair): _merge_vuse puts them in the
+    returning slots and records vuse_split False."""
+
+
+def rep_usage(ga, start, end):
+    """Per day, new vs returning users: active users, sessions, engagement seconds — SUMS (ratios like
+    sessionsPerUser / averageSessionDuration are not additive: the engine divides the sums). ~3 rows a day."""
+    return ga.report_all({"dateRanges": [_rng(start, end)], "dimensions": ga4._dim("date", "newVsReturning"),
+                          "metrics": ga4._dim(*USE_METS)}, page_rows=UNI_PAGE_ROWS)
+
+
+def _nvr_rejected(e):
+    s = str(e)
+    return s.startswith("HTTP 400") and "newVsReturning" in s
+
+
+def rep_vuse(ga, start, end):
+    """rep_usage per app version (the same days: new version vs old). A property that rejects newVsReturning with
+    appVersion is asked again without it (_Unsplit: every user in the returning slots, vuse_split False)."""
+    body = {"dateRanges": [_rng(start, end)], "metrics": ga4._dim(*USE_METS)}
+    try:
+        return ga.report_all(dict(body, dimensions=ga4._dim("date", "appVersion", "newVsReturning")),
+                             page_rows=UNI_PAGE_ROWS)
+    except RuntimeError as e:
+        if not _nvr_rejected(e):
+            raise
+    return _Unsplit(ga.report_all(dict(body, dimensions=ga4._dim("date", "appVersion")), page_rows=UNI_PAGE_ROWS))
+
+
+def _use_vals(r):
+    return [int(r.get("activeUsers") or 0), int(r.get("sessions") or 0),
+            int(round(float(r.get("userEngagementDuration") or 0)))]
+
+
+def _merge_usage(p, rows):
+    """→ p["usage"][day] = {"n"|"r"|"o": [active users, sessions, engagement seconds]} — new, returning, anything
+    else GA4 answers (e.g. "(not set)"); whole numbers."""
+    for r in rows:
+        d = ga4._d(r.get("date"))
+        if not _in(p, d):
+            p["bad_rows"] += 1
+            continue
+        u = p["usage"].setdefault(d.isoformat(), {"n": [0, 0, 0], "r": [0, 0, 0], "o": [0, 0, 0]})
+        slot = u[NVR_SLOT.get(str(r.get("newVsReturning") or ""), "o")]
+        for j, v in enumerate(_use_vals(r)):
+            slot[j] += v
+
+
+def _merge_vuse(p, rows):
+    """→ p["vuse"][day][version] = [aN, sN, tN, aR, sR, tR] (new users, then returning — anything else GA4 answers
+    counts as returning; unsplit rows (_Unsplit) all go there). A version under VUSE_MIN_SHARE of the day's active
+    users (daily a1) is pooled into "_rest", "(not set)" / "(other)" into "_x" — sums stay exact (additive)."""
+    split = not isinstance(rows, _Unsplit)
+    if not split:
+        p["vuse_split"] = False
+    got = {}
+    for r in rows:
+        d = ga4._d(r.get("date"))
+        if not _in(p, d):
+            p["bad_rows"] += 1
+            continue
+        v = str(r.get("appVersion") or "")
+        v = "_x" if v in ("", "(not set)", "(other)", "(none)") else v
+        acc = got.setdefault(d.isoformat(), {}).setdefault(v, [0] * 6)
+        off = 0 if split and str(r.get("newVsReturning") or "") == "new" else 3
+        for j, x in enumerate(_use_vals(r)):
+            acc[off + j] += x
+    for k, vers in got.items():
+        cap = VUSE_MIN_SHARE * int((p["daily"].get(k) or {}).get("a1") or 0)
+        out = {}
+        for v, acc in vers.items():
+            key = v if v == "_x" or acc[0] + acc[3] >= cap else "_rest"
+            cur = out.setdefault(key, [0] * 6)
+            for j in range(6):
+                cur[j] += acc[j]
+        p["vuse"][k] = out
+
+
 def _a28_rejected(e):
     s = str(e)
     return s.startswith("HTTP 400") and "active28DayUsers" in s
@@ -289,7 +397,8 @@ def _parse(start, end, den):
     return {"daily": {d.isoformat(): {"new": 0, "a1": 0, "a28": 0 if den == "a28" else None, "un": 0,
                                       "un_ev": 0, "upd": 0} for d in _days(start, end)},
             "cohorts": {}, "unplaced": {}, "versions": {}, "bad_rows": 0, "incomplete": {}, "alone": {},
-            "cells_log": [], "cov": {}, "gone": set(), "cell_src": {}, "probes": 0}
+            "cells_log": [], "cov": {}, "gone": set(), "cell_src": {}, "probes": 0,
+            "usage": {}, "vuse": {}, "vuse_split": True, "impact_failed": []}
 
 
 def _in(p, d):
@@ -354,8 +463,29 @@ def _merge_versions(p, rows):
 
 # Per-date reports fetched over the same window as the daily one: (name, report fn, merge fn into the parsed
 # window). THE Step 4 extension point — a country / campaign report is one more entry here (plus a key in
-# _parse and merge_window) and every full / incremental fetch then carries it.
-REPORTS = [("events", rep_events, _merge_events), ("versions", rep_versions, _merge_versions)]
+# _parse and merge_window) and every full / incremental fetch then carries it. The IMPACT_REPORTS never fail the
+# fetch (see _fetch_window).
+REPORTS = [("events", rep_events, _merge_events), ("versions", rep_versions, _merge_versions),
+           ("usage", rep_usage, _merge_usage), ("vuse", rep_vuse, _merge_vuse)]
+
+
+def _spent(ga, q0):
+    """tokensPerDay the calls since the quota snapshot `q0` consumed (from `remaining`; the last call's own
+    `consumed` without a snapshot) — recorded privately (state), never printed."""
+    b0, b1 = (q0 or {}).get("tokensPerDay") or {}, (ga.quota or {}).get("tokensPerDay") or {}
+    try:
+        if "remaining" in b0 and "remaining" in b1:
+            return max(0, int(b0["remaining"]) - int(b1["remaining"]))
+        return int(b1.get("consumed") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _tokens(ga, kind, q0):
+    t = getattr(ga, "impact_tokens", None)
+    if t is None:
+        t = ga.impact_tokens = {}
+    t[kind] = t.get(kind, 0) + _spent(ga, q0)
 
 
 # ── cells, checked against the events report ─────────────────────────────────────────────────────
@@ -950,13 +1080,301 @@ def _fetch_window(ga, start, end, den, place_from, cut, daily=None, chunk=FULL_C
     _merge_daily(p, daily)
     del daily
     for name, fn, merge in REPORTS:
-        rows = fn(ga, start, end)
+        q0 = ga.quota
+        try:
+            rows = fn(ga, start, end)
+        except Exception:
+            if name not in IMPACT_REPORTS:
+                raise
+            p["impact_failed"].append(name)       # an impact read never fails the uninstall fetch: the days we hold
+            continue                              # stay (keep_best_days), it is asked again at the next fetch
+        if name in IMPACT_REPORTS:
+            _tokens(ga, name, q0)
         if ga.truncated(rows):
             cut.add(name)
         merge(p, rows)
         del rows
     _fetch_all_cells(ga, p, start, end, place_from, cut, chunk, stop, **(cells or {}))
     return p
+
+
+# ── update impact: usage days kept at their best, new-user return cohorts ───────────────────────────
+
+def _use_sessions(v, key):
+    """Σ sessions of one day's usage ({"n"|"r"|"o": [a, s, t]}) or vuse ({version: [aN, sN, tN, aR, sR, tR]})."""
+    if key == "usage":
+        return sum(int((v.get(s) or [0, 0, 0])[1] or 0) for s in ("n", "r", "o"))
+    return sum(int(x[1] or 0) + int(x[4] or 0) for x in (v or {}).values())
+
+
+def keep_best_days(held, fetched, key, a, b):
+    """Day by day over [a, b] ("usage" / "vuse"): a re-read replaces a day `held` holds only when its Σ sessions ≥ the
+    held Σ × (1 − GRADE_TIE) — late data only adds, so a LOWER re-read means GA4 answered degraded; a day missing from
+    the re-read keeps the held one too. Held days go back into `fetched` (in place) → how many were kept."""
+    h, f = held.get(key) or {}, fetched.setdefault(key, {})
+    kept = 0
+    for x in _days(_d(a), _d(b)):
+        k = x.isoformat()
+        if k not in h:
+            continue
+        if k not in f or _use_sessions(f[k], key) < _use_sessions(h[k], key) * (1 - GRADE_TIE):
+            f[k] = h[k]
+            kept += 1
+    return kept
+
+
+def _impact_flags(store):
+    """store["flags"]["impact"] (in place, defaults filled): vuse_split (GA4 split vuse by new / returning), ret_k (the
+    cohort scale), ret_short {day: coverage} (cohorts read short: never used), usage_kept / vuse_kept (held days a lower
+    re-read did not replace, last merge), thresholded (a cohort answer was thresholded) — and, when they happen,
+    truncated (a cohort answer was cut) and ret_run (the backfill's short batches so far, carried to the next fetch)."""
+    fl = store.setdefault("flags", {})
+    fi = fl.get("impact")
+    if not isinstance(fi, dict):
+        fi = fl["impact"] = {}
+    for k, v in (("vuse_split", True), ("ret_k", 1.0), ("ret_short", {}), ("usage_kept", 0), ("vuse_kept", 0),
+                 ("thresholded", False)):
+        fi.setdefault(k, v)
+    return fi
+
+
+def ret_body(days):
+    """One DAILY cohort per install day (firstSessionDate), day 0..COHORT_DAYS. A cohort request carries NO top-level
+    dateRanges — the dates live in each cohort (ga4.cohort_body)."""
+    return {"dimensions": ga4._dim("cohort", "cohortNthDay"),
+            "metrics": ga4._dim("cohortActiveUsers", "cohortTotalUsers"),
+            "cohortSpec": {"cohorts": [{"name": "c" + d.strftime("%Y%m%d"), "dimension": "firstSessionDate",
+                                        "dateRange": {"startDate": d.isoformat(), "endDate": d.isoformat()}}
+                                       for d in days],
+                           "cohortsRange": {"granularity": "DAILY", "startOffset": 0, "endOffset": COHORT_DAYS}},
+            "limit": 10000}
+
+
+def rep_ret(ga, days):
+    """New-user return: of the users whose FIRST session was day c (cohortTotalUsers), how many were active N days
+    later (cohortActiveUsers — the same "active user" as the DAU), N = 0..COHORT_DAYS, for the install days `days`
+    (≤ COH_BATCH: ≤ 14 × 31 rows, so a request is bounded and GA4 never folds it into "(other)"). Limits, as GA4
+    documents them (or doesn't): cohorts are by firstSessionDate only (no version split); the most cohorts one request
+    may carry and its token cost are not documented (fetch_ret keeps batches at 14 and records the tokens); it may be
+    thresholded (flags.impact.thresholded); user-level data older than the property's retention reads short or empty
+    (the self-check in fetch_ret finds that edge). Not a REPORTS entry: a cohort request has no dateRanges."""
+    return ga.report(ret_body(days))
+
+
+def _ret_rows(rows, days, end):
+    """Cohort rows → {install day ISO: {"t": total, "a": [active on day 0..M]}} for every day asked, M = min(COHORT_DAYS,
+    end − day): a day N GA4 left out (it omits empty rows) is 0 when the cohort has any row; a cohort with none reads
+    t 0. Day N past `end` (not settled for this fetch) is dropped."""
+    got = {}
+    for r in rows:
+        name = str(r.get("cohort") or "")
+        try:
+            c = datetime.strptime(name[1:], "%Y%m%d").date()
+            n = int(str(r.get("cohortNthDay")))
+        except (TypeError, ValueError):
+            continue
+        g = got.setdefault(c, {"t": 0, "a": {}})
+        g["t"] = max(g["t"], int(r.get("cohortTotalUsers") or 0))
+        g["a"][n] = g["a"].get(n, 0) + int(r.get("cohortActiveUsers") or 0)
+    out = {}
+    for c in days:
+        m = min(COHORT_DAYS, (end - c).days)
+        if m < 0:
+            continue
+        g = got.get(c) or {"t": 0, "a": {}}
+        out[c.isoformat()] = {"t": g["t"], "a": [g["a"].get(n, 0) for n in range(m + 1)]}
+    return out
+
+
+def _new(daily, k):
+    return int((daily.get(k) or {}).get("new") or 0)
+
+
+def _ret_judge(got, daily, k):
+    """Each cohort's self-check against the day's installs (daily new) → in place cov / ok, and (judged, short) counts.
+    cov = cohortTotalUsers ÷ newUsers; ok = not judged, or cov ≥ COH_MIN_COVERAGE × k (k = the app's cohort scale, like
+    _users_k). A cohort under COH_MIN_USERS installs is judged pooled with the batch's other small ones (their Σ) —
+    too few installs alone say nothing."""
+    judged = short = 0
+    small = []
+    for day, e in got.items():
+        n = _new(daily, day)
+        e["cov"] = round(e["t"] / n, 4) if n else None
+        if n >= COH_MIN_USERS:
+            e["ok"] = e["cov"] >= COH_MIN_COVERAGE * k
+            judged, short = judged + 1, short + (not e["ok"])
+        elif n:
+            small.append(day)
+        else:
+            e["ok"] = True
+    st, sn = sum(got[d]["t"] for d in small), sum(_new(daily, d) for d in small)
+    for day in small:
+        got[day]["ok"] = sn < COH_MIN_USERS or st >= COH_MIN_COVERAGE * k * sn
+        if sn >= COH_MIN_USERS:
+            judged, short = judged + 1, short + (not got[day]["ok"])
+    return judged, short
+
+
+def _ret_scale(got, daily, held):
+    """The app's cohort scale: cohortTotalUsers per newUser of the newest ≥7 judged cohorts of this read (their
+    median, at most one batch of them) — else the one held (flags.impact.ret_k), else 1."""
+    cov = [e["t"] / _new(daily, d) for d, e in sorted(got.items(), reverse=True)
+           if _new(daily, d) >= COH_MIN_USERS and e["t"] > 0][:COH_BATCH]
+    if len(cov) >= 7:
+        cov.sort()
+        n = len(cov)
+        return round(cov[n // 2] if n % 2 else (cov[n // 2 - 1] + cov[n // 2]) / 2, 4)
+    try:
+        return float(held) if held else 1.0
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _ret_keep(held, new):
+    """The better read of one cohort: a held complete (ok) one is never replaced by a short re-read; otherwise the re-read
+    wins when it is ok, reaches more days, or holds ≥ the held total × (1 − GRADE_TIE)."""
+    if not held:
+        return new
+    if held.get("ok") and not new["ok"]:
+        return held
+    if new["ok"] or len(new["a"]) > len(held.get("a") or []) or new["t"] >= int(held.get("t") or 0) * (1 - GRADE_TIE):
+        return new
+    return held
+
+
+def fetch_ret(ga, store, end, stop=None, full=False, at=None):
+    """The new-user return cohorts into `store` (in place; store["ret"] {install day: {t, a, cov, ok, at}}), at most
+    COH_MAX_CALLS cohort requests of COH_BATCH install days each, in this order:
+      (a) the maturing cohorts — [E − COHORT_DAYS − ACT_LATE_DAYS − 1, E] (from ret_from / history_start at the
+          earliest), ~3 requests: each one re-read until its day 30 is final;
+      (b) repair: held cohorts in [ret_from, E − 35] that read short or stopped short of day 30, not asked in the last
+          COH_REPAIR_DAYS, and install days there never read at all, the newest COH_BATCH;
+      (c) backfill while GA4's user-data edge is unknown (ret_from None): newest → oldest from the oldest cohort asked so
+          far (ret_to, the cursor: the oldest day really asked — a cut fetch leaves the rest to it) down to history_start; COH_EDGE_RUN short batches in a row (≥ half of ≥3 judged
+          cohorts short) = the edge: ret_from = the day after the newest short cohort of the first of them (the history's
+          start when it never came). A FULL re-pull first probes the batch just older than ret_from: reading complete,
+          the edge moved (GA4 keeps user data longer now) and the backfill resumes.
+    Every cohort is self-checked (_ret_judge, against daily new × the app's scale _ret_scale); a short one stays stored
+    and flagged (flags.impact.ret_short {day: coverage}), never used. Each cohort keeps its better read (_ret_keep).
+    Stops quietly at the run budget (`stop`), low quota or the call cap — the cursor resumes next fetch. A 400 naming the
+    cohorts halves the batch. → the requests made."""
+    daily, hs = store.get("daily") or {}, _d(store["history_start"])
+    ret, fi = store.setdefault("ret", {}), _impact_flags(store)
+    at = at or end.isoformat()
+    calls = [0]
+    rf = _d(store["ret_from"]) if store.get("ret_from") else None
+
+    def can():
+        return calls[0] < COH_MAX_CALLS and not (stop and stop()) and not _quota_low(ga.quota)
+
+    def ask(days):
+        """→ {day ISO: {"t", "a"}} of the install days asked, or None (the budget / quota / cap stopped it)."""
+        if not days:
+            return {}
+        if not can():
+            return None
+        calls[0] += 1
+        q0 = ga.quota
+        try:
+            rows = rep_ret(ga, days)
+        except RuntimeError as e:
+            if not (str(e).startswith("HTTP 400") and "cohort" in str(e).lower()):
+                raise
+            if len(days) == 1:
+                return {}                               # GA4 won't take this one cohort: nothing to store
+            a = ask(days[:len(days) // 2])
+            b = ask(days[len(days) // 2:]) if a is not None else None
+            return None if a is None or b is None else dict(a, **b)
+        _tokens(ga, "ret", q0)
+        if ga.truncated(rows):
+            fi["truncated"] = True
+        if (ga.last_meta or {}).get("subjectToThresholding"):
+            fi["thresholded"] = True
+        return _ret_rows(rows, days, end)
+
+    def put(got, k):
+        """Judge a batch, keep each cohort's better read → (short batch?, its newest short cohort, cohorts judged)."""
+        judged, short = _ret_judge(got, daily, k)
+        newest_short = max((d for d, e in got.items() if not e["ok"]), default=None)
+        for d, e in got.items():
+            e["at"] = at
+            ret[d] = _ret_keep(ret.get(d), e)
+            ret[d]["at"] = at                           # asked today (a kept older read too: its re-ask is spent)
+        return judged >= 3 and short * 2 >= judged, newest_short, judged
+
+    lo = max(hs, rf or hs, end - timedelta(days=COHORT_DAYS + ACT_LATE_DAYS + 1))
+    recent = _days(lo, end) if lo <= end else []
+    got, oldest = {}, None
+    for i in range(len(recent), 0, -COH_BATCH):         # newest first: a stopped fetch still has the newest
+        g = ask(recent[max(0, i - COH_BATCH):i])
+        if g is None:
+            break
+        got.update(g)
+        oldest = recent[max(0, i - COH_BATCH)]
+    k = _ret_scale(got, daily, fi.get("ret_k"))
+    fi["ret_k"] = k
+    if got:
+        put(got, k)
+        # the cursor = the oldest day really asked: a fetch cut before the oldest recent batch leaves those days to
+        # the backfill (they drop out of the recent window tomorrow — ret_to = lo would skip them for good)
+        if not store.get("ret_to") or _d(store["ret_to"]) > oldest:
+            store["ret_to"] = oldest.isoformat()
+    if rf is not None:                                  # (b) repair
+        top = end - timedelta(days=COHORT_DAYS + 5)
+        # … held cohorts that read short / stopped short of day 30, and install days never read at all (a hole a
+        # cut fetch left before the cursor rule above), newest first
+        want = [d for d in sorted(set(ret) | {x.isoformat() for x in _days(rf, top)}, reverse=True)
+                if rf <= _d(d) <= top and _new(daily, d)
+                and (d not in ret or not ret[d].get("ok") or len(ret[d].get("a") or []) < COHORT_DAYS + 1)
+                and (d not in ret or _age_days(ret[d].get("at"), at) >= COH_REPAIR_DAYS)]
+        g = ask([_d(d) for d in sorted(want[:COH_BATCH])])
+        if g:
+            put(g, k)
+    if full and rf is not None and rf > hs:             # (c) a full re-pull: did the edge move?
+        b0 = max(hs, rf - timedelta(days=COH_BATCH))
+        g = ask(_days(b0, rf - timedelta(days=1)))
+        if g:
+            bad, _, judged = put(g, k)
+            if not bad and judged >= 3:
+                rf, store["ret_from"], store["ret_to"] = None, None, b0.isoformat()
+    run = list(fi.get("ret_run") or [])
+    while rf is None:                                   # (c) backfill
+        cur = _d(store["ret_to"]) if store.get("ret_to") else lo
+        if cur <= hs:
+            rf = _d(run[0]) + timedelta(days=1) if run else hs
+            break
+        b0 = max(hs, cur - timedelta(days=COH_BATCH))
+        g = ask(_days(b0, cur - timedelta(days=1)))
+        if g is None:
+            break
+        bad, newest, _ = put(g, k)
+        store["ret_to"] = b0.isoformat()
+        if bad:
+            run.append(newest)
+            if len(run) >= COH_EDGE_RUN:
+                rf = _d(run[0]) + timedelta(days=1)
+        else:
+            run = []
+    if rf is not None:
+        store["ret_from"] = rf.isoformat()
+        run = []
+    fi["ret_run"] = run
+    fi["ret_short"] = {d: e.get("cov") for d, e in sorted(ret.items()) if not e.get("ok")}
+    store["ret"] = dict(sorted(ret.items()))
+    return calls[0]
+
+
+def _age_days(a, b):
+    """Days from ISO day a to ISO day b (a huge number when a is unknown)."""
+    try:
+        return (_d(b) - _d(a)).days
+    except (TypeError, ValueError):
+        return 10 ** 6
+
+
+def _impact_full(p):
+    """Did a fetch's usage AND vuse reads both come back (so its window's impact data is whole)?"""
+    return not any(n in (p.get("impact_failed") or []) for n in IMPACT_REPORTS)
 
 
 # ── full + incremental fetch ────────────────────────────────────────────────────────────────────
@@ -987,15 +1405,30 @@ def fetch_full(ga, end, max_history_days, old_store=None, stop=None, held=True, 
                       cells={"edge": _stored_edge(mem), "echunk": echunk, "full": True, "held": mem,
                              "at": at or end.isoformat()})
     del rows
-    return {"v": STORE_V, "den": p["den"], "history_start": hs.isoformat(), "window_end": end.isoformat(),
-            "history_capped": hs <= start0, "covered": [[hs.isoformat(), end.isoformat()]],
-            "daily": p["daily"], "cohorts": p["cohorts"], "unplaced": p["unplaced"], "versions": p["versions"],
-            "cell_src": p["cell_src"], "users_ok_days": p["edge"], "events_chunk_days": p["echunk"],
-            "cells_chunk_days": next_chunk(p["cells_log"], chunk, p["daily"], p["alone"]),
-            "last_window": [hs.isoformat(), end.isoformat()],
-            "flags": {"truncated": sorted(cut), "thresholded": bool(ga.thresholded), "kept_old_before": None,
-                      "bad_rows": p["bad_rows"], "incomplete_days": dict(sorted(p["incomplete"].items())),
-                      "users_k": p.get("k")}}
+    fi_old = ((mem or {}).get("flags") or {}).get("impact") or {}
+    out = {"v": STORE_V, "den": p["den"], "history_start": hs.isoformat(), "window_end": end.isoformat(),
+           "history_capped": hs <= start0, "covered": [[hs.isoformat(), end.isoformat()]],
+           "daily": p["daily"], "cohorts": p["cohorts"], "unplaced": p["unplaced"], "versions": p["versions"],
+           "cell_src": p["cell_src"], "users_ok_days": p["edge"], "events_chunk_days": p["echunk"],
+           "cells_chunk_days": next_chunk(p["cells_log"], chunk, p["daily"], p["alone"]),
+           "last_window": [hs.isoformat(), end.isoformat()],
+           "usage": p["usage"], "vuse": p["vuse"],
+           # the return cohorts this stream's store holds carry over (each keeps its best read); another stream's don't
+           "ret": {d: dict(e) for d, e in ((mem or {}).get("ret") or {}).items()},
+           "ret_from": (mem or {}).get("ret_from"), "ret_to": (mem or {}).get("ret_to"),
+           "flags": {"truncated": sorted(cut), "thresholded": bool(ga.thresholded), "kept_old_before": None,
+                     "bad_rows": p["bad_rows"], "incomplete_days": dict(sorted(p["incomplete"].items())),
+                     "users_k": p.get("k"),
+                     "impact": {"vuse_split": bool(p["vuse_split"]), "ret_k": fi_old.get("ret_k") or 1.0,
+                                "ret_short": {}, "usage_kept": 0, "vuse_kept": 0, "thresholded": False,
+                                "ret_run": list(fi_old.get("ret_run") or [])}}}
+    if _impact_full(p):
+        out["impact_v"] = IMPACT_V                      # usage + vuse over the whole history: the impact data is whole
+    try:
+        fetch_ret(ga, out, end, stop, full=True, at=at or end.isoformat())
+    except Exception:
+        pass                                            # never fails the uninstall fetch: the cursor resumes next time
+    return out
 
 
 def _users_chunk(store):
@@ -1150,6 +1583,26 @@ def merge_window(store, fetched, start, end, held=True):
             vers[k] = fetched["versions"][k]
         else:
             vers.pop(k, None)
+    # usage / vuse: the better of the held day and the re-read (keep_best_days — late data only adds)
+    fi = _impact_flags(store) if any(key in fetched for key in IMPACT_REPORTS) else None
+    for key in IMPACT_REPORTS:
+        if key not in fetched:
+            continue
+        kept = keep_best_days(store, fetched, key, start, end) if held else 0
+        fi[key + "_kept"] = kept
+        tgt = store.setdefault(key, {})
+        for d in _days(start, end):
+            k = d.isoformat()
+            if k in fetched[key]:
+                tgt[k] = fetched[key][k]
+            else:
+                tgt.pop(k, None)
+        store[key] = dict(sorted(tgt.items()))
+    if fi is not None:
+        split = fetched["vuse_split"] if "vuse_split" in fetched else \
+            ((fetched.get("flags") or {}).get("impact") or {}).get("vuse_split")
+        if split is not None and "vuse" not in (fetched.get("impact_failed") or []):
+            fi["vuse_split"] = bool(split)
     cells = store.setdefault("cohorts", {})
     for f in list(cells):
         fd = _d(f)
@@ -1210,7 +1663,42 @@ def fetch_incr(ga, store, end, refetch_days, stop=None, at=None):
     fl["users_k"] = p.get("k", fl.get("users_k"))
     if p["den"] == "dau":
         store["den"] = "dau"                    # one denominator for the whole series
+    impact_backfill(ga, store, start, p)
+    try:
+        fetch_ret(ga, store, end, stop, at=at or end.isoformat())
+    except Exception:
+        pass                                    # never fails the uninstall fetch: the cursor resumes next time
     return store
+
+
+def impact_backfill(ga, store, start, p):
+    """A store from before the update-impact reports (impact_v < IMPACT_V): usage and vuse of its history before the
+    incremental window (`start`; the window itself came with `p`) — 1–2 calls, paged — each day kept at its best
+    (keep_best_days). impact_v is set only once both reads came back whole; on any failure it stays unset (asked again
+    at the next fetch) and the uninstall data is saved as ever. No STORE_V bump: the alert history stays."""
+    if int(store.get("impact_v") or 0) >= IMPACT_V:
+        return
+    try:
+        if not _impact_full(p):
+            return
+        hs = _d(store["history_start"])
+        if hs < start:
+            q = {"daily": store.get("daily") or {}, "usage": {}, "vuse": {}, "vuse_split": True, "bad_rows": 0,
+                 "impact_failed": []}
+            for name, fn, merge in REPORTS:
+                if name in IMPACT_REPORTS:
+                    q0 = ga.quota
+                    merge(q, fn(ga, hs, start - timedelta(days=1)))
+                    _tokens(ga, name, q0)
+            fi = _impact_flags(store)
+            for key in IMPACT_REPORTS:
+                fi[key + "_kept"] = keep_best_days(store, q, key, hs, start - timedelta(days=1))
+                store[key] = dict(sorted(dict(store.get(key) or {}, **q[key]).items()))
+            if not q["vuse_split"]:
+                fi["vuse_split"] = False
+        store["impact_v"] = IMPACT_V
+    except Exception:
+        pass
 
 
 def _sum_new(store, a, b):
@@ -1262,9 +1750,14 @@ def apply_rebuild(old, new, check_ratio=True):
             inc = dict((new.get("flags") or {}).get("incomplete_days") or {})
             keep_best(old, new, inc, nhs, new["window_end"])
             new.setdefault("flags", {})["incomplete_days"] = dict(sorted(inc.items()))
+            fi = _impact_flags(new)
+            for key in IMPACT_REPORTS:                   # usage / vuse days: the better read (keep_best_days)
+                fi[key + "_kept"] = keep_best_days(old, new, key, nhs, new["window_end"])
+                new[key] = dict(sorted((new.get(key) or {}).items()))
         return new, True
     unchecked = _store_v(old) < CHECKED_V
     merged = merge_window(old, new, nhs, _d(new["window_end"]), held=check_ratio)
+    kept = {k: ((merged.get("flags") or {}).get("impact") or {}).get(k + "_kept", 0) for k in IMPACT_REPORTS}
     inc = dict((merged.get("flags") or {}).get("incomplete_days") or {})
     if unchecked:
         inc.update(stored_coverage(merged, ohs, nhs - timedelta(days=1)))
@@ -1273,6 +1766,13 @@ def apply_rebuild(old, new, check_ratio=True):
                   events_chunk_days=new.get("events_chunk_days"))
     merged["flags"] = dict(new.get("flags") or {}, kept_old_before=nhs.isoformat(),
                            incomplete_days=dict(sorted(inc.items())))
+    for k in ("ret", "ret_from", "ret_to"):             # the return cohorts: fetch_full already kept the best of each
+        merged[k] = new.get(k)
+    merged.pop("impact_v", None)
+    if new.get("impact_v"):
+        merged["impact_v"] = new["impact_v"]
+    fi = _impact_flags(merged)
+    fi.update({k + "_kept": v for k, v in kept.items()})
     return merged, True
 
 
@@ -1381,7 +1881,7 @@ def _local_day(t, tz_name):
 
 def revision_base(old, tz_name):
     """What the NEXT fetch compares against to measure late data: (the local day of `old`'s last fetch,
-    {day: [app_remove users, new users]} for the days that fetch read — its last_window, or the whole history
+    {day: [app_remove users, new users, active users]} for the days that fetch read — its last_window, or the whole history
     when its last fetch was a full one — no older than REVISION_MAX_AGE). None when unknown."""
     if not old or not old.get("fetched_at"):
         return None
@@ -1397,13 +1897,14 @@ def revision_base(old, tz_name):
     for d in _days(a, _d(lw[1])):
         r = daily.get(d.isoformat())
         if r is not None:
-            vals[d.isoformat()] = [int(r.get("un") or 0), int(r.get("new") or 0)]
+            vals[d.isoformat()] = [int(r.get("un") or 0), int(r.get("new") or 0), int(r.get("a1") or 0)]
     return P, vals
 
 
 def record_revisions(store, base, today, window, max_age=REVISION_MAX_AGE):
     """The recent days THIS fetch re-read (`window` = [start, end]) vs `base` (revision_base of the store
-    before it) → store["revisions"][today] = {"un"|"new": {age: [before, after]}}, age = the day's age in days
+    before it) → store["revisions"][today] = {"un"|"new"|"a1": {age: [before, after]}} (a1 = daily active users:
+    how late the activity the update-impact card reads comes in), age = the day's age in days
     at the earlier fetch (its local day − the day). Only a fetch exactly one day after the last one is
     recorded, so each entry is "what arrived between age a and a+1"; the newest REVISION_FETCHES are kept.
     Only ages up to `max_age` (the refetch window: what every daily re-read covers) — a full fetch the day
@@ -1416,17 +1917,18 @@ def record_revisions(store, base, today, window, max_age=REVISION_MAX_AGE):
         return
     a, b = _d(window[0]), _d(window[1])
     daily = store.get("daily") or {}
-    rec = {"un": {}, "new": {}}
-    for k, (un0, new0) in vals.items():
+    rec = {"un": {}, "new": {}, "a1": {}}
+    for k, v in vals.items():
         d = _d(k)
         age = (P - d).days
         r = daily.get(k)
         if r is None or not a <= d <= b or not 0 <= age <= min(max_age, REVISION_MAX_AGE):
             continue
-        for name, before, after in (("un", un0, int(r.get("un") or 0)), ("new", new0, int(r.get("new") or 0))):
-            s = rec[name].setdefault(str(age), [0, 0])
-            s[0] += before
-            s[1] += after
+        for name, j in (("un", 0), ("new", 1), ("a1", 2)):
+            if j < len(v):
+                s = rec[name].setdefault(str(age), [0, 0])
+                s[0] += int(v[j])
+                s[1] += int(r.get(name) or 0)
     if not rec["un"] and not rec["new"]:
         return
     revs = dict(store.get("revisions") or {})
@@ -1692,6 +2194,9 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
                                                         # unreadable v2 store can't show it didn't move: reset)
                 st.update(last_try=_now_iso(now), last_ok=_now_iso(now), last_kind=kind, fail=None,
                           fail_detail=None, meta=store_meta(store))
+                tok = getattr(ga, "impact_tokens", None)
+                if tok:                                 # the impact reads' GA4 tokens (private: never printed)
+                    st["tokens"] = {k: int(tok.get(k, 0)) for k in ("usage", "vuse", "ret")}
                 if kind == "full":
                     st.pop("repair_failed", None)
                 out["apps"][aid] = "fetched"

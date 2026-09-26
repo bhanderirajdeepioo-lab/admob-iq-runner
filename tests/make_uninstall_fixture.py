@@ -52,6 +52,21 @@ The apps cover what the tab has to show:
                                                                                        by default ("dikhao"), kept
   * no GA4: no package / no stream / a stream that errors / an app added today whose fetch was deferred /
     a second AdMob app for the Caller's Play package (fetched and alerted once, under the Caller)
+
+UPDATE IMPACT (the "📦 Update impact" card; AdMob revenue on Pacific days is passed in like build_static does — the
+properties are on IST, so every GA4 day takes its share of two AdMob days):
+  * Demo Caller 3.2 (10 Sep, 10%/day rollout)  old users on 3.2 open the app 15% less and spend 22% less time → returning
+                                               DAU below expected + time per user down → ⏳ too early (2 settled days),
+                                               then worse for one day ("pakka hone ke liye kal ka data bhi"), then 🛑 HALT
+                                               on 21 Sep — alert SENT (Telegram)
+  * Demo Flashlight 1.2 (1 Sep)                new users come back more (D1 30% → 36%) → ✅ WIN (a good alert, seeded:
+                                               the app's first impact evaluation)
+    Demo Flashlight 1.3 (19 Sep)               → ⏳ Too early
+  * Demo Wallpapers 2.0 (1 Sep, LOW adoption:  users on 2.0 see a third fewer ads → ad revenue per user −8% with ads per
+    a staged rollout stuck at 25%)             user −8% (not the market) → ⚠️ HOLD, "diluted" + slow rollout
+  * Demo Weather 4.1 (15 Jul)                  old: no alert; GA4 keeps its user data 60 days here, so new users back
+                                               D1 / D7 say "GA4 ab itna purana user data nahi rakhta" (ret_from)
+  * Demo Launcher update surge (5 Aug)         kind "update": no version table (rows "No data", the reason)
 """
 
 import contextlib
@@ -68,7 +83,7 @@ from admob_iq import build_static
 from admob_iq.config import settings
 from admob_iq.fetch import ga4
 from admob_iq.uninstall_build import run_uninstall
-from tests.uninstall_synth import AdminFake, Truth, UniStub, wave
+from tests.uninstall_synth import DEFAULT_RET, AdminFake, Truth, UniStub, rollout as shares, wave
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "uninstall_sample.json")
 E_FINAL = date(2026, 9, 23)
@@ -114,14 +129,24 @@ def truths():
             return {old: int(a1 * (1 - s)), new: int(a1 * s)} if s else {old: a1}
         return versions
 
+    def by_share(f):                                                    # {version: share} → the Truth's users by version
+        return lambda day, a1: {v: int(a1 * x) for v, x in f(day).items() if int(a1 * x)}
+
+    def s32(day):                                                        # the Caller's 3.2 share (rollout below)
+        return 0.0 if day < date(2026, 9, 10) else min(0.9, 0.1 * ((day - date(2026, 9, 10)).days + 1))
+    flash = shares("1.1", [(date(2026, 9, 1), "1.2", 0.3), (date(2026, 9, 19), "1.3", 0.3)])
     t = {
         "200000001": Truth(d(239), E, lambda c: int(5000 * wave(c)), lags=BIG_LAGS, old_per_day=400, noise=0.03,
                            bump=lambda c: ({1: 60} if c >= date(2026, 9, 11)
                                            else {60: 70} if d(199) <= c <= d(187) else None),
                            upd=lambda c: 12000 if c == date(2026, 9, 10) else 800,
-                           versions=rollout("3.1", "3.2", date(2026, 9, 10)), seed=1),
-        "200000002": Truth(d(74), E, lambda c: int(400 * wave(c)), noise=0.05, old_per_day=20, seed=2,
-                           bump=lambda c: {0: -100, 1: 20} if c >= date(2026, 8, 25) else None),
+                           versions=rollout("3.1", "3.2", date(2026, 9, 10)), seed=1,
+                           ret=lambda c, k: DEFAULT_RET(k), old_act=lambda day: 1 - 0.15 * s32(day),
+                           tpu=lambda day, v, new: 150.0 if new else 280.0 * (0.78 if v == "3.2" else 1.0)),
+        "200000002": Truth(d(74), E, lambda c: int(400 * wave(c)), noise=0.05, old_per_day=20, seed=2, base0=30000,
+                           bump=lambda c: {0: -100, 1: 20} if c >= date(2026, 8, 25) else None,
+                           ret=lambda c, k: DEFAULT_RET(k) * (1.2 if c >= date(2026, 9, 2) else 1.0),
+                           versions=by_share(flash)),
         "200000003": Truth(d(19), E, 150, noise=0.08, seed=3),
         "200000004": Truth(d(199), E, lambda c: int(35 * wave(c, 0.3)), noise=0.2, seed=4),
         "200000005": Truth(d(149), E, lambda c: int(1500 * wave(c)), noise=0.03, seed=5,
@@ -130,7 +155,8 @@ def truths():
         "200000006": Truth(d(119), E, lambda c: int(800 * wave(c)), noise=0.04, seed=6,
                            old_per_day=lambda c: 960 if c == E else 60,
                            upd=lambda c: 2400 if c == date(2026, 8, 5) else 200),
-        "200000007": Truth(d(99), E, lambda c: int(300 * wave(c)), noise=0.05, old_per_day=10, seed=7),
+        "200000007": Truth(d(99), E, lambda c: int(300 * wave(c)), noise=0.05, old_per_day=10, seed=7,
+                           versions=by_share(shares("1.0", [(date(2026, 9, 1), "2.0", 0.06, 0.25)]))),
         "200000008": Truth(d(99), E, 100, seed=8),
         "200000009": Truth(d(29), E, 100, seed=9),
         "200000012": Truth(d(29), E, 100, seed=12),
@@ -153,9 +179,35 @@ def truths():
                                 date(2026, 8, 20): 0.94}                 # … and a near-complete one: filled (≈)
     caller = t["200000001"]                                              # install-day USERS kept 150 days only
     caller.users_day = lambda day: 1.0 if (caller.asof - day).days <= 150 else 0.04
+    t["200000005"].ret_day = lambda age: 1.0 if age <= 60 else 0.3      # Weather: user data kept 60 days (GA4's old
+                                                                         # 2-month retention) — older cohorts read short
     for x in t.values():                                                 # Firebase-like late app_remove
         x.late = lambda age: 1.0 if age > 7 else LATE_SHARE.get(age, 0.8)
     return t
+
+
+IMPRESSIONS = {"200000007": lambda v: 4.0 * (0.68 if v == "2.0" else 1.0)}   # Wallpapers 2.0: a third fewer ads
+
+
+def revenue(tr, today):
+    """What build_static.admob_revenue hands the uninstall step: every app's AdMob revenue per Pacific day up to
+    yesterday — ~4 ad impressions per active user a day at $2 per 1,000 (the Caller Copy's own few dollars join the
+    Caller's: one Play package)."""
+    till = today - timedelta(days=1)
+    apps = {}
+    for aid, _, _, route in APPS:
+        if not route or route[1] not in tr:
+            continue
+        t, ipu = tr[route[1]], IMPRESSIONS.get(route[1], lambda v: 4.0)
+        days = {}
+        for day in sorted(t.a1):
+            if day > till or not t.a1[day] or day < E_FINAL - timedelta(days=150):
+                continue
+            imp = sum(u * ipu(v) for v, u in (t.vers.get(day) or {"1.0": t.a1[day]}).items())
+            days[day.isoformat()] = [int(imp * 2000), int(imp)]
+        apps[aid] = days
+    apps[_aid(13)] = {k: [v[0] // 50, v[1] // 50] for k, v in apps[_aid(1)].items()}
+    return {"tz": "America/Los_Angeles", "currency": "USD", "till": till.isoformat(), "apps": apps}
 
 
 def build_fixture(work_dir):
@@ -202,7 +254,8 @@ def build_fixture(work_dir):
             dashboard = {"apps_catalog": catalog, "kpis": {"revenue": 1.0}}
             flags["broken_tried"] = False
             clock = (lambda: 1e6 if flags["broken_tried"] else 0.0) if final else (lambda: 0.0)
-            run_uninstall(dashboard, data_dir, out_dir, s, now=now, clock=clock)
+            pt_today = (now - timedelta(hours=7)).date()                   # the AdMob report's day (Pacific, PDT)
+            run_uninstall(dashboard, data_dir, out_dir, s, now=now, clock=clock, revenue=revenue(tr, pt_today))
             res = build_static.send_alerts(dashboard, s)                  # dry run: formats, never sends
             sent.append({"run": now.strftime("%Y-%m-%dT%H:%MZ"),
                          "telegram": next((r["text"] for r in res if r["channel"] == "telegram"), None),
