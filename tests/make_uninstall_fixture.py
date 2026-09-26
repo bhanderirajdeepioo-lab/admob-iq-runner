@@ -35,8 +35,13 @@ The apps cover what the tab has to show:
                                                                                        "kaccha": can only grow);
                                                                                        and 3 Sep's install-day
                                                                                        cells GA4 never returns in
-                                                                                       full → "data adhoora", no
-                                                                                       alert from it
+                                                                                       full (60%) → "Data
+                                                                                       incomplete", no alert from
+                                                                                       it; the rows it would empty
+                                                                                       take older installs
+                            20 Aug's install-day cells only ever 94% there          → filled up to the day's
+                                                                                       exact total: "≈ Estimate",
+                                                                                       used everywhere
                             app_update users jump on 5 Aug (no new version)          → an "update" 📦 line
   * Demo Wallpapers         a day with no app_remove at all (14 Sep)                 → tracking watch once that
                                                                                        day is settled, NO false
@@ -144,7 +149,8 @@ def truths():
         if z.new[c] and i % 3 == 0:
             z.cells[(c, c + timedelta(days=2))] = 1                      # a tester removed it 2 days later
     z.start = t0
-    t["200000006"].short_day = {date(2026, 9, 3): 0.6}                  # cells short at ANY range: incomplete
+    t["200000006"].short_day = {date(2026, 9, 3): 0.6,                  # cells short at ANY range: incomplete
+                                date(2026, 8, 20): 0.94}                 # … and a near-complete one: filled (≈)
     caller = t["200000001"]                                              # install-day USERS kept 150 days only
     caller.users_day = lambda day: 1.0 if (caller.asof - day).days <= 150 else 0.04
     for x in t.values():                                                 # Firebase-like late app_remove

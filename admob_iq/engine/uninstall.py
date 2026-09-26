@@ -55,8 +55,25 @@ day × lag); output is what the tab shows and which alerts are open.
     test also runs on the settled days: the provisional ones read LOW, so a moderate rise shows there only
     once its late data is in — about LATE_DAYS later, but never missed.
   * INCOMPLETE DAYS — days whose install-day cells GA4 never returned in full (the store's
-    flags.incomplete_days, see fetch.ga4_uninstall) feed no baseline, and no cohort comparison counts an
-    install day whose checkpoint window touches one: shown ("data adhoora"), never alerted on.
+    flags.incomplete_days {day: coverage}, see fetch.ga4_uninstall):
+      – NEAR-COMPLETE ones (coverage ≥ IMPUTE_MIN_COVERAGE) are FILLED (fill_days): every cell of that event day (and
+        its unplaced users) scaled up as one, largest-remainder rounded like the events path, so the day adds up to
+        its exact total (daily un × the users-cell scale — 1 on every live app). Here, at evaluation time, not in the
+        fetch: the store keeps what GA4 returned (keep_best grades raw reads; a complete re-read later simply replaces
+        the day) and the threshold can move without a re-fetch. They are ESTIMATES ("andaza"), used like any other
+        day — baselines, survival, triangle, comparisons — and shown: flags.estimated_days, and "≈" (est {…}) on
+        every number the filling moved by ≥ EST_MARK_PP points.
+      – ESTIMATE RULE: a comparison whose install days touch a filled day fires only when it ALSO fires, the same
+        way, on the cells exactly as GA4 returned them (the added users taken back out, _judge_est) — the filling
+        alone never makes an alert, nor the verdict's "worse / better"; an alert that fires both ways says so
+        (EST_NOTE, alert["estimate"]). Rate alerts judge the exact daily totals: unaffected.
+      – The rest stay EXCLUDED: they feed no baseline, no comparison counts an install day whose days 0..N touch one,
+        never alerted on ("Data incomplete"). A comparison window they (or a tracking break) would leave under its
+        minimum of install days (RECENT_MIN, PREV_MIN, VERDICT_MIN_DAYS) FALLS BACK to the newest EARLIER window of
+        install days where the minimum holds — ONE stretch, never a few newer clean days pooled with older ones
+        (_pick) — and says so (row["fallback"] — "purane installs liye — 10 Jul ka data adhoora"); "—" only when no
+        such install day exists at all. Significance, persistence and the recent-only rule stay as they are: a
+        fall-back row whose installs are older than ALERT_RECENT_DAYS is information only.
   * EVENTS-SCALED DAYS — old days whose install-day split GA4 keeps only for app_remove EVENTS (the store's
     cell_src: "events_scaled" — the events' split by install day, scaled to that day's users on the scale of
     the app's users cells, so an old day and a recent one compare like with like) are complete: USED like any
@@ -70,6 +87,7 @@ obvious (outside E's year or older than YEAR_CLEAR_DAYS: "16–22 Mar 2026"). Fr
 1,000 (3 dp), points = percentage points.
 """
 
+import bisect
 import math
 from datetime import date, timedelta
 
@@ -79,6 +97,11 @@ LAG_DAYS = 2              # GA4 settles in ~48h (mirrors fetch.ga4.LAG_DAYS with
 LATE_DAYS = 7             # Firebase adds events (mostly app_remove) up to ~7 days late: the newest 7 days are
                           # PROVISIONAL — they can only grow (config GA4_LATE_DAYS; the build passes it in)
 PROV_NOTE = " · abhi ka data kaccha — number aur badh sakta hai"   # on an "up" alert that uses provisional days
+EST_NOTE = " · kuch din ka GA4 data adhoora tha — total ke hisaab se poora kiya (andaza)"   # an alert on filled days
+IMPUTE_MIN_COVERAGE = 0.70   # an incomplete day holding ≥70% of its exact total is filled up to it (≤1.43×: at most
+                             # its missing ≤30% is placed by assumption) — live short days read 0.91–0.96 (and a
+                             # mass of 0.75–0.9), broken ones ~0.37: left out
+EST_MARK_PP = 0.1         # a number the filling moved by under 0.1 point reads the same either way: shown plain (no ≈)
 LATE_MIN_USERS = 50       # lateness: an age needs ≥50 re-read users before its share is shown (fewer is noise)
 NOT_SET = {"", "(not set)", "(other)", "(none)"}
 
@@ -493,15 +516,139 @@ def drift_now(ds, n=None):
     return dict(down, prov=False) if down else None
 
 
+# ── incomplete days: the near-complete ones filled up to their exact total ─────────────────────────
+
+def _lr_scale(items, ratio):
+    """[(key, users)] → {key: users × ratio}, rounded by largest remainder so they add up to round(Σ × ratio) — whole
+    users, ties by key (deterministic). fetch.ga4_uninstall._scale_day's rule (copied: the engine never imports the
+    requests-based fetch module)."""
+    want = int(round(sum(u for _, u in items) * ratio))
+    raw = [(k, u * ratio) for k, u in items]
+    got = {k: int(x) for k, x in raw}
+    for k, x in sorted(raw, key=lambda kx: (int(kx[1]) - kx[1], str(kx[0])))[:max(0, want - sum(got.values()))]:
+        got[k] += 1
+    return got
+
+
+def _pos(v, dflt=1.0):
+    """A positive number, else dflt (a scale read from the store)."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return dflt
+    return v if v > 0 else dflt
+
+
+def fill_days(store, min_cov=IMPUTE_MIN_COVERAGE):
+    """The store as the engine reads it: each flagged incomplete event day whose cells (placed + unplaced) hold ≥
+    min_cov of what a complete day holds is FILLED. A complete day holds its exact app_remove users (daily un, the
+    date × eventName report) × the day's scale: the app's users-cell scale (flags.users_k) — or, for an events day,
+    the scale its events were put on (cell_src k) — 1 when unknown; the target the events path scales its days to, so
+    a filled day sits on the scale of its complete neighbours (live: every app's scale is 1, the day adds up to its
+    exact un). Filled = every cell of that event day (and its unplaced count) scaled up as ONE (_lr_scale, the events
+    path's largest-remainder rounding), so the day adds up to that total. Assumed: the users GA4 left out of the day
+    sat on the install days like the ones it returned. Coverage = the cells now ÷ that total, or the fetch's own
+    flagged reading when lower. A day under min_cov (or with no uninstalls to scale to) stays flagged incomplete —
+    excluded as before. Never scaled down (a day already at its total is only marked).
+    Non-destructive (the store keeps its raw cells and flags: a later complete re-read simply replaces them, and
+    keep_best keeps grading the raw reads): a new dict that shares every untouched cell with `store`;
+    flags.incomplete_days = the days still left out, and "_est" = {"days": {day: coverage} filled, "add": {install
+    day: {lag: users added}}} — what takes the estimate back out. A store without a filled day comes back as it is."""
+    if "_est" in store:
+        return store
+    fl = store.get("flags") or {}
+    inc = fl.get("incomplete_days") or {}
+    if not inc:
+        return store
+    k_app, src = _pos(fl.get("users_k")), store.get("cell_src") or {}
+    at = {}
+    for d in inc:
+        try:
+            at[_d(d).toordinal()] = d
+        except ValueError:
+            continue
+    items = {d: [] for d in at.values()}
+    cells, unpl, daily = store.get("cohorts") or {}, store.get("unplaced") or {}, store.get("daily") or {}
+    for f, lags in cells.items():
+        try:
+            fo = _d(f).toordinal()
+        except ValueError:
+            continue
+        for lag, u in lags.items():
+            d = at.get(fo + int(lag))
+            if d is not None and u:
+                items[d].append(((f, lag), int(u)))
+    for d in items:
+        if unpl.get(d):
+            items[d].append((None, int(unpl[d])))
+    keep, est, add = {}, {}, {}
+    new_c = new_u = None
+    for d in sorted(inc):
+        s = src.get(d) or {}
+        k = _pos(s.get("k"), k_app) if s.get("src") == "events_scaled" else k_app
+        want = int((daily.get(d) or {}).get("un") or 0) * k
+        got = sum(u for _, u in items.get(d) or [])
+        cov = got / want if want > 0 else 0.0
+        f = inc[d]
+        if isinstance(f, (int, float)) and not isinstance(f, bool):
+            cov = min(cov, f)                          # the fetch's own reading counts too: the lower one decides
+        if d not in items or cov < min_cov:
+            keep[d] = inc[d]
+            continue
+        est[d] = round(cov, 4)
+        if got >= want:
+            continue                                   # holds its total already: marked, never trimmed
+        old = dict(items[d])
+        for key, v in _lr_scale(items[d], want / got).items():
+            if v == old[key]:
+                continue
+            if key is None:
+                new_u = dict(unpl) if new_u is None else new_u
+                new_u[d] = v
+                continue
+            f, lag = key
+            new_c = dict(cells) if new_c is None else new_c
+            if new_c[f] is cells[f]:
+                new_c[f] = dict(cells[f])
+            new_c[f][lag] = v
+            a = add.setdefault(f, {})
+            a[int(lag)] = a.get(int(lag), 0) + v - old[key]
+    if not est:
+        return store
+    out = dict(store, flags=dict(fl, incomplete_days=dict(sorted(keep.items()))), _est={"days": est, "add": add})
+    if new_c is not None:
+        out["cohorts"] = new_c
+    if new_u is not None:
+        out["unplaced"] = new_u
+    return out
+
+
 # ── cohort curve ────────────────────────────────────────────────────────────────────────────────
 
 def cohort_data(store, E=None, broken=None):
     """Per install day c in [history_start, E] (index i = c − history_start): n[i] = new installs,
     cum[i] = cumulative uninstalling users for lags 0..age (age = E − c), raw[i] = {lag: users}.
-    `broken` = daily_series' tracking-break flags (same index), see mark_breaks."""
+    `broken` = daily_series' tracking-break flags (same index), see mark_breaks. A store fill_days filled also
+    gives est = {event-day index: coverage} of its filled days and addc = {install-day index: cumulative users
+    the filling added, by lag} — what takes the estimate back out (the cells exactly as GA4 returned them)."""
     hs, E = _d(store["history_start"]), _d(E or store["window_end"])
     H = max(0, (E - hs).days + 1)
     n, raw = _raw_lags(store, hs, H)
+    fill = store.get("_est") or {}
+    est, addc = {}, {}
+    for k, cov in (fill.get("days") or {}).items():
+        i = (_d(k) - hs).days
+        if 0 <= i < H:
+            est[i] = cov
+    for f, lags in (fill.get("add") or {}).items():
+        i = (_d(f) - hs).days
+        if 0 <= i < H:
+            row, run = [0] * (H - i), 0
+            for lag in range(H - i):
+                run += lags.get(lag, 0)
+                row[lag] = run
+            if run:
+                addc[i] = row
     cum = []
     unplaced, over = sum((store.get("unplaced") or {}).values()), 0
     for i in range(H):
@@ -517,7 +664,7 @@ def cohort_data(store, E=None, broken=None):
         cum.append(row)
     inc = sorted(i for i in ((_d(k) - hs).days for k in (store.get("flags") or {}).get("incomplete_days") or {})
                  if 0 <= i < H)
-    cd = {"hs": hs, "E": E, "H": H, "n": n, "cum": cum, "raw": raw, "inc": inc,
+    cd = {"hs": hs, "E": E, "H": H, "n": n, "cum": cum, "raw": raw, "inc": inc, "est": est, "addc": addc,
           "flags": {"unplaced_users": int(unplaced), "over_100": over}}
     mark_breaks(cd, broken)
     return cd
@@ -628,6 +775,8 @@ def cut_cohorts(cd, i0):
         return cd
     return {"hs": cd["hs"] + timedelta(days=i0), "E": cd["E"], "H": cd["H"] - i0, "n": cd["n"][i0:],
             "cum": cd["cum"][i0:], "raw": cd["raw"][i0:], "inc": [i - i0 for i in cd["inc"] if i >= i0],
+            "est": {i - i0: c for i, c in (cd.get("est") or {}).items() if i >= i0},
+            "addc": {i - i0: r for i, r in (cd.get("addc") or {}).items() if i >= i0},
             "flags": cd["flags"]}
 
 
@@ -650,6 +799,153 @@ def _pool(cd, i0, i1, N, per=False, clean=False, skip=None):
         if per:
             each.append((xc, nc, i))
     return (x, n, k, each) if per else (x, n, k)
+
+
+def _left_out(cd, i, N):
+    """Why install day i can't count for checkpoint N (_pool clean's rules): "inc" = a still-incomplete day in its
+    days 0..N after install, "brk" = a tracking break in days 0..min(N, lmat) — else None."""
+    ni, nb = cd.get("ni"), cd.get("nb")
+    if ni and ni[i] <= i + N:
+        return "inc"
+    if nb and nb[i] <= i + min(N, cd.get("lmat", N)):
+        return "brk"
+    return None
+
+
+def _pick(cd, top, K, need, N, skip=None):
+    """The install days a comparison window pools for checkpoint N → (idx ascending, w0, fb). Normally the K days
+    ending at `top` (w0 = top − K + 1) that have installs, can count (_left_out) and are not in `skip`. When
+    still-incomplete days (or tracking breaks) leave fewer than `need` of them — and it is THEM (without them the
+    window would hold `need`), or nothing is left at all — it FALLS BACK to the newest EARLIER K-day window where the
+    same rule holds (≥ need such days), and on while a step back only gains install days (so the K days right before
+    the spoiled ones when they are clean): the window slides back one day at a time, never past a claimed (`skip`)
+    day. Always ONE stretch of K consecutive install days — never a few clean days newer than the spoiled ones pooled
+    with older ones (a "recent" number made mostly of installs months older, yet dated — and judged recent — by its
+    newest day); those few are left out with the spoiled ones. No such window (the history's start): only a window
+    that would be EMPTY takes the fullest one it passed. w0 = the window's first day. fb = {event-day index: "inc" |
+    "brk"} of the days that spoil install days from that window to `top` (None: no fall-back)."""
+    n, H = cd["n"], cd["H"]
+    top = min(top, H - 1 - N)
+    w0 = top - K + 1
+
+    def use(i):
+        return bool(n[i]) and not _left_out(cd, i, N) and not (skip and i in skip)
+
+    idx = [i for i in range(max(0, w0), top + 1) if use(i)]
+    lost = sum(1 for i in range(max(0, w0), top + 1) if n[i] and _left_out(cd, i, N))
+    if len(idx) >= need or not lost or (idx and len(idx) + lost < need):
+        return idx, w0, None
+    j, cnt, got, most = top, len(idx), None, (0, None)
+    while j - K >= 0 and not (skip and j in skip):  # slide [j−K+1, j] one day back: j leaves, j−K comes in
+        step = use(j - K) - use(j)
+        if got is not None and step <= 0:
+            break                                    # holds `need` and no longer only gains install days: this one
+        cnt += step
+        j -= 1
+        if cnt >= need:
+            got = j
+        elif cnt > most[0]:
+            most = (cnt, j)                          # the fullest window passed (the newest of equals)
+    if got is None:
+        if idx or most[1] is None:
+            return idx, w0, None
+        got = most[1]
+    a = got - K + 1
+    fb = {}
+    for i in range(max(0, a), top + 1):
+        why = _left_out(cd, i, N) if n[i] else None
+        if why:
+            fb[cd["ni"][i] if why == "inc" else cd["nb"][i]] = why
+    return [i for i in range(max(0, a), got + 1) if use(i)], a, fb
+
+
+def _sum(cd, idx, N):
+    """Σ uninstalled-by-N, Σ installs over the install days `idx` (from _pick) → (x, n, k, [(x_c, n_c, i)])."""
+    x = n = 0
+    each = []
+    for i in idx:
+        xc, nc = cd["cum"][i][N], cd["n"][i]
+        x, n = x + xc, n + nc
+        each.append((xc, nc, i))
+    return x, n, len(idx), each
+
+
+def _added(cd, idx, N):
+    """Users fill_days added to install days `idx` by day N → (Σ, per day): x minus these = the cells exactly as GA4
+    returned them."""
+    addc = cd.get("addc") or {}
+    per = [addc[i][N] if i in addc else 0 for i in idx]
+    return sum(per), per
+
+
+def _est_of(cd, idx, N, x, added, n, pp=None):
+    """How much of a pooled number (x uninstalled of n installs, by day N) rests on filled days (fill_days) → None when
+    the filling moved it by under EST_MARK_PP points (it reads the same either way), else {days: the filled event days
+    its install days × 0..N touch, first / last (ISO), lo / hi: their coverage, share: the users added ÷ x, pp: the
+    points they added}. pp: the points to judge by instead (verdict: the more of its two numbers — pooled over both
+    windows, a number the filling moved could read under EST_MARK_PP and lose its "≈")."""
+    est = cd.get("est") or {}
+    if not est or not idx or not added or not n:
+        return None
+    pp = added * 100 / n if pp is None else pp
+    if pp < EST_MARK_PP:
+        return None
+    ev = sorted(est)
+    hit = set()
+    for i in idx:
+        hit.update(ev[bisect.bisect_left(ev, i):bisect.bisect_right(ev, i + N)])
+    if not hit:
+        return None
+    hs, cov = cd["hs"], [est[e] for e in hit]
+    return {"days": len(hit), "first": _iso(hs + timedelta(days=min(hit))), "last": _iso(hs + timedelta(days=max(hit))),
+            "lo": round(min(cov), 4), "hi": round(max(cov), 4), "share": round(added / x, 5) if x else 0.0,
+            "pp": round(pp, 2)}
+
+
+def _fb_out(cd, *fbs):
+    """The fall-backs of a comparison's windows (_pick) → None, or what the row says: {recent, prev (which window
+    fell back), n: the excluded days passed, days: the newest ≤3 of them (ISO), kind: "inc" | "brk" | "both"}."""
+    if not any(fb for fb in fbs):
+        return None
+    ev = {}
+    for fb in fbs:
+        for e, why in (fb or {}).items():
+            ev[e] = why if ev.get(e) in (None, why) else "both"
+    kinds = set(ev.values())
+    top3 = sorted(ev)[-3:]
+    return {"recent": bool(fbs[0]), "prev": bool(len(fbs) > 1 and fbs[1]), "n": len(ev),
+            "days": [_iso(cd["hs"] + timedelta(days=e)) for e in top3],
+            "kind": kinds.pop() if len(kinds) == 1 else "both"}
+
+
+def _told(cd, idx, w0, top, fb):
+    """The install days a firing row TELLS (claimed once it is sent): its whole window — or, after a fall-back, only
+    the days it pooled (the excluded ones it passed were not judged) → [[from, to]] ISO."""
+    if not fb:
+        return [list(_win(cd, w0, top))]
+    return _add_ranges([], [_win(cd, i, i) for i in idx])
+
+
+def _judge(xr, nr, each, xb, nb, phi, sample):
+    """The recent days (xr of nr, per day `each`) vs a base (xb of nb) → (fires, z, Δ points, rel of the smaller side):
+    enough users, |z| ≥ Z_MIN after the day-to-day swings (φ), ≥ MIN_PP points, ≥ MIN_REL of the smaller side, and on
+    a big app ≥ BREADTH_MIN recent days on the moved side (see compare)."""
+    pr, pb = xr / nr, xb / nb
+    dpp = round((pr - pb) * 100, 6)              # rounded so float dust can't decide a flag at the edge
+    z = z2(xr, nr, xb, nb)
+    z = None if z is None else round(z / math.sqrt(phi), 2)
+    small = min(pb, 1 - pb)
+    relsm = abs(pr - pb) / small if small > 0 else float("inf")
+    fires = (sample and xb >= MIN_EVENTS and nb - xb >= MIN_EVENTS and z is not None and abs(z) >= Z_MIN
+             and abs(dpp) >= MIN_PP and relsm >= MIN_REL)
+    if fires and nr >= BIG_RECENT_USERS:
+        moved = sum(1 for xc, nc, _ in each if (xc / nc > pb if dpp > 0 else xc / nc < pb))
+        fires = moved >= BREADTH_MIN
+    return bool(fires), z, dpp, relsm
+
+
+def _sample(kr, nr, xr):
+    return kr >= RECENT_MIN and nr >= MIN_RECENT_USERS and xr >= MIN_EVENTS and nr - xr >= MIN_EVENTS
 
 
 def headline_curve(cd, late=0):
@@ -682,11 +978,43 @@ def dispersion(cd, i0, i1, N):
     [i0, i1] (complete, non-empty days): 1 when the days differ only as much as pure chance would, more
     when real day-to-day swings (weekday, campaign / country mix) add to it — which the plain
     two-proportion z ignores, so on real data it calls noise "significant"."""
-    x, n, k, each = _pool(cd, i0, i1, N, per=True, clean=True)
+    return _phi(_pool(cd, i0, i1, N, per=True, clean=True)[3])
+
+
+def _phi(each):
+    """dispersion's φ of per-install-day (x_c, n_c, i) — 1 for fewer than 2 days or a share of 0 / 1."""
+    x, n, k = sum(e[0] for e in each), sum(e[1] for e in each), len(each)
     p = x / n if n else 0
     if k < 2 or not 0 < p < 1:
         return 1.0
     return sum((xc - nc * p) ** 2 / (nc * p * (1 - p)) for xc, nc, _ in each) / (k - 1)
+
+
+def _as_read(cd, each, N):
+    """Per-install-day (x_c, n_c, i) with the users fill_days added taken back out: the cells exactly as GA4 returned
+    them."""
+    addc = cd.get("addc") or {}
+    return [(xc - addc[i][N], nc, i) if i in addc else (xc, nc, i) for xc, nc, i in each]
+
+
+def _judge_est(cd, N, r, b, phi):
+    """_judge on the pooled numbers, AND — when either side's install days touch a day fill_days filled — on the
+    cells exactly as GA4 returned them (the added users taken back out, _added): the ESTIMATE RULE. A comparison
+    resting on filled days fires only when it fires the same way both with and without the estimate, so no alert
+    is ever made by the filling alone. The day-to-day swings φ stay the filled cells' (the noise model): on the cells
+    as returned, a filled day's hole alone reads as 4–10× the swings and would silence real changes near it.
+    r / b = (x, n, k, each) of the recent days / the base. → (fires, z, Δ points, rel of the smaller side, the
+    base's est (_est_of))."""
+    xr, nr, kr, each = r
+    xb, nb = b[0], b[1]
+    fires, z, dpp, relsm = _judge(xr, nr, each, xb, nb, phi, _sample(kr, nr, xr))
+    ar, _ = _added(cd, [e[2] for e in each], N)
+    ab, _ = _added(cd, [e[2] for e in b[3]], N)
+    est = _est_of(cd, [e[2] for e in b[3]], N, xb, ab, nb)
+    if fires and (ar or ab):
+        f2, _, d2, _ = _judge(xr - ar, nr, _as_read(cd, each, N), xb - ab, nb, phi, _sample(kr, nr, xr - ar))
+        fires = f2 and (d2 > 0) == (dpp > 0)
+    return fires, z, dpp, relsm, est
 
 
 def compare(cd, N, skip=None, late=0):
@@ -696,64 +1024,83 @@ def compare(cd, N, skip=None, late=0):
     before, never below 1) AND real (>= MIN_PP points and >= MIN_REL of the smaller side), and — for a
     big app — at least BREADTH_MIN of the recent days individually sit on the moved side.
     skip: install-day indexes left out of R (the ones an alert already covered — see evaluate_app).
-    late: "complete" means settled — c + N ≤ E − late (the "down" test; see the module docstring)."""
+    late: "complete" means settled — c + N ≤ E − late (the "down" test; see the module docstring).
+    FALL-BACK (_pick): when still-incomplete days (or tracking breaks) leave R under RECENT_MIN install days (P under
+    PREV_MIN), it takes the newest earlier window they leave enough in instead (one stretch of install days) —
+    row["fallback"] says so (_fb_out), and R / P's from / to are the days pooled. P is always the PREV_K days before
+    R's window, A every day before it. A number
+    resting on filled days (fill_days) carries "est" (_est_of) and fires only by the ESTIMATE RULE (_judge_est)."""
     top = cd["H"] - 1 - N - late
-    xr, nr, kr, each = _pool(cd, top - RECENT_K + 1, top, N, per=True, clean=True, skip=skip)
+    ri, rw0, rfb = _pick(cd, top, RECENT_K, RECENT_MIN, N, skip)
+    xr, nr, kr, each = R = _sum(cd, ri, N)
     pr = xr / nr if nr else None
-    sample = kr >= RECENT_MIN and nr >= MIN_RECENT_USERS and xr >= MIN_EVENTS and nr - xr >= MIN_EVENTS
-    f, t = _win(cd, top - RECENT_K + 1, top)
-    if skip and each:                                  # the install days actually in R
+    sample = _sample(kr, nr, xr)
+    f, t = _win(cd, rw0, top)
+    if (skip or rfb) and each:                         # the install days actually in R
         f, t = _win(cd, each[0][2], each[-1][2])
     reach = min(N, cd.get("lmat", N))
     rng = range(max(0, top - RECENT_K + 1), top + 1)
     lost = [cd["nb"][i] for i in rng if cd.get("nb") and cd["n"][i] and cd["nb"][i] <= i + reach]
     gap = [cd["ni"][i] for i in rng if cd.get("ni") and cd["n"][i] and cd["ni"][i] <= i + N]
-    row = {"n": N, "late": late, "recent": {"p": _r(pr, 5), "users": nr, "from": f, "to": t, "k": kr, "x": xr},
+    re_ = _est_of(cd, ri, N, xr, _added(cd, ri, N)[0], nr)
+    row = {"n": N, "late": late, "recent": {"p": _r(pr, 5), "users": nr, "from": f, "to": t, "k": kr, "x": xr,
+                                            "est": re_},
            "low_sample": not sample, "prev": None, "all": None,
            "break_day": _iso(cd["hs"] + timedelta(days=min(lost))) if lost else None,
-           "inc_day": _iso(cd["hs"] + timedelta(days=min(gap))) if gap else None}
-    phi = max(1.0, dispersion(cd, top - RECENT_K - PREV_K + 1, top - RECENT_K, N))
+           "inc_day": _iso(cd["hs"] + timedelta(days=min(gap))) if gap else None,
+           "_days": ri if rfb else list(range(max(0, top - RECENT_K + 1), top + 1)), "_told": _told(cd, ri, rw0, top, rfb)}
+    pi, pw0, pfb = _pick(cd, rw0 - 1, PREV_K, PREV_MIN, N)
+    P = _sum(cd, pi, N)
+    row["fallback"] = _fb_out(cd, rfb, pfb)
+    phi = max(1.0, _phi(P[3]))
     row["phi"] = round(phi, 3)
-    for name, i0, need in (("prev", top - RECENT_K - PREV_K + 1, PREV_MIN), ("all", 0, ALL_MIN_COHORTS)):
-        i1 = top - RECENT_K
-        xb, nb, kb = _pool(cd, i0, i1, N, clean=True)
+    A = None
+    for name, need in (("prev", PREV_MIN), ("all", ALL_MIN_COHORTS)):
+        if name == "all":
+            A = _pool(cd, 0, rw0 - 1, N, per=True, clean=True)
+        xb, nb, kb, eb = B = P if name == "prev" else A
         if kb < need or not nb or pr is None:
             continue
-        pb = xb / nb
-        dpp = round((pr - pb) * 100, 6)              # rounded so float dust can't decide a flag at the edge
-        z = z2(xr, nr, xb, nb)
-        z = None if z is None else round(z / math.sqrt(phi), 2)
-        small = min(pb, 1 - pb)
-        relsm = abs(pr - pb) / small if small > 0 else float("inf")
-        fires = (sample and xb >= MIN_EVENTS and nb - xb >= MIN_EVENTS and z is not None and abs(z) >= Z_MIN
-                 and abs(dpp) >= MIN_PP and relsm >= MIN_REL)
-        if fires and nr >= BIG_RECENT_USERS:
-            moved = sum(1 for xc, nc, _ in each if (xc / nc > pb if dpp > 0 else xc / nc < pb))
-            fires = moved >= BREADTH_MIN
-        bf, bt = _win(cd, i0, i1)
-        row[name] = {"p": _r(pb, 5), "users": nb, "from": bf, "to": bt, "delta_pp": round(dpp, 1), "z": z,
-                     "fires": bool(fires), "k": kb, "x": xb, "rel_small": relsm, "exact_pp": dpp}
+        fires, z, dpp, relsm, est = _judge_est(cd, N, R, B, phi)
+        if name == "prev":
+            bf, bt = _win(cd, eb[0][2], eb[-1][2]) if pfb else _win(cd, pw0, rw0 - 1)
+        else:
+            bf, bt = _win(cd, 0, rw0 - 1)
+        row[name] = {"p": _r(xb / nb, 5), "users": nb, "from": bf, "to": bt, "delta_pp": round(dpp, 1), "z": z,
+                     "fires": bool(fires), "k": kb, "x": xb, "rel_small": relsm, "exact_pp": dpp, "est": est}
     return row
+
+
+def _est_cell(cd, i0, i1, N, n):
+    """Did the filling (fill_days) move a triangle cell — install days [i0, i1] (n installs) by day N — by ≥
+    EST_MARK_PP points? (its "≈")"""
+    addc = cd.get("addc") or {}
+    if not addc or not n:
+        return False
+    return sum(addc[i][N] for i in range(max(0, i0), i1 + 1) if i in addc and cd["n"][i]) * 100 / n >= EST_MARK_PP
 
 
 def _tri_rows(cd, lo, hi, cols, pre=False):
     """The triangle's ISO-week rows over install days [lo, hi] (dates inside cd), newest first; a week cut by lo
-    or hi is a partial row. pre: the rows are from before the launch (shown on request only)."""
+    or hi is a partial row. pre: the rows are from before the launch (shown on request only). est = the column
+    indexes whose cell the filling moved (_est_cell: "≈")."""
     E, hs, rows = cd["E"], cd["hs"], []
     wk = hi - timedelta(days=hi.weekday())              # Monday of hi's week
     while wk + timedelta(days=6) >= lo:
         a, b = max(wk, lo), min(wk + timedelta(days=6), hi)
         i0, i1 = (a - hs).days, (b - hs).days
-        p = []
-        for N in cols:
+        p, est = [], []
+        for j, N in enumerate(cols):
             if (E - b).days < N:
                 p.append(None)
                 continue
             x, n, _ = _pool(cd, i0, i1, N)
             p.append(_r(x / n, 5) if n else None)
+            if _est_cell(cd, i0, i1, N, n):
+                est.append(j)
         iso = wk.isocalendar()
         rows.append({"week": "%d-W%02d" % (iso[0], iso[1]), "from": _iso(a), "to": _iso(b), "days": i1 - i0 + 1,
-                     "users": sum(cd["n"][i0:i1 + 1]), "partial": i1 - i0 + 1 < 7, "p": p, "pre": pre})
+                     "users": sum(cd["n"][i0:i1 + 1]), "partial": i1 - i0 + 1 < 7, "p": p, "pre": pre, "est": est})
         wk -= timedelta(days=7)
     return rows
 
@@ -787,7 +1134,8 @@ def triangle(cd, cols, late=0, surv=None, pre=None):
             continue
         x, n, _ = _pool(cd, (a - hs).days, (b - hs).days, N)
         avg4.append({"p": _r(x / n, 5), "users": n, "from": _iso(a), "to": _iso(b),
-                     "prov": b + timedelta(days=N) > S} if n else None)
+                     "prov": b + timedelta(days=N) > S, "est": _est_cell(cd, (a - hs).days, (b - hs).days, N, n)}
+                    if n else None)
     rows = _tri_rows(cd, hs, E, cols) if H else []
     if pre is not None and pre["hs"] < hs:
         rows += _tri_rows(pre, pre["hs"], hs - timedelta(days=1), cols, pre=True)
@@ -893,39 +1241,56 @@ def verdict(cd, late=0):
     app the breadth rule scaled to the window: ≥ BREADTH_MIN/RECENT_K of its install days on the moved side (16
     of 28 — 4 of 28 would pass on noise alone), and the gap still ≥ MIN_PP without the biggest install day (one
     campaign day can't carry it). Settled days only, so both ways can be news. → {n, recent, prev, delta_pp
-    (kept, points), z, fires, dir ("worse" = fewer kept, "better", None), low_sample}, or None while no day has
-    both windows (each needs VERDICT_MIN_DAYS clean install days)."""
+    (kept, points), z, fires, dir ("worse" = fewer kept, "better", None), low_sample, fallback, est}, or None while no
+    day has both windows (each needs VERDICT_MIN_DAYS clean install days). Like compare: a window that still-incomplete
+    days would empty FALLS BACK to the newest earlier window they leave enough in (_pick; fallback = _fb_out, from /
+    to = the days pooled), and a verdict resting on filled days (est = _est_of over both windows, judged by the
+    more-moved one) is "real" only by the ESTIMATE RULE — the same way with the filled users taken back out."""
     H = cd["H"]
     for N in VERDICT_DAYS:
         top = H - 1 - N - late
-        r0, p1 = top - VERDICT_K + 1, top - VERDICT_K
-        p0 = p1 - VERDICT_K + 1
-        xr, nr, kr, each = _pool(cd, r0, top, N, per=True, clean=True)
-        xb, nb, kb = _pool(cd, p0, p1, N, clean=True)
+        ri, rw0, rfb = _pick(cd, top, VERDICT_K, VERDICT_MIN_DAYS, N)
+        pi, pw0, pfb = _pick(cd, rw0 - 1, VERDICT_K, VERDICT_MIN_DAYS, N)
+        xr, nr, kr, each = _sum(cd, ri, N)
+        xb, nb, kb, eb = _sum(cd, pi, N)
         if kr < VERDICT_MIN_DAYS or kb < VERDICT_MIN_DAYS or not nr or not nb:
             continue
+        phi = max(1.0, _phi(eb))
+        fires, z, dpp, sample = _vjudge(xr, nr, kr, each, xb, nb, phi)
+        ar, _ = _added(cd, ri, N)
+        ab, _ = _added(cd, pi, N)
+        if fires and (ar or ab):                       # the ESTIMATE RULE (see _judge_est)
+            f2, _, d2, _ = _vjudge(xr - ar, nr, kr, _as_read(cd, each, N), xb - ab, nb, phi)
+            fires = f2 and (d2 > 0) == (dpp > 0)
         pr, pb = xr / nr, xb / nb
-        sample = (nr >= MIN_RECENT_USERS and min(xr, nr - xr, xb, nb - xb) >= MIN_EVENTS)
-        phi = max(1.0, dispersion(cd, p0, p1, N))
-        z = z2(xr, nr, xb, nb)
-        z = None if z is None else round(z / math.sqrt(phi), 2)
-        dpp = round((pr - pb) * 100, 6)
-        small = min(pb, 1 - pb)
-        relsm = abs(pr - pb) / small if small > 0 else float("inf")
-        fires = bool(sample and z is not None and abs(z) >= Z_MIN and abs(dpp) >= MIN_PP and relsm >= MIN_REL)
-        if fires and nr >= BIG_RECENT_USERS:
-            moved = sum(1 for xc, nc, _ in each if (xc / nc > pb if dpp > 0 else xc / nc < pb))
-            xm, nm, _ = max(each, key=lambda e: e[1])              # the biggest install day, left out
-            loo = ((xr - xm) / (nr - nm) - pb) * 100 if nr > nm else 0.0
-            fires = (moved >= math.ceil(BREADTH_MIN * kr / RECENT_K)
-                     and abs(loo) >= MIN_PP and (loo > 0) == (dpp > 0))
-        rf, rt = _win(cd, r0, top)
-        bf, bt = _win(cd, p0, p1)
+        rf, rt = _win(cd, ri[0], ri[-1]) if rfb else _win(cd, rw0, top)
+        bf, bt = _win(cd, pi[0], pi[-1]) if pfb else _win(cd, pw0, rw0 - 1)
         return {"n": N, "recent": {"from": rf, "to": rt, "users": nr, "k": kr, "left": _r(1 - pr, 5)},
                 "prev": {"from": bf, "to": bt, "users": nb, "k": kb, "left": _r(1 - pb, 5)},
                 "delta_pp": round((pb - pr) * 100, 1), "z": z, "fires": bool(fires),
-                "dir": ("worse" if dpp > 0 else "better") if fires else None, "low_sample": not sample}
+                "dir": ("worse" if dpp > 0 else "better") if fires else None, "low_sample": not sample,
+                "fallback": _fb_out(cd, rfb, pfb),
+                "est": _est_of(cd, pi + ri, N, xr + xb, ar + ab, nr + nb, max(ar * 100 / nr, ab * 100 / nb))}
     return None
+
+
+def _vjudge(xr, nr, kr, each, xb, nb, phi):
+    """verdict's rules on one pair of windows → (fires, z, Δ points of the uninstall share, sample)."""
+    pr, pb = xr / nr, xb / nb
+    sample = (nr >= MIN_RECENT_USERS and min(xr, nr - xr, xb, nb - xb) >= MIN_EVENTS)
+    z = z2(xr, nr, xb, nb)
+    z = None if z is None else round(z / math.sqrt(phi), 2)
+    dpp = round((pr - pb) * 100, 6)
+    small = min(pb, 1 - pb)
+    relsm = abs(pr - pb) / small if small > 0 else float("inf")
+    fires = bool(sample and z is not None and abs(z) >= Z_MIN and abs(dpp) >= MIN_PP and relsm >= MIN_REL)
+    if fires and nr >= BIG_RECENT_USERS:
+        moved = sum(1 for xc, nc, _ in each if (xc / nc > pb if dpp > 0 else xc / nc < pb))
+        xm, nm, _ = max(each, key=lambda e: e[1])              # the biggest install day, left out
+        loo = ((xr - xm) / (nr - nm) - pb) * 100 if nr > nm else 0.0
+        fires = (moved >= math.ceil(BREADTH_MIN * kr / RECENT_K)
+                 and abs(loo) >= MIN_PP and (loo > 0) == (dpp > 0))
+    return fires, z, dpp, sample
 
 
 def key_days(curve, cps):
@@ -1080,7 +1445,10 @@ def cohort_conditions(rows):
                    "z": b["z"], "installs_from": row["recent"]["from"], "installs_to": row["recent"]["to"],
                    "base_from": b["from"], "base_to": b["to"], "since": None, "day": None,
                    "users": row["recent"]["users"], "ns": sorted(ns),
-                   "held": {k: by_n[k]["held"] for k in sorted(ns) if by_n[k].get("held")}}
+                   # the ESTIMATE RULE held (compare): it rests on filled days — its message says so (EST_NOTE)
+                   "est": bool(row["recent"].get("est") or any((row[x] or {}).get("est") for x in vs)),
+                   "held": {k: by_n[k]["held"] for k in sorted(ns) if by_n[k].get("held")},
+                   "told": {k: by_n[k].get("_told") for k in sorted(ns)}}
     return out
 
 
@@ -1101,10 +1469,12 @@ def _cohort_text(s, ref=None):
 
 
 def alert_text(family, dr, s, ref=None):
-    """The Hinglish message (without the leading "{app}: "); an "up" alert that rests on provisional days
-    says so (PROV_NOTE) — the number can still grow, never shrink. ref = the data's last day: a date whose
-    year isn't obvious says it (fmt_span)."""
-    return _alert_text(family, dr, s, ref) + (PROV_NOTE if s.get("prov") and dr == "up" else "")
+    """The Hinglish message (without the leading "{app}: "); an install alert resting on filled days says so
+    (EST_NOTE — it also fired without them, compare's ESTIMATE RULE), an "up" alert that rests on provisional days
+    says so (PROV_NOTE, always last) — the number can still grow, never shrink. ref = the data's last day: a date
+    whose year isn't obvious says it (fmt_span)."""
+    return (_alert_text(family, dr, s, ref) + (EST_NOTE if s.get("est") else "")
+            + (PROV_NOTE if s.get("prov") and dr == "up" else ""))
 
 
 def _alert_text(family, dr, s, ref=None):
@@ -1207,7 +1577,7 @@ def alert_obj(ep, app, E):
            "z": s.get("z"), "installs_from": s.get("installs_from"), "installs_to": s.get("installs_to"),
            "base_from": s.get("base_from"), "base_to": s.get("base_to"), "since": s.get("since"),
            "day": s.get("day"), "users": int(s.get("users") or 0), "opened": ep["opened"],
-           "provisional": prov,
+           "provisional": prov, "estimate": bool(s.get("est")),
            "last_seen": ep["last_true"], "fresh": (E - _d(ep["opened"])).days < FRESH_EVALS,
            "notify": ep.get("notified_at") is None, "data_till": _iso(E),
            "message": "%s: %s" % (app, text), "text": text}
@@ -1252,18 +1622,27 @@ def arrow(new, settled, head=False, lit=None):
     return None, new
 
 
-def _head(up, down, lit):
+def _unsettled(row, S):
+    """Is the day N of the row's newest install day still provisional (after S, the last settled day)? The newest
+    comparison's is — unless a fall-back took older installs (compare), whose day N is settled."""
+    t = row["recent"]["to"]
+    return bool(t) and _d(t) + timedelta(days=row["n"]) > S
+
+
+def _head(up, down, lit, S):
     """One portfolio-table D cell: recent 7 install days vs the 28 before (▼ and its numbers: settled data)."""
     if up is None:
         return None
     dr, row = arrow(up, down, True, lit)
-    prov = row is up and down is not up             # the newest comparison: its day N is still provisional
+    prov = row is up and down is not up and _unsettled(row, S)   # the newest comparison: its day N still provisional
     if row["recent"]["p"] is None:
         return None
     r, b = row["recent"], row["prev"]
+    fb = row.get("fallback")
     return {"p": r["p"], "prev": b["p"] if b else None, "delta_pp": _delta(row, True), "dir": dr,
             "alert": bool(lit), "low_sample": row["low_sample"], "from": r["from"], "to": r["to"],
-            "prov": prov}
+            "prov": prov, "est": bool(r.get("est") or (b or {}).get("est")),     # ≈: rests on filled days
+            "fb": fb}              # older installs (compare's fall-back: which window, the days passed, incomplete / break)
 
 
 def _pooled_rate(ds, i0, i1):
@@ -1346,11 +1725,12 @@ def new_cohort_rows(cd, rows, dr, claimed, is_open, late_days=0):
             continue
         late, N = row.get("late", 0), row["n"]
         top = cd["H"] - 1 - N - late
-        if not any(i in claimed for i in range(top - RECENT_K + 1, top + 1)):
+        days = row.get("_days") or range(max(0, top - RECENT_K + 1), top + 1)   # its window, or the days a fall-back pooled
+        if not any(i in claimed for i in days):
             out.append(row)
             continue
         fresh = compare(cd, N, skip=claimed, late=late)
-        free = [i for i in range(max(0, top - RECENT_K + 1), top + 1) if i not in claimed and cd["n"][i]]
+        free = [i for i in days if i not in claimed and cd["n"][i]]
         if _fires(fresh, dr):
             out.append(fresh)
         elif is_open and fresh["recent"]["k"] and any(
@@ -1444,7 +1824,10 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     curves, the triangle, the checkpoints and their alerts, the summary — and kept: the daily series, the cohort
     file, survival["with_test"] and the triangle's "pre" rows still hold them (the page shows them on a tap).
     RECENT: an alert is only about installs whose window ends within ALERT_RECENT_DAYS; a checkpoint whose
-    newest installs are older than that and moved is listed in "old_changes" — info, never an episode."""
+    newest installs are older than that and moved is listed in "old_changes" — info, never an episode.
+    INCOMPLETE DAYS: read through fill_days — the near-complete ones filled (flags.estimated_days, used everywhere,
+    shown "≈"), the rest left out (flags.incomplete_days)."""
+    store = fill_days(store)
     E = _d(store["window_end"])
     late = max(0, int(late or 0))
     S = E - timedelta(days=late)                     # the last settled day
@@ -1495,13 +1878,12 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     ready = []
     for dr, c in conds.items():
         hd = c.pop("held")                                                # {N: its held install days}
+        told = c.pop("told")                   # {N: its install days — the window, or the days a fall-back pooled}
         need = PERSIST_BIG if c["users"] >= BIG_RECENT_USERS else 1      # big apps: one run can't fire it
         if first or streak.get("cohort|" + dr, 0) >= need:
             ready.append(dict(c, key="%s|cohort|%s" % (app_id, dr)))
-            lt = c["late"]
-            told = {N: _win(cd, H - N - RECENT_K - lt, H - 1 - N - lt) for N in c["ns"]}
-            claimed[dr] = _add_ranges(claimed.get(dr), told.values())    # these install days are told now —
-            real = _claimed(cd, [w for N, w in told.items() if N not in hd])      # all but the provisional ones
+            claimed[dr] = _add_ranges(claimed.get(dr), [w for ws in told.values() for w in ws])   # told now —
+            real = _claimed(cd, [w for N, ws in told.items() if N not in hd for w in ws])  # all but the provisional ones
             keep = (_claimed(cd, held.get(dr)) | {i for f in hd.values() for i in f}) - real   # a row only held:
             held[dr] = _add_ranges([], [_win(cd, i, i) for i in sorted(keep)])   # claimed, not told
     ready += rate_ready(ds, drift, app_id, streak, since, E, first)
@@ -1526,13 +1908,13 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     for up, dn in zip(rows, settled):
         N = up["n"]
         dr, row = arrow(up, dn, False, lit.get(N))
-        prov = row is up and dn is not up
+        prov = row is up and dn is not up and _unsettled(row, S)
         table.append({"n": N, "key": "D%d" % N,
                       "head": {"p": curve["p"][N], "lo": curve["lo"][N], "hi": curve["hi"][N], "users": curve["users"][N]},
-                      "recent": {k: row["recent"][k] for k in ("p", "users", "from", "to")},
+                      "recent": {k: row["recent"].get(k) for k in ("p", "users", "from", "to", "k", "est")},
                       "prev": _base_out(row["prev"]), "all": _base_out(row["all"]), "prov": prov,
                       "dir": dr, "alert": N in lit, "low_sample": row["low_sample"], "break_day": row["break_day"],
-                      "inc_day": row["inc_day"]})
+                      "inc_day": row["inc_day"], "fallback": row.get("fallback")})
     by_n = {row["n"]: row for row in rows}
     by_s = {row["n"]: row for row in settled}
 
@@ -1541,7 +1923,7 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
             return None
         up = by_n.get(N) or compare(cd, N)
         dn = (by_s.get(N) or compare(cd, N, late=late)) if late else up
-        return _head(up, dn, lit.get(N))
+        return _head(up, dn, lit.get(N), S)
     head4 = {"D%d" % N: cell(N) for N in HEAD4}
     counts = {"warning": 0, "watch": 0, "good": 0}
     for a in alerts:
@@ -1550,9 +1932,10 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     sv = survival_out(cd, late, cp["list"], whole)
     fl = store.get("flags") or {}
     inc = {k: v for k, v in sorted((fl.get("incomplete_days") or {}).items()) if whole["hs"] <= _d(k) <= E}
-    lo, hi = _iso(whole["hs"]), _iso(E)              # days whose cells are an events estimate (used, just shown)
-    evd = sorted(k for k, v in (store.get("cell_src") or {}).items()
-                 if lo <= k <= hi and (v or {}).get("src") == "events_scaled" and k not in inc)
+    lo, hi = _iso(whole["hs"]), _iso(E)
+    est = {k: v for k, v in sorted(((store.get("_est") or {}).get("days") or {}).items()) if lo <= k <= hi}
+    evd = sorted(k for k, v in (store.get("cell_src") or {}).items()   # days whose cells are an events estimate
+                 if lo <= k <= hi and (v or {}).get("src") == "events_scaled" and k not in inc and k not in est)
     detail = {"app_id": app_id, "app": app, "package": package or store.get("package"), "key": key,
               "tz": store.get("time_zone") or "UTC", "den": store.get("den") or "a28",
               "history_start": _iso(whole["hs"]), "data_till": _iso(E), "settled_till": _iso(S), "late_days": late,
@@ -1561,11 +1944,12 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
               "flags": {"truncated": sorted(fl.get("truncated") or []), "thresholded": bool(fl.get("thresholded")),
                         "unplaced_users": cd["flags"]["unplaced_users"], "over_100": cd["flags"]["over_100"],
                         "kept_old_before": fl.get("kept_old_before"), "incomplete_days": inc,
+                        "estimated_days": est,       # {day: coverage}: incomplete, filled up to its total (≈)
                         "outdated": bool(outdated),
                         # per day of the history, where its install-day cells came from: the users report, an
-                        # events estimate (used), or incomplete (flagged, not alerted on)
-                        "cell_days": {"users": whole["H"] - len(evd) - len(inc), "events": len(evd),
-                                      "incomplete": len(inc)},
+                        # events estimate (used), incomplete but filled (used, ≈), or incomplete (left out)
+                        "cell_days": {"users": whole["H"] - len(evd) - len(est) - len(inc), "events": len(evd),
+                                      "estimated": len(est), "incomplete": len(inc)},
                         "events_span": [evd[0], evd[-1]] if evd else None},
               "daily": {"start": _iso(ds["start"]), "new": ds["new"], "un": ds["un"], "a28": ds["den"],
                         "upd": ds["upd"], "rate": ds["rate"], "med": ds["med"], "lo": ds["lo"], "hi": ds["hi"],
@@ -1630,7 +2014,7 @@ def lateness(sums):
 def _base_out(b):
     if not b:
         return None
-    return {k: b[k] for k in ("p", "users", "from", "to", "delta_pp", "z", "fires")}
+    return {k: b.get(k) for k in ("p", "users", "from", "to", "delta_pp", "z", "fires", "est")}
 
 
 def _raw_lags(store, hs, H):
@@ -1651,7 +2035,9 @@ def _raw_lags(store, hs, H):
 
 
 def cohort_file(store, E=None):
-    """The raw per-install-day lags for the "Saare din" triangle (§5d): nothing aggregated, nothing cut."""
+    """The raw per-install-day lags for the "Saare din" triangle (§5d): nothing aggregated, nothing cut — the cells
+    as the engine reads them (the build passes the fill_days store: a filled day's cells filled, like every number
+    of the detail; flags.estimated_days says which)."""
     hs, E = _d(store["history_start"]), _d(E or store["window_end"])
     n, raw = _raw_lags(store, hs, max(0, (E - hs).days + 1))
     return {"v": 1, "app_id": store.get("app_id"), "start": _iso(hs), "end": _iso(E), "new": n,

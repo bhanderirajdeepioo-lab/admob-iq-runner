@@ -19,7 +19,8 @@ SELF-CHECKED CELLS: a long firstSessionDate × date report on a big app silently
 its uninstalls (seen live: 2–78% over 90 days, while ~11-day ranges were complete). So every cells slice is
 checked against the date × eventName report of the same days (daily[d].un): a short slice is thrown away
 whole and asked again as two halves, down to single days; a single day still short is KEPT and recorded in
-flags.incomplete_days {day: coverage} (the engine takes no alert from it, the tab says "data adhoora"). Rows
+flags.incomplete_days {day: coverage} — as GA4 returned it: the engine fills one holding ≥ 70% up to its total at
+evaluation time (an estimate, engine.uninstall.fill_days) and leaves the rest out (the tab says "data adhoora"). Rows
 GA4 folds into "(other)" never count as covered. When the shortfall is GA4's own (days short even alone), or
 the fetch spent its call cap / run budget, a short slice is kept with its short days flagged instead of split
 further; a re-read that comes back short never replaces cells we hold in full (keep_best). The slice size

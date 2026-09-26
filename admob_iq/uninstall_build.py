@@ -31,7 +31,8 @@ from .fetch import ga4_uninstall as gu
 
 ASSET = "uninstall.json.gz"
 COHORT_PREFIX = "uninstall_c_"
-COHORT_V = 1                  # bump when the cohort file format changes (forces a rewrite)
+COHORT_V = 2                  # bump when the cohort file format changes (forces a rewrite) — 2: near-complete days
+                              # filled (engine fill_days), like every other number of the tab
 NO_GA4_TEXT = {
     "no_package": "Play Store package nahi mila — AdMob me app ka store link jodo",
     "no_stream": "Kisi bhi GA4 account me is app ka Android stream nahi mila",
@@ -84,7 +85,7 @@ def _selected_apps(dashboard, data_dir):
 
 def _sig(path):
     with open(path, "rb") as f:
-        return "%s:%d" % (hashlib.sha1(f.read()).hexdigest()[:16], COHORT_V)
+        return "%s:%d:%s" % (hashlib.sha1(f.read()).hexdigest()[:16], COHORT_V, eng.IMPUTE_MIN_COVERAGE)
 
 
 def _reason(a, status, state):
@@ -139,6 +140,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
         st = state["fetch"].setdefault(aid, {})
         st["meta"] = gu.store_meta(store)               # planning always follows the store actually on disk
         stale = gu._hours_since(store.get("fetched_at"), now) > eng.STALE_HOURS
+        store = eng.fill_days(store)                    # near-complete days filled (≈) — the detail and the cohort
+                                                        # file read the same cells; the store on disk stays raw
         # an unchecked store format (v1: its clean re-pull still pending — quota, a failure) is shown and flagged,
         # but whatever it opens is seeded, never sent: no alert from unchecked data ever goes out. A v2 store
         # waiting for its repair is checked data: evaluated as ever (its incomplete days still left out)
@@ -173,7 +176,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None):
                         "late_days": cfg["late_days"], "thin_min_days": eng.THIN_MIN_DAYS,
                         "thin_min_users": eng.THIN_MIN_USERS, "surv_recent_days": eng.SURV_RECENT_DAYS,
                         "verdict_k": eng.VERDICT_K, "tri_avg_weeks": eng.TRI_AVG_WEEKS,
-                        "alert_recent_days": eng.ALERT_RECENT_DAYS, "year_clear_days": eng.YEAR_CLEAR_DAYS},
+                        "alert_recent_days": eng.ALERT_RECENT_DAYS, "year_clear_days": eng.YEAR_CLEAR_DAYS,
+                        "impute_min_coverage": eng.IMPUTE_MIN_COVERAGE, "est_mark_pp": eng.EST_MARK_PP},
              "lateness": eng.lateness(late_sums), "apps": details, "no_ga4": no_ga4}
     write_json_gz_stable(os.path.join(out_dir, ASSET), asset)
     asset_v = hashlib.sha1(json.dumps(asset, ensure_ascii=False, separators=(",", ":"), sort_keys=True)

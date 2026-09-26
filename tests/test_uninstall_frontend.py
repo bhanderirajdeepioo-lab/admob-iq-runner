@@ -155,6 +155,11 @@ def test_every_title_label_and_chip_is_english(report):
         assert h[k], k
 
 
+def test_filled_days_are_an_estimate_and_emptied_rows_take_older_installs(report):
+    h = report["has"]
+    assert h["incomplete_kept"] and h["estimate_pill"] and h["estimate_cells"] and h["older_installs"]
+
+
 def test_the_rate_tile_names_its_7_days_and_long_notes_are_one_line_until_tapped(report):
     h = report["has"]
     assert h["rate_window"]              # "Daily uninstall rate · last 7 days", its dates by the number, alerts first
