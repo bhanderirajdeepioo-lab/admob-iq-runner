@@ -257,3 +257,45 @@ def test_every_har_din_page_names_the_4_weeks_and_no_page_is_only_test_installs(
 def test_no_verdict_for_a_young_app_blames_its_age_not_the_data(report):
     t = report["texts"]["no_verdict_young_launch"]
     assert "Pichhle mahine se tulna ~2 mahine ke data ke baad" in t and "adhoora/gayab" not in t
+
+
+def test_app_updates_are_a_line_right_above_the_install_week_they_fell_in(report):
+    r, tx = report["rel"], report["texts"]
+    # every app × both modes × test weeks hidden / shown × 12 / all rows (+ made-up updates): each 📦 line is right
+    # above the week its update(s) fell in, that week alone has the 📦 badge, the legend only comes with a line
+    assert r["bad"] == [] and r["checked"] >= 1000 and r["lines"] >= 20
+    legend = "📦 = naya update. Line ke upar wale hafte = naye version ke installs, neeche = purane version ke."
+    for m in ("cp", "all"):                                  # the fixture's own updates (the engine's releases)
+        cal, wea, lau, fla = (tx["rel|%s|%s|false|false" % (a, m)] for a in
+                              ("Demo Caller – Test App", "Demo Weather", "Demo Launcher", "Demo Flashlight"))
+        assert "📦 Naya update v3.2 aaya — 10 Sep (is hafte ke beech) 7–13 Sep 📦 " in cal and legend in cal
+        assert re.search(r"14–20 Sep [^📦–]* 📦 Naya update v3\.2", cal)                   # between 14–20 and 7–13 Sep
+        assert re.search(r"20–26 Jul [^📦–]* 📦 Naya update v4\.1 aaya — 15 Jul \(is hafte ke beech\) 13–19 Jul 📦 ", wea)
+        assert "📦 Naya update aaya — 5 Aug (update karne wale achanak badhe) 3–9 Aug 📦 " in lau and legend in lau
+        assert "📦" not in fla                                                             # no update: no line, no legend
+        assert r["tips"]["Demo Caller – Test App|%s|false|false" % m] == ["Is hafte naya update v3.2 aaya — 10 Sep"]
+        assert r["tips"]["Demo Launcher|%s|false|false" % m] == [
+            "Is hafte naya update aaya — 5 Aug (update karne wale achanak badhe)"]
+        # several in one week: ONE line naming them all (a version already called "v…" is not "vv…")
+        two = tx["rel|two|" + m]
+        assert "📦 3 update: v3.2 (8 Sep), update (11 Sep), v3.2.1 (12 Sep) 7–13 Sep 📦 " in two
+        assert two.count("update:") == 1 and "vv" not in two
+        assert r["tips"]["two|" + m] == ["Is hafte 3 update: v3.2 (8 Sep), update (11 Sep), v3.2.1 (12 Sep)"]
+        # in the newest (partial) week: under the year row, above that week, first thing after the 4-week row
+        assert re.search(r"4 hafte ka average .*? ── 2026 ── 📦 Naya update v3\.3 aaya — 22 Sep \(is hafte ke beech\) "
+                         r"21–23 Sep \(sirf 3 din\) 📦 [\d.k]+ installs", tx["rel|newest|" + m])
+        assert "📦" not in tx["rel|none|" + m]
+        # among the test installs before the launch: only while those are shown, with its year, under its year row
+        assert "📦" not in tx["rel|test|%s|false" % m]
+        assert "── 2025 ── 📦 Naya update v1.1 aaya — 24 Dec 2025 (is hafte ke beech) 22–28 Dec 📦 " in tx[
+            "rel|test|%s|true" % m] and legend in tx["rel|test|%s|true" % m]
+        # the week the launch cuts in two: the launch day's update above the first launched week, the last test
+        # week's only while the test installs are shown
+        launch = ["Is hafte naya update v1.0 aaya — 16 Jun"]
+        assert r["tips"]["launch|%s|false" % m] == launch
+        assert r["tips"]["launch|%s|true" % m] == launch + ["Is hafte naya update v0.9 aaya — 14 Jun"]
+    # "Har din" page 2 (days 31–61: the same weeks) keeps every 📦 line
+    for pre in ("false", "true"):
+        assert r["pages"]["Demo Caller – Test App|all|%s|page2" % pre] == 1
+        assert r["tips"]["Demo Caller – Test App|all|%s|page2" % pre] == ["Is hafte naya update v3.2 aaya — 10 Sep"]
+        assert r["tips"]["Demo Weather|all|%s|page2" % pre] == ["Is hafte naya update v4.1 aaya — 15 Jul"]

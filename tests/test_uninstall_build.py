@@ -439,6 +439,20 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
         ("D180", "2026-03-14", "2026-03-20")]
     assert all(not a["old_changes"] for a in asset["apps"] if a is not cal)
     assert all(al["installs_to"] >= "2026-07-25" for al in s["alerts"] if al["family"] == "cohort")
+    # app updates reach each app's detail — the install-week table draws a 📦 line above the week each fell in: the
+    # Caller's 3.2, the Weather's 4.1 in the middle of its table, the Launcher's app_update jump (no new version)
+    assert {a["app"]: a["releases"] for a in asset["apps"] if a["releases"]} == {
+        "Demo Caller – Test App": [{"date": "2026-09-10", "version": "3.2", "kind": "version"}],
+        "Demo Weather": [{"date": "2026-07-15", "version": "4.1", "kind": "version"}],
+        "Demo Launcher": [{"date": "2026-08-05", "version": None, "kind": "update"}]}
+    for a in asset["apps"]:
+        for rel in a["releases"]:
+            rows = [r for r in a["triangle"]["rows"] if r["from"] <= rel["date"] <= r["to"]]
+            assert len(rows) == 1 and not rows[0]["pre"]
+    wea = [a for a in asset["apps"] if a["app"] == "Demo Weather"][0]
+    k = next(i for i, r in enumerate(wea["triangle"]["rows"]) if r["to"] == "2026-07-19")
+    assert wea["triangle"]["rows"][k]["from"] == "2026-07-13" and 5 < k < len(wea["triangle"]["rows"]) - 5
+    assert wea["zoom"]["reason"] == "alert"                        # an update 10 weeks old: no day-by-day zoom from it
     assert all(LOG_LINE.match(line) for line in fx["public_log"]) and len(fx["public_log"]) == 7
     with open(OUT, encoding="utf-8") as f:
         committed = f.read()

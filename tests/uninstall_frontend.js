@@ -112,6 +112,60 @@ scen('no_verdict_young_launch', `${RESET} (()=>{ const a=UNI.apps.find(x=>x.app_
 scen('maybe_test', `${RESET} (()=>{ const a=UNI.apps.find(x=>x.app_id===${JSON.stringify(wal.app_id)}); a.launch.sure=false;
   try{ UNIAPP=a.app_id; APP=a.app; const h=uniScreen(); UNIPRE=true; UNITRI='all'; UNITRIEXP=true; return h+'<hr>'+uniScreen(); } finally { a.launch.sure=true; } })()`);
 
+// app updates in the install-week table ("🔺 Install hafta × din"): every 📦 line sits right ABOVE the week its update(s)
+// fell in (after that week's year row), names each of their dates, that week — and only it — carries the 📦 badge, and
+// the legend comes only with the lines. Every app × both modes × test weeks hidden / shown × 12 / all rows, then the
+// same app with made-up updates: two or more in one week, one in the newest (partial) week, one among the test
+// installs, none. Each table is a scenario too (no errors / "undefined" / jargon)
+const rel = { checked: 0, lines: 0, bad: [], tips: {}, pages: {} };
+function relCheck(name, app, set, over) {
+  let res;
+  try {
+    res = JSON.parse(run(`(()=>{ ${RESET} const a=UNI.apps.find(x=>x.app_id===${JSON.stringify(app.app_id)}), keep=a.releases; ${set}
+      ${over ? `a.releases=${JSON.stringify(over)};` : ''}
+      try{ const h=uniTriCard(a), L=uniLaunch(a); let rows=a.triangle.rows;
+        if(UNITRI==='all'){ const C=UNICOH[a.key]; rows=uniTriAll(C,0,0,a.settled_till,null,L?uniDiff(C.start,L.day):0).rows; }
+        rows=UNIPRE?rows.filter(r=>!r.pre||r.users>0):rows.filter(r=>!r.pre); if(!UNITRIEXP) rows=rows.slice(0,12);
+        return JSON.stringify({h, pg:UNITRIPAGE, rows:rows.map(r=>[r.from,r.to]), rels:(a.releases||[]).map(x=>[x.date,uniD(x.date)])}); }
+      finally{ a.releases=keep; ${RESET} } })()`));
+  } catch (e) { errors.push('rel ' + name + ': ' + e.message); return; }
+  const trs = ((res.h.split('<tbody>')[1] || '').split('</tbody>')[0]).split('<tr').slice(1);
+  let wi = 0, pend = null, badges = 0;
+  for (const tr of trs.slice(2)) {                                   // after the All-time normal and 4-week rows
+    if (tr.startsWith(' class="uni-yr"')) { if (pend) rel.bad.push(name + ': a year row under a 📦 line'); continue; }
+    if (tr.startsWith(' class="uni-rel"')) { if (pend) rel.bad.push(name + ': two 📦 lines'); pend = tr; rel.lines++; continue; }
+    const [f, t] = res.rows[wi++] || [], want = res.rels.filter(([d]) => d >= f && d <= t), badge = tr.includes('class="uni-relb"');
+    if (badge) badges++;
+    if (!!want.length !== !!pend || !!want.length !== badge) rel.bad.push(`${name}: ${f}–${t} line ${!!pend} badge ${badge} updates ${want.length}`);
+    for (const [, d] of pend ? want : []) if (!pend.includes('(' + d + ')') && !pend.includes('— ' + d + ' (')) rel.bad.push(`${name}: ${d} not on its line`);
+    pend = null; rel.checked++;
+  }
+  const lines = trs.filter(x => x.startsWith(' class="uni-rel"')).length;
+  if (pend || wi !== res.rows.length) rel.bad.push(`${name}: weeks ${wi}/${res.rows.length}`);
+  if (lines !== badges || res.h.includes('📦 = naya update.') !== lines > 0) rel.bad.push(name + ': legend / badges');
+  out['rel|' + name] = res.h;
+  rel.tips[name] = [...res.h.matchAll(/class="uni-relb" title="([^"]*)"/g)].map(m => m[1]);
+  rel.pages[name] = res.pg;
+}
+for (const a of apps) for (const tri of ['cp', 'all']) for (const pre of [false, true]) for (const exp of [false, true])
+  relCheck(`${a.app}|${tri}|${pre}|${exp}`, a, `UNITRI='${tri}'; UNIPRE=${pre}; UNITRIEXP=${exp};`);
+for (const tri of ['cp', 'all']) {
+  relCheck('two|' + tri, apps[0], `UNITRI='${tri}';`, [{ date: '2026-09-08', version: '3.2', kind: 'version' },
+    { date: '2026-09-11', version: null, kind: 'update' }, { date: '2026-09-12', version: 'v3.2.1', kind: 'version' }]);
+  relCheck('newest|' + tri, apps[0], `UNITRI='${tri}';`, [{ date: '2026-09-22', version: '3.3', kind: 'version' }]);
+  relCheck('none|' + tri, apps[0], `UNITRI='${tri}';`, []);
+  for (const pre of [false, true])
+    relCheck(`test|${tri}|${pre}`, wal, `UNITRI='${tri}'; UNIPRE=${pre}; UNITRIEXP=true;`, [{ date: '2025-12-24', version: '1.1', kind: 'version' }]);
+  // the launch cuts a week in two: one on the launch day goes above the first launched week; one on the last day of
+  // the newest test week that has installs, above that week — only while the test installs are shown
+  for (const pre of [false, true])
+    relCheck(`launch|${tri}|${pre}`, wal, `UNITRI='${tri}'; UNIPRE=${pre}; UNITRIEXP=true;`, [{ date: wal.launch.day, version: '1.0', kind: 'version' },
+      { date: wal.triangle.rows.find(r => r.pre && r.users > 0).to, version: '0.9', kind: 'version' }]);
+}
+// "Har din" pages are columns (days after install), not weeks: page 2 has the same weeks, so the same 📦 lines
+for (const a of apps) for (const pre of [false, true])
+  relCheck(`${a.app}|all|${pre}|page2`, a, `UNITRI='all'; UNITRIPAGE=1; UNIPRE=${pre}; UNITRIEXP=true;`);
+
 // ── what the page says ──
 const text = h => h.replace(/\son\w+="[^"]*"/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
 const uiText = h => h.replace(/\son\w+="[^"]*"/g, '').replace(/\sid="[^"]*"/g, '');   // markup + titles + chart labels, minus code
@@ -197,7 +251,8 @@ console.log(JSON.stringify({
             all_hover_both: charts.every(c => c.hover_both), all_start_100: charts.every(c => c.first === '100% bache') },
   summary, avg4: { checked: avg4Checked, bad: avg4Bad }, ref: { checked: refChecked, bad: refBad },
   rate_bad: rateBad, coh_bad: cohBad, gap_bad: gapBad, label_bad: labelBad, tip_big: tipBig, span_bad: spanBad,
-  totals, header, header2, pages, texts: Object.fromEntries(Object.entries(out).filter(([k]) => /^(pre\||detail\|[^|]*\|all\|90\|all\|true|portfolio_30d|detail\|[^|]*\|all\|30\|cp\|false|overview_no_admob|tripage1_caller|no_verdict_young_launch|maybe_test)/.test(k)).map(([k, v]) => [k, T(k)])),
+  totals, header, header2, pages, texts: Object.fromEntries(Object.entries(out).filter(([k]) => /^(pre\||detail\|[^|]*\|all\|90\|all\|true|portfolio_30d|detail\|[^|]*\|all\|30\|cp\|false|overview_no_admob|tripage1_caller|no_verdict_young_launch|maybe_test|rel\|(two|newest|none|test)\||rel\|[^|]*\|(cp|all)\|false\|false$)/.test(k)).map(([k, v]) => [k, T(k)])),
+  rel,
   plain_kya_badla: T('portfolio_30d').match(/Kya badla\? \((\d+)\)/)[1],
   portfolio_lines: (T('portfolio_30d').match(/Ek nazar me(.*?)📊 Roz ka uninstall rate/) || ['', ''])[1],
   portfolio: T('portfolio_30d'),

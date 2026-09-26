@@ -247,6 +247,10 @@
   .uni-sticky th[onclick]{cursor:pointer;user-select:none;white-space:nowrap}
   .uni-heat th,.uni-heat td{padding:8px 9px}
   .uni-heat td.h{text-align:center;font-size:12px;color:#fff;font-variant-numeric:tabular-nums}
+  /* an app update: a dashed line right above the install week it fell in (its text wraps in the pinned first column) */
+  .uni-heat tr.uni-rel td{background:var(--purple-b);border-top:2px dashed var(--purple);padding:6px 9px}
+  .uni-heat tr.uni-rel td.nm{color:var(--purple);font-size:11px;font-weight:700;line-height:1.4;white-space:normal;max-width:170px;overflow-wrap:anywhere}
+  .uni-relb{font-size:11px;margin-left:4px;cursor:help}
   .uni-num{font-variant-numeric:tabular-nums;white-space:nowrap}
   .uni-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .uni-ct{flex-wrap:wrap;gap:6px 12px}
@@ -3122,6 +3126,15 @@ function uniTriCard(a){
   return `<div class="card pad0" id="uni-tri" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>🔺 Install hafta × din</h3><span class="faint" style="font-size:11.5px">Har row = ek hafte ke installs · laal = normal se zyada hate · hara = kam</span></div>
     <div style="padding:8px 17px 0;font-size:12px;color:var(--ink2);line-height:1.5">Har box = us hafte install karne walon me se us din tak kitne % ne app hata diya</div>
     <div style="padding:8px 17px 0"><div class="chips" style="margin-bottom:8px">${chips}</div>${pager}</div>${body}</div>`; }
+// one install week's app updates (engine releases, oldest first: a new version out to ≥5% of that day's users, or
+// a sudden jump in users updating the app) → its 📦 line and its label's tooltip; none → null
+function uniRelTxt(list){ if(!list||!list.length) return null;
+  const v=x=>{ const s=String(x.version); return /^v/i.test(s)?s:'v'+s; };
+  if(list.length>1){ const l=list.map(x=>(x.version?v(x):'update')+' ('+uniD(x.date)+')').join(', ');
+    return {line:`📦 ${list.length} update: ${l}`, tip:`Is hafte ${list.length} update: ${l}`}; }
+  const x=list[0], d=uniD(x.date);
+  return x.version?{line:`📦 Naya update ${v(x)} aaya — ${d} (is hafte ke beech)`, tip:`Is hafte naya update ${v(x)} aaya — ${d}`}
+    :{line:`📦 Naya update aaya — ${d} (update karne wale achanak badhe)`, tip:`Is hafte naya update aaya — ${d} (update karne wale achanak badhe)`}; }
 function uniTriTable(cols,ref,rows,a,avg4,aset){
   // the weeks before the launch (test installs) only when shown — a test week with no install at all has nothing to
   // show (it stays in the data); year separator rows ("── 2026 ──") say each week's year
@@ -3146,18 +3159,26 @@ function uniTriTable(cols,ref,rows,a,avg4,aset){
     const tip=uniSpan(g.from,g.to)+' ke installs · '+fmtN(g.users)+' installs'+(k?' · kaccha — late data abhi aa raha, badh sakta hai':'')+(inc?' · data adhoora — GA4 ne kuch din poore nahi diye':'');
     return `<td class="h" style="${(k||inc)&&low(g.p,ref[j])?'':uniHeat(g.p,ref[j])}${k?';opacity:.55':''}" title="${hAttr(tip)}">${uniPct(g.p)}${inc?'<sup>½</sup>':''}</td>`; }).join('')}</tr>`;
   const sep=t=>`<tr class="uni-yr"><td class="nm" style="font-size:11px;font-weight:700;color:var(--muted);white-space:normal;max-width:170px;padding:6px 9px">${t}</td><td colspan="${cols.length}" style="padding:6px 0"></td></tr>`;
-  let yr='', pre=false; const LA=uniLaunch(a);
+  // app updates (the engine's releases): a 📦 line right ABOVE the install week each fell in — the weeks above it are
+  // installs of the new version, the ones below of the old one — and a 📦 on that week's label. Only weeks shown here
+  // get one (an update among the test installs before the launch only while those are shown); after the year row
+  const rels=((a&&a.releases)||[]).filter(x=>x&&x.date).sort((x,y)=>x.date<y.date?-1:(x.date>y.date?1:0));
+  const relSep=t=>`<tr class="uni-rel"><td class="nm">${hAttr(t)}</td><td colspan="${cols.length}"></td></tr>`;
+  let yr='', pre=false, nRel=0; const LA=uniLaunch(a);
   const body=shown.map(r=>{ let h='';
     if(r.pre&&!pre){ pre=true; yr=''; h+=sep(`🧪 ${uniTestWord(LA,true)}${LA?' (launch '+uniD(LA.day)+' se pehle)':''}`); }
     if(r.to.slice(0,4)!==yr){ yr=r.to.slice(0,4); h+=sep('── '+yr+' ──'); }
-    return h+`<tr${r.pre?' style="opacity:.62"':''}><td class="nm" style="white-space:nowrap">${uniSpan(r.from,r.to,true)}${r.partial?` <span class="faint" style="font-weight:400">(sirf ${r.days} din)</span>`:''}<div class="faint" style="font-size:10.5px;font-weight:400">${fmtN(r.users)} installs${r.pre?(LA&&LA.sure===false?' · shayad test':' · test'):''}</div></td>`
+    const rt=uniRelTxt(rels.filter(x=>x.date>=r.from&&x.date<=r.to));
+    if(rt){ nRel++; h+=relSep(rt.line); }
+    return h+`<tr${r.pre?' style="opacity:.62"':''}><td class="nm" style="white-space:nowrap">${uniSpan(r.from,r.to,true)}${r.partial?` <span class="faint" style="font-weight:400">(sirf ${r.days} din)</span>`:''}${rt?`<span class="uni-relb" title="${hAttr(rt.tip)}">📦</span>`:''}<div class="faint" style="font-size:10.5px;font-weight:400">${fmtN(r.users)} installs${r.pre?(LA&&LA.sure===false?' · shayad test':' · test'):''}</div></td>`
     +cols.map((N,j)=>{ const p=(r.p||[])[j]; if(p==null) return '<td class="h"><span class="faint">·</span></td>';
       const end=uniAdd(r.to,N), k=uniKaccha(a,end), inc=uniIncIn(a,r.from,end).length>0, rf=ref[j];
       const tip=(k?'kaccha — late data abhi aa raha, badh sakta hai':'')+(inc?(k?' · ':'')+'data adhoora — GA4 ne kuch din poore nahi diye':'');
       const heat=(r.pre||((k||inc)&&low(p,rf)))?'':uniHeat(p,rf);   // kaccha / adhoora read low: red (more) only, never green; test weeks: no colour
       return `<td class="h" style="${heat}${k?';opacity:.55':''}"${tip?` title="${hAttr(tip)}"`:''}>${uniPct(p)}${inc?'<sup>½</sup>':''}</td>`; }).join('')+'</tr>'; }).join('');
   const lg=a&&a.settled_till?`<div class="faint" style="font-size:10.5px;padding:8px 17px 0">Halka rang = kaccha (din ${uniD(a.settled_till)} ke baad ka — late data abhi aa raha)${uniIncDays(a).length?' · ½ = data adhoora (GA4 ne kuch din poore nahi diye) — dono':' —'} kabhi hara nahi</div>`:'';
-  const more=lg+(vis.length>12?`<div style="padding:10px 17px 14px"><span class="lnk" style="font-size:12px" onclick="uniTX()">${UNITRIEXP?'Kam dikhao':'+'+(vis.length-12)+' aur hafte… sab dikhao'}</span></div>`:'<div style="height:6px"></div>');
+  const rlg=nRel?'<div class="faint" id="uni-rel-lg" style="font-size:10.5px;padding:6px 17px 0">📦 = naya update. Line ke upar wale hafte = naye version ke installs, neeche = purane version ke.</div>':'';
+  const more=lg+rlg+(vis.length>12?`<div style="padding:10px 17px 14px"><span class="lnk" style="font-size:12px" onclick="uniTX()">${UNITRIEXP?'Kam dikhao':'+'+(vis.length-12)+' aur hafte… sab dikhao'}</span></div>`:'<div style="height:6px"></div>');
   return `<div class="uni-scroll"><table class="uni-sticky uni-heat" style="margin-top:4px;min-width:${Math.max(480,190+cols.length*58)}px"><thead>${head}</thead><tbody>${refRow}${avRow}${body}</tbody></table></div>${more}`; }
 const UNI_SECTIONS=[uniDailyCard,uniCurveCard,uniTriCard];   // Step 4: push (a)=>html builders here
 
