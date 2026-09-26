@@ -424,7 +424,11 @@ def _frac_or_none(v):
 def check_head(h, where):
     if h is None:
         return
-    _keys(h, ("p", "prev", "delta_pp", "dir", "alert", "low_sample", "from", "to", "prov"), where)
+    _keys(h, ("p", "prev", "delta_pp", "dir", "alert", "low_sample", "from", "to", "prov", "est", "fb"), where)
+    assert isinstance(h["est"], bool), where
+    if h["fb"] is not None:                                            # older installs: compare's fall-back, as the row's
+        _keys(h["fb"], ("recent", "prev", "n", "days", "kind"), where)
+        assert h["fb"]["kind"] in ("inc", "brk", "both") and all(_iso(x) for x in h["fb"]["days"]), where
     assert _frac_or_none(h["p"]) and _frac_or_none(h["prev"]) and (h["delta_pp"] is None or _num(h["delta_pp"]))
     assert h["dir"] in ("up", "down", None) and isinstance(h["alert"], bool) and isinstance(h["low_sample"], bool)
     assert _iso(h["from"]) and _iso(h["to"]), where
@@ -434,7 +438,7 @@ def check_head(h, where):
 ALERT_KEYS = ("id", "source", "app_id", "app", "family", "dir", "severity", "unit", "checkpoint", "n", "also", "vs",
               "now", "before", "delta_pp", "rel", "z", "installs_from", "installs_to", "base_from", "base_to",
               "since", "day", "users", "opened", "last_seen", "fresh", "notify", "data_till", "message", "text",
-              "provisional")
+              "provisional", "estimate")
 
 
 def check_alert(a, closed=False):
@@ -460,6 +464,8 @@ def check_alert(a, closed=False):
     assert isinstance(a["fresh"], bool) and isinstance(a["notify"], bool)
     assert isinstance(a["provisional"], bool) and not (a["provisional"] and a["dir"] == "down")   # good news: settled
     assert a["text"].endswith(" · abhi ka data kaccha — number aur badh sakta hai") == a["provisional"]
+    assert isinstance(a["estimate"], bool) and not (a["estimate"] and a["family"] != "cohort")
+    assert (" · kuch din ka GA4 data adhoora tha — total ke hisaab se poora kiya (andaza)" in a["text"]) == a["estimate"]
     assert a["message"] == a["app"] + ": " + a["text"]
     assert re.search("[%s-%s]" % (chr(0x900), chr(0x97F)), a["message"]) is None
     if closed:
@@ -498,7 +504,7 @@ def check_asset(asset, summary=None):
     _keys(asset["consts"], ("lag_days", "band_days", "band_k", "recent_k", "prev_k", "head_k", "z", "min_pp",
                             "min_rel", "min_recent_users", "big_recent_users", "zoom_days", "late_days", "thin_min_days",
                             "thin_min_users", "surv_recent_days", "verdict_k", "tri_avg_weeks", "alert_recent_days",
-                            "year_clear_days"), "consts")
+                            "year_clear_days", "impute_min_coverage", "est_mark_pp"), "consts")
     check_lateness(asset["lateness"])
     for n in asset["no_ga4"]:
         _keys(n, ("app_id", "app", "package", "reason", "text"), "no_ga4")
@@ -514,10 +520,13 @@ def check_asset(asset, summary=None):
         assert (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["settled_till"])).days == a["late_days"]
         assert a["fetched_at"] is None or _TS.match(a["fetched_at"])
         _keys(a["flags"], ("truncated", "thresholded", "unplaced_users", "over_100", "kept_old_before",
-                           "incomplete_days", "outdated", "cell_days", "events_span"), "flags")
+                           "incomplete_days", "estimated_days", "outdated", "cell_days", "events_span"), "flags")
         assert isinstance(a["flags"]["outdated"], bool)
         for d, cov in a["flags"]["incomplete_days"].items():             # {day: coverage}, inside the history
             assert _iso(d) and a["history_start"] <= d <= a["data_till"] and _num(cov) and cov < 1
+        for d, cov in a["flags"]["estimated_days"].items():              # {day: coverage}: filled, used (≈)
+            assert _iso(d) and a["history_start"] <= d <= a["data_till"] and _num(cov)
+            assert cov >= asset["consts"]["impute_min_coverage"] and d not in a["flags"]["incomplete_days"]
         check_lateness(a["lateness"])
         H = (date.fromisoformat(a["data_till"]) - date.fromisoformat(a["history_start"])).days + 1
         L = a["launch"]                                                    # test installs before it: hidden, kept
@@ -530,9 +539,10 @@ def check_asset(asset, summary=None):
         start = L["day"] if L["hidden"] else a["history_start"]            # where every install-day number starts
         Hp = (date.fromisoformat(a["data_till"]) - date.fromisoformat(start)).days + 1
         cdays, span = a["flags"]["cell_days"], a["flags"]["events_span"]   # every day: users | events | incomplete
-        _keys(cdays, ("users", "events", "incomplete"), "cell_days")
+        _keys(cdays, ("users", "events", "estimated", "incomplete"), "cell_days")
         assert all(isinstance(v, int) and v >= 0 for v in cdays.values()) and sum(cdays.values()) == H
         assert cdays["incomplete"] == len(a["flags"]["incomplete_days"])
+        assert cdays["estimated"] == len(a["flags"]["estimated_days"])
         assert (span is None) == (cdays["events"] == 0)
         assert span is None or (a["history_start"] <= span[0] <= span[1] <= a["data_till"])
         _keys(a["daily"], ("start", "new", "un", "a28", "upd", "rate", "med", "lo", "hi", "breaks"), "daily")
@@ -558,7 +568,13 @@ def check_asset(asset, summary=None):
         assert [t["n"] for t in a["table"]] == a["checkpoints"]
         for t in a["table"]:
             _keys(t, ("n", "key", "head", "recent", "prev", "all", "dir", "alert", "low_sample", "break_day", "prov",
-                      "inc_day"), "table row")
+                      "inc_day", "fallback"), "table row")
+            fb = t["fallback"]                                             # older installs: what it passed, said
+            if fb is not None:
+                _keys(fb, ("recent", "prev", "n", "days", "kind"), "table fallback")
+                assert (fb["recent"] or fb["prev"]) and fb["kind"] in ("inc", "brk", "both") and fb["n"] >= len(fb["days"]) >= 1
+                assert all(_iso(x) for x in fb["days"]) and fb["days"] == sorted(fb["days"])
+                assert fb["kind"] == "brk" or set(fb["days"]) & set(a["flags"]["incomplete_days"])
             assert t["key"] == "D%d" % t["n"] and (t["break_day"] is None or t["break_day"] in a["daily"]["breaks"])
             assert t["inc_day"] is None or t["inc_day"] in a["flags"]["incomplete_days"]
             assert isinstance(t["prov"], bool) and not (t["dir"] == "down" and t["prov"])
@@ -566,10 +582,17 @@ def check_asset(asset, summary=None):
                 assert t["prov"] == ((date.fromisoformat(t["recent"]["to"]) + timedelta(days=t["n"])).isoformat()
                                      > a["settled_till"]), t
             _keys(t["head"], ("p", "lo", "hi", "users"), "table head")
-            _keys(t["recent"], ("p", "users", "from", "to"), "table recent")
+            _keys(t["recent"], ("p", "users", "from", "to", "k", "est"), "table recent")
+            assert isinstance(t["recent"]["k"], int) and 0 <= t["recent"]["k"] <= 7
             for b in ("prev", "all"):
                 if t[b] is not None:
-                    _keys(t[b], ("p", "users", "from", "to", "delta_pp", "z", "fires"), "table " + b)
+                    _keys(t[b], ("p", "users", "from", "to", "delta_pp", "z", "fires", "est"), "table " + b)
+            for o in (t["recent"], t["prev"], t["all"]):                  # ≈: how much rests on filled days
+                if o is not None and o["est"] is not None:
+                    _keys(o["est"], ("days", "first", "last", "lo", "hi", "share", "pp"), "table est")
+                    assert o["est"]["pp"] >= 0.1
+                    assert o["est"]["days"] >= 1 and o["est"]["first"] in a["flags"]["estimated_days"]
+                    assert o["est"]["last"] in a["flags"]["estimated_days"] and 0 < o["est"]["share"] < 1
         _keys(a["head4"], ("D0", "D1", "D7", "D30"), "detail head4")
         _keys(a["lifetime"], ("p", "users", "un", "rate_all_med"), "lifetime")
         tri = a["triangle"]
@@ -577,7 +600,8 @@ def check_asset(asset, summary=None):
         assert tri["cols"] == a["checkpoints"] and len(tri["ref"]) == len(tri["ref_users"]) == len(tri["avg4"]) == len(tri["cols"])
         got = [(N, av) for N, av in zip(tri["cols"], tri["avg4"]) if av is not None]
         for N, av in got:                                                 # ONE set: the 4 newest settled full weeks
-            _keys(av, ("p", "users", "from", "to", "prov"), "triangle avg4")
+            _keys(av, ("p", "users", "from", "to", "prov", "est"), "triangle avg4")
+            assert isinstance(av["est"], bool)
             f, t = date.fromisoformat(av["from"]), date.fromisoformat(av["to"])
             assert f.weekday() == 0 and (t - f).days == 27 and av["to"] <= a["settled_till"] and av["from"] >= start
             assert (t + timedelta(days=N)).isoformat() <= a["data_till"]   # every one of them reached day N
@@ -594,8 +618,10 @@ def check_asset(asset, summary=None):
         assert sum(r["days"] for r in tri["rows"] if r["pre"]) == H - Hp
         assert [r["pre"] for r in tri["rows"]] == sorted((r["pre"] for r in tri["rows"]))
         for r in tri["rows"]:
-            _keys(r, ("week", "from", "to", "days", "users", "partial", "p", "pre"), "triangle row")
+            _keys(r, ("week", "from", "to", "days", "users", "partial", "p", "pre", "est"), "triangle row")
             assert len(r["p"]) == len(tri["cols"]) and (r["to"] < start) == r["pre"]
+            assert r["est"] == sorted(set(r["est"])) and all(r["p"][j] is not None for j in r["est"])   # ≈ cells
+            assert not r["est"] or a["flags"]["estimated_days"]
         for r in a["releases"]:
             _keys(r, ("date", "version", "kind"), "release")
         old = (date.fromisoformat(a["data_till"]) - timedelta(days=asset["consts"]["alert_recent_days"])).isoformat()
@@ -673,7 +699,7 @@ def check_survival(sv, a, consts):
         all(N < len(sv["all"]["left"]) for N in sv["key_days"]) and not any(N < solid for N in a["checkpoints"]))
     v = sv["verdict"]
     if v is not None:
-        _keys(v, ("n", "recent", "prev", "delta_pp", "z", "fires", "dir", "low_sample"), "verdict")
+        _keys(v, ("n", "recent", "prev", "delta_pp", "z", "fires", "dir", "low_sample", "fallback", "est"), "verdict")
         for w in ("recent", "prev"):
             _keys(v[w], ("from", "to", "users", "k", "left"), "verdict " + w)
         assert v["n"] in (7, 3, 1, 0) and isinstance(v["fires"], bool) and isinstance(v["low_sample"], bool)

@@ -10,7 +10,7 @@ import hashlib
 import json
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 import yaml
@@ -414,9 +414,20 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     assert list(lau["flags"]["incomplete_days"]) == ["2026-09-03"]                  # flagged, shown, no alert from it
     assert any(t["inc_day"] == "2026-09-03" for t in lau["table"])
     assert all(not a["flags"]["incomplete_days"] for a in asset["apps"] if a["app"] != "Demo Launcher")
+    # … and one GA4 only ever returns ~90% of: filled up to its exact total (an estimate, "≈"), used everywhere
+    est = lau["flags"]["estimated_days"]
+    assert list(est) == ["2026-08-20"] and 0.85 < est["2026-08-20"] < 0.97 and lau["flags"]["cell_days"]["estimated"] == 1
+    assert all(not a["flags"]["estimated_days"] for a in asset["apps"] if a is not lau)
+    cf = fx["cohort_files"]["uninstall_c_%s.json.gz" % lau["key"]]            # the "Every day" cells: the filled ones
+    i20 = (date(2026, 8, 20) - date.fromisoformat(cf["start"])).days
+    on20 = sum(u for i, lags in enumerate(cf["lags"]) for lag, u in lags if i + lag == i20) + cf["unplaced"].get("2026-08-20", 0)
+    assert on20 == lau["daily"]["un"][i20]
+    # the still-incomplete 3 Sep never empties a row that has older installs: they take those, and say so
+    assert all(t["recent"]["p"] is not None for t in lau["table"])
+    assert any(t["fallback"] and t["fallback"]["recent"] and t["fallback"]["days"] == ["2026-09-03"] for t in lau["table"])
     # GA4 keeps the Caller's install-day USERS 150 days only: its older days come from the events (used, shown)
     cal = [a for a in asset["apps"] if a["app"] == "Demo Caller – Test App"][0]
-    assert cal["flags"]["cell_days"] == {"users": 155, "events": 85, "incomplete": 0}
+    assert cal["flags"]["cell_days"] == {"users": 155, "events": 85, "estimated": 0, "incomplete": 0}
     assert cal["flags"]["events_span"] == [cal["history_start"], "2026-04-21"]
     assert all(a["flags"]["cell_days"]["events"] == 0 for a in asset["apps"] if a is not cal)
     assert {a["stage"] for a in asset["apps"]} == {"naya", "badh_raha", "stable"}
@@ -565,7 +576,7 @@ def test_a_v2_store_is_checked_data_while_its_repair_waits_and_a_repair_that_bar
     st = gu.load_store(path)                                        # events
     assert st["v"] == gu.STORE_V and st["flags"]["incomplete_days"] == {}
     assert st["cell_src"][short]["src"] == "events_scaled"
-    assert a["flags"]["cell_days"] == {"users": 199, "events": 1, "incomplete": 0}
+    assert a["flags"]["cell_days"] == {"users": 199, "events": 1, "estimated": 0, "incomplete": 0}
     assert gu.load_state(data)["fetch"][tg.A1]["last_kind"] == "repair"
     assert resets == []                                             # half a day of 200 moved: < 1% — its alert
                                                                     # history is kept

@@ -853,7 +853,7 @@ def test_a_day_short_by_users_and_by_events_stays_flagged():
     assert 0.37 < inc[glitch.isoformat()] <= 0.4 and glitch.isoformat() in _src(st, "users")   # 40% × 85% < 40%
     from admob_iq.engine import uninstall as eng
     d, _ = eng.evaluate_app(st, A1, "One", {}, "2026-09-25T12:00:00Z")
-    assert d["flags"]["cell_days"] == {"users": 300 - len(inc), "events": 0, "incomplete": len(inc)}
+    assert d["flags"]["cell_days"] == {"users": 300 - len(inc), "events": 0, "estimated": 0, "incomplete": len(inc)}
 
 
 def test_an_old_events_day_sits_on_the_users_cells_scale_so_a_stable_app_raises_no_alert():

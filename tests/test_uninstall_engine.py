@@ -353,16 +353,37 @@ def test_one_tracking_break_blinds_only_the_install_days_around_it():
             if date.fromisoformat(c) + timedelta(days=int(lag)) == br:
                 del lags[lag]
     spoilt = {br - timedelta(days=k) for k in range(8)}   # the break hit their day 0–7, which still loses ≥0.5%
+
+    def expect(top, N):
+        """(users, from, to, fell back?) of the 7 install days ending at `top` the break leaves — or, when fewer than
+        RECENT_MIN are left, those of the newest EARLIER 7-day window it leaves RECENT_MIN in, slid on while that only
+        gains days: ONE stretch of install days (the few clean ones newer than the break are left out with it, never
+        pooled with older ones)."""
+        bad = spoilt if N >= 7 else {c for c in spoilt if (br - c).days <= N}
+        ok = lambda t: [c for c in (t - timedelta(days=k) for k in range(7)) if c not in bad]     # noqa: E731
+        if len(ok(top)) >= eng.RECENT_MIN:
+            return 3000 * len(ok(top)), ok(top)[-1], ok(top)[0], False
+        while len(ok(top)) < eng.RECENT_MIN or len(ok(top - timedelta(days=1))) > len(ok(top)):
+            top -= timedelta(days=1)
+        return 3000 * len(ok(top)), ok(top)[-1], ok(top)[0], True
     for E in (END, END + timedelta(days=30)):
         d, _, _ = evaluate(st, E=E)
         assert d["daily"]["breaks"] == [br.isoformat()] and d["stage"] == "stable"
         for t in d["table"]:                                  # at EVERY checkpoint only those 8 install days go
-            days = {date.fromisoformat(t["recent"]["to"]) - timedelta(days=k) for k in range(7)}
-            lost = len(days & spoilt) if t["n"] >= 7 else len({c for c in days & spoilt if (br - c).days <= t["n"]})
-            assert t["recent"]["users"] == 3000 * (7 - lost), (E, t["n"])
-            assert t["break_day"] == (br.isoformat() if lost else None) and t["low_sample"] == (lost > 2)
-    rows = {t["n"]: t["recent"]["users"] for t in evaluate(st, E=END)[0]["table"]}
-    assert rows[7] == rows[14] == 9000 and rows[30] == rows[60] == rows[90] == rows[180] == 21000
+            r, fb = t["recent"], t["fallback"]
+            got = (r["users"], date.fromisoformat(r["from"]), date.fromisoformat(r["to"]), bool(fb and fb["recent"]))
+            tops = [E - timedelta(days=t["n"] + late) for late in (0, eng.LATE_DAYS)]    # newest | settled
+            assert got in [expect(top, t["n"]) for top in tops], (E, t["n"], got)
+            assert not t["low_sample"] and (t["break_day"] is None) == (not got[3] and got[0] == 21000)
+            if fb:                                            # it says what it passed (R's or the 4 weeks before's):
+                assert fb["kind"] == "brk" and fb["days"] == [br.isoformat()] and fb["n"] == 1     # that one break
+    rows = {t["n"]: t["recent"] for t in evaluate(st, E=END)[0]["table"]}
+    assert rows[30]["users"] == rows[60]["users"] == rows[90]["users"] == rows[180]["users"] == 21000
+    for N in (7, 14):                                         # never a blank row: ≥ RECENT_MIN days of ONE stretch
+        r = rows[N]
+        assert r["users"] >= 3000 * eng.RECENT_MIN and r["k"] == r["users"] // 3000
+        assert (date.fromisoformat(r["to"]) - date.fromisoformat(r["from"])).days < 7
+    assert rows[7]["users"] == 21000                          # the 7 clean install days right before the break's
 
 
 
@@ -653,8 +674,11 @@ def test_an_incomplete_day_blinds_the_install_days_it_touches_and_never_alerts()
     assert d["alerts"] == [] and list(d["flags"]["incomplete_days"]) == [bad.isoformat()]
     rows = [t for t in d["table"] if t["inc_day"]]
     assert rows and all(t["inc_day"] == bad.isoformat() for t in rows)
-    for t_ in rows:                                                          # every install day it touched: left out
-        assert t_["recent"]["users"] < 7000
+    for t_ in rows:                                                          # every install day it touched: left out —
+        r, fb = t_["recent"], t_["fallback"]                                 # too few left: older ones it doesn't touch
+        assert r["users"] < 7000 or (fb and r["users"] == 7000 and fb["days"] == [bad.isoformat()])
+        assert not (fb and fb["recent"]) or date.fromisoformat(r["from"]) + timedelta(days=t_["n"]) < bad
+    assert any(t_["fallback"] for t_ in rows) and not any(t_["low_sample"] for t_ in d["table"] if t_["fallback"])
     blind = copy.deepcopy(st)
     blind["flags"]["incomplete_days"] = {}                                   # if it were NOT flagged: false good news
     assert any(a["dir"] == "down" for a in evaluate(blind)[0]["alerts"])
@@ -959,13 +983,13 @@ def test_events_scaled_days_are_used_everywhere_and_only_counted():
     for k in ("survival", "triangle", "table", "head4", "lifetime", "curve", "daily", "alerts"):
         assert d[k] == plain[k], k
     assert cohort_alerts(d) and d["flags"]["incomplete_days"] == {}
-    assert d["flags"]["cell_days"] == {"users": 200 - len(old), "events": len(old), "incomplete": 0}
+    assert d["flags"]["cell_days"] == {"users": 200 - len(old), "events": len(old), "estimated": 0, "incomplete": 0}
     assert d["flags"]["events_span"] == [old[0], old[-1]]
     flagged = copy.deepcopy(st)                                    # the same days flagged incomplete: left out
     flagged["flags"]["incomplete_days"] = {k: 0.5 for k in old}
     f, _, _ = evaluate(flagged)
     assert f["survival"]["all"]["n"][0] < d["survival"]["all"]["n"][0]
-    assert f["flags"]["cell_days"] == {"users": 200 - len(old), "events": 0, "incomplete": len(old)}
+    assert f["flags"]["cell_days"] == {"users": 200 - len(old), "events": 0, "estimated": 0, "incomplete": len(old)}
     assert f["flags"]["events_span"] is None
 
 
@@ -1189,3 +1213,196 @@ def test_the_summary_names_the_days_it_leaves_out_by_kind():
     st["daily"][gap.isoformat()]["un"] = 0
     c = evaluate(st)[0]["survival"]["all"]
     assert c["gap_inc"] == sorted(inc) and c["gap_brk"] == [gap.isoformat()] and c["gap_days"] == 3
+
+
+# ── incomplete days: the near-complete ones filled ("andaza"), comparisons never emptied by the rest ─────────
+
+def consistent(st, old=0):
+    """make_store with GA4's arithmetic: each day's app_remove users (daily un) = its install-day cells + `old`
+    users from before the history (unplaced) — make_store's own daily uninstalls are independent of its cells."""
+    st = copy.deepcopy(st)
+    tot = {}
+    for c, lags in st["cohorts"].items():
+        for lag, u in lags.items():
+            k = (date.fromisoformat(c) + timedelta(days=int(lag))).isoformat()
+            tot[k] = tot.get(k, 0) + u
+    for k, r in st["daily"].items():
+        if old:
+            st["unplaced"][k] = old
+        r["un"] = r["un_ev"] = tot.get(k, 0) + old
+    return st
+
+
+def day_total(st, day):
+    """Every user the store places on event day `day`: its install-day cells + its unplaced ones."""
+    t = sum(u for c, lags in st["cohorts"].items() for lag, u in lags.items()
+            if (date.fromisoformat(c) + timedelta(days=int(lag))).isoformat() == day)
+    return t + int((st.get("unplaced") or {}).get(day) or 0)
+
+
+def short(st, shares, old_only=()):
+    """GA4 returned only share × each cell of these event days (rounded: it lost users at random) —
+    or, for the days in old_only, lost only users from BEFORE the history (unplaced) and none of the recent install
+    days' — flagged as the fetch does: {day: cells ÷ un}."""
+    st = copy.deepcopy(st)
+    for day, share in shares.items():
+        if day in old_only:
+            un = st["daily"][day]["un"]
+            st["unplaced"][day] = max(0, int(round(un * share)) - (day_total(st, day) - st["unplaced"].get(day, 0)))
+            continue
+        for c, lags in st["cohorts"].items():
+            for lag in lags:
+                if (date.fromisoformat(c) + timedelta(days=int(lag))).isoformat() == day:
+                    lags[lag] = int(round(lags[lag] * share))
+        if st["unplaced"].get(day):
+            st["unplaced"][day] = int(round(st["unplaced"][day] * share))
+    st["flags"]["incomplete_days"] = {d: round(day_total(st, d) / st["daily"][d]["un"], 4) for d in shares}
+    return st
+
+
+def test_near_complete_days_are_filled_to_their_exact_total_and_the_rest_stay_left_out():
+    st = consistent(make_store(150, 1000), old=80)
+    d95, d75, d50 = ((END - timedelta(days=k)).isoformat() for k in (30, 45, 60))
+    sh = short(st, {d95: 0.95, d75: 0.75, d50: 0.5})
+    assert all(abs(sh["flags"]["incomplete_days"][k] - v) < 0.02 for k, v in ((d95, 0.95), (d75, 0.75), (d50, 0.5)))
+    raw = copy.deepcopy(sh)
+    f = eng.fill_days(sh)
+    assert sh == raw                                               # the store keeps its raw cells and flags
+    assert sorted(f["_est"]["days"]) == [d75, d95] and list(f["flags"]["incomplete_days"]) == [d50]
+    assert f["_est"]["days"][d95] == sh["flags"]["incomplete_days"][d95]
+    for d in (d95, d75):                                           # filled up to the day's exact total, to the user
+        assert day_total(f, d) == f["daily"][d]["un"] and day_total(sh, d) < f["daily"][d]["un"]
+    assert day_total(f, d50) == day_total(sh, d50)                 # under 70%: as it came — left out
+    for c, lags in sh["cohorts"].items():                          # the day scaled as ONE: each cell ~ cell ÷ coverage
+        for lag, u in lags.items():
+            if (date.fromisoformat(c) + timedelta(days=int(lag))).isoformat() == d75:
+                ratio = st["daily"][d75]["un"] / day_total(sh, d75)
+                assert abs(f["cohorts"][c][lag] - u * ratio) < 1
+                assert f["_est"]["add"].get(c, {}).get(int(lag), 0) == f["cohorts"][c][lag] - u
+    assert eng.fill_days(f) is f and eng.fill_days(st) is st       # once only; nothing to fill: the store itself
+    d, _, _ = evaluate(sh)
+    assert list(d["flags"]["estimated_days"]) == [d95, d75][::-1] and list(d["flags"]["incomplete_days"]) == [d50]
+    assert d["flags"]["cell_days"] == {"users": 147, "events": 0, "estimated": 2, "incomplete": 1}
+    assert d["survival"]["all"]["gap_inc"] == [d50]                # only the day still left out costs install days
+    full, _, _ = evaluate(st)                                      # the filled days read like the complete store
+    est_rows = 0
+    for t, u in zip(d["table"], full["table"]):
+        if t["inc_day"] or t["fallback"]:
+            continue
+        assert t["n"] == u["n"] and abs(t["recent"]["p"] - u["recent"]["p"]) < 0.002, t["n"]
+        est_rows += bool(t["recent"]["est"] or (t["prev"] or {}).get("est"))
+    assert est_rows                                                # … and say they rest on an estimate (≈)
+    e = [t["recent"]["est"] for t in d["table"] if t["recent"]["est"]][0]
+    assert e["first"] in (d75, d95) and 0.74 < e["lo"] <= e["hi"] < 0.96 and e["pp"] >= eng.EST_MARK_PP
+
+
+def test_a_window_an_excluded_day_would_empty_falls_back_to_older_clean_installs():
+    st = consistent(make_store(200, 1000))
+    bad = END - timedelta(days=20)
+    d, _, _ = evaluate(short(st, {bad.isoformat(): 0.5}))
+    assert d["alerts"] == [] and list(d["flags"]["incomplete_days"]) == [bad.isoformat()]
+    rows = {t["n"]: t for t in d["table"]}
+    hs = END - timedelta(days=199)                                 # blank only where EVERY install day that reached
+    assert [N for N, t in rows.items() if t["recent"]["p"] is None] == [N for N in rows if bad - timedelta(days=N) <= hs]
+    assert rows[150]["recent"]["p"] is not None and rows[180]["recent"]["p"] is None      # N touches it
+    for N, t in rows.items():
+        if N < 26 or t["recent"]["p"] is None:                    # the newest 7 install days: some untouched
+            continue
+        fb, r = t["fallback"], t["recent"]                        # all 7 touch it: the 7 before them instead
+        assert fb["recent"] and fb["days"] == [bad.isoformat()] and fb["kind"] == "inc" and t["inc_day"] == bad.isoformat()
+        top = date.fromisoformat(r["to"])
+        assert top + timedelta(days=N) < bad and r["users"] == 7000 and not t["low_sample"], N
+        assert (top - date.fromisoformat(r["from"])).days == 6    # the newest ones it doesn't touch
+        if t["prev"]:                                              # the 4 weeks before THEM
+            assert date.fromisoformat(t["prev"]["to"]) < date.fromisoformat(r["from"])
+            assert t["prev"]["users"] == 28000 or date.fromisoformat(t["prev"]["from"]) == hs    # (or all there is)
+    young = consistent(make_store(29, 1000))                      # "—" only when no install day is left at all:
+    bad = END - timedelta(days=10)                                 # a 4-week-old app — from day 18 on, every one of
+    d, _, _ = evaluate(short(young, {bad.isoformat(): 0.5}))      # its install days reached 10 days ago
+    blank = [t["n"] for t in d["table"] if t["recent"]["p"] is None]
+    assert blank == list(range(18, 23))
+    assert all(t["fallback"] is None and t["inc_day"] == bad.isoformat() for t in d["table"] if t["n"] in blank)
+
+
+def test_a_fall_back_is_one_stretch_of_installs_never_old_ones_dated_by_a_few_new_ones():
+    # installs of ~3 months ago left far more (a bad old version); an excluded day sits so that at D45 only the 2
+    # newest install days miss it. Pooled with the 5 clean days before the stretch it spoils, those 2 would date a
+    # "recent" row of mostly 95-day-old installs "…–5 Aug": a D45 ALERT about old installs (the recent-only rule
+    # judges the newest day). ONE stretch instead: the 7 days right before it — old installs, info only
+    lo, hi = END - timedelta(days=97), END - timedelta(days=93)
+    st = consistent(make_store(200, 1000, lags={0: 200, 1: 50, 2: 30, 7: 20, 30: 20},
+                               bump=lambda c: {0: 150} if lo <= c <= hi else None))
+    bad = END - timedelta(days=47)
+    d, _, _ = evaluate(short(st, {bad.isoformat(): 0.5}))
+    t45 = {t["n"]: t for t in d["table"]}[45]
+    r = t45["recent"]
+    assert t45["fallback"]["recent"] and date.fromisoformat(r["to"]) + timedelta(days=45) < bad
+    assert r["k"] == 7 and (date.fromisoformat(r["to"]) - date.fromisoformat(r["from"])).days == 6
+    assert r["p"] > t45["prev"]["p"] + 0.05                                   # the old installs' rise: shown …
+    assert not cohort_alerts(d) and any(o["checkpoint"] == "D45" for o in d["old_changes"])   # … info only
+    for t in d["table"]:                                                      # every window: one stretch of days
+        for w, K in (("recent", eng.RECENT_K), ("prev", eng.PREV_K)):
+            o = t[w]
+            if o and o["from"] and t["fallback"] and t["fallback"]["recent" if w == "recent" else "prev"]:
+                assert (date.fromisoformat(o["to"]) - date.fromisoformat(o["from"])).days < K, (t["n"], w)
+
+
+def test_the_verdict_marks_a_number_the_filling_moved_though_the_other_window_is_untouched():
+    # a filled day touches only the newest 4 settled weeks: their number moved by ≥ EST_MARK_PP points — pooled over
+    # both windows it would read half that and lose its "≈"
+    st = consistent(make_store(120, 1000), old=80)
+    day = (END - timedelta(days=20)).isoformat()
+    v = evaluate(short(st, {day: 0.96}))[0]["survival"]["verdict"]
+    assert v["n"] == 7 and v["prev"]["to"] < v["recent"]["from"] <= (END - timedelta(days=27)).isoformat()   # its day−7
+    e = v["est"]
+    assert e and e["first"] == e["last"] == day and e["pp"] >= eng.EST_MARK_PP
+    assert e["pp"] * v["recent"]["users"] / (v["recent"]["users"] + v["prev"]["users"]) < eng.EST_MARK_PP
+
+
+def test_an_alert_never_rests_on_the_filling_alone(monkeypatch):
+    # nothing changed — but on 2 of the newest days GA4 lost only users of OLD installs (~28% of the day): filled
+    # "as one", those days' newest cells are inflated by ~40%. On the filled cells D0 reads ~7 points higher; on the
+    # cells exactly as GA4 returned them nothing moved. The estimate rule: no alert
+    st = consistent(make_store(90, 700), old=250)
+    days = [(END - timedelta(days=k)).isoformat() for k in (2, 4)]
+    sh = short(st, {k: 0.723 for k in days}, old_only=days)
+    assert all(0.7 <= v < 0.73 for v in sh["flags"]["incomplete_days"].values())
+    d, _, _ = evaluate(sh)
+    t0 = [t for t in d["table"] if t["n"] == 0][0]
+    assert t0["recent"]["est"] and t0["recent"]["p"] > t0["prev"]["p"] + 0.05     # the estimate reads higher …
+    assert not cohort_alerts(d)                                                   # … never an alert on its own
+    monkeypatch.setattr(eng, "_added", lambda cd, idx, N: (0, [0] * len(idx)))    # (without the rule it would be)
+    assert cohort_alerts(evaluate(sh)[0])
+
+
+def test_a_real_change_resting_on_a_filled_day_alerts_and_says_so():
+    st = consistent(make_store(90, 1000, bump=lambda c: {0: 150} if c >= END - timedelta(days=6) else None), old=80)
+    day = (END - timedelta(days=3)).isoformat()                    # a filled day among the newest installs
+    d, _, _ = evaluate(short(st, {day: 0.9}))
+    a = cohort_alerts(d)
+    assert len(a) == 1 and a[0]["dir"] == "up" and a[0]["estimate"] is True
+    assert eng.EST_NOTE in a[0]["text"] and a[0]["text"].endswith(eng.PROV_NOTE)   # PROV_NOTE stays last
+    plain = cohort_alerts(evaluate(st)[0])                         # the same change without a short day: no note
+    assert len(plain) == 1 and plain[0]["estimate"] is False and eng.EST_NOTE not in plain[0]["text"]
+
+
+def test_istrom_like_short_days_fill_every_long_row_with_the_newest_installs():
+    # the live shape: a big stable app whose 15 event days of ~6–11 weeks ago GA4 returned short, users AND events
+    # alike (so the fetch keeps them flagged, {day: coverage} — live 0.91–0.96; here ~0.82–0.93: GA4's short answer
+    # floors every cell of the long tail) — before, one of them blanked every row from 45 days on
+    t = Truth(END - timedelta(days=419), END, 3000, lags=STABLE_LAGS, old_per_day=200)
+    offs = [78] + list(range(72, 63, -1)) + [58, 57, 51, 41, 39]
+    t.short_day = {END - timedelta(days=k): 0.93 + 0.03 * (i % 2) + 0.003 * (i % 3) for i, k in enumerate(offs)}
+    st = truth_store(t, END)
+    inc = st["flags"]["incomplete_days"]
+    assert len(inc) == 15 and all(eng.IMPUTE_MIN_COVERAGE <= v < 0.97 for v in inc.values())
+    d, _, _ = evaluate(st)
+    assert d["stage"] == "stable" and d["flags"]["incomplete_days"] == {} and len(d["flags"]["estimated_days"]) == 15
+    long_ = [t_ for t_ in d["table"] if 45 <= t_["n"] <= 330]
+    assert [t_["n"] for t_ in long_] == [45, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
+    for t_ in long_:                                               # every one filled — by the NEWEST install days
+        r = t_["recent"]
+        assert r["p"] is not None and t_["prev"] and t_["prev"]["p"] is not None and t_["fallback"] is None, t_["n"]
+        assert date.fromisoformat(r["to"]) in {END - timedelta(days=t_["n"] + late) for late in (0, eng.LATE_DAYS)}
+        assert not t_["low_sample"] and t_["inc_day"] is None
+    assert any(t_["recent"]["est"] for t_ in long_) and not cohort_alerts(d)

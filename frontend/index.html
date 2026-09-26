@@ -252,6 +252,7 @@
   .uni-heat tr.uni-rel td.nm{color:var(--purple);font-size:11px;font-weight:700;line-height:1.4;white-space:normal;max-width:170px;overflow-wrap:anywhere}
   .uni-relb{font-size:11px;margin-left:4px;cursor:help}
   .uni-num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .uni-est{color:var(--muted);margin-right:2px;cursor:help;font-weight:600}
   .uni-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .uni-ct{flex-wrap:wrap;gap:6px 12px}
   /* At a glance: big "Stay after N days" tiles, the verdict + daily-rate panels, meta line, footnote */
@@ -2687,7 +2688,10 @@ function uniVerdict(a){
     return {t:'ℹ️ Not enough data', c:'info', sub:old?'Pichhle mahine se tulna abhi nahi — kai din ka GA4 data adhoora/gayab hai, ya installs bahut kam':'Pichhle mahine se tulna ~2 mahine ke data ke baad', news}; }
   const r=v.recent||{}, p=v.prev||{}, g=uniVGap(v), gt=g?' '+uniGapTxt(g):'', k=uniVKind(v);
   // the comparison in one line: the same two numbers the chip's gap is the difference of
-  const cmp=`${uniAfter(v.n)}: <b>${uni100(r.left)}</b> of 100 stay in the last 4 settled weeks (${uniSpan(r.from,r.to)}) vs <b>${uni100(p.left)}</b> in the 4 weeks before (${uniSpan(p.from,p.to)})`;
+  // older installs when the newest touch days whose data is incomplete (↩), ≈ when it rests on filled days
+  const fbt=uniFbTxt(v.fallback), wk=v.fallback&&v.fallback.recent?'4 older settled weeks':'the last 4 settled weeks';
+  const cmp=`${uniAfter(v.n)}: ${uniEstMark(v.est)}<b>${uni100(r.left)}</b> of 100 stay in ${wk} (${uniSpan(r.from,r.to)}) vs <b>${uni100(p.left)}</b> in the 4 weeks before (${uniSpan(p.from,p.to)})`
+    +(fbt?` <span class="faint" title="${hAttr(fbt.tip)}">${fbt.lbl}</span>`:'');
   if(k==='worse') return {t:`⚠️ Worse than last month${gt?' −'+gt.trim():''}`, c:'bad', sub:cmp, news};
   if(k==='better') return {t:`🟢 Better than last month${gt?' +'+gt.trim():''}`, c:'good', sub:cmp, news};
   if(k==='low') return {t:'ℹ️ Not enough data', c:'info', sub:'Installs abhi kam — chhota farak pakka nahi keh sakte. '+cmp, news};
@@ -2726,11 +2730,29 @@ function uniVis(id){ const c=((DATA&&DATA.apps_catalog)||[]).find(x=>x.app_id===
 function uniAlertsFor(){ return ((DATA.uninstall&&DATA.uninstall.alerts)||[]).filter(x=>(!APP||x.app===APP)&&uniVis(x.app_id)); }
 function uniAlertCol(x){ return x.family==='rate_zero'?'var(--watch)':(x.dir==='up'?'var(--bad)':'var(--good)'); }   // 0 uninstalls = tracking break, not good news
 // late data: a day after the app's settled_till is still filling in ("kaccha"); incomplete days = install-day
-// cells GA4 never returned in full ("data adhoora" — no alert is taken from them)
+// cells GA4 never returned in full ("data adhoora" — no alert is taken from them). A near-complete one (≥70% there)
+// is FILLED up to the day's exact total instead (engine fill_days): flags.estimated_days {day: coverage} — used
+// everywhere, a number it moved shows "≈" (an estimate, "andaza")
 function uniKaccha(a,d){ return !!(a&&a.settled_till&&d&&d>a.settled_till); }
 function uniLateDays(){ const c=UNI&&UNI.consts; return (c&&c.late_days!=null)?+c.late_days:7; }
 function uniIncDays(a){ return Object.keys((a&&a.flags&&a.flags.incomplete_days)||{}).sort(); }
 function uniIncIn(a,from,to){ return uniIncDays(a).filter(d=>d>=from&&d<=to); }
+function uniEstDays(a){ return (a&&a.flags&&a.flags.estimated_days)||{}; }
+const uniCov=c=>Math.round(+c*100)+'%';
+// one estimate's tooltip: "is din (10 Jul) ka data ~94% aaya tha — total ke hisaab se poora kiya" — e = the engine's
+// {days, first, last, lo, hi, pp} (or {days, lo, hi} from the flags)
+function uniEstTip(e){ if(!e) return ''; const r=e.lo===e.hi?uniCov(e.lo):uniCov(e.lo)+'–'+uniCov(e.hi);
+  const d=e.days===1?`is din${e.first?' ('+uniD(e.first)+')':''}`:`in ${e.days} dino${e.first?' ('+uniSpan(e.first,e.last)+')':''}`;
+  return `≈ andaza: ${d} ka data ~${r} aaya tha — total ke hisaab se poora kiya`+(e.pp!=null?` (andaze ka hissa ~${(+e.pp).toFixed(1)} point)`:''); }
+const uniEstMark=e=>e?`<span class="uni-est" title="${hAttr(uniEstTip(e))}">≈</span>`:'';
+const UNI_EST_TIP='≈ andaza: in installs ke kuch din ka GA4 data poora nahi aaya tha (70% se zyada aaya) — total ke hisaab se poora kiya';
+// a comparison that took OLDER installs because the newest ones touch days whose data is still incomplete (engine
+// compare's fall-back) → {lbl: English, tip: Hinglish}; fb = {recent, prev, n, days, kind}
+function uniFbTxt(fb){ if(!fb) return null; const ds=(fb.days||[]), w=fb.kind==='brk'?'missing':'incomplete';
+  const dd=fb.n<=2?ds.map(uniD).join(', '):`${fb.n} days`, hw=fb.kind==='brk'?'data gayab (0 uninstall record)':'data adhoora';
+  const col=fb.recent?'':' ("4 weeks before" ke liye)', more=fb.n>ds.length?` (+${fb.n-ds.length} aur din)`:'';
+  return {lbl:`↩ ${fb.recent?'Older installs':'4 weeks before: older installs'} · ${dd}: data ${w}`,
+    tip:`purane installs liye${col} — ${ds.map(uniD).join(', ')}${more} ka ${hw}; ${fb.recent?'naye':'unse pehle ke'} installs un dino ko chhoote the`}; }
 // measured lateness → "2 din purana → 80% · 3 → 88% · 5 → 96% · 7 → 99%" (share of a day's final uninstalls already in)
 function uniLateTxt(L){ if(!L||!Array.isArray(L.ages)||!Array.isArray(L.un)) return '';
   return [2,3,5,7].map(x=>{ const i=L.ages.indexOf(x), v=i<0?null:L.un[i]; return v==null?null:(x===L.ages[0]?x+' din purana → ':x+' → ')+Math.round(v*100)+'%'; }).filter(Boolean).join(' · '); }
@@ -2798,12 +2820,19 @@ function uniCohPrep(j){ if(!j||!j.start||!Array.isArray(j.new)) throw new Error(
 // column — the 4 newest full weeks (Mon–Sun) whose days are all settled — shown for a column only when every one of
 // them reached that day (so the row never goes down); prov = that day is still kaccha for the newest; set = those weeks. ref = the
 // "All-time normal" row = 1 − the app's "hamesha" survival (left) — the engine's ref, the summary's "N din baad X
-// bache"; it never goes down across the columns. No survival at N → no normal ('·').
-function uniTriAll(C,a0,a1,settled,left,first){ const rows=[], f0=Math.max(0,Math.min(first||0,C.n.length));
+// bache"; it never goes down across the columns. No survival at N → no normal ('·'). est = the app's filled days
+// {day: coverage} (flags.estimated_days): a cell whose users they moved by ≥ est_mark_pp points gets "≈" (row.est =
+// its column indexes, avg4[N].est) — the users a filled day added ≈ its cell × (1 − coverage), from the cells here
+function uniTriAll(C,a0,a1,settled,left,first,est){ const rows=[], f0=Math.max(0,Math.min(first||0,C.n.length));
+  const K=(UNI&&UNI.consts)||{}, MP=K.est_mark_pp!=null?+K.est_mark_pp:0.1;
+  const ev=Object.keys(est||{}).map(d=>[uniDiff(C.start,d),1-(+est[d])]).filter(([e,m])=>e>=0&&e<=C.nE&&m>0).sort((x,y)=>x[0]-y[0]);
+  const added=(j,N)=>{ let s=0, lo=0, hi=ev.length; while(lo<hi){ const m=(lo+hi)>>1; if(ev[m][0]<j) lo=m+1; else hi=m; }
+    for(let k=lo;k<ev.length&&ev[k][0]<=j+N;k++){ const L=ev[k][0]-j, c=C.cum[j]; s+=((c[L]||0)-(L?(c[L-1]||0):0))*ev[k][1]; } return s; };
+  const isEst=(j0,j1,N,users)=>{ if(!ev.length||!users) return false; let s=0; for(let j=j0;j<=j1;j++) if(C.n[j]>0) s+=added(j,N); return s*100/users>=MP; };
   const seg=(hi,lo,pre)=>{ let i=hi; while(i>=lo){ const d=uniAdd(C.start,i), i0=Math.max(lo,i-(new Date(_uD(d)).getUTCDay()+6)%7); let users=0;
     for(let j=i0;j<=i;j++) if(C.n[j]>0) users+=C.n[j];
-    const p=[]; for(let N=a0;N<=a1;N++){ if(i+N>C.nE||!users){ p.push(null); continue; } let x=0; for(let j=i0;j<=i;j++) if(C.n[j]>0) x+=C.cum[j][N]||0; p.push(x/users); }
-    rows.push({week:uniWeek(uniAdd(C.start,i0)),from:uniAdd(C.start,i0),to:d,days:i-i0+1,users,partial:(i-i0+1)<7,p,pre}); i=i0-1; } };
+    const p=[], es=[]; for(let N=a0;N<=a1;N++){ if(i+N>C.nE||!users){ p.push(null); continue; } let x=0; for(let j=i0;j<=i;j++) if(C.n[j]>0) x+=C.cum[j][N]||0; p.push(x/users); if(isEst(i0,i,N,users)) es.push(N-a0); }
+    rows.push({week:uniWeek(uniAdd(C.start,i0)),from:uniAdd(C.start,i0),to:d,days:i-i0+1,users,partial:(i-i0+1)<7,p,pre,est:es}); i=i0-1; } };
   seg(Math.min(C.nE,C.n.length-1),f0,false); if(f0>0) seg(f0-1,0,true);
   const L=Array.isArray(left)?left:[], ref=[]; for(let N=a0;N<=a1;N++) ref.push(N<L.length&&L[N]!=null?+(1-L[N]).toFixed(5):null);
   let set=null;
@@ -2811,7 +2840,7 @@ function uniTriAll(C,a0,a1,settled,left,first){ const rows=[], f0=Math.max(0,Mat
     if(j0>=f0) set={f,b,j0,j1}; }
   const avg4=[]; for(let N=a0;N<=a1;N++){ let v=null;
     if(set&&set.j1+N<=C.nE){ let x=0,u=0; for(let j=set.j0;j<=set.j1&&j<C.n.length;j++) if(C.n[j]>0){ x+=C.cum[j][N]||0; u+=C.n[j]; }
-      if(u) v={p:x/u,users:u,from:set.f,to:set.b,prov:uniAdd(set.b,N)>settled}; }
+      if(u) v={p:x/u,users:u,from:set.f,to:set.b,prov:uniAdd(set.b,N)>settled,est:isEst(set.j0,Math.min(set.j1,C.n.length-1),N,u)}; }
     avg4.push(v); }
   let su=0; if(set) for(let j=set.j0;j<=set.j1&&j<C.n.length;j++) su+=C.n[j]>0?C.n[j]:0;
   return {rows,ref,avg4,set:set?{from:set.f,to:set.b,users:su}:null}; }   // set: named even on a page none of its columns reach
@@ -2882,6 +2911,7 @@ function uniAppChip(a,x,xc){ return `<span class="uni-ac" data-app="${hAttr(a.ap
 function uniChangeRow(x,withApp,closed){
   const [sl,sc]=uniSev(x), go=withApp?`uniOpen('${uniQ(x.app_id)}')`:`uniJump('${x.family==='cohort'?'uni-cp':'uni-daily'}')`;
   const tags=(x.provisional&&!closed?'<span class="pill p-b" title="Firebase ka late data abhi aa raha — ye number badh sakta hai">Provisional</span>':'')
+    +(x.estimate?'<span class="pill p-b" title="Kuch din ka GA4 data adhoora tha — total ke hisaab se poora kiya (andaza). Ye badlaav bina andaze ke bhi dikhta hai, isliye alert hai">Estimate</span>':'')
     +(x.fresh&&!closed?'<span class="pill p-p">New</span>':'')+(closed&&x.closed?`<span class="dt">Closed · ${uniD(x.closed)}</span>`:'');
   const act=closed?'':(withApp?'<span class="lnk">Open →</span>':`<span class="lnk" onclick="${go}">Open →</span>`);
   return `<div class="uni-chg ${withApp?'wa':'na'}${closed?' cl':''}"${withApp?` onclick="${go}"`:''}><span class="sv"><span class="pill ${sc}">${sl}</span></span>`
@@ -2976,9 +3006,10 @@ function uniPortfolio(){
   const hcell=hd=>{ if(!hd||hd.p==null) return '<td class="faint" title="abhi data nahi">—</td>';
     const ar=hd.dir==='up'?'▲':(hd.dir==='down'?'▼':''), c=hd.dir==='up'?'var(--bad)':'var(--good)';
     const dp=uniDP(hd.p,hd.prev), sd=uniShownD(hd.p,hd.prev,dp);
-    const tt=uniSpan(hd.from,hd.to)+' ke installs'+(hd.prev!=null?' · pichhle 4 hafte '+uniPctDP(hd.prev,dp):'');
+    const tt=uniSpan(hd.from,hd.to)+' ke installs'+(hd.prev!=null?' · pichhle 4 hafte '+uniPctDP(hd.prev,dp):'')
+      +(hd.fb?' · '+uniFbTxt(hd.fb).tip:'')+(hd.est?' · ≈ andaza: kuch din ka GA4 data poora nahi aaya tha — total ke hisaab se poora kiya':'');
     const kc=hd.prov?'<sup class="faint" title="Provisional — in installs ka ye din abhi late data le raha, number badh sakta hai">*</sup>':'';
-    return `<td class="uni-num" title="${hAttr(tt+(hd.prov?' · provisional (late data aa raha)':''))}">${uniPctDP(hd.p,dp)}${kc}${ar?`<span style="margin-left:5px;${hd.alert?`color:${c};font-weight:800`:'color:var(--faint)'}">${ar}${uniPP(sd!=null?sd:hd.delta_pp)}</span>`:''}${hd.low_sample?' <span class="pill p-b" style="font-size:10px">Low data</span>':''}</td>`; };
+    return `<td class="uni-num" title="${hAttr(tt+(hd.prov?' · provisional (late data aa raha)':''))}">${hd.est?'<span class="uni-est">≈</span>':''}${uniPctDP(hd.p,dp)}${kc}${ar?`<span style="margin-left:5px;${hd.alert?`color:${c};font-weight:800`:'color:var(--faint)'}">${ar}${uniPP(sd!=null?sd:hd.delta_pp)}</span>`:''}${hd.low_sample?' <span class="pill p-b" style="font-size:10px">Low data</span>':''}</td>`; };
   // the number = all time (every settled install); under it, only for a real change judged ON day 7, the verdict's OWN
   // two numbers ("▲ 12→16") — so the arrow never seems to compare with the number beside it
   const s7cell=a=>{ const v=s7(a); if(v==null) return '<td class="faint" title="abhi 7 din ka pakka data nahi">—</td>';
@@ -3069,7 +3100,12 @@ function uniDetail(id,viaApp){
   if(F.unplaced_users>0) fl.push(`<span title="Ye uninstalls kisi install din se jude nahi">${fmtN(F.unplaced_users)} uninstalls without an install day</span>`);
   if(F.over_100>0) fl.push('<span title="Kuch dino ka GA4 count 100% se upar">⚠️ Some GA4 days over 100%</span>');
   const incN=uniIncDays(a).length;   // install-day cells GA4 never returned in full — shown, never alerted on
-  if(incN) fl.push(`<span class="pill p-y" title="${hAttr('GA4 ne '+uniIncDays(a).map(uniD).join(', ')+' ke install-din numbers poore nahi diye — un dino ko chhoone wale install din kisi alert me nahi gine jaate')}">⚠️ Data incomplete · ${incN} ${incN===1?'day':'days'}</span>`);
+  if(incN) fl.push(`<span class="pill p-y" title="${hAttr('GA4 ne '+uniIncDays(a).map(uniD).join(', ')+' ke install-din numbers poore nahi diye (70% se kam aaye) — un dino ko chhoone wale install din kisi alert me nahi gine jaate; jo row isse khali ho jaati, wo purane installs leti hai (↩)')}">⚠️ Data incomplete · ${incN} ${incN===1?'day':'days'}</span>`);
+  // near-complete days (≥70% there) filled up to the day's exact total — used everywhere, numbers they moved say "≈"
+  const ED=uniEstDays(a), edK=Object.keys(ED).sort(), estN=edK.length;
+  if(estN){ const cv=edK.map(k=>+ED[k]), lo=Math.min(...cv), hi=Math.max(...cv);
+    const list=edK.length<=6?edK.map(uniD).join(', '):edK.slice(0,3).map(uniD).join(', ')+' … '+edK.slice(-2).map(uniD).join(', ');
+    fl.push(`<span class="pill p-b" title="${hAttr(uniEstTip({days:estN,lo,hi})+': '+list+'. Ye din sab jagah gine jaate hain; jo number inse badla uspe ≈ hai. Alert tabhi aata hai jab bina andaze ke bhi dikhe')}">≈ Estimate · ${estN} partial ${estN===1?'day':'days'}</span>`); }
   // old days whose install-day users GA4 no longer keeps: estimated from the app_remove events — used, just said
   const evN=(F.cell_days&&F.cell_days.events)||0, evS=F.events_span;
   if(evN) fl.push(`<span class="pill p-b" title="${hAttr('GA4 purane dino ke install-din users poore nahi rakhta — '+(evS?uniSpan(evS[0],evS[1])+' ke beech ke ':'')+'un dino ke numbers uninstall ginti (events) se thoda andaza hain: har din ka total us din ke uninstall users jitna, naye dino ke hisaab se. Ye din sab jagah gine jaate hain, alerts me bhi')}">ℹ️ Estimate · ${evN} old ${evN===1?'day':'days'}</span>`);
@@ -3239,7 +3275,8 @@ function uniCpCard(a){
   const T=a.table||[], LT=a.lifetime||{}, R=a.rate_now||{}, st=UNI_STAGE[a.stage], zt=uniZoomTxt(a.zoom);
   // ⏳ = provisional (these installs' day N is in the last late_days: the % can still grow); "settled" = the row shows the
   // settled comparison instead (a ▼ or a settled alert — its installs are a week older)
-  const cell=(o,dp,k)=>(o&&o.p!=null)?`${uniPctDP(o.p,dp)}<div class="faint" style="font-size:10.5px">${fmtN(o.users)} installs${k===true?' <span title="Provisional — in installs ka ye din abhi late data le raha, % badh sakta hai">⏳</span>':(k===false?' · <span title="pakke data par (late data aa chuka)">settled</span>':'')}</div>`:'<span class="faint">—</span>';
+  // ≈ = the number rests on days whose GA4 data came ~70–99% and were filled up to the day's total (an estimate)
+  const cell=(o,dp,k)=>(o&&o.p!=null)?`${uniEstMark(o.est)}${uniPctDP(o.p,dp)}<div class="faint" style="font-size:10.5px">${fmtN(o.users)} installs${k===true?' <span title="Provisional — in installs ka ye din abhi late data le raha, % badh sakta hai">⏳</span>':(k===false?' · <span title="pakke data par (late data aa chuka)">settled</span>':'')}</div>`:'<span class="faint">—</span>';
   const tt=o=>(o&&o.from)?` title="${hAttr(uniSpan(o.from,o.to)+' ke installs')}"`:'';
   const rows=T.map(t=>{ const r=t.recent||{}, pv=t.prev, al=t.all;
     const hb=(pv&&pv.p!=null)?pv:((al&&al.p!=null)?al:null), dp=uniDP(r.p,hb&&hb.p);   // one precision per row → the row adds up
@@ -3249,18 +3286,21 @@ function uniCpCard(a){
     const bd=dl==null?'<span class="faint">—</span>':`<span style="color:${c};font-weight:${t.alert?800:600}">${ar}${uniPP(dl)} pts</span>`
       +(dA!=null?`<div class="faint" style="font-size:10.5px">vs all time ${uniPP(dA)} pts</div>`:'');
     // a GA4 tracking break (a day with 0 uninstalls) left some install days out: say so, not just "kam data"
-    const brk=t.break_day?`<div class="faint" style="font-size:10.5px" title="Us din GA4 me ek bhi uninstall record nahi hua — uske aas-paas ke install din is row se bahar">⚠️ ${uniD(t.break_day)}: data missing</div>`:'';
-    const inc=t.inc_day?`<div class="faint" style="font-size:10.5px" title="GA4 ne us din ke install-din numbers poore nahi diye — jin install dino ko wo chhoota hai wo is row se bahar">⚠️ ${uniD(t.inc_day)}: data incomplete</div>`:'';
+    const brk=(t.break_day&&!(t.fallback&&t.fallback.kind!=='inc'))?`<div class="faint" style="font-size:10.5px" title="Us din GA4 me ek bhi uninstall record nahi hua — uske aas-paas ke install din is row se bahar">⚠️ ${uniD(t.break_day)}: data missing</div>`:'';
+    // the newest installs touch a day whose data is incomplete (or missing): the row took OLDER installs instead
+    const fbt=uniFbTxt(t.fallback);
+    const inc=fbt?`<div class="faint" style="font-size:10.5px" title="${hAttr(fbt.tip)}">${fbt.lbl}</div>`
+      :(t.inc_day?`<div class="faint" style="font-size:10.5px" title="GA4 ne us din ke install-din numbers poore nahi diye — jin install dino ko wo chhoota hai wo is row se bahar">⚠️ ${uniD(t.inc_day)}: data incomplete</div>`:'');
     const stt=(t.alert?(t.dir==='down'?'<span class="pill p-g">🎉 Better</span>':'<span class="pill p-y">🟠 Worse</span>')
       :oc?`<span class="pill p-b" title="${hAttr(uniOldDays()+' din se purane installs — sirf jaankari, iska alert nahi aata')}">ℹ️ Old installs</span>`
       :(t.low_sample?(t.break_day?'<span class="pill p-b">Data missing</span>':(t.inc_day?'<span class="pill p-b">Data incomplete</span>':'<span class="pill p-b">Low data</span>')):'<span class="faint">Normal</span>'))+brk+inc;
     const kk=t.prov?true:(a.settled_till&&r.to&&!uniKaccha(a,uniAdd(r.to,t.n))&&uniKaccha(a,a.data_till)?false:null);
     return `<tr><td class="nm">${uniDayCol(t.n)}</td><td class="uni-num"${tt(r)}>${cell(r,dp,kk)}</td><td class="uni-num"${tt(pv)}>${cell(pv,dp)}</td><td class="uni-num"${tt(al)}>${cell(al,dp)}</td>
-      <td class="uni-num">${bd}</td><td style="white-space:nowrap">${r.from?uniSpan(r.from,r.to):'—'}</td><td>${stt}</td></tr>`; }).join('')
+      <td class="uni-num">${bd}</td><td style="white-space:nowrap">${r.from?uniSpan(r.from,r.to):'—'}${(t.fallback&&t.fallback.recent&&r.k&&r.from&&uniDiff(r.from,r.to)+1>r.k)?` <span class="faint" title="${hAttr('sirf itne install din gine — beech wale adhoore data wale din ko chhoote the')}">· ${r.k} days</span>`:''}</td><td>${stt}</td></tr>`; }).join('')
     ||`<tr><td colspan="7" class="muted" style="padding:16px">Abhi koi din nahi — ek hafte ke poore installs ke baad aayega.</td></tr>`;
   const stage=(st||zt||a.stage_why)?`<div style="padding:10px 17px 0;display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center">${st?`<span class="pill ${st[0]}">${st[1]}</span>`:''}${zt?`<span class="pill p-p" style="white-space:normal;max-width:100%;overflow-wrap:anywhere" title="Alert ya naye version ke baad kuch hafte har din ki row dikhti hai (sirf key days nahi)">🔍 ${hAttr(zt)}</span>`:''}${a.stage_why?`<span class="faint" style="font-size:11.5px">${hAttr(a.stage_why)}</span>`:''}</div>`:'';
   const life=`<div class="faint" style="font-size:12px;padding:11px 17px 13px;border-top:1px solid var(--line)" title="ab tak kul (har umar ke installs)">♾️ All time: <b style="color:var(--ink2)">${uniPct(LT.p)}</b> of installs gone so far (${fmtN(LT.un)} / ${fmtN(LT.users)}) · daily rate now ${uniRate(R.last7)}/1k, all-time typical ${uniRate(LT.rate_all_med)}/1k</div>`;
-  return `<div class="card pad0" id="uni-cp" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>🧮 Full table — new installs vs before</h3><span class="faint" style="font-size:11.5px">Har row = install ke itne din me kitne % ne app hataya · new = sabse naye 7 install-din · ⏳ = provisional (late data aa raha) · ▼ sirf pakke data se</span></div>${stage}
+  return `<div class="card pad0" id="uni-cp" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>🧮 Full table — new installs vs before</h3><span class="faint" style="font-size:11.5px">Har row = install ke itne din me kitne % ne app hataya · new = sabse naye 7 install-din · ⏳ = provisional (late data aa raha) · ▼ sirf pakke data se${T.some(t=>t.fallback)?' · ↩ = purane installs (naye wale adhoore data wale din ko chhoote the)':''}${T.some(t=>[t.recent,t.prev,t.all].some(o=>o&&o.est))?' · ≈ = andaza (GA4 ne kuch din ka data poora nahi diya — total ke hisaab se poora kiya)':''}</span></div>${stage}
     <div class="uni-scroll" style="margin-top:10px"><table class="uni-sticky" style="min-width:720px"><thead><tr><th>Days after install</th><th>New installs: % gone</th><th>4 weeks before</th><th>All time</th><th>Change</th><th>New installs from</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>${life}</div>`; }
 
 function uniTriCard(a){
@@ -3277,7 +3317,7 @@ function uniTriCard(a){
       else { if(key&&!UNICOHL[key]) loadUNICOH(key,()=>uniRerender()); body='<div class="muted" style="font-size:13px;padding:14px 17px">⏳ har din ka data load ho raha hai…</div>'; } }
     else { const f0=(L&&!UNIPRE)?Math.max(0,uniDiff(C.start,L.day)):0, last=Math.floor((C.nE-f0)/31); if(UNITRIPAGE>last) UNITRIPAGE=last;   // test installs hidden: no pages only they reach
       const a0=UNITRIPAGE*31, a1=Math.min(C.nE-f0,a0+30), cols=[]; for(let N=a0;N<=a1;N++) cols.push(N);
-      const r=uniTriAll(C,a0,a1,a.settled_till,left,L?uniDiff(C.start,L.day):0);
+      const r=uniTriAll(C,a0,a1,a.settled_till,left,L?uniDiff(C.start,L.day):0,uniEstDays(a));
       pager=`<div class="chips" style="align-items:center;margin:0 0 8px">${a0>0?`<span class="chip" onclick="uniTP(${UNITRIPAGE-1})">◀ Days ${a0-31}–${a0-1}</span>`:''}<span class="faint" style="font-size:12px;font-weight:600">Days ${a0}–${a1}</span>${UNITRIPAGE<last?`<span class="chip" onclick="uniTP(${UNITRIPAGE+1})">Day ${a1+1}… ▶</span>`:''}</div>`;
       body=uniTriTable(cols,r.ref,r.rows,a,r.avg4,r.set); } }
   return `<div class="card pad0" id="uni-tri" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>🔺 Install week × day</h3><span class="faint" style="font-size:11.5px">Har row = ek hafte ke installs · laal = normal se zyada hate · hara = kam</span></div>
@@ -3312,9 +3352,9 @@ function uniTriTable(cols,ref,rows,a,avg4,aset){
   const avNote=!set?'Abhi 4 pakke hafte nahi':(reached?`${sp} ke installs — har column me yahi installs; · = abhi itne din nahi hue`:`${sp} ke installs abhi itne din tak nahi pahunche`);
   const avRow=`<tr><td class="nm faint" style="font-size:11.5px;font-weight:600">4-week average<div class="faint" style="font-size:10.5px;font-weight:400;white-space:normal;max-width:170px">${avNote}</div></td>${cols.map((N,j)=>{ const g=(avg4||[])[j];
     if(!g||g.p==null) return `<td class="h" style="color:var(--muted)" title="${hAttr(set?sp+' ke saare installs abhi itne din tak nahi pahunche':'abhi 4 pakke hafte nahi')}">·</td>`;
-    const inc=uniIncIn(a,g.from,uniAdd(g.to,N)).length>0, k=!!g.prov;
-    const tip=uniSpan(g.from,g.to)+' ke installs · '+fmtN(g.users)+' installs'+(k?' · provisional — late data abhi aa raha, badh sakta hai':'')+(inc?' · data incomplete — GA4 ne kuch din poore nahi diye':'');
-    return `<td class="h" style="${(k||inc)&&low(g.p,ref[j])?'':uniHeat(g.p,ref[j])}${k?';opacity:.55':''}" title="${hAttr(tip)}">${uniPct(g.p)}${inc?'<sup>½</sup>':''}</td>`; }).join('')}</tr>`;
+    const inc=uniIncIn(a,g.from,uniAdd(g.to,N)).length>0, k=!!g.prov, es=!!g.est;
+    const tip=uniSpan(g.from,g.to)+' ke installs · '+fmtN(g.users)+' installs'+(k?' · provisional — late data abhi aa raha, badh sakta hai':'')+(inc?' · data incomplete — GA4 ne kuch din poore nahi diye':'')+(es?' · '+UNI_EST_TIP:'');
+    return `<td class="h" style="${(k||inc)&&low(g.p,ref[j])?'':uniHeat(g.p,ref[j])}${k?';opacity:.55':''}" title="${hAttr(tip)}">${es?'<span class="uni-est">≈</span>':''}${uniPct(g.p)}${inc?'<sup>½</sup>':''}</td>`; }).join('')}</tr>`;
   const sep=t=>`<tr class="uni-yr"><td class="nm" style="font-size:11px;font-weight:700;color:var(--muted);white-space:normal;max-width:170px;padding:6px 9px">${t}</td><td colspan="${cols.length}" style="padding:6px 0"></td></tr>`;
   // app updates (the engine's releases): a 📦 line right ABOVE the install week each fell in — the weeks above it are
   // installs of the new version, the ones below of the old one — and a 📦 on that week's label. Only weeks shown here
@@ -3329,11 +3369,12 @@ function uniTriTable(cols,ref,rows,a,avg4,aset){
     if(rt){ nRel++; h+=relSep(rt.line); }
     return h+`<tr${r.pre?' style="opacity:.62"':''}><td class="nm" style="white-space:nowrap">${uniSpan(r.from,r.to,true)}${r.partial?` <span class="faint" style="font-weight:400">(only ${r.days} ${r.days===1?'day':'days'})</span>`:''}${rt?`<span class="uni-relb" title="${hAttr(rt.tip)}">📦</span>`:''}<div class="faint" style="font-size:10.5px;font-weight:400">${fmtN(r.users)} installs${r.pre?(LA&&LA.sure===false?' · maybe test':' · test'):''}</div></td>`
     +cols.map((N,j)=>{ const p=(r.p||[])[j]; if(p==null) return '<td class="h"><span class="faint">·</span></td>';
-      const end=uniAdd(r.to,N), k=uniKaccha(a,end), inc=uniIncIn(a,r.from,end).length>0, rf=ref[j];
-      const tip=(k?'provisional — late data abhi aa raha, badh sakta hai':'')+(inc?(k?' · ':'')+'data incomplete — GA4 ne kuch din poore nahi diye':'');
+      const end=uniAdd(r.to,N), k=uniKaccha(a,end), inc=uniIncIn(a,r.from,end).length>0, rf=ref[j], es=(r.est||[]).includes(j);
+      const tip=[k?'provisional — late data abhi aa raha, badh sakta hai':'',inc?'data incomplete — GA4 ne kuch din poore nahi diye':'',es?UNI_EST_TIP:''].filter(Boolean).join(' · ');
       const heat=(r.pre||((k||inc)&&low(p,rf)))?'':uniHeat(p,rf);   // provisional / incomplete read low: red (more) only, never green; test weeks: no colour
-      return `<td class="h" style="${heat}${k?';opacity:.55':''}"${tip?` title="${hAttr(tip)}"`:''}>${uniPct(p)}${inc?'<sup>½</sup>':''}</td>`; }).join('')+'</tr>'; }).join('');
-  const lg=a&&a.settled_till?`<div class="faint" style="font-size:10.5px;padding:8px 17px 0">Halka rang = provisional (din ${uniD(a.settled_till)} ke baad ka — late data abhi aa raha)${uniIncDays(a).length?' · ½ = data incomplete (GA4 ne kuch din poore nahi diye) — dono':' —'} kabhi hara nahi</div>`:'';
+      return `<td class="h" style="${heat}${k?';opacity:.55':''}"${tip?` title="${hAttr(tip)}"`:''}>${es?'<span class="uni-est">≈</span>':''}${uniPct(p)}${inc?'<sup>½</sup>':''}</td>`; }).join('')+'</tr>'; }).join('');
+  const anyEst=shown.some(r=>(r.est||[]).length)||(avg4||[]).some(g=>g&&g.est);
+  const lg=a&&a.settled_till?`<div class="faint" style="font-size:10.5px;padding:8px 17px 0">Halka rang = provisional (din ${uniD(a.settled_till)} ke baad ka — late data abhi aa raha)${uniIncDays(a).length?' · ½ = data incomplete (GA4 ne kuch din poore nahi diye) — dono':' —'} kabhi hara nahi${anyEst?' · ≈ = andaza (GA4 ne us din ka data ~70–99% diya tha — total ke hisaab se poora kiya)':''}</div>`:'';
   const rlg=nRel?'<div class="faint" id="uni-rel-lg" style="font-size:10.5px;padding:6px 17px 0">📦 = new update. Line ke upar wale hafte = naye version ke installs, neeche = purane version ke.</div>':'';
   const more=lg+rlg+(vis.length>12?`<div style="padding:10px 17px 14px"><span class="lnk" style="font-size:12px" onclick="uniTX()">${UNITRIEXP?'Hide':'Show all'}</span> <span class="faint" style="font-size:11px">${UNITRIEXP?'':'+'+(vis.length-12)+' more weeks'}</span></div>`:'<div style="height:6px"></div>');
   return `<div class="uni-scroll"><table class="uni-sticky uni-heat" style="margin-top:4px;min-width:${Math.max(480,190+cols.length*58)}px"><thead>${head}</thead><tbody>${refRow}${avRow}${body}</tbody></table></div>${more}`; }

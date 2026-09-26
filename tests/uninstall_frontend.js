@@ -229,7 +229,7 @@ for (const a of apps) {
 const gapBad = [];
 for (const a of apps) {
   const t = text(run(`uniSumCard(UNI.apps.find(x=>x.app_id===${JSON.stringify(a.app_id)}))`));
-  const h = t.match(/(?:Worse|Better|Maybe worse|Maybe better) than last month [−+]([\d.]+)/), sb = t.match(/After (?:install day|\d+ days?): ([\d.]+) of 100 stay in the last 4 settled weeks \([^)]*\) vs ([\d.]+) in the 4 weeks before/);
+  const h = t.match(/(?:Worse|Better|Maybe worse|Maybe better) than last month [−+]([\d.]+)/), sb = t.match(/After (?:install day|\d+ days?): (?:≈ ?)?([\d.]+) of 100 stay in (?:the last 4|4 older) settled weeks \([^)]*\) vs ([\d.]+) in the 4 weeks before/);
   if (h && (!sb || Math.abs(Math.abs(parseFloat(sb[1]) - parseFloat(sb[2])) - parseFloat(h[1])) > 1e-9)) gapBad.push(a.app);
 }
 // the curve's value labels (phone, the default 90 days and 30 days): the latest key day shown and day 7 always get one
@@ -353,6 +353,21 @@ console.log(JSON.stringify({
     events_note: has('detail|Demo Caller – Test App|all|30|cp|false', 'ℹ️ Estimate · 85 old days')
       && !apps.some(a => a.app !== 'Demo Caller – Test App' && has(`detail|${a.app}|all|30|cp|false`, 'ℹ️ Estimate ·')),
     incomplete_kept: has('detail|Demo Launcher|all|30|cp|false', '⚠️ Data incomplete · 1 day'),
+    // a near-complete day filled up to its exact total: ONE "≈ Estimate" pill (its tooltip: how much came), a ≈ on the
+    // numbers it moved; a row the still-incomplete day would empty takes OLDER installs and says so (English label,
+    // Hinglish tooltip) — "Data incomplete" stays for that excluded day only
+    estimate_pill: has('detail|Demo Launcher|all|30|cp|false', '≈ Estimate · 1 partial day')
+      && has('detail|Demo Launcher|all|30|cp|false', 'is din ka data ~89% aaya tha — total ke hisaab se poora kiya')
+      && !apps.some(a => a.app !== 'Demo Launcher' && has(`detail|${a.app}|all|30|cp|false`, '≈ Estimate ·')),
+    estimate_cells: ['detail|Demo Launcher|all|90|all|true', 'detail|Demo Launcher|all|30|cp|false'].every(k => has(k, '<span class="uni-est"'))
+      && has('detail|Demo Launcher|all|90|all|true', 'is din (20 Aug) ka data ~89% aaya tha — total ke hisaab se poora kiya')
+      && !apps.some(a => a.app !== 'Demo Launcher' && has(`detail|${a.app}|all|90|all|true`, 'class="uni-est"')),
+    older_installs: has('detail|Demo Launcher|all|90|all|true', '↩ Older installs · 3 Sep: data incomplete')
+      && has('detail|Demo Launcher|all|90|all|true', 'purane installs liye — 3 Sep ka data adhoora')
+      && has('detail|Demo Launcher|all|90|all|true', '↩ 4 weeks before: older installs · 3 Sep: data incomplete')
+      // … and the portfolio's D cells say the same: WHICH window took older installs, and why (a break is "gayab")
+      && has('portfolio_30d', 'purane installs liye (&quot;4 weeks before&quot; ke liye) — 3 Sep ka data adhoora')
+      && has('portfolio_30d', 'purane installs liye — 14 Sep ka data gayab (0 uninstall record)'),
     worse_portfolio: (() => { const p = (out.verdict_worse || '').split('<hr>');
       return p.length === 3 && /data-k="worse"[^>]*><i class="dt"><\/i>Worse than last month <b>\(1\)<\/b>/.test(p[1]) && !/data-xp="/.test(p[1])
         && /data-xp="worse"/.test(p[2]) && text(p[2].split('data-xp="worse"')[1] || '').includes(apps[0].app + ' −5'); })(),
