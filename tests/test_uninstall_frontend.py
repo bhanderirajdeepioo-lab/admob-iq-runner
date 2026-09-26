@@ -527,3 +527,57 @@ def test_update_cards_say_what_their_numbers_are_and_never_hide_a_failure(report
     assert '⏳ Too early' in n["h"] and 'title="Agla update bahut jaldi aa gaya"' in n["h"] and ">No verdict</span>" in n["h"]
     assert ">No verdict</span>" in n["p"]
     assert im["upd_throw"]
+
+
+def test_rows_nobody_judged_show_only_the_plain_change_and_no_headline_comes_from_them(report):
+    # Low data / No data / Pending rows: never a model number (vs expected, net of the trend, "(judged)") — the plain
+    # Before → After "vs before", or —; the folded line and the Recent updates list: a change only from a Worse / Better
+    # row, else "No clear change" (a verdict) or nothing (too early)
+    im = report["impact"]
+    d = im["display"]
+    assert d["rows"] == 7 * len(im["blocks"]) and d["bad"] == [] and d["mini_bad"] == []
+    assert d["vs_before"] >= 1 and d["vs_expected"] >= 1                     # the fixture has both kinds
+    heads = d["heads"]
+    assert len(heads) == 5
+    for h in heads:
+        if h["head_row"] is None:
+            assert h["hl"] == (None if h["lv"] == "pending" else "No clear change"), h
+        else:
+            assert h["head_status"] in ("worse", "better") and h["hl"] and h["hl"] != "No clear change", h
+    assert [h["hl"] for h in heads if h["lv"] == "continue"] == ["No clear change"]
+    # a young app that grew fast before its update (synthetic): Low data rows with a model level beside them
+    s = d["synth"]
+    assert "1,200 1,300 +8.3% vs before Low data Update se pehle app tez badh raha tha (~×6.7/hafta)" in s["dau"]
+    assert "vs expected" not in s["dau"] and "9,000" not in s["dau"] and "−86%" not in s["dau"]
+    assert "+5% vs before" in s["arp"] and "(judged)" not in s["arp"] and "+310%" not in s["arp"]
+    assert "impressions/user +40% · eCPM −30%" in s["arp"]                   # plain Before → After: still said
+    assert "+10% vs before" in s["ses"] and "net of the usual trend" not in s["ses"] and "−60%" not in s["ses"]
+    assert s["mini"].startswith("No clear change · Returning DAU low data · ") and "Ad revenue/user low data" in s["mini"]
+    assert "%" not in s["mini"] and "pts" not in s["mini"]
+    assert s["upd"].count("No clear change") == 2 and "−86%" not in s["upd"]  # a stale head on a Low data row: dropped
+    assert 'Normal trend : update se pehle koi number hafte me ×1.35 se tez badh / ghat raha ho' in im["how"]
+
+
+def test_a_worse_or_better_row_is_headlined_by_what_it_was_judged_on_never_a_number_pointing_the_other_way(report):
+    # the headline (Recent updates) and the folded line: the change a Worse / Better row was JUDGED on, named so —
+    # Returning DAU "vs expected", sessions / time "net of trend", ad revenue on "Ads/user" (a HALT on ads/user −35%
+    # while revenue/user rose +120% on eCPM never reads as a red "+120%"); the open row: a plain change whose sign
+    # contradicts the status is not coloured, the judged number under it is. A block nothing could measure: "Not
+    # enough data yet", never "No clear change"
+    d = report["impact"]["display"]
+    hl = sorted(h["hl"] for h in d["heads"] if h["head_row"])
+    assert hl == ["Ads/user −7.8%", "D1 return +6 pts", "Returning DAU −9.8% vs expected"], hl
+    c = d["contra"]
+    assert '<span class="down">Ads/user −35%</span>' in c["mini"] and "+120%" not in c["mini"]
+    assert '<span class="down">Sessions/user −8% net of trend</span>' in c["mini"] and "+3%" not in c["mini"]
+    assert "Ads/user −35%" in c["upd"] and "+120%" not in c["upd"] and "No clear change" not in c["upd"]
+    assert '<span class="hl down">Ads/user −35%</span>' in c["upd_html"]
+    # the open rows: "+120%" / "+3%" shown plain (not red), the judged "−35%" / "−8%" red
+    assert '<span style="font-weight:700">+120%</span>' in c["arp_cell"], c["arp_cell"]
+    assert 'ads/user <span style="font-weight:700;color:var(--bad)">−35%</span> (judged)' in c["arp_cell"]
+    assert '<span style="font-weight:700">+3%</span>' in c["ses_cell"], c["ses_cell"]
+    assert '<span style="font-weight:700;color:var(--bad)">−8%</span> net of the usual trend' in c["ses_cell"]
+    # nothing measured
+    assert c["nd_mini"].startswith("Not enough data yet · Returning DAU low data · ") and "No clear change" not in c["nd_mini"]
+    assert "Not enough data yet" in c["nd_upd"] and "No clear change" not in c["nd_upd"]
+    assert 'title="Abhi koi number parkha nahi ja saka (Low data / No data)">Not enough data yet</span>' in c["nd_html"]

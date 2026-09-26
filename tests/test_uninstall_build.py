@@ -689,7 +689,7 @@ def test_every_app_update_gets_its_card_in_the_asset_and_the_summary(isite):
     assert rows[A1]["updates"] == [{"key": "ver:1.1@2026-08-26", "label": "v1.1", "date": "2026-08-26", "level": "halt",
                                     "early": False, "final": True, "adoption": b1["adoption"]["last"],
                                     "head": {"row": "returning_dau", "change": b1["rows"]["returning_dau"]["change"],
-                                             "unit": "rel"}}]
+                                             "unit": "rel"}, "judged": 9}]
     al = [a for a in s["alerts"] if a["family"] == "impact"]
     assert [(a["app"], a["severity"], a["level"], a["notify"]) for a in al] == [(N1, "warning", "halt", True)]
     assert al[0]["message"].startswith(N1 + ": v1.1 (26 Aug) ke baad purane users ka DAU ")

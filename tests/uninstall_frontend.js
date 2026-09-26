@@ -236,6 +236,86 @@ for (const f of ['', 'halt', 'hold', 'continue', 'win', 'pending']) {
     rows: [...h.matchAll(/class="uni-upd" data-lv="([a-z]+)"/g)].map(m => m[1]), on: [...h.matchAll(/class="uni-sc [a-z]+ on" data-uf="([a-z]+)"/g)].map(m => m[1]),
     text: itext(h).slice(0, 2500) };
 }
+// the display rule: a Low data / No data / Pending row never shows a model number (vs expected, trend-adjusted,
+// "(judged)") — its plain Before → After "vs before", or —; the folded line and the Recent updates list show a change
+// only from a Worse / Better row ("No clear change" when the verdict found none)
+const IMP_JUDGED = ['worse', 'better', 'same', 'unsure', 'market'], IMP_MODEL = /vs expected|\(judged\)|net of the usual trend|>expected [\d,]/;
+impact.display = { rows: 0, judged: 0, bad: [], vs_expected: 0, vs_before: 0, mini_bad: [], heads: [], synth: null };
+for (const blk of impact.blocks) {
+  const main = blk.html.split('Same days: new version vs old versions')[0];
+  for (const m of main.matchAll(/<tr data-row="([a-z_0-9]+)">([\s\S]*?)<\/tr>/g)) {
+    const st = (m[2].match(/data-st="([a-z]+)"/) || [])[1];
+    impact.display.rows++;
+    if (IMP_JUDGED.includes(st)) { impact.display.judged++; impact.display.vs_expected += m[2].includes(' vs expected<') ? 1 : 0; continue; }
+    impact.display.vs_before += m[2].includes(' vs before<') ? 1 : 0;
+    if (IMP_MODEL.test(m[2])) impact.display.bad.push(blk.app + '|' + blk.key + '|' + m[1] + ': ' + itext(m[2]).slice(0, 200));
+  }
+}
+const MINI_WORD = { same: 'normal', unsure: 'maybe', market: 'market', low: 'low data', pending: '⏳', na: '—' };
+for (const a of apps) for (const b of (a.impact && a.impact.updates) || []) {
+  const h = run(`uniImpMini(${JSON.stringify(b)})`), spans = [...h.matchAll(/<span( class="(up|down)")?>([^<]*)<\/span>/g)].map(m => [m[2] || '', m[3]]);
+  const rows = b.rows || {}, vrows = (b.versions_cmp && b.versions_cmp.rows) || {};
+  const shorts = { returning_dau: 'Returning DAU', new_d1: 'D1 return', new_d7: 'D7 return', sessions: 'Sessions/user', time: 'Time/user', arpdau: 'Ad revenue/user', uninstall_d0: 'Install-day uninstall' };
+  // a Worse / Better row: the change it was JUDGED on, said so (vs expected · net of trend · ads/user), its sign the
+  // status's (up = better, but more install-day uninstalls = worse) — never a plain change pointing the other way
+  const judgedAs = { returning_dau: ['Returning DAU', ' vs expected'], sessions: ['Sessions/user', ' net of trend'], time: ['Time/user', ' net of trend'], arpdau: ['Ads/user', ''] };
+  for (const [k, sh] of Object.entries(shorts)) {
+    const st = rows[k].status, wbk = ['worse', 'better'].includes(st), [lb, sf] = wbk && judgedAs[k] ? judgedAs[k] : [sh, ''];
+    const sp = spans.find(x => x[1].startsWith(lb + ' ')), sg = (st === 'worse') !== (k === 'uninstall_d0') ? '−' : '+';
+    const ok = wbk ? (sp && sp[0] === (st === 'worse' ? 'down' : 'up') && sp[1].startsWith(lb + ' ' + sg) && new RegExp('^' + lb + ' [−+][\\d.]+(%| pts)' + sf + '$').test(sp[1])) : (sp && sp[0] === '' && sp[1] === sh + ' ' + MINI_WORD[st]);
+    if (!ok) impact.display.mini_bad.push(a.app + '|' + b.key + '|' + k + ': ' + (sp ? sp.join('|') : 'missing'));
+  }
+  const all = Object.values(Object.assign({}, rows, vrows)), wb = all.some(r => r && ['worse', 'better'].includes(r.status));
+  const nj = all.filter(r => r && IMP_JUDGED.includes(r.status)).length, lead = nj ? 'No clear change' : 'Not enough data yet';
+  if (h.includes(lead) !== (!wb && !!(b.verdict && b.verdict.level)) || h.includes(nj ? 'Not enough data yet' : 'No clear change')) impact.display.mini_bad.push(a.app + '|' + b.key + ': ' + lead + ' ' + h.includes(lead));
+}
+{ const h = ((out['upd|'] || '').split('id="uni-updates"')[1] || '').split('<div class="card')[0];
+  for (const m of h.matchAll(/<div class="uni-upd" data-lv="([a-z]+)" onclick="uniImpGo\('([^']*)','([^']*)'\)">([\s\S]*?)<span class="lnk go">/g)) {
+    const a = apps.find(x => x.app_id === m[2]), b = ((a && a.impact && a.impact.updates) || []).find(x => x.key === m[3]);
+    const hl = (m[4].match(/<span class="hl [a-z]+"[^>]*>([^<]*)<\/span>/) || [])[1] || null;
+    const u = (FX.dashboard_uninstall.apps.find(r => r.app_id === m[2]) || { updates: [] }).updates.find(x => x.key === m[3]) || {};
+    const r = u.head && b ? (b.rows[u.head.row] || b.versions_cmp.rows[u.head.row]) : null;
+    impact.display.heads.push({ lv: m[1], hl, head_row: u.head ? u.head.row : null, head_status: r ? r.status : null });
+  }
+}
+// a young app that grew fast before its update (synthetic numbers): its rows Low data with a model level beside them
+try { impact.display.synth = JSON.parse(run(`(()=>{ ${RESET} const a0=UNI.apps.find(x=>uniImpBlocks(x).length), a=JSON.parse(JSON.stringify(a0)), b=uniImpBlocks(a)[0];
+  const itx=h=>h.replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/\\s+/g,' ').trim();
+  const why='Update se pehle app tez badh raha tha (~×6.7/hafta) — normal trend pakka nahi, isliye sirf pehle vs baad';
+  for (const r of Object.values(b.rows).concat(Object.values(b.versions_cmp.rows))) if(r.status==='worse'||r.status==='better'){ r.status=r.raw_status='same'; }
+  Object.assign(b.rows.returning_dau,{status:'low',raw_status:'low',before:1200,after:1300,expected:9000,change:-0.8556,z:null,reason:why});
+  Object.assign(b.rows.returning_dau.extra,{raw_change:0.08333,mu_week:1.9,mode:'raw'});
+  Object.assign(b.rows.arpdau,{status:'low',raw_status:'low',before:8,after:8.4,change:0.05,z:null,reason:why.replace('app','kamai per user')});
+  Object.assign(b.rows.arpdau.extra,{imp_adj:3.1,imp_change:0.4,ecpm_change:-0.3});
+  Object.assign(b.rows.sessions,{status:'low',raw_status:'low',before:2,after:2.2,change:0.1,z:null,reason:why});
+  Object.assign(b.rows.sessions.extra,{adj_change:-0.6});
+  b.verdict=Object.assign({},b.verdict,{level:'continue',worse:[],better:[],early:false,final:true});
+  const open=uniImpBlock(a,b,true), mini=uniImpMini(b), tr=k=>(open.split('<tr data-row="'+k+'">')[1]||'').split('</tr>')[0];
+  const s={app:'Demo Young',app_id:a.app_id,updates:[{key:b.key,label:b.label,date:b.date,level:'continue',early:false,final:true,adoption:0.9,head:null},
+    {key:b.key,label:b.label,date:b.date,level:'continue',early:false,final:true,adoption:0.9,head:{row:'returning_dau',change:-0.8556,unit:'rel'}}]};
+  const upd=uniUpdatesCard([{s,a}]);
+  return JSON.stringify({dau:itx(tr('returning_dau')), arp:itx(tr('arpdau')), ses:itx(tr('sessions')), mini:itx(mini), upd:itx(upd)}); })()`)); } catch (e) { errors.push('imp synth: ' + e.message); }
+// a Worse / Better per-user row whose plain change points the other way (synthetic): a HALT on ads/user −35% while
+// revenue/user rose +120% (eCPM), sessions −8% net of a trend while the number rose +3%; and a block nothing could
+// measure (every row Low data / No data: "Not enough data yet", never "No clear change")
+try { impact.display.contra = JSON.parse(run(`(()=>{ ${RESET} const a0=UNI.apps.find(x=>uniImpBlocks(x).length), a=JSON.parse(JSON.stringify(a0)), b=uniImpBlocks(a)[0];
+  const itx=h=>h.replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/\\s+/g,' ').trim();
+  for (const r of Object.values(b.rows).concat(Object.values(b.versions_cmp.rows))) if(r.status==='worse'||r.status==='better'){ r.status=r.raw_status='same'; }
+  Object.assign(b.rows.arpdau,{status:'worse',raw_status:'worse',before:5,after:11,change:1.2,z:-9});
+  Object.assign(b.rows.arpdau.extra,{imp_adj:-0.35,imp_change:-0.3,ecpm_change:2.1});
+  Object.assign(b.rows.sessions,{status:'worse',raw_status:'worse',before:2,after:2.06,change:0.03,z:-6});
+  Object.assign(b.rows.sessions.extra,{adj_change:-0.08});
+  b.verdict=Object.assign({},b.verdict,{level:'halt',worse:['arpdau','sessions'],better:[],early:false,final:true});
+  const open=uniImpBlock(a,b,true), mini=uniImpMini(b), tr=k=>(open.split('<tr data-row="'+k+'">')[1]||'').split('</tr>')[0];
+  const cell=k=>(tr(k).split('<td class="uni-num"')[3]||'');
+  const s={app:'Demo Contra',app_id:a.app_id,updates:[{key:b.key,label:b.label,date:b.date,level:'halt',early:false,final:true,adoption:0.9,head:{row:'arpdau',change:-0.35,unit:'rel'},judged:9}]};
+  const upd=uniUpdatesCard([{s,a}]);
+  const n=JSON.parse(JSON.stringify(b));
+  for (const r of Object.values(n.rows).concat(Object.values(n.versions_cmp.rows))){ r.status=r.raw_status='low'; }
+  n.verdict=Object.assign({},n.verdict,{level:'continue',worse:[],better:[],early:false,final:true});
+  const s2={app:'Demo Nodata',app_id:a.app_id,updates:[{key:b.key,label:b.label,date:b.date,level:'continue',early:false,final:true,adoption:0.9,head:null,judged:0}]};
+  const upd2=uniUpdatesCard([{s:s2,a:null}]);
+  return JSON.stringify({mini:mini, arp_cell:cell('arpdau'), ses_cell:cell('sessions'), upd:itx(upd), upd_html:upd, nd_mini:itx(uniImpMini(n)), nd_upd:itx(upd2), nd_html:upd2}); })()`)); } catch (e) { errors.push('imp contra: ' + e.message); }
 // "Update detail →" (Alerts screen) / a Recent updates row with the header's App ALREADY that app: the page ends on the
 // block (it went back to the top: the jump was cancelled by uniOpen's scroll to the top)
 try { impact.jump_scroll = JSON.parse(run(`(()=>{ const keep={render, show, _navSave, doc:document, win:window}, calls=[];
