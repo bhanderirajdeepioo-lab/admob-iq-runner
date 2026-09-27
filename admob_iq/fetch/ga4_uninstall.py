@@ -1858,7 +1858,8 @@ def store_meta(store):
     return {"v": store.get("v"), "history_start": store.get("history_start"), "window_end": store.get("window_end"),
             "next_rebuild": store.get("next_rebuild"), "covered": store.get("covered") or [],
             "property_id": store.get("property_id"), "stream_id": store.get("stream_id"),
-            "time_zone": store.get("time_zone")}
+            "time_zone": store.get("time_zone"), "impact_v": int(store.get("impact_v") or 0),
+            "ret_done": bool(store.get("ret_from"))}
 
 
 def _store_v(store):
@@ -1976,7 +1977,17 @@ def plan(app_st, store, end, now, cfg):
         return "full"
     if end > _d(store["window_end"]) or holes(store):
         return "full" if (end - incr_start(store, end, cfg["refetch_days"])).days + 1 > FULL_IF_GAP_DAYS else "incr"
-    return None
+    if backfill_due(store):
+        return "incr"                                   # its usage / vuse or return-cohort history is still coming in:
+    return None                                         # read on as soon as min_hours allows, not on the next GA4 day
+
+
+def backfill_due(store):
+    """A store (or its meta) whose update-impact data (usage / vuse, impact_v) or return-cohort history (ret_from: the
+    edge found or history_start reached) isn't whole yet. A meta from before these keys never says so."""
+    if "impact_v" in store and int(store.get("impact_v") or 0) < IMPACT_V:
+        return True
+    return store.get("ret_done") is False
 
 
 def _fail_kind(e):

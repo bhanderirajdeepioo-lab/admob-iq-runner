@@ -220,6 +220,27 @@ def test_plan_is_once_per_20h_when_the_day_moved_retries_after_3h_and_rebuilds_o
     assert gu.plan(rej, v1, END + timedelta(days=1), NOW + timedelta(hours=24), cfg) == "full"
 
 
+def test_a_store_still_backfilling_its_impact_or_return_history_is_read_on_without_waiting_for_a_new_day():
+    cfg = dict(CFG)
+    ok = {"property_id": PID, "stream_id": S1, "last_ok": "2026-09-24T12:00:00Z", "last_try": "2026-09-24T12:00:00Z"}
+    store = {"v": gu.STORE_V, "history_start": "2026-01-01", "window_end": "2026-09-23", "next_rebuild": "2026-10-10",
+             "covered": [["2026-01-01", "2026-09-23"]], "property_id": PID, "stream_id": S1}
+    whole = gu.store_meta(dict(store, impact_v=gu.IMPACT_V, ret_from="2026-01-01"))
+    assert whole["impact_v"] == gu.IMPACT_V and whole["ret_done"] is True
+    assert gu.plan(ok, whole, END, NOW, cfg) is None                                         # nothing new, all whole
+    no_usage = gu.store_meta(dict(store, ret_from="2026-01-01"))                             # usage / vuse not read yet
+    walking = gu.store_meta(dict(store, impact_v=gu.IMPACT_V, ret_to="2026-05-01"))          # return history mid-way
+    for meta in (no_usage, walking):
+        assert gu.backfill_due(meta) and gu.plan(ok, meta, END, NOW, cfg) == "incr"         # read on now …
+        assert gu.plan(dict(ok, last_ok="2026-09-25T00:00:00Z"), meta, END, NOW, cfg) is None   # … min_hours still rules
+        assert gu.plan(dict(ok, last_ok="2026-09-25T10:00:00Z"), meta, END, NOW, dict(cfg, min_hours=1)) == "incr"
+    old_meta = {k: v for k, v in no_usage.items() if k not in ("impact_v", "ret_done")}      # a meta from before the keys
+    assert not gu.backfill_due(old_meta) and gu.plan(ok, old_meta, END, NOW, cfg) is None
+    assert not gu.backfill_due(dict(store, impact_v=gu.IMPACT_V))                             # a full store: no ret_done
+    assert gu.plan(ok, dict(no_usage, window_end="2026-05-01", covered=[["2026-01-01", "2026-05-01"]]),
+                   END, NOW, cfg) == "full"                                                  # a big gap still re-pulls
+
+
 def test_env_overrides_reach_the_uninstall_config(monkeypatch):
     from admob_iq.config import settings
     from admob_iq.uninstall_build import ga4_cfg
