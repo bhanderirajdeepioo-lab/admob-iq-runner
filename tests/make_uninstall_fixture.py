@@ -407,7 +407,7 @@ def build_active_fixture(work_dir):
                 if rv.get("all_days"):
                     rev["all_apps"][aid] = {k: v for k, v in rv["all_days"].items() if k <= till.isoformat()}
             dashboard = {"apps_catalog": catalog, "kpis": {"revenue": 1.0}, "alerts": {"items": []}}
-            build_static._uninstall_step(dashboard, data_dir, out_dir, s, revenue=rev)
+            build_static._uninstall_step(dashboard, data_dir, out_dir, s, revenue=rev, now=now)   # pinned clock
             res = build_static.send_alerts(dashboard, s)
             sent.append({"run": now.strftime("%Y-%m-%dT%H:%MZ"),
                          "telegram": next((r["text"] for r in res if r["channel"] == "telegram"), None),

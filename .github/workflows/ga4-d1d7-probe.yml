@@ -1,0 +1,43 @@
+# One-off: can the owner's one-day "Country + First session date" report give D1 / D7 (new users back next day /
+# after 7 days) for OLD install days too? See admob_iq/fetch/ga4_d1d7_probe.py. Read-only against GA4.
+# Input (the build's app routes) and output (ga4/d1d7_probe.json) live in the PRIVATE repo. This repo's Actions log is
+# PUBLIC: it shows progress counts and one line of counts only; stderr (which could echo request details) is hidden.
+name: ga4-d1d7-probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_apps:
+        description: "probe only the first N apps (0 = all)"
+        required: false
+        default: "0"
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-d1d7-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30          # the probe stops starting GA4 calls after 22 min and then writes what it has
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Run
+        env:
+          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          PROBE_MAX_APPS: ${{ github.event.inputs.max_apps }}
+          PYTHONUNBUFFERED: "1"
+        run: python -m admob_iq.fetch.ga4_d1d7_probe 2>/tmp/d1d7.err || { echo "::error::d1d7 probe failed (details kept off the public log)"; exit 1; }

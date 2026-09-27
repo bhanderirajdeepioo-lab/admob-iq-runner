@@ -275,14 +275,14 @@ def account_tzs(accounts, s, report_tz, mode, has_creds):
     return out
 
 
-def _uninstall_step(dashboard, data_dir, out_dir, s, revenue=None):
+def _uninstall_step(dashboard, data_dir, out_dir, s, revenue=None, now=None):
     """GA4 Uninstall tab (admob_iq.uninstall_build) → the site file names it wrote. OPTIONAL: on ANY failure
     the dashboard is left exactly as the AdMob build made it, and the log gets the error TYPE only (GA4
     error texts can carry property / stream ids, and this log is public). revenue = admob_revenue (the update-impact
-    card's ARPDAU)."""
+    card's ARPDAU). now: the build's clock (None: the real one — tests and the fixture pin it)."""
     try:
         from .uninstall_build import run_uninstall
-        files = run_uninstall(dashboard, data_dir, out_dir, s, revenue=revenue) or []
+        files = run_uninstall(dashboard, data_dir, out_dir, s, now=now, revenue=revenue) or []
     except Exception as e:
         dashboard.pop("uninstall", None)
         dashboard.pop("active", None)              # (an Active alert must never stay due without its summary)
