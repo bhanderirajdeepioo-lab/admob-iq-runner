@@ -890,6 +890,12 @@ def test_backfill_due_uses_iday_done():
     assert gu.plan(just, meta, END, NOW + timedelta(hours=gu.IDAY_EVERY_HOURS), cfg) == "iday"
     # a new settled GA4 day wins over it: the app's real fetch, as without GA4_IDAY
     assert gu.plan(filling, meta, END + timedelta(days=1), NOW, cfg) == gu.plan(ok, meta, END + timedelta(days=1), NOW, CFG)
+    # GA4_IDAY just switched on: an app with no install-value history yet starts it at once (its own kind — the app's
+    # next real fetch keeps its min_hours clock), not only after that real fetch
+    never = dict(ok, last_ok="2026-09-25T09:00:00Z")                          # fetched 3h ago, no "iday" yet
+    assert "iday" not in never and gu.plan(never, meta, END, NOW, cfg) == "iday"
+    assert gu.plan(never, meta, END, NOW, CFG) is None                        # GA4_IDAY off: never
+    assert gu.plan(dict(never, last_iday="2026-09-25T11:00:00Z"), meta, END, NOW, cfg) is None   # every 2 h at most
 
 
 def test_iday_only_fetch_never_holds_back_the_new_day(monkeypatch, tmp_path):

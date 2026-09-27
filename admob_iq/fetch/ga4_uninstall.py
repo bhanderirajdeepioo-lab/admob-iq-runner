@@ -2011,8 +2011,10 @@ def iday_due(app_st, cfg, now):
     never moved — for an app whose install-value history is still coming in (state.fetch[aid].iday.done False), at
     most every IDAY_EVERY_HOURS. It runs after every app that is due for real in the run, on the time left, so a new
     GA4 day is never held back by it: the uninstall / Active fetch of the next settled day keeps its own min_hours
-    clock. None otherwise."""
-    if not cfg.get("iday") or (app_st.get("iday") or {}).get("done") is not False:
+    clock. An app whose install-value history never started (no state.fetch[aid].iday yet — GA4_IDAY just switched
+    on) is due too, so the backfill starts at once instead of waiting for the app's next real fetch. None otherwise."""
+    ida = app_st.get("iday")
+    if not cfg.get("iday") or (ida is not None and ida.get("done") is not False):
         return None
     if _hours_since(app_st.get("last_iday"), now) < IDAY_EVERY_HOURS:
         return None
