@@ -466,6 +466,22 @@ def test_return_daily_chart(report, fixture):
         assert c["edge_mark"] == (E.get("ret_state") == "found" and bool(E.get("ret_from"))), c
 
 
+def test_return_chart_rate_is_over_the_install_days_new_users(report):
+    """The by-install-day chart divides by the install day's GA4 new users (Firebase's "New users" base): the cohort's
+    own total t changing moves nothing, new users changing moves the points."""
+    got = [c for c in report["retbase"] if c["n"]]
+    assert got, report["retbase"]
+    assert all(c["t_same"] and c["new_moves"] for c in got), got
+
+
+def test_grid_week_installs_unknown_reads_dash_never_0(report):
+    """A grid week without a rate day has unknown installs (null): its label reads "— installs", never "0 installs"."""
+    assert report["ginst"], report["ginst"]
+    for g in report["ginst"]:
+        assert "— installs" in g["none"] and not re.search(r"(^|\s)0 installs", g["none"]), g
+        assert "12,345 installs" in g["some"], g
+
+
 def test_edge_states_render(report, fixture):
     for r in rows(fixture):
         E = det(fixture, r).get("edges") or {}

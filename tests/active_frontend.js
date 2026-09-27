@@ -220,6 +220,19 @@ for (const r of rows) {
       state: (d.edges || {}).ret_state, ret_from: (d.edges || {}).ret_from || null, chips: [...h.matchAll(/onclick="actRN\((\d+)\)"/g)].map(x => +x[1]) });
   }
 }
+// the return chart's base: the install day's GA4 new users (daily.new — Firebase's "New users"), never the cohort's own
+// total coh.t: t scaled changes nothing, new scaled moves the points
+const retbase = [];
+for (const r of rows) {
+  const d = dets[r.key]; if (!d || !(d.daily || {}).coh || !(((d.tri || {}).nmax || 0) >= 1) || (d.edges || {}).ret_state === 'wait') continue;
+  const vals = mut => { const h = run(`(()=>{ ${RESET} ${openApp(r)} ACTRANGE='all'; ACTRETN=1; const d=JSON.parse(JSON.stringify(ACTD[${J(r.key)}])), D=d.daily; ${mut} return actTriCard(d); })()`);
+    const m = (h.split('id="act-ret-chart"')[1] || '').match(/data-pts='([^']*)'/);
+    return m ? JSON.parse(m[1].replace(/&#39;/g, "'").replace(/&amp;/g, '&')).map(p => p.v) : null; };
+  try {
+    const base = vals(''), tx = vals('D.coh.t=D.coh.t.map(x=>x==null?x:x*3+7);'), nx = vals('D.new=D.new.map(x=>x==null?x:x*2);');
+    retbase.push({ app: r.app, n: base ? base.filter(v => v !== '—').length : 0, t_same: J(base) === J(tx), new_moves: J(base) !== J(nx) });
+  } catch (e) { errors.push('retbase ' + r.app + ': ' + e.message); }
+}
 // the grid: rows, year separators, test weeks, 📦 lines, provisional cells never coloured — phone (cols_phone) and desktop
 const grid = [];
 for (const r of rows) {
@@ -341,9 +354,19 @@ for (const r of rows) {
     if (t.cls === 'p-g' && !al.some(x => (AM[t.m] || []).includes(x.metric) && x.severity === 'good')) colour.push(r.app + ' ' + t.m + ' green');
   }
 }
+// the grid's "N installs" (the rate's base): unknown (null — a week without a rate day) reads "—", never 0
+const ginst = [];
+for (const r of rows) {
+  const d = dets[r.key]; if (!d || !((d.tri || {}).rows || []).length || (d.edges || {}).ret_state === 'wait') continue;
+  const lab = u => { const h = run(`(()=>{ ${RESET} ${openApp(r)} ACTPRE=true; ACTTRIEXP=true; const d=JSON.parse(JSON.stringify(ACTD[${J(r.key)}])); d.tri.rows.forEach(x=>{ x.users=${J(u)}; }); return actTriCard(d); })()`);
+    const tb = (h.split('<tbody>')[1] || '').split('</tbody>')[0], m = tb.match(/data-week="[^"]*"><td class="nm"[\s\S]*?<\/td>/);
+    return m ? text(m[0]).trim() : null; };
+  try { ginst.push({ app: r.app, none: lab(null), some: lab(12345) }); } catch (e) { errors.push('ginst ' + r.app + ': ' + e.message); }
+  break;
+}
 console.log(JSON.stringify({
   scenarios: Object.keys(out).length, errors, bad, jargon: jargon.slice(0, 20), devanagari, titles: String(run('TITLES.active.join("|")')),
-  apps, portfolio, imp, ids, header, gofrom, alerts, syn, retc, grid, colour,
+  apps, portfolio, imp, ids, header, gofrom, alerts, syn, retc, retbase, ginst, grid, colour,
   fix: { rev_market: text(sec(fx2.rev_market, 'class="act-mk"', '</div></div>')).trim(), pf_market_now: text(sec(fx2.pf_market_now, 'id="act-market">', '</div>')).trim(),
     pf_market_old: text(sec(fx2.pf_market_old, 'id="act-market">', '</div>')).trim(), inst_opp: text(fx2.inst_opp), inst_same: text(fx2.inst_same), inst_zero: text(fx2.inst_zero),
     hint_ads: text(fx2.hint_ads), hint_ret: text(fx2.hint_ret), linked: text(fx2.linked),

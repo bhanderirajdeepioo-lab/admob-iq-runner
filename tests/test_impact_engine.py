@@ -4,6 +4,7 @@ update cuts, a hotfix is the same update), the owner's four must-haves (returnin
 back on day 1 / 7, sessions / time per returning user, ad revenue per user) + uninstall on install day + the same-days
 new-vs-old version table, the verdict, persistence, the alerts, the contract — and no false alarms from plain noise."""
 
+import copy
 import math
 import re
 import sys
@@ -198,6 +199,51 @@ def test_fewer_new_users_back_next_day_is_worse():
     assert r["extra"]["installs_before"] == r["extra"]["installs_after"] == 14000 and r["extra"]["phi"] == 1.0
     assert b["rows"]["new_d7"]["status"] == "same" and b["verdict"]["level"] == "halt"     # −4 points ≥ 2× 1.5
     assert "installs_swing" not in b["notes"]
+
+
+def test_new_users_back_is_over_the_install_days_ga4_new_users_never_the_cohort_total():
+    """D1 / D7 = Σ returners ÷ Σ the install days' GA4 new users (Firebase's "New users"); the cohort's own total t and
+    the app's cohort scale ret_k (both 8% above new here) never divide — nor scale the returning DAU's expected level
+    (ρ̂ per new user × the installs that came)."""
+    st, rv = one(rho=_rho(0.26))
+    b0 = blk(run(st, rv)[0], R0)
+    for e in st["ret"].values():
+        e["t"] = int(round(e["t"] * 1.08))
+    st["flags"]["impact"]["ret_k"] = 1.08
+    b = blk(run(st, rv)[0], R0)
+    r = b["rows"]["new_d1"]
+    assert (r["before"], r["after"], r["change"], r["status"]) == (0.3, 0.26, -4.0, "worse")
+    assert r["extra"]["installs_before"] == r["extra"]["installs_after"] == 14000             # Σ new, not Σ t (15,120)
+    for k in ("new_d1", "new_d7", "returning_dau"):
+        x, y = b["rows"][k], b0["rows"][k]
+        assert (x["before"], x["after"], x.get("expected"), x["change"], x["status"]) == \
+            (y["before"], y["after"], y.get("expected"), y["change"], y["status"]), k
+    assert b["verdict"]["level"] == b0["verdict"]["level"] == "halt"
+    gone = (R0 + timedelta(days=2)).isoformat()                     # an after-install day with unknown new users:
+    del st["daily"][gone]                                           # no rate (never 0) — left out of both sums
+    r2 = blk(run(st, rv)[0], R0)["rows"]["new_d1"]
+    assert r2["n_after"] == 6 and r2["extra"]["installs_after"] == 12000 and r2["after"] == 0.26
+
+
+def test_complete_cohorts_without_their_install_days_new_users_say_so_never_next_fetch():
+    """A complete cohort whose install day's GA4 new users are unknown has no base for the rate: the row says that
+    (NA_NO_NEW) — never "next fetch", which would not bring it. A cohort read short still says too old, nothing read yet
+    still says next fetch."""
+    st, rv = one(rho=_rho(0.26))
+    for j in range(8):                                               # the after-install days R0 .. R0 + 7
+        del st["daily"][(R0 + timedelta(days=j)).isoformat()]["new"]
+    b = blk(run(st, rv)[0], R0)
+    for k in ("new_d1", "new_d7"):
+        assert (b["rows"][k]["status"], b["rows"][k]["reason"]) == ("na", imp.NA_NO_NEW), k
+    assert imp.NA_NO_NEW == "GA4 me in install dino ke naye users (New users) ki ginti nahi — 100 me kitne, ye nahi " \
+                            "nikal sakta"
+    st2 = copy.deepcopy(st)
+    for c in (R0 + timedelta(days=j) for j in range(8)):
+        st2["ret"][c.isoformat()]["ok"] = False                     # read short too: GA4 no longer keeps it
+    assert blk(run(st2, rv)[0], R0)["rows"]["new_d1"]["reason"] == imp.NA_OLD
+    for c in (R0 + timedelta(days=j) for j in range(8)):
+        st["ret"].pop(c.isoformat())                                # not read at all yet
+    assert blk(run(st, rv)[0], R0)["rows"]["new_d1"]["reason"] == imp.NA_NOT_YET
 
 
 def test_with_installs_up_80_percent_a_d1_drop_is_still_shown_but_only_secondary():

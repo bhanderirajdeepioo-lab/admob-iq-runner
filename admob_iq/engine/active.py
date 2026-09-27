@@ -11,6 +11,9 @@ row.
   * OLD USERS O(d) = R(d) − Y(d), Y = the recent installs coming back (the return cohorts where GA4 gave them, else the
     installs × the measured return rates ρ̂ — "≈", model mode). No ρ̂ yet (or more than MODEL_BACK_DAYS before its first
     window): no O at all.
+  * RETURN RATES (D1 … D30 — tiles, chart, grid, act_return, ρ̂): day-N returners (the usable cohort's a[N]) ÷ the
+    install day's GA4 new users (daily "new" = Firebase's "New users" base), pooled Σ a ÷ Σ new over the same install
+    days. The cohort's own total t only decides whether it is usable; an install day with new unknown or 0 has no rate.
   * DAILY NORMAL BAND ("FAST"): the median of the last 7 base days × a weekday factor, its residuals' own centre and
     spread; the band is ±BAND_K spreads = the spike threshold, so a dot outside the band is a What-changed row.
   * TILES: the last 7 SETTLED days vs the 28 before, judged against the same statistic at earlier ends (an empirical
@@ -328,10 +331,10 @@ def _psum(p, a, b):
 
 
 def returners(P, d, rho, K):
-    """Y(d) = Σ_{k=1..K} (the cohort d−k's day-k actives when it is usable, else its installs × ret_k × ρ̂_k) → (Y, the
-    imputed part)."""
+    """Y(d) = Σ_{k=1..K} (the cohort d−k's day-k actives when it is usable, else its installs × ρ̂_k — ρ̂ is already
+    per GA4 new user, so no cohort scale) → (Y, the imputed part)."""
     y = yi = 0.0
-    A, usable, new, rk = P["A"], P["usable"], P["new"], P["ret_k"]
+    A, usable, new = P["A"], P["usable"], P["new"]
     for k in range(1, K + 1):
         c = d - k
         if c < 0:
@@ -340,14 +343,14 @@ def returners(P, d, rho, K):
         if usable[c] and a is not None and len(a) > k:
             y += a[k]
         else:
-            v = (new[c] or 0) * rk * rho[k]
+            v = (new[c] or 0) * rho[k]
             y, yi = y + v, yi + v
     return y, yi
 
 
 def _rho_at(P, d):
-    """ρ̂_k at day index d over the usable install days [d−28−k, d−1−k] with c + k ≤ S, ≥ 14 of them; K = the last k
-    every k' ≤ k qualifies for → (rho, K) or None."""
+    """ρ̂_k at day index d = Σ day-k returners ÷ Σ the install days' GA4 new users over the rate days (usable, new > 0)
+    [d−28−k, d−1−k] with c + k ≤ S, ≥ 14 of them; K = the last k every k' ≤ k qualifies for → (rho, K) or None."""
     rho, K, iS = {}, 0, P["iS"]
     for k in range(1, COHORT_DAYS + 1):
         hi, lo = min(d - 1 - k, iS - k), max(0, d - 28 - k)
@@ -356,10 +359,10 @@ def _rho_at(P, d):
         pc = P["PC"][k]
         if pc[hi + 1] - pc[lo] < 14:
             break
-        t = P["PT"][k][hi + 1] - P["PT"][k][lo]
-        if t <= 0:
+        n = P["PN"][k][hi + 1] - P["PN"][k][lo]
+        if n <= 0:
             break
-        rho[k], K = (P["PA"][k][hi + 1] - P["PA"][k][lo]) / t, k
+        rho[k], K = (P["PA"][k][hi + 1] - P["PA"][k][lo]) / n, k
     return (rho, K) if K else None
 
 
@@ -473,7 +476,7 @@ def prepare(store, udet, revenue, E, cfg=None, late_un=U.LATE_DAYS):
     wd0 = hs.weekday()
     wd = [(wd0 + i) % 7 for i in range(H)]
     P = {"hs": hs, "E": E, "S": S, "H": H, "iS": iS, "iE": H - 1, "i0": i0, "days": days, "iso": iso, "wd": wd,
-         "cx": cx, "tz": store.get("time_zone") or "UTC", "ret_k": cx["ret_k"],
+         "cx": cx, "tz": store.get("time_zone") or "UTC",
          "launch_day": _d(launch["day"]) if launch.get("day") else hs, "cfg": cfg}
     # daily totals
     daily = store.get("daily") or {}
@@ -539,16 +542,20 @@ def prepare(store, udet, revenue, E, cfg=None, late_un=U.LATE_DAYS):
         if rf and days[i] < rf:
             continue
         usable[i] = True
-    PA, PT, PC = [None] * (COHORT_DAYS + 1), [None] * (COHORT_DAYS + 1), [None] * (COHORT_DAYS + 1)
+    # every return rate = Σ day-N returners (the usable cohort's a[N]) ÷ Σ the install days' GA4 new users (daily
+    # "new" — Firebase's "New users" base; t only decides above whether a cohort is usable): a rate day is usable with
+    # new > 0 — new unknown or 0 has no rate (never 0)
+    rd = [usable[i] and new[i] is not None and new[i] > 0 for i in range(H)]
+    PA, PN, PC = [None] * (COHORT_DAYS + 1), [None] * (COHORT_DAYS + 1), [None] * (COHORT_DAYS + 1)
     for N in range(1, COHORT_DAYS + 1):
-        pa, pt, pc = [0] * (H + 1), [0] * (H + 1), [0] * (H + 1)
+        pa, pn, pc = [0] * (H + 1), [0] * (H + 1), [0] * (H + 1)
         for i in range(H):
-            ok = usable[i] and len(A[i]) > N
+            ok = rd[i] and len(A[i]) > N
             pa[i + 1] = pa[i] + (A[i][N] if ok else 0)
-            pt[i + 1] = pt[i] + (T[i] if ok else 0)
+            pn[i + 1] = pn[i] + (new[i] if ok else 0)
             pc[i + 1] = pc[i] + (1 if ok else 0)
-        PA[N], PT[N], PC[N] = pa, pt, pc
-    P.update(A=A, T=T, usable=usable, PA=PA, PT=PT, PC=PC, ret_from=rf, has_ret=bool(ret), ret_bad0=bad0,
+        PA[N], PN[N], PC[N] = pa, pn, pc
+    P.update(A=A, T=T, usable=usable, rd=rd, PA=PA, PN=PN, PC=PC, ret_from=rf, has_ret=bool(ret), ret_bad0=bad0,
              ret_empty=empty, ret=ret)
     # recent returners Y and old users O (§2.4)
     Y, yi, oq, Kd = [None] * H, [None] * H, [None] * H, [None] * H
@@ -858,12 +865,12 @@ def _spike_day(P, m, d):
 # ── new users coming back (D-metrics) ───────────────────────────────────────────────────────────
 
 def _cw(P, N, lo, hi):
-    """(Σ a[N], Σ t, usable days) over install indexes [lo, hi]."""
+    """(Σ a[N], Σ GA4 new users, rate days) over install indexes [lo, hi] — the rate is the first ÷ the second."""
     lo, hi = max(lo, 0), min(hi, P["H"] - 1)
     if hi < lo:
         return 0, 0, 0
-    pa, pt, pc = P["PA"][N], P["PT"][N], P["PC"][N]
-    return pa[hi + 1] - pa[lo], pt[hi + 1] - pt[lo], pc[hi + 1] - pc[lo]
+    pa, pn, pc = P["PA"][N], P["PN"][N], P["PC"][N]
+    return pa[hi + 1] - pa[lo], pn[hi + 1] - pn[lo], pc[hi + 1] - pc[lo]
 
 
 def _ret_null(P, N, r1):
@@ -887,7 +894,7 @@ def _ret_null(P, N, r1):
 
 
 def _ret_ref(P, N, lo, hi):
-    """The all-time share at N over usable post-launch install days [lo, hi] → (p, t, days)."""
+    """The all-time share at N over the post-launch rate days [lo, hi] → (p, Σ new users, days)."""
     a, t, c = _cw(P, N, max(lo, P["i0"]), hi)
     return (a / t if t else None), t, c
 
@@ -896,8 +903,8 @@ def _phi_at(P, N, lo, hi):
     each = []
     for c in range(max(lo, 0), min(hi, P["H"] - 1) + 1):
         a = P["A"][c]
-        if P["usable"][c] and a is not None and len(a) > N and P["T"][c]:
-            each.append((a[N], P["T"][c], c))
+        if P["rd"][c] and a is not None and len(a) > N:
+            each.append((a[N], P["new"][c], c))
     return U._phi(each)
 
 
@@ -1299,7 +1306,7 @@ def _nmax(P, iS=None):
 
 def _grid(P, udet, edges, portfolio_edge):
     H, E, S, hs, i0, iso = P["H"], P["E"], P["S"], P["hs"], P["i0"], P["iso"]
-    usable, T, new = P["usable"], P["T"], P["new"]
+    usable, rd, T, new = P["usable"], P["rd"], P["T"], P["new"]
     nmax = P["nmax"]
     stage = udet.get("stage") or "badh_raha"
     cols = [N for N in LADDER.get(stage, LADDER["badh_raha"]) if 1 <= N <= nmax]
@@ -1344,8 +1351,11 @@ def _grid(P, udet, edges, portfolio_edge):
             tsum = sum(T[i] or 0 for i in range(i_a, i_b + 1))
             nsum = sum(new[i] or 0 for i in range(i_a, i_b + 1))
             nodata = bool(nsum and tsum / nsum < NODATA_SHARE) or not nsum and not tsum
-            part = ndays < 7 or any(not usable[i] for i in range(i_a, i_b + 1))
-            users = sum(T[i] or 0 for i in range(i_a, i_b + 1) if usable[i])
+            # a day without a rate (not usable, or its GA4 new users unknown / 0) makes the week partial; the week's
+            # installs = the rate's base, Σ GA4 new users of its rate days — no rate day at all: unknown (null, never 0)
+            part = ndays < 7 or any(not rd[i] for i in range(i_a, i_b + 1))
+            nrd = [i for i in range(i_a, i_b + 1) if rd[i]]
+            users = int(sum(new[i] for i in nrd)) if nrd else None
             if not nodata:
                 for N in range(1, COHORT_DAYS + 1):
                     if wb + timedelta(days=N) > E:
@@ -1365,7 +1375,7 @@ def _grid(P, udet, edges, portfolio_edge):
                             h = 1 if p > r else -1
                     heat[N] = h
             iso_w = wk.isocalendar()
-            rows.append({"week": "%d-W%02d" % (iso_w[0], iso_w[1]), "from": _iso(wa), "to": _iso(wb), "users": int(users),
+            rows.append({"week": "%d-W%02d" % (iso_w[0], iso_w[1]), "from": _iso(wa), "to": _iso(wb), "users": users,
                          "days": ndays, "v": v, "prov": prov, "heat": heat, "part": bool(part and not nodata),
                          "pre": i_b < i0, "q": bool(unverified and pedge is not None and wb < pedge),
                          "nodata": bool(nodata)})
@@ -1880,17 +1890,17 @@ def _ret_cond(P, st, recent_from):
     if st["tw"] >= RET_BIG:                                   # big apps: breadth + not one day
         side, big, bt = 0, None, -1
         for c in range(st["r0"], st["r1"] + 1):
-            a = P["A"][c]
-            if not (P["usable"][c] and a is not None and len(a) > N and P["T"][c]):
+            a, n = P["A"][c], P["new"][c]
+            if not (P["rd"][c] and a is not None and len(a) > N):
                 continue
-            pc = a[N] / P["T"][c]
+            pc = a[N] / n
             side += 1 if (pc - st["pb"] > 0) == (d > 0) else 0
-            if P["T"][c] > bt:
-                big, bt = c, P["T"][c]
+            if n > bt:
+                big, bt = c, n
         if side < 4:
             return None
         if big is not None:
-            aw2, tw2 = st["aw"] - P["A"][big][N], st["tw"] - P["T"][big]
+            aw2, tw2 = st["aw"] - P["A"][big][N], st["tw"] - P["new"][big]
             if tw2 <= 0:
                 return None
             d2 = aw2 / tw2 - st["pb"]

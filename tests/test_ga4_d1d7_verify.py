@@ -284,11 +284,13 @@ def test_plan_resumes_skips_complete_apps_caps_to_the_smallest_and_never_drops_o
 # ── the rules ────────────────────────────────────────────────────────────────────────────────────
 
 def test_the_match_rules():
+    # judge(store users a_k, the store's daily new users of X — the tab's rate base, GA4 users A, GA4 newUsers N)
     assert vr.judge(102, 1000, 100, 1000) == (True, True)            # 2 users: the floor
     assert vr.judge(103, 1000, 100, 1000) == (False, True)           # 3 users over 100, rate +0.3 pp
     assert vr.judge(510, 1000, 500, 1000) == (True, False)           # 2% of 500 = 10 users, but +1.0 pp
-    assert vr.judge(300, 1050, 300, 1000) == (True, False)           # cohort size 5% high: the rate moves 1.4 pp
-    assert vr.judge(5, 0, 5, 100) == (True, False)                   # no cohort size: no rate
+    assert vr.judge(300, 1050, 300, 1000) == (True, False)           # daily new 5% high: the tab's rate moves 1.4 pp
+    assert vr.judge(5, 0, 5, 100) == (True, False)                   # no daily new: the tab shows no rate
+    assert vr.judge(5, None, 5, 100) == (True, False)
     assert vr.ranges([date(2026, 1, 3), date(2026, 1, 1), date(2026, 1, 2), date(2026, 1, 9)]) == \
         {"days": 4, "runs": [["2026-01-01", "2026-01-03"], ["2026-01-09", "2026-01-09"]]}
     assert vr.ranges([date(2026, 1, 1) + timedelta(days=2 * i) for i in range(5)], cap=2)["cut"] == 3
@@ -324,25 +326,27 @@ def test_every_install_day_is_classified_day_by_day_against_the_owner_method(wor
     for aid in (AID_A, AID_AT):                                                       # one GA4 read, both stores
         s = _store(rep, PKG_A, aid)
         assert s["install_days"] == 118 and s["ret_days"] == 117 and s["ret_outside_window"] == 0
-        assert s["d1"] == {"match": 110, "mismatch": 2, "store_not_final": 1, "missing_in_store": 1,
+        assert s["d1"] == {"match": 111, "mismatch": 1, "store_not_final": 1, "missing_in_store": 1,
                            "short_in_store": 0, "not_ok_in_store": 1, "too_small": 1, "no_ga4_row": 1, "unread": 0,
                            "not_due": 1}
-        assert s["d7"] == {"match": 104, "mismatch": 2, "store_not_final": 0, "missing_in_store": 1,
+        assert s["d7"] == {"match": 105, "mismatch": 1, "store_not_final": 0, "missing_in_store": 1,
                            "short_in_store": 1, "not_ok_in_store": 1, "too_small": 1, "no_ga4_row": 1, "unread": 0,
                            "not_due": 7}
         assert sum(s["all_k"].values()) == 118 * 30 and all(sum(c.values()) == 118 for c in s["by_k"].values())
-        assert s["rules"]["d1"] == {"judged": 113, "users_ok": 111, "rate_ok": 110, "fail_users_only": 0,
-                                    "fail_rate_only": 1, "fail_both": 2,             # X_SIZE: users fine, rate not
-                                    "fail_on_flagged_day": 0}
+        # X_SIZE (the cohort's own size t 5% off, daily new = N): the tab divides by daily new, so it matches — the
+        # size line below still reports the store's t
+        assert s["rules"]["d1"] == {"judged": 113, "users_ok": 111, "rate_ok": 111, "fail_users_only": 0,
+                                    "fail_rate_only": 0, "fail_both": 2, "fail_on_flagged_day": 0}
         assert s["would_match"]["d1"] == {"not_ok_in_store": {"match": 1, "of": 1}, "too_small": {"match": 1, "of": 1}}
-        # what the tab shows: ok, t > 0, a[0]/t in [0.9, 1.1], on / after ret_from
-        assert s["tab"] == {"used": 110, "no_entry": 1, "not_ok": 1, "t0": 1, "a0_off": 0, "before_ret_from": 5}
-        assert s["shown"]["d1"] == {"match": 105, "mismatch": 2, "store_not_final": 1}
+        # what the tab shows: ok, t > 0, a[0]/t in [0.9, 1.1], on / after ret_from, daily new > 0
+        assert s["tab"] == {"used": 110, "no_entry": 1, "not_ok": 1, "t0": 1, "a0_off": 0, "before_ret_from": 5,
+                            "new0": 0}
+        assert s["shown"]["d1"] == {"match": 106, "mismatch": 1, "store_not_final": 1}
     s = _store(rep, PKG_A, AID_A)
     w = s["worst"][0]
     assert (w["x"], w["k"], w["class"]) == (X_MIS.isoformat(), 1, "mismatch") and w["pp"] > 5 and w["users"] > 0
-    assert {(m["x"], m["k"]) for m in s["worst"]} == {(X_MIS.isoformat(), 1), (X_SIZE.isoformat(), 1),
-                                                      (X_SIZE.isoformat(), 7), (X_MIS7.isoformat(), 7)}
+    assert {(m["x"], m["k"]) for m in s["worst"]} == {(X_MIS.isoformat(), 1), (X_MIS7.isoformat(), 7)}
+    assert w["store"] == round(w["a"] / w["new"], 4) and w["new"] == TRUTH_A.n(X_MIS)       # the tab's rate
     assert all(m["class"] == "mismatch" for m in s["worst_any_k"])
     assert s["gaps"]["d1"]["missing_in_store"]["runs"] == [[X_MISS.isoformat()] * 2]
     assert s["gaps"]["d7"]["not_due"]["runs"] == [["2026-09-18", LAST.isoformat()]]
@@ -358,6 +362,7 @@ def test_every_install_day_is_classified_day_by_day_against_the_owner_method(wor
     assert r["a1"] == round(TRUTH_A.A(X_MIS, 1) * 1.3) and r["k_mismatch"] == 1 and r["k_judged"] == 30
     assert (rows[X_NF.isoformat()]["c1"], rows[X_NF.isoformat()]["c7"]) == ("f", "d")
     assert rows[X_MIS7.isoformat()]["c7"] == "x" and rows[X_TOL.isoformat()]["c7"] == "m"
+    assert (rows[X_SIZE.isoformat()]["c1"], rows[X_SIZE.isoformat()]["c7"]) == ("m", "m")
     assert (rows[X_ZERO.isoformat()]["c1"], rows[X_SMALL.isoformat()]["c1"], rows[X_NOTOK.isoformat()]["c1"],
             rows[X_MISS.isoformat()]["c1"], rows[X_SHORT.isoformat()]["c7"]) == ("n", "z", "o", "M", "s")
     assert rows[X_MISS.isoformat()]["t"] is None and rows[X_MISS.isoformat()]["tab_uses"] == 0
@@ -372,6 +377,36 @@ def test_every_install_day_is_classified_day_by_day_against_the_owner_method(wor
     assert c["complete"] and sc["d1"]["match"] == 17 and sc["d1"]["not_due"] == 1 and sc["d7"]["match"] == 11
     assert rep["counts"]["apps_complete"] == 3 and rep["counts"]["install_days"] == 2 * 118 + 58 + 18
     json.loads(vr.pr._dump(rep))
+
+
+def test_the_rate_is_judged_on_the_tabs_base_the_install_days_daily_new_users(world):
+    """The tab shows D1 = a[1] ÷ the install day's daily GA4 new users (Firebase's "New users"), never ÷ the cohort's
+    own size t: a cohort 5% off in size still matches (the size line reports it), a daily new 10% off fails the rate
+    with t = N, and an install day without daily new has no rate on the tab (new0) — its rate fails."""
+    f, data, units = world()
+    xt, xb, x0 = (HS_C + timedelta(days=i) for i in (6, 8, 10))            # all on / after ret_from (HS_C + 5)
+    path = gu.store_path(data, AID_C)
+    st = gu.load_store(path)
+    st["ret"][xt.isoformat()]["t"] = round(TRUTH_C.n(xt) * 1.05)
+    st["daily"][xb.isoformat()]["new"] = round(TRUTH_C.n(xb) * 1.1)
+    del st["daily"][x0.isoformat()]["new"]
+    gu.save_store(path, st)
+    rep = _run([u for u in units if u["package"] == PKG_C], data)
+    assert rep["rules"]["rate"].startswith("|a_k/new - A/N| <= 0.5 pp") and "the tab's base" in rep["rules"]["rate"]
+    s = _store(rep, PKG_C, AID_C)
+    rows = {r[0]: dict(zip(s["table"]["cols"], r)) for r in s["table"]["rows"]}
+    rt, rb, r0 = rows[xt.isoformat()], rows[xb.isoformat()], rows[x0.isoformat()]
+    assert (rt["t"], rt["N"], rt["daily_new"]) == (round(TRUTH_C.n(xt) * 1.05), TRUTH_C.n(xt), TRUTH_C.n(xt))
+    assert (rt["c1"], rt["c7"], rt["tab_uses"]) == ("m", "m", 1)            # t off, the tab's base right: match
+    assert (rb["t"], rb["N"]) == (TRUTH_C.n(xb), TRUTH_C.n(xb)) and rb["daily_new"] != rb["N"]
+    assert (rb["c1"], rb["c7"], rb["tab_uses"]) == ("x", "x", 1) and rb["a1"] == rb["A1"]   # users right, rate not
+    assert (r0["daily_new"], r0["c1"], r0["tab_uses"]) == (0, "x", 0)       # no base: the tab shows no rate
+    assert s["tab"]["new0"] == 1 and s["tab"]["used"] == 18 - 5 - 1
+    assert s["rules"]["d1"]["fail_rate_only"] == 2 and s["rules"]["d1"]["fail_both"] == 0
+    assert s["shown"]["d1"]["mismatch"] == 1                                # xb only: x0 is not on the tab
+    m = next(m for m in s["worst"] if (m["x"], m["k"]) == (xb.isoformat(), 1))
+    assert m["new"] == round(TRUTH_C.n(xb) * 1.1) and m["store"] == round(m["a"] / m["new"], 4) and m["pp"] < -0.5
+    assert s["size"]["n"] - s["size"]["within"] == 1 and s["size"]["worst"][0][0] == xt.isoformat()
 
 
 def test_a_split_that_lost_users_is_flagged_and_never_counted_as_a_match(world):
@@ -552,7 +587,7 @@ def test_main_writes_the_private_file_and_prints_counts_only(world, tmp_path, mo
     assert path == vr.OUT_PATH == "ga4/d1d7_verify.json" and msg == "ga4 d1d7 verify"
     rep = json.loads(text)
     assert set(rep["apps"]) == {PKG_A, PKG_B, PKG_C} and rep["partial"] is False
-    assert rep["summary"]["apps"]["%s|%s" % (PKG_A, AID_A)]["d1"] == [110, 113]
+    assert rep["summary"]["apps"]["%s|%s" % (PKG_A, AID_A)]["d1"] == [111, 113]
 
 
 def test_main_resumes_only_the_apps_missing_and_carries_the_rest(world, tmp_path, monkeypatch, capsys):

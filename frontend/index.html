@@ -4081,8 +4081,8 @@ function actDetail(r,d){
   return hdr+[actSumCard,actChangesCard,(a)=>uniImpactCard(a,'act'),actKpis,actDailyCard,actTriCard,actUseCard,actRevCard,()=>actTimingNote()].map(safe).join(''); }
 // "📌 At a glance": the engine's one line, six tiles (last 7 settled days vs the 4 weeks before), context, latest day,
 // the data-edge sentences, the Uninstall tab's line for this app and the provisional footnote
-const ACT_TILES=[['ret_dau','Returning users / day','Roz ke active users me se us din ke naye installs hata ke — purane users.'],['d1','Came back next day','Kisi din install karne walo me se kitne agle din phir aaye.'],
-  ['d7','Came back after a week','Kisi din install karne walo me se kitne 7ve din phir aaye.'],['sess','Sessions per user','Purane (returning) users ka roz ka average sessions. GA4 \'returning\' = pehle bhi app khol chuka (isme aaj ke install ka 2nd session bhi)'],
+const ACT_TILES=[['ret_dau','Returning users / day','Roz ke active users me se us din ke naye installs hata ke — purane users.'],['d1','Came back next day','Kisi din ke har 100 naye users (GA4 \'New users\', Firebase jaisa base) me se kitne agle din phir aaye.'],
+  ['d7','Came back after a week','Kisi din ke har 100 naye users (GA4 \'New users\', Firebase jaisa base) me se kitne 7ve din phir aaye.'],['sess','Sessions per user','Purane (returning) users ka roz ka average sessions. GA4 \'returning\' = pehle bhi app khol chuka (isme aaj ke install ka 2nd session bhi)'],
   ['time','Time per user','Purane (returning) users ka roz ka average time (GA4 engagement time). GA4 \'returning\' = pehle bhi app khol chuka (isme aaj ke install ka 2nd session bhi)'],['arpdau','Ad revenue per 1,000 users','AdMob kamai ÷ GA4 active users × 1,000 — ads per user × ad ka rate (eCPM). ≈: GA4 ka din aur AdMob ka din alag timezone me — kamai ghante ke hisaab se baanti, andaza.']];
 function actTile(d,k,label,tip,als,win){
   const T=d.tiles||{}, M=T[k]||null, st=actSt(M), dm=k==='d1'||k==='d7', cur=actCurOf(d), F=d.flags||{}, v=M&&M.v, ok=actOk(v), sm=[];
@@ -4264,9 +4264,10 @@ const ACT_RN=[[1,'Next day'],[3,'After 3 days'],[7,'After a week'],[14,'After 2 
 function actRetChart(d,X,T){
   const nmax=actOk(T.nmax)?+T.nmax:0, ns=ACT_RN.filter(([N])=>N<=nmax);
   if(!ns.length) return '';
-  const N=ns.some(([k])=>k===ACTRETN)?ACTRETN:ns[0][0], C=X.D.coh||{}, t=C.t||[], a=C['d'+N]||[], ok=C.ok||[], edge=(d.edges||{}).ret_from||T.from||null, ie=edge?Math.max(0,uniDiff(X.st,edge)):0;
+  const N=ns.some(([k])=>k===ACTRETN)?ACTRETN:ns[0][0], C=X.D.coh||{}, nw=X.D.new||[], a=C['d'+N]||[], ok=C.ok||[], edge=(d.edges||{}).ret_from||T.from||null, ie=edge?Math.max(0,uniDiff(X.st,edge)):0;
   const v=new Array(X.n).fill(null);   // a not-usable install day stays a gap
-  for(let i=ie;i<X.n;i++){ if(ok[i]!==1) continue; let s=0,u=0,c=0; for(let j=Math.max(ie,i-6);j<=i;j++){ const tt=actAt(t,j), aa=actAt(a,j); if(ok[j]===1&&tt!=null&&tt>0&&aa!=null){ s+=aa; u+=tt; c++; } } v[i]=(c>=4&&u>0)?s*100/u:null; }
+  // the rate = Σ returners ÷ Σ that install day's GA4 new users (Firebase's "New users" base); new unknown / 0: no rate
+  for(let i=ie;i<X.n;i++){ if(ok[i]!==1) continue; let s=0,u=0,c=0; for(let j=Math.max(ie,i-6);j<=i;j++){ const nn=actAt(nw,j), aa=actAt(a,j); if(ok[j]===1&&nn!=null&&nn>0&&aa!=null){ s+=aa; u+=nn; c++; } } v[i]=(c>=4&&u>0)?s*100/u:null; }
   const ref=(T.ref||[])[N], i0=actI0(X), chips=ns.map(([k,l])=>`<span class="chip${k===N?' on':''}" onclick="actRN(${k})">${l}</span>`).join('');
   const Xp=Object.assign({},X,{iS:X.iS-N});   // an install day is settled at day N only when c + N ≤ settled_till
   const chart=actChart(Xp,i0,v,{fmt:x=>(+x).toFixed(1)+'%',lines:actOk(ref)?[{v:new Array(X.n).fill(+ref*100),color:'#8496b5',dash:'5 4',width:1.6}]:[],

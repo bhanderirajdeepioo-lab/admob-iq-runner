@@ -3,19 +3,22 @@ of the build, is the new-user return the Active users tab shows right?
 
 The tab reads the stored return cohorts — data/ga4_uninstall/<key>.json.gz, "ret" {install day X: {"t":
 cohortTotalUsers, "a": [cohortActiveUsers on day X+0 .. X+30], "ok", "cov", "at"}} (fetch_ret, the cohortSpec API) —
-and shows D1 = a[1] ÷ t, D7 = a[7] ÷ t. The owner's own method (Firebase → "Demographic details: Country" + secondary
-dimension "First session date", ONE day at a time; ga4_d1d7_probe.py showed on 28 apps that it and cohortSpec agree
-for install days up to 900 days old) is asked here for EVERY activity date D from the app's history_start to
-min(window_end, today − 3) (property timezone), one runReport per day:
+and shows D1 = a[1] ÷ new, D7 = a[7] ÷ new, new = the store's daily GA4 new users of X (daily[X]["new"], Firebase's
+"New users" base; t only decides whether the tab uses the cohort, and a day with new unknown or 0 has no rate). The
+owner's own method (Firebase → "Demographic details: Country" + secondary dimension "First session date", ONE day at
+a time; ga4_d1d7_probe.py showed on 28 apps that it and cohortSpec agree for install days up to 900 days old) is asked
+here for EVERY activity date D from the app's history_start to min(window_end, today − 3) (property timezone), one
+runReport per day:
     {dateRanges: [{D, D}], dimensions: [firstSessionDate], metrics: [activeUsers, newUsers],
      dimensionFilter: platform == Android AND streamId == <the app's stream>, returnPropertyQuota: true,
      limit: PAGE_ROWS (+ offset paging to the last row), orderBys: firstSessionDate}
 → A[D][X] = users whose first session was X, active on D (X ≥ D − 30 kept), N[X] = newUsers on row X of day X.
 Then for EVERY install day X in [history_start, window_end − 1] and k = 1..30 with X + k ≤ the last day asked (and
 ≤ that store's own window end — judged_to):
-GA4 truth D_k(X) = A[X+k][X] ÷ N[X] against the store's a[k] ÷ t. Rules (both reported):
-    users  |a_k − A| ≤ max(2, 2% of A)        rate  |a_k/t − A/N| ≤ 0.5 percentage points
-    size   |t − N| ≤ 2% of N (cohort size vs newUsers; reported, not part of the verdict)
+GA4 truth D_k(X) = A[X+k][X] ÷ N[X] against what the tab shows, the store's a[k] ÷ new. Rules (both reported):
+    users  |a_k − A| ≤ max(2, 2% of A)        rate  |a_k/new − A/N| ≤ 0.5 percentage points (new unknown / 0: fails)
+    size   |t − N| ≤ 2% of N (the stored cohort's size vs newUsers: the store's own quality line; reported, not part
+           of the verdict — t is no rate's base)
 Each (X, k) gets ONE class, in this order: not_due (X + k after the last day asked) → unread (a GA4 day it needs was
 not read: an error, or the run stopped) → no_ga4_row (N = 0: GA4 has no installs that day) → missing_in_store (no ret
 entry) → short_in_store (a ret entry without a[k]) → not_ok_in_store (ret ok = false: the build's own self-check
@@ -70,7 +73,7 @@ FINAL_LAG = 3                       # a full cohort read on local day `at` ended
                                     # is its sure end, final up to that − ACT_LATE_DAYS (see _final_to)
 MIN_N = 20                          # an install day with fewer new users is reported, not judged
 USERS_ABS, USERS_REL = 2, 0.02      # users rule: |a_k − A| ≤ max(2, 2% of A)
-RATE_PP = 0.005                     # rate rule: |a_k/t − A/N| ≤ 0.5 percentage points
+RATE_PP = 0.005                     # rate rule: |a_k/new − A/N| ≤ 0.5 percentage points (new: the tab's base)
 SIZE_REL = 0.02                     # cohort size: |t − N| ≤ 2% of N
 COV_OK, COV_MIN_A1 = 0.98, 50       # an activity day's split holds ≥ 98% of the store's daily actives (≥ 50 of them)
 WORST = 20
@@ -437,10 +440,11 @@ def read_all(ga, days, rd):
 
 # ── the comparison ──────────────────────────────────────────────────────────────────────────────
 
-def judge(a, t, A, N):
-    """→ (users_ok, rate_ok): |a − A| ≤ max(USERS_ABS, USERS_REL·A); |a/t − A/N| ≤ RATE_PP (False when t or N is 0)."""
+def judge(a, new, A, N):
+    """→ (users_ok, rate_ok): |a − A| ≤ max(USERS_ABS, USERS_REL·A); |a/new − A/N| ≤ RATE_PP, new = the store's daily
+    GA4 new users of the install day — the tab's base (False when new or N is unknown / 0: the tab shows no rate)."""
     users = abs(a - A) <= max(USERS_ABS, USERS_REL * A)
-    rate = bool(t) and bool(N) and abs(a / t - A / N) <= RATE_PP
+    rate = bool(new) and bool(N) and abs(a / new - A / N) <= RATE_PP
     return users, rate
 
 
@@ -460,9 +464,10 @@ def _final_to(e, a, x, we):
     return end - timedelta(days=gu.ACT_LATE_DAYS)
 
 
-def classify(x, k, e, a, t, rd, last, final_to):
+def classify(x, k, e, a, dn, rd, last, final_to):
     """One install day X × day k → (class, GA4 users A, store users a_k, users_ok, rate_ok) — see the module docstring
-    for the order. The rules are evaluated whenever both sides have numbers (would_match for not_ok / too_small)."""
+    for the order; dn = the store's daily new users of X (the rate's base). The rules are evaluated whenever both sides
+    have numbers (would_match for not_ok / too_small)."""
     d = x + timedelta(days=k)
     if d > last:
         return "not_due", None, None, None, None
@@ -476,7 +481,7 @@ def classify(x, k, e, a, t, rd, last, final_to):
         return "missing_in_store", A, None, None, None
     if len(a) <= k:
         return "short_in_store", A, None, None, None
-    u, r = judge(a[k], t, A, n)
+    u, r = judge(a[k], dn, A, n)
     if not e.get("ok"):
         return "not_ok_in_store", A, a[k], u, r
     if n < MIN_N:
@@ -488,9 +493,9 @@ def classify(x, k, e, a, t, rd, last, final_to):
     return "mismatch", A, a[k], u, r
 
 
-def tab_use(e, x, rf):
-    """Does the Active users tab use this ret entry (engine.active: ok, t > 0, a[0]/t in [0.9, 1.1], X ≥ ret_from)? →
-    None when it does, else the reason."""
+def tab_use(e, x, rf, dn=None):
+    """Does the Active users tab show a rate from this ret entry (engine.active: ok, t > 0, a[0]/t in [0.9, 1.1], X ≥
+    ret_from, and the install day's daily new users dn > 0 — the rate's base)? → None when it does, else the reason."""
     if not e:
         return "no_entry"
     if not e.get("ok"):
@@ -503,6 +508,8 @@ def tab_use(e, x, rf):
         return "a0_off"
     if rf and x < rf:
         return "before_ret_from"
+    if not dn:
+        return "new0"
     return None
 
 
@@ -566,7 +573,7 @@ def evaluate(s, rd, last):
     rules = {k: dict.fromkeys(RULE_KEYS, 0) for k in HEAD}
     would = {k: {"not_ok_in_store": [0, 0], "too_small": [0, 0]} for k in HEAD}      # [would match, of]
     shown = {k: dict.fromkeys(JUDGED, 0) for k in HEAD}
-    tab = dict.fromkeys(("used", "no_entry", "not_ok", "t0", "a0_off", "before_ret_from"), 0)
+    tab = dict.fromkeys(("used", "no_entry", "not_ok", "t0", "a0_off", "before_ret_from", "new0"), 0)
     per = {k: {c: [] for c in CLASSES if c != "match"} for k in HEAD}
     mism, size, dn_n, rows, gap = [], [], [], [], []
     for x in xs:
@@ -577,19 +584,19 @@ def evaluate(s, rd, last):
         t = pr._int(e.get("t")) if e else None
         n = rd["new"].get(x) if x in rd["ok"] else None
         dn = (daily.get(iso) or [None])[0]
-        why = tab_use(e, x, rf)
+        why = tab_use(e, x, rf, dn)
         tab["used" if why is None else why] += 1
         fin = _final_to(e, a, x, we) if e else we
         head, kbad, kj = {}, 0, 0
         for k in range(1, K_MAX + 1):
-            c, A, ak, u, r = classify(x, k, e, a, t, rd, last, fin)
+            c, A, ak, u, r = classify(x, k, e, a, dn, rd, last, fin)
             by_k[k][c] += 1
             kj += c in JUDGED
             flag = c in JUDGED and not (u and r) and _flagged(rd, x, x + timedelta(days=k))
             if c == "mismatch":
                 kbad += 1
-                m = {"x": iso, "k": k, "t": t, "a": ak, "N": n, "A": A, "store": _rate(ak, t), "ga4": _rate(A, n),
-                     "users": ak - A, "class": c}
+                m = {"x": iso, "k": k, "t": t, "new": dn, "a": ak, "N": n, "A": A, "store": _rate(ak, dn),
+                     "ga4": _rate(A, n), "users": ak - A, "class": c}
                 m["pp"] = round(100 * (m["store"] - m["ga4"]), 2) if None not in (m["store"], m["ga4"]) else None
                 if flag:
                     m["ga4_day_flagged"] = 1                # thresholded / "(other)" on X or X + k
@@ -851,7 +858,10 @@ def build_report(apps, run, now, total, partial):
     return {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run_started": gu._now_iso(now),
             "partial": partial,
             "rules": {"users": "|a_k - A| <= max(%d, %g%% of A)" % (USERS_ABS, 100 * USERS_REL),
-                      "rate": "|a_k/t - A/N| <= %g pp" % (100 * RATE_PP), "size": "|t - N| <= %g%% of N" % (100 * SIZE_REL),
+                      "rate": "|a_k/new - A/N| <= %g pp (new = the store's daily GA4 new users: the tab's base)"
+                      % (100 * RATE_PP),
+                      "size": "|t - N| <= %g%% of N (the stored cohort's size: store quality, no rate's base)"
+                      % (100 * SIZE_REL),
                       "min_n": MIN_N, "k_max": K_MAX, "settle_days": SETTLE, "final_lag": FINAL_LAG},
             "legend": {"classes": list(CLASSES), "codes": CODE, "table_cols": list(TABLE_COLS),
                        "activity_cols": list(ACT_COLS)},

@@ -8,7 +8,9 @@ one BLOCK, newest first, with the owner's four must-haves as Before (7 days) | A
      recent installs coming back at the PRE-release return rates × the installs that really came (ad spend swings the
      installs — that part is expected, not the update's).
   2. NEW USERS BACK next day (D1) / after 7 days (D7): of the users who installed after the update vs before it (the
-     same weekdays), how many were active again on day 1 / day 7 (GA4 cohorts, firstSessionDate).
+     same weekdays), how many were active again on day 1 / day 7 (GA4 cohorts, firstSessionDate) — per 100 of the
+     install days' GA4 new users (daily "new", Firebase's "New users" base; Σ returners ÷ Σ new). The cohort's own
+     total t only decides whether it is complete; an install day with new unknown or 0 is left out.
   3. SESSIONS / TIME PER USER of the RETURNING users (a new install's first day is different: never mixed in), before vs
      after, judged net of the weekly trend the app was already on — and, on the same days, users on the new version vs
      the older versions ("Same days: new version vs old"), net of the usual early-updater gap (the same comparison after
@@ -144,6 +146,7 @@ NA_YOUNG = "App launch ke turant baad ka update — pehle ka hafta nahi"
 NA_CUT = "Agla update bahut jaldi aa gaya"
 NA_OLD = "GA4 ab itna purana user data nahi rakhta"
 NA_NOT_YET = "GA4 se ye data abhi aana baaki hai — agle fetch me"
+NA_NO_NEW = "GA4 me in install dino ke naye users (New users) ki ginti nahi — 100 me kitne, ye nahi nikal sakta"
 NA_NO_USAGE = "GA4 usage data abhi aana baaki hai — agle fetch me"
 NA_NO_REV = "AdMob revenue nahi mila"
 NA_NO_VER = "Is update ka version number nahi"
@@ -291,7 +294,7 @@ def _context(store, cd, whole, i0, revenue, E, late):
           "daily": daily, "usage": usage, "vuse": store.get("vuse") or {}, "ret": store.get("ret") or {},
           "vers": store.get("versions") or {}, "cd": cd,
           "ret_from": _d(store["ret_from"]) if store.get("ret_from") else None,
-          "ret_k": U._pos(fi.get("ret_k"), 1.0), "split": fi.get("vuse_split") is not False,
+          "split": fi.get("vuse_split") is not False,
           "has_data": int(store.get("impact_v") or 0) >= IMPACT_V,
           "launch": whole["hs"] + timedelta(days=i0), "rev": rev, "tz_blend": blend,
           "currency": (revenue or {}).get("currency") or "USD",
@@ -436,19 +439,27 @@ def _span(row, a, b):
         row["from_b"], row["to_b"] = _iso(min(b)), _iso(max(b))
 
 
+def _new_of(cx, c):
+    """The install day's GA4 new users (the return rates' base) → int > 0, or None (unknown or 0: no rate)."""
+    n = _dv(cx, c, "new")
+    return n if n else None
+
+
 def _rho(cx, R):
-    """Pre-release return rates ρ̂_k = Σ day-k actives ÷ Σ cohort users over the complete cohorts [R−28−k, R−1−k], and
-    K = the last day k (≤ COHORT_DAYS) that ≥14 such cohorts reach, every day before it too."""
+    """Pre-release return rates ρ̂_k = Σ day-k actives ÷ Σ the install days' GA4 new users over the complete cohorts
+    [R−28−k, R−1−k] (new > 0), and K = the last day k (≤ COHORT_DAYS) that ≥14 such cohorts reach, every day before it
+    too."""
     ret, rho, K = cx["ret"], {}, 0
     for k in range(1, COHORT_DAYS + 1):
-        x = t = n = 0
+        x = u = n = 0
         for j in range(28):
-            e = ret.get((R - timedelta(days=28 + k - j)).isoformat())
-            if e and e.get("ok") and len(e.get("a") or []) > k and e.get("t"):
-                x, t, n = x + e["a"][k], t + e["t"], n + 1
-        if n < 14 or not t:
+            c = R - timedelta(days=28 + k - j)
+            e, nw = ret.get(c.isoformat()), _new_of(cx, c)
+            if e and e.get("ok") and len(e.get("a") or []) > k and e.get("t") and nw:
+                x, u, n = x + e["a"][k], u + nw, n + 1
+        if n < 14 or not u:
             break
-        rho[k], K = x / t, k
+        rho[k], K = x / u, k
     return rho, K
 
 
@@ -483,7 +494,7 @@ def dau_row(cx, blk):
     K = 0 if raw else K
     ex.update(mode="raw" if raw else "cohort", k_days=K)
     mn = DAU_MIN_REL * (2 if raw else 1)
-    rk, ret = cx["ret_k"], cx["ret"]
+    ret = cx["ret"]
     memo, rmemo = {}, {}
 
     def Y(d):
@@ -494,8 +505,8 @@ def dau_row(cx, blk):
                 e = ret.get(c.isoformat())
                 if e and e.get("ok") and len(e.get("a") or []) > k:
                     y += e["a"][k]
-                else:
-                    v = (_dv(cx, c, "new") or 0) * rk * rho[k]
+                else:                                 # ρ̂ is per GA4 new user: no cohort scale
+                    v = (_dv(cx, c, "new") or 0) * rho[k]
                     y, yi = y + v, yi + v
             memo[d] = (y, yi)
         return memo[d][0]
@@ -506,7 +517,7 @@ def dau_row(cx, blk):
 
     def recent(d):
         if d not in rmemo:
-            rmemo[d] = sum((_dv(cx, d - timedelta(days=k), "new") or 0) * rk * rho[k] for k in range(1, K + 1))
+            rmemo[d] = sum((_dv(cx, d - timedelta(days=k), "new") or 0) * rho[k] for k in range(1, K + 1))
         return rmemo[d]
 
     omemo, wmemo = {}, {}
@@ -626,11 +637,10 @@ def _mix(cx, rho, K, used, bs):
     each side. → None without matched days."""
     if not used:
         return None
-    rk = cx["ret_k"]
 
     def feed(d):
         if K >= 7:
-            return sum((_dv(cx, d - timedelta(days=k), "new") or 0) * rk * rho[k] for k in range(1, K + 1))
+            return sum((_dv(cx, d - timedelta(days=k), "new") or 0) * rho[k] for k in range(1, K + 1))
         return sum(_dv(cx, d - timedelta(days=k), "new") or 0 for k in range(1, 15)) / 14
 
     fa, fb = sum(feed(d) for d in used), sum(feed(b) for b in bs)
@@ -662,23 +672,32 @@ def ret_row(cx, blk, N):
 
     okm = {}
 
+    def done(c):
+        """The install day's cohort when it is complete up to day N, else None."""
+        e = ret.get(c.isoformat())
+        return e if e and e.get("ok") and len(e.get("a") or []) > N and e.get("t") else None
+
     def okc(c):
+        """The install day's (day-N returners, GA4 new users) when its cohort is complete and new > 0, else None."""
         if c not in okm:
-            e = ret.get(c.isoformat())
-            okm[c] = e if e and e.get("ok") and len(e.get("a") or []) > N and e.get("t") else None
+            e, nw = done(c), _new_of(cx, c)
+            okm[c] = (e["a"][N], nw) if e and nw else None
         return okm[c]
     A, B = [c for c in Ca if okc(c)], [c for c in Cb if okc(c)]
     if len(A) < 3 or not B:
         lost = any((ret.get(c.isoformat()) or {}).get("ok") is False for c in Ca + Cb)
-        return _na(row, NA_OLD if lost else NA_NOT_YET)
-    xa, na = sum(okc(c)["a"][N] for c in A), sum(okc(c)["t"] for c in A)
-    xb, nb = sum(okc(c)["a"][N] for c in B), sum(okc(c)["t"] for c in B)
+        # a complete cohort left out only because its install day's GA4 new users are unknown / 0: no base for the
+        # rate, and the next fetch would not bring one
+        nonew = any(done(c) and not _new_of(cx, c) for c in Ca + Cb)
+        return _na(row, NA_OLD if lost else NA_NO_NEW if nonew else NA_NOT_YET)
+    xa, na = sum(okc(c)[0] for c in A), sum(okc(c)[1] for c in A)
+    xb, nb = sum(okc(c)[0] for c in B), sum(okc(c)[1] for c in B)
     pb, pa = xb / nb, xa / na
     each = []
     for c in _days(R - timedelta(days=28 + N), R - timedelta(days=1 + N)):
         e = okc(c)
         if e:
-            each.append((e["a"][N], e["t"], c.toordinal()))
+            each.append((e[0], e[1], c.toordinal()))
     phi = max(1.0, U._phi(each))
     dpp = (pa - pb) * 100
     p = (xa + xb) / (na + nb)
@@ -690,8 +709,8 @@ def ret_row(cx, blk, N):
         D = timedelta(days=dl)
         Aq, Bq = [okc(c - D) for c in A], [okc(c - D) for c in B]
         if all(Aq) and all(Bq):
-            nulls.append(100 * (sum(e["a"][N] for e in Aq) / sum(e["t"] for e in Aq)
-                                - sum(e["a"][N] for e in Bq) / sum(e["t"] for e in Bq)))
+            nulls.append(100 * (sum(e[0] for e in Aq) / sum(e[1] for e in Aq)
+                                - sum(e[0] for e in Bq) / sum(e[1] for e in Bq)))
     if len(nulls) >= NULL_MIN:
         se = max(se, U.spread(nulls, 0.0))
     z = dpp / se if se else None
@@ -704,7 +723,7 @@ def ret_row(cx, blk, N):
     _span(row, A, B)
     provs = [c for c in win["days_a"] if c + timedelta(days=N) <= cx["E"] and okc(c)]
     if len(provs) > len(A):
-        row["after_prov"] = sum(okc(c)["a"][N] for c in provs) / sum(okc(c)["t"] for c in provs)
+        row["after_prov"] = sum(okc(c)[0] for c in provs) / sum(okc(c)[1] for c in provs)
     sample = min(na, nb) >= MIN_INSTALLS and min(xa, xb) >= MIN_EVENTS and len(A) >= 3
     big = abs(dpp) >= RET_MIN_PP and rel is not None and abs(rel) >= RET_MIN_REL     # both minimums
     if not sample:
@@ -714,7 +733,7 @@ def ret_row(cx, blk, N):
     else:
         st = "unsure" if big else "same"
     if st in ("worse", "better") and na >= U.BIG_RECENT_USERS:        # a big app: breadth, as the uninstall alerts
-        moved = sum(1 for c in A if (okc(c)["a"][N] / okc(c)["t"] > pb) == (dpp > 0))
+        moved = sum(1 for c in A if (okc(c)[0] / okc(c)[1] > pb) == (dpp > 0))
         if moved < math.ceil(4 / 7 * len(A)):
             st = "unsure"
     row["status"] = row["raw_status"] = st

@@ -583,6 +583,96 @@ def test_return_grid_ref_avg4_pre_prov():
     assert abs(d2["tri"]["ref"][1] - 0.3) < 0.002                        # the testers' D1 (1 of 1–2) left out
 
 
+def test_every_return_rate_is_over_the_install_days_ga4_new_users_never_the_cohort_total():
+    """Firebase's D1 / D7 base is "New users": every rate = Σ day-N returners ÷ Σ the install days' GA4 new users (daily
+    "new"). The cohort's own total t (here 8% above new — still a usable cohort) never divides: tiles, act_return and
+    the grid (all-time normal, 4-week average, weeks) read exactly as when t = new. (Every cohort here is usable, so no
+    returner is imputed: ρ̂ is proved by the next test.)"""
+    lo = S - timedelta(days=7)
+    kw = dict(new=2000,
+              rho=lambda c, k: DEFAULT_RET(k) - (0.04 if k == 1 and lo <= c <= S - timedelta(days=1) else 0.0))
+    st, rv = quiet(**kw)
+    base, *_ = run(copy.deepcopy(st), rv, astate={"eval": {}, "episodes": {}, "closed": []})
+    for e in st["ret"].values():
+        e["t"] = int(round(e["t"] * 1.08))
+    d, *_ = run(st, rv, astate={"eval": {}, "episodes": {}, "closed": []})
+    for k in ("d1", "d7"):
+        for f in ("v", "base", "all", "pp", "z", "s", "n", "nb", "st"):
+            assert d["tiles"][k][f] == base["tiles"][k][f], (k, f)
+    t1 = d["tiles"]["d1"]
+    assert t1["s"][1] == 2000 * t1["n"] and t1["s"][3] == 2000 * t1["nb"]     # Σ new users, not Σ t
+    assert abs(t1["base"] - 0.3) < 0.002 and abs(t1["v"] - 0.26) < 0.002
+    ra = [a for a in d["changes"]["open"] if a["family"] == "act_return"]
+    assert [(a["metric"], a["dir"]) for a in ra] == [("d1", "down")] and ra[0]["users"] == 2000 * t1["n"]
+    assert ra[0]["text"].startswith("Agle din wapas aane wale kam: 100 me 26, pehle 30 (")
+    g, gb = d["tri"], base["tri"]
+    assert g["ref"] == gb["ref"] and g["ref_users"] == gb["ref_users"] and g["avg4"] == gb["avg4"]
+    assert [(r["v"], r["users"], r["heat"]) for r in g["rows"]] == [(r["v"], r["users"], r["heat"]) for r in gb["rows"]]
+    assert g["rows"][2]["users"] == 7 * 2000                              # a full settled week: Σ new users
+    assert d["daily"]["old"] == base["daily"]["old"] and d["daily"]["y"] == base["daily"]["y"]
+    last = sorted(st["ret"])[-40]
+    assert d["daily"]["coh"]["t"][-40] == st["ret"][last]["t"] != 2000        # t itself is kept as stored
+    # an install day whose GA4 new users are unknown has no rate (never 0): left out of both sums
+    gone = (lo + timedelta(days=2)).isoformat()
+    st2 = copy.deepcopy(st)
+    del st2["daily"][gone]
+    d2, _, _, _, udet = run(st2, rv)
+    P = act.prepare(dict(st2, window_end=END.isoformat()), udet, rv, END.isoformat())
+    i = (date.fromisoformat(gone) - P["hs"]).days
+    assert P["usable"][i] and not P["rd"][i] and act._cw(P, 1, i, i) == (0, 0, 0) and d2["daily"]["new"][i] is None
+    t2 = d2["tiles"]["d1"]
+    assert t2["n"] == t1["n"] - 1 and t2["s"][1] == t1["s"][1] - 2000 and t2["s"][0] < t1["s"][0]
+
+
+def test_imputed_returners_are_the_install_days_new_users_times_rho_per_new_user_never_the_cohort_scale():
+    """A recent cohort GA4 could not complete is imputed: its install day's GA4 new users × ρ̂_k, ρ̂ = Σ day-k returners
+    ÷ Σ GA4 new users (every rate's base). Neither the cohorts' own total t nor the app's cohort scale ret_k (both 8%
+    above new here) enters: the recent returners, old users, their quality and the returning-users split (old vs
+    recent) read exactly as when t = new."""
+    bad = lambda c: S - timedelta(days=20) <= c <= S - timedelta(days=12)        # 9 cohorts GA4 could not complete
+    st, rv = quiet(new=2000, ret_ok=lambda c: not bad(c))
+    base, _, _, _, udet = run(copy.deepcopy(st), rv)
+    for e in st["ret"].values():
+        e["t"] = int(round(e["t"] * 1.08))
+    st["flags"]["impact"]["ret_k"] = 1.08
+    d, _, _, _, udet2 = run(st, rv)
+    P = act.prepare(dict(st, window_end=END.isoformat()), udet2, rv, END.isoformat())
+    iS = P["iS"]
+    imp = [i for i in range(iS - 6, iS + 1) if P["yi"][i]]
+    assert len(imp) == 7 and min(P["yi"][i] for i in imp) > 1000                   # the tile week IS imputed
+    rho, K = act._rho_at(P, iS)
+    assert K == 30 and rho[1] == 0.3 and rho[7] == int(2000 * DEFAULT_RET(7)) / 2000     # per new user, not per t
+    ri, Ki = act._rho_at(P, iS)[0], P["Kd"][iS]
+    want = sum(P["A"][iS - k][k] if P["usable"][iS - k] else 2000 * ri[k] for k in range(1, Ki + 1))
+    assert Ki == 30 and abs(P["Y"][iS] - want) < 1e-6                             # new × ρ̂: no ret_k
+    for k in ("y", "old", "oq", "old_k"):
+        assert d["daily"][k] == base["daily"][k], k
+    assert d["split"] is not None and d["split"] == base["split"]
+    assert d["tiles"]["ret_dau"] == base["tiles"]["ret_dau"] and d["ctx"] == base["ctx"]
+
+
+def test_a_grid_week_without_a_rate_day_has_unknown_installs_never_0():
+    """The grid's "N installs" is the rate's base (Σ GA4 new users of the week's rate days): a week whose install days'
+    new users are all unknown has no rate and unknown installs (null — "— installs", never 0), marked part data; a week
+    with one such day is part data, its installs the other 6 days'."""
+    st, rv = quiet(new=2000)
+    d0, *_ = run(copy.deepcopy(st), rv)
+    w_all, w_one = d0["tri"]["rows"][3], d0["tri"]["rows"][5]
+    assert w_all["users"] == w_one["users"] == 7 * 2000 and not w_all["part"] and not w_one["part"]
+    wa = date.fromisoformat(w_all["from"])
+    for j in range(7):
+        del st["daily"][(wa + timedelta(days=j)).isoformat()]["new"]
+    del st["daily"][(date.fromisoformat(w_one["from"]) + timedelta(days=3)).isoformat()]["new"]
+    d, *_ = run(st, rv)
+    r = next(x for x in d["tri"]["rows"] if x["from"] == w_all["from"])
+    assert r["users"] is None and r["part"] and not r["nodata"]
+    assert all(v is None for v in r["v"]) and not any(r["heat"])
+    r1 = next(x for x in d["tri"]["rows"] if x["from"] == w_one["from"])
+    assert r1["users"] == 6 * 2000 and r1["part"] and r1["v"][1] is not None and not any(r1["heat"])
+    assert all(x["users"] == y["users"] for x, y in zip(d["tri"]["rows"], d0["tri"]["rows"])
+               if x["from"] not in (w_all["from"], w_one["from"]))
+
+
 # ── 8. the version table ────────────────────────────────────────────────────────────────────────
 
 def test_version_table_keeps_rest_and_unknown():
