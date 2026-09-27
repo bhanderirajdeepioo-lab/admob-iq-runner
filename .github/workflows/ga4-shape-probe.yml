@@ -1,0 +1,68 @@
+# One-off: the GA4 SHAPE probe for the "Install value" tab (country-wise D1/D7/D30 + earning per install, ads money
+# back) — does GA4 accept each request the design may use, how big / costly / whole is it, and does GA4's ad revenue tie
+# to AdMob's. See admob_iq/fetch/ga4_shape_probe.py. Read-only against GA4 and against the PRIVATE repo's data; the only
+# write is ga4/shape_probe.json in the PRIVATE repo. This repo's Actions log is PUBLIC: it shows progress counts and one
+# line of counts only; stderr (which could echo request details) is hidden.
+name: ga4-shape-probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_apps:
+        description: "probe only the first N apps (0 = all)"
+        required: false
+        default: "0"
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-shape-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    # the probe starts no GA4 call 22 min after IT starts, then writes what it has; before it: setup + the clone
+    # (capped at 8 min below) + loading AdMob; after: the last in-flight calls + the private write. 45 leaves room for
+    # all of it, so a slow clone can never get the job killed after the GA4 quota is spent and before the write.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Read the PRIVATE data (read-only clone, for the AdMob / Google Ads comparison)
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing"; exit 1; }
+          test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
+          # the token goes in a header for this one command only: never into a URL, a file or .git/config; a clone
+          # slower than 8 min is given up (the GA4 part still runs), never left to eat the job's time
+          auth=$(printf 'x-access-token:%s' "$DATA_REPO_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          if timeout 480 git -c http.extraheader="AUTHORIZATION: basic $auth" clone -q --depth=1 \
+               "https://github.com/$DATA_REPO.git" _private > /dev/null 2>&1; then
+            echo "private data: $(ls -1 _private/data 2>/dev/null | wc -l) file(s)"
+          else
+            rm -rf _private        # the GA4 part still runs (state via the contents API); AdMob is compared offline
+            echo "::warning::private data not cloned: the AdMob comparison is skipped (details kept off the public log)"
+          fi
+      - name: Run
+        env:
+          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          SHAPE_DATA_DIR: _private
+          PROBE_MAX_APPS: ${{ github.event.inputs.max_apps }}
+          PYTHONUNBUFFERED: "1"
+        run: python -m admob_iq.fetch.ga4_shape_probe 2>/tmp/shape.err || { echo "::error::shape probe failed (details kept off the public log)"; exit 1; }
