@@ -207,7 +207,7 @@ def test_every_request_is_the_specs_shape_over_the_last_28_days(fake):
     assert MGR not in by
     qs = {k: q for cid, k, q in f.queries if cid == A1}
     rng = "segments.date BETWEEN '%s' AND '%s'" % (START, END)
-    assert qs["G1P"] == ("SELECT campaign.id, campaign.app_campaign_setting.app_id, "
+    assert qs["G1P"] == ("SELECT campaign.id, campaign.app_campaign_setting.app_id, campaign.advertising_channel_type, "
                          "geographic_view.country_criterion_id, geographic_view.location_type, "
                          "segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks "
                          "FROM geographic_view WHERE %s "
@@ -215,7 +215,8 @@ def test_every_request_is_the_specs_shape_over_the_last_28_days(fake):
                          "AND geographic_view.location_type = 'LOCATION_OF_PRESENCE' "
                          "AND metrics.cost_micros > 0" % rng)
     assert qs["G1I"] == qs["G1P"].replace("LOCATION_OF_PRESENCE", "AREA_OF_INTEREST")
-    assert qs["G2"] == ("SELECT campaign.app_campaign_setting.app_id, geographic_view.country_criterion_id, "
+    assert qs["G2"] == ("SELECT campaign.app_campaign_setting.app_id, campaign.advertising_channel_type, "
+                        "geographic_view.country_criterion_id, "
                         "geographic_view.location_type, segments.date, segments.conversion_action_category, "
                         "metrics.conversions FROM geographic_view WHERE %s "
                         "AND campaign.advertising_channel_type = 'MULTI_CHANNEL' "
@@ -325,6 +326,28 @@ def test_a_refused_request_is_kept_as_its_code_and_the_rest_goes_on(fake):
     assert (g7["accepted"], g7["fallback"]) == (3, 1)                     # A1: the spec's fields only
     assert rep["summary"]["g5"]["via"] == "account" and rep["summary"]["g5"]["pass"] is True
     assert rep["counts"]["errors"] == 3
+
+
+def test_a_disabled_account_is_asked_once_and_nothing_else(fake):
+    # CUSTOMER_NOT_ENABLED on the spend read: every other request of that account would fail the same way — none is
+    # asked (the live run lost its call cap to them), the other accounts are probed as ever
+    f = fake()
+    f.raise_for = {"SPEND": ({A2}, "HTTP 403: authorizationError=CUSTOMER_NOT_ENABLED — account %s" % A2)}
+    rep = _run()
+    asked_a2 = [k for c, k, _ in f.queries if c == A2]
+    assert asked_a2 == ["SPEND"] and rep["accounts"][A2].get("not_enabled") is True
+    assert [k for c, k, _ in f.queries if c == A1].count("G1P") == 1              # A1 still probed in full
+    assert rep["counts"]["errors"] == 1
+
+
+def test_the_geo_queries_select_every_field_they_filter_on():
+    # GAQL refused them live with EXPECTED_REFERENCED_FIELD_IN_SELECT_CLAUSE: a WHERE field must be in the SELECT
+    for q in (gp.Q_G1, gp.Q_G2, gp.Q_ULV):
+        sel, where = q.split(" FROM ")[0], q.split(" WHERE ")[1]
+        for fld in ("campaign.advertising_channel_type", "geographic_view.location_type",
+                    "segments.conversion_action_category"):
+            if fld in where:
+                assert fld in sel, (fld, q[:60])
 
 
 def test_a_quota_error_stops_every_further_call(fake):

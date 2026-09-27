@@ -111,7 +111,7 @@ NEEDS = {"c": ("SPEND",), "cm": ("SPEND", "CHAN"), "p": ("G1P",), "i": ("G1I",),
 
 Q_CHAN = ("SELECT campaign.id, campaign.advertising_channel_type, campaign.advertising_channel_sub_type "
           "FROM campaign WHERE campaign.app_campaign_setting.app_id != ''")
-Q_G1 = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, "
+Q_G1 = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, campaign.advertising_channel_type, "
         "geographic_view.country_criterion_id, geographic_view.location_type, "
         "segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks "
         "FROM geographic_view "
@@ -119,7 +119,8 @@ Q_G1 = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, "
         "AND campaign.advertising_channel_type = 'MULTI_CHANNEL' "
         "AND geographic_view.location_type = '{lt}' "
         "AND metrics.cost_micros > 0")
-Q_G2 = ("SELECT campaign.app_campaign_setting.app_id, geographic_view.country_criterion_id, "
+Q_G2 = ("SELECT campaign.app_campaign_setting.app_id, campaign.advertising_channel_type, "
+        "geographic_view.country_criterion_id, "
         "geographic_view.location_type, segments.date, segments.conversion_action_category, "
         "metrics.conversions "
         "FROM geographic_view "
@@ -127,7 +128,7 @@ Q_G2 = ("SELECT campaign.app_campaign_setting.app_id, geographic_view.country_cr
         "AND campaign.advertising_channel_type = 'MULTI_CHANNEL' "
         "AND geographic_view.location_type = 'LOCATION_OF_PRESENCE' "
         "AND segments.conversion_action_category = 'DOWNLOAD'")
-Q_ULV = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, "
+Q_ULV = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, campaign.advertising_channel_type, "
          "user_location_view.country_criterion_id, user_location_view.targeting_location, "
          "segments.date, metrics.cost_micros "
          "FROM user_location_view "
@@ -384,6 +385,9 @@ def probe_account(run, ctx, acct):
 
     res = {}
     res["SPEND"] = ask("SPEND", lambda: gads._app_spend_for(aid, mcc, dev, tok, a, b))
+    if res["SPEND"] is None and ((rec["calls"].get("SPEND") or {}).get("err") or {}).get("http") == 403:
+        rec["not_enabled"] = True                  # a disabled / cancelled account (CUSTOMER_NOT_ENABLED): every other
+        return rec                                 # request would fail the same way — none asked
     if res["SPEND"] == []:
         rec["no_spend"] = True
     else:
