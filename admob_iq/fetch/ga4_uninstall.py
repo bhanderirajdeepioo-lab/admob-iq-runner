@@ -71,11 +71,22 @@ are there at age N", so the owner sees how late Firebase really is.
 Store files and state.json are deterministic (sorted keys, gzip without a timestamp) and only rewritten
 when their content changes, so the private repo's history grows about once a day, not every run.
 
+INSTALL VALUE (engine.value; only with the setting GA4_IDAY): a separate private file per app,
+data/ga4_uninstall/iday/<key>.json.gz (+ <key>.old.json.gz, the frozen old parts), read after the return cohorts in
+every full / incremental fetch (fetch_iday, never failing it). Per ACTIVITY day D, once it is final (D ≤ E − 3): Q-B
+[firstSessionDate] (all countries, install ages 0..427, exact: the truth), Q-C [countryId, firstSessionDate] with
+firstSessionDate inList D−90..D (countries, tied to Q-B: whatever GA4 did not give to a country stays visible as
+"unassigned", never spread, never dropped), and Q-T [date] day totals per block of days. Each day is folded ONCE into
+aggregates (install day × lag; install week × country × lag) + a per-day ledger; a newest → oldest cursor backfills
+the history ≤ IDAY_MAX_CALLS calls a fetch. The main store is never touched by it.
+
 Nothing here prints, and refresh_all never raises: a failing owner / app is recorded in the PRIVATE state
 (state.json, never shipped) and the others carry on. The public build log gets one line of counts from
-admob_iq.uninstall_build.
+admob_iq.uninstall_build (and one more, iday_log_line, when GA4_IDAY is on).
 """
 
+import copy
+import functools
 import hashlib
 import json
 import os
@@ -1381,14 +1392,15 @@ def _impact_full(p):
 
 # ── full + incremental fetch ────────────────────────────────────────────────────────────────────
 
-def fetch_full(ga, end, max_history_days, old_store=None, stop=None, held=True, at=None):
+def fetch_full(ga, end, max_history_days, old_store=None, stop=None, held=True, at=None, iday=None):
     """The app's whole history: the daily report over the widest window finds where its data starts
     (history_start), then the other reports from there. Cells whose install day is older than that but
     still inside `old_store`'s history are placed into those older cohorts. `stop` = the run budget (see
     _fetch_cells). held: `old_store` is this stream's — its users edge and events slice size are used, and
     its old days held as complete users cells are not asked by events (nothing could beat them, keep_best);
     False (the app moved to another stream): none of that. `at` = the fetch's day, into cell_src (default
-    the window end). Raises on any failure (the caller keeps the old store)."""
+    the window end). iday = refresh_all's box for the install-value reads (_iday_step; None: none). Raises on any
+    failure (the caller keeps the old store)."""
     start0 = end - timedelta(days=max_history_days - 1)
     rows, den = _daily_rows(ga, start0, end, "a28")
     cut = {"daily"} if ga.truncated(rows) else set()
@@ -1430,6 +1442,7 @@ def fetch_full(ga, end, max_history_days, old_store=None, stop=None, held=True, 
         fetch_ret(ga, out, end, stop, full=True, at=at or end.isoformat())
     except Exception:
         pass                                            # never fails the uninstall fetch: the cursor resumes next time
+    _iday_step(ga, out, iday, end, stop, at or end.isoformat())     # never fails it either (reads `out` only)
     return out
 
 
@@ -1644,9 +1657,10 @@ def merge_window(store, fetched, start, end, held=True):
     return store
 
 
-def fetch_incr(ga, store, end, refetch_days, stop=None, at=None):
+def fetch_incr(ga, store, end, refetch_days, stop=None, at=None, iday=None):
     """The recent window (see incr_start) re-pulled and merged into `store` (in place, returned). Its users
-    edge stays as it is (only a full re-pull moves it); days of the window past it go by events."""
+    edge stays as it is (only a full re-pull moves it); days of the window past it go by events. iday: see
+    fetch_full."""
     start = incr_start(store, end, refetch_days)
     cut = set()
     chunk = _users_chunk(store)
@@ -1670,6 +1684,7 @@ def fetch_incr(ga, store, end, refetch_days, stop=None, at=None):
         fetch_ret(ga, store, end, stop, at=at or end.isoformat())
     except Exception:
         pass                                    # never fails the uninstall fetch: the cursor resumes next time
+    _iday_step(ga, store, iday, end, stop, at or end.isoformat())   # never fails it either (reads `store` only)
     return store
 
 
@@ -1972,22 +1987,36 @@ def plan(app_st, store, end, now, cfg):
         return None if rejected and end < _d(store["next_rebuild"]) else "full"   # (never an incremental onto it) —
                                                         # a re-pull just rejected: again tomorrow, not every 3h
     if _hours_since(app_st.get("last_ok"), now) < cfg["min_hours"]:
-        return None                                     # at most once per ~20h
+        return iday_due(app_st, cfg, now)               # at most once per ~20h (the install-value backfill: its own)
     if store.get("next_rebuild") and end >= _d(store["next_rebuild"]):
         return "full"
     if end > _d(store["window_end"]) or holes(store):
         return "full" if (end - incr_start(store, end, cfg["refetch_days"])).days + 1 > FULL_IF_GAP_DAYS else "incr"
     if backfill_due(store):
         return "incr"                                   # its usage / vuse or return-cohort history is still coming in:
-    return None                                         # read on as soon as min_hours allows, not on the next GA4 day
+    return iday_due(app_st, cfg, now)                   # read on as soon as min_hours allows, not on the next GA4 day
 
 
-def backfill_due(store):
+def backfill_due(store, app_st=None):
     """A store (or its meta) whose update-impact data (usage / vuse, impact_v) or return-cohort history (ret_from: the
-    edge found or history_start reached) isn't whole yet. A meta from before these keys never says so."""
+    edge found or history_start reached) isn't whole yet. A meta from before these keys never says so. (`app_st` is
+    not read: the install-value backfill has its own fetch kind — iday_due — that never moves last_ok.)"""
     if "impact_v" in store and int(store.get("impact_v") or 0) < IMPACT_V:
         return True
     return store.get("ret_done") is False
+
+
+def iday_due(app_st, cfg, now):
+    """"iday" (GA4_IDAY on): an install-value-only fetch — the stored store only READ, never fetched or saved, last_ok
+    never moved — for an app whose install-value history is still coming in (state.fetch[aid].iday.done False), at
+    most every IDAY_EVERY_HOURS. It runs after every app that is due for real in the run, on the time left, so a new
+    GA4 day is never held back by it: the uninstall / Active fetch of the next settled day keeps its own min_hours
+    clock. None otherwise."""
+    if not cfg.get("iday") or (app_st.get("iday") or {}).get("done") is not False:
+        return None
+    if _hours_since(app_st.get("last_iday"), now) < IDAY_EVERY_HOURS:
+        return None
+    return "iday"
 
 
 def _fail_kind(e):
@@ -2009,6 +2038,898 @@ def _quota_low(q):
             if (b.get("remaining") or 0) < QUOTA_MIN_FRAC * total:
                 return True
     return False
+
+
+# ── install value: GA4 per activity day, folded (the "iday" file; engine.value reads it) ─────────────
+
+IDAY_V = 1                  # the iday file format: a file of another one starts over (a new `iday` input: seeded)
+IDAY_DIR = "iday"           # data/ga4_uninstall/iday/<key>.json.gz (+ <key>.old.json.gz: the frozen old parts)
+IDAY_MAX_CALLS = 120        # GA4 calls per app-fetch at most (shape probe: tokens p90 ≤ 12 a call → 120)
+IDAY_CTY_DAYS = 400         # countries (Q-C) are read only for activity days D ≥ F − 400
+IDAY_LATE = 3               # a day is read once it is final: D ≤ F = E − 3 (≥ 5 days old: whole on 28/28 apps)
+IDAY_TRIES = 3              # a read that comes back short is asked at most 3 times in all, then kept (≈ / unassigned)
+IDAY_HOUR_FLOOR = 0.5       # the BACKFILL stops for a property once an hourly token bucket is under 50%: the build's
+                            # other reports always keep half
+IDAY_RETRY_DAYS = 5         # step 2: at most 5 days asked again per fetch, each at most once a day
+IDAY_CHECK_DAYS = 28        # step 3, the late check: in a file's first 28 days …
+IDAY_CHECK_AGE = 7          # … day F − 7 (~12 days old, read fresh at ~5) is read again, only measured (chk)
+IDAY_EDGE_RUN = 7           # 7 days in a row whose Q-B has no install-day-D row while the day had installs = the edge
+IDAY_TOT_DAYS = 120         # a Q-T block holds at most 120 days
+IDAY_TOT_RESERVE = 2        # calls the day reads leave for the Q-T blocks (new days + backfill: 2 blocks)
+IDAY_ERR_STOP = 2           # 2 failed calls in a row stop the app's iday reads for this fetch
+IDAY_EVERY_HOURS = 2        # an install-value-only fetch (plan "iday": backfill not done) at most every 2 h per app
+IDAY_DUE_SHARE = 0.5        # the backfill inside a DUE app's fetch stops at half the run budget …
+IDAY_RESERVE_SEC = 30       # … and early enough to leave 30 s for every due app still to come (none is deferred)
+GAP_MAX = 0.02              # Q-C tie: Σ countries' ad revenue within 2% of Q-B's (fresh revenue moved ≤ ~1.3% between
+TIE_NEW = 0.01              # reads minutes apart) and their install-day new users within 1% …
+TIE_ABS_MICROS = 1000       # … or within $0.001 / 1 user (a tiny day: that much either way says nothing)
+TIE_ABS_USERS = 1
+QB_WIN = 427                # Q-B sees install ages 0..427 only — older users are missing even from its TOTAL
+QB_NCOV = 0.99              # Q-B self-check: lag-0 new users ≥ 99% of the day's newUsers …
+QB_COV = (0.97, 1.05)       # … Σ active users 97–105% of the day's (only while every user is inside the window)
+QB_WIN_DROP = (420, 300)    # a read whose largest lag fell under 300 after one at ≥ 420: GA4 keeps less (qb_win)
+CTY_LIST = 91               # Q-C install days: D − 90 .. D
+CSET_N, CSET_MAX = 25, 35   # country slots: the top 25 by installs (+ "--" unknown, "ZZ" every other), ≤ 35 in all
+CSET_ADD, CSET_WIN = 0.02, 28   # a country holding ≥ 2% of installs over the last 28 folded days gets a slot
+ZZN_TOP = 10                # (per folded day, the 10 biggest countries without a slot are remembered for that)
+IAP_MIN = 0.01              # flags.iap: in-app purchases ≥ 1% of ad revenue (Q-T)
+HOT_X_DAYS, HOT_C_DAYS = 400, 100   # .old: x / days older than to − 400, country weeks ending before to − 100 (whole months)
+ULAGS = (0, 1, 3, 7, 14, 30, 45, 60, 90, 120, 180, 270, 365)            # x[X].u: active users at these lags
+RBANDS = ((0, 0), (1, 1), (2, 3), (4, 7), (8, 14), (15, 30), (31, 60), (61, 90), (91, 180), (181, 365))
+CLAGS = (1, 3, 7, 14, 30, 60, 90)                                          # c[W][slot].u: users at these lags
+CBANDS = RBANDS[:8]                                                        # c[W][slot].r, gap.r: revenue ≤ 90 days
+ABANDS = ((0, 0), (1, 6), (7, 29), (30, 89), (90, 364), (365, 427))        # days[D].ab / rb: by install age
+IDAY_METS = ("activeUsers", "newUsers", "totalAdRevenue", "totalRevenue")
+QB_FOLDED = ("ok", "q", "empty")        # days[D].st that were folded into x (each exactly once)
+QC_FOLDED = ("ok", "smp", "gap")        # days[D].cst that were folded into c
+
+
+def _bands_ix(bands, top):
+    ix = [None] * (top + 1)
+    for i, (lo, hi) in enumerate(bands):
+        for lag in range(lo, hi + 1):
+            ix[lag] = i
+    return ix
+
+
+RB_IX, AB_IX = _bands_ix(RBANDS, 365), _bands_ix(ABANDS, QB_WIN)
+UL_IX, CL_IX = {lag: i for i, lag in enumerate(ULAGS)}, {lag: i for i, lag in enumerate(CLAGS)}
+
+
+def _mic(v):
+    """USD → micros (int)."""
+    try:
+        return int(round(float(v or 0) * 1e6))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _int(v):
+    try:
+        return int(round(float(v or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def iday_week(x):
+    """An install day (date or ISO) → the ISO Monday of its week (Monday–Sunday, the GA4 timezone's days)."""
+    x = _d(x)
+    return (x - timedelta(days=x.weekday())).isoformat()
+
+
+def iday_band(lag):
+    """A lag in days (0..365) → its RBANDS index (None past 365)."""
+    return RB_IX[lag] if 0 <= lag <= 365 else None
+
+
+@functools.lru_cache(maxsize=4096)
+def _x_date(f):
+    """GA4 YYYYMMDD → date (None when not a date), cached: the same ~430 install days recur on every read."""
+    return ga4._d(f)
+
+
+def _slot_cc(v):
+    """GA4 countryId → the ISO-2 code, "--" when unknown ("(not set)", empty, anything not a 2-letter code)."""
+    s = str(v or "").strip()
+    return s if len(s) == 2 and s.isalpha() and s.isupper() else "--"
+
+
+def _date_ranges(keys):
+    """Sorted ISO days → [[first, last]] runs of consecutive days."""
+    out = []
+    for k in keys:
+        if out and (_d(k) - _d(out[-1][1])).days == 1:
+            out[-1][1] = k
+        else:
+            out.append([k, k])
+    return out
+
+
+# the three reads (Ga4App adds the Android + stream filter, returnPropertyQuota, a total order and paging)
+
+def _iday_body(a, b, dims, no_total=False, total_row=True):
+    body = {"dateRanges": [_rng(a, b)], "dimensions": ga4._dim(*dims),
+            "metrics": ga4._dim(*(IDAY_METS[:3] if no_total else IDAY_METS)), "currencyCode": "USD",
+            "keepEmptyRows": False}
+    if total_row:
+        body["metricAggregations"] = ["TOTAL"]
+    return body
+
+
+def rep_iday_qb(ga, d, no_total=False):
+    """Q-B: ONE activity day d, all countries, by install day (firstSessionDate): ≤ 428 rows, 1 token. The truth every
+    country read is tied to; install ages 0..427 only (QB_WIN). no_total: without totalRevenue (a property that
+    rejects it)."""
+    return ga.report_all(_iday_body(d, d, ("firstSessionDate",), no_total), page_rows=UNI_PAGE_ROWS)
+
+
+def rep_iday_qc(ga, d, no_total=False):
+    """Q-C: ONE activity day d by country × install day, install days d−90 .. d only (a 91-value inList — GA4 refuses
+    a numeric between on firstSessionDate). ≤ ~14k rows, one page. The list does NOT avoid GA4's "(other)" loss (it
+    only hides the row): the loss is measured by tying the read to Q-B (_iday_check_qc)."""
+    days = [(d - timedelta(days=i)).strftime("%Y%m%d") for i in range(CTY_LIST)]
+    return ga.report_all(_iday_body(d, d, ("countryId", "firstSessionDate"), no_total),
+                         extra=[ga4._in_list("firstSessionDate", days)], page_rows=UNI_PAGE_ROWS)
+
+
+def rep_iday_tot(ga, a, b, no_total=False):
+    """Q-T: the day totals of [a, b] by date (every install age): the GA4 side of the AdMob check, the IAP share, and
+    the revenue of users older than Q-B's window (rb_old)."""
+    return ga.report_all(_iday_body(a, b, ("date",), no_total, total_row=False), page_rows=UNI_PAGE_ROWS)
+
+
+# parse, self-check, fold
+
+def _qb_parse(rows, d, hs):
+    """Q-B rows of day d → its sums (a4, rev4 micros, n = new users installed on d), ab / rb by install-age band (0..427),
+    win (the largest lag with users), oth ("(other)" row), t91 (ad revenue of install days d−90..d: the tie's side),
+    c91 [lag 0..90] (the same, install days ≥ hs: what the fold puts into x — the gap's side) and the cells to fold
+    [(X, lag, active, new, ad, iap)] (X ≥ hs, lag ≤ 365). Rows with a bad date only add to a4 / rev4."""
+    q = {"rows": len(rows), "a4": 0, "rev4": 0, "n": 0, "ab": [0] * len(ABANDS), "rb": [0] * len(ABANDS),
+         "win": None, "oth": False, "t91": 0, "c91": [0] * CTY_LIST, "cells": []}
+    for r in rows:
+        f = str(r.get("firstSessionDate") or "")
+        act, new, ad = _int(r.get("activeUsers")), _int(r.get("newUsers")), _mic(r.get("totalAdRevenue"))
+        iap = _mic(r["totalRevenue"]) - ad if "totalRevenue" in r else None
+        q["a4"] += act
+        q["rev4"] += ad
+        if f == "(other)":
+            q["oth"] = True
+        x = _x_date(f)
+        if x is None or x > d:
+            continue
+        lag = (d - x).days
+        if lag == 0:
+            q["n"] += new
+        if act and (q["win"] is None or lag > q["win"]):
+            q["win"] = lag
+        if lag <= QB_WIN:
+            q["ab"][AB_IX[lag]] += act
+            q["rb"][AB_IX[lag]] += ad
+        if lag < CTY_LIST:
+            q["t91"] += ad
+            if x >= hs:
+                q["c91"][lag] += ad
+        if x >= hs and lag <= 365:
+            q["cells"].append((x.isoformat(), lag, act, new, ad, iap))
+    return q
+
+
+def _meta_flags(meta):
+    m = meta or {}
+    return bool(m.get("dataLossFromOtherRow")), bool(m.get("samplingMetadatas")), bool(m.get("subjectToThresholding"))
+
+
+def _iday_check_qb(q, meta, day, d, hs, tries, capped=False):
+    """Q-B's self-check against the store's day (daily new / a1) → (st, ledger fields). ncov = lag-0 new users ÷ the
+    day's newUsers; cov = Σ active users ÷ the day's, only while d − hs ≤ QB_WIN and the history isn't capped (`capped`:
+    users older than history_start exist) — past that, older users are legitimately absent: null. st: ok (folded) · retry (short without a GA4 flag: not folded, asked again; after IDAY_TRIES reads →
+    q) · q (folded, ≈: "(other)", loss, sampled, cov > 1.05 or tries used up) · empty (0 rows, 0 active users)."""
+    new, a1 = _int((day or {}).get("new")), _int((day or {}).get("a1"))
+    ncov = round(q["n"] / new, 4) if new else None
+    cov = round(q["a4"] / a1, 4) if a1 and (d - hs).days <= QB_WIN and not capped else None
+    loss, smp, thr = _meta_flags(meta)
+    if not q["rows"] and not a1:
+        st = "empty"
+    elif q["oth"] or loss or smp or (cov is not None and cov > QB_COV[1]):
+        st = "q"
+    elif (ncov is not None and ncov < QB_NCOV) or (cov is not None and cov < QB_COV[0]):
+        st = "q" if tries >= IDAY_TRIES else "retry"
+    else:
+        st = "ok"
+    return st, {"a4": q["a4"], "n": q["n"], "rev4": q["rev4"], "ncov": ncov, "cov": cov, "win": q["win"],
+                "oth": q["oth"], "loss": loss, "smp": smp, "thr": thr, "rows": q["rows"], "ab": list(q["ab"]),
+                "rb": list(q["rb"])}
+
+
+def _iday_fold_qb(ida, q):
+    """Q-B's cells into x[X] (in place): u[ULAGS] active users, r[RBANDS] ad revenue micros (lag ≤ 365), p the same for
+    in-app purchases (totalRevenue − totalAdRevenue; only where there are any), n the lag-0 new users."""
+    x = ida["x"]
+    for k, lag, act, new, ad, iap in q["cells"]:
+        e = x.get(k)
+        if e is None:
+            e = x[k] = {"n": 0, "u": [0] * len(ULAGS), "r": [0] * len(RBANDS)}
+        if lag == 0:
+            e["n"] += new
+        i = UL_IX.get(lag)
+        if i is not None:
+            e["u"][i] += act
+        e["r"][RB_IX[lag]] += ad
+        if iap:
+            p = e.get("p") or [0] * len(RBANDS)
+            p[RB_IX[lag]] += iap
+            e["p"] = p
+
+
+def _qc_parse(rows, d, hs):
+    """Q-C rows of day d → rev / n0 (Σ named countries' ad revenue over install days d−90..d, their lag-0 new users:
+    the tie's side), nr [lag 0..90] / nn0 (the same, install days ≥ hs: the gap's side), agg {(country, install
+    week): {n, u[CLAGS], r[CBANDS]}} (install days ≥ hs) and inst {country: lag-0 new users}. "(other)" rows (either
+    dimension) are never folded (their users are not additive): coth; a row with a bad install day neither."""
+    lo = d - timedelta(days=CTY_LIST - 1)
+    c = {"rows": len(rows), "coth": False, "rev": 0, "n0": 0, "nr": [0] * CTY_LIST, "nn0": 0, "agg": {}, "inst": {}}
+    xs, slots = {}, {}                                  # ~14k rows, 91 install days, ~200 countries: parsed once each
+    for r in rows:
+        cc, f = str(r.get("countryId") or ""), str(r.get("firstSessionDate") or "")
+        if cc == "(other)" or f == "(other)":
+            c["coth"] = True
+            continue
+        xl = xs.get(f)
+        if xl is None:
+            x = _x_date(f)
+            xl = xs[f] = (None, None, None) if x is None or not lo <= x <= d else (x, (d - x).days, iday_week(x))
+        x, lag, week = xl
+        if x is None:
+            continue
+        act, new, ad = _int(r.get("activeUsers")), _int(r.get("newUsers")), _mic(r.get("totalAdRevenue"))
+        slot = slots.get(cc)
+        if slot is None:
+            slot = slots[cc] = _slot_cc(cc)
+        c["rev"] += ad
+        if lag == 0:
+            c["n0"] += new
+            c["inst"][slot] = c["inst"].get(slot, 0) + new
+        if x < hs:
+            continue
+        c["nr"][lag] += ad
+        if lag == 0:
+            c["nn0"] += new
+        key = (slot, week)
+        a = c["agg"].get(key)
+        if a is None:
+            a = c["agg"][key] = {"n": 0, "u": [0] * len(CLAGS), "r": [0] * len(CBANDS)}
+        if lag == 0:
+            a["n"] += new
+        i = CL_IX.get(lag)
+        if i is not None:
+            a["u"][i] += act
+        a["r"][RB_IX[lag]] += ad
+    return c
+
+
+def _tie_inside(got, want, rel, floor):
+    return abs(got - want) <= max(rel * abs(want), floor)
+
+
+def _iday_check_qc(c, meta, t91, n0, ctries):
+    """Q-C's self-check, tied to the same day's Q-B (t91 = its ad revenue over the 91 install days, n0 = its lag-0 new
+    users) → (cst, ledger fields). The primary trigger is dataLossFromOtherRow (closs): GA4 sets it on a filtered read
+    that shows NO "(other)" row. tie_rev / tie_new = Σ countries ÷ Q-B (active users are never tied: travellers + HLL
+    run 0–4% high). cst: ok · smp (sampled, tie inside: folded as it is) · gap (closs / "(other)" / sampled with the
+    tie outside / tries used up: the named rows folded, the shortfall kept as unassigned) · retry (tie outside without
+    a flag: not folded, asked again with a fresh Q-B)."""
+    closs, csmp, thr = _meta_flags(meta)
+    frac = None
+    for s in (meta or {}).get("samplingMetadatas") or []:
+        try:
+            v = int(s.get("samplesReadCount")) / int(s.get("samplingSpaceSize"))
+        except (TypeError, ValueError, ZeroDivisionError, AttributeError):
+            continue
+        frac = round(v if frac is None else min(frac, v), 4)
+    inside = (_tie_inside(c["rev"], t91, GAP_MAX, TIE_ABS_MICROS)
+              and _tie_inside(c["n0"], n0, TIE_NEW, TIE_ABS_USERS))
+    if closs or c["coth"]:
+        cst = "gap"
+    elif csmp:
+        cst = "smp" if inside else "gap"
+    elif inside:
+        cst = "ok"
+    else:
+        cst = "gap" if ctries >= IDAY_TRIES else "retry"
+    return cst, {"closs": closs, "coth": c["coth"], "csmp": csmp, "cthr": thr, "smp_frac": frac,
+                 "tie_rev": round(c["rev"] / t91, 4) if t91 else None,
+                 "tie_new": round(c["n0"] / n0, 4) if n0 else None}
+
+
+def _zero(e):
+    return not e.get("n") and not any(e.get("u") or []) and not any(e.get("r") or [])
+
+
+def _iday_fold_gap(ida, c, qbc, d, hs):
+    """The signed shortfall of a folded Q-C read into c[W]["gap"] {n, r[CBANDS]} (in place): per install day X ≥ hs of
+    d−90..d, what the day's Q-B put into x[X] (qbc) minus Σ named countries — so Σ slots + gap = Σ x exactly, week by
+    week and band by band. Never spread over the countries."""
+    touched = set()
+    for lag in range(CTY_LIST):
+        x = d - timedelta(days=lag)
+        if x < hs:
+            break
+        gr = int(qbc["r"][lag]) - c["nr"][lag]
+        gn = int(qbc["n"]) - c["nn0"] if lag == 0 else 0
+        if not gr and not gn:
+            continue
+        w = iday_week(x)
+        g = ida["c"].setdefault(w, {}).setdefault("gap", {"n": 0, "r": [0] * len(CBANDS)})
+        g["n"] += gn
+        g["r"][RB_IX[lag]] += gr
+        touched.add(w)
+    for w in touched:
+        if _zero(ida["c"][w]["gap"]):
+            del ida["c"][w]["gap"]
+        if not ida["c"][w]:
+            del ida["c"][w]
+
+
+def _iday_cset(ida, day_inst, before, days):
+    """Country slots (in place). The first fetch with country data: the top CSET_N countries by lag-0 installs of its
+    own reads, + "--" and "ZZ". Then per folded day the ZZN_TOP biggest countries without a slot are remembered (the
+    newest CSET_WIN folded days); one holding ≥ CSET_ADD of those days' installs is appended (≤ CSET_MAX slots), with
+    cset_since = the days folded before (ranges): a cell needing one of them is partial. Slots never move."""
+    cset = ida["cset"]
+    if not cset:
+        if not day_inst:
+            return
+        tot = {}
+        for inst in day_inst.values():
+            for cc, n in inst.items():
+                tot[cc] = tot.get(cc, 0) + n
+        top = sorted((cc for cc, n in tot.items() if cc not in ("--", "ZZ") and n > 0), key=lambda cc: (-tot[cc], cc))
+        cset.extend(top[:CSET_N] + ["--", "ZZ"])
+    zzn = ida["zzn"]
+    for k, inst in day_inst.items():
+        zzn[k] = dict(sorted(((cc, n) for cc, n in inst.items() if cc not in cset and cc != "--" and n > 0),
+                             key=lambda cn: (-cn[1], cn[0]))[:ZZN_TOP])
+    for k in sorted(zzn)[:-CSET_WIN]:
+        del zzn[k]
+    want = sum(_int((days.get(k) or {}).get("n")) for k in zzn)
+    got = {}
+    for inst in zzn.values():
+        for cc, n in inst.items():
+            got[cc] = got.get(cc, 0) + n
+    for cc in sorted((cc for cc, n in got.items() if want and n >= CSET_ADD * want), key=lambda cc: (-got[cc], cc)):
+        if len(cset) >= CSET_MAX:
+            break
+        cset.append(cc)
+        if before:
+            ida["cset_since"][cc] = _date_ranges(before)
+        for inst in zzn.values():
+            inst.pop(cc, None)
+
+
+def _iday_fold_pend(ida, pend):
+    """This fetch's country cells {(country, week): {n, u, r}} into c[W][slot index] (in place; all-zero slots
+    left out)."""
+    if not pend:
+        return
+    ix = {cc: i for i, cc in enumerate(ida["cset"])}
+    unk, zz = ix.get("--"), ix.get("ZZ")
+    touched = set()
+    for (cc, w), a in sorted(pend.items()):
+        s = ix.get(cc, unk if cc == "--" else zz)
+        if s is None:
+            continue
+        e = ida["c"].setdefault(w, {}).setdefault(str(s), {"n": 0, "u": [0] * len(CLAGS), "r": [0] * len(CBANDS)})
+        e["n"] += a["n"]
+        e["u"] = [p + v for p, v in zip(e["u"], a["u"])]
+        e["r"] = [p + v for p, v in zip(e["r"], a["r"])]
+        touched.add((w, str(s)))
+    for w, s in touched:
+        if _zero(ida["c"][w][s]):
+            del ida["c"][w][s]
+        if not ida["c"][w]:
+            del ida["c"][w]
+
+
+def _iday_new(src, at):
+    return {"v": IDAY_V, "src": list(src), "tz": None, "cur": "USD", "born": at, "from": None, "to": None,
+            "cfrom": None, "edge": None, "done": False,
+            "flags": {"no_total": False, "iap": False, "smp": False, "qb_win": False},
+            "cset": [], "cset_since": {}, "zzn": {}, "erun": [], "wlast": None, "days": {}, "x": {}, "c": {}}
+
+
+def _hour_low(q, floor=IDAY_HOUR_FLOOR):
+    """An hourly token bucket of the property under `floor` of its size (the backfill's own stop)."""
+    for k in ("tokensPerHour", "tokensPerProjectPerHour"):
+        b = (q or {}).get(k) or {}
+        if "remaining" in b:
+            total = max(QUOTA_CAP[k], (b.get("consumed") or 0) + (b.get("remaining") or 0))
+            if (b.get("remaining") or 0) < floor * total:
+                return True
+    return False
+
+
+def _rb_old(rec):
+    """days[D].rb_old: Q-T's ad revenue − Q-B's (users installed > 427 days ago), once both are known (null before)."""
+    if rec.get("rev") is not None and rec.get("rev4") is not None and rec.get("st") in QB_FOLDED:
+        rec["rb_old"] = rec["rev"] - rec["rev4"]
+
+
+class _Iday:
+    """One app-fetch's iday reads (fetch_iday): the call cap, the stops, this fetch's country cells until the slots
+    are known, and the counts."""
+
+    def __init__(self, ga, store, ida, end, stop, at, plain, max_calls, cty_days):
+        self.ga, self.ida, self.days, self.at = ga, ida, ida["days"], at
+        self.stop, self.plain, self.max_calls = stop, plain, max_calls
+        self.hs, self.daily = _d(store["history_start"]), store.get("daily") or {}
+        self.capped = bool(store.get("history_capped"))
+        self.F = end - timedelta(days=IDAY_LATE)
+        self.cty_lo = self.F - timedelta(days=cty_days)
+        self.calls = self.errs = 0
+        self.halt = False
+        self.pend, self.day_inst = {}, {}
+        self.stats = {"days": 0, "cdays": 0, "folded": 0, "flagged": 0, "csmp": 0, "cgap": 0, "retry": 0, "calls": 0,
+                      "tok": 0, "qstop": False, "why": None}
+
+    # budget
+
+    def can(self, need=1, back=False, reserve=True):
+        """May the next `need` calls go? The call cap (IDAY_TOT_RESERVE kept for Q-T), stop() (the build's 2× budget), a
+        low quota; the backfill (back) also the plain run budget and the hourly floor."""
+        why = None
+        if self.halt:
+            return False
+        if self.calls + need + (IDAY_TOT_RESERVE if reserve else 0) > self.max_calls:
+            why = "cap"
+        elif self.stop and self.stop():
+            why = "budget"
+        elif _quota_low(self.ga.quota):
+            why = "quota"
+        elif back and self.plain and self.plain():
+            why = "budget"
+        elif back and _hour_low(self.ga.quota):
+            why = "hour"
+        if why:
+            self.stats["why"] = self.stats["why"] or why
+            self.stats["qstop"] |= why in ("quota", "hour")
+            return False
+        return True
+
+    def ask(self, fn, *args):
+        """One read → (rows, metadata, tokens), or None: it failed (the day is `err`; IDAY_ERR_STOP in a row stop the
+        fetch's reads; a quota answer stops them at once). A 400 is asked ONCE more without totalRevenue (flags.no_total,
+        kept). A response in another currency than USD counts as failed."""
+        fl = self.ida["flags"]
+        nt = bool(fl.get("no_total"))
+        while True:
+            q0, c0 = self.ga.quota, getattr(self.ga, "calls", None)
+            try:
+                rows = fn(self.ga, *args, no_total=nt)
+                meta = dict(self.ga.last_meta or {})
+                if meta.get("currencyCode") not in (None, "", "USD"):
+                    raise ValueError("currency")
+            except Exception as e:
+                self._count(q0, c0)
+                if _fail_kind(e) == "quota":
+                    self.halt, self.stats["qstop"] = True, True
+                    self.stats["why"] = self.stats["why"] or "quota"
+                    return None
+                if not nt and str(e).startswith("HTTP 400"):
+                    nt = True
+                    continue
+                self.errs += 1
+                if self.errs >= IDAY_ERR_STOP:
+                    self.halt = True
+                    self.stats["why"] = self.stats["why"] or "errors"
+                return None
+            tok = self._count(q0, c0)
+            self.errs = 0
+            if nt:
+                fl["no_total"] = True
+            return rows, meta, tok
+
+    def _count(self, q0, c0):
+        """One read's calls and tokens → the fetch's counts and ga.impact_tokens['iday'] → its tokens."""
+        c1 = getattr(self.ga, "calls", None)
+        n = c1 - c0 if isinstance(c0, int) and isinstance(c1, int) and c1 > c0 else 1
+        tok = _spent(self.ga, q0)
+        self.calls += n
+        self.stats["calls"] += n
+        self.stats["tok"] += tok
+        t = getattr(self.ga, "impact_tokens", None)
+        if t is None:
+            t = self.ga.impact_tokens = {}
+        t["iday"] = t.get("iday", 0) + tok
+        return tok
+
+    # one day
+
+    def _need(self, d):
+        return 2 if d >= self.cty_lo else 1
+
+    def day(self, d):
+        """Q-B of day d → the ledger (+ its fold into x, and its Q-C when it folds inside the country horizon).
+        → the parse (None: the call failed — the day is `err`, unread)."""
+        k = d.isoformat()
+        rec = self.days.setdefault(k, {"st": None, "tries": 0})
+        res = self.ask(rep_iday_qb, d)
+        if res is None:
+            rec.update(st="err", at=self.at)
+            return None
+        rows, meta, tok = res
+        self.stats["days"] += 1
+        q = _qb_parse(rows, d, self.hs)
+        tries = _int(rec.get("tries")) + 1
+        st, f = _iday_check_qb(q, meta, self.daily.get(k), d, self.hs, tries, self.capped)
+        rec.update(f, st=st, tries=tries, at=self.at, tok=tok)
+        self._win(d, q)
+        if st == "retry":
+            self.stats["retry"] += 1
+            return q
+        _iday_fold_qb(self.ida, q)
+        _rb_old(rec)
+        self.stats["folded"] += 1
+        self.stats["flagged"] += st == "q"
+        if d < self.cty_lo:
+            rec["cst"] = "none"
+        elif st == "empty":
+            rec.update(cst="ok", ctries=0, crows=0, ctok=0, closs=False, coth=False, csmp=False, cthr=False,
+                       smp_frac=None, tie_rev=None, tie_new=None)
+        else:
+            rec["cst"] = None                           # asked next (or at a later fetch: step 2)
+            rec["qbc"] = {"n": q["n"], "r": list(q["c91"])}
+            if self.can(1):
+                self.qc(d, q["t91"], q["n"])
+        return q
+
+    def qc(self, d, t91, n0):
+        """Q-C of day d, tied to a Q-B read of the same fetch (t91, n0) → the ledger; folded (gap now, the country cells
+        once the slots are known) unless `retry` / `err`."""
+        k = d.isoformat()
+        rec = self.days[k]
+        res = self.ask(rep_iday_qc, d)
+        if res is None:
+            rec.update(cst="err", at=self.at)
+            return
+        rows, meta, tok = res
+        self.stats["cdays"] += 1
+        c = _qc_parse(rows, d, self.hs)
+        ctries = _int(rec.get("ctries")) + 1
+        cst, f = _iday_check_qc(c, meta, t91, n0, ctries)
+        rec.update(f, cst=cst, ctries=ctries, crows=c["rows"], ctok=tok, at=self.at)
+        if cst == "retry":
+            self.stats["retry"] += 1
+            return
+        qbc = rec.pop("qbc", None)
+        if qbc is not None:
+            _iday_fold_gap(self.ida, c, qbc, d, self.hs)
+        for key, a in c["agg"].items():
+            p = self.pend.get(key)
+            if p is None:
+                self.pend[key] = {"n": a["n"], "u": list(a["u"]), "r": list(a["r"])}
+            else:
+                p["n"] += a["n"]
+                p["u"] = [x + y for x, y in zip(p["u"], a["u"])]
+                p["r"] = [x + y for x, y in zip(p["r"], a["r"])]
+        self.day_inst[k] = c["inst"]
+        self.stats["csmp"] += cst == "smp"
+        self.stats["cgap"] += cst == "gap"
+        if cst == "smp":
+            self.ida["flags"]["smp"] = True
+
+    def _win(self, d, q):
+        """flags.qb_win: Q-B's window shrank (largest lag < 300 on a day that should reach ≥ 420, after a read that did)."""
+        if (d - self.hs).days < QB_WIN_DROP[0] or not q["rows"]:
+            return
+        win, last = q["win"] or 0, self.ida.get("wlast")
+        if win < QB_WIN_DROP[1] and isinstance(last, int) and last >= QB_WIN_DROP[0]:
+            self.ida["flags"]["qb_win"] = True
+        self.ida["wlast"] = win
+
+    # the steps
+
+    def prep(self):
+        """Days still waiting for their country read that fell out of the country horizon: none now."""
+        for k, r in self.days.items():
+            if r.get("st") in ("ok", "q") and r.get("cst") in (None, "retry", "err") and _d(k) < self.cty_lo:
+                r["cst"] = "none"
+                r.pop("qbc", None)
+
+    def new_days(self):
+        """Step 1: every unread day after the newest one read, up to F, oldest first (normally one). A new file: F."""
+        if not self.days:
+            todo = [self.F] if self.F >= self.hs else []
+        else:
+            to = _d(max(self.days))
+            todo = _days(max(to + timedelta(days=1), self.hs), self.F) if to < self.F else []
+        for d in todo:
+            if not self.can(self._need(d)):
+                break
+            self.day(d)
+
+    def retries(self):
+        """Step 2: ≤ IDAY_RETRY_DAYS days, newest first, each at most once a day: Q-B `retry` / `err` days, and folded
+        days whose Q-C is `retry` / `err` / not asked yet (with a fresh Q-B for the tie — never folded again)."""
+        er = set(self.ida.get("erun") or [])
+        cand = []
+        for k, r in self.days.items():
+            d = _d(k)
+            if r.get("at") == self.at or k in er or not self.hs <= d <= self.F:
+                continue
+            if r.get("st") in ("retry", "err"):
+                cand.append((k, "qb"))
+            elif r.get("st") in ("ok", "q") and d >= self.cty_lo and r.get("cst") in (None, "retry", "err"):
+                cand.append((k, "qc"))
+        for k, kind in sorted(cand, reverse=True)[:IDAY_RETRY_DAYS]:
+            d = _d(k)
+            if kind == "qb":
+                if not self.can(self._need(d)):
+                    break
+                self.day(d)
+                continue
+            if not self.can(2):
+                break
+            res = self.ask(rep_iday_qb, d)             # the tie's side, read now (never folded again)
+            self.days[k]["at"] = self.at
+            if res is None:
+                self.days[k]["cst"] = "err"
+                continue
+            self.stats["days"] += 1
+            q = _qb_parse(res[0], d, self.hs)
+            if self.can(1):
+                self.qc(d, q["t91"], q["n"])
+
+    def late(self):
+        """Step 3 (a file's first IDAY_CHECK_DAYS days): day F − IDAY_CHECK_AGE, read fresh at ~5 days, read again —
+        only measured (days[D].chk = {a, n, rev, closs, tie_rev, tie_new, at}), never folded again: how late GA4 is,
+        and at what age country loss starts."""
+        born = self.ida.get("born")
+        if not born or _age_days(born, self.at) >= IDAY_CHECK_DAYS:
+            return
+        d = self.F - timedelta(days=IDAY_CHECK_AGE)
+        k = d.isoformat()
+        r = self.days.get(k)
+        if not r or r.get("st") not in ("ok", "q") or r.get("chk") is not None:
+            return
+        if _age_days(k, r.get("at")) > IDAY_CHECK_AGE:
+            return                                      # a backfilled day: not read fresh, nothing to compare
+        cty = d >= self.cty_lo and r.get("cst") in QC_FOLDED
+        if not self.can(2 if cty else 1):
+            return
+        res = self.ask(rep_iday_qb, d)
+        if res is None:
+            return
+        q = _qb_parse(res[0], d, self.hs)
+        chk = {"at": self.at, "a": q["a4"], "n": q["n"], "rev": q["rev4"], "closs": None, "tie_rev": None,
+               "tie_new": None}
+        if cty:
+            res = self.ask(rep_iday_qc, d)
+            if res is not None:
+                _, f = _iday_check_qc(_qc_parse(res[0], d, self.hs), res[1], q["t91"], q["n"], 1)
+                chk.update(closs=f["closs"], tie_rev=f["tie_rev"], tie_new=f["tie_new"])
+        r["chk"] = chk
+
+    def backfill(self):
+        """Step 4: from the oldest day read − 1 down to history_start, newest first — the only step that obeys the plain
+        run budget and the hourly floor. Stops at a failed call (the day is `err`: step 2 asks it again) and at the data
+        edge: IDAY_EDGE_RUN days in a row (days without installs don't count) whose Q-B has no install-day-D row while
+        the day had installs → edge = the newest of them, their st "edge"."""
+        cur = _d(min(self.days)) - timedelta(days=1) if self.days else self.F
+        er = list(self.ida.get("erun") or [])
+        while cur >= self.hs and self.ida.get("edge") is None:
+            if not self.can(self._need(cur), back=True):
+                break
+            q = self.day(cur)
+            if q is None:
+                break
+            k = cur.isoformat()
+            if _int((self.daily.get(k) or {}).get("new")) > 0:
+                if q["n"] == 0 and self.days[k].get("st") == "retry":
+                    er.append(k)
+                else:
+                    er = []
+            if len(er) >= IDAY_EDGE_RUN:
+                self.ida["edge"] = er[0]
+                for e in er:
+                    self.days[e]["st"] = "edge"
+                er = []
+                break
+            cur -= timedelta(days=1)
+        self.ida["erun"] = er
+
+    def totals(self):
+        """Step 5: Q-T for every day read without its totals (tt), one call per block of consecutive days
+        (≤ IDAY_TOT_DAYS), newest first. A failed block stays null (unknown, never 0) and is asked at the next fetch."""
+        blocks = []
+        for k in sorted(k for k, r in self.days.items() if not r.get("tt")):
+            d = _d(k)
+            if blocks and (d - blocks[-1][1]).days == 1 and (d - blocks[-1][0]).days < IDAY_TOT_DAYS:
+                blocks[-1][1] = d
+            else:
+                blocks.append([d, d])
+        for a, b in sorted(blocks, reverse=True):
+            if not self.can(1, reserve=False):
+                break
+            res = self.ask(rep_iday_tot, a, b)
+            if res is None:
+                continue
+            nt = bool(self.ida["flags"].get("no_total"))
+            by = {}
+            for r in res[0]:
+                d = ga4._d(r.get("date"))
+                if d is not None:
+                    by[d.isoformat()] = r
+            for d in _days(a, b):
+                k = d.isoformat()
+                r, rec = by.get(k) or {}, self.days[k]
+                rec.update(a=_int(r.get("activeUsers")), nn=_int(r.get("newUsers")), rev=_mic(r.get("totalAdRevenue")),
+                           tot=None if nt and "totalRevenue" not in r else _mic(r.get("totalRevenue")), tt=self.at)
+                _rb_old(rec)
+
+    def finish(self):
+        """The country slots and this fetch's country cells, the cursor (from / to / cfrom / done) and the flags."""
+        ida = self.ida
+        before = sorted(k for k, r in self.days.items() if r.get("cst") in QC_FOLDED and k not in self.day_inst)
+        _iday_cset(ida, self.day_inst, before, self.days)
+        _iday_fold_pend(ida, self.pend)
+        ida["from"] = min(self.days) if self.days else None
+        ida["to"] = max(self.days) if self.days else None
+        cf = [k for k, r in self.days.items() if r.get("cst") in QC_FOLDED]
+        ida["cfrom"] = min(cf) if cf else None
+        ida["done"] = bool(ida.get("edge") is not None or self.F < self.hs
+                           or (ida["from"] is not None and _d(ida["from"]) <= self.hs))
+        rev = iap = 0
+        for r in self.days.values():
+            if r.get("rev") is not None and r.get("tot") is not None:
+                rev, iap = rev + r["rev"], iap + r["tot"] - r["rev"]
+        ida["flags"]["iap"] = bool(rev > 0 and iap >= IAP_MIN * rev)
+
+    def run(self):
+        self.prep()
+        self.new_days()
+        self.retries()
+        self.late()
+        self.backfill()
+        self.totals()
+        self.finish()
+
+
+def _iday_defaults(ida):
+    base = _iday_new(ida.get("src") or [], ida.get("born"))
+    for k, v in base.items():
+        if not isinstance(ida.get(k), type(v)) and v is not None:
+            ida[k] = v
+        ida.setdefault(k, v)
+    for k, v in base["flags"].items():
+        ida["flags"].setdefault(k, v)
+    return ida
+
+
+def fetch_iday(ga, store, ida, end, stop=None, at=None, plain=None, max_calls=IDAY_MAX_CALLS, cty_days=IDAY_CTY_DAYS):
+    """The app's install-value reads (see the module docstring) → (the new iday data, counts). `ida` = what
+    load_iday gave (None: none yet) — NEVER changed in place: a failure anywhere leaves it (and the file) as it was.
+    `store` = the app's uninstall store, only read (history_start, daily new / a1 for the self-checks). end = the
+    fetch's settled end E; F = E − IDAY_LATE, the newest day read. stop = the build's 2× budget, plain = the plain run
+    budget (the backfill only); at most `max_calls` GA4 calls, countries for days ≥ F − `cty_days`. A new file starts
+    when ida's stream (src) is not ga's or its format is not IDAY_V. In each fetch:
+      1. new days: every unread day after the newest read, up to F, oldest first (Q-B, then its Q-C);
+      2. retries: ≤ IDAY_RETRY_DAYS days (Q-B retry / err; Q-C retry / err / not asked, with a fresh Q-B for the tie);
+      3. the late check (a file's first 28 days): day F − 7 read again, measured only;
+      4. the backfill, newest → oldest (plain budget, hourly floor, the call cap, the data edge);
+      5. Q-T for every day read without totals, one call per block.
+    Counts (never ids / money): days (Q-B reads), cdays (Q-C reads), folded (flagged: ≈), csmp, cgap (country read
+    sampled / unassigned), retry, calls, tok, qstop (a quota stop), why (the first stop)."""
+    at = at or end.isoformat()
+    src = [str(ga.property_id), str(ga.stream_id)]
+    if not isinstance(ida, dict) or ida.get("src") != src or _int(ida.get("v")) != IDAY_V:
+        ida = _iday_new(src, at)
+    else:
+        ida = _iday_defaults(copy.deepcopy(ida))
+    run = _Iday(ga, store, ida, end, stop, at, plain, max_calls, cty_days)
+    run.run()
+    return ida, run.stats
+
+
+def _iday_step(ga, store, box, end, stop, at):
+    """fetch_iday for fetch_full / fetch_incr, never failing them. box (from refresh_all): {"ida", "plain", "max_calls",
+    "cty_days"} in; "ok", "ida", "stats" out (ok False: nothing to save — the file stays as it was)."""
+    if box is None:
+        return
+    box["ok"] = False
+    try:
+        ida, stats = fetch_iday(ga, store, box.get("ida"), end, stop=stop, at=at, plain=box.get("plain"),
+                                max_calls=int(box.get("max_calls") or IDAY_MAX_CALLS),
+                                cty_days=int(box.get("cty_days") or IDAY_CTY_DAYS))
+    except Exception as e:
+        box["err"] = type(e).__name__
+        return
+    box.update(ida=ida, stats=stats, ok=True)
+
+
+# the file: hot + .old, merged in memory
+
+def iday_path(data_dir, app_id, old=False):
+    return os.path.join(data_dir, DIR, IDAY_DIR, file_key(app_id) + (".old" if old else "") + ".json.gz")
+
+
+def load_iday(data_dir, app_id):
+    """The app's iday data — the hot file with its .old part merged in: {v, src, tz, cur, born, from, to, cfrom, edge,
+    done, flags, cset, cset_since, zzn, erun, wlast, days, x, c} — or None: none yet, unreadable, or an .old part that
+    can't be read or belongs to another stream / format (the backfill then starts over: never half a history)."""
+    hot = load_store(iday_path(data_dir, app_id))
+    if not isinstance(hot, dict):
+        return None
+    ida = {k: v for k, v in hot.items() if k != "cut"}
+    for k in ("days", "x", "c"):
+        ida[k] = dict(hot.get(k) or {})
+    op = iday_path(data_dir, app_id, old=True)
+    if os.path.exists(op):
+        old = load_store(op)
+        if not isinstance(old, dict) or old.get("v") != hot.get("v") or old.get("src") != hot.get("src"):
+            return None
+        for k in ("days", "x", "c"):
+            for kk, vv in (old.get(k) or {}).items():
+                ida[k].setdefault(kk, vv)
+    return ida
+
+
+def _iday_split(ida):
+    """→ (hot, old): .old holds days / x older than the first of the month of to − HOT_X_DAYS, and the country weeks
+    that end before the first of the month of to − HOT_C_DAYS — whole months, so it is rewritten about once a month
+    (and while the backfill folds into it)."""
+    parts = {k: ida.get(k) or {} for k in ("days", "x", "c")}
+    hot = {k: v for k, v in ida.items() if k not in parts}
+    old = {"v": ida.get("v"), "src": ida.get("src"), "days": {}, "x": {}, "c": {}}
+    if not ida.get("to"):
+        hot.update(parts, cut=None)
+        return hot, old
+    to = _d(ida["to"])
+    xc = (to - timedelta(days=HOT_X_DAYS)).replace(day=1).isoformat()
+    cc = (to - timedelta(days=HOT_C_DAYS)).replace(day=1)
+    hot["cut"] = {"x": xc, "c": cc.isoformat()}
+    for k in ("days", "x"):
+        hot[k] = {d: v for d, v in parts[k].items() if d >= xc}
+        old[k] = {d: v for d, v in parts[k].items() if d < xc}
+    wc = (cc - timedelta(days=6)).isoformat()          # a week ends before cc ⇔ its Monday is before cc − 6
+    hot["c"] = {w: v for w, v in parts["c"].items() if w >= wc}
+    old["c"] = {w: v for w, v in parts["c"].items() if w < wc}
+    return hot, old
+
+
+def save_iday(data_dir, app_id, ida):
+    """Both files, deterministic (write_json_gz_stable: only when the content changed); no .old part → no .old file.
+    → True when anything was written or removed."""
+    hot, old = _iday_split(ida)
+    op = iday_path(data_dir, app_id, old=True)
+    wrote = False
+    if old["days"] or old["x"] or old["c"]:
+        wrote = write_json_gz_stable(op, old)
+    elif os.path.exists(op):
+        os.remove(op)
+        wrote = True
+    return write_json_gz_stable(iday_path(data_dir, app_id), hot) or wrote
+
+
+def iday_meta(ida, stats=None):
+    """state.fetch[aid].iday — what plan() (backfill_due) and the log read."""
+    s = stats or {}
+    return {"v": ida.get("v"), "from": ida.get("from"), "to": ida.get("to"), "cfrom": ida.get("cfrom"),
+            "done": bool(ida.get("done")), "calls": int(s.get("calls") or 0), "tok": int(s.get("tok") or 0)}
+
+
+IDAY_COUNTS = ("apps", "days", "cdays", "folded", "flagged", "csmp", "cgap", "retry", "whole", "filling", "calls",
+               "qstops")
+
+
+def iday_log_line(status):
+    """The public counts-only line (refresh_all's status["iday"], present only when GA4_IDAY is on) — or None."""
+    c = (status or {}).get("iday")
+    if not isinstance(c, dict):
+        return None
+    return ("ga4 iday: apps %d, days read %d (with countries %d), folded %d (flagged %d), country sampled %d, "
+            "country unassigned %d, retry %d, apps whole %d, filling %d, calls %d, quota stops %d"
+            % tuple(int(c.get(k) or 0) for k in IDAY_COUNTS))
 
 
 # ── orchestration ───────────────────────────────────────────────────────────────────────────────
@@ -2053,15 +2974,83 @@ def _discover(cfg, tokens, state, apps, access, now):
     return True
 
 
+def _iday_box(data_dir, aid, cfg, plain):
+    """refresh_all → fetch_full / fetch_incr: the app's iday file (None: a new one) and its limits (cfg "iday_max_calls",
+    "iday_cty_days"; the defaults IDAY_MAX_CALLS / IDAY_CTY_DAYS)."""
+    try:
+        ida = load_iday(data_dir, aid)
+    except Exception:
+        ida = None
+    return {"ida": ida, "plain": plain, "max_calls": cfg.get("iday_max_calls") or IDAY_MAX_CALLS,
+            "cty_days": cfg.get("iday_cty_days") or IDAY_CTY_DAYS}
+
+
+def _iday_save(data_dir, aid, box, tz, st, ic):
+    """After the app's fetch went through: its iday file (written only on change), state.fetch[aid].iday, the counts.
+    A failure here costs only the file (the next fetch reads on from the one on disk)."""
+    try:
+        ida, s = box["ida"], box.get("stats") or {}
+        ida["tz"] = tz
+        save_iday(data_dir, aid, ida)
+        st["iday"] = iday_meta(ida, s)
+        ic["apps"] += 1
+        for k in ("days", "cdays", "folded", "flagged", "csmp", "cgap", "retry", "calls"):
+            ic[k] += int(s.get(k) or 0)
+        ic["qstops"] += bool(s.get("qstop"))
+    except Exception:
+        pass
+
+
+def _iday_only(cfg, data_dir, a, st, r, tz, end, now, plain, over, access, owner_rt, ic, held_back):
+    """plan "iday": the app's install-value reads alone (new days, retries, the backfill — the plain run budget), on
+    the store as it is on disk: the store is never fetched or saved, and last_ok / last_try / fail stay as they were
+    (this fetch never pushes back the app's next real one, and its failure never marks the app failed). Only
+    st["last_iday"], and st["iday"] with the file after a read that went through. Never raises."""
+    aid, pid = a["app_id"], r["property_id"]
+    st["last_iday"] = _now_iso(now)
+    ga = box = old = None
+    try:
+        owner = r.get("owner")
+        if owner not in access:
+            try:
+                access[owner] = (ga4.access_token(cfg["client_id"], cfg["client_secret"], owner_rt[owner])
+                                 if owner in owner_rt else None)
+            except Exception:
+                access[owner] = None
+        tok = access.get(owner)
+        if not tok:
+            return
+        old = load_store(store_path(data_dir, aid))
+        if not old or (str(old.get("property_id")), str(old.get("stream_id"))) != (str(pid), str(r["stream_id"])):
+            return                                      # no store yet / another stream: its real fetch comes first
+        ga = ga4.Ga4App(tok, pid, r["stream_id"])
+        box = _iday_box(data_dir, aid, cfg, plain)
+        _iday_step(ga, old, box, end, over, _local_day(now, tz).isoformat())
+        if box.get("ok"):
+            _iday_save(data_dir, aid, box, tz, st, ic)
+    except Exception:
+        pass
+    finally:
+        if ga is not None and _quota_low(ga.quota):
+            held_back.add(pid)
+        old = box = None
+
+
 def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
     """Fetch what is due for every selected app (`apps` = [{app_id, app_name, package|None}]) → status
-    {"counts", "apps": {app_id: fresh|fetched|failed|deferred}, "no_ga4": {app_id: reason}, "discovery"}.
-    Never raises; never prints."""
+    {"counts", "apps": {app_id: fresh|fetched|failed|deferred}, "no_ga4": {app_id: reason}, "discovery"} (+ "iday":
+    the install-value counts, IDAY_COUNTS, when cfg "iday" is on — iday_log_line). Never raises; never prints."""
     now = now or datetime.now(timezone.utc)
     t0 = clock()
 
     def over():                                         # one app's cells re-asks stop splitting past 2× the budget
         return clock() - t0 >= 2 * cfg["run_budget_sec"]
+
+    def plain():                                        # the install-value backfill stops at the plain budget
+        return clock() - t0 >= cfg["run_budget_sec"]
+
+    iday_on = bool(cfg.get("iday"))                     # GA4_IDAY off: nothing of it is read, written or counted
+    ic = dict.fromkeys(IDAY_COUNTS, 0)
 
     counts = dict.fromkeys(("selected", "with_ga4", "fetched", "full", "repair", "fresh", "failed", "deferred",
                             "no_ga4"), 0)
@@ -2106,14 +3095,31 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
                 continue
             todo.append((kind, a, st, r, tz, end))
         # incremental first (oldest first), then repairs, then full fetches (never fetched first); last run's
-        # deferred lead
+        # deferred lead. The install-value-only fetches ("iday") come after every app due for real, on the time left
         rank = {"incr": 0, "repair": 1}
-        todo.sort(key=lambda t: (not t[2].get("deferred"), rank.get(t[0], 2), t[2].get("last_ok") is not None,
-                                 t[2].get("last_ok") or "", t[1]["app_id"]))
+        todo.sort(key=lambda t: (t[0] == "iday", not t[2].get("deferred"), rank.get(t[0], 2),
+                                 t[2].get("last_ok") is not None, t[2].get("last_ok") or "", t[1]["app_id"]))
+        due_left = [sum(1 for t in todo if t[0] != "iday")]
+
+        def back_stop(later):
+            """The install-value backfill inside a due app's fetch stops at IDAY_DUE_SHARE of the budget, and early
+            enough to leave IDAY_RESERVE_SEC for each of the `later` due apps still to come — the backfill never
+            defers another app's new GA4 day."""
+            cut = min(IDAY_DUE_SHARE * cfg["run_budget_sec"], cfg["run_budget_sec"] - IDAY_RESERVE_SEC * later)
+            return lambda: clock() - t0 >= cut
 
         held_back = set()
         for kind, a, st, r, tz, end in todo:
             aid, pid = a["app_id"], r["property_id"]
+            if kind == "iday":                          # the install-value backfill alone: never deferred — the app
+                seen = "failed" if st.get("fail") else "fresh"   # keeps its own status (a failed one stays failed)
+                if clock() - t0 >= cfg["run_budget_sec"] or pid in held_back:
+                    out["apps"][aid] = seen
+                    continue
+                _iday_only(cfg, data_dir, a, st, r, tz, end, now, plain, over, access, owner_rt, ic, held_back)
+                out["apps"][aid] = seen
+                continue
+            due_left[0] -= 1
             if clock() - t0 >= cfg["run_budget_sec"] or pid in held_back:
                 st["deferred"] = True
                 out["apps"][aid] = "deferred"
@@ -2153,6 +3159,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
                     kind = "repair"                     # a v2 store is repaired before anything is added to it
                 if kind == "incr":                      # (a failed repair: incrementals onto the v2 store
                     upgrade = False                     # meanwhile — it stays v2, the repair is tried again)
+                box = _iday_box(data_dir, aid, cfg, back_stop(due_left[0])) if iday_on and kind != "repair" else None
                 before = _day_totals(old, _all_days(old)) if upgrade and old else None
                 flagged = ((old.get("flags") or {}).get("incomplete_days") or {}) if upgrade and old else {}
                 at = _local_day(now, tz).isoformat()
@@ -2173,7 +3180,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
                         held_back.add(pid)
                     continue
                 if kind == "full":
-                    new = fetch_full(ga, end, cfg["max_history_days"], old, stop=over, held=not moved, at=at)
+                    new = fetch_full(ga, end, cfg["max_history_days"], old, stop=over, held=not moved, at=at, iday=box)
                     store, ok = apply_rebuild(old, new, check_ratio=not moved)
                     if not ok:                          # keep what we hold; try the full pull again tomorrow
                         old["next_rebuild"] = (end + timedelta(days=1)).isoformat()
@@ -2188,7 +3195,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
                                  last_window=new["last_window"],
                                  next_rebuild=(end + timedelta(days=cfg["rebuild_days"] + stagger)).isoformat())
                 else:
-                    store = fetch_incr(ga, old, end, cfg["refetch_days"], stop=over, at=at)
+                    store = fetch_incr(ga, old, end, cfg["refetch_days"], stop=over, at=at, iday=box)
                 if revs and not moved:
                     store["revisions"] = revs
                 elif moved:
@@ -2209,7 +3216,9 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
                           fail_detail=None, meta=store_meta(store))
                 tok = getattr(ga, "impact_tokens", None)
                 if tok:                                 # the impact reads' GA4 tokens (private: never printed)
-                    st["tokens"] = {k: int(tok.get(k, 0)) for k in ("usage", "vuse", "ret")}
+                    st["tokens"] = {k: int(tok.get(k, 0)) for k in ("usage", "vuse", "ret") + (("iday",) * iday_on)}
+                if box is not None and box.get("ok"):   # the install-value file: only after a fetch that went through
+                    _iday_save(data_dir, aid, box, tz, st, ic)
                 if kind == "full":
                     st.pop("repair_failed", None)
                 out["apps"][aid] = "fetched"
@@ -2225,11 +3234,17 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
                 if fk == "quota":
                     held_back.add(pid)
             finally:
-                old = store = new = None                # free a big store before the next app
+                old = store = new = box = None          # free a big store (and iday data) before the next app
             if _quota_low(ga.quota):
                 held_back.add(pid)
     except Exception as e:                              # a bug here must never cost the AdMob build
         out["error"] = type(e).__name__
+    if iday_on:
+        for a in apps:
+            s = (state["fetch"].get(a["app_id"]) or {}).get("iday")
+            if isinstance(s, dict):
+                ic["whole" if s.get("done") else "filling"] += 1
+        out["iday"] = ic
     for v in out["apps"].values():
         counts[v] += 1
     counts["no_ga4"] = len(out["no_ga4"])

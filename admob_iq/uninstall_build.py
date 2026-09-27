@@ -63,7 +63,9 @@ def ga4_cfg(s):
             "late_days": s.get("ga4_late_days", eng.LATE_DAYS),
             "max_history_days": s.get("ga4_max_history_days", 1300),
             "run_budget_sec": s.get("ga4_run_budget_sec", 900),
-            "streams_ttl_hours": s.get("ga4_streams_ttl_hours", 168.0)}
+            "streams_ttl_hours": s.get("ga4_streams_ttl_hours", 168.0),
+            "iday": bool(s.get("ga4_iday", False)),              # the Install value tab's install-day fetch
+            "iday_max_calls": s.get("iday_max_calls", 120), "iday_cty_days": s.get("iday_cty_days", 400)}
 
 
 def _selected_apps(dashboard, data_dir):
@@ -223,6 +225,7 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
     state = gu.load_state(data_dir)
     os.makedirs(out_dir, exist_ok=True)
     details, rows, no_ga4, files = [], [], [], [ASSET]
+    market = None
     act_on = bool(s.get("ga4_active", True))       # the Active users tab rides this loop (its own state and files)
     if act_on:                                      # — imported only here: an Active failure (even at import) costs
         try:                                        # the Active tab only, never the Uninstall step
@@ -234,6 +237,27 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         except Exception as e:
             act_on = False
             print("ga4 active skipped: %s" % type(e).__name__, file=sys.stderr)
+    val_on = bool(s.get("ga4_value", False))       # the Install value tab rides this loop too (its own state and
+    if val_on:                                      # files) — imported only here: a failure (even at import) costs
+        try:                                        # that tab only, never the Uninstall or Active step
+            from . import value_build as vb
+            val_cfg = vb.cfg_from(s)
+            val_st, val_rows = vb.load_state(data_dir), []
+            val_pre = vb.prepass(data_dir, apps, revenue, dashboard, val_cfg, val_st)
+            if val_pre is None:
+                raise RuntimeError("prepass")
+            val_mkt = market                        # the weeks most apps' ad rate moved together (Active's prepass;
+            if not act_on:                          # with Active off, the same read here — failure-isolated)
+                try:
+                    from . import active_build as _ab
+                    val_mkt = _ab.market_prepass(revenue, [a for a in apps if not a.get("same_as")
+                                                           and os.path.exists(gu.store_path(data_dir, a["app_id"]))],
+                                                 app_revenue)
+                except Exception:
+                    val_mkt = None
+        except Exception as e:
+            val_on = False
+            print("ga4 value skipped: %s" % type(e).__name__, file=sys.stderr)
     late_sums = {"un": {}, "new": {}, "a1": {}, "fetches": 0}    # every app's late-data re-reads, pooled
     for a in sorted(apps, key=lambda x: (x["app_name"].casefold(), x["app_id"])):
         aid, path = a["app_id"], gu.store_path(data_dir, a["app_id"])
@@ -269,6 +293,20 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                 except Exception:                       # its state can't be put back: this app starts over (seeded)
                     ab.drop_app(act_st, aid)
                 act_rows.append(ab.error_row(a, key))
+        if val_on:                                      # Install value: after Active (an open Active return alert
+            vsnap = None                                # tags the money-back ones); a failure costs only this app's
+            try:                                        # value row (its value state kept)
+                vsnap = vb.snapshot(val_st, aid)
+                aal = (act_rows[-1].get("_alerts") if act_on and act_rows and act_rows[-1].get("app_id") == aid
+                       else None)
+                val_rows.append(vb.app_step(store, a, detail, key, val_st, now_iso, rev, val_pre, val_cfg, out_dir,
+                                            act_alerts=aal, market=val_mkt))
+            except Exception:
+                try:
+                    vb.restore_app(val_st, aid, vsnap)
+                except Exception:
+                    vb.drop_app(val_st, aid)
+                val_rows.append(vb.error_row(a, key))
         eng.revision_sums(store, late_sums)
         name = COHORT_PREFIX + key + ".json.gz"
         sig = _sig(path)
@@ -332,8 +370,18 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
              sum(1 for al in alerts if al["notify"]), sum(ic.values()), ic["halt"], ic["hold"], ic["win"], early,
              len(ia), sum(1 for al in ia if al["notify"])),
           file=sys.stderr)
+    if cfg.get("iday"):                                 # the install-day fetch's ONE counts line (only when it ran)
+        try:
+            il = gu.iday_log_line(status)
+            if il:
+                print(il, file=sys.stderr)
+        except Exception:
+            pass
     if act_on:                                          # dashboard["active"] last (its log line: build_static's)
         ab.finish(dashboard, out_dir, act_rows, market, act_st, data_dir, no_ga4, act_cfg,
+                  dashboard["uninstall"]["status"])
+    if val_on:                                          # dashboard["value"] after that (its log line: build_static's)
+        vb.finish(dashboard, out_dir, val_rows, val_pre, val_st, data_dir, no_ga4, val_cfg,
                   dashboard["uninstall"]["status"])
     return files
 

@@ -9,18 +9,9 @@ than silently dropped.
 """
 
 
-def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
-    """spend: fetch_app_spend output (or None). app_store_ids: {app_id: store_id}.
-    apps_catalog: [{app_id, app_name, rev, ...}]. aliases: {google_ads_store_id: admob_app_name}
-    (or a LIST of candidate names, when the app has been renamed) — manual overrides for apps whose
-    AdMob store listing isn't linked (blank store id) so they'd otherwise land in 'unmatched'.
-    Returns the roas.json payload."""
-    if spend is None:                                    # Google Ads not configured (secrets missing)
-        return {"configured": False, "by_app": {}, "currency_src": "USD", "fx": {},
-                "unmatched_spend_usd": 0}
-    if spend.get("error"):                               # configured but the call failed — surface WHY
-        return {"configured": False, "error": spend["error"], "by_app": {}, "currency_src": "USD",
-                "fx": {}, "unmatched_spend_usd": 0}
+def store_owner(app_store_ids, apps_catalog, aliases=None):
+    """{Google Ads store id: the AdMob app NAME its spend is attributed to} — the ROAS join's one rule (build_roas below;
+    the Install value tab joins spend with the SAME map, so both tabs always give an app the same Google Ads spend)."""
     # store_id -> app_name; on a duplicate store id keep the highest-revenue app's name
     by_store_app = {}
     for c in sorted(apps_catalog or [], key=lambda x: -(x.get("rev") or 0)):
@@ -50,6 +41,22 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
             continue
         target = max(hit, key=lambda n: rev_by_name.get(n, 0)) if hit else cands[0]
         by_store_app[str(ga_sid).strip()] = target
+    return by_store_app
+
+
+def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
+    """spend: fetch_app_spend output (or None). app_store_ids: {app_id: store_id}.
+    apps_catalog: [{app_id, app_name, rev, ...}]. aliases: {google_ads_store_id: admob_app_name}
+    (or a LIST of candidate names, when the app has been renamed) — manual overrides for apps whose
+    AdMob store listing isn't linked (blank store id) so they'd otherwise land in 'unmatched'.
+    Returns the roas.json payload."""
+    if spend is None:                                    # Google Ads not configured (secrets missing)
+        return {"configured": False, "by_app": {}, "currency_src": "USD", "fx": {},
+                "unmatched_spend_usd": 0}
+    if spend.get("error"):                               # configured but the call failed — surface WHY
+        return {"configured": False, "error": spend["error"], "by_app": {}, "currency_src": "USD",
+                "fx": {}, "unmatched_spend_usd": 0}
+    by_store_app = store_owner(app_store_ids, apps_catalog, aliases)
     camps_by_sid = spend.get("campaigns") or {}
     installs_by_sid = spend.get("installs") or {}        # store_id -> {date: campaign-attributed installs}
     convval_by_sid = spend.get("convval") or {}          # store_id -> {date: Google Ads conversion value (USD)}

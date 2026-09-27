@@ -420,6 +420,59 @@
     .act-t:not(.open) .act-x{display:none}.act-t{cursor:pointer}.act-pt{cursor:default}
     .act-t .v{font-size:24px}
   }
+  /* ===== 💸 Install value tab — the Uninstall / Active .uni-* look; its own bits are val-* (no red / green without an alert,
+     numbers never coloured; tables scroll inside their card, the page never scrolls sideways) ===== */
+  #val-root .lnk{color:var(--cyan);cursor:pointer;font-weight:600}
+  .val-line{font-size:13.5px;font-weight:650;color:#fff;line-height:1.5;margin:0 0 12px}
+  .val-t .v{margin-top:0;overflow-wrap:anywhere}
+  .val-t .v small{font-size:12px;font-weight:650;color:var(--muted);margin-left:5px;letter-spacing:0}
+  .val-t .v small.val-rgb{display:none}
+  .val-t .v.val-vs{font-size:19px;line-height:1.35;letter-spacing:0}
+  .val-t .val-pl{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .val-t .val-x{display:flex;flex-direction:column;flex:1 1 auto}
+  .val-t .val-sl{font-size:11px;color:var(--muted);line-height:1.5;margin-top:auto;padding-top:6px;border-top:1px dashed var(--line)}
+  .val-t .val-dt{margin-top:5px}
+  .val-pt{cursor:default}
+  .val-edges{margin-top:10px;display:grid;gap:3px}
+  .val-edge{font-size:11.5px;color:var(--ink2);line-height:1.5}
+  .val-relc{cursor:pointer}
+  .uni-chg.val-info .tx{color:var(--ink2);font-weight:550}
+  .val-tbl th,.val-tbl td{padding:8px 10px}
+  .val-tbl td.val-proj{font-style:italic;color:var(--muted)}
+  .val-tbl td small{font-size:10px;margin-left:1px}
+  .val-strip{font-size:12.5px;color:var(--ink2);line-height:1.6;padding:8px 17px 10px;overflow-wrap:anywhere}
+  .val-ctbl th,.val-ctbl td{padding:8px 10px}
+  .val-ctbl th .val-ths{font-size:10px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--faint);margin-top:2px}
+  .val-ctbl tr.val-all td{background:var(--panel2)}
+  .val-ctbl tr.val-cx td{background:var(--panel2);white-space:normal}
+  .val-few{margin-left:6px;font-size:10px;padding:1px 7px}
+  .val-cxd{display:grid;gap:5px;font-size:12px;color:var(--ink2);line-height:1.5;max-width:760px}
+  .val-cxd .val-ctx-t{font-weight:600;color:#fff}
+  .val-spks{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:4px}
+  .val-spk{font-size:11px;min-width:0}.val-spkr{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+  .val-cards{display:grid;gap:8px;padding:0 12px 4px}
+  .val-cc{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px 12px;cursor:pointer;min-width:0}
+  .val-cc.all{cursor:default;border-style:dashed}
+  .val-cc .h{font-size:13.5px;color:#fff;line-height:1.4;overflow-wrap:anywhere}
+  .val-cc .m{font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.45;font-variant-numeric:tabular-nums}
+  .val-cc .p{margin-top:6px}
+  .val-cc .s{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .val-cc.open .s{white-space:normal}
+  .val-cc .val-cxd{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+  .val-rest{font-size:12px;color:var(--muted);line-height:1.6;padding:10px 17px 0}
+  .val-note{font-size:11.5px;color:var(--ink2);line-height:1.5;margin-top:8px;padding:8px 11px;border-radius:9px;background:var(--panel2);border:1px solid var(--line)}
+  .note.val-chk .tb{font-size:12px}
+  .val-tbl td .val-rg{font-size:10.5px;font-weight:500}
+  @media(max-width:760px){
+    .val-strp .uni-scs,.val-strp .uni-xp,.val-strp .uni-acs{min-width:0}
+    .val-tbl th,.val-tbl td{padding:8px 7px}
+  }
+  @media(max-width:430px){      /* a phone: one tile a row — label, number and chip; a tap shows the rest */
+    .val-tiles{grid-template-columns:minmax(0,1fr)}
+    .val-t:not(.open):not(.val-pt) .val-x{display:none}.val-t{cursor:pointer}.val-pt{cursor:default}
+    .val-t .v{font-size:24px}.val-t .v.val-vs{font-size:17px}
+    .val-t:not(.open) .v small.val-rgb{display:block;margin:3px 0 0;font-size:11.5px;font-weight:550}
+  }
 </style>
 </head>
 <body>
@@ -435,6 +488,7 @@
       <li><button data-screen="baseline"><span class="i">📐</span> Baseline</button></li>
       <li><button data-screen="mediation"><span class="i">🔗</span> Mediation</button></li>
       <li><button data-screen="roas"><span class="i">💰</span> Marketing ROAS</button></li>
+      <li><button data-screen="value"><span class="i">💸</span> Install value</button></li>
       <li><button data-screen="active"><span class="i">👥</span> Active users</button></li>
       <li><button data-screen="uninstall"><span class="i">🚪</span> Uninstall</button></li>
     </ul>
@@ -596,6 +650,7 @@ const TITLES={overview:["Portfolio Overview","Live · engine-computed"],placemen
   countries:["Country Strategy","Per-geo · per-app"],baseline:["Baseline & Market","Standard ranges · eCPM trend"],mediation:["Mediation","Network competition"],
   reco:["Recommendations","Ranked · with uplift"],health:["Account Health & Compliance","IVT · consent · app-ads.txt"],
   roas:["Marketing ROAS","Google Ads spend vs revenue"],
+  value:["Install value","Earning per install, ads money back & countries (GA4 + AdMob + Google Ads)"],
   active:["Active users","Returning users, comebacks, time & ad revenue (GA4)"],
   uninstall:["Uninstall","Installs vs uninstalls (GA4)"],
   datewise:["Date-wise Report","Har din · spend · installs · revenue · P/L"],
@@ -652,6 +707,7 @@ function appSelHtml(){ const _vapps=(DATA.apps||[]).filter(a=>appVisibleByName(a
 function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; APP=a;
   if(UNIAPP&&uniName(UNIAPP)!==a) UNIAPP='';   // the header left the app whose Uninstall detail was open: close it (never one app under "All apps")
   if(ACTAPP&&actName(ACTAPP)!==a) ACTAPP='';   // … and the Active users tab's
+  if(VALAPP&&valName(VALAPP)!==a) VALAPP='';   // … and the Install value tab's
   render(); show(cur==='reportcard'?'placements':cur); window.scrollTo({top:0}); }
 function searchCountries(q){ q=(q||'').trim().toUpperCase(); document.querySelectorAll('#cty-tbody tr').forEach((r,i)=>{ const n=(r.getAttribute('data-c')||'').toUpperCase(); r.style.display=(q?n.includes(q):i<30)?'':'none'; }); }
 
@@ -713,8 +769,8 @@ function render(){
   window.__ax=null;              // invalidate the cached calendar axis (data may have changed)
   const root=document.getElementById('screens');root.innerHTML='';
   root.append(renderOverview(),renderPlacements(),renderReport(),renderAppDetail(),renderMovers(),renderAlerts(),
-              renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderActive(),renderUninstall(),renderDateWise(),renderReco(),renderHealth(),renderSettings());
-  const _uw=(((DATA.uninstall&&DATA.uninstall.alert_counts)||{}).warning||0)+(((DATA.active||{}).alert_counts||{}).warning||0);   // uninstall + active users (GA4) warnings join the badge
+              renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderActive(),renderUninstall(),renderDateWise(),renderReco(),renderHealth(),renderSettings(),renderValue());
+  const _uw=(((DATA.uninstall&&DATA.uninstall.alert_counts)||{}).warning||0)+(((DATA.active||{}).alert_counts||{}).warning||0)+(((DATA.value||{}).alert_counts||{}).warning||0);   // uninstall + active users (GA4) + install value warnings join the badge
   const c=DATA.alerts.counts;document.getElementById('nav-alert').textContent=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length)+_uw;
   {const _tb=document.getElementById('tab-alert');if(_tb){const _n=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length)+_uw;_tb.textContent=_n;_tb.classList.toggle('on',_n>0);}}
   const sel=document.getElementById('appsel');
@@ -765,6 +821,9 @@ async function refreshData(){
     if(DATA.active&&DATA.active.asset_v!==ACTVER){ const sg={}; actRows().forEach(r=>{ sg[r.key]=r.sig; });   // new Active build → drop the apps whose file changed
       Object.keys(ACTD).forEach(k=>{ if(sg[k]!==ACTSIG[k]){ delete ACTD[k]; delete ACTSIG[k]; } }); ACTVER=DATA.active.asset_v; }
     ACTERR={};
+    if(DATA.value&&DATA.value.asset_v!==VALVER){ const sg={}; valRows().forEach(r=>{ sg[r.key]=r.sig; });   // new Install value build → drop the apps whose file changed
+      Object.keys(VALD).forEach(k=>{ if(sg[k]!==VALSIG[k]){ delete VALD[k]; delete VALSIG[k]; } }); VALVER=DATA.value.asset_v; }
+    VALERR={};
     render();
     if(cur==='appdetail'&&ADAPP) openAppDetail(ADAPP);                     // stay where the user was
     else if(cur==='reportcard'&&PPID) goPlacement(PPID);
@@ -796,6 +855,7 @@ function show(id){
   if(id==='deductions') loadDED(()=>dedRerender());  // lazy-fetch per-unit decay → window to period
   if(id==='uninstall') loadUNI(()=>uniRerender());   // lazy-fetch the GA4 uninstall detail (uninstall.json.gz)
   if(id==='active') actEnsure();                     // the open app's active_<key>.json.gz (also after setApp on this screen)
+  if(id==='value') valEnsure();                      // the open app's value_<key>.json.gz (Install value tab)
   if(id==='placements'){const a=document.getElementById('pl-apps'),d=document.getElementById('pl-detail');if(a&&d){a.style.display='';d.style.display='none';}DETAIL_OPEN=false;}
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.dataset.screen===id));
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
@@ -811,7 +871,7 @@ function _navSave(){
     const on=document.querySelector('.screen.on'); const screen=on?on.dataset.screen:'overview';
     localStorage.setItem('navstate', JSON.stringify({screen, app:APP, range:RANGE,
       adapp:(typeof ADAPP!=='undefined'?ADAPP:''), ppid:(typeof PPID!=='undefined'?PPID:''),
-      uniapp:(typeof UNIAPP!=='undefined'?UNIAPP:''), actapp:(typeof ACTAPP!=='undefined'?ACTAPP:''), t:Date.now()}));
+      uniapp:(typeof UNIAPP!=='undefined'?UNIAPP:''), actapp:(typeof ACTAPP!=='undefined'?ACTAPP:''), valapp:(typeof VALAPP!=='undefined'?VALAPP:''), t:Date.now()}));
   }catch(e){}
 }
 function _navRestore(){
@@ -820,6 +880,7 @@ function _navRestore(){
   if(n.app!=null) APP=n.app; if(n.range) RANGE=n.range;
   if(n.uniapp!=null) UNIAPP=n.app?n.uniapp:'';   // Uninstall tab: the app whose detail was open — only with its header App
   if(n.actapp!=null) ACTAPP=n.app?n.actapp:'';   // Active users tab: the same
+  if(n.valapp!=null) VALAPP=n.app?n.valapp:'';   // Install value tab: the same
   render();                                  // rebuild every screen with the restored app/period (ends on Overview)
   try{
     if(n.screen==='appdetail' && n.adapp && (DATA.apps||[]).some(a=>a.name===n.adapp)){ openAppDetail(n.adapp); return; }
@@ -1536,6 +1597,10 @@ function renderAlerts(){
   let aAl=[],aCards=''; try{ aAl=actAlertsFor(); aCards=aAl.length?actAlertCards(aAl):''; }catch(e){ aAl=[]; aCards=''; }
   if(!aCards) aAl=[];
   aAl.forEach(x=>{ if(!x.linked&&(x.severity==='warning'||x.severity==='watch')) cc[x.severity]=(cc[x.severity]||0)+1; });   // linked: the Update impact card counts it
+  // install value (GA4 + Ads) alerts — DATA.value (App-filtered); none → not a byte of markup more
+  let vAl=[],vCards=''; try{ vAl=valAlertsFor(); vCards=vAl.length?valAlertCards(vAl):''; }catch(e){ vAl=[]; vCards=''; }
+  if(!vCards) vAl=[];
+  vAl.forEach(x=>{ if(x.severity==='warning'||x.severity==='watch') cc[x.severity]=(cc[x.severity]||0)+1; });
   const pidOf=(nm)=>{const p=DATA.placements.find(p=>p.name===nm);return p?p.id:'';};
   const mlabel={revenue:'Revenue',requests:'Requests',match_rate:'Match rate',show_rate:'Show rate',ctr:'CTR'};
   const cards=items.map(x=>{const sev=x.severity==='critical'?'crit':x.severity;
@@ -1552,9 +1617,10 @@ function renderAlerts(){
     return `<div class="alert ${sev}" data-sev="${x.severity}" data-metrics="${metricList}"><div style="font-size:17px">${ICON[x.severity]}</div><div class="abody"><div class="atitle">${x.place}${lost}${x.country&&x.country!=='All'?`<span class="geochip ${(x.country||'').includes('localized')?'loc':''}">${x.country}</span>`:''}</div><div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18)}<span>· <b style="color:var(--ink2)">${size}</b></span></div><div style="margin:9px 0 2px;display:grid;gap:5px">${rows}</div><div class="acause" style="margin-top:8px">💡 ${cause}</div><div class="aact"><span class="abtn pri" onclick="goPlacement('${x.id||pidOf(x.place)}')">View placement →</span></div></div></div>`;}).join('');
   const allOk=`<div class="card" style="text-align:center;padding:26px"><div style="font-size:28px">✅</div><div style="font-weight:750;color:#fff;margin-top:6px">Sab theek — koi badi placement me dikkat nahi</div><div class="muted" style="font-size:13px;margin-top:4px">Chhoti $1-5/day placements ka noise hata diya hai. Jab bhi kisi ${APP||'badi'} placement me revenue/requests sharp gire ya IVT ka signal aaye, wahi yahan dikhega.</div></div>`;
   // column: uninstall cards first (own subheading), then placement cards; ✅ "Sab theek" only when BOTH are empty
-  const gCards=uCards||aCards;   // any GA4 cards (uninstall / active users) above the placements
+  const gCards=uCards||aCards||vCards;   // any GA4 cards (uninstall / active users / install value) above the placements
   const list=(uCards?`<div class="faint al-sub" style="font-size:11.5px">🚪 Uninstall (GA4)</div>${uCards}`:'')
     +(aCards?`<div class="faint al-sub" style="font-size:11.5px${uCards?';margin-top:6px':''}">👥 Active users (GA4)</div>${aCards}`:'')
+    +(vCards?`<div class="faint al-sub" style="font-size:11.5px${uCards||aCards?';margin-top:6px':''}">💸 Install value (GA4 + Ads)</div>${vCards}`:'')
     +(cards?(gCards?`<div class="faint al-sub" style="font-size:11.5px;margin-top:6px">📍 Placements (AdMob)</div>`:'')+cards
            :(gCards?`<div class="muted" style="font-size:12.5px;padding:4px 2px">Placements me koi dikkat nahi.</div>`:allOk));
   const pctTxt=((a.min_share||0.005)*100).toFixed(1)+'%';
@@ -1564,9 +1630,9 @@ function renderAlerts(){
   const rules=[['Koi metric = 0 (band)','Critical','p-r'],['Revenue drop > 40%','Warn','p-y'],['Requests drop > 50%','Warn','p-y'],['Match rate drop > 20pt','Warn','p-y'],['CTR spike > 3× (IVT)','Critical','p-r'],['Show rate drop > 15pt','Watch','p-b']];
   if(DATA.uninstall) rules.push(['Uninstall % (D-checkpoints) ≥2pt, pakka badlav','Warn','p-y'],['Uninstall rate /1k jhatka ya dheere badlav','Warn','p-y'],['Uninstall kam hua','Good','p-g']);
   s.innerHTML=`<h2 class="sc">Alerts</h2><p class="scd">Sirf <b>badi (paise wali)</b> placements ke problems — sabse zyada <b>$ nuksan</b> wale sabse upar. Chhoti placements ka noise hata diya.${thr?` <span class="faint">· ${thr}</span>`:''}</p>
-    <div class="row c4" style="margin-bottom:14px">${kpi('🔴 Critical',cc.critical||0,'zero / IVT','down')}${kpi('🟠 Warning',cc.warning||0,'sharp drop','flat')}${kpi('🟡 Watch',cc.watch||0,'keep an eye','muted')}${kpi('Total issues',items.length+uAl.length+aAl.filter(x=>!x.linked).length,APP||'material only','muted')}</div>
+    <div class="row c4" style="margin-bottom:14px">${kpi('🔴 Critical',cc.critical||0,'zero / IVT','down')}${kpi('🟠 Warning',cc.warning||0,'sharp drop','flat')}${kpi('🟡 Watch',cc.watch||0,'keep an eye','muted')}${kpi('Total issues',items.length+uAl.length+aAl.filter(x=>!x.linked).length+vAl.length,APP||'material only','muted')}</div>
     ${rangeAlertCard()}
-    <div class="chips"><span class="chip on" onclick="filterAlerts('all')">All</span><span class="chip" onclick="filterAlerts('critical')">🔴 Critical</span><span class="chip" onclick="filterAlerts('warning')">🟠 Warning</span><span class="chip" style="margin-left:8px" onclick="filterAlerts('revenue')">Revenue</span><span class="chip" onclick="filterAlerts('requests')">Requests</span><span class="chip" onclick="filterAlerts('match_rate')">Match rate</span><span class="chip" onclick="filterAlerts('ctr')">CTR</span>${DATA.uninstall?`<span class="chip" onclick="filterAlerts('uninstall')">🚪 Uninstall</span>`:''}${aCards?`<span class="chip" onclick="filterAlerts('active')">👥 Active users</span>`:''}</div>
+    <div class="chips"><span class="chip on" onclick="filterAlerts('all')">All</span><span class="chip" onclick="filterAlerts('critical')">🔴 Critical</span><span class="chip" onclick="filterAlerts('warning')">🟠 Warning</span><span class="chip" style="margin-left:8px" onclick="filterAlerts('revenue')">Revenue</span><span class="chip" onclick="filterAlerts('requests')">Requests</span><span class="chip" onclick="filterAlerts('match_rate')">Match rate</span><span class="chip" onclick="filterAlerts('ctr')">CTR</span>${DATA.uninstall?`<span class="chip" onclick="filterAlerts('uninstall')">🚪 Uninstall</span>`:''}${aCards?`<span class="chip" onclick="filterAlerts('active')">👥 Active users</span>`:''}${vCards?`<span class="chip" onclick="filterAlerts('value')">💸 Install value</span>`:''}</div>
     <div class="row c3"><div class="span2" style="display:grid;gap:10px;align-content:start">${list}</div>
     <div style="display:grid;gap:14px;align-content:start">
       <div class="card"><div class="ct"><h3>Alert rules</h3></div><div class="muted" style="font-size:12px;margin:-4px 0 10px">Sirf un placements pe jinki revenue <b style="color:var(--ink2)">us app ke total ka ≥${pctTxt}</b> ho${minU?` (ya min ${minU}/day)`:''}${appFloor!=null?` — ${APP} ≈ ${money(appFloor)}/day`:''} — improvements yahan nahi (wo Movers me).</div>${rules.map((r,i)=>`<div class="rule"><span class="tgl"></span><div style="flex:1">${r[0]}</div><span class="pill ${r[2]}">${r[1]}</span></div>`).join('')}<div style="font-size:11px;color:var(--muted);margin-top:9px">Compare: <b>latest poora din</b> (kal) vs <b>pichhle 7 dino ka median</b>. Aaj (adhura din) count nahi hota. Har data pull pe check.</div></div>
@@ -4432,6 +4498,611 @@ function actAlertCards(list){
       <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18)}<span class="faint">· ${actWhen(x)} · GA4${ad?' + AdMob':''} · data till ${fmtD(x.data_till)}</span></div>
       <div style="margin:9px 0 2px;font-size:12.5px;color:${COL[x.severity]||'var(--ink2)'}">${hAttr(x.text||x.message||'')}</div>
       ${x.linked?`<div class="faint act-linked" style="font-size:11.5px;margin-top:6px">📦 Yahi badlaav ${R&&R.label?hAttr(R.label)+' ke ':''}Update impact card me bhi hai — ek hi baat, alert count me ek baar.</div>`:''}
+      ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
+      <div class="aact">${btn}</div></div></div>`; }).join(''); }
+
+// ---------- 💸 INSTALL VALUE (GA4 + AdMob + Google Ads) ----------
+// Per app: what one install earns (AdMob, all networks — GA4 only splits it by install day and country), how many days until
+// the Google Ads money comes back (seen, or ≈ projected from the app's own older weeks, always with a range) and which
+// countries come back / earn. The build ships a SMALL summary in DATA.value (one row per app + the open alerts) and each
+// app's detail lazily in value_<key>.json.gz. Unknown = "—" (never 0); a week × day cell that is not complete yet is never
+// a small number ("in N days"); estimates and projections carry ≈. Nothing is red / green unless an alert is open, verdicts
+// carry an emoji (never a colour) and numbers are never coloured. Every DOM id in this tab starts with val-.
+let VALD={}, VALL={}, VALERR={}, VALSIG={}, VALVER=null, VALAPP='';
+let VALWK='12', VALSORT='n', VALCM='d1', VALCTYEXP='', VALOLDEXP=false, VALCLEXP=false, VALTILEEXP='';
+let VALSTEXP='', VALPSORT={k:'status',d:1}, VALTIMEXP=false, VALCHKEXP=false, VALJUMP='', VALJT=0;
+function valRows(){ return (DATA&&DATA.value&&Array.isArray(DATA.value.apps))?DATA.value.apps.filter(r=>r&&typeof r==='object'):[]; }
+function valName(id){ const r=valRows().find(x=>x.app_id===id); return r?r.app:''; }
+// the app on screen: the header's App (VALAPP only picks between same-named apps), else none (All apps)
+function valCurRow(){ if(!APP) return null; const L=valRows(); return L.find(x=>x.app_id===VALAPP&&x.app===APP)||L.find(x=>x.app===APP)||null; }
+function loadVALApp(key,cb){ const r=valRows().find(x=>x.key===key); if(!r||!r.file||VALD[key]){cb&&cb();return;} if(VALL[key]) return; VALL[key]=true; VALERR[key]=false;
+  fetchGzJson(r.file+'?t='+Date.now()).then(j=>{ if(!j||typeof j!=='object') throw new Error('file'); VALD[key]=j; VALSIG[key]=r.sig; VALL[key]=false; cb&&cb(); })
+    .catch(()=>{ VALERR[key]=true; VALL[key]=false; cb&&cb(); }); }   // an error still calls back → "Try again", never "loading" forever
+function valEnsure(){ const r=valCurRow(); if(r&&r.key&&r.file&&r.status!=='error'&&!VALD[r.key]&&!VALL[r.key]&&!VALERR[r.key]) loadVALApp(r.key,()=>valRerender()); }
+function valRerender(){ const old=document.querySelector('.screen[data-screen=value]'); if(old){ const f=renderValue(); if(old.classList.contains('on')) f.classList.add('on'); old.replaceWith(f); }
+  if(VALJUMP) valJumpNow(); }
+// an app's page sets the header's App (setApp re-renders every screen and stays here); "← All apps" clears both
+function valOpen(id){ VALAPP=id; VALCTYEXP=''; VALOLDEXP=false; VALCLEXP=false; VALTILEEXP=''; VALCHKEXP=false;
+  const nm=valName(id); if(nm&&APP!==nm){ setApp(nm); return; }
+  valEnsure(); valRerender(); if(!VALJUMP) window.scrollTo({top:0}); _navSave(); }
+function valBack(){ VALAPP=''; VALCTYEXP=''; VALOLDEXP=false; VALCLEXP=false; VALTILEEXP=''; VALCHKEXP=false; VALJUMP='';
+  if(APP){ setApp(''); return; } valRerender(); window.scrollTo({top:0}); _navSave(); }
+// from an Alerts-screen card: this tab, that app, its "What changed?" (once the app's file is on screen, ≤15 s)
+function valGo(id){ show('value'); VALJUMP='val-chg'; VALJT=Date.now(); valOpen(id); valJumpNow(); }
+function valJumpNow(){ const k=VALJUMP; if(!k) return; if(Date.now()-VALJT>15000){ VALJUMP=''; return; }
+  const e=document.getElementById(k), r=(e&&e.getBoundingClientRect)?e.getBoundingClientRect():null; if(!r||!(r.height>0)) return; VALJUMP=''; uniJump(k,'val'); }
+function valJump(sec){ if(sec==='val-chk'&&!VALCHKEXP){ VALCHKEXP=true; valRerender(); } uniJump(sec,'val'); }
+function valWK(v){ VALWK=v; valRerender(); }                                      // money-back table: '12' | '26' | 'all' weeks
+function valSort(k){ VALSORT=k; if(k==='d1'||k==='d7'||k==='d30') VALCM=k; valRerender(); }   // countries: n | d1 | d7 | d30 | rpi
+function valCX(cc){ VALCTYEXP=VALCTYEXP===cc?'':cc; valRerender(); }               // one country's row / card: open / close
+function valOX(){ VALOLDEXP=!VALOLDEXP; valRerender(); }
+function valCLX(){ VALCLEXP=!VALCLEXP; valRerender(); }
+function valKX(){ VALCHKEXP=!VALCHKEXP; valRerender(); }                           // 🔍 Data check
+function valTNX(){ VALTIMEXP=!VALTIMEXP; valRerender(); }                          // ⏱️ When will I know?
+function valTTX(k){ if(typeof innerWidth==='number'&&innerWidth>430) return; VALTILEEXP=VALTILEEXP===k?'':k; valRerender(); }   // a phone tile: its sub-line
+function valSX(k){ VALSTEXP=VALSTEXP===k?'':k; valRerender(); }                    // All apps: one status chip's apps
+function valPSort(k){ VALPSORT=(VALPSORT.k===k)?{k,d:-VALPSORT.d}:{k,d:(k==='app'||k==='status'||k==='pay'||k==='cpi'?1:-1)}; valRerender(); }
+// ---- numbers (unknown = "—", never 0; money comes in USD and follows the $ ⇄ ₹ toggle) ----
+const valOk=v=>v!=null&&v!==''&&isFinite(+v);
+const valM=o=>(o&&typeof o==='object')?o:{};
+function valConst(k,d){ const c=DATA&&DATA.value&&DATA.value.consts; if(c&&typeof c==='object'){ if(valOk(c[k])) return +c[k]; const l=String(k).toLowerCase(); if(valOk(c[l])) return +c[l]; } return d; }
+function valH(d){ return (d&&valOk(d.horizon))?+d.horizon:((DATA&&DATA.value&&valOk(DATA.value.horizon))?+DATA.value.horizon:valConst('H',90)); }
+const VAL_T=[0,1,3,7,14,30,60,90,180,365];
+function valT(){ const c=DATA&&DATA.value&&DATA.value.consts, t=c&&(c.T||c.t); return (Array.isArray(t)&&t.length===10&&t.every(valOk))?t.map(Number):VAL_T; }
+function valUsd(v){ const b=baseCur(), r=(DATA&&DATA.usd_inr)||83; let x=+v; if(b==='INR') x*=r; return x*cfx(); }   // USD → the view currency
+// per-install money: ≥0.1 → 2 decimals ("$1.25", "₹0.35") · ≥0.01 → 3 ("$0.021") · below that 2 significant digits ("$0.0042")
+// — never "<$0.01", never a "$0.00" that reads as zero
+function valMoney(v){ if(!valOk(v)) return '—'; const x=valUsd(v), a=Math.abs(x), sg=x<0?'−':''; let t;
+  if(a===0) t='0'; else if(a>=0.1) t=a.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); else if(a>=0.01) t=a.toFixed(3);
+  else { const p=+a.toPrecision(2); t=p>=0.01?p.toFixed(3):p.toFixed(Math.min(12,Math.ceil(-Math.log10(p))+1)); }
+  return sg+csym()+t; }
+function valBig(v){ if(!valOk(v)) return '—'; const x=valUsd(v), a=Math.abs(x); return csym()+Number(x).toLocaleString(undefined,{minimumFractionDigits:a>=10||a===0?0:2,maximumFractionDigits:a>=10?0:2}); }   // totals: "$109", "₹8,450", "$4.20"
+function valP100(v){ if(!valOk(v)) return '—'; const x=+v, a=Math.abs(x);   // per 100 of ads: "₹42" ($ and ₹ alike) · "₹4.3" · "₹0.04" (never "₹0" for a value above 0)
+  return (x<0?'−':'')+csym()+(a>=10?Math.round(a).toLocaleString():(a>=1?a.toFixed(1).replace(/\.0$/,''):(a===0?'0':String(+a.toPrecision(2))))); }
+// Google Ads spend: in the ₹ view the rupees Google Ads billed (the src amount the build ships next to the USD one,
+// each week at its own rate) — never USD turned back into ₹ at today's rate; in $ the USD amount
+function valSrcCcy(d){ return (d&&d.fx&&d.fx.src)||(DATA&&DATA.value&&DATA.value.spend_ccy)||null; }
+function valSrcOn(src,ccy){ return curView()==='INR'&&(ccy||(DATA&&DATA.value&&DATA.value.spend_ccy))==='INR'&&valOk(src); }
+function valSpendBig(v,src,ccy){ if(valSrcOn(src,ccy)){ const a=Math.abs(+src); return '₹'+Number(+src).toLocaleString(undefined,{minimumFractionDigits:a>=10||a===0?0:2,maximumFractionDigits:a>=10?0:2}); } return valBig(v); }
+function valSpendMoney(v,src,ccy){ if(valSrcOn(src,ccy)){ const a=Math.abs(+src); let t; if(a===0) t='0'; else if(a>=0.1) t=a.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); else if(a>=0.01) t=a.toFixed(3); else { const q=+a.toPrecision(2); t=q.toFixed(Math.min(12,Math.ceil(-Math.log10(q))+1)); } return '₹'+t; } return valMoney(v); }
+// the engine's sentences carry money / country TOKENS ({m:…} per install · {b:…} a total · {s:usd|src} spend ·
+// {q:usd|src} a per-install cost · {p:…} per 100 · {c} the currency sign · {cc:XX} a country): drawn here in the
+// viewer's currency and with the page's own country names — the words stay the engine's
+function valTxt(t){ return hAttr(String(t==null?'':t)).replace(/\{(m|b|s|q|p|cc|c)(?::([^{}]*))?\}/g,(all,k,a)=>{
+  if(k==='c') return csym(); if(k==='cc') return hAttr(valCtyName(a||''));
+  const [u,sr]=String(a||'').split('|'), v=+u, src=sr===undefined||sr===''?null:+sr; if(!isFinite(v)) return '—';
+  if(k==='m') return valMoney(v); if(k==='b') return valBig(v); if(k==='p') return valP100(v);
+  if(k==='s') return valSpendBig(v,src); return valSpendMoney(v,src); }); }
+function valNum(v){ return !valOk(v)?'—':Math.round(+v).toLocaleString(); }
+function valDays(p){ if(!valOk(p)) return '—'; const n=Math.round(+p); return n+(n===1?' day':' days'); }
+function valOf100(v){ if(!valOk(v)) return '—'; const x=+v; return (x>0&&x<10)?x.toFixed(1).replace(/\.0$/,''):String(Math.round(x)); }   // "34" (of 100) · "6.8"
+function valPct(x){ if(!valOk(x)) return '—'; const v=+x*100; return (v>0&&v<10?v.toFixed(1).replace(/\.0$/,''):String(Math.round(v)))+'%'; }
+// a country: the English name the owner's Firebase screen shows (Intl), its flag from the ISO-2 letters; "--" / "ZZ" are slots
+let VAL_DN=null;
+function valCtyName(cc){ const s=String(cc||''); if(s==='--') return 'Unknown'; if(s.toUpperCase()==='ZZ') return 'Other countries'; if(!s) return '—';
+  try{ if(VAL_DN===null) VAL_DN=(typeof Intl!=='undefined'&&Intl.DisplayNames)?new Intl.DisplayNames(['en'],{type:'region'}):false;
+    const n=VAL_DN&&/^[A-Za-z]{2}$/.test(s)?VAL_DN.of(s.toUpperCase()):null; if(n&&n!==s.toUpperCase()) return n; }catch(e){}
+  return s; }
+function valFlag(cc){ const s=String(cc||'').toUpperCase(); if(s==='--') return '❔'; if(s==='ZZ') return '🌐'; if(!/^[A-Z]{2}$/.test(s)) return '🏳️';
+  return String.fromCodePoint(0x1F1E6+s.charCodeAt(0)-65,0x1F1E6+s.charCodeAt(1)-65); }
+function valCtyTag(cc){ return `<span title="${hAttr(valCtyName(cc))}">${valFlag(cc)} ${hAttr(String(cc||'').toUpperCase())}</span>`; }
+// ---- the chip vocabulary (tiles, All-apps strips and table; ONE set) ----
+const VAL_CHL={pay:{worse:'Slower',watch:'Slower · watch',better:'Faster',maybe_dn:'Maybe slower',maybe_up:'Maybe faster',normal:'Normal',never:'💸 Not paying back in 1 year'},
+  b7:{worse:'Lower',watch:'Lower · watch',better:'Higher',maybe_dn:'Maybe lower',maybe_up:'Maybe higher',normal:'Normal',never:'💸 Not paying back in 1 year'},
+  cpi:{worse:'Higher',watch:'Higher · watch',better:'Lower',maybe_dn:'Maybe higher',maybe_up:'Maybe lower',normal:'Normal'},
+  rpi:{worse:'Lower',watch:'Lower',better:'Higher',maybe_dn:'Maybe lower',maybe_up:'Maybe higher',maybe:'Maybe changed',normal:'Normal'},
+  cty:{ok:'Judged',low:'Not judged yet',unclean:'Wait'}};
+const VAL_CM={low:'Not enough data',few:'Not enough data',nospend:'No ads',thin:'Little ads spend',wait:'Waiting for data'};
+const VAL_RANK={worse:0,watch:1,better:2,maybe_dn:3,maybe_up:3,maybe:3,never:4,normal:5,ok:5,thin:6,low:7,few:7,unclean:7,nospend:8,wait:9};
+function valSt(M){ const s=M&&M.st; return VAL_RANK[s]!=null?s:'wait'; }
+function valChipTxt(k,st){ return (VAL_CHL[k]||{})[st]||VAL_CM[st]||VAL_CHL.pay[st]||'Normal'; }
+const VAL_TIP={est:'Andaza — purane hafton ke hisaab se; asli aane pe badlega.',few:'Is country me install kam — farak sirf kismat ka ho sakta hai.',
+  gap:'In hafton me GA4 ne kuch installs/kamai kisi country me nahi baante — isliye abhi faisla nahi.',smp:'Bade app ka country data GA4 sample se aata — andaza, total sahi.',
+  cpi:'Google Ads kharcha ÷ saare naye users (ads + organic).',young:'Abhi kamai ke kaafi hafte nahi — aane pe faisla.',rpi:'AdMob ki kamai (sab networks), install ke din se ab tak, ek install pe.',
+  q:'GA4 ka is din ka data poora nahi mila — andaza',k:'GA4 aur AdMob ki kamai me farak bada — AdMob ke hisaab se scale ki, andaza',al:'Alert khula hai — neeche "What changed?" me dekho.'};
+function valChipTip(k,st,M){
+  if(st==='maybe_dn'||st==='maybe_up'||st==='maybe') return 'Farak dikh raha par abhi pakka nahi — 2 hafte lagatar ho tabhi alert.';
+  if(st==='never') return 'Is hafte ke installs saal bhar me bhi ads ka poora paisa wapas nahi karte (andaza).';
+  if(st==='nospend') return 'Is app pe Google Ads kharcha nahi — isliye paisa-wapas nahi, sirf kamai per install.';
+  if(st==='thin') return 'Thoda kharcha — faisla nahi.';
+  if(st==='low'||st==='few') return (M&&M.why==='young')?'Naya app — purane hafte abhi kam, andaza dusre apps ke hisaab se.':(k==='cty'?'Abhi kisi country ka faisla nahi — 300+ installs nahi, 30 din ka data nahi, ya GA4 ka country data adhoora.':'Installs / kharcha abhi kam — chhota farak pakka nahi keh sakte.');
+  if(st==='unclean') return VAL_TIP.gap;
+  if(st==='wait') return k==='cty'?'Countries ka data aa raha hai.':'Install-wise data abhi aa raha hai.';
+  if(st==='worse'||st==='watch'||st==='better') return VAL_TIP.al;
+  if(k==='cty') return 'Sirf 300+ installs wale countries judge hote hain; baaki "few installs".';
+  return 'Pichhle hafton jaisa — aam utaar-chadhaav ke andar.'; }
+// which alert families a tile answers to — red / green / yellow ONLY with an open alert of that family and severity (else blue)
+const VAL_AF={pay:['pay_slow','pay_loss'],b7:['pay_slow','pay_loss'],cpi:['pay_slow','pay_loss'],rpi:[],cty:['geo_move','geo_cost']};
+function valHasAl(als,k,sev){ return (als||[]).some(x=>x&&(VAL_AF[k]||[]).includes(x.family)&&(!sev||x.severity===sev)&&!x.closed); }
+function valChip(k,M,als){ const st=valSt(M); let c=st==='never'?'uni-pn':(({worse:'p-r',watch:'p-y',better:'p-g',normal:'uni-pz',ok:'uni-pz'})[st]||'p-b');
+  if((c==='p-r'&&!valHasAl(als,k,'warning'))||(c==='p-g'&&!valHasAl(als,k,'good'))||(c==='p-y'&&!valHasAl(als,k))) c='p-b';
+  return `<span class="pill ${c}" data-st="${st}" title="${hAttr(valChipTip(k,st,M))}">${valChipTxt(k,st)}</span>`; }
+function valAls(){ const a=DATA&&DATA.value&&DATA.value.alerts; return Array.isArray(a)?a.filter(x=>x&&typeof x==='object'):[]; }
+function valAlOf(id){ return valAls().filter(x=>x.app_id===id); }
+function valAlsOf(d){ const o=d&&d.changes&&d.changes.open; return (Array.isArray(o)?o:[]).concat(valAlOf(d&&d.app_id)); }
+// a country's verdict: an emoji + words, never a colour — red / yellow / green only while that country has an open alert
+const VAL_VD={keep:['✅','Keep'],slow:['🐢','Slow'],costly:['💸','Costly'],top:['⭐','Top value'],avg:['–','Average'],low:['🔻','Low value']};
+function valVdTip(v,H){ return ({keep:`Paisa ${H} din ke andar wapas — ads chalu rakh sakte ho.`,slow:`Paisa ${H} din ke baad wapas — dheere.`,costly:'Install mehenga, kamai kam — ads yahan mehenge pad rahe.',
+  top:'Is country ka install app ke baaki installs se zyada kamata hai.',avg:'App jaisa hi — farak pakka nahi.',low:'Is country ka install app ke baaki installs se kam kamata hai.'})[v]||''; }
+function valVerdChip(row,als,H){ const cc=row.cc, A=(als||[]).filter(x=>x&&!x.closed&&x.cc===cc&&(x.family==='geo_move'||x.family==='geo_cost'));
+  const x=A.find(z=>z.severity==='warning')||A.find(z=>z.severity==='watch')||A.find(z=>z.severity==='good');
+  if(x){ const up=x.dir==='up', t=x.family==='geo_cost'?'Costly':(x.metric==='rpi7'?(up?'Earning more':'Earning less'):(up?'More came back':'Fewer came back'));
+    const [c,s,st]=x.severity==='warning'?['p-r',' · alert','worse']:(x.severity==='good'?['p-g','','better']:['p-y',' · watch','watch']);
+    return `<span class="pill ${c}" data-st="${st}" title="${hAttr('Alert khula hai — upar "What changed?" me dekho.')}">${t}${s}</span>`; }
+  if(row.few||row.verdict==='few') return `<span class="pill p-b" data-st="few" title="${hAttr(VAL_TIP.few)}">Few installs</span>`;
+  if(row.clean===false||row.verdict==='wait') return `<span class="pill p-b" data-st="wait" title="${hAttr(row.why==='young'&&row.clean!==false?VAL_TIP.young:VAL_TIP.gap)}">Wait</span>`;
+  const v=VAL_VD[row.verdict]; if(!v) return '<span class="faint">—</span>';
+  return `<span class="pill uni-pz" data-st="${row.verdict}" title="${hAttr(valVdTip(row.verdict,H))}">${v[0]} ${v[1]}</span>`; }
+// ---- the tab ----
+function renderValue(){
+  const s=screenDiv('value'); let html;
+  try{ html=valScreen(); }   // a malformed payload must never break the rest of the dashboard's render()
+  catch(e){ html='<h2 class="sc">Install value</h2><div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Install value ka data dikhane me dikkat aayi — thodi der baad page refresh karo.</div></div>'; }
+  s.innerHTML=`<div id="val-root">${html}</div>`;
+  return s; }
+function valScreen(){
+  const V=DATA.value, h2='<h2 class="sc">Install value</h2>';
+  if(!V) return h2+`<div class="card" id="val-off" style="padding:24px 20px"><div style="font-weight:750;color:#fff;font-size:14.5px">💸 Not switched on yet</div><div class="muted" style="font-size:13.5px;line-height:1.6;margin-top:6px">Har install kitna kamata hai, Google Ads ka paisa kitne din me wapas aata hai aur kaunse country me ads chalane layak — ye GA4 install-day data + AdMob + Google Ads se banta hai. Chalu hone ke baad yahan dikhega.</div></div>`;
+  if(APP){ const r=valCurRow(); if(!r) return valNoGa4(APP);
+    const back=`<span class="backlnk" onclick="valBack()">← All apps</span>`, top=back+`<div class="uni-hd" style="margin-bottom:10px"><span style="font-size:18px;font-weight:800;color:#fff">${appChip(r.app,22)}</span></div>`;
+    if(r.status==='error') return top+`<div class="card"><div class="muted" style="font-size:13.5px;padding:10px 2px;line-height:1.6">⚠️ Is app ka Install value data is baar ban nahi paya — agle robot run me phir try hoga.</div></div>`;
+    if(!r.file) return top+`<div class="card" id="val-wait"><div class="muted" style="font-size:13.5px;padding:10px 2px;line-height:1.6">${valTxt((r.summary&&r.summary.text)||'⏳ Install-wise kamai ka data aa raha — GA4 ke agle fetch ke baad yahan dikhega.')}</div></div>`;
+    const d=VALD[r.key];
+    if(!d){ if(VALERR[r.key]) return top+`<div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Is app ka data load nahi hua. <span class="lnk" onclick="VALERR['${uniQ(r.key)}']=false;valEnsure();valRerender()">Try again</span></div></div>`;
+      return top+`<div class="card"><div class="muted" style="font-size:14px;padding:20px">⏳ ${hAttr(r.app)} ka data load ho raha hai…</div></div>`; }
+    return valDetail(r,d); }
+  return valPortfolio(); }
+function valNoGa4(name){ const r=((DATA.value&&DATA.value.no_ga4)||[]).find(x=>x&&x.app===name);
+  return `<span class="backlnk" onclick="valBack()">← All apps</span>
+    <div class="card" id="val-noga4-app"><div class="uni-hd"><span style="font-size:17px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>
+    <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">🔌 ${r?hAttr(r.text||uniReason(r.reason)):'Is app ka install-wise data nahi — ya to ye Android app kisi GA4 property se judi nahi, ya abhi select nahi.'}</div></div>`; }
+// ---- one app: sections in the spec's order, each on its own (a broken one never takes the page down) ----
+function valDetail(r,d){
+  const name=d.app||r.app, H=valH(d), got=uniAgo(d.fetched_at), back=`<span class="backlnk" onclick="valBack()">← All apps</span>`, B='<b style="color:var(--ink2)">';
+  const bits=[`Install-day data till ${B}${uniD(d.settled_till||r.settled_till)||'—'}</b>`]; if(d.spend_till) bits.push(`Google Ads till ${B}${uniD(d.spend_till)}</b>`); if(d.rev_till) bits.push(`AdMob till ${B}${uniD(d.rev_till)}</b>`);
+  const hdr=back+`<div class="uni-hd" style="margin-bottom:4px"><span style="font-size:18px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>
+    <div class="faint" id="val-hd" style="font-size:12px;margin:5px 0 14px;display:flex;gap:5px 10px;flex-wrap:wrap;align-items:center"><span>${bits.join(' · ')}${got?' · fetched '+got:''}</span><span class="pill uni-pn" title="Isi target se Keep / Slow / Costly aur alerts tay hote hain — badalna ho to batao.">Target: paisa ${H} din me wapas</span></div>`;
+  const safe=f=>{ try{ return f(d,r)||''; }catch(e){ return '<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ Ye hissa abhi dikh nahi paya.</div>'; } };
+  return hdr+[valSumCard,valChangesCard,valPayCard,valCtyCard,valChkCard,()=>valTimingNote()].map(safe).join(''); }
+// "📌 At a glance": the engine's one line, five tiles (3 + 2), the context line, the data line and the edge sentences
+function valTileBox(k,label,tip,st,big,chip,sub,span,vcls){ const open=VALTILEEXP===k;
+  return `<div class="uni-st val-t${open?' open':''}" data-m="${k}" data-st="${st}" onclick="valTTX('${k}')"><div class="l" title="${hAttr(tip)}">${label}</div><div class="v${vcls?' '+vcls:''}">${big}</div>`
+    +`<div class="val-pl">${chip}</div><div class="val-x">${sub?`<div class="val-sl">${sub}</div>`:''}${span?`<div class="c val-dt">${span}</div>`:''}</div></div>`; }
+function valPayVals(d,r){ const M=valM(d&&d.tiles&&d.tiles.pay), P=valM(r&&r.pay), g=k=>M.st?M[k]:(M[k]!=null?M[k]:P[k]);   // the tile when there is one
+  return {st:valSt(M.st?M:P), p:M.st?M.v:(M.v!=null?M.v:P.p), lo:g('lo'), hi:g('hi'), obs:!!g('obs'), never:!!g('never'), pct365:g('pct365'), p0:valOk(M.p0)?M.p0:(valOk(M.base)?M.base:P.p0),
+    from:g('from'), to:g('to'), why:g('why'), note:g('note'), shape:g('shape'), est:!!g('est'), rough:!!g('rough'), hi_over:!!g('hi_over')}; }
+function valPayBig(p){ if(p.never) return 'Over 1 year'; if(!valOk(p.p)) return '—'; return (p.obs?'':'≈')+valDays(p.p); }
+// "andaza 28–45 din" — or "andaza kaafi kaccha" when the range is wider than 3× the middle (or runs past a year), or
+// comes from other apps' curves; a range of zero width ("46–46") says nothing and is left out
+function valBandTxt(P){ const lo=valOk(P.lo)?Math.round(+P.lo):null, hi=valOk(P.hi)?Math.round(+P.hi):null, p=+P.p;
+  if(P.shape==='portfolio') return 'andaza kaafi kaccha (dusre apps ke hisaab se)';
+  if(P.rough||P.hi_over) return 'andaza kaafi kaccha';
+  if(lo==null&&hi==null) return 'andaza';
+  if(hi==null||hi>365||(lo!=null&&hi-lo>3*p)) return 'andaza kaafi kaccha';
+  if(lo!=null&&lo===hi) return '';
+  return `andaza ${lo!=null?lo:'?'}–${hi} din`; }
+// the Countries state (the tile's own st when the build sends it; the same rule for an All-apps row): ranked / not judged yet / waiting
+function valCtySt(Y){ Y=valM(Y); if(Y.st&&['ok','low','wait','unclean'].includes(Y.st)) return Y.st; if(valOk(Y.judged)&&+Y.judged>0) return 'ok';
+  return (!valOk(Y.of)||!+Y.of)?'wait':'low'; }
+function valSumCard(d,r){
+  const T=d.tiles||{}, als=valAlsOf(d), S=d.summary||(r&&r.summary)||{}, cur=csym(), W=valWeeks(d), sp=(f,t)=>f?'Installs '+uniSpan(f,t||f):'', ccy=valSrcCcy(d);
+  const P=valPayVals(d,r), pS=[];
+  if(P.never&&valOk(P.pct365)) pS.push(`saal bhar me ≈${Math.round(P.pct365)}% wapas`); else if(valOk(P.p)&&!P.obs&&valBandTxt(P)) pS.push(valBandTxt(P));
+  if(valOk(P.p0)) pS.push(`pehle ~${Math.round(P.p0)} din`);
+  if(P.note) pS.push(valTxt(P.note)); else if(P.st==='nospend') pS.push('Google Ads kharcha nahi — sirf kamai per install'); else if(P.st==='thin') pS.push('thoda kharcha — faisla nahi');
+  else if(P.st==='wait') pS.push('andaza hafte ke installs ke 7 din pure hone ke ~5 din baad');
+  // on a phone the sub-line folds away: a projected number keeps its range right under it
+  const pBig=valPayBig(P)+(valOk(P.p)&&!P.obs&&!P.never&&valBandTxt(P)?`<small class="val-rgb">${hAttr(valBandTxt(P))}</small>`:'');
+  const t1=valTileBox('pay','Ads money back in','Google Ads ka jitna paisa laga, utni AdMob kamai in installs se kitne din me wapas aati hai. ≈ = andaza (purane hafton ke hisaab se).',
+    P.st,pBig,valChip('pay',{st:P.st,why:P.why},als),pS.join(' · '),sp(P.from,P.to));
+  const Bm=valM(T.b7), RP=valM(r&&r.pay), bst=Bm.st?valSt(Bm):P.st, bv=valOk(Bm.v)?Bm.v:null, b30=valOk(Bm.v30)?Bm.v30:null, b0=valOk(Bm.base)?Bm.base:RP.b7_0, bS=[];
+  if(valOk(b30)) bS.push('30 din: '+(Bm.v30_est?'≈':'')+valP100(b30)); if(valOk(b0)) bS.push('pehle 7 din: '+valP100(b0)); if(!valOk(bv)&&Bm.note) bS.push(valTxt(Bm.note));
+  const t2=valTileBox('b7','Back in 7 days',`${cur}100 ke Google Ads pe, in installs se 7 din me kitni AdMob kamai wapas aayi.`,bst,
+    valOk(bv)?(Bm.est?'≈':'')+valP100(bv)+`<small>per ${cur}100</small>`:'—',valChip('b7',{st:bst},als),bS.join(' · '),sp(Bm.from||(valOk(bv)?P.from:''),Bm.to||(valOk(bv)?P.to:'')));
+  const E=valM(T.rpi), RR=valM(r&&r.rpi), ES=valM(E.sub), eg=k=>valOk(ES[k.slice(1)])?ES[k.slice(1)]:(valOk(E[k])?E[k]:RR[k]), ev=valOk(E.v)?E.v:RR.d30, est=!!(E.est||RR.est), eS=[];
+  if(valOk(eg('d1'))) eS.push('1 din '+valMoney(eg('d1'))); if(valOk(eg('d7'))) eS.push('7 din '+valMoney(eg('d7'))); if(valOk(eg('d90'))) eS.push('90 din '+(E.d90_obs&&!E.d90_est?'':'≈')+valMoney(eg('d90')));
+  const t3=valTileBox('rpi','Earning per install',valRpiTip(d),E.st?valSt(E):(valOk(ev)?'normal':'wait'),valOk(ev)?(est?'≈':'')+valMoney(ev)+'<small>in 30 days</small>':'—',
+    valChip('rpi',E.st?E:{st:valOk(ev)?'normal':'wait'},[]),eS.join(' · '),sp(E.from,E.to));
+  const C=valM(T.cpi), RC=valM(r&&r.cpi), cg=k=>valOk(C[k])?C[k]:RC[k], cst=C.st?valSt(C):valSt(RC), cS=[];
+  if(valOk(cg('spend4'))&&+cg('spend4')>0&&valOk(cg('n4'))) cS.push(`Google Ads ${valSpendBig(cg('spend4'),cg('spend4_src'),ccy)} ÷ ${valNum(cg('n4'))} naye users (ads + organic)`); if(valOk(cg('ads'))) cS.push('sirf ads wale: '+valSpendMoney(cg('ads'),cg('ads_src'),ccy));
+  if(!valOk(cg('v'))&&C.note) cS.push(valTxt(C.note));
+  const t4=valTileBox('cpi','Cost per install',VAL_TIP.cpi,cst,valOk(cg('v'))?valSpendMoney(cg('v'),cg('v_src'),ccy):'—',valChip('cpi',{st:cst},als),cS.join(' · '),sp(C.from,C.to));
+  const Y=Object.assign({},valM(r&&r.cty),valM(T.cty)), yst=valCtySt(Y), best=(Y.best||[]).slice(0,3), weak=(Y.weak||[]).slice(0,3), CW=valM(d.countries&&d.countries.win), yS=[];
+  if(weak.length) yS.push('Weakest: '+weak.map(valCtyTag).join(' · ')); if(valOk(Y.of)) yS.push(`${valNum(Y.judged)} of ${valNum(Y.of)} countries judged`);
+  if(yst==='wait') yS.push('countries ka data aa raha'); else if(yst==='unclean'||(yst==='low'&&Y.clean===false)) yS.push('GA4 ka country data adhoora — abhi faisla nahi'); else if(yst==='low') yS.push('abhi faisla nahi (installs / 30 din ka data kam)');
+  // judged, no Best yet: every judged one like the app, or a difference not yet held 2 weeks / on 1,000+ installs
+  const yBig=best.length?'Best: '+best.map(valCtyTag).join(' · '):(yst==='ok'?(Y.all_avg?'Sab app jaise':'Abhi pakka nahi'):'—');
+  const t5=valTileBox('cty','Countries','Kis country ke installs sabse zyada / sabse kam kamate hain — sirf 300+ installs wale countries, 2 hafte lagatar.',yst,
+    yBig,valChip('cty',{st:yst},als)+(Y.smp?`<span class="pill p-b" title="${hAttr(VAL_TIP.smp)}">≈ GA4 sample</span>`:''),yS.join(' · '),sp(CW.from,CW.to),'val-vs');
+  const tiles=`<div class="uni-tiles val-tiles" id="val-tiles" style="--n:3">${t1+t2+t3+t4+t5}</div>`;
+  // context: installs a week, the ads share, spend a week — over the SAME last settled weeks as the cost tile (k of them)
+  const nw=valOk(cg('nw'))&&+cg('nw')>0?+cg('nw'):null;
+  let n4=valOk(cg('n4'))&&nw?+cg('n4'):null, k=nw;
+  if(n4==null){ const x=W.filter(w=>valOk(w.n)&&w.to<=(d.settled_till||'9')).slice(0,4); if(x.length){ n4=x.reduce((t,w)=>t+ +w.n,0); k=x.length; } }
+  const cx=[`Installs ${B_(valOk(n4)&&k?valNum(n4/k):'—')}/week`]; if(valOk(cg('paid_share'))) cx.push(`ads se ~${B_(Math.round(+cg('paid_share')*100)+'%')}`);
+  const s4=cg('spend4'), s4s=cg('spend4_src');
+  cx.push(valOk(s4)&&+s4>0&&nw?`Google Ads ${B_(valSpendBig(+s4/nw,valOk(s4s)?+s4s/nw:null,ccy))}/week`:(valOk(s4)?'Google Ads kharcha nahi':'Google Ads kharcha abhi nahi aaya'));
+  const ctx=`<div class="uni-meta" id="val-ctx">${cx.map(x=>`<span>${x}</span>`).join('')}<span class="faint">(last ${k||4} settled ${k===1?'week':'weeks'})</span></div>`;
+  const I=valM(d.iday), dl=I.state==='wait'||!I.from?'Install-day data abhi aa raha — pehle fetch ke baad.':`Install-day data: ${uniD(I.from)} se (${valOk(I.pct)?Math.round(+I.pct):'—'}% history)${valOk(I.left_days)&&I.state!=='whole'?` · baaki ~${Math.round(+I.left_days)} din me`:''}`;
+  const ed=(Array.isArray(I.text)?I.text:[]).filter(Boolean).map(t=>`<div class="val-edge">${hAttr(t)}</div>`).join('');
+  return `<div class="card" id="val-sum" style="margin-bottom:14px"><div class="ct uni-ct"><h3>📌 At a glance</h3><span class="faint" style="font-size:11.5px">newest settled install weeks vs the weeks before</span></div>
+    ${S.text?`<div class="val-line" data-kind="${hAttr(S.kind||'')}">${valTxt(S.text)}</div>`:''}${tiles}${ctx}<div class="faint" id="val-data" style="font-size:11.5px;margin-top:6px">${dl}</div>${ed?`<div class="val-edges">${ed}</div>`:''}</div>`; }
+// the earning-per-install words follow where the money came from: AdMob all networks, or (mediation not read) AdMob's own network only
+function valRpiTip(d){ return (d&&d.scale&&d.scale.src==='network')?'AdMob ki kamai (sirf AdMob network — mediation ke baaki networks nahi mile), install ke din se ab tak, ek install pe.':VAL_TIP.rpi; }
+const B_=t=>`<b style="color:var(--ink2)">${t}</b>`;
+// ---- "🔔 What changed?" ----
+const VAL_SEC={pay_slow:'val-pay',pay_loss:'val-pay',geo_move:'val-cty',geo_cost:'val-cty',iv_link:'val-chk'};
+const VAL_TAG={cpi:['Cost up','Install ka kharcha badha — isne paisa-wapas dheema kiya'],value:['Value down','Install ki kamai (7 din) ghati'],
+  mix:['Mix','Ads wale installs ya kisi country ka hissa badla'],return:['Returns down','Naye users kam wapas aa rahe (Active users dekho)'],
+  market_wide:['Market','Ad rate (eCPM) sab apps me ek saath badla — is app ka apna badlaav nahi; alert sirf dikhaya, bheja nahi']};
+// the worst first (a warning, then watch, then good), then the newest
+function valNewest(list){ const ab=x=>x.week_to||x.installs_to||x.to||'', SV={warning:0,watch:1,good:2}, sv=x=>SV[x.severity]!=null?SV[x.severity]:3;
+  return (Array.isArray(list)?list:[]).filter(x=>x&&typeof x==='object').slice().sort((p,q)=>(sv(p)-sv(q))||((q.opened||'')>(p.opened||'')?1:((q.opened||'')<(p.opened||'')?-1:(ab(q)>ab(p)?1:(ab(q)<ab(p)?-1:0))))); }
+const valArr=a=>(Array.isArray(a)?a:[]).filter(o=>o&&typeof o==='object');
+function valWhen(x){ const f=x.week_from||x.installs_from, t=x.week_to||x.installs_to; if(f) return 'Installs '+uniSpan(f,t||f); if(x.from) return uniSpan(x.from,x.to); return x.opened?'Since '+uniD(x.opened):''; }
+function valRel(R){ if(!R||typeof R!=='object'||!(R.key||R.version||R.date)) return null;
+  return {key:R.key||(R.date?uniRelKey(R):''), label:R.label||(R.version!=null&&R.version!==''?uniRelV(R):'Update'), date:R.date||''}; }
+function valRelChip(x){ const R=valRel(x.release); if(!R||!R.key) return '';
+  return `<span class="pill p-p val-relc" title="Is update ka asar — Active users → Update impact" onclick="event.stopPropagation();uniImpGo('${uniQ(x.app_id)}','${uniQ(R.key)}','act')">After ${hAttr(R.label)}</span>`; }
+function valChangeRow(x,withApp,closed){
+  const sv=closed?[x.dir==='up'?'Was better':'Was worse','uni-pz']:(x.severity==='warning'?['Worse','p-r']:(x.severity==='good'?['Better','p-g']:['Watch','p-y']));
+  const go=withApp?`valOpen('${uniQ(x.app_id)}')`:`valJump('${VAL_SEC[x.family]||'val-pay'}')`;
+  const tags=(x.fresh&&!closed?'<span class="pill p-p">New</span>':'')+(x.estimate?`<span class="pill p-b" title="${hAttr(VAL_TIP.est)}">≈ Estimate</span>`:'')
+    +(x.cc?`<span class="pill uni-pz">${valCtyTag(x.cc)}</span>`:'')+valRelChip(x)+(Array.isArray(x.tags)?x.tags:[]).filter(t=>VAL_TAG[t]).map(t=>`<span class="pill uni-pz" title="${hAttr(VAL_TAG[t][1])}">${VAL_TAG[t][0]}</span>`).join('')
+    +(closed&&x.closed?`<span class="dt">Closed · ${uniD(x.closed)}</span>`:'');
+  const act=closed?'':(withApp?'<span class="lnk">Open →</span>':`<span class="lnk" onclick="${go}">Open →</span>`);
+  return `<div class="uni-chg ${withApp?'wa':'na'}${closed?' cl':''}" data-fam="${hAttr(x.family||'')}"${withApp?` onclick="${go}"`:''}><span class="sv"><span class="pill ${sv[1]}">${sv[0]}</span></span>`
+    +`${withApp?`<span class="ap" title="${hAttr(x.app)}">${uniAppTag(x.app,16)}</span>`:''}<span class="tx">${valTxt(x.text||x.message||'')}</span>`
+    +`<span class="mt"><span class="dt">${valWhen(x)}</span>${tags}</span><span class="ac">${act}</span></div>`; }
+// an info row (never an alert, never counted, never coloured)
+const VAL_INFO={mix:'Mix',new_cty:'New country',spend:'Ads spend',paid:'Paid share',k:'Scale',gap:'Country data',closed:'Closed',market:'Market'};
+const VAL_ISEC={mix:'val-cty',new_cty:'val-cty',gap:'val-cty',spend:'val-pay',paid:'val-pay',k:'val-chk',closed:'val-pay',market:'val-pay'};
+function valInfoRow(o,app,id,old){ const kind=o.kind||'info', go=app?`valOpen('${uniQ(id)}')`:`valJump('${VAL_ISEC[kind]||'val-pay'}')`;
+  const tags=(VAL_INFO[kind]?`<span class="pill uni-pz">${VAL_INFO[kind]}</span>`:'')+(o.cc?`<span class="pill uni-pz">${valCtyTag(o.cc)}</span>`:'')+(o.release&&o.release.key?valRelChip({release:o.release,app_id:id||o.app_id}):'');
+  return `<div class="uni-chg ${app?'wa':'na'} val-info${old?' old':''}" ${old?'data-old':'data-info'}="${hAttr(kind)}"${app?` onclick="${go}"`:''}><span class="sv"><span class="pill p-b" title="Sirf jaankari — iska alert nahi aata, ginti me nahi">Info</span></span>`
+    +`${app?`<span class="ap" title="${hAttr(app)}">${uniAppTag(app,16)}</span>`:''}<span class="tx">${valTxt(o.text||'')}</span>`
+    +`<span class="mt"><span class="dt">${uniSpan(o.from,o.to)}</span>${tags}</span><span class="ac">${app?'<span class="lnk">Open →</span>':(old?'':`<span class="lnk" onclick="${go}">Open →</span>`)}</span></div>`; }
+function valChangesCard(d){
+  const C=valM(d.changes), open=valNewest(C.open), closed=valNewest(C.closed), info=valArr(C.info), older=valArr(C.older);
+  const body=open.length?open.map(x=>valChangeRow(x,false,false)).join(''):'<div class="uni-ok">✅ All normal — no changes</div>';
+  const cl=closed.length?uniFoldX(VALCLEXP,'Closed',closed.length,'valCLX()')+(VALCLEXP?closed.map(x=>valChangeRow(x,false,true)).join(''):''):'';
+  const ol=older.length?uniFoldX(VALOLDEXP,'Older changes',older.length,'valOX()')+(VALOLDEXP?'<div class="faint" style="font-size:11px;margin:6px 0 2px;line-height:1.5">ℹ️ Pehle ke badlaav — sirf jaankari. Inka alert nahi aata, upar ki ginti me nahi.</div>'+older.map(o=>valInfoRow(o,'',d.app_id,true)).join(''):''):'';
+  return `<div class="card" id="val-chg" style="margin-bottom:14px"><div class="ct"><h3>🔔 What changed? (${open.length})</h3></div>${body}${info.map(o=>valInfoRow(o)).join('')}${cl}${ol}</div>`; }
+// ---- "💸 Money back by install week": the curve (per 100 of ads) + the week table ----
+function valWeeks(d){ return (Array.isArray(d&&d.weeks)?d.weeks:[]).filter(w=>w&&w.from&&w.to).slice().sort((p,q)=>p.from<q.from?1:(p.from>q.from?-1:0)); }
+function valPh(){ return typeof innerWidth==='number'&&innerWidth<=760; }
+const VAL_TL=['Install day','1 d','3 d','1 wk','2 wk','30 d','60 d','90 d','6 mo','1 yr'], VAL_TLP=['0','','','7','','30','','90','','1 yr'];
+// a curve over the 10 ages, evenly spaced (y from 0): series [{v,color,width,dash,op,dots}], band {lo,hi}, o {fmt, h100, ph}
+function valCurveSvg(series,band,o){ const ph=!!o.ph, W=ph?400:1000, H=ph?230:250, mL=ph?46:60, mR=ph?16:26, mT=18, mB=30, pw=W-mL-mR, ph2=H-mT-mB, fs=ph?11:12.5;
+  const all=[]; series.forEach(s=>(s.v||[]).forEach(x=>{ if(valOk(x)) all.push(+x); })); if(band) ['lo','hi'].forEach(k=>(band[k]||[]).forEach(x=>{ if(valOk(x)) all.push(+x); }));
+  if(!all.length) return '<div class="muted" style="font-size:12px;padding:14px 4px">Abhi koi pakka number nahi.</div>';
+  if(o.h100) all.push(100);
+  const top=Math.max(...all,0)*1.1||1, xi=i=>mL+pw*i/9, y=v=>mT+ph2*(1-v/top);
+  const runs=ok=>{ const out=[]; let c=null; for(let i=0;i<10;i++){ if(ok(i)){ if(!c){ c=[]; out.push(c); } c.push(i); } else c=null; } return out; };
+  let g=''; for(let k=0;k<=4;k++){ const v=top*k/4, yy=y(v).toFixed(1); g+=`<line x1="${mL}" y1="${yy}" x2="${W-mR}" y2="${yy}" stroke="#22314f" stroke-width="1"/><text x="${mL-7}" y="${(+yy+4).toFixed(1)}" text-anchor="end" font-size="${fs}" fill="#8496b5">${o.fmt(v)}</text>`; }
+  let b=''; if(band){ const lo=band.lo||[], hi=band.hi||[]; runs(i=>valOk(lo[i])&&valOk(hi[i])).forEach(s=>{ if(s.length<2) return;
+    b+=`<path d="M${s.map(i=>xi(i).toFixed(1)+' '+y(+hi[i]).toFixed(1)).join(' L')} L${s.slice().reverse().map(i=>xi(i).toFixed(1)+' '+y(+lo[i]).toFixed(1)).join(' L')} Z" fill="#3dd0f0" fill-opacity=".12"/>`; }); }
+  const h=o.h100?`<line x1="${mL}" y1="${y(100).toFixed(1)}" x2="${W-mR}" y2="${y(100).toFixed(1)}" stroke="#ffd479" stroke-width="1.4" stroke-dasharray="6 4"/><text x="${mL+6}" y="${(y(100)-6).toFixed(1)}" text-anchor="start" font-size="${fs}" font-weight="700" fill="#ffd479">Paisa wapas</text>`:'';
+  let L=''; series.forEach(s=>{ const v=s.v||[]; runs(i=>valOk(v[i])).forEach(r=>{ if(r.length<2) return;
+      L+=`<path d="M${r.map(i=>xi(i).toFixed(1)+' '+y(+v[i]).toFixed(1)).join(' L')}" fill="none" stroke="${s.color}" stroke-width="${s.width||2.4}"${s.dash?` stroke-dasharray="${s.dash}"`:''}${s.op?` stroke-opacity="${s.op}"`:''} stroke-linejoin="round" stroke-linecap="round"/>`; });
+    if(s.dots) v.forEach((x,i)=>{ if(valOk(x)) L+=`<circle cx="${xi(i).toFixed(1)}" cy="${y(+x).toFixed(1)}" r="${ph?3:3.6}" fill="${s.dots==='hollow'?'#0b1220':s.color}" stroke="${s.color}" stroke-width="1.6"><title>${VAL_TL[i]} · ${s.dots==='hollow'?'≈ ':''}${o.fmt(+x)}</title></circle>`; }); });
+  let xl=''; for(let i=0;i<10;i++){ const t=ph?VAL_TLP[i]:VAL_TL[i]; if(!t) continue;
+    xl+=`<line x1="${xi(i).toFixed(1)}" y1="${mT+ph2}" x2="${xi(i).toFixed(1)}" y2="${mT+ph2+4}" stroke="#3a4a66" stroke-width="1"/><text x="${xi(i).toFixed(1)}" y="${H-9}" text-anchor="middle" font-size="${fs}" fill="#8496b5">${t}</text>`; }
+  return `<svg viewBox="0 0 ${W} ${H}" class="val-curve" style="width:100%;height:auto;display:block" data-ph="${ph?1:0}">${g}${b}${h}${L}${xl}</svg>`; }
+const valLg=(c,t,dash,op)=>`<span><i style="display:inline-block;width:16px;height:0;border-top:2px ${dash||'solid'} ${c}${op?';opacity:'+op:''}"></i>${t}</span>`;
+function valLast(a){ let j=-1; (a||[]).forEach((v,i)=>{ if(valOk(v)) j=i; }); return j; }
+function valCurve(d,W,paid,ph){ const cur=csym(), C=valM(d.curve);
+  if(paid){ const J=W.filter(w=>w.judged&&Array.isArray(w.L)), w0=J.find(w=>w.L.filter(valOk).length>=2)||J[0]; if(!w0) return '';
+    const jo=valLast(w0.L), obs=w0.L.map((v,j)=>j<=jo&&valOk(v)?+v:null), Lp=w0.Lp||[], lo=w0.Llo||[], hi=w0.Lhi||[];
+    const proj=obs.map((v,j)=>j===jo?v:(j>jo&&valOk(Lp[j])?+Lp[j]:null)), hasP=proj.some((v,j)=>j>jo&&v!=null);
+    const band={lo:obs.map((v,j)=>j===jo?v:(j>jo&&valOk(lo[j])?+lo[j]:null)),hi:obs.map((v,j)=>j===jo?v:(j>jo&&valOk(hi[j])?+hi[j]:null))};
+    const prev=J.filter(w=>w.from<w0.from).slice(0,4), nrm=(C.normal||[]).map(x=>valOk(x)?+x:null), hasN=nrm.some(x=>x!=null);
+    const S=prev.map(w=>({v:(w.L||[]).map(x=>valOk(x)?+x:null),color:'#94a3b8',width:1.5,op:.6}));
+    if(hasN) S.push({v:nrm,color:'#8496b5',width:1.8,dash:'2 5'});
+    if(hasP) S.push({v:proj,color:'#3dd0f0',width:2.2,dash:'7 5',dots:'hollow'});
+    S.push({v:obs,color:'#3dd0f0',width:2.8,dots:'solid'});
+    const svg=valCurveSvg(S,hasP?band:null,{fmt:valP100,h100:true,ph});
+    const lgd=`<div class="lgd">${valLg('#3dd0f0','Installs '+uniSpan(w0.from,w0.to))}${hasP?valLg('#3dd0f0','≈ andaza (aage ka)','dashed'):''}${hasP?'<span><i class="dot" style="background:rgba(61,208,240,.28)"></i>≈ range</span>':''}${prev.length?valLg('#94a3b8','Last 4 weeks','solid',.7):''}${hasN?valLg('#8496b5','Normal (older weeks)','dotted'):''}${valLg('#ffd479',cur+'100 = paisa wapas','dashed')}</div>`;
+    return `<div style="padding:10px 17px 0"><div style="font-size:12.5px;font-weight:700;color:var(--ink2);margin:4px 0 8px">Per ${cur}100 of ads — kitna wapas aaya, install ke kitne din baad</div><div id="val-curve">${svg}</div>${lgd}
+      <div class="faint" style="font-size:11.5px;margin-top:6px">Line 100 ke upar gayi = ads ka poora paisa wapas.${C.shape==='portfolio'?' ≈ andaza dusre apps ke hisaab se (is app ke purane hafte abhi kam).':''}</div></div>`; }
+  // no Google Ads: the same curve, as earning per install (never "per 100 of ads")
+  const J=W.filter(w=>Array.isArray(w.rpi)&&w.rpi.filter(valOk).length>=2), w0=J[0]; if(!w0) return '';
+  const jo=valLast(w0.rpi), obs=w0.rpi.map((x,j)=>j<=jo&&valOk(x)?+x:null), P=w0.rpip||[], proj=obs.map((v,j)=>j===jo?v:(j>jo&&valOk(P[j])?+P[j]:null)), hasP=proj.some((v,j)=>j>jo&&v!=null);
+  const S=J.slice(1,5).map(w=>({v:w.rpi.map(x=>valOk(x)?+x:null),color:'#94a3b8',width:1.5,op:.6}));
+  if(hasP) S.push({v:proj,color:'#3dd0f0',width:2.2,dash:'7 5',dots:'hollow'}); S.push({v:obs,color:'#3dd0f0',width:2.8,dots:'solid'});
+  return `<div style="padding:10px 17px 0"><div style="font-size:12.5px;font-weight:700;color:var(--ink2);margin:4px 0 8px">Earning per install — install ke kitne din baad kitna</div><div id="val-curve">${valCurveSvg(S,null,{fmt:valMoney,ph})}</div>
+    <div class="lgd">${valLg('#3dd0f0','Installs '+uniSpan(w0.from,w0.to))}${hasP?valLg('#3dd0f0','≈ andaza (aage ka)','dashed'):''}${S.length>(hasP?2:1)?valLg('#94a3b8','Last 4 weeks','solid',.7):''}</div></div>`; }
+// one "Back in N days" cell: the per-100 number (✅ once it reached 100) · ≈ when a GA4 day was short · ≈ italic projection · "in N days"
+// a week without judged spend: "No ads" only when its spend is KNOWN to be nothing — a week whose Google Ads spend is
+// not in yet (or before the spend history) is unknown, never "No ads"
+function valSpendWait(w){ return !w.judged&&(w.why==='wait'||w.why==='unknown'||(w.why!=='nospend'&&!valOk(w.spend))); }
+function valNoAds(w){ return !w.judged&&!valSpendWait(w)&&(w.why==='nospend'||!(valOk(w.spend)&&+w.spend>0)); }
+const VAL_SPW='Google Ads kharcha abhi nahi aaya';
+function valCell(w,j,S,T,paid){ const t=T[j], k=S?uniDiff(S,uniAdd(w.to,t)):null, sw=valSpendWait(w);
+  const wait=k!=null&&k>0?`<td class="uni-num faint val-imm" data-imm="1">in ${k} ${k===1?'day':'days'}</td>`:'<td class="uni-num faint">—</td>';
+  if(!paid||valNoAds(w)||sw){ const x=(w.rpi||[])[j], xp=(w.rpip||[])[j];
+    if(!valOk(x)&&!paid&&valOk(xp)) return `<td class="uni-num val-proj" data-proj="1" title="${hAttr(VAL_TIP.est+(k!=null&&k>0?' Pakka number ~'+k+' din me.':''))}">≈${valMoney(xp)}</td>`;
+    if(!valOk(x)) return paid?(sw?wait:`<td class="uni-num faint" title="Is hafte Google Ads kharcha nahi">No ads</td>`):wait;
+    return `<td class="uni-num"${paid?` title="${hAttr((sw?VAL_SPW:'Is hafte ads kharcha nahi')+' — ye kamai per install hai ('+csym()+'100 pe nahi)')}"`:''}>${valMoney(x)}${paid?'<small class="faint">/install</small>':''}</td>`; }
+  const v=(w.L||[])[j];
+  if(valOk(v)){ const q=!!(w.Lq||[])[j], e=!q&&!!(w.est||[])[j]; return `<td class="uni-num"${q||e?` data-q="1" title="${hAttr(q?VAL_TIP.q:VAL_TIP.k)}"`:''}>${q||e?'≈':''}${valP100(v)}${+v>=100?' ✅':''}</td>`; }
+  const p=(w.Lp||[])[j];
+  if(valOk(p)) return `<td class="uni-num val-proj" data-proj="1" title="${hAttr(VAL_TIP.est+(k!=null&&k>0?' Pakka number ~'+k+' din me.':''))}">≈${valP100(p)}</td>`;
+  return wait; }
+function valPayCell(w,H,ph){ if(!w.judged) return valSpendWait(w)?`<td class="faint" title="${VAL_SPW}">—</td>`:(valNoAds(w)?'<td class="faint">No ads</td>':'<td class="faint" title="Thoda kharcha — faisla nahi">Little spend</td>');
+  const P=w.pay; if(!P) return '<td class="faint" title="Abhi andaza nahi — thode aur din ka data chahiye">—</td>';
+  if(P.never) return `<td style="white-space:nowrap"${valOk(P.pct365)?` title="Saal bhar me ≈${Math.round(P.pct365)}% wapas (andaza)"`:''}>Over 1 year</td>`;
+  if(!valOk(P.p)) return '<td class="faint">—</td>';
+  if(P.obs) return `<td style="white-space:nowrap">${valDays(P.p)}</td>`;
+  const bt=valBandTxt(P), rg=bt.startsWith('andaza ')&&bt!=='andaza kaafi kaccha'?bt.slice(7).replace(' din',''):(bt==='andaza kaafi kaccha'?'kaafi kaccha':'');
+  return `<td style="white-space:nowrap" title="${hAttr(VAL_TIP.est)}">≈${valDays(P.p)}${rg?(ph?`<div class="faint val-rg">(${rg})</div>`:` <span class="faint">(${rg})</span>`):''}</td>`; }
+function valPayCard(d,r){
+  const W=valWeeks(d), T=valT(), S=d.settled_till, ph=valPh(), cur=csym(), paid=W.some(w=>w.judged), H=valH(d), ccy=valSrcCcy(d);
+  const hd=`<div class="ct uni-ct" style="padding:16px 17px 0"><h3>💸 Money back by install week</h3><span class="faint" style="font-size:11.5px">${paid?`har hafte ke installs pe ${cur}100 ke ads ka kitna wapas aaya`:'Google Ads kharcha nahi — kamai per install'}</span></div>`;
+  const wrap=h=>`<div class="card pad0" id="val-pay" style="margin-bottom:14px">${hd}${h}</div>`;
+  if(!W.length) return wrap(`<div class="uni-empty" style="margin:12px 17px 16px">⏳ Install-wise kamai ka data aa raha — pehle hafte ke installs ke baad yahan dikhega.</div>`);
+  const n=VALWK==='all'?W.length:(+VALWK||12), shown=W.slice(0,n), cols=ph?[3,5]:[1,3,5,7,9];
+  const CL={1:'1 day',3:'1 week',5:'30 days',7:'90 days',9:'1 year'};
+  const heads=paid?(ph?['Week','Cost per install','1 week','30 days','Money back in']:['Week','Installs','Ads spend','Cost per install','Back in 1 day','1 week','30 days','90 days','1 year','Money back in'])
+    :(ph?['Week','Installs','1 week','30 days']:['Week','Installs','Earning per install · 1 day','1 week','30 days','90 days','1 year']);
+  const tip={'Cost per install':VAL_TIP.cpi,'Back in 1 day':`${cur}100 ke ads pe install ke 1 din me kitna wapas`,'Money back in':'Ads ka poora paisa kitne din me wapas — ≈ = andaza (range ke saath)'};
+  const head=`<tr>${heads.map(h=>`<th${tip[h]?` title="${hAttr(tip[h])}"`:''}>${h}</th>`).join('')}</tr>`, nc=heads.length;
+  let body='';
+  shown.forEach(w=>{ const R=valRel(w.release);
+    if(R) body+=`<tr class="uni-rel"><td class="nm">${R.key?`<span class="uni-rl" title="Tap — is update ka asar (Active users → Update impact)" onclick="uniImpGo('${uniQ(d.app_id||r.app_id)}','${uniQ(R.key)}','act')">📦 ${hAttr(R.label)}${R.date?' · '+uniD(R.date):''}</span>`:`📦 ${hAttr(R.label)}${R.date?' · '+uniD(R.date):''}`}</td><td colspan="${nc-1}"></td></tr>`;
+    const lab=`<td class="nm" style="white-space:nowrap">${uniSpan(w.from,w.to)}${ph&&paid?`<div class="faint" style="font-size:10.5px;font-weight:400">${valNum(w.n)} installs</div>`:''}</td>`;
+    const noAds=valNoAds(w), spw=valSpendWait(w), ctip=valOk(w.cpi_ads)?` title="${hAttr('Sirf ads wale installs: '+valSpendMoney(w.cpi_ads,w.cpi_ads_src,ccy)+(valOk(w.paid)?' · ads se '+valPct(w.paid):''))}"`:'';
+    const cpiC=spw?`<td class="faint" title="${VAL_SPW}">aa raha</td>`:(noAds?'<td class="faint">No ads</td>':`<td class="uni-num"${ctip}>${valSpendMoney(w.ecpi,w.ecpi_src,ccy)}</td>`);
+    const cells=cols.map(j=>valCell(w,j,S,T,paid)).join('');
+    body+=`<tr data-week="${hAttr(w.from)}">${lab}`+(paid?(ph?cpiC+cells+valPayCell(w,H,true):`<td class="uni-num">${valNum(w.n)}</td>${spw?`<td class="faint" title="${VAL_SPW}">aa raha</td>`:(noAds?'<td class="faint">No ads</td>':`<td class="uni-num">${valSpendBig(w.spend,w.spend_src,ccy)}</td>`)}${cpiC}${cells}${valPayCell(w,H,false)}`)
+      :`<td class="uni-num">${valNum(w.n)}</td>${cells}`)+'</tr>'; });
+  const chips=[['12','12 weeks'],['26','26 weeks'],['all','All']].map(([v,l])=>`<span class="chip${VALWK===v?' on':''}" onclick="valWK('${v}')">${l}</span>`).join('');
+  const tbl=`<div style="padding:12px 17px 0"><div class="chips" style="margin-bottom:8px">${chips}</div></div><div class="uni-scroll"><table class="uni-sticky uni-heat val-tbl" id="val-weeks" style="min-width:${paid?(ph?330:940):(ph?300:720)}px"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  const foot=[]; if(paid) foot.push('Cost per install = Google Ads kharcha ÷ saare naye users (ads + organic). Sirf ads wale installs ka kharcha: column me tooltip.');
+  const iw=W.find(w=>Array.isArray(w.iap)&&valOk(w.iap[5])&&+w.iap[5]>0); if(iw) foot.push(`In-app kharidari alag: ${valMoney(iw.iap[5])} per install (30 din, Google ke cut se pehle) — paisa-wapas me nahi gini.`);
+  if(valM(d.fx).mode==='one'&&paid) foot.push('Google Ads kharcha ₹ me — purane hafte aaj ke rate pe (har hafte ka apna rate nahi mila), isliye unka kharcha ≈.');
+  else if(paid&&valSrcOn(0,ccy)) foot.push('₹ me Google Ads kharcha bilkul utna jitna Google Ads ne liya; $ view me har hafta apne rate pe.');
+  if(!paid) foot.push(`Is app pe Google Ads kharcha nahi — isliye "paisa wapas" nahi, sirf ek install ki kamai (${d.scale&&d.scale.src==='network'?'AdMob, sirf AdMob network':'AdMob, sab networks'}).`);
+  foot.push('"in N days" = wo din abhi pure nahi hue — chhota number nahi dikhate. ≈ = andaza.');
+  return wrap(valCurve(d,W,paid,ph)+tbl+`<div class="faint" id="val-payfoot" style="font-size:10.5px;padding:8px 17px 14px;line-height:1.55">${foot.map(t=>`<div>${hAttr(t)}</div>`).join('')}</div>`); }
+// ---- "🌍 Countries" ----
+function valCtyRows(C){ return (Array.isArray(C&&C.rows)?C.rows:[]).filter(x=>x&&typeof x==='object'&&x.cc); }
+function valCtyVal(x,k){ if(k==='n') return valOk(x.n)?+x.n:null; if(k==='rpi'){ const v=valM(valM(x.rpi)['30']).v; return valOk(v)?+v:null; } const v=valM(x[k]).v; return valOk(v)?+v:null; }
+function valAx(x,C){ return x.clean===false||!!(C&&C.smp)||!!x.smp; }
+function valRet(x,k,C,short){ const M=valM(x[k]); if(!valOk(M.v)) return '<span class="faint">—</span>';
+  return `${valAx(x,C)||M.st==='est'||M.st==='wait'?'≈':''}${valOf100(M.v)}${short?'':'<small class="faint"> of 100</small>'}`; }
+function valRpiCell(x,C,H){ const R=valM(x.rpi), ax=valAx(x,C), f=k=>{ const M=valM(R[k]); return valOk(M.v)?(ax||M.proj||M.est?'≈':'')+valMoney(M.v):'—'; };
+  let s=['1','7','30','90'].map(f).join(' · '); if(H>90&&valOk(x.be)) s+=` · ≈${valMoney(x.be)} (${H} d)`; return s; }
+function valCtyDetail(x,C,H,geo){ const iv=(k,l)=>{ const M=valM(x[k]); return valOk(M.v)?`${l} ${valOf100(M.v)} of 100${valOk(M.lo)&&valOk(M.hi)?` (${valOf100(M.lo)}–${valOf100(M.hi)})`:''}`:''; };
+  const R=valM(valM(x.rpi)['30']), T=valM(x.trend), out=[];
+  if(x.text) out.push(`<div class="val-ctx-t">${valTxt(x.text)}</div>`);
+  const a=[iv('d1','Next day'),iv('d7','After a week'),iv('d30','After 30 days')].filter(Boolean).join(' · '); if(a) out.push(`<div class="val-ctx-m">${a}</div>`);
+  if(valOk(R.v)) out.push(`<div class="val-ctx-m">Earning per install (30 days) ${valMoney(R.v)}${valOk(R.lo)&&valOk(R.hi)?` (${valMoney(R.lo)}–${valMoney(R.hi)})`:''}${valOk(x.be)?` · install ${valMoney(x.be)} se sasta mile tabhi ${H} din me paisa wapas`:''}</div>`);
+  if(geo&&x.cpi) out.push(`<div class="val-ctx-m">Cost per install ${valMoney(x.cpi.v)}${valOk(x.cpi.ads)?` (sirf ads wale ${valMoney(x.cpi.ads)})`:''}${x.pay&&valOk(x.pay.p)?` · paisa wapas ≈${valDays(x.pay.p)}`:''}</div>`);
+  const sp=[['d1','Next day · 12 weeks',v=>valOf100(v)+' of 100'],['rpi7','Earning per install (1 week) · 12 weeks',valMoney]].map(([k,l,f])=>Array.isArray(T[k])&&T[k].filter(valOk).length>=2?`<div class="val-spk"><div class="faint">${l}</div>${valSpark(T[k],f)}</div>`:'').join('');
+  if(sp) out.push(`<div class="val-spks">${sp}</div>`);
+  return out.join('')||'<div class="faint">Abhi aur detail nahi.</div>'; }
+function valSpark(v,fmt){ const a=(v||[]).map(x=>valOk(x)?+x:null), ok=a.filter(x=>x!=null); if(ok.length<2) return '';
+  const W=140,H=34,p=3, mx=Math.max(...ok), mn=Math.min(0,...ok), n=a.length, xi=i=>p+(W-2*p)*i/Math.max(1,n-1), y=x=>H-p-(H-2*p)*((x-mn)/((mx-mn)||1));
+  let dd='', pen=false; a.forEach((x,i)=>{ if(x==null){ pen=false; return; } dd+=(pen?' L':' M')+xi(i).toFixed(1)+' '+y(x).toFixed(1); pen=true; });
+  const li=valLast(a);
+  return `<div class="val-spkr"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;max-width:100%"><path d="${dd.trim()}" fill="none" stroke="#3dd0f0" stroke-width="1.8" stroke-linejoin="round"/><circle cx="${xi(li).toFixed(1)}" cy="${y(a[li]).toFixed(1)}" r="2.6" fill="#3dd0f0"/></svg><span>${fmt(a[li])}</span></div>`; }
+function valCtyCard(d,r){
+  const C=d.countries||null, H=valH(d), ph=valPh(), als=valAlsOf(d);
+  const hd=`<div class="ct uni-ct" style="padding:16px 17px 0"><h3>🌍 Countries</h3><span class="faint" style="font-size:11.5px">kaunse country me ads chalau, kaunse me rokun</span></div>`;
+  const wrap=h=>`<div class="card pad0" id="val-cty" style="margin-bottom:14px">${hd}${h}</div>`;
+  const rows=valCtyRows(C);
+  if(!C||!C.win) return wrap(`<div class="uni-empty" style="margin:12px 17px 16px">🌍 Countries ka data aa raha — install-day data ke saath aayega.</div>`);
+  const w=C.win, geo=!!C.geo, A=C.app&&typeof C.app==='object'?C.app:null;
+  const wl=`<div class="faint" id="val-cwin" style="font-size:11.5px;padding:6px 17px 0">Installs ${uniSpan(w.from,w.to)}${valOk(w.weeks)?` (${w.weeks} settled weeks)`:''}${w.from30?` · 30-day numbers: installs ${uniSpan(w.from30,w.to30)}`:''}</div>`;
+  if(!rows.length) return wrap(wl+`<div class="uni-empty" style="margin:12px 17px 16px">Not enough installs per country — kisi country me ${valConst('CTY_SHOW',50)}+ installs nahi.</div>`);
+  const rk=(p,q)=>(valOk(p.rank)?+p.rank:99)-(valOk(q.rank)?+q.rank:99);
+  const fl=L=>L.map(x=>`<span title="${hAttr(valCtyName(x.cc))}">${valFlag(x.cc)}</span>`).join(' ');
+  let strip;
+  const judgedRows=rows.filter(x=>x.clean!==false&&!['wait','few'].includes(x.verdict));
+  if(geo){ const g=v=>rows.filter(x=>x.verdict===v&&!x.few&&x.clean!==false); strip=[['keep','✅ Keep'],['slow','🐢 Slow'],['costly','💸 Costly']].filter(([v])=>g(v).length).map(([v,l])=>`${l}: ${fl(g(v))}`).join(' · '); }
+  else { const ok=c=>{ const x=rows.find(y=>y.cc===c); return !x||(x.clean!==false&&!['wait','few'].includes(x.verdict)); }, cc=L=>(L||[]).map(c=>String(c)).filter(ok),
+      top=Array.isArray(C.best)?cc(C.best):[], low=Array.isArray(C.weak)?cc(C.weak):[], tg=L=>L.slice(0,4).map(valCtyTag).join(', ');
+    // the Top / Low verdicts not (yet) on the Best / Weakest list: ranked only with 1,000+ installs and 2 weeks in a row
+    const topX=judgedRows.filter(x=>x.verdict==='top'&&!top.includes(x.cc)).sort(rk).map(x=>x.cc), lowX=judgedRows.filter(x=>x.verdict==='low'&&!low.includes(x.cc)).sort((p,q)=>rk(q,p)).map(x=>x.cc);
+    strip=[top.length?'Most earning per install: '+tg(top):'',low.length?'Least: '+tg(low):'',
+      (topX.length||lowX.length)?`<span title="${hAttr('Farak dikh raha, par abhi pakka nahi — 1,000+ installs aur 2 hafte lagatar hone pe list me aayega')}">Abhi pakka nahi: ${[...topX.map(c=>'⭐ '+valCtyTag(c)),...lowX.map(c=>'🔻 '+valCtyTag(c))].slice(0,6).join(', ')}</span>`:''].filter(Boolean).join(' · '); }
+  if(!strip) strip=judgedRows.length?'Abhi koi country app se alag (zyada / kam) pakka nahi — sab app jaise.':'Abhi kisi country ka faisla nahi — installs ya kamai ke hafte abhi kam.';
+  const sorts=[['n','Installs'],['d1','Next day'],['d7','After a week'],['d30','After 30 days'],['rpi','Earning per install']].map(([k,l])=>`<span class="chip${VALSORT===k?' on':''}" onclick="valSort('${k}')">${l}</span>`).join('');
+  const sk=['n','d1','d7','d30','rpi'].includes(VALSORT)?VALSORT:'n';
+  // any sort but Installs: few-install rows go after the judged ones (a tiny country's lucky number never tops the list)
+  const tiny=x=>sk!=='n'&&(x.few||x.verdict==='few')?1:0;
+  const sorted=rows.slice().sort((p,q)=>{ const f=tiny(p)-tiny(q); if(f) return f; const a=valCtyVal(p,sk), b=valCtyVal(q,sk); if(a==null&&b!=null) return 1; if(b==null&&a!=null) return -1; if(a!==b&&a!=null) return b-a; return (valCtyVal(q,'n')||0)-(valCtyVal(p,'n')||0); });
+  const few=x=>x.few?`<span class="pill uni-pn val-few" title="${hAttr(VAL_TIP.few)}">few installs</span>`:'';
+  const tipOf=x=>x.clean===false?VAL_TIP.gap:(valAx(x,C)?VAL_TIP.smp:(x.verdict==='wait'&&x.why==='young'?VAL_TIP.young:''));
+  let body;
+  if(ph){ const cm=['d1','d7','d30'].includes(VALCM)?VALCM:'d1', cml={d1:'next day',d7:'after a week',d30:'after 30 days'}[cm];
+    const card=(x,all)=>{ const o=!all&&VALCTYEXP===x.cc, R30=valM(valM(x.rpi)['30']), t=tipOf(x);
+      return `<div class="val-cc${o?' open':''}${all?' all':''}" data-cc="${hAttr(x.cc)}"${all?'':` onclick="valCX('${uniQ(x.cc)}')"`}${t?` title="${hAttr(t)}"`:''}><div class="h">${all?'🌍 <b>All countries</b>':`${valFlag(x.cc)} <b>${hAttr(valCtyName(x.cc))}</b>`} <span class="faint">· ${valNum(x.n)} installs</span>${few(x)}</div>`
+        +`<div class="m">${valRet(x,cm,C)} ${cml} · ${valOk(R30.v)?(valAx(x,C)||R30.proj?'≈':'')+valMoney(R30.v):'—'} per install (30 d)</div>`
+        +(all?'':`<div class="p">${valVerdChip(x,als,H)}</div>${x.text?`<div class="s">${valTxt(x.text)}</div>`:''}${o?`<div class="val-cxd">${valCtyDetail(x,C,H,geo)}</div>`:''}`)+`</div>`; };
+    body=`<div class="val-cards" id="val-ccards">${A?card(A,true):''}${sorted.map(x=>card(x,false)).join('')}</div>`; }
+  else { const TH=[['Country'],['Share'],['Next day','100 naye users me se kitne agle din phir aaye'],['After a week','100 me se kitne 7ve din aaye'],['After 30 days','100 me se kitne 30ve din aaye'],
+      ['Earning per install',VAL_TIP.rpi,'1 day · 1 week · 30 days · 90 days'+(H>90?` · ≈${H} days`:'')],...(geo?[['Cost per install',VAL_TIP.cpi],['Money back in']]:[]),['Verdict']];
+    const nc=TH.length;
+    const tr=(x,all)=>{ const t=tipOf(x), o=!all&&VALCTYEXP===x.cc;
+      return `<tr${all?' class="val-all"':` class="clk" data-cc="${hAttr(x.cc)}" onclick="valCX('${uniQ(x.cc)}')"`}${t?` title="${hAttr(t)}"`:''}><td class="nm">${all?'🌍 <b>All countries</b>':`${valFlag(x.cc)} ${hAttr(valCtyName(x.cc))}${few(x)}`}<div class="faint" style="font-size:10.5px;font-weight:400">${valNum(x.n)} installs</div></td>`
+        +`<td class="uni-num">${all?'100%':valPct(x.share)}</td><td class="uni-num">${valRet(x,'d1',C)}</td><td class="uni-num">${valRet(x,'d7',C)}</td><td class="uni-num">${valRet(x,'d30',C)}</td><td class="uni-num">${valRpiCell(x,C,H)}</td>`
+        +(geo?`<td class="uni-num">${x.cpi?valMoney(x.cpi.v):'—'}</td><td class="uni-num">${x.pay&&valOk(x.pay.p)?'≈'+valDays(x.pay.p):'—'}</td>`:'')
+        +`<td style="white-space:nowrap">${all?'<span class="faint">app</span>':valVerdChip(x,als,H)}</td></tr>`
+        +(o?`<tr class="val-cx" data-cx="${hAttr(x.cc)}"><td colspan="${nc}"><div class="val-cxd">${valCtyDetail(x,C,H,geo)}</div></td></tr>`:''); };
+    body=`<div class="uni-scroll"><table class="uni-sticky val-ctbl" id="val-ctbl" style="min-width:${geo?1060:880}px"><thead><tr>${TH.map(([h,t,sb])=>`<th${t?` title="${hAttr(t)}"`:''}>${h}${sb?`<div class="val-ths">${sb}</div>`:''}</th>`).join('')}</tr></thead><tbody>${A?tr(A,true):''}${sorted.map(x=>tr(x,false)).join('')}</tbody></table></div>`; }
+  const sm=valM(C.small), un=valM(C.unknown), ua=valM(C.unassigned), nAll=A&&valOk(A.n)?+A.n:null, rest=[];
+  if(valOk(sm.n)&&+sm.n>0) rest.push(valOk(sm.countries)&&+sm.countries>0?`Other small countries (${valNum(sm.countries)}) — ${valNum(sm.n)} installs, not judged`:`Other countries — ${valNum(sm.n)} installs, not judged`);
+  if(valOk(un.n)&&+un.n>0&&!rows.some(x=>x.cc==='--')) rest.push(`Unknown country — ${valNum(un.n)} installs`);
+  const uaS=Math.max(valOk(ua.rev_share)?+ua.rev_share:0,valOk(ua.n_share)?+ua.n_share:((valOk(ua.n)&&nAll)?+ua.n/nAll:0));
+  if(uaS>0.005) rest.push(`<span title="${hAttr(VAL_TIP.gap)}">Kisi country me nahi baanta (GA4) — ${valNum(ua.n)} installs, kamai ka ${valOk(ua.rev_share)?valPct(ua.rev_share):'—'}</span>`);
+  const notes=[]; if(C.smp) notes.push(`<div class="val-note" id="val-smp">≈ Is app ka country data GA4 sample se deta hai — country ke number andaza (≈), total sahi.</div>`);
+  if(!geo) notes.push(`<div class="val-note" id="val-nogeo">ℹ️ Google Ads country-wise kharcha abhi nahi aata. Isliye har country ke liye "install kitne tak ka chalega" dikha rahe: ${H} din me utni kamai.</div>`);
+  return wrap(wl+`<div class="val-strip" id="val-cstrip">${strip}</div><div style="padding:0 17px"><div class="chips" style="margin-bottom:8px">${sorts}</div></div>${body}`
+    +(rest.length?`<div class="val-rest" id="val-rest">${rest.map(t=>`<div>${t}</div>`).join('')}</div>`:'')
+    +`<div style="padding:4px 17px 14px">${notes.join('')}<div style="font-size:12px;margin-top:8px"><span class="lnk" onclick="show('countries')">AdMob eCPM by country → Country Strategy</span></div></div>`); }
+// ---- "🔍 Data check" (folded): GA4 ÷ AdMob a week, the unassigned part, old users, what came in, FX, zones, deductions ----
+// the Data check's own sentences come from the build (the NEWEST weeks: an AdMob side that stopped coming is said
+// plainly; the network-only fallback, deductions, FX and time zones); the page's own line only when they are missing
+function valChkTexts(d){ const t=valM(d.scale).text; return Array.isArray(t)?t.filter(x=>typeof x==='string'&&x):[]; }
+function valChkLine(d){ const E=valChkTexts(d); if(E.length) return {ok:/^✅/.test(E[0]),text:E[0]};
+  const W=(valM(d.scale).weeks||[]).filter(w=>w&&valOk(w.r)), last=W.slice(-4).map(w=>+w.r).sort((a,b)=>a-b);
+  if(!last.length) return {ok:null,text:'GA4 aur AdMob ki tulna ke liye abhi kaafi hafte nahi.'};
+  const m=last[Math.floor(last.length/2)];
+  return m>=0.9&&m<=1.1?{ok:true,text:'✅ GA4 aur AdMob ki kamai mel khati (±10%)'}:{ok:false,text:`GA4 me AdMob ki kamai ka ${Math.round(m*100)}% dikhta — install-wise kamai AdMob ke hisaab se scale ki (≈)`}; }
+function valChkCard(d){
+  const K=valChkLine(d), open=VALCHKEXP;
+  const th=`<div class="th" onclick="valKX()"><span class="cv${open?' on':''}">▸</span><span>🔍 <b>Data check</b> <span class="faint" style="font-weight:500">· ${hAttr(K.text)}</span></span><span class="lnk" style="margin-left:auto;font-size:12px">${open?'Hide':'Show'}</span></div>`;
+  if(!open) return `<div class="note uni-tn val-chk" id="val-chk">${th}</div>`;
+  const Sc=valM(d.scale), W=(Sc.weeks||[]).filter(w=>w&&w.from).slice(-26), I=valM(d.iday), IC=valM(I.cty), L=[];
+  let chart='';
+  if(W.length>=2){ const dates=W.map(w=>w.from), vals=W.map(w=>valOk(w.r)?+w.r*100:null);
+    chart=`<div style="font-size:12px;font-weight:700;color:var(--ink2);margin:10px 0 4px">GA4 ÷ AdMob kamai, har hafta (${W.length} weeks)</div><div id="val-ratio">`
+      +bTrendChart(dates,vals,{idp:'val-',xlab:uniD,fmt:v=>Math.round(v)+'%',gaps:true,band:{lo:dates.map(()=>80),hi:dates.map(()=>125)}})
+      +`</div><div class="lgd"><span><i class="dot" style="background:rgba(61,208,240,.28)"></i>80–125% = theek</span><span>100% = GA4 aur AdMob barabar</span></div>`; }
+  const It=(Array.isArray(I.text)?I.text:[]).join(' '), ET=valChkTexts(d);
+  if(ET.length){ ET.slice(1).forEach(t=>L.push(t));
+    if(Sc.st==='est'||Sc.st==='none') L.push('≈ Is app ki install-wise kamai andaze wali (GA4 aur AdMob ka farak bada) — total AdMob ka hi hai.'); }
+  else {
+    if((Sc.double||W.filter(w=>valOk(w.r)&&+w.r>=1.5).length>=8)&&!/do baar log/.test(It)) L.push('Shayad ad revenue do baar log ho raha (Firebase link + app ka apna code) — developer se check karwao.');
+    if(Sc.st==='est'||Sc.st==='none') L.push('≈ Is app ki install-wise kamai andaze wali (GA4 aur AdMob ka farak bada) — total AdMob ka hi hai.');
+    if(Sc.src==='network') L.push('AdMob kamai sirf AdMob network se — mediation ke baaki networks nahi mile, isliye kamai thodi kam dikh sakti.');
+    const G=valM(Sc.cty_gap); if(valOk(G.rev)||valOk(G.n)) L.push(`Country me na baanta gaya hissa: kamai ka ${valPct(G.rev)}, installs ka ${valPct(G.n)} (last 12 weeks)`);
+    if(valOk(Sc.old_rev)) L.push(`Purane users (14 mahine se pehle install) ki kamai: ${valPct(Sc.old_rev)} — ye install-week me nahi ginte`); }
+  if(valOk(I.days)) L.push(`Install-day data: ${valNum(I.days)} din padhe${valOk(I.q)&&+I.q>0?` · ${valNum(I.q)} ≈ (GA4 ne poora nahi diya)`:''}${valOk(I.retry)&&+I.retry>0?` · ${valNum(I.retry)} dobara padhenge`:''}`
+    +(valOk(IC.ok)||valOk(IC.smp)||valOk(IC.gap)?` · countries: ${valNum(IC.ok)} din theek${valOk(IC.smp)&&+IC.smp>0?`, ${valNum(IC.smp)} sample`:''}${valOk(IC.gap)&&+IC.gap>0?`, ${valNum(IC.gap)} adhoore`:''}${valOk(IC.retry)&&+IC.retry>0?`, ${valNum(IC.retry)} dobara`:''}`:''));
+  if(I.qb_win&&!/retention/.test(It)) L.push('GA4 me purane users ka data kam dikh raha — property ki data retention setting check karo.');
+  if(!ET.length){ const fx=valM(d.fx); L.push(fx.mode==='one'?'Google Ads ₹ → $: purane hafte aaj ke rate pe (har hafte ka rate nahi mila).':'Google Ads ₹ → $: har hafte ke apne rate pe.');
+    L.push('GA4 din property ke time me'+(d.tz?` (${hAttr(actTz(d.tz))})`:'')+', AdMob / Google Ads India time me — hafte me milaya.');
+    const De=Sc.ded; L.push(De&&valOk(De.rate)?`Invalid-traffic deduction ~${valPct(De.rate)} ghata ke — Marketing ROAS jaisa.`:'AdMob kamai deduction se pehle, isliye Marketing ROAS se thoda zyada.'); }
+  return `<div class="note uni-tn val-chk" id="val-chk">${th}${chart}<ul class="tb">${L.map(t=>`<li>${hAttr(t)}</li>`).join('')}</ul></div>`; }
+// ---- "⏱️ When will I know?" (one line until tapped) ----
+function valTimingNote(){
+  const th=`<div class="th" onclick="valTNX()"><span class="cv${VALTIMEXP?' on':''}">▸</span><span>⏱️ <b>When will I know?</b></span><span class="lnk" style="margin-left:auto;font-size:12px">${VALTIMEXP?'Hide':'Show'}</span></div>`;
+  if(!VALTIMEXP) return `<div class="note uni-tn" id="val-timing">${th}</div>`;
+  return `<div class="note uni-tn" id="val-timing">${th}<ul class="tb">
+    <li>Pehle din ki kamai ~5 din baad pakki, 1 hafte wali ~12 din baad, 30 din wali ~35 din baad.</li>
+    <li>Paisa-wapas ka andaza hafte ke installs ke 7 din pure hone ke ~5 din baad.</li>
+    <li>Country ka faisla ${valConst('WIN_WEEKS',4)} hafte ke installs pe (chhote apps: ${valConst('WIN_WEEKS_SMALL',12)} hafte).</li>
+    <li>Alert tabhi jab 2 hafte lagatar ho.</li></ul></div>`; }
+// ---- All apps ----
+function valPayOf(r){ const P=valM(r.pay); return {st:valSt(P),p:P.p,lo:P.lo,hi:P.hi,obs:!!P.obs,never:!!P.never,pct365:P.pct365,rough:!!P.rough,shape:P.shape,from:P.from,to:P.to}; }
+function valPayTxt(P){ if(P.never) return 'Over 1 year'; if(!valOk(P.p)) return '—'; return (P.obs?'':'≈')+valDays(P.p); }
+// the All-apps "Money back in" cell: the number, its range (a projection is never shown as a bare point) and its week
+function valPayTd(P){ const t=valPayTxt(P); if(!valOk(P.p)||P.obs||P.never) return `<td class="uni-num"${P.from?` title="${hAttr('Installs '+uniSpan(P.from,P.to))}"`:''}>${t}</td>`;
+  const b=valBandTxt(P), rg=b.startsWith('andaza ')&&!/kaccha/.test(b)?b.slice(7).replace(' din',''):(/kaccha/.test(b)?'kaafi kaccha':'');
+  return `<td class="uni-num" style="white-space:nowrap" title="${hAttr((P.from?'Installs '+uniSpan(P.from,P.to):'')+(b?' · '+b:''))}">${t}${rg?` <span class="faint" style="font-size:10.5px">(${rg})</span>`:''}</td>`; }
+// "Back in 7 / 30 days" of an app = the SAME last-4-settled-weeks ratio of sums the pooled tiles add up (never one week)
+function valB(r,k){ const P=valM(r.pay), s=valM(r.s), sp7=valOk(s.spend7_4)?s.spend7_4:null;
+  if(k==='b7') return valOk(P.b7)?+P.b7:(valOk(s.rev7_4)&&valOk(sp7)&&+sp7>0?100*s.rev7_4/sp7:null);
+  return valOk(P.b30)?+P.b30:(valOk(s.rev30_4)&&valOk(s.spend30_4)&&+s.spend30_4>0?100*s.rev30_4/s.spend30_4:null); }
+function valSpend4(r){ if(r.status!=='ok') return null; const s=valM(r.s), c=valM(r.cpi); return valOk(s.spend4)?+s.spend4:(valOk(c.spend4)?+c.spend4:null); }
+function valSpend4Src(r){ if(r.status!=='ok') return null; const s=valM(r.s), c=valM(r.cpi); return valOk(s.spend4_src)?+s.spend4_src:(valOk(c.spend4_src)?+c.spend4_src:null); }
+function valAppChip(r,x){ return `<span class="uni-ac" data-app="${hAttr(r.app)}" title="${hAttr(r.app)} — open" onclick="valOpen('${uniQ(r.app_id)}')">${appIcon(r.app,18)}<span class="n">${hAttr(r.app)}</span>${x?`<span class="x">${x}</span>`:''}</span>`; }
+const VAL_STRIPS=[['pay','Ads money back'],['cpi','Cost per install'],['cty','Countries']];
+function valRowSt(r,k){ return k==='pay'?valSt(valM(r.pay)):(k==='cpi'?valSt(valM(r.cpi)):valCtySt(r.cty)); }
+function valStrip(rows,k,lbl){ const G={}; rows.forEach(r=>{ const st=valRowSt(r,k); (G[st]=G[st]||[]).push(r); });
+  const keys=Object.keys(G).sort((p,q)=>VAL_RANK[p]-VAL_RANK[q]||(p<q?-1:1)), SC={worse:'bad',watch:'watch',better:'good',normal:'ok',ok:'ok',never:'ok'};
+  const val=r=>k==='pay'?valPayTxt(valPayOf(r)):(k==='cpi'?(valOk(valM(r.cpi).v)?valMoney(r.cpi.v):''):(valM(r.cty).best||[]).slice(0,2).map(c=>valFlag(c)).join(' '));
+  return `<div class="act-strip val-strp"><div class="act-sl2">${lbl}</div><div class="uni-scs">${keys.map(st=>{ const id=k+':'+st, on=VALSTEXP===id, L=G[st];
+      let c=SC[st]||'info'; if((c==='bad'&&!L.every(r=>valHasAl(valAlOf(r.app_id),k,'warning')))||(c==='good'&&!L.every(r=>valHasAl(valAlOf(r.app_id),k,'good')))||(c==='watch'&&!L.every(r=>valHasAl(valAlOf(r.app_id),k)))) c='info';
+      const t=valChipTxt(k,st);
+      return `<span class="uni-sc ${c}${on?' on':''}" data-k="${id}" onclick="valSX('${id}')"><i class="dt"></i>${t} <b>(${L.length})</b><span class="cv">▾</span></span>`
+        +(on?`<div class="uni-xp ${c}" data-xp="${id}"><div class="uni-xph"><b>${lbl} · ${t}</b><span class="faint">${hAttr(valChipTip(k,st,null))}</span></div><div class="uni-acs">${L.map(r=>valAppChip(r,val(r))).join('')}</div></div>`:''); }).join('')}</div></div>`; }
+function valSumPortfolio(rows){ const n=rows.length, H=valH(), K={bad:0,ok:0,never:0,no:0,wait:0,err:0};
+  rows.forEach(r=>{ if(r.status==='error'){ K.err++; return; } const s=valM(r.summary).kind; if(s==='worse'||s==='watch') K.bad++; else if(s==='ok'||s==='better'||s==='maybe') K.ok++; else if(s==='never') K.never++; else if(s==='nospend') K.no++; else K.wait++; });
+  // nothing evaluated yet: say so — never "0 apps slow" or "All normal" while every app's data is still coming in
+  const none=!(K.bad+K.ok+K.never+K.no), parts=[];
+  if(none) parts.push('⏳ Abhi koi check nahi hua — install-wise data aa raha'+(K.wait?` (${K.wait} ${K.wait===1?'app':'apps'})`:''));
+  else { if(K.bad) parts.push(`⚠️ ${K.bad} ${K.bad===1?'app ka':'apps ka'} paisa dheere / ghate me`); parts.push(`✅ ${K.ok} normal`);
+    if(K.never) parts.push(`💸 ${K.never} saal bhar me bhi poora wapas nahi`); parts.push(`ℹ️ ${K.no} no ads`); if(K.wait) parts.push(`⏳ ${K.wait} data aa raha`); }
+  if(K.err) parts.push(`⚠️ ${K.err} not built this time`);
+  const cl=`<div class="val-line" id="val-count">${parts.join(' · ')}</div>`;
+  let sp=0,sps=0,srcAll=true,k1=0,r7=0,s7=0,k7=0,r30=0,s30=0,k30=0; rows.forEach(r=>{ const s=valM(r.s), S4=valSpend4(r), S4s=valSpend4Src(r);
+    if(valOk(S4)&&S4>0){ sp+=S4; k1++; if(valOk(S4s)) sps+=S4s; else srcAll=false; }
+    if(valOk(s.rev7_4)&&valOk(s.spend7_4)&&+s.spend7_4>0){ r7+=+s.rev7_4; s7+=+s.spend7_4; k7++; }
+    if(valOk(s.spend30_4)&&+s.spend30_4>0&&valOk(s.rev30_4)){ r30+=+s.rev30_4; s30+=+s.spend30_4; k30++; } });
+  const J=rows.filter(r=>{ const P=valPayOf(r); return !['nospend','thin','wait','low','few'].includes(P.st)&&(valOk(P.p)||P.never); }), ok=J.filter(r=>{ const P=valPayOf(r); return !P.never&&+P.p<=H; });
+  const cur=csym(), tile=(m,l,v,c,tip)=>`<div class="uni-st val-t val-pt" data-m="${m}"><div class="l"${tip?` title="${hAttr(tip)}"`:''}>${l}</div><div class="v">${v}</div><div class="c">${c}</div></div>`;
+  const tiles=[tile('spend','Google Ads spend (4 weeks)',k1?valSpendBig(sp,srcAll?sps:null):'—',`${k1} of ${n} apps`,'Pichhle 4 pakke install hafton ka Google Ads kharcha, sab apps milakar'),
+    tile('b7','Back in 7 days',s7>0?valP100(100*r7/s7)+`<small>per ${cur}100</small>`:'—',`${k7} of ${n} apps`,'Sab apps ki 7 din ki kamai ÷ sab ka kharcha (pichhle 4 pakke hafte)'),
+    tile('b30','Back in 30 days',s30>0?valP100(100*r30/s30)+`<small>per ${cur}100</small>`:'—',`${k30} of ${n} apps`,'Sab apps ki 30 din ki kamai ÷ sab ka kharcha (pichhle 4 pakke hafte)'),
+    tile('ok',`Apps paying back within ${H} days`,J.length?`${ok.length}<small>of ${J.length}</small>`:'—',`${J.length} of ${n} apps`,`Jin apps ka paisa ${H} din ke andar wapas (dikha ya ≈ andaza)`)];
+  const sM=(DATA.value&&DATA.value.settled_till_max)||rows.map(r=>r.settled_till).filter(Boolean).sort().pop();
+  return `<div class="card" id="val-sum" style="margin-bottom:14px"><div class="ct uni-ct"><h3>📌 At a glance</h3><span class="faint" style="font-size:11.5px">All apps · last 4 settled install weeks${sM?' · till '+uniD(sM):''}</span></div>
+    ${cl}<div class="uni-tiles val-tiles" id="val-pool" style="--n:4">${tiles.join('')}</div>
+    <div class="faint" style="font-size:11.5px;margin-top:7px">Saari dikhne wali apps milakar — facts only (har app ka apna normal alag, app pe tap karke dekho)</div>
+    <div class="uni-sec">Status by app <span>· tap a chip to see its apps</span></div><div class="act-strips">${VAL_STRIPS.map(([k,l])=>valStrip(rows,k,l)).join('')}</div></div>`; }
+// countries across apps: facts only — pooled over the apps whose page is loaded (plus any pooled block the build ships)
+function valCtyPool(rows){ const P={}; let na=0;
+  const add=(app,x)=>{ if(!x||!x.cc||x.few||x.clean===false||x.verdict==='wait'||x.verdict==='few'||x.cc==='--'||x.cc==='ZZ'||!valOk(x.n)) return; const p=P[x.cc]=P[x.cc]||{cc:x.cc,n:0,a1:0,n1:0,a7:0,n7:0,r30:0,nr:0,apps:new Set()};
+    p.n+=+x.n; p.apps.add(app); ['d1','d7'].forEach(k=>{ const M=valM(x[k]), w=valOk(M.n)?+M.n:+x.n; if(valOk(M.v)){ p['a'+k.slice(1)]+=M.v*w; p['n'+k.slice(1)]+=w; } });
+    const R=valM(valM(x.rpi)['30']); if(valOk(R.v)&&!R.proj){ p.r30+=R.v*x.n; p.nr+=+x.n; } };
+  rows.forEach(r=>{ const d=VALD[r.key]; if(!d||!d.countries) return; na++; valCtyRows(d.countries).forEach(x=>add(r.app,x)); });
+  return {rows:Object.values(P).sort((a,b)=>b.n-a.n),na}; }
+function valCtyAllCard(rows){ const Q=valCtyPool(rows), L=Q.rows.slice(0,15), n=rows.length;
+  const hd=`<div class="ct uni-ct" style="padding:16px 17px 0"><h3>🌍 Countries across apps</h3><span class="faint" style="font-size:11.5px" title="alag apps milake — sirf andaza">facts only · alag apps milake — sirf andaza</span></div>`;
+  if(!L.length) return `<div class="card pad0" id="val-ctyall" style="margin-bottom:14px">${hd}<div class="uni-empty" style="margin:12px 17px 16px">App kholo — uske countries yahan jud jayenge (abhi ${Q.na} of ${n} apps khule).</div></div>`;
+  const tr=p=>`<tr data-cc="${hAttr(p.cc)}"><td class="nm">${valFlag(p.cc)} ${hAttr(valCtyName(p.cc))}</td><td class="uni-num">${valNum(p.n)}</td><td class="uni-num">${p.n1?valOf100(p.a1/p.n1):'—'}<small class="faint"> of 100</small></td>`
+    +`<td class="uni-num">${p.n7?valOf100(p.a7/p.n7):'—'}<small class="faint"> of 100</small></td><td class="uni-num">${p.nr?valMoney(p.r30/p.nr):'—'}</td><td class="uni-num">${p.apps.size}</td></tr>`;
+  return `<div class="card pad0" id="val-ctyall" style="margin-bottom:14px">${hd}<div class="uni-scroll" style="margin-top:10px"><table class="uni-sticky" style="min-width:560px" title="alag apps milake — sirf andaza"><thead><tr><th>Country</th><th>Installs</th><th>Next day</th><th>After a week</th><th>Earning per install (30 d)</th><th>Apps</th></tr></thead><tbody>${L.map(tr).join('')}</tbody></table></div>
+    <div class="muted" style="font-size:11px;padding:9px 17px 12px;line-height:1.5">Sirf judge hone layak countries (300+ installs, pura data) · sirf khuli hui apps ke (${Q.na} of ${n}) — baaki apps unka page kholne pe judenge.</div></div>`; }
+function valPortfolio(){
+  const V=DATA.value, rows=valRows().filter(r=>uniVis(r.app_id)), n=rows.length, H=valH();
+  const sMax=V.settled_till_max||rows.map(r=>r.settled_till).filter(Boolean).sort().pop();
+  const head=`<h2 class="sc">Install value</h2><p class="scd"><b style="color:var(--ink2)">Install value — all apps</b>${sMax?` · settled till <b style="color:var(--ink2)">${uniD(sMax)}</b>`:' · abhi tak koi install-day data nahi aaya'}<br><span class="faint" style="font-size:12px">Ek install kitna kamata hai, Google Ads ka paisa kitne din me wapas aata hai, aur kaunse country me ads chalane layak. Kamai = AdMob (sab networks); install ke din ke hisaab se baant GA4 se. Target: paisa ${H} din me wapas.</span></p>`;
+  const nBad=rows.filter(r=>r.status==='error').length;
+  const note=V.status==='error'?'<div class="note">⚠️ Install value data is baar nahi ban paya — agle robot run me phir try hoga.</div>'
+    :((V.status&&V.status!=='ok'&&nBad)?`<div class="note">⚠️ ${nBad} ${nBad===1?'app ka':'apps ka'} data is baar nahi bana — agle robot run me phir try hoga.</div>`:'');
+  let sum=''; try{ sum=n?valSumPortfolio(rows):''; }catch(e){ sum='<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ 📌 At a glance — ye hissa abhi dikh nahi paya.</div>'; }
+  const al=valNewest(valAlertsFor()), info=[]; rows.forEach(r=>{ const d=VALD[r.key]; valArr(d&&d.changes&&d.changes.info).forEach(o=>info.push([r,o])); });
+  const judgedAny=rows.some(r=>r.status==='ok'&&r.file&&!['wait'].includes(valM(r.summary).kind));
+  const alCard=`<div class="card" id="val-chg" style="margin-bottom:14px"><div class="ct"><h3>🔔 What changed? (${al.length})</h3></div>
+    ${al.length?al.map(x=>valChangeRow(x,true,false)).join(''):(judgedAny?'<div class="uni-ok">✅ All normal — no changes</div>':'<div class="uni-empty">⏳ Abhi koi check nahi hua — install-wise data aa raha.</div>')}${info.map(([r,o])=>valInfoRow(o,r.app,r.app_id)).join('')}</div>`;
+  const TH=[['app','App'],['spend','Ads spend (4 wks)','Pichhle 4 pakke install hafton ka Google Ads kharcha'],['cpi','Cost per install',VAL_TIP.cpi+' — pichhle 4 pakke hafte'],['b7','Back in 7 days',`${csym()}100 ke ads pe 7 din me kitna wapas — pichhle 4 pakke hafte milakar`],
+    ['b30','30 days',`${csym()}100 ke ads pe 30 din me kitna wapas — pichhle 4 pakke hafte milakar`],['pay','Money back in','Sabse naye pakke hafte ke installs ka ads ka poora paisa kitne din me wapas (≈ = andaza, range ke saath)'],['best','Best country'],['weak','Weakest country'],['status','Status']];
+  const sv=(r,k)=>{ if(k==='app') return (r.app||'').toLowerCase(); if(k==='status') return VAL_RANK[valSt(valM(r.pay))];
+    if(k==='spend') return valSpend4(r); if(k==='cpi') return valOk(valM(r.cpi).v)?+r.cpi.v:null; if(k==='b7'||k==='b30') return valB(r,k);
+    if(k==='pay'){ const P=valPayOf(r); return P.never?9999:(valOk(P.p)?+P.p:null); } return null; };
+  const sorted=rows.slice().sort((x,y)=>{ const a=sv(x,VALPSORT.k), b=sv(y,VALPSORT.k); if(a==null&&b!=null) return 1; if(b==null&&a!=null) return -1;
+    if(a!=null&&b!=null&&a!==b) return (a<b?-1:1)*VALPSORT.d; return (x.app||'').localeCompare(y.app||''); });
+  const td=(v,t)=>`<td class="uni-num"${t?` title="${hAttr(t)}"`:''}>${v}</td>`, cs=L=>(L||[]).slice(0,2).map(valCtyTag).join(' ')||'—';
+  const trows=sorted.map(r=>{ const P=valPayOf(r), sp=valSpend4(r), no=P.st==='nospend', sub=r.status==='error'?'⚠️ Not built this time':(['wait','filling'].includes(valM(r.iday).state)||r.status==='wait'?`⏳ data aa raha${valOk(valM(r.iday).pct)&&+r.iday.pct>0?` (${valNum(r.iday.pct)}%)`:''}`:'');
+    return `<tr class="clk" data-app="${hAttr(r.app)}" onclick="valOpen('${uniQ(r.app_id)}')"><td class="nm" style="min-width:150px;max-width:240px">${appChip(r.app,16)}${sub?`<div class="faint" style="font-size:10.5px;font-weight:400">${sub}</div>`:''}</td>`
+      +(no?'<td class="faint">No ads</td>':td(valOk(sp)?valSpendBig(sp,valSpend4Src(r),r.src_ccy):'—'))+td(no?'—':valSpendMoney(valM(r.cpi).v,valM(r.cpi).v_src,r.src_ccy))+td(no?'—':(valM(r.pay).b7_est&&valOk(valB(r,'b7'))?'≈':'')+valP100(valB(r,'b7')))+td(no?'—':(valM(r.pay).b30_est&&valOk(valB(r,'b30'))?'≈':'')+valP100(valB(r,'b30')))
+      +(no?td('—'):valPayTd(P))+`<td style="white-space:nowrap">${cs(valM(r.cty).best)}</td><td style="white-space:nowrap">${cs(valM(r.cty).weak)}</td>`
+      +`<td style="white-space:nowrap">${valChip('pay',{st:P.st},valAlOf(r.app_id))}</td></tr>`; }).join('')
+    ||`<tr><td colspan="${TH.length}" class="muted" style="padding:16px">Abhi koi app nahi.</td></tr>`;
+  const table=`<div class="card pad0" id="val-table" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>📋 Apps</h3><span class="faint" style="font-size:11.5px">row pe tap = app ki detail · column pe tap = sort</span></div>
+    <div class="uni-scroll" style="margin-top:10px"><table class="uni-sticky" style="min-width:940px"><thead><tr>${TH.map(([k,l,t])=>`<th onclick="valPSort('${k}')"${t?` title="${hAttr(t)}"`:''}>${l}${VALPSORT.k===k?(VALPSORT.d>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead><tbody>${trows}</tbody></table></div>
+    <div class="muted" style="font-size:11px;padding:9px 17px 12px;line-height:1.5">Ads spend, Cost per install, Back in = pichhle 4 pakke install hafte (milakar) · Money back in = sabse naya pakka hafta · Back in = ${csym()}100 ke ads pe kitna wapas · ≈ = andaza · Status = paisa-wapas ka chip</div></div>`;
+  const org=rows.filter(r=>valSt(valM(r.pay))==='nospend');
+  const orgCard=org.length?`<div class="card" id="val-noads" style="margin-bottom:14px"><div class="ct"><h3>ℹ️ Apps without Google Ads (${org.length})</h3></div>
+    ${org.map(r=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line);cursor:pointer" onclick="valOpen('${uniQ(r.app_id)}')">${appChip(r.app,16)}<span class="muted" style="font-size:12.5px">30 din me kamai per install ${valMoney(valM(r.rpi).d30)}</span></div>`).join('')}</div>`:'';
+  const noG=((V.no_ga4)||[]).filter(x=>x&&(!x.app_id||uniVis(x.app_id)));
+  const noCard=noG.length?`<div class="card" id="val-noga4" style="margin-bottom:14px"><div class="ct"><h3>🔌 Apps without GA4 data (${noG.length})</h3></div>
+    ${noG.map(x=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">${appChip(x.app,16)}<span class="muted" style="font-size:12.5px">${hAttr(x.text||uniReason(x.reason))}</span></div>`).join('')}</div>`:'';
+  let cty=''; try{ cty=valCtyAllCard(rows); }catch(e){ cty='<div class="card faint" id="val-ctyall" style="margin-bottom:14px;font-size:12.5px">⚠️ 🌍 Countries across apps — ye hissa abhi dikh nahi paya.</div>'; }
+  return head+note+sum+alCard+table+cty+orgCard+noCard+valTimingNote(); }
+// ---- Alerts screen: the open Install value alerts (from DATA.value — no lazy load); nothing at all when there are none ----
+function valAlertsFor(){ return valAls().filter(x=>(!APP||x.app===APP)&&uniVis(x.app_id)); }
+const VAL_FAM={pay_slow:'Ads money back',pay_loss:'Ads money not coming back',geo_move:'Country',geo_cost:'Country ads costly',iv_link:'GA4 ↔ AdMob link'};
+function valAlertCards(list){
+  const CAUSE={'pay_slow|down':'Install ka kharcha (Google Ads) badha ya ek install ki kamai ghati — bid / budget, campaign aur naya update dekho.','pay_slow|up':'Paisa jaldi wapas aa raha — jo badla wo chalne do.',
+    'pay_loss|down':'Target din me ads ka paisa wapas nahi — sasta install (bid / country) ya zyada kamai (ads / retention) chahiye; kharcha bada ho to budget ghatao.',
+    'geo_move|down':'Is country ke naye users kam wapas aa rahe / kam kama rahe — us country ka campaign, creative ya naya version check karo.','geo_move|up':'Is country ke users zyada wapas aa rahe — achhi khabar.',
+    'geo_cost|down':'Is country me install mehenga, kamai kam — is country ka bid ghatao ya targeting se hatao.','iv_link|down':'Firebase–AdMob link check karo — tab tak is tab ki kamai AdMob ke hisaab se ≈.'};
+  const COL={warning:'var(--bad)',good:'var(--good)',watch:'var(--watch)'}, IC={warning:'🟠',watch:'🟡',good:'🎉'};
+  return (list||[]).map(x=>{ const R=x.release||null, cause=CAUSE[(x.family||'')+'|'+(x.dir==='up'?'up':'down')]||CAUSE[(x.family||'')+'|down'];
+    const sv=x.severity==='warning'?['Worse','p-r']:(x.severity==='good'?['Better','p-g']:['Watch','p-y']);
+    const what=x.family==='pay_slow'?(x.dir==='up'?'faster':'slower'):(x.family==='geo_move'?({d1:'came back next day',d7:'came back after a week',d30:'came back after 30 days',rpi7:'earning per install'}[x.metric]||'change'):'');
+    const title=`💸 ${VAL_FAM[x.family]||'Install value'}${x.cc?' — '+valFlag(x.cc)+' '+hAttr(valCtyName(x.cc)):''}${what?' · '+what:''}`;
+    const btn=`<span class="abtn pri" onclick="valGo('${uniQ(x.app_id)}')">Open app →</span>`+(R&&R.key?`<span class="abtn" onclick="uniImpGo('${uniQ(x.app_id)}','${uniQ(R.key)}','act')">Update detail →</span>`:'');
+    return `<div class="alert ${x.severity==='critical'?'crit':(x.severity||'watch')}" data-sev="${x.severity||'watch'}" data-metrics="value"><div style="font-size:17px">${IC[x.severity]||'•'}</div><div class="abody">
+      <div class="atitle">${title} <span class="pill ${sv[1]}" style="margin-left:4px">${sv[0]}</span>${x.fresh?'<span class="pill p-p" style="margin-left:5px">New</span>':''}</div>
+      <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18)}<span class="faint">· ${valWhen(x)} · GA4 + AdMob + Google Ads${x.data_till?' · data till '+fmtD(x.data_till):''}</span></div>
+      <div style="margin:9px 0 2px;font-size:12.5px;color:${COL[x.severity]||'var(--ink2)'}">${valTxt(x.text||x.message||'')}</div>
       ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
       <div class="aact">${btn}</div></div></div>`; }).join(''); }
 

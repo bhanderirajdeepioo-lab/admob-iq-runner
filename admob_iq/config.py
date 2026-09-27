@@ -57,7 +57,32 @@ def settings() -> dict:
         # the day the GA4 properties' data retention went from 2 to 14 months: a return-data edge 45–100 days before it
         # is said to be that ("none" or any non-date: the reason is never claimed)
         "ga4_retention_changed": _env("GA4_RETENTION_CHANGED", "2026-09-26"),
+        # the 💸 Install value tab (SPEC_AB_FINAL §3.4). GA4_IDAY: the install-day GA4 fetch (Q-B / Q-C / Q-T) that
+        # feeds it; GA4_VALUE: its engine, lazy files and dashboard key (off: nothing of it is read, written or
+        # printed — and nothing is while no app has install-day data yet). Both off until their rollout step
+        # (spec §6: 1 = the fetch, 3 = the tab, after the alert replay); refresh.yml passes the repo variables.
+        "ga4_iday": _env("GA4_IDAY", "false").lower() == "true",       # rollout step 1 switches it on
+        "ga4_value": _env("GA4_VALUE", "false").lower() == "true",     # rollout step 3 switches it on
+        "value_payback_days": _int_env(("VALUE_PAYBACK_DAYS", "VALUE_TARGET_DAYS"), 90),  # H: 30/60/90/180/365
+        "value_iap": _env("VALUE_IAP", "false").lower() == "true",      # in-app purchases in "money back"
+        "value_cpi": _env("VALUE_CPI", "blended"),                      # the main cost per install
+        "value_deduct": _env("VALUE_DEDUCT", "true").lower() == "true", # a per-app deduction rate, when one exists
+        "gads_geo": _env("GADS_GEO", "false").lower() == "true",        # Google Ads cost by country (after the probe)
+        "iday_max_calls": _int_env(("IDAY_MAX_CALLS",), 120),           # install-day GA4 calls per app fetch
+        "iday_cty_days": _int_env(("IDAY_CTY_DAYS",), 400),             # how far back countries are read
     }
+
+
+def _int_env(names, default):
+    """The first of `names` set to an integer (else `default`) — a bad value never breaks the build."""
+    for n in names:
+        v = _env(n)
+        if v:
+            try:
+                return int(v)
+            except ValueError:
+                pass
+    return default
 
 
 def load_accounts(path: str = "config/accounts.yaml") -> list:

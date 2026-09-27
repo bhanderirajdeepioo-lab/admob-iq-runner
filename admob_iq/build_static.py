@@ -195,6 +195,13 @@ def send_alerts(dashboard, s):
         icon = _ICON.get(a.get("severity"), "•")
         sev = str(a.get("severity", "")).upper()
         uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · active users (GA4)'))
+    # GA4 Install value alerts: the same rule (sent ONCE — mark_notified_value after), the same channels
+    for a in (dashboard.get("value") or {}).get("alerts", []):
+        if not a.get("notify"):
+            continue
+        icon = _ICON.get(a.get("severity"), "•")
+        sev = str(a.get("severity", "")).upper()
+        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · install value (GA4 + Ads)'))
     if not lines and not uni:
         return []
     dry = s["notify_dry_run"]
@@ -286,6 +293,7 @@ def _uninstall_step(dashboard, data_dir, out_dir, s, revenue=None, now=None):
     except Exception as e:
         dashboard.pop("uninstall", None)
         dashboard.pop("active", None)              # (an Active alert must never stay due without its summary)
+        dashboard.pop("value", None)               # (nor an Install value one)
         print(f"ga4 uninstall skipped: {type(e).__name__}", file=sys.stderr)
         return []
     if dashboard.get("active"):                    # the Active users tab's ONE public line — counts only
@@ -294,6 +302,12 @@ def _uninstall_step(dashboard, data_dir, out_dir, s, revenue=None, now=None):
             print(log_line(dashboard["active"]), file=sys.stderr)
         except Exception as e:
             print(f"ga4 active log skipped: {type(e).__name__}", file=sys.stderr)
+    if dashboard.get("value"):                     # the Install value tab's ONE public line — counts only
+        try:
+            from .value_build import log_line as value_log_line
+            print(value_log_line(dashboard["value"]), file=sys.stderr)
+        except Exception as e:
+            print(f"ga4 value log skipped: {type(e).__name__}", file=sys.stderr)
     return files
 
 
@@ -307,7 +321,9 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
         revenue = None
         print(f"ga4 uninstall revenue skipped: {type(e).__name__}", file=sys.stderr)
     if revenue is not None and s.get("ga4_active", True):
-        try:                                       # every mediation source (Active users' other-network share only)
+        try:                                       # every mediation source (Active users' other-network share; the
+                                                   # Install value tab's money truth — with Active off it falls back
+                                                   # to the network report and says so: scale.src "network")
             every = mediation_revenue(repo.fetch_mediation(), revenue["till"])
             if every:
                 revenue["all_apps"] = every
@@ -347,12 +363,18 @@ def headers_text(uni_files, dashboard):
             "/uninstall.json.gz\n  Cache-Control: no-store\n\n"
             + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in uni_files if n != "uninstall.json.gz")
             + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in _active_files(dashboard))
+            + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in _value_files(dashboard))
             + "/index.html\n  Cache-Control: no-cache\n")
 
 
 def _active_files(dashboard):
     """The Active users tab's lazy per-app files (for _headers: never served from a stale cache)."""
     return [r["file"] for r in (dashboard.get("active") or {}).get("apps", []) if r.get("file")]
+
+
+def _value_files(dashboard):
+    """The Install value tab's lazy per-app files (for _headers: never served from a stale cache)."""
+    return [r["file"] for r in (dashboard.get("value") or {}).get("apps", []) if r.get("file")]
 
 
 def _uninstall_mark_sent(dashboard, data_dir, s, results=None):
@@ -373,6 +395,13 @@ def _uninstall_mark_sent(dashboard, data_dir, s, results=None):
             mark_notified_active(data_dir, dashboard["active"], dry=s["notify_dry_run"], ids=ids)
         except Exception as e:
             print(f"ga4 active notify-mark skipped: {type(e).__name__}", file=sys.stderr)
+    if dashboard.get("value"):
+        try:
+            from .value_build import mark_notified_value
+            ids = None if results is None else uninstall_delivered(results, s)
+            mark_notified_value(data_dir, dashboard["value"], dry=s["notify_dry_run"], ids=ids)
+        except Exception as e:
+            print(f"ga4 value notify-mark skipped: {type(e).__name__}", file=sys.stderr)
 
 
 class _AppFilteredRepo:
@@ -1087,6 +1116,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 refetch_start = _earliest or (today - timedelta(days=int(os.getenv("ROAS_BACKFILL_DAYS", "550")))).isoformat()
             fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
             spend = merge_spend(cached_spend, fresh_spend, refetch_start)
+            if s.get("ga4_value") and isinstance(fresh_spend, dict) and not fresh_spend.get("error"):
+                try:                               # the Install value tab: the last day a spend fetch went through
+                    from .value_build import record_spend_fetch    # (a stale cache's later days: "not in yet", never $0)
+                    s["roas_spend_ok_till"] = record_spend_fetch(data_dir, today)
+                except Exception as _se:
+                    print(f"value spend date skipped: {type(_se).__name__}", file=sys.stderr)
             # Backfill the adwords account onto OLD/paused campaigns the windowed spend fetch didn't
             # re-tag (they showed a '?' account). A cheap roster query maps campaign→account for all.
             try:
@@ -1129,7 +1164,20 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             if base_ccy == "INR":
                 roas_inr_usd = base_usd
             spend_usd = _spend_to_usd(spend, base_usd)
+            if s.get("ga4_value") and base_ccy != "USD":
+                try:                               # the Install value tab: each week's spend at its OWN rate (a
+                    from .value_build import update_fx_series      # dated series, one range call a day at most)
+                    _sd = [d for dd in ((spend or {}).get("daily") or {}).values() for d in dd]
+                    update_fx_series(data_dir, base_ccy, min(_sd) if _sd else None, today)
+                except Exception as _fe:
+                    print(f"fx series skipped: {type(_fe).__name__}", file=sys.stderr)
             dashboard["roas"] = build_roas(spend_usd, store_ids, dashboard.get("apps_catalog"), roas_aliases)
+            if s.get("ga4_value"):
+                try:                               # the Install value tab gives each app exactly the Google Ads spend
+                    from .engine.roas import store_owner          # this tab does (the same store id → app map)
+                    s["roas_store_owner"] = store_owner(store_ids, dashboard.get("apps_catalog"), roas_aliases)
+                except Exception as _oe:
+                    print(f"value spend map skipped: {type(_oe).__name__}", file=sys.stderr)
             if spend is not None:
                 print(f"roas: spend for {len(dashboard['roas'].get('by_app', {}))} apps "
                       f"({base_ccy}→USD @ {base_usd})", file=sys.stderr)

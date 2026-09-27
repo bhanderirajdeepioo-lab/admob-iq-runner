@@ -106,6 +106,12 @@ jobs:
           # GA4_RETENTION_CHANGED = the day the GA4 data retention went to 14 months (empty: the config default)
           GA4_ACTIVE:           ${{ vars.GA4_ACTIVE || 'true' }}
           GA4_RETENTION_CHANGED: ${{ vars.GA4_RETENTION_CHANGED }}
+          # Install value tab (GA4 + Ads): GA4_IDAY=true starts its install-day GA4 fetch (rollout step 1),
+          # GA4_VALUE=true shows the tab (step 3, after the alert replay); VALUE_PAYBACK_DAYS = the owner's
+          # "paisa kitne din me wapas" target (30/60/90/180/365; empty: 90). All off / default until set.
+          GA4_IDAY:             ${{ vars.GA4_IDAY || 'false' }}
+          GA4_VALUE:            ${{ vars.GA4_VALUE || 'false' }}
+          VALUE_PAYBACK_DAYS:   ${{ vars.VALUE_PAYBACK_DAYS }}
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On

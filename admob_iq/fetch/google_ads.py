@@ -80,16 +80,27 @@ def _search(customer_id, login_customer_id, dev_token, access_token, query):
 def _child_accounts(login_customer_id, dev_token, access_token):
     """Non-manager client accounts under the MCC (id + currency + descriptive name). The name lets
     the UI show which Google Ads account each campaign's spend comes from (user's rule: 1 account =
-    1 app), so a campaign pointing at the wrong app's store id is easy to spot."""
+    1 app), so a campaign pointing at the wrong app's store id is easy to spot.
+    Also the account's time zone ("tz", e.g. "Asia/Calcutta"): Google Ads report days (segments.date)
+    are days in THAT zone. If Google ever refuses the query with time_zone, the roster is asked once
+    more without it (and the accounts carry no "tz" key) — spend never depends on the new field."""
     q = ("SELECT customer_client.id, customer_client.currency_code, customer_client.descriptive_name, "
-         "customer_client.manager FROM customer_client")
+         "customer_client.manager%s FROM customer_client")
+    try:
+        rows, with_tz = _search(login_customer_id, login_customer_id, dev_token, access_token,
+                                q % ", customer_client.time_zone"), True
+    except Exception:
+        rows, with_tz = _search(login_customer_id, login_customer_id, dev_token, access_token, q % ""), False
     out = []
-    for row in _search(login_customer_id, login_customer_id, dev_token, access_token, q):
+    for row in rows:
         cc = row.get("customerClient") or {}
         if cc.get("manager"):
             continue                                  # skip nested managers
-        out.append({"id": str(cc.get("id")), "currency": cc.get("currencyCode") or "USD",
-                    "name": cc.get("descriptiveName") or ""})
+        a = {"id": str(cc.get("id")), "currency": cc.get("currencyCode") or "USD",
+             "name": cc.get("descriptiveName") or ""}
+        if with_tz:
+            a["tz"] = cc.get("timeZone") or None
+        out.append(a)
     return out
 
 

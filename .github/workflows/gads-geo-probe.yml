@@ -1,0 +1,52 @@
+# One-off: the Google Ads GEO probe for the "Install value" tab (cost per install BY COUNTRY, spec §1.8 / §7 G1–G8) —
+# can Google Ads split the app campaigns' cost and installs by country completely enough, and how big is that data.
+# See admob_iq/fetch/gads_geo_probe.py. Read-only against Google Ads (the SAME secrets refresh.yml gives the Ads fetch);
+# the only write is ga4/gads_geo_probe.json in the PRIVATE repo. This repo's Actions log is PUBLIC: it shows progress
+# counts and one line of counts only; stderr (which could echo request details) is hidden.
+name: gads-geo-probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_accounts:
+        description: "probe only the first N Google Ads accounts (0 = all)"
+        required: false
+        default: "0"
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: gads-geo-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    # the probe starts no Google Ads call 12 min after IT starts, then writes what it has; before it: setup (≤ 3 min);
+    # after: the last in-flight calls (≤ 60 s each) + the private write (≤ 4 min of retries). 25 leaves room for all of it.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Run
+        env:
+          GOOGLE_ADS_DEVELOPER_TOKEN:   ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+          GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+          GOOGLE_ADS_REFRESH_TOKEN:     ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          GOOGLE_ADS_CLIENT_ID:         ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+          GOOGLE_ADS_CLIENT_SECRET:     ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+          # the Ads fetch falls back to the AdMob OAuth client when GOOGLE_ADS_CLIENT_* are not set — so does the probe
+          GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          PROBE_MAX_ACCOUNTS: ${{ github.event.inputs.max_accounts }}
+          PYTHONUNBUFFERED: "1"
+        run: python -m admob_iq.fetch.gads_geo_probe 2>/tmp/gads_geo.err || { echo "::error::gads geo probe failed (details kept off the public log)"; exit 1; }
