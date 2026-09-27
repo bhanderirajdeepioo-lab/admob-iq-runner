@@ -803,3 +803,448 @@ def test_the_build_hands_the_network_reports_revenue_to_the_uninstall_step(tmp_p
     assert build_static.account_tzs([{"account_id": "pub-1", "reporting_tz": "Asia/Kolkata"}, {"account_id": "pub-2"}],
                                     s, "America/Los_Angeles", "mock", False) == {
         "pub-1": "Asia/Kolkata", "pub-2": "America/Los_Angeles"}
+
+
+# ── the Active users tab: rides the same step, its own state, its own files ─────────────────────────
+
+from admob_iq import active_build as ab                                          # noqa: E402
+from admob_iq.engine import active as act_eng                                     # noqa: E402
+from tests.uninstall_synth import make_active_store, truncate_store               # noqa: E402
+
+ACT_LOG = re.compile(r"^ga4 active: apps \d+, ready \d+, low data \d+, return data \d+ \(edge found \d+, searching \d+, "
+                     r"waiting \d+, unverified \d+\), sessions data \d+, revenue \d+, open alerts \d+ \(new \d+\), "
+                     r"market-wide (yes|no), errors \d+$")
+ADROP = END - timedelta(days=13)                                                 # A1's old users −12% from here
+ABREAK = END - timedelta(days=5)                                                 # A2: no active user that day
+
+
+def active_stores():
+    out = {}
+    for aid, kw in ((A1, dict(seed=5, old=lambda d: 20000 * (0.88 if d >= ADROP else 1.0))),
+                    (A2, dict(seed=6, a1={ABREAK: 0})), (A6, dict(seed=7))):
+        st, rv = make_active_store(200, noise=0.01, hll=0.01, rev_tz="America/Los_Angeles",
+                                   other=lambda d: 0.03, **kw)
+        st.update(app_id=aid, package=PKG[aid], property_id=PID, stream_id=SID)
+        out[aid] = (st, rv)
+    return out
+
+
+def seed_active(data_dir, E, stores=None):
+    """The three apps' stores as a fetch on data day E left them + the routes (the Active state starts empty)."""
+    stores = stores or active_stores()
+    os.makedirs(os.path.join(data_dir, "ga4_uninstall"), exist_ok=True)
+    with open(os.path.join(data_dir, "app_store_ids.json"), "w", encoding="utf-8") as f:
+        json.dump({"by_id": PKG}, f)
+    for aid, (st, _) in stores.items():
+        gu.save_store(gu.store_path(data_dir, aid), dict(truncate_store(st, E), fetched_at=gu._now_iso(
+            datetime(E.year, E.month, E.day, tzinfo=timezone.utc) + timedelta(days=2))))
+    state = gu.load_state(data_dir)
+    state["routes"].update(fetched_at="2026-09-01T01:00:00Z", by_package={
+        p: {"property_id": PID, "stream_id": SID, "owner": EMAIL} for a, p in PKG.items() if a != A4})
+    gu.save_state(data_dir, state)
+    till = (E + timedelta(days=1)).isoformat()
+    return {"tz": "America/Los_Angeles", "currency": "USD", "till": till,
+            "apps": {aid: {k: v for k, v in rv["days"].items() if k <= till} for aid, (_, rv) in stores.items()},
+            "all_apps": {aid: {k: v for k, v in rv["all_days"].items() if k <= till} for aid, (_, rv) in stores.items()}}
+
+
+@pytest.fixture
+def asite(tmp_path, monkeypatch):
+    data, out = str(tmp_path / "data"), str(tmp_path / "site")
+    monkeypatch.setattr(gu, "refresh_all", lambda *a, **k: copy.deepcopy(STATUS))
+    return data, out, active_stores()
+
+
+def abuild(data, out, stores, E, s=None, hours=0, step=False, revenue=True):
+    """One daily build on data day E (the run two days later, + hours): → (dashboard, files)."""
+    rev = seed_active(data, E, stores)
+    dash = dashboard()
+    now = datetime(E.year, E.month, E.day, 12, tzinfo=timezone.utc) + timedelta(days=2, hours=hours)
+    s = s or ga4_settings()
+    if step:
+        files = build_static._uninstall_step(dash, data, out, s, revenue=rev if revenue else None)
+    else:
+        files = ub.run_uninstall(dash, data, out, s, now=now, revenue=rev if revenue else None)
+    return dash, files
+
+
+def _snap_files(*roots):
+    got = {}
+    for root in roots:
+        for n in sorted(os.listdir(root)):
+            p = os.path.join(root, n)
+            got[p] = (open(p, "rb").read(), os.stat(p).st_mtime_ns)
+    return got
+
+
+def test_first_active_build_sends_nothing(asite):
+    data, out, stores = asite
+    dash, files = abuild(data, out, stores, END)
+    A = dash["active"]
+    assert A["alerts"] and not any(a["notify"] for a in A["alerts"])                # the drop and the break: seeded
+    assert build_static.send_alerts(dash, ga4_settings()) == []
+    assert files[0] == ASSET and len(files) == 4                                    # run_uninstall's files: unchanged
+    for r in A["apps"]:
+        assert os.path.exists(os.path.join(out, r["file"])) and r["status"] == "ok"
+    assert ab.load_state(data)["eval"].keys() == {A1, A2, A6}
+
+
+def test_active_alerts_go_out_once_with_their_label(asite):
+    data, out, stores = asite
+    tele, mail = [], []
+    for k in range(10, -1, -1):                                                     # 11 daily builds
+        dash, _ = abuild(data, out, stores, END - timedelta(days=k))
+        res = build_static.send_alerts(dash, ga4_settings())
+        tele += [r["text"] for r in res if r["channel"] == "telegram"]
+        mail += [r["body"] for r in res if r["channel"] == "email"]
+        build_static._uninstall_mark_sent(dash, data, ga4_settings(), res)          # dry run: counts as sent
+    tl = [l for t in tele for l in t.split("\n") if "active users (GA4)" in l]
+    ml = [l for t in mail for l in t.split("\n") if "active users (GA4)" in l]
+    assert [l.split(":")[0] for l in tl] == ["🟠 [WARNING] " + N1]                   # the drift: Telegram, once
+    assert tl[0].endswith(" · active users (GA4)") and " se purane users kam: roz ~" in tl[0]
+    assert [l.split(":")[0] for l in ml if l.startswith("🟡")] == ["🟡 [WATCH] " + N2]   # the break: e-mail, once
+    assert "ek bhi active user nahi" in [l for l in ml if l.startswith("🟡")][0]
+    assert "uninstall (GA4)" not in "".join(tl)
+    for h in (1, 2):                                                                # the hourly runs after: nothing
+        dash, _ = abuild(data, out, stores, END, hours=h)
+        assert build_static.send_alerts(dash, ga4_settings()) == []
+        assert len(dash["active"]["alerts"]) >= 2 and not any(a["notify"] for a in dash["active"]["alerts"])
+
+
+def test_active_state_survives_refresh_and_uninstall_mark(asite, monkeypatch):
+    data, out, stores = asite
+    dash, _ = abuild(data, out, stores, END - timedelta(days=1))
+    before = {k: (e["opened"], e["notified_at"], e["seeded"]) for k, e in ab.load_state(data)["episodes"].items()}
+    assert before
+    ub.mark_notified(data, dash["uninstall"], dry=True)
+    monkeypatch.setattr(gu, "refresh_all", lambda cfg, d, *a, **k: (gu.save_state(d, gu.load_state(d)),
+                                                                   copy.deepcopy(STATUS))[1])
+    abuild(data, out, stores, END)                                                  # a day later
+    after = ab.load_state(data)["episodes"]
+    for k, v in before.items():
+        if k in after:
+            assert (after[k]["opened"], after[k]["notified_at"], after[k]["seeded"]) == v
+    assert set(before) & set(after)
+    assert ab.load_state(data)["eval"][A1]["end"] == END.isoformat()               # not a first evaluation again
+    assert "active" not in json.load(open(os.path.join(data, "ga4_uninstall", "state.json")))
+
+
+def test_build_static_prints_the_active_counts_line(asite, capsys):
+    data, out, stores = asite
+    dash, files = abuild(data, out, stores, END, step=True)
+    got = capsys.readouterr()
+    lines = got.err.splitlines()
+    assert got.out == "" and len(lines) == 2 and LOG_LINE.match(lines[0]) and ACT_LOG.match(lines[1]), lines
+    assert lines[1] == ab.log_line(dash["active"]) and lines[1].startswith("ga4 active: apps 3, ready 3, low data 0, ")
+    for s in SECRETS + [N1, N2, N6, "com.hidden", "2026-", "Sep"]:
+        assert s not in lines[1]
+
+
+def test_active_files_are_in_headers_stale_ones_removed_and_nothing_private_ships(asite):
+    data, out, stores = asite
+    os.makedirs(out)
+    for n in ("active_deadbeef0000.json.gz", "active_notes.txt"):
+        with open(os.path.join(out, n), "wb") as f:
+            f.write(b"stale")
+    dash, files = abuild(data, out, stores, END)
+    names = [r["file"] for r in dash["active"]["apps"]]
+    assert sorted(names) == sorted("active_%s.json.gz" % gu.file_key(a) for a in (A1, A2, A6))
+    assert not os.path.exists(os.path.join(out, "active_deadbeef0000.json.gz"))
+    assert os.path.exists(os.path.join(out, "active_notes.txt"))                   # not ours: left alone
+    headers = build_static.headers_text(files, dash)
+    for n in names + files[1:]:
+        assert "/%s\n  Cache-Control: no-store\n" % n in headers
+    shipped = json.dumps(dash["active"], ensure_ascii=False)
+    for name in os.listdir(out):
+        if name.endswith(".json.gz"):
+            shipped += gzip.open(os.path.join(out, name), "rt", encoding="utf-8").read()
+    for s in (PID, SID, EMAIL, "secret-ws", "rt-SECRET", "tok-SECRET"):
+        assert s not in shipped
+    for r in dash["active"]["apps"]:                                                # size caps
+        assert len(json.dumps(r, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) <= 2560
+        assert os.path.getsize(os.path.join(out, r["file"])) <= 250 * 1024
+
+
+def test_active_re_runs_leave_every_file_byte_identical(asite):
+    data, out, stores = asite
+    dash, _ = abuild(data, out, stores, END)
+    ub.mark_notified(data, dash["uninstall"], dry=True, now=NOW)
+    ab.mark_notified_active(data, dash["active"], dry=True, now=NOW)
+    abuild(data, out, stores, END, hours=1)
+    a = _snap_files(out, os.path.join(data, "ga4_uninstall"))
+    assert os.path.join(data, "ga4_uninstall", "active_state.json") in a
+    dash, _ = abuild(data, out, stores, END, hours=2)
+    assert _snap_files(out, os.path.join(data, "ga4_uninstall")) == a              # same bytes, same mtimes
+    assert build_static.send_alerts(dash, ga4_settings()) == []
+
+
+def _uni_outputs(data, out, dash):
+    got = {n: open(os.path.join(out, n), "rb").read() for n in os.listdir(out) if n.startswith("uninstall")}
+    got["state.json"] = open(os.path.join(data, "ga4_uninstall", "state.json"), "rb").read()
+    return got, json.dumps(dash["uninstall"], sort_keys=True)
+
+
+def test_active_off_or_without_mediation_leaves_the_uninstall_outputs_byte_identical(tmp_path, monkeypatch):
+    monkeypatch.setattr(gu, "refresh_all", lambda *a, **k: copy.deepcopy(STATUS))
+    stores = active_stores()
+    runs = {}
+    for name, s, rev in (("on", ga4_settings(), True), ("off", ga4_settings(ga4_active=False), True),
+                         ("nomed", ga4_settings(), "nomed")):
+        data, out = str(tmp_path / name / "data"), str(tmp_path / name / "site")
+        rv = seed_active(data, END, stores)
+        if rev == "nomed":
+            rv.pop("all_apps")
+        dash = dashboard()
+        ub.run_uninstall(dash, data, out, s, now=NOW, revenue=rv)
+        runs[name] = (_uni_outputs(data, out, dash), dash, data, out)
+    assert runs["on"][0] == runs["off"][0] == runs["nomed"][0]
+    on, off = runs["on"], runs["off"]
+    assert "active" in on[1] and "active" not in off[1]
+    assert not [n for n in os.listdir(off[3]) if n.startswith("active_")]
+    assert not os.path.exists(os.path.join(off[2], "ga4_uninstall", "active_state.json"))
+    assert runs["nomed"][1]["active"]["apps"][0]["m"]["ads"]["s"] == on[1]["active"]["apps"][0]["m"]["ads"]["s"]
+
+
+def test_a_crash_in_the_active_step_never_costs_the_uninstall_tab(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(gu, "refresh_all", lambda *a, **k: copy.deepcopy(STATUS))
+    stores = active_stores()
+    data, out = str(tmp_path / "ok" / "data"), str(tmp_path / "ok" / "site")
+    rv = seed_active(data, END, stores)
+    dash = dashboard()
+    ub.run_uninstall(dash, data, out, ga4_settings(), now=NOW, revenue=rv)
+    good = _uni_outputs(data, out, dash)
+    capsys.readouterr()
+
+    def boom(*a, **k):
+        raise RuntimeError("HTTP 403 on property " + PID)
+    real = act_eng.evaluate
+    data, out = str(tmp_path / "per_app" / "data"), str(tmp_path / "per_app" / "site")
+    rv = seed_active(data, END, stores)
+    monkeypatch.setattr(act_eng, "evaluate", lambda store, aid, *a, **k: boom() if aid == A2 else real(store, aid, *a, **k))
+    dash = dashboard()
+    ub.run_uninstall(dash, data, out, ga4_settings(), now=NOW, revenue=rv)
+    assert _uni_outputs(data, out, dash) == good                                    # the uninstall tab: identical
+    rows = {r["app_id"]: r for r in dash["active"]["apps"]}
+    assert rows[A2]["status"] == "error" and rows[A2]["file"] is None and rows[A1]["status"] == "ok"
+    assert dash["active"]["status"] == "partial" and dash["active"]["counts"]["errors"] == 1
+    assert A2 not in ab.load_state(data)["eval"]                                    # its state as before (none)
+    err = capsys.readouterr().err.splitlines()
+    assert len(err) == 1 and LOG_LINE.match(err[0])                                 # silent: the one uninstall line
+    monkeypatch.setattr(act_eng, "evaluate", real)
+    monkeypatch.setattr(ab, "save_state", boom)                                     # the end of the step fails
+    data, out = str(tmp_path / "finish" / "data"), str(tmp_path / "finish" / "site")
+    rv = seed_active(data, END, stores)
+    dash = dashboard()
+    ub.run_uninstall(dash, data, out, ga4_settings(), now=NOW, revenue=rv)
+    assert _uni_outputs(data, out, dash) == good and "active" not in dash
+    err = capsys.readouterr().err.splitlines()
+    assert len(err) == 2 and LOG_LINE.match(err[0]) and err[1] == "ga4 active skipped: RuntimeError"
+
+
+def test_uninstall_step_crash_pops_active_too(tmp_path, monkeypatch, capsys):
+    def half(dash, *a, **k):
+        dash["uninstall"], dash["active"] = {"half": 1}, {"alerts": [{"id": "x", "notify": True}]}
+        raise RuntimeError("boom " + PID)
+    monkeypatch.setattr(ub, "run_uninstall", half)
+    dash = dashboard()
+    before = copy.deepcopy(dash)
+    assert build_static._uninstall_step(dash, str(tmp_path), str(tmp_path / "site"), ga4_settings()) == []
+    assert dash == before                                                           # no Active alert left due
+    assert capsys.readouterr().err == "ga4 uninstall skipped: RuntimeError\n"
+
+
+def test_active_mark_runs_even_if_uninstall_mark_fails(asite, monkeypatch, capsys):
+    data, out, stores = asite
+    abuild(data, out, stores, END - timedelta(days=4))
+    dash, _ = abuild(data, out, stores, END)
+    due = [a["id"] for a in dash["active"]["alerts"] if a["notify"]]
+    assert due                                                                      # the drop / break: due now
+    capsys.readouterr()
+
+    def boom(*a, **k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(ub, "mark_notified", boom)
+    build_static._uninstall_mark_sent(dash, data, ga4_settings(), build_static.send_alerts(dash, ga4_settings()))
+    assert capsys.readouterr().err == "ga4 uninstall notify-mark skipped: RuntimeError\n"
+    eps = {e["id"]: e for e in ab.load_state(data)["episodes"].values()}
+    assert all(eps[i]["notified_at"] and eps[i]["notified_dry"] for i in due)
+    monkeypatch.setattr(ab, "mark_notified_active", boom)                           # and the other way round
+    build_static._uninstall_mark_sent({"active": {"alerts": []}}, data, ga4_settings())
+    assert capsys.readouterr().err == "ga4 active notify-mark skipped: RuntimeError\n"
+
+
+def test_the_build_hands_every_mediation_sources_revenue_to_the_active_tab(tmp_path, monkeypatch):
+    from admob_iq.db import FileRepo
+    repo = FileRepo(str(tmp_path / "d"))
+    repo.init_schema()
+    base = dict(account_id="pub-7", ad_unit_id="u", country="US", format="banner", platform="Android",
+                ad_requests=100, matched_requests=90, clicks=0)
+    repo.upsert_network(dict(base, report_date="2026-09-18", app_id=A1, impressions=100, estimated_earnings_micros=250000))
+    for src, imps, micros in (("AdMob Network", 100, 250000), ("Other Net", 20, 40000)):
+        repo.upsert_mediation(dict(base, report_date="2026-09-18", app_id=A1, ad_source=src, mediation_group="g",
+                                   impressions=imps, estimated_earnings_micros=micros))
+    repo.upsert_mediation(dict(base, report_date="2026-09-20", app_id=A1, ad_source="x", mediation_group="g",
+                               impressions=5, estimated_earnings_micros=5))            # today: still filling
+    got = []
+    monkeypatch.setattr(build_static, "_uninstall_step",
+                        lambda dash, data_dir, out_dir, s, revenue=None: got.append(revenue) or [])
+    build_static._uninstall_with_revenue({}, repo, "data", "site", ga4_settings(), "America/Los_Angeles",
+                                         date(2026, 9, 20))
+    assert got[0]["all_apps"] == {A1: {"2026-09-18": [290000, 120]}} and got[0]["apps"][A1]["2026-09-18"] == [250000, 100]
+    got.clear()
+    build_static._uninstall_with_revenue({}, repo, "data", "site", ga4_settings(ga4_active=False),
+                                         "America/Los_Angeles", date(2026, 9, 20))
+    assert "all_apps" not in got[0]                                                # off: nothing of it is read
+    one = ub.app_revenue(dict(got[0], all_apps={A1: {"2026-09-18": [290000, 120]}}), {"app_id": A1, "package": None}, [])
+    assert one["all_days"] == {"2026-09-18": [290000, 120]} and one["days"] == {"2026-09-18": [250000, 100]}
+
+
+def test_no_date_literal_in_active_py():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for name in ("admob_iq/engine/active.py", "admob_iq/active_build.py"):
+        src = open(os.path.join(root, name), encoding="utf-8").read()
+        assert not re.search(r"20\d\d-\d\d-\d\d", src), name                       # every date: from the store / config
+
+
+def test_the_committed_active_fixture_is_what_the_build_writes(tmp_path):
+    from tests.make_uninstall_fixture import OUT_ACTIVE, active_fixture_json, build_active_fixture
+    from tests.test_active_engine import check_alert as check_act_alert, check_detail
+    fx = build_active_fixture(str(tmp_path))
+    A, U = fx["dashboard_active"], fx["dashboard_uninstall"]
+    check_summary(U)
+    assert set(A) == {"v", "status", "asset_v", "data_till_min", "data_till_max", "settled_till_min",
+                      "settled_till_max", "counts", "consts", "market", "alerts", "alert_counts", "no_ga4", "apps"}
+    for a in A["alerts"]:
+        check_act_alert(a)
+    assert A["alert_counts"] == {s: sum(1 for a in A["alerts"] if a["severity"] == s and not a["linked"])
+                                 for s in ("warning", "watch", "good")}                # linked: counted by Uninstall
+    by = {r["app"]: r for r in A["apps"]}
+    for r in A["apps"]:
+        d = fx["app_files"][r["key"]]
+        check_detail(d, r)
+        assert r["file"] == "active_%s.json.gz" % r["key"] and r["sig"] == ab._sig(d)
+        assert d["changes"]["open"] == [a for a in A["alerts"] if a["app_id"] == r["app_id"]]
+    st = {k: {m: by[k]["m"][m]["st"] for m in ("ret_dau", "d1", "sess", "arpdau", "ads")} for k in by}
+    assert st["Demo Steady"] == dict.fromkeys(("ret_dau", "d1", "sess", "arpdau", "ads"), "normal")
+    assert st["Demo Old Drop"]["ret_dau"] == "worse" and st["Demo Tracking"]["ret_dau"] == "break"
+    assert st["Demo Rocket"]["ret_dau"] == "growth" and st["Demo Ad Price"]["arpdau"] == "price_dn"
+    assert st["Demo Mediation"]["ads"] == "watch" and st["Demo D1 Drop"]["d1"] in ("worse", "watch")
+    assert st["Demo Usage Wait"]["sess"] == "wait" and st["Demo Install Surge"]["ret_dau"] in ("normal", "maybe_up")
+    assert {k: by[k]["edges"]["ret_state"] for k in ("Demo Edge In", "Demo Edge Out", "Demo Searching", "Demo Tiny")} \
+        == {"Demo Edge In": "found", "Demo Edge Out": "found", "Demo Searching": "searching", "Demo Tiny": "unverified"}
+    files = {r["app"]: fx["app_files"][r["key"]] for r in A["apps"]}
+    assert files["Demo Edge In"]["edges"]["edge_why"] == "retention" and files["Demo Edge Out"]["edges"]["edge_why"] == "ga4"
+    assert files["Demo Test Installs"]["launch"]["hidden"] and any(x["pre"] for x in files["Demo Test Installs"]["tri"]["rows"])
+    assert files["Demo Rneg"]["daily"]["rneg"] and files["Demo Ad Gap"]["edges"]["rev_gaps"]
+    assert [i["kind"] for i in files["Demo Ad Price"]["changes"]["info"]] == ["price"]
+    assert A["market"]["latest"]["dir"] == "down" and A["market"]["latest"]["of"] >= 8
+    assert A["no_ga4"] == [{"app_id": "ca-app-pub-0000000000000000~9100000017", "app": "Demo No GA4",
+                            "text": ub.NO_GA4_TEXT["not_fetched_yet"]}]
+    sent = [l for x in fx["sent"] for l in (x["telegram"] or "").split("\n") if "active users (GA4)" in l]
+    assert [l.split(":")[0] for l in sent] == ["🟠 [WARNING] Demo Old Drop"]        # sent once, nothing seeded goes out
+    assert all(LOG_LINE.match(l) or ACT_LOG.match(l) for l in fx["public_log"]) and len(fx["public_log"]) == 14
+    text = active_fixture_json(fx)
+    assert len(text.encode("utf-8")) <= 1024 * 1024
+    with open(OUT_ACTIVE, encoding="utf-8") as f:
+        committed = f.read()
+    assert committed == text, "regenerate: python -m tests.make_uninstall_fixture"
+
+
+def test_a_malformed_active_state_heals_and_never_costs_the_uninstall_tab(asite, capsys):
+    data, out, stores = asite
+    abuild(data, out, stores, END - timedelta(days=1))
+    p = ab.state_path(data)
+    with open(p, encoding="utf-8") as f:
+        st = json.load(f)
+    st["episodes"]["x|act_drift|ret_dau|down"] = None                               # valid JSON, not what we write
+    st["episodes"]["legacy"] = {"id": "x", "family": "act_drift"}                  # (no app_id / last)
+    st["closed"].append("junk")
+    st["eval"]["y"] = 3
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(st, f)
+    capsys.readouterr()
+    dash, files = abuild(data, out, stores, END)
+    assert dash["uninstall"] and files[0] == ASSET and len(files) == 4
+    assert dash["active"]["counts"]["errors"] == 0 and all(r["status"] == "ok" for r in dash["active"]["apps"])
+    with open(p, encoding="utf-8") as f:
+        healed = json.load(f)                                                       # saved without the bad entries
+    assert "x|act_drift|ret_dau|down" not in healed["episodes"] and "legacy" not in healed["episodes"]
+    assert "junk" not in healed["closed"] and "y" not in healed["eval"] and healed["eval"].keys() == {A1, A2, A6}
+    assert "skipped" not in capsys.readouterr().err
+
+
+def test_an_active_state_snapshot_or_restore_failure_costs_only_that_app(asite, monkeypatch):
+    data, out, stores = asite
+    real_snap, real_eval = ab.snapshot, act_eng.evaluate
+
+    def boom(*a, **k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(ab, "snapshot", lambda st, aid: boom() if aid == A2 else real_snap(st, aid))
+    dash, files = abuild(data, out, stores, END - timedelta(days=1))
+    rows = {r["app_id"]: r for r in dash["active"]["apps"]}
+    assert dash["uninstall"] and len(files) == 4 and rows[A2]["status"] == "error" and rows[A1]["status"] == "ok"
+    monkeypatch.setattr(ab, "snapshot", real_snap)
+    monkeypatch.setattr(ab, "restore_app", boom)                                    # the step AND the restore fail
+    monkeypatch.setattr(act_eng, "evaluate", lambda store, aid, *a, **k: boom() if aid == A1 else real_eval(store, aid, *a, **k))
+    dash, files = abuild(data, out, stores, END)
+    rows = {r["app_id"]: r for r in dash["active"]["apps"]}
+    assert dash["uninstall"] and len(files) == 4 and rows[A1]["status"] == "error" and rows[A2]["status"] == "ok"
+    st = ab.load_state(data)
+    assert A1 not in st["eval"] and not [e for e in st["episodes"].values() if e["app_id"] == A1]   # starts over, seeded
+
+
+def test_an_active_import_failure_never_costs_the_uninstall_tab(tmp_path, monkeypatch, capsys):
+    import sys
+    import admob_iq
+    monkeypatch.setattr(gu, "refresh_all", lambda *a, **k: copy.deepcopy(STATUS))
+    stores = active_stores()
+    data, out = str(tmp_path / "ok" / "data"), str(tmp_path / "ok" / "site")
+    rv = seed_active(data, END, stores)
+    dash = dashboard()
+    ub.run_uninstall(dash, data, out, ga4_settings(), now=NOW, revenue=rv)
+    good = _uni_outputs(data, out, dash)
+    capsys.readouterr()
+    monkeypatch.delattr(admob_iq, "active_build")                                   # (a rename in impact.py …)
+    monkeypatch.setitem(sys.modules, "admob_iq.active_build", None)
+    for name, s, want in (("on", ga4_settings(), ["ga4 active skipped: ModuleNotFoundError"]),
+                          ("off", ga4_settings(ga4_active=False), [])):              # off: never even imported
+        data, out = str(tmp_path / name / "data"), str(tmp_path / name / "site")
+        rv = seed_active(data, END, stores)
+        dash = dashboard()
+        ub.run_uninstall(dash, data, out, s, now=NOW, revenue=rv)
+        assert _uni_outputs(data, out, dash) == good and "active" not in dash       # the Uninstall tab: identical
+        err = capsys.readouterr().err.splitlines()
+        assert len([l for l in err if LOG_LINE.match(l)]) == 1 and [l for l in err if not LOG_LINE.match(l)] == want
+
+
+def test_the_workflow_passes_the_active_switches():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, ".github", "workflows", "refresh.yml"), encoding="utf-8") as f:
+        y = f.read()
+    assert "GA4_ACTIVE:           ${{ vars.GA4_ACTIVE || 'true' }}" in y                # the off switch, no code push
+    assert "GA4_RETENTION_CHANGED: ${{ vars.GA4_RETENTION_CHANGED }}" in y
+
+
+def test_the_active_tab_reads_a_day_its_account_reported_as_0():
+    rev = {"tz": "America/Los_Angeles", "currency": "USD", "till": "2026-09-19", "tz_by_app": {},
+           "apps": {A1: {"2026-09-17": [10, 1], "2026-09-19": [20, 2]}, A2: {"2026-09-18": [5, 5]},
+                    "ca-app-pub-1111111111111111~9": {"2026-09-16": [1, 1]}}}
+    one = ub.app_revenue(rev, {"app_id": A1, "package": None}, [], cover=True)
+    assert one["cover_days"] == ["2026-09-17", "2026-09-18", "2026-09-19"]        # A1's account (A2 too), not another's
+    assert one["days"] == {"2026-09-17": [10, 1], "2026-09-19": [20, 2]}
+    plain = ub.app_revenue(rev, {"app_id": A1, "package": None}, [])                # the update-impact card's input
+    assert "cover_days" not in plain and plain == {k: v for k, v in one.items() if k != "cover_days"}
+
+
+def test_a_failure_in_the_active_revenue_extras_never_costs_the_update_impact_input(monkeypatch):
+    rev = {"tz": "America/Los_Angeles", "currency": "USD", "till": "2026-09-19", "tz_by_app": {},
+           "apps": {A1: {"2026-09-17": [10, 1], "2026-09-19": [20, 2]}},
+           "all_apps": {A1: {"2026-09-17": [12, 1]}}}
+    plain = ub.app_revenue({k: v for k, v in rev.items() if k != "all_apps"}, {"app_id": A1, "package": None}, [])
+
+    def boom(_):
+        raise ValueError("bad account row")
+    monkeypatch.setattr(ub, "_account_days", boom)
+    one = ub.app_revenue(dict(rev, all_apps={A1: {"2026-09-17": "not a pair"}}), {"app_id": A1, "package": None}, [],
+                         cover=True)
+    assert one == plain                                   # days / tz / till / currency intact, no half-built extras

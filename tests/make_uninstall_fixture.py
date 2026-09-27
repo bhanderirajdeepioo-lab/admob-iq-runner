@@ -83,9 +83,11 @@ from admob_iq import build_static
 from admob_iq.config import settings
 from admob_iq.fetch import ga4
 from admob_iq.uninstall_build import run_uninstall
-from tests.uninstall_synth import DEFAULT_RET, AdminFake, Truth, UniStub, rollout as shares, wave
+from tests.uninstall_synth import (DEFAULT_RET, AdminFake, Truth, UniStub, make_active_store, rollout as shares,
+                                   truncate_store, wave)
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "uninstall_sample.json")
+OUT_ACTIVE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "active_sample.json")
 E_FINAL = date(2026, 9, 23)
 RUN_DAYS = [datetime(2026, 9, d, 12, 0, tzinfo=timezone.utc) for d in range(19, 26)]
 OWNER1, OWNER2 = "owner-1@demo.invalid", "owner-2@demo.invalid"
@@ -236,7 +238,8 @@ def build_fixture(work_dir):
     s = dict(settings(), ga4_enabled=True, ga4_client_id="demo-cid", ga4_client_secret="demo-sec",
              ga4_refresh_tokens=json.dumps({OWNER1: RT1, OWNER2: RT2}), ga4_refresh_token="",
              ga4_min_hours=20.0, ga4_retry_hours=3.0, ga4_refetch_days=14, ga4_late_days=7, ga4_rebuild_days=28,
-             ga4_max_history_days=1300, ga4_run_budget_sec=900, ga4_streams_ttl_hours=168.0, notify_dry_run=True)
+             ga4_max_history_days=1300, ga4_run_budget_sec=900, ga4_streams_ttl_hours=168.0, notify_dry_run=True,
+             ga4_active=False)                     # the Uninstall tab alone (the Active users tab: build_active_fixture)
     sent = []
     with contextlib.ExitStack() as st:
         st.enter_context(mock.patch.object(ga4.requests, "get", admin.get))
@@ -285,6 +288,152 @@ def fixture_json(fx):
     return json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
 
 
+# ── the Active users tab's fixture ───────────────────────────────────────────────────────────────
+#
+# Its own seven daily builds (the same run days, GA4 data till 17–23 Sep 2026) of made-up apps through the real
+# run_uninstall + the Active step, send_alerts (dry run) and the marks — the GA4 fetch stubbed and each run's stores
+# written as a fetch on that data day would have left them (tests.uninstall_synth.truncate_store): the scenarios need
+# inputs the fake GA4 cannot give (usage not fetched yet, a return edge still being searched, mediation revenue …).
+#   * Demo Steady          nothing changes (a 📦 update two months ago)
+#   * Demo Old Drop        old users −12% from 13 Sep → a drift alert, opened on a later run and SENT (Telegram)
+#   * Demo Install Surge   installs ×2 from 3 Sep, old users flat → never an alert about old users
+#   * Demo Rocket          70 days old, +40% a week → "Growing fast", no band, no alert
+#   * Demo Ad Price        eCPM −15% in the last settled week, ads per user flat → "Ad price lower" + an info row
+#   * Demo Ad Gap          12 days without AdMob rows (its account reported nothing) → "No ad data", never $0
+#   * Demo Tracking        0 active users on 19 Sep → Check tracking (watch, e-mail)
+#   * Demo D1 Drop         new users come back 4 points less the next day (the newest settled week), a 📦 before it
+#   * Demo Usage Wait      sessions / time not fetched yet
+#   * Demo Edge In / Out   return data from 20 Jul (fits GA4's old 2-month retention) / from 25 Aug (does not)
+#   * Demo Searching       return data still being read back (edge not found yet)
+#   * Demo Test Installs   200 days of a few test installs before the launch (hidden)
+#   * Demo Tiny            ~10 installs a day, GA4's pooled cohorts empty → "unverified"
+#   * Demo Rneg            a day with fewer active users than installs → no returning users that day (null)
+#   * Demo Mediation       ads per user −8% while other networks took ~13 points more → capped at watch ("mix")
+#   * Demo No GA4          not fetched yet
+# Eleven of them show the same −10% eCPM week (24–30 Aug): market-wide.
+
+A_FINAL = E_FINAL
+A_RUNS = [(RUN_DAYS[i], A_FINAL - timedelta(days=6 - i)) for i in range(7)]
+MKT = (date(2026, 8, 24), date(2026, 8, 30))
+
+
+def _aaid(n):
+    # Demo Ad Gap is the only app of its AdMob account: that account's report has no rows in the gap (a day the account
+    # did report, without this app's row, would be a real $0 — never "No ad data")
+    return ("ca-app-pub-0000000000000001~91000000%02d" if n == 6 else "ca-app-pub-0000000000000000~91000000%02d") % n
+
+
+def active_apps():
+    """[(app_id, name, package, store, revenue)] — every store ends on A_FINAL (each run cuts it to its data day)."""
+    S = A_FINAL - timedelta(days=3)
+    mkt = lambda d: 0.9 if MKT[0] <= d <= MKT[1] else 1.0              # noqa: E731
+
+    def q(seed, market=True, **kw):
+        base = dict(days=130, end=A_FINAL, noise=0.01, hll=0.01, seed=seed, rev_tz="America/Los_Angeles")
+        if market and "ecpm" not in kw:
+            kw["ecpm"] = lambda d: 2.0 * mkt(d)
+        return make_active_store(**dict(base, **kw))
+    drop, surge, cut = date(2026, 9, 13), date(2026, 9, 3), S - timedelta(days=12)
+    lo = S - timedelta(days=7)
+    out = [
+        (1, "Demo Steady", q(21, versions=shares("1.0", [(A_FINAL - timedelta(days=60), "1.1", 0.3)]))),
+        (2, "Demo Old Drop", q(22, old=lambda d: 20000 * (0.88 if d >= drop else 1.0))),
+        (3, "Demo Install Surge", q(23, new=lambda c: 4000 if c >= surge else 2000)),
+        (4, "Demo Rocket", q(24, market=False, days=70, new=30,
+                             old=lambda d: 1000 * 1.4 ** ((d - (A_FINAL - timedelta(days=69))).days / 7))),
+        (5, "Demo Ad Price", q(25, ecpm=lambda d: 2.0 * mkt(d) * (0.85 if d >= S - timedelta(days=6) else 1.0))),
+        (6, "Demo Ad Gap", q(26)),
+        (7, "Demo Tracking", q(27, a1={S - timedelta(days=1): 0})),
+        (8, "Demo D1 Drop", q(28, new=2000, versions=shares("1.0", [(lo - timedelta(days=2), "1.2", 0.3)]),
+                              rho=lambda c, k: DEFAULT_RET(k) - (0.04 if k == 1 and lo <= c <= S - timedelta(days=1)
+                                                                 else 0.0))),
+        (9, "Demo Usage Wait", q(29, usage=False)),
+        (10, "Demo Edge In", q(30, days=150, ret_edge=date(2026, 7, 20))),
+        (11, "Demo Edge Out", q(31, ret_edge=date(2026, 8, 25))),
+        (12, "Demo Searching", q(32, ret_edge="searching", ret_days=60)),
+        (13, "Demo Test Installs", q(33, market=False, days=110, pre_days=200)),
+        (14, "Demo Tiny", q(34, market=False, new=10, old=300, zero_t=True)),
+        (15, "Demo Rneg", q(35, a1={S - timedelta(days=3): 480})),
+        (16, "Demo Mediation", q(36, ipu=lambda d, v: 4.0 * (0.92 if d >= cut else 1.0),
+                                 other=lambda d: 0.02 if d < cut else 0.15)),
+    ]
+    apps = []
+    for n, name, (st, rv) in out:
+        aid, pkg = _aaid(n), "com.demo.act%02d" % n
+        st.update(app_id=aid, package=pkg, property_id="3000000%02d" % n, stream_id="4000000%02d" % n)
+        if name == "Demo Ad Gap":
+            for k in range(39, 51):
+                rv["days"].pop((A_FINAL - timedelta(days=k)).isoformat(), None)
+        apps.append((aid, name, pkg, st, rv))
+    return apps
+
+
+def build_active_fixture(work_dir):
+    """Seven daily builds of the Active users apps → {"dashboard_active", "dashboard_uninstall", "app_files", "sent",
+    "public_log"} (the site's per-app files by key)."""
+    from admob_iq.fetch import ga4_uninstall as gu
+    data_dir, out_dir = os.path.join(work_dir, "data"), os.path.join(work_dir, "site")
+    os.makedirs(os.path.join(data_dir, "ga4_uninstall"), exist_ok=True)
+    apps = active_apps()
+    none_id = _aaid(17)
+    with open(os.path.join(data_dir, "app_store_ids.json"), "w", encoding="utf-8") as f:
+        json.dump({"by_id": dict({aid: pkg for aid, _, pkg, _, _ in apps}, **{none_id: "com.demo.act17"})}, f)
+    state = gu._state_default()
+    state["routes"].update(fetched_at="2026-09-19T01:00:00Z", by_package={
+        pkg: {"property_id": st["property_id"], "stream_id": st["stream_id"], "owner": OWNER1}
+        for _, _, pkg, st, _ in apps})
+    gu.save_state(data_dir, state)
+    s = dict(settings(), ga4_enabled=True, ga4_client_id="demo-cid", ga4_client_secret="demo-sec",
+             ga4_refresh_tokens=json.dumps({OWNER1: RT1}), ga4_refresh_token="", ga4_late_days=7,
+             notify_dry_run=True, ga4_active=True, ga4_retention_changed="2026-09-26")
+    catalog = [{"app_id": aid, "app_name": name, "account_id": "pub-demo", "selected": True}
+               for aid, name, _, _, _ in apps] + [{"app_id": none_id, "app_name": "Demo No GA4",
+                                                   "account_id": "pub-demo", "selected": True}]
+    status = {"counts": {"selected": len(catalog), "with_ga4": len(apps), "fetched": 0, "full": 0, "fresh": len(apps),
+                         "failed": 0, "deferred": 0, "no_ga4": 1}, "apps": {}, "no_ga4": {}, "discovery": None}
+    sent, log_lines = [], []
+    with contextlib.ExitStack() as st_:
+        st_.enter_context(mock.patch.object(gu, "refresh_all", lambda *a, **k: json.loads(json.dumps(status))))
+        log = st_.enter_context(contextlib.redirect_stderr(io.StringIO()))
+        for i, (now, E) in enumerate(A_RUNS):
+            final = i == len(A_RUNS) - 1
+            till = E + timedelta(days=1)
+            rev = {"tz": "America/Los_Angeles", "currency": "USD", "till": till.isoformat(), "apps": {}, "all_apps": {}}
+            for aid, _, _, st, rv in apps:
+                cut = truncate_store(st, E)
+                cut["fetched_at"] = (now - timedelta(hours=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                gu.save_store(gu.store_path(data_dir, aid), cut)
+                rev["apps"][aid] = {k: v for k, v in rv["days"].items() if k <= till.isoformat()}
+                if rv.get("all_days"):
+                    rev["all_apps"][aid] = {k: v for k, v in rv["all_days"].items() if k <= till.isoformat()}
+            dashboard = {"apps_catalog": catalog, "kpis": {"revenue": 1.0}, "alerts": {"items": []}}
+            build_static._uninstall_step(dashboard, data_dir, out_dir, s, revenue=rev)
+            res = build_static.send_alerts(dashboard, s)
+            sent.append({"run": now.strftime("%Y-%m-%dT%H:%MZ"),
+                         "telegram": next((r["text"] for r in res if r["channel"] == "telegram"), None),
+                         "email": next((r["body"] for r in res if r["channel"] == "email"), None)})
+            if not final:
+                build_static._uninstall_mark_sent(dashboard, data_dir, s, res)
+        log_lines = log.getvalue().splitlines()
+    files = {}
+    for r in dashboard["active"]["apps"]:
+        with gzip.open(os.path.join(out_dir, r["file"]), "rt", encoding="utf-8") as f:
+            files[r["key"]] = json.load(f)
+    return {"dashboard_active": dashboard["active"], "dashboard_uninstall": dashboard["uninstall"], "app_files": files,
+            "sent": sent, "public_log": log_lines}
+
+
+def active_fixture_json(fx):
+    body = {"_about": "Synthetic Active-users-tab data written by the real build code (python -m "
+                      "tests.make_uninstall_fixture). dashboard_active = dashboard.json's \"active\" key; "
+                      "dashboard_uninstall = its \"uninstall\" key for the same made-up apps; app_files = "
+                      "site/active_<key>.json.gz by key; sent = what each of the 7 daily runs would notify (dry run); "
+                      "public_log = the build-log lines. Made-up apps only.",
+            "dashboard_active": fx["dashboard_active"], "dashboard_uninstall": fx["dashboard_uninstall"],
+            "app_files": fx["app_files"], "sent": fx["sent"], "public_log": fx["public_log"]}
+    return json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         text = fixture_json(build_fixture(tmp))
@@ -292,6 +441,11 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(text)
     print("wrote %s (%d KB)" % (os.path.relpath(OUT), len(text.encode("utf-8")) // 1024))
+    with tempfile.TemporaryDirectory() as tmp:
+        text = active_fixture_json(build_active_fixture(tmp))
+    with open(OUT_ACTIVE, "w", encoding="utf-8") as f:
+        f.write(text)
+    print("wrote %s (%d KB)" % (os.path.relpath(OUT_ACTIVE), len(text.encode("utf-8")) // 1024))
     return 0
 
 

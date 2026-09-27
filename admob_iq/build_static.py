@@ -188,6 +188,13 @@ def send_alerts(dashboard, s):
         sev = str(a.get("severity", "")).upper()
         what = "update impact (GA4)" if a.get("family") == "impact" else "uninstall (GA4)"
         uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · {what}'))
+    # GA4 Active users alerts: the same rule (sent ONCE — mark_notified_active after), the same channels
+    for a in (dashboard.get("active") or {}).get("alerts", []):
+        if not a.get("notify"):
+            continue
+        icon = _ICON.get(a.get("severity"), "•")
+        sev = str(a.get("severity", "")).upper()
+        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · active users (GA4)'))
     if not lines and not uni:
         return []
     dry = s["notify_dry_run"]
@@ -275,11 +282,19 @@ def _uninstall_step(dashboard, data_dir, out_dir, s, revenue=None):
     card's ARPDAU)."""
     try:
         from .uninstall_build import run_uninstall
-        return run_uninstall(dashboard, data_dir, out_dir, s, revenue=revenue) or []
+        files = run_uninstall(dashboard, data_dir, out_dir, s, revenue=revenue) or []
     except Exception as e:
         dashboard.pop("uninstall", None)
+        dashboard.pop("active", None)              # (an Active alert must never stay due without its summary)
         print(f"ga4 uninstall skipped: {type(e).__name__}", file=sys.stderr)
         return []
+    if dashboard.get("active"):                    # the Active users tab's ONE public line — counts only
+        try:
+            from .active_build import log_line
+            print(log_line(dashboard["active"]), file=sys.stderr)
+        except Exception as e:
+            print(f"ga4 active log skipped: {type(e).__name__}", file=sys.stderr)
+    return files
 
 
 def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today, tz_by_account=None):
@@ -291,20 +306,73 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
     except Exception as e:
         revenue = None
         print(f"ga4 uninstall revenue skipped: {type(e).__name__}", file=sys.stderr)
+    if revenue is not None and s.get("ga4_active", True):
+        try:                                       # every mediation source (Active users' other-network share only)
+            every = mediation_revenue(repo.fetch_mediation(), revenue["till"])
+            if every:
+                revenue["all_apps"] = every
+        except Exception as e:
+            print(f"ga4 active mediation skipped: {type(e).__name__}", file=sys.stderr)
     return _uninstall_step(dashboard, data_dir, out_dir, s, revenue=revenue)
 
 
+def mediation_revenue(rows, till):
+    """The mediation report's rows (every ad source, AdMob Network included) → {AdMob app id: {day: [earnings micros,
+    impressions]}} up to `till` — what the app earned from ALL networks (the Active users tab shows the share the
+    network report misses). No extra report call."""
+    apps = {}
+    for r in rows or []:
+        aid, d = r.get("app_id"), str(r.get("report_date") or "")[:10]
+        if not aid or not d or d > till:
+            continue
+        cur = apps.setdefault(aid, {}).setdefault(d, [0, 0])
+        cur[0] += int(r.get("estimated_earnings_micros") or 0)
+        cur[1] += int(r.get("impressions") or 0)
+    return {a: dict(sorted(v.items())) for a, v in sorted(apps.items())}
+
+
+def headers_text(uni_files, dashboard):
+    """The site's _headers (Cloudflare): noindex everywhere, no referrer, and every data file — the GA4 tabs' lazy
+    per-app files included — never served from a stale cache."""
+    return ("/*\n  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet\n"
+            "  Referrer-Policy: no-referrer\n\n"          # never leak the URL to sites you click through to
+            "/dashboard.json.gz\n  Cache-Control: no-store\n\n"
+            "/baseline.json\n  Cache-Control: no-store\n\n"
+            "/baseline_geo.json.gz\n  Cache-Control: no-store\n\n"
+            "/adunit_country_daily.json.gz\n  Cache-Control: no-store\n\n"
+            "/baseline_daily.json.gz\n  Cache-Control: no-store\n\n"
+            "/selected_apps.json\n  Cache-Control: no-store\n\n"
+            "/account_names.json\n  Cache-Control: no-store\n\n"
+            "/app_names.json\n  Cache-Control: no-store\n\n"
+            "/uninstall.json.gz\n  Cache-Control: no-store\n\n"
+            + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in uni_files if n != "uninstall.json.gz")
+            + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in _active_files(dashboard))
+            + "/index.html\n  Cache-Control: no-cache\n")
+
+
+def _active_files(dashboard):
+    """The Active users tab's lazy per-app files (for _headers: never served from a stale cache)."""
+    return [r["file"] for r in (dashboard.get("active") or {}).get("apps", []) if r.get("file")]
+
+
 def _uninstall_mark_sent(dashboard, data_dir, s, results=None):
-    """After send_alerts: record which uninstall alerts went out (`results` = send_alerts' — only those whose
-    channel took them), so each one is sent ONCE and a failed send is tried again next run."""
-    if not dashboard.get("uninstall"):
-        return
-    try:
-        from .uninstall_build import mark_notified
-        ids = None if results is None else uninstall_delivered(results, s)
-        mark_notified(data_dir, dashboard["uninstall"], dry=s["notify_dry_run"], ids=ids)
-    except Exception as e:
-        print(f"ga4 uninstall notify-mark skipped: {type(e).__name__}", file=sys.stderr)
+    """After send_alerts: record which uninstall / Active users alerts went out (`results` = send_alerts' — only those
+    whose channel took them), so each one is sent ONCE and a failed send is tried again next run. The two are marked
+    independently: one failing never keeps the other's alerts due."""
+    if dashboard.get("uninstall"):
+        try:
+            from .uninstall_build import mark_notified
+            ids = None if results is None else uninstall_delivered(results, s)
+            mark_notified(data_dir, dashboard["uninstall"], dry=s["notify_dry_run"], ids=ids)
+        except Exception as e:
+            print(f"ga4 uninstall notify-mark skipped: {type(e).__name__}", file=sys.stderr)
+    if dashboard.get("active"):
+        try:
+            from .active_build import mark_notified_active
+            ids = None if results is None else uninstall_delivered(results, s)
+            mark_notified_active(data_dir, dashboard["active"], dry=s["notify_dry_run"], ids=ids)
+        except Exception as e:
+            print(f"ga4 active notify-mark skipped: {type(e).__name__}", file=sys.stderr)
 
 
 class _AppFilteredRepo:
@@ -1232,19 +1300,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # dashboard.json changes hourly, so it must NEVER be served from a stale cache
     # — no-store forces every request to fetch the freshest file from origin.
     with open(os.path.join(out_dir, "_headers"), "w", encoding="utf-8") as f:
-        f.write("/*\n  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet\n"
-                "  Referrer-Policy: no-referrer\n\n"          # never leak the URL to sites you click through to
-                "/dashboard.json.gz\n  Cache-Control: no-store\n\n"
-                "/baseline.json\n  Cache-Control: no-store\n\n"
-                "/baseline_geo.json.gz\n  Cache-Control: no-store\n\n"
-                "/adunit_country_daily.json.gz\n  Cache-Control: no-store\n\n"
-                "/baseline_daily.json.gz\n  Cache-Control: no-store\n\n"
-                "/selected_apps.json\n  Cache-Control: no-store\n\n"
-                "/account_names.json\n  Cache-Control: no-store\n\n"
-                "/app_names.json\n  Cache-Control: no-store\n\n"
-                "/uninstall.json.gz\n  Cache-Control: no-store\n\n"
-                + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in uni_files if n != "uninstall.json.gz")
-                + "/index.html\n  Cache-Control: no-cache\n")
+        f.write(headers_text(uni_files, dashboard))
 
     alerts = send_alerts(dashboard, s)
     _uninstall_mark_sent(dashboard, data_dir, s, alerts)

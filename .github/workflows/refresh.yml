@@ -102,6 +102,10 @@ jobs:
           GA4_REFRESH_TOKEN:    ${{ secrets.GA4_REFRESH_TOKEN }}
           GA4_ENABLED:          ${{ vars.GA4_ENABLED || 'true' }}
           GA4_MIN_HOURS:        ${{ vars.GA4_MIN_HOURS || '20' }}
+          # Active users tab (GA4): GA4_ACTIVE=false (repo variable) switches it off without a code push;
+          # GA4_RETENTION_CHANGED = the day the GA4 data retention went to 14 months (empty: the config default)
+          GA4_ACTIVE:           ${{ vars.GA4_ACTIVE || 'true' }}
+          GA4_RETENTION_CHANGED: ${{ vars.GA4_RETENTION_CHANGED }}
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On

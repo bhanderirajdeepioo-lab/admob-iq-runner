@@ -52,6 +52,11 @@ def settings() -> dict:
         "ga4_max_history_days": int(_env("GA4_MAX_HISTORY_DAYS", "1300")),
         "ga4_run_budget_sec": int(_env("GA4_RUN_BUDGET_SEC", "900")),     # stop starting new apps after this
         "ga4_streams_ttl_hours": float(_env("GA4_STREAMS_TTL_HOURS", "168")),   # re-list GA4 streams weekly
+        "ga4_active": _env("GA4_ACTIVE", "true").lower() == "true",    # the Active users tab (off: nothing of it
+                                                                        # is read, written or printed)
+        # the day the GA4 properties' data retention went from 2 to 14 months: a return-data edge 45–100 days before it
+        # is said to be that ("none" or any non-date: the reason is never claimed)
+        "ga4_retention_changed": _env("GA4_RETENTION_CHANGED", "2026-09-26"),
     }
 
 

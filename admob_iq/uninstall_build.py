@@ -118,48 +118,91 @@ def _status(details, counts, no_ga4, status, state):
     return "ok"
 
 
-def app_revenue(revenue, a, apps, package=None):
+def app_revenue(revenue, a, apps, package=None, cover=False):
     """The AdMob revenue of one fetched app's GA4 stream → {tz, currency, till, days: {day: [earnings micros,
     impressions]}}: its own AdMob app (always — even when the app list lost its package; `package` = the store's) +
     every selected AdMob app sharing its Play package (same_pkg), summed, in the app's OWN account's reporting timezone
     (revenue["tz_by_app"], else revenue["tz"]). A same-package app of an account in another timezone is spread onto
     this app's days by the share of each of its days that falls in them (impact._revenue_fn: every dollar kept), never
-    added day-to-day as if the days were the same. None without any."""
+    added day-to-day as if the days were the same. None without any. cover (Active users only): + cover_days, the days
+    this app's AdMob account reported any app — a day without this app's row earned 0 (the update-impact card never
+    reads it)."""
     if not revenue:
         return None
     pkg = a.get("package") or package
     ids = [a["app_id"]] + ([x["app_id"] for x in apps if x.get("same_pkg") and x["same_pkg"] == pkg] if pkg else [])
     tzs, base = revenue.get("tz_by_app") or {}, revenue.get("tz") or "UTC"
     tz = tzs.get(a["app_id"]) or base
-    days = {}
 
-    def add(d, e, n):
-        cur = days.setdefault(d, [0, 0])
-        cur[0], cur[1] = cur[0] + e, cur[1] + n
-    for aid in ids:
-        src = {d: v for d, v in ((revenue.get("apps") or {}).get(aid) or {}).items() if v is not None}
-        if not src:
-            continue
-        tz_x = tzs.get(aid) or base
-        if tz_x == tz:
-            for d, v in src.items():
-                add(d, int(v[0] or 0), int(v[1] or 0))
-            continue
-        lo, hi = imp._d(min(src)), imp._d(max(src))
-        till = revenue.get("till") or max(src)
-        pad = dict(src)                              # its span's edges earned 0 outside it: nothing cut at the ends
-        pad[(lo - timedelta(days=1)).isoformat()] = [0, 0]
-        if hi.isoformat() < till:
-            pad[(hi + timedelta(days=1)).isoformat()] = [0, 0]
-        f, _ = imp._revenue_fn({"tz": tz_x, "till": till, "days": pad}, tz)
-        for d in imp._days(lo - timedelta(days=1), hi + timedelta(days=1)):
-            v = f(d)
-            if v is not None and (v[0] or v[1]):
-                add(d.isoformat(), int(round(v[0] * 1e6)), int(round(v[1])))
+    def collect(pool):
+        days = {}
+
+        def add(d, e, n):
+            cur = days.setdefault(d, [0, 0])
+            cur[0], cur[1] = cur[0] + e, cur[1] + n
+        for aid in ids:
+            src = {d: v for d, v in ((pool or {}).get(aid) or {}).items() if v is not None}
+            if not src:
+                continue
+            tz_x = tzs.get(aid) or base
+            if tz_x == tz:
+                for d, v in src.items():
+                    add(d, int(v[0] or 0), int(v[1] or 0))
+                continue
+            lo, hi = imp._d(min(src)), imp._d(max(src))
+            till = revenue.get("till") or max(src)
+            pad = dict(src)                          # its span's edges earned 0 outside it: nothing cut at the ends
+            pad[(lo - timedelta(days=1)).isoformat()] = [0, 0]
+            if hi.isoformat() < till:
+                pad[(hi + timedelta(days=1)).isoformat()] = [0, 0]
+            f, _ = imp._revenue_fn({"tz": tz_x, "till": till, "days": pad}, tz)
+            for d in imp._days(lo - timedelta(days=1), hi + timedelta(days=1)):
+                v = f(d)
+                if v is not None and (v[0] or v[1]):
+                    add(d.isoformat(), int(round(v[0] * 1e6)), int(round(v[1])))
+        return days
+    days = collect(revenue.get("apps"))
     if not days:
         return None
-    return {"tz": tz, "currency": revenue.get("currency") or "USD",
-            "till": revenue.get("till") or max(days), "days": dict(sorted(days.items()))}
+    out = {"tz": tz, "currency": revenue.get("currency") or "USD",
+           "till": revenue.get("till") or max(days), "days": dict(sorted(days.items()))}
+    try:                                             # Active users' extras only — a failure here costs them (the Active
+        if revenue.get("all_apps"):                  # tab then reads those days as unknown), never the Uninstall step;
+            every = collect(revenue["all_apps"])      # the update-impact card reads days / tz / till / currency only
+            if every:                                 # (every mediation source: the other-network share)
+                out["all_days"] = dict(sorted(every.items()))
+        if cover and all((tzs.get(x) or base) == tz for x in ids):  # the days this app's AdMob account reported any
+            days_c = set()                                        # app (a day it has no row on earned 0 — not "No
+            acc = _account_days(revenue)                          # ad data")
+            for x in ids:
+                days_c.update(acc.get(_account(x)) or ())
+            if days_c:
+                out["cover_days"] = sorted(days_c)
+    except Exception:                                # (no print: this step's log is exactly one counts-only line)
+        out.pop("all_days", None), out.pop("cover_days", None)
+    return out
+
+
+def _account(app_id):
+    """The AdMob account (publisher) of an AdMob app id: "ca-app-pub-<publisher>~<app>" → "ca-app-pub-<publisher>"."""
+    return str(app_id).split("~", 1)[0]
+
+
+_ACC_MEMO = {}
+
+
+def _account_days(revenue):
+    """{account: the AdMob days its network report has rows for (any of its apps)} — once per revenue input."""
+    apps = revenue.get("apps") or {}
+    hit = _ACC_MEMO.get(id(apps))
+    if hit is not None and hit[0] is apps:
+        return hit[1]
+    out = {}
+    for aid, days in apps.items():
+        out.setdefault(_account(aid), set()).update(d for d, v in (days or {}).items() if v is not None)
+    _ACC_MEMO.clear()
+    _ACC_MEMO[id(apps)] = (apps, out)
+    return out
 
 
 def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue=None):
@@ -180,6 +223,17 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
     state = gu.load_state(data_dir)
     os.makedirs(out_dir, exist_ok=True)
     details, rows, no_ga4, files = [], [], [], [ASSET]
+    act_on = bool(s.get("ga4_active", True))       # the Active users tab rides this loop (its own state and files)
+    if act_on:                                      # — imported only here: an Active failure (even at import) costs
+        try:                                        # the Active tab only, never the Uninstall step
+            from . import active_build as ab
+            act_st, act_rows, act_cfg = ab.load_state(data_dir), [], ab.cfg_from(s, cfg)
+            market = ab.market_prepass(revenue, [a for a in apps if not a.get("same_as")
+                                                 and os.path.exists(gu.store_path(data_dir, a["app_id"]))],
+                                       app_revenue)
+        except Exception as e:
+            act_on = False
+            print("ga4 active skipped: %s" % type(e).__name__, file=sys.stderr)
     late_sums = {"un": {}, "new": {}, "a1": {}, "fetches": 0}    # every app's late-data re-reads, pooled
     for a in sorted(apps, key=lambda x: (x["app_name"].casefold(), x["app_id"])):
         aid, path = a["app_id"], gu.store_path(data_dir, a["app_id"])
@@ -198,10 +252,23 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         # an unchecked store format (v1: its clean re-pull still pending — quota, a failure) is shown and flagged,
         # but whatever it opens is seeded, never sent: no alert from unchecked data ever goes out. A v2 store
         # waiting for its repair is checked data: evaluated as ever (its incomplete days still left out)
+        outdated = gu._store_v(store) < gu.CHECKED_V
+        rev = app_revenue(revenue, a, apps, store.get("package"), cover=act_on)
         detail, row = eng.evaluate_app(store, aid, a["app_name"], state, now_iso, stale=stale, key=key,
                                        package=a.get("package") or store.get("package"), late=cfg["late_days"],
-                                       outdated=gu._store_v(store) < gu.CHECKED_V,
-                                       revenue=app_revenue(revenue, a, apps, store.get("package")))
+                                       outdated=outdated, revenue=rev)
+        if act_on:                                      # Active users: the uninstall detail read, never changed; a
+            snap = None                                 # failure costs only this app's Active row (its state kept)
+            try:
+                snap = ab.snapshot(act_st, aid)
+                act_rows.append(ab.app_step(store, a, detail, key, act_st, now_iso, rev, market, stale, outdated,
+                                            act_cfg, out_dir))
+            except Exception:
+                try:
+                    ab.restore_app(act_st, aid, snap)
+                except Exception:                       # its state can't be put back: this app starts over (seeded)
+                    ab.drop_app(act_st, aid)
+                act_rows.append(ab.error_row(a, key))
         eng.revision_sums(store, late_sums)
         name = COHORT_PREFIX + key + ".json.gz"
         sig = _sig(path)
@@ -265,6 +332,9 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
              sum(1 for al in alerts if al["notify"]), sum(ic.values()), ic["halt"], ic["hold"], ic["win"], early,
              len(ia), sum(1 for al in ia if al["notify"])),
           file=sys.stderr)
+    if act_on:                                          # dashboard["active"] last (its log line: build_static's)
+        ab.finish(dashboard, out_dir, act_rows, market, act_st, data_dir, no_ga4, act_cfg,
+                  dashboard["uninstall"]["status"])
     return files
 
 

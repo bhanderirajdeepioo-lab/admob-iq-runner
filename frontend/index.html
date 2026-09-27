@@ -380,6 +380,46 @@
     .uni-imp-t td[data-h]::before{content:attr(data-h);display:block;font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
     .uni-imp-t td .s{white-space:normal}
   }
+  /* ===== Active users (GA4) tab — the Uninstall tab's .uni-* look; its own bits are act-* (no red / green without an alert) ===== */
+  #act-root .lnk{color:var(--cyan);cursor:pointer;font-weight:600}
+  .act-line{font-size:13.5px;font-weight:650;color:#fff;line-height:1.5;margin:0 0 12px}
+  .act-t .v{margin-top:0}                       /* the number right under its label; the sub-lines sit at the tile's foot */
+  .act-t .act-x{display:flex;flex-direction:column;flex:1 1 auto}
+  .act-t .v small{font-size:12px;font-weight:650;color:var(--muted);margin-left:5px;letter-spacing:0}
+  .act-t .act-pl{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .act-t .act-x .c{margin-top:4px}
+  .act-t .act-sl{font-size:11px;color:var(--muted);line-height:1.5;margin-top:auto;padding-top:6px;border-top:1px dashed var(--line)}
+  .act-t .act-x .act-sl{margin-top:auto}.act-t .act-x>.c:last-of-type{margin-bottom:7px}
+  .act-t .act-sh{display:none}
+  .act-pt{cursor:default}
+  .act-edges{margin-top:10px;display:grid;gap:3px}
+  .act-edge{font-size:11.5px;color:var(--ink2);line-height:1.5}
+  .act-xl{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .act-mkl{font-size:12.5px;color:var(--ink2);margin-top:10px;line-height:1.5;padding:8px 11px;border-radius:9px;background:var(--purple-b)}
+  .act-mk{font-size:11.5px;color:var(--ink2);line-height:1.55;margin-top:8px}
+  .act-pkgs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .act-pkg{font-size:11.5px;font-weight:650;padding:4px 10px;border-radius:100px;background:var(--purple-b);color:var(--purple);cursor:pointer;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .act-pkg:hover{outline:1px solid var(--purple)}
+  .act-pkg.off{cursor:default;opacity:.55}.act-pkg.off:hover{outline:0}
+  .act-relc{cursor:pointer}
+  .uni-chg.act-info .tx{color:var(--ink2);font-weight:550}
+  .uni-sc.act-pp .dt{background:var(--purple)}
+  .act-strips{display:grid;gap:10px}
+  .act-strip{display:grid;grid-template-columns:190px minmax(0,1fr);gap:6px 12px;align-items:start}
+  .act-strip .act-sl2{font-size:12px;font-weight:700;color:var(--ink2);padding-top:7px}
+  .act-grid td.act-nd{text-align:left;padding-left:14px;font-style:italic}
+  .act-grid tr.act-edge-row td{border-top:1px dashed #8fb8ff;background:transparent}
+  .act-ver th,.act-ver td{padding:8px 10px}
+  @media(max-width:760px){
+    .act-strip{grid-template-columns:minmax(0,1fr);gap:4px}
+    .act-strip .act-sl2{padding-top:0}
+    .act-strip .uni-scs,.act-strip .uni-xp,.act-strip .uni-acs{min-width:0}
+  }
+  @media(max-width:430px){      /* a phone tile: label, number, "−3% · 4 wks" and its chip — a tap shows the rest */
+    .act-t .act-lg{display:none}.act-t .act-sh{display:inline}
+    .act-t:not(.open) .act-x{display:none}.act-t{cursor:pointer}.act-pt{cursor:default}
+    .act-t .v{font-size:24px}
+  }
 </style>
 </head>
 <body>
@@ -395,6 +435,7 @@
       <li><button data-screen="baseline"><span class="i">📐</span> Baseline</button></li>
       <li><button data-screen="mediation"><span class="i">🔗</span> Mediation</button></li>
       <li><button data-screen="roas"><span class="i">💰</span> Marketing ROAS</button></li>
+      <li><button data-screen="active"><span class="i">👥</span> Active users</button></li>
       <li><button data-screen="uninstall"><span class="i">🚪</span> Uninstall</button></li>
     </ul>
     <div class="nav-lbl">Act</div>
@@ -555,6 +596,7 @@ const TITLES={overview:["Portfolio Overview","Live · engine-computed"],placemen
   countries:["Country Strategy","Per-geo · per-app"],baseline:["Baseline & Market","Standard ranges · eCPM trend"],mediation:["Mediation","Network competition"],
   reco:["Recommendations","Ranked · with uplift"],health:["Account Health & Compliance","IVT · consent · app-ads.txt"],
   roas:["Marketing ROAS","Google Ads spend vs revenue"],
+  active:["Active users","Returning users, comebacks, time & ad revenue (GA4)"],
   uninstall:["Uninstall","Installs vs uninstalls (GA4)"],
   datewise:["Date-wise Report","Har din · spend · installs · revenue · P/L"],
   settings:["Accounts & Apps","Connect · auto-sync"]};
@@ -609,6 +651,7 @@ function appSelHtml(){ const _vapps=(DATA.apps||[]).filter(a=>appVisibleByName(a
   return '<option value="">All apps ('+_vapps.length+')</option>'+(APP&&!_vapps.some(a=>a.name===APP)?opt(APP):'')+_vapps.map(a=>opt(a.name)).join(''); }
 function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; APP=a;
   if(UNIAPP&&uniName(UNIAPP)!==a) UNIAPP='';   // the header left the app whose Uninstall detail was open: close it (never one app under "All apps")
+  if(ACTAPP&&actName(ACTAPP)!==a) ACTAPP='';   // … and the Active users tab's
   render(); show(cur==='reportcard'?'placements':cur); window.scrollTo({top:0}); }
 function searchCountries(q){ q=(q||'').trim().toUpperCase(); document.querySelectorAll('#cty-tbody tr').forEach((r,i)=>{ const n=(r.getAttribute('data-c')||'').toUpperCase(); r.style.display=(q?n.includes(q):i<30)?'':'none'; }); }
 
@@ -670,8 +713,8 @@ function render(){
   window.__ax=null;              // invalidate the cached calendar axis (data may have changed)
   const root=document.getElementById('screens');root.innerHTML='';
   root.append(renderOverview(),renderPlacements(),renderReport(),renderAppDetail(),renderMovers(),renderAlerts(),
-              renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderUninstall(),renderDateWise(),renderReco(),renderHealth(),renderSettings());
-  const _uw=((DATA.uninstall&&DATA.uninstall.alert_counts)||{}).warning||0;   // uninstall (GA4) warnings join the badge
+              renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderActive(),renderUninstall(),renderDateWise(),renderReco(),renderHealth(),renderSettings());
+  const _uw=(((DATA.uninstall&&DATA.uninstall.alert_counts)||{}).warning||0)+(((DATA.active||{}).alert_counts||{}).warning||0);   // uninstall + active users (GA4) warnings join the badge
   const c=DATA.alerts.counts;document.getElementById('nav-alert').textContent=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length)+_uw;
   {const _tb=document.getElementById('tab-alert');if(_tb){const _n=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length)+_uw;_tb.textContent=_n;_tb.classList.toggle('on',_n>0);}}
   const sel=document.getElementById('appsel');
@@ -719,6 +762,9 @@ async function refreshData(){
     catch(_){ const r=await fetch(API_BASE+"/dashboard",{cache:"no-store"}); DATA=await r.json(); }
     if(UNI&&DATA.uninstall&&DATA.uninstall.asset_v!==UNIVER){ UNI=null; UNICOH={}; UNICOHERR={}; }   // new GA4 build → re-fetch the lazy uninstall detail
     UNIERR=false;                                                          // a failed uninstall load retries on the next open
+    if(DATA.active&&DATA.active.asset_v!==ACTVER){ const sg={}; actRows().forEach(r=>{ sg[r.key]=r.sig; });   // new Active build → drop the apps whose file changed
+      Object.keys(ACTD).forEach(k=>{ if(sg[k]!==ACTSIG[k]){ delete ACTD[k]; delete ACTSIG[k]; } }); ACTVER=DATA.active.asset_v; }
+    ACTERR={};
     render();
     if(cur==='appdetail'&&ADAPP) openAppDetail(ADAPP);                     // stay where the user was
     else if(cur==='reportcard'&&PPID) goPlacement(PPID);
@@ -749,6 +795,7 @@ function show(id){
   if(id==='mediation') loadMED(()=>medRerender());   // lazy-fetch daily-by-source → window to period
   if(id==='deductions') loadDED(()=>dedRerender());  // lazy-fetch per-unit decay → window to period
   if(id==='uninstall') loadUNI(()=>uniRerender());   // lazy-fetch the GA4 uninstall detail (uninstall.json.gz)
+  if(id==='active') actEnsure();                     // the open app's active_<key>.json.gz (also after setApp on this screen)
   if(id==='placements'){const a=document.getElementById('pl-apps'),d=document.getElementById('pl-detail');if(a&&d){a.style.display='';d.style.display='none';}DETAIL_OPEN=false;}
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.dataset.screen===id));
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
@@ -764,7 +811,7 @@ function _navSave(){
     const on=document.querySelector('.screen.on'); const screen=on?on.dataset.screen:'overview';
     localStorage.setItem('navstate', JSON.stringify({screen, app:APP, range:RANGE,
       adapp:(typeof ADAPP!=='undefined'?ADAPP:''), ppid:(typeof PPID!=='undefined'?PPID:''),
-      uniapp:(typeof UNIAPP!=='undefined'?UNIAPP:''), t:Date.now()}));
+      uniapp:(typeof UNIAPP!=='undefined'?UNIAPP:''), actapp:(typeof ACTAPP!=='undefined'?ACTAPP:''), t:Date.now()}));
   }catch(e){}
 }
 function _navRestore(){
@@ -772,6 +819,7 @@ function _navRestore(){
   if(!n||!n.screen||(n.t&&Date.now()-n.t>12*3600*1000)){ render(); return; }   // none/stale → normal (Overview)
   if(n.app!=null) APP=n.app; if(n.range) RANGE=n.range;
   if(n.uniapp!=null) UNIAPP=n.app?n.uniapp:'';   // Uninstall tab: the app whose detail was open — only with its header App
+  if(n.actapp!=null) ACTAPP=n.app?n.actapp:'';   // Active users tab: the same
   render();                                  // rebuild every screen with the restored app/period (ends on Overview)
   try{
     if(n.screen==='appdetail' && n.adapp && (DATA.apps||[]).some(a=>a.name===n.adapp)){ openAppDetail(n.adapp); return; }
@@ -1211,6 +1259,9 @@ function bMon(m){ if(!m||m.length<7)return m||''; const MO=['Jan','Feb','Mar','A
 //   xnum     – numeric x (D0…D390 spaced by their value, not by index); labels skip when they would collide
 //   ptLabels – value written above every dot · dim – [bool] per point → faint dot (thin data)
 //   shade    – {from:i, label} hatched area from point i to the end (provisional days that can still grow)
+//   idp      – a prefix for the chart's own SVG ids (Active users tab: 'act-', so every id in that tab starts with it)
+//   lines    – [{v:[],color,dash,width}] extra dashed series drawn gap-aware (null = a break, never 0); the first one's value
+//              joins the hover (Active users tab: old users, the normal line)
 function bTrendChart(months, values, opts){
   opts=opts||{}; const fmt=opts.fmt||(v=>''+v); const col=opts.color||'#3dd0f0'; const xlab=opts.xlab||bMon;
   const n=(months||[]).length; if(!n) return '<div class="muted" style="font-size:12px;padding:14px 4px">Trend data nahi</div>';
@@ -1222,7 +1273,9 @@ function bTrendChart(months, values, opts){
   const bLo=(opts.band&&opts.band.lo)||[], bHi=(opts.band&&opts.band.hi)||[];
   const bOk=i=>bLo[i]!=null&&bHi[i]!=null&&!isNaN(+bLo[i])&&!isNaN(+bHi[i]);
   const bMax=bHi.filter((v,i)=>bOk(i)).map(Number);
-  const vmax=(Math.max(...real,...(sp.length?sp:[0]),...bMax,0)*1.08)||1, vmin=0;
+  const XL=(opts.lines||[]).map(l=>({c:l.color||'#8496b5',d:l.dash||'5 4',w:l.width||2,v:(l.v||[]).map(x=>(x==null||x===''||isNaN(+x))?null:+x)}));
+  const xlMax=[]; XL.forEach(l=>l.v.forEach(x=>{ if(x!=null) xlMax.push(x); }));
+  const vmax=(Math.max(...real,...(sp.length?sp:[0]),...bMax,...xlMax,0)*1.08)||1, vmin=0;
   const xn=opts.xnum?months.map(Number):null, x0=xn?Math.min(...xn):0, x1=xn?Math.max(...xn):0;
   const xi=xn?(i=> mL + (x1>x0? pw*(xn[i]-x0)/(x1-x0) : pw/2)):(i=> mL + (n<=1? pw/2 : pw*i/(n-1)));
   const yv=v=> mT + ph*(1-(v-vmin)/((vmax-vmin)||1));
@@ -1272,14 +1325,16 @@ function bTrendChart(months, values, opts){
   let markEl='';
   if(opts.mark){ const mi=months.indexOf(opts.mark); if(mi>=0){ const mx=xi(mi).toFixed(1);
     markEl=`<line x1="${mx}" y1="${mT}" x2="${mx}" y2="${(mT+ph).toFixed(1)}" stroke="#ffd479" stroke-width="1.4" stroke-dasharray="4 4"/><circle cx="${mx}" cy="${yv(vals[mi]).toFixed(1)}" r="5.5" fill="#ffd479"/><text x="${mx}" y="${(mT-3).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="700" fill="#ffd479">${fmt(vals[mi])}</text>`; } }
-  bTrendChart._n=(bTrendChart._n||0)+1; const gid='gBT'+bTrendChart._n;   // unique gradient id per chart
+  bTrendChart._n=(bTrendChart._n||0)+1; const gid=(opts.idp||'')+'gBT'+bTrendChart._n;   // unique gradient id per chart (idp: a tab's id prefix)
   // hover layer: a transparent overlay snaps to the nearest point → guide line + dot + value label
-  const pts=vals.map((v,i)=>(G&&v==null)?null:({x:+xi(i).toFixed(1),y:+yv(v).toFixed(1),l:xlab(months[i]),v:fmt(v),s:sp.length?fmt(sp[i]):null,sy:sp.length?+yv(sp[i]).toFixed(1):null})).filter(p=>p);   // gaps: hover skips missing days
+  const x0v=i=>(!sp.length&&XL.length&&XL[0].v[i]!=null)?XL[0].v[i]:null;   // the first extra line joins the hover (no spend)
+  const pts=vals.map((v,i)=>(G&&v==null)?null:({x:+xi(i).toFixed(1),y:+yv(v).toFixed(1),l:xlab(months[i]),v:fmt(v),s:sp.length?fmt(sp[i]):(x0v(i)!=null?fmt(x0v(i)):null),sy:sp.length?+yv(sp[i]).toFixed(1):(x0v(i)!=null?+yv(x0v(i)).toFixed(1):null)})).filter(p=>p);   // gaps: hover skips missing days
+  const c2=(!sp.length&&XL.length)?XL[0].c:'#e6b84e';
   const ptsAttr=JSON.stringify(pts).replace(/&/g,'&amp;').replace(/'/g,'&#39;');
   const hov=`<line class="bcg" x1="0" x2="0" y1="${mT}" y2="${(mT+ph).toFixed(1)}" stroke="#cfe8ff" stroke-opacity=".4" stroke-width="1" style="visibility:hidden;pointer-events:none"/>`
     +`<circle class="bch" r="4.8" fill="${col}" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
-    +`<circle class="bch2" r="4.2" fill="#e6b84e" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
-    +`<g class="bct" style="visibility:hidden;pointer-events:none"><rect class="bctbg" rx="7" fill="#0b1220" stroke="#38507a" stroke-width="1"/><text class="bctd" font-size="11" font-weight="600" fill="#8496b5"></text><circle class="bcrdot" r="3.4" fill="${col}"/><text class="bctr" font-size="13.5" font-weight="700" fill="#eaf6ff"></text><circle class="bcsdot" r="3.4" fill="#e6b84e"/><text class="bcts" font-size="13.5" font-weight="700" fill="#eaf6ff"></text></g>`
+    +`<circle class="bch2" r="4.2" fill="${c2}" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
+    +`<g class="bct" style="visibility:hidden;pointer-events:none"><rect class="bctbg" rx="7" fill="#0b1220" stroke="#38507a" stroke-width="1"/><text class="bctd" font-size="11" font-weight="600" fill="#8496b5"></text><circle class="bcrdot" r="3.4" fill="${col}"/><text class="bctr" font-size="13.5" font-weight="700" fill="#eaf6ff"></text><circle class="bcsdot" r="3.4" fill="${c2}"/><text class="bcts" font-size="13.5" font-weight="700" fill="#eaf6ff"></text></g>`
     +`<rect x="${mL}" y="${mT}" width="${pw}" height="${ph.toFixed(1)}" fill="transparent" style="cursor:crosshair" onmousemove="bChartHover(event,this)" onmouseleave="bChartLeave(this)"/>`;
   let spEl='';
   if(sp.length){ const scol=opts.spendColor||'#e6b84e';
@@ -1287,6 +1342,8 @@ function bTrendChart(months, values, opts){
     const sdots=sp.map((v,i)=>`<circle cx="${xi(i).toFixed(1)}" cy="${yv(v).toFixed(1)}" r="${n>28?1.8:2.4}" fill="${scol}"/>`).join('');
     const _sl=n-1;
     spEl=`<path d="M${sline}" fill="none" stroke="${scol}" stroke-width="2" stroke-dasharray="5 3"/>${sdots}<circle cx="${xi(_sl).toFixed(1)}" cy="${yv(sp[_sl]).toFixed(1)}" r="4" fill="${scol}"/>`; }
+  XL.forEach(l=>{ runs(i=>l.v[i]!=null).forEach(sg=>{ if(sg.length<2) return;
+    spEl+=`<path d="M${sg.map(i=>`${xi(i).toFixed(1)} ${yv(l.v[i]).toFixed(1)}`).join(' L')}" fill="none" stroke="${l.c}" stroke-width="${l.w}" stroke-dasharray="${l.d}"/>`; }); });
   const sh=opts.shade, shOn=!!(sh&&sh.from!=null&&sh.from>=0&&sh.from<n);
   let shadeEl='';
   if(shOn){ const sx=Math.max(mL,xi(sh.from)-(n>1&&!xn?pw/(n-1)/2:0));
@@ -1475,6 +1532,10 @@ function renderAlerts(){
   // uninstall (GA4) alerts — open ones from DATA.uninstall (App-filtered); a bad payload just means none shown
   let uAl=[],uCards=''; try{ uAl=uniAlertsFor(); uCards=uniAlertCards(uAl); }catch(e){ uAl=[]; uCards=''; }
   uAl.forEach(x=>{ if(x.severity==='warning'||x.severity==='watch') cc[x.severity]=(cc[x.severity]||0)+1; });
+  // active users (GA4) alerts — DATA.active (App-filtered); none → not a byte of markup more
+  let aAl=[],aCards=''; try{ aAl=actAlertsFor(); aCards=aAl.length?actAlertCards(aAl):''; }catch(e){ aAl=[]; aCards=''; }
+  if(!aCards) aAl=[];
+  aAl.forEach(x=>{ if(!x.linked&&(x.severity==='warning'||x.severity==='watch')) cc[x.severity]=(cc[x.severity]||0)+1; });   // linked: the Update impact card counts it
   const pidOf=(nm)=>{const p=DATA.placements.find(p=>p.name===nm);return p?p.id:'';};
   const mlabel={revenue:'Revenue',requests:'Requests',match_rate:'Match rate',show_rate:'Show rate',ctr:'CTR'};
   const cards=items.map(x=>{const sev=x.severity==='critical'?'crit':x.severity;
@@ -1491,9 +1552,11 @@ function renderAlerts(){
     return `<div class="alert ${sev}" data-sev="${x.severity}" data-metrics="${metricList}"><div style="font-size:17px">${ICON[x.severity]}</div><div class="abody"><div class="atitle">${x.place}${lost}${x.country&&x.country!=='All'?`<span class="geochip ${(x.country||'').includes('localized')?'loc':''}">${x.country}</span>`:''}</div><div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18)}<span>· <b style="color:var(--ink2)">${size}</b></span></div><div style="margin:9px 0 2px;display:grid;gap:5px">${rows}</div><div class="acause" style="margin-top:8px">💡 ${cause}</div><div class="aact"><span class="abtn pri" onclick="goPlacement('${x.id||pidOf(x.place)}')">View placement →</span></div></div></div>`;}).join('');
   const allOk=`<div class="card" style="text-align:center;padding:26px"><div style="font-size:28px">✅</div><div style="font-weight:750;color:#fff;margin-top:6px">Sab theek — koi badi placement me dikkat nahi</div><div class="muted" style="font-size:13px;margin-top:4px">Chhoti $1-5/day placements ka noise hata diya hai. Jab bhi kisi ${APP||'badi'} placement me revenue/requests sharp gire ya IVT ka signal aaye, wahi yahan dikhega.</div></div>`;
   // column: uninstall cards first (own subheading), then placement cards; ✅ "Sab theek" only when BOTH are empty
+  const gCards=uCards||aCards;   // any GA4 cards (uninstall / active users) above the placements
   const list=(uCards?`<div class="faint al-sub" style="font-size:11.5px">🚪 Uninstall (GA4)</div>${uCards}`:'')
-    +(cards?(uCards?`<div class="faint al-sub" style="font-size:11.5px;margin-top:6px">📍 Placements (AdMob)</div>`:'')+cards
-           :(uCards?`<div class="muted" style="font-size:12.5px;padding:4px 2px">Placements me koi dikkat nahi.</div>`:allOk));
+    +(aCards?`<div class="faint al-sub" style="font-size:11.5px${uCards?';margin-top:6px':''}">👥 Active users (GA4)</div>${aCards}`:'')
+    +(cards?(gCards?`<div class="faint al-sub" style="font-size:11.5px;margin-top:6px">📍 Placements (AdMob)</div>`:'')+cards
+           :(gCards?`<div class="muted" style="font-size:12.5px;padding:4px 2px">Placements me koi dikkat nahi.</div>`:allOk));
   const pctTxt=((a.min_share||0.005)*100).toFixed(1)+'%';
   const minU=a.min_usd?money(a.min_usd):null;
   const appFloor=(APP&&a.floor&&typeof a.floor==='object')?a.floor[APP]:null;
@@ -1501,9 +1564,9 @@ function renderAlerts(){
   const rules=[['Koi metric = 0 (band)','Critical','p-r'],['Revenue drop > 40%','Warn','p-y'],['Requests drop > 50%','Warn','p-y'],['Match rate drop > 20pt','Warn','p-y'],['CTR spike > 3× (IVT)','Critical','p-r'],['Show rate drop > 15pt','Watch','p-b']];
   if(DATA.uninstall) rules.push(['Uninstall % (D-checkpoints) ≥2pt, pakka badlav','Warn','p-y'],['Uninstall rate /1k jhatka ya dheere badlav','Warn','p-y'],['Uninstall kam hua','Good','p-g']);
   s.innerHTML=`<h2 class="sc">Alerts</h2><p class="scd">Sirf <b>badi (paise wali)</b> placements ke problems — sabse zyada <b>$ nuksan</b> wale sabse upar. Chhoti placements ka noise hata diya.${thr?` <span class="faint">· ${thr}</span>`:''}</p>
-    <div class="row c4" style="margin-bottom:14px">${kpi('🔴 Critical',cc.critical||0,'zero / IVT','down')}${kpi('🟠 Warning',cc.warning||0,'sharp drop','flat')}${kpi('🟡 Watch',cc.watch||0,'keep an eye','muted')}${kpi('Total issues',items.length+uAl.length,APP||'material only','muted')}</div>
+    <div class="row c4" style="margin-bottom:14px">${kpi('🔴 Critical',cc.critical||0,'zero / IVT','down')}${kpi('🟠 Warning',cc.warning||0,'sharp drop','flat')}${kpi('🟡 Watch',cc.watch||0,'keep an eye','muted')}${kpi('Total issues',items.length+uAl.length+aAl.filter(x=>!x.linked).length,APP||'material only','muted')}</div>
     ${rangeAlertCard()}
-    <div class="chips"><span class="chip on" onclick="filterAlerts('all')">All</span><span class="chip" onclick="filterAlerts('critical')">🔴 Critical</span><span class="chip" onclick="filterAlerts('warning')">🟠 Warning</span><span class="chip" style="margin-left:8px" onclick="filterAlerts('revenue')">Revenue</span><span class="chip" onclick="filterAlerts('requests')">Requests</span><span class="chip" onclick="filterAlerts('match_rate')">Match rate</span><span class="chip" onclick="filterAlerts('ctr')">CTR</span>${DATA.uninstall?`<span class="chip" onclick="filterAlerts('uninstall')">🚪 Uninstall</span>`:''}</div>
+    <div class="chips"><span class="chip on" onclick="filterAlerts('all')">All</span><span class="chip" onclick="filterAlerts('critical')">🔴 Critical</span><span class="chip" onclick="filterAlerts('warning')">🟠 Warning</span><span class="chip" style="margin-left:8px" onclick="filterAlerts('revenue')">Revenue</span><span class="chip" onclick="filterAlerts('requests')">Requests</span><span class="chip" onclick="filterAlerts('match_rate')">Match rate</span><span class="chip" onclick="filterAlerts('ctr')">CTR</span>${DATA.uninstall?`<span class="chip" onclick="filterAlerts('uninstall')">🚪 Uninstall</span>`:''}${aCards?`<span class="chip" onclick="filterAlerts('active')">👥 Active users</span>`:''}</div>
     <div class="row c3"><div class="span2" style="display:grid;gap:10px;align-content:start">${list}</div>
     <div style="display:grid;gap:14px;align-content:start">
       <div class="card"><div class="ct"><h3>Alert rules</h3></div><div class="muted" style="font-size:12px;margin:-4px 0 10px">Sirf un placements pe jinki revenue <b style="color:var(--ink2)">us app ke total ka ≥${pctTxt}</b> ho${minU?` (ya min ${minU}/day)`:''}${appFloor!=null?` — ${APP} ≈ ${money(appFloor)}/day`:''} — improvements yahan nahi (wo Movers me).</div>${rules.map((r,i)=>`<div class="rule"><span class="tgl"></span><div style="flex:1">${r[0]}</div><span class="pill ${r[2]}">${r[1]}</span></div>`).join('')}<div style="font-size:11px;color:var(--muted);margin-top:9px">Compare: <b>latest poora din</b> (kal) vs <b>pichhle 7 dino ka median</b>. Aaj (adhura din) count nahi hota. Har data pull pe check.</div></div>
@@ -2650,31 +2713,43 @@ function uniPX(){ UNIPRE=!UNIPRE; UNITRIPAGE=0; uniRerender(); }   // "Show / Hi
 function uniSX(k){ UNISTEXP=UNISTEXP===k?'':k; uniRerender(); }   // All apps: open / close one status chip's app list
 // an app's "What changed?" row → its section: an install-week change → the full table (opened), a rate change → the daily chart
 // (scrolled to just under the sticky top bar — its height differs on a phone — never beneath it)
-function uniJump(sec){ if(sec==='uni-cp'&&!UNICPEXP){ UNICPEXP=true; uniRerender(); }
+function uniJump(sec,t){ if(sec==='uni-cp'&&!UNICPEXP){ UNICPEXP=true; uniRerender(); }
   const e=document.getElementById(sec); if(!e||!e.getBoundingClientRect) return;
-  const t=document.querySelector('.topbar'), off=((t&&t.offsetHeight)||0)+8, y=window.scrollY||window.pageYOffset||0;
+  const tb=document.querySelector('.topbar'), off=((tb&&tb.offsetHeight)||0)+8, y=window.scrollY||window.pageYOffset||0;
   window.scrollTo({top:Math.max(0,e.getBoundingClientRect().top+y-off),behavior:'smooth'}); }
 function uniTNX(){ UNITIMEXP=!UNITIMEXP; uniRerender(); }   // "⏱️ When will I know?": open / close
-// 📦 Update impact: open one block ('-' = close the open one) · older blocks · "How we compare" · All apps "Recent updates"
-function uniImpX(k){ UNIIMPOPEN=k; uniRerender(); }
-function uniImpAllX(){ const f=uniImpFind(uniCurDet(),UNIIMPOPEN), S=uniImpShow(), cur=UNIIMPALL||!!(f&&f.i>=S);
-  UNIIMPALL=!cur; if(!UNIIMPALL&&f&&f.i>=S) UNIIMPOPEN=''; uniRerender(); }
-function uniImpHowX(){ UNIIMPHOW=!UNIIMPHOW; uniRerender(); }
-function uniUF(k){ UNIUPF=UNIUPF===k?'':k; UNIUPALL=false; uniRerender(); }   // one verdict's updates only / all again
-function uniUPX(){ UNIUPALL=!UNIUPALL; uniRerender(); }
+// 📦 Update impact: ONE card, shown in two tabs — t = 'uni' (Uninstall; the default, its ids uni-…, state UNIIMP* / UNIUP*)
+// or 'act' (Active users; ids act-…, state ACTIMP* / ACTUP*). Every onclick emitted in 'act' passes 'act' (impA); with t
+// left out the markup is exactly the Uninstall tab's
+const IMPT={uni:{p:'uni-',scr:'uninstall',rr:()=>uniRerender(),det:()=>uniCurDet(),c:()=>UNI&&UNI.consts&&UNI.consts.impact,open:id=>uniOpen(id,true)},
+  act:{p:'act-',scr:'active',rr:()=>actRerender(),det:()=>actCurDet(),c:()=>DATA&&DATA.active&&DATA.active.consts&&DATA.active.consts.impact,open:id=>actOpen(id,true)}};
+const impT=t=>t==='act'?'act':'uni', impA=t=>t==='act'?",'act'":'';
+function impS(t){ return impT(t)==='act'?{open:ACTIMPOPEN,all:ACTIMPALL,how:ACTIMPHOW,uf:ACTUPF,uall:ACTUPALL,jump:ACTIMPJUMP,jt:ACTIMPJT}
+  :{open:UNIIMPOPEN,all:UNIIMPALL,how:UNIIMPHOW,uf:UNIUPF,uall:UNIUPALL,jump:UNIIMPJUMP,jt:UNIIMPJT}; }
+function impSet(t,o){ const h=k=>Object.prototype.hasOwnProperty.call(o,k);
+  if(impT(t)==='act'){ if(h('open')) ACTIMPOPEN=o.open; if(h('all')) ACTIMPALL=o.all; if(h('how')) ACTIMPHOW=o.how; if(h('uf')) ACTUPF=o.uf; if(h('uall')) ACTUPALL=o.uall; if(h('jump')) ACTIMPJUMP=o.jump; if(h('jt')) ACTIMPJT=o.jt; }
+  else { if(h('open')) UNIIMPOPEN=o.open; if(h('all')) UNIIMPALL=o.all; if(h('how')) UNIIMPHOW=o.how; if(h('uf')) UNIUPF=o.uf; if(h('uall')) UNIUPALL=o.uall; if(h('jump')) UNIIMPJUMP=o.jump; if(h('jt')) UNIIMPJT=o.jt; } }
+// open one block ('-' = close the open one) · older blocks · "How we compare" · All apps "Recent updates"
+function uniImpX(k,t){ impSet(t,{open:k}); IMPT[impT(t)].rr(); }
+function uniImpAllX(t){ const s=impS(t), f=uniImpFind(IMPT[impT(t)].det(),s.open), S=uniImpShow(t), cur=s.all||!!(f&&f.i>=S);
+  impSet(t,{all:!cur}); if(cur&&f&&f.i>=S) impSet(t,{open:''}); IMPT[impT(t)].rr(); }
+function uniImpHowX(t){ impSet(t,{how:!impS(t).how}); IMPT[impT(t)].rr(); }
+function uniUF(k,t){ impSet(t,{uf:impS(t).uf===k?'':k,uall:false}); IMPT[impT(t)].rr(); }   // one verdict's updates only / all again
+function uniUPX(t){ impSet(t,{uall:!impS(t).uall}); IMPT[impT(t)].rr(); }
 // a 📦 line / badge in the install-week table (or a "What changed?" row) → that update's block: opened (older blocks
 // unfolded when it is one of them) and scrolled to. key = a block key or any of its releases' keys (uniRelKey)
-function uniImp(key){ const f=uniImpFind(uniCurDet(),key); if(!f) return;
-  UNIIMPOPEN=f.b.key; if(f.i>=uniImpShow()) UNIIMPALL=true; UNIIMPJUMP=f.b.key; UNIIMPJT=Date.now(); uniRerender(); uniImpJumpNow(); }
+function uniImp(key,t){ const f=uniImpFind(IMPT[impT(t)].det(),key); if(!f) return;
+  impSet(t,{open:f.b.key}); if(f.i>=uniImpShow(t)) impSet(t,{all:true}); impSet(t,{jump:f.b.key,jt:Date.now()}); IMPT[impT(t)].rr(); uniImpJumpNow(t); }
 // from All apps "Recent updates", an Alerts-screen card or an All apps "What changed?" row: that app, that update's block
-function uniImpGo(id,key){ show('uninstall'); UNIIMPOPEN=key||''; UNIIMPALL=false; UNIIMPJUMP=key||''; UNIIMPJT=Date.now(); uniOpen(id,true); uniImpJumpNow(); }
+// (t: in the Uninstall tab or the Active users tab — the same app, its own copy of the card)
+function uniImpGo(id,key,t){ show(IMPT[impT(t)].scr); impSet(t,{open:key||'',all:false,jump:key||'',jt:Date.now()}); IMPT[impT(t)].open(id); uniImpJumpNow(t); }
 // scroll to the pending block once it is laid out (a screen re-rendered while still hidden has no position yet); a jump
 // that could not happen within 15 s is dropped, so it never fires later on an unrelated re-render
 let UNIIMPJT=0;
-function uniImpJumpNow(){ const k=UNIIMPJUMP; if(!k) return; if(Date.now()-UNIIMPJT>15000){ UNIIMPJUMP=''; return; }
-  const f=uniImpFind(uniCurDet(),k), id='uni-imp-'+(f?f.b.key:k), e=document.getElementById(id);
+function uniImpJumpNow(t){ const s=impS(t), k=s.jump; if(!k) return; if(Date.now()-s.jt>15000){ impSet(t,{jump:''}); return; }
+  const f=uniImpFind(IMPT[impT(t)].det(),k), id=IMPT[impT(t)].p+'imp-'+(f?f.b.key:k), e=document.getElementById(id);
   const r=(e&&e.getBoundingClientRect)?e.getBoundingClientRect():null; if(!r||!(r.height>0)) return;   // not on screen yet: stays pending
-  UNIIMPJUMP=''; uniJump(id); }
+  impSet(t,{jump:''}); uniJump(id,t); }
 // ---- small helpers (dates are ISO YYYY-MM-DD, done in UTC so no local-timezone day shift) ----
 const _uD=s=>Date.parse(s+'T00:00:00Z');
 function uniAdd(s,n){ return new Date(_uD(s)+n*864e5).toISOString().slice(0,10); }
@@ -2682,7 +2757,7 @@ function uniDiff(a,b){ return Math.round((_uD(b)-_uD(a))/864e5); }              
 // a date says its year when that isn't obvious: outside the current year, or more than ~4 months back (the engine's
 // YEAR_CLEAR_DAYS — alert texts follow the same rule): "12–18 Sep" · "16–22 Mar 2026" · "22–28 Oct 2025"
 function uniRef(){ return (DATA&&DATA.today_date)||(DATA&&DATA.uninstall&&DATA.uninstall.data_till_max)||new Date().toISOString().slice(0,10); }
-function uniYr(d){ const c=UNI&&UNI.consts, k=(c&&c.year_clear_days!=null)?+c.year_clear_days:120, R=uniRef();
+function uniYr(d){ const c=(UNI&&UNI.consts)||(DATA&&DATA.active&&DATA.active.consts), k=(c&&c.year_clear_days!=null)?+c.year_clear_days:120, R=uniRef();
   return !!d&&(d.slice(0,4)!==R.slice(0,4)||uniDiff(d,R)>k); }
 function uniD(d){ return d?fmtD(d)+(uniYr(d)?' '+d.slice(0,4):''):''; }                    // "12 Sep" · "16 Mar 2026"
 // "12–18 Sep" · "28 Aug–3 Sep" · "12 Sep" · "16–22 Mar 2026" · across a year BOTH years: "29 Dec 2025–4 Jan 2026",
@@ -2999,7 +3074,8 @@ function uniOldRow(o,app,id){ const x=Object.assign({},o,{family:'cohort',old:tr
     +`${app?`<span class="ap" title="${hAttr(app)}">${uniAppTag(app,16)}</span>`:''}<span class="tx">${hAttr(uniPlain(x))}</span>`
     +`<span class="mt"><span class="dt">${uniWhen(x)}</span></span><span class="ac">${app?'<span class="lnk">Open →</span>':''}</span></div>`; }
 // a collapsed list's header row: "▸ Older changes (3)  Show"
-function uniFold(open,label,n,fn){ return `<div class="uni-fold" onclick="${fn}()"><span class="cv${open?' on':''}">▸</span><span>${label} (${n})</span><span class="lnk" style="margin-left:auto;font-size:12px">${open?'Hide':'Show'}</span></div>`; }
+function uniFold(open,label,n,fn){ return uniFoldX(open,label,n,fn+'()'); }
+function uniFoldX(open,label,n,call){ return `<div class="uni-fold" onclick="${call}"><span class="cv${open?' on':''}">▸</span><span>${label} (${n})</span><span class="lnk" style="margin-left:auto;font-size:12px">${open?'Hide':'Show'}</span></div>`; }
 function uniOldDays(){ const c=UNI&&UNI.consts; return (c&&c.alert_recent_days!=null)?+c.alert_recent_days:60; }
 function uniOldNote(){ const d=uniOldDays();
   return `<div class="faint" style="font-size:11px;margin:6px 0 2px;line-height:1.5">ℹ️ ${d} din se purane installs ke badlaav — sirf jaankari. Inka alert nahi aata, upar ki ginti me nahi.</div>`; }
@@ -3474,8 +3550,8 @@ const UNI_SECTIONS=[uniDailyCard,uniCurveCard,uniTriCard];   // Step 4: push (a)
 // back next day / after 7 days (D1 / D7), sessions and time per returning user (+ the new version vs the old ones on the
 // same days), ad revenue per active user (AdMob ÷ GA4) — plus uninstall on install day, and one verdict. A row is NEVER
 // dropped: no value = "—", its status pill and why. Only settled days are judged; newer days show faded with "*".
-function uniIC(k,d){ const c=UNI&&UNI.consts&&UNI.consts.impact; return (c&&c[k]!=null&&!isNaN(+c[k]))?+c[k]:d; }
-function uniImpShow(){ return Math.max(1,uniIC('impact_show',5)); }
+function uniIC(k,d,t){ const c=(impT(t)==='act'?IMPT.act.c():null)||(UNI&&UNI.consts&&UNI.consts.impact); return (c&&c[k]!=null&&!isNaN(+c[k]))?+c[k]:d; }
+function uniImpShow(t){ return Math.max(1,uniIC('impact_show',5,t)); }
 // the engine's rel_key: "ver:<version>@<date>" · "upd@<date>" (a jump in users updating, no version number)
 function uniRelKey(x){ return (x&&x.version!=null&&x.version!=='')?'ver:'+x.version+'@'+x.date:'upd@'+(x?x.date:''); }
 function uniDur(sec){ if(sec==null||sec===''||!isFinite(+sec)) return '—'; const s=Math.max(0,Math.round(+sec));   // "48s" · "5m 20s" · "1h 05m"
@@ -3499,8 +3575,8 @@ function uniCurDet(){ const id=uniCurId(); return ((UNI&&UNI.apps)||[]).find(z=>
 const UNI_VERD={halt:['🛑 HALT','p-r','Bada ya kai pakke nuksaan — staged rollout rok do, hotfix'],hold:['⚠️ HOLD','p-y','Ek pakka nuksaan — agla rollout roko, jaanch karo'],
   continue:['👍 CONTINUE','uni-pn','Koi pakka nuksaan nahi — rollout chalne do'],win:['✅ WIN','p-g','Pakka faayda, koi nuksaan nahi'],pending:['⏳ Too early','uni-pz','Abhi 3 pakke din nahi (ya agla update bahut jaldi aaya — tab faisla nahi hoga)']};
 function uniLvl(l){ return (l&&l!=='pending'&&UNI_VERD[l])?l:'pending'; }
-function uniVerdChip(v){ const k=uniLvl(v&&v.level), d=UNI_VERD[k]; let tip=d[2];
-  if(k==='pending'&&v){ const md=v.min_days!=null?+v.min_days:uniIC('impact_min_days',3);
+function uniVerdChip(v,t){ const k=uniLvl(v&&v.level), d=UNI_VERD[k]; let tip=d[2];
+  if(k==='pending'&&v){ const md=v.min_days!=null?+v.min_days:uniIC('impact_min_days',3,t);
     tip=uniNever(v)?String(v.why||'Is update ka faisla nahi hoga'):((v.settled_days!=null&&+v.settled_days>=md&&v.why)?String(v.why):`Abhi ${md} pakke din nahi`); }
   return `<span class="pill ${d[1]}" data-lv="${k}" title="${hAttr(tip)}">${d[0]}</span>`; }
 // a block that can never get a verdict (the next update came before it had 3 After days): final, no level, nothing to wait for
@@ -3609,14 +3685,14 @@ function uniImpRow(spec,r,zmin,H){ const [k,label,,tip,cap]=spec, dh=j=>H&&H[j]?
     +`<td class="uni-num"${dh(1)}${aTip?` title="${hAttr(aTip)}"`:''}>${aMain}${aSubs.map(sub).join('')}</td>`
     +`<td class="uni-num"${dh(2)}${cTip?` title="${hAttr(cTip)}"`:''}>${cMain}</td><td class="st">${uniIStat(R,zmin)}</td></tr>`; }
 // the same days, users on the new version vs users on the older ones (returning users; minus the usual early-updater gap)
-function uniImpVRow(spec,r,zmin,bias,nb,H){ const [k,label]=spec, dh=j=>H&&H[j]?` data-h="${hAttr(H[j])}"`:''; nb=(nb!=null&&isFinite(+nb))?+nb:0;
+function uniImpVRow(spec,r,zmin,bias,nb,H,t){ const [k,label]=spec, dh=j=>H&&H[j]?` data-h="${hAttr(H[j])}"`:''; nb=(nb!=null&&isFinite(+nb))?+nb:0;
   const R=(r&&typeof r==='object')?r:{status:'na',reason:'Is update ka version number nahi — naya vs purana version nahi dekh sakte'};
   const ok=v=>v!=null&&v!==''&&isFinite(+v), f=v=>!ok(v)?null:(k==='ver_time'?uniDur(+v):(+v).toFixed(2)), dash='<span class="faint">—</span>';
   const st=UNI_IST[R.status]?R.status:'na', col=st==='worse'?';color:var(--bad)':(st==='better'?';color:var(--good)':'');
   const o=f(R.old), n=f(R.new), pv=R.prov?UNI_IMP_STAR:'';
   // bias = the usual early-updater gap, already relative (e^β − 1); nb = how many earlier updates it comes from
   const b=ok(R.bias)?+R.bias:(ok(bias)?+bias:null), bt=b==null?'':' — pichhle updates me naye version pe aam farak '+uniChg(b)+' tha, wo hata ke';
-  const known=b!=null&&nb>=uniIC('bias_min',3);
+  const known=b!=null&&nb>=uniIC('bias_min',3,t);
   const adj=!ok(R.adj)?'':(b==null||!nb?`<div class="s" title="${hAttr('Jaldi update karne wale users aam taur pe zyada active hote hain — pehle ke updates se ye aam farak abhi pata nahi, isliye upar wala farak seedha hai')}">usual early-updater gap not known yet</div>`
     :`<div class="s" title="${hAttr('Jaldi update karne wale users aam taur pe zyada active hote hain'+bt+(known?'':' (sirf '+nb+' pichhle update se — abhi pakka nahi)'))}">${uniChg(+R.adj)} after the usual early-updater gap${known?'':' (from '+nb+' '+(nb===1?'update':'updates')+')'}</div>`);
   const dTip=ok(R.n_days)?`${R.n_days} din, dono taraf kaafi users`:'';
@@ -3651,7 +3727,7 @@ function uniImpRef(c){ if(!c) return ''; if(typeof c!=='object') return hAttr(c)
 // read as a finding); "No clear change" when the verdict found none ("Not enough data yet" when no row could be
 // measured). A Worse / Better version-table row joins at the end
 const UNI_IMP_MINI={same:'normal',unsure:'maybe',market:'market',low:'low data',pending:'⏳',na:'—'};
-function uniImpMini(b){ const R=(b&&b.rows)||{}, VR=(b&&b.versions_cmp&&b.versions_cmp.rows)||{}, wb=r=>!!(r&&(r.status==='worse'||r.status==='better'));
+function uniImpMini(b,t){ const R=(b&&b.rows)||{}, VR=(b&&b.versions_cmp&&b.versions_cmp.rows)||{}, wb=r=>!!(r&&(r.status==='worse'||r.status==='better'));
   const cell=(r,t)=>`<span${r.status==='worse'?' class="down"':' class="up"'}>${t}</span>`;
   const parts=UNI_IMP_ROWS.map(([k,,s])=>{ const r=R[k], st=(r&&UNI_IST[r.status])?r.status:'na';
     return wb(r)?cell(r,uniImpEffTxt(k,uniImpEff(r,k)||'—')):`<span>${s} ${UNI_IMP_MINI[st]}</span>`; });
@@ -3659,10 +3735,10 @@ function uniImpMini(b){ const R=(b&&b.rows)||{}, VR=(b&&b.versions_cmp&&b.versio
   const v=(b&&b.verdict)||{}, none=uniLvl(v.level)!=='pending'&&!UNI_IMP_ROWS.some(([k])=>wb(R[k]))&&!UNI_IMP_VROWS.some(([k])=>wb(VR[k]));
   const nw=uniImpJudgedN(b)?UNI_IMP_NONE:UNI_IMP_NODATA;
   return (none?`<b title="${hAttr(nw[1])}">${nw[0]}</b> · `:'')+parts.join(' · '); }
-function uniImpBlock(a,b,open){
+function uniImpBlock(a,b,open,t){
   const v=(b.verdict&&typeof b.verdict==='object')?b.verdict:{}, lv=uniLvl(v.level), key=String(b.key), W=b.windows||{}, bw=W.before||{}, aw=W.after||{}, ad=(b.adoption&&typeof b.adoption==='object')?b.adoption:null;
   const aDays=aw.days!=null&&isFinite(+aw.days)?+aw.days:null, aSet=aw.settled!=null&&isFinite(+aw.settled)?+aw.settled:null;
-  const zmin=(aSet!=null&&aSet<uniIC('win_days',7))?uniIC('z_early',4):uniIC('z_final',3);
+  const zmin=(aSet!=null&&aSet<uniIC('win_days',7,t))?uniIC('z_early',4,t):uniIC('z_final',3,t), P=IMPT[impT(t)].p;
   const pills=[];
   if(lv!=='pending'&&v.early) pills.push('<span class="pill p-b" title="Abhi poore 7 pakke din / D7 nahi — faisla badal sakta hai">Early</span>');
   if(uniImpProv(b)) pills.push('<span class="pill p-b" title="Kuch number naye din ke — late data abhi aa raha, badal sakte hain">Provisional</span>');
@@ -3670,8 +3746,8 @@ function uniImpBlock(a,b,open){
   if(ad&&ad.last!=null&&isFinite(+ad.last)) pills.push(`<span class="pill uni-pn" title="${hAttr(uniAdoptTip(b,a)+(ad.slow?' · dheere pahuncha':''))}">${uniPct(+ad.last)} updated</span>`);
   if(b.alert_id) pills.push('<span class="pill p-p" title="Is update ka alert khula hai — What changed? me dekho">🔔 Alert</span>');
   if(uniNever(v)) pills.push(UNI_NEVER_PILL(v));
-  const idA=hAttr(key), head=`<div class="uni-imp-h" onclick="uniImpX('${open?'-':uniQ(key)}')"><span class="cv${open?' on':''}">▸</span><span class="ht">📦 ${hAttr(uniImpLabel(b))} — ${uniD(b.date)} · Verdict: ${uniVerdChip(v)}</span>${pills.join('')}</div>`;
-  if(!open) return `<div class="uni-imp-b" id="uni-imp-${idA}" data-key="${idA}" data-open="0">${head}<div class="uni-imp-mini">${uniImpMini(b)}</div></div>`;
+  const idA=hAttr(key), head=`<div class="uni-imp-h" onclick="uniImpX('${open?'-':uniQ(key)}'${impA(t)})"><span class="cv${open?' on':''}">▸</span><span class="ht">📦 ${hAttr(uniImpLabel(b))} — ${uniD(b.date)} · Verdict: ${uniVerdChip(v,t)}</span>${pills.join('')}</div>`;
+  if(!open) return `<div class="uni-imp-b" id="${P}imp-${idA}" data-key="${idA}" data-open="0">${head}<div class="uni-imp-mini">${uniImpMini(b,t)}</div></div>`;
   // meta: the two windows, settled days, adoption, then the notes as chips
   const mp=[];
   if(bw.from) mp.push(`Before: <b>${uniSpan(bw.from,bw.to)}</b>`);
@@ -3682,8 +3758,8 @@ function uniImpBlock(a,b,open){
   const nt=(Array.isArray(b.notes)?b.notes:[]).filter(n=>UNI_IMP_NOTES[n]!==null).map(n=>{ const d=UNI_IMP_NOTES[n]||[String(n).replace(/_/g,' '),''];
     return `<span class="pill uni-pz"${d[1]?` title="${hAttr(d[1])}"`:''}>${hAttr(d[0])}</span>`; }).join('');
   const meta=`<div class="uni-imp-m">${mp.join('<span class="faint">·</span>')}${nt}</div>`;
-  const bDays=bw.from&&bw.to?uniDiff(bw.from,bw.to)+1:uniIC('win_days',7);
-  const aH=aDays==null?`After (${uniIC('win_days',7)} days)`:(aSet!=null&&aSet<aDays?`After (${aSet} of ${aDays} days)`:`After (${aDays} ${aDays===1?'day':'days'})`);
+  const bDays=bw.from&&bw.to?uniDiff(bw.from,bw.to)+1:uniIC('win_days',7,t);
+  const aH=aDays==null?`After (${uniIC('win_days',7,t)} days)`:(aSet!=null&&aSet<aDays?`After (${aSet} of ${aDays} days)`:`After (${aDays} ${aDays===1?'day':'days'})`);
   const R=(b.rows&&typeof b.rows==='object')?b.rows:{};
   const main=`<div class="uni-scroll"><table class="uni-imp-t uni-sticky"><thead><tr><th>Metric</th><th>Before (${bDays} ${bDays===1?'day':'days'})</th><th>${aH}</th><th>Change</th><th>Status</th></tr></thead>`
     +`<tbody>${UNI_IMP_ROWS.map(s=>uniImpRow(s,R[s[0]],zmin,[`Before (${bDays} ${bDays===1?'day':'days'})`,aH,'Change'])).join('')}</tbody></table></div>`;
@@ -3697,32 +3773,34 @@ function uniImpBlock(a,b,open){
       :(b.kind==='update'?'':' · aam farak abhi pata nahi (pehle ke updates ka data nahi)'));
   const ver=`<div class="uni-imp-sub">Same days: new version vs old versions</div><div class="faint" style="font-size:11.5px;margin-bottom:6px">${vsub}${vnote}</div>`
     +`<div class="uni-scroll"><table class="uni-imp-t uni-sticky"><thead><tr><th>Metric</th><th>Older versions</th><th>${hAttr(nl)}</th><th>Difference</th><th>Status</th></tr></thead>`
-    +`<tbody>${UNI_IMP_VROWS.map(s=>uniImpVRow(s,VR[s[0]],zmin,bias&&bias[s[0]==='ver_time'?'time':'sessions'],bias&&bias.releases,['Older versions',nl,'Difference'])).join('')}</tbody></table></div>`;
+    +`<tbody>${UNI_IMP_VROWS.map(s=>uniImpVRow(s,VR[s[0]],zmin,bias&&bias[s[0]==='ver_time'?'time':'sessions'],bias&&bias.releases,['Older versions',nl,'Difference'],t)).join('')}</tbody></table></div>`;
   const why=v.why?hAttr(v.why):(lv==='pending'?'Abhi faisle ke liye pakke din kam hain':'—');
   const fin=(!v.final&&v.ready_on)?` <span class="faint">· Final when GA4 data reaches ${uniD(v.ready_on)}</span>`:'';
-  return `<div class="uni-imp-b on" id="uni-imp-${idA}" data-key="${idA}" data-open="1">${head}${meta}${main}${ver}<div class="uni-imp-why"><b>Why:</b> ${why}${fin}</div></div>`; }
-function uniImpHow(){ const th=`<div class="uni-fold" onclick="uniImpHowX()"><span class="cv${UNIIMPHOW?' on':''}">▸</span><span>How we compare</span><span class="lnk" style="margin-left:auto;font-size:12px">${UNIIMPHOW?'Hide':'Show'}</span></div>`;
-  if(!UNIIMPHOW) return th;
-  const c=UNI&&UNI.consts, L=(c&&c.lag_days!=null)?+c.lag_days:2, P=k=>Math.round(uniIC(k,0)*1000)/10, Wd=uniIC('win_days',7);
+  return `<div class="uni-imp-b on" id="${P}imp-${idA}" data-key="${idA}" data-open="1">${head}${meta}${main}${ver}<div class="uni-imp-why"><b>Why:</b> ${why}${fin}</div></div>`; }
+function uniImpHow(t){ const HO=impS(t).how, IC=(k,d)=>uniIC(k,d,t), th=`<div class="uni-fold" onclick="uniImpHowX(${impA(t).slice(1)})"><span class="cv${HO?' on':''}">▸</span><span>How we compare</span><span class="lnk" style="margin-left:auto;font-size:12px">${HO?'Hide':'Show'}</span></div>`;
+  if(!HO) return th;
+  const c=UNI&&UNI.consts, L=(c&&c.lag_days!=null)?+c.lag_days:2, P=k=>Math.round(IC(k,0)*1000)/10, Wd=IC('win_days',7);
   return th+`<ul class="uni-imp-how">
-    <li><b>Before</b> = update se pehle ke ${Wd} din · <b>After</b> = ${Wd} din, jab naya version aadhe users tak pahunch jaaye (${uniIC('rollout_wait',3)} din se zyada intezaar nahi). Har din ko pichhle hafte ke <b>same weekday</b> se milate hain.</li>
-    <li>Sirf <b>pakke din</b>: GA4 ka activity data ~${L+uniIC('act_late_days',3)} din purana hone par pakka. Naye din halke (*) dikhte hain — faisla unse nahi.</li>
+    <li><b>Before</b> = update se pehle ke ${Wd} din · <b>After</b> = ${Wd} din, jab naya version aadhe users tak pahunch jaaye (${IC('rollout_wait',3)} din se zyada intezaar nahi). Har din ko pichhle hafte ke <b>same weekday</b> se milate hain.</li>
+    <li>Sirf <b>pakke din</b>: GA4 ka activity data ~${L+IC('act_late_days',3)} din purana hone par pakka. Naye din halke (*) dikhte hain — faisla unse nahi.</li>
     <li><b>Returning DAU</b> = roz ke active users − us din ke naye installs (purane users). <b>Expected</b> = pichhle hafte ka same din × normal hafta-dar-hafta badlaav + haal ke asli installs ka wapas aana (update se pehle ki wapsi rate se) — isliye ad spend se installs badhe ya ghate, to bhi galat Better / Worse nahi.</li>
     <li><b>D1 / D7</b> = update ke baad install karne walon me se kitne agle din / 7ve din app khole, vs update se pehle install karne wale (same weekdays). Installs ±50% se zyada badle to inka vazan kam (campaign ka mix).</li>
     <li><b>Sessions / time per user</b> sirf purane (returning) users ka — naye installs ka pehla din alag hota hai — aur update se pehle se chal raha hafta-dar-hafta trend hata ke. Haal ke installs (ad spend) bahut badle to purane users ka mix badal jaata hai — tab ye (aur neeche wali table) sirf "Maybe" tak. Neeche wali table: <b>same din</b>, naye version wale vs purane version wale users.</li>
     <li><b>Ad revenue per user</b> = AdMob kamai ÷ GA4 active users, har 1,000 users pe. Update ka hissa = <b>ads (impressions) per user</b> — Worse / Better usi se. Sirf eCPM (ad ka rate) badla aur ads per user wahi = <b>Market</b> (bazaar ka asar, update ka nahi) — verdict me nahi gina.</li>
-    <li><b>Normal trend</b>: update se pehle koi number hafte me ×${Math.exp(uniIC('trend_max_week',0.3)).toFixed(2)} se tez badh / ghat raha ho (launch ya tez growth) to uska aage ka andaza pakka nahi — tab wo row "Low data", sirf seedha Before vs After ("vs before"), verdict me nahi gini.</li>
-    <li><b>Aam utaar-chadhaav</b> = update se pehle ke ${uniIC('null_weeks',8)} hafton me har din yahi Before / After tulna karke dekha ki bina update ke ye kitna hilta hai (roz ke number aapas me jude hote hain — ek din ka noise ÷ din gin kar kam lagta).</li>
-    <li><b>Worse / Better</b> tabhi jab farak us aam utaar-chadhaav se kaafi bada ho (pakka), minimum se zyada ho (DAU ${P('dau_min_rel')||3}%, D1/D7 ${uniIC('ret_min_pp',1.5)} point, sessions / time ${P('use_min_rel')||5}%, ads per user ${P('arpdau_min_rel')||5}%), aur ${uniIC('persist',2)} din lagatar dikhe. Kam users / installs = "Low data".</li>
-    <li><b>Naya vs purana version</b>: jaldi update karne wale users aam taur pe zyada active hote hain — pichhle ${uniIC('bias_min',3)}–${uniIC('bias_max',6)} updates ka ye aam farak hata ke dekhte hain.</li>
-    <li><b>Verdict</b>: 🛑 HALT = bada ya kai pakke nuksaan · ⚠️ HOLD = ek pakka nuksaan · 👍 CONTINUE = koi pakka nuksaan nahi · ✅ WIN = pakka faayda, koi nuksaan nahi (poore ${Wd} pakke din + D7 ke baad hi) · ⏳ Too early = abhi ${uniIC('impact_min_days',3)} pakke din nahi.</li></ul>`; }
+    <li><b>Normal trend</b>: update se pehle koi number hafte me ×${Math.exp(IC('trend_max_week',0.3)).toFixed(2)} se tez badh / ghat raha ho (launch ya tez growth) to uska aage ka andaza pakka nahi — tab wo row "Low data", sirf seedha Before vs After ("vs before"), verdict me nahi gini.</li>
+    <li><b>Aam utaar-chadhaav</b> = update se pehle ke ${IC('null_weeks',8)} hafton me har din yahi Before / After tulna karke dekha ki bina update ke ye kitna hilta hai (roz ke number aapas me jude hote hain — ek din ka noise ÷ din gin kar kam lagta).</li>
+    <li><b>Worse / Better</b> tabhi jab farak us aam utaar-chadhaav se kaafi bada ho (pakka), minimum se zyada ho (DAU ${P('dau_min_rel')||3}%, D1/D7 ${IC('ret_min_pp',1.5)} point, sessions / time ${P('use_min_rel')||5}%, ads per user ${P('arpdau_min_rel')||5}%), aur ${IC('persist',2)} din lagatar dikhe. Kam users / installs = "Low data".</li>
+    <li><b>Naya vs purana version</b>: jaldi update karne wale users aam taur pe zyada active hote hain — pichhle ${IC('bias_min',3)}–${IC('bias_max',6)} updates ka ye aam farak hata ke dekhte hain.</li>
+    <li><b>Verdict</b>: 🛑 HALT = bada ya kai pakke nuksaan · ⚠️ HOLD = ek pakka nuksaan · 👍 CONTINUE = koi pakka nuksaan nahi · ✅ WIN = pakka faayda, koi nuksaan nahi (poore ${Wd} pakke din + D7 ke baad hi) · ⏳ Too early = abhi ${IC('impact_min_days',3)} pakke din nahi.</li></ul>`; }
 // the app's "📦 Update impact" card: newest first — the newest (or the tapped) block open, the others one line each; the
 // newest IMPACT_SHOW listed, older ones behind "Show older updates (n)" (never dropped)
-function uniImpactCard(a){
-  const I=a&&a.impact, hd=`<div class="ct uni-ct"><h3>📦 Update impact</h3><span class="faint" style="font-size:11.5px">every app update · before vs after · newest first</span></div>`;
-  const wrap=h=>`<div class="card" id="uni-impact" style="margin-bottom:14px">${hd}${h}</div>`;
+function uniImpactCard(a,t){
+  const I=a&&a.impact, hd=`<div class="ct uni-ct"><h3>📦 Update impact</h3><span class="faint" style="font-size:11.5px">every app update · before vs after · newest first</span></div>`
+    // the Active users copy: its windows differ from the tiles above it (the two can disagree) — said once, under the title
+    +(impT(t)==='act'?'<div class="faint act-imp-note" style="font-size:11.5px;margin:-4px 0 8px">Ye card = har update ke 7 din pehle vs 7 din baad · upar ke tiles = pichhle 7 pakke din</div>':'');
+  const wrap=h=>`<div class="card" id="${IMPT[impT(t)].p}impact" style="margin-bottom:14px">${hd}${h}</div>`;
   if(!I||typeof I!=='object') return wrap('<div class="uni-empty">⏳ Update impact agle robot run ke baad dikhega — GA4 se sessions, time aur naye users ki wapsi ka data aa raha hai.</div>');
-  const B=uniImpBlocks(a), S=uniImpShow(), F=(I.flags&&typeof I.flags==='object')?I.flags:{}, fl=[];
+  const B=uniImpBlocks(a), S=uniImpShow(t), F=(I.flags&&typeof I.flags==='object')?I.flags:{}, fl=[], st=impS(t);
   if(F.revenue==='none') fl.push(['No AdMob revenue','Is app ki AdMob kamai nahi mili — "Ad revenue per user" nahi dikhega']);
   else if(F.revenue==='partial') fl.push(['AdMob revenue: some days missing','Kuch dino ki AdMob kamai nahi mili — un dino ka "Ad revenue per user" nahi']);
   if(F.ret_from) fl.push([`D1 / D7 from ${uniD(F.ret_from)}`,'GA4 purana user data poora nahi rakhta — isse pehle ke installs ki wapsi nahi mili']);
@@ -3730,27 +3808,27 @@ function uniImpactCard(a){
   if(F.vuse_split===false) fl.push(['Version table: all users','GA4 ne version ke saath naye / purane users alag nahi diye — version table me sab users']);
   if(F.tz_blend) fl.push(['Time zones differ','AdMob aur GA4 ka time zone alag — har din ki kamai ghanton ke hisaab se baanti']);
   const flags=fl.length?`<div class="uni-imp-m" style="margin-top:0">${fl.map(([l,t])=>`<span class="pill uni-pz" title="${hAttr(t)}">${l}</span>`).join('')}</div>`:'';
-  const how=uniImpHow();
+  const how=uniImpHow(t);
   if(!B.length) return wrap(flags+'<div class="uni-empty">No app updates found in GA4 data yet</div>'+how);
-  let oi=-1; if(UNIIMPOPEN!=='-'){ const f=UNIIMPOPEN?uniImpFind(a,UNIIMPOPEN):null; oi=f?f.i:0; }
-  const all=UNIIMPALL||oi>=S, blk=(b,i)=>uniImpBlock(a,b,i===oi);
+  let oi=-1; if(st.open!=='-'){ const f=st.open?uniImpFind(a,st.open):null; oi=f?f.i:0; }
+  const all=st.all||oi>=S, blk=(b,i)=>uniImpBlock(a,b,i===oi,t);
   let body=B.slice(0,S).map(blk).join('');
-  if(B.length>S) body+=`<div class="uni-fold" onclick="uniImpAllX()"><span class="cv${all?' on':''}">▸</span><span>${all?'Hide older updates':'Show older updates ('+(B.length-S)+')'}</span></div>`+(all?B.slice(S).map((b,j)=>blk(b,S+j)).join(''):'');
+  if(B.length>S) body+=`<div class="uni-fold" onclick="uniImpAllX(${impA(t).slice(1)})"><span class="cv${all?' on':''}">▸</span><span>${all?'Hide older updates':'Show older updates ('+(B.length-S)+')'}</span></div>`+(all?B.slice(S).map((b,j)=>blk(b,S+j)).join(''):'');
   return wrap(flags+how+body); }
 // All apps "📦 Recent updates": every visible app's updates of the last IMPACT_LIST_DAYS days (summary row .updates),
 // newest first, with verdict count chips (a tap = only that verdict); a row opens that app at that update's block
-function uniUpdatesCard(rows){
-  const LD=uniIC('impact_list_days',60), has=rows.some(r=>Array.isArray(r.s.updates));
+function uniUpdatesCard(rows,t){
+  const LD=uniIC('impact_list_days',60,t), has=rows.some(r=>Array.isArray(r.s.updates)), st=impS(t), X=impA(t);
   const hd=`<div class="ct uni-ct"><h3>📦 Recent updates</h3><span class="faint" style="font-size:11.5px">last ${LD} days · every app update's verdict</span></div>`;
-  const wrap=h=>`<div class="card" id="uni-updates" style="margin-bottom:14px">${hd}${h}</div>`;
+  const wrap=h=>`<div class="card" id="${IMPT[impT(t)].p}updates" style="margin-bottom:14px">${hd}${h}</div>`;
   if(!has) return wrap('<div class="uni-empty">⏳ Update impact agle robot run ke baad dikhega</div>');
   const L=[]; rows.forEach(r=>(r.s.updates||[]).forEach(u=>{ if(u&&typeof u==='object'&&u.key&&u.date) L.push({s:r.s,a:r.a,u}); }));
   if(!L.length) return wrap(`<div class="uni-ok" style="color:var(--muted)">No app updates in the last ${LD} days</div>`);
   L.sort((p,q)=>(p.u.date<q.u.date?1:(p.u.date>q.u.date?-1:String(p.s.app||'').localeCompare(String(q.s.app||'')))));
   const K=['halt','hold','continue','win','pending'], n={}; K.forEach(k=>{n[k]=0;}); L.forEach(o=>{n[uniLvl(o.u.level)]++;});
-  const F=K.includes(UNIUPF)?UNIUPF:'', sh=F?L.filter(o=>uniLvl(o.u.level)===F):L, MAX=10, vis=UNIUPALL?sh:sh.slice(0,MAX);
+  const F=K.includes(st.uf)?st.uf:'', sh=F?L.filter(o=>uniLvl(o.u.level)===F):L, MAX=10, vis=st.uall?sh:sh.slice(0,MAX);
   const cls={halt:'bad',hold:'watch',continue:'ok',win:'good',pending:'info'};
-  const chips=`<div class="uni-scs" style="margin-bottom:6px">${K.map(k=>`<span class="uni-sc ${cls[k]}${F===k?' on':''}" data-uf="${k}" title="${hAttr(UNI_VERD[k][2])}" onclick="uniUF('${k}')"${n[k]?'':' style="opacity:.55"'}>${UNI_VERD[k][0]} <b>(${n[k]})</b></span>`).join('')}</div>`;
+  const chips=`<div class="uni-scs" style="margin-bottom:6px">${K.map(k=>`<span class="uni-sc ${cls[k]}${F===k?' on':''}" data-uf="${k}" title="${hAttr(UNI_VERD[k][2])}" onclick="uniUF('${k}'${X})"${n[k]?'':' style="opacity:.55"'}>${UNI_VERD[k][0]} <b>(${n[k]})</b></span>`).join('')}</div>`;
   // the update's one-line change (engine head): a Worse / Better row's only — never one the block shows as Normal /
   // Maybe / Low data (checked against the block when it is here) — and the change it was judged on (uniImpEffTxt);
   // none = "No clear change" once there is a verdict, "Not enough data yet" when no row could be measured (judged 0)
@@ -3760,15 +3838,15 @@ function uniUpdatesCard(rows){
   const row=o=>{ const u=o.u, lv=uniLvl(u.level), f=o.a?uniImpFind(o.a,u.key):null, pr=!!(f&&uniImpProv(f.b)), hl=chg(u.head,f);
     const hc=lv==='win'?'up':((lv==='halt'||lv==='hold')?'down':'muted');
     const nj=(u.judged!=null&&u.judged!==''&&isFinite(+u.judged))?+u.judged:(f?uniImpJudgedN(f.b):null), nw=nj===0?UNI_IMP_NODATA:UNI_IMP_NONE;
-    return `<div class="uni-upd" data-lv="${lv}" onclick="uniImpGo('${uniQ(o.s.app_id)}','${uniQ(u.key)}')"><span class="ap" title="${hAttr(o.s.app)}">${uniAppTag(o.s.app,16)}</span>`
-      +`<span class="rl">${hAttr(u.label||'App update')} — ${uniD(u.date)}</span>${uniVerdChip({level:u.level})}`
+    return `<div class="uni-upd" data-lv="${lv}" onclick="uniImpGo('${uniQ(o.s.app_id)}','${uniQ(u.key)}'${X})"><span class="ap" title="${hAttr(o.s.app)}">${uniAppTag(o.s.app,16)}</span>`
+      +`<span class="rl">${hAttr(u.label||'App update')} — ${uniD(u.date)}</span>${uniVerdChip({level:u.level},t)}`
       +(hl?`<span class="hl ${hc}">${hAttr(hl)}</span>`:(lv!=='pending'?`<span class="hl muted" title="${hAttr(nw[1])}">${nw[0]}</span>`:''))
       +(u.adoption!=null&&u.adoption!==''&&isFinite(+u.adoption)?`<span class="faint"${f?` title="${hAttr(uniAdoptTip(f.b,o.a))}"`:''}>${uniPct(+u.adoption)} updated</span>`:'')
       +(u.early&&lv!=='pending'?'<span class="pill p-b" title="Abhi poore 7 pakke din / D7 nahi — faisla badal sakta hai">Early</span>':'')
       +(uniNever(f?f.b.verdict:{level:u.level,final:u.final})?UNI_NEVER_PILL(f?f.b.verdict:null):'')
       +(pr?'<span class="pill p-b" title="Kuch number naye din ke — late data abhi aa raha">Provisional</span>':'')+'<span class="lnk go">›</span></div>'; };
   const list=vis.length?vis.map(row).join(''):'<div class="uni-ok" style="color:var(--muted)">No updates with this verdict</div>';
-  const more=sh.length>MAX?uniFold(UNIUPALL,'More updates',sh.length-MAX,'uniUPX'):'';
+  const more=sh.length>MAX?uniFoldX(st.uall,'More updates',sh.length-MAX,`uniUPX(${X.slice(1)})`):'';
   return wrap(chips+list+more+`<div class="faint" style="font-size:11px;margin-top:8px;line-height:1.5">Har update: 7 din pehle vs 7 din baad — Returning DAU, naye users ki wapsi (D1 / D7), sessions / time per user, kamai per user. Row pe tap = us app me poori tulna.</div>`); }
 
 // Alerts screen: uninstall cards, same look as the placement cards (read from DATA.uninstall — no lazy load)
@@ -3790,6 +3868,570 @@ function uniAlertCards(list){
       <div class="atitle">${title}${x.fresh?'<span class="pill p-p" style="margin-left:7px">New</span>':''}</div>
       <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18)}<span class="faint">· GA4${imp?' + AdMob':''} · data till ${fmtD(x.data_till)}</span></div>
       <div style="margin:9px 0 2px;font-size:12.5px;color:${uniAlertCol(x)}">${hAttr(x.text||x.message||'')}</div>
+      ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
+      <div class="aact">${btn}</div></div></div>`; }).join(''); }
+
+// ---------- 👥 ACTIVE USERS (GA4) ----------
+// Per app: returning users a day (active − that day's new installs), how many new users come back (D1 … D30), sessions and
+// time per user, ad revenue per 1,000 users. The build ships a SMALL summary in DATA.active (one row per app + the open
+// alerts) and each app's detail lazily in active_<key>.json.gz. GA4 activity settles ~3 days late: days after an app's
+// settled_till are PROVISIONAL — drawn faded, never judged. Unknown = "—" (never 0). Nothing is red / green unless an
+// alert is open (tiles show at most a blue "Maybe"). The 📦 Update impact card is the Uninstall tab's own card (t='act').
+let ACTD={}, ACTL={}, ACTERR={}, ACTSIG={}, ACTVER=null, ACTAPP='';
+let ACTRANGE='90d', ACTSMOOTH='7d', ACTUSEM='time', ACTUSEPOP='r', ACTREVM='k', ACTRETN=1, ACTTRI='key', ACTTRIEXP=false, ACTPRE=false;
+let ACTSTEXP='', ACTTILEEXP='', ACTOLDEXP=false, ACTCLEXP=false, ACTTIMEXP=false, ACTVERALL=false, ACTSORT={k:'status',d:1}, ACTRELALL=false;
+let ACTIMPOPEN='', ACTIMPALL=false, ACTIMPHOW=false, ACTUPF='', ACTUPALL=false, ACTIMPJUMP='', ACTIMPJT=0, ACTJUMP='', ACTJT=0;
+function actRows(){ return (DATA&&DATA.active&&Array.isArray(DATA.active.apps))?DATA.active.apps.filter(r=>r&&typeof r==='object'):[]; }
+function actName(id){ const r=actRows().find(x=>x.app_id===id); return r?r.app:''; }
+// the app on screen: the header's App (ACTAPP only picks between same-named apps), else none (All apps)
+function actCurRow(){ if(!APP) return null; const L=actRows(); return L.find(x=>x.app_id===ACTAPP&&x.app===APP)||L.find(x=>x.app===APP)||null; }
+function actCurDet(){ const r=actCurRow(); return (r&&r.key&&ACTD[r.key])||null; }
+function loadACTApp(key,cb){ const r=actRows().find(x=>x.key===key); if(!r||!r.file||ACTD[key]){cb&&cb();return;} if(ACTL[key]) return; ACTL[key]=true; ACTERR[key]=false;
+  fetchGzJson(r.file+'?t='+Date.now()).then(j=>{ if(!j||typeof j!=='object') throw new Error('file'); ACTD[key]=j; ACTSIG[key]=r.sig; ACTL[key]=false; cb&&cb(); })
+    .catch(()=>{ ACTERR[key]=true; ACTL[key]=false; cb&&cb(); }); }   // an error still calls back → "Try again", never "loading" forever
+function actEnsure(){ const r=actCurRow(); if(r&&r.key&&r.file&&r.status!=='error'&&!ACTD[r.key]&&!ACTL[r.key]&&!ACTERR[r.key]) loadACTApp(r.key,()=>actRerender()); }
+function actRerender(){ const old=document.querySelector('.screen[data-screen=active]'); if(old){ const f=renderActive(); if(old.classList.contains('on')) f.classList.add('on'); old.replaceWith(f); }
+  if(ACTIMPJUMP) uniImpJumpNow('act'); if(ACTJUMP) actJumpNow(); }
+// an app's detail sets the header's App (setApp re-renders every screen and stays here); "← All apps" clears both
+function actOpen(id,keepImp){ ACTAPP=id; ACTTRIEXP=false; ACTOLDEXP=false; ACTCLEXP=false; ACTPRE=false; ACTTILEEXP=''; ACTVERALL=false; ACTRELALL=false;
+  if(!keepImp){ ACTIMPOPEN=''; ACTIMPALL=false; ACTIMPJUMP=''; }
+  const nm=actName(id); if(nm&&APP!==nm){ setApp(nm); return; }
+  actEnsure(); actRerender(); if(!keepImp&&!ACTJUMP) window.scrollTo({top:0}); _navSave(); }
+function actBack(){ ACTAPP=''; ACTOLDEXP=false; ACTCLEXP=false; ACTPRE=false; ACTTILEEXP=''; ACTIMPOPEN=''; ACTIMPALL=false; ACTIMPJUMP=''; ACTJUMP='';
+  if(APP){ setApp(''); return; } actRerender(); window.scrollTo({top:0}); _navSave(); }
+// from an Alerts-screen card: this tab, that app, its "What changed?" (once the app's file is on screen, ≤15 s)
+function actGo(id){ show('active'); ACTJUMP='act-chg'; ACTJT=Date.now(); actOpen(id); actJumpNow(); }
+function actJumpNow(){ const k=ACTJUMP; if(!k) return; if(Date.now()-ACTJT>15000){ ACTJUMP=''; return; }
+  const e=document.getElementById(k), r=(e&&e.getBoundingClientRect)?e.getBoundingClientRect():null; if(!r||!(r.height>0)) return; ACTJUMP=''; uniJump(k,'act'); }
+function actJump(sec){ uniJump(sec,'act'); }
+function actR(v){ ACTRANGE=v; actRerender(); }        // chart window: 30d | 90d | 1y | all
+function actSm(v){ ACTSMOOTH=v; actRerender(); }       // '7d' 7-day average | 'day' every day
+function actUM(v){ ACTUSEM=v; actRerender(); }         // 'time' | 'sess'
+function actUP(v){ ACTUSEPOP=v; actRerender(); }       // 'r' returning | 'all' | 'n' new installs
+function actRM(v){ ACTREVM=v; actRerender(); }         // 'k' per 1,000 users | 'ads' | 'ecpm'
+function actRN(n){ ACTRETN=+n; actRerender(); }        // by-install-day chart: day N
+function actTM(v){ ACTTRI=v; actRerender(); }          // grid: 'key' days | 'all' every day
+function actTX(){ ACTTRIEXP=!ACTTRIEXP; actRerender(); }
+function actPX(){ ACTPRE=!ACTPRE; actRerender(); }     // show / hide the test installs before the launch
+function actSX(k){ ACTSTEXP=ACTSTEXP===k?'':k; actRerender(); }
+function actTTX(k){ if(typeof innerWidth==='number'&&innerWidth>430) return; ACTTILEEXP=ACTTILEEXP===k?'':k; actRerender(); }   // a phone tile: its details (wider screens show them all)
+function actOX(){ ACTOLDEXP=!ACTOLDEXP; actRerender(); }
+function actCLX(){ ACTCLEXP=!ACTCLEXP; actRerender(); }
+function actTNX(){ ACTTIMEXP=!ACTTIMEXP; actRerender(); }
+function actVX(){ ACTVERALL=!ACTVERALL; actRerender(); }
+function actRX(){ ACTRELALL=!ACTRELALL; actRerender(); }
+function actSort(k){ ACTSORT=(ACTSORT.k===k)?{k,d:-ACTSORT.d}:{k,d:(k==='app'||k==='status'?1:-1)}; actRerender(); }
+// ---- numbers (unknown = "—", never 0) ----
+const actOk=v=>v!=null&&v!==''&&isFinite(+v);
+function actAt(a,i){ const v=Array.isArray(a)?a[i]:null; return actOk(v)?+v:null; }
+function actNum(v){ return !actOk(v)?'—':(Math.abs(+v)>=1e6?fmtN(+v):Math.round(+v).toLocaleString()); }
+function actDec(v){ return !actOk(v)?'—':(+v).toFixed(Math.abs(+v)>=10?1:2); }             // sessions / ads per user
+function actCurOf(d){ return (d&&d.currency)||(DATA&&DATA.active&&DATA.active.currency)||undefined; }
+function actMoney(v,cur,big){ if(!actOk(v)) return '—';
+  if(!big){ const s=uniMoney(+v,cur); return (+v>0&&/(^|[^0-9.])0\.00$/.test(s))?'<'+s.slice(0,-4)+'0.01':s; }   // a tiny real amount: "<$0.01", never a "$0.00" that reads as zero
+  const b=baseCur(), c=cur||b, r=(DATA&&DATA.usd_inr)||83; let x=+v; if(c!==b){ if(c==='USD'&&b==='INR') x*=r; else if(c==='INR'&&b==='USD') x/=r; }
+  return csym()+Number(x*cfx()).toLocaleString(undefined,{maximumFractionDigits:0}); }
+function actUsual(u,pts){ if(!actOk(u)) return ''; const x=Math.abs(+u)*(pts?1:100), t=x<10?x.toFixed(1).replace(/\.0$/,''):String(Math.round(x)); return 'usual ±'+t+(pts?' pts':'%'); }
+function actConst(k,d){ const c=DATA&&DATA.active&&DATA.active.consts; return (c&&actOk(c[k]))?+c[k]:d; }
+function actOldLbl(K){ return 'Installed '+((!actOk(K)||+K>=30)?'30+':(+K+1)+'+')+' days ago'; }
+// a zone as a short label from the data itself (never a hard-coded one): "Etc/GMT-5" → "UTC+5", "America/Los_Angeles" → "Los Angeles"
+function actTz(z){ if(!z) return ''; const s=String(z), m=s.match(/^Etc\/GMT([+-])(\d+)$/); if(m) return 'UTC'+(m[1]==='+'?'−':'+')+m[2];
+  if(/^(Etc\/)?(GMT|UTC|UCT|Zulu|Universal|Greenwich)(0|\+0|-0)?$/.test(s)) return 'UTC'; return s.split('/').pop().replace(/_/g,' '); }
+const ACT_PROV_TIP='GA4 ~3 din tak late data jodta hai — ye number abhi badh sakta hai.';
+const ACT_PROV_PILL=`<span class="pill p-b" title="${ACT_PROV_TIP}">Provisional</span>`;
+// ---- the chip vocabulary (tiles, All-apps strips and table; ONE set) ----
+const ACT_ML={ret_dau:'Returning users',d1:'Came back next day',d7:'Came back after a week',sess:'Sessions per user',time:'Time per user',arpdau:'Ad revenue per 1,000 users',ads:'Ads per user',ecpm:'Price per 1,000 ads'};
+const ACT_CHL={ret_dau:{worse:'Lower',watch:'Lower · watch',slow:'Slowly falling',break:'Check tracking',better:'Higher',maybe_dn:'Maybe lower',maybe_up:'Maybe higher',normal:'Normal'},
+  d:{worse:'Fewer came back',watch:'Fewer · watch',better:'More came back',maybe_dn:'Maybe fewer',maybe_up:'Maybe more',normal:'Same'},
+  sess:{worse:'Fewer sessions',watch:'Less · watch',better:'More sessions',maybe_dn:'Maybe less',maybe_up:'Maybe more',normal:'Normal'},
+  time:{worse:'Less time',watch:'Less · watch',better:'More time',maybe_dn:'Maybe less',maybe_up:'Maybe more',normal:'Normal'},
+  arpdau:{worse:'Lower (fewer ads per user)',watch:'Lower · watch',better:'Higher',maybe_dn:'Maybe lower',maybe_up:'Maybe higher',normal:'Normal',price_dn:'Ad price lower',price_up:'Ad price higher'}};
+const ACT_CHC={worse:'p-r',watch:'p-y',slow:'p-y',break:'p-y',better:'p-g',normal:'uni-pz',price_dn:'p-p',price_up:'p-p'};   // everything else: blue
+// which alert metrics a tile answers to (sess / time also to the "usage" group; the revenue tile to ads per user)
+const ACT_AM={ret_dau:['ret_dau'],d1:['d1'],d7:['d7'],sess:['sess','usage'],time:['time','usage'],arpdau:['ads','arpdau'],ads:['ads'],ecpm:[]};
+function actHasAl(list,k,sev){ return (list||[]).some(x=>x&&(ACT_AM[k]||[k]).includes(x.metric)&&(!sev||x.severity===sev)&&!x.closed); }
+const ACT_RANK={worse:0,break:1,watch:2,slow:2,better:3,maybe_dn:4,maybe_up:4,price_dn:5,price_up:5,growth:6,normal:7,low:8,noad:8,wait:9};
+function actSt(M){ const s=M&&M.st; return ACT_RANK[s]!=null?s:'wait'; }
+function actChipTxt(k,M){ const st=actSt(M), g=(k==='d1'||k==='d7')?'d':(ACT_CHL[k]?k:'ret_dau');
+  let t=(ACT_CHL[g]||{})[st]||ACT_CHL.ret_dau[st];
+  if(st==='growth') t=(M&&actOk(M.rel)&&+M.rel<0)?'Shrinking fast':((M&&actOk(M.rel)&&+M.rel>0)?'Growing fast':'Growing / shrinking fast');
+  else if(st==='low') t='Not enough data'; else if(st==='noad') t='No ad data'; else if(st==='wait') t='Waiting for data';
+  else if(!t) t=(ACT_CHL.ret_dau[st]||'Normal');
+  // the revenue tile took the ads-per-user state but moved the other way: say whose it is (never a bare "Maybe lower" on +13%)
+  if(k==='arpdau'&&M&&M.why==='ads_dir'&&/^(maybe_dn|maybe_up|watch|better)$/.test(st)) t='Ads/user '+t.charAt(0).toLowerCase()+t.slice(1);
+  return t; }
+function actChipTip(k,M,d){ const st=actSt(M), why=M&&M.why;
+  if(st==='maybe_dn'||st==='maybe_up') return 'Farak hai par aam utaar-chadhaav jitna, ya naye installs ka mix badla — abhi pakka nahi.';
+  if(st==='price_dn'||st==='price_up') return 'Sirf ad ka rate (eCPM) badla, ads per user wahi — market/mediation/country mix, app ke use ka nahi.';
+  if(st==='growth') return 'App abhi tez badh/ghat raha hai — normal range abhi nahi banti.';
+  if(st==='low'){ const L=(d&&d.launch&&d.launch.day)||(d&&d.launch_day)||null;
+    if(why==='young') return 'Naya app — normal range '+(L?uniD(uniAdd(L,actConst('act_ready_days',56))):'~2 mahine baad')+' se';
+    if(why==='null_short') return 'Aam utaar-chadhaav naapne ke liye abhi kaafi hafte nahi';
+    if(why==='gap') return 'Is hafte ya pichhle 4 hafton me kai din ka data nahi — tulna nahi ho sakti';
+    return 'Users / installs abhi kam — chhota farak pakka nahi keh sakte'; }
+  if(st==='wait') return (k==='d1'||k==='d7')?'Wapsi (D1/D7) ka data agle GA4 fetch ke saath aayega.':((k==='sess'||k==='time')?'Sessions aur time agle GA4 fetch ke baad aayenge.':'Data abhi aa raha hai.');
+  if(st==='noad') return 'In dino ka AdMob data nahi — isko 0 nahi maana.';
+  if(st==='break') return 'Active users normal ke aadhe se bhi kam — GA4/Firebase tracking check karo. Alert neeche "What changed?" me.';
+  if(st==='slow') return 'Purane users 3 mahine se dheere-dheere ghat rahe — alert neeche "What changed?" me.';
+  if(st==='worse'||st==='watch'||st==='better') return 'Alert khula hai — neeche "What changed?" me dekho.';
+  return 'Pichhle 7 pakke din pichhle 4 hafte jaise — aam utaar-chadhaav ke andar.'; }
+// one chip. Red / green ONLY when that metric has an open alert of that severity (else the same words in blue)
+function actChip(k,M,d,als){ const st=actSt(M); let c=ACT_CHC[st]||'p-b';
+  if(als&&((c==='p-r'&&!actHasAl(als,k,'warning'))||(c==='p-g'&&!actHasAl(als,k,'good')))) c='p-b';
+  return `<span class="pill ${c}" data-st="${st}" title="${hAttr(actChipTip(k,M,d))}">${actChipTxt(k,M)}</span>`; }
+const actPill=(c,t,tip)=>`<span class="pill ${c}"${tip?` title="${hAttr(tip)}"`:''}>${t}</span>`;
+function actAlOf(id){ return ((DATA&&DATA.active&&DATA.active.alerts)||[]).filter(x=>x&&x.app_id===id); }
+// ---- the tab ----
+function renderActive(){
+  const s=screenDiv('active'); let html;
+  try{ html=actScreen(); }   // a malformed GA4 payload must never break the rest of the dashboard's render()
+  catch(e){ html='<h2 class="sc">Active users</h2><div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Active users ka data dikhane me dikkat aayi — thodi der baad page refresh karo.</div></div>'; }
+  s.innerHTML=`<div id="act-root">${html}</div>`;
+  return s; }
+function actScreen(){
+  const A=DATA.active, h2='<h2 class="sc">Active users</h2>';
+  if(!A) return h2+`<div class="card" style="padding:24px 20px"><div class="muted" style="font-size:13.5px;line-height:1.6">🔌 GA4 not connected — active users, wapsi, sessions aur time GA4 (Firebase) se aate hain. Setup ke baad yahan dikhega.</div></div>`;
+  if(APP){ const r=actCurRow(); if(!r) return actNoGa4(APP);
+    const back=`<span class="backlnk" onclick="actBack()">← All apps</span>`, top=back+`<div class="uni-hd" style="margin-bottom:10px"><span style="font-size:18px;font-weight:800;color:#fff">${appChip(r.app,22)}</span></div>`;
+    if(r.status==='error'||!r.file) return top+`<div class="card"><div class="muted" style="font-size:13.5px;padding:10px 2px;line-height:1.6">⚠️ Is app ka Active users data is baar ban nahi paya — agle robot run me phir try hoga.</div></div>`;
+    const d=ACTD[r.key];
+    if(!d){ if(ACTERR[r.key]) return top+`<div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Is app ka data load nahi hua. <span class="lnk" onclick="ACTERR['${uniQ(r.key)}']=false;actEnsure();actRerender()">Try again</span></div></div>`;
+      return top+`<div class="card"><div class="muted" style="font-size:14px;padding:20px">⏳ ${hAttr(r.app)} ka data load ho raha hai…</div></div>`; }
+    return actDetail(r,d); }
+  return actPortfolio(); }
+function actNoGa4(name){ const r=((DATA.active&&DATA.active.no_ga4)||[]).find(x=>x.app===name);
+  return `<span class="backlnk" onclick="actBack()">← All apps</span>
+    <div class="card"><div class="uni-hd"><span style="font-size:17px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>
+    <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">🔌 ${r?hAttr(r.text||uniReason(r.reason)):'Is app ka GA4 (Firebase) data nahi — ya to ye Android app kisi GA4 property se judi nahi, ya abhi select nahi.'}</div></div>`; }
+// ---- one app ----
+function actDetail(r,d){
+  const name=d.app||r.app, back=`<span class="backlnk" onclick="actBack()">← All apps</span>`, got=uniAgo(d.fetched_at), st=UNI_STAGE[d.stage||r.stage], fl=[];
+  if(st) fl.push(`<span class="pill uni-pn" title="${hAttr(d.stage_why||'')}">${st[1].split(' · ')[0]}</span>`);
+  if(d.launch&&d.launch.hidden) fl.push(`<span class="pill uni-pn" title="${hAttr('Launch ('+uniD(d.launch.day)+') se pehle ke '+uniTestWord(d.launch)+' kisi number me nahi gine — neeche tables me dikha sakte ho')}">Test installs hidden</span>`);
+  if(d.stale||r.stale) fl.push('<span class="pill p-y" title="GA4 se naya data nahi aaya — ye purana data hai">⚠️ Old data</span>');
+  const hdr=back+`<div class="uni-hd" style="margin-bottom:4px"><span style="font-size:18px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>
+    <div class="faint" style="font-size:12px;margin:5px 0 14px;display:flex;gap:5px 10px;flex-wrap:wrap;align-items:center"><span>GA4 data till <b style="color:var(--ink2)">${uniD(d.data_till)}</b>${got?' · fetched '+got:''}</span>${fl.join('')}</div>`;
+  const safe=f=>{ try{ return f(d,r)||''; }catch(e){ return '<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ Ye hissa abhi dikh nahi paya.</div>'; } };
+  return hdr+[actSumCard,actChangesCard,(a)=>uniImpactCard(a,'act'),actKpis,actDailyCard,actTriCard,actUseCard,actRevCard,()=>actTimingNote()].map(safe).join(''); }
+// "📌 At a glance": the engine's one line, six tiles (last 7 settled days vs the 4 weeks before), context, latest day,
+// the data-edge sentences, the Uninstall tab's line for this app and the provisional footnote
+const ACT_TILES=[['ret_dau','Returning users / day','Roz ke active users me se us din ke naye installs hata ke — purane users.'],['d1','Came back next day','Kisi din install karne walo me se kitne agle din phir aaye.'],
+  ['d7','Came back after a week','Kisi din install karne walo me se kitne 7ve din phir aaye.'],['sess','Sessions per user','Purane (returning) users ka roz ka average sessions. GA4 \'returning\' = pehle bhi app khol chuka (isme aaj ke install ka 2nd session bhi)'],
+  ['time','Time per user','Purane (returning) users ka roz ka average time (GA4 engagement time). GA4 \'returning\' = pehle bhi app khol chuka (isme aaj ke install ka 2nd session bhi)'],['arpdau','Ad revenue per 1,000 users','AdMob kamai ÷ GA4 active users × 1,000 — ads per user × ad ka rate (eCPM). ≈: GA4 ka din aur AdMob ka din alag timezone me — kamai ghante ke hisaab se baanti, andaza.']];
+function actTile(d,k,label,tip,als,win){
+  const T=d.tiles||{}, M=T[k]||null, st=actSt(M), dm=k==='d1'||k==='d7', cur=actCurOf(d), F=d.flags||{}, v=M&&M.v, ok=actOk(v), sm=[];
+  let big='—';
+  if(ok) big=k==='ret_dau'?actNum(v):(dm?uni100(v)+'<small>of 100</small>':(k==='sess'?actDec(v)+'<small>a day</small>':(k==='time'?uniDur(v)+'<small>a day</small>':((F.tz_blend||F.rev_est||(M&&M.est)?'≈ ':'')+actMoney(v,cur)))));
+  // the change vs the 4 weeks before: % (points for D1 / D7), grey — the numbers are never coloured
+  let ch=null; if(M&&dm){ const pp=actOk(M.pp)?+M.pp:((ok&&actOk(M.base))?(+v-M.base)*100:null); if(pp!=null) ch=uniPP(pp)+' pts'; } else if(M&&actOk(M.rel)) ch=uniChg(M.rel);
+  const chn=(st==='low'&&ch)?((M&&M.why==='young')?'Naya app — tulna baad me':'Tulna pakki nahi'):'';   // not judged: no big % next to "Not enough data"
+  if(chn) ch=null;
+  const TD=actConst('tile_days',7), nn=M&&actOk(M.n)?+M.n:null, days=(nn!=null&&nn<TD&&st!=='wait'&&st!=='noad')?` (${nn} of ${TD} days)`:'';
+  const fr=M&&(M.from||(!dm&&win&&win.from)), to=M&&(M.to||(!dm&&win&&win.to)), dates=fr?(dm?'Installs ':'')+uniSpan(fr,to||fr):'';
+  if(k==='ret_dau'){ const SP=d.split, IN=d.inst;
+    if(SP&&(actOk(SP.old_rel)||actOk(SP.recent_rel))) sm.push(`${actOldLbl(d.daily&&d.daily.old_k)} ${SP.est?'≈ ':''}${uniChg(SP.old_rel)} · Recent installs coming back ${SP.est?'≈ ':''}${uniChg(SP.recent_rel)}`);
+    else if(IN&&actOk(IN.rel)) sm.push(`Installs ${uniChg(IN.rel)} vs 4 weeks${actInstPart(IN,M)}`); }
+  if(dm&&M&&(actOk(M.base)||actOk(M.all))) sm.push(`before ${uni100(M.base)} · all-time ${uni100(M.all)}`);
+  if(k==='arpdau'&&st!=='noad'&&st!=='wait'){ const A=T.ads||{}, C=T.ecpm||{};
+    sm.push(`Ads/user ${actDec(A.v)}${actOk(A.rel)?' ('+uniChg(A.rel)+')':''} · eCPM ${actMoney(C.v,cur)}${actOk(C.rel)?' ('+uniChg(C.rel)+')':''}`);
+    if(actOther(F)) sm.push(`AdMob Network only · other networks ~${actOther(F)}% more`); }
+  if(st==='wait') sm.push(dm?'Wapsi ka data agle GA4 fetch ke saath':((k==='sess'||k==='time')?'Sessions / time agle GA4 fetch me':'Data aa raha hai'));
+  if(st==='noad') sm.push('Is app ka AdMob data nahi mila');
+  const mw=k==='arpdau'&&/^price_/.test(st)&&((d.changes&&d.changes.info)||[]).some(o=>o&&o.kind==='price'&&(o.tags||[]).includes('market_wide'));
+  const chips=actChip(k,M,d,als)+(mw?actPill('p-p','Market-wide','Is hafte kai apps me eCPM saath me badla — bazaar ka asar'):'');
+  const open=ACTTILEEXP===k;
+  return `<div class="uni-st act-t${open?' open':''}" data-m="${k}" data-st="${st}" onclick="actTTX('${k}')"><div class="l" title="${hAttr(tip)}">${label}</div><div class="v">${big}</div>`
+    +(ch?`<div class="c"><span class="act-lg">${ch} vs previous 4 weeks</span><span class="act-sh">${ch} · 4 wks</span></div>`:(chn?`<div class="c">${chn}</div>`:''))
+    +`<div class="act-pl">${chips}</div><div class="act-x">`+(M&&actOk(M.usual)?`<div class="c">${actUsual(M.usual,dm)}</div>`:'')
+    +(dates?`<div class="c act-dt">${dates}${days}</div>`:'')+(sm.length?`<div class="act-sl">${sm.map(x=>`<div>${x}</div>`).join('')}</div>`:'')+`</div></div>`; }
+function actInstPart(IN,M){ const p=actOk(IN.part)?+IN.part:null, r=M&&actOk(M.rel)?+M.rel:null;   // the installs' part of the returning users' change
+  if(p==null||Math.abs(p)*100<0.5) return '';
+  const pts=Math.abs(p*100).toFixed(1).replace(/\.0$/,'');
+  if(r!=null&&Math.abs(r)*100>=0.5&&Math.sign(p)!==Math.sign(r)) return ` — installs ne ~${pts} pts ${p<0?'ghataya':'badhaya'}, warna ~${uniChg(r-p)} ≈`;
+  return ` — isme ~${pts} pts naye installs ki wajah se${r!=null?`, purane users ~${uniChg(r-p)}`:''} ≈`; }
+function actOther(F){ const o=F&&actOk(F.other_share)?+F.other_share:null; return (o!=null&&o>=0.05&&o<1)?Math.round(o/(1-o)*100):0; }   // other networks: ~x% MORE than AdMob Network
+function actSumCard(d,r){
+  const als=((d.changes&&d.changes.open)||[]).concat(actAlOf(d.app_id)), win=(r&&r.win)||null, S=d.summary||{}, C=d.ctx||{}, L=d.latest||{};
+  const tiles=`<div class="uni-tiles act-tiles" style="--n:3">${ACT_TILES.map(([k,l,t])=>actTile(d,k,l,t,als,win)).join('')}</div>`;
+  const ctx=`<div class="uni-meta" id="act-ctx"><span>Active users <b style="color:var(--ink2)">${actNum(C.a1)}</b>/day</span><span>New installs <b style="color:var(--ink2)">${actNum(C.new)}</b>/day</span>`
+    +(actOk(C.old)?`<span>${actOldLbl(d.daily&&d.daily.old_k)} ${C.old_est?'≈ ':''}<b style="color:var(--ink2)">${actNum(C.old)}</b>/day</span>`:'')+'</div>';
+  const lt=L.day?`<div class="faint" id="act-latest" style="font-size:11.5px;margin-top:6px">Latest GA4 day ${uniD(L.day)}: ${actNum(L.ret_dau)} returning so far ${L.prov!==false?ACT_PROV_PILL:''}</div>`:'';
+  const ed=((d.edges&&d.edges.text)||[]).filter(Boolean).map(t=>`<div class="act-edge">${hAttr(t)}</div>`).join('');
+  return `<div class="card" id="act-sum" style="margin-bottom:14px"><div class="ct"><h3>📌 At a glance</h3><span class="faint" style="font-size:11.5px">last 7 settled days vs the 4 weeks before</span></div>
+    ${S.text?`<div class="act-line" data-kind="${hAttr(S.kind||'')}">${hAttr(S.text)}</div>`:''}${tiles}${ctx}${lt}${ed?`<div class="act-edges">${ed}</div>`:''}${actUniLink(d.app_id)}${actProvNote(d.settled_till,d.data_till)}</div>`; }
+function actProvNote(S,E){ if(!S||!E||S>=E) return '';
+  return `<div class="uni-foot">ℹ️ <b>Provisional:</b> ${uniSpan(uniAdd(S,1),E)} — GA4 ~${actConst('act_late_days',3)} din tak late data jodta hai, ye din kam dikhte hain. Faisla sirf pakke din (${uniD(S)} tak) pe.</div>`; }
+// this app on the Uninstall tab, in one line (from DATA.uninstall — no extra load)
+function actUniLink(id){ const U=DATA&&DATA.uninstall, x=U&&(U.apps||[]).find(z=>z&&z.app_id===id); if(!x) return '';
+  const H=x.head4||{}, h=H.D7&&actOk(H.D7.p)?['7 days',H.D7]:(H.D1&&actOk(H.D1.p)?['1 day',H.D1]:null), rt={up:'High',down:'Low',flat:'Normal'}[x.rate_dir], p=[];
+  if(h) p.push(`gone in ${h[0]} ${uniPct(h[1].p)}`); if(rt) p.push('daily rate '+rt);
+  return `<div class="act-xl" id="act-uni">🚪 Uninstalls: ${p.length?p.join(' · '):'—'} · <span class="lnk" onclick="uniGo('${uniQ(id)}')">Open Uninstall →</span></div>`; }
+// ---- "🔔 What changed?" ----
+const ACT_SEC={ret_dau:'act-daily',d1:'act-tri',d3:'act-tri',d7:'act-tri',d14:'act-tri',d30:'act-tri',sess:'act-use',time:'act-use',usage:'act-use',ads:'act-rev',arpdau:'act-rev',ecpm:'act-rev'};
+function actNewest(list){ const ab=x=>x.installs_to||x.day||x.since||x.to||'';
+  return (list||[]).filter(x=>x&&typeof x==='object').slice().sort((p,q)=>((q.opened||'')>(p.opened||'')?1:((q.opened||'')<(p.opened||'')?-1:(ab(q)>ab(p)?1:(ab(q)<ab(p)?-1:0))))); }
+function actWhen(x){ const f=x.family||x.kind;
+  if(f==='act_return') return 'Installs '+uniSpan(x.installs_from||x.from,x.installs_to||x.to);
+  if(f==='act_spike'||f==='act_break') return uniD(x.day||x.from);
+  if(x.since) return 'Since '+uniD(x.since); return uniSpan(x.from,x.to); }
+const ACT_TAG={installs:['Installs','Naye installs bhi badle (ad spend / campaign?) — isliye alert halka'],mix:['Mix','Naye users / dusre ad networks ka hissa badla — isliye alert halka'],
+  market_wide:['Market-wide','Kai apps me ek saath — bazaar ka asar'],time:['Time/user','Log kam / zyada time de rahe — ads usi hisaab se']};
+function actRelChip(x,withApp){ const R=x.release; if(!R||!R.key) return '';
+  const go=withApp?`uniImpGo('${uniQ(x.app_id)}','${uniQ(R.key)}','act')`:`uniImp('${uniQ(R.key)}','act')`;
+  return `<span class="pill p-p act-relc" title="Is update ka asar — Update impact me" onclick="event.stopPropagation();${go}">After ${hAttr(R.label||'update')}</span>`; }
+function actChangeRow(x,withApp,closed){
+  const sv=closed?[x.dir==='up'?'Was higher':'Was lower','uni-pz']:(x.severity==='warning'?['Worse','p-r']:(x.severity==='good'?['Better','p-g']:['Watch','p-y']));
+  const go=withApp?`actOpen('${uniQ(x.app_id)}')`:`actJump('${ACT_SEC[x.metric]||'act-daily'}')`;
+  const tags=(x.fresh&&!closed?'<span class="pill p-p">New</span>':'')+(x.estimate?actPill('p-b','≈ Estimate','Kuch din ka data andaza tha (GA4 aur AdMob ka din alag) — badlaav bina andaze ke bhi dikhta hai'):'')
+    +actRelChip(x,withApp)+(x.tags||[]).filter(t=>ACT_TAG[t]).map(t=>actPill('uni-pz',ACT_TAG[t][0],ACT_TAG[t][1])).join('')+(closed&&x.closed?`<span class="dt">Closed · ${uniD(x.closed)}</span>`:'');
+  const act=closed?'':(withApp?'<span class="lnk">Open →</span>':`<span class="lnk" onclick="${go}">Open →</span>`);
+  return `<div class="uni-chg ${withApp?'wa':'na'}${closed?' cl':''}" data-fam="${hAttr(x.family||'')}"${withApp?` onclick="${go}"`:''}><span class="sv"><span class="pill ${sv[1]}">${sv[0]}</span></span>`
+    +`${withApp?`<span class="ap" title="${hAttr(x.app)}">${uniAppTag(x.app,16)}</span>`:''}<span class="tx">${hAttr(x.text||x.message||'')}</span>`
+    +`<span class="mt"><span class="dt">${actWhen(x)}</span>${tags}</span><span class="ac">${act}</span></div>`; }
+// an info row (never an alert, never counted): ad price only · installs explained it · market-wide · ⏳ early look (provisional)
+const ACT_INFO={price:'Ad price',installs:'Installs',market_wide:'Market-wide',early:'⏳ Early look'};
+function actInfoRow(o,app,id){ const kind=o.kind||'info', sec=kind==='price'?'act-rev':(ACT_SEC[o.metric]||'act-daily'), go=app?`actOpen('${uniQ(id)}')`:`actJump('${sec}')`;
+  const tags=(o.prov||kind==='early'?ACT_PROV_PILL:'')+(ACT_INFO[kind]?actPill('uni-pz',ACT_INFO[kind]):'')+((o.tags||[]).includes('market_wide')&&kind!=='market_wide'?actPill('uni-pz','Market-wide','Kai apps me ek saath — bazaar ka asar'):'');
+  return `<div class="uni-chg ${app?'wa':'na'} act-info" data-info="${hAttr(kind)}"${app?` onclick="${go}"`:''}><span class="sv"><span class="pill p-b" title="Sirf jaankari — iska alert nahi aata, ginti me nahi">Info</span></span>`
+    +`${app?`<span class="ap" title="${hAttr(app)}">${uniAppTag(app,16)}</span>`:''}<span class="tx">${hAttr(o.text||'')}</span>`
+    +`<span class="mt"><span class="dt">${uniSpan(o.from,o.to)}</span>${tags}</span><span class="ac">${app?'<span class="lnk">Open →</span>':`<span class="lnk" onclick="${go}">Open →</span>`}</span></div>`; }
+function actOldRow(o,app,id){ const go=app?`actOpen('${uniQ(id)}')`:'', rel=o.release&&o.release.key?actRelChip({release:o.release,app_id:id},!!app):'';
+  return `<div class="uni-chg ${app?'wa':'na'} old" data-old="${hAttr(o.kind||'')}"${app?` onclick="${go}"`:''}><span class="sv"><span class="pill p-b" title="Purana badlaav — sirf jaankari, iska alert nahi aata">Info</span></span>`
+    +`${app?`<span class="ap" title="${hAttr(app)}">${uniAppTag(app,16)}</span>`:''}<span class="tx">${hAttr(o.text||'')}</span>`
+    +`<span class="mt"><span class="dt">${uniSpan(o.from,o.to)}</span>${rel}</span><span class="ac">${app?'<span class="lnk">Open →</span>':''}</span></div>`; }
+function actChangesCard(d){
+  const C=d.changes||{}, open=actNewest(C.open), closed=actNewest(C.closed), info=(C.info||[]).filter(o=>o&&typeof o==='object'), older=(C.older||[]).filter(o=>o&&typeof o==='object');
+  const body=open.length?open.map(x=>actChangeRow(x,false,false)).join(''):'<div class="uni-ok">✅ All normal — no changes</div>';
+  const inf=info.map(o=>actInfoRow(o)).join('');
+  const cl=closed.length?uniFoldX(ACTCLEXP,'Closed alerts',closed.length,'actCLX()')+(ACTCLEXP?closed.map(x=>actChangeRow(x,false,true)).join(''):''):'';
+  const ol=older.length?uniFoldX(ACTOLDEXP,'Older changes',older.length,'actOX()')+(ACTOLDEXP?'<div class="faint" style="font-size:11px;margin:6px 0 2px;line-height:1.5">ℹ️ Poori history me pehle ke badlaav — sirf jaankari. Inka alert nahi aata, upar ki ginti me nahi.</div>'+older.map(o=>actOldRow(o)).join(''):''):'';
+  return `<div class="card" id="act-chg" style="margin-bottom:14px"><div class="ct"><h3>🔔 What changed? (${open.length})</h3></div>${body}${inf}${cl}${ol}</div>`; }
+// ---- Period row (the header's Period, settled days only) ----
+function actWin(d){ const X=actX(d), till=d.data_till, hs=(!ACTPRE&&X.iL)?uniAdd(X.st,X.iL):X.st, none={from:'',to:'',days:0,empty:true};
+  if(!till||!hs) return none; const T=(DATA&&DATA.today_date)||till; let f=till, t=till;
+  if(RANGE==='7d'||RANGE==='30d'||RANGE==='90d') f=uniAdd(till,-(parseInt(RANGE,10)-1));
+  else if(RANGE==='month') f=T.slice(0,7)+'-01';
+  else if(RANGE==='lastmonth'){ const y=+T.slice(0,4), m=+T.slice(5,7); f=(m>1?y+'-'+String(m-1).padStart(2,'0'):(y-1)+'-12')+'-01'; t=uniAdd(T.slice(0,7)+'-01',-1); }
+  else if(RANGE==='all') f=hs; else if(RANGE==='custom'){ f=RCUSTOM.from||uniAdd(till,-29); t=RCUSTOM.to||till; }
+  if(f<hs) f=hs; if(t>till) t=till; if(f>t) return none; return {from:f,to:t,days:uniDiff(f,t)+1,empty:false}; }
+function actKpis(d){
+  const w=actWin(d), X=actX(d), D=X.D, S=d.settled_till, cur=actCurOf(d);
+  const foot=t=>`<div class="faint" style="font-size:11px;margin:-6px 0 14px">${t}</div>`;
+  if(w.empty) return `<div class="row c6" id="act-kpis" style="margin-bottom:14px">${kpi('👥 Returning users / day','—','No GA4 data for this period yet')}</div>`+foot('Upar ke tiles = pichhle 7 pakke din · ye row = header ka Period');
+  const prov=!S||w.from>S, to=prov?w.to:(w.to>S?S:w.to), i0=uniDiff(X.st,w.from), i1=uniDiff(X.st,to);
+  let R=0,nR=0,nw=0,nN=0,sS=0,sU=0,tT=0,tU=0,rv=0,ra=0,nrv=0; const inc=new Set((D.inc||[]).map(x=>uniDiff(X.st,x))), U=D.u||{}, SS=D.s||{}, TT=D.t||{};
+  for(let i=i0;i<=i1;i++){ const r=actAt(D.ret,i), n=actAt(D.new,i); if(r!=null){R+=r;nR++;} if(n!=null){nw+=n;nN++;}
+    if(!inc.has(i)){ const u=actAt(U.r,i), s=actAt(SS.r,i), t=actAt(TT.r,i); if(u!=null&&u>0){ if(s!=null){sS+=s;sU+=u;} if(t!=null){tT+=t;tU+=u;} } }
+    const e=actAt(D.rev,i), a=actAt(D.a1,i); if(e!=null&&a!=null&&a>0){ rv+=e; ra+=a; nrv++; } }
+  const lab=uniSpan(w.from,to)+' · '+(uniDiff(w.from,to)+1)+'d', pv=prov?' '+ACT_PROV_PILL:'';
+  const k=[kpi('👥 Returning users / day',nR?actNum(R/nR):'—',lab+pv+(nR&&nR<uniDiff(w.from,to)+1?` · ${nR} of ${uniDiff(w.from,to)+1} days`:'')),kpi('📥 New installs',nN?actNum(nw):'—',lab+pv),
+    kpi('🔁 Sessions per user',sU?actDec(sS/sU):'—',(sU?'a day · returning users':'no sessions data yet')+pv),kpi('⏱️ Time per user',tU?uniDur(tT/tU):'—',(tU?'a day · returning users':'no time data yet')+pv),
+    kpi('💰 Ad revenue ≈',nrv?actMoney(rv,cur,true):'—',(nrv?`${nrv} ${nrv===1?'day':'days'} with ad data · AdMob Network only${actOther(d.flags)?` (other networks ~${actOther(d.flags)}% more)`:''}`:'no ad data')+pv),kpi('💵 Per 1,000 users ≈',ra?actMoney(rv*1000/ra,cur):'—',(ra?'AdMob ÷ GA4 active users':'no ad data')+pv)];
+  return `<div class="row c6" id="act-kpis" style="margin-bottom:14px">${k.join('')}</div>`
+    +foot(`Upar ke tiles = pichhle 7 pakke din · ye row = header ka Period (${pRangeLabel(RANGE)}) — sirf pakke din: ${prov?'is period me abhi koi pakka din nahi, isliye naye (provisional) din':uniSpan(w.from,to)}`); }
+// ---- daily charts ----
+function actX(d){ const D=(d&&d.daily)||{}, st=D.start||(d&&d.history_start)||'', n=(st&&d&&d.data_till)?Math.max(0,uniDiff(st,d.data_till)+1):0;
+  const iS=(st&&d.settled_till)?uniDiff(st,d.settled_till):n-1, L=(d&&d.launch)||{}, iL=(L.hidden&&L.day&&st)?Math.max(0,Math.min(n,uniDiff(st,L.day))):0;
+  return {D,st,n,iS,iL}; }
+function actI0(X){ const k=ACTRANGE==='30d'?30:(ACTRANGE==='90d'?90:(ACTRANGE==='1y'?365:X.n)); return Math.max(0,X.n-k,ACTPRE?0:Math.min(Math.max(0,X.n-1),X.iL)); }
+// 7-day average: of a count (mean of the known days) or of a ratio (Σnum ÷ Σden — never a mean of daily ratios); ≥4 known days
+function actRoll(num,den,n){ const out=new Array(n).fill(null);
+  for(let i=0;i<n;i++){ let a=0,b=0,c=0; for(let j=Math.max(0,i-6);j<=i;j++){ const x=actAt(num,j), y=den?actAt(den,j):1; if(x!=null&&y!=null&&y>0){ a+=x; b+=y; c++; } } out[i]=(c>=4&&b>0)?a/b:null; }
+  return out; }
+function actDiv(num,den,n,k){ const o=[]; for(let i=0;i<n;i++){ const x=actAt(num,i), y=actAt(den,i); o.push(x!=null&&y!=null&&y>0?x*(k||1)/y:null); } return o; }
+const ACT_PKG='#a78bfa';
+function actMarks(d,X,extra){ const m=((d.releases||[]).filter(x=>x&&x.date).map(x=>({x:x.date,color:ACT_PKG,label:'📦'})));
+  return m.concat(((X.D.breaks)||[]).map(b=>({x:b,color:'#ff9f43',label:'No data'}))).concat(extra||[]); }
+// the 📦 chips under a chart: each opens that update's block in THIS tab's Update impact card
+function actPkgs(d,from,to){ const L=(d.releases||[]).filter(x=>x&&x.date&&x.date>=from&&x.date<=to).sort((p,q)=>p.date<q.date?1:(p.date>q.date?-1:0));
+  if(!L.length) return ''; const MX=8, sh=ACTRELALL?L:L.slice(0,MX);
+  const lb=x=>x.version?uniRelV(x):'Update';
+  return `<div class="act-pkgs">${sh.map(x=>x.key?`<span class="act-pkg" data-key="${hAttr(x.key)}" title="Tap — is update ka asar (Update impact)" onclick="uniImp('${uniQ(x.key)}','act')">📦 ${hAttr(lb(x))} · ${uniD(x.date)}</span>`
+    :`<span class="act-pkg off" title="Is update ka Update impact block nahi (launch se pehle ya bahut jaldi agla update)">📦 ${hAttr(lb(x))} · ${uniD(x.date)}</span>`).join('')}`
+    +(L.length>MX?`<span class="lnk" style="font-size:11.5px;align-self:center" onclick="actRX()">${ACTRELALL?'Show fewer':'+'+(L.length-MX)+' more updates'}</span>`:'')+'</div>'; }
+function actChart(X,i0,vals,o){ const dates=[]; for(let i=i0;i<X.n;i++) dates.push(uniAdd(X.st,i));
+  const sl=a=>{ const r=[]; for(let i=i0;i<X.n;i++) r.push(Array.isArray(a)&&a[i]!=null&&isFinite(+a[i])?+a[i]:null); return r; };
+  const dim=dates.map((x,j)=>(i0+j)>X.iS||(i0+j)<X.iL), pv=X.iS+1-i0;
+  return bTrendChart(dates,sl(vals),{idp:'act-',xlab:uniD,fmt:o.fmt,gaps:true,color:o.color,band:o.band?{lo:sl(o.band.lo),hi:sl(o.band.hi)}:null,marks:o.marks||[],dim,
+    lines:(o.lines||[]).map(l=>Object.assign({},l,{v:sl(l.v)})),shade:(pv>0&&pv<dates.length)?{from:pv,label:'provisional →'}:null}); }
+function actRangeChips(){ return [['30d','30 days'],['90d','3 months'],['1y','1 year'],['all','All time']].map(([v,l])=>`<span class="chip${ACTRANGE===v?' on':''}" onclick="actR('${v}')">${l}</span>`).join(''); }
+function actSmChips(){ return [['7d','7-day average'],['day','Every day']].map(([v,l])=>`<span class="chip${ACTSMOOTH===v?' on':''}" onclick="actSm('${v}')">${l}</span>`).join(''); }
+const actLg=(c,t,dash)=>`<span><i style="display:inline-block;width:14px;height:0;border-top:2px ${dash?'dashed':'solid'} ${c}"></i>${t}</span>`;
+const actLgBand=t=>`<span><i class="dot" style="background:rgba(61,208,240,.28)"></i>${t}</span>`;
+const actLgMark=(c,t)=>`<span><i style="display:inline-block;height:11px;border-left:2px dashed ${c}"></i>${t}</span>`;
+const ACT_LG_PROV='<span><i style="display:inline-block;width:14px;height:10px;background:repeating-linear-gradient(45deg,rgba(132,150,181,.35) 0 2px,transparent 2px 5px)"></i>Provisional — still coming in</span>';
+// one-sided daily bars (new installs), x lined up with bTrendChart's
+function actBars(dates,vals,pv){ const n=dates.length; if(!n) return '';
+  const W=1000,H=130,mL=56,mR=18,mT=10,mB=28,pw=W-mL-mR,ph=H-mT-mB, V=vals.map(v=>actOk(v)?+v:null), top=Math.max(1,...V.map(v=>v||0))*1.08;
+  const xi=i=>mL+(n<=1?pw/2:pw*i/(n-1)), bw=Math.max(1,Math.min(16,(n<=1?30:pw/(n-1))*0.72)), y=v=>mT+ph*(1-v/top);
+  let g=''; [0,.5,1].forEach(f=>{ const yy=y(top*f).toFixed(1); g+=`<line x1="${mL}" y1="${yy}" x2="${W-mR}" y2="${yy}" stroke="#22314f" stroke-width="1"/><text x="${mL-9}" y="${(+yy+4).toFixed(1)}" text-anchor="end" font-size="13" fill="#8496b5">${fmtN(top*f)}</text>`; });
+  let b=''; V.forEach((v,i)=>{ if(v==null||v<=0) return; b+=`<rect x="${(xi(i)-bw/2).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(mT+ph-y(v)).toFixed(1)}" fill="#94a3b8"${pv>=0&&i>=pv?' fill-opacity=".38"':' fill-opacity=".8"'} rx="1"/>`; });
+  const step=Math.max(1,Math.ceil(n/8)), lastK=Math.floor((n-1)/step)*step; let xl='';
+  for(let i=0;i<n;i++){ if(i%step!==0&&i!==n-1) continue; if(i===lastK&&i!==n-1&&xi(n-1)-xi(i)<46) continue;
+    xl+=`<text x="${xi(i).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="12.5" fill="#8496b5">${uniD(dates[i])}</text>`; }
+  const pts=dates.map((d,i)=>({x:+xi(i).toFixed(1),y:+y(V[i]||0).toFixed(1),l:uniD(d)+(pv>=0&&i>=pv?' · provisional':''),v:V[i]==null?'—':actNum(V[i])+' new',s:null,sy:null}));
+  const hov=`<line class="bcg" x1="0" x2="0" y1="${mT}" y2="${(mT+ph).toFixed(1)}" stroke="#cfe8ff" stroke-opacity=".4" stroke-width="1" style="visibility:hidden;pointer-events:none"/>`
+    +`<circle class="bch" r="4.4" fill="#94a3b8" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/><circle class="bch2" r="1" fill="none" style="visibility:hidden;pointer-events:none"/>`
+    +`<g class="bct" style="visibility:hidden;pointer-events:none"><rect class="bctbg" rx="7" fill="#0b1220" stroke="#38507a" stroke-width="1"/><text class="bctd" font-size="11" font-weight="600" fill="#8496b5"></text><circle class="bcrdot" r="3.4" fill="#94a3b8"/><text class="bctr" font-size="13.5" font-weight="700" fill="#eaf6ff"></text><circle class="bcsdot" r="3.4" fill="none"/><text class="bcts" font-size="13.5" font-weight="700" fill="#eaf6ff"></text></g>`
+    +`<rect x="${mL}" y="${mT}" width="${pw}" height="${ph.toFixed(1)}" fill="transparent" style="cursor:crosshair" onmousemove="bChartHover(event,this)" onmouseleave="bChartLeave(this)"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" data-pts='${JSON.stringify(pts).replace(/&/g,'&amp;').replace(/'/g,'&#39;')}' style="width:100%;height:auto;display:block">${g}${b}${xl}${hov}</svg>`; }
+function actLateLine(d){ const S=d.settled_till; if(!S||!d.data_till||S>=d.data_till) return '';
+  return `<div class="faint act-late" style="font-size:11.5px;line-height:1.5;margin:6px 0 0">⏳ Pichhle ${uniDiff(S,d.data_till)} din (${uniD(uniAdd(S,1))} se) abhi aa rahe — dhaari wale din badhenge.</div>`; }
+// "👥 Returning users — every day": the line (7-day average or every day with its normal range), old users dashed,
+// new installs under it, 📦 chips, provisional days hatched
+function actDailyCard(d){
+  const X=actX(d), hd='<div class="ct uni-ct"><h3>👥 Returning users — every day</h3><span class="faint" style="font-size:11.5px">active users − that day\'s new installs</span></div>';
+  if(!X.n) return `<div class="card" id="act-daily" style="margin-bottom:14px">${hd}<div class="muted" style="font-size:13px">Roz ka data abhi nahi.</div></div>`;
+  const i0=actI0(X), D=X.D, sm=ACTSMOOTH!=='day', B=(d.bands||{}).ret_dau||{}, oq=D.oq||[];
+  const R=sm?actRoll(D.ret,null,X.n):D.ret, O=sm?actRoll(D.old,null,X.n):D.old, hasO=(D.old||[]).some((v,i)=>i>=i0&&actOk(v)), est=oq.some((q,i)=>i>=i0&&q===1);
+  const lines=[]; if(hasO) lines.push({v:O,color:'#8fb8ff',dash:'6 4'}); if(sm&&(B.med||[]).some(actOk)) lines.push({v:actRoll(B.med,null,X.n),color:'#8496b5',dash:'3 4',width:1.6});
+  const chart=actChart(X,i0,R,{fmt:v=>actNum(v),band:sm?null:B,lines,marks:actMarks(d,X)});
+  const from=uniAdd(X.st,i0), to=d.data_till, newc=actBars((()=>{ const a=[]; for(let i=i0;i<X.n;i++) a.push(uniAdd(X.st,i)); return a; })(),(D.new||[]).slice(i0,X.n),X.iS+1-i0);
+  const lgd=`<div class="lgd">${actLg('#3dd0f0','Returning users'+(sm?' (7-day average)':''))}${hasO?actLg('#8fb8ff',actOldLbl(D.old_k)+(est?' ≈':''),true):''}${sm?(lines.length>(hasO?1:0)?actLg('#8496b5','Normal (7-day average)',true):''):actLgBand('Normal range')}`
+    +`${(d.releases||[]).length?actLgMark(ACT_PKG,'📦 App update'):''}${(D.breaks||[]).length?actLgMark('#ff9f43','No data (tracking)'):''}${X.iS<X.n-1?ACT_LG_PROV:''}</div>`;
+  return `<div class="card" id="act-daily" style="margin-bottom:14px">${hd}<div class="chips" style="margin-bottom:6px">${actSmChips()}</div><div class="chips" style="margin-bottom:8px">${actRangeChips()}</div>
+    ${chart}${lgd}${actPkgs(d,from,to)}
+    <div style="font-size:12px;font-weight:700;color:var(--ink2);margin:12px 0 2px">New installs / day</div>${newc}${actLateLine(d)}
+    <div class="faint" style="font-size:10.5px;margin-top:6px;line-height:1.5">Returning users = us din ke GA4 active users − us din ke naye installs (purane users). ${hasO?actOldLbl(D.old_k)+' = inme se jo 30+ din pehle install hue (haal ke installs ka wapas aana hata ke)'+(est?'; ≈ = andaza (wapsi ki rate se)':'')+'. ':''}Khali jagah = us din ka data nahi (0 nahi maana).</div></div>`; }
+// ---- "🔁 How many came back": by install day (chart) + install week × day (grid) ----
+const ACT_RN=[[1,'Next day'],[3,'After 3 days'],[7,'After a week'],[14,'After 2 weeks'],[30,'After 30 days']];
+function actRetChart(d,X,T){
+  const nmax=actOk(T.nmax)?+T.nmax:0, ns=ACT_RN.filter(([N])=>N<=nmax);
+  if(!ns.length) return '';
+  const N=ns.some(([k])=>k===ACTRETN)?ACTRETN:ns[0][0], C=X.D.coh||{}, t=C.t||[], a=C['d'+N]||[], ok=C.ok||[], edge=(d.edges||{}).ret_from||T.from||null, ie=edge?Math.max(0,uniDiff(X.st,edge)):0;
+  const v=new Array(X.n).fill(null);   // a not-usable install day stays a gap
+  for(let i=ie;i<X.n;i++){ if(ok[i]!==1) continue; let s=0,u=0,c=0; for(let j=Math.max(ie,i-6);j<=i;j++){ const tt=actAt(t,j), aa=actAt(a,j); if(ok[j]===1&&tt!=null&&tt>0&&aa!=null){ s+=aa; u+=tt; c++; } } v[i]=(c>=4&&u>0)?s*100/u:null; }
+  const ref=(T.ref||[])[N], i0=actI0(X), chips=ns.map(([k,l])=>`<span class="chip${k===N?' on':''}" onclick="actRN(${k})">${l}</span>`).join('');
+  const Xp=Object.assign({},X,{iS:X.iS-N});   // an install day is settled at day N only when c + N ≤ settled_till
+  const chart=actChart(Xp,i0,v,{fmt:x=>(+x).toFixed(1)+'%',lines:actOk(ref)?[{v:new Array(X.n).fill(+ref*100),color:'#8496b5',dash:'5 4',width:1.6}]:[],
+    marks:actMarks(d,X,edge&&(d.edges||{}).ret_state==='found'?[{x:edge,color:'#8fb8ff',label:'Data starts'}]:[])});
+  const lgd=`<div class="lgd">${actLg('#3dd0f0','Came back · '+ns.find(([k])=>k===N)[1].toLowerCase()+' (7 install din milakar)')}${actOk(ref)?actLg('#8496b5',actLbl(T.label)+' '+uniPct(ref),true):''}${edge&&(d.edges||{}).ret_state==='found'?actLgMark('#8fb8ff','Install-day return data starts '+uniD(edge)):''}${ACT_LG_PROV}</div>`;
+  return `<div style="padding:4px 17px 0"><div style="font-size:12.5px;font-weight:700;color:var(--ink2);margin:6px 0 6px">By install day</div><div class="chips" style="margin-bottom:6px">${chips}</div><div class="chips" style="margin-bottom:8px">${actRangeChips()}</div>
+    <div id="act-ret-chart">${chart}</div>${lgd}${actPkgs(d,uniAdd(X.st,i0),d.data_till)}</div>`; }
+function actLbl(t){ return hAttr(String(t||'All-time normal').replace(/\b(\d{4}-\d\d-\d\d)\b/g,(m,d)=>uniD(d))); }
+function actHeat(h){ return +h>0?'background:rgba(52,217,154,.30);color:#fff':(+h<0?'background:rgba(255,107,107,.30);color:#fff':''); }
+function actTriCard(d){
+  const X=actX(d), T=d.tri||{}, E=d.edges||{}, rs=E.ret_state||'wait', L=d.launch||{}, hid=!!(L.hidden&&L.day);
+  const hd=`<div class="ct uni-ct" style="padding:16px 17px 0"><h3>🔁 How many came back — install week × day</h3><span class="faint" style="font-size:11.5px">of 100 new users, how many opened the app that day</span></div>`;
+  const wrap=h=>`<div class="card pad0" id="act-tri" style="margin-bottom:14px">${hd}${h}</div>`;
+  const rows0=(Array.isArray(T.rows)?T.rows:[]).filter(r=>r&&r.from&&r.to).slice().sort((p,q)=>p.from<q.from?1:(p.from>q.from?-1:0));
+  if(!rows0.length||rs==='wait') return wrap(`<div class="uni-empty" style="margin:12px 17px 16px">🔁 Wapsi (D1/D7) ka data agle GA4 fetch ke saath aayega.</div>`);
+  const nmax=actOk(T.nmax)?+T.nmax:0, ph=(typeof innerWidth==='number'&&innerWidth<700);
+  const cols=ACTTRI==='all'?Array.from({length:nmax},(_,i)=>i+1):((ph&&Array.isArray(T.cols_phone)&&T.cols_phone.length)?T.cols_phone:(T.cols||[])).filter(N=>N>=1&&N<=30);
+  const chips=[['key','Key days'],['all','Every day']].map(([v,l])=>`<span class="chip${ACTTRI===v?' on':''}" onclick="actTM('${v}')">${l}</span>`).join('')
+    +(hid?`<span class="chip${ACTPRE?' on':''}" onclick="actPX()">Show test installs</span>`:'');
+  const vis=ACTPRE?rows0:rows0.filter(r=>!r.pre), shown=ACTTRIEXP?vis:vis.slice(0,12);
+  const pc=(p)=>actOk(p)?uniPct(+p):'·';
+  const head=`<tr><th>Install week</th>${cols.map(N=>`<th style="text-align:center">D${N}</th>`).join('')}</tr>`;
+  const ref=T.ref||[], thin=T.ref_thin||[], A=T.avg4||{}, av=A.v||[], ap=A.prov||[];
+  const refRow=`<tr><td class="nm faint" style="font-size:11.5px;font-weight:600">${actLbl(T.label)}</td>${cols.map(N=>`<td class="h" style="color:var(--muted)${thin[N]?';opacity:.55':''}"${thin[N]?' title="Low data — kam installs itne din tak pahunche"':''}>${pc(ref[N])}</td>`).join('')}</tr>`;
+  const avRow=`<tr><td class="nm faint" style="font-size:11.5px;font-weight:600">4-week average<div class="faint" style="font-size:10.5px;font-weight:400;white-space:normal;max-width:170px">${A.from?uniSpan(A.from,A.to)+' ke installs':'Abhi 4 pakke hafte nahi'}</div></td>${cols.map(N=>`<td class="h"${ap[N]?` style="opacity:.55" title="${ACT_PROV_TIP}"`:''}>${pc(av[N])}</td>`).join('')}</tr>`;
+  const sep=t=>`<tr class="uni-yr"><td class="nm" style="font-size:11px;font-weight:700;color:var(--muted);white-space:normal;max-width:170px;padding:6px 9px">${t}</td><td colspan="${cols.length}" style="padding:6px 0"></td></tr>`;
+  const rels=(d.releases||[]).filter(x=>x&&x.date).sort((p,q)=>p.date<q.date?-1:(p.date>q.date?1:0));
+  let yr='', pre=false, nRel=0;
+  const body=shown.map(r=>{ let h='';
+    if(r.pre&&!pre){ pre=true; yr=''; h+=sep(`🧪 ${uniTestWord(L,true)}${L.day?' (before launch '+uniD(L.day)+')':''}`); }
+    if(r.to.slice(0,4)!==yr){ yr=r.to.slice(0,4); h+=sep('── '+yr+' ──'); }
+    const wk=rels.filter(x=>x.date>=r.from&&x.date<=r.to), rt=uniRelTxt(wk), go=(wk.find(x=>x.key)||{}).key||'';
+    if(rt){ nRel++; h+=`<tr class="uni-rel"><td class="nm">${go?`<span class="uni-rl" title="Tap — is update ka asar (Update impact)" onclick="uniImp('${uniQ(go)}','act')">${hAttr(rt.line)}</span>`:hAttr(rt.line)}</td><td colspan="${cols.length}"></td></tr>`; }
+    const badge=rt?`<span class="uni-relb" title="${hAttr(rt.tip)}"${go?` onclick="uniImp('${uniQ(go)}','act')" style="cursor:pointer"`:''}>📦</span>`:'';
+    const lab=`<td class="nm" style="white-space:nowrap">${uniSpan(r.from,r.to,true)}${actOk(r.days)&&+r.days<7?` <span class="faint" style="font-weight:400">(only ${r.days} ${+r.days===1?'day':'days'})</span>`:''}${badge}<div class="faint" style="font-size:10.5px;font-weight:400">${actNum(r.users)} installs${r.pre?' · test':''}${r.part?' · ½ part data':''}</div></td>`;
+    if(r.nodata) return h+`<tr${r.pre?' style="opacity:.62"':''} data-week="${r.from}">${lab}<td class="h faint act-nd" colspan="${cols.length||1}" title="GA4 ne is hafte ke installs ka wapsi data nahi diya">No data</td></tr>`;
+    return h+`<tr${r.pre?' style="opacity:.62"':''} data-week="${r.from}">${lab}`+cols.map(N=>{ const p=(r.v||[])[N]; if(!actOk(p)) return '<td class="h"><span class="faint">·</span></td>';
+      const pv=!!(r.prov||[])[N], pt=!!r.part, heat=(pv||pt||r.pre)?'':actHeat((r.heat||[])[N]);
+      const tip=[pv?'provisional — abhi aa raha, badh sakta hai':'',pt?'adhoora data — kuch din ka data nahi / GA4 ki shuruaat se pehle':'',r.q?'GA4 ki purani seema check nahi ho sakti (installs kam)':''].filter(Boolean).join(' · ');
+      return `<td class="h" data-n="${N}"${pv?' data-prov="1"':''} style="${heat}${pv?';opacity:.55':''}"${tip?` title="${hAttr(tip)}"`:''}>${uniPct(+p)}${pt?'<sup>½</sup>':''}${r.q?'<sup>?</sup>':''}</td>`; }).join('')+'</tr>'; }).join('');
+  const edge=T.edge||(rs==='found'?E.ret_from:null), all=shown.length===vis.length;
+  const eRow=edge&&all?`<tr class="act-edge-row"><td class="nm" colspan="${cols.length+1}" style="font-size:11px;color:#8fb8ff;white-space:normal">↧ Install-day return data starts ${uniD(edge)}</td></tr>`:'';
+  const tbl=cols.length?`<div class="uni-scroll"><table class="uni-sticky uni-heat act-grid" style="margin-top:4px;min-width:${Math.max(300,170+cols.length*58)}px"><thead>${head}</thead><tbody>${refRow}${avRow}${body}${eRow}</tbody></table></div>`
+    :'<div class="muted" style="font-size:12.5px;padding:4px 17px 12px">Abhi kisi din tak kaafi installs nahi pahunche.</div>';
+  const more=(vis.length>12?`<div style="padding:10px 17px 4px"><span class="lnk" style="font-size:12px" onclick="actTX()">${ACTTRIEXP?'Hide':'Show all '+vis.length+' weeks'}</span></div>`:'')
+    +(edge&&!all?`<div class="faint" style="font-size:10.5px;padding:6px 17px 0;color:#8fb8ff">↧ Install-day return data starts ${uniD(edge)}</div>`:'')
+    +(nRel?`<div class="faint" style="font-size:10.5px;padding:6px 17px 0">📦 = new update. <b style="color:var(--purple)">Tap 📦 to see its impact</b> (before vs after, in Update impact above).</div>`:'');
+  return wrap(actRetChart(d,X,T)+`<div style="padding:12px 17px 0;font-size:12px;color:var(--ink2);line-height:1.5">Har row = ek hafte ke naye users · 100 me se kitne us din app khole · hara = normal se zyada · laal = kam · halka = abhi aa raha · ½ = adhoora data</div>
+    <div style="padding:8px 17px 0"><div class="chips" style="margin-bottom:8px">${chips}</div></div>${tbl}${more}<div style="height:12px"></div>`); }
+// ---- "⏱️ Sessions & time per user" + the version table ----
+function actUseArr(X,m,pop){ const D=X.D, U=D.u||{}, SX=(m==='sess'?D.s:D.t)||{}, inc=new Set((D.inc||[]).map(x=>uniDiff(X.st,x))), num=[], den=[];
+  for(let i=0;i<X.n;i++){ let a=null,b=null;
+    if(!inc.has(i)){ if(pop==='r'){ a=actAt(SX.r,i); b=actAt(U.r,i); } else if(pop==='n'){ a=actAt(SX.n,i); b=actAt(U.n,i); }
+      else { const p=[actAt(SX.n,i),actAt(SX.r,i),actAt(SX.o,i)]; a=p.some(v=>v==null)?null:p[0]+p[1]+p[2]; b=actAt(D.a1,i); } }
+    num.push(a); den.push(b); }
+  return {num,den}; }
+function actVerRow(v){ const lb=v.kind==='rest'?'Other versions (&lt;1% each)':(v.kind==='x'?'Version not set':hAttr(uniRelV({version:v.ver}))), s=v.vs;
+  let vs='<span class="faint">—</span>';
+  if(s&&typeof s==='object'){ const w={higher:'Higher',lower:'Lower',same:'Same',maybe:'Maybe'}[s.st]||'';
+    const tip=s.st==='maybe'?(s.why==='few'?'Pehle ke updates kam — naye version ka aam farak abhi pata nahi':'Abhi pakka nahi'):'Same din, pichhle version wale users se — jaldi update karne walo ka aam farak hata ke';
+    vs=`Sessions ${uniChg(s.rel_s)} · Time ${uniChg(s.rel_t)}`+(w?` <span class="pill ${s.st==='maybe'?'p-b':'uni-pn'}" title="${hAttr(tip)}">${w}</span>`:''); }
+  return `<tr data-ver="${hAttr(v.ver)}"><td class="nm">${lb}</td><td>${v.from?uniD(v.from):'—'}</td><td class="uni-num" title="${hAttr(actNum(v.users)+' users')}">${actOk(v.share)?uniPct(+v.share):'—'}</td>`
+    +`<td class="uni-num">${actDec(v.sess)}</td><td class="uni-num">${uniDur(v.time)}</td><td style="white-space:nowrap">${vs}</td></tr>`; }
+function actVerTable(d){ const V=(d.versions||[]).filter(v=>v&&typeof v==='object'), M=(d.versions_more||[]).filter(v=>v&&typeof v==='object'), F=d.flags||{};
+  if(!V.length&&!M.length) return '';
+  const main=V.filter(v=>!v.kind), tail=V.filter(v=>v.kind), rows=main.concat(ACTVERALL?M:[]).concat(tail);
+  return `<div class="uni-imp-sub" style="margin-top:16px">By app version</div>
+    <div class="uni-scroll"><table class="uni-sticky act-ver" style="min-width:600px"><thead><tr><th>Version</th><th>Out since</th><th>Users now</th><th>Sessions/user</th><th>Time/user</th><th>vs previous version (same days)</th></tr></thead><tbody>${rows.map(actVerRow).join('')}</tbody></table></div>
+    ${M.length?`<div style="padding:8px 2px 0"><span class="lnk" style="font-size:12px" onclick="actVX()">${ACTVERALL?'Show fewer versions':'Show all versions ('+(main.length+M.length+tail.length)+')'}</span></div>`:''}
+    <div class="faint" style="font-size:10.5px;margin-top:6px;line-height:1.5">Returning = returning + GA4 'not set'. Users now = sab versions ke users me is version ka hissa.${F.vuse_split===false?' Version ke hisaab se sessions/time sab users ke (GA4 split nahi deta).':''}</div>`; }
+function actUseCard(d){
+  const X=actX(d), E=d.edges||{}, F=d.flags||{}, hd='<div class="ct uni-ct"><h3>⏱️ Sessions &amp; time per user</h3><span class="faint" style="font-size:11.5px">returning users · every day</span></div>';
+  const wrap=h=>`<div class="card" id="act-use" style="margin-bottom:14px">${hd}${h}</div>`;
+  if(E.usage_state==='wait'||!X.n) return wrap('<div class="uni-empty">⏳ Sessions aur time agle GA4 fetch ke baad aayenge (poori history ek saath).</div>');
+  const m=ACTUSEM==='sess'?'sess':'time', pop=['r','all','n'].includes(ACTUSEPOP)?ACTUSEPOP:'r', A=actUseArr(X,m,pop), sm=ACTSMOOTH!=='day', B=(d.bands||{})[m]||{};
+  const vals=sm?actRoll(A.num,A.den,X.n):actDiv(A.num,A.den,X.n), i0=actI0(X), fmt=m==='time'?(v=>uniDur(v)):(v=>(+v).toFixed(2));
+  const chart=actChart(X,i0,vals,{fmt,band:(!sm&&pop==='r')?B:null,marks:actMarks(d,X)});
+  const c1=[['time','Time per user'],['sess','Sessions per user']].map(([v,l])=>`<span class="chip${m===v?' on':''}" onclick="actUM('${v}')">${l}</span>`).join('');
+  const c2=[['r','Returning'],['all','All users'],['n','New installs']].map(([v,l])=>`<span class="chip${pop===v?' on':''}" onclick="actUP('${v}')">${l}</span>`).join('');
+  const g=actOk(F.gap_g)&&Math.abs(+F.gap_g)>=0.03?`<div class="faint" style="font-size:11.5px;margin-top:6px">ℹ️ ~${Math.round(Math.abs(+F.gap_g)*100)}% of these are new installs on a 2nd session (GA4 unhe bhi "returning" ginta hai).</div>`:'';
+  const inc=(X.D.inc||[]).length?` · ${(X.D.inc||[]).length} ${(X.D.inc||[]).length===1?'day':'days'} with incomplete GA4 data left out (gap)`:'';
+  const lgd=`<div class="lgd">${actLg('#3dd0f0',(m==='time'?'Time':'Sessions')+' per user · '+({r:'returning',all:'all users',n:'new installs — context, not judged'})[pop]+(sm?' (7-day average)':''))}${(!sm&&pop==='r')?actLgBand('Normal range'):''}${(d.releases||[]).length?actLgMark(ACT_PKG,'📦 App update'):''}${X.iS<X.n-1?ACT_LG_PROV:''}</div>`;
+  return wrap(`<div class="chips" style="margin-bottom:6px">${c1}</div><div class="chips" style="margin-bottom:6px">${c2}</div><div class="chips" style="margin-bottom:8px">${actSmChips()}</div>
+    ${pop==='n'?'<div class="faint" style="font-size:11.5px;margin-bottom:6px">New installs — context, not judged (unka pehla din alag hota hai)</div>':''}${chart}${lgd}${actPkgs(d,uniAdd(X.st,i0),d.data_till)}${g}
+    <div class="faint" style="font-size:10.5px;margin-top:6px;line-height:1.5">Per user = us din ke kul sessions (ya time) ÷ us din ke users — 7-day average bhi jod kar hi (roz ke average ka average nahi)${inc}. Normal range sirf Returning ke liye.</div>${actVerTable(d)}`); }
+// ---- "💰 Ad revenue per user" ----
+function actRevCard(d){
+  const X=actX(d), E=d.edges||{}, F=d.flags||{}, cur=actCurOf(d), hd='<div class="ct uni-ct"><h3>💰 Ad revenue per user</h3><span class="faint" style="font-size:11.5px">AdMob Network ÷ GA4 active users</span></div>';
+  const wrap=h=>`<div class="card" id="act-rev" style="margin-bottom:14px">${hd}${h}</div>`;
+  const D=X.D; if(!X.n||!E.rev_from&&!(D.rev||[]).some(actOk)) return wrap('<div class="uni-empty">💰 Is app ki AdMob kamai nahi mili — ad revenue per user nahi.</div>');
+  const m=['k','ads','ecpm'].includes(ACTREVM)?ACTREVM:'k', sm=ACTSMOOTH!=='day', i0=actI0(X);
+  const [num,den,k]=m==='k'?[D.rev,D.a1,1000]:(m==='ads'?[D.imp,D.a1,1]:[D.rev,D.imp,1000]);
+  const vals=sm?actRoll(num,den,X.n).map(v=>v==null?null:v*k):actDiv(num,den,X.n,k), B=(d.bands||{})[m==='k'?'arpdau':(m==='ads'?'ads':'')]||null;
+  const fmt=m==='ads'?(v=>(+v).toFixed(2)):(v=>actMoney(v,cur));
+  const chart=actChart(X,i0,vals,{fmt,band:(!sm&&B)?B:null,marks:actMarks(d,X)});
+  const chips=[['k','Per 1,000 users'],['ads','Ads per user'],['ecpm','Price per 1,000 ads']].map(([v,l])=>`<span class="chip${m===v?' on':''}" onclick="actRM('${v}')">${l}</span>`).join('');
+  const gaps=(D.rev_gaps||[]).filter(g=>Array.isArray(g)&&g[0]);
+  const gl=gaps.length?`<div class="faint" id="act-revgaps" style="font-size:11.5px;margin-top:6px">No ad data ${gaps.map(g=>uniSpan(g[0],g[1]||g[0])).join(', ')} — khali chhoda (0 nahi maana).</div>`:'';
+  const MK=((DATA.active&&DATA.active.market&&DATA.active.market.weeks)||[]).filter(w=>w&&w.from&&w.to>=uniAdd(X.st,i0));
+  const ml=MK.length?`<div class="act-mk">${MK.map(w=>`<div>💱 Market-wide ${w.from?uniSpan(w.from,w.to):''}: eCPM ${w.dir==='up'?'up':'down'} ${actOk(w.median_rel)?uniChg(w.median_rel):''} in ${actNum(w.of)} of ${actNum(w.apps)} apps</div>`).join('')}</div>`:'';
+  const tz=actTz(d.tz), rtz=actTz(d.rev_tz), os=actOther(F)?` Dusre ad networks (mediation) se ~${actOther(F)}% aur kamai hai, wo isme nahi.`:'';
+  const note=`<div class="faint act-revnote" style="font-size:10.5px;margin-top:6px;line-height:1.5">${(tz&&rtz&&tz!==rtz)?`≈ AdMob ka din (${hAttr(rtz)}) aur GA4 ka din (${hAttr(tz)}) alag — din ka revenue ghante ke hisaab se baanta, andaza. Hafte ka total sahi. `:''}Sirf AdMob Network (mediation ke dusre networks nahi).${os} AdMob earnings month close tak estimate.</div>`;
+  const lgd=`<div class="lgd">${actLg('#3dd0f0',({k:'Ad revenue per 1,000 users ≈',ads:'Ads per user',ecpm:'Price per 1,000 ads (eCPM) ≈'})[m]+(sm?' (7-day average)':''))}${(!sm&&B&&(B.lo||[]).some(actOk))?actLgBand('Normal range'):''}${(d.releases||[]).length?actLgMark(ACT_PKG,'📦 App update'):''}${X.iS<X.n-1?ACT_LG_PROV:''}</div>`;
+  return wrap(`<div class="chips" style="margin-bottom:6px">${chips}</div><div class="chips" style="margin-bottom:8px">${actSmChips()}</div>${chart}${lgd}${actPkgs(d,uniAdd(X.st,i0),d.data_till)}${gl}${ml}${note}`); }
+// ---- "⏱️ When will I know?" (one line until tapped) ----
+function actTimingNote(){ const la=uniLateTxt(UNI&&UNI.lateness,'a1');
+  const th=`<div class="th" onclick="actTNX()"><span class="cv${ACTTIMEXP?' on':''}">▸</span><span>⏱️ <b>When will I know?</b></span><span class="lnk" style="margin-left:auto;font-size:12px">${ACTTIMEXP?'Hide':'Show'}</span></div>`;
+  if(!ACTTIMEXP) return `<div class="note uni-tn" id="act-timing">${th}</div>`;
+  return `<div class="note uni-tn" id="act-timing">${th}<ul class="tb">
+    <li>GA4 din ~2 din baad aata hai, activity 3 din me pakki (Uninstall 7 din me).${la?` Sab apps me naapa hua: ${la} active users aa chuke hote hain.`:''}</li>
+    <li>Purane users ka badlaav ~6 din baad dikhta, alert ~9 din baad (2 baar pakka hone par).</li>
+    <li>D1 ~6 din, D7 ~12 din, D30 ~35 din baad.</li>
+    <li>Revenue/user ~6 din baad (AdMob estimate).</li>
+    <li>Update impact: release + 7 din + 3 pakke din.</li></ul></div>`; }
+// ---- All apps ----
+function actStatus(r){ let best='wait'; ['ret_dau','d1','d7','sess','time','arpdau'].forEach(k=>{ const s=actSt((r.m||{})[k]); if(ACT_RANK[s]<ACT_RANK[best]) best=s; }); return best; }
+function actStatusCell(r){ let bk='ret_dau', best='wait'; ['ret_dau','d1','d7','sess','time','arpdau'].forEach(k=>{ const s=actSt((r.m||{})[k]); if(ACT_RANK[s]<ACT_RANK[best]){ best=s; bk=k; } });
+  return `${actChip(bk,(r.m||{})[bk],{launch_day:r.launch_day},actAlOf(r.app_id))}<div class="faint" style="font-size:10.5px;font-weight:400;margin-top:2px">${ACT_ML[bk]}</div>`; }
+function actAppChip(r,x){ return `<span class="uni-ac" data-app="${hAttr(r.app)}" title="${hAttr(r.app)} — open" onclick="actOpen('${uniQ(r.app_id)}')">${appIcon(r.app,18)}<span class="n">${hAttr(r.app)}</span>${x?`<span class="x">${x}</span>`:''}</span>`; }
+// pooled over the visible apps from their own sums (s = [num W, den W, num B, den B]); ret_dau = Σ of each app's mean a day
+function actPool(rows,k){ const ok=[], out=[]; let a=0,b=0,c=0,e=0, sc=null;
+  rows.forEach(r=>{ const M=(r.m||{})[k], s=M&&Array.isArray(M.s)?M.s:null, st=actSt(M);
+    if(!s||r.stale||st==='wait'||st==='noad'||![0,1,2,3].every(j=>actOk(s[j]))||!(+s[1]>0)||!(+s[3]>0)){ out.push(r); return; }
+    ok.push(r); if(k==='ret_dau'){ a+=s[0]/s[1]; b+=s[2]/s[3]; } else { a+=+s[0]; c+=+s[1]; b+=+s[2]; e+=+s[3]; if(sc==null&&actOk(M.v)&&+s[0]>0) sc=+M.v/(s[0]/s[1]); } });
+  if(!ok.length) return {v:null,base:null,ok,out};
+  if(k==='ret_dau') return {v:a,base:b,ok,out};
+  const f=(sc!=null&&isFinite(sc)&&sc>0)?sc:1; return {v:c>0?a/c*f:null,base:e>0?b/e*f:null,ok,out}; }
+const ACT_WAITS={d:'⏳ Wapsi (D1/D7) ka data agle GA4 fetch ke saath aayega',u:'⏳ Sessions / time agle GA4 fetch me aayenge'};
+function actAllWait(rows,k){ return rows.length>0&&rows.every(r=>actSt((r.m||{})[k])==='wait'); }
+function actPoolTile(k,label,P,n,fmt,dm,tip){ const ch=(P.v!=null&&P.base!=null)?(dm?uniPP((P.v-P.base)*100)+' pts':uniChg(P.v/P.base-1)):null;
+  const miss=P.out.map(r=>r.app+(r.stale?' (old data)':'')).join(', ');
+  const wt=!P.ok.length&&(k==='d1'||k==='d7'||k==='sess'||k==='time')&&actAllWait(P.out,k)?ACT_WAITS[dm?'d':'u']:'';   // nothing yet: say why, not "0 of N"
+  return `<div class="uni-st act-t act-pt" data-m="${k}"><div class="l"${tip?` title="${hAttr(tip)}"`:''}>${label}</div><div class="v">${P.v==null?'—':fmt(P.v)}</div>`
+    +(ch?`<div class="c">${ch} vs 4 weeks</div>`:'')+(wt?`<div class="c act-wt">${wt}</div>`:`<div class="c" title="${hAttr(miss?'Is number me nahi: '+miss:'Saari apps')}">${P.ok.length} of ${n} apps</div>`)+`</div>`; }
+const ACT_STRIPS=[['ret_dau','Returning users'],['d1','Came back next day'],['d7','Came back after a week'],['sess','Sessions per user'],['time','Time per user'],['arpdau','Ad revenue per 1,000 users']];
+const ACT_SCC={worse:'bad',watch:'watch',slow:'watch',break:'watch',better:'good',normal:'ok',price_dn:'act-pp',price_up:'act-pp'};
+function actStrip(rows,k){ const G={}; rows.forEach(r=>{ const st=actSt((r.m||{})[k]); (G[st]=G[st]||[]).push(r); });
+  const keys=Object.keys(G).sort((p,q)=>ACT_RANK[p]-ACT_RANK[q]||(p<q?-1:1));
+  const lbl=st=>st==='growth'?'Growing / shrinking fast':actChipTxt(k,{st,why:null});
+  const val=(r)=>{ const M=(r.m||{})[k]||{}; if(!actOk(M.v)) return ''; return (k==='d1'||k==='d7')?(actOk(M.pp)?uniPP(M.pp)+' pts':uni100(M.v)+' of 100'):(actOk(M.rel)?uniChg(M.rel):''); };
+  return `<div class="act-strip"><div class="act-sl2">${ACT_ML[k]}</div><div class="uni-scs">${keys.map(st=>{ const id=k+':'+st, on=ACTSTEXP===id, c=ACT_SCC[st]||'info';
+    return `<span class="uni-sc ${c}${on?' on':''}" data-k="${id}" onclick="actSX('${id}')"><i class="dt"></i>${lbl(st)} <b>(${G[st].length})</b><span class="cv">▾</span></span>`
+      +(on?`<div class="uni-xp ${c==='act-pp'?'info':c}" data-xp="${id}"><div class="uni-xph"><b>${ACT_ML[k]} · ${lbl(st)}</b><span class="faint">${hAttr(actChipTip(k,{st},null))}</span></div><div class="uni-acs">${G[st].map(r=>actAppChip(r,val(r))).join('')}</div></div>`:''); }).join('')}</div></div>`; }
+function actSumPortfolio(rows){ const n=rows.length, cur=(DATA.active&&DATA.active.currency)||undefined;
+  const K={worse:0,watch:0,ok:0,wait:0,better:0,err:0}; rows.forEach(r=>{ if(r.status==='error') K.err++; else { const s=(r.summary||{}).kind;
+    if(s==='worse') K.worse++; else if(s==='break'||s==='watch'||s==='slow') K.watch++; else if(s==='better') K.better++; else if(s==='ok'||s==='maybe') K.ok++; else K.wait++; } });
+  const cl=`<div class="act-line" id="act-count">⚠️ ${K.worse} ${K.worse===1?'app needs':'apps need'} a look · 🟡 ${K.watch} watch${K.better?` · 🟢 ${K.better} better`:''} · ✅ ${K.ok} normal · ℹ️ ${K.wait} not enough data${K.err?` · ⚠️ ${K.err} not built this time`:''}</div>`;
+  const nw=rows.filter(r=>r.ctx&&actOk(r.ctx.new)), P=k=>actPool(rows,k);
+  const tiles=[actPoolTile('ret_dau','Returning users / day',P('ret_dau'),n,actNum,false,'Har app ke roz ke purane users jod kar — ek insaan 2 apps pe ho to 2 baar gina (a person on 2 apps counts twice)'),
+    `<div class="uni-st act-t act-pt" data-m="new"><div class="l">New installs / day</div><div class="v">${nw.length?actNum(nw.reduce((t,r)=>t+ +r.ctx.new,0)):'—'}</div><div class="c" title="${hAttr(rows.filter(r=>!nw.includes(r)).map(r=>r.app).join(', ')||'Saari apps')}">${nw.length} of ${n} apps</div></div>`,
+    actPoolTile('d1','Came back next day',P('d1'),n,v=>uni100(v)+'<small>of 100</small>',true),actPoolTile('d7','Came back after a week',P('d7'),n,v=>uni100(v)+'<small>of 100</small>',true),
+    actPoolTile('sess','Sessions per user',P('sess'),n,v=>actDec(v)+'<small>a day</small>'),actPoolTile('time','Time per user',P('time'),n,v=>uniDur(v)+'<small>a day</small>'),
+    actPoolTile('arpdau','Ad revenue per 1,000 users',P('arpdau'),n,v=>'≈ '+actMoney(v,cur))];
+  const L=DATA.active&&DATA.active.market&&DATA.active.market.latest, sM=(DATA.active&&DATA.active.settled_till_max)||rows.map(r=>r.settled_till).filter(Boolean).sort().pop();
+  const mkr=L?(actOk(L.median_rel)?uniChg(L.median_rel):(L.dir==='up'?'upar':'neeche')):'', mnow=L&&L.to&&sM&&uniDiff(L.to,sM)<=7;
+  const mk=L&&L.from?`<div class="act-mkl" id="act-market">💱 Market-wide: ${mnow?`is hafte ${actNum(L.apps)} me se ${actNum(L.of)} apps ka eCPM ${mkr} (${uniSpan(L.from,L.to)}) — revenue/user ${L.dir==='up'?'zyada':'kam'} dikhega, app ki galti nahi.`
+    :`${uniSpan(L.from,L.to)} ke hafte me ${actNum(L.apps)} me se ${actNum(L.of)} apps ka eCPM ${mkr} tha (ab ka nahi).`}</div>`:'';
+  const st=rows.map(r=>r.settled_till).filter(Boolean).sort().pop(), dt=rows.map(r=>r.data_till).filter(Boolean).sort().pop();
+  return `<div class="card" id="act-sum" style="margin-bottom:14px"><div class="ct"><h3>📌 At a glance</h3><span class="faint" style="font-size:11.5px">All apps · last 7 settled days vs the 4 weeks before</span></div>
+    ${cl}<div class="uni-tiles act-tiles" id="act-pool" style="--n:4">${tiles.join('')}</div>
+    <div class="faint" style="font-size:11.5px;margin-top:7px">Saari dikhne wali apps milakar — facts only (har app ka apna normal alag hai, app pe tap karke dekho)</div>${mk}
+    <div class="uni-sec">Status by app <span>· tap a chip to see its apps</span></div><div class="act-strips">${ACT_STRIPS.map(([k])=>actStrip(rows,k)).join('')}</div>${actProvNote(st,dt)}</div>`; }
+function actPortfolio(){
+  const A=DATA.active, rows=actRows().filter(r=>uniVis(r.app_id)), n=rows.length;
+  const tMax=A.data_till_max||rows.map(r=>r.data_till).filter(Boolean).sort().pop(), sMax=A.settled_till_max||rows.map(r=>r.settled_till).filter(Boolean).sort().pop();
+  const head=`<h2 class="sc">Active users</h2><p class="scd"><b style="color:var(--ink2)">Active users — all apps</b>${tMax?` · GA4 till <b style="color:var(--ink2)">${uniD(tMax)}</b>`:' · abhi tak koi GA4 data nahi aaya'}${sMax?` · settled till <b style="color:var(--ink2)">${uniD(sMax)}</b>`:''}<br><span class="faint" style="font-size:12px">Returning users = roz ke active users − us din ke naye installs. GA4 ka activity data ~3 din me pakka hota hai — naye din <b>Provisional</b> (kam dikhte, judge nahi hote). Period (upar) sirf neeche wali app ki Period row pe lagta hai.</span></p>`;
+  const nBad=rows.filter(r=>r.stale||r.status==='error').length;
+  const note=A.status==='error'?'<div class="note">⚠️ GA4 se abhi Active users data nahi ban paya — agle robot run me phir try hoga.</div>'
+    :((A.status&&A.status!=='ok'&&nBad)?`<div class="note">⚠️ ${nBad} ${nBad===1?'app ka':'apps ka'} data purana ya is baar nahi bana — agle robot run me phir try hoga.</div>`:'');
+  let sum=''; try{ sum=n?actSumPortfolio(rows):''; }catch(e){ sum='<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ 📌 At a glance — ye hissa abhi dikh nahi paya.</div>'; }
+  const vis=new Set(rows.map(r=>r.app_id)), al=actNewest(actAlertsFor()), dets=rows.map(r=>[r,ACTD[r.key]]).filter(([,d])=>d);
+  const info=[], olds=[]; dets.forEach(([r,d])=>{ ((d.changes&&d.changes.info)||[]).forEach(o=>o&&info.push([r,o])); ((d.changes&&d.changes.older)||[]).forEach(o=>o&&olds.push([r,o])); });
+  olds.sort((p,q)=>(q[1].to||'')>(p[1].to||'')?1:((q[1].to||'')<(p[1].to||'')?-1:0));
+  const nd=rows.filter(r=>!ACTD[r.key]).length;
+  const oldL=(olds.length?uniFoldX(ACTOLDEXP,'Older changes',olds.length,'actOX()')+(ACTOLDEXP?olds.map(([r,o])=>actOldRow(o,r.app,r.app_id)).join(''):''):'')
+    +(nd?`<div class="faint" style="font-size:11px;margin-top:8px">ℹ️ Older changes sirf khuli hui apps ke${olds.length?'':' (abhi koi nahi)'} — open an app for its full history.</div>`:'');
+  const alCard=`<div class="card" id="act-chg" style="margin-bottom:14px"><div class="ct"><h3>🔔 What changed? (${al.length})</h3></div>
+    ${al.length?al.map(x=>actChangeRow(x,true,false)).join(''):'<div class="uni-ok">✅ All normal — no changes</div>'}${info.map(([r,o])=>actInfoRow(o,r.app,r.app_id)).join('')}${oldL}</div>`;
+  let upd=''; try{ const U=(DATA.uninstall&&DATA.uninstall.apps)||[], byId={}; rows.forEach(r=>{byId[r.app_id]=r;});
+    upd=uniUpdatesCard(U.filter(x=>x&&uniVis(x.app_id)&&vis.has(x.app_id)).map(x=>({s:x,a:(byId[x.app_id]&&ACTD[byId[x.app_id].key])||null})),'act'); }
+  catch(e){ upd='<div class="card faint" id="act-updates" style="margin-bottom:14px;font-size:12.5px">⚠️ 📦 Recent updates — ye hissa abhi dikh nahi paya.</div>'; }
+  const cur=A.currency||undefined, g=(r,k)=>((r.m||{})[k]||{});
+  const TH=[['app','App'],['ret','Returning/day','Roz ke purane users — pichhle 7 pakke din ka average'],['rel','vs 4 wks','Pichhle 7 pakke din vs usse pehle ke 4 hafte'],['d1','Next day','100 naye users me se kitne agle din aaye (sabse naye pakke install din)'],
+    ['d7','After a week','100 naye users me se kitne 7ve din aaye'],['sess','Sessions/user'],['time','Time/user'],['rev','Rev/1k users','AdMob kamai ÷ GA4 active users × 1,000 (≈)'],['status','Status','Sabse zaroori chip (alert pehle)']];
+  const sv=(r,k)=>{ if(k==='app') return (r.app||'').toLowerCase(); if(k==='status') return ACT_RANK[actStatus(r)];
+    const m={ret:['ret_dau','v'],rel:['ret_dau','rel'],d1:['d1','v'],d7:['d7','v'],sess:['sess','v'],time:['time','v'],rev:['arpdau','v']}[k], v=m?g(r,m[0])[m[1]]:null; return actOk(v)?+v:null; };
+  const sorted=rows.slice().sort((x,y)=>{ const a=sv(x,ACTSORT.k), b=sv(y,ACTSORT.k); if(a==null&&b!=null) return 1; if(b==null&&a!=null) return -1;
+    if(a!=null&&b!=null&&a!==b) return (a<b?-1:1)*ACTSORT.d; return (x.app||'').localeCompare(y.app||''); });
+  const td=(v,t)=>`<td class="uni-num"${t?` title="${hAttr(t)}"`:''}>${v}</td>`, dv=M=>actOk(M.v)?uni100(M.v):'—';
+  const trows=sorted.map(r=>{ const R=g(r,'ret_dau'), sub=r.status==='error'?'⚠️ Not built this time':(r.stale?'⚠️ Old data':(!r.ready?'🆕 New app — normal range later':''));
+    return `<tr class="clk" data-app="${hAttr(r.app)}" onclick="actOpen('${uniQ(r.app_id)}')"><td class="nm" style="min-width:150px;max-width:240px">${appChip(r.app,16)}${sub?`<div class="faint" style="font-size:10.5px;font-weight:400">${sub}</div>`:''}</td>`
+      +td(actNum(R.v))+`<td class="uni-num faint">${actOk(R.rel)&&actSt(R)!=='low'?uniChg(R.rel):'—'}</td>`+td(dv(g(r,'d1')))+td(dv(g(r,'d7')))+td(actDec(g(r,'sess').v))+td(uniDur(g(r,'time').v))
+      +td(actOk(g(r,'arpdau').v)?'≈ '+actMoney(g(r,'arpdau').v,cur):'—')+`<td style="white-space:nowrap">${actStatusCell(r)}</td></tr>`; }).join('')
+    ||`<tr><td colspan="${TH.length}" class="muted" style="padding:16px">GA4 se judi koi app abhi nahi.</td></tr>`;
+  const wl=[(actAllWait(rows,'d1')&&actAllWait(rows,'d7'))?'Next day / After a week: wapsi ka data agle GA4 fetch ke saath':'',(actAllWait(rows,'sess')&&actAllWait(rows,'time'))?'Sessions/user / Time/user: agle GA4 fetch me':''].filter(Boolean);
+  const table=`<div class="card pad0" id="act-table" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>📋 All apps</h3><span class="faint" style="font-size:11.5px">row pe tap = app ki detail · column pe tap = sort</span></div>${wl.length?`<div class="faint" id="act-table-wait" style="font-size:11.5px;padding:6px 17px 0">⏳ ${wl.join(' · ')}</div>`:''}
+    <div class="uni-scroll" style="margin-top:10px"><table class="uni-sticky" style="min-width:880px"><thead><tr>${TH.map(([k,l,t])=>`<th onclick="actSort('${k}')"${t?` title="${hAttr(t)}"`:''}>${l}${ACTSORT.k===k?(ACTSORT.d>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead><tbody>${trows}</tbody></table></div>
+    <div class="muted" style="font-size:11px;padding:9px 17px 12px;line-height:1.5">Sab numbers = pichhle 7 pakke din · Next day / After a week = 100 naye users me se · % grey (sirf jaankari) · Status = sabse zaroori chip</div></div>`;
+  const noG=((A.no_ga4)||[]).filter(x=>x&&(!x.app_id||uniVis(x.app_id)));
+  const noCard=noG.length?`<div class="card" id="act-noga4" style="margin-bottom:14px"><div class="ct"><h3>🔌 Apps without GA4 data (${noG.length})</h3></div>
+    ${noG.map(x=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">${appChip(x.app,16)}<span class="muted" style="font-size:12.5px">${hAttr(x.text||uniReason(x.reason))}</span></div>`).join('')}</div>`:'';
+  return head+note+sum+alCard+upd+table+noCard+actTimingNote(); }
+// ---- Alerts screen: the open Active alerts (from DATA.active — no lazy load); nothing at all when there are none ----
+function actAlertsFor(){ return ((DATA.active&&DATA.active.alerts)||[]).filter(x=>x&&typeof x==='object'&&(!APP||x.app===APP)&&uniVis(x.app_id)); }
+const ACT_FAM={act_drift:'Slow change',act_slow:'3-month trend',act_spike:'Sudden change',act_break:'Tracking check',act_return:'New users coming back'};
+const ACT_AML={ret_dau:'Returning users',usage:'Sessions & time',sess:'Sessions per user',time:'Time per user',ads:'Ads per user',arpdau:'Ad revenue per user',d1:'Came back next day',d3:'Came back after 3 days',d7:'Came back after a week',d14:'Came back after 2 weeks',d30:'Came back after 30 days'};
+function actAlertCards(list){
+  const CAUSE={'act_drift|down':'Purane users / unka use dheere dheere kam — kab se shuru hua wo date aur us waqt ka update / campaign dekho.','act_drift|up':'Achhi khabar — jo badla wo chalne do.',
+    'act_slow|down':'3 mahine se lagatar kam — naye users kam aa rahe ya purane chhod rahe; retention / content dekho.','act_slow|up':'3 mahine se lagatar badh raha — achhi khabar.',
+    'act_spike|down':'Ek-do din me achanak gira — us din ka release / crash / ad / server check karo.','act_spike|up':'Ek-do din me achanak badha — campaign ya feature? Achhi khabar.',
+    'act_break|down':'GA4 / Firebase tracking check karo — SDK, consent ya stream.','act_return|down':'Naye users kam wapas aa rahe — onboarding, naya version ya naya campaign/country check karo.',
+    'act_return|up':'Naye users zyada wapas aa rahe — jo badla wo chalne do.',
+    // by metric first: an ads-per-user or usage change is not about old users
+    'act_drift|ret_dau|down':'Purane users dheere dheere kam — kab se shuru hua wo date aur us waqt ka update / campaign dekho.',
+    'act_drift|ads|down':'Har user ko kam ads — ad load / fill / mediation waterfall aur us waqt ka update check karo.',
+    'act_drift|ads|up':'Har user ko zyada ads — ad load badla? Users ka experience bhi dekho.',
+    'act_spike|ads|down':'Us din ads achanak kam — ad load / fill / mediation ya AdMob account check karo.',
+    'act_spike|ads|up':'Us din ads achanak zyada — ad load / placement badla? Invalid traffic bhi dekho.',
+    'act_drift|use|down':'Purane users kam baar khol rahe / kam time de rahe — us waqt ka update, content ya crash dekho.',
+    'act_drift|use|up':'Log zyada use kar rahe — achhi khabar, jo badla wo chalne do.',
+    'act_spike|use|down':'Us din use achanak kam — release / crash / server check karo.','act_spike|use|up':'Us din use achanak zyada — campaign ya feature? Achhi khabar.'};
+  const MG=m=>(m==='ads'||m==='arpdau')?'ads':((m==='usage'||m==='sess'||m==='time')?'use':m);
+  const COL={warning:'var(--bad)',good:'var(--good)',watch:'var(--watch)'}, IC={warning:'🟠',watch:'🟡',good:'🎉'};
+  return (list||[]).map(x=>{ const R=x.release||null, ad=x.metric==='ads'||x.metric==='arpdau', cause=CAUSE[(x.family||'')+'|'+MG(x.metric)+'|'+(x.dir||'')]||CAUSE[(x.family||'')+'|'+(x.dir||'')];
+    const sv=x.severity==='warning'?['Worse','p-r']:(x.severity==='good'?['Better','p-g']:['Watch','p-y']);
+    const btn=`<span class="abtn pri" onclick="actGo('${uniQ(x.app_id)}')">Open app →</span>`+(R&&R.key?`<span class="abtn" onclick="uniImpGo('${uniQ(x.app_id)}','${uniQ(R.key)}','act')">Update detail →</span>`:'');
+    return `<div class="alert ${x.severity==='critical'?'crit':(x.severity||'watch')}" data-sev="${x.severity||'watch'}" data-metrics="active"><div style="font-size:17px">${IC[x.severity]||'•'}</div><div class="abody">
+      <div class="atitle">👥 ${ACT_AML[x.metric]||'Active users'} — ${ACT_FAM[x.family]||'Change'} <span class="pill ${sv[1]}" style="margin-left:4px">${sv[0]}</span>${x.fresh?'<span class="pill p-p" style="margin-left:5px">New</span>':''}</div>
+      <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18)}<span class="faint">· ${actWhen(x)} · GA4${ad?' + AdMob':''} · data till ${fmtD(x.data_till)}</span></div>
+      <div style="margin:9px 0 2px;font-size:12.5px;color:${COL[x.severity]||'var(--ink2)'}">${hAttr(x.text||x.message||'')}</div>
+      ${x.linked?`<div class="faint act-linked" style="font-size:11.5px;margin-top:6px">📦 Yahi badlaav ${R&&R.label?hAttr(R.label)+' ke ':''}Update impact card me bhi hai — ek hi baat, alert count me ek baar.</div>`:''}
       ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
       <div class="aact">${btn}</div></div></div>`; }).join(''); }
 

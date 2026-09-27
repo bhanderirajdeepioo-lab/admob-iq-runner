@@ -167,6 +167,92 @@ def make_impact_store(days=120, end=END, new=2000, rho=None, old=30000, act=None
     return st, rv
 
 
+def make_active_store(days=400, end=END, new=500, old=20000, noise=0.02, noise_ar=0.9, hll=0.015, weekend=0.93,
+                      usage=True, ret=True, revenue=True, other=None, zero_t=False, a1=None, pre_days=0,
+                      ret_edge=None, ret_days=161, seed=1, **kw):
+    """One app's store for the Active users tab (make_impact_store + the knobs the tab's scenarios need) → (store,
+    revenue). The old users' level follows an AR(1) process (noise_ar ~0.9: live returning users' weekly change of one
+    day and the next correlate ~0.87) with a weekday pattern (weekend ×), each day's active users carry HLL noise (hll,
+    ±1.5%), and every number still adds up like GA4's.
+      usage / ret / revenue False: that input has not arrived (usage + vuse / return cohorts / AdMob revenue).
+      other: fn(day) → the other ad networks' extra share of revenue and impressions (mediation) → revenue["all_days"].
+      zero_t: a tiny app's pooled cohorts marked ok with no users (GA4 returned nothing: t = 0).
+      a1: {day: active users} set as is (a tracking break a1 = 0, a day with a1 ≤ new …).
+      pre_days: that many days of a few TEST installs before the history (0–2 a day, 3 more active users).
+      ret_edge: None (every install day, ret_from = the history's start), a date (GA4's return data starts there:
+      ret_from), or "searching" (only the newest ret_days install days read, the edge not found yet: ret_from None)."""
+    st, rv = make_impact_store(days, end=end, new=new, old=old, noise=noise, noise_ar=noise_ar, weekend=weekend,
+                               seed=seed, revenue=revenue, **kw)
+    rnd = random.Random(seed * 7919 + 1)
+    if hll:
+        for d in sorted(st["daily"]):
+            r = st["daily"][d]
+            r["a1"] = r["new"] + int(round((r["a1"] - r["new"]) * math.exp(rnd.gauss(0, hll))))
+    for d, v in (a1 or {}).items():
+        st["daily"][iso(d) if isinstance(d, date) else d]["a1"] = v
+    if pre_days:
+        hs = date.fromisoformat(st["history_start"])
+        for i in range(1, pre_days + 1):
+            c = hs - timedelta(days=i)
+            k = (c.toordinal() * 37) % 11
+            n = 2 if k == 0 else 1 if k < 4 else 0
+            st["daily"][iso(c)] = {"new": n, "a1": n + 3, "a28": 6, "un": 0, "un_ev": 0, "upd": 0}
+            st["versions"][iso(c)] = {"1.0": n + 3}
+            if st.get("ret") and n:
+                st["ret"][iso(c)] = {"t": n, "a": [n] + [1 if k == 1 else 0 for k in range(1, 31)], "cov": 1.0,
+                                     "ok": True, "at": iso(end)}
+        st["history_start"] = iso(hs - timedelta(days=pre_days))
+        st["covered"] = [[st["history_start"], st["window_end"]]]
+        if st.get("ret_from"):
+            st["ret_from"] = st["ret_to"] = st["history_start"]
+    if not usage:
+        st["usage"], st["vuse"] = {}, {}
+    if not ret:
+        st["ret"], st["ret_from"], st["ret_to"] = {}, None, None
+    elif ret_edge == "searching":
+        keep = sorted(st["ret"])[-ret_days:]
+        st["ret"] = {k: st["ret"][k] for k in keep}
+        st["ret_from"], st["ret_to"] = None, keep[0]
+    elif ret_edge is not None:
+        st["ret"] = {k: v for k, v in st["ret"].items() if k >= iso(ret_edge)}
+        st["ret_from"], st["ret_to"] = iso(ret_edge), iso(ret_edge)
+    if zero_t:
+        for k, e in st["ret"].items():
+            e.update(t=0, a=[0] * len(e["a"]), ok=True)
+    if rv is not None and other is not None:
+        rv["all_days"] = {k: [int(round(v[0] * (1 + other(date.fromisoformat(k))))),
+                              int(round(v[1] * (1 + other(date.fromisoformat(k)))))] for k, v in rv["days"].items()}
+    if not revenue:
+        rv = None
+    return st, rv
+
+
+def truncate_store(st, E):
+    """The store as a fetch on data day E left it: every day after E dropped, each return cohort cut to its days so far
+    (a new dict; the store itself is not changed)."""
+    e = iso(E)
+    out = dict(st, window_end=e, covered=[[st["history_start"], e]])
+    for k in ("daily", "usage", "vuse", "versions"):
+        out[k] = {d: v for d, v in (st.get(k) or {}).items() if d <= e}
+    out["ret"] = {d: dict(v, a=v["a"][:min(30, (E - date.fromisoformat(d)).days) + 1])
+                  for d, v in (st.get("ret") or {}).items() if d <= e}
+    out["cohorts"] = {c: {lag: u for lag, u in lags.items() if (date.fromisoformat(c) + timedelta(days=int(lag))) <= E}
+                      for c, lags in (st.get("cohorts") or {}).items() if c <= e}
+    if st.get("ret_to") and st["ret_to"] > e:
+        out["ret_to"] = e
+    return out
+
+
+def active_udet(store, launch=None, hidden=False, stage="stable", releases=(), impact=None, alerts=()):
+    """A minimal uninstall detail for engine.active (the fields it reads), without the uninstall evaluation — for the
+    long calibration runs."""
+    return {"history_start": store["history_start"], "launch": {"day": launch or store["history_start"],
+                                                                 "hidden": hidden, "sure": True},
+            "stage": stage, "stage_why": "", "zoom": None, "releases": list(releases),
+            "impact": impact or {"v": 1, "updates": [], "flags": {}}, "alerts": list(alerts),
+            "data_till": store["window_end"], "fetched_at": store.get("fetched_at"), "tz": store.get("time_zone")}
+
+
 def run_daily(store, first, last, app_id="ca-app-pub-0000000000000000~0000000001", app="App", state=None):
     """The daily build, day after day: evaluate_app with window_end = each day from `first` to `last`, and
     after every run each alert that was due is marked sent (as mark_notified does) → (sent, state), sent =
