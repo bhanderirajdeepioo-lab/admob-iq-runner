@@ -1,0 +1,67 @@
+# Owner-requested: check D1 / D7 (and D2..D30) of EVERY install day, day by day — the stored return cohorts the Active
+# users tab shows against the owner's one-day "First session date" report. See admob_iq/fetch/ga4_d1d7_verify.py.
+# Read-only against GA4 and against the PRIVATE repo's data; the only write is ga4/d1d7_verify.json in the PRIVATE repo.
+# This repo's Actions log is PUBLIC: it shows progress counts and one line of counts only; stderr (which could echo
+# request details) is hidden.
+name: ga4-d1d7-verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_apps:
+        description: "check only the N smallest apps still to do (0 = all)"
+        required: false
+        default: "0"
+      only_apps_missing:
+        description: "resume: skip the apps the existing private ga4/d1d7_verify.json holds as complete"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-d1d7-verify
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300         # the check starts no GA4 call after 275 min and then writes what it has
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Read the PRIVATE data (read-only clone)
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing"; exit 1; }
+          test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
+          # the token goes in a header for this one command only: never into a URL, a file or .git/config
+          auth=$(printf 'x-access-token:%s' "$DATA_REPO_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          git -c http.extraheader="AUTHORIZATION: basic $auth" clone -q --depth=1 \
+            "https://github.com/$DATA_REPO.git" _private > /dev/null 2>&1 \
+            || { echo "::error::could not clone the private data repo (details kept off the public log)"; exit 1; }
+          echo "private data: $(ls -1 _private/data/ga4_uninstall 2>/dev/null | wc -l) file(s)"
+      - name: Run
+        env:
+          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          VERIFY_DATA_DIR: _private
+          VERIFY_MAX_APPS: ${{ github.event.inputs.max_apps }}
+          VERIFY_ONLY_MISSING: ${{ github.event.inputs.only_apps_missing }}
+          PYTHONUNBUFFERED: "1"
+        run: python -m admob_iq.fetch.ga4_d1d7_verify 2>/tmp/d1d7v.err || { echo "::error::d1d7 verify failed (details kept off the public log)"; exit 1; }
