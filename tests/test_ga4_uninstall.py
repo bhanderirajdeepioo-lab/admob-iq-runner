@@ -994,7 +994,7 @@ def test_launch_weeks_too_small_to_judge_still_lead_to_the_users_edge_at_a_bound
     log = []
     st = gu.fetch_full(_stub(t, log=log), END, 1300)
     assert st["users_ok_days"] == 70 and len(_uni(log)) <= 40 and _off(st, t) == [] and _silent(st, t) == []
-    assert len(_imp(log)) <= 2 + gu.COH_MAX_CALLS                  # usage + vuse + at most 12 cohort requests
+    assert len(_imp(log)) <= 2 + gu.COH_MAX_CALLS                  # usage + vuse + at most COH_MAX_CALLS cohort requests
     for edge in (None, 60):                                        # a store that learned 1-day slices, with no edge
         old = json.loads(json.dumps(st))                           # / one the property's longer data retention
         old.update(users_ok_days=edge, cells_chunk_days=1)         # has moved since: 1,014 calls before
@@ -1155,7 +1155,7 @@ def test_ga4_calls_for_a_1000_day_big_app():
         log = []
         st = gu.fetch_full(_stub(t, log=log), END - timedelta(days=28), 1300)
         assert len(_uni(log)) <= first_max and _off(st, t) == [] and st["flags"]["incomplete_days"] == {}
-        assert len(_imp(log)) <= 2 + gu.COH_MAX_CALLS              # + usage, vuse and ≤ 12 cohort requests
+        assert len(_imp(log)) <= 2 + gu.COH_MAX_CALLS              # + usage, vuse and ≤ COH_MAX_CALLS cohort requests
         t.today = END
         log = []
         gu.fetch_incr(_stub(t, log=log), st, END - timedelta(days=27), 14)
@@ -1278,14 +1278,15 @@ def test_the_cohort_backfill_walks_back_finds_gas_user_data_edge_and_stops_quiet
     n = len(log)
     gu.fetch_incr(_stub(t, log=log), st, END, 10)                      # edge found: only the maturing ones now
     assert len(_imp(log[n:], "ret")) == 3
-    t2 = _impact_truth(days=400)
-    st2 = gu.fetch_full(_stub(t2), END, 1300)                          # no edge in 400 days: 12 calls, then resume
-    assert st2["ret_from"] is None and st2["ret_to"] == (END - timedelta(days=34 + 14 * 9)).isoformat()
+    nb = gu.COH_MAX_CALLS - 3                                          # 3 calls read the maturing cohorts
+    reach = 34 + 14 * nb                                               # one fetch's reach back
+    t2 = _impact_truth(days=reach + 300)                               # no edge, longer than one fetch reaches (and
+    assert reach + 300 < 1300                                          # inside the history cap)
+    st2 = gu.fetch_full(_stub(t2), END, 1300)                          # the call cap, then resume next fetch
+    assert st2["ret_from"] is None and st2["ret_to"] == (END - timedelta(days=reach)).isoformat()
     log2 = []
-    gu.fetch_incr(_stub(t2, log=log2), st2, END, 10)
-    assert len(_imp(log2, "ret")) == gu.COH_MAX_CALLS and st2["ret_to"] < (END - timedelta(days=34 + 14 * 9)).isoformat()
-    for _ in range(3):
-        gu.fetch_incr(_stub(t2), st2, END, 10)
+    gu.fetch_incr(_stub(t2, log=log2), st2, END, 10)                   # the rest, from the cursor on
+    assert len(_imp(log2, "ret")) <= gu.COH_MAX_CALLS
     assert st2["ret_from"] == st2["history_start"]                    # reached the start: every cohort complete
     low = {"tokensPerHour": {"consumed": 30, "remaining": 1000}}       # < 10% left: no cohort call, no failure
     st3 = gu.fetch_full(UniStub(_impact_truth(days=100), TOK_A, PID, S1, quota=lambda ga: low), END, 1300)

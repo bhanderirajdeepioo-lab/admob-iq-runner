@@ -147,7 +147,9 @@ COH_BATCH = 14              # cohorts per cohort request (the size ga4.cohort_bo
 COH_MIN_USERS = 200         # a cohort with fewer installs is judged pooled with the batch's other small ones
 COH_MIN_COVERAGE = 0.90     # a cohort holding < 90% of its installs (× the app's cohort scale ret_k) reads short
 COH_EDGE_RUN = 2            # 2 short batches in a row = GA4's user-data edge: the backfill stops there
-COH_MAX_CALLS = 12          # cohort requests per fetch at most (3 for the maturing ones + repair + backfill)
+COH_MAX_CALLS = 60          # cohort requests per fetch at most (3 for the maturing ones + repair + backfill): the
+                            # backfill walks ~840 install days a fetch — a counts-only probe (ga4-d1d7-probe, 27 Sep
+                            # 2026) found return data whole back to ~900 days on every app, at ~5 tokens a call
 COH_REPAIR_DAYS = 7         # a held short (or not yet mature) cohort is asked again at most once a week
 IMPACT_REPORTS = ("usage", "vuse")
 NVR_SLOT = {"new": "n", "returning": "r"}

@@ -98,7 +98,7 @@ COH_BATCH = 14            # (fetch) cohorts per cohort request
 COH_MIN_USERS = 200       # (fetch) a smaller cohort is judged pooled with the batch's other small ones
 COH_MIN_COVERAGE = 0.90   # (fetch) a cohort holding < 90% of its installs (× the app's scale) reads short
 COH_EDGE_RUN = 2          # (fetch) 2 short batches in a row = GA4's user-data edge
-COH_MAX_CALLS = 12        # (fetch) cohort requests per fetch at most
+COH_MAX_CALLS = 60        # (fetch) cohort requests per fetch at most
 IMPACT_ALERT_DAYS = 35    # only updates of the last 5 weeks alert (final ≈ R+20); older = info
 IMPACT_LIST_DAYS = 60     # All apps "Recent updates"
 IMPACT_SHOW = 5           # newest 5 blocks listed; older folded, never dropped
