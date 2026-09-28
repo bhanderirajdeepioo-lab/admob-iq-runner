@@ -4,8 +4,10 @@
 // tests/fixtures/uninstall_sample.json for the Uninstall tab's asset) and renders every Active-tab state: the All-apps
 // page (every Period, every sort, every status chip opened), each app's detail in every chart / table mode, the 📦 Update
 // impact blocks in this tab, the Alerts-screen section, phone and desktop widths, and made-up states the fixture may not
-// hold (edge searching / waiting, an ⏳ Early-look row, an "Ads/user" revenue chip, other time zones). Prints one JSON
-// report; tests/test_active_frontend.py asserts on it.   usage: node active_frontend.js <script.js> <active.json> <uninstall.json>
+// hold (edge searching / waiting, an ⏳ Early-look row, an "Ads/user" revenue chip, other time zones), and the All-apps
+// "📅 Daily — all apps" section on the fixture's active_portfolio file (or, until the fixture carries one, a stub built
+// here from the per-app details by the contract's rules: pfStub). Prints one JSON report; tests/test_active_frontend.py
+// asserts on it.   usage: node active_frontend.js <script.js> <active.json> <uninstall.json>
 const fs = require('fs'), vm = require('vm');
 const [scriptPath, fixturePath, uniPath] = process.argv.slice(2);
 const any = new Proxy(function () {}, {
@@ -35,12 +37,42 @@ ctx.__FX = FX; ctx.__UF = UF;
 run(`DATA = {apps_catalog: [], today_date: '2026-09-25', alerts: {counts: {}, items: []}, uninstall: __FX.dashboard_uninstall, active: __FX.dashboard_active};
      UNI = __UF.asset; UNIERR = false; UNICOH = {}; ACTD = {}; ACTSIG = {};
      for (const [k, d] of Object.entries(__FX.app_files || {})) ACTD[k] = d;`);
+// 📅 Daily — all apps: the fixture's own active_portfolio file (the build's, fixture key "portfolio"); a fixture made before
+// it carried one gets a stub built here by the same contract (v1): each app's arrays from its first day with active users
+// on / after its launch to its data_till (to its last such day when it stopped: none over its last 7 data days); every
+// field null on a day without active users; d1 / d7 only where the install day's return data is usable (coh.ok = 1);
+// u / s / t = the returning users' usage row; brk = its tracking-check days
+const dd = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5);
+const dadd = (a, n) => new Date(Date.parse(a + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+function pfStub(fx) {
+  const apps = [], missing = [];
+  for (const r of fx.dashboard_active.apps) {
+    const d = (fx.app_files || {})[r.key]; if (!d || !d.daily) { missing.push({ app_id: r.app_id, app: r.app, why: 'error' }); continue; }
+    const D = d.daily, st = D.start || d.history_start, L = d.launch || {}, i0 = (L.hidden && L.day) ? Math.max(0, dd(st, L.day)) : 0, a1 = D.a1 || [];
+    const known = []; for (let i = i0; i < a1.length; i++) if (a1[i]) known.push(i);
+    if (!known.length) { missing.push({ app_id: r.app_id, app: r.app, why: 'no_data' }); continue; }
+    const f = known[0], l = known[known.length - 1], iE = Math.min(a1.length - 1, dd(st, d.data_till)), stopped = iE - l >= 7, last = stopped ? l : iE;
+    const C = D.coh || {}, ok = C.ok || [], F = d.flags || {}, o = { a1: [], new: [], ret: [], d1: [], d7: [], u: [], s: [], t: [], rev: [] };
+    const g = (a, i) => (a && a[i] != null) ? a[i] : null;
+    for (let i = f; i <= last; i++) { const has = !!a1[i], n = has ? g(D.new, i) : null, u = has ? g((D.u || {}).r, i) : null;
+      o.a1.push(has ? a1[i] : null); o.new.push(n); o.ret.push(has ? g(D.ret, i) : null);
+      for (const k of ['d1', 'd7']) { const v = g(C[k], i); o[k].push(has && v != null && n && ok[i] === 1 ? v : null); }
+      o.u.push(u || null); o.s.push(u ? g((D.s || {}).r, i) : null); o.t.push(u ? g((D.t || {}).r, i) : null); o.rev.push(has ? g(D.rev, i) : null); }
+    const fi = dadd(st, f), la = dadd(st, last);
+    apps.push(Object.assign(o, { app_id: d.app_id, app: d.app, key: d.key, start: fi, to: la, data_till: d.data_till, settled_till: d.settled_till, stale: !!d.stale,
+      stopped, start_why: i0 ? 'launch' : 'data', currency: d.currency, rev_est: !!(F.tz_blend || F.rev_est), brk: (D.breaks || []).filter(x => x >= fi && x <= la) }));
+  }
+  return { v: 1, currency: (apps.find(a => a.currency) || {}).currency || 'USD', missing, apps };
+}
+const PF = FX.portfolio || pfStub(FX), PF_SRC = FX.portfolio ? 'fixture' : 'stub';
+ctx.__PF = PF;
+run(`if(!DATA.active.portfolio) DATA.active.portfolio={file:'active_portfolio.json.gz',sig:'stub00000000'}; ACTPF=__PF; ACTPFSIG=DATA.active.portfolio.sig; ACTPFC=null;`);
 const out = {};
 function scen(name, code) { try { out[name] = String(run(code)); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + (e.stack.match(/at [^\n]*/g) || []).slice(0, 4).join(' < ')); } }
 const RESET = `UNIAPP=''; APP=''; RANGE='30d'; innerWidth=375; ACTAPP=''; ACTRANGE='90d'; ACTSMOOTH='7d'; ACTUSEM='time'; ACTUSEPOP='r'; ACTREVM='k'; ACTRETN=1;
   ACTTRI='key'; ACTTRIEXP=false; ACTPRE=false; ACTSTEXP=''; ACTTILEEXP=''; ACTOLDEXP=false; ACTCLEXP=false; ACTTIMEXP=false; ACTVERALL=false;
   ACTSORT={k:'status',d:1}; ACTRELALL=false; ACTIMPOPEN=''; ACTIMPALL=false; ACTIMPHOW=false; ACTUPF=''; ACTUPALL=false; ACTIMPJUMP=''; ACTJUMP='';
-  ACTIMPWIN=7; ACTIMPWK={}; UNIIMPWIN=7; UNIIMPWK={};`;
+  ACTIMPWIN=7; ACTIMPWK={}; UNIIMPWIN=7; UNIIMPWK={}; ACTPFR='90d'; ACTPFN=14; ACTPFMK=false;`;
 const rows = FX.dashboard_active.apps, dets = FX.app_files;
 const J = JSON.stringify;
 const openApp = r => `ACTAPP=${J(r.app_id)}; APP=${J(r.app)};`;
@@ -280,6 +312,59 @@ for (const r of rows) {
   }
 }
 
+// ── 📅 Daily — all apps: every range, phone / desktop, paging, the app filter, $ ⇄ ₹, the loading / error / no-file
+// states, a stale app, an app late by a day, a broken file, and a section that throws (the rest of the page still draws) ──
+for (const r of ['30d', '90d', '180d', 'all']) scen('pf|' + r, `${RESET} ACTPFR='${r}'; actPortfolio()`);
+scen('pf|desktop', `${RESET} innerWidth=1280; actPortfolio()`);
+scen('pf|all_rows', `${RESET} ACTPFN=100000; ACTPFMK=true; ACTPFR='all'; actPortfolio()`);
+scen('pf|more', `${RESET} (()=>{ const keep=actRerender; actRerender=()=>{}; try{ actPfMore(30); return actPortfolio(); } finally{ actRerender=keep; } })()`);
+const PF_VIS = rows.filter((r, i) => i % 3 !== 1).map(r => r.app_id);
+scen('pf|filter', `${RESET} (()=>{ const kc=DATA.apps_catalog, ks=APPSEL; DATA.apps_catalog=DATA.active.apps.map(r=>({app_id:r.app_id,account_id:'acc-x'}));
+  APPSEL={accounts:{'acc-x':{decided:true,selected:${J(PF_VIS)}}}}; ACTPFN=100000; try{ return actPortfolio(); } finally{ DATA.apps_catalog=kc; APPSEL=ks; } })()`);
+scen('pf|inr', `${RESET} (()=>{ const kv=CURVIEW; CURVIEW='INR'; ACTPFN=100000; try{ return actPortfolio(); } finally{ CURVIEW=kv; } })()`);
+scen('pf|usd', `${RESET} ACTPFN=100000; actPortfolio()`);
+const pfMut = (nm, mut) => scen(nm, `${RESET} (()=>{ const keep=ACTPF, F=JSON.parse(JSON.stringify(keep)); ${mut} ACTPF=F; ACTPFN=100000;
+  try{ return actPortfolio(); } finally{ ACTPF=keep; ACTPFC=null; } })()`);
+const PF_ARR = "['a1','new','ret','d1','d7','u','s','t','rev']";
+const PF_STALE = (PF.apps.find(a => a.app === 'Demo Steady') || PF.apps[0]).app_id, PF_LATE = (PF.apps.find(a => a.app === 'Demo Old Drop') || PF.apps[1]).app_id;
+pfMut('pf|stale', `const a=F.apps.find(x=>x.app_id===${J(PF_STALE)}); for(const k of ${PF_ARR}) a[k]=a[k].slice(0,a[k].length-6);
+  a.data_till=uniAdd(a.data_till,-6); a.settled_till=uniAdd(a.settled_till,-6); a.stale=true;`);
+pfMut('pf|late', `const a=F.apps.find(x=>x.app_id===${J(PF_LATE)}); for(const k of ${PF_ARR}) a[k]=a[k].slice(0,a[k].length-1);
+  a.data_till=uniAdd(a.data_till,-1); a.settled_till=uniAdd(a.settled_till,-1);`);
+pfMut('pf|broken', `F.apps=[null,5,'x',{app_id:'x1',app:'Broken',start:'2026-09-10',a1:[null,'abc',-3,{}]},{app_id:'x2',app:'Odd',start:'2026-09-15',data_till:'2026-09-17',
+  a1:[10,20,'30'],new:[1,null,'a'],ret:[9,null,null],d1:[null,'q',2],d7:[],u:[5,0,null],s:[7,'s',null],t:[null,null,40],rev:['x',2,null]}];`);
+pfMut('pf|empty', `F.apps=[];`);
+// the biggest app (its last day's DAU) gone stale 6 days early / not built this run (in the file's missing list, or — a file
+// without that list — its summary row an error): its missing DAU never reads as a drop, and it still counts in "k of n"
+const PF_BIG = (() => { let b = null, bv = -1; for (const a of PF.apps) { const v = [...a.a1].reverse().find(x => x) || 0; if (v > bv) { bv = v; b = a.app_id; } } return b; })();
+pfMut('pf|stalebig', `const a=F.apps.find(x=>x.app_id===${J(PF_BIG)}); for(const k of ${PF_ARR}) a[k]=a[k].slice(0,a[k].length-6);
+  a.data_till=uniAdd(a.data_till,-6); a.settled_till=uniAdd(a.settled_till,-6); a.stale=true;`);
+pfMut('pf|errbig', `const a=F.apps.find(x=>x.app_id===${J(PF_BIG)}); F.apps=F.apps.filter(x=>x!==a); F.missing=(F.missing||[]).concat([{app_id:a.app_id,app:a.app,why:'error'}]);`);
+scen('pf|errrow', `${RESET} (()=>{ const keep=ACTPF, F=JSON.parse(JSON.stringify(keep)), r=DATA.active.apps.find(x=>x.app_id===${J(PF_BIG)}), ks=r.status;
+  F.apps=F.apps.filter(x=>x.app_id!==r.app_id); delete F.missing; r.status='error'; ACTPF=F; ACTPFN=100000;
+  try{ return actPortfolio(); } finally{ ACTPF=keep; ACTPFC=null; r.status=ks; } })()`);
+// folded chips: the newest 8 + every chip of something drawn on the chart — a big app's tracking-check run behind ten newer
+// one-day gaps of a tiny app still has its chip (and its band)
+pfMut('pf|pin', `const N=60, f=v=>new Array(N).fill(v), E=()=>f(null), tiny=f(5); for(let i=30;i<=48;i+=2) tiny[i]=null;
+  const base={start:'2026-01-01',to:'2026-03-01',data_till:'2026-03-01',settled_till:'2026-02-26',stale:false,stopped:false,currency:'USD',rev_est:false,d1:E(),d7:E(),u:E(),s:E(),t:E(),rev:E()};
+  F.missing=[]; F.apps=[Object.assign({},base,{app_id:'pin1',app:'Pin Big',a1:f(1000),new:f(100),ret:f(900),brk:['2026-01-06','2026-01-07','2026-01-08','2026-01-09','2026-01-10','2026-01-11']}),
+    Object.assign({},base,{app_id:'pin2',app:'Pin Tiny',a1:tiny,new:tiny.map(v=>v==null?null:1),ret:tiny.map(v=>v==null?null:4),brk:[]})];
+  const solo=new Array(72).fill(3); solo[2]=null; const nul=()=>new Array(72).fill(null);   // alone in the set on 22 Dec: that day no app has data
+  F.apps.push(Object.assign({},base,{app_id:'pin3',app:'Pin Solo',start:'2025-12-20',a1:solo,new:solo.map(v=>v==null?null:1),ret:solo.map(v=>v==null?null:2),d1:nul(),d7:nul(),u:nul(),s:nul(),t:nul(),rev:nul(),brk:[]}));
+  ACTPFR='all';`);
+// a portfolio past a million a day: every count in full ("1,234,567", never "1.2M" — a day-to-day change must show)
+pfMut('pf|big', `for(const a of F.apps) for(const k of ['a1','new','ret']) a[k]=a[k].map(v=>v==null?v:v*1000);`);
+scen('pf|noptr', `${RESET} (()=>{ const k=DATA.active.portfolio; delete DATA.active.portfolio; try{ return actPortfolio(); } finally{ DATA.active.portfolio=k; } })()`);
+scen('pf|loading', `${RESET} (()=>{ ACTPF=null; try{ return actPortfolio(); } finally{ ACTPF=__PF; ACTPFC=null; } })()`);
+scen('pf|error', `${RESET} (()=>{ ACTPF=null; ACTPFERR=true; try{ return actPortfolio(); } finally{ ACTPF=__PF; ACTPFERR=false; ACTPFC=null; } })()`);
+scen('pf|throw', `${RESET} (()=>{ const keep=actPfSeries; actPfSeries=()=>{ throw new Error('boom'); }; try{ return actPortfolio(); } finally{ actPfSeries=keep; } })()`);
+// the lazy load: opening All apps with no file in memory starts exactly one fetch of the pointer's file (never on an app's page)
+let pfLoad = null;
+try { pfLoad = JSON.parse(run(`(()=>{ const keepF=fetchGzJson, calls=[]; fetchGzJson=u=>{ calls.push(u); return new Promise(()=>{}); };
+  try{ ${RESET} ACTPF=null; ACTPFL=false; actEnsure(); actEnsure(); const o={calls:calls.slice(), loading:ACTPFL};
+    ACTPFL=false; calls.length=0; APP=DATA.active.apps[0].app; ACTAPP=DATA.active.apps[0].app_id; actEnsure(); o.on_app=calls.filter(u=>u.startsWith('active_portfolio')).length; return JSON.stringify(o); }
+  finally{ fetchGzJson=keepF; ACTPF=__PF; ACTPFL=false; ACTPFC=null; ACTL={}; APP=''; ACTAPP=''; } })()`)); } catch (e) { errors.push('pf load: ' + e.message); }
+
 // ── what the page says ──
 const text = h => h.replace(/\son\w+="[^"]*"/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/\s+/g, ' ');
 const uiText = h => h.replace(/\son\w+="[^"]*"/g, '').replace(/\sid="[^"]*"/g, '');   // markup + titles + chart labels, minus code
@@ -357,6 +442,42 @@ const portfolio = { text: T('portfolio_30d').slice(0, 6000), count: text(sec(pH,
   strip_classes: [...sec(pH, 'class="act-strips"', 'class="uni-foot"').matchAll(/<span class="uni-sc ([a-z-]+)( on)?" data-k="([a-z0-9_]+):([a-z_]+)"/g)].map(m => [m[1], m[3], m[4]]),
   noga4: (pH.match(/<h3>🔌 Apps without GA4 data \((\d+)\)<\/h3>/) || [])[1], timing: T('timing_open').includes('D1 ~6 din, D7 ~12 din, D30 ~35 din baad.'),
   head: text(pH.slice(0, 700)).trim(), market: text(sec(pH, 'id="act-market">', '</div>')).trim(), prov_note: /ℹ️ <b>Provisional:<\/b>/.test(sec(pH, 'id="act-sum"', 'id="act-chg"')) };
+// 📅 Daily — all apps: the section, its table rows (cells + tooltips), the chart's points / marks / hatch, the change chips
+const pfSec = h => { const a = h.indexOf('<div class="card" id="act-pf"'), a2 = a < 0 ? h.indexOf('id="act-pf"') : a; if (a2 < 0) return '';
+  const b = h.indexOf('id="act-table"', a2); return h.slice(a2, b < 0 ? undefined : b); };
+const unq = x => x == null ? null : x.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+const pfParse = h => { const s = pfSec(h), pm = s.match(/data-pts='([^']*)'/), vb = s.match(/<svg viewBox="0 0 (\d+) (\d+)"/);
+  return { has: !!s, text: text(s).trim().slice(0, 3000),
+    rows: [...s.matchAll(/<tr data-day="([^"]*)"( class="act-pfp")?>([\s\S]*?)<\/tr>/g)].map(m => ({ day: m[1], prov: !!m[2],
+      cells: [...m[3].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c => text(c[1]).trim()),
+      tips: [...m[3].matchAll(/<td(?: class="([^"]*)")?(?: title="([^"]*)")?>/g)].map(c => unq(c[2] || null)),
+      cls: [...m[3].matchAll(/<td(?: class="([^"]*)")?/g)].map(c => c[1] || ''), star: /class="act-pfs"/.test(m[3]), pill: m[3].includes('>Provisional</span>') })),
+    heads: [...(s.split('<thead>')[1] || '').split('</thead>')[0].matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(m => m[1]),
+    pts: pm ? JSON.parse(unq(pm[1])) : null, vbw: vb ? +vb[1] : null,
+    marks: [...s.matchAll(/class="act-pf-mk" data-day="([^"]*)"/g)].map(m => m[1]), hatch: (s.match(/class="act-pf-prov"/g) || []).length,
+    gmarks: [...s.matchAll(/class="act-pf-gk" data-day="([^"]*)"/g)].map(m => m[1]), inc: [...s.matchAll(/class="act-pf-inc" data-day="([^"]*)"/g)].map(m => m[1]),
+    brk: [...s.matchAll(/class="act-pf-brk" data-from="([^"]*)" data-to="([^"]*)"/g)].map(m => [m[1], m[2]]), rh: (s.match(/<tr class="act-pfrh">/g) || []).length,
+    rh_after: [...s.matchAll(/<tr class="act-pfrh">[\s\S]*?<\/tr><tr data-day="([^"]*)"/g)].map(m => m[1]),
+    lines: [...s.matchAll(/<path class="act-pf-ln" data-s="([a-z]+)" data-f="([01])" d="([^"]*)"/g)].map(m => ({ s: m[1], f: +m[2], xs: [...m[3].matchAll(/[ML](-?[\d.]+) /g)].map(x => +x[1]) })),
+    mlabels: [...s.matchAll(/class="act-pf-ml"[^>]*>([^<]*)<\/text>/g)].map(m => m[1]),
+    chips: [...s.matchAll(/<span class="act-pfc" data-k="([a-z]+)" data-day="([^"]*)" title="[^"]*">([^<]*)<\/span>/g)].map(m => ({ k: m[1], day: m[2], text: unq(m[3]) })),
+    chip_more: (s.match(/onclick="actPfMX\(\)">([^<]*)</) || [])[1] || null,
+    ranges: [...s.matchAll(/<span class="chip( on)?" onclick="actPfR\('([a-z0-9]+)'\)">([^<]*)<\/span>/g)].map(m => [m[2], m[3], !!m[1]]),
+    last: text(sec(s, 'id="act-pf-last"', '</div>').replace(/^[^>]*>/, '')).trim(), more: text(sec(s, 'class="act-pfmore"', '</div>').replace(/^[^>]*>/, '')).trim().slice(0, 300),
+    more_calls: [...s.matchAll(/onclick="actPfMore\((\d+)\)"/g)].map(m => +m[1]), note: text(sec(s, 'class="faint act-pfnote"', '</div>').replace(/^[^>]*>/, '')).trim(),
+    prov_note: /ℹ️ <b>Provisional:<\/b>/.test(s), lgd: text(sec(s, '<div class="lgd">', '</div>')).trim(),
+    pool: [...sec(h, 'id="act-pool"', 'class="uni-sec"').matchAll(/<div class="uni-st act-t act-pt" data-m="([a-z0-9_]+)">([\s\S]*?)(?=<div class="uni-st act-t act-pt"|$)/g)].map(m => text(m[2]).trim()),
+    order: ['id="act-sum"', 'id="act-chg"', 'id="act-updates"', 'id="act-pf"', 'id="act-table"'].map(k => h.indexOf(k)), full_len: h.length };
+};
+const pfWide = [];
+for (const [k, v] of Object.entries(out)) { if (!k.startsWith('pf|') || k === 'pf|desktop') continue; const s = pfSec(v);
+  for (const m of s.matchAll(/min-width:(\d+)px/g)) { const before = s.slice(Math.max(0, m.index - 400), m.index); if (+m[1] > 340 && !/<div class="uni-scroll[^"]*"[^>]*><table [^>]*$/.test(before)) pfWide.push(k + ': ' + m[1]); }
+  for (const m of s.matchAll(/<table /g)) { const before = s.slice(Math.max(0, m.index - 60), m.index); if (!/<div class="uni-scroll[^"]*"[^>]*>$/.test(before)) pfWide.push(k + ': table outside a scroller'); }
+  for (const m of s.replace(/<svg[\s\S]*?<\/svg>/g, '').matchAll(/\swidth="(\d+)"/g)) if (+m[1] > 340) pfWide.push(k + ': fixed width ' + m[1]);
+  for (const m of s.matchAll(/<svg [^>]*>/g)) if (!/style="width:100%/.test(m[0])) pfWide.push(k + ': chart without a fluid width'); }
+const pf = { src: PF_SRC, file: PF, vis: PF_VIS, big: PF_BIG, wide: pfWide, load: pfLoad, ptr: FX.dashboard_active.portfolio || null,
+  s: Object.fromEntries(Object.keys(out).filter(k => k.startsWith('pf|')).map(k => [k.slice(3), pfParse(out[k])])),
+  portfolio_30d: pfParse(out.portfolio_30d || ''), throw_rest: ['id="act-sum"', 'id="act-chg"', 'id="act-table"'].every(k => (out['pf|throw'] || '').includes(k)) };
 // Alerts screen
 const alertsOf = h => ({ sub: h.includes('👥 Active users (GA4)'), cards: (h.match(/data-metrics="active"/g) || []).length, open_app: [...h.matchAll(/onclick="actGo\('([^']*)'\)">Open app →/g)].map(m => m[1]),
   upd: [...h.matchAll(/onclick="uniImpGo\('([^']*)','([^']*)','act'\)">Update detail →/g)].map(m => [m[1], m[2]]), chip: h.includes(`onclick="filterAlerts('active')"`),
@@ -397,9 +518,25 @@ for (const r of rows) {
   try { ginst.push({ app: r.app, none: lab(null), some: lab(12345) }); } catch (e) { errors.push('ginst ' + r.app + ': ' + e.message); }
   break;
 }
+// the hourly refresh: the 📅 Daily file in memory is dropped when the pointer's sig changes — even with the tab's asset_v
+// the same (an app's slice can fail / come back while every per-app file stays as it was) — and kept when it doesn't
+async function pfRefreshCheck() {
+  const o = {};
+  for (const [nm, sig] of [['same', ''], ['changed', 'c0ffee000000'], ['gone', null]]) {
+    o[nm] = await run(`(async()=>{ const keep={l:loadDashboardData, r:render, s:show, d:DATA}, ptr=DATA.active.portfolio;
+      const act=Object.assign({}, DATA.active, {portfolio: ${sig === null ? 'null' : `Object.assign({}, ptr, ${sig ? `{sig:'${sig}'}` : '{}'})`}});
+      const D2=Object.assign({}, DATA, {active: act}); loadDashboardData=async()=>D2; render=()=>{}; show=()=>{};
+      ACTPF=__PF; ACTPFSIG=ptr.sig; ACTPFC=null; ACTVER=DATA.active.asset_v;
+      try{ await refreshData(); return {kept: ACTPF===__PF, same_asset_v: ACTVER===act.asset_v}; }
+      finally{ loadDashboardData=keep.l; render=keep.r; show=keep.s; DATA=keep.d; ACTPF=__PF; ACTPFSIG=ptr.sig; ACTPFC=null; } })()`);
+  }
+  return o;
+}
+(async () => {
+try { pf.refresh = await pfRefreshCheck(); } catch (e) { errors.push('pf refresh: ' + e.message); }
 console.log(JSON.stringify({
   scenarios: Object.keys(out).length, errors, bad, jargon: jargon.slice(0, 20), devanagari, titles: String(run('TITLES.active.join("|")')),
-  apps, portfolio, imp, win, ids, header, gofrom, alerts, syn, retc, retbase, ginst, grid, colour,
+  apps, portfolio, pf, imp, win, ids, header, gofrom, alerts, syn, retc, retbase, ginst, grid, colour,
   fix: { rev_market: text(sec(fx2.rev_market, 'class="act-mk"', '</div></div>')).trim(), pf_market_now: text(sec(fx2.pf_market_now, 'id="act-market">', '</div>')).trim(),
     pf_market_old: text(sec(fx2.pf_market_old, 'id="act-market">', '</div>')).trim(), inst_opp: text(fx2.inst_opp), inst_same: text(fx2.inst_same), inst_zero: text(fx2.inst_zero),
     hint_ads: text(fx2.hint_ads), hint_ret: text(fx2.hint_ret), linked: text(fx2.linked),
@@ -408,3 +545,4 @@ console.log(JSON.stringify({
     table_wait: text(sec(fx2.pool_wait, 'id="act-table-wait"', '</div>')).replace(/^[^>]*>/, '').trim(), young_tile: text(fx2.young_tile) },
   alert_cards: out.alert_cards || '', texts: Object.fromEntries(Object.entries(out).filter(([k]) => /^(detail\|[^|]*\|base|portfolio_30d|no_active|noga4\|)/.test(k)).map(([k, v]) => [k, T(k).slice(0, 8000)])),
 }, null, 1));
+})();

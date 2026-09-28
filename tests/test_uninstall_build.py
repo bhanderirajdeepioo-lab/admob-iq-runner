@@ -1139,7 +1139,8 @@ def test_the_committed_active_fixture_is_what_the_build_writes(tmp_path):
     A, U = fx["dashboard_active"], fx["dashboard_uninstall"]
     check_summary(U)
     assert set(A) == {"v", "status", "asset_v", "data_till_min", "data_till_max", "settled_till_min",
-                      "settled_till_max", "counts", "consts", "market", "alerts", "alert_counts", "no_ga4", "apps"}
+                      "settled_till_max", "counts", "consts", "market", "alerts", "alert_counts", "no_ga4", "portfolio",
+                      "apps"}
     for a in A["alerts"]:
         check_act_alert(a)
     assert A["alert_counts"] == {s: sum(1 for a in A["alerts"] if a["severity"] == s and not a["linked"])
@@ -1274,3 +1275,110 @@ def test_a_failure_in_the_active_revenue_extras_never_costs_the_update_impact_in
     one = ub.app_revenue(dict(rev, all_apps={A1: {"2026-09-17": "not a pair"}}), {"app_id": A1, "package": None}, [],
                          cover=True)
     assert one == plain                                   # days / tz / till / currency intact, no half-built extras
+
+
+# ── the All-apps "📅 Daily" series: active_portfolio.json.gz (lazy; the summary gets only a pointer) ─────────────
+
+def _port(out, dash):
+    P = dash["active"]["portfolio"]
+    with gzip.open(os.path.join(out, P["file"]), "rt", encoding="utf-8") as f:
+        return P, json.load(f)
+
+
+def test_active_portfolio_file_is_written_pointed_to_and_in_headers(asite):
+    data, out, stores = asite
+    dash, files = abuild(data, out, stores, END)
+    P, body = _port(out, dash)
+    assert set(P) == {"file", "sig", "from", "to", "days", "apps", "missing", "settled_till"}
+    assert P["file"] == ab.PORT_FILE == "active_portfolio.json.gz" and not ab.FILE_RE.match(P["file"])
+    assert P["sig"] == ab._sig(body) and P["apps"] == len(body["apps"]) == 3 and P["missing"] == 0
+    assert (P["from"], P["to"], P["settled_till"]) == (body["from"], body["to"], body["settled_till"])
+    assert P["days"] == len(body["total"]["n"]) and P["to"] == END.isoformat()
+    assert len(json.dumps(P, separators=(",", ":"))) <= 300                        # the first load stays small
+    assert "/%s\n  Cache-Control: no-store\n" % P["file"] in build_static.headers_text(files, dash)
+    assert P["file"] not in files                                                   # run_uninstall's list: unchanged
+    dets = {}
+    for r in dash["active"]["apps"]:
+        with gzip.open(os.path.join(out, r["file"]), "rt", encoding="utf-8") as f:
+            dets[r["app_id"]] = json.load(f)
+        assert "_port" not in r                                                     # never shipped in the summary
+    for a in body["apps"]:                                                          # each app = its own detail's arrays
+        assert json.loads(json.dumps(act_eng.portfolio_part(dets[a["app_id"]]))) == a
+    tot, T = body["total"], len(body["total"]["n"])
+    hs = date.fromisoformat(body["from"])
+    for t in range(T):                                                              # DAU = Σ the details' a1 that day
+        day = (hs + timedelta(days=t)).isoformat()
+        vals = []
+        for d in dets.values():
+            i = (date.fromisoformat(day) - date.fromisoformat(d["history_start"])).days
+            if 0 <= i < len(d["daily"]["a1"]) and d["daily"]["a1"][i]:
+                vals.append(d["daily"]["a1"][i])
+        assert tot["a1"][t] == (sum(vals) if vals else None) and tot["k"][t] == len(vals)
+    b = (ABREAK - hs).days                                                          # A2: 0 active users that day
+    assert tot["k"][b] == 2 and tot["n"][b] == 3 and tot["brk"][b] == 1             # "2 of 3 apps", marked
+    assert tot["prov"][-3:] == [1, 1, 1] and tot["prov"][-4] == 0
+
+
+def test_a_portfolio_failure_costs_only_its_own_file(asite, monkeypatch, capsys):
+    data, out, stores = asite
+    dash0, _ = abuild(data, out, stores, END)
+    assert os.path.exists(os.path.join(out, ab.PORT_FILE))
+    before = {n: open(os.path.join(out, n), "rb").read() for n in os.listdir(out) if n != ab.PORT_FILE}
+    capsys.readouterr()
+
+    def boom(*a, **k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(act_eng, "portfolio", boom)
+    dash, files = abuild(data, out, stores, END, hours=1)
+    err = capsys.readouterr().err.splitlines()
+    assert [l for l in err if not LOG_LINE.match(l)] == ["ga4 active portfolio skipped: RuntimeError"]
+    assert dash["active"]["portfolio"] is None and not os.path.exists(os.path.join(out, ab.PORT_FILE))
+    assert {n: open(os.path.join(out, n), "rb").read() for n in os.listdir(out)} == before   # every other file
+    assert dash["active"]["apps"] == dash0["active"]["apps"] and dash["uninstall"] == dash0["uninstall"]
+    assert ab.PORT_FILE not in build_static.headers_text(files, dash)
+    monkeypatch.undo()
+    monkeypatch.setattr(gu, "refresh_all", lambda *a, **k: copy.deepcopy(STATUS))
+    dash, _ = abuild(data, out, stores, END, hours=2)                               # the next run heals it
+    assert dash["active"]["portfolio"] == dash0["active"]["portfolio"]
+
+
+def test_an_app_whose_slice_or_active_step_fails_is_listed_missing(asite, monkeypatch):
+    data, out, stores = asite
+    real_part, real_eval = act_eng.portfolio_part, act_eng.evaluate
+
+    def part(d):
+        if d["app_id"] == A1:
+            raise ValueError("x")
+        return real_part(d)
+
+    def ev(store, app_id, *a, **k):
+        if app_id == A2:
+            raise ValueError("x")
+        return real_eval(store, app_id, *a, **k)
+    monkeypatch.setattr(act_eng, "portfolio_part", part)
+    monkeypatch.setattr(act_eng, "evaluate", ev)
+    dash, _ = abuild(data, out, stores, END)
+    P, body = _port(out, dash)
+    by = {r["app_id"]: r for r in dash["active"]["apps"]}
+    assert by[A1]["status"] == "ok" and by[A2]["status"] == "error"                # the A1 row itself is fine
+    assert [a["app_id"] for a in body["apps"]] == [A6] and P["apps"] == 1 and P["missing"] == 2
+    assert sorted((m["app_id"], m["why"]) for m in body["missing"]) == [(A1, "error"), (A2, "error")]
+    assert all(set(m) == {"app_id", "app", "why"} for m in body["missing"])
+
+
+def test_the_fixtures_portfolio_is_the_sum_of_its_apps():
+    from tests.make_uninstall_fixture import OUT_ACTIVE
+    with open(OUT_ACTIVE, encoding="utf-8") as f:
+        fx = json.load(f)
+    body, P = fx["portfolio"], fx["dashboard_active"]["portfolio"]
+    assert P["sig"] == ab._sig(body) and len(body["apps"]) == len(fx["dashboard_active"]["apps"])
+    for a in body["apps"]:
+        assert json.loads(json.dumps(act_eng.portfolio_part(fx["app_files"][a["key"]]))) == a
+    by = {a["app"]: a for a in body["apps"]}
+    assert by["Demo Test Installs"]["start_why"] == "launch" and by["Demo Rocket"]["start_why"] == "data"
+    assert by["Demo Test Installs"]["start"] == fx["app_files"][by["Demo Test Installs"]["key"]]["launch"]["day"]
+    starts = {x for m in body["marks"] for x in m["start"]}
+    assert by["Demo Rocket"]["app_id"] in starts and by["Demo Test Installs"]["app_id"] in starts
+    assert not any(m["stop"] for m in body["marks"]) and body["missing"] == []
+    txt = json.dumps(body, ensure_ascii=False)
+    assert "NaN" not in txt and "Infinity" not in txt and re.search("[%s-%s]" % (chr(0x900), chr(0x97F)), txt) is None

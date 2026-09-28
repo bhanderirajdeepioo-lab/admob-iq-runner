@@ -382,8 +382,12 @@ def headers_text(uni_files, dashboard):
 
 
 def _active_files(dashboard):
-    """The Active users tab's lazy per-app files (for _headers: never served from a stale cache)."""
-    return [r["file"] for r in (dashboard.get("active") or {}).get("apps", []) if r.get("file")]
+    """The Active users tab's lazy files — per app, then the All-apps daily series (for _headers: never served from a
+    stale cache)."""
+    act = dashboard.get("active") or {}
+    port = act.get("portfolio")
+    return ([r["file"] for r in act.get("apps", []) if r.get("file")]
+            + ([port["file"]] if isinstance(port, dict) and port.get("file") else []))
 
 
 def _value_files(dashboard):

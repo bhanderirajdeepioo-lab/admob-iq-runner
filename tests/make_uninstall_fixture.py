@@ -392,8 +392,8 @@ def active_apps():
 
 
 def build_active_fixture(work_dir):
-    """Seven daily builds of the Active users apps → {"dashboard_active", "dashboard_uninstall", "app_files", "sent",
-    "public_log"} (the site's per-app files by key)."""
+    """Seven daily builds of the Active users apps → {"dashboard_active", "dashboard_uninstall", "app_files", "portfolio",
+    "sent", "public_log"} (the site's per-app files by key; portfolio = its All-apps daily file)."""
     from admob_iq.fetch import ga4_uninstall as gu
     data_dir, out_dir = os.path.join(work_dir, "data"), os.path.join(work_dir, "site")
     os.makedirs(os.path.join(data_dir, "ga4_uninstall"), exist_ok=True)
@@ -442,18 +442,24 @@ def build_active_fixture(work_dir):
     for r in dashboard["active"]["apps"]:
         with gzip.open(os.path.join(out_dir, r["file"]), "rt", encoding="utf-8") as f:
             files[r["key"]] = json.load(f)
+    port = None
+    if dashboard["active"].get("portfolio"):
+        with gzip.open(os.path.join(out_dir, dashboard["active"]["portfolio"]["file"]), "rt", encoding="utf-8") as f:
+            port = json.load(f)
     return {"dashboard_active": dashboard["active"], "dashboard_uninstall": dashboard["uninstall"], "app_files": files,
-            "sent": sent, "public_log": log_lines}
+            "portfolio": port, "sent": sent, "public_log": log_lines}
 
 
 def active_fixture_json(fx):
     body = {"_about": "Synthetic Active-users-tab data written by the real build code (python -m "
                       "tests.make_uninstall_fixture). dashboard_active = dashboard.json's \"active\" key; "
                       "dashboard_uninstall = its \"uninstall\" key for the same made-up apps; app_files = "
-                      "site/active_<key>.json.gz by key; sent = what each of the 7 daily runs would notify (dry run); "
+                      "site/active_<key>.json.gz by key; portfolio = site/active_portfolio.json.gz (the All-apps "
+                      "daily series); sent = what each of the 7 daily runs would notify (dry run); "
                       "public_log = the build-log lines. Made-up apps only.",
             "dashboard_active": fx["dashboard_active"], "dashboard_uninstall": fx["dashboard_uninstall"],
-            "app_files": fx["app_files"], "sent": fx["sent"], "public_log": fx["public_log"]}
+            "app_files": fx["app_files"], "portfolio": fx["portfolio"], "sent": fx["sent"],
+            "public_log": fx["public_log"]}
     return json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
 
 

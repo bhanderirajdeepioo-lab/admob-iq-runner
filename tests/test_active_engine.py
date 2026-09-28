@@ -1146,3 +1146,164 @@ def test_an_open_storys_null_only_ever_keeps_it_open():
             assert free is None or (held is not None and abs(held["z"]) >= abs(free["z"]) - 1e-9), (e, cap)
             held_any += held is not None
     assert held_any
+
+
+# ── the All-apps "📅 Daily" series (portfolio_part / portfolio): every app's own arrays, summed per day ──────────
+
+D0 = date(2026, 6, 1)
+
+
+def _pd(aid, a1, new=None, *, start=D0, till=None, launch=None, d1=None, d7=None, u=None, s=None, t=None, rev=None,
+        breaks=(), est=False, currency="USD"):
+    """A minimal detail (only what portfolio_part reads), its arrays from `start`."""
+    H = len(a1)
+    nul = [None] * H
+    new = new if new is not None else [10] * H
+    till = till or start + timedelta(days=H - 1)
+    return {"app_id": aid, "app": "App " + aid, "key": (aid * 12)[:12], "history_start": start.isoformat(),
+            "data_till": till.isoformat(), "settled_till": (till - timedelta(days=3)).isoformat(), "stale": False,
+            "currency": currency, "launch": launch or {"day": start.isoformat(), "hidden": False, "sure": False},
+            "flags": {"tz_blend": est, "rev_est": False},
+            "daily": {"start": start.isoformat(), "a1": a1, "new": new,
+                      "ret": [a - n if a and n is not None and a > n else None for a, n in zip(a1, new)],
+                      "u": {"r": u or nul}, "s": {"r": s or nul}, "t": {"r": t or nul}, "rev": rev or nul,
+                      "breaks": [x.isoformat() for x in breaks], "coh": {"d1": d1 or nul, "d7": d7 or nul}}}
+
+
+def _pf(*dets, missing=()):
+    return act.portfolio([act.portfolio_part(d) for d in dets], missing)
+
+
+def test_portfolio_sums_each_day_over_the_apps_with_data_never_0():
+    a = _pd("a", [100, 101, 102, 103, None, 0, 106, None, 108, 109])
+    b = _pd("b", [50, 50, 50, 50, 50, 50, 50, None, 50, 50], new=[10, 10, 60, 10, 10, 10, 10, 10, 10, 10])
+    body = _pf(a, b)
+    T = body["total"]
+    assert body["from"] == D0.isoformat() and body["to"] == (D0 + timedelta(days=9)).isoformat()
+    assert T["a1"] == [150, 151, 152, 153, 50, 50, 156, None, 158, 159]              # a day with no app: null, never 0
+    assert T["k"] == [2, 2, 2, 2, 1, 1, 2, 0, 2, 2] and T["n"] == [2] * 10          # "1 of 2 apps"
+    assert T["new"][4] == 10 and T["kn"][4] == 1 and T["new"][7] is None            # a1 unknown / 0: its new left out
+    assert T["ret"][2] == 92 and T["kr"][2] == 1                                    # b: 50 active ≤ 60 new → no returning
+    assert T["ret"][0] == 90 + 40 and T["kr"][0] == 2
+    pa = next(p for p in body["apps"] if p["app_id"] == "a")
+    assert pa["a1"][5] is None and pa["new"][5] is None and pa["ret"][5] is None    # a1 = 0 is no data, never 0
+    assert set(T) == set(act.PORT_TOTAL) and all(len(v) == 10 for v in T.values())
+    assert body["marks"] == [] and body["missing"] == []
+
+
+def test_portfolio_marks_launch_and_stop_and_counts_the_apps_in_the_set():
+    L = D0 + timedelta(days=10)
+    a = _pd("a", [1000] * 30)
+    b = _pd("b", [3] * 10 + [800] * 20, launch={"day": L.isoformat(), "hidden": True, "sure": True})  # test installs
+    c = _pd("c", [500] * 22 + [0] * 8)                                              # stopped: 8 days without users
+    d = _pd("d", [400] * 27 + [None] * 3)                                           # a 3-day gap only: missing
+    e = _pd("e", [300] * 28, till=D0 + timedelta(days=27))                          # its data 2 days behind
+    body = _pf(a, b, c, d, e)
+    by = {p["app_id"]: p for p in body["apps"]}
+    assert by["b"]["start"] == L.isoformat() and by["b"]["start_why"] == "launch" and len(by["b"]["a1"]) == 20
+    assert by["a"]["start_why"] == "data" and not by["a"]["stopped"]
+    assert by["c"]["stopped"] and by["c"]["to"] == (D0 + timedelta(days=21)).isoformat() and len(by["c"]["a1"]) == 22
+    assert not by["d"]["stopped"] and by["d"]["to"] == (D0 + timedelta(days=29)).isoformat()
+    assert not by["e"]["stopped"] and by["e"]["data_till"] < body["to"]
+    assert body["marks"] == [{"day": L.isoformat(), "start": ["b"], "stop": []},
+                             {"day": (D0 + timedelta(days=22)).isoformat(), "start": [], "stop": ["c"]}]
+    T = body["total"]
+    assert T["n"][:10] == [4] * 10 and T["n"][10:22] == [5] * 12 and T["n"][22:] == [4] * 8
+    assert T["k"][9] == 4 and T["a1"][9] == 1000 + 500 + 400 + 300                  # b's test installs never count
+    assert T["k"][28:] == [2, 2] and T["n"][28:] == [4, 4]                         # d and e: in the set, no data yet
+    assert T["a1"][29] == 1000 + 800
+
+
+def test_portfolio_d1_d7_pool_the_returners_over_the_install_days_new_users():
+    H = 20
+    a = _pd("a", [1000] * H, new=[100] * H, d1=[30] * (H - 1) + [None], d7=[10] * (H - 7) + [None] * 7)
+    b = _pd("b", [2000] * H, new=[300] * 2 + [0] + [300] * (H - 3), d1=[60, None, 0] + [60] * (H - 4) + [None],
+            d7=[20] * (H - 7) + [None] * 7)
+    T = _pf(a, b)["total"]
+    assert (T["d1"][0], T["d1n"][0], T["d1k"][0]) == (90, 400, 2)                  # 90 ÷ 400 = 22.5%, not (30% + 20%)/2
+    assert (T["d1"][1], T["d1n"][1], T["d1k"][1]) == (30, 100, 1)                  # b's cohort unusable that day
+    assert (T["d1"][2], T["d1n"][2], T["d1k"][2]) == (30, 100, 1)                  # b had 0 new users: no rate
+    assert T["d1"][-1] is None and T["d1n"][-1] is None and T["d1k"][-1] == 0       # day 1 not reached yet: null
+    E = H - 1
+    assert [i for i in range(H) if T["d1p"][i]] == [E - 3, E - 2, E - 1]            # c + 1 after settled_till
+    assert [i for i in range(H) if T["d7p"][i]] == [E - 9, E - 8, E - 7]            # c + 7 after settled_till, reached
+    assert T["d7"][E - 7] == 30 and T["d7n"][E - 7] == 400 and T["d7"][E - 6] is None
+
+
+def test_portfolio_week_on_week_compares_the_same_apps_only():
+    a = _pd("a", [1000 + 10 * i for i in range(21)])
+    b = _pd("b", [None] * 10 + [500] * 11)                                          # appears on day 10
+    c = _pd("c", [200] * 21)
+    c["daily"]["a1"][6] = None                                                      # no data a week before day 13
+    T = _pf(a, b, c)["total"]
+    assert T["wow"][14] == float("%.4g" % ((1140 + 200) / (1070 + 200) - 1)) and T["wk"][14] == 2   # b not compared
+    assert T["wow"][13] == float("%.4g" % (1130 / 1060 - 1)) and T["wk"][13] == 1   # c: no data on day 6
+    assert T["wk"][17] == 3 and T["wow"][17] == float("%.4g" % ((1170 + 500 + 200) / (1100 + 500 + 200) - 1))
+    assert T["wow"][:7] == [None] * 7 and T["wk"][:7] == [0] * 7
+
+
+def test_portfolio_per_user_values_and_revenue_are_ratios_of_sums():
+    a = _pd("a", [1000] * 4, u=[100, 100, 0, 100], s=[300, 300, 0, None], t=[6000] * 4, rev=[10.0, None, 10.0, 10.0],
+            est=True)
+    b = _pd("b", [5000] * 4, u=[900, None, 900, 900], s=[900, None, 900, 900], t=[9000, None, 9000, 9000],
+            rev=[None, None, 5.12345, 2.5])
+    c = _pd("c", [700] * 4, rev=[99.0] * 4, currency="INR")
+    body = _pf(a, b, c)
+    T = body["total"]
+    assert (T["s"][0], T["u"][0], T["t"][0], T["ku"][0]) == (1200, 1000, 15000, 2)  # 1.2 sessions, not (3 + 1)/2
+    assert (T["u"][1], T["ku"][1]) == (100, 1)                                      # b's incomplete usage day: out
+    assert (T["u"][2], T["ku"][2]) == (900, 1)                                      # a: no returning users that day
+    assert (T["rev"][0], T["ra1"][0], T["kv"][0], T["est"][0]) == (10.0, 1000, 1, 1)  # b's no-ad-data day: not its DAU
+    assert T["rev"][1] is None and T["ra1"][1] is None and T["kv"][1] == 0          # no ad data anywhere: null, never 0
+    assert (T["rev"][2], T["ra1"][2], T["est"][2]) == (15.1235, 6000, 1)
+    assert (T["rev"][3], T["ra1"][3]) == (12.5, 6000)
+    assert body["currency"] == "USD"                                                # c's INR: its own, never summed in
+    pc = next(p for p in body["apps"] if p["app_id"] == "c")
+    assert pc["currency"] == "INR" and pc["rev"] == [99.0] * 4 and T["a1"][0] == 6700
+
+
+def test_portfolio_provisional_days_follow_each_apps_settled_till():
+    a = _pd("a", [1000] * 21)                                                       # data till day 20, settled day 17
+    b = _pd("b", [500] * 16, till=D0 + timedelta(days=15))                          # 5 days behind: settled day 12
+    body = _pf(a, b)
+    T = body["total"]
+    assert [i for i in range(21) if T["prov"][i]] == [13, 14, 15, 18, 19, 20]
+    assert body["settled_till"] == (D0 + timedelta(days=17)).isoformat()
+    assert T["k"][16:] == [1] * 5 and T["n"][16:] == [2] * 5
+
+
+def test_portfolio_is_order_free_and_empty_is_null():
+    a, b = _pd("a", [100] * 9), _pd("b", [None, None, 7, 8, 9, 10, 11, 12, 13])
+    miss = [{"app_id": "z", "app": "Zed", "why": "error"}, {"app_id": "y", "app": "Ann", "why": "no_data"}]
+    assert _pf(a, b, missing=miss) == _pf(b, a, missing=miss[::-1])
+    assert [m["app"] for m in _pf(a, missing=miss)["missing"]] == ["Ann", "Zed"]
+    assert act.portfolio_part(_pd("n", [None, 0, None])) is None                    # never a day with users
+    for body in (act.portfolio([]), act.portfolio([None], miss)):
+        assert body["total"] is None and body["apps"] == [] and body["from"] is None and body["settled_till"] is None
+    pb = _pf(b)["apps"][0]
+    assert pb["start"] == (D0 + timedelta(days=2)).isoformat() and len(pb["a1"]) == 7   # its first day with users
+
+
+def test_portfolio_part_reads_the_apps_own_detail():
+    X = S - timedelta(days=9)
+    st, rv = quiet(days=200, pre_days=40, a1={X: 0}, tz="Asia/Kolkata", rev_tz="America/Los_Angeles")
+    d, row, *_ = run(st, rv)
+    p = act.portfolio_part(d)
+    dl, hs = d["daily"], date.fromisoformat(d["history_start"])
+    assert d["launch"]["hidden"] and p["start"] == d["launch"]["day"] and p["start_why"] == "launch"
+    i0 = (date.fromisoformat(p["start"]) - hs).days
+    assert p["to"] == d["data_till"] and len(p["a1"]) == len(dl["a1"]) - i0 and not p["stopped"]
+    for j, i in enumerate(range(i0, len(dl["a1"]))):
+        ok = bool(dl["a1"][i])
+        assert p["a1"][j] == (dl["a1"][i] if ok else None) and p["ret"][j] == (dl["ret"][i] if ok else None)
+        assert p["d1"][j] == (dl["coh"]["d1"][i] if ok and dl["new"][i] else None)
+        assert p["u"][j] == (dl["u"]["r"][i] or None if ok else None) and p["rev"][j] == (dl["rev"][i] if ok else None)
+    x = (X - date.fromisoformat(p["start"])).days
+    assert p["a1"][x] is None and p["brk"] == [X.isoformat()] and p["rev_est"] and p["settled_till"] == d["settled_till"]
+    body = act.portfolio([p])
+    T = body["total"]
+    assert T["a1"] == p["a1"] and T["d1"] == p["d1"] and T["k"][x] == 0 and T["n"] == [1] * len(p["a1"])
+    assert T["brk"][x] == 1 and body["marks"] == [] and body["currency"] == d["currency"]
+    assert T["s"][-10] == dl["s"]["r"][-10] and T["rev"][-10] == dl["rev"][-10]
+    txt = json.dumps(body, ensure_ascii=False, allow_nan=False)                      # no NaN / Infinity ever
+    assert re.search("[%s-%s]" % (chr(0x900), chr(0x97F)), txt) is None

@@ -2669,6 +2669,175 @@ def _summary(tiles, alerts, edges, P, E):
     return {"kind": "ok", "text": "✅ Sab normal — %s apni normal range me." % what + suffix}
 
 
+# ── the portfolio's daily series ("📅 Daily — all apps"): every app's own daily arrays, summed day by day ─────────
+
+PORT_V = 1
+PORT_STOP_DAYS = 7          # no active users over an app's own last 7+ data days: it stopped (a chart marker); a shorter
+                            # trailing gap is only "missing" on those days ("27 of 28 apps")
+PORT_FIELDS = ("a1", "new", "ret", "d1", "d7", "u", "s", "t", "rev")
+PORT_NS = (("d1", 1), ("d7", 7))
+PORT_TOTAL = ("n", "k", "a1", "new", "kn", "ret", "kr", "d1", "d1n", "d1k", "d1p", "d7", "d7n", "d7k", "d7p", "u", "s", "t",
+              "ku", "rev", "ra1", "kv", "est", "prov", "wow", "wk", "brk")
+
+
+def portfolio_part(detail):
+    """One app's slice of the portfolio's daily series, read from its own detail (the daily arrays the tab already has
+    — nothing fetched, nothing modelled) → a dict, or None when it has no day with active users after its launch.
+
+      * Its arrays run from `start` — its first day with active users on or after its launch (test installs before a
+        hidden launch never count) — to `to`: its data_till, or, when it stopped (no active users over its own last
+        PORT_STOP_DAYS days), its last day with them. start_why = "launch" (a hidden launch: the app went live inside
+        the history) or "data" (the first day GA4 has for it).
+      * A day whose active users are unknown or 0 is no data for this app: every field is null that day (never 0).
+      * a1 / new as stored; ret = active − new, null when active ≤ new (the tab's rule); d1 / d7 = that INSTALL day's
+        users back on day 1 / 7 — null unless its return data is usable, its new users > 0 and day N is reached (the
+        rate's base is the same day's GA4 new users, as everywhere in the tab); u / s / t = returning users / their
+        sessions / their seconds (GA4's r slot — the tab's per-user tiles; null on a missing or incomplete usage day, or
+        u = 0); rev = AdMob Network earnings on the GA4 day, in `currency` (null = no ad data, never 0); rev_est = the
+        tab's "≈" on revenue (a timezone blend / an estimate)."""
+    dl = detail.get("daily") or {}
+    a1 = dl.get("a1") or []
+    H = len(a1)
+    if not H or not detail.get("data_till"):
+        return None
+    hs = _d(dl.get("start") or detail["history_start"])
+    launch = detail.get("launch") or {}
+    i0 = max(0, (_d(launch["day"]) - hs).days) if launch.get("hidden") and launch.get("day") else 0
+    known = [i for i in range(i0, H) if a1[i]]
+    if not known:
+        return None
+    f, l = known[0], known[-1]
+    iE = min(H - 1, (_d(detail["data_till"]) - hs).days)
+    stopped = iE - l >= PORT_STOP_DAYS
+    last = l if stopped else iE
+    nul = [None] * H
+    new, ret, rev = dl.get("new") or nul, dl.get("ret") or nul, dl.get("rev") or nul
+    coh = dl.get("coh") or {}
+    back = {k: coh.get(k) or nul for k, _ in PORT_NS}
+    ur, sr, tr = ((dl.get(g) or {}).get("r") or nul for g in ("u", "s", "t"))
+    fl = detail.get("flags") or {}
+    out = {k: [] for k in PORT_FIELDS}
+    for i in range(f, last + 1):
+        ok = bool(a1[i])
+        n = new[i] if ok else None
+        out["a1"].append(a1[i] if ok else None)
+        out["new"].append(n)
+        out["ret"].append(ret[i] if ok else None)
+        for k, _ in PORT_NS:
+            v = back[k][i]
+            out[k].append(v if ok and v is not None and n else None)
+        u = ur[i] if ok else None
+        out["u"].append(u if u else None)
+        out["s"].append(sr[i] if u else None)
+        out["t"].append(tr[i] if u else None)
+        out["rev"].append(rev[i] if ok else None)
+    fi, la = _iso(hs + timedelta(days=f)), _iso(hs + timedelta(days=last))
+    st = detail.get("settled_till") or _iso(_d(detail["data_till"]) - timedelta(days=ACT_LATE_DAYS))
+    return dict(out, app_id=detail.get("app_id"), app=detail.get("app"), key=detail.get("key"), start=fi, to=la,
+                data_till=detail["data_till"], settled_till=st, stale=bool(detail.get("stale")), stopped=stopped,
+                start_why="launch" if i0 else "data", currency=detail.get("currency"),
+                rev_est=bool(fl.get("tz_blend") or fl.get("rev_est")),
+                brk=[d for d in dl.get("breaks") or [] if fi <= d <= la])
+
+
+def portfolio(parts, missing=(), currency=None):
+    """Every app's slice (portfolio_part) → the "📅 Daily — all apps" file: the apps' own arrays (the page re-sums the
+    apps its filter shows, with these same rules), the days where the set of apps changes, and `total` — the same sums
+    over every app here, day by day. Whole history, never trimmed; unknown stays null.
+
+      * n = apps in the set that day (from its start to the newest day — to its last day, for one that stopped); k =
+        those with data that day ("27 of 28 apps"). Every other Σ counts the apps with that field known and carries its
+        own count (kn, kr, d1k, d7k, ku, kv); a sum over no app is null, never 0. marks = the days that set changes:
+        [{day, start: [app_id], stop: [app_id]}] (an app's first day after the first one; the day after an app stopped).
+      * DAU = Σ active users (a person on 2 apps counts twice); Returning = Σ (active − new) over the apps where that is
+        known; New installs = Σ new.
+      * Came back on day N of an install day = Σ returners ÷ Σ that day's new users, over the apps with usable return
+        data (dN / dNn); dNp = some app's day N is still provisional.
+      * Sessions / time per user = Σ s ÷ Σ u, Σ t ÷ Σ u; ad revenue per 1,000 users = 1000 · Σ rev ÷ ra1 (the active
+        users of the apps with ad data that day); est = some counted app's revenue is "≈" (rev_est).
+      * prov = some app with data that day has not settled it yet (after its settled_till): drawn faded, never judged.
+      * wow = DAU vs the same weekday a week before over the SAME apps (the wk apps with data on both days).
+      * brk = apps with a tracking-check day (their GA4 numbers are kept as reported; the day is marked).
+    An app in another currency than the file's keeps its own revenue (and its currency) but is left out of total.rev
+    (never a mixed sum)."""
+    parts = sorted((p for p in parts if p), key=lambda p: ((p.get("app") or "").casefold(), p.get("app_id") or ""))
+    cur = currency or next((p["currency"] for p in parts if p.get("currency")), None)
+    body = {"v": PORT_V, "currency": cur, "consts": {"stop_days": PORT_STOP_DAYS, "late_days": ACT_LATE_DAYS},
+            "missing": sorted((dict(m) for m in missing or []),
+                              key=lambda m: ((m.get("app") or "").casefold(), m.get("app_id") or ""))}
+    if not parts:
+        return dict(body, settled_till=None, apps=[], marks=[], total=None, **{"from": None, "to": None})
+    start = min(_d(p["start"]) for p in parts)
+    end = max(_d(p["data_till"]) for p in parts)
+    T = (end - start).days + 1
+    t_ = {k: [0] * T for k in PORT_TOTAL}
+    wn, wd = [0] * T, [0] * T
+    starts, stops, apps = {}, {}, []
+    for p in parts:
+        o, L = (_d(p["start"]) - start).days, len(p["a1"])
+        mend = o + L - 1 if p["stopped"] else T - 1
+        for t in range(o, mend + 1):
+            t_["n"][t] += 1
+        if o > 0:
+            starts.setdefault(o, []).append(p["app_id"])
+        if p["stopped"] and mend + 1 < T:
+            stops.setdefault(mend + 1, []).append(p["app_id"])
+        iS = (_d(p["settled_till"]) - start).days
+        q = dict(p)
+        rv = q["rev"] if p.get("currency") in (None, cur) else [None] * L
+        a1 = q["a1"]
+        for x in q["brk"]:
+            t_["brk"][(_d(x) - start).days] += 1
+        for j in range(L):
+            v = a1[j]
+            if v is None:
+                continue
+            t = o + j
+            t_["k"][t] += 1
+            t_["a1"][t] += v
+            if t > iS:
+                t_["prov"][t] = 1
+            for k, kc in (("new", "kn"), ("ret", "kr")):
+                if q[k][j] is not None:
+                    t_[k][t] += q[k][j]
+                    t_[kc][t] += 1
+            for k, N in PORT_NS:
+                if q[k][j] is not None:
+                    t_[k][t] += q[k][j]
+                    t_[k + "n"][t] += q["new"][j]
+                    t_[k + "k"][t] += 1
+                    if t + N > iS:
+                        t_[k + "p"][t] = 1
+            if q["u"][j]:
+                t_["u"][t] += q["u"][j]
+                t_["s"][t] += q["s"][j] or 0
+                t_["t"][t] += q["t"][j] or 0
+                t_["ku"][t] += 1
+            if rv[j] is not None:
+                t_["rev"][t] += rv[j]
+                t_["ra1"][t] += v
+                t_["kv"][t] += 1
+                if q["rev_est"]:
+                    t_["est"][t] = 1
+            if j >= 7 and a1[j - 7] is not None:
+                wn[t] += v
+                wd[t] += a1[j - 7]
+                t_["wk"][t] += 1
+        apps.append(q)
+    tot = dict(t_)
+    for k, kc in (("a1", "k"), ("new", "kn"), ("ret", "kr"), ("d1", "d1k"), ("d1n", "d1k"), ("d7", "d7k"),
+                  ("d7n", "d7k"), ("u", "ku"), ("s", "ku"), ("t", "ku"), ("ra1", "kv")):
+        tot[k] = [t_[k][t] if t_[kc][t] else None for t in range(T)]
+    tot["rev"] = [round(t_["rev"][t], 4) if t_["kv"][t] else None for t in range(T)]
+    tot["wow"] = [_g4(wn[t] / wd[t] - 1) if t_["wk"][t] and wd[t] > 0 else None for t in range(T)]
+    days = [_iso(start + timedelta(days=t)) for t in range(T)]
+    settled = [t for t in range(T) if t_["k"][t] and not t_["prov"][t]]
+    marks = [{"day": days[t], "start": sorted(starts.get(t, [])), "stop": sorted(stops.get(t, []))}
+             for t in sorted(set(starts) | set(stops))]
+    return dict(body, settled_till=days[settled[-1]] if settled else None, apps=apps, marks=marks, total=tot,
+                **{"from": days[0], "to": days[-1]})
+
+
 # ── replay: daily evaluations over one prepared history (calibration and the private verification only) ─────────
 
 def replay(store, app_id, udet, revenue, days, cfg=None, late_un=U.LATE_DAYS, families=None, metrics=None,

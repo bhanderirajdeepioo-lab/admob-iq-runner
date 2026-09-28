@@ -416,15 +416,31 @@
   .act-grid td.act-nd{text-align:left;padding-left:14px;font-style:italic}
   .act-grid tr.act-edge-row td{border-top:1px dashed #8fb8ff;background:transparent}
   .act-ver th,.act-ver td{padding:8px 10px}
+  /* 📅 Daily — all apps: who joined / left chips, the date-wise table (provisional rows faded, numbers never coloured) */
+  .act-pfcs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .act-pfc{font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:100px;background:var(--raise);color:var(--ink2);border:1px dashed var(--line2);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;cursor:help}
+  .act-pft th,.act-pft td{padding:8px 10px;white-space:nowrap}
+  .act-pft th{white-space:normal;vertical-align:bottom;line-height:1.3;min-width:58px}
+  .act-pft .act-pfwd{display:inline;font-size:11px;font-weight:500;color:var(--muted);margin-left:5px}
+  .act-pft .act-pfpill{font-size:9.5px;padding:1px 6px;margin-left:3px;vertical-align:1px}
+  .act-pft tr.act-pfp td:not(.nm),.act-pft td.act-pfv{opacity:.55}
+  .act-pft td.act-pfv{font-style:italic}
+  .act-pft td.act-pfi{opacity:.55;font-style:italic}   /* a day a big app's data is missing: its sums read low, never a drop */
+  .act-pft tr.act-pfrh th{font-size:10.5px;padding:6px 10px;color:var(--muted);background:var(--panel2);border-top:1px solid var(--line2)}
+  .act-pfs{color:var(--muted);cursor:help;margin-left:1px}
+  .act-pfg{color:var(--muted);margin-left:1px}
+  .act-pfmore{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12px;margin-top:10px}
   @media(max-width:760px){
     .act-strip{grid-template-columns:minmax(0,1fr);gap:4px}
     .act-strip .act-sl2{padding-top:0}
     .act-strip .uni-scs,.act-strip .uni-xp,.act-strip .uni-acs{min-width:0}
+    .act-pft .act-pfwd{display:block;margin:1px 0 0}    /* 📅 the weekday under the date (a narrow pinned column) */
   }
   @media(max-width:430px){      /* a phone tile: label, number, "−3% · 4 wks" and its chip — a tap shows the rest */
     .act-t .act-lg{display:none}.act-t .act-sh{display:inline}
     .act-t:not(.open) .act-x{display:none}.act-t{cursor:pointer}.act-pt{cursor:default}
     .act-t .v{font-size:24px}
+    .act-pfc{white-space:normal}    /* 📅 a chip wraps on a phone — its date is never cut off */
   }
   /* ===== 💸 Install value tab — the Uninstall / Active .uni-* look; its own bits are val-* (no red / green without an alert,
      numbers never coloured; tables scroll inside their card, the page never scrolls sideways) ===== */
@@ -855,7 +871,8 @@ async function refreshData(){
     UNIERR=false;                                                          // a failed uninstall load retries on the next open
     if(DATA.active&&DATA.active.asset_v!==ACTVER){ const sg={}; actRows().forEach(r=>{ sg[r.key]=r.sig; });   // new Active build → drop the apps whose file changed
       Object.keys(ACTD).forEach(k=>{ if(sg[k]!==ACTSIG[k]){ delete ACTD[k]; delete ACTSIG[k]; } }); ACTVER=DATA.active.asset_v; }
-    ACTERR={};
+    { const pf=actPfPtr(); if(ACTPF&&(!pf||pf.sig!==ACTPFSIG)){ ACTPF=null; ACTPFSIG=null; ACTPFC=null; } }   // the 📅 Daily file: dropped whenever its own sig changed (it can change with asset_v the same — an app's slice failing / back)
+    ACTERR={}; ACTPFERR=false;
     if(DATA.value&&DATA.value.asset_v!==VALVER){ const sg={}; valRows().forEach(r=>{ sg[r.key]=r.sig; });   // new Install value build → drop the apps whose file changed
       Object.keys(VALD).forEach(k=>{ if(sg[k]!==VALSIG[k]){ delete VALD[k]; delete VALSIG[k]; } }); VALVER=DATA.value.asset_v; }
     VALERR={};
@@ -4167,6 +4184,7 @@ let ACTRANGE='90d', ACTSMOOTH='7d', ACTUSEM='time', ACTUSEPOP='r', ACTREVM='k', 
 let ACTSTEXP='', ACTTILEEXP='', ACTOLDEXP=false, ACTCLEXP=false, ACTTIMEXP=false, ACTVERALL=false, ACTSORT={k:'status',d:1}, ACTRELALL=false;
 let ACTIMPOPEN='', ACTIMPALL=false, ACTIMPHOW=false, ACTUPF='', ACTUPALL=false, ACTIMPJUMP='', ACTIMPJT=0, ACTJUMP='', ACTJT=0;
 let ACTIMPWIN, ACTIMPWK={};   // 📦 Before / after window of this tab's copy of the card (UNIIMPWIN / UNIIMPWK's rule)
+let ACTPF=null, ACTPFL=false, ACTPFERR=false, ACTPFSIG=null, ACTPFC=null, ACTPFR='90d', ACTPFN=14, ACTPFMK=false;   // 📅 Daily — all apps (active_portfolio.json.gz, lazy)
 function actRows(){ return (DATA&&DATA.active&&Array.isArray(DATA.active.apps))?DATA.active.apps.filter(r=>r&&typeof r==='object'):[]; }
 function actName(id){ const r=actRows().find(x=>x.app_id===id); return r?r.app:''; }
 // the app on screen: the header's App (ACTAPP only picks between same-named apps), else none (All apps)
@@ -4175,7 +4193,8 @@ function actCurDet(){ const r=actCurRow(); return (r&&r.key&&ACTD[r.key])||null;
 function loadACTApp(key,cb){ const r=actRows().find(x=>x.key===key); if(!r||!r.file||ACTD[key]){cb&&cb();return;} if(ACTL[key]) return; ACTL[key]=true; ACTERR[key]=false;
   fetchGzJson(r.file+'?t='+Date.now()).then(j=>{ if(!j||typeof j!=='object') throw new Error('file'); ACTD[key]=j; ACTSIG[key]=r.sig; ACTL[key]=false; cb&&cb(); })
     .catch(()=>{ ACTERR[key]=true; ACTL[key]=false; cb&&cb(); }); }   // an error still calls back → "Try again", never "loading" forever
-function actEnsure(){ const r=actCurRow(); if(r&&r.key&&r.file&&r.status!=='error'&&!ACTD[r.key]&&!ACTL[r.key]&&!ACTERR[r.key]) loadACTApp(r.key,()=>actRerender()); }
+function actEnsure(){ const r=actCurRow(); if(r&&r.key&&r.file&&r.status!=='error'&&!ACTD[r.key]&&!ACTL[r.key]&&!ACTERR[r.key]) loadACTApp(r.key,()=>actRerender());
+  if(!APP&&actPfPtr()&&!ACTPF&&!ACTPFL&&!ACTPFERR) loadACTPf(()=>actRerender()); }   // All apps: the 📅 Daily file
 function actRerender(){ const old=document.querySelector('.screen[data-screen=active]'); if(old){ const f=renderActive(); if(old.classList.contains('on')) f.classList.add('on'); old.replaceWith(f); }
   if(ACTIMPJUMP) uniImpJumpNow('act'); if(ACTJUMP) actJumpNow(); }
 // an app's detail sets the header's App (setApp re-renders every screen and stays here); "← All apps" clears both
@@ -4658,6 +4677,7 @@ function actPortfolio(){
   const note=A.status==='error'?'<div class="note">⚠️ GA4 se abhi Active users data nahi ban paya — agle robot run me phir try hoga.</div>'
     :((A.status&&A.status!=='ok'&&nBad)?`<div class="note">⚠️ ${nBad} ${nBad===1?'app ka':'apps ka'} data purana ya is baar nahi bana — agle robot run me phir try hoga.</div>`:'');
   let sum=''; try{ sum=n?actSumPortfolio(rows):''; }catch(e){ sum='<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ 📌 At a glance — ye hissa abhi dikh nahi paya.</div>'; }
+  let pf=''; try{ pf=n?actPfCard(rows):''; }catch(e){ pf='<div class="card faint" id="act-pf" style="margin-bottom:14px;font-size:12.5px">⚠️ 📅 Daily — all apps — ye hissa abhi dikh nahi paya.</div>'; }
   const vis=new Set(rows.map(r=>r.app_id)), al=actNewest(actAlertsFor()), dets=rows.map(r=>[r,ACTD[r.key]]).filter(([,d])=>d);
   const info=[], olds=[]; dets.forEach(([r,d])=>{ ((d.changes&&d.changes.info)||[]).forEach(o=>o&&info.push([r,o])); ((d.changes&&d.changes.older)||[]).forEach(o=>o&&olds.push([r,o])); });
   olds.sort((p,q)=>(q[1].to||'')>(p[1].to||'')?1:((q[1].to||'')<(p[1].to||'')?-1:0));
@@ -4689,7 +4709,241 @@ function actPortfolio(){
   const noG=((A.no_ga4)||[]).filter(x=>x&&(!x.app_id||uniVis(x.app_id)));
   const noCard=noG.length?`<div class="card" id="act-noga4" style="margin-bottom:14px"><div class="ct"><h3>🔌 Apps without GA4 data (${noG.length})</h3></div>
     ${noG.map(x=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">${appChip(x.app,16)}<span class="muted" style="font-size:12.5px">${hAttr(x.text||uniReason(x.reason))}</span></div>`).join('')}</div>`:'';
-  return head+note+sum+alCard+upd+table+noCard+actTimingNote(); }
+  return head+note+sum+alCard+upd+pf+table+noCard+actTimingNote(); }   // the open alerts first, then 📅 day by day, then each app
+// ---- 📅 Daily — all apps: the portfolio day by day (active_portfolio.json.gz, lazy — DATA.active.portfolio points at it) ----
+// The build writes every app's daily arrays (whole history, from its first counted day) into ONE lazy file; the page adds
+// up the VISIBLE apps (the header's app filter, like the pooled tiles): DAU = Σ active users, Returning = Σ (active − that
+// day's new installs), New installs, came back on day 1 / 7 = Σ came back ÷ Σ that install day's GA4 new users, sessions /
+// time per returning user, ad revenue per 1,000 users (≈) and "vs same day last week" over the SAME apps only. Days after
+// an app's settled_till are provisional (faded / hatched, never judged); an app's first day and the day after it stopped
+// are marked on the chart (a new app is never read as growth). A day a BIG app has no data (a gap, not in yet, gone stale:
+// its own recent DAU ≥ 2% of the day's) reads low, so it is faded, dotted ("○") and marked "⏸️" — never drawn as a sure
+// drop and never the "latest settled day" line; any app without data reads "27 of 28 apps"; an app not built this run
+// counts in that n every day. Tracking-check runs are named (an orange band when the app is big). Unknown = "—" (never 0).
+// A person on 2 apps counts twice.
+function actPfPtr(){ const P=DATA&&DATA.active&&DATA.active.portfolio; return (P&&typeof P==='object'&&typeof P.file==='string'&&P.file)?P:null; }
+function loadACTPf(cb){ const P=actPfPtr(); if(!P||ACTPF){cb&&cb();return;} if(ACTPFL) return; ACTPFL=true; ACTPFERR=false;
+  fetchGzJson(P.file+'?t='+Date.now()).then(j=>{ if(!j||typeof j!=='object'||!Array.isArray(j.apps)) throw new Error('file'); ACTPF=j; ACTPFSIG=P.sig||null; ACTPFC=null; ACTPFL=false; cb&&cb(); })
+    .catch(()=>{ ACTPFERR=true; ACTPFL=false; cb&&cb(); }); }   // an error still calls back → "Try again", never "loading" forever
+function actPfR(v){ ACTPFR=v; actRerender(); }                          // chart window: 30d | 90d | 180d | all
+function actPfMore(k){ ACTPFN=k>0?ACTPFN+k:14; actRerender(); }          // the date-wise table: 14 rows, then +30 a tap
+function actPfMX(){ ACTPFMK=!ACTPFMK; actRerender(); }                  // all the "apps with data changed" chips
+const ACT_WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function actWd(d){ return ACT_WD[new Date(_uD(d)).getUTCDay()]||''; }
+const ACT_PF_MISS=0.02;   // an app "matters" on a day when its own recent DAU (mean of its last 7 days with data) is ≥ 2% of the day's
+// the visible apps' sums, day by day on one calendar (index 0 = the earliest visible app's first day), cached per file +
+// filter. The same rules as the build's own total (engine portfolio): an app is in the set from its start to the newest
+// day (to its last day when it stopped); a day with its active users unknown / 0 is "no data" for it; every other Σ runs
+// over the apps with that field known; revenue only from apps in the file's currency (never a mixed sum). On top (page
+// only): an app not built this run is in n every day; ms = the usual DAU of the in-set apps without data that day
+// (each one's mean over its last 7 days with data) → inc = that is ≥ 2% of the day's DAU + it; bk = tracking-check runs
+function actPfSeries(rows){ const F=ACTPF; if(!F||!Array.isArray(F.apps)) return null;
+  const A=F.apps.filter(a=>a&&typeof a==='object'&&typeof a.start==='string'&&/^\d{4}-\d\d-\d\d$/.test(a.start)&&Array.isArray(a.a1)&&a.a1.length&&uniVis(a.app_id));
+  // the visible apps not in the file: no day with active users yet (outside "k of n"), or not built this run (inside n — their DAU is in no day)
+  const inF=new Set(A.map(a=>a.app_id)), FM=Array.isArray(F.missing)?F.missing.filter(m=>m&&typeof m==='object'&&uniVis(m.app_id)):null;
+  const lost=FM?FM.map(m=>({id:String(m.app_id||''),name:String(m.app||m.app_id||''),err:m.why!=='no_data'}))
+    :(rows||[]).filter(r=>r&&!inF.has(r.app_id)).map(r=>({id:String(r.app_id||''),name:String(r.app||''),err:r.status==='error'}));
+  if(!A.length) return {n:0,N:0,A,P:[],lost,X:[]};
+  const key=A.map(a=>a.app_id).join(',')+'|'+lost.map(x=>x.id+(x.err?'!':'')).join(',')+'|'+baseCur();
+  if(ACTPFC&&ACTPFC.F===F&&ACTPFC.key===key) return ACTPFC.S;
+  const from=A.map(a=>a.start).sort()[0], fc=F.currency||(A.find(a=>a.currency)||{}).currency||null, ok=d=>typeof d==='string'&&/^\d{4}-\d\d-\d\d$/.test(d);
+  const P=A.map(a=>{ const off=uniDiff(from,a.start), till=ok(a.data_till)?uniDiff(from,a.data_till):off+a.a1.length-1, end=(a.stopped&&ok(a.to))?uniDiff(from,a.to):null;
+    return {a,off,till,end,L:Math.max(0,Math.min(a.a1.length,(end!=null?Math.min(end,till):till)-off+1)),si:ok(a.settled_till)?uniDiff(from,a.settled_till):till,
+      rv:!a.currency||!fc||a.currency===fc,name:String(a.app||a.app_id||''),brk:new Set((Array.isArray(a.brk)?a.brk:[]).filter(ok).map(x=>uniDiff(from,x)))}; });
+  const n=Math.max(0,...P.map(p=>p.till))+1, z=()=>new Array(n).fill(0);
+  const S={from,n,N:A.length,A,P,cur:fc,lost,nn:z(),ap:z(),dau:z(),rt:z(),rtn:z(),rta:z(),nw:z(),nwn:z(),d1n:z(),d1d:z(),d1c:z(),d1p:z(),d7n:z(),d7d:z(),d7c:z(),d7p:z(),
+    sS:z(),sU:z(),tT:z(),tU:z(),rv:z(),ra:z(),rvc:z(),bl:z(),pv:z(),wow:new Array(n).fill(null),wowc:z(),ms:z(),inc:z()};
+  const at=(p,f,i)=>{ const k=i-p.off; return (k>=0&&k<p.L)?actAt(p.a[f],k):null; }, has=(p,i)=>{ const x=at(p,'a1',i); return x!=null&&x>0; };
+  const inSet=(p,i)=>i>=p.off&&(p.end==null||i<=p.end);
+  P.forEach(p=>{ for(let i=Math.max(0,p.off);i<n;i++){ if(inSet(p,i)) S.nn[i]++; if(!has(p,i)) continue; const x=at(p,'a1',i), w=at(p,'new',i);
+    S.ap[i]++; S.dau[i]+=x; if(i>p.si) S.pv[i]=1;
+    if(w!=null){ S.nw[i]+=w; S.nwn[i]++; }
+    const r=at(p,'ret',i); if(r!=null){ S.rt[i]+=r; S.rtn[i]++; S.rta[i]+=x; }
+    [[1,'d1'],[7,'d7']].forEach(([N,f])=>{ const q=at(p,f,i); if(q!=null&&w!=null&&w>0){ S[f+'n'][i]+=q; S[f+'d'][i]+=w; S[f+'c'][i]++; if(i+N>p.si) S[f+'p'][i]=1; } });
+    const u=at(p,'u',i); if(u!=null&&u>0){ const s=at(p,'s',i), t=at(p,'t',i); if(s!=null){ S.sS[i]+=s; S.sU[i]+=u; } if(t!=null){ S.tT[i]+=t; S.tU[i]+=u; } }
+    const e=p.rv?at(p,'rev',i):null; if(e!=null){ S.rv[i]+=e; S.ra[i]+=x; S.rvc[i]++; if(p.a.rev_est) S.bl[i]=1; } } });
+  for(let i=7;i<n;i++){ let s1=0,s0=0,c=0; P.forEach(p=>{ if(has(p,i)&&has(p,i-7)){ s1+=at(p,'a1',i); s0+=at(p,'a1',i-7); c++; } }); S.wowc[i]=c; S.wow[i]=(c&&s0>0)?s1/s0-1:null; }
+  S.X=lost.filter(x=>x.err); if(S.X.length) for(let i=0;i<n;i++) S.nn[i]+=S.X.length;
+  const mean=q=>q.reduce((s,v)=>s+v,0)/q.length;
+  P.forEach(p=>{ const q=[], hi=p.end!=null?Math.min(p.end,n-1):n-1;
+    for(let i=Math.max(0,p.off);i<=hi;i++){ if(has(p,i)){ q.push(at(p,'a1',i)); if(q.length>7) q.shift(); } else if(q.length) S.ms[i]+=mean(q); } });
+  for(let i=0;i<n;i++) if(S.ap[i]>0&&S.ms[i]>0&&S.ms[i]>=ACT_PF_MISS*(S.dau[i]+S.ms[i])) S.inc[i]=1;   // (a day no app has: no point, every cell "—")
+  S.bk=[]; P.forEach(p=>{ const d=[...p.brk].filter(i=>i>=p.off&&i<n).sort((x,y)=>x-y);
+    for(let j=0;j<d.length;j++){ let e=j; while(e+1<d.length&&d[e+1]===d[e]+1) e++; const i=d[j], q=[]; for(let k=i-1;k>=p.off&&q.length<7;k--) if(has(p,k)) q.push(at(p,'a1',k));
+      S.bk.push({p,i,e:d[e],big:q.length>0&&mean(q)>=ACT_PF_MISS*Math.max(S.dau[i],1)}); j=e; } });
+  S.at=at; S.has=has; S.inSet=inSet; S.ls=-1; S.ls0=-1;   // the newest settled day with no big app missing (ls0: with or without)
+  for(let i=n-1;i>=0;i--) if(S.ap[i]>0&&!S.pv[i]){ if(S.ls0<0) S.ls0=i; if(!S.inc[i]){ S.ls=i; break; } }
+  ACTPFC={F,key,S}; return S; }
+// a day's missing share: "≈39% of DAU" = the missing apps' usual DAU ÷ (the day's DAU + it)
+function actPfPc(S,i){ const m=S.ms[i], t=S.dau[i]+m; return t>0?Math.max(1,Math.round(100*m/t)):0; }
+// returning on the chart: only when the apps with a known returning number hold ≥98% of that day's DAU (else a gap, never a fake dip)
+function actPfRetOk(S,i){ return S.rtn[i]>0&&S.dau[i]>0&&S.rta[i]>=0.98*S.dau[i]; }
+// who of the set has no number on a day: no data that day · not in yet (after its GA4 data_till) · not built this run — and tracking-check days
+function actPfMiss(S,i){ const o={gap:[],late:[],brk:[],err:S.X||[]}; S.P.forEach(p=>{ if(p.brk.has(i)) o.brk.push(p); if(!S.inSet(p,i)||S.has(p,i)) return; (i>p.till?o.late:o.gap).push(p); }); return o; }
+// the days the set of apps changes (chart marks): an app's first day (after the first one) and the day after it stopped
+function actPfMarks(S,i0){ const M={}; S.P.forEach(p=>{ if(p.off>0&&p.off>=i0&&p.off<S.n) (M[p.off]=M[p.off]||[]).push({p,k:'first',s:1});
+  if(p.end!=null&&p.end+1<S.n&&p.end+1>=i0) (M[p.end+1]=M[p.end+1]||[]).push({p,k:'stop',s:-1}); });
+  return Object.keys(M).map(Number).sort((x,y)=>x-y).map(i=>({i,o:M[i]})); }
+// the chips under the chart, newest first: those marks + each run of "no data" days, each app not in yet at the end and each tracking-check run
+function actPfEvents(S,i0,M){ const ev=[]; M.forEach(m=>m.o.forEach(c=>ev.push({i:m.i,e:m.i,p:c.p,k:c.k,s:c.s})));
+  S.P.forEach(p=>{ const hi=Math.min(p.till,p.end!=null?p.end:p.till);
+    for(let i=Math.max(i0,p.off);i<=hi;i++){ if(S.has(p,i)) continue; let e=i; while(e+1<=hi&&!S.has(p,e+1)) e++; ev.push({i,e,p,k:'gap',s:0}); i=e; }
+    if(p.till<S.n-1&&(p.end==null||p.end>p.till)&&p.till+1>=i0) ev.push({i:p.till+1,e:S.n-1,p,k:p.a.stale?'stale':'late',s:0}); });
+  (S.bk||[]).forEach(b=>{ if(b.e>=i0) ev.push({i:Math.max(b.i,i0),e:b.e,p:b.p,k:'brk',s:0,big:b.big}); });
+  // big = the chip of something drawn on the chart (a banded tracking check, a "⏸️" missing run): shown even when the chips are folded
+  ev.forEach(x=>{ if(x.k==='gap'||x.k==='late'||x.k==='stale'){ for(let i=x.i;i<=x.e;i++) if(S.inc[i]){ x.big=true; break; } } });
+  return ev.sort((x,y)=>y.i-x.i||(x.p.name<y.p.name?-1:1)); }
+function actPfI0(S){ const k={'30d':30,'90d':90,'180d':180}[ACTPFR]; return k?Math.max(0,S.n-k):0; }
+const actPfN=v=>actOk(v)?Math.round(+v).toLocaleString():'—';   // the day's numbers in full ("12,345,678" — never "12.3M", which hides a day-to-day change)
+const actPfK=v=>{ const t=(x,u)=>x.toFixed(2).replace(/\.?0+$/,'')+u; return v>=1e6?t(v/1e6,'M'):(v>=1e3?t(v/1e3,'k'):String(Math.round(v))); };   // axis ticks: "250k" · "1.25M"
+function actPfNice(v){ const x=Math.max(+v||0,1), raw=x/4, m=Math.pow(10,Math.floor(Math.log10(raw))), f=raw/m, s=Math.max(1,(f<=1?1:(f<=2?2:(f<=2.5?2.5:(f<=5?5:10))))*m);
+  return {s,top:Math.ceil(x/s)*s}; }
+const ACT_PF_C={dau:'#3dd0f0',ret:'#e6b84e',new:'#94a3b8',mk:'#cfd8e6'}, ACT_PF_BRK='#ff9f43';   // orange = tracking check, as on an app's own charts
+// one drawing, two panels on the same days: active users (DAU) + returning (dashed) on top, new installs (bars) under it;
+// a narrower drawing on a phone so its text stays readable; provisional days hatched + faded; app-count changes marked;
+// a day a big app's data is missing faded + a hollow dot + "⏸️"; a big app's tracking-check run an orange band
+function actPfChart(S,i0,M){ const n=S.n-i0; if(n<1) return '';
+  const nar=(typeof innerWidth==='number'&&innerWidth<700), W=nar?520:1000, fz=nar?16:13, ts=nar?1.5:1, lw=nar?3:2.2;
+  const mL=nar?58:60, mR=nar?14:20, mT=28, h1=nar?230:175, gp=nar?44:36, h2=nar?84:66, mB=nar?34:30, y2=mT+h1+gp, H=y2+h2+mB, pw=W-mL-mR;
+  const xi=j=>mL+(n<=1?pw/2:pw*j/(n-1)), dt=[], Dv=[], Rv=[], Nv=[], pv=[], iv=[], sf=[];
+  for(let i=i0;i<S.n;i++){ dt.push(uniAdd(S.from,i)); Dv.push(S.ap[i]>0?S.dau[i]:null); Rv.push(actPfRetOk(S,i)?S.rt[i]:null); Nv.push(S.nwn[i]>0?S.nw[i]:null); pv.push(!!S.pv[i]);
+    iv.push(!!S.inc[i]&&S.ap[i]>0); sf.push(!!S.pv[i]||!!S.inc[i]); }
+  if(!Dv.some(v=>v!=null)) return '<div class="muted" style="font-size:12.5px;padding:14px 4px">In dino ka data nahi.</div>';
+  const T1=actPfNice(Math.max(0,...Dv.map(v=>v||0),...Rv.map(v=>v||0))), y1=v=>mT+h1*(1-v/T1.top);
+  const T2=actPfNice(Math.max(0,...Nv.map(v=>v||0))), yN=v=>y2+h2*(1-v/T2.top), P2=(x,y)=>x.toFixed(1)+' '+y.toFixed(1);
+  let g=''; for(let v=0;v<=T1.top+T1.s/2;v+=T1.s){ const y=y1(v).toFixed(1);
+    g+=`<line x1="${mL}" y1="${y}" x2="${W-mR}" y2="${y}" stroke="${v?'#22314f':'#3a4a66'}" stroke-width="1"/><text x="${mL-8}" y="${(+y+5).toFixed(1)}" text-anchor="end" font-size="${fz}" fill="#8496b5">${actPfK(v)}</text>`; }
+  [0,T2.top].forEach(v=>{ const y=yN(v).toFixed(1); g+=`<line x1="${mL}" y1="${y}" x2="${W-mR}" y2="${y}" stroke="${v?'#22314f':'#3a4a66'}" stroke-width="1"/><text x="${mL-8}" y="${(+y+5).toFixed(1)}" text-anchor="end" font-size="${fz}" fill="#8496b5">${actPfK(v)}</text>`; });
+  g+=`<text x="${mL}" y="${(y2-12).toFixed(1)}" font-size="${fz}" font-weight="600" fill="#8496b5">New installs / day</text>`;
+  // provisional runs: hatched over both panels
+  const hw=n>1?pw/(n-1)/2:pw/2; let sh='';
+  for(let j=0;j<n;j++){ if(!pv[j]||(j>0&&pv[j-1])) continue; let e=j; while(e+1<n&&pv[e+1]) e++; const x0=Math.max(mL,xi(j)-hw), x1=Math.min(W-mR,xi(e)+hw);
+    sh+=`<rect class="act-pf-prov" x="${x0.toFixed(1)}" y="${mT}" width="${Math.max(0,x1-x0).toFixed(1)}" height="${(y2+h2-mT).toFixed(1)}" fill="url(#act-pf-h)"/>`; }
+  // a big app's tracking-check run: an orange band over the top panel (its numbers kept as GA4 gave them — the day is marked)
+  let bk=''; (S.bk||[]).forEach(b=>{ if(!b.big||b.e<i0) return; const j0=Math.max(b.i,i0)-i0, j1=Math.min(b.e,S.n-1)-i0, x0=Math.max(mL,xi(j0)-hw), x1=Math.min(W-mR,xi(j1)+hw), w=Math.max(1.5,x1-x0).toFixed(1);
+    bk+=`<rect class="act-pf-brk" data-from="${uniAdd(S.from,b.i)}" data-to="${uniAdd(S.from,b.e)}" x="${x0.toFixed(1)}" y="${mT}" width="${w}" height="${h1}" fill="${ACT_PF_BRK}" fill-opacity=".1"/>`
+      +`<rect x="${x0.toFixed(1)}" y="${mT}" width="${w}" height="${nar?5:4}" fill="${ACT_PF_BRK}" fill-opacity=".85"/>`; });
+  // lines: a stretch between two sure days full; one touching a provisional day or a day a big app's data is missing faded; a lone point gets a dot
+  const lone=(V,c)=>V.map((v,j)=>(v!=null&&(j===0||V[j-1]==null)&&(j===n-1||V[j+1]==null))?`<circle cx="${xi(j).toFixed(1)}" cy="${y1(v).toFixed(1)}" r="${lw+0.8}" fill="${c}"${sf[j]?' fill-opacity=".45"':''}/>`:'').join('');
+  const path=(V,s,c,dash,soft)=>{ let d='', pj=-2; for(let j=0;j+1<n;j++){ if(V[j]==null||V[j+1]==null||(sf[j]||sf[j+1])!==soft) continue;
+      d+=(pj===j?'':' M'+P2(xi(j),y1(V[j])))+' L'+P2(xi(j+1),y1(V[j+1])); pj=j+1; } d=d.trim();
+    return d?`<path class="act-pf-ln" data-s="${s}" data-f="${soft?1:0}" d="${d}" fill="none" stroke="${c}" stroke-width="${lw}"${dash?` stroke-dasharray="${dash}"`:''}${soft?' stroke-opacity=".45"':''} stroke-linejoin="round" stroke-linecap="round"/>`:''; };
+  let area=''; for(let j=0;j<n;j++){ if(Dv[j]==null||(j>0&&Dv[j-1]!=null)) continue; let e=j; while(e+1<n&&Dv[e+1]!=null) e++; const pts=[]; for(let k=j;k<=e;k++) pts.push(P2(xi(k),y1(Dv[k])));
+    area+=`<path d="M${P2(xi(j),y1(0))} L${pts.join(' L')} L${P2(xi(e),y1(0))} Z" fill="url(#act-pf-g)"/>`; }
+  const C=ACT_PF_C, dash=nar?'8 6':'7 5';
+  const hol=Dv.map((v,j)=>(v!=null&&iv[j])?`<circle class="act-pf-inc" data-day="${dt[j]}" cx="${xi(j).toFixed(1)}" cy="${y1(v).toFixed(1)}" r="${(lw+1.4).toFixed(1)}" fill="#0b1220" stroke="${C.dau}" stroke-width="${nar?2.2:1.8}"/>`:'').join('');
+  const lines=area+path(Rv,'ret',C.ret,dash,false)+path(Rv,'ret',C.ret,dash,true)+lone(Rv,C.ret)+path(Dv,'dau',C.dau,'',false)+path(Dv,'dau',C.dau,'',true)+lone(Dv,C.dau)+hol;
+  // new installs: one bar a day
+  const bw=Math.max(1,Math.min(nar?9:14,(n<=1?30:pw/(n-1))*0.7)); let bars='';
+  Nv.forEach((v,j)=>{ if(v==null||!(v>0)) return; bars+=`<rect x="${(xi(j)-bw/2).toFixed(1)}" y="${yN(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.6,y2+h2-yN(v)).toFixed(1)}" fill="${C.new}" fill-opacity="${sf[j]?'.35':'.8'}" rx="1"/>`; });
+  // app-count changes: a dotted up-down line through both panels, "+1" / "−1" above; the first day of a run where a big app's
+  // data is missing: a fainter one, "⏸️" above — marks too close for their own label share one ("+3" over three launches in
+  // three days, "+1 ⏸️"), so a count is never hidden
+  const MK=[]; (M||[]).forEach(m=>{ const j=m.i-i0; if(j<0||j>=n) return; const up=m.o.filter(c=>c.s>0).length; MK.push({j,up,dn:m.o.length-up,gp:0,day:uniAdd(S.from,m.i)}); });
+  for(let j=0;j<n;j++) if(iv[j]&&!(j>0&&iv[j-1])) MK.push({j,up:0,dn:0,gp:1,day:dt[j]});
+  MK.sort((a,b)=>a.j-b.j||a.gp-b.gp);
+  let mk=''; const cl=[]; MK.forEach(m=>{ const x=xi(m.j);
+    mk+=m.gp?`<line class="act-pf-gk" data-day="${m.day}" x1="${x.toFixed(1)}" y1="${mT}" x2="${x.toFixed(1)}" y2="${(y2+h2).toFixed(1)}" stroke="${C.dau}" stroke-opacity=".5" stroke-width="${nar?1.8:1.3}" stroke-dasharray="1 5"/>`
+      :`<line class="act-pf-mk" data-day="${m.day}" x1="${x.toFixed(1)}" y1="${mT}" x2="${x.toFixed(1)}" y2="${(y2+h2).toFixed(1)}" stroke="${C.mk}" stroke-opacity=".6" stroke-width="${nar?1.8:1.3}" stroke-dasharray="3 4"/>`;
+    const L=cl[cl.length-1]; if(L&&x-L.x0<fz*2.8){ L.up+=m.up; L.dn+=m.dn; L.gp+=m.gp; L.x1=x; } else cl.push({x0:x,x1:x,up:m.up,dn:m.dn,gp:m.gp}); });
+  cl.forEach(c=>{ const t=[c.up?'+'+c.up:'',c.dn?'−'+c.dn:'',c.gp?'⏸️':''].filter(Boolean).join(' '), tx=Math.min(Math.max((c.x0+c.x1)/2,mL+fz),W-mR-fz);
+    mk+=`<text class="act-pf-ml" x="${tx.toFixed(1)}" y="${(mT-9).toFixed(1)}" text-anchor="middle" font-size="${fz-1}" font-weight="700" fill="${C.mk}">${t}</text>`; });
+  // the latest point's value, labelled once
+  let li=n-1; while(li>0&&Dv[li]==null) li--; const lx=xi(li), ly=y1(Dv[li]);
+  const last=`<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="${lw+1.6}" fill="${C.dau}"${sf[li]?' fill-opacity=".6"':''}/><text x="${(lx-9).toFixed(1)}" y="${Math.max(fz+mT-6,ly-11).toFixed(1)}" text-anchor="end" font-size="${fz+1}" font-weight="700" fill="#eaf6ff" stroke="#0b1220" stroke-width="3.5" paint-order="stroke">${fmtN(Dv[li]).replace(/\.0(?=[kM]$)/,'')}</text>`;
+  // dates under the lower panel: the latest day first, then back in steps, never two on top of each other
+  const wdt=s=>s.length*fz*0.56, tk=[]; const step=Math.max(1,Math.ceil(n/(nar?4:8)));
+  for(let j=n-1;j>=0;j-=step){ const x=xi(j), s=uniD(dt[j]); if(tk.some(t=>Math.abs(t.x-x)<(wdt(t.s)+wdt(s))/2+10)) continue; tk.push({x,s,j}); }
+  const xl=tk.map(({x,s})=>{ const cx=Math.max(mL+wdt(s)/2,Math.min(x,W-mR-wdt(s)/2)); return `<line x1="${x.toFixed(1)}" y1="${y2+h2}" x2="${x.toFixed(1)}" y2="${y2+h2+4}" stroke="#3a4a66" stroke-width="1"/><text x="${cx.toFixed(1)}" y="${H-10}" text-anchor="middle" font-size="${fz}" fill="#8496b5">${s}</text>`; }).join('');
+  // hover: that day's active users, returning users and new installs together (+ who is missing / on a tracking check)
+  const pts=[]; Dv.forEach((v,j)=>{ if(v==null) return; const i=i0+j, bn=S.P.filter(p=>p.brk.has(i));
+    pts.push({x:+xi(j).toFixed(1),y:+y1(v).toFixed(1),l:actWd(dt[j])+' '+uniD(dt[j])+(S.ap[i]<S.nn[i]?' · '+S.ap[i]+' of '+S.nn[i]+' apps':'')+(iv[j]?` (≈${actPfPc(S,i)}% of DAU missing)`:'')
+      +(bn.length?' · tracking check: '+actPfNames(bn,2):'')+(pv[j]?' · provisional':''),v:actPfN(v)+' active users',
+    s:(Rv[j]!=null?actPfN(Rv[j]):'—')+' returning · '+(Nv[j]!=null?actPfN(Nv[j]):'—')+' new',sy:Rv[j]!=null?+y1(Rv[j]).toFixed(1):null}); });
+  const ptsAttr=JSON.stringify(pts).replace(/&/g,'&amp;').replace(/'/g,'&#39;');
+  const hov=`<line class="bcg" x1="0" x2="0" y1="${mT}" y2="${(y2+h2).toFixed(1)}" stroke="#cfe8ff" stroke-opacity=".4" stroke-width="1" style="visibility:hidden;pointer-events:none"/>`
+    +`<circle class="bch" r="${4.8*ts}" fill="${C.dau}" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
+    +`<circle class="bch2" r="${4.2*ts}" fill="${C.ret}" stroke="#0b1220" stroke-width="1.6" style="visibility:hidden;pointer-events:none"/>`
+    +`<g class="bct" style="visibility:hidden;pointer-events:none"><rect class="bctbg" rx="${7*ts}" fill="#0b1220" stroke="#38507a" stroke-width="1"/><text class="bctd" font-size="${11*ts}" font-weight="600" fill="#8496b5"></text><circle class="bcrdot" r="${3.4*ts}" fill="${C.dau}"/><text class="bctr" font-size="${13.5*ts}" font-weight="700" fill="#eaf6ff"></text><circle class="bcsdot" r="${3.4*ts}" fill="${C.ret}"/><text class="bcts" font-size="${13.5*ts}" font-weight="700" fill="#eaf6ff"></text></g>`
+    +`<rect x="${mL}" y="${mT}" width="${pw}" height="${(y2+h2-mT).toFixed(1)}" fill="transparent" style="cursor:crosshair" onmousemove="bChartHover(event,this)" onmouseleave="bChartLeave(this)" ontouchstart="bChartHover(event.touches[0],this)" ontouchmove="bChartHover(event.touches[0],this)"/>`;
+  const defs=`<defs><linearGradient id="act-pf-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.dau}" stop-opacity=".22"/><stop offset="1" stop-color="${C.dau}" stop-opacity="0"/></linearGradient>`
+    +`<pattern id="act-pf-h" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="8" fill="#8496b5" fill-opacity=".18"/></pattern></defs>`;
+  return `<svg viewBox="0 0 ${W} ${H}" data-pts='${ptsAttr}' data-ts="${ts}" style="width:100%;height:auto;display:block">${defs}${g}${sh}${bk}${bars}${lines}${mk}${last}${xl}${hov}</svg>`; }
+const ACT_PF_CK={first:['🆕','first day','Is app ka pehla din (launch / GA4 judi) — us din se DAU me judi, ye growth nahi'],
+  stop:['⏹️','stopped','Is app ke pichhle 7+ din koi active user nahi — us din se total me nahi, ye girawat nahi'],
+  gap:['⏸️','no data','In din is app ka GA4 data nahi (0 nahi maana) — total me nahi judi, isliye total kam dikhega'],
+  late:['⏳','not in yet','Is app ka GA4 data abhi in din tak nahi aaya — aane par total badhega'],
+  stale:['⚠️','old data','Is app ka GA4 se naya data nahi aa raha — iske baad ke din total me nahi'],
+  brk:['⚠️','tracking check','Is app ke GA4 numbers in din normal ke aadhe se kam — tracking check (GA4 / Firebase dekho), asli girawat pakki nahi. Numbers jaise aaye waise jode']};
+function actPfNames(L,max){ const k=max||6; return L.slice(0,k).map(p=>p.name).join(', ')+(L.length>k?' +'+(L.length-k)+' more':''); }
+// the date-wise table's cells for day i (every number from the same sums as the chart)
+function actPfRow(S,i,E){ const d=uniAdd(S.from,i), pv=!!S.pv[i], cur=S.cur||undefined, td=(v,t,c)=>`<td class="uni-num${c?' '+c:''}"${t?` title="${hAttr(t)}"`:''}>${v}</td>`;
+  const M=actPfMiss(S,i), mt=[M.gap.length?'No data: '+actPfNames(M.gap):'',M.late.length?'Not in yet: '+actPfNames(M.late)+' (GA4 data till '+uniD(uniAdd(S.from,Math.min(...M.late.map(p=>p.till))))+')':'',
+    M.err.length?'Not built this time: '+actPfNames(M.err):'',M.brk.length?'Tracking check: '+actPfNames(M.brk):''].filter(Boolean).join(' · ');
+  const has=S.ap[i]>0, pct=v=>(v*100).toFixed(1)+'%', inc=has&&!!S.inc[i];
+  // a big app's data missing that day: the counts read low — faded, and said on the cell (never a sure drop)
+  const it=inc?`≈${actPfPc(S,i)}% of DAU missing — ${actPfNames(M.gap.concat(M.late),3)} ka data is din nahi; total kam dikhta hai, ye girawat nahi`:'', ic=inc?'act-pfi':'';
+  const dn=(N)=>{ const c=S['d'+N+'c'][i]; if(c) return td(pct(S['d'+N+'n'][i]/S['d'+N+'d'][i]),`${c} of ${S.ap[i]} apps · ${actNum(S['d'+N+'d'][i])} new users that day`+(S['d'+N+'p'][i]?' · Provisional — '+ACT_PROV_TIP:''),S['d'+N+'p'][i]?'act-pfv':'');
+    return i+N>E?td('—',`Abhi pata nahi — ${uniD(uniAdd(d,N))} ka GA4 data aane par`,'faint'):td('—','Is din ka wapsi data nahi','faint'); };
+  const rt=S.rtn[i]?actPfN(S.rt[i])+(S.rtn[i]<S.ap[i]?`<sup class="act-pfs" title="${hAttr(`${S.ap[i]-S.rtn[i]} ${S.ap[i]-S.rtn[i]===1?'app ka':'apps ka'} is din returning number nahi (active ≤ new installs, ya pata nahi) — unhe chhod ke jod`)}">*</sup>`:''):'—';
+  const rk=S.rvc[i]&&S.ra[i]>0?(S.bl[i]?'≈ ':'')+actMoney(S.rv[i]*1000/S.ra[i],cur):'—';
+  const wk=S.wow[i]!=null?uniChg(S.wow[i]):'—', wkt=S.wow[i]!=null?`vs ${actWd(d)} ${uniD(uniAdd(d,-7))} — sirf wo ${S.wowc[i]} apps jinka dono din data hai (same apps)`+(pv?' · Provisional — '+ACT_PROV_TIP:''):'Pichhle hafte ka isi din nahi';
+  return `<tr data-day="${d}"${pv?' class="act-pfp"':''}><td class="nm"><b>${uniD(d)}</b><div class="act-pfwd">${actWd(d)}${pv?` <span class="pill p-b act-pfpill" title="${ACT_PROV_TIP}">Provisional</span>`:''}</div></td>`
+    +td(`${S.ap[i]} of ${S.nn[i]}`+(inc?' <sup class="act-pfg">⏸️</sup>':''),mt||'Saari apps ka data')+td(has?actPfN(S.dau[i]):'—',it,ic)+td(rt,it,ic)+td(S.nwn[i]?actPfN(S.nw[i]):'—',it,ic)+dn(1)+dn(7)
+    +td(S.sU[i]>0?actDec(S.sS[i]/S.sU[i]):'—')+td(S.tU[i]>0?uniDur(S.tT[i]/S.tU[i]):'—')
+    +td(rk,S.rvc[i]?`${S.rvc[i]} of ${S.ap[i]} apps with ad data · AdMob Network only`+(S.bl[i]?' · ≈ AdMob aur GA4 ka din alag timezone me — andaza':''):'In din ka AdMob data nahi')+td(wk,wkt,'faint')+'</tr>'; }
+// "📅 Daily — all apps": the latest settled day in words, the chart (range chips), who joined / left, the date-wise table
+function actPfCard(rows){ const P=actPfPtr(); if(!P) return '';
+  const hd=`<div class="ct uni-ct"><h3>📅 Daily — all apps</h3><span class="faint" style="font-size:11.5px">Active users (DAU), returning users &amp; new installs — every day</span></div>`, wrap=b=>`<div class="card" id="act-pf" style="margin-bottom:14px">${hd}${b}</div>`;
+  if(!ACTPF){ if(ACTPFERR) return wrap(`<div class="muted" style="font-size:13.5px;padding:10px 2px">⚠️ Roz ka data load nahi hua. <span class="lnk" onclick="ACTPFERR=false;actEnsure();actRerender()">Try again</span></div>`);
+    return wrap(`<div class="muted" style="font-size:13.5px;padding:14px 2px">⏳ Roz ka data load ho raha hai…</div>`); }
+  const S=actPfSeries(rows); if(!S||!S.n) return wrap(`<div class="muted" style="font-size:13.5px;padding:10px 2px">Dikhne wali apps ka roz ka data abhi nahi.</div>`);
+  const E=S.n-1, i0=actPfI0(S), C=ACT_PF_C;
+  // the apps not in the file: no day with active users yet, or their part not built this run — named, never a silent 0
+  const lost=S.lost||[];
+  // the latest settled day in one line — never a day a big app's data is missing (its sum reads low); only when every settled
+  // day has one, that day, with how much is missing
+  const ls=S.ls>=0?S.ls:S.ls0, lsd=ls>=0?uniAdd(S.from,ls):null, gone=i=>{ const m=actPfMiss(S,i); return m.gap.concat(m.late); };
+  let lsx=''; if(ls>=0&&S.inc[ls]) lsx=` · ≈${actPfPc(S,ls)}% of DAU missing (${hAttr(actPfNames(gone(ls),3))} ka data nahi)`;
+  else if(ls>=0){ const sk=[], wl=[]; for(let i=ls+1;i<=E;i++) if(S.ap[i]>0&&!S.pv[i]&&S.inc[i]){ sk.push(i); gone(i).forEach(p=>{ if(!wl.includes(p)) wl.push(p); }); }
+    if(sk.length) lsx=` · <span class="faint">⏸️ baad ke ${sk.length} pakke din me ${hAttr(actPfNames(wl,3))} ka data nahi — isliye ye din</span>`; }
+  const top=ls>=0?`<div class="act-line" id="act-pf-last">📅 ${actWd(lsd)} ${uniD(lsd)} <span class="faint" style="font-weight:500">(latest settled day)</span>: ${actPfN(S.dau[ls])} active users (DAU) · ${S.rtn[ls]?actPfN(S.rt[ls])+' returning':'returning —'} · ${S.nwn[ls]?actPfN(S.nw[ls])+' new installs':'new installs —'}${S.wow[ls]!=null?` · <span title="${hAttr('Sirf wo '+S.wowc[ls]+' apps jinka dono din data hai (same apps)')}">${uniChg(S.wow[ls])} vs last ${actWd(lsd)}</span>`:''} · ${S.ap[ls]} of ${S.nn[ls]} apps${lsx}</div>`:'';
+  // app-count changes in the range: chart marks + one chip per app
+  // (3+ apps the same day and way — e.g. many apps' first GA4 day — are one chip, named in its tooltip)
+  const M=actPfMarks(S,i0), ev=[], by={}; actPfEvents(S,i0,M).forEach(x=>{ const g=x.i+'|'+x.e+'|'+x.k; if(by[g]){ by[g].ps.push(x.p); if(x.big) by[g].big=true; } else { by[g]=Object.assign({},x,{ps:[x.p]}); ev.push(by[g]); } });
+  const MX=8, sh=ACTPFMK?ev:ev.filter((x,j)=>j<MX||x.big);   // folded: the newest 8 + every chip of a mark on the chart
+  const evd=x=>{ const a=uniAdd(S.from,x.i); return x.k==='stale'?'GA4 till '+uniD(uniAdd(S.from,x.p.till)):(x.k==='late'?'from '+uniD(a):(x.e>x.i?uniSpan(a,uniAdd(S.from,x.e)):uniD(a))); };
+  const chips=ev.length?`<div class="act-pfcs">${sh.map(x=>{ const k=ACT_PF_CK[x.k]||ACT_PF_CK.gap; return `<span class="act-pfc" data-k="${x.k}" data-day="${uniAdd(S.from,x.i)}" title="${hAttr((x.ps.length>2?actPfNames(x.ps,40)+' — ':'')+k[2])}">${k[0]} ${x.s>0?'+ ':(x.s<0?'− ':'')}${x.ps.length>2?x.ps.length+' apps':hAttr(x.ps.map(p=>p.name).join(', '))} · ${k[1]} · ${evd(x)}</span>`; }).join('')}`
+    +(ev.length>ev.filter((x,j)=>j<MX||x.big).length?`<span class="lnk" style="font-size:11.5px;align-self:center" onclick="actPfMX()">${ACTPFMK?'Show fewer':'+'+(ev.length-sh.length)+' more'}</span>`:'')+'</div>':'';
+  const rng=[['30d','30 days'],['90d','3 months'],['180d','6 months'],['all','All time']].map(([v,l])=>`<span class="chip${ACTPFR===v?' on':''}" onclick="actPfR('${v}')">${l}</span>`).join('');
+  const anyPv=S.pv.some((x,i)=>x&&i>=i0), anyRg=S.pv.some((x,i)=>i>=i0&&S.ap[i]>0&&!actPfRetOk(S,i)&&S.rtn[i]>0);
+  const anyInc=S.inc.some((x,i)=>x&&i>=i0&&S.ap[i]>0), anyBig=(S.bk||[]).some(b=>b.big&&b.e>=i0), anyBk=ev.some(x=>x.k==='brk');
+  const lgd=`<div class="lgd">${actLg(C.dau,'Active users (DAU)')}${actLg(C.ret,'Returning users',true)}<span><i class="dot" style="background:${C.new}"></i>New installs (lower bars)</span>`
+    +`${M.length?actLgMark(C.mk,'App count changed (new app / stopped)'):''}`
+    +`${anyInc?`<span title="${hAttr('Us din kisi badi app ka data nahi aaya — DAU kam dikhta hai, ye girawat nahi')}"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;border:2px solid ${C.dau}"></i>⏸️ App data missing (total low)</span>`:''}`
+    +`${anyBig?`<span title="${hAttr(ACT_PF_CK.brk[2])}"><i style="display:inline-block;width:14px;height:8px;background:rgba(255,159,67,.3);border-top:3px solid ${ACT_PF_BRK}"></i>Tracking check</span>`:''}${anyPv?ACT_LG_PROV:''}</div>`;
+  const chart=`<div id="act-pf-chart">${actPfChart(S,i0,M)}</div>`;
+  // the date-wise table: newest first, ACTPFN rows, then "Show more" — each "Show more" block starts with the column names again
+  const TH=[['Date'],['Apps with data','Us din kitni apps ka GA4 data aaya (dikhne wali apps me se) — cell pe ruko: kaun nahi. ⏸️ = kisi badi app ka data nahi, total kam'],['DAU','Active users: sab apps ke roz ke GA4 active users jode — ek insaan 2 apps pe ho to 2 baar gina'],
+    ['Returning','Active users − us din ke naye installs, har app ka, jode'],['New installs','GA4 new users (pehli baar app khola), sab apps jode'],
+    ['Came back next day %','Us din install karne walo me se kitne % agle din phir aaye — sab apps milakar (Σ wapas aaye ÷ Σ us din ke naye users)'],['After a week %','Us din install karne walo me se kitne % 7ve din aaye — sab apps milakar'],
+    ['Sessions/user','Returning users ke sessions ÷ returning users (upar ke tiles jaise)'],['Time/user','Returning users ka time ÷ returning users'],
+    ['Ad revenue / 1,000 users','AdMob Network kamai ÷ GA4 active users × 1,000 (≈ — AdMob aur GA4 ka din alag timezone me)'],['vs same day last week','DAU vs pichhle hafte ka isi din — sirf wo apps jinka dono din data hai (same apps), nayi / ruki app se farak nahi']];
+  const rh=`<tr class="act-pfrh">${TH.map(([l])=>`<th>${l}</th>`).join('')}</tr>`;
+  const nR=Math.min(S.n,Math.max(1,ACTPFN)), trs=[]; let star=false, incR=false;
+  for(let i=E,r=0;i>E-nR&&i>=0;i--,r++){ if(r>=14&&(r-14)%30===0) trs.push(rh); trs.push(actPfRow(S,i,E)); if(S.rtn[i]&&S.rtn[i]<S.ap[i]) star=true; if(S.inc[i]&&S.ap[i]>0) incR=true; }
+  const left=S.n-nR, more=`<div class="act-pfmore">${left>0?`<span class="lnk" onclick="actPfMore(30)">Show more (${Math.min(30,left)} ${Math.min(30,left)===1?'day':'days'})</span><span class="faint">· ${left} older ${left===1?'day':'days'} · history from ${uniD(S.from)}</span>`:`<span class="faint">All ${S.n} days · from ${uniD(S.from)}</span>`}${nR>14?`<span class="lnk" onclick="actPfMore(0)">Show fewer</span>`:''}</div>`;
+  const table=`<div class="uni-scroll act-pfw"><table class="uni-sticky act-pft" style="min-width:940px"><thead><tr>${TH.map(([l,t])=>`<th${t?` title="${hAttr(t)}"`:''}>${l}</th>`).join('')}</tr></thead><tbody>${trs.join('')}</tbody></table></div>`;
+  let pj=E; while(pj>=0&&S.pv[pj]) pj--; const note=pj<E?actProvNote(uniAdd(S.from,pj),uniAdd(S.from,E)):'';   // the provisional days at the end
+  return wrap(`${top}<div class="chips" style="margin-bottom:8px">${rng}</div>${chart}${lgd}${chips}
+    <div class="uni-sec act-pfsec">Date-wise <span>· newest first · halka = Provisional (abhi badh sakta hai)</span></div>${table}${more}
+    <div class="faint act-pfnote" style="font-size:11px;line-height:1.55;margin-top:8px">Saari dikhne wali apps (${S.N}) milakar — DAU me ek insaan 2 apps pe ho to 2 baar gina (a person on 2 apps counts twice). `
+    +`"vs same day last week" sirf wo apps jinka dono din data hai (same apps) — nayi app ya ruki app se % nahi badalta. Chart me khadi (upar-neeche) dotted line aur "+1 / −1" wale din apps ki ginti badli (nayi app aayi / koi app ruki) — us din ka uchhaal growth nahi; kisi din kisi app ka data na ho to "Apps with data" me dikhta hai. `
+    +`${anyInc||incR?'⏸️ / khokhla gola (chart) = us din kisi badi app ka data nahi aaya — DAU kam dikhta hai (halka dikhaya), ye girawat nahi. ':''}`
+    +`${anyBig||anyBk?'Orange patti / ⚠️ tracking check = us app ke GA4 numbers normal ke aadhe se kam — asli girawat pakki nahi. ':''}`
+    +`${star?'* (Returning) = us din kuch apps ka returning number nahi (active ≤ new installs, ya pata nahi) — unhe chhod ke joda. ':''}`
+    +`Came back next day / After a week = us din install karne walo me se (us din ke GA4 new users pe).${anyRg?' Returning line me khali jagah = us din kisi badi app ka returning number nahi.':''} — = pata nahi (0 nahi maana).`
+    +`${lost.filter(x=>!x.err).length?` ℹ️ Abhi koi din ka data nahi: ${hAttr(actPfNames(lost.filter(x=>!x.err)))}.`:''}${lost.filter(x=>x.err).length?` ⚠️ Is baar nahi bana (har din "Apps with data" me gini, DAU me nahi): ${hAttr(actPfNames(lost.filter(x=>x.err)))}.`:''}</div>${note}`); }
 // ---- Alerts screen: the open Active alerts (from DATA.active — no lazy load); nothing at all when there are none ----
 function actAlertsFor(){ return ((DATA.active&&DATA.active.alerts)||[]).filter(x=>x&&typeof x==='object'&&(!APP||x.app===APP)&&uniVis(x.app_id)); }
 const ACT_FAM={act_drift:'Slow change',act_slow:'3-month trend',act_spike:'Sudden change',act_break:'Tracking check',act_return:'New users coming back'};

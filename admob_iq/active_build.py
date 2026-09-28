@@ -6,8 +6,11 @@
   * market_prepass: which recent weeks moved eCPM the same way on most GA4 apps (from the revenue input only).
   * app_step: engine.active.evaluate for one app right after the uninstall evaluation (its detail read, never changed)
     → writes active_<key>.json.gz (deterministic, rewritten only on change) → the summary row.
-  * finish: at the very end of run_uninstall — the portfolio edge, the state, stale files, then dashboard["active"]
-    LAST. On any failure dashboard["active"] is removed and ONE line is printed: "ga4 active skipped: <ExcName>".
+  * finish: at the very end of run_uninstall — the portfolio edge, the state, stale files, the portfolio's daily file
+    (active_portfolio.json.gz: every app's own daily arrays + their day-by-day sums, lazy — the summary gets only a
+    pointer), then dashboard["active"] LAST. On any failure dashboard["active"] is removed and ONE line is printed:
+    "ga4 active skipped: <ExcName>". The daily file alone failing costs only that file ("portfolio": null and ONE line,
+    "ga4 active portfolio skipped: <ExcName>").
   * mark_notified_active: after send_alerts, like uninstall_build.mark_notified, over this tab's episodes.
 
 PRIVACY: nothing here prints except that one error-type line; the counts line is build_static's (log_line).
@@ -29,6 +32,7 @@ from .fetch import ga4_uninstall as gu
 STATE = "active_state.json"
 PREFIX = "active_"
 FILE_RE = re.compile(r"^active_[0-9a-f]{12}\.json\.gz$")
+PORT_FILE = "active_portfolio.json.gz"          # the All-apps "📅 Daily" series (never matches FILE_RE)
 
 
 def _default():
@@ -148,6 +152,10 @@ def app_step(store, a, udet, key, st, now_iso, rev, market, stale, outdated, cfg
     name = PREFIX + key + ".json.gz"
     write_json_gz_stable(os.path.join(out_dir, name), detail)
     row.update(file=name, sig=_sig(detail))
+    try:                                             # its slice of the All-apps daily series (a failure costs only
+        row["_port"] = act.portfolio_part(detail)    # that slice: the app is listed as missing there)
+    except Exception:
+        row["_port"] = False
     row["_alerts"] = detail["changes"]["open"]
     row["_ret_from"] = detail["edges"]["ret_from"] if detail["edges"]["ret_state"] == "found" else None
     return row
@@ -169,10 +177,33 @@ def consts(cfg):
     return out
 
 
-def finish(dashboard, out_dir, rows, market, st, data_dir, no_ga4, cfg, status=None):
-    """The end of the step: portfolio edge + state saved, stale files removed, then dashboard["active"] LAST. Never
-    raises: a failure removes dashboard["active"] and prints the error type only."""
+def portfolio_step(out_dir, parts):
+    """The All-apps daily series → active_portfolio.json.gz (deterministic, rewritten only on change) → the pointer for
+    dashboard["active"]["portfolio"] = {file, sig, from, to, days, apps, missing, settled_till}. parts = [(row, its
+    slice: a dict, None = no day with active users, False = the slice failed)]. Never raises: on a failure the old file
+    is removed (a stale series never ships), ONE error-type line is printed and the pointer is None."""
     try:
+        miss = [{"app_id": r.get("app_id"), "app": r.get("app"),
+                 "why": "no_data" if p is None and r.get("status") == "ok" else "error"} for r, p in parts if not p]
+        body = act.portfolio([p for _, p in parts if p], miss)
+        write_json_gz_stable(os.path.join(out_dir, PORT_FILE), body)
+        return {"file": PORT_FILE, "sig": _sig(body), "from": body["from"], "to": body["to"],
+                "days": len((body["total"] or {}).get("n") or []), "apps": len(body["apps"]), "missing": len(miss),
+                "settled_till": body["settled_till"]}
+    except Exception as e:
+        try:
+            os.remove(os.path.join(out_dir, PORT_FILE))
+        except OSError:
+            pass
+        print("ga4 active portfolio skipped: %s" % type(e).__name__, file=sys.stderr)
+        return None
+
+
+def finish(dashboard, out_dir, rows, market, st, data_dir, no_ga4, cfg, status=None):
+    """The end of the step: portfolio edge + state saved, stale files removed, the All-apps daily file, then
+    dashboard["active"] LAST. Never raises: a failure removes dashboard["active"] and prints the error type only."""
+    try:
+        parts = [(r, r.pop("_port", None)) for r in rows]
         alerts = act.sort_alerts([al for r in rows for al in r.pop("_alerts", [])])
         edges = sorted(r.pop("_ret_from") for r in rows if r.get("_ret_from"))
         for r in rows:
@@ -221,7 +252,7 @@ def finish(dashboard, out_dir, rows, market, st, data_dir, no_ga4, cfg, status=N
                "counts": cnt, "consts": c, "market": market or {"weeks": [], "latest": None},
                "alerts": alerts, "alert_counts": ac,
                "no_ga4": [{"app_id": n["app_id"], "app": n["app"], "text": n["text"]} for n in no_ga4 or []],
-               "apps": rows}
+               "portfolio": portfolio_step(out_dir, parts), "apps": rows}
         dashboard["active"] = out
     except Exception as e:
         dashboard.pop("active", None)
