@@ -39,7 +39,8 @@ const out = {};
 function scen(name, code) { try { out[name] = String(run(code)); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + (e.stack.match(/at [^\n]*/g) || []).slice(0, 4).join(' < ')); } }
 const RESET = `UNIAPP=''; APP=''; RANGE='30d'; innerWidth=375; ACTAPP=''; ACTRANGE='90d'; ACTSMOOTH='7d'; ACTUSEM='time'; ACTUSEPOP='r'; ACTREVM='k'; ACTRETN=1;
   ACTTRI='key'; ACTTRIEXP=false; ACTPRE=false; ACTSTEXP=''; ACTTILEEXP=''; ACTOLDEXP=false; ACTCLEXP=false; ACTTIMEXP=false; ACTVERALL=false;
-  ACTSORT={k:'status',d:1}; ACTRELALL=false; ACTIMPOPEN=''; ACTIMPALL=false; ACTIMPHOW=false; ACTUPF=''; ACTUPALL=false; ACTIMPJUMP=''; ACTJUMP='';`;
+  ACTSORT={k:'status',d:1}; ACTRELALL=false; ACTIMPOPEN=''; ACTIMPALL=false; ACTIMPHOW=false; ACTUPF=''; ACTUPALL=false; ACTIMPJUMP=''; ACTJUMP='';
+  ACTIMPWIN=7; ACTIMPWK={}; UNIIMPWIN=7; UNIIMPWK={};`;
 const rows = FX.dashboard_active.apps, dets = FX.app_files;
 const J = JSON.stringify;
 const openApp = r => `ACTAPP=${J(r.app_id)}; APP=${J(r.app)};`;
@@ -112,6 +113,34 @@ try { imp.go = JSON.parse(run(`(()=>{ const keep={render, show, _navSave}, calls
   try{ ${RESET} const r=DATA.active.apps.find(x=>ACTD[x.key]&&((ACTD[x.key].impact||{}).updates||[]).length), b=ACTD[r.key].impact.updates[0];
     uniImpGo(r.app_id,b.key,'act'); return JSON.stringify({calls, app:APP, want:r.app, actapp:ACTAPP, open:ACTIMPOPEN, key:b.key, uni:UNIIMPOPEN, screen:actScreen().includes('id="act-imp-'+b.key+'"')}); }
   finally{ render=keep.render; show=keep.show; _navSave=keep._navSave; } })()`)); } catch (e) { errors.push('imp go: ' + e.message); }
+
+
+// ── 📦 Before / after windows in THIS tab (SPEC_WINDOWS §5): its own card default (independent of the Uninstall tab's),
+// every onclick carrying 'act', the ⏰ late chip / Recent updates chip opening the block HERE at 30; the fixture's own
+// by_window (impact v2) — every block at 30 — when it has them
+run(fs.readFileSync(require('path').join(__dirname, 'impact_win_synth.js'), 'utf8'));
+const win = { v2: false, blocks: [], syn: null };
+for (const r of rows) { const d = dets[r.key]; if (!d) continue;
+  for (const b of ((d.impact || {}).updates || [])) { if (!b.by_window) continue; win.v2 = true;
+    const nm = `win|${r.app}|${b.key}`;
+    scen(nm, `${RESET} ${openApp(r)} ACTIMPOPEN=${J(b.key)}; ACTIMPWK={${J(b.key)}:30}; actScreen()`);
+    const h = out[nm] || '', o = h.split('<div class="uni-imp-b').filter(x => x.includes('data-open="1"'))[0] || '';
+    win.blocks.push({ app: r.app, key: b.key, id_act: h.includes(`id="act-imp-${b.key}"`), rows: [...o.matchAll(/<tr data-row="([a-z_0-9]+)"/g)].map(m => m[1]),
+      hdr: (o.match(/Verdict( \(\d+ days\))?:/) || [])[0] || null, acts: (h.split('id="act-impact"')[1] || '').split('id="act-kpis"')[0].match(/onclick="uni[A-Za-z]+\([^"]*\)"/g) || [] }); } }
+try { win.syn = JSON.parse(run(`(()=>{ ${RESET} const r=DATA.active.apps.find(x=>ACTD[x.key]&&((ACTD[x.key].impact||{}).updates||[]).length), d=__winApp(ACTD[r.key]), B=uniImpBlocks(d), b=B[0];
+  const ua=__winApp(UNI.apps.find(x=>uniImpBlocks(x).length)), saved=[], keepLS=localStorage, hdr=h=>[...h.matchAll(/Verdict( \\(\\d+ days\\))?:/g)].map(m=>m[1]||'');
+  localStorage={getItem:()=>null,setItem:(k,v)=>saved.push([k,v]),removeItem(){}};
+  try{ const o={};
+    uniImpWinX(30,'act'); o.act=hdr(uniImpactCard(d,'act')); o.uni=hdr(uniImpactCard(ua)); o.acwin=ACTIMPWIN; o.uwin=UNIIMPWIN; o.saved=saved.slice();
+    o.note=(uniImpactCard(d,'act').match(/<div class="faint act-imp-note"[^>]*>([^<]*)<\\/div>/)||[])[1]||null;
+    uniImpWinX(60); o.act2=hdr(uniImpactCard(d,'act')); o.uni2=hdr(uniImpactCard(ua)); o.saved2=saved.slice();
+    b.late={level:'hold',alert_id:'x',seeded:false}; ACTIMPOPEN=b.key; const h=uniImpactCard(d,'act');
+    o.onclicks=h.match(/onclick="[^"]*"/g)||[]; o.late=(h.match(/<span class="pill [a-z-]+ uni-late"[^>]*onclick="([^"]*)">([^<]*)<\\/span>/)||[]).slice(1);
+    o.ids=[...h.matchAll(/\\sid="([^"]*)"/g)].map(m=>m[1]);
+    const s={app:r.app,app_id:r.app_id,updates:[{key:b.key,label:b.label,date:b.date,level:'continue',early:false,final:true,adoption:0.9,head:null,judged:7,late:{level:'halt',alert_id:'x'}}]};
+    o.upd=(uniUpdatesCard([{s,a:d}],'act').match(/<span class="pill [a-z-]+ uni-late"[^>]*onclick="([^"]*)">([^<]*)<\\/span>/)||[]).slice(1);
+    o.app_id=r.app_id; o.key=b.key; return JSON.stringify(o); }
+  finally{ localStorage=keepLS; ${RESET} } })()`)); } catch (e) { errors.push('win act: ' + e.message); }
 
 // ── ids: each app's Uninstall screen and Active screen — each duplicate-free, the two disjoint ──
 const ids = [];
@@ -285,7 +314,11 @@ for (const r of rows) {
     info_rows: [...chg.matchAll(/data-info="([^"]*)"/g)].map(m => m[1]), closed_rows: (chgF.match(/<div class="uni-chg na cl"/g) || []).length, older_rows: (chgF.match(/data-old="/g) || []).length,
     folds: [...chg.matchAll(/<span>([A-Za-z ]+) \((\d+)\)<\/span>/g)].map(m => [m[1], +m[2]]),
     sev_pills: [...chg.matchAll(/<span class="sv"><span class="pill ([a-z-]+)">([^<]*)<\/span>/g)].map(m => [m[1], m[2]]),
-    imp_card: h.includes('id="act-impact"') && h.includes('<h3>📦 Update impact</h3>') && h.includes('Ye card = har update ke 7 din pehle vs 7 din baad · upar ke tiles = pichhle 7 pakke din'),
+    // the note: "(upar chuno)" only right under a 7 / 14 / 30 / 60 selector (an app with updates); else today's words
+    imp_card: h.includes('id="act-impact"') && h.includes('<h3>📦 Update impact</h3>') && (h.includes('uni-imp-cseg')
+      ? h.includes('Ye card = har update ke 7 din pehle vs 7 din baad (upar chuno) · upar ke tiles = pichhle 7 pakke din') && h.indexOf('uni-imp-cseg') < h.indexOf('act-imp-note')
+      : h.includes('Ye card = har update ke 7 din pehle vs 7 din baad · upar ke tiles = pichhle 7 pakke din') && !h.includes('(upar chuno)')),
+    imp_seg: h.includes('uni-imp-cseg'),
     sections: ['act-sum', 'act-chg', 'act-impact', 'act-kpis', 'act-daily', 'act-tri', 'act-use', 'act-rev', 'act-timing'].map(s => h.indexOf('id="' + s + '"')),
     versions: [...(f.split('<table class="uni-sticky act-ver"')[1] || '').matchAll(/<tr data-ver="([^"]*)"><td class="nm">([^<]*)/g)].map(m => [m[1], m[2].replace(/&lt;/g, '<')]),
     versions_base: [...(h.split('<table class="uni-sticky act-ver"')[1] || '').matchAll(/<tr data-ver="([^"]*)"/g)].map(m => m[1]),
@@ -366,7 +399,7 @@ for (const r of rows) {
 }
 console.log(JSON.stringify({
   scenarios: Object.keys(out).length, errors, bad, jargon: jargon.slice(0, 20), devanagari, titles: String(run('TITLES.active.join("|")')),
-  apps, portfolio, imp, ids, header, gofrom, alerts, syn, retc, retbase, ginst, grid, colour,
+  apps, portfolio, imp, win, ids, header, gofrom, alerts, syn, retc, retbase, ginst, grid, colour,
   fix: { rev_market: text(sec(fx2.rev_market, 'class="act-mk"', '</div></div>')).trim(), pf_market_now: text(sec(fx2.pf_market_now, 'id="act-market">', '</div>')).trim(),
     pf_market_old: text(sec(fx2.pf_market_old, 'id="act-market">', '</div>')).trim(), inst_opp: text(fx2.inst_opp), inst_same: text(fx2.inst_same), inst_zero: text(fx2.inst_zero),
     hint_ads: text(fx2.hint_ads), hint_ret: text(fx2.hint_ret), linked: text(fx2.linked),

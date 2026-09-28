@@ -116,6 +116,9 @@ jobs:
           GADS_GEO:             ${{ vars.GADS_GEO || 'false' }}
           VALUE_CD:             ${{ vars.VALUE_CD || 'false' }}
           VALUE_PAYBACK_DAYS:   ${{ vars.VALUE_PAYBACK_DAYS }}
+          # Update impact card: IMPACT_WINDOWS=false (repo variable) turns off its 14 / 30 / 60-day windows and the
+          # late-effect alerts without a code push (the 7-day card as before)
+          IMPACT_WINDOWS:       ${{ vars.IMPACT_WINDOWS || 'true' }}
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On

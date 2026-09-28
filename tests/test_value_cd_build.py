@@ -85,7 +85,9 @@ def _digest(obj):
 
 
 def flags_off_digest(tmp):
-    return _digest([{k: v for k, v in b.items() if k != "dash"} for b in run_builds(tmp)])
+    # every flag off — IMPACT_WINDOWS too (on, the uninstall log line gains its ", impact_late alerts …" counts: the
+    # value outputs are identical either way)
+    return _digest([{k: v for k, v in b.items() if k != "dash"} for b in run_builds(tmp, s=_settings(impact_windows=False))])
 
 
 def legacy_geo_digest():

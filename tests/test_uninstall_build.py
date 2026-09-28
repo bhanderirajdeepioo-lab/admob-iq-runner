@@ -33,7 +33,8 @@ PKG = {A1: "com.hidden.one", A2: "com.hidden.two", A4: "com.hidden.four", A6: "c
 SECRETS = test_ga4.SECRETS + [PID, SID, EMAIL, "rt-SECRET-x", A1, A2, A3, A4, A6, N1, N2, N3, N4, N6] + list(PKG.values())
 LOG_LINE = re.compile(r"^ga4 uninstall: apps \d+, with GA4 \d+, fetched \d+ \(full \d+, repair \d+\), fresh \d+, "
                       r"failed \d+, deferred \d+, open alerts \d+ \(new \d+\), impact updates \d+ \(halt \d+, "
-                      r"hold \d+, win \d+, early \d+\), impact alerts \d+ \(new \d+\)$")
+                      r"hold \d+, win \d+, early \d+\), impact alerts \d+ \(new \d+\), "
+                      r"impact_late alerts \d+ \(new \d+\)$")
 
 
 def _bump(delta):
@@ -333,6 +334,22 @@ def test_run_uninstall_and_its_wrapper_return_the_files_for_headers(site):
 
 # ── privacy + determinism ────────────────────────────────────────────────────────────────────────
 
+def test_the_log_line_counts_the_update_windows_that_crashed_and_only_then(site, capsys, monkeypatch):
+    # (review 2026-09-28: a failure-isolated 14 / 30 / 60-day window was dropped silently) — counts only, and the
+    # line is unchanged while none failed
+    data, out, _ = site
+    real = imp.impact_app
+
+    def crashed(*a, **k):
+        detail, updates, conds = real(*a, **k)
+        detail["flags"]["windows_failed"] = 2
+        return detail, updates, conds
+    monkeypatch.setattr(imp, "impact_app", crashed)
+    run(data, out)
+    lines = capsys.readouterr().err.splitlines()
+    assert len(lines) == 1 and lines[0].endswith("impact_late alerts 0 (new 0), windows failed 6"), lines
+
+
 def test_public_log_is_one_counts_line_and_site_files_hold_no_ids(site, capsys):
     data, out, _ = site
     dash, _ = run(data, out)
@@ -342,7 +359,7 @@ def test_public_log_is_one_counts_line_and_site_files_hold_no_ids(site, capsys):
     assert len(lines) == 1 and LOG_LINE.match(lines[0]), lines
     assert lines[0] == ("ga4 uninstall: apps 5, with GA4 3, fetched 0 (full 0, repair 0), fresh 3, failed 0, "
                         "deferred 0, open alerts 3 (new 3), impact updates 0 (halt 0, hold 0, win 0, early 0), "
-                        "impact alerts 0 (new 0)")
+                        "impact alerts 0 (new 0), impact_late alerts 0 (new 0)")
     for s in SECRETS:
         assert s not in got.err
     shipped = json.dumps(dash["uninstall"], ensure_ascii=False)
@@ -406,8 +423,9 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     assert ("Demo Flashlight", "cohort", "good", False, False) in fam                   # good news: settled only
     assert {("Demo Caller – Test App", "impact", "warning", False, False),              # 🛑 HALT (sent 21 Sep)
             ("Demo Wallpapers", "impact", "watch", False, False),                       # ⚠️ HOLD (seeded)
-            ("Demo Flashlight", "impact", "good", False, False)} < fam and len(fam) == 8  # ✅ WIN (seeded)
-    assert sum(1 for x in fx["sent"] if x["telegram"] or x["email"]) == 3               # sent once each, no flood
+            ("Demo Flashlight", "impact", "good", False, False),                        # ✅ WIN (seeded)
+            ("Demo Late Drop", "impact_late", "watch", False, False)} < fam and len(fam) == 9   # ⏰ late (sent 24 Sep)
+    assert sum(1 for x in fx["sent"] if x["telegram"] or x["email"]) == 4               # sent once each, no flood
     assert {n["reason"] for n in asset["no_ga4"]} == {"no_package", "no_stream", "fetch_failed", "not_fetched_yet",
                                                       "same_package"}
     wall = [a for a in asset["apps"] if a["app"] == "Demo Wallpapers"][0]
@@ -465,7 +483,11 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
                             {"date": "2026-09-19", "version": "1.3", "kind": "version"}],
         "Demo Wallpapers": [{"date": "2026-09-01", "version": "2.0", "kind": "version"}],
         "Demo Weather": [{"date": "2026-07-15", "version": "4.1", "kind": "version"}],
-        "Demo Launcher": [{"date": "2026-08-05", "version": None, "kind": "update"}]}
+        "Demo Launcher": [{"date": "2026-08-05", "version": None, "kind": "update"}],
+        "Demo Late Drop": [{"date": "2026-06-15", "version": "1.9", "kind": "version"},
+                           {"date": "2026-08-12", "version": "2.0", "kind": "version"},
+                           {"date": "2026-08-22", "version": "2.1", "kind": "version"}],
+        "Demo Late Told": [{"date": "2026-08-04", "version": "3.1", "kind": "version"}]}
     for a in asset["apps"]:
         for rel in a["releases"]:
             rows = [r for r in a["triangle"]["rows"] if r["from"] <= rel["date"] <= r["to"]]
@@ -479,7 +501,9 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     assert {k: (b["verdict"]["level"], b["verdict"]["final"]) for k, b in imp.items()} == {
         ("Demo Caller – Test App", "v3.2"): ("halt", False), ("Demo Flashlight", "v1.3"): (None, False),
         ("Demo Flashlight", "v1.2"): ("win", True), ("Demo Wallpapers", "v2.0"): ("hold", True),
-        ("Demo Weather", "v4.1"): ("continue", True), ("Demo Launcher", "App update"): ("continue", True)}
+        ("Demo Weather", "v4.1"): ("continue", True), ("Demo Launcher", "App update"): ("continue", True),
+        ("Demo Late Drop", "v1.9"): ("continue", True), ("Demo Late Drop", "v2.0"): ("continue", True),
+        ("Demo Late Drop", "v2.1"): ("continue", True), ("Demo Late Told", "v3.1"): ("hold", True)}
     b = imp[("Demo Caller – Test App", "v3.2")]                  # old users on 3.2: less DAU, less time — early
     assert b["verdict"]["worse"] == ["returning_dau", "time"] and b["rows"]["new_d7"]["status"] == "pending"
     assert b["rows"]["returning_dau"]["change"] < -0.06 and b["rows"]["time"]["change"] < -0.1
@@ -501,7 +525,8 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     assert wea["impact"]["flags"]["ret_from"] > "2026-07-01" and "no_cohorts" in b["notes"]
     b = imp[("Demo Launcher", "App update")]
     assert b["kind"] == "update" and all(r["status"] == "na" for r in b["versions_cmp"]["rows"].values())
-    assert s["impact_counts"] == {"halt": 1, "hold": 1, "continue": 1, "win": 1, "pending": 1}
+    # (+ the late-effect apps' updates of the last 60 days: Late Drop's 2.0 / 2.1 continue, Late Told's 3.1 holds)
+    assert s["impact_counts"] == {"halt": 1, "hold": 2, "continue": 3, "win": 1, "pending": 1}
     assert all(a["impact"]["flags"]["revenue"] in ("ok", "partial") for a in asset["apps"])      # the AdMob revenue
     assert all(LOG_LINE.match(line) for line in fx["public_log"]) and len(fx["public_log"]) == 7
     with open(OUT, encoding="utf-8") as f:
@@ -689,7 +714,7 @@ def test_every_app_update_gets_its_card_in_the_asset_and_the_summary(isite):
     assert rows[A1]["updates"] == [{"key": "ver:1.1@2026-08-26", "label": "v1.1", "date": "2026-08-26", "level": "halt",
                                     "early": False, "final": True, "adoption": b1["adoption"]["last"],
                                     "head": {"row": "returning_dau", "change": b1["rows"]["returning_dau"]["change"],
-                                             "unit": "rel"}, "judged": 9}]
+                                             "unit": "rel"}, "judged": 9, "late": None}]
     al = [a for a in s["alerts"] if a["family"] == "impact"]
     assert [(a["app"], a["severity"], a["level"], a["notify"]) for a in al] == [(N1, "warning", "halt", True)]
     assert al[0]["message"].startswith(N1 + ": v1.1 (26 Aug) ke baad purane users ka DAU ")
@@ -739,7 +764,8 @@ def test_an_update_alert_goes_out_once_as_update_impact_and_its_log_line_is_coun
     dash, _ = irun(data, out, rev)
     err = capsys.readouterr().err.splitlines()
     assert len(err) == 1 and LOG_LINE.match(err[0])
-    assert err[0].endswith("impact updates 2 (halt 1, hold 0, win 0, early 0), impact alerts 1 (new 1)")
+    assert err[0].endswith("impact updates 2 (halt 1, hold 0, win 0, early 0), impact alerts 1 (new 1), "
+                           "impact_late alerts 0 (new 0)")
     for secret in (N1, N2, A1, A2, "1.1", "ver:", "Aug", PKG[A1]):
         assert secret not in err[0]
     res = build_static.send_alerts(dash, ga4_settings())

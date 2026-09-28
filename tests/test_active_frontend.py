@@ -20,7 +20,7 @@ import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIXTURE = os.environ.get("ACTIVE_FE_FIXTURE") or os.path.join(ROOT, "tests", "fixtures", "active_sample.json")
-UNI_FIXTURE = os.path.join(ROOT, "tests", "fixtures", "uninstall_sample.json")
+UNI_FIXTURE = os.environ.get("UNINSTALL_FE_FIXTURE") or os.path.join(ROOT, "tests", "fixtures", "uninstall_sample.json")
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 MON = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -605,3 +605,38 @@ def test_period_row_says_network_only_and_one_day(report, fixture):
 def test_phone_status_strip_never_widens_the_page(html):
     block = html.split("@media(max-width:760px){\n    .act-strip")[1].split("}\n  }")[0]
     assert "grid-template-columns:minmax(0,1fr)" in block and "min-width:0" in block
+
+
+
+# ── 📦 Before / after windows in this tab (SPEC_WINDOWS §5) ─────────────────────────────────────────────────────────
+
+def test_windows_in_active_have_their_own_default_act_onclicks_and_open_here_at_30(report):
+    w = report["win"]["syn"]
+    assert w, "no app with an update block in the fixture"
+    assert w["act"] and set(w["act"]) == {" (30 days)"} and w["acwin"] == 30        # this tab's card at 30 …
+    assert w["uni"] and set(w["uni"]) == {""} and w["uwin"] == 7                   # … the Uninstall tab's still at 7
+    assert w["saved"] == [["imp_win_act", "30"]]
+    assert w["note"] == "Ye card = har update ke 30 din pehle vs 30 din baad (upar chuno) · upar ke tiles = pichhle 7 pakke din"
+    assert set(w["act2"]) == {" (30 days)"} and set(w["uni2"]) == {" (60 days)"} and w["saved2"][-1] == ["imp_win_uni", "60"]
+    calls = [c for c in w["onclicks"] if c.startswith('onclick="uni')]
+    assert calls and all("'act')" in c for c in calls), calls                        # every tap stays in this tab
+    assert any(c.startswith('onclick="uniImpWinX(') for c in calls) and any(c.startswith('onclick="uniImpWX(') for c in calls)
+    assert w["late"] == ["event.stopPropagation();uniImp('%s','act',30)" % w["key"], "⏰ 30 days: ⚠️ HOLD"]
+    assert w["upd"] == ["event.stopPropagation();uniImpGo('%s','%s','act',30)" % (w["app_id"], w["key"]), "⏰ 30 days: 🛑 HALT"]
+    assert all(i.startswith("act-") for i in w["ids"]), w["ids"]
+
+
+def test_windows_every_fixture_block_in_active_at_30(report):
+    if not report["win"]["v2"]:
+        pytest.skip("the committed Active fixture has no by_window yet (impact v1): the made-up windows above cover this tab")
+    for b in report["win"]["blocks"]:
+        assert b["id_act"] and b["hdr"] == "Verdict (30 days):" and b["rows"] == ["returning_dau", "new_d1", "new_d7", "sessions", "time", "arpdau", "uninstall_d0", "new_d30"], b
+        assert b["acts"] and all("'act')" in c for c in b["acts"]), b["acts"][:5]
+
+
+def test_the_note_says_upar_chuno_only_right_under_its_selector(report, fixture):
+    # (review 2026-09-28) the note sat above the selector while saying "upar chuno", and showed on apps with no
+    # selector at all: now under the selector (an app with updates) — else today's words, under the title
+    seg = [report["apps"][r["app"]]["imp_seg"] for r in rows(fixture)]
+    assert any(seg) and not all(seg), seg
+    assert all(report["apps"][r["app"]]["imp_card"] for r in rows(fixture))

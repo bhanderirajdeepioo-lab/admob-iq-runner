@@ -1552,8 +1552,9 @@ def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_befo
         for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit and e["family"] == "cohort"
                     and e["last"].get("installs_to") and _d(e["last"]["installs_to"]) < old_before]:
             closed.append(dict(eps.pop(key), closed=E_iso))
-    if advanced:                                     # (update-impact episodes: impact.update_impact_episodes)
-        for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit and e["family"] != "impact"]:
+    if advanced:                                     # (update-impact episodes: impact.update_impact_episodes /
+        for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit     # update_late_episodes)
+                    and e["family"] not in ("impact", "impact_late")]:
             ep = eps[key]
             if ep["family"] in ("rate_spike", "rate_zero"):
                 done = (_d(E) - _d(ep["last_day"])).days > SPIKE_KEEP_DAYS
@@ -1573,7 +1574,7 @@ def alert_obj(ep, app, E):
     text = alert_text(ep["family"], ep["dir"], dict(s, prov=prov), E)
     out = {"id": ep["id"], "source": "uninstall", "app_id": ep["app_id"], "app": app, "family": ep["family"],
            "dir": ep["dir"], "severity": s.get("severity") or "watch",
-           "unit": {"cohort": "pct", "impact": "rel"}.get(ep["family"], "per1k"),
+           "unit": {"cohort": "pct", "impact": "rel", "impact_late": "rel"}.get(ep["family"], "per1k"),
            "checkpoint": s.get("checkpoint"), "n": s.get("n"), "also": list(s.get("also") or []),
            "vs": list(s.get("vs") or []), "now": s.get("now"), "before": s.get("before"),
            "delta_pp": s.get("delta_pp"), "rel": s.get("rel") if s.get("rel") is not None else 0.0,
@@ -1587,6 +1588,10 @@ def alert_obj(ep, app, E):
     if ep["family"] == "impact":                      # an update's impact (engine.impact): which update, its level, its rows
         out.update(release=dict(s.get("release") or {}), level=s.get("level"),
                    rows={k: list((s.get("rows") or {}).get(k) or []) for k in ("worse", "better")})
+    elif ep["family"] == "impact_late":               # a late effect (the 30-day window): + the window and the updates
+        out.update(release=dict(s.get("release") or {}), level=s.get("level"),     # released inside it
+                   rows={k: list((s.get("rows") or {}).get(k) or []) for k in ("worse", "told")},
+                   window=s.get("window"), mixed=list(s.get("mixed") or []))
     if "closed" in ep:                                # history only: never "new", never (re)sent
         out.update(closed=ep["closed"], fresh=False, notify=False)
     return out
@@ -1821,7 +1826,7 @@ def old_changes(rows, recent_from, skip, ref):
 
 
 def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=None, late=LATE_DAYS,
-                 outdated=False, revenue=None):
+                 outdated=False, revenue=None, windows=True):
     """Evaluate one app's store against its saved evaluation state → (detail, summary row). Updates
     state["eval"][app_id] and this app's episodes in place (pure otherwise). late = the provisional days
     (config GA4_LATE_DAYS). outdated = the store is an older format still waiting for its clean re-pull:
@@ -1835,7 +1840,8 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     shown "≈"), the rest left out (flags.incomplete_days).
     UPDATE IMPACT (engine.impact): every app update's before / after card (detail["impact"], summary["updates"]); its
     HOLD / HALT / WIN episodes join the app's alerts. revenue = the app's AdMob revenue {tz, currency, till, days:
-    {day: [earnings micros, impressions]}} (None: no ARPDAU row)."""
+    {day: [earnings micros, impressions]}} (None: no ARPDAU row). windows (config IMPACT_WINDOWS): the card's 14 / 30 /
+    60-day windows and their late-effect alerts (family "impact_late", one per app)."""
     store = fill_days(store)
     E = _d(store["window_end"])
     late = max(0, int(late or 0))
@@ -1899,9 +1905,13 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     eps = update_episodes(state, app_id, E, ready, advanced, first or outdated, now, recent_from)
     from . import impact as imp                      # (lazy: impact imports this module)
     impact, updates, iconds = imp.impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, first,
-                                             advanced, outdated, now)
-    eps = [e for e in eps if e["family"] != "impact"] + imp.update_impact_episodes(state, app_id, E, iconds,
-                                                                                   advanced, now)
+                                             advanced, outdated, now, windows_on=windows)
+    lcond = next((c for c in iconds if c["family"] == "impact_late"), None)
+    iconds = [c for c in iconds if c["family"] == "impact"]
+    # (update_episodes returned every episode of the app in state, the late one too: listed once, from its own family)
+    eps = ([e for e in eps if e["family"] not in ("impact", "impact_late")]
+           + imp.update_impact_episodes(state, app_id, E, iconds, advanced, now)
+           + (imp.update_late_episodes(state, app_id, E, lcond, advanced, now) if windows else []))
     if outdated:                                     # NOTHING goes out from an older store format — not even an
         for e in eps:                                # episode opened earlier whose send failed (still due)
             if e.get("notified_at") is None:
@@ -1909,6 +1919,16 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     by_block = {e["block"]: e["id"] for e in eps if e["family"] == "impact"}
     for u in impact["updates"]:
         u["alert_id"] = by_block.get(u["key"])
+    if windows:                                      # the open late episode: its block opens on 30 days (the alert's
+        lep = next((e for e in eps if e["family"] == "impact_late"), None)       # jump lands there), its id on it
+        for u in impact["updates"]:
+            if "default_window" in u:
+                u["default_window"] = imp.LATE_WINDOW if lep and lep["block"] == u["key"] else imp.WIN_DAYS
+            if u.get("late"):
+                u["late"]["alert_id"] = lep["id"] if lep and lep["block"] == u["key"] else None
+        for u in updates:
+            if u.get("late"):
+                u["late"]["alert_id"] = lep["id"] if lep and lep["block"] == u["key"] else None
     istate = ((state.get("eval") or {}).get(app_id) or {}).get("impact")
     state.setdefault("eval", {})[app_id] = {"end": _iso(E), "stage": cp["stage"], "stable_hold": cp["stable_hold"],
                                             "streak": streak, "since": since,

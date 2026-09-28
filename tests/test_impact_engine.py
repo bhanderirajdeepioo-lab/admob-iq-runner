@@ -44,7 +44,7 @@ def test_the_engine_constants_match_the_fetch_and_the_asset():
     for k in ("IMPACT_V", "COHORT_DAYS", "ACT_LATE_DAYS", "VUSE_MIN_SHARE", "COH_BATCH", "COH_MIN_USERS",
               "COH_MIN_COVERAGE", "COH_EDGE_RUN", "COH_MAX_CALLS"):
         assert getattr(imp, k) == getattr(gu, k), k
-    assert imp.CONSTS["dau_min_rel"] == 0.03 and len(imp.CONSTS) == 44 and all(k == k.lower() for k in imp.CONSTS)
+    assert imp.CONSTS["dau_min_rel"] == 0.03 and len(imp.CONSTS) == 58 and all(k == k.lower() for k in imp.CONSTS)
 
 
 # ── 1. windows ───────────────────────────────────────────────────────────────────────────────────

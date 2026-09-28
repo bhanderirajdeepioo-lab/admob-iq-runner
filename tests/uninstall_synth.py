@@ -715,6 +715,11 @@ ALERT_KEYS = ("id", "source", "app_id", "app", "family", "dir", "severity", "uni
 
 
 IMPACT_ALERT_KEYS = ("release", "level", "rows")
+LATE_ALERT_KEYS = ("release", "level", "rows", "window", "mixed")
+LATE_TEXT = re.compile(r"^(v.+?|App update) \(\d{1,2} [A-Z][a-z]{2}( \d{4})?\) ke 30 din baad .+ · pehle 7 din me ye nahi "
+                       r"dikha tha( · beech me \d+ aur updates? \(.+\) — asar mila-jula ho sakta hai)? · "
+                       r"(HALT — staged rollout rok do, hotfix bhejo|HOLD — agla rollout roko, jaanch karo)"
+                       r"( · D30 abhi baaki)?")
 IMPACT_TEXT = re.compile(r"^(v.+?|App update) \(\d{1,2} [A-Z][a-z]{2}( \d{4})?\) ke baad .+ · "
                          r"(HALT — staged rollout rok do, hotfix bhejo|HOLD — agla rollout roko, jaanch karo|"
                          r"WIN — isi disha me aage badho)( · shuruaati — D7 abhi baaki)?")
@@ -722,10 +727,13 @@ IMPACT_TEXT = re.compile(r"^(v.+?|App update) \(\d{1,2} [A-Z][a-z]{2}( \d{4})?\)
 
 def check_alert(a, closed=False):
     imp = a.get("family") == "impact"
-    _keys(a, ALERT_KEYS + (IMPACT_ALERT_KEYS if imp else ()) + (("closed",) if closed else ()), "alert")
-    assert a["source"] == "uninstall" and a["family"] in ("cohort", "rate_spike", "rate_drift", "rate_zero", "impact")
+    late = a.get("family") == "impact_late"
+    _keys(a, ALERT_KEYS + (IMPACT_ALERT_KEYS if imp else LATE_ALERT_KEYS if late else ())
+          + (("closed",) if closed else ()), "alert")
+    assert a["source"] == "uninstall" and a["family"] in ("cohort", "rate_spike", "rate_drift", "rate_zero", "impact",
+                                                           "impact_late")
     assert a["dir"] in ("up", "down") and a["severity"] in ("warning", "watch", "good")
-    assert a["unit"] == {"cohort": "pct", "impact": "rel"}.get(a["family"], "per1k")
+    assert a["unit"] == {"cohort": "pct", "impact": "rel", "impact_late": "rel"}.get(a["family"], "per1k")
     assert a["id"].startswith(a["app_id"] + "|uninstall_" + a["family"] + "|ALL|" + a["dir"] + "|")
     if a["family"] == "cohort":
         assert a["checkpoint"] == "D%d" % a["n"] and isinstance(a["n"], int)
@@ -746,6 +754,24 @@ def check_alert(a, closed=False):
         assert a["rows"]["worse" if a["dir"] == "up" else "better"]
         assert _iso(a["installs_from"]) and _iso(a["installs_to"]) and _iso(a["base_from"]) and _iso(a["base_to"])
         assert IMPACT_TEXT.match(a["text"]), a["text"]
+    elif late:                                                 # a late effect: the 30-day window, bad news only
+        assert a["checkpoint"] is None and a["n"] is None and a["vs"] == [] and a["dir"] == "up"
+        assert all(IMPACT_LABEL.match(x) for x in a["also"])    # (other updates flagged at once: one alert per app)
+        assert a["delta_pp"] is None or _num(a["delta_pp"])
+        assert {"halt": "warning", "hold": "watch"}[a["level"]] == a["severity"] and a["window"] == 30
+        _keys(a["release"], ("key", "label", "date"), "late release")
+        assert _iso(a["release"]["date"]) and a["since"] == a["release"]["date"] and a["day"] is None
+        rk = a["release"]["key"]
+        assert re.search(r"^%s\|uninstall_impact_late\|ALL\|up\|\d{4}-\d{2}-\d{2}\|.+\|(hold|halt)$"
+                         % re.escape(a["app_id"]), a["id"]), a["id"]
+        _keys(a["rows"], ("worse", "told"), "late alert rows")
+        assert a["rows"]["worse"] and set(a["rows"]["worse"]) <= set(IMPACT_ROWS_LONG)
+        assert set(a["rows"]["told"]) <= set(IMPACT_ROWS_LONG) and not set(a["rows"]["told"]) & set(a["rows"]["worse"])
+        assert all(IMPACT_LABEL.match(x) for x in a["mixed"]) and ((" · beech me " in a["text"]) == bool(a["mixed"]))
+        assert _iso(a["installs_from"]) and _iso(a["installs_to"]) and _iso(a["base_from"]) and _iso(a["base_to"])
+        assert (date.fromisoformat(a["installs_to"]) - date.fromisoformat(a["installs_from"])).days == 29
+        assert (date.fromisoformat(a["base_to"]) - date.fromisoformat(a["base_from"])).days == 29
+        assert LATE_TEXT.match(a["text"]), a["text"]
     else:
         assert a["checkpoint"] is None and a["n"] is None and a["delta_pp"] is None and a["also"] == []
     if a["family"] == "rate_drift":
@@ -759,7 +785,8 @@ def check_alert(a, closed=False):
     assert isinstance(a["fresh"], bool) and isinstance(a["notify"], bool)
     assert isinstance(a["provisional"], bool) and not (a["provisional"] and a["dir"] == "down")   # good news: settled
     assert a["text"].endswith(" · abhi ka data kaccha — number aur badh sakta hai") == a["provisional"]
-    assert isinstance(a["estimate"], bool) and not (a["estimate"] and a["family"] not in ("cohort", "impact"))
+    assert isinstance(a["estimate"], bool) and not (a["estimate"] and a["family"] not in ("cohort", "impact",
+                                                                                         "impact_late"))
     assert (" · kuch din ka GA4 data adhoora tha — total ke hisaab se poora kiya (andaza)" in a["text"]) == a["estimate"]
     assert a["message"] == a["app"] + ": " + a["text"]
     assert re.search("[%s-%s]" % (chr(0x900), chr(0x97F)), a["message"]) is None
@@ -1045,32 +1072,43 @@ def check_lateness(L):
 # ── the update-impact card (engine.impact, spec §4) ─────────────────────────────────────────────────
 
 IMPACT_ROWS = ("returning_dau", "new_d1", "new_d7", "sessions", "time", "arpdau", "uninstall_d0")
+IMPACT_ROWS_LONG = IMPACT_ROWS + ("new_d30",)                    # the 30 / 60-day windows add D30
 IMPACT_VROWS = ("ver_sessions", "ver_time")
 IMPACT_ROW_KEYS = ("before", "after", "expected", "after_prov", "change", "change_unit", "unit", "z", "status",
                    "raw_status", "streak", "prov", "est", "n_before", "n_after", "from_b", "to_b", "from_a", "to_a",
-                   "reason", "ready_on", "extra")
+                   "reason", "ready_on", "extra", "basis", "noise", "need")
 IMPACT_VROW_KEYS = ("old", "new", "diff", "adj", "bias", "z", "status", "raw_status", "streak", "n_days", "reason", "prov")
 IMPACT_EXTRA = {"returning_dau": ("raw_change", "mode", "k_days", "imputed_share", "mu_week", "expected_model"),
                 "new_d1": ("installs_before", "installs_after", "swing", "cohorts_before", "cohorts_after", "phi"),
                 "new_d7": ("installs_before", "installs_after", "swing", "cohorts_before", "cohorts_after", "phi"),
+                "new_d30": ("installs_before", "installs_after", "swing", "cohorts_before", "cohorts_after", "phi"),
                 "sessions": ("all_before", "all_after", "adj_change"), "time": ("all_before", "all_after", "adj_change"),
                 "arpdau": ("imp_change", "imp_adj", "ecpm_change", "newshare_before", "newshare_after", "tz_blend",
-                           "currency"),
+                           "currency", "imp_before", "imp_after", "imp_expected"),
                 "uninstall_d0": ("read", "phi", "est")}
 IMPACT_UNITS = {"returning_dau": "users", "new_d1": "pct", "new_d7": "pct", "sessions": "num", "time": "sec",
-                "arpdau": "usd1k", "uninstall_d0": "pct"}
+                "arpdau": "usd1k", "uninstall_d0": "pct", "new_d30": "pct"}
 IMPACT_STATUS = ("worse", "better", "same", "unsure", "low", "pending", "na", "market")
 IMPACT_NOTES = ("installs_swing", "newshare_swing", "diluted", "slow_rollout", "no_cohorts", "no_revenue", "tz_blend",
                 "before_overlap", "cut_by_next", "prov", "est", "thresholded")
+IMPACT_NOTES_LONG = IMPACT_NOTES + ("mixed", "mixed_before", "trend_capped", "plain", "young")
 IMPACT_CONSTS = ("impact_v", "act_late_days", "cohort_days", "win_days", "pre_days", "adopt_after", "rollout_wait",
                  "adopt_low", "chain_days", "impact_min_days", "z_final", "z_early", "dau_min_rel", "ret_min_pp",
                  "ret_min_rel", "use_min_rel", "arpdau_min_rel", "imp_min_rel", "ver_min_rel", "big_x", "persist",
                  "min_dau", "min_installs", "min_events", "ver_min_users", "install_swing", "newshare_swing",
                  "sigma_floor", "noise_lag", "null_weeks", "null_min", "trend_max_week", "recent_swing", "bias_min", "bias_max",
                  "vuse_min_share", "coh_batch", "coh_min_users", "coh_min_coverage",
-                 "coh_edge_run", "coh_max_calls", "impact_alert_days", "impact_list_days", "impact_show")
+                 "coh_edge_run", "coh_max_calls", "impact_alert_days", "impact_list_days", "impact_show",
+                 "windows", "long_min", "judge_d", "trend_horizon_weeks", "pu_trend_max_n", "null_span_x", "null_min_x",
+                 "null_df_full", "ret30_min_pp", "ret30_min_rel", "late_window", "late_alert_days", "late_persist",
+                 "late_v")
 IMPACT_LABEL = re.compile(r"^(v.+|App update)$")               # (a version name may hold a space: "v2.1 (45)")
 IMPACT_TREND = "normal trend pakka nahi, isliye sirf pehle vs baad"   # a trend too steep to extrapolate (TREND_MAX_WEEK)
+IMPACT_BASIS = ("expected", "plain", "rate")
+IMPACT_WINDOW_KEYS = ("n", "state", "before", "after", "mixed", "mixed_before", "adoption_mean", "rows", "verdict",
+                      "notes")
+IMPACT_VERDICT_KEYS = ("level", "early", "final", "why", "worse", "better", "pending", "ready_on", "settled_days",
+                       "min_days")
 _DPS = {"users": 0, "pct": 5, "num": 3, "sec": 1, "usd1k": 4}
 
 
@@ -1081,33 +1119,180 @@ def _dp_ok(v, dp):
 def check_updates(ups, data_till):
     """A summary row's "updates" (the All apps "Recent updates" list)."""
     for u in ups:
-        _keys(u, ("key", "label", "date", "level", "early", "final", "adoption", "head", "judged"), "summary update")
+        _keys(u, ("key", "label", "date", "level", "early", "final", "adoption", "head", "judged")
+              + (("late",) if "late" in u else ()), "summary update")
         assert isinstance(u["judged"], int) and 0 <= u["judged"] <= len(IMPACT_ROWS) + len(IMPACT_VROWS)
         assert IMPACT_LABEL.match(u["label"]) and _iso(u["date"]) and u["level"] in ("halt", "hold", "continue", "win", None)
         assert isinstance(u["early"], bool) and u["early"] == (not u["final"])
         assert u["adoption"] is None or 0 <= u["adoption"] <= 1.0001
-        assert (date.fromisoformat(data_till) - date.fromisoformat(u["date"])).days <= 60
+        # the last 60 days (IMPACT_LIST_DAYS) — an update whose late effect holds up to 75 (LATE_ALERT_DAYS: its ⏰ chip)
+        assert (date.fromisoformat(data_till) - date.fromisoformat(u["date"])).days <= (75 if u.get("late") else 60)
         if u["head"] is not None:
             _keys(u["head"], ("row", "change", "unit"), "update head")
             assert u["head"]["row"] in IMPACT_ROWS + IMPACT_VROWS and u["head"]["unit"] in ("rel", "pp")
+        if u.get("late") is not None:                            # a late effect (the 30-day window) holds now
+            _keys(u["late"], ("level", "alert_id"), "summary update late")
+            assert u["late"]["level"] in ("hold", "halt") and (u["late"]["alert_id"] is None
+                                                              or isinstance(u["late"]["alert_id"], str))
     assert [u["date"] for u in ups] == sorted((u["date"] for u in ups), reverse=True)
+
+
+def _check_row(k, r, after_from, day, long_n=None):
+    """One impact row (a 7-day row, or a 14 / 30 / 60-day one once uniImpNorm-filled): keys, units, statuses, rounding,
+    reasons, the basis / noise / need additions."""
+    where = "impact row %s%s" % (k, "" if long_n is None else " @%d" % long_n)
+    _keys(r, IMPACT_ROW_KEYS, where)
+    _keys(r["extra"], IMPACT_EXTRA[k], where + " extra")
+    assert r["unit"] == IMPACT_UNITS[k] and r["change_unit"] == ("pp" if r["unit"] == "pct" else "rel")
+    assert r["status"] in IMPACT_STATUS and r["raw_status"] in IMPACT_STATUS, (where, r["status"])
+    assert isinstance(r["streak"], int) and isinstance(r["prov"], bool) and isinstance(r["est"], bool)
+    assert (r["expected"] is None) or k in ("returning_dau", "sessions", "time"), (where, r["expected"])
+    assert r["basis"] in IMPACT_BASIS and (r["basis"] == "rate") == (r["unit"] == "pct"), (where, r["basis"])
+    if k in ("sessions", "time") and r["expected"] is not None:          # "vs expected" = the judged change exactly
+        assert r["basis"] == "expected" and long_n is None, where
+    if long_n is not None and k in ("sessions", "time", "arpdau"):
+        assert r["basis"] == "plain" and r["expected"] is None, where  # 14 / 30 / 60: per-user rows plain
+    if k == "arpdau" and r["extra"]["imp_expected"] is not None:
+        assert r["basis"] == "expected", where
+    for x in ("before", "after", "expected", "after_prov"):
+        assert _dp_ok(r[x], _DPS[r["unit"]]), (where, x, r[x])
+    ndp = 2 if r["change_unit"] == "pp" else 4
+    assert _dp_ok(r["change"], ndp) and _dp_ok(r["z"], 2) and _dp_ok(r["noise"], ndp) and _dp_ok(r["need"], ndp)
+    assert r["noise"] is None or r["noise"] > 0, where
+    assert (r["need"] is None) == (r["noise"] is None) and r["need"] != 0, where     # "pakka: ≥ need" (±, never 0)
+    if r["status"] in ("na", "low", "market"):                  # never a bare "—": it says why
+        assert isinstance(r["reason"], str) and r["reason"], (where, r)
+    if r["status"] == "pending":
+        assert r["ready_on"] is None or _iso(r["ready_on"])
+    if r["status"] in ("worse", "better"):
+        assert r["raw_status"] == r["status"] and r["change"] is not None and r["z"] is not None
+    if r["status"] == "unsure" and r["raw_status"] in ("worse", "better"):
+        assert long_n is None and r["reason"] == "pakka hone ke liye kal ka data bhi"   # no persistence at 14+
+    # a trend too steep to extrapolate: Low data (never judged), no expected level, the plain change
+    if IMPACT_TREND in (r["reason"] or ""):
+        assert r["status"] == r["raw_status"] == "low" and r["z"] is None and r["expected"] is None, (where, r)
+    if k == "returning_dau" and r["extra"]["expected_model"] is not None:
+        assert r["expected"] is None and r["status"] in ("low", "pending"), r
+        if r["before"] and r["change"] is not None:
+            assert abs(r["change"] - (r["after"] / r["before"] - 1)) < 0.01, r
+    if k == "arpdau" and IMPACT_TREND in (r["reason"] or "") and "ads per user" in r["reason"]:
+        assert r["extra"]["imp_adj"] is None, r
+    for x in ("from_a", "to_a", "from_b", "to_b"):
+        assert r[x] is None or _iso(r[x])
+    if r["from_a"]:
+        assert r["from_a"] >= after_from and r["to_b"] < day, (where, r)
+
+
+def _fill(r, k, W):
+    """uniImpNorm: a sparse 14 / 30 / 60-day row → a full row (the page's defaults)."""
+    out = dict.fromkeys(IMPACT_ROW_KEYS)
+    out.update(prov=False, est=False, streak=0, n_before=0, n_after=0, unit=IMPACT_UNITS[k],
+               change_unit="pp" if IMPACT_UNITS[k] == "pct" else "rel")
+    out.update({x: v for x, v in r.items() if x != "extra"})
+    out["raw_status"] = r.get("raw_status", r.get("status"))
+    if out["basis"] is None:                                         # (left out: the window's default for the row)
+        out["basis"] = {"pct": "rate", "users": "expected"}.get(IMPACT_UNITS[k], "plain")
+    out["extra"] = dict(dict.fromkeys(IMPACT_EXTRA[k]), **(r.get("extra") or {}))
+    for x, n, side, e in (("from_a", "n_after", "after", "from"), ("to_a", "n_after", "after", "to"),
+                          ("from_b", "n_before", "before", "from"), ("to_b", "n_before", "before", "to")):
+        if out[n] and out[x] is None:                              # (left out: equal to the window's own)
+            out[x] = W[side][e]
+    return out
+
+
+def check_window(W, b, N, data_till=None):
+    """One block's by_window[str(N)] (spec §4): keys, dates, state, mixed lists, the sparse rows (keys ⊂ the row keys,
+    filled: the 7-day assertions), the verdict (+ n / state / mixed / told / late)."""
+    where = "window %s@%d" % (b["key"], N)
+    _keys(W, IMPACT_WINDOW_KEYS, where)
+    assert W["n"] == N and W["state"] in ("running", "judged", "final"), where
+    R = date.fromisoformat(b["date"])
+    assert W["before"] == {"from": (R - timedelta(days=N)).isoformat(), "to": (R - timedelta(days=1)).isoformat(),
+                           "days": N}, where
+    a = W["after"]
+    _keys(a, ("from", "to", "days", "settled", "settled_till", "judged_on", "final_on"), where + " after")
+    a0 = date.fromisoformat(a["from"])
+    assert a["from"] == b["windows"]["after"]["from"] and a["days"] == N, where         # never cut at 14 / 30 / 60
+    assert a["to"] == (a0 + timedelta(days=N - 1)).isoformat() and 0 <= a["settled"] <= N
+    end_a = a0 + timedelta(days=N - 1)
+    assert a["judged_on"] == (end_a + timedelta(days=10)).isoformat(), where
+    assert a["final_on"] == (end_a + timedelta(days=10 if N < 30 else 33)).isoformat(), where
+    if data_till is not None:
+        E = date.fromisoformat(data_till)
+        want = ("running" if E < end_a + timedelta(days=10) else "final" if E >= date.fromisoformat(a["final_on"])
+                else "judged")
+        assert W["state"] == want, (where, W["state"], want)
+        if a["settled_till"]:
+            assert a["settled_till"] <= (E - timedelta(days=3)).isoformat()
+    for lst, lo, hi in (("mixed", R + timedelta(days=1), end_a), ("mixed_before", R - timedelta(days=N), R - timedelta(days=1))):
+        assert isinstance(W[lst], list), where
+        for m in W[lst]:
+            _keys(m, ("key", "label", "date"), where + " " + lst)
+            assert IMPACT_LABEL.match(m["label"]) and lo.isoformat() <= m["date"] <= hi.isoformat(), (where, m)
+        assert [m["date"] for m in W[lst]] == sorted(m["date"] for m in W[lst])       # oldest first
+    assert W["adoption_mean"] is None or 0 <= W["adoption_mean"] <= 1.0001
+    keys = IMPACT_ROWS_LONG if N >= 30 else IMPACT_ROWS
+    _keys(W["rows"], keys, where + " rows")
+    for k, r in W["rows"].items():
+        assert set(r) <= set(IMPACT_ROW_KEYS) and "status" in r, (where, k, sorted(set(r) - set(IMPACT_ROW_KEYS)))
+        assert not ({"unit", "change_unit", "streak"} & set(r)) and r.get("raw_status") != r["status"]
+        assert all(v is not None and v is not False and v != "" and v != {} and v != [] for v in r.values()), (where, k)
+        f = _fill(r, k, W)
+        _check_row(k, f, a["from"], b["date"], N)
+        if W["state"] == "running":
+            assert f["status"] in ("pending", "na") and f["z"] is None and f["change"] is None, (where, k, f)
+            if f["status"] == "pending":
+                want = a["final_on"] if k == "new_d30" else a["judged_on"]
+                assert f["ready_on"] == want, (where, k, f["ready_on"])
+    v = W["verdict"]
+    _keys(v, IMPACT_VERDICT_KEYS + ("n", "state", "mixed", "told", "late") + (("told_by",) if "told_by" in v else ()),
+          where + " verdict")
+    assert v["n"] == N and v["state"] == W["state"] and v["mixed"] == bool(W["mixed"]), where
+    assert v["level"] in ("halt", "hold", "continue", "win", None) and v["early"] == (not v["final"])
+    assert v["final"] == (W["state"] == "final") and isinstance(v["why"], str) and v["why"], where
+    young = all(r["status"] == "na" for r in W["rows"].values())   # (launched < N days before it: no Before window)
+    if W["state"] == "running":
+        assert v["level"] is None and v["ready_on"] == (None if young else a["judged_on"]), where
+    if young:
+        assert v["level"] is None and v["ready_on"] is None, where
+    if v["level"] == "win":
+        assert v["final"] and not v["worse"] and v["better"]
+    if v["level"] in ("hold", "halt"):
+        assert v["worse"]
+    for lst, st in (("worse", "worse"), ("better", "better"), ("pending", "pending")):
+        assert v[lst] == [k for k in keys if W["rows"][k]["status"] == st], (where, lst)
+    assert isinstance(v["told"], list) and set(v["told"]) <= set(v["worse"]), where
+    for k, lbl in (v.get("told_by") or {}).items():
+        assert k in v["told"] and IMPACT_LABEL.match(lbl)
+    assert v["late"] in (None, "hold", "halt") and (v["late"] is None or (N == 30 and W["state"] != "running"))
+    if v["mixed"]:
+        assert W["state"] == "running" or young or v["why"].endswith("aur update%s)" % ("s" if len(W["mixed"]) > 1 else ""))
+    assert W["notes"] == [n for n in IMPACT_NOTES_LONG if n in W["notes"]], where
+    assert ("mixed" in W["notes"]) == bool(W["mixed"]) and ("mixed_before" in W["notes"]) == bool(W["mixed_before"])
 
 
 def check_impact(imp, detail=None):
     """One app's detail["impact"]: every update block with EXACTLY the owner's 7 rows + the 2 version rows + the verdict
     (the verify gate: a missing row fails here), every key of the contract, statuses / notes / levels from their lists,
-    the rounding, the windows, and "na" / "pending" / "low" rows always saying why."""
+    the rounding, the windows, and "na" / "pending" / "low" rows always saying why. v 2: + each block's 14 / 30 / 60-day
+    windows (by_window), default_window and late."""
     _keys(imp, ("v", "updates", "flags"), "impact")
-    assert imp["v"] == 1
+    assert imp["v"] in (1, 2)
     fl = imp["flags"]
-    _keys(fl, ("ret_from", "vuse_split", "revenue", "tz_blend", "usage_from"), "impact flags")
+    # (+ windows_failed: how many 14 / 30 / 60-day windows crashed this run — only when any; those windows are left out)
+    _keys(fl, ("ret_from", "vuse_split", "revenue", "tz_blend", "usage_from")
+          + (("windows_failed",) if "windows_failed" in fl else ()), "impact flags")
+    assert "windows_failed" not in fl or (imp["v"] == 2 and isinstance(fl["windows_failed"], int)
+                                           and fl["windows_failed"] >= 1)
     assert fl["revenue"] in ("ok", "none", "partial") and isinstance(fl["vuse_split"], bool)
     assert isinstance(fl["tz_blend"], bool) and all(fl[k] is None or _iso(fl[k]) for k in ("ret_from", "usage_from"))
     assert [b["date"] for b in imp["updates"]] == sorted((b["date"] for b in imp["updates"]), reverse=True)
     assert len({b["key"] for b in imp["updates"]}) == len(imp["updates"])
     for b in imp["updates"]:
+        wf = imp["v"] == 2 and bool(fl.get("windows_failed"))       # a crashed window is left out (never faked)
         _keys(b, ("key", "rel_keys", "kind", "versions", "label", "date", "adoption", "windows", "rows", "versions_cmp",
-                  "verdict", "notes", "alert_id"), "impact block")
+                  "verdict", "notes", "alert_id") + (("default_window", "late") if imp["v"] == 2 else ())
+              + (("by_window",) if imp["v"] == 2 and (not wf or "by_window" in b) else ()), "impact block")
         assert b["kind"] in ("version", "update") and b["key"] == b["rel_keys"][0] and IMPACT_LABEL.match(b["label"])
         assert (b["kind"] == "version") == bool(b["versions"]) and (b["label"] == "App update") == (b["kind"] == "update")
         for k in b["rel_keys"]:
@@ -1132,36 +1317,9 @@ def check_impact(imp, detail=None):
             assert w["after"]["settled_till"] <= (date.fromisoformat(detail["data_till"]) - timedelta(days=3)).isoformat()
         _keys(b["rows"], IMPACT_ROWS, "impact rows")                    # exactly the 7: none ever dropped
         for k, r in b["rows"].items():
-            _keys(r, IMPACT_ROW_KEYS, "impact row " + k)
-            _keys(r["extra"], IMPACT_EXTRA[k], "impact row extra " + k)
-            assert r["unit"] == IMPACT_UNITS[k] and r["change_unit"] == ("pp" if r["unit"] == "pct" else "rel")
-            assert r["status"] in IMPACT_STATUS and r["raw_status"] in IMPACT_STATUS
-            assert isinstance(r["streak"], int) and isinstance(r["prov"], bool) and isinstance(r["est"], bool)
-            assert (r["expected"] is None) or k == "returning_dau"
-            for x in ("before", "after", "expected", "after_prov"):
-                assert _dp_ok(r[x], _DPS[r["unit"]]), (k, x, r[x])
-            assert _dp_ok(r["change"], 2 if r["change_unit"] == "pp" else 4) and _dp_ok(r["z"], 2)
-            if r["status"] in ("na", "low", "market"):                  # never a bare "—": it says why
-                assert isinstance(r["reason"], str) and r["reason"], (k, r)
-            if r["status"] == "pending":
-                assert r["ready_on"] is None or _iso(r["ready_on"])
-            if r["status"] in ("worse", "better"):
-                assert r["raw_status"] == r["status"] and r["change"] is not None and r["z"] is not None
-            if r["status"] == "unsure" and r["raw_status"] in ("worse", "better"):
-                assert r["reason"] == "pakka hone ke liye kal ka data bhi"
-            # a trend too steep to extrapolate: Low data (never judged), no expected level, the plain change
-            if IMPACT_TREND in (r["reason"] or ""):
-                assert r["status"] == r["raw_status"] == "low" and r["z"] is None and r["expected"] is None, (k, r)
-            if k == "returning_dau" and r["extra"]["expected_model"] is not None:
-                assert r["expected"] is None and r["status"] in ("low", "pending"), r
-                if r["before"] and r["change"] is not None:
-                    assert abs(r["change"] - (r["after"] / r["before"] - 1)) < 0.01, r
-            if k == "arpdau" and IMPACT_TREND in (r["reason"] or "") and "ads per user" in r["reason"]:
-                assert r["extra"]["imp_adj"] is None, r
-            for x in ("from_a", "to_a", "from_b", "to_b"):
-                assert r[x] is None or _iso(r[x])
-            if r["from_a"]:
-                assert r["from_a"] >= w["after"]["from"] and r["to_b"] < b["date"]
+            _check_row(k, r, w["after"]["from"], b["date"])
+            if imp["v"] == 1:                                           # (IMPACT_WINDOWS off: no noise line)
+                assert r["noise"] is None and r["need"] is None
         vc = b["versions_cmp"]
         _keys(vc, ("new_label", "days", "adoption_mean", "split", "bias", "rows"), "versions_cmp")
         _keys(vc["days"], ("from", "to", "n"), "versions_cmp days")
@@ -1177,8 +1335,7 @@ def check_impact(imp, detail=None):
             if not vc["split"] or vc["bias"]["releases"] < 3:          # never worse / better without its gap
                 assert r["status"] not in ("worse", "better")
         v = b["verdict"]
-        _keys(v, ("level", "early", "final", "why", "worse", "better", "pending", "ready_on", "settled_days", "min_days"),
-              "verdict")
+        _keys(v, IMPACT_VERDICT_KEYS, "verdict")
         assert v["level"] in ("halt", "hold", "continue", "win", None) and v["early"] == (not v["final"])
         assert isinstance(v["why"], str) and v["why"] and v["min_days"] == 3 and v["settled_days"] == w["after"]["settled"]
         allr = dict(b["rows"], **vc["rows"])
@@ -1195,6 +1352,25 @@ def check_impact(imp, detail=None):
         assert b["alert_id"] is None or isinstance(b["alert_id"], str)
         if detail is not None and b["alert_id"]:
             assert b["alert_id"] in {a["id"] for a in detail["alerts"]}
+        if imp["v"] != 2:
+            continue
+        assert b["default_window"] in (7, 30)
+        if b["late"] is not None:
+            _keys(b["late"], ("level", "alert_id", "seeded"), "impact block late")
+            assert b["late"]["level"] in ("hold", "halt") and isinstance(b["late"]["seeded"], bool)
+            assert b["late"]["alert_id"] is None or isinstance(b["late"]["alert_id"], str)
+            if detail is not None and b["late"]["alert_id"]:
+                assert b["late"]["alert_id"] in {a["id"] for a in detail["alerts"] if a["family"] == "impact_late"}
+        bw = b.get("by_window") or {}
+        if wf:
+            assert set(bw) <= {"14", "30", "60"}, sorted(bw)
+        else:
+            _keys(bw, ("14", "30", "60"), "by_window")
+        for n in (14, 30, 60):
+            if str(n) in bw:
+                check_window(bw[str(n)], b, n, detail["data_till"] if detail is not None else None)
+        if detail is not None and b["default_window"] == 30:
+            assert any(a["family"] == "impact_late" and a["release"]["key"] == b["key"] for a in detail["alerts"])
 
 
 def check_cohort_file(c, detail):

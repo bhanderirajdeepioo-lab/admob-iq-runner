@@ -199,7 +199,8 @@ def send_alerts(dashboard, s):
             continue
         icon = _ICON.get(a.get("severity"), "•")
         sev = str(a.get("severity", "")).upper()
-        what = "update impact (GA4)" if a.get("family") == "impact" else "uninstall (GA4)"
+        what = {"impact": "update impact (GA4)", "impact_late": "late update impact (GA4)"}.get(a.get("family"),
+                                                                                               "uninstall (GA4)")
         uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · {what}'))
     # GA4 Active users alerts: the same rule (sent ONCE — mark_notified_active after), the same channels
     for a in (dashboard.get("active") or {}).get("alerts", []):

@@ -39,10 +39,20 @@ never extrapolated: the row is "Low data" with plain before vs after and no expe
 the verdict only ever use worse / better rows). GA4's own limits are said, never hidden: user
 counts are estimates, consent-denied users are missing, user-level data older than GA4's retention reads short (the
 fetch finds that edge: ret_from) — rows it touches say "No data" with the reason, never a guess.
+
+7 / 14 / 30 / 60 DAYS (spec SPEC_WINDOWS; by_window, config IMPACT_WINDOWS): the 7-day block above stays exactly as it
+was (every row, verdict and alert). Each block also gets 14 / 30 / 60-day windows: Before = [R−N, R−1], After = [a0,
+a0+N−1] (the same a0), NEVER cut by the next update (the updates inside are listed: "Mixed"), each after-day paired with
+the same weekday nearest its mirrored position (pair_day). Returning DAU extrapolates the normal weekly change ≤3 weeks;
+per-user rows are plain (no trend); every row's noise = the same N-day comparison at pseudo-updates over 8N days (≥3N
+of them, widened by t when few are independent; the rate rows use nothing else), read through prefix sums (O(1) a
+shift). A long window is judged only once complete (end_a + 10; final with D30 at end_a + 33). The 30-day window's HOLD /
+HALT on rows no 7-day verdict or alert already told (this update's or one released inside the window) is the late
+family "impact_late": one episode per app, after 2 daily evaluations, seeded on rollout.
 """
 
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from ..alerting.rules import fingerprint
 from . import uninstall as U
@@ -104,6 +114,21 @@ COH_MAX_CALLS = 60        # (fetch) cohort requests per fetch at most
 IMPACT_ALERT_DAYS = 35    # only updates of the last 5 weeks alert (final ≈ R+20); older = info
 IMPACT_LIST_DAYS = 60     # All apps "Recent updates"
 IMPACT_SHOW = 5           # newest 5 blocks listed; older folded, never dropped
+# ── the 14 / 30 / 60-day windows (spec SPEC_WINDOWS; the 7-day block above stays exactly as it was) ──
+WINDOWS = (7, 14, 30, 60)      # owner: 7 / 14 / 30 / 60 days; 7 = today's early verdict + alerts
+LONG_MIN = 14                  # windows ≥14: never cut by the next update, judged only complete, noise required
+TREND_HORIZON_WEEKS = 3        # DAU: the normal weekly change extrapolated ≤3 weeks (lowest 30/60-day noise; =today at 7/14)
+PU_TREND_MAX_N = 7             # per-user rows: net of the trend at 7 only; 14/30/60 plain (lower noise at each)
+NULL_SPAN_X = 8                # pseudo-updates over 8×N days (=56 at 7: NULL_WEEKS)
+NULL_MIN_X = 3                 # ≥3×N of them (=21 at 7: NULL_MIN) — ~3 independent N-day stretches
+NULL_DF_FULL = 8               # N≥14: spread widened by T975[df]/T975[8], df = valid // N, below 8
+JUDGE_D = 7                    # a long window is judged once D7 of its last install day is settled (end_a+10)
+RET30_MIN_PP = 1.0             # D30 (base ~5%): ≥1 point AND …
+RET30_MIN_REL = 0.10           # … ≥10% of before
+LATE_WINDOW = 30               # the late-effect check's window
+LATE_ALERT_DAYS = 75           # judged ≈R+41, D30 ≈R+64, +persistence: older updates never raise a late alert
+LATE_PERSIST = 2               # a late condition holds on 2 daily evaluations before it is sent
+LATE_V = 1                     # state marker: the first evaluation without it seeds every late condition
 
 CONSTS = {k.lower(): v for k, v in dict(
     IMPACT_V=IMPACT_V, ACT_LATE_DAYS=ACT_LATE_DAYS, COHORT_DAYS=COHORT_DAYS, WIN_DAYS=WIN_DAYS, PRE_DAYS=PRE_DAYS,
@@ -117,30 +142,39 @@ CONSTS = {k.lower(): v for k, v in dict(
     BIAS_MIN=BIAS_MIN, BIAS_MAX=BIAS_MAX, VUSE_MIN_SHARE=VUSE_MIN_SHARE, COH_BATCH=COH_BATCH,
     COH_MIN_USERS=COH_MIN_USERS, COH_MIN_COVERAGE=COH_MIN_COVERAGE, COH_EDGE_RUN=COH_EDGE_RUN,
     COH_MAX_CALLS=COH_MAX_CALLS, IMPACT_ALERT_DAYS=IMPACT_ALERT_DAYS, IMPACT_LIST_DAYS=IMPACT_LIST_DAYS,
-    IMPACT_SHOW=IMPACT_SHOW).items()}
+    IMPACT_SHOW=IMPACT_SHOW, WINDOWS=list(WINDOWS), LONG_MIN=LONG_MIN, JUDGE_D=JUDGE_D,
+    TREND_HORIZON_WEEKS=TREND_HORIZON_WEEKS, PU_TREND_MAX_N=PU_TREND_MAX_N, NULL_SPAN_X=NULL_SPAN_X,
+    NULL_MIN_X=NULL_MIN_X, NULL_DF_FULL=NULL_DF_FULL, RET30_MIN_PP=RET30_MIN_PP, RET30_MIN_REL=RET30_MIN_REL,
+    LATE_WINDOW=LATE_WINDOW, LATE_ALERT_DAYS=LATE_ALERT_DAYS, LATE_PERSIST=LATE_PERSIST, LATE_V=LATE_V).items()}
 
 ROWS = ("returning_dau", "new_d1", "new_d7", "sessions", "time", "arpdau", "uninstall_d0")
+ROWS_LONG = ROWS + ("new_d30",)              # the 30 / 60-day windows add D30 (secondary, its own group)
 VROWS = ("ver_sessions", "ver_time")
 PRIMARY = ("returning_dau", "new_d1", "arpdau", "uninstall_d0")
-GROUPS = (("usage", ("sessions", "time")), ("d7", ("new_d7",)), ("version", ("ver_sessions", "ver_time")))
-APP_LEVEL = set(ROWS)                       # the version table is not diluted by adoption: the rest is
+GROUPS = (("usage", ("sessions", "time")), ("d7", ("new_d7",)), ("version", ("ver_sessions", "ver_time")),
+          ("d30", ("new_d30",)))
+APP_LEVEL = set(ROWS_LONG)                  # the version table is not diluted by adoption: the rest is
 LEVEL_RANK = {"continue": 0, "win": 0, "hold": 1, "halt": 2}
 SEVERITY = {"halt": "warning", "hold": "watch", "win": "good"}
 ACT = {"halt": "HALT — staged rollout rok do, hotfix bhejo", "hold": "HOLD — agla rollout roko, jaanch karo",
        "win": "WIN — isi disha me aage badho"}
 UNIT = {"returning_dau": "users", "new_d1": "pct", "new_d7": "pct", "sessions": "num", "time": "sec",
-        "arpdau": "usd1k", "uninstall_d0": "pct"}
+        "arpdau": "usd1k", "uninstall_d0": "pct", "new_d30": "pct"}
 EXTRA = {"returning_dau": ("raw_change", "mode", "k_days", "imputed_share", "mu_week", "expected_model"),
          "new_d1": ("installs_before", "installs_after", "swing", "cohorts_before", "cohorts_after", "phi"),
          "sessions": ("all_before", "all_after", "adj_change"),
-         "arpdau": ("imp_change", "imp_adj", "ecpm_change", "newshare_before", "newshare_after", "tz_blend", "currency"),
+         "arpdau": ("imp_change", "imp_adj", "ecpm_change", "newshare_before", "newshare_after", "tz_blend", "currency",
+                    "imp_before", "imp_after", "imp_expected"),
          "uninstall_d0": ("read", "phi", "est")}
-EXTRA["new_d7"], EXTRA["time"] = EXTRA["new_d1"], EXTRA["sessions"]
+EXTRA["new_d7"], EXTRA["time"], EXTRA["new_d30"] = EXTRA["new_d1"], EXTRA["sessions"], EXTRA["new_d1"]
+BASIS = ("expected", "plain", "rate")        # what a row is judged on (the page's "Actual / Expected" rule, §2.8)
 DP = {"users": 0, "pct": 5, "num": 3, "sec": 1, "usd1k": 4}
 STATUSES = ("worse", "better", "same", "unsure", "low", "pending", "na", "market")
 JUDGED = ("worse", "better", "same", "unsure", "market")     # a status from the row's own test (the rest: not measured)
 NOTES = ("installs_swing", "newshare_swing", "diluted", "slow_rollout", "no_cohorts", "no_revenue", "tz_blend",
          "before_overlap", "cut_by_next", "prov", "est", "thresholded")
+NOTES_LONG = NOTES + ("mixed", "mixed_before", "trend_capped", "plain", "young")   # + the 14 / 30 / 60-day ones
+STATES = ("running", "judged", "final")      # a 14 / 30 / 60-day window: not complete / judged (D30 may wait) / final
 
 NA_YOUNG = "App launch ke turant baad ka update — pehle ka hafta nahi"
 NA_CUT = "Agla update bahut jaldi aa gaya"
@@ -300,6 +334,13 @@ def _context(store, cd, whole, i0, revenue, E, late):
           "currency": (revenue or {}).get("currency") or "USD",
           "thresholded": bool(fi.get("thresholded")) or bool((store.get("flags") or {}).get("thresholded")),
           "usage_from": min(usage) if usage else None}
+    lo = [min(x) for x in (daily, cx["ret"], usage) if x]            # the prefix sums' day span (ordinals)
+    cx["_span"] = (min(_d(x) for x in lo).toordinal() if lo else E.toordinal(), E.toordinal())
+    rdays = [k for k, v in ((revenue or {}).get("days") or {}).items() if v is not None]
+    # each series' first day (a 14 / 30 / 60-day row's history = the release − max(launch, its series' first day))
+    cx["first"] = {"daily": _d(min(daily)) if daily else None, "usage": _d(min(usage)) if usage else None,
+                   "ret": _d(min(cx["ret"])) if cx["ret"] else None, "rev": _d(min(rdays)) if rdays else None,
+                   "d0": cd["hs"] if cd and cd.get("hs") else None}
     first5 = {}                                   # each version's first day on ≥ RELEASE_SHARE of the day's users
     for k in sorted(cx["vers"]):
         vs = cx["vers"][k] or {}
@@ -366,16 +407,49 @@ def _adoption(cx, b):
     return out
 
 
-def windows(cx, b, prev_b, next_b):
-    """The block's windows (see the module docstring) → b["win"]."""
+def _adopt_newer(cx, b, days):
+    """Mean share of each day's active users on the block's versions OR any version first ≥5% of a day's users on or
+    after the release ("this update or newer": a later release is not dilution) over `days` → float or None."""
+    R, keep = b["R"], set(b["versions"])
+    keep |= {v for v, d in cx["first5"].items() if d >= R}
+    out = []
+    for d in days:
+        vs = cx["vers"].get(d.isoformat()) or {}
+        tot = _dv(cx, d, "a1") or sum(vs.values())
+        if tot:
+            out.append(min(1.0, sum(u for v, u in vs.items() if v in keep) / tot))
+    return _mean(out)
+
+
+def _rel_ref(x):
+    return {"key": x["key"], "label": x["label"], "date": _iso(x["R"])}
+
+
+def windows(cx, b, blocks, j, N=WIN_DAYS):
+    """The block's windows (see the module docstring). N = 7: today's (the next update cuts the after-week) → b["win"]
+    (and b["A"]). N ≥ LONG_MIN: PURE (nothing written to b — the 7-day win is read again later): Before = [R−N, R−1],
+    After = [a0, a0+N−1] never cut; the later updates inside After are listed (mixed), the earlier ones inside Before too
+    (mixed_before); adoption = "this update or newer" over the After days so far."""
     R, E = b["R"], cx["E"]
-    A = _adoption(cx, b)
+    prev_b = blocks[j - 1] if j else None
+    next_b = blocks[j + 1] if j + 1 < len(blocks) else None
+    A = b["A"] if N != WIN_DAYS and "A" in b else _adoption(cx, b)
     if b["kind"] == "version":
         hit = next((d for d in sorted(A) if d >= R and A[d] >= ADOPT_AFTER), None)
         a0 = max(R + timedelta(days=1), min(hit or R + timedelta(days=ROLLOUT_WAIT), R + timedelta(days=ROLLOUT_WAIT)))
         slow = a0 <= E and (A.get(a0) or 0.0) < ADOPT_AFTER
     else:
         a0, slow = R + timedelta(days=1), False
+    if N != WIN_DAYS:
+        end_a = a0 + timedelta(days=N - 1)
+        days_a = _days(a0, end_a)
+        avail = [d for d in days_a if d <= E]
+        return {"n": N, "a0": a0, "end_a": end_a, "days_a": days_a, "settled": [d for d in days_a if d <= cx["S_act"]],
+                "avail": avail, "slow": slow, "cut_by": None, "b0": R - timedelta(days=N), "b1": R - timedelta(days=1),
+                "overlap": None,
+                "adopt_mean": _adopt_newer(cx, b, avail) if b["kind"] == "version" else None,
+                "mixed": [_rel_ref(x) for x in blocks[j + 1:] if x["R"] <= end_a],
+                "mixed_before": [_rel_ref(x) for x in blocks[:j] if R - timedelta(days=N) <= x["R"] <= R - timedelta(days=1)]}
     end_a, cut_by = a0 + timedelta(days=WIN_DAYS - 1), None
     if next_b is not None and next_b["R"] - timedelta(days=1) < end_a:
         end_a, cut_by = next_b["R"] - timedelta(days=1), {"label": next_b["label"], "date": _iso(next_b["R"])}
@@ -385,10 +459,26 @@ def windows(cx, b, prev_b, next_b):
     over = prev_b if prev_b is not None and R - timedelta(days=7) <= prev_b["R"] <= R - timedelta(days=1) else None
     shown = [A[d] for d in avail if d in A]
     b["A"] = A
-    b["win"] = {"a0": a0, "end_a": end_a, "days_a": days_a, "settled": settled, "avail": avail, "slow": slow,
-                "cut_by": cut_by, "b0": R - timedelta(days=7), "b1": R - timedelta(days=1),
+    b["win"] = {"n": WIN_DAYS, "a0": a0, "end_a": end_a, "days_a": days_a, "settled": settled, "avail": avail,
+                "slow": slow, "cut_by": cut_by, "b0": R - timedelta(days=7), "b1": R - timedelta(days=1),
                 "overlap": over, "adopt_mean": _mean(shown) if b["kind"] == "version" else None}
     return b["win"]
+
+
+def pair_day(win, R, d):
+    """After-day d → (its before-day, the weeks between): the day of d's weekday inside [R−N, R−1] nearest to d's
+    position mirrored into it (R−N + (d − a0)) — unique (±k offsets never share a weekday). At N = 7: _bday."""
+    N = win.get("n", WIN_DAYS)
+    lo, hi = R - timedelta(days=N), R - timedelta(days=1)
+    t = lo + (d - win["a0"])
+    r = (d - t).days % 7                             # t + r and t + r − 7 are the two candidates of d's weekday
+    near, far = (r, r - 7) if r <= 3 else (r - 7, r)
+    b = t + timedelta(days=near)
+    if not lo <= b <= hi:
+        b = t + timedelta(days=far)
+        if not lo <= b <= hi:                        # (a window shorter than a week: never here)
+            return _bday(R, d)
+    return b, (d - b).days // 7
 
 
 # ── rows ─────────────────────────────────────────────────────────────────────────────────────────
@@ -398,7 +488,8 @@ def _row(key):
             "change_unit": "pp" if UNIT[key] == "pct" else "rel", "unit": UNIT[key], "z": None, "status": "na",
             "raw_status": "na", "streak": 0, "prov": False, "est": False, "n_before": 0, "n_after": 0,
             "from_b": None, "to_b": None, "from_a": None, "to_a": None, "reason": None, "ready_on": None,
-            "extra": dict.fromkeys(EXTRA[key])}
+            "extra": dict.fromkeys(EXTRA[key]), "basis": "rate" if UNIT[key] == "pct" else "expected",
+            "noise": None, "need": None}
 
 
 def _vrow():
@@ -424,7 +515,32 @@ def _judge(eff, mn, z, Z, sample=True):
 
 
 def _zlevel(win):
+    if win.get("n", WIN_DAYS) >= LONG_MIN:           # a long window is judged only once complete
+        return Z_FINAL
     return Z_FINAL if win["settled"] and len(win["settled"]) == len(win["days_a"]) else Z_EARLY
+
+
+def _long(win):
+    return win.get("n", WIN_DAYS) >= LONG_MIN
+
+
+def _need_rel(eff, noise, Z, mn):
+    """The signed relative change a rel row would need to be worse / better (in its judged change's direction; down
+    when 0): beyond Z × its noise (log) and its minimum."""
+    if noise is None:
+        return None
+    if eff is not None and eff > 0:
+        return max(math.exp(Z * noise) - 1, mn)
+    return -max(1 - math.exp(-Z * noise), mn)
+
+
+def _need_pp(eff, noise, Z, mn_pp, mn_rel_pp):
+    """The signed change in points a pp row would need: beyond Z × its noise, its pp minimum and its rel minimum (in
+    points)."""
+    if noise is None:
+        return None
+    m = max(Z * noise, mn_pp, mn_rel_pp or 0.0)
+    return m if eff is not None and eff > 0 else -m
 
 
 def _pending(row, win, ready):
@@ -463,17 +579,33 @@ def _rho(cx, R):
     return rho, K
 
 
-def _null_sd(vals):
-    """The week comparison's own noise from its pseudo-updates: their spread around 0 (a model bias counts as noise
-    too), floored at SIGMA_FLOOR."""
-    return max(U.spread(vals, 0.0), SIGMA_FLOOR)
+def _null_sd(vals, N=WIN_DAYS):
+    """The window comparison's own noise from its pseudo-updates: their spread around 0 (a model bias counts as noise
+    too), floored at SIGMA_FLOOR. N ≥ LONG_MIN: widened by T975[df] / T975[NULL_DF_FULL], df = len // N (below it):
+    pseudo-updates one day apart overlap by N−1 days, so 180 of them at 60 days hold only ~3 independent stretches."""
+    s = max(U.spread(vals, 0.0), SIGMA_FLOOR)
+    if N >= LONG_MIN:
+        df = min(NULL_DF_FULL, len(vals) // N)
+        if df < NULL_DF_FULL:
+            s *= T975.get(df, T975[1]) / T975[NULL_DF_FULL]
+    return s
 
 
-def _shifts(R, days):
-    """The pseudo-update shifts Δ for after-days `days`: every shifted after-day before the release, NULL_WEEKS weeks
-    of them, one per day (each keeps its own same-weekday matching, so any Δ is a fair copy)."""
+def _shifts(R, days, N=WIN_DAYS):
+    """The pseudo-update shifts Δ for after-days `days`: every shifted after-day before the release, NULL_SPAN_X × N of
+    them (56 at 7: NULL_WEEKS weeks), one per day (each keeps its own same-weekday matching, so any Δ is a fair copy)."""
     lo = max((d - R).days for d in days) + 1
-    return range(max(lo, 1), max(lo, 1) + 7 * NULL_WEEKS)
+    return range(max(lo, 1), max(lo, 1) + (7 * NULL_WEEKS if N == WIN_DAYS else NULL_SPAN_X * N))
+
+
+def _null_min(N):
+    return NULL_MIN if N == WIN_DAYS else NULL_MIN_X * N
+
+
+def _hist_need(N):
+    """Days of history before the release the N-day noise needs (≥ NULL_MIN_X·N pseudo-updates, each reading ~5 weeks
+    further back): 5N + 31."""
+    return 5 * N + 31
 
 
 # ≥ NULL_MIN pseudo-updates need ~10 weeks before the release: the first starts ≤10 days back, each looks 5 weeks further
@@ -481,21 +613,181 @@ LOW_NULL = "Update se pehle ka ~%d hafte ka data chahiye (aam utaar-chadhaav nap
 # …the data is there, but enough of those pseudo-updates sat in a launch / growth stretch (TREND_MAX_WEEK): said so
 LOW_NULL_TREND = ("Update se pehle ke hafton me %s tez badh / ghat raha tha (launch ya tez growth) — aam utaar-chadhaav "
                   "napne layak normal hafte kam")
+# the 14 / 30 / 60-day noise needs 5N+31 days before the release (15 / 26 / 48 weeks; D30 ~30 more): the app's age,
+# said with it — ONLY when the row's series really is that short (else LOW_NULL_GAP: the history is there, its days not)
+LOW_NULL_N = ("Update se pehle ka ~%d hafte%s ka data chahiye (%d-din tulna ka aam utaar-chadhaav napne ke liye) — is "
+              "update se pehle ~%d hafte ka tha")
+LOW_NULL_GAP = ("Update se pehle ke GA4 data me kai dino ki kami (ya un dino installs nahi) — %d-din tulna ka aam "
+                "utaar-chadhaav napne layak din kam")
+# the normal weekly change / its backtest read N days before the before-window at 14 / 30 / 60: short there (the app
+# older than that): that stretch named — never "the weeks before the update", which the app had
+LOW_REF_N = "Update se ~%d din pehle ke %d hafte ka data kam (normal trend napne ke liye)"
+LOW_AB_N = "Before / After ke dino ka data kam"
+NA_YOUNG_N = "Update app launch ke %d din ke andar aaya — pehle ke poore %d din nahi"
+LOW_RATE = "Naye users kam — kam se kam %d installs aur %d wapas aane wale chahiye"
+SERIES = {"dau": ("daily",), "sessions": ("usage",), "time": ("usage",), "rev": ("daily", "rev"), "imp": ("daily", "rev"),
+          "rate": ("ret",), "d0": ("d0",)}
 
 
-def dau_row(cx, blk):
-    """Returning DAU vs its expected level (see the module docstring, and the spec's §3.4a). Also keeps, for the
-    per-user rows, how much of the returning users are recent installs coming back (blk["_mix"])."""
-    row, win, R = _row("returning_dau"), blk["win"], blk["R"]
-    ex = row["extra"]
-    rho, K = _rho(cx, R)
-    raw = K < 7
-    Kx = K                                            # (the mix check below reads ρ̂ even in raw mode, when it has it)
-    K = 0 if raw else K
-    ex.update(mode="raw" if raw else "cohort", k_days=K)
-    mn = DAU_MIN_REL * (2 if raw else 1)
+def _hist_from(cx, series):
+    """The first day a row's pseudo-updates can read: max(launch, its series' first day(s)) — the return cohorts also
+    not before GA4's user-data edge (ret_from)."""
+    days = [cx.get("launch")] + [(cx.get("first") or {}).get(s) for s in SERIES.get(series, ())]
+    if series == "rate":
+        days.append(cx.get("ret_from"))
+    days = [d for d in days if d is not None]
+    return max(days) if days else None
+
+
+def _avail(cx, R, series=None):
+    """Days of the row's series before the release R (the history its noise can read)."""
+    f = _hist_from(cx, series)
+    return max(0, (R - f).days) if f is not None else 0
+
+
+def _need_rate(win, R, k):
+    """Days before R a rate row (return day k; 0 = install-day uninstall) reads for ≥ NULL_MIN_X·N pseudo-updates: the
+    shifts start past its last after-day (+ k), each reads its before-install days N (+ k) further back."""
+    N = win["n"]
+    return (win["end_a"] - R).days + NULL_MIN_X * N + N + 2 * k
+
+
+def low_null_n(cx, R, N, need=None, series=None):
+    """LOW_NULL_N for window N at release R: the weeks needed (the window's 5N+31, or the row's own need when longer —
+    D30) + the months at 60, and the weeks its series had (from max(launch, the series' first day))."""
+    days = max(_hist_need(N), need or 0)
+    weeks = math.ceil(days / 7)
+    had = _avail(cx, R, series) // 7
+    return LOW_NULL_N % (weeks, " (~%d mahine)" % round(days / 30.44) if N >= 60 else "", N, had)
+
+
+def _hist_short(cx, R, N, need=None, series=None):
+    """The row's series is shorter than its N-day noise needs (`need` days; default 5N+31) — the app's age, not gaps."""
+    return _avail(cx, R, series) < (need if need else _hist_need(N))
+
+
+def is_hist(reason):
+    """A LOW_NULL_N reason (the app's history too short for the window's noise: the card's "young" line says it once)."""
+    return bool(reason) and reason.startswith("Update se pehle ka ~") and reason.endswith(" hafte ka tha")
+
+
+def _low_null(cx, R, N, nulls, steep_n, what, need=None, series=None):
+    """Why a row has too few pseudo-updates: the steep weeks (LOW_NULL_TREND), else at 7 the history (LOW_NULL — byte
+    for byte today's); at 14 / 30 / 60 the history (LOW_NULL_N) only when the row's series is shorter than its noise
+    needs (`need`: its days, default 5N+31) — else the days are there but too many unreadable (LOW_NULL_GAP)."""
+    if len(nulls) + steep_n >= _null_min(N):
+        return LOW_NULL_TREND % what
+    if N == WIN_DAYS:
+        return LOW_NULL
+    if _hist_short(cx, R, N, need, series):
+        return low_null_n(cx, R, N, need, series)
+    return LOW_NULL_GAP % N
+
+
+def _low_ref(cx, R, N, weeks, series):
+    """A 14 / 30 / 60-day row whose normal-trend reference ([R−N−7·weeks−7, R−N−1] with its week-over-week lookback) is
+    short: the app's history (LOW_NULL_N: the reference sits before the series' first day) or that stretch's data."""
+    f = _hist_from(cx, series)
+    if f is not None and f > R - timedelta(days=N + 28):
+        return low_null_n(cx, R, N, None, series)
+    return LOW_REF_N % (N, weeks)
+
+
+# ── the 14 / 30 / 60-day pseudo-updates in O(1) a shift: prefix sums (spec §2.7) ─────────────────────
+
+class _Pfx:
+    """Prefix sums of a per-day value `fn(day)` → tuple of `dim` numbers or None (invalid) over the days [lo, hi]
+    (ordinals): the sum over any day range and how many of its days are invalid (a day outside [lo, hi] is) — two
+    lookups whatever the range's length."""
+
+    def __init__(self, fn, lo, hi, dim):
+        self.lo, self.n, self.dim = lo, max(0, hi - lo + 1), dim
+        self.P = [[0.0] * (self.n + 1) for _ in range(dim)]
+        self.Q = [0] * (self.n + 1)
+        self.v = []
+        for i in range(self.n):
+            x = fn(date.fromordinal(lo + i))
+            self.v.append(x)
+            for k in range(dim):
+                self.P[k][i + 1] = self.P[k][i] + (x[k] if x is not None else 0.0)
+            self.Q[i + 1] = self.Q[i] + (x is None)
+
+    def rng(self, a, b, cnt):
+        """Σ over the days a..b (ordinals) → (sums, invalid days); cnt = [reads] (the cost guard)."""
+        cnt[0] += 2
+        i, j = a - self.lo, b - self.lo
+        tot = b - a + 1
+        i0, j0 = max(i, 0), min(j, self.n - 1)
+        if i0 > j0:
+            return (0.0,) * self.dim, tot
+        return (tuple(self.P[k][j0 + 1] - self.P[k][i0] for k in range(self.dim)),
+                tot - (j0 - i0 + 1) + self.Q[j0 + 1] - self.Q[i0])
+
+    def at(self, a, cnt):
+        cnt[0] += 1
+        i = a - self.lo
+        return self.v[i] if 0 <= i < self.n else None
+
+
+def _mset(days):
+    """A day multiset (dates, repeats allowed) → (lo, hi, holes, extra) in ordinals: its hull [lo, hi] minus the hull
+    days it lacks, plus each repeated day's extra count — Σ over the multiset = the hull range − holes + extras."""
+    cnt = {}
+    for d in days:
+        o = d.toordinal()
+        cnt[o] = cnt.get(o, 0) + 1
+    lo, hi = min(cnt), max(cnt)
+    return lo, hi, [o for o in range(lo, hi + 1) if o not in cnt], [(o, c - 1) for o, c in cnt.items() if c > 1]
+
+
+def _mset_sum(pf, ms, D, cnt):
+    """Σ of pf's value over the multiset ms shifted back by D days → (sums, invalid days)."""
+    lo, hi, holes, extra = ms
+    s, bad = pf.rng(lo - D, hi - D, cnt)
+    s = list(s)
+    for o in holes:
+        x = pf.at(o - D, cnt)
+        if x is None:
+            bad -= 1
+        else:
+            for k in range(pf.dim):
+                s[k] -= x[k]
+    for o, c in extra:
+        x = pf.at(o - D, cnt)
+        if x is not None:
+            for k in range(pf.dim):
+                s[k] += c * x[k]
+    return s, bad
+
+
+def _pfx(cx, key, fn, dim):
+    """The app's prefix sums of one per-day value (built once, shared by every block and window)."""
+    cache = cx.setdefault("_pfx", {})
+    if key not in cache:
+        lo, hi = cx["_span"]
+        cache[key] = _Pfx(fn, lo, hi, dim)
+    return cache[key]
+
+
+def _count(cx, N, n):
+    """The pseudo-update cost guard: values read by the null loops of window N."""
+    c = cx.setdefault("_nreads", {})
+    c[N] = c.get(N, 0) + n
+
+
+def _dau_memo(cx, blk):
+    """What returning DAU reads that does not depend on the window — ρ̂, Y / O / recent / week-over-week by day, the
+    normal weekly change and its backtest by their reference end day (μ for window N at shift Δ = μ for window N' at
+    shift Δ + N − N') — built once per block, shared by its 7 / 14 / 30 / 60-day rows (blk["_m"])."""
+    m = blk.setdefault("_m", {})
+    if "dau" in m:
+        return m["dau"]
+    rho, Kx = _rho(cx, blk["R"])
+    raw = Kx < 7
+    K = 0 if raw else Kx
     ret = cx["ret"]
-    memo, rmemo = {}, {}
+    memo, rmemo, omemo, wmemo, mumemo, btmemo = {}, {}, {}, {}, {}, {}
+    touched = {}                                      # the days this row's Y was read on (imputed_share), in order
 
     def Y(d):
         if d not in memo:
@@ -511,48 +803,69 @@ def dau_row(cx, blk):
             memo[d] = (y, yi)
         return memo[d][0]
 
-    def O(d):
-        r = _ret_dau(cx, d)
-        return None if r is None else r - Y(d)
+    def Om(d):
+        if d not in omemo:
+            r = _ret_dau(cx, d)
+            omemo[d] = None if r is None else r - Y(d)
+        if d in memo and d not in touched:
+            touched[d] = True
+        return omemo[d]
 
     def recent(d):
         if d not in rmemo:
             rmemo[d] = sum((_dv(cx, d - timedelta(days=k), "new") or 0) * rho[k] for k in range(1, K + 1))
         return rmemo[d]
 
-    omemo, wmemo = {}, {}
-
-    def Om(d):
-        if d not in omemo:
-            omemo[d] = O(d)
-        return omemo[d]
-
     def wow(u):
         if u not in wmemo:
             wmemo[u] = _log(Om(u), Om(u - timedelta(days=7)))
         return wmemo[u]
 
-    def mu_at(Rq):
-        # the normal weekly change comes from the weeks BEFORE the before-week (NOISE_LAG): the before-week is the
-        # contrast's own baseline — reused as its reference it makes the noise look ~20% smaller than it is
-        v = [wow(u) for u in _days(Rq - timedelta(days=21 + NOISE_LAG), Rq - timedelta(days=1 + NOISE_LAG))]
-        v = [x for x in v if x is not None]
-        return U.median(v) if v else 0.0
+    def mu_ref(e):
+        # the normal weekly change of the 3 weeks ending on e (= the before-window's first day − 1: the before-window
+        # is the contrast's own baseline — reused as its reference it makes the noise look ~20% smaller than it is)
+        if e not in mumemo:
+            v = [wow(u) for u in _days(e - timedelta(days=20), e)]
+            v = [x for x in v if x is not None]
+            mumemo[e] = U.median(v) if v else 0.0
+        return mumemo[e]
 
     def expd(d, b, w, mu):
         o = Om(b)
-        return None if o is None or o <= 0 else o * math.exp(mu * w) + recent(d)
+        return None if o is None or o <= 0 else o * math.exp(mu * min(w, TREND_HORIZON_WEEKS)) + recent(d)
 
-    def backtest(Rq, mu):
-        bt = []
-        for t in _days(Rq - timedelta(days=14 + NOISE_LAG), Rq - timedelta(days=1 + NOISE_LAG)):
-            x = _log(_ret_dau(cx, t), expd(t, t - timedelta(days=7), 1, mu))
-            if x is not None:
-                bt.append(x)
-        return bt
-    mu = mu_at(R)
+    def backtest(e):
+        if e not in btmemo:
+            mu, bt = mu_ref(e), []
+            for t in _days(e - timedelta(days=13), e):
+                x = _log(_ret_dau(cx, t), expd(t, t - timedelta(days=7), 1, mu))
+                if x is not None:
+                    bt.append(x)
+            btmemo[e] = bt
+        return btmemo[e]
+    m["dau"] = {"rho": rho, "Kx": Kx, "K": K, "raw": raw, "memo": memo, "touched": touched, "Om": Om, "Y": Y,
+                "recent": recent, "mu_ref": mu_ref, "expd": expd, "backtest": backtest}
+    return m["dau"]
+
+
+def dau_row(cx, blk):
+    """Returning DAU vs its expected level (see the module docstring, and the spec's §3.4a) over the block's window
+    (blk["win"]: 7 days, or 14 / 30 / 60 — the same test with pair_day, the trend extrapolated ≤ TREND_HORIZON_WEEKS and
+    that window's own pseudo-update noise). Also keeps, for the per-user rows, how much of the returning users are recent
+    installs coming back (blk["_mix"])."""
+    row, win, R = _row("returning_dau"), blk["win"], blk["R"]
+    N = win.get("n", WIN_DAYS)
+    ex = row["extra"]
+    dm = _dau_memo(cx, blk)
+    rho, Kx, K, raw = dm["rho"], dm["Kx"], dm["K"], dm["raw"]
+    ex.update(mode="raw" if raw else "cohort", k_days=K)
+    mn = DAU_MIN_REL * (2 if raw else 1)
+    memo, touched, expd, backtest, mu_ref = dm["memo"], dm["touched"], dm["expd"], dm["backtest"], dm["mu_ref"]
+    touched.clear()
+    lag = timedelta(days=N + 1)                      # μ / backtest reference: the day before the before-window
+    mu = mu_ref(R - lag)
     steep = _steep(mu)                               # a launch / growth phase: no expected level (TREND_MAX_WEEK)
-    bt = [] if steep else backtest(R, mu)
+    bt = [] if steep else backtest(R - lag)
     rb = [_ret_dau(cx, d) for d in _days(win["b0"], win["b1"])]
     rb = [x for x in rb if x is not None]
     ex["mu_week"] = round(mu, 5)
@@ -560,7 +873,7 @@ def dau_row(cx, blk):
     sr = se = srb = 0.0
     xa = []
     for d in win["settled"]:
-        b, w = _bday(R, d)
+        b, w = pair_day(win, R, d)
         r, e, r0 = _ret_dau(cx, d), expd(d, b, w, mu), _ret_dau(cx, b)
         x = _log(r, e)
         if x is None or not r0:
@@ -568,7 +881,7 @@ def dau_row(cx, blk):
         xa.append(x)
         used.append(d), bs.append(b), pat.append((d, b, w))
         sr, se, srb = sr + r, se + e, srb + r0
-    ys = [memo[d] for d in memo]
+    ys = [memo[d] for d in touched]
     tot = sum(y for y, _ in ys)
     ex["imputed_share"] = round(sum(yi for _, yi in ys) / tot, 5) if tot else 0.0
     row["est"] = ex["imputed_share"] >= 0.01
@@ -584,6 +897,10 @@ def dau_row(cx, blk):
         if steep:                                    # the model's level is kept aside, never shown as expected
             ex["expected_model"] = row["expected"]
             row.update(expected=None, change=sr / srb - 1 if srb else None)
+    if steep:
+        row["basis"] = "plain"
+    if _long(win) and not steep and pat and any(w > TREND_HORIZON_WEEKS for _, _, w in pat):
+        row["_capped"] = True                        # (note "trend_capped": 3 of its 4–9 weeks extrapolated)
     blk["_mix"] = _mix(cx, rho, Kx, used, bs)
     if len(win["settled"]) < IMPACT_MIN_DAYS:
         return _pending(row, win, win["a0"] + timedelta(days=IMPACT_MIN_DAYS - 1 + ACT_LATE_DAYS))
@@ -593,32 +910,48 @@ def dau_row(cx, blk):
     if (_mean(rb) or 0) < MIN_DAU:
         row.update(status="low", raw_status="low", reason="Roz %d se kam purane users — GA4 ginti ka noise zyada" % MIN_DAU)
         return row
-    if len(bt) < 10 or len(xa) < IMPACT_MIN_DAYS:
-        row.update(status="low", raw_status="low", reason="Update se pehle ke 2 hafte ka data kam")
+    if len(bt) < 10 or len(xa) < IMPACT_MIN_DAYS:                # (14 / 30 / 60: the reference is N days further back)
+        why = ("Update se pehle ke 2 hafte ka data kam" if N == WIN_DAYS else _low_ref(cx, R, N, 2, "dau")
+               if len(bt) < 10 else LOW_AB_N)
+        row.update(status="low", raw_status="low", reason=why)
         return row
-    if abs(row["change"]) < mn:                      # under the minimum: Normal whatever the noise (_judge) — the
-        row["raw_status"] = row["status"] = "same"   # noise is only measured when it can decide
+    under = abs(row["change"]) < mn                  # under the minimum: Normal whatever the noise (_judge) — its
+    if under and not cx.get("_noise_all"):           # noise is still measured (the page's "pakka" line), never judged
+        row["raw_status"] = row["status"] = "same"
         row["_ratio"] = abs(row["change"]) / mn
         if raw:
             row["reason"] = RAW_WHY
         return row
     shift = _mean(xa) - U.median(bt)
     nulls, steep_n = [], 0                           # the same comparison at every pseudo-update before the release
-    for dl in _shifts(R, used):
-        Rq, D = R - timedelta(days=dl), timedelta(days=dl)
-        mq = mu_at(Rq)
-        bq = backtest(Rq, mq)
-        xq = [_log(_ret_dau(cx, d - D), expd(d - D, b - D, w, mq)) for d, b, w in pat]
-        if len(bq) >= 10 and all(x is not None for x in xq):
-            if _steep(mq):                           # the test would not run there (TREND_MAX_WEEK)
-                steep_n += 1
-                continue
-            nulls.append(_mean(xq) - U.median(bq))
-    if len(nulls) < NULL_MIN:                        # (short only for the steep ones: not a short history)
-        row.update(status="low", raw_status="low",
-                   reason=LOW_NULL_TREND % "app" if len(nulls) + steep_n >= NULL_MIN else LOW_NULL)
+    if N == WIN_DAYS or (R - cx["launch"]).days >= _hist_need(N):
+        cnt = 0
+        for dl in _shifts(R, used, N):
+            Rq, D = R - timedelta(days=dl), timedelta(days=dl)
+            e = Rq - lag
+            mq = mu_ref(e)
+            bq = backtest(e)
+            xq = [_log(_ret_dau(cx, d - D), expd(d - D, b - D, w, mq)) for d, b, w in pat]
+            cnt += 2 * len(pat)
+            if len(bq) >= 10 and all(x is not None for x in xq):
+                if _steep(mq):                       # the test would not run there (TREND_MAX_WEEK)
+                    steep_n += 1
+                    continue
+                nulls.append(_mean(xq) - U.median(bq))
+        _count(cx, ("dau", N), cnt)
+    if len(nulls) >= _null_min(N):
+        row["noise"] = _null_sd(nulls, N)
+        row["need"] = _need_rel(row["change"], row["noise"], _zlevel(win), mn)
+    if under:
+        row["raw_status"] = row["status"] = "same"
+        row["_ratio"] = abs(row["change"]) / mn
+        if raw:
+            row["reason"] = RAW_WHY
         return row
-    z = shift / _null_sd(nulls)
+    if len(nulls) < _null_min(N):                    # (short only for the steep ones: not a short history)
+        row.update(status="low", raw_status="low", reason=_low_null(cx, R, N, nulls, steep_n, "app", series="dau"))
+        return row
+    z = shift / row["noise"]
     row["z"] = z
     st = _judge(row["change"], mn, z, _zlevel(win))
     if raw:                                          # no return cohorts: the installs' returners can't be told apart
@@ -654,16 +987,42 @@ def _mix(cx, rho, K, used, bs):
     return {"swing": sw, "moved": sw is not None and abs(sw) > INSTALL_SWING}
 
 
+RET_KEY = {1: "new_d1", 7: "new_d7", 30: "new_d30"}
+
+
+def _okc_fn(cx, N):
+    """fn(install day) → (day-N returners, GA4 new users) when its cohort is complete up to day N and new > 0, else
+    None — the app's, whatever the block (the prefix sums read it)."""
+    ret = cx["ret"]
+
+    def okc(c):
+        e = ret.get(c.isoformat())
+        if not (e and e.get("ok") and len(e.get("a") or []) > N and e.get("t")):
+            return None
+        nw = _new_of(cx, c)
+        return (e["a"][N], nw) if nw else None
+    return okc
+
+
 def ret_row(cx, blk, N):
-    """New users back on day N (1 / 7): after-install days vs before-install days of the same weekdays (§3.4b)."""
-    key = "new_d1" if N == 1 else "new_d7"
+    """New users back on day N (1 / 7 / 30): after-install days vs before-install days of the same weekdays (§3.4b).
+    The window's install days: after = [a0, end_a] (day N settled), before = [R−W−N, R−1−N] on their weekdays (W = the
+    window's length). 7 days: noise = max(binomial·φ, the pseudo-updates' spread). 14 / 30 / 60: the pseudo-updates'
+    spread only (slow install-mix drift — campaigns — that a 4-week φ never sees), ≥ NULL_MIN_X·W of them or Low data;
+    judged only once every install day's day N is settled."""
+    key = RET_KEY[N]
     row, win, R = _row(key), blk["win"], blk["R"]
+    W = win.get("n", WIN_DAYS)
+    lng = W >= LONG_MIN
     ex, ret = row["extra"], cx["ret"]
     S = cx["S_act"]
+    mnpp, mnrel = (RET30_MIN_PP, RET30_MIN_REL) if N == 30 else (RET_MIN_PP, RET_MIN_REL)
     Ca = [c for c in win["days_a"] if c + timedelta(days=N) <= S]
     wd = {c.weekday() for c in Ca}
-    Cb = [c for c in _days(R - timedelta(days=7 + N), R - timedelta(days=1 + N)) if c.weekday() in wd]
+    Cb = [c for c in _days(R - timedelta(days=W + N), R - timedelta(days=1 + N)) if c.weekday() in wd]
     ready = win["a0"] + timedelta(days=2 + N + ACT_LATE_DAYS)
+    if lng and len(Ca) < len(win["days_a"]):         # (D30 in a judged window: its day 30 comes at end_a + 33)
+        return _pending(row, win, win["end_a"] + timedelta(days=N + ACT_LATE_DAYS))
     if len(Ca) < 3:
         return _pending(row, win, ready if len(win["days_a"]) >= 3 else None)
     rf = cx["ret_from"]
@@ -705,14 +1064,29 @@ def ret_row(cx, blk, N):
     # the same comparison at every pseudo-update before the release (the install days of a week are not independent
     # — a campaign's users stay for days): its spread, when there are enough of them, if bigger than the model's
     nulls = []
-    for dl in _shifts(R - timedelta(days=N), A):
-        D = timedelta(days=dl)
-        Aq, Bq = [okc(c - D) for c in A], [okc(c - D) for c in B]
-        if all(Aq) and all(Bq):
-            nulls.append(100 * (sum(e[0] for e in Aq) / sum(e[1] for e in Aq)
-                                - sum(e[0] for e in Bq) / sum(e[1] for e in Bq)))
-    if len(nulls) >= NULL_MIN:
-        se = max(se, U.spread(nulls, 0.0))
+    if not lng:
+        for dl in _shifts(R - timedelta(days=N), A):
+            D = timedelta(days=dl)
+            Aq, Bq = [okc(c - D) for c in A], [okc(c - D) for c in B]
+            if all(Aq) and all(Bq):
+                nulls.append(100 * (sum(e[0] for e in Aq) / sum(e[1] for e in Aq)
+                                    - sum(e[0] for e in Bq) / sum(e[1] for e in Bq)))
+        _count(cx, ("rate", W), (len(A) + len(B)) * len(_shifts(R - timedelta(days=N), A)))
+        if len(nulls) >= NULL_MIN:
+            se = max(se, U.spread(nulls, 0.0))
+    else:                                            # O(1) a shift: prefix sums of (returners, new) by install day
+        pf = _pfx(cx, ("ret", N), _okc_fn(cx, N), 2)
+        msA, msB, cnt = _mset(A), _mset(B), [0]
+        for dl in _shifts(R - timedelta(days=N), A, W):
+            sa, bad = _mset_sum(pf, msA, dl, cnt)
+            if bad:
+                continue
+            sb, bad = _mset_sum(pf, msB, dl, cnt)
+            if bad or not sa[1] or not sb[1]:
+                continue
+            nulls.append(100 * (sa[0] / sa[1] - sb[0] / sb[1]))
+        _count(cx, ("rate", W), cnt[0])
+        se = _null_sd(nulls, W) if len(nulls) >= _null_min(W) else 0.0
     z = dpp / se if se else None
     rel = dpp / (100 * pb) if pb else None
     nav, nbv = [_dv(cx, c, "new") or 0 for c in Ca], [_dv(cx, c, "new") or 0 for c in Cb]
@@ -724,10 +1098,18 @@ def ret_row(cx, blk, N):
     provs = [c for c in win["days_a"] if c + timedelta(days=N) <= cx["E"] and okc(c)]
     if len(provs) > len(A):
         row["after_prov"] = sum(okc(c)[0] for c in provs) / sum(okc(c)[1] for c in provs)
+    if se:
+        row["noise"] = se
+        row["need"] = _need_pp(dpp, se, _zlevel(win), mnpp, mnrel * pb * 100)
     sample = min(na, nb) >= MIN_INSTALLS and min(xa, xb) >= MIN_EVENTS and len(A) >= 3
-    big = abs(dpp) >= RET_MIN_PP and rel is not None and abs(rel) >= RET_MIN_REL     # both minimums
+    big = abs(dpp) >= mnpp and rel is not None and abs(rel) >= mnrel     # both minimums
     if not sample:
         st = "low"
+        if lng:
+            row["reason"] = LOW_RATE % (MIN_INSTALLS, MIN_EVENTS)
+    elif lng and len(nulls) < _null_min(W):          # never the binomial·φ fallback at 14 / 30 / 60
+        st = "low"
+        row["reason"] = _low_null(cx, R, W, nulls, 0, "", need=_need_rate(win, R, N), series="rate")
     elif big and z is not None and abs(z) >= _zlevel(win) and (z > 0) == (dpp > 0):
         st = "better" if dpp > 0 else "worse"
     else:
@@ -737,23 +1119,19 @@ def ret_row(cx, blk, N):
         if moved < math.ceil(4 / 7 * len(A)):
             st = "unsure"
     row["status"] = row["raw_status"] = st
-    row["_ratio"] = abs(dpp) / RET_MIN_PP
+    row["_ratio"] = abs(dpp) / mnpp
     if swing is not None and abs(swing) > INSTALL_SWING:
         row["_swing"] = True
     return row
 
 
-def _pu_test(cx, blk, M, need=0.0, what="ye number"):
-    """The per-user test (§3.4d) of M (a per-user number by day): each settled after-day vs the same weekday before, net
-    of the normal week-over-week change μ (the median of the 3 weeks before the before-week, NOISE_LAG); the noise = the
-    same comparison at every pseudo-update before the release (_null_sd) — measured only when the effect reaches
-    `need` (the row's minimum: under it the row is Normal whatever the noise). A normal weekly change steeper than
-    TREND_MAX_WEEK is never extrapolated (why = trend_why(μ, `what`), steep = μ; no stat / adj), nor measured as noise
-    (too few pseudo-updates left for that reason: LOW_NULL_TREND, else LOW_NULL). → {used, bs, stat (the
-    mean trend-net log change), adj (its effect: e^stat − 1 — what is judged), z, why (None, "pending", or why there is
-    no z), steep}."""
-    win, R = blk["win"], blk["R"]
-    memo, wmemo = {}, {}
+def _pu_memo(cx, mkey, M):
+    """A per-user number's by-day memos (the app's, whatever the block or window): m(d), week-over-week, and the normal
+    weekly change μ by its reference end day (the day before the before-window) with how many weeks it read."""
+    cache = cx.setdefault("_pum", {})
+    if mkey is not None and mkey in cache:
+        return cache[mkey]
+    memo, wmemo, mumemo = {}, {}, {}
 
     def m(d):
         if d not in memo:
@@ -765,59 +1143,114 @@ def _pu_test(cx, blk, M, need=0.0, what="ye number"):
             wmemo[u] = _log(m(u), m(u - timedelta(days=7)))
         return wmemo[u]
 
-    def mu_at(Rq):
-        v = [wow(u) for u in _days(Rq - timedelta(days=21 + NOISE_LAG), Rq - timedelta(days=1 + NOISE_LAG))]
-        v = [x for x in v if x is not None]
-        return (U.median(v) if v else 0.0), len(v)
-    mu, nw = mu_at(R)
+    def mu_ref(e):
+        if e not in mumemo:
+            v = [wow(u) for u in _days(e - timedelta(days=20), e)]
+            v = [x for x in v if x is not None]
+            mumemo[e] = ((U.median(v) if v else 0.0), len(v))
+        return mumemo[e]
+    out = {"m": m, "mu_ref": mu_ref}
+    if mkey is not None:
+        cache[mkey] = out
+    return out
+
+
+def _pu_test(cx, blk, M, need=0.0, what="ye number", mkey=None):
+    """The per-user test (§3.4d) of M (a per-user number by day): each settled after-day vs its before-day (pair_day),
+    at 7 days net of the normal week-over-week change μ (the median of the 3 weeks before the before-window, NOISE_LAG),
+    at 14 / 30 / 60 plain (PU_TREND_MAX_N: no trend — the lower-noise rule there); the noise = the same comparison at
+    every pseudo-update before the release (_null_sd) — judged only when the effect reaches `need` (the row's minimum:
+    under it the row is Normal whatever the noise; the noise itself is still measured for the page's "pakka" line). A
+    normal weekly change steeper than TREND_MAX_WEEK is never extrapolated (why = trend_why(μ, `what`), steep = μ; no stat
+    / adj), nor measured as noise (too few pseudo-updates left for that reason: LOW_NULL_TREND, else LOW_NULL). mkey:
+    the number's name (its by-day memos and prefix sums are shared by every block and window). → {used, bs, stat (the
+    mean log change it judges), adj (its effect: e^stat − 1 — what is judged), z, noise, why (None, "pending", or why
+    there is no z), steep, trend (True: net of μ)}."""
+    win, R = blk["win"], blk["R"]
+    N = win.get("n", WIN_DAYS)
+    trend = N <= PU_TREND_MAX_N
+    pm = _pu_memo(cx, mkey, M)
+    m, mu_ref = pm["m"], pm["mu_ref"]
+    lag = timedelta(days=N + 1)
+    mu, nw = mu_ref(R - lag)
     xa, used, bs, pat = [], [], [], []
     for d in win["settled"]:
-        b, w = _bday(R, d)
+        b, w = pair_day(win, R, d)
         x = _log(m(d), m(b))
         if x is None:
             continue
-        xa.append(x - mu * w)
+        xa.append(x - mu * w if trend else x)
         used.append(d), bs.append(b), pat.append((d, b, w))
-    out = {"used": used, "bs": bs, "stat": None, "adj": None, "z": None, "why": None, "steep": None}
+    out = {"used": used, "bs": bs, "stat": None, "adj": None, "z": None, "noise": None, "why": None, "steep": None,
+           "trend": trend}
     if len(win["settled"]) < IMPACT_MIN_DAYS:
         out["why"] = "pending"
         return out
-    if nw < 10 or len(xa) < IMPACT_MIN_DAYS:
-        out["why"] = "Update se pehle ke 3 hafte ka data kam"
+    if nw < 10 or len(xa) < IMPACT_MIN_DAYS:                     # (14 / 30 / 60: the reference is N days further back)
+        out["why"] = ("Update se pehle ke 3 hafte ka data kam" if trend else _low_ref(cx, R, N, 3, mkey)
+                      if nw < 10 else LOW_AB_N)
         return out
     if _steep(mu):
         out["why"], out["steep"] = trend_why(mu, what), mu
         return out
     out["stat"] = st = _mean(xa)
     out["adj"] = math.exp(st) - 1
-    if abs(out["adj"]) < need:
+    under = abs(out["adj"]) < need
+    if under and not cx.get("_noise_all"):
         return out
     nulls, steep_n = [], 0
-    for dl in _shifts(R, used):
-        D = timedelta(days=dl)
-        mq, nq = mu_at(R - D)
-        if nq < 10:
-            continue
-        xq = [_log(m(d - D), m(b - D)) for d, b, _ in pat]
-        if all(x is not None for x in xq):
-            if _steep(mq):                           # the test would not run there (TREND_MAX_WEEK)
+    if trend:                                        # 7 days: today's loop, exactly
+        for dl in _shifts(R, used, N):
+            D = timedelta(days=dl)
+            mq, nq = mu_ref(R - D - lag)
+            if nq < 10:
+                continue
+            xq = [_log(m(d - D), m(b - D)) for d, b, _ in pat]
+            if all(x is not None for x in xq):
+                if _steep(mq):                       # the test would not run there (TREND_MAX_WEEK)
+                    steep_n += 1
+                    continue
+                nulls.append(_mean([x - mq * w for x, (_, _, w) in zip(xq, pat)]))
+        _count(cx, ("pu", N), 2 * len(pat) * len(_shifts(R, used, N)))
+    elif (R - cx["launch"]).days >= _hist_need(N):   # 14 / 30 / 60: O(1) a shift (prefix sums of log m)
+        def lg(d):
+            v = m(d)
+            return (math.log(v),) if v is not None and v > 0 else None
+        pf = _pfx(cx, ("pu", mkey), lg, 1) if mkey is not None else _Pfx(lg, *cx["_span"], 1)
+        msA, msB, cnt, n = _mset(used), _mset(bs), [0], len(used)
+        for dl in _shifts(R, used, N):
+            mq, nq = mu_ref(R - timedelta(days=dl) - lag)
+            if nq < 10:
+                continue
+            sa, bad = _mset_sum(pf, msA, dl, cnt)
+            if bad:
+                continue
+            sb, bad = _mset_sum(pf, msB, dl, cnt)
+            if bad:
+                continue
+            if _steep(mq):
                 steep_n += 1
                 continue
-            nulls.append(_mean([x - mq * w for x, (_, _, w) in zip(xq, pat)]))
-    if len(nulls) < NULL_MIN:                        # (short only for the steep ones: not a short history)
-        out["why"] = LOW_NULL_TREND % what if len(nulls) + steep_n >= NULL_MIN else LOW_NULL
+            nulls.append((sa[0] - sb[0]) / n)
+        _count(cx, ("pu", N), cnt[0])
+    if len(nulls) >= _null_min(N):
+        out["noise"] = _null_sd(nulls, N)
+    if under:
         return out
-    out["z"] = st / _null_sd(nulls)
+    if len(nulls) < _null_min(N):                    # (short only for the steep ones: not a short history)
+        out["why"] = _low_null(cx, R, N, nulls, steep_n, what, series=mkey)
+        return out
+    out["z"] = st / out["noise"]
     return out
 
 
-def _pu(cx, blk, row, M, num, den, mn, what="ye number"):
+def _pu(cx, blk, row, M, num, den, mn, what="ye number", mkey=None):
     """A per-user row: shown = pooled Σnum ÷ Σden after vs the matched before days (change = after ÷ before − 1, as
-    the numbers read); judged = _pu_test's trend-net effect (adj) against the minimum `mn` — a trend the app was already
-    on never makes (or hides) a change; one too steep to extrapolate (TREND_MAX_WEEK) = Low data, the plain change
-    only. → (row, the test)."""
+    the numbers read); judged = _pu_test's effect (adj: at 7 days net of the trend) against the minimum `mn` — a trend
+    the app was already on never makes (or hides) a change; one too steep to extrapolate (TREND_MAX_WEEK) = Low data,
+    the plain change only. → (row, the test)."""
     win = blk["win"]
-    t = _pu_test(cx, blk, M, mn, what)
+    t = _pu_test(cx, blk, M, mn, what, mkey)
     used, bs = t["used"], t["bs"]
     sa = sum(num(d) for d in used)
     sda = sum(den(d) for d in used)
@@ -830,11 +1263,16 @@ def _pu(cx, blk, row, M, num, den, mn, what="ye number"):
     pa = [d for d in win["avail"] if M(d) is not None]
     if len(win["avail"]) > len(win["settled"]) and pa and sum(den(d) for d in pa):
         row["after_prov"] = sum(num(d) for d in pa) / sum(den(d) for d in pa)
+    row["basis"] = "expected" if t["trend"] and t["steep"] is None else "plain"
+    if t["noise"] is not None:
+        row["noise"] = t["noise"]
+        row["need"] = _need_rel(t["adj"], t["noise"], _zlevel(win), mn)
     if t["why"] == "pending":
         _pending(row, win, win["a0"] + timedelta(days=IMPACT_MIN_DAYS - 1 + ACT_LATE_DAYS))
         return row, t
     if t["why"] or row["change"] is None:
-        row.update(status="low", raw_status="low", reason=t["why"] or "Update se pehle ke 3 hafte ka data kam")
+        row.update(status="low", raw_status="low", reason=t["why"] or (
+            "Update se pehle ke 3 hafte ka data kam" if win.get("n", WIN_DAYS) == WIN_DAYS else LOW_AB_N))
         return row, t
     row["z"] = t["z"]
     st = _judge(t["adj"], mn, t["z"], _zlevel(win))
@@ -862,6 +1300,8 @@ def _mix_cap(blk, row):
 def use_row(cx, blk, key):
     """Sessions / engagement time per RETURNING user (usage[day]["r"]); all users in extra for the tooltip."""
     row = _row(key)
+    if blk["win"].get("n", WIN_DAYS) > PU_TREND_MAX_N:
+        row["basis"] = "plain"
     if not cx["usage"]:
         return _na(row, NA_NO_USAGE)
     j = 1 if key == "sessions" else 2
@@ -879,8 +1319,10 @@ def use_row(cx, blk, key):
     def M(d):
         r = slot(d, "r")
         return r[j] / r[0] if r and r[0] and r[j] else None
-    row, t = _pu(cx, blk, row, M, num, den, USE_MIN_REL, "%s per user" % key)
+    row, t = _pu(cx, blk, row, M, num, den, USE_MIN_REL, "%s per user" % key, mkey=key)
     used, bs = t["used"], t["bs"]
+    if row["basis"] == "expected" and t["adj"] is not None and row["after"] is not None:
+        row["expected"] = row["after"] / (1 + t["adj"])     # "vs expected" = exactly the judged (trend-net) change
 
     def allu(days):
         n = sum((slot(d, "n") or [0, 0, 0])[j] + (slot(d, "r") or [0, 0, 0])[j] for d in days)
@@ -908,6 +1350,8 @@ def arpdau_row(cx, blk):
     (TREND_MAX_WEEK): of ads per user = Low data, nothing judged; of revenue per user only (eCPM) = no Market / Maybe
     from revenue — ads per user alone may still say Worse / Better, else Low data."""
     row = _row("arpdau")
+    if blk["win"].get("n", WIN_DAYS) > PU_TREND_MAX_N:
+        row["basis"] = "plain"
     ex = row["extra"]
     ex.update(tz_blend=cx["tz_blend"], currency=cx["currency"])
     f = cx["rev"]
@@ -937,7 +1381,7 @@ def arpdau_row(cx, blk):
         a = sum(a1(d) for d in days)
         return fn(days) / a if a else None
     win = blk["win"]
-    row, t = _pu(cx, blk, row, M, lambda d: rev(d) * 1000, a1, ARPDAU_MIN_REL, "kamai per user")
+    row, t = _pu(cx, blk, row, M, lambda d: rev(d) * 1000, a1, ARPDAU_MIN_REL, "kamai per user", mkey="rev")
     used, bs = t["used"], t["bs"]
     ia, ib = pool(used, lambda ds: sum(imp(d) for d in ds)), pool(bs, lambda ds: sum(imp(d) for d in ds))
     ra, rb = sum(rev(d) for d in used), sum(rev(d) for d in bs)
@@ -945,7 +1389,13 @@ def arpdau_row(cx, blk):
     eb = rb / sum(imp(d) for d in bs) if ib else None
     ns_b = pool(bs, lambda ds: sum(_dv(cx, d, "new") or 0 for d in ds))
     ns_a = pool(used, lambda ds: sum(_dv(cx, d, "new") or 0 for d in ds))
-    ti = _pu_test(cx, blk, Mi, IMP_MIN_REL, "ads per user")      # the update's part: ads per active user
+    ti = _pu_test(cx, blk, Mi, IMP_MIN_REL, "ads per user", mkey="imp")   # the update's part: ads per active user
+    row["basis"] = "expected" if ti["trend"] and ti["steep"] is None else "plain"
+    row["noise"] = ti["noise"]                       # (judged on ads per user: its noise, its minimum)
+    row["need"] = _need_rel(ti["adj"], ti["noise"], _zlevel(win), ARPDAU_MIN_REL)
+    ex.update(imp_before=ib, imp_after=ia,
+              imp_expected=ia / (1 + ti["adj"]) if ia is not None and ti["adj"] is not None
+              and row["basis"] == "expected" else None)
     ex.update(imp_change=round(ia / ib - 1, 4) if ia and ib else None, imp_adj=ti["adj"],
               ecpm_change=round(ea / eb - 1, 4) if ea and eb else None,
               newshare_before=None if ns_b is None else round(ns_b, 5),
@@ -1055,6 +1505,11 @@ def d0_row(cx, blk):
     row.update(before=b[0] / b[1], after=r[0] / r[1], change=use["dpp"], z=use["z"], n_before=b[2], n_after=r[2],
                prov=bool(use is nw and use["prov"]), est=bool(use["est"]))
     _span(row, use["Ca"], use["Cb"])
+    pp = (r[0] + b[0]) / (r[1] + b[1])               # the binomial·φ se _judge_est used (its |Δ ÷ z|)
+    if 0 < pp < 1:
+        row["noise"] = 100 * math.sqrt(pp * (1 - pp) * (1 / r[1] + 1 / b[1]) * phi)
+        pb = b[0] / b[1]
+        row["need"] = _need_pp(use["dpp"], row["noise"], U.Z_MIN, U.MIN_PP, U.MIN_REL * min(pb, 1 - pb) * 100)
     if nw and stl and use is stl and nw["r"][2] > stl["r"][2]:
         row["after_prov"] = nw["r"][0] / nw["r"][1]
     if st is None:
@@ -1068,6 +1523,97 @@ def d0_row(cx, blk):
                 r[2], r[1], U.RECENT_MIN, U.MIN_RECENT_USERS)
     row["status"] = row["raw_status"] = st
     row["_ratio"] = abs(use["dpp"]) / U.MIN_PP
+    return row
+
+
+def _d0_cell_fn(cx):
+    """fn(install day) → (uninstalled on install day, installs) of a day that can count (_left_out: complete, no
+    tracking break), else None — the app's, whatever the block."""
+    cd = cx["cd"]
+    hs, H = cd["hs"], cd["H"]
+
+    def cell(c):
+        i = (c - hs).days
+        if 0 <= i < H and cd["n"][i] and U._left_out(cd, i, 0) is None:
+            return (cd["cum"][i][0], cd["n"][i])
+        return None
+    return cell
+
+
+def d0_long(cx, blk):
+    """Uninstall on install day at 14 / 30 / 60 days: the SETTLED read only (install days ≤ S_un; pending until every
+    after-install day is), pooled after − before in points, judged against the window's own pseudo-update noise (slow
+    install-mix drift — campaigns — reads as a change on a within-4-weeks φ): worse / better only at |z| ≥ Z_FINAL and
+    ≥ U.MIN_PP and ≥ U.MIN_REL of the smaller side; up = worse. The ESTIMATE RULE as the 7-day row (U._as_read)."""
+    row, win, R, cd = _row("uninstall_d0"), blk["win"], blk["R"], cx["cd"]
+    N = win["n"]
+    ex = row["extra"]
+    hs = cd["hs"]
+    cell = _d0_cell_fn(cx)
+    each28 = []
+    for c in _days(R - timedelta(days=28), R - timedelta(days=1)):
+        x = cell(c)
+        if x:
+            each28.append((x[0], x[1], (c - hs).days))
+    phi = max(1.0, U._phi(each28))
+    ex.update(phi=round(phi, 3), read="settled")
+    if any(c > cx["S_un"] for c in win["days_a"]):
+        return _pending(row, win, win["end_a"] + timedelta(days=cx["late"]))
+    Ca = [c for c in win["days_a"] if cell(c)]
+    Cb = [c for c in _days(win["b0"], win["b1"]) if cell(c)]
+    if len(Ca) < 3 or not Cb:
+        row.update(status="low", raw_status="low", reason="Install ke din ke uninstall ka data kam")
+        return row
+    xa, na = sum(cell(c)[0] for c in Ca), sum(cell(c)[1] for c in Ca)
+    xb, nb = sum(cell(c)[0] for c in Cb), sum(cell(c)[1] for c in Cb)
+    pa, pb = xa / na, xb / nb
+    dpp = round((pa - pb) * 100, 6)                  # rounded so float dust can't decide a flag at the edge
+    ia, ib = [(c - hs).days for c in Ca], [(c - hs).days for c in Cb]
+    ar, ab = U._added(cd, ia, 0)[0], U._added(cd, ib, 0)[0]
+    est = U._est_of(cd, ib, 0, xb, ab, nb) or U._est_of(cd, ia, 0, xa, ar, na)
+    ex["est"] = est
+    row.update(before=pb, after=pa, change=dpp, n_before=len(Cb), n_after=len(Ca), est=bool(est))
+    _span(row, Ca, Cb)
+    small = min(pb, 1 - pb)
+    sample = U._sample(len(Ca), na, xa) and xb >= U.MIN_EVENTS and nb - xb >= U.MIN_EVENTS
+    nulls = []
+    pf = _pfx(cx, ("d0",), cell, 2)
+    msA, msB, cnt = _mset(Ca), _mset(Cb), [0]
+    for dl in _shifts(R, Ca, N):
+        sa, bad = _mset_sum(pf, msA, dl, cnt)
+        if bad:
+            continue
+        sb, bad = _mset_sum(pf, msB, dl, cnt)
+        if bad or not sa[1] or not sb[1]:
+            continue
+        nulls.append(100 * (sa[0] / sa[1] - sb[0] / sb[1]))
+    _count(cx, ("d0", N), cnt[0])
+    if len(nulls) >= _null_min(N):
+        row["noise"] = _null_sd(nulls, N)
+        row["need"] = _need_pp(dpp, row["noise"], Z_FINAL, U.MIN_PP, U.MIN_REL * small * 100)
+    row["_ratio"] = abs(dpp) / U.MIN_PP
+    if not sample:
+        row.update(status="low", raw_status="low",
+                   reason="Install ke din ke uninstall ka data kam — %d din, %d installs (kam se kam %d din, %d installs)"
+                   % (len(Ca), na, U.RECENT_MIN, U.MIN_RECENT_USERS))
+        return row
+    if row["noise"] is None:
+        row.update(status="low", raw_status="low",
+                   reason=_low_null(cx, R, N, nulls, 0, "", need=_need_rate(win, R, 0), series="d0"))
+        return row
+    z = dpp / row["noise"]
+    row["z"] = z
+
+    def fires(d):
+        return (abs(d / row["noise"]) >= Z_FINAL and abs(d) >= U.MIN_PP
+                and (abs(d) / 100 / small if small > 0 else float("inf")) >= U.MIN_REL)
+    big = abs(dpp) >= U.MIN_PP and (abs(dpp) / 100 / small if small > 0 else float("inf")) >= U.MIN_REL
+    f = fires(dpp)
+    if f and (ar or ab):                             # the ESTIMATE RULE: the cells as GA4 returned them fire too
+        d2 = ((xa - ar) / na - (xb - ab) / nb) * 100
+        f = fires(d2) and (d2 > 0) == (dpp > 0)
+    st = ("worse" if dpp > 0 else "better") if f else "unsure" if big else "same"
+    row["status"] = row["raw_status"] = st
     return row
 
 
@@ -1219,18 +1765,20 @@ def _signed_pct(x):
     return U._minus(("+" if x > 0 else "-" if x < 0 else "") + _pct(x))
 
 
-def head_phrase(key, row, cx):
+def head_phrase(key, row, cx, n=None):
     """The row's message phrase (alert text; spec §3.7). A row whose judged change points the other way from its plain
-    before → after leads with the judged one (the alert never opens on a rise for a HALT)."""
+    before → after leads with the judged one (the alert never opens on a rise for a HALT). n: a 14 / 30 / 60-day
+    window's length — a plain-basis per-user row says "<n> din pehle vs baad"."""
     c = row.get("change")
     if key == "returning_dau":
         pt = _plain_too(key, row, "; pehle se %s %s")
         what = "expected se %s %s" % (_pct(c), _dir(c, "zyada", "kam")) if pt else "%s %s" % (
             _pct(c), _dir(c, "badha", "gira"))
         return "purane users ka DAU %s (expected %s → %s/din%s)" % (what, _users(row["expected"]), _users(row["after"]), pt)
-    if key in ("new_d1", "new_d7", "uninstall_d0"):
+    if key in ("new_d1", "new_d7", "new_d30", "uninstall_d0"):
         o, n, sd = U.shown_pct(row["before"], row["after"])
         lead = {"new_d1": "naye users me se agle din wapas aane wale", "new_d7": "naye users me se 7ve din wapas aane wale",
+                "new_d30": "naye users me se 30ve din wapas aane wale",
                 "uninstall_d0": "install ke din hi hataane wale"}[key]
         return "%s %s → %s (%s point)" % (lead, o, n, U.fmt_pp(sd))
     if key in ("sessions", "time"):
@@ -1238,6 +1786,8 @@ def head_phrase(key, row, cx):
         b, a = ((U._minus("%.1f" % row["before"]), U._minus("%.1f" % row["after"])) if key == "sessions"
                 else (fmt_dur(row["before"]), fmt_dur(row["after"])))
         lead = "purane users ke sessions per user" if key == "sessions" else "purane users ka time per user"
+        if row.get("basis") == "plain":
+            return "%s%s %s → %s (%s)" % (lead, " %d din pehle vs baad" % n if n else "", b, a, U.fmt_rel(e))
         if _plain_too(key, row):
             return "%s normal trend hata ke %s (%s → %s, seedha %s)" % (lead, U.fmt_rel(e), b, a, U.fmt_rel(c))
         net = "" if e is None or abs(e - c) < 0.01 else "; normal trend hata ke %s" % U.fmt_rel(e)
@@ -1260,8 +1810,8 @@ def short_phrase(key, row):
     """"time per user −14%", "D1 wapsi −4 point" — the "aur … kharab" list."""
     if key == "returning_dau":
         return "DAU " + _signed_pct(row["change"])
-    if key in ("new_d1", "new_d7"):
-        return "%s wapsi %s point" % ("D1" if key == "new_d1" else "D7", U.fmt_pp(row["change"]))
+    if key in ("new_d1", "new_d7", "new_d30"):
+        return "%s wapsi %s point" % ({"new_d1": "D1", "new_d7": "D7", "new_d30": "D30"}[key], U.fmt_pp(row["change"]))
     if key == "uninstall_d0":
         return "install ke din uninstall %s point" % U.fmt_pp(row["change"])
     if key in ("sessions", "time"):
@@ -1276,8 +1826,9 @@ def why_phrase(key, row):
     if key == "returning_dau":
         return "purane users ka DAU expected se %s %s%s" % (_pct(row["change"]), _dir(row["change"], "zyada", "kam"),
                                                             _plain_too(key, row))
-    if key in ("new_d1", "new_d7", "uninstall_d0"):
+    if key in ("new_d1", "new_d7", "new_d30", "uninstall_d0"):
         lead = {"new_d1": "agle din wapas aane wale naye users", "new_d7": "7ve din wapas aane wale naye users",
+                "new_d30": "30ve din wapas aane wale naye users",
                 "uninstall_d0": "install ke din hi hataane wale"}[key]
         return "%s %s point %s" % (lead, U.fmt_pp(abs(row["change"])), _dir(row["change"], "zyada", "kam"))
     if key in ("sessions", "time"):
@@ -1325,18 +1876,23 @@ def persist(rows, prev_rows, advanced, final, fresh):
     return keep
 
 
-def verdict(blk, rows, vrows, cx):
-    """The block's verdict from its effective row statuses (spec §3.6)."""
+def verdict(blk, rows, vrows, cx, final=None):
+    """The block's verdict from its effective row statuses (spec §3.6) — over the rows present (the 7-day block's 7 + 2,
+    a 14-day window's 7, a 30 / 60-day window's 8 with D30). final: a long window's, from its state (§2.6); the 7-day
+    block computes its own (every after-day settled and D7 in)."""
     win = blk["win"]
     allr = dict(rows, **vrows)
+    keys = [k for k in ROWS_LONG + VROWS if k in allr]
     settled = len(win["settled"])
     na_all = blk.get("_na")
-    final = bool(win["days_a"]) and settled == len(win["days_a"]) and rows["new_d7"]["status"] != "pending"
-    worse = [k for k in ROWS + VROWS if allr[k]["status"] == "worse"]
-    better = [k for k in ROWS + VROWS if allr[k]["status"] == "better"]
-    pending = [k for k in ROWS + VROWS if allr[k]["status"] == "pending"]
-    primary = [k for k in PRIMARY if not allr[k].get("_swing")]
-    groups = [list(m) for _, m in GROUPS] + [[k] for k in PRIMARY if allr[k].get("_swing")]
+    if final is None:
+        final = bool(win["days_a"]) and settled == len(win["days_a"]) and rows["new_d7"]["status"] != "pending"
+    worse = [k for k in keys if allr[k]["status"] == "worse"]
+    better = [k for k in keys if allr[k]["status"] == "better"]
+    pending = [k for k in keys if allr[k]["status"] == "pending"]
+    primary = [k for k in PRIMARY if k in allr and not allr[k].get("_swing")]
+    groups = ([[k for k in m if k in allr] for _, m in GROUPS] + [[k] for k in PRIMARY if k in allr and allr[k].get("_swing")])
+    groups = [g for g in groups if g]
     diluted = win["adopt_mean"] is not None and win["adopt_mean"] < ADOPT_LOW
     readies = [allr[k]["ready_on"] for k in pending if allr[k].get("ready_on")]
     if final:
@@ -1378,14 +1934,14 @@ def verdict(blk, rows, vrows, cx):
         out["why"] = _cap(_join([why_phrase(k, allr[k]) for k in _rank(worse, allr)])) + \
             " — sirf ek taraf ka pakka nuksaan, baaki theek: rollout chalne do"
     else:
-        un = [k for k in ROWS + VROWS if allr[k]["status"] == "unsure" and allr[k].get("_ratio")]
+        un = [k for k in keys if allr[k]["status"] == "unsure" and allr[k].get("_ratio")]
         if better:
             out["why"] = _cap(_join([why_phrase(k, allr[k]) for k in _rank(better, allr)])) + \
                 (" — adoption kam, isliye WIN nahi" if diluted else " — abhi pakka nahi" if not final else "")
         elif un:
             out["why"] = "Kuch farak dikh raha hai (%s), par abhi pakka nahi — rollout chalne do" % ", ".join(
                 un_phrase(k, allr[k]) for k in _rank(un, allr)[:3])
-        elif not any(allr[k]["status"] in JUDGED for k in ROWS + VROWS):
+        elif not any(allr[k]["status"] in JUDGED for k in keys):
             out["why"] = "Abhi koi number parkha nahi ja saka (data kam ya nahi) — rollout chalne do"
         else:
             out["why"] = "Koi pakka farak nahi — rollout chalne do"
@@ -1397,7 +1953,7 @@ def _judged_plain(key, row):
     Returning DAU (vs expected), sessions / time (net of the trend) — else (None, None)."""
     if key == "returning_dau":
         return row["change"], row["extra"].get("raw_change")
-    if key in ("sessions", "time"):
+    if key in ("sessions", "time") and row.get("basis") != "plain":
         return _eff(key, row), row["change"]
     return None, None
 
@@ -1425,7 +1981,7 @@ def un_phrase(key, row):
 
 def _rank(keys, allr):
     """Primary rows first, then the biggest effect ÷ minimum."""
-    return sorted(keys, key=lambda k: (k not in PRIMARY, -allr[k].get("_ratio", 0), (ROWS + VROWS).index(k)))
+    return sorted(keys, key=lambda k: (k not in PRIMARY, -allr[k].get("_ratio", 0), (ROWS_LONG + VROWS).index(k)))
 
 
 def alert_text(blk, level, rows_all, keys, early, E):
@@ -1454,6 +2010,9 @@ def _round_row(row):
         row["change"] = _rd(row["change"], 2 if row["change_unit"] == "pp" else 4)
     if row["z"] is not None:
         row["z"] = _rd(row["z"], 2)
+    for k in ("noise", "need"):                      # in the change's unit: log ≈ rel (4 dp) or points (2 dp)
+        if row.get(k) is not None:
+            row[k] = _rd(row[k], 2 if row["change_unit"] == "pp" else 4)
     ex = row["extra"]
     for k, v in list(ex.items()):
         if isinstance(v, float):
@@ -1482,13 +2041,17 @@ def _round_vrow(row):
     return row
 
 
-def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, first, advanced, outdated, now):
-    """One app's update impact → (detail["impact"], summary["updates"], ready conditions for update_impact_episodes).
-    Keeps its per-row persistence in state["eval"][app_id]["impact"] (in place). `first` / `advanced` = the uninstall
-    evaluation's (first ever / E moved on); a first evaluation WITH impact data, or an outdated store, seeds what it
-    shows (never sent)."""
+def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, first, advanced, outdated, now,
+               windows_on=True):
+    """One app's update impact → (detail["impact"], summary["updates"], ready conditions for update_impact_episodes —
+    and, family "impact_late", at most ONE for update_late_episodes). Keeps its per-row persistence in
+    state["eval"][app_id]["impact"] (in place; the late condition's streak and LATE_V there too). `first` / `advanced`
+    = the uninstall evaluation's (first ever / E moved on); a first evaluation WITH impact data, or an outdated store,
+    seeds what it shows (never sent). windows_on (config IMPACT_WINDOWS): the 14 / 30 / 60-day windows (by_window), the
+    late family and every row's noise — off: exactly the v1 card (noise / need null)."""
     E = _d(E)
     cx = _context(store, cd, whole, i0, revenue, E, late)
+    cx["_noise_all"] = bool(windows_on)
     blocks = make_blocks(rels, cx["launch"])
     ev = state.setdefault("eval", {}).setdefault(app_id, {})
     prev = ev.get("impact") or {}
@@ -1498,7 +2061,7 @@ def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, 
     keep_state, conds, done = {}, [], []
     for j, blk in enumerate(blocks):
         blk["_cx"] = cx
-        windows(cx, blk, blocks[j - 1] if j else None, blocks[j + 1] if j + 1 < len(blocks) else None)
+        windows(cx, blk, blocks, j)
         win = blk["win"]
         if blk["R"] < cx["launch"] + timedelta(days=7):
             blk["_na"] = NA_YOUNG
@@ -1519,6 +2082,9 @@ def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, 
             vc = ver_rows(cx, blk, done)
         done.append(blk)
         vrows = vc["rows"]
+        if not windows_on:                            # (the flag off: today's card exactly — no noise line)
+            for r in rows.values():
+                r["noise"] = r["need"] = None
         final_pre = (bool(win["days_a"]) and len(win["settled"]) == len(win["days_a"])
                      and rows["new_d7"]["status"] != "pending")
         prow = (pblocks.get(blk["key"]) or {}).get("rows") or {}
@@ -1549,26 +2115,343 @@ def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, 
                        "versions_cmp": dict(vc, rows={k: _round_vrow(vrows[k]) for k in VROWS}),
                        "verdict": vd, "notes": notes, "alert_id": None}
         blk["_head"] = head
+        blk["_vd7"] = vd
+    late_state, late_cands, late_ok, failed = None, [], False, 0
+    if windows_on:                                   # the 14 / 30 / 60-day windows: failure-isolated per block AND
+        late_fail = False                            # window — a crash costs that window, never the block's other
+        for j, blk in enumerate(blocks):             # windows or its 7 days (counted: flags.windows_failed, the log)
+            blk["_out"].update(default_window=WIN_DAYS, late=None)
+            bw, cand = {}, None
+            for N in WINDOWS[1:]:
+                try:
+                    W, c = _long_window(cx, blk, blocks, j, N, state, app_id, E)
+                except Exception:
+                    failed += 1
+                    late_fail = late_fail or N == LATE_WINDOW
+                    continue
+                bw[str(N)] = W
+                cand = c or cand
+            if bw:
+                blk["_out"]["by_window"] = bw
+            if cand is not None:
+                late_cands.append(cand)
+                blk["_out"]["late"] = {"level": cand["level"], "alert_id": None, "seeded": False}
+        try:
+            late_state, lc = _late_pick(app_id, late_cands, prev, seed, advanced, E)
+            if lc is not None:
+                conds.append(lc)
+                for blk in blocks:
+                    if blk["_out"].get("late"):
+                        blk["_out"]["late"]["seeded"] = bool(lc["seed"])
+            late_ok = True
+        except Exception:
+            failed += 1
+            late_ok = False
+        # a 30-day window that failed may hide a late condition: LATE_V is written only by a run that saw them all
+        # (else a crash on the first run after the merge would mark seeding done with nothing seeded — and send the
+        # historical conditions once fixed)
+        late_ok = late_ok and not late_fail
     ev["impact"] = {"data": bool(cx["has_data"] or prev.get("data")), "blocks": dict(sorted(keep_state.items()))}
+    if windows_on and late_ok:
+        ev["impact"]["late_v"] = LATE_V
+        if late_state:
+            ev["impact"]["late"] = late_state
+    elif windows_on:                                 # (a failure: the late family's state carried unchanged)
+        for k in ("late", "late_v"):
+            if k in prev:
+                ev["impact"][k] = prev[k]
     updates = []
-    for blk in reversed(blocks):
-        if blk["R"] >= E - timedelta(days=IMPACT_LIST_DAYS):
+    for blk in reversed(blocks):                     # (+ an older update whose late condition holds: its ⏰ chip —
+        if blk["R"] >= E - timedelta(days=IMPACT_LIST_DAYS) or blk["_out"].get("late"):   # up to LATE_ALERT_DAYS)
             vd = blk["_out"]["verdict"]
-            updates.append({"key": blk["key"], "label": blk["label"], "date": _iso(blk["R"]), "level": vd["level"],
-                            "early": vd["early"], "final": vd["final"],
-                            "adoption": blk["_out"]["adoption"]["last"], "head": blk["_head"],
-                            "judged": sum(r["status"] in JUDGED for r in list(blk["_out"]["rows"].values())
-                                          + list(blk["_out"]["versions_cmp"]["rows"].values()))})
+            u = {"key": blk["key"], "label": blk["label"], "date": _iso(blk["R"]), "level": vd["level"],
+                 "early": vd["early"], "final": vd["final"],
+                 "adoption": blk["_out"]["adoption"]["last"], "head": blk["_head"],
+                 "judged": sum(r["status"] in JUDGED for r in list(blk["_out"]["rows"].values())
+                               + list(blk["_out"]["versions_cmp"]["rows"].values()))}
+            if windows_on:
+                lt = blk["_out"].get("late")
+                u["late"] = {"level": lt["level"], "alert_id": None} if lt else None
+            updates.append(u)
     rf = store.get("ret_from")
     rev = "none" if cx["rev"] is None else "ok"
     if cx["rev"] is not None:
         span = [d for d in _days(max(cx["launch"], E - timedelta(days=PRE_DAYS + 30)), cx["S_act"])]
         if any(cx["rev"](d) is None for d in span):
             rev = "partial"
-    detail = {"v": 1, "updates": [b["_out"] for b in reversed(blocks)],
+    detail = {"v": 2 if windows_on else 1, "updates": [b["_out"] for b in reversed(blocks)],
               "flags": {"ret_from": rf, "vuse_split": cx["split"], "revenue": rev, "tz_blend": cx["tz_blend"],
                         "usage_from": cx["usage_from"]}}
+    if failed:                                       # (only then: the page and the log say it; counts only)
+        detail["flags"]["windows_failed"] = failed
     return detail, updates, conds
+
+
+# ── the 14 / 30 / 60-day windows (spec SPEC_WINDOWS §2–§4) ──────────────────────────────────────────
+
+def _state(win, N, E):
+    """A long window's (state, judged_on, final_on): judged once D7 of its last install day is settled (end_a + 10),
+    final once D30 is too at 30 / 60 (end_a + 33) — data days."""
+    judged_on = win["end_a"] + timedelta(days=ACT_LATE_DAYS + JUDGE_D)
+    final_on = judged_on if N < LATE_WINDOW else win["end_a"] + timedelta(days=30 + ACT_LATE_DAYS)
+    return ("running" if E < judged_on else "judged" if E < final_on else "final"), judged_on, final_on
+
+
+def _running_row(cx, wb, key, ready):
+    """A row of a window still running: pending until `ready`, with the full Before value and the settled After days so
+    far (after_prov, shown faded) — no change, no z, no test."""
+    row, win, R = _row(key), wb["win"], wb["R"]
+    if key in ("sessions", "time", "arpdau"):
+        row["basis"] = "plain" if win["n"] > PU_TREND_MAX_N else "expected"
+    b_days, a_days = _days(win["b0"], win["b1"]), win["settled"]
+
+    def pool(days, num, den):
+        n = [num(d) for d in days]
+        dn = [den(d) for d in days]
+        ok = [(x, y) for x, y in zip(n, dn) if x is not None and y]
+        return sum(x for x, _ in ok) / sum(y for _, y in ok) if ok else None
+    if key == "returning_dau":
+        rb = [x for x in (_ret_dau(cx, d) for d in b_days) if x is not None]
+        ra = [x for x in (_ret_dau(cx, d) for d in a_days) if x is not None]
+        row.update(before=_mean(rb), after_prov=_mean(ra))
+    elif key in ("new_d1", "new_d7", "new_d30"):
+        k = {"new_d1": 1, "new_d7": 7, "new_d30": 30}[key]
+        rf, okc = cx["ret_from"], _okc_fn(cx, k)
+        cb = _days(R - timedelta(days=win["n"] + k), R - timedelta(days=1 + k))
+        if rf is not None and cb and min(cb) < rf:
+            return _na(row, NA_OLD)
+        ca = [c for c in win["days_a"] if c + timedelta(days=k) <= cx["S_act"]]
+        vb, va = [okc(c) for c in cb], [okc(c) for c in ca]
+        vb, va = [x for x in vb if x], [x for x in va if x]
+        row.update(before=sum(x for x, _ in vb) / sum(n for _, n in vb) if vb else None,
+                   after_prov=sum(x for x, _ in va) / sum(n for _, n in va) if va else None)
+        if key == "new_d30":
+            ready = win["end_a"] + timedelta(days=30 + ACT_LATE_DAYS)
+    elif key in ("sessions", "time"):
+        if not cx["usage"]:
+            return _na(row, NA_NO_USAGE)
+        j = 1 if key == "sessions" else 2
+
+        def slot(d):
+            return ((cx["usage"].get(d.isoformat()) or {}).get("r")) or None
+        row.update(before=pool(b_days, lambda d: (slot(d) or [0, 0, 0])[j], lambda d: (slot(d) or [0, 0, 0])[0]),
+                   after_prov=pool(a_days, lambda d: (slot(d) or [0, 0, 0])[j], lambda d: (slot(d) or [0, 0, 0])[0]))
+    elif key == "arpdau":
+        f = cx["rev"]
+        if f is None:
+            return _na(row, NA_NO_REV)
+        row["extra"].update(tz_blend=cx["tz_blend"], currency=cx["currency"])
+
+        def rv(d):
+            v = f(d)
+            return v[0] * 1000 if v and _dv(cx, d, "a1") else None
+        row.update(before=pool(b_days, rv, lambda d: _dv(cx, d, "a1") or 0),
+                   after_prov=pool(a_days, rv, lambda d: _dv(cx, d, "a1") or 0))
+    elif key == "uninstall_d0":
+        cell = _d0_cell_fn(cx)
+        vb = [x for x in (cell(c) for c in b_days) if x]
+        va = [x for x in (cell(c) for c in win["days_a"] if c <= cx["S_un"]) if x]
+        row.update(before=sum(x for x, _ in vb) / sum(n for _, n in vb) if vb else None,
+                   after_prov=sum(x for x, _ in va) / sum(n for _, n in va) if va else None)
+    return _pending(row, win, ready)
+
+
+def _told_of(state, app_id, b):
+    """The rows the 7-day verdict / alert already told for update b: its current 7-day HOLD / HALT's worse rows + the
+    worse rows of every "impact" episode (open or closed) of the same update (_same_update, dir up)."""
+    t = set()
+    vd = b.get("_vd7")
+    if vd and vd["level"] in ("hold", "halt"):
+        t.update(vd["worse"])
+    c = {"dir": "up", "kind": b["kind"], "vers": list(b["versions"]), "R": _iso(b["R"])}
+    for e in list((state.get("episodes") or {}).values()) + list(state.get("closed") or []):
+        if e.get("app_id") == app_id and _same_update(e, c):
+            t.update(((e.get("last") or {}).get("rows") or {}).get("worse") or [])
+    return t
+
+
+# extra keys the page never reads (the 7-day rows keep them all): left out of the 14 / 30 / 60-day rows (size — live
+# by_window averaged 9.3 KB a block, over the spec's estimate; the contract fills a missing extra key back as null)
+EXTRA_UNREAD = ("k_days", "expected_model", "phi", "imp_before", "est")
+# a 14 / 30 / 60-day row's basis by its unit when left out (the page and the contract fill it back): D1 / D7 / D30 /
+# install day "rate", returning DAU "expected" (its trend capped; "plain" only on a steep trend — then kept), the
+# per-user rows "plain" (PU_TREND_MAX_N)
+BASIS_LONG = {"pct": "rate", "users": "expected", "num": "plain", "sec": "plain", "usd1k": "plain"}
+
+
+def _sparse(row, W):
+    """A long-window row without what the page fills back (uniImpNorm): null / false / "" / {} / [] values, raw_status
+    = status, unit / change_unit (they follow the key), streak (always 0), from / to equal to the window's own, the
+    basis when it is the window's default for the row (BASIS_LONG), and the extra keys the page never reads
+    (EXTRA_UNREAD)."""
+    out = {}
+    for k, v in row.items():
+        if k in ("unit", "change_unit", "streak") or (k == "raw_status" and v == row["status"]):
+            continue
+        if k == "basis" and v == BASIS_LONG.get(row.get("unit")):
+            continue                                 # (its window's default: rate / plain per-user / DAU expected)
+        if k == "extra":
+            v = {x: y for x, y in v.items() if y is not None and x not in EXTRA_UNREAD}
+        if v is None or v is False or (isinstance(v, (str, list, dict)) and not v):
+            continue
+        if (k, v) in (("from_a", W["after"]["from"]), ("to_a", W["after"]["to"]), ("from_b", W["before"]["from"]),
+                      ("to_b", W["before"]["to"])):
+            continue
+        out[k] = v
+    return out
+
+
+def _mixed_why(n):
+    return " · mila-jula (beech me %d aur update%s)" % (n, "s" if n > 1 else "")
+
+
+def _long_window(cx, blk, blocks, j, N, state, app_id, E):
+    """One block's N-day window (N ≥ LONG_MIN) → (W for by_window[str(N)], the late candidate (N = LATE_WINDOW only) or
+    None). Pure for the block: the 7-day block and its win are never touched (a shallow copy shares only the memos)."""
+    win = windows(cx, blk, blocks, j, N)
+    blk.setdefault("_m", {})                         # (the memos: shared by the block's windows, even without 7 days)
+    wb = dict(blk, win=win, _mix=None, _na=None)
+    R = blk["R"]
+    st, judged_on, final_on = _state(win, N, E)
+    keys = ROWS_LONG if N >= LATE_WINDOW else ROWS
+    young = R - timedelta(days=N) < cx["launch"]
+    rows, vd, cand = {}, None, None
+    if young:
+        why = NA_YOUNG_N % (N, N)
+        rows = {k: _na(_row(k), why) for k in keys}
+        for k in ("sessions", "time", "arpdau"):
+            rows[k]["basis"] = "plain"
+        vd = {"level": None, "early": st != "final", "final": st == "final", "why": why, "worse": [], "better": [],
+              "pending": [], "ready_on": None, "settled_days": len(win["settled"]), "min_days": IMPACT_MIN_DAYS}
+    elif st == "running":
+        rows = {k: _running_row(cx, wb, k, judged_on) for k in keys}
+        lag = timedelta(days=U.LAG_DAYS)
+        why = "%d din poore ~%s ko · faisla ~%s ko" % (N, U.fmt_day(win["end_a"], E), U.fmt_day(judged_on + lag, E))
+        vd = {"level": None, "early": True, "final": False, "why": why, "worse": [], "better": [],
+              "pending": [k for k in keys if rows[k]["status"] == "pending"], "ready_on": _iso(judged_on),
+              "settled_days": len(win["settled"]), "min_days": IMPACT_MIN_DAYS}
+    else:
+        rows["returning_dau"] = dau_row(cx, wb)
+        rows["new_d1"], rows["new_d7"] = ret_row(cx, wb, 1), ret_row(cx, wb, 7)
+        if N >= LATE_WINDOW:
+            rows["new_d30"] = ret_row(cx, wb, 30)
+        rows["sessions"], rows["time"] = use_row(cx, wb, "sessions"), use_row(cx, wb, "time")
+        rows["arpdau"] = arpdau_row(cx, wb)
+        rows["uninstall_d0"] = d0_long(cx, wb)
+        rows = {k: rows[k] for k in keys}
+        vd = verdict(wb, rows, {}, cx, final=st == "final")
+        if win["mixed"]:
+            vd["why"] += _mixed_why(len(win["mixed"]))
+    told, told_by, late = [], {}, None
+    if not young and st != "running" and vd["worse"]:
+        own = _told_of(state, app_id, blk)
+        by = {}
+        # the updates released inside this window (mixed) — and inside its Before (mixed_before): an earlier update's
+        # drop that started there makes this After read worse than this Before, already told by THAT update
+        for x in [x for x in blocks[j + 1:] if x["R"] <= win["end_a"]] + \
+                [x for x in blocks[:j] if win["b0"] <= x["R"] <= win["b1"]]:
+            for k in _told_of(state, app_id, x) - own:
+                by.setdefault(k, x["label"])
+        told = [k for k in vd["worse"] if k in own or k in by]
+        told_by = {k: by[k] for k in told if k not in own}
+        if N == LATE_WINDOW:
+            masked = {k: dict(r, status="same") if k in told else r for k, r in rows.items()}
+            lv = verdict(wb, masked, {}, cx, final=st == "final")["level"]
+            late = lv if lv in ("hold", "halt") else None
+    vd.update(n=N, state=st, mixed=bool(win["mixed"]), told=told, late=late)
+    if told_by:
+        vd["told_by"] = told_by
+    if late and R >= E - timedelta(days=LATE_ALERT_DAYS):
+        cand = _late_cand(app_id, blk, wb, rows, vd, E)
+    notes = set(_notes(cx, wb, rows, {}))
+    if win["mixed"]:
+        notes.add("mixed")
+    if win["mixed_before"]:
+        notes.add("mixed_before")
+    dau = rows["returning_dau"]
+    if dau.get("_capped") or (st == "running" and not young and N >= LATE_WINDOW):
+        notes.add("trend_capped")
+    if any(rows[k]["basis"] == "plain" and rows[k]["status"] != "na" for k in ("sessions", "time", "arpdau")):
+        notes.add("plain")
+    if any(r["status"] == "low" and is_hist(r.get("reason")) for r in rows.values()):
+        notes.add("young")                           # (the history really short — never data gaps: LOW_NULL_GAP)
+    W = {"n": N, "state": st,
+         "before": {"from": _iso(win["b0"]), "to": _iso(win["b1"]), "days": N},
+         "after": {"from": _iso(win["a0"]), "to": _iso(win["end_a"]), "days": len(win["days_a"]),
+                   "settled": len(win["settled"]),
+                   "settled_till": _iso(win["settled"][-1]) if win["settled"] else None,
+                   "judged_on": _iso(judged_on), "final_on": _iso(final_on)},
+         "mixed": win["mixed"], "mixed_before": win["mixed_before"],
+         "adoption_mean": None if win["adopt_mean"] is None else round(win["adopt_mean"], 5)}
+    W.update(rows={k: _sparse(_round_row(rows[k]), W) for k in keys}, verdict=vd,
+             notes=[n for n in NOTES_LONG if n in notes])
+    return W, cand
+
+
+def _late_cand(app_id, blk, wb, rows, vd, E):
+    """A block whose 30-day verdict, told rows masked, is still HOLD / HALT → its late condition (everything the alert
+    object and the text are built from; built before the rows are rounded, like _cond)."""
+    level, win = vd["late"], wb["win"]
+    untold = [k for k in vd["worse"] if k not in vd["told"]]
+    ks = _rank(untold, rows)
+    hk = ks[0]
+    r = rows[hk]
+    if r["change_unit"] == "pp":
+        now, before, dpp = r["after"], r["before"], r["change"]
+        rel = (r["after"] / r["before"] - 1) if r["before"] else 0.0
+    else:
+        now, before = r["after"], r["expected"] if hk == "returning_dau" else r["before"]
+        rel, dpp = _eff(hk, r), None
+    return {"key": "%s|impact_late" % app_id, "family": "impact_late", "dir": "up", "vers": list(blk["versions"]),
+            "kind": blk["kind"], "severity": SEVERITY[level], "level": level, "block": blk["key"],
+            "text": late_text(blk, level, rows, ks, win, vd["final"], E), "now": now, "before": before, "rel": rel,
+            "delta_pp": dpp, "z": r["z"], "installs_from": _iso(win["a0"]), "installs_to": _iso(win["end_a"]),
+            "base_from": _iso(win["b0"]), "base_to": _iso(win["b1"]), "since": _iso(blk["R"]), "day": None,
+            "users": int(round(rows["returning_dau"]["after"] or 0)), "checkpoint": None, "n": None, "also": [],
+            "vs": [], "prov": False, "est": bool(hk == "uninstall_d0" and r["est"]),
+            "release": {"key": blk["key"], "label": blk["label"], "date": _iso(blk["R"])},
+            "rows": {"worse": untold, "told": list(vd["told"])}, "mixed": [m["label"] for m in win["mixed"]],
+            "window": LATE_WINDOW, "seed": False, "R": _iso(blk["R"])}
+
+
+def late_text(blk, level, rows, ks, win, final, E):
+    """The late alert's Hinglish message (without "{app}: "): "<label> (<day>) ke 30 din baad <head> · pehle 7 din me
+    ye nahi dikha tha … · <ACT>"."""
+    head = head_phrase(ks[0], rows[ks[0]], blk["_cx"], n=win["n"])
+    more = ""
+    if len(ks) > 1:
+        more = " · aur %d cheez%s kharab: %s" % (len(ks) - 1, "ein" if len(ks) > 2 else "",
+                                                ", ".join(short_phrase(k, rows[k]) for k in ks[1:]))
+    mixed = ""
+    if win["mixed"]:
+        n = len(win["mixed"])
+        mixed = " · beech me %d aur update%s (%s) — asar mila-jula ho sakta hai" % (
+            n, "s" if n > 1 else "", ", ".join(m["label"] for m in win["mixed"]))
+    text = "%s (%s) ke %d din baad %s%s · pehle 7 din me ye nahi dikha tha%s · %s" % (
+        blk["label"], U.fmt_day(blk["R"], E), win["n"], head, more, mixed, ACT[level])
+    if not final:
+        text += " · D30 abhi baaki"
+    return text
+
+
+def _late_pick(app_id, cands, prev, seed, advanced, E):
+    """This evaluation's late candidates → (the late state to keep, the ONE ready condition or None): the highest level,
+    then the oldest update (its window holds the later ones; the others go in `also`); ready once it held on
+    LATE_PERSIST daily evaluations (hourly re-runs never advance it), or at once when seeded (the app's first impact
+    evaluation, an outdated store, or the first evaluation without LATE_V). The app's ONE late condition goes on while
+    it holds at the same or a lower level — also when the chosen block changes (the older update aged out of
+    LATE_ALERT_DAYS while a newer one holds the same drop): its streak carries, so the open episode is refreshed (the
+    snapshot moves), never closed and re-opened under the newer update's name. Only a rise (HOLD → HALT) starts over."""
+    if not cands:
+        return None, None
+    cands = sorted(cands, key=lambda c: (-LEVEL_RANK[c["level"]], c["R"]))
+    c = dict(cands[0], also=[x["release"]["label"] for x in cands[1:]])
+    pl = prev.get("late") or {}
+    same = bool(pl.get("block")) and pl.get("level") in LEVEL_RANK and LEVEL_RANK[c["level"]] <= LEVEL_RANK[pl["level"]]
+    streak = (int(pl.get("streak") or 0) + 1 if advanced else max(1, int(pl.get("streak") or 0))) if same else 1
+    lseed = bool(seed) or prev.get("late_v") != LATE_V
+    c["seed"] = lseed
+    return {"block": c["block"], "level": c["level"], "streak": streak}, (c if streak >= LATE_PERSIST or lseed else None)
 
 
 def _adopt_out(blk):
@@ -1730,3 +2613,57 @@ def update_impact_episodes(state, app_id, E, conds, advanced, now):
             if ep["misses"] >= U.CLOSE_EVALS:
                 closed.append(dict(eps.pop(key), closed=E_iso))
     return [e for e in eps.values() if e["app_id"] == app_id and e.get("family") == "impact"]
+
+
+def update_late_episodes(state, app_id, E, cond, advanced, now):
+    """Open / refresh / close this app's ONE late-effect episode (family "impact_late", key "<app>|impact_late"; shared
+    state["episodes"] / "closed", so mark_notified works unchanged). Pure: it only changes `state`. cond = the ready
+    condition (impact_app) or None. id = fingerprint(app, "uninstall_impact_late", dir up, "<opened>|<update>|<level>")
+    (<update> = _ident of its block). A newer block's condition refreshes the open episode (the snapshot moves, nothing
+    re-sent); HOLD → HALT regenerates the id (sent once more), HALT → HOLD never re-sends. Closes after CLOSE_EVALS
+    advanced evaluations without a condition — at once (never sent) when its update is older than LATE_ALERT_DAYS. A
+    closed one of the same update comes back (same id, nothing re-sent unless above its peak); another update's is a
+    new episode. A seeded condition is shown, never sent. The 7-day family's episodes are never touched (_same_update
+    only matches family "impact"). → this app's open late episodes (0 or 1)."""
+    eps, closed = state.setdefault("episodes", {}), state.setdefault("closed", [])
+    E = _d(E)
+    E_iso = E.isoformat()
+    key = "%s|impact_late" % app_id
+    ep = eps.get(key)
+    if cond is not None:
+        snap = U._snap(cond)
+        lvl, ident = cond["level"], _ident(cond["kind"], cond["vers"], cond["block"])
+        if ep is None:
+            j = next((j for j in range(len(closed) - 1, -1, -1)
+                      if closed[j].get("app_id") == app_id and closed[j].get("family") == "impact_late"
+                      and closed[j].get("ident") == ident), None)
+            if j is not None:                        # the same update's late episode comes back: taken back
+                ep = closed.pop(j)
+                ep.pop("closed", None)
+                ep["misses"] = 0
+                eps[key] = ep
+        if ep is None:
+            ep = {"id": fingerprint(app_id, "uninstall_impact_late", None, "up", "%s|%s|%s" % (E_iso, ident, lvl)),
+                  "app_id": app_id, "family": "impact_late", "dir": "up", "opened": E_iso, "last_true": E_iso,
+                  "misses": 0, "notified_at": now if cond["seed"] else None, "notified_dry": False,
+                  "seeded": bool(cond["seed"]), "block": cond["block"], "ident": ident, "vers": list(cond["vers"]),
+                  "kind": cond["kind"], "peak": lvl, "last": snap}
+            eps[key] = ep
+        else:
+            ep["last_true"], ep["misses"] = E_iso, 0
+            if LEVEL_RANK.get(lvl, 0) > LEVEL_RANK.get(ep.get("peak"), 0):   # HOLD → HALT: sent once more
+                ep["peak"] = lvl
+                ep["id"] = fingerprint(app_id, "uninstall_impact_late", None, "up",
+                                       "%s|%s|%s" % (ep["opened"], ep.get("ident") or ident, lvl))
+                ep["notified_at"] = now if cond["seed"] else None
+                ep["notified_dry"], ep["seeded"] = False, bool(cond["seed"])
+            ep["last"], ep["block"] = snap, cond["block"]
+    elif ep is not None:
+        R = (ep.get("last") or {}).get("R")
+        if R and _d(R) < E - timedelta(days=LATE_ALERT_DAYS):
+            closed.append(dict(eps.pop(key), closed=E_iso))
+        elif advanced:
+            ep["misses"] += 1
+            if ep["misses"] >= U.CLOSE_EVALS:
+                closed.append(dict(eps.pop(key), closed=E_iso))
+    return [e for e in eps.values() if e["app_id"] == app_id and e.get("family") == "impact_late"]

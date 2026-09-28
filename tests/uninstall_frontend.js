@@ -36,7 +36,7 @@ run(`DATA = {apps_catalog: [], today_date: '2026-09-25', alerts: {counts: {}, it
      for (const [n, j] of Object.entries(__FX.cohort_files || {})) UNICOH[n.slice(12, -8)] = uniCohPrep(j);`);
 const out = {};
 function scen(name, code) { try { out[name] = String(run(code)); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + (e.stack.match(/at [^\n]*/g) || []).slice(0, 4).join(' < ')); } }
-const RESET = `UNIAPP=''; APP=''; UNICSRC='all'; UNICRANGE='90'; UNITRI='cp'; UNITRIPAGE=0; UNITRIEXP=false; UNIOLDEXP=false; UNICLEXP=false; UNICPEXP=false; UNIDRANGE='90d'; UNIPRE=false; UNISTEXP=''; UNITIMEXP=false; UNIIMPOPEN=''; UNIIMPALL=false; UNIIMPHOW=false; UNIUPF=''; UNIUPALL=false; UNIIMPJUMP='';`;
+const RESET = `UNIAPP=''; APP=''; UNICSRC='all'; UNICRANGE='90'; UNITRI='cp'; UNITRIPAGE=0; UNITRIEXP=false; UNIOLDEXP=false; UNICLEXP=false; UNICPEXP=false; UNIDRANGE='90d'; UNIPRE=false; UNISTEXP=''; UNITIMEXP=false; UNIIMPOPEN=''; UNIIMPALL=false; UNIIMPHOW=false; UNIUPF=''; UNIUPALL=false; UNIIMPJUMP=''; UNIIMPWIN=7; UNIIMPWK={};`;
 for (const r of ['today', '7d', '30d', '90d', 'month', 'lastmonth', 'all', 'custom'])
   scen('portfolio_' + r, `${RESET} RANGE='${r}'; RCUSTOM={from:'2026-08-01',to:'2026-09-30'}; UNITRIEXP=${r === 'all'}; uniScreen()`);
 for (const k of ['app', 'ins', 'outs', 'net', 'rate', 'S7', 'D0', 'D1', 'D7', 'D30', 'alert'])
@@ -239,7 +239,7 @@ for (const f of ['', 'halt', 'hold', 'continue', 'win', 'pending']) {
 // the display rule: a Low data / No data / Pending row never shows a model number (vs expected, trend-adjusted,
 // "(judged)") — its plain Before → After "vs before", or —; the folded line and the Recent updates list show a change
 // only from a Worse / Better row ("No clear change" when the verdict found none)
-const IMP_JUDGED = ['worse', 'better', 'same', 'unsure', 'market'], IMP_MODEL = /vs expected|\(judged\)|net of the usual trend|>expected [\d,]/;
+const IMP_JUDGED = ['worse', 'better', 'same', 'unsure', 'market'], IMP_MODEL = /vs expected|\(judged\)|net of the usual trend|>expected [\d,]|[Ee]xpected \(bina update ke\)|Actual:|pakka: ≥/;
 impact.display = { rows: 0, judged: 0, bad: [], vs_expected: 0, vs_before: 0, mini_bad: [], heads: [], synth: null };
 for (const blk of impact.blocks) {
   const main = blk.html.split('Same days: new version vs old versions')[0];
@@ -256,9 +256,10 @@ for (const a of apps) for (const b of (a.impact && a.impact.updates) || []) {
   const h = run(`uniImpMini(${JSON.stringify(b)})`), spans = [...h.matchAll(/<span( class="(up|down)")?>([^<]*)<\/span>/g)].map(m => [m[2] || '', m[3]]);
   const rows = b.rows || {}, vrows = (b.versions_cmp && b.versions_cmp.rows) || {};
   const shorts = { returning_dau: 'Returning DAU', new_d1: 'D1 return', new_d7: 'D7 return', sessions: 'Sessions/user', time: 'Time/user', arpdau: 'Ad revenue/user', uninstall_d0: 'Install-day uninstall' };
-  // a Worse / Better row: the change it was JUDGED on, said so (vs expected · net of trend · ads/user), its sign the
-  // status's (up = better, but more install-day uninstalls = worse) — never a plain change pointing the other way
-  const judgedAs = { returning_dau: ['Returning DAU', ' vs expected'], sessions: ['Sessions/user', ' net of trend'], time: ['Time/user', ' net of trend'], arpdau: ['Ads/user', ''] };
+  // a Worse / Better row: the change it was JUDGED on, said so (vs expected — DAU's model level, sessions / time net of
+  // the trend: one word with the open row, SPEC_WINDOWS §5 · ads/user), its sign the status's (up = better, but more
+  // install-day uninstalls = worse) — never a plain change pointing the other way
+  const judgedAs = { returning_dau: ['Returning DAU', ' vs expected'], sessions: ['Sessions/user', ' vs expected'], time: ['Time/user', ' vs expected'], arpdau: ['Ads/user', ''] };
   for (const [k, sh] of Object.entries(shorts)) {
     const st = rows[k].status, wbk = ['worse', 'better'].includes(st), [lb, sf] = wbk && judgedAs[k] ? judgedAs[k] : [sh, ''];
     const sp = spans.find(x => x[1].startsWith(lb + ' ')), sg = (st === 'worse') !== (k === 'uninstall_d0') ? '−' : '+';
@@ -275,7 +276,7 @@ for (const a of apps) for (const b of (a.impact && a.impact.updates) || []) {
     const hl = (m[4].match(/<span class="hl [a-z]+"[^>]*>([^<]*)<\/span>/) || [])[1] || null;
     const u = (FX.dashboard_uninstall.apps.find(r => r.app_id === m[2]) || { updates: [] }).updates.find(x => x.key === m[3]) || {};
     const r = u.head && b ? (b.rows[u.head.row] || b.versions_cmp.rows[u.head.row]) : null;
-    impact.display.heads.push({ lv: m[1], hl, head_row: u.head ? u.head.row : null, head_status: r ? r.status : null });
+    impact.display.heads.push({ lv: m[1], hl, head_row: u.head ? u.head.row : null, head_status: r ? r.status : null, late: m[4].includes(' uni-late"') });
   }
 }
 // a young app that grew fast before its update (synthetic numbers): its rows Low data with a model level beside them
@@ -325,6 +326,153 @@ try { impact.jump_scroll = JSON.parse(run(`(()=>{ const keep={render, show, _nav
   window={scrollTo:o=>calls.push(o), scrollY:0, pageYOffset:0};
   try{ ${RESET} APP=a.app; UNIAPP=a.app_id; uniImpGo(a.app_id,k); return JSON.stringify({k, calls, open:UNIIMPOPEN, pending:UNIIMPJUMP}); }
   finally{ render=keep.render; show=keep.show; _navSave=keep._navSave; document=keep.doc; window=keep.win; ${RESET} } })()`)); } catch (e) { errors.push('jump_scroll: ' + e.message); }
+
+// ── 📦 Before / after windows (SPEC_WINDOWS §5): 7 / 14 / 30 / 60 days, Actual / Expected, Mixed, ⏰ late ──
+// (a) the fixture's own by_window (impact v2) — every block at every window; (b) made-up windows (__mkW: the §4
+// contract's shape, sparse rows) on a copy of an app, so every display rule is checked whatever the fixture holds
+run(fs.readFileSync(require('path').join(__dirname, 'impact_win_synth.js'), 'utf8'));
+const win = { src: null, blocks: [], syn: {} };
+const V2 = apps.some(a => ((a.impact || {}).updates || []).some(b => b.by_window));
+win.src = V2 ? 'fixture' : 'v1';
+const segOf = h => { const m = h.match(/<div class="uni-imp-seg[^"]*"[^>]*><span>Before \/ after:<\/span><span class="seg">([\s\S]*?)<\/span><\/div>/);
+  return m ? [...m[1].matchAll(/<button( class="on")?( disabled title="([^"]*)")?[^>]*>([^<]*)<\/button>/g)].map(x => ({ on: !!x[1], dis: !!x[2], tip: x[3] || null, t: x[4] })) : null; };
+const blkOf = (h, key) => { const p = h.split('<div class="uni-imp-b').find(x => x.includes('data-key="' + key + '"')) || ''; return p.split('<div class="card"')[0]; };
+const rowsOf = h => [...h.split('Same days: new version vs old versions')[0].matchAll(/<tr data-row="([a-z_0-9]+)">([\s\S]*?)<\/tr>/g)].map(m => ({ k: m[1], h: m[2], st: (m[2].match(/data-st="([a-z]+)"/) || [])[1] }));
+// (a) the fixture's windows: every block opened at 7 / 14 / 30 / 60 (the block's own choice)
+if (V2) for (const a of apps) for (const b of ((a.impact || {}).updates || [])) for (const N of [7, 14, 30, 60]) {
+  const nm = `win|${a.app}|${b.key}|${N}`;
+  scen(nm, `${RESET} RANGE='30d'; UNIAPP=${JSON.stringify(a.app_id)}; APP=${JSON.stringify(a.app)}; UNIIMPOPEN=${JSON.stringify(b.key)}; UNIIMPWK={${JSON.stringify(b.key)}:${N}}; uniScreen()`);
+  const h = blkOf(out[nm] || '', b.key), W = N === 7 ? null : (b.by_window || {})[String(N)] || null, rs = rowsOf(h);
+  win.blocks.push({ app: a.app, key: b.key, n: N, state: W ? W.state : null, has: !!W, open: h.includes('data-open="1"'),
+    header: itext(((h.split('class="uni-imp-h"')[1] || '').split('</div>')[0]).replace(/^[^>]*>/, '')).trim(),
+    rows: rs.map(r => r.k), statuses: rs.map(r => r.st), labels: [...h.split('Same days: new version vs old versions')[0].matchAll(/<td class="nm"[^>]*>([^<]*)/g)].map(m => m[1]),
+    heads: [...h.matchAll(/<th>([^<]*)<\/th>/g)].map(m => m[1]), seg: segOf(h), vtable: h.includes('Same days: new version vs old versions'),
+    vnote: h.includes('Naya vs purana version: sirf 7-din window me (baad me naye updates aa jaate hain)'),
+    why: itext((h.split('<div class="uni-imp-why">')[1] || '').split('</div>')[0]).trim(), mixed: (W && W.mixed || []).map(m => m.label),
+    mixed_pill: (h.match(/class="pill p-b uni-mixed" title="([^"]*)">([^<]*)</) || []).slice(1).map(x => x.replace(/&amp;/g, '&')),
+    after_days: W ? W.after : null, late_lv: run(`uniImpLateLv(${JSON.stringify(b)})`), late_chip: (h.match(/<span class="pill [a-z-]+ uni-late"[^>]*onclick="([^"]*)">([^<]*)<\/span>/) || []).slice(1),
+    dau: (rs.find(r => r.k === 'returning_dau') || {}).h || '', text: itext(h).slice(0, 2500) });
+}
+// the fixture's ⏰ late family on the other screens: Recent updates' chip, the What changed? rows (All apps, the app)
+win.upd_late = [...((out['upd|'] || '').split('id="uni-updates"')[1] || '').matchAll(/class="pill [a-z-]+ uni-late"[^>]*onclick="event\.stopPropagation\(\);uniImpGo\('([^']*)','([^']*)','uni',30\)">([^<]*)</g)].map(m => [m[1], m[2], m[3]]);
+win.chg_late = [...(out.portfolio_30d || '').matchAll(/<div class="uni-chg wa"[^>]*onclick="uniImpGo\('([^']*)','([^']*)','uni',30\)"/g)].map(m => [m[1], m[2]]);
+win.chg_late_app = [];
+for (const a of apps) { const h = out[`detail|${a.app}|all|30|cp|false`] || '';
+  for (const m of h.matchAll(/<span class="lnk" onclick="uniImp\('([^']*)','uni',30\)">Open →<\/span>/g)) win.chg_late_app.push([a.app_id, m[1]]); }
+// (b) made-up windows: the card default, a block's own choice, what survives a re-render, remembered / blocked storage
+const S = win.syn;
+try { S.card = JSON.parse(run(`(()=>{ ${RESET} const a=__winApp(UNI.apps.find(x=>uniImpBlocks(x).length>1)), B=uniImpBlocks(a), k0=B[0].key, k1=B[B.length-1].key, hdr=h=>[...h.matchAll(/Verdict( \\(\\d+ days\\))?:/g)].map(m=>m[1]||'');
+  const saved=[]; const keepLS=localStorage; localStorage={getItem:()=>null,setItem:(k,v)=>saved.push([k,v]),removeItem(){}};
+  try{ UNIIMPWIN=undefined; const r={};
+    r.first=hdr(uniImpactCard(a)); r.first_seg=uniImpactCard(a);
+    uniImpWinX(30); r.w30=hdr(uniImpactCard(a)); r.win=UNIIMPWIN; r.saved=saved.slice();
+    uniImpWX(k1,60); r.over=hdr(uniImpactCard(a)); r.again=hdr(uniImpactCard(a)); r.wk=JSON.parse(JSON.stringify(UNIIMPWK));
+    uniImpWinX(14); r.w14=hdr(uniImpactCard(a)); r.wk2=JSON.parse(JSON.stringify(UNIIMPWK)); r.act_win=ACTIMPWIN===undefined?'unread':ACTIMPWIN;
+    UNIIMPOPEN=k0; r.open30=(uniImpWinX(30),uniImpactCard(a)); r.k0=k0; r.k1=k1; r.nblocks=B.length;
+    return JSON.stringify(r); } finally{ localStorage=keepLS; ${RESET} } })()`)); } catch (e) { errors.push('win card: ' + e.message); }
+try { S.store = JSON.parse(run(`(()=>{ ${RESET} const a=__winApp(UNI.apps.find(x=>uniImpBlocks(x).length>1)), keepLS=localStorage, hdr=h=>[...h.matchAll(/Verdict( \\(\\d+ days\\))?:/g)].map(m=>m[1]||''), r={};
+  try{ localStorage={getItem:()=>'30',setItem(){},removeItem(){}}; UNIIMPWIN=undefined; r.remembered=hdr(uniImpactCard(a)); r.rwin=UNIIMPWIN;
+    localStorage={getItem:()=>{ throw new Error('blocked'); },setItem:()=>{ throw new Error('blocked'); },removeItem(){}}; UNIIMPWIN=undefined;
+    r.blocked=hdr(uniImpactCard(a)); r.bwin=UNIIMPWIN; r.bseg=uniImpactCard(a); uniImpWinX(60); r.blocked60=hdr(uniImpactCard(a));
+    // no default chosen: a block whose late episode is open (default_window 30) shows 30, the others 7; a chosen 7 wins
+    const B=uniImpBlocks(a); B[0].default_window=30; localStorage={getItem:()=>null,setItem(){},removeItem(){}}; UNIIMPWIN=undefined; r.dflt=hdr(uniImpactCard(a));
+    UNIIMPWIN=7; r.dflt7=hdr(uniImpactCard(a));
+    return JSON.stringify(r); } finally{ localStorage=keepLS; ${RESET} } })()`)); } catch (e) { errors.push('win store: ' + e.message); }
+// an asset from before the windows (no by_window): 14 / 30 / 60 disabled "Agle robot run ke baad"; built with the switch
+// off (the engine's consts list the windows, no block has them): no selector at all
+try { S.v1 = JSON.parse(run(`(()=>{ ${RESET} const a=__winApp(UNI.apps.find(x=>uniImpBlocks(x).length>1)), c=UNI.consts.impact, keep=c.windows; uniImpBlocks(a).forEach(b=>{ delete b.by_window; delete b.default_window; }); a.impact.v=1;
+  try{ UNIIMPOPEN=uniImpBlocks(a)[0].key; delete c.windows; const off=uniImpactCard(a); c.windows=[7,14,30,60]; const hid=uniImpactCard(a);
+    a.impact.v=2; const fail=uniImpactCard(a); a.impact.v=1;   // a v2 app whose windows failed this run: disabled, not hidden
+    uniImpWinX(30); const after=uniImpactCard(a); return JSON.stringify({off, hid, fail, after_hdr:[...after.matchAll(/Verdict( \\(\\d+ days\\))?:/g)].map(m=>m[1]||'')}); }
+  finally{ if(keep===undefined) delete c.windows; else c.windows=keep; ${RESET} } })()`)); } catch (e) { errors.push('win v1: ' + e.message); }
+if (S.v1) { S.v1.off_seg = segOf(S.v1.off); S.v1.off_blk_seg = segOf(S.v1.off.split('data-open="1"')[1] || ''); S.v1.hid_has = S.v1.hid.includes('class="uni-imp-seg');
+  S.v1.fail_seg = segOf(S.v1.fail); delete S.v1.off; delete S.v1.hid; delete S.v1.fail; }
+if (S.card) { S.card.card_seg = segOf(S.card.first_seg); S.card.open30_seg = segOf(S.card.open30.split('data-open="1"')[1] || ''); S.card.open30_blk = rowsOf(blkOf(S.card.open30, S.card.k0)).map(r => r.k); delete S.card.first_seg; delete S.card.open30; }
+if (S.store) { S.store.bseg = segOf(S.store.bseg); }
+// every row's cells at 7 (v2-style rows), 14, 30 (judged: plain per-user, D30 pending, Mixed) and 60 (running), and a
+// Low data ("young") 30; plus the late chip, the "already told" note, the Alerts card, What changed? and Recent updates
+try { S.views = JSON.parse(run(`(()=>{ ${RESET} const a=__winApp(UNI.apps.find(x=>uniImpBlocks(x).length>1)), B=uniImpBlocks(a), b=B[B.length-1], k=b.key, r={}; try{
+  const cells=h=>Object.fromEntries([...h.split('Same days: new version vs old versions')[0].matchAll(/<tr data-row="([a-z_0-9]+)">([\\s\\S]*?)<\\/tr>/g)].map(m=>{ const td=m[2].split('<td'); return [m[1],{after:'<td'+td[3],change:'<td'+td[4],status:'<td'+td[5]}]; }));
+  for (const N of [7,14,30,60]){ UNIIMPWK={[k]:N}; const h=uniImpBlock(a,b,true); r[N]={h, cells:cells(h), mini:uniImpBlock(a,b,false)}; }
+  // a running window no row can ever fill (the app is younger than its Before): the engine's why, no verdict day promised
+  const w60=b.by_window['60'], keep60=JSON.stringify(w60), why0='Update app launch ke 60 din ke andar aaya — pehle ke poore 60 din nahi';
+  Object.values(w60.rows).forEach(x=>{ x.status='na'; delete x.ready_on; delete x.after_prov; delete x.prov; x.reason=why0; });
+  Object.assign(w60.verdict,{pending:[],ready_on:null,why:why0}); UNIIMPWK={[k]:60};
+  r.never={h:uniImpBlock(a,b,true), mini:uniImpBlock(a,b,false)}; b.by_window['60']=JSON.parse(keep60);
+  b.by_window['30']=__mkW(b,30,{state:'final',young:true,mixed:b.by_window['30'].mixed}); UNIIMPWK={[k]:30}; const hy=uniImpBlock(a,b,true); r.young={h:hy, cells:cells(hy)};
+  // told: this update's own 7-day HOLD on ads per user, and one told by an update inside the window (its label)
+  const m=B[0]; m.verdict=Object.assign({},m.verdict,{level:'hold',worse:['new_d1']}); b.verdict=Object.assign({},b.verdict,{level:'hold',worse:['arpdau']});
+  b.by_window['30']=__mkW(b,30,{state:'judged',worse:['arpdau','new_d1'],told:['arpdau','new_d1'],mixed:[{key:m.key,label:m.label||'App update',date:m.date}]});
+  const ht=uniImpBlock(a,b,true); r.told=cells(ht); r.told_h=ht;
+  b.by_window['30'].verdict.told_by={new_d1:'v9.9'}; r.told_by=cells(uniImpBlock(a,b,true)); delete b.by_window['30'].verdict.told_by;   // the engine's own naming wins
+  // ⏰ late: the header chip (the block's late alert, else its 30-day verdict), whatever window the block shows
+  b.late={level:'halt',alert_id:'x',seeded:false}; UNIIMPWK={}; r.late_hdr=uniImpBlock(a,b,false); b.late=null;
+  b.by_window['30'].verdict.late='hold'; r.late_v30=uniImpBlock(a,b,false); r.k=k; r.label=b.label; r.m_label=m.label;
+  return JSON.stringify(r); } finally{ ${RESET} } })()`)); } catch (e) { errors.push('win views: ' + e.message); }
+if (S.views) for (const N of ['7', '14', '30', '60', 'young']) { const v = S.views[N]; v.heads = [...v.h.matchAll(/<th>([^<]*)<\/th>/g)].map(m => m[1]);
+  v.header = itext(((v.h.split('class="uni-imp-h"')[1] || '').split('</div>')[0]).replace(/^[^>]*>/, '')).trim(); v.seg = segOf(v.h); v.text = itext(v.h);
+  v.mini_text = itext((v.mini || '').split('class="uni-imp-mini"')[1] || '').replace(/^[^>]*>/, '').trim(); out['win_view|' + N] = v.h; }
+// the late chip's tap (the block's app on screen): that block, opened, at 30
+try { S.late_tap = JSON.parse(run(`(()=>{ ${RESET} const a=__winApp(UNI.apps.find(x=>uniImpBlocks(x).length>1)), i=UNI.apps.findIndex(x=>x.app_id===a.app_id), keep=UNI.apps[i], B=uniImpBlocks(a), b=B[B.length-1];
+  b.late={level:'hold',alert_id:'x',seeded:false}; UNI.apps[i]=a;
+  try{ UNIAPP=a.app_id; APP=a.app; UNIIMPOPEN='-'; const h=uniScreen(), m=h.match(/<span class="pill [a-z-]+ uni-late"[^>]*onclick="([^"]*)">([^<]*)<\\/span>/);
+    uniImp(b.key,'uni',30); const g=uniScreen(), o=g.split('<div class="uni-imp-b').find(x=>x.includes('data-open="1"'))||'';
+    return JSON.stringify({call:m&&m[1], chip:m&&m[2], open:UNIIMPOPEN, wk:UNIIMPWK, want:b.key, hdr:(o.match(/Verdict( \\(\\d+ days\\))?:/)||[])[0]||null}); }
+  finally{ UNI.apps[i]=keep; ${RESET} } })()`)); } catch (e) { errors.push('win late tap: ' + e.message); }
+// the late family on the other screens: the Alerts card, What changed? rows (All apps / one app), Recent updates' chip
+try { S.late_al = JSON.parse(run(`(()=>{ ${RESET} const a=UNI.apps.find(x=>uniImpBlocks(x).length), b=uniImpBlocks(a)[0];
+  const al={family:'impact_late',level:'hold',severity:'watch',dir:'up',app:a.app,app_id:a.app_id,data_till:'2026-09-23',opened:'2026-09-23',fresh:true,
+    release:{key:b.key,label:b.label||'App update',date:b.date},rows:{worse:['arpdau'],told:[]},mixed:[],window:30,
+    text:(b.label||'App update')+' ke 30 din baad ads per user −14% · pehle 7 din me ye nahi dikha tha · HOLD — agla rollout roko, jaanch karo'};
+  const s={app:a.app,app_id:a.app_id,updates:[{key:b.key,label:b.label,date:b.date,level:'continue',early:false,final:true,adoption:0.9,head:null,judged:7,late:{level:'hold',alert_id:'x'}},
+    {key:b.key+'x',label:b.label,date:b.date,level:'continue',early:false,final:true,adoption:0.9,head:null,judged:7,late:null}]};
+  return JSON.stringify({card:uniAlertCards([al]), row_all:uniChangeRow(al,true,false), row_app:uniChangeRow(al,false,false), when:uniWhen(al), sev:uniSev(al), plain:uniPlain(al),
+    upd:uniUpdatesCard([{s,a}]), app_id:a.app_id, key:b.key, label:b.label||'App update', date:uniD(b.date)}); })()`)); } catch (e) { errors.push('win late alerts: ' + e.message); }
+if (S.late_al) { out.win_late_card = S.late_al.card; out.win_late_upd = S.late_al.upd; }
+// review fixes (2026-09-28): the 7-day verdict beside a long window, Mixed on a folded header, "Not enough data", a plain
+// per-user row's one "vs before" number, the young line said once (the engine's own weeks), a window that failed alone
+try { S.fix = JSON.parse(run(`(()=>{ ${RESET} const a=__winApp(UNI.apps.find(x=>uniImpBlocks(x).length>1)), B=uniImpBlocks(a), b=B[B.length-1], k=b.key, r={}; try{
+  const cells=h=>Object.fromEntries([...h.split('Same days: new version vs old versions')[0].matchAll(/<tr data-row="([a-z_0-9]+)">([\\s\\S]*?)<\\/tr>/g)].map(m=>{ const td=m[2].split('<td'); return [m[1],{label:'<td'+td[1],after:'<td'+td[3],change:'<td'+td[4],status:'<td'+td[5]}]; }));
+  const hdr=h=>(h.split('class="uni-imp-h"')[1]||'').split('</div>')[0];
+  // a 7-day HALT (the alerts' verdict) while the card shows 30 — judged, and still running
+  b.verdict=Object.assign({},b.verdict,{level:'halt',worse:['arpdau']}); UNIIMPWIN=30; UNIIMPWK={};
+  r.halt30=hdr(uniImpBlock(a,b,false)); r.halt7=(UNIIMPWIN=7,hdr(uniImpBlock(a,b,false)));
+  const keep30=JSON.stringify(b.by_window['30']); b.by_window['30']=__mkW(b,30,{state:'running'}); UNIIMPWIN=30;
+  r.halt30run=hdr(uniImpBlock(a,b,false)); r.halt30run_mini=uniImpBlock(a,b,false);
+  b.by_window['30']=__mkW(b,30,{state:'judged',mixed:[{key:'m1',label:'v8.1',date:'2026-09-01'},{key:'m2',label:'v8.2',date:'2026-09-08'}]});
+  r.mix_closed=hdr(uniImpBlock(a,b,false)); r.mix_open=uniImpBlock(a,b,true);
+  // a plain sessions row whose pooled change (+4%) and paired days' change it was judged on (−6%) differ in sign; an
+  // ads/user row judged plain (imp_adj −6.5%, pooled impressions/user −2%)
+  const W=b.by_window['30'], ses=W.rows.sessions, arp=W.rows.arpdau;
+  Object.assign(ses,{status:'worse',z:-3.3,change:0.04,after:+(ses.before*1.04).toFixed(3),extra:{adj_change:-0.06,all_before:2.0,all_after:2.1}});
+  Object.assign(arp,{status:'worse',z:-3.2,change:-0.01,extra:Object.assign({},arp.extra,{imp_adj:-0.065,imp_change:-0.02,ecpm_change:0.01})});
+  W.verdict.worse=['sessions','arpdau']; W.verdict.level='hold';
+  const hp=uniImpBlock(a,b,true); r.plain=cells(hp); r.plain_mini=uniImpMini(uniImpW(b,30));
+  // the young line from the engine's reasons: D30 alone (its own 30 weeks), and no row repeats it under its pill
+  const Y=__mkW(b,30,{state:'final'}); Y.rows.new_d30=Object.assign({},Y.rows.new_d30,{status:'low',z:null,noise:null,need:null,
+    reason:'Update se pehle ka ~30 hafte ka data chahiye (30-din tulna ka aam utaar-chadhaav napne ke liye) — is update se pehle ~27 hafte ka tha'});
+  Y.notes.push('young'); b.by_window['30']=Y; const hy=uniImpBlock(a,b,true); r.young1=hy; r.young1_cells=cells(hy);
+  // two rows short with DIFFERENT needs (DAU 26 weeks, D30 its own 30): one line, "kai rows", neither row repeats its own
+  Y.rows.returning_dau=Object.assign({},Y.rows.returning_dau,{status:'low',z:null,noise:null,need:null,expected:null,
+    reason:'Update se pehle ka ~26 hafte ka data chahiye (30-din tulna ka aam utaar-chadhaav napne ke liye) — is update se pehle ~27 hafte ka tha'});
+  const h2=uniImpBlock(a,b,true); r.young2_line=(h2.match(/<div class="faint uni-imp-young">([^<]*)<\\/div>/)||[])[1]||null; r.young2_cells=cells(h2);
+  // no row measured at a long window: "Not enough data", never 👍 CONTINUE
+  const Z=__mkW(b,30,{state:'final',young:true}); Object.values(Z.rows).forEach(x=>{ if(x.status!=='low'){ Object.assign(x,{status:'na',reason:'GA4 ab itna purana user data nahi rakhta',z:null,noise:null,need:null}); } });
+  Z.verdict=Object.assign(Z.verdict,{level:'continue',worse:[],why:'Abhi koi number parkha nahi ja saka (data kam ya nahi) — rollout chalne do'}); b.by_window['30']=Z;
+  r.nodata=hdr(uniImpBlock(a,b,false)); r.nodata_young_line=(uniImpBlock(a,b,true).match(/<div class="faint uni-imp-young">([^<]*)<\\/div>/)||[])[1]||null;
+  b.by_window['30']=JSON.parse(keep30);
+  // one window the engine could not build this run (flags.windows_failed): its button alone disabled
+  delete b.by_window['60']; UNIIMPWK={[k]:7}; r.seg_fail=uniImpBlock(a,b,true); r.dau7=cells(uniImpBlock(a,b,true)).returning_dau;
+  UNIIMPWK={[k]:30}; r.dau30=cells(uniImpBlock(a,b,true)).returning_dau; r.k=k;
+  return JSON.stringify(r); } finally{ ${RESET} } })()`)); } catch (e) { errors.push('win fix: ' + e.message); }
+if (S.fix) { S.fix.seg_fail = segOf(S.fix.seg_fail.split('data-open="1"')[1] || ''); S.fix.halt30run_mini = itext((S.fix.halt30run_mini.split('class="uni-imp-mini"')[1] || '').replace(/^[^>]*>/, '')).trim();
+  S.fix.young1_line = (S.fix.young1.match(/<div class="faint uni-imp-young">([^<]*)<\/div>/) || [])[1] || null; delete S.fix.young1;
+  S.fix.mix_open_hdr = (S.fix.mix_open.split('class="uni-imp-h"')[1] || '').split('</div>')[0];
+  S.fix.mix_open_meta = S.fix.mix_open.includes('class="pill p-b uni-mixed"'); delete S.fix.mix_open; }
+// "How we compare" at 7 and at the card's 30
+try { S.how = JSON.parse(run(`(()=>{ ${RESET} UNIAPP=UNI.apps[0].app_id; APP=UNI.apps[0].app; UNIIMPHOW=true; const h7=uniImpHow(); UNIIMPWIN=30; const h30=uniImpHow(); ${RESET}
+  return JSON.stringify({h7, h30}); })()`)); } catch (e) { errors.push('win how: ' + e.message); }
+if (S.how) { S.how.t7 = itext(S.how.h7); S.how.t30 = itext(S.how.h30); delete S.how.h7; delete S.how.h30; }
 
 // ── what the page says ──
 const text = h => h.replace(/\son\w+="[^"]*"/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
@@ -439,7 +587,7 @@ console.log(JSON.stringify({
   summary, pooled, xp, rate_states: rateStates, avg4: { checked: avg4Checked, bad: avg4Bad }, ref: { checked: refChecked, bad: refBad },
   rate_bad: rateBad, coh_bad: cohBad, gap_bad: gapBad, label_bad: labelBad, tip_big: tipBig, span_bad: spanBad,
   totals, header, header2, pages, texts: Object.fromEntries(Object.entries(out).filter(([k]) => /^(pre\||detail\|[^|]*\|all\|90\|all\|true|portfolio_30d|detail\|[^|]*\|all\|30\|cp\|false|overview_no_admob|tripage1_caller|no_verdict_young_launch|maybe_test|rel\|(two|newest|none|test)\||rel\|[^|]*\|(cp|all)\|false\|false$)/.test(k)).map(([k, v]) => [k, T(k)])),
-  rel, impact, alert_cards: out.alert_cards || '',
+  rel, impact, win, alert_cards: out.alert_cards || '',
   plain_what_changed: (T('portfolio_30d').match(/What changed\? \((\d+)\)/) || [])[1],
   portfolio: T('portfolio_30d'),
   has: {

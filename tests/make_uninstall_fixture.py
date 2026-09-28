@@ -67,6 +67,17 @@ properties are on IST, so every GA4 day takes its share of two AdMob days):
   * Demo Weather 4.1 (15 Jul)                  old: no alert; GA4 keeps its user data 60 days here, so new users back
                                                D1 / D7 say "GA4 ab itna purana user data nahi rakhta" (ret_from)
   * Demo Launcher update surge (5 Aug)         kind "update": no version table (rows "No data", the reason)
+
+THE 7 / 14 / 30 / 60-DAY WINDOWS (spec SPEC_WINDOWS; every block carries by_window):
+  * Demo Late Drop (440 days)  v1.9 (E−100, clean: its 60-day window final), v2.0 (E−42, instant adoption) and v2.1
+                               (E−32, inside v2.0's 30 days: "Mixed"); ads per user −15% from E−24 — after both 7-day
+                               after-windows, so both 7-day verdicts stay CONTINUE and nothing is told. v2.0's 30-day
+                               window is judged on data day E−2 (run 5: held once) → ⏰ late HOLD SENT in run 6 ("ke 30
+                               din baad … pehle 7 din me ye nahi dikha tha … D30 abhi baaki"); its 60 days running
+  * Demo Late Told (240 days)  one update (E−50): new users back next day −2.5 points from its a0, lasting → 7-day HOLD
+                               (older than 35 days: never alerted), 30-day HOLD with the row told ("7 din ke faisle me
+                               pehle hi dikha"), no late alert
+  (the Caller's 3.2 and the Flashlight's 1.3 read "running" at 30 / 60; the first run seeds, nothing of it is sent)
 """
 
 import contextlib
@@ -117,6 +128,8 @@ APPS = [
     (_aid(11), "Demo No Stream", "com.demo.nostream", None),
     (_aid(12), "Demo Hidden (not selected)", "com.demo.hidden", (P1, "200000012")),
     (_aid(13), "Demo Caller Copy", "com.demo.caller", None),
+    (_aid(14), "Demo Late Drop", "com.demo.latedrop", (P3, "200000013")),
+    (_aid(15), "Demo Late Told", "com.demo.latetold", (P2, "200000014")),
 ]
 JUST_ADDED, BROKEN, HIDDEN = _aid(9), _aid(8), _aid(12)
 
@@ -162,6 +175,12 @@ def truths():
         "200000008": Truth(d(99), E, 100, seed=8),
         "200000009": Truth(d(29), E, 100, seed=9),
         "200000012": Truth(d(29), E, 100, seed=12),
+        "200000013": Truth(d(439), E, lambda c: int(2000 * wave(c)), noise=0.03, old_per_day=50, seed=13,
+                           ret=lambda c, k: DEFAULT_RET(k), versions=by_share(shares("1.0", [
+                               (d(100), "1.9", 1.0), (d(42), "2.0", 1.0), (d(32), "2.1", 1.0)]))),
+        "200000014": Truth(d(239), E, lambda c: int(2000 * wave(c)), noise=0.03, old_per_day=50, seed=14,
+                           ret=lambda c, k: DEFAULT_RET(k) - (0.025 if k == 1 and c >= d(49) else 0.0),
+                           versions=by_share(shares("3.0", [(d(50), "3.1", 1.0)]))),
     }
     gap = date(2026, 9, 14)                                              # a tracking break: no app_remove that day
     z = t["200000007"]
@@ -189,6 +208,9 @@ def truths():
 
 
 IMPRESSIONS = {"200000007": lambda v: 4.0 * (0.68 if v == "2.0" else 1.0)}   # Wallpapers 2.0: a third fewer ads
+# Late Drop: ads per user −15% from E−24 (the days after both 7-day after-windows of v2.0 / v2.1)
+IMPRESSIONS_DAY = {"200000013": lambda v, day: 4.0 * (0.85 if day >= E_FINAL - timedelta(days=24) else 1.0)}
+LONG_REV = ("200000013", "200000014")        # their whole history (the 30 / 60-day noise reads ≥ 6 months back)
 
 
 def revenue(tr, today):
@@ -201,11 +223,12 @@ def revenue(tr, today):
         if not route or route[1] not in tr:
             continue
         t, ipu = tr[route[1]], IMPRESSIONS.get(route[1], lambda v: 4.0)
+        ipd = IMPRESSIONS_DAY.get(route[1], lambda v, day: ipu(v))
         days = {}
         for day in sorted(t.a1):
-            if day > till or not t.a1[day] or day < E_FINAL - timedelta(days=150):
+            if day > till or not t.a1[day] or (day < E_FINAL - timedelta(days=150) and route[1] not in LONG_REV):
                 continue
-            imp = sum(u * ipu(v) for v, u in (t.vers.get(day) or {"1.0": t.a1[day]}).items())
+            imp = sum(u * ipd(v, day) for v, u in (t.vers.get(day) or {"1.0": t.a1[day]}).items())
             days[day.isoformat()] = [int(imp * 2000), int(imp)]
         apps[aid] = days
     apps[_aid(13)] = {k: [v[0] // 50, v[1] // 50] for k, v in apps[_aid(1)].items()}

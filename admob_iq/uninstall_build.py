@@ -65,6 +65,7 @@ def ga4_cfg(s):
             "run_budget_sec": s.get("ga4_run_budget_sec", 900),
             "streams_ttl_hours": s.get("ga4_streams_ttl_hours", 168.0),
             "iday": bool(s.get("ga4_iday", False)),              # the Install value tab's install-day fetch
+            "impact_windows": bool(s.get("impact_windows", True)),  # the update card's 14 / 30 / 60-day windows
             "iday_max_calls": s.get("iday_max_calls", 120), "iday_cty_days": s.get("iday_cty_days", 400)}
 
 
@@ -280,7 +281,7 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         rev = app_revenue(revenue, a, apps, store.get("package"), cover=act_on)
         detail, row = eng.evaluate_app(store, aid, a["app_name"], state, now_iso, stale=stale, key=key,
                                        package=a.get("package") or store.get("package"), late=cfg["late_days"],
-                                       outdated=outdated, revenue=rev)
+                                       outdated=outdated, revenue=rev, windows=cfg["impact_windows"])
         if act_on:                                      # Active users: the uninstall detail read, never changed; a
             snap = None                                 # failure costs only this app's Active row (its state kept)
             try:
@@ -362,13 +363,18 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                               "data_till_max": till[-1] if till else None, "counts": counts, "apps": rows,
                               "alerts": alerts, "alert_counts": ac, "impact_counts": ic}
     ia = [al for al in alerts if al["family"] == "impact"]
+    il = [al for al in alerts if al["family"] == "impact_late"]      # the late effects (30-day window), apart
+    # the 14 / 30 / 60-day windows that crashed this run (failure-isolated: counted, never silent; only when any)
+    wf = sum(int((((d.get("impact") or {}).get("flags") or {}).get("windows_failed")) or 0) for d in details)
     early = sum(1 for r in rows for u in r["updates"] if u["early"])
     print("ga4 uninstall: apps %d, with GA4 %d, fetched %d (full %d, repair %d), fresh %d, failed %d, deferred %d, "
-          "open alerts %d (new %d), impact updates %d (halt %d, hold %d, win %d, early %d), impact alerts %d (new %d)"
+          "open alerts %d (new %d), impact updates %d (halt %d, hold %d, win %d, early %d), impact alerts %d (new %d)%s"
           % (counts["selected"], counts["with_ga4"], sc.get("fetched", 0), sc.get("full", 0), sc.get("repair", 0),
              sc.get("fresh", 0), counts["failed"], counts["deferred"], len(alerts),
              sum(1 for al in alerts if al["notify"]), sum(ic.values()), ic["halt"], ic["hold"], ic["win"], early,
-             len(ia), sum(1 for al in ia if al["notify"])),
+             len(ia), sum(1 for al in ia if al["notify"]),
+             ", impact_late alerts %d (new %d)" % (len(il), sum(1 for al in il if al["notify"]))
+             + (", windows failed %d" % wf if wf else "") if cfg["impact_windows"] else ""),
           file=sys.stderr)
     if cfg.get("iday"):                                 # the install-day fetch's ONE counts line (only when it ran)
         try:

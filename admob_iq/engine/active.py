@@ -2157,20 +2157,37 @@ def _anchor(c):
     return _d(c.get("since") or c.get("day") or c.get("installs_from"))
 
 
+def _late_to(udet, key):
+    """The 30-day window's last After day of update block `key` (the uninstall detail's by_window "30"), or None."""
+    for u in (udet.get("impact") or {}).get("updates") or []:
+        if u.get("key") == key:
+            to = ((((u.get("by_window") or {}).get("30") or {}).get("after")) or {}).get("to")
+            return _d(to) if to else None
+    return None
+
+
 def _link(c, udet):
     """An Active episode an open Update impact alert already covers → (release, cap severity) — else the release block
-    it falls just after → (release, None) — else (None, None)."""
+    it falls just after → (release, None) — else (None, None). A late-effect alert ("impact_late": the 30-day window)
+    covers the same metrics and direction anchored from the release to that window's end + LINK_AFTER (an Active drift
+    that fired BEFORE the late alert is not de-duplicated backwards)."""
     rows = [IMPACT_ROW.get(m) for m in ((["sess", "time"] if c["metric"] == "usage" else [c["metric"]]))]
     rows = [r for r in rows if r]
     a = _anchor(c)
     for al in udet.get("alerts") or []:
-        if al.get("family") != "impact" or al.get("closed") or not al.get("release"):
+        fam = al.get("family")
+        if fam not in ("impact", "impact_late") or al.get("closed") or not al.get("release"):
             continue
         side = (al.get("rows") or {}).get("worse" if c["dir"] == "down" else "better") or []
         if not any(r in side for r in rows):
             continue
         R = _d(al["release"]["date"])
-        if R - timedelta(days=LINK_BEFORE) <= a <= R + timedelta(days=LINK_AFTER):
+        if fam == "impact":
+            lo, hi = R - timedelta(days=LINK_BEFORE), R + timedelta(days=LINK_AFTER)
+        else:
+            to = _late_to(udet, al["release"].get("key")) or (_d(al["installs_to"]) if al.get("installs_to") else None)
+            lo, hi = R, (to or R) + timedelta(days=LINK_AFTER)
+        if lo <= a <= hi:
             cap = {"halt": "warning", "hold": "watch", "win": "good"}.get(al.get("level"))
             return dict(al["release"]), cap
     for u in (udet.get("impact") or {}).get("updates") or []:
