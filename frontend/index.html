@@ -463,9 +463,38 @@
   .val-note{font-size:11.5px;color:var(--ink2);line-height:1.5;margin-top:8px;padding:8px 11px;border-radius:9px;background:var(--panel2);border:1px solid var(--line)}
   .note.val-chk .tb{font-size:12px}
   .val-tbl td .val-rg{font-size:10.5px;font-weight:500}
+  /* 🧬 New users by app version · 🗓️ Long-term by install month (VALUE_CD) — same look as Countries, own class names */
+  .val-lead{font-size:13px;font-weight:600;color:#fff;line-height:1.5;padding:8px 17px 4px;overflow-wrap:anywhere}
+  .val-vtbl th,.val-vtbl td,.val-ltbl th,.val-ltbl td{padding:8px 10px}
+  .val-vtbl th .val-ths,.val-ltbl th .val-ths{font-size:10px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--faint);margin-top:2px}
+  .val-vtbl td.nm{min-width:128px}
+  .val-vtbl td .val-vsub,.val-ltbl td .val-vsub{font-size:10.5px;font-weight:400;color:var(--faint);white-space:nowrap}
+  .val-vtbl tr.val-vx td{background:var(--panel2);white-space:normal}
+  .val-vtbl tr.clk.on td{background:var(--raise)}
+  .val-vcmp{font-size:11.5px;color:var(--muted);white-space:nowrap}
+  .val-vxd{display:grid;gap:5px;font-size:12px;color:var(--ink2);line-height:1.5;max-width:760px}
+  .val-vxd .val-ctx-t{font-weight:600;color:#fff}
+  .val-vxd .val-vxa{margin-top:3px}
+  .val-vc{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px 12px;cursor:pointer;min-width:0}
+  .val-vc .h{font-size:13.5px;color:#fff;line-height:1.4;overflow-wrap:anywhere}
+  .val-vc .m{font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.45;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .val-vc .p{margin-top:6px}
+  .val-vc .val-vxd{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+  .val-ltbl tr.val-yr td{background:var(--bg2);color:#fff;font-weight:800;font-size:12px;padding:5px 10px;letter-spacing:.04em;white-space:nowrap}
+  .val-ltbl td.nm{white-space:nowrap}
+  .val-lproj{font-style:italic;color:var(--muted)}
+  .val-lrel{font-size:11px;margin-left:4px;cursor:pointer}
+  .val-lbase{font-size:12px;color:var(--ink2);line-height:1.55;padding:10px 17px 0;overflow-wrap:anywhere}
+  .val-foot{font-size:10.5px;color:var(--faint);padding:8px 17px 14px;line-height:1.55}
+  .val-foot .uni-fold{font-size:12px}
+  .uni-imp-ver{font-size:12px;margin-top:8px;line-height:1.5}
+  tr.uni-rel .val-vlk{font-size:11px;font-weight:600;white-space:nowrap}
+  .val-vfew,.val-vnow{margin-left:6px;font-size:10px;padding:1px 7px}
   @media(max-width:760px){
     .val-strp .uni-scs,.val-strp .uni-xp,.val-strp .uni-acs{min-width:0}
     .val-tbl th,.val-tbl td{padding:8px 7px}
+    .val-vtbl th,.val-vtbl td,.val-ltbl th,.val-ltbl td{padding:8px 7px}
+    .val-ltbl td.nm{white-space:normal;min-width:86px}
   }
   @media(max-width:430px){      /* a phone: one tile a row — label, number and chip; a tap shows the rest */
     .val-tiles{grid-template-columns:minmax(0,1fr)}
@@ -3842,7 +3871,16 @@ function uniImpBlock(a,b,open,t){
     +`<tbody>${UNI_IMP_VROWS.map(s=>uniImpVRow(s,VR[s[0]],zmin,bias&&bias[s[0]==='ver_time'?'time':'sessions'],bias&&bias.releases,['Older versions',nl,'Difference'],t)).join('')}</tbody></table></div>`;
   const why=v.why?hAttr(v.why):(lv==='pending'?'Abhi faisle ke liye pakke din kam hain':'—');
   const fin=(!v.final&&v.ready_on)?` <span class="faint">· Final when GA4 data reaches ${uniD(v.ready_on)}</span>`:'';
-  return `<div class="uni-imp-b on" id="${P}imp-${idA}" data-key="${idA}" data-open="1">${head}${meta}${main}${ver}<div class="uni-imp-why"><b>Why:</b> ${why}${fin}</div></div>`; }
+  return `<div class="uni-imp-b on" id="${P}imp-${idA}" data-key="${idA}" data-open="1">${head}${meta}${main}${ver}<div class="uni-imp-why"><b>Why:</b> ${why}${fin}</div>${uniImpVerLnk(a,b)}</div>`; }
+// 🧬 (Install value, VALUE_CD on): an open version block links to that version's new users — 30 days of returns and earning.
+// Only when the build has C on and the app has an Install value page; without DATA.value nothing (the Uninstall / Active
+// screens stay byte for byte). A block of several versions: the newest
+function uniImpVerLnk(a,b){ if(!b||b.kind!=='version'||!valCdOn()) return '';
+  const V=(Array.isArray(b.versions)?b.versions:[]).filter(v=>v!=null&&v!==''&&typeof v!=='object'), ver=V.length?String(V[V.length-1]):'', id=a&&a.app_id;
+  const r=ver&&id?valRows().find(x=>x.app_id===id&&x.status==='ok'&&x.file):null; if(!r) return '';
+  // an update newer than the Install value page's install-day data: no numbers yet — the link says so, never promises them
+  const nw=!!(b.date&&r.settled_till&&String(b.date)>String(r.settled_till)), dt=b.date?`,'${uniQ(b.date)}'`:'';
+  return `<div class="uni-imp-ver">🧬 <span class="lnk" onclick="valVerGo('${uniQ(r.app_id)}','${uniQ(ver)}'${dt})">New users of ${hAttr(valVLabel(ver))} — ${nw?`abhi naya: install-day data ${uniD(r.settled_till)} tak, number kuch din me`:'30 din tak kitne ruke, kitna kamaya'} →</span></div>`; }
 function uniImpHow(t){ const HO=impS(t).how, IC=(k,d)=>uniIC(k,d,t), th=`<div class="uni-fold" onclick="uniImpHowX(${impA(t).slice(1)})"><span class="cv${HO?' on':''}">▸</span><span>How we compare</span><span class="lnk" style="margin-left:auto;font-size:12px">${HO?'Hide':'Show'}</span></div>`;
   if(!HO) return th;
   const c=UNI&&UNI.consts, L=(c&&c.lag_days!=null)?+c.lag_days:2, P=k=>Math.round(IC(k,0)*1000)/10, Wd=IC('win_days',7);
@@ -4512,6 +4550,8 @@ function actAlertCards(list){
 let VALD={}, VALL={}, VALERR={}, VALSIG={}, VALVER=null, VALAPP='';
 let VALWK='12', VALSORT='n', VALCM='d1', VALCTYEXP='', VALOLDEXP=false, VALCLEXP=false, VALTILEEXP='';
 let VALSTEXP='', VALPSORT={k:'status',d:1}, VALTIMEXP=false, VALCHKEXP=false, VALJUMP='', VALJT=0;
+let VALVEROPEN='', VALVEROLD=false, VALLONG='18';   // 🧬 the open version row · the older versions fold · 🗓️ '18' months (8 quarters) | 'all'
+let VALVERAPP='', VALVERDATE='';                     // the app a 🧬 link (valVerGo) opened: its version may have no row (said once) · its release date
 function valRows(){ return (DATA&&DATA.value&&Array.isArray(DATA.value.apps))?DATA.value.apps.filter(r=>r&&typeof r==='object'):[]; }
 function valName(id){ const r=valRows().find(x=>x.app_id===id); return r?r.app:''; }
 // the app on screen: the header's App (VALAPP only picks between same-named apps), else none (All apps)
@@ -4526,7 +4566,7 @@ function valRerender(){ const old=document.querySelector('.screen[data-screen=va
 function valOpen(id){ VALAPP=id; VALCTYEXP=''; VALOLDEXP=false; VALCLEXP=false; VALTILEEXP=''; VALCHKEXP=false;
   const nm=valName(id); if(nm&&APP!==nm){ setApp(nm); return; }
   valEnsure(); valRerender(); if(!VALJUMP) window.scrollTo({top:0}); _navSave(); }
-function valBack(){ VALAPP=''; VALCTYEXP=''; VALOLDEXP=false; VALCLEXP=false; VALTILEEXP=''; VALCHKEXP=false; VALJUMP='';
+function valBack(){ VALAPP=''; VALCTYEXP=''; VALOLDEXP=false; VALCLEXP=false; VALTILEEXP=''; VALCHKEXP=false; VALJUMP=''; VALVEROPEN=''; VALVEROLD=false; VALVERAPP=''; VALVERDATE='';
   if(APP){ setApp(''); return; } valRerender(); window.scrollTo({top:0}); _navSave(); }
 // from an Alerts-screen card: this tab, that app, its "What changed?" (once the app's file is on screen, ≤15 s)
 function valGo(id){ show('value'); VALJUMP='val-chg'; VALJT=Date.now(); valOpen(id); valJumpNow(); }
@@ -4543,6 +4583,17 @@ function valTNX(){ VALTIMEXP=!VALTIMEXP; valRerender(); }                       
 function valTTX(k){ if(typeof innerWidth==='number'&&innerWidth>430) return; VALTILEEXP=VALTILEEXP===k?'':k; valRerender(); }   // a phone tile: its sub-line
 function valSX(k){ VALSTEXP=VALSTEXP===k?'':k; valRerender(); }                    // All apps: one status chip's apps
 function valPSort(k){ VALPSORT=(VALPSORT.k===k)?{k,d:-VALPSORT.d}:{k,d:(k==='app'||k==='status'||k==='pay'||k==='cpi'?1:-1)}; valRerender(); }
+// 🧬 / 🗓️ (VALUE_CD): switched on when the build says so — the Update impact block's "New users of vX" line needs it
+function valCdOn(){ return !!(DATA&&DATA.value&&DATA.value.consts&&DATA.value.consts.cd===true); }
+// from a 📦 Update impact block or an Alerts-screen card: this tab, that app, its version row open (once the file is in)
+function valVerGo(id,ver,dt){ show('value'); VALVEROPEN=String(ver==null?'':ver); VALVERAPP=String(id==null?'':id); VALVERDATE=String(dt==null?'':dt); VALJUMP='val-ver'; VALJT=Date.now(); valOpen(id); valJumpNow(); }
+// on the app's page (a 📦 row of the money-back table, a "What changed?" row): the version row, open
+function valVerJump(ver){ VALVEROPEN=String(ver==null?'':ver); valRerender(); uniJump(document.getElementById('val-vopen')?'val-vopen':'val-ver','val'); }
+// from an Alerts-screen card of a section's own family (🗓️ long_ret): this tab, that app, that section
+function valGoTo(id,sec){ show('value'); VALJUMP=sec||'val-chg'; VALJT=Date.now(); valOpen(id); valJumpNow(); }
+function valVX(v){ v=String(v==null?'':v); VALVEROPEN=VALVEROPEN===v?'':v; valRerender(); }   // one version's row / card: open / close
+function valVOX(){ VALVEROLD=!VALVEROLD; valRerender(); }
+function valLG(v){ VALLONG=v==='all'?'all':'18'; valRerender(); }                  // long-term table: newest 18 months (8 quarters) | all
 // ---- numbers (unknown = "—", never 0; money comes in USD and follows the $ ⇄ ₹ toggle) ----
 const valOk=v=>v!=null&&v!==''&&isFinite(+v);
 const valM=o=>(o&&typeof o==='object')?o:{};
@@ -4587,6 +4638,8 @@ function valCtyName(cc){ const s=String(cc||''); if(s==='--') return 'Unknown'; 
 function valFlag(cc){ const s=String(cc||'').toUpperCase(); if(s==='--') return '❔'; if(s==='ZZ') return '🌐'; if(!/^[A-Z]{2}$/.test(s)) return '🏳️';
   return String.fromCodePoint(0x1F1E6+s.charCodeAt(0)-65,0x1F1E6+s.charCodeAt(1)-65); }
 function valCtyTag(cc){ return `<span title="${hAttr(valCtyName(cc))}">${valFlag(cc)} ${hAttr(String(cc||'').toUpperCase())}</span>`; }
+function valCcs(L){ return (Array.isArray(L)?L:[]).filter(c=>c!=null&&c!==''&&typeof c!=='object').map(String).slice(0,4); }   // a short country list
+function valFlags(L){ return L.map(c=>`<span title="${hAttr(valCtyName(c))}">${valFlag(c)}</span>`).join(' '); }
 // ---- the chip vocabulary (tiles, All-apps strips and table; ONE set) ----
 const VAL_CHL={pay:{worse:'Slower',watch:'Slower · watch',better:'Faster',maybe_dn:'Maybe slower',maybe_up:'Maybe faster',normal:'Normal',never:'💸 Not paying back in 1 year'},
   b7:{worse:'Lower',watch:'Lower · watch',better:'Higher',maybe_dn:'Maybe lower',maybe_up:'Maybe higher',normal:'Normal',never:'💸 Not paying back in 1 year'},
@@ -4631,6 +4684,8 @@ function valVerdChip(row,als,H){ const cc=row.cc, A=(als||[]).filter(x=>x&&!x.cl
     const [c,s,st]=x.severity==='warning'?['p-r',' · alert','worse']:(x.severity==='good'?['p-g','','better']:['p-y',' · watch','watch']);
     return `<span class="pill ${c}" data-st="${st}" title="${hAttr('Alert khula hai — upar "What changed?" me dekho.')}">${t}${s}</span>`; }
   if(row.few||row.verdict==='few') return `<span class="pill p-b" data-st="few" title="${hAttr(VAL_TIP.few)}">Few installs</span>`;
+  if(row.verdict==='late'){ const u=valOk(row.pay&&row.pay.upto)?Math.round(+row.pay.upto):H;   // not paid back by the last age its curve reaches
+    return `<span class="pill uni-pz" data-st="late" title="${hAttr(`${u} din me bhi is country ke ads ka paisa wapas nahi aaya — aage ki kamai ka andaza abhi nahi (lambi chaal aane pe faisla).`)}">⏳ Not paid back in ${u} days</span>`; }
   if(row.clean===false||row.verdict==='wait') return `<span class="pill p-b" data-st="wait" title="${hAttr(row.why==='young'&&row.clean!==false?VAL_TIP.young:VAL_TIP.gap)}">Wait</span>`;
   const v=VAL_VD[row.verdict]; if(!v) return '<span class="faint">—</span>';
   return `<span class="pill uni-pz" data-st="${row.verdict}" title="${hAttr(valVdTip(row.verdict,H))}">${v[0]} ${v[1]}</span>`; }
@@ -4664,7 +4719,7 @@ function valDetail(r,d){
   const hdr=back+`<div class="uni-hd" style="margin-bottom:4px"><span style="font-size:18px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>
     <div class="faint" id="val-hd" style="font-size:12px;margin:5px 0 14px;display:flex;gap:5px 10px;flex-wrap:wrap;align-items:center"><span>${bits.join(' · ')}${got?' · fetched '+got:''}</span><span class="pill uni-pn" title="Isi target se Keep / Slow / Costly aur alerts tay hote hain — badalna ho to batao.">Target: paisa ${H} din me wapas</span></div>`;
   const safe=f=>{ try{ return f(d,r)||''; }catch(e){ return '<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ Ye hissa abhi dikh nahi paya.</div>'; } };
-  return hdr+[valSumCard,valChangesCard,valPayCard,valCtyCard,valChkCard,()=>valTimingNote()].map(safe).join(''); }
+  return hdr+[valSumCard,valChangesCard,valPayCard,valCtyCard,valVerCard,valLongCard,valChkCard,()=>valTimingNote()].map(safe).join(''); }
 // "📌 At a glance": the engine's one line, five tiles (3 + 2), the context line, the data line and the edge sentences
 function valTileBox(k,label,tip,st,big,chip,sub,span,vcls){ const open=VALTILEEXP===k;
   return `<div class="uni-st val-t${open?' open':''}" data-m="${k}" data-st="${st}" onclick="valTTX('${k}')"><div class="l" title="${hAttr(tip)}">${label}</div><div class="v${vcls?' '+vcls:''}">${big}</div>`
@@ -4709,10 +4764,13 @@ function valSumCard(d,r){
   if(!valOk(cg('v'))&&C.note) cS.push(valTxt(C.note));
   const t4=valTileBox('cpi','Cost per install',VAL_TIP.cpi,cst,valOk(cg('v'))?valSpendMoney(cg('v'),cg('v_src'),ccy):'—',valChip('cpi',{st:cst},als),cS.join(' · '),sp(C.from,C.to));
   const Y=Object.assign({},valM(r&&r.cty),valM(T.cty)), yst=valCtySt(Y), best=(Y.best||[]).slice(0,3), weak=(Y.weak||[]).slice(0,3), CW=valM(d.countries&&d.countries.win), yS=[];
-  if(weak.length) yS.push('Weakest: '+weak.map(valCtyTag).join(' · ')); if(valOk(Y.of)) yS.push(`${valNum(Y.judged)} of ${valNum(Y.of)} countries judged`);
+  // with Google Ads cost by country (GADS_GEO): the Keep / Costly countries lead the tile
+  const kp=valCcs(Y.keep), co=valCcs(Y.costly), kc=kp.length>0||co.length>0;
+  if(kc){ if(kp.length&&co.length) yS.push('💸 Costly: '+valFlags(co)); } else if(weak.length) yS.push('Weakest: '+weak.map(valCtyTag).join(' · '));
+  if(valOk(Y.of)) yS.push(`${valNum(Y.judged)} of ${valNum(Y.of)} countries judged`);
   if(yst==='wait') yS.push('countries ka data aa raha'); else if(yst==='unclean'||(yst==='low'&&Y.clean===false)) yS.push('GA4 ka country data adhoora — abhi faisla nahi'); else if(yst==='low') yS.push('abhi faisla nahi (installs / 30 din ka data kam)');
   // judged, no Best yet: every judged one like the app, or a difference not yet held 2 weeks / on 1,000+ installs
-  const yBig=best.length?'Best: '+best.map(valCtyTag).join(' · '):(yst==='ok'?(Y.all_avg?'Sab app jaise':'Abhi pakka nahi'):'—');
+  const yBig=kc?(kp.length?'✅ Keep: '+valFlags(kp):'💸 Costly: '+valFlags(co)):(best.length?'Best: '+best.map(valCtyTag).join(' · '):(yst==='ok'?(Y.all_avg?'Sab app jaise':'Abhi pakka nahi'):'—'));
   const t5=valTileBox('cty','Countries','Kis country ke installs sabse zyada / sabse kam kamate hain — sirf 300+ installs wale countries, 2 hafte lagatar.',yst,
     yBig,valChip('cty',{st:yst},als)+(Y.smp?`<span class="pill p-b" title="${hAttr(VAL_TIP.smp)}">≈ GA4 sample</span>`:''),yS.join(' · '),sp(CW.from,CW.to),'val-vs');
   const tiles=`<div class="uni-tiles val-tiles" id="val-tiles" style="--n:3">${t1+t2+t3+t4+t5}</div>`;
@@ -4732,7 +4790,7 @@ function valSumCard(d,r){
 function valRpiTip(d){ return (d&&d.scale&&d.scale.src==='network')?'AdMob ki kamai (sirf AdMob network — mediation ke baaki networks nahi mile), install ke din se ab tak, ek install pe.':VAL_TIP.rpi; }
 const B_=t=>`<b style="color:var(--ink2)">${t}</b>`;
 // ---- "🔔 What changed?" ----
-const VAL_SEC={pay_slow:'val-pay',pay_loss:'val-pay',geo_move:'val-cty',geo_cost:'val-cty',iv_link:'val-chk'};
+const VAL_SEC={pay_slow:'val-pay',pay_loss:'val-pay',geo_move:'val-cty',geo_cost:'val-cty',iv_link:'val-chk',ver_ret:'val-ver',long_ret:'val-long'};
 const VAL_TAG={cpi:['Cost up','Install ka kharcha badha — isne paisa-wapas dheema kiya'],value:['Value down','Install ki kamai (7 din) ghati'],
   mix:['Mix','Ads wale installs ya kisi country ka hissa badla'],return:['Returns down','Naye users kam wapas aa rahe (Active users dekho)'],
   market_wide:['Market','Ad rate (eCPM) sab apps me ek saath badla — is app ka apna badlaav nahi; alert sirf dikhaya, bheja nahi']};
@@ -4745,19 +4803,24 @@ function valRel(R){ if(!R||typeof R!=='object'||!(R.key||R.version||R.date)) ret
   return {key:R.key||(R.date?uniRelKey(R):''), label:R.label||(R.version!=null&&R.version!==''?uniRelV(R):'Update'), date:R.date||''}; }
 function valRelChip(x){ const R=valRel(x.release); if(!R||!R.key) return '';
   return `<span class="pill p-p val-relc" title="Is update ka asar — Active users → Update impact" onclick="event.stopPropagation();uniImpGo('${uniQ(x.app_id)}','${uniQ(R.key)}','act')">After ${hAttr(R.label)}</span>`; }
+// a new-users-by-version alert names its version ("v2.4.1"); a country-cost alert that also absorbed a "fewer came back" move says so
+function valAlVer(x){ return x&&x.family==='ver_ret'&&x.ver!=null&&x.ver!==''?(x.ver_label?String(x.ver_label):valVLabel(x.ver)):''; }
+function valAlso(x){ return !!(x&&x.family==='geo_cost'&&Array.isArray(x.also)&&x.also.length); }
 function valChangeRow(x,withApp,closed){
   const sv=closed?[x.dir==='up'?'Was better':'Was worse','uni-pz']:(x.severity==='warning'?['Worse','p-r']:(x.severity==='good'?['Better','p-g']:['Watch','p-y']));
-  const go=withApp?`valOpen('${uniQ(x.app_id)}')`:`valJump('${VAL_SEC[x.family]||'val-pay'}')`;
+  // a version's alert opens its 🧬 row (on All apps: that app, the row open); a long-term one its 🗓️ section
+  const vl=valAlVer(x), go=withApp?(vl?`valVerGo('${uniQ(x.app_id)}','${uniQ(x.ver)}')`:(x.family==='long_ret'?`valGoTo('${uniQ(x.app_id)}','val-long')`:`valOpen('${uniQ(x.app_id)}')`))
+    :(vl?`valVerJump('${uniQ(x.ver)}')`:`valJump('${VAL_SEC[x.family]||'val-pay'}')`);
   const tags=(x.fresh&&!closed?'<span class="pill p-p">New</span>':'')+(x.estimate?`<span class="pill p-b" title="${hAttr(VAL_TIP.est)}">≈ Estimate</span>`:'')
-    +(x.cc?`<span class="pill uni-pz">${valCtyTag(x.cc)}</span>`:'')+valRelChip(x)+(Array.isArray(x.tags)?x.tags:[]).filter(t=>VAL_TAG[t]).map(t=>`<span class="pill uni-pz" title="${hAttr(VAL_TAG[t][1])}">${VAL_TAG[t][0]}</span>`).join('')
+    +(x.cc?`<span class="pill uni-pz">${valCtyTag(x.cc)}</span>`:'')+(vl?`<span class="pill uni-pz" title="Is version ke saath install hue naye users">🧬 ${hAttr(vl)}</span>`:'')+valRelChip(x)+(Array.isArray(x.tags)?x.tags:[]).filter(t=>VAL_TAG[t]).map(t=>`<span class="pill uni-pz" title="${hAttr(VAL_TAG[t][1])}">${VAL_TAG[t][0]}</span>`).join('')
     +(closed&&x.closed?`<span class="dt">Closed · ${uniD(x.closed)}</span>`:'');
   const act=closed?'':(withApp?'<span class="lnk">Open →</span>':`<span class="lnk" onclick="${go}">Open →</span>`);
   return `<div class="uni-chg ${withApp?'wa':'na'}${closed?' cl':''}" data-fam="${hAttr(x.family||'')}"${withApp?` onclick="${go}"`:''}><span class="sv"><span class="pill ${sv[1]}">${sv[0]}</span></span>`
-    +`${withApp?`<span class="ap" title="${hAttr(x.app)}">${uniAppTag(x.app,16)}</span>`:''}<span class="tx">${valTxt(x.text||x.message||'')}</span>`
+    +`${withApp?`<span class="ap" title="${hAttr(x.app)}">${uniAppTag(x.app,16)}</span>`:''}<span class="tx">${valTxt(x.text||x.message||'')}${valAlso(x)?' · also fewer came back':''}</span>`
     +`<span class="mt"><span class="dt">${valWhen(x)}</span>${tags}</span><span class="ac">${act}</span></div>`; }
 // an info row (never an alert, never counted, never coloured)
-const VAL_INFO={mix:'Mix',new_cty:'New country',spend:'Ads spend',paid:'Paid share',k:'Scale',gap:'Country data',closed:'Closed',market:'Market'};
-const VAL_ISEC={mix:'val-cty',new_cty:'val-cty',gap:'val-cty',spend:'val-pay',paid:'val-pay',k:'val-chk',closed:'val-pay',market:'val-pay'};
+const VAL_INFO={mix:'Mix',new_cty:'New country',spend:'Ads spend',paid:'Paid share',k:'Scale',gap:'Country data',closed:'Closed',market:'Market',ver_d30:'Version',ver_mix:'Version',long_up:'Long-term'};
+const VAL_ISEC={mix:'val-cty',new_cty:'val-cty',gap:'val-cty',spend:'val-pay',paid:'val-pay',k:'val-chk',closed:'val-pay',market:'val-pay',ver_d30:'val-ver',ver_mix:'val-ver',long_up:'val-long'};
 function valInfoRow(o,app,id,old){ const kind=o.kind||'info', go=app?`valOpen('${uniQ(id)}')`:`valJump('${VAL_ISEC[kind]||'val-pay'}')`;
   const tags=(VAL_INFO[kind]?`<span class="pill uni-pz">${VAL_INFO[kind]}</span>`:'')+(o.cc?`<span class="pill uni-pz">${valCtyTag(o.cc)}</span>`:'')+(o.release&&o.release.key?valRelChip({release:o.release,app_id:id||o.app_id}):'');
   return `<div class="uni-chg ${app?'wa':'na'} val-info${old?' old':''}" ${old?'data-old':'data-info'}="${hAttr(kind)}"${app?` onclick="${go}"`:''}><span class="sv"><span class="pill p-b" title="Sirf jaankari — iska alert nahi aata, ginti me nahi">Info</span></span>`
@@ -4850,7 +4913,7 @@ function valPayCard(d,r){
   const head=`<tr>${heads.map(h=>`<th${tip[h]?` title="${hAttr(tip[h])}"`:''}>${h}</th>`).join('')}</tr>`, nc=heads.length;
   let body='';
   shown.forEach(w=>{ const R=valRel(w.release);
-    if(R) body+=`<tr class="uni-rel"><td class="nm">${R.key?`<span class="uni-rl" title="Tap — is update ka asar (Active users → Update impact)" onclick="uniImpGo('${uniQ(d.app_id||r.app_id)}','${uniQ(R.key)}','act')">📦 ${hAttr(R.label)}${R.date?' · '+uniD(R.date):''}</span>`:`📦 ${hAttr(R.label)}${R.date?' · '+uniD(R.date):''}`}</td><td colspan="${nc-1}"></td></tr>`;
+    if(R) body+=`<tr class="uni-rel"><td class="nm">${R.key?`<span class="uni-rl" title="Tap — is update ka asar (Active users → Update impact)" onclick="uniImpGo('${uniQ(d.app_id||r.app_id)}','${uniQ(R.key)}','act')">📦 ${hAttr(R.label)}${R.date?' · '+uniD(R.date):''}</span>`:`📦 ${hAttr(R.label)}${R.date?' · '+uniD(R.date):''}`}</td><td colspan="${nc-1}">${valVerLnk(d,w.release)}</td></tr>`;
     const lab=`<td class="nm" style="white-space:nowrap">${uniSpan(w.from,w.to)}${ph&&paid?`<div class="faint" style="font-size:10.5px;font-weight:400">${valNum(w.n)} installs</div>`:''}</td>`;
     const noAds=valNoAds(w), spw=valSpendWait(w), ctip=valOk(w.cpi_ads)?` title="${hAttr('Sirf ads wale installs: '+valSpendMoney(w.cpi_ads,w.cpi_ads_src,ccy)+(valOk(w.paid)?' · ads se '+valPct(w.paid):''))}"`:'';
     const cpiC=spw?`<td class="faint" title="${VAL_SPW}">aa raha</td>`:(noAds?'<td class="faint">No ads</td>':`<td class="uni-num"${ctip}>${valSpendMoney(w.ecpi,w.ecpi_src,ccy)}</td>`);
@@ -4874,34 +4937,82 @@ function valRet(x,k,C,short){ const M=valM(x[k]); if(!valOk(M.v)) return '<span 
   return `${valAx(x,C)||M.st==='est'||M.st==='wait'?'≈':''}${valOf100(M.v)}${short?'':'<small class="faint"> of 100</small>'}`; }
 function valRpiCell(x,C,H){ const R=valM(x.rpi), ax=valAx(x,C), f=k=>{ const M=valM(R[k]); return valOk(M.v)?(ax||M.proj||M.est?'≈':'')+valMoney(M.v):'—'; };
   let s=['1','7','30','90'].map(f).join(' · '); if(H>90&&valOk(x.be)) s+=` · ≈${valMoney(x.be)} (${H} d)`; return s; }
-function valCtyDetail(x,C,H,geo){ const iv=(k,l)=>{ const M=valM(x[k]); return valOk(M.v)?`${l} ${valOf100(M.v)} of 100${valOk(M.lo)&&valOk(M.hi)?` (${valOf100(M.lo)}–${valOf100(M.hi)})`:''}`:''; };
+function valCtyDetail(x,C,H,geo,ccy){ const iv=(k,l)=>{ const M=valM(x[k]); return valOk(M.v)?`${l} ${valOf100(M.v)} of 100${valOk(M.lo)&&valOk(M.hi)?` (${valOf100(M.lo)}–${valOf100(M.hi)})`:''}`:''; };
   const R=valM(valM(x.rpi)['30']), T=valM(x.trend), out=[];
   if(x.text) out.push(`<div class="val-ctx-t">${valTxt(x.text)}</div>`);
   const a=[iv('d1','Next day'),iv('d7','After a week'),iv('d30','After 30 days')].filter(Boolean).join(' · '); if(a) out.push(`<div class="val-ctx-m">${a}</div>`);
   if(valOk(R.v)) out.push(`<div class="val-ctx-m">Earning per install (30 days) ${valMoney(R.v)}${valOk(R.lo)&&valOk(R.hi)?` (${valMoney(R.lo)}–${valMoney(R.hi)})`:''}${valOk(x.be)?` · install ${valMoney(x.be)} se sasta mile tabhi ${H} din me paisa wapas`:''}</div>`);
-  if(geo&&x.cpi) out.push(`<div class="val-ctx-m">Cost per install ${valMoney(x.cpi.v)}${valOk(x.cpi.ads)?` (sirf ads wale ${valMoney(x.cpi.ads)})`:''}${x.pay&&valOk(x.pay.p)?` · paisa wapas ≈${valDays(x.pay.p)}`:''}</div>`);
-  const sp=[['d1','Next day · 12 weeks',v=>valOf100(v)+' of 100'],['rpi7','Earning per install (1 week) · 12 weeks',valMoney]].map(([k,l,f])=>Array.isArray(T[k])&&T[k].filter(valOk).length>=2?`<div class="val-spk"><div class="faint">${l}</div>${valSpark(T[k],f)}</div>`:'').join('');
+  // the plain per-country cost (the older input shape, no week envelope) keeps its one line exactly as before
+  if(geo&&x.cpi&&!(C&&C.geo_why!=null)) out.push(`<div class="val-ctx-m">Cost per install ${valMoney(x.cpi.v)}${valOk(x.cpi.ads)?` (sirf ads wale ${valMoney(x.cpi.ads)})`:''}${x.pay&&valOk(x.pay.p)?` · paisa wapas ≈${valDays(x.pay.p)}`:''}</div>`);
+  else if(geo&&x.cpi){ const K=valM(x.cpi), P=valM(x.pay), B=valM(x.back), ads=valCtyAds(K,ccy);
+    if(K.noads) out.push('<div class="val-ctx-m">No ads here — is country me Google Ads kharcha nahi, yahan ke installs organic</div>');
+    else if(K.unknown) out.push(`<div class="val-ctx-m">${hAttr(VAL_XXC)}</div>`);
+    else if(K.thin) out.push(`<div class="val-ctx-m">Little ads — yahan ${hAttr(valCtyThinWhy(K))}, isliye ads ka faisla (Keep / Costly) nahi · Cost per install ${valSpendMoney(K.v,K.src,ccy)}${ads?` (sirf ads wale ${valCtyAds(K,ccy,true)})`:''}</div>`);
+    else { const pt=P.never?' · saal bhar me bhi paisa wapas nahi (andaza)':(valOk(P.p)?` · paisa wapas ${P.obs?'':'≈'}${valDays(P.p)}`:(valOk(P.upto)?` · ${Math.round(+P.upto)} din me paisa wapas nahi aaya`:''));
+      out.push(`<div class="val-ctx-m">Cost per install ${valSpendMoney(K.v,K.src,ccy)}${ads?` (sirf ads wale ${valCtyAds(K,ccy,true)})`:''}${pt}</div>`);
+      if(valOk(K.paid)) out.push(`<div class="val-ctx-m">Ads se ~${valPct(K.paid)} installs</div>`);
+      // ₹ back per ₹100 of ads in this country, at 7 / 30 (/ 90) days — each over its own install weeks' cost; ≈ while
+      // projected, or when those weeks' cost is not all known (the window's cost stands in)
+      if(valOk(B['7'])||valOk(B['30'])) out.push(`<div class="val-ctx-m" title="${hAttr('Har umar pe usi hafton ke installs ki kamai ÷ unhi hafton ka Google Ads kharcha. ≈ = andaza')}">${csym()}100 ke ads pe 7 din me ${B['7_est']?'≈':''}${valP100(B['7'])}, 30 din me ${B['30_est']?'≈':''}${valP100(B['30'])} wapas${valOk(B['90'])?`, 90 din me ${B['90_proj']||B['90_est']?'≈':''}${valP100(B['90'])}`:''}</div>`); } }
+  // the cost sparkline in the ₹ view: as billed (its own series), never USD at today's rate
+  const cS=Array.isArray(T.cpi_src)&&valSrcOn(1,ccy)&&T.cpi_src.length===(T.cpi||[]).length, cK=cS?'cpi_src':'cpi', cF=cS?(v=>valSpendMoney(0,v,ccy)):valMoney;
+  const sp=[['d1','Next day · 12 weeks',v=>valOf100(v)+' of 100'],['rpi7','Earning per install (1 week) · 12 weeks',valMoney],...(geo?[[cK,'Cost per install (12 weeks)',cF]]:[])].map(([k,l,f])=>Array.isArray(T[k])&&T[k].filter(valOk).length>=2?`<div class="val-spk"><div class="faint">${l}</div>${valSpark(T[k],f)}</div>`:'').join('');
   if(sp) out.push(`<div class="val-spks">${sp}</div>`);
   return out.join('')||'<div class="faint">Abhi aur detail nahi.</div>'; }
+// a country's Google Ads cost (the week envelope): cost per install · "No ads here" (grey) · its money back — seen ("34 days"),
+// ≈ projected (the band in the tooltip) or "Over 1 year"
+const VAL_NOADS='Is country me Google Ads kharcha nahi — yahan ke installs organic';
+const VAL_XXC='Is country ka Google Ads kharcha pakka nahi — kuch kharcha Google Ads ne kisi country se match nahi kiya (Other / unmapped), ho sakta hai isi ka ho';
+// the ads-only cost per install, always with the Google Ads downloads it rests on (≈ below GEO_DL_MIN of them)
+function valCtyAds(K,ccy,inl){ if(!valOk(K.ads)) return ''; const dl=valOk(K.dl)?Math.round(+K.dl):null, few=dl!=null&&dl<valConst('GEO_DL_MIN',50);
+  const t=dl!=null?`${valNum(dl)} Google Ads download${dl===1?'':'s'}`:'';
+  return `${few?'≈':''}${valSpendMoney(K.ads,K.ads_src,ccy)}${t?(inl?' · '+t:` (${t})`):''}`; }
+// a country with only a trickle of Google Ads: its cost shown, never judged — why, in the owner's words
+function valCtyThinWhy(K){ const t=K.thin;
+  if(t==='spend') return `Google Ads kharcha thoda (hafte me ${valMoney(valConst('SPEND_MIN_WEEK',20))} se kam)`;
+  if(t==='dl') return `Google Ads se sirf ${valNum(K.dl)} installs`;
+  if(t==='paid') return `ads se sirf ~${valPct(K.paid)} installs`;
+  return 'Google Ads thoda'; }
+function valCtyCpi(x,ccy){ const K=valM(x.cpi); if(K.noads) return `<span class="faint" title="${hAttr(VAL_NOADS)}">No ads here</span>`;
+  if(K.unknown) return `<span class="faint" title="${hAttr(VAL_XXC)}">—</span>`;
+  if(!valOk(K.v)) return '<span class="faint">—</span>';
+  const ads=valCtyAds(K,ccy);
+  if(K.thin) return `<span class="faint" title="${hAttr('Yahan '+valCtyThinWhy(K)+' — isliye ads ka faisla (Keep / Costly) nahi. Kharcha ÷ saare naye users: '+valSpendMoney(K.v,K.src,ccy)+(ads?'; sirf ads wale installs pe '+ads:'')+'.')}">Little ads</span>`;
+  return `<span title="${hAttr('Is country ka Google Ads kharcha ÷ is country ke saare naye users (ads + organic).'+(ads?' Sirf ads wale installs pe: '+ads+'.':''))}">${valSpendMoney(K.v,K.src,ccy)}</span>`; }
+function valCtyPayTxt(P){ P=valM(P); if(P.never) return 'Over 1 year'; if(!valOk(P.p)) return valOk(P.upto)?`Over ${valDays(P.upto)}`:'—'; return (P.obs?'':'≈')+valDays(P.p); }
+function valCtyPay(x){ const P=valM(x.pay), t=valCtyPayTxt(P); if(t==='—') return '<span class="faint">—</span>';
+  if(P.never) return `<span title="${hAttr('Saal bhar me bhi is country ke ads ka poora paisa wapas nahi (andaza)')}">${t}</span>`;
+  if(!valOk(P.p)) return `<span title="${hAttr(`${Math.round(+P.upto)} din me bhi paisa wapas nahi aaya — aage ka andaza abhi nahi (kamai ki lambi chaal aane pe)`)}">${t}</span>`;
+  const lo=valOk(P.lo)?Math.round(+P.lo):null, hi=valOk(P.hi)?Math.round(+P.hi):null;
+  const tip=P.obs?'Dikh chuka — is country ke installs ki asli kamai se':((lo!=null&&hi!=null&&lo!==hi)?`andaza ${lo}–${hi} din`:(lo!=null&&hi==null?`andaza ${lo}+ din`:'andaza'));
+  return `<span title="${hAttr(tip)}">${t}</span>`; }
+// the "All countries" row: the app's own Google Ads cost over these weeks ÷ all its new users (₹ view: as billed)
+function valCtyCpiAll(C,A,ccy){ const CO=valM(C&&C.cost), T=CO.total, n=A&&valOk(A.n)?+A.n:0;
+  return valOk(T)&&+T>0&&n>0?`<span title="${hAttr('Poore app ka Google Ads kharcha (in hafton ka) ÷ saare naye users (ads + organic)')}">${valSpendMoney(+T/n,valOk(CO.total_src)?+CO.total_src/n:null,ccy)}</span>`:'<span class="faint">—</span>'; }
+// a phone card's second line: "· $0.021 cost per install · Money back ≈34 days" (or "· No ads here" / "· Little ads")
+function valCtyCostPh(x,ccy){ const K=valM(x.cpi); if(K.noads) return ' · <span class="faint">No ads here</span>'; if(K.thin) return ` · <span class="faint" title="${hAttr('Yahan '+valCtyThinWhy(K)+' — ads ka faisla nahi')}">Little ads</span>`; if(!valOk(K.v)) return '';
+  const t=valCtyPayTxt(x.pay); return ` · ${valSpendMoney(K.v,K.src,ccy)} cost per install${/^Over /.test(t)?' · Money back: o'+t.slice(1):(t!=='—'?' · Money back '+t:'')}`; }
 function valSpark(v,fmt){ const a=(v||[]).map(x=>valOk(x)?+x:null), ok=a.filter(x=>x!=null); if(ok.length<2) return '';
   const W=140,H=34,p=3, mx=Math.max(...ok), mn=Math.min(0,...ok), n=a.length, xi=i=>p+(W-2*p)*i/Math.max(1,n-1), y=x=>H-p-(H-2*p)*((x-mn)/((mx-mn)||1));
   let dd='', pen=false; a.forEach((x,i)=>{ if(x==null){ pen=false; return; } dd+=(pen?' L':' M')+xi(i).toFixed(1)+' '+y(x).toFixed(1); pen=true; });
   const li=valLast(a);
   return `<div class="val-spkr"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;max-width:100%"><path d="${dd.trim()}" fill="none" stroke="#3dd0f0" stroke-width="1.8" stroke-linejoin="round"/><circle cx="${xi(li).toFixed(1)}" cy="${y(a[li]).toFixed(1)}" r="2.6" fill="#3dd0f0"/></svg><span>${fmt(a[li])}</span></div>`; }
 function valCtyCard(d,r){
-  const C=d.countries||null, H=valH(d), ph=valPh(), als=valAlsOf(d);
+  const C=d.countries||null, H=valH(d), ph=valPh(), als=valAlsOf(d), ccy=valSrcCcy(d);
   const hd=`<div class="ct uni-ct" style="padding:16px 17px 0"><h3>🌍 Countries</h3><span class="faint" style="font-size:11.5px">kaunse country me ads chalau, kaunse me rokun</span></div>`;
   const wrap=h=>`<div class="card pad0" id="val-cty" style="margin-bottom:14px">${hd}${h}</div>`;
   const rows=valCtyRows(C);
   if(!C||!C.win) return wrap(`<div class="uni-empty" style="margin:12px 17px 16px">🌍 Countries ka data aa raha — install-day data ke saath aayega.</div>`);
-  const w=C.win, geo=!!C.geo, A=C.app&&typeof C.app==='object'?C.app:null;
+  // geo = Google Ads cost by country is SHOWN: on, and (with the week envelope, env) every window week passed coverage.
+  // With it off — or a week short — the cost columns stay out and the verdicts are the no-cost ones (never mixed)
+  const w=C.win, geoOn=!!C.geo, gw=C.geo_why==null?null:String(C.geo_why), env=gw!=null, geo=geoOn&&(!env||gw==='ok'), A=C.app&&typeof C.app==='object'?C.app:null;
   const wl=`<div class="faint" id="val-cwin" style="font-size:11.5px;padding:6px 17px 0">Installs ${uniSpan(w.from,w.to)}${valOk(w.weeks)?` (${w.weeks} settled weeks)`:''}${w.from30?` · 30-day numbers: installs ${uniSpan(w.from30,w.to30)}`:''}</div>`;
   if(!rows.length) return wrap(wl+`<div class="uni-empty" style="margin:12px 17px 16px">Not enough installs per country — kisi country me ${valConst('CTY_SHOW',50)}+ installs nahi.</div>`);
   const rk=(p,q)=>(valOk(p.rank)?+p.rank:99)-(valOk(q.rank)?+q.rank:99);
   const fl=L=>L.map(x=>`<span title="${hAttr(valCtyName(x.cc))}">${valFlag(x.cc)}</span>`).join(' ');
   let strip;
   const judgedRows=rows.filter(x=>x.clean!==false&&!['wait','few'].includes(x.verdict));
-  if(geo){ const g=v=>rows.filter(x=>x.verdict===v&&!x.few&&x.clean!==false); strip=[['keep','✅ Keep'],['slow','🐢 Slow'],['costly','💸 Costly']].filter(([v])=>g(v).length).map(([v,l])=>`${l}: ${fl(g(v))}`).join(' · '); }
+  if(geo){ const g=v=>rows.filter(x=>x.verdict===v&&!x.few&&x.clean!==false); strip=[['keep','✅ Keep'],['slow','🐢 Slow'],['late','⏳ Not paid back yet'],['costly','💸 Costly']].filter(([v])=>g(v).length).map(([v,l])=>`${l}: ${fl(g(v))}`).join(' · '); }
   else { const ok=c=>{ const x=rows.find(y=>y.cc===c); return !x||(x.clean!==false&&!['wait','few'].includes(x.verdict)); }, cc=L=>(L||[]).map(c=>String(c)).filter(ok),
       top=Array.isArray(C.best)?cc(C.best):[], low=Array.isArray(C.weak)?cc(C.weak):[], tg=L=>L.slice(0,4).map(valCtyTag).join(', ');
     // the Top / Low verdicts not (yet) on the Best / Weakest list: ranked only with 1,000+ installs and 2 weeks in a row
@@ -4920,29 +5031,262 @@ function valCtyCard(d,r){
   if(ph){ const cm=['d1','d7','d30'].includes(VALCM)?VALCM:'d1', cml={d1:'next day',d7:'after a week',d30:'after 30 days'}[cm];
     const card=(x,all)=>{ const o=!all&&VALCTYEXP===x.cc, R30=valM(valM(x.rpi)['30']), t=tipOf(x);
       return `<div class="val-cc${o?' open':''}${all?' all':''}" data-cc="${hAttr(x.cc)}"${all?'':` onclick="valCX('${uniQ(x.cc)}')"`}${t?` title="${hAttr(t)}"`:''}><div class="h">${all?'🌍 <b>All countries</b>':`${valFlag(x.cc)} <b>${hAttr(valCtyName(x.cc))}</b>`} <span class="faint">· ${valNum(x.n)} installs</span>${few(x)}</div>`
-        +`<div class="m">${valRet(x,cm,C)} ${cml} · ${valOk(R30.v)?(valAx(x,C)||R30.proj?'≈':'')+valMoney(R30.v):'—'} per install (30 d)</div>`
-        +(all?'':`<div class="p">${valVerdChip(x,als,H)}</div>${x.text?`<div class="s">${valTxt(x.text)}</div>`:''}${o?`<div class="val-cxd">${valCtyDetail(x,C,H,geo)}</div>`:''}`)+`</div>`; };
+        +`<div class="m">${valRet(x,cm,C)} ${cml} · ${valOk(R30.v)?(valAx(x,C)||R30.proj?'≈':'')+valMoney(R30.v):'—'} per install (30 d)${!all&&geo&&env&&x.cpi?valCtyCostPh(x,ccy):''}</div>`
+        +(all?'':`<div class="p">${valVerdChip(x,als,H)}</div>${x.text?`<div class="s">${valTxt(x.text)}</div>`:''}${o?`<div class="val-cxd">${valCtyDetail(x,C,H,geo,ccy)}</div>`:''}`)+`</div>`; };
     body=`<div class="val-cards" id="val-ccards">${A?card(A,true):''}${sorted.map(x=>card(x,false)).join('')}</div>`; }
   else { const TH=[['Country'],['Share'],['Next day','100 naye users me se kitne agle din phir aaye'],['After a week','100 me se kitne 7ve din aaye'],['After 30 days','100 me se kitne 30ve din aaye'],
-      ['Earning per install',VAL_TIP.rpi,'1 day · 1 week · 30 days · 90 days'+(H>90?` · ≈${H} days`:'')],...(geo?[['Cost per install',VAL_TIP.cpi],['Money back in']]:[]),['Verdict']];
+      ['Earning per install',VAL_TIP.rpi,'1 day · 1 week · 30 days · 90 days'+(H>90?` · ≈${H} days`:'')],...(geo?[['Cost per install',VAL_TIP.cpi],['Money back in',env?'Is country ke installs se us country ke Google Ads ka poora paisa kitne din me wapas — ≈ = andaza':undefined]]:[]),['Verdict']];
     const nc=TH.length;
     const tr=(x,all)=>{ const t=tipOf(x), o=!all&&VALCTYEXP===x.cc;
       return `<tr${all?' class="val-all"':` class="clk" data-cc="${hAttr(x.cc)}" onclick="valCX('${uniQ(x.cc)}')"`}${t?` title="${hAttr(t)}"`:''}><td class="nm">${all?'🌍 <b>All countries</b>':`${valFlag(x.cc)} ${hAttr(valCtyName(x.cc))}${few(x)}`}<div class="faint" style="font-size:10.5px;font-weight:400">${valNum(x.n)} installs</div></td>`
         +`<td class="uni-num">${all?'100%':valPct(x.share)}</td><td class="uni-num">${valRet(x,'d1',C)}</td><td class="uni-num">${valRet(x,'d7',C)}</td><td class="uni-num">${valRet(x,'d30',C)}</td><td class="uni-num">${valRpiCell(x,C,H)}</td>`
-        +(geo?`<td class="uni-num">${x.cpi?valMoney(x.cpi.v):'—'}</td><td class="uni-num">${x.pay&&valOk(x.pay.p)?'≈'+valDays(x.pay.p):'—'}</td>`:'')
+        +(geo?(env?`<td class="uni-num">${all?valCtyCpiAll(C,x,ccy):valCtyCpi(x,ccy)}</td><td class="uni-num">${all?'<span class="faint">—</span>':valCtyPay(x)}</td>`
+          :`<td class="uni-num">${x.cpi?valMoney(x.cpi.v):'—'}</td><td class="uni-num">${x.pay&&valOk(x.pay.p)?'≈'+valDays(x.pay.p):'—'}</td>`):'')
         +`<td style="white-space:nowrap">${all?'<span class="faint">app</span>':valVerdChip(x,als,H)}</td></tr>`
-        +(o?`<tr class="val-cx" data-cx="${hAttr(x.cc)}"><td colspan="${nc}"><div class="val-cxd">${valCtyDetail(x,C,H,geo)}</div></td></tr>`:''); };
+        +(o?`<tr class="val-cx" data-cx="${hAttr(x.cc)}"><td colspan="${nc}"><div class="val-cxd">${valCtyDetail(x,C,H,geo,ccy)}</div></td></tr>`:''); };
     body=`<div class="uni-scroll"><table class="uni-sticky val-ctbl" id="val-ctbl" style="min-width:${geo?1060:880}px"><thead><tr>${TH.map(([h,t,sb])=>`<th${t?` title="${hAttr(t)}"`:''}>${h}${sb?`<div class="val-ths">${sb}</div>`:''}</th>`).join('')}</tr></thead><tbody>${A?tr(A,true):''}${sorted.map(x=>tr(x,false)).join('')}</tbody></table></div>`; }
-  const sm=valM(C.small), un=valM(C.unknown), ua=valM(C.unassigned), nAll=A&&valOk(A.n)?+A.n:null, rest=[];
-  if(valOk(sm.n)&&+sm.n>0) rest.push(valOk(sm.countries)&&+sm.countries>0?`Other small countries (${valNum(sm.countries)}) — ${valNum(sm.n)} installs, not judged`:`Other countries — ${valNum(sm.n)} installs, not judged`);
+  const sm=valM(C.small), un=valM(C.unknown), ua=valM(C.unassigned), nAll=A&&valOk(A.n)?+A.n:null, rest=[], CO=valM(C.cost);
+  // with the cost envelope: the small countries' Google Ads cost (≈ per install, never judged) and the cost Google Ads
+  // could not place in any country ("Other / unmapped") — counted in the totals, shown, never judged
+  // … its share of the cost (bold, with a word, when it is a big part), and per Google Ads download (its installs are
+  // mostly organic: per install it would look cheap) — never judged
+  const smS=valOk(sm.share)?+sm.share:null, smBig=smS!=null&&smS>=0.1;
+  const smPart=smS!=null?(smBig?`<b title="${hAttr('Ads ke kharche ka bada hissa in chhote countries me — inka faisla nahi hota, alag se dekho')}">${valPct(smS)} of ads cost</b>`:`${valPct(smS)} of ads cost`):'';
+  const smAds=valOk(sm.cpi_ads)?`≈${valSpendMoney(sm.cpi_ads,sm.cpi_ads_src,ccy)} per Google Ads install`:(smS==null&&valOk(sm.cpi)?`≈${valMoney(sm.cpi)} per install`:'');
+  const smc=geo&&env&&valOk(sm.cost)&&+sm.cost>0?`, Google Ads ${valSpendBig(sm.cost,sm.cost_src,ccy)}${smPart||smAds?` (${[smPart,smAds].filter(Boolean).join(', ')})`:''}`:'';
+  if((valOk(sm.n)&&+sm.n>0)||smc) rest.push(valOk(sm.countries)&&+sm.countries>0?`Other small countries (${valNum(sm.countries)}) — ${valNum(sm.n)} installs${smc}, not judged`:`Other countries — ${valNum(sm.n)} installs${smc}, not judged`);
   if(valOk(un.n)&&+un.n>0&&!rows.some(x=>x.cc==='--')) rest.push(`Unknown country — ${valNum(un.n)} installs`);
   const uaS=Math.max(valOk(ua.rev_share)?+ua.rev_share:0,valOk(ua.n_share)?+ua.n_share:((valOk(ua.n)&&nAll)?+ua.n/nAll:0));
   if(uaS>0.005) rest.push(`<span title="${hAttr(VAL_TIP.gap)}">Kisi country me nahi baanta (GA4) — ${valNum(ua.n)} installs, kamai ka ${valOk(ua.rev_share)?valPct(ua.rev_share):'—'}</span>`);
+  if(geo&&env&&valOk(CO.unmapped)&&+CO.unmapped>0&&valOk(CO.unmapped_share)&&+CO.unmapped_share>0.005)
+    rest.push(`<span title="${hAttr('Google Ads ne ye kharcha aisi jagah ka bataya jo kisi country se match nahi hua — total me gina, kisi country ka faisla isse nahi')}">Google Ads: ${valSpendBig(CO.unmapped,CO.unmapped_src,ccy)} kisi country se match nahi hua (Other / unmapped)</span>`);
   const notes=[]; if(C.smp) notes.push(`<div class="val-note" id="val-smp">≈ Is app ka country data GA4 sample se deta hai — country ke number andaza (≈), total sahi.</div>`);
-  if(!geo) notes.push(`<div class="val-note" id="val-nogeo">ℹ️ Google Ads country-wise kharcha abhi nahi aata. Isliye har country ke liye "install kitne tak ka chalega" dikha rahe: ${H} din me utni kamai.</div>`);
+  if(geoOn&&env&&gw!=='ok'){ const till=valM(C.geo_cov).till, gt=({wait:`ℹ️ Google Ads country-wise kharcha abhi ${till?uniD(till)+' tak':'poora nahi'} aaya — naye hafton ka country cost aane pe dikhega.`,
+      cov:'ℹ️ In hafton me Google Ads ka country-wise kharcha poora nahi mila — country cost nahi dikhaya (faisla bina cost ke).',nostore:'ℹ️ Is app ke Google Ads account ka country-wise data nahi mila.',
+      noads:'ℹ️ In hafton me Google Ads kharcha nahi — country ka cost nahi.'})[gw];
+    if(gt) notes.push(`<div class="val-note" id="val-geowhy">${hAttr(gt)}</div>`); }
+  if(!geoOn) notes.push(`<div class="val-note" id="val-nogeo">ℹ️ Google Ads country-wise kharcha abhi nahi aata. Isliye har country ke liye "install kitne tak ka chalega" dikha rahe: ${H} din me utni kamai.</div>`);
   return wrap(wl+`<div class="val-strip" id="val-cstrip">${strip}</div><div style="padding:0 17px"><div class="chips" style="margin-bottom:8px">${sorts}</div></div>${body}`
     +(rest.length?`<div class="val-rest" id="val-rest">${rest.map(t=>`<div>${t}</div>`).join('')}</div>`:'')
     +`<div style="padding:4px 17px 14px">${notes.join('')}<div style="font-size:12px;margin-top:8px"><span class="lnk" onclick="show('countries')">AdMob eCPM by country → Country Strategy</span></div></div>`); }
+// ---- "🧬 New users by app version" (VALUE_CD): new users by the version they got on their install day — how many came
+// back, what they earned — each version against the one before it at the same age. A file from before (by_version is
+// an array) draws nothing at all ----
+function valVLabel(v){ const s=String(v==null?'':v); return /^v/i.test(s)?s:'v'+s; }   // "v2.4.1" (never "vv2.4.1")
+function valBV(d){ const B=d&&d.by_version; return (B&&typeof B==='object'&&!Array.isArray(B))?B:null; }
+function valVRows(B){ return valArr(B&&B.rows).filter(x=>x.ver!=null&&x.ver!=='').sort((p,q)=>String(q.from||'').localeCompare(String(p.from||''))); }   // newest first
+// the money-back table's 📦 row: "New users of v2.4.1 →" — only when 🧬 has that version's row
+function valVerLnk(d,rel){ const B=valBV(d), v=rel&&rel.version!=null&&rel.version!==''?String(rel.version):'';
+  if(!B||!v||!valVRows(B).some(x=>String(x.ver)===v)) return '';
+  return `<span class="lnk val-vlk" title="${hAttr('Is version ke saath install hue naye users — kitne ruke, kitna kamaya')}" onclick="valVerJump('${uniQ(v)}')">New users of ${hAttr(valVLabel(v))} →</span>`; }
+const VAL_VFEW='Is version pe install kam — farak sirf kismat ka ho sakta hai.';
+const VAL_VEST='Andaza — GA4 ka kuch din ka data poora nahi, ya kamai AdMob ke hisaab se scale ki; asli number thoda alag ho sakta hai.';
+const VAL_VTIP={d1:'Is version ke saath install hue 100 naye users me se kitne agle din phir aaye.',d7:'Is version ke saath install hue 100 naye users me se kitne 7ve din phir aaye.',
+  d30:'Is version ke saath install hue 100 naye users me se kitne 30ve din phir aaye.',vs:'Pichhle version ke aakhri 28 din ke installs se tulna — same umar pe.'};
+const valInN=M=>valOk(M.in)&&+M.in>0?Math.round(+M.in):null;
+function valVWait(M){ const n=valInN(M); return `<span class="faint" title="${hAttr('Abhi itne din purane installs nahi — '+(n?n+' din me':'kuch din me')+' pakka number.')}">${n?'in '+valDays(n):'Wait'}</span>`; }
+const valVPart=M=>{ const n=valInN(M); return `${valNum(M.days)} of ${valNum(M.of)} din ke installs itne purane — baaki ${n?n+' din me':'jaldi'}.`; };
+const VAL_NODATA='<span class="faint" title="GA4 me itna purana install-wise data nahi mila.">No data</span>';
+// one "X of 100" cell: "in N days" (not old enough — never a small number) · "31*" (only some install days old enough yet) ·
+// grey (few installs / returners) · ≈ (a GA4 day not whole) · "No data"
+function valVCell(M){ M=valM(M); const st=M.st, tl='<small class="faint"> of 100</small>';
+  if(st==='wait') return valVWait(M); if(st==='nodata') return VAL_NODATA; if(!valOk(M.v)) return '<span class="faint">—</span>';
+  const v=(M.q?'≈':'')+valOf100(M.v);
+  if(st==='part') return M.few?`<span class="faint" title="${hAttr(valVPart(M)+' '+VAL_VFEW+' Sirf '+valNum(M.n)+' installs'+(valOk(M.ret)?', '+valNum(M.ret)+' wapas aaye':'')+'.')}">${v}*</span>${tl}`:`<span title="${hAttr(valVPart(M))}">${v}*</span>${tl}`;
+  if(st==='few') return `<span class="faint" title="${hAttr(VAL_VFEW+(valOk(M.ret)?' Sirf '+valNum(M.ret)+' users wapas aaye.':''))}">${v}</span>${tl}`;
+  return (M.q?`<span title="${hAttr(VAL_TIP.q)}">${v}</span>`:v)+tl; }
+function valVMoney(M){ M=valM(M); const st=M.st;
+  if(st==='wait') return valVWait(M); if(st==='nodata') return VAL_NODATA; if(!valOk(M.v)) return '<span class="faint">—</span>';
+  const ax=M.est||M.q, v=(ax?'≈':'')+valMoney(M.v);
+  if(st==='part') return M.few?`<span class="faint" title="${hAttr(valVPart(M)+' '+VAL_VFEW+' Sirf '+valNum(M.n)+' installs.')}">${v}*</span>`:`<span title="${hAttr(valVPart(M))}">${v}*</span>`;
+  if(st==='few') return `<span class="faint" title="${hAttr(VAL_VFEW)}">${v}</span>`;
+  return ax?`<span title="${hAttr(VAL_VEST)}">${v}</span>`:v; }
+// a change in points of 100: "−3", "+0.5", "0"
+function valPts(x){ if(!valOk(x)) return '—'; const v=+x, a=Math.abs(v), t=a>0&&a<10?a.toFixed(1).replace(/\.0$/,''):String(Math.round(a)); return t==='0'?'0':(v<0?'−':'+')+t; }
+// "vs previous version": grey words, never a colour — "−3 pts next day · −2 pts week" and the version it is compared with
+const valVShort=x=>`Sirf ${valNum(x.days)} din naye users isi version pe aaye — tulna ke liye ${valNum(valConst('VER_MIN_DAYS',3))}+ din chahiye.`;
+function valVsTxt(x){ const V=x.vs;
+  if(!V||typeof V!=='object') return `<span class="faint" title="${hAttr('Isse pehle ka koi bada version (300+ installs, 3+ din) nahi — tulna nahi')}">—</span>`;
+  if(x.verdict==='short'){ const pl=V.label||(V.ver!=null&&V.ver!==''?valVLabel(V.ver):'');   // finished too soon: never "wait"
+    return `<span class="faint" title="${hAttr(valVShort(x))}">—</span>${pl?`<div class="val-vsub">vs ${hAttr(pl)}</div>`:''}`; }
+  const p=[['d1','next day'],['d7','week']].map(([k,l])=>{ const c=valM(V[k]); return valOk(c.delta)&&c.st!=='wait'?`${valPts(c.delta)} pts ${l}`:''; }).filter(Boolean);   // "wait": not yet a fair comparison
+  const pl=V.label||(V.ver!=null&&V.ver!==''?valVLabel(V.ver):'');
+  return `<span class="val-vcmp" title="${hAttr(VAL_VTIP.vs)}">${p.length?p.join(' · '):'<span title="Tulna ke liye dono taraf 3+ din ke itne purane installs chahiye">wait</span>'}</span>${pl?`<div class="val-vsub">vs ${hAttr(pl)}</div>`:''}`; }
+// a version's verdict: emoji + words in a neutral outline — yellow / red / green ONLY while its ver_ret alert is open
+// (data-vst, never data-st: the Countries checks never read these)
+const VAL_VV={worse:['🔻','Lower','Naye users pichhle version se kam ruk rahe (pakka farak) — alert tabhi jab 2 hafte lagatar aur 1,000+ installs.'],
+  better:['⭐','Higher','Naye users pichhle version se zyada ruk rahe (pakka farak).'],same:['–','Same as before','Pichhle version jaisa — farak aam utaar-chadhaav ke andar.']};
+function valVerChip(x,als){ const v=String(x.ver), A=(als||[]).filter(a=>a&&!a.closed&&a.family==='ver_ret'&&String(a.ver)===v);
+  const a=A.find(z=>z.severity==='warning')||A.find(z=>z.severity==='watch')||A.find(z=>z.severity==='good');
+  if(a){ const [c,t,s]=a.severity==='warning'?['p-r','Lower · alert','worse']:(a.severity==='good'?['p-g','Higher','better']:['p-y','Lower · watch','watch']);
+    return `<span class="pill ${c}" data-vst="${s}" title="${hAttr('Alert khula hai — upar "What changed?" me dekho.')}">${t}</span>`; }
+  if(x.verdict==='few') return `<span class="pill p-b" data-vst="few" title="${hAttr(VAL_VFEW)}">Few installs</span>`;
+  if(x.verdict==='short') return `<span class="pill uni-pz" data-vst="short" title="${hAttr(valVShort(x))}">Too short to compare</span>`;
+  if(x.verdict==='wait') return `<span class="pill p-b" data-vst="wait" title="${hAttr('Tulna ke liye dono versions ke 3+ din ke itne purane installs chahiye — aane pe faisla.')}">Wait</span>`;
+  const V=VAL_VV[x.verdict]; if(!V) return '<span class="faint">—</span>';
+  return `<span class="pill uni-pz" data-vst="${x.verdict}" title="${hAttr(V[2])}">${V[0]} ${V[1]}</span>`; }
+// a tapped version: its sentence, the ranges, the two sides compared, the hotfixes skipped, its 📦 Update impact
+function valVerDetail(x,d){ const out=[], lab=x.label||valVLabel(x.ver), V=valM(x.vs), pl=V.label||(V.ver!=null&&V.ver!==''?valVLabel(V.ver):'');
+  if(x.text) out.push(`<div class="val-ctx-t">${valTxt(x.text)}</div>`);
+  const iv=(k,l)=>{ const M=valM(x[k]); if(!valOk(M.v)||M.st==='wait'||M.st==='nodata') return '';
+    return `${l} ${M.q?'≈':''}${valOf100(M.v)}${M.st==='part'?'*':''} of 100${valOk(M.lo)&&valOk(M.hi)?` (${valOf100(M.lo)}–${valOf100(M.hi)})`:''}`; };
+  const a=[iv('d1','Next day'),iv('d7','After a week'),iv('d30','After 30 days')].filter(Boolean).join(' · '); if(a) out.push(`<div>${a}</div>`);
+  const R=valM(x.rpi), rp=[['1','1 day'],['7','1 week'],['30','30 days']].map(([k,l])=>{ const M=valM(R[k]); if(!valOk(M.v)||M.st==='wait'||M.st==='nodata') return '';
+    return `${l} ${M.est||M.q?'≈':''}${valMoney(M.v)}${M.st==='part'?'*':''}${valOk(M.lo)&&valOk(M.hi)?` (${valMoney(M.lo)}–${valMoney(M.hi)})`:''}`; }).filter(Boolean);
+  if(rp.length) out.push(`<div>Earning per install: ${rp.join(' · ')}</div>`);
+  if(pl){ const cm=[['d1','next day'],['d7','after a week'],['d30','after 30 days']].map(([k,l])=>{ const c=valM(V[k]); return valOk(c.v0)&&valOk(c.v1)?`${l} ${valOf100(c.v1)} vs ${valOf100(c.v0)}`:''; }).filter(Boolean), r7=valM(V.rpi7);
+    if(cm.length) cm[cm.length-1]+=' <span class="faint">(of 100)</span>';
+    if(valOk(r7.v0)&&valOk(r7.v1)) cm.push(`earning (1 week) ${valMoney(r7.v1)} vs ${valMoney(r7.v0)}`);
+    if(cm.length) out.push(`<div>${hAttr(lab)} vs ${hAttr(pl)}: ${cm.join(' · ')}</div>`);
+    const c=valM(V.d1); if(c.from0&&c.from1) out.push(`<div class="faint">Tulna: ${hAttr(pl)} ke installs ${uniSpan(c.from0,c.to0)}${valOk(c.n0)?' ('+valNum(c.n0)+')':''} vs ${hAttr(lab)} ke ${uniSpan(c.from1,c.to1)}${valOk(c.n1)?' ('+valNum(c.n1)+')':''} — dono same umar pe</div>`);
+    const sk=(Array.isArray(V.skipped)?V.skipped:[]).filter(s=>s!=null&&s!==''&&typeof s!=='object').map(valVLabel);
+    if(sk.length) out.push(`<div class="faint">Beech ka chhota update ${hAttr(sk.join(', '))} tulna me nahi liya (installs ya din kam)</div>`); }
+  const m=[`${valNum(x.n)} installs`]; if(valOk(x.days)) m.push(`${valNum(x.days)} din naye users isi version pe aaye`); if(valOk(x.share_dom)) m.push(`un dino ${valPct(x.share_dom)} naye users isi version pe`);
+  if(x.gaps) m.push('beech me dusra version aaya tha — dono hisse ek saath gine');
+  out.push(`<div class="faint">${m.join(' · ')}</div>`);
+  const Rl=valRel(x.release); if(Rl&&Rl.key) out.push(`<div class="val-vxa"><span class="pill p-p val-relc" title="Is update ka 7 din pehle vs baad — Active users → Update impact" onclick="event.stopPropagation();uniImpGo('${uniQ(d.app_id)}','${uniQ(Rl.key)}','act')">📦 ${hAttr(Rl.label)}${Rl.date?' · '+uniD(Rl.date):''} · Update impact →</span></div>`);
+  return out.join(''); }
+function valVerCard(d){
+  const B=valBV(d); if(!B) return '';                                      // a file from before 🧬: nothing, byte for byte
+  const ph=valPh(), als=valAlsOf(d), st=String(B.state||''), rows=valVRows(B);
+  const hd=`<div class="ct uni-ct" style="padding:16px 17px 0"><h3>🧬 New users by app version</h3><span class="faint" style="font-size:11.5px">kaunse update ke baad naye users kam ya zyada ruk rahe</span></div>`;
+  const wrap=h=>`<div class="card pad0" id="val-ver" style="margin-bottom:14px">${hd}${h}</div>`, box=t=>`<div class="uni-empty" style="margin:12px 17px 16px">${t}</div>`;
+  const FB={nosplit:'GA4 is app ke naye users ka version alag nahi deta — version-wise data nahi.',nodata:'⏳ Version-wise data aa raha.',
+    low:`Kisi version pe ${valNum(valConst('VER_SHOW_N',100))}+ installs nahi — version-wise faisla nahi.`,single:'Abhi ek hi version — tulna ke liye agla update chahiye.'};
+  if(st==='error') return wrap(box('⚠️ Ye hissa abhi dikh nahi paya.'));
+  const say=B.text?valTxt(B.text):(FB[st]||'⏳ Version-wise data aa raha.');
+  if(st==='nosplit'||st==='nodata'||st==='low'||!rows.length) return wrap(box(say));
+  const lim=Math.max(1,valConst('VER_ROWS',8)), oi=rows.findIndex(x=>String(x.ver)===VALVEROPEN), oldOpen=VALVEROLD||oi>=lim;
+  const shown=oldOpen?rows:rows.slice(0,lim), nOld=Math.max(valOk(B.older)?+B.older:0,rows.length-lim);
+  const few=x=>valOk(x.n)&&+x.n<valConst('VER_JUDGE_N',300)?`<span class="pill uni-pn val-vfew" title="${hAttr(VAL_VFEW)}">few installs</span>`:'';
+  const nm=x=>{ const R=valRel(x.release);
+    return `${R?`<span title="${hAttr('📦 Update '+(R.date?uniD(R.date):''))}">📦 </span>`:''}<b style="color:#fff">${hAttr(x.label||valVLabel(x.ver))}</b>`
+      +`${x.current?' <span class="pill uni-pn val-vnow" title="Abhi naye users isi version pe aa rahe">Current</span>':''}${few(x)}`; };
+  let body;
+  if(ph){ const card=x=>{ const v=String(x.ver), o=VALVEROPEN===v, V=valM(x.vs), c1=valM(x.d1), R30=valM(valM(x.rpi)['30']);
+      // beside "pichhla X" the SAME pair the verdict compares (this version's first 28 days vs its last 28), never
+      // this version's all-days number
+      const D1=valM(V.d1), pair=valOk(D1.v1)&&valOk(D1.v0)&&!['wait','short'].includes(D1.st);
+      const l1=(c1.st==='wait'||c1.st==='nodata'||!valOk(c1.v))?`Next day: ${valVCell(c1)}`:(pair?`<span title="${hAttr(VAL_VTIP.vs)}">${valOf100(D1.v1)}</span><small class="faint"> of 100</small> next day (pichhla ${valOf100(D1.v0)})`:`${valVCell(c1)} next day`);
+      const l2=(R30.st==='wait'||R30.st==='nodata'||!valOk(R30.v))?`30-day earning: ${valVMoney(R30)}`:`${valVMoney(R30)} per install (30 d)`;
+      return `<div class="val-vc${o?' open':''}" data-ver="${hAttr(v)}"${o?' id="val-vopen"':''} onclick="valVX('${uniQ(v)}')"><div class="h">${nm(x)} <span class="faint">· ${uniSpan(x.from,x.to)} · ${valNum(x.n)} installs</span></div>`
+        +`<div class="m">${l1} · ${l2}</div>${ch(x)}${o?`<div class="val-vxd">${valVerDetail(x,d)}</div>`:''}</div>`; }, ch=x=>{ const c=valVerChip(x,als); return /class="pill /.test(c)?`<div class="p">${c}</div>`:''; };   // no verdict (the first version): no chip line
+    body=`<div class="val-cards" id="val-vcards">${shown.map(card).join('')}</div>`; }
+  else { const TH=[['Version'],['Installs'],['Next day',VAL_VTIP.d1],['After a week',VAL_VTIP.d7],['After 30 days',VAL_VTIP.d30],['Earning per install',valRpiTip(d),'1 day · 1 week · 30 days'],
+      ['vs previous version',VAL_VTIP.vs],['Verdict']], nc=TH.length;
+    const tr=x=>{ const v=String(x.ver), o=VALVEROPEN===v, R=valM(x.rpi);
+      return `<tr class="clk${o?' on':''}" data-ver="${hAttr(v)}"${o?' id="val-vopen"':''} onclick="valVX('${uniQ(v)}')"><td class="nm">${nm(x)}<div class="val-vsub">${uniSpan(x.from,x.to)}${valOk(x.days)?` · ${valNum(x.days)} ${+x.days===1?'day':'days'}`:''}</div></td>`
+        +`<td class="uni-num">${valNum(x.n)}</td><td class="uni-num">${valVCell(x.d1)}</td><td class="uni-num">${valVCell(x.d7)}</td><td class="uni-num">${valVCell(x.d30)}</td>`
+        +`<td class="uni-num">${['1','7','30'].map(k=>valVMoney(R[k])).join(' · ')}</td><td>${valVsTxt(x)}</td><td style="white-space:nowrap">${valVerChip(x,als)}</td></tr>`
+        +(o?`<tr class="val-vx" data-vx="${hAttr(v)}"><td colspan="${nc}"><div class="val-vxd">${valVerDetail(x,d)}</div></td></tr>`:''); };
+    body=`<div class="uni-scroll"><table class="uni-sticky val-vtbl" id="val-vtbl" style="min-width:1000px"><thead><tr>${TH.map(([h,t,sb])=>`<th${t?` title="${hAttr(t)}"`:''}>${h}${sb?`<div class="val-ths">${sb}</div>`:''}</th>`).join('')}</tr></thead><tbody>${shown.map(tr).join('')}</tbody></table></div>`; }
+  const LO=valM(B.left_out), SH=valM(B.short), dm=valOk(B.dom_min)?Math.round(+B.dom_min*100):80, wd=valConst('VER_WIN_DAYS',28), more=[], f=[];
+  if(valOk(SH.versions)&&+SH.versions>0) more.push(`<div class="faint" style="font-size:12px" title="${hAttr(`In versions pe ${valNum(valConst('VER_SHOW_N',100))} se kam naye users — alag row nahi`)}">Short-lived versions (${valNum(SH.versions)}) — ${valNum(SH.n)} installs</div>`);
+  if(nOld>0) more.push(rows.length>lim?uniFoldX(oldOpen,'Older versions',nOld,'valVOX()'):`<div class="faint" style="font-size:12px">Older versions (${valNum(nOld)}) — sirf naye ${valNum(lim)} dikhaye</div>`);
+  f.push('Version = install ke din ka version; baad me update karne wale bhi isi me gine.');
+  if(valOk(LO.days)&&+LO.days>0) f.push(`Rollout ke ${valNum(LO.days)} din (jab koi ek version ${dm}%+ naye users pe nahi tha) gine nahi — ${valNum(LO.n)} installs.`);
+  const NV=valM(B.no_vuse); if(valOk(NV.days)&&+NV.days>0) f.push(`${valNum(NV.days)} din ka version data GA4 ne nahi diya — un dino ke ${valNum(NV.n)} installs gine nahi.`);
+  f.push(`Tulna: naye version ke pehle ${wd} din ke installs vs pichhle version ke aakhri ${wd} din — dono same umar pe.`);
+  f.push('Agle din wala number ~5 din baad pakka, hafte wala ~12 din baad, 30 din wala ~35 din baad.');
+  f.push('"in N days" = itne din purane installs abhi nahi — chhota number nahi dikhate · * = sirf kuch din ke installs itne purane · ≈ = andaza.');
+  const lead=st==='single'?box(say):(B.text?`<div class="val-lead" id="val-vlead">${valTxt(B.text)}</div>`:'');
+  // a 🧬 link from Update impact to a version with no row of its own (never 80%+ of a day's new users — a rollout — or
+  // under VER_SHOW_N of them): said, instead of a table without it
+  // … and one released after the newest install-day data (or after the newest version's last day): not there YET
+  const lastTo=rows.map(x=>String(x.to||'')).sort().pop()||'', fresh=!!VALVERDATE&&((d.settled_till&&VALVERDATE>String(d.settled_till))||(lastTo&&VALVERDATE>lastTo));
+  const why=fresh?`abhi naya hai — install-day data ${d.settled_till?uniD(d.settled_till)+' tak':'abhi'} aaya; iski row kuch din me aayegi (jab naye users isi version pe aayenge).`
+    :`ki alag row nahi — is version pe kisi din ${dm}%+ naye users nahi aaye (rollout), ya ${valNum(valConst('VER_SHOW_N',100))} se kam naye users aaye.`;
+  const miss=(VALVEROPEN&&oi<0&&VALVERAPP&&VALVERAPP===String(d.app_id==null?'':d.app_id))?`<div style="padding:0 17px"><div class="val-note" id="val-vnone">ℹ️ ${hAttr(valVLabel(VALVEROPEN))} ${hAttr(why)}</div></div>`:'';
+  return wrap(lead+miss+`<div style="height:8px"></div>${body}${more.length?`<div style="padding:8px 17px 0;display:grid;gap:4px">${more.join('')}</div>`:''}<div class="val-foot" id="val-vfoot">${f.map(t=>`<div>${hAttr(t)}</div>`).join('')}</div>`); }
+// ---- "🗓️ Long-term by install month" (VALUE_CD): 1, 2, 3, 6, 12 months after install — how many still open the app, what an
+// install earned — one row per install month (or 3-month quarter), newest first, a year row wherever the year changes.
+// A file from before (long is an array) draws nothing at all ----
+const VAL_MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], VAL_LT=[30,60,90,180,365], VAL_LRT=[30,90,180,365];
+const VAL_LTH={30:'Day 30',60:'Day 60 (2 mo)',90:'Day 90 (3 mo)',180:'Day 180 (6 mo)',365:'Day 365 (1 yr)'};
+const VAL_LPROJ='Andaza — is app ke purane mahino ki kamai ki chaal se; asli aane pe badlega.';
+function valLD(d){ const L=d&&d.long; return (L&&typeof L==='object'&&!Array.isArray(L))?L:null; }
+// a month / quarter key or date → "Sep 2025" / "Q3 2025"; a span of them → "Jun–Jul 2026" · "Dec 2025–Jan 2026" · "Q1–Q2 2026" (the year always written)
+function valPer(k){ const s=String(k||''), q=s.match(/^(\d{4})-Q([1-4])$/), m=s.match(/^(\d{4})-(\d{2})/); return q?{y:q[1],t:'Q'+q[2]}:(m&&+m[2]>=1&&+m[2]<=12?{y:m[1],t:VAL_MON[+m[2]-1]}:null); }
+function valPerSpan(a,b){ const A=valPer(a), Z=valPer(b); if(!A&&!Z) return ''; if(!A||!Z||(A.y===Z.y&&A.t===Z.t)) return (A||Z).t+' '+(A||Z).y;
+  return A.y===Z.y?`${A.t}–${Z.t} ${Z.y}`:`${A.t} ${A.y}–${Z.t} ${Z.y}`; }
+function valLLab(x){ let s=String(x.label||'').trim(), sub=''; const m=s.match(/^(.*?)\s*\(([^()]*)\)$/); if(m){ s=m[1].trim(); sub=m[2]; }
+  const k=String(x.key||''), q=k.match(/^(\d{4})-Q([1-4])$/);
+  if(!s){ const P=valPer(k)||valPer(x.from); s=P?P.t+' '+P.y:'—'; }
+  if(!sub&&q){ const i=(+q[2]-1)*3; sub=VAL_MON[i]+'–'+VAL_MON[i+2]; }
+  return {s,sub}; }
+function valLYear(x){ return valOk(x.year)?String(Math.round(+x.year)):String(x.key||x.from||'').slice(0,4); }
+// one "X of 100" cell of a month: complete for EVERY install day of the month, or "in N days" — never its early days alone
+function valLCell(M,t,q,rq){ M=valM(M); const st=M.st, n=valInN(M), wh=q?'In 3 mahino':'Is mahine';
+  if(st==='wait') return `<span class="faint" title="${hAttr(`${wh} ke sabse naye installs ${t} din ke ${n?n+' din me':'jaldi'} honge — tab pakka number.`)}">${n?'in '+valDays(n):'Wait'}</span>`;
+  if(st==='nodata') return VAL_NODATA; if(!valOk(M.v)) return '<span class="faint">—</span>';
+  const v=(rq||M.q?'≈':'')+valOf100(M.v), tl='<small class="faint"> of 100</small>';
+  if(st==='few') return `<span class="faint" title="${hAttr(`Sirf ${valNum(M.ret)} users wapas — number pakka nahi.`)}">${v}</span>${tl}`;
+  const rg=valOk(M.lo)&&valOk(M.hi)?`Shayad ${valOf100(M.lo)}–${valOf100(M.hi)} ke beech (100 me)`:'';
+  return (rg||rq||M.q?`<span title="${hAttr([rq||M.q?VAL_TIP.q:'',rg].filter(Boolean).join(' · '))}">${v}</span>`:v)+tl; }
+// earning per install at t: seen · ≈ (k outside the normal range / a GA4 day not whole) · grey italic ≈ projection · "—" / "in N days"
+function valLMoney(M,full){ M=valM(M); const n=valInN(M);
+  if(M.st==='nodata') return VAL_NODATA;
+  if(M.proj&&valOk(M.v)) return `<span class="val-lproj" data-proj="1" title="${hAttr(VAL_LPROJ+(valOk(M.lo)&&valOk(M.hi)?' Range '+valMoney(M.lo)+'–'+valMoney(M.hi)+'.':'')+(n?' Pakka number ~'+n+' din me.':''))}">≈${valMoney(M.v)}</span>`;
+  if(M.st==='wait'||!valOk(M.v)) return `<span class="faint" title="${hAttr(n?`Pakka number ${n} din me.`:'Abhi nahi.')}">${full&&n?'in '+valDays(n):'—'}</span>`;
+  return M.est?`<span title="${hAttr(VAL_VEST)}">≈${valMoney(M.v)}</span>`:valMoney(M.v); }
+// the four earning ages in one cell — a month with none of them yet says once when the first comes ("in 14 days")
+// … an age not old enough yet (and not projected) reads "1 yr in N days" like every not-yet cell of the section — said
+// once, for the first such age (the later ones come after it); "—" stays unknown
+const VAL_LRL={30:'30 d',90:'90 d',180:'6 mo',365:'1 yr'};
+function valLRpi(R){ const M=VAL_LRT.map(t=>valM(R[t]));
+  if(M.every(m=>!valOk(m.v)&&m.st!=='nodata')){ const n=valInN(M[0]); return `<span class="faint" title="${hAttr(n?`Pehla (30 din wala) number ${n} din me.`:'Abhi nahi.')}">${n?'in '+valDays(n):'—'}</span>`; }
+  const out=[]; for(let i=0;i<M.length;i++){ const m=M[i], n=valInN(m);
+    if(!valOk(m.v)&&m.st==='wait'&&n){ out.push(`<span class="faint" title="${hAttr(`${VAL_LRL[VAL_LRT[i]]} wala pakka number ${n} din me.`)}">${VAL_LRL[VAL_LRT[i]]} in ${valDays(n)}</span>`); break; }
+    out.push(valLMoney(m)); }
+  return out.join(' · '); }
+function valLB(x,q){ if(x.b365_thin) return `<span class="faint" title="${hAttr(`Is ${q?'quarter':'mahine'} Google Ads kharcha bahut thoda (hafte me ${valMoney(valConst('SPEND_MIN_WEEK',20))} se kam) — ${csym()}100 pe wapsi ka hisaab nahi`)}">Little ads</span>`;
+  if(!valOk(x.b365)) return '<span class="faint">—</span>';
+  return x.b365_proj?`<span class="val-lproj" data-proj="1" title="${hAttr(VAL_LPROJ)}">≈${valP100(x.b365)}</span>`:valP100(x.b365); }
+function valLongCard(d){
+  const L=valLD(d); if(!L) return '';                                      // a file from before 🗓️: nothing, byte for byte
+  const ph=valPh(), st=String(L.state||''), q=L.grain==='quarter', cur=csym();
+  const rows=valArr(L.rows).filter(x=>x.key||x.from).sort((p,z)=>String(z.key||z.from||'').localeCompare(String(p.key||p.from||'')));
+  const hd=`<div class="ct uni-ct" style="padding:16px 17px 0"><h3>🗓️ Long-term by install month</h3><span class="faint" style="font-size:11.5px">2, 3, 6, 12 mahine baad kitne bache, kitna kamaya</span></div>`;
+  const wrap=h=>`<div class="card pad0" id="val-long" style="margin-bottom:14px">${hd}${h}</div>`, box=t=>`<div class="uni-empty" style="margin:12px 17px 16px">${t}</div>`;
+  const FB={young:'⏳ Abhi koi mahina 60 din purana nahi — pehla number jaldi aayega.',low:'Is app me mahine ke install kam — lambi wapsi ka number pakka nahi.'};
+  if(st==='error') return wrap(box('⚠️ Ye hissa abhi dikh nahi paya.'));
+  const say=L.text?valTxt(L.text):(FB[st]||'⏳ Mahine-wise data aa raha.');
+  if(st==='low'||!rows.length) return wrap(box(say));
+  const lim=Math.max(1,q?valConst('LONG_QROWS',8):valConst('LONG_ROWS',18)), all=VALLONG==='all', shown=all?rows:rows.slice(0,lim), hasB=rows.some(x=>valOk(x.b365));
+  const dTip=t=>`Us ${q?'quarter':'mahine'} ke 100 naye users me se kitne install ke ${t}ve din app khol rahe the.`;
+  const TH=ph?[['Installed in'],['Day 90',dTip(90)],['Day 365',dTip(365)],['Earning 1 yr','Ek install ki 1 saal ki kamai, install ke din se — ≈ grey = andaza']]
+    :[['Installed in'],['Installs'],...VAL_LT.map(t=>[VAL_LTH[t],dTip(t)]),['Earning per install',valRpiTip(d),'30 d · 90 d · 6 mo · 1 yr'],
+      ...(hasB?[[`1 yr per ${cur}100`,`Us ${q?'quarter':'mahine'} ke Google Ads ke ${cur}100 pe 1 saal me kitni kamai wapas aayi.`]]:[])];
+  const nc=TH.length;
+  // the month's app updates: one 📦 (its versions in the tooltip) → the first one's Update impact
+  const lab=x=>{ const {s,sub}=valLLab(x), R=(Array.isArray(x.release)?x.release:[]).map(valRel).filter(Boolean), K=R.find(Z=>Z.key);
+    const t=R.length?hAttr('📦 '+R.map(Z=>Z.label+(Z.date?' · '+uniD(Z.date):'')).join(', ')+(K?' — Update impact':'')):'';
+    const rl=!R.length?'':(K?`<span class="val-lrel" title="${t}" onclick="uniImpGo('${uniQ(d.app_id)}','${uniQ(K.key)}','act')">📦</span>`:`<span class="val-lrel" title="${t}">📦</span>`);
+    return `<td class="nm"><b style="color:#fff"${x.part?` title="${hAttr(`${q?'Ye 3 mahine':'Mahina'} poora data me nahi (${uniD(x.from)} se)`)}"`:''}>${hAttr(s)}${x.part?'*':''}</b>${sub?` <span class="val-vsub">(${hAttr(sub)})</span>`:''}${rl}`
+      +`${ph?`<div class="val-vsub">${valNum(x.n)} installs</div>`:''}</td>`; };
+  let body='', yr='';
+  shown.forEach(x=>{ const y=valLYear(x), D=valM(x.d), R=valM(x.rpi), rq=!!x.q;
+    if(y&&y!==yr){ yr=y; body+=`<tr class="val-yr" data-yr="${hAttr(y)}"><td class="nm">── ${hAttr(y)} ──</td><td colspan="${nc-1}"></td></tr>`; }
+    body+=`<tr data-month="${hAttr(x.key||x.from)}">${lab(x)}`+(ph?`<td class="uni-num">${valLCell(D['90'],90,q,rq)}</td><td class="uni-num">${valLCell(D['365'],365,q,rq)}</td><td class="uni-num">${valLMoney(R['365'],true)}</td>`
+      :`<td class="uni-num">${valNum(x.n)}</td>${VAL_LT.map(t=>`<td class="uni-num">${valLCell(D[t],t,q,rq)}</td>`).join('')}<td class="uni-num">${valLRpi(R)}</td>${hasB?`<td class="uni-num">${valLB(x,q)}</td>`:''}`)+'</tr>'; });
+  const tg=rows.length>lim?`<div style="padding:10px 17px 0"><div class="chips" style="margin-bottom:0">${[['18',`${lim} ${q?'quarters':'months'}`],['all','All']].map(([v,l])=>`<span class="chip${(v==='all')===all?' on':''}" onclick="valLG('${v}')">${l}</span>`).join('')}</div></div>`:'';
+  const tbl=`<div class="uni-scroll" style="margin-top:10px"><table class="uni-sticky val-ltbl" id="val-ltbl" style="min-width:${ph?330:1040}px"><thead><tr>${TH.map(([h,t,sb])=>`<th${t?` title="${hAttr(t)}"`:''}>${h}${sb?`<div class="val-ths">${sb}</div>`:''}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+  // the normal the long-term alert compares with: the months before the newest two
+  // each normal says its OWN months (each age compares with the months complete at that age): one label when they
+  // all share them, else one per number — never one span printed over numbers from other months
+  const Bs=valM(L.base), b60=valM(Bs['60']), b90=valM(Bs['90']), br=valM(Bs.rpi180), U=q?'quarters':'mahine';
+  const bs=[[b60,`Day 60 ~${valOf100(b60.v)} of 100`],[b90,`Day 90 ~${valOf100(b90.v)} of 100`],[br,`6 mahine ki kamai ~${valMoney(br.v)} per install`]].filter(([o])=>valOk(o.v));
+  const lbl=o=>[valOk(o.rows)?`pichhle ${valNum(o.rows)} ${U}`:'',o.from?valPerSpan(o.from,o.to):''].filter(Boolean).join(', '), keys=bs.map(([o])=>lbl(o));
+  const one=keys.every(k=>k===keys[0]);
+  const base=bs.length?`<div class="val-lbase" id="val-lbase">Normal${one&&keys[0]?` (${keys[0]})`:''}: ${bs.map(([o,t],i)=>t+(!one&&keys[i]?` (${keys[i]})`:'')).join(' · ')}</div>`:'';
+  const f=['Day 60 = install ke 60ve din app kholne wale, 100 naye users me se (Firebase jaisa base).',
+    `Kamai = ${d.scale&&d.scale.src==='network'?'AdMob ki kamai (sirf AdMob network)':'AdMob ki kamai (sab networks)'}, install ke din se, ek install pe.`,
+    'Mahine ka 90 din wala number mahina khatam hone ke ~95 din baad; 1 saal wala ~370 din baad.',
+    '"in N days" = abhi itne din pure nahi hue — chhota number nahi dikhate · ≈ grey = andaza · * = mahina poora data me nahi.'].map(hAttr);
+  if(L.edge) f.push(hAttr(`Install-wise data ${uniD(L.edge)} se — usse pehle ka "No data".`));
+  if(L.note) f.push(valTxt(L.note)); else if(q) f.push(`Is app me mahine ke install ${valNum(valConst('LONG_MIN_N',1000))} se kam — isliye 3-3 mahine milake.`);
+  const lead=st==='young'?box(say):(L.text?`<div class="val-lead" id="val-llead">${valTxt(L.text)}</div>`:'');
+  return wrap(lead+base+tg+tbl+`<div class="val-foot" id="val-lfoot">${f.map(t=>`<div>${t}</div>`).join('')}</div>`); }
 // ---- "🔍 Data check" (folded): GA4 ÷ AdMob a week, the unassigned part, old users, what came in, FX, zones, deductions ----
 // the Data check's own sentences come from the build (the NEWEST weeks: an AdMob side that stopped coming is said
 // plainly; the network-only fallback, deductions, FX and time zones); the page's own line only when they are missing
@@ -5088,18 +5432,29 @@ function valPortfolio(){
   return head+note+sum+alCard+table+cty+orgCard+noCard+valTimingNote(); }
 // ---- Alerts screen: the open Install value alerts (from DATA.value — no lazy load); nothing at all when there are none ----
 function valAlertsFor(){ return valAls().filter(x=>(!APP||x.app===APP)&&uniVis(x.app_id)); }
-const VAL_FAM={pay_slow:'Ads money back',pay_loss:'Ads money not coming back',geo_move:'Country',geo_cost:'Country ads costly',iv_link:'GA4 ↔ AdMob link'};
+const VAL_FAM={pay_slow:'Ads money back',pay_loss:'Ads money not coming back',geo_move:'Country',geo_cost:'Country ads costly',iv_link:'GA4 ↔ AdMob link',
+  ver_ret:'New users by version',long_ret:'Long-term retention'};
+// a long-term alert's install months: "Jun–Jul 2026" (its two month keys, else its install span)
+function valAlMonths(x){ const M=(Array.isArray(x&&x.months)?x.months:[]).filter(k=>valPer(k)).map(String).sort();
+  return M.length?valPerSpan(M[0],M[M.length-1]):valPerSpan(x&&(x.week_from||x.installs_from),x&&(x.week_to||x.installs_to)); }
 function valAlertCards(list){
   const CAUSE={'pay_slow|down':'Install ka kharcha (Google Ads) badha ya ek install ki kamai ghati — bid / budget, campaign aur naya update dekho.','pay_slow|up':'Paisa jaldi wapas aa raha — jo badla wo chalne do.',
     'pay_loss|down':'Target din me ads ka paisa wapas nahi — sasta install (bid / country) ya zyada kamai (ads / retention) chahiye; kharcha bada ho to budget ghatao.',
     'geo_move|down':'Is country ke naye users kam wapas aa rahe / kam kama rahe — us country ka campaign, creative ya naya version check karo.','geo_move|up':'Is country ke users zyada wapas aa rahe — achhi khabar.',
-    'geo_cost|down':'Is country me install mehenga, kamai kam — is country ka bid ghatao ya targeting se hatao.','iv_link|down':'Firebase–AdMob link check karo — tab tak is tab ki kamai AdMob ke hisaab se ≈.'};
+    'geo_cost|down':'Is country me install mehenga, kamai kam — is country ka bid ghatao ya targeting se hatao.','iv_link|down':'Firebase–AdMob link check karo — tab tak is tab ki kamai AdMob ke hisaab se ≈.',
+    'ver_ret|down':'Is version ke saath aaye naye users kam ruk rahe — is update me kya badla (pehli screen, ads, crash) dekho; Update impact card bhi dekho.','ver_ret|up':'Is version ke naye users zyada ruk rahe — jo badla wo chalne do.',
+    'long_ret|down':'In mahino ke installs lambe samay me kam bache — campaign, country ka mix ya us waqt ke version dekho. Ye dheere badalta hai, jaldbaazi nahi.'};
   const COL={warning:'var(--bad)',good:'var(--good)',watch:'var(--watch)'}, IC={warning:'🟠',watch:'🟡',good:'🎉'};
   return (list||[]).map(x=>{ const R=x.release||null, cause=CAUSE[(x.family||'')+'|'+(x.dir==='up'?'up':'down')]||CAUSE[(x.family||'')+'|down'];
     const sv=x.severity==='warning'?['Worse','p-r']:(x.severity==='good'?['Better','p-g']:['Watch','p-y']);
-    const what=x.family==='pay_slow'?(x.dir==='up'?'faster':'slower'):(x.family==='geo_move'?({d1:'came back next day',d7:'came back after a week',d30:'came back after 30 days',rpi7:'earning per install'}[x.metric]||'change'):'');
-    const title=`💸 ${VAL_FAM[x.family]||'Install value'}${x.cc?' — '+valFlag(x.cc)+' '+hAttr(valCtyName(x.cc)):''}${what?' · '+what:''}`;
-    const btn=`<span class="abtn pri" onclick="valGo('${uniQ(x.app_id)}')">Open app →</span>`+(R&&R.key?`<span class="abtn" onclick="uniImpGo('${uniQ(x.app_id)}','${uniQ(R.key)}','act')">Update detail →</span>`:'');
+    const what=x.family==='pay_slow'?(x.dir==='up'?'faster':'slower'):(x.family==='geo_move'?({d1:'came back next day',d7:'came back after a week',d30:'came back after 30 days',rpi7:'earning per install'}[x.metric]||'change')
+      :(x.family==='ver_ret'?({d1:'came back next day',d7:'came back after a week',rpi7:'earning per install (1 week)'}[x.metric]||'change'):(x.family==='long_ret'?({d60:'still opening after 60 days',d90:'still opening after 90 days',rpi180:'earning per install (6 months)'}[x.metric]||'change')
+      :(valAlso(x)?'also fewer came back':''))));
+    // a version's alert names its version ("— v2.4.1"), a long-term one its install months ("— Jun–Jul 2026"); each opens its own row / section
+    const vl=valAlVer(x), lm=x.family==='long_ret'?valAlMonths(x):'';
+    const title=`💸 ${VAL_FAM[x.family]||'Install value'}${x.cc?' — '+valFlag(x.cc)+' '+hAttr(valCtyName(x.cc)):''}${vl?' — '+hAttr(vl):''}${lm?' — '+hAttr(lm):''}${what?' · '+what:''}`;
+    const go=vl?`valVerGo('${uniQ(x.app_id)}','${uniQ(x.ver)}')`:(x.family==='long_ret'?`valGoTo('${uniQ(x.app_id)}','val-long')`:`valGo('${uniQ(x.app_id)}')`);
+    const btn=`<span class="abtn pri" onclick="${go}">Open app →</span>`+(R&&R.key?`<span class="abtn" onclick="uniImpGo('${uniQ(x.app_id)}','${uniQ(R.key)}','act')">Update detail →</span>`:'');
     return `<div class="alert ${x.severity==='critical'?'crit':(x.severity||'watch')}" data-sev="${x.severity||'watch'}" data-metrics="value"><div style="font-size:17px">${IC[x.severity]||'•'}</div><div class="abody">
       <div class="atitle">${title} <span class="pill ${sv[1]}" style="margin-left:4px">${sv[0]}</span>${x.fresh?'<span class="pill p-p" style="margin-left:5px">New</span>':''}</div>
       <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18)}<span class="faint">· ${valWhen(x)} · GA4 + AdMob + Google Ads${x.data_till?' · data till '+fmtD(x.data_till):''}</span></div>

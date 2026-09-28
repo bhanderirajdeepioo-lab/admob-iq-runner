@@ -108,9 +108,13 @@ jobs:
           GA4_RETENTION_CHANGED: ${{ vars.GA4_RETENTION_CHANGED }}
           # Install value tab (GA4 + Ads): GA4_IDAY=true starts its install-day GA4 fetch (rollout step 1),
           # GA4_VALUE=true shows the tab (step 3, after the alert replay); VALUE_PAYBACK_DAYS = the owner's
-          # "paisa kitne din me wapas" target (30/60/90/180/365; empty: 90). All off / default until set.
+          # "paisa kitne din me wapas" target (30/60/90/180/365; empty: 90). GADS_GEO=true adds Google Ads cost
+          # by country (its own cache, data/roas_geo_cache*.json.gz); VALUE_CD=true adds new users by app version
+          # and long-term by install month (no new GA4 call). All off / default until set.
           GA4_IDAY:             ${{ vars.GA4_IDAY || 'false' }}
           GA4_VALUE:            ${{ vars.GA4_VALUE || 'false' }}
+          GADS_GEO:             ${{ vars.GADS_GEO || 'false' }}
+          VALUE_CD:             ${{ vars.VALUE_CD || 'false' }}
           VALUE_PAYBACK_DAYS:   ${{ vars.VALUE_PAYBACK_DAYS }}
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints

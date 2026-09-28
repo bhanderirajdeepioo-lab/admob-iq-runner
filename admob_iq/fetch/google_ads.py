@@ -172,6 +172,116 @@ def _app_convval_lag_for(customer_id, login_customer_id, dev_token, access_token
     return out
 
 
+# ── cost and downloads BY COUNTRY (the Install value tab, GADS_GEO; fetch.gads_geo runs these) ────────────────────
+# The exact queries the gads-geo-probe measured: geographic_view with LOCATION_OF_PRESENCE holds ~100% of the app
+# campaigns' cost, and MULTI_CHANNEL is every app campaign. Every field a query filters on is also selected (Google
+# refuses a WHERE on some fields the SELECT lacks). Read-only; `search` (default _search) is injectable for tests.
+
+def _app_geo_spend_for(customer_id, login_customer_id, dev_token, access_token, start, end, search=None):
+    """App-campaign COST by country for ONE account over [start, end] → rows {store_id, date, ccid, cost_micros}
+    (account currency micros). store_id "" = a row without an app id (the caller drops and counts it); ccid None = a
+    row without a country (the caller's "Other / unmapped")."""
+    q = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, campaign.advertising_channel_type, "
+         "geographic_view.country_criterion_id, geographic_view.location_type, "
+         "segments.date, metrics.cost_micros "
+         "FROM geographic_view "
+         "WHERE segments.date BETWEEN '%s' AND '%s' "
+         "AND campaign.advertising_channel_type = 'MULTI_CHANNEL' "
+         "AND geographic_view.location_type = 'LOCATION_OF_PRESENCE' "
+         "AND metrics.cost_micros > 0" % (start, end))
+    out = []
+    for row in (search or _search)(customer_id, login_customer_id, dev_token, access_token, q):
+        camp = row.get("campaign") or {}
+        gv = row.get("geographicView") or {}
+        if camp.get("advertisingChannelType") not in (None, "MULTI_CHANNEL") \
+                or gv.get("locationType") not in (None, "LOCATION_OF_PRESENCE"):
+            continue                                            # what the WHERE already excludes (selected: checked)
+        v = gv.get("countryCriterionId")
+        try:
+            ccid = str(int(v)) if v not in (None, "", 0, "0") else None
+        except (TypeError, ValueError):
+            ccid = None
+        out.append({"store_id": _norm_store((camp.get("appCampaignSetting") or {}).get("appId")),
+                    "date": str((row.get("segments") or {}).get("date") or ""), "ccid": ccid,
+                    "cost_micros": int((row.get("metrics") or {}).get("costMicros") or 0)})
+    return out
+
+
+def _app_geo_installs_for(customer_id, login_customer_id, dev_token, access_token, start, end, search=None):
+    """App-campaign DOWNLOAD conversions by country for ONE account over [start, end] → rows {store_id, date, ccid,
+    dl}. A second query: conversion segments cannot share a request with cost. Same store id / ccid rules as
+    _app_geo_spend_for."""
+    q = ("SELECT campaign.app_campaign_setting.app_id, campaign.advertising_channel_type, "
+         "geographic_view.country_criterion_id, geographic_view.location_type, "
+         "segments.date, segments.conversion_action_category, metrics.conversions "
+         "FROM geographic_view "
+         "WHERE segments.date BETWEEN '%s' AND '%s' "
+         "AND campaign.advertising_channel_type = 'MULTI_CHANNEL' "
+         "AND geographic_view.location_type = 'LOCATION_OF_PRESENCE' "
+         "AND segments.conversion_action_category = 'DOWNLOAD'" % (start, end))
+    out = []
+    for row in (search or _search)(customer_id, login_customer_id, dev_token, access_token, q):
+        camp = row.get("campaign") or {}
+        gv = row.get("geographicView") or {}
+        if camp.get("advertisingChannelType") not in (None, "MULTI_CHANNEL") \
+                or gv.get("locationType") not in (None, "LOCATION_OF_PRESENCE") \
+                or (row.get("segments") or {}).get("conversionActionCategory") not in (None, "DOWNLOAD"):
+            continue
+        v = gv.get("countryCriterionId")
+        try:
+            ccid = str(int(v)) if v not in (None, "", 0, "0") else None
+        except (TypeError, ValueError):
+            ccid = None
+        out.append({"store_id": _norm_store((camp.get("appCampaignSetting") or {}).get("appId")),
+                    "date": str((row.get("segments") or {}).get("date") or ""), "ccid": ccid,
+                    "dl": float((row.get("metrics") or {}).get("conversions") or 0)})
+    return out
+
+
+def _geo_iso(login_customer_id, dev_token, access_token, ids=None, search=None):
+    """Country criterion id → ISO-2, always asked on the MCC → {ccid: {"cc": ISO-2 | None, "parent": ccid | None}}.
+    ids None: the Country list (target_type 'Country'). ids [...]: those ids, ANY target type (a territory keeps its
+    own ISO-2; a region without one names its parent) — one request for all of them, asked once more by resource name
+    when Google refuses the id list (HTTP 400). Any other failure raises (the caller counts it)."""
+    srch = search or _search
+    mcc = login_customer_id
+
+    def num(v):
+        try:
+            return str(int(str(v).rsplit("/", 1)[-1])) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+    if ids is None:
+        rows = srch(mcc, mcc, dev_token, access_token,
+                    "SELECT geo_target_constant.id, geo_target_constant.country_code "
+                    "FROM geo_target_constant WHERE geo_target_constant.target_type = 'Country'")
+    else:
+        want = sorted({n for n in (num(i) for i in ids) if n}, key=int)
+        if not want:
+            return {}
+        sel = ("SELECT geo_target_constant.id, geo_target_constant.country_code, geo_target_constant.target_type, "
+               "geo_target_constant.parent_geo_target, geo_target_constant.status "
+               "FROM geo_target_constant WHERE ")
+        try:
+            rows = srch(mcc, mcc, dev_token, access_token, sel + "geo_target_constant.id IN (%s)" % ", ".join(want))
+        except Exception as e:
+            if not str(e).startswith("HTTP 400"):
+                raise
+            rows = srch(mcc, mcc, dev_token, access_token, sel + "geo_target_constant.resource_name IN (%s)"
+                        % ", ".join("'geoTargetConstants/%s'" % i for i in want))
+    out = {}
+    for row in rows or []:
+        g = row.get("geoTargetConstant") or {}
+        gid = num(g.get("id")) or num(g.get("resourceName"))
+        if not gid:
+            continue
+        cc = str(g.get("countryCode") or "").strip().upper()
+        out[gid] = {"cc": cc if len(cc) == 2 and cc.isascii() and cc.isalpha() else None,
+                    "parent": num(g.get("parentGeoTarget")) if ids is not None else None}
+    return out
+
+
 def _fx_cache_path():
     import os
     return os.getenv("FX_CACHE_PATH", os.path.join("data", "fx_cache.json"))

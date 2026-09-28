@@ -18,6 +18,12 @@ Alerts (pay_slow, pay_loss, geo_move, geo_cost, iv_link) are evaluated once per 
 Active tab's rules against floods: the first evaluation, a new input (28-day burn-in) and a moved GA4 stream are
 seeded (shown, never sent); hourly re-runs with the same week end change nothing.
 
+Behind flags, both off by default (SPEC_CD_GEO; off = every output exactly as before): GADS_GEO hands the engine
+Google Ads cost per country as a week envelope (_Geo: a week's cost is used only while Google Ads' own country total
+covers its campaign cost) — a country's cost per install, its money back and geo_cost; VALUE_CD adds C (new users by
+the app version of their install day) and D (long-term by install month) from engine.value_cd, with ver_ret / long_ret
+on the same episode rules (dedupe per family group: DEDUP).
+
 Dates in texts come from uninstall.fmt_span / fmt_day (the page formats ISO dates itself); no date literal lives here.
 """
 
@@ -125,11 +131,42 @@ REOPEN_SEED_DAYS = {"pay_loss": 91, "geo_move": 42}   # a reopen this soon after
 
 GOOD = ("ok", "q", "empty")                        # a folded Q-B day
 CGOOD = ("ok", "smp", "gap")                       # a folded Q-C day
-FAMILIES = ("pay_slow", "pay_loss", "geo_move", "geo_cost", "iv_link")
+FAMILIES = ("pay_slow", "pay_loss", "geo_move", "geo_cost", "iv_link", "ver_ret", "long_ret")
 SEV_ORDER = {"warning": 0, "watch": 1, "good": 2}
-UNIT = {"pay_slow": "per100", "pay_loss": "days", "geo_move": "pp", "geo_cost": "usd", "iv_link": "pct"}
+UNIT = {"pay_slow": "per100", "pay_loss": "days", "geo_move": "pp", "geo_cost": "usd", "iv_link": "pct",
+        "ver_ret": "pp", "long_ret": "pp"}
 INPUTS = {"pay_slow": ("iday", "spend", "k"), "pay_loss": ("iday", "spend", "k"), "geo_move": ("iday", "cty"),
-          "geo_cost": ("cty", "geo", "spend"), "iv_link": ("iday", "k")}
+          "geo_cost": ("cty", "geo", "spend"), "iv_link": ("iday", "k"),
+          "ver_ret": ("iday", "ver"), "long_ret": ("iday", "long")}      # (+ "k" when an earning metric leads)
+RPI_METRICS = ("rpi7", "rpi180")                   # an earning metric: unit usd, and the AdMob scale is an input
+# Google Ads cost by country (GADS_GEO, the week envelope of value_build._app_geo): a week's country cost is used only
+# when Σ country cost ÷ campaign cost lies in [GEO_COV_MIN, GEO_COV_MAX]; UNMAPPED = cost Google Ads could not place in
+# a country (counted in totals, shown, never judged). Exported in consts only while GADS_GEO is on (value_build.consts)
+GEO_COV_MIN = 0.97
+GEO_COV_MAX = 1.03
+# … or when the two differ by no more than the cache's own rounding: each country-week cell keeps 1/100 of the
+# currency (half a unit of error at most), so value_build puts the bound of the week's cells into the envelope ("tol",
+# USD); GEO_COV_ABS is the floor (and the bound of an envelope without "tol"). A trickle week (a few paise after a
+# campaign stopped) can miss 3% by that rounding alone and must not hide a whole window's country cost — but a week
+# with real cost missing (more than the rounding can explain) is not covered, however small
+GEO_COV_ABS = 0.05
+UNMAPPED = "XX"
+# a week whose "Other / unmapped" cost is more than 1 − GEO_COV_MIN of its campaign cost (a failed country map) is not
+# covered either: Google Ads' cost is there, but not in any country — never read as "No ads here" in a real country
+# ── a country's cost is JUDGED (Keep / Slow / Costly, money back, ₹ per ₹100 and geo_cost) only when ads there are more
+# than a trickle: ≥ SPEND_MIN_WEEK USD a window week on average, ≥ GEO_DL_MIN Google Ads downloads in the window and ads
+# bringing ≥ GEO_PAID_MIN of its new users — else "Little ads" (its cost shown, the no-cost verdict, no alert). The
+# blended cost of a country where ads buy 1% of the installs says nothing about whether those ads pay back
+GEO_DL_MIN = 50
+GEO_PAID_MIN = 0.3
+GEO_XX_NOADS = 0.005            # unmapped above this share of the window's cost: a country with no cost of its own is
+                                # "unknown" (its cost may sit in the unmapped part), never "No ads here"
+GEO_BACK_REL = 0.15             # a country's money back is "seen" only when the earning weeks' own cost per install is
+                                # within ±15% of the window's (the ₹ back per ₹100 uses those weeks' own cost)
+GEOCOST_DEDUP_DAYS = 7          # one geo_cost notification per app per 7 days (the rest shown, not sent)
+# one notification per app, family group and direction per N days (episodes): the pay_* rule, generalised
+VER_DEDUP_DAYS = 7
+LONG_DEDUP_DAYS = 28
 NWORD = {1: "agle din", 7: "hafte baad", 30: "30 din baad"}
 NAMES = {"US": "United States", "IN": "India", "GB": "United Kingdom", "DE": "Germany", "FR": "France", "BR": "Brazil", "ID": "Indonesia",
          "PK": "Pakistan", "BD": "Bangladesh", "NG": "Nigeria", "PH": "Philippines", "VN": "Vietnam", "TH": "Thailand",
@@ -161,6 +198,13 @@ CONSTS = {k.lower(): (list(v) if isinstance(v, tuple) else (dict(v) if isinstanc
     IAP_SHOW=IAP_SHOW, TREND_WEEKS=TREND_WEEKS, K_WEEK_DAYS=K_WEEK_DAYS, K_POOL_WEEKS=K_POOL_WEEKS,
     ADS_STALE_DAYS=ADS_STALE_DAYS, CPI_JUMP=CPI_JUMP, CTY_ALPHA=CTY_ALPHA, CTY_MIN_DF=CTY_MIN_DF,
     REOPEN_SEED_DAYS=dict(REOPEN_SEED_DAYS)).items()}
+
+# added after CONSTS on purpose: CONSTS (and so dashboard["value"]["consts"] / asset_v) stays exactly as it was while
+# GADS_GEO and VALUE_CD are off — value_cd.CONSTS carries the whole table when VALUE_CD is on
+REOPEN_SEED_DAYS.update(geo_cost=42, long_ret=91)
+DEDUP = {"pay": (("pay_slow", "pay_loss"), PAY_DEDUP_DAYS), "ver": (("ver_ret",), VER_DEDUP_DAYS),
+         "long": (("long_ret",), LONG_DEDUP_DAYS), "geo": (("geo_cost",), GEOCOST_DEDUP_DAYS)}
+DEDUP_OF = {f: g for g, (fams, _) in DEDUP.items() for f in fams}
 
 ONE = timedelta(days=1)
 
@@ -1060,9 +1104,12 @@ def _countries(P, ida, shapes, H, geo, app_name, prev_sets=None):
     """Countries (§2.5). prev_sets = the Top / Low countries of the previous weekly evaluation: a country is named
     Best / Weakest only when it holds two weekly evaluations in a row."""
     C = _Cty(P, ida)
-    out = {"win": None, "geo": bool(geo), "smp": C.smp, "app": None, "rows": [],
+    G = geo if isinstance(geo, _Geo) else _Geo(geo)
+    out = {"win": None, "geo": G.on(), "smp": C.smp, "app": None, "rows": [],
            "small": {"countries": 0, "n": 0, "zz": 0}, "unknown": {"n": 0}, "unassigned": {"n": 0, "rev_share": None},
            "state": "wait", "phi": {}}
+    if G.env():                                   # the week envelope (GADS_GEO): why a cost is (not) shown
+        out.update(geo_why=None, geo_cov=None, cost=None)
     if not C.cw or C.cfrom is None:
         return out, C, None
     # the window: 4 settled weeks per metric (12 when fewer than RANK_MIN countries have CTY_JUDGE installs)
@@ -1083,6 +1130,11 @@ def _countries(P, ida, shapes, H, geo, app_name, prev_sets=None):
                   "to30": _iso(max(win[30]) + timedelta(days=6)) if win[30] else None, "size": nw}
     n_all = sum(P["wk"][W]["n"] for W in wd)
     clean = {t: all(C.clean(W, t) for W in win[t]) for t in (1, 7, 30, 60, 90)}
+    gwhy = G.why(wd) if G.env() else None         # the envelope: country cost over exactly the D1 window's weeks
+    xx_big = False                                # a material unmapped part: "no cost here" is not known
+    if gwhy == "ok":
+        tot = G.total(wd)
+        xx_big = tot > 0 and G.cost(UNMAPPED, wd)[0] / tot > GEO_XX_NOADS
 
     def dmet(cc, N):
         ws = win[N]
@@ -1174,10 +1226,39 @@ def _countries(P, ida, shapes, H, geo, app_name, prev_sets=None):
                "verdict": "few", "why": None, "sure": False, "text": None, "_obs": obs, "_h": h}
         row["rpi"]["90"] = ({"v": r90["v"], "lo": r90["lo"], "hi": r90["hi"], "proj": bool(r90.get("proj")),
                              "est": bool(r90.get("est"))} if r90 else None)
-        cost, dl = _geo_sum((geo or {}).get(cc), wd)
-        if cost and n:                                # the cost over exactly the weeks of its installs
-            row["cpi"] = {"v": _m6(cost / n), "ads": _m6(cost / dl) if dl else None, "spend": _m6(cost)}
-            row["pay"] = _cty_pay(obs, shapes, cost / n)
+        if G.env():                                   # the week envelope: only when every window week is covered
+            if gwhy == "ok" and n:
+                cost, dl = G.cost(cc, wd)
+                csrc = G.cost_src(cc, wd)
+                if cost > 0:
+                    cpi = cost / n
+                    row["cpi"] = {"v": _m6(cpi), "ads": _m6(cost / dl) if dl else None, "spend": _m6(cost),
+                                  "dl": _m6(dl), "paid": _g4(min(1.0, dl / n)) if dl is not None else None}
+                    if csrc is not None:              # the billed currency (the ₹ view: exactly what Ads billed)
+                        row["cpi"].update(src=_m6(csrc / n), spend_src=_m6(csrc),
+                                          ads_src=_m6(csrc / dl) if dl else None)
+                    thin = _geo_thin(cost, dl, n, len(wd))
+                    if thin:                          # a trickle of ads: shown, never judged (no-cost verdict)
+                        row["cpi"]["thin"] = thin
+                    else:
+                        row["pay"] = _cty_pay(obs, shapes, cpi, env=True)
+                        row["back"], same = _geo_back(C, G, cc, obs, row["rpi"]["90"], win, cpi)
+                        if row["pay"] is not None:
+                            p = row["pay"]["p"]
+                            ts = [t for t in (1, 7, 30, 60, 90) if obs.get(t)]
+                            upto = next((t for t in ts if p is not None and t >= p), None)
+                            row["pay"]["obs"] = _pay_obs(obs, p) and same(upto)
+                elif xx_big:                          # cost Google Ads could not place: this one's may be in it
+                    row["cpi"] = {"v": None, "spend": None, "unknown": True}
+                else:                                 # no Google Ads cost there: organic installs, never "cheapest"
+                    row["cpi"] = {"v": None, "spend": 0.0, "noads": True}
+            if "back" not in row:
+                row["back"] = None
+        else:
+            cost, dl = _geo_sum((G.raw or {}).get(cc), wd)
+            if cost and n:                            # the cost over exactly the weeks of its installs
+                row["cpi"] = {"v": _m6(cost / n), "ads": _m6(cost / dl) if dl else None, "spend": _m6(cost)}
+                row["pay"] = _cty_pay(obs, shapes, cost / n)
         rows.append(row)
     # the verdict: the country's earning per install vs the REST of the app (the app without it) at the same age, as
     # two samples — each with its own residual SE over the last 12 weeks — judged with a t-quantile (m − 1 degrees of
@@ -1208,8 +1289,10 @@ def _countries(P, ida, shapes, H, geo, app_name, prev_sets=None):
             row["verdict"], row["why"] = "few", ("few_val" if row["n"] >= CTY_JUDGE else None)
         elif cv is None or excl is None:              # enough installs, the earnings not old enough yet
             row["verdict"], row["why"] = "wait", "young"
-        elif row["cpi"] is not None:
-            row["verdict"] = _cost_verdict(row, H)
+        elif (row["cpi"] or {}).get("v") is not None and not row["cpi"].get("thin"):
+            row["verdict"] = _cost_verdict(row, H, env=G.env())
+            if row["verdict"] == "wait":                  # earnings not old enough for a money back, no curve yet
+                row["why"] = "young"
         else:
             se_c, m_c = _rpi_se2(C, row["cc"], bt, w12[bt], len(win[bt]))
             se_r, m_r = _rpi_se_rest(C, row["cc"], bt, w12[bt], len(win[bt]))
@@ -1244,6 +1327,10 @@ def _countries(P, ida, shapes, H, geo, app_name, prev_sets=None):
     for row in rows:
         row["text"] = country_text(row, app_d[1]["v"], H, best, weak)
         row["trend"] = _trend(C, row["cc"], w12)
+        if G.env():                                   # cost per install per week (12 weeks): covered weeks only
+            row["trend"]["cpi"], src = _trend_cpi(C, G, row["cc"], w12[1])
+            if src is not None:                       # … and as billed (the ₹ view)
+                row["trend"]["cpi_src"] = src
     # the "All" row and the unassigned part
     out["app"] = {"cc": "All", "n": int(n_all), "share": 1.0 if n_all else None, "clean": all(clean[t] for t in (1, 7, 30)),
                   "d1": {k: v for k, v in app_d[1].items() if k in ("v", "lo", "hi", "n", "st")},
@@ -1277,8 +1364,19 @@ def _countries(P, ida, shapes, H, geo, app_name, prev_sets=None):
     gn12 = sum(abs(C.cw[W]["gap"]["n"]) for W in g12)
     dn = sum(P["wk"][W]["n"] for W in g12)
     out["gap12"] = {"rev": _g4(gr / dr) if dr > 0 else None, "n": _g4(gn12 / dn) if dn else None, "weeks": len(g12)}
+    if G.env():
+        gf = _geo_fields(G, gwhy, wd, rows, out["small"]["n"], P["S"])
+        out["small"]["cost"], out["small"]["cpi"] = gf.pop("small_cost", None), gf.pop("small_cpi", None)
+        ex = gf.pop("small_extra", None)
+        if ex:                                        # its share of the cost, its Google Ads downloads, ₹ billed
+            out["small"].update(ex)
+        out.update(gf)
+        if gwhy == "ok":                              # the tile's Keep / Costly: rankable, held two evaluations
+            vd = {r["cc"]: r["verdict"] for r in rows}
+            out["keep"] = [cc for cc in best if vd.get(cc) == "keep"]
+            out["costly"] = [cc for cc in weak if vd.get(cc) == "costly"]
     return out, C, {"win": win, "w12": w12, "phis": phis, "clean": clean, "app_obs": app_obs, "app_d": app_d,
-                     "h": hs_by_cc}
+                     "h": hs_by_cc, "geo": G, "geo_why": gwhy, "app_h": app_h}
 
 
 def _geo_sum(g, weeks):
@@ -1299,9 +1397,272 @@ def _geo_sum(g, weeks):
     return float(g.get("cost") or 0), float(g.get("dl") or 0)
 
 
-def _cty_pay(obs, shapes, cpi):
+class _Geo:
+    """The Google Ads country cost the engine is handed (GADS_GEO), whatever its shape:
+      * None / {} → off;
+      * the legacy per-country shapes {cc: {cost, dl}} / {cc: {"daily": {day: [usd, dl]}}} → exactly the behaviour
+        before the week envelope (every week taken as it is, no coverage fields in the output);
+      * the week envelope of value_build._app_geo ({"v": 2, "first", "till", "weeks": {Monday: {whole, cov, spend, geo,
+        rate, dl_ok, by: {cc: [usd, dl | None]}}}}) → per install week, gated by Google Ads' own coverage (Σ country
+        cost ÷ campaign cost in [GEO_COV_MIN, GEO_COV_MAX], or off by ≤ GEO_COV_ABS USD in a trickle week); a week
+        that is not whole or not covered hides every
+        country's cost, honestly (never a partial cost read as a cheap country)."""
+
+    def __init__(self, geo):
+        self.raw = geo if isinstance(geo, dict) and geo else None
+        self.is_env = bool(self.raw) and self.raw.get("v") == 2
+        self.wk = {}
+        if self.is_env:
+            for k, v in (self.raw.get("weeks") or {}).items():
+                try:
+                    self.wk[_d(k)] = v if isinstance(v, dict) else {}
+                except (TypeError, ValueError):
+                    continue
+
+    def on(self):
+        return self.raw is not None
+
+    def env(self):
+        return self.is_env
+
+    @staticmethod
+    def _tol(e):
+        """The USD a week's country total may miss its campaign cost by through the cache's rounding alone."""
+        t = e.get("tol")
+        return max(GEO_COV_ABS, float(t)) if isinstance(t, (int, float)) else GEO_COV_ABS
+
+    @staticmethod
+    def _xx(e):
+        v = ((e.get("by") or {}).get(UNMAPPED) or [0])[0]
+        return float(v or 0)
+
+    def week_ok(self, W):
+        if not self.is_env:
+            return self.on()
+        e = self.wk.get(W)
+        cov = (e or {}).get("cov")
+        if not e or not e.get("whole") or cov is None:
+            return False
+        sp, g = e.get("spend"), e.get("geo")
+        tol = self._tol(e)
+        if not GEO_COV_MIN <= cov <= GEO_COV_MAX:          # a trickle week: off by no more than the rounding
+            if sp is None or g is None or abs(float(g) - float(sp)) > tol:
+                return False
+        xx = self._xx(e)                                    # cost Google Ads put in no country (a failed map): the
+        if xx > 0 and sp:                                   # countries' own part must still cover the campaign
+            if float(g or 0) - xx < GEO_COV_MIN * float(sp) and float(sp) - (float(g or 0) - xx) > tol:
+                return False
+        return True
+
+    def why(self, weeks):
+        """"ok" | "wait" (a week not whole: Google Ads' country data not in yet) | "cov" (a whole week whose country
+        cost does not add up to its campaign cost) | "nostore" (the app spent but none of its stores is in the country
+        cache — the envelope's in_cache = 0 says so directly; without that key, every whole week with spend has no
+        country cost) | "noads" (every week ok, nothing spent); None when off or without weeks."""
+        if not self.on() or not weeks:
+            return None
+        if not self.is_env:
+            return "ok"
+        es = [self.wk.get(W) for W in weeks]
+        if self.raw.get("till") and self.raw.get("in_cache") == 0 and any(e and (e.get("spend") or 0) > 0 for e in es):
+            return "nostore"                              # (a cache with nothing committed yet is "wait", below)
+        spw = [e for e in es if e and e.get("whole") and (e.get("spend") or 0) > 0]
+        if spw and all(e.get("cov") is None and not (e.get("geo") or 0) for e in spw):
+            return "nostore"
+        if any(not e or not e.get("whole") for e in es):
+            return "wait"
+        if not all(self.week_ok(W) for W in weeks):
+            return "cov"
+        if sum(float(e.get("spend") or 0) for e in es) <= 0:
+            return "noads"
+        return "ok"
+
+    def cost(self, cc, weeks):
+        """(USD, downloads | None) of country cc over the install weeks — legacy: _geo_sum as it always was."""
+        if not self.on():
+            return 0.0, 0.0
+        if not self.is_env:
+            return _geo_sum(self.raw.get(cc), weeks)
+        c = dl = 0.0
+        known = True
+        for W in weeks or ():
+            e = self.wk.get(W) or {}
+            if e.get("dl_ok") is False:
+                known = False
+            v = (e.get("by") or {}).get(cc)
+            if not v:
+                continue
+            c += float(v[0] or 0)
+            if len(v) < 2 or v[1] is None:
+                known = False
+            else:
+                dl += float(v[1])
+        return c, (dl if known else None)
+
+    def cost_src(self, cc, weeks):
+        """The same cost in the billed (base) currency — the ₹ view shows exactly what Google Ads billed — or None
+        when a week does not carry it (an envelope from before)."""
+        if not self.is_env:
+            return None
+        s = 0.0
+        for W in weeks or ():
+            v = ((self.wk.get(W) or {}).get("by") or {}).get(cc)
+            if not v:
+                continue
+            if len(v) < 3 or v[2] is None:
+                return None
+            s += float(v[2])
+        return s
+
+    def total_src(self, weeks):
+        tot = 0.0
+        for W in weeks or ():
+            for v in (((self.wk.get(W) or {}).get("by") or {}).values()):
+                if not v:
+                    continue
+                if len(v) < 3 or v[2] is None:
+                    return None
+                tot += float(v[2])
+        return tot
+
+    def ccs(self, weeks=None):
+        if not self.on():
+            return set()
+        if not self.is_env:
+            return set(self.raw)
+        out = set()
+        for W in (weeks if weeks is not None else self.wk):
+            out |= set(((self.wk.get(W) or {}).get("by") or {}))
+        return out
+
+    def total(self, weeks):
+        """Every country's cost over the weeks, the unmapped part included."""
+        if not self.is_env:
+            return sum(_geo_sum(g, weeks)[0] for g in (self.raw or {}).values())
+        return sum(float(v[0] or 0) for W in weeks or () for v in (((self.wk.get(W) or {}).get("by") or {}).values())
+                   if v)
+
+    def sums(self, weeks):
+        """(Σ campaign spend, Σ country cost) in USD over the weeks the envelope holds."""
+        es = [self.wk.get(W) for W in weeks or ()]
+        return (sum(float(e.get("spend") or 0) for e in es if e), sum(float(e.get("geo") or 0) for e in es if e))
+
+    def mapped(self, weeks):
+        """Σ country cost placed in a real country (the unmapped part left out), USD."""
+        es = [self.wk.get(W) for W in weeks or ()]
+        return sum(float(e.get("geo") or 0) - self._xx(e) for e in es if e)
+
+
+def _geo_fields(G, gwhy, wd, rows, small_n, S):
+    """The envelope's extra Countries keys (GADS_GEO on, week envelope): geo_why, geo_cov, cost, small.cost / cpi —
+    and, privately, the not-covered weeks the Data check names."""
+    sp, gs = G.sums(wd)
+    covs = [G.wk[W]["cov"] for W in wd if W in G.wk and G.wk[W].get("cov") is not None]
+    v = (gs / sp) if sp > 0 else (1.0 if (wd and gs == 0 and all(W in G.wk for W in wd)) else None)
+    out = {"geo_why": gwhy,
+           "geo_cov": {"v": _g4(v), "min": _g4(min(covs)) if covs else None, "weeks": len(wd),
+                       "from": _iso(min(wd)) if wd else None, "to": _iso(max(wd) + timedelta(days=6)) if wd else None,
+                       "till": G.raw.get("till")},
+           "cost": None, "_gbad": None}
+    bad = [W for W in wd if not G.week_ok(W)]
+    if bad:
+        bs, bg = G.sums(bad)
+        bm = G.mapped(bad)                                # the part placed in a real country (a failed map says so)
+        out["_gbad"] = {"from": min(bad), "to": max(bad) + timedelta(days=6),
+                        "v": (min(bg, bm) / bs) if bs > 0 else None}
+    if gwhy == "ok":
+        total = G.total(wd)
+        unm = G.cost(UNMAPPED, wd)[0]
+        own = sum(((r.get("cpi") or {}).get("spend") or 0) for r in rows)
+        small = max(0.0, total - own - unm)
+        tsrc, usrc = G.total_src(wd), G.cost_src(UNMAPPED, wd)
+        osrc = sum(((r.get("cpi") or {}).get("spend_src") or 0) for r in rows)
+        ssrc = max(0.0, tsrc - osrc - (usrc or 0)) if tsrc is not None else None
+        # the small countries' Google Ads downloads (their ads-only cost per install) — unknown when any is unknown
+        mine = {r["cc"] for r in rows}
+        sdl = 0.0
+        for cc in G.ccs(wd):
+            if cc in mine or cc == UNMAPPED:
+                continue
+            c, d = G.cost(cc, wd)
+            if c > 0 and d is None:
+                sdl = None
+                break
+            sdl += d or 0
+        out["cost"] = {"total": _m6(total), "rows": _m6(own), "small": _m6(small), "unmapped": _m6(unm),
+                       "unmapped_share": _g4(unm / total) if total > 0 else None, "spend": _m6(sp)}
+        if tsrc is not None:                              # the billed (base) currency: the ₹ view's own amounts
+            out["cost"].update(total_src=_m6(tsrc), small_src=_m6(ssrc), unmapped_src=_m6(usrc))
+        out["small_cost"] = _m6(small)
+        out["small_cpi"] = _m6(small / small_n) if (small > 0 and small_n) else None
+        ads_ok = bool(sdl and sdl >= GEO_DL_MIN and small > 0)
+        out["small_extra"] = {"share": _g4(small / total) if total > 0 else None,
+                              "dl": _m6(sdl) if sdl is not None else None,
+                              "cpi_ads": _m6(small / sdl) if ads_ok else None,
+                              "cost_src": _m6(ssrc) if ssrc is not None else None,
+                              "cpi_ads_src": _m6(ssrc / sdl) if (ads_ok and ssrc is not None) else None}
+    return out
+
+
+def _geo_thin(cost, dl, n, nweeks):
+    """Why a country's Google Ads cost is too thin to judge — "spend" (under SPEND_MIN_WEEK USD a window week on
+    average), "dl" (under GEO_DL_MIN Google Ads downloads) or "paid" (ads bring under GEO_PAID_MIN of its new users) —
+    or None: judged. Unknown downloads (Q-G2 failed) leave only the spend rule."""
+    if cost < SPEND_MIN_WEEK * max(nweeks, 1):
+        return "spend"
+    if dl is not None:
+        if dl < GEO_DL_MIN:
+            return "dl"
+        if n and dl / n < GEO_PAID_MIN:
+            return "paid"
+    return None
+
+
+def _geo_back(C, G, cc, obs, r90, win, cpi):
+    """₹ back per ₹100 of Google Ads in the country after 7 / 30 / 90 days: the earnings of the install weeks each
+    age is measured on ÷ THOSE weeks' own Google Ads cost (never a newer cost over older earnings); ≈ ("t_est") when
+    those weeks' cost is not all covered (then the window's cost per install stands in). → (back, same(t)): same(t)
+    = the weeks of age t cost within ±GEO_BACK_REL of the window's cost per install (a money back "seen")."""
+    back, own = {}, {}
+    for t in (7, 30, 60, 90):
+        o = obs.get(t)
+        if o is None:
+            continue
+        ws = [W for W in win[t] if C.cw[W]["rows"].get(cc) is not None and not C.part(cc, W, t)]
+        if ws and all(G.week_ok(W) for W in ws):
+            c = G.cost(cc, ws)[0]
+            if c > 0 and o["n"]:
+                own[t] = c / o["n"]
+    for t in (7, 30):
+        o = obs.get(t)
+        if o is None:
+            back[str(t)], back["%d_est" % t] = None, False
+        elif t in own:
+            back[str(t)], back["%d_est" % t] = _g4(100 * o["y"] / (own[t] * o["n"])), False
+        else:
+            back[str(t)], back["%d_est" % t] = _g4(100 * o["v"] / cpi), True
+    v90 = (r90 or {}).get("v")
+    if obs.get(90) and 90 in own:
+        back["90"], back["90_est"] = _g4(100 * obs[90]["y"] / (own[90] * obs[90]["n"])), False
+    else:
+        back["90"], back["90_est"] = (_g4(100 * v90 / cpi) if v90 is not None else None), bool(v90 is not None
+                                                                                              and obs.get(90))
+    back["90_proj"] = bool((r90 or {}).get("proj"))
+
+    def same(t):
+        if t is None:
+            return False
+        if t == 1:                                    # the cost window itself
+            return True
+        c = own.get(t)
+        return c is not None and abs(c / cpi - 1) <= GEO_BACK_REL
+    return back, same
+
+
+def _cty_pay(obs, shapes, cpi, env=False):
     """A country's money back against its own cost per install: its observed earning per install at 1…90 days, then
-    the app's curve beyond → {p, lo, hi, never, q80_365} (days; None: not within a year)."""
+    the app's curve beyond → {p, lo, hi, never, q80_365} (days; None: not within a year). env (the week envelope):
+    also `upto`, the last age the curve reaches (money back not within it → "Over {upto} days")."""
     ts = [t for t in (1, 7, 30, 60, 90) if obs.get(t)]
     if not ts or not cpi:
         return None
@@ -1321,13 +1682,19 @@ def _cty_pay(obs, shapes, cpi):
             arr[i] = (arr[i][0], max(arr[i][1], arr[i - 1][1]))
     p = _cross(med, cpi)
     q80 = hi[-1][1] if hi[-1][0] == 365 else None
-    return {"p": _int(p), "lo": _int(_cross(hi, cpi)), "hi": _int(_cross(lo, cpi)),
-            "never": p is None and med[-1][0] == 365, "q80_365": _m6(q80)}
+    out = {"p": _int(p), "lo": _int(_cross(hi, cpi)), "hi": _int(_cross(lo, cpi)),
+           "never": p is None and med[-1][0] == 365, "q80_365": _m6(q80)}
+    if env:
+        out["upto"] = med[-1][0]
+    return out
 
 
-def _cost_verdict(row, H):
+def _cost_verdict(row, H, env=False):
     """With country cost (GADS_GEO, §2.5): keep (P̂ ≤ H; sure when even P_hi ≤ H) / slow (H < P̂ ≤ 2H, or the band
-    straddles H) / costly (the q80 curve at 365 under the cost, or P_lo > 2H) / few."""
+    straddles H) / costly (the q80 curve at 365 under the cost, or P_lo > 2H) / few. env (the week envelope): what the
+    legacy shapes called "few" is said as it is — "late" (not paid back by the last age the curve reaches, ≥ H, with
+    no curve beyond it: "Not paid back in {upto} days"), "wait" (not paid back yet and the earnings not H days old,
+    no curve beyond) or "slow" (P̂ beyond 2H, not surely: the band reaches under 2H). "few" stays for few installs."""
     pay, cpi = row.get("pay"), (row.get("cpi") or {}).get("v")
     if not pay or not cpi:
         return "few"
@@ -1339,6 +1706,10 @@ def _cost_verdict(row, H):
         row["sure"] = hi is not None and hi <= H
         return "keep"
     if (p is not None and p <= 2 * H) or (lo is not None and lo <= H < (hi if hi is not None else 366)):
+        return "slow"
+    if env:
+        if p is None and not pay["never"]:
+            return "late" if (pay.get("upto") or 0) >= H else "wait"
         return "slow"
     return "few"
 
@@ -1356,6 +1727,35 @@ def _trend(C, cc, w12):
     return {"d1": d1, "rpi7": r7}
 
 
+def _trend_cpi(C, G, cc, weeks):
+    """The third sparkline (oldest → newest): the country's Google Ads cost ÷ its installs per install week — a week
+    whose country cost is not covered, a thin week, or a week without Google Ads cost there reads null (never 0)."""
+    out, src, known = [], [], True
+    for W in reversed(weeks):
+        c = C.cw[W]["rows"].get(cc)
+        v = vs = None
+        if G.week_ok(W) and c and c["n"] >= CTY_SHOW and not C.part(cc, W, 1):
+            cost = G.cost(cc, [W])[0]
+            v = _m6(cost / c["n"]) if cost > 0 else None
+            if v is not None:
+                cs = G.cost_src(cc, [W])
+                known = known and cs is not None
+                vs = _m6(cs / c["n"]) if cs is not None else None
+        out.append(v)
+        src.append(vs)
+    return out, (src if known else None)
+
+
+def _pay_obs(obs, p):
+    """A country's money back is OBSERVED when its crossing lies on its own observed points (1 … 90 days) and none of
+    those points is ≈."""
+    ts = [t for t in (1, 7, 30, 60, 90) if obs.get(t)]
+    if p is None or not ts or p > ts[-1]:
+        return False
+    upto = next(t for t in ts if t >= p)
+    return not any(obs[t].get("est") for t in ts if t <= upto)
+
+
 def country_text(row, d1_app, H, best, weak):
     """The row's one Hinglish sentence (§2.8); money and the country's name are tokens (the page draws them)."""
     name = t_cc(row["cc"])
@@ -1371,11 +1771,14 @@ def country_text(row, d1_app, H, best, weak):
     d1 = row["d1"]["v"]
     head = "%s: 100 me se %s agle din wapas (app me %s)" % (
         name, "—" if d1 is None else int(round(d1)), "—" if d1_app is None else int(round(d1_app)))
-    if row["cpi"] is not None:
+    K = row["cpi"] or {}
+    if K.get("v") is not None and not K.get("thin"):
         pp = (row.get("pay") or {}).get("p")
         tail = {"keep": "paisa ~%s din me wapas, ads chalu rakh sakte ho" % (pp if pp is not None else H),
                 "slow": "paisa wapas aane me ~%s din — dheere" % (pp if pp is not None else ">%d" % H),
-                "costly": "ads yahan mehenge pad rahe"}.get(row["verdict"], "abhi faisla nahi")
+                "costly": "ads yahan mehenge pad rahe",
+                "late": "%s din me paisa wapas nahi aaya — aage ka andaza abhi nahi" % (
+                    (row.get("pay") or {}).get("upto") or H)}.get(row["verdict"], "abhi faisla nahi")
         return "%s, %d din me kamai per install %s — install %s me pad raha, %s" % (
             head, H, t_m(row["be"]), t_q(row["cpi"]["v"]), tail)
     r30 = (row["rpi"].get("30") or {}).get("v")
@@ -1386,6 +1789,11 @@ def country_text(row, d1_app, H, best, weak):
         txt += " — sabse zyada kamai walon me"
     elif row["cc"] in weak:
         txt += " — kam kamai walon me"
+    if K.get("thin"):                                 # a trickle of Google Ads: its cost is shown, never judged
+        txt += " — yahan %s, isliye ads ka faisla nahi" % {
+            "spend": "Google Ads kharcha thoda",
+            "dl": "Google Ads se sirf %s installs" % "{:,}".format(int(round(K.get("dl") or 0))),
+            "paid": "ads se sirf ~%s%% installs" % _num1(100 * (K.get("paid") or 0))}[K["thin"]]
     return txt
 
 
@@ -1649,11 +2057,18 @@ def _conditions(P, weeks, pays, H, E, ctyinfo, C, releases, act_alerts, geo, str
                           "_force_seed": held, "_est": bool(kbad or link)})
     if link is not None:
         conds.append(link)
-    # geo_move (and geo_cost with country cost)
+    # geo_move (and geo_cost with country cost) — one episode per country and direction: when both hold for the same
+    # country the cost leads, the move rides along (also / move); an already-open geo_move closes by itself
     if C is not None and ctyinfo is not None:
-        conds += _geo_conds(P, C, ctyinfo, act_alerts, app)
-        if geo:
-            conds += _geo_cost_conds(C, ctyinfo, geo, H, streak, app)
+        gm = _geo_conds(P, C, ctyinfo, act_alerts, app)
+        gc = _geo_cost_conds(C, ctyinfo, geo, H, streak, app) if geo else []
+        for c in gc:
+            mv = next((m for m in gm if m["cc"] == c["cc"] and m["dir"] == c["dir"]), None)
+            if mv is not None:
+                gm.remove(mv)
+                c["also"] = [mv["metric"]] + [x for x in mv.get("also") or [] if x != mv["metric"]]
+                c["move"] = {"metric": mv["metric"], "now": mv["now"], "before": mv["before"]}
+        conds += gm + gc
     return conds
 
 
@@ -1747,22 +2162,50 @@ def _geo_conds(P, C, ci, act_alerts, app):
 
 def _geo_cost_conds(C, ci, geo, H, streak, app):
     """geo_cost (only with country cost): the country's q80 earning at H stays under its cost per install for two
-    weekly evaluations, or its observed 30-day earning is under 0.3 × its cost."""
+    weekly evaluations, or its observed 30-day earning is under 0.3 × its cost. With the week envelope also: never for
+    a country whose ads are a trickle (_geo_thin), never for one no worse than the whole app when the app itself does
+    not pay back (that is the app's cost — pay_loss / pay_slow say it once, not once per country), a streak ends when
+    its country stops qualifying (only a window whose data is not whole freezes it), and the strongest leads (the
+    episodes' dedupe sends one per app and 7 days)."""
+    G = geo if isinstance(geo, _Geo) else _Geo(geo)
+    env = G.env()
     out = []
     ws = ci["win"][1]
-    total = sum(_geo_sum(g, ws)[0] for g in geo.values())
-    for cc, g in sorted(geo.items()):
-        cost = _geo_sum(g, ws)[0]
+    if env and G.why(ws) != "ok":                     # a window week not covered: nothing judged, streaks kept
+        return out
+    if env and not all(C.clean(W, 30) for W in ci["win"][30] or []):
+        return out                                    # GA4's 30-day weeks not whole: nothing judged, streaks kept
+    total = G.total(ws)                               # every country's cost, the unmapped part included
+    app_ratio = None                                  # the whole app: its cost per install ÷ its q80 earning at H
+    if env and total > 0:
+        n_all = sum(C.P["wk"][W]["n"] for W in ws)
+        ah = (ci.get("app_h") or {}).get("hi")
+        if n_all and ah:
+            app_ratio = (total / n_all) / ah
+    seen = set()
+    for cc in sorted(G.ccs(ws)):
+        if cc in (UNMAPPED, "--", "ZZ"):
+            continue
+        k = "geo_cost|%s" % cc
+        seen.add(k)
+        cost, dl = G.cost(cc, ws)
         _, n = _cty_sums(C, cc, ws, 1, "u")
         if not n or cost < max(GEOCOST_MIN_SPEND, GEOCOST_SHARE * total) or n < CTY_JUDGE:
+            if env:
+                streak[k] = 0
             continue
-        if not all(C.clean(W, 30) for W in ci["win"][30] or []):
+        if not env and not all(C.clean(W, 30) for W in ci["win"][30] or []):
+            continue
+        if env and _geo_thin(cost, dl, n, len(ws)):
+            streak[k] = 0
             continue
         cpi = cost / n
         y30, n30 = _cty_sums(C, cc, ci["win"][30], 30, "r")
         r30 = y30 / n30 if n30 else None
-        k = "geo_cost|%s" % cc
         hi = ((ci.get("h") or {}).get(cc) or {}).get("hi")
+        if env and app_ratio is not None and app_ratio > 1 and hi and cpi / hi <= (1 + GEO_APPWIDE) * app_ratio:
+            streak[k] = 0                             # no worse than the app, which does not pay back as a whole
+            continue
         now_bad = (hi is not None and hi < cpi)
         streak[k] = (streak.get(k, 0) + 1) if now_bad else 0
         if streak[k] >= 2 or (r30 is not None and r30 < 0.3 * cpi):
@@ -1773,6 +2216,10 @@ def _geo_cost_conds(C, ci, geo, H, streak, app):
                         "z": None, "share": _g4(share), "week_from": _iso(min(ws)),
                         "week_to": _iso(max(ws) + timedelta(days=6)), "base_from": None, "base_to": None,
                         "users": int(n), "spend": _m6(cost / max(len(ws), 1)), "tags": [], "release": None})
+    if env:
+        for k in [k for k in streak if k.startswith("geo_cost|") and k not in seen]:
+            streak[k] = 0                             # a country no longer in the window's cost: its streak ends
+        out.sort(key=lambda c: (SEV_ORDER[c["severity"]], -(c["share"] or 0), c["cc"]))   # the one sent: the biggest
     return out
 
 
@@ -1790,12 +2237,15 @@ def _snap(c):
 
 
 def _eid(app_id, c, opened, extra=""):
-    return fingerprint(app_id, "value_%s_%s" % (c["family"], c["metric"]), c.get("cc"), c["dir"], opened + extra)
+    return fingerprint(app_id, "value_%s_%s" % (c["family"], c["metric"]), c.get("cc") or c.get("ver"), c["dir"],
+                       opened + extra)
 
 
-def episodes(st, app_id, E, conds, advanced, now):
+def episodes(st, app_id, E, conds, advanced, now, close=()):
     """Open / refresh / close this app's value episodes from this week's conditions (each carrying `seed`). Pure:
-    returns the new {episodes, closed}. Nothing changes unless the week end advanced (hourly re-runs are no-ops)."""
+    returns the new {episodes, closed}. Nothing changes unless the week end advanced (hourly re-runs are no-ops).
+    close = episode keys that close now (a version that left the newest ones C judges), if not true this week.
+    Dedupe (DEDUP): one notification per app, family group (pay_* / ver_ret / long_ret) and direction per N days."""
     eps = {k: dict(e) for k, e in (st.get("episodes") or {}).items()}
     closed = [dict(e) for e in st.get("closed") or []]
     just_closed = []
@@ -1812,14 +2262,16 @@ def episodes(st, app_id, E, conds, advanced, now):
                         if (e["family"] == c["family"] and e.get("cc") == c.get("cc") and e["dir"] == c["dir"]
                                 and 0 <= (E - _d(e["closed"])).days <= keep):   # drop already told): shown, not sent
                             seed = True
-                if not seed and c["family"] in ("pay_slow", "pay_loss"):   # one pay_* notification per app per 7 days
-                    seed = c["dir"] in pay_now
+                grp = DEDUP_OF.get(c["family"])
+                if not seed and grp:                      # one notification per app, group and direction per N days
+                    fams, days = DEDUP[grp]
+                    seed = (grp, c["dir"]) in pay_now
                     for e in list(eps.values()) + closed:
-                        if (e["family"] in ("pay_slow", "pay_loss") and e["dir"] == c["dir"] and not e.get("seeded")
-                                and e.get("notified_at") and (_d(now) - _d(e["notified_at"])).days < PAY_DEDUP_DAYS):
+                        if (e["family"] in fams and e["dir"] == c["dir"] and not e.get("seeded")
+                                and e.get("notified_at") and (_d(now) - _d(e["notified_at"])).days < days):
                             seed = True
                     if not seed:
-                        pay_now.add(c["dir"])
+                        pay_now.add((grp, c["dir"]))
                 ep = {"id": _eid(app_id, c, E_iso), "app_id": app_id, "family": c["family"], "metric": c["metric"],
                       "cc": c.get("cc"), "dir": c["dir"], "opened": E_iso, "last_true": E_iso, "misses": 0,
                       "notified_at": now if seed else None, "notified_dry": False, "seeded": seed, "last": snap}
@@ -1838,7 +2290,7 @@ def episodes(st, app_id, E, conds, advanced, now):
         for key in [k for k in eps if k not in hit]:
             ep = eps[key]
             ep["misses"] = ep.get("misses", 0) + 1
-            if ep["misses"] >= (1 if ep["family"] == "pay_loss" else CLOSE_WEEKS):
+            if ep["misses"] >= (1 if ep["family"] == "pay_loss" else CLOSE_WEEKS) or key in close:
                 done = dict(eps.pop(key), closed=E_iso)
                 closed.append(done)
                 just_closed.append(done)
@@ -1898,6 +2350,9 @@ def alert_text(s, app_name, H, ref):
     if fam == "iv_link":
         return ("GA4 me AdMob ki kamai ka sirf %s%% dikh raha (pehle %s%%) — Firebase–AdMob link check karo; is tab ki "
                 "kamai AdMob ke hisaab se ≈" % (_int(s.get("now")), _int(s.get("before"))))
+    if fam in ("ver_ret", "long_ret"):                # C / D (VALUE_CD): their own module's sentences
+        from . import value_cd as VC
+        return VC.ver_alert_text(s) if fam == "ver_ret" else VC.long_alert_text(s)
     return ""
 
 
@@ -1942,6 +2397,15 @@ def alert_obj(ep, app_name, E, H, S=None, src_ccy=None):
            "release": dict(s["release"]) if s.get("release") else None, "linked": False,
            "market": dict(s["market"]) if s.get("market") else None,
            "data_till": _iso(S or E), "text": text, "message": "%s: %s" % (app_name, render_text(text))}
+    if s.get("metric") in RPI_METRICS:
+        out["unit"] = "usd"
+    if ep["family"] in ("ver_ret", "long_ret"):        # C / D: the version / months the alert is about
+        out["linked"] = bool(s.get("linked"))
+        for k in ("ver", "ver_label", "pver_label", "months"):
+            if k in s:
+                out[k] = list(s[k]) if isinstance(s[k], list) else s[k]
+    if s.get("move"):                                  # geo_cost that carries the same country's geo_move
+        out["move"] = dict(s["move"])
     if "closed" in ep:
         out.update(closed=ep["closed"], fresh=False, notify=False)
     return out
@@ -2150,6 +2614,8 @@ def _tiles(P, weeks, pays, alerts, E, cty, H, have_spend=True):
     ct = {"best": (cty or {}).get("best") or [], "weak": (cty or {}).get("weak") or [],
           "judged": len(judged), "of": len(rows), "all_avg": bool(judged) and all(r_["verdict"] == "avg" for r_ in judged),
           "st": ("wait" if not cty or not cty.get("win") else ("ok" if judged else "low"))}
+    if cty and "keep" in cty:                        # country cost (the week envelope, every window week covered)
+        ct["keep"], ct["costly"] = list(cty["keep"]), list(cty["costly"])
     return {"pay": pay_t, "b7": b7_t, "rpi": rpi_t, "cpi": cpi_t, "cty": ct, "ads": state}
 
 
@@ -2315,8 +2781,10 @@ def _ida_state(ida, hs, S):
 
 # ── one app ─────────────────────────────────────────────────────────────────────────────────────
 
-def _inputs_seen(ev_inputs, E, weeks, cty_clean_weeks, kvalid, spend_seen, geo_on):
-    """inputs[x] = the week end E when input x was first seen (never now) — the burn-in anchor."""
+def _inputs_seen(ev_inputs, E, weeks, cty_clean_weeks, kvalid, spend_seen, geo_on, cd=None):
+    """inputs[x] = the week end E when input x was first seen (never now) — the burn-in anchor. cd (VALUE_CD on) =
+    {"ver": seen, "long": seen}: the C / D inputs (their keys exist only then — the state is unchanged while it is
+    off)."""
     inp = dict(ev_inputs or {})
     E_iso = _iso(E)
     if inp.get("iday") is None and sum(1 for w in weeks if w["cj"][_tj(7)] and w["n"] > 0) >= INPUT_IDAY_WEEKS:
@@ -2331,13 +2799,26 @@ def _inputs_seen(ev_inputs, E, weeks, cty_clean_weeks, kvalid, spend_seen, geo_o
         inp["k"] = E_iso
     for k in ("iday", "cty", "spend", "geo", "k"):
         inp.setdefault(k, None)
+    if cd is not None:
+        for k in ("ver", "long"):
+            if inp.get(k) is None and cd.get(k):
+                inp[k] = E_iso
+            inp.setdefault(k, None)
     return inp
 
 
-def _seed(fam, inputs, E, first):
+def _seed_keys(c):
+    """The inputs a condition stands on: its family's, plus the AdMob scale when an earning metric leads C / D."""
+    keys = INPUTS[c["family"]]
+    if c["family"] in ("ver_ret", "long_ret") and c.get("metric") in RPI_METRICS:
+        keys = keys + ("k",)
+    return keys
+
+
+def _seed(fam, inputs, E, first, keys=None):
     if first:
         return True
-    for k in INPUTS[fam]:
+    for k in (keys or INPUTS[fam]):
         v = inputs.get(k)
         if v is None or (E - _d(v)).days < BURNIN_DAYS:
             return True
@@ -2349,10 +2830,12 @@ def empty_state():
 
 
 def evaluate_app(store, ida, rev, spend, fx, udet_releases, st_app, portfolio_shape, cfg, now_iso, *, app_id, app,
-                 key=None, act_alerts=None, geo=None, ded=None, market=None):
+                 key=None, act_alerts=None, geo=None, ded=None, market=None, impact=None):
     """One app → (detail, row, new_state). market = Active's market prepass (engine.active.market: the weeks most
-    apps' ad rate moved together) — a money-back move that is only the market's is shown, never sent. `st_app` = this app's slice of the value state {eval, episodes, closed}
-    (never changed: the new slice is returned). detail = the lazy value_<key>.json.gz, row = its summary row in
+    apps' ad rate moved together) — a money-back move that is only the market's is shown, never sent. impact =
+    value_build.release_impact (version → its Update impact verdict), read by C only (cfg["cd"], VALUE_CD). geo = the
+    Google Ads country cost (GADS_GEO): None, a legacy per-country shape or the week envelope (_Geo). `st_app` = this
+    app's slice of the value state {eval, episodes, closed} (never changed: the new slice is returned). detail = the lazy value_<key>.json.gz, row = its summary row in
     dashboard["value"]["apps"] (with "_alerts" / "_shape" for value_build.finish to take off)."""
     cfg = cfg or {}
     H = cfg.get("payback_days") or H_DEFAULT
@@ -2395,16 +2878,54 @@ def evaluate_app(store, ida, rev, spend, fx, udet_releases, st_app, portfolio_sh
         cty, C, ci = None, None, None
     cty_clean = len([W for W in C.weeks(30) if C.clean(W, 30)]) if C is not None else 0
     spend_seen = any(w["judged"] for w in weeks)
-    inputs = _inputs_seen((ev or {}).get("inputs") if ev and ev.get("iday_v") == ida.get("v") else None, E, weeks,
-                          cty_clean, P["sc"]["valid"], spend_seen, bool(geo))
     streak = dict((ev or {}).get("streak") or {})
     app_ref = {"id": app_id, "name": app}
+    # C (new users by the app version they installed) and D (long-term by install month) — VALUE_CD only, each its own
+    # try: a failure costs that part ("error"), never the app
+    byv = lng = None
+    cd_conds, cd_info, close_now, cd_seen = [], [], set(), None
+    if cfg.get("cd"):
+        from . import value_cd as VC
+        cd_seen = {"ver": False, "long": False}
+        try:
+            st2 = dict(streak)
+            byv, vconds = VC.versions(P, store, udet_releases, impact, E, advanced, st2, app_ref, market, spend)
+            streak = st2
+            cd_conds += vconds
+            cd_info += byv.pop("_info", None) or []
+            cd_seen["ver"] = bool(byv.pop("_seen", False))
+            live = byv.pop("_live", None)
+            if live is not None:
+                close_now = {k for k, e in (base_st.get("episodes") or {}).items()
+                             if e.get("family") == "ver_ret" and (e.get("last") or {}).get("ver") not in live}
+        except Exception:
+            byv = {"state": "error", "rows": [], "text": None}
+        try:
+            lng, lconds = VC.long_term(P, shapes, spend, fx, udet_releases, ida, E, advanced, app_ref)
+            cd_conds += lconds
+            cd_info += lng.pop("_info", None) or []
+            cd_seen["long"] = bool(lng.pop("_seen", False))
+        except Exception:
+            lng = {"state": "error", "rows": [], "text": None}
+    G = _Geo(geo)                                   # the country cost input: seen once its window is covered
+    geo_seen = G.on() and (not G.env() or (ci or {}).get("geo_why") == "ok")
+    inputs = _inputs_seen((ev or {}).get("inputs") if ev and ev.get("iday_v") == ida.get("v") else None, E, weeks,
+                          cty_clean, P["sc"]["valid"], spend_seen, geo_seen, cd_seen)
+    if not G.on():                                  # GADS_GEO off (or no cost for this app): switched on again later
+        inputs["geo"] = None                        # is a new input with a new burn-in — and a new 2-evaluation streak
+        for k in [k for k in streak if k.startswith("geo_cost|")]:
+            del streak[k]
+    if not cfg.get("cd"):                           # VALUE_CD off: the same for C / D (a state switched on → off is
+        inputs.pop("ver", None)                     # then exactly one that was never on; on again = a new burn-in
+        inputs.pop("long", None)                    # and new streaks)
+        for k in [k for k in streak if k.startswith("ver_ret|")]:
+            del streak[k]
     conds = (_conditions(P, weeks, pays, H, E, ci, C, udet_releases, act_alerts, geo, streak, app_ref, market)
-             if advanced else [])
+             + cd_conds if advanced else [])
     for c in conds:
-        c["seed"] = _seed(c["family"], inputs, E, first) or bool(c.pop("_force_seed", False))
+        c["seed"] = _seed(c["family"], inputs, E, first, _seed_keys(c)) or bool(c.pop("_force_seed", False))
         c["est"] = P["sc"]["st"] != "ok" or bool(c.pop("_est", False))
-    new_st, just_closed = episodes(base_st, app_id, E, conds, advanced, now_iso)
+    new_st, just_closed = episodes(base_st, app_id, E, conds, advanced, now_iso, close=close_now)
     if advanced:
         new_ev = {"end_week": _iso(E), "src": src, "iday_v": ida.get("v"), "inputs": inputs,
                   "streak": {k: v for k, v in sorted(streak.items()) if v},
@@ -2417,14 +2938,14 @@ def evaluate_app(store, ida, rev, spend, fx, udet_releases, st_app, portfolio_sh
     alerts = sort_alerts([alert_obj(e, app, E, H, S, src_ccy) for e in open_eps])
     closed = sort_alerts([alert_obj(e, app, E, H, S, src_ccy) for e in new_st["closed"]])
     tiles = _tiles(P, weeks, pays, alerts, E, cty, H, have_spend=bool(spend))
-    info = _info(P, weeks, C, ci, just_closed, pays, E, spend is not None, alerts)
+    info = _info(P, weeks, C, ci, just_closed, pays, E, spend is not None, alerts) + cd_info
     ida_state, ida_pct, ida_left = _ida_state(ida, hs, S)
     summary = _summary(tiles, alerts, weeks, pays, ida_state, ida_pct, ida_left, E, S)
     ads_state = tiles.pop("ads", None)
     detail = _detail(store, ida, P, weeks, pays, shapes, cty, alerts, closed, info, tiles, summary, fx_mode, fx, H,
                      app_id, app, key, ida_state, ida_pct, ded, udet_releases, left=ida_left,
                      spend_till=(spend or {}).get("till") if spend else None,
-                     rev_till=(rev or {}).get("till"), src_ccy=src_ccy)
+                     rev_till=(rev or {}).get("till"), src_ccy=src_ccy, by_version=byv, long=lng)
     detail["ads"] = ads_state                        # on / stopped / noads / none / spend_wait / thin / new
     row = _row(detail, weeks, pays, alerts, tiles, cty, ida_state, ida_pct, app_id, app, key, H)
     row["_alerts"] = alerts
@@ -2485,8 +3006,10 @@ def _week_out(w, pay, releases):
 
 
 def _detail(store, ida, P, weeks, pays, shapes, cty, alerts, closed, info, tiles, summary, fx_mode, fx, H, app_id,
-            app, key, ida_state, ida_pct, ded, releases, left=None, spend_till=None, rev_till=None, src_ccy=None):
+            app, key, ida_state, ida_pct, ded, releases, left=None, spend_till=None, rev_till=None, src_ccy=None,
+            by_version=None, long=None):
     days = ida.get("days") or {}
+    gbad = cty.pop("_gbad", None) if isinstance(cty, dict) else None
     cnt = {"ok": 0, "q": 0, "retry": 0, "empty": 0, "err": 0}
     cc = {"ok": 0, "smp": 0, "gap": 0, "retry": 0}
     for e in days.values():
@@ -2522,14 +3045,42 @@ def _detail(store, ida, P, weeks, pays, shapes, cty, alerts, closed, info, tiles
                       "cty_gap": {"rev": g12.get("rev"), "n": g12.get("n")},
                       "st": sc["st"], "double": sc["double"],
                       "ded": ({"rate": _g4(ded["rate"]), "src": ded.get("src")} if ded and ded.get("rate") else None),
-                      "text": _check_text(sc, g12, old / tot if tot else None, ded, fx_mode, S, src_ccy)},
+                      "text": _check_text(sc, g12, old / tot if tot else None, ded, fx_mode, S, src_ccy)
+                      + _geo_check_text(cty, gbad, S)},
             "fx": {"mode": fx_mode, "now": (fx or {}).get("now"), "src": src_ccy},
             "tiles": tiles, "summary": summary, "weeks": wk_out, "curve": _curve_out(weeks, shapes),
             "countries": cty or {"win": None, "geo": False, "smp": False, "app": None, "rows": [],
                                  "small": {"countries": 0, "n": 0, "zz": 0}, "unknown": {"n": 0},
                                  "unassigned": {"n": 0, "rev_share": None}, "state": "wait"},
             "changes": {"open": alerts, "closed": closed[-20:], "info": info, "older": []},
-            "by_version": [], "long": []}
+            "by_version": by_version if by_version is not None else [], "long": long if long is not None else []}
+
+
+def _geo_check_text(cty, gbad, S):
+    """The Data check's Google Ads country lines — only with the week envelope (GADS_GEO); [] otherwise."""
+    if not isinstance(cty, dict) or "geo_why" not in cty:
+        return []
+    out = []
+    why, gc = cty.get("geo_why"), cty.get("geo_cov") or {}
+    if why == "ok":
+        t = "Google Ads country-wise kharcha: campaign kharche ka %s%% country me mila (last %d weeks)" % (
+            _num1(100 * gc["v"]) if gc.get("v") is not None else "—", gc.get("weeks") or 0)
+        us = (cty.get("cost") or {}).get("unmapped_share")
+        if us is not None and us >= 0.0005:
+            t += "; kisi country se match nahi hua: %s%%" % _num1(100 * us)
+        out.append(t)
+    elif why == "cov" and gbad:
+        cov = " (%s%%)" % _num1(100 * gbad["v"]) if gbad.get("v") is not None else ""
+        out.append("⚠️ Google Ads country-wise kharcha %s me poora nahi mila%s — un hafton ka country cost nahi dikhaya"
+                   % (_span(gbad["from"], gbad["to"], S), cov))
+    elif why == "wait":
+        till = gc.get("till")
+        out.append("Google Ads country-wise kharcha %s — naye hafton ka country cost uske baad" % (
+            "%s tak aaya" % U.fmt_day(till, S) if till else "abhi aa raha"))
+    elif why == "nostore":
+        out.append("Is app ke Google Ads account ka country-wise data nahi mila — country cost nahi dikhaya")
+    out.append("Country: Google Ads me jahan user ad dekhte waqt tha, GA4 me install ke din jahan tha — lagbhag same")
+    return out
 
 
 def _check_text(sc, g12, old, ded, fx_mode, S=None, src_ccy=None):
@@ -2619,7 +3170,8 @@ def _row(detail, weeks, pays, alerts, tiles, cty, ida_state, ida_pct, app_id, ap
             "cty": {"best": tiles["cty"]["best"], "weak": tiles["cty"]["weak"], "judged": tiles["cty"]["judged"],
                     "of": tiles["cty"]["of"], "all_avg": tiles["cty"]["all_avg"],
                     "win_weeks": ((ct or {}).get("win") or {}).get("weeks") or 0,
-                    "geo": bool((ct or {}).get("geo")), "smp": bool((ct or {}).get("smp")),
+                    "geo": bool((ct or {}).get("geo")) and (ct or {}).get("geo_why", "ok") == "ok",
+                    "smp": bool((ct or {}).get("smp")),
                     "clean": bool(((ct or {}).get("app") or {}).get("clean", True))},
             "alerts": ac, "summary": detail["summary"], "src_ccy": (detail.get("fx") or {}).get("src"),
             # the portfolio's pooling sums — ratios of sums over the last 4 settled CALENDAR weeks (the cost tile's and

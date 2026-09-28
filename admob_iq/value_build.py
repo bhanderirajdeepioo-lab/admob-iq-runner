@@ -42,6 +42,7 @@ FX_EVERY_SEC = 20 * 3600                  # the FX range call: at most once a ~d
 FX_HOSTS = ("https://api.frankfurter.dev/v1/%s..%s?from=%s&to=USD",
             "https://api.frankfurter.app/%s..%s?from=%s&to=USD")
 GEO_DAYS = 120                            # country cost days kept for the engine (≥ the 12-week country window)
+GEO_TOL_CELLS = 250                       # the geo cache's countries a store-week at most (≈ every country / territory)
 
 
 def _default():
@@ -107,6 +108,9 @@ def cfg_from(s):
     return {"payback_days": h if h in val.H_ALLOWED else val.H_DEFAULT, "iap": bool(s.get("value_iap", False)),
             "cpi": s.get("value_cpi") or "blended", "deduct": bool(s.get("value_deduct", True)),
             "geo": bool(s.get("gads_geo", False)),
+            # VALUE_CD: C (new users by app version) and D (long-term by install month) — off: none of it is computed,
+            # written, counted or exported (SPEC_CD_GEO §S.1)
+            "cd": bool(s.get("value_cd", False)),
             # {Google Ads store id: AdMob app name} — the Marketing ROAS step's own join map (build_static hands it
             # over); None: the prepass rebuilds it the same way (engine.roas.store_owner)
             "store_owner": s.get("roas_store_owner") if isinstance(s.get("roas_store_owner"), dict) else None,
@@ -230,8 +234,10 @@ def _ded_rates(dashboard):
 
 
 def _load_geo(data_dir):
-    raw = _load_json(os.path.join(data_dir, GEO_FILE))
-    return raw if isinstance(raw, dict) and isinstance(raw.get("daily"), dict) else None
+    """The Google Ads country cache (fetch.gads_geo: data/roas_geo_cache.json.gz + its .old part, merged; week grain)
+    or None (none yet / another version)."""
+    from .fetch import gads_geo
+    return gads_geo.load_geo(data_dir)
 
 
 def prepass(data_dir, apps, revenue, dashboard, cfg, st):
@@ -281,13 +287,16 @@ def app_spend(pre, a, store):
             "sids": len(sids)}
 
 
-def _app_geo(pre, a, store, fx, till):
-    """Country cost per DAY (USD) of the GEO_DAYS days to `till` from the Google Ads country cache (GADS_GEO only) →
-    {cc: {"daily": {day: [cost_usd, downloads]}}} — the engine sums exactly the days of the install weeks it divides
-    by (never a 28-day cost over a 12-week install window)."""
+def _app_geo(pre, a, store, fx, till, spend=None):
+    """Country cost from the Google Ads country cache (GADS_GEO only). The week cache (fetch.gads_geo, `weeks`) → the
+    engine's week envelope (_app_geo_weeks). The older day-grain shape (`daily`) → cost per DAY (USD) of the GEO_DAYS
+    days to `till`: {cc: {"daily": {day: [cost_usd, downloads]}}} — the engine sums exactly the days of the install
+    weeks it divides by (never a 28-day cost over a 12-week install window)."""
     geo = (pre or {}).get("geo")
     if not geo or not till:
         return None
+    if isinstance(geo.get("weeks"), dict):
+        return _app_geo_weeks(pre, a, store, fx, till, spend)
     rows = {}
     for p in sorted(app_sids(pre, a, store, geo.get("daily") or {})):
         for d, by in ((geo.get("daily") or {}).get(p) or {}).items():
@@ -312,6 +321,81 @@ def _app_geo(pre, a, store, fx, till):
             e = out.setdefault(cc, {"daily": {}})
             e["daily"][d] = [cost / 1e6 * r, float(dl)]
     return out or None
+
+
+def _app_geo_weeks(pre, a, store, fx, till, spend=None):
+    """The week envelope (SPEC_CD_GEO §G.8) for every Monday W of [Monday(till − GEO_DAYS), Monday(till)], or None
+    when the app has no spend object (`spend` = app_spend(...), made here when not handed over):
+      {"v": 2, "ccy", "first", "till" (the geo cache's), "stores": the app's spend store ids, "in_cache": those of
+       them with any week in the geo cache,
+       "weeks": {W: {"whole", "cov", "spend", "geo", "rate", "dl_ok", "by": {cc: [usd, dl | null]}}}}
+    Only the app's own spend store ids (app_sids over the spend cache — the set app_spend uses) are read. rate = the
+    week's spend-weighted USD rate (Σ spend·f(d) ÷ Σ spend; the mean of f over the 7 days without spend; None when f
+    has no rate → not whole), so Σ countries in USD = cov × the week's USD spend exactly. cov = Σ country cost ÷ Σ
+    campaign cost (base micros): 1.0 when both are 0; None when there is country cost without spend, or when a store of
+    the app has spend in W but no committed week in the cache. whole = W ≥ max(geo.first, spend.first) and
+    W + 6 ≤ min(geo.till, spend.till)."""
+    from .fetch.gads_geo import GEO_MICROS_Q                # the cache's cell rounding (1/100 of the currency)
+    geo, sp = pre["geo"], pre.get("spend")
+    if spend is None:
+        spend = app_spend(pre, a, store)
+    if not spend or not sp:
+        return None
+    gw = geo.get("weeks") or {}
+    sids = sorted(app_sids(pre, a, store, sp["daily"]))
+    ccy = sp.get("ccy") or "INR"
+    f, _ = val._fx_fn(fx, ccy)
+    t = date.fromisoformat(till)
+    W = t - timedelta(days=GEO_DAYS)
+    W -= timedelta(days=W.weekday())
+    last = t - timedelta(days=t.weekday())
+    firsts = [x for x in (geo.get("first"), spend.get("first")) if x]
+    tills = [x for x in (geo.get("till"), spend.get("till")) if x]
+    lo = max(firsts) if len(firsts) == 2 else None
+    hi = min(tills) if len(tills) == 2 else None
+    weeks = {}
+    while W <= last:
+        wk = W.isoformat()
+        days = [(W + timedelta(days=i)).isoformat() for i in range(7)]
+        per = {sid: sum(float((sp["daily"].get(sid) or {}).get(d) or 0) for d in days) for sid in sids}
+        byday = [sum(float((sp["daily"].get(sid) or {}).get(d) or 0) for sid in sids) for d in days]
+        fs = [f(W + timedelta(days=i)) for i in range(7)]
+        tot = sum(byday)
+        if any(r is None for r in fs):
+            rate = None
+        elif tot > 0:
+            rate = sum(v * r for v, r in zip(byday, fs)) / tot
+        else:
+            rate = sum(fs) / 7.0
+        g, by, dl_ok, missing, ncell = 0, {}, True, False, 0
+        for sid in sids:
+            cells = (gw.get(sid) or {}).get(wk)
+            if cells is None:
+                missing = missing or per[sid] > 0
+                continue
+            ncell += max(len(cells), GEO_TOL_CELLS) if (cells or per[sid] > 0) else 0
+            for cc, (cost, dl) in sorted(cells.items()):
+                g += cost or 0
+                e = by.setdefault(cc, [0, 0.0])
+                e[0] += cost or 0
+                if dl is None or e[1] is None:
+                    e[1] = None
+                    dl_ok = False
+                else:
+                    e[1] += dl
+        cov = None if missing or (tot == 0 and g > 0) else 1.0 if tot == 0 else g / tot
+        usd = (lambda m: m * rate / 1e6) if rate is not None else (lambda m: None)
+        # tol: what the cache's rounding alone can make the country total miss by (every cell of a committed store-week
+        # keeps 1/100 of the currency — half a unit at most — and a country rounded to 0 is not stored at all: at most
+        # GEO_TOL_CELLS countries a store); by[cc][2]: the cost in the billed currency (the ₹ view's own amount)
+        weeks[wk] = {"whole": bool(rate is not None and lo and hi and wk >= lo and days[-1] <= hi), "cov": cov,
+                     "spend": usd(tot), "geo": usd(g), "rate": rate, "dl_ok": dl_ok,
+                     "tol": usd(ncell * GEO_MICROS_Q / 2),
+                     "by": {cc: [usd(c), None if d is None else round(d, 2), c / 1e6]
+                            for cc, (c, d) in sorted(by.items())}}
+        W += timedelta(days=7)
+    return {"v": 2, "ccy": ccy, "first": geo.get("first"), "till": geo.get("till"), "stores": len(sids),
+            "in_cache": sum(1 for sid in sids if gw.get(sid)), "weeks": weeks}
 
 
 # ── one app ─────────────────────────────────────────────────────────────────────────────────────
@@ -369,6 +453,24 @@ def releases(udet):
     return out
 
 
+def release_impact(udet):
+    """Each app version's Update impact verdict, for C's ver_ret (an alert the Update impact block already told the
+    owner is shown, never sent again): {version: {"worse": [row keys], "better": [row keys], "key": block key}} from
+    the uninstall detail's impact updates (newest first; a version's newest block wins). Any failure → {}."""
+    out = {}
+    try:
+        for u in ((udet or {}).get("impact") or {}).get("updates") or []:
+            vd = u.get("verdict") or {}
+            for v in u.get("versions") or []:
+                if v is None or str(v) in out:
+                    continue
+                out[str(v)] = {"worse": [str(k) for k in vd.get("worse") or []],
+                               "better": [str(k) for k in vd.get("better") or []], "key": u.get("key")}
+    except Exception:
+        return {}
+    return out
+
+
 def app_step(store, a, udet, key, st, now_iso, rev, pre, cfg, out_dir, act_alerts=None, market=None):
     """One app: its install-day files → evaluate → value_<key>.json.gz → its summary row (alerts under "_alerts",
     its curve shape under "_shape": finish takes them off). An app without the files yet: a "wait" row, no file,
@@ -380,12 +482,13 @@ def app_step(store, a, udet, key, st, now_iso, rev, pre, cfg, out_dir, act_alert
         row["_has"] = False
         return row
     spend = app_spend(pre, a, store)
-    geo = _app_geo(pre, a, store, pre.get("fx"), ida.get("to")) if cfg.get("geo") else None
+    geo = _app_geo(pre, a, store, pre.get("fx"), ida.get("to"), spend=spend) if cfg.get("geo") else None
     ded = (pre.get("ded") or {}).get(aid) or (pre.get("ded") or {}).get(a["app_name"])
+    kw = {"impact": release_impact(udet)} if cfg.get("cd") else {}
     detail, row, new = val.evaluate_app(store, ida, rev, spend, pre.get("fx"), releases(udet),
                                         _slice(st, aid), pre.get("portfolio_shape") or {}, cfg, now_iso,
                                         app_id=aid, app=a["app_name"], key=key, act_alerts=act_alerts, geo=geo,
-                                        ded=ded, market=market)
+                                        ded=ded, market=market, **kw)
     row["_has"] = True
     if detail is None:                                  # the file is there but holds no folded day yet
         row.setdefault("_alerts", [])
@@ -396,6 +499,11 @@ def app_step(store, a, udet, key, st, now_iso, rev, pre, cfg, out_dir, act_alert
     row.update(file=name, sig=_sig(detail))
     row["cty"]["gap_weeks"] = ((detail.get("countries") or {}).get("gap_weeks") or 0)
     row["organic"] = detail["no_ads"]
+    if cfg.get("geo"):                                  # counts.geo's reason (taken off in finish)
+        row["cty"]["geo_why"] = (detail.get("countries") or {}).get("geo_why")
+    if cfg.get("cd"):                                   # counts.ver / counts.long (taken off in finish)
+        row["_cd"] = {k: (detail.get(k) or {}).get("state") if isinstance(detail.get(k), dict) else None
+                      for k in ("by_version", "long")}
     _put(st, aid, new)
     return row
 
@@ -414,9 +522,21 @@ def error_row(a, key):
 # ── the end of the step ─────────────────────────────────────────────────────────────────────────
 
 def consts(cfg):
+    """The page's constants. With GADS_GEO and VALUE_CD off they are exactly as before (asset_v too): the geo gate's
+    own only with GADS_GEO on; `cd` (and C / D's own table) only with VALUE_CD on."""
     out = dict(val.CONSTS)
     out.update(horizon=cfg["payback_days"], iap_in_payback=cfg["iap"], cpi_main=cfg["cpi"], deduct=cfg["deduct"],
                geo=cfg["geo"])
+    if cfg.get("geo"):
+        out.update(geo_cov_min=val.GEO_COV_MIN, geo_cov_max=val.GEO_COV_MAX, geo_cov_abs=val.GEO_COV_ABS,
+                   geo_days=GEO_DAYS, geo_dl_min=val.GEO_DL_MIN, geo_paid_min=val.GEO_PAID_MIN,
+                   geo_xx_noads=val.GEO_XX_NOADS, geo_back_rel=val.GEO_BACK_REL,
+                   geocost_dedup_days=val.GEOCOST_DEDUP_DAYS)
+        out["reopen_seed_days"] = dict(val.REOPEN_SEED_DAYS)            # geo_cost's 42 days (and the rest, as ever)
+    if cfg.get("cd"):
+        from .engine import value_cd
+        out.update(value_cd.CONSTS)
+        out["cd"] = True
     return out
 
 
@@ -464,10 +584,21 @@ def finish(dashboard, out_dir, rows, pre, st, data_dir, no_ga4, cfg, status=None
                "geo": {"on": sum(1 for r in ok if (r.get("cty") or {}).get("geo")),
                        "off": sum(1 for r in ok if not (r.get("cty") or {}).get("geo"))},
                "errors": sum(1 for r in rows if r["status"] == "error")}
+        if cfg.get("geo"):                              # why an app shows no country cost (GADS_GEO on only)
+            why = [(r.get("cty") or {}).get("geo_why") for r in ok]
+            for k in ("cov", "wait", "nostore", "noads"):
+                cnt["geo"][k] = sum(1 for w in why if w == k)
+        if cfg.get("cd"):                               # C / D states per app (VALUE_CD on only)
+            cds = [r.get("_cd") or {} for r in ok]
+            cnt["ver"] = {k: sum(1 for c in cds if c.get("by_version") == k)
+                          for k in ("ok", "single", "low", "nodata", "nosplit", "error")}
+            cnt["long"] = {k: sum(1 for c in cds if c.get("long") == k) for k in ("ok", "young", "low", "error")}
         for r in rows:
             r.pop("organic", None)
+            r.pop("_cd", None)
             if isinstance(r.get("cty"), dict):
                 r["cty"].pop("gap_weeks", None)
+                r["cty"].pop("geo_why", None)
         ac = {"warning": 0, "watch": 0, "good": 0}
         for al in alerts:
             ac[al["severity"]] = ac.get(al["severity"], 0) + 1

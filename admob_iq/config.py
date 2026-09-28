@@ -68,6 +68,9 @@ def settings() -> dict:
         "value_cpi": _env("VALUE_CPI", "blended"),                      # the main cost per install
         "value_deduct": _env("VALUE_DEDUCT", "true").lower() == "true", # a per-app deduction rate, when one exists
         "gads_geo": _env("GADS_GEO", "false").lower() == "true",        # Google Ads cost by country (after the probe)
+        # the Install value tab's C (new users by app version) and D (long-term by install month) — no new GA4 call,
+        # both read the install-day files; off: nothing of them is computed, written or shown (SPEC_CD_GEO §S.1)
+        "value_cd": _env("VALUE_CD", "false").lower() == "true",
         "iday_max_calls": _int_env(("IDAY_MAX_CALLS",), 120),           # install-day GA4 calls per app fetch
         "iday_cty_days": _int_env(("IDAY_CTY_DAYS",), 400),             # how far back countries are read
     }

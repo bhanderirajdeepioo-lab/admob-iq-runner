@@ -64,6 +64,19 @@ def _spend_to_usd(spend, rate):
     return out
 
 
+def _gads_geo_step(s, data_dir, spend, today):
+    """The ROAS step, right after the spend cache is written: Google Ads cost by country for the Install value tab
+    (fetch.gads_geo; SPEC_CD_GEO §G.7), only when GADS_GEO is on. Its own try — a failure costs only the geo cache's
+    update (spend, ROAS and every other output are unchanged). `spend` is only read. One counts-only line either way."""
+    if not s.get("gads_geo"):
+        return
+    try:
+        from .fetch.gads_geo import geo_step
+        print(geo_step(s, data_dir, spend, today), file=sys.stderr)
+    except Exception as _ge:
+        print(f"gads geo skipped: {type(_ge).__name__}", file=sys.stderr)
+
+
 def data_quality(repo, totals):
     """Post-fetch integrity check: confirm the stored data has no truncation holes.
     Runs verify_coverage over each report's OWN span (excluding the newest, partial day so a
@@ -1138,6 +1151,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                         json.dump(spend, _cf)
                 except Exception as _ce:
                     print(f"roas cache write skipped: {_ce}", file=sys.stderr)
+            _gads_geo_step(s, data_dir, spend, today)          # GADS_GEO only; its own try, reads `spend` only
             store_ids = resolve_store_ids(accounts, data_dir, dashboard.get("apps_catalog"),
                                           client_id=s["google_client_id"], client_secret=s["google_client_secret"],
                                           currency=s["report_currency"], make_client=make_client, mode="live")

@@ -14,6 +14,7 @@ Everything here is made up: no real app, country mix, money or id. A made-up app
 make_app(**kw) → {"store", "ida", "rev", "spend", "fx", "S"}: the engine's inputs for one app (cached; deep-copied).
 """
 
+import bisect
 import copy
 import functools
 import gzip
@@ -60,11 +61,21 @@ def fx_rate(d, hs):
 def _make(weeks=60, end=END, base=2000, seed=1, spend=True, cpi=0.06, cpi_jump=None, k=1.0, k_from=None, k_after=None,
           smp=False, gap_days=(), gap_loss=0.05, drop=None, filling=None, cty_days=400, old_usd=40.0, iap=0.0,
           q_days=(), ads_share=0.87, spend_stop=None, countries=None, start=None, noise=0.04, ga4_drop=None, cnoise=0.0,
-          cty_share=None, organic=None):
+          cty_share=None, organic=None, versions=None, vsplit=True, ver_drop=None, long_drop=None):
     """ga4_drop = (day, f): GA4's ad revenue × f from that activity day (a Firebase link / consent / SDK change), AdMob —
     the truth — unchanged. cnoise: each country's install-day revenue × a lognormal with sd cnoise/√installs (a null of
     identical countries). cty_share = (cc, day, ×): that country's install share × from that install day (a campaign).
-    organic = (from, to, ×): installs × on those days, Google Ads spend and its installs unchanged."""
+    organic = (from, to, ×): installs × on those days, Google Ads spend and its installs unchanged.
+    C / D (VALUE_CD; none of these given: the output is exactly as before):
+      versions = ((version, first day, ramp days[, last day]), …) → store["vuse"] (every day's new users split by the
+        version they got: the newest version from its first day takes a share rising over `ramp` days (0: at once),
+        the version before it the rest; a `last day` hands the day after back to the version before it — a hotfix
+        pulled, or an A → B → A) plus a 1% "(not set)" slot, and store["flags"]["impact"]["vuse_split"] = vsplit
+        (False: every user in the returning slots, as GA4 answers without newVsReturning);
+      ver_drop = (version, ×): returners at ages 1–29 of the install days that version is dominant on × (D1 and D7
+        of that version's new users, never its installs or earnings);
+      long_drop = (first month (a date), months, ×): install days in those calendar months — returners at ages ≥ 45
+        and revenue at ages ≥ 31 × (the long-term tail only)."""
     cty = dict(countries) if countries else dict(CTY)
     S = end - timedelta(days=LATE)
     hs = start or (end - timedelta(days=weeks * 7 - 1))
@@ -128,6 +139,21 @@ def _make(weeks=60, end=END, base=2000, seed=1, spend=True, cpi=0.06, cpi_jump=N
 
     def users_c(X, c, L):
         return n_c[X][c] if L == 0 else ret(L) * a_c[X][c]
+    vshare = _vshares(versions, hs, end) if versions else None
+    vdrop = {}
+    if ver_drop:
+        for X, sh in (vshare or {}).items():
+            if max(sh, key=lambda v: (sh[v], v)) == ver_drop[0] and max(sh.values()) * 0.99 >= 0.8:
+                vdrop[X] = ver_drop[1]
+    ldrop = set()
+    if long_drop:
+        m0 = long_drop[0].year * 12 + long_drop[0].month - 1
+        ldrop = set(range(m0, m0 + long_drop[1]))
+
+    def lmul(X, L, what):
+        if ldrop and X.year * 12 + X.month - 1 in ldrop and ((what == "u" and L >= 45) or (what == "r" and L >= 31)):
+            return long_drop[2]
+        return 1.0
     x, cw, days = {}, {}, {}
     qb_rev = {}
     for i in range(ndays):
@@ -145,10 +171,11 @@ def _make(weeks=60, end=END, base=2000, seed=1, spend=True, cpi=0.06, cpi_jump=N
             if L == 0:
                 e["n"] += new[X]
             if L in ULAGS:
-                e["u"][ULAGS.index(L)] += int(round(sum(users_c(X, c, L) for c in cty)))
+                um = (vdrop.get(X, 1.0) if 1 <= L < 30 else 1.0) * (lmul(X, L, "u") if ldrop else 1.0)
+                e["u"][ULAGS.index(L)] += int(round(sum(users_c(X, c, L) for c in cty) * um))
             b = _band(L)
             if b is not None:
-                e["r"][b] += tot
+                e["r"][b] += int(round(tot * lmul(X, L, "r"))) if ldrop else tot
                 if iap:
                     e["p"][b] += int(round(tot * iap))
             if L <= 90 and D >= cfrom:
@@ -230,7 +257,53 @@ def _make(weeks=60, end=END, base=2000, seed=1, spend=True, cpi=0.06, cpi_jump=N
              "window_end": iso(end), "fetched_at": "2026-09-21T01:00:00Z",
              "daily": {iso(d): {"new": n, "a1": n * 5, "a28": n * 20, "un": 0, "un_ev": 0, "upd": 0}
                        for d, n in new.items()}}
+    if versions:
+        store["vuse"] = _vuse(vshare, new, vsplit)
+        store["flags"] = {"impact": {"vuse_split": bool(vsplit)}}
     return {"store": store, "ida": ida, "rev": rev, "spend": sp, "fx": fx, "S": S, "hs": hs, "new": new}
+
+
+def _vshares(versions, hs, end):
+    """{day: {version: share of the day's new users}} for versions ((version, first, ramp[, last]), …): the first
+    version holds every day before the next one; a version from its first day takes min(1, (day − first + 1) / ramp)
+    of the new users from the version before it (all at once with ramp 0; a tuple of shares: those on its first days,
+    then all) — until its `last` day, if any."""
+    vs = sorted((tuple(v) for v in versions), key=lambda v: v[1])
+    out = {}
+    d = hs
+    while d <= end:
+        live = [v for v in vs if v[1] <= d and (len(v) < 4 or v[3] is None or d <= v[3])]
+        if not live:
+            out[d] = {vs[0][0]: 1.0}
+        elif len(live) == 1:
+            out[d] = {live[-1][0]: 1.0}
+        else:
+            cur, prev = live[-1], live[-2]
+            i = (d - cur[1]).days
+            if isinstance(cur[2], tuple):                   # explicit daily shares, then all of it
+                s = cur[2][i] if i < len(cur[2]) else 1.0
+            else:
+                s = 1.0 if cur[2] <= 0 else min(1.0, (i + 1) / cur[2])
+            out[d] = {cur[0]: s} if s >= 1 else {cur[0]: s, prev[0]: 1 - s}
+        d += timedelta(days=1)
+    return out
+
+
+def _vuse(vshare, new, split):
+    """store["vuse"] {day: {version: [aN, sN, tN, aR, sR, tR]}}: new users by the day's shares (+ 1% "_x"), and
+    returning users 4× as many; unsplit (GA4 without newVsReturning): everything in the returning slots."""
+    out = {}
+    for d, sh in sorted(vshare.items()):
+        n = new.get(d, 0)
+        day = {}
+        for v, s in sorted(sh.items()):
+            a = int(round(n * 0.99 * s))
+            r = int(round(n * 4 * s))
+            day[v] = [a, 2 * a, 60 * a, r, 2 * r, 90 * r] if split else [0, 0, 0, a + r, 2 * (a + r), 90 * (a + r)]
+        x = int(round(n * 0.01))
+        day["_x"] = [x, x, 30 * x, 0, 0, 0] if split else [0, 0, 0, x, x, 30 * x]
+        out[iso(d)] = day
+    return out
 
 
 def make_app(**kw):
@@ -238,9 +311,11 @@ def make_app(**kw):
     for k in ("gap_days", "q_days"):
         if k in kw:
             kw[k] = tuple(sorted(kw[k]))
-    for k in ("ga4_drop", "cty_share", "organic"):
+    for k in ("ga4_drop", "cty_share", "organic", "ver_drop", "long_drop"):
         if kw.get(k) is not None:
             kw[k] = tuple(kw[k])
+    if kw.get("versions") is not None:
+        kw["versions"] = tuple(tuple(tuple(x) if isinstance(x, list) else x for x in v) for v in kw["versions"])
     if isinstance(kw.get("countries"), dict):
         kw["countries"] = tuple(sorted(kw["countries"].items()))
     return copy.deepcopy(_make(**kw))
@@ -269,6 +344,56 @@ def spend_cache(apps):
             "campaigns": {}, "fx": {"USD": 1.0, "INR": FX0}, "note": None}
 
 
+def _fx_at(series, d):
+    """The dated USD rate the engine reads for day d (a weekend / holiday: the business day before)."""
+    keys = sorted(series)
+    i = bisect.bisect_right(keys, iso(d)) - 1
+    return series[keys[max(i, 0)]]
+
+
+def geo_envelope(m, cov=1.0, noads=(), xx=0.0, mult=None, small=None, till=None, dl=0.87, dl_null=(), days=120):
+    """A GADS_GEO week envelope (value_build._app_geo's engine input, SPEC_CD_GEO §G.8) for make_app output m: every
+    Monday of [Monday(S − days), Monday(S)]; a week's covered cost (cov × its Google Ads spend in USD) is shared over
+    the countries by their installs × mult[cc] (default 1) — so with no mult every country's cost per install is the
+    same — minus the `xx` share, which goes to "XX" (Google Ads could not place it in a country).
+      cov: one coverage for every week, or {Monday iso: cov}; noads: countries with no Google Ads cost; small: {cc:
+      installs-equivalent weight} for countries the app has no row for; till: the cache's last day (a week past it is
+      not whole); dl: Google Ads downloads per install; dl_null: countries whose downloads are unknown; xx: one
+      unmapped share for every week, or {Monday iso: share}. Each country carries its cost in the billed currency too
+      ([usd, dl, billed], as value_build writes it)."""
+    S, hs, sp, ida = m["S"], m["hs"], m["spend"], m["ida"]
+    till = till or S
+    series = m["fx"]["series"]
+    cset = ida["cset"]
+    W, last = _mon(S - timedelta(days=days)), _mon(S)
+    weeks = {}
+    while W <= last:
+        ds = [W + timedelta(days=i) for i in range(7)]
+        src = sum(((sp or {}).get("daily") or {}).get(iso(d), 0) for d in ds)
+        usd = sum(((sp or {}).get("daily") or {}).get(iso(d), 0) / 1e6 * _fx_at(series, d) for d in ds)
+        cells = ida["c"].get(iso(W)) or {}
+        n_c = {cset[int(k)]: v["n"] for k, v in cells.items() if k != "gap"}
+        wts = {cc: n * (mult or {}).get(cc, 1.0) for cc, n in n_c.items()
+               if cc not in noads and cc not in ("--", "ZZ") and n > 0}
+        wts.update(small or {})
+        cv = cov.get(iso(W), 1.0) if isinstance(cov, dict) else cov
+        xw = xx.get(iso(W), 0.0) if isinstance(xx, dict) else xx
+        total = cv * usd
+        tw = sum(wts.values())
+        rate = (usd / src * 1e6) if src else _fx_at(series, W)
+        by = {}
+        for cc, w in sorted(wts.items()):
+            c = total * (1 - xw) * w / tw
+            by[cc] = [c, None if cc in dl_null else round(dl * n_c.get(cc, w), 2), c / rate]
+        if xw and total:
+            by["XX"] = [total * xw, 0.0, total * xw / rate]
+        weeks[iso(W)] = {"whole": W >= hs and W + timedelta(days=6) <= till,
+                         "cov": (cv if src > 0 else (1.0 if not total else None)), "spend": usd, "geo": total,
+                         "rate": rate, "dl_ok": not dl_null, "by": by}
+        W += timedelta(days=7)
+    return {"v": 2, "ccy": "INR", "first": iso(hs), "till": iso(till), "weeks": weeks}
+
+
 # ── the frontend fixture: 3 made-up apps through the REAL build code ──────────────────────────────
 
 FIX_START = {"spend": END - timedelta(days=60 * 7 - 1), "organic": END - timedelta(days=40 * 7 - 1),
@@ -286,6 +411,18 @@ FIX_APPS = (
     ("ca-app-pub-5555555555555555~103", "Demo Young App", "com.demo.value.young",
      dict(start=FIX_START["young"], seed=13, filling=30, base=600)),
 )
+# C / D (VALUE_CD): each app's versions — only seed_build(cd=True) (the committed fixture) puts them in the stores.
+# Made-up version strings (never the release synth's). (a) 2.0 → 2.1 → a one-day hotfix 2.1.1 (pulled) → 2.2 after 3
+# rollout days at 40 / 60 (left out) → 2.3, 5 days old (its week not in yet); every version's users behave alike (no
+# ver_ret). (b) GA4 does not split its new users by version (nosplit). (c) one version (single).
+FIX_VERSIONS = {
+    "ca-app-pub-5555555555555555~101": dict(versions=(("2.0", FIX_START["spend"], 0), ("2.1", date(2026, 4, 6), 0),
+                                                      ("2.1.1", date(2026, 6, 28), 0, date(2026, 6, 28)),
+                                                      ("2.2", date(2026, 6, 29), (0.4, 0.4, 0.4)),
+                                                      ("2.3", date(2026, 9, 12), 0))),
+    "ca-app-pub-5555555555555555~102": dict(versions=(("5.0", FIX_START["organic"], 0),), vsplit=False),
+    "ca-app-pub-5555555555555555~103": dict(versions=(("3.0", FIX_START["young"], 0),)),
+}
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "value_sample.json")
 RUNS = tuple(datetime(2026, 9, 21, 12, 0, tzinfo=timezone.utc) - timedelta(days=7 * k) for k in range(5, -1, -1))
 
@@ -297,13 +434,18 @@ def _kw(kw, end):
     return kw
 
 
-def seed_build(data_dir, apps=FIX_APPS, end=END, write=True):
+def seed_build(data_dir, apps=FIX_APPS, end=END, write=True, cd=False):
     """Stores (tests.uninstall_synth.make_store) + install-day files + the spend cache + FX series for `apps` →
-    (revenue for run_uninstall, {app id: make_app output}). write False: the revenue only (nothing on disk changes)."""
+    (revenue for run_uninstall, {app id: make_app output}). write False: the revenue only (nothing on disk changes).
+    cd True: each app's FIX_VERSIONS go into its install-day model and its store gets their `vuse` / vuse_split (the
+    stores and files are otherwise the same)."""
     from admob_iq.fetch import ga4_uninstall as gu
     from tests.uninstall_synth import make_store
+
+    def _kw_cd(aid, kw):
+        return dict(kw, **FIX_VERSIONS.get(aid, {})) if cd else kw
     if not write:
-        made = {aid: make_app(end=end, **_kw(kw, end)) for aid, _, _, kw in apps}
+        made = {aid: make_app(end=end, **_kw_cd(aid, _kw(kw, end))) for aid, _, _, kw in apps}
         return ({"tz": "UTC", "currency": "USD", "till": iso(end),
                  "apps": {aid: m["rev"]["days"] for aid, m in made.items()},
                  "all_apps": {aid: m["rev"]["all_days"] for aid, m in made.items()}}, made)
@@ -313,7 +455,7 @@ def seed_build(data_dir, apps=FIX_APPS, end=END, write=True):
     made, sp = {}, []
     rev = {"tz": "UTC", "currency": "USD", "till": iso(end), "apps": {}, "all_apps": {}}
     for aid, name, pkg, kw in apps:
-        kw = _kw(kw, end)
+        kw = _kw_cd(aid, _kw(kw, end))
         m = make_app(end=end, **kw)
         made[aid] = m
         news = m["new"]
@@ -321,6 +463,9 @@ def seed_build(data_dir, apps=FIX_APPS, end=END, write=True):
                         app_id=aid, package=pkg)
         st.update(property_id="p-" + pkg.rsplit(".", 1)[-1], stream_id="s-" + pkg.rsplit(".", 1)[-1],
                   time_zone="UTC")
+        if cd and "vuse" in m["store"]:
+            st["vuse"] = m["store"]["vuse"]
+            st.setdefault("flags", {})["impact"] = dict(m["store"]["flags"]["impact"])
         gu.save_store(gu.store_path(data_dir, aid), st)
         ida = dict(m["ida"], src=[st["property_id"], st["stream_id"]])
         write_iday(data_dir, aid, ida)
@@ -349,7 +494,7 @@ def build_fixture(tmp):
     data_dir, out_dir = os.path.join(tmp, "data"), os.path.join(tmp, "site")
     s = dict(settings(), ga4_enabled=True, ga4_client_id="demo-cid", ga4_client_secret="demo-sec",
              ga4_refresh_tokens=json.dumps({"owner@example.test": "rt-demo"}), ga4_refresh_token="",
-             notify_dry_run=True, ga4_active=True, ga4_value=True)
+             notify_dry_run=True, ga4_active=True, ga4_value=True, value_cd=True, gads_geo=False)
     catalog = [{"app_id": aid, "app_name": name, "account_id": "pub-demo", "selected": True}
                for aid, name, _, _ in FIX_APPS]
     status = {"counts": {"selected": len(catalog), "with_ga4": len(catalog), "fetched": 0, "full": 0,
@@ -360,7 +505,7 @@ def build_fixture(tmp):
         st_.enter_context(mock.patch.object(gu, "refresh_all", lambda *a, **k: json.loads(json.dumps(status))))
         log = st_.enter_context(contextlib.redirect_stderr(io.StringIO()))
         for i, now in enumerate(RUNS):
-            rev, _ = seed_build(data_dir, end=now.date() - timedelta(days=2))     # the fetch left GA4 till now − 2
+            rev, _ = seed_build(data_dir, end=now.date() - timedelta(days=2), cd=True)   # GA4 till now − 2
             dashboard = {"apps_catalog": catalog, "kpis": {"revenue": 1.0}, "alerts": {"items": []}, "usd_inr": 83.3}
             build_static._uninstall_step(dashboard, data_dir, out_dir, s, revenue=rev, now=now)
             res = build_static.send_alerts(dashboard, s)
