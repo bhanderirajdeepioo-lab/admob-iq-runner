@@ -39,3 +39,6 @@ __pycache__/
 review_worker/devkeys.json
 review_worker/wrangler.toml
 review_worker/worker/
+# wrangler's local secrets file (a local GITHUB_TOKEN for Settings saves) — never commit it
+.dev.vars
+.dev.vars.*

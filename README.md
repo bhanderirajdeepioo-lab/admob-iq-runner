@@ -36,4 +36,5 @@ See `SETUP-GUIDE.md`.
 
     admob_iq/      analysis engine, AdMob + Google Ads fetchers, static builder
     frontend/      dashboard UI (single self-contained HTML file)
+    review_worker/ dashboard Worker: Review API + Settings saves (see review_worker/README.md)
     config/        example config only; real config lives in the private repo

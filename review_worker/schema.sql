@@ -29,4 +29,7 @@ CREATE TABLE IF NOT EXISTS rv_snoozes (
   day TEXT NOT NULL, until TEXT NOT NULL, days INTEGER NOT NULL CHECK (days IN (7,14)), note TEXT NOT NULL DEFAULT '',
   who TEXT NOT NULL, at TEXT NOT NULL, cleared_by TEXT, cleared_at TEXT);
 CREATE UNIQUE INDEX IF NOT EXISTS rv_snoozes_one_live ON rv_snoozes(app, feature) WHERE cleared_at IS NULL;
-INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '2');
+CREATE TABLE IF NOT EXISTS config_log (            -- append-only: every Settings save through /api/config/save
+  id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT NOT NULL, at TEXT NOT NULL, file TEXT NOT NULL,
+  bytes INTEGER NOT NULL, result TEXT NOT NULL, commit_sha TEXT);
+INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '3');

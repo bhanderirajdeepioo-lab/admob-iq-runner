@@ -1,6 +1,8 @@
 // Daily App Review API — Cloudflare Worker entry.
 //
 //   /api/review/*   → this API (Access JWT verified here, then D1 binding REVIEW_DB)
+//   /api/config/*   → Settings saves (Access JWT, admins only; commits config/<file>.json with the GITHUB_TOKEN
+//                     secret — see config.js), audited in D1 (config_log)
 //   other /api/*    → 404 JSON
 //   everything else → the static dashboard (env.ASSETS), exactly as without this Worker
 //
@@ -13,12 +15,16 @@ import {
   FEATS, ensureSchema, getRev, getDayState, getAppView, getStates, getCalendar, applyAction, decideFlag,
   _resetSchemaForTests,
 } from "./db.js";
+import { CFG_MSG, CONFIG_MAX_BYTES, serverSaveReady, githubConfig, validateSave, commitConfig, auditSave } from "./config.js";
 
 export { ApiError };
 
 const PREFIX = "/api/review/";
 const ROUTES = { me: "GET", day: "GET", calendar: "GET", action: "POST", decide: "POST" };
+const CONFIG_PREFIX = "/api/config/";
+const CONFIG_ROUTES = { status: "GET", save: "POST" };
 const MAX_BODY = 8192;
+const CONFIG_MAX_BODY = CONFIG_MAX_BYTES + 8192;   // {file, content}: the file (≤ 256 KiB as written) + the envelope
 const NOTE_MAX = 600;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const KEY_RE = /^[0-9a-f]{12}$/;
@@ -89,9 +95,11 @@ function errorResponse(e) {
   let msg = MSG[e.error] || SERVER_MSG;
   if (e.error === "bad_request") msg = `Galat request (${x.field || "body"})`;
   if (e.error === "conflict") msg = CONFLICT_MSG[x.why] || "Ye abhi nahi ho sakta";
+  if (x.msg) msg = x.msg;                             // config saves carry their own Hinglish reason
   const body = { error: e.error, msg };
   if (x.why) body.why = x.why;
   if (x.field) body.field = x.field;
+  if (x.gh_status !== undefined) body.gh_status = x.gh_status;   // the GitHub HTTP status only, never its body
   if (x.flag_id) body.flag_id = x.flag_id;
   if (x.open_day) body.open_day = x.open_day;
   return json(e.status, body, x.allow ? { Allow: x.allow } : null);
@@ -160,16 +168,16 @@ async function readCapped(request, max) {
   return out;
 }
 
-/** POST guard: JSON media type → same-origin Origin → ≤ 8 KiB → a JSON object. */
-async function readJsonBody(request, url) {
+/** POST guard: JSON media type → same-origin Origin → ≤ `max` bytes (8 KiB) → a JSON object. */
+async function readJsonBody(request, url, max = MAX_BODY, tooLarge = null) {
   const ct = (request.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
   if (ct !== "application/json") throw new ApiError(415, "unsupported_media_type");
   const origin = request.headers.get("Origin");
   if (!origin || origin !== url.origin) throw new ApiError(403, "forbidden");
   const len = Number(request.headers.get("Content-Length"));
-  if (Number.isFinite(len) && len > MAX_BODY) throw new ApiError(413, "payload_too_large");
-  const buf = await readCapped(request, MAX_BODY);
-  if (buf === null) throw new ApiError(413, "payload_too_large");
+  if (Number.isFinite(len) && len > max) throw new ApiError(413, "payload_too_large", tooLarge);
+  const buf = await readCapped(request, max);
+  if (buf === null) throw new ApiError(413, "payload_too_large", tooLarge);
   let obj;
   try {
     obj = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(buf));
@@ -403,10 +411,61 @@ async function api(request, env, url) {
   return HANDLERS[name]({ request, env, url, email, admin, body, db, now: new Date().toISOString() });
 }
 
+// ── Settings saves (/api/config/*; the rules live in config.js) ───────────────────────────────────
+
+async function hConfigStatus(c) {
+  return json(200, { server_save: serverSaveReady(c.env), admin: c.admin });
+}
+
+/** Admin → strict validation → D1 audit table ready → GitHub commit (sha refetch + retry) → audit row → {ok, sha}. */
+async function hConfigSave(c) {
+  if (!c.admin) throw new ApiError(403, "admin_only", { msg: CFG_MSG.admin_only });
+  const v = validateSave(c.body);
+  const db = c.env.REVIEW_DB;
+  if (!db || typeof db.prepare !== "function" || typeof db.batch !== "function") throw new ApiError(500, "misconfigured");
+  try {
+    await ensureSchema(db);
+  } catch (e) {
+    console.error("config-api: schema", errType(e));
+    throw new ApiError(503, "db_unavailable");
+  }
+  const row = { who: c.email, at: c.now, file: v.file, bytes: v.bytes, result: "ok", commit_sha: null };
+  const audit = () => auditSave(db, row, (e) => console.error("config-api: audit", errType(e)));
+  let r;
+  try {
+    const cfg = githubConfig(c.env);
+    r = await commitConfig(cfg, v.file, v.text, `${v.file} — saved by ${c.email} via dashboard`);
+  } catch (e) {
+    row.result = e instanceof ApiError ? e.error : "server_error";
+    await audit();
+    throw e;
+  }
+  row.commit_sha = r.sha;
+  await audit();
+  const out = { ok: true, file: v.file, sha: r.sha };
+  if (r.commit_url) out.commit_url = r.commit_url;
+  return json(200, out);
+}
+
+const CONFIG_HANDLERS = { status: hConfigStatus, save: hConfigSave };
+
+async function configApi(request, env, url) {
+  const name = url.pathname.slice(CONFIG_PREFIX.length);
+  if (!Object.prototype.hasOwnProperty.call(CONFIG_ROUTES, name)) throw new ApiError(404, "not_found");
+  const method = CONFIG_ROUTES[name];
+  if (request.method !== method) throw new ApiError(405, "method_not_allowed", { allow: method });
+
+  const { email } = await verifyAccess(request, env);
+  const admin = isAdmin(email, env);
+  const body = method === "POST" ? await readJsonBody(request, url, CONFIG_MAX_BODY, { msg: CFG_MSG.too_large }) : null;
+  return CONFIG_HANDLERS[name]({ request, env, url, email, admin, body, now: new Date().toISOString() });
+}
+
 async function route(request, env) {
   const url = new URL(request.url);
   const p = url.pathname;
   if (p.startsWith(PREFIX)) return api(request, env, url);
+  if (p.startsWith(CONFIG_PREFIX)) return configApi(request, env, url);
   if (p === "/api" || p.startsWith("/api/")) throw new ApiError(404, "not_found");
   if (env && env.ASSETS && typeof env.ASSETS.fetch === "function") return env.ASSETS.fetch(request);
   throw new ApiError(404, "not_found");

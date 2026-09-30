@@ -32,8 +32,12 @@ test("privacy: no publisher/app ids, long hex ids, UUIDs, real domains or real e
   const files = walk(ROOT);
   assert.ok(files.length >= 10);
   const problems = [];
+  // api.github.com / github.com: the public GitHub hosts of Settings saves (config.js). The config repo itself comes
+  // from the CONFIG_REPO var, so a github.com URL here may only name a placeholder owner (checked below).
   const allowedUrlHost = (h) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(h) || /(^|\.)example\.test(:\d+)?$/.test(h) ||
-    /^\$\{[A-Za-z_.]+\}$/.test(h) || h === "<team>.cloudflareaccess.com" || h === "…" || h === ",";
+    /^\$\{[A-Za-z_.]+\}$/.test(h) || h === "<team>.cloudflareaccess.com" || h === "api.github.com" || h === "github.com" ||
+    h === "…" || h === ",";
+  const allowedGhOwner = (o) => /^(example-[a-z-]+|owner|\$\{[A-Za-z_.]+\}|repos)$/.test(o);
   for (const f of files) {
     const rel = relative(ROOT, f);
     const text = readFileSync(f, "utf8");
@@ -45,6 +49,8 @@ test("privacy: no publisher/app ids, long hex ids, UUIDs, real domains or real e
     }
     for (const m of text.matchAll(/([A-Za-z0-9<>_-]+)\.cloudflareaccess\.com/g)) if (m[1] !== "<team>") bad("team domain", m[0]);
     for (const m of text.matchAll(/https?:\/\/([^/\s"'`)]+)/g)) if (!allowedUrlHost(m[1])) bad("url host", m[1]);
+    for (const m of text.matchAll(/https?:\/\/(?:api\.)?github\.com\/([^/\s"'`)]+)/g)) if (!allowedGhOwner(m[1])) bad("github owner", m[1]);
+    for (const m of text.matchAll(/CONFIG_REPO\s*=\s*"([^"]*)"/g)) if (!/^owner\\?\/private-repo$/.test(m[1])) bad("config repo", m[1]);
     for (const m of text.matchAll(/[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)/g)) {
       if (m[1].toLowerCase() !== "example.test" && !m[0].endsWith("p@yload.sig")) bad("email", m[0]);
     }
@@ -52,7 +58,7 @@ test("privacy: no publisher/app ids, long hex ids, UUIDs, real domains or real e
   assert.deepEqual(problems, []);
 });
 
-test("wrangler.example.toml: placeholders only, access-bypassing URLs off, no test-only JWKS", () => {
+test("wrangler.example.toml: placeholders only, access-bypassing URLs off, no test-only JWKS, no GitHub token", () => {
   const t = readFileSync(join(ROOT, "wrangler.example.toml"), "utf8");
   assert.match(t, /^workers_dev = false$/m);
   assert.match(t, /^preview_urls = false$/m);
@@ -63,6 +69,9 @@ test("wrangler.example.toml: placeholders only, access-bypassing URLs off, no te
   assert.match(t, /^main = "worker\/index\.js"$/m);
   assert.match(t, /^run_worker_first = \["\/api\/\*"\]$/m);
   assert.equal(/^\s*ACCESS_JWKS_JSON/m.test(t), false);
+  assert.match(t, /^CONFIG_REPO = "owner\/private-repo"/m);
+  assert.equal(/^\s*GITHUB_TOKEN\s*=/m.test(t), false, "GITHUB_TOKEN is a Cloudflare Secret, never a var in the file");
+  assert.match(t, /^# .*GITHUB_TOKEN.*Secret/m);
 });
 
 test("local-dev leftovers (wrangler state = a local D1 with clicked notes / app names, dev keys, local config) are git-ignored", () => {
@@ -72,7 +81,7 @@ test("local-dev leftovers (wrangler state = a local D1 with clicked notes / app 
   const ignored = (p) => spawnSync("git", ["check-ignore", "-q", "--no-index", p], { cwd: repo, encoding: "utf8" }).status === 0;
   for (const p of ["review_worker/.state/v3/d1/miniflare-D1DatabaseObject/db.sqlite", "review_worker/.wrangler/tmp/x.js",
     "review_worker/devkeys.json", "review_worker/wrangler.toml", "review_worker/worker/index.js", "review_worker/site/index.html",
-    ".state/x", ".wrangler/x"]) {
+    ".state/x", ".wrangler/x", "review_worker/.dev.vars", ".dev.vars"]) {
     assert.equal(ignored(p), true, p);
   }
   for (const p of ["review_worker/src/index.js", "review_worker/wrangler.example.toml", "review_worker/test/devkeys.mjs",
@@ -85,7 +94,7 @@ test("local-dev leftovers (wrangler state = a local D1 with clicked notes / app 
 
 test("every src/*.js passes node --check; src/package.json marks ES modules", () => {
   const js = readdirSync(SRC).filter((f) => f.endsWith(".js"));
-  assert.deepEqual(js.sort(), ["auth.js", "db.js", "index.js"]);
+  assert.deepEqual(js.sort(), ["auth.js", "config.js", "db.js", "index.js"]);
   for (const f of js) {
     const r = spawnSync(process.execPath, ["--check", join(SRC, f)], { encoding: "utf8" });
     assert.equal(r.status, 0, `${f}: ${r.stderr}`);
@@ -153,7 +162,7 @@ function runCase({ worker = null, remote = null, path = process.env.PATH }) {
   return { r, staged, workerFiles, contents };
 }
 
-const REAL = ["auth.js", "db.js", "index.js", "package.json"];
+const REAL = ["auth.js", "config.js", "db.js", "index.js", "package.json"];
 const OLD = { "index.js": "export default {};\n" };
 
 test("sync step: review_worker missing → no worker/, push goes on (data + site staged)", { skip: !canRun }, () => {
@@ -185,7 +194,7 @@ test("sync step: a src file with a syntax error → nothing synced, remote worke
 
 test("sync step: code that parses but does not LINK (missing export / missing module) → nothing synced", { skip: !canRun }, () => {
   const pkg = '{"type":"module"}\n';
-  const real = Object.fromEntries(["auth.js", "db.js", "index.js"].map((f) => [f, readFileSync(join(SRC, f), "utf8")]));
+  const real = Object.fromEntries(["auth.js", "config.js", "db.js", "index.js"].map((f) => [f, readFileSync(join(SRC, f), "utf8")]));
   const broken = [
     real["index.js"].replace("_resetAuthForTests }", "_resetAuthForTests, notThere }"),     // a named export auth.js lacks
     real["index.js"].replace('from "./db.js"', 'from "./dbx.js"'),                           // a module file that is not there
@@ -220,8 +229,8 @@ test("sync step: real src replaces a stale remote worker/ (old files removed, ch
   const c = runCase({ worker: "real", remote: { ...OLD, "old.js": "export {};\n" } });
   assert.equal(c.r.status, 0, c.r.stderr);
   assert.deepEqual(c.workerFiles, REAL);
-  assert.deepEqual(c.staged, ["A\tdata/a.json", "A\tsite/b.html", "A\tworker/auth.js", "A\tworker/db.js",
-    "A\tworker/package.json", "D\tworker/old.js", "M\tworker/index.js"]);
+  assert.deepEqual(c.staged, ["A\tdata/a.json", "A\tsite/b.html", "A\tworker/auth.js", "A\tworker/config.js",
+    "A\tworker/db.js", "A\tworker/package.json", "D\tworker/old.js", "M\tworker/index.js"]);
 });
 
 test("sync step: no node on PATH → nothing synced, step still exits 0", { skip: !canRun }, () => {

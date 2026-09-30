@@ -5,10 +5,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { FakeD1 } from "./fake_d1.js";
 import {
-  SCHEMA, SCHEMA_VERSION, MIGRATIONS, ensureSchema, splitSql, addDays, _resetSchemaForTests,
+  SCHEMA, SCHEMA_VERSION, MIGRATIONS, CONFIG_LOG_DDL, ensureSchema, splitSql, addDays, _resetSchemaForTests,
 } from "../src/db.js";
 
 const TABLES = ["rv_actions", "rv_flags", "rv_meta", "rv_notes", "rv_snoozes", "rv_state"];
+const hasConfigLog = (db) => db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'config_log'")[0].n === 1;
 const INDEXES = ["rv_actions_day", "rv_flags_day", "rv_flags_one_open", "rv_flags_status", "rv_notes_day", "rv_snoozes_one_live"];
 
 const objects = (db, type) => db.q("SELECT name FROM sqlite_master WHERE type = ? AND name LIKE 'rv_%' ORDER BY name", type).map((r) => r.name);
@@ -19,28 +20,29 @@ test("schema.sql equals the DDL in db.js (SCHEMA)", () => {
   assert.equal(file.trim(), SCHEMA.trim());
 });
 
-test("splitSql: 13 statements; a ';' inside a trailing comment does not split", () => {
+test("splitSql: 14 statements; a ';' inside a trailing comment does not split", () => {
   const parts = splitSql(SCHEMA);
-  assert.equal(parts.length, 13);
+  assert.equal(parts.length, 14);
   assert.ok(parts.some((p) => p.includes("append-only; never UPDATE/DELETE")));
   for (const p of parts) assert.match(p, /^(CREATE|INSERT)/);
 });
 
-test("ensureSchema creates every table + index, schema_version = 2, and is idempotent", async () => {
+test("ensureSchema creates every table + index, schema_version = 3, and is idempotent", async () => {
   _resetSchemaForTests();
   const db = new FakeD1();
-  assert.equal(await ensureSchema(db), 2);
-  assert.equal(SCHEMA_VERSION, 2);
+  assert.equal(await ensureSchema(db), 3);
+  assert.equal(SCHEMA_VERSION, 3);
   assert.deepEqual(objects(db, "table"), TABLES);
+  assert.ok(hasConfigLog(db));
   assert.deepEqual(objects(db, "index"), INDEXES);
   const batches = db.batches;
   await ensureSchema(db);
   assert.equal(db.batches, batches, "second call in the same isolate does nothing");
   _resetSchemaForTests();                          // a new isolate on the same database
   db.sqlite.exec("INSERT INTO rv_state (day, app, st, who, at) VALUES ('2026-10-01','a1a1a1a1a1a1','ok','x@example.test','t')");
-  assert.equal(await ensureSchema(db), 2);
+  assert.equal(await ensureSchema(db), 3);
   assert.deepEqual(objects(db, "table"), TABLES);
-  assert.deepEqual(db.q("SELECT k, v FROM rv_meta"), [{ k: "schema_version", v: "2" }]);
+  assert.deepEqual(db.q("SELECT k, v FROM rv_meta"), [{ k: "schema_version", v: "3" }]);
   assert.equal(db.q("SELECT COUNT(*) AS n FROM rv_state")[0].n, 1, "existing data kept");
 });
 
@@ -49,26 +51,26 @@ test("ensureSchema: a failure is not cached (next call retries); separate databa
   const db = new FakeD1();
   db.failNext = new Error("temporary");
   await assert.rejects(ensureSchema(db), /temporary/);
-  assert.equal(await ensureSchema(db), 2);
+  assert.equal(await ensureSchema(db), 3);
   const other = new FakeD1();
-  assert.equal(await ensureSchema(other), 2);
+  assert.equal(await ensureSchema(other), 3);
   assert.deepEqual(objects(other, "table"), TABLES);
 });
 
 test("MIGRATIONS run in order in one batch each and bump schema_version", async () => {
   _resetSchemaForTests();
   const db = new FakeD1();
-  MIGRATIONS[3] = ["ALTER TABLE rv_notes ADD COLUMN edited_at TEXT"];
-  MIGRATIONS[4] = ["CREATE INDEX IF NOT EXISTS rv_notes_who ON rv_notes(who)"];
+  MIGRATIONS[4] = ["ALTER TABLE rv_notes ADD COLUMN edited_at TEXT"];
+  MIGRATIONS[5] = ["CREATE INDEX IF NOT EXISTS rv_notes_who ON rv_notes(who)"];
   try {
-    assert.equal(await ensureSchema(db), 4);
-    assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "4" }]);
+    assert.equal(await ensureSchema(db), 5);
+    assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "5" }]);
     assert.ok(db.q("PRAGMA table_info(rv_notes)").some((c) => c.name === "edited_at"));
     _resetSchemaForTests();
-    assert.equal(await ensureSchema(db), 4, "already migrated → nothing re-run");
+    assert.equal(await ensureSchema(db), 5, "already migrated → nothing re-run");
   } finally {
-    delete MIGRATIONS[3];
     delete MIGRATIONS[4];
+    delete MIGRATIONS[5];
     _resetSchemaForTests();
   }
 });
@@ -81,24 +83,52 @@ const V1_FLAGS = `CREATE TABLE IF NOT EXISTS rv_flags (
   decision TEXT CHECK (decision IN ('theek','kaam','band')), dec_note TEXT, dec_by TEXT, dec_at TEXT,
   done_note TEXT, done_by TEXT, done_at TEXT, wd_by TEXT, wd_at TEXT)`;
 
-test("a schema_version 1 database is migrated to 2 (rv_flags gets dec_day / done_day; data kept); a new one starts at 2", async () => {
+test("a schema_version 1 database is migrated to 3 (rv_flags gets dec_day / done_day, config_log; data kept); a new one starts at 3", async () => {
   _resetSchemaForTests();
   const db = new FakeD1();
   db.sqlite.exec("CREATE TABLE rv_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL); INSERT INTO rv_meta VALUES ('schema_version', '1');");
   db.sqlite.exec(V1_FLAGS);
   db.sqlite.exec("INSERT INTO rv_flags (day, app, raised_by, raised_at) VALUES ('2026-10-01', 'a1a1a1a1a1a1', 'x@example.test', 't')");
-  assert.equal(await ensureSchema(db), 2);
+  assert.equal(await ensureSchema(db), 3);
   const cols = db.q("PRAGMA table_info(rv_flags)").map((c) => c.name);
   assert.ok(cols.includes("dec_day") && cols.includes("done_day"));
-  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "2" }]);
+  assert.ok(hasConfigLog(db));
+  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "3" }]);
   assert.equal(db.q("SELECT COUNT(*) AS n FROM rv_flags")[0].n, 1, "existing flag kept");
   _resetSchemaForTests();
-  assert.equal(await ensureSchema(db), 2, "migrated once; a new isolate does not re-run it");
+  assert.equal(await ensureSchema(db), 3, "migrated once; a new isolate does not re-run it");
   _resetSchemaForTests();
   const fresh = new FakeD1();
-  assert.equal(await ensureSchema(fresh), 2);
+  assert.equal(await ensureSchema(fresh), 3);
   assert.ok(fresh.q("PRAGMA table_info(rv_flags)").some((c) => c.name === "dec_day"));
+  assert.ok(hasConfigLog(fresh));
   _resetSchemaForTests();
+});
+
+test("a schema_version 2 database (the live Review DB) is migrated to 3: config_log added, review data untouched", async () => {
+  _resetSchemaForTests();
+  const db = new FakeD1();
+  const v2 = splitSql(SCHEMA).filter((s) => !s.includes("config_log") && !s.startsWith("INSERT"));
+  for (const s of v2) db.sqlite.exec(s);
+  db.sqlite.exec("INSERT INTO rv_meta VALUES ('schema_version', '2')");
+  db.sqlite.exec("INSERT INTO rv_state (day, app, st, who, at) VALUES ('2026-10-01','a1a1a1a1a1a1','ok','x@example.test','t')");
+  assert.equal(hasConfigLog(db), false);
+  const batches = db.batches;
+  assert.equal(await ensureSchema(db), 3);
+  assert.equal(db.batches, batches + 2, "the schema batch + one migration batch");
+  assert.ok(hasConfigLog(db));
+  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "3" }]);
+  assert.equal(db.q("SELECT COUNT(*) AS n FROM rv_state")[0].n, 1, "existing review state kept");
+  const cols = db.q("PRAGMA table_info(config_log)").map((c) => c.name);
+  assert.deepEqual(cols, ["id", "who", "at", "file", "bytes", "result", "commit_sha"]);
+  _resetSchemaForTests();
+});
+
+test("MIGRATIONS[3] creates the same config_log table as SCHEMA", () => {
+  const norm = (s) => s.replace(/--[^\n]*/g, "").replace(/\s+/g, " ").trim();
+  const inSchema = splitSql(SCHEMA).find((s) => s.includes("config_log"));
+  assert.deepEqual(MIGRATIONS[3], [CONFIG_LOG_DDL]);
+  assert.equal(norm(inSchema), norm(CONFIG_LOG_DDL));
 });
 
 test("rv_flags_one_open: one OPEN flag per app + feature (NULL = poori app is its own slot); closed ones do not count", async () => {

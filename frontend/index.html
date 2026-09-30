@@ -2592,12 +2592,67 @@ function appPickToggle(acc,pid){ APPSEL.accounts=APPSEL.accounts||{};
 function appPickAll(acc,on){ APPSEL.accounts=APPSEL.accounts||{}; const ids=(DATA.apps_catalog||[]).filter(x=>x.account_id===acc).map(x=>x.app_id); APPSEL.accounts[acc]={decided:true, selected:on?ids.slice():[]}; appSelStore(); rerenderSettings(); }
 function appPickSave(){ appSelStore(); ghCommitFile('config/selected_apps.json', APPSEL, 'select apps'); if(typeof DATA!=='undefined'&&DATA)rerender(); }
 function rerenderSettings(){ const old=document.querySelector('.screen[data-screen=settings]'); if(old){const f=renderSettings(); if(old.classList.contains('on'))f.classList.add('on'); old.replaceWith(f);} }
-function ghCommitFile(path,obj,msg,okMsg){ const tok=ghToken(); if(!tok){ bToast('Pehle 🔑 GitHub token daalo (Settings → Accounts & Apps)'); return; }
+// ── Settings saves (config/<file>.json in the private repo) ──────────────────────────────────────
+// First choice: the dashboard Worker (POST /api/config/save). It checks the Access login (admins only) and commits
+// with its own GitHub token (a Cloudflare Secret), so nobody needs a token in the browser. The old browser-token path
+// below is ONLY the fallback for when that API is not reachable (404 on /api/config/status, or a network error).
+const CFG_TXT={server:'Save dashboard ke server se hota hai (aapke login se) — GitHub token ki zaroorat nahi',
+  admin_only:'Sirf admin settings badal sakta hai',no_token:'Pehle 🔑 GitHub token daalo (Settings → Accounts & Apps)',
+  ok:'✅ Save ho gaya — robot agle run me poora apply karega (hide + fetch band)',net:'❌ Save fail (network/token)'};
+let CFGST=null, CFGST_P=null;      // /api/config/status → null (not asked yet) · {reach:false} · {reach:true,server_save,admin}
+function cfgFileKey(path){ const m=/^config\/(account_names|app_names|selected_apps|approved_ranges)\.json$/.exec(String(path||'')); return m?m[1]:null; }
+// GET /api/config/status answer → CFGST. 404, a network error, or a page that is not the API's JSON = API not reachable.
+function cfgStatusOf(r){ if(!r||!r.status||r.status===404) return {reach:false};
+  const j=r.data; if(r.status===200&&j&&typeof j==='object'&&typeof j.server_save==='boolean') return {reach:true,server_save:j.server_save,admin:j.admin===true};
+  if(r.status===200) return {reach:false};
+  return {reach:true,server_save:false,admin:null,status:r.status}; }       // e.g. 401 / 5xx: the API is there but said no
+// an error answer of POST /api/config/save → toast text: the API's Hinglish reason + the HTTP status (+ GitHub's status)
+function cfgApiErrMsg(status,j){ const m=(j&&typeof j.msg==='string'&&j.msg)?j.msg.replace(/[.]+$/,''):(status===401?'Login zaroori — page reload karo':'Server me dikkat — thodi der baad try karo');
+  const g=(j&&typeof j.gh_status==='number'&&j.gh_status>0)?' · GitHub '+j.gh_status:'';
+  return '❌ Save fail — '+m+' (HTTP '+status+g+')'; }
+// fallback path only (browser token → GitHub directly): a GitHub error status → toast text
+function ghErrMsg(status){
+  if(status===401) return '❌ Save fail — GitHub token expire/galat (HTTP 401). Naya token daalo.';
+  if(status===403||status===404) return '❌ Save fail — is token ko admob-iq repo me likhne ki permission nahi (HTTP '+status+')';
+  if(status===409||status===422) return '❌ Save fail — kisi aur ne abhi save kiya, dobara try karo';
+  return '❌ Save fail — GitHub se dikkat (HTTP '+(status||0)+'), dobara try karo'; }
+async function cfgFetch(method,name,body,ms){ let ctl=null, tm=null;
+  try{ if(ms&&typeof AbortController!=='undefined'){ ctl=new AbortController(); tm=setTimeout(()=>ctl.abort(),ms); }
+    const r=await fetch('/api/config/'+name,{method,credentials:'same-origin',redirect:'manual',cache:'no-store',
+      headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:ctl?ctl.signal:undefined});
+    if(r.type==='opaqueredirect') return {status:401,data:null};          // Access login expired
+    let j=null; try{ j=await r.json(); }catch(e){ j=null; }
+    return {status:r.status,data:j}; }
+  catch(e){ return {status:0,data:null}; }
+  finally{ if(tm) clearTimeout(tm); } }
+function cfgRerender(){ try{ rerenderSettings(); }catch(e){} try{ bRerender(); }catch(e){} }
+function cfgStatus(force){ if(CFGST&&!force) return Promise.resolve(CFGST);
+  if(!CFGST_P) CFGST_P=cfgFetch('GET','status',null,10000).then(r=>{ CFGST=cfgStatusOf(r); CFGST_P=null; cfgRerender(); return CFGST; });
+  return CFGST_P; }
+function ghCommitFile(path,obj,msg,okMsg,noTokMsg){
+  return cfgSave(path,obj,msg,okMsg||CFG_TXT.ok,noTokMsg||CFG_TXT.no_token).catch(()=>{ bToast(CFG_TXT.net); return false; }); }
+async function cfgSave(path,obj,msg,okMsg,noTokMsg){ const file=cfgFileKey(path);
+  if(file){ bToast('⏳ Saving…'); const st=await cfgStatus(!!(CFGST&&!CFGST.reach));   // unreachable before → ask again
+    if(st.reach){ const r=await cfgFetch('POST','save',{file,content:obj},0);
+      if(r.status===200&&r.data&&r.data.ok===true){ bToast(okMsg); return true; }
+      if(r.status!==0&&r.status!==404){ bToast(cfgApiErrMsg(r.status,r.data)); return false; }
+      CFGST={reach:false}; cfgRerender(); } }                               // the API went away → browser-token path
+  return ghCommitDirect(path,obj,msg,okMsg,noTokMsg); }
+// fallback: the browser's own GitHub token (Settings → 🔑). GET the sha → PUT; 409/422 → one retry with a fresh sha.
+async function ghCommitDirect(path,obj,msg,okMsg,noTokMsg){ const tok=ghToken(); if(!tok){ bToast(noTokMsg||CFG_TXT.no_token); return false; }
   const url=`https://api.github.com/repos/${GH_REPO}/contents/${path}`, hdr={Authorization:'Bearer '+tok,'Accept':'application/vnd.github+json'};
+  const content=btoa(unescape(encodeURIComponent(JSON.stringify(obj,null,1))));
   bToast('⏳ Saving to GitHub…');
-  fetch(url,{headers:hdr}).then(r=>r.ok?r.json():{}).then(cur=>{ const content=btoa(unescape(encodeURIComponent(JSON.stringify(obj,null,1))));
-    return fetch(url,{method:'PUT',headers:{...hdr,'Content-Type':'application/json'},body:JSON.stringify({message:msg,content,sha:cur.sha})}); })
-   .then(r=>bToast(r.ok?(okMsg||'✅ Save ho gaya — robot agle run me poora apply karega (hide + fetch band)'):'❌ Save fail — token me repo-write hai?')).catch(()=>bToast('❌ Save fail (network/token)')); }
+  try{ for(let i=0;i<2;i++){
+      const g=await fetch(url,{headers:hdr,cache:'no-store'});                // no-store: a cached GET would hand back an old sha
+      if(!g.ok&&g.status!==404){ bToast(ghErrMsg(g.status)); return false; }
+      const cur=g.ok?await g.json():{};                                      // 404 = a new file (or no access: the PUT says)
+      const p=await fetch(url,{method:'PUT',headers:{...hdr,'Content-Type':'application/json'},body:JSON.stringify({message:msg,content,sha:cur.sha})});
+      if(p.ok){ bToast(okMsg); return true; }
+      if((p.status===409||p.status===422)&&i===0) continue;
+      bToast(ghErrMsg(p.status)); return false; } }
+  catch(e){ bToast(CFG_TXT.net); return false; }
+  return false; }
 function ghToken(){ try{return localStorage.getItem('gh_tok')||''}catch(e){return''} }
 function ghSetToken(t){ try{localStorage.setItem('gh_tok',t)}catch(e){} }
 function ghForget(){ try{localStorage.removeItem('gh_tok')}catch(e){} bToast('Token bhula diya'); bRerender(); }
@@ -2644,13 +2699,8 @@ function bSaveCountryMetric(uid,country,k,rng){ const b=(BASELINE||DATA.baseline
   p.countries[country].metrics[k]={range:rng,approved_at:bLastMonth()};
   if(p.metrics[k])delete p.metrics[k];                 // country override → this metric re-pends at placement level
   bRerender(); ghCommit('edit '+country+' '+(MN[k]||k)+' → re-pend'); }
-function ghCommit(msg){ const tok=ghToken(); if(!tok){ bToast('Pehle 🔑 GitHub token daalo (upar)'); return; }
-  const url=`https://api.github.com/repos/${GH_REPO}/contents/${GH_PATH}`, hdr={Authorization:'Bearer '+tok,'Accept':'application/vnd.github+json'};
-  bToast('⏳ Saving to GitHub…');
-  fetch(url,{headers:hdr}).then(r=>r.ok?r.json():{}).then(cur=>{
-    const content=btoa(unescape(encodeURIComponent(JSON.stringify(APPR))));
-    return fetch(url,{method:'PUT',headers:{...hdr,'Content-Type':'application/json'},body:JSON.stringify({message:'approvals: '+msg,content,sha:cur.sha})}); })
-   .then(r=>bToast(r.ok?'✅ Saved to GitHub (robot agle run me apply karega)':'❌ Save fail — token me repo-write hai?')).catch(()=>bToast('❌ Save fail (network/token)')); }
+// approvals = config/approved_ranges.json: same save path as Settings (server first, browser token only as fallback)
+function ghCommit(msg){ return ghCommitFile(GH_PATH, APPR, 'approvals: '+msg, '✅ Saved to GitHub (robot agle run me apply karega)', 'Pehle 🔑 GitHub token daalo (upar)'); }
 // a country-baseline table (shared: ad-unit drill B→country AND app-level A). `cs` = decoded rows.
 // `uid` set → editable (ad-unit drill: per-metric approve state + ✎ edit). uid null → read-only (app-level A view).
 function bGeoTable(cs,label,uid){
@@ -2939,7 +2989,8 @@ function renderBaseline(){
   bApplyUnits(b.units);                                  // overlay current approvals (incl. local edits)
   const sel=APP||BSEL;                                   // which app we're drilled into (null = app list)
   const tok=ghToken();
-  const tokenBar=`<div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 13px">
+  const tokenBar=(CFGST&&CFGST.reach&&CFGST.server_save)?`<div class="card" style="margin-bottom:12px;padding:11px 13px"><span data-cfg="server-note" style="font-size:12.5px;color:var(--ink2)">${CFG_TXT.server}</span></div>`
+   :`<div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 13px">
     <span style="font-size:12.5px;color:var(--ink2)">🔑 Approve save karne ke liye GitHub token:</span>
     ${tok?`<span class="pill p-g" style="font-size:11px">token set ✓</span><button onclick="ghForget()" style="border:1px solid var(--line2);background:var(--panel);color:var(--ink2);font:inherit;font-size:12px;padding:5px 11px;border-radius:8px;cursor:pointer">Forget</button>`
       :`<input id="ghtok" type="password" placeholder="github_pat_… / ghp_…" style="flex:1;min-width:200px;max-width:340px;background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:8px;padding:6px 11px;font:inherit;outline:none"><button onclick="ghSetToken(document.getElementById('ghtok').value.trim());bToast('Token saved (browser me)');bRerender()" style="border:1px solid var(--cyan);background:rgba(61,208,240,.14);color:#fff;font:inherit;font-weight:650;font-size:12.5px;padding:6px 13px;border-radius:8px;cursor:pointer">Save token</button>`}
@@ -6649,12 +6700,15 @@ function renderHealth(){
 // ---------- SETTINGS ----------
 function renderSettings(){
   const s=screenDiv('settings');const accts=DATA.accounts||[];
+  // /api/config/status: the server saves (no token box) · a non-admin cannot save (buttons off)
+  const cfgSrv=!!(CFGST&&CFGST.reach&&CFGST.server_save), cfgLock=!!(CFGST&&CFGST.reach&&CFGST.admin===false);
+  const cfgLockNote=`<span data-cfg="admin-only" class="faint" style="font-size:11.5px">🔒 ${CFG_TXT.admin_only}</span>`;
   const cards=accts.map(a=>`<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><div><div class="appname">🏢 ${ACCNAMES[a.account_id]||a.label}</div><div class="muted" style="font-size:12px">${a.account_id}</div></div><span class="pill p-g">✓ Connected</span></div><div class="kv"><span class="k">OAuth token</span><span class="v" style="color:var(--good)">${a.token}</span></div><div class="kv"><span class="k">Apps</span><span class="v">${a.apps.length}</span></div><div class="kv"><span class="k">Last sync</span><span class="v">${a.last_sync}</span></div>
     <div style="margin-top:12px"><div class="muted" style="font-size:11.5px;margin-bottom:5px">Account ka naam <span class="faint">— jin apps ke naam same hain unpe ye tag lagega</span></div>
       <input type="text" value="${(ACCNAMES[a.account_id]||'').replace(/"/g,'&quot;')}" placeholder="jaise: Main Studio" oninput="accNameSet('${a.account_id}',this.value)"
              style="width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;color:var(--ink);font-size:13px;font-family:inherit"></div>
     <div class="muted" style="font-size:12px;margin-top:12px">🔄 Auto-sync — GitHub ka robot chalata hai</div></div>`).join('')
-    +`<div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div class="appname">✏️ Account naam save karo</div><div class="muted" style="font-size:12px;margin-top:3px">Robot agle run me apply karega — phir alerts/tables me <b>pub-6124…</b> ki jagah tumhara naam dikhega.</div></div><span class="abtn pri" style="cursor:pointer" onclick="accNameSave()">💾 Save names</span></div>`;
+    +`<div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div class="appname">✏️ Account naam save karo</div><div class="muted" style="font-size:12px;margin-top:3px">Robot agle run me apply karega — phir alerts/tables me <b>pub-6124…</b> ki jagah tumhara naam dikhega.</div></div>${cfgLock?`${cfgLockNote}<span class="abtn pri" aria-disabled="true" title="${CFG_TXT.admin_only}" style="opacity:.45;cursor:not-allowed">💾 Save names</span>`:`<span class="abtn pri" style="cursor:pointer" onclick="accNameSave()">💾 Save names</span>`}</div>`;
   // per-account app picker (checkbox = keep; unticked = hide + fetch band). From apps_catalog.
   const byAcc=appCatByAccount(); const accLabel={}; accts.forEach(a=>accLabel[a.account_id]=a.label||a.account_id);
   const tok=ghToken();
@@ -6678,8 +6732,9 @@ function renderSettings(){
   s.innerHTML=`<h2 class="sc">Accounts &amp; Apps</h2><p class="scd">Neeche har account ki apps me se jo chahiye wahi <b>tick</b> karo — untick wali dashboard se hat jaayengi aur aage fetch bhi band (purana data delete nahi hoga). Save karne ke baad robot agle run me poora apply karega.</p>
     <div class="row c2" style="margin-bottom:14px">${cards}</div>
     <div class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 13px">
-      <span style="font-size:12.5px;color:var(--ink2)">🔑 Selection save karne ke liye GitHub token:</span>${tokBar}
-      <button onclick="appPickSave()" style="border:1px solid #4ade80;background:rgba(74,222,128,.14);color:#fff;font:inherit;font-weight:650;font-size:12.5px;padding:6px 14px;border-radius:8px;cursor:pointer;margin-left:auto">💾 Selection save</button></div>
+      ${cfgSrv?`<span data-cfg="server-note" style="font-size:12.5px;color:var(--ink2)">${CFG_TXT.server}</span>`:`<span style="font-size:12.5px;color:var(--ink2)">🔑 Selection save karne ke liye GitHub token:</span>${tokBar}`}
+      ${cfgLock?`<span style="margin-left:auto">${cfgLockNote}</span><button disabled aria-disabled="true" title="${CFG_TXT.admin_only}" style="border:1px solid #4ade80;background:rgba(74,222,128,.14);color:#fff;font:inherit;font-weight:650;font-size:12.5px;padding:6px 14px;border-radius:8px;opacity:.45;cursor:not-allowed">💾 Selection save</button>`
+        :`<button onclick="appPickSave()" style="border:1px solid #4ade80;background:rgba(74,222,128,.14);color:#fff;font:inherit;font-weight:650;font-size:12.5px;padding:6px 14px;border-radius:8px;cursor:pointer;margin-left:auto">💾 Selection save</button>`}</div>
     ${pick||'<div class="card"><div class="muted" style="font-size:13px">Apps abhi load nahi hui — robot run ke baad yahan aayengi.</div></div>'}
     <div class="card" style="margin-top:6px;border-style:dashed;border-color:var(--line2)"><div class="muted" style="font-size:13px">➕ <b style="color:var(--ink)">Naya AdMob account add karna hai?</b> Mujhe bolo — step-by-step guide kar dunga (OAuth token → GitHub secret). Naya account add hote hi uski apps yahan selection ke liye aa jaayengi.</div></div>`;
   return s;
@@ -7695,6 +7750,7 @@ async function load(){
     loadAppSel();                            // which apps the user kept (hides unselected)
     loadAccNames();                          // friendly names for the AdMob accounts
     loadAppNames();                          // the user's own names for apps (✏️ on App Report)
+    cfgStatus();                             // Settings saves: server (Worker) or the browser-token fallback
     setInterval(updateFreshness, 30000);    // tick "X min pehle" every 30s
     setInterval(refreshData, 300000);        // pull fresh data every 5 min (robot updates hourly)
     window.addEventListener('pagehide', _navSave);   // save view before unload / mobile tab-discard

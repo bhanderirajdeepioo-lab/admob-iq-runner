@@ -13,7 +13,7 @@ import { ApiError } from "./auth.js";
 
 export const FEATS = ["kamai", "uninstall", "active", "value", "update", "ads", "deduct", "mediation", "health", "setup"];
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 // The exact DDL of the spec (§B.5). review_worker/schema.sql must stay equal to this (a test checks).
 export const SCHEMA = `CREATE TABLE IF NOT EXISTS rv_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -47,14 +47,22 @@ CREATE TABLE IF NOT EXISTS rv_snoozes (
   day TEXT NOT NULL, until TEXT NOT NULL, days INTEGER NOT NULL CHECK (days IN (7,14)), note TEXT NOT NULL DEFAULT '',
   who TEXT NOT NULL, at TEXT NOT NULL, cleared_by TEXT, cleared_at TEXT);
 CREATE UNIQUE INDEX IF NOT EXISTS rv_snoozes_one_live ON rv_snoozes(app, feature) WHERE cleared_at IS NULL;
-INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '2');`;
+CREATE TABLE IF NOT EXISTS config_log (            -- append-only: every Settings save through /api/config/save
+  id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT NOT NULL, at TEXT NOT NULL, file TEXT NOT NULL,
+  bytes INTEGER NOT NULL, result TEXT NOT NULL, commit_sha TEXT);
+INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '3');`;
 
 // Schema changes: MIGRATIONS[n] = [sql, …] upgrades version n-1 → n (run in order, one batch each). A NEW database
 // gets the current SCHEMA (and schema_version = SCHEMA_VERSION) directly; only an older database runs these.
 // 2: the review day of a flag decision (dec_day) and of "kaam ho gaya" (done_day) — before 09:00 IST the open day is
 //    still yesterday, so the IST date of dec_at / done_at is not the day the decision belongs to.
+// 3: config_log, the audit of Settings saves (POST /api/config/save: who, at, file, bytes, result, commit sha).
+export const CONFIG_LOG_DDL = `CREATE TABLE IF NOT EXISTS config_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT NOT NULL, at TEXT NOT NULL, file TEXT NOT NULL,
+  bytes INTEGER NOT NULL, result TEXT NOT NULL, commit_sha TEXT)`;
 export const MIGRATIONS = {
   2: ["ALTER TABLE rv_flags ADD COLUMN dec_day TEXT", "ALTER TABLE rv_flags ADD COLUMN done_day TEXT"],
+  3: [CONFIG_LOG_DDL],
 };
 
 /** One statement per entry (a ';' inside a trailing comment is not a statement end). */

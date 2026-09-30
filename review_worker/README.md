@@ -5,12 +5,17 @@ the refresh robot (`site/review/…`). This Worker stores what people **do** wit
 `🚩 Important · Re-review` flags (per app or per feature), `🔁 Kal dobara dekho`, `💤 Pata hai` snoozes, and the
 admin's decisions on flags — in a Cloudflare D1 database, so every device and every teammate sees the same state.
 
+The same Worker also saves the dashboard's **settings** (account names, app names, the app selection and the
+Baseline approvals — `config/*.json` in the private repo) for admins, with its own GitHub token, so nobody has to keep
+a GitHub token in the browser any more (see [Settings saves](#settings-saves-apiconfig)).
+
 No runtime dependencies: WebCrypto, `fetch`, `DecompressionStream` and the D1 binding only.
 
 ```
 src/index.js   routing, validation, CSRF, response headers; everything that is not /api/* goes to the static site
 src/auth.js    Cloudflare Access JWT verification (fails closed)
 src/db.js      D1 schema (created automatically), every query and state rule
+src/config.js  Settings saves: strict validation of the four config files, the GitHub contents-API write, the audit row
 schema.sql     the same DDL as db.js (documentation; a test keeps them equal)
 test/          node:test suites, a D1 fake over node:sqlite, test-only JWT helpers, devkeys.mjs (local e2e keys)
 ```
@@ -20,6 +25,8 @@ test/          node:test suites, a D1 fake over node:sqlite, test-only JWT helpe
 ```
 browser ──► Cloudflare Access (edge login) ──► Worker
                                                  ├─ /api/review/*  verify the Access JWT again → D1 (REVIEW_DB)
+                                                 ├─ /api/config/*  verify the Access JWT again → admin? → GitHub (config/*.json)
+                                                 │                 + one audit row in D1 (config_log)
                                                  ├─ other /api/*   404
                                                  └─ everything else → static dashboard (ASSETS), unchanged
 ```
@@ -32,7 +39,7 @@ browser ──► Cloudflare Access (edge login) ──► Worker
   is ever served on any of these paths.
 - **"Who"** on every action is the verified, lower-cased Access email. Nobody can act as someone else.
 - **CSRF:** POSTs need `Content-Type: application/json` and an `Origin` equal to the request's own origin; bodies
-  are capped at 8 KiB. No `Access-Control-*` (CORS) header is ever sent, and `OPTIONS` → `405`.
+  are capped at 8 KiB (`/api/config/save`: 264 KiB, for a file of up to 256 KiB). No `Access-Control-*` (CORS) header is ever sent, and `OPTIONS` → `405`.
 - **Logs:** the Worker never logs emails, notes, app names or money — errors log only their type.
 - Every API response: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
   `X-Robots-Tag: noindex`, `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'` (the static
@@ -68,7 +75,10 @@ database_id = "REVIEW_DB_ID"
 [vars]
 ACCESS_TEAM_DOMAIN = "ACCESS_TEAM_DOMAIN"     # e.g. <team>.cloudflareaccess.com (no https://)
 ACCESS_AUD = "ACCESS_AUD"                     # the Access application's AUD tag
-ADMIN_EMAILS = "owner@example.test"           # comma list; only these can decide 🚩 flags
+ADMIN_EMAILS = "owner@example.test"           # comma list; only these can decide 🚩 flags and save Settings
+CONFIG_REPO = "owner/private-repo"            # Settings saves: the PRIVATE repo ("owner/name") that holds config/*.json
+
+# GITHUB_TOKEN is a Secret, set only by the owner in the Cloudflare dashboard — NEVER in this file.
 ```
 
 `wrangler.example.toml` holds the same block with comments. The refresh robot copies `review_worker/src/` into the
@@ -80,8 +90,8 @@ imports, so a missing module or export never reaches the Workers build); until t
 `ASSETS` unchanged.
 
 - **Admins:** `ADMIN_EMAILS` (comma or space separated, case-insensitive). Only admins can decide flags
-  (`👍 Theek hai` · `🛠 Kaam do` · `⛔ Band karo` · `✅ Kaam ho gaya`) and correct older days. Everyone the Access
-  policy lets in can review.
+  (`👍 Theek hai` · `🛠 Kaam do` · `⛔ Band karo` · `✅ Kaam ho gaya`), correct older days and save Settings.
+  Everyone the Access policy lets in can review.
 - **Open day:** the Worker reads `site/review/index.json` through the `ASSETS` binding (the same file the page
   reads). Writes go to its `open_day`; other days get `403 day_closed` (admins may still fix `ok`/`note`/`undo`/
   `bulk_ok` on an older snapshot day from History). The page's "Aaj ka review" sends `live: true`: if a newer
@@ -94,9 +104,10 @@ imports, so a missing module or export never reaches the Workers build); until t
 ## Database
 
 - **No manual migration:** the Worker creates its tables (`rv_meta`, `rv_state`, `rv_actions`, `rv_notes`,
-  `rv_flags`, `rv_snoozes`) on the first request of each isolate (`CREATE … IF NOT EXISTS`, idempotent) and
-  records `schema_version` (now 2). A new database gets the current DDL directly; an older one is upgraded by
-  `MIGRATIONS` in `db.js` (2: `rv_flags.dec_day` / `done_day`, the review day of a flag decision).
+  `rv_flags`, `rv_snoozes`, `config_log`) on the first request of each isolate (`CREATE … IF NOT EXISTS`,
+  idempotent) and records `schema_version` (now 3). A new database gets the current DDL directly; an older one is
+  upgraded by `MIGRATIONS` in `db.js` (2: `rv_flags.dec_day` / `done_day`, the review day of a flag decision;
+  3: `config_log`, the audit of Settings saves).
 - `rv_actions` is append-only (the "who did what" history); every write adds its row in the same transaction.
 - **Backup / undo:** D1 Time Travel can restore the database to any minute of the last 30 days (Workers Paid;
   7 days on the Free plan) with `wrangler d1 time-travel restore <db> --timestamp=…`, run by the operator.
@@ -119,16 +130,62 @@ imports, so a missing module or export never reaches the Workers build); until t
 Errors: `{"error": code, "msg": "<short Hinglish>", "why"?, "field"?}` with 400 / 401 / 403 / 404 / 405 / 409 /
 413 / 415 / 500 / 503.
 
+## Settings saves (`/api/config/*`)
+
+The Settings screen (account names, the app picker), the ✏️ app rename and the Baseline approvals write
+`config/<file>.json` in the **private** repo. The page sends the file to this Worker; the Worker commits it with its
+own token. The old way — a GitHub token pasted into the browser — is only a fallback for a page that cannot reach
+this API (404 on `/api/config/status`, or a network error).
+
+| Method | Path | What |
+|---|---|---|
+| GET | `status` | `{server_save, admin}` — `server_save` = `GITHUB_TOKEN` and `CONFIG_REPO` are set. The page then hides its 🔑 token box; a non-admin sees the save buttons off. |
+| POST | `save` | `{file, content}` → `{ok: true, file, sha, commit_url?}` (admins only) |
+
+- **Who:** the same Access JWT check as the Review API, then `ADMIN_EMAILS`; anyone else gets
+  `403 "Sirf admin settings badal sakta hai"`. Same CSRF rules (JSON only, same-origin `Origin`).
+- **Files** (`file` → `config/<file>.json`), validated strictly (else `400` with a Hinglish reason); the file as
+  written (`JSON.stringify(content, null, 1)`) is at most 256 KiB (else `413`):
+  - `account_names`: `{"pub-<digits>": "name, 1–60 characters"}`;
+  - `app_names`: `{"ca-app-pub-<digits>~<digits>": "name, 1–80 characters"}`;
+  - `selected_apps`: `{"accounts": {"pub-<digits>": {"decided": bool, "selected": ["ca-app-pub-<digits>~<digits>", …]}}}`
+    — every selected app must belong to that publisher;
+  - `approved_ranges`: `{"placements": {…}}` — a structural check only (the shape belongs to
+    `admob_iq/engine/approvals.py`, old flat entries included).
+- **The write:** GitHub contents API on `CONFIG_REPO` with `User-Agent: admob-iq-dashboard`: GET the file's sha
+  (404 = a new file) → PUT with that sha and the commit message `<file> — saved by <email> via dashboard`. A
+  `409`/`422` answer means someone saved in between: the sha is fetched again and the PUT retried, up to 3 times.
+- **Errors** (`msg` is what the page shows, with the HTTP status):
+
+  | Case | HTTP | `error` | `msg` |
+  |---|---|---|---|
+  | `GITHUB_TOKEN` not set | 503 | `token_missing` | `GitHub token abhi Cloudflare me nahi daala` |
+  | `CONFIG_REPO` not set | 503 | `repo_missing` | `Config repo (CONFIG_REPO) abhi Cloudflare me set nahi` |
+  | GitHub 401 | 502 | `github_auth` | `GitHub token expire/galat` |
+  | GitHub 403 / 404 | 502 | `github_forbidden` | `Token ko repo me likhne ki permission nahi` |
+  | still 409/422 after 3 retries | 409 | `github_conflict` | `Kisi aur ne abhi save kiya — dobara try karo` |
+  | any other GitHub failure | 502 | `github_unavailable` | `GitHub se jud nahi paaye — thodi der baad try karo` |
+
+  GitHub failures also carry `gh_status` (GitHub's HTTP status). Nothing else from a GitHub response is passed on.
+- **Audit:** every admin save that passes validation appends one row to D1 `config_log`
+  (`who, at, file, bytes, result, commit_sha`; `result` = `ok` or the error code above).
+- **The token:** `GITHUB_TOKEN` is a Cloudflare **Secret** that only the owner sets (Worker → Settings → Variables
+  and Secrets → type *Secret*). Never put it in `wrangler.toml` or any file. Use a fine-grained token limited to the
+  private config repo with **Contents: Read and write** only. The Worker never logs it and never returns it; a test
+  checks every response and every console line.
+
 ## Tests
 
 ```bash
 cd review_worker
 npm test              # = node --test "test/*.test.js"   (Node ≥ 22.5 for node:sqlite; no npm install needed)
-node --check src/index.js && node --check src/auth.js && node --check src/db.js
+npm run check         # node --check on every src/*.js
 ```
 
 The tests run the real Worker entry against a D1 fake over `node:sqlite` and sign JWTs with an RSA key generated
 in the test (valid, expired, wrong `aud`/`iss`/`kid`, bad signature, `alg` confusion, missing header, …).
+`test/config.test.js` covers Settings saves against a fake GitHub (mocked `fetch`): admin only, CSRF, validation of
+each file, the sha retry on 409/422, the error mapping, the audit row, and that the token never leaks.
 `test/repo.test.js` also runs the robot's sync step — read straight from `.github/workflows/refresh.yml` — under
 `bash -eo pipefail` in seven states (folder missing, remote-only, syntax error, parses but does not link, no
 `package.json`, ok, no node) and
@@ -150,7 +207,11 @@ WRANGLER_SEND_METRICS=false npx wrangler@4 dev --local --port 8787 --persist-to 
 curl -s -H "Cf-Access-Jwt-Assertion: $(jq -r .tokens.owner devkeys.json)" localhost:8787/api/review/me
 ```
 
+To try Settings saves locally, add `CONFIG_REPO` to the local `wrangler.toml` and a **throwaway** token to a
+`.dev.vars` file next to it (`GITHUB_TOKEN = "…"`, wrangler's local-secrets file; without it `status` says
+`server_save: false` and `save` answers 503).
+
 Only `--local`: never `--remote`, never `wrangler deploy` from a laptop — the private repo's push deploys.
-The local `wrangler.toml`, `worker/`, `devkeys.json`, `.state/` and `.wrangler/` are git-ignored (the local D1 in
+The local `wrangler.toml`, `.dev.vars`, `worker/`, `devkeys.json`, `.state/` and `.wrangler/` are git-ignored (the local D1 in
 `.state/` holds whatever notes / flags / app names you clicked — never commit it). Better still, keep the whole
 local setup outside this repo.

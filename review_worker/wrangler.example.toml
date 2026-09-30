@@ -26,4 +26,9 @@ database_id = "REVIEW_DB_ID"
 [vars]
 ACCESS_TEAM_DOMAIN = "ACCESS_TEAM_DOMAIN"     # e.g. <team>.cloudflareaccess.com (no https://)
 ACCESS_AUD = "ACCESS_AUD"                     # the Access application's AUD tag
-ADMIN_EMAILS = "owner@example.test"           # comma list; only these can decide 🚩 flags
+ADMIN_EMAILS = "owner@example.test"           # comma list; only these can decide 🚩 flags and save Settings
+CONFIG_REPO = "owner/private-repo"            # Settings saves: the PRIVATE repo ("owner/name") that holds config/*.json
+
+# GITHUB_TOKEN is a Secret, set only by the owner in the Cloudflare dashboard (Worker → Settings → Variables and
+# Secrets → Add → type "Secret") — NEVER in this file or any other file. A fine-grained token with access to the
+# private config repo only, permission "Contents: Read and write". Without it Settings saves answer 503.
