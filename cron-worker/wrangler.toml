@@ -2,6 +2,11 @@ name = "admob-iq-cron"
 main = "worker.js"
 compatibility_date = "2024-11-01"
 
-# Hourly at :17. Cloudflare fires cron triggers on time (unlike GitHub's throttled schedule).
+# The Worker's fetch handler triggers a refresh for any visitor, so it must have NO public URL:
+# workers.dev and preview URLs stay OFF (a deploy without these lines turns workers.dev back on).
+workers_dev = false
+preview_urls = false
+
+# Every 30 minutes (matches the live trigger). Cloudflare fires cron triggers on time (unlike GitHub's throttled schedule).
 [triggers]
-crons = ["17 * * * *"]
+crons = ["*/30 * * * *"]
