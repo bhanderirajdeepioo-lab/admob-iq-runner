@@ -31,3 +31,11 @@ __pycache__/
 /_private/
 /ga4/
 /ga4_out/
+
+# Review Worker local dev (review_worker/README.md): wrangler's local state holds the local D1 (notes, flags and the
+# app names clicked while testing against a copy of the real site) — never commit any of it
+.state/
+.wrangler/
+review_worker/devkeys.json
+review_worker/wrangler.toml
+review_worker/worker/

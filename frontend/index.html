@@ -524,6 +524,289 @@
     .val-t .v{font-size:24px}.val-t .v.val-vs{font-size:17px}
     .val-t:not(.open) .v small.val-rgb{display:block;margin:3px 0 0;font-size:11.5px;font-weight:550}
   }
+  /* ==== RV:BEGIN ==== */
+  /* ===== Daily Review (Review tab) — every rule scoped under #rv-root with rv- classes (SPEC_REVIEW §C.10) ===== */
+  body[data-screen="review"] .topbar label.ctrl,body[data-screen="review"] #rangecustom{display:none!important}   /* App / Period do not apply to Review; 💱 stays */
+  .nav button .badge.rv-n,.botbar .tbadge.rv-n{background:var(--line2);color:var(--ink)}
+  #rv-root{--rv-blue-b:#132a52;--rv-blue-ink:#9cc0ff;--rv-bad-line:#5a2530;--rv-focus:#8fb8ff;--rv-bar0:#344a6c;--rv-bar1:#4c8dff;
+    max-width:940px;font-size:14.5px;line-height:1.5;font-variant-numeric:tabular-nums;color:var(--ink)}
+  #rv-root *{box-sizing:border-box}
+  #rv-root [hidden]{display:none!important}
+  #rv-root :focus-visible{outline:2px solid var(--rv-focus);outline-offset:2px;border-radius:6px}
+  #rv-root h2,#rv-root h3,#rv-root h4,#rv-root h5{margin:0}
+  #rv-root a{color:var(--rv-blue-ink)}
+  #rv-root .rv-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  #rv-root .rv-hint{font-size:12.5px;color:var(--muted);margin:0}
+  /* header row + sub-tabs */
+  #rv-root .rv-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px}
+  #rv-root .rv-h{font-size:19px;font-weight:750;letter-spacing:-.01em;line-height:1.3}
+  #rv-root .rv-h .rv-d{font-weight:500;color:var(--muted);font-size:14px}
+  #rv-root .rv-prog{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);white-space:nowrap}
+  #rv-root .rv-pbar{width:110px;height:6px;border-radius:99px;background:var(--line2);overflow:hidden}
+  #rv-root .rv-pbar i{display:block;height:100%;background:var(--good);width:0;transition:width .3s}
+  #rv-root .rv-tabs{display:flex;gap:2px;margin-top:8px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+  #rv-root .rv-tabs button{font:inherit;font-size:14px;font-weight:600;color:var(--muted);background:none;border:0;border-bottom:2.5px solid transparent;
+    padding:8px 12px 9px;cursor:pointer;white-space:nowrap;min-height:38px}
+  #rv-root .rv-tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--blue)}
+  #rv-root .rv-tabs .rv-cnt{font-size:12px;font-weight:600;color:var(--faint);margin-left:4px}
+  /* banners / strips */
+  #rv-root .rv-ban{margin-top:12px;border-radius:10px;padding:9px 12px;font-size:13.5px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;
+    background:var(--panel);border:1px solid var(--line2);color:var(--ink2)}
+  #rv-root .rv-ban.bad{background:var(--bad-b);border-color:var(--rv-bad-line);color:var(--ink)}
+  #rv-root .rv-ban.warn{background:var(--watch-b);border-color:transparent;color:var(--ink)}
+  #rv-root .rv-ban.info{background:var(--rv-blue-b);border-color:transparent;color:var(--ink)}
+  #rv-root .rv-ban b{font-weight:700}
+  #rv-root .rv-ban .rv-btn{margin-left:auto}
+  #rv-root .rv-strip{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;font-size:12.5px}
+  #rv-root .rv-strip span{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 8px;color:var(--ink2)}
+  #rv-root .rv-strip b{color:var(--ink);font-weight:650}
+  #rv-root .rv-lead{margin:14px 0 4px;font-size:14.5px;color:var(--ink2)}
+  #rv-root .rv-lead b{color:var(--ink)}
+  #rv-root .rv-legend{margin-top:8px;font-size:13px;color:var(--muted)}
+  #rv-root .rv-legend>summary{cursor:pointer;color:var(--ink2);font-weight:600;padding:4px 0}
+  #rv-root .rv-legend ul{margin:8px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+  #rv-root .rv-legend .rv-keys{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px}
+  #rv-root .rv-legend .rv-keys span{display:inline-flex;align-items:center;gap:6px}
+  #rv-root .rv-legend .rv-hint{margin-top:6px}
+  #rv-root section.rv-blk{margin-top:22px}
+  #rv-root .rv-bh{display:flex;align-items:baseline;justify-content:space-between;gap:8px 12px;flex-wrap:wrap;margin-bottom:10px}
+  #rv-root .rv-bh h2,#rv-root .rv-bh h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:750;color:var(--ink2)}
+  #rv-root .rv-bh .rv-sub{font-size:12.5px;color:var(--faint)}
+  #rv-root .rv-cards{display:flex;flex-direction:column;gap:12px}
+  #rv-root .rv-donebar{margin-top:14px;background:var(--good-b);color:var(--good);border-radius:10px;padding:10px 14px;font-weight:650;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+  /* card */
+  #rv-root .rv-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px 10px;scroll-margin-top:84px;min-width:0}
+  #rv-root .rv-card.t-red{border-left:3px solid var(--bad)}
+  #rv-root .rv-card.t-amber{border-left:3px solid var(--watch)}
+  #rv-root .rv-card.rv-done{opacity:.88}
+  #rv-root .rv-card.rv-done .rv-dots,#rv-root .rv-card.rv-done .rv-hl{opacity:.82}
+  #rv-root .rv-ch1{display:flex;align-items:flex-start;gap:8px}
+  #rv-root .rv-rk{font-size:12.5px;color:var(--faint);font-weight:650;min-width:22px;padding-top:2px}
+  #rv-root .rv-rk:empty{display:none}
+  #rv-root .rv-app{flex:1;min-width:0;font-size:16.5px;font-weight:680;line-height:1.3;overflow-wrap:anywhere}
+  #rv-root .rv-app .rv-acct{color:var(--muted);font-weight:500}
+  #rv-root .rv-rs{font-size:12px;font-weight:650;border-radius:999px;padding:2px 9px;border:1px solid var(--line2);color:var(--muted);white-space:nowrap}
+  #rv-root .rv-rs.ok{background:var(--good-b);color:var(--good);border-color:transparent}
+  #rv-root .rv-rs.note{background:var(--rv-blue-b);color:var(--rv-blue-ink);border-color:transparent}
+  #rv-root .rv-rs.flag{background:var(--watch-b);color:var(--watch);border-color:transparent}
+  #rv-root .rv-rs.kal{background:var(--raise);color:var(--ink2);border-color:transparent}
+  #rv-root .rv-ml{margin:4px 0 0;font-size:13.5px;color:var(--ink2);overflow-wrap:anywhere}
+  #rv-root .rv-ml b{color:var(--ink);font-size:14.5px}
+  #rv-root .rv-ml .rv-sz{color:var(--muted)}
+  #rv-root .rv-up{color:var(--good);font-weight:650}#rv-root .rv-dn{color:var(--bad);font-weight:650}
+  #rv-root .rv-flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  #rv-root .rv-flags:empty{display:none}
+  #rv-root .rv-flag{font-size:12.5px;font-weight:600;border-radius:6px;padding:1px 8px;background:var(--raise);color:var(--ink2);overflow-wrap:anywhere}
+  #rv-root .rv-flag.rv-nb{background:var(--bad-b);color:var(--bad)}
+  #rv-root .rv-flag.rv-co{background:var(--watch-b);color:var(--watch)}
+  #rv-root .rv-flag.rv-kaam{background:var(--purple-b);color:var(--purple)}
+  #rv-root .rv-dots{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 5px}
+  #rv-root .rv-dc{display:inline-flex;align-items:center;gap:5px;font-size:12px;border-radius:999px;padding:2px 8px 2px 6px;border:1px solid var(--line);color:var(--faint);background:var(--panel2)}
+  #rv-root .rv-dc i{width:9px;height:9px;border-radius:50%;flex:none;border:1.5px solid var(--faint)}
+  #rv-root .rv-dc.red{color:var(--bad);border-color:var(--rv-bad-line);background:var(--bad-b);font-weight:650}#rv-root .rv-dc.red i{background:var(--bad);border-color:var(--bad)}
+  #rv-root .rv-dc.amber{color:var(--watch);border-color:transparent;background:var(--watch-b);font-weight:650}#rv-root .rv-dc.amber i{background:var(--watch);border-color:var(--watch)}
+  #rv-root .rv-dc.green{color:var(--good);border-color:transparent;background:var(--good-b)}#rv-root .rv-dc.green i{background:var(--good);border-color:var(--good)}
+  #rv-root .rv-dc.normal{color:var(--ink2)}#rv-root .rv-dc.normal i{border-color:var(--muted)}
+  #rv-root .rv-dc.wait i{border-style:dashed}
+  #rv-root .rv-dc.na i{border:0;height:1.5px;border-radius:0;background:var(--faint)}
+  #rv-root .rv-dc.nodata{opacity:.7}#rv-root .rv-dc.nodata i{background:var(--line2);border-color:var(--line2)}
+  #rv-root .rv-dc.snz{color:var(--muted);background:var(--panel2);border:1px dashed var(--line2);font-weight:500}#rv-root .rv-dc.snz i{background:none;border-color:var(--muted)}
+  #rv-root .rv-dc.snz .rv-dl::before{content:"💤 "}
+  #rv-root .rv-dc.rv-flg{box-shadow:0 0 0 1.5px var(--watch)}
+  #rv-root .rv-dfl{font-size:11px;line-height:1}
+  #rv-root .rv-hl{margin:8px 0 0;font-size:15px;font-weight:600;line-height:1.4;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
+  #rv-root .rv-hl.t-normal,#rv-root .rv-hl.t-green{font-weight:500;color:var(--ink2)}
+  #rv-root .rv-hl .rv-age{font-size:12.5px;color:var(--muted);font-weight:500}
+  #rv-root .rv-hlt{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}
+  #rv-root .rv-card.rv-hasbad.rv-open>.rv-ch>.rv-hl{display:none}
+  #rv-root .rv-chip{display:inline-block;font-size:12px;font-weight:650;border-radius:6px;padding:1px 7px;white-space:nowrap}
+  #rv-root .rv-chip.naya{background:var(--rv-blue-b);color:var(--rv-blue-ink)}#rv-root .rv-chip.chal{background:var(--raise);color:var(--ink2)}
+  #rv-root .rv-chip.theek{background:var(--good-b);color:var(--good)}#rv-root .rv-chip.purana{background:var(--raise);color:var(--muted)}
+  #rv-root .rv-chip.ph{background:var(--watch-b);color:var(--watch)}
+  /* buttons */
+  #rv-root .rv-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  #rv-root .rv-btn{font:inherit;font-size:13px;font-weight:600;color:var(--ink);background:var(--raise);border:1px solid var(--line2);border-radius:8px;
+    padding:6px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:34px;text-align:left}
+  #rv-root .rv-btn:hover{border-color:var(--muted)}
+  #rv-root .rv-btn[disabled]{opacity:.5;cursor:not-allowed}
+  #rv-root .rv-btn[aria-busy="true"]{opacity:.75;cursor:progress}
+  #rv-root .rv-btn.rv-ok{background:var(--good-b);border-color:transparent;color:var(--good)}
+  #rv-root .rv-btn.rv-ok[aria-pressed="true"]{background:var(--good);color:var(--bg)}
+  #rv-root .rv-btn[aria-pressed="true"]{border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue)}
+  #rv-root .rv-btn.rv-imp .rv-tick{width:14px;height:14px;border:1.5px solid currentColor;border-radius:3px;display:inline-block;position:relative;flex:none}
+  #rv-root .rv-btn.rv-imp[aria-checked="true"]{background:var(--watch-b);color:var(--watch);border-color:var(--watch)}
+  #rv-root .rv-btn.rv-imp[aria-checked="true"] .rv-tick::after{content:"";position:absolute;left:3.5px;top:0;width:4px;height:8px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  #rv-root .rv-btn.rv-ghost{background:none}
+  #rv-root .rv-btn.rv-pri{background:var(--blue2);border-color:var(--blue2);color:#fff}
+  #rv-root .rv-btn.rv-sm{font-size:12.5px;padding:4px 9px;min-height:34px}
+  #rv-root .rv-btn.rv-link{background:none;border-color:var(--line2);color:var(--rv-blue-ink)}
+  #rv-root .rv-tog{margin-left:auto}
+  #rv-root .rv-panel:empty,#rv-root .rv-fpanel:empty,#rv-root .rv-dpanel:empty,#rv-root .rv-gpanel:empty{display:none}
+  #rv-root .rv-panel,#rv-root .rv-fpanel,#rv-root .rv-dpanel,#rv-root .rv-gpanel{margin-top:10px;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  #rv-root .rv-panel label,#rv-root .rv-fpanel label,#rv-root .rv-dpanel label{font-size:13px;font-weight:600;color:var(--ink2)}
+  #rv-root textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--panel);border:1px solid var(--line2);border-radius:8px;padding:8px 10px;width:100%;min-height:64px;resize:vertical}
+  #rv-root .rv-prow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  #rv-root .rv-radio{display:inline-flex;align-items:center;gap:5px;font-size:13.5px;color:var(--ink2);margin-right:10px;min-height:34px}
+  #rv-root .rv-log{margin-top:6px;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
+  #rv-root .rv-log:empty{display:none}
+  #rv-root .rv-log .rv-n{color:var(--ink2);white-space:pre-wrap}
+  #rv-root .rv-log .rv-n b{color:var(--ink);font-weight:600}
+  #rv-root .rv-who{border-bottom:1px dotted var(--line2)}
+  /* body */
+  #rv-root .rv-body{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:10px}
+  #rv-root .rv-fb{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel2);min-width:0}
+  #rv-root .rv-fb.red{border-color:var(--rv-bad-line)}
+  #rv-root .rv-fb.rv-snoozed{opacity:.75;border-style:dashed}
+  #rv-root .rv-fb.rv-flagged{border-color:var(--watch);box-shadow:inset 3px 0 0 var(--watch)}
+  #rv-root .rv-fbh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  #rv-root .rv-fbh h4{font-size:14.5px;font-weight:700}
+  #rv-root .rv-fd{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none;border:1.5px solid var(--faint)}
+  #rv-root .rv-fd.red{background:var(--bad);border-color:var(--bad)}#rv-root .rv-fd.amber{background:var(--watch);border-color:var(--watch)}
+  #rv-root .rv-fd.green{background:var(--good);border-color:var(--good)}#rv-root .rv-fd.normal,#rv-root .rv-fd.snz{border-color:var(--muted)}#rv-root .rv-fd.wait{border-style:dashed}
+  #rv-root .rv-fd.na{border:0;height:2px;border-radius:0;background:var(--faint)}#rv-root .rv-fd.nodata{background:var(--line2);border-color:var(--line2)}
+  #rv-root .rv-sw{font-size:12.5px;font-weight:700;white-space:nowrap}
+  #rv-root .rv-sw.red{color:var(--bad)}#rv-root .rv-sw.amber{color:var(--watch)}#rv-root .rv-sw.green{color:var(--good)}#rv-root .rv-sw.info,#rv-root .rv-sw.normal{color:var(--muted)}
+  #rv-root .rv-sw i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;background:currentColor}
+  #rv-root .rv-fbb{margin-left:auto;display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:100%}
+  #rv-root .rv-flb{font:inherit;font-size:12.5px;font-weight:600;color:var(--muted);background:none;border:1px solid var(--line2);border-radius:7px;
+    padding:2px 8px;min-height:34px;min-width:34px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap}
+  #rv-root .rv-flb:hover{border-color:var(--watch);color:var(--watch)}
+  #rv-root .rv-flb[aria-pressed="true"]{background:var(--watch-b);color:var(--watch);border-color:var(--watch)}
+  #rv-root .rv-flb.rv-carry{color:var(--watch);border-style:dashed;border-color:var(--watch)}
+  #rv-root .rv-flb.rv-kaamb{color:var(--purple);border-style:dashed;border-color:var(--purple)}
+  #rv-root .rv-flb[disabled]{opacity:.5;cursor:not-allowed}
+  #rv-root .rv-fchip{display:inline-block;font-size:12px;font-weight:650;border-radius:6px;padding:1px 7px;background:var(--watch-b);color:var(--watch);white-space:nowrap}
+  #rv-root .rv-snzchip{font-size:12px;color:var(--muted);border:1px dashed var(--line2);border-radius:6px;padding:0 6px}
+  #rv-root .rv-q{margin:8px 0 0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 12px;font-size:14px}
+  #rv-root .rv-q>div{display:contents}
+  #rv-root .rv-q dt{color:var(--muted);font-weight:600;font-size:13px;padding-top:1px}
+  #rv-root .rv-q dd{margin:0;color:var(--ink2);overflow-wrap:anywhere}
+  #rv-root .rv-q dd b{color:var(--ink)}
+  #rv-root .rv-fs{font-size:12.5px;color:var(--muted)}
+  #rv-root .rv-kis{margin:6px 0 0;font-size:12.5px;color:var(--faint);display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
+  #rv-root .rv-det>summary{cursor:pointer;font-size:13px;font-weight:650;color:var(--rv-blue-ink);list-style:none;padding:6px 0;min-height:34px}
+  #rv-root .rv-det>summary::-webkit-details-marker{display:none}
+  #rv-root .rv-detb{border-top:1px dashed var(--line2);padding-top:8px}
+  #rv-root .rv-tabnote{margin:8px 0 0}
+  #rv-root .rv-fig{margin:4px 0 0;max-width:460px;width:100%}
+  #rv-root .rv-fig svg{width:100%;height:auto;display:block}
+  #rv-root .rv-fig figcaption{font-size:12px;color:var(--faint);margin-top:2px}
+  #rv-root svg .ax{stroke:var(--line2);stroke-width:1}
+  #rv-root svg .b0{fill:var(--rv-bar0)}#rv-root svg .b1{fill:var(--rv-bar1)}
+  #rv-root svg .ref{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
+  #rv-root svg .reft,#rv-root svg .xl,#rv-root svg .vl,#rv-root svg .mkt{font:10.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;fill:var(--muted)}
+  #rv-root svg .vl{fill:var(--ink2);font-weight:600}
+  #rv-root svg text{paint-order:stroke;stroke:var(--panel2);stroke-width:3px;stroke-linejoin:round}
+  #rv-root svg .mk{stroke:var(--ink2);stroke-width:1;stroke-dasharray:2 2}
+  #rv-root svg .mkt{fill:var(--ink2);font-weight:600}
+  #rv-root .rv-mh{font-size:13px;font-weight:650;color:var(--ink2);margin:10px 0 0}
+  #rv-root .rv-mlist{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:7px}
+  #rv-root .rv-mlist li{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:13.5px;align-items:baseline;min-width:0}
+  #rv-root .rv-src{font-size:11.5px;color:var(--muted);border:1px solid var(--line2);border-radius:5px;padding:0 6px}
+  #rv-root .rv-mf{color:var(--ink);overflow-wrap:anywhere;min-width:0}
+  #rv-root .rv-mm{flex-basis:100%;font-size:12.5px;color:var(--faint);overflow-wrap:anywhere}
+  #rv-root .rv-rest>summary{cursor:pointer;font-size:13.5px;font-weight:650;color:var(--ink2);padding:4px 0;min-height:30px}
+  #rv-root .rv-olist{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+  #rv-root .rv-ol{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;font-size:13.5px;min-width:0}
+  #rv-root .rv-ol b{font-weight:650;color:var(--ink2)}
+  #rv-root .rv-ol.rv-flagged>b{color:var(--watch)}
+  #rv-root .rv-olw{font-size:12px;color:var(--muted);font-weight:600}
+  #rv-root .rv-ol.green .rv-olw{color:var(--good)}
+  #rv-root .rv-olt{flex:1 1 220px;color:var(--ink2);min-width:0;overflow-wrap:anywhere}
+  #rv-root .rv-ol .rv-flb{align-self:center}
+  #rv-root .rv-inf{flex-basis:100%;font-size:12.5px;color:var(--muted);padding-left:18px;overflow-wrap:anywhere}
+  #rv-root .rv-det.rv-inl{flex-basis:100%;padding-left:18px}
+  #rv-root .rv-ol .rv-fpanel{flex:1 1 100%;margin-top:4px}
+  #rv-root .rv-pkg{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--faint);overflow-wrap:anywhere}
+  /* groups */
+  #rv-root .rv-grp{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  #rv-root .rv-grph{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+  #rv-root .rv-grph h2,#rv-root .rv-grph h3{font-size:15px;font-weight:700}
+  #rv-root .rv-grph .rv-sub{font-size:12.5px;color:var(--muted);font-weight:500}
+  #rv-root .rv-grp .rv-cards{margin-top:10px;gap:8px}
+  #rv-root .rv-grp .rv-card{background:var(--panel2)}
+  #rv-root .rv-grp .rv-panel{background:var(--panel)}
+  #rv-root .rv-toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13.5px;
+    font-weight:600;padding:8px 14px;border-radius:10px;max-width:calc(100% - 32px);z-index:80;box-shadow:0 6px 24px rgba(0,0,0,.45);transition:opacity .2s}
+  #rv-root .rv-toast:empty{opacity:0;padding:0;pointer-events:none;box-shadow:none}
+  /* summary */
+  #rv-root .rv-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+  #rv-root .rv-tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+  #rv-root .rv-tile .rv-tl{font-size:12.5px;color:var(--muted)}
+  #rv-root .rv-tile .rv-tv{font-size:24px;font-weight:750;margin-top:2px;line-height:1.2}
+  #rv-root .rv-tile .rv-tv small{font-size:14px;color:var(--muted);font-weight:600}
+  #rv-root .rv-sl{list-style:none;margin:0;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  #rv-root .rv-sl>li{padding:10px 14px;border-top:1px solid var(--line);font-size:14px;min-width:0;overflow-wrap:anywhere}
+  #rv-root .rv-sl>li:first-child{border-top:0}
+  #rv-root .rv-an{font-weight:650}
+  #rv-root .rv-meta{font-size:12.5px;color:var(--muted)}
+  #rv-root .rv-nt{margin-top:3px;color:var(--ink2);white-space:pre-wrap;overflow-wrap:anywhere}
+  #rv-root .rv-empty{color:var(--muted);font-size:13.5px}
+  #rv-root .rv-sl details>summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;min-height:30px}
+  #rv-root .rv-sl details>summary::-webkit-details-marker{display:none}
+  #rv-root .rv-ic{min-width:22px}
+  #rv-root .rv-snap{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:13px}
+  #rv-root .rv-snap li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;min-width:0}
+  #rv-root .rv-snap b{font-weight:600;color:var(--ink2);min-width:112px}
+  #rv-root .rv-dec{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  #rv-root .rv-decd{margin-top:6px;font-size:13px;color:var(--ink2);background:var(--panel2);border-radius:8px;padding:6px 10px;overflow-wrap:anywhere}
+  #rv-root .rv-admin{border:1px solid var(--line2);border-radius:12px;padding:12px 14px;background:var(--panel2)}
+  #rv-root .rv-admin h2{font-size:15px;font-weight:700;letter-spacing:0;text-transform:none;color:var(--ink)}
+  #rv-root .rv-admin h3{font-size:13px;font-weight:700;color:var(--ink2);margin:14px 0 6px}
+  #rv-root .rv-admin details>summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--ink2);margin:14px 0 6px;min-height:30px}
+  #rv-root .rv-jump{font-weight:600;background:none;border:0;padding:0;color:var(--rv-blue-ink);font:inherit;cursor:pointer;text-align:left;text-decoration:underline;text-underline-offset:2px}
+  /* history */
+  #rv-root .rv-month{margin-top:12px}
+  #rv-root .rv-month h3{font-size:13.5px;font-weight:700;color:var(--ink2);margin:0 0 6px}
+  #rv-root .rv-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;max-width:560px}
+  #rv-root .rv-cal .rv-wd{font-size:11.5px;color:var(--faint);text-align:center;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+  #rv-root .rv-day{font:inherit;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink);padding:6px 2px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:2px;min-height:58px;min-width:0}
+  #rv-root .rv-day .rv-dn2{font-size:15px;font-weight:700}
+  #rv-root .rv-day .rv-ds{font-size:10.5px;color:var(--muted);line-height:1.1;text-align:center;overflow-wrap:anywhere}
+  #rv-root .rv-day.green{background:var(--good-b);border-color:transparent}#rv-root .rv-day.green .rv-dn2{color:var(--good)}
+  #rv-root .rv-day.amber{background:var(--watch-b);border-color:transparent}#rv-root .rv-day.amber .rv-dn2{color:var(--watch)}
+  #rv-root .rv-day.red{background:var(--bad-b);border-color:transparent}#rv-root .rv-day.red .rv-dn2{color:var(--bad)}
+  #rv-root .rv-day.none{background:var(--panel2);color:var(--faint);border-style:dashed}
+  #rv-root .rv-day.rv-today{outline:2px solid var(--blue);outline-offset:1px}
+  #rv-root .rv-day[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--ink2)}
+  #rv-root .rv-day.rv-blank{visibility:hidden}
+  #rv-root .rv-hleg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--muted);margin:10px 0}
+  #rv-root .rv-hleg span{display:inline-flex;align-items:center;gap:6px}
+  #rv-root .rv-sq{width:12px;height:12px;border-radius:3px;display:inline-block}
+  #rv-root .rv-sq.green{background:var(--good)}#rv-root .rv-sq.amber{background:var(--watch)}#rv-root .rv-sq.red{background:var(--bad)}
+  #rv-root .rv-sq.none{background:var(--panel2);border:1px dashed var(--line2)}
+  #rv-root .rv-dayp{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+  #rv-root .rv-dayp .rv-cards{margin-top:10px}
+  #rv-root .rv-dayp .rv-card{background:var(--panel2)}
+  #rv-root .rv-red{font-weight:650;color:var(--bad);margin:8px 0 0}
+  #rv-root .rv-pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+  #rv-root .rv-pill{font:inherit;font-size:12.5px;border-radius:7px;padding:4px 8px;background:var(--panel2);border:1px solid var(--line);color:var(--ink2);cursor:pointer;min-height:34px;text-align:left;overflow-wrap:anywhere}
+  #rv-root .rv-pill.rv-pend{color:var(--bad);border-color:var(--rv-bad-line)}
+  #rv-root .rv-pill:hover{border-color:var(--bad)}
+  #rv-root .rv-hlog{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--ink2)}
+  #rv-root .rv-hlog li{overflow-wrap:anywhere}
+  #rv-root .rv-hlog .rv-meta{margin-right:6px}
+  #rv-root .rv-how{margin-top:26px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+  #rv-root .rv-how>summary{cursor:pointer;font-weight:650;font-size:14px;min-height:30px}
+  #rv-root .rv-how ol{margin:8px 0 0;padding-left:20px;font-size:13.5px;color:var(--ink2);display:flex;flex-direction:column;gap:4px}
+  #rv-root .rv-state{margin-top:14px;background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:16px}
+  #rv-root .rv-state h2{font-size:17px;font-weight:750}
+  #rv-root .rv-state p{margin:6px 0 0;color:var(--ink2)}
+  @media (max-width:760px){
+    #rv-root .rv-toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+  }
+  @media (max-width:560px){
+    #rv-root .rv-q{display:block}#rv-root .rv-q>div{display:block;margin-bottom:6px}#rv-root .rv-q dt{font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+    #rv-root .rv-h{font-size:17px}#rv-root .rv-pbar{width:70px}#rv-root .rv-tog{margin-left:0}
+    #rv-root .rv-app{font-size:15.5px}#rv-root .rv-hl{font-size:14.5px}
+    #rv-root .rv-snap b{min-width:0}
+    #rv-root .rv-card,#rv-root .rv-grp{padding-left:11px;padding-right:11px}
+    #rv-root .rv-cal{gap:4px}#rv-root .rv-day .rv-ds{font-size:9.5px}
+    #rv-root .rv-jump{min-height:34px;vertical-align:middle}   /* phone: every tap target ≥ 34 px */
+  }
+  @media (prefers-reduced-motion:reduce){#rv-root *{transition:none!important;scroll-behavior:auto!important}}
+  /* ==== RV:END ==== */
 </style>
 </head>
 <body>
@@ -532,6 +815,7 @@
     <div class="brand"><div class="logo">◈</div><div class="nm">AdMob IQ<small>Revenue Intelligence</small></div></div>
     <div class="nav-lbl">Analyse</div>
     <ul class="nav" id="nav">
+      <li><button data-screen="review"><span class="i">✅</span> Review <span class="badge" id="nav-review" hidden></span></button></li>
       <li><button data-screen="overview" class="active"><span class="i">📊</span> Overview</button></li>
       <li><button data-screen="movers"><span class="i">📈</span> Movers</button></li>
       <li><button data-screen="alerts"><span class="i">🔔</span> Alerts <span class="badge" id="nav-alert">·</span></button></li>
@@ -584,10 +868,10 @@
     </div></div></div>
   </main>
   <nav class="botbar" aria-label="Primary">
+    <button class="tabbtn" data-screen="review" onclick="show('review')"><span class="ti">✅</span>Review<span class="tbadge" id="tab-review"></span></button>
     <button class="tabbtn" data-screen="overview" onclick="show('overview')"><span class="ti">📊</span>Overview</button>
     <button class="tabbtn" data-screen="mediation" onclick="show('mediation')"><span class="ti">🔗</span>Mediation</button>
     <button class="tabbtn" data-screen="alerts" onclick="show('alerts')"><span class="ti">🔔</span>Alerts<span class="tbadge" id="tab-alert"></span></button>
-    <button class="tabbtn" data-screen="deductions" onclick="show('deductions')"><span class="ti">📉</span>Deductions</button>
     <button class="tabbtn" onclick="toggleNav()"><span class="ti">⋯</span>More</button>
   </nav>
 </div>
@@ -704,6 +988,7 @@ const TITLES={overview:["Portfolio Overview","Live · engine-computed"],placemen
   value:["Install value","Earning per install, ads money back & countries (GA4 + AdMob + Google Ads)"],
   active:["Active users","Returning users, comebacks, time & ad revenue (GA4)"],
   uninstall:["Uninstall","Installs vs uninstalls (GA4)"],
+  review:["Daily Review","Har din har app ka ek card · team review"],
   datewise:["Date-wise Report","Har din · spend · installs · revenue · P/L"],
   settings:["Accounts & Apps","Connect · auto-sync"]};
 
@@ -818,9 +1103,12 @@ function applyRangeCustom(){ const f=document.getElementById('rc-from'),t=docume
 
 function render(){
   window.__ax=null;              // invalidate the cached calendar axis (data may have changed)
+  rvSaveFocus();                 // Review tab: remember a focused field inside #rv-root (its node survives this rebuild)
   const root=document.getElementById('screens');root.innerHTML='';
   root.append(renderOverview(),renderPlacements(),renderReport(),renderAppDetail(),renderMovers(),renderAlerts(),
               renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderActive(),renderUninstall(),renderDateWise(),renderReco(),renderHealth(),renderSettings(),renderValue());
+  root.append(renderReview());   // ONE persistent node: drafts / open panels survive the 5-min refresh and the ₹/$ toggle
+  rvRestoreFocus();
   const _uw=(((DATA.uninstall&&DATA.uninstall.alert_counts)||{}).warning||0)+(((DATA.active||{}).alert_counts||{}).warning||0)+(((DATA.value||{}).alert_counts||{}).warning||0);   // uninstall + active users (GA4) + install value warnings join the badge
   const c=DATA.alerts.counts;document.getElementById('nav-alert').textContent=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length)+_uw;
   {const _tb=document.getElementById('tab-alert');if(_tb){const _n=(c.critical||0)+(c.warning||0)+((DATA.range_alerts||[]).length)+_uw;_tb.textContent=_n;_tb.classList.toggle('on',_n>0);}}
@@ -908,12 +1196,15 @@ function show(id){
   if(id==='uninstall') loadUNI(()=>uniRerender());   // lazy-fetch the GA4 uninstall detail (uninstall.json.gz)
   if(id==='active') actEnsure();                     // the open app's active_<key>.json.gz (also after setApp on this screen)
   if(id==='value') valEnsure();                      // the open app's value_<key>.json.gz (Install value tab)
+  if(id==='review') rvEnsure();                      // Daily Review: lazy-load review/index.json + the open day (+ API)
   if(id==='placements'){const a=document.getElementById('pl-apps'),d=document.getElementById('pl-detail');if(a&&d){a.style.display='';d.style.display='none';}DETAIL_OPEN=false;}
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.dataset.screen===id));
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
   document.querySelectorAll('.botbar .tabbtn').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-sub').textContent=TITLES[id][1];}
-  window.scrollTo({top:0});
+  const _rvKeep=rvKeepScroll(id);           // Review re-shown by the 5-min refresh / ₹⇄$: stay where the reader was
+  rvOnShow(id);                             // body[data-screen] (hides App / Period on Review) + the #review hash
+  if(!_rvKeep) window.scrollTo({top:0});
   _navSave();                               // remember where we are (restored on reload / tab return)
 }
 // ---- Remember & restore the current view across a page reload or a mobile tab-discard, so coming back
@@ -1281,6 +1572,7 @@ function openAppDetail(name){
     ${body}`;
 
   document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('on',x.dataset.screen==='appdetail'));
+  rvOnShow('appdetail');                    // Review → Detail link: App / Period come back, the #review hash goes
   document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
   const tt=document.getElementById('tb-title'), ts=document.getElementById('tb-sub');
   if(tt)tt.textContent=name; if(ts)ts.textContent='Ad-unit & country wise · '+pRangeLabel(RANGE);
@@ -6023,6 +6315,1001 @@ function renderSettings(){
   return s;
 }
 
+/* ==== RV:BEGIN ==== */
+// ===================================================================================================
+// DAILY REVIEW (Review tab) — SPEC_REVIEW §C. Cards come frozen from site/review/days/<d>.json.gz (built by
+// admob_iq.review); every click goes to the Review API (/api/review/*, Worker + D1, Access-verified "who").
+// Everything here is prefixed rv/RV, scoped under #rv-root, and wrapped in try/catch: a Review failure shows a
+// friendly state inside #rv-root and never breaks render() or any other tab. No optimistic UI: nothing shows as
+// saved until the API confirms it.
+// ===================================================================================================
+const RV_TXT={nav:"Review",title:"Daily Review",sub:"Har din har app ka ek card · team review",
+  tab_today:"Aaj ka review",tab_sum:"Summary",tab_hist:"History",
+  b_ok:"✅ Got it · Reviewed",b_note:"📝 Note",b_imp:"🚩 Important · Re-review",
+  imp_help:"Admin dobara dekhega — faisla hone tak ye card upar focus me rahega",
+  st_imp:"🚩 Re-review (Important)",sum_imp:"🚩 Important · Re-review",adm_list:"🚩 Re-review list",
+  b_kal:"🔁 Kal dobara dekho",kal_help:"Khud kal dobara dekhna hai — admin ko nahi jaata",
+  b_snz:"💤 Pata hai…",b_undo:"↩ Wapas lo",b_all:"✅ Sab reviewed",
+  st_pend:"⏳ Baaki",st_ok:"✅ Reviewed",st_note:"📝 Reviewed + note",st_kal:"🔁 Kal dobara dekho",
+  d_theek:"👍 Theek hai",d_kaam:"🛠 Kaam do",d_band:"⛔ Band karo",d_done:"✅ Kaam ho gaya",
+  poori:"Poori app",not_started:"Review abhi shuru nahi hua",
+  api_down:"Buttons abhi band hain — review server se jud nahi paaye. Cards dekh sakte ho.",
+  auth_gone:"Login session khatam — page reload karo",
+  save_fail:"❌ Save nahi hua — {msg}. Dobara try karo.",
+  flag_block:"🚩 Ye card Re-review me hai — admin ke faisle tak aise hi rahega. Hatana ho to ↩ Wapas lo.",
+  hist_red:"⏳ Is din ka review baaki hai"};
+const RV_FEATS=[["kamai","Kamai · eCPM"],["uninstall","Uninstall"],["active","Active users"],["value","Install value"],
+  ["update","Update impact"],["ads","Ads"],["deduct","Deductions"],["mediation","Mediation"],["health","Account health"],
+  ["setup","Setup / data"]];
+const RV_FEAT_LONG={
+  kamai:"Kamai · eCPM — AdMob kamai aur ad rate (1,000 ads ka), kal vs usual; ad unit ki girawat",
+  uninstall:"Uninstall — install ke din / N din me app hataane wale, roz hataane wale",
+  active:"Active users — purane users roz, agle din / 7 din baad wapas aane wale, ads har user",
+  value:"Install value — Google Ads ka paisa kitne din me wapas (paisa wapas)",
+  update:"Update impact — naye version ke baad kya badla (Update roko / Chalne do / result kab)",
+  ads:"Ads — Google Ads kharcha, ROAS (kamai ÷ kharcha), ek install ka kharcha",
+  deduct:"Deductions — AdMob ne baad me kitna kaata, invalid traffic (IVT) ka khatra",
+  mediation:"Mediation — dusre ad networks ka hissa",
+  health:"Account health — invalid traffic, ads serving",
+  setup:"Setup / data — data kab tak aaya, GA4 juda hai ya nahi"};
+const RV_FEAT_TAB={kamai:"Overview / Alerts",uninstall:"Uninstall",active:"Active users",value:"Install value",
+  update:"Uninstall → Updates ka asar",ads:"Marketing ROAS",deduct:"Deductions",mediation:"Mediation",
+  health:"Account health",setup:"Settings"};
+const RV_FEAT_PRI={deduct:0,update:1,kamai:2,uninstall:3,active:4,ads:5,value:6,setup:7,health:8,mediation:9};
+const RV_TR={red:4,amber:3,green:2,normal:1,info:1,wait:0,na:0,nodata:0,snz:1};
+const RV_STW={red:"Bigda",amber:"Dhyan do",green:"Behtar",normal:"Normal",wait:"Abhi jaldi",na:"Lagu nahi",
+  nodata:"data nahi",snz:"Pata hai (snooze)"};
+const RV_WORD={red:"Bigda",amber:"Dhyan do",green:"Behtar",info:"Jaankari"};
+const RV_SIZE={badi:"Badi",madhyam:"Madhyam",chhoti:"Chhoti"};
+const RV_MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const RV_MONL=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const RV_WDAY=["Ravivar","Somvar","Mangalvar","Budhvar","Guruvar","Shukravar","Shanivar"];   // JS getUTCDay() order
+const RV_DEC={theek:"Theek hai",kaam:"Kaam do",band:"Band karo",done:"Kaam ho gaya"};
+const RV_DEC_LAB={theek:"Theek hai — koi kaam nahi. Note (zaroori nahi):",kaam:"Kaam do — kya karna hai, kisko?",
+  band:"Band karo — kya band karna hai (ad unit / campaign / rollout)?",done:"Kaam ho gaya — kya kiya? (zaroori nahi)"};
+const RV_ACT_LAB={ok:"✅ Reviewed",note:"📝 Note",kal:"🔁 Kal dobara dekho",flag:"🚩 Re-review",unflag:"🚩 hataya",
+  undo:"↩ Wapas liya",snooze:"💤 Pata hai (snooze)",unsnooze:"💤 Snooze hataya",bulk_ok:"✅ Group reviewed",decide:"🧑‍💼 Faisla"};
+const RV_FX={v:null};   // fallback rate holder (the page passes doc.fx explicitly wherever it renders money)
+// Detail links → the dashboard tab for that feature (SPEC §C.6 RV_LINK)
+const RV_LINK={
+  uninstall:a=>uniGo(a.app_id), update:a=>uniGo(a.app_id), active:a=>actGo(a.app_id), value:a=>valGo(a.app_id),
+  kamai:a=>{ if(DATA&&(DATA.apps||[]).some(x=>x.name===a.dname)) openAppDetail(a.dname); else show('alerts'); },
+  ads:()=>show('roas'), deduct:()=>show('deductions'), mediation:()=>show('mediation'), health:()=>show('health'),
+  setup:()=>show('settings')};
+
+// ---------------------------------------------------------------- pure helpers (no DOM, no fetch)
+function rvEsc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function rvPd(s){ const p=String(s||"").split("-"); return new Date(Date.UTC(+p[0],(+p[1]||1)-1,+p[2]||1)); }
+function rvIso(d){ return d.toISOString().slice(0,10); }
+function rvAddDays(s,n){ const d=rvPd(s); d.setUTCDate(d.getUTCDate()+n); return rvIso(d); }
+function rvDayDiff(a,b){ return Math.round((rvPd(b)-rvPd(a))/864e5); }
+function rvFd(s){ if(!s) return ""; const d=rvPd(s); return isNaN(d)?String(s):d.getUTCDate()+" "+RV_MON[d.getUTCMonth()]; }
+function rvWd(s){ const d=rvPd(s); return isNaN(d)?"":RV_WDAY[d.getUTCDay()]; }
+function rvIstDay(ts){ const t=Date.parse(ts); return isNaN(t)?"":new Date(t+330*60000).toISOString().slice(0,10); }
+function rvWhen(ts){ const t=Date.parse(ts); if(isNaN(t)) return "";
+  try{ return new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date(t)); }
+  catch(e){ const d=new Date(t+330*60000); return d.getUTCDate()+" "+RV_MON[d.getUTCMonth()]+", "+String(d.getUTCHours()).padStart(2,"0")+":"+String(d.getUTCMinutes()).padStart(2,"0"); } }
+function rvWho(email){ const e=String(email||""); const n=e.indexOf("@")>0?e.slice(0,e.indexOf("@")):e;
+  return '<span class="rv-who" title="'+rvEsc(e)+'">'+rvEsc(n||"?")+"</span>"; }
+function rvPct(x){ return ((x>=0?"+":"−")+Math.abs(Math.round(x*100))+"%"); }
+function rvInd(n){ const s=Math.round(n).toString(), l=s.slice(-3), r=s.slice(0,-3); return r? r.replace(/\B(?=(\d{2})+(?!\d))/g,",")+","+l : l; }
+function rvCurIsInr(){ try{ return typeof curView==="function" && curView()==="INR"; }catch(e){ return false; } }
+function rvRate(fx){ const r=Number(fx)||Number(RV_FX.v)||Number(typeof DATA!=="undefined"&&DATA&&DATA.usd_inr)||83; return r>0?r:83; }
+// $/₹ text for a USD amount. s = suffix ("/din"), sign=1 → "+" on positives, p=2 → small-money precision.
+function rvMoney(usd,s,sign,p,fx){
+  const v=Number(usd); if(!isFinite(v)) return "—";
+  const a=Math.abs(v), neg=v<0?"−":(sign==1&&v>0?"+":""); let t;
+  if(rvCurIsInr()){ const x=a*rvRate(fx);
+    if(p==2) t=x<100? x.toFixed(1) : rvInd(x);
+    else t= x>=1e7? (x/1e7).toFixed(2)+" crore" : x>=1e5? (x/1e5).toFixed(1)+" lakh" : rvInd(x);
+    t="₹"+t; }
+  else { if(p==2) t=a<10? a.toFixed(2) : a.toFixed(1);
+    else t= a>=10? Math.round(a).toLocaleString("en-US") : a.toFixed(1);
+    t="$"+t; }
+  return neg+t+(s||""); }
+function rvMSpan(seg,fx,tag){ const tg=tag||"span";
+  return "<"+tg+' class="rv-m" data-usd="'+rvEsc(Number(seg.usd))+'" data-s="'+rvEsc(seg.s||"")+'" data-sign="'+(seg.sign?1:0)+'" data-p="'+(seg.p==2?2:0)+'"'+
+    (fx?' data-fx="'+rvEsc(fx)+'"':"")+">"+rvEsc(rvMoney(seg.usd,seg.s||"",seg.sign,seg.p,fx))+"</"+tg+">"; }
+// rich text (§A.5): a string, or [string | {usd,s,sign,p}] — every string escaped, money follows ₹/$.
+function rvRt(rt,fx){ if(rt==null) return ""; if(typeof rt==="string"||typeof rt==="number") return rvEsc(rt);
+  if(!Array.isArray(rt)) return "";
+  return rt.map(x=> (typeof x==="string"||typeof x==="number")? rvEsc(x) : (x&&typeof x==="object"&&isFinite(Number(x.usd)))? rvMSpan(x,fx) : "").join(""); }
+function rvRtText(rt,fx){ if(rt==null) return ""; if(!Array.isArray(rt)) return String(rt);
+  return rt.map(x=> typeof x==="string"? x : (x&&typeof x==="object"&&isFinite(Number(x.usd)))? rvMoney(x.usd,x.s||"",x.sign,x.p,fx) : "").join(""); }
+function rvFeats(doc){ return (doc&&Array.isArray(doc.feats)&&doc.feats.length)? doc.feats : RV_FEATS; }
+function rvFlab(doc,f){ if(!f||f==="app") return RV_TXT.poori; const x=rvFeats(doc).find(q=>q[0]===f); return x?x[1]:f; }
+function rvAppMap(doc){ const m={}; ((doc&&doc.apps)||[]).forEach(a=>{ if(a&&a.key) m[a.key]=a; }); return m; }
+function rvAppOf(doc,key){ return ((doc&&doc.apps)||[]).find(a=>a&&a.key===key)||null; }
+function rvEmptyS(d){ return {d:d||null,open_day:null,writable:false,rev:0,states:{},notes:[],flags:[],snoozes:[],prev:null,log:[],me:null}; }
+function rvS(S,d){ const e=rvEmptyS(d); if(!S) return e;
+  return {...e,...S,states:S.states||{},notes:S.notes||[],flags:S.flags||[],snoozes:S.snoozes||[],log:S.log||[]}; }
+function rvSnz(doc,S,key,f){ const d=doc&&doc.day;
+  return ((S&&S.snoozes)||[]).find(z=>z&&z.app===key&&z.feature===f&&(!d||!z.until||z.until>=d))||null; }
+// effective status of one feature: a snoozed red/amber → "snz"
+function rvEffSt(doc,S,key,f){ const a=rvAppOf(doc,key); const x=a&&a.f?a.f[f]:null; if(!x||!x.st) return "nodata";
+  if((x.st==="red"||x.st==="amber")&&rvSnz(doc,S,key,f)) return "snz"; return x.st; }
+function rvIsAttn(doc,S,key){ return rvFeats(doc).some(f=>{ const s=rvEffSt(doc,S,key,f[0]); return s==="red"||s==="amber"; }); }
+function rvNewBad(doc,S,key){ const a=rvAppOf(doc,key); return !!a&&(a.nb||[]).some(f=>!rvSnz(doc,S,key,f)); }
+function rvFlagsOf(S,key){ return ((S&&S.flags)||[]).filter(x=>x&&x.app===key); }
+function rvEarlierOpen(doc,S,key){ const d=doc&&doc.day; return rvFlagsOf(S,key).filter(x=>x.status==="open"&&x.day<d); }
+function rvKalPrev(S,key){ const p=S&&S.prev; return !!(p&&Array.isArray(p.kal)&&p.kal.indexOf(key)>=0); }
+// lifted to the top: any OPEN (undecided) 🚩 — raised today or carried from an earlier day — or yesterday's 🔁
+function rvLift(doc,S,key){ const d=doc&&doc.day; return rvFlagsOf(S,key).some(x=>x.status==="open"&&(!d||x.day<=d))||rvKalPrev(S,key); }
+// client layout (§C.5): lifted / attention cards on top (🆕 + lifted first, then k7), the rest grouped.
+function rvLayout(doc,S){ const top=[],ok=[],small=[], A=rvAppMap(doc);
+  ((doc&&doc.apps)||[]).forEach(a=>{ if(!a||!a.key) return; const k=a.key;
+    if(rvLift(doc,S,k)||(!a.small&&rvIsAttn(doc,S,k))) top.push(k); else if(a.small) small.push(k); else ok.push(k); });
+  const k7=k=>Number(A[k].k7)||0, upr=k=>(rvNewBad(doc,S,k)||rvLift(doc,S,k))?0:1;
+  top.sort((x,y)=>upr(x)-upr(y)||k7(y)-k7(x)); ok.sort((x,y)=>k7(y)-k7(x)); small.sort((x,y)=>k7(y)-k7(x));
+  return {top,ok,small}; }
+// review state of one app: pend | ok | note (ok + a note today) | kal | flag
+function rvStOf(S,key){ const s=S&&S.states&&S.states[key]; if(!s||!s.st) return "pend";
+  if(s.st==="flag"&&rvAppFlagOpen(S,key)) return "flag"; if(s.st==="kal") return "kal";
+  return ((S.notes||[]).some(n=>n&&n.app===key))?"note":"ok"; }   // a DECIDED whole-app 🚩 = reviewed (the log shows the decision)
+// a whole-app 🚩 raised on S.d that is still open (undecided) — only that keeps the card in "🚩 Re-review"
+function rvAppFlagOpen(S,key){ return ((S&&S.flags)||[]).some(x=>x&&x.app===key&&!x.feature&&x.status==="open"&&(!S.d||x.day===S.d)); }
+const RV_STL={pend:"st_pend",ok:"st_ok",note:"st_note",kal:"st_kal",flag:"st_imp"};
+function rvStLabel(st){ return RV_TXT[RV_STL[st]||"st_pend"]; }
+// flags as they stood at the END of day d (History: a decision after d is shown as still open)
+function rvHistS(S,d){ const s=rvS(S,d);
+  const flags=s.flags.map(x=>{ const y={...x}, dd=y.dec_at?rvDecDay(y):"", dn=y.done_at?rvDoneDay(y):"";
+    // (a withdrawal only ever happens on the flag's own day — unflag / undo — so it is never "after d" here)
+    if(y.decision&&dd&&dd>d){ y.status="open"; y.decision=null; y.dec_note=null; y.dec_by=null; y.dec_at=null; y.done_at=null; y.done_by=null; y.done_note=null; }
+    else if(y.decision==="kaam"&&y.status==="closed"&&dn&&dn>d){ y.status="kaam"; y.done_at=null; y.done_by=null; y.done_note=null; }
+    return y; }).filter(y=>y.day<=d);
+  // snoozes as seen at review time: an app with a state keeps the features it had snoozed then
+  const snz=[]; const seen={};
+  Object.keys(s.states).forEach(k=>{ seen[k]=1; ((s.states[k]||{}).snz||[]).forEach(f=>snz.push({app:k,feature:f,until:null,note:"",who:"",at:""})); });
+  s.snoozes.forEach(z=>{ if(z&&!seen[z.app]) snz.push(z); });
+  return {...s,flags,snoozes:snz}; }
+// the REVIEW day of a decision / of "kaam ho gaya" (the open day it was made on; before 09:00 IST that is still
+// yesterday) — the IST date of the timestamp only for a flag without one
+function rvDecDay(x){ return (x&&x.dec_day)||(x&&x.dec_at?rvIstDay(x.dec_at):""); }
+function rvDoneDay(x){ return (x&&x.done_day)||(x&&x.done_at?rvIstDay(x.done_at):""); }
+function rvDayColor(nApps,c){ const n=Number(nApps)||0; if(!n) return "none"; const r=Number(c&&c.rev)||0;
+  return r>=n?"green":r>0?"amber":"red"; }
+function rvChipHtml(ch){ if(ch==="naya") return '<span class="rv-chip naya">🆕 Naya</span>';
+  if(ch==="chal_raha") return '<span class="rv-chip chal">🔁 Chal raha</span>';
+  if(ch==="purani") return '<span class="rv-chip ph">purani halat</span>';
+  if(ch==="theek") return '<span class="rv-chip theek">✅ Theek ho gaya</span>';
+  if(ch==="purana") return '<span class="rv-chip purana">🗄 Purana</span>';
+  return ""; }
+// bar chart (port of make_demo.svg_bars): bars from after_idx on in the accent, dashed "pehle" line, marks.
+function rvChartVal(v,fmt,fx,tag){ if(fmt==="usd") return tag? rvMSpan({usd:v,s:"",sign:0,p:0},fx,"tspan") : rvMoney(v,"",0,0,fx);
+  if(fmt==="p100"){ const t=v<10?(v.toFixed(1).replace(/\.?0+$/,"")):v.toFixed(0); return tag?rvEsc(t):t; }
+  if(fmt==="r1"){ const t=v.toFixed(1); return tag?rvEsc(t):t; }
+  const t=Math.round(v).toLocaleString("en-US"); return tag?rvEsc(t):t; }
+function rvChartSvg(ch,fx){
+  if(!ch||!Array.isArray(ch.vals)) return "";
+  const vals=ch.vals.map(v=>(v==null||!isFinite(Number(v)))?null:Number(v)), n=vals.length;
+  if(!n||vals.every(v=>v==null)) return "";
+  const labels=Array.isArray(ch.labels)?ch.labels:[], fmt=ch.fmt||"n", tips=Array.isArray(ch.tips)?ch.tips:null;
+  const before=(ch.before==null||!isFinite(Number(ch.before)))?null:Number(ch.before);
+  const W=340,H=136,L=4,R=4,T=26,B=20, f1=v=>v.toFixed(1);
+  let vmax=Math.max(...vals.filter(v=>v!=null).map(v=>Math.max(v,0)),before!=null?Math.max(before,0):0); if(!(vmax>0)) vmax=1; vmax*=1.15;
+  const pw=(W-L-R)/n, bw=Math.max(3,pw-3), base=H-B, y=v=>T+(base-T)*(1-Math.max(v,0)/vmax);
+  const ai=(ch.after_idx==null||!isFinite(Number(ch.after_idx)))?null:Number(ch.after_idx);
+  const out=['<svg viewBox="0 0 '+W+" "+H+'" role="img" aria-label="'+rvEsc(ch.cap||"chart")+'" preserveAspectRatio="xMidYMid meet">',
+    '<line class="ax" x1="'+L+'" x2="'+(W-R)+'" y1="'+base+'" y2="'+base+'"/>'];
+  vals.forEach((v,i)=>{ if(v==null) return; const x0=L+i*pw+(pw-bw)/2, yt=y(v), hgt=base-yt, r=Math.max(0,Math.min(3,bw/2,hgt));
+    const cls=(ai!=null&&i>=ai)?"b1":"b0";
+    const tip=(tips&&tips[i]!=null)?String(tips[i]):((labels[i]!=null?labels[i]:"")+": "+rvChartVal(v,fmt,fx,false));
+    out.push('<path class="'+cls+'" d="M'+f1(x0)+","+base+" V"+f1(yt+r)+" Q"+f1(x0)+","+f1(yt)+" "+f1(x0+r)+","+f1(yt)+" H"+f1(x0+bw-r)+
+      " Q"+f1(x0+bw)+","+f1(yt)+" "+f1(x0+bw)+","+f1(yt+r)+" V"+base+' Z"><title>'+rvEsc(tip)+"</title></path>"); });
+  if(before!=null){ const yb=y(before);
+    out.push('<line class="ref" x1="'+L+'" x2="'+(W-R)+'" y1="'+f1(yb)+'" y2="'+f1(yb)+'"/>');
+    out.push('<text class="reft" x="'+(L+2)+'" y="'+f1(yb-4)+'">pehle '+rvChartVal(before,fmt,fx,true)+"</text>"); }
+  const used=[];
+  (Array.isArray(ch.marks)?ch.marks:[]).forEach(m=>{ if(!Array.isArray(m)||m[0]==null||!isFinite(Number(m[0]))) return;
+    const x=L+Number(m[0])*pw; let yy=11; if(used.some(u=>Math.abs(x-u)<70)) yy=22; used.push(x);
+    const anc=x>W-90?"end":"start", tx=anc==="end"?x-3:x+3;
+    out.push('<line class="mk" x1="'+f1(x)+'" x2="'+f1(x)+'" y1="'+(yy+3)+'" y2="'+base+'"/>');
+    out.push('<text class="mkt" x="'+f1(tx)+'" y="'+(yy+1)+'" text-anchor="'+anc+'">'+rvEsc(m[1])+"</text>"); });
+  let last=-1; vals.forEach((v,i)=>{ if(v!=null) last=i; });
+  const xl=L+last*pw+pw/2;
+  out.push('<text class="vl" x="'+f1(Math.min(xl,W-R-1))+'" y="'+f1(y(vals[last])-4)+'" text-anchor="end">'+rvChartVal(vals[last],fmt,fx,true)+"</text>");
+  out.push('<text class="xl" x="'+L+'" y="'+(H-5)+'">'+rvEsc(labels[0]!=null?labels[0]:"")+"</text>");
+  out.push('<text class="xl" x="'+(W-R)+'" y="'+(H-5)+'" text-anchor="end">'+rvEsc(labels[n-1]!=null?labels[n-1]:"")+"</text>");
+  out.push("</svg>");
+  return out.join(""); }
+function rvDetailHtml(det,f,key,P,fx){
+  if(!det) return "";
+  const parts=[];
+  const svg=det.chart?rvChartSvg(det.chart,fx):"";
+  if(svg) parts.push('<figure class="rv-fig">'+svg+"<figcaption>"+rvEsc(det.chart.cap||"")+"</figcaption></figure>");
+  const more=Array.isArray(det.more)?det.more:[];
+  if(more.length) parts.push('<h5 class="rv-mh">Is feature me aur ('+more.length+')</h5><ul class="rv-mlist">'+more.map(r=>
+    '<li><span class="rv-sw '+rvEsc(r.w)+'"><i></i>'+rvEsc(RV_WORD[r.w]||"")+"</span>"+(r.src?'<span class="rv-src">'+rvEsc(r.src)+"</span>":"")+
+    '<span class="rv-mf">'+rvRt(r.fact,fx)+"</span>"+(r.meta?'<span class="rv-mm">'+rvEsc(r.meta)+"</span>":"")+"</li>").join("")+"</ul>");
+  parts.push(rvGoBtn(f,key,det.tab));
+  return parts.join(""); }
+function rvGoBtn(f,key,tab){ return '<p class="rv-tabnote"><button type="button" class="rv-btn rv-link rv-sm" data-rvgo="'+rvEsc(f)+'" data-key="'+rvEsc(key)+'">Detail: '+
+  rvEsc(tab||RV_FEAT_TAB[f]||"dashboard")+" ›</button></p>"; }
+function rvFlagInfo(doc,S,key,f){ // f = feature id or "app"
+  const d=doc&&doc.day, fe=f==="app"?null:f;
+  const fl=rvFlagsOf(S,key).filter(x=>(x.feature||null)===fe);
+  return {today:fl.find(x=>x.status==="open"&&x.day===d)||null,
+    carry:fl.find(x=>x.status==="open"&&x.day<d)||null,
+    kaam:fl.find(x=>x.status==="kaam")||null}; }
+function rvFlagBtn(doc,S,key,f,lab,short,P,live){
+  const fi=rvFlagInfo(doc,S,key,f), d=doc.day;
+  if(!live){ // History: a static marker only
+    const x=fi.today||fi.carry; if(x) return '<span class="rv-fchip">🚩'+(short?"":" Re-review")+"</span>";
+    if(fi.kaam) return '<span class="rv-fchip" style="color:var(--purple);background:var(--purple-b)">🛠'+(short?"":" Kaam")+"</span>";
+    return ""; }
+  let txt,cls="",pressed="false",vh;
+  if(fi.today){ txt=short?"🚩 ✓":"🚩 Flagged ✓"; pressed="true"; vh=" (flag laga hai)"; }
+  else if(fi.carry){ const n=rvDayDiff(fi.carry.day,d); txt=short?"🚩 "+n+" din":"🚩 "+n+" din se khula"; cls=" rv-carry"; vh=" (khula flag)"; }
+  else if(fi.kaam){ const n=rvDayDiff(fi.kaam.day,d); txt=short?"🛠":"🛠 Kaam · "+(n>0?n+" din":"aaj"); cls=" rv-kaamb"; vh=" (admin ka kaam chal raha)"; }
+  else { txt=short?"🚩":"🚩 Re-review"; vh=""; }
+  return '<button type="button" class="rv-flb'+cls+'" data-rvact="fflag" data-f="'+rvEsc(f)+'" id="rv-'+P+"-ff-"+rvEsc(key)+"-"+rvEsc(f)+
+    '" aria-pressed="'+pressed+'" title="Important · Re-review — sirf '+rvEsc(lab)+'">'+txt+
+    '<span class="rv-vh"> — Important · Re-review: '+rvEsc(lab)+vh+"</span></button>"; }
+function rvLogHtml(doc,S,key){
+  const d=doc.day, lg=[], s=S.states[key], st=rvStOf(S,key);
+  if(s&&s.st) lg.push("<span>"+rvEsc(rvStLabel(st==="note"?"ok":st))+" · "+rvWho(s.who)+" · "+rvEsc(rvWhen(s.at))+"</span>");
+  (S.notes||[]).filter(n=>n.app===key).forEach(n=>lg.push('<span class="rv-n">📝 <b>'+rvWho(n.who)+"</b> · "+rvEsc(rvWhen(n.at))+": "+rvEsc(n.text)+"</span>"));
+  rvFlagsOf(S,key).forEach(x=>{
+    const today=x.day===d&&x.status!=="withdrawn";
+    if(today) lg.push('<span class="rv-n">🚩 <b>'+rvEsc(rvFlab(doc,x.feature))+"</b> · "+rvWho(x.raised_by)+" · "+rvEsc(rvWhen(x.raised_at))+(x.note?": "+rvEsc(x.note):"")+
+      (x.status==="open"?" — admin ka faisla baaki":"")+"</span>");
+    const decToday=x.dec_at&&(today||rvDecDay(x)===d), doneToday=x.done_at&&(today||rvDoneDay(x)===d);
+    if(x.decision&&decToday) lg.push('<span class="rv-n">🧑‍💼 Admin: <b>'+rvEsc(RV_DEC[x.decision]||x.decision)+"</b>"+(today?"":" ("+rvEsc(rvFlab(doc,x.feature))+")")+
+      (x.dec_note?" — "+rvEsc(x.dec_note):"")+" · "+rvWho(x.dec_by)+", "+rvEsc(rvWhen(x.dec_at))+"</span>");
+    if(doneToday) lg.push('<span class="rv-n">🧑‍💼 Admin: <b>Kaam ho gaya</b>'+(today?"":" ("+rvEsc(rvFlab(doc,x.feature))+")")+(x.done_note?" — "+rvEsc(x.done_note):"")+
+      " · "+rvWho(x.done_by)+", "+rvEsc(rvWhen(x.done_at))+"</span>"); });
+  return lg.join(""); }
+function rvFeatBlock(doc,S,a,f,lab,live,P,fx,ro){
+  const x=a.f[f]||{}, st=x.st, key=a.key, q=x.q||{}, z=rvSnz(doc,S,key,f), fi=rvFlagInfo(doc,S,key,f), fo=!!(fi.today||fi.carry);
+  const rows=[["Kya hua",rvRt(q.kya,fx)],["Kab se",rvEsc(q.kab||"")],["Kitna bada",rvRt(q.kit,fx)],
+    ["Naya ya purana",q.naya?(rvChipHtml(q.naya.chip)+(q.naya.first?' <span class="rv-fs">Pehli baar dikha: '+rvEsc(q.naya.first)+"</span>":"")):""],
+    ["Kya karo","<b>"+rvEsc(q.karo||"")+"</b>"]];
+  const extra=[]; if(q.kis) extra.push("<span>Kis data pe: "+rvRt(q.kis,fx)+"</span>");
+  if(q.abhi) extra.push("<span>Abhi: "+rvRt(q.abhi,fx)+"</span>"); if(q.saath) extra.push("<span>Saath me: "+rvRt(q.saath,fx)+"</span>");
+  (x.info||[]).forEach(t=>extra.push("<span>ℹ️ "+rvRt(t,fx)+"</span>"));
+  const dis=ro?" disabled":"";
+  const btns=live? '<span class="rv-fbb">'+rvFlagBtn(doc,S,key,f,lab,false,P,true).replace("<button ","<button"+dis+" ")+
+    '<button type="button" class="rv-btn rv-ghost rv-sm" data-rvact="snz" data-f="'+rvEsc(f)+'" id="rv-'+P+"-sz-"+rvEsc(key)+"-"+rvEsc(f)+'"'+dis+">"+(z?"💤 Snooze dekho":rvEsc(RV_TXT.b_snz))+"</button></span>"
+    : '<span class="rv-fbb">'+rvFlagBtn(doc,S,key,f,lab,false,P,false)+"</span>";
+  return '<section class="rv-fb '+rvEsc(st)+(z?" rv-snoozed":"")+(fo?" rv-flagged":"")+'" data-f="'+rvEsc(f)+'" aria-label="'+rvEsc(lab)+'">'+
+    '<div class="rv-fbh"><span class="rv-fd '+rvEsc(st)+'" aria-hidden="true"></span><h4>'+rvEsc(lab)+'</h4><span class="rv-sw '+rvEsc(st)+'">'+rvEsc(RV_STW[st]||"")+"</span>"+
+    (z?'<span class="rv-snzchip">💤 Pata hai'+(z.until?" · "+rvEsc(rvFd(z.until))+" tak":"")+"</span>":"")+btns+"</div>"+
+    '<dl class="rv-q">'+rows.map(r=>"<div><dt>"+r[0]+"</dt><dd>"+r[1]+"</dd></div>").join("")+"</dl>"+
+    (extra.length?'<p class="rv-kis">'+extra.join("")+"</p>":"")+
+    (x.detail?'<details class="rv-det"><summary>Detail →</summary><div class="rv-detb">'+rvDetailHtml(x.detail,f,key,P,fx)+"</div></details>":rvGoBtn(f,key,null))+
+    '<div class="rv-fpanel" data-rvpanel="'+P+"f:"+rvEsc(key)+":"+rvEsc(f)+'"></div></section>'; }
+function rvRestLi(doc,S,a,f,lab,live,P,fx,ro){
+  const x=a.f[f]||{}, st=x.st||"nodata", key=a.key, fi=rvFlagInfo(doc,S,key,f), fo=!!(fi.today||fi.carry);
+  const inf=[]; if(x.kis) inf.push("Kis data pe: "+rvRt(x.kis,fx)); (x.info||[]).forEach(t=>inf.push(rvRt(t,fx)));
+  const det=(x.detail&&st!=="na"&&st!=="nodata")?'<details class="rv-det rv-inl"><summary>Detail →</summary><div class="rv-detb">'+rvDetailHtml(x.detail,f,key,P,fx)+"</div></details>":"";
+  let fb=rvFlagBtn(doc,S,key,f,lab,true,P,live); if(ro&&live) fb=fb.replace("<button ","<button disabled ");
+  return '<li class="rv-ol '+rvEsc(st)+(fo?" rv-flagged":"")+'" data-f="'+rvEsc(f)+'"><span class="rv-fd '+rvEsc(st)+'" aria-hidden="true"></span><b>'+rvEsc(lab)+"</b>"+
+    '<span class="rv-olw">'+rvEsc(RV_STW[st]||"")+'</span><span class="rv-olt">'+rvRt(x.line!=null?x.line:x.t,fx)+"</span>"+fb+
+    (inf.length?'<span class="rv-inf">ℹ️ '+inf.join(" · ")+"</span>":"")+det+
+    (live?'<div class="rv-fpanel" data-rvpanel="'+P+"f:"+rvEsc(key)+":"+rvEsc(f)+'"></div>':"")+"</li>"; }
+// ONE card (port of the demo card_html). mode: live | history | history_admin. o = {rank, open, ro}
+function rvCardHtml(doc,S,key,mode,o){
+  o=o||{}; mode=mode||"live";
+  const a=rvAppOf(doc,key); if(!a) return "";
+  const live=mode==="live", hadm=mode==="history_admin", P=live?"t":"h", d=doc.day, fx=doc.fx;
+  const SS=live? rvS(S,d) : rvHistS(S,d);
+  const feats=rvFeats(doc), st=rvStOf(SS,key), sObj=SS.states[key]||null, ro=!!o.ro;
+  let rank=o.rank;
+  if(rank==null&&live){ const L=rvLayout(doc,SS), i=L.top.indexOf(key); rank=i>=0?i+1:null; }
+  // money line
+  const y=Number(a.y)||0, us=Number(a.us)||0, rel=us>0?(y/us-1):null;
+  const cls=(rel!=null&&rel<=-0.2&&us-y>=10)?"rv-dn":((rel!=null&&rel>=0.2&&y-us>=10)?"rv-up":"");
+  const relT=(rel!=null&&us>=0.5)? (Math.abs(rel)<0.005?" <span>(barabar)</span>":' <span class="'+cls+'">('+rvPct(rel)+")</span>") : "";
+  const dat=(doc.data&&doc.data.admob_till)||"";
+  const mline="Kal"+(dat?" ("+rvEsc(rvFd(dat))+")":"")+" <b>"+rvMSpan({usd:y,s:"",sign:0,p:0},fx)+"</b> · usual "+rvMSpan({usd:us,s:"/din",sign:0,p:0},fx)+relT+
+    ' · <span class="rv-sz">'+rvEsc(RV_SIZE[a.size]||"")+" app · 7 din ka avg "+rvMSpan({usd:Number(a.k7)||0,s:"/din",sign:0,p:0},fx)+"</span>";
+  // chips row
+  const fl=[];
+  if(rvNewBad(doc,SS,key)) fl.push('<span class="rv-flag rv-nb">🆕 Naya aur bigda'+((!a.small||rvLift(doc,SS,key))?" — upar laaya":"")+"</span>");
+  rvEarlierOpen(doc,SS,key).forEach(x=>fl.push('<span class="rv-flag rv-co">🚩 '+rvEsc(rvFlab(doc,x.feature))+" · "+rvDayDiff(x.day,d)+" din se khula</span>"));
+  rvFlagsOf(SS,key).filter(x=>x.status==="open"&&x.day===d&&!x.feature).forEach(()=>fl.push('<span class="rv-flag rv-co">🚩 '+rvEsc(RV_TXT.poori)+"</span>"));
+  rvFlagsOf(SS,key).filter(x=>x.status==="kaam").forEach(x=>{ const n=rvDayDiff(x.day,d);
+    fl.push('<span class="rv-flag rv-kaam">🛠 '+rvEsc(rvFlab(doc,x.feature))+" · kaam chal raha · "+(n>0?n+" din se":"aaj se")+"</span>"); });
+  if(rvKalPrev(SS,key)) fl.push('<span class="rv-flag rv-co">🔁 '+rvEsc(rvFd(SS.prev.d))+" ko “kal dobara dekho” kaha tha</span>");
+  const nz=feats.filter(f=>{ const x=a.f&&a.f[f[0]]; return x&&(x.st==="red"||x.st==="amber")&&rvSnz(doc,SS,key,f[0]); }).length;
+  if(nz) fl.push('<span class="rv-flag">💤 '+nz+" baat snooze</span>");
+  // dots
+  const dots=feats.map(f=>{ const x=(a.f&&a.f[f[0]])||{}, es=rvEffSt(doc,SS,key,f[0]), fi=rvFlagInfo(doc,SS,key,f[0]), fo=!!(fi.today||fi.carry);
+    return '<li class="rv-dc '+rvEsc(es)+(fo?" rv-flg":"")+'" data-f="'+rvEsc(f[0])+'" title="'+rvEsc(f[1]+": "+(RV_STW[es]||"")+" — "+(x.t||""))+'"><i aria-hidden="true"></i>'+
+      (fo?'<span class="rv-dfl" aria-hidden="true">🚩</span>':"")+'<span class="rv-dl">'+rvEsc(f[1])+'</span><span class="rv-vh"> — '+rvEsc(RV_STW[es]||"")+(fo?" · 🚩 Re-review":"")+"</span></li>"; }).join("");
+  const h=a.head||{};
+  const hchip=(h.chip?rvChipHtml(h.chip):"")+(h.age?' <span class="rv-age">'+rvEsc(h.age)+" se</span>":"");
+  // body: red/amber blocks, then "Baaki N cheezein"
+  // red/amber blocks in the demo's order (= the builder's head order): red first, "purani halat" last, then feature priority
+  const pur=f=>{ const q=(a.f[f[0]]||{}).q; return q&&q.naya&&q.naya.chip==="purani"?1:0; };
+  const bad=feats.filter(f=>{ const x=a.f&&a.f[f[0]]; return x&&(x.st==="red"||x.st==="amber"); })
+    .sort((p,q)=>(RV_TR[a.f[q[0]].st]||0)-(RV_TR[a.f[p[0]].st]||0)||pur(p)-pur(q)||(RV_FEAT_PRI[p[0]]||0)-(RV_FEAT_PRI[q[0]]||0));
+  const rest=feats.filter(f=>bad.indexOf(f)<0).sort((p,q)=>{ const sp=((a.f[p[0]]||{}).st)||"nodata", sq=((a.f[q[0]]||{}).st)||"nodata";
+    return (RV_TR[sq]||0)-(RV_TR[sp]||0)||((RV_FEAT_PRI[p[0]]||0)-(RV_FEAT_PRI[q[0]]||0)); });
+  const cnt={}; rest.forEach(f=>{ const s=((a.f[f[0]]||{}).st)||"nodata"; cnt[s]=(cnt[s]||0)+1; });
+  const br=["green","normal","wait","na","nodata"].filter(s=>cnt[s]).map(s=>cnt[s]+" "+RV_STW[s].toLowerCase()).join(", ");
+  const body=bad.map(f=>rvFeatBlock(doc,SS,a,f[0],f[1],live,P,fx,ro)).join("")+
+    '<details class="rv-rest"'+(bad.length?"":" open")+"><summary>Baaki "+rest.length+" cheezein"+(br?" ("+rvEsc(br)+")":"")+'</summary><ul class="rv-olist">'+
+    rest.map(f=>rvRestLi(doc,SS,a,f[0],f[1],live,P,fx,ro)).join("")+"</ul></details>"+(a.pkg?'<div class="rv-pkg">'+rvEsc(a.pkg)+"</div>":"");
+  const open=!!o.open, id="rv-"+P+"-", k=rvEsc(key), dis=ro?" disabled":"";
+  const fImp=rvFlagInfo(doc,SS,key,"app");
+  let acts="";
+  if(live) acts='<button type="button" class="rv-btn rv-ok" data-rvact="ok" id="'+id+"ok-"+k+'" aria-pressed="'+(st==="ok"||st==="note")+'"'+dis+">"+rvEsc(RV_TXT.b_ok)+"</button>"+
+    '<button type="button" class="rv-btn" data-rvact="note" id="'+id+"note-"+k+'"'+dis+">"+rvEsc(RV_TXT.b_note)+"</button>"+
+    '<button type="button" class="rv-btn rv-imp" data-rvact="imp" id="'+id+"imp-"+k+'" role="checkbox" aria-checked="'+(st==="flag"||!!fImp.today)+'"'+dis+
+      '><span class="rv-tick" aria-hidden="true"></span>'+rvEsc(RV_TXT.b_imp)+"</button>"+
+    '<button type="button" class="rv-btn" data-rvact="kal" id="'+id+"kal-"+k+'" aria-pressed="'+(st==="kal")+'" title="'+rvEsc(RV_TXT.kal_help)+'"'+dis+">"+rvEsc(RV_TXT.b_kal)+"</button>"+
+    '<button type="button" class="rv-btn rv-ghost" data-rvact="undo" id="'+id+"undo-"+k+'"'+(st==="pend"?" hidden":"")+dis+">"+rvEsc(RV_TXT.b_undo)+"</button>";
+  else if(hadm) acts='<button type="button" class="rv-btn rv-ok" data-rvact="ok" id="'+id+"ok-"+k+'" aria-pressed="'+(st==="ok"||st==="note")+'"'+dis+">"+rvEsc(RV_TXT.b_ok)+"</button>"+
+    '<button type="button" class="rv-btn" data-rvact="note" id="'+id+"note-"+k+'"'+dis+">"+rvEsc(RV_TXT.b_note)+"</button>"+
+    '<button type="button" class="rv-btn rv-ghost" data-rvact="undo" id="'+id+"undo-"+k+'"'+(st==="pend"?" hidden":"")+dis+">"+rvEsc(RV_TXT.b_undo)+"</button>";
+  acts+='<button type="button" class="rv-btn rv-ghost rv-tog" data-rvact="tog" id="'+id+"tog-"+k+'" aria-expanded="'+open+'" aria-controls="'+id+"b-"+k+'">'+(open?"Card band karo ▴":"Poora card kholo ▾")+"</button>";
+  const stc=st==="flag"?"flag":st;
+  return '<article class="rv-card t-'+rvEsc(a.tier||"normal")+(bad.length?" rv-hasbad":"")+(st!=="pend"?" rv-done":"")+(open?" rv-open":"")+'" id="'+id+"c-"+k+
+    '" data-key="'+k+'" data-mode="'+rvEsc(mode)+'" data-d="'+rvEsc(d)+'" tabindex="-1" aria-labelledby="'+id+"h-"+k+'">'+
+    '<header class="rv-ch"><div class="rv-ch1"><span class="rv-rk" data-rk>'+(rank?"#"+rank:"")+'</span><h3 class="rv-app" id="'+id+"h-"+k+'">'+rvEsc(a.name||a.dname||key)+
+    ' <span class="rv-acct">· '+rvEsc(a.acct||"")+'</span></h3><span class="rv-rs '+rvEsc(stc)+'">'+rvEsc(rvStLabel(st))+"</span></div>"+
+    '<p class="rv-ml">'+mline+"</p>"+'<div class="rv-flags">'+fl.join("")+"</div>"+
+    '<ul class="rv-dots" aria-label="Features">'+dots+"</ul>"+
+    '<p class="rv-hl t-'+rvEsc(a.tier||"normal")+'">'+hchip+' <span class="rv-hlt">'+rvRt(h.text,fx)+"</span></p></header>"+
+    '<div class="rv-body" id="'+id+"b-"+k+'"'+(open?"":" hidden")+">"+body+"</div>"+
+    '<div class="rv-acts" role="group" aria-label="Review">'+acts+"</div>"+
+    '<div class="rv-panel" data-rvpanel="'+P+"c:"+k+'"></div>'+
+    '<div class="rv-log" aria-live="polite">'+rvLogHtml(doc,SS,key)+"</div></article>"; }
+function rvAppLabel(doc,key,fallback){ const a=rvAppOf(doc,key); return a? (a.name||a.dname||key)+" · "+(a.acct||"") : (fallback||key); }
+function rvJumpBtn(doc,key,label){ const a=rvAppOf(doc,key);
+  if(!a) return '<span class="rv-an">'+rvEsc(label||key)+"</span>";
+  return '<button type="button" class="rv-jump" data-rvjump="'+rvEsc(key)+'">'+rvEsc(a.name||a.dname||key)+'</button> <span class="rv-meta">· '+rvEsc(a.acct||"")+"</span>"; }
+function rvFlagSort(doc){ const A=rvAppMap(doc), ord={}; rvFeats(doc).forEach((f,i)=>ord[f[0]]=i);
+  return (p,q)=> (p.day<q.day?-1:p.day>q.day?1:0) || ((A[q.app]?Number(A[q.app].k7)||0:0)-(A[p.app]?Number(A[p.app].k7)||0:0)) ||
+    ((p.feature?ord[p.feature]:-1)-(q.feature?ord[q.feature]:-1)) || (p.id-q.id); }
+// one flag = App · Feature (or 'poori app') · note · who · when (+ age, decision / "Admin ka faisla baaki")
+function rvFlagLine(doc,S,x,admin){
+  const d=doc.day, age=rvDayDiff(x.day,d), a=rvAppOf(doc,x.app);
+  const fname=x.feature?rvFlab(doc,x.feature):"poori app";
+  let h='<b>'+(a?rvJumpBtn(doc,x.app):rvEsc(x.app_label||x.app))+" · "+rvEsc(fname)+"</b>"+
+    (x.note?' · <span class="rv-nt" style="display:inline">“'+rvEsc(x.note)+"”</span>":"")+
+    ' <div class="rv-meta">'+rvWho(x.raised_by)+" · "+rvEsc(rvWhen(x.raised_at))+(age>0&&(x.status==="open"||x.status==="kaam")?" · "+age+" din se khula":"")+
+    (a&&x.feature&&a.f&&a.f[x.feature]&&a.f[x.feature].t?" · card pe: "+rvEsc(a.f[x.feature].t):"")+"</div>";
+  if(x.decision) h+='<div class="rv-decd">🧑‍💼 Admin faisla: <b>'+rvEsc(RV_DEC[x.decision]||x.decision)+"</b>"+(x.dec_note?" — "+rvEsc(x.dec_note):"")+
+    (x.dec_by?" · "+rvWho(x.dec_by)+", "+rvEsc(rvWhen(x.dec_at)):"")+(x.status==="kaam"?" · <b>kaam chal raha</b>":"")+
+    (x.done_at?" · ✅ kaam ho gaya"+(x.done_note?" — "+rvEsc(x.done_note):"")+" ("+rvWho(x.done_by)+", "+rvEsc(rvWhen(x.done_at))+")":"")+"</div>";
+  else if(x.status==="withdrawn") h+='<div class="rv-meta">Hata diya'+(x.wd_by?" · "+rvWho(x.wd_by)+", "+rvEsc(rvWhen(x.wd_at)):"")+"</div>";
+  else if(x.status==="open"&&!admin) h+='<div class="rv-meta">Admin ka faisla baaki</div>';
+  if(admin&&(x.status==="open"||x.status==="kaam")){
+    const id=Number(x.id)||0;
+    h+='<div class="rv-dec">'+(x.status==="open"?
+      ["theek","kaam","band"].map(dc=>'<button type="button" class="rv-btn" data-rvdec="'+dc+'" data-fid="'+id+'" id="rv-dec-'+dc+"-"+id+'">'+rvEsc(RV_TXT["d_"+dc])+"</button>").join("")
+      : '<button type="button" class="rv-btn rv-ok" data-rvdec="done" data-fid="'+id+'" id="rv-dec-done-'+id+'">'+rvEsc(RV_TXT.d_done)+"</button>")+
+      '</div><div class="rv-dpanel" data-rvpanel="d:'+id+'"></div>'; }
+  return h; }
+function rvNotesHtml(S,key){ return (S.notes||[]).filter(n=>n.app===key).map(n=>'<div class="rv-nt">📝 '+rvEsc(n.text)+' <span class="rv-meta">— '+rvWho(n.who)+", "+rvEsc(rvWhen(n.at))+"</span></div>").join(""); }
+function rvSummaryHtml(doc,S,me){
+  S=rvS(S,doc&&doc.day); me=me||S.me||null;
+  const d=doc.day, apps=(doc.apps||[]).filter(a=>a&&a.key), n=apps.length, fx=doc.fx, li=h=>"<li>"+h+"</li>";
+  const cnt={pend:0,ok:0,note:0,kal:0,flag:0}; apps.forEach(a=>cnt[rvStOf(S,a.key)]++);
+  const done=n-cnt.pend, fsort=rvFlagSort(doc);
+  const todayFlags=S.flags.filter(x=>x.day===d&&x.status!=="withdrawn");
+  const notesApps=apps.filter(a=>S.notes.some(x=>x.app===a.key)).length;
+  let h='<section class="rv-blk"><div class="rv-bh"><h2>'+rvEsc(rvWd(d)+", "+rvFd(d))+'</h2><span class="rv-sub">Sab apps · kisne kab kya kiya, har line me</span></div><div class="rv-tiles">'+
+    '<div class="rv-tile"><div class="rv-tl">Reviewed · '+rvEsc(rvFd(d))+'</div><div class="rv-tv">'+done+" <small>/ "+n+"</small></div></div>"+
+    '<div class="rv-tile"><div class="rv-tl">'+rvEsc(RV_TXT.sum_imp)+'</div><div class="rv-tv">'+todayFlags.length+" <small>aaj · "+S.flags.filter(x=>x.status==="open").length+" khule</small></div></div>"+
+    '<div class="rv-tile"><div class="rv-tl">🔁 Kal dobara dekho</div><div class="rv-tv">'+cnt.kal+"</div></div>"+
+    '<div class="rv-tile"><div class="rv-tl">📝 Note ke saath</div><div class="rv-tv">'+notesApps+"</div></div>"+
+    '<div class="rv-tile"><div class="rv-tl">⏳ Baaki</div><div class="rv-tv">'+cnt.pend+"</div></div></div></section>";
+  const imps=S.flags.filter(x=>(x.day===d&&x.status!=="withdrawn")||x.status==="open"||x.status==="kaam").sort(fsort);
+  h+='<section class="rv-blk"><div class="rv-bh"><h2>'+rvEsc(RV_TXT.sum_imp)+'</h2><span class="rv-sub">Aaj ke + pichhle khule · har flag alag (poori app ya ek feature)</span></div><ul class="rv-sl">'+
+    (imps.length?imps.map(x=>li(rvFlagLine(doc,S,x,false))).join(""):li('<span class="rv-empty">Aaj koi 🚩 flag nahi laga</span>'))+"</ul></section>";
+  const kal=apps.filter(a=>rvStOf(S,a.key)==="kal");
+  h+='<section class="rv-blk"><div class="rv-bh"><h2>🔁 Kal dobara dekho</h2><span class="rv-sub">Khud ka reminder — admin ko nahi jaata</span></div><ul class="rv-sl">'+
+    (kal.length?kal.map(a=>{ const s=S.states[a.key]; return li(rvJumpBtn(doc,a.key)+'<div class="rv-meta">🔁 '+rvWho(s.who)+" · "+rvEsc(rvWhen(s.at))+"</div>"+rvNotesHtml(S,a.key)); }).join("")
+      :li('<span class="rv-empty">Kuch nahi</span>'))+"</ul></section>";
+  const na=apps.filter(a=>S.notes.some(x=>x.app===a.key));
+  h+='<section class="rv-blk"><div class="rv-bh"><h2>📝 Notes</h2><span class="rv-sub">Team ke liye</span></div><ul class="rv-sl">'+
+    (na.length?na.map(a=>li(rvJumpBtn(doc,a.key)+rvNotesHtml(S,a.key))).join(""):li('<span class="rv-empty">Aaj koi note nahi</span>'))+"</ul></section>";
+  const L=rvLayout(doc,S), order=L.top.concat(L.ok,L.small), A=rvAppMap(doc);
+  const pend=order.filter(k=>rvStOf(S,k)==="pend");
+  h+='<section class="rv-blk"><div class="rv-bh"><h2>⏳ Baaki ('+pend.length+')</h2><span class="rv-sub">Tap karo — card khulega</span></div><ul class="rv-sl">'+
+    li(pend.length?'<div class="rv-pills">'+pend.map(k=>'<button type="button" class="rv-pill rv-pend" data-rvjump="'+rvEsc(k)+'">⏳ '+rvEsc(A[k].name||k)+' <span class="rv-meta">· '+rvEsc(A[k].acct||"")+"</span></button>").join("")+"</div>"
+      :'<span class="rv-empty">Koi app baaki nahi ✅</span>')+"</ul></section>";
+  // app-wise: the frozen card, with the snoozes the reviewer saw (states[key].snz) as 💤
+  const HS=rvHistS(S,d);
+  h+='<section class="rv-blk"><div class="rv-bh"><h2>App-wise</h2><span class="rv-sub">Kholo — review ke waqt card pe kya dikha tha</span></div><ul class="rv-sl">'+order.map(k=>{
+    const a=A[k], st=rvStOf(S,k), s=S.states[k], feats=rvFeats(doc);
+    const badN=feats.filter(f=>{ const e=rvEffSt(doc,HS,k,f[0]); return e==="red"||e==="amber"; }).length;
+    const szN=feats.filter(f=>rvEffSt(doc,HS,k,f[0])==="snz").length;
+    const fg=S.flags.filter(x=>x.app===k&&x.day===d&&x.status!=="withdrawn");
+    const nts=S.notes.filter(x=>x.app===k), ln=nts.length?nts[nts.length-1].text:"";
+    return "<li><details><summary><span class=\"rv-ic\">"+rvEsc(rvStLabel(st).split(" ")[0])+'</span><span class="rv-an">'+rvEsc(a.name||k)+'</span><span class="rv-meta">· '+rvEsc(a.acct||"")+" · "+
+      rvEsc(rvStLabel(st).replace(/^\S+\s/,""))+" · "+(badN?badN+" baat dekhne layak":"sab theek")+(szN?" · 💤 "+szN+" pata hai":"")+(fg.length?" · 🚩 "+fg.length+" flag":"")+
+      (ln?" · 📝 “"+rvEsc(ln.slice(0,70))+(ln.length>70?"…":"")+"”":"")+"</span></summary>"+
+      '<div class="rv-meta" style="margin-top:6px">'+(s?rvWho(s.who)+" · "+rvEsc(rvWhen(s.at)):"abhi review nahi hua")+" · kya dikha tha (review ke waqt):</div><ul class=\"rv-snap\">"+
+      (fg.some(x=>!x.feature)?"<li><b>🚩 "+rvEsc(RV_TXT.poori)+'</b><span class="rv-meta">Re-review flag</span></li>':"")+
+      feats.map(f=>{ const x=(a.f&&a.f[f[0]])||{}, e=rvEffSt(doc,HS,k,f[0]), ff=fg.some(y=>y.feature===f[0]);
+        return '<li><span class="rv-fd '+rvEsc(e==="snz"?"normal":e)+'" aria-hidden="true"></span><b>'+rvEsc(f[1])+(ff?" 🚩":"")+'</b><span class="rv-meta">'+rvEsc(RV_STW[e]||"")+"</span><span>"+rvEsc(x.t||"")+"</span></li>"; }).join("")+
+      "</ul>"+rvNotesHtml(S,k)+'<p style="margin:8px 0 0"><button type="button" class="rv-jump" data-rvjump="'+rvEsc(k)+'">Card kholo →</button></p></details></li>'; }).join("")+"</ul></section>";
+  const sz=S.snoozes.slice().sort((p,q)=>(p.until<q.until?-1:1));
+  h+='<section class="rv-blk"><div class="rv-bh"><h2>💤 Pata hai (snooze)</h2><span class="rv-sub">Kitne din tak chhupa</span></div><ul class="rv-sl">'+
+    (sz.length?sz.map(z=>li((rvAppOf(doc,z.app)?rvJumpBtn(doc,z.app):rvEsc(z.app_label||z.app))+' <span class="rv-meta">· '+rvEsc(rvFlab(doc,z.feature))+" · "+rvEsc(rvFd(z.until))+" tak · "+
+      rvWho(z.who)+", "+rvEsc(rvWhen(z.at))+"</span>"+(z.note?'<div class="rv-nt">'+rvEsc(z.note)+"</div>":""))).join(""):li('<span class="rv-empty">Koi snooze nahi</span>'))+"</ul></section>";
+  if(me&&me.admin){
+    const op=S.flags.filter(x=>x.status==="open").sort((p,q)=>(p.raised_at<q.raised_at?-1:p.raised_at>q.raised_at?1:p.id-q.id));
+    const km=S.flags.filter(x=>x.status==="kaam").sort(fsort);
+    const cl=S.flags.filter(x=>x.status==="closed"&&rvDayDiff((x.done_at?rvDoneDay(x):rvDecDay(x))||x.day,d)<=14).sort(fsort);
+    h+='<section class="rv-blk rv-admin" aria-labelledby="rv-h-adm"><div class="rv-bh"><h2 id="rv-h-adm">🧑‍💼 Admin view — '+rvEsc(RV_TXT.adm_list)+" ("+op.length+' khule)</h2><span class="rv-sub">Har flag ka alag faisla + note</span></div>'+
+      '<p class="rv-hint" style="margin:0 0 8px">👍 Theek hai = koi kaam nahi, band · 🛠 Kaam do = kaam diya, card pe roz dikhega jab tak “kaam ho gaya” na ho · ⛔ Band karo = ad unit / campaign / rollout band karne ka faisla.</p>'+
+      "<h3>Khule ("+op.length+')</h3><ul class="rv-sl">'+(op.length?op.map(x=>li(rvFlagLine(doc,S,x,true))).join(""):li('<span class="rv-empty">Koi khula 🚩 nahi. Team jab kisi card pe “'+rvEsc(RV_TXT.b_imp)+"” lagayegi (poori app pe ya kisi ek feature pe), wo yahan aayega.</span>"))+"</ul>"+
+      "<h3>Kaam chal raha ("+km.length+')</h3><ul class="rv-sl">'+(km.length?km.map(x=>li(rvFlagLine(doc,S,x,true))).join(""):li('<span class="rv-empty">Kuch nahi</span>'))+"</ul>"+
+      "<details><summary>Band ("+cl.length+')</summary><ul class="rv-sl">'+(cl.length?cl.map(x=>li(rvFlagLine(doc,S,x,true))).join(""):li('<span class="rv-empty">Kuch nahi</span>'))+"</ul></details></section>"; }
+  return h; }
+function rvCalendarHtml(idx,cal,selDay){
+  if(!idx||!idx.go_live||!idx.open_day) return "";
+  const days=(cal&&cal.days)?cal.days:(cal||{}), snap={};
+  (idx.days||[]).forEach(x=>{ if(x&&x.d) snap[x.d]=Number(x.apps)||0; });
+  let from=idx.go_live, to=idx.open_day; if(to<from) return "";
+  const WD=["Som","Mangal","Budh","Guru","Shukra","Shani","Ravi"];
+  let out="", cur=from;
+  while(cur<=to){
+    const p=rvPd(cur), y=p.getUTCFullYear(), m=p.getUTCMonth();
+    out+='<div class="rv-month"><h3>'+RV_MONL[m]+" "+y+'</h3><div class="rv-cal" role="group" aria-label="'+RV_MONL[m]+" "+y+'">'+
+      WD.map(w=>'<div class="rv-wd" aria-hidden="true">'+w+"</div>").join("");
+    const lead=(p.getUTCDay()+6)%7; for(let i=0;i<lead;i++) out+='<div class="rv-day rv-blank" aria-hidden="true"></div>';
+    while(cur<=to&&rvPd(cur).getUTCMonth()===m){
+      const n=snap[cur]||0, c=days[cur], col=rvDayColor(n,c), rev=Math.min(Number(c&&c.rev)||0,n||Infinity);
+      const lab= col==="green"?"sab reviewed" : col==="amber"? rev+"/"+n : col==="red"?"baaki":"cards nahi bane";
+      const aria= col==="none"? cur+": cards nahi bane" : col==="red"? cur+": baaki" : cur+": "+rev+"/"+n+" reviewed";
+      out+='<button type="button" class="rv-day '+col+(cur===idx.open_day?" rv-today":"")+'" data-rvday="'+cur+'" id="rv-day-'+cur+'" aria-pressed="'+(selDay===cur)+'" aria-label="'+rvEsc(aria)+'">'+
+        '<span class="rv-dn2">'+rvPd(cur).getUTCDate()+'</span><span class="rv-ds">'+(cur===idx.open_day?"aaj · ":"")+rvEsc(lab)+"</span></button>";
+      cur=rvAddDays(cur,1); }
+    out+="</div></div>"; }
+  return out; }
+function rvLogLine(doc,x){
+  const e=x.extra&&typeof x.extra==="object"?x.extra:{};
+  let what=RV_ACT_LAB[x.act]||x.act;
+  if(x.act==="decide") what="🧑‍💼 Faisla: "+(RV_DEC[e.decision]||e.decision||"");
+  if(x.act==="snooze"&&e.days) what+=" "+e.days+" din";
+  const app=x.app?rvAppLabel(doc,x.app,x.app):"";
+  return '<li><span class="rv-meta">'+rvEsc(rvWhen(x.at))+"</span> "+rvWho(x.who)+" · "+rvEsc(what)+(app?" · "+rvEsc(app):"")+(x.feature?" · "+rvEsc(rvFlab(doc,x.feature)):"")+
+    (x.note?" · “"+rvEsc(x.note)+"”":"")+(e.admin_fix?' <span class="rv-meta">(admin sudhaar)</span>':"")+"</li>"; }
+
+// ---------------------------------------------------------------- runtime state (DOM side)
+const RV={root:null,idx:null,idxErr:null,idxAt:0,me:null,meErr:null,auth:true,doc:null,S:null,view:"today",histDay:null,
+  hdocs:{},hS:{},hAdmin:false,cal:null,calErr:false,loading:null,exp:{},first:true,pn:{},dirty:{},sumDirty:false,
+  lastShow:null,prevShow:null,focus:null,scrollY:null,pollT:null,idxT:null,newDay:null,toastT:null,busy:{},lastPend:null,
+  booted:false,err:null,syncT:null,
+  hash0:(typeof location!=="undefined"&&location&&location.hash)||""};   // the page's first hash: _navRestore's show() may replace it before rvBoot
+function rvCanWrite(){ return !!(RV.me&&RV.auth!==false&&RV.S&&RV.S.writable&&!RV.newDay); }   // (newDay: a newer snapshot opened — this day is closed)
+const RV_NEWDAY_MSG="Naye din ke cards aa gaye — upar “Kholo” dabao";
+function rvRoMsg(){ return RV.newDay?RV_NEWDAY_MSG:RV.auth===false?RV_TXT.auth_gone:RV_TXT.api_down; }
+// the server says a NEWER day is open than the one this page shows: stop writing to it (every click would land on a
+// closed day — for an admin silently as an "admin sudhaar") and offer the new day's cards
+function rvNewDay(od){ try{ if(!RV.doc) return; if(od&&!(String(od)>RV.doc.day)) return; if(RV.newDay&&(!od||RV.newDay===od)) return;
+    RV.newDay=od||RV.newDay||true; rvBanners(); rvUpdateAllRo(); }catch(e){} }
+// lvl: 0 = background (poll), 1 = the reader's own click (default), 2 = "ye raha summary". For 3 s a toast is only
+// replaced by one of the same or a higher level (a poll never hides a save / error message; a retry's ✅ always shows).
+function rvToast(msg,lvl){ try{ const t=document.getElementById("rv-toast"); if(!t) return; lvl=lvl==null?1:lvl;
+    if(RV.toastHold>Date.now()&&lvl<(RV.toastLvl||0)) return;
+    RV.toastHold=Date.now()+3000; RV.toastLvl=lvl; t.textContent=msg; clearTimeout(RV.toastT);
+    RV.toastT=setTimeout(()=>{ t.textContent=""; },3400); }catch(e){} }
+function rvFailMsg(r){ return RV_TXT.save_fail.replace("{msg}",String((r&&r.msg)||"Server me dikkat").replace(/[.。]+$/,"")); }
+async function rvApi(method,path,body){
+  let ctl=null, tm=null;
+  try{ ctl=typeof AbortController!=="undefined"?new AbortController():null; if(ctl) tm=setTimeout(()=>ctl.abort(),15000);
+    const r=await fetch("/api/review/"+path,{method,credentials:"same-origin",redirect:"manual",cache:"no-store",
+      headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined,signal:ctl?ctl.signal:undefined});
+    if(r.type==="opaqueredirect"||r.status===401) return {ok:false,err:"auth",status:401,msg:RV_TXT.auth_gone};
+    let j=null; try{ j=await r.json(); }catch(e){ j=null; }
+    if(!j||typeof j!=="object") return {ok:false,err:"net",status:r.status,msg:"Review server nahi mila"};
+    if(!r.ok) return {ok:false,err:j.error||("http_"+r.status),status:r.status,why:j.why||null,msg:j.msg||"Server me dikkat — thodi der baad try karo",data:j};
+    return {ok:true,data:j}; }
+  catch(e){ return {ok:false,err:"net",status:0,msg:(e&&e.name==="AbortError")?"Server ne jawab nahi diya":"Server se jud nahi paaye"}; }
+  finally{ if(tm) clearTimeout(tm); } }
+async function rvFetchIndex(){
+  try{ const r=await fetch("review/index.json?t="+Date.now(),{cache:"no-store"}); if(!r.ok) return {ok:false,status:r.status};
+    const j=await r.json(); return (j&&typeof j==="object")?{ok:true,idx:j}:{ok:false,status:0}; }
+  catch(e){ return {ok:false,status:0}; } }
+function rvDayFile(idx,d){ const x=((idx&&idx.days)||[]).find(y=>y&&y.d===d); const f=(x&&x.file)||("review/days/"+d+".json.gz");
+  return /^review\/days\/\d{4}-\d{2}-\d{2}\.json(\.gz)?$/.test(f)?f:"review/days/"+d+".json.gz"; }
+async function rvLoadDoc(d){ if(RV.hdocs[d]) return RV.hdocs[d];
+  const doc=await fetchGzJson(rvDayFile(RV.idx,d)+"?v="+encodeURIComponent(d)); if(!doc||!Array.isArray(doc.apps)) throw new Error("bad doc");
+  RV.hdocs[d]=doc; return doc; }
+// ---------------------------------------------------------------- lifecycle
+function renderReview(){
+  try{
+    if(!RV.root){ const s=document.createElement("section"); s.className="screen"; s.dataset.screen="review"; s.id="rv-root";
+      RV.root=s; rvWire(s); rvShell(); rvRenderAll(); }
+    rvPaint(RV.root);
+  }catch(e){ try{ if(!RV.root){ RV.root=document.createElement("section"); RV.root.className="screen"; RV.root.dataset.screen="review"; RV.root.id="rv-root"; } }catch(_){} }
+  return RV.root; }
+function rvPaint(root){ try{ (root||document).querySelectorAll(".rv-m").forEach(el=>{
+    el.textContent=rvMoney(parseFloat(el.getAttribute("data-usd")),el.getAttribute("data-s")||"",el.getAttribute("data-sign")==="1"?1:0,el.getAttribute("data-p")==="2"?2:0,el.getAttribute("data-fx")); }); }catch(e){} }
+function rvSaveFocus(){ try{ RV.focus=null; RV.scrollY=null; const r=RV.root; if(!r) return;
+    // render() always ends with show('overview') and the caller then re-shows Review: remember where the reader was
+    if(r.classList.contains("on")){ RV.scrollY=window.scrollY; RV.pendY={y:window.scrollY,t:Date.now()}; }
+    const a=document.activeElement; if(a&&a.id&&r.contains(a)){ let s=null,e=null; try{ s=a.selectionStart; e=a.selectionEnd; }catch(_){}
+      RV.focus={id:a.id,s,e}; } }catch(e){} }
+function rvRestoreFocus(){ try{ const f=RV.focus; RV.focus=null;
+    if(RV.scrollY!=null&&RV.root&&RV.root.classList.contains("on")&&Math.abs(window.scrollY-RV.scrollY)>1) window.scrollTo(0,RV.scrollY);
+    if(!f) return; const el=document.getElementById(f.id); if(!el) return;
+    try{ el.focus({preventScroll:true}); }catch(_){ el.focus(); }
+    if(f.s!=null&&el.setSelectionRange) try{ el.setSelectionRange(f.s,f.e); }catch(_){} }catch(e){} }
+function rvPendY(){ const p=RV.pendY; return (p&&Date.now()-p.t<2000)?p:null; }
+function rvKeepScroll(id){ return id==="review"&&(RV.lastShow==="review"||!!rvPendY()); }   // called by show() BEFORE rvOnShow
+function rvOnShow(id){ try{
+    document.body.setAttribute("data-screen",id); RV.prevShow=RV.lastShow; RV.lastShow=id;
+    if(id==="review"){ const p=rvPendY(); RV.pendY=null; if(p&&Math.abs(window.scrollY-p.y)>1) window.scrollTo(0,p.y); rvSetHash(); rvPollStart(); }
+    else { rvPollStop(); if(RV.booted&&String(location.hash||"").indexOf("#review")===0) history.replaceState(null,"",location.pathname+location.search); }
+  }catch(e){} }
+function rvParseHash(h){ const m=/^#review(?:\/(summary|history)(?:\/(\d{4}-\d{2}-\d{2}))?)?\/?$/.exec(String(h||""));
+  if(!m) return null; return {view:m[1]==="summary"?"sum":m[1]==="history"?"hist":"today",day:m[2]||null}; }
+function rvHashFor(){ return "#review"+(RV.view==="sum"?"/summary":RV.view==="hist"?"/history"+(RV.histDay?"/"+RV.histDay:""):""); }
+function rvSetHash(){ try{ const h=rvHashFor(); if(location.hash!==h) history.replaceState(null,"",location.pathname+location.search+h); }catch(e){} }
+function rvBoot(){ try{
+    if(RV.booted) return; RV.booted=true;
+    const h=rvParseHash(RV.hash0||location.hash); RV.hash0="";
+    if(h){ RV.view=h.view; RV.histDay=h.day; show("review"); }
+    window.addEventListener("hashchange",()=>{ try{ const x=rvParseHash(location.hash); if(!x) return;
+      RV.histDay=x.day||RV.histDay; if(RV.lastShow!=="review") { RV.view=x.view; show("review"); } else rvSwitch(x.view,false); }catch(e){} });
+    document.addEventListener("visibilitychange",()=>{ try{ if(document.visibilityState==="visible"&&RV.lastShow==="review") rvPoll(); }catch(e){} });
+    setTimeout(()=>{ rvBadge(); },3000);
+  }catch(e){} }
+// lazy load: index → /me → the open day's doc → GET day (nothing before the first open, except the badge)
+function rvEnsure(){ try{
+    if(RV.loading) return RV.loading;
+    const recent=Date.now()-RV.idxAt<60000;
+    if(RV.idx&&RV.doc&&RV.S&&RV.me&&!RV.meErr) return Promise.resolve();          // loaded: polling keeps it fresh
+    if(recent&&((RV.idxErr&&RV.idxErr!=="fail")||RV.meErr||RV.err)) return Promise.resolve();   // a failed try ≤ 60 s ago: wait (or "Phir koshish karo"); a failed index load retries on every open
+    RV.loading=rvLoad().catch(()=>{}).finally(()=>{ RV.loading=null; }); return RV.loading;
+  }catch(e){ return Promise.resolve(); } }
+async function rvLoad(){
+  RV.idxAt=Date.now();
+  if(!RV.idx||!RV.doc){ RV.err=null; rvRenderAll(); }
+  const ir=await rvFetchIndex();
+  if(!ir.ok||!ir.idx||!Array.isArray(ir.idx.days)||!ir.idx.days.length||!ir.idx.open_day){ RV.idx=ir.ok?ir.idx:null;
+    // only a real 404 / an empty list means "not started"; a network error, a login redirect or a 5xx is a load failure
+    RV.idxErr=ir.ok?"empty":ir.status===404?"missing":"fail"; RV.doc=null; rvRenderAll(); rvBadgeSet(null); return; }
+  RV.idx=ir.idx; RV.idxErr=null;
+  const od=RV.idx.open_day;
+  const [mr,doc]=await Promise.all([rvApi("GET","me"), rvLoadDoc(od).catch(()=>null)]);
+  if(mr.ok){ RV.me=mr.data; RV.meErr=null; RV.auth=true; } else { RV.me=null; RV.meErr=mr.err==="auth"?"auth":"down"; if(mr.err==="auth") RV.auth=false; }
+  if(!doc){ RV.err="doc"; RV.doc=null; rvRenderAll(); return; }
+  RV.doc=doc; RV.err=null;
+  if(RV.me){ const dr=await rvApi("GET","day?d="+encodeURIComponent(od));
+    if(dr.ok){ rvSetS(dr.data); if(dr.data.open_day&&dr.data.open_day>od) RV.newDay=dr.data.open_day; } else { if(dr.err==="auth"){ RV.auth=false; RV.meErr="auth"; } else RV.meErr="down"; RV.S=null; } }
+  if(!RV.S||RV.S.d!==od) RV.S={...rvEmptyS(od),open_day:od,me:RV.me};
+  RV.lastPend=rvPendCount();
+  rvRenderAll();
+  if(RV.view==="hist") rvHistEnter(); }
+function rvSetS(data){ const od=RV.idx?RV.idx.open_day:null; RV.S={...rvS(data,data.d),open_day:data.open_day||od,me:RV.me}; }
+function rvPendCount(){ if(!RV.doc||!RV.S) return null; return RV.doc.apps.filter(a=>a&&a.key&&rvStOf(RV.S,a.key)==="pend").length; }
+function rvReload(){ RV.idx=null; RV.doc=null; RV.S=null; RV.me=null; RV.meErr=null; RV.idxErr=null; RV.hdocs={}; RV.hS={}; RV.cal=null; RV.newDay=null;
+  RV.pn={}; RV.dirty={}; RV.exp={}; RV.first=true; RV.idxAt=0; RV.lastPend=null; rvEnsure(); }
+// ---------------------------------------------------------------- DOM shell + views
+function rvShell(){ const r=RV.root;
+  r.innerHTML='<div class="rv-head"><h2 class="rv-h">'+rvEsc(RV_TXT.title)+' <span class="rv-d" id="rv-hd"></span></h2>'+
+    '<div class="rv-prog" aria-live="polite" id="rv-prog" hidden><span class="rv-pbar" aria-hidden="true"><i id="rv-pb"></i></span><span id="rv-pt"></span></div></div>'+
+    '<div class="rv-tabs" role="tablist" aria-label="Review views">'+
+    '<button type="button" role="tab" id="rv-tb-today" data-rvtab="today" aria-controls="rv-v-today" aria-selected="true">'+rvEsc(RV_TXT.tab_today)+'<span class="rv-cnt" id="rv-tc-today"></span></button>'+
+    '<button type="button" role="tab" id="rv-tb-sum" data-rvtab="sum" aria-controls="rv-v-sum" aria-selected="false" tabindex="-1">'+rvEsc(RV_TXT.tab_sum)+'<span class="rv-cnt" id="rv-tc-sum"></span></button>'+
+    '<button type="button" role="tab" id="rv-tb-hist" data-rvtab="hist" aria-controls="rv-v-hist" aria-selected="false" tabindex="-1">'+rvEsc(RV_TXT.tab_hist)+"</button></div>"+
+    '<div id="rv-bans"></div>'+
+    '<div id="rv-v-today" role="tabpanel" aria-labelledby="rv-tb-today"></div>'+
+    '<div id="rv-v-sum" role="tabpanel" aria-labelledby="rv-tb-sum" hidden></div>'+
+    '<div id="rv-v-hist" role="tabpanel" aria-labelledby="rv-tb-hist" hidden></div>'+
+    '<div class="rv-toast" id="rv-toast" role="status" aria-live="polite"></div>'; }
+function rvQ(sel){ return RV.root?RV.root.querySelector(sel):null; }
+function rvRenderAll(){ try{
+    if(!RV.root) return;
+    rvTabsSync(); rvBanners();
+    const tv=rvQ("#rv-v-today"); if(!tv) return;
+    if(!RV.idx&&!RV.idxErr){ tv.innerHTML='<div class="rv-state"><p>⏳ Review load ho raha hai…</p></div>'; rvQ("#rv-v-sum").innerHTML=""; rvQ("#rv-v-hist").innerHTML=""; rvHead(); return; }
+    if(RV.idxErr==="fail"){ const st='<div class="rv-state"><h2>Review load nahi ho paaya</h2><p>Net ya login check karo — login session khatam ho gaya ho to page reload karo.</p>'+
+        '<p><button type="button" class="rv-btn" data-rvcmd="retry">Phir koshish karo</button> <button type="button" class="rv-btn" data-rvcmd="reload">Reload</button></p></div>';
+      tv.innerHTML=st; rvQ("#rv-v-sum").innerHTML=st; rvQ("#rv-v-hist").innerHTML=st; rvHead(); return; }
+    if(RV.idxErr){ const rdy=(RV.idx&&RV.idx.ready_ist)||"09:00";
+      const st='<div class="rv-state"><h2>'+rvEsc(RV_TXT.not_started)+"</h2><p>Pehle din ke cards "+rvEsc(rdy)+" IST ke baad robot banayega (aam taur pe ~10 baje tak).</p></div>";
+      tv.innerHTML=st; rvQ("#rv-v-sum").innerHTML=st; rvQ("#rv-v-hist").innerHTML=st; rvHead(); return; }
+    if(RV.err==="doc"||!RV.doc){ const st='<div class="rv-state"><h2>Cards load nahi ho paaye</h2><p>Aaj ke review cards ki file nahi mili. Thodi der baad dobara kholo.</p>'+
+        '<p><button type="button" class="rv-btn" data-rvcmd="retry">Phir koshish karo</button></p></div>';
+      tv.innerHTML=st; rvQ("#rv-v-sum").innerHTML=st; rvQ("#rv-v-hist").innerHTML=""; rvHead(); return; }
+    rvRenderToday(); rvRenderSum(); if(RV.view==="hist") rvRenderHist(); rvHead(); rvBadgeFromState();
+  }catch(e){ rvCrash(e); } }
+function rvCrash(e){ try{ const tv=rvQ("#rv-v-today"); if(tv) tv.innerHTML='<div class="rv-state"><h2>Review dikhane me dikkat</h2><p>Baaki dashboard theek chal raha hai. Page reload karke dekho.</p></div>'; }catch(_){} }
+function rvHead(){ const hd=rvQ("#rv-hd"), pg=rvQ("#rv-prog");
+  if(RV.doc){ hd.textContent="· "+(RV.doc.weekday||rvWd(RV.doc.day))+", "+rvFd(RV.doc.day);
+    const n=RV.doc.apps.length, p=rvPendCount(), done=n-(p||0);
+    pg.hidden=false; rvQ("#rv-pt").textContent=done+"/"+n+" reviewed"; rvQ("#rv-pb").style.width=(n?done/n*100:0)+"%";
+    rvQ("#rv-tc-today").textContent=p?p+" baaki":"✓";
+    const of=RV.S?RV.S.flags.filter(x=>x.status==="open").length:0; rvQ("#rv-tc-sum").textContent=of?of+" 🚩":""; }
+  else { hd.textContent=""; pg.hidden=true; rvQ("#rv-tc-today").textContent=""; rvQ("#rv-tc-sum").textContent=""; } }
+function rvTabsSync(){ ["today","sum","hist"].forEach(v=>{ const b=rvQ("#rv-tb-"+v), p=rvQ("#rv-v-"+v); if(!b||!p) return; const on=RV.view===v;
+  b.setAttribute("aria-selected",on?"true":"false"); b.tabIndex=on?0:-1; p.hidden=!on; }); }
+function rvSwitch(v,focusTab){ if(["today","sum","hist"].indexOf(v)<0) v="today"; RV.view=v; rvTabsSync(); rvSetHash();
+  if(v==="sum"&&RV.sumDirty) rvRenderSum(); if(v==="hist") rvHistEnter();
+  if(focusTab){ const b=rvQ("#rv-tb-"+v); if(b) b.focus(); } }
+function rvBanners(){ const b=rvQ("#rv-bans"); if(!b) return; const out=[], I=RV.idx;
+  if(RV.auth===false||RV.meErr==="auth") out.push('<div class="rv-ban bad" role="alert"><span><b>'+rvEsc(RV_TXT.auth_gone)+'</b></span><button type="button" class="rv-btn" data-rvcmd="reload">Reload</button></div>');
+  else if(RV.meErr==="down"&&RV.doc) out.push('<div class="rv-ban warn" role="status"><span>'+rvEsc(RV_TXT.api_down)+'</span><button type="button" class="rv-btn" data-rvcmd="retry">Phir koshish karo</button></div>');
+  if(I&&RV.doc){
+    const od=I.open_day, nowIst=rvIstDay(new Date().toISOString());
+    if(RV.newDay) out.push('<div class="rv-ban info" role="status"><span><b>Naye din'+(typeof RV.newDay==="string"?" ("+rvEsc(rvFd(RV.newDay))+")":"")+
+      " ke cards aa gaye</b> — "+rvEsc(rvFd(RV.doc.day))+" ka review band ho gaya, yahan ab click save nahi hoga.</span>"+
+      '<button type="button" class="rv-btn rv-pri" data-rvcmd="newday">Kholo</button></div>');
+    if(I.retry) out.push('<div class="rv-ban info"><span>Aaj ke cards abhi nahi bane — robot agle run me phir koshish karega. Tab tak '+rvEsc(rvFd(od))+" ka review khula hai.</span></div>");
+    else if(I.pending_today) out.push('<div class="rv-ban info"><span>Aaj ('+rvEsc(rvFd(I.today_ist))+") ke cards "+rvEsc(I.ready_ist||"09:00")+" IST ke baad pehle robot run pe aayenge (aam taur pe ~10 baje tak). Tab tak "+rvEsc(rvFd(od))+" ka review khula hai.</span></div>");
+    const age=od&&nowIst?rvDayDiff(od,nowIst):0;
+    if(age>=2) out.push('<div class="rv-ban warn"><span>Naye cards '+age+" din se nahi bane — robot check karo. Aakhri cards "+rvEsc(rvFd(od))+" ke.</span></div>");
+    if(RV.me&&RV.S&&!RV.S.writable&&RV.auth!==false&&!RV.newDay) out.push('<div class="rv-ban warn"><span>Ye din band ho chuka — sirf admin sudhaar kar sakta hai.</span></div>'); }
+  b.innerHTML=out.join(""); }
+function rvStripHtml(doc){ const D=doc.data||{}, s=[];
+  if(D.admob_till) s.push("<span>Kamai: <b>"+rvEsc(rvFd(D.admob_till))+" tak</b></span>");
+  if(D.ga4_till) s.push("<span>Users &amp; uninstall: <b>"+rvEsc(rvFd(D.ga4_till))+" tak</b>"+(D.ga4_lag!=null?" (Google "+rvEsc(D.ga4_lag)+" din baad deta hai)":"")+"</span>");
+  if(D.settled_till) s.push("<span>Pakka: <b>"+rvEsc(rvFd(D.settled_till))+" tak</b></span>");
+  return s.length?'<div class="rv-strip">'+s.join("")+"</div>":""; }
+function rvLegendHtml(doc){
+  const keys=[["red","🔴 Bigda"],["amber","🟡 Dhyan do"],["green","🟢 Behtar"],["normal","⚪ Normal"],["wait","⏳ Abhi jaldi"],["na","— Lagu nahi"],["nodata","data nahi"]];
+  return '<details class="rv-legend"><summary>Golon ka matlab</summary><div class="rv-keys">'+keys.map(k=>'<span><span class="rv-fd '+k[0]+'" aria-hidden="true"></span>'+k[1]+"</span>").join("")+"</div>"+
+    "<ul>"+rvFeats(doc).map(f=>"<li>"+rvEsc(RV_FEAT_LONG[f[0]]||f[1])+"</li>").join("")+"</ul>"+
+    '<p class="rv-hint">Sirf 🔴/🟡 wale feature card me khulte hain — har ek me 5 sawaal: kya hua · kab se · kitna bada · naya ya purana · kya karo. “Detail →” me chart aur baaki baatein.</p>'+
+    '<p class="rv-hint">🚩 = Important · Re-review: admin dobara dekhega, faisla hone tak card upar focus me rahega. Poori app ke liye card ke niche wala “'+rvEsc(RV_TXT.b_imp)+
+    "” button; sirf ek baat ke liye us feature ke aage wala chhota 🚩 (golon me bhi 🚩 dikhega). 🔁 Kal dobara dekho = sirf aapka kal ka reminder, admin ko nahi jaata.</p></details>"; }
+// "Aaj ka review": full build once per doc; afterwards cards are patched / moved in place
+function rvRenderToday(){ const tv=rvQ("#rv-v-today"), doc=RV.doc, S=RV.S; if(!tv||!doc) return;
+  const L=rvLayout(doc,S);
+  if(RV.first){ RV.first=false; let n=0, E=(doc.consts&&Number(doc.consts.expand_top))||3;
+    L.top.forEach(k=>{ const o=n<E&&rvStOf(S,k)==="pend"; if(o) n++; RV.exp[k]=o; }); }
+  const nb=L.top.filter(k=>rvNewBad(doc,S,k)).length, n=doc.apps.length;
+  tv.innerHTML=rvStripHtml(doc)+'<div class="rv-donebar" id="rv-donebar" hidden><span>✅ Aaj ke saare '+n+' apps review ho gaye</span><button type="button" class="rv-btn rv-sm" data-rvtab="sum">Summary dekho →</button></div>'+
+    '<p class="rv-lead" id="rv-lead"></p>'+rvLegendHtml(doc)+
+    '<section class="rv-blk" aria-labelledby="rv-h-top"><div class="rv-bh"><h2 id="rv-h-top">Dekhne layak apps</h2><span class="rv-sub">Har app alag · kamai (7 din ka avg) ke hisaab se · naya+bigda sabse upar</span></div>'+
+    '<div class="rv-cards" id="rv-list-top"></div><p class="rv-hint" id="rv-top-empty" hidden>Aaj kisi badi app me 🔴/🟡 nahi.</p></section>'+
+    '<section class="rv-blk rv-grp" id="rv-grp-ok" aria-labelledby="rv-h-ok"><div class="rv-grph"><h2 id="rv-h-ok">Sab theek <span class="rv-sub">— koi 🔴/🟡 nahi (sirf normal / achhi khabar)</span></h2>'+
+    '<button type="button" class="rv-btn rv-ok" id="rv-all-ok" data-rvbulk="ok">'+rvEsc(RV_TXT.b_all)+'</button></div><div class="rv-gpanel" data-rvpanel="g:ok"></div><div class="rv-cards" id="rv-list-ok"></div></section>'+
+    '<section class="rv-blk rv-grp" id="rv-grp-small" aria-labelledby="rv-h-small"><div class="rv-grph"><h2 id="rv-h-small">Chhoti apps <span class="rv-sub" id="rv-small-sub"></span></h2>'+
+    '<button type="button" class="rv-btn rv-ok" id="rv-all-small" data-rvbulk="small">'+rvEsc(RV_TXT.b_all)+'</button></div><div class="rv-gpanel" data-rvpanel="g:small"></div>'+
+    '<p class="rv-hint" style="margin:6px 0 0">Kamai + ads kharcha '+rvMSpan({usd:(doc.consts&&doc.consts.small_usd)||30,s:"/din",sign:0,p:0},doc.fx)+' se kam wale apps. Inke 🔴 bhi yahin dikhte hain, upar nahi aate.</p>'+
+    '<div class="rv-cards" id="rv-list-small"></div></section>'+
+    '<details class="rv-how"><summary>Ye page kaise bana</summary><ol>'+(doc.how||[]).map(x=>"<li>"+rvRt(x,doc.fx)+"</li>").join("")+"</ol></details>";
+  const put=(id,keys,top)=>{ const box=rvQ(id); box.innerHTML=keys.map((k,i)=>rvCardHtml(doc,S,k,"live",{rank:top?i+1:null,open:!!RV.exp[k],ro:!rvCanWrite()})).join(""); keys.forEach(k=>rvRestorePanels("t",k)); };
+  put("#rv-list-top",L.top,true); put("#rv-list-ok",L.ok,false); put("#rv-list-small",L.small,false);
+  ["g:ok","g:small"].forEach(id=>{ if(RV.pn[id]) rvPanelFill(id); });
+  RV.dirty={};
+  rvTodayChrome(L,nb); }
+function rvTodayChrome(L,nb){ const doc=RV.doc, S=RV.S; if(!doc||!rvQ("#rv-list-top")) return rvHead(); L=L||rvLayout(doc,S);
+  if(nb==null) nb=L.top.filter(k=>rvNewBad(doc,S,k)).length;
+  const lead=rvQ("#rv-lead"); if(lead) lead.innerHTML="<b>"+L.top.length+" apps</b> me kuch dekhne layak hai (kamai ke hisaab se line me"+(nb?"; "+nb+" naye aur bigde upar":"")+") · <b>"+
+    L.ok.length+"</b> sab theek · <b>"+L.small.length+"</b> chhoti apps. Har card: upar kal ki kamai vs usual, phir 10 golon me har feature.";
+  rvQ("#rv-top-empty").hidden=!!L.top.length; rvQ("#rv-grp-ok").hidden=!L.ok.length; rvQ("#rv-grp-small").hidden=!L.small.length;
+  const sbad=L.small.filter(k=>rvIsAttn(doc,S,k)).length, ssum=L.small.reduce((s,k)=>s+(Number(rvAppOf(doc,k).k7)||0),0);
+  rvQ("#rv-small-sub").innerHTML="— sab milakar "+rvMSpan({usd:ssum,s:"/din",sign:0,p:0},doc.fx)+" · "+sbad+" me kuch bigda";
+  [["ok",L.ok],["small",L.small]].forEach(g=>{ const pend=g[1].filter(k=>rvStOf(S,k)==="pend").length, b=rvQ("#rv-all-"+g[0]); if(!b) return;
+    b.disabled=!pend||!rvCanWrite(); b.textContent=pend?RV_TXT.b_all+" ("+pend+" baaki)":"✅ Sab reviewed ho gaye"; });
+  const p=rvPendCount(); rvQ("#rv-donebar").hidden=!(p===0);
+  rvHead(); rvBadgeFromState(); }
+// re-render some cards (null = all) and re-place every card in its group; a card with an open panel waits (dirty)
+function rvUpdateToday(keys,force){ const doc=RV.doc, S=RV.S; if(!doc||!rvQ("#rv-list-top")) return rvRenderAll();
+  const L=rvLayout(doc,S), ro=!rvCanWrite();
+  (keys||doc.apps.map(a=>a.key)).forEach(k=>{ const el=document.getElementById("rv-t-c-"+k); if(!el) return;
+    if(!force&&rvHasPanel("t",k)){ RV.dirty[k]=1; return; }
+    const i=L.top.indexOf(k), tmp=document.createElement("div");
+    tmp.innerHTML=rvCardHtml(doc,S,k,"live",{rank:i>=0?i+1:null,open:!!RV.exp[k],ro});
+    const nu=tmp.firstElementChild; if(nu){ el.replaceWith(nu); rvRestorePanels("t",k); delete RV.dirty[k]; } });
+  const place=(id,arr,top)=>{ const box=rvQ(id); arr.forEach((k,i)=>{ const c=document.getElementById("rv-t-c-"+k); if(!c) return;
+    if(box.children[i]!==c) box.insertBefore(c,box.children[i]||null); const rk=c.querySelector("[data-rk]"); if(rk) rk.textContent=top?"#"+(i+1):""; }); };
+  place("#rv-list-top",L.top,true); place("#rv-list-ok",L.ok,false); place("#rv-list-small",L.small,false);
+  rvTodayChrome(L); rvPaint(rvQ("#rv-v-today")); }
+function rvRenderSum(){ const sv=rvQ("#rv-v-sum"); if(!sv||!RV.doc) return;
+  if(Object.keys(RV.pn).some(id=>id.indexOf("d:")===0)&&sv.contains(document.activeElement)){ RV.sumDirty=true; return; }
+  const p=rvPendCount();
+  sv.innerHTML=(p===0?'<div class="rv-donebar"><span>✅ Aaj ka review pura — ye raha summary</span></div>':"")+rvSummaryHtml(RV.doc,RV.S,RV.me);
+  Object.keys(RV.pn).filter(id=>id.indexOf("d:")===0).forEach(id=>rvPanelFill(id));
+  RV.sumDirty=false; rvPaint(sv); }
+// ---------------------------------------------------------------- History
+async function rvHistEnter(){ try{
+    const hv=rvQ("#rv-v-hist"); if(!hv||!RV.idx||RV.idxErr||!RV.doc) return;
+    rvRenderHist();
+    if(RV.me&&RV.idx.go_live&&RV.idx.open_day){ const cr=await rvApi("GET","calendar?from="+RV.idx.go_live+"&to="+RV.idx.open_day);
+      if(cr.ok){ RV.cal=cr.data; RV.calErr=false; } else RV.calErr=true; rvRenderHist(); }
+    const d=RV.histDay||RV.idx.open_day; if(d) rvHistPick(d,true);
+  }catch(e){} }
+function rvRenderHist(){ const hv=rvQ("#rv-v-hist"); if(!hv||!RV.idx) return; const I=RV.idx;
+  let cal=RV.cal;
+  if(RV.S&&I.open_day){ cal={days:{...((cal&&cal.days)||{})}}; const od=I.open_day, n=Object.keys(RV.S.states).length;   // the open day: live
+    cal.days[od]={...(cal.days[od]||{}),rev:n}; }
+  const keep=rvQ("#rv-dayp");
+  hv.innerHTML='<section class="rv-blk"><div class="rv-bh"><h2>Rozana review · '+rvEsc(rvFd(I.go_live))+"–"+rvEsc(rvFd(I.open_day))+'</h2><span class="rv-sub">Kisi din pe tap karo</span></div>'+
+    '<p class="rv-hint">History '+rvEsc(rvFd(I.go_live))+" se shuru hui (jab review chalu hua).</p>"+
+    '<div class="rv-hleg"><span><span class="rv-sq green"></span>sab reviewed</span><span><span class="rv-sq amber"></span>aadha</span><span><span class="rv-sq red"></span>baaki (review nahi hua)</span><span><span class="rv-sq none"></span>cards nahi bane</span></div>'+
+    (RV.calErr||(!RV.me&&!RV.cal)?'<p class="rv-hint">Pichhle dino ki ginti abhi nahi mili (review server) — din pe tap karke cards dekh sakte ho.</p>':"")+
+    rvCalendarHtml(I,cal,RV.histDay||I.open_day)+'<div class="rv-dayp" id="rv-dayp"></div></section>';
+  if(keep&&keep.innerHTML){ const nd=rvQ("#rv-dayp"); nd.replaceWith(keep); } }
+async function rvHistPick(d,quiet){ try{
+    if(!RV.idx) return; RV.histDay=d; rvSetHash();
+    RV.root.querySelectorAll(".rv-day[data-rvday]").forEach(b=>b.setAttribute("aria-pressed",b.getAttribute("data-rvday")===d?"true":"false"));
+    const box=rvQ("#rv-dayp"); if(!box) return;
+    const inIdx=(RV.idx.days||[]).some(x=>x.d===d);
+    if(!inIdx){ box.innerHTML='<h3 style="font-size:16px">'+rvEsc(rvWd(d)+", "+rvFd(d))+'</h3><p class="rv-hint">Is din ke cards nahi bane (robot ne us din snapshot nahi banaya).</p>'; return; }
+    box.innerHTML='<p class="rv-hint">⏳ '+rvEsc(rvFd(d))+" ke cards load ho rahe hain…</p>";
+    const doc=await rvLoadDoc(d).catch(()=>null);
+    if(!doc){ box.innerHTML='<p class="rv-hint">Is din ke cards load nahi ho paaye. Thodi der baad dobara try karo.</p>'; return; }
+    let S=null;
+    if(RV.me){ const r=await rvApi("GET","day?d="+encodeURIComponent(d)); if(r.ok) S={...rvS(r.data,d),me:RV.me}; }
+    RV.hS[d]=S||{...rvEmptyS(d),me:RV.me};
+    if(RV.histDay!==d) return;
+    rvRenderHistDay(d,!quiet);
+  }catch(e){ const box=rvQ("#rv-dayp"); if(box) box.innerHTML='<p class="rv-hint">Is din ko dikhane me dikkat hui.</p>'; } }
+function rvRenderHistDay(d,focus){ const box=rvQ("#rv-dayp"), doc=RV.hdocs[d], S=RV.hS[d]; if(!box||!doc||!S) return;
+  const apps=doc.apps.filter(a=>a&&a.key), n=apps.length, x=apps.filter(a=>rvStOf(S,a.key)!=="pend").length;
+  const past=d<(RV.idx.open_day||""), adm=!!(RV.me&&RV.me.admin&&past&&RV.auth!==false);
+  const mode=(adm&&RV.hAdmin)?"history_admin":"history";
+  const ord=(doc.order&&(doc.order.top||[]).concat(doc.order.ok||[],doc.order.small||[]))||[], seen={};
+  const keys=ord.filter(k=>{ if(seen[k]||!rvAppOf(doc,k)) return false; seen[k]=1; return true; }).concat(apps.map(a=>a.key).filter(k=>!seen[k]));
+  const pend=keys.filter(k=>rvStOf(S,k)==="pend");
+  box.innerHTML='<h3 style="font-size:16px" tabindex="-1" id="rv-dayh">'+rvEsc((doc.weekday||rvWd(d))+", "+rvFd(d))+" · "+x+"/"+n+" reviewed</h3>"+
+    (x<n?'<p class="rv-red">'+rvEsc(RV_TXT.hist_red)+"</p>":"")+
+    (d===RV.idx.open_day?'<p style="margin:8px 0 0"><button type="button" class="rv-btn rv-sm" data-rvtab="today">Aaj ka review kholo →</button></p>':"")+
+    (adm?'<p style="margin:8px 0 0"><button type="button" class="rv-btn rv-sm" data-rvcmd="hadmin" aria-pressed="'+(mode==="history_admin")+'">✏️ Admin: is din me sudhaar karo</button></p>':"")+
+    (mode==="history_admin"&&pend.length?'<p style="margin:8px 0 0"><button type="button" class="rv-btn rv-ok rv-sm" data-rvbulk="hist" id="rv-all-hist">'+rvEsc(RV_TXT.b_all)+" ("+pend.length+' baaki)</button></p><div class="rv-gpanel" data-rvpanel="g:hist"></div>':"")+
+    '<h4 class="rv-mh">Kisne kya kiya</h4><ul class="rv-hlog">'+((S.log||[]).length?S.log.map(y=>rvLogLine(doc,y)).join(""):'<li class="rv-empty">Is din koi click nahi hua</li>')+"</ul>"+
+    '<div class="rv-cards">'+keys.map(k=>rvCardHtml(doc,S,k,mode,{open:false,ro:mode==="history_admin"&&!(S.writable&&RV.auth!==false)})).join("")+"</div>";
+  keys.forEach(k=>rvRestorePanels("h",k)); if(RV.pn["g:hist"]) rvPanelFill("g:hist");
+  rvPaint(box);
+  if(focus){ const h=rvQ("#rv-dayh"); if(h) try{ h.focus({preventScroll:true}); }catch(_){} } }
+// ---------------------------------------------------------------- badge (nav + bottom bar)
+function rvBadgeSet(n,red){ try{ [["nav-review",false],["tab-review",true]].forEach(([id,tb])=>{ const el=document.getElementById(id); if(!el) return;
+    if(!n){ el.textContent=""; if(tb) el.classList.remove("on"); else el.hidden=true; return; }
+    el.textContent=n; el.classList.toggle("rv-n",!red); if(tb) el.classList.add("on"); else el.hidden=false; }); }catch(e){} }
+function rvBadgeFromState(){ try{ if(!RV.doc||!RV.S||!RV.me) { if(!RV.doc) rvBadgeSet(null); return; }
+    const L=rvLayout(RV.doc,RV.S), p=RV.doc.apps.filter(a=>rvStOf(RV.S,a.key)==="pend");
+    rvBadgeSet(p.length, p.some(a=>L.top.indexOf(a.key)>=0)); }catch(e){} }
+async function rvBadge(){ try{ if(RV.doc&&RV.S) return rvBadgeFromState(); if(RV.loading) return;
+    const ir=await rvFetchIndex(); if(!ir.ok||!ir.idx||!ir.idx.open_day) return;
+    if(!RV.idx){ RV.idx=ir.idx; RV.idxErr=null; RV.idxAt=Date.now(); }
+    const od=RV.idx.open_day, [mr,doc]=await Promise.all([rvApi("GET","me"),rvLoadDoc(od).catch(()=>null)]);
+    if(!mr.ok||!doc) return; if(!RV.me){ RV.me=mr.data; RV.meErr=null; }
+    const dr=await rvApi("GET","day?d="+encodeURIComponent(od)); if(!dr.ok) return;
+    if(!RV.doc){ RV.doc=doc; } if(!RV.S) rvSetS(dr.data);
+    RV.lastPend=rvPendCount(); rvBadgeFromState(); rvRenderAll(); }catch(e){} }
+// ---------------------------------------------------------------- polling (60 s day state · 10 min index)
+function rvPollStart(){ try{ if(!RV.pollT) RV.pollT=setInterval(()=>{ rvPoll(); },60000); if(!RV.idxT) RV.idxT=setInterval(()=>{ rvPollIndex(); },600000); }catch(e){} }
+function rvPollStop(){ try{ clearInterval(RV.pollT); clearInterval(RV.idxT); RV.pollT=null; RV.idxT=null; }catch(e){} }
+function rvSig(S,k){ return JSON.stringify([S.states[k]||null,(S.notes||[]).filter(x=>x.app===k).map(x=>[x.id,x.text]),
+  (S.flags||[]).filter(x=>x.app===k).map(x=>[x.id,x.status,x.decision,x.done_at,x.note]),(S.snoozes||[]).filter(x=>x.app===k).map(x=>[x.id,x.until]),
+  !!(S.prev&&(S.prev.kal||[]).indexOf(k)>=0)]); }
+async function rvPoll(){ try{
+    if(RV.polling||!RV.doc||!RV.me||RV.auth===false||document.visibilityState!=="visible"||RV.lastShow!=="review") return;
+    RV.polling=true;
+    const r=await rvApi("GET","day?d="+encodeURIComponent(RV.doc.day));
+    if(!r.ok){ if(r.err==="auth"){ RV.auth=false; RV.meErr="auth"; rvRenderAll(); } return; }
+    rvApplyDay(r.data,true);
+  }catch(e){} finally{ RV.polling=false; } }
+function rvApplyDay(data,fromPoll){ if(!RV.doc||!data||data.d!==RV.doc.day) return;
+  const old=RV.S||rvEmptyS(RV.doc.day), oldRev=Number(old.rev)||0; if(fromPoll&&Number(data.rev)===oldRev) return;
+  const me=RV.me&&RV.me.email;
+  const others={}; (data.log||[]).forEach(x=>{ if(x.id>oldRev&&x.who!==me) others[x.app||("#"+x.ref)]=1; });
+  const wasW=!!old.writable;
+  rvSetS(data);
+  if(data.open_day&&data.open_day>RV.doc.day) rvNewDay(data.open_day);
+  const ch=RV.doc.apps.map(a=>a.key).filter(k=>rvSig(old,k)!==rvSig(RV.S,k));
+  if(wasW!==!!RV.S.writable) rvRenderAll(); else if(ch.length) rvUpdateToday(ch); else rvTodayChrome();
+  rvRenderSum(); if(RV.view==="hist") rvRenderHist();
+  const n=Object.keys(others).length; if(fromPoll&&n) rvToast("🔄 Team ne "+n+" card update kiye",0);
+  rvMaybeDone(); }
+async function rvPollIndex(){ try{ if(!RV.idx||document.visibilityState!=="visible") return; const ir=await rvFetchIndex();
+    if(ir.ok&&ir.idx&&ir.idx.open_day&&ir.idx.open_day!==RV.idx.open_day) rvNewDay(ir.idx.open_day); }catch(e){} }
+// quietly re-sync the open day (after a click: the log / rev / others' changes)
+function rvSyncSoon(){ try{ clearTimeout(RV.syncT); RV.syncT=setTimeout(async()=>{ if(!RV.doc||!RV.me) return; const r=await rvApi("GET","day?d="+encodeURIComponent(RV.doc.day));
+    if(r.ok) rvApplyDay(r.data,false); },1500); }catch(e){} }
+function rvMaybeDone(){ try{ const p=rvPendCount(), was=RV.lastPend; RV.lastPend=p;
+    if(p===0&&was>0&&RV.doc){ const k="rv_done_"+RV.doc.day; let seen=false; try{ seen=localStorage.getItem(k)==="1"; }catch(e){}
+      if(!seen){ try{ localStorage.setItem(k,"1"); }catch(e){} rvSwitch("sum",true); rvToast("Sab "+RV.doc.apps.length+" apps review ho gaye — ye raha summary",2); } } }catch(e){} }
+// ---------------------------------------------------------------- panels (drafts live in RV.pn, so a re-render never loses text)
+function rvHasPanel(P,k){ return Object.keys(RV.pn).some(id=>id===P+"c:"+k||id.indexOf(P+"f:"+k+":")===0); }
+function rvPanelBox(id){ return RV.root?RV.root.querySelector('[data-rvpanel="'+id+'"]'):null; }
+function rvTaId(id){ return "rv-ta-"+id.replace(/[^A-Za-z0-9]/g,"-"); }
+function rvRestorePanels(P,k){ Object.keys(RV.pn).forEach(id=>{ if(id===P+"c:"+k||id.indexOf(P+"f:"+k+":")===0) rvPanelFill(id); }); }
+function rvCtx(P,k){ if(P==="h"){ const d=RV.histDay; return {doc:RV.hdocs[d],S:RV.hS[d],d}; } return {doc:RV.doc,S:RV.S,d:RV.doc&&RV.doc.day}; }
+function rvPanelHtml(id,p){
+  const btn=(act,txt,pri,extra)=>'<button type="button" class="rv-btn'+(pri?" rv-pri":" rv-ghost")+'" data-rvp="'+act+'" data-pid="'+rvEsc(id)+'"'+(extra||"")+">"+rvEsc(txt)+"</button>";
+  const ta=(lab,ph,max)=>'<label for="'+rvTaId(id)+'">'+rvEsc(lab)+'</label><textarea id="'+rvTaId(id)+'" data-rvdraft="'+rvEsc(id)+'" maxlength="'+(max||600)+'" placeholder="'+rvEsc(ph)+'">'+rvEsc(p.draft||"")+"</textarea>";
+  const row=x=>'<div class="rv-prow">'+x+"</div>", hint=(t,b)=>'<p class="rv-hint" style="margin:0">'+(b?"<b>"+t+"</b>":t)+"</p>";
+  const C=rvCtx(p.P,p.key), doc=C.doc, S=C.S||rvEmptyS(C.d);
+  const lab=doc?rvFlab(doc,p.f):"";
+  switch(p.kind){
+    case "note": return ta("Team ke liye note (is app ke liye)","Jaise: developer ko bata diya, kal update aayega")+row(btn("note-save","Note save karo",1)+btn("close","Chhodo"));
+    case "imp": return hint("🚩 Important · Re-review — poori app",true)+hint(rvEsc(RV_TXT.imp_help)+". Sirf ek baat ke liye ho to us feature ke aage wala chhota 🚩 dabao. (🔁 Kal dobara dekho alag hai — wo sirf aapka kal ka reminder hai, admin ko nahi jaata.)")+
+      ta("Kya dikkat hai? (likhna zaroori nahi)","Jaise: kamai 41% giri, developer se baat ki — aapka faisla chahiye")+row(btn("imp-save","🚩 Re-review ke liye bhejo",1)+btn("close","Chhodo"));
+    case "impcarry": { const x=rvFlagInfo(doc,S,p.key,"app").carry; const n=x?rvDayDiff(x.day,C.d):0;
+      return hint("🚩 "+rvEsc(RV_TXT.poori)+" · "+n+" din se khula · admin ka faisla baaki"+(x?" · "+rvWho(x.raised_by)+(x.note?" · “"+rvEsc(x.note)+"”":""):""))+row(btn("close","Chhodo")); }
+    case "undo": return hint("Is app ka aaj ka review (state, notes aur aaj ke khule 🚩) hata dein?")+row(btn("undo-yes","Haan, hatao",1)+btn("close","Nahi"));
+    case "flag": return hint("🚩 "+rvEsc(lab)+" — Important · Re-review",true)+hint(rvEsc(RV_TXT.imp_help))+
+      ta("Note (likhna zaroori nahi)","Jaise: 3 din se gir raha hai, developer ko bata diya — aap bhi dekh lo")+row(btn("fflag-save","🚩 Flag karo",1)+btn("close","Chhodo"));
+    case "unflag": { const x=rvFlagInfo(doc,S,p.key,p.f).today;
+      return hint("🚩 <b>"+rvEsc(lab)+"</b>"+(x?" · "+rvWho(x.raised_by)+" · "+rvEsc(rvWhen(x.raised_at))+(x.note?" · “"+rvEsc(x.note)+"”":""):""))+hint("Ye 🚩 hata dein?")+row(btn("fflag-off","Haan, hatao",1)+btn("close","Nahi")); }
+    case "carry": { const x=rvFlagInfo(doc,S,p.key,p.f).carry; const n=x?rvDayDiff(x.day,C.d):0;
+      return hint("🚩 "+n+" din se khula · admin ka faisla baaki"+(x?" · "+rvWho(x.raised_by)+(x.note?" · “"+rvEsc(x.note)+"”":""):""))+hint("Admin view: Summary tab.")+row(btn("close","Chhodo")); }
+    case "kaam": { const x=rvFlagInfo(doc,S,p.key,p.f).kaam; const n=x?rvDayDiff(x.day,C.d):0;
+      return hint("🛠 Admin ne kaam diya · <b>"+rvEsc(lab)+"</b> · "+(n>0?n+" din se":"aaj se")+(x&&x.dec_note?" · kaam: “"+rvEsc(x.dec_note)+"”":""))+
+        hint("Kaam hone pe admin “"+rvEsc(RV_TXT.d_done)+"” dabayega — tab tak ye card pe dikhega.")+
+        hint("Koi nayi baat ho to phir se 🚩 laga sakte ho — "+rvEsc(RV_TXT.imp_help)+".")+
+        ta("Note (likhna zaroori nahi)","Jaise: kaam ke baad bhi gir raha hai — aap phir dekh lo")+row(btn("fflag-save","🚩 Flag karo",1)+btn("close","Chhodo")); }
+    case "snz": { const a=doc&&rvAppOf(doc,p.key), ph=(a&&a.f&&a.f[p.f]&&a.f[p.f].snz_ph)||"Jaise: developer ko bata diya, agle update me fix", nm="rv-snzd-"+rvTaId(id);
+      return hint("Pata hai (jaani-maani baat) — itne din ye baat card ko upar nahi laayegi. Uske baad phir dikhegi.")+
+        '<div class="rv-prow" role="radiogroup" aria-label="Kitne din">'+[7,14].map(n=>'<label class="rv-radio"><input type="radio" name="'+nm+'" value="'+n+'" data-rvdays="'+rvEsc(id)+'"'+((p.days||7)===n?" checked":"")+"> "+n+" din</label>").join("")+"</div>"+
+        ta("Note (kyun pata hai)",ph)+row(btn("snz-save","💤 Pata hai — snooze karo",1)+btn("close","Chhodo")); }
+    case "snzoff": { const z=doc&&rvSnz(doc,S,p.key,p.f);
+      return hint("💤 "+(z&&z.until?rvEsc(rvFd(z.until))+" tak chhupa hai":"Chhupa hai")+(z&&z.who?" · "+rvWho(z.who)+" · "+rvEsc(rvWhen(z.at)):"")+(z&&z.note?" · “"+rvEsc(z.note)+"”":""))+
+        row(btn("snz-off","Snooze hatao",1)+btn("close","Chhodo")); }
+    case "bulk": { const bad=(p.keys||[]).filter(k=>doc&&rvIsAttn(doc,S,k));
+      return (p.g==="small"&&bad.length?'<p class="rv-hint" style="margin:0;color:var(--watch);font-weight:600">Dhyan do: in me '+bad.length+" apps me 🔴/🟡 baat hai ("+bad.map(k=>rvEsc(rvAppLabel(doc,k))).join(", ")+"). Chhoti apps hain, isliye ek saath — chahein to pehle unke card kholo.</p>":"")+
+        hint((p.keys||[]).length+" apps ko ✅ Reviewed mark karein? (jin pe pehle se kuch hai, wo waise hi rahenge)")+row(btn("bulk-yes","Haan, sab reviewed",1)+btn("close","Nahi")); }
+    case "dec": { const x=(RV.S&&RV.S.flags||[]).find(y=>y.id===p.fid), c=x?(rvAppLabel(RV.doc,x.app,x.app_label).split(" · ")[0]+" · "+rvFlab(RV.doc,x.feature)+" — "):"";
+      return ta(c+RV_DEC_LAB[p.dec],p.dec==="kaam"?"Jaise: developer ko bolo — agle update me ad unit theek kare":p.dec==="band"?"Jaise: rewarded ad unit band karo":"")+
+        row(btn("dec-save","Pakka karo: "+RV_DEC[p.dec],1)+btn("close","Chhodo")); }
+  }
+  return ""; }
+const RV_PANEL_LAB={note:"📝 Note",imp:"🚩 Important · Re-review — poori app",impcarry:"🚩 Khula flag",undo:"↩ Wapas lo",flag:"🚩 Important · Re-review — ek feature",
+  unflag:"🚩 hatana",carry:"🚩 Khula flag",kaam:"🛠 Admin ka kaam",snz:"💤 Pata hai",snzoff:"💤 Snooze",bulk:"✅ Sab reviewed",dec:"🧑‍💼 Admin faisla"};
+function rvPanelFill(id){ const p=RV.pn[id], box=rvPanelBox(id); if(!p||!box) return false; box.innerHTML=rvPanelHtml(id,p);
+  box.setAttribute("role","group"); box.setAttribute("aria-label",RV_PANEL_LAB[p.kind]||"Panel"); rvPaint(box); return true; }
+function rvPanelOpen(id,p,opener){
+  if(RV.pn[id]&&RV.pn[id].kind===p.kind&&!p.keep){ rvPanelClose(id); return; }
+  p.opener=opener?opener.id:null; p.draft=p.draft||""; RV.pn[id]=p;
+  // one card-level panel at a time per card
+  if(!rvPanelFill(id)){ delete RV.pn[id]; return; }
+  const box=rvPanelBox(id), f=box.querySelector("textarea")||box.querySelector("input[type=radio]:checked")||box.querySelector("button");
+  if(f) try{ f.focus({preventScroll:false}); }catch(_){ f.focus(); } }
+function rvPanelClose(id,noFocus){ const p=RV.pn[id]; delete RV.pn[id]; const box=rvPanelBox(id); if(box) box.innerHTML="";
+  // a card that others changed while this panel was open is refreshed now, THEN focus goes back to the (new) opener
+  if(p&&p.key&&p.P==="t"&&RV.dirty[p.key]&&!rvHasPanel("t",p.key)) rvUpdateToday([p.key]);
+  if(id.indexOf("d:")===0&&RV.sumDirty) rvRenderSum();
+  if(p&&!noFocus&&p.opener){ const o=document.getElementById(p.opener); if(o) try{ o.focus({preventScroll:true}); }catch(_){ o.focus(); } } }
+// ---------------------------------------------------------------- actions (no optimistic UI)
+function rvBusy(btn,on,lab){ if(!btn) return; if(on){ btn.dataset.rvlab=btn.innerHTML; btn.disabled=true; btn.setAttribute("aria-busy","true"); btn.textContent="⏳ Save ho raha…"; }
+  else if(btn.isConnected){ btn.disabled=false; btn.removeAttribute("aria-busy"); if(btn.dataset.rvlab!=null) btn.innerHTML=btn.dataset.rvlab; } }
+function rvFail(r){ if(r&&r.err==="auth"){ RV.auth=false; RV.meErr="auth"; rvBanners(); rvUpdateAllRo(); }
+  if(r&&r.why==="day_moved"){ rvToast("❌ Save nahi hua — "+RV_NEWDAY_MSG); rvNewDay(r.data&&r.data.open_day); return; }
+  rvToast(rvFailMsg(r));
+  if(r&&(r.why==="already_flagged"||r.why==="flagged"||r.why==="not_open"||r.err==="day_closed")) rvSyncSoon(); }
+function rvUpdateAllRo(){ try{ if(RV.doc&&rvQ("#rv-list-top")) rvUpdateToday(null,false); }catch(e){} }
+function rvMergeApp(S,res){ if(!S||!res) return; const k=res.app; if(!k) return;
+  if(res.state) S.states[k]=res.state; else delete S.states[k];
+  S.notes=S.notes.filter(x=>x.app!==k).concat(res.notes||[]);
+  const ids={}; (res.flags||[]).forEach(x=>ids[x.id]=1);
+  S.flags=S.flags.filter(x=>x.app!==k&&!ids[x.id]).concat(res.flags||[]).sort((p,q)=>p.id-q.id);
+  S.snoozes=S.snoozes.filter(x=>x.app!==k).concat(res.snoozes||[]); }
+async function rvPost(btn,path,body){ const key=path+JSON.stringify(body); if(RV.busy[key]) return null; RV.busy[key]=1; rvBusy(btn,true);
+  try{ const r=await rvApi("POST",path,body); if(!r.ok){ rvBusy(btn,false); rvFail(r); return null; } rvBusy(btn,false); return r.data; }
+  finally{ delete RV.busy[key]; } }
+function rvAfter(P,d,keys){ if(P==="t"){ rvUpdateToday(keys,true); rvRenderSum(); rvMaybeDone(); rvSyncSoon(); if(RV.view==="hist") rvRenderHist(); }
+  else { rvRenderHistDay(d,false); if(RV.cal&&RV.cal.days&&RV.hS[d]){ RV.cal.days[d]={...(RV.cal.days[d]||{}),rev:Object.keys(RV.hS[d].states).length}; rvRenderHist(); }
+    rvHistSync(d); } }
+// quietly re-read a History day after an admin correction (its log, notes, flags as the server has them)
+function rvHistSync(d){ try{ clearTimeout(RV.hsyncT); RV.hsyncT=setTimeout(async()=>{ try{ if(!RV.me||!RV.hS[d]) return;
+      const r=await rvApi("GET","day?d="+encodeURIComponent(d)); if(!r.ok||!r.data||r.data.d!==d) return;
+      RV.hS[d]={...rvS(r.data,d),me:RV.me};
+      if(RV.histDay===d&&!Object.keys(RV.pn).some(id=>id.indexOf("hc:")===0||id.indexOf("hf:")===0||id==="g:hist")){ const fo=document.activeElement&&document.activeElement.id; rvRenderHistDay(d,false);
+        if(fo){ const el=document.getElementById(fo); if(el) try{ el.focus({preventScroll:true}); }catch(_){} } } }catch(e){} },900); }catch(e){} }
+async function rvAction(btn,P,d,body,okMsg,panelId){
+  const C=rvCtx(P,body.app); const S=C.S; if(!S) return false;
+  const res=await rvPost(btn,"action",P==="t"?{d,...body,live:true}:{d,...body}); if(!res) return false;
+  const S2=rvCtx(P,body.app).S||S;   // (a poll may have replaced the state object meanwhile)
+  if(res.states){ Object.keys(res.states).forEach(k=>{ S2.states[k]=res.states[k]; }); } else rvMergeApp(S2,res);
+  const op=panelId&&RV.pn[panelId]?RV.pn[panelId].opener:null;
+  if(panelId) rvPanelClose(panelId,true);
+  rvAfter(P,d,res.changed&&res.changed.length?res.changed:(res.app?[res.app]:[]));
+  if(okMsg) rvToast(okMsg);
+  const fo=document.getElementById(op||(btn&&btn.id)||"");
+  if(fo&&!fo.disabled&&!fo.hidden) try{ fo.focus({preventScroll:true}); }catch(_){}
+  return true; }
+function rvNm(doc,k){ return rvAppLabel(doc,k); }
+// after ✅ / 🔁 saved: an open card panel closes only when nothing is typed in it (a draft is never thrown away)
+function rvDropEmptyPanel(id){ const p=RV.pn[id]; if(p&&!String(p.draft||"").trim()) rvPanelClose(id,true); }
+function rvCardAct(t){
+  const card=t.closest(".rv-card"); if(!card) return; const k=card.getAttribute("data-key"), mode=card.getAttribute("data-mode"), P=mode==="live"?"t":"h", d=card.getAttribute("data-d");
+  const act=t.getAttribute("data-rvact"), C=rvCtx(P,k), doc=C.doc, S=C.S; if(!doc) return;
+  if(act==="tog"){ const b=card.querySelector(".rv-body"), open=b.hidden; b.hidden=!open; card.classList.toggle("rv-open",open); t.setAttribute("aria-expanded",open?"true":"false");
+    t.textContent=open?"Card band karo ▴":"Poora card kholo ▾"; if(P==="t") RV.exp[k]=open; return; }
+  if(P==="t"&&!rvCanWrite()){ rvToast(rvRoMsg()); return; }
+  if(P==="h"&&!(S&&S.writable&&RV.auth!==false)){ rvToast("Ye din band ho chuka — sirf admin sudhaar kar sakta hai"); return; }
+  const st=rvStOf(S,k), cid=P+"c:"+k;
+  if(act==="ok"){ if(st==="flag"){ rvToast(RV_TXT.flag_block); return; } if(st==="ok"||st==="note"){ rvToast("Pehle se reviewed hai"); return; }
+    rvAction(t,P,d,{app:k,act:"ok"},"✅ Reviewed — "+rvNm(doc,k)).then(ok=>{ if(!ok) return; rvDropEmptyPanel(cid); if(P==="t"){ RV.exp[k]=false; rvUpdateToday([k],true); } rvFocusSoft(t.id); }); return; }
+  if(act==="kal"){ if(st==="flag"){ rvToast(RV_TXT.flag_block); return; } if(st==="kal"){ rvToast("Pehle se “kal dobara dekho” laga hai"); return; }
+    rvAction(t,P,d,{app:k,act:"kal"},"🔁 Kal dobara dekhenge — "+rvNm(doc,k)).then(ok=>{ if(!ok) return; rvDropEmptyPanel(cid); RV.exp[k]=false; rvUpdateToday([k],true); rvFocusSoft(t.id); }); return; }
+  if(act==="note") return rvPanelOpen(cid,{kind:"note",P,key:k,d},t);
+  if(act==="undo") return rvPanelOpen(cid,{kind:"undo",P,key:k,d},t);
+  if(act==="imp"){ if(st==="flag") return rvPanelOpen(cid,{kind:"undo",P,key:k,d},t);
+    const fi=rvFlagInfo(doc,S,k,"app"); if(fi.carry) return rvPanelOpen(cid,{kind:"impcarry",P,key:k,d},t);
+    return rvPanelOpen(cid,{kind:"imp",P,key:k,d},t); }
+  const f=t.getAttribute("data-f"), fid=P+"f:"+k+":"+f;
+  if(act==="fflag"){ const fi=rvFlagInfo(doc,S,k,f);
+    const kind=fi.today?"unflag":fi.carry?"carry":fi.kaam?"kaam":"flag";
+    return rvPanelOpen(fid,{kind,P,key:k,f,d},t); }
+  if(act==="snz"){ return rvPanelOpen(fid,{kind:rvSnz(doc,S,k,f)?"snzoff":"snz",P,key:k,f,d,days:7},t); } }
+function rvPanelAct(t){
+  const id=t.getAttribute("data-pid"), p=RV.pn[id], a=t.getAttribute("data-rvp"); if(!p) return;
+  if(a==="close") return rvPanelClose(id);
+  const C=rvCtx(p.P,p.key), doc=C.doc, S=C.S;
+  const draft=()=>{ const ta=document.getElementById(rvTaId(id)); return ((ta?ta.value:p.draft)||"").trim(); };
+  if(a==="note-save"){ const v=draft(); if(!v){ rvToast("Note khaali hai"); const ta=document.getElementById(rvTaId(id)); if(ta) ta.focus(); return; }
+    return rvAction(t,p.P,p.d,{app:p.key,act:"note",note:v},"📝 Note save",id); }
+  if(a==="imp-save"){ const wasTop=p.P==="t"&&rvLayout(doc,S).top.indexOf(p.key)>=0;
+    return rvAction(t,p.P,p.d,{app:p.key,act:"flag",feature:null,note:draft()},null,id)
+    .then(ok=>{ if(!ok) return; RV.exp[p.key]=false; rvUpdateToday([p.key],true);
+      const up=p.P==="t"&&!wasTop&&rvLayout(RV.doc,RV.S).top.indexOf(p.key)>=0;
+      rvToast("🚩 Re-review ke liye bheja — "+rvNm(doc,p.key)+(up?" — card upar focus me gaya":"")); if(up) rvKeepCard(p.key); }); }
+  if(a==="undo-yes") return rvAction(t,p.P,p.d,{app:p.key,act:"undo"},"↩ Hata diya",id);
+  if(a==="fflag-save"){ const wasTop=p.P==="t"&&rvLayout(doc,S).top.indexOf(p.key)>=0;
+    return rvAction(t,p.P,p.d,{app:p.key,act:"flag",feature:p.f,note:draft()},null,id).then(ok=>{ if(!ok) return;
+      const up=p.P==="t"&&!wasTop&&rvLayout(RV.doc,RV.S).top.indexOf(p.key)>=0;
+      rvToast("🚩 "+rvFlab(doc,p.f)+" flag hua — "+rvNm(doc,p.key)+(up?" — card upar focus me gaya":"")); rvKeepInView(p.key,p.f); }); }
+  if(a==="fflag-off"){ const x=rvFlagInfo(doc,S,p.key,p.f).today; if(!x){ rvPanelClose(id); return; }
+    return rvAction(t,p.P,p.d,{app:p.key,act:"unflag",flag_id:x.id,feature:p.f},"🚩 Hata diya",id).then(ok=>{ if(ok) rvKeepInView(p.key,p.f); }); }
+  if(a==="snz-save"){ const wasTop=rvLayout(doc,S).top.indexOf(p.key)>=0, days=p.days===14?14:7;
+    return rvAction(t,p.P,p.d,{app:p.key,act:"snooze",feature:p.f,days,note:draft()},null,id).then(ok=>{ if(!ok) return;
+      const nowTop=rvLayout(RV.doc,RV.S).top.indexOf(p.key)>=0; rvToast("💤 "+days+" din ke liye snooze"+(wasTop&&!nowTop?" — card “Sab theek” me gaya":"")); }); }
+  if(a==="snz-off") return rvAction(t,p.P,p.d,{app:p.key,act:"unsnooze",feature:p.f},"Snooze hataya",id);
+  if(a==="bulk-yes"){ const keys=(p.keys||[]).filter(k=>rvStOf(S,k)==="pend"); if(!keys.length){ rvPanelClose(id); return; }
+    return (async()=>{ let ok=true; for(let i=0;i<keys.length&&ok;i+=60){ ok=await rvAction(t,p.P,p.d,{act:"bulk_ok",apps:keys.slice(i,i+60)},null,null); }
+      if(ok){ const op=p.opener; rvPanelClose(id,true); rvToast("✅ Group reviewed"); rvFocusSoft(op,p.g==="hist"?"rv-dayh":"rv-h-"+p.g); } })(); }
+  if(a==="dec-save"){ const v=draft(); if((p.dec==="kaam"||p.dec==="band")&&!v){ rvToast("Note zaroori hai — "+(p.dec==="kaam"?"kya kaam, kisko?":"kya band karna hai?")); const ta=document.getElementById(rvTaId(id)); if(ta) ta.focus(); return; }
+    return (async()=>{ const res=await rvPost(t,"decide",{flag_id:p.fid,decision:p.dec,note:v}); if(!res||!res.flag) return;
+      [RV.S].concat(Object.values(RV.hS)).forEach(S2=>{ if(S2&&S2.flags) S2.flags=S2.flags.map(x=>x.id===res.flag.id?res.flag:x); });
+      rvPanelClose(id,true); const x=res.flag; rvUpdateToday([x.app],false); rvRenderSum(); rvSyncSoon();
+      if(RV.view==="hist"&&RV.histDay&&RV.hS[RV.histDay]) rvRenderHistDay(RV.histDay,false);
+      rvToast("🧑‍💼 Faisla: "+RV_DEC[p.dec]+" · "+rvFlab(RV.doc,x.feature)); const h=rvQ("#rv-h-adm"); if(h) try{ h.setAttribute("tabindex","-1"); h.focus({preventScroll:true}); }catch(_){} })(); } }
+function rvFocusSoft(id,fallback){ try{ const ok=el=>!!(el&&el.isConnected&&!el.disabled&&!el.hidden&&el.offsetParent!==null);
+    let el=id&&document.getElementById(id); if(!ok(el)) el=fallback&&document.getElementById(fallback); if(!ok(el)) return;
+    if(el.tagName!=="BUTTON"&&!el.hasAttribute("tabindex")) el.setAttribute("tabindex","-1");
+    el.focus({preventScroll:true}); }catch(e){} }
+function rvKeepCard(k){ try{ const c=document.getElementById("rv-t-c-"+k), b=c&&c.querySelector('[data-rvact="imp"]'); if(!c) return;
+  const rm=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+  c.scrollIntoView({behavior:rm?"auto":"smooth",block:"start"}); if(b) try{ b.focus({preventScroll:true}); }catch(_){ b.focus(); } }catch(e){} }
+function rvKeepInView(k,f){ try{ const c=document.getElementById("rv-t-c-"+k), b=c&&c.querySelector('[data-rvact="fflag"][data-f="'+f+'"]'); if(!b) return;
+  const rm=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+  b.scrollIntoView({behavior:rm?"auto":"smooth",block:"center"}); try{ b.focus({preventScroll:true}); }catch(_){ b.focus(); } }catch(e){} }
+function rvBulkOpen(t){ const g=t.getAttribute("data-rvbulk");
+  if(g==="hist"){ const d=RV.histDay, doc=RV.hdocs[d], S=RV.hS[d]; if(!doc||!S) return;
+    return rvPanelOpen("g:hist",{kind:"bulk",P:"h",g,d,keys:doc.apps.map(a=>a.key).filter(k=>rvStOf(S,k)==="pend")},t); }
+  if(!rvCanWrite()){ rvToast(rvRoMsg()); return; }
+  const L=rvLayout(RV.doc,RV.S), keys=(g==="ok"?L.ok:L.small).filter(k=>rvStOf(RV.S,k)==="pend");
+  rvPanelOpen("g:"+g,{kind:"bulk",P:"t",g,d:RV.doc.day,keys},t); }
+function rvDecOpen(t){ if(!(RV.me&&RV.me.admin)) return; const fid=Number(t.getAttribute("data-fid")), dec=t.getAttribute("data-rvdec");
+  rvPanelOpen("d:"+fid,{kind:"dec",P:"s",fid,dec},t); }
+function rvJump(k){ rvSwitch("today",false); const c=document.getElementById("rv-t-c-"+k); if(!c) return;
+  const b=c.querySelector(".rv-body"), tg=c.querySelector('[data-rvact="tog"]');
+  if(b&&b.hidden&&tg){ b.hidden=false; c.classList.add("rv-open"); tg.setAttribute("aria-expanded","true"); tg.textContent="Card band karo ▴"; RV.exp[k]=true; }
+  const rm=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+  try{ c.scrollIntoView({behavior:rm?"auto":"smooth",block:"start"}); }catch(_){} try{ c.focus({preventScroll:true}); }catch(_){} }
+function rvGo(t){ const f=t.getAttribute("data-rvgo"), k=t.getAttribute("data-key"), card=t.closest(".rv-card"), P=card&&card.getAttribute("data-mode")!=="live"?"h":"t";
+  const doc=rvCtx(P,k).doc, a=doc&&rvAppOf(doc,k); if(!a||!RV_LINK[f]) return; RV_LINK[f](a); }
+function rvCmd(t){ const c=t.getAttribute("data-rvcmd");
+  if(c==="reload"){ location.reload(); return; }
+  if(c==="retry"){ RV.meErr=null; RV.err=null; RV.idxAt=0; RV.loading=null; RV.auth=true; if(!RV.doc) RV.idxErr=null; rvLoad().catch(()=>{}); return; }
+  if(c==="newday"){ rvReload(); return; }
+  if(c==="hadmin"){ RV.hAdmin=!RV.hAdmin; if(RV.histDay) rvRenderHistDay(RV.histDay,false); const b=rvQ('[data-rvcmd="hadmin"]'); if(b) b.focus(); return; } }
+function rvWire(root){
+  root.addEventListener("click",ev=>{ try{ const t=ev.target.closest("button"); if(!t||!root.contains(t)) return;
+    if(t.hasAttribute("data-rvtab")){ rvSwitch(t.getAttribute("data-rvtab"),true); return; }
+    if(t.hasAttribute("data-rvjump")){ rvJump(t.getAttribute("data-rvjump")); return; }
+    if(t.hasAttribute("data-rvday")){ rvHistPick(t.getAttribute("data-rvday"),false); return; }
+    if(t.hasAttribute("data-rvgo")){ rvGo(t); return; }
+    if(t.hasAttribute("data-rvp")){ rvPanelAct(t); return; }
+    if(t.hasAttribute("data-rvact")){ rvCardAct(t); return; }
+    if(t.hasAttribute("data-rvdec")){ rvDecOpen(t); return; }
+    if(t.hasAttribute("data-rvbulk")){ rvBulkOpen(t); return; }
+    if(t.hasAttribute("data-rvcmd")){ rvCmd(t); return; }
+  }catch(e){ rvToast("❌ Kuch gadbad hui — page reload karke dekho"); } });
+  root.addEventListener("input",ev=>{ try{ const t=ev.target, id=t.getAttribute&&t.getAttribute("data-rvdraft"); if(id&&RV.pn[id]) RV.pn[id].draft=t.value; }catch(e){} });
+  root.addEventListener("change",ev=>{ try{ const t=ev.target, id=t.getAttribute&&t.getAttribute("data-rvdays"); if(id&&RV.pn[id]) RV.pn[id].days=Number(t.value)===14?14:7; }catch(e){} });
+  root.addEventListener("keydown",ev=>{ try{ const t=ev.target;
+    if(ev.key==="Escape"){ const box=t.closest&&t.closest("[data-rvpanel]"); if(box){ const id=box.getAttribute("data-rvpanel"); if(RV.pn[id]){ ev.preventDefault(); rvPanelClose(id); } } return; }
+    if(t.getAttribute&&t.getAttribute("role")==="tab"&&(ev.key==="ArrowRight"||ev.key==="ArrowLeft"||ev.key==="Home"||ev.key==="End")){
+      const ts=["today","sum","hist"], i=ts.indexOf(t.getAttribute("data-rvtab")); ev.preventDefault();
+      const j=ev.key==="Home"?0:ev.key==="End"?2:(i+(ev.key==="ArrowRight"?1:-1)+3)%3; rvSwitch(ts[j],true); } }catch(e){} }); }
+/* ==== RV:END ==== */
+
 async function load(){
   try{
     if(!DATA){
@@ -6034,6 +7321,7 @@ async function load(){
     try{ CURVIEW=localStorage.getItem("curview")||null; }catch(e){}   // restore chosen currency view
     curSyncUI();
     _navRestore();                           // restore the LAST screen (app/period too) if recent, else Overview
+    rvBoot();                                // #review… deep links win over navstate; the Review badge (3 s later)
     loadAppSel();                            // which apps the user kept (hides unselected)
     loadAccNames();                          // friendly names for the AdMob accounts
     loadAppNames();                          // the user's own names for apps (✏️ on App Report)

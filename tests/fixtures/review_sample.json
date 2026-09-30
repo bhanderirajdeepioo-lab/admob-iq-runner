@@ -1,0 +1,2066 @@
+{
+ "_about": "Synthetic Daily App Review fixture (tests/review_synth.py --write): index.json + the open day's card document written by admob_iq.review over a made-up site, a synthetic GET day response and /me. No real data.",
+ "day": {
+  "apps": [
+   {
+    "acct": "Synth Studio",
+    "app_id": "ca-app-pub-0000000000000000~0000000002",
+    "dname": "Synth Beta Browser · Synth Studio",
+    "f": {
+     "active": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Purane users roz 14,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Purane users roz 14,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+     },
+     "ads": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+     },
+     "deduct": {
+      "detail": {
+       "chart": {
+        "after_idx": 10,
+        "before": 1000.0,
+        "cap": "home_banner · clicks per din · 17–30 Sep",
+        "fmt": "n",
+        "labels": [
+         "17 Sep",
+         "18 Sep",
+         "19 Sep",
+         "20 Sep",
+         "21 Sep",
+         "22 Sep",
+         "23 Sep",
+         "24 Sep",
+         "25 Sep",
+         "26 Sep",
+         "27 Sep",
+         "28 Sep",
+         "29 Sep",
+         "30 Sep"
+        ],
+        "marks": [
+         [
+          10,
+          "Shuru"
+         ]
+        ],
+        "tips": null,
+        "vals": [
+         1000.0,
+         1000.0,
+         1000.0,
+         1000.0,
+         1000.0,
+         1000.0,
+         1000.0,
+         1000.0,
+         1000.0,
+         1000.0,
+         4000.0,
+         4000.0,
+         4000.0,
+         4000.0
+        ]
+       },
+       "more": [],
+       "tab": "Deductions"
+      },
+      "info": [],
+      "kis": null,
+      "line": "Ek banner pe clicks achanak 4 guna — invalid click ka khatra",
+      "q": {
+       "abhi": "Waisa hi: 30 Sep ko 4,000 clicks",
+       "kab": "27 Sep · 4 din se",
+       "karo": "App me home_banner kahan hai dekho; samajh na aaye to AdMob me ye ad unit pause karo.",
+       "kis": "AdMob 27–30 Sep · vs 20–26 Sep",
+       "kit": "Clicks roz ~1,000 → ~4,000 · ads dikhe utne hi",
+       "kya": "Ek banner pe clicks achanak 4 guna — invalid click ka khatra",
+       "naya": {
+        "chip": "naya",
+        "first": "29 Sep (jab ye page shuru hua)"
+       },
+       "saath": null
+      },
+      "snz_ph": null,
+      "st": "red",
+      "t": "Ek banner pe clicks achanak 4 guna — invalid click ka khatra"
+     },
+     "health": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Invalid traffic: saaf · ads serving: ok",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Invalid traffic: saaf · ads serving: ok"
+     },
+     "kamai": {
+      "detail": {
+       "chart": {
+        "after_idx": 7,
+        "before": 400.0,
+        "cap": "App ki AdMob kamai · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "fmt": "usd",
+        "labels": [
+         "17 Sep",
+         "18 Sep",
+         "19 Sep",
+         "20 Sep",
+         "21 Sep",
+         "22 Sep",
+         "23 Sep",
+         "24 Sep",
+         "25 Sep",
+         "26 Sep",
+         "27 Sep",
+         "28 Sep",
+         "29 Sep",
+         "30 Sep"
+        ],
+        "marks": [
+         [
+          7,
+          "pichhle 7 din"
+         ]
+        ],
+        "tips": null,
+        "vals": [
+         400.0,
+         400.0,
+         400.0,
+         400.0,
+         400.0,
+         400.0,
+         400.0,
+         400.0,
+         400.0,
+         400.0,
+         400.0,
+         400.0,
+         400.0,
+         400.0
+        ]
+       },
+       "more": [],
+       "tab": "Overview / Alerts"
+      },
+      "info": [],
+      "kis": null,
+      "line": [
+       "Kal ",
+       {
+        "p": 0,
+        "s": "",
+        "sign": 0,
+        "usd": 400.0
+       },
+       " · usual ",
+       {
+        "p": 0,
+        "s": "/din",
+        "sign": 0,
+        "usd": 400.0
+       },
+       " · ad rate (1,000 ads ka) ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 4.0
+       },
+       " → ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 4.0
+       }
+      ],
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Kal $400 · usual $400/din · ad rate (1,000 ads ka) $4.00 → $4.00"
+     },
+     "mediation": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Mediation ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "Mediation ka data nahi"
+     },
+     "setup": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+     },
+     "uninstall": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate"
+     },
+     "update": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Pichhle 60 din me koi update nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Pichhle 60 din me koi update nahi"
+     },
+     "value": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "GA4 nahi juda — install value ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "GA4 nahi juda — install value ka data nahi"
+     }
+    },
+    "head": {
+     "age": "4 din",
+     "chip": "naya",
+     "text": "Ek banner pe clicks achanak 4 guna — invalid click ka khatra"
+    },
+    "k7": 400.0,
+    "key": "d85db25e2642",
+    "kp7": 400.0,
+    "name": "Synth Beta Browser",
+    "nb": [
+     "deduct"
+    ],
+    "paisa": 400.0,
+    "pkg": "com.example.synth2",
+    "size": "badi",
+    "small": false,
+    "spend": 0.0,
+    "tier": "red",
+    "us": 400.0,
+    "y": 400.0
+   },
+   {
+    "acct": "Synth Studio",
+    "app_id": "ca-app-pub-0000000000000000~0000000001",
+    "dname": "Synth Alpha Player · Synth Studio",
+    "f": {
+     "active": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Purane users roz 13,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Purane users roz 13,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+     },
+     "ads": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+     },
+     "deduct": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Koi deduction nahi dikha (17–30 Sep)",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Koi deduction nahi dikha (17–30 Sep)"
+     },
+     "health": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Invalid traffic: saaf · ads serving: ok",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Invalid traffic: saaf · ads serving: ok"
+     },
+     "kamai": {
+      "detail": {
+       "chart": {
+        "after_idx": 7,
+        "before": 520.0,
+        "cap": "App ki AdMob kamai · $/din · 17–30 Sep",
+        "fmt": "usd",
+        "labels": [
+         "17 Sep",
+         "18 Sep",
+         "19 Sep",
+         "20 Sep",
+         "21 Sep",
+         "22 Sep",
+         "23 Sep",
+         "24 Sep",
+         "25 Sep",
+         "26 Sep",
+         "27 Sep",
+         "28 Sep",
+         "29 Sep",
+         "30 Sep"
+        ],
+        "marks": [
+         [
+          7,
+          "Shuru"
+         ]
+        ],
+        "tips": null,
+        "vals": [
+         520.0,
+         520.0,
+         520.0,
+         520.0,
+         520.0,
+         520.0,
+         520.0,
+         320.0,
+         320.0,
+         320.0,
+         320.0,
+         320.0,
+         320.0,
+         320.0
+        ]
+       },
+       "more": [],
+       "tab": "Overview / Alerts"
+      },
+      "info": [],
+      "kis": null,
+      "line": "App ki kamai 38% giri",
+      "q": {
+       "abhi": [
+        "Waisa hi: 30 Sep ko ",
+        {
+         "p": 0,
+         "s": "",
+         "sign": 0,
+         "usd": 320.0
+        }
+       ],
+       "kab": "24 Sep · 7 din se",
+       "karo": "Pichhle update ke baad kya badla dekho; tab tak ads budget mat badhao.",
+       "kis": "AdMob 24–30 Sep · vs 17–23 Sep",
+       "kit": [
+        "Kamai ",
+        {
+         "p": 0,
+         "s": "",
+         "sign": 0,
+         "usd": 520.0
+        },
+        " → ",
+        {
+         "p": 0,
+         "s": "/din",
+         "sign": 0,
+         "usd": 320.0
+        },
+        " (",
+        {
+         "p": 0,
+         "s": "/din",
+         "sign": 1,
+         "usd": -200.0
+        },
+        ")"
+       ],
+       "kya": "App ki kamai 38% giri",
+       "naya": {
+        "chip": "naya",
+        "first": "29 Sep (jab ye page shuru hua)"
+       },
+       "saath": null
+      },
+      "snz_ph": null,
+      "st": "red",
+      "t": "App ki kamai 38% giri"
+     },
+     "mediation": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Mediation ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "Mediation ka data nahi"
+     },
+     "setup": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+     },
+     "uninstall": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate"
+     },
+     "update": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Pichhle 60 din me koi update nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Pichhle 60 din me koi update nahi"
+     },
+     "value": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "GA4 nahi juda — install value ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "GA4 nahi juda — install value ka data nahi"
+     }
+    },
+    "head": {
+     "age": "7 din",
+     "chip": "naya",
+     "text": "App ki kamai 38% giri"
+    },
+    "k7": 320.0,
+    "key": "d3f13277abcb",
+    "kp7": 520.0,
+    "name": "Synth Alpha Player",
+    "nb": [
+     "kamai"
+    ],
+    "paisa": 320.0,
+    "pkg": "com.example.synth1",
+    "size": "badi",
+    "small": false,
+    "spend": 0.0,
+    "tier": "red",
+    "us": 348.5714,
+    "y": 320.0
+   },
+   {
+    "acct": "Synth Studio",
+    "app_id": "ca-app-pub-0000000000000000~0000000003",
+    "dname": "Synth Gamma Gallery · Synth Studio",
+    "f": {
+     "active": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Purane users roz 15,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Purane users roz 15,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+     },
+     "ads": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+     },
+     "deduct": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Koi deduction nahi dikha (17–30 Sep)",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Koi deduction nahi dikha (17–30 Sep)"
+     },
+     "health": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Invalid traffic: saaf · ads serving: ok",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Invalid traffic: saaf · ads serving: ok"
+     },
+     "kamai": {
+      "detail": {
+       "chart": {
+        "after_idx": 7,
+        "before": 350.0,
+        "cap": "App ki AdMob kamai · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "fmt": "usd",
+        "labels": [
+         "17 Sep",
+         "18 Sep",
+         "19 Sep",
+         "20 Sep",
+         "21 Sep",
+         "22 Sep",
+         "23 Sep",
+         "24 Sep",
+         "25 Sep",
+         "26 Sep",
+         "27 Sep",
+         "28 Sep",
+         "29 Sep",
+         "30 Sep"
+        ],
+        "marks": [
+         [
+          7,
+          "pichhle 7 din"
+         ]
+        ],
+        "tips": null,
+        "vals": [
+         350.0,
+         350.0,
+         350.0,
+         350.0,
+         350.0,
+         350.0,
+         350.0,
+         350.0,
+         350.0,
+         350.0,
+         350.0,
+         350.0,
+         350.0,
+         350.0
+        ]
+       },
+       "more": [],
+       "tab": "Overview / Alerts"
+      },
+      "info": [],
+      "kis": null,
+      "line": [
+       "Kal ",
+       {
+        "p": 0,
+        "s": "",
+        "sign": 0,
+        "usd": 350.0
+       },
+       " · usual ",
+       {
+        "p": 0,
+        "s": "/din",
+        "sign": 0,
+        "usd": 350.0
+       },
+       " · ad rate (1,000 ads ka) ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 3.5
+       },
+       " → ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 3.5
+       }
+      ],
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Kal $350 · usual $350/din · ad rate (1,000 ads ka) $3.50 → $3.50"
+     },
+     "mediation": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Mediation ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "Mediation ka data nahi"
+     },
+     "setup": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+     },
+     "uninstall": {
+      "detail": {
+       "chart": {
+        "after_idx": 4,
+        "before": 20.0,
+        "cap": "Install ke din hi hataane wale · 100 me · installs ke hafte 11 Aug–21 Sep",
+        "fmt": "p100",
+        "labels": [
+         "11 Aug",
+         "18 Aug",
+         "25 Aug",
+         "1 Sep",
+         "8 Sep",
+         "15 Sep"
+        ],
+        "marks": [
+         [
+          4,
+          "Shuru"
+         ]
+        ],
+        "tips": [
+         "Installs 11–17 Aug: 100 me 20 (700 installs)",
+         "Installs 18–24 Aug: 100 me 20 (700 installs)",
+         "Installs 25–31 Aug: 100 me 20 (700 installs)",
+         "Installs 1–7 Sep: 100 me 20 (700 installs)",
+         "Installs 8–14 Sep: 100 me 30 (700 installs)",
+         "Installs 15–21 Sep: 100 me 30 (700 installs)"
+        ],
+        "vals": [
+         20.0,
+         20.0,
+         20.0,
+         20.0,
+         30.0,
+         30.0
+        ]
+       },
+       "more": [],
+       "tab": "Uninstall"
+      },
+      "info": [],
+      "kis": null,
+      "line": "Install ke din hi hataane wale: 100 me 20 → 30",
+      "q": {
+       "abhi": null,
+       "kab": "Installs 8 Sep se · 23 din se",
+       "karo": "8 Sep ke aas-paas campaign, country ya update me kya badla, dekho.",
+       "kis": "Installs 15–21 Sep · vs hamesha ka normal",
+       "kit": "700 installs me se ~70 log zyada ne app hataya",
+       "kya": "Install ke din hi hataane wale: 100 me 20 → 30",
+       "naya": {
+        "chip": "chal_raha",
+        "first": "23 Sep (jab ye feature shuru hua)"
+       },
+       "saath": null
+      },
+      "snz_ph": null,
+      "st": "amber",
+      "t": "Install ke din hi hataane wale: 100 me 20 → 30"
+     },
+     "update": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Pichhle 60 din me koi update nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Pichhle 60 din me koi update nahi"
+     },
+     "value": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "GA4 nahi juda — install value ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "GA4 nahi juda — install value ka data nahi"
+     }
+    },
+    "head": {
+     "age": "23 din",
+     "chip": "chal_raha",
+     "text": "Install ke din hi hataane wale: 100 me 20 → 30"
+    },
+    "k7": 350.0,
+    "key": "82251130bf3a",
+    "kp7": 350.0,
+    "name": "Synth Gamma Gallery",
+    "nb": [],
+    "paisa": 350.0,
+    "pkg": "com.example.synth3",
+    "size": "badi",
+    "small": false,
+    "spend": 0.0,
+    "tier": "amber",
+    "us": 350.0,
+    "y": 350.0
+   },
+   {
+    "acct": "A/c 1111",
+    "app_id": "ca-app-pub-0000000000000000~0000000008",
+    "dname": "Synth Hotel Notes · A/c 1111",
+    "f": {
+     "active": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "GA4 nahi juda — active users ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "GA4 nahi juda — active users ka data nahi"
+     },
+     "ads": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+     },
+     "deduct": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Koi deduction nahi dikha (17–30 Sep)",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Koi deduction nahi dikha (17–30 Sep)"
+     },
+     "health": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Invalid traffic: saaf · ads serving: ok",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Invalid traffic: saaf · ads serving: ok"
+     },
+     "kamai": {
+      "detail": {
+       "chart": {
+        "after_idx": 7,
+        "before": 60.0,
+        "cap": "App ki AdMob kamai · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "fmt": "usd",
+        "labels": [
+         "17 Sep",
+         "18 Sep",
+         "19 Sep",
+         "20 Sep",
+         "21 Sep",
+         "22 Sep",
+         "23 Sep",
+         "24 Sep",
+         "25 Sep",
+         "26 Sep",
+         "27 Sep",
+         "28 Sep",
+         "29 Sep",
+         "30 Sep"
+        ],
+        "marks": [
+         [
+          7,
+          "pichhle 7 din"
+         ]
+        ],
+        "tips": null,
+        "vals": [
+         60.0,
+         60.0,
+         60.0,
+         60.0,
+         60.0,
+         60.0,
+         60.0,
+         60.0,
+         60.0,
+         60.0,
+         60.0,
+         60.0,
+         60.0,
+         60.0
+        ]
+       },
+       "more": [],
+       "tab": "Overview / Alerts"
+      },
+      "info": [],
+      "kis": null,
+      "line": [
+       "Kal ",
+       {
+        "p": 0,
+        "s": "",
+        "sign": 0,
+        "usd": 60.0
+       },
+       " · usual ",
+       {
+        "p": 0,
+        "s": "/din",
+        "sign": 0,
+        "usd": 60.0
+       },
+       " · ad rate (1,000 ads ka) ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 0.6
+       },
+       " → ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 0.6
+       }
+      ],
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Kal $60 · usual $60/din · ad rate (1,000 ads ka) $0.60 → $0.60"
+     },
+     "mediation": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Mediation ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "Mediation ka data nahi"
+     },
+     "setup": {
+      "detail": {
+       "chart": null,
+       "more": [],
+       "tab": "Settings"
+      },
+      "info": [],
+      "kis": null,
+      "line": "GA4 me is app ka Android stream nahi mila",
+      "q": {
+       "abhi": null,
+       "kab": "29 Sep · 2 din se (jab se ye page dekh raha hai)",
+       "karo": "GA4 me is app ka Android data stream jodo (Firebase project link).",
+       "kis": "GA4 accounts",
+       "kit": "Is app ka Uninstall, Active users aur Install value ka data nahi",
+       "kya": "GA4 me is app ka Android stream nahi mila",
+       "naya": {
+        "chip": "purani",
+        "first": "29 Sep (jab ye page shuru hua)"
+       },
+       "saath": null
+      },
+      "snz_ph": null,
+      "st": "amber",
+      "t": "GA4 me is app ka Android stream nahi mila"
+     },
+     "uninstall": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "GA4 nahi juda — uninstall ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "GA4 nahi juda — uninstall ka data nahi"
+     },
+     "update": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Pichhle 60 din me koi update nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Pichhle 60 din me koi update nahi"
+     },
+     "value": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "GA4 nahi juda — install value ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "GA4 nahi juda — install value ka data nahi"
+     }
+    },
+    "head": {
+     "age": "2 din",
+     "chip": "purani",
+     "text": "GA4 me is app ka Android stream nahi mila"
+    },
+    "k7": 60.0,
+    "key": "d51823beefd0",
+    "kp7": 60.0,
+    "name": "Synth Hotel Notes",
+    "nb": [],
+    "paisa": 60.0,
+    "pkg": "com.example.synth8",
+    "size": "madhyam",
+    "small": false,
+    "spend": 0.0,
+    "tier": "amber",
+    "us": 60.0,
+    "y": 60.0
+   },
+   {
+    "acct": "A/c 1111",
+    "app_id": "ca-app-pub-0000000000000000~0000000004",
+    "dname": "Synth Delta Diary · A/c 1111",
+    "f": {
+     "active": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Purane users roz 16,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Purane users roz 16,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+     },
+     "ads": {
+      "detail": {
+       "chart": {
+        "after_idx": 7,
+        "before": 50.0,
+        "cap": "Google Ads kharcha · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "fmt": "usd",
+        "labels": [
+         "17 Sep",
+         "18 Sep",
+         "19 Sep",
+         "20 Sep",
+         "21 Sep",
+         "22 Sep",
+         "23 Sep",
+         "24 Sep",
+         "25 Sep",
+         "26 Sep",
+         "27 Sep",
+         "28 Sep",
+         "29 Sep",
+         "30 Sep"
+        ],
+        "marks": [
+         [
+          7,
+          "pichhle 7 din"
+         ]
+        ],
+        "tips": null,
+        "vals": [
+         50.0,
+         50.0,
+         50.0,
+         50.0,
+         50.0,
+         50.0,
+         50.0,
+         50.0,
+         50.0,
+         50.0,
+         50.0,
+         50.0,
+         50.0,
+         50.0
+        ]
+       },
+       "more": [],
+       "tab": "Marketing ROAS"
+      },
+      "info": [],
+      "kis": null,
+      "line": [
+       "Kharcha ",
+       {
+        "p": 0,
+        "s": "/din",
+        "sign": 0,
+        "usd": 50.0
+       },
+       " · ROAS 9.00 · ek install ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 0.5
+       },
+       " (24–30 Sep)"
+      ],
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Kharcha $50/din · ROAS 9.00 · ek install $0.50 (24–30 Sep)"
+     },
+     "deduct": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": [
+       "AdMob ne baad me ",
+       {
+        "p": 0,
+        "s": "",
+        "sign": 0,
+        "usd": 2.0
+       },
+       " kaata (17–30 Sep) · kamai ka 0.1% se kam"
+      ],
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "AdMob ne baad me $2.0 kaata (17–30 Sep) · kamai ka 0.1% se kam"
+     },
+     "health": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Invalid traffic: saaf · ads serving: ok",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Invalid traffic: saaf · ads serving: ok"
+     },
+     "kamai": {
+      "detail": {
+       "chart": {
+        "after_idx": 7,
+        "before": 450.0,
+        "cap": "App ki AdMob kamai · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "fmt": "usd",
+        "labels": [
+         "17 Sep",
+         "18 Sep",
+         "19 Sep",
+         "20 Sep",
+         "21 Sep",
+         "22 Sep",
+         "23 Sep",
+         "24 Sep",
+         "25 Sep",
+         "26 Sep",
+         "27 Sep",
+         "28 Sep",
+         "29 Sep",
+         "30 Sep"
+        ],
+        "marks": [
+         [
+          7,
+          "pichhle 7 din"
+         ]
+        ],
+        "tips": null,
+        "vals": [
+         450.0,
+         450.0,
+         450.0,
+         450.0,
+         450.0,
+         450.0,
+         450.0,
+         450.0,
+         450.0,
+         450.0,
+         450.0,
+         450.0,
+         450.0,
+         450.0
+        ]
+       },
+       "more": [],
+       "tab": "Overview / Alerts"
+      },
+      "info": [],
+      "kis": null,
+      "line": [
+       "Kal ",
+       {
+        "p": 0,
+        "s": "",
+        "sign": 0,
+        "usd": 450.0
+       },
+       " · usual ",
+       {
+        "p": 0,
+        "s": "/din",
+        "sign": 0,
+        "usd": 450.0
+       },
+       " · ad rate (1,000 ads ka) ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 4.5
+       },
+       " → ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 4.5
+       }
+      ],
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Kal $450 · usual $450/din · ad rate (1,000 ads ka) $4.50 → $4.50"
+     },
+     "mediation": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "2 network · Synth Network One 67% · Synth Network Two 33% (24–30 Sep)",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "2 network · Synth Network One 67% · Synth Network Two 33% (24–30 Sep)"
+     },
+     "setup": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+     },
+     "uninstall": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate"
+     },
+     "update": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Pichhle 60 din me koi update nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Pichhle 60 din me koi update nahi"
+     },
+     "value": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Ads ka paisa ~45 din me wapas (installs 3–9 Jul) · ≈ Andaza",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Ads ka paisa ~45 din me wapas (installs 3–9 Jul) · ≈ Andaza"
+     }
+    },
+    "head": {
+     "age": null,
+     "chip": null,
+     "text": "Sab normal — koi badlav nahi"
+    },
+    "k7": 450.0,
+    "key": "25e216099fdc",
+    "kp7": 450.0,
+    "name": "Synth Delta Diary",
+    "nb": [],
+    "paisa": 500.0,
+    "pkg": "com.example.synth4",
+    "size": "badi",
+    "small": false,
+    "spend": 50.0,
+    "tier": "normal",
+    "us": 450.0,
+    "y": 450.0
+   },
+   {
+    "acct": "A/c 1111",
+    "app_id": "ca-app-pub-0000000000000000~0000000005",
+    "dname": "Synth Echo Editor · A/c 1111",
+    "f": {
+     "active": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Purane users roz 17,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Purane users roz 17,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+     },
+     "ads": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+     },
+     "deduct": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Koi deduction nahi dikha (17–30 Sep)",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Koi deduction nahi dikha (17–30 Sep)"
+     },
+     "health": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Invalid traffic: saaf · ads serving: ok",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Invalid traffic: saaf · ads serving: ok"
+     },
+     "kamai": {
+      "detail": {
+       "chart": {
+        "after_idx": 7,
+        "before": 80.0,
+        "cap": "App ki AdMob kamai · $/din · 17–30 Sep",
+        "fmt": "usd",
+        "labels": [
+         "17 Sep",
+         "18 Sep",
+         "19 Sep",
+         "20 Sep",
+         "21 Sep",
+         "22 Sep",
+         "23 Sep",
+         "24 Sep",
+         "25 Sep",
+         "26 Sep",
+         "27 Sep",
+         "28 Sep",
+         "29 Sep",
+         "30 Sep"
+        ],
+        "marks": [
+         [
+          7,
+          "Shuru"
+         ]
+        ],
+        "tips": null,
+        "vals": [
+         80.0,
+         80.0,
+         80.0,
+         80.0,
+         80.0,
+         80.0,
+         80.0,
+         110.0,
+         110.0,
+         110.0,
+         110.0,
+         110.0,
+         110.0,
+         110.0
+        ]
+       },
+       "more": [],
+       "tab": "Overview / Alerts"
+      },
+      "info": [],
+      "kis": "AdMob 24–30 Sep · vs 17–23 Sep",
+      "line": [
+       "Kamai +38%: ",
+       {
+        "p": 0,
+        "s": "",
+        "sign": 0,
+        "usd": 80.0
+       },
+       " → ",
+       {
+        "p": 0,
+        "s": "/din",
+        "sign": 0,
+        "usd": 110.0
+       }
+      ],
+      "q": null,
+      "snz_ph": null,
+      "st": "green",
+      "t": "Kamai +38%: $80 → $110/din"
+     },
+     "mediation": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Mediation ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "Mediation ka data nahi"
+     },
+     "setup": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+     },
+     "uninstall": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate"
+     },
+     "update": {
+      "detail": {
+       "chart": null,
+       "more": [],
+       "tab": "Uninstall → Updates ka asar"
+      },
+      "info": [],
+      "kis": "Update impact · v1.0.8 (10 Sep) · pehle vs baad ke installs",
+      "line": "✅ v1.0.8 update achha gaya",
+      "q": null,
+      "snz_ph": null,
+      "st": "green",
+      "t": "✅ v1.0.8 update achha gaya"
+     },
+     "value": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Google Ads kharcha nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Google Ads kharcha nahi"
+     }
+    },
+    "head": {
+     "age": "21 din",
+     "chip": "chal_raha",
+     "text": "✅ v1.0.8 update achha gaya"
+    },
+    "k7": 110.0,
+    "key": "a3bc8c6156af",
+    "kp7": 80.0,
+    "name": "Synth Echo Editor - Pro",
+    "nb": [],
+    "paisa": 110.0,
+    "pkg": "com.example.synth5",
+    "size": "madhyam",
+    "small": false,
+    "spend": 0.0,
+    "tier": "green",
+    "us": 105.7143,
+    "y": 110.0
+   },
+   {
+    "acct": "Synth Studio",
+    "app_id": "ca-app-pub-0000000000000000~0000000006",
+    "dname": "Synth Foxtrot Flash · Synth Studio",
+    "f": {
+     "active": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Purane users roz 18,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Purane users roz 18,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+     },
+     "ads": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+     },
+     "deduct": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Koi deduction nahi dikha (17–30 Sep)",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Koi deduction nahi dikha (17–30 Sep)"
+     },
+     "health": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Invalid traffic: saaf · ads serving: ok",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Invalid traffic: saaf · ads serving: ok"
+     },
+     "kamai": {
+      "detail": {
+       "chart": {
+        "after_idx": 7,
+        "before": 12.0,
+        "cap": "App ki AdMob kamai · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "fmt": "usd",
+        "labels": [
+         "17 Sep",
+         "18 Sep",
+         "19 Sep",
+         "20 Sep",
+         "21 Sep",
+         "22 Sep",
+         "23 Sep",
+         "24 Sep",
+         "25 Sep",
+         "26 Sep",
+         "27 Sep",
+         "28 Sep",
+         "29 Sep",
+         "30 Sep"
+        ],
+        "marks": [
+         [
+          7,
+          "pichhle 7 din"
+         ]
+        ],
+        "tips": null,
+        "vals": [
+         12.0,
+         12.0,
+         12.0,
+         12.0,
+         12.0,
+         12.0,
+         12.0,
+         12.0,
+         12.0,
+         12.0,
+         12.0,
+         12.0,
+         12.0,
+         12.0
+        ]
+       },
+       "more": [],
+       "tab": "Overview / Alerts"
+      },
+      "info": [],
+      "kis": null,
+      "line": [
+       "Kal ",
+       {
+        "p": 0,
+        "s": "",
+        "sign": 0,
+        "usd": 12.0
+       },
+       " · usual ",
+       {
+        "p": 0,
+        "s": "/din",
+        "sign": 0,
+        "usd": 12.0
+       },
+       " · ad rate (1,000 ads ka) ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 0.12
+       },
+       " → ",
+       {
+        "p": 2,
+        "s": "",
+        "sign": 0,
+        "usd": 0.12
+       }
+      ],
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "Kal $12 · usual $12/din · ad rate (1,000 ads ka) $0.12 → $0.12"
+     },
+     "mediation": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Mediation ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "Mediation ka data nahi"
+     },
+     "setup": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "q": null,
+      "snz_ph": null,
+      "st": "normal",
+      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+     },
+     "uninstall": {
+      "detail": {
+       "chart": {
+        "after_idx": 9,
+        "before": 2.0,
+        "cap": "Har 1,000 users me roz kitne app hataate · 15–28 Sep",
+        "fmt": "r1",
+        "labels": [
+         "15 Sep",
+         "16 Sep",
+         "17 Sep",
+         "18 Sep",
+         "19 Sep",
+         "20 Sep",
+         "21 Sep",
+         "22 Sep",
+         "23 Sep",
+         "24 Sep",
+         "25 Sep",
+         "26 Sep",
+         "27 Sep",
+         "28 Sep"
+        ],
+        "marks": [
+         [
+          9,
+          "Shuru"
+         ]
+        ],
+        "tips": null,
+        "vals": [
+         2.0,
+         2.0,
+         2.0,
+         2.0,
+         2.0,
+         2.0,
+         2.0,
+         2.0,
+         2.0,
+         3.0,
+         3.0,
+         3.0,
+         3.0,
+         3.0
+        ]
+       },
+       "more": [],
+       "tab": "Uninstall"
+      },
+      "info": [],
+      "kis": null,
+      "line": "Roz app hataane wale 50% badhe",
+      "q": {
+       "abhi": null,
+       "kab": "24 Sep · 7 din se",
+       "karo": "24 Sep ke aas-paas notification ya ads badle? Us update ke reviews dekho.",
+       "kis": "Roz ka avg 24–28 Sep · vs 2–29 Aug",
+       "kit": "Har 1,000 users me roz 2.0 → 3.0 hataate",
+       "kya": "Roz app hataane wale 50% badhe",
+       "naya": {
+        "chip": "naya",
+        "first": "26 Sep"
+       },
+       "saath": null
+      },
+      "snz_ph": null,
+      "st": "red",
+      "t": "Roz app hataane wale 50% badhe"
+     },
+     "update": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "Pichhle 60 din me koi update nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "na",
+      "t": "Pichhle 60 din me koi update nahi"
+     },
+     "value": {
+      "detail": null,
+      "info": [],
+      "kis": null,
+      "line": "GA4 nahi juda — install value ka data nahi",
+      "q": null,
+      "snz_ph": null,
+      "st": "nodata",
+      "t": "GA4 nahi juda — install value ka data nahi"
+     }
+    },
+    "head": {
+     "age": "7 din",
+     "chip": "naya",
+     "text": "Roz app hataane wale 50% badhe"
+    },
+    "k7": 12.0,
+    "key": "2d041557dd04",
+    "kp7": 12.0,
+    "name": "Synth Foxtrot Flash",
+    "nb": [
+     "uninstall"
+    ],
+    "paisa": 12.0,
+    "pkg": "com.example.synth6",
+    "size": "chhoti",
+    "small": true,
+    "spend": 0.0,
+    "tier": "red",
+    "us": 12.0,
+    "y": 12.0
+   }
+  ],
+  "built_at": "2026-10-01T04:17:09Z",
+  "built_from": {
+   "generated_at": "2026-10-01T04:13:55+00:00"
+  },
+  "consts": {
+   "badi_usd": 300,
+   "expand_top": 3,
+   "naya_days": 10,
+   "small_usd": 30
+  },
+  "counts": {
+   "amber": 2,
+   "apps": 7,
+   "attn": 4,
+   "failed": 0,
+   "nb": 2,
+   "ok": 2,
+   "red": 2,
+   "small": 1
+  },
+  "data": {
+   "admob_till": "2026-09-30",
+   "ded": {
+    "from": "2026-09-17",
+    "to": "2026-09-30"
+   },
+   "ga4_lag": 3,
+   "ga4_till": "2026-09-28",
+   "p7": {
+    "from": "2026-09-17",
+    "to": "2026-09-23"
+   },
+   "settled_till": "2026-09-25",
+   "usual": {
+    "from": "2026-09-23",
+    "to": "2026-09-29"
+   },
+   "w7": {
+    "from": "2026-09-24",
+    "to": "2026-09-30"
+   }
+  },
+  "day": "2026-10-01",
+  "feats": [
+   [
+    "kamai",
+    "Kamai · eCPM"
+   ],
+   [
+    "uninstall",
+    "Uninstall"
+   ],
+   [
+    "active",
+    "Active users"
+   ],
+   [
+    "value",
+    "Install value"
+   ],
+   [
+    "update",
+    "Update impact"
+   ],
+   [
+    "ads",
+    "Ads"
+   ],
+   [
+    "deduct",
+    "Deductions"
+   ],
+   [
+    "mediation",
+    "Mediation"
+   ],
+   [
+    "health",
+    "Account health"
+   ],
+   [
+    "setup",
+    "Setup / data"
+   ]
+  ],
+  "fx": 88.0,
+  "how": [
+   "Har app ka ek card. Line: pehle wo apps jinme koi 🔴 baat 🆕 Naya (10 din ke andar shuru) hai, ya koi khula 🚩 Re-review flag (admin ka faisla baaki) / kal ka “kal dobara dekho” — phir baaki kamai (pichhle 7 din ka avg, 24–30 Sep) ke hisaab se.",
+   "Kal = 30 Sep (AdMob ka aakhri poora din). Usual = 23–29 Sep ka roz ka avg.",
+   [
+    "Uninstall, Active users, Install value, Update aur ad-unit ki baatein dashboard ke unhi tabs ke rules se bani. Ads: 24–30 Sep vs 17–23 Sep; ROAS 20%+ gira ya ek install ka kharcha 30%+ badha to 🟡. Deductions: 17–30 Sep ke AdMob snapshots; kisi ad unit ka 15%+ aur ",
+    {
+     "p": 0,
+     "s": "",
+     "sign": 0,
+     "usd": 20.0
+    },
+    "+ kata to 🔴. Mediation: kisi network ka hissa 10%+ se 1/3 se neeche gira to 🟡."
+   ],
+   [
+    "Chhoti apps: kamai + ads kharcha ",
+    {
+     "p": 0,
+     "s": "/din",
+     "sign": 0,
+     "usd": 30.0
+    },
+    " se kam. Inke 🔴 bhi unke group me dikhte hain, upar nahi aate."
+   ],
+   "Jin features ka is app ke liye data nahi, unka gola grey (“data nahi”).",
+   "States: ✅ Reviewed · 📝 Reviewed + note · 🚩 Re-review (Important) · 🔁 Kal dobara dekho. 🚩 Important · Re-review = admin dobara dekhega — poori app pe (card ke niche wala button) ya sirf ek feature pe (har feature ke aage chhota 🚩, note ke saath; jaise sirf “Kamai · eCPM” ya sirf “Uninstall”). Har flag alag item hai aur admin har ek ka alag faisla karta hai (👍 Theek hai · 🛠 Kaam do · ⛔ Band karo). Faisla hone tak card upar focus me rehta hai; khula flag agle din ke card pe “🚩 Kamai · eCPM · N din se khula” jaisa dikhta hai. 🛠 Kaam wala flag card pe sirf chip dikhata hai.",
+   "🔁 Kal dobara dekho alag hai — ye sirf khud ke liye kal ka reminder hai, admin ko nahi jaata. 💤 Pata hai = ek baat 7 ya 14 din ke liye chhupao (note ke saath).",
+   "Ye cards 1 Oct ko ek baar bane (us waqt ka data) aur din bhar wahi rehte hain — isliye History me wahi dikhta hai jo review ke waqt tha.",
+   "Sab 7 apps review hote hi Summary khulta hai."
+  ],
+  "order": {
+   "ok": [
+    "25e216099fdc",
+    "a3bc8c6156af"
+   ],
+   "small": [
+    "2d041557dd04"
+   ],
+   "top": [
+    "d85db25e2642",
+    "d3f13277abcb",
+    "82251130bf3a",
+    "d51823beefd0"
+   ]
+  },
+  "ready_ist": "09:00",
+  "v": 1,
+  "weekday": "Guruvar"
+ },
+ "index": {
+  "days": [
+   {
+    "apps": 7,
+    "d": "2026-09-29",
+    "file": "review/days/2026-09-29.json.gz",
+    "small": 1,
+    "top": 4
+   },
+   {
+    "apps": 7,
+    "d": "2026-09-30",
+    "file": "review/days/2026-09-30.json.gz",
+    "small": 1,
+    "top": 4
+   },
+   {
+    "apps": 7,
+    "d": "2026-10-01",
+    "file": "review/days/2026-10-01.json.gz",
+    "small": 1,
+    "top": 4
+   }
+  ],
+  "go_live": "2026-09-29",
+  "next_snapshot": "2026-10-02T09:00:00+05:30",
+  "open_apps": {
+   "25e216099fdc": "Synth Delta Diary · A/c 1111",
+   "2d041557dd04": "Synth Foxtrot Flash · Synth Studio",
+   "82251130bf3a": "Synth Gamma Gallery · Synth Studio",
+   "a3bc8c6156af": "Synth Echo Editor - Pro · A/c 1111",
+   "d3f13277abcb": "Synth Alpha Player · Synth Studio",
+   "d51823beefd0": "Synth Hotel Notes · A/c 1111",
+   "d85db25e2642": "Synth Beta Browser · Synth Studio"
+  },
+  "open_day": "2026-10-01",
+  "pending_today": false,
+  "ready_ist": "09:00",
+  "retry": false,
+  "today_ist": "2026-10-01",
+  "v": 1
+ },
+ "me": {
+  "admin": true,
+  "email": "owner@example.test",
+  "go_live": "2026-09-29",
+  "open_day": "2026-10-01",
+  "server_time": "2026-10-01T05:30:00.000Z"
+ },
+ "state": {
+  "d": "2026-10-01",
+  "flags": [
+   {
+    "app": "a3bc8c6156af",
+    "app_label": "Synth Echo Editor · A/c 1111",
+    "day": "2026-09-30",
+    "dec_at": null,
+    "dec_by": null,
+    "dec_day": null,
+    "dec_note": null,
+    "decision": null,
+    "done_at": null,
+    "done_by": null,
+    "done_day": null,
+    "done_note": null,
+    "feature": "kamai",
+    "id": 1,
+    "note": "Kamai upar gayi par ad rate gira — synthetic",
+    "raised_at": "2026-09-30T05:00:00.000Z",
+    "raised_by": "team@example.test",
+    "status": "open",
+    "wd_at": null,
+    "wd_by": null
+   },
+   {
+    "app": "2d041557dd04",
+    "app_label": "Synth Foxtrot Flash · Synth Studio",
+    "day": "2026-09-29",
+    "dec_at": "2026-09-29T09:00:00.000Z",
+    "dec_by": "owner@example.test",
+    "dec_day": "2026-09-29",
+    "dec_note": "Developer ko bolo — synthetic",
+    "decision": "kaam",
+    "done_at": null,
+    "done_by": null,
+    "done_day": null,
+    "done_note": null,
+    "feature": null,
+    "id": 2,
+    "note": "Poori app dekho — synthetic",
+    "raised_at": "2026-09-29T05:00:00.000Z",
+    "raised_by": "team@example.test",
+    "status": "kaam",
+    "wd_at": null,
+    "wd_by": null
+   },
+   {
+    "app": "82251130bf3a",
+    "app_label": "Synth Gamma Gallery · Synth Studio",
+    "day": "2026-10-01",
+    "dec_at": null,
+    "dec_by": null,
+    "dec_day": null,
+    "dec_note": null,
+    "decision": null,
+    "done_at": null,
+    "done_by": null,
+    "done_day": null,
+    "done_note": null,
+    "feature": "uninstall",
+    "id": 3,
+    "note": "",
+    "raised_at": "2026-10-01T05:10:00.000Z",
+    "raised_by": "team@example.test",
+    "status": "open",
+    "wd_at": null,
+    "wd_by": null
+   }
+  ],
+  "log": [
+   {
+    "act": "kal",
+    "app": "82251130bf3a",
+    "at": "2026-10-01T05:10:00.000Z",
+    "extra": null,
+    "feature": null,
+    "id": 6,
+    "note": null,
+    "ref": null,
+    "who": "owner@example.test"
+   },
+   {
+    "act": "flag",
+    "app": "82251130bf3a",
+    "at": "2026-10-01T05:10:00.000Z",
+    "extra": null,
+    "feature": "uninstall",
+    "id": 5,
+    "note": "",
+    "ref": 3,
+    "who": "team@example.test"
+   },
+   {
+    "act": "snooze",
+    "app": "d85db25e2642",
+    "at": "2026-10-01T05:10:00.000Z",
+    "extra": "{\"days\":7}",
+    "feature": "deduct",
+    "id": 4,
+    "note": "Pata hai — synthetic",
+    "ref": 1,
+    "who": "team@example.test"
+   },
+   {
+    "act": "ok",
+    "app": "d85db25e2642",
+    "at": "2026-10-01T05:10:00.000Z",
+    "extra": null,
+    "feature": null,
+    "id": 3,
+    "note": null,
+    "ref": null,
+    "who": "team@example.test"
+   },
+   {
+    "act": "note",
+    "app": "25e216099fdc",
+    "at": "2026-10-01T05:10:00.000Z",
+    "extra": null,
+    "feature": null,
+    "id": 2,
+    "note": "Synthetic note <img src=x onerror=alert(1)> & more",
+    "ref": 1,
+    "who": "team@example.test"
+   },
+   {
+    "act": "ok",
+    "app": "25e216099fdc",
+    "at": "2026-10-01T05:10:00.000Z",
+    "extra": null,
+    "feature": null,
+    "id": 1,
+    "note": null,
+    "ref": null,
+    "who": "team@example.test"
+   }
+  ],
+  "notes": [
+   {
+    "app": "25e216099fdc",
+    "at": "2026-10-01T05:10:00.000Z",
+    "id": 1,
+    "text": "Synthetic note <img src=x onerror=alert(1)> & more",
+    "who": "team@example.test"
+   }
+  ],
+  "open_day": "2026-10-01",
+  "prev": {
+   "d": "2026-09-30",
+   "kal": [
+    "25e216099fdc"
+   ]
+  },
+  "rev": 6,
+  "snoozes": [
+   {
+    "app": "d85db25e2642",
+    "app_label": "Synth Beta Browser · Synth Studio",
+    "at": "2026-10-01T05:10:00.000Z",
+    "day": "2026-10-01",
+    "days": 7,
+    "feature": "deduct",
+    "id": 1,
+    "note": "Pata hai — synthetic",
+    "until": "2026-10-08",
+    "who": "team@example.test"
+   }
+  ],
+  "states": {
+   "25e216099fdc": {
+    "at": "2026-10-01T05:10:00.000Z",
+    "snz": [],
+    "st": "ok",
+    "who": "team@example.test"
+   },
+   "82251130bf3a": {
+    "at": "2026-10-01T05:10:00.000Z",
+    "snz": [],
+    "st": "kal",
+    "who": "owner@example.test"
+   },
+   "d85db25e2642": {
+    "at": "2026-10-01T05:10:00.000Z",
+    "snz": [
+     "deduct"
+    ],
+    "st": "ok",
+    "who": "team@example.test"
+   }
+  },
+  "writable": true
+ }
+}

@@ -325,6 +325,20 @@ def _uninstall_step(dashboard, data_dir, out_dir, s, revenue=None, now=None):
     return files
 
 
+def _review_step(dashboard, data_dir, out_dir, now=None):
+    """Daily App Review (admob_iq.review): freezes today's cards once (after REVIEW_READY_IST), publishes every day's
+    snapshot to site/review/ and writes site/review/index.json → the _headers patterns it needs. OPTIONAL: off unless
+    REVIEW_ENABLED; on ANY failure every other output stays exactly as built and the log gets the error TYPE only."""
+    if (os.getenv("REVIEW_ENABLED") or "").strip().lower() not in ("1", "true", "yes", "on"):
+        return []
+    try:
+        from .review import run_review
+        return run_review(dashboard, data_dir, out_dir, now=now) or []
+    except Exception as e:
+        print(f"review skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today, tz_by_account=None):
     """The uninstall step with the exact AdMob revenue per app per day (the update-impact card's ARPDAU) from the
     network report already in `repo` — no extra report call (tz_by_account: account_tzs). A revenue failure only costs
@@ -361,11 +375,16 @@ def mediation_revenue(rows, till):
     return {a: dict(sorted(v.items())) for a, v in sorted(apps.items())}
 
 
-def headers_text(uni_files, dashboard):
+def headers_text(uni_files, dashboard, extra=()):
     """The site's _headers (Cloudflare): noindex everywhere, no referrer, and every data file — the GA4 tabs' lazy
-    per-app files included — never served from a stale cache."""
+    per-app files included — never served from a stale cache. extra: more no-store patterns (the Review tab's
+    "/review/*"), placed just before the /index.html rule."""
     return ("/*\n  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet\n"
-            "  Referrer-Policy: no-referrer\n\n"          # never leak the URL to sites you click through to
+            "  Referrer-Policy: no-referrer\n"            # never leak the URL to sites you click through to
+            # never framed by another site: the Review tab's buttons (reviewed / undo / admin decisions) must not be
+            # clickable under a clickjacking overlay while the viewer's Access session is live
+            "  X-Frame-Options: DENY\n"
+            "  Content-Security-Policy: frame-ancestors 'none'\n\n"
             "/dashboard.json.gz\n  Cache-Control: no-store\n\n"
             "/baseline.json\n  Cache-Control: no-store\n\n"
             "/baseline_geo.json.gz\n  Cache-Control: no-store\n\n"
@@ -378,6 +397,7 @@ def headers_text(uni_files, dashboard):
             + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in uni_files if n != "uninstall.json.gz")
             + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in _active_files(dashboard))
             + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in _value_files(dashboard))
+            + "".join(f"{p}\n  Cache-Control: no-store\n\n" for p in extra)
             + "/index.html\n  Cache-Control: no-cache\n")
 
 
@@ -1355,6 +1375,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     with open(os.path.join(out_dir, "app_names.json"), "w", encoding="utf-8") as f:
         f.write(open(apn_src, encoding="utf-8").read() if os.path.exists(apn_src) else "{}")
 
+    # Daily App Review (Review tab): today's cards frozen once + every day's snapshot published under site/review/.
+    # OPTIONAL (REVIEW_ENABLED) and failure-isolated: nothing above or below changes when it is off or fails.
+    review_paths = _review_step(dashboard, data_dir, out_dir) if (mode == "live" and repo.has_data()) else []
+
     # Keep the dashboard out of every search index. It is served from a public static host, so the
     # ONLY thing standing between the URL and the open internet is that nobody knows it — a crawler
     # that finds it once would put revenue figures into search results permanently. Both belt and
@@ -1367,7 +1391,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # dashboard.json changes hourly, so it must NEVER be served from a stale cache
     # — no-store forces every request to fetch the freshest file from origin.
     with open(os.path.join(out_dir, "_headers"), "w", encoding="utf-8") as f:
-        f.write(headers_text(uni_files, dashboard))
+        f.write(headers_text(uni_files, dashboard, extra=review_paths))
 
     alerts = send_alerts(dashboard, s)
     _uninstall_mark_sent(dashboard, data_dir, s, alerts)

@@ -1,0 +1,29 @@
+# EXAMPLE ONLY — the real file is the PRIVATE repo's wrangler.toml, written by the owner's operator at deploy
+# time. Every value below is a placeholder; never commit real ids, domains, AUD tags or emails to this repo.
+name = "admob-iq"
+main = "worker/index.js"
+compatibility_date = "2024-09-23"
+
+# Only the Cloudflare Access-protected custom domain may serve this Worker.
+# workers.dev and preview URLs bypass Access, so they stay OFF (without these two lines every
+# `wrangler deploy` turns workers.dev back ON and the dashboard data becomes public).
+workers_dev = false
+preview_urls = false
+
+# Static dashboard (site/). Access guards the whole host at the edge; /api/* runs the Worker first,
+# which ALSO verifies the Access JWT itself. not_found_handling is not set (same as today: a missing file is a 404).
+[assets]
+directory = "./site"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+# Daily App Review state (review clicks, notes, 🚩 flags, snoozes).
+[[d1_databases]]
+binding = "REVIEW_DB"
+database_name = "admob-review"
+database_id = "REVIEW_DB_ID"
+
+[vars]
+ACCESS_TEAM_DOMAIN = "ACCESS_TEAM_DOMAIN"     # e.g. <team>.cloudflareaccess.com (no https://)
+ACCESS_AUD = "ACCESS_AUD"                     # the Access application's AUD tag
+ADMIN_EMAILS = "owner@example.test"           # comma list; only these can decide 🚩 flags

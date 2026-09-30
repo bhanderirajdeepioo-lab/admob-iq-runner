@@ -119,6 +119,12 @@ jobs:
           # Update impact card: IMPACT_WINDOWS=false (repo variable) turns off its 14 / 30 / 60-day windows and the
           # late-effect alerts without a code push (the 7-day card as before)
           IMPACT_WINDOWS:       ${{ vars.IMPACT_WINDOWS || 'true' }}
+          # Daily App Review (Review tab): REVIEW_ENABLED=true (repo variable) starts the daily card snapshots — set it
+          # only after the Review API (Worker) is live; REVIEW_READY_IST = when the day's cards freeze (IST, empty: 09:00);
+          # REVIEW_REBUILD_DAY=<YYYY-MM-DD> rebuilds TODAY's cards once (any other day is ignored).
+          REVIEW_ENABLED:       ${{ vars.REVIEW_ENABLED || 'false' }}
+          REVIEW_READY_IST:     ${{ vars.REVIEW_READY_IST }}
+          REVIEW_REBUILD_DAY:   ${{ vars.REVIEW_REBUILD_DAY }}
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On
@@ -149,7 +155,18 @@ jobs:
             rm -rf data site && mkdir -p data site
             cp -a ../data/. data/ 2>/dev/null || true
             cp -a ../site/. site/ 2>/dev/null || true
+            # Review API (Worker) code → private worker/. Synced only when this checkout has it, every file parses AND
+            # index.js links (a real import: a missing module / export passes --check but fails the Workers build);
+            # otherwise worker/ stays exactly as on the remote (a missing folder never breaks this push).
+            # src/package.json ({"type":"module"}) is required: without it newer node lets a broken ES module pass --check.
+            if [ -f ../review_worker/src/index.js ] && [ -f ../review_worker/src/package.json ] && command -v node >/dev/null 2>&1 \
+               && ( for f in ../review_worker/src/*.js; do node --check "$f" >/dev/null 2>&1 || exit 1; done ) \
+               && node --input-type=module -e 'const { pathToFileURL } = await import("node:url"); await import(pathToFileURL(process.argv[1]).href);' \
+                    ../review_worker/src/index.js >/dev/null 2>&1; then
+              rm -rf worker && mkdir -p worker && cp -a ../review_worker/src/. worker/
+            fi
             git add -A data site
+            if [ -d worker ]; then git add -A worker; fi
             if git diff --cached --quiet; then echo "nothing to commit"; pushed=1; break; fi
             git commit -q -m "refresh $(date -u '+%F %H:%M') UTC"
             if git push -q origin HEAD:main 2>/dev/null; then echo "pushed on attempt $i"; pushed=1; break; fi
