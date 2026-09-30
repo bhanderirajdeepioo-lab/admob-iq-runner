@@ -562,10 +562,15 @@ def test_market_lines_count_moved_of_total_and_old_weeks_are_past(report):
 
 
 def test_install_part_keeps_its_sign(report):
+    """SPEC_SPLIT §6.4.2: the installs' part of the returning users' change keeps its sign — opposite, same and ~0 — now
+    as the split block (whole %s that add up as printed, the per-user part absorbing the rounding; the elastic estimate
+    says ≈ Andaza; no "pts")."""
     fx = report["fix"]
-    assert "installs ne ~5.7 pts ghataya, warna ~+13% ≈" in fx["inst_opp"] and "about" not in fx["inst_opp"]
-    assert "isme ~8 pts naye installs ki wajah se, purane users ~−4% ≈" in fx["inst_same"]
-    assert "Installs +5% vs 4 weeks" in fx["inst_zero"] and "pts" not in fx["inst_zero"].split("Installs +5% vs 4 weeks")[1][:20]
+    for k, (t, f, p) in (("inst_opp", ("+8%", "−6%", "+14%")), ("inst_same", ("−12%", "−8%", "−4%")), ("inst_zero", ("+2%", "0%", "+2%"))):
+        b = fx[k].strip()
+        assert b.startswith("Purane users roz: %s (" % t), b
+        assert "• installs ki wajah se: %s (" % f in b and "• asli badlaav: %s" % p in b, b
+        assert "≈ Andaza" in b and "pts" not in b and "about" not in b, b
 
 
 def test_alert_hint_follows_the_metric(report):

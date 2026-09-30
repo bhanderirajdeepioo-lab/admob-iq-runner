@@ -80,14 +80,41 @@ def run_builds(tmp, s=None, seed_kw=None, days=(7, 0)):
     return got
 
 
+def _no_sp(obj):
+    """obj without the SPEC_SPLIT "sp" keys (the change's installs vs per-user split, an added explanation): the pins
+    below stay abd6ee8's — everything else must still be byte-identical."""
+    if isinstance(obj, dict):
+        return {k: _no_sp(v) for k, v in obj.items() if k != "sp"}
+    if isinstance(obj, list):
+        return [_no_sp(v) for v in obj]
+    if isinstance(obj, str) and obj.startswith("{") and '"sp"' in obj:     # value_state.json (its save_state text)
+        return json.dumps(_no_sp(json.loads(obj)), ensure_ascii=False, sort_keys=True, indent=1)
+    return obj
+
+
 def _digest(obj):
-    return hashlib.sha256(json.dumps(obj, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(json.dumps(_no_sp(obj), sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
+
+
+def _resig(b):
+    """(SPEC_SPLIT) a build's row sigs / asset_v as the build computes them from its files — without their "sp" keys."""
+    v = b.get("value")
+    if v and v.get("apps") is not None:
+        v = dict(v, apps=[dict(r) for r in v["apps"]])
+        for r in v["apps"]:
+            if r.get("file") in b["files"]:
+                r["sig"] = vb._sig(_no_sp(b["files"][r["file"]]))
+        if "asset_v" in v:
+            v["asset_v"] = vb._sig({"sigs": sorted(r.get("sig") or "" for r in v["apps"]), "consts": v["consts"]})
+        b = dict(b, value=v)
+    return b
 
 
 def flags_off_digest(tmp):
     # every flag off — IMPACT_WINDOWS too (on, the uninstall log line gains its ", impact_late alerts …" counts: the
     # value outputs are identical either way)
-    return _digest([{k: v for k, v in b.items() if k != "dash"} for b in run_builds(tmp, s=_settings(impact_windows=False))])
+    return _digest([_resig({k: v for k, v in b.items() if k != "dash"})
+                    for b in run_builds(tmp, s=_settings(impact_windows=False))])
 
 
 def legacy_geo_digest():

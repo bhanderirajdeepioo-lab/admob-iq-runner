@@ -31,6 +31,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import ga4_probe
 from .db import write_json_gz_stable
+from .engine import attrib
 from .engine import impact as imp
 from .engine import uninstall as eng
 from .fetch import ga4_uninstall as gu
@@ -216,6 +217,7 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
     cfg = ga4_cfg(s)
     if cfg is None:
         return None
+    attrib.ON, attrib.FAILS = bool(s.get("split", True)), 0     # the installs vs per-user split (SPEC_SPLIT S9)
     now = now or datetime.now(timezone.utc)
     now_iso = gu._now_iso(now)
     apps = _selected_apps(dashboard, data_dir)
@@ -389,6 +391,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
     if val_on:                                          # dashboard["value"] after that (its log line: build_static's)
         vb.finish(dashboard, out_dir, val_rows, val_pre, val_st, data_dir, no_ga4, val_cfg,
                   dashboard["uninstall"]["status"])
+    if attrib.FAILS:                                    # a split that could not be worked out (never a verdict): counted
+        print("split failed: %d" % attrib.FAILS, file=sys.stderr)          # — counts only, and only when any
     return files
 
 

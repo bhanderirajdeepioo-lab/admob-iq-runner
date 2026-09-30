@@ -55,6 +55,7 @@ import math
 from datetime import date, datetime, timedelta, timezone
 
 from ..alerting.rules import fingerprint
+from . import attrib
 from . import uninstall as U
 
 # ── constants (each with its one-line why) ──
@@ -871,6 +872,8 @@ def dau_row(cx, blk):
     ex["mu_week"] = round(mu, 5)
     used, bs, pat = [], [], []
     sr = se = srb = 0.0
+    src = srcb = syb = stt = 0.0                     # (the split's: Σ recent(d), Σ recent(b), Σ Y(b), Σ Om(b)·(e^{μ·w} − 1)
+                                                     # — read only)
     xa = []
     for d in win["settled"]:
         b, w = pair_day(win, R, d)
@@ -881,6 +884,11 @@ def dau_row(cx, blk):
         xa.append(x)
         used.append(d), bs.append(b), pat.append((d, b, w))
         sr, se, srb = sr + r, se + e, srb + r0
+        rc, yv = dm["recent"](d), dm["Y"](b)         # (memoized: re-reading them changes nothing)
+        src, srcb, syb, stt = src + rc, srcb + dm["recent"](b), syb + yv, stt + (e - rc - (r0 - yv))
+    if used:                                         # expected − before = (Σrecent(d) − ΣY(b) + Σtrend) ÷ n, exactly
+        row["_spx"] = (("steep", mu) if steep else ("raw",) if raw
+                       else ("dau", src, srcb, syb, stt, len(used), sum(rho[k] for k in range(1, K + 1))))
     ys = [memo[d] for d in touched]
     tot = sum(y for y, _ in ys)
     ex["imputed_share"] = round(sum(yi for _, yi in ys) / tot, 5) if tot else 0.0
@@ -1389,6 +1397,8 @@ def arpdau_row(cx, blk):
     eb = rb / sum(imp(d) for d in bs) if ib else None
     ns_b = pool(bs, lambda ds: sum(_dv(cx, d, "new") or 0 for d in ds))
     ns_a = pool(used, lambda ds: sum(_dv(cx, d, "new") or 0 for d in ds))
+    if used and bs:                                  # (the split's: active users per day, before / after)
+        row["_spx"] = ("rev", sum(a1(d) for d in bs) / len(bs), sum(a1(d) for d in used) / len(used), ns_b, ns_a)
     ti = _pu_test(cx, blk, Mi, IMP_MIN_REL, "ads per user", mkey="imp")   # the update's part: ads per active user
     row["basis"] = "expected" if ti["trend"] and ti["steep"] is None else "plain"
     row["noise"] = ti["noise"]                       # (judged on ads per user: its noise, its minimum)
@@ -1501,6 +1511,7 @@ def d0_row(cx, blk):
         row.update(status="low", raw_status="low", reason="Install ke din ke uninstall ka data kam")
         return row
     r, b = use["r"], use["b"]
+    row["_spx"] = ("ur", b[1], b[2], r[1], r[2])     # (the split's: installs and install days, before / after)
     ex.update(read="newest" if use is nw else "settled", est=use["est"])
     row.update(before=b[0] / b[1], after=r[0] / r[1], change=use["dpp"], z=use["z"], n_before=b[2], n_after=r[2],
                prov=bool(use is nw and use["prov"]), est=bool(use["est"]))
@@ -1567,6 +1578,7 @@ def d0_long(cx, blk):
     xa, na = sum(cell(c)[0] for c in Ca), sum(cell(c)[1] for c in Ca)
     xb, nb = sum(cell(c)[0] for c in Cb), sum(cell(c)[1] for c in Cb)
     pa, pb = xa / na, xb / nb
+    row["_spx"] = ("ur", nb, len(Cb), na, len(Ca))   # (the split's: installs and install days, before / after)
     dpp = round((pa - pb) * 100, 6)                  # rounded so float dust can't decide a flag at the edge
     ia, ib = [(c - hs).days for c in Ca], [(c - hs).days for c in Cb]
     ar, ab = U._added(cd, ia, 0)[0], U._added(cd, ib, 0)[0]
@@ -1999,6 +2011,55 @@ def alert_text(blk, level, rows_all, keys, early, E):
     return text, ks[0]
 
 
+# ── the installs vs per-user split of each judged row (SPEC_SPLIT F2 / F4 / F6) ───────────────────
+
+def _split_rows(cx, rows, N):
+    """Each JUDGED row's split wire "sp" from the sums the row already kept ("_spx"; dropped with the other "_" keys by
+    _round_row) — returning DAU: expected − before = the installs' part + the rest the expected level already held
+    (["imp", fi, tr(, nb, na)]): fi = Σ(recent(d) − recent(b)) ÷ n — the pair days' installs moving at the SAME ρ̂
+    (pure volume) — and tr = the old users' usual trend + the before days' measured recent returners vs ρ̂ (Σ recent(b)
+    − Σ Y(b): not installs moving); nb / na = the installs a day feeding them, ρ̂-weighted (fi = (na − nb) · Σρ̂), on the
+    7-day rows only. Install-day uninstall: ["ur", installs / day before / after], ad revenue per user (7 days only):
+    ["rev", active users / day before / after(, the new-user share when it moved)]. Low / na / pending rows get none —
+    except a returning-DAU row on a trend too steep to extrapolate (Low data): ["no", "steep_up" | "steep_dn"] says why
+    it has none. Read-only: no status, number or verdict reads it."""
+    for key, row in rows.items():
+        x = row.get("_spx")
+        if not x:
+            continue
+        if x[0] == "steep":
+            if row.get("status") == "low":
+                sp = attrib.safe(attrib.no, "steep_up" if x[1] > 0 else "steep_dn")
+                if sp is not None:
+                    row["sp"] = sp
+            continue
+        if row.get("status") not in JUDGED:
+            continue
+        if x[0] == "raw":
+            sp = attrib.safe(attrib.no, "cohorts")
+        elif x[0] == "dau":
+            def build(x=x):
+                _, src, srcb, syb, stt, n, srho = x
+                nb = na = None
+                if N == WIN_DAYS and srho > 0:
+                    nb, na = srcb / n / srho, src / n / srho
+                return attrib.imp((src - srcb) / n, (stt + srcb - syb) / n, nb, na)
+            sp = attrib.safe(build)
+        elif x[0] == "ur":
+            sp = attrib.safe(lambda x=x: attrib.rate("ur", x[1] / x[2], x[3] / x[4]))
+        elif x[0] == "rev" and N == WIN_DAYS:
+            def build(x=x):
+                _, ub, ua, ns_b, ns_a = x
+                notes = ([("new", ns_b, ns_a)] if ns_a is not None and ns_b is not None
+                         and abs(ns_a - ns_b) > NEWSHARE_SWING else [])
+                return attrib.rev(ub, ua, notes)
+            sp = attrib.safe(build)
+        else:
+            sp = None
+        if sp is not None:
+            row["sp"] = sp
+
+
 # ── one app ──────────────────────────────────────────────────────────────────────────────────────
 
 def _round_row(row):
@@ -2107,6 +2168,7 @@ def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, 
         if level in ("halt", "hold", "win") and blk["R"] >= E - timedelta(days=IMPACT_ALERT_DAYS):
             keys = vd["better"] if level == "win" else vd["worse"]
             conds.append(_cond(app_id, blk, level, allr, keys, vd, seed, E, rows))
+        _split_rows(cx, rows, WIN_DAYS)
         blk["_out"] = {"key": blk["key"], "rel_keys": blk["rel_keys"], "kind": blk["kind"], "versions": blk["versions"],
                        "label": blk["label"], "date": _iso(blk["R"]),
                        "adoption": _adopt_out(blk),
@@ -2383,6 +2445,7 @@ def _long_window(cx, blk, blocks, j, N, state, app_id, E):
                    "judged_on": _iso(judged_on), "final_on": _iso(final_on)},
          "mixed": win["mixed"], "mixed_before": win["mixed_before"],
          "adoption_mean": None if win["adopt_mean"] is None else round(win["adopt_mean"], 5)}
+    _split_rows(cx, rows, N)
     W.update(rows={k: _sparse(_round_row(rows[k]), W) for k in keys}, verdict=vd,
              notes=[n for n in NOTES_LONG if n in notes])
     return W, cand

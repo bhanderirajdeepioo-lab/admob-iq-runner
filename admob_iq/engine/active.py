@@ -35,6 +35,7 @@ import math
 from datetime import datetime, timedelta, timezone
 
 from ..alerting.rules import fingerprint
+from . import attrib
 from . import impact as imp
 from . import uninstall as U
 
@@ -559,6 +560,7 @@ def prepare(store, udet, revenue, E, cfg=None, late_un=U.LATE_DAYS):
              ret_empty=empty, ret=ret)
     # recent returners Y and old users O (§2.4)
     Y, yi, oq, Kd = [None] * H, [None] * H, [None] * H, [None] * H
+    ysrc = [None] * H                                  # the (ρ̂, K) each day's Y was summed with (the split reads it)
     rhos = [_rho_at(P, d) for d in range(H)] if any(usable) else [None] * H
     first = next((d for d in range(H) if rhos[d]), None)
     if first is not None:
@@ -578,13 +580,13 @@ def prepare(store, udet, revenue, E, cfg=None, late_un=U.LATE_DAYS):
             if src is None:
                 continue
             y, yv = returners(P, d, src[0], src[1])
-            Y[d], yi[d], Kd[d] = y, yv, src[1]
+            Y[d], yi[d], Kd[d], ysrc[d] = y, yv, src[1], src
             oq[d] = 2 if own and yv <= MEASURED_Y * y else 1
     old = [None] * H
     for d in range(H):
         if R[d] is not None and Y[d] is not None and R[d] - Y[d] > 0:
             old[d] = R[d] - Y[d]
-    P.update(Y=Y, yi=yi, oq=oq, old=old, Kd=Kd)
+    P.update(Y=Y, yi=yi, oq=oq, old=old, Kd=Kd, ysrc=ysrc)
     # metric numerators / denominators (per-user values: ratios of sums, never means of ratios)
     num, den = {}, {}
     num["ret_dau"], den["ret_dau"] = R, [1 if r is not None else None for r in R]
@@ -1000,6 +1002,8 @@ def _inst_attr(P, w0, w1, b0, b1, rel, beta):
     pot = None
     if swing is not None and swing > -1 and rb and n0:
         pot = min(YS_MAX, n0 * RET_SUM_MAX / rb) * math.log(1 + swing)
+    # (+ what the split of the change reads — SPEC_SPLIT F1: yb / yw, rb, n0 / n1, sw_b / sw_w; nothing decides on them)
+    xk = {"yb": None, "yw": None, "rb": rb, "n0": n0, "n1": n1, "sw_b": sw_b, "sw_w": sw_w}
     if _cohort_mode(P, b0, w1):
         cy_w, cy_b = _psum(P["p_yc"], w0, w1), _psum(P["p_yc"], b0, b1)
         if cy_w and cy_b and rb:
@@ -1007,14 +1011,14 @@ def _inst_attr(P, w0, w1, b0, b1, rel, beta):
             if rb > 0:
                 part = (yw - yb) / rb
                 est = any(P["oq"][i] == 1 or (P["yi"][i] or 0) > 0 for i in range(max(b0, 0), w1 + 1))
-                return {"mode": "cohort", "inst_part": part, "old_part": rel - part, "swing": swing, "pot": None,
-                        "est": est}
+                return dict({"mode": "cohort", "inst_part": part, "old_part": rel - part, "swing": swing, "pot": None,
+                             "est": est}, **dict(xk, yb=yb, yw=yw))
     if beta is not None:
         if n1 and n0 and n1 > 0 and n0 > 0:
             part = beta * math.log(n1 / n0)
-            return {"mode": "elastic", "inst_part": part, "old_part": rel - part, "swing": swing, "pot": pot,
-                    "est": True}
-    return {"mode": "raw", "inst_part": None, "old_part": None, "swing": swing, "pot": pot, "est": False}
+            return dict({"mode": "elastic", "inst_part": part, "old_part": rel - part, "swing": swing, "pot": pot,
+                         "est": True}, **xk)
+    return dict({"mode": "raw", "inst_part": None, "old_part": None, "swing": swing, "pot": pot, "est": False}, **xk)
 
 
 def _inst_rule(att, rel, min_old=None):
@@ -1037,6 +1041,130 @@ def _inst_rule(att, rel, min_old=None):
 def _share(p_num, p_den, a, b):
     d = _psum(p_den, a, b)
     return _psum(p_num, a, b) / d if d else None
+
+
+# ── the installs vs per-user split of a change (SPEC_SPLIT F1 / F5 / F6 / F8) — read-only: every quantity here is one
+# the engine already worked out for its own rule; nothing it returns decides anything ─────────────────────────────
+
+NOSP = ("wait", "noad", "low")                    # a tile in these states shows no change: no split
+
+
+def _k_of(P, a, b):
+    """The return days K the recent installs' returners Y sum over on [a, b] (_cohort_mode: one K on its valid days)."""
+    Kd, valid = P["Kd"], P["valid"]["ret_dau"]
+    for i in range(min(b, P["H"] - 1), max(a, 0) - 1, -1):
+        if valid[i] and Kd[i]:
+            return Kd[i]
+    return None
+
+
+def _lag_sums(P, days, K):
+    """Per lag k = 1..K over the days: Σ the day-k returners of the cohort d − k (measured, else its installs × the ρ̂
+    that day's Y used — exactly the terms Y sums) and Σ those cohorts' installs → (num, den)."""
+    A, usable, new, src = P["A"], P["usable"], P["new"], P["ysrc"]
+    num, den = [0.0] * (K + 1), [0.0] * (K + 1)
+    for d in days:
+        rho = src[d][0]
+        for k in range(1, K + 1):
+            c = d - k
+            if c < 0:
+                continue
+            n = new[c] or 0
+            a = A[c]
+            num[k] += a[k] if usable[c] and a is not None and len(a) > k else n * rho[k]
+            den[k] += n
+    return num, den
+
+
+def _ret_vol(P, W, B, K):
+    """The recent installs' returners split into volume and return (SPEC_SPLIT S1): on the before days B each lag's
+    return per install ρ_k = Σ returners ÷ Σ installs; the after days W's own installs at those ρ_k give what the
+    volume alone would have brought (vw), so fi = vw − yb is the installs' part and the rest — yw − vw, the recent
+    installs' own return moving, and the old users — is per user. → (fi, yb, yw, nb, na, pb, pa): nb / na = the
+    installs a day feeding them, weighted by ρ_k (fi = yb · (na ÷ nb − 1)); pb / pa = of 100 installs of the last K days,
+    how many come back a day, at B's / W's own curve. None when a side has no day."""
+    if not W or not B or not K:
+        return None
+    nB, dB = _lag_sums(P, B, K)
+    nW, dW = _lag_sums(P, W, K)
+    yb, yw = sum(nB) / len(B), sum(nW) / len(W)
+    vw = sb = sa = S = SW = 0.0
+    for k in range(1, K + 1):
+        if dB[k] > 0:
+            rk = nB[k] / dB[k]
+            vw += rk * dW[k] / len(W)
+            S += rk
+            sb, sa = sb + rk * dB[k] / len(B), sa + rk * dW[k] / len(W)
+        else:                                              # no installs known behind this lag: it can't scale
+            vw += nB[k] / len(B)
+        if dW[k] > 0:
+            SW += nW[k] / dW[k]
+    nb, na = (sb / S, sa / S) if S > 0 else (None, None)
+    return vw - yb, yb, yw, nb, na, (100 * S / K if S > 0 else None), (100 * SW / K if SW > 0 else None)
+
+
+def _y_days(P, a, b):
+    """The days of [a, b] whose returners Y are counted (valid, Y known) — the days p_Y / p_yc sum."""
+    Y, valid = P["Y"], P["valid"]["ret_dau"]
+    return [i for i in range(max(a, 0), min(b, P["H"] - 1) + 1) if valid[i] and Y[i] is not None]
+
+
+def _sp_ret(P, att, w0, w1, b0, b1, before=None):
+    """A returning-users change's split over the same windows as its install attribution (_inst_attr): cohort mode —
+    the recent installs' returners after at the before days' per-install return curve (_ret_vol: pure volume); elastic
+    — β̂·log(n1 ÷ n0) × the before level (its n0 / n1: the installs feeding each window); raw — none."""
+    def build():
+        if att["mode"] == "cohort":
+            K = _k_of(P, b0, w1)
+            v = _ret_vol(P, _y_days(P, w0, w1), _y_days(P, b0, b1), K)
+            if v is None:
+                return attrib.no("few")
+            fi, yb, yw, nb, na, pb, pa = v
+            return attrib.ret(fi, yb, yw, nb, na, pb, pa, K, 1 if att["est"] else 0, before)
+        if att["mode"] == "elastic":
+            return attrib.ret(att["inst_part"] * att["rb"], 0, 0, att["n0"], att["n1"], None, None, None, 3, before)
+        return attrib.no("cohorts")
+    return attrib.safe(build)
+
+
+def _sp_pu(P, moved, w0, w1, b0, b1):
+    """A per-user number's notes (what _mix_moves found moved between B and W) → ["pu", …] or None."""
+    def build():
+        notes = []
+        for x in moved or ():
+            if x == "newshare":
+                notes.append(("new", _share(P["p_new"], P["p_a1"], b0, b1), _share(P["p_new"], P["p_a1"], w0, w1)))
+            elif x == "recent":
+                notes.append(("rec", _share(P["p_Y"], P["pn"]["ret_dau"], b0, b1),
+                              _share(P["p_Y"], P["pn"]["ret_dau"], w0, w1)))
+            elif x == "other_net":
+                notes.append(("net", other_share(P, b0, b1, "imp"), other_share(P, w0, w1, "imp")))
+        return attrib.pu(notes)
+    return attrib.safe(build)
+
+
+def _sp_rr(st):
+    """A return rate's split: the install days' GA4 new users per rate day, before / after (_ret_stats)."""
+    return attrib.safe(lambda: attrib.rate("rr", st["tb"] / st["cb"], st["tw"] / st["cw"]))
+
+
+def _sp_spike(P, d, med):
+    """A returning-users jump's split: the recent installs' returners that day vs their 28 days before (_spike_part's
+    days), the volume part at those days' per-install return curve (_ret_vol)."""
+    def build():
+        if not med:
+            return attrib.no("base")
+        _, _, ybar, _, _, _ = _spike_part(P, d, med)
+        if ybar is None:
+            return attrib.no("few" if _cohort_mode(P, d - 28, d) and P["Y"][d] is not None else "cohorts")
+        K = _k_of(P, d - 28, d)
+        v = _ret_vol(P, [d], _y_days(P, d - 28, d - 1), K)
+        if v is None:
+            return attrib.no("few")
+        est = any(P["oq"][i] == 1 or (P["yi"][i] or 0) > 0 for i in range(max(d - 28, 0), d + 1))
+        fi, yb, yw, nb, na, pb, pa = v
+        return attrib.ret(fi, yb, yw, nb, na, pb, pa, K, 1 if est else 0)
+    return attrib.safe(build)
 
 
 def _mix_moves(P, w0, w1, b0, b1, m):
@@ -1118,7 +1246,7 @@ def _tile_null(P, m, e):
 def _M(**kw):
     out = {"v": None, "base": None, "all": None, "rel": None, "pp": None, "z": None, "usual": None, "st": "normal",
            "why": None, "est": False, "n": 0, "nb": 0, "from": None, "to": None, "bfrom": None, "bto": None,
-           "s": None}
+           "s": None, "sp": None}
     out.update(kw)
     return out
 
@@ -1624,22 +1752,31 @@ def _told(P, told, fam_ok, metric, dr, a, b):
     return False
 
 
+def _spike_part(P, d, med):
+    """What a returning-users jump on day d reads of the install mix → (part, upto, ybar, swing, n0, n1): part = the
+    recent installs' returners that day vs their mean over the 4 weeks before (ybar; return cohorts) ÷ the normal, else
+    at most RET_SUM_MAX × the installs' move over the week that feeds them (upto)."""
+    Y = P["Y"]
+    n1, n0 = _mean_new(P, d - 7, d - 1), _mean_new(P, d - 35, d - 8)
+    swing = (n1 / n0 - 1) if n1 is not None and n0 else None
+    part, upto, ybar = None, False, None
+    if _cohort_mode(P, d - 28, d) and Y[d] is not None:
+        yb = [Y[i] for i in range(max(0, d - 28), d) if Y[i] is not None and P["valid"]["ret_dau"][i]]
+        if len(yb) >= 14:
+            ybar = sum(yb) / len(yb)
+            part = (Y[d] - ybar) / med
+    elif swing is not None and swing > -1 and n0:
+        part, upto = min(YS_MAX, n0 * RET_SUM_MAX / med) * math.log(1 + swing), True
+    return part, upto, ybar, swing, n0, n1
+
+
 def _spike_inst(P, d, rel, med):
     """Does the install mix explain half of a returning-users jump on day d (the same direction)? The recent installs'
     returners that day vs their 4 weeks before (return cohorts), else at most RET_SUM_MAX × the installs' move over the
     week that feeds them → the alert's install snapshot, or None."""
     if not med:
         return None
-    Y = P["Y"]
-    n1, n0 = _mean_new(P, d - 7, d - 1), _mean_new(P, d - 35, d - 8)
-    swing = (n1 / n0 - 1) if n1 is not None and n0 else None
-    part, upto = None, False
-    if _cohort_mode(P, d - 28, d) and Y[d] is not None:
-        yb = [Y[i] for i in range(max(0, d - 28), d) if Y[i] is not None and P["valid"]["ret_dau"][i]]
-        if len(yb) >= 14:
-            part = (Y[d] - sum(yb) / len(yb)) / med
-    elif swing is not None and swing > -1 and n0:
-        part, upto = min(YS_MAX, n0 * RET_SUM_MAX / med) * math.log(1 + swing), True
+    part, upto, _, swing, _, _ = _spike_part(P, d, med)
     if part is None or _sgn(part) != _sgn(rel) or abs(part) < 0.5 * abs(rel):
         return None
     return {"mode": "cohort" if not upto else "raw", "part": _m4(part if abs(part) <= abs(rel) else rel),
@@ -1656,10 +1793,10 @@ def _inst_snap(att, rel):
     return {"mode": att["mode"], "part": _m4(part), "swing": _m4(att["swing"]), "upto": upto}
 
 
-def _inst_info(P, dr, rel, frm, to, slow=False):
+def _inst_info(P, dr, rel, frm, to, slow=False, sp=None):
     """The info row of a returning-users change the installs explain (never an alert)."""
     return {"kind": "installs", "metric": "ret_dau", "dir": dr, "from": frm, "to": to, "rel": _m4(rel),
-            "tags": ["installs"], "prov": False,
+            "tags": ["installs"], "prov": False, "sp": sp,
             "text": "Returning users %s%s, par ye naye installs %s aane se (ad spend?) — 30+ din purane users normal"
                     % (U.fmt_rel(rel), " (3 mahine me)" if slow else "", "zyada" if rel > 0 else "kam")}
 
@@ -1704,14 +1841,17 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
             att = _inst_attr(P, s, e, dr["bfrom"], dr["bto"], dr["rel"], beta)
             rule = _inst_rule(att, dr["rel"])
             c["inst"] = _inst_snap(att, dr["rel"])
+            c["sp"] = _sp_ret(P, att, s, e, dr["bfrom"], dr["bto"])
             if rule == "info" or (rule == "cap" and dr["dir"] == "up"):   # a rise the installs explain: never
-                info.append(_inst_info(P, dr["dir"], dr["rel"], iso[s], iso[e]))
+                info.append(_inst_info(P, dr["dir"], dr["rel"], iso[s], iso[e],
+                                       sp=_sp_ret(P, att, s, e, dr["bfrom"], dr["bto"], att["rb"])))
                 continue
             if rule == "cap":
                 c["cap"], c["tags"] = "watch", c["tags"] + ["installs"]
                 c["est"] = att["est"]
         else:
             moved = _mix_moves(P, s, e, dr["bfrom"], dr["bto"], m)
+            c["sp"] = _sp_pu(P, moved, s, e, dr["bfrom"], dr["bto"]) if moved else None
             if moved:
                 if dr["dir"] == "up":                  # the users' mix moved: a rise is not the app's (tile: Maybe)
                     continue
@@ -1755,9 +1895,11 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
              "now": sl["now"], "before": sl["before"], "since": iso[sl["s"]], "day": None,
              "days": SLOW_DAYS, "base_from": iso[sl["bfrom"]], "base_to": iso[sl["bto"]],
              "installs_from": None, "installs_to": None, "delta_pp": None, "users": _int(sl["now"]),
-             "tags": [], "cap": None, "also": [], "est": False, "inst": _inst_snap(att, sl["rel"])}
+             "tags": [], "cap": None, "also": [], "est": False, "inst": _inst_snap(att, sl["rel"]),
+             "sp": _sp_ret(P, att, sl["s"], sl["e"], sl["bfrom"], sl["bto"])}
         if rule == "info" or (rule == "cap" and sl["dir"] == "up"):
-            info.append(_inst_info(P, sl["dir"], sl["rel"], iso[sl["s"]], iso[sl["e"]], slow=True))
+            info.append(_inst_info(P, sl["dir"], sl["rel"], iso[sl["s"]], iso[sl["e"]], slow=True,
+                                   sp=_sp_ret(P, att, sl["s"], sl["e"], sl["bfrom"], sl["bto"], att["rb"])))
         else:
             if rule == "cap":
                 c["cap"], c["tags"], c["est"] = "watch", ["installs"], att["est"]
@@ -1829,7 +1971,8 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
                             "delta_pp": None, "users": _int(P["R"][d0]) if m == "ret_dau" else _int(P["den"][m][d0]),
                             "tags": ["installs"] if inst else [], "cap": "watch" if inst else None, "also": [],
                             "est": bool(m == "ads" and P["tz_blend"]), "inst": inst,
-                            "broke": bool(m == "ads" and min(h["rel"] for h in g) <= ADS_BROKE)})
+                            "broke": bool(m == "ads" and min(h["rel"] for h in g) <= ADS_BROKE),
+                            "sp": _sp_spike(P, d0, first["med"]) if m == "ret_dau" else None})
     # new users coming back
     if P["has_ret"] and (only is None or any(k in only for k in D_NS)):
         nmax = P["nmax"] if iS == P["iS"] else _nmax(P, iS)
@@ -1925,7 +2068,7 @@ def _ret_cond(P, st, recent_from):
             "installs_from": iso[st["r0"]], "installs_to": iso[st["r1"]], "base_from": iso[st["b0"]],
             "base_to": iso[st["b1"]], "users": int(st["tw"]), "vs": ["prev", "all"] if vs_all else ["prev"],
             "tags": ["installs"] if capped else [], "cap": "watch" if (capped or st["sn"] is None) else None,
-            "inst_swing": swing, "also": [], "est": False, "_r0": st["r0"], "_r1": st["r1"]}
+            "inst_swing": swing, "also": [], "est": False, "_r0": st["r0"], "_r1": st["r1"], "sp": _sp_rr(st)}
 
 
 # ── text (§2.15) ────────────────────────────────────────────────────────────────────────────────
@@ -2140,7 +2283,8 @@ def alert_obj(ep, app, E):
            "notify": ep.get("notified_at") is None, "provisional": False, "estimate": bool(s.get("est")),
            "tags": sorted(set(s.get("tags") or []) | ({"update"} if s.get("release") else set())),
            "release": dict(s["release"]) if s.get("release") else None, "linked": bool(s.get("linked")),
-           "data_till": _iso(E), "text": text, "message": "%s: %s" % (app, text)}
+           "data_till": _iso(E), "text": text, "message": "%s: %s" % (app, text),
+           "sp": s.get("sp") if attrib.ON else None}          # the change's split (SPEC_SPLIT), null allowed
     if "closed" in ep:
         out.update(closed=ep["closed"], fresh=False, notify=False)
     return out
@@ -2463,6 +2607,8 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
     rd = tiles["ret_dau"]
     if b0 >= 0 and rd["rel"] is not None:
         att = _inst_attr(P, w0, iS, b0, b1, rd["rel"], beta["v"])
+        if rd["st"] not in NOSP:
+            rd["sp"] = _sp_ret(P, att, w0, iS, b0, b1)
         if att["mode"] == "cohort":
             cw_ = _psum(P["p_yc"], w0, iS)
             cb_ = _psum(P["p_yc"], b0, b1)
@@ -2482,13 +2628,16 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
         if t["st"] in ("maybe_dn", "maybe_up") and b0 >= 0 and _mix_moves(P, w0, iS, b0, b1, m):
             t["why"] = "mix"
     for k in ("d1", "d7"):
-        tiles[k], _ = _tile_d(P, k, alerts, edges)
+        tiles[k], st_k = _tile_d(P, k, alerts, edges)
+        if st_k is not None and "pw" in st_k and tiles[k]["st"] not in NOSP:
+            tiles[k]["sp"] = _sp_rr(st_k)
+    _tile_splits(P, tiles, w0, iS, b0, b1)
     # info rows: eCPM-only move (the market's), early looks
     if (ec["rel"] is not None and ec["z"] is not None and abs(ec["rel"]) >= MIN_REL["ads"] and abs(ec["z"]) >= Z_MAYBE
             and ads["st"] in ("normal",) and ec["st"] not in ("low", "wait", "noad", "growth")):
         dr = "up" if ec["rel"] > 0 else "down"
         row_ = {"kind": "price", "metric": "ecpm", "dir": dr, "from": ec["from"], "to": ec["to"], "rel": ec["rel"],
-                "tags": [], "prov": False,
+                "tags": [], "prov": False, "sp": None,
                 "text": "Ad ka rate (eCPM) %s (%s), ads per user wahi — market/mediation/country mix ka asar, app ke "
                         "use ka nahi" % (U.fmt_rel(ec["rel"]), U.fmt_span(ec["from"], ec["to"], E))}
         for wk in (mkt or {}).get("weeks") or []:
@@ -2502,7 +2651,7 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
         info.append(row_)
     for d, kind, exp_ in P["early"]:
         info.append({"kind": "early", "metric": "ret_dau", "dir": "down", "from": iso[d], "to": iso[d],
-                     "rel": _m4((P["R"][d] or 0) / exp_ - 1) if exp_ else None, "tags": [], "prov": True,
+                     "rel": _m4((P["R"][d] or 0) / exp_ - 1) if exp_ else None, "tags": [], "prov": True, "sp": None,
                      "text": "⏳ %s (abhi aa raha): active users normal ke aadhe se bhi kam — 3 din me pakka hoga"
                              % U.fmt_day(P["days"][d], E)})
     eps_all = open_eps + [e for e in state.get("closed") or [] if e["app_id"] == app_id]
@@ -2565,6 +2714,8 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
         if m in WIN_METRICS:                          # their dates are the row's shared win; all / pp are the
             for k in ("from", "to", "bfrom", "bto", "all", "pp"):   # d-metrics' only (always null here) — the row
                 t.pop(k, None)                        # stays under 2.5 KB with every metric populated
+        if m != "ret_dau" or t.get("sp") is None:     # the split: returning users' only, when there is one (size)
+            t.pop("sp", None)
         mrow[m] = t
     row = {"app_id": app_id, "app": app, "key": key, "file": None, "sig": None, "status": "ok",
            "data_till": _iso(E), "settled_till": _iso(S), "stale": bool(stale), "stage": udet.get("stage"),
@@ -2573,6 +2724,24 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
                                           "rev_state")},
            "win": win, "m": mrow, "ctx": ctx, "latest": latest, "alerts": counts, "summary": summary}
     return detail, row
+
+
+def _tile_splits(P, tiles, w0, iS, b0, b1):
+    """The split of the arpdau tile (revenue total = active users × revenue per 1,000 users, + the new-user share when
+    it moved) and the per-user tiles' notes (sessions, time, ads, eCPM: what _mix_moves found moved) — read-only."""
+    ar = tiles["arpdau"]
+    if ar["st"] not in NOSP and ar["rel"] is not None and iS >= 0:
+        def build():
+            nw, dw, cw, nb, db, cb = _win_stat(P, "arpdau", iS, clip=True)
+            notes = []
+            if b0 >= 0 and "newshare" in _mix_moves(P, w0, iS, b0, b1, "arpdau"):
+                notes.append(("new", _share(P["p_new"], P["p_a1"], b0, b1), _share(P["p_new"], P["p_a1"], w0, iS)))
+            return attrib.rev(db / cb if cb else None, dw / cw if cw else None, notes)
+        ar["sp"] = attrib.safe(build)
+    for m in ("sess", "time", "ads", "ecpm"):
+        t = tiles[m]
+        if t["st"] not in NOSP and t["rel"] is not None and b0 >= 0:
+            t["sp"] = attrib.safe(lambda m=m: _sp_pu(P, _mix_moves(P, w0, iS, b0, b1, m), w0, iS, b0, b1))
 
 
 def _spans(P, mask):

@@ -35,6 +35,18 @@ def _num(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+SP_CODES = ("ret", "imp", "uc", "ur", "rr", "rev", "ir", "spd", "vpi", "pu", "no")
+
+
+def _keys_sp(obj, keys, where):
+    """_keys + the one optional key "sp" (SPEC_SPLIT: the change's installs vs per-user split — a contract extension,
+    null or a list whose first item is a known code)."""
+    assert isinstance(obj, dict), where
+    assert set(obj) - {"sp"} == set(keys), "%s: %s" % (where, sorted((set(obj) - {"sp"}) ^ set(keys)))
+    sp = obj.get("sp")
+    assert sp is None or (isinstance(sp, list) and sp and sp[0] in SP_CODES), (where, sp)
+
+
 M_KEYS = ("v", "base", "all", "rel", "pp", "z", "usual", "st", "why", "est", "n", "nb", "from", "to", "bfrom", "bto", "s")
 ALERT_KEYS = ("id", "source", "app_id", "app", "family", "metric", "also", "dir", "severity", "unit", "now", "before",
               "rel", "delta_pp", "z", "since", "day", "installs_from", "installs_to", "base_from", "base_to", "users",
@@ -44,7 +56,7 @@ ALERT_KEYS = ("id", "source", "app_id", "app", "family", "metric", "also", "dir"
 
 def check_m(M, where, row=False):
     keys = [k for k in M_KEYS if not (row and k in ("from", "to", "bfrom", "bto", "all", "pp"))]
-    _keys(M, keys, where)
+    _keys_sp(M, keys, where)
     assert M["st"] in ST and M["why"] in WHY, (where, M["st"], M["why"])
     assert isinstance(M["est"], bool) and isinstance(M["n"], int) and isinstance(M["nb"], int)
     for k in ("v", "base", "all", "rel", "pp", "z", "usual"):
@@ -53,7 +65,7 @@ def check_m(M, where, row=False):
 
 
 def check_alert(a, closed=False):
-    _keys(a, ALERT_KEYS + (("closed",) if closed else ()), "alert")
+    _keys_sp(a, ALERT_KEYS + (("closed",) if closed else ()), "alert")
     assert a["source"] == "active" and a["family"] in ("act_drift", "act_slow", "act_spike", "act_break", "act_return")
     assert a["metric"] in ("ret_dau", "usage", "sess", "time", "ads", "d1", "d3", "d7", "d14", "d30")
     assert a["dir"] in ("up", "down") and a["severity"] in ("warning", "watch", "good")
@@ -114,7 +126,7 @@ def check_detail(d, row=None):
     for a in ch["closed"]:
         check_alert(a, closed=True)
     for i in ch["info"]:
-        _keys(i, ("kind", "metric", "dir", "from", "to", "rel", "text", "tags", "prov"), "info")
+        _keys_sp(i, ("kind", "metric", "dir", "from", "to", "rel", "text", "tags", "prov"), "info")
         assert i["kind"] in ("price", "installs", "market_wide", "early") and i["prov"] == (i["kind"] == "early")
     for o in ch["older"]:
         _keys(o, ("kind", "metric", "dir", "from", "to", "before", "now", "rel", "z", "release", "text"), "older")

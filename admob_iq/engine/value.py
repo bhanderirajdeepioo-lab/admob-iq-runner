@@ -34,6 +34,7 @@ from datetime import timedelta
 
 from ..alerting.rules import fingerprint
 from . import active as act
+from . import attrib
 from . import impact as imp
 from . import uninstall as U
 
@@ -1854,6 +1855,37 @@ def _cpi_at(weeks_by_W, e):
     return math.log(c1 / c0), {"c1": c1, "c0": c0, "s1": s1, "s0": s0, "rec": rec, "base": base}
 
 
+def _sp_vpi(info, rec=None):
+    """Money back per 100 spent (SPEC_SPLIT F7): value per install and cost per install on the base weeks of b7r / b70
+    (_b7_at's base: 100 · vb ÷ cb = 100 · b70 exactly) and the after weeks `rec` — by default _b7_at's 2 newest (the
+    pay_slow alert's b7r); the tile passes its own one week, so the split's after is the tile's number →
+    ["vpi", vb, va, cb, ca]. Read-only."""
+    def build():
+        base = info["base"]
+        ws = info["rec"] if rec is None else rec
+        nr, nb = sum(w["n"] for w in ws), sum(w["n"] for w in base)
+        return attrib.vpi(sum(w["R"][_tj(7)] for w in base) / nb, sum(w["R"][_tj(7)] for w in ws) / nr,
+                          sum(w["spend"] for w in base) / nb, sum(w["spend"] for w in ws) / nr)
+    return attrib.safe(build)
+
+
+def _sp_spd(weeks, w0):
+    """The ad spend's split on the cost tile's own window (SPEC_SPLIT F7): the tile's 4 calendar weeks w0 (installs a
+    week, cost per install = the tile's number) vs the up to PAY_BASE_WEEKS weeks before them with spend and installs
+    known → ["spd", installs / week before / after, cost per install before / after]; None with fewer than PAY_BASE_MIN
+    such weeks (the tile shows no before either — as an earning tile without a before value)."""
+    base = [w for w in weeks if w["W"] < w0[0]["W"] and w["spend"] is not None and w["cj"][_tj(0)]
+            and w["n"] > 0][-PAY_BASE_WEEKS:]
+    if len(base) < PAY_BASE_MIN or sum(w["spend"] for w in base) <= 0 or not sum(w["n"] for w in w0):
+        return None
+
+    def build():
+        nb, na = sum(w["n"] for w in base), sum(w["n"] for w in w0)
+        return attrib.spd(nb / len(base), na / len(w0), sum(w["spend"] for w in base) / nb,
+                          sum(w["spend"] for w in w0) / na)
+    return attrib.safe(build)
+
+
 def _market_hit(market, dr, a, b):
     """A market-wide week (Active's market prepass: most apps' ad rate — eCPM — moved the same way that week) in
     direction dr overlapping [a, b] by ≥ 4 days → {from, to, apps, of}, else None."""
@@ -2010,7 +2042,8 @@ def _conditions(P, weeks, pays, H, E, ctyinfo, C, releases, act_alerts, geo, str
                               "users": sum(w["n"] for w in rec), "spend": _m6(sum(w["spend"] for w in rec) / 2),
                               "spend_src": _m6(sum(w.get("spend_src") or 0 for w in rec) / 2),
                               "tags": tags, "release": rel, "cause": cause, "market": mk if market_only else None,
-                              "_force_seed": held or (up and mix_only), "_est": bool(kbad or link)})
+                              "_force_seed": held or (up and mix_only), "_est": bool(kbad or link),
+                              "sp": _sp_vpi(info)})
     # pay_loss (a state): the 2 newest judged weeks with t_o ≥ 7 both miss the target even on the good band — only
     # while the app still spends (the newest judged week ended ≤ ADS_STALE_DAYS before E: stopped ads close it)
     jw = [w for w in weeks if w["judged"] and w["cj"][_tj(7)] and w["W"] + timedelta(days=6) <= E
@@ -2120,7 +2153,8 @@ def _geo_conds(P, C, ci, act_alerts, app):
                         warn = sg < 0 and rel <= -2 * thr and share >= GEO_WARN_SHARE and z <= -GEO_WARN_Z
                         found.setdefault((cc, dr), []).append(
                             {"metric": met, "t": t, "z": z, "now": _m6(R1), "before": _m6(R0), "rel": _g4(rel),
-                             "delta": None, "share": share, "n": n1, "warn": warn, "rec": rec, "base": base})
+                             "delta": None, "share": share, "n": n1, "warn": warn, "rec": rec, "base": base,
+                             "sp": attrib.safe(lambda: attrib.ir(n0 / len(base), n1 / len(rec)))})
                 continue
             p1, p0 = x1 / n1, x0 / n0
             delta = 100 * (p1 - p0)
@@ -2144,7 +2178,8 @@ def _geo_conds(P, C, ci, act_alerts, app):
                     found.setdefault((cc, dr), []).append(
                         {"metric": met, "t": t, "z": z, "now": _g4(100 * p1), "before": _g4(100 * p0),
                          "rel": _g4(rel), "delta": _g4(delta), "share": share, "n": n1, "warn": warn, "rec": rec,
-                         "base": base})
+                         "base": base,       # (the split: installs a DAY, as the rate's per-day words read it)
+                         "sp": attrib.safe(lambda: attrib.rate("rr", n0 / (7 * len(base)), n1 / (7 * len(rec))))})
     out = []
     for (cc, dr), hits in sorted(found.items()):
         hits.sort(key=lambda h: -abs(h["z"]))
@@ -2157,6 +2192,8 @@ def _geo_conds(P, C, ci, act_alerts, app):
                     "week_to": _iso(max(h["rec"]) + timedelta(days=6)), "base_from": _iso(min(h["base"])),
                     "base_to": _iso(max(h["base"]) + timedelta(days=6)), "users": int(h["n"]), "spend": None,
                     "tags": [], "release": None})
+        if h.get("sp") is not None:                    # the lead metric's split (SPEC_SPLIT F5 / F7)
+            out[-1]["sp"] = h["sp"]
     return out
 
 
@@ -2406,6 +2443,8 @@ def alert_obj(ep, app_name, E, H, S=None, src_ccy=None):
                 out[k] = list(s[k]) if isinstance(s[k], list) else s[k]
     if s.get("move"):                                  # geo_cost that carries the same country's geo_move
         out["move"] = dict(s["move"])
+    if s.get("sp") is not None and attrib.ON:         # the change's split (SPEC_SPLIT) — only when there is one
+        out["sp"] = s["sp"]
     if "closed" in ep:
         out.update(closed=ep["closed"], fresh=False, notify=False)
     return out
@@ -2552,6 +2591,10 @@ def _tiles(P, weeks, pays, alerts, E, cty, H, have_spend=True):
                   v30=_g4(v30), v30_est=e30, **{"from": _iso(w["W"]), "to": _iso(w["W"] + timedelta(days=6))})
         if base:
             b7_t["bfrom"], b7_t["bto"] = _iso(r[1]["base"][0]["W"]), _iso(r[1]["base"][-1]["W"] + timedelta(days=6))
+        if r:                                         # the split of money back per 100 (SPEC_SPLIT F7): the base
+            x = _sp_vpi(r[1], [w])                    # weeks the tile's base is, after = the tile's own week
+            if x is not None:
+                b7_t["sp"] = x
     else:
         b7_t = _M(st=pay_al or idle[state], why=state, note=note)
     # earning per install (30 days, newest 4 complete weeks)
@@ -2574,6 +2617,10 @@ def _tiles(P, weeks, pays, alerts, E, cty, H, have_spend=True):
         rpi_t = _M(v=_m6(v), base=_m6(base), rel=_g4(rel), st=st, est=any(w["E"][_tj(30)] or w["q"][_tj(30)] for w in c30),
                    sub=sub, d90_obs=True, d90_est=any(w["E"][_tj(90)] or w["q"][_tj(90)] for w in w90),
                    **{"from": _iso(c30[0]["W"]), "to": _iso(c30[-1]["W"] + timedelta(days=6))})
+        if base:                                      # the split: installs per week × earning per install (F7) —
+            x = attrib.safe(lambda: attrib.ir(sum(w["n"] for w in prev) / len(prev), n / len(c30)))
+            if x is not None:
+                rpi_t["sp"] = x
     else:
         rpi_t = _M(st="wait")
     # cost per install: the last 4 settled CALENDAR weeks (the same window as the All-apps row and the pooled spend)
@@ -2604,6 +2651,10 @@ def _tiles(P, weeks, pays, alerts, E, cty, H, have_spend=True):
                    ads_src=_m6(src / na) if na else None, paid_share=_g4(min(1.0, na / n)) if n else None,
                    spend4=_m6(sp0), spend4_src=_m6(src), n4=n, nw=len(w0), st=st, z=_g4(cz),
                    **{"from": _iso(w0[0]["W"]), "to": _iso(w0[-1]["W"] + timedelta(days=6))})
+        if state == "on":                             # the split of the ad spend: installs × cost per install on
+            x = _sp_spd(weeks, w0)                    # the tile's own 4 weeks vs the weeks before (F7)
+            if x is not None:
+                cpi_t["sp"] = x
     elif w0:                                          # known: nothing spent in these 4 weeks
         cpi_t = _M(st="nospend", why=state, note=note, spend4=0.0, spend4_src=0.0, n4=sum(w["n"] for w in w0),
                    nw=len(w0), **{"from": _iso(w0[0]["W"]), "to": _iso(w0[-1]["W"] + timedelta(days=6))})

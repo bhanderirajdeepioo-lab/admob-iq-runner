@@ -95,6 +95,7 @@ import math
 from datetime import date, timedelta
 
 from ..alerting.rules import fingerprint
+from . import attrib
 
 LAG_DAYS = 2              # GA4 settles in ~48h (mirrors fetch.ga4.LAG_DAYS without importing requests)
 LATE_DAYS = 7             # Firebase adds events (mostly app_remove) up to ~7 days late: the newest 7 days are
@@ -454,8 +455,36 @@ def _expect_from(ds, a, s):
             e = eo + sum(new[i - L] * h[L] for L in range(min(K - 1, i) + 1) if new[i - L])
             got[i] = e if e > 0 else None
         return got[i]
+    f.h = h                                     # the usual share leaving per day after install (the split's per 100)
     memo[(a, s)] = f
     return f
+
+
+def _sp_uc(ds, a, s, aft, cal=None):
+    """The split of a daily-uninstalls change (SPEC_SPLIT F3) on ONE fixed base, exactly as rate_drift judges: the base
+    days [a, s−1] and the after days `aft`, each with an expected count from _expect_from(ds, a, s) at the host's own
+    calibration — cal = what that raw expectation is multiplied by (default: rate_drift's exp(median log(actual ÷
+    expected)) over the base days; a rate_spike passes its band's expected ÷ the raw one), so the split's own per-install
+    change (actual ÷ expected after − 1) is the alert's → ["uc", mean actual before / after, mean calibrated expected
+    before / after (the calibration cancels in xa ÷ xb), the installs a day feeding the expected uninstalls (each lag
+    weighted by its usual share leaving: the installs part always has their sign and is at most their change), 100 ×
+    the usual share leaving within 28 days]. Read-only."""
+    def build():
+        f = _expect_from(ds, a, s)
+        bef = [j for j in range(max(0, a), s) if ds["base"][j] and f(j)]
+        af = [i for i in aft if f(i)]
+        if len(bef) < BAND_MIN_DAYS or not af:
+            return attrib.no("few")
+        c = cal if cal is not None else math.exp(median([math.log(max(ds["un"][j], 0.5) / f(j)) for j in bef]))
+        mean = lambda v: sum(v) / len(v)                                   # noqa: E731
+        h, new, sh = f.h, ds["new"], sum(f.h)
+
+        def feed(i):                                                       # the young part of f(i) ÷ Σh
+            return sum((new[i - L] or 0) * h[L] for L in range(min(YOUNG_DAYS - 1, i) + 1)) / sh
+        nb, na = (mean([feed(j) for j in bef]), mean([feed(i) for i in af])) if sh > 0 else (None, None)
+        return attrib.uc(mean([ds["un"][j] for j in bef]), mean([ds["un"][i] for i in af]),
+                         c * mean([f(j) for j in bef]), c * mean([f(i) for i in af]), nb, na, 100 * sh)
+    return attrib.safe(build)
 
 
 def rate_drift(ds, n=None, want=None):
@@ -501,7 +530,11 @@ def rate_drift(ds, n=None, want=None):
                 best = {"since": ds["start"] + timedelta(days=s), "before": se_ * 1000 / sd, "now": su * 1000 / sd,
                         "rel": rel, "z": round(z, 2), "dir": "up" if rel > 0 else "down", "days": L, "users": su,
                         "extra": round(extra), "base_from": ds["start"] + timedelta(days=a),
-                        "base_to": ds["start"] + timedelta(days=s - 1)}
+                        "base_to": ds["start"] + timedelta(days=s - 1), "_win": (a, s, [i for i, e in ea if e])}
+    if best is not None:                         # the split of the change it reports (read-only, SPEC_SPLIT F3)
+        sp = _sp_uc(ds, *best.pop("_win"))
+        if sp is not None:
+            best["sp"] = sp
     return best
 
 
@@ -1452,7 +1485,17 @@ def cohort_conditions(rows):
                    "est": bool(row["recent"].get("est") or any((row[x] or {}).get("est") for x in vs)),
                    "held": {k: by_n[k]["held"] for k in sorted(ns) if by_n[k].get("held")},
                    "told": {k: by_n[k].get("_told") for k in sorted(ns)}}
+        x = _sp_ur(row["recent"], b)                 # the split of the uninstallers' count (SPEC_SPLIT F4)
+        if x is not None:
+            out[dr]["sp"] = x
     return out
+
+
+def _sp_ur(recent, base):
+    """An uninstall rate's split: the install days' installs per day, base vs recent (the rates are the host's)."""
+    if not recent or not base:
+        return None
+    return attrib.safe(lambda: attrib.rate("ur", base["users"] / base["k"], recent["users"] / recent["k"]))
 
 
 def _cohort_text(s, ref=None):
@@ -1585,6 +1628,8 @@ def alert_obj(ep, app, E):
            "last_seen": ep["last_true"], "fresh": (E - _d(ep["opened"])).days < FRESH_EVALS,
            "notify": ep.get("notified_at") is None, "data_till": _iso(E),
            "message": "%s: %s" % (app, text), "text": text}
+    if s.get("sp") is not None and attrib.ON:        # the change's split (SPEC_SPLIT) — only when there is one
+        out["sp"] = s["sp"]
     if ep["family"] == "impact":                      # an update's impact (engine.impact): which update, its level, its rows
         out.update(release=dict(s.get("release") or {}), level=s.get("level"),
                    rows={k: list((s.get("rows") or {}).get(k) or []) for k in ("worse", "better")})
@@ -1650,10 +1695,14 @@ def _head(up, down, lit, S):
         return None
     r, b = row["recent"], row["prev"]
     fb = row.get("fallback")
-    return {"p": r["p"], "prev": b["p"] if b else None, "delta_pp": _delta(row, True), "dir": dr,
-            "alert": bool(lit), "low_sample": row["low_sample"], "from": r["from"], "to": r["to"],
-            "prov": prov, "est": bool(r.get("est") or (b or {}).get("est")),     # ≈: rests on filled days
-            "fb": fb}              # older installs (compare's fall-back: which window, the days passed, incomplete / break)
+    out = {"p": r["p"], "prev": b["p"] if b else None, "delta_pp": _delta(row, True), "dir": dr,
+           "alert": bool(lit), "low_sample": row["low_sample"], "from": r["from"], "to": r["to"],
+           "prov": prov, "est": bool(r.get("est") or (b or {}).get("est")),     # ≈: rests on filled days
+           "fb": fb}              # older installs (compare's fall-back: which window, the days passed, incomplete / break)
+    x = _sp_ur(r, b) if b and b.get("p") is not None and r.get("k") else None
+    if x is not None:                                # the split of the cell's change (SPEC_SPLIT F4)
+        out["sp"] = x
+    return out
 
 
 def _pooled_rate(ds, i0, i1):
@@ -1689,13 +1738,19 @@ def _rate_now(ds, drift):
         dr = "down"
     day = lambda i: _iso(ds["start"] + timedelta(days=max(0, i))) if n else None    # noqa: E731
     prov = bool(late and t > n - late)
-    return {"last7": rate, "med": m, "lo": lo, "hi": hi, "dir": dr, "from": day(f), "to": day(t - 1), "prov": prov,
+    sp = (_sp_uc(ds, max(0, f - BAND_DAYS), f, [i for i in range(max(0, f), t) if ds["good"][i]
+                                                   and ds["rate"][i] is not None and ds["den"][i]])
+          if rate is not None and f > 0 else None)
+    out = {"last7": rate, "med": m, "lo": lo, "hi": hi, "dir": dr, "from": day(f), "to": day(t - 1), "prov": prov,
             # under the band is good news: never from provisional days (they read low until their late data is in)
             "out_of_band": bool(rate is not None and lo is not None and (rate > hi or (rate < lo and not prov))),
             "drift": ({"since": _iso(drift["since"]), "before": round(drift["before"], 3),
                        "now": round(drift["now"], 3), "rel": round(drift["rel"], 4), "z": drift["z"],
                        "prov": bool(drift.get("prov"))}
                       if drift else None)}
+    if sp is not None:                               # the split of the shown 7 days' uninstalls (SPEC_SPLIT F3)
+        out["sp"] = sp
+    return out
 
 
 def _fires(row, dr):
@@ -1778,6 +1833,8 @@ def rate_ready(ds, drift, app_id, streak, since, E, first, n=None):
                     "z": drift["z"], "since": drift["since"], "day": None, "users": drift["users"],
                     "base_from": drift["base_from"], "base_to": drift["base_to"], "prov": bool(drift.get("prov")),
                     "installs_from": None, "installs_to": None, "checkpoint": None, "n": None})
+        if drift.get("sp") is not None:
+            out[-1]["sp"] = drift["sp"]
     for sp in rate_spikes(ds, n):
         if drift and sp["dir"] == drift["dir"] and sp["family"] == "rate_spike" and sp["day"] >= drift["since"]:
             continue                                  # part of a slow drift already in view — not "achanak"
@@ -1787,6 +1844,12 @@ def rate_ready(ds, drift, app_id, streak, since, E, first, n=None):
         out.append(dict(sp, key=k, delta_pp=None, since=None, checkpoint=None, n=None,
                         base_from=sp["day"] - timedelta(days=BAND_DAYS), base_to=sp["day"] - timedelta(days=1),
                         installs_from=None, installs_to=None))
+        if sp["family"] == "rate_spike":             # the split of the day's jump (SPEC_SPLIT F3: s = the day) — at
+            i = (sp["day"] - ds["start"]).days       # the band's own expected (its rel: actual ÷ that − 1)
+            f0 = _expect_from(ds, max(0, i - BAND_DAYS), i)(i)
+            x = _sp_uc(ds, max(0, i - BAND_DAYS), i, [i], sp["expected"] / f0 if f0 and sp.get("expected") else None)
+            if x is not None:
+                out[-1]["sp"] = x
     return out
 
 
@@ -1821,6 +1884,8 @@ def old_changes(rows, recent_from, skip, ref):
             item = {k: c[k] for k in ("n", "checkpoint", "dir", "vs", "now", "before", "delta_pp", "z", "users",
                                       "installs_from", "installs_to", "base_from", "base_to")}
             item["text"] = alert_text("cohort", dr, dict(c, old=True), ref)
+            if c.get("sp") is not None:
+                item["sp"] = c["sp"]
             out.append(item)
     return sorted(out, key=lambda o: (o["installs_to"], -o["n"], o["dir"]), reverse=True)
 
@@ -1955,6 +2020,10 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
                       "prev": _base_out(row["prev"]), "all": _base_out(row["all"]), "prov": prov,
                       "dir": dr, "alert": N in lit, "low_sample": row["low_sample"], "break_day": row["break_day"],
                       "inc_day": row["inc_day"], "fallback": row.get("fallback")})
+        tb = row["prev"] or row["all"]                # the base its arrow shows (_delta): the split of that change
+        x = _sp_ur(row["recent"], tb) if tb and row["recent"]["p"] is not None and row["recent"].get("k") else None
+        if x is not None:
+            table[-1]["sp"] = x
     by_n = {row["n"]: row for row in rows}
     by_s = {row["n"]: row for row in settled}
 

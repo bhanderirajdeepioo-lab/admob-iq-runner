@@ -807,6 +807,33 @@
   }
   @media (prefers-reduced-motion:reduce){#rv-root *{transition:none!important;scroll-behavior:auto!important}}
   /* ==== RV:END ==== */
+  /* ===== 🧮 installs vs per-user split (SPEC_SPLIT): one block for every tab — a total, the installs' part, the real
+     per-user part (+ the rate on today's installs); a one-line form (.split-c) on cards, rows and chips. Grey text,
+     never coloured; wraps inside its box (a phone never scrolls sideways) ===== */
+  .split{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:6px;min-width:0;overflow-wrap:anywhere;font-weight:500;text-align:left}
+  span.split,span.split>span{display:block}
+  .split .spk{color:var(--ink2);font-weight:650}
+  .split .spl{padding-left:11px;text-indent:-11px}
+  .split .spn{padding-left:11px;color:var(--faint)}
+  .split .sps{color:var(--faint)}
+  .split b{color:var(--ink2);font-weight:750;font-variant-numeric:tabular-nums}
+  .split.none,.split.none .spk{color:var(--faint);font-weight:500}
+  .split-c{font-size:11px;color:var(--muted);line-height:1.45;margin-top:4px;font-weight:550;overflow-wrap:anywhere}
+  .act-t .act-x .split,.val-t .val-x .split{padding-top:6px;border-top:1px dashed var(--line)}
+  .uni-chg>.split{grid-column:2/-1;margin-top:0}
+  .uni-chg.wa>.split{grid-column:3/-1}
+  .uni-imp-t tr.uni-imp-sp td{padding-top:0;border-top:0}
+  .uni-imp-t tr.uni-imp-sp .split{margin-top:0;max-width:640px}
+  .uni-num .split,.uni-num .split-c{text-align:left}
+  .split.act-pool-split{margin-top:10px}
+  .split.act-notes{margin-top:8px}.split.uni-imp-notes{margin:6px 0 2px}
+  @media(max-width:1180px){ .uni-chg.wa>.split{grid-column:1/-1} }
+  @media(max-width:1000px){ .uni-chg.na>.split{grid-column:1/-1} }
+  @media(max-width:600px){
+    .uni-imp-t tbody tr.uni-imp-sp{display:block;padding:0 0 10px;border-top:0}
+    .uni-imp-t tbody tr.uni-imp-sp td{display:block;padding:0}
+  }
+  @media(max-width:430px){ .act-tiles>.act-t.open[data-spl]{grid-column:1/-1} }
 </style>
 </head>
 <body>
@@ -3289,8 +3316,10 @@ function uniRateTile(a){ const R=a.rate_now||{}, S=uniRateState(a);
   const st=(!S.band||ex.length)?'':(S.hiB?'<span class="pill p-r" data-rs="high">High</span>':(S.loB?'<span class="pill p-g" data-rs="low">Low</span>':'<span class="pill uni-pn" data-rs="normal">Normal</span>'));
   const tags=ex.map(([c,e,t])=>`<span class="pill ${c}" data-ra="1">${e} ${t}</span>`).join('')+st
     +(R.prov?'<span class="pill p-b" title="Firebase ka late data abhi aa raha — ye number badh sakta hai">Provisional</span>':'');
+  let spl=''; if(splitHas(R)){
+    spl=splitHtml('uc',Object.assign({_alerts:a.alerts||[]},R)); }
   return `<div class="uni-pan" id="uni-rate">${hd}<div class="uni-rv">${uniRate(R.last7)}<small>per 1,000 active users${R.from?' · '+uniSpan(R.from,R.to):''}</small></div>
-    <div class="uni-sub">${S.band?`Normal range <b>${uniRate(R.lo)}–${uniRate(R.hi)}</b>`:'Normal range abhi ban rahi'}</div>${tags?`<div class="uni-pills">${tags}</div>`:''}</div>`; }
+    <div class="uni-sub">${S.band?`Normal range <b>${uniRate(R.lo)}–${uniRate(R.hi)}</b>`:'Normal range abhi ban rahi'}</div>${tags?`<div class="uni-pills">${tags}</div>`:''}${spl}</div>`; }
 function uniKacchaNote(settled,till){ if(!settled||!till||settled>=till) return '';
   return `<div class="uni-foot">ℹ️ <b>Provisional:</b> ${uniSpan(uniAdd(settled,1),till)} — Firebase late bhejta hai, number badh sakte hain. "Stay" numbers sirf pakke din (${uniD(settled)} tak) se.</div>`; }
 const uniQ=s=>String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');   // safe inside onclick="f('…')"
@@ -3481,7 +3510,7 @@ function uniNewest(list){ const about=x=>x.installs_to||x.day||x.since||'';
   return (list||[]).slice().sort((p,q)=>((q.opened||'')>(p.opened||'')?1:((q.opened||'')<(p.opened||'')?-1:(about(q)>about(p)?1:(about(q)<about(p)?-1:0))))); }
 // an app name + icon that opens THAT APP here (appChip opens the Play Store instead)
 function uniAppTag(name,size){ return `<span class="appchip">${appIcon(name,size||16)}<span>${hAttr(name)}</span></span>`; }
-function uniAppChip(a,x,xc){ return `<span class="uni-ac" data-app="${hAttr(a.app)}" title="${hAttr(a.app)} — open" onclick="uniOpen('${uniQ(a.app_id)}')">${appIcon(a.app,18)}<span class="n">${hAttr(a.app)}</span>${x?`<span class="x${xc?' '+xc:''}">${x}</span>`:''}</span>`; }
+function uniAppChip(a,x,xc,tip){ return `<span class="uni-ac" data-app="${hAttr(a.app)}" title="${hAttr(a.app+' — open'+(tip?' · '+tip:''))}" onclick="uniOpen('${uniQ(a.app_id)}')">${appIcon(a.app,18)}<span class="n">${hAttr(a.app)}</span>${x?`<span class="x${xc?' '+xc:''}">${x}</span>`:''}</span>`; }
 // one "What changed?" row: severity · (app) · plain line · dates + Provisional / New · Open →. All apps: the row opens
 // that app; an app's own list: Open → jumps to the table / chart the change is in (a closed alert: no Open)
 function uniChangeRow(x,withApp,closed){
@@ -3495,13 +3524,18 @@ function uniChangeRow(x,withApp,closed){
   const act=closed?'':(withApp?'<span class="lnk">Open →</span>':`<span class="lnk" onclick="${go}">Open →</span>`);
   return `<div class="uni-chg ${withApp?'wa':'na'}${closed?' cl':''}"${withApp?` onclick="${go}"`:''}><span class="sv"><span class="pill ${sc}">${sl}</span></span>`
     +`${withApp?`<span class="ap" title="${hAttr(x.app)}">${uniAppTag(x.app,16)}</span>`:''}<span class="tx">${hAttr(uniPlain(x))}</span>`
-    +`<span class="mt"><span class="dt">${uniWhen(x)}</span>${tags}</span><span class="ac">${act}</span></div>`; }
+    +`<span class="mt"><span class="dt">${uniWhen(x)}</span>${tags}</span><span class="ac">${act}</span>${uniAlSplit(x,false)}</div>`; }
+// an Uninstall change's split: an install week's "N din me hataya" (ur: a rate), the daily uninstalls (uc: counts vs
+// installs × the usual per-install lags); an update's impact carries none (its rows do). c = the one-line form
+function uniAlSplit(x,c){ if(!splitHas(x)) return ''; const k=splitAlKind(x); return c?splitChip(k,x):splitHtml(k,x,{tag:'span'}); }
+// this app's data carries the split (the engine's SPLIT switch on) — the kinds computed here (kept users) follow it
+function uniSplitLive(a){ return !!a&&(splitHas(a.rate_now)||['table','alerts','alerts_closed','old_changes'].some(f=>(Array.isArray(a[f])?a[f]:[]).some(splitHas))); }
 // a change in OLD installs (the engine's old_changes: install window ended more than alert_recent_days ago) — one faded
 // "Info" row in the collapsed "Older changes" list; never an alert, never counted in a summary
 function uniOldRow(o,app,id){ const x=Object.assign({},o,{family:'cohort',old:true}), go=app?`uniOpen('${uniQ(id)}')`:'';
   return `<div class="uni-chg ${app?'wa':'na'} old"${app?` onclick="${go}"`:''}><span class="sv"><span class="pill p-b" title="Purane installs ka badlaav — sirf jaankari, iska alert nahi aata">Info</span></span>`
     +`${app?`<span class="ap" title="${hAttr(app)}">${uniAppTag(app,16)}</span>`:''}<span class="tx">${hAttr(uniPlain(x))}</span>`
-    +`<span class="mt"><span class="dt">${uniWhen(x)}</span></span><span class="ac">${app?'<span class="lnk">Open →</span>':''}</span></div>`; }
+    +`<span class="mt"><span class="dt">${uniWhen(x)}</span></span><span class="ac">${app?'<span class="lnk">Open →</span>':''}</span>${splitHas(o)?splitHtml('rate',o,{tag:'span'}):''}</div>`; }
 // a collapsed list's header row: "▸ Older changes (3)  Show"
 function uniFold(open,label,n,fn){ return uniFoldX(open,label,n,fn+'()'); }
 function uniFoldX(open,label,n,call){ return `<div class="uni-fold" onclick="${call}"><span class="cv${open?' on':''}">▸</span><span>${label} (${n})</span><span class="lnk" style="margin-left:auto;font-size:12px">${open?'Hide':'Show'}</span></div>`; }
@@ -3584,10 +3618,11 @@ function uniPortfolio(){
     if(a==null&&b!=null) return 1; if(b==null&&a!=null) return -1;                        // no data → always last
     if(a!=null&&b!=null&&a!==b) return (a<b?-1:1)*UNISORT.d;
     return ((y.sm&&y.sm.ins)||0)-((x.sm&&x.sm.ins)||0); });                              // tie → more installs first
-  const hcell=hd=>{ if(!hd||hd.p==null) return '<td class="faint" title="abhi data nahi">—</td>';
+  const hcell=(hd,N)=>{ if(!hd||hd.p==null) return '<td class="faint" title="abhi data nahi">—</td>'; hd=Object.assign({_days:N},hd);
     const ar=hd.dir==='up'?'▲':(hd.dir==='down'?'▼':''), c=hd.dir==='up'?'var(--bad)':'var(--good)';
     const dp=uniDP(hd.p,hd.prev), sd=uniShownD(hd.p,hd.prev,dp);
-    const tt=uniSpan(hd.from,hd.to)+' ke installs'+(hd.prev!=null?' · pichhle 4 hafte '+uniPctDP(hd.prev,dp):'')
+    const sx=splitHas(hd)?splitTxt('rate',hd):'';
+    const tt=uniSpan(hd.from,hd.to)+' ke installs'+(hd.prev!=null?' · pichhle 4 hafte '+uniPctDP(hd.prev,dp):'')+(sx?' · '+sx:'')
       +(hd.fb?' · '+uniFbTxt(hd.fb).tip:'')+(hd.est?' · ≈ andaza: kuch din ka GA4 data poora nahi aaya tha — total ke hisaab se poora kiya':'');
     const kc=hd.prov?'<sup class="faint" title="Provisional — in installs ka ye din abhi late data le raha, number badh sakta hai">*</sup>':'';
     return `<td class="uni-num" title="${hAttr(tt+(hd.prov?' · provisional (late data aa raha)':''))}">${hd.est?'<span class="uni-est">≈</span>':''}${uniPctDP(hd.p,dp)}${kc}${ar?`<span style="margin-left:5px;${hd.alert?`color:${c};font-weight:800`:'color:var(--faint)'}">${ar}${uniPP(sd!=null?sd:hd.delta_pp)}</span>`:''}${hd.low_sample?' <span class="pill p-b" style="font-size:10px">Low data</span>':''}</td>`; };
@@ -3607,7 +3642,7 @@ function uniPortfolio(){
       <td class="uni-num">${m.ins!=null?Math.round(m.ins).toLocaleString():'—'}</td><td class="uni-num">${m.outs!=null?Math.round(m.outs).toLocaleString():'—'}</td>
       <td class="uni-num ${m.net==null?'':(m.net<0?'down':'up')}" style="font-weight:700">${m.net==null?'—':(m.net<0?'−':'+')+Math.abs(Math.round(m.net)).toLocaleString()}</td>
       <td class="uni-num" title="▲ = sabse naye 7 din (ya unse pehle ke pakke 7 din) ka rate apne normal level se 10%+ upar · ▼ = pakke 7 din (sabse naye 7 se pehle ke) ka rate 10%+ neeche — naye din provisional hain, unse ▼ nahi">${uniRate(m.rate)} ${rd}</td>
-      ${hcell(h4.D0)}${hcell(h4.D1)}${hcell(h4.D7)}${hcell(h4.D30)}<td style="white-space:nowrap">${pills}</td></tr>`; }).join('')
+      ${hcell(h4.D0,0)}${hcell(h4.D1,1)}${hcell(h4.D7,7)}${hcell(h4.D30,30)}<td style="white-space:nowrap">${pills}</td></tr>`; }).join('')
     ||`<tr><td colspan="${TH.length}" class="muted" style="padding:16px">GA4 se judi koi app abhi nahi.</td></tr>`;
   const table=`<div class="card pad0" id="uni-table" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>📋 All apps</h3><span class="faint" style="font-size:11.5px">row pe tap = app ki detail · column pe tap = sort</span></div>
     <div class="uni-scroll" style="margin-top:10px"><table class="uni-sticky" style="min-width:860px"><thead><tr>${TH.map(([k,l,t])=>`<th onclick="uniSort('${k}')"${t?` title="${hAttr(t)}"`:''}>${l}${UNISORT.k===k?(UNISORT.d>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead><tbody>${trows}</tbody></table></div>
@@ -3637,6 +3672,7 @@ function uniSumPortfolio(dets){
     else if(coh.length) return;                                   // counted in "Some install weeks worse / better"
     else if(k==='unsure') uns.push(a); else if(k==='same') same.push(a); else none.push(a); });
   const gap=a=>{ const v=a.survival.verdict, g=uniVGap(v)||0; return `${g>0?'+':(g<0?'−':'')}${uniGapTxt(g)}${v.n!==7?' · '+uniDayCol(v.n).toLowerCase():''}`; };
+  const vsp=a=>uniSplitLive(a)?splitTxt('uni_verdict',a.survival.verdict):'';
   const d7=L=>L.every(a=>a.survival.verdict.n===7)?' (7 din baad)':'';     // the day in the note only when it's every app's
   // one app chip per app: its install weeks, newest first ("17–23 Sep, 3–9 Sep")
   const weeks=L=>{ const m=new Map(); L.forEach(([a,x])=>{ if(!m.has(a.app_id)) m.set(a.app_id,{a,s:[]}); m.get(a.app_id).s.push(uniSpan(x.installs_from,x.installs_to)); });
@@ -3647,12 +3683,12 @@ function uniSumPortfolio(dets){
     if(!S.up.length&&!S.zero.length&&!S.dn.length){ if(S.has) RK.push({a}); else RN.push({a}); } });
   // [key, chip label, colour, app list, what the list means (a short Hinglish line)]
   const status=[
-    ['worse','Worse than last month','bad',W.map(a=>({a,x:gap(a),xc:'bad'})),'Pichhle 4 pakke hafte ke installs vs usse pehle ke 4 hafte — 100 me se kam bache'+d7(W)],
+    ['worse','Worse than last month','bad',W.map(a=>({a,x:gap(a),xc:'bad',t:vsp(a)})),'Pichhle 4 pakke hafte ke installs vs usse pehle ke 4 hafte — 100 me se kam bache'+d7(W)],
     ['wk_up','Some install weeks worse','bad',weeks(NU).map(o=>Object.assign(o,{xc:'bad'})),'In hafton ke installs normal se zyada app hata rahe — details "What changed?" me'],
-    ['better','Better than last month','good',B.map(a=>({a,x:gap(a),xc:'good'})),'Pichhle 4 pakke hafte ke installs vs usse pehle ke 4 hafte — 100 me se zyada bache'+d7(B)],
+    ['better','Better than last month','good',B.map(a=>({a,x:gap(a),xc:'good',t:vsp(a)})),'Pichhle 4 pakke hafte ke installs vs usse pehle ke 4 hafte — 100 me se zyada bache'+d7(B)],
     ['wk_dn','Some install weeks better','good',weeks(ND).map(o=>Object.assign(o,{xc:'good'})),'In hafton ke installs normal se kam app hata rahe'],
     ['same','Same as last month','ok',same.map(a=>({a})),'Pichhle 4 pakke hafte ke installs pichhle mahine jaise hi ruke'],
-    ['unsure','Maybe changed','info',uns.map(a=>({a,x:gap(a)})),'Farak dikha, par itna aam utaar-chadhaav me bhi aata hai — abhi pakka nahi'],
+    ['unsure','Maybe changed','info',uns.map(a=>({a,x:gap(a),t:vsp(a)})),'Farak dikha, par itna aam utaar-chadhaav me bhi aata hai — abhi pakka nahi'],
     ['none','Not enough data yet','info',none.map(a=>({a})),'Naya app ya installs kam — pichhle mahine se tulna abhi nahi']];
   const rate=[
     ['r_up','Higher','bad',RU,'Roz ka uninstall rate normal se zyada — ya ek din ka jhatka / dheere dheere badhna'],
@@ -3662,7 +3698,7 @@ function uniSumPortfolio(dets){
     ['r_none','No rate yet','info',RN,'Rate 28 din ke GA4 data ke baad aata hai']];
   // an open chip's app list sits right under that chip (it takes a whole line of the strip)
   const strip=(G,cls)=>`<div class="uni-scs${cls?' '+cls:''}">${G.filter(g=>g[3].length).map(([k,l,c,L,why])=>`<span class="uni-sc ${c}${UNISTEXP===k?' on':''}" data-k="${k}" onclick="uniSX('${k}')"><i class="dt"></i>${l} <b>(${L.length})</b><span class="cv">▾</span></span>`
-    +(UNISTEXP===k?`<div class="uni-xp ${c}" data-xp="${k}"><div class="uni-xph"><b>${l}</b><span class="faint">${why}</span></div><div class="uni-acs">${L.map(o=>uniAppChip(o.a,o.x,o.xc)).join('')}</div></div>`:'')).join('')}</div>`;
+    +(UNISTEXP===k?`<div class="uni-xp ${c}" data-xp="${k}"><div class="uni-xph"><b>${l}</b><span class="faint">${why}</span></div><div class="uni-acs">${L.map(o=>uniAppChip(o.a,o.x,o.xc,o.t)).join('')}</div></div>`:'')).join('')}</div>`;
   const st=dets.map(a=>a.settled_till).filter(Boolean).sort()[0], dt=dets.map(a=>a.data_till).filter(Boolean).sort().pop();
   return `<div class="card" id="uni-sum" style="margin-bottom:14px"><div class="ct"><h3>📌 At a glance</h3><span class="faint" style="font-size:11.5px">All apps</span></div>
     ${tiles}
@@ -3878,8 +3914,9 @@ function uniCpCard(a){
       :oc?`<span class="pill p-b" title="${hAttr(uniOldDays()+' din se purane installs — sirf jaankari, iska alert nahi aata')}">ℹ️ Old installs</span>`
       :(t.low_sample?(t.break_day?'<span class="pill p-b">Data missing</span>':(t.inc_day?'<span class="pill p-b">Data incomplete</span>':'<span class="pill p-b">Low data</span>')):'<span class="faint">Normal</span>'))+brk+inc;
     const kk=t.prov?true:(a.settled_till&&r.to&&!uniKaccha(a,uniAdd(r.to,t.n))&&uniKaccha(a,a.data_till)?false:null);
+    const sx=splitHas(t)?splitTxt('rate',t):'';
     return `<tr><td class="nm">${uniDayCol(t.n)}</td><td class="uni-num"${tt(r)}>${cell(r,dp,kk)}</td><td class="uni-num"${tt(pv)}>${cell(pv,dp)}</td><td class="uni-num"${tt(al)}>${cell(al,dp)}</td>
-      <td class="uni-num">${bd}</td><td style="white-space:nowrap">${r.from?uniSpan(r.from,r.to):'—'}${(t.fallback&&t.fallback.recent&&r.k&&r.from&&uniDiff(r.from,r.to)+1>r.k)?` <span class="faint" title="${hAttr('sirf itne install din gine — beech wale adhoore data wale din ko chhoote the')}">· ${r.k} days</span>`:''}</td><td>${stt}</td></tr>`; }).join('')
+      <td class="uni-num"${sx?` title="${hAttr(sx)}"`:''}>${bd}</td><td style="white-space:nowrap">${r.from?uniSpan(r.from,r.to):'—'}${(t.fallback&&t.fallback.recent&&r.k&&r.from&&uniDiff(r.from,r.to)+1>r.k)?` <span class="faint" title="${hAttr('sirf itne install din gine — beech wale adhoore data wale din ko chhoote the')}">· ${r.k} days</span>`:''}</td><td>${stt}</td></tr>`; }).join('')
     ||`<tr><td colspan="7" class="muted" style="padding:16px">Abhi koi din nahi — ek hafte ke poore installs ke baad aayega.</td></tr>`;
   const stage=(st||zt||a.stage_why)?`<div style="padding:10px 17px 0;display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center">${st?`<span class="pill ${st[0]}">${st[1]}</span>`:''}${zt?`<span class="pill p-p" style="white-space:normal;max-width:100%;overflow-wrap:anywhere" title="Alert ya naye version ke baad kuch hafte har din ki row dikhti hai (sirf key days nahi)">🔍 ${hAttr(zt)}</span>`:''}${a.stage_why?`<span class="faint" style="font-size:11.5px">${hAttr(a.stage_why)}</span>`:''}</div>`:'';
   const life=`<div class="faint" style="font-size:12px;padding:11px 17px 13px;border-top:1px solid var(--line)" title="ab tak kul (har umar ke installs)">♾️ All time: <b style="color:var(--ink2)">${uniPct(LT.p)}</b> of installs gone so far (${fmtN(LT.un)} / ${fmtN(LT.users)}) · daily rate now ${uniRate(R.last7)}/1k, all-time typical ${uniRate(LT.rate_all_med)}/1k</div>`;
@@ -3992,6 +4029,277 @@ function uniChg(r){ if(r==null||r===''||!isFinite(+r)) return '—'; const x=Mat
 function uniMoney(v,cur){ const b=baseCur(), c=cur||b, r=(DATA&&DATA.usd_inr)||83; let x=+v;
   if(c!==b){ if(c==='USD'&&b==='INR') x*=r; else if(c==='INR'&&b==='USD') x/=r; }
   return cm(x,2); }
+// ---- 🧮 installs vs per-user split (SPEC_SPLIT), shared by Active users, Uninstall, Install value, Update impact and the
+// Alerts cards: every change → how much came from daily installs going up / down (ad spend) and how much is the real
+// per-user change (per 100 / per 1,000, then as actual numbers). The engines write a short list `sp` on each change;
+// splitOf(kind, host) expands it into the contract object — the SAME dict as Python admob_iq.engine.attrib.expand (a
+// parity test checks both; host keys _k / _days / _alerts are expand's k / days / alerts, _st is this page's own status
+// override) — splitHtml draws the 3-line block (detail views), splitTxt the one-line form (cards, rows, tooltips; the
+// same string as attrib.line). A host with no `sp` (an older file, or the SPLIT switch off) keeps its old lines. Parts
+// add up as shown: whole %s, the installs part rounded on its own, the per-user part = shown total − the others. Every
+// helper is failure-isolated (an error → null / '') and nothing here feeds any verdict ----
+const SPLIT_WORD={bigda:'🔴 Bigda',dhyan:'🟡 Dhyan do',behtar:'🟢 Behtar',normal:'⚪ Normal',jaldi:'⏳ Abhi jaldi',lagu_nahi:'— Lagu nahi'};
+const SPLIT_NONE={cohorts:'naye users ki wapsi ka data nahi',few:'data kam',steep:'app tezi se badal rahi',steep_up:'app tezi se badh rahi',steep_dn:'app tezi se ghat rahi',
+  base:'pehle ka number nahi',apps:'kuch apps ka hisaab nahi'};
+const SPLIT_BASIS={ret:'returning',imp:'returning',uc:'uninstall_count',ur:'uninstall_rate',uk:'uninstall_rate',rr:'return_rate',rev:'revenue_total',ir:'revenue_total',
+  spd:'ad_spend',vpi:'value_per_install',pu:'per_user',dau:'active_users'};
+const SPLIT_KIND={act_tile_ret:'ret',act_alert_ret:'ret',act_info_ret:'ret',act_row_ret:'ret',act_tile_rr:'rr',rate:null,imp_rate:'rr',uni_verdict:'uk',imp_dau:'imp',uc:'uc',
+  rev:'rev',ir:'ir',spd:'spd',vpi:'vpi',pu:'pu',dau:'dau'};
+// the status word is COPIED from the verdict the change already has (§2.4, never recomputed); no verdict → no word, nor
+// for a "maybe" tile / an "unsure" row (their own chip says it), nor for a closed change; and it stays only when the
+// per-user part points its way (splitAgree) — a word never contradicts the line it ends
+const SPLIT_TILE_ST={worse:'bigda',never:'bigda',watch:'dhyan',slow:'dhyan',break:'dhyan',better:'behtar',normal:'normal',
+  price_dn:'normal',price_up:'normal',growth:'jaldi',low:'jaldi',wait:'jaldi',thin:'jaldi',noad:'lagu_nahi',nospend:'lagu_nahi'};
+const SPLIT_SEV_ST={warning:'bigda',watch:'dhyan',good:'behtar'}, SPLIT_ROW_ST={worse:'bigda',better:'behtar',same:'normal',market:'normal'};
+const SPLIT_JUDGED=['worse','better','same','unsure','market'];
+// per-user % = (the volume factor) × its own change on these; a rise of the per-user part is the bad way on SPLIT_BAD_UP
+const SPLIT_MULT=['rr','ur','uk','uc','rev','ir','spd','vpi','imp'], SPLIT_BAD_UP=['uc','ur','spd'], SPLIT_MONEY=['rev','ir','spd','vpi'];
+const sN=v=>typeof v==='number'&&isFinite(v);                    // a usable number (never a string, never NaN / ∞)
+const splitF=v=>v!=null&&v!==''&&typeof v!=='boolean'&&isFinite(+v);
+const splitHasK=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+// S4: a % as shown — first to 6 decimals (float dust like 7.4999999 never flips it), then half away from zero
+function splitR(x){ if(!sN(x)) return null; const y=+x.toFixed(6), a=Math.floor(Math.abs(y)+0.5); return a===0?0:(y<0?-a:a); }
+function splitStOf(kind,h){ if(splitHasK(h,'_st')) return SPLIT_WORD[h._st]?h._st:null;
+  if(h.closed) return null;
+  if(kind==='act_info_ret') return 'normal'; if(kind==='act_row_ret') return null;
+  if(kind==='uni_verdict') return ({worse:'bigda',better:'behtar'})[h.dir]||'normal';
+  if(splitHasK(h,'severity')) return SPLIT_SEV_ST[h.severity]||null;
+  if(kind==='uc'&&splitHasK(h,'out_of_band')){   // the daily rate tile: an open rate alert decides, else the band
+    const sv=(Array.isArray(h._alerts)?h._alerts:[]).filter(a=>a&&(a.family==='rate_drift'||a.family==='rate_spike')&&!a.closed).map(a=>a.severity);
+    for(const x of ['warning','watch','good']) if(sv.includes(x)) return SPLIT_SEV_ST[x];
+    if(sN(h.last7)&&sN(h.hi)&&h.last7>h.hi) return 'dhyan'; if(sN(h.last7)&&sN(h.lo)&&h.last7<h.lo) return 'behtar'; return 'normal'; }
+  if(splitHasK(h,'status')) return SPLIT_ROW_ST[h.status]||null;
+  if(splitHasK(h,'st')) return SPLIT_TILE_ST[h.st]||null;
+  return null; }
+function splitNone(r){ const e=new Error(r); e.splitNone=r; return e; }
+function splitNeed(...v){ if(!v.every(sN)) throw splitNone('few'); }
+// the one core: before → after, the installs part (and a trend); per-user = the residual (the parts add up exactly)
+function splitCore(B,A,F,T){ splitNeed(B,A,F); if(B<=0) throw splitNone('base');
+  const tot=A-B, P=tot-F-(T?T:0), st=splitR(100*(tot/B)), sf=splitR(100*(F/B)), stt=T!=null?splitR(100*(T/B)):null;
+  return {total:{before:B,after:A,abs:tot,rel:tot/B},from_installs:{abs:F,rel:F/B},trend:T==null?null:{abs:T,rel:T/B},per_user:{abs:P,rel:P/B,own:null,status:null},
+    shown:{total:st,from_installs:sf,trend:stt,per_user:st-sf-(stt||0)}}; }
+// "count" when a % of the before total would mislead: a part at −100% or below, or the per-user % more than 1.5× / under
+// ⅔ of its own per-unit change (installs moved a lot: the Δinstalls × Δrate part is measured on today's installs)
+function splitForm(x){ const s=x.shown; if(Math.min(s.from_installs,s.per_user,s.trend!=null?s.trend:0)<=-100) return 'count';
+  const own=x.per_user.own, p=x.per_user.rel;
+  if(SPLIT_MULT.includes(x.code)&&own!=null&&(Math.abs(own)>=0.05||Math.abs(p)>=0.05)&&(own===0||p/own<2/3-1e-9||p/own>1.5+1e-9)) return 'count';
+  return 'pct'; }
+// the parts as numbers: integers × 10^exp (2 significant digits of the largest); per_user = total − the others
+function splitCounts(x){ const D=x.total.abs, F=x.from_installs.abs, P=x.per_user.abs, T=x.trend?x.trend.abs:null;
+  const M=Math.max(Math.abs(D),Math.abs(F),Math.abs(P),Math.abs(T||0)), e=M>0?Math.floor(Math.log10(M))-1:0;
+  const n=v=>e<0?splitR(v*Math.pow(10,-e)):splitR(v/Math.pow(10,e)), nD=n(D), nF=n(F), nT=T!=null?n(T):null;
+  return {exp:e,total:nD,from_installs:nF,trend:nT,per_user:nD-nF-(nT||0)}; }
+function splitAgree(x,st){ if(!['bigda','dhyan','behtar'].includes(st)) return st;
+  const c=x.shown.count, p=c?c.per_user:x.shown.per_user, up=SPLIT_BAD_UP.includes(x.code), bad=up?p>0:p<0, good=up?p<0:p>0;
+  return (st==='behtar'?good:bad)?st:null; }
+function splitFinish(x,st){ x.form=splitForm(x); x.shown.count=x.form==='count'?splitCounts(x):null; x.per_user.status=splitAgree(x,st); return x; }
+function splitInst(b,a,what){ return (!sN(b)||!sN(a)||b<=0)?null:{before:b,after:a,rel:a/b-1,what:what||'installs'}; }
+function splitDays(h,kind){ if(h._days!=null) return h._days; if(kind==='act_tile_rr') return null;   // a d1 / d7 tile's n is its window, not the day
+  if(Number.isInteger(h.n)) return h.n; const m=typeof h.metric==='string'?h.metric.match(/^d(\d+)$/):null; return m?+m[1]:null; }
+// a rate (100 me X): installs per day ib → ia, share rb → ra (0–1). The installs part keeps the old share on the new
+// installs; the per-user part (incl. Δinstalls × Δrate) is measured on today's installs
+function splitRateParts(ib,ia,rb,ra){ splitNeed(ib,ia,rb,ra); const o=splitCore(ib*rb,ia*ra,(ia-ib)*rb);
+  o.installs=splitInst(ib,ia); o.per100={n:100,before:100*rb,after:100*ra,k:null}; o.per_user.own=rb>0?ra/rb-1:null; o.on_now={installs:ia,abs:o.per_user.abs}; return o; }
+// an uninstall / return rate host's two shares: a checkpoint row (the base its arrow shows), an All-apps cell, an alert
+// / older change (a country's per-100 ÷ 100), an Update impact row
+function splitHostRates(h){ const full=v=>!!(v&&typeof v==='object'&&Object.keys(v).length);
+  if(h.recent&&typeof h.recent==='object'&&!Array.isArray(h.recent)){ const b=full(h.prev)?h.prev:(full(h.all)?h.all:{}); return [b.p,h.recent.p]; }
+  if(splitHasK(h,'p')&&splitHasK(h,'prev')) return [h.prev,h.p];
+  if(splitHasK(h,'now')){ let b=h.before, a=h.now; if(h.family==='geo_move'&&sN(b)&&sN(a)){ b/=100; a/=100; } return [b,a]; }
+  return [h.before,h.after]; }
+function splitOf(kind,h){ try{ return splitOf_(kind,h); }catch(e){ return null; } }
+function splitOf_(kind,h){ if(!h||typeof h!=='object'||Array.isArray(h)||!splitHasK(SPLIT_KIND,kind)) return null;
+  if(kind==='dau') return splitDau(h);
+  let code=SPLIT_KIND[kind]; const sp=h.sp, L=Array.isArray(sp)&&sp.length>0;
+  const derived=kind==='imp_rate'||kind==='uni_verdict'||(kind==='act_tile_rr'&&!L);
+  if(!derived){ if(!L) return null;
+    if(sp[0]==='no'){ const c=code||'ur'; return {v:1,code:c,basis:SPLIT_BASIS[c],none:sp.length>1?sp[1]:'error'}; }
+    if(code==null) code=sp[0]; if(sp[0]!==code) return null; }
+  if(code==='pu') return {v:1,code:'pu',basis:SPLIT_BASIS.pu,note:sp.slice(1).map(x=>Array.from(x))};
+  const st=splitStOf(kind,h);
+  if((kind==='imp_rate'||kind==='imp_dau'||((kind==='rate'||kind==='rev')&&splitHasK(h,'status')))&&!SPLIT_JUDGED.includes(h.status)) return null;   // an Update impact row with no judged number
+  if(!SPLIT_BASIS[code]) return null;
+  const out={v:1,code,basis:SPLIT_BASIS[code],per:['ir','spd','vpi'].includes(code)?'week':'day',days:null,installs:null,trend:null,per100:null,on_now:null,form:'pct',est:false,mode:null,note:[]};
+  try{
+    if(code==='ret'){ const [fi,yb,yw,nb,na,pb,pa,kk,fl]=sp.slice(1,10); let B,A;
+      if(kind==='act_tile_ret'){ B=h.base; A=h.v; } else if(kind==='act_alert_ret'){ B=h.before; A=h.now; }
+      else if(kind==='act_info_ret'){ B=sp[10]; splitNeed(B,h.rel); A=B*(1+h.rel); }
+      else { const s=h.s||[null,null,null,null]; splitNeed(...s); if(s[1]<=0||s[3]<=0) throw splitNone('few'); B=s[2]/s[3]; A=s[0]/s[1]; }
+      splitNeed(fl); const body=splitCore(B,A,fi), mode=(fl&2)?'elastic':'cohort';
+      body.installs=splitInst(nb,na); if(sN(pb)&&sN(pa)) body.per100={n:100,before:pb,after:pa,k:h._k!=null?h._k:(kk===undefined?null:kk)};
+      if(mode==='cohort'&&sN(yb)&&sN(yw)&&B-yb>0) body.per_user.own=(A-yw)/(B-yb)-1;   // the 30+ day old users themselves
+      Object.assign(out,body,{est:!!(fl&1),mode}); }
+    else if(code==='rr'||code==='ur'||code==='uk'){ let ib,ia,rb,ra;
+      if(kind==='imp_rate'){ const x=(h.extra&&typeof h.extra==='object')?h.extra:{}; splitNeed(x.installs_before,x.cohorts_before,x.installs_after,x.cohorts_after);
+        if(!x.cohorts_before||!x.cohorts_after) throw splitNone('few'); ib=x.installs_before/x.cohorts_before; ia=x.installs_after/x.cohorts_after; rb=h.before; ra=h.after; }
+      else if(kind==='uni_verdict'){ const p=h.prev||{}, r=h.recent||{}; splitNeed(p.users,p.k,r.users,r.k); if(!p.k||!r.k) throw splitNone('few');
+        ib=p.users/p.k; ia=r.users/r.k; rb=p.left; ra=r.left; }
+      else if(kind==='act_tile_rr'){ const s=h.s||[null,null,null,null]; splitNeed(...s); if(s[1]<=0||s[3]<=0) throw splitNone('few'); rb=s[2]/s[3]; ra=s[0]/s[1];
+        if(L&&sp.length>=3&&sp[0]==='rr'){ ib=sp[1]; ia=sp[2]; } else { splitNeed(h.n,h.nb); if(!h.n||!h.nb) throw splitNone('few'); ib=s[3]/h.nb; ia=s[1]/h.n; } }
+      else { ib=sp[1]; ia=sp[2]; [rb,ra]=splitHostRates(h); }
+      Object.assign(out,splitRateParts(ib,ia,rb,ra),{days:splitDays(h,kind)}); }
+    else if(code==='imp'){ const B=h.before, A=h.after, body=splitCore(B,A,sp[1],sp[2]);
+      if(sp.length>=5) body.installs=splitInst(sp[3],sp[4]); if(sN(h.expected)&&h.expected>0) body.per_user.own=A/h.expected-1;
+      Object.assign(out,body,{mode:'cohort'}); }
+    else if(code==='uc'){ const [ub,ua,xb,xa,nb,na,p100]=sp.slice(1,8); splitNeed(ub,ua,xb,xa); if(xb<=0||xa<=0||ub<=0) throw splitNone('base');
+      const body=splitCore(ub,ua,ub*(xa/xb-1)); body.installs=splitInst(nb,na); body.per100=sN(p100)?{n:100,before:p100,after:null,k:28}:null;
+      body.per_user.own=ua/xa-1; Object.assign(out,body); }   // the alert's own per-install change (xa: at its calibration)
+    else if(code==='rev'){ const ub=sp[1], ua=sp[2], row=kind==='rev'&&splitHasK(h,'status'), ab=row?h.before:h.base, aa=row?h.after:h.v; splitNeed(ub,ua,ab,aa);
+      const body=splitCore(ub*ab/1000,ua*aa/1000,(ua-ub)*ab/1000); body.installs=splitInst(ub,ua,'users'); body.per100={n:1000,before:ab,after:aa,k:null};
+      body.per_user.own=ab>0?aa/ab-1:null; Object.assign(out,body,{note:sp.slice(3).map(x=>Array.from(x))}); }
+    else if(code==='ir'){ const ib=sp[1], ia=sp[2], al=splitHasK(h,'severity'), vb=al?h.before:h.base, va=al?h.now:h.v; splitNeed(ib,ia,vb,va);
+      const body=splitCore(ib*vb,ia*va,(ia-ib)*vb); body.installs=splitInst(ib,ia); body.per100={n:1,before:vb,after:va,k:null};
+      body.per_user.own=vb>0?va/vb-1:null; Object.assign(out,body); }
+    else if(code==='spd'){ const [ib,ia,cb,ca]=sp.slice(1,5); splitNeed(ib,ia,cb,ca);
+      const body=splitCore(ib*cb,ia*ca,(ia-ib)*cb); body.installs=splitInst(ib,ia); body.per100={n:1,before:cb,after:ca,k:null};
+      body.per_user.own=cb>0?ca/cb-1:null; Object.assign(out,body); }
+    else if(code==='vpi'){ const [vb,va,cb,ca]=sp.slice(1,5); splitNeed(vb,va,cb,ca); if(cb<=0||ca<=0||vb<=0) throw splitNone('base');
+      const B=100*vb/cb, body=splitCore(B,100*va/ca,B*(cb/ca-1)); body.installs=splitInst(cb,ca,'cost'); body.per100={n:1,before:vb,after:va,k:null};
+      body.per_user.own=va/vb-1; Object.assign(out,body); }
+    else return null;
+  }catch(e){ if(e&&e.splitNone) return {v:1,code,basis:SPLIT_BASIS[code],none:e.splitNone}; throw e; }
+  return splitFinish(out,st); }
+// JS only: the portfolio's week-over-week (same apps): the new installs' part (Σ new today − Σ new a week ago), the rest
+function splitDau(h){ try{ const nb=h.nb, na=h.na; splitNeed(nb,na); const o=splitCore(h.before,h.after,na-nb);
+  return splitFinish(Object.assign({v:1,code:'dau',basis:SPLIT_BASIS.dau,per:'day',days:null,installs:splitInst(nb,na),per100:null,on_now:null,form:'pct',est:false,mode:null,note:[]},o),null); }
+  catch(e){ return (e&&e.splitNone)?{v:1,code:'dau',basis:SPLIT_BASIS.dau,none:e.splitNone}:null; } }
+// ---- the words (SPEC_SPLIT §4): counts in lakh / commas, rates "100 me 30 → 27", whole signed %s, no dates, no codes ----
+function splitPct(n){ return n==null?'—':(n>0?'+'+n+'%':(n<0?'−'+(-n)+'%':'0%')); }
+function splitNum(v){ if(!splitF(v)) return '—'; const x=+v, a=Math.abs(x), sg=x<0?'−':'', d1=y=>y.toFixed(1).replace(/\.0$/,''), d=y=>y<10?y.toFixed(2).replace(/\.?0+$/,''):d1(y);
+  if(a>=1e7) return sg+d(a/1e7)+' crore'; if(a>=1e5) return sg+d(a/1e5)+' lakh'; if(a<10) return sg+d1(a);   // "1.22 lakh" · "12.5 lakh" (a 1–10 lakh count keeps 2 decimals: a 5% move stays visible)
+  return sg+Math.round(a).toLocaleString('en-US'); }
+function splitP100(v){ if(!splitF(v)) return '—'; const a=Math.abs(+v), t=a<10?a.toFixed(1).replace(/\.0$/,''):String(Math.round(a)); return (+v<0&&t!=='0'?'−':'')+t; }
+// a per-100 pair "before → after" that never prints one number for two different values: numbers that come out equal
+// or 1 apart get a decimal (12.4 → 11.6, 10.4 → 9.9), still equal → 2
+function splitP100Pair(b,a){ const t=splitP100(b), u=splitP100(a); if(!splitF(b)||!splitF(a)||+b===+a) return [t,u];
+  const near=Math.abs(Math.round(+b)-Math.round(+a))<=1;
+  if(t!==u&&!near) return [t,u];
+  const f=dp=>[+b,+a].map(x=>x.toFixed(dp).replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,'')), r=f(1);
+  return r[0]!==r[1]?r:f(2); }
+// ~2 significant digits, whole people / installs: "6,000" · "180" · "12 lakh" · "7"
+function splitAbout(v){ if(!splitF(v)) return '—'; const a=Math.abs(+v);
+  if(a>=1e5) return String(+(a/1e5).toPrecision(2))+' lakh'; if(a<10) return String(Math.round(a)); return Math.round(+a.toPrecision(2)).toLocaleString('en-US'); }
+// an integer n × 10^e (the count form) as an about-number with its sign, its decimals the unit's (the parts add up as
+// printed): "~+180" · "~−1.5 lakh" · "~+0.85"
+function splitCnum(n,e){ const sg=n>0?'+':(n<0?'−':''); if(e>=0) return '~'+sg+splitNum(Math.abs(n)*Math.pow(10,e));
+  const t=String(Math.abs(n)).padStart(-e+1,'0'); return '~'+sg+(t.slice(0,e)+'.'+t.slice(e)).replace(/0+$/,'').replace(/\.$/,''); }
+function splitNWords(n){ return n===0?'install ke din hi':(n===1?'agle din':(n==null?'':n+' din me')); }
+// the Kul label; a pooled one names the apps it counts first ("21 apps ke purane users roz (26 me se)")
+function splitKul(S,o){ const n=S.days, c=S.code;
+  const L={ret:'Purane users roz',imp:'Purane users roz',uc:'Roz uninstall',ur:'Roz hataane wale'+(n!=null?' ('+splitNWords(n)+')':''),
+    uk:'Roz bache hue'+(n!=null?' ('+n+' din baad)':''),rr:'Roz wapas aane wale'+(n!=null?' ('+(n===1?'agle din':n+' din baad')+')':''),
+    rev:'Kamai roz',ir:'Installs se kamai / hafta',spd:'Ads kharcha / hafta',vpi:(typeof csym==='function'?csym():'$')+'100 pe wapas (7 din me)',dau:'Active users (pichhle hafte ke same din se)'}[c]||'Kul';
+  const b=o.label||L, A=S.apps; if(!A) return b;
+  return A.with<A.of?`${A.with} apps ke ${b.charAt(0).toLowerCase()+b.slice(1)} (${A.of} me se)`:`${b} (sab ${A.of} apps)`; }
+// a note: [code, before, after] with the shares written per 100 (the engine's wire)
+const SPLIT_NOTE={new:(b,a)=>`naye users ka hissa 100 me ${splitP100(b)} → ${splitP100(a)}`,net:()=>'dusre ad networks ka hissa badla',
+  rec:(b,a)=>`haal ke installs ka hissa 100 me ${splitP100(b)} → ${splitP100(a)}`,paid:(b,a)=>`ads wale installs 100 me ${splitP100(b)} → ${splitP100(a)}`,
+  swing:()=>'naye installs bahut badle — mix badla ho sakta hai'};
+function splitNoteTxt(x){ if(!Array.isArray(x)) return ''; const f=SPLIT_NOTE[x[0]]; if(!f) return ''; if(x[0]!=='net'&&x[0]!=='swing'&&(!splitF(x[1])||!splitF(x[2]))) return ''; return 'Saath me: '+f(+x[1],+x[2]); }
+// the distinct notes of several hosts, once each (a card shows a "Saath me:" once, never on every tile / row)
+function splitNotesOnce(list,o){ try{ const seen=new Set(), nt=[]; (list||[]).forEach(n=>{ if(Array.isArray(n)&&!seen.has(n[0])&&splitNoteTxt(n)){ seen.add(n[0]); nt.push(n); } });
+  return nt.length?splitBlock({v:1,code:'pu',note:nt},o||{}):''; }catch(e){ return ''; } }
+// the block: o.money (a per-user / per-install amount; o.moneyP / o.costP: the same with more digits), o.big (a total),
+// o.cost (a per-install cost), o.label (the Kul label), o.cls (an extra class), o.notes===false (its "Saath me:" lines
+// shown once elsewhere); none → one grey "pata nahi" line (never a fake 0), pu → only its Saath me: line
+function splitBlock(S,o){ try{ return splitBlock_(S,o||{}); }catch(e){ return ''; } }
+function splitBlock_(S,o){ if(!S) return '';
+  const cls='split'+(o.cls?' '+o.cls:''), E=hAttr, g=o.tag==='span'?'span':'div', el=(c,t)=>`<${g} class="${c}">${t}</${g}>`;
+  if(S.none){ if(S.none==='error'||!SPLIT_NONE[S.none]) return '';   // o.named: a block standing alone (the All-apps pool) names its number and its apps
+    const t=o.named?`${E(splitKul(Object.assign({},S,{apps:null}),o))}: installs ka hissa pata nahi`+(S.apps&&S.none==='apps'?` (${S.apps.of} me se ${S.apps.with} apps ka hisaab)`:' — '+SPLIT_NONE[S.none])
+      :'Installs ka hissa: pata nahi — '+SPLIT_NONE[S.none];
+    return `<${g} class="${cls} none" data-b="${E(S.code||'')}">${el('spk',t)}</${g}>`; }
+  const notes=o.notes===false?'':(S.note||[]).map(splitNoteTxt).filter(Boolean).map(t=>el('sps',E(t))).join('');
+  if(S.code==='pu') return notes?`<${g} class="${cls}" data-b="pu">${notes}</${g}>`:'';
+  if(!S.shown) return '';
+  const c=S.code, s=S.shown, P=splitPct, T=S.total, I=S.installs, H=S.per100||{}, st=S.per_user.status, C=S.form==='count'?s.count:null;
+  const cnt=['ret','imp','uc','ur','uk','rr','dau'].includes(c), num=v=>cnt?splitNum(v):((c==='vpi'&&typeof valP100==='function')?valP100(v):(o.big||splitNum)(v));
+  const m=v=>(o.money||splitNum)(v), cost=v=>(o.cost||o.money||splitNum)(v);
+  // money before → after that would print the same for two different values: more digits
+  const pair=(f,fp,b,a)=>{ const x=f(b), y=f(a); return (x===y&&b!==a&&fp)?[fp(b),fp(a)]:[x,y]; };
+  const iP=(I&&I.rel!=null&&I.what!=='cost')?splitR(100*I.rel):null, iT=iP==null?'':`${I.what==='users'?'users':'installs'} ${P(iP)}`, j=(a,b)=>[a,b].filter(Boolean).join('; ');
+  // a part: its % of the before total, or (the count form) its number a day / a week
+  const unit=S.per==='week'?' / hafta':(c==='vpi'?'':' roz');
+  const cv=n=>{ const e=C.exp, v=e>=0?Math.abs(n)*Math.pow(10,e):Math.abs(n)/Math.pow(10,-e), sg=n>0?'+':(n<0?'−':'');
+    if(cnt) return splitCnum(n,e)+unit;
+    const f=c==='vpi'?num:(v<1&&o.money?o.money:(o.big||splitNum)); return '~'+sg+String(f(v)).replace(/^−/,'')+unit; };
+  const part=k=>C?cv(C[k]):P(s[k]);
+  let fL='installs ki wajah se', fD='', pL='asli badlaav', pD='', xL='';
+  const own=S.per_user.own!=null?splitR(100*S.per_user.own):null, ownD=w=>(own!=null&&(C||own!==s.per_user))?`${w} ${P(own)}`:'';
+  if(c==='ret'){ const k=H.k!=null?H.k+' din ke ':'', mv=sN(H.before)&&sN(H.after)&&H.before>0&&Math.abs(H.after/H.before-1)>=0.01;   // the recent installs' own return moved (≥ 1%)
+    const pp=mv?splitP100Pair(H.before,H.after):(sN(H.before)?[splitP100(H.before),null]:null);
+    fD=j(iT,pp?`${k}100 installs me se ~${pp[0]} roz aate`:''); pD=ownD((H.k!=null?H.k+'+ din purane':'purane')+' users khud');
+    if(mv&&pp[0]!==pp[1]) xL=`naye users ki wapsi: 100 me ~${pp[0]} → ~${pp[1]} roz`; }
+  else if(c==='imp'){ fD=iT; pL='update ka asar'; pD=ownD('expected se'); }
+  else if(c==='uc'){ fD=j(iT,H.before!=null?`100 me ~${splitP100(H.before)} pehle 28 din me hata dete`:''); pD=ownD('har install pe'); }
+  else if(c==='ur'||c==='uk'||c==='rr'){ const w={ur:'hataate',uk:'bache rehte',rr:'wapas aate'}[c], pp=splitP100Pair(H.before,H.after), on=S.on_now;
+    fD=j(iT,`100 me ${pp[0]} ${w}`); pD=`100 me ${pp[0]} → ${pp[1]}`+(C&&on&&sN(on.installs)?`; roz ~${splitAbout(on.installs)} installs pe`:''); }
+  else if(c==='rev'){ const [b,a]=pair(m,o.moneyP,H.before,H.after); fL='users ki ginti se'; fD=j(iT,`har 1,000 users se ${b}`); pL='asli badlaav (har user se kamai)'; pD=`har 1,000 users se ${b} → ${a}`; }
+  else if(c==='ir'){ const [b,a]=pair(m,o.moneyP,H.before,H.after); fD=j(iT,`ek install se ${b}`); pL='asli badlaav (har install se kamai)'; pD=`${b} → ${a}`; }
+  else if(c==='spd'){ const [b,a]=pair(cost,o.costP||o.moneyP,H.before,H.after); fD=j(iT,`ek install ${b} ka`); pL='asli badlaav (ek install ka daam)'; pD=`${b} → ${a}`; }
+  else if(c==='vpi'){ const [cb,ca]=I?pair(cost,o.costP||o.moneyP,I.before,I.after):['',''], [vb,va]=pair(m,o.moneyP,H.before,H.after);
+    fL='install ke daam ki wajah se'; fD=I?`ek install ${cb} → ${ca}`:''; pL='asli badlaav (kamai per install)'; pD=`ek install se ${vb} → ${va}`; }
+  else if(c==='dau'){ fL='naye installs se'; fD=iT; pL='purane users se'; }
+  // the total before → after, never one number twice (a tiny count: 2 decimals; money: 4 significant digits)
+  const kul=(()=>{ const x=num(T.before), y=num(T.after); if(x!==y||T.before===T.after) return [x,y];
+    if(cnt&&Math.abs(T.before)<10&&Math.abs(T.after)<10) return [T.before,T.after].map(v=>(v<0?'−':'')+Math.abs(v).toFixed(2));
+    return (!cnt&&c!=='vpi'&&o.moneyP)?[o.moneyP(T.before),o.moneyP(T.after)]:[x,y]; })();
+  const L=[el('spk',`${E(splitKul(S,o))}: <b>${P(s.total)}</b> (${kul[0]} → ${kul[1]})`),
+    el('spl',`• ${fL}: <b>${part('from_installs')}</b>${fD?' ('+fD+')':''}${S.est?' · ≈ Andaza':''}`)];
+  if(C?C.trend:s.trend) L.push(el('spl',`• pehle se chal raha trend: <b>${part('trend')}</b>`));
+  L.push(el('spl',`• ${pL}: <b>${part('per_user')}</b>${pD?' ('+pD+')':''}${st&&SPLIT_WORD[st]?' → '+SPLIT_WORD[st]:''}`));
+  if(xL) L.push(el('spn',xL));
+  // the rate on today's installs, in people (never under a 0% part, never a fraction of a person; the count form has it inline)
+  const on=S.on_now; if(!C&&on&&(c==='ur'||c==='uk'||c==='rr')&&s.per_user!==0&&Math.abs(on.abs)>=1){ const a=splitAbout(Math.abs(on.abs));
+    if(a!=='0'&&a!=='—') L.push(el('spn',`roz ~${splitAbout(on.installs)} installs pe ~${a} ${on.abs<0?'kam':'zyada'} ${{ur:'hataate',uk:'bache',rr:'wapas'}[c]}`)); }
+  return `<${g} class="${cls}" data-b="${E(c)}">${L.join('')}${notes}</${g}>`; }
+function splitHtml(kind,host,o){ try{ return splitBlock(splitOf(kind,host),o); }catch(e){ return ''; } }
+// the one-line form (≤ 12 words), its counted thing first and the parts as an equation that adds up as printed:
+// "roz wapas aane wale: kul +8% = installs se +20% + asli −12%"; the count form "…: ~−150 = installs se ~−180 + asli ~+30
+// (kul −75%)" (none for money: its amounts need the page's currency); nothing for none / per-user notes. = attrib.line
+const SPLIT_SUBJ={ret:'purane users roz',imp:'purane users roz',uc:'roz uninstall',ur:'roz hataane wale',uk:'roz bache hue',rr:'roz wapas aane wale',rev:'kamai roz',
+  ir:'hafte ki kamai',spd:'hafte ka ads kharcha',vpi:'paisa wapas',dau:'active users'};
+const SPLIT_FW={rev:'users se',vpi:'daam se',dau:'naye installs se'}, SPLIT_PW={imp:'update',vpi:'kamai se',dau:'purane users se'};
+function splitLine(S){ if(!S||S.none||!S.shown) return ''; const s=S.shown, c=S.form==='count'?s.count:null, P=splitPct;
+  if(c&&SPLIT_MONEY.includes(S.code)) return '';
+  const f=k=>c?splitCnum(c[k],c.exp):P(s[k]), parts=[(SPLIT_FW[S.code]||'installs se')+' '+f('from_installs')];
+  if((c||s).trend) parts.push('trend '+f('trend')); parts.push((SPLIT_PW[S.code]||'asli')+' '+f('per_user'));
+  const subj=SPLIT_SUBJ[S.code]||'kul';
+  return c?`${subj}: ${splitCnum(c.total,c.exp)} = ${parts.join(' + ')} (kul ${P(s.total)})`:`${subj}: kul ${P(s.total)} = ${parts.join(' + ')}`; }
+function splitTxt(kind,host){ try{ return splitLine(splitOf(kind,host)); }catch(e){ return ''; } }
+// the one-line form as a small line under a card / chip ('' when there is none)
+function splitChip(kind,host){ try{ const S=splitOf(kind,host), t=splitLine(S); return t?`<div class="split-c" data-b="${hAttr(S.code)}">${hAttr(t)}</div>`:''; }catch(e){ return ''; } }
+// the host carries the new contract (a non-null sp): its block replaces the old installs lines
+const splitHas=h=>!!(h&&typeof h==='object'&&h.sp!=null);
+// …and it shows its parts (not a "pata nahi", a notes-only or an engine-error one): only then does it replace the old
+// installs lines and the Installs tag — a split that can't be worked out never takes a shown fact away
+const splitParts=h=>splitHas(h)&&Array.isArray(h.sp)&&h.sp.length>0&&h.sp[0]!=='no'&&h.sp[0]!=='pu';
+// All apps, returning users pooled (SPEC_SPLIT F1; the same rule as Python attrib.pool): over the apps the tile adds up
+// (visible, not stale, not waiting / without data), Σ of each covered app's own parts; the covered apps must hold ≥ 90%
+// of the pooled level, else "pata nahi". The page calls it only when the data carries the split
+function splitPoolM(ms){ try{ let allb=0,cov=0,of=0,n=0,p100=true,est=false; const S={b:0,a:0,fi:0,yb:0,yw:0,nb:0,na:0,db:0,da:0}, modes=new Set(), ks=new Set();
+  for(const m0 of (ms||[])){ const m=m0||{}, s=m.s; if(m.st==='wait'||m.st==='noad'||!Array.isArray(s)||s.length<4||!s.every(sN)||s[1]<=0||s[3]<=0) continue;
+    const b=s[2]/s[3], a=s[0]/s[1]; of++; allb+=b; const sp=m.sp; if(!Array.isArray(sp)||sp.length<10||sp[0]!=='ret') continue;
+    const [fi,yb,yw,nb,na,pb,pa,kk,fl]=sp.slice(1,10); if(![fi,yb,yw,nb,na,fl].every(sN)) continue;
+    n++; cov+=b; S.b+=b; S.a+=a; S.fi+=fi; S.yb+=yb; S.yw+=yw; S.nb+=nb; S.na+=na; est=est||!!(fl&1); modes.add((fl&2)?'elastic':'cohort'); ks.add(kk===undefined?null:kk);
+    if(sN(pb)&&sN(pa)&&pb>0&&pa>0&&yb>0&&yw>0){ S.db+=100*yb/pb; S.da+=100*yw/pa; } else p100=false; }
+  if(!of) return null;
+  if(!n||allb<=0||cov<0.9*allb) return {v:1,code:'ret',basis:'returning',none:'apps',apps:{of,with:n}};
+  const out={v:1,code:'ret',basis:'returning',per:'day',days:null,installs:null,trend:null,per100:null,on_now:null,form:'pct',est,
+    mode:modes.size===1?[...modes][0]:'mixed',note:[],apps:{of,with:n}};
+  Object.assign(out,splitCore(S.b,S.a,S.fi)); out.installs=splitInst(S.nb,S.na);
+  if(p100&&S.db>0&&S.da>0){ const k1=ks.size===1?[...ks][0]:null; out.per100={n:100,before:100*S.yb/S.db,after:100*S.yw/S.da,k:sN(k1)?k1:null}; }
+  if(modes.size===1&&modes.has('cohort')&&S.b-S.yb>0) out.per_user.own=(S.a-S.yw)/(S.b-S.yb)-1;
+  return splitFinish(out,null); }catch(e){ return null; } }
+function splitPool(rows){ try{ return splitPoolM((rows||[]).filter(r=>r&&!r.stale).map(r=>r.m&&r.m.ret_dau)); }catch(e){ return null; } }
+// All apps, came back next day / after a week pooled from the same sums the tile uses (each app's per day)
+function splitPoolRate(rows,k){ try{ let s0=0,s1=0,s2=0,s3=0,c=0;
+  (rows||[]).forEach(r=>{ const M=r&&r.m&&r.m[k], s=M&&M.s; if(!M||r.stale||M.st==='wait'||M.st==='noad'||!Array.isArray(s)||![0,1,2,3].every(j=>splitF(s[j]))||!(+s[1]>0)||!(+s[3]>0)||!(+M.n>0)||!(+M.nb>0)) return;
+    s0+=s[0]/M.n; s1+=s[1]/M.n; s2+=s[2]/M.nb; s3+=s[3]/M.nb; c++; });
+  return c?splitOf('act_tile_rr',{s:[s0,s1,s2,s3],n:1,nb:1,_days:k==='d1'?1:7,_st:null}):null; }catch(e){ return null; } }
+// 📅 the portfolio's week-over-week, same apps: the new installs' part (Σ new today − Σ new a week ago) and the rest
+function splitWow(S,i){ try{ if(!S||!S.wnc||!S.wnc[i]||S.wnc[i]!==S.wowc[i]||S.wow[i]==null) return ''; const b=S.wa0[i], a=S.wa1[i];
+  return splitLine(splitDau({before:b,after:a,nb:S.wn0[i],na:S.wn1[i]})); }catch(e){ return ''; } }
 function uniImpBlocks(a){ const I=a&&a.impact, U=(I&&Array.isArray(I.updates))?I.updates.filter(b=>b&&typeof b==='object'&&b.key):[];
   return U.map((b,i)=>[b,i]).sort((p,q)=>(p[0].date<q[0].date?1:(p[0].date>q[0].date?-1:p[1]-q[1]))).map(p=>p[0]); }   // newest first
 function uniImpFind(a,k){ if(!k||!a) return null; const B=uniImpBlocks(a);
@@ -4162,10 +4470,32 @@ function uniImpRow(spec,r,zmin,H,o){ const [k,label,,tip,cap]=spec, dh=j=>H&&H[j
       cSub+=`<div class="s uni-need" title="${hAttr(nTip)}">pakka: ≥ ${nd}</div>`; }
   }
   const ltip=(k==='returning_dau'&&o.n>=14)?`Roz ke active users − us din ke naye installs = purane users. Expected = ${uniImpDauExp(o.n)} (ad spend ka asar hata ke)`:tip;
+  const spl=uniImpSplit(k,R,o);
   return `<tr data-row="${k}"><td class="nm" title="${hAttr(ltip)}">${label}${cap?sub(cap):''}</td>`
     +`<td class="uni-num"${dh(0)}${bTip?` title="${hAttr(bTip)}"`:''}>${bef!=null?bef:dash}${ins&&R.from_b?sub('installs '+sp(R.from_b,R.to_b)):''}</td>`
     +`<td class="uni-num"${dh(1)}${aTip?` title="${hAttr(aTip)}"`:''}>${aMain}${eLine}${aSubs.map(sub).join('')}</td>`
-    +`<td class="uni-num"${dh(2)}${cTip?` title="${hAttr(cTip)}"`:''}>${cMain}${cSub}</td><td class="st">${uniIStat(R,zmin,{run:o.run?o.n:0,tl:o.tl,yr:o.yr})}</td></tr>`; }
+    +`<td class="uni-num"${dh(2)}${cTip?` title="${hAttr(cTip)}"`:''}>${cMain}${cSub}</td><td class="st">${uniIStat(R,zmin,{run:o.run?o.n:0,tl:o.tl,yr:o.yr})}</td></tr>`
+    +(spl?`<tr class="uni-imp-sp" data-sp="${k}"><td colspan="5">${spl}</td></tr>`:''); }
+// an Update impact row's split (every window, SPEC_SPLIT F2): Returning DAU = before + the recent installs' part + the
+// usual trend + the update's own part (the engine's expected already holds the first two); D1 / D7 / D30 = installs ×
+// the share; install-day uninstalls likewise; ad revenue (7 days) = users × revenue per user; sessions / time = the
+// window's mix notes. Only when the block carries the split (o.sl) and the row has a judged number
+function uniImpLive(b){ const has=R=>R&&typeof R==='object'&&Object.values(R).some(splitHas), W=(b&&b.by_window&&typeof b.by_window==='object')?b.by_window:{};
+  return !!b&&(has(b.rows)||Object.values(W).some(w=>w&&has(w.rows))); }
+function uniImpSplit(k,R,o){ try{ if(!o||!o.sl||!R||typeof R!=='object') return ''; const x=(R.extra&&typeof R.extra==='object')?R.extra:{};
+  if(k==='returning_dau') return splitHtml('imp_dau',R);
+  if(k==='new_d1'||k==='new_d7'||k==='new_d30') return splitHtml('imp_rate',Object.assign({_days:+k.slice(5)},R));
+  if(k==='uninstall_d0') return splitHas(R)?splitHtml('rate',Object.assign({_days:0},R)):'';
+  if(k==='arpdau') return splitHtml('rev',R,{money:v=>actMoney(v,x.currency),big:v=>actMoney(v,x.currency,true),moneyP:v=>actMoneyP(v,x.currency),notes:false});
+  return ''; }catch(e){ return ''; } }
+// the window's mix notes (sessions / time judged: the new users' share or the installs moved a lot; the revenue row's
+// new-user share), said once under the table — never on every row
+function uniImpNoteBlock(R,N,sl){ try{ if(!sl||!R||typeof R!=='object') return ''; const nt=[], A=((R.arpdau||{}).extra)||{}, n=Array.isArray(N)?N:[];
+  if(['sessions','time'].some(k=>R[k]&&UNI_IMP_JUDGED.includes(R[k].status))){
+    if(n.includes('newshare_swing')&&splitF(A.newshare_before)&&splitF(A.newshare_after)) nt.push(['new',100*A.newshare_before,100*A.newshare_after]);   // (the row's shares are 0–1)
+    else if(n.includes('installs_swing')) nt.push(['swing',null,null]); }
+  const rv=splitOf('rev',R.arpdau||{}); if(rv&&Array.isArray(rv.note)) nt.push(...rv.note);
+  return splitNotesOnce(nt,{cls:'uni-imp-notes'}); }catch(e){ return ''; } }
 // the same days, users on the new version vs users on the older ones (returning users; minus the usual early-updater gap)
 function uniImpVRow(spec,r,zmin,bias,nb,H,t){ const [k,label]=spec, dh=j=>H&&H[j]?` data-h="${hAttr(H[j])}"`:''; nb=(nb!=null&&isFinite(+nb))?+nb:0;
   const R=(r&&typeof r==='object')?r:{status:'na',reason:'Is update ka version number nahi — naya vs purana version nahi dekh sakte'};
@@ -4328,9 +4658,9 @@ function uniImpBlock(a,b,open,t){
   const yg=Y?`<div class="faint uni-imp-young">${Y.txt}</div>`:'';
   const bDays=bw.days!=null&&isFinite(+bw.days)?+bw.days:(bw.from&&bw.to?uniDiff(bw.from,bw.to)+1:(LW?n:uniIC('win_days',7,t)));
   const aH=aDays==null?`After (${LW?n:uniIC('win_days',7,t)} days)`:(aSet!=null&&aSet<aDays?`After (${aSet} of ${aDays} days)`:`After (${aDays} ${aDays===1?'day':'days'})`);
-  const R=Wv.rows, tl=LW?uniImpTold(a,b,Wv):{};
+  const R=Wv.rows, tl=LW?uniImpTold(a,b,Wv):{}, sl=uniImpLive(b);
   const main=`<div class="uni-scroll"><table class="uni-imp-t uni-sticky"><thead><tr><th>Metric</th><th>Before (${bDays} ${bDays===1?'day':'days'})</th><th>${aH}</th><th>Change</th><th>Status</th></tr></thead>`
-    +`<tbody>${RS.map(s=>uniImpRow(s,R[s[0]],zmin,[`Before (${bDays} ${bDays===1?'day':'days'})`,aH,'Change'],{n,run,tl:tl[s[0]],yr:Y&&Y.yr})).join('')}</tbody></table></div>`;
+    +`<tbody>${RS.map(s=>uniImpRow(s,R[s[0]],zmin,[`Before (${bDays} ${bDays===1?'day':'days'})`,aH,'Change'],{n,run,tl:tl[s[0]],yr:Y&&Y.yr,sl,notes:Wv.notes,rows:R})).join('')}</tbody></table></div>`;
   // same days: the new version vs the older ones — the 7-day window only (later, newer updates mix in)
   let ver='';
   if(LW) ver='<div class="faint uni-imp-vnote">Naya vs purana version: sirf 7-din window me (baad me naye updates aa jaate hain)</div>';
@@ -4347,7 +4677,7 @@ function uniImpBlock(a,b,open,t){
     +`<tbody>${UNI_IMP_VROWS.map(s=>uniImpVRow(s,VR[s[0]],zmin,bias&&bias[s[0]==='ver_time'?'time':'sessions'],bias&&bias.releases,['Older versions',nl,'Difference'],t)).join('')}</tbody></table></div>`; }
   const why=run?uniImpRunTxt(Wv,true):(v.why?hAttr(v.why):(lv==='pending'?'Abhi faisle ke liye pakke din kam hain':'—'));
   const fin=(!run&&!v.final&&v.ready_on)?` <span class="faint">· Final when GA4 data reaches ${uniD(v.ready_on)}</span>`:'';
-  return `<div class="uni-imp-b on" id="${P}imp-${idA}" data-key="${idA}" data-open="1">${head}${seg}${meta}${yg}${main}${ver}<div class="uni-imp-why"><b>Why:</b> ${why}${fin}</div>${uniImpVerLnk(a,b)}</div>`; }
+  return `<div class="uni-imp-b on" id="${P}imp-${idA}" data-key="${idA}" data-open="1">${head}${seg}${meta}${yg}${main}${uniImpNoteBlock(R,Wv.notes,sl)}${ver}<div class="uni-imp-why"><b>Why:</b> ${why}${fin}</div>${uniImpVerLnk(a,b)}</div>`; }
 // 🧬 (Install value, VALUE_CD on): an open version block links to that version's new users — 30 days of returns and earning.
 // Only when the build has C on and the app has an Install value page; without DATA.value nothing (the Uninstall / Active
 // screens stay byte for byte). A block of several versions: the newest
@@ -4461,7 +4791,7 @@ function uniAlertCards(list){
     return `<div class="alert ${sev}" data-sev="${x.severity}" data-metrics="uninstall"><div style="font-size:17px">${ICON[x.severity]||'•'}</div><div class="abody">
       <div class="atitle">${title}${x.fresh?'<span class="pill p-p" style="margin-left:7px">New</span>':''}</div>
       <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18)}<span class="faint">· GA4${imp?' + AdMob':''} · data till ${fmtD(x.data_till)}</span></div>
-      <div style="margin:9px 0 2px;font-size:12.5px;color:${uniAlertCol(x)}">${hAttr(x.text||x.message||'')}</div>
+      <div style="margin:9px 0 2px;font-size:12.5px;color:${uniAlertCol(x)}">${hAttr(x.text||x.message||'')}</div>${imp?'':uniAlSplit(x,true)}
       ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
       <div class="aact">${btn}</div></div></div>`; }).join(''); }
 
@@ -4625,9 +4955,10 @@ function actTile(d,k,label,tip,als,win){
   if(chn) ch=null;
   const TD=actConst('tile_days',7), nn=M&&actOk(M.n)?+M.n:null, days=(nn!=null&&nn<TD&&st!=='wait'&&st!=='noad')?` (${nn} of ${TD} days)`:'';
   const fr=M&&(M.from||(!dm&&win&&win.from)), to=M&&(M.to||(!dm&&win&&win.to)), dates=fr?(dm?'Installs ':'')+uniSpan(fr,to||fr):'';
-  if(k==='ret_dau'){ const SP=d.split, IN=d.inst;
-    if(SP&&(actOk(SP.old_rel)||actOk(SP.recent_rel))) sm.push(`${actOldLbl(d.daily&&d.daily.old_k)} ${SP.est?'≈ ':''}${uniChg(SP.old_rel)} · Recent installs coming back ${SP.est?'≈ ':''}${uniChg(SP.recent_rel)}`);
-    else if(IN&&actOk(IN.rel)) sm.push(`Installs ${uniChg(IN.rel)} vs 4 weeks${actInstPart(IN,M)}`); }
+  const spl=actTileSplit(d,k,M,cur);
+  if(k==='ret_dau'&&!splitParts(M)){ const SP=d.split, IN=d.inst, no=splitHas(M);   // no: a "pata nahi" split — the installs' own change stays, no old part beside it
+    if(!no&&SP&&(actOk(SP.old_rel)||actOk(SP.recent_rel))) sm.push(`${actOldLbl(d.daily&&d.daily.old_k)} ${SP.est?'≈ ':''}${uniChg(SP.old_rel)} · Recent installs coming back ${SP.est?'≈ ':''}${uniChg(SP.recent_rel)}`);
+    else if(IN&&actOk(IN.rel)) sm.push(`Installs ${uniChg(IN.rel)} vs 4 weeks${no?'':actInstPart(IN,M)}`); }
   if(dm&&M&&(actOk(M.base)||actOk(M.all))) sm.push(`before ${uni100(M.base)} · all-time ${uni100(M.all)}`);
   if(k==='arpdau'&&st!=='noad'&&st!=='wait'){ const A=T.ads||{}, C=T.ecpm||{};
     sm.push(`Ads/user ${actDec(A.v)}${actOk(A.rel)?' ('+uniChg(A.rel)+')':''} · eCPM ${actMoney(C.v,cur)}${actOk(C.rel)?' ('+uniChg(C.rel)+')':''}`);
@@ -4637,10 +4968,27 @@ function actTile(d,k,label,tip,als,win){
   const mw=k==='arpdau'&&/^price_/.test(st)&&((d.changes&&d.changes.info)||[]).some(o=>o&&o.kind==='price'&&(o.tags||[]).includes('market_wide'));
   const chips=actChip(k,M,d,als)+(mw?actPill('p-p','Market-wide','Is hafte kai apps me eCPM saath me badla — bazaar ka asar'):'');
   const open=ACTTILEEXP===k;
-  return `<div class="uni-st act-t${open?' open':''}" data-m="${k}" data-st="${st}" onclick="actTTX('${k}')"><div class="l" title="${hAttr(tip)}">${label}</div><div class="v">${big}</div>`
+  return `<div class="uni-st act-t${open?' open':''}" data-m="${k}" data-st="${st}"${spl?' data-spl="1"':''} onclick="actTTX('${k}')"><div class="l" title="${hAttr(tip)}">${label}</div><div class="v">${big}</div>`
     +(ch?`<div class="c"><span class="act-lg">${ch} vs previous 4 weeks</span><span class="act-sh">${ch} · 4 wks</span></div>`:(chn?`<div class="c">${chn}</div>`:''))
     +`<div class="act-pl">${chips}</div><div class="act-x">`+(M&&actOk(M.usual)?`<div class="c">${actUsual(M.usual,dm)}</div>`:'')
-    +(dates?`<div class="c act-dt">${dates}${days}</div>`:'')+(sm.length?`<div class="act-sl">${sm.map(x=>`<div>${x}</div>`).join('')}</div>`:'')+`</div></div>`; }
+    +(dates?`<div class="c act-dt">${dates}${days}</div>`:'')+(sm.length?`<div class="act-sl">${sm.map(x=>`<div>${x}</div>`).join('')}</div>`:'')+spl+`</div></div>`; }
+// a tile's installs vs per-user block (SPEC_SPLIT): returning users (the installs' volume vs the per-user change: the
+// 30+ day old users and the recent installs' own return), came back next day / after a week (installs × the share), ad
+// revenue per 1,000 users (users × revenue per user). The per-user tiles' "Saath me:" mix notes are said once, under
+// the tiles (actNoteBlock). '' without a split
+function actTileSplit(d,k,M,cur){ try{ const mo={money:v=>actMoney(v,cur),big:v=>actMoney(v,cur,true),moneyP:v=>actMoneyP(v,cur),notes:false}, sp=M&&M.sp, c=Array.isArray(sp)?sp[0]:null;
+  if(!splitHas(M)) return '';
+  if(k==='ret_dau') return splitHtml('act_tile_ret',Object.assign({_k:d.daily&&d.daily.old_k},M));
+  if(k==='d1'||k==='d7') return splitHtml('act_tile_rr',Object.assign({_days:k==='d1'?1:7},M));
+  if(c==='rev'||(k==='arpdau'&&c==='no')) return splitHtml('rev',M,mo);
+  return ''; }catch(e){ return ''; } }
+// the per-user tiles' mix notes (sessions, time, ads, ad rate, revenue per user), each said once for the card
+function actNoteBlock(d){ try{ const T=(d&&d.tiles)||{}, nt=[];
+  ['sess','time','arpdau','ads','ecpm'].forEach(k=>{ const M=T[k]; if(!splitHas(M)) return; const c=Array.isArray(M.sp)?M.sp[0]:null, S=splitOf(c==='rev'?'rev':'pu',M);
+    if(S&&Array.isArray(S.note)) nt.push(...S.note); });
+  return splitNotesOnce(nt,{cls:'act-notes'}); }catch(e){ return ''; } }
+function actMoneyP(v,cur){ if(!actOk(v)) return '—'; const b=baseCur(), c=cur||b, r=(DATA&&DATA.usd_inr)||83; let x=+v;   // actMoney with 4 significant digits
+  if(c!==b){ if(c==='USD'&&b==='INR') x*=r; else if(c==='INR'&&b==='USD') x/=r; } x*=cfx(); return (x<0?'−':'')+csym()+String(+Math.abs(x).toPrecision(4)); }
 function actInstPart(IN,M){ const p=actOk(IN.part)?+IN.part:null, r=M&&actOk(M.rel)?+M.rel:null;   // the installs' part of the returning users' change
   if(p==null||Math.abs(p)*100<0.5) return '';
   const pts=Math.abs(p*100).toFixed(1).replace(/\.0$/,'');
@@ -4649,7 +4997,7 @@ function actInstPart(IN,M){ const p=actOk(IN.part)?+IN.part:null, r=M&&actOk(M.r
 function actOther(F){ const o=F&&actOk(F.other_share)?+F.other_share:null; return (o!=null&&o>=0.05&&o<1)?Math.round(o/(1-o)*100):0; }   // other networks: ~x% MORE than AdMob Network
 function actSumCard(d,r){
   const als=((d.changes&&d.changes.open)||[]).concat(actAlOf(d.app_id)), win=(r&&r.win)||null, S=d.summary||{}, C=d.ctx||{}, L=d.latest||{};
-  const tiles=`<div class="uni-tiles act-tiles" style="--n:3">${ACT_TILES.map(([k,l,t])=>actTile(d,k,l,t,als,win)).join('')}</div>`;
+  const tiles=`<div class="uni-tiles act-tiles" style="--n:3">${ACT_TILES.map(([k,l,t])=>actTile(d,k,l,t,als,win)).join('')}</div>`+actNoteBlock(d);
   const ctx=`<div class="uni-meta" id="act-ctx"><span>Active users <b style="color:var(--ink2)">${actNum(C.a1)}</b>/day</span><span>New installs <b style="color:var(--ink2)">${actNum(C.new)}</b>/day</span>`
     +(actOk(C.old)?`<span>${actOldLbl(d.daily&&d.daily.old_k)} ${C.old_est?'≈ ':''}<b style="color:var(--ink2)">${actNum(C.old)}</b>/day</span>`:'')+'</div>';
   const lt=L.day?`<div class="faint" id="act-latest" style="font-size:11.5px;margin-top:6px">Latest GA4 day ${uniD(L.day)}: ${actNum(L.ret_dau)} returning so far ${L.prov!==false?ACT_PROV_PILL:''}</div>`:'';
@@ -4680,18 +5028,24 @@ function actChangeRow(x,withApp,closed){
   const sv=closed?[x.dir==='up'?'Was higher':'Was lower','uni-pz']:(x.severity==='warning'?['Worse','p-r']:(x.severity==='good'?['Better','p-g']:['Watch','p-y']));
   const go=withApp?`actOpen('${uniQ(x.app_id)}')`:`actJump('${ACT_SEC[x.metric]||'act-daily'}')`;
   const tags=(x.fresh&&!closed?'<span class="pill p-p">New</span>':'')+(x.estimate?actPill('p-b','≈ Estimate','Kuch din ka data andaza tha (GA4 aur AdMob ka din alag) — badlaav bina andaze ke bhi dikhta hai'):'')
-    +actRelChip(x,withApp)+(x.tags||[]).filter(t=>ACT_TAG[t]).map(t=>actPill('uni-pz',ACT_TAG[t][0],ACT_TAG[t][1])).join('')+(closed&&x.closed?`<span class="dt">Closed · ${uniD(x.closed)}</span>`:'');
+    +actRelChip(x,withApp)+(x.tags||[]).filter(t=>ACT_TAG[t]&&!(t==='installs'&&splitParts(x))).map(t=>actPill('uni-pz',ACT_TAG[t][0],ACT_TAG[t][1])).join('')+(closed&&x.closed?`<span class="dt">Closed · ${uniD(x.closed)}</span>`:'');
   const act=closed?'':(withApp?'<span class="lnk">Open →</span>':`<span class="lnk" onclick="${go}">Open →</span>`);
   return `<div class="uni-chg ${withApp?'wa':'na'}${closed?' cl':''}" data-fam="${hAttr(x.family||'')}"${withApp?` onclick="${go}"`:''}><span class="sv"><span class="pill ${sv[1]}">${sv[0]}</span></span>`
     +`${withApp?`<span class="ap" title="${hAttr(x.app)}">${uniAppTag(x.app,16)}</span>`:''}<span class="tx">${hAttr(x.text||x.message||'')}</span>`
-    +`<span class="mt"><span class="dt">${actWhen(x)}</span>${tags}</span><span class="ac">${act}</span></div>`; }
+    +`<span class="mt"><span class="dt">${actWhen(x)}</span>${tags}</span><span class="ac">${act}</span>${actAlSplit(x,false)}</div>`; }
+// an Active alert's split: returning users (ret), new users coming back (rr: a rate), per-user notes (pu); c = the one-line form
+// an alert's kind (attrib.alert_kind's map; a "no" split still says "pata nahi" in a detail row)
+const SPLIT_ALK={ret:'act_alert_ret',rr:'rate',ur:'rate',uc:'uc',vpi:'vpi',ir:'ir',pu:'pu'};
+function splitAlKind(x){ const sp=x&&x.sp, c=Array.isArray(sp)?sp[0]:null; return SPLIT_ALK[c]||(x&&x.metric==='ret_dau'?'act_alert_ret':(x&&/^rate_(drift|spike)$/.test(x.family||'')?'uc':'rate')); }
+function actAlSplit(x,c){ if(!splitHas(x)) return ''; const k=splitAlKind(x), cur=(DATA&&DATA.active&&DATA.active.currency)||undefined;
+  return c?splitChip(k,x):splitHtml(k,x,{money:v=>actMoney(v,cur),big:v=>actMoney(v,cur,true),moneyP:v=>actMoneyP(v,cur),tag:'span'}); }
 // an info row (never an alert, never counted): ad price only · installs explained it · market-wide · ⏳ early look (provisional)
 const ACT_INFO={price:'Ad price',installs:'Installs',market_wide:'Market-wide',early:'⏳ Early look'};
 function actInfoRow(o,app,id){ const kind=o.kind||'info', sec=kind==='price'?'act-rev':(ACT_SEC[o.metric]||'act-daily'), go=app?`actOpen('${uniQ(id)}')`:`actJump('${sec}')`;
   const tags=(o.prov||kind==='early'?ACT_PROV_PILL:'')+(ACT_INFO[kind]?actPill('uni-pz',ACT_INFO[kind]):'')+((o.tags||[]).includes('market_wide')&&kind!=='market_wide'?actPill('uni-pz','Market-wide','Kai apps me ek saath — bazaar ka asar'):'');
   return `<div class="uni-chg ${app?'wa':'na'} act-info" data-info="${hAttr(kind)}"${app?` onclick="${go}"`:''}><span class="sv"><span class="pill p-b" title="Sirf jaankari — iska alert nahi aata, ginti me nahi">Info</span></span>`
     +`${app?`<span class="ap" title="${hAttr(app)}">${uniAppTag(app,16)}</span>`:''}<span class="tx">${hAttr(o.text||'')}</span>`
-    +`<span class="mt"><span class="dt">${uniSpan(o.from,o.to)}</span>${tags}</span><span class="ac">${app?'<span class="lnk">Open →</span>':`<span class="lnk" onclick="${go}">Open →</span>`}</span></div>`; }
+    +`<span class="mt"><span class="dt">${uniSpan(o.from,o.to)}</span>${tags}</span><span class="ac">${app?'<span class="lnk">Open →</span>':`<span class="lnk" onclick="${go}">Open →</span>`}</span>${splitHas(o)?splitHtml((o.sp||[])[0]==='pu'?'pu':'act_info_ret',o,{tag:'span'}):''}</div>`; }
 function actOldRow(o,app,id){ const go=app?`actOpen('${uniQ(id)}')`:'', rel=o.release&&o.release.key?actRelChip({release:o.release,app_id:id},!!app):'';
   return `<div class="uni-chg ${app?'wa':'na'} old" data-old="${hAttr(o.kind||'')}"${app?` onclick="${go}"`:''}><span class="sv"><span class="pill p-b" title="Purana badlaav — sirf jaankari, iska alert nahi aata">Info</span></span>`
     +`${app?`<span class="ap" title="${hAttr(app)}">${uniAppTag(app,16)}</span>`:''}<span class="tx">${hAttr(o.text||'')}</span>`
@@ -4928,11 +5282,14 @@ function actPool(rows,k){ const ok=[], out=[]; let a=0,b=0,c=0,e=0, sc=null;
   const f=(sc!=null&&isFinite(sc)&&sc>0)?sc:1; return {v:c>0?a/c*f:null,base:e>0?b/e*f:null,ok,out}; }
 const ACT_WAITS={d:'⏳ Wapsi (D1/D7) ka data agle GA4 fetch ke saath aayega',u:'⏳ Sessions / time agle GA4 fetch me aayenge'};
 function actAllWait(rows,k){ return rows.length>0&&rows.every(r=>actSt((r.m||{})[k])==='wait'); }
-function actPoolTile(k,label,P,n,fmt,dm,tip){ const ch=(P.v!=null&&P.base!=null)?(dm?uniPP((P.v-P.base)*100)+' pts':uniChg(P.v/P.base-1)):null;
+function actPoolTile(k,label,P,n,fmt,dm,tip,sx){ const ch=(P.v!=null&&P.base!=null)?(dm?uniPP((P.v-P.base)*100)+' pts':uniChg(P.v/P.base-1)):null;
   const miss=P.out.map(r=>r.app+(r.stale?' (old data)':'')).join(', ');
   const wt=!P.ok.length&&(k==='d1'||k==='d7'||k==='sess'||k==='time')&&actAllWait(P.out,k)?ACT_WAITS[dm?'d':'u']:'';   // nothing yet: say why, not "0 of N"
   return `<div class="uni-st act-t act-pt" data-m="${k}"><div class="l"${tip?` title="${hAttr(tip)}"`:''}>${label}</div><div class="v">${P.v==null?'—':fmt(P.v)}</div>`
-    +(ch?`<div class="c">${ch} vs 4 weeks</div>`:'')+(wt?`<div class="c act-wt">${wt}</div>`:`<div class="c" title="${hAttr(miss?'Is number me nahi: '+miss:'Saari apps')}">${P.ok.length} of ${n} apps</div>`)+`</div>`; }
+    +(ch?`<div class="c">${ch} vs 4 weeks</div>`:'')+(wt?`<div class="c act-wt">${wt}</div>`:`<div class="c" title="${hAttr(miss?'Is number me nahi: '+miss:'Saari apps')}">${P.ok.length} of ${n} apps</div>`)
+    +(sx&&!wt?`<div class="split-c" data-b="rr">${hAttr(sx)}</div>`:'')+`</div>`; }
+// the Active data carries the split (the engine's SPLIT switch on): any alert or app row with one
+function actSplitLive(rows){ const A=DATA&&DATA.active; return ((A&&A.alerts)||[]).some(x=>splitHas(x))||(rows||actRows()).some(r=>r&&r.m&&splitHas(r.m.ret_dau)); }
 const ACT_STRIPS=[['ret_dau','Returning users'],['d1','Came back next day'],['d7','Came back after a week'],['sess','Sessions per user'],['time','Time per user'],['arpdau','Ad revenue per 1,000 users']];
 const ACT_SCC={worse:'bad',watch:'watch',slow:'watch',break:'watch',better:'good',normal:'ok',price_dn:'act-pp',price_up:'act-pp'};
 function actStrip(rows,k){ const G={}; rows.forEach(r=>{ const st=actSt((r.m||{})[k]); (G[st]=G[st]||[]).push(r); });
@@ -4946,10 +5303,11 @@ function actSumPortfolio(rows){ const n=rows.length, cur=(DATA.active&&DATA.acti
   const K={worse:0,watch:0,ok:0,wait:0,better:0,err:0}; rows.forEach(r=>{ if(r.status==='error') K.err++; else { const s=(r.summary||{}).kind;
     if(s==='worse') K.worse++; else if(s==='break'||s==='watch'||s==='slow') K.watch++; else if(s==='better') K.better++; else if(s==='ok'||s==='maybe') K.ok++; else K.wait++; } });
   const cl=`<div class="act-line" id="act-count">⚠️ ${K.worse} ${K.worse===1?'app needs':'apps need'} a look · 🟡 ${K.watch} watch${K.better?` · 🟢 ${K.better} better`:''} · ✅ ${K.ok} normal · ℹ️ ${K.wait} not enough data${K.err?` · ⚠️ ${K.err} not built this time`:''}</div>`;
-  const nw=rows.filter(r=>r.ctx&&actOk(r.ctx.new)), P=k=>actPool(rows,k);
+  const nw=rows.filter(r=>r.ctx&&actOk(r.ctx.new)), P=k=>actPool(rows,k), live=actSplitLive(rows);
   const tiles=[actPoolTile('ret_dau','Returning users / day',P('ret_dau'),n,actNum,false,'Har app ke roz ke purane users jod kar — ek insaan 2 apps pe ho to 2 baar gina (a person on 2 apps counts twice)'),
     `<div class="uni-st act-t act-pt" data-m="new"><div class="l">New installs / day</div><div class="v">${nw.length?actNum(nw.reduce((t,r)=>t+ +r.ctx.new,0)):'—'}</div><div class="c" title="${hAttr(rows.filter(r=>!nw.includes(r)).map(r=>r.app).join(', ')||'Saari apps')}">${nw.length} of ${n} apps</div></div>`,
-    actPoolTile('d1','Came back next day',P('d1'),n,v=>uni100(v)+'<small>of 100</small>',true),actPoolTile('d7','Came back after a week',P('d7'),n,v=>uni100(v)+'<small>of 100</small>',true),
+    actPoolTile('d1','Came back next day',P('d1'),n,v=>uni100(v)+'<small>of 100</small>',true,'',live?splitLine(splitPoolRate(rows,'d1')):''),
+    actPoolTile('d7','Came back after a week',P('d7'),n,v=>uni100(v)+'<small>of 100</small>',true,'',live?splitLine(splitPoolRate(rows,'d7')):''),
     actPoolTile('sess','Sessions per user',P('sess'),n,v=>actDec(v)+'<small>a day</small>'),actPoolTile('time','Time per user',P('time'),n,v=>uniDur(v)+'<small>a day</small>'),
     actPoolTile('arpdau','Ad revenue per 1,000 users',P('arpdau'),n,v=>'≈ '+actMoney(v,cur))];
   const L=DATA.active&&DATA.active.market&&DATA.active.market.latest, sM=(DATA.active&&DATA.active.settled_till_max)||rows.map(r=>r.settled_till).filter(Boolean).sort().pop();
@@ -4958,7 +5316,7 @@ function actSumPortfolio(rows){ const n=rows.length, cur=(DATA.active&&DATA.acti
     :`${uniSpan(L.from,L.to)} ke hafte me ${actNum(L.apps)} me se ${actNum(L.of)} apps ka eCPM ${mkr} tha (ab ka nahi).`}</div>`:'';
   const st=rows.map(r=>r.settled_till).filter(Boolean).sort().pop(), dt=rows.map(r=>r.data_till).filter(Boolean).sort().pop();
   return `<div class="card" id="act-sum" style="margin-bottom:14px"><div class="ct"><h3>📌 At a glance</h3><span class="faint" style="font-size:11.5px">All apps · last 7 settled days vs the 4 weeks before</span></div>
-    ${cl}<div class="uni-tiles act-tiles" id="act-pool" style="--n:4">${tiles.join('')}</div>
+    ${cl}<div class="uni-tiles act-tiles" id="act-pool" style="--n:4">${tiles.join('')}</div>${live?splitBlock(splitPool(rows),{cls:'act-pool-split',named:true}):''}
     <div class="faint" style="font-size:11.5px;margin-top:7px">Saari dikhne wali apps milakar — facts only (har app ka apna normal alag hai, app pe tap karke dekho)</div>${mk}
     <div class="uni-sec">Status by app <span>· tap a chip to see its apps</span></div><div class="act-strips">${ACT_STRIPS.map(([k])=>actStrip(rows,k)).join('')}</div>${actProvNote(st,dt)}</div>`; }
 function actPortfolio(){
@@ -5044,7 +5402,7 @@ function actPfSeries(rows){ const F=ACTPF; if(!F||!Array.isArray(F.apps)) return
       rv:!a.currency||!fc||a.currency===fc,name:String(a.app||a.app_id||''),brk:new Set((Array.isArray(a.brk)?a.brk:[]).filter(ok).map(x=>uniDiff(from,x)))}; });
   const n=Math.max(0,...P.map(p=>p.till))+1, z=()=>new Array(n).fill(0);
   const S={from,n,N:A.length,A,P,cur:fc,lost,nn:z(),ap:z(),dau:z(),rt:z(),rtn:z(),rta:z(),nw:z(),nwn:z(),d1n:z(),d1d:z(),d1c:z(),d1p:z(),d7n:z(),d7d:z(),d7c:z(),d7p:z(),
-    sS:z(),sU:z(),tT:z(),tU:z(),rv:z(),ra:z(),rvc:z(),bl:z(),pv:z(),wow:new Array(n).fill(null),wowc:z(),ms:z(),inc:z()};
+    sS:z(),sU:z(),tT:z(),tU:z(),rv:z(),ra:z(),rvc:z(),bl:z(),pv:z(),wow:new Array(n).fill(null),wowc:z(),ms:z(),inc:z(),wa0:z(),wa1:z(),wn0:z(),wn1:z(),wnc:z()};
   const at=(p,f,i)=>{ const k=i-p.off; return (k>=0&&k<p.L)?actAt(p.a[f],k):null; }, has=(p,i)=>{ const x=at(p,'a1',i); return x!=null&&x>0; };
   const inSet=(p,i)=>i>=p.off&&(p.end==null||i<=p.end);
   P.forEach(p=>{ for(let i=Math.max(0,p.off);i<n;i++){ if(inSet(p,i)) S.nn[i]++; if(!has(p,i)) continue; const x=at(p,'a1',i), w=at(p,'new',i);
@@ -5054,7 +5412,8 @@ function actPfSeries(rows){ const F=ACTPF; if(!F||!Array.isArray(F.apps)) return
     [[1,'d1'],[7,'d7']].forEach(([N,f])=>{ const q=at(p,f,i); if(q!=null&&w!=null&&w>0){ S[f+'n'][i]+=q; S[f+'d'][i]+=w; S[f+'c'][i]++; if(i+N>p.si) S[f+'p'][i]=1; } });
     const u=at(p,'u',i); if(u!=null&&u>0){ const s=at(p,'s',i), t=at(p,'t',i); if(s!=null){ S.sS[i]+=s; S.sU[i]+=u; } if(t!=null){ S.tT[i]+=t; S.tU[i]+=u; } }
     const e=p.rv?at(p,'rev',i):null; if(e!=null){ S.rv[i]+=e; S.ra[i]+=x; S.rvc[i]++; if(p.a.rev_est) S.bl[i]=1; } } });
-  for(let i=7;i<n;i++){ let s1=0,s0=0,c=0; P.forEach(p=>{ if(has(p,i)&&has(p,i-7)){ s1+=at(p,'a1',i); s0+=at(p,'a1',i-7); c++; } }); S.wowc[i]=c; S.wow[i]=(c&&s0>0)?s1/s0-1:null; }
+  for(let i=7;i<n;i++){ let s1=0,s0=0,c=0; P.forEach(p=>{ if(has(p,i)&&has(p,i-7)){ s1+=at(p,'a1',i); s0+=at(p,'a1',i-7); c++;
+      const w1=at(p,'new',i), w0=at(p,'new',i-7); if(w1!=null&&w0!=null){ S.wn1[i]+=w1; S.wn0[i]+=w0; S.wnc[i]++; } } }); S.wowc[i]=c; S.wow[i]=(c&&s0>0)?s1/s0-1:null; S.wa0[i]=s0; S.wa1[i]=s1; }
   S.X=lost.filter(x=>x.err); if(S.X.length) for(let i=0;i<n;i++) S.nn[i]+=S.X.length;
   const mean=q=>q.reduce((s,v)=>s+v,0)/q.length;
   P.forEach(p=>{ const q=[], hi=p.end!=null?Math.min(p.end,n-1):n-1;
@@ -5179,7 +5538,8 @@ function actPfRow(S,i,E){ const d=uniAdd(S.from,i), pv=!!S.pv[i], cur=S.cur||und
     return i+N>E?td('—',`Abhi pata nahi — ${uniD(uniAdd(d,N))} ka GA4 data aane par`,'faint'):td('—','Is din ka wapsi data nahi','faint'); };
   const rt=S.rtn[i]?actPfN(S.rt[i])+(S.rtn[i]<S.ap[i]?`<sup class="act-pfs" title="${hAttr(`${S.ap[i]-S.rtn[i]} ${S.ap[i]-S.rtn[i]===1?'app ka':'apps ka'} is din returning number nahi (active ≤ new installs, ya pata nahi) — unhe chhod ke jod`)}">*</sup>`:''):'—';
   const rk=S.rvc[i]&&S.ra[i]>0?(S.bl[i]?'≈ ':'')+actMoney(S.rv[i]*1000/S.ra[i],cur):'—';
-  const wk=S.wow[i]!=null?uniChg(S.wow[i]):'—', wkt=S.wow[i]!=null?`vs ${actWd(d)} ${uniD(uniAdd(d,-7))} — sirf wo ${S.wowc[i]} apps jinka dono din data hai (same apps)`+(pv?' · Provisional — '+ACT_PROV_TIP:''):'Pichhle hafte ka isi din nahi';
+  const wsp=(S.wow[i]!=null&&actSplitLive())?splitWow(S,i):'';
+  const wk=S.wow[i]!=null?uniChg(S.wow[i]):'—', wkt=S.wow[i]!=null?`vs ${actWd(d)} ${uniD(uniAdd(d,-7))} — sirf wo ${S.wowc[i]} apps jinka dono din data hai (same apps)`+(wsp?' · '+wsp:'')+(pv?' · Provisional — '+ACT_PROV_TIP:''):'Pichhle hafte ka isi din nahi';
   return `<tr data-day="${d}"${pv?' class="act-pfp"':''}><td class="nm"><b>${uniD(d)}</b><div class="act-pfwd">${actWd(d)}${pv?` <span class="pill p-b act-pfpill" title="${ACT_PROV_TIP}">Provisional</span>`:''}</div></td>`
     +td(`${S.ap[i]} of ${S.nn[i]}`+(inc?' <sup class="act-pfg">⏸️</sup>':''),mt||'Saari apps ka data')+td(has?actPfN(S.dau[i]):'—',it,ic)+td(rt,it,ic)+td(S.nwn[i]?actPfN(S.nw[i]):'—',it,ic)+dn(1)+dn(7)
     +td(S.sU[i]>0?actDec(S.sS[i]/S.sU[i]):'—')+td(S.tU[i]>0?uniDur(S.tT[i]/S.tU[i]):'—')
@@ -5263,7 +5623,7 @@ function actAlertCards(list){
     return `<div class="alert ${x.severity==='critical'?'crit':(x.severity||'watch')}" data-sev="${x.severity||'watch'}" data-metrics="active"><div style="font-size:17px">${IC[x.severity]||'•'}</div><div class="abody">
       <div class="atitle">👥 ${ACT_AML[x.metric]||'Active users'} — ${ACT_FAM[x.family]||'Change'} <span class="pill ${sv[1]}" style="margin-left:4px">${sv[0]}</span>${x.fresh?'<span class="pill p-p" style="margin-left:5px">New</span>':''}</div>
       <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18)}<span class="faint">· ${actWhen(x)} · GA4${ad?' + AdMob':''} · data till ${fmtD(x.data_till)}</span></div>
-      <div style="margin:9px 0 2px;font-size:12.5px;color:${COL[x.severity]||'var(--ink2)'}">${hAttr(x.text||x.message||'')}</div>
+      <div style="margin:9px 0 2px;font-size:12.5px;color:${COL[x.severity]||'var(--ink2)'}">${hAttr(x.text||x.message||'')}</div>${actAlSplit(x,true)}
       ${x.linked?`<div class="faint act-linked" style="font-size:11.5px;margin-top:6px">📦 Yahi badlaav ${R&&R.label?hAttr(R.label)+' ke ':''}Update impact card me bhi hai — ek hi baat, alert count me ek baar.</div>`:''}
       ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
       <div class="aact">${btn}</div></div></div>`; }).join(''); }
@@ -5449,9 +5809,17 @@ function valDetail(r,d){
   const safe=f=>{ try{ return f(d,r)||''; }catch(e){ return '<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ Ye hissa abhi dikh nahi paya.</div>'; } };
   return hdr+[valSumCard,valChangesCard,valPayCard,valCtyCard,valVerCard,valLongCard,valChkCard,()=>valTimingNote()].map(safe).join(''); }
 // "📌 At a glance": the engine's one line, five tiles (3 + 2), the context line, the data line and the edge sentences
-function valTileBox(k,label,tip,st,big,chip,sub,span,vcls){ const open=VALTILEEXP===k;
+function valTileBox(k,label,tip,st,big,chip,sub,span,vcls,spl){ const open=VALTILEEXP===k;
   return `<div class="uni-st val-t${open?' open':''}" data-m="${k}" data-st="${st}" onclick="valTTX('${k}')"><div class="l" title="${hAttr(tip)}">${label}</div><div class="v${vcls?' '+vcls:''}">${big}</div>`
-    +`<div class="val-pl">${chip}</div><div class="val-x">${sub?`<div class="val-sl">${sub}</div>`:''}${span?`<div class="c val-dt">${span}</div>`:''}</div></div>`; }
+    +`<div class="val-pl">${chip}</div><div class="val-x">${sub?`<div class="val-sl">${sub}</div>`:''}${span?`<div class="c val-dt">${span}</div>`:''}${spl||''}</div></div>`; }
+// Install value's money in the split block: per install (valMoney), a week's total (valBig), a per-install cost (Google
+// Ads, in $ ⇄ ₹ like the tiles) — the same formatters the tab uses
+const VAL_SPLIT_O={money:v=>valMoney(v),big:v=>valBig(v),cost:v=>valSpendMoney(v),moneyP:v=>valMoneyP(v)};
+// per-install money with 4 significant digits (a before → after pair that would print one number twice)
+function valMoneyP(v){ if(!valOk(v)) return '—'; const x=valUsd(v); return (x<0?'−':'')+csym()+String(+Math.abs(x).toPrecision(4)); }
+// a value change's kind: money back per 100 (vpi), earning per install (ir), ads spend (spd), a country's share coming back (rr)
+function valSplit(x,c){ if(!splitHas(x)) return ''; const k=x.sp[0]==='no'?(x.family==='pay_slow'?'vpi':'rate'):splitAlKind(x);
+  return c?splitChip(k,x):splitHtml(k,x,Object.assign({tag:'span'},VAL_SPLIT_O)); }
 function valPayVals(d,r){ const M=valM(d&&d.tiles&&d.tiles.pay), P=valM(r&&r.pay), g=k=>M.st?M[k]:(M[k]!=null?M[k]:P[k]);   // the tile when there is one
   return {st:valSt(M.st?M:P), p:M.st?M.v:(M.v!=null?M.v:P.p), lo:g('lo'), hi:g('hi'), obs:!!g('obs'), never:!!g('never'), pct365:g('pct365'), p0:valOk(M.p0)?M.p0:(valOk(M.base)?M.base:P.p0),
     from:g('from'), to:g('to'), why:g('why'), note:g('note'), shape:g('shape'), est:!!g('est'), rough:!!g('rough'), hi_over:!!g('hi_over')}; }
@@ -5482,15 +5850,17 @@ function valSumCard(d,r){
   const Bm=valM(T.b7), RP=valM(r&&r.pay), bst=Bm.st?valSt(Bm):P.st, bv=valOk(Bm.v)?Bm.v:null, b30=valOk(Bm.v30)?Bm.v30:null, b0=valOk(Bm.base)?Bm.base:RP.b7_0, bS=[];
   if(valOk(b30)) bS.push('30 din: '+(Bm.v30_est?'≈':'')+valP100(b30)); if(valOk(b0)) bS.push('pehle 7 din: '+valP100(b0)); if(!valOk(bv)&&Bm.note) bS.push(valTxt(Bm.note));
   const t2=valTileBox('b7','Back in 7 days',`${cur}100 ke Google Ads pe, in installs se 7 din me kitni AdMob kamai wapas aayi.`,bst,
-    valOk(bv)?(Bm.est?'≈':'')+valP100(bv)+`<small>per ${cur}100</small>`:'—',valChip('b7',{st:bst},als),bS.join(' · '),sp(Bm.from||(valOk(bv)?P.from:''),Bm.to||(valOk(bv)?P.to:'')));
+    valOk(bv)?(Bm.est?'≈':'')+valP100(bv)+`<small>per ${cur}100</small>`:'—',valChip('b7',{st:bst},als),bS.join(' · '),sp(Bm.from||(valOk(bv)?P.from:''),Bm.to||(valOk(bv)?P.to:'')),'',
+    splitHas(Bm)?splitHtml('vpi',Bm,VAL_SPLIT_O):'');
   const E=valM(T.rpi), RR=valM(r&&r.rpi), ES=valM(E.sub), eg=k=>valOk(ES[k.slice(1)])?ES[k.slice(1)]:(valOk(E[k])?E[k]:RR[k]), ev=valOk(E.v)?E.v:RR.d30, est=!!(E.est||RR.est), eS=[];
   if(valOk(eg('d1'))) eS.push('1 din '+valMoney(eg('d1'))); if(valOk(eg('d7'))) eS.push('7 din '+valMoney(eg('d7'))); if(valOk(eg('d90'))) eS.push('90 din '+(E.d90_obs&&!E.d90_est?'':'≈')+valMoney(eg('d90')));
   const t3=valTileBox('rpi','Earning per install',valRpiTip(d),E.st?valSt(E):(valOk(ev)?'normal':'wait'),valOk(ev)?(est?'≈':'')+valMoney(ev)+'<small>in 30 days</small>':'—',
-    valChip('rpi',E.st?E:{st:valOk(ev)?'normal':'wait'},[]),eS.join(' · '),sp(E.from,E.to));
+    valChip('rpi',E.st?E:{st:valOk(ev)?'normal':'wait'},[]),eS.join(' · '),sp(E.from,E.to),'',splitHas(E)?splitHtml('ir',E,VAL_SPLIT_O):'');
   const C=valM(T.cpi), RC=valM(r&&r.cpi), cg=k=>valOk(C[k])?C[k]:RC[k], cst=C.st?valSt(C):valSt(RC), cS=[];
   if(valOk(cg('spend4'))&&+cg('spend4')>0&&valOk(cg('n4'))) cS.push(`Google Ads ${valSpendBig(cg('spend4'),cg('spend4_src'),ccy)} ÷ ${valNum(cg('n4'))} naye users (ads + organic)`); if(valOk(cg('ads'))) cS.push('sirf ads wale: '+valSpendMoney(cg('ads'),cg('ads_src'),ccy));
   if(!valOk(cg('v'))&&C.note) cS.push(valTxt(C.note));
-  const t4=valTileBox('cpi','Cost per install',VAL_TIP.cpi,cst,valOk(cg('v'))?valSpendMoney(cg('v'),cg('v_src'),ccy):'—',valChip('cpi',{st:cst},als),cS.join(' · '),sp(C.from,C.to));
+  const t4=valTileBox('cpi','Cost per install',VAL_TIP.cpi,cst,valOk(cg('v'))?valSpendMoney(cg('v'),cg('v_src'),ccy):'—',valChip('cpi',{st:cst},als),cS.join(' · '),sp(C.from,C.to),'',
+    splitHas(C)?splitHtml('spd',C,VAL_SPLIT_O):'');
   const Y=Object.assign({},valM(r&&r.cty),valM(T.cty)), yst=valCtySt(Y), best=(Y.best||[]).slice(0,3), weak=(Y.weak||[]).slice(0,3), CW=valM(d.countries&&d.countries.win), yS=[];
   // with Google Ads cost by country (GADS_GEO): the Keep / Costly countries lead the tile
   const kp=valCcs(Y.keep), co=valCcs(Y.costly), kc=kp.length>0||co.length>0;
@@ -5545,7 +5915,7 @@ function valChangeRow(x,withApp,closed){
   const act=closed?'':(withApp?'<span class="lnk">Open →</span>':`<span class="lnk" onclick="${go}">Open →</span>`);
   return `<div class="uni-chg ${withApp?'wa':'na'}${closed?' cl':''}" data-fam="${hAttr(x.family||'')}"${withApp?` onclick="${go}"`:''}><span class="sv"><span class="pill ${sv[1]}">${sv[0]}</span></span>`
     +`${withApp?`<span class="ap" title="${hAttr(x.app)}">${uniAppTag(x.app,16)}</span>`:''}<span class="tx">${valTxt(x.text||x.message||'')}${valAlso(x)?' · also fewer came back':''}</span>`
-    +`<span class="mt"><span class="dt">${valWhen(x)}</span>${tags}</span><span class="ac">${act}</span></div>`; }
+    +`<span class="mt"><span class="dt">${valWhen(x)}</span>${tags}</span><span class="ac">${act}</span>${valSplit(x,false)}</div>`; }
 // an info row (never an alert, never counted, never coloured)
 const VAL_INFO={mix:'Mix',new_cty:'New country',spend:'Ads spend',paid:'Paid share',k:'Scale',gap:'Country data',closed:'Closed',market:'Market',ver_d30:'Version',ver_mix:'Version',long_up:'Long-term'};
 const VAL_ISEC={mix:'val-cty',new_cty:'val-cty',gap:'val-cty',spend:'val-pay',paid:'val-pay',k:'val-chk',closed:'val-pay',market:'val-pay',ver_d30:'val-ver',ver_mix:'val-ver',long_up:'val-long'};
@@ -6186,7 +6556,7 @@ function valAlertCards(list){
     return `<div class="alert ${x.severity==='critical'?'crit':(x.severity||'watch')}" data-sev="${x.severity||'watch'}" data-metrics="value"><div style="font-size:17px">${IC[x.severity]||'•'}</div><div class="abody">
       <div class="atitle">${title} <span class="pill ${sv[1]}" style="margin-left:4px">${sv[0]}</span>${x.fresh?'<span class="pill p-p" style="margin-left:5px">New</span>':''}</div>
       <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18)}<span class="faint">· ${valWhen(x)} · GA4 + AdMob + Google Ads${x.data_till?' · data till '+fmtD(x.data_till):''}</span></div>
-      <div style="margin:9px 0 2px;font-size:12.5px;color:${COL[x.severity]||'var(--ink2)'}">${valTxt(x.text||x.message||'')}</div>
+      <div style="margin:9px 0 2px;font-size:12.5px;color:${COL[x.severity]||'var(--ink2)'}">${valTxt(x.text||x.message||'')}</div>${valSplit(x,true)}
       ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
       <div class="aact">${btn}</div></div></div>`; }).join(''); }
 

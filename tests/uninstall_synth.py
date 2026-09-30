@@ -690,6 +690,22 @@ def _keys(obj, keys, where):
     assert set(obj) == set(keys), "%s: %s" % (where, sorted(set(obj) ^ set(keys)))
 
 
+SP_CODES = ("ret", "imp", "uc", "ur", "rr", "rev", "ir", "spd", "vpi", "pu", "no")
+
+
+def _sp_ok(sp, where):
+    assert sp is None or (isinstance(sp, list) and sp and sp[0] in SP_CODES), (where, sp)
+
+
+def _keys_sp(obj, keys, where):
+    """_keys + the one optional key "sp" (SPEC_SPLIT: the change's installs vs per-user split, carried only when there is
+    one — a contract extension)."""
+    assert isinstance(obj, dict), where
+    assert set(obj) - {"sp"} == set(keys), "%s: %s" % (where, sorted((set(obj) - {"sp"}) ^ set(keys)))
+    assert "sp" not in obj or obj["sp"] is not None, where
+    _sp_ok(obj.get("sp"), where)
+
+
 def _frac_or_none(v):
     return v is None or (_num(v) and v >= 0)
 
@@ -697,7 +713,7 @@ def _frac_or_none(v):
 def check_head(h, where):
     if h is None:
         return
-    _keys(h, ("p", "prev", "delta_pp", "dir", "alert", "low_sample", "from", "to", "prov", "est", "fb"), where)
+    _keys_sp(h, ("p", "prev", "delta_pp", "dir", "alert", "low_sample", "from", "to", "prov", "est", "fb"), where)
     assert isinstance(h["est"], bool), where
     if h["fb"] is not None:                                            # older installs: compare's fall-back, as the row's
         _keys(h["fb"], ("recent", "prev", "n", "days", "kind"), where)
@@ -728,8 +744,9 @@ IMPACT_TEXT = re.compile(r"^(v.+?|App update) \(\d{1,2} [A-Z][a-z]{2}( \d{4})?\)
 def check_alert(a, closed=False):
     imp = a.get("family") == "impact"
     late = a.get("family") == "impact_late"
-    _keys(a, ALERT_KEYS + (IMPACT_ALERT_KEYS if imp else LATE_ALERT_KEYS if late else ())
-          + (("closed",) if closed else ()), "alert")
+    _keys_sp(a, ALERT_KEYS + (IMPACT_ALERT_KEYS if imp else LATE_ALERT_KEYS if late else ())
+             + (("closed",) if closed else ()), "alert")
+    assert not (imp or late) or "sp" not in a, a["id"]           # an update's verdict: its rows carry the splits
     assert a["source"] == "uninstall" and a["family"] in ("cohort", "rate_spike", "rate_drift", "rate_zero", "impact",
                                                            "impact_late")
     assert a["dir"] in ("up", "down") and a["severity"] in ("warning", "watch", "good")
@@ -879,7 +896,8 @@ def check_asset(asset, summary=None):
         assert all(_iso(b) and a["history_start"] <= b <= a["data_till"] for b in a["daily"]["breaks"])
         for k in ("new", "un", "a28", "upd", "rate", "med", "lo", "hi"):
             assert len(a["daily"][k]) == H, k                              # every day, through data_till
-        _keys(a["rate_now"], ("last7", "med", "lo", "hi", "dir", "out_of_band", "drift", "from", "to", "prov"), "rate_now")
+        _keys_sp(a["rate_now"], ("last7", "med", "lo", "hi", "dir", "out_of_band", "drift", "from", "to", "prov"),
+                 "rate_now")
         rn = a["rate_now"]
         assert _iso(rn["from"]) and _iso(rn["to"]) and rn["from"] <= rn["to"] <= a["data_till"]
         assert rn["prov"] == (rn["to"] > a["settled_till"]) and not (rn["dir"] == "down" and rn["prov"])
@@ -896,8 +914,8 @@ def check_asset(asset, summary=None):
         assert all(len(v) == Hp for v in a["curve"].values())            # index = N, 0..Hp-1 (from the launch)
         assert [t["n"] for t in a["table"]] == a["checkpoints"]
         for t in a["table"]:
-            _keys(t, ("n", "key", "head", "recent", "prev", "all", "dir", "alert", "low_sample", "break_day", "prov",
-                      "inc_day", "fallback"), "table row")
+            _keys_sp(t, ("n", "key", "head", "recent", "prev", "all", "dir", "alert", "low_sample", "break_day", "prov",
+                         "inc_day", "fallback"), "table row")
             fb = t["fallback"]                                             # older installs: what it passed, said
             if fb is not None:
                 _keys(fb, ("recent", "prev", "n", "days", "kind"), "table fallback")
@@ -960,8 +978,8 @@ def check_asset(asset, summary=None):
         for al in a["alerts_closed"]:
             check_alert(al, closed=True)
         for o in a["old_changes"]:                                         # older ones: info only
-            _keys(o, ("n", "checkpoint", "dir", "vs", "now", "before", "delta_pp", "z", "users", "installs_from",
-                      "installs_to", "base_from", "base_to", "text"), "old change")
+            _keys_sp(o, ("n", "checkpoint", "dir", "vs", "now", "before", "delta_pp", "z", "users", "installs_from",
+                         "installs_to", "base_from", "base_to", "text"), "old change")
             assert o["installs_to"] < old and o["dir"] in ("up", "down") and o["checkpoint"] == "D%d" % o["n"]
     if summary is not None:
         assert [a["app_id"] for a in asset["apps"]] == [r["app_id"] for r in summary["apps"]]
@@ -1141,7 +1159,9 @@ def _check_row(k, r, after_from, day, long_n=None):
     """One impact row (a 7-day row, or a 14 / 30 / 60-day one once uniImpNorm-filled): keys, units, statuses, rounding,
     reasons, the basis / noise / need additions."""
     where = "impact row %s%s" % (k, "" if long_n is None else " @%d" % long_n)
-    _keys(r, IMPACT_ROW_KEYS, where)
+    _keys_sp(r, IMPACT_ROW_KEYS, where)
+    assert "sp" not in r or r["status"] in ("worse", "better", "same", "unsure", "market") or (
+        r["sp"] in (["no", "steep_up"], ["no", "steep_dn"]) and r["status"] == "low"), (where, r["status"], r["sp"])
     _keys(r["extra"], IMPACT_EXTRA[k], where + " extra")
     assert r["unit"] == IMPACT_UNITS[k] and r["change_unit"] == ("pp" if r["unit"] == "pct" else "rel")
     assert r["status"] in IMPACT_STATUS and r["raw_status"] in IMPACT_STATUS, (where, r["status"])
@@ -1234,7 +1254,7 @@ def check_window(W, b, N, data_till=None):
     keys = IMPACT_ROWS_LONG if N >= 30 else IMPACT_ROWS
     _keys(W["rows"], keys, where + " rows")
     for k, r in W["rows"].items():
-        assert set(r) <= set(IMPACT_ROW_KEYS) and "status" in r, (where, k, sorted(set(r) - set(IMPACT_ROW_KEYS)))
+        assert set(r) - {"sp"} <= set(IMPACT_ROW_KEYS) and "status" in r, (where, k, sorted(set(r) - set(IMPACT_ROW_KEYS)))
         assert not ({"unit", "change_unit", "streak"} & set(r)) and r.get("raw_status") != r["status"]
         assert all(v is not None and v is not False and v != "" and v != {} and v != [] for v in r.values()), (where, k)
         f = _fill(r, k, W)

@@ -248,8 +248,11 @@ const pfMk = to => String(run(`(()=>{ ${RESET} const A=DATA.active, keep=JSON.st
   A.market={weeks:[], latest:{from:uniAdd(sM,${to}-6),to:uniAdd(sM,${to}),dir:'down',share:0.8667,apps:15,of:13,median_rel:-0.1}};
   try{ return actSumPortfolio(actRows().filter(r=>uniVis(r.app_id))); } finally{ A.market=JSON.parse(keep); } })()`));
 fx2.pf_market_now = pfMk(-2); fx2.pf_market_old = pfMk(-29);
+// (SPEC_SPLIT §6.4.2: the installs' part is now the split block — the tile's sp in the elastic form, the same three cases)
 const instLine = (rel, part, irel) => String(run(`(()=>{ ${RESET} const r=DATA.active.apps.find(x=>x.key===${J(rows[0].key)}), d=JSON.parse(JSON.stringify(ACTD[r.key]));
-  d.split=null; d.inst={mode:'elastic',rel:${irel},part:${part}}; d.tiles.ret_dau=Object.assign({},d.tiles.ret_dau,{rel:${rel}}); ACTTILEEXP='ret_dau'; return actSumCard(d,r); })()`));
+  d.split=null; d.inst={mode:'elastic',rel:${irel},part:${part}}; const T=d.tiles.ret_dau, b=T.base;
+  d.tiles.ret_dau=Object.assign({},T,{rel:${rel},v:b*(1+${rel}),sp:['ret',${part}*b,0,0,1000,1000*(1+${irel}),null,null,null,3]}); ACTTILEEXP='ret_dau'; return actSumCard(d,r); })()`));
+const retBlock = h => (String(h).match(/<div class="split" data-b="ret">[\s\S]*?<\/div><\/div>/) || [''])[0];
 fx2.inst_opp = instLine(0.075, -0.057, -0.33); fx2.inst_same = instLine(-0.12, -0.08, -0.4); fx2.inst_zero = instLine(0.02, 0.001, 0.05);
 const oneAl = (extra) => `Object.assign({id:'x|active_act_drift_ads|down',source:'active',app_id:${J(rows[0].app_id)},app:${J(rows[0].app)},family:'act_drift',metric:'ads',also:[],dir:'down',
   severity:'watch',unit:'per1k',now:3600,before:4000,rel:-0.1,delta_pp:null,z:-5,since:'2026-09-01',day:null,installs_from:null,installs_to:null,base_from:null,base_to:null,users:1000,
@@ -538,7 +541,7 @@ console.log(JSON.stringify({
   scenarios: Object.keys(out).length, errors, bad, jargon: jargon.slice(0, 20), devanagari, titles: String(run('TITLES.active.join("|")')),
   apps, portfolio, pf, imp, win, ids, header, gofrom, alerts, syn, retc, retbase, ginst, grid, colour,
   fix: { rev_market: text(sec(fx2.rev_market, 'class="act-mk"', '</div></div>')).trim(), pf_market_now: text(sec(fx2.pf_market_now, 'id="act-market">', '</div>')).trim(),
-    pf_market_old: text(sec(fx2.pf_market_old, 'id="act-market">', '</div>')).trim(), inst_opp: text(fx2.inst_opp), inst_same: text(fx2.inst_same), inst_zero: text(fx2.inst_zero),
+    pf_market_old: text(sec(fx2.pf_market_old, 'id="act-market">', '</div>')).trim(), inst_opp: text(retBlock(fx2.inst_opp)), inst_same: text(retBlock(fx2.inst_same)), inst_zero: text(retBlock(fx2.inst_zero)),
     hint_ads: text(fx2.hint_ads), hint_ret: text(fx2.hint_ret), linked: text(fx2.linked),
     total_linked: (text(fx2.alerts_linked).match(/Total issues (\d+)/) || [])[1], total_unlinked: (text(fx2.alerts_unlinked).match(/Total issues (\d+)/) || [])[1],
     pool_wait: [...sec(fx2.pool_wait, 'id="act-pool"', 'class="uni-sec"').matchAll(/<div class="uni-st act-t act-pt" data-m="([a-z0-9_]+)">([\s\S]*?)(?=<div class="uni-st act-t act-pt"|$)/g)].map(m => ({ m: m[1], text: text(m[2]).trim() })),

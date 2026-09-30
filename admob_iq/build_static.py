@@ -180,6 +180,19 @@ def _urgent(line):
     return "[CRITICAL]" in line or "[WARNING]" in line or line.startswith("🎉")
 
 
+def _split_tail(a, s):
+    """" · <the change's split in one line>" for a GA4 alert (SPEC_SPLIT S8: installs se … · asli … (kul …)) — "" when it
+    has none, for an update's verdict (its rows carry theirs), or with SPLIT off. The message itself never changes."""
+    if not s.get("split", True):
+        return ""
+    try:
+        from .engine import attrib
+        t = attrib.alert_line(a)
+    except Exception:
+        return ""
+    return " · " + t if t else ""
+
+
 def send_alerts(dashboard, s):
     """Telegram gets the urgent ones live; email gets the full daily digest.
     dry_run (the default until creds are set) just formats — nothing leaks.
@@ -201,21 +214,21 @@ def send_alerts(dashboard, s):
         sev = str(a.get("severity", "")).upper()
         what = {"impact": "update impact (GA4)", "impact_late": "late update impact (GA4)"}.get(a.get("family"),
                                                                                                "uninstall (GA4)")
-        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · {what}'))
+        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")}{_split_tail(a, s)} · {what}'))
     # GA4 Active users alerts: the same rule (sent ONCE — mark_notified_active after), the same channels
     for a in (dashboard.get("active") or {}).get("alerts", []):
         if not a.get("notify"):
             continue
         icon = _ICON.get(a.get("severity"), "•")
         sev = str(a.get("severity", "")).upper()
-        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · active users (GA4)'))
+        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")}{_split_tail(a, s)} · active users (GA4)'))
     # GA4 Install value alerts: the same rule (sent ONCE — mark_notified_value after), the same channels
     for a in (dashboard.get("value") or {}).get("alerts", []):
         if not a.get("notify"):
             continue
         icon = _ICON.get(a.get("severity"), "•")
         sev = str(a.get("severity", "")).upper()
-        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · install value (GA4 + Ads)'))
+        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")}{_split_tail(a, s)} · install value (GA4 + Ads)'))
     if not lines and not uni:
         return []
     dry = s["notify_dry_run"]

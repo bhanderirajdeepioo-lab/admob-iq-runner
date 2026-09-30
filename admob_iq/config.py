@@ -65,6 +65,9 @@ def settings() -> dict:
         "ga4_value": _env("GA4_VALUE", "false").lower() == "true",     # rollout step 3 switches it on
         "impact_windows": _env("IMPACT_WINDOWS", "true").lower() == "true",  # the update card's 14 / 30 / 60-day
                                                                         # windows + late alerts (off: the 7-day card only)
+        # every change split into "installs ki wajah se" / "asli badlaav" (SPEC_SPLIT): off → no split anywhere, no
+        # Telegram tail, the page as before (a rollback without a code push)
+        "split": _env("SPLIT", "true").lower() == "true",
         "value_payback_days": _int_env(("VALUE_PAYBACK_DAYS", "VALUE_TARGET_DAYS"), 90),  # H: 30/60/90/180/365
         "value_iap": _env("VALUE_IAP", "false").lower() == "true",      # in-app purchases in "money back"
         "value_cpi": _env("VALUE_CPI", "blended"),                      # the main cost per install
