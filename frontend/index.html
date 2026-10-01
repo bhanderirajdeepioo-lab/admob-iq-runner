@@ -3053,6 +3053,9 @@ function appSelHtml(){ const _vapps=(DATA.apps||[]).filter(a=>appVisibleByName(a
   return '<option value="">All apps ('+_vapps.length+')</option>'+(APP&&!_vapps.some(a=>a.name===APP)?opt(APP):'')+_vapps.map(a=>opt(a.name)).join(''); }
 // the selector's icon: the chosen app's logo, 📱 for "All apps" (+ the picker button's name — apkSync)
 function appSelIcon(){ const el=document.getElementById('appsel-ic'); if(el) el.innerHTML=APP?appIcon(APP,18):'📱'; apkSync(); }
+// the whole header App selector in step with APP: the hidden <select>'s list (appSelHtml) + the icon + the picker button —
+// render() and a jump that changes APP without a render (bGotoUnit)
+function appSelSync(){ const sel=document.getElementById('appsel'); if(sel) sel.innerHTML=appSelHtml(); appSelIcon(); }
 function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; APP=a;
   if(UNIAPP&&uniName(UNIAPP)!==a) UNIAPP='';   // the header left the app whose Uninstall detail was open: close it (never one app under "All apps")
   if(ACTAPP&&actName(ACTAPP)!==a) ACTAPP='';   // … and the Active users tab's
@@ -3224,9 +3227,7 @@ function render(){
   rvRestoreFocus();
   document.getElementById('nav-alert').textContent=alertsBadgeN();
   {const _tb=document.getElementById('tab-alert');if(_tb){const _n=alertsBadgeN();_tb.textContent=_n;_tb.classList.toggle('on',_n>0);}}
-  const sel=document.getElementById('appsel');
-  if(sel) sel.innerHTML=appSelHtml();
-  appSelIcon();
+  appSelSync();
   const rsel=document.getElementById('rangesel'); if(rsel) rsel.value=RANGE;
   const rcust=document.getElementById('rangecustom'); if(rcust) rcust.style.display=(RANGE==='custom'?'inline-flex':'none');
   if(!window.__wired){            // attach static listeners once (survives auto-refresh re-renders)
@@ -4871,7 +4872,7 @@ function bDrill(app){ BUNIT=null; BSEL=app; bRerender(); window.scrollTo({top:0}
 function bBack(){ BUNIT=null; BSEL=null; if(APP){ setApp(''); } else { bRerender(); window.scrollTo({top:0}); } }
 function bOpenUnit(uid){ BUNIT=uid; const u=(BASELINE||DATA.baseline).units.find(x=>x.id===uid); if(u)BSEL=u.app; bRerender(); window.scrollTo({top:0}); }
 // open a placement page from ANY tab (e.g. an alert click): switch to Baseline, load it if needed, then open the unit
-function bGotoUnit(uid){ BUNIT=uid; if(typeof APP!=='undefined')APP=''; show('baseline'); const u=((BASELINE&&BASELINE.units)||[]).find(x=>x.id===uid); if(u)BSEL=u.app; if(BASELINE)bRerender(); window.scrollTo({top:0}); }
+function bGotoUnit(uid){ BUNIT=uid; if(typeof APP!=='undefined'){ APP=''; appSelSync(); } show('baseline'); const u=((BASELINE&&BASELINE.units)||[]).find(x=>x.id===uid); if(u)BSEL=u.app; if(BASELINE)bRerender(); window.scrollTo({top:0}); }
 function bBackToApp(){ BUNIT=null; bRerender(); window.scrollTo({top:0}); }
 function bSetView(v){ BVIEW=v; bRerender(); }
 function bSeg(v,txt){ const on=BVIEW===v; return `<button onclick="bSetView('${v}')" style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.14)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-weight:650;font-size:13px;padding:7px 14px;border-radius:9px;cursor:pointer">${txt}</button>`; }

@@ -168,4 +168,6 @@ def test_every_name_helper_and_header_carries_the_icon():
     assert "📱 ${sel}" not in js and 'font-size:26px">📱</div>' not in js and 'font-size:24px">📱</div>' not in js
     # the header App selector: the chosen app's icon beside the native <select> (keyboard / phone picker kept)
     assert '<span id="appsel-ic" aria-hidden="true">📱</span> <span class="cx">App:</span><select id="appsel"' in _page()
-    assert "if(sel) sel.innerHTML=appSelHtml();\n  appSelIcon();" in js
+    assert "function appSelSync(){ const sel=document.getElementById('appsel'); if(sel) sel.innerHTML=appSelHtml(); appSelIcon(); }" in js
+    r0 = js.index("function render(){")
+    assert "\n  appSelSync();\n" in js[r0:js.index("function show(", r0)]

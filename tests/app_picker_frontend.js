@@ -94,8 +94,8 @@ ctx.__DATA = {
 ctx.__A2 = A2; ctx.__HIDE = [id(A2, 12), id(A2, 15), id(A2, 16)];   // A2 keeps 3 of its 4 apps: "Hidden Tool" is hidden
 ctx.__CALLS = [];
 run(`DATA=__DATA; ACCNAMES={'${A1}':'Alpha Studio'}; APPSEL={accounts:{[__A2]:{decided:true,selected:__HIDE}}}; APP='';
-  // render()'s two lines for the header, then the spy: setApp(name) records the name and refreshes the header the same way
-  var __hdr=()=>{ document.getElementById('appsel').innerHTML=appSelHtml(); appSelIcon(); };
+  // render()'s header sync (appSelSync), then the spy: setApp(name) records the name and refreshes the header the same way
+  var __hdr=()=>appSelSync();
   setApp=function(a){ __CALLS.push(a); APP=a; __hdr(); };
   __hdr(); apkWire(); apkWire();`);   // wired twice on purpose: the second call must be a no-op
 

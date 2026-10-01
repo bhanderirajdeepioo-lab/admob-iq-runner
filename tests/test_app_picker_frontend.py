@@ -230,7 +230,9 @@ def test_topbar_markup_and_wiring():
     assert ('<button type="button" id="apk-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="apk-list">'
             '<span id="apk-nm">All apps</span><span class="apk-cv" aria-hidden="true">▾</span></button></label>') in page
     # render(): the <select> is still filled + its change listener kept; the picker wired once beside it
-    assert "if(sel) sel.innerHTML=appSelHtml();\n  appSelIcon();" in js
+    assert "function appSelSync(){ const sel=document.getElementById('appsel'); if(sel) sel.innerHTML=appSelHtml(); appSelIcon(); }" in js
+    r0 = js.index("function render(){")
+    assert "\n  appSelSync();\n" in js[r0:js.index("function show(", r0)]
     blk = js[js.index("if(!window.__wired){"):]
     blk = blk[:blk.index("\n  }\n")]
     assert "sel0.addEventListener('change',e=>setApp(e.target.value));" in blk and "apkWire();" in blk
