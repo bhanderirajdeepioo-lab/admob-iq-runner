@@ -5677,7 +5677,7 @@ function uniPP(d){ if(d==null||isNaN(d)) return '—'; const a=Math.abs(+d).toFi
 function uniDP(now,before){ return (now==null||before==null)?null:(Math.abs(now-before)*100>=5?0:1); }
 function uniPctDP(p,dp){ return (p==null||isNaN(p))?'—':(dp==null?uniPct(p):(p*100).toFixed(dp)+'%'); }
 function uniShownD(now,before,dp){ if(now==null||before==null) return null; const k=dp==null?1:dp; return +((+(now*100).toFixed(k))-(+(before*100).toFixed(k))).toFixed(k); }
-function uniRate(v){ return (v==null||isNaN(v))?'—':(+v).toFixed(1); }
+function uniRate(v){ return uniRateP(v); }   // (was the raw per-1,000 number; the display rule: always the % of daily active users)
 function uniRateP(v){ return (v==null||isNaN(v))?'—':((+v)/10).toFixed(2)+'%'; }   // a rate stored per 1,000 active users → the % the page shows (display rule)
 // "fetched 3 h ago" — English on this tab (the shared relTime, Hinglish, stays as it is on the other screens)
 function uniAgo(iso){ if(!iso) return null; const t=new Date(iso).getTime(); if(isNaN(t)) return null;
@@ -7345,7 +7345,7 @@ function uniPortfolio(parts){
   const hwTxt=k=>HW[k]?`installs ${smpSpan(HW[k][0],HW[k][1])} · vs previous 4 weeks`:'';
   const TH=[['app','App'],['S7','Still in app after 7 days','Still in app after 7 days (%) — saare pakke installs se. Neeche ▲/▼ 12%→16% = pichhle 4 pakke hafte ke installs vs usse pehle ke 4 hafte (sirf pakka farak)'],
     ['ins','Installs','Installs — last 7 days'],['outs','Uninstalls','Uninstalls — last 7 days'],['net','Net','Installs − uninstalls — last 7 days'],['rate','Uninstall rate','Uninstall rate — last 7 days'],
-    ['D0','Gone on install day',hwTxt('D0')],['D1','Gone in 1 day',hwTxt('D1')],['D7','Gone in 7 days',hwTxt('D7')],['D30','Gone in 30 days',hwTxt('D30')],['alert','Alerts']];
+    ['D0','Same day uninstall',hwTxt('D0')],['D1','Uninstalled within 1 day',hwTxt('D1')],['D7','Uninstalled within 7 days',hwTxt('D7')],['D30','Uninstalled within 30 days',hwTxt('D30')],['alert','Alerts']];
   const sv=(r,k)=>{ const m=r.sm||{}; if(k==='app') return (r.s.app||'').toLowerCase(); if(k==='ins') return m.ins; if(k==='outs') return m.outs;
     if(k==='net') return m.net; if(k==='rate') return m.rate; if(k==='S7') return s7(r.a); if(k==='alert') return (r.s.alerts||{}).warning||0; const hd=(r.s.head4||{})[k]; return (hd&&HW[k]&&hd.from===HW[k][0]&&hd.to===HW[k][1])?hd.p:null; };
   const sorted=rows.slice().sort((x,y)=>{ const a=sv(x,UNISORT.k), b=sv(y,UNISORT.k);
@@ -7386,7 +7386,7 @@ function uniPortfolio(parts){
   // one column = one window: each D column's install week (vs the 4 weeks before) printed under its header
   const hw2=`<tr class="smp-hw">${TH.map(([k])=>`<th class="faint" style="font-size:10px;font-weight:600;white-space:nowrap">${HW[k]?'installs '+smpSpan(HW[k][0],HW[k][1]):(['ins','outs','net','rate'].includes(k)&&wF?smpSpan(wF,wT):'')}</th>`).join('')}</tr>`;
   const table=`<div class="card pad0" id="uni-table" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>📋 All apps</h3><span class="faint" style="font-size:11.5px">row pe tap = app ki detail · column pe tap = sort</span></div>
-    <div class="smp-per" style="padding:6px 17px 0;margin:0">Each app · Installs / Uninstalls / Net / Uninstall rate = last 7 days${wF?' ('+smpSpan(wF,wT)+')':''} · "Gone …" = har column ke upar likhe install hafte (% ne hataaye) vs previous 4 weeks · "Still in app after 7 days" = saare pakke installs</div>
+    <div class="smp-per" style="padding:6px 17px 0;margin:0">Each app · Installs / Uninstalls / Net / Uninstall rate = last 7 days${wF?' ('+smpSpan(wF,wT)+')':''} · "Same day uninstall / Uninstalled within N days" = har column ke upar likhe install hafte (% ne hataaye) vs previous 4 weeks · "Still in app after 7 days" = saare pakke installs</div>
     <div class="uni-scroll" style="margin-top:10px"><table class="uni-sticky" style="min-width:900px"><thead><tr>${TH.map(hdr).join('')}</tr>${hw2}</thead><tbody>${trows}</tbody></table></div>
     <div class="muted" id="uni-tfoot" style="font-size:11px;padding:9px 17px 12px;line-height:1.5">Ek column = ek install hafta: jis app ka us hafte ka data nahi, wahan "—" · ▲▼ = usi hafte vs previous 4 weeks · ⏳ = pakka nahi (late data aa raha)</div>
     <div class="faint" id="uni-mix" style="font-size:10.5px;padding:0 17px 12px;line-height:1.5">🔺 "Install week × day" table har app ke andar hai. ⚠️ All apps me har hafte apps ka mix badalta hai — sahi tulna ke liye upar se ek app chuno.</div></div>`;
@@ -7690,7 +7690,7 @@ function uniCpCard(a){
       <td class="uni-num"${sx?` title="${hAttr(sx)}"`:''}>${bd}</td><td style="white-space:nowrap">${r.from?uniSpan(r.from,r.to):'—'}${(t.fallback&&t.fallback.recent&&r.k&&r.from&&uniDiff(r.from,r.to)+1>r.k)?` <span class="faint" title="${hAttr('sirf itne install din gine — beech wale adhoore data wale din ko chhoote the')}">· ${r.k} days</span>`:''}</td><td>${stt}</td></tr>`; }).join('')
     ||`<tr><td colspan="7" class="muted" style="padding:16px">Abhi koi din nahi — ek hafte ke poore installs ke baad aayega.</td></tr>`;
   const stage=(st||zt||a.stage_why)?`<div style="padding:10px 17px 0;display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center">${st?`<span class="pill ${st[0]}">${st[1]}</span>`:''}${zt?`<span class="pill p-p" style="white-space:normal;max-width:100%;overflow-wrap:anywhere" title="Alert ya naye version ke baad kuch hafte har din ki row dikhti hai (sirf key days nahi)">🔍 ${hAttr(zt)}</span>`:''}${a.stage_why?`<span class="faint" style="font-size:11.5px">${hAttr(smpInfoTxt(a.stage_why))}</span>`:''}</div>`:'';
-  const life=`<div class="faint" style="font-size:12px;padding:11px 17px 13px;border-top:1px solid var(--line)" title="ab tak kul (har umar ke installs)">♾️ All time: <b style="color:var(--ink2)">${uniPct(LT.p)}</b> of installs gone so far (${fmtN(LT.un)} / ${fmtN(LT.users)}) · roz hataane wale ab har 1,000 users me ${uniRate(R.last7)}, hamesha ka aam ${uniRate(LT.rate_all_med)}</div>`;
+  const life=`<div class="faint" style="font-size:12px;padding:11px 17px 13px;border-top:1px solid var(--line)" title="ab tak kul (har umar ke installs)">♾️ All time: <b style="color:var(--ink2)">${fmtN(LT.un)}</b> of ${fmtN(LT.users)} installs gone so far (<b style="color:var(--ink2)">${uniPct(LT.p)}</b>) · uninstall rate ab ${uniRateP(R.last7)}, hamesha ka aam ${uniRateP(LT.rate_all_med)}</div>`;
   return `<div class="card pad0" id="uni-cp" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>🧮 Full table — new installs vs before</h3><span class="faint" style="font-size:11.5px">Har row = install ke itne din me kitne % ne app hataya · naye = sabse naye 7 install-din · ⏳ = pakka nahi (late data aa raha) · ▼ sirf pakke data se${T.some(t=>t.fallback)?' · ↩ = purane installs (naye wale adhoore data wale din ko chhoote the)':''}${T.some(t=>[t.recent,t.prev,t.all].some(o=>o&&o.est))?' · ≈ = andaza (GA4 ne kuch din ka data poora nahi diya — total ke hisaab se poora kiya)':''}</span></div>${stage}
     <div class="uni-scroll" style="margin-top:10px"><table class="uni-sticky" style="min-width:720px"><thead><tr><th>Days after install</th><th>Installs: % gone</th><th>4 weeks before</th><th>All time</th><th>Change</th><th>Installs from</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>${life}</div>`; }
 
@@ -7964,7 +7964,7 @@ function splitKul(S,o){ const n=S.days, c=S.code;
   return A.with<A.of?`${A.with} apps’ ${b.charAt(0).toLowerCase()+b.slice(1)} (of ${A.of})`:`${b} (all ${A.of} apps)`; }
 // a note: [code, before, after] with the shares written per 100 (the engine's wire)
 const SPLIT_NOTE={new:(b,a)=>`new users’ share ${splitP100(b)}% → ${splitP100(a)}%`,net:()=>'dusre ad networks ka hissa badla',
-  rec:(b,a)=>`haal ke installs ka hissa ${splitP100(b)}% → ${splitP100(a)}`,paid:(b,a)=>`ads wale installs ${splitP100(b)}% → ${splitP100(a)}`,
+  rec:(b,a)=>`haal ke installs ka hissa ${splitP100(b)}% → ${splitP100(a)}%`,paid:(b,a)=>`ads wale installs ${splitP100(b)}% → ${splitP100(a)}%`,
   swing:()=>'naye installs bahut badle — mix badla ho sakta hai'};
 function splitNoteTxt(x){ if(!Array.isArray(x)) return ''; const f=SPLIT_NOTE[x[0]]; if(!f) return ''; if(x[0]!=='net'&&x[0]!=='swing'&&(!splitF(x[1])||!splitF(x[2]))) return ''; return 'Also: '+f(+x[1],+x[2]); }
 // the distinct notes of several hosts, once each (a card shows a "Saath me:" once, never on every tile / row)
@@ -7999,12 +7999,12 @@ function splitBlock_(S,o){ if(!S) return '';
   const own=S.per_user.own!=null?splitR(100*S.per_user.own):null, ownD=w=>(own!=null&&(C||own!==s.per_user))?`${w} ${P(own)}`:'';
   if(c==='ret'){ const k=H.k!=null?H.k+' din ke ':'', mv=sN(H.before)&&sN(H.after)&&H.before>0&&Math.abs(H.after/H.before-1)>=0.01;   // the recent installs' own return moved (≥ 1%)
     const pp=mv?splitP100Pair(H.before,H.after):(sN(H.before)?[splitP100(H.before),null]:null);
-    fD=j(iT,pp?`${k}din ke installs me se ~${pp[0]} roz aate`:''); pD=ownD((H.k!=null?H.k+'+ din purane':'purane')+' users khud');
+    fD=j(iT,pp?`${k}installs me se ~${pp[0]}% roz aate`:''); pD=ownD((H.k!=null?H.k+'+ din purane':'purane')+' users khud');
     if(mv&&pp[0]!==pp[1]) xL=`new users back: ~${pp[0]}% → ~${pp[1]}%/day`; }
   else if(c==='imp'){ fD=iT; pL='update impact'; pD=ownD('expected se'); }
   else if(c==='uc'){ fD=j(iT,H.before!=null?`${splitP100(H.before)}% ~ pehle 28 din me hata dete`:''); pD=ownD('har install pe'); }
   else if(c==='ur'||c==='uk'||c==='rr'){ const w={ur:'hataate',uk:'bache rehte',rr:'wapas aate'}[c], pp=splitP100Pair(H.before,H.after), on=S.on_now;
-    fD=j(iT,`${pp[0]} ${w}`); pD=`${pp[0]}% → ${pp[1]}`+(C&&on&&sN(on.installs)?`; roz ~${splitAbout(on.installs)} installs pe`:''); }
+    fD=j(iT,`${pp[0]}% ${w}`); pD=`${pp[0]}% → ${pp[1]}%`+(C&&on&&sN(on.installs)?`; roz ~${splitAbout(on.installs)} installs pe`:''); }
   else if(c==='rev'){ const [b,a]=pair(m,o.moneyP,H.before,H.after); fL='by users'; fD=j(iT,`per user ${b}`); pL='real change (revenue per user)'; pD=`per user ${b} → ${a}`; }
   else if(c==='ir'){ const [b,a]=pair(m,o.moneyP,H.before,H.after); fD=j(iT,`per install ${b}`); pL='real change (earning per install)'; pD=`${b} → ${a}`; }
   else if(c==='spd'){ const [b,a]=pair(cost,o.costP||o.moneyP,H.before,H.after); fD=j(iT,`per install ${b}`); pL='real change (cost per install)'; pD=`${b} → ${a}`; }
@@ -8035,7 +8035,7 @@ function splitLine(S){ if(!S||S.none||!S.shown) return ''; const s=S.shown, c=S.
   if(c&&SPLIT_MONEY.includes(S.code)) return '';
   const f=k=>c?splitCnum(c[k],c.exp):P(s[k]), parts=[(SPLIT_FW[S.code]||'from installs')+' '+f('from_installs')];
   if((c||s).trend) parts.push('trend '+f('trend')); parts.push((SPLIT_PW[S.code]||'real')+' '+f('per_user'));
-  const subj=SPLIT_SUBJ[S.code]||'kul';
+  const subj=SPLIT_SUBJ[S.code]||'total';
   return c?`${subj}: ${splitCnum(c.total,c.exp)} = ${parts.join(' + ')} (total ${P(s.total)})`:`${subj}: total ${P(s.total)} = ${parts.join(' + ')}`; }
 function splitTxt(kind,host){ try{ return splitLine(splitOf(kind,host)); }catch(e){ return ''; } }
 // the one-line form as a small line under a card / chip ('' when there is none)
@@ -8170,7 +8170,7 @@ const UNI_IMP_EXP_TIP={returning_dau:"Update na aata to kitna hota — model ka 
 function uniImpDauExp(n){ return `Before window ke usi weekday ka din (~${n} din pehle) × normal hafta-dar-hafta badlaav (zyada se zyada 3 hafte aage) + haal ke installs ka wapas aana`; }
 function uniImpAds(v){ return (+v<1?(+v).toFixed(2):(+v).toFixed(1)); }   // ads (impressions) per active user: "4.1"
 function uniImpExpLine(R,k,V,n){ const x=V.x, ok=V.ok;
-  if(k==='arpdau') return (ok(x.imp_after)&&ok(x.imp_expected))?`<div class="s uni-exp" title="${hAttr(UNI_IMP_EXP_TIP.arpdau)}">Ads per user: ${uniImpAds(x.imp_after)} · expected (bina update ke) ${uniImpAds(x.imp_expected)}</div>`:'';
+  if(k==='arpdau') return (ok(x.imp_after)&&ok(x.imp_expected))?`<div class="s uni-exp" title="${hAttr(UNI_IMP_EXP_TIP.arpdau)}">Ads per user: ${uniImpAds(x.imp_after)} · Expected (without update): ${uniImpAds(x.imp_expected)}</div>`:'';
   let e=ok(R.expected)?+R.expected:null;
   if(e==null&&(k==='sessions'||k==='time')&&ok(x.adj_change)&&ok(R.after)&&+x.adj_change>-1) e=+R.after/(1+(+x.adj_change));   // an older asset: after / (1 + judged change)
   const tip=(k==='returning_dau'&&n>=14)?`Update na aata to kitna hota — model ka andaza (${uniImpDauExp(n)}). Ye 'data aana baaki' nahi hai — asli number upar hai`:(UNI_IMP_EXP_TIP[k]||UNI_IMP_EXP_TIP.sessions);
@@ -11556,7 +11556,7 @@ function srcHtml(){ const key=g=>g.nJ?g.pj:g.pe*1e-6; const L=CT.filter(g=>g.row
     +(()=>{ const cnt={}; wins.forEach(C=>{ const k=span(C.f,C.t)+'|'+C.wk; cnt[k]=(cnt[k]||0)+1; }); const top=Object.entries(cnt).sort((p,q)=>q[1]-p[1]); const [k0,n0]=top[0]||['|',0], [sp0,wk0]=k0.split('|');
       return `<div class="vs-hint2">Engine ki country window — upar ki week range se alag: ${n0} apps me installs ${sp0} (${wk0} pakke hafte)${top.length>1?`; <span title="${esc(top.slice(1).map(([k,n])=>k.split('|')[0]+' ('+n+')').join(' · '))}">${wins.length-n0} chhote / naye apps ki apni window</span>`:''}. Earning by day ${H} = us country ke purane installs ki asli kamai (ya ≈).</div>`; })(); }
 TIPS.cty=cc=>{ const g=CT.find(x=>x.cc===cc); if(!g) return ''; const L=g.rows.slice().sort((p,q)=>p.profD-q.profD);
-  return `<div class="vs-tt">${ctyH(cc)} · ${L.length} ${L.length===1?'app':'apps'}</div>`+L.map(x=>`<div class="vs-row"><span>${ic(x.a,14,'ail')}${esc(x.a.store)} · ${esc(x.a.acc)}${x.judged?'':' <span class="vs-tsm">≈</span>'}</span><b class="${x.judged?profCls(x.profD):'vs-faint'}">${mL(x.profD,true)}</b></div><div class="vs-tsm">CPI ${mP(x.cpiV)} · earning by ${H}d ${x.est?'≈':''}${mP(x.beV)} · ${x.pp!=null?'money back '+(x.fl&128?'':'≈')+x.pp+' days':(x.never?'1 yr+':'—')} · ${SW[x.pill]}${x.judged?' · '+KYA[x.todo.v]:' · '+esc(x.why)}</div>`).join('')
+  return `<div class="vs-tt">${ctyH(cc)} · ${L.length} ${L.length===1?'app':'apps'}</div>`+L.map(x=>`<div class="vs-row"><span>${ic(x.a,14,'ail')}${esc(x.a.store)} · ${esc(x.a.acc)}${x.judged?'':' <span class="vs-tsm">≈</span>'}</span><b class="${x.judged?profCls(x.profD):'vs-faint'}">${mL(x.profD,true)}</b></div><div class="vs-tsm">CPI ${mP(x.cpiV)} · earning by ${H}d ${x.est?'≈':''}${mP(x.beV)} · ${x.pp!=null?'money back '+(x.fl&128?'':'≈')+x.pp+(+x.pp===1?' day':' days'):(x.never?'1 yr+':'—')} · ${SW[x.pill]}${x.judged?' · '+KYA[x.todo.v]:' · '+esc(x.why)}</div>`).join('')
    +`<div class="vs-sep"></div>${trow('Total',mL(g.profD,true)+'/day')}${trow('Spend',mT(g.spD)+'/day')}`; };
 
 /* ================= Timeline (install weeks + updates + alerts + engine info) ================= */
@@ -12231,7 +12231,7 @@ function valPayCell(w,H,ph){ if(!w.judged) return valSpendWait(w)?`<td class="fa
   if(P.never) return `<td style="white-space:nowrap"${valOk(P.pct365)?` title="Saal bhar me ≈${Math.round(P.pct365)}% wapas (andaza)"`:''}>Over 1 year</td>`;
   if(!valOk(P.p)) return '<td class="faint">—</td>';
   if(P.obs) return `<td style="white-space:nowrap">${valDays(P.p)}</td>`;
-  const bt=valBandTxt(P), rg=bt.startsWith('andaza ')&&bt!=='andaza kaafi kaccha'?bt.slice(7).replace(' din',''):(bt==='andaza kaafi kaccha'?'kaafi kaccha':'');
+  const bt=valBandTxt(P), rg=/^≈ \S+–\d+ days$/.test(bt)?bt.slice(2).replace(' days',''):'';   // the band "≈ 20–40 days" → (20–40)
   return `<td style="white-space:nowrap" title="${hAttr(VAL_TIP.est)}">≈${valDays(P.p)}${rg?(ph?`<div class="faint val-rg">(${rg})</div>`:` <span class="faint">(${rg})</span>`):''}</td>`; }
 function valPayCard(d,r){
   const W=valWeeks(d), T=valT(), S=d.settled_till, ph=valPh(), cur=csym(), paid=W.some(w=>w.judged), H=valH(d), ccy=valSrcCcy(d);
@@ -13032,6 +13032,7 @@ function rvEsc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp
 function rvPd(s){ const p=String(s||"").split("-"); return new Date(Date.UTC(+p[0],(+p[1]||1)-1,+p[2]||1)); }
 function rvIso(d){ return d.toISOString().slice(0,10); }
 function rvAddDays(s,n){ const d=rvPd(s); d.setUTCDate(d.getUTCDate()+n); return rvIso(d); }
+function rvOpenN(n){ return n+(n===1?" day":" days")+" open"; }   // "1 day open" / "4 days open"
 function rvDayDiff(a,b){ return Math.round((rvPd(b)-rvPd(a))/864e5); }
 function rvFd(s){ if(!s) return ""; const d=rvPd(s); return isNaN(d)?String(s):d.getUTCDate()+" "+RV_MON[d.getUTCMonth()]; }
 function rvWd(s){ const d=rvPd(s); return isNaN(d)?"":RV_WDAY[d.getUTCDay()]; }
@@ -13189,7 +13190,7 @@ function rvFlagBtn(doc,S,key,f,lab,short,P,live){
     return ""; }
   let txt,cls="",pressed="false",vh;
   if(fi.today){ txt=short?"🚩 ✓":"🚩 Flagged ✓"; pressed="true"; vh=" (flag is on)"; }
-  else if(fi.carry){ const n=rvDayDiff(fi.carry.day,d); txt=short?"🚩 "+n+"d":"🚩 "+n+" days open"; cls=" rv-carry"; vh=" (open flag)"; }
+  else if(fi.carry){ const n=rvDayDiff(fi.carry.day,d); txt=short?"🚩 "+n+"d":"🚩 "+rvOpenN(n); cls=" rv-carry"; vh=" (open flag)"; }
   else if(fi.kaam){ const n=rvDayDiff(fi.kaam.day,d); txt=short?"🛠":"🛠 Task · "+(n>0?n+" days":"today"); cls=" rv-kaamb"; vh=" (admin task in progress)"; }
   else { txt=short?"🚩":"🚩 Re-review"; vh=""; }
   return '<button type="button" class="rv-flb'+cls+'" data-rvact="fflag" data-f="'+rvEsc(f)+'" id="rv-'+P+"-ff-"+rvEsc(key)+"-"+rvEsc(f)+
@@ -13256,7 +13257,7 @@ function rvCardHtml(doc,S,key,mode,o){
   // chips row
   const fl=[];
   if(rvNewBad(doc,SS,key)) fl.push('<span class="rv-flag rv-nb">🆕 New and worse'+((!a.small||rvLift(doc,SS,key))?" — moved up":"")+"</span>");
-  rvEarlierOpen(doc,SS,key).forEach(x=>fl.push('<span class="rv-flag rv-co">🚩 '+rvEsc(rvFlab(doc,x.feature))+" · "+rvDayDiff(x.day,d)+" days open</span>"));
+  rvEarlierOpen(doc,SS,key).forEach(x=>fl.push('<span class="rv-flag rv-co">🚩 '+rvEsc(rvFlab(doc,x.feature))+" · "+rvOpenN(rvDayDiff(x.day,d))+"</span>"));
   rvFlagsOf(SS,key).filter(x=>x.status==="open"&&x.day===d&&!x.feature).forEach(()=>fl.push('<span class="rv-flag rv-co">🚩 '+rvEsc(RV_TXT.poori)+"</span>"));
   rvFlagsOf(SS,key).filter(x=>x.status==="kaam").forEach(x=>{ const n=rvDayDiff(x.day,d);
     fl.push('<span class="rv-flag rv-kaam">🛠 '+rvEsc(rvFlab(doc,x.feature))+" · task in progress · "+(n>0?n+" days":"today")+"</span>"); });
@@ -13321,7 +13322,7 @@ function rvFlagLine(doc,S,x,admin){
   const fname=x.feature?rvFlab(doc,x.feature):"full app";
   let h='<b>'+(a?rvJumpBtn(doc,x.app):rvEsc(x.app_label||x.app))+" · "+rvEsc(fname)+"</b>"+
     (x.note?' · <span class="rv-nt" style="display:inline">“'+rvEsc(x.note)+"”</span>":"")+
-    ' <div class="rv-meta">'+rvWho(x.raised_by)+" · "+rvEsc(rvWhen(x.raised_at))+(age>0&&(x.status==="open"||x.status==="kaam")?" · "+age+" days open":"")+
+    ' <div class="rv-meta">'+rvWho(x.raised_by)+" · "+rvEsc(rvWhen(x.raised_at))+(age>0&&(x.status==="open"||x.status==="kaam")?" · "+rvOpenN(age):"")+
     (a&&x.feature&&a.f&&a.f[x.feature]&&a.f[x.feature].t?" · on card: "+rvEsc(a.f[x.feature].t):"")+"</div>";
   if(x.decision) h+='<div class="rv-decd">🧑‍💼 Admin decision: <b>'+rvEsc(RV_DEC[x.decision]||x.decision)+"</b>"+(x.dec_note?" — "+rvEsc(x.dec_note):"")+
     (x.dec_by?" · "+rvWho(x.dec_by)+", "+rvEsc(rvWhen(x.dec_at)):"")+(x.status==="kaam"?" · <b>kaam chal raha</b>":"")+
@@ -13773,14 +13774,14 @@ function rvPanelHtml(id,p){
     case "imp": return hint("🚩 Important · Re-review — full app",true)+hint(rvEsc(RV_TXT.imp_help)+". Sirf ek baat ke liye ho to us feature ke aage wala chhota 🚩 dabao. (🔁 Check again tomorrow alag hai — wo sirf aapka kal ka reminder hai, admin ko nahi jaata.)")+
       ta("Kya dikkat hai? (likhna zaroori nahi)","Jaise: revenue 41% giri, developer se baat ki — aapka faisla chahiye")+row(btn("imp-save","🚩 Send for re-review",1)+btn("close","Cancel"));
     case "impcarry": { const x=rvFlagInfo(doc,S,p.key,"app").carry; const n=x?rvDayDiff(x.day,C.d):0;
-      return hint("🚩 "+rvEsc(RV_TXT.poori)+" · "+n+" days open · admin’s decision pending"+(x?" · "+rvWho(x.raised_by)+(x.note?" · “"+rvEsc(x.note)+"”":""):""))+row(btn("close","Cancel")); }
+      return hint("🚩 "+rvEsc(RV_TXT.poori)+" · "+rvOpenN(n)+" · admin’s decision pending"+(x?" · "+rvWho(x.raised_by)+(x.note?" · “"+rvEsc(x.note)+"”":""):""))+row(btn("close","Cancel")); }
     case "undo": return hint("Is app ka today’s review (state, notes aur aaj ke khule 🚩) hata dein?")+row(btn("undo-yes","Yes, remove",1)+btn("close","No"));
     case "flag": return hint("🚩 "+rvEsc(lab)+" — Important · Re-review",true)+hint(rvEsc(RV_TXT.imp_help))+
       ta("Note (optional)","Jaise: 3 din se gir raha hai, developer ko bata diya — aap bhi dekh lo")+row(btn("fflag-save","🚩 Flag karo",1)+btn("close","Cancel"));
     case "unflag": { const x=rvFlagInfo(doc,S,p.key,p.f).today;
       return hint("🚩 <b>"+rvEsc(lab)+"</b>"+(x?" · "+rvWho(x.raised_by)+" · "+rvEsc(rvWhen(x.raised_at))+(x.note?" · “"+rvEsc(x.note)+"”":""):""))+hint("Ye 🚩 hata dein?")+row(btn("fflag-off","Yes, remove",1)+btn("close","No")); }
     case "carry": { const x=rvFlagInfo(doc,S,p.key,p.f).carry; const n=x?rvDayDiff(x.day,C.d):0;
-      return hint("🚩 "+n+" days open · admin’s decision pending"+(x?" · "+rvWho(x.raised_by)+(x.note?" · “"+rvEsc(x.note)+"”":""):""))+hint("Admin view: Summary tab.")+row(btn("close","Cancel")); }
+      return hint("🚩 "+rvOpenN(n)+" · admin’s decision pending"+(x?" · "+rvWho(x.raised_by)+(x.note?" · “"+rvEsc(x.note)+"”":""):""))+hint("Admin view: Summary tab.")+row(btn("close","Cancel")); }
     case "kaam": { const x=rvFlagInfo(doc,S,p.key,p.f).kaam; const n=x?rvDayDiff(x.day,C.d):0;
       return hint("🛠 Admin ne kaam diya · <b>"+rvEsc(lab)+"</b> · "+(n>0?n+" days":"today")+(x&&x.dec_note?" · kaam: “"+rvEsc(x.dec_note)+"”":""))+
         hint("Kaam hone pe admin “"+rvEsc(RV_TXT.d_done)+"” dabayega — tab tak ye card pe dikhega.")+

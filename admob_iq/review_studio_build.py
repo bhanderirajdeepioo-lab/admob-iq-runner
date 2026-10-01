@@ -118,6 +118,7 @@ RULES = [
     (r'Splash ad dikhne ki dar', 'Splash ad show rate'),
     (r'(range [\d.]+–[\d.]+)(?!%)', r'\1%'),
     (r'(\w{3}) me 100 me ([\d.]+)', r'\1 \2%'),
+    (r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) me (\d[\d.]*%)', r'\1 \2'),   # (the review's new form)
     (r'100 me (\d[\d,]*(?:\.\d+)?) → (\d[\d,]*(?:\.\d+)?)', r'\1% → \2%'),
     (r'100 me (\d[\d,]*(?:\.\d+)?)', r'\1%'),
     (r' · 100 me · ', ' · % · '),
@@ -145,6 +146,7 @@ RULES = [
     (r'^AdMob (\d+ \w{3}(?: \d{4})?) tak', r'AdMob till \1'),
     # update
     (r'⏳ Abhi jaldi — install-wise kamai ka data aa raha', '⏳ Too early — install revenue data still coming'),
+    (r'⏳ Too early — install-wise earning ka data aa raha', '⏳ Too early — install revenue data still coming'),
     (r'⏳ Abhi jaldi', '⏳ Too early'),
     (r'👍 Chalne do', '👍 Keep'),
     (r'Pichhle (\d+) din me koi update nahi', r'No update in last \1 days'),
@@ -152,9 +154,13 @@ RULES = [
     (r'✅ (v[\d.]+) update achha gaya: ', r'✅ \1 went well: '),
     (r'✅ Update achha gaya', '✅ Went well'),
     (r'🛑 Update roko', '🛑 Stop the update'),
+    (r'✅ (v[\d.]+) update went well: ', r'✅ \1 went well: '),      # the review's own English since Oct 2026
+    (r'✅ Update went well', '✅ Went well'),
+    (r'🛑 Stop update\b', '🛑 Stop the update'),
     # value
     (r'^Ads ka paisa ~(\d+) din me wapas \(installs (.+?)\) · ≈ Andaza', r'Ad spend back in ~\1 days (installs \2) · ≈ estimate'),
     (r'^Google Ads ka paisa 1 saal me bhi pura wapas nahi \(~(\d+)% hi\)', r'Ad spend not back even in 1 year (only ~\1%)'),
+    (r'^Ads money not back in 1 year \(~(\d+)% hi wapas\)', r'Ad spend not back even in 1 year (only ~\1%)'),
     (r'^GA4 nahi juda — (.+?) ka data nahi', lambda m: 'GA4 not linked — no ' + m.group(1) + ' data'),
     # active
     (r'^Purane users \(roz\) (\d+)% kam: ([\d,]+) → ([\d,]+)', r'Returning users \2 → \3/day (−\1%)'),
@@ -217,6 +223,7 @@ WRULES = [
     (r'^Shuru · ', 'Start · '),
     (r'^pichhle 7 din$', 'last 7 days'),
     (r'\$/din', '/day'),
+    (r'\$/day\b', '/day'),      # the review's captions now say "$/day"; the page shows ₹ or $ itself
 ]
 _RULES = [(re.compile(p), r) for p, r in RULES]
 _WRULES = [(re.compile(p), r) for p, r in WRULES]
@@ -297,7 +304,10 @@ def parse_age_phrase(kab):
     m = re.search(r'(\d+\+?) (din|hafte|mahine) se', kab or '')
     if m:
         return m.group(1), m.group(2)
-    if re.search(r'aaj se', kab or ''):
+    m = re.search(r'(\d+\+?) (days?|weeks|months) ago', kab or '')     # the review's own words since Oct 2026
+    if m:
+        return m.group(1), {'day': 'din', 'days': 'din', 'weeks': 'hafte', 'months': 'mahine'}[m.group(2)]
+    if re.search(r'aaj se|(?:^|· )today\b', kab or ''):
         return '0', 'din'
     return None, None
 
@@ -334,9 +344,11 @@ def kab_rest(kab):
     parts = [p.strip() for p in (kab or '').split('·')]
     keep = []
     for p in parts[1:]:
-        if re.fullmatch(r'(\d+\+? (din|hafte|mahine)|aaj) se.*', p) and not re.search(r'\(.+\)', p):
+        if (re.fullmatch(r'(\d+\+? (din|hafte|mahine)|aaj) se.*', p)
+                or re.fullmatch(r'(\d+\+? (days?|weeks|months) ago|today).*', p)) and not re.search(r'\(.+\)', p):
             continue
         p = re.sub(r'^(\d+\+? (?:din|hafte|mahine)|aaj) se ', '', p)
+        p = re.sub(r'^(\d+\+? (?:days?|weeks|months) ago|today) ', '', p)       # (the review's English age)
         p = re.sub(r'(v[\d.]+|update) (\d+ \w{3}) ko aaya \((\d+) din pehle\)', r'\1 released \2 (\3 days before)', p)
         p = re.sub(r'(v[\d.]+|update) (\d+ \w{3}) ko aaya', r'\1 released \2', p)
         p = re.sub(r'(v[\d.]+|update) usi din aaya', r'\1 released same day', p)
@@ -385,7 +397,7 @@ def key_num(fid, f):
             m = re.search(r'only ~(\d+)%', s)
             if m:
                 return '~' + m.group(1) + '%'
-        m = re.search(r'ROAS (?:\(kamai ÷ kharcha\) )?([\d.]+) → ([\d.]+)', s)
+        m = re.search(r'ROAS (?:\((?:kamai ÷ kharcha|revenue ÷ spend)\) )?([\d.]+) → ([\d.]+)', s)
         if m:
             return m.group(2)
         m = re.search(r'\(([\d.]+)%\) · was ([\d.]+)%', s)
@@ -552,7 +564,7 @@ def med_shares(medj, dname, w7, p7):
 def _chart(ch):
     ch = dict(ch)
     vals = list(ch.get('vals') or [])
-    if ch.get('fmt') == 'r1' and 'Har 1,000' in (ch.get('cap') or ''):   # per 1,000 users → % of users
+    if ch.get('fmt') == 'r1' and re.search(r'Har 1,000|^Uninstall rate \(% of daily active users\)', ch.get('cap') or ''):   # per 1,000 users → % of users
         vals = [None if v is None else v / 10 for v in vals]
         ch['before'] = None if ch.get('before') is None else ch['before'] / 10
         ch['fmt'] = 'pct2'
@@ -583,9 +595,9 @@ def feature(fid, f, day, card_at, at_of):
         o['since'] = kab_rest(q.get('kab'))
         o['first'] = first_of(q, day, card_at, at_of)
         kis = plain(o['q']['kis'])
-        m = re.search(r'⏳ Not final(?: · final (\d+ \w{3}(?: \d{4})?))?', kis)
+        m = re.search(r'⏳ Not final(?: · final (?:on )?(\d+ \w{3}(?: \d{4})?))?', kis)
         o['prov'] = (m.group(1) or '') if m else None
-        o['q']['kis'] = re.sub(r' · ⏳ Not final(?: · final \d+ \w{3}(?: \d{4})?)?', '', kis)
+        o['q']['kis'] = re.sub(r' · ⏳ Not final(?: · final (?:on )?\d+ \w{3}(?: \d{4})?)?', '', kis)
     det = f.get('detail')
     if det:
         o['chart'] = _chart(det['chart']) if det.get('chart') else None

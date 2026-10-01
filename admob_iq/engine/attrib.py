@@ -619,7 +619,7 @@ def pct(n):
     return ("+%d%%" % n) if n > 0 else ("−%d%%" % -n) if n < 0 else "0%"
 
 
-# what the one-liner counts, named first (its "kul" is that count's change, never the headline's rate or per-1,000)
+# what the one-liner counts, named first (its "total" is that count's change, never the headline's rate or per-1,000)
 # (the page's SPLIT_SUBJ / SPLIT_FW / SPLIT_PW must say the very same words — tests/test_split_frontend compares the
 # lines). "ur" counts the PEOPLE uninstalling a day (F12) — never "uninstall rate", which is the headline's rate.
 SUBJ = {"ret": "old users, daily", "imp": "old users, daily", "uc": "daily uninstalls", "ur": "daily uninstalls",
@@ -667,9 +667,9 @@ def cnum(n, e):
 
 def line(split):
     """The one-liner, its counted thing first and the parts as an equation that adds up as printed:
-    `daily returns: kul +8% = from installs +20% + real −12%` (≤ 12 words); from users … (revenue total), from price …
+    `daily returns: total +8% = from installs +20% + real −12%` (≤ 12 words); from users … (revenue total), from price …
     + from revenue … (money back), from installs … + trend … + update … (update impact; the trend only when its shown %
-    isn't 0). The count form: `daily uninstalls: ~−150 = from installs ~−180 + real ~+30 (kul −75%)` (a money split in the
+    isn't 0). The count form: `daily uninstalls: ~−150 = from installs ~−180 + real ~+30 (total −75%)` (a money split in the
     count form has none: its amounts need the page's currency). "" for none / notes only / no split."""
     try:
         if not split or split.get("none") or "shown" not in split:
@@ -683,10 +683,10 @@ def line(split):
         if (c or s)["trend"]:
             parts.append("trend " + f("trend"))
         parts.append(P_WORD.get(code, "real") + " " + f("per_user"))
-        subj = SUBJ.get(code, "kul")
+        subj = SUBJ.get(code, "total")
         if c:
-            return "%s: %s = %s (kul %s)" % (subj, cnum(c["total"], c["exp"]), " + ".join(parts), pct(s["total"]))
-        return "%s: kul %s = %s" % (subj, pct(s["total"]), " + ".join(parts))
+            return "%s: %s = %s (total %s)" % (subj, cnum(c["total"], c["exp"]), " + ".join(parts), pct(s["total"]))
+        return "%s: total %s = %s" % (subj, pct(s["total"]), " + ".join(parts))
     except Exception:
         return ""
 

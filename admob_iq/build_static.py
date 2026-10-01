@@ -181,7 +181,7 @@ def _urgent(line):
 
 
 def _split_tail(a, s):
-    """" · <the change's split in one line>" for a GA4 alert (SPEC_SPLIT S8: installs se … · asli … (kul …)) — "" when it
+    """" · <the change's split in one line>" for a GA4 alert (SPEC_SPLIT S8: installs se … · real … (total …)) — "" when it
     has none, for an update's verdict (its rows carry theirs), or with SPLIT off. The message itself never changes."""
     if not s.get("split", True):
         return ""
