@@ -7045,12 +7045,12 @@ function gdCell(a,k){ const g=gdMeta(), r=g&&g.apps[a.id], lab=GDL[k];
 // they already rise: c.eng) against the all-time avg: an open alert at day N (strongest); "a real change" (its test, after
 // the day-to-day swings: af) → Worse / Better; |z| ≥ 2 with its arrow the same way → Watch (or a light Better); else Normal
 function gdJudge(c){ if(!c.all) return {s:null,word:'Too early',why:'All-time avg abhi nahi'};
-  if(!c.lat) return {s:null,word:'Too early',why:'Last pakka week abhi nahi'};
+  if(!c.lat) return {s:null,word:'Too early',why:'Latest week abhi nahi'};
   if(c.young) return {s:null,word:'Too early',why:'App 8 hafte se nayi — all-time avg launch se, tulna abhi nahi'};
   const E=c.eng||c.lat, dE=Math.sign(E.p-c.all.p), ed=c.d==='up'?1:(c.d==='down'?-1:0);
-  const wk=c.eng?' (naye installs '+span(c.eng.f,c.eng.t)+', ⏳)':'';
+  const wk=c.eng?' (new installs '+span(c.eng.f,c.eng.t)+', ⏳)':'';
   if(c.al){ const ds=ed||dE; return {s:3*ds,word:ds>0?'Worse':'Better',why:'engine ka alert khula'+wk+' — '+(ds>0?'zyada':'kam')+' log ja rahe'}; }
-  if(c.ls) return {s:null,word:'Too early',why:'last pakka week me installs kam (engine ke liye chhota sample)'};
+  if(c.ls) return {s:null,word:'Too early',why:'latest week me installs kam (engine ke liye chhota sample)'};
   if(c.af&&dE){ const h=heatP(E,c.all,true), lv=Math.max(2,Math.abs(h.s||0));
     return {s:lv*dE,word:dE>0?'Worse':'Better',why:'engine: all-time se pakka badlaav'+wk+' — aam utaar-chadhaav se kaafi bada'}; }
   if(c.az!=null&&Math.abs(c.az)>=2&&ed&&ed===dE) return {s:ed,word:ed>0?'Watch':'Better',why:'farak dikh raha'+wk+' (engine ka arrow '+(ed>0?'▲':'▼')+'), abhi pakka badlaav nahi'};
@@ -7060,9 +7060,9 @@ function gdTd(a,k,c){ const tk=`data-tk="gd:${a.i}:${k}"`;
   return `<td ${tk}><span class="us-hcell us-gtc ${c.s?hcls(c.s):''}"><span class="us-gtp">${pc(c.all.p,1)}</span><span class="us-gtn">${fN(c.all.x)} gone</span></span></td>`; }
 function gdName(a){ const r=(gdMeta()||{apps:{}}).apps[a.id];
   return `<div class="us-gnm" data-go="${a.i}"><div>${nmH(a)}${r&&r.since?`<div class="us-gsince">All time · since ${fd(r.since)}${r.cap?' (GA4 data yahin se)':''}</div>`:''}</div></div>`; }
-const gdHint=()=>`All time avg: har app ke launch (ya GA4 data shuru) se ab tak ke pakke installs me se kitne N din ke andar app hata chuke · bada = %, chhota = kitne log gaye · rang = last pakka week vs app ka all-time avg · hover / tap = last pakka week (dates ke saath) aur badlaav · upar ki range se alag · row click = app view`;
+const gdHint=()=>`All time avg: har app ke launch (ya GA4 data shuru) se ab tak ke pakke installs me se kitne N din ke andar app hata chuke · bada = %, chhota = kitne log gaye · rang = latest week vs app ka all-time avg · hover / tap = latest week (dates ke saath) aur badlaav · upar ki range se alag · row click = app view`;
 const gdLegend=()=>{ const sw=cls=>`<i style="background:var(--us-${cls})"></i>`;
-  return `<div class="us-legend"><span>Rang = last pakka week vs app ka all-time avg:</span><span class="us-sw">${sw('h3')}${sw('h2')}${sw('h1')}</span><span>zyada gaye (Worse / Watch)</span><span class="us-sw"><i style="border:1px solid var(--line2)"></i></span><span>Normal</span><span class="us-sw">${sw('g1')}${sw('g2')}${sw('g3')}</span><span>kam gaye (Better)</span><span>· — = abhi pakka nahi (hover = wajah)</span></div>`; };
+  return `<div class="us-legend"><span>Rang = latest week vs app ka all-time avg:</span><span class="us-sw">${sw('h3')}${sw('h2')}${sw('h1')}</span><span>more gone (Worse / Watch)</span><span class="us-sw"><i style="border:1px solid var(--line2)"></i></span><span>Normal</span><span class="us-sw">${sw('g1')}${sw('g2')}${sw('g3')}</span><span>fewer gone (Better)</span><span>· — = not final yet (hover = why)</span></div>`; };
 function gdNoga(){ const q=ST.q.trim().toLowerCase();
   return NOGA.filter(n=>{ if(ST.fst.size&&!ST.fst.has('lagu')) return false; if(ST.facc&&n.acc!==ST.facc) return false; if(ST.fsz&&n.sz!==ST.fsz) return false; if(q&&(n.nm||'').toLowerCase().indexOf(q)<0) return false; return true; }); }
 const gdChg=c=>(c&&c.all&&c.lat&&!c.young)?c.lat.p-c.all.p:null;
@@ -7076,12 +7076,12 @@ function gdParts(){ const rows=filtered().map(o=>({o,c:GDL.map((_,k)=>gdCell(o.a
     +gdNoga().map(n=>`<tr><td><div class="us-gnm"><div><span class="us-nmt us-ain">${appIconId(n.id,String(n.nm||''),16)}<span class="us-aint">${esc(String(n.nm||'').replace(/ · [^·]+$/,''))} <span class="us-acn">· ${esc(n.acc)}</span></span></span></div></div></td><td class="us-l us-faint us-gna" colspan="${GDL.length}">N/A — ${esc(n.why)}</td></tr>`).join('');
   return {head,body,cnt:rows.length+gdNoga().length,tot:A.length+NOGA.length}; }
 // the panel (All apps, right under "Saari apps"): the same search / status / account / size filters as that table (ST)
-function gdHtml(){ gdWire(); if(!gdMeta()) return `<div class="us-ph"><div><div class="us-eyebrow">Har app · install ke baad din ke hisaab se</div><h2>Gone by day N</h2><div class="us-hint">⏳ Is table ka data agle refresh me aayega</div></div></div>`;
+function gdHtml(){ gdWire(); if(!gdMeta()) return `<div class="us-ph"><div><div class="us-eyebrow">Each app · by days after install</div><h2>Gone by day N</h2><div class="us-hint">⏳ Is table ka data agle refresh me aayega</div></div></div>`;
   const P0=gdParts(), accs=[...new Set(A.map(a=>a.acc).concat(NOGA.map(n=>n.acc)))].sort();
   const bar=`<div class="us-tbar"><input class="us-srch" id="us-gq" type="search" placeholder="App ya account dhoondo…" value="${esc(ST.q)}" aria-label="Search apps"><div class="us-fchips" id="us-gfst">${Object.keys(SW).map(s=>`<button class="us-f-${s}" data-gst="${s}" aria-pressed="${ST.fst.has(s)}">${SW[s]}</button>`).join('')}</div>`
-    +`<select class="us-tsel" id="us-gfacc" aria-label="Account"><option value="">Sab accounts</option>${accs.map(x=>`<option${ST.facc===x?' selected':''}>${esc(x)}</option>`).join('')}</select>`
-    +`<select class="us-tsel" id="us-gfsz" aria-label="Size"><option value="">Sab size</option>${['badi','madhyam','chhoti'].map(x=>`<option value="${x}"${ST.fsz===x?' selected':''}>${x==='badi'?'Badi':(x==='madhyam'?'Madhyam':'Chhoti')}</option>`).join('')}</select><span class="us-tcount" id="us-gcount">${P0.cnt} / ${P0.tot} apps</span></div>`;
-  return `<div class="us-ph"><div><div class="us-eyebrow">Har app · all time · install ke baad din ke hisaab se</div><h2>Gone by day N</h2><div class="us-hint" id="us-ghint">${gdHint()}</div></div>`
+    +`<select class="us-tsel" id="us-gfacc" aria-label="Account"><option value="">All accounts</option>${accs.map(x=>`<option${ST.facc===x?' selected':''}>${esc(x)}</option>`).join('')}</select>`
+    +`<select class="us-tsel" id="us-gfsz" aria-label="Size"><option value="">All sizes</option>${['badi','madhyam','chhoti'].map(x=>`<option value="${x}"${ST.fsz===x?' selected':''}>${x==='badi'?'Big':(x==='madhyam'?'Medium':'Small')}</option>`).join('')}</select><span class="us-tcount" id="us-gcount">${P0.cnt} / ${P0.tot} apps</span></div>`;
+  return `<div class="us-ph"><div><div class="us-eyebrow">Each app · all time · by days after install</div><h2>Gone by day N</h2><div class="us-hint" id="us-ghint">${gdHint()}</div></div>`
     +`<div class="us-right"><div class="us-seg" id="us-gby" role="group" aria-label="Sort by"><button data-by="all" aria-pressed="${GST.by==='all'}">Sort by all-time %</button><button data-by="chg" aria-pressed="${GST.by==='chg'}">Sort by change</button></div></div></div>`
     +`${bar}<div class="us-tw us-st-tw"><table class="us-st us-gdt"><thead id="us-gthead"><tr>${P0.head}</tr></thead><tbody id="us-gtbody">${P0.body}</tbody></table></div>${gdLegend()}`; }
 function gdSync(){ const ae=document.activeElement;
@@ -7106,22 +7106,22 @@ function gdWire(){ if(GDW) return; GDW=true;
 TIPS.gd=(i,k)=>{ const a=A[+i]; if(!a) return ''; k=+k; const c=gdCell(a,k), lab=GDL[k];
   let h=`<div class="us-tt">${esc(a.nm)} · ${lab}</div>`;
   if(!c.all&&!c.lat) return h+`<div>— ${esc(c.why||'')}</div>`;
-  const line=(l,w)=>trow(l,pc(w.p,1))+`<div class="us-tsm">installs ${span(w.f,w.t)} · ${gdCnt(w)} gaye</div>`;
+  const line=(l,w)=>trow(l,pc(w.p,1))+`<div class="us-tsm">installs ${span(w.f,w.t)} · ${gdCnt(w)} gone</div>`;
   if(c.all) h+=line('All time',c.all);
-  if(c.lat) h+=line('Last pakka week',c.lat);
-  if(c.eng) h+=line('Naye installs ⏳ (abhi badh sakta)',c.eng);
-  if(c.prev) h+=line('Pehle 4 hafte',c.prev);
+  if(c.lat) h+=line('Latest week',c.lat);
+  if(c.eng) h+=line('New installs ⏳ (may still rise)',c.eng);
+  if(c.prev) h+=line('Previous 4 weeks',c.prev);
   if(c.all&&c.lat){ const dp=(c.lat.p-c.all.p)*100, ppl=(c.lat.p-c.all.p)*c.lat.n;
-    h+='<div class="us-sep"></div>'+trow('Badlaav',pc(c.all.p,1)+' → '+pc(c.lat.p,1))
-      +`<div>${Math.abs(dp)<0.05?'All-time jitne hi gaye':(dp>0?'+':MI)+Math.abs(dp).toFixed(1)+'% '+(dp>0?'zyada':'kam')+' gaye all-time se'} · ≈ ${fS(ppl)} log <span class="us-tsm">(us week ke installs pe)</span></div>`; }
+    h+='<div class="us-sep"></div>'+trow('Change',pc(c.all.p,1)+' → '+pc(c.lat.p,1))
+      +`<div>${Math.abs(dp)<0.05?'All-time jitne hi gaye · ≈ '+fS(ppl)+' log':'≈ '+fS(ppl)+' log ('+(dp>0?'+':MI)+Math.abs(dp).toFixed(1)+'%) · all-time se '+(dp>0?'zyada':'kam')+' gaye'} <span class="us-tsm">(us week ke installs pe)</span></div>`; }
   h+=`<div class="us-tsm"><b>${c.word}</b>${c.why?' — '+esc(c.why):''}</div>`;
-  if(c.pend) h+=`<div class="us-tsm">⏳ Not final · ${fd(c.pend.pk)} ko pakka — ${span(c.pend.f,c.pend.t)} ke installs ka ${lab} abhi pakka nahi, isliye nahi gine</div>`;
-  if(c.fb) h+=`<div class="us-tsm">⚠️ GA4 data adhoora${c.fb[1]&&c.fb[1].length?' ('+c.fb[1].map(fd).join(', ')+')':''} — last pakka week me us se pehle ke installs</div>`;
+  if(c.pend) h+=`<div class="us-tsm">⏳ Not final · final on ${fd(c.pend.pk)} — ${span(c.pend.f,c.pend.t)} ke installs ka ${lab} abhi pakka nahi, isliye nahi gine</div>`;
+  if(c.fb) h+=`<div class="us-tsm">⚠️ GA4 data adhoora${c.fb[1]&&c.fb[1].length?' ('+c.fb[1].map(fd).join(', ')+')':''} — latest week me us se pehle ke installs</div>`;
   if(c.young&&c.all) h+=`<div class="us-tsm">All time = launch (${fd(c.all.f)}) se har pakka install din — app 8 hafte se nayi</div>`;
   return h; };
 TIPS.gdh=k=>{ k=+k; const g=gdMeta(); if(!g) return ''; const N=+g.cols[k];
-  return `<div class="us-tt">${GDL[k]}</div><div>All time avg: ${k?'install ke '+N+' din ke andar':'install ke din hi'} app hataane wale — har app ke launch se ab tak</div>`
-    +`<div class="us-tsm">Rang = last pakka week vs all-time · cell pe hover / tap = poora hisaab · Click = sort (${GST.by==='chg'?'change':'all-time %'})</div>`; };
+  return `<div class="us-tt">${GDL[k]}</div><div>All time avg: ${k?'Uninstalled within '+N+' days':'Same day uninstall'} — har app ke launch se ab tak</div>`
+    +`<div class="us-tsm">Rang = latest week vs all-time · cell pe hover / tap = poora hisaab · Click = sort (${GST.by==='chg'?'change':'all-time %'})</div>`; };
 // one app's view (drawer / app page): its 9 checkpoints as labelled bars — the bar = all time, ┃ = the last pakka week
 // (coloured by the cell's judgement) — and the same row as the table
 function gdApp(o,mode){ const a=o.a, g=gdMeta(); if(!g) return ''; const cells=GDL.map((_,k)=>gdCell(a,k)), r=g.apps[a.id];
@@ -7131,11 +7131,11 @@ function gdApp(o,mode){ const a=o.a, g=gdMeta(); if(!g) return ''; const cells=G
     const lc=c.eng?'':cls;                            // the colour sits on the week the judgement is about
     const mk=c.all?(c.lat?`<i class="us-gbk${lc}" style="left:${at(c.lat.p)}%"></i>`:'')+(c.eng?`<i class="us-gbk us-gbn2${cls}" style="left:${at(c.eng.p)}%"></i>`:''):'';
     return `<div class="us-gbr" data-tk="gd:${a.i}:${k}"><span class="us-gbl">${GDL[k]}</span><span class="us-gbt">${c.all?`<i class="us-gbf" style="width:${w.toFixed(1)}%"></i>`:''}${mk}</span>`
-      +`<span class="us-gbv">${c.all?`<b>${pc(c.all.p,1)}</b>${c.lat?` <span class="us-gbx${lc}">· last ${pc(c.lat.p,1)}</span>`:''}${c.eng?` <span class="us-gbx${cls}">· naye ${pc(c.eng.p,1)} ⏳</span>`:''}<small>${gdCnt(c.all)}</small>`:'<span class="us-faint">—</span>'}</span></div>`; }).join('');
+      +`<span class="us-gbv">${c.all?`<b>${pc(c.all.p,1)}</b>${c.lat?` <span class="us-gbx${lc}">· latest week ${pc(c.lat.p,1)}</span>`:''}${c.eng?` <span class="us-gbx${cls}">· new installs ${pc(c.eng.p,1)} ⏳</span>`:''}<small>${gdCnt(c.all)}</small>`:'<span class="us-faint">—</span>'}</span></div>`; }).join('');
   const hd=mode==='p'?'h2':'h2 style="font-size:15px"';
-  return `<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">All time · install ke baad din ke hisaab se</div><${hd}>Gone by day N</h2><div class="us-hint">All time avg${r&&r.since?' (since '+fd(r.since)+')':''}: naye users me se kitne N din ke andar app hata chuke · bar = all time · ┃ = last pakka week · ┆ = naye installs (⏳ abhi badh sakta, jab engine unhe dikhata hai) · rang = all-time se farak · % pehle, log neeche · hover / tap = poora hisaab</div></div></div>`
+  return `<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">All time · by days after install</div><${hd}>Gone by day N</h2><div class="us-hint">All time avg${r&&r.since?' (since '+fd(r.since)+')':''}: naye users me se kitne N din ke andar app hata chuke · bar = all time · ┃ = latest week · ┆ = new installs (⏳ abhi badh sakta, jab engine unhe dikhata hai) · rang = all-time se farak · % pehle, log neeche · hover / tap = poora hisaab</div></div></div>`
     +`<div class="us-gbars">${bars}</div><div class="us-tw"><table class="us-mini us-gdt"><thead><tr>${GDL.map((l,k)=>`<th data-tk="gdh:${k}">${l}</th>`).join('')}</tr></thead><tbody><tr>${cells.map((c,k)=>gdTd(a,k,c)).join('')}</tr></tbody></table></div>`
-    +`<div class="us-clg"><span class="us-k"><i style="background:var(--us-s-out);height:9px"></i>All time</span><span class="us-k"><i style="background:var(--ink);width:3px;height:12px;border-radius:1px"></i>last pakka week</span><span class="us-k"><i style="border-left:3px dotted var(--ink2);width:0;height:12px;border-radius:0"></i>naye installs ⏳</span><span class="us-k"><i style="background:var(--bad);width:3px;height:12px;border-radius:1px"></i>zyada gaye</span><span class="us-k"><i style="background:var(--good);width:3px;height:12px;border-radius:1px"></i>kam gaye</span></div></div>`; }
+    +`<div class="us-clg"><span class="us-k"><i style="background:var(--us-s-out);height:9px"></i>All time</span><span class="us-k"><i style="background:var(--ink);width:3px;height:12px;border-radius:1px"></i>Latest week</span><span class="us-k"><i style="border-left:3px dotted var(--ink2);width:0;height:12px;border-radius:0"></i>New installs ⏳</span><span class="us-k"><i style="background:var(--bad);width:3px;height:12px;border-radius:1px"></i>more gone</span><span class="us-k"><i style="background:var(--good);width:3px;height:12px;border-radius:1px"></i>fewer gone</span></div></div>`; }
 
 /* ================= footer ================= */
 function footHtml(){ return `<summary>Ye number kaise bane? (chhoti si list)</summary><ul>
@@ -13061,10 +13061,10 @@ function rvMSpan(seg,fx,tag){ const tg=tag||"span";
   return "<"+tg+' class="rv-m" data-usd="'+rvEsc(Number(seg.usd))+'" data-s="'+rvEsc(seg.s||"")+'" data-sign="'+(seg.sign?1:0)+'" data-p="'+(seg.p==2?2:0)+'"'+
     (fx?' data-fx="'+rvEsc(fx)+'"':"")+">"+rvEsc(rvMoney(seg.usd,seg.s||"",seg.sign,seg.p,fx))+"</"+tg+">"; }
 // rich text (§A.5): a string, or [string | {usd,s,sign,p}] — every string escaped, money follows ₹/$.
-function rvRt(rt,fx){ if(rt==null) return ""; if(typeof rt==="string"||typeof rt==="number") return rvEsc(rt);
+function rvRt(rt,fx){ if(rt==null) return ""; if(typeof rt==="string") return rvEsc(smpCompat(rt)); if(typeof rt==="number") return rvEsc(rt);
   if(!Array.isArray(rt)) return "";
   return rt.map(x=> typeof x==="string"? rvEsc(smpCompat(x)) : typeof x==="number"? rvEsc(x) : (x&&typeof x==="object"&&isFinite(Number(x.usd)))? rvMSpan(x,fx) : "").join(""); }   // older stored days: said the new way (smpCompat)
-function rvRtText(rt,fx){ if(rt==null) return ""; if(!Array.isArray(rt)) return String(rt);
+function rvRtText(rt,fx){ if(rt==null) return ""; if(!Array.isArray(rt)) return typeof rt==="string"?smpCompat(rt):String(rt);
   return rt.map(x=> typeof x==="string"? smpCompat(x) : (x&&typeof x==="object"&&isFinite(Number(x.usd)))? rvMoney(x.usd,x.s||"",x.sign,x.p,fx) : "").join(""); }
 function rvFeats(doc){ return (doc&&Array.isArray(doc.feats)&&doc.feats.length)? doc.feats : RV_FEATS; }
 function rvFlab(doc,f){ if(!f||f==="app") return RV_TXT.poori; const x=rvFeats(doc).find(q=>q[0]===f); return x?x[1]:f; }
@@ -14187,8 +14187,8 @@ function retChart(a,W){ const R=a.x&&a.x.ret; if(!R) return ''; const v=R.v, d=R
   [...new Set([fi,li,mi,mo])].forEach(i=>{ if(i>=0&&v[i]!=null) s+=lab(i,i===li?'var(--good)':'var(--ink2)'); });
   s+=T(pl,H-4,fd(d[0]),{c:'var(--faint)',fs:9.5,fw:500})+T(W-pr,H-4,fd(d[n-1]),{a:'end',c:'var(--faint)',fs:9.5,fw:500});
   s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
-  CH[id]={X,n,w:W,tip:i=>`<div class="rs-tt">${esc(wd(d[i]).slice(0,3))}, ${fd(d[i])}</div><div class="rs-row"><span>Returning users</span><b>${v[i]==null?'—':nf.format(v[i])}</b></div>${R.final&&d[i]>R.final?'<div class="rs-tsm rs-prov">⏳ Not final — GA4 abhi badal sakta hai</div>':''}`};
-  return `<div class="rs-chartp"><div class="rs-cap">Returning users per day · GA4 · ${fd(d[0])}–${fd(d[n-1])}${R.final?' (final till '+fd(R.final)+')':''}</div>${s}</div>`; }
+  CH[id]={X,n,w:W,tip:i=>`<div class="rs-tt">${esc(wd(d[i]).slice(0,3))}, ${fd(d[i])}</div><div class="rs-row"><span>Old users</span><b>${v[i]==null?'—':nf.format(v[i])}</b></div>${R.final&&d[i]>R.final?'<div class="rs-tsm rs-prov">⏳ Not final — GA4 abhi badal sakta hai</div>':''}`};
+  return `<div class="rs-chartp"><div class="rs-cap">Old users per day · GA4 · ${fd(d[0])}–${fd(d[n-1])}${R.final?' (final till '+fd(R.final)+')':''}</div>${s}</div>`; }
 // mediation: every network's share of the revenue (the card's 7 days), the actual revenue first, % beside it
 function medChart(a){ const sh=(a.x&&a.x.med)||[]; if(!sh.length) return ''; const C=['var(--cyan)','var(--purple)','var(--rs-blue-s)','var(--watch)','var(--good)','#f472b6'];
   const w7=FILE.meta.w7||{}, p7=FILE.meta.p7||{};
@@ -14235,7 +14235,7 @@ function heroHtml(){ const n=A.length, d=doneN(); const cnt={ok:0,note:0,flag:0,
   h+=`<button class="rs-sc rs-good" type="button" data-rsfilter="clear" aria-pressed="${ST.filter==='clear'}"><span class="rs-t"><span class="rs-ic">✅</span>All clear</span><span class="rs-big">${CL.length}<small>apps</small></span><span class="rs-ln">${CL.slice(0,6).map(a=>`<b>${esc(String(a.name).trim())}</b> <span class="rs-muted">· ${esc(a.acct)}</span>`).join('<br>')+(CL.length>6?` <span class="rs-muted">+${CL.length-6}</span>`:'')||'—'}</span></button>`;
   if(big){ const top6=mv.slice(0,6), mxd=Math.max(...top6.map(x=>Math.abs(x.d)),1e-9), br=rel(big.a.y,big.a.us);
     const sv=`<div class="rs-mvl" role="list" aria-label="Six biggest changes, yesterday vs usual">${top6.map(x=>{ const neg=x.d<0, w=(Math.abs(x.d)/mxd*50).toFixed(1); return `<div class="rs-mvr" role="listitem" data-tk="app:${esc(x.a.key)}"><span class="rs-mvn">${esc(String(x.a.name).trim())} <span class="rs-muted">· ${esc(x.a.acct)}</span></span><span class="rs-mvb"><i style="${neg?'right:50%':'left:50%'};width:${w}%;background:${neg?'var(--bad)':'var(--good)'}"></i></span><b class="${neg?'rs-bad':'rs-good'}">${mH(x.d,{sign:1})} <small>${pct(rel(x.a.y,x.a.us),0)}</small></b></div>`; }).join('')}</div>`;
-    h+=`<div class="rs-sc rs-wide ${big.d<0?'rs-bad':'rs-good'}" role="button" tabindex="0" data-rsgo="${esc(big.a.key)}"><span class="rs-t"><span class="rs-ic">📈</span>Biggest change today · yesterday vs usual</span><div class="rs-mov"><div class="rs-mvbig"><span class="rs-big">${mH(big.d,{sign:1})}<small>${pct(br)}</small></span><span class="rs-ln"><b>${esc(String(big.a.name).trim())}</b> <span class="rs-muted">· ${esc(big.a.acct)}</span></span><span class="rs-ln">Yesterday ${mH(big.a.y)} vs usual ${mH(big.a.us,{s:'/day'})}</span><span class="rs-ln rs-muted rs-small">${Math.abs(br||0)<0.05?'Bada number, par % chhota — normal utaar-chadhaav jaisa':'Card kholo — kya badla dekho'}</span></div>${sv}</div></div>`; }
+    h+=`<div class="rs-sc rs-wide ${big.d<0?'rs-bad':'rs-good'}" role="button" tabindex="0" data-rsgo="${esc(big.a.key)}"><span class="rs-t"><span class="rs-ic">📈</span>Biggest change today · yesterday vs usual</span><div class="rs-mov"><div class="rs-mvbig"><span class="rs-big">${mH(big.d,{sign:1})}<small>${pct(br)}</small></span><span class="rs-ln"><b>${esc(String(big.a.name).trim())}</b> <span class="rs-muted">· ${esc(big.a.acct)}</span></span><span class="rs-ln">Yesterday ${mH(big.a.y)} vs usual ${mH(big.a.us,{s:'/day'})}</span><span class="rs-ln rs-muted rs-small">${Math.abs(br||0)<0.05?'Bada number, par % chhota — normal utaar-chadhaav jaisa':'Open the card — kya badla dekho'}</span></div>${sv}</div></div>`; }
   return h+'</div>'; }
 
 /* ================= today: the feature map (every box says what it is, at every width) ================= */
@@ -14327,7 +14327,7 @@ function tableHtml(V){ const {k,d}=ST.sort; const L=V.slice().sort((x,y)=>{ cons
      +`<td class="rs-wh">${nw?`${esc(FN(nw.f))} · ${ageH(nw.g)}<br><span class="rs-faint">${esc(cameT(a.f[nw.f]).replace(/ · (on the first card|when the feature started)$/,''))}${nw.g.start?' · started '+fd(nw.g.start):''}</span>`:'<span class="rs-faint">—</span>'}</td>`
      +`<td class="rs-tl">${pillH(a.key)}</td><td>${fl.length?`🚩 ${fl.length}`:'<span class="rs-faint">—</span>'}</td><td><button type="button" class="rs-btn rs-sm rs-ok" id="rs-t-ok-${esc(a.key)}" data-rsact="ok" data-k="${esc(a.key)}" aria-pressed="${s==='ok'||s==='note'}" aria-label="Got it · Reviewed — ${esc(nameP(a))}"${canW()?'':' disabled'}>✅ Got it</button></td></tr>`; });
   return h+'</tbody></table></div>'; }
-function howHtml(){ const M=FILE.meta; return `<summary>Ye page kaise bana (how this works)</summary><ul>${(M.how||[]).map(x=>`<li>${rt(x)}</li>`).join('')}<li>Studio: feature lines owner ke rules me — “Same day uninstall”, actual number pehle aur % saath me (cohort data se gina), units /day. Charts usi data se jo card ne padha: AdMob placements (revenue), GA4 cohort (same day uninstall), GA4 daily (returning users), AdMob mediation (networks) — card ke din tak hi.</li><li>Har click asli Review API pe save hota hai (team ke saath) — wahi jo “🗂 Old views” ke buttons karte hain.</li></ul>`; }
+function howHtml(){ const M=FILE.meta; return `<summary>Ye page kaise bana (how this works)</summary><ul>${(M.how||[]).map(x=>`<li>${rt(x)}</li>`).join('')}<li>Studio: feature lines owner ke rules me — “Same day uninstall”, actual number pehle aur % saath me (install-week data se gina), units /day. Charts usi data se jo card ne padha: AdMob placements (revenue), GA4 install weeks (same day uninstall), GA4 daily (old users), AdMob mediation (networks) — card ke din tak hi.</li><li>Har click asli Review API pe save hota hai (team ke saath) — wahi jo “🗂 Old views” ke buttons karte hain.</li></ul>`; }
 
 /* ================= drawer (the full card) ================= */
 function layer(){ let L=$('rs-layer'); if(L) return L;
@@ -14507,7 +14507,7 @@ function panelBody(p){ const a=AK[p.key], btn=(act,t,pri)=>`<button type="button
       return `<h4>💤 Snooze · ${esc(fl)}</h4>`+help('Pata hai (jaani-maani baat) — itne din ye baat card ko upar nahi laayegi. Uske baad phir dikhegi.')+`<div class="rs-row2" role="radiogroup" aria-label="How many days">${[7,14].map(n=>`<label class="rs-radio"><input type="radio" name="rs-snzd" value="${n}" data-rsdays="1"${(p.days||7)===n?' checked':''}> ${n} days</label>`).join('')}</div>`+ta('Note (kyun pata hai)',ph)+row(btn('snz-save','💤 Snooze',1)+btn('close','Cancel')); }
     case 'snzoff': { const z=rvSnz(RV.doc,S0(),p.key,p.f); return `<h4>💤 Snoozed · ${esc(fl)}</h4>`+help(`${z&&z.until?'Till '+fd(z.until):'Hidden'}${z&&z.who?' · '+rvWho(z.who)+' · '+esc(when(z.at)):''}${z&&z.note?' · “'+esc(z.note)+'”':''}`)+row0(btn('snz-off','Remove snooze',1)+btn('close','Cancel')); }
     case 'bulk': { const keys=p.keys||[], bad=keys.filter(k=>AK[k]&&bads(AK[k]).length), r=bad.filter(k=>nRed(AK[k])).length;
-      return `<h4>✅ Mark all ${keys.length} reviewed?</h4>`+help(bad.length?`<b class="rs-watch">Dhyan do:</b> in me ${bad.length} apps me Worse/Watch baat hai (${r} Worse, ${bad.length-r} Watch): ${bad.map(k=>esc(nameP(AK[k]))).join(', ')}. Chhoti apps hain, isliye ek saath — chahein to pehle unke card kholo.`:'Sab normal hain. (jin pe pehle se kuch hai, wo waise hi rahenge)')+row0(btn('bulk-yes','Yes, mark all reviewed',1)+btn('close','No')); }
+      return `<h4>✅ Mark all ${keys.length} reviewed?</h4>`+help(bad.length?`<b class="rs-watch">${WD.st.dhyan}:</b> in me ${bad.length} apps me Worse/Watch baat hai (${r} Worse, ${bad.length-r} Watch): ${bad.map(k=>esc(nameP(AK[k]))).join(', ')}. Chhoti apps hain, isliye ek saath — chahein to pehle unke card kholo.`:'Sab normal hain. (jin pe pehle se kuch hai, wo waise hi rahenge)')+row0(btn('bulk-yes','Yes, mark all reviewed',1)+btn('close','No')); }
     case 'dec': { const x=(S0().flags||[]).find(y=>y.id===p.fid), a2=x&&AK[x.app], c=x?(a2?nameP(a2):(x.app_label||x.app))+' · '+(x.feature?FN(x.feature):'Whole app')+' — ':'';
       return `<h4>🧑‍💼 ${esc(DEC[p.dec])}</h4>`+ta(c+DEC_LAB[p.dec],p.dec==='kaam'?'Jaise: developer ko bolo — agle update me ad unit theek kare':(p.dec==='band'?'Jaise: rewarded ad unit band karo':''))+row(btn('dec-save','Confirm: '+DEC[p.dec],1)+btn('close','Cancel')); }
   } return ''; }

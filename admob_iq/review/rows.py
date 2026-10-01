@@ -199,7 +199,7 @@ def _active_row(ctx, a, drift_keys, slow):
         if fam == "act_slow" and (aid, m) in drift_keys:
             return                                                   # M5: merged into the drift row
         rel = a.get("rel") or 0
-        fact = f"Old users/day {pct(rel, False)} {'badhe' if up else 'kam'}: {users(a['before'])} → {users(a['now'])}"
+        fact = f"Old users/day {users(a['before'])} → {users(a['now'])} ({pct(rel, False)} {'badhe' if up else 'kam'})"
         saath = None
         s = slow.get((aid, m))
         if fam == "act_slow" or (s and fam == "act_drift"):
