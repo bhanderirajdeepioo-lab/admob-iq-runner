@@ -40,7 +40,8 @@ run(`DATA = {apps_catalog: [{app_id:'s~1', app_name:'Demo Small', account_id:'pu
     {place:'demo_inter', id:'u2', app:'Demo App', country:'All', base_rev:30, severity:'warning', kind:'drop', lost:12, started:'2026-08-30', metrics:[{metric:'revenue', message:'revenue down 45%', current:16, lost:12, kind:'drop', started:'2026-08-30'}]},
     {place:'demo_show', id:'u3', app:'Demo App', country:'All', base_rev:20, severity:'watch', kind:'drop', lost:0, started:'2026-09-24', metrics:[{metric:'show_rate', message:'show_rate down 20pt', current:0.4, kind:'drop', started:'2026-09-24'}]}]},
   uninstall: __U.dashboard_uninstall, active: __A.dashboard_active, value: __V.dashboard_value};
-  UNI = __U.asset; UNIERR = false; UNICOH = {}; ACTD = {}; VALD = {}; CURVIEW = 'USD';`);
+  UNI = __U.asset; UNIERR = false; UNICOH = {}; ACTD = {}; VALD = {}; CURVIEW = 'USD';
+  ACTPF = __A.portfolio || null; ACTPFSIG = (DATA.active.portfolio || {}).sig || null; ACTPFC = null;`);   // KPIWINDOW: the pooled tiles now read this (not r.m) — preload it like active_frontend.js does
 const RESET = `SMPF={}; SMPALL=false; APP=''; UNIAPP=''; ACTAPP=''; VALAPP=''; RANGE='30d'; innerWidth=375; UNISTEXP=''; ACTSTEXP=''; VALSTEXP=''; UNIUPALL=false;`;
 const out = {};
 function scen(name, code) { try { out[name] = String(run(`(()=>{ ${RESET} ${code} })()`)); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + ((e.stack || '').match(/at [^\n]*/g) || []).slice(0, 3).join(' < ')); out[name] = ''; } }
@@ -138,8 +139,12 @@ R.naye = { uni: (text(out.uni_pf_open).match(/🆕 (\d+) naye alert \(aaj\/kal\)
 { const a0 = UF.asset.apps[0];
   scen('how', `UNIAPP=${J(a0.app_id)}; APP=${J(a0.app)}; impSet('uni',{how:true}); try{ return uniImpHow('uni'); } finally{ impSet('uni',{how:false}); }`);
   scen('uni_cp_all', `SMPALL=true; UNICPEXP=true; let h=''; for(const a of UNI.apps){ UNIAPP=a.app_id; APP=a.app; h+=uniScreen(); } UNICPEXP=false; return h;`);
-  scen('act_pool_big', `const rows=JSON.parse(JSON.stringify(actRows())).map(r=>{ const m=r.m||(r.m={}); m.ret_dau=Object.assign({},m.ret_dau||{},{v:800000,base:760000}); r.ctx=Object.assign({},r.ctx||{},{new:150000}); return r; });
-    return actSumPortfolio(rows);`); }
+  // the "Purane users (roz)" pooled tile now reads ACTPF (not r.m — KPIWINDOW): inflate ITS a1/ret arrays so the
+  // pooled total crosses into lakh territory, same intent as before (a big number must say "lakh", never "…M")
+  scen('act_pool_big', `const rows=actRows(), keepPF=ACTPF, F=JSON.parse(JSON.stringify(ACTPF));
+    F.apps.forEach(a=>{ a.a1=(a.a1||[]).map(v=>v==null?v:v*1000); a.ret=(a.ret||[]).map(v=>v==null?v:v*1000); });
+    ACTPF=F; ACTPFC=null;
+    try{ return actSumPortfolio(rows); } finally{ ACTPF=keepPF; ACTPFC=null; }`); }
 // ── 4. visible words on every screen of the three tabs + the Alerts screen ──
 scen('alerts', `const keep=screenDiv; screenDiv=id=>({dataset:{screen:id},innerHTML:''}); try{ return renderAlerts().innerHTML; } finally{ screenDiv=keep; }`);
 scen('alerts_app', `const keep=screenDiv; screenDiv=id=>({dataset:{screen:id},innerHTML:''}); APP='Demo App'; try{ return renderAlerts().innerHTML; } finally{ screenDiv=keep; APP=''; }`);

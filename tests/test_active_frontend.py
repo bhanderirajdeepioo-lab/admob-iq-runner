@@ -406,7 +406,7 @@ def test_prov_and_est_marks(report, fixture):
         L = d.get("latest") or {}
         assert a["latest"] == ""                                          # one metric = one number: no single-day line (§6.5)
         assert a["prov_note"] == bool(d.get("settled_till") and d.get("data_till") and d["settled_till"] < d["data_till"]), r["app"]
-        assert "Pichhle 7 din (" in a["kpis_today"], r["app"]                  # a fixed 7 days, whatever the Period (§6.2)
+        assert "7 din (" in a["kpis_today"], r["app"]   # KPIWINDOW: default 7 days (no longer the header's Period — a local selector; see test_kpiwindow_frontend.py)
     assert report["portfolio"]["prov_note"]
 
 

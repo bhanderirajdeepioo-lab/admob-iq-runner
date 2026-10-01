@@ -73,7 +73,8 @@ run(`DATA = {apps_catalog: [], today_date: '2026-09-25', currency: 'USD', usd_in
        active: __FA.dashboard_active, value: __FV.dashboard_value};
      UNI = __FU.asset; UNIERR = false; UNICOH = {}; ACTD = {}; VALD = {};
      for (const [k, d] of Object.entries(__FA.app_files || {})) ACTD[k] = d;
-     for (const [k, d] of Object.entries(__FV.app_files || {})) VALD[k] = d; CURVIEW='USD';`);
+     for (const [k, d] of Object.entries(__FV.app_files || {})) VALD[k] = d; CURVIEW='USD';
+     ACTPF = __FA.portfolio || null; ACTPFSIG = (DATA.active.portfolio || {}).sig || null; ACTPFC = null;`);   // KPIWINDOW: the pooled tiles now read this (not r.m) — preload it like active_frontend.js does
 const has = h => h && typeof h === 'object' && h.sp != null;
 const drawn = sp => Array.isArray(sp) && !(sp[0] === 'no' && (sp[1] === 'error' || !sp[1])) && !(sp[0] === 'pu' && sp.length < 2);
 const F = { hosts: 0, blocks: 0, missing: [], bad: [], texts: [], pooled: null, any: false };

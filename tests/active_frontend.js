@@ -268,8 +268,13 @@ const alertsTotal = extra => String(run(`${RESET} (()=>{ const keep=screenDiv, A
   try{ return renderAlerts().innerHTML; } finally{ screenDiv=keep; A.alerts=ka; } })()`));
 fx2.alerts_linked = alertsTotal(`{severity:'warning',linked:true,release:{key:'k',label:'v1.2',date:'2026-09-11'},tags:['update']}`);
 fx2.alerts_unlinked = alertsTotal(`{severity:'warning'}`);
-fx2.pool_wait = String(run(`(()=>{ ${RESET} const keep=JSON.stringify(DATA.active.apps); DATA.active.apps.forEach(r=>{ for(const k of ['d1','d7','sess','time']) if(r.m&&r.m[k]) r.m[k]=Object.assign({},r.m[k],{st:'wait',v:null,s:null}); });
-  try{ return actPortfolio(); } finally{ DATA.active.apps=JSON.parse(keep); } })()`));
+// "Came back next day / after a week" still read the OLD per-app summary row (r.m: their own judged install week,
+// untouched by KPIWINDOW — see actSumPortfolio); "Sessions per user" / "Time per user" now come from the portfolio's
+// own raw daily file (ACTPF, like the other KPIWINDOW tiles), so a no-data scenario for them has to blank THAT file
+fx2.pool_wait = String(run(`(()=>{ ${RESET} const keep=JSON.stringify(DATA.active.apps), keepPF=ACTPF?JSON.stringify(ACTPF):null;
+  DATA.active.apps.forEach(r=>{ for(const k of ['d1','d7','sess','time']) if(r.m&&r.m[k]) r.m[k]=Object.assign({},r.m[k],{st:'wait',v:null,s:null}); });
+  if(ACTPF){ const F=JSON.parse(JSON.stringify(ACTPF)); F.apps.forEach(a=>{ a.s=[]; a.t=[]; }); ACTPF=F; ACTPFC=null; }
+  try{ return actPortfolio(); } finally{ DATA.active.apps=JSON.parse(keep); if(keepPF){ ACTPF=JSON.parse(keepPF); } ACTPFC=null; } })()`));
 fx2.young_tile = String(run(`(()=>{ ${RESET} const r=DATA.active.apps.find(x=>x.key===${J(rows[0].key)}), d=JSON.parse(JSON.stringify(ACTD[r.key]));
   d.tiles.ret_dau=Object.assign({},d.tiles.ret_dau,{st:'low',why:'young',rel:0.99}); d.tiles.arpdau=Object.assign({},d.tiles.arpdau,{st:'low',why:'few',rel:1.27}); return actSumCard(d,r); })()`));
 

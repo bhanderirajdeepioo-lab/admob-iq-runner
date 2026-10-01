@@ -886,6 +886,24 @@
   body[data-screen="uninstall"] #rangectl,body[data-screen="active"] #rangectl,body[data-screen="value"] #rangectl,
   body[data-screen="uninstall"] #rangecustom,body[data-screen="active"] #rangecustom,body[data-screen="value"] #rangecustom{display:none!important}
   body[data-screen="uninstall"] #smp-pick,body[data-screen="active"] #smp-pick,body[data-screen="value"] #smp-pick{display:inline-flex}
+  /* KPIWINDOW: the shared period + compare selector that drives the top KPI numbers of Uninstall / Active users /
+     Install value (replaces the hidden header Period picker on these three tabs — a local control instead) */
+  .kw-bar{margin:0 0 14px;padding:10px 12px;background:var(--raise);border:1px solid var(--line);border-radius:12px}
+  .kw-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .kw-row+.kw-row{margin-top:8px}
+  .kw-bar .chip{cursor:pointer}
+  .kw-cst{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .kw-cst input[type=date]{background:var(--panel);border:1px solid var(--line2);color:var(--ink);font:inherit;font-size:12.5px;border-radius:8px;padding:4px 8px;color-scheme:dark}
+  .kw-cst .cx{color:var(--faint)}
+  .kw-cst .lnk{cursor:pointer;color:var(--cyan);font-weight:700;font-size:12.5px}
+  .kw-cmp-l{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;color:var(--ink2)}
+  .kw-cmp-l select{background:var(--panel);border:1px solid var(--line2);color:var(--ink);font:inherit;font-size:12.5px;font-weight:650;border-radius:8px;padding:4px 8px;cursor:pointer}
+  .kw-err{margin-top:7px;font-size:12px;font-weight:650;color:var(--bad)}
+  .kw-note{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5}
+  .kw-cmp-miss{color:var(--muted);font-style:italic}
+  .kw-avg-note{display:block;margin-top:2px;font-size:10.5px;color:var(--faint)}
+  .kw-cmpline{margin-top:3px}
+  .kw-common-note{font-size:11px;color:var(--muted);margin:-4px 0 10px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -3742,22 +3760,30 @@ function uniLateTxt(L,k){ k=k||'un'; if(!L||!Array.isArray(L.ages)||!Array.isArr
 function uniReason(r){ return ({no_package:'Play Store package nahi mila — GA4 se jod nahi sakte.',no_stream:'Kisi GA4 property me is app ka Android stream nahi mila.',
   stream_list_failed:'GA4 se apps ki list nahi aa payi — agle robot run me phir try hoga.',not_fetched_yet:'GA4 data abhi aaya nahi — agle robot run me aayega.',
   fetch_failed:'GA4 se data lene me dikkat — agle robot run me phir try hoga.',same_package:'Isi Play Store app ki doosri AdMob app me iska GA4 data dikhta hai.'})[r]||'GA4 data nahi.'; }
-// Top Period → this app's GA4 window. GA4 ends at data_till (≈ today−2), so "Today"/"Yesterday" mean
-// its latest settled day, and every window is clipped to [launch (or history_start), data_till].
-function uniWindow(a){
-  const till=a&&a.data_till, hs=uniFirst(a)||till;
+// The shared KPIWINDOW selector (7/14/30/60/custom, see kwWin above) → this app's GA4 window, clipped to
+// [launch (or history_start), tillOverride || data_till]. tillOverride: the portfolio's common end date (every
+// visible app pooled to the SAME end day — see uniCommonTill); omitted on a single app, which uses its own
+// data_till (SPEC: "On a single app, use that app's own data_till").
+function uniWindow(a,tillOverride){
+  const till=tillOverride||(a&&a.data_till), hs=uniFirst(a)||till;
   const none={from:'',to:'',days:0,label:'No GA4 data',empty:true}; if(!till) return none;
-  const T=(DATA&&DATA.today_date)||till; let f=till, t=till, lab=null;
-  if(RANGE==='today'||RANGE==='yesterday') lab=uniD(till)+' · latest GA4 day';
-  else if(RANGE==='7d'||RANGE==='30d'||RANGE==='90d') f=uniAdd(till,-(parseInt(RANGE,10)-1));
-  else if(RANGE==='month') f=T.slice(0,7)+'-01';
-  else if(RANGE==='lastmonth'){ const y=+T.slice(0,4), m=+T.slice(5,7); f=(m>1?y+'-'+String(m-1).padStart(2,'0'):(y-1)+'-12')+'-01'; t=uniAdd(T.slice(0,7)+'-01',-1); }
-  else if(RANGE==='all') f=hs;
-  else if(RANGE==='custom'){ f=RCUSTOM.from||uniAdd(till,-29); t=RCUSTOM.to||till; }
-  if(f<hs) f=hs; if(t>till) t=till;
-  if(f>t) return Object.assign({},none,{label:'No GA4 data for this period yet (2-day delay)'});
-  const days=uniDiff(f,t)+1;
-  return {from:f,to:t,days,label:lab||(uniSpan(f,t)+' · '+days+'d'),empty:false};
+  const w=kwWin(hs,till);
+  if(w.empty) return Object.assign({},none,{label:'No GA4 data for this period yet'});
+  return {from:w.from,to:w.to,days:w.days,label:uniSpan(w.from,w.to)+' · '+w.days+'d',empty:false};
+}
+// the common end date for the All-apps pooled window: the MIN data_till among the apps that have one (so every
+// app is pooled over the SAME days — fixes the old "label spans N+1 days, mixing different apps' windows" bug).
+// apps: the uniWindow() `a` objects (survival/daily detail), already filtered to visible ones.
+function uniCommonTill(apps){ const t=(apps||[]).map(a=>a&&a.data_till).filter(Boolean).sort(); return t.length?t[0]:null; }
+// the fixed, ALWAYS-7-days window the "📋 All apps" table and its "Gone …" columns use — unaffected by the
+// KPIWINDOW selector (SPEC: the selection drives only the KPI tiles / pooled numbers of the top band, never this
+// table). Same clipping rules uniWindow used to apply when RANGE was permanently forced to '7d'.
+function uniWindow7(a,tillOverride){
+  const till=tillOverride||(a&&a.data_till), hs=uniFirst(a)||till;
+  const none={from:'',to:'',days:0,label:'No GA4 data',empty:true}; if(!till) return none;
+  let f=uniAdd(till,-6); if(f<hs) f=hs; if(f>till) return Object.assign({},none,{label:'No GA4 data for this period yet'});
+  const days=uniDiff(f,till)+1;
+  return {from:f,to:till,days,label:uniSpan(f,till)+' · '+days+'d',empty:false};
 }
 // Sums over a window. A missing day (null) is skipped, never counted as 0. Rate = Σuninstalls×1000 ÷
 // Σ(28-day active) — the backend's rate_now rule, so on "7 din" it equals the card's "Pichhle 7 din" (not
@@ -3780,17 +3806,34 @@ function uniSums(a,w){
   return {ins:nI?ins:null, outs:nO?outs:null, net:(nI&&nO)?ins-outs:null,
           rate:B?bU*1000/bA:(rA>0?rU*1000/rA:null), lo:B?eL/bA:null, hi:B?eH/bA:null, med:B?eM/bA:null,
           rU,rA,bU,bA,eL,eH, prov:uniKaccha(a,w.to)}; }   // prov: the window ends in kaccha days (they read low)
-function uniKpiRow(list,lab){
+// pools a list of uniSums() results (one per app, or a single one on an app page) into one portfolio total
+function uniPoolSums(list){
   let ins=0,outs=0,hI=false,hO=false,rU=0,rA=0,bU=0,bA=0,eL=0,eH=0;
-  list.forEach(x=>{ if(x.ins!=null){ins+=x.ins;hI=true;} if(x.outs!=null){outs+=x.outs;hO=true;} rU+=x.rU; rA+=x.rA; bU+=x.bU; bA+=x.bA; eL+=x.eL; eH+=x.eH; });
+  (list||[]).forEach(x=>{ if(!x) return; if(x.ins!=null){ins+=x.ins;hI=true;} if(x.outs!=null){outs+=x.outs;hO=true;}
+    rU+=x.rU||0; rA+=x.rA||0; bU+=x.bU||0; bA+=x.bA||0; eL+=x.eL||0; eH+=x.eH||0; });
   const B=bA>0, rate=B?bU*1000/bA:(rA>0?rU*1000/rA:null), lo=B?eL/bA:null, hi=B?eH/bA:null;   // same days for rate and band
-  const net=(hI&&hO)?ins-outs:null;
+  return {ins:hI?ins:null, outs:hO?outs:null, net:(hI&&hO)?ins-outs:null, rate, lo, hi, rA:B?bA:rA};   // rA: this period's active-user base (the "Matlab" line's multiplier)
+}
+// the 4-tile KPI row (Installs / Uninstalls / Net / Uninstall rate), now driven by the shared KPIWINDOW selector
+// instead of a fixed "pichhle 7 din". curList/cmpList: uniSums() results for the chosen period / the comparison
+// period (one entry per visible app, or one for a single app page — see uniPortfolio / uniDetail). w/cmpW: their
+// windows (kwWin / kwCmpWin). provSuffix: the existing "⏳ Pakka nahi · <date> ko pakka" text, appended as-is.
+function uniKpiRow(curList,cmpList,w,cmpW,provSuffix){
+  const P=uniPoolSums(curList), C=uniPoolSums(cmpList);
+  const lab=(w&&!w.empty)?(`${w.days} din (${smpSpan(w.from,w.to)})`+(provSuffix||'')):'Is range me data nahi';
   // inverted vs revenue: more uninstalls = red; "under the range" (green) only on settled days — a kaccha day
   // reads low until its late data is in, so no good news from it (a rise is real: late data only adds)
-  const rcls=(rate==null||lo==null||hi==null)?'muted':(rate>hi?'down':(rate<lo&&!list.some(x=>x.prov)?'up':'muted'));
-  return `<div class="row c4" id="uni-kpis" style="margin-bottom:14px">${kpi('📥 Installs',hI?smpCount(ins):'—',lab)}${kpi('📤 Uninstalls',hO?smpCount(outs):'—',lab)}`
-    +`${kpi('➕ Net (in − out)',net==null?'—':(net<0?'−':'+')+smpCount(Math.abs(net)),lab,net==null?'muted':(net<0?'down':'up'))}`
-    +`${kpi('📊 Uninstall rate',rate==null?'—':rate.toFixed(1),'har 1,000 users me roz · '+((lo!=null&&hi!=null)?'normal '+lo.toFixed(1)+'–'+hi.toFixed(1):(rA>0?'normal range abhi nahi':'rate abhi nahi')),rcls)}</div>`; }
+  const rcls=(P.rate==null||P.lo==null||P.hi==null)?'muted':(P.rate>P.hi?'down':(P.rate<P.lo&&!(curList||[]).some(x=>x&&x.prov)?'up':'muted'));
+  const ic=v=>smpCount(v), hasW=!!(w&&!w.empty);
+  const insCmp=hasW?kwCmpLine(P.ins||0,w.days,C.ins,cmpW,ic):'';
+  const outsCmp=hasW?kwCmpLine(P.outs||0,w.days,C.outs,cmpW,ic):'';
+  const netCmp=(hasW&&P.net!=null)?kwCmpLine(P.net,w.days,C.net,cmpW,v=>(v<0?'−':'+')+ic(Math.abs(v))):'';
+  const rateCmp=(hasW&&P.rate!=null)?kwRatePctLine(P.rate/1000,w.days,C.rate!=null?C.rate/1000:null,cmpW,
+    {base:P.rA,perDay:true,what:'uninstall',est:(curList||[]).some(x=>x&&x.prov)}):'';
+  const brk=t=>t?`<div class="kw-cmpline">${t}</div>`:'';
+  return `<div class="row c4" id="uni-kpis" style="margin-bottom:14px">${kpi('📥 Installs',P.ins!=null?smpCount(P.ins):'—',lab+brk(insCmp))}${kpi('📤 Uninstalls',P.outs!=null?smpCount(P.outs):'—',lab+brk(outsCmp))}`
+    +`${kpi('➕ Net (in − out)',P.net==null?'—':(P.net<0?'−':'+')+smpCount(Math.abs(P.net)),lab+brk(netCmp),P.net==null?'muted':(P.net<0?'down':'up'))}`
+    +`${kpi('📊 Uninstall rate',P.rate==null?'—':kwPct(P.rate/1000),'users roz app hataate · '+((P.lo!=null&&P.hi!=null)?'normal '+kwPct(P.lo/1000)+'–'+kwPct(P.hi/1000):(P.rate!=null?'normal range abhi nahi':'rate abhi nahi'))+brk(rateCmp),rcls)}</div>`; }
 // raw cohort file → per-install-day cumulative uninstall counts (cum[i][N] = users of day i gone by day N)
 function uniCohPrep(j){ if(!j||!j.start||!Array.isArray(j.new)) throw new Error('cohort file');
   const nE=j.end?uniDiff(j.start,j.end):j.new.length-1, n=j.new.map(v=>+v||0), cum=[];
@@ -3924,6 +3967,204 @@ function uniTimingNote(){ const c=UNI&&UNI.consts, L=(c&&c.lag_days!=null)?+c.la
     <li>📦 <b>Updates ka asar</b> (active users, sessions, time, kamai): GA4 ka activity data <b>${L+uniIC('act_late_days',3)} din purana hone par pakka</b> — isse naye din halke dikhte hain, faisla unse nahi.${la?` Sab apps me naapa hua: ${la} active users aa chuke hote hain.`:''} Pehla faisla update ke ~${uniIC('impact_min_days',3)} pakke din baad, poora (7 din baad wapas aane walon ke saath) ~3 hafte baad.</li></ul></div>`; }
 const UNI_STAGE={naya:['p-b','🆕 Naya app · har din'],badh_raha:['p-y','📈 Growing · every day in week 1, then 10/14/21/30…'],stable:['p-g','✅ Stable · 1, 3, 7, 14, 30, 45, 60…']};
 
+// ======================================================================================================
+// KPIWINDOW — the shared period + comparison selector for the TOP KPI NUMBERS of three tabs: Uninstall,
+// Active users, Install value. Until now these were fixed to "pichhle 7 din" (uniScreen / actScreen / valScreen
+// forced RANGE='7d'); the owner asked for 14 / 30 / 60 / custom too, plus a choice of what to compare against.
+// This is deliberately a SEPARATE pair of globals from RANGE/RCUSTOM above — Overview, Placements, Report Card,
+// Countries stay exactly as they are. The choice is shared by all three tabs and persisted (localStorage, every
+// read/write in try/catch: a browser that blocks storage just starts at the default, never an error).
+// It drives ONLY the KPI tiles / pooled numbers of each tab's top band plus the app-page KPI row — never
+// "What changed?", alerts, verdicts, the Update impact card, the Uninstall retention tile (judged on settled
+// install weeks — see uniSumCard / uniSumPortfolio) or the Install value judged-week card.
+let KWIN='7', KWCUSTOM={from:'',to:''}, KWERR='';
+// comparison baseline: 'prev' (default — the previous period, same length) · 'month' (the same dates one
+// calendar month back, each end clamped to that month's last day) · 'custom' (any range, any length)
+let KCMP='prev', KCMPCUSTOM={from:'',to:''}, KCMPERR='';
+const KW_OPTS=[['7','7 din'],['14','14 din'],['30','30 din'],['60','60 din'],['custom','📅 Custom']];
+const KW_CMP_OPTS=[['prev','Pichhle utne hi din'],['month','Pichhle mahine ke same din'],['custom','📅 Custom compare']];
+const KW_N={'7':7,'14':14,'30':30,'60':60};
+const KW_MAXDAYS=365;
+const KW_NONE={from:'',to:'',days:0,empty:true};
+function kwLoad(){ try{ const j=JSON.parse(localStorage.getItem('kwin_v1')||'null'); if(!j||typeof j!=='object') return;
+    if(Object.prototype.hasOwnProperty.call(KW_N,j.win)||j.win==='custom') KWIN=j.win;
+    if(j.custom&&typeof j.custom==='object') KWCUSTOM={from:String(j.custom.from||''),to:String(j.custom.to||'')};
+    if(['prev','month','custom'].includes(j.cmp)) KCMP=j.cmp;
+    if(j.cmpCustom&&typeof j.cmpCustom==='object') KCMPCUSTOM={from:String(j.cmpCustom.from||''),to:String(j.cmpCustom.to||'')};
+  }catch(e){} }
+function kwSave(){ try{ localStorage.setItem('kwin_v1',JSON.stringify({win:KWIN,custom:KWCUSTOM,cmp:KCMP,cmpCustom:KCMPCUSTOM})); }catch(e){} }
+function kwDays(){ return KW_N[KWIN]||7; }
+// from ≤ to · at most 365 days · both dates present — a clear Hinglish reason when not (never a silent clamp)
+function kwValidCustom(f,t){
+  if(!f||!t) return 'Dono dates chuno';
+  if(!/^\d{4}-\d\d-\d\d$/.test(f)||!/^\d{4}-\d\d-\d\d$/.test(t)) return 'Date sahi format me nahi';
+  if(f>t) return 'From date, To date ke baad nahi ho sakti';
+  if(uniDiff(f,t)+1>KW_MAXDAYS) return 'Zyada se zyada 365 din ka range chuno';
+  return '';
+}
+// the chosen MAIN window, clipped to the data that exists: hs = earliest day, till = latest day — an app's own
+// data_till on a single app, the portfolio's common end date on All apps (kwCommonTill)
+function kwWin(hs,till){
+  if(!hs||!till||hs>till) return KW_NONE;
+  if(KWIN==='custom'){
+    const f0=KWCUSTOM.from||'', t0=KWCUSTOM.to||''; if(!f0||!t0||f0>t0||uniDiff(f0,t0)+1>KW_MAXDAYS) return KW_NONE;
+    const f=f0<hs?hs:f0, t=t0>till?till:t0; if(f>t) return KW_NONE;
+    return {from:f,to:t,days:uniDiff(f,t)+1,empty:false};
+  }
+  const t=till, f0=uniAdd(t,-(kwDays()-1)), f=f0<hs?hs:f0; if(f>t) return KW_NONE;
+  return {from:f,to:t,days:uniDiff(f,t)+1,empty:false};
+}
+// the previous period, same length as w, right before it — clipped at hs; full=false means it was clipped
+// (partial data): callers show "pehle ka poora data nahi" instead of a short total
+function kwPrevWin(w,hs){
+  if(!w||w.empty||!hs) return KW_NONE;
+  const t=uniAdd(w.from,-1); if(t<hs) return KW_NONE;
+  const f0=uniAdd(t,-(w.days-1)), f=f0<hs?hs:f0;
+  return {from:f,to:t,days:uniDiff(f,t)+1,full:f===f0,empty:false};
+}
+// one calendar month back: each END of the main window shifted back a month on its own, clamped to that
+// month's last day (31 Jan → 31 Dec · 31 Mar → 28/29 Feb) — so clamping never desyncs from/to by more than
+// the months themselves differ in length
+function kwShiftMonth(d){
+  const y=+d.slice(0,4), m=+d.slice(5,7), day=+d.slice(8,10);
+  let my=y, mm=m-1; if(mm<1){ mm=12; my--; }
+  const dim=new Date(Date.UTC(my,mm,0)).getUTCDate();
+  return my+'-'+String(mm).padStart(2,'0')+'-'+String(Math.min(day,dim)).padStart(2,'0');
+}
+function kwMonthWin(w,hs,till){
+  if(!w||w.empty||!hs||!till) return KW_NONE;
+  const f=kwShiftMonth(w.from), t=kwShiftMonth(w.to); if(f>t) return KW_NONE;
+  const ff=f<hs?hs:f, tt=t>till?till:t; if(ff>tt) return KW_NONE;
+  return {from:ff,to:tt,days:uniDiff(ff,tt)+1,full:(ff===f&&tt===t),empty:false};
+}
+function kwCustomCmpWin(hs,till){
+  const f0=KCMPCUSTOM.from||'', t0=KCMPCUSTOM.to||''; if(!f0||!t0||f0>t0||uniDiff(f0,t0)+1>KW_MAXDAYS||!hs||!till) return KW_NONE;
+  const f=f0<hs?hs:f0, t=t0>till?till:t0; if(f>t) return KW_NONE;
+  return {from:f,to:t,days:uniDiff(f,t)+1,full:(f===f0&&t===t0),empty:false};
+}
+// the comparison window for the chosen baseline — hs/till = the SAME bounds kwWin(hs,till) used for the main one
+function kwCmpWin(w,hs,till){ return KCMP==='month'?kwMonthWin(w,hs,till):(KCMP==='custom'?kwCustomCmpWin(hs,till):kwPrevWin(w,hs)); }
+// true when the saved CUSTOM compare range is entirely outside [hs,till] — "no longer exists in the data"; the
+// portfolio render of each tab calls kwCheckStale once with its own broadest bounds (never a single app's —
+// drilling into a small app must never reset a choice that is still valid for the tab as a whole)
+function kwCmpStale(hs,till){ if(KCMP!=='custom') return false; const f=KCMPCUSTOM.from,t=KCMPCUSTOM.to;
+  return !!(f&&t&&hs&&till&&(t<hs||f>till)); }
+function kwCheckStale(hs,till){ if(kwCmpStale(hs,till)){ KCMP='prev'; KCMPERR=''; kwSave(); } }
+// the honest note when some visible apps' GA4 data is newer than the common end date they were all pooled to
+// (SPEC: "<n> apps ka data <date> tak aa gaya — sab ko barabar rakhne ke liye <common date> tak gina")
+function kwCommonNote(apps,commonTill){
+  if(!commonTill) return '';
+  const newer=(apps||[]).filter(a=>a&&a.data_till&&a.data_till>commonTill);
+  if(!newer.length) return '';
+  const latest=newer.map(a=>a.data_till).sort().pop();
+  return `<div class="kw-common-note">ℹ️ ${newer.length} ${newer.length===1?'app':'apps'} ka data ${smpD(latest)} tak aa gaya — sab ko barabar rakhne ke liye ${smpD(commonTill)} tak gina</div>`;
+}
+// one tile's comparison line. cur/curDays = the chosen period's summed value + its day count; cmpV/cmpW = the
+// same for the comparison period (cmpV null / cmpW empty = no data there — never a fake 0); fmt formats a value;
+// isRate: true for a tile that is already a per-user / per-1,000 / "100 me" rate — shown "before → after" with
+// no per-day-average split (it is already comparable as-is); false for a raw total (installs, uninstalls, net…),
+// which falls back to a per-day-average comparison when the two windows are not the same length
+// COUNT tiles (installs, uninstalls, net, purane users total, kamai total, spend…): a raw total, so a different
+// window length is a real problem — compares per-day averages instead (OWNER: "lambai alag ho to problem hi
+// nahi aayegi" — the rate tiles below solve it by going per 100/1,000; count tiles solve it this way).
+// COUNT tiles (installs, uninstalls, net, purane users total, kamai total, spend…): always "roz ~<avg> (±%)" (a
+// raw total has a real day-length problem, so it is never compared as a bare total); the two periods' totals
+// appear in small grey text only when their lengths actually differ (OWNER).
+function kwCmpLine(curV,curDays,cmpV,cmpW,fmt){
+  if(cmpV==null||!cmpW||cmpW.empty||!cmpW.days){
+    const dash=(cmpW&&cmpW.from&&cmpW.to)?smpSpan(cmpW.from,cmpW.to):'';
+    return `<span class="kw-cmp-miss">${dash?('is range me data nahi ('+dash+')'):'pehle ka poora data nahi'}</span>`;
+  }
+  const curAvg=curDays?curV/curDays:null, cmpAvg=cmpW.days?cmpV/cmpW.days:null;
+  const pct=(curAvg!=null&&cmpAvg)?(curAvg-cmpAvg)/Math.abs(cmpAvg):null;
+  const totals=(curDays!==cmpW.days)?`<span class="kw-avg-note">total ${fmt(curV)} vs ${fmt(cmpV)}</span>`:'';
+  return `roz ~${fmt(curAvg)}${pct==null?'':' ('+signed(pct)+')'}${totals}`;
+}
+// one decimal from 10%, two below 10%, no trailing zeros, never "0%" for a real non-zero rate (OWNER)
+function kwPct(p){
+  if(p==null||isNaN(p)) return '—';
+  const v=p*100, av=Math.abs(v);
+  if(av===0) return '0%';
+  let dp=av>=10?1:2, s=av.toFixed(dp);
+  if(parseFloat(s)===0) dp=Math.min(6,Math.ceil(-Math.log10(av))+1), s=av.toFixed(dp);   // a real but tiny rate: never round away to "0%"
+  s=s.replace(/0+$/,'').replace(/\.$/,'');
+  return (v<0?'−':'')+s+'%';
+}
+// RATE tiles whose value is a PROPORTION (an uninstall rate, a return rate…): the owner's final rule — the
+// ACTUAL number is primary, the percentages sit beside it, never "100 me" / "har 1,000 me" / an explanation line.
+// curV/cmpV are 0..1 proportions. base: the CHOSEN period's own base (installs or active users) the delta is
+// applied to. perDay: the rate recurs every day (a daily rate, like the daily uninstall rate) — the actual
+// number is shown AS a daily figure (base ÷ the period's days), matching how the rate itself repeats.
+function kwRatePctLine(curV,curDays,cmpV,cmpW,o){
+  o=o||{};
+  if(cmpV==null||!cmpW||cmpW.empty){
+    const dash=(cmpW&&cmpW.from&&cmpW.to)?smpSpan(cmpW.from,cmpW.to):'';
+    return `<span class="kw-cmp-miss">${dash?('is range me data nahi ('+dash+')'):'pehle ka poora data nahi'}</span>`;
+  }
+  const d=curV-cmpV, baseTot=o.base, base=o.perDay?(baseTot!=null&&curDays?baseTot/curDays:null):baseTot;
+  let nTxt='';
+  if(base!=null&&base>0){ const n=Math.abs(d)*base;
+    if(Math.round(n)>=1) nTxt=`${d>0?'+':'−'}${(o.nFmt||(x=>Math.round(x).toLocaleString('en-US')))(n)}${o.perDay?'/din':''}${o.what?' '+o.what:''} `; }
+  const est=(o.est&&nTxt)?'≈ ':'';
+  return `${est}${nTxt}(${kwPct(curV)}, pehle ${kwPct(cmpV)})`;
+}
+// money-PER-USER rate tiles (₹ per 1,000 users and the like): the actual extra/less money, shown as a daily
+// figure (money-per-user rates are daily too), then the per-user values themselves — never a percentage, money
+// does not read as one. fmt/fmtSmall: the tab's own money formatters (4-sig-fig for the small per-user values).
+function kwRateMoneyLine(curV,curDays,cmpV,cmpW,fmt,fmtSmall,o){
+  o=o||{};
+  if(cmpV==null||!cmpW||cmpW.empty){
+    const dash=(cmpW&&cmpW.from&&cmpW.to)?smpSpan(cmpW.from,cmpW.to):'';
+    return `<span class="kw-cmp-miss">${dash?('is range me data nahi ('+dash+')'):'pehle ka poora data nahi'}</span>`;
+  }
+  const per=o.per||1000, d=curV-cmpV, base=o.base!=null&&curDays?o.base/curDays:null;
+  let nTxt='';
+  if(base!=null&&base>0){ const n=Math.abs(d)*base/per; nTxt=`${d>0?'+':'−'}${fmt(n)}/din `; }
+  const est=(o.est&&nTxt)?'≈ ':'';
+  return `${est}${nTxt}(${fmtSmall(curV/per)} per user, pehle ${fmtSmall(cmpV/per)} per user)`;
+}
+// a continuous per-day / per-user average with no "per 100/1,000 of X" meaning (sessions, time, a plain daily
+// headcount) — already length-independent, so just before → after with a plain % change
+function kwRateAvgLine(curV,curDays,cmpV,cmpW,fmt){
+  if(cmpV==null||!cmpW||cmpW.empty){
+    const dash=(cmpW&&cmpW.from&&cmpW.to)?smpSpan(cmpW.from,cmpW.to):'';
+    return `<span class="kw-cmp-miss">${dash?('is range me data nahi ('+dash+')'):'pehle ka poora data nahi'}</span>`;
+  }
+  const pct=cmpV?(curV-cmpV)/Math.abs(cmpV):null;
+  return `${fmt(cmpV)} → ${fmt(curV)}${pct==null?'':' ('+signed(pct)+')'}`;
+}
+// default dates to PREFILL an empty custom box with (never mutates state — Apply still needs a tap)
+function kwDefCustom(hs,till){ const t=till||'', f0=t?uniAdd(t,-(kwDays()-1)):'', f=(f0&&hs&&f0<hs)?hs:f0; return {from:f,to:t}; }
+// the selector itself: period chips + (when custom) its date boxes, the Compare dropdown + (when custom) its own
+// date boxes, and the one grey note. tag = 'uni' | 'act' | 'val' (keeps element ids unique — all three screens'
+// markup exists in the DOM at once, only one is shown). hs/till = THIS screen's own data bounds (for the date
+// inputs' min/max — the window itself is always clipped again per app at render time).
+// element ids are TAG-prefixed ('uni-kw-…' / 'act-kw-…' / 'val-kw-…'), matching each tab's own id convention
+// (tests assert every id in a tab's markup starts with its own prefix)
+function kwBar(tag,hs,till){
+  const main=KW_OPTS.map(([v,l])=>`<span class="chip${KWIN===v?' on':''}" onclick="kwSet('${v}','${tag}')">${l}</span>`).join('');
+  const defC=kwDefCustom(hs,till);
+  const cstBox=KWIN==='custom'?`<div class="kw-cst"><input type="date" id="${tag}-kw-f" value="${hAttr(KWCUSTOM.from||defC.from)}" min="${hAttr(hs||'')}" max="${hAttr(till||'')}"><span class="cx">→</span><input type="date" id="${tag}-kw-t" value="${hAttr(KWCUSTOM.to||defC.to)}" min="${hAttr(hs||'')}" max="${hAttr(till||'')}"><span class="lnk" onclick="kwApply('${tag}')">Apply</span></div>`:'';
+  const err=KWERR?`<div class="kw-err">⚠️ ${hAttr(KWERR)}</div>`:'';
+  const cmpSel=`<label class="kw-cmp-l">Compare: <select id="${tag}-kw-cmp" onchange="kwCmpSet(this.value,'${tag}')">${KW_CMP_OPTS.map(([v,l])=>`<option value="${v}"${KCMP===v?' selected':''}>${l}</option>`).join('')}</select></label>`;
+  const cmpCst=KCMP==='custom'?`<div class="kw-cst"><input type="date" id="${tag}-kwc-f" value="${hAttr(KCMPCUSTOM.from||defC.from)}" min="${hAttr(hs||'')}" max="${hAttr(till||'')}"><span class="cx">→</span><input type="date" id="${tag}-kwc-t" value="${hAttr(KCMPCUSTOM.to||defC.to)}" min="${hAttr(hs||'')}" max="${hAttr(till||'')}"><span class="lnk" onclick="kwCmpApply('${tag}')">Apply</span></div>`:'';
+  const cmpErr=KCMPERR?`<div class="kw-err">⚠️ ${hAttr(KCMPERR)}</div>`:'';
+  return `<div class="kw-bar" id="${tag}-kw-bar"><div class="kw-row">${main}</div>${cstBox}${err}<div class="kw-row kw-cmprow">${cmpSel}</div>${cmpCst}${cmpErr}
+    <div class="kw-note">Ye chunav sirf upar ke numbers ke liye — alerts ka apna data range 🕒 line me hai</div></div>`;
+}
+function kwRerenderTag(tag){ if(tag==='uni') uniRerender(); else if(tag==='act') actRerender(); else if(tag==='val') valRerender(); }
+function kwSet(v,tag){ KWIN=v; if(v!=='custom') KWERR=''; kwSave(); kwRerenderTag(tag); }
+function kwApply(tag){ const f=document.getElementById(tag+'-kw-f'), t=document.getElementById(tag+'-kw-t');
+  const fv=f?f.value:'', tv=t?t.value:'', err=kwValidCustom(fv,tv);
+  if(err){ KWERR=err; kwRerenderTag(tag); return; }
+  KWCUSTOM={from:fv,to:tv}; KWIN='custom'; KWERR=''; kwSave(); kwRerenderTag(tag); }
+function kwCmpSet(v,tag){ KCMP=v; if(v!=='custom') KCMPERR=''; kwSave(); kwRerenderTag(tag); }
+function kwCmpApply(tag){ const f=document.getElementById(tag+'-kwc-f'), t=document.getElementById(tag+'-kwc-t');
+  const fv=f?f.value:'', tv=t?t.value:'', err=kwValidCustom(fv,tv);
+  if(err){ KCMPERR=err; kwRerenderTag(tag); return; }
+  KCMPCUSTOM={from:fv,to:tv}; KCMP='custom'; KCMPERR=''; kwSave(); kwRerenderTag(tag); }
+// ======================================================================================================
+
 function renderUninstall(){
   const s=screenDiv('uninstall'); let html;
   try{ html=uniScreen(); }   // a malformed GA4 payload must never break the rest of the dashboard's render()
@@ -3931,8 +4172,7 @@ function renderUninstall(){
   s.innerHTML=`<div id="uni-root">${html}</div>`;
   return s;
 }
-function uniScreen(){ const R0=RANGE; RANGE='7d'; try{ return uniScreen_(); } finally { RANGE=R0; } }
-function uniScreen_(){
+function uniScreen(){
   const U=DATA.uninstall, h2='<h2 class="sc">Uninstall</h2>'; let html;
   if(!U) html=h2+`<div class="card" style="padding:24px 20px"><div class="muted" style="font-size:13.5px;line-height:1.6">🔌 GA4 abhi connect nahi (ya band) hai — uninstall data GA4 / Firebase se aata hai. Setup ke baad yahan dikhega.</div></div>`;
   else if(UNIERR||!U.asset) html=h2+`<div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Uninstall data load nahi hua — thodi der baad page refresh karo. <span class="lnk" onclick="UNIERR=false;uniRerender();loadUNI(()=>uniRerender())">Try again</span></div></div>`;
@@ -3949,7 +4189,8 @@ function uniNoGa4(name){ const r=((UNI&&UNI.no_ga4)||[]).find(x=>x.app===name);
 function uniPortfolio(){
   UNIPRE=false;                                     // "Show" (test installs) is one app's view: never the portfolio's
   const U=DATA.uninstall, det={}; ((UNI&&UNI.apps)||[]).forEach(x=>{det[x.app_id]=x;});
-  const rows=(U.apps||[]).filter(x=>uniVis(x.app_id)).map(x=>{ const a=det[x.app_id]||null, w=a?uniWindow(a):null; return {s:x,a,w,sm:a?uniSums(a,w):null}; });
+  // the "📋 All apps" table stays on its own fixed 7 days (unaffected by the KPIWINDOW selector below)
+  const rows=(U.apps||[]).filter(x=>uniVis(x.app_id)).map(x=>{ const a=det[x.app_id]||null, w=a?uniWindow7(a):null; return {s:x,a,w,sm:a?uniSums(a,w):null}; });
   const tills=rows.map(r=>r.a&&r.a.data_till).filter(Boolean).sort();
   const tMax=tills[tills.length-1]||U.data_till_max, T=smpToday();
   const sets=rows.map(r=>r.a&&r.a.settled_till).filter(Boolean).sort(), sMax=sets[sets.length-1]||null;
@@ -3966,11 +4207,18 @@ function uniPortfolio(){
   const C=U.counts||{}; if(!nBad) nBad=(C.failed||0)+(C.deferred||0)+(C.stale||0);
   const note=U.status==='error'?`<div class="note">⚠️ GA4 se abhi data nahi aa paya — agle robot run me phir try hoga.</div>`
     :(U.status&&U.status!=='ok'&&nBad)?`<div class="note">⚠️ ${nBad} ${nBad===1?'app':'apps'} ka GA4 data purana ya abhi nahi aaya — agle robot run me phir try hoga.</div>`:'';
-  // the pooled KPIs (the grey band): a fixed "pichhle 7 din" window (the Period picker is hidden on this tab)
-  const ws=rows.filter(r=>r.w&&!r.w.empty).map(r=>r.w), wF=ws.map(w=>w.from).sort()[0], wT=ws.map(w=>w.to).sort().pop();
-  const prov=rows.some(r=>r.a&&r.w&&!r.w.empty&&uniKaccha(r.a,r.w.to)), pk=prov&&wT?uniAdd(wT,uniLateDays()+uniLag()):null;
-  const lab=!ws.length?'Abhi GA4 data nahi':`Pichhle 7 din (${smpSpan(wF,wT)})${prov?' · '+smpPakka(pk):''}`;
-  const kpis=uniKpiRow(rows.filter(r=>r.sm).map(r=>r.sm),lab);
+  // the pooled KPIs (the grey band): the KPIWINDOW selector (7/14/30/60/custom, default 7 — SPEC: the owner's
+  // "7 days pe hi kyu?"). Every visible app pooled over the SAME window, ending on the common end date (the min
+  // data_till among them) — never each app's own last-N-days, which silently mixed windows a day apart.
+  const allA=rows.map(r=>r.a).filter(Boolean), commonTill=uniCommonTill(allA);
+  const hsAll=allA.map(a=>uniFirst(a)).filter(Boolean).sort()[0]||commonTill;
+  kwCheckStale(hsAll,commonTill);                   // a saved custom compare range outside the whole tab's data → 'prev'
+  const kw=kwWin(hsAll,commonTill), kcmp=kwCmpWin(kw,hsAll,commonTill);
+  const kwRows=allA.map(a=>{ const w=uniWindow(a,commonTill); return {a,w,sm:w.empty?null:uniSums(a,w)}; });
+  const kprov=kwRows.some(r=>r.w&&!r.w.empty&&uniKaccha(r.a,r.w.to)), kpk=kprov&&kw.to?uniAdd(kw.to,uniLateDays()+uniLag()):null;
+  const kpis=kwBar('uni',hsAll,commonTill)
+    +kwCommonNote(allA,commonTill)
+    +uniKpiRow(kwRows.map(r=>r.sm),allA.map(a=>uniSums(a,kcmp)),kw,kcmp,kprov?' · '+smpPakka(kpk):'');
   const dets=rows.map(r=>r.a).filter(a=>a&&a.data_till);
   let sum=''; try{ sum=dets.length?uniSumPortfolio(dets,kpis,rows.length):''; }catch(e){ sum=''; }
   const alCard=smpList(L,{id:'uni',tab:'uni',withApp:true,cardId:'uni-alerts',scope:'Har app alag'});
@@ -4018,6 +4266,8 @@ function uniPortfolio(){
       ${hcell(h4.D0,0,'D0')}${hcell(h4.D1,1,'D1')}${hcell(h4.D7,7,'D7')}${hcell(h4.D30,30,'D30')}<td style="white-space:nowrap">${pills}</td></tr>`; }).join('')
     ||`<tr><td colspan="${TH.length}" class="muted" style="padding:16px">GA4 se judi koi app abhi nahi.</td></tr>`;
   const hdr=([k,l,t])=>`<th onclick="uniSort('${k}')"${t?` title="${hAttr(t)}"`:''}>${l}${UNISORT.k===k?(UNISORT.d>0?' ▲':' ▼'):''}</th>`;
+  // the table's own fixed 7 days (unaffected by the KPIWINDOW selector above)
+  const t7=rows.filter(r=>r.w&&!r.w.empty).map(r=>r.w), wF=t7.map(w=>w.from).sort()[0], wT=t7.map(w=>w.to).sort().pop();
   // one column = one window: each D column's install week (vs the 4 weeks before) printed under its header
   const hw2=`<tr class="smp-hw">${TH.map(([k])=>`<th class="faint" style="font-size:10px;font-weight:600;white-space:nowrap">${HW[k]?'installs '+smpSpan(HW[k][0],HW[k][1]):(['ins','outs','net','rate'].includes(k)&&wF?smpSpan(wF,wT):'')}</th>`).join('')}</tr>`;
   const table=`<div class="card pad0" id="uni-table" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>📋 All apps</h3><span class="faint" style="font-size:11.5px">row pe tap = app ki detail · column pe tap = sort</span></div>
@@ -4044,7 +4294,8 @@ function uniSumPortfolio(dets,kpis,nApps){
   if(V.length){ const w=top.split('|'), su=V.reduce((t,v)=>t+v.recent.users,0), pu=V.reduce((t,v)=>t+v.prev.users,0);
     const r=V.reduce((t,v)=>t+v.recent.users*v.recent.left,0)/su, p=V.reduce((t,v)=>t+v.prev.users*v.prev.left,0)/pu;
     tile=`<div class="uni-tiles" id="uni-pool" style="--n:1">${uniStayTile(7,r,`100 me se · pehle ${uni100(p)}`,'')}</div>
-      <div class="smp-per" style="margin:6px 0 0">7 din baad bhi app me · installs ${smpSpan(w[0],w[1])} vs pehle (${smpSpan(w[2],w[3])}) · ${V.length} apps (${dets.length} me se — jinka yahi install hafta hai)</div>`; }
+      <div class="smp-per" style="margin:6px 0 0">7 din baad bhi app me · installs ${smpSpan(w[0],w[1])} vs pehle (${smpSpan(w[2],w[3])}) · ${V.length} apps (${dets.length} me se — jinka yahi install hafta hai)</div>
+      <div class="faint" style="font-size:10.5px;margin-top:2px">(install hafte ke hisaab se — upar ka chunav ispe nahi)</div>`; }
   const W=[],B=[],same=[],uns=[],none=[],NU=[],ND=[];
   dets.forEach(a=>{ const v=a.survival&&a.survival.verdict, k=uniVKind(v), coh=uniCohAlerts(a);
     coh.forEach(x=>(x.dir==='up'?NU:ND).push([a,x]));
@@ -4108,8 +4359,12 @@ function uniDetail(id,viaApp){
   const got=uniAgo(a.fetched_at);
   const hdr=back+`<div class="uni-hd" style="margin-bottom:4px"><span class="faint" style="font-size:12px">Sirf ye app:</span> <span style="font-size:18px;font-weight:800;color:#fff">${smpAppHtml(id,name)}</span>${a.package?`<div class="faint" style="font-size:11px;width:100%">${hAttr(a.package)}</div>`:''}</div>
     <div class="faint" style="font-size:12px;margin:5px 0 14px;display:flex;gap:5px 12px;flex-wrap:wrap;align-items:center"><span>GA4 data till <b style="color:var(--ink2)">${uniD(a.data_till)}</b>${got?' · fetched '+got:''}</span>${fl.map(t=>`<span>${t}</span>`).join('')}</div>`;
-  const w=uniWindow(a), sm=uniSums(a,w);
-  const kpis=uniKpiRow(sm?[sm]:[],w.empty?w.label:`Pichhle 7 din (${smpSpan(w.from,w.to)})`+(!w.empty&&uniKaccha(a,w.to)?' · '+smpPakka(uniAdd(w.to,uniLateDays()+uniLag())):''))+`<div class="faint" style="font-size:11px;margin:-6px 0 14px">Sirf ye app · upar ke 4 number = pichhle 7 din. Baaki sab ka apna range likha hai.</div>`;
+  const hsA=uniFirst(a)||a.data_till;
+  const w=uniWindow(a), sm=w.empty?null:uniSums(a,w), cmpW=kwCmpWin(w,hsA,a.data_till), cmpSm=uniSums(a,cmpW);
+  const kprov=!w.empty&&uniKaccha(a,w.to);
+  const kpis=kwBar('uni',hsA,a.data_till)
+    +uniKpiRow(sm?[sm]:[],cmpSm?[cmpSm]:[],w,cmpW,kprov?' · '+smpPakka(uniAdd(w.to,uniLateDays()+uniLag())):'')
+    +`<div class="faint" style="font-size:11px;margin:-6px 0 14px">Sirf ye app · upar ke 4 number is chune hue period ke. Baaki sab ka apna range likha hai.</div>`;
   const safe=f=>{ try{ return f(a)||''; }catch(e){ return '<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ Ye hissa abhi dikh nahi paya.</div>'; } };
   return hdr+safe(uniSumCard)+safe(uniChangesCard)+safe(uniImpactCard)+kpis+UNI_SECTIONS.map(safe).join('')+uniTimingNote();
 }
@@ -4138,7 +4393,8 @@ function uniPreLine(a){ const L=uniLaunch(a); if(!L) return '';
 function uniSumCard(a){
   const SV=a.survival||{}, C=uniSurvAll(a), days=(SV.key_days||[]).filter(N=>C&&Array.isArray(C.left)&&N<C.left.length&&C.left[N]!=null);
   const sol=uniSolid(C);
-  const tiles=days.length?`<div class="uni-tiles" style="--n:${days.length}">${days.map(N=>uniStayTile(N,C.left[N],'of 100 new users',N>=sol?`Low data — sirf ${fmtN((C.n||[])[N])} installs itne din tak pahunche`:'')).join('')}</div>`
+  const tiles=days.length?`<div class="uni-tiles" style="--n:${days.length}">${days.map(N=>uniStayTile(N,C.left[N],'of 100 new users',N>=sol?`Low data — sirf ${fmtN((C.n||[])[N])} installs itne din tak pahunche`:'')).join('')}</div>
+    <div class="faint" style="font-size:10.5px;margin:-4px 0 8px">(install hafte ke hisaab se — upar ka chunav ispe nahi)</div>`
     :'<div class="uni-empty">👥 How many stay — ~2 hafte ke pakke data ke baad dikhega</div>';
   const V=uniVerdict(a);
   const vp=`<div class="uni-pan" id="uni-verdict"><div class="l">Vs last month</div><div class="uni-pills">${[{t:V.t,c:V.c}].concat(V.news||[]).map(z=>`<span class="uni-vc ${z.c}">${z.t}</span>`).join('')}</div>`
@@ -5608,8 +5864,7 @@ function renderActive(){
   catch(e){ html='<h2 class="sc">Active users</h2><div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Active users ka data dikhane me dikkat aayi — thodi der baad page refresh karo.</div></div>'; }
   s.innerHTML=`<div id="act-root">${html}</div>`;
   return s; }
-function actScreen(){ const R0=RANGE; RANGE='7d'; try{ return actScreen_(); } finally { RANGE=R0; } }
-function actScreen_(){
+function actScreen(){
   const A=DATA.active, h2='<h2 class="sc">Active users</h2>';
   if(!A) return h2+`<div class="card" style="padding:24px 20px"><div class="muted" style="font-size:13.5px;line-height:1.6">🔌 GA4 not connected — active users, wapsi, sessions aur time GA4 (Firebase) se aate hain. Setup ke baad yahan dikhega.</div></div>`;
   if(APP){ const r=actCurRow(); if(!r) return actNoGa4(APP);
@@ -5749,29 +6004,51 @@ function actChangesCard(d){
     arr(C.info).map(o=>smpActInfoRow(Object.assign({settled_till:d.settled_till},o),nm,id)),arr(C.older).map(o=>smpActOldRow(o,nm,id)));
   L.forEach(r=>{ if(r.type==='info'&&r.attrs&&r.attrs.includes('data-old')) r.go=''; else if(r.type==='info') r.go=`actJump('${(r.attrs||'').includes('"price"')?'act-rev':'act-daily'}')`; });
   return smpList(L,{id:'act:'+id,tab:'act',withApp:false,appPage:true,cardId:'act-chg',scope:'Sirf ye app: '+hAttr(smpName(id,nm))}); }
-// ---- Period row (the header's Period, settled days only) ----
-function actWin(d){ const X=actX(d), till=d.data_till, hs=(!ACTPRE&&X.iL)?uniAdd(X.st,X.iL):X.st, none={from:'',to:'',days:0,empty:true};
-  if(!till||!hs) return none; const T=(DATA&&DATA.today_date)||till; let f=till, t=till;
-  if(RANGE==='7d'||RANGE==='30d'||RANGE==='90d') f=uniAdd(till,-(parseInt(RANGE,10)-1));
-  else if(RANGE==='month') f=T.slice(0,7)+'-01';
-  else if(RANGE==='lastmonth'){ const y=+T.slice(0,4), m=+T.slice(5,7); f=(m>1?y+'-'+String(m-1).padStart(2,'0'):(y-1)+'-12')+'-01'; t=uniAdd(T.slice(0,7)+'-01',-1); }
-  else if(RANGE==='all') f=hs; else if(RANGE==='custom'){ f=RCUSTOM.from||uniAdd(till,-29); t=RCUSTOM.to||till; }
-  if(f<hs) f=hs; if(t>till) t=till; if(f>t) return none; return {from:f,to:t,days:uniDiff(f,t)+1,empty:false}; }
-function actKpis(d){
-  const w=actWin(d), X=actX(d), D=X.D, S=d.settled_till, cur=actCurOf(d);
-  const foot=t=>`<div class="faint" style="font-size:11px;margin:-6px 0 14px">${t}</div>`;
-  if(w.empty) return `<div class="row c6" id="act-kpis" style="margin-bottom:14px">${kpi('👥 Purane users (roz)','—','Pichhle 7 din ka GA4 data abhi nahi')}</div>`+foot('Sirf ye app · ye row = pichhle 7 din');
+// ---- the app-page KPI row (SPEC KPIWINDOW: driven by the shared period selector, default 7 days) ----
+function actHs(d){ const X=actX(d); return (!ACTPRE&&X.iL)?uniAdd(X.st,X.iL):X.st; }
+function actWin(d){ const till=d.data_till, hs=actHs(d); if(!till||!hs) return KW_NONE; return kwWin(hs,till); }
+// sums over an arbitrary window w (used for both the chosen period and its comparison) — settled days only: a
+// window ending after settled_till reads only its settled part (prov=true), unless NONE of it is settled yet, in
+// which case it falls back to the (⏳ pakka nahi) days so the tile is never just "—"
+function actWinSums(d,w){
+  if(!w||w.empty) return null;
+  const X=actX(d), D=X.D, S=d.settled_till;
   const prov=!S||w.from>S, to=prov?w.to:(w.to>S?S:w.to), i0=uniDiff(X.st,w.from), i1=uniDiff(X.st,to);
   let R=0,nR=0,nw=0,nN=0,sS=0,sU=0,tT=0,tU=0,rv=0,ra=0,nrv=0; const inc=new Set((D.inc||[]).map(x=>uniDiff(X.st,x))), U=D.u||{}, SS=D.s||{}, TT=D.t||{};
   for(let i=i0;i<=i1;i++){ const r=actAt(D.ret,i), n=actAt(D.new,i); if(r!=null){R+=r;nR++;} if(n!=null){nw+=n;nN++;}
     if(!inc.has(i)){ const u=actAt(U.r,i), s=actAt(SS.r,i), t=actAt(TT.r,i); if(u!=null&&u>0){ if(s!=null){sS+=s;sU+=u;} if(t!=null){tT+=t;tU+=u;} } }
     const e=actAt(D.rev,i), a=actAt(D.a1,i); if(e!=null&&a!=null&&a>0){ rv+=e; ra+=a; nrv++; } }
-  const lab=`Pichhle 7 din (${uniSpan(w.from,w.to)})`+(to!==w.to?` · pakke din ${uniSpan(w.from,to)}`:''), pv=prov?' '+ACT_PROV_PILL:'';   // a fixed 7 days (SPEC_SIMPLIFY §6.2)
-  const k=[kpi('👥 Purane users (roz)',nR?actNum(R/nR):'—',lab+pv+(nR&&nR<uniDiff(w.from,to)+1?` · ${nR} of ${uniDiff(w.from,to)+1} days`:'')),kpi('📥 Installs',nN?actNum(nw):'—',lab+pv),
-    kpi('🔁 Sessions per user',sU?actDec(sS/sU):'—',(sU?'a day · returning users':'no sessions data yet')+pv),kpi('⏱️ Time per user',tU?uniDur(tT/tU):'—',(tU?'a day · returning users':'no time data yet')+pv),
-    kpi('💰 Ad revenue ≈',nrv?actMoney(rv,cur,true):'—',(nrv?`${nrv} ${nrv===1?'day':'days'} with ad data · AdMob Network only${actOther(d.flags)?` (other networks ~${actOther(d.flags)}% more)`:''}`:'no ad data')+pv),kpi('💵 Per 1,000 users ≈',ra?actMoney(rv*1000/ra,cur):'—',(ra?'AdMob ÷ GA4 active users':'no ad data')+pv)];
-  return `<div class="row c6" id="act-kpis" style="margin-bottom:14px">${k.join('')}</div>`
-    +foot(`Sirf ye app · ye row = pichhle 7 din — sirf pakke din: ${prov?'abhi koi pakka din nahi, isliye naye (⏳ pakka nahi) din':uniSpan(w.from,to)}`); }
+  return {R,nR,nw,nN,sS,sU,tT,tU,rv,ra,nrv,prov,from:w.from,to,days:uniDiff(w.from,to)+1}; }
+function actKpis(d){
+  const hs=actHs(d), till=d.data_till, w=actWin(d), cur=actCurOf(d);
+  const foot=t=>`<div class="faint" style="font-size:11px;margin:-6px 0 14px">${t}</div>`;
+  const bar=kwBar('act',hs,till);
+  if(w.empty) return bar+`<div class="row c6" id="act-kpis" style="margin-bottom:14px">${kpi('👥 Purane users (roz)','—','Is range ka GA4 data abhi nahi')}</div>`+foot('Sirf ye app · upar ke 6 number is chune hue period ke');
+  const S1=actWinSums(d,w), cmpW=kwCmpWin(w,hs,till), S2=cmpW.empty?null:actWinSums(d,cmpW);
+  const prov=S1.prov, to=S1.to, pv=prov?' '+ACT_PROV_PILL:'';
+  const lab=`${w.days} din (${uniSpan(w.from,w.to)})`+(to!==w.to?` · pakke din ${uniSpan(w.from,to)}`:'');
+  // the comparison window, with its EFFECTIVE day count (settled days only — like the main one above)
+  const cmpEff=S2?Object.assign({},cmpW,{days:S2.days}):cmpW;
+  const brk=t=>t?`<div class="kw-cmpline">${t}</div>`:'';
+  const retCur=S1.nR?S1.R/S1.nR:null, retCmp=S2&&S2.nR?S2.R/S2.nR:null;
+  const sessCur=S1.sU?S1.sS/S1.sU:null, sessCmp=S2&&S2.sU?S2.sS/S2.sU:null;
+  const timeCur=S1.tU?S1.tT/S1.tU:null, timeCmp=S2&&S2.tU?S2.tT/S2.tU:null;
+  const rateCur=S1.ra?S1.rv/S1.ra:null, rateCmp=S2&&S2.ra?S2.rv/S2.ra:null;   // money per user (owner: never per 1,000)
+  const retCmpTxt=retCur!=null?kwRateAvgLine(retCur,S1.days,retCmp,cmpEff,actNum):'';
+  const insCmpTxt=kwCmpLine(S1.nw,S1.days,S2?S2.nw:null,cmpEff,actNum);
+  const sessCmpTxt=sessCur!=null?kwRateAvgLine(sessCur,S1.days,sessCmp,cmpEff,actDec):'';
+  const timeCmpTxt=timeCur!=null?kwRateAvgLine(timeCur,S1.days,timeCmp,cmpEff,uniDur):'';
+  const revCmpTxt=kwCmpLine(S1.rv,S1.days,S2?S2.rv:null,cmpEff,v=>actMoney(v,cur,true));
+  const rateCmpTxt=rateCur!=null?kwRateMoneyLine(rateCur,S1.days,rateCmp,cmpEff,v=>actMoney(v,cur,true),v=>actMoneyP(v,cur),
+    {base:S1.ra,est:prov,per:1}):'';
+  const k=[kpi('👥 Purane users (roz)',S1.nR?actNum(S1.R/S1.nR):'—',lab+pv+(S1.nR&&S1.nR<S1.days?` · ${S1.nR} of ${S1.days} days`:'')+brk(retCmpTxt)),
+    kpi('📥 Installs',S1.nN?actNum(S1.nw):'—',lab+pv+brk(insCmpTxt)),
+    kpi('🔁 Sessions per user',S1.sU?actDec(S1.sS/S1.sU):'—',(S1.sU?'a day · returning users':'no sessions data yet')+pv+brk(sessCmpTxt)),
+    kpi('⏱️ Time per user',S1.tU?uniDur(S1.tT/S1.tU):'—',(S1.tU?'a day · returning users':'no time data yet')+pv+brk(timeCmpTxt)),
+    kpi('💰 Ad revenue ≈',S1.nrv?actMoney(S1.rv,cur,true):'—',(S1.nrv?`${S1.nrv} ${S1.nrv===1?'day':'days'} with ad data · AdMob Network only${actOther(d.flags)?` (other networks ~${actOther(d.flags)}% more)`:''}`:'no ad data')+pv+brk(revCmpTxt)),
+    kpi('💵 Kamai per user ≈',S1.ra?actMoneyP(S1.rv/S1.ra,cur):'—',(S1.ra?'AdMob ÷ GA4 active users':'no ad data')+pv+brk(rateCmpTxt))];
+  return bar+`<div class="row c6" id="act-kpis" style="margin-bottom:14px">${k.join('')}</div>`
+    +foot(`Sirf ye app · sirf pakke din: ${prov?'abhi koi pakka din nahi, isliye naye (⏳ pakka nahi) din':uniSpan(w.from,to)}`); }
 // ---- daily charts ----
 function actX(d){ const D=(d&&d.daily)||{}, st=D.start||(d&&d.history_start)||'', n=(st&&d&&d.data_till)?Math.max(0,uniDiff(st,d.data_till)+1):0;
   const iS=(st&&d.settled_till)?uniDiff(st,d.settled_till):n-1, L=(d&&d.launch)||{}, iL=(L.hidden&&L.day&&st)?Math.max(0,Math.min(n,uniDiff(st,L.day))):0;
@@ -5993,28 +6270,98 @@ function actStrip(rows,k){ const G={}; rows.forEach(r=>{ const w=SMP_AWK[actChip
   return `<div class="act-strip"><div class="act-sl2">${ACT_ML[k]}</div><div class="uni-scs">${keys.map(w=>{ const id=k+':'+rep(w), on=ACTSTEXP===id, c=SMP_AWC[w]||'info';
     return `<span class="uni-sc ${c}${on?' on':''}" data-k="${id}" onclick="actSX('${id}')"><i class="dt"></i>${SMP_WORD[w]} <b>(${G[w].length})</b><span class="cv">▾</span></span>`
       +(on?`<div class="uni-xp ${c}" data-xp="${id}"><div class="uni-xph"><b>${ACT_ML[k]} · ${SMP_WORD[w]}</b></div><div class="uni-acs">${G[w].map(r=>actAppChip(r,val(r))).join('')}</div></div>`:''); }).join('')}</div></div>`; }
-function actSumPortfolio(rows){ const n=rows.length, cur=(DATA.active&&DATA.active.currency)||undefined;
+// the All-apps pooled KPI tiles (SPEC KPIWINDOW), computed from the portfolio's own per-day file (ACTPF — the
+// same raw daily series actPfChart already draws from; loaded once, lazily — see actEnsure). Unlike the per-app
+// KPI row this never needs each app's own detail file: everything here is already pooled, day by day, across
+// every visible app. null while ACTPF has not loaded yet (the caller shows the existing loading / error states).
+function actPfSum(S,i0,i1){
+  let rt=0,rtn=0,nw=0,nwn=0,sS=0,sU=0,tT=0,tU=0,rv=0,ra=0,d1n=0,d1d=0,d7n=0,d7d=0,pv=false;
+  const lo=Math.max(0,i0), hi=Math.min(S.n-1,i1);
+  for(let i=lo;i<=hi;i++){ if(actPfRetOk(S,i)){ rt+=S.rt[i]; rtn++; } if(S.nwn[i]>0){ nw+=S.nw[i]; nwn++; }
+    sS+=S.sS[i]||0; sU+=S.sU[i]||0; tT+=S.tT[i]||0; tU+=S.tU[i]||0;
+    if(S.rvc[i]>0){ rv+=S.rv[i]; ra+=S.ra[i]; } d1n+=S.d1n[i]||0; d1d+=S.d1d[i]||0; d7n+=S.d7n[i]||0; d7d+=S.d7d[i]||0;
+    if(S.pv[i]) pv=true; }
+  return {rt,rtn,nw,nwn,sS,sU,tT,tU,rv,ra,d1n,d1d,d7n,d7d,pv,days:Math.max(0,hi-lo+1)}; }
+// which of the visible apps had SOME data for a metric within [i0,i1] — the pooled tiles' "X of N apps" (N =
+// every visible app, like actPortfolio's own count; X = how many actually had this metric in the window —
+// mirrors actPfSeries' own per-app conditions for each field)
+function actPfContrib(S,p,i,metric){
+  if(!S.has(p,i)) return false;
+  if(metric==='ret_dau') return S.at(p,'ret',i)!=null;
+  if(metric==='new') return S.at(p,'new',i)!=null;
+  if(metric==='sess'){ const u=S.at(p,'u',i); return u!=null&&u>0&&S.at(p,'s',i)!=null; }
+  if(metric==='time'){ const u=S.at(p,'u',i); return u!=null&&u>0&&S.at(p,'t',i)!=null; }
+  if(metric==='arpdau') return !!p.rv&&S.at(p,'rev',i)!=null;
+  if(metric==='d1'){ const w=S.at(p,'new',i); return w!=null&&w>0&&S.at(p,'d1',i)!=null; }
+  if(metric==='d7'){ const w=S.at(p,'new',i); return w!=null&&w>0&&S.at(p,'d7',i)!=null; }
+  return false; }
+function actPfAppCount(S,i0,i1,metric){ const lo=Math.max(0,i0), hi=Math.min(S.n-1,i1); let c=0;
+  S.P.forEach(p=>{ for(let i=lo;i<=hi;i++){ if(actPfContrib(S,p,i,metric)){ c++; return; } } }); return c; }
+function actPoolKwTiles(rows){
+  const P=actPfPtr();
+  if(!P) return {bar:'',note:'',html:'<div class="uni-empty">👥 Roz ka data abhi nahi</div>'};
+  const hs=rows.map(r=>r.data_till).filter(Boolean).sort()[0]||null;   // overwritten by the real ACTPF start below
+  if(!ACTPF){ const msg=ACTPFERR?`⚠️ Roz ka data load nahi hua. <span class="lnk" onclick="ACTPFERR=false;actEnsure();actRerender()">Try again</span>`:'⏳ Roz ka data load ho raha hai…';
+    return {bar:kwBar('act',hs,hs),note:'',html:`<div class="uni-empty">${msg}</div>`}; }
+  const S=actPfSeries(rows);
+  if(!S||!S.n) return {bar:kwBar('act',hs,hs),note:'',html:'<div class="uni-empty">Dikhne wali apps ka roz ka data abhi nahi.</div>'};
+  const commonTill=uniCommonTill(rows), hsAll=S.from;
+  kwCheckStale(hsAll,commonTill);
+  const w=kwWin(hsAll,commonTill), cmpW=kwCmpWin(w,hsAll,commonTill);
+  const cur=S.cur||(DATA.active&&DATA.active.currency)||undefined;
+  if(w.empty) return {bar:kwBar('act',hsAll,commonTill),note:kwCommonNote(rows,commonTill),html:'<div class="uni-empty">Is range me data nahi</div>'};
+  const i0=uniDiff(S.from,w.from), i1=uniDiff(S.from,w.to), A=actPfSum(S,i0,i1), nTotal=rows.length;
+  const cmp=cmpW.empty?null:actPfSum(S,uniDiff(S.from,cmpW.from),uniDiff(S.from,cmpW.to));
+  const cmpEff=cmp?Object.assign({},cmpW,{days:cmp.days}):cmpW;
+  const lab=`${w.days} din (${smpSpan(w.from,w.to)})`+(A.pv?' · '+smpPakka(uniAdd(w.to,uniLateDays()+uniLag())):'');
+  const brk=t=>t?`<div class="kw-cmpline">${t}</div>`:'';
+  const retV=A.rtn?A.rt/A.rtn:null, retC=cmp&&cmp.rtn?cmp.rt/cmp.rtn:null;
+  const sessV=A.sU?A.sS/A.sU:null, sessC=cmp&&cmp.sU?cmp.sS/cmp.sU:null;
+  const timeV=A.tU?A.tT/A.tU:null, timeC=cmp&&cmp.tU?cmp.tT/cmp.tU:null;
+  const arpV=A.ra?A.rv/A.ra:null, arpC=cmp&&cmp.ra?cmp.rv/cmp.ra:null;   // money per user (owner: never per 1,000)
+  // nothing from any app yet for a sessions / time tile: say why (agle GA4 fetch ke saath) instead of "0 of N"
+  const cap=(metric,nOk)=>(nOk===0&&['sess','time'].includes(metric))?ACT_WAITS.u:`${nOk} of ${nTotal} apps`;
+  const tile=(key,l,v,fmt,cmpTxt)=>{ const nOk=actPfAppCount(S,i0,i1,key);
+    return `<div class="uni-st act-t act-pt" data-m="${key}"><div class="l">${l}</div><div class="v">${v==null?'—':fmt(v)}</div><div class="c">${cap(key,nOk)}</div>${brk(cmpTxt)}</div>`; };
+  // "Came back next day / after a week" are NOT here: they need the install day's +1 / +7 outcome to already be
+  // settled, so a short recent window (7/14 days) would always read "no data yet" — exactly why actSumPortfolio
+  // keeps them on their OWN existing judged-install-week basis below, unaffected by this selector (like Uninstall's
+  // "gone by day N" columns stay in the 📋 All apps table, never in the live uni-kpis row)
+  const tiles=[tile('ret_dau','Purane users (roz)',retV,smpCount,retV!=null?kwRateAvgLine(retV,A.days,retC,cmpEff,smpCount):''),
+    tile('new','Installs / day',A.nwn?A.nw:null,smpCount,kwCmpLine(A.nw,A.days,cmp?cmp.nw:null,cmpEff,smpCount)),
+    tile('sess','Sessions per user',sessV,v=>actDec(v)+'<small>a day</small>',sessV!=null?kwRateAvgLine(sessV,A.days,sessC,cmpEff,actDec):''),
+    tile('time','Time per user',timeV,v=>uniDur(v)+'<small>a day</small>',timeV!=null?kwRateAvgLine(timeV,A.days,timeC,cmpEff,uniDur):''),
+    tile('arpdau','Kamai per user (roz)',arpV,v=>'≈ '+actMoneyP(v,cur),arpV!=null?kwRateMoneyLine(arpV,A.days,arpC,cmpEff,v=>actMoney(v,cur,true),v=>actMoneyP(v,cur),
+      {base:A.ra,est:A.pv,per:1}):'')];
+  const html=`<div class="smp-per" style="margin:0 0 8px">${lab}</div><div class="uni-tiles act-tiles" id="act-pool" style="--n:4">${tiles.join('')}</div>`;
+  return {bar:kwBar('act',hsAll,commonTill),note:kwCommonNote(rows,commonTill),html};
+}
+function actSumPortfolio(rows){ const n=rows.length;
   const K={worse:0,watch:0,ok:0,wait:0,better:0,err:0}; rows.forEach(r=>{ if(r.status==='error') K.err++; else { const s=(r.summary||{}).kind;
     if(s==='worse') K.worse++; else if(s==='break'||s==='watch'||s==='slow') K.watch++; else if(s==='better') K.better++; else if(s==='ok'||s==='maybe') K.ok++; else K.wait++; } });
   const cl=`<div class="act-line" id="act-count">🔴 ${K.worse} Bigda · 🟡 ${K.watch} Dhyan do · 🟢 ${K.better} Behtar · ⚪ ${K.ok} Normal · ⏳ ${K.wait} Abhi jaldi${K.err?` · ⚠️ ${K.err} is baar nahi bane`:''}</div>`;
-  const nw=rows.filter(r=>r.ctx&&actOk(r.ctx.new)), P=k=>actPool(rows,k), live=actSplitLive(rows);
-  // one window per number: the 7 settled days vs the 4 weeks before (the rows' own win — the one most apps have)
+  const live=actSplitLive(rows);
+  // the status strips below (App status / Daily uninstall-rate-like chips) stay on their own judged window —
+  // the newest 7 settled days vs the 4 weeks before (unaffected by the KPIWINDOW selector: these are verdicts)
   const wk={}; rows.forEach(r=>{ const w=r.win; if(w&&w.from&&w.to){ const q=[w.from,w.to,w.bfrom,w.bto].join('|'); wk[q]=(wk[q]||0)+1; } });
   const wq=Object.keys(wk).sort((p,q)=>wk[q]-wk[p]||(q<p?-1:1))[0], W=wq?wq.split('|'):null;
   const wtxt=W?`pichhle 7 pakke din (${smpSpan(W[0],W[1])})${W[2]?` vs pehle (${smpSpan(W[2],W[3])})`:''}`:'pichhle 7 pakke din vs usse pehle ke 4 hafte';
+  // the pooled KPI tiles themselves: the KPIWINDOW selector (SPEC: "7 days pe hi kyu?")
+  let kw; try{ kw=actPoolKwTiles(rows); }catch(e){ kw={bar:'',note:'',html:'<div class="uni-empty">⚠️ Ye hissa abhi dikh nahi paya.</div>'}; }
+  const splitNote=KWIN==='7'?(live?splitBlock(splitPool(rows),{cls:'act-pool-split',named:true}):'')
+    :'<div class="faint" style="font-size:10.5px;margin-top:6px">Install-split sirf "7 din" (default) pe — baaki windows ke liye abhi nahi</div>';
+  // "Came back next day / after a week": need an install week old enough that its +1 / +7 day outcome already
+  // settled — on their OWN judged install week (SPEC: never the KPIWINDOW selector), exactly as before
+  const P=k=>actPool(rows,k);
   const iw=k=>{ const q={}; rows.forEach(r=>{ const M=(r.m||{})[k]; if(M&&M.from&&M.to){ const z=M.from+'|'+M.to; q[z]=(q[z]||0)+1; } }); const b=Object.keys(q).sort((p,x)=>q[x]-q[p]||(x<p?-1:1))[0]; return b?' · installs '+smpSpan(...b.split('|')):''; };
-  const tiles=[actPoolTile('ret_dau','Purane users (roz)',P('ret_dau'),n,smpCount,false,'Har app ke roz ke purane users jod kar — ek insaan 2 apps pe ho to 2 baar gina'),
-    `<div class="uni-st act-t act-pt" data-m="new"><div class="l">Installs / day</div><div class="v">${nw.length?smpCount(nw.reduce((t,r)=>t+ +r.ctx.new,0)):'—'}</div><div class="c" title="${hAttr(rows.filter(r=>!nw.includes(r)).map(r=>smpName(r.app_id,r.app)).join(', ')||'Saari apps')}">${nw.length} of ${n} apps</div></div>`,
-    actPoolTile('sess','Sessions per user',P('sess'),n,v=>actDec(v)+'<small>a day</small>'),actPoolTile('time','Time per user',P('time'),n,v=>uniDur(v)+'<small>a day</small>'),
-    actPoolTile('arpdau','Kamai har 1,000 users se (roz)',P('arpdau'),n,v=>'≈ '+actMoney(v,cur))];
   const back=[actPoolTile('d1','Came back next day'+iw('d1'),P('d1'),n,v=>uni100(v)+'<small>of 100</small>',true,'',live?splitLine(splitPoolRate(rows,'d1')):''),
     actPoolTile('d7','Came back after a week'+iw('d7'),P('d7'),n,v=>uni100(v)+'<small>of 100</small>',true,'',live?splitLine(splitPoolRate(rows,'d7')):'')];
+  const backHtml=`<div class="uni-tiles act-tiles" id="act-pool-back" style="--n:4"><div class="uni-sec act-poolsec" style="grid-column:1/-1;margin:0 0 6px">Naye users wapas aaye <span>· har tile ka apna install hafta — upar ke chunav se alag</span></div>${back.join('')}</div>`;
   const L=DATA.active&&DATA.active.market&&DATA.active.market.latest;
   const mkr=L?(actOk(L.median_rel)?uniChg(L.median_rel):(L.dir==='up'?'upar':'neeche')):'', mnow=L&&L.to&&uniDiff(L.to,smpToday())<=14;   // only while ≤ 14 days old
   const mk=L&&L.from&&mnow?`<div class="act-mkl" id="act-market">Saath me: kai apps me ek saath — bazaar ka asar · ${uniSpan(L.from,L.to)}: ${actNum(L.apps)} me se ${actNum(L.of)} apps ka ad rate ${mkr} — kamai/user ${L.dir==='up'?'zyada':'kam'} dikhegi, app ki galti nahi.</div>`:'';
   const st=rows.map(r=>r.settled_till).filter(Boolean).sort().pop(), dt=rows.map(r=>r.data_till).filter(Boolean).sort().pop();
-  return `<div class="card" id="act-sum" style="margin-bottom:14px"><div class="smp-band"><div class="smp-bl">SAB APPS MILAKAR (${n} apps)</div>${smpPer('Sab apps milakar · '+wtxt)}
-    <div class="uni-tiles act-tiles" id="act-pool" style="--n:4">${tiles.join('')}<div class="uni-sec act-poolsec" style="grid-column:1/-1;margin:6px 0 0">Naye users wapas aaye <span>· har tile ka apna install hafta</span></div>${back.join('')}</div>${live?splitBlock(splitPool(rows),{cls:'act-pool-split',named:true}):''}${mk}</div>
+  return `<div class="card" id="act-sum" style="margin-bottom:14px"><div class="smp-band"><div class="smp-bl">SAB APPS MILAKAR (${n} apps)</div>${kw.bar}${kw.note}${kw.html}${splitNote}${backHtml}${mk}</div>
     <div class="uni-sec">Har app alag · Halat <span>· ${wtxt} · chip pe tap = uski apps</span></div>${cl}<div class="act-strips">${ACT_STRIPS.map(([k])=>actStrip(rows,k)).join('')}</div>${actProvNote(st,dt)}</div>`; }
 function actPortfolio(){
   const A=DATA.active, rows=actRows().filter(r=>uniVis(r.app_id)), n=rows.length;
@@ -6480,8 +6827,7 @@ function renderValue(){
   catch(e){ html='<h2 class="sc">Install value</h2><div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Install value ka data dikhane me dikkat aayi — thodi der baad page refresh karo.</div></div>'; }
   s.innerHTML=`<div id="val-root">${html}</div>`;
   return s; }
-function valScreen(){ const R0=RANGE; RANGE='7d'; try{ return valScreen_(); } finally { RANGE=R0; } }
-function valScreen_(){
+function valScreen(){
   const V=DATA.value, h2='<h2 class="sc">Install value</h2>';
   if(!V) return h2+`<div class="card" id="val-off" style="padding:24px 20px"><div style="font-weight:750;color:#fff;font-size:14.5px">💸 Not switched on yet</div><div class="muted" style="font-size:13.5px;line-height:1.6;margin-top:6px">Har install kitna kamata hai, Google Ads ka paisa kitne din me wapas aata hai aur kaunse country me ads chalane layak — ye GA4 install-day data + AdMob + Google Ads se banta hai. Chalu hone ke baad yahan dikhega.</div></div>`;
   if(APP){ const r=valCurRow(); if(!r) return valNoGa4(APP);
@@ -6498,13 +6844,21 @@ function valNoGa4(name){ const r=((DATA.value&&DATA.value.no_ga4)||[]).find(x=>x
     <div class="card" id="val-noga4-app"><div class="uni-hd"><span style="font-size:17px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>
     <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">🔌 ${r?hAttr(r.text||uniReason(r.reason)):'Is app ka install-wise data nahi — ya to ye Android app kisi GA4 property se judi nahi, ya abhi select nahi.'}</div></div>`; }
 // ---- one app: sections in the spec's order, each on its own (a broken one never takes the page down) ----
+// KPIWINDOW on this tab: Install value's own tiles (📌 At a glance below — payback / back-in-7-days / earning per
+// install / cost per install / countries) are judged on SETTLED INSTALL WEEKS (each one tracks a cohort of
+// installs forward in time — "earning per install 30 days later" has no meaning over an arbitrary 14/30/60-day
+// CALENDAR window). SPEC is explicit that these stay exactly as they are. The selector still shows here (shared
+// state with Uninstall / Active users), with a note saying so plainly instead of silently doing nothing.
+function valKwNote(hs,till){
+  return kwBar('val',hs,till)+`<div class="faint" style="font-size:11px;margin:-6px 0 14px">💸 Install value ke number install-hafte ke hisaab se judge hote hain (upar "📌 At a glance" — pakka install hafta vs usse pehle) — ye chunav unko nahi badalta.</div>`; }
 function valDetail(r,d){
   const name=d.app||r.app, H=valH(d), got=uniAgo(d.fetched_at), back=`<span class="backlnk" onclick="valBack()">← All apps</span>`, B='<b style="color:var(--ink2)">';
   const bits=[`Install-day data till ${B}${uniD(d.settled_till||r.settled_till)||'—'}</b>`]; if(d.spend_till) bits.push(`Google Ads till ${B}${uniD(d.spend_till)}</b>`); if(d.rev_till) bits.push(`AdMob till ${B}${uniD(d.rev_till)}</b>`);
   const hdr=back+`<div class="uni-hd" style="margin-bottom:4px"><span class="faint" style="font-size:12px">Sirf ye app:</span> <span style="font-size:18px;font-weight:800;color:#fff">${smpAppHtml(d.app_id||r.app_id,name)}</span></div>
     <div class="faint" id="val-hd" style="font-size:12px;margin:5px 0 14px;display:flex;gap:5px 10px;flex-wrap:wrap;align-items:center"><span>${bits.join(' · ')}${got?' · fetched '+got:''}</span><span class="pill uni-pn" title="Isi target se Keep / Slow / Costly aur alerts tay hote hain — badalna ho to batao.">Target: paisa ${H} din me wapas</span></div>`;
+  const W=valWeeks(d), hs=W.length?W[W.length-1].from:null, till=d.settled_till||r.settled_till||(W.length?W[0].to:null);
   const safe=f=>{ try{ return f(d,r)||''; }catch(e){ return '<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ Ye hissa abhi dikh nahi paya.</div>'; } };
-  return hdr+[valSumCard,valChangesCard,valPayCard,valCtyCard,valVerCard,valLongCard,valChkCard,()=>valTimingNote()].map(safe).join(''); }
+  return hdr+valKwNote(hs,till)+[valSumCard,valChangesCard,valPayCard,valCtyCard,valVerCard,valLongCard,valChkCard,()=>valTimingNote()].map(safe).join(''); }
 // "📌 At a glance": the engine's one line, five tiles (3 + 2), the context line, the data line and the edge sentences
 function valTileBox(k,label,tip,st,big,chip,sub,span,vcls,spl){ const open=VALTILEEXP===k;
   return `<div class="uni-st val-t${open?' open':''}" data-m="${k}" data-st="${st}" onclick="valTTX('${k}')"><div class="l" title="${hAttr(tip)}">${label}</div><div class="v${vcls?' '+vcls:''}">${big}</div>`
@@ -7187,6 +7541,7 @@ function valPortfolio(){
   const nBad=rows.filter(r=>r.status==='error').length;
   const note=V.status==='error'?'<div class="note">⚠️ Install value data is baar nahi ban paya — agle robot run me phir try hoga.</div>'
     :((V.status&&V.status!=='ok'&&nBad)?`<div class="note">⚠️ ${nBad} ${nBad===1?'app ka':'apps ka'} data is baar nahi bana — agle robot run me phir try hoga.</div>`:'');
+  const kwNote=valKwNote(null,sMax);   // shared selector (cross-tab state) — this tab's numbers stay judged weeks (see valKwNote)
   let sum=''; try{ sum=n?valSumPortfolio(rows):''; }catch(e){ sum='<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ Sab apps milakar — ye hissa abhi dikh nahi paya.</div>'; }
   // the top section (SPEC_SIMPLIFY §6.5): the ad-funded apps — Paisa wapas (din me) · pehle · halat; the rest as one-line counts
   const judged=ads.filter(r=>{ const P=valPayOf(r); return valOk(P.p)||P.never; }), jaldi=ads.filter(r=>!judged.includes(r)), noads=rows.filter(r=>valSt(valM(r.pay))==='nospend');
@@ -7223,7 +7578,7 @@ function valPortfolio(){
   const noCard=noG.length?`<div class="card" id="val-noga4" style="margin-bottom:14px"><div class="ct"><h3>🔌 Apps without GA4 data (${noG.length})</h3></div>
     ${noG.map(x=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">${smpAppHtml(x.app_id,x.app)}<span class="muted" style="font-size:12.5px">${hAttr(x.text||uniReason(x.reason))}</span></div>`).join('')}</div>`:'';
   let cty=''; try{ cty=valCtyAllCard(rows); }catch(e){ cty='<div class="card faint" id="val-ctyall" style="margin-bottom:14px;font-size:12.5px">⚠️ 🌍 Countries across apps — ye hissa abhi dikh nahi paya.</div>'; }
-  return head+note+payCard+sum+alCard+table+cty+orgCard+noCard+valTimingNote(); }
+  return head+kwNote+note+payCard+sum+alCard+table+cty+orgCard+noCard+valTimingNote(); }
 // ---- Alerts screen: the open Install value alerts (from DATA.value — no lazy load); nothing at all when there are none ----
 function valAlertsFor(){ return valAls().filter(x=>(!APP||x.app===APP)&&uniVis(x.app_id)); }
 const VAL_FAM={pay_slow:'Ads money back',pay_loss:'Ads money not coming back',geo_move:'Country',geo_cost:'Country ads costly',iv_link:'GA4 ↔ AdMob link',
@@ -8389,6 +8744,7 @@ async function load(){
       catch(_){ const r = await fetch(API_BASE+"/dashboard", {cache:"no-store"}); DATA = await r.json(); }
     }
     try{ CURVIEW=localStorage.getItem("curview")||null; }catch(e){}   // restore chosen currency view
+    kwLoad();                                // restore the shared KPI-window period + comparison choice
     curSyncUI();
     _navRestore();                           // restore the LAST screen (app/period too) if recent, else Overview …
     // … SPEC_SIMPLIFY (owner-approved): ✅ Review is the landing screen once review/index.json lists a day (a recent saved
