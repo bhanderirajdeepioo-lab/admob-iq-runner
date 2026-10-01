@@ -263,17 +263,19 @@ def test_the_table_does_not_follow_the_range(page):
 
 def test_the_hover_box_shows_the_last_pakka_week_with_its_dates_and_the_change(built, page):
     tips = page["30"]["tips"]
-    full = [t for t in tips if "Last pakka week " in t]
+    full = [t for t in tips if "Latest week " in t]
     assert len(full) >= 20
     for t in full:
-        assert re.search(r"All time \d+\.\d% installs .+? · [\d,.]+(?: lakh)? of [\d,.]+(?: lakh)? gaye", t)
-        assert re.search(r"Last pakka week \d+\.\d% installs \d", t) and re.search(r"Badlaav \d+\.\d% → \d+\.\d%", t)
-        assert re.search(r"(\+|−)\d+\.\d% (zyada|kam) gaye all-time se|All-time jitne hi gaye", t)
-        assert re.search(r"≈ [+−±][\d,.]+(?: lakh)? log \(us week ke installs pe\)", t)
+        assert re.search(r"All time \d+\.\d% installs .+? · [\d,.]+(?: lakh)? of [\d,.]+(?: lakh)? gone", t)
+        assert re.search(r"Latest week \d+\.\d% installs \d", t) and re.search(r"Change \d+\.\d% → \d+\.\d%", t)
+        # the change line is number-first now: "≈ +30 log (+1.2%) · all-time se zyada gaye" (unchanged: "All-time jitne
+        # hi gaye · ≈ ±0 log")
+        assert re.search(r"≈ [+−±][\d,.]+(?: lakh)? log \([+−]\d+\.\d%\) · all-time se (?:zyada|kam) gaye|All-time jitne hi gaye · ≈ ±0 log", t)
+        assert re.search(r"\(us week ke installs pe\)", t)
         assert re.search(r"\b(Worse|Watch|Better|Normal|Too early)\b", t)
-        assert "⏳ Not final · " in t and " ko pakka — " in t     # the newer install days left out, said so
-    assert any("Pehle 4 hafte " in t for t in full)
-    assert any("Naye installs ⏳ (abhi badh sakta) " in t for t in full)   # the engine's newer row, when it shows one
+        assert "⏳ Not final · final on " in t and " — " in t     # the newer install days left out, said so
+    assert any("Previous 4 weeks " in t for t in full)
+    assert any("New installs ⏳ (may still rise) " in t for t in full)   # the engine's newer row, when it shows one
     young = [t for t in tips if "app 8 hafte se nayi" in t]
     assert young and all("Too early" in t for t in young)
 
@@ -330,7 +332,7 @@ def test_the_app_view_has_its_9_bars_with_the_numbers_and_the_row(page):
         assert [int(k) for k, _ in bars] == list(range(9))
         for _, b in bars:
             v = re.sub(r"<[^>]+>", "", b.split('<span class="us-gbv">')[1])
-            assert re.match(r"^\d+\.\d% · last \d+\.\d%(?: · naye \d+\.\d% ⏳)?[\d,]+(?:\.\d+)?(?: lakh)? of [\d,]+(?:\.\d+)?(?: lakh)?$", v), v
+            assert re.match(r"^\d+\.\d% · latest week \d+\.\d%(?: · new installs \d+\.\d% ⏳)?[\d,]+(?:\.\d+)?(?: lakh)? of [\d,]+(?:\.\d+)?(?: lakh)?$", v), v
             assert 'class="us-gbk' in b                         # the last pakka week marked on the all-time bar
         assert "Gone by day N" in h and len(re.findall(r'<td[^>]*data-tk="gd:\d+:\d"', h)) == 9   # + the table's row
 
@@ -338,4 +340,4 @@ def test_the_app_view_has_its_9_bars_with_the_numbers_and_the_row(page):
 def test_a_file_without_the_block_still_renders(page):
     n = page["nogd"]
     assert n["screen"] and "agle refresh" in n["panel"] and "<table" not in n["panel"]
-    assert "us-gbars" not in n["drawer"] and "Kitne abhi bhi app me" in n["drawer"]
+    assert "us-gbars" not in n["drawer"] and "How many still in app" in n["drawer"]

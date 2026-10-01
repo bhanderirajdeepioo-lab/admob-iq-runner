@@ -31,9 +31,11 @@ RANK = {"worse": 0, "break": 1, "watch": 2, "slow": 2, "better": 3, "maybe_dn": 
         "growth": 6, "normal": 7, "low": 8, "noad": 8, "wait": 9}
 TILE_KEYS = ("ret_dau", "d1", "d7", "sess", "time", "arpdau")
 # SPEC_SIMPLIFY §1.8 / §6.4: exactly six status words — one per state (the metric is named by its tile / strip / column)
-WORD = {"worse": "🔴 Bigda", "watch": "🟡 Dhyan do", "slow": "🟡 Dhyan do", "break": "🟡 Dhyan do", "better": "🟢 Behtar",
+# (owner, 1 Oct 2026: WD.st / WD.sti in frontend/index.html — Bigda/Dhyan do/Behtar/Abhi jaldi/Lagu nahi/Jaankari ->
+#  Worse/Watch/Better/Too early/N/A/Info; the data keys bigda/dhyan/behtar/jaldi/lagu/info are unchanged)
+WORD = {"worse": "🔴 Worse", "watch": "🟡 Watch", "slow": "🟡 Watch", "break": "🟡 Watch", "better": "🟢 Better",
         "maybe_dn": "⚪ Normal", "maybe_up": "⚪ Normal", "normal": "⚪ Normal", "price_dn": "⚪ Normal", "price_up": "⚪ Normal",
-        "growth": "⏳ Abhi jaldi", "low": "⏳ Abhi jaldi", "wait": "⏳ Abhi jaldi", "noad": "— Lagu nahi"}
+        "growth": "⏳ Too early", "low": "⏳ Too early", "wait": "⏳ Too early", "noad": "— N/A"}
 
 
 @pytest.fixture(scope="module")
@@ -85,7 +87,7 @@ def test_every_active_state_renders_without_errors(report):
 
 
 def test_tab_title_and_nav(report, html):
-    assert report["titles"] == "Active users|Returning users, comebacks, time & ad revenue (GA4)"
+    assert report["titles"] == "Active users|Old users, comebacks, time & ad revenue (GA4)"   # glossary: Returning users -> Old users
     nav = re.findall(r'<li><button data-screen="([a-z]+)"', html.split('<ul class="nav" id="nav">')[1].split("</ul>")[0])
     assert nav.index("active") + 1 == nav.index("uninstall")                       # directly above 🚪 Uninstall
     assert '<li><button data-screen="active"><span class="i">👥</span> Active users</button></li>' in html
@@ -136,7 +138,8 @@ def test_tiles_d1_and_d7_separate(report, fixture):
         assert tiles == list(TILE_KEYS), (r["app"], tiles)
         for t in report["apps"][r["app"]]["tiles"]:
             if t["m"] in ("d1", "d7") and t["st"] not in ("wait", "noad") and t["big"] != "—":
-                assert t["big"].endswith("of 100"), (r["app"], t)
+                # display rule: the number first, % beside it (never "of 100" / "per 100")
+                assert re.fullmatch(r"[\d.]+ %", t["big"]), (r["app"], t)
 
 
 def test_tiles_show_settled_dates(report, fixture):
@@ -173,7 +176,7 @@ def test_rev_tile_split(report, fixture):
         if t["st"] in ("noad", "wait"):
             assert t["big"] == "—" and "$0" not in t["text"]
             continue
-        assert "AdMob ads har user" in t["text"] and "Ad rate (1,000 ads ka)" in t["text"], (r["app"], t["text"])   # §6.4 words
+        assert "Ads per user" in t["text"] and "Ad rate" in t["text"], (r["app"], t["text"])   # §6.4 words (now per user, no "1,000 ads")
         if t["big"] != "—":
             assert t["big"].startswith("≈"), (r["app"], t["big"])
         osh = (det(fixture, r).get("flags") or {}).get("other_share")
@@ -210,7 +213,7 @@ def test_use_card_modes(report, fixture):
         if (det(fixture, r).get("edges") or {}).get("usage_state") == "wait":
             assert all(m["wait"] for m in u.values()), r["app"]
             continue
-        assert u["base"]["on"] == ["Time per user", "Purane users (roz)", "7-day average"], (r["app"], u["base"])   # §6.4
+        assert u["base"]["on"] == ["Time per user", "Old users/day", "7-day average"], (r["app"], u["base"])   # §6.4
         assert u["sess_all"]["on"] == ["Sessions per user", "All users", "7-day average"]
         assert u["time_new_day"]["on"] == ["Time per user", "Installs", "Every day"]
         assert u["time_new_day"]["context"] and not u["time_new_day"]["band"] and not u["base"]["band"]
@@ -244,7 +247,7 @@ def test_changes_rows(report, fixture):
                                                 if not o.get("from") or (_date.fromisoformat(r["data_till"]) - _date.fromisoformat(o.get("started") or o["from"])).days <= 90), r["app"]
         assert a["closed_rows"] == len(C.get("closed") or []), r["app"]
         for cls, lbl in a["sev_pills"]:
-            assert (cls, lbl) in (("p-r", "🔴 Bigda"), ("p-y", "🟡 Dhyan do"), ("p-g", "🟢 Behtar"), ("p-b", "ℹ️ Jaankari"))
+            assert (cls, lbl) in (("p-r", "🔴 Worse"), ("p-y", "🟡 Watch"), ("p-g", "🟢 Better"), ("p-b", "ℹ️ Info"))
 
 
 def test_changes_all_normal(report, fixture):
@@ -259,7 +262,7 @@ def test_changes_all_normal(report, fixture):
 
 def test_early_look_row_is_provisional_and_uncounted(report):
     e = report["syn"]["early"]
-    assert e["row"] and e["pill"] and not e["counted"]               # an ℹ️ Jaankari row with its "⏳ Pakka nahi", never an alert
+    assert e["row"] and e["pill"] and not e["counted"]               # an ℹ️ Info row with its "⏳ Not final", never an alert
     assert e["title"] is not None and int(e["title"]) <= int(e["open"])   # "What changed? (n)" = the rows shown (never the info row)
 
 
@@ -283,7 +286,7 @@ def test_uniimpgo_act_path_shows_active(report):
     assert g["calls"][0] == "show:uninstall" and g["uni"] == g["key"] and g["open"] == "" and not g["screen"]   # §6.5: the Uninstall tab's card
 
 
-VERD = {"halt": "🛑 Update roko", "hold": "⚠️ Ruk ke jaancho", "continue": "👍 Chalne do", "win": "✅ Update achha gaya", None: "⏳ Abhi jaldi"}
+VERD = {"halt": "🛑 Stop update", "hold": "⚠️ Wait and check", "continue": "👍 Keep", "win": "✅ Update went well", None: "⏳ Too early"}
 
 
 def _dmy(d):
@@ -302,7 +305,7 @@ def test_imp_card_in_active(report, fixture):
         ups = sorted(uni[r["app_id"]]["updates"], key=lambda u: u["date"], reverse=True)
         if ups:
             u = ups[0]
-            assert a["imp_line"] == "📦 Is app ka aakhri update: %s (%s) · %s → Uninstall me poora card ›" % (u["label"], _dmy(u["date"]), VERD[u["level"]]), a["imp_line"]
+            assert a["imp_line"] == "📦 Is app ka aakhri update: %s (%s) · %s → Full card in Uninstall ›" % (u["label"], _dmy(u["date"]), VERD[u["level"]]), a["imp_line"]
             assert a["imp_go"] == ["onclick=\"uniImpGo('%s','%s')\"" % (r["app_id"], u["key"])], a["imp_go"]
             seen["update"] += 1
         else:
@@ -352,7 +355,7 @@ def test_portfolio_chips_open_exact_apps(report, fixture):
         s_ = (r.get("summary") or {}).get("kind")
         K["worse" if s_ == "worse" else "watch" if s_ in ("break", "watch", "slow") else "better" if s_ == "better" else "ok" if s_ in ("ok", "maybe") else "wait"] += 1
     c = report["portfolio"]["count"]
-    assert c.startswith("🔴 %d Bigda" % K["worse"]) and "🟡 %d Dhyan do" % K["watch"] in c and "⚪ %d Normal" % K["ok"] in c and "⏳ %d Abhi jaldi" % K["wait"] in c
+    assert c.startswith("🔴 %d Worse" % K["worse"]) and "🟡 %d Watch" % K["watch"] in c and "⚪ %d Normal" % K["ok"] in c and "⏳ %d Too early" % K["wait"] in c
 
 
 def test_portfolio_recent_updates(report, fixture):
@@ -366,7 +369,7 @@ def test_portfolio_table_sort(report, fixture):
     col = {"ret": ("ret_dau", "v"), "rel": ("ret_dau", "rel"), "d1": ("d1", "v"), "d7": ("d7", "v"), "sess": ("sess", "v"), "time": ("time", "v"), "rev": ("arpdau", "v")}
     heads = [k for k, _ in report["portfolio"]["table_heads"]]
     assert heads == ["app", "ret", "rel", "d1", "d7", "sess", "time", "rev", "status"]
-    assert [l for _, l in report["portfolio"]["table_heads"]] == ["App", "Purane users (roz)", "vs 4 wks", "Next day", "After a week", "Sessions/user", "Time/user", "Kamai har 1,000 users se", "Status"]   # §6.4
+    assert [l for _, l in report["portfolio"]["table_heads"]] == ["App", "Old users/day", "vs 4 wks", "Back next day", "Back after 7 days", "Sessions/user", "Time/user", "Revenue per user", "Status"]   # §6.4
     for key, order in report["portfolio"]["sorts"].items():
         k, d = key.split("|")
         assert sorted(order) == sorted(R), key
@@ -406,7 +409,7 @@ def test_prov_and_est_marks(report, fixture):
         L = d.get("latest") or {}
         assert a["latest"] == ""                                          # one metric = one number: no single-day line (§6.5)
         assert a["prov_note"] == bool(d.get("settled_till") and d.get("data_till") and d["settled_till"] < d["data_till"]), r["app"]
-        assert "7 din (" in a["kpis_today"], r["app"]   # KPIWINDOW: default 7 days (no longer the header's Period — a local selector; see test_kpiwindow_frontend.py)
+        assert "7 days (" in a["kpis_today"], r["app"]   # KPIWINDOW: default 7 days (no longer the header's Period — a local selector; see test_kpiwindow_frontend.py)
     assert report["portfolio"]["prov_note"]
 
 
@@ -562,7 +565,7 @@ def test_market_lines_count_moved_of_total_and_old_weeks_are_past(report):
     # dates, and only while it is ≤ 14 days old (a month-old week: hidden, never told in the past tense)
     fx = report["fix"]
     assert fx["rev_market"] == "", fx["rev_market"]                                       # a week of 1–7 Sep: > 14 days old
-    assert fx["pf_market_now"].startswith("Saath me: kai apps me ek saath — bazaar ka asar · ")
+    assert fx["pf_market_now"].startswith("Also: kai apps me ek saath — bazaar ka asar · ")   # "Saath me:" -> "Also:"
     assert "15 me se 13 apps ka ad rate −10%" in fx["pf_market_now"] and "kam dikhegi, app ki galti nahi" in fx["pf_market_now"]
     assert fx["pf_market_old"] == ""
 
@@ -574,15 +577,15 @@ def test_install_part_keeps_its_sign(report):
     fx = report["fix"]
     for k, (t, f, p) in (("inst_opp", ("+8%", "−6%", "+14%")), ("inst_same", ("−12%", "−8%", "−4%")), ("inst_zero", ("+2%", "0%", "+2%"))):
         b = fx[k].strip()
-        assert b.startswith("Purane users roz: %s (" % t), b
-        assert "• installs ki wajah se: %s (" % f in b and "• asli badlaav: %s" % p in b, b
-        assert "≈ Andaza" in b and "pts" not in b and "about" not in b, b
+        assert b.startswith("Old users/day: %s (" % t), b
+        assert "• due to installs: %s (" % f in b and "• real change: %s" % p in b, b   # installs ki wajah se / asli badlaav
+        assert "· ≈" in b and "Andaza" not in b and "pts" not in b and "about" not in b, b   # "≈ Andaza" -> "≈" (marker alone)
 
 
 def test_alert_hint_follows_the_metric(report):
     fx = report["fix"]
     assert "💡 Har user ko kam ads — ad load / fill / mediation" in fx["hint_ads"] and "Purane users" not in fx["hint_ads"]
-    assert "💡 Purane users dheere dheere kam" in fx["hint_ret"]
+    assert "💡 Old users dheere dheere kam" in fx["hint_ret"]
 
 
 def test_a_linked_alert_is_one_story_with_the_update_card(report):
@@ -599,7 +602,7 @@ def test_waiting_metrics_say_why_on_the_all_apps_page(report):
         assert "Wapsi ka data agle GA4 fetch ke saath aayega" in by[k] and " of " not in by[k]
     for k in ("sess", "time"):
         assert "Sessions / time agle GA4 fetch me aayenge" in by[k]
-    assert "Next day / After a week: wapsi ka data agle GA4 fetch ke saath" in fx["table_wait"]
+    assert "Back next day / Back after 7 days: wapsi ka data agle GA4 fetch ke saath" in fx["table_wait"]
 
 
 def test_a_tile_that_is_not_judged_shows_no_big_change(report):
@@ -630,13 +633,13 @@ def test_windows_in_active_have_their_own_default_act_onclicks_and_open_here_at_
     assert w["act"] and set(w["act"]) == {" (30 days)"} and w["acwin"] == 30        # this tab's card at 30 …
     assert w["uni"] and set(w["uni"]) == {""} and w["uwin"] == 7                   # … the Uninstall tab's still at 7
     assert w["saved"] == [["imp_win_act", "30"]]
-    assert w["note"] == "Ye card = har update ke 30 din pehle vs 30 din baad (upar chuno) · upar ke tiles = pichhle 7 pakke din"
+    assert w["note"] == "Ye card = har update ke 30 din pehle vs 30 din baad (choose above) · upar ke tiles = pichhle 7 pakke din"   # "upar chuno" -> "choose above"
     assert set(w["act2"]) == {" (30 days)"} and set(w["uni2"]) == {" (60 days)"} and w["saved2"][-1] == ["imp_win_uni", "60"]
     calls = [c for c in w["onclicks"] if c.startswith('onclick="uni')]
     assert calls and all("'act')" in c for c in calls), calls                        # every tap stays in this tab
     assert any(c.startswith('onclick="uniImpWinX(') for c in calls) and any(c.startswith('onclick="uniImpWX(') for c in calls)
-    assert w["late"] == ["event.stopPropagation();uniImp('%s','act',30)" % w["key"], "30 din baad: ⚠️ Ruk ke jaancho"]   # §6.4 words
-    assert w["upd"] == ["event.stopPropagation();uniImpGo('%s','%s','act',30)" % (w["app_id"], w["key"]), "30 din baad: 🛑 Update roko"]
+    assert w["late"] == ["event.stopPropagation();uniImp('%s','act',30)" % w["key"], "After 30 days: ⚠️ Wait and check"]   # §6.4 words
+    assert w["upd"] == ["event.stopPropagation();uniImpGo('%s','%s','act',30)" % (w["app_id"], w["key"]), "After 30 days: 🛑 Stop update"]
     assert all(i.startswith("act-") for i in w["ids"]), w["ids"]
 
 
@@ -805,9 +808,13 @@ def check_pf_rows(rows_, days, usd_inr=1.0, sym="$"):
         assert (c[7] == "—") if not r["sU"] else abs(float(c[7]) - r["sS"] / r["sU"]) <= 0.051, (row["day"], c[7])
         assert (c[8] == "—") if not r["tU"] else abs(_dur(c[8]) - r["tT"] / r["tU"]) <= 60, (row["day"], c[8])
         if r["rvc"] and r["ra"]:
+            # display rule: "Revenue per user" = money ÷ 1,000 of the stored per-1,000 value (2-4 decimals, by size)
             assert c[9].startswith("≈ " + sym) or c[9].startswith(sym), (row["day"], c[9])
-            v = float(c[9].replace("≈", "").replace(sym, "").replace(",", "").replace("<", "").strip())
-            assert abs(v - 1000.0 * r["rv"] / r["ra"] * usd_inr) <= 0.006 or c[9].startswith("<"), (row["day"], c[9])
+            s9 = c[9].replace("≈", "").replace(sym, "").replace(",", "").replace("<", "").strip()
+            v = float(s9)
+            dec = len(s9.split(".")[1]) if "." in s9 else 0
+            tol = 0.5 * 10 ** (-dec) + 1e-9
+            assert abs(v - r["rv"] / r["ra"] * usd_inr) <= tol or c[9].startswith("<"), (row["day"], c[9])
         else:
             assert c[9] == "—", (row["day"], c[9])                                        # no ad data: never $0
         if r["wc"] and r["w0"] > 0:
@@ -824,8 +831,8 @@ def test_pf_section_sits_after_the_alerts_and_before_the_app_table(report):
     assert s["has"] and "📅 Daily — all apps" in s["text"]
     o = s["order"]
     assert 0 < o[0] < o[1] < o[2] < o[3], o                                            # At a glance · What changed · 📅 · table (no updates card, §6.5)
-    assert s["heads"] == ["Date", "Apps with data", "DAU", "Purane users (roz)", "Installs", "Came back next day %", "After a week %",
-                          "Sessions/user", "Time/user", "Kamai har 1,000 users se", "vs same day last week"]
+    assert s["heads"] == ["Date", "Apps with data", "DAU", "Old users/day", "Installs", "Back next day %", "Back after 7 days %",
+                          "Sessions/user", "Time/user", "Revenue per user", "vs same day last week"]
     assert report["pf"]["portfolio_30d"]["has"]                                        # the Period (header) never hides it
 
 
@@ -880,9 +887,9 @@ def test_pf_provisional_days_hatched_faded_and_pilled(report):
     assert any(days[d]["prov"] for d in shown) and s["hatch"] >= 1 and s["prov_note"]
     assert len(s["pts"]) == len(shown)
     for p, d in zip(s["pts"], shown):                                                   # the hover names the day and says provisional
-        assert p["l"].startswith("%s %s" % (_wd(d), _dm(d))) and p["l"].endswith(" · ⏳ pakka nahi") == days[d]["prov"], (d, p["l"])
+        assert p["l"].startswith("%s %s" % (_wd(d), _dm(d))) and p["l"].endswith(" · ⏳ not final") == days[d]["prov"], (d, p["l"])
     assert [r["day"] for r in s["rows"] if r["prov"]] == [d for d in sorted(days, reverse=True)[:14] if days[d]["prov"]]
-    assert "⏳ Pakka nahi" in s["lgd"]                                                  # (was "Provisional", SPEC_SIMPLIFY §1.4)
+    assert "⏳ Not final" in s["lgd"]                                                  # (was "Provisional" / "Pakka nahi", SPEC_SIMPLIFY §1.4)
 
 
 def _wd(d):
@@ -1173,7 +1180,7 @@ def test_pf_footnote_explains_the_star_and_the_marks(report):
     S = report["pf"]["s"]
     for k in ("90d", "all_rows", "broken", "stalebig"):
         s = S[k]
-        assert any(r["star"] for r in s["rows"]) == ("† (Purane users) = " in s["note"]), k
+        assert any(r["star"] for r in s["rows"]) == ("† (Old users) = " in s["note"]), k
     assert not any(r["star"] for r in S["broken"]["rows"])
     assert "khadi (upar-neeche) dotted line" in S["90d"]["note"] and "Dashed line wale din" not in S["90d"]["note"]
 

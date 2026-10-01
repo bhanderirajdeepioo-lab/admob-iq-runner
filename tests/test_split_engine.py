@@ -89,7 +89,7 @@ def test_a_rate_splits_into_the_installs_move_and_the_rate_move_exactly():
     assert x["per100"]["before"] == pytest.approx(30) and x["per100"]["after"] == pytest.approx(25)
     assert x["installs"]["rel"] == pytest.approx(0.5) and x["per_user"]["status"] == "dhyan"
     assert x["shown"] == {"total": 25, "from_installs": 50, "trend": None, "per_user": -25, "count": None}
-    assert attrib.line(x) == "daily returns: kul +25% = from installs +50% + real −25%"
+    assert attrib.line(x) == "daily returns: total +25% = from installs +50% + real −25%"
 
 
 def test_every_basis_has_its_truth_and_adds_up():
@@ -118,9 +118,9 @@ def test_every_basis_has_its_truth_and_adds_up():
     y = adds_up(attrib.expand("imp_dau", r))
     assert y["trend"]["abs"] == 400 and y["per_user"]["abs"] == pytest.approx(39000 - 41600)
     assert y["per_user"]["own"] == pytest.approx(39000 / 41600 - 1) and y["per_user"]["status"] == "bigda"
-    assert attrib.line(y) == "old users, daily: kul −3% = from installs +3% + trend +1% + update −7%"
+    assert attrib.line(y) == "old users, daily: total −3% = from installs +3% + trend +1% + update −7%"
     assert attrib.line(attrib.expand("imp_dau", dict(r, sp=attrib.imp(1200, 0)))) == \
-        "old users, daily: kul −3% = from installs +3% + update −6%"                    # no trend at 0%
+        "old users, daily: total −3% = from installs +3% + update −6%"                    # no trend at 0%
     for st in ("low", "na", "pending"):
         assert attrib.expand("imp_dau", dict(r, status=st)) is None                   # nothing judged: no split
     # uninstall count: expected-by-installs (at the alert's calibration) ×1.25, actual ×1.52
@@ -134,7 +134,7 @@ def test_every_basis_has_its_truth_and_adds_up():
     w = adds_up(attrib.expand("rev", ar))
     assert w["from_installs"]["rel"] == pytest.approx(-0.1) and w["per_user"]["own"] == pytest.approx(0.02)
     assert w["installs"]["what"] == "users" and w["note"] == [["new", 10, 20]]
-    assert attrib.line(w) == "daily revenue: kul −8% = from users −10% + real +2%"
+    assert attrib.line(w) == "daily revenue: total −8% = from users −10% + real +2%"
     # install value: installs / week × earning per install; ad spend: installs × cost per install
     q = adds_up(attrib.expand("ir", {"st": "normal", "base": 0.05, "v": 0.06, "sp": attrib.ir(1000, 800)}))
     assert q["per"] == "week" and q["from_installs"]["rel"] == pytest.approx(-0.2)
@@ -144,7 +144,7 @@ def test_every_basis_has_its_truth_and_adds_up():
     v = adds_up(attrib.expand("vpi", {"severity": "watch", "sp": attrib.vpi(5.0, 4.8, 10.0, 12.0)}))
     assert v["total"]["before"] == pytest.approx(50) and v["total"]["after"] == pytest.approx(40)
     assert v["from_installs"]["abs"] == pytest.approx(50 * (10 / 12 - 1)) and v["installs"]["what"] == "cost"
-    assert attrib.line(v) == "money back: kul −20% = from price −17% + from revenue −3%"
+    assert attrib.line(v) == "money back: total −20% = from price −17% + from revenue −3%"
     # derived hosts (no sp): an impact new_dN row, the survival verdict
     ir_ = {"status": "same", "before": 0.3, "after": 0.3,
            "extra": {"installs_before": 7000, "cohorts_before": 7, "installs_after": 14000, "cohorts_after": 7}}
@@ -630,16 +630,16 @@ def test_the_telegram_line_gets_the_split_before_its_label_and_never_on_an_updat
     # the one-liner names what it counts (daily uninstalls: the users uninstalling a day, not the headline's rate) and
     # its parts add up as printed; installs −40% with the rate up 40% reads as counts, never "real +24%"
     assert ("🟠 [WARNING] App: D1 uninstall 20% → 28% · daily uninstalls: ~−100 = from installs ~−240 + real ~+140 "
-            "(kul −16%) · uninstall (GA4)") in body
+            "(total −16%) · uninstall (GA4)") in body
     assert "🟠 [WARNING] App: v2 ke baad … · update impact (GA4)" in body
-    assert ("🟠 [WARNING] App: purane users kam · old users, daily: kul −10% = from installs −3% + real −7% "
+    assert ("🟠 [WARNING] App: purane users kam · old users, daily: total −10% = from installs −3% + real −7% "
             "· active users (GA4)") in body
     assert "🟡 [WATCH] App: ads kam · active users (GA4)" in body
-    assert ("🟠 [WARNING] App: paisa der se · money back: kul −20% = from price −17% + from revenue −3% "
+    assert ("🟠 [WARNING] App: paisa der se · money back: total −20% = from price −17% + from revenue −3% "
             "· install value (GA4 + Ads)") in body
     off = build_static.send_alerts(dash, dict(s, split=False))
     body = next(r["body"] for r in off if r["channel"] == "email")
-    assert " se " not in body.replace("paisa der se", "") and "asli" not in body and "kul" not in body
+    assert " se " not in body.replace("paisa der se", "") and "asli" not in body and ": total " not in body and "(total " not in body
 
 
 def test_the_switch_reaches_the_build_from_a_repo_variable(monkeypatch):
@@ -756,7 +756,7 @@ def test_a_big_install_swing_reads_as_counts_never_an_impossible_percent():
     assert x["form"] == "count" and x["shown"]["count"] == {"exp": 1, "total": -15, "from_installs": -18, "trend": None,
                                                             "per_user": 3}
     assert x["per_user"]["status"] == "bigda"                                  # more of each 100 leave: the bad way
-    assert attrib.line(x) == "daily uninstalls: ~−150 = from installs ~−180 + real ~+30 (kul −75%)"
+    assert attrib.line(x) == "daily uninstalls: ~−150 = from installs ~−180 + real ~+30 (total −75%)"
     y = adds_up(attrib.expand("rate", {"before": 0.40, "now": 0.20, "severity": "good", "sp": ["ur", 100, 600]}))
     assert y["form"] == "count" and y["shown"]["per_user"] <= -100 and y["shown"]["count"]["per_user"] == -12
     d1 = adds_up(attrib.expand("act_tile_rr", {"sp": ["rr", 1000, 4000], "s": [4200, 28000, 8400, 28000],
@@ -852,8 +852,8 @@ def test_install_value_splits_are_the_tiles_own_numbers():
 def test_the_one_liner_names_what_it_counts():
     """F12: the one-liner leads with the counted thing, so its "kul" is never read as the headline's rate."""
     ur = attrib.expand("rate", {"before": 0.20, "now": 0.28, "severity": "warning", "sp": ["ur", 3000, 2900]})
-    assert attrib.line(ur) == "daily uninstalls: kul +35% = from installs −3% + real +38%"
+    assert attrib.line(ur) == "daily uninstalls: total +35% = from installs −3% + real +38%"
     rr = attrib.expand("rate", {"before": 0.30, "now": 0.28, "severity": "watch", "sp": ["rr", 1000, 1100]})
-    assert attrib.line(rr).startswith("daily returns: kul +3% = from installs +10% + real −")
+    assert attrib.line(rr).startswith("daily returns: total +3% = from installs +10% + real −")
     dau_less = attrib.expand("uc", {"severity": "warning", "sp": attrib.uc(1000, 1150, 1000, 900, 3000, 2700, 45)})
-    assert attrib.line(dau_less).startswith("daily uninstalls: kul +15% = from installs −10% + real +25%")
+    assert attrib.line(dau_less).startswith("daily uninstalls: total +15% = from installs −10% + real +25%")

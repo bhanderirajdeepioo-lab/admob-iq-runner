@@ -35,9 +35,9 @@ NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 BANNED = re.compile(r"\bis hafte\b|\bthis week\b|\babhi ka\b|Provisional|kacch?a\b|kacche|Estimate|/1k|\bpts\b|\bpp\b|\bpoints?\b"
                     r"|cohort|ARPDAU|eCPM|mediation|Stay after|\bsettled\b|\blatest\b(?! week\b)|\brecent\b", re.I)   # "Latest week" (Gone by day N) is the owner's word
-BANNED_CASE = re.compile(r"\bNew\b|\bD\d{1,3}\b|\bMix\b|\bHALT\b|\bWIN\b|\bReturning\b")
+BANNED_CASE = re.compile(r"\bNew\b(?!\s*(?:alert|users?|installs?|vs\b|engine|=))|\bD\d{1,3}\b|\bMix\b|\bHALT\b|\bWIN\b|\bReturning\b")
 DEVA = re.compile("[ऀ-ॿ]")
-SIX = {"Bigda", "Dhyan do", "Behtar", "Normal", "Abhi jaldi", "Lagu nahi"}
+SIX = {"Worse", "Watch", "Better", "Normal", "Too early", "N/A"}
 
 
 @pytest.fixture(scope="module")
@@ -283,8 +283,8 @@ def test_kya_badla_keeps_every_alert_with_its_timestamps(report):
     cards = re.split(r'<div class="us-ac ', chg)[1:]
     assert len(cards) == len(al)
     for c in cards:
-        assert "🕒 Alert aaya: " in c and " IST" in c and "Badlaav shuru: " in c and "Data: " in c
-        assert re.search(r'class="us-age[^"]*"[^>]*>🔔 (🆕 Naya alert · aaj \d\d:\d\d|🆕 Kal aaya|📌 \d+ din se khula|📌 .+ se khula|📌 Shuru se khula \(.+\)|✅ Theek ho gaya|📌 Khula)<', c), c[:300]
+        assert "🕒 Alert time: " in c and " IST" in c and "Change started: " in c and "Data: " in c
+        assert re.search(r'class="us-age[^"]*"[^>]*>🔔 (🆕 New alert · today \d\d:\d\d|🆕 Yesterday|📌 Open \d+ days?|📌 Open since .+|📌 Open from start \(.+\)|✅ Fixed|📌 Open)<', c), c[:300]
 
 
 # ── the words ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -374,7 +374,7 @@ def test_the_app_page_words(report):
         m = BANNED.search(u) or BANNED_CASE.search(u)
         assert not m, (m.group(0), u[max(0, m.start() - 80):m.end() + 40])
         assert not re.search(r"\b100 me\b|\b1,000 me\b|\bhar 1,000\b|per 1,000", u), u[:200]
-        assert "🕒 Alert aaya: " in u or "Is app pe koi khula alert nahi" in u
+        assert "🕒 Alert time: " in u or "Is app pe koi khula alert nahi" in u
 
 
 # ── the charts: hover numbers through ONE path, numbers printed on them, labels never overlapping ──────────────────
@@ -390,7 +390,7 @@ def test_numbers_are_printed_on_the_charts(report):
     c = J(report, "charts")
     big = c["bigLabels"]
     assert any(re.match(r"^\d{1,2} \w{3}: [\d,]+(?: lakh)? \(\d+(?:\.\d+)?%\)$", t) for t in big), big   # the latest day
-    assert any(t.startswith("Avg ") and "/din (" in t for t in big) or any(t.startswith("Normal ") for t in big), big
+    assert any(t.startswith("Avg ") and "/day (" in t for t in big) or any(t.startswith("Normal ") for t in big), big
     assert any(t.startswith("v1.1: ") for t in big), big                           # the 📦 version, before → after
     assert c["inside"] and c["overlap"] == 0                                        # inside the chart, never on each other
     assert any(t.startswith("Max ") for t in c["ioLabels"]) and any(re.match(r"^\d{1,2} \w{3}: ", t) for t in c["ioLabels"])
@@ -399,7 +399,7 @@ def test_numbers_are_printed_on_the_charts(report):
     for t in big + c["ioLabels"] + c["tlLabels"] + c["kpiLabels"]:
         assert not re.search(r"\b100 me\b|1,000 me|per 1,000|NaN|undefined", t), t
         if "%" in t:                                                                # the actual number first, its % beside
-            assert re.search(r"[\d,]+(?: lakh)?(?:/din)? \(\d+(?:\.\d+)?%\)", t) or re.search(r"[\d,]+→[\d,]+/din \(", t), t
+            assert re.search(r"[\d,]+(?: lakh)?(?:/day)? \(\d+(?:\.\d+)?%\)", t) or re.search(r"[\d,]+→[\d,]+/day \(", t), t
 
 
 def test_labels_drop_rather_than_overlap(report):

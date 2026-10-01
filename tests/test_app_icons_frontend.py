@@ -138,7 +138,7 @@ def test_the_review_cards_and_summary_name_apps_with_their_icon(report):
         assert (_icons(head.group(1))[0][1] == "https://icons.example.test/review.png") == (k == r["first"])
         assert _icons(head.group(1))[0][0] == 22
     jumps = re.findall(r'<button type="button" class="rv-jump" data-rvjump="[^"]*">(.*?)</button>', r["summary"])
-    assert jumps and all(j.startswith('<span class="aicon ail') for j in jumps if not j.startswith("Card kholo"))
+    assert jumps and all(j.startswith('<span class="aicon ail') for j in jumps if not j.startswith("Open card"))
     assert all(p.startswith('⏳ <span class="aicon ail') for p in re.findall(r'class="rv-pill rv-pend" data-rvjump="[^"]*">(.*?)</button>', r["summary"]))
     assert all(s.endswith('</span>') for s in re.findall(r'</span>(<span class="aicon ail[^>]*>(?:<img[^>]*>)?</span>)<span class="rv-an">', r["summary"]))
 

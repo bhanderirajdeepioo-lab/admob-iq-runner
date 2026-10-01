@@ -46,8 +46,8 @@ BANNED = re.compile(r"\bis hafte\b|\bthis week\b|\babhi ka\b|Provisional|kacch?a
                     r"|cohort|ARPDAU|eCPM|mediation|Stay after|\bsettled\b|\blatest\b|\brecent\b", re.I)
 BANNED_CASE = re.compile(r"\bNew\b|\bD\d{1,3}\b|\bMix\b|\bHALT\b|\bWIN\b|\bReturning\b")
 DEVA = re.compile("[ऀ-ॿ]")
-WORDS = {"bigda": "🔴 Bigda", "dhyan": "🟡 Dhyan do", "behtar": "🟢 Behtar", "normal": "⚪ Normal", "jaldi": "⏳ Abhi jaldi",
-         "lagu": "— Lagu nahi"}
+WORDS = {"bigda": "🔴 Worse", "dhyan": "🟡 Watch", "behtar": "🟢 Better", "normal": "⚪ Normal", "jaldi": "⏳ Too early",
+         "lagu": "— N/A"}
 
 
 def _detail(st, rv, app_id):
@@ -145,11 +145,11 @@ def test_a_release_date_shows_the_same_rows_as_that_updates_own_block_at_every_w
 
 def test_the_card_at_a_date_title_verdict_dates_and_update_on_that_day(report):
     C = report["card"]
-    assert C["title"].startswith("📌 Aapki date: Bina naam — ")
-    assert C["title_named"].startswith("📌 Aapki date: Banner ad hataya — ")
+    assert C["title"].startswith("📌 Your date: No name — ")
+    assert C["title_named"].startswith("📌 Your date: Banner ad hataya — ")
     assert C["verdict_chip"] and C["before_after"] == [True, True]
     # an update released exactly on that date says so, with a link to its own block (uniImp(key)) in this same card
-    assert C["same_note"].startswith("📦 Isi din App update aaya — uska apna card dekho")
+    assert C["same_note"].startswith("📦 Isi din App update aaya — see its own card →")
     assert C["same_link"] == "uniImp('upd@%s')" % report["_fx"]["picks"]["update_dates"][-1]
     assert C["window_buttons"] == [[7, True, False], [14, False, False], [30, False, False], [60, False, False]]
     assert C["at_30"]["n"] == "30" and "Verdict (30 days)" in C["at_30"]["title"]
@@ -162,7 +162,7 @@ def test_early_pending_and_the_real_updates_inside_the_windows(report):
     ro = last["7"]["verdict"]["ready_on"]
     assert last["7"]["verdict"]["level"] is None and ro
     # the day it completes as the rows' "ready ~" say it: the GA4 data day it needs + GA4's lag (2 days here)
-    assert C["pending_line"] == "⏳ Abhi jaldi — %s ko poora hoga" % report["fmt"]["lag:" + ro]
+    assert C["pending_line"] == "⏳ Too early — %s ko poora hoga" % report["fmt"]["lag:" + ro]
     assert report["fmt"]["lag:" + ro] == report["fmt"].get((date.fromisoformat(ro) + timedelta(days=2)).isoformat(),
                                                            report["fmt"]["lag:" + ro])
     assert C["pending_rows"] >= 5                      # every row of a date this near is still ⏳
@@ -196,7 +196,7 @@ def test_the_all_apps_tool_loads_every_file_with_progress_and_sorts_worst_first(
                                              ["Demo No GA4 Clock · A/c 1001", "Demo Pending Camera · A/c 1001"])
     rank = ["bigda", "dhyan", "normal", "behtar", "jaldi", "lagu"]
     assert [rank.index(r["sw"]) for r in rows] == sorted(rank.index(r["sw"]) for r in rows)
-    assert rows[0]["sw"] == "bigda" and rows[0]["word"] == "🔴 Bigda" and rows[0]["verdict"] == "🛑 Update roko"
+    assert rows[0]["sw"] == "bigda" and rows[0]["word"] == "🔴 Worse" and rows[0]["verdict"] == "🛑 Stop update"
     assert rows[0]["hl"].startswith("Purane users (roz): ") or ": " in rows[0]["hl"]
     assert all(r["word"] == WORDS[r["sw"]] for r in rows)
     assert all(" · A/c 1001" in r["app"] for r in rows)                               # names carry the account
@@ -247,8 +247,8 @@ def test_words_english_labels_hinglish_roman_six_status_words_no_banned_word(rep
         assert "NaN" not in t and "undefined" not in t and "null" not in t, name
     # the labels the owner reads first are English; the card's own wording is unchanged (Actual / Expected)
     allt = " ".join(W["texts"].values())
-    for lab in ("📅 Apni date se tulna karo", "Date", "Before / after:", "💾 Save", "📌 Saved dates:", "All apps",
-                "📅 Ek date, sab apps", "Show", "Actual:", "Expected (bina update ke):"):
+    for lab in ("📅 Compare any date", "Date", "Before / after:", "💾 Save", "📌 Saved dates:", "All apps",
+                "📅 One date, all apps", "Show", "Actual:", "Expected (without update):"):
         assert lab in allt, lab
     # in the All-apps tool: no status word outside the six
     assert set(W["all_words"]) <= set(WORDS.values())

@@ -145,7 +145,7 @@ scen('band', `(() => { const d = __DOC.day, k = __K[1];
     raised_at: rvAddDays(d, -back - 1) + 'T05:00:00.000Z', status: 'closed', decision: 'band', dec_note: 'band karo', dec_by: 'owner@example.test',
     dec_at: rvAddDays(d, -back) + 'T05:00:00.000Z', dec_day: rvAddDays(d, -back)});
   const S = {...__S0, flags: [mk(94, 1), mk(95, 14), mk(96, 20)], me: __S.me};
-  const h = String(rvSummaryHtml(__DOC, S, __S.me)), p = h.split('<summary>Band (')[1]; return p ? parseInt(p, 10) : -1; })()`);
+  const h = String(rvSummaryHtml(__DOC, S, __S.me)), p = h.split('<summary>Closed (')[1]; return p ? parseInt(p, 10) : -1; })()`);
 // a newer open day: Aaj view goes read-only; a 409 day_moved does the same; an OLDER open_day (stale cache) does not
 scen('newday', `(() => { const d = __DOC.day, r = {};
   RV.doc = __DOC; RV.S = {...__S, writable: true}; RV.me = __S.me; RV.auth = true; RV.newDay = null;

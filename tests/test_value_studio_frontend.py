@@ -37,11 +37,11 @@ pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 BANNED = re.compile(r"\bis hafte\b|\bthis week\b|\babhi ka\b|Provisional|kacch?a\b|kacche|Estimate|/1k|\bpts\b|\bpp\b|\bpoints?\b"
                     r"|cohort|ARPDAU|eCPM|mediation|Stay after|\bsettled\b|\blatest\b|\brecent\b"
                     r"|cumulative|checkpoint|bharosa|headline|\bLTV\b", re.I)
-BANNED_CASE = re.compile(r"\bNew\b|\bD\d{1,3}\b|\bMix\b|\bHALT\b|\bWIN\b|\bReturning\b")
+BANNED_CASE = re.compile(r"\bD\d{1,3}\b|\bMix\b|\bHALT\b|\bWIN\b|\bReturning\b|(?<!🆕 )\bNew\b(?!\s(?:vs|week|users|engine|installs|alert))")
 DEVA = re.compile("[ऀ-ॿ]")
-SIX = {"Bigda", "Dhyan do", "Behtar", "Normal", "Abhi jaldi", "Lagu nahi"}
-AGE = re.compile(r"🔔 (🆕 Naya alert · aaj \d\d:\d\d|🆕 Kal aaya|📌 \d+ din se khula|📌 .+ se khula|📌 Shuru se khula \(.+\)|📌 Khula|✅ Theek ho gaya|Band · .+)$")
-STUDIO_AGE = re.compile(r"^(🆕 Aaj|🆕 Kal aaya|📌 \d+ din se khula|📌 .+ se khula|📌 Khula)$")
+SIX = {"Worse", "Watch", "Better", "Normal", "Too early", "N/A"}
+AGE = re.compile(r"🔔 (🆕 New alert · today \d\d:\d\d|🆕 Yesterday|📌 Open \d+ days|📌 Open since .+|📌 Open from start \(.+\)|📌 Open|✅ Fixed|Band · .+)$")
+STUDIO_AGE = re.compile(r"^(🆕 Today|🆕 Yesterday|📌 Open \d+ days|📌 Open since .+|📌 Open)$")
 
 
 @pytest.fixture(scope="module")
@@ -238,8 +238,8 @@ def test_drawer_poora_app_page_and_refresh(report, built):
     assert d["afterRefresh"]                                                # the 5-minute refresh never wipes an open drawer
     big = next(a["id"] for a in studio["apps"] if a["sz"] == "badi")
     assert d["calls"] == [big] and d["closed"]                              # "Poora app page →" → the app's page
-    assert any(t.startswith("paisa wapas: ") for t in d["labels"]), d["labels"]   # the payback point, printed
-    assert any(re.match(r"^≈?[−+]?\$[\d,.]+ \(\d+% wapas\)$", t) for t in d["labels"]), d["labels"]   # the latest, number then %
+    assert any(t.startswith("money back: ") for t in d["labels"]), d["labels"]   # the payback point, printed
+    assert any(re.match(r"^≈?[−+]?\$[\d,.]+ \(\d+% back\)$", t) for t in d["labels"]), d["labels"]   # the latest, number then %
 
 
 def test_the_full_app_page(report):
@@ -265,18 +265,18 @@ def test_whats_new_keeps_every_alert_with_its_timestamps(report, built):
     assert len(alert_cards) == len(want)
     for c in alert_cards:
         t = re.sub(r"<[^>]+>", "", c)
-        assert "🕒 Alert aaya: " in t and " IST" in t and "Badlaav shuru: " in t and "Data: " in t, t[:300]
+        assert "🕒 Alert time: " in t and " IST" in t and "Change started: " in t and "Data: " in t, t[:300]
         age = re.search(r'class="vs-age[^"]*"[^>]*>([^<]+)<', c).group(1)
         assert AGE.match(age), age
     for c in cards:
         if c in alert_cards:
             continue
         t = re.sub(r"<[^>]+>", "", c)
-        assert "🕒 Alert aaya: — (" in t and "Badlaav shuru: " in t and "Data: " in t, t[:300]   # not an alert, and says so
+        assert "🕒 Alert time: — (" in t and "Change started: " in t and "Data: " in t, t[:300]   # not an alert, and says so
         age = re.search(r'class="vs-age[^"]*"[^>]*>([^<]+)<', c).group(1)
         assert STUDIO_AGE.match(age), age
     tbl = report["out"]["chgTable"]
-    assert tbl.count("<tr data-app=") >= len(want) and "🕒 Alert aaya" in tbl
+    assert tbl.count("<tr data-app=") >= len(want) and "🕒 Alert time" in tbl
 
 
 # ── the numbers printed on the charts ───────────────────────────────────────────────────────────────────────────

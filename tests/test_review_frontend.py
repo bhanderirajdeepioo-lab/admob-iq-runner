@@ -24,18 +24,18 @@ FIXTURE = os.environ.get("REVIEW_FE_FIXTURE") or rs.FIXTURE
 NODE = shutil.which("node")
 K = rs.K
 RV_TXT = {
-    "nav": "Review", "title": "Daily Review", "sub": "Har din har app ka ek card · team review",
-    "tab_today": "Aaj ka review", "tab_sum": "Summary", "tab_hist": "History",
+    "nav": "Review", "title": "Daily Review", "sub": "One card per app per day · team review",
+    "tab_today": "Today’s review", "tab_sum": "Summary", "tab_hist": "History",
     "b_ok": "✅ Got it · Reviewed", "b_note": "📝 Note", "b_imp": "🚩 Important · Re-review",
     "imp_help": "Admin dobara dekhega — faisla hone tak ye card upar focus me rahega",
     "st_imp": "🚩 Re-review (Important)", "sum_imp": "🚩 Important · Re-review", "adm_list": "🚩 Re-review list",
-    "b_kal": "🔁 Kal dobara dekho", "kal_help": "Khud kal dobara dekhna hai — admin ko nahi jaata", "b_snz": "💤 Pata hai…",
-    "b_undo": "↩ Wapas lo", "b_all": "✅ Sab reviewed", "st_pend": "⏳ Baaki", "st_ok": "✅ Reviewed",
-    "st_note": "📝 Reviewed + note", "st_kal": "🔁 Kal dobara dekho", "d_theek": "👍 Theek hai", "d_kaam": "🛠 Kaam do",
-    "d_band": "⛔ Band karo", "d_done": "✅ Kaam ho gaya", "poori": "Poori app", "not_started": "Review abhi shuru nahi hua",
+    "b_kal": "🔁 Check again tomorrow", "kal_help": "Khud kal dobara dekhna hai — admin ko nahi jaata", "b_snz": "💤 Snooze…",
+    "b_undo": "↩ Undo", "b_all": "✅ All reviewed", "st_pend": "⏳ Pending", "st_ok": "✅ Reviewed",
+    "st_note": "📝 Reviewed + note", "st_kal": "🔁 Check again tomorrow", "d_theek": "👍 OK", "d_kaam": "🛠 Assign task",
+    "d_band": "⛔ Close", "d_done": "✅ Done", "poori": "Full app", "not_started": "Review not started yet",
     "api_down": "Buttons abhi band hain — review server se jud nahi paaye. Cards dekh sakte ho.",
     "auth_gone": "Login session khatam — page reload karo", "save_fail": "❌ Save nahi hua — {msg}. Dobara try karo.",
-    "flag_block": "🚩 Ye card Re-review me hai — admin ke faisle tak aise hi rahega. Hatana ho to ↩ Wapas lo.",
+    "flag_block": "🚩 Ye card Re-review me hai — admin ke faisle tak aise hi rahega. Hatana ho to ↩ Undo.",
     "hist_red": "⏳ Is din ka review baaki hai",
 }
 FNS = ("rvEsc", "rvRt", "rvMoney", "rvEffSt", "rvIsAttn", "rvLayout", "rvCardHtml", "rvSummaryHtml", "rvCalendarHtml",
@@ -165,15 +165,15 @@ def test_cards_have_ten_dots_flags_on_flagged_dots_and_the_exact_buttons(rep, fx
     assert 'role="checkbox"' in c4 and "aria-checked" in c4 and "aria-pressed" in c4
     assert RV_TXT["kal_help"] in c4
     assert "<img" not in c4 and "&lt;img" in c4                              # the team note is escaped
-    assert RV_TXT["st_note"] in text(c4) and "kal dobara dekho” kaha tha" in text(c4)
+    assert RV_TXT["st_note"] in text(c4) and "said “check again tomorrow”" in text(c4)
     assert RV_TXT["st_kal"] in text(live[K[3]]) and RV_TXT["st_ok"] in text(live[K[2]])
-    assert RV_TXT["st_pend"] in text(live[K[1]]) and "🆕 Naya aur bigda" in text(live[K[1]])
+    assert RV_TXT["st_pend"] in text(live[K[1]]) and "🆕 New and worse" in text(live[K[1]])
     t5 = text(live[K[5]])
-    assert "Kamai · eCPM" in t5 and "din se khula" in t5 and "Synth Echo Editor - Pro" in t5
-    assert "kaam chal raha" in text(live[K[6]])
+    assert "Revenue · eCPM" in t5 and re.search(r"\b\d+ days? open\b", t5) and "Synth Echo Editor - Pro" in t5
+    assert "task in progress" in text(live[K[6]])
     assert "💤" in text(live[K[2]])
     t1 = text(live[K[1]])
-    for q in ("Kya hua", "Kab se", "Kitna bada", "Naya ya purana", "Kya karo"):
+    for q in ("What happened", "Since when", "How big", "New or old", "Next step"):
         assert q in t1, q
     assert "Detail:" in t1 and 'class="rv-m"' in live[K[1]]
     assert "₹" in S(rep, "cards_inr")
@@ -202,7 +202,7 @@ def test_summary_admin_list_only_for_admins(rep):
         assert not any(lab in b for b in buttons(team)), lab
     for h in (adm, team):
         t = text(h)
-        assert RV_TXT["sum_imp"] in t and "Kamai · eCPM" in t and "Synth Echo Editor" in t
+        assert RV_TXT["sum_imp"] in t and "Revenue · eCPM" in t and "Synth Echo Editor" in t
         assert "<img" not in h
 
 
@@ -211,7 +211,7 @@ def test_calendar_colours_and_charts(rep):
     days = S(rep, "cal_days")
     assert len(days) == 3
     cal = S(rep, "calendar")
-    assert "7/7 reviewed" in cal and "3/7 reviewed" in cal and "baaki" in cal
+    assert "all reviewed" in cal and "3/7" in cal and "pending" in cal
     assert cal.count('aria-pressed="true"') == 1 and cal.count("aria-pressed") >= 3
     assert S(rep, "calendar_sel").count('aria-pressed="true"') == 1
     charts = S(rep, "charts")
@@ -227,7 +227,7 @@ def test_a_decided_whole_app_flag_no_longer_holds_the_card_in_re_review(rep):
     assert st["decided"] == "ok" and st["decided_note"] == "note"
     card = st["card"]
     assert RV_TXT["st_ok"] in text(card) and RV_TXT["st_imp"] not in text(card)
-    assert "Theek hai" in text(card)                                    # the log shows the admin's decision
+    assert "Admin: OK" in text(card)                                    # the log shows the admin's decision
     assert st["hist_later"] == "flag", "History of the flag's day: decided on a later day → still Re-review then"
 
 
@@ -239,15 +239,15 @@ def test_a_flag_raised_today_lifts_the_card_but_kaam_does_not(rep):
 def test_small_app_chip_says_upar_laaya_only_when_the_card_is_on_top(rep):
     sc = S(rep, "small_chip")
     assert sc is not None, "the synthetic day has a small app with a new red feature"
-    assert "🆕 Naya aur bigda" in text(sc["small"]) and "upar laaya" not in text(sc["small"])
-    assert "upar laaya" in text(sc["lifted"])                           # a small app lifted by an open 🚩 is on top
+    assert "🆕 New and worse" in text(sc["small"]) and "moved up" not in text(sc["small"])
+    assert "moved up" in text(sc["lifted"])                           # a small app lifted by an open 🚩 is on top
 
 
 def test_history_uses_the_review_day_of_a_decision(rep):
     h = S(rep, "hist_decday")
     assert h["same"] == "closed", "decided while the day was still open (before 09:00 IST next day) → decided that day"
     assert h["later"] == "open"
-    assert "Theek hai" in text(h["log_same"]) and h["log_next"] == ""
+    assert "Admin: OK" in text(h["log_same"]) and h["log_next"] == ""
 
 
 def test_admin_band_list_keeps_14_review_days(rep):
@@ -257,7 +257,7 @@ def test_admin_band_list_keeps_14_review_days(rep):
 def test_a_newer_open_day_makes_the_live_view_read_only_and_live_writes_say_so(rep):
     n = S(rep, "newday")
     assert n["can0"] is True and n["older"] is None, "an OLDER open_day (stale cache) is not a new day"
-    assert n["newer"] and n["can1"] is False and "Kholo" in n["msg"]
+    assert n["newer"] and n["can1"] is False and "Open" in n["msg"]
     assert n["poll"], "a poll that sees a newer open_day shows the new-day banner"
     assert n["live_body"]["live"] is True and n["live_body"]["act"] == "ok"
     assert "live" not in n["hist_body"], "History's admin correction is not a live write"

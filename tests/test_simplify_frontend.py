@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 # SPEC_SIMPLIFY §1.1 / §1.7 / §6.4 / §9 checks 1 + 2: words no screen of these tabs may show
 BANNED = re.compile(r"\bis hafte\b|\bthis week\b|\babhi ka\b|Provisional|kacch?a\b|kacche|Estimate|/1k|\bpts\b|\bpp\b|\bpoints?\b"
                     r"|cohort|ARPDAU|eCPM|mediation|Stay after|\bsettled\b|\blatest\b|\brecent\b", re.I)
-BANNED_CASE = re.compile(r"\bNew\b|\bD\d{1,3}\b|\bMix\b|\bHALT\b|\bWIN\b|\bReturning\b")   # the old chips / codes, as written
+BANNED_CASE = re.compile(r"(?<!🆕 )\bNew\b|\bD\d{1,3}\b|\bMix\b|\bHALT\b|\bWIN\b|\bReturning\b")   # the old chips / codes, as written — 🆕 New (today/yesterday chip, GLOSSARY problem chips) is wanted now
 DEVA = re.compile("[ऀ-ॿ]")
 
 
@@ -49,11 +49,11 @@ def test_renders_without_errors(report):
 
 def test_dates_age_and_ist_time(report):
     h = report["helpers"]
-    assert h["umar"] == ["0 din", "3 din", "30 din", "4 hafte", "13 hafte", "3 mahine", "7 mahine"]      # §1.2 Umar
+    assert h["umar"] == ["0 days", "3 days", "30 days", "4 weeks", "13 weeks", "3 months", "7 months"]      # §1.2 Umar
     assert h["ist"] == "28 Sep, 10:26 IST" and h["ist_date"] == "28 Sep" and h["ist_none"] == ""          # never an invented time
     assert h["d_this"] == "16 Mar" and h["d_last"] == "29 Dec 2025"                                         # the year only when not this year
-    assert h["pakka"] == "⏳ Pakka nahi · 5 Oct ko pakka" and h["pakka0"] == "⏳ Pakka nahi"
-    assert h["nw"] == ["install ke din hi", "agle din", "7 din me", "12 din me"]                          # §6.4 D0 / D1 / D7 / Dn
+    assert h["pakka"] == "⏳ Not final · final on 5 Oct" and h["pakka0"] == "⏳ Not final"
+    assert h["nw"] == ["same day uninstall", "uninstalled within 1 day", "uninstalled within 7 days", "uninstalled within 12 days"]  # §6.4 D0 / D1 / D7 / Dn
     assert h["rel"] == ["+14%", "−28%", "0%", ""] and h["count"] == ["12,345", "2.5 lakh", "34.5 lakh"]
 
 
@@ -61,24 +61,24 @@ def test_one_chip_and_the_timestamp_line(report):
     r = report["rows"]
     # the chip is the ALERT's age (owner, 1 Oct: "new alert he?") — never the change's: a change that began 5 days ago in
     # an alert made 4 days ago reads "📌 4 din se khula" (the change's start is "Badlaav shuru" in the 🕒 line)
-    assert r["naya"]["chip"] == "📌 4 din se khula" and r["naya"]["tip"] == "Alert aaya: 21 Sep, 10:30 IST"
-    # the owner's 🕒 line, in its order: Alert aaya (IST time) · Data · Badlaav shuru
-    assert r["naya"]["ts"] == "🕒 Alert aaya: 21 Sep, 10:30 IST · Data: Installs 19–25 Sep · vs pehle (22 Aug–18 Sep) · Badlaav shuru: 20 Sep · 5 din"
+    assert r["naya"]["chip"] == "📌 Open 4 days" and r["naya"]["tip"] == "Alert time: 21 Sep, 10:30 IST"
+    # the owner's 🕒 line, in its order: Alert time (IST time) · Data · Change started
+    assert r["naya"]["ts"] == "🕒 Alert time: 21 Sep, 10:30 IST · Data: Installs 19–25 Sep · vs pehle (22 Aug–18 Sep) · Change started: 20 Sep · 5 days"
     # an episode with no recorded time at all (neither opened_at nor notified_at): its opened is the DATA day it was
     # judged on (2–3 days before the run that made it) — said so, never as the run's day and never with a time
-    assert r["chal"]["ts"].startswith("🕒 Alert aaya: 3 Sep tak ke data pe · Data: ") and r["chal"]["ts"].endswith("Badlaav shuru: 1 Sep · 24 din")
-    assert r["chal"]["chip"] == "📌 Khula" and "Naya" not in r["old_red"]["chip"] and "Chal raha" not in r["old_red"]["chip"]
-    assert r["cap"]["ts"].endswith("Badlaav shuru: 6+ mahine se")
-    assert " · ≈ Andaza · ⏳ Pakka nahi · 5 Oct ko pakka · Badlaav shuru: " in r["pakka"]["ts"]
-    # an info row: no age chip (🗄 Purana past 30 days) and its own 🕒 line — Data · Badlaav shuru (· Dikha when known)
-    assert r["info30"]["chip"] == "" and r["info60"]["chip"] == "🗄 Purana" and "Alert aaya" not in r["info30"]["ts"]
-    assert r["info30"]["ts"] == "🕒 Data: Installs 19–25 Sep · vs pehle (22 Aug–18 Sep) · Badlaav shuru: 10 Sep · 15 din"
-    assert r["info_dikha"]["ts"].endswith("Badlaav shuru: 10 Sep · 15 din · Dikha: 12 Sep")
-    assert r["info_nodata"]["ts"] == "🕒 Badlaav shuru: 10 Sep · 15 din"
-    # closed: ✅ Theek ho gaya (recovered) / "Band" with its reason, the close time last
-    assert r["theek"]["chip"] == "✅ Theek ho gaya" and r["theek"]["ts"].endswith("Band hua: 22 Sep, 10:30 IST (theek ho gaya)")
-    assert r["theek"]["ts"].startswith("🕒 Alert aaya: 3 Sep, 10:30 IST · Data: ")
-    assert r["band"]["chip"] == "" and r["band"]["ts"].endswith("Band hua: 22 Sep tak ke data pe (naya update aaya)")
+    assert r["chal"]["ts"].startswith("🕒 Alert time: on data till 3 Sep · Data: ") and r["chal"]["ts"].endswith("Change started: 1 Sep · 24 days")
+    assert r["chal"]["chip"] == "📌 Open" and "New" not in r["old_red"]["chip"] and "Ongoing" not in r["old_red"]["chip"]
+    assert r["cap"]["ts"].endswith("Change started: 6+ months")
+    assert " · ≈ · ⏳ Not final · final on 5 Oct · Change started: " in r["pakka"]["ts"]
+    # an info row: no age chip (🗄 Old past 30 days) and its own 🕒 line — Data · Change started (· Seen when known)
+    assert r["info30"]["chip"] == "" and r["info60"]["chip"] == "🗄 Old" and "Alert time" not in r["info30"]["ts"]
+    assert r["info30"]["ts"] == "🕒 Data: Installs 19–25 Sep · vs pehle (22 Aug–18 Sep) · Change started: 10 Sep · 15 days"
+    assert r["info_dikha"]["ts"].endswith("Change started: 10 Sep · 15 days · Seen: 12 Sep")
+    assert r["info_nodata"]["ts"] == "🕒 Change started: 10 Sep · 15 days"
+    # closed: ✅ Fixed (recovered) / "Band" with its reason, the close time last
+    assert r["theek"]["chip"] == "✅ Fixed" and r["theek"]["ts"].endswith("Closed: 22 Sep, 10:30 IST (recovered)")
+    assert r["theek"]["ts"].startswith("🕒 Alert time: 3 Sep, 10:30 IST · Data: ")
+    assert r["band"]["chip"] == "" and r["band"]["ts"].endswith("Closed: on data till 22 Sep (new update)")
     # §1.3: recovered ≤ 7 days ago, was 🔴 / 🟡, not small, opened before it closed
     assert r["theek_rule"] == [True, False, False, False, False, False]
 
@@ -88,15 +88,15 @@ def test_the_alert_age_chip_boundaries_in_ist(report):
     (2–29) · 📌 <date> se khula (30+) · 📌 Shuru se khula (<date>) for an episode the feature's first run made (seeded,
     whatever its day). The last check here: 25 Sep 03:30 UTC = 25 Sep 09:00 IST."""
     r = report["rows"]
-    assert r["age_aaj_utc_yday"]["chip"] == "🆕 Naya alert · aaj 00:30" and r["age_aaj_utc_yday"]["isnew"]   # 24 Sep 19:00 UTC
-    assert r["age_kal_utc_same"]["chip"] == "🆕 Kal aaya" and r["age_kal_utc_same"]["isnew"]                  # 24 Sep 23:59 IST
-    assert r["age_kal"]["chip"] == "🆕 Kal aaya"
-    assert r["age_2"]["chip"] == "📌 2 din se khula" and not r["age_2"]["isnew"]
-    assert r["age_29"]["chip"] == "📌 29 din se khula" and r["age_30"]["chip"] == "📌 26 Aug se khula"
-    assert r["age_old_year"]["chip"] == "📌 30 Dec 2025 se khula"
-    assert r["age_seeded"]["chip"] == "📌 Shuru se khula (19 Sep)" and not r["age_seeded"]["isnew"]
-    assert r["age_seeded"]["tip"] == "Ye halat feature shuru hone se pehle se thi — tab hi mil gayi · Alert aaya: 19 Sep, 17:30 IST"
-    assert r["age_seeded_today"]["chip"] == "📌 Shuru se khula (25 Sep)"
+    assert r["age_aaj_utc_yday"]["chip"] == "🆕 New alert · today 00:30" and r["age_aaj_utc_yday"]["isnew"]   # 24 Sep 19:00 UTC
+    assert r["age_kal_utc_same"]["chip"] == "🆕 Yesterday" and r["age_kal_utc_same"]["isnew"]                  # 24 Sep 23:59 IST
+    assert r["age_kal"]["chip"] == "🆕 Yesterday"
+    assert r["age_2"]["chip"] == "📌 Open 2 days" and not r["age_2"]["isnew"]
+    assert r["age_29"]["chip"] == "📌 Open 29 days" and r["age_30"]["chip"] == "📌 Open since 26 Aug"
+    assert r["age_old_year"]["chip"] == "📌 Open since 30 Dec 2025"
+    assert r["age_seeded"]["chip"] == "📌 Open from start (19 Sep)" and not r["age_seeded"]["isnew"]
+    assert r["age_seeded"]["tip"] == "Ye halat feature shuru hone se pehle se thi — tab hi mil gayi · Alert time: 19 Sep, 17:30 IST"
+    assert r["age_seeded_today"]["chip"] == "📌 Open from start (25 Sep)"
     assert not any(r[k]["isnew"] for k in ("age_2", "age_29", "age_30", "age_old_year", "age_seeded", "age_seeded_today", "naya", "chal"))
 
 
@@ -104,12 +104,12 @@ def test_the_alert_time_falls_back_opened_at_then_notified_at_then_the_data_day(
     """The time shown is the run that opened the episode (opened_at); an older episode's is the engine's alert_at (its
     notified_at run); with neither, the data day it was judged on in words — never an invented time."""
     r = report["rows"]
-    assert r["fb_opened"]["ts"].startswith("🕒 Alert aaya: 24 Sep, 09:30 IST · ") and r["fb_opened"]["chip"] == "🆕 Kal aaya"
-    assert r["fb_alert_at"]["ts"].startswith("🕒 Alert aaya: 23 Sep, 18:30 IST · ") and r["fb_alert_at"]["chip"] == "📌 2 din se khula"
-    assert r["fb_bad_opened"]["ts"].startswith("🕒 Alert aaya: 23 Sep, 18:30 IST · ")      # "sent" is not a time
-    assert r["fb_none"]["ts"].startswith("🕒 Alert aaya: 21 Sep tak ke data pe · ") and r["fb_none"]["chip"] == "📌 Khula"
-    assert r["fb_none_closed"]["ts"].startswith("🕒 Alert aaya: 3 Sep tak ke data pe · ")
-    assert r["fb_none_closed"]["ts"].endswith("Band hua: 22 Sep tak ke data pe (samay poora hua)")
+    assert r["fb_opened"]["ts"].startswith("🕒 Alert time: 24 Sep, 09:30 IST · ") and r["fb_opened"]["chip"] == "🆕 Yesterday"
+    assert r["fb_alert_at"]["ts"].startswith("🕒 Alert time: 23 Sep, 18:30 IST · ") and r["fb_alert_at"]["chip"] == "📌 Open 2 days"
+    assert r["fb_bad_opened"]["ts"].startswith("🕒 Alert time: 23 Sep, 18:30 IST · ")      # "sent" is not a time
+    assert r["fb_none"]["ts"].startswith("🕒 Alert time: on data till 21 Sep · ") and r["fb_none"]["chip"] == "📌 Open"
+    assert r["fb_none_closed"]["ts"].startswith("🕒 Alert time: on data till 3 Sep · ")
+    assert r["fb_none_closed"]["ts"].endswith("Closed: on data till 22 Sep (window ended)")
 
 
 def test_a_legend_above_every_what_changed_list_and_the_heads_count_new_alerts(report):
@@ -126,13 +126,13 @@ def test_reviewer_timestamp_share_and_fold_fixes(report):
     "eCPM" / "mediation" in an engine sentence are said in Hinglish; a small app's info row > 90 days old is listed
     nowhere (§1.3, like every other app's), while an OPEN alert told as ℹ️ (N1) is always listed, whatever its age."""
     h, r = report["helpers"], report["rows"]
-    assert r["not_iso"]["ts"].startswith("🕒 Alert aaya: 21 Sep tak ke data pe · Data: ")
+    assert r["not_iso"]["ts"].startswith("🕒 Alert time: on data till 21 Sep · Data: ")
     assert h["share"].endswith("— isme ~25.5% unka") and "100 me 25.5" not in h["share"]
     assert h["share_upto"].endswith("— isme ~12% tak unka ho sakta")
-    assert h["pp"] == "agle din wapas aane wale naye users 100 me 26 kam"
+    assert h["pp"] == "back next day 26% kam"
     assert "bazaar/dusre ad networks/country mix" in h["market"] and not re.search(r"eCPM|market|mediation", h["market"])
     assert r["small_info120"]["small_app"] is None
-    assert r["n1_old"]["fold"] == "purana" and r["n1_old"]["fold_app"] == "purana" and r["n1_old"]["ts"].startswith("🕒 Alert aaya: ")
+    assert r["n1_old"]["fold"] == "purana" and r["n1_old"]["fold_app"] == "purana" and r["n1_old"]["ts"].startswith("🕒 Alert time: ")
 
 
 def test_reviewer_old_labels_gone_from_the_notes_tables_and_pooled_tiles(report):
@@ -142,15 +142,15 @@ def test_reviewer_old_labels_gone_from_the_notes_tables_and_pooled_tiles(report)
     points to the update card it lost (§6.5)."""
     t = report["texts"]
     how = t["how"]
-    for w in ("🛑 Update roko = ", "⚠️ Ruk ke jaancho = ", "👍 Chalne do = ", "✅ Update achha gaya = ", "⏳ Abhi jaldi = "):
+    for w in ("🛑 Update roko = ", "⚠️ Ruk ke jaancho = ", "👍 Chalne do = ", "✅ Update achha gaya = ", "⏳ Too early = "):
         assert w in how, w
-    assert not re.search(r"HALT|HOLD|CONTINUE|\bWIN\b|Too early|Returning DAU|\bWorse\b|\bBetter\b|\bMaybe\b|eCPM|\bMarket\b", how), how
+    assert not re.search(r"HALT|HOLD|CONTINUE|\bWIN\b|Returning DAU|\bMaybe\b|eCPM", how), how
     cp = t["uni_cp_all"]
     assert "Full table" in cp and not re.search(r"🎉 Better|🟠 Worse|\bMaybe\b|\bmarket\b|low data ·", cp)
-    assert re.search(r"Purane users \(roz\) \d+(\.\d)? lakh", report["pool_big"]) and not re.search(r"\d(\.\d)?M\b", report["pool_big"])
+    assert re.search(r"Old users/day \d+(\.\d)? lakh", report["pool_big"]) and not re.search(r"\d(\.\d)?M\b", report["pool_big"])
     # the Active All-apps page lost its "📦 Recent updates" card (§6.5): one line points to where it lives now
     act_pf = t["act_pf_nofiles"]
-    assert "📦 Updates ka asar → Uninstall tab ›" in act_pf and "Recent updates" not in act_pf
+    assert "📦 Update impact → Uninstall tab ›" in act_pf and "Recent updates" not in act_pf
 
 
 def test_active_says_in_one_line_whether_an_app_had_an_update_and_goes_to_its_block_in_uninstall(report):
@@ -159,14 +159,14 @@ def test_active_says_in_one_line_whether_an_app_had_an_update_and_goes_to_its_bl
     Uninstall tab at that app with that update's block open. All apps: "📦 Updates ka asar → Uninstall tab ›"."""
     L = report["updline"]
     apps, allp = [x for x in L if not x.get("all")], next(x for x in L if x.get("all"))
-    assert allp["text"] == "📦 Updates ka asar → Uninstall tab ›" and allp["go"] == "show('uninstall')"
+    assert allp["text"] == "📦 Update impact → Uninstall tab ›" and allp["go"] == "show('uninstall')"
     with_u = [x for x in apps if x["n"]]
     assert with_u and [x for x in apps if not x["n"]]
     for x in apps:
         if not x["n"]:
             assert x["text"] == "📦 Pichhle 60 din me koi update nahi" and x["go"] == "", x
             continue
-        assert re.match(r"^📦 Is app ka aakhri update: \S.* \(\d{1,2} [A-Z][a-z]{2}\) · .+ → Uninstall me poora card ›$", x["text"]), x["text"]
+        assert re.match(r"^📦 Is app ka aakhri update: \S.* \(\d{1,2} [A-Z][a-z]{2}\) · .+ → Full card in Uninstall ›$", x["text"]), x["text"]
         assert x["go"] == "uniImpGo('%s','%s')" % (x["app_id"], x["newest"]), x
         assert x["calls"][0] == "show:uninstall" and x["UNIAPP"] == x["app_id"] and x["APP"] == x["app"], x
         assert x["open"] == x["newest"] and x["rendered_open"] == [x["newest"]] and x["card"] and x["detail"], x
@@ -199,8 +199,8 @@ def test_section_6_3_folds(report):
     assert r["theek"]["fold"] == "theek" and r["band"]["fold"] is None and r["band"]["fold_app"] == "band"   # Band: the app's history only
 
 
-AGE = re.compile(r"^(?:🆕 Naya alert · aaj \d\d:\d\d|🆕 Kal aaya|📌 \d+ din se khula|📌 \d{1,2} [A-Z][a-z]{2}(?: \d{4})? se khula"
-                 r"|📌 Shuru se khula \(\d{1,2} [A-Z][a-z]{2}(?: \d{4})?\)|✅ Theek ho gaya|Band · .*)$")
+AGE = re.compile(r"^(?:🆕 New alert · today \d\d:\d\d|🆕 Yesterday|📌 Open \d+ days|📌 Open since \d{1,2} [A-Z][a-z]{2}(?: \d{4})?"
+                 r"|📌 Open from start \(\d{1,2} [A-Z][a-z]{2}(?: \d{4})?\)|✅ Fixed|Closed · .*)$")
 
 
 def test_every_row_has_one_word_one_chip_and_its_timestamp_line(report):
@@ -257,9 +257,9 @@ def test_no_banned_word_on_any_screen(report):
 
 def test_alerts_screen_is_ad_units_only(report):
     a = report["alerts"]
-    assert a["ga4_cards"] == 0 and "Ad units ke problems · Sirf badi (paise wali) ad units · AdMob data 24 Sep tak" in report["texts"]["alerts"]
+    assert a["ga4_cards"] == 0 and "Ad unit problems · Only big (money) ad units · AdMob data till 24 Sep" in report["texts"]["alerts"]
     assert a["total"] == "2"                                                  # critical + warning (the watch never counts)
-    assert a["chips"] == [["🆕 Naya", "22 Sep · 3 din"], ["🔁 Chal raha", "30 Aug · 26 din"], ["🆕 Naya", "24 Sep · 1 din"]]
+    assert a["chips"] == [["🆕 New", "22 Sep · 3 days"], ["🔁 Ongoing", "30 Aug · 26 days"], ["🆕 New", "24 Sep · 1 day"]]
     assert "uninstall aur install value ki khabar ab unke apne tabs me hai" in report["texts"]["alerts"]
 
 

@@ -97,12 +97,12 @@ try {
     // the per-user tiles' "Saath me:" notes (sessions, time, ads per user, ad rate, revenue per user): once, under the tiles
     { const h = String(run(`(()=>{ ${RESET} const r=DATA.active.apps.find(x=>x.key===${J(r.key)}); return actSumCard(ACTD[${J(r.key)}],r); })()`));
       const nb = (h.match(/<div class="split act-notes"[^>]*>([\s\S]*?)<\/div><\/div>/) || [""])[0];
-      const said = [...nb.matchAll(/<div class="sps">(Saath me: [^<]*)<\/div>/g)].map(m => m[1]);
+      const said = [...nb.matchAll(/<div class="sps">(Also: [^<]*)<\/div>/g)].map(m => m[1]);
       F.notes = (F.notes || 0) + said.length; if (new Set(said).size !== said.length) F.bad.push(`act notes twice ${r.app}`);
-      if ((h.match(/Saath me: /g) || []).length !== said.length) F.bad.push(`act notes outside the card line ${r.app}`);
+      if ((h.match(/Also: /g) || []).length !== said.length) F.bad.push(`act notes outside the card line ${r.app}`);
       for (const k of ['sess', 'time', 'ads', 'ecpm', 'arpdau']) { const M = (d.tiles || {})[k]; if (!has(M) || !drawn(M.sp)) continue;
         const S = run(`JSON.stringify(splitOf(${J((M.sp || [])[0] === 'rev' ? 'rev' : 'pu')},ACTD[${J(r.key)}].tiles[${J(k)}]))`), nt = (JSON.parse(S) || {}).note || [];
-        for (const x of nt) { F.any = true; F.hosts++; if (said.some(t => t.startsWith('Saath me: ' + ({ new: 'naye users', net: 'dusre ad', rec: 'haal ke', paid: 'ads wale' })[x[0]]))) F.blocks++; else F.missing.push(`act notes ${r.app} ${k} ${x[0]}`); } } }
+        for (const x of nt) { F.any = true; F.hosts++; if (said.some(t => t.startsWith('Also: ' + ({ new: 'new users', net: 'dusre ad', rec: 'haal ke', paid: 'ads wale' })[x[0]]))) F.blocks++; else F.missing.push(`act notes ${r.app} ${k} ${x[0]}`); } } }
     const C = d.changes || {};
     (C.open || []).forEach((x, i) => expect(`act row ${r.app} ${i}`, x, String(run(`actChangeRow(ACTD[${J(r.key)}].changes.open[${i}],false,false)`))));
     (C.info || []).forEach((o, i) => expect(`act info ${r.app} ${i}`, o, String(run(`actInfoRow(ACTD[${J(r.key)}].changes.info[${i}])`))));
@@ -123,7 +123,7 @@ try {
     (a.old_changes || []).forEach((o, i) => expect(`uni old ${a.app} ${i}`, o, String(run(`uniOldRow(UNI.apps.find(z=>z.app_id===${id}).old_changes[${i}])`))));
     if (has(a.rate_now) && a.rate_now.last7 != null) expect(`uni rate ${a.app}`, a.rate_now, String(run(`uniRateTile(UNI.apps.find(z=>z.app_id===${id}))`)));
     const tb = String(run(`uniCpCard(UNI.apps.find(z=>z.app_id===${id}))`)); chk(`uni table ${a.app}`, tb);
-    (a.table || []).forEach((t, i) => { if (has(t) && drawn(t.sp)) { F.hosts++; if (/<td class="uni-num" title="[^"]*(installs se|users se)[^"]*">/.test(tb)) F.blocks++; else F.missing.push(`uni table ${a.app} ${i}`); } });
+    (a.table || []).forEach((t, i) => { if (has(t) && drawn(t.sp)) { F.hosts++; if (/<td class="uni-num" title="[^"]*(from installs|from users|from new installs|from price)[^"]*">/.test(tb)) F.blocks++; else F.missing.push(`uni table ${a.app} ${i}`); } });
     const blocks = ((a.impact || {}).updates || []);
     blocks.forEach((b, bi) => { for (const N of [7, 14, 30, 60]) {
       const R = N === 7 ? (b.rows || {}) : (((b.by_window || {})[String(N)] || {}).rows || {});
@@ -131,9 +131,9 @@ try {
       const h = String(run(`(()=>{ ${RESET} const a=UNI.apps.find(z=>z.app_id===${id}), b=uniImpBlocks(a).find(x=>x.key===${J(b.key)}); UNIIMPWK={[b.key]:${N}}; return uniImpBlock(a,b,true); })()`));
       chk(`uni impact ${a.app} ${bi} ${N}`, h);
       // the window's "Saath me:" notes: once each, under the table (never on every row)
-      const said = [...h.matchAll(/Saath me: [^<]*/g)].map(m => m[0]), nb = (h.match(/<div class="split uni-imp-notes"[\s\S]*?<\/div><\/div>/) || [''])[0];
+      const said = [...h.matchAll(/Also: [^<]*/g)].map(m => m[0]), nb = (h.match(/<div class="split uni-imp-notes"[\s\S]*?<\/div><\/div>/) || [''])[0];
       if (new Set(said).size !== said.length) F.bad.push(`impact notes twice ${a.app} ${bi} ${N}`);
-      if ((nb.match(/Saath me: /g) || []).length !== said.length) F.bad.push(`impact notes outside the table line ${a.app} ${bi} ${N}`);
+      if ((nb.match(/Also: /g) || []).length !== said.length) F.bad.push(`impact notes outside the table line ${a.app} ${bi} ${N}`);
       F.impNotes = (F.impNotes || 0) + said.length;
       for (const [k, r] of Object.entries(R)) { if (!has(r) || !drawn(r.sp) || !['worse', 'better', 'same', 'unsure', 'market'].includes(r.status)) continue; F.any = true; F.hosts++;
         if (h.includes(`<tr class="uni-imp-sp" data-sp="${k}">`)) F.blocks++; else F.missing.push(`impact ${a.app} ${b.key} ${N} ${k}`); }

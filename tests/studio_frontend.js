@@ -76,7 +76,7 @@ get('rows30', `(()=>{ ${RESET} KWIN='30'; uniScreen(); return JSON.stringify({W:
 
 // ── the shared KPIWINDOW / compare / currency ───────────────────────────────────────────────────────────────────────
 get('kwin', `(()=>{ ${RESET} const r={};
-  KWIN='30'; const h30=uniScreen(); r.ext30=US._.W().L; r.win30=/\\(30 din\\)/.test(h30);
+  KWIN='30'; const h30=uniScreen(); r.ext30=US._.W().L; r.win30=/\\(30 days\\)/.test(h30);
   US._.setRange('14'); r.after14={KWIN, L:US._.W().L, saved:JSON.parse(localStorage.getItem('kwin_v1')).win, other:kwWin('2026-01-01','2026-09-19').days};
   US._.setRange('c'); r.custom={KWIN, from:KWCUSTOM.from, to:KWCUSTOM.to, L:US._.W().L};
   US._.setCmp('month'); r.month={KCMP, saved:JSON.parse(localStorage.getItem('kwin_v1')).cmp, W:US._.W()};
@@ -89,7 +89,7 @@ get('header', `(()=>{ ${RESET} KWIN='60'; KCMP='month'; const h=uniScreen(); ${R
 
 // ── the drawer → the app's full page; a refresh keeps it; another view closes it ───────────────────────────────────
 get('drawer', `(()=>{ ${RESET} uniScreen(); const A=US._.A(), r={}; const calls=[]; const keep=uniOpen; uniOpen=function(id){ calls.push(id); };
-  US.openDrawer(0); const h=document.getElementById('us-drawer').innerHTML; r.open=US._.ST.drawer===0; r.full=(h.match(/Poora app page →/g)||[]).length;
+  US.openDrawer(0); const h=document.getElementById('us-drawer').innerHTML; r.open=US._.ST.drawer===0; r.full=(h.match(/Full app page →/g)||[]).length;
   r.dataFull=(h.match(/data-full="([^"]+)"/)||[])[1]===A[0].id; r.lock=document.body.classList.contains('us-lock');
   uniScreen(); r.afterRefresh=US._.ST.drawer===0&&US._.ST.did===A[0].id;          // the 5-minute refresh re-renders the screen
   US._.fullPage(A[0].id); r.calls=calls; r.closed=US._.ST.drawer===-1&&!document.body.classList.contains('us-lock');
@@ -140,15 +140,15 @@ get('page', `(()=>{ ${RESET} const r={}, row=DATA.uninstall.apps.find(x=>US._.A(
   r.fold=nz(h).indexOf('<div class="uo-in">'+nz(old)+'</div>')>=0; r.oldNoStudio=old.indexOf('us-root')<0;
   const pg=h.slice(h.indexOf('id="us-apg"'),h.indexOf('id="uni-old-app"'));
   r.kpis=(pg.match(/class="us-kpi"/g)||[]).length; r.charts=(pg.match(/<svg viewBox="[^"]*" id="us-s\\d+" data-hv="1"/g)||[]).length;
-  r.coh=pg.indexOf('class="us-coh"')>=0; r.daytable=pg.indexOf('Din-ba-din')>=0; r.cards=(pg.match(/class="us-ac /g)||[]).length; r.alerts=US._.A().find(a=>a.id===id).al.length;
-  r.ts=(pg.match(/🕒 Alert aaya: /g)||[]).length; r.labels=(pg.match(/<text class="us-lbl"/g)||[]).map?((pg.match(/<text class="us-lbl"[^>]*>[^<]*/g)||[]).map(t=>t.replace(/^.*>/,''))):[];
+  r.coh=pg.indexOf('class="us-coh"')>=0; r.daytable=pg.indexOf('Day by day')>=0; r.cards=(pg.match(/class="us-ac /g)||[]).length; r.alerts=US._.A().find(a=>a.id===id).al.length;
+  r.ts=(pg.match(/🕒 Alert time: /g)||[]).length; r.labels=(pg.match(/<text class="us-lbl"/g)||[]).map?((pg.match(/<text class="us-lbl"[^>]*>[^<]*/g)||[]).map(t=>t.replace(/^.*>/,''))):[];
   r.text=__text(pg);
   // the same numbers as the drawer: the KPI tiles of both read one computation
   const i=US._.A().findIndex(a=>a.id===id); US.openDrawer(i); const dh=document.getElementById('us-drawer').innerHTML; US.closeDrawer();
   const kt=x=>__text((x.match(/<div class="us-dk[^"]*">[\\s\\S]*?<\\/div><\\/div><\\/div><div class="us-panel">/)||[''])[0]);
   r.sameKpis=kt(dh)!==''&&kt(dh)===kt(pg);
   // the shared range drives the page too
-  US._.setRange('7'); r.after7=US._.W().L; r.html7=__text(document.getElementById('us-apg').innerHTML).indexOf('Din-ba-din')>=0;
+  US._.setRange('7'); r.after7=US._.W().L; r.html7=__text(document.getElementById('us-apg').innerHTML).indexOf('Day by day')>=0;
   // the Studio's file still loading: a short wait, the older page folded under it
   US._.load(null); const hl=uniScreen(); US._.load(__STUDIO); r.loading=hl.indexOf('Uninstall Studio load ho raha hai')>=0&&hl.indexOf('id="uni-old-app"')>=0&&hl.indexOf('id="us-root"')<0;
   // an app with no GA4 data: its older page as before
@@ -164,7 +164,7 @@ get('charts', `(()=>{ ${RESET} const r={}, A=US._.A(); const ids=[];
   r.tips=ids.every(id=>{ const S=SPK[id]; const a=S.tip(0), b=S.tip(S.n-1); return typeof a==='string'&&a.length>10&&typeof b==='string'&&b.length>10; });
   r.oldHit=dh.indexOf('us-bigr')<0&&dh.indexOf('us-bigx')<0&&h.indexOf('us-bigr')<0;
   // the drawer's rate chart: its labels — the latest day, the range average, the normal, 📦 versions, 🔔 starts
-  const big=(dh.match(/<svg viewBox="0 0 (\\d+) (\\d+)" id="us-d\\d+" data-hv="1" role="img" aria-label="Roz hataaye % chart">[\\s\\S]*?<\\/svg>/)||[])[0]||'';
+  const big=(dh.match(/<svg viewBox="0 0 (\\d+) (\\d+)" id="us-d\\d+" data-hv="1" role="img" aria-label="Uninstall rate % chart">[\\s\\S]*?<\\/svg>/)||[])[0]||'';
   const vb=(big.match(/viewBox="0 0 (\\d+) (\\d+)"/)||[]).slice(1).map(Number);
   const L=[...big.matchAll(/<text class="us-lbl" x="([\\d.-]+)" y="([\\d.-]+)" font-size="([\\d.]+)"[^>]*>([^<]*)<\\/text>/g)].map(m=>({x:+m[1],y:+m[2],fs:+m[3],t:m[4]}));
   r.bigLabels=L.map(l=>l.t); r.vb=vb;

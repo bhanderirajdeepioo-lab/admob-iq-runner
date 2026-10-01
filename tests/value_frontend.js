@@ -248,7 +248,7 @@ for (const r of rows) {
   const chk = sec(f, 'id="val-chk"', 'id="val-timing"');
   apps[r.app] = { key: r.key, header: text(h.slice(0, 1600)).slice(0, 400),
     sections: ['val-sum', 'val-chg', 'val-pay', 'val-cty', 'val-chk', 'val-timing'].map(s => h.indexOf('id="' + s + '"')),
-    titles: ['📌 At a glance', '🔔 What changed? (', '💸 Money back by install week', '🌍 Countries', 'Data check', 'When will I know?', '← All apps', 'Target: paisa'].filter(x => T(`detail|${r.app}|base`).includes(x)),
+    titles: ['📌 At a glance', '🔔 What changed? (', '💸 Money back by install week', '🌍 Countries', 'Data check', 'When will I know?', '← All apps', 'Target: money back in'].filter(x => T(`detail|${r.app}|base`).includes(x)),
     tiles, tile_open: /class="uni-st val-t open" data-m="pay"/.test(out[`detail|${r.app}|tile_open`] || ''),
     summary: (sum.match(/<div class="val-line" data-kind="([^"]*)">([^<]*)<\/div>/) || []).slice(1), ctx: text(sec(sum, 'id="val-ctx"', '</div>')).replace(/^[^>]*>/, '').trim(),
     data_line: text(sec(sum, 'id="val-data"', '</div>')).replace(/^[^>]*>/, '').trim(),
@@ -265,7 +265,7 @@ for (const r of rows) {
       chart: /id="val-curve"/.test(pay), chart_ph: (sec(pay, 'id="val-curve"', '</svg>').match(/data-ph="(\d)"/) || [])[1],
       chart_x_phone: [...sec(pay, 'id="val-curve"', '</svg>').matchAll(/<text x="[^"]*" y="[^"]*" text-anchor="middle" font-size="11" fill="#8496b5">([^<]*)<\/text>/g)].map(m => m[1]),
       chart_x_desk: [...sec(payD, 'id="val-curve"', '</svg>').matchAll(/<text x="[^"]*" y="[^"]*" text-anchor="middle" font-size="12.5" fill="#8496b5">([^<]*)<\/text>/g)].map(m => m[1]),
-      line100: sec(payD, 'id="val-curve"', '</svg>').includes('>Paisa wapas</text>'), caption: T(`detail|${r.app}|desktop`).includes('Line 100 ke upar gayi = ads ka poora paisa wapas.'),
+      line100: sec(payD, 'id="val-curve"', '</svg>').includes('>Money back</text>'), caption: T(`detail|${r.app}|desktop`).includes('Line 100 ke upar gayi = ads ka poora paisa wapas.'),
       foot: text(sec(payD, 'id="val-payfoot"', '</div></div>')).replace(/^[^>]*>/, '').trim(),
       money_back: [...payD.matchAll(/<tr data-week="[^"]*">[\s\S]*?<\/tr>/g)].map(m => text((m[0].match(/<td[^>]*>((?:(?!<td)[\s\S])*?)<\/td><\/tr>$/) || [])[1] || '').trim()),
       inr: sec(out[`detail|${r.app}|inr`] || '', 'id="val-pay"', 'id="val-cty"').includes('₹') },
@@ -302,7 +302,7 @@ const portfolio = { head: text(pH.slice(0, 900)).trim(), count: text(sec(pH, 'id
   strip_classes: [...sec(pH, 'class="act-strips"', 'id="val-chg"').matchAll(/<span class="uni-sc ([a-z-]+)( on)?" data-k="([a-z0-9_]+):([a-z_]+)"/g)].map(m => [m[1], m[3], m[4]]),
   ctyall: text(sec(pH, 'id="val-ctyall"', 'id="val-noads"')).slice(0, 1500), ctyall_rows: [...sec(pH, 'id="val-ctyall"', '</tbody>').matchAll(/<tr data-cc="([^"]*)"/g)].map(m => m[1]),
   ctyall_nofiles: T('portfolio_nofiles').includes('App kholo — uske countries yahan jud jayenge'),
-  noads: (pH.match(/<span>— Ads nahi chal rahe \((\d+)\)<\/span>/) || [])[1], noga4: (pH.match(/<h3>🔌 Apps without GA4 data \((\d+)\)<\/h3>/) || [])[1],   // (noads: SPEC_SIMPLIFY §6.5, one folded line of count)
+  noads: (pH.match(/<span>— No ads running \((\d+)\)<\/span>/) || [])[1], noga4: (pH.match(/<h3>🔌 Apps without GA4 data \((\d+)\)<\/h3>/) || [])[1],   // (noads: SPEC_SIMPLIFY §6.5, one folded line of count)
   timing: T('portfolio_timing').includes('Alert tabhi jab 2 hafte lagatar ho.'), inr: (out.portfolio_inr || '').includes('₹'), xp, psorts };
 // Alerts screen
 const alertsOf = h => ({ sub: h.includes('💸 Install value (GA4 + Ads)'), cards: (h.match(/data-metrics="value"/g) || []).length, chip: h.includes(`onclick="filterAlerts('value')"`),
@@ -322,13 +322,13 @@ for (const [k, v] of Object.entries(out)) {
 const syn = {
   no_red: { pills: pills(out.no_red || ''), blue: [...(out.no_red || '').matchAll(/<span class="pill p-b" data-st="(worse|watch|better)"/g)].map(m => m[1]),
     strip: [...(out.no_red || '').matchAll(/<span class="uni-sc ([a-z-]+)( on)?" data-k="(pay|cpi):(worse|better)"/g)].map(m => [m[1], m[4]]) },
-  warn: { red_tile: /data-m="pay" data-st="worse"[\s\S]*?<span class="pill p-r" data-st="worse"/.test(out.warn || ''), row: (out.warn || '').includes('<span class="pill p-r smp-w">🔴 Bigda</span>') },
-  unclean: { wait: [...(out.unclean || '').matchAll(/<span class="pill p-b" data-st="wait" title="([^"]*)">⏳ Abhi jaldi<\/span>/g)].length, judged: [...(out.unclean || '').matchAll(/data-st="(keep|slow|costly|top|avg|low)"/g)].length,
+  warn: { red_tile: /data-m="pay" data-st="worse"[\s\S]*?<span class="pill p-r" data-st="worse"/.test(out.warn || ''), row: (out.warn || '').includes('<span class="pill p-r smp-w">🔴 Worse</span>') },
+  unclean: { wait: [...(out.unclean || '').matchAll(/<span class="pill p-b" data-st="wait" title="([^"]*)">⏳ Too early<\/span>/g)].length, judged: [...(out.unclean || '').matchAll(/data-st="(keep|slow|costly|top|avg|low)"/g)].length,
     approx: (sec(out.unclean || '', '<tr class="clk"', '</tbody>').match(/≈\d/g) || []).length, tip: (out.unclean || '').includes('In hafton me GA4 ne kuch installs/kamai kisi country me nahi baante'),
     text: text(out.unclean || '').slice(0, 600) },
   geo: { heads: [...sec(out.geo || '', '<thead>', '</thead>').matchAll(/<th[^>]*>([^<]*)/g)].map(m => m[1]), strip: text(sec(out.geo || '', 'id="val-cstrip">', '</div>')).trim(),
     nogeo: (out.geo || '').includes('id="val-nogeo"'), open: text(sec(out.geo || '', '<tr class="val-cx"', '</tr>')) },
-  h180: { rpi: [...(out.h180 || '').matchAll(/\(180 d\)/g)].length, target: (out.h180 || '').includes('Target: paisa 180 din me wapas'), nogeo: text(sec(out.h180 || '', 'id="val-nogeo"', '</div>')) },
+  h180: { rpi: [...(out.h180 || '').matchAll(/\(180 d\)/g)].length, target: (out.h180 || '').includes('Target: money back in 180 days'), nogeo: text(sec(out.h180 || '', 'id="val-nogeo"', '</div>')) },
   never: { big: ((out.never || '').match(/data-m="pay" data-st="never"[\s\S]*?<div class="v">([^<]*)<\/div>/) || [])[1], chip: ((out.never || '').match(/data-m="pay" data-st="never"[\s\S]*?<span class="pill ([a-z0-9-]+)" data-st="never"[^>]*>([^<]*)</) || []).slice(1),
     cell: (out.never || '').includes('>Over 1 year</td>'), sub: text(out.never || '').includes('saal bhar me ≈62% wapas') },
   smp: { note: text(sec(out.smp || '', 'id="val-smp"', '</div>')).replace(/^[^>]*>/, '').trim(), unassigned: [...sec(out.smp || '', 'id="val-rest">', '<div style="padding:4px 17px 14px">').matchAll(/<div>([\s\S]*?)<\/div>/g)].map(m => text(m[1]).trim()),

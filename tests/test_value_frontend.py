@@ -111,7 +111,7 @@ def test_detail_sections_in_order(report, fixture):
         a = report["apps"][r["app"]]
         assert all(i > 0 for i in a["sections"]) and a["sections"] == sorted(a["sections"]), r["app"]
         assert a["titles"] == ["📌 At a glance", "🔔 What changed? (", "💸 Money back by install week", "🌍 Countries", "Data check",
-                               "When will I know?", "← All apps", "Target: paisa"], r["app"]
+                               "When will I know?", "← All apps", "Target: money back in"], r["app"]
         assert r["app"] in a["header"] and "Install-day data till" in a["header"]
 
 
@@ -142,7 +142,7 @@ def test_tiles_five(report, fixture):
                 if P.get("never"):
                     assert t["big"] == "Over 1 year"
                 elif P.get("v") is not None:                  # (+ the range right under it, for a phone)
-                    big = re.sub(r" andaza.*$", "", t["big"])
+                    big = re.sub(r" ≈.*$", "", t["big"])
                     assert big == ("" if P.get("obs") else "≈") + "%d day%s" % (round(P["v"]), "" if round(P["v"]) == 1 else "s")
                     assert P.get("obs") or t["big"] != big, t
                 else:
@@ -225,14 +225,14 @@ def test_country_rows(report, fixture):
         assert c["rows_desk"] == want and c["rows_phone"] == want, r["app"]
         assert c["all_row"] == bool(C.get("app")), r["app"]
         if not C.get("geo"):
-            assert c["heads"] == ["Country", "Share", "Next day", "After a week", "After 30 days", "Earning per install", "Verdict"]
+            assert c["heads"] == ["Country", "Share", "Back next day", "Back after 7 days", "Back after 30 days", "Earning per install", "Verdict"]
         for cc, (cls, s_, label) in c["verdicts"].items():
             x = next(y for y in R if y["cc"] == cc)
             if s_ in ("top", "avg", "low", "keep", "slow", "costly"):
                 assert cls == "uni-pz" and s_ == x.get("verdict")                     # a verdict: emoji + words, never a colour
         assert c["win"].startswith("Installs ") and "pakke hafte)" in c["win"], c["win"]      # (§6.4: settled → pakka)
         assert c["link"], r["app"]
-        assert "of 100" in c["open_desk"] and c["open_sparks"] >= 1, r["app"]          # a tap: the sentence, the interval, 12-week lines
+        assert "%" in c["open_desk"] and c["open_sparks"] >= 1, r["app"]          # a tap: the sentence, the interval, 12-week lines (display rule: "of 100" -> %)
         assert c["open_phone"], r["app"]
         d1 = sorted([x for x in R if (x.get("d1") or {}).get("v") is not None], key=lambda x: -x["d1"]["v"])
         assert c["sort_d1"][:len(d1)] == [x["cc"] for x in d1], r["app"]
@@ -343,7 +343,7 @@ def test_data_check_ratio(report, fixture):
         if W:
             last = sorted(w["r"] for w in W[-8:])
             m = last[len(last) // 2]
-            want = "✅ GA4 aur AdMob ki kamai mel khati (±10%)" if 0.9 <= m <= 1.1 else "GA4 me AdMob ki kamai ka %d%% dikhta" % round(m * 100)
+            want = "✅ GA4 aur AdMob revenue mel khati (±10%)" if 0.9 <= m <= 1.1 else "GA4 me AdMob revenue ka %d%% dikhta" % round(m * 100)
             assert want in a["chk"]["text"], r["app"]
             assert ("do baar log ho raha" in a["chk"]["text"]) == (sum(1 for w in W[-26:] if w["r"] >= 1.5) >= 8), r["app"]
 
@@ -352,10 +352,10 @@ def test_data_check_unassigned(report, fixture):
     for r in detailed(fixture):
         a, S = report["apps"][r["app"]], (det(fixture, r).get("scale") or {})
         if S.get("cty_gap"):
-            assert "Country me na baanta gaya hissa: kamai ka" in a["chk"]["text"]
+            assert "Country me na baanta gaya hissa: revenue ka" in a["chk"]["text"]
             assert re.search(r"\(last \d+ weeks\)", a["chk"]["text"])          # as many weeks as there are (≤ 12)
         if S.get("old_rev") is not None:
-            assert "Purane users (14 mahine se pehle install) ki kamai:" in a["chk"]["text"]
+            assert "Old users (14 mahine se pehle install) ki revenue:" in a["chk"]["text"]
         assert "AdMob / Google Ads India time me" in a["chk"]["text"]
 
 
@@ -386,7 +386,7 @@ def test_release_short_day_thin_and_older(report):
 
 def test_never_pays_back(report):
     n = report["syn"]["never"]
-    assert n["big"] == "Over 1 year" and n["chip"] == ["uni-pn", "🔴 Bigda"] and n["cell"] and n["sub"]   # §6.4: 💸 Not paying back → 🔴 Bigda
+    assert n["big"] == "Over 1 year" and n["chip"] == ["uni-pn", "🔴 Worse"] and n["cell"] and n["sub"]   # §6.4: 💸 Not paying back → 🔴 Worse
 
 
 def test_changes_rows(report, fixture):
@@ -416,12 +416,12 @@ def test_alerts_screen_value_section_absent_when_empty(report, fixture):
 def test_portfolio(report, fixture):
     p, R = report["portfolio"], rows(fixture)
     # SPEC_SIMPLIFY §6.1 first line; the count line in the six words
-    assert p["head"].startswith("Install value INSTALL VALUE · Sirf Google Ads wali apps (") and " tak judge hue · Pakka " in p["head"]
-    assert re.fullmatch(r"(🔴 \d+ Bigda \(paisa dheere / ghate me\) · )?⚪ \d+ Normal( · 🔴 \d+ Bigda \(1 saal me bhi paisa wapas nahi\))?( · 🟡 \d+ Dhyan do \(purani halat: 1 saal me bhi paisa wapas nahi\))? · — \d+ Ads nahi chal rahe( · ⏳ \d+ Abhi jaldi)?( · ⚠️ \d+ is baar nahi bane)?", p["count"]), p["count"]
+    assert p["head"].startswith("Install value INSTALL VALUE · Sirf Google Ads wali apps (") and "Installs judged through " in p["head"] and " · Pakka " in p["head"]
+    assert re.fullmatch(r"(🔴 \d+ Worse \(money back slow / losing\) · )?⚪ \d+ Normal( · 🔴 \d+ Worse \(1 saal me bhi paisa wapas nahi\))?( · 🟡 \d+ Watch \(old issue: 1 saal me bhi paisa wapas nahi\))? · — \d+ Ads nahi chal rahe( · ⏳ \d+ Too early)?( · ⚠️ \d+ is baar nahi bane)?", p["count"]), p["count"]
     assert [t["m"] for t in p["pool"]] == ["spend", "b7", "b30", "ok"]
     assert all(re.search(r"\d+ of %d apps" % len(R), t["text"]) for t in p["pool"])
     assert p["table_heads"] == [["app", "App"], ["spend", "Ads spend (4 wks)"], ["cpi", "Cost per install"], ["b7", "Back in 7 days"], ["b30", "30 days"],
-                                ["pay", "Paisa wapas (din me)"], ["best", "Best country"], ["weak", "Weakest country"], ["status", "Status"]]   # §6.4
+                                ["pay", "Money back in"], ["best", "Best country"], ["weak", "Weakest country"], ["status", "Status"]]   # §6.4
     assert sorted(i for _, i in p["table_rows"]) == sorted(r["app_id"] for r in R)
     assert p["chg_title"] is not None and int(p["chg_title"]) <= len(fixture["dv"].get("alerts") or [])   # the rows shown (§6.3)
     for k, o in p["xp"]["open"].items():                                             # each chip opens exactly its apps
@@ -487,20 +487,20 @@ def test_spend_not_in_yet_is_never_no_ads(report):
 
 def test_context_line_divides_by_the_weeks_it_has(report):
     f = report["fix"]
-    assert "Installs 1,000 /week" in f["ctx3"] and "Google Ads $100 /week" in f["ctx3"] and "(pichhle 3 pakke hafte)" in f["ctx3"]
+    assert "Installs 1,000 /week" in f["ctx3"] and "Google Ads $100 /week" in f["ctx3"] and "(last 3 final weeks)" in f["ctx3"]
     assert "Google Ads ₹8,400 /week" in f["ctx3_inr"]                                   # 25,200 billed ÷ 3 weeks
     assert "Cost per install ₹8.40" in f["cpi3_inr"] and "Google Ads ₹25,200 ÷ 3,000" in f["cpi3_inr"]
 
 
 def test_back_in_7_days_tile_uses_its_own_weeks_30_day_value(report):
     b = report["fix"]["b7same"]
-    assert "≈$23 per $100" in b and "30 din: ≈$50" in b
+    assert "≈$23 per $100" in b and "30 days: ≈$50" in b
 
 
 def test_ranges_never_zero_width_and_kept_on_a_phone(report):
     f = report["fix"]
     assert "46–46" not in f["zerow"] and "(46" not in f["zerow"]
-    assert f["rangeph"] == "andaza 107–112 din"
+    assert f["rangeph"] == "≈ 107–112 days"
     assert f["paytd"].strip() == "≈109 days (107–112)"                                   # the All-apps cell
 
 
@@ -541,7 +541,7 @@ def test_observed_90_day_value_has_no_approx_mark(report, fixture):
         R = (det(fixture, r).get("tiles") or {}).get("rpi") or {}
         if (R.get("sub") or {}).get("90") is not None and not R.get("d90_est"):
             seen += 1
-            assert "90 din $" in sub and "90 din ≈" not in sub, sub
+            assert "90 days $" in sub and "90 days ≈" not in sub, sub
     assert seen
 
 
@@ -552,6 +552,6 @@ def test_a_never_pays_back_level_that_was_already_there_is_purani_halat_not_red(
     s = pathlib.Path(__file__).resolve().parents[1].joinpath("frontend", "index.html").read_text()
     chip = s[s.index("function valChip(k,M,als){"):]
     chip = chip[:chip.index("\n}") if "\n}" in chip[:600] else 600]
-    assert "st==='never'&&M&&valOk(M.p0)&&+M.p0>=366" in chip and "🟡 Dhyan do · purani halat" in chip
+    assert "st==='never'&&M&&valOk(M.p0)&&+M.p0>=366" in chip and "🟡 Watch · old issue" in chip
     summ = s[s.index("function valSumPortfolio(rows){"):][:1800]
-    assert "K.neverOld++" in summ and "🟡 ${K.neverOld} Dhyan do (purani halat: 1 saal me bhi paisa wapas nahi)" in summ
+    assert "K.neverOld++" in summ and "🟡 ${K.neverOld} Watch (old issue: 1 saal me bhi paisa wapas nahi)" in summ

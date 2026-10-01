@@ -164,7 +164,7 @@ function sameCell(a, b) {
     TEXTS.card_30 = text(h);
     // near today: every window still ⏳ — "⏳ Abhi jaldi — <ready_on> ko poora hoga"
     h = at(P.last);
-    C.pending_line = text((h.match(/<div class="uni-any-note"><b[^>]*>(⏳ Abhi jaldi[\s\S]*?)<\/b>/) || [])[1] || '');
+    C.pending_line = text((h.match(/<div class="uni-any-note"><b[^>]*>(⏳ Too early[\s\S]*?)<\/b>/) || [])[1] || '');
     C.pending_rows = (cut(h, '<div class="uni-any-res"').match(/data-st="pending"/g) || []).length;
     TEXTS.card_pending = text(h);
     const notes = hh => [...cut(hh, '<div class="uni-any-res"', '<div class="uni-imp-b').matchAll(/<div class="uni-any-note">([\s\S]*?)<\/div>/g)].map(m => text(m[1]));
@@ -200,7 +200,7 @@ function sameCell(a, b) {
         const mine = cut(box(0), '<div class="uni-any-res"');
         if (/Same days: new version vs old versions|uni-imp-vnote/.test(mine)) Pa.no_version_table = false;
         if (/ updated<\/span>|Adoption |On this update or newer/.test(mine)) Pa.no_adoption = false;
-        if (!/📌 Aapki date: <span id="uni-any-nmt">Bina naam<\/span> — /.test(mine)) Pa.titles_ok = false;
+        if (!/📌 Your date: <span id="uni-any-nmt">No name<\/span> — /.test(mine)) Pa.titles_ok = false;
         const ro = rowsOf(cut(real, '<div', '<div class="uni-imp-sub">')), rm = rowsOf(mine);   // (the update's version table: not a date's)
         if (J(Object.keys(ro)) !== J(Object.keys(rm))) { Pa.diffs.push({ d, N, rows: [Object.keys(ro), Object.keys(rm)] }); continue; }
         for (const k of Object.keys(ro)) { Pa.rows++; const x = ro[k], y = rm[k];
@@ -295,7 +295,7 @@ function sameCell(a, b) {
     T.marker_rows = T.rows.filter(r => r.pin).map(r => r.id).sort();
     T.marker_chips = (cut(h, '<div class="uni-any-mks">', '</div>').match(/class="uni-any-mk/g) || []).length;
     const n0 = NET.log.length; run('uniAnyAllWin(30)'); const h30 = run('uniAnyAllCard()');
-    T.window_switch_instant = NET.log.length === n0 && /data-n|uni-anyall-sum/.test(h30) && /30 din pehle vs 30 din baad/.test(text(h30));
+    T.window_switch_instant = NET.log.length === n0 && /data-n|uni-anyall-sum/.test(h30) && /30 days before vs 30 days after/.test(text(h30));
     T.rows_30 = (h30.match(/<div class="uni-anyr"/g) || []).length; TEXTS.all_30 = text(h30); run('uniAnyAllWin(7)');
     run(`uniAnyGo(${J(A.app_id)}, ${J(P.halt)}, 7)`);
     T.opened = JSON.parse(run('JSON.stringify({app: UANY.app, date: UANY.date, win: UANY.win, name: UANY.name})'));

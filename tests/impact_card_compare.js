@@ -59,7 +59,9 @@ const dec = s => String(s).replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').repla
 // the day and month are compared, the year word is not)
 const norm = s => String(run(NEW, `smpInfoTxt(${JSON.stringify(dec(s))})`)).replace(/100 me /g, ' ').replace(/1,000 (users|ads)/g, ' ')
   .replace(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (19|20)\d\d\b/g, '$1');
-const nums = s => (norm(s).match(/[+−-]?\d[\d,]*(?:\.\d+)?%?/g) || []).sort();
+// SPEC_SIMPLIFY's display rule (owner, 1 Oct): a bare point delta ("0 pts" / "−1.5") now always carries its own "%"
+// ("0%" / "−1.5%") — same number, a trailing unit the old page omitted — so the % is stripped before comparing values
+const nums = s => (norm(s).match(/[+−-]?\d[\d,]*(?:\.\d+)?%?/g) || []).map(x => x.replace(/%$/, '')).sort();
 const cut = (h, a, b) => { const i = h.indexOf(a); if (i < 0) return ''; const j = b ? h.indexOf(b, i + a.length) : -1; return h.slice(i, j < 0 ? undefined : j); };
 const pillClasses = s => [...s.matchAll(/<span class="pill ([^"]+)"/g)].map(m => m[1]).sort();
 function rowsOf(t) {   // one table: every row id → {status, numbers in its value cells (not its label), its status cell's}

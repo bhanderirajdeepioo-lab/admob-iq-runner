@@ -85,7 +85,7 @@ get('header', `(()=>{ ${RESET} KWIN='60'; KCMP='month'; CURVIEW='INR'; const h=v
 
 // ── the drawer → the full app page; a refresh keeps the drawer; the app page closes it ───────────────────────────────
 get('drawer', `(()=>{ ${RESET} valScreen(); const A=VS._.A(), r={}; const calls=[]; const keep=valOpen; valOpen=function(id){ calls.push(id); };
-  const i=A.findIndex(a=>a.sz==='badi'); VS.openDrawer(i); const h=document.getElementById('vs-drawer').innerHTML; r.open=VS._.ST.drawer===i; r.full=(h.match(/Poora app page →/g)||[]).length;
+  const i=A.findIndex(a=>a.sz==='badi'); VS.openDrawer(i); const h=document.getElementById('vs-drawer').innerHTML; r.open=VS._.ST.drawer===i; r.full=(h.match(/Full app page →/g)||[]).length;
   r.dataFull=(h.match(/data-full="([^"]+)"/)||[])[1]===A[i].id; r.lock=document.body.classList.contains('vs-lock');
   r.labels=(h.match(/<text class="vs-cl"[^>]*>[^<]+</g)||[]).map(x=>x.replace(/<[^>]*>/g,'').replace(/<$/,''));
   valScreen(); r.afterRefresh=VS._.ST.drawer===i&&VS._.ST.did===A[i].id;
@@ -96,7 +96,7 @@ get('page', `(()=>{ ${RESET} valScreen(); const A=VS._.A(), a=A.find(x=>x.sz==='
   r.root=h.indexOf('id="vs-root"')>=0; r.pg=h.indexOf('id="vs-pgbody"')>=0; r.fold=h.indexOf('id="val-oldapp"')>=0;
   r.foldAfter=h.indexOf('id="val-oldapp"')>h.indexOf('id="vs-pgbody"'); r.back=/data-back="1"/.test(h);
   const old=valAppOld(row); r.oldInside=h.indexOf(old)>h.indexOf('id="val-oldapp"');
-  r.sections=['Paisa kitne din me wapas','Har install hafta','Week by week','Countries'].every(t=>h.indexOf(t)>=0);
+  r.sections=['Money back — how many days','Each install week','Week by week','Countries'].every(t=>h.indexOf(t)>=0);
   r.labels=(h.match(/<text class="vs-cl"[^>]*>[^<]+</g)||[]).map(x=>x.replace(/<[^>]*>/g,'').replace(/<$/,''));
   KWIN='60'; const h60=valScreen(); r.range60=VS._.W().L===8&&/data-r="60" aria-pressed="true"/.test(h60);
   const ptr=DATA.value.studio; delete DATA.value.studio; r.noPtrSame=valScreen()===valAppOld(row); DATA.value.studio=ptr;

@@ -405,8 +405,8 @@ for (const r of rows) {
     ctx_text: text(secIn(h, 'id="act-ctx"', '</div>')).trim(), latest: text(secIn(h, 'id="act-latest"', '</div>')).trim(), latest_prov: sec(h, 'id="act-latest"', '</div>').includes('>Provisional</span>'),
     has_titles: ['📌 At a glance', '🔔 What changed? (', 'When will I know?', '← All apps'].filter(x => T(`detail|${r.app}|base`).includes(x)),
     summary: (sum.match(/<div class="act-line" data-kind="([^"]*)">([^<]*)<\/div>/) || []).slice(1), edges: [...sum.matchAll(/<div class="act-edge">([^<]*)<\/div>/g)].map(m => m[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"')),
-    prov_note: /⏳ <b>Pakka nahi:<\/b>/.test(sum), uni_link: sum.includes('Open Uninstall →'),
-    chg_title: (chg.match(/🔔 What changed\? \((\d+)\)/) || [])[1], chg_counts: (text(chg).match(/What changed\? \(\d+\) Sirf ye app: .*? · (\d+) shown · (\d+) folded below/) || []).slice(1).map(Number),
+    prov_note: /⏳ <b>Not final:<\/b>/.test(sum), uni_link: sum.includes('Open Uninstall →'),
+    chg_title: (chg.match(/🔔 What changed\? \((\d+)\)/) || [])[1], chg_counts: (text(chg).match(/What changed\? \(\d+\) Only this app: .*? · (\d+) shown · (\d+) folded below/) || []).slice(1).map(Number),
     chg_rows: [...chgF.matchAll(/<div class="uni-chg na" data-fam="([^"]*)"/g)].map(m => m[1]), all_normal: chg.includes('✅ All normal — no changes'),
     info_rows: [...chgF.matchAll(/data-info="([^"]*)"/g)].map(m => m[1]), closed_rows: (chgF.match(/<div class="uni-chg na cl"/g) || []).length, older_rows: (chgF.match(/data-old="/g) || []).length,
     folds: [...chg.matchAll(/<span>([A-Za-z ]+) \((\d+)\)<\/span>/g)].map(m => [m[1], +m[2]]),
@@ -426,7 +426,7 @@ for (const r of rows) {
     rev: { gaps: text(secIn(h, 'id="act-revgaps"', '</div>')).trim(), note: text(sec(h, 'class="faint act-revnote"', '</div>')).replace(/^[^>]*>/, '').trim(), zero_money: /\$0(\.0+)?(?![\d.])/.test(text(sec(h, 'id="act-sum"', 'id="act-chg"'))) },
     kpis: text(sec(out[`detail|${r.app}|range_all`] || '', 'id="act-kpis"', 'id="act-daily"')).trim().slice(0, 900),
     kpis_today: text(sec(out[`detail|${r.app}|range_today`] || '', 'id="act-kpis"', 'id="act-daily"')).trim().slice(0, 900),
-    daily_title: h.includes('<h3>👥 Purane users (roz) — every day</h3>'), tri_title: h.includes('<h3>🔁 How many came back — install week × day</h3>'),
+    daily_title: h.includes('<h3>👥 Old users — every day</h3>'), tri_title: h.includes('<h3>🔁 How many came back — install week × day</h3>'),
     use_title: h.includes('<h3>⏱️ Sessions &amp; time per user</h3>'), rev_title: h.includes('<h3>💰 Ad revenue per user</h3>'),
     chips_seen: [...new Set([...h.matchAll(/<span class="chip( on)?" onclick="act[A-Za-z]+\([^)]*\)">([^<]*)<\/span>/g)].map(m => m[2]))],
     tile_open: /class="uni-st act-t open" data-m="ret_dau"/.test(out[`detail|${r.app}|tile_open`] || ''),
@@ -454,7 +454,7 @@ const portfolio = { text: T('portfolio_30d').slice(0, 6000), count: text(sec(pH,
   table_pills: [...sec(pH, 'id="act-table"', '</tbody>').matchAll(/<span class="pill ([a-z0-9-]+)" data-st="([a-z_]+)"/g)].map(m => [m[1], m[2]]),
   strip_classes: [...sec(pH, 'class="act-strips"', 'class="uni-foot"').matchAll(/<span class="uni-sc ([a-z-]+)( on)?" data-k="([a-z0-9_]+):([a-z_]+)"/g)].map(m => [m[1], m[3], m[4]]),
   noga4: (pH.match(/<h3>🔌 Apps without GA4 data \((\d+)\)<\/h3>/) || [])[1], timing: T('timing_open').includes('D1 ~6 din, D7 ~12 din, D30 ~35 din baad.'),
-  head: text(pH.slice(0, 700)).trim(), market: text(sec(pH, 'id="act-market">', '</div>')).trim(), prov_note: /⏳ <b>Pakka nahi:<\/b>/.test(sec(pH, 'id="act-sum"', 'id="act-chg"')) };
+  head: text(pH.slice(0, 700)).trim(), market: text(sec(pH, 'id="act-market">', '</div>')).trim(), prov_note: /⏳ <b>Not final:<\/b>/.test(sec(pH, 'id="act-sum"', 'id="act-chg"')) };
 // 📅 Daily — all apps: the section, its table rows (cells + tooltips), the chart's points / marks / hatch, the change chips
 const pfSec = h => { const a = h.indexOf('<div class="card" id="act-pf"'), a2 = a < 0 ? h.indexOf('id="act-pf"') : a; if (a2 < 0) return '';
   const b = h.indexOf('id="act-table"', a2); return h.slice(a2, b < 0 ? undefined : b); };
@@ -464,7 +464,7 @@ const pfParse = h => { const s = pfSec(h), pm = s.match(/data-pts='([^']*)'/), v
     rows: [...s.matchAll(/<tr data-day="([^"]*)"( class="act-pfp")?>([\s\S]*?)<\/tr>/g)].map(m => ({ day: m[1], prov: !!m[2],
       cells: [...m[3].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c => text(c[1]).trim()),
       tips: [...m[3].matchAll(/<td(?: class="([^"]*)")?(?: title="([^"]*)")?>/g)].map(c => unq(c[2] || null)),
-      cls: [...m[3].matchAll(/<td(?: class="([^"]*)")?/g)].map(c => c[1] || ''), star: /class="act-pfs"/.test(m[3]), pill: m[3].includes('>⏳ Pakka nahi</span>') })),
+      cls: [...m[3].matchAll(/<td(?: class="([^"]*)")?/g)].map(c => c[1] || ''), star: /class="act-pfs"/.test(m[3]), pill: m[3].includes('>⏳ Not final</span>') })),
     heads: [...(s.split('<thead>')[1] || '').split('</thead>')[0].matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(m => m[1]),
     pts: pm ? JSON.parse(unq(pm[1])) : null, vbw: vb ? +vb[1] : null,
     marks: [...s.matchAll(/class="act-pf-mk" data-day="([^"]*)"/g)].map(m => m[1]), hatch: (s.match(/class="act-pf-prov"/g) || []).length,
@@ -479,7 +479,7 @@ const pfParse = h => { const s = pfSec(h), pm = s.match(/data-pts='([^']*)'/), v
     ranges: [...s.matchAll(/<span class="chip( on)?" onclick="actPfR\('([a-z0-9]+)'\)">([^<]*)<\/span>/g)].map(m => [m[2], m[3], !!m[1]]),
     last: text(sec(s, 'id="act-pf-last"', '</div>').replace(/^[^>]*>/, '')).trim(), more: text(sec(s, 'class="act-pfmore"', '</div>').replace(/^[^>]*>/, '')).trim().slice(0, 300),
     more_calls: [...s.matchAll(/onclick="actPfMore\((\d+)\)"/g)].map(m => +m[1]), note: text(sec(s, 'class="faint act-pfnote"', '</div>').replace(/^[^>]*>/, '')).trim(),
-    prov_note: /⏳ <b>Pakka nahi:<\/b>/.test(s), lgd: text(sec(s, '<div class="lgd">', '</div>')).trim(),
+    prov_note: /⏳ <b>Not final:<\/b>/.test(s), lgd: text(sec(s, '<div class="lgd">', '</div>')).trim(),
     pool: [...sec(h, 'id="act-pool"', 'class="uni-sec"').matchAll(/<div class="uni-st act-t act-pt" data-m="([a-z0-9_]+)">([\s\S]*?)(?=<div class="uni-st act-t act-pt"|$)/g)].map(m => text(m[2]).trim()),
     order: ['id="act-sum"', 'id="act-chg"', 'id="act-pf"', 'id="act-table"'].map(k => h.indexOf(k)), full_len: h.length };
 };
@@ -499,15 +499,15 @@ const alertsOf = h => ({ sub: h.includes('👥 Active users (GA4)'), cards: (h.m
 const alerts = { all: alertsOf(out.alerts_all || ''), per_app: Object.fromEntries(rows.map(r => [r.app, alertsOf(out['alerts|' + r.app] || '')])), no_active: alertsOf(out.alerts_no_active || ''), no_active_tab: T('no_active') };
 const syn = {
   ads_dir: ((out.ads_dir || '').match(/data-m="arpdau" data-st="[a-z_]+"[\s\S]*?<span class="pill ([a-z0-9-]+)" data-st="maybe_dn"[^>]*>([^<]*)<\/span><\/div><div class="c smp-saath">([^<]*)<\/div>/) || []).slice(2).join(' | ') || null,
-  early: { row: /data-info="early"[\s\S]*?⏳ Pakka nahi/.test(out.early || ''), pill: /data-info="early"><div class="smp-row"><div class="smp-l1"><span class="pill p-b smp-w">ℹ️ Jaankari/.test(out.early || ''),
+  early: { row: /data-info="early"[\s\S]*?⏳ Not final/.test(out.early || ''), pill: /data-info="early"><div class="smp-row"><div class="smp-l1"><span class="pill p-b smp-w">ℹ️ Info/.test(out.early || ''),
     title: ((out.early || '').match(/🔔 What changed\? \((\d+)\)/) || [])[1], open: (out.early || '').split('<hr>')[1], counted: /<div class="uni-chg na" data-fam/.test((out.early || '').split('data-info="early"')[1] || '') },
   zones: text(sec(out.zones || '', 'class="faint act-revnote"', '</div>')).replace(/^[^>]*>/, ''), zones_gmt: text(sec(out.zones_gmt || '', 'class="faint act-revnote"', '</div>')).replace(/^[^>]*>/, ''),
   zones_same: text(sec(out.zones_same || '', 'class="faint act-revnote"', '</div>')).replace(/^[^>]*>/, ''),
   six_days: T('six_days').includes('(6 of 7 days)'),
   searching: { text: T('edge_searching').includes('dhoondh rahe hain'), edge_row: (out.edge_searching || '').includes('Install-day return data starts'), grid: (out.edge_searching || '').includes('act-grid') },
-  wait: { text: T('edge_wait').includes('🔁 Wapsi (agle din / 7 din baad) ka data agle GA4 fetch ke saath aayega.'), tiles: [...(out.edge_wait || '').matchAll(/data-m="(d1|d7)" data-st="wait"[\s\S]*?>⏳ Abhi jaldi<\/span>/g)].length },
+  wait: { text: T('edge_wait').includes('🔁 Wapsi (back next day / after 7 days) ka data agle GA4 fetch ke saath aayega.'), tiles: [...(out.edge_wait || '').matchAll(/data-m="(d1|d7)" data-st="wait"[\s\S]*?>⏳ Too early<\/span>/g)].length },
   found: { edge_row: (out.edge_found || '').includes('↧ Install-day return data starts') },
-  usage_wait: { tiles: [...(out.usage_wait || '').matchAll(/data-m="(sess|time)" data-st="wait"[\s\S]*?>⏳ Abhi jaldi<\/span>/g)].length, card: T('usage_wait').includes('Sessions aur time agle GA4 fetch ke baad aayenge') },
+  usage_wait: { tiles: [...(out.usage_wait || '').matchAll(/data-m="(sess|time)" data-st="wait"[\s\S]*?>⏳ Too early<\/span>/g)].length, card: T('usage_wait').includes('Sessions aur time agle GA4 fetch ke baad aayenge') },
   no_alert_red: { red: /<span class="pill p-r" data-st="worse"/.test(out.no_alert_red || ''), green: /<span class="pill p-g" data-st="better"/.test(out.no_alert_red || ''),
     blue: (out.no_alert_red || '').match(/<span class="pill p-b" data-st="(worse|better)"/g) || [] },
   all_wait: { dashes: [...(out.all_wait || '').matchAll(/data-m="[a-z0-9_]+" data-st="wait"[\s\S]*?<div class="v">—<\/div>/g)].length, zero_money: /\$0(\.0+)?(?![\d.])/.test(text((out.all_wait || '').replace(/<svg[\s\S]*?<\/svg>/g, ''))) },   // chart axis ticks aside

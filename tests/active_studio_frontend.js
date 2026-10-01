@@ -94,7 +94,7 @@ get('header', `(()=>{ ${RESET} KWIN='60'; KCMP='month'; const h=actScreen(); ${R
 
 // ── the drawer → the app's page; a refresh keeps it; an app page closes it ─────────────────────────────────────────
 get('drawer', `(()=>{ ${RESET} actScreen(); __flush(); const A=AS._.A(), r={}; const calls=[]; const keep=actOpen; actOpen=function(id){ calls.push(id); };
-  AS.openDrawer(0); const h=document.getElementById('as-drawer').innerHTML; r.open=AS._.ST.drawer===0; r.full=(h.match(/Poora app page →/g)||[]).length;
+  AS.openDrawer(0); const h=document.getElementById('as-drawer').innerHTML; r.open=AS._.ST.drawer===0; r.full=(h.match(/Full app page →/g)||[]).length;
   r.dataFull=(h.match(/data-full="([^"]+)"/)||[])[1]===A[0].id; r.lock=document.body.classList.contains('as-lock');
   actScreen(); __flush(); r.afterRefresh=AS._.ST.drawer===0&&AS._.ST.did===A[0].id&&document.getElementById('as-drawer').classList.contains('as-on');
   AS._.fullPage(A[0].id); r.calls=calls; r.closed=AS._.ST.drawer===-1&&!document.body.classList.contains('as-lock');

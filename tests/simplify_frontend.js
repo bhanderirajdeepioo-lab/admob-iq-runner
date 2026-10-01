@@ -120,18 +120,19 @@ for (const r of VF.dashboard_value.apps) if (VF.app_files[r.key]) { scen(`val|${
 const rowsOf = h => [...String(h).matchAll(/<div class="uni-chg [^"]*"[^>]*><div class="smp-row">([\s\S]*?class="smp-ts">[\s\S]*?)<\/div><\/div><\/div>/g)].map(m => {
   const t = text(m[1]);
   return { words: (m[1].match(/class="pill [a-z-]+ smp-w"/g) || []).length, word: (m[1].match(/smp-w">([^<]*)</) || [])[1] || '',
-    chips: (m[1].match(/class="smp-chip( band)?"/g) || []).length, clock: t.includes('🕒 Alert aaya: '),
+    chips: (m[1].match(/class="smp-chip( band)?"/g) || []).length, clock: t.includes('🕒 Alert time: '),
     ts_clock: /^🕒 /.test(text((m[1].match(/class="smp-ts">([\s\S]*)$/) || [])[1] || '')), fallback: / tak ke data pe/.test(text((m[1].match(/class="smp-ts">([\s\S]*)$/) || [])[1] || '').split(' · ')[0]),
-    chip: (m[1].match(/class="smp-chip(?: band)?"[^>]*>([^<]*)</) || [])[1] || '', shuru: /Badlaav shuru: (\d{1,2} [A-Z][a-z]{2}( \d{4})? · \d+ (din|hafte|mahine)|6\+ mahine se|—)/.test(t),
-    data: t.includes(' Data: ') || t.startsWith('Data: ') || / Data: /.test(t), info: (m[1].match(/smp-w">ℹ️ Jaankari</) || []).length > 0, t: t.slice(0, 300) }; });
+    chip: (m[1].match(/class="smp-chip(?: band)?"[^>]*>([^<]*)</) || [])[1] || '', shuru: /Change started: (\d{1,2} [A-Z][a-z]{2}( \d{4})? · \d+ (days|weeks|months)|6\+ months|—)/.test(t),
+    data: t.includes(' Data: ') || t.startsWith('Data: ') || / Data: /.test(t), info: (m[1].match(/smp-w">ℹ️ Info</) || []).length > 0, t: t.slice(0, 300) }; });
 R.rows_all = {};
 for (const k of ['uni_pf_open', 'act_pf_files', 'val_pf_files', ...apps]) R.rows_all[k] = rowsOf(out[k]);
 R.legend = {};
 for (const k of ['uni_pf', 'uni_pf_open', 'act_pf_nofiles', 'act_pf_files', 'val_pf_files', ...apps]) { const h = out[k] || '';
-  R.legend[k] = { lists: (h.match(/<h3>🔔 What changed\? \(/g) || []).length, legends: (h.match(/<div class="smp-legend">🆕 = naya alert \(aaj\/kal\) · 📌 = pehle se khula · 🕒 = kab aaya \/ kis data pe<\/div>/g) || []).length,
+  R.legend[k] = { lists: (h.match(/<h3>🔔 What changed\? \(/g) || []).length, legends: (h.match(/<div class="smp-legend">🆕 = new alert \(today\/yesterday\) · 📌 = already open · 🕒 = when it came \/ on what data<\/div>/g) || []).length,
     order: h.indexOf('<h3>🔔 What changed? (') < h.indexOf('class="smp-legend"') && h.indexOf('class="smp-legend"') < (h.indexOf('<div class="uni-chg ') < 0 ? Infinity : h.indexOf('<div class="uni-chg ')) }; }
-// the tab heads: "🆕 n naye alert (aaj/kal)" counts the rows whose chip is 🆕
-R.naye = { uni: (text(out.uni_pf_open).match(/🆕 (\d+) naye alert \(aaj\/kal\)/) || [])[1],
+// the tab heads: Uninstall's is English now ("🆕 n new alerts (today/yesterday)"), Active's is still Hinglish
+// ("🆕 n naye alert (aaj/kal)") — both count the rows whose chip is 🆕
+R.naye = { uni: (text(out.uni_pf_open).match(/🆕 (\d+) new alerts? \(today\/yesterday\)/) || [])[1],
   uni_rows: rowsOf(out.uni_pf_open).filter(x => /^🆕/.test(x.chip)).length, act: (text(out.act_pf_files).match(/🆕 (\d+) naye alert \(aaj\/kal\)/) || [])[1],
   act_rows: rowsOf(out.act_pf_files).filter(x => /^🆕/.test(x.chip)).length };
 
@@ -155,7 +156,7 @@ R.open_alerts = { uni: (UF.dashboard_uninstall.alerts || []).map(a => a.id), act
   val: (VF.dashboard_value.alerts || []).map(a => a.id) };
 R.texts = Object.fromEntries(Object.entries(out).map(([k, v]) => [k, text(v)]));
 R.alerts = { html: out.alerts, ga4_cards: (out.alerts.match(/data-metrics="(uninstall|active|value)"/g) || []).length,
-  total: (text(out.alerts).match(/Total issues (\d+)/) || [])[1], chips: [...out.alerts.matchAll(/<span class="smp-chip">([^<]*)<\/span> Shuru: ([^<]*)</g)].map(m => [m[1], m[2]]) };
+  total: (text(out.alerts).match(/Total issues (\d+)/) || [])[1], chips: [...out.alerts.matchAll(/<span class="smp-chip">([^<]*)<\/span> · Started: ([^<]*)</g)].map(m => [m[1], m[2]]) };
 
 // ── 4b. the Active users tab's ONE update line (owner, 1 Oct: "rehne do, Uninstall se dekh lunga"): per app "📦 Is app ka
 // aakhri update: vX (date) · <verdict> → Uninstall me poora card ›" (or "📦 Pichhle 60 din me koi update nahi"), and its
@@ -167,7 +168,7 @@ R.updline = JSON.parse(run(`(()=>{ const out=[]; const keep={show, render, _navS
       const o={app_id:r.app_id, app:r.app, n:(r.updates||[]).length, text:t, go, newest:((r.updates||[]).slice().sort((p,q)=>p.date<q.date?1:-1)[0]||{}).key||null};
       if(go){ eval(go); const page=uniScreen(); const open=page.split('<div class="uni-imp-b').filter(x=>x.includes('data-open="1"'));
         Object.assign(o,{calls:calls.slice(), APP, UNIAPP, open:UNIIMPOPEN, jump:UNIIMPJUMP, rendered_open:open.map(x=>(x.match(/data-key="([^"]*)"/)||[])[1]),
-          card:page.includes('id="uni-impact"'), detail:page.includes('Sirf ye app:')}); }
+          card:page.includes('id="uni-impact"'), detail:page.includes('Only this app:')}); }
       out.push(o); }
     // the All-apps line
     out.push({all:true, text:(actPortfolio().split('id="act-upd-link"')[1]||'').split('</div>')[0].replace(/<[^>]*>/g,' ').replace(/^[^>]*>/,'').replace(/\\s+/g,' ').trim(),
@@ -175,7 +176,7 @@ R.updline = JSON.parse(run(`(()=>{ const out=[]; const keep={show, render, _navS
   } finally{ show=keep.show; render=keep.render; _navSave=keep._navSave; APP=''; UNIAPP=''; }
   return JSON.stringify(out); })()`));
 // impact / impact_late alerts stay in the Uninstall tab's "What changed?" (All apps and the app's own): their rows
-R.imp_rows = { all: rowsOf(out.uni_pf_open).filter(x => /Update roko|Ruk ke jaancho|Update achha gaya|30 din baad:/.test(x.t)).map(x => ({ chip: x.chip, clock: x.clock, ts: x.ts_clock })),
+R.imp_rows = { all: rowsOf(out.uni_pf_open).filter(x => /Stop update|Wait and check|Update went well|After 30 days:/.test(x.t)).map(x => ({ chip: x.chip, clock: x.clock, ts: x.ts_clock })),
   want: (UF.dashboard_uninstall.alerts || []).filter(a => a.family === 'impact' || a.family === 'impact_late').length };
 
 // ── 5. the Alerts badges: ad units (critical + warning) + approved-range breaches — the GA4 tabs are not in it ──

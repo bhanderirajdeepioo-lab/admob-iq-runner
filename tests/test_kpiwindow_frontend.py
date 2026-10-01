@@ -162,13 +162,13 @@ def test_persistence_survives_corrupt_json(report):
 # ---- COUNT tiles: always "roz ~<avg> (+/-%)"; totals only (small, grey) when the lengths differ -------------
 def test_count_tile_display(report):
     equal = out(report, "cmpline_equal")
-    assert equal.startswith("roz ~30 ") and "kw-avg-note" not in equal   # 900/30 = 30/day; same length -> no totals text
+    assert equal.startswith("daily ~30 ") and "kw-avg-note" not in equal   # 900/30 = 30/day; same length -> no totals text
     assert re.search(r"\(-?\d+%\)", equal) or "−" in equal
     unequal = out(report, "cmpline_unequal")
-    assert unequal.startswith("roz ~920 ")   # 27600/30 = 920/day
+    assert unequal.startswith("daily ~920 ")   # 27600/30 = 920/day
     assert "kw-avg-note" in unequal and "27,600" in unequal and "25,100" in unequal   # both periods' totals, in grey, because 30 != 14 days
-    assert "pehle ka poora data nahi" in out(report, "cmpline_missing_prev")
-    assert "is range me data nahi" in out(report, "cmpline_missing_range")
+    assert "no complete data for before" in out(report, "cmpline_missing_prev")
+    assert "no data in this range" in out(report, "cmpline_missing_range")
 
 
 def test_count_tile_percent_matches_per_day_average(report):
@@ -192,18 +192,18 @@ def test_percent_formatting_rules(report):
 # "Matlab" text anywhere (the owner's final display rule) --------------------------------------------------
 def test_rate_tile_actual_number_and_percent(report):
     t = out(report, "ratepct_period_total")
-    assert t == "+186 uninstall (28%, pehle 22%)"          # 0.06 * 3098 ~= 185.88 -> 186
+    assert t == "+186 uninstall (28%, before 22%)"          # 0.06 * 3098 ~= 185.88 -> 186
     assert "100 me" not in t and "1,000 me" not in t and "har 1,000" not in t and "Matlab" not in t
 
 
 def test_rate_tile_daily_figure_for_a_recurring_rate(report):
     t = out(report, "ratepct_daily")
-    assert t == "≈ +2/din uninstall (0.97%, pehle 0.81%)"    # (0.0097-0.0081)*(7000/7) ~= 1.6 -> 2/din; est -> ≈
+    assert t == "≈ +2/day uninstall (0.97%, before 0.81%)"    # (0.0097-0.0081)*(7000/7) ~= 1.6 -> 2/day; est -> ≈
 
 
 def test_rate_tile_missing_and_no_base(report):
-    assert "pehle ka poora data nahi" in out(report, "ratepct_missing")
-    assert out(report, "ratepct_no_base") == "(28%, pehle 22%)"   # no base given -> no actual-number part, percentages still shown
+    assert "no complete data for before" in out(report, "ratepct_missing")
+    assert out(report, "ratepct_no_base") == "(28%, before 22%)"   # no base given -> no actual-number part, percentages still shown
 
 
 def test_rate_tile_percent_is_length_invariant(report):
@@ -211,22 +211,22 @@ def test_rate_tile_percent_is_length_invariant(report):
     # window's length is (7 / 14 / 30 days) -- the whole point of comparing a rate "per 100", never per-day
     rows = jout(report, "ratepct_len_invariant")
     assert len(set(rows)) == 1
-    assert rows[0] == "(0.97%, pehle 0.81%)"
+    assert rows[0] == "(0.97%, before 0.81%)"
 
 
 # ---- money-per-user RATE tiles: the actual money is a daily figure, then the per-user values -- never a % ----
 def test_money_rate_tile(report):
     t = out(report, "ratemoney")
-    assert t.startswith("+₹20/din (")   # (2.31-1.92) * (1_500_000/30) / 1000 = 19.5 -> 20/din
+    assert t.startswith("+₹20/day (")   # (2.31-1.92) * (1_500_000/30) / 1000 = 19.5 -> 20/day
     assert "per user" in t and "%" not in t
-    assert "pehle ₹" in t
-    assert "pehle ka poora data nahi" in out(report, "ratemoney_missing")
+    assert "before ₹" in t
+    assert "no complete data for before" in out(report, "ratemoney_missing")
 
 
 # ---- plain continuous averages (sessions/user, time/user, purane users roz): before -> after with a plain % --
 def test_plain_average_tile(report):
     assert out(report, "rateavg") == "2.1 → 2.3 (+10%)"
-    assert "pehle ka poora data nahi" in out(report, "rateavg_missing")
+    assert "no complete data for before" in out(report, "rateavg_missing")
 
 
 def test_pool_sums_skips_missing_apps_never_a_fake_zero(report):
@@ -328,7 +328,7 @@ def test_invalid_custom_range_shows_the_hinglish_message_not_a_crash(report):
 def test_the_selector_appears_on_all_three_tabs(report):
     for name in ("uni_portfolio_30", "act_portfolio_30", "val_portfolio_30"):
         html = out(report, name)
-        assert "14 din" in html and "30 din" in html and "60 din" in html and "Custom" in html
+        assert "14 days" in html and "30 days" in html and "60 days" in html and "Custom" in html
         assert "Ye chunav sirf upar ke numbers ke liye" in html
 
 
@@ -354,6 +354,6 @@ def test_kpi_bands_never_say_per_1000_owner_rule():
     s = pathlib.Path(__file__).resolve().parents[1].joinpath("frontend", "index.html").read_text()
     uni = s[s.index("kpi('📊 Uninstall rate'"):][:400]
     assert "kwPct(P.rate/1000)" in uni and "har 1,000" not in uni
-    assert "💵 Kamai per user ≈" in s and "💵 Per 1,000 users ≈" not in s
-    assert "tile('arpdau','Kamai per user (roz)'" in s and "tile('arpdau','Kamai har 1,000 users se (roz)'" not in s
+    assert "💵 Revenue per user ≈" in s and "💵 Per 1,000 users ≈" not in s
+    assert "tile('arpdau','Revenue per user (/day)'" in s and "tile('arpdau','Kamai har 1,000 users se (roz)'" not in s
     assert "S1.rv*1000/S1.ra" not in s and "A.rv*1000/A.ra" not in s

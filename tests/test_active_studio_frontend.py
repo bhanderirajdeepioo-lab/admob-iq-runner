@@ -40,9 +40,12 @@ NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 BANNED = re.compile(r"\bis hafte\b|\bthis week\b|\babhi ka\b|Provisional|kacch?a\b|kacche|Estimate|/1k|\bpts\b|\bpp\b|\bpoints?\b"
                     r"|cohort|ARPDAU|eCPM|mediation|Stay after|\bsettled\b|\blatest\b|\brecent\b", re.I)
-BANNED_CASE = re.compile(r"\bNew\b|\bD\d{1,3}\b|\bMix\b|\bHALT\b|\bWIN\b|\bReturning\b")
+# narrowed: the English 🆕 chips ("🆕 New", "🆕 New alert · today", "New users", "New vs old", "New engine alerts") are
+# wanted now — ban only a standalone OLD "New" pill (not preceded by "🆕 ", not followed by a word that makes it one
+# of the wanted phrases above)
+BANNED_CASE = re.compile(r"(?<!🆕 )\bNew\b(?! (?:engine|vs|users|alert))|\bD\d{1,3}\b|\bMix\b|\bHALT\b|\bWIN\b|\bReturning\b")
 DEVA = re.compile("[ऀ-ॿ]")
-SIX = {"Bigda", "Dhyan do", "Behtar", "Normal", "Abhi jaldi", "Lagu nahi"}
+SIX = {"Worse", "Watch", "Better", "Normal", "Too early", "N/A"}
 
 
 @pytest.fixture(scope="module")
@@ -279,7 +282,7 @@ def test_one_apps_page_is_the_studio_with_the_whole_older_page_folded_under_it(r
     i_root, i_pg_root, i_pg, i_old = p["order"]
     assert 0 <= i_root < i_pg < i_old and i_pg_root > 0          # the Studio's page, then "🗂 Purane views"
     assert p["oldInFold"] and p["oldFull"]                      # the older app page, whole, inside the fold
-    assert "🗂 Purane views" in p["html"] and p["html"].count('id="act-') >= 5
+    assert "🗂 Old views" in p["html"] and p["html"].count('id="act-') >= 5   # label renamed (GLOSSARY §3; was "Purane views")
     assert p["noPtrSame"]                                       # no Studio file: the older page exactly as before
     assert p["win30"]                                           # the page follows the shared range
     assert p["foldOpenOnJump"]                                  # a jump into the older page (Alerts → this app) opens it
@@ -294,15 +297,15 @@ def test_what_changed_keeps_every_alert_with_its_timestamps(report):
     cards = re.split(r'<div class="as-ac ', chg)[1:]
     assert len(cards) == len(al)
     for c, x in zip(cards, al):
-        assert "Badlaav shuru: " in c and "Data: " in c
+        assert "Change started: " in c and "Data: " in c   # "Badlaav shuru:" -> "Change started:"
         if 'as-s-info' in c[:40]:
-            continue                                           # an engine info row (not an alert): 🕒 Data · Badlaav shuru
-        assert "🕒 Alert aaya: " in c and " IST" in c
-        assert re.search(r'class="as-age[^"]*"[^>]*>🔔 (🆕 Naya alert · aaj \d\d:\d\d|🆕 Kal aaya|📌 \d+ din se khula|📌 .+ se khula'
-                         r'|📌 Shuru se khula \(.+\)|✅ Band ho gaya|📌 Khula)<', c), c[:300]
+            continue                                           # an engine info row (not an alert): 🕒 Data · Change started
+        assert "🕒 Alert time: " in c and " IST" in c   # "Alert aaya:" -> "Alert time:"
+        assert re.search(r'class="as-age[^"]*"[^>]*>🔔 (🆕 New alert · today \d\d:\d\d|🆕 Yesterday|📌 Open \d+ days|📌 Open since .+'
+                         r'|📌 Open from start \(.+\)|✅ Closed|📌 Open)<', c), c[:300]
     rows = re.split(r"<tr data-app=", report["out"]["chgTable"])[1:]
-    assert rows and all("Badlaav shuru: " in r and "Data: " in r for r in rows)
-    assert all("🕒 Alert aaya: " in r for r in rows if "ℹ️ Jaankari" not in r)
+    assert rows and all("Change started: " in r and "Data: " in r for r in rows)
+    assert all("🕒 Alert time: " in r for r in rows if "ℹ️ Info" not in r)
 
 
 # ── the numbers printed on the charts ────────────────────────────────────────────────────────────────────────────
@@ -315,7 +318,7 @@ def test_the_charts_print_their_numbers_without_hover(report):
     assert c["map"] >= 4                                       # every map row's trend carries its latest value
     assert any(t.startswith("avg ") for t in c["tl"]) and any(" → " in t for t in c["tl"])
     d = c["drawer"]
-    assert any(t.startswith("chosen range · farak ") and t.endswith("%)") for t in d)    # the range's farak, users/day
+    assert any(t.startswith("chosen range · difference ") and t.endswith("%)") for t in d)    # the range's farak -> "difference", users/day
     assert any(t.startswith("normal ") for t in d) and any(t.startswith("avg ") for t in d)
     assert any(t.startswith(c["rel"][0] + " · ") and " → " in t for t in d)             # 📦 version + before → after
     assert any(re.match(r"^\d{1,2} [A-Z][a-z]{2} · ", t) for t in d)                     # an alert day + its number
