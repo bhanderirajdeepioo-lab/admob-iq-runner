@@ -353,6 +353,30 @@ def _impact_any_tail(out_dir):
         return []
 
 
+def _studio_step(dashboard, data_dir, out_dir, s):
+    """🧭 Uninstall Studio (admob_iq.uninstall_studio_build): the Uninstall tab's All-apps view — ONE lazy file from the
+    files the Uninstall step wrote this build, its pointer dashboard["uninstall"]["studio"] and ONE counts-only line →
+    its _headers paths. OPTIONAL (UNINSTALL_STUDIO, default on) and failure-isolated: switched off (its file removed,
+    nothing printed) or failing (the error TYPE only), every other output is exactly as without it."""
+    try:
+        from . import uninstall_studio_build as usb
+        if not usb.enabled(s):
+            usb.off(out_dir)
+            return []
+        files = usb.run(dashboard, out_dir, os.path.join(os.path.dirname(data_dir) or ".", "config"), s)
+        line = usb.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return ["/" + f for f in files]
+    except Exception as e:
+        try:
+            dashboard["uninstall"].pop("studio", None)
+        except Exception:
+            pass
+        print(f"uninstall studio skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 def _review_step(dashboard, data_dir, out_dir, now=None):
     """Daily App Review (admob_iq.review): freezes today's cards once (after REVIEW_READY_IST), publishes every day's
     snapshot to site/review/ and writes site/review/index.json → the _headers patterns it needs. OPTIONAL: off unless
@@ -1309,6 +1333,9 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         uni_files = _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today,
                                             account_tzs(accounts, s, report_tz, mode, has_creds))
         any_paths = _impact_any_tail(out_dir)
+    # 🧭 Uninstall Studio (the Uninstall tab's All-apps view): one lazy file from what the Uninstall step just wrote —
+    # OPTIONAL (UNINSTALL_STUDIO) and failure-isolated; without this build's Uninstall data it leaves no file behind
+    studio_paths = _studio_step(dashboard, data_dir, out_dir, s)
 
     os.makedirs(out_dir, exist_ok=True)
     # dashboard.json is the primary payload and GROWS with history depth (placements + countries_daily),
@@ -1420,7 +1447,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # dashboard.json changes hourly, so it must NEVER be served from a stale cache
     # — no-store forces every request to fetch the freshest file from origin.
     with open(os.path.join(out_dir, "_headers"), "w", encoding="utf-8") as f:
-        f.write(headers_text(uni_files, dashboard, extra=list(review_paths) + any_paths))
+        f.write(headers_text(uni_files, dashboard, extra=list(review_paths) + any_paths + studio_paths))
 
     alerts = send_alerts(dashboard, s)
     _uninstall_mark_sent(dashboard, data_dir, s, alerts)

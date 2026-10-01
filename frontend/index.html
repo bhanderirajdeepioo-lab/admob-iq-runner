@@ -904,6 +904,396 @@
   .kw-avg-note{display:block;margin-top:2px;font-size:10.5px;color:var(--faint)}
   .kw-cmpline{margin-top:3px}
   .kw-common-note{font-size:11px;color:var(--muted);margin:-4px 0 10px;line-height:1.5}
+  /* ===== 🧭 UNINSTALL STUDIO (the Uninstall tab's All-apps view) — everything under #us-root / #us-layer, classes us-* ===== */
+:is(#us-root,#us-layer){--us-raise2:#1c2c47;--us-blue-s:#8fb8ff;--us-blue-b:#15284a;--us-h3:rgba(255,107,107,.62);--us-h2:rgba(255,107,107,.36);--us-h1:rgba(255,107,107,.18);--us-h0:#18263d;--us-g1:rgba(52,217,154,.16);--us-g2:rgba(52,217,154,.32);--us-g3:rgba(52,217,154,.54);--us-s-in:#22d3ee;--us-s-out:#a78bfa;--us-s-rate:#8fb8ff;--us-band:rgba(143,184,255,.13);--us-ghost:#7d8fae;--us-seq0:#13213a;--us-seq1:#0f5163;--us-seq2:#0f8299;--us-seq3:#22d3ee;--us-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--us-num:"IBM Plex Sans Condensed","Roboto Condensed","Arial Narrow",-apple-system,BlinkMacSystemFont,sans-serif;--us-r:14px;}
+#us-root,#us-layer{color:var(--ink);font:13.5px/1.5 var(--us-font);-webkit-font-smoothing:antialiased;text-align:left}
+:is(#us-root,#us-layer) td{color:inherit}
+:is(#us-root,#us-layer) [hidden]{display:none!important}
+#us-root{position:relative;min-width:0;container:us/inline-size}
+body:not([data-screen="uninstall"]) #us-layer{display:none}
+body.us-lock[data-screen="uninstall"]{overflow:hidden}
+:is(#us-root,#us-layer) button,:is(#us-root,#us-layer) select,:is(#us-root,#us-layer) input{font:inherit;color:inherit}
+:is(#us-root,#us-layer) button{cursor:pointer}
+:is(#us-root,#us-layer) :focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:6px}
+:is(#us-root,#us-layer) .us-num,:is(#us-root,#us-layer) .us-n{font-family:var(--us-num);font-variant-numeric:tabular-nums}
+:is(#us-root,#us-layer) .us-muted{color:var(--muted)}
+:is(#us-root,#us-layer) .us-faint{color:var(--faint)}
+:is(#us-root,#us-layer) .us-bad{color:var(--bad)}
+:is(#us-root,#us-layer) .us-good{color:var(--good)}
+:is(#us-root,#us-layer) .us-watch{color:var(--watch)}
+/* ---------- top bar ---------- */
+:is(#us-root,#us-layer) .us-top{position:sticky;top:var(--us-stick,0px);z-index:8;margin:-15px -24px 0;background:rgba(10,17,32,.86);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+:is(#us-root,#us-layer) .us-top-in{max-width:none;margin:0;padding:10px 24px 8px;display:flex;align-items:center;gap:12px 20px;flex-wrap:wrap}
+:is(#us-root,#us-layer) .us-brand{display:flex;align-items:center;gap:11px;min-width:0;margin-right:auto}
+:is(#us-root,#us-layer) .us-mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#2f6bff,var(--cyan));display:grid;place-items:center;flex:none}
+:is(#us-root,#us-layer) .us-bn{font:700 17px/1.1 var(--us-num);letter-spacing:.01em}
+:is(#us-root,#us-layer) .us-demo{font-size:11px;color:var(--watch);font-weight:600;margin-top:2px}
+:is(#us-root,#us-layer) .us-ctrls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+:is(#us-root,#us-layer) .us-seg{display:inline-flex;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:2px;gap:2px}
+:is(#us-root,#us-layer) .us-seg button{background:none;border:0;border-radius:8px;padding:5px 10px;font-weight:600;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+:is(#us-root,#us-layer) .us-seg button:hover{background:var(--raise)}
+:is(#us-root,#us-layer) .us-seg button[aria-pressed="true"]{background:var(--us-raise2);color:#fff;box-shadow:inset 0 0 0 1px rgba(34,211,238,.45)}
+:is(#us-root,#us-layer) .us-seg kbd{font:600 9.5px var(--us-num);color:var(--faint);margin-left:4px}
+:is(#us-root,#us-layer) .us-sel{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:0 4px 0 10px;font-size:12px;color:var(--muted)}
+:is(#us-root,#us-layer) .us-sel select{background:transparent;border:0;padding:6px 4px;font-weight:600;font-size:12.5px;color:var(--ink);max-width:190px}
+:is(#us-root,#us-layer) .us-sel select option{background:var(--panel);color:var(--ink)}
+:is(#us-root,#us-layer) .us-custom{max-width:none;margin:0;padding:0 24px 8px;display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
+:is(#us-root,#us-layer) .us-custom input{background:var(--panel);border:1px solid var(--line2);border-radius:8px;padding:4px 6px;color:var(--ink);color-scheme:dark;font-size:12px}
+:is(#us-root,#us-layer) .us-custom .us-grp{display:inline-flex;align-items:center;gap:5px}
+:is(#us-root,#us-layer) .us-winline{max-width:none;margin:0;padding:0 24px 9px;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+:is(#us-root,#us-layer) .us-winline b{color:var(--ink);font-weight:600}
+:is(#us-root,#us-layer) .us-winline .us-prov{color:var(--watch)}
+/* ---------- layout ---------- */
+:is(#us-root,#us-layer) .us-wrap{max-width:none;margin:0;padding-inline:0;padding-block:18px 26px;display:flex;flex-direction:column;gap:22px}
+:is(#us-root,#us-layer) .us-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--us-r);min-width:0}
+:is(#us-root,#us-layer) .us-ph{display:flex;align-items:flex-end;gap:6px 14px;flex-wrap:wrap;padding:16px 18px 10px}
+:is(#us-root,#us-layer) .us-ph h2{margin:0;font:650 17px/1.2 var(--us-font);letter-spacing:.005em}
+:is(#us-root,#us-layer) .us-eyebrow{font:600 10.5px/1 var(--us-num);letter-spacing:.11em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+:is(#us-root,#us-layer) .us-ph .us-hint{font-size:12px;color:var(--muted)}
+:is(#us-root,#us-layer) .us-ph .us-right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+:is(#us-root,#us-layer) .us-duo{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:18px;align-items:stretch}
+@container us (max-width:1080px){:is(#us-root,#us-layer) .us-duo{grid-template-columns:minmax(0,1fr)}}
+/* ---------- story strip ---------- */
+:is(#us-root,#us-layer) .us-story{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+:is(#us-root,#us-layer) .us-sc{position:relative;background:linear-gradient(180deg,#132139,#101b2e);border:1px solid var(--line);border-radius:var(--us-r);padding:13px 15px 13px;cursor:pointer;transition:border-color .2s,transform .2s;min-width:0;text-align:left;display:flex;flex-direction:column;gap:3px}
+:is(#us-root,#us-layer) .us-sc:hover{border-color:var(--line2);transform:translateY(-1px)}
+:is(#us-root,#us-layer) .us-sc .us-ic{font-size:15px;line-height:1}
+:is(#us-root,#us-layer) .us-sc .us-t{font:600 10.5px/1.2 var(--us-num);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;gap:7px;align-items:center}
+:is(#us-root,#us-layer) .us-sc .us-big{font:700 27px/1.1 var(--us-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em;margin-top:3px}
+:is(#us-root,#us-layer) .us-sc .us-big small{font:600 13px var(--us-num);color:var(--muted);margin-left:4px;letter-spacing:0}
+:is(#us-root,#us-layer) .us-sc .us-ln{font-size:12.5px;color:var(--ink2);line-height:1.35}
+:is(#us-root,#us-layer) .us-sc .us-ln b{color:var(--ink);font-weight:600}
+:is(#us-root,#us-layer) .us-sc.us-bad .us-big{color:var(--bad)}
+:is(#us-root,#us-layer) .us-sc.us-good .us-big{color:var(--good)}
+:is(#us-root,#us-layer) .us-sc.us-watch .us-big{color:var(--watch)}
+@container us (max-width:960px){:is(#us-root,#us-layer) .us-story{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* ---------- KPI hero ---------- */
+:is(#us-root,#us-layer) .us-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+:is(#us-root,#us-layer) .us-kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--us-r);padding:14px 16px 10px;min-width:0;display:flex;flex-direction:column}
+:is(#us-root,#us-layer) .us-kl{font:600 11px/1.2 var(--us-num);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+:is(#us-root,#us-layer) .us-kl .us-kh{text-transform:none;letter-spacing:0;font:400 11.5px var(--us-font);color:var(--faint);text-align:right}
+:is(#us-root,#us-layer) .us-kv{display:flex;align-items:baseline;gap:6px;margin-top:6px}
+:is(#us-root,#us-layer) .us-kv .us-num{font-size:34px;font-weight:700;line-height:1;letter-spacing:-.015em}
+:is(#us-root,#us-layer) .us-kv .us-ku{font:600 13px var(--us-num);color:var(--muted)}
+:is(#us-root,#us-layer) .us-kd{font:600 13px/1.35 var(--us-num);margin-top:6px;font-variant-numeric:tabular-nums}
+:is(#us-root,#us-layer) .us-kd .us-vs{color:var(--faint);font-weight:500}
+:is(#us-root,#us-layer) .us-kd.us-up-bad,:is(#us-root,#us-layer) .us-kd.us-dn-bad{color:var(--bad)}
+:is(#us-root,#us-layer) .us-kd.us-up-good,:is(#us-root,#us-layer) .us-kd.us-dn-good{color:var(--good)}
+:is(#us-root,#us-layer) .us-kd.us-flat{color:var(--ink2)}
+:is(#us-root,#us-layer) .us-ks{font-size:11.5px;color:var(--muted);min-height:16px;line-height:1.35}
+:is(#us-root,#us-layer) .us-ks b{color:var(--ink2);font-weight:600}
+:is(#us-root,#us-layer) .us-spk{display:block;width:100%;height:auto;margin-top:8px;overflow:visible;cursor:crosshair}
+@container us (max-width:960px){:is(#us-root,#us-layer) .us-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container us (max-width:448px){:is(#us-root,#us-layer) .us-kv .us-num{font-size:27px}
+:is(#us-root,#us-layer) .us-kpi{padding:12px 12px 8px}
+:is(#us-root,#us-layer) .us-sc .us-big{font-size:23px}}
+@media (max-width:480px){:is(#us-root,#us-layer) .us-kv .us-num{font-size:27px}
+:is(#us-root,#us-layer) .us-kpi{padding:12px 12px 8px}
+:is(#us-root,#us-layer) .us-sc .us-big{font-size:23px}}
+/* ---------- ledger ---------- */
+:is(#us-root,#us-layer) .us-ledger summary{list-style:none;cursor:pointer;display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink2);font-weight:600;padding:6px 12px;border:1px solid var(--line2);border-radius:999px;background:var(--panel)}
+:is(#us-root,#us-layer) .us-ledger summary::-webkit-details-marker{display:none}
+:is(#us-root,#us-layer) .us-ledger[open] summary{background:var(--raise)}
+:is(#us-root,#us-layer) .us-ledger .us-tw{margin-top:10px}
+/* ---------- tables ---------- */
+:is(#us-root,#us-layer) .us-tw{overflow:auto;border-radius:0 0 var(--us-r) var(--us-r);max-width:100%}
+:is(#us-root,#us-layer) table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+:is(#us-root,#us-layer) th{font:600 10.5px/1.25 var(--us-num);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;padding:9px 8px;background:var(--panel2);border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2}
+:is(#us-root,#us-layer) th.us-l,:is(#us-root,#us-layer) td.us-l{text-align:left}
+:is(#us-root,#us-layer) td{padding:7px 8px;border-bottom:1px solid rgba(33,50,73,.7);text-align:right;white-space:nowrap;font-family:var(--us-num);font-variant-numeric:tabular-nums;font-size:13px}
+:is(#us-root,#us-layer) tbody tr{transition:background .15s}
+:is(#us-root,#us-layer) tbody tr:hover td{background:rgba(28,44,71,.55)}
+:is(#us-root,#us-layer) .us-mini td{padding:5px 10px;font-size:12.5px}
+:is(#us-root,#us-layer) .us-prow td{color:var(--muted)}
+/* ---------- status chips ---------- */
+:is(#us-root,#us-layer) .us-chip{display:inline-flex;align-items:center;gap:5px;font:600 11.5px/1 var(--us-font);padding:4px 8px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
+:is(#us-root,#us-layer) .us-chip i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+:is(#us-root,#us-layer) .us-st-bigda{color:var(--bad);background:var(--bad-b);border-color:rgba(255,107,107,.25)}
+:is(#us-root,#us-layer) .us-st-dhyan{color:var(--watch);background:var(--watch-b);border-color:rgba(230,184,78,.25)}
+:is(#us-root,#us-layer) .us-st-behtar{color:var(--good);background:var(--good-b);border-color:rgba(52,217,154,.25)}
+:is(#us-root,#us-layer) .us-st-normal{color:var(--ink2);background:transparent;border-color:var(--line2)}
+:is(#us-root,#us-layer) .us-st-jaldi{color:var(--us-blue-s);background:var(--us-blue-b);border-color:rgba(143,184,255,.25)}
+:is(#us-root,#us-layer) .us-st-lagu{color:var(--faint);background:transparent;border-color:var(--line2);border-style:dashed}
+:is(#us-root,#us-layer) .us-alb{font:600 10.5px/1 var(--us-font);border:1px solid var(--line2);background:var(--panel2);border-radius:999px;padding:3px 7px;white-space:nowrap;color:var(--ink2)}
+:is(#us-root,#us-layer) .us-alb:hover{border-color:var(--cyan)}
+:is(#us-root,#us-layer) .us-alb.us-s-bigda{color:#ff9a9a}
+:is(#us-root,#us-layer) .us-alb.us-s-dhyan{color:var(--watch)}
+:is(#us-root,#us-layer) .us-alb.us-s-behtar{color:var(--good)}
+:is(#us-root,#us-layer) .us-alb.us-new{box-shadow:inset 0 0 0 1px rgba(34,211,238,.45)}
+:is(#us-root,#us-layer) .us-alb b{font-weight:700;color:var(--muted)}
+:is(#us-root,#us-layer) .us-ac.us-flash{animation:us-flash 1.6s ease-out}
+@keyframes us-flash{0%,40%{box-shadow:0 0 0 2px var(--cyan)}100%{box-shadow:0 0 0 0 transparent}}
+:is(#us-root,#us-layer) .us-spl{display:flex;gap:6px;justify-content:flex-end;font:500 10.5px var(--us-num);color:var(--muted);margin-top:3px;white-space:nowrap;font-variant-numeric:tabular-nums}
+:is(#us-root,#us-layer) .us-spl i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:2px;vertical-align:0}
+:is(#us-root,#us-layer) .us-spl .us-dn{background:var(--ink2)}
+:is(#us-root,#us-layer) .us-spl .us-dp{background:repeating-linear-gradient(135deg,var(--ink2) 0 2px,transparent 2px 4px)}
+:is(#us-root,#us-layer) .us-sbar{display:flex;height:4px;margin-top:4px;gap:1px;justify-content:flex-end}
+:is(#us-root,#us-layer) .us-sbar span{display:block;height:4px;border-radius:2px}
+:is(#us-root,#us-layer) .us-sbar .us-n.us-p{background:var(--bad)}
+:is(#us-root,#us-layer) .us-sbar .us-n.us-g{background:var(--good)}
+:is(#us-root,#us-layer) .us-sbar .us-o.us-p{background:repeating-linear-gradient(135deg,var(--bad) 0 2px,rgba(255,107,107,.25) 2px 4px)}
+:is(#us-root,#us-layer) .us-sbar .us-o.us-g{background:repeating-linear-gradient(135deg,var(--good) 0 2px,rgba(52,217,154,.25) 2px 4px)}
+:is(#us-root,#us-layer) .us-sbar.us-q span{filter:grayscale(1);opacity:.5}
+:is(#us-root,#us-layer) .us-age{font:500 11px/1 var(--us-font);color:var(--ink2);background:var(--raise);border-radius:999px;padding:4px 8px;white-space:nowrap}
+:is(#us-root,#us-layer) .us-age.us-new{color:#fff;background:rgba(34,211,238,.16);box-shadow:inset 0 0 0 1px rgba(34,211,238,.4)}
+:is(#us-root,#us-layer) .us-sz{font:600 10px/1 var(--us-num);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line2);border-radius:5px;padding:2px 4px;white-space:nowrap}
+:is(#us-root,#us-layer) .us-sz.us-badi{color:var(--ink2);border-color:#3a5070}
+/* ---------- heat map ---------- */
+:is(#us-root,#us-layer) .us-mapw{overflow-x:auto;padding:0 10px 4px}
+:is(#us-root,#us-layer) .us-hm{display:grid;grid-template-columns:26px minmax(170px,1fr) 92px repeat(4,72px) 84px;gap:3px;min-width:650px;align-items:stretch}
+:is(#us-root,#us-layer) .us-hm .us-hh{font:600 10px/1.2 var(--us-num);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 4px 6px;display:flex;align-items:flex-end;justify-content:center;text-align:center}
+:is(#us-root,#us-layer) .us-hm .us-hh.us-l{justify-content:flex-start;text-align:left}
+:is(#us-root,#us-layer) .us-hm .us-rk{display:flex;flex-direction:column;align-items:center;justify-content:center;font:600 12px var(--us-num);color:var(--faint);line-height:1.1}
+:is(#us-root,#us-layer) .us-hm .us-rk i{font-style:normal;font-size:9.5px}
+:is(#us-root,#us-layer) .us-hm .us-nm{display:flex;flex-direction:column;justify-content:center;padding:4px 8px 4px 4px;min-width:0;cursor:pointer;border-radius:8px}
+:is(#us-root,#us-layer) .us-nmt{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.25;white-space:normal;overflow-wrap:anywhere}
+:is(#us-root,#us-layer) .us-nmt .us-acn{color:var(--muted);font-weight:500}
+:is(#us-root,#us-layer) .us-hm .us-inr{display:flex;flex-direction:column;justify-content:center;align-items:flex-end;padding:0 6px;overflow:hidden;font:600 13px var(--us-num);font-variant-numeric:tabular-nums}
+:is(#us-root,#us-layer) .us-hm .us-inr .us-bar{display:block;height:3px;border-radius:2px;margin-top:5px;background:var(--bad);opacity:.85;max-width:100%}
+:is(#us-root,#us-layer) .us-hm .us-inr .us-bar.us-g{background:var(--good)}
+:is(#us-root,#us-layer) .us-hm .us-inr .us-bar.us-n{background:var(--faint);opacity:.6}
+:is(#us-root,#us-layer) .us-hc{border-radius:7px;background:var(--us-h0);display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:42px;font:600 14px/1.1 var(--us-num);font-variant-numeric:tabular-nums;color:var(--ink);transition:background .3s,transform .15s,box-shadow .15s;cursor:default;position:relative}
+:is(#us-root,#us-layer) .us-hc small{font:500 10.5px var(--us-num);color:var(--muted);margin-top:2px}
+:is(#us-root,#us-layer) .us-hc:hover{transform:scale(1.04);box-shadow:0 0 0 1px var(--line2),0 6px 18px rgba(0,0,0,.35);z-index:3}
+:is(#us-root,#us-layer) .us-hc.us-na{background:transparent;border:1px dashed var(--line);color:var(--faint);font-weight:500;font-size:12px}
+:is(#us-root,#us-layer) .us-h3{background:var(--us-h3);color:#fff}
+:is(#us-root,#us-layer) .us-h2{background:var(--us-h2)}
+:is(#us-root,#us-layer) .us-h1{background:var(--us-h1)}
+:is(#us-root,#us-layer) .us-h-1{background:var(--us-g1)}
+:is(#us-root,#us-layer) .us-h-2{background:var(--us-g2)}
+:is(#us-root,#us-layer) .us-h-3{background:var(--us-g3);color:#04130d}
+:is(#us-root,#us-layer) .us-h3 small,:is(#us-root,#us-layer) .us-h-3 small{color:inherit;opacity:.8}
+:is(#us-root,#us-layer) .us-hc.us-tr{background:transparent;padding:0 2px}
+:is(#us-root,#us-layer) .us-hm .us-nm.us-hl,:is(#us-root,#us-layer) .us-hm .us-rk.us-hl,:is(#us-root,#us-layer) .us-hm .us-inr.us-hl{background:rgba(34,211,238,.09);border-radius:8px}
+:is(#us-root,#us-layer) .us-hm .us-hc.us-hl{box-shadow:inset 0 0 0 1.5px rgba(34,211,238,.55)}
+:is(#us-root,#us-layer) .us-legend{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:10px 18px 14px;font-size:11.5px;color:var(--muted)}
+:is(#us-root,#us-layer) .us-legend .us-sw{display:inline-flex;gap:2px;align-items:center}
+:is(#us-root,#us-layer) .us-legend .us-sw i{width:16px;height:10px;border-radius:3px;display:inline-block}
+:is(#us-root,#us-layer) .us-moreb{background:none;border:1px solid var(--line2);color:var(--ink2);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;margin:8px 18px 0}
+:is(#us-root,#us-layer) .us-moreb:hover{background:var(--raise)}
+/* ---------- diverging bars ---------- */
+:is(#us-root,#us-layer) .us-src-sum{padding:0 18px 8px;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted)}
+:is(#us-root,#us-layer) .us-src-sum b{font:700 18px var(--us-num);color:var(--ink);font-variant-numeric:tabular-nums}
+:is(#us-root,#us-layer) .us-dv{padding:4px 12px 4px}
+:is(#us-root,#us-layer) .us-dvr{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;gap:3px 12px;align-items:baseline;padding:6px 8px 7px;border-radius:8px;cursor:pointer}
+:is(#us-root,#us-layer) .us-dvr .us-dvb{grid-column:1/-1}
+:is(#us-root,#us-layer) .us-dvr:hover,:is(#us-root,#us-layer) .us-dvr.us-hl{background:rgba(34,211,238,.07)}
+:is(#us-root,#us-layer) .us-dvr .us-nmt{font-size:12px}
+:is(#us-root,#us-layer) .us-dvb{position:relative;height:16px}
+:is(#us-root,#us-layer) .us-dvb .us-ax{position:absolute;left:50%;top:-4px;bottom:-4px;width:1px;background:var(--line2)}
+:is(#us-root,#us-layer) .us-dvb .us-seg{position:absolute;top:2px;height:12px;border-radius:3px;padding:0;border:0;display:block}
+:is(#us-root,#us-layer) .us-dvb .us-seg.us-rb{background:var(--bad)}
+:is(#us-root,#us-layer) .us-dvb .us-seg.us-rg{background:var(--good)}
+:is(#us-root,#us-layer) .us-dvb .us-seg.us-vol{background:repeating-linear-gradient(135deg,rgba(194,206,227,.42) 0 3px,rgba(194,206,227,.14) 3px 6px)}
+:is(#us-root,#us-layer) .us-dvb .us-seg.us-ob{background:repeating-linear-gradient(135deg,var(--bad) 0 3px,rgba(255,107,107,.25) 3px 6px)}
+:is(#us-root,#us-layer) .us-dvb .us-seg.us-og{background:repeating-linear-gradient(135deg,var(--good) 0 3px,rgba(52,217,154,.25) 3px 6px)}
+:is(#us-root,#us-layer) .us-dvr.us-q .us-dvb{filter:grayscale(1);opacity:.45}
+:is(#us-root,#us-layer) .us-dvn{font:600 13px var(--us-num);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+:is(#us-root,#us-layer) .us-dvi{font:500 12px var(--us-num);text-align:right;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+:is(#us-root,#us-layer) .us-dvh{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;gap:8px 12px;padding:2px 20px 2px;font:600 10px var(--us-num);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+:is(#us-root,#us-layer) .us-dvh span:nth-child(2),:is(#us-root,#us-layer) .us-dvh span:nth-child(3){text-align:right}
+:is(#us-root,#us-layer) .us-dvh .us-axl{grid-column:1/-1;display:flex;justify-content:space-between;text-transform:none;letter-spacing:0;font:500 11px var(--us-font)}
+:is(#us-root,#us-layer) .us-dvrest{margin:4px 6px 0;padding:7px 6px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+/* ---------- timeline ---------- */
+:is(#us-root,#us-layer) .us-tlw{padding:0 14px 6px;overflow-x:auto}
+:is(#us-root,#us-layer) .us-tl svg{display:block;width:100%;height:auto;overflow:visible}
+:is(#us-root,#us-layer) .us-tl .us-mk{cursor:pointer}
+:is(#us-root,#us-layer) .us-tl .us-mk:hover circle,:is(#us-root,#us-layer) .us-tl .us-mk:hover rect{stroke:#fff;stroke-width:2}
+/* ---------- what changed ---------- */
+:is(#us-root,#us-layer) .us-chg-h{display:flex;align-items:flex-end;gap:6px 14px;flex-wrap:wrap;padding:0 2px 10px}
+:is(#us-root,#us-layer) .us-chg-h h2{margin:0;font:650 17px/1.2 var(--us-font)}
+:is(#us-root,#us-layer) .us-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(288px,1fr));gap:12px}
+:is(#us-root,#us-layer) .us-ac{background:var(--panel);border:1px solid var(--line);border-radius:var(--us-r);padding:13px 15px 11px;display:flex;flex-direction:column;gap:7px;min-width:0;cursor:pointer;transition:border-color .2s,transform .2s;position:relative;overflow:hidden}
+:is(#us-root,#us-layer) .us-ac:hover{border-color:var(--line2);transform:translateY(-1px)}
+:is(#us-root,#us-layer) .us-ac.us-hl{border-color:rgba(34,211,238,.6)}
+:is(#us-root,#us-layer) .us-ac::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--line2)}
+:is(#us-root,#us-layer) .us-ac.us-s-bigda::before{background:var(--bad)}
+:is(#us-root,#us-layer) .us-ac.us-s-dhyan::before{background:var(--watch)}
+:is(#us-root,#us-layer) .us-ac.us-s-behtar::before{background:var(--good)}
+:is(#us-root,#us-layer) .us-ac .us-l1{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+:is(#us-root,#us-layer) .us-ac .us-app{font-size:13.5px;font-weight:650;line-height:1.3;color:var(--ink)}
+:is(#us-root,#us-layer) .us-ac .us-app .us-acn{color:var(--muted);font-weight:500}
+:is(#us-root,#us-layer) .us-ac .us-mid{display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:10px;align-items:center}
+:is(#us-root,#us-layer) .us-ac .us-big{font:700 30px/1 var(--us-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+:is(#us-root,#us-layer) .us-ac .us-big small{font:600 12.5px var(--us-num);color:var(--muted);margin-left:5px;letter-spacing:0}
+:is(#us-root,#us-layer) .us-ac.us-s-bigda .us-big{color:var(--bad)}
+:is(#us-root,#us-layer) .us-ac.us-s-dhyan .us-big{color:var(--watch)}
+:is(#us-root,#us-layer) .us-ac.us-s-behtar .us-big{color:var(--good)}
+:is(#us-root,#us-layer) .us-ac .us-what{font-size:12.5px;color:var(--ink2);margin-top:4px;line-height:1.35}
+:is(#us-root,#us-layer) .us-ac .us-what b{font-family:var(--us-num);font-weight:600;color:var(--ink)}
+:is(#us-root,#us-layer) .us-ac .us-todo{font-size:12.5px;color:var(--ink);background:var(--raise);border-radius:8px;padding:6px 9px;line-height:1.35}
+:is(#us-root,#us-layer) .us-ac .us-todo b{color:var(--cyan);font-weight:600}
+:is(#us-root,#us-layer) .us-ac .us-ts{font-size:11px;color:var(--faint);line-height:1.45}
+:is(#us-root,#us-layer) .us-ac .us-ts span+span::before{content:" · "}
+:is(#us-root,#us-layer) .us-ac .us-ts br+span::before{content:""}
+:is(#us-root,#us-layer) .us-slope{width:108px;height:56px;display:block}
+:is(#us-root,#us-layer) .us-fold{margin-top:12px;background:var(--panel2);border:1px solid var(--line);border-radius:12px}
+:is(#us-root,#us-layer) .us-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:13px;font-weight:600;color:var(--ink2)}
+:is(#us-root,#us-layer) .us-fold>summary::-webkit-details-marker{display:none}
+:is(#us-root,#us-layer) .us-fold>summary .us-cv{transition:transform .2s;color:var(--faint)}
+:is(#us-root,#us-layer) .us-fold[open]>summary .us-cv{transform:rotate(90deg)}
+:is(#us-root,#us-layer) .us-fold>summary .us-pv{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint);white-space:nowrap}
+:is(#us-root,#us-layer) .us-fold .us-cards{padding:0 12px 12px}
+:is(#us-root,#us-layer) .us-ok{padding:16px;border:1px dashed var(--line2);border-radius:12px;color:var(--ink2)}
+/* ---------- smart table ---------- */
+:is(#us-root,#us-layer) .us-tbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:0 18px 12px}
+:is(#us-root,#us-layer) .us-srch{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:6px 10px;min-width:200px;flex:1 1 200px;max-width:320px;color:var(--ink)}
+:is(#us-root,#us-layer) .us-srch::placeholder{color:var(--faint)}
+:is(#us-root,#us-layer) .us-fchips{display:flex;gap:5px;flex-wrap:wrap}
+:is(#us-root,#us-layer) .us-fchips button{background:transparent;border:1px solid var(--line2);border-radius:999px;padding:3px 9px;font-size:11.5px;font-weight:600;color:var(--muted)}
+:is(#us-root,#us-layer) .us-fchips button[aria-pressed="true"]{color:var(--ink)}
+:is(#us-root,#us-layer) .us-fchips button[aria-pressed="true"].us-f-bigda{background:var(--bad-b);color:var(--bad);border-color:rgba(255,107,107,.4)}
+:is(#us-root,#us-layer) .us-fchips button[aria-pressed="true"].us-f-dhyan{background:var(--watch-b);color:var(--watch);border-color:rgba(230,184,78,.4)}
+:is(#us-root,#us-layer) .us-fchips button[aria-pressed="true"].us-f-behtar{background:var(--good-b);color:var(--good);border-color:rgba(52,217,154,.4)}
+:is(#us-root,#us-layer) .us-fchips button[aria-pressed="true"].us-f-normal{background:var(--us-raise2)}
+:is(#us-root,#us-layer) .us-fchips button[aria-pressed="true"].us-f-jaldi{background:var(--us-blue-b);color:var(--us-blue-s)}
+:is(#us-root,#us-layer) .us-fchips button[aria-pressed="true"].us-f-lagu{background:var(--raise)}
+:is(#us-root,#us-layer) .us-tsel{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:5px 8px;font-size:12px;color:var(--ink)}
+:is(#us-root,#us-layer) .us-tcount{font-size:12px;color:var(--faint);margin-left:auto}
+:is(#us-root,#us-layer) .us-st-tw{max-height:72vh}
+:is(#us-root,#us-layer) .us-st th{cursor:pointer;user-select:none;white-space:normal;vertical-align:bottom;min-width:64px;max-width:104px}
+:is(#us-root,#us-layer) .us-st th.us-l{max-width:none}
+:is(#us-root,#us-layer) .us-st .us-alb{white-space:normal;text-align:left;line-height:1.25;max-width:150px}
+:is(#us-root,#us-layer) .us-st th .us-ar{color:var(--cyan);margin-left:3px}
+:is(#us-root,#us-layer) .us-st th.us-sorted{color:var(--ink)}
+:is(#us-root,#us-layer) .us-st td:first-child,:is(#us-root,#us-layer) .us-st th:first-child{position:sticky;left:0;z-index:1;text-align:left}
+:is(#us-root,#us-layer) .us-st th:first-child{z-index:3}
+:is(#us-root,#us-layer) .us-st td:first-child{background:var(--panel);min-width:170px;max-width:196px;white-space:normal}
+:is(#us-root,#us-layer) .us-st tbody tr:hover td:first-child{background:#1a2942}
+:is(#us-root,#us-layer) .us-st tr.us-hl td{background:rgba(34,211,238,.07)}
+:is(#us-root,#us-layer) .us-st tr.us-hl td:first-child{background:#13283a}
+:is(#us-root,#us-layer) .us-st .us-nmc{display:flex;gap:8px;align-items:flex-start}
+:is(#us-root,#us-layer) .us-st .us-xp{background:none;border:0;color:var(--faint);font-size:12px;padding:1px 2px;line-height:1.2;transition:transform .2s}
+:is(#us-root,#us-layer) .us-st tr.us-open .us-xp{transform:rotate(90deg);color:var(--cyan)}
+:is(#us-root,#us-layer) .us-cellv{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+:is(#us-root,#us-layer) .us-cellv .us-v{font-weight:600;font-size:13.5px}
+:is(#us-root,#us-layer) .us-cellv .us-d{font-size:10.5px;color:var(--muted);font-weight:500}
+:is(#us-root,#us-layer) .us-cellv .us-d.us-b{color:var(--bad)}
+:is(#us-root,#us-layer) .us-cellv .us-d.us-g{color:var(--good)}
+:is(#us-root,#us-layer) .us-dbar{height:3px;border-radius:2px;background:var(--us-s-in);opacity:.55;margin-top:3px;align-self:flex-end}
+:is(#us-root,#us-layer) .us-dbar.us-o{background:var(--us-s-out)}
+:is(#us-root,#us-layer) .us-hcell{border-radius:6px;padding:3px 6px;display:inline-flex;flex-direction:column;align-items:flex-end;min-width:60px}
+:is(#us-root,#us-layer) .us-lostbar{position:relative;width:84px;height:12px;margin-left:auto;margin-top:3px;display:block}
+:is(#us-root,#us-layer) .us-lostbar .us-ax{display:block;position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line2)}
+:is(#us-root,#us-layer) .us-lostbar .us-b{display:block;position:absolute;top:2px;height:8px;border-radius:2px}
+:is(#us-root,#us-layer) tr.us-xrow td{background:var(--panel2);padding:0;white-space:normal;text-align:left;font-family:var(--us-font)}
+:is(#us-root,#us-layer) tr.us-xrow:hover td{background:var(--panel2)}
+:is(#us-root,#us-layer) .us-xin{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:14px 16px 16px;position:sticky;left:0;max-width:min(1300px,calc(100vw - 40px))}
+:is(#us-root,#us-layer) .us-xin h4{margin:0 0 6px;font:600 10.5px var(--us-num);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+:is(#us-root,#us-layer) .us-xin .us-go{grid-column:1/-1;justify-self:start}
+@container us (max-width:780px){:is(#us-root,#us-layer) .us-xin{grid-template-columns:minmax(0,1fr)}}
+:is(#us-root,#us-layer) .us-btn{background:var(--us-raise2);border:1px solid var(--line2);border-radius:9px;padding:6px 12px;font-size:12.5px;font-weight:600;color:var(--ink)}
+:is(#us-root,#us-layer) .us-btn:hover{border-color:var(--cyan)}
+/* ---------- drawer ---------- */
+:is(#us-root,#us-layer) .us-scrim{position:fixed;inset:0;background:rgba(3,7,15,.6);z-index:1000;opacity:0;pointer-events:none;transition:opacity .25s}
+:is(#us-root,#us-layer) .us-scrim.us-on{opacity:1;pointer-events:auto}
+:is(#us-root,#us-layer) .us-drawer{position:fixed;top:0;right:0;bottom:0;width:min(1000px,100vw);background:var(--bg2);border-left:1px solid var(--line2);z-index:1001;transform:translateX(102%);transition:transform .32s cubic-bezier(.2,.8,.2,1);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:is(#us-root,#us-layer) .us-drawer.us-on{transform:none}
+:is(#us-root,#us-layer) .us-dh{position:sticky;top:0;z-index:5;background:rgba(12,21,39,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 18px 10px;display:flex;gap:10px;align-items:flex-start}
+:is(#us-root,#us-layer) .us-dh .us-t{flex:1;min-width:0}
+:is(#us-root,#us-layer) .us-dh h3{margin:0;font:700 19px/1.25 var(--us-font)}
+:is(#us-root,#us-layer) .us-dh h3 .us-acn{color:var(--muted);font-weight:500}
+:is(#us-root,#us-layer) .us-dh .us-l2{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:11.5px;color:var(--faint)}
+:is(#us-root,#us-layer) .us-icb{background:var(--panel);border:1px solid var(--line2);border-radius:9px;width:34px;height:34px;display:grid;place-items:center;color:var(--ink2);font-size:15px;flex:none}
+:is(#us-root,#us-layer) .us-icb:hover{border-color:var(--cyan);color:#fff}
+:is(#us-root,#us-layer) .us-db{padding:16px 18px 40px;display:flex;flex-direction:column;gap:16px}
+:is(#us-root,#us-layer) .us-dk{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+:is(#us-root,#us-layer) .us-dk .us-kpi{padding:11px 13px 9px}
+:is(#us-root,#us-layer) .us-dk .us-kv .us-num{font-size:26px}
+@media (max-width:760px){:is(#us-root,#us-layer) .us-dk{grid-template-columns:repeat(2,minmax(0,1fr))}}
+:is(#us-root,#us-layer) .us-chart{padding:4px 10px 8px}
+:is(#us-root,#us-layer) .us-chart svg{display:block;width:100%;height:auto;overflow:visible}
+:is(#us-root,#us-layer) .us-clg{display:flex;flex-wrap:wrap;gap:4px 14px;padding:4px 18px 12px;font-size:11.5px;color:var(--muted);align-items:center}
+:is(#us-root,#us-layer) .us-clg .us-k{display:inline-flex;align-items:center;gap:5px}
+:is(#us-root,#us-layer) .us-clg .us-k i{display:inline-block;width:14px;height:3px;border-radius:2px}
+:is(#us-root,#us-layer) .us-cohw{overflow-x:auto;padding:0 12px 6px}
+:is(#us-root,#us-layer) .us-coh{display:grid;gap:3px;min-width:560px}
+:is(#us-root,#us-layer) .us-coh .us-c{border-radius:6px;min-height:30px;display:flex;align-items:center;justify-content:center;font:600 12.5px var(--us-num);font-variant-numeric:tabular-nums;position:relative}
+:is(#us-root,#us-layer) .us-coh .us-c.us-na{background:transparent;color:var(--faint);font-weight:400}
+:is(#us-root,#us-layer) .us-coh .us-c.us-pv::after{content:"";position:absolute;right:3px;top:3px;width:5px;height:5px;border-radius:50%;background:var(--watch)}
+:is(#us-root,#us-layer) .us-coh .us-rh{font:500 11.5px var(--us-num);color:var(--ink2);display:flex;flex-direction:column;justify-content:center;padding-right:6px;line-height:1.2;white-space:nowrap}
+:is(#us-root,#us-layer) .us-coh .us-rh small{color:var(--faint);font-size:10.5px}
+:is(#us-root,#us-layer) .us-coh .us-chh{font:600 10px var(--us-num);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:center;padding:2px 0 4px}
+:is(#us-root,#us-layer) .us-coh .us-ref{outline:1px dashed var(--line2);background:transparent!important;color:var(--ink2)}
+:is(#us-root,#us-layer) .us-upd{display:flex;flex-direction:column;gap:6px;padding:0 18px 14px}
+:is(#us-root,#us-layer) .us-upd .us-u{display:flex;gap:10px;align-items:center;font-size:12.5px;flex-wrap:wrap}
+:is(#us-root,#us-layer) .us-upd .us-u .us-dt{font:600 12px var(--us-num);color:var(--muted);width:56px}
+/* ---------- tooltip ---------- */
+:is(#us-root,#us-layer) #us-tip{position:fixed;z-index:1100;pointer-events:none;background:#0b1424;border:1px solid var(--line2);border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.45;color:var(--ink2);box-shadow:0 12px 30px rgba(0,0,0,.45);max-width:min(330px,calc(100vw - 20px));opacity:0;transition:opacity .12s}
+:is(#us-root,#us-layer) #us-tip.us-on{opacity:1}
+:is(#us-root,#us-layer) #us-tip.us-pin{pointer-events:auto}
+:is(#us-root,#us-layer) #us-tip .us-tt{font-weight:650;color:var(--ink);margin-bottom:3px;font-size:12.5px}
+:is(#us-root,#us-layer) #us-tip .us-row{display:flex;justify-content:space-between;gap:14px}
+:is(#us-root,#us-layer) #us-tip .us-row b{font-family:var(--us-num);font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600}
+:is(#us-root,#us-layer) #us-tip .us-sep{border-top:1px solid var(--line);margin:5px 0}
+:is(#us-root,#us-layer) #us-tip .us-lk{color:var(--cyan);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+:is(#us-root,#us-layer) #us-tip .us-tsm{color:var(--faint);font-size:11px}
+/* ---------- footer ---------- */
+:is(#us-root,#us-layer) .us-foot{font-size:12px;color:var(--muted)}
+:is(#us-root,#us-layer) .us-foot summary{cursor:pointer;color:var(--ink2);font-weight:600}
+:is(#us-root,#us-layer) .us-foot ul{margin:8px 0 0;padding-left:18px;display:grid;gap:3px}
+:is(#us-root,#us-layer) .us-kbd{font:600 10.5px var(--us-num);border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:0 5px;color:var(--ink2)}
+/* linked highlight */
+:is(#us-root,#us-layer) .us-dimmed [data-app]:not(.us-hl){opacity:.38;transition:opacity .15s}
+:is(#us-root,#us-layer) [data-app]{transition:opacity .15s}
+@container us (max-width:608px){:is(#us-root,#us-layer) .us-story{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;margin-inline:0;padding:2px 0 6px;scrollbar-width:none}
+:is(#us-root,#us-layer) .us-story::-webkit-scrollbar{display:none}
+:is(#us-root,#us-layer) .us-story{align-items:flex-start}
+:is(#us-root,#us-layer) .us-story .us-sc{flex:0 0 78%;scroll-snap-align:start}
+:is(#us-root,#us-layer) .us-kl .us-kh{display:none}
+:is(#us-root,#us-layer) .us-mapw{overflow:visible;padding:0 8px 4px}
+:is(#us-root,#us-layer) .us-hm{grid-template-columns:22px repeat(4,minmax(0,1fr));min-width:0;row-gap:3px}
+:is(#us-root,#us-layer) .us-hm .us-nm{grid-column:2/span 3;padding-top:10px}
+:is(#us-root,#us-layer) .us-hm .us-inr{padding-top:10px}
+:is(#us-root,#us-layer) .us-hm .us-rk{padding-top:10px}
+:is(#us-root,#us-layer) .us-hm .us-c1{grid-column-start:2}
+:is(#us-root,#us-layer) .us-hm .us-hc.us-tr,:is(#us-root,#us-layer) .us-hm .us-trh{display:none}
+:is(#us-root,#us-layer) .us-hm .us-hh.us-l{grid-column:2/span 3}
+:is(#us-root,#us-layer) .us-hc{min-height:38px;font-size:13px}
+:is(#us-root,#us-layer) .us-wrap{padding-inline:0;gap:18px}
+:is(#us-root,#us-layer) .us-ph{padding:14px 14px 8px}
+:is(#us-root,#us-layer) .us-dvh{padding-inline:12px}
+:is(#us-root,#us-layer) .us-dv{padding-inline:6px}
+:is(#us-root,#us-layer) .us-cards{grid-template-columns:minmax(0,1fr)}
+:is(#us-root,#us-layer) .us-legend{padding-inline:14px}
+:is(#us-root,#us-layer) .us-tbar{padding-inline:14px}
+:is(#us-root,#us-layer) .us-srch{max-width:none}
+:is(#us-root,#us-layer) .us-st td:first-child{min-width:150px;max-width:160px}}
+@media (max-width:640px){:is(#us-root,#us-layer) .us-top{position:relative;top:auto}
+:is(#us-root,#us-layer) .us-winline .us-kb{display:none}
+:is(#us-root,#us-layer) .us-top-in{padding:8px 16px 6px;gap:8px}
+:is(#us-root,#us-layer) .us-custom,:is(#us-root,#us-layer) .us-winline{padding-inline:16px}
+:is(#us-root,#us-layer) .us-sel select{max-width:150px}
+:is(#us-root,#us-layer) .us-seg button{padding:5px 8px}
+:is(#us-root,#us-layer) .us-seg kbd{display:none}
+:is(#us-root,#us-layer) .us-cards{grid-template-columns:minmax(0,1fr)}
+:is(#us-root,#us-layer) .us-db{padding:14px 14px 40px}
+:is(#us-root,#us-layer) .us-dh .us-eyebrow{display:none}
+:is(#us-root,#us-layer) .us-dh h3{font-size:16.5px}
+:is(#us-root,#us-layer) .us-dh .us-pkg{display:none}
+:is(#us-root,#us-layer) .us-icb{width:32px;height:32px}
+:is(#us-root,#us-layer) .us-dh{padding:10px 14px}}
+
+@keyframes us-rise{from{opacity:.25;transform:translateY(3px)}to{opacity:1;transform:none}}
+:is(#us-root,#us-layer) .us-fresh .us-hc,:is(#us-root,#us-layer) .us-fresh .us-dvr,:is(#us-root,#us-layer) .us-fresh .us-kpi .us-spk,:is(#us-root,#us-layer) .us-fresh #us-tbody tr{animation:us-rise .42s cubic-bezier(.2,.8,.2,1) both}
+:is(#us-root,#us-layer) .us-fresh .us-hm>:nth-child(16n+5){animation-delay:.03s}
+:is(#us-root,#us-layer) .us-fresh .us-hm>:nth-child(16n+9){animation-delay:.06s}
+:is(#us-root,#us-layer) .us-fresh .us-hm>:nth-child(16n+13){animation-delay:.09s}
+@media (prefers-reduced-motion:reduce){:is(#us-root,#us-layer) *,:is(#us-root,#us-layer) *::before,:is(#us-root,#us-layer) *::after{transition:none!important;animation:none!important}}
+@media (max-width:760px){:is(#us-root,#us-layer) .us-top{position:relative;top:auto;margin:-15px -12px 0}:is(#us-root,#us-layer) .us-top-in{padding-left:12px;padding-right:12px}:is(#us-root,#us-layer) .us-custom,:is(#us-root,#us-layer) .us-winline{padding-inline:12px}}
+@media (max-width:430px){:is(#us-root,#us-layer) .us-top{margin:-13px -10px 0}:is(#us-root,#us-layer) .us-top-in{padding-left:10px;padding-right:10px}:is(#us-root,#us-layer) .us-custom,:is(#us-root,#us-layer) .us-winline{padding-inline:10px}}
+:is(#us-root,#us-layer) .us-sub{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
+:is(#us-root,#us-layer) .us-full-r{margin-top:9px}
+:is(#us-root,#us-layer) .us-btn.us-full{border-color:rgba(34,211,238,.55);color:#fff;background:linear-gradient(90deg,rgba(47,107,255,.32),rgba(34,211,238,.16))}
+:is(#us-root,#us-layer) .us-btn.us-full:hover{border-color:var(--cyan)}
+#us-main>.note{margin:0}
+#uni-old{margin:22px 0 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
+#uni-old>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;padding:12px 16px;font-size:14px;font-weight:700;color:var(--ink2)}
+#uni-old>summary::-webkit-details-marker{display:none}
+#uni-old>summary .uo-cv{transition:transform .2s;color:var(--faint)}
+#uni-old[open]>summary .uo-cv{transform:rotate(90deg)}
+#uni-old>summary .uo-h{font-weight:500;font-size:12px;color:var(--faint)}
+#uni-old>.uo-in{padding:4px 12px 12px}
 </style>
 </head>
 <body>
@@ -1292,7 +1682,7 @@ function show(id){
   if(id==='baseline') loadBaseline();     // lazy-fetch the baseline payload on first open
   if(id==='mediation') loadMED(()=>medRerender());   // lazy-fetch daily-by-source → window to period
   if(id==='deductions') loadDED(()=>dedRerender());  // lazy-fetch per-unit decay → window to period
-  if(id==='uninstall') loadUNI(()=>uniRerender());   // lazy-fetch the GA4 uninstall detail (uninstall.json.gz)
+  if(id==='uninstall'){ loadUNI(()=>uniRerender()); US.ensure(()=>uniRerender()); }   // lazy-fetch the GA4 uninstall detail (uninstall.json.gz) + the 🧭 Studio's file
   if(id==='active') actEnsure();                     // the open app's active_<key>.json.gz (also after setApp on this screen)
   if(id==='value') valEnsure();                      // the open app's value_<key>.json.gz (Install value tab)
   if(id==='review') rvEnsure();                      // Daily Review: lazy-load review/index.json + the open day (+ API)
@@ -4165,16 +4555,845 @@ function kwCmpApply(tag){ const f=document.getElementById(tag+'-kwc-f'), t=docum
   KCMPCUSTOM={from:fv,to:tv}; KCMP='custom'; KCMPERR=''; kwSave(); kwRerenderTag(tag); }
 // ======================================================================================================
 
+// ======================================================================================================
+// 🧭 UNINSTALL STUDIO — the Uninstall tab's All-apps view (the owner-approved "Uninstall Studio" design: "kafi badiya
+// dikh raha he"). ONE lazy file, uninstall_studio.json.gz (admob_iq/uninstall_studio_build.py — exactly the data the
+// approved demo was made from), and every number worked out here for the range / compare the viewer picks:
+//   * the "Nuksaan" loss lens (loss): uninstalls on the range's days vs the app's own normal, split into naye users
+//     (gone 0–7 days after install) and purane users (the rest) — no double counting — with a noise test (pakka / grey);
+//   * the story strip, the hero KPIs with sparklines, "Nuksaan ka map" (heatmap), "Kahan se aaya", the timeline,
+//     "Kya badla?" (EVERY engine alert: 🕒 Alert aaya in IST, the age chip, Badlaav shuru, the data window), the apps
+//     table and the app drawer (charts + the install-week grid) — its "Poora app page →" opens the app's full page.
+// The range / compare control IS the dashboard's shared KPIWINDOW (KWIN / KCMP: shared with Active users and Install
+// value, remembered); ₹ / $ and the fx are the dashboard's (curView / cfx / DATA.usd_inr). Everything is scoped: ids
+// "us-…", classes "us-…", the CSS under #us-root / #us-layer (the drawer, its scrim and the tooltip live in #us-layer
+// on <body>, outside the screens — so the 5-minute refresh never wipes an open drawer). Keys 7 / 1 / 3 / 6, "/" and Esc
+// work only while the Uninstall tab is on screen, never while typing. A file that cannot load → the older views.
+// ======================================================================================================
+let UNIOLDOPEN=false;                                   // the "Purane views" fold (All apps, under the Studio) open
+const US=(function(){
+'use strict';
+/* ================= the file ================= */
+let RAW=null, VER=null, LOADING=false, ERR=false, SIG=null;
+let M=null, N=0, A=[], ALERTS=[], NOGA=[], PD={}, NOW=null, YR='';
+const AL='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_', AX={};
+for(let i=0;i<64;i++) AX[AL[i]]=i;
+function dec(s){ const out=[]; let prev=0,z=0,m=1;
+  for(let j=0;j<s.length;j++){ const ch=s[j]; if(ch==='~'){ out.push(null); continue; }
+    const k=AX[ch]; z+=(k&31)*m; if(k>=32){ m*=32; continue; }
+    prev+=(z%2)?-(z+1)/2:z/2; out.push(prev); z=0; m=1; }
+  return out; }
+const KEYS=['nw','un','a28','md','lo','hi','g0','c1','c2','c3','c4','c5','c6','c7','r1','rv','a1'];
+const DAY=864e5, P=s=>Date.parse(s+'T00:00:00Z');
+const dAdd=(s,n)=>new Date(P(s)+n*DAY).toISOString().slice(0,10);
+const dDiff=(a,b)=>Math.round((P(b)-P(a))/DAY);
+const ix=s=>dDiff(M.S,s), dOf=i=>dAdd(M.S,i);
+const vis=id=>{ try{ return uniVis(id); }catch(e){ return true; } };      // the header's app selection (as the older views)
+function ptr(){ const U=(typeof DATA!=='undefined'&&DATA&&DATA.uninstall)||null, p=U&&U.studio;
+  return (p&&typeof p.file==='string'&&/^[\w.-]+\.json\.gz$/.test(p.file))?p:null; }
+// the file: fetched when the Uninstall tab opens (and again only when the build wrote a new one — the older data stays
+// on screen meanwhile); cb when it arrives or fails
+function ensure(cb){ const p=ptr(); if(!p||LOADING||(RAW&&VER===p.v)||(ERR&&VER===p.v)) return; LOADING=true;
+  fetchGzJson(p.file+'?t='+Date.now()).then(j=>{ if(!j||j.v!==1||!j.meta||!Array.isArray(j.apps)) throw new Error('format');
+      RAW=j; VER=p.v; ERR=false; SIG=null; LOADING=false; cb&&cb(); })
+    .catch(()=>{ ERR=!RAW; VER=p.v; LOADING=false; cb&&cb(); }); }
+function retry(){ ERR=false; VER=null; ensure(()=>uniRerender()); uniRerender(); }
+// decoded per render only when the file or the visible apps changed
+function prep(){ const sig=VER+'|'+RAW.apps.map(a=>vis(a.id)?1:0).join('')+'|'+RAW.noga.map(n=>vis(n.id)?1:0).join('');
+  if(sig===SIG&&M) return; SIG=sig;
+  M=RAW.meta; N=M.n; YR=String(M.today).slice(0,4);
+  const keep=[], map={};
+  RAW.apps.forEach((a0,k)=>{ if(!vis(a0.id)) return; map[k]=keep.length; keep.push(Object.assign({},a0)); });
+  A=keep;
+  A.forEach((a,i)=>{ a.i=i; KEYS.forEach(k=>{ a[k]=dec(a[k]); });
+    a.fi=Math.max(0,ix(a.first)); a.al=[];
+    a.coh={ref:a.coh.ref,w:a.coh.w.map(r=>({w:r[0],n:r[1],v:dec(r[2]),p:r[3],f:r[4]||r[0],t:r[5]||dAdd(r[0],6),part:r.length>4}))};
+    ['md','lo','hi'].forEach(k=>{ a[k]=a[k].map(v=>v==null?null:v/1000); });   // stored ×1000 → per 1,000 active users
+    a.rate=a.un.map((u,i)=>a.a28[i]?u*1000/a.a28[i]:null);
+    a.c=[a.g0,a.c1,a.c2,a.c3,a.c4,a.c5,a.c6,a.c7];                       // uninstalls exactly L days after install (per install day)
+    a.g7=a.g0.map((v,i)=>{ if(v==null) return null; let t=v; for(let L=1;L<=7;L++){ const x=a.c[L][i]; if(x==null) return null; t+=x; } return t; });
+    a.E=new Array(N).fill(null);                                           // early removals ON calendar day d: users installed 0–7 days before
+    for(let d=7;d<N;d++){ let t=0, ok=true; for(let L=0;L<=7;L++){ const i=d-L, n=a.nw[i]; if(i<a.fi||n==null||n===0) continue; const x=a.c[L][i]; if(x==null){ ok=false; break; } t+=x; } if(ok) a.E[d]=t; } });
+  ALERTS=(RAW.alerts||[]).filter(x=>x&&x.a>=0&&map[x.a]!=null).map(x=>Object.assign({},x,{a:map[x.a]}));
+  ALERTS.forEach((x,k)=>{ x.k=k; A[x.a].al.push(x); });
+  NOGA=(RAW.noga||[]).filter(n=>vis(n.id));
+  NOW=ist(M.gen)||{day:M.today,hm:''};
+  A.forEach(a=>{ a.st=appStatus(a); a.na=newestAlert(a); a.ta=topAlert(a); a.nOpen=a.al.filter(x=>!x.closed).length; });
+  // portfolio daily series (whole span, once)
+  const nw=new Array(N).fill(0), un=new Array(N).fill(0), rU=new Array(N).fill(0), rA=new Array(N).fill(0), bU=new Array(N).fill(0), bA=new Array(N).fill(0), eL=new Array(N).fill(0), eH=new Array(N).fill(0), eM=new Array(N).fill(0);
+  A.forEach(a=>{ for(let i=a.fi;i<N;i++){ if(a.nw[i]!=null) nw[i]+=a.nw[i]; if(a.un[i]!=null) un[i]+=a.un[i]; const d=a.a28[i]; if(d==null) continue; rU[i]+=a.un[i]; rA[i]+=d;
+    if(a.md[i]!=null){ bU[i]+=a.un[i]; bA[i]+=d; eL[i]+=a.lo[i]*d; eH[i]+=a.hi[i]*d; eM[i]+=a.md[i]*d; } } });
+  PD={nw,un,net:nw.map((v,i)=>v-un[i]),rate:rU.map((u,i)=>rA[i]?u*1000/rA[i]:null),lo:eL.map((v,i)=>bA[i]?v/bA[i]:null),hi:eH.map((v,i)=>bA[i]?v/bA[i]:null),
+    exc:bU.map((u,i)=>bA[i]?u-eM[i]/1000:null)}; }
+
+/* ================= format ================= */
+const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fd=s=>{ if(!s) return ''; return (+s.slice(8,10))+' '+MO[+s.slice(5,7)-1]+(s.slice(0,4)!==YR?' '+s.slice(0,4):''); };
+const fdNoY=s=>(+s.slice(8,10))+' '+MO[+s.slice(5,7)-1];
+const span=(a,b)=>{ if(!a) return ''; if(!b||a===b) return fd(a);
+  if(a.slice(0,4)!==b.slice(0,4)) return fd(a)+'–'+fd(b);
+  return (a.slice(0,7)===b.slice(0,7)?String(+a.slice(8)):fdNoY(a))+'–'+fd(b); };
+const addMonths=(s,k)=>{ const y=+s.slice(0,4), m0=+s.slice(5,7)-1+k, d=+s.slice(8,10), Y=y+Math.floor(m0/12), Mm=((m0%12)+12)%12;
+  const last=new Date(Date.UTC(Y,Mm+1,0)).getUTCDate(); return new Date(Date.UTC(Y,Mm,Math.min(d,last))).toISOString().slice(0,10); };
+const ist=iso=>{ const t=Date.parse(iso); if(isNaN(t)) return null; const z=new Date(t+330*6e4).toISOString(); return {day:z.slice(0,10),hm:z.slice(11,16)}; };
+const fist=iso=>{ if(!/T\d{2}:\d{2}/.test(String(iso||''))) return fd(String(iso||'').slice(0,10)); const z=ist(iso); return z?fd(z.day)+', '+z.hm+' IST':''; };
+const umar=n=>n<=30?n+' din':(n<90?Math.round(n/7)+' hafte':Math.round(n/30)+' mahine');
+const nf=new Intl.NumberFormat('en-US'), nfi=new Intl.NumberFormat('en-IN');
+const trim=s=>s.indexOf('.')>=0?s.replace(/0+$/,'').replace(/\.$/,''):s;
+const MI='−';
+function fN(v){ if(v==null||!isFinite(v)) return '—'; const a=Math.abs(v), sg=v<0?MI:'';
+  if(a>=1e5){ const x=a/1e5; return sg+trim(x>=100?String(Math.round(x)):(x>=10?x.toFixed(1):x.toFixed(2)))+' lakh'; }
+  return sg+nf.format(Math.round(a)); }
+const fS=v=>(v==null||!isFinite(v))?'—':((Math.round(v)>0?'+':(Math.round(v)<0?MI:'±'))+fN(Math.abs(v)));
+function pc(p,dp){ if(p==null||!isFinite(p)) return '—'; const x=p*100; if(dp==null) dp=Math.abs(x)<1?2:(Math.abs(x)<10?1:0); return x.toFixed(dp)+'%'; }
+const rp=(r,dp)=>r==null?'—':pc(r/1000,dp==null?2:dp);
+const fX=v=>(v==null||!isFinite(v))?'—':(Math.abs(v)<3?'~0':fS(v));
+const relp=(a,b)=>(a==null||b==null||!b)?null:(a-b)/Math.abs(b);
+const fR=r=>{ if(r==null||!isFinite(r)) return ''; const p=Math.round(r*100); return (p>0?'+':(p<0?MI:'±'))+Math.abs(p)+'%'; };
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+// money: every amount in the file is in the dashboard's base currency (AdMob's report currency); shown in the
+// dashboard's view currency (₹ / $ — curView, the same toggle and fx as every other tab)
+const FXR=()=>+((typeof DATA!=='undefined'&&DATA&&DATA.usd_inr)||0)||(M&&M.fx)||83;
+const isINR=()=>curView()==='INR';
+const inINR=v=>baseCur()==='INR'?v:v*FXR();          // the same amount in ₹ (the ₹10 / ₹1,000 rules)
+const symOf=()=>isINR()?'₹':(curView()==='USD'?'$':csym());
+function moneyL(v,sign){ if(v==null||!isFinite(v)) return '—'; if(Math.abs(inINR(v))<10) return '~'+symOf()+'0'; return money(v,sign); }
+function money(v,sign){ if(v==null||!isFinite(v)) return '—'; const inr=isINR(), x=v*cfx(), a=Math.abs(x);
+  const sg=sign?(x>0.005?'+':(x<-0.005?MI:'')):(x<0?MI:''), sym=symOf();
+  let s; if(inr&&a>=1e5) s=trim((a/1e5).toFixed(a>=1e6?1:2))+' lakh'; else if(a>=100) s=(inr?nfi:nf).format(Math.round(a)); else if(a>=10) s=a.toFixed(0); else s=a.toFixed(a>=1?1:2);
+  return sg+sym+s; }
+
+/* ================= state ================= */
+// range / compare = the dashboard's shared KPIWINDOW (KWIN / KWCUSTOM / KCMP / KCMPCUSTOM, kwSave); the rest is the Studio's
+const ST={sort:{k:'inr',d:-1},fst:new Set(),facc:'',fsz:'',q:'',open:new Set(),mapAll:false,srcAll:false,chgView:'cards',cohMode:'abs',
+  drawer:-1,did:null,dScroll:0,ledger:false,folds:new Set()};
+const LS='uninstallStudio.v1';
+try{ const s=JSON.parse(localStorage.getItem(LS)||'{}')||{}; if(s.chgView==='cards'||s.chgView==='table') ST.chgView=s.chgView;
+  if(s.cohMode==='abs'||s.cohMode==='dev') ST.cohMode=s.cohMode; }catch(e){}
+function save(){ try{ localStorage.setItem(LS,JSON.stringify({chgView:ST.chgView,cohMode:ST.cohMode})); }catch(e){} }
+const RM=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
+const rangeOf=()=>KWIN==='custom'?'c':(KW_N[KWIN]||7);
+const cmpOf=()=>KCMP==='custom'?'c':(KCMP==='month'?'month':'prev');
+
+/* ================= windows ================= */
+const clampD=s=>s<M.S?M.S:(s>M.E?M.E:s);
+function windows(){ let f,t; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t1=KWCUSTOM.to, f2=KCMPCUSTOM.from, t2=KCMPCUSTOM.to;
+  if(R0==='c'&&f1&&t1){ f=clampD(f1); t=clampD(t1); if(f>t){ const x=f; f=t; t=x; } }
+  else { t=M.E; f=dAdd(M.E,-((R0==='c'?30:+R0)-1)); }
+  const L=dDiff(f,t)+1; let cf,ct;
+  if(C0==='month'){ cf=addMonths(f,-1); ct=addMonths(t,-1); if(ct>=f) ct=dAdd(f,-1); }
+  else if(C0==='c'&&f2&&t2){ cf=clampD(f2); ct=clampD(t2); if(cf>ct){ const x=cf; cf=ct; ct=x; } }
+  else { ct=dAdd(f,-1); cf=dAdd(ct,-(L-1)); }
+  if(cf<M.S) cf=M.S; if(ct<cf) ct=cf;
+  return {f,t,L,cf,ct,cL:dDiff(cf,ct)+1}; }
+
+/* ================= core math (mirrors the dashboard's uniSums / uniKpiRow) ================= */
+function sums(a,f,t){ const i0=Math.max(ix(f),a.fi,0), i1=Math.min(ix(t),N-1);
+  let ins=0,nI=0,outs=0,nO=0,rU=0,rA=0,bU=0,bA=0,eM=0,eL=0,eH=0,nb=0,nr=0,rv=0,a1=0;
+  for(let i=i0;i<=i1;i++){ const nw=a.nw[i], u=a.un[i], d=a.a28[i];
+    if(nw!=null){ ins+=nw; nI++; } if(u!=null){ outs+=u; nO++; }
+    if(a.rv[i]!=null&&a.a1[i]){ rv+=a.rv[i]; a1+=a.a1[i]; }
+    if(d==null) continue; rU+=u; rA+=d; nr++;
+    if(a.md[i]!=null){ bU+=u; bA+=d; eM+=a.md[i]*d; eL+=a.lo[i]*d; eH+=a.hi[i]*d; nb++; } }
+  const B=bA>0, days=Math.max(0,i1-i0+1);
+  return {i0,i1,days,ins:nI?ins:null,outs:nO?outs:null,nI,nO,rU,rA,bU,bA,eM,eL,eH,nb,nr,
+    rate:B?bU*1000/bA:(rA>0?rU*1000/rA:null),lo:B?eL/bA:null,hi:B?eH/bA:null,med:B?eM/bA:null,
+    exc:nb?(bU-eM/1000)/nb:null,arp:a1>0?(rv/100)/a1:null,prov:ix(t)>ix(a.settled),
+    z:B&&nb?((bU*1000/bA-eM/bA)/Math.max(1e-9,((bU*1000/bA>=eM/bA?eH-eM:eM-eL)/bA)/4/Math.sqrt(nb))):null}; }
+function pool(list){ let ins=0,outs=0,hI=0,hO=0,rU=0,rA=0,bU=0,bA=0,eL=0,eH=0,eM=0,exc=0,hx=0,usd=0,hu=0,nr=0;
+  list.forEach(s=>{ if(s.ins!=null){ ins+=s.ins; hI=1; } if(s.outs!=null){ outs+=s.outs; hO=1; } rU+=s.rU; rA+=s.rA; bU+=s.bU; bA+=s.bA; eL+=s.eL; eH+=s.eH; eM+=s.eM; nr+=s.nr;
+    if(s.exc!=null){ exc+=s.exc; hx=1; if(s.arp!=null){ usd+=s.exc*s.arp; hu=1; } } });
+  const B=bA>0; return {ins:hI?ins:null,outs:hO?outs:null,net:(hI&&hO)?ins-outs:null,rU,rA,bU,bA,
+    rate:B?bU*1000/bA:(rA>0?rU*1000/rA:null),lo:B?eL/bA:null,hi:B?eH/bA:null,med:B?eM/bA:null,exc:hx?exc:null,usd:hu?usd:null}; }
+const KN={d0:0,s7:7,r1:1};
+// loss order: real (outside-noise) losses first, then the rest by money, unknown last
+function lossCmp(x,y,key,sg){ key=key||'usd'; sg=sg||'sig'; const a=x[key], b=y[key]; if(a==null&&b!=null) return 1; if(b==null&&a!=null) return -1;
+  if(a!=null&&b!=null){ const ta=a>0&&x[sg]?0:(a>0?1:2), tb=b>0&&y[sg]?0:(b>0?1:2); if(ta!==tb) return ta-tb; if(a!==b) return b-a; }
+  return (y.outD||0)-(x.outD||0); }
+function cohR(a,i0,i1,kind){ i0=Math.max(i0,a.fi,0,kind==='r1'?ix(a.retFrom):0); i1=Math.min(i1,N-1);
+  let k=0,n=0,lo=-1,hi=-1; const G=kind==='d0'?a.g0:(kind==='s7'?a.g7:a.r1);
+  for(let i=i0;i<=i1;i++){ const nw=a.nw[i], g=G[i]; if(nw==null||g==null) continue; k+=g; n+=nw; if(lo<0) lo=i; hi=i; }
+  if(!n) return {p:null,n:0,k:0};
+  const Nn=KN[kind], last=dOf(hi), st=kind==='r1'?a.aset:a.settled, prov=dAdd(last,Nn)>st;
+  return {p:kind==='s7'?1-k/n:k/n,n,k,f:dOf(lo),t:last,days:hi-lo+1,prov,pk:prov?dAdd(last,Nn+(kind==='r1'?M.actLate:M.late)+M.lag):null}; }
+const cohW=(a,f,t,kind)=>cohR(a,ix(f)-KN[kind],ix(t)-KN[kind],kind);
+const cohN=(a,f,kind)=>{ const i0=ix(f)-KN[kind]; return cohR(a,i0-28,i0-1,kind); };
+// NUKSAAN (one lens, used everywhere): uninstalls on the range's days vs the app's own normal, split without double counting —
+// naye users = removals by people installed 0–7 days before (expected = the app's pre-range lag hazards × actual installs);
+// purane users = all other removals (expected = the app's pre-range old-user removal rate × 28-day active users).
+// Both normals come from the 4–5 weeks just before the range. Noise = the day-to-day spread of the same residual in the 28 days
+// before the range (counted on at most 7 independent days), so a sustained small drift is not over-claimed.
+function loss(a,f,t){ const i0=Math.max(ix(f),a.fi), i1=Math.min(ix(t),N-1);
+  if(i1<i0) return {why:'is range me app ka data nahi'};
+  const H=[0,0,0,0,0,0,0,0]; let Nn=0, nd=0;
+  for(let i=Math.max(0,a.fi,i0-35);i<=i0-8;i++){ const n=a.nw[i]; if(n==null||n<=0) continue; let ok=true; for(let L=0;L<=7;L++) if(a.c[L][i]==null){ ok=false; break; } if(!ok) continue; Nn+=n; nd++; for(let L=0;L<=7;L++) H[L]+=a.c[L][i]; }
+  if(nd<14||Nn<100) return {why:'normal abhi nahi — range se pehle ke 5 hafte me installs kam / app naya'};
+  const h=H.map(x=>x/Nn), exE=d=>{ let t=0; for(let L=0;L<=7;L++){ const i=d-L; if(i<a.fi||i<0) continue; const n=a.nw[i]; if(n) t+=n*h[L]; } return t; };
+  let So=0,Sa=0,od=0; for(let d=Math.max(0,i0-28);d<=i0-1;d++){ const E=a.E[d], u=a.un[d], b=a.a28[d]; if(E==null||u==null||!b) continue; So+=u-E; Sa+=b; od++; }
+  // a young app (< ~2 months) has no old-user normal yet: count the naye-users part only — nearly every user is new anyway
+  const part=(od<14||!Sa), orate=part?0:So/Sa;
+  const res=d=>{ const E=a.E[d], u=a.un[d], b=a.a28[d]; if(E==null||u==null) return null; const xe=exE(d);
+    if(part) return {ea:E-xe,ob:0,ex:xe,xe,xo:0}; if(!b) return null; const xo=orate*b; return {ea:E-xe,ob:(u-E)-xo,ex:xe+xo,xe,xo}; };
+  let sa=0,sb=0,sx=0,se_=0,so_=0,n=0; const day=[];
+  for(let d=i0;d<=i1;d++){ const r=res(d); day.push(r?r.ea+r.ob:null); if(!r) continue; sa+=r.ea; sb+=r.ob; sx+=r.ex; se_+=r.xe; so_+=r.xo; n++; }
+  if(!n) return {why:'is range me rate ka data nahi'};
+  const pre=[]; for(let d=Math.max(0,i0-28);d<=i0-1;d++){ const r=res(d); if(r) pre.push(r.ea+r.ob); }
+  const mu=pre.reduce((q,v)=>q+v,0)/pre.length, sd=Math.sqrt(pre.reduce((q,v)=>q+(v-mu)*(v-mu),0)/Math.max(1,pre.length-1));
+  const tot=(sa+sb)/n, z=tot/(Math.max(sd,1)/Math.sqrt(Math.min(n,7)));
+  return {a:sa/n,b:part?null:sb/n,tot,exp:sx/n,expE:se_/n,expO:so_/n,z,sig:Math.abs(z)>=2,days:n,i0,i1,day,sd,part}; }
+function heatP(c,c0,worseHigh){ if(!c||c.p==null||!c0||c0.p==null) return {s:null,why:c&&c.p!=null?'normal ke liye pehle ka data nahi':'data nahi'};
+  if(c.n<60||c0.n<60) return {s:null,why:'kam data (60 se kam installs)'};
+  const p=c.p,p0=c0.p, se=Math.sqrt(Math.max(p0*(1-p0),1e-6)*(1/c.n+1/c0.n)), z=(p-p0)/se, rel=(p-p0)/Math.max(Math.min(p0,1-p0),.01);
+  if(Math.abs(z)<2) return {s:0,z,rel};
+  const m=Math.abs(rel), lv=m>=.25?3:(m>=.12?2:(m>=.05?1:0)), bad=(p>p0)===worseHigh;
+  return {s:lv*(bad?1:-1),z,rel}; }
+function heatRate(s){ if(s.rate==null) return {s:null,why:'rate abhi nahi (28 din ka data chahiye)'}; if(s.med==null) return {s:null,why:'normal range abhi ban rahi'};
+  const rel=(s.rate-s.med)/s.med, out=s.rate>s.hi||s.rate<s.lo, m=Math.abs(rel), sig=out||(s.z!=null&&Math.abs(s.z)>=2);
+  if(!sig) return {s:0,rel,out,sig,why:'normal range ke andar — aam utaar-chadhaav'};
+  let lv=out?3:(m>=.25?3:(m>=.12?2:1));
+  if(rel<0&&s.prov) lv=Math.min(lv,1);   // not-yet-final days read low: no strong good news from them
+  return {s:lv*(rel>0?1:-1),rel,out,sig}; }
+const hcls=s=>s==null?'us-na':(s===0?'':'us-h'+s);
+const tiny=usd=>usd!=null&&Math.abs(inINR(usd))<10;
+function pillOf(o){ const L=o.L, red=[o.hd0,o.hr,o.hs7,o.hr1].some(h=>h&&h.s!=null&&h.s>=2);
+  if(!L||L.tot==null) return red?'dhyan':'jaldi';
+  if(L.sig&&L.tot>0){ const rel=L.tot/Math.max(1,L.exp); return (rel>=.1||(o.usd!=null&&inINR(o.usd)>=1000))&&!tiny(o.usd)?'bigda':'dhyan'; }
+  if(L.sig&&L.tot<0) return red?'dhyan':'behtar';
+  return red?'dhyan':'normal'; }
+
+/* ================= status / alerts ================= */
+const SW={bigda:'Bigda',dhyan:'Dhyan do',behtar:'Behtar',normal:'Normal',jaldi:'Abhi jaldi',lagu:'Lagu nahi'};
+const SORD={bigda:0,dhyan:1,behtar:2,normal:3,jaldi:4,lagu:5};
+const chip=k=>`<span class="us-chip us-st-${k}"><i></i>${SW[k]}</span>`;
+// an alert's age chip — the dashboard's vocabulary (IST): 🆕 Naya alert · aaj HH:MM · 🆕 Kal aaya · 📌 N din se khula ·
+// 📌 <date> se khula · 📌 Shuru se khula (<date>) · ✅ Theek ho gaya; s = the short form for the 🔔 badge
+function ageOf(x){ if(x.closed) return {t:'✅ Theek ho gaya',s:'Theek ho gaya',tip:'Band hua: '+(x.cat?fist(x.cat):fd(x.closed)),n:dDiff(x.closed,M.today),fresh:false};
+  if(!x.at) return {t:'📌 Khula',s:'Khula',tip:'Alert ka time record nahi'+(x.opened?' — '+fd(x.opened)+' tak ke data pe':''),n:null};
+  const z=ist(x.at); if(!z) return {t:'📌 Khula',s:'Khula',tip:'Alert ka time record nahi',n:null};
+  const n=Math.max(0,dDiff(z.day,NOW.day)), tip='Alert aaya: '+fist(x.at);
+  if(x.seeded) return {t:'📌 Shuru se khula ('+fd(z.day)+')',s:'Shuru se khula',tip:'Ye halat feature shuru hone se pehle se thi · '+tip,n,fresh:false};
+  if(n===0) return {t:'🆕 Naya alert · aaj '+z.hm,s:'Aaj '+z.hm,tip,n,fresh:true}; if(n===1) return {t:'🆕 Kal aaya',s:'Kal aaya',tip,n,fresh:true};
+  const t=n<30?n+' din se khula':fd(z.day)+' se khula'; return {t:'📌 '+t,s:t,tip,n,fresh:false}; }
+function appStatus(a){ let s=null; a.al.forEach(x=>{ if(x.closed) return; if(s==null||SORD[x.sev]<SORD[s]) s=x.sev; });
+  if(s==='normal') s=null;
+  if(!s){ if(a.vk==='worse') s='bigda'; else if(a.vk==='better') s='behtar'; }
+  if(!s) s=(a.vk==='none'||a.vk==='low'||!a.ready)?'jaldi':'normal';
+  return s; }
+function newestAlert(a){ let b=null; a.al.forEach(x=>{ if(x.closed||!x.at) return; if(!b||x.at>b.at) b=x; }); return b; }
+function topAlert(a){ let b=null; a.al.forEach(x=>{ if(x.closed) return; if(!b||SORD[x.sev]<SORD[b.sev]||(SORD[x.sev]===SORD[b.sev]&&(x.at||'')>(b.at||''))) b=x; }); return b; }
+function alBadge(a){ const x=a.ta; if(!x) return ''; const ag=ageOf(x);
+  return `<button class="us-alb us-s-${x.sev}${ag.fresh?' us-new':''}" data-al="${x.k}" title="${esc('Engine alert · '+ag.s+' · '+ag.tip+' — click = alert card')}">🔔 ${SW[x.sev]} · ${esc(ag.s)}${a.nOpen>1?` <b>+${a.nOpen-1}</b>`:''}</button>`; }
+const MET={rate_drift:'Roz hataane wale',rate_spike:'Ek din me hataaye',rate_zero:'0 uninstall record',
+  uninstall_d0:'Install ke din hi hataaye',new_d1:'Agle din wapas aaye',new_d7:'7 din baad wapas aaye',new_d30:'30 din baad wapas aaye',returning_dau:'Purane users roz'};
+const metName=x=>MET[x.m]||(/^D\d+$/.test(x.m||'')?((+x.m.slice(1))===0?'Install ke din hi hataaye':((+x.m.slice(1))===1?'Agle din tak hataaye':(+x.m.slice(1))+' din me hataaye')):'Badlaav');
+function todo(x){ const up=x.dir==='up', f=x.fam, n=+x.n||0;
+  if(x.closed) return 'Kuch nahi — wapas normal';
+  if(f==='impact'||f==='impact_late'){ return x.lv==='halt'?'Rollout rok do, hotfix bhejo':(x.lv==='hold'?'Rollout rok ke 2–3 din aur dekho':(x.lv==='win'?'Isi disha me aage badho':'Update ka asar dekhte raho')); }
+  if(f==='rate_zero') return 'GA4 / Firebase tracking check karo';
+  if(!up) return 'Kuch nahi — jo badla wo chalne do';
+  if(f==='cohort'&&n===0) return 'Pehli screen, permissions aur ads campaign check karo';
+  if(f==='cohort'&&n<=7) return 'Pehle hafte ka experience dekho — ads zyada? crash?';
+  if(f==='cohort') return 'Purane users jaa rahe — haal ka update / notifications dekho';
+  if(f==='rate_spike') return 'Us din ka update / campaign / crash dekho';
+  return 'Last update aur crash report dekho'; }
+function alertVals(x){ // the shown "pehle → ab" in %, the dashboard's units made human
+  if(x.unit==='per1k') return {now:x.now!=null?x.now/1000:null,bef:x.bef!=null?x.bef/1000:null,dp:2};
+  if(x.m==='returning_dau') return {now:null,bef:null};
+  return {now:x.now,bef:x.bef,dp:null}; }
+function pakkaOf(x){ if(!x.prov||x.closed) return null; if(x.fam==='cohort') return dAdd(x.it,(+x.n||0)+M.late+M.lag); return x.dt?dAdd(x.dt,M.late+M.lag):null; }
+function dataOf(x){ const b=(x.bf&&x.bt)?'pehle '+span(x.bf,x.bt):'pehle ka normal';
+  if(x.fam==='cohort') return 'Installs '+span(x.if,x.it)+' vs '+((x.vs.length&&x.vs.indexOf('prev')<0)?'hamesha ka normal':b);
+  if(x.fam==='rate_drift') return 'Roz ka avg '+span(x.since,x.dt)+' vs '+b;
+  if(x.fam==='rate_spike'||x.fam==='rate_zero') return 'Ek din: '+fd(x.day)+' vs normal range';
+  if(x.fam==='impact'||x.fam==='impact_late') return (x.rl||'App update')+' ('+fd(x.rd||x.since)+') se pehle vs baad';
+  return ''; }
+const startedOf=x=>x.started||(x.fam==='rate_drift'?x.since:((x.fam==='rate_spike'||x.fam==='rate_zero')?x.day:((x.fam==='impact'||x.fam==='impact_late')?(x.rd||x.since):x.if)))||null;
+function foldOf(x){ const a=A[x.a], ag=startedOf(x)?dDiff(startedOf(x),M.today):null;
+  if(x.closed) return 'theek'; if(a.sz==='chhoti') return 'chhoti'; if(x.sev==='behtar') return 'achhi';
+  if(x.sev==='bigda'||x.sev==='dhyan') return (ag==null||ag<=30||a.sz==='badi')?'':'purana'; return 'info'; }
+
+/* ================= compute everything for the current window ================= */
+let W, R=[], PT={}, PC={};
+function compute(){ W=windows();
+  R=A.map(a=>{ const s=sums(a,W.f,W.t), c=sums(a,W.cf,W.ct);
+    const o={a,s,c};
+    ['d0','s7','r1'].forEach(k=>{ o[k]=cohW(a,W.f,W.t,k); o[k+'c']=cohW(a,W.cf,W.ct,k); o[k+'n']=cohN(a,W.f,k); });
+    o.hd0=heatP(o.d0,o.d0n,true); o.hs7=heatP(o.s7,o.s7n,false); o.hr1=heatP(o.r1,o.r1n,false); o.hr=heatRate(s);
+    o.insD=s.ins!=null&&s.nI?s.ins/s.days:null; o.outD=s.outs!=null&&s.nO?s.outs/s.days:null;
+    o.insC=c.ins!=null&&c.nI?c.ins/c.days:null; o.outC=c.outs!=null&&c.nO?c.outs/c.days:null;
+    o.L=loss(a,W.f,W.t); o.Lc=loss(a,W.cf,W.ct);
+    const ok=o.L.tot!=null&&s.arp!=null; o.usd=ok?o.L.tot*s.arp:null; o.usdA=ok?o.L.a*s.arp:null; o.usdB=ok?(o.L.b||0)*s.arp:null; o.sig=!!o.L.sig;
+    o.usdC=(o.Lc.tot!=null&&c.arp!=null)?o.Lc.tot*c.arp:null; o.sigC=!!o.Lc.sig;
+    // Δ uninstalls/day split: rate change vs more/fewer users
+    o.dOut=(o.outD!=null&&o.outC!=null)?o.outD-o.outC:null;
+    if(o.dOut!=null&&s.rate!=null&&c.rate!=null&&s.nr){ o.rEff=(s.rate-c.rate)/1000*(s.rA/s.nr); o.vEff=o.dOut-o.rEff; } else { o.rEff=null; o.vEff=o.dOut; }
+    o.rEffUsd=(o.rEff!=null&&s.arp!=null)?o.rEff*s.arp:null;
+    return o; });
+  const rk=(key,sg)=>{ const L=R.slice().sort((x,y)=>lossCmp(x,y,key,sg)); const m={}; L.forEach((o,i)=>{ if(o[key]!=null) m[o.a.i]=i+1; }); return m; };
+  const r1=rk('usd','sig'), r0=rk('usdC','sigC'); R.forEach(o=>{ o.rank=r1[o.a.i]||null; o.rankC=r0[o.a.i]||null; o.pill=pillOf(o); });
+  PT=pool(R.map(o=>o.s)); PC=pool(R.map(o=>o.c)); PT.days=W.L; PC.days=W.cL;
+  const LL=R.filter(o=>o.L.tot!=null); PT.La=LL.reduce((q,o)=>q+o.L.a,0); PT.Lb=LL.reduce((q,o)=>q+(o.L.b||0),0); PT.Ltot=PT.La+PT.Lb; PT.nL=LL.length;
+  PT.Lusd=R.reduce((q,o)=>q+(o.usd||0),0); PT.LusdA=R.reduce((q,o)=>q+(o.usdA||0),0); PT.LusdB=R.reduce((q,o)=>q+(o.usdB||0),0);
+  PT.Lday=new Array(W.L).fill(null); LL.forEach(o=>{ const off=o.L.i0-ix(W.f); o.L.day.forEach((v,k)=>{ if(v==null) return; const j=off+k; PT.Lday[j]=(PT.Lday[j]||0)+v; }); });
+  PT.prov=ix(W.t)>ix(M.settled); }
+
+/* ================= SVG helpers ================= */
+function lin(d0,d1,r0,r1){ const k=(d1-d0)?(r1-r0)/(d1-d0):0; return v=>r0+(v-d0)*k; }
+function pathOf(vals,X,Y){ let d='',pen=false; vals.forEach((v,i)=>{ if(v==null||!isFinite(v)){ pen=false; return; } d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1); pen=true; }); return d; }
+function areaOf(lo,hi,X,Y){ let d='',seg=[]; const flush=()=>{ if(seg.length>1){ d+='M'+seg.map(i=>X(i).toFixed(1)+' '+Y(hi[i]).toFixed(1)).join('L')+'L'+seg.slice().reverse().map(i=>X(i).toFixed(1)+' '+Y(lo[i]).toFixed(1)).join('L')+'Z'; } seg=[]; };
+  lo.forEach((v,i)=>{ if(v==null||hi[i]==null) flush(); else seg.push(i); }); flush(); return d; }
+const SPK={}; let spkN=0;
+// small chart: vals (now), ghost (compare, stretched), band lo/hi, prov from index
+function spark(o){ const w=o.w||280, h=o.h||54, pad=4, vals=o.vals, n=vals.length, id='us-s'+(++spkN);
+  const all=vals.concat(o.ghost||[],o.lo||[],o.hi||[]).filter(v=>v!=null&&isFinite(v));
+  if(!all.length||n<2) return `<svg class="us-spk" viewBox="0 0 ${w} ${h}"><text x="${w/2}" y="${h/2+4}" text-anchor="middle" fill="var(--faint)" font-size="11">—</text></svg>`;
+  let mn=Math.min(...all), mx=Math.max(...all); if(o.zero) mn=Math.min(0,mn); if(mx===mn){ mx+=1; mn-=1; } const pr=(mx-mn)*.08;
+  const X=lin(0,n-1,pad,w-pad), Y=lin(mn-pr,mx+pr,h-pad,pad);
+  const g=o.ghost&&o.ghost.length>1?o.ghost:null, GX=g?lin(0,g.length-1,pad,w-pad):null;
+  const col=o.color||'var(--us-s-rate)';
+  let s=`<svg class="us-spk" id="${id}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="height:${o.hpx||h}px">`;
+  if(o.lo&&o.hi) s+=`<path d="${areaOf(o.lo,o.hi,X,Y)}" fill="var(--us-band)"/>`;
+  if(o.zero&&mn<0) s+=`<line x1="${pad}" x2="${w-pad}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="var(--line2)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+  if(g) s+=`<path d="${pathOf(g,i=>GX(i),Y)}" fill="none" stroke="var(--us-ghost)" stroke-width="1.4" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" opacity=".85"/>`;
+  const pd=pathOf(vals,X,Y);
+  if(o.area){ let first=-1,last=-1; vals.forEach((v,i)=>{ if(v!=null){ if(first<0) first=i; last=i; } });
+    if(first>=0) s+=`<path d="${pd}L${X(last).toFixed(1)} ${h}L${X(first).toFixed(1)} ${h}Z" fill="${col}" opacity=".12"/>`; }
+  if(o.pre){ const pv=vals.map((v,i)=>i<=o.pre?v:null), wv=vals.map((v,i)=>i>=o.pre?v:null);
+    s+=`<path d="${pathOf(pv,X,Y)}" fill="none" stroke="${col}" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" opacity=".35"/><path d="${pathOf(wv,X,Y)}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }
+  else s+=`<path d="${pd}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+  if(o.prov!=null&&o.prov<n){ const x0=X(Math.max(0,o.prov))-(o.prov>0?(X(1)-X(0))/2:0); s+=`<line x1="${x0.toFixed(1)}" x2="${(w-pad+1).toFixed(1)}" y1="${h-1}" y2="${h-1}" stroke="var(--watch)" stroke-width="2.5" vector-effect="non-scaling-stroke" opacity=".85"/>`; }
+  let li=-1; for(let i=n-1;i>=0;i--) if(vals[i]!=null){ li=i; break; }
+  if(li>=0&&o.dot!==false) s+=`<ellipse cx="${X(li).toFixed(1)}" cy="${Y(vals[li]).toFixed(1)}" rx="3.2" ry="${(3.2*(o.hpx?h/o.hpx:1)).toFixed(2)}" fill="${col}" stroke="var(--panel)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+  s+=`<line class="us-xh" x1="0" x2="0" y1="0" y2="${h}" stroke="var(--ink2)" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0"/></svg>`;
+  if(o.tip) SPK[id]={n,tip:o.tip,X,w};
+  return s; }
+const HATCH='<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><pattern id="us-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="rgba(230,184,78,.05)"/><line x1="0" y1="0" x2="0" y2="6" stroke="rgba(230,184,78,.28)" stroke-width="2"/></pattern></defs></svg>';
+
+/* ================= the layer (drawer + scrim + tooltip: on <body>, outside the screens) ================= */
+const $=id=>document.getElementById(id);
+const roots=()=>[$('us-root'),$('us-layer')].filter(Boolean);
+function layer(){ let L=$('us-layer'); if(L) return L;
+  L=document.createElement('div'); L.id='us-layer';
+  L.innerHTML=HATCH+'<div class="us-scrim" id="us-scrim"></div><div class="us-drawer" id="us-drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-label="App view"></div><div id="us-tip" role="tooltip"></div>';
+  document.body.appendChild(L);
+  try{ $('us-drawer').addEventListener('scroll',e=>{ ST.dScroll=e.target.scrollTop; },{passive:true}); }catch(e){}
+  return L; }
+let FONT=false;
+function font(){ if(FONT) return; FONT=true;   // the Studio's condensed number face (falls back to the system's when it cannot load)
+  try{ const l=document.createElement('link'); l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap'; document.head.appendChild(l); }catch(e){} }
+
+/* ================= tooltip ================= */
+let tipPinned=false;
+function showTip(html,x,y,pin){ layer(); const tipEl=$('us-tip'); tipEl.innerHTML=html; tipEl.classList.add('us-on'); tipEl.classList.toggle('us-pin',!!pin); tipPinned=!!pin;
+  const r=tipEl.getBoundingClientRect(), vw=innerWidth, vh=innerHeight; let L=x+14, T=y+14;
+  if(L+r.width>vw-8) L=Math.max(8,x-r.width-14); if(T+r.height>vh-8) T=Math.max(8,y-r.height-14);
+  tipEl.style.left=L+'px'; tipEl.style.top=T+'px'; }
+function hideTip(){ const tipEl=$('us-tip'); if(tipEl) tipEl.classList.remove('us-on','us-pin'); tipPinned=false; }
+const TIPS={};
+const trow=(k,v)=>`<div class="us-row"><span>${k}</span><b>${v}</b></div>`;
+function spkHover(sv,e){ const S=SPK[sv.id], r=sv.getBoundingClientRect(), fx=(e.clientX-r.left)/r.width*S.w;
+  let best=0,bd=1e9; for(let i=0;i<S.n;i++){ const d=Math.abs(S.X(i)-fx); if(d<bd){ bd=d; best=i; } }
+  const xh=sv.querySelector('.us-xh'); xh.setAttribute('x1',S.X(best)); xh.setAttribute('x2',S.X(best)); xh.setAttribute('opacity','1');
+  sv.querySelectorAll('.us-xh').forEach(l=>{ if(l!==xh) l.setAttribute('opacity','0'); });
+  showTip(S.tip(best),e.clientX,e.clientY); }
+const inStudio=t=>!!(t&&t.closest&&t.closest('#us-root,#us-layer'));
+
+/* ================= count-up ================= */
+const LASTV={};
+const FMT={n:v=>fN(v),s:v=>fS(v),r:v=>rp(v),m:v=>money(v),p:v=>pc(v,1)};
+function countUp(){ const root=$('us-root'); if(!root) return; root.querySelectorAll('[data-cu]').forEach(el=>{ const id=el.getAttribute('data-cu'), to=+el.getAttribute('data-v'), fmt=el.getAttribute('data-f');
+  const from=LASTV[id]; LASTV[id]=to; if(RM||from==null||!isFinite(from)||!isFinite(to)||from===to||el.getAttribute('data-v')==='') return;
+  const F=FMT[fmt]; const t0=performance.now(), dur=520;
+  const step=t=>{ const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3); el.textContent=F(from+(to-from)*e); if(k<1) requestAnimationFrame(step); };
+  el.textContent=F(from); requestAnimationFrame(step); setTimeout(()=>{ if(LASTV[id]===to) el.textContent=F(to); },dur+120); }); }
+
+/* ================= names ================= */
+const bnm=a=>{ const t=' · '+a.acc; return (a.nm&&a.nm.slice(-t.length)===t)?a.nm.slice(0,-t.length):a.store; };   // the store name + its "(2024 wala)" tag
+const nmH=a=>`<span class="us-nmt">${esc(bnm(a))} <span class="us-acn">· ${esc(a.acc)}</span></span>`;
+const szH=a=>a.sz==='badi'?'<span class="us-sz us-badi" title="Badi app — kamai + ads kharcha $300+/din">Badi</span>':'';
+
+/* ================= header (the Studio's top bar: range / compare = KPIWINDOW, ₹ / $ = the dashboard's) ================= */
+function winHtml(){ const firstK=dAdd(M.settled,1);
+  const kd=W.t>M.settled?`<span class="us-prov">⏳ ${span(firstK>W.f?firstK:W.f,W.t)} pakka nahi · ${fd(dAdd(W.t,M.late+M.lag))} ko pakka</span>`:'<span class="us-good">✓ Saare din pakke</span>';
+  return `<span>📅 <b>${span(W.f,W.t)}</b> (${W.L} din) <span class="us-faint">vs</span> <b>${span(W.cf,W.ct)}</b>${W.cL!==W.L?' ('+W.cL+' din)':''}</span>`
+    +`<span>Sab ${A.length} apps ka GA4 data <b>${fd(M.E)}</b> tak (ek hi din)</span>${kd}<span class="us-faint">Har number roz ka average<span class="us-kb"> · ⌨ <span class="us-kbd">7</span> <span class="us-kbd">1</span> <span class="us-kbd">3</span> <span class="us-kbd">6</span></span></span>`; }
+function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
+  const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
+  const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${M.S}" max="${M.E}">`;
+  return `<div class="us-top-in"><div class="us-brand"><span class="us-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="4" y="1.5" width="10" height="15" rx="2.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 5.5v6m-2.6-2.4L9 11.7l2.6-2.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
+    +`<div><div class="us-bn">Uninstall Studio</div><div class="us-sub">All apps · ${A.length} apps${NOGA.length?' + '+NOGA.length+' bina GA4':''}</div></div></div>`
+    +`<div class="us-ctrls"><div class="us-seg" id="us-rng" role="group" aria-label="Range">${rb('7','7 din','7')}${rb('14','14','1')}${rb('30','30','3')}${rb('60','60','6')}${rb('c','Custom','')}</div>`
+    +`<label class="us-sel" for="us-cmp"><span>vs</span><select id="us-cmp"><option value="prev"${c0==='prev'?' selected':''}>Pichhle utne hi din</option><option value="month"${c0==='month'?' selected':''}>Pichhle mahine same din</option><option value="c"${c0==='c'?' selected':''}>Custom range…</option></select></label>`
+    +`<div class="us-seg" id="us-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur==='USD'}">$</button></div></div></div>`
+    +`<div class="us-custom" id="us-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="us-grp" id="us-cgA"${r0==='c'?'':' hidden'}>Range ${iv('us-cf1',W.f,'Range from')} – ${iv('us-ct1',W.t,'Range to')}</span>`
+    +`<span class="us-grp" id="us-cgB"${c0==='c'?'':' hidden'}>Compare ${iv('us-cf2',W.cf,'Compare from')} – ${iv('us-ct2',W.ct,'Compare to')}</span><span class="us-faint" id="us-cnote">Data ${fd(M.S)} se ${fd(M.E)} tak</span></div>`
+    +`<div class="us-winline" id="us-winline">${winHtml()}</div>`; }
+function renderTop(){ const el=$('us-top'); if(!el) return;   // in place: the focused control keeps its focus
+  const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
+  el.querySelectorAll('#us-rng button').forEach(b=>b.setAttribute('aria-pressed',String(r0===b.dataset.r)));
+  el.querySelectorAll('#us-cur button').forEach(b=>b.setAttribute('aria-pressed',String(cur===b.dataset.c)));
+  const cm=$('us-cmp'); if(cm) cm.value=c0;
+  const cr=$('us-customRow'); if(cr) cr.hidden=!(r0==='c'||c0==='c'); const ga=$('us-cgA'), gb=$('us-cgB'); if(ga) ga.hidden=r0!=='c'; if(gb) gb.hidden=c0!=='c';
+  [['us-cf1',W.f],['us-ct1',W.t],['us-cf2',W.cf],['us-ct2',W.ct]].forEach(([id,v])=>{ const x=$(id); if(x&&document.activeElement!==x){ x.min=M.S; x.max=M.E; x.value=v; } });
+  const wl=$('us-winline'); if(wl) wl.innerHTML=winHtml(); }
+
+/* ================= story strip ================= */
+function storyHtml(){ const out=[];
+  const ord=R.slice().sort((x,y)=>lossCmp(x,y)), top=ord.find(o=>o.sig&&o.L.tot>0&&o.usd!=null&&!tiny(o.usd));
+  if(top) out.push(`<button class="us-sc us-bad" data-app="${top.a.i}" data-go="${top.a.i}"><div class="us-t"><span class="us-ic">🔥</span>Sabse bada nuksaan</div><div class="us-big us-num">${fX(top.L.tot)}<small>log/din</small></div><div class="us-ln">${nmH(top.a)}</div><div class="us-ln">naye <b>${fX(top.L.a)}</b> · purane <b>${top.L.part?'—':fX(top.L.b)}</b> · <b>≈ ${moneyL(top.usd)}/din</b></div></button>`);
+  else out.push(`<button class="us-sc us-good" data-scroll="us-map"><div class="us-t"><span class="us-ic">✅</span>Pakka nuksaan</div><div class="us-big us-num">0<small>apps</small></div><div class="us-ln">Kisi app me normal se pakka zyada log nahi gaye</div><div class="us-ln us-faint">chhote farak map me (grey)</div></button>`);
+  const dT=(PT.outs!=null&&PC.outs!=null)?PT.outs/W.L-PC.outs/W.cL:null;
+  // biggest change in uninstalls/din vs pehle — never the 🔥 app with an opposite-looking sign
+  const drv=R.filter(o=>o.dOut!=null&&!(top&&o===top&&Math.sign(o.dOut)!==Math.sign(top.L.tot))).sort((x,y)=>Math.abs(y.dOut)-Math.abs(x.dOut))[0];
+  if(drv&&dT!=null){ const why=drv.rEff!=null?(Math.abs(drv.rEff)>=Math.abs(drv.vEff)?'zyadatar rate badalne se':'zyadatar users '+(drv.vEff>0?'badhne':'ghatne')+' se'):'';
+    out.push(`<button class="us-sc ${drv.dOut>0?'us-watch':'us-good'}" data-app="${drv.a.i}" data-go="${drv.a.i}"><div class="us-t"><span class="us-ic">🧭</span>Sabse bada badlaav</div><div class="us-big us-num">${fS(drv.dOut)}<small>uninstalls/din</small></div><div class="us-ln">${nmH(drv.a)}</div><div class="us-ln">vs ${span(W.cf,W.ct)}${why?' · '+why:''} · nuksaan ${drv.L.tot!=null?'<b>'+fX(drv.L.tot)+' log/din</b>':'—'}</div></button>`); }
+  const cnt=k=>R.filter(o=>o.pill===k).length, better=R.filter(o=>o.pill==='behtar');
+  out.push(`<button class="us-sc us-good" data-filter="behtar"><div class="us-t"><span class="us-ic">✅</span>Sudhri apps</div><div class="us-big us-num">${better.length}<small>/ ${A.length} apps Behtar</small></div><div class="us-ln">${better.length?'<b>'+esc(bnm(better[0].a))+' · '+esc(better[0].a.acc)+'</b>'+(better.length>1?' +'+(better.length-1):''):'is range me koi nahi'}</div><div class="us-ln us-faint">Bigda ${cnt('bigda')} · Dhyan do ${cnt('dhyan')} · Normal ${cnt('normal')}</div></button>`);
+  const fresh=ALERTS.filter(x=>!x.closed&&ageOf(x).fresh).sort((x,y)=>(SORD[x.sev]-SORD[y.sev])||(y.at>x.at?1:-1));
+  const nx=fresh[0]; const av=nx?alertVals(nx):null;
+  out.push(`<button class="us-sc ${nx&&nx.sev==='bigda'?'us-bad':'us-watch'}" data-al="${nx?nx.k:''}" data-scroll="us-chg"><div class="us-t"><span class="us-ic">🔔</span>Naye engine alerts (aaj / kal)</div><div class="us-big us-num">${fresh.length}<small>alerts</small></div>${nx?`<div class="us-ln">${nmH(A[nx.a])}</div><div class="us-ln">${esc(metName(nx))}${av.now!=null?`: <b>${pc(av.bef,av.dp)} → ${pc(av.now,av.dp)}</b>`:''} · ${esc(ageOf(nx).t.replace(/^🆕 /,''))}</div>`:'<div class="us-ln">Koi naya alert nahi</div>'}</button>`);
+  return out.join(''); }
+
+/* ================= KPI hero ================= */
+function seriesFor(arr,f,t){ const o=[]; for(let i=ix(f);i<=ix(t);i++) o.push(i>=0&&i<N?arr[i]:null); return o; }
+function deltaH(now,bef,goodUp,fmt,unit){ if(now==null||bef==null) return '<span class="us-vs">pehle ka data nahi</span>';
+  const d=now-bef, r=relp(now,bef), up=d>0, cls=Math.abs(r||0)<.005?'us-flat':(up===goodUp?(up?'us-up-good':'us-dn-good'):(up?'us-up-bad':'us-dn-bad'));
+  return {cls,h:`${d>0?'▲':(d<0?'▼':'■')} ${fmt(d)}${unit||''} (${fR(r)}) <span class="us-vs">vs ${fmt===fS?fN(bef):fmt(bef)}</span>`}; }
+function kpisHtml(){ const L=W.L, cL=W.cL, provI=W.t>M.settled?Math.max(0,ix(dAdd(M.settled,1))-ix(W.f)):null;
+  const mk=(id,lab,hint,v,f,unit,dl,spk,sub)=>`<div class="us-kpi" id="us-k-${id}"><div class="us-kl"><span>${lab}</span><span class="us-kh">${hint}</span></div><div class="us-kv"><span class="us-num" data-cu="${id}" data-v="${v==null?'':v}" data-f="${f}">${v==null?'—':FMT[f](v)}</span>${unit?`<span class="us-ku">${unit}</span>`:''}</div><div class="us-kd ${dl.cls||''}">${dl.h||dl}</div>${spk}<div class="us-ks">${sub||''}</div></div>`;
+  const tipD=(lab,arr,carr,fmt)=>i=>{ const d=dAdd(W.f,i), cd=W.cL>1?dAdd(W.cf,Math.round(i*(W.cL-1)/Math.max(1,W.L-1))):W.cf, v=arr[i], c=carr[Math.round(i*(W.cL-1)/Math.max(1,W.L-1))];
+    return `<div class="us-tt">${fd(d)}${d>M.settled?' ⏳':''}</div>${trow(lab,fmt(v))}${trow('<span class="us-tsm">pehle · '+fd(cd)+'</span>',fmt(c))}${d>M.settled?'<div class="us-tsm">⏳ pakka nahi · '+fd(dAdd(d,M.late+M.lag))+' ko pakka</div>':''}`; };
+  const sI=seriesFor(PD.nw,W.f,W.t), cI=seriesFor(PD.nw,W.cf,W.ct), sO=seriesFor(PD.un,W.f,W.t), cO=seriesFor(PD.un,W.cf,W.ct);
+  const sN=seriesFor(PD.net,W.f,W.t), cN=seriesFor(PD.net,W.cf,W.ct), sR=seriesFor(PD.rate,W.f,W.t), cR=seriesFor(PD.rate,W.cf,W.ct);
+  const insD=PT.ins!=null?PT.ins/L:null, insC=PC.ins!=null?PC.ins/cL:null, outD=PT.outs!=null?PT.outs/L:null, outC=PC.outs!=null?PC.outs/cL:null, netD=PT.net!=null?PT.net/L:null, netC=PC.net!=null?PC.net/cL:null;
+  const dI=deltaH(insD,insC,true,fS,'/din'), dO=deltaH(outD,outC,false,fS,'/din'), dN=deltaH(netD,netC,true,fS,'/din');
+  let dR='<span class="us-vs">—</span>';
+  if(PT.rate!=null&&PC.rate!=null){ const ppl=(PT.rate-PC.rate)/1000*(PT.rA/Math.max(1,L)); const up=ppl>0, r=relp(PT.rate,PC.rate);
+    dR={cls:Math.abs(r)<.005?'us-flat':(up?'us-up-bad':'us-dn-good'),h:`${up?'▲':'▼'} ${fS(ppl)} log/din (${rp(PT.rate)}, pehle ${rp(PC.rate)})`}; }
+  const fmtR=v=>rp(v);
+  const subR=`<span data-tk="ptl:0">Nuksaan <b>${fX(PT.Ltot)} log/din</b>${PT.Lusd?' ≈ <b>'+moneyL(PT.Lusd,true)+'</b>':''}</span> · normal rate ${rp(PT.lo)}–${rp(PT.hi)}`;
+  return mk('ins','Installs','roz ka avg',insD,'n','/din',dI,spark({vals:sI,ghost:cI,prov:provI,color:'var(--us-s-in)',area:1,tip:tipD('Installs',sI,cI,fN)}),`Kul ${fN(PT.ins)} · ${W.L} din${PT.prov?' · <span class="us-watch">━ ⏳ pakka nahi</span>':''}`)
+    +mk('outs','Uninstalls','roz ka avg',outD,'n','/din',dO,spark({vals:sO,ghost:cO,prov:provI,color:'var(--us-s-out)',area:1,tip:tipD('Uninstalls',sO,cO,fN)}),`Kul ${fN(PT.outs)} · ${W.L} din${PT.prov?' · <span class="us-watch">━ ⏳ pakka nahi</span>':''}`)
+    +mk('net','Net','installs − uninstalls',netD,'s','/din',dN,spark({vals:sN,ghost:cN,prov:provI,color:'var(--ink2)',zero:1,tip:tipD('Net',sN,cN,fS)}),`${netD>0?'Users badh rahe':'Users ghat rahe'} · kul ${fS(PT.net)}`)
+    +mk('rate','Uninstall rate','roz active users me se',PT.rate,'r','',dR,spark({vals:sR,ghost:cR,prov:provI,lo:seriesFor(PD.lo,W.f,W.t),hi:seriesFor(PD.hi,W.f,W.t),color:'var(--us-s-rate)',tip:tipD('Rate',sR,cR,fmtR)}),subR); }
+function ledgerHtml(){ const insD=PT.ins!=null?PT.ins/W.L:null, outD=PT.outs!=null?PT.outs/W.L:null, netD=PT.net!=null?PT.net/W.L:null;
+  let rows=''; for(let i=ix(W.t);i>=ix(W.f);i--){ const d=dOf(i), r=PD.rate[i], hs=(r!=null&&PD.hi[i]!=null)?(r>PD.hi[i]?'us-h3':(r<PD.lo[i]?'us-h-2':'')):'';
+    rows+=`<tr class="${d>M.settled?'us-prow':''}"><td class="us-l">${fd(d)}${d>M.settled?' ⏳':''}</td><td>${fN(PD.nw[i])}</td><td>${fN(PD.un[i])}</td><td>${fS(PD.net[i])}</td><td><span class="us-hcell ${hs}">${rp(r)}</span></td><td>${PT.Lday[i-ix(W.f)]==null?'—':fX(PT.Lday[i-ix(W.f)])}</td></tr>`; }
+  return `<table class="us-mini"><thead><tr><th class="us-l">Din</th><th>Installs</th><th>Uninstalls</th><th>Net</th><th>Uninstall rate</th><th>Normal se zyada gaye</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td class="us-l" style="font-weight:600">Roz ka avg</td><td>${fN(insD)}</td><td>${fN(outD)}</td><td>${fS(netD)}</td><td>${rp(PT.rate)}</td><td>${fX(PT.Ltot)}</td></tr></tfoot></table>`; }
+
+/* ================= Nuksaan ka map (heatmap) ================= */
+const COLS=[['d0','Install day','Install ke din hi hataaye — % installs'],['rate','Roz hataaye','Daily uninstall — % active users roz'],['s7','7 din baad','7 din baad bhi app me — % installs'],['r1','Agle din wapas','Next-day return — % installs']];
+function cellOf(o,k){ if(k==='rate'){ const s=o.s, h=o.hr; return {v:s.rate==null?null:rp(s.rate),s:h.s,why:h.why}; }
+  const c=o[k], h=o['h'+(k==='d0'?'d0':k)]; return {v:c.p==null?null:pc(c.p,c.p<.1?1:0),s:h.s,why:h.why}; }
+function splitH(o,mx,w){ const L=o.L; if(!L||L.tot==null) return ''; const ua=o.usdA!=null?o.usdA:L.a, ub=o.usdB!=null?o.usdB:(L.b||0), W0=w||62;
+  const wa=Math.max(Math.abs(ua)/mx*W0,1.5), wb=Math.max(Math.abs(ub)/mx*W0,1.5);
+  const k=Math.min(1,W0/Math.max(1e-9,wa+wb));   // both parts together never wider than the cell
+  return `<span class="us-sbar${o.sig?'':' us-q'}"><span class="us-n ${ua>0?'us-p':'us-g'}" style="width:${(wa*k).toFixed(1)}px"></span><span class="us-o ${ub>0?'us-p':'us-g'}" style="width:${(wb*k).toFixed(1)}px"></span></span>`; }
+const splitN=o=>(o.L&&o.L.tot!=null)?`<span class="us-spl"><span title="Naye users (install ke 0–7 din me hataaye)"><i class="us-dn"></i>${fX(o.L.a)}</span><span title="${o.L.part?'Purane users ka normal abhi nahi (naya app)':'Purane users'}"><i class="us-dp"></i>${o.L.part?'—':fX(o.L.b)}</span></span>`:'';
+const lossCls=o=>o.usd==null&&(!o.L||o.L.tot==null)?'us-faint':(!o.sig||tiny(o.usd)?'us-faint':((o.usd!=null?o.usd:o.L.tot)>0?'us-bad':'us-good'));
+function mapHtml(){ const rows=R.slice().sort((x,y)=>lossCmp(x,y));
+  const shown=ST.mapAll?rows:rows.slice(0,12);
+  let h=`<div class="us-hh">#</div><div class="us-hh us-l">App</div><div class="us-hh" style="justify-content:flex-end;text-align:right" title="Normal se zyada gaye log × 1 user ki roz ki kamai. Chhote numbers: naye users ▪ / purane users ▨ (log/din)">Nuksaan ${symOf()}/din</div>`+COLS.map((c,ci)=>{ const pv=c[0]==='rate'?shown.some(o=>o.s.prov):shown.some(o=>o[c[0]].prov); return `<div class="us-hh${ci?'':' us-c1'}" title="${esc(c[2])}${pv?' · ⏳ kuch din pakke nahi':''}">${c[1]}${pv?' ⏳':''}</div>`; }).join('')+'<div class="us-hh us-trh">Roz hataaye · 4 hafte</div>';
+  const mxS=Math.max(1e-9,...shown.map(q=>q.usd!=null?Math.abs(q.usdA)+Math.abs(q.usdB):0));
+  shown.forEach(o=>{ const a=o.a, rk=o.rank, mv=(o.rank&&o.rankC)?o.rankC-o.rank:null;
+    const arrow=mv?`<i class="${mv>0?'us-bad':'us-good'}" title="pehle #${o.rankC}">${mv>0?'▲'+mv:'▼'+(-mv)}</i>`:'';
+    h+=`<div class="us-rk" data-app="${a.i}" data-go="${a.i}" style="cursor:pointer">${rk||'·'}${arrow}</div><div class="us-nm" data-app="${a.i}" data-go="${a.i}" data-tk="app:${a.i}">${nmH(a)}<div style="display:flex;gap:5px;margin-top:4px;align-items:center;flex-wrap:wrap">${chip(o.pill)}${alBadge(a)}${a.sz==='badi'?szH(a):''}</div></div>`
+      +`<div class="us-inr" data-app="${a.i}" data-tk="inr:${a.i}" data-go="${a.i}" style="cursor:pointer"><span class="${lossCls(o)}">${o.usd!=null?moneyL(o.usd,true):(o.L.tot!=null?fX(o.L.tot)+' log':'—')}</span>${splitH(o,mxS,64)}${splitN(o)}</div>`;
+    COLS.forEach((c,ci)=>{ const x=cellOf(o,c[0]), nv=c[0]==='rate'?(o.s.med!=null?rp(o.s.med):null):(o[c[0]+'n'].p!=null?pc(o[c[0]+'n'].p,o[c[0]+'n'].p<.1?1:0):null); const sub=x.v==null||nv==null?'':'normal '+nv;
+      h+=`<div class="us-hc ${hcls(x.s)}${ci?'':' us-c1'}" data-app="${a.i}" data-tk="cell:${a.i}:${c[0]}">${x.v==null?'—':x.v}${sub?`<small>${sub}</small>`:''}</div>`; });
+    const i1=ix(W.t), i0=Math.max(0,Math.min(ix(W.f),i1-27)), sv=a.rate.slice(i0,i1+1), lo=a.lo.slice(i0,i1+1), hi=a.hi.slice(i0,i1+1);
+    h+=`<div class="us-hc us-tr" data-app="${a.i}">${spark({vals:sv,lo,hi,w:88,h:34,hpx:34,pre:ix(W.f)-i0,color:o.hr.s>=2?'var(--bad)':(o.hr.s<=-2?'var(--good)':'var(--us-s-rate)'),
+      tip:i=>{ const k=i0+i, d=dOf(k); return `<div class="us-tt">${esc(a.nm)} · ${fd(d)}${d>a.settled?' ⏳':''}</div>${trow('Roz hataaye',rp(a.rate[k]))}${trow('Uninstalls',fN(a.un[k]))}${a.lo[k]!=null?trow('Normal range',rp(a.lo[k])+'–'+rp(a.hi[k])):''}`; }})}</div>`; });
+  const sw=cls=>`<i style="background:var(--us-${cls})"></i>`;
+  return `<div class="us-ph"><div><div class="us-eyebrow">Kahan nuksaan ho raha</div><h2>Nuksaan ka map</h2><div class="us-hint">Pill = is range ka haal · 🔔 = engine alert · pakka nuksaan sabse upar (grey = aam utaar-chadhaav) · hover / tap = asli numbers</div></div></div>`
+    +`<div class="us-mapw"><div class="us-hm" id="us-hm">${h}</div></div>`
+    +(rows.length>12?`<button class="us-moreb" id="us-mapMore">${ST.mapAll?'Sirf top 12':'Sab '+rows.length+' apps dikhao'}</button>`:'')
+    +`<div class="us-legend"><span>Rang = app ka apna normal se farak:</span><span class="us-sw">${sw('h3')}${sw('h2')}${sw('h1')}</span><span>bura</span><span class="us-sw"><i style="background:var(--us-h0)"></i></span><span>normal</span><span class="us-sw">${sw('g1')}${sw('g2')}${sw('g3')}</span><span>achha</span><span class="us-sw"><i style="border:1px dashed var(--line2)"></i></span><span>kam data</span><span>· Nuksaan ke neeche: <i style="display:inline-block;width:8px;height:8px;background:var(--ink2);border-radius:2px"></i> naye users · <i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,var(--ink2) 0 2px,transparent 2px 4px)"></i> purane users (log/din)</span></div>`; }
+TIPS.app=i=>{ const a=A[+i], o=R[+i]; return `<div class="us-tt">${esc(a.nm)}</div>${trow('Is range me ('+span(W.f,W.t)+')',SW[o.pill])}${a.ta?trow('🔔 Engine alert',SW[a.ta.sev]+' · '+esc(ageOf(a.ta).s)):''}${trow('Size',a.sz==='badi'?'Badi':(a.sz==='madhyam'?'Madhyam':'Chhoti'))}${trow('Kamai + kharcha/din',money(a.paisa))}<div class="us-tsm">Click = poora app view</div>`; };
+TIPS.ptl=()=>`<div class="us-tt">Sab apps · nuksaan ${span(W.f,W.t)}</div>${trow('Normal se zyada gaye',fX(PT.Ltot)+' log/din')}${trow('&nbsp;· naye users',fX(PT.La))}${trow('&nbsp;· purane users',fX(PT.Lb))}${trow(symOf()+' nuksaan',moneyL(PT.Lusd,true)+'/din')}<div class="us-tsm">${PT.nL} apps ka normal bana · har app apne normal se (Kahan se aaya me split)</div>`;
+TIPS.inr=i=>{ const o=R[+i], L=o.L, a=o.a; const cur=symOf();
+  if(!L||L.tot==null) return `<div class="us-tt">${esc(a.nm)} · nuksaan</div><div>— ${esc((L&&L.why)||'normal abhi nahi')}</div>`;
+  return `<div class="us-tt">${esc(a.nm)} · nuksaan ${span(W.f,W.t)}</div>`
+    +(o.sig?'':'<div class="us-tsm" style="color:var(--watch)">Roz ke aam utaar-chadhaav ke andar — pakka nuksaan nahi</div>')
+    +trow('Normal se zyada gaye',fX(L.tot)+' log/din')+trow('&nbsp;· naye users (0–7 din)',fX(L.a)+' log/din')+trow('&nbsp;· purane users',L.part?'— (normal abhi nahi, naya app)':fX(L.b)+' log/din')
+    +trow('Uninstalls/din: asli vs normal',fN(o.outD)+' vs '+fN(L.exp))
+    +(o.s.arp!=null?trow('1 user ki roz ki kamai',money(o.s.arp))+trow(cur+' nuksaan',moneyL(o.usd,true)+'/din'):'<div class="us-tsm">Kamai ka data nahi — '+cur+' nahi</div>')
+    +`<div class="us-sep"></div><div class="us-tsm">Naye = install ke 0–7 din me hataaye; purane = baaki. Dono app ke apne pichhle 4–5 hafte ke normal se. Alag-alag gine — double count nahi. ${cur} ≈ andaza: har din roz ki kamai itni aur kam.</div>${o.rankC?`<div class="us-tsm">Pehle (${span(W.cf,W.ct)}) rank #${o.rankC}</div>`:''}`; };
+TIPS.cell=(i,k)=>{ const o=R[+i], a=o.a;
+  if(k==='rate'){ const s=o.s, c=o.c; if(s.rate==null) return `<div class="us-tt">${esc(a.nm)}</div>— ${o.hr.why}`;
+    return `<div class="us-tt">${esc(a.nm)} · roz hataaye</div>${trow(span(W.f,W.t)+(s.prov?' ⏳':''),rp(s.rate)+' · '+fN(o.outD)+'/din')}${c.rate!=null?trow('pehle '+span(W.cf,W.ct),rp(c.rate)+' · '+fN(o.outC)+'/din'):''}${s.med!=null?trow('Normal',rp(s.med)+' ('+rp(s.lo)+'–'+rp(s.hi)+')'):''}${s.exc!=null?trow('Normal se',fS(s.exc)+' log/din'):''}${s.prov?'<div class="us-tsm">⏳ '+fd(dAdd(W.t,M.late+M.lag))+' ko pakka</div>':''}`; }
+  const c=o[k], cc=o[k+'c'], cn=o[k+'n'], lab={d0:'Install ke din hi hataaye',s7:'7 din baad bhi app me',r1:'Agle din wapas aaye'}[k], h=o['h'+k];
+  if(c.p==null) return `<div class="us-tt">${esc(a.nm)} · ${lab}</div>— data nahi`;
+  const ppl=cc.p!=null?(c.p-cc.p)*c.n/Math.max(1,c.days):null, word=k==='d0'?(ppl>0?'zyada gaye':'kam gaye'):(k==='s7'?(ppl>0?'zyada ruke':'kam ruke'):(ppl>0?'zyada wapas':'kam wapas'));
+  return `<div class="us-tt">${esc(a.nm)} · ${lab}</div>${trow('Installs '+span(c.f,c.t)+(c.prov?' ⏳':''),pc(c.p,1)+' · '+fN(c.n)+' installs')}${cc.p!=null?trow('pehle '+span(cc.f,cc.t),pc(cc.p,1)):''}${cn.p!=null?trow('normal '+span(cn.f,cn.t),pc(cn.p,1)):''}${ppl!=null?'<div class="us-sep"></div>'+trow('vs pehle',fS(Math.abs(ppl))+' log/din '+word):''}${h.s==null?'<div class="us-tsm">'+h.why+'</div>':(h.s===0?'<div class="us-tsm">Normal jaisa (farak pakka nahi)</div>':'')}${c.prov?'<div class="us-tsm">⏳ '+fd(c.pk)+' ko pakka</div>':''}${k!=='d0'?'<div class="us-tsm">'+(k==='s7'?'Jinka 7wa din is range me aaya':'Jinka agla din is range me aaya')+'</div>':''}`; };
+
+/* ================= Kahan se aaya (diverging) ================= */
+function srcHtml(){ const cur=symOf(), val=o=>o.usd!=null?o.usd:null;
+  const L=R.filter(o=>o.L&&o.L.tot!=null).sort((x,y)=>lossCmp(x,y));
+  const pos=L.filter(o=>(val(o)!=null?val(o):o.L.tot)>0), neg=L.filter(o=>(val(o)!=null?val(o):o.L.tot)<0);
+  let show=ST.srcAll?L:pos.slice(0,6).concat(neg.slice(-4)); show=show.filter((o,i,arr)=>arr.indexOf(o)===i);
+  const rest=L.filter(o=>show.indexOf(o)<0), restU=rest.reduce((q,o)=>q+(o.usd||0),0), restP=rest.reduce((q,o)=>q+o.L.tot,0);
+  const mag=o=>o.usd!=null?Math.abs(o.usdA)+Math.abs(o.usdB):0, mx=Math.max(1e-9,...show.map(mag));
+  const bar=o=>{ if(o.usd==null) return '<span class="us-ax"></span>'; let s='<span class="us-ax"></span>', pp=0, nn=0;
+    [[o.usdA,'n'],[o.usdB,'o']].forEach(([x,t])=>{ if(!x) return; const w=Math.abs(x)/mx*50; let l; if(x>0){ l=50+pp; pp+=w; } else { nn+=w; l=50-nn; }
+      s+=`<span class="us-seg ${t==='n'?(x>0?'us-rb':'us-rg'):(x>0?'us-ob':'us-og')}" style="left:${l.toFixed(2)}%;width:${Math.max(.4,w).toFixed(2)}%"></span>`; });
+    return s; };
+  const rows=show.map(o=>`<div class="us-dvr${o.sig&&!tiny(o.usd)?'':' us-q'}" data-app="${o.a.i}" data-go="${o.a.i}" data-tk="inr:${o.a.i}"><div>${nmH(o.a)}</div><div class="us-dvn ${lossCls(o)}">${fX(o.L.tot)}</div><div class="us-dvi ${lossCls(o)}">${moneyL(o.usd,true)}</div><div class="us-dvb">${bar(o)}</div></div>`).join('');
+  const sigN=L.filter(o=>o.sig&&!tiny(o.usd)&&o.usd>0).length;
+  return `<div class="us-ph"><div><div class="us-eyebrow">Kis app se nuksaan</div><h2>Kahan se aaya</h2><div class="us-hint">Normal se zyada gaye log/din · ${span(W.f,W.t)} · naye users vs purane users</div></div></div>`
+    +`<div class="us-src-sum"><span><b class="${PT.Ltot>0?'us-bad':'us-good'}">${fX(PT.Ltot)}</b> log/din${PT.Lusd?` ≈ <b style="font-size:14px" class="${PT.Lusd>0?'us-bad':'us-good'}">${moneyL(PT.Lusd,true)}</b>/din`:''}</span><span>naye <b style="font-size:14px">${fX(PT.La)}</b> · purane <b style="font-size:14px">${fX(PT.Lb)}</b> · ${sigN} apps me pakka nuksaan</span></div>`
+    +`<div class="us-dvh"><span>App</span><span>Log/din</span><span>${cur}/din</span><span class="us-axl"><span>← normal se kam gaye</span><span>zyada gaye →</span></span></div><div class="us-dv">${rows}`
+    +(rest.length&&!ST.srcAll?`<div class="us-dvrest"><span>Baaki ${rest.length} apps</span><span class="us-num">${fX(restP)} log/din · ${moneyL(restU,true)}</span></div>`:'')+`</div>`
+    +(R.length>L.length?`<div class="us-dvrest" style="margin:0 18px"><span>${R.length-L.length} apps ka normal abhi nahi (naye apps)</span><span>—</span></div>`:'')
+    +`<button class="us-moreb" id="us-srcMore">${ST.srcAll?'Sirf bade':'Sab apps dikhao'}</button>`
+    +`<div class="us-legend"><span class="us-sw"><i style="background:var(--bad)"></i><i style="background:var(--good)"></i></span><span>naye users (install ke 0–7 din)</span><span class="us-sw"><i style="background:repeating-linear-gradient(135deg,var(--bad) 0 3px,rgba(255,107,107,.25) 3px 6px)"></i><i style="background:repeating-linear-gradient(135deg,var(--good) 0 3px,rgba(52,217,154,.25) 3px 6px)"></i></span><span>purane users</span><span>grey = aam utaar-chadhaav</span></div>`; }
+
+/* ================= timeline (alerts + updates) ================= */
+let TLW=1000;                                            // the panel's width (measured once on screen)
+const xStep=(n,w)=>Math.max(1,Math.ceil(n/Math.max(2,Math.floor(w/58))));
+function tlHtml(){ const i1=ix(W.t), i0=Math.max(0,Math.min(ix(W.f),i1-41)), n=i1-i0+1, f0=dOf(i0), w=Math.max(600,Math.round((TLW||1000)-30)), h=178, padL=116, padR=14, X=lin(0,Math.max(1,n-1),padL+8,w-padR-8), hw=n>1?(X(1)-X(0))/2:6;
+  const un=PD.un.slice(i0,i1+1), vals=un.filter(v=>v!=null), mn=vals.length?Math.min(...vals)*.97:0, mx=vals.length?Math.max(...vals)*1.02:1, Y=lin(mn,mx,70,16);
+  const ups={}, als={};
+  A.forEach(a=>{ a.rel.forEach(r=>{ if(r[0]>=f0&&r[0]<=W.t){ (ups[r[0]]=ups[r[0]]||[]).push([a,r]); } }); });
+  ALERTS.forEach(x=>{ if(x.closed) return; let d=startedOf(x); if(!d) return; const before=d<f0; if(before) d=f0; if(d>W.t) return; (als[d]=als[d]||[]).push([x,before]); });
+  let s=`<svg viewBox="0 0 ${w} ${h}" style="min-width:${w}px" role="img" aria-label="Updates aur badlaav ki timeline">`;
+  const ws=ix(W.f)-i0; s+=`<rect x="${(X(ws)-hw).toFixed(1)}" y="4" width="${(w-padR-X(ws)+hw).toFixed(1)}" height="${h-24}" rx="6" fill="rgba(34,211,238,.045)" stroke="rgba(34,211,238,.22)" stroke-dasharray="3 3"/>`;
+  if(ws>0) s+=`<text x="${(X(ws)-hw+6).toFixed(1)}" y="15" font-size="10.5" fill="var(--cyan)">chuni range · ${span(W.f,W.t)}</text>`;
+  s+=`<text x="0" y="42" font-size="11" fill="var(--muted)">Uninstalls/din</text><text x="0" y="56" font-size="10" fill="var(--faint)">sab apps</text>`;
+  s+=`<path d="${pathOf(un.map((v,i)=>i<=ws?v:null),X,Y)}" fill="none" stroke="var(--us-s-out)" stroke-width="1.6" opacity=".45"/><path d="${pathOf(un.map((v,i)=>i>=ws?v:null),X,Y)}" fill="none" stroke="var(--us-s-out)" stroke-width="2.2"/>`;
+  [[100,'📦 Updates'],[138,'🔔 Badlaav shuru']].forEach(([y,l])=>{ s+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="0" y="${y+4}" font-size="11" fill="var(--muted)">${l}</text>`; });
+  const pv=W.t>M.settled?ix(dAdd(M.settled,1))-i0:null; if(pv!=null&&pv<n) s+=`<line x1="${(X(Math.max(0,pv))-hw).toFixed(1)}" x2="${(w-padR).toFixed(1)}" y1="${h-21}" y2="${h-21}" stroke="var(--watch)" stroke-width="2.5"/><text x="${w-padR}" y="${h-25}" text-anchor="end" font-size="10" fill="var(--watch)">⏳ pakka nahi</text>`;
+  const step=Math.max(n<=14?1:(n<=31?3:7),xStep(n,w-padL-padR)); for(let i=n-1;i>=0;i-=step){ s+=`<text x="${X(i)}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`; }
+  Object.keys(ups).forEach(d=>{ const L=ups[d], i=dDiff(f0,d), x=X(i), lv=L.some(z=>z[1][2]==='halt')?'var(--bad)':(L.some(z=>z[1][2]==='win')?'var(--good)':'var(--us-blue-s)');
+    s+=`<g class="us-mk" data-tk="tlu:${d}" data-tl="u:${d}"><line x1="${x}" x2="${x}" y1="${un[i]!=null?Y(un[i]):70}" y2="92" stroke="${lv}" stroke-opacity=".3"/><rect x="${x-7}" y="93" width="14" height="14" rx="3" transform="rotate(45 ${x} 100)" fill="${lv}"/>${L.length>1?`<text x="${x}" y="103.5" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0a1120">${L.length}</text>`:''}</g>`; });
+  Object.keys(als).forEach(d=>{ const L=als[d], i=dDiff(f0,d), x=X(i), worst=L.map(z=>z[0].sev).sort((p,q)=>SORD[p]-SORD[q])[0], col=worst==='bigda'?'var(--bad)':(worst==='dhyan'?'var(--watch)':'var(--good)');
+    s+=`<g class="us-mk" data-tk="tla:${d}" data-tl="a:${d}">${L.some(z=>z[1])?`<text x="${x-12}" y="142" text-anchor="end" font-size="11" fill="var(--faint)">←</text>`:''}<circle cx="${x}" cy="138" r="${L.length>1?9:7}" fill="${col}"/>${L.length>1?`<text x="${x}" y="141.5" text-anchor="middle" font-size="10" font-weight="700" fill="#0a1120">${L.length}</text>`:''}</g>`; });
+  s+='</svg>';
+  const nU=Object.values(ups).reduce((t,L)=>t+L.length,0), nA=Object.values(als).reduce((t,L)=>t+L.length,0);
+  tlHtml.ups=ups; tlHtml.als=als;
+  return `<div class="us-ph"><div><div class="us-eyebrow">Kab kya hua</div><h2>Timeline</h2><div class="us-hint">${span(f0,W.t)} · ${nU} updates · ${nA} khule alerts, badlaav shuru hone ke din pe (← = pehle shuru) · marker = list</div></div></div><div class="us-tlw">${s}</div>`; }
+function renderTl(){ const box=$('us-tl'); if(!box) return; TLW=box.clientWidth||TLW; box.innerHTML=tlHtml(); const tw=box.querySelector('.us-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; }
+TIPS.tlu=d=>{ const L=tlHtml.ups[d]||[]; return `<div class="us-tt">📦 ${fd(d)} · ${L.length} update</div>`+L.map(([a,r])=>`<div class="us-row"><span>${esc(bnm(a))} · ${esc(a.acc)}</span><b>${esc(r[1])}</b></div><div class="us-tsm">${UPDW(r[2])}</div>`).join(''); };
+TIPS.tla=d=>{ const L=tlHtml.als[d]||[]; return `<div class="us-tt">🔔 ${fd(d)} · ${L.length} alert</div>`+L.map(([x,b])=>`<div class="us-row"><span>${esc(bnm(A[x.a]))} · ${esc(A[x.a].acc)}</span><b class="${x.sev==='bigda'?'us-bad':(x.sev==='dhyan'?'us-watch':'us-good')}">${SW[x.sev]}</b></div><div class="us-tsm">${esc(metName(x))}${b?' · shuru '+fd(startedOf(x)):''}</div>`).join(''); };
+
+/* ================= Kya badla? (every engine alert — the owner's timestamp rules on each card) ================= */
+function slope(x){ const v=alertVals(x); if(v.now==null||v.bef==null) return '';
+  const lo=Math.min(v.now,v.bef), hi=Math.max(v.now,v.bef), pad=(hi-lo)*.35+1e-6, Y=lin(lo-pad,hi+pad,46,10), col=x.sev==='bigda'?'var(--bad)':(x.sev==='dhyan'?'var(--watch)':(x.sev==='behtar'?'var(--good)':'var(--ink2)'));
+  return `<svg class="us-slope" viewBox="0 0 108 56" aria-hidden="true"><line x1="22" x2="22" y1="6" y2="50" stroke="var(--line)"/><line x1="86" x2="86" y1="6" y2="50" stroke="var(--line)"/>`
+   +`<line x1="22" y1="${Y(v.bef).toFixed(1)}" x2="86" y2="${Y(v.now).toFixed(1)}" stroke="${col}" stroke-width="2.4" stroke-linecap="round"/><circle cx="22" cy="${Y(v.bef).toFixed(1)}" r="3.5" fill="var(--panel)" stroke="var(--us-ghost)" stroke-width="2"/><circle cx="86" cy="${Y(v.now).toFixed(1)}" r="4" fill="${col}"/>`
+   +`<text x="22" y="${(Y(v.bef)+(v.bef>v.now?-8:15)).toFixed(1)}" text-anchor="middle" font-size="10.5" fill="var(--muted)" font-family="var(--us-num)">${pc(v.bef,v.dp)}</text><text x="86" y="${(Y(v.now)+(v.now>v.bef?-8:15)).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink)" font-family="var(--us-num)">${pc(v.now,v.dp)}</text></svg>`; }
+function bigOf(x){ if(x.ppl==null){ return {n:fR(relp(x.now,x.bef))||'—',u:'',w:x.dir==='up'?'badha':'ghata'}; }
+  const k=x.kind, p=x.ppl; let w;
+  if(k==='wapas') w=p<0?'kam log wapas aaye':'zyada log wapas aaye'; else if(x.m==='returning_dau') w=p<0?'kam purane users':'zyada purane users'; else w=p>0?'log zyada gaye':'log kam gaye';
+  return {n:fS(p),u:'/din',w}; }
+// the grey line (owner's rule, every alert): 🕒 Alert aaya (IST) · Data (+ ⏳ Pakka nahi) · Badlaav shuru (+ its age) · Band hua
+function tsH(x){ const st=startedOf(x), pk=pakkaOf(x);
+  return `<span>🕒 Alert aaya: ${x.at?fist(x.at):(x.opened?fd(x.opened)+' tak ke data pe':'—')}</span><span>Data: ${esc(dataOf(x)||'—')}${x.est?' · ≈ Andaza':''}${pk?' · ⏳ Pakka nahi · '+fd(pk)+' ko pakka':''}</span>`
+    +`<br><span>Badlaav shuru: ${x.cap?'6+ mahine se':(st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—')}${x.rl?' · '+esc(x.rl)+' ke baad':''}</span>${x.closed?`<span>Band hua: ${x.cat?fist(x.cat):fd(x.closed)}</span>`:''}`; }
+function cardH(x){ const a=A[x.a], ag=ageOf(x), b=bigOf(x), v=alertVals(x);
+  const fresh=ag.fresh?' us-new':'';
+  return `<div class="us-ac us-s-${x.sev}" data-app="${a.i}" data-go="${a.i}" data-alk="${x.k}" data-tk="al:${x.k}"><div class="us-l1">${x.closed?chip('behtar'):chip(x.sev)}<span class="us-age${fresh}" title="${esc(ag.tip)}">🔔 ${ag.t}</span>${szH(a)}</div>`
+   +`<div class="us-app">${esc(bnm(a))} <span class="us-acn">· ${esc(a.acc)}</span></div>`
+   +`<div class="us-mid"><div><div class="us-big">${b.n}<small>${b.u}</small></div><div class="us-what">${b.w} · ${esc(metName(x))}${v.now!=null?` (<b>${pc(v.now,v.dp)}</b>, pehle ${pc(v.bef,v.dp)})`:''}${x.usd!=null?` · <b>≈ ${moneyL(Math.abs(x.usd))}/din</b>${x.fam==='cohort'?' (in installs pe)':''}`:''}</div></div>${slope(x)}</div>`
+   +`<div class="us-todo"><b>Kya karo:</b> ${esc(todo(x))}</div>`
+   +`<div class="us-ts">${tsH(x)}</div></div>`; }
+TIPS.al=k=>{ const x=ALERTS[+k], v=alertVals(x); return `<div class="us-tt">${esc(A[x.a].nm)}</div><div>${esc(metName(x))}${v.now!=null?': '+pc(v.bef,v.dp)+' → '+pc(v.now,v.dp):''}</div><div class="us-tsm" style="margin-top:4px">${esc(ageOf(x).tip)} · click = app view</div>`; };
+function sortAl(L){ const SZ={badi:0,madhyam:1,chhoti:2}, u=x=>x.usd!=null?Math.abs(x.usd):-1; return L.slice().sort((p,q)=>(SORD[p.sev]-SORD[q.sev])||(u(q)-u(p))||(SZ[A[p.a].sz]-SZ[A[q.a].sz])||((ageOf(p).fresh?0:1)-(ageOf(q).fresh?0:1))||String(startedOf(q)||'').localeCompare(String(startedOf(p)||''))); }
+function chgHtml(){ const B={'':[],purana:[],achhi:[],theek:[],chhoti:[],info:[]}; sortAl(ALERTS).forEach(x=>{ const f=foldOf(x); (B[f]||B.info).push(x); });
+  const nV=B[''].length, nF=Object.keys(B).filter(k=>k).reduce((t,k)=>t+B[k].length,0), fresh=ALERTS.filter(x=>!x.closed&&ageOf(x).fresh).length;
+  const view=L=>ST.chgView==='table'?alTable(L):`<div class="us-cards">${L.map(cardH).join('')}</div>`;
+  const chsz=new Map(); B.chhoti.forEach(x=>{ const a=A[x.a]; chsz.set(a.i,a.paisa); });
+  const F=[['achhi','🟢 Achhi khabar'],['theek','✅ Theek ho gaya — pichhle 7 din'],['chhoti','Chhoti apps'],['purana','🗄 30 din se purane'],['info','ℹ️ Jaankari']];
+  const folds=F.filter(([k])=>B[k].length).map(([k,l])=>`<details class="us-fold" data-fold="${k}"${ST.folds.has(k)?' open':''}><summary><span class="us-cv">▸</span><span>${l} (${B[k].length})${k==='chhoti'?' · '+money([...chsz.values()].reduce((t,v)=>t+v,0))+'/din':''}</span><span class="us-pv">${new Set(B[k].map(x=>x.a)).size} apps</span></summary>${view(B[k])}</details>`).join('');
+  return `<div class="us-chg-h"><div><div class="us-eyebrow">Naya vs purana</div><h2>Kya badla?</h2><div class="us-hint" style="font-size:12px;color:var(--muted)">${nV} dikhaye · ${nF} neeche band · ${fresh} naye (aaj/kal) · engine ke alerts — range se alag</div></div><div class="us-right" style="margin-left:auto"><div class="us-seg" id="us-chgV"><button data-v="cards" aria-pressed="${ST.chgView==='cards'}">Cards</button><button data-v="table" aria-pressed="${ST.chgView==='table'}">Table</button></div></div></div>`
+    +(nV?view(B['']):'<div class="us-ok">✅ Koi Bigda / Dhyan do badlaav dekhne layak nahi — baaki neeche band</div>')+folds; }
+function alTable(L){ return `<div class="us-panel us-tw" style="border-radius:var(--us-r)"><table class="us-mini"><thead><tr><th class="us-l">Status</th><th class="us-l">Alert</th><th class="us-l">App</th><th class="us-l">Kya badla</th><th>Log/din</th><th>Pehle → Ab</th><th>${symOf()}/din</th><th class="us-l">Kya karo</th><th class="us-l">Badlaav shuru</th><th class="us-l">🕒 Alert aaya</th></tr></thead><tbody>`
+  +L.map(x=>{ const a=A[x.a], b=bigOf(x), v=alertVals(x), st=startedOf(x), ag=ageOf(x); return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="us-l">${x.closed?chip('behtar'):chip(x.sev)}</td><td class="us-l"><span class="us-age${ag.fresh?' us-new':''}" title="${esc(ag.tip)}">${ag.t}</span></td><td class="us-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="us-l" style="font-family:var(--us-font)">${esc(metName(x))}</td><td class="${x.sev==='bigda'||x.sev==='dhyan'?'us-bad':'us-good'}" style="font-weight:600">${b.n}</td><td>${v.now!=null?pc(v.bef,v.dp)+' → '+pc(v.now,v.dp):'—'}</td><td>${x.usd!=null?money(Math.abs(x.usd)):'—'}</td><td class="us-l" style="font-family:var(--us-font);white-space:normal;min-width:180px">${esc(todo(x))}</td><td class="us-l">${x.cap?'6+ mahine se':(st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—')}</td><td class="us-l">${x.at?fist(x.at):'—'}<div class="us-tsm" style="white-space:normal;min-width:160px">Data: ${esc(dataOf(x)||'—')}${pakkaOf(x)?' · ⏳ '+fd(pakkaOf(x))+' ko pakka':''}</div></td></tr>`; }).join('')+'</tbody></table></div>'; }
+
+/* ================= the apps table ================= */
+const TC=[['app','App','us-l'],['st','Haal · 🔔 alert','us-l'],['ins','Installs/din'],['outs','Uninstalls/din'],['d0','Install-day %'],['rate','Roz hataaye %'],['s7','7 din stay %'],['r1','Agle din wapas %'],['lost','Normal se zyada'],['inr','nuksaan/din'],['trend','Trend','us-l']];
+function sval(o,k){ const a=o.a; switch(k){ case 'app': return (a.store+' '+a.acc).toLowerCase(); case 'st': return SORD[o.pill]+(a.ta?SORD[a.ta.sev]/10:.9);
+  case 'ins': return o.insD; case 'outs': return o.outD; case 'd0': return o.d0.p; case 'rate': return o.s.rate; case 's7': return o.s7.p; case 'r1': return o.r1.p; case 'lost': return o.L.tot==null?null:(o.L.tot>0?(o.sig?2e9:1e9):0)+o.L.tot; case 'inr': return o.usd==null?null:(o.usd>0?(o.sig&&!tiny(o.usd)?2e9:1e9):0)+o.usd; case 'trend': return o.hr.s; } return null; }
+function cntCell(v,c,mx,cls,good){ if(v==null) return '<td class="us-faint">—</td>'; const d=c!=null?v-c:null, r=relp(v,c);
+  const dc=d==null||Math.abs(r||0)<.02?'':((d>0)===good?'us-g':'us-b');
+  return `<td><div class="us-cellv"><span class="us-v">${fN(v)}</span>${d!=null?`<span class="us-d ${dc}">${d>0?'▲':(d<0?'▼':'')}${fN(Math.abs(d))} (${fR(r)})</span>`:''}<span class="us-dbar ${cls}" style="width:${Math.max(2,Math.sqrt(Math.max(0,v)/mx)*84).toFixed(0)}px"></span></div></td>`; }
+function pctCell(o,k){ const c=k==='rate'?null:o[k], cc=k==='rate'?null:o[k+'c'], h=k==='rate'?o.hr:o['h'+k];
+  if(k==='rate'){ const s=o.s, p=o.c; if(s.rate==null) return `<td class="us-faint" data-tk="cell:${o.a.i}:rate">—</td>`;
+    const ppl=p.rate!=null&&s.nr?(s.rate-p.rate)/1000*(s.rA/s.nr):null;
+    return `<td data-tk="cell:${o.a.i}:rate"><span class="us-hcell ${hcls(h.s)}"><span class="us-v" style="font-weight:600">${rp(s.rate)}</span>${ppl!=null?`<span class="us-d" style="font-size:11px;color:${ppl>0?'var(--bad)':'var(--good)'}">${ppl>0?'▲':'▼'}${fN(Math.abs(ppl))} log · ${rp(p.rate)}</span>`:''}</span></td>`; }
+  if(c.p==null) return `<td class="us-faint" data-tk="cell:${o.a.i}:${k}">—</td>`;
+  const ppl=cc.p!=null?(c.p-cc.p)*c.n/Math.max(1,c.days):null, bad=ppl!=null&&((ppl>0)===(k==='d0'));
+  return `<td data-tk="cell:${o.a.i}:${k}"><span class="us-hcell ${hcls(h.s)}"><span class="us-v" style="font-weight:600">${pc(c.p,1)}</span>${ppl!=null?`<span class="us-d" style="font-size:11px;color:${Math.abs(ppl)<.5?'var(--muted)':(bad?'var(--bad)':'var(--good)')}">${ppl>0?'▲':'▼'}${fN(Math.abs(ppl))} log · ${pc(cc.p,0)}</span>`:''}</span></td>`; }
+function lostCell(o){ const L=o.L; if(!L||L.tot==null) return `<td class="us-faint" data-tk="inr:${o.a.i}">—</td>`;
+  return `<td data-tk="inr:${o.a.i}"><div class="us-cellv"><span class="us-v ${lossCls(o)}">${fX(L.tot)}</span>${splitN(o)}</div></td>`; }
+function filtered(){ const q=ST.q.trim().toLowerCase();
+  return R.filter(o=>{ const a=o.a; if(ST.fst.size&&!ST.fst.has(o.pill)) return false; if(ST.facc&&a.acc!==ST.facc) return false; if(ST.fsz&&a.sz!==ST.fsz) return false;
+    if(q&&(a.store+' '+a.acc+' '+a.pkg).toLowerCase().indexOf(q)<0) return false; return true; }); }
+function tblParts(){ const L=filtered(), k=ST.sort.k, d=ST.sort.d;
+  L.sort((x,y)=>{ const a=sval(x,k), b=sval(y,k); if(a==null&&b!=null) return 1; if(b==null&&a!=null) return -1; if(a!=null&&b!=null&&a!==b) return (a<b?-1:1)*d; return (y.outD||0)-(x.outD||0); });
+  const q=ST.q.trim().toLowerCase();
+  const NG=NOGA.filter(n=>{ if(ST.fst.size&&!ST.fst.has('lagu')) return false; if(ST.facc&&n.acc!==ST.facc) return false; if(ST.fsz&&n.sz!==ST.fsz) return false; if(q&&(n.nm||'').toLowerCase().indexOf(q)<0) return false; return true; });
+  const mxI=Math.max(1,...R.map(o=>o.insD||0)), mxO=Math.max(1,...R.map(o=>o.outD||0)), mxL=Math.max(1e-9,...R.map(o=>o.usd!=null?Math.abs(o.usdA)+Math.abs(o.usdB):0));
+  const pvk=key=>key==='rate'?R.some(o=>o.s.prov):(['d0','s7','r1'].indexOf(key)>=0?R.some(o=>o[key].prov):false);
+  const head=TC.map(([key,l,al])=>`<th class="${al||''}${k===key?' us-sorted':''}" data-sort="${key}" title="Sort${pvk(key)?' · ⏳ kuch din pakke nahi':''}">${key==='inr'?symOf()+' '+l:l}${pvk(key)?' ⏳':''}${k===key?`<span class="us-ar">${d>0?'▲':'▼'}</span>`:''}</th>`).join('');
+  const body=L.map(o=>{ const a=o.a, op=ST.open.has(a.i), i1=ix(W.t), i0=Math.max(0,Math.min(ix(W.f),i1-27));
+    const tr=spark({vals:a.rate.slice(i0,i1+1),lo:a.lo.slice(i0,i1+1),hi:a.hi.slice(i0,i1+1),w:96,h:30,hpx:30,pre:ix(W.f)-i0,color:o.hr.s>=2?'var(--bad)':(o.hr.s<=-2?'var(--good)':'var(--us-s-rate)'),
+      tip:i=>{ const kk=i0+i, dd=dOf(kk); return `<div class="us-tt">${esc(a.nm)} · ${fd(dd)}${dd>a.settled?' ⏳':''}</div>${trow('Roz hataaye',rp(a.rate[kk]))}${trow('Uninstalls',fN(a.un[kk]))}${a.lo[kk]!=null?trow('Normal',rp(a.lo[kk])+'–'+rp(a.hi[kk])):''}`; }});
+    return `<tr data-app="${a.i}" class="${op?'us-open':''}"><td><div class="us-nmc"><button class="us-xp" data-xp="${a.i}" aria-label="Expand" aria-expanded="${op}">▶</button><div><div data-go="${a.i}" style="cursor:pointer" data-tk="app:${a.i}">${nmH(a)}</div>${a.sz==='badi'?`<div style="margin-top:3px">${szH(a)}</div>`:''}</div></div></td>`
+      +`<td class="us-l"><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">${chip(o.pill)}${alBadge(a)}</div></td>`
+      +cntCell(o.insD,o.insC,mxI,'',true)+cntCell(o.outD,o.outC,mxO,'us-o',false)+pctCell(o,'d0')+pctCell(o,'rate')+pctCell(o,'s7')+pctCell(o,'r1')+lostCell(o)
+      +`<td style="font-weight:600" data-tk="inr:${a.i}"><div class="us-cellv"><span class="${lossCls(o)}">${moneyL(o.usd,true)}</span>${splitH(o,mxL,56)}</div></td><td class="us-l">${tr}</td></tr>`
+      +(op?`<tr class="us-xrow"><td colspan="${TC.length}">${expandH(o)}</td></tr>`:''); }).join('')
+    +NG.map(n=>`<tr><td><div class="us-nmc"><span class="us-xp" style="visibility:hidden">▶</span><div><span class="us-nmt">${esc(String(n.nm||'').replace(/ · [^·]+$/,''))} <span class="us-acn">· ${esc(n.acc)}</span></span></div></div></td><td class="us-l">${chip('lagu')}</td><td class="us-l us-faint" colspan="${TC.length-2}" style="text-align:left;font-family:var(--us-font);white-space:normal">— ${esc(n.why)}</td></tr>`).join('');
+  return {head,body,cnt:L.length+NG.length,tot:A.length+NOGA.length}; }
+function tblHtml(){ const P0=tblParts();
+  const accs=[...new Set(A.map(a=>a.acc).concat(NOGA.map(n=>n.acc)))].sort();
+  const bar=`<div class="us-tbar"><input class="us-srch" id="us-q" type="search" placeholder="App ya account dhoondo…  ( / )" value="${esc(ST.q)}" aria-label="Search apps"><div class="us-fchips" id="us-fst">${Object.keys(SW).map(s=>`<button class="us-f-${s}" data-st="${s}" aria-pressed="${ST.fst.has(s)}">${SW[s]}</button>`).join('')}</div>`
+    +`<select class="us-tsel" id="us-facc" aria-label="Account"><option value="">Sab accounts</option>${accs.map(x=>`<option${ST.facc===x?' selected':''}>${esc(x)}</option>`).join('')}</select>`
+    +`<select class="us-tsel" id="us-fsz" aria-label="Size"><option value="">Sab size</option>${['badi','madhyam','chhoti'].map(x=>`<option value="${x}"${ST.fsz===x?' selected':''}>${x==='badi'?'Badi':(x==='madhyam'?'Madhyam':'Chhoti')}</option>`).join('')}</select><span class="us-tcount">${P0.cnt} / ${P0.tot} apps</span></div>`;
+  return `<div class="us-ph"><div><div class="us-eyebrow">Har app · poori table</div><h2>Saari apps</h2><div class="us-hint">Pill = is range ka haal · 🔔 = engine alert · column = sort · ▶ = mini charts · rang = app ka apna normal · ▲▼ = vs ${span(W.cf,W.ct)}</div></div></div>${bar}<div class="us-tw us-st-tw"><table class="us-st"><thead id="us-thead"><tr>${P0.head}</tr></thead><tbody id="us-tbody">${P0.body}</tbody></table></div>`; }
+function renderTbl(keepFocus){ const el=$('us-tbl'); if(!el) return;
+  if(keepFocus&&$('us-tbody')){ const P0=tblParts(); $('us-thead').innerHTML=`<tr>${P0.head}</tr>`; $('us-tbody').innerHTML=P0.body; const tc=el.querySelector('.us-tcount'); if(tc) tc.textContent=P0.cnt+' / '+P0.tot+' apps';
+    el.querySelectorAll('#us-fst button').forEach(b=>b.setAttribute('aria-pressed',String(ST.fst.has(b.dataset.st)))); return; }
+  el.innerHTML=tblHtml(); }
+function expandH(o){ const a=o.a, i0=Math.max(0,Math.min(ix(W.f),N-28)), i1=ix(W.t), wi=ix(W.f)-i0;
+  const rate=spark({vals:a.rate.slice(i0,i1+1),lo:a.lo.slice(i0,i1+1),hi:a.hi.slice(i0,i1+1),w:320,h:80,color:'var(--us-s-rate)',prov:W.t>a.settled?ix(dAdd(a.settled,1))-i0:null,
+    tip:i=>{ const k=i0+i; return `<div class="us-tt">${fd(dOf(k))}</div>${trow('Roz hataaye',rp(a.rate[k]))}${a.lo[k]!=null?trow('Normal',rp(a.lo[k])+'–'+rp(a.hi[k])):''}`; }});
+  const io=spark({vals:a.nw.slice(i0,i1+1),ghost:null,w:320,h:80,color:'var(--us-s-in)',area:1,tip:i=>{ const k=i0+i; return `<div class="us-tt">${fd(dOf(k))}</div>${trow('Installs',fN(a.nw[k]))}${trow('Uninstalls',fN(a.un[k]))}${trow('Net',fS((a.nw[k]||0)-(a.un[k]||0)))}`; }});
+  const io2=spark({vals:a.un.slice(i0,i1+1),w:320,h:80,color:'var(--us-s-out)',area:1,dot:false});
+  return `<div class="us-xin"><div><h4>Roz hataaye % · normal band${wi>0?' · pichhle 4 hafte':''}</h4>${rate}</div><div><h4><span style="color:var(--us-s-in)">Installs</span> vs <span style="color:var(--us-s-out)">uninstalls</span> /din</h4><div style="position:relative">${io}<div style="position:absolute;inset:0;pointer-events:none">${io2}</div></div></div><div><h4>Install hafte · % abhi bhi app me</h4>${cohMini(a)}</div><button class="us-btn us-go" data-go="${a.i}">Poora app view →</button></div>`; }
+const cohLab=c=>c===0?'Install din':'Din '+c;
+function cohMini(a){ const W2=a.coh.w.slice(-6), cols=[0,1,7,30]; const ci=cols.map(c=>M.cohCols.indexOf(c));
+  return `<div class="us-coh" style="grid-template-columns:70px repeat(${cols.length},1fr);min-width:0">`+'<div></div>'+cols.map(c=>`<div class="us-chh">${cohLab(c)}</div>`).join('')
+    +W2.slice().reverse().map(r=>`<div class="us-rh">${span(r.f,r.t)}</div>`+ci.map(k=>cohCell(a,r,k)).join('')).join('')+'</div>'; }
+
+/* ================= install week × day grid ================= */
+function seqCol(v,lo,hi){ if(v==null) return ''; const t=Math.max(0,Math.min(1,(v-lo)/Math.max(1e-6,hi-lo)));
+  const c0=[19,33,58], c1=[34,211,238], m=c0.map((x,i)=>Math.round(x+(c1[i]-x)*Math.pow(t,1.1)));
+  return `background:rgb(${m.join(',')});color:${t>.62?'#04202a':'var(--ink)'}`; }
+function cohCell(a,r,k){ const v=r.v[k]; if(v==null) return '<div class="us-c us-na">·</div>';
+  const pv=(r.p>>(M.cohCols.length-1-k))&1, ref=a.coh.ref[k]; let st;
+  if(ST.cohMode==='dev'&&ref!=null){ const d=(v-ref)/Math.max(30,1000-ref); const s=Math.abs(d)<.04?0:(Math.abs(d)<.1?1:(Math.abs(d)<.2?2:3)); st=s?`background:var(--us-${d<0?'h':'g'}${s})`:'background:var(--us-h0)'; }
+  else { const col=a.coh.w.map(w=>w.v[k]).filter(x=>x!=null).concat(ref!=null?[ref]:[]); st=seqCol(v,Math.min(...col)-20,Math.max(...col)); }
+  return `<div class="us-c${pv?' us-pv':''}" style="${st}" data-tk="coh:${a.i}:${r.w}:${k}">${pc(v/1000,0)}</div>`; }
+TIPS.coh=(i,w,k)=>{ const a=A[+i], r=a.coh.w.find(x=>x.w===w), N0=M.cohCols[+k], v=r.v[+k], ref=a.coh.ref[+k], pv=(r.p>>(M.cohCols.length-1-k))&1;
+  const stay=Math.round(r.n*v/1000);
+  return `<div class="us-tt">${esc(a.nm)} · installs ${span(r.f,r.t)}</div>${trow(N0===0?'Install ke din ke baad bhi app me':N0+' din baad bhi app me',pc(v/1000,1))}${trow('Installs',fN(r.n))}${trow('Ab bhi app me',fN(stay)+' log')}${ref!=null?trow('Hamesha ka normal',pc(ref/1000,1)):''}${ref!=null?trow('Normal se',fS(Math.round(r.n*(v-ref)/1000))+' log'):''}${pv?'<div class="us-tsm">⏳ pakka nahi — late data aa raha</div>':''}${r.part?'<div class="us-tsm">Adhoora hafta (launch / data ka kinara)</div>':''}`; };
+function cohFull(a){ const C=M.cohCols, rows=a.coh.w.slice().reverse();
+  let h=`<div class="us-coh" style="grid-template-columns:96px repeat(${C.length},minmax(52px,1fr))"><div class="us-chh" style="text-align:left">Install hafta</div>`+C.map(c=>`<div class="us-chh">${cohLab(c)}</div>`).join('');
+  h+=`<div class="us-rh">Hamesha ka normal<small>saare installs</small></div>`+C.map((c,k)=>a.coh.ref[k]==null?'<div class="us-c us-na">·</div>':`<div class="us-c us-ref">${pc(a.coh.ref[k]/1000,0)}</div>`).join('');
+  rows.forEach(r=>{ h+=`<div class="us-rh">${span(r.f,r.t)}<small>${fN(r.n)} installs</small></div>`+C.map((c,k)=>cohCell(a,r,k)).join(''); });
+  return h+'</div>'; }
+
+/* ================= drawer (app view) ================= */
+const chartW=()=>{ const d=$('us-drawer'); return Math.round(Math.min(940,Math.max(300,((d&&d.clientWidth)||innerWidth)-(innerWidth<=640?52:60)))); };
+function bigChart(a){ const i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.f),i1-27)), n=i1-i0+1, w=chartW(), h=innerWidth<=640?200:230, pl=46, pr=14, pt=16, pb=26;
+  const rate=a.rate.slice(i0,i1+1), lo=a.lo.slice(i0,i1+1), hi=a.hi.slice(i0,i1+1), md=a.md.slice(i0,i1+1);
+  const cOff=dDiff(W.cf,W.f), gh=[]; for(let i=i0;i<=i1;i++){ const j=i-cOff; gh.push(j>=0&&j<N?a.rate[j]:null); }
+  const core=rate.concat(gh,md).filter(v=>v!=null); if(!core.length||n<1) return '<div class="us-chart us-faint" style="padding:20px">Roz ka rate abhi nahi (28 din ka data chahiye)</div>';
+  const all=core.concat(lo).filter(v=>v!=null); let mn=Math.min(...all)*.9, mx=Math.max(...core)*1.25; if(mx<=mn) mx=mn+1; const cut=hi.some(v=>v!=null&&v>mx);
+  for(let i=0;i<hi.length;i++){ if(hi[i]!=null&&hi[i]>mx) hi[i]=mx; } const X=lin(0,Math.max(1,n-1),pl,w-pr), Y=lin(mn,mx,h-pb,pt);
+  let s=`<svg viewBox="0 0 ${w} ${h}" id="us-bigc">`;
+  const ws=ix(W.f)-i0; if(ws>0) s+=`<rect x="${X(ws)-3}" y="${pt-6}" width="${w-pr-X(ws)+3}" height="${h-pb-pt+6}" fill="rgba(34,211,238,.04)" stroke="rgba(34,211,238,.18)" stroke-dasharray="3 3"/><text x="${X(ws)+5}" y="${pt+16}" font-size="10.5" fill="var(--cyan)">chuni range</text>`;
+  const pv=W.t>a.settled?ix(dAdd(a.settled,1))-i0:null; if(pv!=null&&pv<n) s+=`<rect x="${X(pv)-((X(1)-X(0))/2)}" y="${pt-6}" width="${w-pr-X(pv)+(X(1)-X(0))/2}" height="${h-pb-pt+6}" fill="url(#us-hatch)"/><text x="${w-pr-2}" y="${h-pb-6}" text-anchor="end" font-size="10.5" fill="var(--watch)">⏳ pakka nahi</text>`;
+  for(let k=0;k<=4;k++){ const v=mn+(mx-mn)*k/4; s+=`<line x1="${pl}" x2="${w-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-opacity=".6"/><text x="${pl-6}" y="${Y(v)+3.5}" text-anchor="end" font-size="10.5" fill="var(--faint)">${rp(v)}</text>`; }
+  const step=xStep(n,w-pl-pr); for(let i=n-1;i>=0;i-=step) s+=`<text x="${X(i)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`;
+  s+=`<path d="${areaOf(lo,hi,X,Y)}" fill="var(--us-band)"/><path d="${pathOf(md,X,Y)}" fill="none" stroke="var(--us-blue-s)" stroke-opacity=".45" stroke-dasharray="2 4"/>`;
+  s+=`<path d="${pathOf(gh,X,Y)}" fill="none" stroke="var(--us-ghost)" stroke-width="1.4" stroke-dasharray="4 4"/>`;
+  s+=`<path d="${pathOf(rate,X,Y)}" fill="none" stroke="var(--us-s-rate)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  rate.forEach((v,i)=>{ if(v!=null&&hi[i]!=null&&(v>hi[i]||v<lo[i])) s+=`<circle cx="${X(i)}" cy="${Y(v)}" r="3.5" fill="${v>hi[i]?'var(--bad)':'var(--good)'}"/>`; });
+  a.rel.forEach(r=>{ const i=ix(r[0])-i0; if(i<0||i>=n) return; const col=r[2]==='halt'?'var(--bad)':(r[2]==='win'?'var(--good)':'var(--us-blue-s)');
+    s+=`<g data-tk="upd:${a.i}:${r[0]}"><line x1="${X(i)}" x2="${X(i)}" y1="${pt}" y2="${h-pb}" stroke="${col}" stroke-opacity=".55" stroke-dasharray="1 3"/><text x="${X(i)}" y="${pt-2}" text-anchor="middle" font-size="12">📦</text></g>`; });
+  a.al.forEach(x=>{ if(x.closed) return; const d=startedOf(x); if(!d) return; const i=ix(d)-i0; if(i<0||i>=n) return; const col=x.sev==='bigda'?'var(--bad)':(x.sev==='dhyan'?'var(--watch)':'var(--good)');
+    s+=`<circle cx="${X(i)}" cy="${h-pb}" r="5" fill="${col}" stroke="var(--bg2)" stroke-width="2" data-tk="al:${x.k}"/>`; });
+  s+=`<line id="us-bigx" x1="0" x2="0" y1="${pt}" y2="${h-pb}" stroke="var(--ink2)" opacity="0"/><rect x="${pl}" y="${pt}" width="${w-pl-pr}" height="${h-pb-pt}" fill="transparent" id="us-bigr"/></svg>`;
+  bigChart.st={a,i0,n,X,w,gh,cOff};
+  return `<div class="us-chart">${s}</div><div class="us-clg"><span class="us-k"><i style="background:var(--us-s-rate)"></i>Roz hataaye %</span><span class="us-k"><i style="background:var(--us-band);height:9px"></i>Normal range</span><span class="us-k"><i style="background:var(--us-ghost)"></i>Pehle (${span(W.cf,W.ct)}, same jagah)</span><span class="us-k">📦 Update</span><span class="us-k"><i style="background:var(--bad);width:8px;height:8px;border-radius:50%"></i>Alert shuru</span><span class="us-k">● range se bahar</span>${cut?'<span class="us-k us-faint">normal band upar se kata (chart padhne layak rahe)</span>':''}</div>`; }
+function ioChart(a){ const i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.f),i1-27)), n=i1-i0+1, w=chartW(), h=170, pl=46, pr=14, pt=10, pb=24;
+  const I=a.nw.slice(i0,i1+1), O=a.un.slice(i0,i1+1), mx=Math.max(1,...I.filter(v=>v!=null),...O.filter(v=>v!=null));
+  const X=lin(-.5,n-.5,pl,w-pr), mid=pt+(h-pt-pb)/2, Y=v=>(v/mx)*((h-pt-pb)/2-2), bw=Math.max(1.5,(w-pl-pr)/Math.max(1,n)*.62);
+  let s=`<svg viewBox="0 0 ${w} ${h}"><line x1="${pl}" x2="${w-pr}" y1="${mid}" y2="${mid}" stroke="var(--line2)"/>`;
+  s+=`<text x="${pl-6}" y="${pt+8}" text-anchor="end" font-size="10.5" fill="var(--faint)">${fN(mx)}</text><text x="${pl-6}" y="${mid+3.5}" text-anchor="end" font-size="10.5" fill="var(--faint)">0</text><text x="${pl-6}" y="${h-pb}" text-anchor="end" font-size="10.5" fill="var(--faint)">${fN(mx)}</text>`;
+  I.forEach((v,i)=>{ const d=dOf(i0+i), op=d>a.settled?.55:1; if(v!=null) s+=`<rect x="${X(i)-bw/2}" y="${mid-Y(v)}" width="${bw}" height="${Y(v)}" rx="1.5" fill="var(--us-s-in)" opacity="${op}" data-tk="io:${a.i}:${i0+i}"/>`;
+    if(O[i]!=null) s+=`<rect x="${X(i)-bw/2}" y="${mid+1}" width="${bw}" height="${Y(O[i])}" rx="1.5" fill="var(--us-s-out)" opacity="${op}" data-tk="io:${a.i}:${i0+i}"/>`; });
+  const step=xStep(n,w-pl-pr); for(let i=n-1;i>=0;i-=step) s+=`<text x="${X(i)}" y="${h-6}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`;
+  return `<div class="us-chart">${s}</svg></div><div class="us-clg"><span class="us-k"><i style="background:var(--us-s-in)"></i>Installs (upar)</span><span class="us-k"><i style="background:var(--us-s-out)"></i>Uninstalls (neeche)</span><span class="us-k us-faint">halki = ⏳ pakka nahi</span></div>`; }
+TIPS.io=(i,k)=>{ const a=A[+i], d=dOf(+k); return `<div class="us-tt">${esc(a.nm)} · ${fd(d)}${d>a.settled?' ⏳':''}</div>${trow('Installs',fN(a.nw[k]))}${trow('Uninstalls',fN(a.un[k]))}${trow('Net',fS((a.nw[k]||0)-(a.un[k]||0)))}${trow('Install ke din hi hataaye',a.g0[k]!=null&&a.nw[k]?pc(a.g0[k]/a.nw[k],1):'—')}`; };
+const UPDW=lv=>({halt:'Bigda — rollout roko, hotfix bhejo',hold:'Dhyan do — ruk ke dekho',continue:'Normal — koi nuksaan nahi dikha',win:'Behtar — achha asar'})[lv]||'Abhi jaldi — asar napa ja raha';
+TIPS.upd=(i,d)=>{ const a=A[+i]; return a.rel.filter(r=>r[0]===d).map(r=>`<div class="us-tt">📦 ${esc(r[1])} · ${fd(d)}</div><div>${UPDW(r[2])}${r[3]||!r[2]?'':' (pakka nahi)'}</div>`).join(''); };
+function lock(on){ try{ document.body.classList.toggle('us-lock',!!on); }catch(e){} }
+function openDrawer(i){ layer(); i=+i; if(!A[i]) return; ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('us-drawer'); d.classList.add('us-on'); d.setAttribute('aria-hidden','false'); $('us-scrim').classList.add('us-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.us-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
+function closeDrawer(){ ST.drawer=-1; ST.did=null; const d=$('us-drawer'); if(d){ d.classList.remove('us-on'); d.setAttribute('aria-hidden','true'); } const sc=$('us-scrim'); if(sc) sc.classList.remove('us-on'); lock(false); hideTip(); }
+function navOrder(){ return R.slice().sort((x,y)=>lossCmp(x,y)).map(o=>o.a.i); }
+function drawerHtml(){ const o=R[ST.drawer], a=o.a, s=o.s, c=o.c, ord=navOrder(), pos=ord.indexOf(a.i);
+  const k=(lab,hint,v,f,unit,dl,sub)=>`<div class="us-kpi"><div class="us-kl"><span>${lab}</span><span class="us-kh">${hint}</span></div><div class="us-kv"><span class="us-num">${v==null?'—':FMT[f](v)}</span>${unit?`<span class="us-ku">${unit}</span>`:''}</div><div class="us-kd ${dl.cls||''}">${dl.h||dl}</div><div class="us-ks">${sub||''}</div></div>`;
+  const pk=(c0,cc,good)=>{ if(c0.p==null) return {h:'<span class="us-vs">—</span>'}; if(cc.p==null) return {h:'<span class="us-vs">pehle ka data nahi</span>'}; const ppl=(c0.p-cc.p)*c0.n/Math.max(1,c0.days), up=ppl>0, cls=Math.abs(ppl)<.5?'us-flat':(up===good?(up?'us-up-good':'us-dn-good'):(up?'us-up-bad':'us-dn-bad'));
+    return {cls,h:`${up?'▲':'▼'} ${fS(ppl)} log/din (${pc(c0.p,1)}, pehle ${pc(cc.p,1)})`}; };
+  const dR=(s.rate!=null&&c.rate!=null&&s.nr)?(()=>{ const ppl=(s.rate-c.rate)/1000*(s.rA/s.nr); return {cls:Math.abs(ppl)<.5?'us-flat':(ppl>0?'us-up-bad':'us-dn-good'),h:`${ppl>0?'▲':'▼'} ${fS(ppl)} log/din (${rp(s.rate)}, pehle ${rp(c.rate)})`}; })():{h:'<span class="us-vs">—</span>'};
+  const kp=k('Installs','roz ka avg',o.insD,'n','/din',deltaH(o.insD,o.insC,true,fS,'/din'))+k('Uninstalls','roz ka avg',o.outD,'n','/din',deltaH(o.outD,o.outC,false,fS,'/din'))
+    +k('Roz hataaye','% active users',s.rate,'r','',dR,s.med!=null?'normal '+rp(s.lo)+'–'+rp(s.hi):'normal range abhi nahi')
+    +`<div class="us-kpi" data-tk="inr:${a.i}"><div class="us-kl"><span>Nuksaan</span><span class="us-kh">normal se zyada gaye</span></div><div class="us-kv"><span class="us-num ${lossCls(o)}">${o.L.tot==null?'—':fX(o.L.tot)}</span><span class="us-ku">log/din</span></div><div class="us-kd ${lossCls(o)}">${o.L.tot==null?'<span class="us-vs">'+esc(o.L.why||'')+'</span>':'≈ '+moneyL(o.usd,true)+'/din'}</div><div class="us-ks">${o.L.tot==null?'':'naye <b>'+fX(o.L.a)+'</b> · purane <b>'+(o.L.part?'—':fX(o.L.b))+'</b>'+(o.sig?'':' · aam utaar-chadhaav')}</div></div>`
+    +k('Install day','hataaye',o.d0.p,'p','',pk(o.d0,o.d0c,false),o.d0.n?fN(o.d0.n)+' installs'+(o.d0.prov?' · ⏳':''):'')
+    +k('7 din baad','bhi app me',o.s7.p,'p','',pk(o.s7,o.s7c,true),o.s7.n?'installs '+span(o.s7.f,o.s7.t)+(o.s7.prov?' · ⏳':''):'')
+    +k('Agle din','wapas aaye',o.r1.p,'p','',pk(o.r1,o.r1c,true),o.r1.n?'installs '+span(o.r1.f,o.r1.t)+(o.r1.prov?' · ⏳':''):'')
+    +k('Size','kamai + kharcha',a.paisa,'m','/din','<span class="us-vs">'+(a.sz==='badi'?'Badi app':(a.sz==='madhyam'?'Madhyam app':'Chhoti app'))+'</span>','');
+  const days=[]; for(let i=ix(W.t);i>=Math.max(ix(W.f),a.fi);i--) days.push(i);
+  const dt=`<table class="us-mini"><thead><tr><th class="us-l">Din</th><th>Installs</th><th>Uninstalls</th><th>Net</th><th>Roz hataaye</th><th>Install day %</th><th class="us-l">Events</th></tr></thead><tbody>`+days.map(i=>{ const d=dOf(i), r=a.rate[i], hs=(r!=null&&a.hi[i]!=null)?(r>a.hi[i]?'us-h3':(r<a.lo[i]?'us-h-2':'')):'';
+    const ev=a.rel.filter(x=>x[0]===d).map(x=>'📦 '+esc(x[1])).concat(a.al.filter(x=>!x.closed&&startedOf(x)===d).map(x=>'🔔 '+SW[x.sev])).join(' · ');
+    return `<tr class="${d>a.settled?'us-prow':''}"><td class="us-l">${fd(d)}${d>a.settled?' ⏳':''}</td><td>${fN(a.nw[i])}</td><td>${fN(a.un[i])}</td><td>${fS((a.nw[i]||0)-(a.un[i]||0))}</td><td><span class="us-hcell ${hs}">${rp(r)}</span></td><td>${a.g0[i]!=null&&a.nw[i]?pc(a.g0[i]/a.nw[i],1):'—'}</td><td class="us-l" style="font-family:var(--us-font);font-size:12px">${ev}</td></tr>`; }).join('')+'</tbody></table>';
+  const als=sortAl(a.al);
+  const ups=a.rel.slice().reverse();
+  return `<div class="us-dh"><div class="us-t"><div class="us-eyebrow">App view · ${pos+1} / ${ord.length} (nuksaan ke kram me) · ${span(W.f,W.t)}</div><h3>${esc(bnm(a))} <span class="us-acn">· ${esc(a.acc)}</span></h3><div class="us-l2">${chip(o.pill)}${alBadge(a)}${szH(a)}<span class="us-pkg">${esc(a.pkg)}</span><span>Data ${fd(M.E)} tak${W.t>a.settled?' · ⏳ '+fd(dAdd(a.settled,1))+'+ pakka nahi':''}</span></div>`
+    +`<div class="us-full-r"><button class="us-btn us-full" id="us-full" data-full="${esc(a.id)}" title="Update impact card, kisi bhi date se tulna, install-week table — sab is app ke page pe">Poora app page →</button></div></div>`
+    +`<button class="us-icb" id="us-dPrev" aria-label="Pichhli app" title="Pichhli app (←)">‹</button><button class="us-icb" id="us-dNext" aria-label="Agli app" title="Agli app (→)">›</button><button class="us-icb" id="us-dClose" aria-label="Band karo" title="Band karo (Esc)">✕</button></div>`
+    +`<div class="us-db"><div class="us-dk">${kp}</div>`
+    +`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Roz ka uninstall rate</div><h2 style="font-size:15px">Roz hataaye % · normal band ke saath</h2></div></div>${bigChart(a)}</div>`
+    +`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Aaye vs gaye</div><h2 style="font-size:15px">Installs vs uninstalls</h2></div></div>${ioChart(a)}</div>`
+    +`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Install hafta × din</div><h2 style="font-size:15px">Kitne abhi bhi app me</h2><div class="us-hint">Har row = ek hafte ke installs · cell = us din ke baad kitne % ne app rakha</div></div><div class="us-right"><div class="us-seg" id="us-cohM"><button data-m="abs" aria-pressed="${ST.cohMode==='abs'}">% bache</button><button data-m="dev" aria-pressed="${ST.cohMode==='dev'}">Normal se farak</button></div></div></div><div class="us-cohw">${cohFull(a)}</div><div class="us-clg">${ST.cohMode==='abs'?'<span class="us-k"><i style="background:linear-gradient(90deg,#13213a,#22d3ee);width:40px;height:9px"></i>kam → zyada bache</span>':'<span class="us-k"><i style="background:var(--us-h2);height:9px"></i>normal se kam bache</span><span class="us-k"><i style="background:var(--us-g2);height:9px"></i>normal se zyada</span>'}<span class="us-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ pakka nahi</span><span class="us-k">· = abhi us din tak nahi pahunche</span></div></div>`
+    +(als.length?`<div><div class="us-chg-h"><div><div class="us-eyebrow">Is app ke alerts</div><h2 style="font-size:15px">Kya badla?</h2></div></div><div class="us-cards">${als.map(cardH).join('')}</div></div>`:'<div class="us-ok">✅ Is app pe koi khula alert nahi</div>')
+    +(ups.length?`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · ${fd(M.S)} se</div><h2 style="font-size:15px">Updates ka asar</h2><div class="us-hint">Poora Update impact card (kisi bhi date se tulna) app page pe</div></div></div><div class="us-upd">${ups.map(r=>`<div class="us-u"><span class="us-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="us-faint">${r[2]==='halt'?'Rollout roko, hotfix bhejo':(r[2]==='win'?'Achha asar':(r[2]==='continue'?'Koi nuksaan nahi dikha':(r[2]==='hold'?'Ruk ke dekho':'Asar abhi napa ja raha')))}</span></div>`).join('')}</div></div>`:'')
+    +`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Roz ka hisaab</div><h2 style="font-size:15px">Din-ba-din · ${span(W.f,W.t)}</h2></div></div><div class="us-tw" style="max-height:360px">${dt}</div></div>`
+    +`<div style="display:flex;justify-content:center;padding:6px 0 2px"><button class="us-btn us-full" data-full="${esc(a.id)}">Poora app page →</button></div></div>`; }
+function renderDrawer(keep){ if(ST.drawer<0) return; const d=$('us-drawer'); if(!d) return; const y=d.scrollTop;
+  d.innerHTML=drawerHtml(); if(keep) d.scrollTop=keep===true?y:keep;
+  const bc=$('us-bigc'); if(bc){ const S=bigChart.st; const rr=bc.querySelector('#us-bigr'), xl=bc.querySelector('#us-bigx');
+    rr.addEventListener('mousemove',e=>{ const r=bc.getBoundingClientRect(), fx=(e.clientX-r.left)/r.width*S.w; let best=0,bd=1e9; for(let i=0;i<S.n;i++){ const dd=Math.abs(S.X(i)-fx); if(dd<bd){ bd=dd; best=i; } }
+      xl.setAttribute('x1',S.X(best)); xl.setAttribute('x2',S.X(best)); xl.setAttribute('opacity','.6'); const k=S.i0+best, dd=dOf(k), aa=S.a;
+      showTip(`<div class="us-tt">${fd(dd)}${dd>aa.settled?' ⏳':''}</div>${trow('Roz hataaye',rp(aa.rate[k]))}${trow('Uninstalls',fN(aa.un[k]))}${trow('Installs',fN(aa.nw[k]))}${aa.lo[k]!=null?trow('Normal',rp(aa.lo[k])+'–'+rp(aa.hi[k])):''}${S.gh[best]!=null?trow('Pehle ('+fd(dAdd(dd,-S.cOff))+')',rp(S.gh[best])):''}${aa.rel.filter(r=>r[0]===dd).map(r=>'<div class="us-tsm">📦 '+esc(r[1])+'</div>').join('')}`,e.clientX,e.clientY); });
+    rr.addEventListener('mouseleave',()=>{ xl.setAttribute('opacity','0'); hideTip(); }); } }
+// "Poora app page →": the app's existing Uninstall page (Update impact card, any-date compare, install-week table …)
+function fullPage(id){ closeDrawer(); try{ uniOpen(id); }catch(e){} }
+
+/* ================= footer ================= */
+function footHtml(){ return `<summary>Ye number kaise bane? (chhoti si list)</summary><ul>
+<li><b>Roz ka avg</b> = range ke kul ÷ din. Rate se alag-alag lambai ki range bhi barabar tulti hai.</li>
+<li><b>Roz hataaye %</b> = uninstalls ÷ pichhle 28 din ke active users (dashboard ka hi tareeka) · <b>normal</b> = engine ki normal range.</li>
+<li><b>Nuksaan</b> (ek hi tareeka, poore page pe) = range ke dino me asli uninstalls − normal. Do hisse, alag-alag gine (double count nahi): <b>naye users</b> = install ke 0–7 din me hataane wale (normal = app ke pichhle 5 hafte ka hisaab × asli installs); <b>purane users</b> = baaki (normal = pichhle 4 hafte ka rate × active users).</li>
+<li><b>Pakka</b> tabhi jab farak pichhle 4 hafte ke roz ke utaar-chadhaav se 2 guna bada ho; warna grey. ₹ &lt; 10/din = ~₹0, log &lt; 3/din = ~0.</li>
+<li><b>${symOf()} nuksaan/din</b> ≈ (normal se zyada gaye/din) × (1 user ki roz ki AdMob kamai, isi range ki) — andaza: har din roz ki kamai itni aur kam hoti ja rahi.</li>
+<li><b>Pill</b> (Bigda / Dhyan do / Behtar / Normal / Abhi jaldi / Lagu nahi) = chuni range ka haal, isi nuksaan + cell rangon se. <b>🔔</b> = engine ka alert (range se alag), click = uska card.</li>
+<li><b>Install day %</b> = range ke installs me se install ke din hi hataaye · <b>7 din stay</b> = jinka 7wa din is range me aaya, unme se kitne app me rahe · <b>Agle din wapas</b> = jinka agla din is range me aaya, unme se kitne ne app khola.</li>
+<li><b>Rang</b> = app ka apna normal (install hafton ke numbers: pichhle 28 din ke installs; roz ka rate: engine ki range). Farak tabhi rangeen jab pakka ho (z ≥ 2, kam se kam 60 installs).</li>
+<li><b>⏳ Pakka nahi</b> = Firebase late data bhejta hai — ${fd(dAdd(M.settled,1))} ke baad ke din badal sakte hain. Status words aur alerts dashboard engine ke hain.</li>
+<li>Range / compare upar ke chunav se (Active users aur Install value ke saath ek hi) · ₹ / $ poore dashboard ka · Data ${fd(M.S)} – ${fd(M.E)} (${M.n} din) · App ke naam hamesha account ke saath · ${NOGA.length} app ka GA4 nahi (Lagu nahi).</li></ul>`; }
+
+/* ================= render ================= */
+// the whole Studio as HTML (the dashboard's uniScreen puts it in the Uninstall screen); the parts that need the page
+// (widths, the open drawer, count-up) follow in afterMount
+function screen(note){ prep(); spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
+  setTimeout(afterMount,0);
+  return `<div id="us-root"><div class="us-top" id="us-top">${topHtml()}</div>`
+    +`<div class="us-wrap" id="us-main">${note||''}<section class="us-story" id="us-story" aria-label="Sabse zaroori baatein">${storyHtml()}</section>`
+    +`<section aria-label="Portfolio KPIs"><div class="us-kpis" id="us-kpis">${kpisHtml()}</div><details class="us-ledger" id="us-ledger" style="margin-top:10px"${ST.ledger?' open':''}><summary>📋 Roz ka hisaab — table</summary><div class="us-panel us-tw" id="us-ledgerT" style="border-radius:var(--us-r);max-height:380px">${ledgerHtml()}</div></details></section>`
+    +`<section class="us-duo"><article class="us-panel" id="us-map">${mapHtml()}</article><article class="us-panel" id="us-src">${srcHtml()}</article></section>`
+    +`<section class="us-panel us-tl" id="us-tl">${tlHtml()}</section><section id="us-chg">${chgHtml()}</section><section class="us-panel" id="us-tbl">${tblHtml()}</section>`
+    +`<details class="us-foot" id="us-foot">${footHtml()}</details></div></div>`; }
+let stickT=0;
+function stick(){ const r=$('us-root'); if(!r) return; try{ const tb=document.querySelector('.topbar'); const cs=tb?getComputedStyle(tb):null;
+  r.style.setProperty('--us-stick',(tb&&cs&&cs.position==='sticky'?tb.offsetHeight:0)+'px'); }catch(e){} }
+function afterMount(){ const root=$('us-root'); if(!root) return; layer(); stick();
+  const box=$('us-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.us-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; }
+  countUp();
+  if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('us-drawer'); if(d&&!d.classList.contains('us-on')){ d.classList.add('us-on'); $('us-scrim').classList.add('us-on'); lock(true); } } } }
+// a Studio-only change (range, compare, a key): every section again, in place — the header keeps its focus
+let firstAll=true;
+function renderAll(){ const root=$('us-root'); if(!root){ uniRerender(); return; }
+  const m=$('us-main'); if(m&&!RM){ m.classList.remove('us-fresh'); void m.offsetWidth; m.classList.add('us-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('us-fresh'),700); }
+  spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop();
+  const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
+  set('us-story',storyHtml()); set('us-kpis',kpisHtml()); set('us-ledgerT',ledgerHtml()); set('us-map',mapHtml()); set('us-src',srcHtml());
+  renderTl(); set('us-chg',chgHtml()); renderTbl(false); set('us-foot',footHtml()); if(ST.drawer>=0) renderDrawer(true); countUp(); }
+// the shared choice changed here: the other tabs that read it (Active users, Install value) follow, after this paints
+function shared(){ kwSave(); renderAll(); setTimeout(()=>{ try{ actRerender(); }catch(e){} try{ valRerender(); }catch(e){} },30); }
+function setRange(r){ if(r==='c'){ if(!KWCUSTOM.from||!KWCUSTOM.to) KWCUSTOM={from:W.f,to:W.t}; KWIN='custom'; } else KWIN=String(r); KWERR=''; shared(); }
+function setCmp(v){ if(v==='c'){ if(!KCMPCUSTOM.from||!KCMPCUSTOM.to) KCMPCUSTOM={from:W.cf,to:W.ct}; KCMP='custom'; } else KCMP=(v==='month'?'month':'prev'); KCMPERR=''; shared(); }
+function setDate(id,v){ if(!/^\d{4}-\d\d-\d\d$/.test(v)) return;
+  if(id==='us-cf1'||id==='us-ct1'){ let f=id==='us-cf1'?v:(KWCUSTOM.from||W.f), t=id==='us-ct1'?v:(KWCUSTOM.to||W.t); if(f>t){ const x=f; f=t; t=x; } KWCUSTOM={from:f,to:t}; KWIN='custom'; KWERR=''; }
+  else { let f=id==='us-cf2'?v:(KCMPCUSTOM.from||W.cf), t=id==='us-ct2'?v:(KCMPCUSTOM.to||W.ct); if(f>t){ const x=f; f=t; t=x; } KCMPCUSTOM={from:f,to:t}; KCMP='custom'; KCMPERR=''; }
+  shared(); }
+function setCur(c){ if(c===curView()) return; const y=window.scrollY||0; try{ toggleCur(); }catch(e){} try{ if(curView()!==c) toggleCur(); }catch(e){} window.scrollTo(0,y); }
+
+/* ================= events (wired once, every handler scoped to the Studio) ================= */
+let WIRED=false, hlApp=null;
+const shownNow=()=>{ const r=$('us-root'); return !!(r&&document.body.getAttribute('data-screen')==='uninstall'&&r.offsetParent!==null); };
+function wire(){ if(WIRED) return; WIRED=true;
+  document.addEventListener('mousemove',e=>{ if(tipPinned) return; const t=e.target;
+    if(!inStudio(t)){ const tipEl=$('us-tip'); if(tipEl&&tipEl.classList.contains('us-on')) hideTip(); return; }
+    const k0=t.closest('[data-tk]');
+    if(k0){ const [k,...args]=k0.getAttribute('data-tk').split(':'); const h=TIPS[k]&&TIPS[k](...args); if(h){ showTip(h,e.clientX,e.clientY); return; } }
+    const sv=t.closest('svg.us-spk'); if(sv&&SPK[sv.id]){ spkHover(sv,e); return; }
+    hideTip(); roots().forEach(r=>r.querySelectorAll('svg.us-spk .us-xh[opacity="1"]').forEach(l=>l.setAttribute('opacity','0'))); });
+  document.addEventListener('click',e=>{ if(tipPinned&&!(e.target.closest&&e.target.closest('#us-tip'))) hideTip(); },true);
+  document.addEventListener('touchstart',e=>{ const t=e.target; if(!inStudio(t)) return; const k0=t.closest('[data-tk]'); if(!k0) return;
+    const [k,...args]=k0.getAttribute('data-tk').split(':'); const h=TIPS[k]&&TIPS[k](...args); const p=e.touches[0]; if(h) showTip(h,p.clientX,p.clientY,true); },{passive:true});
+  document.addEventListener('mouseover',e=>{ const t=e.target; if(!inStudio(t)&&hlApp==null) return; const a0=inStudio(t)?t.closest('[data-app]'):null; const id=a0?a0.getAttribute('data-app'):null;
+    if(id===hlApp) return; hlApp=id;
+    roots().forEach(r=>{ r.querySelectorAll('[data-app].us-hl').forEach(el=>el.classList.remove('us-hl'));
+      if(id!=null) r.querySelectorAll('[data-app="'+id+'"]').forEach(el=>el.classList.add('us-hl')); }); });
+  document.addEventListener('toggle',e=>{ const t=e.target; if(!inStudio(t)) return;
+    if(t.id==='us-ledger') ST.ledger=t.open; else if(t.dataset&&t.dataset.fold){ t.open?ST.folds.add(t.dataset.fold):ST.folds.delete(t.dataset.fold); } },true);
+  document.addEventListener('click',onClick);
+  document.addEventListener('input',e=>{ if(e.target.id==='us-q'){ ST.q=e.target.value; renderTbl(true); } });
+  document.addEventListener('change',e=>{ const id=e.target.id; if(!inStudio(e.target)) return;
+    if(id==='us-facc'){ ST.facc=e.target.value; renderTbl(true); } else if(id==='us-fsz'){ ST.fsz=e.target.value; renderTbl(true); }
+    else if(id==='us-cmp') setCmp(e.target.value); else if(/^us-c[ft][12]$/.test(id)) setDate(id,e.target.value); });
+  document.addEventListener('keydown',e=>{ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.tagName==='INPUT'||tg.tagName==='SELECT'||tg.tagName==='TEXTAREA'||tg.isContentEditable));
+    if(e.key==='Escape'){ if(ST.drawer>=0){ closeDrawer(); e.preventDefault(); } hideTip(); return; }
+    if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
+    if(ST.drawer>=0&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navDrawer(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
+    const m={'7':'7','1':'14','3':'30','6':'60'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
+    if(e.key==='/'){ const q=$('us-q'); if(q){ q.focus(); q.scrollIntoView({block:'center',behavior:RM?'auto':'smooth'}); e.preventDefault(); } } });
+  let rzT=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(!$('us-root')) return; stick(); if(Math.abs(innerWidth-lastW)<40) return; lastW=innerWidth; renderTl(); if(ST.drawer>=0) renderDrawer(true); },180); }); }
+function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+dir+ord.length)%ord.length; ST.drawer=ord[q]; ST.did=A[ST.drawer].id; renderDrawer(); const d=$('us-drawer'); if(d) d.scrollTop=0; }
+function onClick(e){ const t=e.target; if(!inStudio(t)) return;
+  const fp=t.closest('[data-full]'); if(fp){ e.preventDefault(); fullPage(fp.getAttribute('data-full')); return; }
+  const ab=t.closest('[data-al]'); if(ab&&ab.dataset.al!==''){ e.stopPropagation(); hideTip(); const k=ab.dataset.al, inD=!!ab.closest('#us-drawer');
+    if(!inD&&ST.drawer>=0) closeDrawer();
+    const root=inD?$('us-drawer'):$('us-chg'); let card=root&&root.querySelector('[data-alk="'+k+'"]');
+    if(!card&&inD){ closeDrawer(); card=document.querySelector('#us-chg [data-alk="'+k+'"]'); }
+    if(card){ const fold=card.closest('details'); if(fold) fold.open=true; card.scrollIntoView({behavior:RM?'auto':'smooth',block:'center'}); card.classList.remove('us-flash'); void card.offsetWidth; card.classList.add('us-flash'); }
+    return; }
+  const rb=t.closest('#us-rng button'); if(rb){ setRange(rb.dataset.r); return; }
+  const cb=t.closest('#us-cur button'); if(cb){ setCur(cb.dataset.c); return; }
+  const fl=t.closest('[data-filter]'); if(fl){ ST.fst=new Set([fl.dataset.filter]); renderTbl(); const tb=$('us-tbl'); if(tb) tb.scrollIntoView({behavior:RM?'auto':'smooth',block:'start'}); return; }
+  const xp=t.closest('[data-xp]'); if(xp){ const i=+xp.dataset.xp; ST.open.has(i)?ST.open.delete(i):ST.open.add(i); renderTbl(true); return; }
+  const th=t.closest('th[data-sort]'); if(th){ const k=th.dataset.sort; ST.sort=ST.sort.k===k?{k,d:-ST.sort.d}:{k,d:(k==='app'||k==='st'||k==='s7'||k==='r1')?1:-1}; renderTbl(true); return; }
+  const fb=t.closest('#us-fst button'); if(fb){ const s=fb.dataset.st; ST.fst.has(s)?ST.fst.delete(s):ST.fst.add(s); renderTbl(true); return; }
+  const cv=t.closest('#us-chgV button'); if(cv){ ST.chgView=cv.dataset.v; const el=$('us-chg'); if(el) el.innerHTML=chgHtml(); save(); return; }
+  const cm=t.closest('#us-cohM button'); if(cm){ ST.cohMode=cm.dataset.m; renderDrawer(true); save(); return; }
+  if(t.closest('#us-mapMore')){ ST.mapAll=!ST.mapAll; const el=$('us-map'); if(el) el.innerHTML=mapHtml(); return; }
+  if(t.closest('#us-srcMore')){ ST.srcAll=!ST.srcAll; const el=$('us-src'); if(el) el.innerHTML=srcHtml(); return; }
+  if(t.closest('#us-dClose')||t.id==='us-scrim'){ closeDrawer(); return; }
+  if(t.closest('#us-dPrev')||t.closest('#us-dNext')){ navDrawer(t.closest('#us-dPrev')?-1:1); return; }
+  const tl=t.closest('[data-tl]'); if(tl){ const [k,d]=tl.dataset.tl.split(':'); const L=k==='u'?tlHtml.ups[d]:tlHtml.als[d]; if(!L) return; const items=L.map(z=>k==='u'?z[0]:A[z[0].a]);
+    const uniq=[...new Set(items)]; if(uniq.length===1){ openDrawer(uniq[0].i); return; }
+    const r=tl.getBoundingClientRect(); showTip((k==='u'?TIPS.tlu(d):TIPS.tla(d))+'<div class="us-sep"></div>'+uniq.map(a=>`<div><span class="us-lk" data-go="${a.i}">${esc(bnm(a))} · ${esc(a.acc)} →</span></div>`).join(''),r.left+r.width/2,r.top+r.height,true); e.stopPropagation(); return; }
+  const go=t.closest('[data-go]'); if(go&&!t.closest('select,input')){ hideTip(); openDrawer(+go.dataset.go); return; }
+  const sc=t.closest('[data-scroll]'); if(sc){ const el=$(sc.dataset.scroll); if(el) el.scrollIntoView({behavior:RM?'auto':'smooth',block:'start'}); } }
+
+/* ================= the dashboard's side ================= */
+// called by the Uninstall screen's render when it is NOT the Studio (an app's page, another state): no drawer over it
+function hide(){ if(ST.drawer>=0) closeDrawer(); else hideTip(); }
+return {ptr, ensure, retry, screen, hide, closeDrawer, openDrawer,
+  ready:()=>!!RAW&&!!ptr(), loading:()=>LOADING, failed:()=>ERR&&!RAW,
+  // checks / tests (read-only views of the current state)
+  _:{A:()=>A, R:()=>R, W:()=>W, PT:()=>PT, PC:()=>PC, ST, ALERTS:()=>ALERTS, NOGA:()=>NOGA, M:()=>M, sums, cohR, cohW, pool, loss, ix, dOf, windows,
+     story:storyHtml, kpis:kpisHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml,
+     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage}};
+})();
+
 function renderUninstall(){
   const s=screenDiv('uninstall'); let html;
   try{ html=uniScreen(); }   // a malformed GA4 payload must never break the rest of the dashboard's render()
   catch(e){ html='<h2 class="sc">Uninstall</h2><div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Uninstall data dikhane me dikkat aayi — thodi der baad page refresh karo.</div></div>'; }
+  if(html.indexOf('id="us-root"')<0){ try{ US.hide(); }catch(e){} }   // no Studio on screen (an app's page …): no drawer over it
   s.innerHTML=`<div id="uni-root">${html}</div>`;
   return s;
 }
 function uniScreen(){
   const U=DATA.uninstall, h2='<h2 class="sc">Uninstall</h2>'; let html;
   if(!U) html=h2+`<div class="card" style="padding:24px 20px"><div class="muted" style="font-size:13.5px;line-height:1.6">🔌 GA4 abhi connect nahi (ya band) hai — uninstall data GA4 / Firebase se aata hai. Setup ke baad yahan dikhega.</div></div>`;
+  else if(!APP&&usOn()) html=usPortfolio();          // "All apps" → 🧭 the Uninstall Studio (+ the older views folded under it)
   else if(UNIERR||!U.asset) html=h2+`<div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Uninstall data load nahi hua — thodi der baad page refresh karo. <span class="lnk" onclick="UNIERR=false;uniRerender();loadUNI(()=>uniRerender())">Try again</span></div></div>`;
   else if(!UNI) html=h2+`<div class="card"><div class="muted" style="font-size:14px;padding:20px">⏳ Uninstall data load ho raha hai…</div></div>`;
   else if(APP){ const L=U.apps||[], sm=L.find(x=>x.app_id===UNIAPP&&x.app===APP)||L.find(x=>x.app===APP); html=sm?uniDetail(sm.app_id,true):uniNoGa4(APP); }   // top App filter → that app straight away
@@ -4186,7 +5405,7 @@ function uniNoGa4(name){ const r=((UNI&&UNI.no_ga4)||[]).find(x=>x.app===name);
     <div class="card"><div class="uni-hd"><span style="font-size:17px;font-weight:800;color:#fff">${appChip(name,22)}</span></div>
     <div class="muted" style="font-size:13px;margin-top:10px;line-height:1.6">🔌 ${r?hAttr(r.text||uniReason(r.reason)):'Is app ka GA4 (Firebase) data nahi — ya to ye Android app kisi GA4 property se judi nahi, ya abhi select nahi.'}</div></div>`; }
 
-function uniPortfolio(){
+function uniPortfolio(parts){
   UNIPRE=false;                                     // "Show" (test installs) is one app's view: never the portfolio's
   const U=DATA.uninstall, det={}; ((UNI&&UNI.apps)||[]).forEach(x=>{det[x.app_id]=x;});
   // the "📋 All apps" table stays on its own fixed 7 days (unaffected by the KPIWINDOW selector below)
@@ -4210,6 +5429,8 @@ function uniPortfolio(){
   // the pooled KPIs (the grey band): the KPIWINDOW selector (7/14/30/60/custom, default 7 — SPEC: the owner's
   // "7 days pe hi kyu?"). Every visible app pooled over the SAME window, ending on the common end date (the min
   // data_till among them) — never each app's own last-N-days, which silently mixed windows a day apart.
+  let sum='';
+  if(!parts){                                       // (the Studio's fold: the Studio has its own KPIs and range)
   const allA=rows.map(r=>r.a).filter(Boolean), commonTill=uniCommonTill(allA);
   const hsAll=allA.map(a=>uniFirst(a)).filter(Boolean).sort()[0]||commonTill;
   kwCheckStale(hsAll,commonTill);                   // a saved custom compare range outside the whole tab's data → 'prev'
@@ -4220,7 +5441,8 @@ function uniPortfolio(){
     +kwCommonNote(allA,commonTill)
     +uniKpiRow(kwRows.map(r=>r.sm),allA.map(a=>uniSums(a,kcmp)),kw,kcmp,kprov?' · '+smpPakka(kpk):'');
   const dets=rows.map(r=>r.a).filter(a=>a&&a.data_till);
-  let sum=''; try{ sum=dets.length?uniSumPortfolio(dets,kpis,rows.length):''; }catch(e){ sum=''; }
+  try{ sum=dets.length?uniSumPortfolio(dets,kpis,rows.length):''; }catch(e){ sum=''; }
+  }
   const alCard=smpList(L,{id:'uni',tab:'uni',withApp:true,cardId:'uni-alerts',scope:'Har app alag'});
   // every app with GA4 (sortable): one column = one install week (the latest settled one), printed in its header
   const s7=a=>{ const c=a&&a.survival&&a.survival.all; return (c&&Array.isArray(c.left)&&c.left.length>7)?c.left[7]:null; };
@@ -4279,8 +5501,22 @@ function uniPortfolio(){
     ${noG.map(x=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">${smpAppHtml(x.app_id,x.app)}<span class="muted" style="font-size:12.5px">${hAttr(x.text||uniReason(x.reason))}</span></div>`).join('')}</div>`:'';
   let upd=''; try{ upd=uniUpdatesCard(rows); }catch(e){   // 📦 every visible app's updates + verdicts (a failure says so)
     upd='<div class="card faint" id="uni-updates" style="margin-bottom:14px;font-size:12.5px">⚠️ 📦 Updates ka asar — ye hissa abhi dikh nahi paya.</div>'; }
-  return head+note+sum+alCard+upd+uniAnyAllCard()+table+noCard+uniTimingNote();
+  if(parts) return {note,alCard,upd,any:uniAnyAllCard(),table,noCard,timing:uniTimingNote()};
+  const sNote=(US.ptr()&&US.failed())?`<div class="note">⚠️ Uninstall Studio load nahi hua — purane views dikh rahe hain. <span class="lnk" onclick="US.retry()">Try again</span></div>`:'';
+  return head+sNote+note+sum+alCard+upd+uniAnyAllCard()+table+noCard+uniTimingNote();
 }
+// 🧭 All apps with the Studio: [the honest data note] + the Studio + "Purane views" (the older All-apps sections the Studio
+// does not replace: 📦 Updates ka asar with 📅 Ek date, sab apps · the full 📋 All apps table · the older What changed? list)
+function usOn(){ return !!US.ptr()&&!US.failed(); }
+function usPortfolio(){
+  const P0=(UNI&&!UNIERR)?uniPortfolio(true):null;
+  let top;
+  if(US.ready()){ try{ top=US.screen(P0?P0.note:''); }
+    catch(e){ top=`<div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Uninstall Studio dikhane me dikkat aayi — <span class="lnk" onclick="US.retry()">Try again</span></div></div>`; } }
+  else top=`<h2 class="sc">Uninstall</h2><div class="card"><div class="muted" style="font-size:14px;padding:20px">⏳ Uninstall Studio load ho raha hai…</div></div>`;
+  const inner=UNIERR?`<div class="muted" style="font-size:13px;padding:12px 4px">⚠️ Purane views load nahi hue — <span class="lnk" onclick="UNIERR=false;uniRerender();loadUNI(()=>uniRerender())">Try again</span></div>`
+    :(!P0?'<div class="muted" style="font-size:13px;padding:12px 4px">⏳ Purane views load ho rahe hain…</div>':P0.upd+P0.any+P0.table+P0.alCard+P0.noCard+P0.timing);
+  return (US.ready()?'':(P0?P0.note:''))+top+`<details id="uni-old"${UNIOLDOPEN?' open':''} ontoggle="UNIOLDOPEN=this.open"><summary><span class="uo-cv">▸</span><span>🗂 Purane views</span><span class="uo-h">📦 Updates ka asar · 📅 Ek date, sab apps · 📋 All apps table · 🔔 What changed? (purani list)</span></summary><div class="uo-in">${inner}</div></details>`; }
 // All apps: the grey "SAB APPS MILAKAR" band — the pooled "7 din baad bhi app me" (the apps whose verdict reads the SAME
 // 4 settled install weeks, vs the 4 before: one window, printed) and the pooled 7-day KPIs — then, per app ("Har app
 // alag"), each app's own verdict counted into the status chips (apps are not mixed into one verdict — a change in the app

@@ -122,6 +122,9 @@ jobs:
           # Update impact "compare any date" (every day of the last year, precomputed lazy files; never an alert):
           # IMPACT_ANY=false (repo variable) turns it off without a code push (its files removed)
           IMPACT_ANY:           ${{ vars.IMPACT_ANY || 'true' }}
+          # Uninstall Studio (the Uninstall tab's All-apps view, one lazy file; never an alert): UNINSTALL_STUDIO=false
+          # (repo variable) turns it off without a code push (its file removed, the older All-apps views as before)
+          UNINSTALL_STUDIO:     ${{ vars.UNINSTALL_STUDIO || 'true' }}
           # Daily App Review (Review tab): REVIEW_ENABLED=true (repo variable) starts the daily card snapshots — set it
           # only after the Review API (Worker) is live; REVIEW_READY_IST = when the day's cards freeze (IST, empty: 09:00);
           # REVIEW_REBUILD_DAY=<YYYY-MM-DD> rebuilds TODAY's cards once (any other day is ignored).

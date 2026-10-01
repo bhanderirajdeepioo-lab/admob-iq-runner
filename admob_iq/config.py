@@ -69,6 +69,9 @@ def settings() -> dict:
         # never an alert) — off: none of its files, the site as without it
         "impact_any": _env("IMPACT_ANY", "true").lower() == "true",
         "impact_any_budget_sec": _int_env(("IMPACT_ANY_BUDGET_SEC",), 150),   # its computing per build at most
+        # 🧭 Uninstall Studio: the Uninstall tab's All-apps view (uninstall_studio.json.gz, one lazy file; never an alert)
+        # — off: no file, no pointer, the tab's older All-apps views exactly as before (a rollback without a code push)
+        "uninstall_studio": _env("UNINSTALL_STUDIO", "true").lower() == "true",
         # every change split into "installs ki wajah se" / "asli badlaav" (SPEC_SPLIT): off → no split anywhere, no
         # Telegram tail, the page as before (a rollback without a code push)
         "split": _env("SPLIT", "true").lower() == "true",
