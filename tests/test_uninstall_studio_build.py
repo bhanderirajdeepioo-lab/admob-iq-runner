@@ -66,12 +66,14 @@ def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
     assert _run(s, cfg, dash) == ["/uninstall_studio.json.gz"]
     body = _gz(os.path.join(s, usb.FILE))
     assert body.pop("v") == usb.V
-    assert body == ref
+    assert body.pop("gd")["apps"]                             # ("Gone by day N": its own block, after the demo —
+    assert body == ref                                         #  tests/test_uninstall_studio_gone.py)
     # and the module's own entry point, straight
     U = _gz(os.path.join(s, "uninstall.json.gz"))
     got = usb.build_data(dash, U, lambda n: _gz(os.path.join(s, n)),
                          json.load(open(os.path.join(cfg, "account_names.json"))),
                          json.load(open(os.path.join(cfg, "app_names.json"))))
+    got.pop("gd")
     assert got == ref
 
 
@@ -97,7 +99,7 @@ def test_contract_pointer_and_deterministic_bytes(site, capsys):
     _run(s, cfg, dash)
     p = os.path.join(s, usb.FILE)
     body = _gz(p)
-    assert set(body) == {"v", "meta", "apps", "alerts", "noga"}
+    assert set(body) == {"v", "meta", "apps", "alerts", "noga", "gd"}     # (gd: tests/test_uninstall_studio_gone.py)
     M = body["meta"]
     assert set(M) == {"cohCols", "S", "E", "n", "today", "gen", "fx", "late", "lag", "actLate", "settled", "apps",
                       "noga", "portfolioSettled"}

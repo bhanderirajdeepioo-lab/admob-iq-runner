@@ -2221,6 +2221,35 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-pk{grid-template-columns:repeat(4,minmax(0,1fr))}
 @container us (max-width:700px){:is(#us-root,#us-layer) .us-pk{grid-template-columns:repeat(2,minmax(0,1fr))}:is(#us-root,#us-layer) .us-pgt{font-size:17px}}
 @container us (max-width:448px){:is(#us-root,#us-layer) .us-sl-a{display:none}}
+/* ---------- gone by day N (every app × day 0–60 after install; its bars in the app view) ---------- */
+:is(#us-root,#us-layer) .us-st.us-gdt td{padding:6px 4px}
+:is(#us-root,#us-layer) .us-st.us-gdt th{padding:9px 6px}
+:is(#us-root,#us-layer) .us-st.us-gdt td:first-child{min-width:140px;max-width:164px;padding-left:8px}
+:is(#us-root,#us-layer) .us-gdt td .us-hcell{min-width:0;padding:3px 4px}
+:is(#us-root,#us-layer) .us-gdt .us-v{font-weight:600}
+:is(#us-root,#us-layer) .us-gsh{display:block;font:500 10px/1.25 var(--us-num);letter-spacing:0;text-transform:none;color:var(--watch);margin-top:3px;white-space:nowrap}
+:is(#us-root,#us-layer) .us-gdt .us-v small,:is(#us-root,#us-layer) .us-gbv small{font-size:11px;font-weight:500;color:var(--ink2)}
+:is(#us-root,#us-layer) .us-gdt .us-h3 .us-v small,:is(#us-root,#us-layer) .us-gdt .us-h-3 .us-v small{color:inherit}
+:is(#us-root,#us-layer) .us-gsb{display:block;font:500 10.5px/1.25 var(--us-num);color:var(--watch);margin-top:2px;white-space:nowrap}
+:is(#us-root,#us-layer) .us-gdt td.us-gna{text-align:left;font-family:var(--us-font);white-space:normal}
+:is(#us-root,#us-layer) .us-gdt .us-gdash{display:inline-block;padding:3px 6px}
+:is(#us-root,#us-layer) .us-gdt tbody tr[data-gdgo]{cursor:pointer}
+:is(#us-root,#us-layer) .us-gnm{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+:is(#us-root,#us-layer) .us-gico{width:20px;height:20px;border-radius:5px;flex:none;object-fit:cover;margin-top:1px}
+:is(#us-root,#us-layer) .us-mini.us-gdt th{cursor:default}
+:is(#us-root,#us-layer) .us-gbars{display:grid;gap:7px;padding:2px 18px 12px;max-width:1000px}
+:is(#us-root,#us-layer) .us-gbr{display:grid;grid-template-columns:66px minmax(0,1fr) minmax(108px,auto);gap:10px;align-items:center;border-radius:6px}
+:is(#us-root,#us-layer) .us-gbr:hover{background:rgba(34,211,238,.06)}
+:is(#us-root,#us-layer) .us-gbl{font:600 11px var(--us-num);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+:is(#us-root,#us-layer) .us-gbt{position:relative;height:14px;background:var(--panel2);border-radius:4px}
+:is(#us-root,#us-layer) .us-gbf{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--us-s-out);opacity:.9}
+:is(#us-root,#us-layer) .us-gbf.us-gbad{background:var(--bad)}
+:is(#us-root,#us-layer) .us-gbf.us-ggood{background:var(--good)}
+:is(#us-root,#us-layer) .us-gbf.us-gb1{opacity:.55}
+:is(#us-root,#us-layer) .us-gbn{position:absolute;top:-3px;bottom:-3px;width:0;border-left:2px dashed var(--ink2);opacity:.85}
+:is(#us-root,#us-layer) .us-gbv{font:600 13px var(--us-num);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+@container us (max-width:608px){:is(#us-root,#us-layer) .us-st.us-gdt td:first-child{min-width:112px;max-width:128px}:is(#us-root,#us-layer) .us-gbars{padding-inline:14px}:is(#us-root,#us-layer) .us-gbr{grid-template-columns:56px minmax(0,1fr) auto;gap:8px}}
+@media (max-width:480px){:is(#us-root,#us-layer) .us-gbars{padding-inline:12px}:is(#us-root,#us-layer) .us-gbr{grid-template-columns:52px minmax(0,1fr) auto;gap:8px}}
 #uni-old,#uni-old-app{margin:22px 0 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
 #uni-old>summary,#uni-old-app>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;padding:12px 16px;font-size:14px;font-weight:700;color:var(--ink2)}
 #uni-old>summary::-webkit-details-marker,#uni-old-app>summary::-webkit-details-marker{display:none}
@@ -6133,7 +6162,7 @@ function tblHtml(){ const P0=tblParts();
     +`<select class="us-tsel" id="us-facc" aria-label="Account"><option value="">Sab accounts</option>${accs.map(x=>`<option${ST.facc===x?' selected':''}>${esc(x)}</option>`).join('')}</select>`
     +`<select class="us-tsel" id="us-fsz" aria-label="Size"><option value="">Sab size</option>${['badi','madhyam','chhoti'].map(x=>`<option value="${x}"${ST.fsz===x?' selected':''}>${x==='badi'?'Badi':(x==='madhyam'?'Madhyam':'Chhoti')}</option>`).join('')}</select><span class="us-tcount">${P0.cnt} / ${P0.tot} apps</span></div>`;
   return `<div class="us-ph"><div><div class="us-eyebrow">Har app · poori table</div><h2>Saari apps</h2><div class="us-hint">Pill = is range ka haal · 🔔 = engine alert · column = sort · ▶ = mini charts · rang = app ka apna normal · ▲▼ = vs ${span(W.cf,W.ct)}</div></div></div>${bar}<div class="us-tw us-st-tw"><table class="us-st"><thead id="us-thead"><tr>${P0.head}</tr></thead><tbody id="us-tbody">${P0.body}</tbody></table></div>`; }
-function renderTbl(keepFocus){ const el=$('us-tbl'); if(!el) return;
+function renderTbl(keepFocus){ gdRender(true); const el=$('us-tbl'); if(!el) return;
   if(keepFocus&&$('us-tbody')){ const P0=tblParts(); $('us-thead').innerHTML=`<tr>${P0.head}</tr>`; $('us-tbody').innerHTML=P0.body; const tc=el.querySelector('.us-tcount'); if(tc) tc.textContent=P0.cnt+' / '+P0.tot+' apps';
     el.querySelectorAll('#us-fst button').forEach(b=>b.setAttribute('aria-pressed',String(ST.fst.has(b.dataset.st)))); return; }
   el.innerHTML=tblHtml(); }
@@ -6296,8 +6325,8 @@ function bodyHtml(o,mode){ const a=o.a, s=o.s, c=o.c;
   const dtH=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Roz ka hisaab</div><${hd}>Din-ba-din · ${span(W.f,W.t)}</${he}></div></div><div class="us-tw" style="max-height:${mode==='p'?520:360}px">${dt}</div></div>`;
   const ch1=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Roz ka uninstall rate</div><${hd}>Roz hataaye % · normal band ke saath</${he}></div></div>${bigChart(a,o,mode)}</div>`;
   const ch2=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Aaye vs gaye</div><${hd}>Installs vs uninstalls</${he}></div></div>${ioChart(a,mode)}</div>`;
-  if(mode==='p') return `<div class="us-dk us-pk">${kp}</div>${ch1}${ch2}${coh}${alH}${upH}${dtH}`;
-  return `<div class="us-dk">${kp}</div>${ch1}${ch2}${coh}${alH}${upH}${dtH}`; }
+  if(mode==='p') return `<div class="us-dk us-pk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${coh}${alH}${upH}${dtH}`;
+  return `<div class="us-dk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${coh}${alH}${upH}${dtH}`; }
 function drawerHtml(){ const o=R[ST.drawer], a=o.a, ord=navOrder(), pos=ord.indexOf(a.i);
   return `<div class="us-dh"><div class="us-t"><div class="us-eyebrow">App view · ${pos+1} / ${ord.length} (nuksaan ke kram me) · ${span(W.f,W.t)}</div><h3 class="us-ainb">${ic(a,28)}<span class="us-aint">${esc(bnm(a))} <span class="us-acn">· ${esc(a.acc)}</span></span></h3><div class="us-l2">${chip(o.pill)}${alBadge(a)}${szH(a)}<span class="us-pkg">${esc(a.pkg)}</span><span>Data ${fd(M.E)} tak${W.t>a.settled?' · ⏳ '+fd(dAdd(a.settled,1))+'+ pakka nahi':''}</span></div>`
     +`<div class="us-full-r"><button class="us-btn us-full" id="us-full" data-full="${esc(a.id)}" title="Is app ka poora page: bade charts, saare tables, Update impact card aur kisi bhi date se tulna">Poora app page →</button></div></div>`
@@ -6316,6 +6345,143 @@ function pageHtml(i){ const o=R[i], a=o.a, ord=navOrder(), pos=ord.indexOf(a.i);
     +`<div class="us-right"><button class="us-icb" data-pnav="-1" aria-label="Pichhli app" title="Pichhli app (←)">‹</button><button class="us-icb" data-pnav="1" aria-label="Agli app" title="Agli app (→)">›</button></div></div>`
     +`<div class="us-pgb">${bodyHtml(o,'p')}</div>`; }
 function navPage(dir){ const ord=navOrder(), i=A.findIndex(a=>a.id===PAGE), p=ord.indexOf(i); if(p<0) return; const q=ord[(p+dir+ord.length)%ord.length]; try{ uniOpen(A[q].id); }catch(e){} }
+
+/* ================= "Gone by day N" — every app × Same day / Day 1 / 3 / 7 / 14 / 30 / 45 / 60 ================= */
+// The owner's table (1 Oct: "pura app list … day 1, 3, 7, 14, 30, 45, 60 pe uninstall hone vale"): per app, of the installs
+// of the chosen range, how many had uninstalled by day N — the actual number first, its % beside it, coloured against the
+// app's own normal. From the file's gd block (uninstall_studio_build._gone): per install day its installs and those gone by
+// day N, PAKKA days only, the engine's own rules (the launch cut, incomplete days, tracking breaks) already applied.
+//   * a cell pools the range's install days whose day N is pakka (the newer ones: ⏳ not final yet, left out) — pakka by the
+//     Studio's common day (meta.settled: the apps' latest common data day − the late days), so a column is one set of days;
+//   * none of them pakka yet (Day 60 on a 7-day range): the newest pakka install days instead, as many as the range has —
+//     the engine's checkpoint-table window (its _pick, ported: gdPick), so a 7-day range shows the engine table's numbers;
+//   * normal = the 4 weeks of install days just before the cell's own (heatP: the test the Studio's other cells use).
+// Its table sits right under "Saari apps" (the same search / filters: ST); each app view (drawer, app page) has its 8 bars.
+const GDL=['Same day','Day 1','Day 3','Day 7','Day 14','Day 30','Day 45','Day 60'];
+const GD_MIN=20;                                   // fewer installs in a cell: "—" (too few to read), the reason on hover
+const GST={k:'sz',d:-1,by:'p'};                    // the table's sort: 'sz' (app size: the range's installs), 'app' or a column 0–7; by % ('p') / number ('x')
+const gdMeta=()=>{ const g=RAW&&RAW.gd; return (g&&Array.isArray(g.cols)&&g.cols.length===GDL.length&&g.apps)?g:null; };
+// one app's arrays, decoded once per prep: n = installs per install day, c[k] = gone by day cols[k] (the file's
+// per-column increments added up; null = not pakka / not counted), x = the incomplete days / breaks that left days out
+function gdData(a){ if(a._gd!==undefined) return a._gd; const g=gdMeta(), r=g&&g.apps[a.id];
+  if(!r||typeof r.n!=='string'||!Array.isArray(r.g)||r.g.length!==g.cols.length){ a._gd=null; return null; }
+  const n=dec(r.n), c=[]; let run=n.map(()=>0);
+  r.g.forEach(e=>{ const col=dec(e); run=run.map((s,j)=>(s==null||col[j]==null)?null:s+col[j]); c.push(run); });
+  a._gd={n,c,x:Array.isArray(r.x)?r.x:[],pad:+g.pad||0,cols:g.cols}; return a._gd; }
+// the engine's _pick (a comparison window: K install days ending at top; incomplete days / breaks leaving fewer than
+// `need` → the newest earlier K-day window that holds them, one stretch) — on the gd arrays' index
+function gdPick(use,lost,top,K,need){ const w0=top-K+1, idx=[]; let ls=0;
+  for(let j=Math.max(0,w0);j<=top;j++){ if(use(j)) idx.push(j); else if(lost(j)) ls++; }
+  if(idx.length>=need||!ls||(idx.length&&idx.length+ls<need)) return {idx,w0,fb:false,ls};
+  let j=top, cnt=idx.length, got=null, most=[0,null];
+  while(j-K>=0){ const step=(use(j-K)?1:0)-(use(j)?1:0); if(got!=null&&step<=0) break; cnt+=step; j--; if(cnt>=need) got=j; else if(cnt>most[0]) most=[cnt,j]; }
+  if(got==null){ if(idx.length||most[1]==null) return {idx,w0,fb:false,ls}; got=most[1]; }
+  const a0=got-K+1, out=[]; for(let q=Math.max(0,a0);q<=got;q++) if(use(q)) out.push(q);
+  return {idx:out,w0:a0,fb:true,ls}; }
+// one cell: app a, column k, the range f..t (L days) → {x gone, n installs, p, k install days, f / t (the install days
+// used), mode full | part (the newest left out: ⏳) | fb (none pakka: the newest pakka ones), pk (⏳ pakka on), lost (days
+// left out: incomplete / break), nrm (normal), h (heatP), why (— and its reason)}
+function gdCell(a,k,f,t,L){ const G=gdData(a), lab=GDL[k];
+  if(!G) return {na:1,mode:'full',k:0,n:0,x:0,p:null,lost:0,lostD:[],nrm:{p:null,n:0},h:{s:null},why:'Is app ka "gone by day" data nahi'};
+  const N=+G.cols[k], n=G.n, c=G.c[k], J=d=>ix(d)+G.pad, Dj=j=>dAdd(M.S,j-G.pad);
+  const use=j=>j>=0&&j<n.length&&n[j]>0&&c[j]!=null, gone=j=>j>=0&&j<n.length&&n[j]>0&&c[j]==null;
+  // pakka = the Studio's common pakka day (every app's columns on the same install days, as the Studio pools all apps
+  // on the same days), never past the app's own
+  const top=dAdd(a.settled<M.settled?a.settled:M.settled,-N), lo=f<a.first?a.first:f, out={N,lab,mode:'full',k:0,n:0,x:0,p:null,lost:0,lostD:[],nrm:{p:null,n:0},h:{s:null}};
+  if(lo>t){ out.why='App '+fd(a.first)+' se hai — is range me iske installs nahi'; return out; }
+  if(top<a.first){ out.why='Abhi kisi install ka '+lab+' pakka nahi (app '+fd(a.first)+' se hai)'; out.early=1; return out; }
+  let idx=[];
+  if(top>=lo){ out.mode=top>=t?'full':'part'; out.f=lo; out.t=top<t?top:t; for(let j=J(out.f);j<=J(out.t);j++){ if(use(j)) idx.push(j); else if(gone(j)) out.lost++; } }
+  else { out.mode='fb'; const r=gdPick(use,gone,J(top),L,Math.max(1,Math.round(L*5/7))); idx=r.idx; out.lost=r.ls;
+    if(r.fb&&idx.length){ out.f=Dj(idx[0]); out.t=Dj(idx[idx.length-1]); } else { const s0=Dj(Math.max(0,r.w0)); out.f=s0<a.first?a.first:s0; out.t=top; } }
+  if(out.mode!=='full') out.pk=dAdd(t,N+M.late+M.lag);
+  idx.forEach(j=>{ out.x+=c[j]; out.n+=n[j]; }); out.k=idx.length; out.p=out.n?out.x/out.n:null;
+  if(out.lost){ const hi=dAdd(out.t,N); out.lostD=G.x.filter(e=>Array.isArray(e)&&e[0]>=out.f&&e[0]<=hi).map(e=>e[0]).slice(-3); }
+  if(!out.k) out.why=out.lost?'In install dino ka GA4 data adhoora — engine ki tarah nahi gine':'In dino me installs nahi';
+  else if(out.n<GD_MIN) out.why='Sirf '+fN(out.n)+' installs — padhne ke liye kam';
+  if(out.k){ const e=J(out.f)-1; let nx=0,nn=0,nk=0,a0=-1,a1=-1;
+    for(let j=Math.max(0,e-27);j<=e;j++) if(use(j)){ nx+=c[j]; nn+=n[j]; nk++; if(a0<0) a0=j; a1=j; }
+    out.nrm=nn?{p:nx/nn,n:nn,k:nk,f:Dj(a0),t:Dj(a1)}:{p:null,n:0};
+    out.h=out.n>=GD_MIN?heatP({p:out.p,n:out.n},out.nrm,true):{s:null,why:out.why}; }
+  return out; }
+const gdOk=c=>!!(c&&c.k&&c.n>=GD_MIN&&c.p!=null);
+const gdWord=k=>k?GDL[k]+' tak gaye':'Same day gaye';
+const gdStat=c=>{ if(c.na) return 'N/A'; const s=c.h&&c.h.s; if(!gdOk(c)||s==null) return 'Too early'; return s>=2?'Worse':(s===1?'Watch':(s<0?'Better':'Normal')); };
+// the install days a cell used, when not the whole range (⏳) — under the column's header when the column shares them
+const gdWin=c=>(c.mode==='full'||!c.k)?'':span(c.f,c.t);
+const gdSub=(c,common)=>{ const w=gdWin(c); return (!w||w===common)?'':`<span class="us-gsb">⏳ installs ${w}</span>`; };
+function gdTd(a,k,c,common){ const tk=`data-tk="gd:${a.i}:${k}"`;
+  if(!gdOk(c)) return `<td class="us-faint" ${tk}><span class="us-gdash">—</span></td>`;
+  return `<td ${tk}><span class="us-hcell ${hcls(c.h.s)}"><span class="us-v">${fN(c.x)} <small>(${pc(c.p,1)})</small></span>${gdSub(c,common)}</span></td>`; }
+function gdName(a){ const m=(typeof DATA!=='undefined'&&DATA&&DATA.app_icons)||{}, u=m[a.id];
+  const ic=(typeof u==='string'&&/^https:\/\//.test(u))?`<img class="us-gico" src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`:'';
+  return `<div class="us-gnm" data-go="${a.i}">${ic}<div>${nmH(a)}</div></div>`; }
+const gdHint=()=>`Naye users me se kitne N din ke andar app hata chuke — har app apne normal se · installs ${span(W.f,W.t)} (${W.L} din) · cell = actual number (% installs) · rang = app ka apna normal (cell ke installs se pehle ke 4 hafte) · ⏳ installs … = range ke naye installs ka din N abhi pakka nahi, isliye sirf ye pakke installs gine · row click = app view`;
+const gdLegend=()=>{ const sw=cls=>`<i style="background:var(--us-${cls})"></i>`;
+  return `<div class="us-legend"><span>Rang = app ka apna normal se farak:</span><span class="us-sw">${sw('h3')}${sw('h2')}${sw('h1')}</span><span>zyada gaye (Worse)</span><span class="us-sw"><i style="border:1px solid var(--line2)"></i></span><span>Normal</span><span class="us-sw">${sw('g1')}${sw('g2')}${sw('g3')}</span><span>kam gaye (Better)</span><span>· — = installs kam / abhi pakka nahi (hover = wajah)</span></div>`; };
+function gdNoga(){ const q=ST.q.trim().toLowerCase();
+  return NOGA.filter(n=>{ if(ST.fst.size&&!ST.fst.has('lagu')) return false; if(ST.facc&&n.acc!==ST.facc) return false; if(ST.fsz&&n.sz!==ST.fsz) return false; if(q&&(n.nm||'').toLowerCase().indexOf(q)<0) return false; return true; }); }
+function gdParts(){ const rows=filtered().map(o=>({o,c:GDL.map((_,k)=>gdCell(o.a,k,W.f,W.t,W.L))}));
+  const key=GST.k, d=GST.d, val=r=>key==='sz'?r.o.s.ins:(key==='app'?(r.o.a.store+' '+r.o.a.acc).toLowerCase():(c=>gdOk(c)?(GST.by==='x'?c.x:c.p):null)(r.c[key]));
+  rows.sort((x,y)=>{ const a=val(x), b=val(y); if(a==null&&b!=null) return 1; if(b==null&&a!=null) return -1; if(a!=null&&b!=null&&a!==b) return (a<b?-1:1)*d; return (y.o.s.ins||0)-(x.o.s.ins||0); });
+  const NG=gdNoga(), cw=GDL.map((_,k)=>{ const m={}; let b='', bn=0; rows.forEach(r=>{ const w=gdWin(r.c[k]); if(w&&(m[w]=(m[w]||0)+1)>bn){ bn=m[w]; b=w; } }); return b; });
+  const th=(key,l,cls,tk,sub)=>`<th class="${cls||''}${GST.k===key?' us-sorted':''}" data-gsort="${key}"${tk?` data-tk="${tk}"`:' title="Sort"'}>${l}${GST.k===key?`<span class="us-ar">${GST.d>0?'▲':'▼'}</span>`:''}${sub?`<span class="us-gsh">⏳ installs ${sub}</span>`:''}</th>`;
+  const head=th('app','App','us-l')+GDL.map((l,k)=>th(k,l,'',`gdh:${k}`,cw[k])).join('');
+  const body=rows.map(r=>{ const a=r.o.a; return `<tr data-app="${a.i}" data-gdgo="${a.i}"><td>${gdName(a)}</td>${r.c.map((c,k)=>gdTd(a,k,c,cw[k])).join('')}</tr>`; }).join('')
+    +NG.map(n=>`<tr><td><div class="us-gnm"><div><span class="us-nmt">${esc(String(n.nm||'').replace(/ · [^·]+$/,''))} <span class="us-acn">· ${esc(n.acc)}</span></span></div></div></td><td class="us-l us-faint us-gna" colspan="${GDL.length}">N/A — ${esc(n.why)}</td></tr>`).join('');
+  return {head,body,cnt:rows.length+NG.length,tot:A.length+NOGA.length}; }
+// the panel (All apps, right under "Saari apps"): the same search / status / account / size filters as that table (ST)
+function gdHtml(){ gdWire(); if(!gdMeta()) return `<div class="us-ph"><div><div class="us-eyebrow">Har app · install ke baad din ke hisaab se</div><h2>Gone by day N</h2><div class="us-hint">⏳ Is table ka data agle refresh me aayega</div></div></div>`;
+  const P0=gdParts(), accs=[...new Set(A.map(a=>a.acc).concat(NOGA.map(n=>n.acc)))].sort();
+  const bar=`<div class="us-tbar"><input class="us-srch" id="us-gq" type="search" placeholder="App ya account dhoondo…" value="${esc(ST.q)}" aria-label="Search apps"><div class="us-fchips" id="us-gfst">${Object.keys(SW).map(s=>`<button class="us-f-${s}" data-gst="${s}" aria-pressed="${ST.fst.has(s)}">${SW[s]}</button>`).join('')}</div>`
+    +`<select class="us-tsel" id="us-gfacc" aria-label="Account"><option value="">Sab accounts</option>${accs.map(x=>`<option${ST.facc===x?' selected':''}>${esc(x)}</option>`).join('')}</select>`
+    +`<select class="us-tsel" id="us-gfsz" aria-label="Size"><option value="">Sab size</option>${['badi','madhyam','chhoti'].map(x=>`<option value="${x}"${ST.fsz===x?' selected':''}>${x==='badi'?'Badi':(x==='madhyam'?'Madhyam':'Chhoti')}</option>`).join('')}</select><span class="us-tcount" id="us-gcount">${P0.cnt} / ${P0.tot} apps</span></div>`;
+  return `<div class="us-ph"><div><div class="us-eyebrow">Har app · install ke baad din ke hisaab se</div><h2>Gone by day N</h2><div class="us-hint" id="us-ghint">${gdHint()}</div></div>`
+    +`<div class="us-right"><div class="us-seg" id="us-gby" role="group" aria-label="Sort by"><button data-by="p" aria-pressed="${GST.by==='p'}">Sort by %</button><button data-by="x" aria-pressed="${GST.by==='x'}">Sort by number</button></div></div></div>`
+    +`${bar}<div class="us-tw us-st-tw"><table class="us-st us-gdt"><thead id="us-gthead"><tr>${P0.head}</tr></thead><tbody id="us-gtbody">${P0.body}</tbody></table></div>${gdLegend()}`; }
+function gdSync(){ const ae=document.activeElement;
+  [['us-q',ST.q],['us-gq',ST.q],['us-facc',ST.facc],['us-gfacc',ST.facc],['us-fsz',ST.fsz],['us-gfsz',ST.fsz]].forEach(([id,v])=>{ const x=$(id); if(x&&x!==ae&&x.value!==v) x.value=v; });
+  roots().forEach(r=>r.querySelectorAll('#us-gfst button').forEach(b=>b.setAttribute('aria-pressed',String(ST.fst.has(b.dataset.gst)))));
+  const by=$('us-gby'); if(by) by.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(GST.by===b.dataset.by))); }
+// in place (the focused control keeps its focus) — also whenever "Saari apps" re-renders (its filters are this table's)
+function gdRender(keep){ const el=$('us-gd'); if(!el||VIEW!=='all') return;
+  if(!keep||!gdMeta()||!$('us-gtbody')){ el.innerHTML=gdHtml(); return; }
+  const P0=gdParts(); $('us-gthead').innerHTML=`<tr>${P0.head}</tr>`; $('us-gtbody').innerHTML=P0.body;
+  const c=$('us-gcount'); if(c) c.textContent=P0.cnt+' / '+P0.tot+' apps'; const h=$('us-ghint'); if(h) h.innerHTML=gdHint(); gdSync(); }
+let GDW=false;
+function gdWire(){ if(GDW) return; GDW=true;
+  document.addEventListener('input',e=>{ if(e.target&&e.target.id==='us-gq'){ ST.q=e.target.value; renderTbl(true); } });
+  document.addEventListener('change',e=>{ const id=e.target&&e.target.id; if(id==='us-gfacc'){ ST.facc=e.target.value; renderTbl(true); } else if(id==='us-gfsz'){ ST.fsz=e.target.value; renderTbl(true); } });
+  document.addEventListener('click',e=>{ const t=e.target; if(!inStudio(t)) return;
+    const s=t.closest('th[data-gsort]'); if(s){ const v=s.dataset.gsort, key=v==='app'?'app':+v; GST.d=GST.k===key?-GST.d:(key==='app'?1:-1); GST.k=key; gdRender(true); return; }
+    const b=t.closest('#us-gby button'); if(b){ GST.by=b.dataset.by==='x'?'x':'p'; gdRender(true); return; }
+    const f=t.closest('#us-gfst button'); if(f){ const s0=f.dataset.gst; ST.fst.has(s0)?ST.fst.delete(s0):ST.fst.add(s0); renderTbl(true); return; }
+    const r=t.closest('[data-gdgo]'); if(r&&!t.closest('[data-go]')){ if(tipPinned&&Date.now()-tipT<700) return;   // (a phone tap on a cell pins its numbers)
+      hideTip(); openDrawer(+r.dataset.gdgo); } }); }
+TIPS.gd=(i,k)=>{ const a=A[+i]; if(!a||!W) return ''; k=+k; const c=gdCell(a,k,W.f,W.t,W.L), lab=GDL[k];
+  let h=`<div class="us-tt">${esc(a.nm)} · ${lab}</div>`;
+  if(c.k){ h+=trow('Installs '+span(c.f,c.t),fN(c.n)+' · '+c.k+' din')+trow(gdWord(k),c.n<GD_MIN?'—':fN(c.x)+' ('+pc(c.p,1)+')');
+    if(c.nrm.p!=null) h+=trow('Normal · installs '+span(c.nrm.f,c.nrm.t),pc(c.nrm.p,1));
+    if(c.nrm.p!=null&&gdOk(c)){ const ppl=(c.p-c.nrm.p)*c.n, r=relp(c.p,c.nrm.p); h+=trow('Normal se',fS(ppl)+' log ('+(fR(r)||'±0%')+')'); }
+    h+=`<div class="us-tsm">${gdStat(c)}${c.h.s==null&&c.h.why&&c.h.why!==c.why?' — '+esc(c.h.why):(c.h.s===0?(Math.abs(c.h.z||0)<2?' — farak aam utaar-chadhaav ke andar':' — farak chhota (normal ke 5% se kam)'):'')}</div>`; }
+  if(c.why) h+=`<div>— ${esc(c.why)}</div>`;
+  if(c.mode==='part') h+=`<div class="us-tsm">⏳ Not final · ${fd(c.pk)} ko pakka — ${span(dAdd(c.t,1),W.t)} ke installs ka ${lab} abhi pakka nahi, wo nahi gine</div>`;
+  if(c.mode==='fb') h+=`<div class="us-tsm">⏳ Not final · ${fd(c.pk)} ko pakka — is range (${span(W.f,W.t)}) ke installs ka ${lab} abhi pakka nahi${c.k?', isliye uske pehle ke sabse naye pakke '+c.k+' din ke installs':''}</div>`;
+  if(c.lost) h+=`<div class="us-tsm">${c.lost} install din nahi gine — GA4 data adhoora / tracking break${c.lostD.length?' ('+c.lostD.map(fd).join(', ')+')':''}</div>`;
+  return h; };
+TIPS.gdh=k=>{ k=+k; const g=gdMeta(); if(!g||!W) return ''; const N=+g.cols[k], nf=R.some(o=>{ const c=gdCell(o.a,k,W.f,W.t,W.L); return c.mode!=='full'&&c.k; });
+  return `<div class="us-tt">${GDL[k]}</div><div>${k?'Install ke '+N+' din ke andar':'Install ke din hi'} app hataane wale — naye users me se (actual number, phir %)</div>`
+    +(nf?`<div class="us-tsm">⏳ Not final · ${fd(dAdd(W.t,N+M.late+M.lag))} ko pakka — range ke naye installs ka ${GDL[k]} abhi pakka nahi; cell ke neeche likhe installs gine</div>`:'')+`<div class="us-tsm">Click = sort (${GST.by==='x'?'number':'%'})</div>`; };
+// one app's view (drawer / app page): its 8 checkpoints as labelled bars (┆ = its normal) and the same row as the table
+function gdApp(o,mode){ const a=o.a; if(!gdMeta()) return '';
+  const cells=GDL.map((_,k)=>gdCell(a,k,W.f,W.t,W.L)), mx=Math.max(1e-9,...cells.map(c=>Math.max(gdOk(c)?c.p:0,c.nrm&&c.nrm.p!=null?c.nrm.p:0)));
+  const bars=cells.map((c,k)=>{ const ok=gdOk(c), w=ok?c.p/mx*100:0, nw=c.nrm&&c.nrm.p!=null?c.nrm.p/mx*100:null, s=c.h&&c.h.s;
+    return `<div class="us-gbr" data-tk="gd:${a.i}:${k}"><span class="us-gbl">${GDL[k]}</span><span class="us-gbt">${ok?`<i class="us-gbf${s>=2?' us-gbad':(s===1?' us-gbad us-gb1':(s<=-2?' us-ggood':(s===-1?' us-ggood us-gb1':'')))}" style="width:${w.toFixed(1)}%"></i>`:''}${nw!=null?`<i class="us-gbn" style="left:${nw.toFixed(1)}%"></i>`:''}</span>`
+      +`<span class="us-gbv">${ok?fN(c.x)+' <small>('+pc(c.p,1)+')</small>':'<span class="us-faint">—</span>'}${gdSub(c)}</span></div>`; }).join('');
+  const hd=mode==='p'?'h2':'h2 style="font-size:15px"';
+  return `<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Install ke baad din ke hisaab se</div><${hd}>Gone by day N</h2><div class="us-hint">Naye users me se kitne N din ke andar app hata chuke · range ${span(W.f,W.t)} · actual number (% installs) · ┆ = app ka apna normal · ⏳ installs … = range ke naye installs ka din N abhi pakka nahi, isliye ye pakke installs gine · hover / tap = poora hisaab</div></div></div>`
+    +`<div class="us-gbars">${bars}</div><div class="us-tw"><table class="us-mini us-gdt"><thead><tr>${GDL.map((l,k)=>`<th data-tk="gdh:${k}">${l}</th>`).join('')}</tr></thead><tbody><tr>${cells.map((c,k)=>gdTd(a,k,c)).join('')}</tr></tbody></table></div>`
+    +`<div class="us-clg"><span class="us-k"><i style="background:var(--us-s-out);height:9px"></i>Gaye</span><span class="us-k"><i style="background:var(--bad);height:9px"></i>normal se zyada</span><span class="us-k"><i style="background:var(--good);height:9px"></i>normal se kam</span><span class="us-k"><i style="border-left:2px dashed var(--ink2);height:11px;width:0;border-radius:0"></i>normal (pehle ke 4 hafte)</span><span class="us-k">⏳ = sirf likhe hue pakke installs</span></div></div>`; }
 
 /* ================= footer ================= */
 function footHtml(){ return `<summary>Ye number kaise bane? (chhoti si list)</summary><ul>
@@ -6340,7 +6506,7 @@ function screen(note){ prep(); VIEW='all'; PAGE=null; SPF='us-s'; spkN=0; for(co
     +`<div class="us-wrap" id="us-main">${note||''}<section class="us-story" id="us-story" aria-label="Sabse zaroori baatein">${storyHtml()}</section>`
     +`<section aria-label="Portfolio KPIs"><div class="us-kpis" id="us-kpis">${kpisHtml()}</div><details class="us-ledger" id="us-ledger" style="margin-top:10px"${ST.ledger?' open':''}><summary>📋 Roz ka hisaab — table</summary><div class="us-panel us-tw" id="us-ledgerT" style="border-radius:var(--us-r);max-height:380px">${ledgerHtml()}</div></details></section>`
     +`<section class="us-duo"><article class="us-panel" id="us-map">${mapHtml()}</article><article class="us-panel" id="us-src">${srcHtml()}</article></section>`
-    +`<section class="us-panel us-tl" id="us-tl">${tlHtml()}</section><section id="us-chg">${chgHtml()}</section><section class="us-panel" id="us-tbl">${tblHtml()}</section>`
+    +`<section class="us-panel us-tl" id="us-tl">${tlHtml()}</section><section id="us-chg">${chgHtml()}</section><section class="us-panel" id="us-tbl">${tblHtml()}</section><section class="us-panel" id="us-gd">${gdHtml()}</section>`
     +`<details class="us-foot" id="us-foot">${footHtml()}</details></div></div>`; }
 // is this app in the Studio's file (visible apps)? — else its older page stays as it was
 function has(id){ try{ prep(); return A.some(a=>a.id===id); }catch(e){ return false; } }
@@ -6450,7 +6616,8 @@ return {ptr, ensure, retry, screen, appScreen, has, hide, closeDrawer, openDrawe
   _:{A:()=>A, R:()=>R, W:()=>W, PT:()=>PT, PC:()=>PC, ST, ALERTS:()=>ALERTS, NOGA:()=>NOGA, M:()=>M, sums, cohR, cohW, pool, loss, ix, dOf, windows,
      story:storyHtml, kpis:kpisHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml,
      page:id=>{ const i=A.findIndex(a=>a.id===id); return i<0?'':pageHtml(i); }, view:()=>({VIEW,PAGE}), SPK:()=>SPK, labels, navPage,
-     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage}};
+     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage,
+     gdCell, gdPick, gdHtml:()=>gdHtml(), gdApp:(i,m)=>gdApp(R[i],m||'d'), GST, GDL}};
 })();
 
 function renderUninstall(){
