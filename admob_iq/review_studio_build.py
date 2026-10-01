@@ -165,10 +165,7 @@ RULES = [
     (r'^Roz (?:app )?hataane wale (\d+)% kam', r'Daily uninstalls −\1%'),
     (r'^Roz (?:app )?hataane wale (\d+)% badhe', r'Daily uninstalls +\1%'),
     # the same facts as the review now writes them (glossary names; the number first, the % beside it)
-    (r'^Uninstall rate (\d+)% kam hua$', r'Uninstall rate −\1%'),
-    (r'^Uninstall rate (\d+)% badha$', r'Uninstall rate +\1%'),
-    (r'^Old users/day ([\d,.]+(?: lakh)?) → ([\d,.]+(?: lakh)?) \((\d+)% kam\)', r'Old users \1 → \2/day (−\3%)'),
-    (r'^Old users/day ([\d,.]+(?: lakh)?) → ([\d,.]+(?: lakh)?) \((\d+)% badhe\)', r'Old users \1 → \2/day (+\3%)'),
+    (r'^Old users/day ([\d,.]+(?: lakh)?) → ([\d,.]+(?: lakh)?) \(([+−]\d+%)\)', r'Old users \1 → \2/day (\3)'),
     (r'^Roz ([\d,.]+(?: lakh)?) → ([\d,.]+(?: lakh)?) old users', r'Old users \1 → \2/day'),
     (r'Ads wale installs ka hissa', 'Ads installs share'),
     (r'^Google Ads kharcha (?!·)', 'Google Ads spend '),

@@ -182,7 +182,7 @@ def headline(ctx, r, story):
     if k == "rate":
         if r.get("count_flat"):
             return r["fact"]
-        return f"Uninstall rate {pct(r['rel'], False)} {'badha' if r['up'] else 'kam hua'}"
+        return f"Uninstall rate {'+' if r['up'] else '−'}{pct(r['rel'], False)}"
     return r["fact"]
 
 
@@ -240,7 +240,7 @@ def good_text(ctx, r):
     if k == "act_drift":
         return f"old users/day {pct(r['rel'])}"
     if k == "rate":
-        return f"uninstall rate {pct(r['rel'], False)} kam"
+        return f"uninstall rate −{pct(r['rel'], False)}"
     if k == "cohort":
         return f"{gone_w(r['n'])} {p100(r['before'])}% → {p100(r['now'])}%"
     return r["fact"]

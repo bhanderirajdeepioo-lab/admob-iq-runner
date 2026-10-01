@@ -138,7 +138,7 @@ def _uninstall_row(ctx, a):
     elif fam == "rate_drift":
         up = a["dir"] == "up"
         rel = a["now"] / a["before"] - 1 if a["before"] else 0
-        fact = f"Uninstall rate {pct(rel, False)} {'badha' if up else 'kam hua'}"
+        fact = f"Uninstall rate {'+' if up else '−'}{pct(rel, False)}"
         prov_on = (ctx.ga4_till + timedelta(late_days(ctx, aid, "uninstall") + ctx.ga4_lag)) if a.get("provisional") else None
         till = a.get("data_till") or ctx.ga4_till
         period = f"Daily avg {fr(ctx, a['since'], till)} · vs {fr(ctx, a['base_from'], a['base_to'])}"
@@ -199,7 +199,7 @@ def _active_row(ctx, a, drift_keys, slow):
         if fam == "act_slow" and (aid, m) in drift_keys:
             return                                                   # M5: merged into the drift row
         rel = a.get("rel") or 0
-        fact = f"Old users/day {users(a['before'])} → {users(a['now'])} ({pct(rel, False)} {'badhe' if up else 'kam'})"
+        fact = f"Old users/day {users(a['before'])} → {users(a['now'])} ({'+' if up else '−'}{pct(rel, False)})"
         saath = None
         s = slow.get((aid, m))
         if fam == "act_slow" or (s and fam == "act_drift"):
@@ -226,7 +226,7 @@ def _active_row(ctx, a, drift_keys, slow):
                  sev_override="info")
         else:
             _add(ctx, **base, kind="act_ads", metric="ads", topic="T3", up=up, started=D(a["since"]), release=rel_,
-                 fact=f"Ads per user {pct(rel, False)} {'zyada' if up else 'kam'}",
+                 fact=f"Ads per user {'+' if up else '−'}{pct(rel, False)}",
                  saath=(f"revenue per user {fr(ctx, win.get('from'), win.get('to'))}: {pct(arel)}" if arel is not None and win else None),
                  period=period, vs_prev=True, before=a["before"], now=a["now"], rel=rel)
     elif fam == "act_return":

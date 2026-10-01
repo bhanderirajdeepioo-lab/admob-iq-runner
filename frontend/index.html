@@ -12862,7 +12862,7 @@ function renderReco(){
   const ra=(DATA.range_alerts||[]).filter(x=>!APP||x.app===APP);
   if(ra.length) cards.push({action:'Out of approved range — investigate', conf:'high',
     why:'Ye placements apni "normal" range se hile — floor / demand / mediation / quality check karo.',
-    rows: ra.map(a=>({app:a.app,place:a.place,sub:a.message||'',rev:revOf(a.place,a.app),id:a.id,goto:'unit'})).sort((a,b)=>b.rev-a.rev),
+    rows: ra.map(a=>({app:a.app,place:a.place,sub:smpInfoTxt(a.message||''),rev:revOf(a.place,a.app),id:a.id,goto:'unit'})).sort((a,b)=>b.rev-a.rev),
     total: ra.reduce((a,x)=>a+revOf(x.place,x.app),0)});
   // 3) IVT / high deduction → check traffic
   const ded=((DATA.deductions&&DATA.deductions.rows)||[]).filter(x=>x.flag==='ivt'&&(!APP||x.app===APP));

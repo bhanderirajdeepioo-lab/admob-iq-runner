@@ -1626,14 +1626,14 @@
       },
       "info": [],
       "kis": null,
-      "line": "Uninstall rate 50% badha",
+      "line": "Uninstall rate +50%",
       "q": {
        "abhi": null,
        "kab": "24 Sep · 7 days ago",
        "karo": "24 Sep ke aas-paas notification ya ads badle? Us update ke reviews dekho.",
        "kis": "Daily avg 24–28 Sep · vs 2–29 Aug",
        "kit": "Uninstall rate: roz ~20 (0.2%) → ~30 (0.3%) users",
-       "kya": "Uninstall rate 50% badha",
+       "kya": "Uninstall rate +50%",
        "naya": {
         "chip": "naya",
         "first": "26 Sep"
@@ -1642,7 +1642,7 @@
       },
       "snz_ph": null,
       "st": "red",
-      "t": "Uninstall rate 50% badha"
+      "t": "Uninstall rate +50%"
      },
      "update": {
       "detail": null,
@@ -1668,7 +1668,7 @@
     "head": {
      "age": "7 days",
      "chip": "naya",
-     "text": "Uninstall rate 50% badha"
+     "text": "Uninstall rate +50%"
     },
     "k7": 12.0,
     "key": "2d041557dd04",
