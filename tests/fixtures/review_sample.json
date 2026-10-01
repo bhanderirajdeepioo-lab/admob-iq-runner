@@ -638,7 +638,42 @@
      },
      "uninstall": {
       "detail": {
-       "chart": null,
+       "chart": {
+        "after_idx": 4,
+        "before": 20.0,
+        "cap": "Same day uninstall · % · install weeks 11 Aug–21 Sep",
+        "fmt": "p100",
+        "labels": [
+         "11 Aug",
+         "18 Aug",
+         "25 Aug",
+         "1 Sep",
+         "8 Sep",
+         "15 Sep"
+        ],
+        "marks": [
+         [
+          4,
+          "Started"
+         ]
+        ],
+        "tips": [
+         "Installs 11–17 Aug: 140 of 700 (20%)",
+         "Installs 18–24 Aug: 140 of 700 (20%)",
+         "Installs 25–31 Aug: 140 of 700 (20%)",
+         "Installs 1–7 Sep: 140 of 700 (20%)",
+         "Installs 8–14 Sep: 210 of 700 (30%)",
+         "Installs 15–21 Sep: 210 of 700 (30%)"
+        ],
+        "vals": [
+         20.0,
+         20.0,
+         20.0,
+         20.0,
+         30.0,
+         30.0
+        ]
+       },
        "more": [],
        "tab": "Uninstall"
       },

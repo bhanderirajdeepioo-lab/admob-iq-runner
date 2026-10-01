@@ -34,7 +34,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 BANNED = re.compile(r"\bis hafte\b|\bthis week\b|\babhi ka\b|Provisional|kacch?a\b|kacche|Estimate|/1k|\bpts\b|\bpp\b|\bpoints?\b"
-                    r"|cohort|ARPDAU|eCPM|mediation|Stay after|\bsettled\b|\blatest\b|\brecent\b", re.I)
+                    r"|cohort|ARPDAU|eCPM|mediation|Stay after|\bsettled\b|\blatest\b(?! week\b)|\brecent\b", re.I)   # "Latest week" (Gone by day N) is the owner's word
 BANNED_CASE = re.compile(r"\bNew\b|\bD\d{1,3}\b|\bMix\b|\bHALT\b|\bWIN\b|\bReturning\b")
 DEVA = re.compile("[ऀ-ॿ]")
 SIX = {"Bigda", "Dhyan do", "Behtar", "Normal", "Abhi jaldi", "Lagu nahi"}

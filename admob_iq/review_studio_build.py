@@ -164,6 +164,12 @@ RULES = [
     (r'^Roz ([\d,]+) → ([\d,]+) purane users', r'Returning users \1 → \2/day'),
     (r'^Roz (?:app )?hataane wale (\d+)% kam', r'Daily uninstalls −\1%'),
     (r'^Roz (?:app )?hataane wale (\d+)% badhe', r'Daily uninstalls +\1%'),
+    # the same facts as the review now writes them (glossary names; the number first, the % beside it)
+    (r'^Uninstall rate (\d+)% kam hua$', r'Uninstall rate −\1%'),
+    (r'^Uninstall rate (\d+)% badha$', r'Uninstall rate +\1%'),
+    (r'^Old users/day ([\d,.]+(?: lakh)?) → ([\d,.]+(?: lakh)?) \((\d+)% kam\)', r'Old users \1 → \2/day (−\3%)'),
+    (r'^Old users/day ([\d,.]+(?: lakh)?) → ([\d,.]+(?: lakh)?) \((\d+)% badhe\)', r'Old users \1 → \2/day (+\3%)'),
+    (r'^Roz ([\d,.]+(?: lakh)?) → ([\d,.]+(?: lakh)?) old users', r'Old users \1 → \2/day'),
     (r'Ads wale installs ka hissa', 'Ads installs share'),
     (r'^Google Ads kharcha (?!·)', 'Google Ads spend '),
     (r'\(4 hafte ka avg\)', '(4-week avg)'),
@@ -172,6 +178,7 @@ RULES = [
     (r'^Kamai ([+−]\d+%)', r'Revenue \1'),
     (r'^Kamai ', 'Revenue '),
     (r'(v[\d.]+) update achha gaya$', r'\1 went well'),
+    (r'(v[\d.]+) update went well$', r'\1 went well'),
     # the page's own words (the "how this works" lines)
     (r'Kamai · eCPM', 'Revenue · eCPM'),
     (r'🔁 Kal dobara dekho', '🔁 Check again tomorrow'),

@@ -5,7 +5,8 @@ the same meaning as the demo's svg_bars() arguments (p100 values are already ×1
 
 from datetime import timedelta
 
-from .fmt import D, back_w, cap, days_back, fd, fr, gone_w, p100, ver_of
+from .fmt import D, back_w, days_back, fd, fr, gone_w, p100, ver_of
+from .fmt import cap as up1   # (not "cap": chart_for has its own local caption named cap)
 from .series import day_series, idx_of_day, idx_of_week, rel_update, ret_weeks, un_weeks
 
 
@@ -64,19 +65,19 @@ def chart_for(ctx, r):
     if k in ("cohort", "act_return", "impact"):
         if k == "cohort":
             wk = un_weeks(ctx, aid, r["n"], r["inst"][1])
-            what = cap(gone_w(r["n"]))
+            what = up1(gone_w(r["n"]))
         elif k == "act_return":
             N = int(r["metric"].split("d")[-1])
             wk = ret_weeks(ctx, aid, N, r["inst"][1])
-            what = cap(back_w(N))
+            what = up1(back_w(N))
         else:
             rd = D(r["release"]["date"])
             if r["metric"] == "un_d0":
-                lim, fn, what = ctx.ga4_till, (lambda e: un_weeks(ctx, aid, 0, e)), cap(gone_w(0))
+                lim, fn, what = ctx.ga4_till, (lambda e: un_weeks(ctx, aid, 0, e)), up1(gone_w(0))
             else:
                 N = 1 if r["metric"] == "ret_d1" else 7
                 lim, fn = ctx.ga4_till - timedelta(N), (lambda e, N=N: ret_weeks(ctx, aid, N, e))
-                what = cap(back_w(N))
+                what = up1(back_w(N))
             e = rd + timedelta(6)
             while e + timedelta(7) <= lim:
                 e += timedelta(7)
@@ -86,7 +87,7 @@ def chart_for(ctx, r):
         if not wk:
             return None
         vals = [w["p"] * 100 for w in wk]
-        tips = [f"Installs {fr(ctx, w['s'], w['e'])}: {round(w['n'] * w['p']):,} ({p100(w['p'])}%) · {w['n']:,} installs"
+        tips = [f"Installs {fr(ctx, w['s'], w['e'])}: {round(w['n'] * w['p']):,} of {w['n']:,} ({p100(w['p'])}%)"
                 for w in wk]
         si = idx_of_week(wk, r["started"])
         ri = idx_of_week(wk, rel_["date"]) if rel_ else None

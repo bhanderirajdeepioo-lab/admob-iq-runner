@@ -192,7 +192,7 @@ def test_the_owners_wording_everywhere(site):
     assert any(t.startswith("Same day uninstall") for t in text)
     assert not any(re.search(r"[Ii]nstall ke din (hi )?hataane", t) for t in text)
     A = {a["key"]: a for a in body["apps"]}
-    assert A[rs.K[6]]["f"]["uninstall"]["line"] == "Daily uninstalls +50%"
+    assert A[rs.K[6]]["f"]["uninstall"]["line"] == "Uninstall rate +50%"
     assert A[rs.K[5]]["f"]["update"]["line"] == "✅ v1.0.8 went well"
     assert A[rs.K[5]]["f"]["kamai"]["line"][0] == "Revenue +38%: "
 
