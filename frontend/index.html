@@ -843,6 +843,502 @@
   }
   @media (prefers-reduced-motion:reduce){#rv-root *{transition:none!important;scroll-behavior:auto!important}}
   /* ==== RV:END ==== */
+  /* ==== RS:BEGIN ==== */
+  /* ===== 🗂 REVIEW STUDIO (the Review tab's Studio) — everything under #rs-root / #rs-layer, classes rs-* ===== */
+:is(#rs-root,#rs-layer){--rs-raise2:#1c2c47;--rs-blue-s:#8fb8ff;--rs-blue-b:#15284a;--rs-band:rgba(143,184,255,.07);--rs-c-red:rgba(255,107,107,.78);--rs-c-amber:rgba(230,184,78,.70);--rs-c-green:rgba(52,217,154,.42);--rs-c-normal:#1a2a42;--rs-c-wait:#16284a;--rs-c-snz:#232a3a;--rs-num:"IBM Plex Sans Condensed","Roboto Condensed","Arial Narrow",-apple-system,BlinkMacSystemFont,sans-serif;--rs-emo:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;--rs-r:14px}
+#rs-root,#rs-layer{color:var(--ink);font:13.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased;text-align:left}
+#rv-root.rs-on{max-width:none}
+#rv-root.rs-on .rv-toast{z-index:99}
+#rs-root{position:relative;min-width:0;container:rs/inline-size;margin-top:4px}
+body:not([data-screen="review"]) #rs-layer{display:none}
+body.rs-lock[data-screen="review"]{overflow:hidden}
+:is(#rs-root,#rs-layer) *{box-sizing:border-box}
+:is(#rs-root,#rs-layer) [hidden]{display:none!important}
+:is(#rs-root,#rs-layer) button,:is(#rs-root,#rs-layer) select,:is(#rs-root,#rs-layer) input,:is(#rs-root,#rs-layer) textarea{font:inherit;color:inherit}
+:is(#rs-root,#rs-layer) button{cursor:pointer}
+:is(#rs-root,#rs-layer) :focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:6px}
+:is(#rs-root,#rs-layer) h2,:is(#rs-root,#rs-layer) h3,:is(#rs-root,#rs-layer) h4{margin:0;text-wrap:balance}
+:is(#rs-root,#rs-layer) .rs-muted{color:var(--muted)}:is(#rs-root,#rs-layer) .rs-faint{color:var(--faint)}:is(#rs-root,#rs-layer) .rs-ink{color:var(--ink)}
+:is(#rs-root,#rs-layer) .rs-bad{color:var(--bad)}:is(#rs-root,#rs-layer) .rs-good{color:var(--good)}:is(#rs-root,#rs-layer) .rs-watch{color:var(--watch)}:is(#rs-root,#rs-layer) .rs-cy{color:var(--cyan)}:is(#rs-root,#rs-layer) .rs-pink{color:#ffb4b4}
+:is(#rs-root,#rs-layer) .rs-small{font-size:11.5px}
+:is(#rs-root,#rs-layer) .rs-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:is(#rs-root,#rs-layer) .rv-m{font-variant-numeric:tabular-nums}
+/* ---------- the older tab, folded ---------- */
+#rs-old{margin-top:22px;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
+#rs-old>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;font-weight:700;font-size:14px;color:var(--ink)}
+#rs-old>summary::-webkit-details-marker{display:none}
+#rs-old>summary .rs-cv{display:inline-block;transition:transform .2s;color:var(--muted)}
+#rs-old[open]>summary .rs-cv{transform:rotate(90deg)}
+#rs-old>summary .rs-oh{font-weight:500;font-size:12px;color:var(--faint)}
+#rs-old>.rs-oldin{padding:4px 14px 16px;max-width:940px}
+/* ---------- top bar ---------- */
+:is(#rs-root,#rs-layer) .rs-top{position:sticky;top:var(--rs-stick,0px);z-index:8;background:rgba(10,17,32,.9);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:var(--rs-r)}
+:is(#rs-root,#rs-layer) .rs-top-in{padding:10px 16px 8px;display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap}
+:is(#rs-root,#rs-layer) .rs-brand{display:flex;align-items:center;gap:11px;min-width:0;margin-right:auto}
+:is(#rs-root,#rs-layer) .rs-mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#2f6bff,var(--cyan));display:grid;place-items:center;flex:none}
+:is(#rs-root,#rs-layer) .rs-bn{font:700 17px/1.1 var(--rs-num);letter-spacing:.01em}
+:is(#rs-root,#rs-layer) .rs-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+:is(#rs-root,#rs-layer) .rs-ctrls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+:is(#rs-root,#rs-layer) .rs-seg{display:inline-flex;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:2px;gap:2px;flex-wrap:wrap}
+:is(#rs-root,#rs-layer) .rs-seg button{background:none;border:0;border-radius:8px;padding:5px 11px;font-weight:600;font-size:12.5px;color:var(--ink2);white-space:nowrap;min-height:30px}
+:is(#rs-root,#rs-layer) .rs-seg button:hover{background:var(--raise)}
+:is(#rs-root,#rs-layer) .rs-seg button[aria-pressed="true"],:is(#rs-root,#rs-layer) .rs-seg button[aria-selected="true"]{background:var(--rs-raise2);color:#fff;box-shadow:inset 0 0 0 1px rgba(34,211,238,.45)}
+:is(#rs-root,#rs-layer) .rs-seg button .rs-cnt{font:600 11px var(--rs-num);color:var(--faint);margin-left:5px}
+:is(#rs-root,#rs-layer) .rs-me{font-size:12px;color:var(--ink2);white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-me b{color:var(--watch)}
+:is(#rs-root,#rs-layer) .rs-icb{background:var(--panel);border:1px solid var(--line2);border-radius:9px;min-width:34px;height:34px;display:inline-grid;place-items:center;color:var(--ink2);font-size:14px;flex:none;padding:0 8px}
+:is(#rs-root,#rs-layer) .rs-icb:hover{border-color:var(--cyan);color:#fff}
+:is(#rs-root,#rs-layer) .rs-winline{padding:10px 2px 0;display:flex;flex-wrap:wrap;gap:6px 8px;font-size:12px;color:var(--muted);align-items:center}
+:is(#rs-root,#rs-layer) .rs-fr{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:3px 9px;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-fr b{color:var(--ink);font-weight:600}
+:is(#rs-root,#rs-layer) .rs-fr.rs-prov{color:var(--watch);border-color:rgba(230,184,78,.3)}
+:is(#rs-root,#rs-layer) .rs-fr.rs-day{color:var(--ink);border-color:var(--line2);background:var(--raise)}
+:is(#rs-root,#rs-layer) .rs-fr.rs-ro{color:#ffb4b4;border-color:rgba(255,107,107,.4);white-space:normal}
+/* ---------- layout ---------- */
+:is(#rs-root,#rs-layer) .rs-wrap{padding-block:16px 10px;display:flex;flex-direction:column;gap:20px}
+:is(#rs-root,#rs-layer) .rs-view{display:flex;flex-direction:column;gap:20px;min-width:0}
+:is(#rs-root,#rs-layer) .rs-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--rs-r);min-width:0}
+:is(#rs-root,#rs-layer) .rs-ph{display:flex;align-items:flex-end;gap:8px 14px;flex-wrap:wrap;padding:16px 18px 10px}
+:is(#rs-root,#rs-layer) .rs-ph h2{font-size:17px;font-weight:650;line-height:1.2}
+:is(#rs-root,#rs-layer) .rs-ph2{padding-top:4px}
+:is(#rs-root,#rs-layer) .rs-h14{font-size:14px!important}
+:is(#rs-root,#rs-layer) .rs-eyebrow{font:600 10.5px/1 var(--rs-num);letter-spacing:.11em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+:is(#rs-root,#rs-layer) .rs-eyebrow2{font:600 11px/1.2 var(--rs-num);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-sub2{font:600 11px/1 var(--rs-num);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:6px 18px 4px}
+:is(#rs-root,#rs-layer) .rs-hint{font-size:12px;color:var(--muted);max-width:76ch}
+:is(#rs-root,#rs-layer) .rs-ph .rs-right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+:is(#rs-root,#rs-layer) .rs-empty{padding:14px 18px 18px;color:var(--muted);font-size:12.5px}
+:is(#rs-root,#rs-layer) .rs-pad{padding:0 18px 12px}:is(#rs-root,#rs-layer) .rs-pad2{padding:0 18px 6px}
+/* ---------- hero ---------- */
+:is(#rs-root,#rs-layer) .rs-hero{display:grid;grid-template-columns:minmax(270px,340px) minmax(0,1fr);gap:14px;align-items:stretch}
+:is(#rs-root,#rs-layer) .rs-ringp{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+:is(#rs-root,#rs-layer) .rs-ringw{display:flex;gap:16px;align-items:center}
+:is(#rs-root,#rs-layer) .rs-ring{width:118px;height:118px;flex:none;display:block}
+:is(#rs-root,#rs-layer) .rs-ring .rs-rl1{font:700 26px var(--rs-num);fill:var(--ink)}
+:is(#rs-root,#rs-layer) .rs-ring .rs-rl2{font:600 11px var(--rs-num);fill:var(--muted);letter-spacing:.06em}
+:is(#rs-root,#rs-layer) .rs-rstat{display:flex;flex-direction:column;gap:3px;font-size:12.5px;min-width:0}
+:is(#rs-root,#rs-layer) .rs-rstat .rs-eyebrow{margin:0}
+:is(#rs-root,#rs-layer) .rs-rstat .rs-big{font:700 21px/1.1 var(--rs-num)}
+:is(#rs-root,#rs-layer) .rs-rstat .rs-big small{font:600 12px var(--rs-num);color:var(--muted);margin-left:4px}
+:is(#rs-root,#rs-layer) .rs-rstat .rs-muted b{color:var(--ink)}
+:is(#rs-root,#rs-layer) .rs-bdown{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+:is(#rs-root,#rs-layer) .rs-bd{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px 4px;text-align:center;min-width:0}
+:is(#rs-root,#rs-layer) .rs-bd b{display:block;font:700 17px/1.1 var(--rs-num)}
+:is(#rs-root,#rs-layer) .rs-bd span{display:block;font-size:10.5px;color:var(--muted);line-height:1.2;margin-top:2px}
+:is(#rs-root,#rs-layer) .rs-bd.rs-on{border-color:var(--line2);background:var(--raise)}
+:is(#rs-root,#rs-layer) .rs-tsl{font-size:11.5px;color:var(--faint);line-height:1.45}
+:is(#rs-root,#rs-layer) .rs-story{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+:is(#rs-root,#rs-layer) .rs-sc{position:relative;background:linear-gradient(180deg,#132139,#101b2e);border:1px solid var(--line);border-radius:var(--rs-r);padding:12px 15px;cursor:pointer;transition:border-color .2s,transform .2s;min-width:0;text-align:left;display:flex;flex-direction:column;gap:3px;color:inherit}
+:is(#rs-root,#rs-layer) .rs-sc:hover{border-color:var(--line2);transform:translateY(-1px)}
+:is(#rs-root,#rs-layer) .rs-sc[aria-pressed="true"]{border-color:rgba(34,211,238,.6);box-shadow:inset 0 0 0 1px rgba(34,211,238,.25)}
+:is(#rs-root,#rs-layer) .rs-sc .rs-t{font:600 10.5px/1.2 var(--rs-num);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;gap:7px;align-items:center}
+:is(#rs-root,#rs-layer) .rs-sc .rs-ic{font-size:14px;letter-spacing:0}
+:is(#rs-root,#rs-layer) .rs-sc .rs-big{font:700 30px/1.05 var(--rs-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em;margin-top:2px;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-sc .rs-big small{font:600 13px var(--rs-num);color:var(--muted);margin-left:5px;letter-spacing:0}
+:is(#rs-root,#rs-layer) .rs-sc .rs-ln{font-size:12.5px;color:var(--ink2);line-height:1.38}
+:is(#rs-root,#rs-layer) .rs-sc .rs-ln b{color:var(--ink);font-weight:600}
+:is(#rs-root,#rs-layer) .rs-sc.rs-bad .rs-big{color:var(--bad)}:is(#rs-root,#rs-layer) .rs-sc.rs-good .rs-big{color:var(--good)}:is(#rs-root,#rs-layer) .rs-sc.rs-watch .rs-big{color:var(--watch)}:is(#rs-root,#rs-layer) .rs-sc.rs-cyan .rs-big{color:var(--cyan)}
+:is(#rs-root,#rs-layer) .rs-sc.rs-wide{grid-column:span 2}
+:is(#rs-root,#rs-layer) .rs-mbar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--raise);margin-top:6px}
+:is(#rs-root,#rs-layer) .rs-mbar i{display:block;height:100%}
+:is(#rs-root,#rs-layer) .rs-mbar.rs-mbig{height:20px;border-radius:5px;margin:4px 0 0}
+:is(#rs-root,#rs-layer) .rs-mbar.rs-mbig i{display:flex;align-items:center;justify-content:center;font:650 10.5px/1 var(--rs-num);font-style:normal;color:#0a1120;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+:is(#rs-root,#rs-layer) .rs-chipsln{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+:is(#rs-root,#rs-layer) .rs-fchip{display:inline-flex;gap:4px;align-items:center;font-weight:600;line-height:1;font-size:11px;padding:3px 7px;border-radius:999px;background:var(--panel2);border:1px solid var(--line2);color:var(--ink2);white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-e{font-family:var(--rs-emo)}
+:is(#rs-root,#rs-layer) .rs-mov{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:4px 14px;align-items:center;margin-top:4px}
+:is(#rs-root,#rs-layer) .rs-mvbig{display:flex;flex-direction:column;gap:2px;min-width:0}
+:is(#rs-root,#rs-layer) .rs-mvl{display:flex;flex-direction:column;gap:4px;min-width:0}
+:is(#rs-root,#rs-layer) .rs-mvr{display:grid;grid-template-columns:minmax(0,1fr) minmax(48px,70px) auto;gap:8px;align-items:center;font-size:11.5px;color:var(--ink2)}
+:is(#rs-root,#rs-layer) .rs-mvn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+:is(#rs-root,#rs-layer) .rs-mvb{position:relative;height:10px}
+:is(#rs-root,#rs-layer) .rs-mvb::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--line2)}
+:is(#rs-root,#rs-layer) .rs-mvb i{position:absolute;top:1px;height:8px;border-radius:2px;opacity:.88}
+:is(#rs-root,#rs-layer) .rs-mvr b{font:650 11.5px var(--rs-num);text-align:right;white-space:nowrap;min-width:64px}
+:is(#rs-root,#rs-layer) .rs-mvr b small{font-weight:500;color:var(--muted);font-size:10.5px}
+/* ---------- status vocabulary ---------- */
+:is(#rs-root,#rs-layer) .rs-chip{display:inline-flex;align-items:center;gap:5px;font-weight:650;font-size:11.5px;line-height:1;padding:4px 8px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
+:is(#rs-root,#rs-layer) .rs-chip i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+:is(#rs-root,#rs-layer) .rs-chip.rs-chs{padding:2px 6px;font-size:10.5px}
+:is(#rs-root,#rs-layer) .rs-st-red{color:var(--bad);background:var(--bad-b);border-color:rgba(255,107,107,.3)}
+:is(#rs-root,#rs-layer) .rs-st-amber{color:var(--watch);background:var(--watch-b);border-color:rgba(230,184,78,.3)}
+:is(#rs-root,#rs-layer) .rs-st-green{color:var(--good);background:var(--good-b);border-color:rgba(52,217,154,.3)}
+:is(#rs-root,#rs-layer) .rs-st-normal{color:var(--ink2);background:transparent;border-color:var(--line2)}
+:is(#rs-root,#rs-layer) .rs-st-wait{color:var(--rs-blue-s);background:var(--rs-blue-b);border-color:rgba(143,184,255,.28)}
+:is(#rs-root,#rs-layer) .rs-st-na{color:var(--faint);background:transparent;border-color:var(--line2);border-style:dashed}
+:is(#rs-root,#rs-layer) .rs-st-nodata{color:var(--faint);background:transparent;border-color:var(--line2);border-style:dotted}
+:is(#rs-root,#rs-layer) .rs-st-snz{color:var(--muted);background:var(--rs-c-snz);border-color:var(--line2)}
+:is(#rs-root,#rs-layer) .rs-age{font-weight:600;font-size:11px;line-height:1;color:var(--ink2);background:var(--raise);border-radius:999px;padding:4px 8px;white-space:nowrap;border:1px solid var(--line2)}
+:is(#rs-root,#rs-layer) .rs-age.rs-new{color:#fff;background:rgba(34,211,238,.16);border-color:rgba(34,211,238,.45)}
+:is(#rs-root,#rs-layer) .rs-prov,:is(#rs-root,#rs-layer) .rs-pv{color:var(--watch)}
+:is(#rs-root,#rs-layer) .rs-sz{font:600 10px/1 var(--rs-num);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line2);border-radius:5px;padding:3px 5px;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-sz.rs-badi{color:var(--ink2);border-color:#3a5070}
+:is(#rs-root,#rs-layer) .rs-tagw{font-weight:600;font-size:10.5px;line-height:1;color:var(--purple);border:1px solid rgba(167,139,250,.4);border-radius:999px;padding:3px 7px;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-nbchip{font-weight:650;font-size:11px;line-height:1;color:#fff;background:rgba(255,107,107,.18);border:1px solid rgba(255,107,107,.45);border-radius:999px;padding:3px 8px;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-pill{display:inline-flex;align-items:center;gap:5px;font-weight:650;font-size:12px;line-height:1.1;padding:5px 9px;border-radius:999px;border:1px solid var(--line2);color:var(--ink2);background:var(--panel2);white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-pill.rs-pxs{padding:3px 7px;font-size:11px;white-space:normal}
+:is(#rs-root,#rs-layer) .rs-pill.rs-p-ok{color:var(--good);border-color:rgba(52,217,154,.4);background:rgba(52,217,154,.08)}
+:is(#rs-root,#rs-layer) .rs-pill.rs-p-flag{color:#ffb4b4;border-color:rgba(255,107,107,.5);background:rgba(255,107,107,.1)}
+:is(#rs-root,#rs-layer) .rs-pill.rs-p-kal{color:var(--rs-blue-s);border-color:rgba(143,184,255,.4);background:var(--rs-blue-b)}
+:is(#rs-root,#rs-layer) .rs-pill.rs-p-pend{color:var(--watch);border-color:rgba(230,184,78,.35);background:rgba(230,184,78,.06)}
+:is(#rs-root,#rs-layer) .rs-pill.rs-p-kaam{color:var(--purple);border-color:rgba(167,139,250,.45);background:var(--purple-b)}
+:is(#rs-root,#rs-layer) .rs-av{position:relative;width:36px;height:36px;border-radius:9px;flex:none;display:grid;place-items:center;font:700 16px var(--rs-num);color:#fff;overflow:hidden}
+:is(#rs-root,#rs-layer) .rs-av img{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:cover}
+:is(#rs-root,#rs-layer) .rs-av.rs-sm{width:22px;height:22px;border-radius:6px;font-size:11px}
+:is(#rs-root,#rs-layer) .rs-av.rs-lg{width:46px;height:46px;border-radius:11px;font-size:20px}
+:is(#rs-root,#rs-layer) .rs-nmt{font-weight:650;color:var(--ink);line-height:1.25;overflow-wrap:anywhere}
+:is(#rs-root,#rs-layer) .rs-nmt .rs-acn{color:var(--muted);font-weight:500}
+:is(#rs-root,#rs-layer) .rs-pre{margin-right:3px;font-weight:500;opacity:.8}
+:is(#rs-root,#rs-layer) .rs-kbd{font:600 10.5px var(--rs-num);border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:0 5px;color:var(--ink2);background:var(--panel2)}
+/* ---------- the feature map: every box names its feature, at every width ---------- */
+:is(#rs-root,#rs-layer) .rs-mapw{overflow-x:auto;padding:0 12px 4px}
+:is(#rs-root,#rs-layer) .rs-hm{display:grid;grid-template-columns:24px minmax(160px,1fr) 84px repeat(10,minmax(50px,92px)) 56px 96px;gap:3px;min-width:962px;align-items:stretch}
+:is(#rs-root,#rs-layer) .rs-hh{font:600 10px/1.15 var(--rs-num);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 2px 6px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;gap:3px;background:none;border:0;border-radius:6px}
+:is(#rs-root,#rs-layer) .rs-hh .rs-e{font-family:var(--rs-emo);font-size:14px;letter-spacing:0}
+:is(#rs-root,#rs-layer) .rs-hh .rs-w{text-transform:none;letter-spacing:0}
+:is(#rs-root,#rs-layer) button.rs-hh:hover{background:var(--raise);color:var(--ink)}
+:is(#rs-root,#rs-layer) .rs-hh[aria-pressed="true"]{color:var(--cyan)}
+:is(#rs-root,#rs-layer) .rs-hh.rs-l{align-items:flex-start;text-align:left}
+:is(#rs-root,#rs-layer) .rs-hh.rs-r{align-items:flex-end;text-align:right}
+:is(#rs-root,#rs-layer) .rs-gsep{grid-column:1/-1;font:600 10.5px/1 var(--rs-num);letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:12px 4px 4px;display:flex;gap:8px;align-items:center}
+:is(#rs-root,#rs-layer) .rs-gsep::after{content:"";flex:1;height:1px;background:var(--line)}
+:is(#rs-root,#rs-layer) .rs-rk{display:flex;align-items:center;justify-content:center;font:600 12px var(--rs-num);color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-nm{display:flex;align-items:center;gap:8px;padding:2px 6px 2px 2px;min-width:0;cursor:pointer;border-radius:8px;background:none;border:0;text-align:left;color:inherit}
+:is(#rs-root,#rs-layer) .rs-nm:hover{background:var(--raise)}
+:is(#rs-root,#rs-layer) .rs-nm .rs-nmt{font-size:12.5px}
+:is(#rs-root,#rs-layer) .rs-rv{display:flex;flex-direction:column;justify-content:center;align-items:flex-end;padding:0 6px;font:600 13px var(--rs-num);font-variant-numeric:tabular-nums;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-rv small{font:500 10.5px var(--rs-num);color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-rv small.rs-up{color:var(--good)}:is(#rs-root,#rs-layer) .rs-rv small.rs-dn{color:var(--bad)}
+:is(#rs-root,#rs-layer) .rs-hc{position:relative;border:0;border-radius:7px;min-height:46px;display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;font:650 12.5px/1 var(--rs-num);font-variant-numeric:tabular-nums;color:var(--ink);transition:transform .12s,box-shadow .12s;padding:2px 2px;white-space:nowrap;min-width:0}
+:is(#rs-root,#rs-layer) .rs-hc:hover{transform:scale(1.06);box-shadow:0 0 0 1px var(--line2),0 6px 18px rgba(0,0,0,.35);z-index:3}
+:is(#rs-root,#rs-layer) .rs-hc .rs-cl{display:block;font:600 8.5px/1 var(--rs-num);letter-spacing:.03em;text-transform:uppercase;opacity:.85;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-hc .rs-cv2{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+:is(#rs-root,#rs-layer) .rs-s-red.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-red{background:var(--rs-c-red);color:#fff}
+:is(#rs-root,#rs-layer) .rs-s-amber.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-amber{background:var(--rs-c-amber);color:#1d1404}
+:is(#rs-root,#rs-layer) .rs-s-green.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-green{background:var(--rs-c-green);color:#e9fff5}
+:is(#rs-root,#rs-layer) .rs-s-normal.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-normal{background:var(--rs-c-normal);color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-s-wait.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-wait{background:var(--rs-c-wait);color:var(--rs-blue-s)}
+:is(#rs-root,#rs-layer) .rs-s-snz.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-snz{background:var(--rs-c-snz);color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-s-na.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-na{background:transparent;border:1px dashed var(--line);color:var(--faint);font-weight:500}
+:is(#rs-root,#rs-layer) .rs-s-nodata.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-nodata{background:repeating-linear-gradient(135deg,rgba(97,116,143,.22) 0 4px,transparent 4px 8px);border:1px solid var(--line);color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-hc.rs-s-normal .rs-cl,:is(#rs-root,#rs-layer) .rs-hc.rs-s-na .rs-cl,:is(#rs-root,#rs-layer) .rs-hc.rs-s-nodata .rs-cl,:is(#rs-root,#rs-layer) .rs-hc.rs-s-wait .rs-cl,:is(#rs-root,#rs-layer) .rs-hc.rs-s-snz .rs-cl{color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-nbd{position:absolute;top:3px;left:3px;width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(255,107,107,.9)}
+:is(#rs-root,#rs-layer) .rs-cfl{position:absolute;top:-4px;right:-3px;font-size:11px;font-family:var(--rs-emo);line-height:1}
+:is(#rs-root,#rs-layer) .rs-dt{width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.55;display:inline-block}
+:is(#rs-root,#rs-layer) .rs-iss{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:650 12px var(--rs-num)}
+:is(#rs-root,#rs-layer) .rs-r{color:var(--bad)}:is(#rs-root,#rs-layer) .rs-a{color:var(--watch)}
+:is(#rs-root,#rs-layer) .rs-iss i.rs-w,:is(#rs-root,#rs-layer) .rs-ft i.rs-w{font-style:normal}
+:is(#rs-root,#rs-layer) .rs-stc{display:flex;align-items:center;justify-content:flex-end;padding-right:2px}
+:is(#rs-root,#rs-layer) .rs-stc .rs-pill{font-size:11px;padding:4px 7px;white-space:normal;text-align:center}
+:is(#rs-root,#rs-layer) .rs-ft{font:600 11px var(--rs-num);display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0 2px;color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-ftl{grid-column:1/4;font:600 10px var(--rs-num);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);display:flex;align-items:center;justify-content:flex-end;padding-right:8px;text-align:right}
+:is(#rs-root,#rs-layer) .rs-legend{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:8px 18px 14px;font-size:11.5px;color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-legend.rs-legin{padding:8px 0 2px}
+:is(#rs-root,#rs-layer) .rs-k{display:inline-flex;gap:5px;align-items:center}
+:is(#rs-root,#rs-layer) .rs-k b{color:var(--ink);font-weight:600}
+:is(#rs-root,#rs-layer) .rs-sw{width:16px;height:12px;border-radius:3px;display:inline-block;flex:none}
+:is(#rs-root,#rs-layer) .rs-swnd{background:repeating-linear-gradient(135deg,rgba(97,116,143,.4) 0 3px,transparent 3px 6px);border:1px solid var(--line)}
+:is(#rs-root,#rs-layer) .rs-swdot{position:absolute;top:2px;left:2px;width:5px;height:5px;border-radius:50%;background:#fff}
+/* ---------- list ---------- */
+:is(#rs-root,#rs-layer) .rs-lh{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end}
+:is(#rs-root,#rs-layer) .rs-lh h2{font-size:17px;font-weight:650}
+:is(#rs-root,#rs-layer) .rs-lh .rs-right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+:is(#rs-root,#rs-layer) .rs-fbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}
+:is(#rs-root,#rs-layer) .rs-fbar button{background:transparent;border:1px solid var(--line2);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted);min-height:30px}
+:is(#rs-root,#rs-layer) .rs-fbar button[aria-pressed="true"]{color:var(--ink);background:var(--rs-raise2);border-color:rgba(34,211,238,.45)}
+:is(#rs-root,#rs-layer) .rs-fbar .rs-c{font:600 11px var(--rs-num);color:var(--faint);margin-left:4px}
+:is(#rs-root,#rs-layer) .rs-srch{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:6px 10px;min-width:0;width:220px;max-width:100%;color:var(--ink)}
+:is(#rs-root,#rs-layer) .rs-srch::placeholder{color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-khint{font-size:11.5px;color:var(--faint);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+#rs-lbody{margin-top:12px}
+:is(#rs-root,#rs-layer) .rs-grp{display:flex;flex-direction:column;gap:12px;margin-bottom:18px}
+:is(#rs-root,#rs-layer) .rs-gh{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:6px 2px 0}
+:is(#rs-root,#rs-layer) .rs-gh h3{font-size:15px;font-weight:650}
+:is(#rs-root,#rs-layer) .rs-gsub{font-size:12px;color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-gh .rs-right{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+:is(#rs-root,#rs-layer) .rs-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+@container rs (min-width:1500px){#rs-root .rs-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@container rs (max-width:900px){#rs-root .rs-cards{grid-template-columns:minmax(0,1fr)}}
+/* ---------- card ---------- */
+:is(#rs-root,#rs-layer) .rs-rc{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--rs-r);padding:13px 15px 12px 17px;display:flex;flex-direction:column;gap:10px;min-width:0;overflow:hidden;scroll-margin-top:140px;transition:border-color .2s,box-shadow .2s;container-type:inline-size}
+:is(#rs-root,#rs-layer) .rs-rc::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--line2)}
+:is(#rs-root,#rs-layer) .rs-rc.rs-t-red::before{background:var(--bad)}:is(#rs-root,#rs-layer) .rs-rc.rs-t-amber::before{background:var(--watch)}:is(#rs-root,#rs-layer) .rs-rc.rs-t-green::before{background:var(--good)}
+:is(#rs-root,#rs-layer) .rs-rc.rs-kf{border-color:rgba(34,211,238,.7);box-shadow:0 0 0 1px rgba(34,211,238,.35)}
+:is(#rs-root,#rs-layer) .rs-rc.rs-done{background:linear-gradient(180deg,rgba(52,217,154,.05),var(--panel) 40%)}
+:is(#rs-root,#rs-layer) .rs-flash{animation:rsflash 1.8s ease-out}
+@keyframes rsflash{0%,40%{box-shadow:0 0 0 2px var(--cyan)}100%{box-shadow:0 0 0 0 transparent}}
+:is(#rs-root,#rs-layer) .rs-rc-h{display:flex;gap:10px;align-items:flex-start}
+:is(#rs-root,#rs-layer) .rs-rc-h .rs-rk{font:700 12px var(--rs-num);color:var(--faint);padding-top:10px;min-width:22px}
+:is(#rs-root,#rs-layer) .rs-rh-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+:is(#rs-root,#rs-layer) .rs-rc-h .rs-nmt{font-size:14.5px}
+:is(#rs-root,#rs-layer) .rs-l2{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+:is(#rs-root,#rs-layer) .rs-rc-h>.rs-pill{margin-left:auto;flex:none}
+:is(#rs-root,#rs-layer) .rs-rc-m{display:grid;grid-template-columns:minmax(150px,200px) minmax(0,1fr);gap:12px;align-items:center}
+:is(#rs-root,#rs-layer) .rs-lbl{font:600 10.5px/1.2 var(--rs-num);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-mny .rs-big{font:700 26px/1.1 var(--rs-num);font-variant-numeric:tabular-nums;white-space:nowrap;margin-top:2px}
+:is(#rs-root,#rs-layer) .rs-dl{font:600 12.5px/1.35 var(--rs-num);margin-top:2px}
+:is(#rs-root,#rs-layer) .rs-dl.rs-up,:is(#rs-root,#rs-layer) .rs-kd.rs-up,:is(#rs-root,#rs-layer) td .rs-up{color:var(--good)}:is(#rs-root,#rs-layer) .rs-dl.rs-dn,:is(#rs-root,#rs-layer) .rs-kd.rs-dn,:is(#rs-root,#rs-layer) td .rs-dn{color:var(--bad)}:is(#rs-root,#rs-layer) .rs-dl.rs-fl,:is(#rs-root,#rs-layer) .rs-kd.rs-fl{color:var(--ink2)}
+:is(#rs-root,#rs-layer) .rs-mny .rs-vs{font-size:11.5px;line-height:1.35;color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-spk{display:block;width:100%;height:auto;overflow:visible;cursor:crosshair}
+:is(#rs-root,#rs-layer) .rs-nospk{font-size:11.5px;color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-strip{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px}
+:is(#rs-root,#rs-layer) .rs-strip li{min-width:0}
+:is(#rs-root,#rs-layer) .rs-fc{width:100%;border:0;border-radius:8px;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px 1px;position:relative;color:var(--ink);transition:transform .12s}
+:is(#rs-root,#rs-layer) .rs-fc:hover{transform:translateY(-1px);box-shadow:0 0 0 1px var(--line2)}
+:is(#rs-root,#rs-layer) .rs-fc .rs-fi{font-family:var(--rs-emo);font-size:14px;line-height:1}
+:is(#rs-root,#rs-layer) .rs-fc .rs-flb{font:600 9.5px/1.05 var(--rs-num);letter-spacing:.02em;text-transform:uppercase;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-fc .rs-fk{font:700 10.5px/1 var(--rs-num);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-fc .rs-nbd{top:4px;left:4px;width:6px;height:6px}
+:is(#rs-root,#rs-layer) .rs-flg{position:absolute;top:-5px;right:-3px;font-size:11px;font-family:var(--rs-emo)}
+@container (max-width:540px){#rs-root .rs-strip{grid-template-columns:repeat(5,minmax(0,1fr))}#rs-root .rs-fc{min-height:46px}#rs-root .rs-fc .rs-flb{font-size:9px}}
+:is(#rs-root,#rs-layer) .rs-ti{border-radius:10px;background:var(--panel2);border:1px solid var(--line);padding:9px 11px;display:flex;flex-direction:column;gap:5px}
+:is(#rs-root,#rs-layer) .rs-ti.rs-s-red{border-color:rgba(255,107,107,.35)}:is(#rs-root,#rs-layer) .rs-ti.rs-s-amber{border-color:rgba(230,184,78,.32)}:is(#rs-root,#rs-layer) .rs-ti.rs-s-green{border-color:rgba(52,217,154,.3)}
+:is(#rs-root,#rs-layer) .rs-ti-h{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+:is(#rs-root,#rs-layer) .rs-ti-h b{font-weight:650;font-size:12.5px}
+:is(#rs-root,#rs-layer) .rs-fe{font-family:var(--rs-emo)}
+:is(#rs-root,#rs-layer) .rs-ti-t{font-size:13.5px;font-weight:600;color:var(--ink);line-height:1.38}
+:is(#rs-root,#rs-layer) .rs-ti-k{font-size:12.5px;color:var(--ink2);line-height:1.4}
+:is(#rs-root,#rs-layer) .rs-ts{font-size:11.5px;color:var(--faint);line-height:1.5;display:flex;flex-wrap:wrap;gap:3px 10px;align-items:center}
+:is(#rs-root,#rs-layer) .rs-next{font-size:12.5px;color:var(--ink);background:var(--raise);border-radius:8px;padding:6px 9px;line-height:1.4}
+:is(#rs-root,#rs-layer) .rs-next b{color:var(--cyan);font-weight:650}
+:is(#rs-root,#rs-layer) .rs-ois{display:flex;flex-direction:column;gap:3px}
+:is(#rs-root,#rs-layer) .rs-oi{display:flex;gap:7px;align-items:baseline;background:none;border:0;padding:3px 4px;border-radius:7px;text-align:left;font-size:12px;color:var(--ink2);line-height:1.35;width:100%}
+:is(#rs-root,#rs-layer) .rs-oi:hover{background:var(--raise)}
+:is(#rs-root,#rs-layer) .rs-oi .rs-d{width:8px;height:8px;border-radius:50%;flex:none;transform:translateY(1px)}
+:is(#rs-root,#rs-layer) .rs-d.rs-s-red{background:var(--bad)}:is(#rs-root,#rs-layer) .rs-d.rs-s-amber{background:var(--watch)}:is(#rs-root,#rs-layer) .rs-d.rs-s-green{background:var(--good)}
+:is(#rs-root,#rs-layer) .rs-oi b{color:var(--ink);font-weight:600}
+:is(#rs-root,#rs-layer) .rs-oi .rs-ag{color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-acts{display:flex;flex-wrap:wrap;gap:6px}
+:is(#rs-root,#rs-layer) .rs-btn{display:inline-flex;align-items:center;gap:5px;background:var(--raise);border:1px solid var(--line2);border-radius:9px;padding:6px 11px;font-size:12.5px;font-weight:600;color:var(--ink);min-height:36px;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-btn:hover{border-color:var(--cyan)}
+:is(#rs-root,#rs-layer) .rs-btn[disabled]{opacity:.45;cursor:not-allowed}
+:is(#rs-root,#rs-layer) .rs-btn.rs-ok{background:rgba(52,217,154,.12);border-color:rgba(52,217,154,.45);color:#c9ffe9}
+:is(#rs-root,#rs-layer) .rs-btn.rs-ok[aria-pressed="true"]{background:rgba(52,217,154,.26);color:#fff}
+:is(#rs-root,#rs-layer) .rs-btn.rs-imp[aria-checked="true"]{background:rgba(255,107,107,.2);border-color:rgba(255,107,107,.6);color:#fff}
+:is(#rs-root,#rs-layer) .rs-btn.rs-kal[aria-pressed="true"]{background:var(--rs-blue-b);border-color:rgba(143,184,255,.55);color:#fff}
+:is(#rs-root,#rs-layer) .rs-btn.rs-ghost{background:transparent}
+:is(#rs-root,#rs-layer) .rs-btn.rs-pri{background:rgba(34,211,238,.14);border-color:rgba(34,211,238,.55);color:#fff}
+:is(#rs-root,#rs-layer) .rs-btn.rs-sm{min-height:30px;padding:4px 9px;font-size:12px}
+:is(#rs-root,#rs-layer) .rs-btn.rs-open{margin-left:auto;background:transparent;color:var(--cyan);border-color:rgba(34,211,238,.4)}
+:is(#rs-root,#rs-layer) .rs-by{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px;border-top:1px dashed var(--line);padding-top:8px}
+:is(#rs-root,#rs-layer) .rs-by b{color:var(--ink2);font-weight:600}
+:is(#rs-root,#rs-layer) .rs-lg{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+:is(#rs-root,#rs-layer) .rs-pnl{border:1px solid var(--line2);background:var(--bg2);border-radius:11px;padding:11px 12px;display:flex;flex-direction:column;gap:8px}
+:is(#rs-root,#rs-layer) .rs-pnl h4{font-size:13px;font-weight:650;line-height:1.3}
+:is(#rs-root,#rs-layer) .rs-phelp{font-size:12px;color:var(--muted);line-height:1.45}
+:is(#rs-root,#rs-layer) .rs-pnl label{font-size:12px;color:var(--ink2)}
+:is(#rs-root,#rs-layer) .rs-pnl textarea{width:100%;min-height:66px;resize:vertical;background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:8px 10px;color:var(--ink);line-height:1.4}
+:is(#rs-root,#rs-layer) .rs-row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+:is(#rs-root,#rs-layer) .rs-cc{font:500 11px var(--rs-num);color:var(--faint);margin-left:auto}
+:is(#rs-root,#rs-layer) .rs-radio{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--ink2)}
+/* ---------- table ---------- */
+:is(#rs-root,#rs-layer) .rs-tw{overflow:auto;border-radius:var(--rs-r);max-width:100%;border:1px solid var(--line);background:var(--panel);max-height:78vh}
+:is(#rs-root,#rs-layer) table.rs-st{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+:is(#rs-root,#rs-layer) .rs-st th{font:600 10.5px/1.25 var(--rs-num);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;padding:9px 8px;background:var(--panel2);border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2}
+:is(#rs-root,#rs-layer) .rs-st th button{all:unset;cursor:pointer;display:inline-flex;gap:3px;align-items:center}
+:is(#rs-root,#rs-layer) .rs-st th.rs-sorted{color:var(--ink)}
+:is(#rs-root,#rs-layer) .rs-st .rs-ar{color:var(--cyan)}
+:is(#rs-root,#rs-layer) .rs-st th.rs-tl,:is(#rs-root,#rs-layer) .rs-st td.rs-tl{text-align:left}
+:is(#rs-root,#rs-layer) .rs-st td{padding:7px 8px;border-bottom:1px solid rgba(33,50,73,.7);text-align:right;white-space:nowrap;font-family:var(--rs-num);font-variant-numeric:tabular-nums;font-size:13px;vertical-align:middle;color:inherit}
+:is(#rs-root,#rs-layer) .rs-st tbody tr{cursor:pointer;transition:background .15s}
+:is(#rs-root,#rs-layer) .rs-st tbody tr:hover td{background:rgba(28,44,71,.55)}
+:is(#rs-root,#rs-layer) .rs-st tbody tr.rs-kf td{background:rgba(34,211,238,.08)}
+:is(#rs-root,#rs-layer) .rs-st td.rs-app{white-space:normal;min-width:210px;font-family:inherit;text-align:left}
+:is(#rs-root,#rs-layer) .rs-w2{display:flex;gap:8px;align-items:center}
+:is(#rs-root,#rs-layer) .rs-st td small{display:block;font-size:10.5px;color:var(--muted);font-weight:500}
+:is(#rs-root,#rs-layer) .rs-st td.rs-iss2 .rs-r,:is(#rs-root,#rs-layer) .rs-st td.rs-iss2 .rs-a{font-weight:700}
+:is(#rs-root,#rs-layer) .rs-st td.rs-wh{white-space:normal;min-width:150px;font-family:inherit;font-size:12px;text-align:left}
+:is(#rs-root,#rs-layer) .rs-dots{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap}
+:is(#rs-root,#rs-layer) .rs-dch{font:600 9.5px/1 var(--rs-num);letter-spacing:.03em;text-transform:uppercase;border-radius:4px;padding:3px 5px}
+:is(#rs-root,#rs-layer) .rs-dch.rs-s-red{background:var(--rs-c-red);color:#fff}:is(#rs-root,#rs-layer) .rs-dch.rs-s-amber{background:var(--rs-c-amber);color:#1d1404}
+/* ---------- drawer ---------- */
+#rs-layer .rs-scrim{position:fixed;inset:0;background:rgba(3,7,15,.6);z-index:80;opacity:0;pointer-events:none;transition:opacity .25s}
+#rs-layer .rs-scrim.rs-on{opacity:1;pointer-events:auto}
+#rs-layer .rs-drawer{position:fixed;top:0;right:0;bottom:0;width:min(1000px,100vw);background:var(--bg2);border-left:1px solid var(--line2);z-index:81;transform:translateX(102%);transition:transform .3s cubic-bezier(.2,.8,.2,1);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden}
+#rs-layer .rs-drawer.rs-on{transform:none;visibility:visible}
+:is(#rs-root,#rs-layer) .rs-dh{position:sticky;top:0;z-index:5;background:rgba(12,21,39,.95);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 18px 10px;display:flex;gap:12px;align-items:flex-start}
+:is(#rs-root,#rs-layer) .rs-dh .rs-t{flex:1;min-width:0}
+:is(#rs-root,#rs-layer) .rs-dh h3{font-size:19px;font-weight:700;line-height:1.25;overflow-wrap:anywhere}
+:is(#rs-root,#rs-layer) .rs-dh h3 .rs-acn{color:var(--muted);font-weight:500}
+:is(#rs-root,#rs-layer) .rs-dh .rs-l2{margin-top:6px;font-size:11.5px;color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-nav{display:flex;gap:6px}
+:is(#rs-root,#rs-layer) .rs-db{padding:14px 18px 50px;display:flex;flex-direction:column;gap:16px}
+:is(#rs-root,#rs-layer) .rs-dk{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+:is(#rs-root,#rs-layer) .rs-kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px 9px;min-width:0}
+:is(#rs-root,#rs-layer) .rs-kl{font:600 10.5px/1.2 var(--rs-num);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+:is(#rs-root,#rs-layer) .rs-kh{text-transform:none;letter-spacing:0;font-weight:400;font-size:11px;color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-kv{font:700 24px/1.1 var(--rs-num);font-variant-numeric:tabular-nums;margin-top:5px;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-kv small{font:600 12px var(--rs-num);color:var(--muted);margin-left:3px}
+:is(#rs-root,#rs-layer) .rs-kd{font:600 12px/1.35 var(--rs-num);margin-top:4px}
+:is(#rs-root,#rs-layer) .rs-kd .rs-vs{color:var(--faint);font-weight:500}
+:is(#rs-root,#rs-layer) .rs-sect{display:flex;flex-direction:column;gap:10px}
+:is(#rs-root,#rs-layer) .rs-sect>h4{font:600 10.5px/1 var(--rs-num);letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-chartp{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px 8px}
+:is(#rs-root,#rs-layer) .rs-cap{font-size:12px;color:var(--muted);margin-bottom:4px}
+:is(#rs-root,#rs-layer) .rs-chart{display:block;width:100%;height:auto;overflow:visible;cursor:crosshair}
+:is(#rs-root,#rs-layer) .rs-fgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+:is(#rs-root,#rs-layer) .rs-fb{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:8px;min-width:0;scroll-margin-top:110px}
+:is(#rs-root,#rs-layer) .rs-fb.rs-wide{grid-column:1/-1}
+:is(#rs-root,#rs-layer) .rs-fb.rs-s-red{border-color:rgba(255,107,107,.4)}:is(#rs-root,#rs-layer) .rs-fb.rs-s-amber{border-color:rgba(230,184,78,.35)}:is(#rs-root,#rs-layer) .rs-fb.rs-s-green{border-color:rgba(52,217,154,.3)}
+:is(#rs-root,#rs-layer) .rs-fb-h{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+:is(#rs-root,#rs-layer) .rs-fb-h .rs-fe{font-size:15px}
+:is(#rs-root,#rs-layer) .rs-fb-h b{font-size:13.5px;font-weight:650}
+:is(#rs-root,#rs-layer) .rs-fb-h .rs-ff{margin-left:auto;display:inline-flex;gap:6px;flex-wrap:wrap}
+:is(#rs-root,#rs-layer) .rs-fb .rs-ln{font-size:13px;color:var(--ink);line-height:1.4}
+:is(#rs-root,#rs-layer) .rs-q{display:grid;grid-template-columns:96px minmax(0,1fr);gap:4px 10px;font-size:12.5px;line-height:1.4;margin:0}
+:is(#rs-root,#rs-layer) .rs-q dt{color:var(--muted);font-weight:600}
+:is(#rs-root,#rs-layer) .rs-q dd{margin:0;color:var(--ink2)}
+:is(#rs-root,#rs-layer) .rs-info{font-size:12px;color:var(--rs-blue-s)}
+:is(#rs-root,#rs-layer) .rs-more{display:flex;flex-direction:column;gap:5px;border-top:1px dashed var(--line);padding-top:7px}
+:is(#rs-root,#rs-layer) .rs-mr{font-size:12px;color:var(--ink2);line-height:1.4}
+:is(#rs-root,#rs-layer) .rs-mr small{display:block;color:var(--faint);font-size:11px}
+:is(#rs-root,#rs-layer) .rs-golink{align-self:flex-start}
+:is(#rs-root,#rs-layer) .rs-fbtn{display:inline-flex;gap:4px;align-items:center;font-weight:600;font-size:11.5px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink2);border-radius:999px;padding:4px 9px;min-height:28px}
+:is(#rs-root,#rs-layer) .rs-fbtn[aria-checked="true"]{background:rgba(255,107,107,.18);border-color:rgba(255,107,107,.55);color:#fff}
+:is(#rs-root,#rs-layer) .rs-fbtn[disabled]{opacity:.45;cursor:not-allowed}
+:is(#rs-root,#rs-layer) .rs-logl{font-size:12px;color:var(--ink2);display:flex;flex-direction:column;gap:3px}
+:is(#rs-root,#rs-layer) .rs-logl .rs-e{color:var(--faint);font-family:inherit}
+:is(#rs-root,#rs-layer) .rs-pkg{font:500 11.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint);overflow-wrap:anywhere}
+/* ---------- summary / history ---------- */
+:is(#rs-root,#rs-layer) .rs-donebar{border:1px solid rgba(52,217,154,.45);background:rgba(52,217,154,.08);color:#c9ffe9;border-radius:12px;padding:10px 14px;font-weight:650}
+:is(#rs-root,#rs-layer) .rs-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+:is(#rs-root,#rs-layer) .rs-tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--rs-r);padding:12px 14px;min-width:0}
+:is(#rs-root,#rs-layer) .rs-tile .rs-t{font:600 10.5px/1.2 var(--rs-num);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-tile .rs-v{font:700 28px/1.1 var(--rs-num);margin-top:4px;font-variant-numeric:tabular-nums}
+:is(#rs-root,#rs-layer) .rs-tile .rs-v small{font:600 13px var(--rs-num);color:var(--muted);margin-left:4px}
+:is(#rs-root,#rs-layer) .rs-tile .rs-s{font-size:11.5px;color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-duo{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+:is(#rs-root,#rs-layer) .rs-lst{display:flex;flex-direction:column;gap:2px;padding:0 12px 12px}
+:is(#rs-root,#rs-layer) .rs-li{display:flex;gap:10px;align-items:flex-start;padding:9px 8px;border-radius:9px;border-bottom:1px solid rgba(33,50,73,.6)}
+:is(#rs-root,#rs-layer) .rs-li:last-child{border-bottom:0}
+:is(#rs-root,#rs-layer) .rs-tx{flex:1;min-width:0;font-size:12.5px;line-height:1.45;color:var(--ink2)}
+:is(#rs-root,#rs-layer) .rs-tx b{color:var(--ink);font-weight:650}
+:is(#rs-root,#rs-layer) .rs-nt{color:var(--ink);font-style:italic}
+:is(#rs-root,#rs-layer) .rs-mt{color:var(--faint);font-size:11.5px}
+:is(#rs-root,#rs-layer) .rs-li .rs-acts{margin-top:6px}
+:is(#rs-root,#rs-layer) .rs-jump{all:unset;cursor:pointer;color:var(--ink);font-weight:650;border-bottom:1px dotted var(--line2)}
+:is(#rs-root,#rs-layer) .rs-jump:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+:is(#rs-root,#rs-layer) .rs-closed{padding:0 18px 12px}
+:is(#rs-root,#rs-layer) .rs-closed>summary{cursor:pointer;color:var(--ink2);font-weight:600;font-size:12.5px;padding:4px 0}
+:is(#rs-root,#rs-layer) .rs-pills{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 16px}
+:is(#rs-root,#rs-layer) .rs-pills button{background:var(--panel2);border:1px solid var(--line2);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--ink2);display:inline-flex;gap:6px;align-items:center;min-height:32px}
+:is(#rs-root,#rs-layer) .rs-pills button:hover{border-color:var(--cyan)}
+:is(#rs-root,#rs-layer) .rs-mon{font-size:13px;font-weight:650;line-height:1;color:var(--ink2);padding:6px 18px 8px}
+:is(#rs-root,#rs-layer) .rs-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;padding:0 18px 12px}
+:is(#rs-root,#rs-layer) .rs-cal .rs-wd{font:600 10.5px var(--rs-num);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);text-align:center;padding:4px 0}
+:is(#rs-root,#rs-layer) .rs-cd{min-height:74px;border-radius:10px;border:1px dashed var(--line);display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;padding:7px 8px;font:600 12px var(--rs-num);color:var(--faint);background:transparent;text-align:left;min-width:0}
+:is(#rs-root,#rs-layer) .rs-cd .rs-cdn{font-size:12px}
+:is(#rs-root,#rs-layer) .rs-cd .rs-cx{font:700 17px/1 var(--rs-num);color:inherit}
+:is(#rs-root,#rs-layer) .rs-cd .rs-xs{font-weight:500;font-size:10.5px;line-height:1.2;color:inherit;opacity:.85;overflow-wrap:anywhere}
+:is(#rs-root,#rs-layer) button.rs-cd{cursor:pointer}
+:is(#rs-root,#rs-layer) .rs-cd.rs-c-green{background:rgba(52,217,154,.22);border:1px solid rgba(52,217,154,.55);color:#d8ffef}
+:is(#rs-root,#rs-layer) .rs-cd.rs-c-amber{background:rgba(230,184,78,.2);border:1px solid rgba(230,184,78,.55);color:#ffe9b8}
+:is(#rs-root,#rs-layer) .rs-cd.rs-c-red{background:rgba(255,107,107,.16);border:1px solid rgba(255,107,107,.5);color:#ffd0d0}
+:is(#rs-root,#rs-layer) .rs-cd.rs-c-none{background:repeating-linear-gradient(135deg,rgba(97,116,143,.12) 0 4px,transparent 4px 8px)}
+:is(#rs-root,#rs-layer) .rs-cd.rs-sel{box-shadow:0 0 0 2px var(--cyan)}
+:is(#rs-root,#rs-layer) .rs-cd.rs-nx{border-color:rgba(34,211,238,.5);color:var(--cyan)}
+:is(#rs-root,#rs-layer) .rs-cd.rs-out{border-color:transparent}
+:is(#rs-root,#rs-layer) .rs-cd.rs-fut{border-color:transparent;background:rgba(22,35,58,.35);opacity:.6}
+:is(#rs-root,#rs-layer) .rs-pstat{padding-bottom:10px}
+:is(#rs-root,#rs-layer) .rs-fbars{display:flex;flex-direction:column;gap:6px}
+:is(#rs-root,#rs-layer) .rs-fbr{display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr) auto;gap:10px;align-items:center;background:none;border:0;border-radius:8px;padding:3px 4px;color:var(--ink2);text-align:left;width:100%}
+:is(#rs-root,#rs-layer) .rs-fbr:hover{background:var(--raise)}
+:is(#rs-root,#rs-layer) .rs-fbl{font-size:12.5px;display:flex;gap:6px;align-items:center;justify-content:flex-end;text-align:right;white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-fbt{display:flex;height:18px;border-radius:4px;background:var(--panel2);overflow:hidden}
+:is(#rs-root,#rs-layer) .rs-fbt i{display:flex;align-items:center;justify-content:center;font:700 11px var(--rs-num);font-style:normal;height:100%}
+:is(#rs-root,#rs-layer) .rs-fbt i.rs-r{background:var(--bad);color:#fff}:is(#rs-root,#rs-layer) .rs-fbt i.rs-a{background:var(--watch);color:#1d1404}
+:is(#rs-root,#rs-layer) .rs-fbn{font:650 12px var(--rs-num);color:var(--ink);white-space:nowrap}
+:is(#rs-root,#rs-layer) .rs-fbn small{font-weight:500;color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-foot{font-size:12px;color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-foot summary{cursor:pointer;color:var(--ink2);font-weight:600}
+:is(#rs-root,#rs-layer) .rs-foot ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px;max-width:110ch}
+/* ---------- tooltip / key help ---------- */
+#rs-tip{position:fixed;z-index:95;pointer-events:none;background:#0b1424;border:1px solid var(--line2);border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.45;color:var(--ink2);box-shadow:0 12px 30px rgba(0,0,0,.5);max-width:min(340px,calc(100vw - 20px));opacity:0;visibility:hidden;transition:opacity .1s;left:0;top:0}
+#rs-tip.rs-on{opacity:1;visibility:visible}
+#rs-tip.rs-pin{pointer-events:auto}
+#rs-tip .rs-tt{font-weight:650;color:var(--ink);margin-bottom:3px;font-size:12.5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#rs-tip .rs-row{display:flex;justify-content:space-between;gap:14px}
+#rs-tip .rs-row b{font-family:var(--rs-num);font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600}
+#rs-tip .rs-sep{border-top:1px solid var(--line);margin:6px 0}
+#rs-tip .rs-tsm{color:var(--faint);font-size:11px}
+#rs-tip .rs-lk{color:var(--cyan);cursor:pointer;text-decoration:underline;text-underline-offset:2px;background:none;border:0;padding:0;font-size:12px}
+#rs-help{position:fixed;inset:0;z-index:96;display:grid;place-items:center;background:rgba(3,7,15,.62);padding:16px}
+#rs-help .rs-box{background:var(--bg2);border:1px solid var(--line2);border-radius:14px;padding:16px 18px;max-width:420px;width:100%}
+#rs-help h3{margin:0 0 10px;font-size:16px;font-weight:650}
+#rs-help dl{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;margin:0;font-size:13px}
+#rs-help dt{text-align:right}
+#rs-help dd{margin:0;color:var(--ink2)}
+/* ---------- the Studio's own width (the dashboard's sidebar takes room): container queries ---------- */
+@container rs (max-width:1180px){
+  #rs-root .rs-hero{grid-template-columns:minmax(0,1fr)}
+  #rs-root .rs-ringp{flex-direction:row;flex-wrap:wrap;align-items:center}
+  #rs-root .rs-ringp .rs-bdown{flex:1 1 320px}
+}
+@container rs (max-width:1000px){
+  #rs-root .rs-story{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #rs-root .rs-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
+  #rs-root .rs-duo{grid-template-columns:minmax(0,1fr)}
+}
+/* the map: 5 labelled boxes a row (2 rows an app), the name over 3 columns and the revenue over 2; the feature
+   header buttons and the footer counts are hidden — every box already says which feature it is */
+@container rs (max-width:980px){
+  #rs-root .rs-mapw{overflow:visible;padding:0 8px 4px}
+  #rs-root .rs-hm{grid-template-columns:repeat(5,minmax(0,1fr));min-width:0;row-gap:3px}
+  #rs-root .rs-hm button.rs-hh,#rs-root .rs-hm .rs-ft,#rs-root .rs-hm .rs-rk,#rs-root .rs-hm .rs-iss,#rs-root .rs-hm .rs-stc,#rs-root .rs-hm .rs-hh.rs-x,#rs-root .rs-hm .rs-ftl{display:none}
+  #rs-root .rs-hm .rs-nm{grid-column:1/span 3;padding-top:8px}
+  #rs-root .rs-hm .rs-rv{grid-column:span 2;padding-top:8px}
+  #rs-root .rs-hm .rs-hh.rs-l{grid-column:1/span 3}
+  #rs-root .rs-hm .rs-hh.rs-r{grid-column:span 2}
+  #rs-root .rs-hc{min-height:46px;font-size:12px;letter-spacing:0}
+  #rs-root .rs-hc .rs-cl{font-size:9.5px}
+}
+@container rs (max-width:420px){#rs-root .rs-hc .rs-cl{font-size:8.5px}}
+@container rs (max-width:700px){
+  #rs-root .rs-top{position:relative;top:auto}
+  #rs-root .rs-top-in{padding:8px 12px 6px;gap:8px}
+  #rs-root .rs-wrap{gap:16px}
+  #rs-root .rs-ph{padding:14px 14px 8px}
+  #rs-root .rs-story{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  #rs-root .rs-sc{padding:10px 11px}
+  #rs-root .rs-sc .rs-big{font-size:24px}
+  #rs-root .rs-sc .rs-ln{font-size:12px}
+  #rs-root .rs-sc.rs-wide{grid-column:1/-1}
+  #rs-root .rs-mov{grid-template-columns:minmax(0,1fr)}
+  #rs-root .rs-fr.rs-opt,#rs-root #rs-kbd,#rs-root .rs-khint{display:none}
+  #rs-root .rs-seg button{padding:5px 8px}
+  #rs-root .rs-ringw{width:100%}
+  #rs-root .rs-legend{padding-inline:14px}
+  #rs-root .rs-rc{padding:12px 12px 11px 14px}
+  #rs-root .rs-rc-m{grid-template-columns:minmax(0,1fr)}
+  #rs-root .rs-strip{grid-template-columns:repeat(5,minmax(0,1fr))}
+  #rs-root .rs-fc{min-height:46px}
+  #rs-root .rs-fc .rs-flb{font-size:9px}
+  #rs-root .rs-btn.rs-open{margin-left:0}
+  #rs-root .rs-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #rs-root .rs-fbr{grid-template-columns:minmax(0,118px) minmax(0,1fr) auto;gap:6px}
+  #rs-root .rs-fbl{font-size:11.5px;white-space:normal}
+  #rs-root .rs-cal{gap:4px;padding:0 10px 12px}
+  #rs-root .rs-cd{min-height:58px;padding:5px}
+  #rs-root .rs-cd .rs-xs{display:none}
+  #rs-root .rs-srch{width:100%}
+  #rs-root .rs-lh .rs-right{margin-left:0;width:100%}
+  #rs-root .rs-me{order:5}
+}
+@media (max-width:1000px){#rs-layer .rs-dk{grid-template-columns:repeat(2,minmax(0,1fr))}#rs-layer .rs-fgrid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:720px){
+  #rs-layer .rs-db{padding:12px 14px 50px}
+  #rs-layer .rs-dh{padding:10px 14px}
+  #rs-layer .rs-dh h3{font-size:16px}
+  #rs-layer .rs-dh .rs-opt{display:none}
+  #rs-layer .rs-dh .rs-av.rs-lg{width:36px;height:36px}
+  #rs-layer .rs-dh .rs-icb{min-width:32px;height:32px}
+  #rs-layer .rs-q{grid-template-columns:minmax(0,1fr)}
+  #rs-layer .rs-q dt{margin-top:4px}
+  #rs-layer .rs-btn.rs-open{margin-left:0}
+  #rs-layer .rs-kv{font-size:20px}
+}
+@media (prefers-reduced-motion:reduce){:is(#rs-root,#rs-layer) *,:is(#rs-root,#rs-layer) *::before{transition:none!important;animation:none!important}}
+  /* ==== RS:END ==== */
   /* ===== 🧮 installs vs per-user split (SPEC_SPLIT): one block for every tab — a total, the installs' part, the real
      per-user part (+ the rate on today's installs); a one-line form (.split-c) on cards, rows and chips. Grey text,
      never coloured; wraps inside its box (a phone never scrolls sideways) ===== */
@@ -12811,7 +13307,7 @@ function renderReview(){
   try{
     if(!RV.root){ const s=document.createElement("section"); s.className="screen"; s.dataset.screen="review"; s.id="rv-root";
       RV.root=s; rvWire(s); rvShell(); rvRenderAll(); }
-    rvPaint(RV.root);
+    rvPaint(RV.root); try{ RVS.sync(); }catch(e){}   // 🗂 Review Studio (₹ / $, a data refresh)
   }catch(e){ try{ if(!RV.root){ RV.root=document.createElement("section"); RV.root.className="screen"; RV.root.dataset.screen="review"; RV.root.id="rv-root"; } }catch(_){} }
   return RV.root; }
 function rvPaint(root){ try{ (root||document).querySelectorAll(".rv-m").forEach(el=>{
@@ -12914,7 +13410,8 @@ function rvHead(){ const hd=rvQ("#rv-hd"), pg=rvQ("#rv-prog");
     pg.hidden=false; rvQ("#rv-pt").textContent=done+"/"+n+" reviewed"; rvQ("#rv-pb").style.width=(n?done/n*100:0)+"%";
     rvQ("#rv-tc-today").textContent=p?p+" baaki":"✓";
     const of=RV.S?RV.S.flags.filter(x=>x.status==="open").length:0; rvQ("#rv-tc-sum").textContent=of?of+" 🚩":""; }
-  else { hd.textContent=""; pg.hidden=true; rvQ("#rv-tc-today").textContent=""; rvQ("#rv-tc-sum").textContent=""; } }
+  else { hd.textContent=""; pg.hidden=true; rvQ("#rv-tc-today").textContent=""; rvQ("#rv-tc-sum").textContent=""; }
+  try{ RVS.sync(); }catch(e){} }   // 🗂 Review Studio: one render per tick, after the older views
 function rvTabsSync(){ ["today","sum","hist"].forEach(v=>{ const b=rvQ("#rv-tb-"+v), p=rvQ("#rv-v-"+v); if(!b||!p) return; const on=RV.view===v;
   b.setAttribute("aria-selected",on?"true":"false"); b.tabIndex=on?0:-1; p.hidden=!on; }); }
 function rvSwitch(v,focusTab){ if(["today","sum","hist"].indexOf(v)<0) v="today"; RV.view=v; rvTabsSync(); rvSetHash();
@@ -13302,6 +13799,725 @@ function rvWire(root){
       const ts=["today","sum","hist"], i=ts.indexOf(t.getAttribute("data-rvtab")); ev.preventDefault();
       const j=ev.key==="Home"?0:ev.key==="End"?2:(i+(ev.key==="ArrowRight"?1:-1)+3)%3; rvSwitch(ts[j],true); } }catch(e){} }); }
 /* ==== RV:END ==== */
+/* ==== RS:BEGIN ==== */
+// ===================================================================================================================
+// 🗂 REVIEW STUDIO — the Review tab's Studio (the owner-approved "Review Studio" design). ONE lazy file per review day,
+// review/studio/<day>.json.gz (admob_iq/review_studio_build.py: the frozen card's text in the owner's wording + the
+// 14-day revenue, the weekly same-day uninstall, the returning users, the mediation shares, the icons, the key numbers),
+// named by review/index.json["studio"][day]. It is shown ONLY for the card on screen (same day + the card's built_at:
+// the frozen card is the one reviewed). Every click goes to the REAL Review API through the older tab's own helpers
+// (rvAction → rvPost → rvApi: the same request bodies, the same-origin JSON POST, the same errors and messages); who and
+// admin come from /me, states / notes / flags / snoozes from GET day, the History counts from GET calendar — ONE state
+// (RV) for the Studio and the older views. The older Review tab stays whole under "🗂 Old views" (its own nodes moved
+// there, never rebuilt); with no file or a failed load the tab is exactly the older one. Ids "rs-…", classes "rs-…",
+// the CSS under #rs-root / #rs-layer (the drawer, its scrim, the tooltip and the key help live in #rs-layer on <body>).
+// Keys j / k / r / i / n / o / ? / Esc work only while the Review tab is on screen, never while typing.
+// ===================================================================================================================
+const RVS=(function(){
+'use strict';
+/* ================= state ================= */
+let FILE=null, FKEY='', LOADING=false, ERR='', ERRAT=0, ON=false, ORDER=null, SYQ=false, FA={}, A=[], AK={};
+const ST={mode:'cards',filter:'all',q:'',sort:{k:'order',d:1},gsort:'order',gfeat:null,drawer:null,dfid:null,focus:null,oldOpen:false,help:false};
+let PNL=null;            // the one open panel: {slot, kind, key, f, fid, dec, g, keys, days, draft, opener}
+const HLOAD={}, HERR={}; let CALLOAD=false, CALAT=0;
+try{ const s=JSON.parse(localStorage.getItem('rs_pref_v1')||'{}'); if(s.mode==='table'||s.mode==='cards') ST.mode=s.mode; }catch(e){}
+function savePref(){ try{ localStorage.setItem('rs_pref_v1',JSON.stringify({mode:ST.mode})); }catch(e){} }
+const $=id=>document.getElementById(id);
+const FE=()=>(FILE&&FILE.feats)||[['kamai','Revenue · eCPM','Revenue','💰'],['uninstall','Uninstall','Uninstall','🗑️'],['active','Active users','Active','👥'],['value','Install value','Value','💎'],['update','Update impact','Update','🔄'],['ads','Ads','Ads','📣'],['deduct','Deductions','Deduct','✂️'],['mediation','Mediation','Mediation','🔀'],['health','Account health','Health','🩺'],['setup','Setup / data','Setup','⚙️']];
+const FID=()=>FE().map(f=>f[0]);
+const FN=f=>{ const x=FE().find(y=>y[0]===f); return x?x[1]:(f||'Whole app'); };
+const FS=f=>{ const x=FE().find(y=>y[0]===f); return x?x[2]:f; };
+const FI=f=>{ const x=FE().find(y=>y[0]===f); return x?x[3]:''; };
+const STW={red:'Worse',amber:'Watch',green:'Better',normal:'Normal',wait:'Too early',na:'N/A',nodata:'No data',snz:'Snoozed'};
+const SEV={red:4,amber:3,green:1,normal:0,wait:0,snz:0,na:-1,nodata:-1};
+const SIZE={badi:'Big',madhyam:'Mid',chhoti:'Small'};
+const GRP={top:'Needs a look',ok:'All clear',small:'Small apps'};
+const ST_TXT={pend:'⏳ Pending',ok:'✅ Reviewed',note:'📝 Reviewed + note',flag:'🚩 Re-review (Important)',kal:'🔁 Check again tomorrow'};
+const ST_CLS={pend:'rs-p-pend',ok:'rs-p-ok',note:'rs-p-ok',flag:'rs-p-flag',kal:'rs-p-kal'};
+const DEC={theek:'👍 Fine · close',kaam:'🛠 Assign fix',band:'⛔ Stop',done:'✅ Fix done'};
+const DEC_LAB={theek:'Fine — koi kaam nahi. Note (zaroori nahi):',kaam:'Assign fix — kya karna hai, kisko? (zaroori)',band:'Stop — kya band karna hai (ad unit / campaign / rollout)? (zaroori)',done:'Fix done — kya kiya? (zaroori nahi)'};
+const ACT={ok:'✅ Reviewed',note:'📝 Note',kal:'🔁 Check again tomorrow',flag:'🚩 Re-review',unflag:'🚩 Removed',undo:'↩ Undo',snooze:'💤 Snoozed',unsnooze:'💤 Snooze removed',bulk_ok:'✅ Reviewed (group)',decide:'🧑‍💼 Admin decision'};
+const isBad=s=>s==='red'||s==='amber';
+const RM=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
+
+/* ================= format ================= */
+const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const WDN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const DAYMS=864e5, P=s=>Date.parse(s+'T00:00:00Z');
+const dAdd=(s,n)=>new Date(P(s)+n*DAYMS).toISOString().slice(0,10);
+const dDiff=(a,b)=>Math.round((P(b)-P(a))/DAYMS);
+const fd=s=>s?(+String(s).slice(8,10))+' '+MO[+String(s).slice(5,7)-1]:'';
+const wd=s=>WDN[new Date(P(s)).getUTCDay()]||'';
+const esc=s=>rvEsc(s);
+const nf=new Intl.NumberFormat('en-US');
+const trim=s=>s.indexOf('.')>=0?s.replace(/0+$/,'').replace(/\.$/,''):s;
+const MI='−';
+const FXR=()=>Number((FILE&&FILE.meta&&FILE.meta.fx)||(RV.doc&&RV.doc.fx))||null;
+const INR=()=>{ try{ return curView()==='INR'; }catch(e){ return false; } };
+// money: the older tab's own spans (rvMSpan) — ₹ / $ follows the dashboard's currency and rvPaint repaints them
+const mH=(usd,o)=>{ o=o||{}; if(usd==null||!isFinite(usd)) return '—'; return rvMSpan({usd:+usd,s:o.s||'',sign:o.sign?1:0,p:o.p?2:0},FXR(),o.tag); };
+const mT=(usd,o)=>{ o=o||{}; if(usd==null||!isFinite(usd)) return '—'; return rvMoney(+usd,o.s||'',o.sign?1:0,o.p?2:0,FXR()); };
+const rt=x=>rvRt(x,FXR()), rtp=x=>rvRtText(x,FXR());
+function pct(r,dp){ if(r==null||!isFinite(r)) return '—'; const x=r*100, d=dp==null?(Math.abs(x)<10?1:0):dp; const s=trim(Math.abs(x).toFixed(d)); return (x>0.05?'+':(x<-0.05?MI:'±'))+s+'%'; }
+const rel=(a,b)=>(a==null||!b)?null:(a-b)/Math.abs(b);
+const when=iso=>{ const t=rvWhen(iso); return t?t+' IST':''; };
+const rng=(a,b)=>(!a||!b)?fd(a||b):(String(a).slice(0,7)===String(b).slice(0,7)?(+String(a).slice(8,10))+'–'+fd(b):fd(a)+'–'+fd(b));
+
+/* ================= the file (and the apps of the card on screen) ================= */
+function ptr(){ const I=RV.idx, d=(RV.doc&&RV.doc.day)||(I&&I.open_day), p=I&&I.studio&&d?I.studio[d]:null;
+  return (p&&typeof p.file==='string'&&/^review\/studio\/\d{4}-\d{2}-\d{2}\.json\.gz$/.test(p.file)&&typeof p.card==='string')?Object.assign({day:d},p):null; }
+function valid(j,p){ return !!(j&&j.v===1&&j.day===p.day&&j.card_built_at===p.card&&j.meta&&Array.isArray(j.apps)&&Array.isArray(j.feats)); }
+function load(p,k){ LOADING=true;
+  fetchGzJson(p.file+'?v='+encodeURIComponent(p.v||'')).then(j=>{ if(!valid(j,p)) throw new Error('format'); FILE=j; FKEY=k; ERR=''; FA={}; j.apps.forEach(a=>{ if(a&&a.key) FA[a.key]=a; }); })
+    .catch(()=>{ FILE=null; FKEY=''; FA={}; ERR=k; ERRAT=Date.now(); })
+    .finally(()=>{ LOADING=false; sync(); }); }
+function retry(){ ERR=''; ERRAT=0; sync(); }
+// an app the file left out (its card could not be read when the file was built): shown from the card document itself
+function fromDoc(a){ const F={}; FID().forEach(f=>{ const x=(a.f&&a.f[f])||{}; F[f]={st:x.st||'nodata',line:x.line,t:x.t,info:x.info||[],kis:x.kis||null,q:null,k:null}; });
+  return {key:a.key,id:a.app_id,name:a.name||a.dname||a.key,tag:'',acct:a.acct||'',pkg:a.pkg||'',dname:a.dname||'',size:a.size,small:!!a.small,
+    k7:a.k7,kp7:a.kp7,y:a.y,us:a.us,spend:a.spend,tier:a.tier,nb:a.nb||[],head:a.head||{},top:null,icon:null,ser:null,f:F,x:{},raw:true}; }
+function S0(){ return RV.S||rvEmptyS(RV.doc&&RV.doc.day); }
+function prep(){ const doc=RV.doc, S=S0(), L=rvLayout(doc,S), ord=L.top.concat(L.ok,L.small); A=[]; AK={};
+  ord.forEach((k,i)=>{ const d=rvAppOf(doc,k); if(!d) return; const base=FA[k]||fromDoc(d);
+    const a=Object.assign({},base,{grp:L.top.indexOf(k)>=0?'top':(L.ok.indexOf(k)>=0?'ok':'small'),rank:i+1,trank:L.top.indexOf(k)+1,doc:d});
+    A.push(a); AK[k]=a; });
+  return L; }
+const effSt=(a,f)=>rvEffSt(RV.doc,S0(),a.key,f);
+const stOf=k=>rvStOf(S0(),k);
+const bads=a=>FID().filter(f=>isBad(effSt(a,f))).sort((x,y)=>SEV[effSt(a,y)]-SEV[effSt(a,x)]);
+const nRed=a=>FID().filter(f=>effSt(a,f)==='red').length, nAmb=a=>FID().filter(f=>effSt(a,f)==='amber').length;
+const isNB=(a,f)=>(a.nb||[]).indexOf(f)>=0&&!rvSnz(RV.doc,S0(),a.key,f);
+const nbOf=a=>(a.nb||[]).filter(f=>!rvSnz(RV.doc,S0(),a.key,f));
+const fInfo=(k,f)=>rvFlagInfo(RV.doc,S0(),k,f);
+const featFlag=(k,f)=>{ const x=fInfo(k,f); return x.today||x.carry||null; };
+const openFlags=k=>(S0().flags||[]).filter(x=>x.app===k&&(x.status==='open'||x.status==='kaam'));
+const doneN=()=>A.filter(a=>stOf(a.key)!=='pend').length;
+const canW=()=>rvCanWrite();
+const nameP=a=>String(a.name||'').trim()+(a.tag?' '+a.tag:'')+' · '+(a.acct||'');
+const topFeat=a=>{ const B=bads(a); if(a.top&&isBad(effSt(a,a.top))) return a.top; return B[0]||a.top||null; };
+
+/* ================= the layout: the Studio on top, the older tab folded under it ================= */
+function on(){ const r=RV.root; if(!r) return false; if(ON&&$('rs-root')&&$('rs-old')) return true;
+  ORDER=[...r.children]; const bans=r.querySelector('#rv-bans'), toast=r.querySelector('#rv-toast');
+  const st=document.createElement('div'); st.id='rs-root';
+  const fold=document.createElement('details'); fold.id='rs-old'; fold.className='rs-old'; if(ST.oldOpen) fold.open=true;
+  const sm=document.createElement('summary'); sm.innerHTML='<span class="rs-cv" aria-hidden="true">▸</span><span>🗂 Old views</span><span class="rs-oh">Purana Review tab — Aaj ka review · Summary · History · 💤 Pata hai · admin sudhaar: sab kuch wahi, wahi buttons</span>';
+  const inner=document.createElement('div'); inner.className='rs-oldin'; fold.appendChild(sm); fold.appendChild(inner);
+  ORDER.forEach(n=>{ if(n!==bans&&n!==toast) inner.appendChild(n); });
+  r.insertBefore(st,r.firstChild); if(bans) r.insertBefore(bans,st); r.insertBefore(fold,toast&&toast.parentNode===r?toast:null);
+  fold.addEventListener('toggle',()=>{ ST.oldOpen=fold.open; if(fold.open&&RV.view==='hist') try{ rvHistEnter(); }catch(e){} });
+  // the Studio's tab keys stay in the Studio (the older tab's root handler would read them as ITS tabs)
+  st.addEventListener('keydown',e=>{ const t=e.target; if(!(t&&t.getAttribute&&t.getAttribute('role')==='tab'&&t.hasAttribute('data-rsv'))) return;
+    if(['ArrowRight','ArrowLeft','Home','End'].indexOf(e.key)<0) return; e.preventDefault(); e.stopPropagation();
+    const V=['today','sum','hist'], i=V.indexOf(RV.view||'today'), j=e.key==='Home'?0:(e.key==='End'?2:(i+(e.key==='ArrowRight'?1:-1)+3)%3); setView(V[j],true); });
+  r.classList.add('rs-on'); ON=true; layer(); return true; }
+function off(){ if(!ON) return; const r=RV.root; ON=false; closeDrawer(true); hideTip(); closePanel(true);
+  try{ const st=$('rs-root'), fold=$('rs-old'); (ORDER||[]).forEach(n=>r.appendChild(n)); if(st) st.remove(); if(fold) fold.remove(); r.classList.remove('rs-on'); }catch(e){} }
+// called by rvHead() after every load / poll / click of the Review tab: one Studio render per tick
+function sync(){ if(SYQ) return; SYQ=true; Promise.resolve().then(syncNow); }
+function syncNow(){ SYQ=false;
+  try{ if(!RV.root) return;
+    const p=ptr();
+    if(!p){ off(); return; }
+    const k=p.day+'|'+p.card+'|'+(p.v||'');
+    if(!FILE||FKEY!==k){ if(ERR===k&&Date.now()-ERRAT<60000){ off(); return; } if(!LOADING) load(p,k); }
+    if(!RV.doc||RV.doc.day!==p.day||RV.doc.built_at!==p.card||RV.err==='doc'){ off(); return; }
+    if(!FILE||FKEY!==k){ if(on()) renderLoading(); return; }
+    if(on()) render();
+  }catch(e){ try{ off(); }catch(_){} } }
+function paint(){ try{ const L=$('rs-layer'); if(L) rvPaint(L); }catch(e){} }
+
+/* ================= small html helpers ================= */
+function avCol(a){ let h=0; for(const c of String(a.key)) h=(h*31+c.charCodeAt(0))%360; return `hsl(${h} 45% 38%)`; }
+function iconOf(a){ const u=a.icon||(typeof DATA!=='undefined'&&DATA&&DATA.app_icons&&a.id?DATA.app_icons[a.id]:null); return (typeof u==='string'&&/^https:\/\//.test(u))?u:null; }
+const avH=(a,cls)=>{ const u=iconOf(a), ch=esc((String(a.name||'?').trim()[0]||'?').toUpperCase());
+  return u?`<span class="rs-av ${cls||''}" style="background:${avCol(a)}"><img src="${esc(u)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()"><b>${ch}</b></span>`
+    :`<span class="rs-av ${cls||''}" style="background:${avCol(a)}" aria-hidden="true"><b>${ch}</b></span>`; };
+const nameH=a=>`<span class="rs-nmt">${esc(String(a.name||'').trim())}${a.tag?` <span class="rs-tagw">${esc(a.tag)}</span>`:''} <span class="rs-acn">· ${esc(a.acct)}</span></span>`;
+const chipSt=s=>`<span class="rs-chip rs-st-${s}"><i></i>${STW[s]||s}</span>`;
+const ageH=g=>g?`<span class="rs-age ${g.k!=='open'?'rs-new':''}">${esc(g.txt)}</span>`:'';
+const pillH=k=>{ const s=stOf(k); return `<span class="rs-pill ${ST_CLS[s]}">${ST_TXT[s]}</span>`; };
+const WHY={'first card':'on the first card','feature started':'when the feature started'};
+function cameT(x){ const f=x.first; if(!f) return ''; return '🕒 Came '+(f.at?when(f.at):fd(f.d))+(f.why?' · '+(WHY[f.why]||f.why):''); }
+function winT(x){ const k=x.q?x.q.kis:rtp(x.kis); return k?'📊 '+k:''; }
+const provH=x=>x.prov!=null?`<span class="rs-pv">⏳ Not final${x.prov?' · final '+esc(x.prov):''}</span>`:'';
+function tsLine(x){ return [cameT(x)?esc(cameT(x)):'',winT(x)?esc(winT(x)):'',provH(x),x.since?esc(x.since):''].filter(Boolean).map(s=>`<span>${s}</span>`).join(''); }   // (the age chip is on the issue's own header line)
+const kitShow=x=>{ if(!x.q||!x.q.kit) return ''; const k=rtp(x.q.kit), y=rtp(x.q.kya); return (k&&y.indexOf(k)===0)?'':rt(x.q.kit); };
+const kTxt=k=>{ k=String(k||''); return k.indexOf('ad ')===0?'<span class="rs-pre">ad</span>'+esc(k.slice(3)):esc(k); };
+function cellTxt(x,s){ if(s==='snz') return '💤'; if(x.k&&(isBad(s)||s==='green')) return kTxt(x.k); if(s==='wait') return '⏳'; if(s==='na') return '–'; if(s==='nodata') return '?'; if(s==='green') return '✓'; if(isBad(s)) return '!'; return '<span class="rs-dt"></span>'; }
+const kbd=s=>`<span class="rs-kbd">${s}</span>`;
+const lineOf=x=>x.q?x.q.kya:x.line;
+
+/* ================= charts (key numbers printed on every chart; ONE document mousemove handler shows the rest) ======= */
+const CH={}; let chN=0;
+const lin=(d0,d1,r0,r1)=>{ const k=(d1-d0)?(r1-r0)/(d1-d0):0; return v=>r0+(v-d0)*k; };
+function pathOf(vals,X,Y){ let d='',pen=false; vals.forEach((v,i)=>{ if(v==null||!isFinite(v)){ pen=false; return; } d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1); pen=true; }); return d; }
+const T=(x,y,s,o)=>{ o=o||{}; return `<text x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" text-anchor="${o.a||'start'}" font-size="${o.fs||10.5}" font-weight="${o.fw||600}" fill="${o.c||'var(--ink2)'}" class="rs-ct" stroke="var(--panel)" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${o.h?s:esc(s)}</text>`; };
+const TM=(usd,o)=>mH(usd,Object.assign({tag:'tspan'},o||{}));
+function vfmt(v,fmt,tag){ if(v==null||!isFinite(v)) return '—'; if(fmt==='usd') return tag?TM(v):mT(v); if(fmt==='p100') return trim(v.toFixed(v<10?1:0))+'%'; if(fmt==='pct2') return trim(v.toFixed(2))+'%'; if(fmt==='r1') return trim(v.toFixed(1)); return nf.format(Math.round(v)); }
+// the card's sparkline: 14 days of AdMob revenue, Yesterday + usual printed on it
+function revSpark(a){ const ser=a.ser; if(!ser||!ser.length) return '<div class="rs-nospk">14-day chart nahi (Studio data nahi)</div>';
+  const d14=FILE.meta.d14, w=300,h=84,pl=6,pr=6,pt=16,pb=15, vals=ser, us=+a.us||0, n=vals.length;
+  const all=vals.concat([us]).filter(v=>v!=null); let mn=Math.min(...all), mx=Math.max(...all); if(mx===mn){ mx+=1; mn=Math.max(0,mn-1); } const pd=(mx-mn)*.12; mn=Math.max(0,mn-pd); mx+=pd;
+  const X=lin(0,n-1,pl+2,w-pr-2), Y=lin(mn,mx,h-pb,pt), id='rs-ch'+(++chN);
+  const pth=pathOf(vals,X,Y), li=n-1, yy=Y(vals[li]==null?0:vals[li]), uy=Y(us), up=(vals[li]||0)>=us;
+  const col=Math.abs(rel(a.y,a.us)||0)<0.1?'var(--rs-blue-s)':(up?'var(--good)':'var(--bad)');
+  let s=`<svg class="rs-spk" data-ch="${id}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Revenue ${fd(d14[0])}–${fd(d14[n-1])}: yesterday ${esc(mT(a.y))}, usual ${esc(mT(a.us))} a day">`;
+  s+=`<rect x="${(X(n-8)-(X(1)-X(0))/2).toFixed(1)}" y="${pt-4}" width="${(X(n-2)-X(n-8)+(X(1)-X(0))).toFixed(1)}" height="${h-pb-pt+4}" fill="var(--rs-band)" rx="4"/>`;
+  s+=`<path d="${pth}L${X(li).toFixed(1)} ${h-pb}L${X(0).toFixed(1)} ${h-pb}Z" fill="var(--rs-blue-s)" opacity=".10"/>`;
+  s+=`<line x1="${pl}" x2="${w-pr}" y1="${uy.toFixed(1)}" y2="${uy.toFixed(1)}" stroke="var(--watch)" stroke-width="1.2" stroke-dasharray="4 3" opacity=".9"/>`;
+  s+=`<path d="${pth}" fill="none" stroke="var(--rs-blue-s)" stroke-width="2" stroke-linejoin="round"/>`;
+  s+=`<circle cx="${X(li).toFixed(1)}" cy="${yy.toFixed(1)}" r="4" fill="${col}" stroke="var(--panel)" stroke-width="1.5"/>`;
+  const close=Math.abs(yy-uy)<13, yl=close?(up?Math.min(yy,uy)-6:Math.max(yy,uy)+13):(yy<uy?yy-7:yy+14);
+  s+=T(X(li)-6,Math.max(11,Math.min(h-pb-2,yl)),'Yesterday '+TM(a.y),{a:'end',c:'var(--ink)',fs:11.5,fw:700,h:1});
+  const ul=close?(up?Math.max(yy,uy)+13:Math.min(yy,uy)-5):(uy<yy?uy-5:uy+13);
+  s+=T(pl+2,Math.max(11,Math.min(h-pb-2,ul)),'usual '+TM(a.us,{s:'/day'}),{c:'var(--watch)',fs:10.5,h:1});
+  const U=FILE.meta.usual||{};
+  s+=T(pl,h-2,fd(d14[0]),{c:'var(--faint)',fs:9.5,fw:500})+T(w-pr,h-2,fd(d14[n-1]),{a:'end',c:'var(--faint)',fs:9.5,fw:500})+(U.from?T(X(n-5),h-2,'usual '+rng(U.from,U.to),{a:'middle',c:'var(--faint)',fs:9.5,fw:500}):'');
+  s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-4}" y2="${h-pb}" stroke="var(--ink2)" stroke-width="1" opacity="0"/></svg>`;
+  CH[id]={X,n,w,tip:i=>{ const v=ser[i], d=d14[i]; return `<div class="rs-tt">${esc(wd(d).slice(0,3))}, ${fd(d)}</div><div class="rs-row"><span>Revenue</span><b>${mH(v)}</b></div><div class="rs-row"><span>vs usual ${mH(a.us,{s:'/day'})}</span><b>${pct(rel(v,a.us))}</b></div>${i===n-1?`<div class="rs-tsm">Yesterday — card ka number (frozen ${esc(FILE.meta.built_ist)} IST)</div>`:''}`; }};
+  return s; }
+// a bar chart for a card CHART dict (values printed: every bar when there is room, else last + max + min)
+function barChart(ch,W,o){ o=o||{}; const H=o.h||150, pl=8, pr=ch.before!=null?72:8, pt=22, pb=22, vals=(ch.vals||[]).map(v=>(v==null||!isFinite(v))?null:+v), n=vals.length, fmt=ch.fmt;
+  if(!n||vals.every(v=>v==null)) return '';
+  const all=vals.concat(ch.before!=null?[+ch.before]:[]).filter(v=>v!=null&&isFinite(v)); let mx=Math.max(...all,0); if(!(mx>0)) mx=1; mx*=1.18;
+  const bw=(W-pl-pr)/n, X=i=>pl+bw*(i+.5), Y=lin(0,mx,H-pb,pt), id='rs-ch'+(++chN);
+  let s=`<svg class="rs-chart" data-ch="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(ch.cap)}">`;
+  s+=`<line x1="${pl}" x2="${W-pr}" y1="${H-pb}" y2="${H-pb}" stroke="var(--line2)"/>`;
+  const ai=ch.after_idx;
+  vals.forEach((v,i)=>{ if(v==null) return; const hi=ai==null||i>=ai, y=Y(Math.max(v,0)); s+=`<rect x="${(X(i)-bw*.34).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*.68).toFixed(1)}" height="${Math.max(1,H-pb-y).toFixed(1)}" rx="2" fill="${hi?(o.col||'var(--rs-blue-s)'):'var(--rs-raise2)'}" opacity="${hi?.95:1}"/>`; });
+  const BL=o.bl||'before avg';
+  const room=bw>=34; let mi=-1,mn=-1; vals.forEach((v,i)=>{ if(v==null) return; if(mi<0||v>vals[mi]) mi=i; if(mn<0||v<vals[mn]) mn=i; });
+  let last=-1; vals.forEach((v,i)=>{ if(v!=null) last=i; });
+  if(ch.before!=null){ const y=Y(+ch.before); s+=`<line x1="${pl}" x2="${W-pr+4}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--watch)" stroke-dasharray="4 3" stroke-width="1.3"/>`+T(W-pr+8,y-2,BL,{c:'var(--watch)',fs:10,fw:500})+T(W-pr+8,y+10,vfmt(+ch.before,fmt,1),{c:'var(--watch)',fs:11,fw:700,h:1}); }
+  (ch.marks||[]).forEach(([i,t])=>{ if(i==null||i>=n) return; s+=`<line x1="${(X(i)-bw/2).toFixed(1)}" x2="${(X(i)-bw/2).toFixed(1)}" y1="${pt-10}" y2="${H-pb}" stroke="var(--cyan)" stroke-dasharray="2 3" opacity=".7"/>`+T(Math.min(X(i)-bw/2+3,W-60),pt-12,t,{c:'var(--cyan)',fs:10}); });
+  vals.forEach((v,i)=>{ if(v==null) return; if(!(room||i===last||i===mi||i===mn)) return; const fs=room&&n>10?9.5:10.5; s+=T(X(i),Y(Math.max(v,0))-4,vfmt(v,fmt,1),{a:'middle',fs,c:i===last?'var(--ink)':'var(--ink2)',h:1}); });
+  const step=Math.max(1,Math.ceil(n/Math.max(2,Math.floor(W/62))));
+  (ch.labels||[]).forEach((l,i)=>{ if(i%step&&i!==n-1) return; if(i!==n-1&&n-1-i<step) return; s+=T(X(i),H-6,l,{a:'middle',c:'var(--faint)',fs:10,fw:500}); });
+  s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
+  const cap0=String(ch.cap||'').split(' · ')[0];
+  CH[id]={X,n,w:W,tip:i=>`<div class="rs-tt">${esc((ch.labels||[])[i]||'')}</div><div class="rs-row"><span>${esc(cap0)}</span><b>${vfmt(vals[i],fmt,0)}</b></div>${ch.before!=null?`<div class="rs-row"><span>${esc(BL)}</span><b>${vfmt(+ch.before,fmt,0)}</b></div>`:''}${ch.tips&&ch.tips[i]?`<div class="rs-tsm">${esc(ch.tips[i])}</div>`:''}`};
+  return s; }
+function revChart(a,W){ const d14=FILE.meta.d14, U=FILE.meta.usual||{};
+  return barChart({cap:'App AdMob revenue · /day',labels:d14.map(d=>wd(d).slice(0,2)+' '+fd(d)),vals:a.ser,fmt:'usd',before:a.us,after_idx:null,marks:[],
+    tips:d14.map((d,i)=>i===13?'Yesterday — card ka number (frozen)':(U.from&&d>=U.from&&d<=U.to?'usual window ('+fd(U.from)+'–'+fd(U.to)+')':''))},W,{h:170,col:'var(--cyan)',bl:'usual/day'}); }
+// same day uninstall by install week (the cohort file) — every bar printed, the actual count in the tooltip
+function unChart(a,W){ const U=a.x&&a.x.un; if(!U) return ''; const wk=U.wk.filter(w=>w.n>0); if(!wk.length) return ''; const H=150,pl=8,pr=8,pt=22,pb=34,n=wk.length,id='rs-ch'+(++chN);
+  const v=wk.map(w=>100*w.s/w.n), mx=Math.max(...v,1)*1.2, bw=(W-pl-pr)/n, X=i=>pl+bw*(i+.5), Y=lin(0,mx,H-pb,pt);
+  let s=`<svg class="rs-chart" data-ch="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Same day uninstall by install week"><defs><pattern id="ph${id}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="rgba(230,184,78,.18)"/><line x1="0" y1="0" x2="0" y2="5" stroke="rgba(230,184,78,.7)" stroke-width="2"/></pattern></defs>`;
+  s+=`<line x1="${pl}" x2="${W-pr}" y1="${H-pb}" y2="${H-pb}" stroke="var(--line2)"/>`;
+  wk.forEach((w,i)=>{ const y=Y(v[i]); s+=`<rect x="${(X(i)-bw*.33).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*.66).toFixed(1)}" height="${(H-pb-y).toFixed(1)}" rx="2" fill="${w.prov?`url(#ph${id})`:'var(--purple)'}" ${w.prov?'stroke="var(--watch)" stroke-width="1"':''}/>`+T(X(i),y-4,trim(v[i].toFixed(v[i]<10?1:0))+'%',{a:'middle',c:i===n-1?'var(--ink)':'var(--ink2)'});
+    const show=bw>=46||i%2===(n-1)%2; if(show) s+=T(X(i),H-pb+13,fd(w.f),{a:'middle',c:'var(--faint)',fs:9.5,fw:500})+(bw>=46?T(X(i),H-pb+25,nf.format(w.n),{a:'middle',c:'var(--faint)',fs:9,fw:500}):''); });
+  s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
+  CH[id]={X,n,w:W,tip:i=>{ const w=wk[i]; return `<div class="rs-tt">Installs ${fd(w.f)}–${fd(w.t)}</div><div class="rs-row"><span>Same day uninstall</span><b>${nf.format(w.s)} of ${nf.format(w.n)}</b></div><div class="rs-row"><span>Share</span><b>${trim((100*w.s/w.n).toFixed(1))}%</b></div>${w.prov?`<div class="rs-tsm rs-prov">⏳ Not final — is app ka uninstall data ${esc(U.late)} din tak late aata hai</div>`:''}`; }};
+  return `<div class="rs-chartp"><div class="rs-cap">Same day uninstall · by install week · bars = %, below = installs${wk.some(w=>w.prov)?' · <span class="rs-prov">hatched = ⏳ not final</span>':''}</div>${s}</div>`; }
+// returning users per day (the Active users file), final till the day GA4 stops changing it
+function retChart(a,W){ const R=a.x&&a.x.ret; if(!R) return ''; const v=R.v, d=R.d, n=v.length, H=140,pl=8,pr=8,pt=18,pb=20,id='rs-ch'+(++chN);
+  const ok=v.filter(x=>x!=null); if(!ok.length) return ''; let mn=Math.min(...ok), mx=Math.max(...ok); const pd=(mx-mn)*.15||1; mn=Math.max(0,mn-pd); mx+=pd;
+  const X=lin(0,n-1,pl+2,W-pr-2), Y=lin(mn,mx,H-pb,pt), si=R.final?d.indexOf(R.final):-1;
+  let s=`<svg class="rs-chart" data-ch="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Returning users per day">`;
+  if(si>=0&&si<n-1){ const x0=(X(si)+X(si+1))/2; s+=`<rect x="${x0.toFixed(1)}" y="${pt-8}" width="${(W-pr-x0).toFixed(1)}" height="${H-pb-pt+8}" fill="rgba(230,184,78,.08)"/>`+T(W-pr-2,pt+2,'⏳ not final',{a:'end',c:'var(--watch)',fs:9.5}); }
+  s+=`<path d="${pathOf(v,X,Y)}L${X(n-1).toFixed(1)} ${H-pb}L${X(0).toFixed(1)} ${H-pb}Z" fill="var(--good)" opacity=".1"/><path d="${pathOf(v,X,Y)}" fill="none" stroke="var(--good)" stroke-width="2" stroke-linejoin="round"/>`;
+  let mi=-1,mo=-1; v.forEach((x,i)=>{ if(x==null) return; if(mi<0||x>v[mi]) mi=i; if(mo<0||x<v[mo]) mo=i; });
+  let fi=-1, li=-1; v.forEach((x,i)=>{ if(x!=null){ if(fi<0) fi=i; li=i; } });
+  const lab=(i,c)=>{ const x=X(i), y=Y(v[i]); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${c}"/>`+T(Math.min(W-pr-2,Math.max(pl+2,x)),i===mo?y+14:y-6,nf.format(v[i]),{a:i===li?'end':(i===fi?'start':'middle'),c:'var(--ink)'}); };
+  [...new Set([fi,li,mi,mo])].forEach(i=>{ if(i>=0&&v[i]!=null) s+=lab(i,i===li?'var(--good)':'var(--ink2)'); });
+  s+=T(pl,H-4,fd(d[0]),{c:'var(--faint)',fs:9.5,fw:500})+T(W-pr,H-4,fd(d[n-1]),{a:'end',c:'var(--faint)',fs:9.5,fw:500});
+  s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
+  CH[id]={X,n,w:W,tip:i=>`<div class="rs-tt">${esc(wd(d[i]).slice(0,3))}, ${fd(d[i])}</div><div class="rs-row"><span>Returning users</span><b>${v[i]==null?'—':nf.format(v[i])}</b></div>${R.final&&d[i]>R.final?'<div class="rs-tsm rs-prov">⏳ Not final — GA4 abhi badal sakta hai</div>':''}`};
+  return `<div class="rs-chartp"><div class="rs-cap">Returning users per day · GA4 · ${fd(d[0])}–${fd(d[n-1])}${R.final?' (final till '+fd(R.final)+')':''}</div>${s}</div>`; }
+// mediation: every network's share of the revenue (the card's 7 days), the actual revenue first, % beside it
+function medChart(a){ const sh=(a.x&&a.x.med)||[]; if(!sh.length) return ''; const C=['var(--cyan)','var(--purple)','var(--rs-blue-s)','var(--watch)','var(--good)','#f472b6'];
+  const w7=FILE.meta.w7||{}, p7=FILE.meta.p7||{};
+  let bar='', lg='';
+  sh.forEach((x,i)=>{ if(!(x.s>0)) return; const c=C[i%C.length]; bar+=`<i style="width:${x.s}%;background:${c}" data-tk="med:${esc(a.key)}:${i}">${x.s>=18?esc(String(x.n).replace(/\s*\(.*\)$/,''))+' '+trim(x.s.toFixed(0))+'%':''}</i>`;
+    lg+=`<span class="rs-k" data-tk="med:${esc(a.key)}:${i}"><span class="rs-sw" style="background:${c}"></span>${esc(x.n)} <b>${x.usd!=null?mH(x.usd)+' · ':''}${trim(x.s.toFixed(1))}%</b>${x.p!=null?` <span class="rs-faint">(was ${trim(x.p.toFixed(1))}%)</span>`:''}${x.f!=null?` <span class="rs-faint">· fill ${trim(x.f.toFixed(1))}%</span>`:''}</span>`; });
+  return `<div class="rs-chartp"><div class="rs-cap">Revenue by network · ${fd(w7.from)}–${fd(w7.to)} (was = ${fd(p7.from)}–${fd(p7.to)})</div><div class="rs-mbar rs-mbig">${bar}</div><div class="rs-legend rs-legin">${lg}</div></div>`; }
+function ringSvg(done,n){ const r=50, c=2*Math.PI*r, p=n?done/n:0;
+  return `<svg class="rs-ring" viewBox="0 0 120 120" role="img" aria-label="${done} of ${n} reviewed"><circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--rs-raise2)" stroke-width="11"/><circle cx="60" cy="60" r="${r}" fill="none" stroke="${p>=1?'var(--good)':'var(--cyan)'}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${(c*p).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 60 60)"/><text class="rs-rl1" x="60" y="62" text-anchor="middle">${done}/${n}</text><text class="rs-rl2" x="60" y="80" text-anchor="middle">${Math.round(100*p)}% DONE</text></svg>`; }
+
+/* ================= header ================= */
+function topHtml(){ const M=FILE.meta, I=RV.idx||{}, me=RV.me, v=RV.view||'today';
+  const tab=(id,l,c)=>`<button type="button" role="tab" id="rs-tb-${id}" data-rsv="${id}" aria-selected="${v===id}" aria-controls="rs-v-${id}"${v===id?'':' tabindex="-1"'}>${l}${c?`<span class="rs-cnt">${c}</span>`:''}</button>`;
+  const pend=A.length-doneN(), of=(S0().flags||[]).filter(x=>x.status==='open').length;
+  const nx=I.next_snapshot?String(I.next_snapshot).slice(0,10):null;
+  return `<div class="rs-top-in"><div class="rs-brand"><span class="rs-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="3.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M5.4 9.3l2.3 2.3 4.9-5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><div class="rs-bn">Review Studio</div><div class="rs-sub">${esc(M.wday)}, ${fd(M.day)} ${esc(String(M.day).slice(0,4))} · daily app review</div></div></div>`
+   +`<div class="rs-ctrls"><div class="rs-seg" role="tablist" aria-label="Review views">${tab('today',"Today's review",pend?pend+' pending':'✓')}${tab('sum','Summary',of?of+' 🚩':'')}${tab('hist','History','')}</div>`
+   +`<div class="rs-seg" role="group" aria-label="Currency"><button type="button" data-rscur="INR" aria-pressed="${INR()}">₹</button><button type="button" data-rscur="USD" aria-pressed="${!INR()}">$</button></div>`
+   +`<span class="rs-me" title="${esc(me&&me.email||'')}">${me?'👤 '+rvWho(me.email)+(me.admin?' · <b>Admin</b>':''):'👤 —'}</span>`
+   +`<button class="rs-icb" type="button" id="rs-kbd" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">⌨️</button></div></div>`; }
+function winHtml(){ const M=FILE.meta, I=RV.idx||{}, nx=I.next_snapshot?String(I.next_snapshot).slice(0,10):null;
+  return `<div class="rs-winline" id="rs-win"><span class="rs-fr rs-day">📅 <b>${esc(M.wday)}, ${fd(M.day)}</b></span>`
+   +`<span class="rs-fr" data-tk="fr:frozen">🧊 Cards frozen <b>${fd(M.day)}, ${esc(M.built_ist)} IST</b></span>`
+   +`<span class="rs-fr" data-tk="fr:rev">💰 Revenue till <b>${fd(M.admob_till)}</b></span>`
+   +(M.ga4_till?`<span class="rs-fr" data-tk="fr:ga4">👥 Users & uninstall till <b>${fd(M.ga4_till)}</b></span>`:'')
+   +(M.settled_till?`<span class="rs-fr rs-prov" data-tk="fr:final">⏳ Final till <b>${fd(M.settled_till)}</b></span>`:'')
+   +(nx?`<span class="rs-fr" data-tk="fr:next">⏭ Next cards <b>${fd(nx)}, ${esc(I.ready_ist||'09:00')} IST</b></span>`:'')
+   +(!canW()?`<span class="rs-fr rs-ro" title="${esc(rvRoMsg())}">🔒 Read-only — ${esc(rvRoMsg())}</span>`:'')+`</div>`; }
+
+/* ================= today: hero ================= */
+function heroHtml(){ const n=A.length, d=doneN(); const cnt={ok:0,note:0,flag:0,kal:0,pend:0}; A.forEach(a=>cnt[stOf(a.key)]++);
+  const T1=A.filter(a=>a.grp==='top'), tp=T1.filter(a=>stOf(a.key)==='pend').length;
+  const NB=A.filter(a=>nbOf(a).length), nbf={}; NB.forEach(a=>nbOf(a).forEach(f=>{ nbf[f]=(nbf[f]||0)+1; }));
+  const fl=(S0().flags||[]).filter(x=>x.status==='open'||x.status==='kaam'), CL=A.filter(a=>!bads(a).length);
+  const mv=A.filter(a=>a.y!=null&&a.us!=null).map(a=>({a,d:a.y-a.us})).sort((x,y)=>Math.abs(y.d)-Math.abs(x.d)), big=mv[0];
+  const I=RV.idx||{}, M=FILE.meta, nx=I.next_snapshot?String(I.next_snapshot).slice(0,10):null;
+  let h=`<div class="rs-panel rs-ringp"><div class="rs-ringw">${ringSvg(d,n)}<div class="rs-rstat"><span class="rs-eyebrow">Today's progress</span><span class="rs-big">${d}<small>of ${n} apps reviewed</small></span><span class="rs-muted">${d>=n?'✅ Aaj ke saare apps ho gaye — Summary dekho':`${n-d} baaki · pehle <b>Needs a look</b> wale`}</span></div></div>`
+   +`<div class="rs-bdown" role="list">${[['ok','✅','Reviewed'],['note','📝','+ note'],['flag','🚩','Re-review'],['kal','🔁','Tomorrow'],['pend','⏳','Pending']].map(([k,e,l])=>`<div class="rs-bd ${cnt[k]?'rs-on':''}" role="listitem"><b>${cnt[k]}</b><span>${e} ${l}</span></div>`).join('')}</div>`
+   +`<div class="rs-tsl">🧊 Cards ${fd(M.day)}, ${esc(M.built_ist)} IST ko freeze hue — din bhar wahi rahenge${nx?` · ⏭ agle ${fd(nx)}, ${esc(I.ready_ist||'09:00')} IST`:''}</div></div>`;
+  h+='<div class="rs-story">';
+  h+=`<button class="rs-sc rs-bad" type="button" data-rsfilter="attn" aria-pressed="${ST.filter==='attn'}"><span class="rs-t"><span class="rs-ic">🔎</span>Needs a look</span><span class="rs-big">${T1.length}<small>apps</small></span><span class="rs-ln"><b>${tp} pending</b> · badi / medium apps jinme Worse ya Watch hai (ya khula 🚩)</span><span class="rs-mbar"><i style="width:${T1.length?100*(T1.length-tp)/T1.length:0}%;background:var(--good)"></i></span></button>`;
+  h+=`<button class="rs-sc rs-watch" type="button" data-rsfilter="nb" aria-pressed="${ST.filter==='nb'}"><span class="rs-t"><span class="rs-ic">🆕</span>New & worse</span><span class="rs-big">${NB.length}<small>apps</small></span><span class="rs-ln">Worse issue jo ${esc((RV.doc.consts&&RV.doc.consts.naya_days)||10)} din ke andar shuru hua</span><span class="rs-chipsln">${Object.keys(nbf).sort((x,y)=>nbf[y]-nbf[x]).map(f=>`<span class="rs-fchip"><span class="rs-e">${FI(f)}</span>${esc(FN(f))} <b>${nbf[f]}</b></span>`).join('')}</span></button>`;
+  h+=`<button class="rs-sc ${fl.length?'rs-bad':'rs-cyan'}" type="button" data-rsfilter="flag" aria-pressed="${ST.filter==='flag'}"><span class="rs-t"><span class="rs-ic">🚩</span>Flags · Re-review</span><span class="rs-big">${fl.length}<small>open</small></span><span class="rs-ln">${fl.length?fl.slice(0,3).map(x=>`<b>${esc(AK[x.app]?String(AK[x.app].name).trim():(x.app_label||x.app))}</b> · ${esc(x.feature?FN(x.feature):'Whole app')}${x.status==='kaam'?' · 🛠':''}`).join('<br>')+(fl.length>3?` <span class="rs-muted">+${fl.length-3}</span>`:''):'Aaj abhi koi 🚩 nahi. Card pe 🚩 dabao to admin dobara dekhega.'}</span></button>`;
+  h+=`<button class="rs-sc rs-good" type="button" data-rsfilter="clear" aria-pressed="${ST.filter==='clear'}"><span class="rs-t"><span class="rs-ic">✅</span>All clear</span><span class="rs-big">${CL.length}<small>apps</small></span><span class="rs-ln">${CL.slice(0,6).map(a=>`<b>${esc(String(a.name).trim())}</b> <span class="rs-muted">· ${esc(a.acct)}</span>`).join('<br>')+(CL.length>6?` <span class="rs-muted">+${CL.length-6}</span>`:'')||'—'}</span></button>`;
+  if(big){ const top6=mv.slice(0,6), mxd=Math.max(...top6.map(x=>Math.abs(x.d)),1e-9), br=rel(big.a.y,big.a.us);
+    const sv=`<div class="rs-mvl" role="list" aria-label="Six biggest changes, yesterday vs usual">${top6.map(x=>{ const neg=x.d<0, w=(Math.abs(x.d)/mxd*50).toFixed(1); return `<div class="rs-mvr" role="listitem" data-tk="app:${esc(x.a.key)}"><span class="rs-mvn">${esc(String(x.a.name).trim())} <span class="rs-muted">· ${esc(x.a.acct)}</span></span><span class="rs-mvb"><i style="${neg?'right:50%':'left:50%'};width:${w}%;background:${neg?'var(--bad)':'var(--good)'}"></i></span><b class="${neg?'rs-bad':'rs-good'}">${mH(x.d,{sign:1})} <small>${pct(rel(x.a.y,x.a.us),0)}</small></b></div>`; }).join('')}</div>`;
+    h+=`<div class="rs-sc rs-wide ${big.d<0?'rs-bad':'rs-good'}" role="button" tabindex="0" data-rsgo="${esc(big.a.key)}"><span class="rs-t"><span class="rs-ic">📈</span>Biggest change today · yesterday vs usual</span><div class="rs-mov"><div class="rs-mvbig"><span class="rs-big">${mH(big.d,{sign:1})}<small>${pct(br)}</small></span><span class="rs-ln"><b>${esc(String(big.a.name).trim())}</b> <span class="rs-muted">· ${esc(big.a.acct)}</span></span><span class="rs-ln">Yesterday ${mH(big.a.y)} vs usual ${mH(big.a.us,{s:'/day'})}</span><span class="rs-ln rs-muted rs-small">${Math.abs(br||0)<0.05?'Bada number, par % chhota — normal utaar-chadhaav jaisa':'Card kholo — kya badla dekho'}</span></div>${sv}</div></div>`; }
+  return h+'</div>'; }
+
+/* ================= today: the feature map (every box says what it is, at every width) ================= */
+function mapOrder(){ const L=A.slice();
+  if(ST.gfeat){ const f=ST.gfeat; return L.sort((x,y)=>(SEV[effSt(y,f)]-SEV[effSt(x,f)])||((+y.k7||0)-(+x.k7||0))); }
+  if(ST.gsort==='rev') return L.sort((x,y)=>(+y.k7||0)-(+x.k7||0));
+  if(ST.gsort==='sev') return L.sort((x,y)=>(nRed(y)*10+nAmb(y))-(nRed(x)*10+nAmb(x))||((+y.k7||0)-(+x.k7||0)));
+  return L; }
+function mapHtml(){ const FE0=FE();
+  let h=`<div class="rs-ph"><div><div class="rs-eyebrow">Feature map</div><h2>${A.length} apps × ${FE0.length} features</h2><div class="rs-hint">Har khana = ek app ka ek feature (naam khane me hi likha). Rang = haalat, number = asli badlaav. Hover / tap karo detail ke liye, click karo → poora card usi feature pe khulega. Column ka naam dabao → us feature ke hisaab se sort.</div></div>`
+   +`<div class="rs-right"><div class="rs-seg" role="group" aria-label="Sort apps">${[['order','Review order'],['rev','Revenue'],['sev','Most issues']].map(([k,l])=>`<button type="button" data-rsgsort="${k}" aria-pressed="${!ST.gfeat&&ST.gsort===k}">${l}</button>`).join('')}</div></div></div>`;
+  h+='<div class="rs-mapw"><div class="rs-hm" role="grid" aria-label="Apps by feature">';
+  h+=`<div class="rs-hh rs-x" role="columnheader">#</div><div class="rs-hh rs-l" role="columnheader">App${ST.gfeat?` · sorted by ${esc(FN(ST.gfeat))}`:''}</div><div class="rs-hh rs-r" role="columnheader">Yesterday<br><span class="rs-w">vs usual</span></div>`;
+  FE0.forEach(([f,n,s,i])=>{ h+=`<button type="button" class="rs-hh rs-fh" role="columnheader" data-rsgfeat="${f}" aria-pressed="${ST.gfeat===f}" data-tk="fh:${f}" aria-label="${esc(n)} — sort by this feature"><span class="rs-e">${i}</span><span class="rs-w">${esc(s)}</span></button>`; });
+  h+=`<div class="rs-hh rs-x" role="columnheader">Issues</div><div class="rs-hh rs-x rs-r" role="columnheader">Review</div>`;
+  let lastG=null; const sep=!ST.gfeat&&ST.gsort==='order';
+  mapOrder().forEach(a=>{ if(sep&&a.grp!==lastG){ lastG=a.grp; h+=`<div class="rs-gsep">${esc(GRP[a.grp])} · ${A.filter(x=>x.grp===a.grp).length}</div>`; }
+    const r=rel(a.y,a.us), cls=r==null?'':(r>=0.1?'rs-up':(r<=-0.1?'rs-dn':''));
+    h+=`<div class="rs-rk">${a.rank}</div><button type="button" class="rs-nm" data-rsgo="${esc(a.key)}" data-tk="app:${esc(a.key)}">${avH(a,'rs-sm')}${nameH(a)}</button><div class="rs-rv">${mH(a.y)}<small class="${cls}">${pct(r,0)}</small></div>`;
+    FID().forEach(f=>{ const x=a.f[f]||{}, s=effSt(a,f), nb=isNB(a,f), fl=featFlag(a.key,f);
+      h+=`<button type="button" class="rs-hc rs-s-${s}" data-rsgo="${esc(a.key)}:${f}" data-tk="cell:${esc(a.key)}:${f}" aria-label="${esc(nameP(a))} · ${esc(FN(f))}: ${STW[s]} — ${esc(rtp(lineOf(x)))}"><span class="rs-cl" aria-hidden="true">${esc(FS(f))}</span><span class="rs-cv2">${cellTxt(x,s)}</span>${nb?'<span class="rs-nbd" aria-hidden="true"></span>':''}${fl?'<span class="rs-cfl" aria-hidden="true">🚩</span>':''}</button>`; });
+    const rr=nRed(a), aa=nAmb(a);
+    h+=`<div class="rs-iss">${rr?`<span class="rs-r">${rr}<i class="rs-w"> Worse</i></span>`:''}${aa?`<span class="rs-a">${aa}<i class="rs-w"> Watch</i></span>`:''}${!rr&&!aa?'<span class="rs-faint">—</span>':''}</div><div class="rs-stc">${pillH(a.key).replace('class="rs-pill','class="rs-pill rs-ps')}</div>`; });
+  h+=`<div class="rs-ftl">Apps with issue</div>`;
+  FID().forEach(f=>{ const r=A.filter(a=>effSt(a,f)==='red').length, m=A.filter(a=>effSt(a,f)==='amber').length; h+=`<div class="rs-ft" data-tk="ft:${f}">${r?`<span class="rs-r">${r}<i class="rs-w"> Worse</i></span>`:''}${m?`<span class="rs-a">${m}<i class="rs-w"> Watch</i></span>`:''}${!r&&!m?'—':''}</div>`; });
+  h+='<div class="rs-ft rs-x" style="grid-column:span 2"></div></div></div>';
+  h+=`<div class="rs-legend"><span class="rs-k"><span class="rs-sw" style="background:var(--rs-c-red)"></span>Worse</span><span class="rs-k"><span class="rs-sw" style="background:var(--rs-c-amber)"></span>Watch</span><span class="rs-k"><span class="rs-sw" style="background:var(--rs-c-green)"></span>Better</span><span class="rs-k"><span class="rs-sw" style="background:var(--rs-c-normal)"></span>Normal</span><span class="rs-k"><span class="rs-sw" style="background:var(--rs-c-wait)"></span>⏳ Too early</span><span class="rs-k"><span class="rs-sw" style="border:1px dashed var(--line2)"></span>N/A</span><span class="rs-k"><span class="rs-sw rs-swnd"></span>No data</span><span class="rs-k"><span class="rs-sw" style="background:var(--rs-c-snz)"></span>💤 Snoozed</span><span class="rs-k"><span class="rs-sw" style="background:var(--rs-c-red);position:relative"><i class="rs-swdot"></i></span>🆕 New & worse</span><span class="rs-k">🚩 flagged</span></div>`;
+  return h; }
+
+/* ================= today: list (cards / table) ================= */
+const FILTERS=[['all','All'],['attn','Needs a look'],['nb','New & worse'],['pend','Pending'],['done','Reviewed'],['flag','🚩 Flags'],['small','Small apps'],['clear','All clear']];
+function passes(a,f){ f=f||ST.filter; const k=a.key;
+  if(f==='attn') return a.grp==='top'; if(f==='nb') return nbOf(a).length>0; if(f==='pend') return stOf(k)==='pend'; if(f==='done') return stOf(k)!=='pend';
+  if(f==='flag') return openFlags(k).length>0; if(f==='small') return a.grp==='small'; if(f==='clear') return !bads(a).length; return true; }
+function matchQ(a){ const q=ST.q.trim().toLowerCase(); if(!q) return true; return (a.name+' '+(a.tag||'')+' '+a.acct+' '+(a.pkg||'')).toLowerCase().indexOf(q)>=0; }
+const visible=()=>A.filter(a=>passes(a)&&matchQ(a));
+function listHtml(){ const V=visible();
+  let h=`<div class="rs-lh"><div><div class="rs-eyebrow">Apps</div><h2>Review one by one</h2></div><div class="rs-right"><input class="rs-srch" id="rs-q" type="search" placeholder="Search app / account…" aria-label="Search apps" value="${esc(ST.q)}"><div class="rs-seg" role="group" aria-label="View"><button type="button" data-rsmode="cards" aria-pressed="${ST.mode==='cards'}">▦ Cards</button><button type="button" data-rsmode="table" aria-pressed="${ST.mode==='table'}">☰ Table</button></div></div></div>`;
+  h+=`<div class="rs-fbar" role="group" aria-label="Filter apps">${FILTERS.map(([k,l])=>`<button type="button" data-rsfilter="${k}" aria-pressed="${ST.filter===k}">${l}<span class="rs-c">${A.filter(a=>passes(a,k)).length}</span></button>`).join('')}</div>`;
+  h+=`<div class="rs-khint">Keys: ${kbd('j')}/${kbd('k')} move · ${kbd('r')} reviewed · ${kbd('i')} important · ${kbd('n')} note · ${kbd('o')} open · ${kbd('?')} help</div>`;
+  return h+'<div id="rs-lbody">'+(ST.mode==='table'?tableHtml(V):cardsHtml(V))+'</div>'; }
+function cardsHtml(V){ if(!V.length) return `<div class="rs-empty rs-panel">Is filter me koi app nahi. <button class="rs-btn rs-sm" type="button" data-rsfilter="all">Show all</button></div>`;
+  let h=''; ['top','ok','small'].forEach(g=>{ const L=V.filter(a=>a.grp===g); if(!L.length) return;
+    const all=A.filter(a=>a.grp===g), ib=all.filter(a=>bads(a).length), pend=all.filter(a=>stOf(a.key)==='pend');
+    const small=(RV.doc.consts&&RV.doc.consts.small_usd)||30;
+    h+=`<section class="rs-grp" aria-label="${esc(GRP[g])}"><div class="rs-gh"><h3 id="rs-gh-${g}" tabindex="-1">${esc(GRP[g])} · ${all.length}</h3><span class="rs-gsub">${g==='top'?'Badi / medium apps jinme koi Worse ya Watch baat hai (ya khula 🚩) — 🆕 New & worse pehle, phir kamai ke hisaab se':(g==='small'?`Kamai + ads kharcha ${mH(small,{s:'/day'})} se kam · ${ib.length} me Worse/Watch baat hai · inke Worse bhi yahin, upar nahi aate`:'Koi Worse/Watch nahi')}</span>${g!=='top'&&pend.length?`<span class="rs-right"><button class="rs-btn rs-sm rs-ok" type="button" id="rs-bulk-${g}" data-rsbulk="${g}"${canW()?'':' disabled'}>✅ Mark all ${pend.length} reviewed</button></span>`:''}</div><div class="rs-pslot" id="rs-bslot-${g}"></div><div class="rs-cards">${L.map(cardHtml).join('')}</div></section>`; });
+  return h; }
+function issueBlock(a,f,big){ const x=a.f[f]||{}, s=effSt(a,f), fl=featFlag(a.key,f);
+  return `<div class="rs-ti rs-s-${s}"><div class="rs-ti-h">${chipSt(s)}<span class="rs-fe">${FI(f)}</span><b>${esc(FN(f))}</b>${ageH(x.age)}${isNB(a,f)?'<span class="rs-nbchip">🆕 New & worse</span>':''}${fl?'<span class="rs-pill rs-p-flag rs-pxs">🚩 flagged</span>':''}</div>`
+   +`<div class="rs-ti-t">${rt(lineOf(x))}</div>${kitShow(x)?`<div class="rs-ti-k">${kitShow(x)}</div>`:''}`
+   +(x.q?`<div class="rs-ts">${tsLine(x)}</div>`:(x.kis?`<div class="rs-ts"><span>📊 ${rt(x.kis)}</span></div>`:''))
+   +(x.q&&x.q.karo&&big?`<div class="rs-next"><b>Next step:</b> ${esc(x.q.karo)}</div>`:'')+'</div>'; }
+function cardHtml(a){ const k=a.key, s=stOf(k), B=bads(a), top=topFeat(a), r=rel(a.y,a.us), dcl=r==null?'rs-fl':(r>=0.1?'rs-up':(r<=-0.1?'rs-dn':'rs-fl')), M=FILE.meta;
+  const ai=fInfo(k,'app');
+  let h=`<article class="rs-rc rs-t-${esc(a.tier||'normal')} ${s!=='pend'?'rs-done':''} ${ST.focus===k?'rs-kf':''}" id="rs-c-${esc(k)}" data-key="${esc(k)}" tabindex="-1" aria-label="${esc(nameP(a))}">`;
+  h+=`<div class="rs-rc-h">${a.grp==='top'?`<span class="rs-rk">#${a.trank}</span>`:''}${avH(a)}<div class="rs-rh-t">${nameH(a)}<div class="rs-l2"><span class="rs-sz ${a.size==='badi'?'rs-badi':''}">${SIZE[a.size]||'—'}</span>${nbOf(a).length?'<span class="rs-nbchip">🆕 New & worse</span>':''}${ai.today||ai.carry?`<span class="rs-pill rs-p-flag rs-pxs">🚩 Whole app${ai.carry&&!ai.today?' · '+dDiff(ai.carry.day,RV.doc.day)+' days open':''}</span>`:''}${FID().filter(f=>featFlag(k,f)).map(f=>`<span class="rs-pill rs-p-flag rs-pxs">🚩 ${esc(FN(f))}</span>`).join('')}${FID().filter(f=>fInfo(k,f).kaam).map(f=>`<span class="rs-pill rs-p-kaam rs-pxs">🛠 ${esc(FN(f))} · fix assigned</span>`).join('')}${rvKalPrev(S0(),k)?`<span class="rs-pill rs-p-kal rs-pxs">🔁 ${fd(S0().prev.d)} ko “check again tomorrow”</span>`:''}${a.raw?'<span class="rs-pill rs-pxs">Studio data nahi — card ka text</span>':''}</div></div>${pillH(k)}</div>`;
+  h+=`<div class="rs-rc-m"><div class="rs-mny"><div class="rs-lbl">Yesterday · ${fd(M.admob_till)}</div><div class="rs-big">${mH(a.y)}</div><div class="rs-dl ${dcl}">${mH((+a.y||0)-(+a.us||0),{sign:1})} (${pct(r)}) vs usual</div><div class="rs-vs">usual ${mH(a.us,{s:'/day'})} · 7-day avg ${mH(a.k7,{s:'/day'})}</div></div>${revSpark(a)}</div>`;
+  h+=`<ul class="rs-strip" aria-label="Features">${FID().map(f=>{ const x=a.f[f]||{}, st=effSt(a,f); return `<li><button type="button" class="rs-fc rs-s-${st}" data-rsgo="${esc(k)}:${f}" data-tk="cell:${esc(k)}:${f}" aria-label="${esc(FN(f))}: ${STW[st]}"><span class="rs-fi" aria-hidden="true">${FI(f)}</span><span class="rs-flb">${esc(FS(f))}</span>${(isBad(st)||st==='green')&&x.k?`<span class="rs-fk">${kTxt(x.k)}</span>`:(st==='snz'?'<span class="rs-fk">💤</span>':'')}${isNB(a,f)?'<span class="rs-nbd" aria-hidden="true"></span>':''}${featFlag(k,f)?'<span class="rs-flg" aria-hidden="true">🚩</span>':''}</button></li>`; }).join('')}</ul>`;
+  if(top&&isBad(effSt(a,top))) h+=issueBlock(a,top,true);
+  else if(top&&effSt(a,top)==='green') h+=`<div class="rs-ti rs-s-green"><div class="rs-ti-h">${chipSt('green')}<span class="rs-fe">${FI(top)}</span><b>${esc(FN(top))}</b></div><div class="rs-ti-t">${rt(a.f[top].line)}</div><div class="rs-ts"><span>✅ Koi Worse/Watch nahi — baaki sab Normal</span></div></div>`;
+  else h+=`<div class="rs-ti"><div class="rs-ti-h">${chipSt('normal')}<b>All normal — no change</b></div><div class="rs-ts"><span>Saare features Normal / N/A${FID().some(f=>effSt(a,f)==='snz')?' (💤 snoozed baatein chhupi)':''} — jaldi se ✅ kar sakte ho</span></div></div>`;
+  const rest=B.filter(f=>f!==top);
+  if(rest.length) h+=`<div class="rs-ois"><span class="rs-eyebrow2">+${rest.length} more ${rest.length>1?'issues':'issue'}</span>${rest.map(f=>{ const x=a.f[f]||{}; return `<button type="button" class="rs-oi" data-rsgo="${esc(k)}:${f}"><span class="rs-d rs-s-${effSt(a,f)}"></span><span><b>${esc(FN(f))}</b> — ${rt(lineOf(x))} <span class="rs-ag">${[x.age?esc(x.age.txt):'',cameT(x)?esc(cameT(x).replace(/ · (on the first card|when the feature started)$/,'')):'',x.q&&x.q.kis?'📊 '+esc(x.q.kis):'',x.prov!=null?'⏳ Not final':''].filter(Boolean).map(t=>'· '+t).join(' ')}</span></span></button>`; }).join('')}</div>`;
+  h+=actsHtml(a,false)+`<div class="rs-pslot" id="rs-ps-${esc(k)}"></div>`+byHtml(a)+'</article>';
+  return h; }
+function actsHtml(a,inDrawer){ const k=a.key, s=stOf(k), ro=!canW(), dis=ro?` disabled title="${esc(rvRoMsg())}"`:'', P=inDrawer?'rs-d':'rs';
+  const has=s!=='pend'||(S0().notes||[]).some(n=>n.app===k)||(S0().flags||[]).some(x=>x.app===k&&x.day===RV.doc.day&&x.status==='open');
+  const ai=fInfo(k,'app');
+  return `<div class="rs-acts" role="group" aria-label="Review actions"><button type="button" class="rs-btn rs-ok" id="${P}-ok-${esc(k)}" data-rsact="ok" data-k="${esc(k)}" aria-pressed="${s==='ok'||s==='note'}"${dis}>✅ Got it · Reviewed</button><button type="button" class="rs-btn" id="${P}-note-${esc(k)}" data-rsact="note" data-k="${esc(k)}"${dis}>📝 Note</button><button type="button" class="rs-btn rs-imp" id="${P}-imp-${esc(k)}" data-rsact="imp" data-k="${esc(k)}" role="checkbox" aria-checked="${s==='flag'||!!ai.today}"${dis}>🚩 Important · Re-review</button><button type="button" class="rs-btn rs-kal" id="${P}-kal-${esc(k)}" data-rsact="kal" data-k="${esc(k)}" aria-pressed="${s==='kal'}" title="Khud kal dobara dekhna hai — admin ko nahi jaata"${ro?' disabled':''}>🔁 Check again tomorrow</button>${has?`<button type="button" class="rs-btn rs-ghost" id="${P}-undo-${esc(k)}" data-rsact="undo" data-k="${esc(k)}"${dis}>↩ Undo</button>`:''}${inDrawer?'':`<button type="button" class="rs-btn rs-open" id="${P}-open-${esc(k)}" data-rsact="open" data-k="${esc(k)}">Open full card ›</button>`}</div>`; }
+function byHtml(a){ const k=a.key, S=S0(), s=S.states[k], st=stOf(k), d=RV.doc.day; let L=[];
+  if(!s) L.push(`<span>⏳ Not reviewed yet · card frozen ${fd(d)}, ${esc(FILE.meta.built_ist)} IST</span>`);
+  else L.push(`<span class="rs-lg">${ST_TXT[st==='note'?'ok':st]} · <b>${rvWho(s.who)}</b> · ${esc(when(s.at))}${s.st==='kal'?' <span class="rs-faint">· kal ke card pe upar aayega (sirf aapke liye)</span>':''}</span>`);
+  (S.notes||[]).filter(n=>n.app===k).forEach(n=>L.push(`<span class="rs-lg">📝 <b>${rvWho(n.who)}</b> · ${esc(when(n.at))}: <span class="rs-ink">${esc(n.text)}</span></span>`));
+  (S.flags||[]).filter(x=>x.app===k&&x.status!=='withdrawn'&&(x.day===d||x.status==='open'||x.status==='kaam')).forEach(x=>{
+    L.push(`<span class="rs-lg">🚩 ${esc(x.feature?FN(x.feature):'Whole app')} · <b>${rvWho(x.raised_by)}</b> · ${esc(when(x.raised_at))}${x.day<d?' · '+dDiff(x.day,d)+' days open':''}${x.note?': '+esc(x.note):''} <span class="rs-faint">· ${x.status==='open'?'admin ka faisla baaki':(x.status==='kaam'?'🛠 fix assigned'+(x.dec_note?': '+esc(x.dec_note):''):'closed')}</span></span>`);
+    if(x.decision&&(x.day===d||rvDecDay(x)===d)) L.push(`<span class="rs-lg">🧑‍💼 Admin: <b>${esc(DEC[x.decision]||x.decision)}</b>${x.dec_note?' — '+esc(x.dec_note):''} · ${rvWho(x.dec_by)}, ${esc(when(x.dec_at))} <span class="rs-faint">(${esc(x.feature?FN(x.feature):'Whole app')})</span></span>`); });
+  (S.snoozes||[]).filter(z=>z.app===k).forEach(z=>L.push(`<span class="rs-lg">💤 ${esc(FN(z.feature))} · snoozed till ${fd(z.until)} · ${rvWho(z.who)}${z.note?': '+esc(z.note):''}</span>`));
+  return `<div class="rs-by" aria-live="polite">${L.join('')}</div>`; }
+const TCOL=[['order','#','l'],['app','App','l'],['y','Yesterday',''],['d','vs usual',''],['k7','7-day avg',''],['iss','Issues',''],['new','Newest issue','l'],['st','Review','l'],['fl','Flags',''],['x','','']];
+const ST_ORD={pend:0,flag:1,kal:2,ok:3,note:4};
+function newest(a){ let b=null; bads(a).forEach(f=>{ const g=(a.f[f]||{}).age; if(g&&g.n!=null&&(b==null||g.n<b.n)) b={n:g.n,g,f}; else if(g&&g.n==null&&b==null) b={n:9999,g,f}; }); return b; }
+function sortVal(a,k){ if(k==='y') return +a.y||0; if(k==='d') return (+a.y||0)-(+a.us||0); if(k==='k7') return +a.k7||0; if(k==='iss') return nRed(a)*100+nAmb(a); if(k==='new'){ const b=newest(a); return b?-b.n:-1e9; } if(k==='st') return -ST_ORD[stOf(a.key)]; if(k==='fl') return openFlags(a.key).length; if(k==='app') return String(a.name).toLowerCase(); return -a.rank; }
+function tableHtml(V){ const {k,d}=ST.sort; const L=V.slice().sort((x,y)=>{ const p=sortVal(x,k), q=sortVal(y,k); return (typeof p==='string'?p.localeCompare(q):(q-p))*d; });
+  let h=`<div class="rs-tw"><table class="rs-st" aria-label="Apps table"><thead><tr>${TCOL.map(([c,l,al])=>c==='x'?'<th><span class="rs-sr">Quick review</span></th>':`<th class="${al==='l'?'rs-tl':''} ${k===c?'rs-sorted':''}" aria-sort="${k===c?(d===1?'descending':'ascending'):'none'}"><button type="button" data-rssort="${c}">${l}${k===c?`<span class="rs-ar">${d===1?'▼':'▲'}</span>`:''}</button></th>`).join('')}</tr></thead><tbody>`;
+  L.forEach(a=>{ const r=rel(a.y,a.us), nw=newest(a), s=stOf(a.key), fl=openFlags(a.key);
+    h+=`<tr data-key="${esc(a.key)}" class="${ST.focus===a.key?'rs-kf':''}" tabindex="-1"><td class="rs-tl rs-faint">${a.rank}</td><td class="rs-app"><div class="rs-w2">${avH(a,'rs-sm')}<div>${nameH(a)}${bads(a).length?`<div class="rs-dots">${bads(a).map(f=>`<span class="rs-dch rs-s-${effSt(a,f)}">${esc(FS(f))}</span>`).join('')}</div>`:''}</div></div></td>`
+     +`<td>${mH(a.y)}</td><td><span class="${r>=0.1?'rs-up':(r<=-0.1?'rs-dn':'')}">${mH((+a.y||0)-(+a.us||0),{sign:1})}</span><small>${pct(r)}</small></td><td>${mH(a.k7)}<small>prev ${mH(a.kp7)}</small></td>`
+     +`<td class="rs-iss2">${nRed(a)?`<span class="rs-r">${nRed(a)} Worse</span>`:''}${nRed(a)&&nAmb(a)?'<br>':''}${nAmb(a)?`<span class="rs-a">${nAmb(a)} Watch</span>`:''}${!nRed(a)&&!nAmb(a)?'<span class="rs-faint">—</span>':''}</td>`
+     +`<td class="rs-wh">${nw?`${esc(FN(nw.f))} · ${ageH(nw.g)}<br><span class="rs-faint">${esc(cameT(a.f[nw.f]).replace(/ · (on the first card|when the feature started)$/,''))}${nw.g.start?' · started '+fd(nw.g.start):''}</span>`:'<span class="rs-faint">—</span>'}</td>`
+     +`<td class="rs-tl">${pillH(a.key)}</td><td>${fl.length?`🚩 ${fl.length}`:'<span class="rs-faint">—</span>'}</td><td><button type="button" class="rs-btn rs-sm rs-ok" id="rs-t-ok-${esc(a.key)}" data-rsact="ok" data-k="${esc(a.key)}" aria-pressed="${s==='ok'||s==='note'}" aria-label="Got it · Reviewed — ${esc(nameP(a))}"${canW()?'':' disabled'}>✅ Got it</button></td></tr>`; });
+  return h+'</tbody></table></div>'; }
+function howHtml(){ const M=FILE.meta; return `<summary>Ye page kaise bana (how this works)</summary><ul>${(M.how||[]).map(x=>`<li>${rt(x)}</li>`).join('')}<li>Studio: feature lines owner ke rules me — “Same day uninstall”, actual number pehle aur % saath me (cohort data se gina), units /day. Charts usi data se jo card ne padha: AdMob placements (revenue), GA4 cohort (same day uninstall), GA4 daily (returning users), AdMob mediation (networks) — card ke din tak hi.</li><li>Har click asli Review API pe save hota hai (team ke saath) — wahi jo “🗂 Old views” ke buttons karte hain.</li></ul>`; }
+
+/* ================= drawer (the full card) ================= */
+function layer(){ let L=$('rs-layer'); if(L) return L;
+  L=document.createElement('div'); L.id='rs-layer';
+  L.innerHTML='<div class="rs-scrim" id="rs-scrim"></div><aside class="rs-drawer" id="rs-drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Full card"></aside><div id="rs-tip" role="tooltip"></div><div id="rs-help" hidden><div class="rs-box" role="dialog" aria-modal="true" aria-labelledby="rs-help-h"><h3 id="rs-help-h">Keyboard</h3><dl><dt>'+kbd('j')+' '+kbd('k')+'</dt><dd>Next / previous card</dd><dt>'+kbd('r')+'</dt><dd>✅ Got it · Reviewed</dd><dt>'+kbd('i')+'</dt><dd>🚩 Important · Re-review</dd><dt>'+kbd('n')+'</dt><dd>📝 Note</dd><dt>'+kbd('o')+' / '+kbd('Enter')+'</dt><dd>Open full card</dd><dt>'+kbd('Esc')+'</dt><dd>Close panel / card</dd><dt>'+kbd('?')+'</dt><dd>This help</dd></dl><p class="rs-muted" style="font-size:12px;margin:12px 0 0">Type karte waqt (note likhte waqt) ye keys kaam nahi karti.</p><div style="margin-top:12px;text-align:right"><button class="rs-btn" type="button" id="rs-help-x">Close</button></div></div></div>';
+  document.body.appendChild(L); wire(); return L; }
+function dwW(){ const d=Math.min(1000,innerWidth); return Math.max(260,d-(innerWidth<=720?28:36)-26); }
+function featBlock(a,f,wide){ const x=a.f[f]||{}, s=effSt(a,f), fi=fInfo(a.key,f), ff=fi.today||fi.carry, W=wide?dwW():Math.max(260,(dwW()-12)/(innerWidth<=1000?1:2)), ro=!canW();
+  const z=rvSnz(RV.doc,S0(),a.key,f), raw=(a.f[f]||{}).st;
+  const flab=fi.today?'🚩 Flagged ✓':(fi.carry?`🚩 ${dDiff(fi.carry.day,RV.doc.day)} days open`:(fi.kaam?'🛠 Fix assigned':'🚩 Flag'));
+  let h=`<div class="rs-fb rs-s-${s} ${wide?'rs-wide':''}" id="rs-fb-${f}"><div class="rs-fb-h"><span class="rs-fe">${FI(f)}</span><b>${esc(FN(f))}</b>${chipSt(s)}${ageH(x.age)}${isNB(a,f)?'<span class="rs-nbchip">🆕 New & worse</span>':''}<span class="rs-ff"><button type="button" class="rs-fbtn" id="rs-ff-${esc(a.key)}-${f}" role="checkbox" aria-checked="${!!ff}" data-rsff="${esc(a.key)}:${f}" aria-label="🚩 Important · Re-review — ${esc(FN(f))}"${ro?' disabled':''}>${flab}</button>${isBad(raw)?`<button type="button" class="rs-fbtn" id="rs-sz-${esc(a.key)}-${f}" data-rssnz="${esc(a.key)}:${f}"${ro?' disabled':''}>${z?'💤 Snoozed till '+fd(z.until):'💤 Snooze'}</button>`:''}</span></div>`;
+  h+=`<div class="rs-ln">${rt(lineOf(x))}</div>`;
+  if(x.q){ h+=`<dl class="rs-q">${kitShow(x)?`<dt>How big</dt><dd>${kitShow(x)}</dd>`:''}<dt>Since</dt><dd>${esc(cameT(x))}${x.age?' · '+ageH(x.age):''}${x.age&&x.age.start?` · issue started ${fd(x.age.start)}`:''}${x.since?' · '+esc(x.since):''}</dd><dt>Data</dt><dd>${esc(winT(x))}${x.prov!=null?' · '+provH(x):''}</dd>${x.q.abhi?`<dt>Now</dt><dd>${rt(x.q.abhi)}</dd>`:''}${x.q.saath?`<dt>Also</dt><dd>${rt(x.q.saath)}</dd>`:''}</dl>`;
+    if(x.q.karo) h+=`<div class="rs-next"><b>Next step:</b> ${esc(x.q.karo)}</div>`; }
+  else if(x.kis) h+=`<div class="rs-ts"><span>📊 ${rt(x.kis)}</span></div>`;
+  if(x.rate&&x.rate.n) h+=`<div class="rs-ts"><span>🔢 ${nf.format(x.rate.c)} of ${nf.format(x.rate.n)} installs (${trim(String(x.rate.p))}%)${x.rate.was!=null?' · was '+trim(String(x.rate.was))+'%':''}</span></div>`;
+  (x.info||[]).forEach(t=>{ h+=`<div class="rs-info">ℹ️ ${rt(t)}</div>`; });
+  if(x.chart&&!(f==='kamai'&&/^App AdMob revenue/.test(x.chart.cap||''))) h+=`<div class="rs-chartp"><div class="rs-cap">${esc(x.chart.cap)}</div>${barChart(x.chart,W-26,{h:140,col:s==='red'?'var(--bad)':(s==='amber'?'var(--watch)':(s==='green'?'var(--good)':'var(--rs-blue-s)'))})}</div>`;
+  if(f==='uninstall') h+=unChart(a,W-26);
+  if(f==='active') h+=retChart(a,W-26);
+  if(f==='mediation') h+=medChart(a);
+  if(f==='kamai'&&a.ser) h+=`<div class="rs-ts"><span>📈 14-day revenue chart upar hai</span></div>`;
+  if(x.more&&x.more.length) h+=`<div class="rs-more"><span class="rs-eyebrow2">More in ${esc(FN(f))} (${x.more.length})</span>${x.more.map(m=>`<div class="rs-mr"><span class="rs-chip rs-st-${m.w==='info'?'wait':esc(m.w)} rs-chs"><i></i>${m.w==='info'?'Info':(STW[m.w]||'')}</span> ${rt(m.fact)}<small>${esc(m.src)} · ${esc(m.meta||'')}</small></div>`).join('')}</div>`;
+  h+=`<button type="button" class="rs-btn rs-sm rs-ghost rs-golink" data-rsgolink="${esc(a.key)}:${f}">Open in dashboard: ${esc(x.tab||RV_FEAT_TAB[f]||'dashboard')} ›</button>`;
+  h+=`<div class="rs-pslot" id="rs-fps-${f}"></div></div>`;
+  return h; }
+function drawerHtml(a){ const k=a.key, B=bads(a), O=FID().filter(f=>B.indexOf(f)<0), M=FILE.meta, kp=rel(a.k7,a.kp7), r=rel(a.y,a.us);
+  let h=`<div class="rs-dh">${avH(a,'rs-lg')}<div class="rs-t"><div class="rs-eyebrow rs-opt">Full card · #${a.rank} of ${A.length} · ${esc(GRP[a.grp])}</div><h3>${esc(String(a.name).trim())}${a.tag?` <span class="rs-tagw">${esc(a.tag)}</span>`:''} <span class="rs-acn">· ${esc(a.acct)}</span></h3><div class="rs-l2"><span class="rs-sz ${a.size==='badi'?'rs-badi':''}">${SIZE[a.size]||'—'}</span>${nbOf(a).length?'<span class="rs-nbchip">🆕 New & worse</span>':''}<span id="rs-dw-pill">${pillH(k)}</span><span class="rs-opt">Revenue till ${fd(M.admob_till)}${M.ga4_till?' · users till '+fd(M.ga4_till):''}</span></div></div><div class="rs-nav"><button class="rs-icb" type="button" data-rsdnav="-1" aria-label="Previous app (k)">‹</button><button class="rs-icb" type="button" data-rsdnav="1" aria-label="Next app (j)">›</button><button class="rs-icb" type="button" data-rsdclose="1" id="rs-dclose" aria-label="Close">✕</button></div></div>`;
+  h+=`<div class="rs-db"><div id="rs-dw-acts">${actsHtml(a,true)}</div><div id="rs-dw-pslot" class="rs-pslot"></div>`;
+  h+=`<div class="rs-dk"><div class="rs-kpi"><div class="rs-kl">Yesterday<span class="rs-kh">${fd(M.admob_till)}</span></div><div class="rs-kv">${mH(a.y)}</div><div class="rs-kd ${r>=0.1?'rs-up':(r<=-0.1?'rs-dn':'rs-fl')}">${mH((+a.y||0)-(+a.us||0),{sign:1})} (${pct(r)}) <span class="rs-vs">vs usual</span></div></div>`
+   +`<div class="rs-kpi"><div class="rs-kl">Usual<span class="rs-kh">${M.usual?fd(M.usual.from)+'–'+fd(M.usual.to):''}</span></div><div class="rs-kv">${mH(a.us)}<small>/day</small></div><div class="rs-kd rs-fl"><span class="rs-vs">7-day daily avg</span></div></div>`
+   +`<div class="rs-kpi"><div class="rs-kl">Last 7 days<span class="rs-kh">${M.w7?fd(M.w7.from)+'–'+fd(M.w7.to):''}</span></div><div class="rs-kv">${mH(a.k7)}<small>/day</small></div><div class="rs-kd ${kp>=0.1?'rs-up':(kp<=-0.1?'rs-dn':'rs-fl')}">${pct(kp)} <span class="rs-vs">vs ${mH(a.kp7,{s:'/day'})} before</span></div></div>`
+   +`<div class="rs-kpi"><div class="rs-kl">Ads spend<span class="rs-kh">Google Ads · 4-wk avg</span></div><div class="rs-kv">${a.spend>0.05?mH(a.spend)+'<small>/day</small>':'—'}</div><div class="rs-kd rs-fl"><span class="rs-vs">${a.spend>0.05?(a.k7?mH(a.spend)+' = '+trim((100*a.spend/a.k7).toFixed(0))+'% of revenue':''):'No ads spend'}</span></div></div></div>`;
+  if(a.ser) h+=`<div class="rs-chartp"><div class="rs-cap">AdMob revenue per day · ${fd(M.d14[0])}–${fd(M.d14[13])} · dotted = usual${M.usual?' ('+fd(M.usual.from)+'–'+fd(M.usual.to)+' avg)':''}</div>${revChart(a,dwW()-26)}</div>`;
+  h+=`<div class="rs-sect"><h4>Issues · ${B.length}</h4>${B.length?`<div class="rs-fgrid">${B.map(f=>featBlock(a,f,true)).join('')}</div>`:'<div class="rs-muted rs-small">Koi Worse / Watch nahi ✅</div>'}</div>`;
+  h+=`<div class="rs-sect"><h4>Other features · ${O.length}</h4><div class="rs-fgrid">${O.map(f=>featBlock(a,f,(f==='uninstall'&&a.x&&a.x.un)||(f==='active'&&a.x&&a.x.ret)||(f==='mediation'&&a.x&&a.x.med))).join('')}</div></div>`;
+  h+=`<div class="rs-sect"><h4>Note</h4><div class="rs-pnl"><label for="rs-dw-note">Team ke liye note (is app ke liye)</label><textarea id="rs-dw-note" maxlength="600" placeholder="Jaise: developer ko bata diya, kal update aayega"${canW()?'':' disabled'}>${esc(ST.dnote||'')}</textarea><div class="rs-row2"><button type="button" class="rs-btn" id="rs-dw-notesave" data-rsdwnote="${esc(k)}"${canW()?'':' disabled'}>Save note</button><span class="rs-cc" id="rs-dw-cc">${(ST.dnote||'').length} / 600</span></div></div></div>`;
+  h+=`<div class="rs-sect"><h4>This app today · who did what</h4>${byHtml(a)}<div class="rs-logl">${(S0().log||[]).filter(x=>x.app===k).map(x=>`<span>${logTxt(x)} <span class="rs-e">· ${rvWho(x.who)} · ${esc(when(x.at))}</span></span>`).join('')||'<span class="rs-e">Aaj is card pe abhi kuchh nahi hua</span>'}</div><button type="button" class="rs-btn rs-sm rs-ghost rs-golink" data-rsv="hist">History (calendar) ›</button></div>`;
+  if(a.pkg) h+=`<div class="rs-pkg">${esc(a.pkg)}</div>`;
+  return h+'</div>'; }
+function logTxt(x){ const e=x.extra&&typeof x.extra==='object'?x.extra:{}; let w=ACT[x.act]||esc(x.act);
+  if(x.act==='decide') w='🧑‍💼 Decision: '+esc(DEC[e.decision]||e.decision||''); if(x.act==='snooze'&&e.days) w+=' '+e.days+' days'; if(e.bulk) w=ACT.bulk_ok;
+  return w+(x.feature?' · '+esc(FN(x.feature)):(x.act==='flag'?' · Whole app':''))+(x.note?': “'+esc(x.note)+'”':'')+(e.admin_fix?' <span class="rs-faint">(admin fix)</span>':''); }
+function renderDrawer(keep){ const a=AK[ST.drawer]; const d=$('rs-drawer'); if(!a||!d){ closeDrawer(true); return; }
+  const top=keep?d.scrollTop:0; d.innerHTML=drawerHtml(a); paint(); if(keep) d.scrollTop=top; fillPanel(); }
+function openDrawer(k,f,noFocus){ layer(); if(!AK[k]) return; hideTip(); closePanel(true); ST.drawer=k; ST.focus=k; ST.dnote=''; renderDrawer(false);
+  const d=$('rs-drawer'); d.classList.add('rs-on'); d.setAttribute('aria-hidden','false'); $('rs-scrim').classList.add('rs-on'); document.body.classList.add('rs-lock');
+  ST.dOpener=document.activeElement&&document.activeElement.id||null;
+  setTimeout(()=>{ if(f){ const b=$('rs-fb-'+f); if(b){ b.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); b.classList.remove('rs-flash'); void b.offsetWidth; b.classList.add('rs-flash'); } } if(noFocus) return; const c=$('rs-dclose'); if(c) c.focus({preventScroll:true}); },60); }
+function closeDrawer(quiet){ if(ST.drawer==null) return; const k=ST.drawer; ST.drawer=null; const d=$('rs-drawer'); if(d){ d.classList.remove('rs-on'); d.setAttribute('aria-hidden','true'); d.innerHTML=''; }
+  const sc=$('rs-scrim'); if(sc) sc.classList.remove('rs-on'); document.body.classList.remove('rs-lock'); hideTip(); if(PNL&&PNL.inDrawer) closePanel(true);
+  if(quiet) return; const c=$('rs-c-'+k); if(c&&RV.view==='today') c.focus({preventScroll:true}); else if(ST.dOpener&&$(ST.dOpener)) $(ST.dOpener).focus({preventScroll:true}); }
+function dnav(dl){ const n=A.length; if(!n) return; let i=A.findIndex(a=>a.key===ST.drawer); i=(i+dl+n)%n; ST.drawer=A[i].key; ST.focus=ST.drawer; ST.dnote=''; closePanel(true); renderDrawer(false); const d=$('rs-drawer'); if(d) d.scrollTop=0; const b=$('rs-dclose'); if(b) b.focus({preventScroll:true}); }
+
+/* ================= summary ================= */
+function sumHtml(){ const S=S0(), d=RV.doc.day, n=A.length, dn=doneN(), me=RV.me; const cnt={ok:0,note:0,flag:0,kal:0,pend:0}; A.forEach(a=>cnt[stOf(a.key)]++);
+  const todayF=(S.flags||[]).filter(x=>x.day===d&&x.status!=='withdrawn'), openF=(S.flags||[]).filter(x=>x.status==='open');
+  const noteApps=new Set((S.notes||[]).map(x=>x.app)).size, fsort=rvFlagSort(RV.doc);
+  let h=(dn>=n&&n?'<div class="rs-donebar">✅ Aaj ka review pura — ye raha summary</div>':'')+`<div class="rs-tiles"><div class="rs-tile"><div class="rs-t">Reviewed · ${fd(d)}</div><div class="rs-v">${dn}<small>/ ${n}</small></div><div class="rs-s">${n?Math.round(100*dn/n):0}% done</div></div><div class="rs-tile"><div class="rs-t">🚩 Important · Re-review</div><div class="rs-v">${todayF.length}<small>today</small></div><div class="rs-s">${openF.length} open · admin ka faisla baaki</div></div><div class="rs-tile"><div class="rs-t">🔁 Check again tomorrow</div><div class="rs-v">${cnt.kal}</div><div class="rs-s">sirf khud ka reminder</div></div><div class="rs-tile"><div class="rs-t">📝 With note</div><div class="rs-v">${noteApps}</div><div class="rs-s">${(S.notes||[]).length} notes</div></div><div class="rs-tile"><div class="rs-t">⏳ Pending</div><div class="rs-v ${cnt.pend?'rs-watch':'rs-good'}">${cnt.pend}</div><div class="rs-s">${A.filter(a=>a.grp==='top'&&stOf(a.key)==='pend').length} in Needs a look</div></div></div>`;
+  // the flags: admin decides each one (admin view) / everyone sees them with who / when / note
+  const imps=(S.flags||[]).filter(x=>(x.day===d&&x.status!=='withdrawn')||x.status==='open'||x.status==='kaam').sort(fsort);
+  const adm=!!(me&&me.admin);
+  const flagLi=(x,withBtns)=>{ const a=AK[x.app], age=dDiff(x.day,d), id=Number(x.id)||0;
+    let t=`<div class="rs-li">${a?avH(a,'rs-sm'):''}<div class="rs-tx"><b>${a?`<button type="button" class="rs-jump" data-rsjump="${esc(x.app)}">${esc(nameP(a))}</button>`:esc(x.app_label||x.app)}</b> · ${esc(x.feature?FN(x.feature):'Whole app')}${x.note?` · <span class="rs-nt">“${esc(x.note)}”</span>`:''}<br><span class="rs-mt">🚩 ${rvWho(x.raised_by)} · ${esc(when(x.raised_at))}${age>0&&(x.status==='open'||x.status==='kaam')?' · '+age+' days open':''}${a&&x.feature&&a.f[x.feature]?' · card: '+esc(rtp(lineOf(a.f[x.feature]))):''}</span>`;
+    if(x.decision) t+=`<br><span class="rs-mt">🧑‍💼 Admin: <b>${esc(DEC[x.decision]||x.decision)}</b>${x.dec_note?' — '+esc(x.dec_note):''}${x.dec_by?' · '+rvWho(x.dec_by)+', '+esc(when(x.dec_at)):''}${x.status==='kaam'?' · <b>fix in progress</b>':''}${x.done_at?' · ✅ fix done'+(x.done_note?' — '+esc(x.done_note):'')+' ('+rvWho(x.done_by)+', '+esc(when(x.done_at))+')':''}</span>`;
+    else if(x.status==='withdrawn') t+=`<br><span class="rs-mt">Removed${x.wd_by?' · '+rvWho(x.wd_by)+', '+esc(when(x.wd_at)):''}</span>`;
+    else if(x.status==='open'&&!withBtns) t+='<br><span class="rs-mt">Admin ka faisla baaki</span>';
+    if(withBtns&&(x.status==='open'||x.status==='kaam')) t+=`<div class="rs-acts">${x.status==='open'?['theek','kaam','band'].map(dc=>`<button class="rs-btn rs-sm" type="button" id="rs-dec-${dc}-${id}" data-rsdec="${dc}" data-fid="${id}">${DEC[dc]}</button>`).join(''):`<button class="rs-btn rs-sm rs-ok" type="button" id="rs-dec-done-${id}" data-rsdec="done" data-fid="${id}">${DEC.done}</button>`}${a?`<button class="rs-btn rs-sm rs-ghost" type="button" data-rsgo="${esc(x.app)}${x.feature?':'+esc(x.feature):''}">Open card ›</button>`:''}</div><div class="rs-pslot" id="rs-dps-${id}"></div>`;
+    return t+'</div></div>'; };
+  h+=`<div class="rs-duo"><section class="rs-panel"><div class="rs-ph"><div><div class="rs-eyebrow">${adm?'Admin list':'Flags'}</div><h2 id="rs-h-adm" tabindex="-1">🚩 Important · Re-review</h2><div class="rs-hint">Har flag alag item hai — admin har ek ka faisla karega (${esc(DEC.theek)} · ${esc(DEC.kaam)} · ${esc(DEC.band)} · ${esc(DEC.done)}). Faisla hone tak card upar focus me rehta hai.</div></div></div>`;
+  if(adm){ const op=(S.flags||[]).filter(x=>x.status==='open').sort((p,q)=>(p.raised_at<q.raised_at?-1:p.raised_at>q.raised_at?1:p.id-q.id));
+    const km=(S.flags||[]).filter(x=>x.status==='kaam').sort(fsort), cl=(S.flags||[]).filter(x=>x.status==='closed'&&dDiff((x.done_at?rvDoneDay(x):rvDecDay(x))||x.day,d)<=14).sort(fsort);
+    h+=`<div class="rs-sub2">Open (${op.length})</div><div class="rs-lst">${op.length?op.map(x=>flagLi(x,true)).join(''):'<div class="rs-empty">Koi khula 🚩 nahi. Team jab kisi card pe “🚩 Important · Re-review” lagayegi (poori app pe ya kisi ek feature pe), wo yahan aayega.</div>'}</div>`
+      +`<div class="rs-sub2">Fix in progress (${km.length})</div><div class="rs-lst">${km.length?km.map(x=>flagLi(x,true)).join(''):'<div class="rs-empty">Kuch nahi</div>'}</div>`
+      +`<details class="rs-closed"><summary>Closed (${cl.length})</summary><div class="rs-lst">${cl.length?cl.map(x=>flagLi(x,false)).join(''):'<div class="rs-empty">Kuch nahi</div>'}</div></details>`; }
+  else h+=imps.length?'<div class="rs-lst">'+imps.map(x=>flagLi(x,false)).join('')+'</div>':`<div class="rs-empty">Aaj abhi koi 🚩 nahi. Kisi card pe <b>🚩 Important · Re-review</b> dabao (poori app), ya full card me kisi feature ke aage 🚩 — wo yahan aayega, note aur waqt ke saath.</div>`;
+  h+='</section>';
+  const rows=FID().map(f=>({f,r:A.filter(a=>effSt(a,f)==='red').length,m:A.filter(a=>effSt(a,f)==='amber').length,fl:(S.flags||[]).filter(x=>x.feature===f&&x.status!=='withdrawn'&&(x.status==='open'||x.status==='kaam'||x.day===d)).length})), mx=Math.max(...rows.map(x=>x.r+x.m),1);
+  const sv=`<div class="rs-fbars" role="list" aria-label="Apps with Worse or Watch, by feature">${rows.map(x=>{ const wr=100*x.r/mx, wa=100*x.m/mx, tot=x.r+x.m;
+    return `<button type="button" class="rs-fbr" role="listitem" data-rsgfeatgo="${x.f}" aria-label="${esc(FN(x.f))}: ${x.r} Worse, ${x.m} Watch"><span class="rs-fbl"><span class="rs-e">${FI(x.f)}</span>${esc(FN(x.f))}</span><span class="rs-fbt">${x.r?`<i class="rs-r" style="width:${wr.toFixed(1)}%">${wr>=7?x.r:''}</i>`:''}${x.m?`<i class="rs-a" style="width:${wa.toFixed(1)}%">${wa>=7?x.m:''}</i>`:''}</span><b class="rs-fbn">${tot?tot+(tot===1?' app':' apps'):'0'}${x.r||x.m?` <small>(${x.r} Worse · ${x.m} Watch)</small>`:''}${x.fl?` · 🚩${x.fl}`:''}</b></button>`; }).join('')}</div>`;
+  h+=`<section class="rs-panel"><div class="rs-ph"><div><div class="rs-eyebrow">Counts by feature</div><h2>Where the issues are</h2><div class="rs-hint">Kitni apps me ye feature Worse (laal) ya Watch (peela) hai · 🚩 = aaj ke / khule flags</div></div></div><div class="rs-pad">${sv}</div><div class="rs-legend"><span class="rs-k"><span class="rs-sw" style="background:var(--bad)"></span>Worse</span><span class="rs-k"><span class="rs-sw" style="background:var(--watch)"></span>Watch</span><span class="rs-k">Row dabao → Feature map us feature ke hisaab se sort</span></div></section></div>`;
+  const KAL=A.filter(a=>stOf(a.key)==='kal');
+  h+=`<div class="rs-duo"><section class="rs-panel"><div class="rs-ph"><div><h2>🔁 Check again tomorrow · ${KAL.length}</h2><div class="rs-hint">Khud ka reminder — admin ko nahi jaata. Kal ke card pe ye upar aayenge.</div></div></div>${KAL.length?`<div class="rs-pills">${KAL.map(a=>{ const s=S.states[a.key]; return `<button type="button" data-rsjump="${esc(a.key)}">${avH(a,'rs-sm')}${esc(nameP(a))} <span class="rs-faint">· ${rvWho(s&&s.who)}, ${esc(when(s&&s.at))}</span></button>`; }).join('')}</div>`:'<div class="rs-empty">Koi nahi</div>'}</section>`;
+  h+=`<section class="rs-panel"><div class="rs-ph"><div><h2>📝 Notes · ${(S.notes||[]).length}</h2><div class="rs-hint">Team ke liye</div></div></div>${(S.notes||[]).length?'<div class="rs-lst">'+S.notes.map(nn=>{ const a=AK[nn.app]; return `<div class="rs-li">${a?avH(a,'rs-sm'):''}<div class="rs-tx"><b>${a?esc(nameP(a)):esc(nn.app)}</b><br>${esc(nn.text)}<br><span class="rs-mt">📝 ${rvWho(nn.who)} · ${esc(when(nn.at))}</span></div></div>`; }).join('')+'</div>':'<div class="rs-empty">Abhi koi note nahi</div>'}</section></div>`;
+  const PEND=A.filter(a=>stOf(a.key)==='pend');
+  h+=`<section class="rs-panel"><div class="rs-ph"><div><h2>⏳ Pending · ${PEND.length}</h2><div class="rs-hint">Dabao → seedha us card pe</div></div></div>${PEND.length?`<div class="rs-pills">${PEND.map(a=>`<button type="button" data-rsjump="${esc(a.key)}">${avH(a,'rs-sm')}${esc(String(a.name).trim())} <span class="rs-faint">· ${esc(a.acct)}</span>${bads(a).length?` <span class="${nRed(a)?'rs-bad':'rs-watch'}">●</span>`:''}</button>`).join('')}</div>`:'<div class="rs-empty">✅ Sab ho gaye</div>'}</section>`;
+  const SZ=(S.snoozes||[]).slice().sort((p,q)=>(p.until<q.until?-1:1));
+  h+=`<section class="rs-panel"><div class="rs-ph"><div><h2>💤 Snoozed · ${SZ.length}</h2><div class="rs-hint">Jaani-maani baatein — itne din card ko upar nahi laayengi</div></div></div>${SZ.length?'<div class="rs-lst">'+SZ.map(z=>{ const a=AK[z.app]; return `<div class="rs-li">${a?avH(a,'rs-sm'):''}<div class="rs-tx"><b>${a?esc(nameP(a)):esc(z.app_label||z.app)}</b> · ${esc(FN(z.feature))} · till ${fd(z.until)}${z.note?`<br><span class="rs-nt">“${esc(z.note)}”</span>`:''}<br><span class="rs-mt">💤 ${rvWho(z.who)} · ${esc(when(z.at))}</span></div></div>`; }).join('')+'</div>':'<div class="rs-empty">Koi snooze nahi</div>'}</section>`;
+  h+=`<section class="rs-panel"><div class="rs-ph"><div><h2>Who did what · today</h2><div class="rs-hint">Poori team ke clicks (Review API ka log)</div></div></div><div class="rs-lst">${(S.log||[]).length?S.log.map(x=>{ const a=AK[x.app]; return `<div class="rs-li">${a?avH(a,'rs-sm'):''}<div class="rs-tx">${logTxt(x)}${a?` — <b>${esc(nameP(a))}</b>`:(x.app?' — '+esc(x.app):'')}<br><span class="rs-mt">${rvWho(x.who)} · ${esc(when(x.at))}</span></div></div>`; }).join(''):'<div class="rs-empty">Abhi kuchh nahi</div>'}</div></section>`;
+  return h; }
+
+/* ================= history ================= */
+function calOf(){ const I=RV.idx; let cal=(RV.cal&&RV.cal.days)?{...RV.cal.days}:{}; if(RV.S&&I&&I.open_day) cal[I.open_day]={...(cal[I.open_day]||{}),rev:Object.keys(RV.S.states||{}).length}; return cal; }
+function histHtml(){ const I=RV.idx||{}, first=I.go_live, last=I.open_day; if(!first||!last) return '<div class="rs-empty rs-panel">History abhi nahi</div>';
+  const snap={}; (I.days||[]).forEach(x=>{ if(x&&x.d) snap[x.d]=Number(x.apps)||0; }); const cal=calOf(), sel=RV.histDay||last;
+  let h=`<section class="rs-panel"><div class="rs-ph"><div><div class="rs-eyebrow">History</div><h2>Daily review · ${fd(first)} – ${fd(last)}</h2><div class="rs-hint">History ${fd(first)} se shuru hui (jab review chalu hua) — sirf asli din dikhte hain. Har din ke cards ${esc(I.ready_ist||'09:00')} IST ke baad freeze hote hain, isliye yahan wahi dikhta hai jo review ke waqt tha.</div></div></div>`;
+  if(RV.calErr||(!RV.me&&!RV.cal)) h+='<div class="rs-empty">Pichhle dino ki ginti abhi nahi mili (review server) — din pe tap karke cards dekh sakte ho.</div>';
+  let cur=first; const nx=I.next_snapshot?String(I.next_snapshot).slice(0,10):null;
+  while(cur<=last){ const y=+cur.slice(0,4), m=+cur.slice(5,7), m0=cur.slice(0,8)+'01', dow=(new Date(P(m0)).getUTCDay()+6)%7, dim=new Date(Date.UTC(y,m,0)).getUTCDate();
+    h+=`<div class="rs-mon">${esc(['January','February','March','April','May','June','July','August','September','October','November','December'][m-1])} ${y}</div><div class="rs-cal" role="group" aria-label="Review calendar ${esc(MO[m-1])} ${y}">`+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(x=>`<div class="rs-wd" aria-hidden="true">${x}</div>`).join('');
+    for(let i=0;i<dow;i++) h+='<div class="rs-cd rs-out" aria-hidden="true"></div>';
+    for(let i=1;i<=dim;i++){ const dd=cur.slice(0,8)+String(i).padStart(2,'0');
+      if(dd<first) h+=`<div class="rs-cd rs-c-none"><span class="rs-cdn">${i}</span><span class="rs-xs">before go-live</span></div>`;
+      else if(dd<=last){ const n=snap[dd]||0, c=cal[dd], col=rvDayColor(n,c), rv=Math.min(Number(c&&c.rev)||0,n||Infinity);
+        const lab=col==='green'?'all reviewed':(col==='amber'?'partly':(col==='red'?'not reviewed':'no cards'));
+        h+=`<button type="button" class="rs-cd rs-c-${col} ${sel===dd?'rs-sel':''}" data-rsday="${dd}" aria-pressed="${sel===dd}" aria-label="${dd}: ${col==='none'?'no cards':rv+'/'+n+' reviewed'}"><span class="rs-cdn">${i} · ${wd(dd).slice(0,3)}</span><span class="rs-cx">${n?rv+'/'+n:'—'}</span><span class="rs-xs">${dd===last?'today · ':''}${lab}${c&&c.flag?' · 🚩'+c.flag:''}${c&&c.notes?' · 📝'+c.notes:''}</span></button>`; }
+      else if(dd===nx) h+=`<div class="rs-cd rs-nx"><span class="rs-cdn">${i}</span><span class="rs-xs">⏭ next · ${esc(I.ready_ist||'09:00')} IST</span></div>`;
+      else h+=`<div class="rs-cd rs-fut"><span class="rs-cdn">${i}</span></div>`; }
+    h+='</div>'; cur=dAdd(cur.slice(0,8)+String(dim).padStart(2,'0'),1); }
+  h+=`<div class="rs-legend"><span class="rs-k"><span class="rs-sw" style="background:rgba(52,217,154,.45)"></span>All reviewed</span><span class="rs-k"><span class="rs-sw" style="background:rgba(230,184,78,.45)"></span>Partly</span><span class="rs-k"><span class="rs-sw" style="background:rgba(255,107,107,.35)"></span>Not reviewed</span><span class="rs-k"><span class="rs-sw rs-swnd"></span>No cards</span></div></section>`;
+  h+=dayHtml(sel);
+  return h; }
+function dayHtml(d){ const I=RV.idx||{}, isOpen=d===I.open_day, inIdx=(I.days||[]).some(x=>x.d===d);
+  if(!inIdx) return `<section class="rs-panel"><div class="rs-ph"><div><h2>${esc(wd(d))}, ${fd(d)}</h2><div class="rs-hint">Is din ke cards nahi bane (robot ne us din snapshot nahi banaya).</div></div></div></section>`;
+  const doc=isOpen?RV.doc:RV.hdocs[d], S=isOpen?S0():RV.hS[d];
+  if(!doc||!S){ if(HERR[d]) return `<section class="rs-panel"><div class="rs-empty">Is din ke cards load nahi ho paaye. <button type="button" class="rs-btn rs-sm" data-rsday="${d}">Try again</button></div></section>`; loadDay(d); return `<section class="rs-panel"><div class="rs-empty">⏳ ${fd(d)} ke cards load ho rahe hain…</div></section>`; }
+  const apps=(doc.apps||[]).filter(a=>a&&a.key), n=apps.length, cnt={ok:0,note:0,flag:0,kal:0,pend:0}; apps.forEach(a=>cnt[rvStOf(S,a.key)]++); const x=n-cnt.pend;
+  const lab=k=>{ const a=rvAppOf(doc,k); return a?(a.name||a.dname||k)+' · '+(a.acct||''):k; };
+  const built=doc.built_at?when(doc.built_at):'';
+  let h=`<section class="rs-panel"><div class="rs-ph"><div><div class="rs-eyebrow">Selected day</div><h2 id="rs-dayh" tabindex="-1">${esc(wd(d))}, ${fd(d)} · ${x}/${n} reviewed</h2>${x<n?'<div class="rs-hint rs-bad">⏳ Is din ka review baaki hai</div>':'<div class="rs-hint rs-good">✅ Sab reviewed</div>'}</div><div class="rs-right">${isOpen?'<button class="rs-btn rs-sm" type="button" data-rsv="today">Open this day\'s cards ›</button>':`<button class="rs-btn rs-sm" type="button" data-rsoldday="${d}">Open this day's cards ›</button>`}</div></div>`;
+  h+=`<div class="rs-pills rs-pstat">${[['ok','✅ Reviewed'],['note','📝 + note'],['flag','🚩 Re-review'],['kal','🔁 Tomorrow'],['pend','⏳ Pending']].map(([k,l])=>`<span class="rs-pill ${ST_CLS[k]}">${l} · ${cnt[k]}</span>`).join('')}${built?`<span class="rs-pill">🧊 frozen ${esc(built)}</span>`:''}${doc.counts?`<span class="rs-pill">${doc.counts.red} Worse · ${doc.counts.amber} Watch apps (card tier)</span>`:''}</div>`;
+  if(!isOpen) h+=`<div class="rs-hint rs-pad2">Purane din ke cards (aur admin sudhaar — ✅ / 📝 / ↩) “🗂 Old views” → History me khulte hain.</div>`;
+  h+=`<div class="rs-ph rs-ph2"><div><h2 class="rs-h14">Who did what</h2></div></div><div class="rs-lst">${(S.log||[]).length?S.log.map(y=>{ const a=y.app?rvAppOf(doc,y.app):null; return `<div class="rs-li"><div class="rs-tx">${logTxt(y)}${y.app?` — <b>${esc(lab(y.app))}</b>`:''}<br><span class="rs-mt">${rvWho(y.who)} · ${esc(when(y.at))}</span></div></div>`; }).join(''):'<div class="rs-empty">Is din abhi kisi ne kuchh nahi kiya</div>'}</div></section>`;
+  return h; }
+async function loadDay(d){ if(HLOAD[d]) return; HLOAD[d]=1;
+  try{ const doc=await rvLoadDoc(d); let S=null; if(RV.me){ const r=await rvApi('GET','day?d='+encodeURIComponent(d)); if(r.ok) S={...rvS(r.data,d),me:RV.me}; }
+    if(!RV.hS[d]) RV.hS[d]=S||{...rvEmptyS(d),me:RV.me}; HERR[d]=0; }
+  catch(e){ HERR[d]=1; } finally{ HLOAD[d]=0; if(RV.view==='hist') renderView(); } }
+async function ensureCal(){ const I=RV.idx; if(CALLOAD||RV.cal||!RV.me||!I||!I.go_live||!I.open_day||Date.now()-CALAT<60000) return; CALLOAD=true; CALAT=Date.now();
+  try{ const r=await rvApi('GET','calendar?from='+I.go_live+'&to='+I.open_day); if(r.ok){ RV.cal=r.data; RV.calErr=false; } else RV.calErr=true; }
+  catch(e){ RV.calErr=true; } finally{ CALLOAD=false; if(RV.view==='hist') renderView(); } }
+
+/* ================= render ================= */
+function renderLoading(){ const r=$('rs-root'); if(!r) return; if(r.getAttribute('data-st')==='load') return; r.setAttribute('data-st','load');
+  r.innerHTML='<div class="rs-wrap"><div class="rs-panel rs-empty">⏳ Review Studio load ho raha hai… (purana Review tab neeche “🗂 Old views” me)</div></div>'; }
+function viewHtml(){ const v=RV.view||'today';
+  if(v==='sum') return `<section class="rs-view" id="rs-v-sum" role="tabpanel" aria-labelledby="rs-tb-sum">${sumHtml()}</section>`;
+  if(v==='hist'){ ensureCal(); return `<section class="rs-view" id="rs-v-hist" role="tabpanel" aria-labelledby="rs-tb-hist">${histHtml()}</section>`; }
+  return `<section class="rs-view" id="rs-v-today" role="tabpanel" aria-labelledby="rs-tb-today"><section class="rs-hero" aria-label="Today at a glance">${heroHtml()}</section><section class="rs-panel" id="rs-map" aria-label="Feature map">${mapHtml()}</section><section id="rs-list" aria-label="Apps">${listHtml()}</section><details class="rs-foot" id="rs-how"${ST.howOpen?' open':''}>${howHtml()}</details></section>`; }
+function render(){ const r=$('rs-root'); if(!r) return;
+  const ae=document.activeElement, fid=ae&&ae.id&&(r.contains(ae)||($('rs-layer')&&$('rs-layer').contains(ae)))?ae.id:null; let sel=null; try{ if(fid&&ae.selectionStart!=null) sel=[ae.selectionStart,ae.selectionEnd]; }catch(e){}
+  if(PNL){ const ta=$(PNL.slot)&&$(PNL.slot).querySelector('textarea'); if(ta) PNL.draft=ta.value; }
+  const dn=$('rs-dw-note'); if(dn) ST.dnote=dn.value;
+  for(const k in CH) delete CH[k]; chN=0; prep();
+  r.removeAttribute('data-st');
+  r.innerHTML=`<div class="rs-top" id="rs-top">${topHtml()}</div>${winHtml()}<div class="rs-wrap" id="rs-main">${viewHtml()}</div>`;
+  if(ST.drawer!=null){ if(AK[ST.drawer]) renderDrawer(true); else closeDrawer(true); }
+  fillPanel(); stick();
+  if(fid){ const el=$(fid); if(el&&el!==document.activeElement){ try{ el.focus({preventScroll:true}); if(sel&&el.setSelectionRange) el.setSelectionRange(sel[0],sel[1]); }catch(e){} } }
+  if(ST.focus){ const c=$('rs-c-'+ST.focus)||document.querySelector(`#rs-root tbody tr[data-key="${ST.focus}"]`); if(c) c.classList.add('rs-kf'); } }
+function renderView(){ if(!ON||!FILE) return; render(); }
+function stick(){ const r=$('rs-root'); if(!r) return; try{ const tb=document.querySelector('.topbar'); const cs=tb?getComputedStyle(tb):null; r.style.setProperty('--rs-stick',(tb&&cs&&cs.position==='sticky'?tb.offsetHeight:0)+'px'); }catch(e){} }
+function setView(v,focusTab){ if(['today','sum','hist'].indexOf(v)<0) v='today'; RV.view=v; try{ rvTabsSync(); rvSetHash(); if(v==='sum'&&RV.sumDirty) rvRenderSum(); if(v==='hist'&&ST.oldOpen) rvHistEnter(); }catch(e){}
+  render(); if(focusTab){ const b=$('rs-tb-'+v); if(b) b.focus({preventScroll:true}); }
+  const t=$('rs-root'); if(t) try{ const top=t.getBoundingClientRect().top, off=parseFloat(t.style.getPropertyValue('--rs-stick'))||0; if(top<off) scrollTo(0,Math.max(0,scrollY+top-off-8)); }catch(e){} }
+
+/* ================= panels (inline; Esc closes; drafts kept across re-renders) ================= */
+function slotFor(k){ if(ST.drawer===k&&$('rs-dw-pslot')) return 'rs-dw-pslot'; return $('rs-ps-'+k)?'rs-ps-'+k:($('rs-dw-pslot')?'rs-dw-pslot':null); }
+function openPanel(p,opener){ if(PNL&&PNL.slot===p.slot&&PNL.kind===p.kind&&PNL.key===p.key&&PNL.f===p.f&&PNL.fid===p.fid&&PNL.dec===p.dec){ closePanel(); return; }
+  closePanel(true); if(!p.slot||!$(p.slot)) return; p.draft=p.draft||''; p.opener=opener&&opener.id||null; p.inDrawer=!!($('rs-drawer')&&$('rs-drawer').contains($(p.slot))); PNL=p; fillPanel(true); }
+function closePanel(quiet){ if(!PNL) return; const p=PNL; PNL=null; const s=$(p.slot); if(s) s.innerHTML='';
+  if(!quiet&&p.opener&&$(p.opener)) try{ $(p.opener).focus({preventScroll:true}); }catch(e){} }
+function panelBody(p){ const a=AK[p.key], btn=(act,t,pri)=>`<button type="button" class="rs-btn${pri?' rs-pri':' rs-ghost'}" data-rspa="${act}">${esc(t)}</button>`;
+  const ta=(lab,ph)=>`<label for="rs-pta">${esc(lab)}</label><textarea id="rs-pta" maxlength="600" placeholder="${esc(ph)}">${esc(p.draft||'')}</textarea>`;
+  const row=x=>`<div class="rs-row2">${x}<span class="rs-cc" id="rs-pcc">${(p.draft||'').length} / 600</span></div>`, row0=x=>`<div class="rs-row2">${x}</div>`, help=t=>`<div class="rs-phelp">${t}</div>`;
+  const fl=p.f?FN(p.f):'Whole app';
+  switch(p.kind){
+    case 'note': return `<h4>📝 Note</h4>`+ta('Team ke liye note (is app ke liye)','Jaise: developer ko bata diya, kal update aayega')+row(btn('note-save','Save note',1)+btn('close','Cancel'));
+    case 'imp': return `<h4>🚩 Important · Re-review — whole app</h4>`+help('Admin dobara dekhega — faisla hone tak ye card upar focus me rahega. Sirf ek baat ke liye ho to full card me us feature ke aage wala 🚩 dabao. (🔁 Check again tomorrow alag hai — wo sirf aapka kal ka reminder hai, admin ko nahi jaata.)')+ta('Kya dikkat hai? (likhna zaroori nahi)','Jaise: kamai 41% giri, developer se baat ki — aapka faisla chahiye')+row(btn('imp-save','🚩 Send for re-review',1)+btn('close','Cancel'));
+    case 'impcarry': { const x=fInfo(p.key,'app').carry; return `<h4>🚩 Whole app — open flag</h4>`+help(`${x?dDiff(x.day,RV.doc.day)+' days open · ':''}admin ka faisla baaki${x?' · '+rvWho(x.raised_by)+(x.note?' · “'+esc(x.note)+'”':''):''}`)+row0(btn('close','OK')); }
+    case 'undo': return `<h4>↩ Undo</h4>`+help('Is app ka aaj ka review (state, notes aur aaj ke khule 🚩) hata dein?')+row0(btn('undo-yes','Yes, undo',1)+btn('close','No'));
+    case 'flag': return `<h4>🚩 ${esc(fl)} — Important · Re-review</h4>`+help('Admin dobara dekhega — faisla hone tak ye card upar focus me rahega. Sirf ye feature flag hoga, poori app nahi.')+ta('Note (likhna zaroori nahi)','Jaise: 3 din se gir raha hai, developer ko bata diya — aap bhi dekh lo')+row(btn('fflag-save','🚩 Flag it',1)+btn('close','Cancel'));
+    case 'unflag': { const x=fInfo(p.key,p.f).today; return `<h4>Remove this 🚩?</h4>`+help(`<b>${esc(fl)}</b>${x?' · '+rvWho(x.raised_by)+' · '+esc(when(x.raised_at))+(x.note?' · “'+esc(x.note)+'”':''):''}`)+row0(btn('fflag-off','Yes, remove',1)+btn('close','No')); }
+    case 'carry': { const x=fInfo(p.key,p.f).carry; return `<h4>🚩 ${esc(fl)} — open flag</h4>`+help(`${x?dDiff(x.day,RV.doc.day)+' days open · ':''}admin ka faisla baaki${x?' · '+rvWho(x.raised_by)+(x.note?' · “'+esc(x.note)+'”':''):''}. Admin view: Summary tab.`)+row0(btn('close','OK')); }
+    case 'kaam': { const x=fInfo(p.key,p.f).kaam, n=x?dDiff(x.day,RV.doc.day):0; return `<h4>🛠 Fix assigned · ${esc(fl)}</h4>`+help(`${n>0?n+' days':'today'}${x&&x.dec_note?' · fix: “'+esc(x.dec_note)+'”':''}. Fix hone pe admin “${DEC.done}” dabayega — tab tak ye card pe dikhega. Koi nayi baat ho to phir se 🚩 laga sakte ho.`)+ta('Note (likhna zaroori nahi)','Jaise: fix ke baad bhi gir raha hai — aap phir dekh lo')+row(btn('fflag-save','🚩 Flag it',1)+btn('close','Cancel')); }
+    case 'snz': { const ph=(a&&a.doc&&a.doc.f&&a.doc.f[p.f]&&a.doc.f[p.f].snz_ph)||'Jaise: developer ko bata diya, agle update me fix';
+      return `<h4>💤 Snooze · ${esc(fl)}</h4>`+help('Pata hai (jaani-maani baat) — itne din ye baat card ko upar nahi laayegi. Uske baad phir dikhegi.')+`<div class="rs-row2" role="radiogroup" aria-label="How many days">${[7,14].map(n=>`<label class="rs-radio"><input type="radio" name="rs-snzd" value="${n}" data-rsdays="1"${(p.days||7)===n?' checked':''}> ${n} days</label>`).join('')}</div>`+ta('Note (kyun pata hai)',ph)+row(btn('snz-save','💤 Snooze',1)+btn('close','Cancel')); }
+    case 'snzoff': { const z=rvSnz(RV.doc,S0(),p.key,p.f); return `<h4>💤 Snoozed · ${esc(fl)}</h4>`+help(`${z&&z.until?'Till '+fd(z.until):'Hidden'}${z&&z.who?' · '+rvWho(z.who)+' · '+esc(when(z.at)):''}${z&&z.note?' · “'+esc(z.note)+'”':''}`)+row0(btn('snz-off','Remove snooze',1)+btn('close','Cancel')); }
+    case 'bulk': { const keys=p.keys||[], bad=keys.filter(k=>AK[k]&&bads(AK[k]).length), r=bad.filter(k=>nRed(AK[k])).length;
+      return `<h4>✅ Mark all ${keys.length} reviewed?</h4>`+help(bad.length?`<b class="rs-watch">Dhyan do:</b> in me ${bad.length} apps me Worse/Watch baat hai (${r} Worse, ${bad.length-r} Watch): ${bad.map(k=>esc(nameP(AK[k]))).join(', ')}. Chhoti apps hain, isliye ek saath — chahein to pehle unke card kholo.`:'Sab normal hain. (jin pe pehle se kuch hai, wo waise hi rahenge)')+row0(btn('bulk-yes','Yes, mark all reviewed',1)+btn('close','No')); }
+    case 'dec': { const x=(S0().flags||[]).find(y=>y.id===p.fid), a2=x&&AK[x.app], c=x?(a2?nameP(a2):(x.app_label||x.app))+' · '+(x.feature?FN(x.feature):'Whole app')+' — ':'';
+      return `<h4>🧑‍💼 ${esc(DEC[p.dec])}</h4>`+ta(c+DEC_LAB[p.dec],p.dec==='kaam'?'Jaise: developer ko bolo — agle update me ad unit theek kare':(p.dec==='band'?'Jaise: rewarded ad unit band karo':''))+row(btn('dec-save','Confirm: '+DEC[p.dec],1)+btn('close','Cancel')); }
+  } return ''; }
+function fillPanel(focus){ if(!PNL) return; const s=$(PNL.slot); if(!s){ return; }
+  s.innerHTML=`<div class="rs-pnl" role="group" aria-label="${esc(PNL.kind)}">${panelBody(PNL)}</div>`; paint();
+  if(focus){ const t=s.querySelector('textarea')||s.querySelector('input[type=radio]:checked')||s.querySelector('button'); if(t) try{ t.focus({preventScroll:false}); }catch(e){} } }
+
+/* ================= actions: the REAL Review API through the older tab's helpers ================= */
+const D0=()=>RV.doc.day;
+function guard(){ if(!canW()){ rvToast(rvRoMsg()); return false; } return true; }
+function afterAct(k){ prep(); if(PNL&&PNL.key===k&&PNL.kind!=='bulk'){ /* kept */ } }
+function lifted(k,wasTop){ const L=rvLayout(RV.doc,S0()); return !wasTop&&L.top.indexOf(k)>=0; }
+function doOk(k,btn){ if(!guard()) return; const s=stOf(k); if(s==='flag'){ rvToast('🚩 Ye card Re-review me hai — admin ke faisle tak aise hi rahega. Hatana ho to ↩ Undo.'); return; }
+  if(s==='ok'||s==='note'){ rvToast('Pehle se reviewed hai'); return; }
+  rvAction(btn||null,'t',D0(),{app:k,act:'ok'},'✅ Reviewed — '+nameP(AK[k])).then(ok=>{ if(ok&&PNL&&PNL.key===k&&!String(PNL.draft||'').trim()) closePanel(true); }); }
+function doKal(k,btn){ if(!guard()) return; const s=stOf(k); if(s==='flag'){ rvToast('🚩 Ye card Re-review me hai — admin ke faisle tak aise hi rahega. Hatana ho to ↩ Undo.'); return; }
+  if(s==='kal'){ rvToast('Pehle se “check again tomorrow” laga hai'); return; }
+  rvAction(btn||null,'t',D0(),{app:k,act:'kal'},'🔁 Check again tomorrow — '+nameP(AK[k])).then(ok=>{ if(ok&&PNL&&PNL.key===k&&!String(PNL.draft||'').trim()) closePanel(true); }); }
+function draftOf(){ const t=$('rs-pta'); return ((t?t.value:(PNL&&PNL.draft))||'').trim(); }
+function panelAct(a,btn){ const p=PNL; if(!p) return; if(a==='close'){ closePanel(); return; }
+  const k=p.key, d=D0(), name=k&&AK[k]?nameP(AK[k]):'';
+  const done=ok=>{ if(!ok) return false; const op=p.opener; if(PNL===p) closePanel(true); const el=op&&$(op); if(el&&!el.disabled) try{ el.focus({preventScroll:true}); }catch(e){} return true; };
+  if(a==='note-save'){ const v=draftOf(); if(!v){ rvToast('Note khaali hai'); const t=$('rs-pta'); if(t) t.focus(); return; } return rvAction(btn,'t',d,{app:k,act:'note',note:v},'📝 Note saved',null).then(done); }
+  if(a==='imp-save'){ const wasTop=rvLayout(RV.doc,S0()).top.indexOf(k)>=0; return rvAction(btn,'t',d,{app:k,act:'flag',feature:null,note:draftOf()},null,null).then(ok=>{ if(!done(ok)) return; rvToast('🚩 Sent for re-review — '+name+(lifted(k,wasTop)?' — card upar focus me gaya':'')); }); }
+  if(a==='undo-yes') return rvAction(btn,'t',d,{app:k,act:'undo'},'↩ Undone — '+name,null).then(done);
+  if(a==='fflag-save'){ const wasTop=rvLayout(RV.doc,S0()).top.indexOf(k)>=0; return rvAction(btn,'t',d,{app:k,act:'flag',feature:p.f,note:draftOf()},null,null).then(ok=>{ if(!done(ok)) return; rvToast('🚩 '+FN(p.f)+' flagged — '+name+(lifted(k,wasTop)?' — card upar focus me gaya':'')); }); }
+  if(a==='fflag-off'){ const x=fInfo(k,p.f).today; if(!x){ closePanel(); return; } return rvAction(btn,'t',d,{app:k,act:'unflag',flag_id:x.id,feature:p.f},'🚩 Removed',null).then(done); }
+  if(a==='snz-save'){ const days=p.days===14?14:7; return rvAction(btn,'t',d,{app:k,act:'snooze',feature:p.f,days,note:draftOf()},'💤 Snoozed for '+days+' days',null).then(done); }
+  if(a==='snz-off') return rvAction(btn,'t',d,{app:k,act:'unsnooze',feature:p.f},'💤 Snooze removed',null).then(done);
+  if(a==='bulk-yes'){ const keys=(p.keys||[]).filter(x=>stOf(x)==='pend'); if(!keys.length){ closePanel(); return; }
+    return (async()=>{ let ok=true; for(let i=0;i<keys.length&&ok;i+=60) ok=await rvAction(btn,'t',d,{act:'bulk_ok',apps:keys.slice(i,i+60)},null,null);
+      if(ok){ closePanel(true); rvToast('✅ Group reviewed — '+keys.length+' apps'); const h=$('rs-gh-'+p.g); if(h) try{ h.focus({preventScroll:true}); }catch(e){} } })(); }
+  if(a==='dec-save'){ const v=draftOf(); if((p.dec==='kaam'||p.dec==='band')&&!v){ rvToast('Note zaroori hai — '+(p.dec==='kaam'?'kya kaam, kisko?':'kya band karna hai?')); const t=$('rs-pta'); if(t) t.focus(); return; }
+    return (async()=>{ const res=await rvPost(btn,'decide',{flag_id:p.fid,decision:p.dec,note:v}); if(!res||!res.flag) return;
+      [RV.S].concat(Object.values(RV.hS||{})).forEach(S2=>{ if(S2&&S2.flags) S2.flags=S2.flags.map(x=>x.id===res.flag.id?res.flag:x); });
+      closePanel(true); const x=res.flag; rvUpdateToday([x.app],false); rvRenderSum(); rvSyncSoon();
+      if(RV.view==='hist'&&RV.histDay&&RV.hS[RV.histDay]&&$('rv-dayp')) try{ rvRenderHistDay(RV.histDay,false); }catch(e){}
+      rvToast('🧑‍💼 Decision: '+DEC[p.dec]+' · '+(x.feature?FN(x.feature):'Whole app')); const h=$('rs-h-adm'); if(h) try{ h.focus({preventScroll:true}); }catch(e){} })(); } }
+function cardAct(act,k,btn){ const a=AK[k]; if(!a) return; ST.focus=k;
+  if(act==='open'){ openDrawer(k); return; }
+  if(!guard()) return; const st=stOf(k); let slot=slotFor(k);
+  if(!slot&&act!=='ok'&&act!=='kal'){ openDrawer(k,null,true); slot='rs-dw-pslot'; }
+  if(act==='ok') return doOk(k,btn); if(act==='kal') return doKal(k,btn);
+  if(act==='note') return openPanel({slot,kind:'note',key:k},btn);
+  if(act==='undo') return openPanel({slot,kind:'undo',key:k},btn);
+  if(act==='imp'){ if(st==='flag') return openPanel({slot,kind:'undo',key:k},btn); if(fInfo(k,'app').carry) return openPanel({slot,kind:'impcarry',key:k},btn); return openPanel({slot,kind:'imp',key:k},btn); } }
+function featAct(k,f,btn){ if(!guard()) return; const fi=fInfo(k,f), kind=fi.today?'unflag':(fi.carry?'carry':(fi.kaam?'kaam':'flag'));
+  openPanel({slot:$('rs-fps-'+f)?'rs-fps-'+f:slotFor(k),kind,key:k,f},btn); }
+function snzAct(k,f,btn){ if(!guard()) return; openPanel({slot:$('rs-fps-'+f)?'rs-fps-'+f:slotFor(k),kind:rvSnz(RV.doc,S0(),k,f)?'snzoff':'snz',key:k,f,days:7},btn); }
+function bulkAct(g,btn){ if(!guard()) return; const keys=A.filter(a=>a.grp===g&&stOf(a.key)==='pend').map(a=>a.key); if(!keys.length) return; openPanel({slot:'rs-bslot-'+g,kind:'bulk',g,keys},btn); }
+function decAct(fid,dec,btn){ if(!(RV.me&&RV.me.admin)) return; openPanel({slot:'rs-dps-'+fid,kind:'dec',fid,dec},btn); }
+function golink(k,f){ const a=rvAppOf(RV.doc,k); if(!a||!RV_LINK[f]) return; closeDrawer(true); try{ RV_LINK[f](a); }catch(e){} }
+
+/* ================= tooltip: ONE document mousemove handler (a tap pins it) ================= */
+let tipPinned=false, PIN={el:null,at:0};
+function showTip(html,x,y,pin){ layer(); const t=$('rs-tip'); t.innerHTML=html; paint(); t.classList.add('rs-on'); t.classList.toggle('rs-pin',!!pin); tipPinned=!!pin;
+  const r=t.getBoundingClientRect(), vw=innerWidth, vh=innerHeight; let L=x+14, Tp=y+16;
+  if(L+r.width>vw-8) L=Math.max(8,x-r.width-14); if(Tp+r.height>vh-8) Tp=Math.max(8,y-r.height-14);
+  t.style.left=L+'px'; t.style.top=Tp+'px'; }
+function hideTip(){ const t=$('rs-tip'); if(t) t.classList.remove('rs-on','rs-pin'); tipPinned=false; PIN={el:null,at:0};
+  document.querySelectorAll('#rs-root svg .rs-xh[opacity="1"],#rs-layer svg .rs-xh[opacity="1"]').forEach(l=>l.setAttribute('opacity','0')); }
+const trow=(k,v)=>`<div class="rs-row"><span>${k}</span><b>${v}</b></div>`;
+const TIPS={
+  cell(k,f,pin){ const a=AK[k], x=a&&a.f[f]; if(!x) return ''; const s=effSt(a,f), z=s==='snz'?rvSnz(RV.doc,S0(),k,f):null;
+    let h=`<div class="rs-tt"><span>${FI(f)} ${esc(FN(f))}</span>${chipSt(s)}${ageH(x.age)}</div><div class="rs-tsm">${esc(nameP(a))}</div><div class="rs-sep"></div><div class="rs-ink">${rt(lineOf(x))}</div>`;
+    if(kitShow(x)) h+=`<div style="margin-top:3px">${kitShow(x)}</div>`;
+    if(x.q){ h+=`<div class="rs-sep"></div>${cameT(x)?`<div>${esc(cameT(x))}</div>`:''}${winT(x)?`<div class="rs-tsm">${esc(winT(x))}</div>`:''}${x.prov!=null?`<div class="rs-tsm">${provH(x)}</div>`:''}`; if(x.q.karo) h+=`<div style="margin-top:4px"><b class="rs-cy">Next step:</b> ${esc(x.q.karo)}</div>`; }
+    else if(x.kis) h+=`<div class="rs-tsm" style="margin-top:3px">📊 ${rt(x.kis)}</div>`;
+    if(z) h+=`<div class="rs-tsm">💤 Snoozed till ${fd(z.until)}${z.note?' — '+esc(z.note):''} (${STW[(a.f[f]||{}).st]||''} underneath)</div>`;
+    if(isNB(a,f)) h+='<div class="rs-tsm rs-pink">🆕 New & worse — 10 din ke andar shuru, isliye card upar</div>';
+    if(featFlag(k,f)) h+='<div class="rs-tsm rs-pink">🚩 Flagged for re-review</div>';
+    h+=pin?`<div class="rs-sep"></div><button type="button" class="rs-lk" data-rsgo="${esc(k)}:${f}">Open full card ›</button>`:'<div class="rs-tsm" style="margin-top:4px">Click → full card</div>';
+    return h; },
+  app(k){ const a=AK[k]; if(!a) return ''; return `<div class="rs-tt">${esc(nameP(a))}</div>${trow('Yesterday',mH(a.y))}${trow('Usual',mH(a.us,{s:'/day'}))}${trow('7-day avg',mH(a.k7,{s:'/day'}))}<div class="rs-sep"></div>${trow('Worse',nRed(a))}${trow('Watch',nAmb(a))}${trow('Review',ST_TXT[stOf(k)])}<div class="rs-tsm">Click → full card</div>`; },
+  fh(f){ const r=A.filter(a=>effSt(a,f)==='red').length, m=A.filter(a=>effSt(a,f)==='amber').length; return `<div class="rs-tt">${FI(f)} ${esc(FN(f))}</div>${trow('Worse',r+' apps')}${trow('Watch',m+' apps')}<div class="rs-tsm">Click → is feature ke hisaab se sort</div>`; },
+  ft(f){ const r=A.filter(a=>effSt(a,f)==='red').length, m=A.filter(a=>effSt(a,f)==='amber').length; return `<div class="rs-tt">${FI(f)} ${esc(FN(f))}</div>${trow('Worse',r+' apps')}${trow('Watch',m+' apps')}<div class="rs-tsm">Har column ke neeche: kitni apps Worse / Watch</div>`; },
+  med(k,i){ const a=AK[k], x=a&&a.x&&a.x.med&&a.x.med[+i]; if(!x) return ''; return `<div class="rs-tt">🔀 ${esc(x.n)}</div>${x.usd!=null?trow('Revenue (7 days)',mH(x.usd)):''}${trow('Share',trim(x.s.toFixed(1))+'%')}${x.p!=null?trow('Share before',trim(x.p.toFixed(1))+'%'):''}${x.f!=null?trow('Fill',trim(x.f.toFixed(1))+'%'):''}<div class="rs-tsm">${esc(nameP(a))}</div>`; },
+  fr(k){ const M=FILE.meta, I=RV.idx||{}; return {frozen:`<div class="rs-tt">🧊 Cards frozen</div>Roz ${esc(I.ready_ist||'09:00')} IST ke baad robot har app ka ek card banata hai aur din bhar wahi rehta hai — isliye History me wahi dikhta hai jo review ke waqt tha.`,
+    rev:`<div class="rs-tt">💰 Revenue till ${fd(M.admob_till)}</div>AdMob ka aakhri poora din. “Yesterday” = ${fd(M.admob_till)}.`,
+    ga4:`<div class="rs-tt">👥 Users & uninstall till ${fd(M.ga4_till)}</div>Google (GA4) ye data ${esc(M.ga4_lag)} din baad deta hai.`,
+    final:`<div class="rs-tt">⏳ Final till ${fd(M.settled_till)}</div>Iske baad ke users / uninstall number abhi badal sakte hain (⏳ not final).`,
+    next:`<div class="rs-tt">⏭ Next cards</div>Agle cards ${fd(String(I.next_snapshot||'').slice(0,10))} ko ${esc(I.ready_ist||'09:00')} IST ke baad pehle robot run pe (aam taur pe ~10 baje tak).`}[k]||''; },
+};
+function chartTip(sv,cx){ const S=CH[sv.getAttribute('data-ch')]; if(!S) return null; const r=sv.getBoundingClientRect(), fx=(cx-r.left)/r.width*S.w; let best=0,bd=1e9; for(let i=0;i<S.n;i++){ const d=Math.abs(S.X(i)-fx); if(d<bd){ bd=d; best=i; } }
+  const xh=sv.querySelector('.rs-xh'); if(xh){ xh.setAttribute('x1',S.X(best)); xh.setAttribute('x2',S.X(best)); xh.setAttribute('opacity','1'); } return S.tip(best); }
+function tipFor(t,pin){ const [k,...args]=t.getAttribute('data-tk').split(':'); return TIPS[k]?TIPS[k](...args,pin):''; }
+const inS=t=>!!(t&&t.closest&&t.closest('#rs-root,#rs-layer'));
+const shownNow=()=>{ const r=$('rs-root'); return !!(ON&&FILE&&r&&document.body.getAttribute('data-screen')==='review'&&r.offsetParent!==null); };
+
+/* ================= events (wired once; every handler scoped to the Studio) ================= */
+let WIRED=false;
+function wire(){ if(WIRED) return; WIRED=true;
+  document.addEventListener('mousemove',e=>{ if(tipPinned) return; const t=e.target;
+    if(!inS(t)){ const tp=$('rs-tip'); if(tp&&tp.classList.contains('rs-on')) hideTip(); return; }
+    if(t.closest('#rs-tip')) return;
+    const k0=t.closest('[data-tk]'); if(k0){ const h=tipFor(k0,false); if(h){ showTip(h,e.clientX,e.clientY); return; } }
+    const sv=t.closest('svg[data-ch]'); if(sv){ document.querySelectorAll('#rs-root svg .rs-xh[opacity="1"],#rs-layer svg .rs-xh[opacity="1"]').forEach(l=>{ if(!sv.contains(l)) l.setAttribute('opacity','0'); }); const h=chartTip(sv,e.clientX); if(h){ showTip(h,e.clientX,e.clientY); return; } }
+    const tp=$('rs-tip'); if(tp&&tp.classList.contains('rs-on')) hideTip(); },{passive:true});
+  document.addEventListener('touchstart',e=>{ const p=e.touches[0]; if(!p||!inS(e.target)) return; if(e.target.closest('#rs-tip')) return;
+    const t=e.target.closest('[data-tk]'), sv=!t&&e.target.closest('svg[data-ch]');
+    if(t){ const h=tipFor(t,true); if(h){ if(tipPinned&&PIN.el===t){ PIN.at=0; return; } showTip(h,p.clientX,p.clientY,true); PIN={el:t,at:Date.now()}; } return; }
+    if(sv){ const h=chartTip(sv,p.clientX); if(h){ showTip(h,p.clientX,p.clientY,true); PIN={el:sv,at:Date.now()}; } } },{passive:true});
+  document.addEventListener('click',e=>{ if(!tipPinned) return; if(e.target.closest&&e.target.closest('#rs-tip')) return;
+    if(PIN.el&&PIN.el.contains(e.target)&&Date.now()-PIN.at<800){ e.stopPropagation(); e.preventDefault(); return; }   // the first tap only pins
+    hideTip(); },true);
+  document.addEventListener('focusin',e=>{ const t=e.target.closest&&e.target.closest('[data-tk]'); if(!t||tipPinned||!inS(t)) return; const h=tipFor(t,false); if(!h) return; const r=t.getBoundingClientRect(); showTip(h,r.left+Math.min(r.width,40),r.bottom-8); });
+  document.addEventListener('focusout',e=>{ if(!tipPinned&&e.target.closest&&e.target.closest('[data-tk]')&&inS(e.target)) hideTip(); });
+  addEventListener('scroll',()=>{ if(!tipPinned){ const tp=$('rs-tip'); if(tp&&tp.classList.contains('rs-on')) hideTip(); } },{passive:true});
+  document.addEventListener('click',onClick);
+  document.addEventListener('keydown',e=>{ if(e.key!=='Enter'&&e.key!==' ') return; const sc=e.target.closest&&e.target.closest('#rs-root .rs-sc[role="button"][data-rsgo]'); if(sc){ e.preventDefault(); goTo(sc.getAttribute('data-rsgo')); } });
+  document.addEventListener('input',e=>{ const t=e.target; if(!inS(t)) return;
+    if(t.id==='rs-q'){ ST.q=t.value; const b=$('rs-lbody'); if(b){ b.innerHTML=ST.mode==='table'?tableHtml(visible()):cardsHtml(visible()); paint(); fillPanel(); } }
+    if(t.id==='rs-pta'&&PNL){ PNL.draft=t.value; const c=$('rs-pcc'); if(c) c.textContent=t.value.length+' / 600'; }
+    if(t.id==='rs-dw-note'){ ST.dnote=t.value; const c=$('rs-dw-cc'); if(c) c.textContent=t.value.length+' / 600'; } });
+  document.addEventListener('change',e=>{ const t=e.target; if(inS(t)&&t.getAttribute('data-rsdays')&&PNL) PNL.days=Number(t.value)===14?14:7; });
+  document.addEventListener('toggle',e=>{ const t=e.target; if(t&&t.id==='rs-how') ST.howOpen=t.open; },true);
+  document.addEventListener('keydown',onKey);
+  addEventListener('resize',()=>{ clearTimeout(wire.rz); wire.rz=setTimeout(()=>{ if(Math.abs(innerWidth-(wire.w||0))<40) return; wire.w=innerWidth; if(ST.drawer!=null) renderDrawer(true); },200); }); }
+function goTo(spec){ const [k,f]=String(spec).split(':'); openDrawer(k,f||null); }
+function jumpCard(k){ ST.filter='all'; ST.q=''; ST.mode='cards'; setView('today'); setFocus(k,true); }
+function onClick(e){ const t=e.target; if(!inS(t)) return;
+  const pa=t.closest('[data-rspa]'); if(pa){ panelAct(pa.getAttribute('data-rspa'),pa); return; }
+  const ac=t.closest('[data-rsact]'); if(ac){ cardAct(ac.getAttribute('data-rsact'),ac.getAttribute('data-k'),ac); return; }
+  const ff=t.closest('[data-rsff]'); if(ff){ const [k,f]=ff.getAttribute('data-rsff').split(':'); featAct(k,f,ff); return; }
+  const sz=t.closest('[data-rssnz]'); if(sz){ const [k,f]=sz.getAttribute('data-rssnz').split(':'); snzAct(k,f,sz); return; }
+  const dn=t.closest('[data-rsdwnote]'); if(dn){ if(!guard()) return; const ta=$('rs-dw-note'), v=String(ta&&ta.value||'').trim(), k=dn.getAttribute('data-rsdwnote'); if(!v){ rvToast('Note khaali hai'); if(ta) ta.focus(); return; }
+    rvAction(dn,'t',D0(),{app:k,act:'note',note:v},'📝 Note saved',null).then(ok=>{ if(ok){ ST.dnote=''; const x=$('rs-dw-note'); if(x) x.value=''; const c=$('rs-dw-cc'); if(c) c.textContent='0 / 600'; } }); return; }
+  const bk=t.closest('[data-rsbulk]'); if(bk){ bulkAct(bk.getAttribute('data-rsbulk'),bk); return; }
+  const dc=t.closest('[data-rsdec]'); if(dc){ decAct(Number(dc.getAttribute('data-fid')),dc.getAttribute('data-rsdec'),dc); return; }
+  const gl=t.closest('[data-rsgolink]'); if(gl){ const [k,f]=gl.getAttribute('data-rsgolink').split(':'); golink(k,f); return; }
+  const dv=t.closest('[data-rsdnav]'); if(dv){ dnav(+dv.getAttribute('data-rsdnav')); return; }
+  if(t.closest('[data-rsdclose]')||t.id==='rs-scrim'){ closeDrawer(); return; }
+  const go=t.closest('[data-rsgo]'); if(go){ if(t.closest('#rs-tip')) hideTip(); goTo(go.getAttribute('data-rsgo')); return; }
+  const fl=t.closest('[data-rsfilter]'); if(fl){ const f=fl.getAttribute('data-rsfilter'), sc=fl.classList.contains('rs-sc'); ST.filter=(ST.filter===f&&sc)?'all':f; if(RV.view!=='today') setView('today'); else render(); if(sc){ const l=$('rs-list'); if(l) l.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); } return; }
+  const md=t.closest('[data-rsmode]'); if(md){ ST.mode=md.getAttribute('data-rsmode'); savePref(); render(); return; }
+  const so=t.closest('[data-rssort]'); if(so){ const k=so.getAttribute('data-rssort'); ST.sort=ST.sort.k===k?{k,d:-ST.sort.d}:{k,d:1}; render(); return; }
+  const gs=t.closest('[data-rsgsort]'); if(gs){ ST.gsort=gs.getAttribute('data-rsgsort'); ST.gfeat=null; render(); return; }
+  const gf=t.closest('[data-rsgfeat]'); if(gf){ const f=gf.getAttribute('data-rsgfeat'); ST.gfeat=ST.gfeat===f?null:f; render(); return; }
+  const gg=t.closest('[data-rsgfeatgo]'); if(gg){ ST.gfeat=gg.getAttribute('data-rsgfeatgo'); setView('today'); const m=$('rs-map'); if(m) m.scrollIntoView({block:'start'}); return; }
+  const jp=t.closest('[data-rsjump]'); if(jp){ jumpCard(jp.getAttribute('data-rsjump')); return; }
+  const od=t.closest('[data-rsoldday]'); if(od){ const d=od.getAttribute('data-rsoldday'), f=$('rs-old'); if(f){ f.open=true; ST.oldOpen=true; } try{ rvSwitch('hist',false); rvHistPick(d,false); }catch(e){} render(); setTimeout(()=>{ const x=$('rs-old'); if(x) x.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); },60); return; }
+  const dy=t.closest('[data-rsday]'); if(dy){ const d=dy.getAttribute('data-rsday'); HERR[d]=0; RV.histDay=d; try{ rvSetHash(); }catch(e){} render(); return; }
+  const vv=t.closest('[data-rsv]'); if(vv){ closeDrawer(true); setView(vv.getAttribute('data-rsv'),vv.getAttribute('role')==='tab'); return; }
+  const cu=t.closest('[data-rscur]'); if(cu){ const c=cu.getAttribute('data-rscur'); if((c==='INR')!==INR()){ const y=scrollY; try{ toggleCur(); }catch(e){} scrollTo(0,y); } return; }
+  if(t.closest('#rs-kbd')){ toggleHelp(true); return; }
+  if(t.closest('#rs-help-x')||t.id==='rs-help'){ toggleHelp(false); return; }
+  const card=t.closest('.rs-rc'); if(card&&!t.closest('button,a,textarea,input')) setFocus(card.getAttribute('data-key'),false);
+  const tr=t.closest('#rs-root tbody tr[data-key]'); if(tr&&!t.closest('button')) openDrawer(tr.getAttribute('data-key')); }
+function listKeys(){ return ST.mode==='table'?[...document.querySelectorAll('#rs-lbody tbody tr[data-key]')].map(r=>r.getAttribute('data-key')):[...document.querySelectorAll('#rs-lbody .rs-rc')].map(c=>c.getAttribute('data-key')); }
+function setFocus(k,scroll){ ST.focus=k; document.querySelectorAll('#rs-root .rs-kf').forEach(x=>x.classList.remove('rs-kf'));
+  const el=$('rs-c-'+k)||document.querySelector(`#rs-root tbody tr[data-key="${k}"]`); if(!el) return; el.classList.add('rs-kf'); if(scroll){ try{ el.focus({preventScroll:true}); el.scrollIntoView({block:'center',behavior:RM?'auto':'smooth'}); }catch(e){} } }
+function move(d){ const L=listKeys(); if(!L.length) return; let i=L.indexOf(ST.focus); i=i<0?(d>0?0:L.length-1):Math.max(0,Math.min(L.length-1,i+d)); setFocus(L[i],true); }
+function curKey(){ if(ST.drawer!=null) return ST.drawer; if(ST.focus&&listKeys().indexOf(ST.focus)>=0) return ST.focus; const L=listKeys(); if(L.length){ setFocus(L[0],true); return L[0]; } return null; }
+function toggleHelp(v){ layer(); const h=$('rs-help'); h.hidden=!v; ST.help=v; if(v){ const b=$('rs-help-x'); if(b) b.focus(); } else { const b=$('rs-kbd'); if(b) b.focus(); } }
+function onKey(e){ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.tagName==='INPUT'||tg.tagName==='TEXTAREA'||tg.tagName==='SELECT'||tg.isContentEditable));
+  if(e.key==='Escape'){ if(PNL&&(inS(tg)||tg===document.body)){ closePanel(); e.preventDefault(); return; } if(ST.help){ toggleHelp(false); return; } if(ST.drawer!=null){ closeDrawer(); return; } hideTip(); return; }
+  if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
+  if(tg&&tg.closest&&tg.closest('#rs-old')) return;                          // the older views keep their own keys
+  if(e.key==='?'){ toggleHelp(!ST.help); e.preventDefault(); return; }
+  if(ST.help) return;
+  if((RV.view||'today')!=='today'&&ST.drawer==null) return;
+  const k=e.key.toLowerCase();
+  if(k==='j'||k==='k'){ e.preventDefault(); if(ST.drawer!=null) dnav(k==='j'?1:-1); else move(k==='j'?1:-1); return; }
+  if(k==='r'){ const key=curKey(); if(key){ e.preventDefault(); doOk(key,$((ST.drawer!=null?'rs-d':'rs')+'-ok-'+key)); } return; }
+  if(k==='i'){ const key=curKey(); if(key){ e.preventDefault(); cardAct('imp',key,$((ST.drawer!=null?'rs-d':'rs')+'-imp-'+key)); } return; }
+  if(k==='n'){ const key=curKey(); if(key){ e.preventDefault(); cardAct('note',key,$((ST.drawer!=null?'rs-d':'rs')+'-note-'+key)); } return; }
+  if((k==='o'||e.key==='Enter')&&ST.drawer==null){ if(e.key==='Enter'&&tg&&tg.closest&&tg.closest('button,a,[role="button"]')) return; const key=curKey(); if(key){ e.preventDefault(); openDrawer(key); } } }
+
+return {sync, paint, retry, on:()=>ON, ready:()=>!!FILE,
+  _:{get FILE(){ return FILE; }, get A(){ return A; }, ST, TIPS, CH, render, prep, setView, openDrawer, closeDrawer, cardAct, featAct, snzAct, bulkAct, decAct, panelAct,
+     get PNL(){ return PNL; }, doOk, doKal, mapHtml, heroHtml, listHtml, sumHtml, histHtml, drawerHtml:k=>drawerHtml(AK[k]), tableHtml:()=>tableHtml(visible()), load:(j)=>{ FILE=j; FA={}; (j&&j.apps||[]).forEach(a=>{ FA[a.key]=a; }); FKEY=j?(j.day+'|'+j.card_built_at+'|'+((ptr()||{}).v||'')):''; ERR=''; }, fail:()=>{ FILE=null; FKEY=''; const p=ptr(); ERR=p?(p.day+'|'+p.card+'|'+(p.v||'')):'x'; ERRAT=Date.now(); }, syncNow}};
+})();
+/* ==== RS:END ==== */
 
 async function load(){
   try{

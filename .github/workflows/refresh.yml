@@ -137,6 +137,10 @@ jobs:
           REVIEW_ENABLED:       ${{ vars.REVIEW_ENABLED || 'false' }}
           REVIEW_READY_IST:     ${{ vars.REVIEW_READY_IST }}
           REVIEW_REBUILD_DAY:   ${{ vars.REVIEW_REBUILD_DAY }}
+          # Review Studio (the Review tab's Studio, one lazy file per review day, frozen with that day's cards; never an
+          # alert): REVIEW_STUDIO=false (repo variable) turns it off without a code push (its files and pointer removed,
+          # the older Review tab exactly as before)
+          REVIEW_STUDIO:        ${{ vars.REVIEW_STUDIO || 'true' }}
           # Every change split into "installs ki wajah se" / "asli badlaav": SPLIT=false (repo variable) turns the
           # split off without a code push (the page and the alerts as before)
           SPLIT:                ${{ vars.SPLIT || 'true' }}

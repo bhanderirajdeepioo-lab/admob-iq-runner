@@ -439,6 +439,30 @@ def _review_step(dashboard, data_dir, out_dir, now=None):
         return []
 
 
+def _review_studio_step(dashboard, data_dir, out_dir, s, ran=True, now=None):
+    """🗂 Review Studio (admob_iq.review_studio_build): the Review tab's Studio — ONE lazy file for the open review day,
+    built once from that day's FROZEN cards (+ the site files the review step read), its pointer in
+    site/review/index.json and ONE counts-only line → its _headers patterns (the review step's "/review/*" covers it).
+    OPTIONAL (REVIEW_STUDIO, default on) and failure-isolated: switched off (its files and pointer removed, nothing
+    printed), without this build's review step (ran=False: nothing touched) or failing (the error TYPE only), every
+    other output is exactly as without it."""
+    try:
+        from . import review_studio_build as rsb
+        if not rsb.enabled(s):
+            rsb.off(out_dir)
+            return []
+        if not ran:
+            return []
+        files = rsb.run(dashboard, data_dir, out_dir, s, now=now)
+        line = rsb.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return files
+    except Exception as e:
+        print(f"Review Studio skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today, tz_by_account=None):
     """The uninstall step with the exact AdMob revenue per app per day (the update-impact card's ARPDAU) from the
     network report already in `repo` — no extra report call (tz_by_account: account_tzs). A revenue failure only costs
@@ -1497,6 +1521,9 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # Daily App Review (Review tab): today's cards frozen once + every day's snapshot published under site/review/.
     # OPTIONAL (REVIEW_ENABLED) and failure-isolated: nothing above or below changes when it is off or fails.
     review_paths = _review_step(dashboard, data_dir, out_dir) if (mode == "live" and repo.has_data()) else []
+    # 🗂 Review Studio (the Review tab's Studio): one lazy file for the open review day, frozen with its cards — OPTIONAL
+    # (REVIEW_STUDIO) and failure-isolated; it runs only after this build's review step wrote site/review/index.json
+    rstudio_paths = _review_studio_step(dashboard, data_dir, out_dir, s, ran=bool(review_paths))
 
     # Keep the dashboard out of every search index. It is served from a public static host, so the
     # ONLY thing standing between the URL and the open internet is that nobody knows it — a crawler
@@ -1510,7 +1537,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # dashboard.json changes hourly, so it must NEVER be served from a stale cache
     # — no-store forces every request to fetch the freshest file from origin.
     with open(os.path.join(out_dir, "_headers"), "w", encoding="utf-8") as f:
-        f.write(headers_text(uni_files, dashboard, extra=list(review_paths) + any_paths + vstudio_paths + as_paths + studio_paths))
+        f.write(headers_text(uni_files, dashboard, extra=list(review_paths) + [p for p in rstudio_paths if p not in review_paths]
+                             + any_paths + vstudio_paths + as_paths + studio_paths))
 
     alerts = send_alerts(dashboard, s)
     _uninstall_mark_sent(dashboard, data_dir, s, alerts)

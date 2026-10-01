@@ -1,0 +1,193 @@
+"""🗂 Review Studio — the page side (frontend/index.html's RVS closure), run in node on a synthetic Studio file + card
+document the REAL build code made (tests/review_studio_synth.py → the review store + the Studio step):
+
+  * every app of the card is rendered — the map, the cards, the table, the drawer, the tooltips, Summary, History —
+    with the owner's words (English labels, "Next step:", the button names) and never "100 me" / "/din";
+  * every coloured box says what it is (the feature's name inside every map box and card box);
+  * every action goes to the REAL API path with the older tab's own request body (POST JSON, same-origin), the state
+    comes back from the answer, and a refusal shows the older tab's own message;
+  * the older views: the old Review tab's own nodes move into "🗂 Old views" and come back in their order when there is
+    no Studio file, the file fails to load, or the file is not this card's.
+Prints nothing on success; tests/review_studio_frontend.js is the harness."""
+
+import contextlib
+import gzip
+import io
+import json
+import os
+import re
+import shutil
+import subprocess
+
+import pytest
+
+from admob_iq import build_static
+from admob_iq.config import settings
+from tests import review_studio_synth as ss
+from tests import review_synth as rs
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FIDS = ["kamai", "uninstall", "active", "value", "update", "ads", "deduct", "mediation", "health", "setup"]
+SHORT = ["Revenue", "Uninstall", "Active", "Value", "Update", "Ads", "Deduct", "Mediation", "Health", "Setup"]
+DS = rs.DAY.isoformat()
+
+
+def _script(tmp):
+    html = open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8").read()
+    js = max(re.findall(r"<script>([\s\S]*?)</script>", html), key=len)
+    p = os.path.join(tmp, "page.js")
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(js)
+    return p
+
+
+@pytest.fixture(scope="module")
+def report(tmp_path_factory):
+    if shutil.which("node") is None:
+        pytest.skip("node not installed")
+    tmp = str(tmp_path_factory.mktemp("rsfe"))
+    site, data, dash = ss.make(tmp)
+    with contextlib.redirect_stderr(io.StringIO()):
+        assert build_static._review_studio_step(dash, data, site, dict(settings()), now=rs.NOW) == ["/review/*"]
+    with open(os.path.join(site, "review", "index.json"), encoding="utf-8") as f:
+        index = json.load(f)
+    with gzip.open(os.path.join(data, "review", "days", f"{DS}.json.gz"), "rt", encoding="utf-8") as f:
+        day = json.load(f)
+    with gzip.open(os.path.join(site, "review", "studio", f"{DS}.json.gz"), "rt", encoding="utf-8") as f:
+        studio = json.load(f)
+    K = rs.K
+    fx = {"index": index, "day": day, "studio": studio, "state": rs.daystate(rs.DAY),
+          "me": {"email": "owner@example.test", "admin": True, "open_day": DS, "go_live": index["go_live"],
+                 "server_time": f"{DS}T05:30:00.000Z"},
+          "keys": {"ok": K[1], "kal": K[2], "note": K[8], "imp": K[5], "feat": K[1], "f": "kamai", "pend": K[3]}}
+    fp = os.path.join(tmp, "fx.json")
+    with open(fp, "w", encoding="utf-8") as f:
+        json.dump(fx, f, ensure_ascii=False)
+    r = subprocess.run(["node", os.path.join(ROOT, "tests", "review_studio_frontend.js"), _script(tmp), fp],
+                       capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr[-2000:]
+    out = json.loads(r.stdout)
+    out["_fx"] = fx
+    return out
+
+
+def test_no_errors_and_the_functions_exist(report):
+    assert report["errors"] == []
+    assert all(v == "function" for k, v in report["fns"].items() if k != "RVS") and report["fns"]["RVS"] == "object"
+
+
+def test_layout_studio_on_top_and_the_old_tab_folded_whole(report):
+    assert report["order0"] == [" rv-head", "rv-tabs", "rv-bans", "rv-v-today", "rv-v-sum", "rv-v-hist", "rv-toast"]
+    ld = report["loading"]
+    assert ld["on"] and not ld["ready"] and ld["st"] == "load" and "Review Studio load ho raha hai" in ld["html"]
+    L = report["layout"]
+    assert L["on"] and L["rson"]
+    assert L["order"] == ["rv-bans", "rs-root", "rs-old", "rv-toast"]          # banners + toast stay visible
+    assert L["fold"] == ["SUMMARY:", "DIV:rs-oldin"]
+    assert L["folded"] == [" rv-head", "rv-tabs", "rv-v-today", "rv-v-sum", "rv-v-hist"]
+
+
+def test_every_app_is_rendered_in_every_view(report):
+    fx, H = report["_fx"], report["html"]
+    keys = [a["key"] for a in fx["day"]["apps"]]
+    assert sorted(a["key"] for a in report["apps"]) == sorted(keys) and len(keys) == 7
+    assert not any(a["raw"] for a in report["apps"])
+    for k in keys:
+        assert f'data-rsgo="{k}"' in H["map"] and f'id="rs-c-{k}"' in H["list"] and f'data-key="{k}"' in H["table"]
+        for f in FIDS:
+            assert f'data-tk="cell:{k}:{f}"' in H["map"] and f'data-rsgo="{k}:{f}"' in H["list"]
+            assert f'id="rs-fb-{f}"' in H["drawers"][k]
+    for a in report["apps"]:                                                    # the name always with its account
+        assert re.search(r'<span class="rs-nmt">' + re.escape(a["name"]) + r"(?: <span class=\"rs-tagw\">[^<]+</span>)? <span class=\"rs-acn\">· "
+                         + re.escape(a["acct"]), H["map"])
+    assert "rs-v-today" in H["root"] and "rv-card" not in H["root"] and "data-rvact" not in H["root"]
+    for t in ("Today's review", "Summary", "History", "Cards frozen", "Revenue till", "Final till", "Next cards"):
+        assert t in H["root"], t
+
+
+def test_every_box_says_what_it_is(report):
+    H = report["html"]
+    boxes = re.findall(r'<button type="button" class="rs-hc [^"]+"[^>]*>(.*?)</button>', H["map"])
+    assert len(boxes) == 7 * 10
+    for i, b in enumerate(boxes):
+        assert b.startswith(f'<span class="rs-cl" aria-hidden="true">{SHORT[i % 10]}</span>'), b
+    strips = re.findall(r'<button type="button" class="rs-fc [^"]+"[^>]*>(.*?)</button>', H["list"])
+    assert len(strips) == 7 * 10 and all('<span class="rs-flb">' in s for s in strips)
+
+
+def test_the_owners_words(report):
+    H = report["html"]
+    every = "".join([H["root"], H["map"], H["hero"], H["list"], H["table"], H["sum"], H["hist"], H["frtips"], report["inr"]]
+                    + list(H["drawers"].values()) + list(H["tips"].values()))
+    for bad in ("100 me", "/din", "per 1,000", "har 1,000", "Har 1,000", "Bigda", "Dhyan do", "Kal dobara dekho",
+                "Wapas lo", "Poora card kholo"):
+        assert bad not in every, bad
+    for good in ("✅ Got it · Reviewed", "📝 Note", "🚩 Important · Re-review", "🔁 Check again tomorrow",
+                 "Open full card ›", "Next step:", "Same day uninstall", "Worse", "Watch", "Better", "Normal",
+                 "Too early", "N/A", "🕒 Came", "📊 ", "Needs a look", "Small apps", "Feature map"):
+        assert good in every, good
+    assert "↩ Undo" in H["list"]                                               # (the cards with a review already)
+    for d in H["drawers"].values():
+        assert "Open in dashboard:" in d and "Revenue · eCPM" in d
+    assert "₹" in report["inr"] and "$" not in re.sub(r"<[^>]*>", "", report["inr"]).replace("$/", "")
+    # Summary (admin): the decision buttons; History: the calendar of the review days
+    assert all(d in H["sum"] for d in ("👍 Fine · close", "🛠 Assign fix", "⛔ Stop")) and "Admin list" in H["sum"]
+    assert f'data-rsday="{DS}"' in H["hist"] and "Who did what" in H["hist"]
+
+
+def _bodies(r):
+    return [x["body"] for x in r["req"]]
+
+
+def test_every_action_hits_the_api_with_the_older_tabs_request(report):
+    K = report["_fx"]["keys"]
+    for name in ("r_ok", "r_kal", "r_note", "r_imp", "r_undo", "r_fflag", "r_unflag", "r_snz", "r_unsnz", "r_bulk", "r_dec"):
+        for x in report[name]["req"]:
+            assert x["method"] == "POST" and x["ct"] == "application/json" and x["cred"] == "same-origin", (name, x)
+            assert x["url"] in ("/api/review/action", "/api/review/decide"), (name, x)
+    assert _bodies(report["r_ok"]) == [{"d": DS, "app": K["ok"], "act": "ok", "live": True}]
+    assert report["r_ok"]["st"] == "ok" and report["r_ok"]["toast"].startswith("✅ Reviewed — ")
+    assert report["r_ok_again"] == {"req": [], "toast": "Pehle se reviewed hai"}
+    assert _bodies(report["r_kal"]) == [{"d": DS, "app": K["kal"], "act": "kal", "live": True}] and report["r_kal"]["st"] == "kal"
+    assert _bodies(report["r_note"]) == [{"d": DS, "app": K["note"], "act": "note", "note": "Synthetic note <b>x</b>", "live": True}]
+    assert report["r_note"]["st"] == "note" and report["r_note"]["pnl"] is None
+    assert report["r_note_empty"] == {"req": [], "toast": "Note khaali hai"}
+    assert _bodies(report["r_imp"]) == [{"d": DS, "app": K["imp"], "act": "flag", "feature": None, "note": "Admin dekho", "live": True}]
+    assert report["r_imp"]["st"] == "flag" and report["r_imp"]["toast"].startswith("🚩 Sent for re-review — ")
+    assert report["r_ok_flagged"]["req"] == [] and report["r_ok_flagged"]["toast"].startswith("🚩 Ye card Re-review me hai")
+    assert _bodies(report["r_undo"]) == [{"d": DS, "app": K["imp"], "act": "undo", "live": True}] and report["r_undo"]["st"] == "pend"
+    assert _bodies(report["r_fflag"]) == [{"d": DS, "app": K["feat"], "act": "flag", "feature": "kamai", "note": "Sirf ye", "live": True}]
+    assert ["kamai", "open"] in report["r_fflag"]["flags"]
+    (b,) = _bodies(report["r_unflag"])
+    assert b == {"d": DS, "app": K["feat"], "act": "unflag", "flag_id": b["flag_id"], "feature": "kamai", "live": True}
+    assert ["kamai", "withdrawn"] in report["r_unflag"]["flags"]
+    assert _bodies(report["r_snz"]) == [{"d": DS, "app": K["feat"], "act": "snooze", "feature": "kamai", "days": 14, "note": "Pata hai", "live": True}]
+    assert report["r_snz"]["eff"] == "snz" and report["r_unsnz"]["eff"] == "red"
+    assert _bodies(report["r_unsnz"]) == [{"d": DS, "app": K["feat"], "act": "unsnooze", "feature": "kamai", "live": True}]
+    (bk,) = _bodies(report["r_bulk"])
+    assert bk["act"] == "bulk_ok" and bk["d"] == DS and bk["live"] is True and bk["apps"] and set(bk) == {"d", "act", "apps", "live"}
+    dec = report["a_dec"]
+    assert dec["empty"].startswith("Note zaroori hai") and dec["after_kaam"] == "kaam" and dec["after_done"] == "closed"
+    assert _bodies(report["r_dec"]) == [{"flag_id": dec["id"], "decision": "kaam", "note": "Developer ko bolo"},
+                                        {"flag_id": dec["id"], "decision": "done", "note": ""}]
+
+
+def test_a_refusal_shows_the_older_tabs_message_and_changes_nothing(report):
+    r = report["r_409"]
+    assert len(r["req"]) == 1 and r["st"] == "kal" and r["toast"] == r["fail"]
+    a = report["r_401"]
+    assert len(a["req"]) == 1 and a["auth"] is False and a["canW"] is False
+    assert report["r_ro"]["req"] == [] and report["r_ro"]["toast"] == "Login session khatam — page reload karo"
+
+
+def test_the_old_views_come_back_exactly_without_a_studio_file(report):
+    F = report["fallback"]
+    order0 = report["order0"]
+    assert F["noptr"] == {"on": False, "order": order0, "rson": False, "rs": False, "old": False}
+    assert F["back"] is True and F["failed"] == {"on": False, "order": order0} and F["back2"] is True
+    assert F["otherCard"] == {"on": False} and F["back3"] is True
+
+
+def test_an_app_the_file_left_out_is_still_shown_from_its_card(report):
+    r = report["raw"]
+    assert r["n"] == 7 and r["raw"] and r["card"] and r["pill"] and r["map"] and r["drawer"]
