@@ -851,6 +851,7 @@
   .smp-hd{display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap}.smp-hd .faint{font-size:11.5px}
   .smp-per{font-size:11.5px;color:var(--muted);margin:-4px 0 8px;line-height:1.5;overflow-wrap:anywhere}
   .smp-fb{padding-left:4px}
+  .smp-legend{font-size:11px;color:var(--faint);margin:-4px 0 8px;line-height:1.5;overflow-wrap:anywhere}
   .smp-top{line-height:1.6;overflow-wrap:anywhere}
   .smp-band{background:var(--raise);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 12px}
   .smp-band>.smp-bl{font-size:10.5px;font-weight:800;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
@@ -3173,10 +3174,12 @@ function renderRoas(){
 
 // ---------- SIMPLIFY: ONE vocabulary for Uninstall / Active users / Install value (+ the Alerts screen) ----------
 // Every change row on these tabs says the same things the same way: one status word (🔴 Bigda / 🟡 Dhyan do / 🟢 Behtar /
-// ℹ️ Jaankari …) + one status chip (🆕 Naya ≤ 10 din · 🔁 Chal raha · ✅ Theek ho gaya · 🗄 Purana), the app with its
-// account (never cut), ONE fact ("pehle → ab"), and one grey timestamp line: 🕒 Alert bana (IST) · Data (the window and
-// what it is compared with, ⏳ Pakka nahi when it can still move) · Badlaav shuru (the day the change began + its age) ·
-// Band hua (closed ones). Dates: "25 Sep", the year only when it is not this year. The lists read DATA (+ the Uninstall
+// ℹ️ Jaankari …) + one chip — an ALERT's age (when the alert itself came, IST: 🆕 Naya alert · aaj HH:MM · 🆕 Kal aaya ·
+// 📌 N din se khula · 📌 <date> se khula · 📌 Shuru se khula (seeded); closed: ✅ Theek ho gaya / Band; an info row
+// older than 30 days: 🗄 Purana), the app with its account (never cut), ONE fact ("pehle → ab"), and one grey timestamp
+// line on EVERY row: 🕒 Alert aaya (IST) · Data (the window and what it is compared with, ⏳ Pakka nahi when it can
+// still move) · Badlaav shuru (the day the change began + its age) · Band hua (closed ones); an info row: 🕒 Data ·
+// Badlaav shuru. Dates: "25 Sep", the year only when it is not this year. The lists read DATA (+ the Uninstall
 // asset that loads once for All apps) only — never a per-app file — so they are the same before and after opening an app.
 const SMP={naya:10,theek:7,purana:30,drop:90,badi:300,chhoti:30};
 let SMPF={}, SMPALL=false, SMPAPPS=null, SMPAPPSK='';   // open folds (list id + fold) · every fold open (checks) · app names / sizes cache
@@ -3229,39 +3232,66 @@ function smpSizeTxt(a){ if(!a||!a.size) return ''; return ({badi:'Badi',madhyam:
 function smpAppHtml(id,name,size){ const a=smpApp(id,name); return `<span class="smp-app">${appIcon(a.dname||name,16)}<span class="n">${hAttr(a.name)}</span></span>`; }
 // ---- status word + chip (§1.3 / §1.8) ----
 function smpSev(s){ return s==='warning'||s==='critical'?'bigda':(s==='good'?'behtar':(s==='watch'?'dhyan':'info')); }
-function smpChipOf(r){ if(r.type==='closed') return r.theek?'✅ Theek ho gaya':''; const a=smpAge(r.started);
-  if(r.type==='info'&&a!=null&&a>SMP.purana) return '🗄 Purana'; return (a!=null&&a<=SMP.naya)?'🆕 Naya':'🔁 Chal raha'; }
+// the row's ONE chip (owner, 1 Oct: "ye kab ka he? new alert he?"): an alert says how old the ALERT is (smpAgeChip) —
+// never how old the change is (that is "Badlaav shuru" in the 🕒 line); an info row only "🗄 Purana" past 30 days
+function smpChipOf(r){ if(r.type==='closed') return r.theek?'✅ Theek ho gaya':'';
+  if(r.type==='info'&&!r.alertInfo){ const a=smpAge(r.started); return (a!=null&&a>SMP.purana)?'🗄 Purana':''; }
+  return smpAgeChip(r).t; }
+function smpChipTip(r){ return (r.type==='closed'||(r.type==='info'&&!r.alertInfo))?'':smpAgeChip(r).tip; }
+function smpIsNew(r){ return (r.type==='alert'||(r.type==='info'&&r.alertInfo))&&/^🆕/.test(smpChipOf(r)); }
 // a closed alert "✅ Theek ho gaya": closed as recovered ≤ 7 days ago, was 🔴 / 🟡, not a small app, open ≥ 2 evaluations, not the first run's own
 function smpTheek(x,a){ if(!x||!x.closed||x.close_reason!=='recovered') return false; const ag=smpAge(x.closed); if(ag==null||ag>SMP.theek) return false;
   if(x.severity!=='warning'&&x.severity!=='watch') return false; if(a&&a.size==='chhoti') return false;
   if(x.opened&&x.closed<=x.opened) return false; return true; }
-// ---- the grey timestamp line (every alert of these three tabs): 🕒 Alert bana · Data · Badlaav shuru · Band hua ----
-// (an episode opened / closed before opened_at / closed_at were kept: its opened / closed is the DATA day it was judged
-// on — 2–3 days before the run that made it — so it says "<date> tak ke data pe", never a time and never as the run's day)
-function smpRunAt(s){ return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(s||''))?s:null; }
+// ---- the grey timestamp line (EVERY row of these three tabs): 🕒 Alert aaya · Data · Badlaav shuru · Band hua (an info
+// row: 🕒 Data · Badlaav shuru) ---- (an episode with no recorded run time at all — neither opened_at nor notified_at:
+// its opened / closed is the DATA day it was judged on, 2–3 days before the run that made it — says "<date> tak ke data
+// pe", never a time and never as the run's day)
+function smpRunAt(s){ return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(s||''))&&!isNaN(Date.parse(s))?s:null; }
 function smpDataDay(d){ return d?smpD(d)+' tak ke data pe':'—'; }
-function smpTs(r){ const p=[], oa=smpRunAt(r.openedAt), ca=smpRunAt(r.closedAt);
-  if(r.type!=='info'||r.alertInfo) p.push(`🕒 Alert bana: ${oa?smpIst(oa):smpDataDay(r.opened)}${r.seeded?' (pehli jaanch me hi mila)':''}`);
+// when the ALERT came: the run that opened the episode (opened_at) → the engine's alert_at (opened_at, else the run that
+// registered it for notification: notified_at — a real recorded UTC time) → none (only then the data-day words)
+function smpAlertAt(r){ return smpRunAt(r&&r.openedAt)||smpRunAt(r&&r.alertAt)||null; }
+// "aaj" / "kal" are counted in IST calendar days up to the build's last check (DATA.generated_at, "Aakhri check")
+function smpNowMs(){ const t=Date.parse((DATA&&DATA.generated_at)||''); return isNaN(t)?Date.now():t; }
+function smpIstDay(ms){ return new Date(ms+330*60000).toISOString().slice(0,10); }
+function smpIstHM(ms){ return new Date(ms+330*60000).toISOString().slice(11,16); }
+const SMP_SEED_TIP='Ye halat feature shuru hone se pehle se thi — tab hi mil gayi';
+// an alert's age chip, IST: same day → "🆕 Naya alert · aaj 10:26" · the day before → "🆕 Kal aaya" · 2–29 days →
+// "📌 N din se khula" · 30+ → "📌 <date> se khula" · made by the feature's first run (seeded) → "📌 Shuru se khula (<date>)"
+function smpAgeChip(r){ const at=smpAlertAt(r);
+  if(!at) return {t:'📌 Khula',tip:'Alert ka time record nahi (purana alert) — '+smpDataDay(r&&r.opened)};
+  const ms=Date.parse(at), day=smpIstDay(ms), n=Math.max(0,uniDiff(day,smpIstDay(smpNowMs()))), tip='Alert aaya: '+smpIst(at);
+  if(r.seeded) return {t:`📌 Shuru se khula (${smpD(day)})`,tip:SMP_SEED_TIP+' · '+tip};
+  if(n===0) return {t:`🆕 Naya alert · aaj ${smpIstHM(ms)}`,tip};
+  if(n===1) return {t:'🆕 Kal aaya',tip};
+  return {t:n<30?`📌 ${n} din se khula`:`📌 ${smpD(day)} se khula`,tip}; }
+function smpTs(r){ const p=[], al=r.type!=='info'||!!r.alertInfo, at=smpAlertAt(r), ca=smpRunAt(r.closedAt);
+  if(al) p.push(`Alert aaya: ${at?smpIst(at):smpDataDay(r.opened)}`);
   if(r.data) p.push(`Data: ${r.data}${r.andaza?' · ≈ Andaza':''}${r.pakka!==undefined&&r.pakka!==false?' · '+smpPakka(r.pakka):''}`);
   p.push(`Badlaav shuru: ${smpShuru(r)}${r.relLabel?' · '+hAttr(r.relLabel)+' ke baad':''}`);
+  if(!al&&r.seen) p.push(`Dikha: ${smpD(r.seen)}`);                     // an info row's first-seen day, when it has one
   if(r.type==='closed') p.push(`Band hua: ${ca?smpIst(ca):smpDataDay(r.closed)}${r.closeReason&&SMP_REASON[r.closeReason]?' ('+SMP_REASON[r.closeReason]+')':''}`);
+  p[0]='🕒 '+p[0];
   return `<div class="smp-ts">${p.map(t=>`<span>${t}</span>`).join('<span class="smp-dot"> · </span>')}</div>`; }
 // ---- one row (every list of the three tabs): line 1 status word + chip + app (+ size), line 2 the fact, then "Saath me:" /
 // the split block, then the grey timestamp line. The outer <div class="uni-chg …"> and its onclick stay what they were ----
-function smpRowHtml(r,withApp){ const w=r.sev||'info', chip=smpChipOf(r), a=smpApp(r.appId,r.app);
+function smpRowHtml(r,withApp){ const w=r.sev||'info', chip=smpChipOf(r), ctip=smpChipTip(r), a=smpApp(r.appId,r.app);
   const band=r.type==='closed'&&!r.theek?`<span class="smp-chip band">Band · ${smpD(r.closed)}${r.closeReason&&SMP_REASON[r.closeReason]?' ('+SMP_REASON[r.closeReason]+')':''}</span>`:'';
   const cls='uni-chg '+(withApp?'wa':'na')+(r.type==='closed'?' cl':'')+(r.icls?' '+r.icls:'');
   const act=r.go&&!withApp?`<span class="lnk" onclick="${r.go}">Open →</span>`:(withApp&&r.go?'<span class="lnk">Open →</span>':'');
   // the outer row keeps its old markup (class · data-* · onclick); ONE inner block spans the whole row grid
   return `<div class="${cls}"${r.attrs||''}${withApp&&r.go?` onclick="${r.go}"`:''}><div class="smp-row">`
-    +`<div class="smp-l1"><span class="pill ${SMP_WCLS[w]||'p-b'} smp-w">${SMP_WORD[w]||SMP_WORD.info}</span>${chip?`<span class="smp-chip">${chip}</span>`:band}`
+    +`<div class="smp-l1"><span class="pill ${SMP_WCLS[w]||'p-b'} smp-w">${SMP_WORD[w]||SMP_WORD.info}</span>${chip?`<span class="smp-chip"${ctip?` title="${hAttr(ctip)}"`:''}>${chip}</span>`:band}`
     +`${withApp?smpAppHtml(r.appId,r.app):''}${a.size&&withApp?`<span class="smp-size">${smpSizeTxt(a)}</span>`:''}${act}</div>`
     +`<div class="tx smp-fact">${r.fact||''}</div>${(r.saath||[]).slice(0,1).map(t=>`<div class="smp-saath">Saath me: ${t}</div>`).join('')}${r.split||''}${smpTs(r)}</div></div>`; }
+// one small legend above every "What changed?" list (owner, 1 Oct: the chip and the 🕒 line said in one line)
+const SMP_LEGEND='<div class="smp-legend">🆕 = naya alert (aaj/kal) · 📌 = pehle se khula · 🕒 = kab aaya / kis data pe</div>';
 // ---- the "Kya badla?" list (§6.3): visible = 🔴 / 🟡 up to 30 days old + every 🔴 / 🟡 of a Badi app; the rest in closed folds ----
 const SMP_SORT={bigda:0,dhyan:1,behtar:2,normal:3,jaldi:3,lagu:3,info:4};
 const SMP_SZ={badi:0,madhyam:1,chhoti:2};
 function smpSortRows(L){ return L.slice().sort((p,q)=>{ const a=smpApp(p.appId,p.app), b=smpApp(q.appId,q.app);
-  return (SMP_SORT[p.sev]-SMP_SORT[q.sev])||((SMP_SZ[a.size]!=null?SMP_SZ[a.size]:3)-(SMP_SZ[b.size]!=null?SMP_SZ[b.size]:3))||((smpChipOf(p)==='🆕 Naya'?0:1)-(smpChipOf(q)==='🆕 Naya'?0:1))
+  return (SMP_SORT[p.sev]-SMP_SORT[q.sev])||((SMP_SZ[a.size]!=null?SMP_SZ[a.size]:3)-(SMP_SZ[b.size]!=null?SMP_SZ[b.size]:3))||((smpIsNew(p)?0:1)-(smpIsNew(q)?0:1))
     ||String(q.started||'').localeCompare(String(p.started||''))||String(p.app||'').localeCompare(String(q.app||''))||String(p.key||'').localeCompare(String(q.key||'')); }); }
 function smpFoldOf(r,appPage){ const a=smpApp(r.appId,r.app), ag=smpAge(r.started);
   if(r.type==='closed') return r.theek?'theek':(appPage?'band':null);
@@ -3287,7 +3317,7 @@ function smpList(rows,o){ const id=o.id, tab=o.tab, withApp=!!o.withApp, appPage
   smpSortRows(rows).forEach(r=>{ const f=smpFoldOf(r,appPage); if(f!=null&&B[f]) B[f].push(r); });
   const nVis=B[''].length, nFold=['purana','achhi','theek','chhoti','info','band'].reduce((t,k)=>t+B[k].length,0);
   const sz=B.chhoti.reduce((m,r)=>{ const a=smpApp(r.appId,r.app); if(a&&a.id&&!m.has(a.id)) m.set(a.id,a.paisa||0); return m; },new Map()), szt=[...sz.values()].reduce((t,v)=>t+v,0);
-  const head=`<div class="ct smp-hd"><h3>🔔 What changed? (${nVis})</h3><span class="faint">${o.scope||'Har app alag'} · ${nVis} shown · ${nFold} folded below</span></div>`;
+  const head=`<div class="ct smp-hd"><h3>🔔 What changed? (${nVis})</h3><span class="faint">${o.scope||'Har app alag'} · ${nVis} shown · ${nFold} folded below</span></div>${SMP_LEGEND}`;
   const vis=nVis?smpGroup(B[''],id,tab,withApp):o.empty?o.empty:(nFold?`<div class="uni-ok">✅ Koi 🔴 / 🟡 badlaav dekhne layak nahi — baaki neeche band</div>`:'<div class="uni-ok">✅ All normal — no changes</div>');
   const F=[['purana',`🗄 Older than 30 days (${B.purana.length})`],['achhi',`🟢 Good news (${B.achhi.length})`],['theek',`✅ Theek ho gaya — last 7 days (${B.theek.length})`],
     ['chhoti',`Small apps (${sz.size}) · ${money(szt)}/din`],['info',`ℹ️ Jaankari (${B.info.length})`],['band',`Closed (${B.band.length})`]];
@@ -3299,7 +3329,7 @@ function smpPer(t){ return `<div class="smp-per">${t}</div>`; }
 function smpBuilt(){ const g=DATA&&DATA.generated_at; return g?smpIst(g):''; }
 function smpHead(name,parts){ const b=smpBuilt();
   return `<h2 class="sc">${name}</h2><p class="scd smp-top">${parts.filter(Boolean).join(' · ')}${b?`<br><span class="faint">Aakhri check: ${b}</span>`:''}</p>`; }
-function smpNaye(rows){ return rows.filter(r=>r.type==='alert'&&smpAge(r.started)!=null&&smpAge(r.started)<=SMP.naya).length; }
+function smpNaye(rows){ return rows.filter(smpIsNew).length; }   // new ALERTS (aaj / kal) — the legend's 🆕
 const SMP_PICKER='Yahan har section ki dates us section me likhi hain';
 // ---- Uninstall rows ----
 const SMP_IMPROW={returning_dau:['purane users (roz)','n'],new_d1:['agle din wapas aane wale','r'],new_d7:['7 din baad wapas aane wale','r'],new_d30:['30 din baad wapas aane wale','r'],
@@ -3336,7 +3366,7 @@ function smpUniRow(x,withApp,closed){ const a=smpApp(x.app_id,x.app), imp=x.fami
   const gk=x.family==='cohort'?'c'+x.n+x.dir:'', gtxt=x.family==='cohort'?`${smpNW(x.n)} hataane wale ${x.dir==='up'?'badhe':'ghate'}`:'';
   return {src:'uninstall',type:closed?'closed':'alert',sev,app:x.app,appId:x.app_id,key:x.id,fact:smpUniFact(x),saath,split:imp?'':uniAlSplit(x,false),
     data:smpUniData(x),pakka:closed?undefined:smpUniPakka(x),andaza:!!x.estimate,started:smpUniStarted(x),cap:!!x.started_cap,
-    relLabel:imp&&x.release?(x.release.label||''):'',opened:x.opened,openedAt:x.opened_at,seeded:!!x.seeded,closed:x.closed,closedAt:x.closed_at,closeReason:x.close_reason,
+    relLabel:imp&&x.release?(x.release.label||''):'',opened:x.opened,openedAt:x.opened_at,alertAt:x.alert_at,seeded:!!x.seeded,closed:x.closed,closedAt:x.closed_at,closeReason:x.close_reason,
     theek:closed&&smpTheek(x,a),go:closed?'':smpUniGo(x,withApp),gk,gtxt,week:gk?x.installs_from+'|'+x.installs_to:'',attrs:''}; }
 // an old install-week change (never an alert): ℹ️ Jaankari
 function smpUniOldRow(o,app,id){ const x=Object.assign({},o,{family:'cohort'}), dp=uniDP(o.now,o.before);
@@ -3376,7 +3406,7 @@ function smpActRow(x,withApp,closed,list){ const n1=smpActN1(x), info=!closed&&n
   const go=withApp?`actOpen('${uniQ(x.app_id)}')`:`actJump('${ACT_SEC[x.metric]||'act-daily'}')`, R=x.release&&x.release.key?x.release:null;
   return {src:'active',type:closed?'closed':(info?'info':'alert'),alertInfo:!!info,sev:info?'info':(x.family==='act_break'?'dhyan':smpSev(x.severity)),app:x.app,appId:x.app_id,key:x.id,
     fact:hAttr(smpActFact(x)),saath:smpActSaath(x,list),split:actAlSplit(x,false),data:smpActData(x),andaza:!!x.estimate,started:smpActStarted(x),cap:!!x.started_cap,
-    relLabel:R?(R.label||''):'',opened:x.opened,openedAt:x.opened_at,seeded:!!x.seeded,closed:x.closed,closedAt:x.closed_at,closeReason:x.close_reason,
+    relLabel:R?(R.label||''):'',opened:x.opened,openedAt:x.opened_at,alertAt:x.alert_at,seeded:!!x.seeded,closed:x.closed,closedAt:x.closed_at,closeReason:x.close_reason,
     theek:closed&&smpTheek(x,smpApp(x.app_id,x.app)),go:closed?'':go,gk:x.family==='act_return'?'r'+x.metric+x.dir:'',gtxt:x.family==='act_return'?`${smpBackW(+String(x.metric).slice(1))} wapas aane wale ${x.dir==='up'?'badhe':'ghate'}`:'',
     week:x.family==='act_return'?x.installs_from+'|'+x.installs_to:'',attrs:` data-fam="${hAttr(x.family||'')}"`}; }
 function smpActMerged(list){ return (list||[]).filter(x=>!(x.family==='act_slow'&&!x.closed&&(list||[]).some(z=>z&&z.family==='act_drift'&&!z.closed&&z.app_id===x.app_id&&z.metric===x.metric))); }
@@ -3417,7 +3447,7 @@ function smpValRow(x,withApp,closed){ const vl=valAlVer(x);
   if(T.includes('market_wide')) s.push('kai apps me ek saath — bazaar ka asar'); if(valAlso(x)) s.push('kam log wapas aaye');
   const R=valRel(x.release);
   return {src:'value',type:closed?'closed':'alert',sev:smpSev(x.severity),app:x.app,appId:x.app_id,key:x.id,fact:smpValFact(x),saath:s,split:valSplit(x,false),data:smpValData(x),
-    andaza:!!x.estimate,started:x.started||x.week_from||x.installs_from||null,cap:!!x.started_cap,relLabel:vl?vl:(R?R.label:''),opened:x.opened,openedAt:x.opened_at,seeded:!!x.seeded,
+    andaza:!!x.estimate,started:x.started||x.week_from||x.installs_from||null,cap:!!x.started_cap,relLabel:vl?vl:(R?R.label:''),opened:x.opened,openedAt:x.opened_at,alertAt:x.alert_at,seeded:!!x.seeded,
     closed:x.closed,closedAt:x.closed_at,closeReason:x.close_reason,theek:closed&&smpTheek(x,smpApp(x.app_id,x.app)),go:closed?'':go,gk:'',week:'',attrs:` data-fam="${hAttr(x.family||'')}"`}; }
 const SMP_VINFO={mix:'Countries',new_cty:'Countries',gap:'Countries',spend:'Ads kharcha',paid:'Ads kharcha',k:'Lambi baat',closed:'Ads kharcha',market:'Ads kharcha',ver_d30:'Version',ver_mix:'Version',long_up:'Lambi baat'};
 function smpValInfoRow(o,app,id,old){ const kind=o.kind||'info';
@@ -3901,7 +3931,7 @@ function uniPortfolio(){
   ((UNI&&UNI.apps)||[]).filter(a=>a&&uniVis(a.app_id)).forEach(a=>{ (a.alerts_closed||[]).forEach(x=>L.push(smpUniRow(Object.assign({app:a.app},x),true,true)));
     (a.old_changes||[]).forEach(o=>L.push(smpUniOldRow(o,a.app,a.app_id))); });
   const head=smpHead('Uninstall',[`<b style="color:var(--ink2)">UNINSTALL</b>`,`Har app alag (${rows.length} apps)`,tMax?`Users ka data ${smpD(tMax)} tak (Google ${Math.max(0,uniDiff(tMax,T))} din late)`:'abhi tak koi GA4 data nahi aaya',
-    sMax?`Pakka ${smpD(sMax)} tak`:'',`Aaj ${smpD(T)}`,`🆕 ${smpNaye(L)} naye`]);
+    sMax?`Pakka ${smpD(sMax)} tak`:'',`Aaj ${smpD(T)}`,`🆕 ${smpNaye(L)} naye alert (aaj/kal)`]);
   // honest status line when some apps' GA4 data is old / missing / failed
   const noG=((UNI&&UNI.no_ga4)||[]).filter(x=>uniVis(x.app_id));
   const inList=new Set(rows.map(r=>r.s.app_id));
@@ -5262,8 +5292,20 @@ function actDetail(r,d){
     <div class="faint" style="font-size:12px;margin:5px 0 14px;display:flex;gap:5px 10px;flex-wrap:wrap;align-items:center"><span>GA4 data till <b style="color:var(--ink2)">${uniD(d.data_till)}</b>${got?' · fetched '+got:''}</span>${fl.join('')}</div>`;
   const safe=f=>{ try{ return f(d,r)||''; }catch(e){ return '<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ Ye hissa abhi dikh nahi paya.</div>'; } };
   return hdr+[actSumCard,actChangesCard,actUpdLine,actKpis,actDailyCard,actTriCard,actUseCard,actRevCard,()=>actTimingNote()].map(safe).join(''); }
-// SPEC_SIMPLIFY §6.5 / D4: an update's verdict is told on the Uninstall tab only — here one line that goes there
-function actUpdLine(d){ return `<div class="card" id="act-impact" style="margin-bottom:14px;padding:12px 16px"><span class="faint">📦 Is app ke updates ka asar →</span> <span class="lnk" onclick="uniGo('${uniQ(d.app_id)}')">Uninstall tab ›</span></div>`; }
+// SPEC_SIMPLIFY §6.5 / D4: an update's verdict is told on the Uninstall tab only (its full 📦 Update impact card) — here
+// ONE line that says whether this app had an update and goes straight to that update's block there (owner, 1 Oct):
+// "📦 Is app ka aakhri update: v3.2 (10 Sep) · 🛑 Update roko → Uninstall me poora card ›" · "📦 Pichhle 60 din me koi
+// update nahi". Read from DATA.uninstall's summary row (the same updates the Uninstall "📦 Updates ka asar" list shows)
+function actUpdLine(d){ const id=d.app_id, U=DATA&&DATA.uninstall, r=U&&(U.apps||[]).find(z=>z&&z.app_id===id);
+  const wrap=h=>`<div class="card" id="act-impact" style="margin-bottom:14px;padding:12px 16px;line-height:1.7">${h}</div>`;
+  if(!r||!Array.isArray(r.updates)) return wrap(`<span class="faint">📦 Is app ke updates ka asar →</span> <span class="lnk" onclick="uniGo('${uniQ(id)}')">Uninstall tab ›</span>`);
+  const L=r.updates.filter(u=>u&&typeof u==='object'&&u.key&&u.date).sort((p,q)=>p.date<q.date?1:(p.date>q.date?-1:0));
+  if(!L.length) return wrap(`<span class="faint">📦 Pichhle ${uniIC('impact_list_days',60,'act')} din me koi update nahi</span>`);
+  const u=L[0], lt=u.late&&(u.late.level==='hold'||u.late.level==='halt')&&UNI_VERD[u.late.level];
+  const vd=uniNever({level:u.level,final:u.final})?UNI_NEVER_PILL(null):uniVerdChip({level:u.level});
+  return wrap(`📦 Is app ka aakhri update: <b style="color:var(--ink2)">${hAttr(u.label||'App update')}</b> (${uniD(u.date)}) · ${vd}`
+    +(lt?` · <span class="pill ${lt[1]}">30 din baad: ${lt[0]}</span>`:'')
+    +` → <span class="lnk" onclick="uniImpGo('${uniQ(id)}','${uniQ(u.key)}')">Uninstall me poora card ›</span>`); }
 // "📌 At a glance": the engine's one line, six tiles (last 7 settled days vs the 4 weeks before), context, latest day,
 // the data-edge sentences, the Uninstall tab's line for this app and the provisional footnote
 const ACT_TILES=[['ret_dau','Purane users (roz)','Roz ke active users me se us din ke naye installs hata ke — purane users.'],['d1','Came back next day','Kisi din ke har 100 naye users (GA4 \'New users\', Firebase jaisa base) me se kitne agle din phir aaye.'],
@@ -5642,7 +5684,7 @@ function actPortfolio(){
   (Array.isArray(A.closed)?A.closed:[]).filter(x=>x&&vis.has(x.app_id)&&(!APP||x.app===APP)).forEach(x=>L.push(smpActRow(x,true,true,A0)));
   const byId={}; rows.forEach(r=>{ byId[r.app_id]=r; });
   (Array.isArray(A.info)?A.info:[]).filter(o=>o&&byId[o.app_id]&&(!APP||byId[o.app_id].app===APP)).forEach(o=>{ const r=byId[o.app_id]; L.push(o.src==='older'?smpActOldRow(o,r.app,r.app_id):smpActInfoRow(Object.assign({settled_till:r.settled_till},o),r.app,r.app_id)); });
-  const head=smpHead('Active users',[`<b style="color:var(--ink2)">ACTIVE USERS</b>`,`Har app alag (${n} apps)`,tMax?`Users ka data ${smpD(tMax)} tak`:'abhi tak koi GA4 data nahi aaya',sMax?`Pakka ${smpD(sMax)} tak`:'',`Aaj ${smpD(smpToday())}`,`🆕 ${smpNaye(L)} naye`])
+  const head=smpHead('Active users',[`<b style="color:var(--ink2)">ACTIVE USERS</b>`,`Har app alag (${n} apps)`,tMax?`Users ka data ${smpD(tMax)} tak`:'abhi tak koi GA4 data nahi aaya',sMax?`Pakka ${smpD(sMax)} tak`:'',`Aaj ${smpD(smpToday())}`,`🆕 ${smpNaye(L)} naye alert (aaj/kal)`])
     +`<p class="faint" style="font-size:12px;margin:-6px 0 12px">Purane users = roz ke active users − us din ke naye installs. GA4 ka data ~3 din me pakka hota hai — naye din ⏳ pakka nahi (kam dikhte, unpe faisla nahi).</p>`;
   const nBad=rows.filter(r=>r.stale||r.status==='error').length;
   const note=A.status==='error'?'<div class="note">⚠️ GA4 se abhi Active users data nahi ban paya — agle robot run me phir try hoga.</div>'
@@ -5671,7 +5713,7 @@ function actPortfolio(){
   const noCard=noG.length?`<div class="card" id="act-noga4" style="margin-bottom:14px"><div class="ct"><h3>🔌 Apps without GA4 data (${noG.length})</h3></div>
     ${noG.map(x=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">${appChip(x.app,16)}<span class="muted" style="font-size:12.5px">${hAttr(x.text||uniReason(x.reason))}</span></div>`).join('')}</div>`:'';
   // (§6.5: the "📦 Updates ka asar" card lives on the Uninstall tab only — here, as on each app page, one line that goes there)
-  const upd=DATA.uninstall?`<div class="card" id="act-upd-link" style="margin-bottom:14px;padding:12px 16px"><span class="faint">📦 Sab apps ke updates ka asar →</span> <span class="lnk" onclick="show('uninstall')">Uninstall tab ›</span></div>`:'';
+  const upd=DATA.uninstall?`<div class="card" id="act-upd-link" style="margin-bottom:14px;padding:12px 16px">📦 Updates ka asar → <span class="lnk" onclick="show('uninstall')">Uninstall tab ›</span></div>`:'';
   return head+note+sum+alCard+upd+pf+table+noCard+actTimingNote(); }   // the open alerts first, then 📅 day by day, then each app
 // ---- 📅 Daily — all apps: the portfolio day by day (active_portfolio.json.gz, lazy — DATA.active.portfolio points at it) ----
 // The build writes every app's daily arrays (whole history, from its first counted day) into ONE lazy file; the page adds

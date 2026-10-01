@@ -357,27 +357,34 @@ def test_old_install_changes_are_info_in_a_collapsed_list_never_counted(report, 
     assert re.search(r"180 days .*? ▲ 100 me \+6 14–20 Mar ℹ️ Old installs 210 days", cal_open)   # (§1.7 "100 me", §1.1 no year)
 
 
+# the alert-age chip (owner, 1 Oct) and the legend above every "What changed?" list
+AGE = (r"(?:🆕 Naya alert · aaj \d\d:\d\d|🆕 Kal aaya|📌 \d+ din se khula|📌 \d{1,2} [A-Z][a-z]{2}(?: \d{4})? se khula"
+       r"|📌 Shuru se khula \(\d{1,2} [A-Z][a-z]{2}(?: \d{4})?\))")
+LEGEND = re.escape("🆕 = naya alert (aaj/kal) · 📌 = pehle se khula · 🕒 = kab aaya / kis data pe")
+
+
 def test_what_changed_rows_carry_severity_dates_tags_and_open(report, fixture):
     p = report["texts"]["portfolio_30d"]
     ic = r"(?:[A-Z?] )?"                                     # the app icon (its letter when no image) before the name
-    # SPEC_SIMPLIFY §6.3 + the owner's timestamp rule: status word · chip · app (size) · Open → / one fact / the grey
-    # 🕒 line (Alert bana · Data with ⏳ Pakka nahi · Badlaav shuru); good news and 30+ days old ones in the folds
-    ts = r"🕒 Alert bana: \d{1,2} [A-Z][a-z]{2}(?:, \d\d:\d\d IST)?(?: \(pehli jaanch me hi mila\))? · Data: "
+    # SPEC_SIMPLIFY §6.3 + the owner's timestamp rule (1 Oct): status word · the ALERT's age chip · app (size) · Open → /
+    # one fact / the grey 🕒 line (Alert aaya, a real IST time on these built alerts · Data with ⏳ Pakka nahi · Badlaav
+    # shuru); good news and 30+ days old ones in the folds
+    ts = r"🕒 Alert aaya: \d{1,2} [A-Z][a-z]{2}, \d\d:\d\d IST · Data: "
     # (an install-week watch is 🟡, SPEC_SIMPLIFY §1.8 — the old row called every "up" week Worse)
-    assert re.search(r"🟡 Dhyan do (?:🆕 Naya|🔁 Chal raha) " + ic + r"Demo Caller – Test App Open → Agle din hataane wale: 100 me [\d.]+ → [\d.]+ [^🕒]*"
+    assert re.search(r"🟡 Dhyan do " + AGE + r" " + ic + r"Demo Caller – Test App Open → Agle din hataane wale: 100 me [\d.]+ → [\d.]+ [^🕒]*"
                      + ts + r"Installs 16–22 Sep · vs pehle \([^)]*\) · ⏳ Pakka nahi · \d+ [A-Z][a-z]{2} ko pakka · Badlaav shuru: ", p)
-    assert re.search(r"🔴 Bigda (?:🆕 Naya|🔁 Chal raha) " + ic + r"Demo Launcher Open → Ek din me zyada hataaye: har 1,000 users me [\d.]+, normal ~[\d.]+ [^🕒]*"
+    assert re.search(r"🔴 Bigda " + AGE + r" " + ic + r"Demo Launcher Open → Ek din me zyada hataaye: har 1,000 users me [\d.]+, normal ~[\d.]+ [^🕒]*"
                      + ts + r"Ek din: 23 Sep · vs normal range · ⏳ Pakka nahi", p)
-    assert re.search(r"🟡 Dhyan do (?:🆕 Naya|🔁 Chal raha) " + ic + r"Demo Wallpapers Open → Ek bhi uninstall record nahi hua Saath me: data me gadbad\? "
+    assert re.search(r"🟡 Dhyan do " + AGE + r" " + ic + r"Demo Wallpapers Open → Ek bhi uninstall record nahi hua Saath me: data me gadbad\? "
                      r"GA4 / Firebase tracking check karo " + ts + r"Ek din: 14 Sep", p)
-    assert re.search(r"🔴 Bigda (?:🆕 Naya|🔁 Chal raha) " + ic + r"Demo Weather Open → Roz hataane wale: har 1,000 users me [\d.]+ → [\d.]+ "
+    assert re.search(r"🔴 Bigda " + AGE + r" " + ic + r"Demo Weather Open → Roz hataane wale: har 1,000 users me [\d.]+ → [\d.]+ "
                      r"\(\+\d+%\) [^🕒]*" + ts + r"Roz ka avg 12–23 Sep · vs ", p)
     assert "🟢 Good news (" in p and "Demo Flashlight" not in p.split("What changed?")[1].split("🟢 Good news")[0]   # good news: folded
     assert "Provisional" not in p and " New " not in p
     # an app's own rows: no app, the same word / chip / 🕒 line, and Open → (to its table or chart)
     cal = report["texts"]["detail|Demo Caller – Test App|all|30|cp|false"]
-    assert re.search(r"What changed\? \(\d\) Sirf ye app: Demo Caller – Test App · \d shown · \d folded below 🔴 Bigda (?:🆕 Naya|🔁 Chal raha) Open → "
-                     r"🛑 Update roko [^🕒]*? " + ts + r"v3\.2 \(10 Sep\) se pehle vs baad .*? 🟡 Dhyan do (?:🆕 Naya|🔁 Chal raha) Open → "
+    assert re.search(r"What changed\? \(\d\) Sirf ye app: Demo Caller – Test App · \d shown · \d folded below " + LEGEND + r" 🔴 Bigda " + AGE + r" Open → "
+                     r"🛑 Update roko [^🕒]*? " + ts + r"v3\.2 \(10 Sep\) se pehle vs baad .*? 🟡 Dhyan do " + AGE + r" Open → "
                      r"Agle din hataane wale: [^🕒]*" + ts + r"Installs 16–22 Sep", cal)   # + v3.2's 🛑 first (🔴 before 🟡)
 
 

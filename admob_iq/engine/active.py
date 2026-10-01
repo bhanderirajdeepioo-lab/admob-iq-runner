@@ -2314,8 +2314,8 @@ def started_of(ep, P=None):
 def alert_obj(ep, app, E, P=None):
     """Episode → the alert object (uninstall's alert_obj keys + the Active ones). Rebuilt every build: a renamed app
     shows its new name. P = the app's prepared series (an act_return's "started" walks its return series back).
-    SPEC_SIMPLIFY (shown only): started / started_cap, seeded, opened_at (None: opened before it was kept) and, closed,
-    closed_at / close_reason (None: closed before they were kept)."""
+    SPEC_SIMPLIFY (shown only): started / started_cap, seeded, opened_at (None: opened before it was kept), alert_at
+    (uninstall.alert_at) and, closed, closed_at / close_reason (None: closed before they were kept)."""
     s, E = ep["last"], _d(E)
     if ep["family"] == "act_break" and ep.get("days"):  # one break over several days: its whole span, and whether
         s = dict(s, day=ep["day"], last_day=ep["last_day"], days_list=ep["days"],   # it still runs on the newest
@@ -2338,7 +2338,8 @@ def alert_obj(ep, app, E, P=None):
            "data_till": _iso(E), "text": text, "message": "%s: %s" % (app, text),
            "sp": s.get("sp") if attrib.ON else None}          # the change's split (SPEC_SPLIT), null allowed
     st, cap = started_of(ep, P)
-    out.update(started=st, started_cap=bool(cap), seeded=bool(ep.get("seeded")), opened_at=ep.get("opened_at"))
+    out.update(started=st, started_cap=bool(cap), seeded=bool(ep.get("seeded")), opened_at=ep.get("opened_at"),
+               alert_at=U.alert_at(ep))
     if "closed" in ep:
         out.update(closed=ep["closed"], fresh=False, notify=False, closed_at=ep.get("closed_at"),
                    close_reason=ep.get("close_reason"))

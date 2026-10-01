@@ -398,7 +398,7 @@ for (const r of rows) {
   const chgF = sec(f, 'id="act-chg"', 'id="act-impact"');
   apps[r.app] = { key: r.key, header: text(h.slice(0, 1500)).slice(0, 300), tiles, ctx: /Active users [\d,.kM—]+ ?\/day Installs [\d,.kM—]+ ?\/day/.test(text(secIn(h, 'id="act-ctx"', '</div>'))),
     ctx_text: text(secIn(h, 'id="act-ctx"', '</div>')).trim(), latest: text(secIn(h, 'id="act-latest"', '</div>')).trim(), latest_prov: sec(h, 'id="act-latest"', '</div>').includes('>Provisional</span>'),
-    has_titles: ['📌 At a glance', '🔔 What changed? (', '📦 Is app ke updates ka asar', 'When will I know?', '← All apps'].filter(x => T(`detail|${r.app}|base`).includes(x)),
+    has_titles: ['📌 At a glance', '🔔 What changed? (', 'When will I know?', '← All apps'].filter(x => T(`detail|${r.app}|base`).includes(x)),
     summary: (sum.match(/<div class="act-line" data-kind="([^"]*)">([^<]*)<\/div>/) || []).slice(1), edges: [...sum.matchAll(/<div class="act-edge">([^<]*)<\/div>/g)].map(m => m[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"')),
     prov_note: /⏳ <b>Pakka nahi:<\/b>/.test(sum), uni_link: sum.includes('Open Uninstall →'),
     chg_title: (chg.match(/🔔 What changed\? \((\d+)\)/) || [])[1], chg_counts: (text(chg).match(/What changed\? \(\d+\) Sirf ye app: .*? · (\d+) shown · (\d+) folded below/) || []).slice(1).map(Number),
@@ -407,8 +407,10 @@ for (const r of rows) {
     folds: [...chg.matchAll(/<span>([A-Za-z ]+) \((\d+)\)<\/span>/g)].map(m => [m[1], +m[2]]),
     sev_pills: [...chgF.matchAll(/<span class="pill ([a-z-]+) smp-w">([^<]*)<\/span>/g)].map(m => [m[1], m[2]]),
     // the note: "(upar chuno)" only right under a 7 / 14 / 30 / 60 selector (an app with updates); else today's words
-    // SPEC_SIMPLIFY §6.5 / D4: the update's card is the Uninstall tab's only — here ONE line that goes there
-    imp_card: h.includes('id="act-impact"') && h.includes('📦 Is app ke updates ka asar →') && h.includes(`onclick="uniGo('${r.app_id}')">Uninstall tab ›`) && !h.includes('uni-imp-b') && !h.includes('<h3>📦 Update impact</h3>'),
+    // SPEC_SIMPLIFY §6.5 / D4: the update's card is the Uninstall tab's only — here ONE line that goes there (owner, 1 Oct:
+    // "📦 Is app ka aakhri update: vX (date) · <verdict> → Uninstall me poora card ›" or "📦 Pichhle 60 din me koi update nahi")
+    imp_card: h.includes('id="act-impact"') && !h.includes('uni-imp-b') && !h.includes('<h3>📦 Update impact</h3>'),
+    imp_line: text(secIn(h, 'id="act-impact"', '</div>')).trim(), imp_go: sec(h, 'id="act-impact"', '</div>').match(/onclick="[^"]*"/g) || [],
     imp_seg: h.includes('uni-imp-cseg'),
     sections: ['act-sum', 'act-chg', 'act-impact', 'act-kpis', 'act-daily', 'act-tri', 'act-use', 'act-rev', 'act-timing'].map(s => h.indexOf('id="' + s + '"')),
     versions: [...(f.split('<table class="uni-sticky act-ver"')[1] || '').matchAll(/<tr data-ver="([^"]*)"><td class="nm">([^<]*)/g)].map(m => [m[1], m[2].replace(/&lt;/g, '<')]),

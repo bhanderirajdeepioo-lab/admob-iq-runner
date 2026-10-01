@@ -92,6 +92,7 @@ obvious (outside E's year or older than YEAR_CLEAR_DAYS: "16–22 Mar 2026"). Fr
 
 import bisect
 import math
+import re
 from datetime import date, timedelta
 
 from ..alerting.rules import fingerprint
@@ -1625,6 +1626,21 @@ def reopen_ep(ep):
     return ep
 
 
+_RUN_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
+
+
+def alert_at(ep):
+    """When the alert itself came (shown only, nothing decides on it): the build run that opened the episode (opened_at)
+    — else, for an episode opened before opened_at was kept, the run that registered it for notification (notified_at:
+    the same run for a new episode, the first run for a seeded one). Only a real recorded UTC time counts ("sent" or
+    a date alone is not one); none → None, never an estimate."""
+    for k in ("opened_at", "notified_at"):
+        v = ep.get(k)
+        if isinstance(v, str) and _RUN_ISO.match(v):
+            return v
+    return None
+
+
 # ── "Shuru": the day a change began in the data (SPEC_SIMPLIFY §1.2) — shown only, nothing decides on it ────────────
 
 def cohort_started(cd, s, max_weeks=STARTED_MAX_WEEKS):
@@ -1674,8 +1690,9 @@ def alert_obj(ep, app, E, cd=None):
     every build, so a renamed app shows its new name. cd = the app's (post-launch) cohort data: a cohort alert's
     "started" walks its weekly series back (cohort_started); without it, its installs_from.
     SPEC_SIMPLIFY (shown only, nothing decides on them): started / started_cap (the day the change began in the data,
-    started_of), seeded, opened_at (the run that opened it; None for an episode opened before it was kept) and, closed,
-    closed_at / close_reason (None for an episode closed before they were kept)."""
+    started_of), seeded, opened_at (the run that opened it; None for an episode opened before it was kept), alert_at
+    (when the alert came: opened_at, else its notified_at run — alert_at()) and, closed, closed_at / close_reason (None
+    for an episode closed before they were kept)."""
     s, E = ep["last"], _d(E)
     prov = bool(s.get("prov")) and ep["dir"] == "up" and "closed" not in ep    # history: its days have settled
     text = alert_text(ep["family"], ep["dir"], dict(s, prov=prov), E)
@@ -1702,7 +1719,8 @@ def alert_obj(ep, app, E, cd=None):
                    rows={k: list((s.get("rows") or {}).get(k) or []) for k in ("worse", "told")},
                    window=s.get("window"), mixed=list(s.get("mixed") or []))
     st, cap = started_of(ep, cd)
-    out.update(started=st, started_cap=bool(cap), seeded=bool(ep.get("seeded")), opened_at=ep.get("opened_at"))
+    out.update(started=st, started_cap=bool(cap), seeded=bool(ep.get("seeded")), opened_at=ep.get("opened_at"),
+               alert_at=alert_at(ep))
     if "closed" in ep:                                # history only: never "new", never (re)sent
         out.update(closed=ep["closed"], fresh=False, notify=False, closed_at=ep.get("closed_at"),
                    close_reason=ep.get("close_reason"))

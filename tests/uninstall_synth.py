@@ -728,7 +728,7 @@ ALERT_KEYS = ("id", "source", "app_id", "app", "family", "dir", "severity", "uni
               "now", "before", "delta_pp", "rel", "z", "installs_from", "installs_to", "base_from", "base_to",
               "since", "day", "users", "opened", "last_seen", "fresh", "notify", "data_till", "message", "text",
               "provisional", "estimate",
-              "started", "started_cap", "seeded", "opened_at")      # + SPEC_SIMPLIFY (a contract extension)
+              "started", "started_cap", "seeded", "opened_at", "alert_at")   # + SPEC_SIMPLIFY (a contract extension)
 CLOSED_KEYS = ("closed", "closed_at", "close_reason")                  # a closed one: + these (SPEC_SIMPLIFY)
 CLOSE_REASONS = ("recovered", "superseded", "window_end", "seed_cleanup")
 
@@ -820,11 +820,14 @@ _NOW_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 def check_simplify(a, closed=False):
     """The SPEC_SIMPLIFY keys of an alert object (uninstall, Active, Install value): started = an ISO day or None,
-    started_cap / seeded bools, opened_at = a run's UTC time or None (opened before it was kept); closed: closed_at the
-    same, close_reason one of CLOSE_REASONS or None (closed before it was kept)."""
+    started_cap / seeded bools, opened_at = a run's UTC time or None (opened before it was kept), alert_at = when the
+    alert came (opened_at, else the notified_at run — a run's UTC time or None, never anything else); closed: closed_at
+    the same, close_reason one of CLOSE_REASONS or None (closed before it was kept)."""
     assert a["started"] is None or _iso(a["started"]), a["started"]
     assert isinstance(a["started_cap"], bool) and isinstance(a["seeded"], bool)
     assert a["opened_at"] is None or _NOW_ISO.match(a["opened_at"]), a["opened_at"]
+    assert a["alert_at"] is None or _NOW_ISO.match(a["alert_at"]), a["alert_at"]
+    assert a["opened_at"] is None or a["alert_at"] == a["opened_at"], (a["alert_at"], a["opened_at"])
     if closed:
         assert a["closed_at"] is None or _NOW_ISO.match(a["closed_at"]), a["closed_at"]
         assert a["close_reason"] is None or a["close_reason"] in CLOSE_REASONS, a["close_reason"]

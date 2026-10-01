@@ -100,8 +100,9 @@ def test_detail_sections_in_order_with_english_titles(report, fixture):
         a = report["apps"][r["app"]]
         assert all(i > 0 for i in a["sections"]) and a["sections"] == sorted(a["sections"]), r["app"]
         assert a["daily_title"] and a["tri_title"] and a["use_title"] and a["rev_title"]
-        # (SPEC_SIMPLIFY §6.5: the update card lives on the Uninstall tab — here its one-line link)
-        assert a["has_titles"] == ["📌 At a glance", "🔔 What changed? (", "📦 Is app ke updates ka asar", "When will I know?", "← All apps"], r["app"]
+        # (SPEC_SIMPLIFY §6.5: the update card lives on the Uninstall tab — here its one-line link, test_imp_card_in_active)
+        assert a["has_titles"] == ["📌 At a glance", "🔔 What changed? (", "When will I know?", "← All apps"], r["app"]
+        assert a["imp_line"].startswith("📦 "), r["app"]
         assert {"7-day average", "Every day", "30 days", "3 months", "1 year", "All time"} <= set(a["chips_seen"]), r["app"]
 
 
@@ -282,13 +283,35 @@ def test_uniimpgo_act_path_shows_active(report):
     assert g["calls"][0] == "show:uninstall" and g["uni"] == g["key"] and g["open"] == "" and not g["screen"]   # §6.5: the Uninstall tab's card
 
 
+VERD = {"halt": "🛑 Update roko", "hold": "⚠️ Ruk ke jaancho", "continue": "👍 Chalne do", "win": "✅ Update achha gaya", None: "⏳ Abhi jaldi"}
+
+
+def _dmy(d):
+    return "%d %s" % (int(d[8:10]), ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")[int(d[5:7]) - 1])
+
+
 def test_imp_card_in_active(report, fixture):
-    # SPEC_SIMPLIFY §6.5 / D4: no update card on the Active app page — one line "Is app ke updates ka asar → Uninstall tab ›"
+    """SPEC_SIMPLIFY §6.5 / D4 + the owner (1 Oct): no update card on the Active app page — ONE line saying whether the app
+    had an update in the last 60 days (the Uninstall summary row's updates: the same list the Uninstall tab shows) and
+    going straight to that update's block in the Uninstall tab's full card."""
+    uni = {x["app_id"]: x for x in fixture["dashboard_uninstall"]["apps"]}
+    seen = {"update": 0, "none": 0}
     for r in rows(fixture):
-        assert report["apps"][r["app"]]["imp_card"], r["app"]
+        a = report["apps"][r["app"]]
+        assert a["imp_card"], r["app"]
+        ups = sorted(uni[r["app_id"]]["updates"], key=lambda u: u["date"], reverse=True)
+        if ups:
+            u = ups[0]
+            assert a["imp_line"] == "📦 Is app ka aakhri update: %s (%s) · %s → Uninstall me poora card ›" % (u["label"], _dmy(u["date"]), VERD[u["level"]]), a["imp_line"]
+            assert a["imp_go"] == ["onclick=\"uniImpGo('%s','%s')\"" % (r["app_id"], u["key"])], a["imp_go"]
+            seen["update"] += 1
+        else:
+            assert a["imp_line"] == "📦 Pichhle 60 din me koi update nahi" and a["imp_go"] == [], a["imp_line"]
+            seen["none"] += 1
+    assert seen["update"] and seen["none"], seen
     for b in report["imp"]["blocks"]:
         assert b["n_open"] == 0 and not b["id_act"] and not b["id_uni"] and b["rows"] == 0, b
-        assert b["acts"] == ["onclick=\"uniGo('%s')\"" % next(r["app_id"] for r in rows(fixture) if r["app"] == b["app"])], b["acts"]
+        assert len(b["acts"]) <= 1 and all(x.startswith('onclick="uniImpGo(') for x in b["acts"]), b["acts"]
 
 
 def test_no_duplicate_ids_across_tabs(report, fixture):
@@ -622,7 +645,7 @@ def test_windows_every_fixture_block_in_active_at_30(report):
         pytest.skip("the committed Active fixture has no by_window yet (impact v1): the made-up windows above cover this tab")
     for b in report["win"]["blocks"]:                                    # SPEC_SIMPLIFY §6.5: no block on the Active page
         assert not b["id_act"] and b["hdr"] is None and b["rows"] == [], b
-        assert len(b["acts"]) == 1 and b["acts"][0].startswith('onclick="uniGo('), b["acts"]
+        assert len(b["acts"]) <= 1 and all(x.startswith('onclick="uniImpGo(') for x in b["acts"]), b["acts"]
 
 
 def test_the_note_says_upar_chuno_only_right_under_its_selector(report, fixture):

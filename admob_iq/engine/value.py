@@ -2436,7 +2436,8 @@ def alert_obj(ep, app_name, E, H, S=None, src_ccy=None):
     country tokens (the page draws them in the viewer's currency); `message` (Telegram / email) is written out in USD,
     the report currency. data_till = S, the newest install-day data the tab has read.
     SPEC_SIMPLIFY (shown only): started (started_of) / started_cap (always False here), seeded, opened_at (None: opened
-    before it was kept) and, closed, closed_at / close_reason (None: closed before they were kept)."""
+    before it was kept), alert_at (uninstall.alert_at) and, closed, closed_at / close_reason (None: closed before they
+    were kept)."""
     s = dict(ep["last"], family=ep["family"], dir=ep["dir"], cc=ep.get("cc"))
     text = alert_text(s, app_name, H, E)
     out = {"id": ep["id"], "source": "value", "app_id": ep["app_id"], "app": app_name, "family": ep["family"],
@@ -2465,7 +2466,8 @@ def alert_obj(ep, app_name, E, H, S=None, src_ccy=None):
         out["move"] = dict(s["move"])
     if s.get("sp") is not None and attrib.ON:         # the change's split (SPEC_SPLIT) — only when there is one
         out["sp"] = s["sp"]
-    out.update(started=started_of(ep), started_cap=False, seeded=bool(ep.get("seeded")), opened_at=ep.get("opened_at"))
+    out.update(started=started_of(ep), started_cap=False, seeded=bool(ep.get("seeded")), opened_at=ep.get("opened_at"),
+               alert_at=U.alert_at(ep))
     if "closed" in ep:
         out.update(closed=ep["closed"], fresh=False, notify=False, closed_at=ep.get("closed_at"),
                    close_reason=ep.get("close_reason"))

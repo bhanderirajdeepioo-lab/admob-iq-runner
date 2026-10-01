@@ -52,7 +52,7 @@ ALERT_KEYS = ("id", "source", "app_id", "app", "family", "metric", "also", "dir"
               "rel", "delta_pp", "z", "since", "day", "installs_from", "installs_to", "base_from", "base_to", "users",
               "opened", "last_seen", "fresh", "notify", "provisional", "estimate", "tags", "release", "linked",
               "data_till", "text", "message",
-              "started", "started_cap", "seeded", "opened_at")      # + SPEC_SIMPLIFY (a contract extension)
+              "started", "started_cap", "seeded", "opened_at", "alert_at")   # + SPEC_SIMPLIFY (a contract extension)
 
 
 def check_m(M, where, row=False):

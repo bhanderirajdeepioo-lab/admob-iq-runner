@@ -80,7 +80,7 @@ def run_builds(tmp, s=None, seed_kw=None, days=(7, 0)):
     return got
 
 
-SIMPLIFY_KEYS = ("started", "started_cap", "opened_at", "closed_at", "close_reason", "week_from0")
+SIMPLIFY_KEYS = ("started", "started_cap", "opened_at", "alert_at", "closed_at", "close_reason", "week_from0")
 
 
 def _is_alert(obj):

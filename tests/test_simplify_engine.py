@@ -82,6 +82,58 @@ def test_an_episode_opened_before_the_change_reads_opened_at_none_never_an_inven
     assert a["opened_at"] is None and a["started"] == "2026-08-24" and a["started_cap"] is False
 
 
+# ── alert_at: when the ALERT came (owner, 1 Oct: "ye kab ka he? new alert he?") ────────────────────────────────
+
+def test_alert_at_is_opened_at_then_the_notified_at_run_never_an_estimate():
+    """alert_at = opened_at (the run that opened the episode) → else notified_at (an episode opened before opened_at was
+    kept: the run that registered it for notification — the same run for a new one, the first run for a seeded one) →
+    else None. Only a real recorded UTC run time counts: "sent", a date alone or nothing is never shown as a time."""
+    assert U.alert_at({"opened_at": T2, "notified_at": T1}) == T2
+    assert U.alert_at({"notified_at": T1}) == T1 and U.alert_at({"opened_at": None, "notified_at": T1}) == T1
+    for bad in (None, "sent", "t0", "2026-09-21", "", 5):
+        assert U.alert_at({"notified_at": bad}) is None, bad
+        assert U.alert_at({"opened_at": bad, "notified_at": T3}) == T3, bad
+    assert U.alert_at({}) is None
+
+
+def test_every_engine_alert_carries_alert_at_open_and_closed():
+    # Uninstall (a new episode: its opening run · an older one: its notified_at run · neither: None)
+    state = {}
+    eps = U.update_episodes(state, AID, END, [_ucond()], True, True, T1)          # first evaluation: seeded, sent T1
+    a = U.alert_obj(eps[0], APP, END)
+    assert a["alert_at"] == a["opened_at"] == T1
+    old = {k: v for k, v in eps[0].items() if k != "opened_at"}                  # as a build before opened_at wrote it
+    assert U.alert_obj(old, APP, END)["alert_at"] == T1 and U.alert_obj(old, APP, END)["opened_at"] is None
+    assert U.alert_obj(dict(old, notified_at=None), APP, END)["alert_at"] is None
+    assert U.alert_obj(dict(old, notified_at="sent"), APP, END)["alert_at"] is None
+    c = U.alert_obj(dict(old, closed="2026-09-20"), APP, END)                     # closed: the same rule
+    assert c["alert_at"] == T1 and c["closed_at"] is None
+    check_simplify(c, closed=True)
+    # an update's impact (uninstall alert family "impact")
+    st = {}
+    eps = imp.update_impact_episodes(st, "a", END, [_ic()], True, T2)
+    a = U.alert_obj(eps[0], APP, END)
+    assert a["family"] == "impact" and a["alert_at"] == T2
+    ia = {k: v for k, v in eps[0].items() if k != "opened_at"}
+    ia["notified_at"] = T3
+    assert U.alert_obj(ia, APP, END)["alert_at"] == T3
+    # Active users
+    ep = {"id": "x", "app_id": AID, "family": "act_drift", "metric": "ret_dau", "key_metric": "ret_dau", "dir": "down",
+          "opened": "2026-09-10", "last_true": "2026-09-19", "misses": 0, "notified_at": T1, "seeded": True,
+          "last": {"severity": "watch", "now": 900, "before": 1000, "rel": -0.1, "since": "2026-09-01", "z": -4.2}}
+    assert act.alert_obj(ep, APP, END)["alert_at"] == T1
+    assert act.alert_obj(dict(ep, opened_at=T4), APP, END)["alert_at"] == T4
+    assert act.alert_obj(dict(ep, notified_at="sent"), APP, END)["alert_at"] is None
+    assert act.alert_obj(dict(ep, closed="2026-09-19"), APP, END)["alert_at"] == T1
+    # Install value
+    vep = {"id": "y", "app_id": AID, "family": "pay_slow", "metric": "b7", "cc": None, "dir": "down",
+           "opened": "2026-09-06", "last_true": "2026-09-06", "misses": 0, "notified_at": T2, "seeded": False,
+           "last": {"severity": "watch", "week_from": "2026-08-24", "week_to": "2026-09-06", "now": 20, "before": 30}}
+    assert V.alert_obj(vep, APP, SEP(6), 90)["alert_at"] == T2
+    assert V.alert_obj(dict(vep, opened_at=T1), APP, SEP(6), 90)["alert_at"] == T1
+    assert V.alert_obj(dict(vep, notified_at=None), APP, SEP(6), 90)["alert_at"] is None
+
+
 def test_the_full_uninstall_flow_keeps_the_first_runs_opened_at_and_an_hourly_rerun_changes_nothing():
     st = make_store(80, 1000, rate_fn=lambda c: 5.6 if c >= SEP(3) else 4.1, end=SEP(20))
     state = {}
@@ -466,7 +518,7 @@ def test_ad_unit_items_carry_started_and_nothing_else_moves():
 
 # ── invariance: the additions decide nothing ─────────────────────────────────────────────────────
 
-NEW_KEYS = {"started", "started_cap", "opened_at", "closed_at", "close_reason", "week_from0"}
+NEW_KEYS = {"started", "started_cap", "opened_at", "alert_at", "closed_at", "close_reason", "week_from0"}
 
 
 def _is_alert(x):
@@ -536,6 +588,7 @@ def runs(tmp_path_factory):
         mp.setattr(V, "started_of", lambda ep: "2001-01-01")
         mp.setattr(U, "close_ep", lambda ep, E_iso, now, reason: dict(ep, closed=E_iso, closed_at="perturbed",
                                                                       close_reason="seed_cleanup"))
+        mp.setattr(U, "alert_at", lambda ep: "1999-01-01T00:00:00Z")
         pert = _run_all(str(tmp_path_factory.mktemp("pert")))
     return real, pert
 
@@ -549,6 +602,9 @@ def test_the_additions_decide_nothing_alerts_states_and_notifications_are_the_sa
     # … and the perturbation did reach the outputs (the test would catch a decision that read them)
     al = pert["uninstall"]["out"]["dashboard_uninstall"]["alerts"]
     assert al and all(a["started"] == "2001-01-01" and a["started_cap"] for a in al)
+    assert all(a["alert_at"] == "1999-01-01T00:00:00Z" for a in al)
+    for name, sec in (("active", "dashboard_active"), ("value", "dashboard_value")):
+        assert all(a["alert_at"] == "1999-01-01T00:00:00Z" for a in pert[name]["out"][sec]["alerts"]), name
 
 
 def _decisions(fx_alerts):
@@ -609,3 +665,6 @@ def test_the_built_alerts_carry_the_additions_and_the_lists_keep_their_caps(runs
     for name, st in (("uninstall", "state.json"), ("active", "active_state.json"), ("value", "value_state.json")):
         for e in real[name]["state"][st]["episodes"].values():
             assert e.get("opened_at") and e["opened_at"].endswith("Z"), (name, e["id"])
+    # … and every built alert says when it came: its opening run (alert_at = opened_at on these new histories)
+    for a in Ufx["dashboard_uninstall"]["alerts"] + A["alerts"] + A["closed"] + Vd["alerts"]:
+        assert a["alert_at"] and a["alert_at"] == a["opened_at"], a["id"]

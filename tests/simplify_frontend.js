@@ -56,7 +56,7 @@ R.helpers = JSON.parse(run(`JSON.stringify({share:smpInfoTxt('3 Jul se purane us
 
 // ── 2. one row's chip, fold and the grey 🕒 line (made-up rows) ──
 const ROW = o => `Object.assign({src:'uninstall',type:'alert',sev:'bigda',app:'Demo App',appId:'x~1',key:'k',fact:'f',data:'Installs 19–25 Sep · vs pehle (22 Aug–18 Sep)'},${o})`;
-R.rows = JSON.parse(run(`(()=>{ const r=o=>{ const x=${ROW('o')}; return {chip:smpChipOf(x), fold:smpFoldOf(x,false), fold_app:smpFoldOf(x,true), ts:smpTs(x).replace(/<[^>]*>/g,'')}; };
+R.rows = JSON.parse(run(`(()=>{ const r=o=>{ const x=${ROW('o')}; return {chip:smpChipOf(x), tip:smpChipTip(x), isnew:smpIsNew(x), fold:smpFoldOf(x,false), fold_app:smpFoldOf(x,true), ts:smpTs(x).replace(/<[^>]*>/g,'')}; };
   return JSON.stringify({
     naya: r({started:'2026-09-20', openedAt:'2026-09-21T05:00:00Z', opened:'2026-09-21'}),
     chal: r({started:'2026-09-01', opened:'2026-09-03', seeded:true}),
@@ -72,6 +72,24 @@ R.rows = JSON.parse(run(`(()=>{ const r=o=>{ const x=${ROW('o')}; return {chip:s
     not_iso: r({started:'2026-09-20', opened:'2026-09-21', openedAt:'seeded'}),
     small_info120: Object.assign(r({type:'info', sev:'info', started:'2026-05-20'}), {small_app: smpFoldOf(Object.assign(${ROW('{}')},{type:'info',sev:'info',started:'2026-05-20',appId:'s~1'}),false)}),
     n1_old: r({type:'info', sev:'info', alertInfo:true, started:'2026-05-20', opened:'2026-09-21'}),
+    // the ALERT's age (owner, 1 Oct), IST calendar days up to the build's last check (generated_at 25 Sep 03:30 UTC = 09:00 IST)
+    age_aaj_utc_yday: r({started:'2026-09-20', opened:'2026-09-22', alertAt:'2026-09-24T19:00:00Z'}),     // 25 Sep 00:30 IST
+    age_kal_utc_same: r({started:'2026-09-20', opened:'2026-09-22', alertAt:'2026-09-24T18:29:00Z'}),     // 24 Sep 23:59 IST
+    age_kal: r({started:'2026-09-20', opened:'2026-09-22', alertAt:'2026-09-24T03:00:00Z'}),
+    age_2: r({started:'2026-09-20', opened:'2026-09-21', alertAt:'2026-09-23T10:00:00Z'}),
+    age_29: r({started:'2026-08-20', opened:'2026-08-25', alertAt:'2026-08-27T10:00:00Z'}),
+    age_30: r({started:'2026-08-20', opened:'2026-08-24', alertAt:'2026-08-26T10:00:00Z'}),
+    age_old_year: r({started:'2025-12-01', opened:'2025-12-28', alertAt:'2025-12-30T10:00:00Z'}),
+    age_seeded: r({started:'2026-09-01', opened:'2026-09-17', seeded:true, alertAt:'2026-09-19T12:00:00Z'}),
+    age_seeded_today: r({started:'2026-09-01', opened:'2026-09-23', seeded:true, alertAt:'2026-09-25T01:00:00Z'}),
+    // the time's fallback: opened_at → the engine's alert_at (notified_at) → the data day (never an invented time)
+    fb_opened: r({started:'2026-09-20', opened:'2026-09-21', openedAt:'2026-09-24T04:00:00Z', alertAt:'2026-09-20T04:00:00Z'}),
+    fb_alert_at: r({started:'2026-09-20', opened:'2026-09-21', alertAt:'2026-09-23T13:00:00Z'}),
+    fb_bad_opened: r({started:'2026-09-20', opened:'2026-09-21', openedAt:'sent', alertAt:'2026-09-23T13:00:00Z'}),
+    fb_none: r({started:'2026-09-20', opened:'2026-09-21'}),
+    fb_none_closed: r({type:'closed', theek:false, started:'2026-09-01', opened:'2026-09-03', closed:'2026-09-22', closeReason:'window_end'}),
+    info_dikha: r({type:'info', sev:'info', started:'2026-09-10', seen:'2026-09-12'}),
+    info_nodata: r({type:'info', sev:'info', started:'2026-09-10', data:''}),
     theek_rule: [smpTheek({closed:'2026-09-22',opened:'2026-09-10',close_reason:'recovered',severity:'warning'}),
                  smpTheek({closed:'2026-09-22',opened:'2026-09-10',close_reason:'superseded',severity:'warning'}),
                  smpTheek({closed:'2026-09-10',opened:'2026-09-01',close_reason:'recovered',severity:'warning'}),
@@ -101,10 +119,20 @@ for (const r of VF.dashboard_value.apps) if (VF.app_files[r.key]) { scen(`val|${
 const rowsOf = h => [...String(h).matchAll(/<div class="uni-chg [^"]*"[^>]*><div class="smp-row">([\s\S]*?class="smp-ts">[\s\S]*?)<\/div><\/div><\/div>/g)].map(m => {
   const t = text(m[1]);
   return { words: (m[1].match(/class="pill [a-z-]+ smp-w"/g) || []).length, word: (m[1].match(/smp-w">([^<]*)</) || [])[1] || '',
-    chips: (m[1].match(/class="smp-chip( band)?"/g) || []).length, clock: t.includes('🕒 Alert bana: '), shuru: /Badlaav shuru: (\d{1,2} [A-Z][a-z]{2}( \d{4})? · \d+ (din|hafte|mahine)|6\+ mahine se|—)/.test(t),
+    chips: (m[1].match(/class="smp-chip( band)?"/g) || []).length, clock: t.includes('🕒 Alert aaya: '),
+    ts_clock: /^🕒 /.test(text((m[1].match(/class="smp-ts">([\s\S]*)$/) || [])[1] || '')), fallback: / tak ke data pe/.test(text((m[1].match(/class="smp-ts">([\s\S]*)$/) || [])[1] || '').split(' · ')[0]),
+    chip: (m[1].match(/class="smp-chip(?: band)?"[^>]*>([^<]*)</) || [])[1] || '', shuru: /Badlaav shuru: (\d{1,2} [A-Z][a-z]{2}( \d{4})? · \d+ (din|hafte|mahine)|6\+ mahine se|—)/.test(t),
     data: t.includes(' Data: ') || t.startsWith('Data: ') || / Data: /.test(t), info: (m[1].match(/smp-w">ℹ️ Jaankari</) || []).length > 0, t: t.slice(0, 300) }; });
 R.rows_all = {};
 for (const k of ['uni_pf_open', 'act_pf_files', 'val_pf_files', ...apps]) R.rows_all[k] = rowsOf(out[k]);
+R.legend = {};
+for (const k of ['uni_pf', 'uni_pf_open', 'act_pf_nofiles', 'act_pf_files', 'val_pf_files', ...apps]) { const h = out[k] || '';
+  R.legend[k] = { lists: (h.match(/<h3>🔔 What changed\? \(/g) || []).length, legends: (h.match(/<div class="smp-legend">🆕 = naya alert \(aaj\/kal\) · 📌 = pehle se khula · 🕒 = kab aaya \/ kis data pe<\/div>/g) || []).length,
+    order: h.indexOf('<h3>🔔 What changed? (') < h.indexOf('class="smp-legend"') && h.indexOf('class="smp-legend"') < (h.indexOf('<div class="uni-chg ') < 0 ? Infinity : h.indexOf('<div class="uni-chg ')) }; }
+// the tab heads: "🆕 n naye alert (aaj/kal)" counts the rows whose chip is 🆕
+R.naye = { uni: (text(out.uni_pf_open).match(/🆕 (\d+) naye alert \(aaj\/kal\)/) || [])[1],
+  uni_rows: rowsOf(out.uni_pf_open).filter(x => /^🆕/.test(x.chip)).length, act: (text(out.act_pf_files).match(/🆕 (\d+) naye alert \(aaj\/kal\)/) || [])[1],
+  act_rows: rowsOf(out.act_pf_files).filter(x => /^🆕/.test(x.chip)).length };
 
 // ── 3b. reviewer: the "How we compare" note, the full table and the pooled tiles in the six words / lakh ──
 { const a0 = UF.asset.apps[0];
@@ -123,6 +151,27 @@ R.open_alerts = { uni: (UF.dashboard_uninstall.alerts || []).map(a => a.id), act
 R.texts = Object.fromEntries(Object.entries(out).map(([k, v]) => [k, text(v)]));
 R.alerts = { html: out.alerts, ga4_cards: (out.alerts.match(/data-metrics="(uninstall|active|value)"/g) || []).length,
   total: (text(out.alerts).match(/Total issues (\d+)/) || [])[1], chips: [...out.alerts.matchAll(/<span class="smp-chip">([^<]*)<\/span> Shuru: ([^<]*)</g)].map(m => [m[1], m[2]]) };
+
+// ── 4b. the Active users tab's ONE update line (owner, 1 Oct: "rehne do, Uninstall se dekh lunga"): per app "📦 Is app ka
+// aakhri update: vX (date) · <verdict> → Uninstall me poora card ›" (or "📦 Pichhle 60 din me koi update nahi"), and its
+// tap: the Uninstall tab, that app, that update's block opened in the full card ──
+R.updline = JSON.parse(run(`(()=>{ const out=[]; const keep={show, render, _navSave, scrollTo:globalThis.scrollTo}; const calls=[];
+  try{ show=id=>calls.push('show:'+id); render=()=>calls.push('render'); _navSave=()=>{};
+    for(const r of DATA.uninstall.apps){ ${RESET} calls.length=0; UNIIMPOPEN=''; UNIIMPJUMP=''; UNIIMPWK={};
+      const h=actUpdLine({app_id:r.app_id}), t=h.replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ').trim(), go=(h.match(/onclick="([^"]*)"/)||[])[1]||'';
+      const o={app_id:r.app_id, app:r.app, n:(r.updates||[]).length, text:t, go, newest:((r.updates||[]).slice().sort((p,q)=>p.date<q.date?1:-1)[0]||{}).key||null};
+      if(go){ eval(go); const page=uniScreen(); const open=page.split('<div class="uni-imp-b').filter(x=>x.includes('data-open="1"'));
+        Object.assign(o,{calls:calls.slice(), APP, UNIAPP, open:UNIIMPOPEN, jump:UNIIMPJUMP, rendered_open:open.map(x=>(x.match(/data-key="([^"]*)"/)||[])[1]),
+          card:page.includes('id="uni-impact"'), detail:page.includes('Sirf ye app:')}); }
+      out.push(o); }
+    // the All-apps line
+    out.push({all:true, text:(actPortfolio().split('id="act-upd-link"')[1]||'').split('</div>')[0].replace(/<[^>]*>/g,' ').replace(/^[^>]*>/,'').replace(/\\s+/g,' ').trim(),
+      go:((actPortfolio().split('id="act-upd-link"')[1]||'').match(/onclick="([^"]*)"/)||[])[1]||''});
+  } finally{ show=keep.show; render=keep.render; _navSave=keep._navSave; APP=''; UNIAPP=''; }
+  return JSON.stringify(out); })()`));
+// impact / impact_late alerts stay in the Uninstall tab's "What changed?" (All apps and the app's own): their rows
+R.imp_rows = { all: rowsOf(out.uni_pf_open).filter(x => /Update roko|Ruk ke jaancho|Update achha gaya|30 din baad:/.test(x.t)).map(x => ({ chip: x.chip, clock: x.clock, ts: x.ts_clock })),
+  want: (UF.dashboard_uninstall.alerts || []).filter(a => a.family === 'impact' || a.family === 'impact_late').length };
 
 // ── 5. the Alerts badges: ad units (critical + warning) + approved-range breaches — the GA4 tabs are not in it ──
 R.badge = { n: run('alertsBadgeN()'), ga4_warnings: run(`[DATA.uninstall,DATA.active,DATA.value].reduce((t,x)=>t+(((x||{}).alert_counts||{}).warning||0),0)`) };
