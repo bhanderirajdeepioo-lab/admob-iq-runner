@@ -473,7 +473,8 @@ const pfParse = h => { const s = pfSec(h), pm = s.match(/data-pts='([^']*)'/), v
     rh_after: [...s.matchAll(/<tr class="act-pfrh">[\s\S]*?<\/tr><tr data-day="([^"]*)"/g)].map(m => m[1]),
     lines: [...s.matchAll(/<path class="act-pf-ln" data-s="([a-z]+)" data-f="([01])" d="([^"]*)"/g)].map(m => ({ s: m[1], f: +m[2], xs: [...m[3].matchAll(/[ML](-?[\d.]+) /g)].map(x => +x[1]) })),
     mlabels: [...s.matchAll(/class="act-pf-ml"[^>]*>([^<]*)<\/text>/g)].map(m => m[1]),
-    chips: [...s.matchAll(/<span class="act-pfc" data-k="([a-z]+)" data-day="([^"]*)" title="[^"]*">([^<]*)<\/span>/g)].map(m => ({ k: m[1], day: m[2], text: unq(m[3]) })),
+    // (a chip naming one or two apps carries each app's icon — decoration with no text — so it is dropped before reading the chip's words)
+    chips: [...s.replace(/<span class="aicon[^"]*"[^>]*>(?:<img[^>]*>)?<\/span>/g, '').matchAll(/<span class="act-pfc" data-k="([a-z]+)" data-day="([^"]*)" title="[^"]*">([^<]*)<\/span>/g)].map(m => ({ k: m[1], day: m[2], text: unq(m[3]) })),
     chip_more: (s.match(/onclick="actPfMX\(\)">([^<]*)</) || [])[1] || null,
     ranges: [...s.matchAll(/<span class="chip( on)?" onclick="actPfR\('([a-z0-9]+)'\)">([^<]*)<\/span>/g)].map(m => [m[2], m[3], !!m[1]]),
     last: text(sec(s, 'id="act-pf-last"', '</div>').replace(/^[^>]*>/, '')).trim(), more: text(sec(s, 'class="act-pfmore"', '</div>').replace(/^[^>]*>/, '')).trim().slice(0, 300),

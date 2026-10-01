@@ -1196,6 +1196,15 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 print(f"app icons: {len(icons)} apps resolved", file=sys.stderr)
         except Exception as e:
             print(f"app icons skipped: {e}", file=sys.stderr)
+        # second chance by app_id: an app whose first icon try found no store listing (cached "" for good) but whose
+        # store id resolved later (app_store_ids) gets its icon from that listing. Isolated; the log is counts only.
+        try:
+            from .fetch.app_icons import fill_icons_from_store_ids, fill_counts_line
+            dashboard["app_icons"], _ic = fill_icons_from_store_ids(
+                dashboard.get("app_icons") or {}, dashboard.get("apps_catalog"), dashboard.get("app_store_ids") or {}, data_dir)
+            print(fill_counts_line(_ic), file=sys.stderr)
+        except Exception as e:
+            print(f"app icons from store ids skipped: {type(e).__name__}", file=sys.stderr)
 
     # ROAS: Google Ads (MCC) marketing spend vs AdMob revenue, per app. OPTIONAL — only runs if the
     # GOOGLE_ADS_* secrets are set; otherwise the ROAS screen shows a setup hint. Separate API, so it
