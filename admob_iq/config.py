@@ -75,6 +75,9 @@ def settings() -> dict:
         # 🧭 Active users Studio: the Active users tab's All-apps view (active_studio.json.gz, one lazy file; never an
         # alert) — off: no file, no pointer, the tab's older All-apps views exactly as before (a rollback without a code push)
         "active_studio": _env("ACTIVE_STUDIO", "true").lower() == "true",
+        # 💸 Install value Studio: the Install value tab's All-apps view (value_studio.json.gz, one lazy file; never an
+        # alert) — off: no file, no pointer, the tab's older All-apps views exactly as before (a rollback without a push)
+        "value_studio": _env("VALUE_STUDIO", "true").lower() == "true",
         # every change split into "installs ki wajah se" / "asli badlaav" (SPEC_SPLIT): off → no split anywhere, no
         # Telegram tail, the page as before (a rollback without a code push)
         "split": _env("SPLIT", "true").lower() == "true",

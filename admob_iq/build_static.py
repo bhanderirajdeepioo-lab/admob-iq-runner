@@ -377,6 +377,30 @@ def _studio_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+def _value_studio_step(dashboard, data_dir, out_dir, s):
+    """💸 Install value Studio (admob_iq.value_studio_build): the Install value tab's All-apps view — ONE lazy file from
+    the files the value step wrote this build, its pointer dashboard["value"]["studio"] and ONE counts-only line → its
+    _headers paths. OPTIONAL (VALUE_STUDIO, default on) and failure-isolated: switched off (its file removed, nothing
+    printed) or failing (the error TYPE only), every other output is exactly as without it."""
+    try:
+        from . import value_studio_build as vsb
+        if not vsb.enabled(s):
+            vsb.off(out_dir)
+            return []
+        files = vsb.run(dashboard, out_dir, os.path.join(os.path.dirname(data_dir) or ".", "config"), s)
+        line = vsb.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return ["/" + f for f in files]
+    except Exception as e:
+        try:
+            dashboard["value"].pop("studio", None)
+        except Exception:
+            pass
+        print(f"value studio skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 def _active_studio_step(dashboard, data_dir, out_dir, s):
     """🧭 Active users Studio (admob_iq.active_studio_build): the Active users tab's All-apps view — ONE lazy file from
     the files the Uninstall step (Active users inside it) wrote this build, its pointer dashboard["active"]["studio"] and
@@ -1363,6 +1387,9 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # 🧭 Active users Studio (the Active users tab's All-apps view): one lazy file from what the same step wrote —
     # OPTIONAL (ACTIVE_STUDIO) and failure-isolated; without this build's Active users data it leaves no file behind
     as_paths = _active_studio_step(dashboard, data_dir, out_dir, s)
+    # 💸 Install value Studio (the Install value tab's All-apps view): one lazy file from what the value step just wrote —
+    # OPTIONAL (VALUE_STUDIO) and failure-isolated; without this build's Install value data it leaves no file behind
+    vstudio_paths = _value_studio_step(dashboard, data_dir, out_dir, s)
 
     os.makedirs(out_dir, exist_ok=True)
     # dashboard.json is the primary payload and GROWS with history depth (placements + countries_daily),
@@ -1474,7 +1501,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # dashboard.json changes hourly, so it must NEVER be served from a stale cache
     # — no-store forces every request to fetch the freshest file from origin.
     with open(os.path.join(out_dir, "_headers"), "w", encoding="utf-8") as f:
-        f.write(headers_text(uni_files, dashboard, extra=list(review_paths) + any_paths + as_paths + studio_paths))
+        f.write(headers_text(uni_files, dashboard, extra=list(review_paths) + any_paths + vstudio_paths + as_paths + studio_paths))
 
     alerts = send_alerts(dashboard, s)
     _uninstall_mark_sent(dashboard, data_dir, s, alerts)
