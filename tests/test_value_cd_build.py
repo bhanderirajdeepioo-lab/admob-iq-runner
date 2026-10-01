@@ -34,8 +34,8 @@ VAL_LOG = re.compile(r"^ga4 value: apps \d+, with ads \d+, organic \d+, install-
                      r"waiting \d+\), country sampled \d+, country weeks not clean \d+, country cost (on|off), "
                      r"open alerts \d+ \(new \d+\), errors \d+$")
 # abd6ee8's builder / engine on the inputs below (see the module doc) — the flags-off outputs must never move
-ABD6EE8_BUILD = "238f49d6fff5e270"
-ABD6EE8_LEGACY_GEO = "29a9f9e5b7be7cc1"
+ABD6EE8_BUILD = "74ea965110fed89b"         # (was 238f49d6fff5e270 before the wording change: texts only)
+ABD6EE8_LEGACY_GEO = "7b39b46d540a8b81"    # (was 29a9f9e5b7be7cc1 before the wording change: texts only)
 
 
 def _settings(**kw):

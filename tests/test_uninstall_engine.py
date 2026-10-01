@@ -176,8 +176,8 @@ def test_owner_example_d1_72_to_79_gives_exactly_the_message():
     al = cohort_alerts(d)
     assert len(al) == 1
     a = al[0]
-    assert a["message"] == ("Phone Call – Caller ID: D1 uninstall 72% → 79% (+7 point) — 12–18 Sep ke installs, "
-                            "pichhle 4 hafte se zyada · abhi ka data kaccha — number aur badh sakta hai")
+    assert a["message"] == ("Phone Call – Caller ID: Uninstalled within 1 day 72% → 79% — 12–18 Sep ke installs, "
+                            "pichhle 4 hafte se zyada · ⏳ Not final — number aur badh sakta hai")
     assert a["provisional"] is True                     # 12–18 Sep's day 1 = 13–19 Sep: still filling in (late data
                                                         # only ADDS uninstalls — the rise is real, it can only grow)
     assert a["text"] == a["message"].split(": ", 1)[1]
@@ -201,11 +201,11 @@ def test_small_moves_do_not_fire_but_a_small_rate_moving_by_half_does():
     d, _, _ = evaluate(make_store(42, 1000, lags=low, bump=owner_bump(20)))
     a = cohort_alerts(d)
     assert len(a) == 1 and a[0]["checkpoint"] == "D1" and a[0]["severity"] == "warning"
-    assert a[0]["text"].startswith("D1 uninstall 4.0% → 6.0% (+2 point)")
+    assert a[0]["text"].startswith("Uninstalled within 1 day 4.0% → 6.0% — ")
     d, _, _ = evaluate(make_store(42, 1000, bump=owner_bump(30)))           # 72% → 75%: real, but mild
     a = cohort_alerts(d)
     assert len(a) == 1 and a[0]["severity"] == "watch"
-    assert a[0]["text"].startswith("D1 uninstall 72.0% → 75.0% (+3 point)")
+    assert a[0]["text"].startswith("Uninstalled within 1 day 72.0% → 75.0% — ")
 
 
 def test_a_tiny_app_is_low_sample_and_never_alerts():
@@ -250,7 +250,7 @@ def test_a_drop_is_good_news_only_on_settled_data():
     d, row, _ = evaluate(make_store(42, 1000, bump=lambda c: {1: -70, 2: 70} if c >= SEP(5) else None))
     a = cohort_alerts(d)
     assert len(a) == 1 and a[0]["severity"] == "good" and a[0]["dir"] == "down" and a[0]["provisional"] is False
-    assert a[0]["text"] == "D1 uninstall 72% → 65% (−7 point) — 5–11 Sep ke installs, pichhle 4 hafte se kam"
+    assert a[0]["text"] == "Uninstalled within 1 day 72% → 65% — 5–11 Sep ke installs, pichhle 4 hafte se kam"
     h = row["head4"]["D1"]
     assert h["dir"] == "down" and h["alert"] and not h["prov"] and (h["from"], h["to"]) == ("2026-09-05", "2026-09-11")
 
@@ -261,7 +261,7 @@ def test_a_move_only_against_all_time_says_all_time_normal():
     d, _, _ = evaluate(st)
     a = cohort_alerts(d)
     assert len(a) == 1 and a[0]["vs"] == ["all"] and a[0]["checkpoint"] == "D1"
-    assert a[0]["text"] == ("D1 uninstall 74.8% → 78.0% (+3.2 point) — 12–18 Sep ke installs, all-time normal se zyada"
+    assert a[0]["text"] == ("Uninstalled within 1 day 74.8% → 78.0% — 12–18 Sep ke installs, all-time normal se zyada"
                             + eng.PROV_NOTE)
     t1 = [t for t in d["table"] if t["n"] == 1][0]
     assert not t1["prev"]["fires"] and t1["all"]["fires"]
@@ -272,8 +272,8 @@ def test_a_day_0_jump_is_one_alert_headlined_d0_with_the_rest_in_also():
     a = cohort_alerts(d)
     assert len(a) == 1 and a[0]["checkpoint"] == "D0"
     assert a[0]["also"] == ["D1", "D2", "D3"]                   # D4: only 3 moved install days in view
-    assert a[0]["text"] == ("D0 uninstall 60% → 70% (+10 point) — 13–19 Sep ke installs, pichhle 4 hafte se zyada"
-                            " · D1, D2, D3 bhi upar · abhi ka data kaccha — number aur badh sakta hai")
+    assert a[0]["text"] == ("Same day uninstall 60% → 70% — 13–19 Sep ke installs, pichhle 4 hafte se zyada"
+                            " · uninstalled within 1, 2, 3 days bhi upar · ⏳ Not final — number aur badh sakta hai")
     assert all(t["alert"] for t in d["table"] if "D%d" % t["n"] in ["D0"] + a[0]["also"])
 
 
@@ -289,12 +289,12 @@ def test_one_bad_install_week_is_one_notification_for_months():
     # checkpoint as they age (D30 in Oct, D45, D60, D90 in Dec, D120 in Jan …): old news, never re-sent
     st = make_store(LONG_DAYS, 600, bump=lambda c: {0: 70} if BAD_WEEK(c) else None, end=LONG_END)
     sent, state = run_daily(st, SEP(1), LONG_END)
-    assert [(x[1], x[2]) for x in sent] == [("watch", "cohort")] and sent[0][3].startswith("D0 uninstall 60.0% → 64.0%")
+    assert [(x[1], x[2]) for x in sent] == [("watch", "cohort")] and sent[0][3].startswith("Same day uninstall 60.0% → 64.0%")
     assert state["closed"] and not state["episodes"]                       # it closed, and stayed closed
     # a big app (waits for a second evaluation), the change on day 1: still exactly one
     st = make_store(LONG_DAYS, 3000, bump=lambda c: {1: 50} if BAD_WEEK(c) else None, end=LONG_END)
     sent, _ = run_daily(st, SEP(1), LONG_END)
-    assert len(sent) == 1 and sent[0][2] == "cohort" and sent[0][3].startswith("D1 uninstall 72.0% → 75.6%")
+    assert len(sent) == 1 and sent[0][2] == "cohort" and sent[0][3].startswith("Uninstalled within 1 day 72.0% → 75.6%")
 
 
 def test_a_lasting_change_is_one_alert_and_a_new_bad_week_later_is_news_again():
@@ -402,8 +402,8 @@ def test_a_spike_day_above_the_band_is_a_warning_and_a_dip_is_good_news_once_set
     d, _, _ = evaluate(_rate_store(8.0))
     sp = [a for a in d["alerts"] if a["family"] == "rate_spike"]
     assert len(sp) == 1 and sp[0]["dir"] == "up" and sp[0]["severity"] == "warning" and sp[0]["unit"] == "per1k"
-    assert sp[0]["text"] == ("19 Sep ko uninstall rate 8.0 /1k active (normal 3.4–7.5) — achanak zyada (800 uninstalls)"
-                             " · abhi ka data kaccha — number aur badh sakta hai")
+    assert sp[0]["text"] == ("19 Sep ko 800 uninstalls (uninstall rate 0.8%, normal 0.34%–0.75%) — achanak zyada"
+                             " · ⏳ Not final — number aur badh sakta hai")
     assert sp[0]["day"] == "2026-09-19" and sp[0]["now"] == 8.0 and sp[0]["before"] == 5.0
     assert d["daily"]["hi"][-1] == 7.459 and d["daily"]["lo"][-1] == 3.352 and d["daily"]["med"][-1] == 5.0
     assert d["rate_now"]["out_of_band"] is False and d["rate_now"]["dir"] == "flat"  # 7-day pooled: +9%
@@ -417,7 +417,7 @@ def test_a_spike_day_above_the_band_is_a_warning_and_a_dip_is_good_news_once_set
     d, _, _ = evaluate(dip)                                                    # 7 days old: settled
     sp = [a for a in d["alerts"] if a["family"] == "rate_spike"]
     assert len(sp) == 1 and sp[0]["dir"] == "down" and sp[0]["severity"] == "good" and not sp[0]["provisional"]
-    assert sp[0]["text"].startswith("12 Sep ko") and sp[0]["text"].endswith("— achanak kam (200 uninstalls)")
+    assert sp[0]["text"].startswith("12 Sep ko 200 uninstalls (uninstall rate") and sp[0]["text"].endswith("— achanak kam")
 
 
 def test_a_zero_day_is_a_tracking_watch_once_it_is_settled():
@@ -427,7 +427,7 @@ def test_a_zero_day_is_a_tracking_watch_once_it_is_settled():
     d, _, _ = evaluate(st)
     z = [a for a in d["alerts"] if a["family"] == "rate_zero"]
     assert len(z) == 1 and z[0]["severity"] == "watch"
-    assert z[0]["text"] == "12 Sep ko ek bhi uninstall record nahi hua (normal ~500/din) — GA4/Firebase tracking check karo"
+    assert z[0]["text"] == "12 Sep ko ek bhi uninstall record nahi hua (normal ~500/day) — GA4/Firebase tracking check karo"
     assert d["daily"]["breaks"] == ["2026-09-12"]
 
 
@@ -482,8 +482,8 @@ def test_a_slow_step_is_drift_since_its_first_day_not_a_row_of_spikes():
     d, _, _ = evaluate(st)
     al = [a for a in d["alerts"] if a["family"].startswith("rate")]
     assert [a["family"] for a in al] == ["rate_drift"]                       # the spikes inside it fold away
-    assert al[0]["message"] == ("Phone Call – Caller ID: 3 Sep se uninstall rate 4.1 → 5.6 /1k active (+37%) — "
-                                "dheere dheere badh raha hai · abhi ka data kaccha — number aur badh sakta hai")
+    assert al[0]["message"] == ("Phone Call – Caller ID: 3 Sep se uninstall rate 0.41% → 0.56% (+37%) — "
+                                "dheere dheere badh raha hai · ⏳ Not final — number aur badh sakta hai")
     assert al[0]["since"] == "2026-09-03" and d["rate_now"]["drift"]["since"] == "2026-09-03"
 
 
@@ -1097,7 +1097,7 @@ def test_a_change_in_old_installs_is_info_never_an_alert():
     old = d["old_changes"]
     assert old and {o["checkpoint"] for o in old} == {"D330"} and old[0]["dir"] == "up"
     assert old[0]["installs_to"] == (END - timedelta(days=337)).isoformat()             # settled data
-    assert old[0]["text"].startswith("D330 uninstall ") and "Oct 2025 ke installs" in old[0]["text"]
+    assert old[0]["text"].startswith("Uninstalled within 330 days ") and "Oct 2025 ke installs" in old[0]["text"]
     sent, state = run_daily(st, END - timedelta(days=3), END)
     assert not [x for x in sent if x[2] == "cohort"] and not state.get("episodes")
     # the same change in RECENT installs is an alert

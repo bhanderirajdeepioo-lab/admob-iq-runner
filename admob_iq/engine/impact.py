@@ -157,8 +157,9 @@ GROUPS = (("usage", ("sessions", "time")), ("d7", ("new_d7",)), ("version", ("ve
 APP_LEVEL = set(ROWS_LONG)                  # the version table is not diluted by adoption: the rest is
 LEVEL_RANK = {"continue": 0, "win": 0, "hold": 1, "halt": 2}
 SEVERITY = {"halt": "warning", "hold": "watch", "win": "good"}
-ACT = {"halt": "HALT — staged rollout rok do, hotfix bhejo", "hold": "HOLD — agla rollout roko, jaanch karo",
-       "win": "WIN — isi disha me aage badho"}
+ACT = {"halt": "🛑 Stop update — staged rollout rok do, hotfix bhejo",
+       "hold": "⚠️ Wait and check — agla rollout roko, jaanch karo",
+       "win": "✅ Update went well — isi disha me aage badho"}
 UNIT = {"returning_dau": "users", "new_d1": "pct", "new_d7": "pct", "sessions": "num", "time": "sec",
         "arpdau": "usd1k", "uninstall_d0": "pct", "new_d30": "pct"}
 EXTRA = {"returning_dau": ("raw_change", "mode", "k_days", "imputed_share", "mu_week", "expected_model"),
@@ -181,7 +182,7 @@ NA_YOUNG = "App launch ke turant baad ka update — pehle ka hafta nahi"
 NA_CUT = "Agla update bahut jaldi aa gaya"
 NA_OLD = "GA4 ab itna purana user data nahi rakhta"
 NA_NOT_YET = "GA4 se ye data abhi aana baaki hai — agle fetch me"
-NA_NO_NEW = "GA4 me in install dino ke naye users (New users) ki ginti nahi — 100 me kitne, ye nahi nikal sakta"
+NA_NO_NEW = "GA4 me in install dino ke naye users ki ginti nahi — kitne % wapas aaye, ye nahi nikal sakta"
 NA_NO_USAGE = "GA4 usage data abhi aana baaki hai — agle fetch me"
 NA_NO_REV = "AdMob revenue nahi mila"
 NA_NO_VER = "Is update ka version number nahi"
@@ -916,7 +917,7 @@ def dau_row(cx, blk):
         row.update(status="low", raw_status="low", reason=trend_why(mu, "app"))
         return row
     if (_mean(rb) or 0) < MIN_DAU:
-        row.update(status="low", raw_status="low", reason="Roz %d se kam purane users — GA4 ginti ka noise zyada" % MIN_DAU)
+        row.update(status="low", raw_status="low", reason="Roz %d se kam old users — GA4 ginti ka noise zyada" % MIN_DAU)
         return row
     if len(bt) < 10 or len(xa) < IMPACT_MIN_DAYS:                # (14 / 30 / 60: the reference is N days further back)
         why = ("Update se pehle ke 2 hafte ka data kam" if N == WIN_DAYS else _low_ref(cx, R, N, 2, "dau")
@@ -1300,7 +1301,7 @@ def _pu(cx, blk, row, M, num, den, mn, what="ye number", mkey=None):
     return row, t
 
 
-MIX_WHY = ("Haal ke installs (ad spend) se purane users ka mix badla — per-user farak mix ka bhi ho sakta hai, isliye "
+MIX_WHY = ("Haal ke installs (ad spend) se old users ka mix badla — per-user farak mix ka bhi ho sakta hai, isliye "
            "abhi pakka nahi")
 
 
@@ -1350,14 +1351,15 @@ def use_row(cx, blk, key):
     if row["status"] not in ("pending", "na") and t["steep"] is None:     # (a steep trend: its own reason)
         mr = [den(d) for d in bs]
         if mr and _mean(mr) < MIN_DAU:
-            row.update(status="low", raw_status="low", reason="Roz %d se kam purane users" % MIN_DAU)
+            row.update(status="low", raw_status="low", reason="Roz %d se kam old users" % MIN_DAU)
     _mix_cap(blk, row)
     return row
 
 
-MARKET_WHY = "Sirf eCPM badla, ads per user wahi — market ka asar, update ka nahi"
-IMP_ONLY_WHY = ("Kamai per user pehle se tez badal rahi thi (eCPM — market) — faisla sirf ads per user (%s) se, uska "
+MARKET_WHY = "Sirf ad rate badla, ads per user wahi — bazaar ka asar, update ka nahi"
+IMP_ONLY_WHY = ("Revenue per user pehle se tez badal rahi thi (ad rate — bazaar) — faisla sirf ads per user (%s) se, uska "
                 "trend normal")
+NO_IMP_WHY = "Ads per user ka data kam — revenue per user ka farak update ka hai ya bazaar ka, pakka nahi"
 
 
 def arpdau_row(cx, blk):
@@ -1399,7 +1401,7 @@ def arpdau_row(cx, blk):
         a = sum(a1(d) for d in days)
         return fn(days) / a if a else None
     win = blk["win"]
-    row, t = _pu(cx, blk, row, M, lambda d: rev(d) * 1000, a1, ARPDAU_MIN_REL, "kamai per user", mkey="rev")
+    row, t = _pu(cx, blk, row, M, lambda d: rev(d) * 1000, a1, ARPDAU_MIN_REL, "revenue per user", mkey="rev")
     used, bs = t["used"], t["bs"]
     ia, ib = pool(used, lambda ds: sum(imp(d) for d in ds)), pool(bs, lambda ds: sum(imp(d) for d in ds))
     ra, rb = sum(rev(d) for d in used), sum(rev(d) for d in bs)
@@ -1446,10 +1448,10 @@ def arpdau_row(cx, blk):
         if st == "same" and ti["adj"] is not None and abs(ti["adj"]) >= ARPDAU_MIN_REL:
             st = "low"                               # ads per user moved past the minimum, its noise unmeasured:
             row["reason"] = (ti["why"] if ti["why"] not in (None, "pending")    # never "Normal" next to that number
-                             else "Ads per user ka data kam — kamai ka farak update ka hai ya market ka, pakka nahi")
+                             else NO_IMP_WHY)
         row.update(status=st, raw_status=st, z=None)
         if st == "unsure":
-            row["reason"] = "Ads per user ka data kam — kamai ka farak update ka hai ya market ka, pakka nahi"
+            row["reason"] = NO_IMP_WHY
         row.pop("_ratio", None), row.pop("_eff", None)
         return row
     st_i = "same" if small else _judge(ti["adj"], ARPDAU_MIN_REL, ti["z"], Z)
@@ -1461,8 +1463,8 @@ def arpdau_row(cx, blk):
             row["reason"] = MARKET_WHY
         else:
             st, z = "unsure", ti["z"]
-            row["reason"] = ("Kamai ka farak pakka, par ads per user ka hissa (%s) abhi pakka nahi — baaki eCPM (market)"
-                             % U.fmt_rel(ti["adj"]))
+            row["reason"] = ("Revenue per user ka farak pakka, par ads per user ka hissa (%s) abhi pakka nahi — baaki "
+                             "ad rate (bazaar)" % U.fmt_rel(ti["adj"]))
     else:
         st, z = ("unsure" if "unsure" in (st_i, st_r) else "same"), (row["z"] if small else ti["z"])
     row.update(status=st, raw_status=st, z=z)
@@ -1518,7 +1520,7 @@ def d0_row(cx, blk):
     if use is None:
         if len(win["days_a"]) and win["a0"] > cx["E"] - timedelta(days=U.RECENT_MIN - 1):
             return _pending(row, win, win["a0"] + timedelta(days=U.RECENT_MIN - 1))
-        row.update(status="low", raw_status="low", reason="Install ke din ke uninstall ka data kam")
+        row.update(status="low", raw_status="low", reason="Same day uninstall ka data kam")
         return row
     r, b = use["r"], use["b"]
     row["_spx"] = ("ur", b[1], b[2], r[1], r[2])     # (the split's: installs and install days, before / after)
@@ -1540,7 +1542,7 @@ def d0_row(cx, blk):
         st = ("low" if not sample else "unsure" if abs(use["dpp"]) >= U.MIN_PP and use["relsm"] >= U.MIN_REL
               else "same")
         if st == "low":
-            row["reason"] = "Install ke din ke uninstall ka data kam — %d din, %d installs (kam se kam %d din, %d installs)" % (
+            row["reason"] = "Same day uninstall ka data kam — %d din, %d installs (kam se kam %d din, %d installs)" % (
                 r[2], r[1], U.RECENT_MIN, U.MIN_RECENT_USERS)
     row["status"] = row["raw_status"] = st
     row["_ratio"] = abs(use["dpp"]) / U.MIN_PP
@@ -1616,7 +1618,7 @@ def d0_long(cx, blk):
     row["_ratio"] = abs(dpp) / U.MIN_PP
     if not sample:
         row.update(status="low", raw_status="low",
-                   reason="Install ke din ke uninstall ka data kam — %d din, %d installs (kam se kam %d din, %d installs)"
+                   reason="Same day uninstall ka data kam — %d din, %d installs (kam se kam %d din, %d installs)"
                    % (len(Ca), na, U.RECENT_MIN, U.MIN_RECENT_USERS))
         return row
     if row["noise"] is None:
@@ -1711,7 +1713,7 @@ def ver_rows(cx, blk, earlier):
                 row.update(status="pending", raw_status="pending")
             else:
                 row.update(status="low", raw_status="low",
-                           reason="Naye / purane version pe roz %d se kam purane users" % VER_MIN_USERS)
+                           reason="Naye / purane version pe roz %d se kam old users" % VER_MIN_USERS)
             continue
         m = _mean(d["r"])
         # the usual gap's spread: the robust one, never under the plain SD of so few updates (the robust one of 3
@@ -1726,7 +1728,7 @@ def ver_rows(cx, blk, earlier):
         st = _judge(row["adj"], VER_MIN_REL, z, _zlevel(win))
         why = None
         if not cx["split"]:
-            why = "GA4 is property me naye / purane users alag nahi deta — sab users ki tulna, sirf andaza"
+            why = "GA4 is property me naye aur old users alag nahi deta — sab users ki tulna, sirf andaza"
         elif len(prior) < BIAS_MIN:
             why = "Pehle ke kam se kam %d update chahiye — aam farak abhi pata nahi" % BIAS_MIN
         if why and st in ("worse", "better"):
@@ -1779,6 +1781,22 @@ def _money(v, cur):
     return ("$%.2f" % v) if cur == "USD" else "%s %.2f" % (cur, v)
 
 
+def _money_pu(v1k, cur):
+    """Revenue stored per 1,000 users → per user (÷ 1,000), with enough decimals for 2 significant digits:
+    $4.20 per 1,000 → "$0.0042", ₹380 → "INR 0.38"."""
+    if v1k is None:
+        return "—"
+    x = v1k / 1000
+    a = abs(x)
+    dp = 2 if a >= 0.1 or a == 0 else min(6, 1 - int(math.floor(math.log10(a))))
+    t = "%.*f" % (dp, x)
+    return ("$" + t) if cur == "USD" else "%s %s" % (cur, t)
+
+
+BACK_NAME = {"new_d1": "back next day", "new_d7": "back after 7 days", "new_d30": "back after 30 days",
+             "uninstall_d0": "same day uninstall"}
+
+
 def _dir(x, up_word, down_word):
     return up_word if x > 0 else down_word
 
@@ -1796,18 +1814,15 @@ def head_phrase(key, row, cx, n=None):
         pt = _plain_too(key, row, "; pehle se %s %s")
         what = "expected se %s %s" % (_pct(c), _dir(c, "zyada", "kam")) if pt else "%s %s" % (
             _pct(c), _dir(c, "badha", "gira"))
-        return "purane users ka DAU %s (expected %s → %s/din%s)" % (what, _users(row["expected"]), _users(row["after"]), pt)
+        return "old users ka DAU %s (expected %s → %s/day%s)" % (what, _users(row["expected"]), _users(row["after"]), pt)
     if key in ("new_d1", "new_d7", "new_d30", "uninstall_d0"):
         o, n, sd = U.shown_pct(row["before"], row["after"])
-        lead = {"new_d1": "naye users me se agle din wapas aane wale", "new_d7": "naye users me se 7ve din wapas aane wale",
-                "new_d30": "naye users me se 30ve din wapas aane wale",
-                "uninstall_d0": "install ke din hi hataane wale"}[key]
-        return "%s %s → %s (%s point)" % (lead, o, n, U.fmt_pp(sd))
+        return "%s %s → %s" % (BACK_NAME[key], o, n)
     if key in ("sessions", "time"):
         e = _eff(key, row)
         b, a = ((U._minus("%.1f" % row["before"]), U._minus("%.1f" % row["after"])) if key == "sessions"
                 else (fmt_dur(row["before"]), fmt_dur(row["after"])))
-        lead = "purane users ke sessions per user" if key == "sessions" else "purane users ka time per user"
+        lead = "old users ke sessions per user" if key == "sessions" else "old users ka time per user"
         if row.get("basis") == "plain":
             return "%s%s %s → %s (%s)" % (lead, " %d din pehle vs baad" % n if n else "", b, a, U.fmt_rel(e))
         if _plain_too(key, row):
@@ -1817,11 +1832,11 @@ def head_phrase(key, row, cx, n=None):
     if key == "arpdau":
         imp = _eff(key, row)
         if imp and c and abs(c) >= 0.005 and (imp < 0) != (c < 0):
-            return "ads per user %s (kamai per 1,000 users %s → %s, %s)" % (
-                U.fmt_rel(imp), _money(row["before"], cx["currency"]), _money(row["after"], cx["currency"]),
+            return "ads per user %s (revenue per user %s → %s, %s)" % (
+                U.fmt_rel(imp), _money_pu(row["before"], cx["currency"]), _money_pu(row["after"], cx["currency"]),
                 U.fmt_rel(c))
-        return "kamai per 1,000 users %s → %s (%s) — ads per user %s" % (
-            _money(row["before"], cx["currency"]), _money(row["after"], cx["currency"]), U.fmt_rel(c),
+        return "revenue per user %s → %s (%s) — ads per user %s" % (
+            _money_pu(row["before"], cx["currency"]), _money_pu(row["after"], cx["currency"]), U.fmt_rel(c),
             U.fmt_rel(imp) if imp is not None else "—")
     what = "sessions per user" if key == "ver_sessions" else "time per user"
     return "naye version pe %s purane se %s %s (aam farak hata ke)" % (what, _pct(row["adj"], 0),
@@ -1829,39 +1844,37 @@ def head_phrase(key, row, cx, n=None):
 
 
 def short_phrase(key, row):
-    """"time per user −14%", "D1 wapsi −4 point" — the "aur … kharab" list."""
+    """"time per user −14%", "back next day 22% → 18%" — the "aur … kharab" list."""
     if key == "returning_dau":
         return "DAU " + _signed_pct(row["change"])
-    if key in ("new_d1", "new_d7", "new_d30"):
-        return "%s wapsi %s point" % ({"new_d1": "D1", "new_d7": "D7", "new_d30": "D30"}[key], U.fmt_pp(row["change"]))
-    if key == "uninstall_d0":
-        return "install ke din uninstall %s point" % U.fmt_pp(row["change"])
+    if key in ("new_d1", "new_d7", "new_d30", "uninstall_d0"):
+        o, n, _sd = U.shown_pct(row["before"], row["after"])
+        return "%s %s → %s" % (BACK_NAME[key], o, n)
     if key in ("sessions", "time"):
         return "%s per user %s" % (key, U.fmt_rel(_eff(key, row)))
     if key == "arpdau":
         return "ads per user " + U.fmt_rel(_eff(key, row))
-    return "naye version pe %s %s" % ("sessions" if key == "ver_sessions" else "time", U.fmt_rel(row["adj"]))
+    return "new version %s %s" % ("sessions" if key == "ver_sessions" else "time", U.fmt_rel(row["adj"]))
 
 
 def why_phrase(key, row):
-    """"purane users ka DAU expected se 5.6% kam" — the verdict's why line."""
+    """"old users ka DAU expected se 5.6% kam" — the verdict's why line."""
     if key == "returning_dau":
-        return "purane users ka DAU expected se %s %s%s" % (_pct(row["change"]), _dir(row["change"], "zyada", "kam"),
-                                                            _plain_too(key, row))
+        return "old users ka DAU expected se %s %s%s" % (_pct(row["change"]), _dir(row["change"], "zyada", "kam"),
+                                                         _plain_too(key, row))
     if key in ("new_d1", "new_d7", "new_d30", "uninstall_d0"):
-        lead = {"new_d1": "agle din wapas aane wale naye users", "new_d7": "7ve din wapas aane wale naye users",
-                "new_d30": "30ve din wapas aane wale naye users",
-                "uninstall_d0": "install ke din hi hataane wale"}[key]
-        return "%s %s point %s" % (lead, U.fmt_pp(abs(row["change"])), _dir(row["change"], "zyada", "kam"))
+        o, n, _sd = U.shown_pct(row["before"], row["after"])
+        return "%s %s → %s" % (BACK_NAME[key], o, n)
     if key in ("sessions", "time"):
         e, pt = _eff(key, row), _plain_too(key, row)
         return "%s%s %s %s%s" % ("sessions per user" if key == "sessions" else "time per user",
                                  " normal trend hata ke" if pt else "", _pct(e, 0), _dir(e, "zyada", "kam"), pt)
     if key == "arpdau":
         e = _eff(key, row)
-        return "ads per user %s %s (kamai per user %s)" % (_pct(e, 0), _dir(e, "zyada", "kam"), U.fmt_rel(row["change"]))
+        return "ads per user %s %s (revenue per user %s)" % (_pct(e, 0), _dir(e, "zyada", "kam"),
+                                                            U.fmt_rel(row["change"]))
     what = "sessions per user" if key == "ver_sessions" else "time per user"
-    return "naye version pe %s %s %s" % (what, _pct(row["adj"], 0), _dir(row["adj"], "zyada", "kam"))
+    return "new version %s %s %s" % (what, _pct(row["adj"], 0), _dir(row["adj"], "zyada", "kam"))
 
 
 def _join(parts):
@@ -1929,7 +1942,8 @@ def verdict(blk, rows, vrows, cx, final=None):
         out.update(why=blk["_na"], ready_on=None)
         return out
     if settled < IMPACT_MIN_DAYS:
-        out["why"] = "Abhi %d pakka din — kam se kam %d chahiye" % (settled, IMPACT_MIN_DAYS)
+        out["why"] = "Abhi %d final day%s — kam se kam %d chahiye" % (settled, "" if settled == 1 else "s",
+                                                                      IMPACT_MIN_DAYS)
         return out
     pw = [k for k in primary if k in worse]
     gw = [g for g in groups if any(k in worse for k in g)]
@@ -1959,7 +1973,8 @@ def verdict(blk, rows, vrows, cx, final=None):
         un = [k for k in keys if allr[k]["status"] == "unsure" and allr[k].get("_ratio")]
         if better:
             out["why"] = _cap(_join([why_phrase(k, allr[k]) for k in _rank(better, allr)])) + \
-                (" — adoption kam, isliye WIN nahi" if diluted else " — abhi pakka nahi" if not final else "")
+                (" — adoption kam, isliye “Update went well” nahi" if diluted else " — abhi pakka nahi"
+                 if not final else "")
         elif un:
             out["why"] = "Kuch farak dikh raha hai (%s), par abhi pakka nahi — rollout chalne do" % ", ".join(
                 un_phrase(k, allr[k]) for k in _rank(un, allr)[:3])
@@ -2017,7 +2032,7 @@ def alert_text(blk, level, rows_all, keys, early, E):
                                             ", ".join(short_phrase(k, rows_all[k]) for k in ks[1:]))
     text = "%s (%s) ke baad %s%s · %s" % (blk["label"], U.fmt_day(blk["R"], E), head, more, ACT[level])
     if early and level in ("hold", "halt"):
-        text += " · shuruaati — D7 abhi baaki"
+        text += " · shuruaati — 7 din ka result abhi baaki"
     return text, ks[0]
 
 
@@ -2512,7 +2527,7 @@ def late_text(blk, level, rows, ks, win, final, E):
     text = "%s (%s) ke %d din baad %s%s · pehle 7 din me ye nahi dikha tha%s · %s" % (
         blk["label"], U.fmt_day(blk["R"], E), win["n"], head, more, mixed, ACT[level])
     if not final:
-        text += " · D30 abhi baaki"
+        text += " · 30 din ka result abhi baaki"
     return text
 
 

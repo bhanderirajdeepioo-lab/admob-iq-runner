@@ -145,7 +145,7 @@ def test_old_users_six_percent_less_active_is_worse_by_six_percent():
     r = b["rows"]["returning_dau"]
     assert r["status"] == "worse" and abs(r["change"] + 0.06) <= 0.005 and r["z"] < -3
     assert b["verdict"]["level"] == "hold" and b["verdict"]["worse"] == ["returning_dau"]   # under 2× the 3% minimum
-    assert b["verdict"]["why"] == "Purane users ka DAU expected se 5.8% kam — pakka"
+    assert b["verdict"]["why"] == "Old users ka DAU expected se 5.8% kam — pakka"
     st, rv = one(new=500, old=40000, act=lambda d, v: 0.92 if d >= R0 + timedelta(days=1) else 1.0)
     assert blk(run(st, rv)[0], R0)["verdict"]["level"] == "halt"                          # −7.7%: ≥ 2× → HALT
 
@@ -235,7 +235,7 @@ def test_complete_cohorts_without_their_install_days_new_users_say_so_never_next
     b = blk(run(st, rv)[0], R0)
     for k in ("new_d1", "new_d7"):
         assert (b["rows"][k]["status"], b["rows"][k]["reason"]) == ("na", imp.NA_NO_NEW), k
-    assert imp.NA_NO_NEW == "GA4 me in install dino ke naye users (New users) ki ginti nahi — 100 me kitne, ye nahi " \
+    assert imp.NA_NO_NEW == "GA4 me in install dino ke naye users ki ginti nahi — kitne % wapas aaye, ye nahi " \
                             "nikal sakta"
     st2 = copy.deepcopy(st)
     for c in (R0 + timedelta(days=j) for j in range(8)):
@@ -365,7 +365,7 @@ def test_fewer_ads_per_user_is_the_updates_a_lower_ecpm_alone_is_the_market():
     st, rv = one(ecpm=lambda d: 1.76 if d >= R0 + timedelta(days=1) else 2.0)
     b = blk(run(st, rv)[0], R0)
     r = b["rows"]["arpdau"]
-    assert r["status"] == "market" and r["reason"].startswith("Sirf eCPM badla") and r["extra"]["ecpm_change"] == -0.12
+    assert r["status"] == "market" and r["reason"].startswith("Sirf ad rate badla") and r["extra"]["ecpm_change"] == -0.12
     assert b["verdict"]["level"] == "continue" and not b["verdict"]["worse"]       # not counted
 
 
@@ -499,7 +499,7 @@ def test_revenue_per_user_on_a_steep_trend_leaves_ads_per_user_to_decide_alone()
             assert r["reason"] == imp.IMP_ONLY_WHY % "−12%" and r["extra"]["imp_adj"] == pytest.approx(-0.12, abs=0.005)
             assert b["verdict"]["level"] == "halt" and b["verdict"]["worse"] == ["arpdau"]
         else:
-            assert r["reason"].startswith("Update se pehle kamai per user tez badh raha tha (~×1.5/hafta)")
+            assert r["reason"].startswith("Update se pehle revenue per user tez badh raha tha (~×1.5/hafta)")
             assert b["verdict"]["level"] == "continue"
 
 
@@ -547,7 +547,7 @@ def test_the_headline_and_the_alert_carry_the_change_a_per_user_row_was_judged_o
         assert head["row"] == "arpdau" and head["change"] == pytest.approx(r["extra"]["imp_adj"], abs=1e-4)
         a = next(a for a in d["alerts"] if a["family"] == "impact")
         assert a["level"] == level and a["rel"] == pytest.approx(r["extra"]["imp_adj"], abs=0.0001)
-        assert a["text"].startswith("v1.1 (26 Aug) ke baad ads per user %s12%% (kamai per 1,000 users $" % (
+        assert a["text"].startswith("v1.1 (26 Aug) ke baad ads per user %s12%% (revenue per user $0.0" % (
             "−" if sg > 0 else "+")), a["text"]                          # the alert opens on what was judged
     # sessions per user on a normal +0.2 a week trend (under the cap) that stops at −15% net: the number still rose
     st, rv = one(spu=lambda d, v, n: 1.6 if n else 2.4 * math.exp(0.2 * (d - R0).days / 7) * (0.85 if d >= a0 else 1.0))
@@ -577,16 +577,16 @@ def test_a_maybe_whose_expected_level_and_plain_change_disagree_says_both():
     # one first (never "DAU 9.8% gira" for users that went up); the same way round, the old wording
     cx, row = {"currency": "USD"}, {"change": -0.098, "expected": 1000, "after": 902, "extra": {"raw_change": 0.025}}
     assert imp.head_phrase("returning_dau", row, cx) == (
-        "purane users ka DAU expected se 9.8% kam (expected 1,000 → 902/din; pehle se 2% zyada)")
-    assert imp.why_phrase("returning_dau", row) == "purane users ka DAU expected se 9.8% kam (pehle se 2% zyada)"
+        "old users ka DAU expected se 9.8% kam (expected 1,000 → 902/day; pehle se 2% zyada)")
+    assert imp.why_phrase("returning_dau", row) == "old users ka DAU expected se 9.8% kam (pehle se 2% zyada)"
     row = dict(row, extra={"raw_change": -0.05})
-    assert imp.head_phrase("returning_dau", row, cx) == "purane users ka DAU 9.8% gira (expected 1,000 → 902/din)"
-    assert imp.why_phrase("returning_dau", row) == "purane users ka DAU expected se 9.8% kam"
+    assert imp.head_phrase("returning_dau", row, cx) == "old users ka DAU 9.8% gira (expected 1,000 → 902/day)"
+    assert imp.why_phrase("returning_dau", row) == "old users ka DAU expected se 9.8% kam"
     ses = {"change": 0.17, "_eff": -0.07, "before": 2.4, "after": 2.8}
     assert imp.head_phrase("sessions", ses, cx) == (
-        "purane users ke sessions per user normal trend hata ke −7% (2.4 → 2.8, seedha +17%)")
+        "old users ke sessions per user normal trend hata ke −7% (2.4 → 2.8, seedha +17%)")
     assert imp.head_phrase("sessions", dict(ses, change=-0.05, after=2.28), cx) == (
-        "purane users ke sessions per user 2.4 → 2.3 (−5%; normal trend hata ke −7%)")
+        "old users ke sessions per user 2.4 → 2.3 (−5%; normal trend hata ke −7%)")
 
 
 def test_too_few_calm_weeks_for_the_noise_says_so_not_that_the_history_is_short(monkeypatch):
@@ -696,7 +696,7 @@ def test_the_version_table_never_says_worse_without_its_usual_gap_or_the_new_ret
     b = blk(run(st, rv)[0], rels[-1][0])
     assert not b["versions_cmp"]["split"]
     assert b["versions_cmp"]["rows"]["ver_sessions"]["status"] == "unsure"
-    assert b["versions_cmp"]["rows"]["ver_sessions"]["reason"].startswith("GA4 is property me naye / purane users alag")
+    assert b["versions_cmp"]["rows"]["ver_sessions"]["reason"].startswith("GA4 is property me naye aur old users alag")
 
 
 def test_an_app_update_surge_without_a_new_version_has_no_version_table():
@@ -764,7 +764,7 @@ def test_win_needs_a_final_block_and_enough_adoption_and_under_3_days_there_is_n
     assert _verdict({"returning_dau": "worse"}, adopt=0.2)["level"] == "hold"            # bad news counts diluted too
     for n in (0, 1, 2):
         v = _verdict({"returning_dau": "worse", "arpdau": "worse"}, settled=n, final=False)
-        assert v["level"] is None and v["why"] == "Abhi %d pakka din — kam se kam 3 chahiye" % n
+        assert v["level"] is None and v["why"] == "Abhi %d final %s — kam se kam 3 chahiye" % (n, "day" if n == 1 else "days")
     assert _verdict({}, settled=3, final=False)["level"] == "continue"
 
 
@@ -884,8 +884,9 @@ def test_updates_older_than_5_weeks_never_alert_and_the_alert_texts_follow_the_t
     d = run(st, rv, state={"eval": {"a": {"end": "2026-09-18", "impact": {"data": True, "blocks": {}}}}}, app="Caller")[0]
     a = next(a for a in d["alerts"] if a["family"] == "impact")
     assert a["notify"] and a["message"] == "Caller: " + a["text"] and a["unit"] == "rel" and a["dir"] == "up"
-    assert re.match(r"^v1\.1 \(26 Aug\) ke baad purane users ka DAU \d+\.?\d*% gira \(expected [\d,]+ → [\d,]+/din\) · "
-                    r"aur 1 cheez kharab: time per user −\d+% · HALT — staged rollout rok do, hotfix bhejo$", a["text"]), a["text"]
+    assert re.match(r"^v1\.1 \(26 Aug\) ke baad old users ka DAU \d+\.?\d*% gira \(expected [\d,]+ → [\d,]+/day\) · "
+                    r"aur 1 cheez kharab: time per user −\d+% · 🛑 Stop update — staged rollout rok do, hotfix bhejo$",
+                    a["text"]), a["text"]
     assert a["release"] == {"key": "ver:1.1@2026-08-26", "label": "v1.1", "date": "2026-08-26"} and a["level"] == "halt"
     assert a["rows"]["worse"][:2] == ["returning_dau", "time"] and a["installs_from"] == "2026-08-27"
     assert (a["base_from"], a["base_to"], a["since"]) == ("2026-08-19", "2026-08-25", "2026-08-26")
@@ -899,7 +900,7 @@ def test_early_bad_news_says_d7_is_still_to_come():
     d = run(st, rv, state={"eval": {"a": {"end": "2026-09-18", "impact": {"data": True, "blocks": {
         "ver:1.1@2026-09-10": {"rows": {"returning_dau": ["worse", 1]}}}}}}})[0]
     a = next(a for a in d["alerts"] if a["family"] == "impact")
-    assert a["text"].endswith("· HALT — staged rollout rok do, hotfix bhejo · shuruaati — D7 abhi baaki")
+    assert a["text"].endswith("· 🛑 Stop update — staged rollout rok do, hotfix bhejo · shuruaati — 7 din ka result abhi baaki")
 
 
 # ── 13. the contract: every kind of block carries every row ─────────────────────────────────────────

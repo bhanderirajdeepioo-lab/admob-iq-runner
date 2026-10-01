@@ -128,7 +128,7 @@ def dashboard(day=DAY):
     val_apps = [{"app_id": A[4], "key": K[4], "file": f"value_{K[4]}.json.gz",
                  "pay": {"st": "ok", "p": 45, "from": iso(day - timedelta(90)), "to": iso(day - timedelta(84))},
                  "cpi": {"spend4_src": 50.0 * 28 * FX}},
-                {"app_id": A[5], "key": K[5], "pay": {"st": "nospend", "note": "Google Ads kharcha nahi — synthetic"}}]
+                {"app_id": A[5], "key": K[5], "pay": {"st": "nospend", "note": "Google Ads spend nahi — synthetic"}}]
     spend = {iso(d): 50_000_000 for d in _days(y, 20)}
     installs = {iso(d): 100 for d in _days(y, 20)}
     return {
@@ -160,7 +160,7 @@ def uninstall_asset(day=DAY):
              "impact": {"updates": []}}
         if i == 5:
             a["impact"]["updates"] = [{"date": iso(day - timedelta(21)), "label": "v1.0.7 → v1.0.8",
-                                       "verdict": {"level": "win", "why": "agle din wapas aane wale badhe — synthetic"}}]
+                                       "verdict": {"level": "win", "why": "back next day badha — synthetic"}}]
         if i == 6:
             since = day - timedelta(7)
             days = _days(ga4, 90)

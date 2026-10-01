@@ -144,11 +144,11 @@ def test_summary_asset_and_cohort_files_follow_the_contract(site):
         (N4, "no_stream", PKG[A4]), (N3, "no_package", None)]
     assert all(n["text"] for n in asset["no_ga4"])
     by = {a["app_id"]: a for a in summary["alerts"]}
-    assert by[A1]["message"] == (N1 + ": D1 uninstall 72% → 79% (+7 point) — 12–18 Sep ke installs, pichhle 4 hafte se "
-                                 "zyada · abhi ka data kaccha — number aur badh sakta hai") and by[A1]["provisional"]
+    assert by[A1]["message"] == (N1 + ": Uninstalled within 1 day 72% → 79% — 12–18 Sep ke installs, pichhle 4 hafte se "
+                                 "zyada · ⏳ Not final — number aur badh sakta hai") and by[A1]["provisional"]
     assert by[A2]["installs_to"] == (END - timedelta(days=8)).isoformat() and not by[A2]["provisional"]   # settled
     assert (by[A1]["severity"], by[A2]["severity"], by[A6]["severity"]) == ("warning", "good", "watch")
-    assert by[A2]["app"] == N2 and by[A2]["message"].startswith(N2 + ": D1 uninstall 72% → 65% (−7 point)")
+    assert by[A2]["app"] == N2 and by[A2]["message"].startswith(N2 + ": Uninstalled within 1 day 72% → 65% — ")
     assert [a["severity"] for a in summary["alerts"]] == ["warning", "watch", "good"]
     assert all(a["notify"] and a["fresh"] for a in summary["alerts"])
     assert summary["alert_counts"] == {"warning": 1, "watch": 1, "good": 1}
@@ -164,7 +164,7 @@ def test_a_renamed_app_shows_its_new_name_in_the_same_alert(site):
     d2["apps_catalog"][0]["app_name"] = "Renamed Caller"
     ub.run_uninstall(d2, data, out, ga4_settings(), now=NOW + timedelta(hours=1))
     a = [a for a in d2["uninstall"]["alerts"] if a["app_id"] == A1][0]
-    assert a["id"] == old_id and a["message"].startswith("Renamed Caller: D1 uninstall")
+    assert a["id"] == old_id and a["message"].startswith("Renamed Caller: Uninstalled within 1 day")
 
 
 # ── notifications ────────────────────────────────────────────────────────────────────────────────
@@ -175,9 +175,10 @@ def test_alerts_go_out_once_warning_and_good_on_telegram_watch_by_email(site):
     res = build_static.send_alerts(dash, ga4_settings())
     tele = next(r["text"] for r in res if r["channel"] == "telegram")
     mail = next(r["body"] for r in res if r["channel"] == "email")
-    assert "🟠 [WARNING] " + N1 + ": D1 uninstall 72% → 79%" in tele and tele.count("uninstall (GA4)") == 2
-    assert "🎉 [GOOD] " + N2 + ": D1 uninstall" in tele and N6 not in tele
-    assert "🟡 [WATCH] " + N6 + ": D1 uninstall 72.0% → 75.0% (+3 point)" in mail and mail.count("uninstall (GA4)") == 3
+    assert "🟠 [WARNING] " + N1 + ": Uninstalled within 1 day 72% → 79%" in tele and tele.count("uninstall (GA4)") == 2
+    assert "🎉 [GOOD] " + N2 + ": Uninstalled within 1 day" in tele and N6 not in tele
+    assert ("🟡 [WATCH] " + N6 + ": Uninstalled within 1 day 72.0% → 75.0% — " in mail
+            and mail.count("uninstall (GA4)") == 3)
     assert all(r.get("dry_run") for r in res)
     assert ub.mark_notified(data, dash["uninstall"], dry=True, now=NOW) == 3
     eps = gu.load_state(data)["episodes"].values()
@@ -510,12 +511,13 @@ def test_the_committed_frontend_fixture_is_what_the_build_writes(tmp_path):
     assert b["adoption"]["slow"] and "slow_rollout" in b["notes"] and b["versions_cmp"]["rows"]["ver_time"]["status"] == "unsure"
     halt = [x["telegram"] for x in fx["sent"] if x["telegram"] and "update impact (GA4)" in x["telegram"]]
     assert [x["run"] for x in fx["sent"] if x["telegram"] and "update impact (GA4)" in x["telegram"]] == ["2026-09-21T12:00Z"]
-    assert re.search(r"🟠 \[WARNING\] Demo Caller – Test App: v3\.2 \(10 Sep\) ke baad purane users ka DAU [\d.]+% gira "
-                     r"\(expected [\d,]+ → [\d,]+/din\) · aur 1 cheez kharab: time per user −\d+% · HALT — staged rollout "
-                     r"rok do, hotfix bhejo · shuruaati — D7 abhi baaki · update impact \(GA4\)", halt[0])
+    assert re.search(r"🟠 \[WARNING\] Demo Caller – Test App: v3\.2 \(10 Sep\) ke baad old users ka DAU [\d.]+% gira "
+                     r"\(expected [\d,]+ → [\d,]+/day\) · aur 1 cheez kharab: time per user −\d+% · 🛑 Stop update — "
+                     r"staged rollout rok do, hotfix bhejo · shuruaati — 7 din ka result abhi baaki · update impact \(GA4\)",
+                     halt[0])
     b = imp[("Demo Flashlight", "v1.2")]                         # new users come back more: a WIN (seeded: first eval)
     assert b["verdict"]["better"] == ["new_d1"] and b["rows"]["new_d1"]["change"] > 5 and not b["verdict"]["worse"]
-    assert imp[("Demo Flashlight", "v1.3")]["verdict"]["why"].startswith("Abhi 1 pakka din")
+    assert imp[("Demo Flashlight", "v1.3")]["verdict"]["why"].startswith("Abhi 1 final day ")
     b = imp[("Demo Wallpapers", "v2.0")]                          # a staged rollout stuck at 25%: fewer ads per user
     r = b["rows"]["arpdau"]
     assert r["status"] == "worse" and -0.1 < r["change"] < -0.05 and abs(r["extra"]["imp_change"] - r["change"]) < 0.01
@@ -717,7 +719,7 @@ def test_every_app_update_gets_its_card_in_the_asset_and_the_summary(isite):
                                              "unit": "rel"}, "judged": 9, "late": None}]
     al = [a for a in s["alerts"] if a["family"] == "impact"]
     assert [(a["app"], a["severity"], a["level"], a["notify"]) for a in al] == [(N1, "warning", "halt", True)]
-    assert al[0]["message"].startswith(N1 + ": v1.1 (26 Aug) ke baad purane users ka DAU ")
+    assert al[0]["message"].startswith(N1 + ": v1.1 (26 Aug) ke baad old users ka DAU ")
 
 
 def test_the_same_play_packages_admob_apps_revenue_is_summed_and_without_revenue_only_arpdau_changes(isite):
@@ -927,7 +929,7 @@ def test_active_alerts_go_out_once_with_their_label(asite):
     tl = [l for t in tele for l in t.split("\n") if "active users (GA4)" in l]
     ml = [l for t in mail for l in t.split("\n") if "active users (GA4)" in l]
     assert [l.split(":")[0] for l in tl] == ["🟠 [WARNING] " + N1]                   # the drift: Telegram, once
-    assert tl[0].endswith(" · active users (GA4)") and " se purane users kam: roz ~" in tl[0]
+    assert tl[0].endswith(" · active users (GA4)") and " se old users kam: roz ~" in tl[0]
     assert [l.split(":")[0] for l in ml if l.startswith("🟡")] == ["🟡 [WATCH] " + N2]   # the break: e-mail, once
     assert "ek bhi active user nahi" in [l for l in ml if l.startswith("🟡")][0]
     assert "uninstall (GA4)" not in "".join(tl)

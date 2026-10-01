@@ -11,28 +11,28 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Purane users roz 14,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "line": "Old users/day 14,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Purane users roz 14,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+      "t": "Old users/day 14,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%"
      },
      "ads": {
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "line": "No Google Ads spend (last 14 days)",
       "q": null,
       "snz_ph": null,
       "st": "na",
-      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+      "t": "No Google Ads spend (last 14 days)"
      },
      "deduct": {
       "detail": {
        "chart": {
         "after_idx": 10,
         "before": 1000.0,
-        "cap": "home_banner · clicks per din · 17–30 Sep",
+        "cap": "home_banner · clicks/day · 17–30 Sep",
         "fmt": "n",
         "labels": [
          "17 Sep",
@@ -53,7 +53,7 @@
         "marks": [
          [
           10,
-          "Shuru"
+          "Started"
          ]
         ],
         "tips": null,
@@ -82,7 +82,7 @@
       "line": "Ek banner pe clicks achanak 4 guna — invalid click ka khatra",
       "q": {
        "abhi": "Waisa hi: 30 Sep ko 4,000 clicks",
-       "kab": "27 Sep · 4 din se",
+       "kab": "27 Sep · 4 days ago",
        "karo": "App me home_banner kahan hai dekho; samajh na aaye to AdMob me ye ad unit pause karo.",
        "kis": "AdMob 27–30 Sep · vs 20–26 Sep",
        "kit": "Clicks roz ~1,000 → ~4,000 · ads dikhe utne hi",
@@ -112,7 +112,7 @@
        "chart": {
         "after_idx": 7,
         "before": 400.0,
-        "cap": "App ki AdMob kamai · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "cap": "App AdMob revenue · $/day · 17–30 Sep (dotted = avg of 17–23 Sep)",
         "fmt": "usd",
         "labels": [
          "17 Sep",
@@ -133,7 +133,7 @@
         "marks": [
          [
           7,
-          "pichhle 7 din"
+          "last 7 days"
          ]
         ],
         "tips": null,
@@ -160,7 +160,7 @@
       "info": [],
       "kis": null,
       "line": [
-       "Kal ",
+       "Yesterday ",
        {
         "p": 0,
         "s": "",
@@ -170,11 +170,11 @@
        " · usual ",
        {
         "p": 0,
-        "s": "/din",
+        "s": "/day",
         "sign": 0,
         "usd": 400.0
        },
-       " · ad rate (1,000 ads ka) ",
+       " · eCPM ",
        {
         "p": 2,
         "s": "",
@@ -192,7 +192,7 @@
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Kal $400 · usual $400/din · ad rate (1,000 ads ka) $4.00 → $4.00"
+      "t": "Yesterday $400 · usual $400/day · eCPM $4.00 → $4.00"
      },
      "mediation": {
       "detail": null,
@@ -208,21 +208,21 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "line": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+      "t": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK"
      },
      "uninstall": {
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate",
+      "line": "Same day uninstall: 20% (installs 15–21 Sep) · uninstall rate 0.2%",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate"
+      "t": "Same day uninstall: 20% (installs 15–21 Sep) · uninstall rate 0.2%"
      },
      "update": {
       "detail": null,
@@ -246,7 +246,7 @@
      }
     },
     "head": {
-     "age": "4 din",
+     "age": "4 days",
      "chip": "naya",
      "text": "Ek banner pe clicks achanak 4 guna — invalid click ka khatra"
     },
@@ -275,21 +275,21 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Purane users roz 13,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "line": "Old users/day 13,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Purane users roz 13,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+      "t": "Old users/day 13,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%"
      },
      "ads": {
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "line": "No Google Ads spend (last 14 days)",
       "q": null,
       "snz_ph": null,
       "st": "na",
-      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+      "t": "No Google Ads spend (last 14 days)"
      },
      "deduct": {
       "detail": null,
@@ -316,7 +316,7 @@
        "chart": {
         "after_idx": 7,
         "before": 520.0,
-        "cap": "App ki AdMob kamai · $/din · 17–30 Sep",
+        "cap": "App AdMob revenue · $/day · 17–30 Sep",
         "fmt": "usd",
         "labels": [
          "17 Sep",
@@ -337,7 +337,7 @@
         "marks": [
          [
           7,
-          "Shuru"
+          "Started"
          ]
         ],
         "tips": null,
@@ -374,11 +374,11 @@
          "usd": 320.0
         }
        ],
-       "kab": "24 Sep · 7 din se",
+       "kab": "24 Sep · 7 days ago",
        "karo": "Pichhle update ke baad kya badla dekho; tab tak ads budget mat badhao.",
        "kis": "AdMob 24–30 Sep · vs 17–23 Sep",
        "kit": [
-        "Kamai ",
+        "Revenue ",
         {
          "p": 0,
          "s": "",
@@ -388,14 +388,14 @@
         " → ",
         {
          "p": 0,
-         "s": "/din",
+         "s": "/day",
          "sign": 0,
          "usd": 320.0
         },
         " (",
         {
          "p": 0,
-         "s": "/din",
+         "s": "/day",
          "sign": 1,
          "usd": -200.0
         },
@@ -426,21 +426,21 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "line": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+      "t": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK"
      },
      "uninstall": {
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate",
+      "line": "Same day uninstall: 20% (installs 15–21 Sep) · uninstall rate 0.2%",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate"
+      "t": "Same day uninstall: 20% (installs 15–21 Sep) · uninstall rate 0.2%"
      },
      "update": {
       "detail": null,
@@ -464,7 +464,7 @@
      }
     },
     "head": {
-     "age": "7 din",
+     "age": "7 days",
      "chip": "naya",
      "text": "App ki kamai 38% giri"
     },
@@ -493,21 +493,21 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Purane users roz 15,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "line": "Old users/day 15,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Purane users roz 15,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+      "t": "Old users/day 15,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%"
      },
      "ads": {
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "line": "No Google Ads spend (last 14 days)",
       "q": null,
       "snz_ph": null,
       "st": "na",
-      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+      "t": "No Google Ads spend (last 14 days)"
      },
      "deduct": {
       "detail": null,
@@ -534,7 +534,7 @@
        "chart": {
         "after_idx": 7,
         "before": 350.0,
-        "cap": "App ki AdMob kamai · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "cap": "App AdMob revenue · $/day · 17–30 Sep (dotted = avg of 17–23 Sep)",
         "fmt": "usd",
         "labels": [
          "17 Sep",
@@ -555,7 +555,7 @@
         "marks": [
          [
           7,
-          "pichhle 7 din"
+          "last 7 days"
          ]
         ],
         "tips": null,
@@ -582,7 +582,7 @@
       "info": [],
       "kis": null,
       "line": [
-       "Kal ",
+       "Yesterday ",
        {
         "p": 0,
         "s": "",
@@ -592,11 +592,11 @@
        " · usual ",
        {
         "p": 0,
-        "s": "/din",
+        "s": "/day",
         "sign": 0,
         "usd": 350.0
        },
-       " · ad rate (1,000 ads ka) ",
+       " · eCPM ",
        {
         "p": 2,
         "s": "",
@@ -614,7 +614,7 @@
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Kal $350 · usual $350/din · ad rate (1,000 ads ka) $3.50 → $3.50"
+      "t": "Yesterday $350 · usual $350/day · eCPM $3.50 → $3.50"
      },
      "mediation": {
       "detail": null,
@@ -630,63 +630,28 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "line": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+      "t": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK"
      },
      "uninstall": {
       "detail": {
-       "chart": {
-        "after_idx": 4,
-        "before": 20.0,
-        "cap": "Install ke din hi hataane wale · 100 me · installs ke hafte 11 Aug–21 Sep",
-        "fmt": "p100",
-        "labels": [
-         "11 Aug",
-         "18 Aug",
-         "25 Aug",
-         "1 Sep",
-         "8 Sep",
-         "15 Sep"
-        ],
-        "marks": [
-         [
-          4,
-          "Shuru"
-         ]
-        ],
-        "tips": [
-         "Installs 11–17 Aug: 100 me 20 (700 installs)",
-         "Installs 18–24 Aug: 100 me 20 (700 installs)",
-         "Installs 25–31 Aug: 100 me 20 (700 installs)",
-         "Installs 1–7 Sep: 100 me 20 (700 installs)",
-         "Installs 8–14 Sep: 100 me 30 (700 installs)",
-         "Installs 15–21 Sep: 100 me 30 (700 installs)"
-        ],
-        "vals": [
-         20.0,
-         20.0,
-         20.0,
-         20.0,
-         30.0,
-         30.0
-        ]
-       },
+       "chart": null,
        "more": [],
        "tab": "Uninstall"
       },
       "info": [],
       "kis": null,
-      "line": "Install ke din hi hataane wale: 100 me 20 → 30",
+      "line": "Same day uninstall: 20% → 30%",
       "q": {
        "abhi": null,
-       "kab": "Installs 8 Sep se · 23 din se",
+       "kab": "Installs 8 Sep se · 23 days ago",
        "karo": "8 Sep ke aas-paas campaign, country ya update me kya badla, dekho.",
-       "kis": "Installs 15–21 Sep · vs hamesha ka normal",
+       "kis": "Installs 15–21 Sep · vs all-time normal",
        "kit": "700 installs me se ~70 log zyada ne app hataya",
-       "kya": "Install ke din hi hataane wale: 100 me 20 → 30",
+       "kya": "Same day uninstall: 20% → 30%",
        "naya": {
         "chip": "chal_raha",
         "first": "23 Sep (jab ye feature shuru hua)"
@@ -695,7 +660,7 @@
       },
       "snz_ph": null,
       "st": "amber",
-      "t": "Install ke din hi hataane wale: 100 me 20 → 30"
+      "t": "Same day uninstall: 20% → 30%"
      },
      "update": {
       "detail": null,
@@ -719,9 +684,9 @@
      }
     },
     "head": {
-     "age": "23 din",
+     "age": "23 days",
      "chip": "chal_raha",
-     "text": "Install ke din hi hataane wale: 100 me 20 → 30"
+     "text": "Same day uninstall: 20% → 30%"
     },
     "k7": 350.0,
     "key": "82251130bf3a",
@@ -756,11 +721,11 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "line": "No Google Ads spend (last 14 days)",
       "q": null,
       "snz_ph": null,
       "st": "na",
-      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+      "t": "No Google Ads spend (last 14 days)"
      },
      "deduct": {
       "detail": null,
@@ -787,7 +752,7 @@
        "chart": {
         "after_idx": 7,
         "before": 60.0,
-        "cap": "App ki AdMob kamai · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "cap": "App AdMob revenue · $/day · 17–30 Sep (dotted = avg of 17–23 Sep)",
         "fmt": "usd",
         "labels": [
          "17 Sep",
@@ -808,7 +773,7 @@
         "marks": [
          [
           7,
-          "pichhle 7 din"
+          "last 7 days"
          ]
         ],
         "tips": null,
@@ -835,7 +800,7 @@
       "info": [],
       "kis": null,
       "line": [
-       "Kal ",
+       "Yesterday ",
        {
         "p": 0,
         "s": "",
@@ -845,11 +810,11 @@
        " · usual ",
        {
         "p": 0,
-        "s": "/din",
+        "s": "/day",
         "sign": 0,
         "usd": 60.0
        },
-       " · ad rate (1,000 ads ka) ",
+       " · eCPM ",
        {
         "p": 2,
         "s": "",
@@ -867,7 +832,7 @@
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Kal $60 · usual $60/din · ad rate (1,000 ads ka) $0.60 → $0.60"
+      "t": "Yesterday $60 · usual $60/day · eCPM $0.60 → $0.60"
      },
      "mediation": {
       "detail": null,
@@ -890,7 +855,7 @@
       "line": "GA4 me is app ka Android stream nahi mila",
       "q": {
        "abhi": null,
-       "kab": "29 Sep · 2 din se (jab se ye page dekh raha hai)",
+       "kab": "29 Sep · 2 days ago (jab se ye page dekh raha hai)",
        "karo": "GA4 me is app ka Android data stream jodo (Firebase project link).",
        "kis": "GA4 accounts",
        "kit": "Is app ka Uninstall, Active users aur Install value ka data nahi",
@@ -937,7 +902,7 @@
      }
     },
     "head": {
-     "age": "2 din",
+     "age": "2 days",
      "chip": "purani",
      "text": "GA4 me is app ka Android stream nahi mila"
     },
@@ -964,18 +929,18 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Purane users roz 16,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "line": "Old users/day 16,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Purane users roz 16,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+      "t": "Old users/day 16,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%"
      },
      "ads": {
       "detail": {
        "chart": {
         "after_idx": 7,
         "before": 50.0,
-        "cap": "Google Ads kharcha · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "cap": "Google Ads spend · $/day · 17–30 Sep (dotted = avg of 17–23 Sep)",
         "fmt": "usd",
         "labels": [
          "17 Sep",
@@ -996,7 +961,7 @@
         "marks": [
          [
           7,
-          "pichhle 7 din"
+          "last 7 days"
          ]
         ],
         "tips": null,
@@ -1023,14 +988,14 @@
       "info": [],
       "kis": null,
       "line": [
-       "Kharcha ",
+       "Spend ",
        {
         "p": 0,
-        "s": "/din",
+        "s": "/day",
         "sign": 0,
         "usd": 50.0
        },
-       " · ROAS 9.00 · ek install ",
+       " · ROAS 9.00 · cost per install ",
        {
         "p": 2,
         "s": "",
@@ -1042,7 +1007,7 @@
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Kharcha $50/din · ROAS 9.00 · ek install $0.50 (24–30 Sep)"
+      "t": "Spend $50/day · ROAS 9.00 · cost per install $0.50 (24–30 Sep)"
      },
      "deduct": {
       "detail": null,
@@ -1078,7 +1043,7 @@
        "chart": {
         "after_idx": 7,
         "before": 450.0,
-        "cap": "App ki AdMob kamai · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "cap": "App AdMob revenue · $/day · 17–30 Sep (dotted = avg of 17–23 Sep)",
         "fmt": "usd",
         "labels": [
          "17 Sep",
@@ -1099,7 +1064,7 @@
         "marks": [
          [
           7,
-          "pichhle 7 din"
+          "last 7 days"
          ]
         ],
         "tips": null,
@@ -1126,7 +1091,7 @@
       "info": [],
       "kis": null,
       "line": [
-       "Kal ",
+       "Yesterday ",
        {
         "p": 0,
         "s": "",
@@ -1136,11 +1101,11 @@
        " · usual ",
        {
         "p": 0,
-        "s": "/din",
+        "s": "/day",
         "sign": 0,
         "usd": 450.0
        },
-       " · ad rate (1,000 ads ka) ",
+       " · eCPM ",
        {
         "p": 2,
         "s": "",
@@ -1158,7 +1123,7 @@
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Kal $450 · usual $450/din · ad rate (1,000 ads ka) $4.50 → $4.50"
+      "t": "Yesterday $450 · usual $450/day · eCPM $4.50 → $4.50"
      },
      "mediation": {
       "detail": null,
@@ -1174,21 +1139,21 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "line": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+      "t": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK"
      },
      "uninstall": {
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate",
+      "line": "Same day uninstall: 20% (installs 15–21 Sep) · uninstall rate 0.2%",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate"
+      "t": "Same day uninstall: 20% (installs 15–21 Sep) · uninstall rate 0.2%"
      },
      "update": {
       "detail": null,
@@ -1204,11 +1169,11 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Ads ka paisa ~45 din me wapas (installs 3–9 Jul) · ≈ Andaza",
+      "line": "Money back in ~45 days (installs 3–9 Jul) · ≈ Andaza",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Ads ka paisa ~45 din me wapas (installs 3–9 Jul) · ≈ Andaza"
+      "t": "Money back in ~45 days (installs 3–9 Jul) · ≈ Andaza"
      }
     },
     "head": {
@@ -1239,21 +1204,21 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Purane users roz 17,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "line": "Old users/day 17,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Purane users roz 17,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+      "t": "Old users/day 17,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%"
      },
      "ads": {
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "line": "No Google Ads spend (last 14 days)",
       "q": null,
       "snz_ph": null,
       "st": "na",
-      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+      "t": "No Google Ads spend (last 14 days)"
      },
      "deduct": {
       "detail": null,
@@ -1280,7 +1245,7 @@
        "chart": {
         "after_idx": 7,
         "before": 80.0,
-        "cap": "App ki AdMob kamai · $/din · 17–30 Sep",
+        "cap": "App AdMob revenue · $/day · 17–30 Sep",
         "fmt": "usd",
         "labels": [
          "17 Sep",
@@ -1301,7 +1266,7 @@
         "marks": [
          [
           7,
-          "Shuru"
+          "Started"
          ]
         ],
         "tips": null,
@@ -1328,7 +1293,7 @@
       "info": [],
       "kis": "AdMob 24–30 Sep · vs 17–23 Sep",
       "line": [
-       "Kamai +38%: ",
+       "Revenue +38%: ",
        {
         "p": 0,
         "s": "",
@@ -1338,7 +1303,7 @@
        " → ",
        {
         "p": 0,
-        "s": "/din",
+        "s": "/day",
         "sign": 0,
         "usd": 110.0
        }
@@ -1346,7 +1311,7 @@
       "q": null,
       "snz_ph": null,
       "st": "green",
-      "t": "Kamai +38%: $80 → $110/din"
+      "t": "Revenue +38%: $80 → $110/day"
      },
      "mediation": {
       "detail": null,
@@ -1362,51 +1327,51 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "line": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+      "t": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK"
      },
      "uninstall": {
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate",
+      "line": "Same day uninstall: 20% (installs 15–21 Sep) · uninstall rate 0.2%",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Install ke din hi hataane wale: 100 me 20 (installs 15–21 Sep) · roz har 1,000 me 2.0 hataate"
+      "t": "Same day uninstall: 20% (installs 15–21 Sep) · uninstall rate 0.2%"
      },
      "update": {
       "detail": {
        "chart": null,
        "more": [],
-       "tab": "Uninstall → Updates ka asar"
+       "tab": "Uninstall → Update impact"
       },
       "info": [],
       "kis": "Update impact · v1.0.8 (10 Sep) · pehle vs baad ke installs",
-      "line": "✅ v1.0.8 update achha gaya",
+      "line": "✅ v1.0.8 update went well",
       "q": null,
       "snz_ph": null,
       "st": "green",
-      "t": "✅ v1.0.8 update achha gaya"
+      "t": "✅ v1.0.8 update went well"
      },
      "value": {
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Google Ads kharcha nahi",
+      "line": "Google Ads spend nahi",
       "q": null,
       "snz_ph": null,
       "st": "na",
-      "t": "Google Ads kharcha nahi"
+      "t": "Google Ads spend nahi"
      }
     },
     "head": {
-     "age": "21 din",
+     "age": "21 days",
      "chip": "chal_raha",
-     "text": "✅ v1.0.8 update achha gaya"
+     "text": "✅ v1.0.8 update went well"
     },
     "k7": 110.0,
     "key": "a3bc8c6156af",
@@ -1431,21 +1396,21 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Purane users roz 18,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35",
+      "line": "Old users/day 18,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Purane users roz 18,000 (+1% · 22–28 Sep vs 15–21 Sep) · agle din wapas 100 me 35"
+      "t": "Old users/day 18,000 (+1% · 22–28 Sep vs 15–21 Sep) · back next day 35%"
      },
      "ads": {
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "Google Ads kharcha nahi (pichhle 14 din)",
+      "line": "No Google Ads spend (last 14 days)",
       "q": null,
       "snz_ph": null,
       "st": "na",
-      "t": "Google Ads kharcha nahi (pichhle 14 din)"
+      "t": "No Google Ads spend (last 14 days)"
      },
      "deduct": {
       "detail": null,
@@ -1472,7 +1437,7 @@
        "chart": {
         "after_idx": 7,
         "before": 12.0,
-        "cap": "App ki AdMob kamai · $/din · 17–30 Sep (dotted = 17–23 Sep ka avg)",
+        "cap": "App AdMob revenue · $/day · 17–30 Sep (dotted = avg of 17–23 Sep)",
         "fmt": "usd",
         "labels": [
          "17 Sep",
@@ -1493,7 +1458,7 @@
         "marks": [
          [
           7,
-          "pichhle 7 din"
+          "last 7 days"
          ]
         ],
         "tips": null,
@@ -1520,7 +1485,7 @@
       "info": [],
       "kis": null,
       "line": [
-       "Kal ",
+       "Yesterday ",
        {
         "p": 0,
         "s": "",
@@ -1530,11 +1495,11 @@
        " · usual ",
        {
         "p": 0,
-        "s": "/din",
+        "s": "/day",
         "sign": 0,
         "usd": 12.0
        },
-       " · ad rate (1,000 ads ka) ",
+       " · eCPM ",
        {
         "p": 2,
         "s": "",
@@ -1552,7 +1517,7 @@
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "Kal $12 · usual $12/din · ad rate (1,000 ads ka) $0.12 → $0.12"
+      "t": "Yesterday $12 · usual $12/day · eCPM $0.12 → $0.12"
      },
      "mediation": {
       "detail": null,
@@ -1568,18 +1533,18 @@
       "detail": null,
       "info": [],
       "kis": null,
-      "line": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek",
+      "line": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK",
       "q": null,
       "snz_ph": null,
       "st": "normal",
-      "t": "AdMob 30 Sep tak · GA4 28 Sep tak · AdMob login: theek"
+      "t": "AdMob till 30 Sep · GA4 till 28 Sep · AdMob login: OK"
      },
      "uninstall": {
       "detail": {
        "chart": {
         "after_idx": 9,
         "before": 2.0,
-        "cap": "Har 1,000 users me roz kitne app hataate · 15–28 Sep",
+        "cap": "Uninstall rate (% of daily active users) · 15–28 Sep",
         "fmt": "r1",
         "labels": [
          "15 Sep",
@@ -1600,7 +1565,7 @@
         "marks": [
          [
           9,
-          "Shuru"
+          "Started"
          ]
         ],
         "tips": null,
@@ -1626,14 +1591,14 @@
       },
       "info": [],
       "kis": null,
-      "line": "Roz app hataane wale 50% badhe",
+      "line": "Uninstall rate 50% badha",
       "q": {
        "abhi": null,
-       "kab": "24 Sep · 7 din se",
+       "kab": "24 Sep · 7 days ago",
        "karo": "24 Sep ke aas-paas notification ya ads badle? Us update ke reviews dekho.",
-       "kis": "Roz ka avg 24–28 Sep · vs 2–29 Aug",
-       "kit": "Har 1,000 users me roz 2.0 → 3.0 hataate",
-       "kya": "Roz app hataane wale 50% badhe",
+       "kis": "Daily avg 24–28 Sep · vs 2–29 Aug",
+       "kit": "Uninstall rate: roz ~20 (0.2%) → ~30 (0.3%) users",
+       "kya": "Uninstall rate 50% badha",
        "naya": {
         "chip": "naya",
         "first": "26 Sep"
@@ -1642,7 +1607,7 @@
       },
       "snz_ph": null,
       "st": "red",
-      "t": "Roz app hataane wale 50% badhe"
+      "t": "Uninstall rate 50% badha"
      },
      "update": {
       "detail": null,
@@ -1666,9 +1631,9 @@
      }
     },
     "head": {
-     "age": "7 din",
+     "age": "7 days",
      "chip": "naya",
-     "text": "Roz app hataane wale 50% badhe"
+     "text": "Uninstall rate 50% badha"
     },
     "k7": 12.0,
     "key": "2d041557dd04",
@@ -1733,7 +1698,7 @@
   "feats": [
    [
     "kamai",
-    "Kamai · eCPM"
+    "Revenue · eCPM"
    ],
    [
     "uninstall",
@@ -1774,10 +1739,10 @@
   ],
   "fx": 88.0,
   "how": [
-   "Har app ka ek card. Line: pehle wo apps jinme koi 🔴 baat 🆕 Naya (10 din ke andar shuru) hai, ya koi khula 🚩 Re-review flag (admin ka faisla baaki) / kal ka “kal dobara dekho” — phir baaki kamai (pichhle 7 din ka avg, 24–30 Sep) ke hisaab se.",
-   "Kal = 30 Sep (AdMob ka aakhri poora din). Usual = 23–29 Sep ka roz ka avg.",
+   "Har app ka ek card. Line: pehle wo apps jinme koi 🔴 baat 🆕 New (10 din ke andar shuru) hai, ya koi khula 🚩 Re-review flag (admin ka faisla baaki) / kal ka “🔁 Check again tomorrow” — phir baaki kamai (pichhle 7 din ka avg, 24–30 Sep) ke hisaab se.",
+   "Yesterday = 30 Sep (AdMob ka aakhri poora din). Usual = 23–29 Sep ka daily avg.",
    [
-    "Uninstall, Active users, Install value, Update aur ad-unit ki baatein dashboard ke unhi tabs ke rules se bani. Ads: 24–30 Sep vs 17–23 Sep; ROAS 20%+ gira ya ek install ka kharcha 30%+ badha to 🟡. Deductions: 17–30 Sep ke AdMob snapshots; kisi ad unit ka 15%+ aur ",
+    "Uninstall, Active users, Install value, Update aur ad-unit ki baatein dashboard ke unhi tabs ke rules se bani. Ads: 24–30 Sep vs 17–23 Sep; ROAS 20%+ gira ya cost per install 30%+ badha to 🟡. Deductions: 17–30 Sep ke AdMob snapshots; kisi ad unit ka 15%+ aur ",
     {
      "p": 0,
      "s": "",
@@ -1787,18 +1752,18 @@
     "+ kata to 🔴. Mediation: kisi network ka hissa 10%+ se 1/3 se neeche gira to 🟡."
    ],
    [
-    "Chhoti apps: kamai + ads kharcha ",
+    "Small apps: kamai + ads spend ",
     {
      "p": 0,
-     "s": "/din",
+     "s": "/day",
      "sign": 0,
      "usd": 30.0
     },
     " se kam. Inke 🔴 bhi unke group me dikhte hain, upar nahi aate."
    ],
-   "Jin features ka is app ke liye data nahi, unka gola grey (“data nahi”).",
-   "States: ✅ Reviewed · 📝 Reviewed + note · 🚩 Re-review (Important) · 🔁 Kal dobara dekho. 🚩 Important · Re-review = admin dobara dekhega — poori app pe (card ke niche wala button) ya sirf ek feature pe (har feature ke aage chhota 🚩, note ke saath; jaise sirf “Kamai · eCPM” ya sirf “Uninstall”). Har flag alag item hai aur admin har ek ka alag faisla karta hai (👍 Theek hai · 🛠 Kaam do · ⛔ Band karo). Faisla hone tak card upar focus me rehta hai; khula flag agle din ke card pe “🚩 Kamai · eCPM · N din se khula” jaisa dikhta hai. 🛠 Kaam wala flag card pe sirf chip dikhata hai.",
-   "🔁 Kal dobara dekho alag hai — ye sirf khud ke liye kal ka reminder hai, admin ko nahi jaata. 💤 Pata hai = ek baat 7 ya 14 din ke liye chhupao (note ke saath).",
+   "Jin features ka is app ke liye data nahi, unka dot grey (“No data”).",
+   "States: ✅ Reviewed · 📝 Reviewed + note · 🚩 Re-review (Important) · 🔁 Check again tomorrow. 🚩 Important · Re-review = admin dobara dekhega — poori app pe (card ke niche wala button) ya sirf ek feature pe (har feature ke aage chhota 🚩, note ke saath; jaise sirf “Revenue · eCPM” ya sirf “Uninstall”). Har flag alag item hai aur admin har ek ka alag faisla karta hai (👍 OK · 🛠 Assign task · ⛔ Close). Faisla hone tak card upar focus me rehta hai; khula flag agle din ke card pe “🚩 Revenue · eCPM · Open N days” jaisa dikhta hai. 🛠 Assign task wala flag card pe sirf chip dikhata hai.",
+   "🔁 Check again tomorrow alag hai — ye sirf khud ke liye kal ka reminder hai, admin ko nahi jaata. 💤 Snooze = ek baat 7 ya 14 din ke liye chhupao (note ke saath).",
    "Ye cards 1 Oct ko ek baar bane (us waqt ka data) aur din bhar wahi rehte hain — isliye History me wahi dikhta hai jo review ke waqt tha.",
    "Sab 7 apps review hote hi Summary khulta hai."
   ],
@@ -1819,7 +1784,7 @@
   },
   "ready_ist": "09:00",
   "v": 1,
-  "weekday": "Guruvar"
+  "weekday": "Thursday"
  },
  "index": {
   "days": [

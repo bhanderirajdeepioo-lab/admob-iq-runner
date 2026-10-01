@@ -139,7 +139,7 @@ def test_ver_cells_complete_part_wait_never_small_number():
         assert r[k]["st"] == "wait" and r[k]["v"] is None and r[k]["n"] == 0
     assert r["d7"]["in"] == 3 and r["d30"]["in"] == 26
     assert r["rpi"]["30"]["st"] == "wait" and r["rpi"]["30"]["v"] is None
-    assert "7 din baad wala number 3 din me" in r["text"]
+    assert "back after 7 days ka number 3 din me" in r["text"]
 
 
 def test_ver_version_that_comes_back_is_one_group_with_gaps():
@@ -225,7 +225,7 @@ def test_ver_ret_needs_1000_installs_3_days_two_evaluations():
     assert a[0]["ver"] == "1.2" and a[0]["ver_label"] == "v1.2" and a[0]["pver_label"] == "v1.1"
     assert a[0]["unit"] == "pp" and a[0]["users"] >= VC.VER_ALERT_N and a[0]["notify"]
     assert a[0]["week_from"] == "2026-08-10" and a[0]["base_to"] == "2026-08-09"
-    assert "v1.2 ke baad naye users kam ruk rahe: 100 me 28 agle din wapas, pichhle v1.1 me 35" in a[0]["text"]
+    assert "v1.2 ke baad naye users kam ruk rahe: back next day 28%, pichhle v1.1 me 35%" in a[0]["text"]
     # the same drop on a small app (each side < 1,000 installs): shown in the table, never an alert
     small = app(base=40, versions=(VERS[0], (VERS[1][0], date(2026, 8, 24), 0), (VERS[2][0], date(2026, 9, 3), 0)),
                 ver_drop=("1.2", 0.6))
@@ -292,7 +292,7 @@ def test_ver_ret_rpi7_market_held():
     _, row, _ = ev(m, st=again(st))
     a = alerts(row, "ver_ret")
     assert len(a) == 1 and a[0]["metric"] == "rpi7" and a[0]["unit"] == "usd" and a[0]["notify"]
-    assert "v1.2 ke naye users ki kamai (7 din) kam:" in a[0]["text"]
+    assert "v1.2 ke naye users ki earning (7 din) kam:" in a[0]["text"]
     mk = {"weeks": [{"from": "2026-08-10", "to": "2026-08-16", "dir": "down", "apps": 9, "of": 10}]}
     _, row, _ = ev(m, st=again(st), market=mk)
     a = alerts(row, "ver_ret")[0]
@@ -487,9 +487,9 @@ def test_long_year_on_every_label(long_det):
     assert VC.fmt_month(date(2025, 12, 3)) == "Dec 2025"
     assert VC._span_months(date(2025, 12, 1), date(2026, 1, 1)) == "Dec 2025–Jan 2026"
     assert VC._span_months(date(2026, 6, 1), date(2026, 7, 1)) == "Jun–Jul 2026"
-    assert re.match(r"^\S+ 20\d\d ke installs: 90 din baad 100 me se [\d.]+ app khol rahe \(pichhle 6 mahine, "
-                    r"[A-Z][a-z]{2} 20\d\d–[A-Z][a-z]{2} 20\d\d: ~[\d.]+\)"
-                    r" · 1 saal me kamai per install ≈\{m:[\d.e-]+\} \(andaza\)$", det["long"]["text"]), det["long"]["text"]
+    assert re.match(r"^\S+ 20\d\d ke installs: back after 90 days [\d.]+% \(pichhle 6 mahine, "
+                    r"[A-Z][a-z]{2} 20\d\d–[A-Z][a-z]{2} 20\d\d: ~[\d.]+%\)"
+                    r" · 1 saal me earning per install ≈\{m:[\d.e-]+\} \(andaza\)$", det["long"]["text"]), det["long"]["text"]
 
 
 LONG_DROP = (date(2026, 5, 1), 2, 0.7)
@@ -503,7 +503,7 @@ def test_long_ret_two_rows_below_base_z_and_sizes():
     assert len(a) == 1 and a[0]["metric"] == "d60" and a[0]["months"] == ["2026-05", "2026-06"]
     assert (a[0]["week_from"], a[0]["week_to"]) == ("2026-05-01", "2026-06-30") and a[0]["base_from"] == "2025-11-01"
     assert a[0]["unit"] == "pp" and a[0]["notify"] and a[0]["users"] > 2 * VC.LONG_JUDGE_N
-    assert a[0]["text"] == "May–Jun 2026 ke installs 60 din baad kam bache: 100 me 3.8, pehle 5.5 (pichhle 6 mahine ka normal)"
+    assert a[0]["text"] == "May–Jun 2026 ke installs back after 60 days kam: 3.8%, pehle 5.5% (pichhle 6 mahine ka normal)"
     one = app(long_drop=(date(2026, 6, 1), 1, 0.7))                    # only the newest month: not both below
     _, _, st = ev(one)
     _, row, _ = ev(one, st=again(st))
@@ -517,7 +517,7 @@ def test_long_ret_two_rows_below_base_z_and_sizes():
     _, row, _ = ev(rp, st=again(st))
     a = alerts(row, "long_ret")
     assert [x["metric"] for x in a] == ["rpi180"] and a[0]["unit"] == "usd"
-    assert a[0]["text"].startswith("Jan–Feb 2026 ke installs ki 6 mahine ki kamai per install kam: {m:")
+    assert a[0]["text"].startswith("Jan–Feb 2026 ke installs ki 6 mahine ki earning per install kam: {m:")
 
 
 def test_long_ret_watch_only_never_warning():
@@ -570,7 +570,7 @@ def test_long_up_is_info_row_not_alert():
     det, row, _ = ev(m, st=again(st))
     assert not alerts(row, "long_ret")
     info = [i for i in det["changes"]["info"] if i["kind"] == "long_up"]
-    assert len(info) == 1 and info[0]["text"] == "May–Jun 2026 ke installs 60 din baad zyada bache: 100 me 7.7, pehle 5.5"
+    assert len(info) == 1 and info[0]["text"] == "May–Jun 2026 ke installs back after 60 days zyada: 7.7%, pehle 5.5%"
 
 
 def test_long_error_isolated(monkeypatch):

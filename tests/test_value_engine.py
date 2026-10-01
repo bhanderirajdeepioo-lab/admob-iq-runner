@@ -344,7 +344,7 @@ def test_pay_slow_needs_two_weeks_and_projection_move():
     a = alerts(row, "pay_slow")
     assert len(a) == 1 and a[0]["dir"] == "down" and a[0]["p"] - a[0]["p0"] >= 7 and "cpi" in a[0]["tags"]
     assert a[0]["week_from"] == "2026-08-24" and a[0]["week_to"] == "2026-09-06"
-    assert "install ka kharcha $0.060 → $0.096 (+60%)" in a[0]["message"]            # the page draws {q:…} itself
+    assert "cost per install $0.060 → $0.096 (+60%)" in a[0]["message"]              # the page draws {q:…} itself
     _, row, _ = ev(app(cpi_jump=(date(2026, 8, 24), 1 / 1.6)))       # cheaper installs: faster → good
     a = alerts(row, "pay_slow")
     assert len(a) == 1 and a[0]["dir"] == "up" and a[0]["severity"] == "good"
@@ -362,12 +362,12 @@ def test_pay_loss_state_open_and_close_info():
     kw = dict(cpi_jump=(date(2026, 8, 24), 2.5, date(2026, 9, 7)))
     det, row, st = ev(app(**kw))
     a = alerts(row, "pay_loss")
-    assert len(a) == 1 and a[0]["severity"] == "watch" and "90 din me paisa wapas nahi karte" in a[0]["text"]
+    assert len(a) == 1 and a[0]["severity"] == "watch" and "90 din me money back nahi karte" in a[0]["text"]
     later = app(end=END + timedelta(days=14), **kw)
     det2, row2, st2 = ev(later, st=st, now="2026-10-05T12:00:00Z")
     assert not alerts(row2, "pay_loss")
     assert [e["family"] for e in st2["closed"]] == ["pay_loss"] or "pay_loss" in [e["family"] for e in st2["closed"]]
-    assert any(i["kind"] == "closed" and i["text"].startswith("✅ ab paisa ~") for i in det2["changes"]["info"])
+    assert any(i["kind"] == "closed" and i["text"].startswith("✅ ab money back in ~") for i in det2["changes"]["info"])
     big = app(cpi_jump=(date(2026, 8, 24), 5.0))
     _, rb, _ = ev(big)
     assert alerts(rb, "pay_loss")[0]["severity"] == "warning"          # even the good band misses, big spend
@@ -387,7 +387,7 @@ def test_geo_move_not_app_wide():
     _, row, _ = ev(app(drop=("NG", date(2026, 8, 31), 0.6)))
     a = alerts(row, "geo_move")
     assert [(x["cc"], x["metric"], x["dir"]) for x in a] == [("NG", "d1", "down")]
-    assert a[0]["now"] < a[0]["before"] and "Nigeria me agle din wapas aane wale kam" in a[0]["message"]
+    assert a[0]["now"] < a[0]["before"] and "Nigeria me back next day kam: 17%, pehle 28%" in a[0]["message"]
     assert set(a[0]["also"]) <= {"d7", "d30", "rpi7"}
     _, row, _ = ev(app(drop=("*", date(2026, 8, 31), 0.6)))          # every country: the app moved, not NG
     assert not alerts(row, "geo_move")
@@ -612,7 +612,7 @@ def test_admob_rows_stopping_never_read_as_zero():
     for wk in ("2026-07-06", "2026-08-10", "2026-08-31"):
         assert w[wk]["rpi"][3] == pytest.approx(c[wk]["rpi"][3], rel=0.005), wk
     assert row["pay"]["p"] == crow["pay"]["p"] and not row["_alerts"]
-    assert det["scale"]["text"][0].startswith("⚠️ AdMob ki kamai 13 Aug se nahi aayi")
+    assert det["scale"]["text"][0].startswith("⚠️ AdMob revenue 13 Aug se nahi aayi")
     assert det["scale"]["weeks"][-1]["admob"] is None and det["scale"]["weeks"][-1]["r"] is None
 
 
@@ -779,12 +779,12 @@ def test_stopped_ads_are_not_this_week():
     det, row, _ = ev(app(spend_stop=END - timedelta(days=210), cpi=0.5), st=_seen())
     assert not alerts(row, "pay_loss") and not alerts(row, "pay_slow")
     t = det["tiles"]["pay"]
-    assert t["st"] == "nospend" and "se Google Ads kharcha nahi" in t["note"] and "aakhri ads hafte" in t["note"]
+    assert t["st"] == "nospend" and "se Google Ads spend nahi" in t["note"] and "aakhri ads hafte" in t["note"]
     assert row["pay"]["st"] == "nospend" and row["pay"]["p"] is None and det["summary"]["kind"] == "nospend"
     assert row["s"]["spend4"] == 0 and row["s"]["rev7_4"] is None and det["tiles"]["cpi"]["st"] == "nospend"
     assert "Is hafte" not in det["summary"]["text"]
     det2, row2, _ = ev(app(spend_stop=END - timedelta(days=70)))
-    assert det2["summary"]["kind"] == "nospend" and det2["summary"]["text"].startswith("ℹ️ 13 Jul se Google Ads kharcha nahi")
+    assert det2["summary"]["kind"] == "nospend" and det2["summary"]["text"].startswith("ℹ️ 13 Jul se Google Ads spend nahi")
 
 
 def test_a_week_that_never_pays_back_is_never_normal():

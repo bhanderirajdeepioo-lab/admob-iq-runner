@@ -214,10 +214,10 @@ def test_value_alerts_go_out_once_with_label(vsite):
     tl = [l for l in tele if l.endswith(" · install value (GA4 + Ads)")]
     ml = [l for l in mail if l.endswith(" · install value (GA4 + Ads)")]
     assert [l.split(":")[0] for l in tl] == ["🟠 [WARNING] Demo Spend App"]
-    assert "Ads ka paisa wapas aane me der" in tl[0] and "install ka kharcha $0.060 → $0.096" in tl[0]
+    assert "Money back me der" in tl[0] and "cost per install $0.060 → $0.096" in tl[0]
     assert [l.split(":")[0] for l in ml if l.startswith("🟡")] == ["🟡 [WATCH] Demo Spend App"]
-    assert "Nigeria me agle din wapas aane wale kam" in [l for l in ml if l.startswith("🟡")][0]
-    assert not [l for l in tl + ml if "pay_loss" in l or "paisa wapas nahi karte" in l]   # 7-day pay dedupe
+    assert "Nigeria me back next day kam" in [l for l in ml if l.startswith("🟡")][0]
+    assert not [l for l in tl + ml if "pay_loss" in l or "money back nahi karte" in l]   # 7-day pay dedupe
     for h in (1, 2):                                                  # the hourly runs after: nothing again
         dash, _ = vbuild(data, out, now=vs.RUNS[-1], hours=h)
         assert "install value" not in json.dumps(build_static.send_alerts(dash, ga4_settings()), ensure_ascii=False)

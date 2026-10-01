@@ -96,7 +96,7 @@ def test_geo_coverage_gate_hides_cost_and_says_why():
     co = det["countries"]
     assert co["geo_why"] == "cov" and co["cost"] is None and co["geo"] and not row["cty"]["geo"]
     assert all(r["cpi"] is None and r["pay"] is None and r["back"] is None and r["verdict"] in NOCOST for r in co["rows"])
-    assert any(t.startswith("⚠️ Google Ads country-wise kharcha ") and "(95%)" in t for t in det["scale"]["text"])
+    assert any(t.startswith("⚠️ Google Ads country-wise spend ") and "(95%)" in t for t in det["scale"]["text"])
     for cv in (0.98, 1.02):
         det, _, _ = ev(m, geo=vs.geo_envelope(m, cov={w0: cv}))
         assert det["countries"]["geo_why"] == "ok" and all(r["cpi"] for r in det["countries"]["rows"])
@@ -109,7 +109,7 @@ def test_geo_wait_when_week_beyond_till():
     det, _, _ = ev(m, geo=vs.geo_envelope(m, till=S - timedelta(days=20)))
     co = det["countries"]
     assert co["geo_why"] == "wait" and all(r["cpi"] is None for r in co["rows"])
-    assert any(t.startswith("Google Ads country-wise kharcha ") and t.endswith("tak aaya — naye hafton ka country cost "
+    assert any(t.startswith("Google Ads country-wise spend ") and t.endswith("tak aaya — naye hafton ka country cost "
                                                                               "uske baad") for t in det["scale"]["text"])
 
 
@@ -491,7 +491,7 @@ def test_geo_not_paid_back_within_the_curve_is_late_not_few():
     for cc in ("NG", "IN"):
         assert c[cc]["n"] >= 1000 and c[cc]["verdict"] == "late", c[cc]["verdict"]
         assert c[cc]["pay"]["p"] is None and not c[cc]["pay"]["never"] and c[cc]["pay"]["upto"] == 90
-        assert "90 din me paisa wapas nahi aaya" in c[cc]["text"]
+        assert "90 din me money back nahi aaya" in c[cc]["text"]
     assert V._cost_verdict({"pay": {"p": None, "lo": None, "hi": None, "never": False, "q80_365": None, "upto": 30},
                             "cpi": {"v": 1.0}}, 90, env=True) == "wait"
     assert V._cost_verdict({"pay": {"p": 200, "lo": 150, "hi": None, "never": False, "q80_365": None},

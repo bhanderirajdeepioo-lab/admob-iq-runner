@@ -54,7 +54,7 @@ def detect(metric: str, current: float, baseline: float, *,
     if is_ratio:
         if (baseline - current) >= drop_pt:
             return Signal(metric, "warning", "drop", current, baseline, chg,
-                          f"{metric} down {(baseline - current) * 100:.0f}pt")
+                          f"{metric} {baseline * 100:.0f}% → {current * 100:.0f}%")   # a rate: before → after (never "points")
     else:
         if chg <= -drop_pct:
             return Signal(metric, "warning", "drop", current, baseline, chg,

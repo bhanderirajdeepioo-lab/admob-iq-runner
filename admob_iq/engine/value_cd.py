@@ -90,7 +90,7 @@ CONSTS = {k.lower(): (list(v) if isinstance(v, tuple) else ({str(a): b for a, b 
 
 ONE = timedelta(days=1)
 NOT_VER = ("_x", "_rest")       # vuse keys that are not a version ("(not set)" / "(other)", and the pooled small ones)
-NWORD = {1: "agle din", 7: "hafte baad", 30: "30 din baad"}
+NWORD = {1: "back next day", 7: "back after 7 days", 30: "back after 30 days"}
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────────────────────────
@@ -113,6 +113,16 @@ def _n(x):
 
 def _i(x):
     return "—" if x is None else str(int(round(x)))
+
+
+def _ip(x):
+    """A 0–100 share as its % text: 34.4 → "34%" ("—" when unknown)."""
+    return "—" if x is None else "%d%%" % int(round(x))
+
+
+def _p1(x):
+    """A 0–100 share with one decimal as its % text: 4.25 → "4.3%" ("—" when unknown)."""
+    return "—" if x is None else _num1(x) + "%"
 
 
 def _num1(x):
@@ -431,11 +441,11 @@ def _ver_row_text(r):
         d1 = r["d1"]
         return "%s: %s installs, sirf %s din naye users isi version pe aaye%s — tulna ke liye %d+ din chahiye" % (
             lab, _n(r["n"]), _n(r["days"]),
-            (" (100 me se %s agle din wapas)" % _i(d1["v"])) if d1.get("v") is not None and d1["st"] != "wait" else "",
+            (" (back next day %s)" % _ip(d1["v"])) if d1.get("v") is not None and d1["st"] != "wait" else "",
             VER_MIN_DAYS)
     d1, d7 = r["d1"], r["d7"]
     if d1["st"] in ("wait", "nodata"):
-        return "%s: %s installs — agle din wala number %s" % (
+        return "%s: %s installs — back next day ka number %s" % (
             lab, _n(r["n"]), ("%d din me" % d1["in"]) if d1.get("in") else "abhi nahi mila")
     vs = r["vs"] or {}
     a1 = (vs.get("d1") or {}).get("v1") if vs else None
@@ -444,16 +454,16 @@ def _ver_row_text(r):
     b7 = (vs.get("d7") or {}).get("v0") if vs else None
     a1 = a1 if a1 is not None else d1["v"]
     a7 = a7 if a7 is not None else d7["v"]
-    txt = "%s: 100 me se %s agle din wapas" % (lab, _i(a1))
+    txt = "%s: %s back next day" % (lab, _ip(a1))
     if d7["st"] in ("wait", "nodata") or a7 is None:
-        txt += ", 7 din baad wala number %s" % (("%d din me" % d7["in"]) if d7.get("in") else "abhi nahi")
+        txt += ", back after 7 days ka number %s" % (("%d din me" % d7["in"]) if d7.get("in") else "abhi nahi")
     else:
-        txt += ", 7 din baad %s" % _i(a7)
+        txt += ", %s back after 7 days" % _ip(a7)
     if vs and b1 is not None:
-        txt += " (pichhla %s: %s%s)" % (vs["label"], _i(b1), (", %s" % _i(b7)) if b7 is not None else "")
+        txt += " (pichhla %s: %s%s)" % (vs["label"], _ip(b1), (", %s" % _ip(b7)) if b7 is not None else "")
     r30 = (r["rpi"].get("30") or {}).get("v")
     if r30 is not None:
-        txt += " — 30 din me kamai per install %s%s" % ("≈" if r["rpi"]["30"].get("est") else "", V.t_m(r30))
+        txt += " — 30 din me earning per install %s%s" % ("≈" if r["rpi"]["30"].get("est") else "", V.t_m(r30))
     if r["verdict"] == "worse":
         txt += " — naye users kam ruk rahe"
     elif r["verdict"] == "better":
@@ -472,9 +482,9 @@ def _ver_summary(rows, S):
     head = "%s (%s se, %s installs)" % (lead["label"], U.fmt_day(V._d(lead["from"]), S), _n(lead["n"]))
     d1, d7 = vs["d1"], vs["d7"]
     if d1["st"] != "wait" and d1["v1"] is not None and d1["v0"] is not None:
-        txt = "%s: 100 me se %s agle din wapas — pichhle %s me %s" % (head, _i(d1["v1"]), vs["label"], _i(d1["v0"]))
+        txt = "%s: back next day %s — pichhle %s me %s" % (head, _ip(d1["v1"]), vs["label"], _ip(d1["v0"]))
         if d7["st"] != "wait" and d7["v1"] is not None and d7["v0"] is not None:
-            txt += "; 7 din baad %s vs %s" % (_i(d7["v1"]), _i(d7["v0"]))
+            txt += "; back after 7 days %s vs %s" % (_ip(d7["v1"]), _ip(d7["v0"]))
     else:
         txt = "%s: pichhle %s se tulna abhi nahi" % (head, vs["label"])
     v = lead["verdict"]
@@ -616,9 +626,9 @@ def versions(P, store, releases, impact, E, advanced, streak, app, market=None, 
                 elif want == "worse" and s["st"] == "worse" and not big and not any(
                         i["ver"] == r["ver"] for i in info if i["kind"] == "ver_mix"):   # one row per version
                     info.append({"kind": "ver_mix", "ver": r["ver"], "from": s["from1"], "to": s["to1"],
-                                 "text": "%s ke baad naye users %s kam wapas dikhte (100 me %s, pichhle %s me %s) — "
+                                 "text": "%s ke baad naye users %s kam dikhte (%s, pichhle %s me %s) — "
                                          "installs abhi kam, isliye alert nahi" % (
-                                             r["label"], NWORD[t], _i(s["v1"]), vs["label"], _i(s["v0"]))})
+                                             r["label"], NWORD[t], _ip(s["v1"]), vs["label"], _ip(s["v0"]))})
         s = vs["rpi7"]
         big = (s["st"] == "worse" and min(s["n0"], s["n1"]) >= VER_ALERT_N
                and min(s["days0"], s["days1"]) >= VER_MIN_DAYS)
@@ -641,9 +651,9 @@ def versions(P, store, releases, impact, E, advanced, streak, app, market=None, 
         s = (r["vs"] or {}).get("d30")
         if s and s["st"] in ("worse", "better"):
             info.append({"kind": "ver_d30", "ver": r["ver"], "from": s["from1"], "to": s["to1"],
-                         "text": "%s ke naye users 30 din baad %s: 100 me %s, pichhle %s me %s" % (
-                             r["label"], "kam" if s["st"] == "worse" else "zyada", _num1(s["v1"]), r["vs"]["label"],
-                             _num1(s["v0"]))})
+                         "text": "%s ke naye users back after 30 days %s: %s, pichhle %s me %s" % (
+                             r["label"], "kam" if s["st"] == "worse" else "zyada", _p1(s["v1"]), r["vs"]["label"],
+                             _p1(s["v0"]))})
     for r in rows:
         r.pop("_a", None)
         r.pop("_sides", None)
@@ -707,18 +717,18 @@ def ver_alert_text(s):
     lab, plab = s.get("ver_label") or label(s.get("ver") or "?"), s.get("pver_label") or "pichhla version"
     if s.get("metric") == "rpi7":
         rel = s.get("rel")
-        txt = "%s ke naye users ki kamai (7 din) %s: %s per install, pichhle %s me %s%s" % (
+        txt = "%s ke naye users ki earning (7 din) %s: %s per install, pichhle %s me %s%s" % (
             lab, "kam" if s.get("dir") == "down" else "zyada", V.t_m(s.get("now")), plab, V.t_m(s.get("before")),
             (" (%s%s)" % ("+" if rel > 0 else "", V._pct(rel))) if rel is not None else "")
     else:
         n = int(str(s.get("metric") or "d1")[1:] or 1)
-        word = NWORD.get(n, "%d din baad" % n)
+        word = NWORD.get(n, "back after %d days" % n)
         if s.get("dir") == "down":
-            txt = ("%s ke baad naye users kam ruk rahe: 100 me %s %s wapas, pichhle %s me %s (%s installs, 2 hafte se)"
-                   % (lab, _i(s.get("now")), word, plab, _i(s.get("before")), _n(s.get("users"))))
+            txt = ("%s ke baad naye users kam ruk rahe: %s %s, pichhle %s me %s (%s installs, 2 hafte se)"
+                   % (lab, word, _ip(s.get("now")), plab, _ip(s.get("before")), _n(s.get("users"))))
         else:
-            txt = "%s ke baad naye users zyada ruk rahe: 100 me %s %s wapas, pichhle %s me %s" % (
-                lab, _i(s.get("now")), word, plab, _i(s.get("before")))
+            txt = "%s ke baad naye users zyada ruk rahe: %s %s, pichhle %s me %s" % (
+                lab, word, _ip(s.get("now")), plab, _ip(s.get("before")))
     mix = s.get("mix") or {}
     if s.get("dir") == "down" and mix.get("p0") is not None:
         txt += " — shayad installs ka mix badla (ads wale %d%% → %d%%)" % (
@@ -726,7 +736,7 @@ def ver_alert_text(s):
     elif s.get("dir") == "down" and mix.get("i0") is not None:
         txt += " — shayad installs ka mix badla (roz ke installs %s → %s)" % (_n(mix["i0"]), _n(mix["i1"]))
     if "market_wide" in (s.get("tags") or []):
-        txt += " · ad rate (eCPM) sab apps me %s" % ("gira" if s.get("dir") == "down" else "badha")
+        txt += " · ad rate sab apps me %s" % ("gira" if s.get("dir") == "down" else "badha")
     if s.get("linked"):
         txt += " (Update impact me bataya)"
     return txt
@@ -960,9 +970,9 @@ def long_term(P, shapes, spend, fx, releases, ida, E, advanced, app):
         conds.append(_long_cond(P, hits, rows, spend, releases, grain, app))
     for u in ups:
         info.append({"kind": "long_up", "from": _iso(u["rec"][0]["from"]), "to": _iso(u["rec"][-1]["to"]),
-                     "text": "%s ke installs %d din baad zyada bache: 100 me %s, pehle %s" % (
-                         _span_months(u["rec"][0]["a"], u["rec"][-1]["a"], grain), u["t"], _num1(u["now"]),
-                         _num1(u["before"]))})
+                     "text": "%s ke installs back after %d days zyada: %s, pehle %s" % (
+                         _span_months(u["rec"][0]["a"], u["rec"][-1]["a"], grain), u["t"], _p1(u["now"]),
+                         _p1(u["before"]))})
     whole60 = [r for r in rows if not r["part"] and r["_c"][60] and r["n"] > 0]
     out["_seen"] = len(whole60) >= INPUT_LONG_ROWS
     out["_info"] = info
@@ -1115,20 +1125,20 @@ def long_alert_text(s):
     unit = "mahine" if s.get("grain", "month") == "month" else "quarter"
     if str(s.get("metric") or "").startswith("rpi"):
         rel = s.get("rel")
-        return "%s ke installs ki 6 mahine ki kamai per install kam: %s, pehle %s%s" % (
+        return "%s ke installs ki 6 mahine ki earning per install kam: %s, pehle %s%s" % (
             span, V.t_m(s.get("now")), V.t_m(s.get("before")),
             (" (%s%s)" % ("+" if rel > 0 else "", V._pct(rel))) if rel is not None else "")
     t = str(s.get("metric") or "d60")[1:]
-    txt = "%s ke installs %s din baad kam bache: 100 me %s, pehle %s (pichhle %s %s ka normal)" % (
-        span, t, _num1(s.get("now")), _num1(s.get("before")), s.get("base_rows") or LONG_BASE, unit)
+    txt = "%s ke installs back after %s days kam: %s, pehle %s (pichhle %s %s ka normal)" % (
+        span, t, _p1(s.get("now")), _p1(s.get("before")), s.get("base_rows") or LONG_BASE, unit)
     if s.get("cause"):
         txt += " — " + s["cause"]
     return txt
 
 
 def _long_text(rows, grain):
-    """"{Mon YYYY} ke installs: 90 din baad 100 me se {d90} app khol rahe (pichhle 6 mahine ~{base}) · 1 saal me kamai
-    per install {≈}{rpi365}{ (andaza)}" — the newest row complete at 90 (else at 60)."""
+    """"{Mon YYYY} ke installs: back after 90 days {d90}% (pichhle 6 mahine, …: ~{base}%) · 1 saal me earning per
+    install {≈}{rpi365}{ (andaza)}" — the newest row complete at 90 (else at 60)."""
     for t in (90, 60):
         done = [r for r in rows if r["_c"][t] and r["n"] > 0 and r["d"][str(t)]["v"] is not None]
         if done:
@@ -1137,14 +1147,14 @@ def _long_text(rows, grain):
     i = rows.index(r)
     base = [b for b in rows[:i] if not b["part"] and b["_c"][t] and b["n"] > 0][-LONG_BASE:]
     lab = r["label"] if grain == "month" else _qlabel(r["a"])
-    txt = "%s ke installs: %d din baad 100 me se %s app khol rahe" % (lab, t, _num1(r["d"][str(t)]["v"]))
+    txt = "%s ke installs: back after %d days %s" % (lab, t, _p1(r["d"][str(t)]["v"]))
     if base:                                           # the months it is compared with, named (never another span's)
         x, n = _pool_d(base, t)
         if n:
             txt += " (pichhle %d %s, %s: ~%s)" % (len(base), "mahine" if grain == "month" else "quarter",
-                                                  _span_months(base[0]["a"], base[-1]["a"], grain), _num1(100 * x / n))
+                                                  _span_months(base[0]["a"], base[-1]["a"], grain), _p1(100 * x / n))
     c = r["rpi"]["365"]
     if c["v"] is not None:
-        txt += " · 1 saal me kamai per install %s%s%s" % ("≈" if (c["est"] or c["proj"]) else "", V.t_m(c["v"]),
+        txt += " · 1 saal me earning per install %s%s%s" % ("≈" if (c["est"] or c["proj"]) else "", V.t_m(c["v"]),
                                                           " (andaza)" if c["proj"] else "")
     return txt

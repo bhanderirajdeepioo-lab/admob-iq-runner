@@ -108,7 +108,7 @@ def test_country_cost_adds_up_to_the_campaign_cost(built):
     free = [r for r in co["rows"] if r["cc"] not in COUNTRY.values() and r["cc"] not in ("--", "ZZ")]
     assert free and all(r["cpi"] == {"v": None, "spend": 0.0, "noads": True} for r in free)
     assert all(r["verdict"] in ("top", "avg", "low", "few", "wait") for r in free)       # never "cheapest"
-    assert any(t.startswith("Google Ads country-wise kharcha: campaign kharche ka 100% country me mila")
+    assert any(t.startswith("Google Ads country-wise spend: campaign spend ka 100% country me mila")
                for t in det["scale"]["text"])
 
 

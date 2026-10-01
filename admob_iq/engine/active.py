@@ -158,10 +158,12 @@ IMPACT_ROW = {"ret_dau": "returning_dau", "sess": "sessions", "time": "time", "a
               "d7": "new_d7"}
 SPIKY = ("act_spike", "act_break")
 UNIT = {"ret_dau": "users", "sess": "num", "time": "sec", "usage": "num", "ads": "per1k"}
-MPHRASE = {"ret_dau": "purane users", "sess": "sessions per user", "time": "time per user", "ads": "ads per user"}
-NWORD = {1: "Agle din", 3: "3 din baad", 7: "7 din baad", 14: "14 din baad", 30: "30 din baad"}
-SUMMARY_WORD = {"ret_dau": "purane users", "d1": "agle din wapsi", "d7": "hafte baad wapsi", "sess": "sessions per user",
+MPHRASE = {"ret_dau": "old users", "sess": "sessions per user", "time": "time per user", "ads": "ads per user"}
+NWORD = {1: "Back next day", 3: "Back after 3 days", 7: "Back after 7 days", 14: "Back after 14 days",
+         30: "Back after 30 days"}
+SUMMARY_WORD = {"ret_dau": "old users", "d1": "back next day", "d7": "back after 7 days", "sess": "sessions per user",
                 "time": "time per user", "arpdau": "revenue per user"}
+GROWTH_HEAD = " · Old users:"      # the growth suffix's lead (cut off when it is the whole summary line)
 
 CONSTS = {k.lower(): (list(v) if isinstance(v, tuple) else v) for k, v in dict(
     ACT_V=ACT_V, ACT_LATE_DAYS=ACT_LATE_DAYS, TILE_DAYS=TILE_DAYS, BASE_DAYS=BASE_DAYS, NULL_WEEKS=NULL_WEEKS_ACT,
@@ -223,6 +225,14 @@ def _users(x):
 
 def _num2(x):
     return ("%.2f" % x).rstrip("0").rstrip(".") if x < 10 else "%.1f" % x
+
+
+def _per_user(v):
+    """An ads count stored per 1,000 users → per user (÷ 1,000): 3,213 → "3.2", 450 → "0.45"."""
+    if v is None:
+        return "—"
+    x = v / 1000
+    return ("%.1f" % x if x >= 1 else "%.2f" % x).rstrip("0").rstrip(".")
 
 
 def _pts(x):
@@ -1669,21 +1679,23 @@ def _edges(P, store, fetch_trunc=None):
     t = ed["text"]
     if rs == "found":
         if why == "retention":
-            t.append("🔁 Install ke din ke hisaab se wapsi (D1/D7) ka data %s se hai — GA4 pehle ye user-level data sirf "
+            t.append("🔁 Install ke din ke hisaab se back next day / back after 7 days ka data %s se hai — GA4 pehle ye "
+                     "user-level data sirf "
                      "2 mahine rakhta tha (%s se 14 mahine; purana wapas nahi aata)."
                      % (U.fmt_day(rf, ref), U.fmt_day(changed, ref)))
         else:
-            t.append("🔁 Install ke din ke hisaab se wapsi (D1/D7) ka data %s se hai — GA4 ne is se pehle ke install "
+            t.append("🔁 Install ke din ke hisaab se back next day / back after 7 days ka data %s se hai — GA4 ne is se "
+                     "pehle ke install "
                      "dino ka user data poora nahi diya (GA4 ki taraf se; purana wapas nahi aata)." % U.fmt_day(rf, ref))
         if fetch_trunc:
             t[-1] += " GA4 khud kehta hai: %s se pehle ka data nahi." % U.fmt_day(fetch_trunc, ref)
     elif rs == "whole":
-        t.append("🔁 Wapsi ka data poori history (%s) se." % U.fmt_day(hs, ref))
+        t.append("🔁 Back next day / back after 7 days ka data poori history (%s) se." % U.fmt_day(hs, ref))
     elif rs == "searching":
         t.append("🔁 GA4 se purana wapsi data dhoondh rahe hain — abhi %s tak mila, roz ~4 mahine aur aayega."
                  % U.fmt_day(ret_oldest, ref))
     elif rs == "wait":
-        t.append("🔁 Wapsi (D1/D7) ka data agle GA4 fetch ke saath aayega.")
+        t.append("🔁 Back next day / back after 7 days ka data agle GA4 fetch ke saath aayega.")
     else:
         t.append("🔁 Installs kam hain, isliye GA4 ki purani seema check nahi ho sakti — purane hafte '?' ke saath.")
     if ret_short > 0 and rs != "wait":
@@ -1701,7 +1713,7 @@ def _edges(P, store, fetch_trunc=None):
             s += " No ad data: %s." % ", ".join(U.fmt_span(a, b, ref) for a, b in gaps)
         osh = other_share(P, max(0, P["iS"] - TILE_DAYS + 1), P["iS"], "rev")
         if osh is not None and osh >= OTHER_NET_MIN:
-            s += (" Sirf AdMob Network — dusre ad networks (mediation) se ~%d%% aur kamai, wo isme nahi."
+            s += (" Sirf AdMob Network — dusre ad networks se ~%d%% aur kamai, wo isme nahi."
                   % round(osh / (1 - osh) * 100 if osh < 1 else 100))
         t.append(s)
     return ed
@@ -1797,7 +1809,7 @@ def _inst_info(P, dr, rel, frm, to, slow=False, sp=None):
     """The info row of a returning-users change the installs explain (never an alert)."""
     return {"kind": "installs", "metric": "ret_dau", "dir": dr, "from": frm, "to": to, "rel": _m4(rel),
             "tags": ["installs"], "prov": False, "sp": sp,
-            "text": "Returning users %s%s, par ye naye installs %s aane se (ad spend?) — 30+ din purane users normal"
+            "text": "Old users %s%s, par ye naye installs %s aane se (ad spend?) — 30+ din old users normal"
                     % (U.fmt_rel(rel), " (3 mahine me)" if slow else "", "zyada" if rel > 0 else "kam")}
 
 
@@ -2092,8 +2104,8 @@ def _inst_txt(s):
         return ""
     t = " · naye installs bhi %s (ad spend?)" % U.fmt_rel(inst["swing"])
     if inst.get("part") is not None and abs(inst["part"]) * 100 >= 0.5:
-        t += " — isme ~%s point %s" % (_pts(abs(inst["part"]) * 100), "tak unka ho sakta" if inst.get("upto")
-                                      else "unka")
+        t += " — isme ~%s%% %s" % (_pts(abs(inst["part"]) * 100), "tak unka ho sakta" if inst.get("upto")
+                                   else "unka")
     return t
 
 
@@ -2114,27 +2126,27 @@ def alert_text(s, E, app=None):
     if fam == "act_drift":
         since = U.fmt_day(s["since"], ref)
         if m == "ret_dau":
-            t = "%s se purane users %s: roz ~%s → ~%s (%s)" % (since, kz, _users(s["before"]), _users(s["now"]),
+            t = "%s se old users %s: roz ~%s → ~%s (%s)" % (since, kz, _users(s["before"]), _users(s["now"]),
                                                               U.fmt_rel(s["rel"])) + _inst_txt(s)
         elif m == "usage":
-            t = "%s se purane users %s baar aur %s time: sessions %s, time %s" % (
+            t = "%s se old users %s baar aur %s time: sessions %s, time %s" % (
                 since, "kam" if s["rel_s"] < 0 else "zyada", "kam" if s["rel_t"] < 0 else "zyada",
                 U.fmt_rel(s["rel_s"]), U.fmt_rel(s["rel_t"]))
         elif m == "sess":
-            t = "%s se har purana user %s baar app khol raha: %s → %s sessions/din (%s)" % (
+            t = "%s se old users ke sessions per user %s: %s → %s/day (%s)" % (
                 since, kz, _num2(s["before"]), _num2(s["now"]), U.fmt_rel(s["rel"]))
         elif m == "time":
-            t = "%s se har purana user %s time de raha: %s → %s (%s)" % (
+            t = "%s se old users ka time per user %s: %s → %s (%s)" % (
                 since, kz, imp.fmt_dur(s["before"]), imp.fmt_dur(s["now"]), U.fmt_rel(s["rel"]))
         else:
-            t = "%s se har user ko %s ads: 1,000 users pe %s → %s (%s)" % (
-                since, kz, _users(s["before"]), _users(s["now"]), U.fmt_rel(s["rel"]))
+            t = "%s se ads per user %s: %s → %s/day (%s)" % (
+                since, kz, _per_user(s["before"]), _per_user(s["now"]), U.fmt_rel(s["rel"]))
             if "time" in (s.get("tags") or []) and s.get("rel_t") is not None:
-                t += " — log %s time de rahe (time/user %s), ads usi hisaab se" % (kz, U.fmt_rel(s["rel_t"]))
+                t += " — log %s time de rahe (time per user %s), ads usi hisaab se" % (kz, U.fmt_rel(s["rel_t"]))
             else:
                 t += " — ad load/fill check karo"
             if s.get("other_net"):
-                t += " · dusre ad networks (mediation) ka hissa badla — AdMob ke ads kam/zyada dikh sakte hain"
+                t += " · dusre ad networks ka hissa badla — AdMob ke ads kam/zyada dikh sakte hain"
     elif fam == "act_spike":
         t = "%s ko %s achanak %s: %s (normal %s–%s)" % (
             U.fmt_day(s["day"], ref), MPHRASE.get(m, m), kz, _fmt_val(m, s["now"]), _fmt_val(m, s["lo"]),
@@ -2150,16 +2162,16 @@ def alert_text(s, E, app=None):
         if s.get("ongoing"):
             t += " — abhi bhi chal raha"
     elif fam == "act_slow":
-        t = "Purane users 3 mahine se dheere-dheere %s rahe: roz ~%s → ~%s (%s)" % (
+        t = "Old users 3 mahine se dheere-dheere %s rahe: roz ~%s → ~%s (%s)" % (
             "ghat" if dr == "down" else "badh", _users(s["before"]), _users(s["now"]), U.fmt_rel(s["rel"])) + _inst_txt(s)
     elif fam == "act_return":
         vs = s.get("vs") or ["prev"]
         which = "dono se" if len(vs) == 2 else "hamesha se" if vs == ["all"] else "pichhle 4 hafte se"
-        t = "%s wapas aane wale %s: 100 me %s, pehle %s (%s %s) — %s ke installs" % (
-            NWORD.get(s.get("n"), "%s din baad" % s.get("n")), kz, _pts(s["now"] * 100), _pts(s["before"] * 100),
-            which, kz, U.fmt_span(s["installs_from"], s["installs_to"], ref))
+        t = "%s %s: %s%%, pehle %s%% (%s %s) — %s ke installs" % (
+            NWORD.get(s.get("n"), "Back after %s days" % s.get("n")), kz, _pts(s["now"] * 100),
+            _pts(s["before"] * 100), which, kz, U.fmt_span(s["installs_from"], s["installs_to"], ref))
         if "installs" in (s.get("tags") or []) and s.get("inst_swing") is not None:
-            t += " · is hafte installs %s (alag campaign/country ho sakta hai)" % U.fmt_rel(s["inst_swing"])
+            t += " · un hafton me installs %s (alag campaign/country ho sakta hai)" % U.fmt_rel(s["inst_swing"])
     else:
         t = str(s.get("text") or "")
     rel = s.get("release")
@@ -2694,7 +2706,7 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
         dr = "up" if ec["rel"] > 0 else "down"
         row_ = {"kind": "price", "metric": "ecpm", "dir": dr, "from": ec["from"], "to": ec["to"], "rel": ec["rel"],
                 "tags": [], "prov": False, "sp": None,
-                "text": "Ad ka rate (eCPM) %s (%s), ads per user wahi — market/mediation/country mix ka asar, app ke "
+                "text": "Ad rate %s (%s), ads per user wahi — bazaar/dusre ad networks/country mix ka asar, app ke "
                         "use ka nahi" % (U.fmt_rel(ec["rel"]), U.fmt_span(ec["from"], ec["to"], E))}
         for wk in (mkt or {}).get("weeks") or []:
             if wk["dir"] != dr:
@@ -2846,12 +2858,12 @@ def _summary(tiles, alerts, edges, P, E):
     worse = [a for a in open_ if a["severity"] == "warning" and a["dir"] == "down"]
     suffix = ""
     if edges["ret_state"] in ("wait", "searching"):
-        suffix += " · Wapsi (D1/D7) ka data abhi aa raha."
+        suffix += " · Back next day / back after 7 days ka data abhi aa raha."
     if edges["usage_state"] == "wait":
         suffix += " · Sessions/time agle fetch me."
     if worse:
         more = len(open_) - 1
-        return {"kind": "worse", "text": "⚠️ " + worse[0]["text"] + (" (+%d aur — neeche dekho)" % more if more else "")
+        return {"kind": "worse", "text": "⚠️ " + worse[0]["text"] + (" (+%d more — see below)" % more if more else "")
                 + suffix}
     br = [a for a in open_ if a["family"] == "act_break"]
     if br:
@@ -2868,11 +2880,11 @@ def _summary(tiles, alerts, edges, P, E):
               if tiles[m]["st"] not in ("wait", "low", "noad", "growth")]
     growth = tiles["ret_dau"]["st"] == "growth"
     if growth:
-        suffix = " · Purane users: App abhi tez %s raha hai — normal range abhi nahi banti." % (
+        suffix = GROWTH_HEAD + " App abhi tez %s raha hai — normal range abhi nahi banti." % (
             "badh" if (tiles["ret_dau"]["rel"] or 0) >= 0 else "ghat") + suffix
     if not judged:
         if growth:
-            return {"kind": "wait", "text": "📈" + suffix[len(" · Purane users:"):]}
+            return {"kind": "wait", "text": "📈" + suffix[len(GROWTH_HEAD):]}
         if (P["S"] - P["launch_day"]).days < ACT_READY_DAYS:
             text = "⏳ Naya app — normal range %s se" % U.fmt_day(P["launch_day"] + timedelta(days=ACT_READY_DAYS), E)
         else:
@@ -2885,9 +2897,9 @@ def _summary(tiles, alerts, edges, P, E):
             SUMMARY_WORD[m], "kam" if tiles[m]["st"] == "maybe_dn" else "zyada") + suffix}
     parts = []
     if "ret_dau" in judged:
-        parts.append("purane users")
+        parts.append("old users")
     if "d1" in judged or "d7" in judged:
-        parts.append("wapsi")
+        parts.append("users coming back")
     if "sess" in judged or "time" in judged:
         parts.append("time")
     if "arpdau" in judged:

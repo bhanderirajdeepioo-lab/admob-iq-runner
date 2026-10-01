@@ -101,7 +101,7 @@ from . import attrib
 LAG_DAYS = 2              # GA4 settles in ~48h (mirrors fetch.ga4.LAG_DAYS without importing requests)
 LATE_DAYS = 7             # Firebase adds events (mostly app_remove) up to ~7 days late: the newest 7 days are
                           # PROVISIONAL — they can only grow (config GA4_LATE_DAYS; the build passes it in)
-PROV_NOTE = " · abhi ka data kaccha — number aur badh sakta hai"   # on an "up" alert that uses provisional days
+PROV_NOTE = " · ⏳ Not final — number aur badh sakta hai"   # on an "up" alert that uses provisional days
 EST_NOTE = " · kuch din ka GA4 data adhoora tha — total ke hisaab se poora kiya (andaza)"   # an alert on filled days
 IMPUTE_MIN_COVERAGE = 0.70   # an incomplete day holding ≥70% of its exact total is filled up to it (≤1.43×: at most
                              # its missing ≤30% is placed by assumption) — live short days read 0.91–0.96 (and a
@@ -307,7 +307,25 @@ def fmt_pp(d):
 
 
 def fmt_rate(r):
-    return _minus("%.1f" % r)
+    """An uninstall rate (stored per 1,000 active users) as the % the page says: 4.2 → "0.42%" (÷ 10)."""
+    x = r / 10
+    return _minus(("%.2f" % x if abs(x) >= 0.01 or x == 0 else "%.3f" % x).rstrip("0").rstrip(".")) + "%"
+
+
+def gone_name(n):
+    """The cohort metric's English name: 0 → "same day uninstall", N → "uninstalled within N day(s)"."""
+    return "same day uninstall" if n == 0 else "uninstalled within %d day%s" % (n, "" if n == 1 else "s")
+
+
+def _also_names(ns):
+    """The other checkpoints that moved too, in words (never D-codes): "uninstalled within 7, 30 days"."""
+    ns = sorted(ns)
+    out = ["same day uninstall"] if 0 in ns else []
+    rest = [n for n in ns if n]
+    if rest:
+        out.append("uninstalled within %s day%s" % (", ".join("%d" % n for n in rest),
+                                                    "" if rest == [1] else "s"))
+    return " aur ".join(out)
 
 
 def fmt_rel(rel):
@@ -1444,7 +1462,7 @@ def checkpoints(cd, curve, H, rels, open_eps, prev_eval, advanced):
     elif H < STABLE_DAYS:
         why = "Abhi %d din ka data — 90 din ke baad din door-door ho sakte hain" % H
     elif not ci_ok:
-        why = "Roz ~%d installs — uninstall %% me ±1 point se zyada ghat-badh, isliye pehle hafte har din" % per_day
+        why = "Roz ~%d installs — uninstall %% me ±1%% se zyada ghat-badh, isliye pehle hafte har din" % per_day
     else:
         why = "%d din tak roz 2%%+ installs hat rahe — isliye pehle hafte har din" % dsteep
     return {"stage": stage, "raw": raw, "stable_hold": hold, "list": cps, "nmax": nmax, "dsteep": dsteep,
@@ -1511,9 +1529,12 @@ def _cohort_text(s, ref=None):
     else:
         basis = ("pichhle 4 hafte aur all-time dono" if len(vs) > 1 else
                  "pichhle 4 hafte" if vs == ["prev"] else "all-time normal")
-    also = (" · %s bhi %s" % (", ".join(s["also"]), "upar" if s["dir"] == "up" else "neeche")) if s.get("also") else ""
-    return "%s uninstall %s → %s (%s point) — %s ke installs, %s se %s%s" % (
-        s["checkpoint"], old, new, fmt_pp(sd), fmt_span(s["installs_from"], s["installs_to"], ref), basis,
+    also = (" · %s bhi %s" % (_also_names(int(str(x).lstrip("D")) for x in s["also"]),
+                              "upar" if s["dir"] == "up" else "neeche")) if s.get("also") else ""
+    n = s["n"] if s.get("n") is not None else int(str(s["checkpoint"]).lstrip("D"))
+    name = gone_name(n)
+    return "%s %s → %s — %s ke installs, %s se %s%s" % (
+        name[:1].upper() + name[1:], old, new, fmt_span(s["installs_from"], s["installs_to"], ref), basis,
         "zyada" if s["dir"] == "up" else "kam", also)
 
 
@@ -1530,14 +1551,14 @@ def _alert_text(family, dr, s, ref=None):
     if family == "cohort":
         return _cohort_text(dict(s, dir=dr), ref)
     if family == "rate_spike":
-        return "%s ko uninstall rate %s /1k active (normal %s–%s) — achanak %s (%d uninstalls)" % (
-            fmt_day(s["day"], ref), fmt_rate(s["now"]), fmt_rate(s["lo"]), fmt_rate(s["hi"]),
-            "zyada" if dr == "up" else "kam", s["users"])
+        return "%s ko %s uninstalls (uninstall rate %s, normal %s–%s) — achanak %s" % (
+            fmt_day(s["day"], ref), "{:,}".format(int(s["users"])), fmt_rate(s["now"]), fmt_rate(s["lo"]),
+            fmt_rate(s["hi"]), "zyada" if dr == "up" else "kam")
     if family == "rate_zero":
-        return "%s ko ek bhi uninstall record nahi hua (normal ~%d/din) — GA4/Firebase tracking check karo" % (
+        return "%s ko ek bhi uninstall record nahi hua (normal ~%d/day) — GA4/Firebase tracking check karo" % (
             fmt_day(s["day"], ref), round(s["expected"]))
     if family == "rate_drift":
-        return "%s se uninstall rate %s → %s /1k active (%s) — dheere dheere %s" % (
+        return "%s se uninstall rate %s → %s (%s) — dheere dheere %s" % (
             fmt_day(s["since"], ref), fmt_rate(s["before"]), fmt_rate(s["now"]), fmt_rel(s["rel"]),
             "badh raha hai" if dr == "up" else "ghat raha hai")
     return str(s.get("text") or "")

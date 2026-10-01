@@ -312,7 +312,7 @@ def test_steady_app_is_all_normal_with_no_alerts():
     assert {k: t["st"] for k, t in d["tiles"].items() if k != "ecpm"} == dict.fromkeys(
         ("ret_dau", "d1", "d7", "sess", "time", "arpdau", "ads"), "normal")
     assert d["changes"]["open"] == [] and d["summary"]["kind"] == "ok"
-    assert d["summary"]["text"] == "✅ Sab normal — purane users, wapsi, time aur revenue apni normal range me."
+    assert d["summary"]["text"] == "✅ Sab normal — old users, users coming back, time aur revenue apni normal range me."
     assert row["alerts"] == {"warning": 0, "watch": 0, "good": 0}
 
 
@@ -326,7 +326,7 @@ def test_slow_drift_opens_drift():
     a = [x for x in d["changes"]["open"] if x["family"] == "act_drift"][0]
     assert a["since"] == drop.isoformat() and -0.12 < a["rel"] < -0.06 and not a["notify"]
     assert d["tiles"]["ret_dau"]["st"] == "worse" and d["summary"]["kind"] == "worse"
-    assert d["summary"]["text"].startswith("⚠️ %s se purane users kam: roz ~" % eng.fmt_day(drop))
+    assert d["summary"]["text"].startswith("⚠️ %s se old users kam: roz ~" % eng.fmt_day(drop))
     # the store runs on: the level is back — closed after CLOSE_EVALS advanced evaluations without it
     ext, _ = make_ext(st, rv, 40)
     sent2, d2, ast, _ = daily(ext, rv, END + timedelta(days=1), END + timedelta(days=40), astate=ast)
@@ -354,7 +354,7 @@ def test_sudden_drop_opens_spike():
     d, *_ = run(st, rv, END, astate=ast)
     sp = [a for a in d["changes"]["open"] if a["family"] == "act_spike"]
     assert [(a["metric"], a["dir"], a["severity"], a["day"]) for a in sp] == [("ret_dau", "down", "watch", day.isoformat())]
-    assert sp[0]["notify"] and sp[0]["text"].startswith("%s ko purane users achanak kam: " % eng.fmt_day(day))
+    assert sp[0]["notify"] and sp[0]["text"].startswith("%s ko old users achanak kam: " % eng.fmt_day(day))
     assert d["tiles"]["ret_dau"]["st"] == "watch"
 
 
@@ -383,7 +383,7 @@ def test_three_month_decline_opens_slow_watch():
     sent, d, ast, _ = daily(st, rv, END - timedelta(days=5), END)
     sl = [a for a in d["changes"]["open"] if a["family"] == "act_slow"]
     assert [(a["dir"], a["severity"]) for a in sl] == [("down", "watch")]
-    assert sl[0]["text"].startswith("Purane users 3 mahine se dheere-dheere ghat rahe: roz ~")
+    assert sl[0]["text"].startswith("Old users 3 mahine se dheere-dheere ghat rahe: roz ~")
     assert d["tiles"]["ret_dau"]["st"] in ("slow", "watch", "worse")
 
 
@@ -437,7 +437,7 @@ def test_installs_doubling_is_not_a_returning_alert():
     if d["tiles"]["ret_dau"]["st"] == "maybe_up":
         assert d["tiles"]["ret_dau"]["why"] == "installs"
     assert d["split"]["recent_rel"] > 0.2 and abs(d["split"]["old_rel"]) < 0.03       # the old users: flat
-    assert not [o for o in d["changes"]["older"] if o["metric"] == "ret_dau" and "purane users zyada" in o["text"]]
+    assert not [o for o in d["changes"]["older"] if o["metric"] == "ret_dau" and "old users zyada" in o["text"]]
     raw, rvr = quiet(new=newf, ret=False)                                # no return data: raw / elasticity mode
     sent, d2, *_ = daily(raw, rvr, END - timedelta(days=4), END)
     for a in d2["changes"]["open"]:
@@ -453,7 +453,7 @@ def test_installs_cut_with_flat_old_users_is_info_only():
     assert not [a for a in d["changes"]["open"] if a["metric"] == "ret_dau"] and sent == []
     info = [i for i in d["changes"]["info"] if i["kind"] == "installs"]
     assert info and info[0]["dir"] == "down" and "naye installs kam aane se (ad spend?)" in info[0]["text"]
-    assert "30+ din purane users normal" in info[0]["text"]
+    assert "30+ din old users normal" in info[0]["text"]
 
 
 # ── 5. revenue ──────────────────────────────────────────────────────────────────────────────────
@@ -466,7 +466,7 @@ def test_ecpm_only_move_is_price_info_not_alert():
     assert d["changes"]["open"] == []
     price = [i for i in d["changes"]["info"] if i["kind"] == "price"]
     assert len(price) == 1 and price[0]["dir"] == "down" and price[0]["tags"] == []
-    assert price[0]["text"].startswith("Ad ka rate (eCPM) −15% (") and "app ke use ka nahi" in price[0]["text"]
+    assert price[0]["text"].startswith("Ad rate −15% (") and "app ke use ka nahi" in price[0]["text"]
     revs = []                                                            # 8 of 10 apps' eCPM fell that week: market-wide
     for k in range(10):
         s_, r_ = quiet(days=120, seed=k + 3, ecpm=lambda d, k=k: 2.0 * (0.85 if d >= cut and k < 8 else 1.0))
@@ -485,14 +485,14 @@ def test_ads_per_user_drop_alerts():
     sent, d, *_ = daily(st, rv, END - timedelta(days=4), END)
     ads = [a for a in d["changes"]["open"] if a["metric"] == "ads"]
     assert [(a["family"], a["dir"]) for a in ads] == [("act_drift", "down")] and ads[0]["unit"] == "per1k"
-    assert ads[0]["text"].endswith("— ad load/fill check karo") and "1,000 users pe" in ads[0]["text"]
+    assert ads[0]["text"].endswith("— ad load/fill check karo") and "ads per user kam: 4 → 3.7/day" in ads[0]["text"]
     assert d["tiles"]["ads"]["st"] in ("worse", "watch") and d["tiles"]["arpdau"]["st"] == d["tiles"]["ads"]["st"]
     # the same with time per user −8%: the users stay less, ads follow — said so
     st2, rv2 = quiet(ipu=lambda d, v: 4.0 * (0.92 if d >= cut else 1.0),
                      tpu=lambda d, v, new: (150.0 if new else 280.0 * (0.92 if d >= cut else 1.0)))
     sent, d2, *_ = daily(st2, rv2, END - timedelta(days=4), END)
     a2 = [a for a in d2["changes"]["open"] if a["metric"] == "ads"][0]
-    assert "time" in a2["tags"] and "log kam time de rahe (time/user −" in a2["text"]
+    assert "time" in a2["tags"] and "log kam time de rahe (time per user −" in a2["text"]
 
 
 def test_other_network_shift_caps_ads_alert():
@@ -502,9 +502,9 @@ def test_other_network_shift_caps_ads_alert():
     sent, d, *_ = daily(st, rv, END - timedelta(days=4), END)
     a = [x for x in d["changes"]["open"] if x["metric"] == "ads"][0]
     assert a["severity"] == "watch" and "mix" in a["tags"]
-    assert "dusre ad networks (mediation) ka hissa badla" in a["text"]
+    assert "dusre ad networks ka hissa badla" in a["text"]
     assert d["flags"]["other_share"] > 0.1
-    assert any("Sirf AdMob Network — dusre ad networks (mediation) se ~" in t for t in d["edges"]["text"])
+    assert any("Sirf AdMob Network — dusre ad networks se ~" in t for t in d["edges"]["text"])
 
 
 # ── 6. young / steep apps, launch ────────────────────────────────────────────────────────────────
@@ -514,7 +514,7 @@ def test_steep_young_app_is_growth_not_alert():
     d, row, *_ = run(st, rv)
     assert d["changes"]["open"] == []
     assert d["tiles"]["ret_dau"]["st"] == "growth" and d["tiles"]["ret_dau"]["why"] == "steep" and d["steep"]["ret_dau"]
-    assert "normal range abhi nahi banti" in d["summary"]["text"] and "purane users," not in d["summary"]["text"]
+    assert "normal range abhi nahi banti" in d["summary"]["text"] and "old users," not in d["summary"]["text"]
     last = d["daily"]["ret"][-1]
     for m in ("ret_dau",):
         for k in ("med", "hi"):
@@ -549,7 +549,7 @@ def test_d1_drop_opens_return_alert_and_provisional_cells_never_colour():
     ra = [a for a in d["changes"]["open"] if a["family"] == "act_return"]
     assert [(a["metric"], a["dir"]) for a in ra] == [("d1", "down")] and ra[0]["unit"] == "pp"
     assert -4.5 < ra[0]["delta_pp"] < -3.5 and ra[0]["installs_to"] == (S - timedelta(days=1)).isoformat()
-    assert ra[0]["text"].startswith("Agle din wapas aane wale kam: 100 me 26, pehle 30 (")
+    assert ra[0]["text"].startswith("Back next day kam: 26%, pehle 30% (")
     assert d["tiles"]["d1"]["st"] in ("worse", "watch")
     # the same drop only on install days whose day 1 is still provisional: no alert, never coloured
     E2 = END - timedelta(days=5)                                          # a Monday: last week's D1 cells just in
@@ -622,7 +622,7 @@ def test_every_return_rate_is_over_the_install_days_ga4_new_users_never_the_coho
     assert abs(t1["base"] - 0.3) < 0.002 and abs(t1["v"] - 0.26) < 0.002
     ra = [a for a in d["changes"]["open"] if a["family"] == "act_return"]
     assert [(a["metric"], a["dir"]) for a in ra] == [("d1", "down")] and ra[0]["users"] == 2000 * t1["n"]
-    assert ra[0]["text"].startswith("Agle din wapas aane wale kam: 100 me 26, pehle 30 (")
+    assert ra[0]["text"].startswith("Back next day kam: 26%, pehle 30% (")
     g, gb = d["tri"], base["tri"]
     assert g["ref"] == gb["ref"] and g["ref_users"] == gb["ref_users"] and g["avg4"] == gb["avg4"]
     assert [(r["v"], r["users"], r["heat"]) for r in g["rows"]] == [(r["v"], r["users"], r["heat"]) for r in gb["rows"]]
@@ -731,7 +731,7 @@ def test_edge_text_reads_ret_from_from_store():
     assert texts[0] != texts[1]
     st, rv = quiet(days=300)                                             # whole
     d, *_ = run(st, rv)
-    assert d["edges"]["ret_state"] == "whole" and d["edges"]["text"][0].startswith("🔁 Wapsi ka data poori history (")
+    assert d["edges"]["ret_state"] == "whole" and d["edges"]["text"][0].startswith("🔁 Back next day / back after 7 days ka data poori history (")
     st, rv = quiet(days=300, ret_edge="searching")
     d, *_ = run(st, rv)
     assert d["edges"]["ret_state"] == "searching" and "abhi %s tak mila" % eng.fmt_day(d["edges"]["ret_oldest"], END) \
@@ -739,11 +739,12 @@ def test_edge_text_reads_ret_from_from_store():
     st, rv = quiet(days=300, ret=False, usage=False)
     d, *_ = run(st, rv)
     assert d["edges"]["ret_state"] == "wait" and d["edges"]["usage_state"] == "wait"
-    assert d["edges"]["text"][0] == "🔁 Wapsi (D1/D7) ka data agle GA4 fetch ke saath aayega."
+    assert d["edges"]["text"][0] == "🔁 Back next day / back after 7 days ka data agle GA4 fetch ke saath aayega."
     assert "⏳ Sessions aur time agle GA4 fetch ke baad aayenge (poori history ek saath)." in d["edges"]["text"]
     assert d["tiles"]["d1"]["st"] == d["tiles"]["sess"]["st"] == "wait"
-    assert d["summary"]["text"].endswith(" · Wapsi (D1/D7) ka data abhi aa raha. · Sessions/time agle fetch me.")
-    assert "purane users" in d["summary"]["text"] and "wapsi, time" not in d["summary"]["text"]
+    assert d["summary"]["text"].endswith(" · Back next day / back after 7 days ka data abhi aa raha. · Sessions/time agle "
+                                         "fetch me.")
+    assert "old users" in d["summary"]["text"] and "users coming back, time" not in d["summary"]["text"]
     tiny, rvt = quiet(days=300, new=10, old=300, zero_t=True)
     d, *_ = run(tiny, rvt)
     assert d["edges"]["ret_state"] == "unverified" and d["flags"]["ret_empty"] > 0
@@ -906,7 +907,7 @@ def test_older_changes_list_a_3_month_old_drop():
            and o["dir"] == "down"]
     assert len(old) == 1 and abs((date.fromisoformat(old[0]["from"]) - a).days) <= 3
     assert date.fromisoformat(old[0]["to"]) >= b - timedelta(days=3) and old[0]["rel"] < -0.08
-    assert old[0]["text"].startswith("%s se purane users kam" % eng.fmt_day(old[0]["from"], END))
+    assert old[0]["text"].startswith("%s se old users kam" % eng.fmt_day(old[0]["from"], END))
     assert d["changes"]["open"] == []
 
 

@@ -1,4 +1,4 @@
-"""Daily App Review — number, date and money formatting (Hinglish, Roman script only).
+"""Daily App Review — number, date and money formatting (short labels in simple English, Roman script only).
 
 Money never becomes HTML here: `money()` returns a sentinel token that `rt()` turns into a rich-text (RT) money
 segment {"usd", "s", "sign", "p"} (the page formats it with its ₹/$ toggle) and `plain()` renders as USD text.
@@ -45,15 +45,15 @@ def age_days(ctx, x):
 
 def umar(n):
     if n <= 30:
-        return f"{n} din"
+        return f"{n} day" if n == 1 else f"{n} days"
     if n < 90:
-        return f"{round(n / 7)} hafte"
-    return f"{round(n / 30)} mahine"
+        return f"{round(n / 7)} weeks"
+    return f"{round(n / 30)} months"
 
 
 def umar_se(n):
-    """'7 din se' / '3 hafte se' — an age of 0 days is 'aaj se', never '0 din se'."""
-    return "aaj se" if n <= 0 else f"{umar(n)} se"
+    """'7 days ago' / '3 weeks ago' — an age of 0 days is 'today', never '0 days ago'."""
+    return "today" if n <= 0 else f"{umar(n)} ago"
 
 
 def pct(x, plus=True):
@@ -64,6 +64,25 @@ def pct(x, plus=True):
 def p100(x):
     v = x * 100
     return (f"{v:.1f}".rstrip("0").rstrip(".")) if v < 10 else f"{v:.0f}"
+
+
+def pct1k(v):
+    """An uninstall rate stored per 1,000 active users → its % text (÷ 10): 4.2 → "0.42%", 12.5 → "1.25%"."""
+    return f"{v / 10:.2f}".rstrip("0").rstrip(".") + "%"
+
+
+def back_w(n):
+    """The return metric's English name: 1 → 'back next day', N → 'back after N days'."""
+    return "back next day" if n == 1 else f"back after {n} days"
+
+
+def gone_w(n):
+    """The uninstall-cohort metric's English name: 0 → 'same day uninstall', N → 'uninstalled within N day(s)'."""
+    return "same day uninstall" if n == 0 else f"uninstalled within {n} day" + ("" if n == 1 else "s")
+
+
+def cap(s):
+    return s[:1].upper() + s[1:] if s else s
 
 
 def users(n):
@@ -80,9 +99,9 @@ def usd_txt(v):
 
 
 def money(v, din=True, sign=False, p=0):
-    """A money token (USD). din → '/din' suffix; sign → '+' for a positive amount; p=2 → small amounts (ad rate,
+    """A money token (USD). din → '/day' suffix; sign → '+' for a positive amount; p=2 → small amounts (ad rate,
     cost per install) with 2 decimals under $10."""
-    return f"\x00m|{float(v):.4f}|{'/din' if din else ''}|{1 if sign else 0}|{2 if p == 2 else 0}\x00"
+    return f"\x00m|{float(v):.4f}|{'/day' if din else ''}|{1 if sign else 0}|{2 if p == 2 else 0}\x00"
 
 
 def usd2(v):

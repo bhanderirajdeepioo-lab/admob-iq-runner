@@ -41,7 +41,7 @@ ST = {"red", "amber", "green", "normal", "wait", "na", "nodata"}
 SRC = {"Uninstall", "Active users", "Install value", "Ad unit", "Ads", "Deductions", "Mediation", "Setup",
        "Update impact"}
 SECRETS = ([rs.A[i] for i in rs.A] + [rs.K[i] for i in rs.A] + list(rs.STORE.values()) + list(rs.PKG.values())
-           + list(rs.UNIT.values()) + [rs.PUB, rs.PUB2, "Synth", "Synth Studio", "com.example", "$", "₹", "/din"])
+           + list(rs.UNIT.values()) + [rs.PUB, rs.PUB2, "Synth", "Synth Studio", "com.example", "$", "₹", "/day", "/din"])
 
 
 def at_ist(d, hhmm):
@@ -91,7 +91,7 @@ def check_rt(x, where):
             continue
         assert isinstance(seg, dict) and set(seg) == {"usd", "s", "sign", "p"}, (where, seg)
         assert isinstance(seg["usd"], (int, float)) and not isinstance(seg["usd"], bool), where
-        assert seg["s"] in ("/din", "") and seg["sign"] in (0, 1) and seg["p"] in (0, 2), (where, seg)
+        assert seg["s"] in ("/day", "") and seg["sign"] in (0, 1) and seg["p"] in (0, 2), (where, seg)
 
 
 def check_chart(c, where):
@@ -150,7 +150,7 @@ def check_doc(doc):
     assert set(doc) == {"v", "day", "weekday", "built_at", "ready_ist", "built_from", "data", "fx", "feats", "consts",
                         "counts", "order", "how", "apps"}
     assert doc["v"] == 1 and re.match(r"^\d{4}-\d{2}-\d{2}$", doc["day"])
-    assert doc["weekday"] in ("Somvar", "Mangalvar", "Budhvar", "Guruvar", "Shukravar", "Shanivar", "Ravivar")
+    assert doc["weekday"] in ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
     assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", doc["built_at"])
     assert re.match(r"^\d\d:\d\d$", doc["ready_ist"])
     assert set(doc["built_from"]) == {"generated_at"}
@@ -206,7 +206,7 @@ def test_the_day_document_follows_the_contract(doc):
     assert re.search(r"<[A-Za-z/]", raw) is None                                  # no HTML anywhere
     assert re.search(r"[\u0900-\u097F]", raw) is None                             # Roman Hinglish only
     assert "\x00" not in raw and "\\u0000" not in raw                              # no money token left over
-    assert doc["day"] == DS and doc["weekday"] == "Guruvar" and doc["built_at"] == "2026-10-01T04:17:09Z"
+    assert doc["day"] == DS and doc["weekday"] == "Thursday" and doc["built_at"] == "2026-10-01T04:17:09Z"
     assert doc["fx"] == rs.FX and doc["built_from"] == {"generated_at": "2026-10-01T04:13:55+00:00"}
     assert doc["data"]["admob_till"] == "2026-09-30" and doc["data"]["ga4_till"] == "2026-09-28"
     assert doc["data"]["ga4_lag"] == 3 and doc["data"]["w7"] == {"from": "2026-09-24", "to": "2026-09-30"}
@@ -245,10 +245,10 @@ def test_order_tiers_and_groups_match_the_synthetic_apps(doc):
     # the 5 answers of a red feature
     q = by[1]["f"]["kamai"]["q"]
     assert plain(q["kya"]) == "App ki kamai 38% giri"
-    assert plain(q["kit"]) == "Kamai $520 → $320/din (−$200/din)"
+    assert plain(q["kit"]) == "Revenue $520 → $320/day (−$200/day)"
     assert q["kab"].startswith("24 Sep") and q["naya"]["chip"] == "naya"
     assert by[1]["f"]["kamai"]["detail"]["chart"]["fmt"] == "usd"
-    assert by[1]["head"]["chip"] == "naya" and by[1]["head"]["age"] == "7 din"
+    assert by[1]["head"]["chip"] == "naya" and by[1]["head"]["age"] == "7 days"
 
 
 def test_every_feature_is_readable_on_the_synthetic_site(site):
@@ -285,11 +285,11 @@ def test_money_segments_are_usd_and_follow_the_rt_format(doc):
             for v in o:
                 walk(v)
     walk(doc)
-    assert segs and all(s["s"] in ("", "/din") for s in segs)
-    assert any(s["s"] == "/din" for s in segs) and any(s["sign"] == 1 for s in segs)
-    assert rt(f"a {money(12.5)} b") == ["a ", {"usd": 12.5, "s": "/din", "sign": 0, "p": 0}, " b"]
+    assert segs and all(s["s"] in ("", "/day") for s in segs)
+    assert any(s["s"] == "/day" for s in segs) and any(s["sign"] == 1 for s in segs)
+    assert rt(f"a {money(12.5)} b") == ["a ", {"usd": 12.5, "s": "/day", "sign": 0, "p": 0}, " b"]
     assert plain(rt(f"x {money(-3.456, din=False, p=2)}")) == "x −$3.46"
-    assert plain(f"{money(1234.5, sign=True)}") == "+$1,234/din"
+    assert plain(f"{money(1234.5, sign=True)}") == "+$1,234/day"
     assert rt("plain text") == "plain text" and rt(None) is None
 
 
@@ -815,17 +815,17 @@ def test_first_shown_and_setup_kab_se_follow_the_snapshot_history(site, tmp_path
     a1 = _feat(doc, 1, "kamai")                                   # a row without a dashboard "opened" date
     assert a1["q"]["naya"]["first"] == "29 Sep (jab ye page shuru hua)"
     ga4 = _feat(doc, 8, "setup")                                  # shown since go-live, no launch date
-    assert ga4["q"]["kab"] == "29 Sep · 2 din se (jab se ye page dekh raha hai)", ga4["q"]["kab"]
+    assert ga4["q"]["kab"] == "29 Sep · 2 days ago (jab se ye page dekh raha hai)", ga4["q"]["kab"]
     tok = _feat(doc, 1, "setup")                                  # new today
-    assert tok["st"] == "red" and tok["q"]["kab"] == "1 Oct · aaj se", tok["q"]["kab"]
-    assert tok["q"]["naya"]["first"] == "1 Oct (aaj)"
+    assert tok["st"] == "red" and tok["q"]["kab"] == "1 Oct · today", tok["q"]["kab"]
+    assert tok["q"]["naya"]["first"] == "1 Oct (today)"
     raw = json.dumps(doc, ensure_ascii=False)
-    assert "0 din se" not in raw and "(0 din)" not in raw
+    assert "0 days ago" not in raw and "(0 days)" not in raw and "0 din se" not in raw
     # a snapshot whose history file is missing ends every run there (never a made-up older date)
     os.remove(os.path.join(data, "review", "seen", f"{d1.isoformat()}.json"))
     res, _ = run(site, data, at_ist(d2, "10:30"), today=d2, rebuild=True)
     assert res["ok"]
-    assert _feat(_day_doc(data, d2), 8, "setup")["q"]["kab"] == "1 Oct · aaj se"
+    assert _feat(_day_doc(data, d2), 8, "setup")["q"]["kab"] == "1 Oct · today"
 
 
 def test_the_first_day_says_page_started_and_later_new_rows_say_aaj(site, tmp_path):
@@ -833,7 +833,7 @@ def test_the_first_day_says_page_started_and_later_new_rows_say_aaj(site, tmp_pa
     res, _ = run(site, data, at_ist(DAY, "09:30"))
     doc = _day_doc(data, DAY)
     assert _feat(doc, 1, "kamai")["q"]["naya"]["first"] == "1 Oct (jab ye page shuru hua)"
-    assert _feat(doc, 8, "setup")["q"]["kab"] == "1 Oct · aaj se (jab se ye page dekh raha hai)"
+    assert _feat(doc, 8, "setup")["q"]["kab"] == "1 Oct · today (jab se ye page dekh raha hai)"
     h = rstore.load_history(data, DAY + timedelta(1), "2026-10-01")
     assert h["go_live"] == DAY and h["seen"][rs.K[1]] and all(v == DAY for v in h["seen"][rs.K[1]].values())
 
@@ -849,15 +849,16 @@ def test_an_ecpm_range_alert_is_money_never_a_rate_per_100(site):
     k4, k5 = _feat(doc, 4, "kamai"), _feat(doc, 5, "kamai")
     assert k4["st"] == "amber" and k5["st"] == "amber"
     t4, t5 = plain(k4["q"]["kya"]) + " · " + plain(k4["q"]["saath"]), plain(k5["q"]["kya"]) + " · " + plain(k5["q"]["saath"])
-    assert "pe click rate" in t4 and "100 me 30" in t4                      # the rate head as before
-    assert "eCPM (1,000 ads ki kamai) Aug me $116.0 (range $40.7–$104.1)" in t4, t4
+    assert "pe click rate" in t4 and ": 30%, range 40%–50%" in t4            # the rate head: a % (R3)
+    assert "eCPM Aug me $116.0 (range $40.7–$104.1)" in t4, t4
     assert "11603" not in json.dumps(doc) and "4074" not in json.dumps(doc)
-    assert "ka eCPM (1,000 ads ki kamai) (main_banner): $12.5, range $40.7–$104.1" in t5, t5    # an eCPM head
-    assert "click rate" not in plain(k5["q"]["kya"]) and "Match rate Aug me 100 me 70 (range 90–100)" in t5, t5
+    assert "ka eCPM (main_banner): $12.5, range $40.7–$104.1" in t5, t5    # an eCPM head
+    assert "click rate" not in plain(k5["q"]["kya"]) and "Match rate Aug me 70% (range 90%–100%)" in t5, t5
     assert "clicks" in k4["q"]["karo"] and "floor price" in k5["q"]["karo"]
     k8 = _feat(doc, 8, "kamai")                                               # an eCPM ABOVE its range
     assert "Range dobara approve" in k8["q"]["karo"] and "range se upar" in plain(k8["q"]["kit"])
     assert "100 me" not in plain(k8["q"]["kya"]) + plain(k8["q"]["kit"]) + k8["t"]
+    assert "%" not in plain(k8["q"]["kya"]) + plain(k8["q"]["kit"])           # an eCPM is money, never a rate
     usd = [s for s in (k5["q"]["kya"] if isinstance(k5["q"]["kya"], list) else []) if isinstance(s, dict)]
     assert [s["usd"] for s in usd] == [12.5, 40.74, 104.11] and all(s["p"] == 2 for s in usd)   # money follows ₹/$
 

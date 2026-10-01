@@ -737,11 +737,12 @@ IMPACT_ALERT_KEYS = ("release", "level", "rows")
 LATE_ALERT_KEYS = ("release", "level", "rows", "window", "mixed")
 LATE_TEXT = re.compile(r"^(v.+?|App update) \(\d{1,2} [A-Z][a-z]{2}( \d{4})?\) ke 30 din baad .+ · pehle 7 din me ye nahi "
                        r"dikha tha( · beech me \d+ aur updates? \(.+\) — asar mila-jula ho sakta hai)? · "
-                       r"(HALT — staged rollout rok do, hotfix bhejo|HOLD — agla rollout roko, jaanch karo)"
-                       r"( · D30 abhi baaki)?")
+                       r"(🛑 Stop update — staged rollout rok do, hotfix bhejo|⚠️ Wait and check — agla rollout roko, "
+                       r"jaanch karo)( · 30 din ka result abhi baaki)?")
 IMPACT_TEXT = re.compile(r"^(v.+?|App update) \(\d{1,2} [A-Z][a-z]{2}( \d{4})?\) ke baad .+ · "
-                         r"(HALT — staged rollout rok do, hotfix bhejo|HOLD — agla rollout roko, jaanch karo|"
-                         r"WIN — isi disha me aage badho)( · shuruaati — D7 abhi baaki)?")
+                         r"(🛑 Stop update — staged rollout rok do, hotfix bhejo|⚠️ Wait and check — agla rollout roko, "
+                         r"jaanch karo|✅ Update went well — isi disha me aage badho)"
+                         r"( · shuruaati — 7 din ka result abhi baaki)?")
 
 
 def check_alert(a, closed=False):
@@ -805,7 +806,7 @@ def check_alert(a, closed=False):
     assert _iso(a["opened"]) and _iso(a["last_seen"]) and _iso(a["data_till"])
     assert isinstance(a["fresh"], bool) and isinstance(a["notify"], bool)
     assert isinstance(a["provisional"], bool) and not (a["provisional"] and a["dir"] == "down")   # good news: settled
-    assert a["text"].endswith(" · abhi ka data kaccha — number aur badh sakta hai") == a["provisional"]
+    assert a["text"].endswith(" · ⏳ Not final — number aur badh sakta hai") == a["provisional"]
     assert isinstance(a["estimate"], bool) and not (a["estimate"] and a["family"] not in ("cohort", "impact",
                                                                                          "impact_late"))
     assert (" · kuch din ka GA4 data adhoora tha — total ke hisaab se poora kiya (andaza)" in a["text"]) == a["estimate"]

@@ -82,7 +82,7 @@ test("live: true (the page's Aaj view) on a day that is no longer open → 409 d
   for (const opt of [{}, own]) {
     const r = await t.act({ d: D0, act: "ok", app: K.a, live: true }, opt);
     assert.equal(r.status, 409);
-    assert.deepEqual(r.json, { error: "conflict", msg: "Naye din ke cards aa gaye — upar “Kholo” dabao", why: "day_moved",
+    assert.deepEqual(r.json, { error: "conflict", msg: "Naye din ke cards aa gaye — upar “Open” dabao", why: "day_moved",
       open_day: D1 });
   }
   const bulk = await t.act({ d: D0, act: "bulk_ok", apps: [K.a], live: true }, own);

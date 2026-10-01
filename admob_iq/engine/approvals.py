@@ -193,9 +193,9 @@ def range_alerts(payload, max_items=60):
                 "id": u["id"], "place": u.get("name"), "app": u.get("app"),
                 "metric": k, "dir": direction, "severity": sev, "rev": u.get("rev_total", 0),
                 "now": latest.get(k), "range": [lo, hi],
-                "message": (f"{_MET_LABEL[k]} {_fmt_val(k, latest.get(k))} — approved range "
-                            f"{_fmt_val(k, lo)}–{_fmt_val(k, hi)} se "
-                            f"{'upar' if direction == 'above' else 'neeche'}"),
+                "message": (f"{_MET_LABEL[k]} {_fmt_val(k, latest.get(k))} — "
+                            f"{'above' if direction == 'above' else 'below'} approved range "
+                            f"{_fmt_val(k, lo)}–{_fmt_val(k, hi)}"),
             })
     items.sort(key=lambda a: (0 if a["severity"] == "warning" else 1, -(a.get("rev") or 0)))
     return items[:max_items]

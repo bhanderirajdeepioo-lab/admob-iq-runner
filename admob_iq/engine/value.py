@@ -168,7 +168,7 @@ GEOCOST_DEDUP_DAYS = 7          # one geo_cost notification per app per 7 days (
 # one notification per app, family group and direction per N days (episodes): the pay_* rule, generalised
 VER_DEDUP_DAYS = 7
 LONG_DEDUP_DAYS = 28
-NWORD = {1: "agle din", 7: "hafte baad", 30: "30 din baad"}
+NWORD = {1: "back next day", 7: "back after 7 days", 30: "back after 30 days"}
 NAMES = {"US": "United States", "IN": "India", "GB": "United Kingdom", "DE": "Germany", "FR": "France", "BR": "Brazil", "ID": "Indonesia",
          "PK": "Pakistan", "BD": "Bangladesh", "NG": "Nigeria", "PH": "Philippines", "VN": "Vietnam", "TH": "Thailand",
          "MX": "Mexico", "TR": "Turkey", "EG": "Egypt", "RU": "Russia", "IT": "Italy", "ES": "Spain", "CA": "Canada",
@@ -390,6 +390,14 @@ def _span(a, b, ref):
 
 def _pct(x):
     return "%d%%" % int(round(100 * x))
+
+
+def _back_pct(v):
+    """Money back per 100 of ads spend (the {p:} value) → the % of spend back: 18.4 → "18%", 4.3 → "4.3%"."""
+    if v is None:
+        return "—"
+    a = abs(v)
+    return (("%.1f" % v).rstrip("0").rstrip(".") if a < 10 else "%d" % round(v)) + "%"
 
 
 # ── AdMob scale (§1.6) ──────────────────────────────────────────────────────────────────────────
@@ -1763,36 +1771,36 @@ def country_text(row, d1_app, H, best, weak):
     if not row["clean"]:
         return "%s: in hafton ka country data GA4 ne poora nahi diya — abhi faisla nahi" % name
     if row.get("why") == "young":
-        return "%s: %s installs — kamai ke kaafi hafte aane pe faisla" % (name, "{:,}".format(row["n"]))
+        return "%s: %s installs — earning ke kaafi hafte aane pe faisla" % (name, "{:,}".format(row["n"]))
     if row["verdict"] == "few":
         if row.get("why") == "few_val":               # many installs now, but the weeks its value comes from are small
-            return ("%s: kamai wale (purane) hafton me sirf %s installs — faisla ke liye kam (%d chahiye)"
+            return ("%s: earning wale (purane) hafton me sirf %s installs — faisla ke liye kam (%d chahiye)"
                     % (name, "{:,}".format(row.get("n_val") or 0), CTY_JUDGE))
         return "%s: abhi sirf %s installs — faisla ke liye kam (%d chahiye)" % (name, "{:,}".format(row["n"]), CTY_JUDGE)
     d1 = row["d1"]["v"]
-    head = "%s: 100 me se %s agle din wapas (app me %s)" % (
-        name, "—" if d1 is None else int(round(d1)), "—" if d1_app is None else int(round(d1_app)))
+    head = "%s: back next day %s (app me %s)" % (
+        name, "—" if d1 is None else "%d%%" % int(round(d1)), "—" if d1_app is None else "%d%%" % int(round(d1_app)))
     K = row["cpi"] or {}
     if K.get("v") is not None and not K.get("thin"):
         pp = (row.get("pay") or {}).get("p")
-        tail = {"keep": "paisa ~%s din me wapas, ads chalu rakh sakte ho" % (pp if pp is not None else H),
-                "slow": "paisa wapas aane me ~%s din — dheere" % (pp if pp is not None else ">%d" % H),
+        tail = {"keep": "money back in ~%s days, ads chalu rakh sakte ho" % (pp if pp is not None else H),
+                "slow": "money back in ~%s days — dheere" % (pp if pp is not None else ">%d" % H),
                 "costly": "ads yahan mehenge pad rahe",
-                "late": "%s din me paisa wapas nahi aaya — aage ka andaza abhi nahi" % (
+                "late": "%s din me money back nahi aaya — aage ka andaza abhi nahi" % (
                     (row.get("pay") or {}).get("upto") or H)}.get(row["verdict"], "abhi faisla nahi")
-        return "%s, %d din me kamai per install %s — install %s me pad raha, %s" % (
+        return "%s, %d din me earning per install %s — install %s me pad raha, %s" % (
             head, H, t_m(row["be"]), t_q(row["cpi"]["v"]), tail)
     r30 = (row["rpi"].get("30") or {}).get("v")
-    txt = "%s, 30 din me kamai per install %s" % (head, t_m(r30))
+    txt = "%s, 30 din me earning per install %s" % (head, t_m(r30))
     if row["be"] is not None:
-        txt += " — install %s se sasta mile tabhi %d din me paisa wapas" % (t_m(row["be"]), H)
+        txt += " — install %s se sasta mile tabhi %d din me money back" % (t_m(row["be"]), H)
     if row["cc"] in best:
         txt += " — sabse zyada kamai walon me"
     elif row["cc"] in weak:
         txt += " — kam kamai walon me"
     if K.get("thin"):                                 # a trickle of Google Ads: its cost is shown, never judged
         txt += " — yahan %s, isliye ads ka faisla nahi" % {
-            "spend": "Google Ads kharcha thoda",
+            "spend": "Google Ads spend thoda",
             "dl": "Google Ads se sirf %s installs" % "{:,}".format(int(round(K.get("dl") or 0))),
             "paid": "ads se sirf ~%s%% installs" % _num1(100 * (K.get("paid") or 0))}[K["thin"]]
     return txt
@@ -1922,20 +1930,20 @@ def _tags(P, info, weeks_by_W, e, releases, act_alerts, ctyinfo=None):
     mix_only = mix is not None and ads_rel is not None and abs(ads_rel) < TAG_REL
     if mix_only:
         tags.append("mix")
-        cause = ("ads wale installs %d%% → %d%% — organic installs badle, ads ka kharcha per ads-install wahi"
+        cause = ("ads wale installs %d%% → %d%% — organic installs badle, cost per ads-install wahi"
                  % (round(100 * mix[0]), round(100 * mix[1])))
     c = _cpi_at(weeks_by_W, e)
     if c is not None and not mix_only:
         c_rel = c[1]["c1"] / c[1]["c0"] - 1
         if abs(c_rel) >= TAG_REL and abs(c[0]) >= 0.5 * abs(Tv) and (c[0] > 0) == (Tv < 0):
             tags.append("cpi")
-            cause = cause or "install ka kharcha %s → %s (%s%s)" % (
+            cause = cause or "cost per install %s → %s (%s%s)" % (
                 t_q(c[1]["c0"], c[1]["s0"]), t_q(c[1]["c1"], c[1]["s1"]), "+" if c_rel > 0 else "", _pct(c_rel))
     v1 = sum(w["R"][_tj(7)] for w in rec) / sum(w["n"] for w in rec)
     v0 = sum(w["R"][_tj(7)] for w in base) / sum(w["n"] for w in base)
     if v0 > 0 and abs(v1 / v0 - 1) >= TAG_REL and (v1 < v0) == (Tv < 0):
         tags.append("value")
-        cause = cause or "kamai per install (7 din) %s → %s (%s%s)" % (
+        cause = cause or "earning per install (7 din) %s → %s (%s%s)" % (
             t_m(v0), t_m(v1), "+" if v1 > v0 else "", _pct(v1 / v0 - 1))
     if mix is not None and not mix_only:
         tags.append("mix")
@@ -2026,7 +2034,7 @@ def _conditions(P, weeks, pays, H, E, ctyinfo, C, releases, act_alerts, geo, str
                 market_only = bool(mk) and set(tags) <= {"value"}
                 if market_only:
                     tags.append("market_wide")
-                    cause = (cause + " — " if cause else "") + "ad rate (eCPM) sab apps me %s" % (
+                    cause = (cause + " — " if cause else "") + "ad rate sab apps me %s" % (
                         "gira" if dr == "down" else "badha")
                 held = bool(kbad or link or market_only)
                 if held and sev == "warning":
@@ -2350,7 +2358,7 @@ def _range_txt(s):
     if s.get("obs") or s.get("never"):
         return ""
     if s.get("rough"):
-        return " (andaza kaafi kaccha)"
+        return " (≈ andaza, data kam)"
     lo, hi = s.get("lo"), s.get("hi")
     if lo is None or hi is None or lo == hi:
         return ""
@@ -2364,38 +2372,39 @@ def alert_text(s, app_name, H, ref):
     if fam == "pay_slow":
         pp = "%s din" % (">365" if (s.get("p") or 0) >= 366 else s.get("p"))
         p0 = "%s din" % (">365" if (s.get("p0") or 0) >= 366 else s.get("p0"))
-        head = "Ads ka paisa %s: %s ke installs ~%s%s (pehle ~%s)" % (
-            "jaldi wapas" if s["dir"] == "up" else "wapas aane me der", wk, pp, _range_txt(s), p0)
-        cause = s.get("cause") or ("%s100 pe 7 din me %s, pehle %s" % (T_C, t_p(s.get("now")), t_p(s.get("before"))))
+        head = "Money back %s: %s ke installs ~%s%s (pehle ~%s)" % (
+            "jaldi" if s["dir"] == "up" else "me der", wk, pp, _range_txt(s), p0)
+        cause = s.get("cause") or ("7 din me spend ka %s back, pehle %s" % (_back_pct(s.get("now")),
+                                                                          _back_pct(s.get("before"))))
         txt = head + " — " + cause
         if s.get("release"):
             txt += " · %s ke baad" % (("v" + str(s["release"]["version"])) if s["release"].get("version")
                                       else "App update")
         return txt
     if fam == "pay_loss":
-        txt = "%s ke installs %d din me paisa wapas nahi karte (%s) — ads ka kharcha %s/hafta" % (
+        txt = "%s ke installs %d din me money back nahi karte (%s) — ads spend %s/week" % (
             wk, H, p_phrase(s).replace(" (", ", ").rstrip(")"), t_s(s.get("spend"), s.get("spend_src")))
         if "market_wide" in (s.get("tags") or []):
-            txt += " · ad rate (eCPM) sab apps me gira"
+            txt += " · ad rate sab apps me gira"
         return txt
     if fam == "geo_move":
         name = t_cc(s["cc"])
         if s["metric"] == "rpi7":
-            return "%s me kamai per install (7 din) %s: %s, pehle %s (%s%s, 2 hafte se)" % (
+            return "%s me earning per install (7 din) %s: %s, pehle %s (%s%s, 2 hafte se)" % (
                 name, "kam" if s["dir"] == "down" else "zyada", t_m(s["now"]), t_m(s["before"]),
                 "+" if (s.get("rel") or 0) > 0 else "", _pct(s.get("rel") or 0))
         n = int(s["metric"][1:])
-        return "%s me %s wapas aane wale %s: 100 me %s, pehle %s (2 hafte se) — %s = installs ka %s" % (
+        return "%s me %s %s: %s%%, pehle %s%% (2 hafte se) — %s = installs ka %s" % (
             name, NWORD[n], "kam" if s["dir"] == "down" else "zyada", _int(s["now"]), _int(s["before"]), name,
             _pct(s.get("share") or 0))
     if fam == "geo_cost":
         name = t_cc(s["cc"])
         pct = _pct((s["before"] or 0) / s["now"]) if s.get("now") else "—"
-        return "%s me ads mehenge: install %s ka, %d din me kamai sirf %s (%s wapas) — kharcha %s/hafta" % (
+        return "%s me ads mehenge: install %s ka, %d din me earning sirf %s (%s back) — spend %s/week" % (
             name, t_q(s["now"]), H, t_m(s.get("before")), pct, t_s(s.get("spend")))
     if fam == "iv_link":
-        return ("GA4 me AdMob ki kamai ka sirf %s%% dikh raha (pehle %s%%) — Firebase–AdMob link check karo; is tab ki "
-                "kamai AdMob ke hisaab se ≈" % (_int(s.get("now")), _int(s.get("before"))))
+        return ("GA4 me AdMob revenue ka sirf %s%% dikh raha (pehle %s%%) — Firebase–AdMob link check karo; is tab ki "
+                "earning AdMob ke hisaab se ≈" % (_int(s.get("now")), _int(s.get("before"))))
     if fam in ("ver_ret", "long_ret"):                # C / D (VALUE_CD): their own module's sentences
         from . import value_cd as VC
         return VC.ver_alert_text(s) if fam == "ver_ret" else VC.long_alert_text(s)
@@ -2407,15 +2416,15 @@ def p_phrase(p):
     if not p:
         return "abhi pata nahi"
     if p.get("never"):
-        return "saal bhar me bhi nahi (≈%s%% wapas)" % _int(p.get("pct365"))
+        return "saal bhar me bhi nahi (≈%s%% back)" % _int(p.get("pct365"))
     if p.get("p") is None:
         return "abhi pata nahi"
     if p.get("obs"):
         return "%d din me" % p["p"]
     if p.get("shape") == "portfolio":
-        return "~%d din me (andaza kaafi kaccha, dusre apps ke hisaab se)" % p["p"]
+        return "~%d din me (≈ andaza, data kam — dusre apps ke hisaab se)" % p["p"]
     if p.get("rough"):
-        return "~%d din me (andaza kaafi kaccha)" % p["p"]
+        return "~%d din me (≈ andaza, data kam)" % p["p"]
     lo, hi = p.get("lo"), p.get("hi")
     if lo is not None and hi is not None and lo == hi:
         return "~%d din me" % p["p"]                     # a range of zero width says nothing: left out
@@ -2537,18 +2546,18 @@ def _ads_state(weeks, pays, E, have_spend):
 
 
 def _stop_note(weeks, pays, last_sp, ref):
-    """"{since} se Google Ads kharcha nahi — aakhri ads hafte ({span}): paisa {P_phrase} wapas"."""
+    """"{since} se Google Ads spend nahi — aakhri ads hafte ({span}) ke installs {P_phrase} money back"."""
     since = last_sp["W"] + timedelta(days=7)
     lj = next((w for w in reversed(weeks) if w["judged"] and pays.get(w["W"])), None)
-    txt = "%s se Google Ads kharcha nahi" % U.fmt_day(since, ref)
+    txt = "%s se Google Ads spend nahi" % U.fmt_day(since, ref)
     if lj is not None:
         p = pays[lj["W"]]
         sp = _span(lj["W"], lj["W"] + timedelta(days=6), ref)
         if p.get("never"):
-            txt += " — aakhri ads hafte (%s) ke installs saal bhar me bhi paisa wapas nahi karte (≈%s%% wapas)" % (
+            txt += " — aakhri ads hafte (%s) ke installs saal bhar me bhi money back nahi karte (≈%s%% back)" % (
                 sp, _int(p.get("pct365")))
         else:
-            txt += " — aakhri ads hafte (%s) ke installs %s paisa wapas" % (sp, p_phrase(p))
+            txt += " — aakhri ads hafte (%s) ke installs %s money back" % (sp, p_phrase(p))
     return txt
 
 
@@ -2567,14 +2576,14 @@ def _tiles(P, weeks, pays, alerts, E, cty, H, have_spend=True):
         note = _stop_note(weeks, pays, last_sp, S)
     elif state == "spend_wait":
         tl = max((w["W"] + timedelta(days=6) for w in weeks if w["spend"] is not None), default=None)
-        note = ("Google Ads kharcha %s se abhi nahi aaya — naye hafton ka paisa-wapas uske baad" %
-                U.fmt_day(tl + ONE, S)) if tl else "Google Ads kharcha abhi nahi aaya"
+        note = ("Google Ads spend %s se abhi nahi aaya — naye hafton ka money back uske baad" %
+                U.fmt_day(tl + ONE, S)) if tl else "Google Ads spend abhi nahi aaya"
     elif state == "new":
         note = "Ads shuru hue — andaza hafte ke installs ke 7 din pure hone ke ~5 din baad"
     elif state == "none":
-        note = "Google Ads kharcha nahi mila"
+        note = "Google Ads spend nahi mila"
     elif state == "noads":
-        note = "Is app pe Google Ads kharcha nahi"
+        note = "Is app pe Google Ads spend nahi"
     idle = {"stopped": "nospend", "none": "nospend", "noads": "nospend", "thin": "thin", "spend_wait": "wait",
             "new": "wait"}
     # money back: the newest judged week with 7 days of earnings — only while the app spends
@@ -2718,10 +2727,10 @@ def _info(P, weeks, C, ci, just_closed, pays, E, spend_known, alerts=None):
         a, b = sw[-4:-2], sw[-2:]
         if all(w["spend"] for w in a) and not any(w["spend"] for w in b):
             out.append({"kind": "spend", "from": _iso(b[0]["W"]), "to": None,
-                        "text": "%s se Google Ads kharcha band" % U.fmt_day(b[0]["W"], ref)})
+                        "text": "%s se Google Ads spend band" % U.fmt_day(b[0]["W"], ref)})
         elif not any(w["spend"] for w in a) and all(w["spend"] for w in b):
             out.append({"kind": "spend", "from": _iso(b[0]["W"]), "to": None,
-                        "text": "%s se Google Ads kharcha shuru" % U.fmt_day(b[0]["W"], ref)})
+                        "text": "%s se Google Ads spend shuru" % U.fmt_day(b[0]["W"], ref)})
     # paid share
     pw = [w for w in weeks if w["paid"] is not None and w["cj"][0]]
     if len(pw) >= 10:
@@ -2737,7 +2746,7 @@ def _info(P, weeks, C, ci, just_closed, pays, E, spend_known, alerts=None):
     if bad:
         raw = _med([v[3] for v in bad])
         out.append({"kind": "k", "from": None, "to": None,
-                    "text": "GA4 me AdMob ki kamai ka %d%% dikhta — install-wise kamai AdMob ke hisaab se scale ki (≈)"
+                    "text": "GA4 me AdMob revenue ka %d%% dikhta — install-wise earning AdMob ke hisaab se scale ki (≈)"
                     % int(round(100 / raw))})
     # countries: mix, new in the top 8, a week not clean
     if C is not None and ci is not None:
@@ -2764,21 +2773,21 @@ def _info(P, weeks, C, ci, just_closed, pays, E, spend_known, alerts=None):
         for W in C.weeks(1, WIN_WEEKS):
             if not C.clean(W, 1):
                 out.append({"kind": "gap", "from": _iso(W), "to": _iso(W + timedelta(days=6)),
-                            "text": "Is hafte ka country data GA4 ne poora nahi baanta — countries ka faisla ruka."})
+                            "text": "Us hafte ka country data GA4 ne poora nahi baanta — countries ka faisla ruka."})
                 break
     for ep in just_closed:
         if ep["family"] == "pay_loss":
             jw = [w for w in weeks if w["judged"] and w["cj"][_tj(7)] and pays.get(w["W"])]
             p = pays[jw[-1]["W"]] if jw else None
             stale = not jw or (E - (jw[-1]["W"] + timedelta(days=6))).days > ADS_STALE_DAYS
-            txt = ("✅ ab Google Ads kharcha nahi — paisa-wapas ka alert band" if stale else
-                   "✅ ab paisa ~%s din me wapas" % (_pval(p) if p and _pval(p) is not None else "?"))
+            txt = ("✅ ab Google Ads spend nahi — money back ka alert band" if stale else
+                   "✅ ab money back in ~%s days" % (_pval(p) if p and _pval(p) is not None else "?"))
             out.append({"kind": "closed", "from": ep["opened"], "to": ep["closed"], "text": txt})
     for a in alerts or []:                            # the market's move, said once (never an app's own alert)
         mk = a.get("market")
         if mk and "market_wide" in (a.get("tags") or []):
             out.append({"kind": "market", "from": mk.get("from"), "to": mk.get("to"),
-                        "text": "Ad rate (eCPM) sab apps me %s — %s me se %s apps me; isliye is app ka paisa-wapas "
+                        "text": "Ad rate sab apps me %s — %s me se %s apps me; isliye is app ka money back "
                                 "alert sirf dikhaya, bheja nahi" % ("gira" if a["dir"] == "down" else "badha",
                                                                    mk.get("apps") or "?", mk.get("of") or "?")})
             break
@@ -2793,7 +2802,7 @@ def _summary(tiles, alerts, weeks, pays, ida_state, ida_pct, ida_left, E, ref):
     worse = [a for a in alerts if a["severity"] == "warning"]
     if worse:
         more = len(alerts) - 1
-        return {"kind": "worse", "text": "⚠️ " + worse[0]["text"] + (" (+%d aur — neeche dekho)" % more if more else "")}
+        return {"kind": "worse", "text": "⚠️ " + worse[0]["text"] + (" (+%d more — see below)" % more if more else "")}
     watch = [a for a in alerts if a["severity"] == "watch"]
     if watch:
         return {"kind": "watch", "text": "🟡 " + watch[0]["text"]}
@@ -2810,39 +2819,39 @@ def _summary(tiles, alerts, weeks, pays, ida_state, ida_pct, ida_left, E, ref):
         port = pt.get("shape") == "portfolio"            # projected from the other apps' curves: the pay alerts never
         alert = "" if port else "2 hafte aisa raha to alert"    # judge such a week (_conditions) — no alert promised
         if pt["st"] == "never" or pt.get("never"):
-            return {"kind": "never", "text": "💸 Is hafte (%s) ke installs saal bhar me ≈%s%% hi ads ka paisa wapas "
+            return {"kind": "never", "text": "💸 %s ke installs saal bhar me ≈%s%% hi ads money back "
                                              "karte%s%s%s." % (span, _int(pt.get("pct365")),
                                                                " (andaza dusre apps ke hisaab se)" if port else "",
                                                                before, " — " + alert if alert else "")}
         ph = p_phrase(dict({k: pt.get(k) for k in ("lo", "hi", "obs", "never", "pct365", "rough", "shape")},
                            p=pt["v"]))
         if pt["st"] in ("maybe_dn", "maybe_up"):
-            return {"kind": "maybe", "text": "🔵 Is hafte (%s) ke installs %s ads ka paisa wapas%s — shayad %s%s." % (
+            return {"kind": "maybe", "text": "🔵 %s ke installs %s ads money back%s — shayad %s%s." % (
                 span, ph, before, "dheere" if pt["st"] == "maybe_dn" else "jaldi", ", " + alert if alert else "")}
         if pt["st"] == "normal":
-            return {"kind": "ok", "text": "✅ Is hafte (%s) ke installs %s ads ka paisa wapas — normal jaisa%s." % (
+            return {"kind": "ok", "text": "✅ %s ke installs %s ads money back — normal jaisa%s." % (
                 span, ph, before)}
-        return {"kind": "ok", "text": "✅ Is hafte (%s) ke installs %s ads ka paisa wapas (pehle ke hafte abhi kam — "
+        return {"kind": "ok", "text": "✅ %s ke installs %s ads money back (pehle ke hafte abhi kam — "
                                       "normal baad me)." % (span, ph)}
     if not weeks:
-        return {"kind": "wait", "text": "⏳ Install-wise kamai ka data aa raha — abhi koi poora install-hafta nahi."}
+        return {"kind": "wait", "text": "⏳ Install-wise earning ka data aa raha — abhi koi poora install-hafta nahi."}
     r30 = tiles["rpi"]["v"]
     if state == "none":
-        return {"kind": "nospend", "text": "ℹ️ Google Ads kharcha abhi nahi mila — 30 din me kamai per install %s."
+        return {"kind": "nospend", "text": "ℹ️ Google Ads spend abhi nahi mila — 30 din me earning per install %s."
                 % t_m(r30)}
     if state in ("stopped", "noads"):
-        return {"kind": "nospend", "text": "ℹ️ %s. 30 din me kamai per install %s." % (
-            pt.get("note") or "Google Ads kharcha nahi", t_m(r30))}
+        return {"kind": "nospend", "text": "ℹ️ %s. 30 din me earning per install %s." % (
+            pt.get("note") or "Google Ads spend nahi", t_m(r30))}
     if ida_state != "whole":
-        return {"kind": "wait", "text": "⏳ Install-wise kamai ka data aa raha — %d%% history aa gayi, ~%d din me poora." % (
+        return {"kind": "wait", "text": "⏳ Install-wise earning ka data aa raha — %d%% history aa gayi, ~%d din me poora." % (
             ida_pct or 0, ida_left or 0)}
     if state == "spend_wait":
-        return {"kind": "wait", "text": "⏳ %s." % (pt.get("note") or "Google Ads kharcha abhi nahi aaya")}
+        return {"kind": "wait", "text": "⏳ %s." % (pt.get("note") or "Google Ads spend abhi nahi aaya")}
     if state == "new":
         return {"kind": "wait", "text": "⏳ %s." % pt.get("note")}
     if state == "on":                                  # judged, 7 days in, no curve yet
-        return {"kind": "wait", "text": "⏳ Ads ka paisa kitne din me wapas — %s." % (pt.get("note") or "abhi andaza nahi")}
-    return {"kind": "thin", "text": "ℹ️ Google Ads kharcha thoda — paisa-wapas ka faisla nahi (hafte me %s aur %d "
+        return {"kind": "wait", "text": "⏳ Ads money kitne din me back — %s." % (pt.get("note") or "abhi andaza nahi")}
+    return {"kind": "thin", "text": "ℹ️ Google Ads spend thoda — money back ka faisla nahi (hafte me %s aur %d "
                                     "installs chahiye)." % (t_b(SPEND_MIN_WEEK), N_MIN_WEEK)}
 
 
@@ -3108,7 +3117,7 @@ def _detail(store, ida, P, weeks, pays, shapes, cty, alerts, closed, info, tiles
     S = P["S"]
     txt = []
     if (ida.get("flags") or {}).get("qb_win"):
-        txt.append("GA4 me purane users ka data kam dikh raha — property ki data retention setting check karo")
+        txt.append("GA4 me old users ka data kam dikh raha — property ki data retention setting check karo")
     if ida.get("edge"):
         txt.append("GA4 me %s se pehle ka install-wise data nahi mila — history wahin se" % U.fmt_day(ida["edge"], S))
     sc = P["sc"]
@@ -3150,7 +3159,7 @@ def _geo_check_text(cty, gbad, S):
     out = []
     why, gc = cty.get("geo_why"), cty.get("geo_cov") or {}
     if why == "ok":
-        t = "Google Ads country-wise kharcha: campaign kharche ka %s%% country me mila (last %d weeks)" % (
+        t = "Google Ads country-wise spend: campaign spend ka %s%% country me mila (last %d weeks)" % (
             _num1(100 * gc["v"]) if gc.get("v") is not None else "—", gc.get("weeks") or 0)
         us = (cty.get("cost") or {}).get("unmapped_share")
         if us is not None and us >= 0.0005:
@@ -3158,11 +3167,11 @@ def _geo_check_text(cty, gbad, S):
         out.append(t)
     elif why == "cov" and gbad:
         cov = " (%s%%)" % _num1(100 * gbad["v"]) if gbad.get("v") is not None else ""
-        out.append("⚠️ Google Ads country-wise kharcha %s me poora nahi mila%s — un hafton ka country cost nahi dikhaya"
+        out.append("⚠️ Google Ads country-wise spend %s me poora nahi mila%s — un hafton ka country cost nahi dikhaya"
                    % (_span(gbad["from"], gbad["to"], S), cov))
     elif why == "wait":
         till = gc.get("till")
-        out.append("Google Ads country-wise kharcha %s — naye hafton ka country cost uske baad" % (
+        out.append("Google Ads country-wise spend %s — naye hafton ka country cost uske baad" % (
             "%s tak aaya" % U.fmt_day(till, S) if till else "abhi aa raha"))
     elif why == "nostore":
         out.append("Is app ke Google Ads account ka country-wise data nahi mila — country cost nahi dikhaya")
@@ -3178,37 +3187,37 @@ def _check_text(sc, g12, old, ded, fx_mode, S=None, src_ccy=None):
     gl = max(G) if G else None
     if sc["src"] and gl is not None and S is not None and (ml is None or ml < min(gl, S) - timedelta(days=6)):
         since = (ml + ONE) if ml is not None else min(G)
-        out.append("⚠️ AdMob ki kamai %s se nahi aayi — naye hafton ki install-wise kamai purane hafton ke hisaab se "
+        out.append("⚠️ AdMob revenue %s se nahi aayi — naye hafton ki install-wise earning purane hafton ke hisaab se "
                    "scale ki (≈)" % U.fmt_day(since, S))
     else:
         ws = [w for w in sc["weeks"][-4:] if w["r"] is not None]
         if ws:
             r = _med([w["r"] for w in ws])
             if 0.9 <= r <= 1.1:
-                out.append("✅ GA4 aur AdMob ki kamai mel khati (±10%)")
+                out.append("✅ GA4 aur AdMob revenue mel khati (±10%)")
             else:
-                out.append("GA4 me AdMob ki kamai ka %d%% dikhta — install-wise kamai AdMob ke hisaab se scale ki (≈)"
+                out.append("GA4 me AdMob revenue ka %d%% dikhta — install-wise earning AdMob ke hisaab se scale ki (≈)"
                            % int(round(100 * r)))
         elif sc["st"] == "none" or not sc["src"]:
-            out.append("AdMob ki kamai abhi GA4 ke dino se nahi mili — kamai GA4 ke hisaab se (≈)")
+            out.append("AdMob revenue abhi GA4 ke dino se nahi mili — earning GA4 ke hisaab se (≈)")
         else:
             out.append("GA4 aur AdMob ki tulna ke liye naye hafte abhi poore nahi")
     if sc["double"]:
         out.append("shayad ad revenue do baar log ho raha (Firebase link + app ka apna code) — developer se check karwao")
     if sc["src"] == "network":
-        out.append("AdMob ki kamai sirf AdMob network se (mediation ke baaki networks nahi) — isliye thodi kam dikh sakti")
+        out.append("AdMob revenue sirf AdMob network se (dusre ad networks nahi) — isliye thodi kam dikh sakti")
     if g12 and g12.get("rev") is not None:
-        out.append("Country me na baanta gaya hissa: kamai ka %s%%, installs ka %s%% (last %d weeks)" % (
+        out.append("Country me na baanta gaya hissa: revenue ka %s%%, installs ka %s%% (last %d weeks)" % (
             _num1(100 * g12["rev"]), _num1(100 * (g12.get("n") or 0)), g12.get("weeks") or GAP_WEEKS))
     if old is not None:
-        out.append("Purane users (14 mahine se pehle install) ki kamai: %s%% — ye install-week me nahi ginte"
+        out.append("Old users (14 mahine se pehle install) ki revenue: %s%% — ye install-week me nahi ginte"
                    % _num1(100 * old))
     if not (ded and ded.get("rate")):
-        out.append("Kamai deduction se pehle, isliye Marketing ROAS se thoda zyada")
+        out.append("Revenue deduction se pehle, isliye Marketing ROAS se thoda zyada")
     if fx_mode == "one":
-        out.append("Google Ads kharcha: purane hafte aaj ke rate pe (₹→$)")
+        out.append("Google Ads spend: purane hafte aaj ke rate pe (₹→$)")
     elif src_ccy and src_ccy != "USD":
-        out.append("Google Ads kharcha: har hafta apne rate pe $ me — isliye $ me Marketing ROAS se thoda alag; ₹ view me "
+        out.append("Google Ads spend: har hafta apne rate pe $ me — isliye $ me Marketing ROAS se thoda alag; ₹ view me "
                    "bilkul utna jitna Google Ads ne liya")
     out.append("GA4 din property ke time me, AdMob / Google Ads India time me — hafte me milaya")
     return out
@@ -3278,7 +3287,7 @@ def _wait_row(app_id, app, key, ida, hs):
     return {"app_id": app_id, "app": app, "key": key, "file": None, "sig": None, "status": "wait",
             "settled_till": None, "iday": {"from": None, "to": None, "cfrom": None, "state": "wait", "pct": 0},
             "pay": None, "rpi": None, "cpi": None, "cty": None, "alerts": {"warning": 0, "watch": 0, "good": 0},
-            "summary": {"kind": "wait", "text": "⏳ Install-wise kamai ka data aa raha — agle fetch me."},
+            "summary": {"kind": "wait", "text": "⏳ Install-wise earning ka data aa raha — agle fetch me."},
             "s": {"spend4": None, "spend4_src": None, "n4": None, "nw": None, "rev7_4": None, "spend7_4": None,
                   "n7_4": None, "rev30_4": None, "n30_4": None, "spend30_4": None}}
 

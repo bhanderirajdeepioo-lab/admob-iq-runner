@@ -73,7 +73,7 @@ const CONFLICT_MSG = {
   not_open: "Ye 🚩 ab khula nahi hai",
   not_kaam: "Ye 🚩 abhi kaam me nahi hai",
   already_decided: "Is 🚩 pe faisla ho chuka hai",
-  day_moved: "Naye din ke cards aa gaye — upar “Kholo” dabao",
+  day_moved: "Naye din ke cards aa gaye — upar “Open” dabao",
 };
 
 // ── per-isolate caches (test-only reset below) ──────────────────────────────────────────────────

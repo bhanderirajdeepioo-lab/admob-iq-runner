@@ -12,8 +12,8 @@ from datetime import date, timedelta
 from .const import (ADS_CPI_UP, ADS_ROAS_DROP, ADS_ROAS_UP, ADUNIT_MIN_LOSS, ADUNIT_RED_DAYS, DED_AMB_PCT,
                     DED_AMB_USD, DED_RED_PCT, DED_RED_USD, DROP_DAYS, KAL_DROP_ABS, KAL_DROP_REL, MED_DROP_SHARE,
                     NAYA_DAYS, PURANA_DAYS, PURANI_HALAT_DAYS, RED_REV_ABS, RED_REV_REL, UPDATE_DAYS)
-from .fmt import D, age_days, days_back, fd, fr, mon_lab, money, p100, pct, rate_txt, umar, umar_se, unit_word, usd2, \
-    usd_txt, users, ver_of
+from .fmt import D, age_days, back_w, cap, days_back, fd, fr, gone_w, mon_lab, money, p100, pct, pct1k, rate_txt, umar, \
+    umar_se, unit_word, usd2, usd_txt, users, ver_of
 from .series import avg, cross_start, day_series, late_days, month_run, ret_weeks, un_weeks, walk_back
 
 
@@ -68,8 +68,8 @@ def observed(ctx, aid, kind, metric):
 
 def vs_text(vs):
     if vs and "prev" in vs:
-        return "vs pichhle 4 hafte"
-    return "vs hamesha ka normal"
+        return "vs previous 4 weeks"
+    return "vs all-time normal"
 
 
 # ── rows from the dashboard's alerts (the Aaj page rules) ─────────────────────────────────────────
@@ -125,8 +125,7 @@ def _uninstall_row(ctx, a):
         wk = un_weeks(ctx, aid, n, a["installs_to"])
         shuru, capped = walk_back(wk, a["before"], a["now"])
         shuru = shuru or D(a["installs_from"])
-        what = "Install ke din hi hataane wale" if n == 0 else f"{n} din me hataane wale"
-        fact = f"{what}: 100 me {p100(a['before'])} → {p100(a['now'])}"
+        fact = f"{cap(gone_w(n))}: {p100(a['before'])}% → {p100(a['now'])}%"
         prov_on = None
         if a.get("provisional"):
             prov_on = D(a["installs_to"]) + timedelta(n + late_days(ctx, aid, "uninstall") + ctx.ga4_lag)
@@ -139,10 +138,10 @@ def _uninstall_row(ctx, a):
     elif fam == "rate_drift":
         up = a["dir"] == "up"
         rel = a["now"] / a["before"] - 1 if a["before"] else 0
-        fact = f"Roz app hataane wale {pct(rel, False)} {'badhe' if up else 'kam'}"
+        fact = f"Uninstall rate {pct(rel, False)} {'badha' if up else 'kam hua'}"
         prov_on = (ctx.ga4_till + timedelta(late_days(ctx, aid, "uninstall") + ctx.ga4_lag)) if a.get("provisional") else None
         till = a.get("data_till") or ctx.ga4_till
-        period = f"Roz ka avg {fr(ctx, a['since'], till)} · vs {fr(ctx, a['base_from'], a['base_to'])}"
+        period = f"Daily avg {fr(ctx, a['since'], till)} · vs {fr(ctx, a['base_from'], a['base_to'])}"
         cnt = {}
         dl_ = (ctx.uapp.get(aid) or {}).get("daily") or {}
         if dl_.get("start") and dl_.get("un") and dl_.get("a28"):
@@ -157,9 +156,9 @@ def _uninstall_row(ctx, a):
         flat = bool(up and cnt.get("count_b") and cnt.get("count_n") is not None and cnt["count_n"] <= cnt["count_b"] * 1.05
                     and cnt.get("a28_n") and cnt.get("a28_b") and cnt["a28_n"] < cnt["a28_b"] * 0.9)
         if flat:
-            fact = f"Users ghate, isliye hataane walon ka hissa {pct(rel, False)} badha"
+            fact = f"Users ghate, isliye uninstall rate {pct(rel, False)} badha"
         _add(ctx, **base, kind="rate", metric="un_rate", topic="T2", up=up, started=D(a["since"]), fact=fact,
-             saath=f"har 1,000 users me roz {a['before']:.1f} → {a['now']:.1f}",
+             saath=f"uninstall rate {pct1k(a['before'])} → {pct1k(a['now'])}",
              period=period, prov_on=prov_on, vs_prev=True, before=a["before"], now=a["now"], rel=rel,
              count_flat=flat, **cnt)
     elif fam == "impact":
@@ -167,12 +166,8 @@ def _uninstall_row(ctx, a):
         rows_ = (a.get("rows") or {})
         head = (rows_.get("worse") or rows_.get("better") or [None])[0]
         v = ver_of(rel_["label"])
-        if head == "new_d1":
-            fact = f"{v} ke baad agle din wapas aane wale: 100 me {p100(a['before'])} → {p100(a['now'])}"
-        elif head == "new_d7":
-            fact = f"{v} ke baad 7 din me wapas aane wale: 100 me {p100(a['before'])} → {p100(a['now'])}"
-        else:
-            fact = f"{v} ke baad install ke din hataane wale: 100 me {p100(a['before'])} → {p100(a['now'])}"
+        what = {"new_d1": back_w(1), "new_d7": back_w(7)}.get(head, gone_w(0))
+        fact = f"{v} ke baad {what}: {p100(a['before'])}% → {p100(a['now'])}%"
         period = (f"Installs {fr(ctx, a['installs_from'], a['installs_to'])} · vs "
                   f"{fr(ctx, a['base_from'], a['base_to'])} (update se pehle)")
         _add(ctx, **base, kind="impact", metric={"new_d1": "ret_d1", "new_d7": "ret_d7"}.get(head, "un_d0"),
@@ -204,7 +199,7 @@ def _active_row(ctx, a, drift_keys, slow):
         if fam == "act_slow" and (aid, m) in drift_keys:
             return                                                   # M5: merged into the drift row
         rel = a.get("rel") or 0
-        fact = f"Purane users (roz) {pct(rel, False)} {'badhe' if up else 'kam'}: {users(a['before'])} → {users(a['now'])}"
+        fact = f"Old users/day {pct(rel, False)} {'badhe' if up else 'kam'}: {users(a['before'])} → {users(a['now'])}"
         saath = None
         s = slow.get((aid, m))
         if fam == "act_slow" or (s and fam == "act_drift"):
@@ -212,7 +207,7 @@ def _active_row(ctx, a, drift_keys, slow):
         mm = re.search(r"naye installs bhi ([−+-]?\d+%)", a.get("text") or "")
         if mm and not saath:
             saath = f"naye installs bhi {mm.group(1)} (ads campaign?)"
-        period = (f"Roz ka avg {fr(ctx, a['since'], a.get('data_till') or ctx.ga4_till)} · vs "
+        period = (f"Daily avg {fr(ctx, a['since'], a.get('data_till') or ctx.ga4_till)} · vs "
                   f"{fr(ctx, a['base_from'], a['base_to'])}")
         _add(ctx, **base, kind="act_drift", metric="ret_dau", topic="T2", up=up, started=D(a["since"]), fact=fact,
              saath=saath, period=period, vs_prev=True, before=a["before"], now=a["now"], rel=rel)
@@ -222,24 +217,24 @@ def _active_row(ctx, a, drift_keys, slow):
         arel = ar.get("rel")
         win = (ctx.aapp.get(aid) or {}).get("win") or {}
         rel_ = a.get("release") if isinstance(a.get("release"), dict) else None
-        period = (f"Roz ka avg {fr(ctx, a['since'], a.get('data_till') or ctx.ga4_till)} · vs "
+        period = (f"Daily avg {fr(ctx, a['since'], a.get('data_till') or ctx.ga4_till)} · vs "
                   f"{fr(ctx, a['base_from'], a['base_to'])}")
         if not up and arel is not None and arel > -0.05:                # N1: not a problem -> info line
             _add(ctx, **base, kind="n1", metric="ads", topic="T3", up=up, started=D(a["since"]), release=rel_,
-                 fact=f"AdMob ads har 1,000 users pe {pct(rel, False)} kam, par kamai/user {pct(arel)} — nuksaan nahi",
+                 fact=f"Ads per user {pct(rel, False)} kam, par revenue per user {pct(arel)} — nuksaan nahi",
                  period=period, vs_prev=True, before=a["before"], now=a["now"], rel=rel, n1=True,
                  sev_override="info")
         else:
             _add(ctx, **base, kind="act_ads", metric="ads", topic="T3", up=up, started=D(a["since"]), release=rel_,
-                 fact=f"AdMob ads har 1,000 users pe {pct(rel, False)} {'zyada' if up else 'kam'}",
-                 saath=(f"kamai/user {fr(ctx, win.get('from'), win.get('to'))}: {pct(arel)}" if arel is not None and win else None),
+                 fact=f"Ads per user {pct(rel, False)} {'zyada' if up else 'kam'}",
+                 saath=(f"revenue per user {fr(ctx, win.get('from'), win.get('to'))}: {pct(arel)}" if arel is not None and win else None),
                  period=period, vs_prev=True, before=a["before"], now=a["now"], rel=rel)
     elif fam == "act_return":
         N = int(m[1:])
         wk = ret_weeks(ctx, aid, N, a["installs_to"])
         shuru, capped = walk_back(wk, a["before"], a["now"])
         shuru = shuru or D(a["installs_from"])
-        fact = f"{N} din baad wapas aane wale: 100 me {p100(a['before'])} → {p100(a['now'])}"
+        fact = f"{cap(back_w(N))}: {p100(a['before'])}% → {p100(a['now'])}%"
         mm = re.search(r"installs ([−+-]?\d+)%", a.get("text") or "")
         saath = f"us hafte naye installs {mm.group(1).replace('-', '−')}% (ads campaign?)" if mm else None
         both = "dono" in (a.get("text") or "") or "pichhle 4 hafte" in (a.get("text") or "")
@@ -261,9 +256,9 @@ def _info_rows(ctx):
                 if not st_ or age_days(ctx, st_) > DROP_DAYS:
                     continue
                 if r.get("kind") == "price":
-                    fact = f"Ad rate (1,000 ads ka) {pct(r['rel'])} — ads per user wahi"
+                    fact = f"Ad rate {pct(r['rel'])} — ads per user wahi"
                 elif r.get("kind") == "installs":
-                    fact = f"Purane users {pct(r['rel'])} — naye installs zyada aane se"
+                    fact = f"Old users {pct(r['rel'])} — naye installs zyada aane se"
                 else:
                     continue
                 _add(ctx, app=aid, src="active", sev="info", kind="info", metric=r.get("metric"),
@@ -294,7 +289,7 @@ def _pay_never_rows(ctx):
             if pay.get("st") == "never" and pay.get("pct365") is not None and pay.get("from"):
                 _add(ctx, app=aid, src="value", sev="watch", kind="pay_never", metric="pay", topic="T4",
                      started=D(pay["from"]),
-                     fact=f"Google Ads ka paisa 1 saal me bhi pura wapas nahi (~{pay['pct365']:.0f}% hi)",
+                     fact=f"Ads money not back in 1 year (~{pay['pct365']:.0f}% hi wapas)",
                      period=f"Installs {fr(ctx, pay['from'], pay['to'])} ka andaza", andaza=False, opened=None,
                      seeded=False, notier=True)
         except Exception:
@@ -497,18 +492,17 @@ def _range_rows(ctx):
             ctx.fail(aid, "kamai")
 
 
-# approved-range metrics (engine.approvals._METS): rates are shown per 100, eCPM as money (the ₹/$ toggle)
-RANGE_WORD = {"show": "dikhne ki dar", "ctr": "pe click rate", "match": "ka match rate",
-              "ecpm": "ka eCPM (1,000 ads ki kamai)"}
-RANGE_LABEL = {"show": "Dikhne ki dar", "ctr": "Click rate", "match": "Match rate", "ecpm": "eCPM (1,000 ads ki kamai)"}
+# approved-range metrics (engine.approvals._METS): rates are shown as %, eCPM as money (the ₹/$ toggle)
+RANGE_WORD = {"show": "ka show rate", "ctr": "pe click rate", "match": "ka match rate", "ecpm": "ka eCPM"}
+RANGE_LABEL = {"show": "Show rate", "ctr": "Click rate", "match": "Match rate", "ecpm": "eCPM"}
 
 
 def range_val(metric, v):
-    return usd2(v) if metric == "ecpm" else f"100 me {rate_txt(v)}"
+    return usd2(v) if metric == "ecpm" else f"{rate_txt(v)}%"
 
 
 def range_span(metric, lo, hi):
-    return f"{usd2(lo)}–{usd2(hi)}" if metric == "ecpm" else f"{rate_txt(lo)}–{rate_txt(hi)}"
+    return f"{usd2(lo)}–{usd2(hi)}" if metric == "ecpm" else f"{rate_txt(lo)}%–{rate_txt(hi)}%"
 
 
 def _range_row(ctx, aid, ra, ra_more):
@@ -583,13 +577,13 @@ def _ads_row(ctx, aid, a):
         pass                                   # spend cut hard: ROAS/cost per install not comparable, told as a line
     elif roas is not None and roasp is not None and roas <= roasp * (1 - ADS_ROAS_DROP):
         st, met = "amber", "roas"
-        fact = f"ROAS (kamai ÷ kharcha) {roasp:.2f} → {roas:.2f}"
+        fact = f"ROAS (revenue ÷ spend) {roasp:.2f} → {roas:.2f}"
     elif cpi is not None and cpip is not None and cpi >= cpip * (1 + ADS_CPI_UP):
         st, met = "amber", "cpi"
-        fact = f"Ek install ka kharcha {usd2(cpip)} → {usd2(cpi)}"
+        fact = f"Cost per install {usd2(cpip)} → {usd2(cpi)}"
     elif roas is not None and roasp is not None and roas >= roasp * (1 + ADS_ROAS_UP):
         st, met = "green", "roas"
-        fact = f"ROAS (kamai ÷ kharcha) {roasp:.2f} → {roas:.2f}"
+        fact = f"ROAS (revenue ÷ spend) {roasp:.2f} → {roas:.2f}"
     if not st:
         return
     # Shuru: walk back the DAILY series (ROAS = AdMob kamai / Google Ads kharcha; or kharcha / installs) while a day
@@ -619,7 +613,7 @@ def _ads_row(ctx, aid, a):
                   tier=st, started=start or D(w7[0]), fact=fact,
                   period=f"Google Ads {fr(ctx, w7[0], w7[-1])} · vs {fr(ctx, p7[0], p7[-1])}",
                   rel=((roas / roasp - 1) if (roas and roasp) else 0), topic="T4")
-    row["kab"] = (f"4 hafte se zyada ({fd(ctx, row['started'])} se pehle se)" if capped else
+    row["kab"] = (f"4+ weeks ({fd(ctx, row['started'])} se pehle se)" if capped else
                   f"{fd(ctx, row['started'])} · {umar_se(row['age'])}" + ("" if start else " (7 din ki tulna)"))
     ctx.extra[aid].append(row)
 
@@ -691,7 +685,7 @@ def _mediation(ctx):
                 if s0 >= MED_DROP_SHARE and s1 < s0 / 3:
                     ctx.extra[aid].append(new_row(
                         ctx, aid, src="mediation", kind="med", metric="share", sev="watch", tier="amber",
-                        started=D(ctx.w7[0]), fact=f"{nm} ka kamai me hissa 100 me {s0 * 100:.0f} → {s1 * 100:.0f}",
+                        started=D(ctx.w7[0]), fact=f"{nm} ka kamai me hissa {s0 * 100:.0f}% → {s1 * 100:.0f}%",
                         period=f"AdMob mediation {fr(ctx, ctx.w7[0], ctx.w7[-1])} · vs {fr(ctx, ctx.p7[0], ctx.p7[-1])}",
                         net=nm, rel=(s1 / s0 - 1)))
         except Exception:
@@ -759,7 +753,7 @@ def setup_rows(ctx, aid, a):
     if y <= 0 and us >= 1:
         rs.append(new_row(ctx, aid, src="setup", kind="setup", metric="admob0", sev="watch", tier="amber",
                           started=ctx.admob_till,
-                          fact=f"Kal ({fd(ctx, ctx.admob_till)}) ka AdMob data 0 — usual {usd_txt(us)}/din",
+                          fact=f"Yesterday ({fd(ctx, ctx.admob_till)}) ka AdMob data 0 — usual {usd_txt(us)}/day",
                           period=f"AdMob {fd(ctx, ctx.admob_till)}"))
     # GA4 logs the ad revenue ~2x (value engine: GA4 / AdMob >= 1.5 for 8+ weeks -> scale.double). Shuru = walk back
     # the weekly AdMob/GA4 factor (k_weeks, oldest first) while <= 1/1.5. GA4 far above AdMob (≥ 5x) is not double
@@ -772,7 +766,7 @@ def setup_rows(ctx, aid, a):
         while i >= 0 and kw[i][1] and kw[i][1] <= 1 / 1.5:
             i -= 1
         st_ = D(kw[i + 1][0]) if i + 1 < len(kw) else day
-        m_ = re.search(r"AdMob ki kamai ka (\d+)%", " ".join(sc.get("text") or []))
+        m_ = re.search(r"AdMob ki (?:kamai|revenue) ka (\d+)%", " ".join(sc.get("text") or []))
         ratio = int(m_.group(1)) / 100 if m_ else None
         how = (f"AdMob ka {ratio * 100:.0f}%" if ratio and ratio < 5 else f"AdMob se {ratio:.0f} guna" if ratio
                else "AdMob se kaafi zyada")
@@ -781,7 +775,7 @@ def setup_rows(ctx, aid, a):
                 else f"GA4 me ad kamai shayad 2 baar log ho rahi ({how})")
         r_ = new_row(ctx, aid, src="setup", kind="setup", metric="admob_gap" if big else "double", sev="watch",
                      tier="amber", started=st_, fact=fact, ratio=ratio,
-                     period=(f"GA4 vs AdMob kamai · hafte {fd(ctx, kw[i + 1][0]) if i + 1 < len(kw) else '?'}–"
+                     period=(f"GA4 vs AdMob revenue · weeks {fd(ctx, kw[i + 1][0]) if i + 1 < len(kw) else '?'}–"
                              f"{fd(ctx, D(kw[-1][0]) + timedelta(6)) if kw else '?'}"))
         r_["purani"] = r_["age"] > PURANI_HALAT_DAYS
         r_["kab"] = f"{fd(ctx, st_)} · {umar_se(r_['age'])}" + (" (jab se data hai)" if i < 0 else "")
@@ -840,8 +834,8 @@ def upd_rows(ctx, aid, have):
     v = ver_of(u["label"])
     v = f"{fd(ctx, u['date'])} wala update" if v == "App update" else v
     why = re.sub(r"\s*—\s*.*$", "", vd.get("why") or "").strip()
-    fact = {"halt": f"{v} ke baad bigda — 🛑 Update roko", "hold": f"{v} ke baad kuch bigda — ⚠️ Ruk ke jaancho",
-            "win": f"✅ {v} update achha gaya"}[lv]
+    fact = {"halt": f"{v} ke baad bigda — 🛑 Stop update", "hold": f"{v} ke baad kuch bigda — ⚠️ Wait and check",
+            "win": f"✅ {v} update went well"}[lv]
     return [new_row(ctx, aid, src="impact", kind="upd", metric=lv, level=lv, sev="warning" if lv == "halt" else "watch",
                     tier={"halt": "red", "hold": "amber", "win": "green"}[lv], started=D(u["date"]), fact=fact, ver=v,
                     why=(why[0].upper() + why[1:]) if why else "",
@@ -856,7 +850,7 @@ def kal_drop_rows(ctx, aid, rows):
         u7 = ctx.u7
         return [new_row(ctx, aid, src="adunit", kind="kal_drop", metric="kamai", sev="watch", tier="amber",
                         started=ctx.admob_till,
-                        fact=f"Kal ({fd(ctx, ctx.admob_till)}) ki kamai usual se {pct(y / us - 1, False)} kam",
+                        fact=f"Yesterday ({fd(ctx, ctx.admob_till)}) ki kamai usual se {pct(y / us - 1, False)} kam",
                         before=us, now=y, period=f"AdMob {fd(ctx, ctx.admob_till)} · vs {fr(ctx, u7[0], u7[-1])} ka avg",
                         rel=y / us - 1)]
     return []

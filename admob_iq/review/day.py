@@ -38,17 +38,17 @@ def row_obj(ctx, x):
     else:
         meta = x["period"]
         if x.get("prov_on"):
-            meta += " · ⏳ Pakka nahi"
+            meta += " · ⏳ Not final"
         if x.get("andaza"):
             meta += " · ≈ Andaza"
         fact = x["fact"]
         if x.get("purani"):
-            fact += " (purani halat)"
+            fact += " (old issue)"
         if x["kind"] == "impact" and x.get("level") == "win":
-            fact = "✅ Update achha gaya: " + fact
+            fact = "✅ Update went well: " + fact
     w = tier if tier in WORD else "info"
     return {"w": w, "src": SRC_TAG.get(x["src"], "Setup"), "fact": rt(fact),
-            "meta": f"{meta} · Shuru {fd(ctx, x['started'])} ({umar(x['age']) if x['age'] > 0 else 'aaj'})"}
+            "meta": f"{meta} · Started {fd(ctx, x['started'])} ({umar(x['age']) if x['age'] > 0 else 'today'})"}
 
 
 def detail(ctx, f, head, rows, aid):
@@ -92,7 +92,7 @@ def _feature(ctx, f, frs, aid, a):
             line = (good_text(ctx, head) if head["kind"] not in ("ads", "range", "med", "kal_drop", "setup", "upd")
                     else head["fact"])
             if head["kind"] == "kamai_up":
-                line = f"Kamai {pct(head['rel'])}: {money(head['before'], din=False)} → {money(head['now'])}"
+                line = f"Revenue {pct(head['rel'])}: {money(head['before'], din=False)} → {money(head['now'])}"
             line = line[0].upper() + line[1:]
             kis = kis_data(ctx, head) if head.get("period") else None
         det = detail(ctx, f, head, rows, aid)
@@ -170,7 +170,7 @@ def build_app(ctx, aid):
     out = _app_base(ctx, aid)
     out.update(tier=tier, nb=nb,
                head={"text": hl, "chip": ("purani" if hpur else hst) if hst else None,
-                     "age": (umar(hage) if hage > 0 else "aaj") if hage is not None else None},
+                     "age": (umar(hage) if hage > 0 else "today") if hage is not None else None},
                f=feats)
     return out, bad
 
@@ -181,23 +181,23 @@ def _how(ctx, n):
     ded = (f"Deductions: {fr(ctx, ctx.ded_from, ctx.ded_to)} ke AdMob snapshots; " if ctx.ded_from and ctx.ded_to
            else "Deductions: AdMob ke snapshots; ")
     lines = [
-        (f"Har app ka ek card. Line: pehle wo apps jinme koi 🔴 baat 🆕 Naya ({NAYA_DAYS} din ke andar shuru) hai, "
-         f"ya koi khula 🚩 Re-review flag (admin ka faisla baaki) / kal ka “kal dobara dekho” — phir "
+        (f"Har app ka ek card. Line: pehle wo apps jinme koi 🔴 baat 🆕 New ({NAYA_DAYS} din ke andar shuru) hai, "
+         f"ya koi khula 🚩 Re-review flag (admin ka faisla baaki) / kal ka “🔁 Check again tomorrow” — phir "
          f"baaki kamai (pichhle 7 din ka avg, {fr(ctx, w7[0], w7[-1])}) ke hisaab se."),
-        f"Kal = {fd(ctx, y)} (AdMob ka aakhri poora din). Usual = {fr(ctx, u7[0], u7[-1])} ka roz ka avg.",
+        f"Yesterday = {fd(ctx, y)} (AdMob ka aakhri poora din). Usual = {fr(ctx, u7[0], u7[-1])} ka daily avg.",
         (f"Uninstall, Active users, Install value, Update aur ad-unit ki baatein dashboard ke unhi tabs ke rules se "
-         f"bani. Ads: {fr(ctx, w7[0], w7[-1])} vs {fr(ctx, p7[0], p7[-1])}; ROAS 20%+ gira ya ek install ka kharcha "
+         f"bani. Ads: {fr(ctx, w7[0], w7[-1])} vs {fr(ctx, p7[0], p7[-1])}; ROAS 20%+ gira ya cost per install "
          f"30%+ badha to 🟡. {ded}kisi ad unit ka 15%+ aur {money(20.0, din=False)}+ kata to 🔴. Mediation: kisi "
          f"network ka hissa 10%+ se 1/3 se neeche gira to 🟡."),
-        f"Chhoti apps: kamai + ads kharcha {money(CHHOTI)} se kam. Inke 🔴 bhi unke group me dikhte hain, upar nahi aate.",
-        "Jin features ka is app ke liye data nahi, unka gola grey (“data nahi”).",
-        ("States: ✅ Reviewed · 📝 Reviewed + note · 🚩 Re-review (Important) · 🔁 Kal dobara dekho. 🚩 Important · "
+        f"Small apps: kamai + ads spend {money(CHHOTI)} se kam. Inke 🔴 bhi unke group me dikhte hain, upar nahi aate.",
+        "Jin features ka is app ke liye data nahi, unka dot grey (“No data”).",
+        ("States: ✅ Reviewed · 📝 Reviewed + note · 🚩 Re-review (Important) · 🔁 Check again tomorrow. 🚩 Important · "
          "Re-review = admin dobara dekhega — poori app pe (card ke niche wala button) ya sirf ek feature pe (har feature "
-         "ke aage chhota 🚩, note ke saath; jaise sirf “Kamai · eCPM” ya sirf “Uninstall”). Har flag alag item hai aur "
-         "admin har ek ka alag faisla karta hai (👍 Theek hai · 🛠 Kaam do · ⛔ Band karo). Faisla hone tak card upar "
-         "focus me rehta hai; khula flag agle din ke card pe “🚩 Kamai · eCPM · N din se khula” jaisa dikhta hai. "
-         "🛠 Kaam wala flag card pe sirf chip dikhata hai."),
-        ("🔁 Kal dobara dekho alag hai — ye sirf khud ke liye kal ka reminder hai, admin ko nahi jaata. 💤 Pata hai = "
+         "ke aage chhota 🚩, note ke saath; jaise sirf “Revenue · eCPM” ya sirf “Uninstall”). Har flag alag item hai aur "
+         "admin har ek ka alag faisla karta hai (👍 OK · 🛠 Assign task · ⛔ Close). Faisla hone tak card upar "
+         "focus me rehta hai; khula flag agle din ke card pe “🚩 Revenue · eCPM · Open N days” jaisa dikhta hai. "
+         "🛠 Assign task wala flag card pe sirf chip dikhata hai."),
+        ("🔁 Check again tomorrow alag hai — ye sirf khud ke liye kal ka reminder hai, admin ko nahi jaata. 💤 Snooze = "
          "ek baat 7 ya 14 din ke liye chhupao (note ke saath)."),
         (f"Ye cards {fd(ctx, ctx.day)} ko ek baar bane (us waqt ka data) aur din bhar wahi rehte hain — isliye History "
          f"me wahi dikhta hai jo review ke waqt tha."),

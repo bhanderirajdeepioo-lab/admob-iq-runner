@@ -107,39 +107,52 @@ def pct(v):
 
 
 def fix_long_text(t, LG):
-    """The engine's long-term line says '100 me se 4.3' — the page says the people and the % beside them."""
+    """The engine's long-term line says 'back after 90 days 4.3%' — the page says the people first, the % beside them
+    ('back after 90 days 1,234 (4.3%)'). Lines built before the wording change ('90 din baad 100 me se 4.3 app khol
+    rahe') get the same new words."""
     if not t:
         return t
-    m = re.match(r'^(\w{3}) (\d{4}) ke installs: (\d+) din baad 100 me se ([\d.]+) app khol rahe', t)
-    q = re.match(r'^Q(\d) (\d{4}) \(\w+–\w+\) ke installs: (\d+) din baad 100 me se ([\d.]+) app khol rahe', t)
+    t = re.sub(r'(\d+) din baad 100 me se ([\d.]+) app khol rahe', r'back after \1 days \2%', t)
+    t = re.sub(r' \(pichhle ([^()]*?): ~([\d.]+)\)', r' (pichhle \1: ~\2%)', t)
+    m = re.match(r'^(\w{3}) (\d{4}) ke installs: back after (\d+) days ([\d.]+)%', t)
+    q = re.match(r'^Q(\d) (\d{4}) \(\w+–\w+\) ke installs: back after (\d+) days ([\d.]+)%', t)
     row = None
     if m and m.group(1) in MONS:
         key = '%s-%02d' % (m.group(2), MONS.index(m.group(1)) + 1)
         row = next((x for x in LG.get('rows') or [] if x.get('key') == key), None)
-        tt, v = m.group(3), m.group(4)
+        tt = m.group(3)
     elif q:
         key = '%s-Q%s' % (q.group(2), q.group(1))
         row = next((x for x in LG.get('rows') or [] if x.get('key') == key), None)
-        tt, v = q.group(3), q.group(4)
+        tt = q.group(3)
     else:
-        return re.sub(r'100 me se ([\d.]+)', lambda z: pct(float(z.group(1))), t)
+        return t
     ret = (((row or {}).get('d') or {}).get(tt) or {}).get('ret')
-    who = ('%s log' % fmt_n(ret)) if ret else 'log'
-    out = re.sub(r'(\d+) din baad 100 me se ([\d.]+) app khol rahe', lambda z: '%s din baad %s app khol rahe (%s)' % (z.group(1), who, pct(float(z.group(2)))), t, count=1)
-    out = re.sub(r' \(pichhle ([^()]*?): ~([\d.]+)\)', lambda z: ' — normal ~%s (pichhle %s)' % (pct(float(z.group(2))), z.group(1)), out)
+    out = re.sub(r'back after (\d+) days ([\d.]+)%',
+                 lambda z: 'back after %s days %s' % (z.group(1), ('%s (%s)' % (fmt_n(ret), pct(float(z.group(2))))
+                                                                   if ret else pct(float(z.group(2))))), t, count=1)
+    out = re.sub(r' \(pichhle ([^()]*?): ~([\d.]+)%\)',
+                 lambda z: ' — normal ~%s (pichhle %s)' % (pct(float(z.group(2))), z.group(1)), out)
     return out
 
 
 def fix_ver_info(t, BV):
-    """'v1.3.7 ke naye users 30 din baad zyada: 100 me 7.4, pichhle v1.3.5 me 5' → people first, % beside."""
-    m = re.search(r'^(v\S+) ke naye users (\d+) din baad (\w+): 100 me ([\d.]+), pichhle (\S+) me ([\d.]+)$', t or '')
+    """'v1.3.7 ke naye users back after 30 days zyada: 7.4%, pichhle v1.3.5 me 5%' → the people first, % beside
+    ('… zyada: 1,234 (7.4%), pichhle v1.3.5 me 5%'). Lines built before the wording change ('30 din baad zyada: 100 me
+    7.4, pichhle v1.3.5 me 5') get the same new words."""
+    t = t or ''
+    o = re.search(r'^(v\S+) ke naye users (\d+) din baad (\w+): 100 me ([\d.]+), pichhle (\S+) me ([\d.]+)$', t)
+    if o:
+        t = '%s ke naye users back after %s days %s: %s%%, pichhle %s me %s%%' % o.groups()
+    m = re.search(r'^(v\S+) ke naye users back after (\d+) days (\w+): ([\d.]+)%, pichhle (\S+) me ([\d.]+)%$', t)
     if not m:
-        return re.sub(r'100 me( se)? ([\d.]+)', lambda z: pct(float(z.group(2))), t or '')
+        return re.sub(r'100 me( se)? ([\d.]+)', lambda z: pct(float(z.group(2))), t)
     lab, tt = m.group(1), m.group(2)
     row = next((x for x in (BV or {}).get('rows') or [] if (x.get('label') or ('v' + str(x.get('ver')))) == lab), None)
     ret = ((row or {}).get('d' + tt) or {}).get('ret')
-    who = ('%s log' % fmt_n(ret)) if ret else ''
-    return '%s ke naye users %s din baad %s: %s(%s) wapas aaye, pichhle %s me %s' % (lab, tt, m.group(3), (who + ' ') if who else '', pct(float(m.group(4))), m.group(5), pct(float(m.group(6))))
+    now = ('%s (%s)' % (fmt_n(ret), pct(float(m.group(4))))) if ret else pct(float(m.group(4)))
+    return '%s ke naye users back after %s days %s: %s, pichhle %s me %s' % (
+        lab, tt, m.group(3), now, m.group(5), pct(float(m.group(6))))
 
 
 VERD = {'keep': 'k', 'slow': 's', 'late': 'l', 'costly': 'c', 'top': 't', 'avg': 'a', 'low': 'w', 'few': 'f', 'wait': 'x'}

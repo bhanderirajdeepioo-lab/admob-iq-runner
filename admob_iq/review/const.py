@@ -34,23 +34,23 @@ FAIL_RATIO = 0.5
 DOC_V = 1
 MAX_MORE = 12                # "Is feature me aur" rows kept per feature
 
-FEATS = [("kamai", "Kamai · eCPM"), ("uninstall", "Uninstall"), ("active", "Active users"),
+FEATS = [("kamai", "Revenue · eCPM"), ("uninstall", "Uninstall"), ("active", "Active users"),
          ("value", "Install value"), ("update", "Update impact"), ("ads", "Ads"),
          ("deduct", "Deductions"), ("mediation", "Mediation"), ("health", "Account health"),
          ("setup", "Setup / data")]
 FEAT_IDS = tuple(f for f, _ in FEATS)
 FEAT_LABEL = dict(FEATS)
 FEAT_TAB = {"kamai": "Overview / Alerts", "uninstall": "Uninstall", "active": "Active users",
-            "value": "Install value", "update": "Uninstall → Updates ka asar", "ads": "Marketing ROAS",
+            "value": "Install value", "update": "Uninstall → Update impact", "ads": "Marketing ROAS",
             "deduct": "Deductions", "mediation": "Mediation", "health": "Account health", "setup": "Settings"}
 FEAT_PRI = {"deduct": 0, "update": 1, "kamai": 2, "uninstall": 3, "active": 4, "ads": 5, "value": 6, "setup": 7,
             "health": 8, "mediation": 9}
 
 TR = {"red": 4, "amber": 3, "green": 2, "normal": 1, "info": 1, "wait": 0, "na": 0, "nodata": 0}
 TIER_RANK = {"red": 4, "amber": 3, "green": 2, "info": 1}
-STWORD = {"red": "Bigda", "amber": "Dhyan do", "green": "Behtar", "normal": "Normal", "wait": "Abhi jaldi",
-          "na": "Lagu nahi", "nodata": "data nahi"}
-WORD = {"red": "Bigda", "amber": "Dhyan do", "green": "Behtar", "info": "Jaankari"}
+STWORD = {"red": "Worse", "amber": "Watch", "green": "Better", "normal": "Normal", "wait": "Too early",
+          "na": "N/A", "nodata": "No data"}
+WORD = {"red": "Worse", "amber": "Watch", "green": "Better", "info": "Info"}
 SRC_TAG = {"uninstall": "Uninstall", "active": "Active users", "value": "Install value", "adunit": "Ad unit",
            "ads": "Ads", "deduct": "Deductions", "health": "Deductions", "mediation": "Mediation",
            "setup": "Setup", "impact": "Update impact"}
@@ -61,7 +61,7 @@ EXTRA_KINDS = ("range", "ads", "med", "kal_drop", "setup", "ded", "ah_ivt", "upd
 NO_CHART_KINDS = ("range", "ads", "med", "kal_drop", "setup", "pay_never", "act_ads", "n1", "info", "val_info", "upd")
 
 MON = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-WDAY = ("Somvar", "Mangalvar", "Budhvar", "Guruvar", "Shukravar", "Shanivar", "Ravivar")
+WDAY = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 UNIT_WORD = (("caller", "Caller-card ad", "call ke baad wali screen ka ad"),
              ("callercad", "Caller-card ad", "call ke baad wali screen ka ad"),

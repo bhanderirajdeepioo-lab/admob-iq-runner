@@ -402,8 +402,10 @@ CUSTOM_TEXT = (
     ("Update se pehle", "Is date se pehle"), (" is update se pehle", " is date se pehle"),
     ("Update se ~", "Is date se ~"),
     ("App launch ke turant baad ka update", "App launch ke turant baad ki date"),
-    ("market ka asar, update ka nahi", "market ka asar, is badlaav ka nahi"),
-    ("kamai ka farak update ka hai ya market ka", "kamai ka farak is badlaav ka hai ya market ka"),
+    ("bazaar ka asar, update ka nahi", "bazaar ka asar, is badlaav ka nahi"),
+    ("revenue per user ka farak update ka hai ya bazaar ka", "revenue per user ka farak is badlaav ka hai ya bazaar ka"),
+    ("market ka asar, update ka nahi", "market ka asar, is badlaav ka nahi"),           # (texts built before the
+    ("kamai ka farak update ka hai ya market ka", "kamai ka farak is badlaav ka hai ya market ka"),   # wording change)
     (" aur update)", " update)"), (" aur updates)", " updates)"),
 )
 

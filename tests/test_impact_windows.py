@@ -224,7 +224,7 @@ def test_a_late_ads_drop_is_judged_at_30_days_and_sent_as_one_late_alert_on_the_
             assert not al["notify"] and al["id"] == sent[0]           # the same episode: never twice
         assert "ke 30 din baad" in al["text"] and "pehle 7 din me ye nahi dikha tha" in al["text"]
         assert "beech me 1 aur update (v2.1) — asar mila-jula ho sakta hai" in al["text"]
-        assert al["text"].endswith("HOLD — agla rollout roko, jaanch karo · D30 abhi baaki")
+        assert al["text"].endswith("⚠️ Wait and check — agla rollout roko, jaanch karo · 30 din ka result abhi baaki")
         assert al["release"]["key"] == b["key"] and al["rows"] == {"worse": ["arpdau"], "told": []}
         assert al["mixed"] == ["v2.1"] and al["window"] == 30 and al["severity"] == "watch"
         assert (al["installs_from"], al["installs_to"]) == (W["after"]["from"], W["after"]["to"])
@@ -699,8 +699,8 @@ def test_the_block_keeps_its_7_day_alert_id_when_both_families_are_open():
                                              "notified_at": "sent", "block": k, "vers": ["2.0"], "kind": "version",
                                              "peak": "hold", "last": {"R": recent, "since": R.isoformat(),
                                                                       "text": "v2.0 (8 Aug) ke baad time per user "
-                                                                              "−10% · HOLD — agla rollout roko, "
-                                                                              "jaanch karo",
+                                                                              "−10% · ⚠️ Wait and check — agla "
+                                                                              "rollout roko, jaanch karo",
                                                                       "severity": "watch", "level": "hold",
                                                                       "release": {"key": k, "label": "v2.0",
                                                                                   "date": R.isoformat()},
@@ -1007,7 +1007,7 @@ def test_the_fixture_shows_a_late_drop_sent_once_a_told_hold_and_running_windows
     assert ld["v2.0"]["default_window"] == 30 and ld["v2.0"]["late"]["level"] == "hold"
     late = [x for x in apps["Demo Late Drop"]["alerts"] if x["family"] == "impact_late"]
     assert len(late) == 1 and late[0]["id"] == ld["v2.0"]["late"]["alert_id"] and not late[0]["notify"]   # sent
-    assert "D30 abhi baaki" in late[0]["text"] and "beech me 1 aur update (v2.1)" in late[0]["text"]
+    assert "30 din ka result abhi baaki" in late[0]["text"] and "beech me 1 aur update (v2.1)" in late[0]["text"]
     sent = [s["run"] for s in fx["sent"] if "ke 30 din baad" in (s["email"] or "") + (s["telegram"] or "")]
     assert sent == ["2026-09-24T12:00Z"]                            # run 6 (data day E−1): held on runs 5 and 6
     lt = apps["Demo Late Told"]["impact"]["updates"][0]

@@ -1,18 +1,19 @@
-"""Daily App Review — the Hinglish texts of a card: the 5 answers (kya hua · kab se · kitna bada · naya ya purana ·
-kya karo), the one-line fallbacks of normal features, good-news lines. Plain strings with money tokens (fmt.money),
-never HTML."""
+"""Daily App Review — the texts of a card (Hinglish sentences, English metric names and short labels): the 5 answers
+(what happened · since when · how big · new or old · next step), the one-line fallbacks of normal features, good-news
+lines. Plain strings with money tokens (fmt.money), never HTML."""
 
 import re
 from datetime import timedelta
 
 from .const import MON, TIER_RANK, UPDATE_DAYS
-from .fmt import D, age_days, fd, fr, mon_lab, money, p100, pct, rate_txt, umar, umar_se, unit_word, usd2, users, ver_of
+from .fmt import (D, age_days, back_w, cap, fd, fr, gone_w, mon_lab, money, p100, pct, pct1k, rate_txt, umar, umar_se,
+                  unit_word, usd2, users, ver_of)
 from .rows import row_id, seen_first
 from .series import day_series, ecpm, rel_near, rel_update
 
 
 def pakka_txt(ctx, on):
-    return f"⏳ Pakka nahi · {fd(ctx, on)} ko pakka"
+    return f"⏳ Not final · final on {fd(ctx, on)}"
 
 
 def kis_data(ctx, r):
@@ -30,8 +31,8 @@ def kab_se(ctx, r):
     pre = "Installs " if r["kind"] in ("cohort", "act_return") else ""
     base = f"{pre}{fd(ctx, s)} se" if pre else fd(ctx, s)
     if r.get("capped"):
-        base = "6+ mahine se"
-    t = f"{base} ({umar(r['age'])})"
+        base = "6+ months ago"                       # (its own age would only repeat it: "6+ months ago" alone)
+    t = base if r.get("capped") else f"{base} ({umar(r['age'])})"
     u = r.get("release") or rel_update(ctx, aid, s, 3)
     if u:
         v = ver_of(u["label"])
@@ -58,6 +59,12 @@ def app_size_txt(ctx, aid):
     return f"Kamai {money(a['k7'])} (7 din ka avg) · ads kharcha nahi"
 
 
+def per_user(v):
+    """A per-1,000-users count (ads) → per user: 3,213 → "3.2", 450 → "0.45"."""
+    x = v / 1000
+    return (f"{x:.1f}" if x >= 1 else f"{x:.2f}").rstrip("0").rstrip(".")
+
+
 def kitna(ctx, r):
     aid, k = r["app"], r["kind"]
     if k == "ivt":
@@ -65,7 +72,7 @@ def kitna(ctx, r):
         ads = "ads dikhe utne hi" if abs(ir) < 0.2 else f"ads dikhe {pct(ir)}"
         return f"Clicks roz ~{r['cb']:,.0f} → ~{r['ca']:,.0f} · {ads}"
     if k in ("kamai_drop", "kamai_up"):
-        return f"Kamai {money(r['before'], din=False)} → {money(r['now'])} ({money(r['now'] - r['before'], sign=True)})"
+        return f"Revenue {money(r['before'], din=False)} → {money(r['now'])} ({money(r['now'] - r['before'], sign=True)})"
     if k == "unit_drop":
         tr = ctx.app_total_rel[aid]
         w7, p7 = ctx.w7, ctx.p7
@@ -92,9 +99,12 @@ def kitna(ctx, r):
         if r.get("count_flat"):
             return (f"Roz hataane wale ~{r['count_b']:,.0f} → ~{r['count_n']:,.0f} log (ginti nahi badhi) · "
                     f"mahine ke active users ~{users(r['a28_b'])} → ~{users(r['a28_n'])}")
-        return f"Har 1,000 users me roz {r['before']:.1f} → {r['now']:.1f} hataate"
+        if r.get("count_b") is not None and r.get("count_n") is not None:
+            return (f"Uninstall rate: roz ~{r['count_b']:,.0f} ({pct1k(r['before'])}) → ~{r['count_n']:,.0f} "
+                    f"({pct1k(r['now'])}) users")
+        return f"Uninstall rate {pct1k(r['before'])} → {pct1k(r['now'])}"
     if k == "act_drift":
-        return f"Roz {users(r['before'])} → {users(r['now'])} purane users"
+        return f"Roz {users(r['before'])} → {users(r['now'])} old users"
     return ""
 
 
@@ -112,7 +122,7 @@ def abhi(ctx, r, story):
         if x.get("inst"):
             t += f" · installs {fr(ctx, *x['inst'])}"
         if x.get("prov_on"):
-            t += " · ⏳ Pakka nahi"
+            t += " · ⏳ Not final"
         return t, x
     if k == "rate" and r["up"]:
         dl = (ctx.uapp.get(r["app"]) or {}).get("daily") or {}
@@ -124,9 +134,9 @@ def abhi(ctx, r, story):
             if len(last3) == 3:
                 a3 = sum(last3) / 3
                 if a3 > r["now"] * 1.15:
-                    return f"Hissa aur badh raha: {fr(ctx, ga4 - timedelta(2), ga4)} me har 1,000 me roz ~{a3:.1f}", None
+                    return f"Hissa aur badh raha: {fr(ctx, ga4 - timedelta(2), ga4)} me uninstall rate ~{pct1k(a3)}", None
                 if a3 < r["now"] * 0.85:
-                    return f"Sudhar raha: {fr(ctx, ga4 - timedelta(2), ga4)} me har 1,000 me roz ~{a3:.1f}", None
+                    return f"Sudhar raha: {fr(ctx, ga4 - timedelta(2), ga4)} me uninstall rate ~{pct1k(a3)}", None
         return None, None
     if k in ("ivt", "unit_drop", "kamai_drop"):
         ndays = (y - r["started"]).days + 1
@@ -165,14 +175,14 @@ def headline(ctx, r, story):
             return f"{pre}{r['short'].lower()} ki kamai lagbhag band: {money(r['before'], din=False)} → {money(r['now'])}"
         return f"{pre}{r['short']} ki kamai {money(r['before'], din=False)} → {money(r['now'])}"
     if k == "cohort":
-        what = "Install ke din hi hataane wale" if r["n"] == 0 else f"{r['n']} din me hataane wale"
+        what = cap(gone_w(r["n"]))
         if r.get("purani"):
-            return f"{what}: 100 me {p100(r['now'])} — {MON[r['started'].month - 1]} se aisa hi"
-        return f"{what}: 100 me {p100(r['before'])} → {p100(r['now'])}"
+            return f"{what}: {p100(r['now'])}% — {MON[r['started'].month - 1]} se aisa hi"
+        return f"{what}: {p100(r['before'])}% → {p100(r['now'])}%"
     if k == "rate":
         if r.get("count_flat"):
             return r["fact"]
-        return f"Roz app hataane wale {pct(r['rel'], False)} {'badhe' if r['up'] else 'kam hue'}"
+        return f"Uninstall rate {pct(r['rel'], False)} {'badha' if r['up'] else 'kam hua'}"
     return r["fact"]
 
 
@@ -201,15 +211,15 @@ def kya_karo(ctx, r, story):
                     ro = (up.get("verdict") or {}).get("ready_on")
             hint = " (pehla level, tutorial, pehla ad)" if r["metric"] == "ret_d1" else ""
             return f"{v} me jo badla{hint} wapas lo. {ver_of(nv['label'])} ka result {fd(ctx, ro) if ro else 'jald'}."
-        return "Rollout roko, fix wala update bhejo."
+        return "Rollout stop karo, fix wala update bhejo."
     if k == "rate" and r.get("count_flat"):
         note = ((ctx.vapp.get(aid) or {}).get("pay") or {}).get("note") or ""
-        m_ = re.match(r"(\d+ \w{3}(?: \d{4})?) se Google Ads kharcha nahi", note)
+        m_ = re.match(r"(\d+ \w{3}(?: \d{4})?) se Google Ads (?:kharcha|spend) nahi", note)
         tail = f" {m_.group(1)} se is app pe Google Ads band hai." if m_ else ""
         return f"Hataane wale nahi badhe, users kam ho rahe hain — naye users laane ka plan dekho.{tail}"
     if r.get("purani"):
-        mw = "install ke din app hataana" if r.get("n") == 0 else "app hataana"
-        return f"Purani halat — jaldi nahi. Agle update me {mw} sudhaarne ka plan rakho."
+        mw = gone_w(0) if r.get("n") == 0 else "app hataana"
+        return f"Old issue — jaldi nahi. Agle update me {mw} sudhaarne ka plan rakho."
     if story["topic"] == "T1":
         return f"{fd(ctx, r['started'])} ke aas-paas campaign, country ya update me kya badla, dekho."
     if story["topic"] == "T2":
@@ -223,17 +233,16 @@ def good_text(ctx, r):
     k = r["kind"]
     if k == "impact":
         v = ver_of(r["release"]["label"])
-        return (f"✅ {v} update achha gaya: install ke din hataane wale "
-                f"100 me {p100(r['before'])} → {p100(r['now'])}")
+        what = {"new_d1": back_w(1), "new_d7": back_w(7)}.get(r.get("head"), gone_w(0))
+        return f"✅ {v} update went well: {what} {p100(r['before'])}% → {p100(r['now'])}%"
     if k == "kamai_up":
-        return f"kamai {pct(r['rel'])}"
+        return f"revenue {pct(r['rel'])}"
     if k == "act_drift":
-        return f"purane users (roz) {pct(r['rel'])}"
+        return f"old users/day {pct(r['rel'])}"
     if k == "rate":
-        return f"roz hataane wale {pct(r['rel'], False)} kam"
+        return f"uninstall rate {pct(r['rel'], False)} kam"
     if k == "cohort":
-        what = "install ke din hataane wale" if r["n"] == 0 else f"{r['n']} din me hataane wale"
-        return f"{what} 100 me {p100(r['before'])} → {p100(r['now'])}"
+        return f"{gone_w(r['n'])} {p100(r['before'])}% → {p100(r['now'])}%"
     return r["fact"]
 
 
@@ -247,7 +256,7 @@ def first_shown(ctx, rows):
         first = min(firsts) if firsts else ctx.day
         if first <= ctx.go_live:
             return f"{fd(ctx, ctx.go_live)} (jab ye page shuru hua)"
-        return fd(ctx, first) + (" (aaj)" if first >= ctx.day else "")
+        return fd(ctx, first) + (" (today)" if first >= ctx.day else "")
     x = min(ops, key=lambda x: x["opened"])
     return fd(ctx, x["opened"]) + (" (jab ye feature shuru hua)" if x.get("seeded") else "")
 
@@ -258,21 +267,22 @@ def q_extra(ctx, r, a):
     y = ctx.admob_till
     if k == "range" and r["metric"] in ("ecpm", "match"):
         if r["metric"] == "ecpm":
-            kit = (f"{r['month']} me 1,000 ads ki kamai {usd2(r['now'])} vs range {usd2(r['lo'])}–{usd2(r['hi'])}"
+            kit = (f"{r['month']} me eCPM {usd2(r['now'])} vs range {usd2(r['lo'])}–{usd2(r['hi'])}"
                    + (" (range se upar — kamai ke liye achha)" if r["now"] > r["hi"] else ""))
             karo = ("Range dobara approve karo agar ye naya normal hai; agle mahine phir dekho."
                     if r["now"] > r["hi"] else f"AdMob me {r['unit']} ka floor price aur mediation check karo.")
         else:
-            kit = f"{r['month']} me 100 me {rate_txt(r['now'])} vs range {rate_txt(r['lo'])}–{rate_txt(r['hi'])}"
+            kit = f"{r['month']} me {rate_txt(r['now'])}% vs range {rate_txt(r['lo'])}%–{rate_txt(r['hi'])}%"
             karo = f"AdMob me {r['unit']} ki ad requests aur fill check karo."
         return dict(kya=r["fact"], kit=kit, karo=karo, saath=r.get("saath"))
     if k == "range":
-        yr = f"Kal ({fd(ctx, y)}) 100 me {rate_txt(r['y_rate'])}" if r.get("y_rate") is not None else ""
+        yr = f"Yesterday ({fd(ctx, y)}) {rate_txt(r['y_rate'])}%" if r.get("y_rate") is not None else ""
         if r.get("lost_usd"):
-            kit = (f"{yr} dikhe; {rate_txt(r['lo'])} dikhte to ≈ {money(r['lost_usd'], din=False)} zyada kamai hoti · "
+            kit = (f"{yr} dikhe; {rate_txt(r['lo'])}% dikhte to ≈ {money(r['lost_usd'], din=False)} zyada kamai hoti · "
                    f"≈ Andaza")
         else:
-            kit = (yr + " · " if yr else "") + f"{r['month']} me 100 me {rate_txt(r['now'])} vs range {rate_txt(r['lo'])}–{rate_txt(r['hi'])}"
+            kit = ((yr + " · " if yr else "") + f"{r['month']} me {rate_txt(r['now'])}% vs range "
+                   f"{rate_txt(r['lo'])}%–{rate_txt(r['hi'])}%")
         if r["metric"] == "show":
             karo = f"{r['unit']} kyun kam dikh raha, developer se check karao (ad ka wait time / timeout)."
             if r.get("purani"):
@@ -309,10 +319,10 @@ def q_extra(ctx, r, a):
         return dict(kya=r["fact"], kit=kit, karo=karo)
     if k == "ads":
         x = ctx.ads[aid]
-        kit = (f"Kharcha {money(x['spp'], din=False)} → {money(x['sp'])} · kamai {money(a['kp7'], din=False)} → "
+        kit = (f"Spend {money(x['spp'], din=False)} → {money(x['sp'])} · revenue {money(a['kp7'], din=False)} → "
                f"{money(a['k7'])}")
         if x["cpi"] and x["cpip"]:
-            kit += f" · ek install {usd2(x['cpip'])} → {usd2(x['cpi'])}"
+            kit += f" · cost per install {usd2(x['cpip'])} → {usd2(x['cpi'])}"
         karo = ("Budget badhane se pehle campaign-wise ROAS dekho; jo campaign kamai nahi la raha, uska budget kam karo."
                 if r["tier"] == "amber" else "Achha chal raha — jo campaign kaam kar raha, use hi badhao.")
         kya = ("Ads pe kharcha badha, par kamai utni nahi badhi" if (r["tier"] == "amber" and x["sp"] > x["spp"])
@@ -321,8 +331,8 @@ def q_extra(ctx, r, a):
     if k == "upd":
         v = r["ver"]
         if r["level"] == "halt":
-            karo = (f"{v} ka rollout ho chuka ({umar(r['age'])} pehle) — ab fix wala update bhejo: {v} me jo badla, "
-                    f"wo wapas lo." if r["age"] > 14 else f"{v} ka rollout roko, fix wala update bhejo.")
+            karo = (f"{v} ka rollout ho chuka ({umar(r['age'])} ago) — ab fix wala update bhejo: {v} me jo badla, "
+                    f"wo wapas lo." if r["age"] > 14 else f"{v} ka rollout stop karo, fix wala update bhejo.")
         elif r["level"] == "hold":
             karo = f"{v} ka rollout abhi mat badhao; result pakka hone tak ruko."
         else:
@@ -342,7 +352,7 @@ def q_extra(ctx, r, a):
                     karo=f"AdMob mediation me {r['net']} ka setup / bidding check karo.")
     if k == "kal_drop":
         return dict(kya=r["fact"],
-                    kit=(f"Kal {money(r['now'], din=False)} vs usual {money(r['before'])} "
+                    kit=(f"Yesterday {money(r['now'], din=False)} vs usual {money(r['before'])} "
                          f"({money(r['now'] - r['before'], din=False, sign=True)})"),
                     karo="Aaj ka number bhi dekho; do din lagatar kam ho to ad units check karo.")
     return dict(kya=r["fact"], kit="", karo="Detail dekho.")
@@ -360,10 +370,10 @@ def q_row(ctx, r, frows, a):
         kit = kitna(ctx, r)
         if not kit:
             if r["kind"] == "act_ads":
-                kit = f"Har 1,000 users pe roz {r['before']:,.0f} → {r['now']:,.0f} AdMob ads"
+                kit = f"Ads per user/day {per_user(r['before'])} → {per_user(r['now'])}"
             elif r["kind"] == "pay_never":
                 pay = (ctx.vapp.get(r["app"]) or {}).get("pay") or {}
-                kit = (f"Google Ads kharcha {money(a['spend'])} (4 hafte ka avg) · saal bhar me "
+                kit = (f"Google Ads spend {money(a['spend'])} (4 weeks avg) · saal bhar me "
                        f"~{pay.get('pct365', 0):.0f}% hi wapas · ≈ Andaza")
             else:
                 kit = app_size_txt(ctx, r["app"])
@@ -371,9 +381,9 @@ def q_row(ctx, r, frows, a):
         if r["kind"] == "impact" and r.get("level") == "hold":
             karo = f"{ver_of(r['release']['label'])} ka rollout abhi mat badhao; result pakka hone tak ruko."
         elif r["kind"] == "act_ads":
-            karo = "AdMob me dekho kaunsa ad unit kam dikh raha; kamai/user bhi gire to pichhla update check karo."
+            karo = "AdMob me dekho kaunsa ad unit kam dikh raha; revenue per user bhi gire to pichhla update check karo."
         elif r["kind"] == "pay_never":
-            karo = ("Purani halat — naye campaign ka budget tabhi badhao jab ROAS sudhre; Install value tab dekho."
+            karo = ("Old issue — naye campaign ka budget tabhi badhao jab ROAS sudhre; Install value tab dekho."
                     if r.get("purani") else "Is campaign ka budget mat badhao jab tak paisa 1 saal me wapas na aaye.")
         q = dict(kya=headline(ctx, r, story), kit=kit, karo=karo)
         try:
@@ -387,7 +397,7 @@ def q_row(ctx, r, frows, a):
     elif r["kind"] in EXTRA_Q:
         kab = f"{fd(ctx, r['started'])} · {umar_se(r['age'])}"
     else:
-        kab = re.sub(r"\((\d+ (?:din|hafte|mahine))\)", r"· \1 se", kab_se(ctx, r)).replace("· 0 din se", "· aaj se")
+        kab = re.sub(r"\((\d+ (?:days?|weeks|months))\)", r"· \1 ago", kab_se(ctx, r)).replace("· 0 days ago", "· today")
     q["kab"] = kab
     q["kis"] = kis_data(ctx, r) if r.get("period") else ""
     q["naya"] = {"chip": "purani" if r.get("purani") else r["status"], "first": first_shown(ctx, [r])}
@@ -403,22 +413,22 @@ def fallback(ctx, f, aid, a):
         if us <= 0 and yv <= 0:
             return "nodata", "Pichhle 8 din me AdMob kamai nahi"
         e1, e0 = ecpm(ctx, aid, [y.isoformat()]), ecpm(ctx, aid, ctx.u7)
-        t = f"Kal {money(yv, din=False)} · usual {money(us)}"
+        t = f"Yesterday {money(yv, din=False)} · usual {money(us)}"
         if e1 and e0:
-            t += f" · ad rate (1,000 ads ka) {usd2(e0)} → {usd2(e1)}"
+            t += f" · eCPM {usd2(e0)} → {usd2(e1)}"
         return "normal", t
     if f == "uninstall":
         if aid in ctx.no_ga4 or aid not in ctx.ud:
             return "nodata", "GA4 nahi juda — uninstall ka data nahi"
         u = ctx.ud[aid]
         if not u.get("ready"):
-            return "wait", "⏳ Abhi jaldi — data kam"
+            return "wait", "⏳ Too early — data kam"
         h = (u.get("head4") or {}).get("D0") or {}
         t = "Koi pakka badlav nahi"
         if h.get("p") is not None:
-            t = f"Install ke din hi hataane wale: 100 me {p100(h['p'])} (installs {fr(ctx, h['from'], h['to'])})"
+            t = f"Same day uninstall: {p100(h['p'])}% (installs {fr(ctx, h['from'], h['to'])})"
         if u.get("rate7"):
-            t += f" · roz har 1,000 me {u['rate7']:.1f} hataate"
+            t += f" · uninstall rate {pct1k(u['rate7'])}"
         return "normal", t
     if f == "active":
         if aid in ctx.no_ga4 or aid not in ctx.aapp:
@@ -427,12 +437,12 @@ def fallback(ctx, f, aid, a):
         rd, d1 = m.get("ret_dau") or {}, m.get("d1") or {}
         w = ctx.aapp[aid].get("win") or {}
         if rd.get("st") in ("low", "growth", None) and not rd.get("v"):
-            return "wait", "⏳ Abhi jaldi"
-        t = f"Purane users roz {users(rd['v'])}" if rd.get("v") else "Purane users: data kam"
+            return "wait", "⏳ Too early"
+        t = f"Old users/day {users(rd['v'])}" if rd.get("v") else "Old users: data kam"
         if rd.get("rel") is not None and w and all(w.get(x) for x in ("from", "to", "bfrom", "bto")):
             t += f" ({pct(rd['rel'])} · {fr(ctx, w['from'], w['to'])} vs {fr(ctx, w['bfrom'], w['bto'])})"
         if d1.get("v") is not None:
-            t += f" · agle din wapas 100 me {p100(d1['v'])}"
+            t += f" · back next day {p100(d1['v'])}%"
         st = "wait" if rd.get("st") in ("low", "growth") else "normal"
         return st, t
     if f == "value":
@@ -442,12 +452,12 @@ def fallback(ctx, f, aid, a):
         pay = v.get("pay") or {}
         st = pay.get("st")
         if st == "nospend":
-            note = re.sub(r"\s—\s.*$", "", pay.get("note") or "") or "Google Ads kharcha nahi"
+            note = re.sub(r"\s—\s.*$", "", pay.get("note") or "") or "No Google Ads spend"
             return "na", note
         if st in ("wait", "thin", "low", "few") or not pay.get("from"):
-            return "wait", "⏳ Abhi jaldi — install-wise kamai ka data aa raha"
+            return "wait", "⏳ Too early — install-wise earning ka data aa raha"
         if pay.get("p"):
-            return "normal", f"Ads ka paisa ~{pay['p']} din me wapas (installs {fr(ctx, pay['from'], pay['to'])}) · ≈ Andaza"
+            return "normal", f"Money back in ~{pay['p']} days (installs {fr(ctx, pay['from'], pay['to'])}) · ≈ Andaza"
         return "normal", "Normal"
     if f == "update":
         ups = [u for u in ((ctx.uapp.get(aid) or {}).get("impact") or {}).get("updates") or []
@@ -460,22 +470,22 @@ def fallback(ctx, f, aid, a):
         vd = u.get("verdict") or {}
         if vd.get("early"):
             ro = vd.get("ready_on")
-            return "wait", f"{v} ({fd(ctx, u['date'])}) · ⏳ Abhi jaldi" + (f" · result {fd(ctx, ro)}" if ro else "")
+            return "wait", f"{v} ({fd(ctx, u['date'])}) · ⏳ Too early" + (f" · result {fd(ctx, ro)}" if ro else "")
         lv = vd.get("level")
-        w = {"continue": "👍 Chalne do", "win": "✅ Update achha gaya", "hold": "⚠️ Ruk ke jaancho",
-             "halt": "🛑 Update roko"}.get(lv, "Koi pakka farak nahi")
+        w = {"continue": "👍 Keep", "win": "✅ Update went well", "hold": "⚠️ Wait and check",
+             "halt": "🛑 Stop update"}.get(lv, "No clear change")
         return "normal", f"{v} ({fd(ctx, u['date'])}) · {w}"
     if f == "ads":
         x = ctx.ads[aid]
         if x["sp"] < 1 and x["spp"] < 1:
-            return "na", "Google Ads kharcha nahi (pichhle 14 din)"
-        t = f"Kharcha {money(x['sp'])}"
+            return "na", "No Google Ads spend (last 14 days)"
+        t = f"Spend {money(x['sp'])}"
         if x["roas"] is not None:
             t += f" · ROAS {x['roas']:.2f}"
         if x["cpi"] is not None:
-            t += f" · ek install {usd2(x['cpi'])}"
+            t += f" · cost per install {usd2(x['cpi'])}"
         if x["spp"] >= 1 and x["sp"] < x["spp"] * 0.3:
-            t += f" · kharcha {money(x['spp'], din=False)} → {money(x['sp'])} (kam kiya?)"
+            t += f" · spend {money(x['spp'], din=False)} → {money(x['sp'])} (kam kiya?)"
         return "normal", t + f" ({fr(ctx, w7[0], w7[-1])})"
     if f == "deduct":
         dd = ctx.deda.get(aid)
@@ -511,10 +521,10 @@ def fallback(ctx, f, aid, a):
     if f == "setup":
         acc = ctx.acct.get(a["acc"]) or {}
         tok = acc.get("token")
-        bits = [f"AdMob {fd(ctx, y)} tak"]
+        bits = [f"AdMob till {fd(ctx, y)}"]
         if aid in ctx.aapp:
-            bits.append(f"GA4 {fd(ctx, ctx.aapp[aid].get('data_till') or ctx.ga4_till)} tak")
+            bits.append(f"GA4 till {fd(ctx, ctx.aapp[aid].get('data_till') or ctx.ga4_till)}")
         if tok:
-            bits.append(f"AdMob login: {'theek' if tok == 'Valid' else tok}")
+            bits.append(f"AdMob login: {'OK' if tok == 'Valid' else tok}")
         return "normal", " · ".join(bits)
-    return "nodata", "data nahi"
+    return "nodata", "No data"

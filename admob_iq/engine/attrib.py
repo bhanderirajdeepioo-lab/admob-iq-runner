@@ -620,11 +620,13 @@ def pct(n):
 
 
 # what the one-liner counts, named first (its "kul" is that count's change, never the headline's rate or per-1,000)
-SUBJ = {"ret": "purane users roz", "imp": "purane users roz", "uc": "roz uninstall", "ur": "roz hataane wale",
-        "uk": "roz bache hue", "rr": "roz wapas aane wale", "rev": "kamai roz", "ir": "hafte ki kamai",
-        "spd": "hafte ka ads kharcha", "vpi": "paisa wapas", "dau": "active users"}
-F_WORD = {"rev": "users se", "vpi": "daam se", "dau": "naye installs se"}
-P_WORD = {"imp": "update", "vpi": "kamai se", "dau": "purane users se"}
+# (the page's SPLIT_SUBJ / SPLIT_FW / SPLIT_PW must say the very same words — tests/test_split_frontend compares the
+# lines). "ur" counts the PEOPLE uninstalling a day (F12) — never "uninstall rate", which is the headline's rate.
+SUBJ = {"ret": "old users, daily", "imp": "old users, daily", "uc": "daily uninstalls", "ur": "daily uninstalls",
+        "uk": "still in app, daily", "rr": "daily returns", "rev": "daily revenue", "ir": "weekly revenue",
+        "spd": "weekly ads spend", "vpi": "money back", "dau": "active users"}
+F_WORD = {"rev": "from users", "vpi": "from price", "dau": "from new installs"}
+P_WORD = {"imp": "update", "vpi": "from revenue", "dau": "from old users"}
 
 
 def _fix(y, n):
@@ -665,9 +667,9 @@ def cnum(n, e):
 
 def line(split):
     """The one-liner, its counted thing first and the parts as an equation that adds up as printed:
-    `roz wapas aane wale: kul +8% = installs se +20% + asli −12%` (≤ 12 words); users se … (revenue total), daam se …
-    + kamai se … (money back), installs se … + trend … + update … (update impact; the trend only when its shown % isn't
-    0). The count form: `roz wapas aane wale: ~−150 = installs se ~−180 + asli ~+30 (kul −75%)` (a money split in the
+    `daily returns: kul +8% = from installs +20% + real −12%` (≤ 12 words); from users … (revenue total), from price …
+    + from revenue … (money back), from installs … + trend … + update … (update impact; the trend only when its shown %
+    isn't 0). The count form: `daily uninstalls: ~−150 = from installs ~−180 + real ~+30 (kul −75%)` (a money split in the
     count form has none: its amounts need the page's currency). "" for none / notes only / no split."""
     try:
         if not split or split.get("none") or "shown" not in split:
@@ -677,10 +679,10 @@ def line(split):
         if c and code in MONEY:
             return ""
         f = (lambda k: cnum(c[k], c["exp"])) if c else (lambda k: pct(s[k]))
-        parts = [F_WORD.get(code, "installs se") + " " + f("from_installs")]
+        parts = [F_WORD.get(code, "from installs") + " " + f("from_installs")]
         if (c or s)["trend"]:
             parts.append("trend " + f("trend"))
-        parts.append(P_WORD.get(code, "asli") + " " + f("per_user"))
+        parts.append(P_WORD.get(code, "real") + " " + f("per_user"))
         subj = SUBJ.get(code, "kul")
         if c:
             return "%s: %s = %s (kul %s)" % (subj, cnum(c["total"], c["exp"]), " + ".join(parts), pct(s["total"]))
