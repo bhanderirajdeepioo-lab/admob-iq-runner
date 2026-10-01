@@ -5505,7 +5505,7 @@ function smpCompat(t){ return String(t==null?'':t)
     .replace(/\b([Aa])gle din wapas aane wale( naye users)?/g,(m,a)=>a==='A'?'Back next day':'back next day').replace(/\b(\d+)ve din wapas aane wale( naye users)?/g,'back after $1 days')
     .replace(/\b(\d+) din baad wapas aane wale\b/g,'back after $1 days').replace(/\b([Rr])oz hataane wale\b/g,(m,r)=>r==='R'?'Uninstall rate':'uninstall rate')
     .replace(/\bPurane users \(roz\)|\bPurane users roz\b/g,'Old users/day').replace(/\bpurane users \(roz\)|\bpurane users roz\b/g,'old users/day').replace(/\bReturning (users|DAU)\b/g,'Old users')
-    .replace(/\s*\(eCPM\)/g,'').replace(/\beCPM\b/g,'ad rate').replace(/\s*\(mediation\)/gi,'').replace(/\bmediation\b/gi,'dusre ad networks').replace(/\bmarket\b/g,'bazaar')
+    .replace(/\s*\(eCPM\)/g,'').replace(/^eCPM\b/,'Ad rate').replace(/\beCPM\b/g,'ad rate').replace(/\s*\(mediation\)/gi,'').replace(/\bmediation\b/gi,'dusre ad networks').replace(/\bmarket\b/g,'bazaar')
     .replace(/\bHALT\b/g,'🛑 Stop update').replace(/\bHOLD\b/g,'⚠️ Wait and check').replace(/\bWIN\b/g,'✅ Update went well').replace(/\bProvisional\b/g,'⏳ Not final').replace(/\bEstimate\b/g,'≈ andaza')
     .replace(/\/din\b/g,'/day').replace(/\blog\/day\b/g,'users/day').replace(/\bagle din wapas\b/g,'back next day').replace(/\b[Aa]ds wale installs ka hissa\b/g,'Ads share').replace(/ — approved range (\S+) se (neeche|upar)\b/g,(m,r,d)=>' — '+(d==='neeche'?'below':'above')+' approved range '+r)
 ; }
