@@ -9,10 +9,10 @@ the app drawer) is worked out in the browser from it, for any range / compare th
     engine's daily rate is valid), the engine's normal band ×1000 (md / lo / hi), uninstalls ON install day (g0) and
     exactly L days after install (c1..c7) per install day, next-day returners (r1), AdMob revenue in cents (rv) and
     active users (a1) for the revenue per user;
-  * "Gone by day N" — its own block gd = {cols, pad, apps: {app id: …}} (see _gone): per app and install day from
-    GD_PAD days before the span, its installs and how many of them had uninstalled by day N (N = GD_COLS), SETTLED
-    days only, with the engine's own rules (the launch cut, incomplete days, tracking breaks) — the page pools any
-    window of install days from it, like the engine's checkpoint table does;
+  * "Gone by day N" — its own block gt = {cols, apps: {app id: …}} (see _gtable): per app and day N (GT_COLS), the
+    engine's own checkpoint numbers — the ALL-TIME share of installs gone by day N (the dashboard table's "All time"),
+    the LATEST final week (the engine's settled comparison: its newest install days whose day N is pakka) and the 4
+    weeks before it, with counts, dates and the engine's alert / arrow — not tied to the range;
   * per app: its install-week × day grid (% still installed, ×1000) + the engine's all-time reference row, its updates
     (📦, with the engine's verdict level), size class (badi / madhyam / chhoti: AdMob earnings + Google Ads spend a day),
     the engine's own verdict kind and the dashboard summary row's alert counts;
@@ -48,9 +48,8 @@ V = 1                 # the file's format (the page refuses another)
 SPAN = 156            # days per app: 60-day range + 60-day compare + 35 days of 'normal' before the compare
 COH_WEEKS = 12        # install weeks in the cohort heatmap
 COH_COLS = [0, 1, 3, 7, 14, 30, 60, 90]
-GD_COLS = [0, 1, 3, 7, 14, 30, 45, 60]   # "Gone by day N" (the owner's columns; 0 = the same day as the install)
-GD_PAD = 35           # its install days start this many days before the span: a window at the span's very start still
-                      # has its 4 weeks before (the cell's normal), with a week to spare
+GT_COLS = [0, 1, 3, 7, 14, 30, 45, 60, 90]   # "Gone by day N" (the owner's columns; 0 = the same day as the install)
+GT_LAGS = 90          # (the cohort cells read: lags 0..90 per install day)
 MAX_GZ = 1500000      # a hard cap far above the ~300 KB target: past it the file is not written (counted, never a
                       # silent half file) — the page then keeps its older All-apps views
 LINE = None           # this build's counts line (build_static prints it)
@@ -144,7 +143,7 @@ def _raw_json(path):
 def build_data(dash, U, load, accn, appn, counts=None):
     """dash = the dashboard (as dashboard.json.gz holds it), U = uninstall.json.gz, load(name) → a site file's JSON
     (uninstall_c_<key> / active_<key>; raises when missing), accn / appn = the account / app names files → the
-    Studio's data {meta, apps, alerts, noga, gd} (compact arrays encoded). counts (optional dict): apps / skipped / gd
+    Studio's data {meta, apps, alerts, noga, gt} (compact arrays encoded). counts (optional dict): apps / skipped / gt
     (the apps with their "Gone by day N" block)."""
     counts = counts if counts is not None else {}
     fx = float(dash.get('usd_inr') or 83)
@@ -337,12 +336,12 @@ def build_data(dash, U, load, accn, appn, counts=None):
                      'sz': size_of(x.get('app_id')), 'paisa': round(paisa.get(x.get('app_id'), 0), 2),
                      'why': x.get('text') or 'GA4 data nahi'})
 
-    gone = {'cols': GD_COLS, 'pad': GD_PAD, 'apps': {}}     # "Gone by day N": its own block, by app id
+    gone = {'cols': GT_COLS, 'apps': {}}                    # "Gone by day N": its own block, by app id
     for ap in apps:
-        g = ap.pop('_gd', None)
+        g = ap.pop('_gt', None)
         if g is not None:
             gone['apps'][ap['id']] = g
-    counts.update(gd=len(gone['apps']))
+    counts.update(gt=len(gone['apps']))
     for ap in apps:
         cols = ap.pop('raw')
         for k, arr in cols.items():
@@ -358,7 +357,7 @@ def build_data(dash, U, load, accn, appn, counts=None):
         'lag': lag, 'actLate': act_late, 'settled': settled_min, 'apps': len(apps), 'noga': len(noga),
         'portfolioSettled': ACT.get('settled_till_min'),
     }
-    return {'meta': meta, 'apps': apps, 'alerts': alerts, 'noga': noga, 'gd': gone}
+    return {'meta': meta, 'apps': apps, 'alerts': alerts, 'noga': noga, 'gt': gone}
 
 
 def _app(a, names, size_of, paisa, srow, load, E, S):
@@ -489,11 +488,11 @@ def _app(a, names, size_of, paisa, srow, load, E, S):
         else:
             ref.append(None)
 
-    # "Gone by day N" (its own block of the file, see _gone; a failure costs only this app's block)
+    # "Gone by day N" (its own block of the file, see _gtable; a failure costs only this app's block)
     try:
-        gd = _gone(a, c, E, S)
+        gt = _gtable(a, c)
     except Exception:
-        gd = None
+        gt = None
 
     # engine status (the dashboard's own verdict words)
     v = (a.get('survival') or {}).get('verdict')
@@ -512,7 +511,7 @@ def _app(a, names, size_of, paisa, srow, load, E, S):
         'first': first, 'settled': a.get('settled_till') or E, 'aset': aset, 'retFrom': ret_from,
         'stage': a.get('stage'), 'ready': bool(sr.get('ready', True)), 'vk': vk, 'pkg': a.get('package') or '',
         'ac': sr.get('alerts') or {},
-        'raw': cols, 'rel': rel, '_gd': gd,
+        'raw': cols, 'rel': rel, '_gt': gt,
         'coh': {'ref': ref, 'w': [[w['w'], w['n'], enc(w['v']), int(''.join(map(str, w['p'])) or '0', 2), w['f'], w['t']]
                                   if w['part'] else [w['w'], w['n'], enc(w['v']), int(''.join(map(str, w['p'])) or '0', 2)]
                                   for w in weeks]},
@@ -520,63 +519,101 @@ def _app(a, names, size_of, paisa, srow, load, E, S):
 
 
 # ---- "Gone by day N" ----------------------------------------------------------------------------------------------
-def _gone(a, c, E, S):
-    """One app's "Gone by day N" block, for install days d = S − GD_PAD … E (index j = d − S + GD_PAD), from its cohort
-    file c (the cells the engine reads) and its detail a (launch, incomplete days, tracking breaks, settled_till):
-
-      n     enc: installs on d (None before the launch the engine cuts at — test installs — or outside the file);
-      g[k]  enc: for N = GD_COLS[k], how many of d's installs had uninstalled by day N MINUS those by the previous column's
-            day (g[0] = by the same day) — the page adds them up (small numbers: a far smaller file). None (and every
-            later column None too) where d's day N is not settled yet (d + N > settled_till: still growing), where d has
-            no installs, or where the engine leaves d out of checkpoint N (engine _left_out: an incomplete day in its
-            days 0..N, or a tracking break in days 0..min(N, lmat)) — exactly the install days the engine's checkpoint
-            table pools (compare(cd, N, late)), so a window the page pools from it equals the table's "recent" there;
-      x     [[day, "i" | "b"]]: those incomplete days / tracking breaks from S − GD_PAD on (the page names them)."""
+def _engine_cd(a, c):
+    """The engine's cohort data for one app, as evaluate_app builds it, from its cohort file c (the cells the engine
+    reads: uninstall_c_<key>, written from the same fill_days store) and its detail a: cumulative uninstalls by lag
+    (0..GT_LAGS), the incomplete days, the tracking breaks (engine mark_breaks: nb / ni / lmat), cut at the launch the
+    engine cuts at (test installs before it never counted)."""
     from .engine import uninstall as eng
-    hs, cnew, lags = c['start'], c['new'], c['lags']
-    H = len(cnew)
-    st = min(a.get('settled_till') or E, c.get('end') or E)
+    hs, new, lags = c['start'], c['new'], c['lags']
+    H = len(new)
+    n = [int(v or 0) for v in new]
+    raw, cum = [], []
+    for i in range(H):
+        r = {int(lg): int(u) for lg, u in (lags[i] or []) if 0 <= int(lg) <= H - 1 - i}
+        raw.append(r)
+        row, run = [], 0
+        for lg in range(min(H - 1 - i, GT_LAGS) + 1):
+            run += r.get(lg, 0)
+            row.append(run)
+        cum.append(row)
+    inc = sorted({diff(hs, d) for d in ((a.get('flags') or {}).get('incomplete_days') or {}) if 0 <= diff(hs, d) < H})
+    broken = [False] * H
+    for b in ((a.get('daily') or {}).get('breaks') or []):
+        if 0 <= diff(hs, b) < H:
+            broken[diff(hs, b)] = True
+    whole = {'hs': D(hs), 'E': D(c.get('end') or add(hs, H - 1)), 'H': H, 'n': n, 'cum': cum, 'raw': raw, 'inc': inc,
+             'est': {}, 'addc': {}, 'flags': {}}
+    eng.mark_breaks(whole, broken)
     L = a.get('launch') or {}
     i0 = max(0, min(H, diff(hs, L['day']))) if (L.get('hidden') and L.get('day')) else 0
-    inc = sorted({diff(hs, d) for d in ((a.get('flags') or {}).get('incomplete_days') or {})})
-    brk = sorted({diff(hs, d) for d in ((a.get('daily') or {}).get('breaks') or [])})
-    # the engine's cohort data cut at the launch, its breaks marked (nb, ni, lmat) by the engine's own mark_breaks
-    raw = [{int(lg): u for lg, u in (lags[i] or [])} for i in range(i0, H)]
-    cd = {'H': H - i0, 'n': [int(v or 0) for v in cnew[i0:]], 'raw': raw, 'inc': [i - i0 for i in inc if i >= i0]}
-    broken = [False] * (H - i0)
-    for b in brk:
-        if i0 <= b < H:
-            broken[b - i0] = True
-    eng.mark_breaks(cd, broken)
-    g0 = add(S, -GD_PAD)
-    n_out, g_out = [], [[] for _ in GD_COLS]
-    for j in range(GD_PAD + SPAN):
-        d = add(g0, j)
-        ci = diff(hs, d)
-        if ci < i0 or ci >= H or not num(cnew[ci]):
-            n_out.append(None)
-            for col in g_out:
-                col.append(None)
+    return eng.mark_breaks(eng.cut_cohorts(whole, i0), broken[i0:]) if i0 else whole
+
+
+def _gtable(a, c):
+    """One app's "Gone by day N" block → {"since": the first install day counted (launch / data start), "cap": the store's
+    history is capped (older GA4 data not kept), "c": per GT_COLS one cell or None (no install day's day N is pakka yet)}.
+    A cell (counts exact, dates ISO; x = uninstalled by day N, n = installs, k = install days):
+      a   all time  [x, n, from, to, k] — the engine table's own "All time" (table[N].all, as the dashboard shows it); an
+          app too young for it (the engine needs 8 weeks of install days): every pakka install day since the launch,
+          and "ay": 1;
+      r   latest    [x, n, from, to, k] — the engine's SETTLED comparison (compare(cd, N, late): its newest install days
+          whose day N is final, an older stretch when incomplete days spoil them: "fb"); p = the 4 weeks before it;
+      u   the engine table's own newer row when it shows one [x, n, from, to, k] (its newest install days, day N not
+          final yet: the table shows them when they already rise, or by default) — what its arrow / alert is about;
+      az / af  the engine's own test of that row vs all time: z (after the day-to-day swings) / 1 = a real change;
+      ls  1 = the engine calls the latest sample too small; al = 1: an open engine alert at day N; d = the table's
+          arrow ("up" / "down" / None); fb = [kind, newest days passed] when the latest fell back past spoiled days."""
+    from .engine import uninstall as eng
+    cd = _engine_cd(a, c)
+    late = int(a['late_days']) if num(a.get('late_days')) else 7
+    hs, H = cd['hs'].isoformat(), cd['H']
+    tab = {r.get('n'): r for r in a.get('table') or [] if isinstance(r, dict)}
+    w = lambda o, k='users': [int(o['x']), int(o[k]), o['from'], o['to']]   # noqa: E731
+    cells = []
+    for N in GT_COLS:
+        if H - 1 - N - late < 0:
+            cells.append(None)                              # no install day has a pakka day N yet
             continue
-        n_out.append(int(cnew[ci]))
-        k, dead = ci - i0, not cnew[ci]
-        cells, p, cum, prev = sorted(raw[k].items()), 0, 0, 0
-        for col, N in zip(g_out, GD_COLS):
-            if dead or add(d, N) > st or eng._left_out(cd, k, N):
-                dead = True                          # (settled and left out only grow with N: every later one too)
-                col.append(None)
-                continue
-            while p < len(cells) and cells[p][0] <= N:
-                cum += cells[p][1]
-                p += 1
-            col.append(int(cum - prev))
-            prev = cum
-    x = sorted([[add(hs, i), 'i'] for i in inc] + [[add(hs, i), 'b'] for i in brk])
-    x = [e for e in x if e[0] >= g0]
-    out = {'n': enc(n_out), 'g': [enc(col) for col in g_out], 'x': x}
-    if dec(out['n']) != n_out or any(dec(e) != col for e, col in zip(out['g'], g_out)):
-        raise ValueError('enc')
-    return out
+        s = eng.compare(cd, N, late=late)
+        r = tab.get(N) or {}
+        cell = {}
+        al = r.get('all')
+        if al and al.get('users') and al.get('from') and al.get('to'):
+            x, n, k = eng._pool(cd, diff(hs, al['from']), diff(hs, al['to']), N, clean=True)
+            if n != al['users'] or not n or abs(x / n - al['p']) > 6e-6:
+                x, k = int(round(al['p'] * al['users'])), None   # (the table's own numbers win; never seen)
+            cell['a'] = [int(x), int(al['users']), al['from'], al['to'], k]
+            if num(al.get('z')):
+                cell['az'] = round(float(al['z']), 2)          # the engine's own test of its row vs all time: z after
+            if al.get('fires'):                                # the day-to-day swings, and "a real change" (fires)
+                cell['af'] = 1
+        else:
+            top = H - 1 - N - late
+            x, n, k = eng._pool(cd, 0, top, N, clean=True)
+            if n:
+                cell['a'] = [int(x), int(n), hs, add(hs, top), k]
+                cell['ay'] = 1
+        rec = s['recent']
+        if rec.get('users'):
+            cell['r'] = w(rec) + [int(rec['k'])]
+        tr = r.get('recent') or {}
+        if tr.get('users') and tr.get('from') and (tr.get('from'), tr.get('to')) != (rec.get('from'), rec.get('to')):
+            nw = eng.compare(cd, N)['recent']               # the table's newer row (compare(cd, N): its own numbers)
+            if (nw.get('from'), nw.get('to'), nw.get('users')) == (tr['from'], tr['to'], tr['users']):
+                cell['u'] = w(nw) + [int(nw['k'])]
+            elif num(tr.get('p')):
+                cell['u'] = [int(round(tr['p'] * tr['users'])), int(tr['users']), tr['from'], tr['to'], tr.get('k')]
+        if s.get('prev') and s['prev'].get('users'):
+            cell['p'] = w(s['prev'])
+        cell['ls'] = 1 if s.get('low_sample') else 0
+        cell['al'] = 1 if r.get('alert') else 0
+        cell['d'] = r.get('dir') if r.get('dir') in ('up', 'down') else None
+        fb = s.get('fallback')
+        if fb and fb.get('recent'):
+            cell['fb'] = [fb.get('kind'), list(fb.get('days') or [])]
+        cells.append(cell if ('a' in cell or 'r' in cell) else None)
+    return {'since': hs, 'cap': bool(a.get('history_capped')), 'c': cells}
 
 
 # ---- the build step -----------------------------------------------------------------------------------------------

@@ -181,20 +181,19 @@ get('charts', `(()=>{ ${RESET} const r={}, A=US._.A(); const ids=[];
   return JSON.stringify(r); })()`);
 // ── "Gone by day N" (tests/test_uninstall_studio_gone.py): the all-apps table, its cells, tooltips, the app view's bars ──
 get('gd', `(()=>{ const r={}, A=US._.A(), GDL=US._.GDL;
-  const cells=()=>A.map(a=>({id:a.id, c:GDL.map((_,k)=>{ const W=US._.W(), x=US._.gdCell(a,k,W.f,W.t,W.L); return {x:x.x,n:x.n,k:x.k,f:x.f||null,t:x.t||null,mode:x.mode,p:x.p,why:x.why||null,s:x.h?x.h.s:null,nrm:x.nrm?x.nrm.p:null}; })}));
+  const cells=()=>A.map(a=>({id:a.id, c:GDL.map((_,k)=>{ const x=US._.gdCell(a,k); return {all:x.all||null,lat:x.lat||null,eng:x.eng||null,prev:x.prev||null,s:x.s,word:x.word,why:x.why||null,pend:x.pend||null,young:!!x.young,na:!!x.na}; })}));
   for(const k of ['7','30','60']){ ${RESET} KWIN=k; const h=uniScreen(); const T=US._.TIPS, tips=[];
     A.forEach((a,i)=>GDL.forEach((_,c)=>tips.push(__text(T.gd(i,c))))); GDL.forEach((_,c)=>tips.push(__text(T.gdh(c))));
     US.openDrawer(0); const dh=document.getElementById('us-drawer').innerHTML; US.closeDrawer();
     r[k]={screen:h.slice(h.indexOf('id="us-gd"'), h.indexOf('id="us-foot"')), panel:US._.gdHtml(), W:US._.W(), cells:cells(), tips, drawer:dh,
       afterTbl:h.indexOf('id="us-gd"')>h.indexOf('id="us-tbl"')&&h.indexOf('id="us-tbl"')>0&&h.indexOf('id="us-gd"')<h.indexOf('id="us-foot"')}; }
+  // the sort switch: by the change (last pakka week − all time), Day 7
+  ${RESET} uniScreen(); US._.GST.by='chg'; US._.GST.k=3; US._.GST.d=-1; r.chg=US._.gdHtml(); US._.GST.by='all'; US._.GST.k='sz'; US._.GST.d=-1;
   // the app page (mode p) has the same bars
   ${RESET} uniScreen(); r.page=US._.gdApp(0,'p');
-  // a Studio file from before this feature (no gd block): a short note, no table, nothing breaks
-  const keep=__STUDIO.gd; delete __STUDIO.gd; US._.load(__STUDIO); ${RESET} const h0=uniScreen(); US.openDrawer(0); r.nogd={panel:US._.gdHtml(), drawer:document.getElementById('us-drawer').innerHTML, screen:h0.indexOf('id="us-root"')>=0}; US.closeDrawer();
-  __STUDIO.gd=keep; US._.load(__STUDIO); ${RESET} uniScreen();
+  // a Studio file from before this table (no gt block): a short note, no table, nothing breaks
+  const keep=__STUDIO.gt; delete __STUDIO.gt; US._.load(__STUDIO); ${RESET} const h0=uniScreen(); US.openDrawer(0); r.nogd={panel:US._.gdHtml(), drawer:document.getElementById('us-drawer').innerHTML, screen:h0.indexOf('id="us-root"')>=0}; US.closeDrawer();
+  __STUDIO.gt=keep; US._.load(__STUDIO); ${RESET} uniScreen();
   return JSON.stringify(r); })()`);
-// the engine's _pick, ported (gdPick): the cases the Python test made with the engine (optional file)
-if (fs.existsSync(path.join(dir, 'gd_pick.json'))) { ctx.__PICK = J('gd_pick.json');
-  get('gdpick', `JSON.stringify(__PICK.map(c=>US._.gdPick(j=>!!c.use[j],j=>!!c.lost[j],c.top,c.K,c.need)))`); }
 out.n = Object.keys(out).length;
 process.stdout.write(JSON.stringify({ errors, out }));
