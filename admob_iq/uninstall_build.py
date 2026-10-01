@@ -262,6 +262,15 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
             val_on = False
             print("ga4 value skipped: %s" % type(e).__name__, file=sys.stderr)
     late_sums = {"un": {}, "new": {}, "a1": {}, "fetches": 0}    # every app's late-data re-reads, pooled
+    any_acc = None                                  # 📦 compare any date (impact_any_build: its own files, never an
+    try:                                            # alert) — imported only here: a failure costs that feature only
+        from . import impact_any_build as iab
+        if iab.enabled(s):
+            any_acc = iab.start(out_dir, s)
+        else:
+            iab.off(out_dir)
+    except Exception as e:
+        print("impact any skipped: %s" % type(e).__name__, file=sys.stderr)
     for a in sorted(apps, key=lambda x: (x["app_name"].casefold(), x["app_id"])):
         aid, path = a["app_id"], gu.store_path(data_dir, a["app_id"])
         store = gu.load_store(path) if os.path.exists(path) and not a.get("same_as") else None
@@ -310,6 +319,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                 except Exception:
                     vb.drop_app(val_st, aid)
                 val_rows.append(vb.error_row(a, key))
+        if any_acc is not None:                         # (never raises: a failure costs only this app's file)
+            iab.app_step(any_acc, out_dir, store, a, key, path, rev, cfg["late_days"])
         eng.revision_sums(store, late_sums)
         name = COHORT_PREFIX + key + ".json.gz"
         sig = _sig(path)
@@ -321,6 +332,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         rows.append(row)
         store = None                                    # one big store in memory at a time
     gu.save_state(data_dir, state)
+    if any_acc is not None:                         # (its files: build_static's headers, by pattern — the list
+        iab.finish(any_acc, out_dir)                # returned here stays the tab's own)
 
     alerts = eng.sort_alerts([al for d in details for al in d["alerts"]])
     sel = {a["app_id"] for a in apps}

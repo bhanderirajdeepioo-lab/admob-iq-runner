@@ -338,6 +338,21 @@ def _uninstall_step(dashboard, data_dir, out_dir, s, revenue=None, now=None):
     return files
 
 
+def _impact_any_tail(out_dir):
+    """📦 Compare any date (impact_any_build, run inside the Uninstall step): its ONE public line — counts only, when it
+    ran — and its _headers pattern while any of its files is on the site (never served from a stale cache)."""
+    try:
+        from .impact_any_build import FILE_RE, INDEX, pop_line
+        line = pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        names = os.listdir(out_dir) if os.path.isdir(out_dir) else []
+        return ["/impact_any_*"] if any(FILE_RE.match(n) or n == INDEX for n in names) else []
+    except Exception as e:
+        print(f"impact any log skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 def _review_step(dashboard, data_dir, out_dir, now=None):
     """Daily App Review (admob_iq.review): freezes today's cards once (after REVIEW_READY_IST), publishes every day's
     snapshot to site/review/ and writes site/review/index.json → the _headers patterns it needs. OPTIONAL: off unless
@@ -1289,10 +1304,11 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # GA4 Uninstall tab: fetch what is due (≤ once/~20h per app), evaluate, write its lazy assets and only
     # then add the small dashboard["uninstall"] summary. OPTIONAL — without GA4 secrets (or on any failure)
     # the AdMob dashboard builds exactly as before.
-    uni_files = []
+    uni_files, any_paths = [], []
     if mode == "live" and has_creds and repo.has_data():
         uni_files = _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today,
                                             account_tzs(accounts, s, report_tz, mode, has_creds))
+        any_paths = _impact_any_tail(out_dir)
 
     os.makedirs(out_dir, exist_ok=True)
     # dashboard.json is the primary payload and GROWS with history depth (placements + countries_daily),
@@ -1404,7 +1420,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # dashboard.json changes hourly, so it must NEVER be served from a stale cache
     # — no-store forces every request to fetch the freshest file from origin.
     with open(os.path.join(out_dir, "_headers"), "w", encoding="utf-8") as f:
-        f.write(headers_text(uni_files, dashboard, extra=review_paths))
+        f.write(headers_text(uni_files, dashboard, extra=list(review_paths) + any_paths))
 
     alerts = send_alerts(dashboard, s)
     _uninstall_mark_sent(dashboard, data_dir, s, alerts)

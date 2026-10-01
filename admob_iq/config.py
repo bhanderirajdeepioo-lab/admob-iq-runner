@@ -65,6 +65,10 @@ def settings() -> dict:
         "ga4_value": _env("GA4_VALUE", "false").lower() == "true",     # rollout step 3 switches it on
         "impact_windows": _env("IMPACT_WINDOWS", "true").lower() == "true",  # the update card's 14 / 30 / 60-day
                                                                         # windows + late alerts (off: the 7-day card only)
+        # 📦 compare any date: the update card for every day of the last year, precomputed (impact_any_<key>.json.gz;
+        # never an alert) — off: none of its files, the site as without it
+        "impact_any": _env("IMPACT_ANY", "true").lower() == "true",
+        "impact_any_budget_sec": _int_env(("IMPACT_ANY_BUDGET_SEC",), 150),   # its computing per build at most
         # every change split into "installs ki wajah se" / "asli badlaav" (SPEC_SPLIT): off → no split anywhere, no
         # Telegram tail, the page as before (a rollback without a code push)
         "split": _env("SPLIT", "true").lower() == "true",

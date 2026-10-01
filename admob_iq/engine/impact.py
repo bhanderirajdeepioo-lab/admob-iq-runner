@@ -933,20 +933,7 @@ def dau_row(cx, blk):
     shift = _mean(xa) - U.median(bt)
     nulls, steep_n = [], 0                           # the same comparison at every pseudo-update before the release
     if N == WIN_DAYS or (R - cx["launch"]).days >= _hist_need(N):
-        cnt = 0
-        for dl in _shifts(R, used, N):
-            Rq, D = R - timedelta(days=dl), timedelta(days=dl)
-            e = Rq - lag
-            mq = mu_ref(e)
-            bq = backtest(e)
-            xq = [_log(_ret_dau(cx, d - D), expd(d - D, b - D, w, mq)) for d, b, w in pat]
-            cnt += 2 * len(pat)
-            if len(bq) >= 10 and all(x is not None for x in xq):
-                if _steep(mq):                       # the test would not run there (TREND_MAX_WEEK)
-                    steep_n += 1
-                    continue
-                nulls.append(_mean(xq) - U.median(bq))
-        _count(cx, ("dau", N), cnt)
+        nulls, steep_n = (dm.get("nulls") or _dau_nulls)(cx, dm, R, N, used, pat)
     if len(nulls) >= _null_min(N):
         row["noise"] = _null_sd(nulls, N)
         row["need"] = _need_rel(row["change"], row["noise"], _zlevel(win), mn)
@@ -969,6 +956,29 @@ def dau_row(cx, blk):
     row["raw_status"] = row["status"] = st
     row["_ratio"] = abs(row["change"]) / mn
     return row
+
+
+def _dau_nulls(cx, dm, R, N, used, pat):
+    """Returning DAU's pseudo-updates: the same comparison at every shift Δ before the release R (its after-days
+    `used`, their (after-day, before-day, weeks) `pat`) → (nulls, the shifts skipped for a steep trend). dm =
+    _dau_memo's (a precomputing stand-in may bring its own "nulls": engine.impact_any — the same values)."""
+    lag = timedelta(days=N + 1)
+    mu_ref, backtest, expd = dm["mu_ref"], dm["backtest"], dm["expd"]
+    nulls, steep_n, cnt = [], 0, 0
+    for dl in _shifts(R, used, N):
+        Rq, D = R - timedelta(days=dl), timedelta(days=dl)
+        e = Rq - lag
+        mq = mu_ref(e)
+        bq = backtest(e)
+        xq = [_log(_ret_dau(cx, d - D), expd(d - D, b - D, w, mq)) for d, b, w in pat]
+        cnt += 2 * len(pat)
+        if len(bq) >= 10 and all(x is not None for x in xq):
+            if _steep(mq):                       # the test would not run there (TREND_MAX_WEEK)
+                steep_n += 1
+                continue
+            nulls.append(_mean(xq) - U.median(bq))
+    _count(cx, ("dau", N), cnt)
+    return nulls, steep_n
 
 
 def _mix(cx, rho, K, used, bs):
@@ -2102,6 +2112,33 @@ def _round_vrow(row):
     return row
 
 
+def block_rows(cx, blk, blocks, j, done):
+    """Block j's 7-day window (blk["win"]) and raw rows → (rows, the version table) — impact_app's, shared with
+    engine.impact_any (a chosen date as a pseudo-block: the same rows, nothing re-derived). done = the blocks
+    evaluated before it (the version table's usual early-updater gap)."""
+    blk["_cx"] = cx
+    windows(cx, blk, blocks, j)
+    win = blk["win"]
+    if blk["R"] < cx["launch"] + timedelta(days=7):
+        blk["_na"] = NA_YOUNG
+    elif len(win["days_a"]) < IMPACT_MIN_DAYS:
+        blk["_na"] = NA_CUT
+    rows = {}
+    if blk.get("_na"):
+        rows = {k: _na(_row(k), blk["_na"]) for k in ROWS}
+        vc = ver_rows(cx, blk, done)
+        for r in vc["rows"].values():
+            _na(r, blk["_na"] if blk["kind"] == "version" else NA_NO_VER)
+    else:
+        rows["returning_dau"] = dau_row(cx, blk)
+        rows["new_d1"], rows["new_d7"] = ret_row(cx, blk, 1), ret_row(cx, blk, 7)
+        rows["sessions"], rows["time"] = use_row(cx, blk, "sessions"), use_row(cx, blk, "time")
+        rows["arpdau"] = arpdau_row(cx, blk)
+        rows["uninstall_d0"] = d0_row(cx, blk)
+        vc = ver_rows(cx, blk, done)
+    return rows, vc
+
+
 def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, first, advanced, outdated, now,
                windows_on=True):
     """One app's update impact → (detail["impact"], summary["updates"], ready conditions for update_impact_episodes —
@@ -2121,26 +2158,8 @@ def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, 
     pblocks = prev.get("blocks") or {}
     keep_state, conds, done = {}, [], []
     for j, blk in enumerate(blocks):
-        blk["_cx"] = cx
-        windows(cx, blk, blocks, j)
+        rows, vc = block_rows(cx, blk, blocks, j, done)
         win = blk["win"]
-        if blk["R"] < cx["launch"] + timedelta(days=7):
-            blk["_na"] = NA_YOUNG
-        elif len(win["days_a"]) < IMPACT_MIN_DAYS:
-            blk["_na"] = NA_CUT
-        rows = {}
-        if blk.get("_na"):
-            rows = {k: _na(_row(k), blk["_na"]) for k in ROWS}
-            vc = ver_rows(cx, blk, done)
-            for r in vc["rows"].values():
-                _na(r, blk["_na"] if blk["kind"] == "version" else NA_NO_VER)
-        else:
-            rows["returning_dau"] = dau_row(cx, blk)
-            rows["new_d1"], rows["new_d7"] = ret_row(cx, blk, 1), ret_row(cx, blk, 7)
-            rows["sessions"], rows["time"] = use_row(cx, blk, "sessions"), use_row(cx, blk, "time")
-            rows["arpdau"] = arpdau_row(cx, blk)
-            rows["uninstall_d0"] = d0_row(cx, blk)
-            vc = ver_rows(cx, blk, done)
         done.append(blk)
         vrows = vc["rows"]
         if not windows_on:                            # (the flag off: today's card exactly — no noise line)

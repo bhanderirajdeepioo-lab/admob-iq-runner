@@ -119,6 +119,9 @@ jobs:
           # Update impact card: IMPACT_WINDOWS=false (repo variable) turns off its 14 / 30 / 60-day windows and the
           # late-effect alerts without a code push (the 7-day card as before)
           IMPACT_WINDOWS:       ${{ vars.IMPACT_WINDOWS || 'true' }}
+          # Update impact "compare any date" (every day of the last year, precomputed lazy files; never an alert):
+          # IMPACT_ANY=false (repo variable) turns it off without a code push (its files removed)
+          IMPACT_ANY:           ${{ vars.IMPACT_ANY || 'true' }}
           # Daily App Review (Review tab): REVIEW_ENABLED=true (repo variable) starts the daily card snapshots — set it
           # only after the Review API (Worker) is live; REVIEW_READY_IST = when the day's cards freeze (IST, empty: 09:00);
           # REVIEW_REBUILD_DAY=<YYYY-MM-DD> rebuilds TODAY's cards once (any other day is ignored).
