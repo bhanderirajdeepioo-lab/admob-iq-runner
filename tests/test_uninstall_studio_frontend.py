@@ -314,7 +314,8 @@ def test_words(report):
 def test_other_tabs_and_the_app_page_are_unaffected(report):
     o = J(report, "others")
     assert o["active_same"] and o["value_same"]
-    assert o["apppage_same"] and o["apppage_no_studio"]
+    # one app: the Studio app page, and the whole older app page — exactly as it is without the Studio — folded under it
+    assert o["apppage_studio"] and o["apppage_old_kept"] and o["apppage_old_alone"]
     assert o["old_view"] == {"kw": True, "studio": False, "table": True}        # no Studio file: the older view, as before
     assert o["studio_view"]["root"] and not o["studio_view"]["kw"] and o["studio_view"]["fold"]   # no duplicate KPI band
     assert all(o["studio_view"]["folded"])                     # 📦 + 📅, the table, the older What changed: in "Purane views"
@@ -343,3 +344,69 @@ def test_the_page_script_scopes_the_studio():
     for i in re.findall(r'\bid="([^"$]+)"', blk):
         assert i.startswith("us-"), i
 
+
+
+# ── the full app page (owner, 1 Oct: "Poora app page" was still the old page) ───────────────────────────────────────
+
+def test_one_app_is_the_studio_app_page_with_the_whole_older_page_folded_under_it(report, built):
+    _, _, studio = built
+    p = J(report, "page")
+    assert p["view"] == {"VIEW": "app", "PAGE": p["id"]}
+    assert p["root"] and p["apg"] and p["back"] and p["nav"] == 2 and p["top"]      # ← All apps, ‹ ›, the shared range bar
+    assert p["fold"] and p["oldNoStudio"]                  # the older page, byte for byte as without the Studio, in the fold
+    assert p["kwbar"]                                      # (its own KPI band lives in the fold, never above the Studio)
+    assert p["kpis"] == 8 and p["charts"] == 2 and p["coh"] and p["daytable"]
+    assert p["cards"] == p["alerts"] and p["ts"] == p["alerts"]          # every alert of the app, each with its 🕒 line
+    assert p["sameKpis"]                                   # the same numbers as the drawer (one computation)
+    assert p["after7"] == 7 and p["html7"]                 # the shared range drives the page
+    assert p["loading"] and p["noGa4"]
+
+
+def test_the_app_page_words(report):
+    for t in json.loads(report["out"]["pageWords"]):
+        assert t
+        for w in ("undefined", "NaN", "[object Object]", "Infinity"):
+            assert w not in t, (w, t[:200])
+        assert not DEVA.search(t)
+        u = t
+        for n in sorted(set(ss.NAMES.values()), key=len, reverse=True):
+            u = u.replace(n, "<app>")
+        m = BANNED.search(u) or BANNED_CASE.search(u)
+        assert not m, (m.group(0), u[max(0, m.start() - 80):m.end() + 40])
+        assert not re.search(r"\b100 me\b|\b1,000 me\b|\bhar 1,000\b|per 1,000", u), u[:200]
+        assert "🕒 Alert aaya: " in u or "Is app pe koi khula alert nahi" in u
+
+
+# ── the charts: hover numbers through ONE path, numbers printed on them, labels never overlapping ──────────────────
+
+def test_every_chart_hovers_through_one_registered_path(report):
+    c = J(report, "charts")
+    # the drawer chart's own mousemove listener (shown, then hidden at once by the document's) is gone: every chart and
+    # sparkline is a registered svg[data-hv] that the one document listener (hov) reads — crosshair AND numbers
+    assert c["n"] >= 10 and c["registered"] and c["tips"] and c["oldHit"]
+
+
+def test_numbers_are_printed_on_the_charts(report):
+    c = J(report, "charts")
+    big = c["bigLabels"]
+    assert any(re.match(r"^\d{1,2} \w{3}: [\d,]+(?: lakh)? \(\d+(?:\.\d+)?%\)$", t) for t in big), big   # the latest day
+    assert any(t.startswith("Avg ") and "/din (" in t for t in big) or any(t.startswith("Normal ") for t in big), big
+    assert any(t.startswith("v1.1: ") for t in big), big                           # the 📦 version, before → after
+    assert c["inside"] and c["overlap"] == 0                                        # inside the chart, never on each other
+    assert any(t.startswith("Max ") for t in c["ioLabels"]) and any(re.match(r"^\d{1,2} \w{3}: ", t) for t in c["ioLabels"])
+    assert any(t.startswith("Avg ") for t in c["tlLabels"]) and any(re.match(r"^\d{1,2} \w{3}: ", t) for t in c["tlLabels"])
+    assert len(c["kpiLabels"]) >= 4 and all(re.match(r"^(\d{1,2} \w{3}: |avg )", t) for t in c["kpiLabels"]), c["kpiLabels"]
+    for t in big + c["ioLabels"] + c["tlLabels"] + c["kpiLabels"]:
+        assert not re.search(r"\b100 me\b|1,000 me|per 1,000|NaN|undefined", t), t
+        if "%" in t:                                                                # the actual number first, its % beside
+            assert re.search(r"[\d,]+(?: lakh)?(?:/din)? \(\d+(?:\.\d+)?%\)", t) or re.search(r"[\d,]+→[\d,]+/din \(", t), t
+
+
+def test_labels_drop_rather_than_overlap(report):
+    got = J(report, "charts")["helper"]
+    texts = [t for _, _, t in got]
+    assert texts[0] == "Aaaa 1,000 (1.0%)"                  # the first priority placed as asked
+    assert "Bbbb 2,000 (2.0%)" not in texts                 # no free spot (no nudges allowed) → dropped, never overlapped
+    assert "Cccc 3,000 (3.0%)" in texts                     # nudged down to a free spot
+    for x, y, t in got:                                     # all inside the box
+        assert 0 <= x and x + len(t) * 10.5 * .56 + 3 <= 200.5 and y + 3 <= 60 and y - 10.5 + 1 >= 0

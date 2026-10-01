@@ -120,7 +120,8 @@ get('others', `(()=>{ const r={}; ${RESET}
   r.active_same=on.a===off.a; r.value_same=on.v===off.v;
   const nm=DATA.uninstall.apps[0].app; APP=nm; UNIAPP=DATA.uninstall.apps[0].app_id; const nz=h=>h.replace(/(id="|url\\(#|href="#)([A-Za-z_-]*?)\\d+/g,'$1$2#');   // (the page's own chart-id counters)
   const p1=nz(uniScreen()); delete DATA.uninstall.studio; const p2=nz(uniScreen()); DATA.uninstall.studio=ptr;
-  r.apppage_same=p1===p2; if(!r.apppage_same){ let i=0; while(p1[i]===p2[i]) i++; r.apppage_diff=[p1.slice(i-60,i+60),p2.slice(i-60,i+60)]; } r.apppage_no_studio=p1.indexOf('id="us-root"')<0; APP=''; UNIAPP='';
+  // one app: the Studio app page, and the WHOLE older app page (as it is without the Studio) folded under it
+  r.apppage_old_kept=p1.indexOf('<div class="uo-in">'+p2+'</div>')>=0; r.apppage_studio=p1.indexOf('id="us-root" class="us-app-pg"')>=0&&p1.indexOf('id="uni-old-app"')>p1.indexOf('id="us-apg"'); r.apppage_old_alone=p2.indexOf('us-root')<0; APP=''; UNIAPP='';
   delete DATA.uninstall.studio; const old=uniScreen(); DATA.uninstall.studio=ptr;
   r.old_view={kw:old.indexOf('uni-kw-bar')>=0, studio:old.indexOf('us-root')>=0||old.indexOf('uni-old')>=0, table:old.indexOf('uni-table')>=0};
   const st=uniScreen(); r.studio_view={root:st.indexOf('id="us-root"')>=0, kw:st.indexOf('uni-kw-bar')>=0, fold:st.indexOf('id="uni-old"')>=0,
@@ -128,5 +129,55 @@ get('others', `(()=>{ const r={}; ${RESET}
   return JSON.stringify(r); })()`);
 get('loading', `(()=>{ ${RESET} US._.load(null); const h=uniScreen(); US._.load(__STUDIO); const h2=uniScreen();
   return JSON.stringify({wait:h.indexOf('Uninstall Studio load ho raha hai')>=0&&h.indexOf('id="uni-old"')>=0&&h.indexOf('us-root')<0, back:h2.indexOf('id="us-root"')>=0}); })()`);
+
+// ── the full app page (one app on the Uninstall tab) ────────────────────────────────────────────────────────────────
+get('page', `(()=>{ ${RESET} const r={}, row=DATA.uninstall.apps.find(x=>US._.A().some(a=>a.id===x.app_id)), id=row.app_id; APP=row.app; UNIAPP=id;
+  const ptr=DATA.uninstall.studio, nz=h=>h.replace(/(id="|url\\(#|href="#)([A-Za-z_-]*?)\\d+/g,'$1$2#');
+  const h=uniScreen(); r.view=US._.view(); r.id=id;
+  r.root=h.indexOf('id="us-root" class="us-app-pg"')>=0; r.apg=h.indexOf('id="us-apg"')>=0; r.back=/data-back="1"[^>]*>← All apps/.test(h);
+  r.nav=(h.match(/data-pnav="(-1|1)"/g)||[]).length; r.top=/id="us-rng"/.test(h); r.kwbar=h.indexOf('uni-kw-bar')>h.indexOf('id="uni-old-app"');
+  delete DATA.uninstall.studio; const old=uniScreen(); DATA.uninstall.studio=ptr;
+  r.fold=nz(h).indexOf('<div class="uo-in">'+nz(old)+'</div>')>=0; r.oldNoStudio=old.indexOf('us-root')<0;
+  const pg=h.slice(h.indexOf('id="us-apg"'),h.indexOf('id="uni-old-app"'));
+  r.kpis=(pg.match(/class="us-kpi"/g)||[]).length; r.charts=(pg.match(/<svg viewBox="[^"]*" id="us-s\\d+" data-hv="1"/g)||[]).length;
+  r.coh=pg.indexOf('class="us-coh"')>=0; r.daytable=pg.indexOf('Din-ba-din')>=0; r.cards=(pg.match(/class="us-ac /g)||[]).length; r.alerts=US._.A().find(a=>a.id===id).al.length;
+  r.ts=(pg.match(/🕒 Alert aaya: /g)||[]).length; r.labels=(pg.match(/<text class="us-lbl"/g)||[]).map?((pg.match(/<text class="us-lbl"[^>]*>[^<]*/g)||[]).map(t=>t.replace(/^.*>/,''))):[];
+  r.text=__text(pg);
+  // the same numbers as the drawer: the KPI tiles of both read one computation
+  const i=US._.A().findIndex(a=>a.id===id); US.openDrawer(i); const dh=document.getElementById('us-drawer').innerHTML; US.closeDrawer();
+  const kt=x=>__text((x.match(/<div class="us-dk[^"]*">[\\s\\S]*?<\\/div><\\/div><\\/div><div class="us-panel">/)||[''])[0]);
+  r.sameKpis=kt(dh)!==''&&kt(dh)===kt(pg);
+  // the shared range drives the page too
+  US._.setRange('7'); r.after7=US._.W().L; r.html7=__text(document.getElementById('us-apg').innerHTML).indexOf('Din-ba-din')>=0;
+  // the Studio's file still loading: a short wait, the older page folded under it
+  US._.load(null); const hl=uniScreen(); US._.load(__STUDIO); r.loading=hl.indexOf('Uninstall Studio load ho raha hai')>=0&&hl.indexOf('id="uni-old-app"')>=0&&hl.indexOf('id="us-root"')<0;
+  // an app with no GA4 data: its older page as before
+  APP='Demo Clock'; UNIAPP=''; const nh=uniScreen(); r.noGa4=nh.indexOf('us-root')<0;
+  ${RESET} return JSON.stringify(r); })()`);
+get('pageWords', `(()=>{ ${RESET} const T=[]; US._.A().forEach(a=>{ const row=DATA.uninstall.apps.find(x=>x.app_id===a.id); if(!row) return; APP=row.app; UNIAPP=a.id; for(const k of ['7','30','60']){ KWIN=k; const h=uniScreen(); T.push(__text(h.slice(h.indexOf('id="us-root"'),h.indexOf('id="uni-old-app"')))); } }); ${RESET} return JSON.stringify(T); })()`);
+
+// ── every chart: one hover path (registered, no own listener), its numbers printed on it, labels never overlapping ──
+get('charts', `(()=>{ ${RESET} const r={}, A=US._.A(); const ids=[];
+  const scan=h=>{ (h.match(/<svg[^>]* id="(us-[sd]\\d+)"[^>]*data-hv="1"|<svg[^>]*data-hv="1"[^>]* id="(us-[sd]\\d+)"/g)||[]).forEach(t=>{ const m=t.match(/id="(us-[sd]\\d+)"/); ids.push(m[1]); }); };
+  const h=uniScreen(); scan(h); const i=A.findIndex(a=>a.rel.length); US.openDrawer(i<0?0:i); const dh=document.getElementById('us-drawer').innerHTML; scan(dh);
+  const SPK=US._.SPK(); r.n=ids.length; r.registered=ids.every(id=>SPK[id]&&typeof SPK[id].tip==='function'&&SPK[id].n>0);
+  r.tips=ids.every(id=>{ const S=SPK[id]; const a=S.tip(0), b=S.tip(S.n-1); return typeof a==='string'&&a.length>10&&typeof b==='string'&&b.length>10; });
+  r.oldHit=dh.indexOf('us-bigr')<0&&dh.indexOf('us-bigx')<0&&h.indexOf('us-bigr')<0;
+  // the drawer's rate chart: its labels — the latest day, the range average, the normal, 📦 versions, 🔔 starts
+  const big=(dh.match(/<svg viewBox="0 0 (\\d+) (\\d+)" id="us-d\\d+" data-hv="1" role="img" aria-label="Roz hataaye % chart">[\\s\\S]*?<\\/svg>/)||[])[0]||'';
+  const vb=(big.match(/viewBox="0 0 (\\d+) (\\d+)"/)||[]).slice(1).map(Number);
+  const L=[...big.matchAll(/<text class="us-lbl" x="([\\d.-]+)" y="([\\d.-]+)" font-size="([\\d.]+)"[^>]*>([^<]*)<\\/text>/g)].map(m=>({x:+m[1],y:+m[2],fs:+m[3],t:m[4]}));
+  r.bigLabels=L.map(l=>l.t); r.vb=vb;
+  const box=l=>[l.x,l.y-l.fs+1,l.x+String(l.t).replace(/&amp;/g,'&').length*l.fs*.56+3,l.y+3];
+  r.inside=L.every(l=>{ const b=box(l); return b[0]>=0&&b[2]<=vb[0]+0.5&&b[1]>=0&&b[3]<=vb[1]; });
+  r.overlap=0; for(let p=0;p<L.length;p++) for(let q=p+1;q<L.length;q++){ const a=box(L[p]), b=box(L[q]); if(a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1]) r.overlap++; }
+  const io=(dh.match(/aria-label="Installs vs uninstalls chart">[\\s\\S]*?<\\/svg>/)||[''])[0]; r.ioLabels=[...io.matchAll(/<text class="us-lbl"[^>]*>([^<]*)<\\/text>/g)].map(m=>m[1]);
+  US.closeDrawer();
+  const tl=US._.tl(); r.tlLabels=[...tl.matchAll(/<text class="us-lbl"[^>]*>([^<]*)<\\/text>/g)].map(m=>m[1]);
+  const kp=US._.kpis(); r.kpiLabels=[...kp.matchAll(/<span class="us-sl[^"]*"[^>]*>([^<]*)<\\/span>/g)].map(m=>m[1]);
+  // the helper itself: a crowded set → all inside, none overlapping, the lower priority dropped
+  const out=US._.labels([{x:50,y:20,t:'Aaaa 1,000 (1.0%)',a:'start',p:1,dys:[0]},{x:52,y:21,t:'Bbbb 2,000 (2.0%)',a:'start',p:2,dys:[0]},{x:52,y:21,t:'Cccc 3,000 (3.0%)',a:'start',p:3,dys:[0,14]},{x:195,y:20,t:'Dddd 4,000',a:'start',p:4}],[0,0,200,60],[[0,40,200,60]]);
+  r.helper=[...out.matchAll(/x="([\\d.]+)" y="([\\d.]+)"[^>]*>([^<]*)</g)].map(m=>[+m[1],+m[2],m[3]]);
+  return JSON.stringify(r); })()`);
 out.n = Object.keys(out).length;
 process.stdout.write(JSON.stringify({ errors, out }));

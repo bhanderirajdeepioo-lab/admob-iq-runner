@@ -1287,13 +1287,28 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-btn.us-full{border-color:rgba(34,211,238,.55);color:#fff;background:linear-gradient(90deg,rgba(47,107,255,.32),rgba(34,211,238,.16))}
 :is(#us-root,#us-layer) .us-btn.us-full:hover{border-color:var(--cyan)}
 #us-main>.note{margin:0}
-#uni-old{margin:22px 0 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
-#uni-old>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;padding:12px 16px;font-size:14px;font-weight:700;color:var(--ink2)}
-#uni-old>summary::-webkit-details-marker{display:none}
-#uni-old>summary .uo-cv{transition:transform .2s;color:var(--faint)}
-#uni-old[open]>summary .uo-cv{transform:rotate(90deg)}
-#uni-old>summary .uo-h{font-weight:500;font-size:12px;color:var(--faint)}
-#uni-old>.uo-in{padding:4px 12px 12px}
+:is(#us-root,#us-layer) .us-spw{position:relative;margin-top:8px}
+:is(#us-root,#us-layer) .us-spw>.us-spk{margin-top:0}
+:is(#us-root,#us-layer) .us-sl{position:absolute;font:600 10px/13px var(--us-num);font-variant-numeric:tabular-nums;color:var(--ink2);white-space:nowrap;pointer-events:none;text-shadow:0 0 3px var(--panel),0 0 3px var(--panel),0 0 2px var(--panel)}
+:is(#us-root,#us-layer) .us-sl-r{right:0}
+:is(#us-root,#us-layer) .us-sl-a{left:0;color:var(--muted);font-weight:500}
+:is(#us-root,#us-layer) .us-lbl{pointer-events:none}
+:is(#us-root,#us-layer) .us-pgh{padding:16px 2px 6px;align-items:flex-start}
+:is(#us-root,#us-layer) .us-pgh .us-l2{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:11.5px;color:var(--faint)}
+:is(#us-root,#us-layer) .us-pgh .us-lk{color:var(--cyan);cursor:pointer;text-transform:none;letter-spacing:0;font:600 12.5px var(--us-font)}
+:is(#us-root,#us-layer) .us-pgt{margin:0;font:700 22px/1.25 var(--us-font)}
+:is(#us-root,#us-layer) .us-pgt .us-acn{color:var(--muted);font-weight:500}
+:is(#us-root,#us-layer) .us-pgb{display:flex;flex-direction:column;gap:16px;margin-top:10px}
+:is(#us-root,#us-layer) .us-pk{grid-template-columns:repeat(4,minmax(0,1fr))}
+@container us (max-width:700px){:is(#us-root,#us-layer) .us-pk{grid-template-columns:repeat(2,minmax(0,1fr))}:is(#us-root,#us-layer) .us-pgt{font-size:17px}}
+@container us (max-width:448px){:is(#us-root,#us-layer) .us-sl-a{display:none}}
+#uni-old,#uni-old-app{margin:22px 0 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
+#uni-old>summary,#uni-old-app>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;padding:12px 16px;font-size:14px;font-weight:700;color:var(--ink2)}
+#uni-old>summary::-webkit-details-marker,#uni-old-app>summary::-webkit-details-marker{display:none}
+#uni-old>summary .uo-cv,#uni-old-app>summary .uo-cv{transition:transform .2s;color:var(--faint)}
+#uni-old[open]>summary .uo-cv,#uni-old-app[open]>summary .uo-cv{transform:rotate(90deg)}
+#uni-old>summary .uo-h,#uni-old-app>summary .uo-h{font-weight:500;font-size:12px;color:var(--faint)}
+#uni-old>.uo-in,#uni-old-app>.uo-in{padding:4px 12px 12px}
 </style>
 </head>
 <body>
@@ -4842,19 +4857,22 @@ function lin(d0,d1,r0,r1){ const k=(d1-d0)?(r1-r0)/(d1-d0):0; return v=>r0+(v-d0
 function pathOf(vals,X,Y){ let d='',pen=false; vals.forEach((v,i)=>{ if(v==null||!isFinite(v)){ pen=false; return; } d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1); pen=true; }); return d; }
 function areaOf(lo,hi,X,Y){ let d='',seg=[]; const flush=()=>{ if(seg.length>1){ d+='M'+seg.map(i=>X(i).toFixed(1)+' '+Y(hi[i]).toFixed(1)).join('L')+'L'+seg.slice().reverse().map(i=>X(i).toFixed(1)+' '+Y(lo[i]).toFixed(1)).join('L')+'Z'; } seg=[]; };
   lo.forEach((v,i)=>{ if(v==null||hi[i]==null) flush(); else seg.push(i); }); flush(); return d; }
-const SPK={}; let spkN=0;
-// small chart: vals (now), ghost (compare, stretched), band lo/hi, prov from index
-function spark(o){ const w=o.w||280, h=o.h||54, pad=4, vals=o.vals, n=vals.length, id='us-s'+(++spkN);
-  const all=vals.concat(o.ghost||[],o.lo||[],o.hi||[]).filter(v=>v!=null&&isFinite(v));
+const SPK={}; let spkN=0, SPF='us-s';
+// small chart: vals (now), ghost (compare, stretched), band lo/hi, prov from index. lab: {last:i=>text, avg:value, avgT:text} —
+// the latest value at the line's end and the range average as a dashed mark, printed on the chart (HTML, so the stretched
+// SVG never distorts them), each placed where no point of the line is, else dropped
+function spark(o){ const w=o.w||280, h=o.h||54, pad=4, vals=o.vals, n=vals.length, id=SPF+(++spkN);
+  const all=vals.concat(o.ghost||[],o.lo||[],o.hi||[],o.lab&&o.lab.avg!=null?[o.lab.avg]:[]).filter(v=>v!=null&&isFinite(v));
   if(!all.length||n<2) return `<svg class="us-spk" viewBox="0 0 ${w} ${h}"><text x="${w/2}" y="${h/2+4}" text-anchor="middle" fill="var(--faint)" font-size="11">—</text></svg>`;
   let mn=Math.min(...all), mx=Math.max(...all); if(o.zero) mn=Math.min(0,mn); if(mx===mn){ mx+=1; mn-=1; } const pr=(mx-mn)*.08;
   const X=lin(0,n-1,pad,w-pad), Y=lin(mn-pr,mx+pr,h-pad,pad);
   const g=o.ghost&&o.ghost.length>1?o.ghost:null, GX=g?lin(0,g.length-1,pad,w-pad):null;
   const col=o.color||'var(--us-s-rate)';
-  let s=`<svg class="us-spk" id="${id}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="height:${o.hpx||h}px">`;
+  let s=`<svg class="us-spk" id="${id}" data-hv="1" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="height:${o.hpx||h}px">`;
   if(o.lo&&o.hi) s+=`<path d="${areaOf(o.lo,o.hi,X,Y)}" fill="var(--us-band)"/>`;
   if(o.zero&&mn<0) s+=`<line x1="${pad}" x2="${w-pad}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="var(--line2)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
   if(g) s+=`<path d="${pathOf(g,i=>GX(i),Y)}" fill="none" stroke="var(--us-ghost)" stroke-width="1.4" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" opacity=".85"/>`;
+  if(o.lab&&o.lab.avg!=null&&isFinite(o.lab.avg)) s+=`<line x1="${pad}" x2="${w-pad}" y1="${Y(o.lab.avg).toFixed(1)}" y2="${Y(o.lab.avg).toFixed(1)}" stroke="${col}" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" opacity=".75"/>`;
   const pd=pathOf(vals,X,Y);
   if(o.area){ let first=-1,last=-1; vals.forEach((v,i)=>{ if(v!=null){ if(first<0) first=i; last=i; } });
     if(first>=0) s+=`<path d="${pd}L${X(last).toFixed(1)} ${h}L${X(first).toFixed(1)} ${h}Z" fill="${col}" opacity=".12"/>`; }
@@ -4866,7 +4884,17 @@ function spark(o){ const w=o.w||280, h=o.h||54, pad=4, vals=o.vals, n=vals.lengt
   if(li>=0&&o.dot!==false) s+=`<ellipse cx="${X(li).toFixed(1)}" cy="${Y(vals[li]).toFixed(1)}" rx="3.2" ry="${(3.2*(o.hpx?h/o.hpx:1)).toFixed(2)}" fill="${col}" stroke="var(--panel)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
   s+=`<line class="us-xh" x1="0" x2="0" y1="0" y2="${h}" stroke="var(--ink2)" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0"/></svg>`;
   if(o.tip) SPK[id]={n,tip:o.tip,X,w};
-  return s; }
+  if(!o.lab) return s;
+  // the labels, in px of the drawn height (the SVG is stretched to its box: y% = y / h)
+  const hp=o.hpx||h, yp=v=>Y(v)/h*hp, LH=13, placed=[];
+  const clear=(top,from,to)=>{ for(let i=from;i<=to;i++){ const v=vals[i]; if(v==null) continue; const y=yp(v); if(y>=top-2&&y<=top+LH+1) return false; } return true; };
+  const pick=(y,from,to,pref)=>{ const c=pref<0?[y-LH-3,y+4,0,hp-LH]:[y+4,y-LH-3,0,hp-LH];
+    for(const t0 of c){ const t=Math.max(0,Math.min(hp-LH,t0)); if(!clear(t,from,to)) continue; if(placed.some(p=>t<p+LH&&t+LH>p)) continue; placed.push(t); return t; } return null; };
+  let ov='';
+  if(li>=0&&o.lab.last){ const from=Math.max(0,Math.floor(n*.55)), t=pick(yp(vals[li]),from,n-1,-1); if(t!=null) ov+=`<span class="us-sl us-sl-r" style="top:${t.toFixed(1)}px">${esc(o.lab.last(li))}</span>`; }
+  if(o.lab.avg!=null&&isFinite(o.lab.avg)&&o.lab.avgT){ let fi=0; while(fi<n&&vals[fi]==null) fi++; const to=Math.min(n-1,Math.ceil(n*.45)), t=pick(yp(o.lab.avg),0,to,(fi<n&&yp(vals[fi])<yp(o.lab.avg))?1:-1);
+    if(t!=null) ov+=`<span class="us-sl us-sl-a" style="top:${t.toFixed(1)}px">${esc(o.lab.avgT)}</span>`; }
+  return `<div class="us-spw">${s}${ov}</div>`; }
 const HATCH='<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><pattern id="us-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="rgba(230,184,78,.05)"/><line x1="0" y1="0" x2="0" y2="6" stroke="rgba(230,184,78,.28)" stroke-width="2"/></pattern></defs></svg>';
 
 /* ================= the layer (drawer + scrim + tooltip: on <body>, outside the screens) ================= */
@@ -4883,7 +4911,7 @@ function font(){ if(FONT) return; FONT=true;   // the Studio's condensed number 
   try{ const l=document.createElement('link'); l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap'; document.head.appendChild(l); }catch(e){} }
 
 /* ================= tooltip ================= */
-let tipPinned=false;
+let tipPinned=false, tipT=0;
 function showTip(html,x,y,pin){ layer(); const tipEl=$('us-tip'); tipEl.innerHTML=html; tipEl.classList.add('us-on'); tipEl.classList.toggle('us-pin',!!pin); tipPinned=!!pin;
   const r=tipEl.getBoundingClientRect(), vw=innerWidth, vh=innerHeight; let L=x+14, T=y+14;
   if(L+r.width>vw-8) L=Math.max(8,x-r.width-14); if(T+r.height>vh-8) T=Math.max(8,y-r.height-14);
@@ -4891,11 +4919,14 @@ function showTip(html,x,y,pin){ layer(); const tipEl=$('us-tip'); tipEl.innerHTM
 function hideTip(){ const tipEl=$('us-tip'); if(tipEl) tipEl.classList.remove('us-on','us-pin'); tipPinned=false; }
 const TIPS={};
 const trow=(k,v)=>`<div class="us-row"><span>${k}</span><b>${v}</b></div>`;
-function spkHover(sv,e){ const S=SPK[sv.id], r=sv.getBoundingClientRect(), fx=(e.clientX-r.left)/r.width*S.w;
+// a chart's hover: the nearest day to the pointer (x), its crosshair, its numbers in the tooltip. Every chart / sparkline of the
+// Studio is registered in SPK (by its <svg id>, marked data-hv) and handled by the ONE document listener below — a chart
+// never has its own listener (an own one was hidden right away by the document's: the drawer chart's numbers never showed)
+function hov(sv,cx,cy,pin){ const S=SPK[sv.id]; if(!S) return false; const r=sv.getBoundingClientRect(); if(!(r.width>0)) return false; const fx=(cx-r.left)/r.width*S.w;
   let best=0,bd=1e9; for(let i=0;i<S.n;i++){ const d=Math.abs(S.X(i)-fx); if(d<bd){ bd=d; best=i; } }
-  const xh=sv.querySelector('.us-xh'); xh.setAttribute('x1',S.X(best)); xh.setAttribute('x2',S.X(best)); xh.setAttribute('opacity','1');
-  sv.querySelectorAll('.us-xh').forEach(l=>{ if(l!==xh) l.setAttribute('opacity','0'); });
-  showTip(S.tip(best),e.clientX,e.clientY); }
+  roots().forEach(rt=>rt.querySelectorAll('svg[data-hv] .us-xh[opacity="1"]').forEach(l=>{ if(l.ownerSVGElement!==sv) l.setAttribute('opacity','0'); }));
+  const xh=sv.querySelector('.us-xh'); if(xh){ xh.setAttribute('x1',S.X(best)); xh.setAttribute('x2',S.X(best)); xh.setAttribute('opacity','1'); }
+  const h=S.tip(best); if(!h) return false; showTip(h,cx,cy,pin); return true; }
 const inStudio=t=>!!(t&&t.closest&&t.closest('#us-root,#us-layer'));
 
 /* ================= count-up ================= */
@@ -4972,10 +5003,11 @@ function kpisHtml(){ const L=W.L, cL=W.cL, provI=W.t>M.settled?Math.max(0,ix(dAd
     dR={cls:Math.abs(r)<.005?'us-flat':(up?'us-up-bad':'us-dn-good'),h:`${up?'▲':'▼'} ${fS(ppl)} log/din (${rp(PT.rate)}, pehle ${rp(PC.rate)})`}; }
   const fmtR=v=>rp(v);
   const subR=`<span data-tk="ptl:0">Nuksaan <b>${fX(PT.Ltot)} log/din</b>${PT.Lusd?' ≈ <b>'+moneyL(PT.Lusd,true)+'</b>':''}</span> · normal rate ${rp(PT.lo)}–${rp(PT.hi)}`;
-  return mk('ins','Installs','roz ka avg',insD,'n','/din',dI,spark({vals:sI,ghost:cI,prov:provI,color:'var(--us-s-in)',area:1,tip:tipD('Installs',sI,cI,fN)}),`Kul ${fN(PT.ins)} · ${W.L} din${PT.prov?' · <span class="us-watch">━ ⏳ pakka nahi</span>':''}`)
-    +mk('outs','Uninstalls','roz ka avg',outD,'n','/din',dO,spark({vals:sO,ghost:cO,prov:provI,color:'var(--us-s-out)',area:1,tip:tipD('Uninstalls',sO,cO,fN)}),`Kul ${fN(PT.outs)} · ${W.L} din${PT.prov?' · <span class="us-watch">━ ⏳ pakka nahi</span>':''}`)
-    +mk('net','Net','installs − uninstalls',netD,'s','/din',dN,spark({vals:sN,ghost:cN,prov:provI,color:'var(--ink2)',zero:1,tip:tipD('Net',sN,cN,fS)}),`${netD>0?'Users badh rahe':'Users ghat rahe'} · kul ${fS(PT.net)}`)
-    +mk('rate','Uninstall rate','roz active users me se',PT.rate,'r','',dR,spark({vals:sR,ghost:cR,prov:provI,lo:seriesFor(PD.lo,W.f,W.t),hi:seriesFor(PD.hi,W.f,W.t),color:'var(--us-s-rate)',tip:tipD('Rate',sR,cR,fmtR)}),subR); }
+  const lst=(arr,f)=>i=>fdNoY(dAdd(W.f,i))+': '+f(arr[i]), lstR=i=>{ const k=ix(W.f)+i; return fdNoY(dAdd(W.f,i))+': '+fN(PD.un[k])+' ('+rp(sR[i])+')'; };
+  return mk('ins','Installs','roz ka avg',insD,'n','/din',dI,spark({vals:sI,ghost:cI,prov:provI,color:'var(--us-s-in)',area:1,tip:tipD('Installs',sI,cI,fN),lab:{last:lst(sI,fN),avg:insD,avgT:'avg '+fN(insD)}}),`Kul ${fN(PT.ins)} · ${W.L} din${PT.prov?' · <span class="us-watch">━ ⏳ pakka nahi</span>':''}`)
+    +mk('outs','Uninstalls','roz ka avg',outD,'n','/din',dO,spark({vals:sO,ghost:cO,prov:provI,color:'var(--us-s-out)',area:1,tip:tipD('Uninstalls',sO,cO,fN),lab:{last:lst(sO,fN),avg:outD,avgT:'avg '+fN(outD)}}),`Kul ${fN(PT.outs)} · ${W.L} din${PT.prov?' · <span class="us-watch">━ ⏳ pakka nahi</span>':''}`)
+    +mk('net','Net','installs − uninstalls',netD,'s','/din',dN,spark({vals:sN,ghost:cN,prov:provI,color:'var(--ink2)',zero:1,tip:tipD('Net',sN,cN,fS),lab:{last:lst(sN,fS),avg:netD,avgT:'avg '+fS(netD)}}),`${netD>0?'Users badh rahe':'Users ghat rahe'} · kul ${fS(PT.net)}`)
+    +mk('rate','Uninstall rate','roz active users me se',PT.rate,'r','',dR,spark({vals:sR,ghost:cR,prov:provI,lo:seriesFor(PD.lo,W.f,W.t),hi:seriesFor(PD.hi,W.f,W.t),color:'var(--us-s-rate)',tip:tipD('Rate',sR,cR,fmtR),lab:{last:lstR,avg:PT.rate,avgT:'avg '+fN(outD)+' ('+rp(PT.rate)+')'}}),subR); }
 function ledgerHtml(){ const insD=PT.ins!=null?PT.ins/W.L:null, outD=PT.outs!=null?PT.outs/W.L:null, netD=PT.net!=null?PT.net/W.L:null;
   let rows=''; for(let i=ix(W.t);i>=ix(W.f);i--){ const d=dOf(i), r=PD.rate[i], hs=(r!=null&&PD.hi[i]!=null)?(r>PD.hi[i]?'us-h3':(r<PD.lo[i]?'us-h-2':'')):'';
     rows+=`<tr class="${d>M.settled?'us-prow':''}"><td class="us-l">${fd(d)}${d>M.settled?' ⏳':''}</td><td>${fN(PD.nw[i])}</td><td>${fN(PD.un[i])}</td><td>${fS(PD.net[i])}</td><td><span class="us-hcell ${hs}">${rp(r)}</span></td><td>${PT.Lday[i-ix(W.f)]==null?'—':fX(PT.Lday[i-ix(W.f)])}</td></tr>`; }
@@ -5051,25 +5083,42 @@ function srcHtml(){ const cur=symOf(), val=o=>o.usd!=null?o.usd:null;
 /* ================= timeline (alerts + updates) ================= */
 let TLW=1000;                                            // the panel's width (measured once on screen)
 const xStep=(n,w)=>Math.max(1,Math.ceil(n/Math.max(2,Math.floor(w/58))));
-function tlHtml(){ const i1=ix(W.t), i0=Math.max(0,Math.min(ix(W.f),i1-41)), n=i1-i0+1, f0=dOf(i0), w=Math.max(600,Math.round((TLW||1000)-30)), h=178, padL=116, padR=14, X=lin(0,Math.max(1,n-1),padL+8,w-padR-8), hw=n>1?(X(1)-X(0))/2:6;
-  const un=PD.un.slice(i0,i1+1), vals=un.filter(v=>v!=null), mn=vals.length?Math.min(...vals)*.97:0, mx=vals.length?Math.max(...vals)*1.02:1, Y=lin(mn,mx,70,16);
+function tlHtml(){ const i1=ix(W.t), i0=Math.max(0,Math.min(ix(W.f),i1-41)), n=i1-i0+1, f0=dOf(i0), w=Math.max(600,Math.round((TLW||1000)-30)), h=178, padL=116, padR=176, X=lin(0,Math.max(1,n-1),padL+8,w-padR-8), hw=n>1?(X(1)-X(0))/2:6;
+  const un=PD.un.slice(i0,i1+1), rt=PD.rate.slice(i0,i1+1);
+  // the chosen range's average and the normal (uninstalls a day, all apps): the actual number, its rate beside it
+  const avgU=PT.outs!=null?PT.outs/W.L:null, nrmU=(avgU!=null&&PT.exc!=null)?avgU-PT.exc:null;
+  const vals=un.concat([avgU,nrmU]).filter(v=>v!=null), mn=vals.length?Math.min(...vals)*.97:0, mx=vals.length?Math.max(...vals)*1.02:1, Y=lin(mn,mx,70,16);
   const ups={}, als={};
   A.forEach(a=>{ a.rel.forEach(r=>{ if(r[0]>=f0&&r[0]<=W.t){ (ups[r[0]]=ups[r[0]]||[]).push([a,r]); } }); });
   ALERTS.forEach(x=>{ if(x.closed) return; let d=startedOf(x); if(!d) return; const before=d<f0; if(before) d=f0; if(d>W.t) return; (als[d]=als[d]||[]).push([x,before]); });
-  let s=`<svg viewBox="0 0 ${w} ${h}" style="min-width:${w}px" role="img" aria-label="Updates aur badlaav ki timeline">`;
-  const ws=ix(W.f)-i0; s+=`<rect x="${(X(ws)-hw).toFixed(1)}" y="4" width="${(w-padR-X(ws)+hw).toFixed(1)}" height="${h-24}" rx="6" fill="rgba(34,211,238,.045)" stroke="rgba(34,211,238,.22)" stroke-dasharray="3 3"/>`;
-  if(ws>0) s+=`<text x="${(X(ws)-hw+6).toFixed(1)}" y="15" font-size="10.5" fill="var(--cyan)">chuni range · ${span(W.f,W.t)}</text>`;
+  const id=SPF+(++spkN);
+  let s=`<svg viewBox="0 0 ${w} ${h}" id="${id}" data-hv="1" style="min-width:${w}px" role="img" aria-label="Updates aur badlaav ki timeline">`;
+  const ws=ix(W.f)-i0; s+=`<rect x="${(X(ws)-hw).toFixed(1)}" y="4" width="${(X(n-1)-X(ws)+2*hw).toFixed(1)}" height="${h-24}" rx="6" fill="rgba(34,211,238,.045)" stroke="rgba(34,211,238,.22)" stroke-dasharray="3 3"/>`;
+  const obs=[], L=[];
+  if(ws>0){ const t='chuni range · '+span(W.f,W.t); s+=`<text x="${(X(ws)-hw+6).toFixed(1)}" y="15" font-size="10.5" fill="var(--cyan)">${t}</text>`; obs.push(txtObs(X(ws)-hw+6,15,t,10.5,'start')); }
   s+=`<text x="0" y="42" font-size="11" fill="var(--muted)">Uninstalls/din</text><text x="0" y="56" font-size="10" fill="var(--faint)">sab apps</text>`;
+  const x0r=X(Math.max(0,ws)), x1r=X(n-1);
+  if(avgU!=null) s+=`<line x1="${x0r}" x2="${x1r}" y1="${Y(avgU).toFixed(1)}" y2="${Y(avgU).toFixed(1)}" stroke="var(--us-s-out)" stroke-width="1.1" stroke-dasharray="6 3" opacity=".85"/>`;
+  if(nrmU!=null) s+=`<line x1="${x0r}" x2="${x1r}" y1="${Y(nrmU).toFixed(1)}" y2="${Y(nrmU).toFixed(1)}" stroke="var(--good)" stroke-width="1.1" stroke-dasharray="2 3" opacity=".9"/>`;
   s+=`<path d="${pathOf(un.map((v,i)=>i<=ws?v:null),X,Y)}" fill="none" stroke="var(--us-s-out)" stroke-width="1.6" opacity=".45"/><path d="${pathOf(un.map((v,i)=>i>=ws?v:null),X,Y)}" fill="none" stroke="var(--us-s-out)" stroke-width="2.2"/>`;
-  [[100,'📦 Updates'],[138,'🔔 Badlaav shuru']].forEach(([y,l])=>{ s+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="0" y="${y+4}" font-size="11" fill="var(--muted)">${l}</text>`; });
-  const pv=W.t>M.settled?ix(dAdd(M.settled,1))-i0:null; if(pv!=null&&pv<n) s+=`<line x1="${(X(Math.max(0,pv))-hw).toFixed(1)}" x2="${(w-padR).toFixed(1)}" y1="${h-21}" y2="${h-21}" stroke="var(--watch)" stroke-width="2.5"/><text x="${w-padR}" y="${h-25}" text-anchor="end" font-size="10" fill="var(--watch)">⏳ pakka nahi</text>`;
+  [[100,'📦 Updates'],[138,'🔔 Badlaav shuru']].forEach(([y,l])=>{ s+=`<line x1="${padL}" x2="${X(n-1)+hw}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="0" y="${y+4}" font-size="11" fill="var(--muted)">${l}</text>`; });
+  const pv=W.t>M.settled?ix(dAdd(M.settled,1))-i0:null; if(pv!=null&&pv<n) s+=`<line x1="${(X(Math.max(0,pv))-hw).toFixed(1)}" x2="${(X(n-1)+hw).toFixed(1)}" y1="${h-21}" y2="${h-21}" stroke="var(--watch)" stroke-width="2.5"/><text x="${X(n-1)+hw}" y="${h-25}" text-anchor="end" font-size="10" fill="var(--watch)">⏳ pakka nahi</text>`;
   const step=Math.max(n<=14?1:(n<=31?3:7),xStep(n,w-padL-padR)); for(let i=n-1;i>=0;i-=step){ s+=`<text x="${X(i)}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`; }
-  Object.keys(ups).forEach(d=>{ const L=ups[d], i=dDiff(f0,d), x=X(i), lv=L.some(z=>z[1][2]==='halt')?'var(--bad)':(L.some(z=>z[1][2]==='win')?'var(--good)':'var(--us-blue-s)');
-    s+=`<g class="us-mk" data-tk="tlu:${d}" data-tl="u:${d}"><line x1="${x}" x2="${x}" y1="${un[i]!=null?Y(un[i]):70}" y2="92" stroke="${lv}" stroke-opacity=".3"/><rect x="${x-7}" y="93" width="14" height="14" rx="3" transform="rotate(45 ${x} 100)" fill="${lv}"/>${L.length>1?`<text x="${x}" y="103.5" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0a1120">${L.length}</text>`:''}</g>`; });
-  Object.keys(als).forEach(d=>{ const L=als[d], i=dDiff(f0,d), x=X(i), worst=L.map(z=>z[0].sev).sort((p,q)=>SORD[p]-SORD[q])[0], col=worst==='bigda'?'var(--bad)':(worst==='dhyan'?'var(--watch)':'var(--good)');
-    s+=`<g class="us-mk" data-tk="tla:${d}" data-tl="a:${d}">${L.some(z=>z[1])?`<text x="${x-12}" y="142" text-anchor="end" font-size="11" fill="var(--faint)">←</text>`:''}<circle cx="${x}" cy="138" r="${L.length>1?9:7}" fill="${col}"/>${L.length>1?`<text x="${x}" y="141.5" text-anchor="middle" font-size="10" font-weight="700" fill="#0a1120">${L.length}</text>`:''}</g>`; });
-  s+='</svg>';
-  const nU=Object.values(ups).reduce((t,L)=>t+L.length,0), nA=Object.values(als).reduce((t,L)=>t+L.length,0);
+  s+=`<line class="us-xh" x1="0" x2="0" y1="8" y2="${h-22}" stroke="var(--ink2)" stroke-width="1" opacity="0"/><rect x="${padL}" y="8" width="${X(n-1)-padL+hw}" height="70" fill="transparent"/>`;
+  Object.keys(ups).forEach(d=>{ const Ls=ups[d], i=dDiff(f0,d), x=X(i), lv=Ls.some(z=>z[1][2]==='halt')?'var(--bad)':(Ls.some(z=>z[1][2]==='win')?'var(--good)':'var(--us-blue-s)');
+    s+=`<g class="us-mk" data-tk="tlu:${d}" data-tl="u:${d}"><line x1="${x}" x2="${x}" y1="${un[i]!=null?Y(un[i]):70}" y2="92" stroke="${lv}" stroke-opacity=".3"/><rect x="${x-7}" y="93" width="14" height="14" rx="3" transform="rotate(45 ${x} 100)" fill="${lv}"/>${Ls.length>1?`<text x="${x}" y="103.5" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0a1120">${Ls.length}</text>`:''}</g>`; });
+  Object.keys(als).forEach(d=>{ const Ls=als[d], i=dDiff(f0,d), x=X(i), worst=Ls.map(z=>z[0].sev).sort((p,q)=>SORD[p]-SORD[q])[0], col=worst==='bigda'?'var(--bad)':(worst==='dhyan'?'var(--watch)':'var(--good)');
+    s+=`<g class="us-mk" data-tk="tla:${d}" data-tl="a:${d}">${Ls.some(z=>z[1])?`<text x="${x-12}" y="142" text-anchor="end" font-size="11" fill="var(--faint)">←</text>`:''}<circle cx="${x}" cy="138" r="${Ls.length>1?9:7}" fill="${col}"/>${Ls.length>1?`<text x="${x}" y="141.5" text-anchor="middle" font-size="10" font-weight="700" fill="#0a1120">${Ls.length}</text>`:''}</g>`; });
+  // the numbers on the chart: the latest day at the line's end, the range average and the normal at the right edge
+  obs.push(...ptsObs(un,X,Y,2.5));
+  let li=-1; for(let i=n-1;i>=0;i--) if(un[i]!=null){ li=i; break; }
+  const gx=X(n-1)+12;
+  if(li>=0) L.push({x:gx,y:Y(un[li])+4,t:fdNoY(dOf(i0+li))+': '+fN(un[li])+(rt[li]!=null?' ('+rp(rt[li])+')':''),a:'start',p:1,b:1,c:'var(--ink)',dys:[0,-12,12,-24,24]});
+  if(avgU!=null) L.push({x:gx,y:Y(avgU)+4,t:'Avg '+fN(avgU)+'/din'+(PT.rate!=null?' ('+rp(PT.rate)+')':''),a:'start',p:2,c:'var(--us-s-out)',dys:[0,-12,12,-24,24,36]});
+  if(nrmU!=null) L.push({x:gx,y:Y(nrmU)+4,t:'Normal '+fN(nrmU)+'/din'+(PT.med!=null?' ('+rp(PT.med)+')':''),a:'start',p:3,c:'var(--good)',dys:[0,12,-12,24,-24,36]});
+  s+=labels(L,[padL,4,w-2,90],obs,'var(--panel)')+'</svg>';
+  SPK[id]={n,X,w,tip:i=>{ const d=dOf(i0+i), nU=(ups[d]||[]).length, nA=(als[d]||[]).length; return `<div class="us-tt">${fd(d)}${d>M.settled?' ⏳':''} · sab apps</div>${trow('Uninstalls',fN(un[i])+(rt[i]!=null?' ('+rp(rt[i])+')':''))}${trow('Installs',fN(PD.nw[i0+i]))}${nU?trow('📦 Updates',nU):''}${nA?trow('🔔 Badlaav shuru',nA):''}`; }};
+  const nU=Object.values(ups).reduce((t,Ls)=>t+Ls.length,0), nA=Object.values(als).reduce((t,Ls)=>t+Ls.length,0);
   tlHtml.ups=ups; tlHtml.als=als;
   return `<div class="us-ph"><div><div class="us-eyebrow">Kab kya hua</div><h2>Timeline</h2><div class="us-hint">${span(f0,W.t)} · ${nU} updates · ${nA} khule alerts, badlaav shuru hone ke din pe (← = pehle shuru) · marker = list</div></div></div><div class="us-tlw">${s}</div>`; }
 function renderTl(){ const box=$('us-tl'); if(!box) return; TLW=box.clientWidth||TLW; box.innerHTML=tlHtml(); const tw=box.querySelector('.us-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; }
@@ -5158,8 +5207,10 @@ function renderTbl(keepFocus){ const el=$('us-tbl'); if(!el) return;
   el.innerHTML=tblHtml(); }
 function expandH(o){ const a=o.a, i0=Math.max(0,Math.min(ix(W.f),N-28)), i1=ix(W.t), wi=ix(W.f)-i0;
   const rate=spark({vals:a.rate.slice(i0,i1+1),lo:a.lo.slice(i0,i1+1),hi:a.hi.slice(i0,i1+1),w:320,h:80,color:'var(--us-s-rate)',prov:W.t>a.settled?ix(dAdd(a.settled,1))-i0:null,
-    tip:i=>{ const k=i0+i; return `<div class="us-tt">${fd(dOf(k))}</div>${trow('Roz hataaye',rp(a.rate[k]))}${a.lo[k]!=null?trow('Normal',rp(a.lo[k])+'–'+rp(a.hi[k])):''}`; }});
-  const io=spark({vals:a.nw.slice(i0,i1+1),ghost:null,w:320,h:80,color:'var(--us-s-in)',area:1,tip:i=>{ const k=i0+i; return `<div class="us-tt">${fd(dOf(k))}</div>${trow('Installs',fN(a.nw[k]))}${trow('Uninstalls',fN(a.un[k]))}${trow('Net',fS((a.nw[k]||0)-(a.un[k]||0)))}`; }});
+    tip:i=>{ const k=i0+i; return `<div class="us-tt">${fd(dOf(k))}</div>${trow('Uninstalls',fN(a.un[k])+(a.rate[k]!=null?' ('+rp(a.rate[k])+')':''))}${a.lo[k]!=null?trow('Normal',rp(a.lo[k])+'–'+rp(a.hi[k])):''}`; },
+    lab:{last:i=>fdNoY(dOf(i0+i))+': '+fN(a.un[i0+i])+' ('+rp(a.rate[i0+i])+')',avg:o.s.rate,avgT:'avg '+fN(o.outD)+' ('+rp(o.s.rate)+')'}});
+  const io=spark({vals:a.nw.slice(i0,i1+1),ghost:null,w:320,h:80,color:'var(--us-s-in)',area:1,tip:i=>{ const k=i0+i; return `<div class="us-tt">${fd(dOf(k))}</div>${trow('Installs',fN(a.nw[k]))}${trow('Uninstalls',fN(a.un[k]))}${trow('Net',fS((a.nw[k]||0)-(a.un[k]||0)))}`; },
+    lab:{last:i=>fdNoY(dOf(i0+i))+': '+fN(a.nw[i0+i])+' installs'}});
   const io2=spark({vals:a.un.slice(i0,i1+1),w:320,h:80,color:'var(--us-s-out)',area:1,dot:false});
   return `<div class="us-xin"><div><h4>Roz hataaye % · normal band${wi>0?' · pichhle 4 hafte':''}</h4>${rate}</div><div><h4><span style="color:var(--us-s-in)">Installs</span> vs <span style="color:var(--us-s-out)">uninstalls</span> /din</h4><div style="position:relative">${io}<div style="position:absolute;inset:0;pointer-events:none">${io2}</div></div></div><div><h4>Install hafte · % abhi bhi app me</h4>${cohMini(a)}</div><button class="us-btn us-go" data-go="${a.i}">Poora app view →</button></div>`; }
 const cohLab=c=>c===0?'Install din':'Din '+c;
@@ -5185,47 +5236,109 @@ function cohFull(a){ const C=M.cohCols, rows=a.coh.w.slice().reverse();
   rows.forEach(r=>{ h+=`<div class="us-rh">${span(r.f,r.t)}<small>${fN(r.n)} installs</small></div>`+C.map((c,k)=>cohCell(a,r,k)).join(''); });
   return h+'</div>'; }
 
-/* ================= drawer (app view) ================= */
-const chartW=()=>{ const d=$('us-drawer'); return Math.round(Math.min(940,Math.max(300,((d&&d.clientWidth)||innerWidth)-(innerWidth<=640?52:60)))); };
-function bigChart(a){ const i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.f),i1-27)), n=i1-i0+1, w=chartW(), h=innerWidth<=640?200:230, pl=46, pr=14, pt=16, pb=26;
+/* ================= numbers printed on the charts (labels that never overlap) ================= */
+// L: [{x,y,t,a:'start'|'middle'|'end',p:priority (lower = placed first),c:colour,fs,b:bold,dys:[vertical nudges]}];
+// box [x0,y0,x1,y1]: they stay inside it; obs: boxes they keep clear of (the lines' points, the markers, other texts).
+// A label with no free spot is DROPPED, never drawn over a line or another label. Text on a halo for contrast.
+const tW=(t,fs)=>String(t).length*fs*.56+3;
+function labels(L,box,obs,halo){ const taken=(obs||[]).slice(); let out='';
+  L.filter(Boolean).sort((p,q)=>p.p-q.p).forEach(l=>{ const fs=l.fs||10.5, w=tW(l.t,fs);
+    for(const [lx,la] of [[l.x,l.a]].concat(l.xs||[])) for(const dy of (l.dys||[0,-12,12,-24,24])){ let x0=la==='end'?lx-w:(la==='middle'?lx-w/2:lx); const y=l.y+dy;
+      x0=Math.max(box[0],Math.min(box[2]-w,x0)); const b=[x0,y-fs+1,x0+w,y+3];
+      if(b[1]<box[1]||b[3]>box[3]) continue;
+      if(taken.some(o=>b[0]<o[2]&&b[2]>o[0]&&b[1]<o[3]&&b[3]>o[1])) continue;
+      taken.push(b); out+=`<text class="us-lbl" x="${x0.toFixed(1)}" y="${y.toFixed(1)}" font-size="${fs}"${l.b?' font-weight="700"':''} fill="${l.c||'var(--ink2)'}" font-family="var(--us-num)" paint-order="stroke" stroke="${halo||'var(--panel)'}" stroke-width="3.2" stroke-linejoin="round">${esc(l.t)}</text>`; return; } });
+  return out; }
+// a line's points (and 3 points between each pair) as small boxes — labels keep off the line itself
+function ptsObs(vals,X,Y,r){ const o=[]; r=r||3; vals.forEach((v,i)=>{ if(v==null||!isFinite(v)) return; const x=X(i), y=Y(v); o.push([x-r,y-r,x+r,y+r]);
+  const nv=vals[i+1]; if(nv!=null&&isFinite(nv)){ const x2=X(i+1), y2=Y(nv); for(let k=1;k<4;k++){ const xx=x+(x2-x)*k/4, yy=y+(y2-y)*k/4; o.push([xx-r,yy-r,xx+r,yy+r]); } } }); return o; }
+const txtObs=(x,y,t,fs,a)=>{ const w=tW(t,fs||10.5), x0=a==='end'?x-w:(a==='middle'?x-w/2:x); return [x0,y-(fs||10.5)+1,x0+w,y+3]; };
+// the average over a few days of a series (a rate) and the matching actual uninstalls a day
+function avgAt(a,i0,i1){ let u=0,d=0,n=0,cu=0,cn=0; for(let i=Math.max(0,i0);i<=Math.min(N-1,i1);i++){ if(a.un[i]!=null){ cu+=a.un[i]; cn++; } const dd=a.a28[i]; if(dd==null||a.un[i]==null) continue; u+=a.un[i]; d+=dd; n++; }
+  return {rate:d>0?u*1000/d:null,outs:cn?cu/cn:null,n}; }
+
+/* ================= the app view: the drawer (a quick look from All apps) and the full app page ================= */
+// the app view's charts as wide as the place they sit in: the drawer, or the page (measured once on screen)
+let PW=0;
+const chartW=mode=>{ if(mode==='p'){ const r=$('us-apg'); const w=(r&&r.clientWidth)||PW||1100; return Math.round(Math.max(300,w-22)); }
+  const d=$('us-drawer'); return Math.round(Math.min(940,Math.max(300,((d&&d.clientWidth)||innerWidth)-(innerWidth<=640?52:60)))); };
+function bigChart(a,o,mode){ const i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.f),i1-27)), n=i1-i0+1, w=chartW(mode), wide=w>=620, h=innerWidth<=640?220:(mode==='p'?300:256), pl=46, pr=wide?184:12, pt=34, pb=26;
   const rate=a.rate.slice(i0,i1+1), lo=a.lo.slice(i0,i1+1), hi=a.hi.slice(i0,i1+1), md=a.md.slice(i0,i1+1);
   const cOff=dDiff(W.cf,W.f), gh=[]; for(let i=i0;i<=i1;i++){ const j=i-cOff; gh.push(j>=0&&j<N?a.rate[j]:null); }
   const core=rate.concat(gh,md).filter(v=>v!=null); if(!core.length||n<1) return '<div class="us-chart us-faint" style="padding:20px">Roz ka rate abhi nahi (28 din ka data chahiye)</div>';
-  const all=core.concat(lo).filter(v=>v!=null); let mn=Math.min(...all)*.9, mx=Math.max(...core)*1.25; if(mx<=mn) mx=mn+1; const cut=hi.some(v=>v!=null&&v>mx);
-  for(let i=0;i<hi.length;i++){ if(hi[i]!=null&&hi[i]>mx) hi[i]=mx; } const X=lin(0,Math.max(1,n-1),pl,w-pr), Y=lin(mn,mx,h-pb,pt);
-  let s=`<svg viewBox="0 0 ${w} ${h}" id="us-bigc">`;
-  const ws=ix(W.f)-i0; if(ws>0) s+=`<rect x="${X(ws)-3}" y="${pt-6}" width="${w-pr-X(ws)+3}" height="${h-pb-pt+6}" fill="rgba(34,211,238,.04)" stroke="rgba(34,211,238,.18)" stroke-dasharray="3 3"/><text x="${X(ws)+5}" y="${pt+16}" font-size="10.5" fill="var(--cyan)">chuni range</text>`;
-  const pv=W.t>a.settled?ix(dAdd(a.settled,1))-i0:null; if(pv!=null&&pv<n) s+=`<rect x="${X(pv)-((X(1)-X(0))/2)}" y="${pt-6}" width="${w-pr-X(pv)+(X(1)-X(0))/2}" height="${h-pb-pt+6}" fill="url(#us-hatch)"/><text x="${w-pr-2}" y="${h-pb-6}" text-anchor="end" font-size="10.5" fill="var(--watch)">⏳ pakka nahi</text>`;
-  for(let k=0;k<=4;k++){ const v=mn+(mx-mn)*k/4; s+=`<line x1="${pl}" x2="${w-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-opacity=".6"/><text x="${pl-6}" y="${Y(v)+3.5}" text-anchor="end" font-size="10.5" fill="var(--faint)">${rp(v)}</text>`; }
+  const s0=o.s, avgR=s0.rate, nrmR=s0.med, avgU=o.outD, nrmU=(s0.nb&&s0.eM)?s0.eM/1000/s0.nb:null;
+  const all=core.concat(lo,[avgR,nrmR]).filter(v=>v!=null); let mn=Math.min(...all)*.9, mx=Math.max(...core.concat([avgR,nrmR].filter(v=>v!=null)))*1.25; if(mx<=mn) mx=mn+1; const cut=hi.some(v=>v!=null&&v>mx);
+  const hi2=hi.map(v=>v!=null&&v>mx?mx:v); const X=lin(0,Math.max(1,n-1),pl,w-pr), Y=lin(mn,mx,h-pb,pt), id=SPF+(++spkN), hw=n>1?(X(1)-X(0))/2:4;
+  const obs=[], L=[];
+  let s=`<svg viewBox="0 0 ${w} ${h}" id="${id}" data-hv="1" role="img" aria-label="Roz hataaye % chart">`;
+  const ws=ix(W.f)-i0; if(ws>0){ s+=`<rect x="${X(ws)-hw}" y="${pt-6}" width="${X(n-1)-X(ws)+2*hw}" height="${h-pb-pt+6}" fill="rgba(34,211,238,.04)" stroke="rgba(34,211,238,.18)" stroke-dasharray="3 3"/>`;
+    L.push({x:X(ws)-hw+5,y:pt+6,t:'chuni range',a:'start',p:9,c:'var(--cyan)',fs:10,dys:[0]}); }
+  const pv=W.t>a.settled?ix(dAdd(a.settled,1))-i0:null; if(pv!=null&&pv<n){ s+=`<rect x="${X(pv)-hw}" y="${pt-6}" width="${X(n-1)-X(pv)+2*hw}" height="${h-pb-pt+6}" fill="url(#us-hatch)"/>`;
+    L.push({x:X(n-1),y:h-pb-5,t:'⏳ pakka nahi',a:'end',p:8,c:'var(--watch)',fs:10,dys:[0]}); }
+  for(let k=0;k<=4;k++){ const v=mn+(mx-mn)*k/4; s+=`<line x1="${pl}" x2="${X(n-1)}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-opacity=".6"/><text x="${pl-6}" y="${Y(v)+3.5}" text-anchor="end" font-size="10.5" fill="var(--faint)">${rp(v)}</text>`; }
   const step=xStep(n,w-pl-pr); for(let i=n-1;i>=0;i-=step) s+=`<text x="${X(i)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`;
-  s+=`<path d="${areaOf(lo,hi,X,Y)}" fill="var(--us-band)"/><path d="${pathOf(md,X,Y)}" fill="none" stroke="var(--us-blue-s)" stroke-opacity=".45" stroke-dasharray="2 4"/>`;
+  s+=`<path d="${areaOf(lo,hi2,X,Y)}" fill="var(--us-band)"/><path d="${pathOf(md,X,Y)}" fill="none" stroke="var(--us-blue-s)" stroke-opacity=".45" stroke-dasharray="2 4"/>`;
   s+=`<path d="${pathOf(gh,X,Y)}" fill="none" stroke="var(--us-ghost)" stroke-width="1.4" stroke-dasharray="4 4"/>`;
+  // the chosen range's average and the normal: reference marks across the range, labelled at the right edge
+  const x0r=X(Math.max(0,ws)), x1r=X(n-1);
+  if(avgR!=null) s+=`<line x1="${x0r}" x2="${x1r}" y1="${Y(avgR).toFixed(1)}" y2="${Y(avgR).toFixed(1)}" stroke="var(--us-s-rate)" stroke-width="1.2" stroke-dasharray="6 3" opacity=".9"/>`;
+  if(nrmR!=null) s+=`<line x1="${x0r}" x2="${x1r}" y1="${Y(nrmR).toFixed(1)}" y2="${Y(nrmR).toFixed(1)}" stroke="var(--good)" stroke-width="1.2" stroke-dasharray="2 3" opacity=".9"/>`;
   s+=`<path d="${pathOf(rate,X,Y)}" fill="none" stroke="var(--us-s-rate)" stroke-width="2.2" stroke-linejoin="round"/>`;
   rate.forEach((v,i)=>{ if(v!=null&&hi[i]!=null&&(v>hi[i]||v<lo[i])) s+=`<circle cx="${X(i)}" cy="${Y(v)}" r="3.5" fill="${v>hi[i]?'var(--bad)':'var(--good)'}"/>`; });
+  // the hover area (under the markers: a 📦 / 🔔 under the pointer shows its own detail)
+  s+=`<line class="us-xh" x1="0" x2="0" y1="${pt}" y2="${h-pb}" stroke="var(--ink2)" stroke-width="1" opacity="0"/><rect x="${pl}" y="${pt-6}" width="${X(n-1)-pl+hw}" height="${h-pb-pt+6}" fill="transparent"/>`;
+  obs.push(...ptsObs(rate,X,Y,3.2),...ptsObs(gh,X,Y,2));
+  let li=-1; for(let i=n-1;i>=0;i--) if(rate[i]!=null){ li=i; break; }
+  const gx=wide?X(n-1)+10:X(n-1);
+  if(li>=0){ const un=a.un[i0+li]; obs.push([X(li)-5,Y(rate[li])-5,X(li)+5,Y(rate[li])+5]);
+    L.push({x:wide?gx:X(li)-6,y:Y(rate[li])+4,t:(wide?fdNoY(dOf(i0+li))+': ':'')+fN(un)+' ('+rp(rate[li])+')',a:wide?'start':'end',p:1,b:1,fs:12,c:'var(--ink)',dys:[0,-14,14,-28,28]}); }
+  if(avgR!=null) L.push({x:wide?gx:X(n-1),y:Y(avgR)+4,t:'Avg '+fN(avgU)+(wide?'/din':'')+' ('+rp(avgR)+')',a:wide?'start':'end',p:2,fs:11.5,c:'var(--us-s-rate)',dys:[0,-13,13,-26,26,-39,39]});
+  if(nrmR!=null) L.push({x:wide?gx:X(n-1),y:Y(nrmR)+4,t:'Normal '+fN(nrmU)+(wide?'/din':'')+' ('+rp(nrmR)+')',a:wide?'start':'end',p:3,fs:11.5,c:'var(--good)',dys:[0,13,-13,26,-26,39,-39]});
+  // 📦 each update: its version and the 7 days before → after (actual uninstalls a day, then the rate)
   a.rel.forEach(r=>{ const i=ix(r[0])-i0; if(i<0||i>=n) return; const col=r[2]==='halt'?'var(--bad)':(r[2]==='win'?'var(--good)':'var(--us-blue-s)');
-    s+=`<g data-tk="upd:${a.i}:${r[0]}"><line x1="${X(i)}" x2="${X(i)}" y1="${pt}" y2="${h-pb}" stroke="${col}" stroke-opacity=".55" stroke-dasharray="1 3"/><text x="${X(i)}" y="${pt-2}" text-anchor="middle" font-size="12">📦</text></g>`; });
+    s+=`<g data-tk="upd:${a.i}:${r[0]}"><line x1="${X(i)}" x2="${X(i)}" y1="${pt}" y2="${h-pb}" stroke="${col}" stroke-opacity=".55" stroke-dasharray="1 3"/><text x="${X(i)}" y="${pt-20}" text-anchor="middle" font-size="12">📦</text></g>`;
+    obs.push([X(i)-8,pt-32,X(i)+8,pt-17]);
+    const k=i0+i, b=avgAt(a,k-7,k-1), f=avgAt(a,k,Math.min(k+6,ix(W.t)));
+    const t=b.rate!=null&&f.rate!=null?`${r[1]}: ${fN(b.outs)}→${fN(f.outs)}/din (${rp(b.rate)}→${rp(f.rate)})`:(f.rate!=null?`${r[1]}: ${fN(f.outs)}/din (${rp(f.rate)})`:`${r[1]}`);
+    L.push({x:X(i),y:pt-6,t,a:'middle',xs:[[X(i)-4,'end'],[X(i)+4,'start']],p:4,c:col,fs:10.5,dys:[0,13,26,39]}); });
+  // 🔔 each alert's start: its date and that day's value
   a.al.forEach(x=>{ if(x.closed) return; const d=startedOf(x); if(!d) return; const i=ix(d)-i0; if(i<0||i>=n) return; const col=x.sev==='bigda'?'var(--bad)':(x.sev==='dhyan'?'var(--watch)':'var(--good)');
-    s+=`<circle cx="${X(i)}" cy="${h-pb}" r="5" fill="${col}" stroke="var(--bg2)" stroke-width="2" data-tk="al:${x.k}"/>`; });
-  s+=`<line id="us-bigx" x1="0" x2="0" y1="${pt}" y2="${h-pb}" stroke="var(--ink2)" opacity="0"/><rect x="${pl}" y="${pt}" width="${w-pl-pr}" height="${h-pb-pt}" fill="transparent" id="us-bigr"/></svg>`;
-  bigChart.st={a,i0,n,X,w,gh,cOff};
-  return `<div class="us-chart">${s}</div><div class="us-clg"><span class="us-k"><i style="background:var(--us-s-rate)"></i>Roz hataaye %</span><span class="us-k"><i style="background:var(--us-band);height:9px"></i>Normal range</span><span class="us-k"><i style="background:var(--us-ghost)"></i>Pehle (${span(W.cf,W.ct)}, same jagah)</span><span class="us-k">📦 Update</span><span class="us-k"><i style="background:var(--bad);width:8px;height:8px;border-radius:50%"></i>Alert shuru</span><span class="us-k">● range se bahar</span>${cut?'<span class="us-k us-faint">normal band upar se kata (chart padhne layak rahe)</span>':''}</div>`; }
-function ioChart(a){ const i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.f),i1-27)), n=i1-i0+1, w=chartW(), h=170, pl=46, pr=14, pt=10, pb=24;
+    s+=`<circle cx="${X(i)}" cy="${h-pb}" r="5" fill="${col}" stroke="var(--bg2)" stroke-width="2" data-tk="al:${x.k}"/>`; obs.push([X(i)-6,h-pb-6,X(i)+6,h-pb+6]);
+    const v=rate[i]; L.push({x:X(i),y:h-pb-10,t:`🔔 ${fdNoY(d)}: ${fN(a.un[i0+i])}${v!=null?' ('+rp(v)+')':''}`,a:'middle',xs:[[X(i)+8,'start'],[X(i)-8,'end']],p:5,c:col,fs:10.5,dys:[0,-12,-24,-36]}); });
+  s+=labels(L,[pl+2,pt-30,w-2,h-pb+2],obs)+'</svg>';
+  SPK[id]={n,X,w,tip:i=>{ const k=i0+i, dd=dOf(k); return `<div class="us-tt">${esc(a.nm)} · ${fd(dd)}${dd>a.settled?' ⏳':''}</div>${trow('Uninstalls',fN(a.un[k])+(a.rate[k]!=null?' ('+rp(a.rate[k])+')':''))}${trow('Installs',fN(a.nw[k]))}${a.lo[k]!=null?trow('Normal',rp(a.lo[k])+'–'+rp(a.hi[k])):''}${gh[i]!=null?trow('Pehle ('+fd(dAdd(dd,-cOff))+')',rp(gh[i])):''}${a.rel.filter(r=>r[0]===dd).map(r=>'<div class="us-tsm">📦 '+esc(r[1])+'</div>').join('')}`; }};
+  return `<div class="us-chart">${s}</div><div class="us-clg"><span class="us-k"><i style="background:var(--us-s-rate)"></i>Roz hataaye %</span><span class="us-k"><i style="background:var(--us-band);height:9px"></i>Normal range</span><span class="us-k"><i style="background:repeating-linear-gradient(90deg,var(--us-s-rate) 0 6px,transparent 6px 9px)"></i>Avg (chuni range)</span><span class="us-k"><i style="background:repeating-linear-gradient(90deg,var(--good) 0 2px,transparent 2px 5px)"></i>Normal (chuni range)</span><span class="us-k"><i style="background:var(--us-ghost)"></i>Pehle (${span(W.cf,W.ct)}, same jagah)</span><span class="us-k">📦 Update</span><span class="us-k"><i style="background:var(--bad);width:8px;height:8px;border-radius:50%"></i>Alert shuru</span><span class="us-k">● range se bahar</span><span class="us-k"><i style="background:repeating-linear-gradient(135deg,rgba(230,184,78,.45) 0 2px,transparent 2px 4px);height:9px"></i>⏳ pakka nahi</span>${cut?'<span class="us-k us-faint">normal band upar se kata (chart padhne layak rahe)</span>':''}</div>`; }
+function ioChart(a,mode){ const i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.f),i1-27)), n=i1-i0+1, w=chartW(mode), h=232, pl=46, pr=14, pt=44, pb=54;
   const I=a.nw.slice(i0,i1+1), O=a.un.slice(i0,i1+1), mx=Math.max(1,...I.filter(v=>v!=null),...O.filter(v=>v!=null));
-  const X=lin(-.5,n-.5,pl,w-pr), mid=pt+(h-pt-pb)/2, Y=v=>(v/mx)*((h-pt-pb)/2-2), bw=Math.max(1.5,(w-pl-pr)/Math.max(1,n)*.62);
-  let s=`<svg viewBox="0 0 ${w} ${h}"><line x1="${pl}" x2="${w-pr}" y1="${mid}" y2="${mid}" stroke="var(--line2)"/>`;
+  const X=lin(-.5,n-.5,pl,w-pr), mid=pt+(h-pt-pb)/2, Y=v=>(v/mx)*((h-pt-pb)/2-2), bw=Math.max(1.5,(w-pl-pr)/Math.max(1,n)*.62), id=SPF+(++spkN);
+  let s=`<svg viewBox="0 0 ${w} ${h}" id="${id}" data-hv="1" role="img" aria-label="Installs vs uninstalls chart"><line x1="${pl}" x2="${w-pr}" y1="${mid}" y2="${mid}" stroke="var(--line2)"/>`;
   s+=`<text x="${pl-6}" y="${pt+8}" text-anchor="end" font-size="10.5" fill="var(--faint)">${fN(mx)}</text><text x="${pl-6}" y="${mid+3.5}" text-anchor="end" font-size="10.5" fill="var(--faint)">0</text><text x="${pl-6}" y="${h-pb}" text-anchor="end" font-size="10.5" fill="var(--faint)">${fN(mx)}</text>`;
-  I.forEach((v,i)=>{ const d=dOf(i0+i), op=d>a.settled?.55:1; if(v!=null) s+=`<rect x="${X(i)-bw/2}" y="${mid-Y(v)}" width="${bw}" height="${Y(v)}" rx="1.5" fill="var(--us-s-in)" opacity="${op}" data-tk="io:${a.i}:${i0+i}"/>`;
-    if(O[i]!=null) s+=`<rect x="${X(i)-bw/2}" y="${mid+1}" width="${bw}" height="${Y(O[i])}" rx="1.5" fill="var(--us-s-out)" opacity="${op}" data-tk="io:${a.i}:${i0+i}"/>`; });
+  s+=`<line class="us-xh" x1="0" x2="0" y1="${pt}" y2="${h-pb}" stroke="var(--ink2)" stroke-width="1" opacity="0"/><rect x="${pl}" y="${pt}" width="${w-pl-pr}" height="${h-pt-pb}" fill="transparent"/>`;
+  const obs=[];
+  I.forEach((v,i)=>{ const d=dOf(i0+i), op=d>a.settled?.55:1; if(v!=null){ s+=`<rect x="${X(i)-bw/2}" y="${mid-Y(v)}" width="${bw}" height="${Y(v)}" rx="1.5" fill="var(--us-s-in)" opacity="${op}" data-tk="io:${a.i}:${i0+i}"/>`; obs.push([X(i)-bw/2,mid-Y(v),X(i)+bw/2,mid]); }
+    if(O[i]!=null){ s+=`<rect x="${X(i)-bw/2}" y="${mid+1}" width="${bw}" height="${Y(O[i])}" rx="1.5" fill="var(--us-s-out)" opacity="${op}" data-tk="io:${a.i}:${i0+i}"/>`; obs.push([X(i)-bw/2,mid,X(i)+bw/2,mid+1+Y(O[i])]); } });
   const step=xStep(n,w-pl-pr); for(let i=n-1;i>=0;i-=step) s+=`<text x="${X(i)}" y="${h-6}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`;
+  // the latest bar and the biggest bar, of each: their values on the chart
+  const last=arr=>{ for(let i=arr.length-1;i>=0;i--) if(arr[i]!=null) return i; return -1; }, big=arr=>{ let b=-1; arr.forEach((v,i)=>{ if(v!=null&&(b<0||v>arr[b])) b=i; }); return b; };
+  const L=[], li=last(I), bi=big(I), lo_=last(O), bo=big(O);
+  if(li>=0) L.push({x:X(li)+bw/2,y:mid-Y(I[li])-4,t:fdNoY(dOf(i0+li))+': '+fN(I[li]),a:'end',p:1,b:1,c:'var(--us-s-in)',dys:[0,-11,-22]});
+  if(bi>=0&&bi!==li) L.push({x:X(bi),y:mid-Y(I[bi])-4,t:'Max '+fN(I[bi])+' ('+fdNoY(dOf(i0+bi))+')',a:'middle',xs:[[X(bi)-bw/2,'end'],[X(bi)+bw/2,'start']],p:2,c:'var(--us-s-in)',dys:[0,-12,-24,-36]});
+  if(lo_>=0) L.push({x:X(lo_)+bw/2,y:mid+1+Y(O[lo_])+12,t:fdNoY(dOf(i0+lo_))+': '+fN(O[lo_]),a:'end',p:3,b:1,c:'var(--us-s-out)',dys:[0,11,22]});
+  if(bo>=0&&bo!==lo_) L.push({x:X(bo),y:mid+1+Y(O[bo])+12,t:'Max '+fN(O[bo])+' ('+fdNoY(dOf(i0+bo))+')',a:'middle',xs:[[X(bo)-bw/2,'end'],[X(bo)+bw/2,'start']],p:4,c:'var(--us-s-out)',dys:[0,12,24,36]});
+  s+=labels(L,[pl+2,1,w-2,h-18],obs);
+  SPK[id]={n,X,w,tip:i=>TIPS.io(a.i,i0+i)};
   return `<div class="us-chart">${s}</svg></div><div class="us-clg"><span class="us-k"><i style="background:var(--us-s-in)"></i>Installs (upar)</span><span class="us-k"><i style="background:var(--us-s-out)"></i>Uninstalls (neeche)</span><span class="us-k us-faint">halki = ⏳ pakka nahi</span></div>`; }
-TIPS.io=(i,k)=>{ const a=A[+i], d=dOf(+k); return `<div class="us-tt">${esc(a.nm)} · ${fd(d)}${d>a.settled?' ⏳':''}</div>${trow('Installs',fN(a.nw[k]))}${trow('Uninstalls',fN(a.un[k]))}${trow('Net',fS((a.nw[k]||0)-(a.un[k]||0)))}${trow('Install ke din hi hataaye',a.g0[k]!=null&&a.nw[k]?pc(a.g0[k]/a.nw[k],1):'—')}`; };
+TIPS.io=(i,k)=>{ const a=A[+i], d=dOf(+k); return `<div class="us-tt">${esc(a.nm)} · ${fd(d)}${d>a.settled?' ⏳':''}</div>${trow('Installs',fN(a.nw[k]))}${trow('Uninstalls',fN(a.un[k]))}${trow('Net',fS((a.nw[k]||0)-(a.un[k]||0)))}${trow('Install ke din hi hataaye',a.g0[k]!=null&&a.nw[k]?fN(a.g0[k])+' ('+pc(a.g0[k]/a.nw[k],1)+')':'—')}`; };
 const UPDW=lv=>({halt:'Bigda — rollout roko, hotfix bhejo',hold:'Dhyan do — ruk ke dekho',continue:'Normal — koi nuksaan nahi dikha',win:'Behtar — achha asar'})[lv]||'Abhi jaldi — asar napa ja raha';
-TIPS.upd=(i,d)=>{ const a=A[+i]; return a.rel.filter(r=>r[0]===d).map(r=>`<div class="us-tt">📦 ${esc(r[1])} · ${fd(d)}</div><div>${UPDW(r[2])}${r[3]||!r[2]?'':' (pakka nahi)'}</div>`).join(''); };
+TIPS.upd=(i,d)=>{ const a=A[+i], k=ix(d), b=avgAt(a,k-7,k-1), f=avgAt(a,k,Math.min(k+6,N-1));
+  return a.rel.filter(r=>r[0]===d).map(r=>`<div class="us-tt">📦 ${esc(r[1])} · ${fd(d)}</div><div>${UPDW(r[2])}${r[3]||!r[2]?'':' (pakka nahi)'}</div>`).join('')
+    +(b.rate!=null?trow('7 din pehle',fN(b.outs)+'/din ('+rp(b.rate)+')'):'')+(f.rate!=null?trow('Uske baad ('+f.n+' din)',fN(f.outs)+'/din ('+rp(f.rate)+')'):''); };
 function lock(on){ try{ document.body.classList.toggle('us-lock',!!on); }catch(e){} }
 function openDrawer(i){ layer(); i=+i; if(!A[i]) return; ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('us-drawer'); d.classList.add('us-on'); d.setAttribute('aria-hidden','false'); $('us-scrim').classList.add('us-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.us-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
 function closeDrawer(){ ST.drawer=-1; ST.did=null; const d=$('us-drawer'); if(d){ d.classList.remove('us-on'); d.setAttribute('aria-hidden','true'); } const sc=$('us-scrim'); if(sc) sc.classList.remove('us-on'); lock(false); hideTip(); }
 function navOrder(){ return R.slice().sort((x,y)=>lossCmp(x,y)).map(o=>o.a.i); }
-function drawerHtml(){ const o=R[ST.drawer], a=o.a, s=o.s, c=o.c, ord=navOrder(), pos=ord.indexOf(a.i);
+// the app view's body — the same in the drawer (mode 'd') and on the full app page (mode 'p', laid out wide)
+function bodyHtml(o,mode){ const a=o.a, s=o.s, c=o.c;
   const k=(lab,hint,v,f,unit,dl,sub)=>`<div class="us-kpi"><div class="us-kl"><span>${lab}</span><span class="us-kh">${hint}</span></div><div class="us-kv"><span class="us-num">${v==null?'—':FMT[f](v)}</span>${unit?`<span class="us-ku">${unit}</span>`:''}</div><div class="us-kd ${dl.cls||''}">${dl.h||dl}</div><div class="us-ks">${sub||''}</div></div>`;
   const pk=(c0,cc,good)=>{ if(c0.p==null) return {h:'<span class="us-vs">—</span>'}; if(cc.p==null) return {h:'<span class="us-vs">pehle ka data nahi</span>'}; const ppl=(c0.p-cc.p)*c0.n/Math.max(1,c0.days), up=ppl>0, cls=Math.abs(ppl)<.5?'us-flat':(up===good?(up?'us-up-good':'us-dn-good'):(up?'us-up-bad':'us-dn-bad'));
     return {cls,h:`${up?'▲':'▼'} ${fS(ppl)} log/din (${pc(c0.p,1)}, pehle ${pc(cc.p,1)})`}; };
@@ -5243,26 +5356,34 @@ function drawerHtml(){ const o=R[ST.drawer], a=o.a, s=o.s, c=o.c, ord=navOrder()
     return `<tr class="${d>a.settled?'us-prow':''}"><td class="us-l">${fd(d)}${d>a.settled?' ⏳':''}</td><td>${fN(a.nw[i])}</td><td>${fN(a.un[i])}</td><td>${fS((a.nw[i]||0)-(a.un[i]||0))}</td><td><span class="us-hcell ${hs}">${rp(r)}</span></td><td>${a.g0[i]!=null&&a.nw[i]?pc(a.g0[i]/a.nw[i],1):'—'}</td><td class="us-l" style="font-family:var(--us-font);font-size:12px">${ev}</td></tr>`; }).join('')+'</tbody></table>';
   const als=sortAl(a.al);
   const ups=a.rel.slice().reverse();
+  const hd=mode==='p'?'h2':'h2 style="font-size:15px"', he=mode==='p'?'h2':'h2';
+  const coh=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Install hafta × din</div><${hd}>Kitne abhi bhi app me</${he}><div class="us-hint">Har row = ek hafte ke installs · cell = us din ke baad kitne % ne app rakha</div></div><div class="us-right"><div class="us-seg" id="us-cohM-${mode}" data-cohm="1"><button data-m="abs" aria-pressed="${ST.cohMode==='abs'}">% bache</button><button data-m="dev" aria-pressed="${ST.cohMode==='dev'}">Normal se farak</button></div></div></div><div class="us-cohw">${cohFull(a)}</div><div class="us-clg">${ST.cohMode==='abs'?'<span class="us-k"><i style="background:linear-gradient(90deg,#13213a,#22d3ee);width:40px;height:9px"></i>kam → zyada bache</span>':'<span class="us-k"><i style="background:var(--us-h2);height:9px"></i>normal se kam bache</span><span class="us-k"><i style="background:var(--us-g2);height:9px"></i>normal se zyada</span>'}<span class="us-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ pakka nahi</span><span class="us-k">· = abhi us din tak nahi pahunche</span></div></div>`;
+  const alH=als.length?`<div><div class="us-chg-h"><div><div class="us-eyebrow">Is app ke alerts</div><${hd}>Kya badla?</${he}></div></div><div class="us-cards">${als.map(cardH).join('')}</div></div>`:'<div class="us-ok">✅ Is app pe koi khula alert nahi</div>';
+  const upH=ups.length?`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · ${fd(M.S)} se</div><${hd}>Updates ka asar</${he}><div class="us-hint">${mode==='p'?'Poora Update impact card (kisi bhi date se tulna) neeche "Purane views" me':'Poora Update impact card (kisi bhi date se tulna) app page pe'}</div></div></div><div class="us-upd">${ups.map(r=>{ const kk=ix(r[0]), b=avgAt(a,kk-7,kk-1), f=avgAt(a,kk,Math.min(kk+6,N-1));
+      return `<div class="us-u"><span class="us-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="us-faint">${r[2]==='halt'?'Rollout roko, hotfix bhejo':(r[2]==='win'?'Achha asar':(r[2]==='continue'?'Koi nuksaan nahi dikha':(r[2]==='hold'?'Ruk ke dekho':'Asar abhi napa ja raha')))}</span>${b.rate!=null&&f.rate!=null?`<span class="us-num" style="font-size:12px;color:var(--ink2)">uninstalls ${fN(b.outs)}→${fN(f.outs)}/din (${rp(b.rate)}→${rp(f.rate)})</span>`:''}</div>`; }).join('')}</div></div>`:'';
+  const dtH=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Roz ka hisaab</div><${hd}>Din-ba-din · ${span(W.f,W.t)}</${he}></div></div><div class="us-tw" style="max-height:${mode==='p'?520:360}px">${dt}</div></div>`;
+  const ch1=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Roz ka uninstall rate</div><${hd}>Roz hataaye % · normal band ke saath</${he}></div></div>${bigChart(a,o,mode)}</div>`;
+  const ch2=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Aaye vs gaye</div><${hd}>Installs vs uninstalls</${he}></div></div>${ioChart(a,mode)}</div>`;
+  if(mode==='p') return `<div class="us-dk us-pk">${kp}</div>${ch1}${ch2}${coh}${alH}${upH}${dtH}`;
+  return `<div class="us-dk">${kp}</div>${ch1}${ch2}${coh}${alH}${upH}${dtH}`; }
+function drawerHtml(){ const o=R[ST.drawer], a=o.a, ord=navOrder(), pos=ord.indexOf(a.i);
   return `<div class="us-dh"><div class="us-t"><div class="us-eyebrow">App view · ${pos+1} / ${ord.length} (nuksaan ke kram me) · ${span(W.f,W.t)}</div><h3>${esc(bnm(a))} <span class="us-acn">· ${esc(a.acc)}</span></h3><div class="us-l2">${chip(o.pill)}${alBadge(a)}${szH(a)}<span class="us-pkg">${esc(a.pkg)}</span><span>Data ${fd(M.E)} tak${W.t>a.settled?' · ⏳ '+fd(dAdd(a.settled,1))+'+ pakka nahi':''}</span></div>`
-    +`<div class="us-full-r"><button class="us-btn us-full" id="us-full" data-full="${esc(a.id)}" title="Update impact card, kisi bhi date se tulna, install-week table — sab is app ke page pe">Poora app page →</button></div></div>`
+    +`<div class="us-full-r"><button class="us-btn us-full" id="us-full" data-full="${esc(a.id)}" title="Is app ka poora page: bade charts, saare tables, Update impact card aur kisi bhi date se tulna">Poora app page →</button></div></div>`
     +`<button class="us-icb" id="us-dPrev" aria-label="Pichhli app" title="Pichhli app (←)">‹</button><button class="us-icb" id="us-dNext" aria-label="Agli app" title="Agli app (→)">›</button><button class="us-icb" id="us-dClose" aria-label="Band karo" title="Band karo (Esc)">✕</button></div>`
-    +`<div class="us-db"><div class="us-dk">${kp}</div>`
-    +`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Roz ka uninstall rate</div><h2 style="font-size:15px">Roz hataaye % · normal band ke saath</h2></div></div>${bigChart(a)}</div>`
-    +`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Aaye vs gaye</div><h2 style="font-size:15px">Installs vs uninstalls</h2></div></div>${ioChart(a)}</div>`
-    +`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Install hafta × din</div><h2 style="font-size:15px">Kitne abhi bhi app me</h2><div class="us-hint">Har row = ek hafte ke installs · cell = us din ke baad kitne % ne app rakha</div></div><div class="us-right"><div class="us-seg" id="us-cohM"><button data-m="abs" aria-pressed="${ST.cohMode==='abs'}">% bache</button><button data-m="dev" aria-pressed="${ST.cohMode==='dev'}">Normal se farak</button></div></div></div><div class="us-cohw">${cohFull(a)}</div><div class="us-clg">${ST.cohMode==='abs'?'<span class="us-k"><i style="background:linear-gradient(90deg,#13213a,#22d3ee);width:40px;height:9px"></i>kam → zyada bache</span>':'<span class="us-k"><i style="background:var(--us-h2);height:9px"></i>normal se kam bache</span><span class="us-k"><i style="background:var(--us-g2);height:9px"></i>normal se zyada</span>'}<span class="us-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ pakka nahi</span><span class="us-k">· = abhi us din tak nahi pahunche</span></div></div>`
-    +(als.length?`<div><div class="us-chg-h"><div><div class="us-eyebrow">Is app ke alerts</div><h2 style="font-size:15px">Kya badla?</h2></div></div><div class="us-cards">${als.map(cardH).join('')}</div></div>`:'<div class="us-ok">✅ Is app pe koi khula alert nahi</div>')
-    +(ups.length?`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · ${fd(M.S)} se</div><h2 style="font-size:15px">Updates ka asar</h2><div class="us-hint">Poora Update impact card (kisi bhi date se tulna) app page pe</div></div></div><div class="us-upd">${ups.map(r=>`<div class="us-u"><span class="us-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="us-faint">${r[2]==='halt'?'Rollout roko, hotfix bhejo':(r[2]==='win'?'Achha asar':(r[2]==='continue'?'Koi nuksaan nahi dikha':(r[2]==='hold'?'Ruk ke dekho':'Asar abhi napa ja raha')))}</span></div>`).join('')}</div></div>`:'')
-    +`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Roz ka hisaab</div><h2 style="font-size:15px">Din-ba-din · ${span(W.f,W.t)}</h2></div></div><div class="us-tw" style="max-height:360px">${dt}</div></div>`
+    +`<div class="us-db">${bodyHtml(o,'d')}`
     +`<div style="display:flex;justify-content:center;padding:6px 0 2px"><button class="us-btn us-full" data-full="${esc(a.id)}">Poora app page →</button></div></div>`; }
 function renderDrawer(keep){ if(ST.drawer<0) return; const d=$('us-drawer'); if(!d) return; const y=d.scrollTop;
-  d.innerHTML=drawerHtml(); if(keep) d.scrollTop=keep===true?y:keep;
-  const bc=$('us-bigc'); if(bc){ const S=bigChart.st; const rr=bc.querySelector('#us-bigr'), xl=bc.querySelector('#us-bigx');
-    rr.addEventListener('mousemove',e=>{ const r=bc.getBoundingClientRect(), fx=(e.clientX-r.left)/r.width*S.w; let best=0,bd=1e9; for(let i=0;i<S.n;i++){ const dd=Math.abs(S.X(i)-fx); if(dd<bd){ bd=dd; best=i; } }
-      xl.setAttribute('x1',S.X(best)); xl.setAttribute('x2',S.X(best)); xl.setAttribute('opacity','.6'); const k=S.i0+best, dd=dOf(k), aa=S.a;
-      showTip(`<div class="us-tt">${fd(dd)}${dd>aa.settled?' ⏳':''}</div>${trow('Roz hataaye',rp(aa.rate[k]))}${trow('Uninstalls',fN(aa.un[k]))}${trow('Installs',fN(aa.nw[k]))}${aa.lo[k]!=null?trow('Normal',rp(aa.lo[k])+'–'+rp(aa.hi[k])):''}${S.gh[best]!=null?trow('Pehle ('+fd(dAdd(dd,-S.cOff))+')',rp(S.gh[best])):''}${aa.rel.filter(r=>r[0]===dd).map(r=>'<div class="us-tsm">📦 '+esc(r[1])+'</div>').join('')}`,e.clientX,e.clientY); });
-    rr.addEventListener('mouseleave',()=>{ xl.setAttribute('opacity','0'); hideTip(); }); } }
-// "Poora app page →": the app's existing Uninstall page (Update impact card, any-date compare, install-week table …)
+  for(const k in SPK) if(k.indexOf('us-d')===0) delete SPK[k];
+  const sf=SPF, sn=spkN; SPF='us-d'; spkN=0; try{ d.innerHTML=drawerHtml(); } finally { SPF=sf; spkN=sn; }   // (the drawer's charts: ids of their own)
+  if(keep) d.scrollTop=keep===true?y:keep; }
+// "Poora app page →": the app's full page (the Studio app page; the older page folded under it)
 function fullPage(id){ closeDrawer(); try{ uniOpen(id); }catch(e){} }
+// the full app page: the Studio's top bar, the app's head (← All apps, its place in the loss order, ‹ ›), then the body wide
+function pageHtml(i){ const o=R[i], a=o.a, ord=navOrder(), pos=ord.indexOf(a.i);
+  return `<div class="us-ph us-pgh"><div style="min-width:0;flex:1"><div class="us-eyebrow"><span class="us-lk" data-back="1" role="link" tabindex="0">← All apps</span> · App page · ${pos+1} / ${ord.length} (nuksaan ke kram me) · ${span(W.f,W.t)}</div><h2 class="us-pgt">${esc(bnm(a))} <span class="us-acn">· ${esc(a.acc)}</span></h2><div class="us-l2">${chip(o.pill)}${alBadge(a)}${szH(a)}<span class="us-pkg">${esc(a.pkg)}</span><span>Data ${fd(M.E)} tak${W.t>a.settled?' · ⏳ '+fd(dAdd(a.settled,1))+'+ pakka nahi':''}</span></div></div>`
+    +`<div class="us-right"><button class="us-icb" data-pnav="-1" aria-label="Pichhli app" title="Pichhli app (←)">‹</button><button class="us-icb" data-pnav="1" aria-label="Agli app" title="Agli app (→)">›</button></div></div>`
+    +`<div class="us-pgb">${bodyHtml(o,'p')}</div>`; }
+function navPage(dir){ const ord=navOrder(), i=A.findIndex(a=>a.id===PAGE), p=ord.indexOf(i); if(p<0) return; const q=ord[(p+dir+ord.length)%ord.length]; try{ uniOpen(A[q].id); }catch(e){} }
 
 /* ================= footer ================= */
 function footHtml(){ return `<summary>Ye number kaise bane? (chhoti si list)</summary><ul>
@@ -5279,8 +5400,9 @@ function footHtml(){ return `<summary>Ye number kaise bane? (chhoti si list)</su
 
 /* ================= render ================= */
 // the whole Studio as HTML (the dashboard's uniScreen puts it in the Uninstall screen); the parts that need the page
-// (widths, the open drawer, count-up) follow in afterMount
-function screen(note){ prep(); spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
+// (widths, the open drawer, count-up) follow in afterMount. VIEW: 'all' (All apps) or 'app' (one app's full page, PAGE).
+let VIEW='all', PAGE=null;
+function screen(note){ prep(); VIEW='all'; PAGE=null; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
   setTimeout(afterMount,0);
   return `<div id="us-root"><div class="us-top" id="us-top">${topHtml()}</div>`
     +`<div class="us-wrap" id="us-main">${note||''}<section class="us-story" id="us-story" aria-label="Sabse zaroori baatein">${storyHtml()}</section>`
@@ -5288,10 +5410,21 @@ function screen(note){ prep(); spkN=0; for(const k in SPK) delete SPK[k]; comput
     +`<section class="us-duo"><article class="us-panel" id="us-map">${mapHtml()}</article><article class="us-panel" id="us-src">${srcHtml()}</article></section>`
     +`<section class="us-panel us-tl" id="us-tl">${tlHtml()}</section><section id="us-chg">${chgHtml()}</section><section class="us-panel" id="us-tbl">${tblHtml()}</section>`
     +`<details class="us-foot" id="us-foot">${footHtml()}</details></div></div>`; }
+// is this app in the Studio's file (visible apps)? — else its older page stays as it was
+function has(id){ try{ prep(); return A.some(a=>a.id===id); }catch(e){ return false; } }
+// one app's full page (the top App selector, "Poora app page →", an app opened anywhere on the tab)
+function appScreen(id,note){ prep(); VIEW='app'; PAGE=id; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
+  if(ST.drawer>=0) closeDrawer();                       // (the quick look belongs to All apps)
+  const i=A.findIndex(a=>a.id===id); setTimeout(afterMount,0);
+  return `<div id="us-root" class="us-app-pg"><div class="us-top" id="us-top">${topHtml()}</div><div class="us-wrap" id="us-main">${note||''}<section id="us-apg" aria-label="App page">${pageHtml(i)}</section>`
+    +`<details class="us-foot" id="us-foot">${footHtml()}</details></div></div>`; }
 let stickT=0;
 function stick(){ const r=$('us-root'); if(!r) return; try{ const tb=document.querySelector('.topbar'); const cs=tb?getComputedStyle(tb):null;
   r.style.setProperty('--us-stick',(tb&&cs&&cs.position==='sticky'?tb.offsetHeight:0)+'px'); }catch(e){} }
+function renderPage(){ const el=$('us-apg'); if(!el||VIEW!=='app') return; const i=A.findIndex(a=>a.id===PAGE); if(i<0) return;
+  for(const k in SPK) if(k.indexOf('us-s')===0) delete SPK[k]; SPF='us-s'; spkN=0; el.innerHTML=pageHtml(i); }
 function afterMount(){ const root=$('us-root'); if(!root) return; layer(); stick();
+  if(VIEW==='app'){ const el=$('us-apg'); const w=el&&el.clientWidth; if(w&&Math.abs(w-PW)>40){ PW=w; renderPage(); } countUp(); return; }
   const box=$('us-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.us-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; }
   countUp();
   if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('us-drawer'); if(d&&!d.classList.contains('us-on')){ d.classList.add('us-on'); $('us-scrim').classList.add('us-on'); lock(true); } } } }
@@ -5299,8 +5432,9 @@ function afterMount(){ const root=$('us-root'); if(!root) return; layer(); stick
 let firstAll=true;
 function renderAll(){ const root=$('us-root'); if(!root){ uniRerender(); return; }
   const m=$('us-main'); if(m&&!RM){ m.classList.remove('us-fresh'); void m.offsetWidth; m.classList.add('us-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('us-fresh'),700); }
-  spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop();
+  SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop();
   const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
+  if(VIEW==='app'){ renderPage(); set('us-foot',footHtml()); countUp(); return; }
   set('us-story',storyHtml()); set('us-kpis',kpisHtml()); set('us-ledgerT',ledgerHtml()); set('us-map',mapHtml()); set('us-src',srcHtml());
   renderTl(); set('us-chg',chgHtml()); renderTbl(false); set('us-foot',footHtml()); if(ST.drawer>=0) renderDrawer(true); countUp(); }
 // the shared choice changed here: the other tabs that read it (Active users, Install value) follow, after this paints
@@ -5321,11 +5455,12 @@ function wire(){ if(WIRED) return; WIRED=true;
     if(!inStudio(t)){ const tipEl=$('us-tip'); if(tipEl&&tipEl.classList.contains('us-on')) hideTip(); return; }
     const k0=t.closest('[data-tk]');
     if(k0){ const [k,...args]=k0.getAttribute('data-tk').split(':'); const h=TIPS[k]&&TIPS[k](...args); if(h){ showTip(h,e.clientX,e.clientY); return; } }
-    const sv=t.closest('svg.us-spk'); if(sv&&SPK[sv.id]){ spkHover(sv,e); return; }
-    hideTip(); roots().forEach(r=>r.querySelectorAll('svg.us-spk .us-xh[opacity="1"]').forEach(l=>l.setAttribute('opacity','0'))); });
-  document.addEventListener('click',e=>{ if(tipPinned&&!(e.target.closest&&e.target.closest('#us-tip'))) hideTip(); },true);
-  document.addEventListener('touchstart',e=>{ const t=e.target; if(!inStudio(t)) return; const k0=t.closest('[data-tk]'); if(!k0) return;
-    const [k,...args]=k0.getAttribute('data-tk').split(':'); const h=TIPS[k]&&TIPS[k](...args); const p=e.touches[0]; if(h) showTip(h,p.clientX,p.clientY,true); },{passive:true});
+    const sv=t.closest('svg[data-hv]'); if(sv&&SPK[sv.id]&&hov(sv,e.clientX,e.clientY,false)) return;
+    hideTip(); roots().forEach(r=>r.querySelectorAll('svg[data-hv] .us-xh[opacity="1"]').forEach(l=>l.setAttribute('opacity','0'))); });
+  document.addEventListener('click',e=>{ if(tipPinned&&!(e.target.closest&&e.target.closest('#us-tip'))&&Date.now()-tipT>700) hideTip(); },true);
+  document.addEventListener('touchstart',e=>{ const t=e.target; if(!inStudio(t)) return; const p=e.touches[0]; const k0=t.closest('[data-tk]');
+    if(k0){ const [k,...args]=k0.getAttribute('data-tk').split(':'); const h=TIPS[k]&&TIPS[k](...args); if(h){ showTip(h,p.clientX,p.clientY,true); tipT=Date.now(); } return; }
+    const sv=t.closest('svg[data-hv]'); if(sv&&SPK[sv.id]&&hov(sv,p.clientX,p.clientY,true)) tipT=Date.now(); },{passive:true});
   document.addEventListener('mouseover',e=>{ const t=e.target; if(!inStudio(t)&&hlApp==null) return; const a0=inStudio(t)?t.closest('[data-app]'):null; const id=a0?a0.getAttribute('data-app'):null;
     if(id===hlApp) return; hlApp=id;
     roots().forEach(r=>{ r.querySelectorAll('[data-app].us-hl').forEach(el=>el.classList.remove('us-hl'));
@@ -5341,15 +5476,18 @@ function wire(){ if(WIRED) return; WIRED=true;
     if(e.key==='Escape'){ if(ST.drawer>=0){ closeDrawer(); e.preventDefault(); } hideTip(); return; }
     if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
     if(ST.drawer>=0&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navDrawer(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
+    if(VIEW==='app'&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navPage(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
     const m={'7':'7','1':'14','3':'30','6':'60'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
     if(e.key==='/'){ const q=$('us-q'); if(q){ q.focus(); q.scrollIntoView({block:'center',behavior:RM?'auto':'smooth'}); e.preventDefault(); } } });
-  let rzT=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(!$('us-root')) return; stick(); if(Math.abs(innerWidth-lastW)<40) return; lastW=innerWidth; renderTl(); if(ST.drawer>=0) renderDrawer(true); },180); }); }
+  let rzT=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(!$('us-root')) return; stick(); if(Math.abs(innerWidth-lastW)<40) return; lastW=innerWidth; if(VIEW==='app'){ const el=$('us-apg'); PW=(el&&el.clientWidth)||PW; renderPage(); return; } renderTl(); if(ST.drawer>=0) renderDrawer(true); },180); }); }
 function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+dir+ord.length)%ord.length; ST.drawer=ord[q]; ST.did=A[ST.drawer].id; renderDrawer(); const d=$('us-drawer'); if(d) d.scrollTop=0; }
 function onClick(e){ const t=e.target; if(!inStudio(t)) return;
   const fp=t.closest('[data-full]'); if(fp){ e.preventDefault(); fullPage(fp.getAttribute('data-full')); return; }
+  if(t.closest('[data-back]')){ e.preventDefault(); hideTip(); try{ uniBack(); }catch(e2){} return; }
+  const pn=t.closest('[data-pnav]'); if(pn){ hideTip(); navPage(+pn.getAttribute('data-pnav')); return; }
   const ab=t.closest('[data-al]'); if(ab&&ab.dataset.al!==''){ e.stopPropagation(); hideTip(); const k=ab.dataset.al, inD=!!ab.closest('#us-drawer');
     if(!inD&&ST.drawer>=0) closeDrawer();
-    const root=inD?$('us-drawer'):$('us-chg'); let card=root&&root.querySelector('[data-alk="'+k+'"]');
+    const root=inD?$('us-drawer'):(VIEW==='app'?$('us-apg'):$('us-chg')); let card=root&&root.querySelector('[data-alk="'+k+'"]');
     if(!card&&inD){ closeDrawer(); card=document.querySelector('#us-chg [data-alk="'+k+'"]'); }
     if(card){ const fold=card.closest('details'); if(fold) fold.open=true; card.scrollIntoView({behavior:RM?'auto':'smooth',block:'center'}); card.classList.remove('us-flash'); void card.offsetWidth; card.classList.add('us-flash'); }
     return; }
@@ -5360,7 +5498,7 @@ function onClick(e){ const t=e.target; if(!inStudio(t)) return;
   const th=t.closest('th[data-sort]'); if(th){ const k=th.dataset.sort; ST.sort=ST.sort.k===k?{k,d:-ST.sort.d}:{k,d:(k==='app'||k==='st'||k==='s7'||k==='r1')?1:-1}; renderTbl(true); return; }
   const fb=t.closest('#us-fst button'); if(fb){ const s=fb.dataset.st; ST.fst.has(s)?ST.fst.delete(s):ST.fst.add(s); renderTbl(true); return; }
   const cv=t.closest('#us-chgV button'); if(cv){ ST.chgView=cv.dataset.v; const el=$('us-chg'); if(el) el.innerHTML=chgHtml(); save(); return; }
-  const cm=t.closest('#us-cohM button'); if(cm){ ST.cohMode=cm.dataset.m; renderDrawer(true); save(); return; }
+  const cm=t.closest('[data-cohm] button'); if(cm){ ST.cohMode=cm.dataset.m; save(); if(cm.closest('#us-drawer')) renderDrawer(true); else renderPage(); return; }
   if(t.closest('#us-mapMore')){ ST.mapAll=!ST.mapAll; const el=$('us-map'); if(el) el.innerHTML=mapHtml(); return; }
   if(t.closest('#us-srcMore')){ ST.srcAll=!ST.srcAll; const el=$('us-src'); if(el) el.innerHTML=srcHtml(); return; }
   if(t.closest('#us-dClose')||t.id==='us-scrim'){ closeDrawer(); return; }
@@ -5368,17 +5506,18 @@ function onClick(e){ const t=e.target; if(!inStudio(t)) return;
   const tl=t.closest('[data-tl]'); if(tl){ const [k,d]=tl.dataset.tl.split(':'); const L=k==='u'?tlHtml.ups[d]:tlHtml.als[d]; if(!L) return; const items=L.map(z=>k==='u'?z[0]:A[z[0].a]);
     const uniq=[...new Set(items)]; if(uniq.length===1){ openDrawer(uniq[0].i); return; }
     const r=tl.getBoundingClientRect(); showTip((k==='u'?TIPS.tlu(d):TIPS.tla(d))+'<div class="us-sep"></div>'+uniq.map(a=>`<div><span class="us-lk" data-go="${a.i}">${esc(bnm(a))} · ${esc(a.acc)} →</span></div>`).join(''),r.left+r.width/2,r.top+r.height,true); e.stopPropagation(); return; }
-  const go=t.closest('[data-go]'); if(go&&!t.closest('select,input')){ hideTip(); openDrawer(+go.dataset.go); return; }
+  const go=t.closest('[data-go]'); if(go&&!t.closest('select,input')){ if(VIEW==='app'&&go.closest('#us-apg')) return; hideTip(); openDrawer(+go.dataset.go); return; }   // (on the app page it already IS that app)
   const sc=t.closest('[data-scroll]'); if(sc){ const el=$(sc.dataset.scroll); if(el) el.scrollIntoView({behavior:RM?'auto':'smooth',block:'start'}); } }
 
 /* ================= the dashboard's side ================= */
 // called by the Uninstall screen's render when it is NOT the Studio (an app's page, another state): no drawer over it
 function hide(){ if(ST.drawer>=0) closeDrawer(); else hideTip(); }
-return {ptr, ensure, retry, screen, hide, closeDrawer, openDrawer,
+return {ptr, ensure, retry, screen, appScreen, has, hide, closeDrawer, openDrawer,
   ready:()=>!!RAW&&!!ptr(), loading:()=>LOADING, failed:()=>ERR&&!RAW,
   // checks / tests (read-only views of the current state)
   _:{A:()=>A, R:()=>R, W:()=>W, PT:()=>PT, PC:()=>PC, ST, ALERTS:()=>ALERTS, NOGA:()=>NOGA, M:()=>M, sums, cohR, cohW, pool, loss, ix, dOf, windows,
      story:storyHtml, kpis:kpisHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml,
+     page:id=>{ const i=A.findIndex(a=>a.id===id); return i<0?'':pageHtml(i); }, view:()=>({VIEW,PAGE}), SPK:()=>SPK, labels, navPage,
      load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage}};
 })();
 
@@ -5396,7 +5535,8 @@ function uniScreen(){
   else if(!APP&&usOn()) html=usPortfolio();          // "All apps" → 🧭 the Uninstall Studio (+ the older views folded under it)
   else if(UNIERR||!U.asset) html=h2+`<div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Uninstall data load nahi hua — thodi der baad page refresh karo. <span class="lnk" onclick="UNIERR=false;uniRerender();loadUNI(()=>uniRerender())">Try again</span></div></div>`;
   else if(!UNI) html=h2+`<div class="card"><div class="muted" style="font-size:14px;padding:20px">⏳ Uninstall data load ho raha hai…</div></div>`;
-  else if(APP){ const L=U.apps||[], sm=L.find(x=>x.app_id===UNIAPP&&x.app===APP)||L.find(x=>x.app===APP); html=sm?uniDetail(sm.app_id,true):uniNoGa4(APP); }   // top App filter → that app straight away
+  else if(APP){ const L=U.apps||[], sm=L.find(x=>x.app_id===UNIAPP&&x.app===APP)||L.find(x=>x.app===APP);
+    html=sm?((usOn()&&(!US.ready()||US.has(sm.app_id)))?usAppPage(sm.app_id):uniDetail(sm.app_id,true)):uniNoGa4(APP); }   // top App filter → that app straight away (🧭 its Studio page)
   else html=uniPortfolio();   // "All apps" in the header → always the portfolio (an app's detail sets the header's App: uniOpen)
   return html;
 }
@@ -5508,6 +5648,17 @@ function uniPortfolio(parts){
 // 🧭 All apps with the Studio: [the honest data note] + the Studio + "Purane views" (the older All-apps sections the Studio
 // does not replace: 📦 Updates ka asar with 📅 Ek date, sab apps · the full 📋 All apps table · the older What changed? list)
 function usOn(){ return !!US.ptr()&&!US.failed(); }
+// 🧭 one app (the top App selector, "Poora app page →", an app opened anywhere on the tab): the Studio's full-width app page
+// (the drawer's content laid out wide, the shared range / compare) + "Purane views": the WHOLE older app page, folded —
+// Since launch, test installs, 📦 Update impact with any-date compare, What changed?, the split blocks, every table
+let UNIOLDAPPOPEN=false;
+function usAppPage(id){ const old=uniDetail(id,true);
+  try{ if(impS('uni').jump) UNIOLDAPPOPEN=true; }catch(e){}   // a 📦 tap waiting for its Update impact block: the fold opens for it
+  let top;
+  if(US.ready()){ try{ top=US.appScreen(id); }
+    catch(e){ top=`<div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Uninstall Studio dikhane me dikkat aayi — <span class="lnk" onclick="US.retry()">Try again</span></div></div>`; } }
+  else top=`<span class="backlnk" onclick="uniBack()">← All apps</span><div class="card"><div class="muted" style="font-size:14px;padding:20px">⏳ Uninstall Studio load ho raha hai…</div></div>`;
+  return top+`<details id="uni-old-app" class="uni-oldv"${UNIOLDAPPOPEN?' open':''} ontoggle="UNIOLDAPPOPEN=this.open"><summary><span class="uo-cv">▸</span><span>🗂 Purane views</span><span class="uo-h">Since launch · test installs · 📦 Update impact (kisi bhi date se tulna) · What changed? · install-week table · sab tables</span></summary><div class="uo-in">${old}</div></details>`; }
 function usPortfolio(){
   const P0=(UNI&&!UNIERR)?uniPortfolio(true):null;
   let top;
