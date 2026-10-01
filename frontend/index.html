@@ -352,6 +352,31 @@
   .uni-upd .ap{font-weight:650;color:#fff;min-width:0;max-width:220px;overflow:hidden}
   .uni-upd .rl{font-weight:700;color:var(--ink2);white-space:nowrap}
   .uni-upd .hl{font-weight:650}.uni-upd .go{margin-left:auto;font-size:15px}
+  /* 📅 Compare any date: the box at the top of 📦 Update impact (date · window · name · 💾 · 📌 saved dates · the
+     comparison drawn as an update block) and the All-apps "📅 Ek date, sab apps" tool — every line wraps at 375 px */
+  .uni-any{border:1px solid var(--line2);border-radius:11px;padding:10px 12px 8px;margin:0 0 12px;background:var(--panel2);min-width:0}
+  .uni-any-t{font-size:13.5px;font-weight:750;color:#fff;line-height:1.45}.uni-any-t .faint{font-size:11.5px;font-weight:500;margin-left:4px}
+  .uni-any-in{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:8px 0 4px;font-size:12px;color:var(--muted);min-width:0}
+  .uni-any-l{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:100%;min-width:0}
+  .uni-any-in input[type=date],.uni-any-in input[type=text]{background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:8px;padding:6px 9px;font:inherit;font-size:12.5px;color-scheme:dark;outline:none;max-width:100%;min-width:0;box-sizing:border-box}
+  .uni-any-in input[type=text]{flex:1 1 200px;max-width:340px}
+  .uni-any-in input[type=checkbox]{accent-color:var(--cyan)}
+  .uni-any .seg button,#uni-anyall .seg button{padding:6px 9px}
+  .uni-any-btn{border:1px solid var(--cyan);background:rgba(61,208,240,.14);color:#fff;font:inherit;font-weight:650;font-size:12.5px;padding:6px 13px;border-radius:8px;cursor:pointer}
+  .uni-any-btn:disabled{opacity:.45;cursor:not-allowed}
+  .uni-any-msg{font-size:12px;font-weight:650;color:var(--muted);min-width:0;overflow-wrap:anywhere}.uni-any-msg.ok{color:var(--good)}.uni-any-msg.err{color:var(--bad)}
+  .uni-any-note{font-size:12px;line-height:1.5;margin:5px 0;color:var(--ink2);overflow-wrap:anywhere}.uni-any-note.faint{color:var(--faint)}
+  .uni-any-mks{display:flex;flex-wrap:wrap;gap:5px 6px;align-items:center;margin:6px 0 4px;font-size:11.5px;color:var(--muted);min-width:0}
+  .uni-any-ml{font-weight:700;color:var(--ink2)}
+  .uni-any-mk{font-size:11.5px;font-weight:650;padding:3px 9px;border-radius:100px;background:var(--purple-b);color:var(--purple);cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .uni-any-mk.on{outline:1px solid var(--purple)}.uni-any-mk:hover{outline:1px solid var(--purple)}
+  .uni-any-x{cursor:pointer;color:var(--muted);font-weight:800;padding:0 4px 0 0;margin-left:-3px}.uni-any-x:hover{color:var(--bad)}
+  .uni-any-res .uni-imp-b{border-top:0;padding-top:6px}.uni-any-bh{cursor:default}
+  .uni-anyr{display:flex;align-items:center;gap:5px 10px;flex-wrap:wrap;padding:9px 2px;border-top:1px solid var(--line);cursor:pointer;font-size:12.5px;min-width:0}
+  .uni-anyr:hover{background:var(--raise)}
+  .uni-anyr .ap{font-weight:650;color:#fff;min-width:0;flex:0 1 270px;max-width:270px}   /* one column for the words after it */
+  .uni-anyr .hl{font-weight:600;color:var(--ink2);min-width:0;overflow-wrap:anywhere}.uni-anyr .faint{min-width:0;overflow-wrap:anywhere}
+  .uni-anyr .go{margin-left:auto;font-size:15px}
   @media(max-width:1180px){      /* All apps rows (with the app's name) stack earlier: their line keeps room to read */
     .uni-chg.wa{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"ap ap ac" "sv mt mt" "tx tx tx"}
     .uni-chg.wa .mt>.dt:first-child{min-width:0}
@@ -372,6 +397,8 @@
     .uni-scs.rows .uni-sc{border-radius:10px;padding:9px 12px}.uni-scs.rows .uni-sc b{margin-left:auto}
     .uni-imp-mini{margin-left:0}
     .uni-upd .ap{max-width:100%}
+    .uni-anyr .ap{max-width:100%;flex-basis:100%}
+    .uni-any-in input[type=text]{max-width:100%}
   }
   /* 📦 Update impact on a phone: every row a small card — its name and status on top, then Before / After / Change
      with their column names — so the change and its status are in view without a sideways scroll */
@@ -4002,7 +4029,7 @@ function uniPortfolio(){
     ${noG.map(x=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">${smpAppHtml(x.app_id,x.app)}<span class="muted" style="font-size:12.5px">${hAttr(x.text||uniReason(x.reason))}</span></div>`).join('')}</div>`:'';
   let upd=''; try{ upd=uniUpdatesCard(rows); }catch(e){   // 📦 every visible app's updates + verdicts (a failure says so)
     upd='<div class="card faint" id="uni-updates" style="margin-bottom:14px;font-size:12.5px">⚠️ 📦 Updates ka asar — ye hissa abhi dikh nahi paya.</div>'; }
-  return head+note+sum+alCard+upd+table+noCard+uniTimingNote();
+  return head+note+sum+alCard+upd+uniAnyAllCard()+table+noCard+uniTimingNote();
 }
 // All apps: the grey "SAB APPS MILAKAR" band — the pooled "7 din baad bhi app me" (the apps whose verdict reads the SAME
 // 4 settled install weeks, vs the 4 before: one window, printed) and the pooled 7-day KPIs — then, per app ("Har app
@@ -4950,25 +4977,29 @@ function uniImpTold(a,b,Wv){ const v=Wv.verdict||{}, T=Array.isArray(v.told)?v.t
 // most of those rows carry — D30 needs its own, longer) — the weeks it needs and had, the row named when it is the only
 // one, else "kai rows"; yr: every such row keeps its pill (the tooltip says its own weeks), no sub-line repeating it.
 // An asset whose rows carry no such reason: the window's 5N+31
-const UNI_IMP_HIST=/^Update se pehle ka ~(\d+) hafte( \(~\d+ mahine\))? ka data chahiye \(\d+-din tulna ka aam utaar-chadhaav napne ke liye\) — is update se pehle ~(\d+) hafte ka tha$/;
-function uniImpYoung(Wv,n,RS){ if(!(Wv.notes||[]).includes('young')) return null;
+// (a 📅 chosen date's card says "Is date se pehle …" — engine.impact_any.custom_text — and its line says so: w)
+const UNI_IMP_HIST=/^(?:Update|Is date) se pehle ka ~(\d+) hafte( \(~\d+ mahine\))? ka data chahiye \(\d+-din tulna ka aam utaar-chadhaav napne ke liye\) — is (?:update|date) se pehle ~(\d+) hafte ka tha$/;
+function uniImpYoung(Wv,n,RS,w){ const Y=uniImpYoung_(Wv,n,RS); if(Y&&w) Y.txt=Y.txt.replace('tulna ke liye update se pehle','tulna ke liye '+w+' se pehle'); return Y; }
+function uniImpYoung_(Wv,n,RS){ if(!(Wv.notes||[]).includes('young')) return null;
   const L=RS.map(([k])=>[k,Wv.rows[k]]).filter(([,r])=>r&&r.status==='low'&&UNI_IMP_HIST.test(String(r.reason||'')));
   if(!L.length) return {txt:`${n}-din tulna ke liye update se pehle ~${Math.ceil((5*n+31)/7)} hafte${n>=60?' (~11 mahine)':''} ka data chahiye — is app ke paas utna nahi tha; isliye kai rows ⏳ Abhi jaldi (low data)`, yr:null};
   const c={}; L.forEach(([,r])=>{ c[r.reason]=(c[r.reason]||0)+1; });
   const top=L.map(([,r])=>r.reason).reduce((x,y)=>c[y]>c[x]?y:x), m=top.match(UNI_IMP_HIST);
   return {txt:`${n}-din tulna ke liye update se pehle ~${m[1]} hafte${m[2]||''} ka data chahiye — is app ke paas ~${m[3]} hafte ka tha; isliye ${L.length===1?"'"+uniImpShort(L[0][0])+"'":'kai rows'} ⏳ Abhi jaldi (low data)`, yr:true}; }
-function uniImpBlock(a,b,open,t){
-  const n=uniImpWinOf(b,t), LW=n>=14, Wv=uniImpW(b,n), v=Wv.verdict, lv=uniLvl(v.level), key=String(b.key), W=Wv.windows, bw=W.before||{}, aw=W.after||{}, ad=(b.adoption&&typeof b.adoption==='object')?b.adoption:null;
+// cx (📅 compare any date, uniAnyBox): a chosen date drawn by this same renderer — cx.n its window, cx.title its header,
+// cx.go(n) the window buttons' call; no fold, no per-block selector, no version table (a date has no version)
+function uniImpBlock(a,b,open,t,cx){
+  const n=(cx&&cx.n)||uniImpWinOf(b,t), LW=n>=14, Wv=uniImpW(b,n), v=Wv.verdict, lv=uniLvl(v.level), key=String(b.key), W=Wv.windows, bw=W.before||{}, aw=W.after||{}, ad=(b.adoption&&typeof b.adoption==='object')?b.adoption:null;
   // still running and waiting for data (a window no row can ever have — app younger than its Before — says the engine's why)
   const run=LW&&Wv.state==='running'&&!!(v.ready_on||(Array.isArray(v.pending)&&v.pending.length)), X=impA(t);
   const aDays=aw.days!=null&&isFinite(+aw.days)?+aw.days:null, aSet=aw.settled!=null&&isFinite(+aw.settled)?+aw.settled:null;
   // a long window is judged only once complete: its "pakka" level is the final one
   const zmin=LW?uniIC('z_final',3,t):((aSet!=null&&aSet<uniIC('win_days',7,t))?uniIC('z_early',4,t):uniIC('z_final',3,t)), P=IMPT[impT(t)].p;
-  const pills=[], ll=uniImpLateLv(b), RS=uniImpRowSpecs(Wv.rows,LW?n:7), Y=LW?uniImpYoung(Wv,n,RS):null, nmx=LW?Wv.mixed.length:0;
+  const pills=[], ll=uniImpLateLv(b), RS=uniImpRowSpecs(Wv.rows,LW?n:7), Y=LW?uniImpYoung(Wv,n,RS,cx?'is date':null):null, nmx=LW?Wv.mixed.length:0;
   // a long window shown: the 7-day verdict (the one alerts come from) stays in sight — a HALT / HOLD / WIN never hides
   // behind "30 days: ⏳ Too early" (a tap: this block at 7)
   const v7=(b.verdict&&typeof b.verdict==='object')?b.verdict:{}, l7=uniLvl(v7.level);
-  if(LW&&(l7==='halt'||l7==='hold'||l7==='win')) pills.push(`<span class="pill ${UNI_VERD[l7][1]} uni-v7" title="${hAttr('7 din ka faisla (alert isi se aata hai) — tap: 7 din dekho')}" onclick="event.stopPropagation();uniImp('${uniQ(key)}','${impT(t)}',7)">7 days: ${UNI_VERD[l7][0]}</span>`);
+  if(LW&&(l7==='halt'||l7==='hold'||l7==='win')) pills.push(`<span class="pill ${UNI_VERD[l7][1]} uni-v7" title="${hAttr('7 din ka faisla (alert isi se aata hai) — tap: 7 din dekho')}" onclick="event.stopPropagation();${cx?cx.go(7):`uniImp('${uniQ(key)}','${impT(t)}',7)`}">7 days: ${UNI_VERD[l7][0]}</span>`);
   if(ll) pills.push(`<span class="pill ${UNI_VERD[ll][1]} uni-late" title="30 din baad naya nuksaan — 7 din me nahi dikha tha" onclick="event.stopPropagation();uniImp('${uniQ(key)}','${impT(t)}',30)">30 din baad: ${UNI_VERD[ll][0]}</span>`);
   if(lv!=='pending'&&v.early) pills.push(`<span class="pill p-b" title="${LW?'30 din baad wapas abhi baaki — faisla badal sakta hai':'Abhi poore 7 pakke din nahi — faisla badal sakta hai'}">⏳ Pehli jhalak (pakka nahi)</span>`);
   if(uniImpProv(Wv)) pills.push('<span class="pill p-b" title="Kuch number naye din ke — late data abhi aa raha, badal sakte hain">⏳ Pakka nahi</span>');
@@ -4984,10 +5015,11 @@ function uniImpBlock(a,b,open,t){
   const nod=LW&&lv!=='pending'&&!uniNever(v)&&uniImpJudgedN(Wv)===0;
   const chip=nod?`<span class="pill uni-pz" data-lv="nodata" title="${hAttr(Y?Y.txt:'Is '+n+'-din window me koi number parkha nahi ja saka (low data / data nahi) — iska faisla nahi')}">⏳ Abhi jaldi</span>`
     :uniVerdChip(v,t,run?uniImpRunTxt(Wv,true):((LW&&!v.level&&v.why)?String(v.why):''),nmx?' · mila-jula (beech me '+nmx+' aur update'+(nmx>1?'s':'')+')':'');
-  const idA=hAttr(key), head=`<div class="uni-imp-h" onclick="uniImpX('${open?'-':uniQ(key)}'${X})"><span class="cv${open?' on':''}">▸</span><span class="ht">📦 ${hAttr(uniImpLabel(b))} — ${uniD(b.date)} · Verdict${LW?` (${n} days)`:''}: ${chip}</span>${pills.join('')}</div>`;
+  const idA=hAttr(key), head=cx?`<div class="uni-imp-h uni-any-bh"><span class="ht">${cx.title} · Verdict${LW?` (${n} days)`:''}: ${chip}</span>${pills.join('')}</div>`
+    :`<div class="uni-imp-h" onclick="uniImpX('${open?'-':uniQ(key)}'${X})"><span class="cv${open?' on':''}">▸</span><span class="ht">📦 ${hAttr(uniImpLabel(b))} — ${uniD(b.date)} · Verdict${LW?` (${n} days)`:''}: ${chip}</span>${pills.join('')}</div>`;
   if(!open) return `<div class="uni-imp-b" id="${P}imp-${idA}" data-key="${idA}" data-open="0">${head}<div class="uni-imp-mini">${run?'⏳ '+uniImpRunTxt(Wv):uniImpMini(Wv,t)}</div></div>`;
   // this block's own 7 / 14 / 30 / 60 (the card's default otherwise)
-  const ws=uniImpWinsState(a,t), seg=ws==='hidden'?'':`<div class="uni-imp-seg"><span>Before / after:</span>${uniImpSeg(n,[14,30,60].some(m=>uniImpHasW(b,m))?'on':'off',m=>`uniImpWX('${uniQ(key)}',${m}${X})`,m=>uniImpHasW(b,m))}</div>`;
+  const ws=cx?'hidden':uniImpWinsState(a,t), seg=ws==='hidden'?'':`<div class="uni-imp-seg"><span>Before / after:</span>${uniImpSeg(n,[14,30,60].some(m=>uniImpHasW(b,m))?'on':'off',m=>`uniImpWX('${uniQ(key)}',${m}${X})`,m=>uniImpHasW(b,m))}</div>`;
   // meta: the two windows, settled days, adoption, then the notes as chips
   const mp=[];
   if(bw.from) mp.push(`Before: <b>${uniSpan(bw.from,bw.to)}</b>`);
@@ -5011,7 +5043,8 @@ function uniImpBlock(a,b,open,t){
     +`<tbody>${RS.map(s=>uniImpRow(s,R[s[0]],zmin,[`Before (${bDays} ${bDays===1?'day':'days'})`,aH,'Change'],{n,run,tl:tl[s[0]],yr:Y&&Y.yr,sl,notes:Wv.notes,rows:R})).join('')}</tbody></table></div>`;
   // same days: the new version vs the older ones — the 7-day window only (later, newer updates mix in)
   let ver='';
-  if(LW) ver='<div class="faint uni-imp-vnote">Naya vs purana version: sirf 7-din window me (baad me naye updates aa jaate hain)</div>';
+  if(cx) ver='';
+  else if(LW) ver='<div class="faint uni-imp-vnote">Naya vs purana version: sirf 7-din window me (baad me naye updates aa jaate hain)</div>';
   else {
   const VC=(b.versions_cmp&&typeof b.versions_cmp==='object')?b.versions_cmp:null, VR=(VC&&VC.rows)||{}, vd=VC&&VC.days;
   const nl=(VC&&VC.new_label)||(b.kind==='update'?'This version':uniImpLabel(b)), bias=VC&&VC.bias;
@@ -5063,7 +5096,8 @@ function uniImpactCard(a,t){
   // the Active users copy: its windows differ from the tiles above it (the two can disagree) — said once: under the
   // title, or (a 7 / 14 / 30 / 60 selector shown) right under that selector — "(upar chuno)" only then
   const note=(N,pick)=>impT(t)==='act'?`<div class="faint act-imp-note" style="font-size:11.5px;margin:${pick?'-2px':'-4px'} 0 8px">Ye card = har update ke ${N} din pehle vs ${N} din baad${pick?' (upar chuno)':''} · upar ke tiles = pichhle 7 pakke din</div>`:'';
-  const wrap=(h,nt)=>`<div class="card" id="${IMPT[impT(t)].p}impact" style="margin-bottom:14px">${hd}${nt==null?note(7,false):''}${h}</div>`;
+  // 📅 the "compare any date" box at the top (the Uninstall tab's card: the one with the app's page)
+  const wrap=(h,nt)=>`<div class="card" id="${IMPT[impT(t)].p}impact" style="margin-bottom:14px">${hd}${impT(t)==='uni'?uniAnyBox(a):''}${nt==null?note(7,false):''}${h}</div>`;
   if(!I||typeof I!=='object') return wrap('<div class="uni-empty">⏳ Update impact agle robot run ke baad dikhega — GA4 se sessions, time aur naye users ki wapsi ka data aa raha hai.</div>');
   const B=uniImpBlocks(a), S=uniImpShow(t), F=(I.flags&&typeof I.flags==='object')?I.flags:{}, fl=[], st=impS(t);
   if(F.revenue==='none') fl.push(['No AdMob revenue','Is app ki AdMob kamai nahi mili — "Ad revenue per user" nahi dikhega']);
@@ -5124,6 +5158,314 @@ function uniUpdatesCard(rows,t){
   const cnt=`⏳ Abhi jaldi (${nW}) · 👍 Chalne do (${nC}) · — Faisla nahi (${nN})`;
   const more=rest.length?`<div class="uni-fold" data-fold="upd-rest" onclick="uniUPX(${X.slice(1)})"><span class="cv${st.uall?' on':''}">▸</span><span>${cnt}</span><span class="lnk" style="margin-left:auto;font-size:12px">${st.uall?'Hide':'Show'}</span></div>`+(st.uall?rest.map(row).join(''):''):'';
   return wrap(list+more+`<div class="faint" style="font-size:11px;margin-top:8px;line-height:1.5">Har update: 7 din pehle vs 7 din baad — purane users (roz), naye users ki wapsi (agle din / 7 din baad), sessions / time har user, kamai har user. Row pe tap = us app me poori tulna.</div>`); }
+// ---------- 📅 COMPARE ANY DATE (owner, 1 Oct: "15 Sep ko ad placement badla, 20 Sep se notification shuru — turant") ----------
+// The build precomputes the 📦 Update impact card for every app × every date of the last year (engine.impact_any: a
+// chosen date X is the engine's own pseudo-update — the same rows, tests and 7 / 14 / 30 / 60-day windows, the app's real
+// updates around X said as for an update) into impact_any_<key>.json.gz (columnar) + impact_any_index.json.gz. The page
+// fetches an app's file ONCE (lazily: when its app page is drawn) and decodes any date in the browser (anyDecode = the
+// contract's reader, engine.impact_any.decode field for field), then draws it with the update blocks' own renderer
+// (uniImpBlock with cx) — the same rows, numbers, split and wording. 📌 Saved dates (named, shared by the team) live in
+// the dashboard Worker's D1 (/api/marks); when that API is not reachable the comparison works the same, saving says so.
+const ANY_FILE_RE=/^impact_any_[0-9a-f]{12}\.json\.gz$/, ANY_DAY_RE=/^\d{4}-\d{2}-\d{2}$/, ANY_WINS=[7,14,30,60];
+const ANY_TXT={pending:'Is app ke liye tulna abhi nahi ban paya — agle refresh me try hoga',noga4:'GA4 data nahi — is app ki tulna nahi ban sakti',
+  load:'⏳ Tulna load ho rahi hai…',net:'⚠️ Tulna ki file load nahi hui'};
+// per row: the extras the file carries [short column, engine key] (the contract's EXTRA)
+const ANY_EXTRA={returning_dau:[['rc','raw_change'],['is','imputed_share']],
+  new_d1:[['ib','installs_before'],['ia','installs_after'],['cb','cohorts_before'],['ca','cohorts_after']],
+  sessions:[['ac','adj_change']],time:[['ac','adj_change']],
+  arpdau:[['ij','imp_adj'],['ic','imp_change'],['ec','ecpm_change'],['it','imp_after'],['ie','imp_expected'],['nb','newshare_before'],['na','newshare_after']],
+  uninstall_d0:[]};
+ANY_EXTRA.new_d7=ANY_EXTRA.new_d30=ANY_EXTRA.new_d1;
+// a row's basis when the file leaves it out: D1 / D7 / D30 / install day "rate"; returning DAU "expected"; sessions /
+// time / ad revenue "expected" at 7 days, "plain" at 14 / 30 / 60
+const anyBasis=(k,N)=>{ const u=UNI_IMP_UNIT[k]; return u==='pct'?'rate':((u==='users'||N===7)?'expected':'plain'); };
+// an app's file + a date → {date, same: [updates released ON it], "7" / "14" / "30" / "60": window} — every window the
+// shape of an update block's by_window[N] (engine.impact_any.decode); null outside the file's dates
+function anyDecode(F,iso){
+  if(!F||!F.n||!F.first||typeof iso!=='string'||!ANY_DAY_RE.test(iso)||!Array.isArray(F.rows)) return null;
+  const D=864e5, t=s=>Date.parse(s+'T00:00:00Z'), i=Math.round((t(iso)-t(F.first))/D);
+  if(!(i>=0&&i<F.n)) return null;
+  const day=o=>o==null?null:new Date(t(iso)+o*D).toISOString().slice(0,10), U=F.updates||[], T=F.text||[], ST=F.status||[];
+  const out={date:iso,same:(((F.u||[])[i])||[]).map(k=>U[k])};
+  for(const N of F.windows||[]){
+    const W=(F.w||{})[String(N)]; if(!W||typeof W!=='object') continue;
+    const g=f=>W[f]?W[f][i]:null, lv=g('lv');
+    if(lv==null) continue;                                         // (that window failed on this date: left out)
+    const keys=N>=30?F.rows:F.rows.slice(0,7), ae=g('ae')==null?N:g('ae'), ns=g('ns')||0, rows={};
+    keys.forEach((k,j)=>{
+      const C=(W.r||[])[j]||{}, h=f=>C[f]?C[f][i]:null, s=h('s'), st=ST[s==null?ST.indexOf('na'):s], u=UNI_IMP_UNIT[k], ex={};
+      (ANY_EXTRA[k]||[]).forEach(([sh,name])=>{ ex[name]=h('x'+sh); });
+      if(k==='returning_dau'){ ex.mode=h('xraw')?'raw':'cohort'; if(ex.imputed_share==null) ex.imputed_share=0; }
+      const o=(f,d)=>h(f)!=null?h(f):d;
+      rows[k]={status:st,raw_status:st,unit:u,change_unit:u==='pct'?'pp':'rel',before:h('b'),after:h('a'),
+        expected:h('x'),after_prov:h('p'),change:h('c'),need:h('q'),z:null,noise:null,
+        reason:h('r')==null?null:T[h('r')],ready_on:day(h('ro')),basis:h('bs')!=null?F.basis[h('bs')]:anyBasis(k,N),
+        est:!!h('e'),prov:!!h('pv'),n_before:h('nb')||0,n_after:h('na')||0,
+        from_b:day(o('fb',-N)),to_b:day(o('tb',-1)),from_a:day(o('fa',1)),to_a:day(o('ta',ae)),sp:h('sp'),extra:ex}; });
+    const fin=!!g('f'), nt=g('nt')||0, L=x=>(x||[]).map(k=>U[k]);
+    const vd={level:F.levels[lv],early:!fin,final:fin,why:g('w')==null?'':T[g('w')],
+      worse:keys.filter(k=>rows[k].status==='worse'),better:keys.filter(k=>rows[k].status==='better'),
+      pending:keys.filter(k=>rows[k].status==='pending'),ready_on:day(g('ro')),settled_days:ns,min_days:3};
+    const w={n:N,state:g('st')==null?null:F.states[g('st')],before:{from:day(-N),to:day(-1),days:N},
+      after:{from:day(1),to:day(ae),days:ae,settled:ns,settled_till:ns?day(ns):null},verdict:vd,
+      notes:(F.notes||[]).filter((_,b)=>(nt>>b)&1),mixed:L(g('mx')),mixed_before:L(g('mb')),
+      overlap_before:g('ov')==null?null:U[g('ov')],cut_by:g('cb')==null?null:U[g('cb')],rows};
+    if(N!==7) Object.assign(vd,{n:N,state:w.state,mixed:w.mixed.length>0});
+    out[String(N)]=w; }
+  return out; }
+// a decoded date → an update block's shape (what uniImpBlock reads of an update): 7 days at the top level (its After
+// cut_by under windows.after, as an update's), 14 / 30 / 60 in by_window; no version, adoption or alert. The ad revenue
+// row says the file's currency (an update's row carries it). A row's own day span: the file only keeps one that differs
+// from the window's, so a side with no number (no install days yet — the engine's span is empty there) gets none back
+function anyBlock(F,D){
+  const cur=F&&F.currency, fix=W=>{ Object.values((W&&W.rows)||{}).forEach(r=>{ if(!r||typeof r!=='object') return;
+      if(r.before==null) r.from_b=r.to_b=null; if(r.after==null&&r.after_prov==null) r.from_a=r.to_a=null; });
+    const r=W&&W.rows&&W.rows.arpdau; if(r&&r.extra&&cur&&r.extra.currency==null) r.extra.currency=cur; return W; };
+  const W7=D['7']?fix(D['7']):null, b={key:'any@'+D.date,rel_keys:[],kind:'custom',versions:[],label:'',date:D.date,adoption:null,
+    versions_cmp:null,alert_id:null,late:null,default_window:7,windows:{},rows:{},verdict:{},notes:[]};
+  if(W7) Object.assign(b,{windows:{before:W7.before,after:Object.assign({},W7.after,{cut_by:W7.cut_by||null}),overlap_before:W7.overlap_before||null},
+    rows:W7.rows,verdict:W7.verdict,notes:W7.notes});
+  const bw={}; [14,30,60].forEach(n=>{ if(D[String(n)]) bw[String(n)]=fix(D[String(n)]); });
+  if(Object.keys(bw).length) b.by_window=bw;
+  return b; }
+// ---- state + the lazy loads (one request each at a time; an error is remembered until "Try again") ----
+let UANY={idx:null,idxErr:'',F:{},FE:{},app:'',date:'',win:7,name:'',star:false,msg:'',mc:'',saving:false,
+  marks:null,marksErr:'',me:'',admin:false,all:{date:'',win:7,run:false,tok:0,done:0,total:0,rows:null,rdate:'',rwin:7,loaded:false,err:''}};
+const UANYP={idx:null,F:{},marks:null};
+function anyEntry(id){ const A=(UANY.idx&&Array.isArray(UANY.idx.apps))?UANY.idx.apps:[]; return A.find(x=>x&&x.app_id===id)||null; }
+// an app the index does not list: one with GA4 data was not built this time (the next refresh builds it) — else no GA4
+function anyNoFile(ga4){ return ga4?ANY_TXT.pending:ANY_TXT.noga4; }
+function anyIdxP(){ if(UANY.idx) return Promise.resolve(UANY.idx); if(UANYP.idx) return UANYP.idx;
+  UANY.idxErr='';
+  return UANYP.idx=fetchGzJson('impact_any_index.json.gz?t='+Date.now()).then(j=>{
+      if(!j||typeof j!=='object'||j.v!==1||j.file_v!==1||!Array.isArray(j.apps)) throw new Error('format');
+      UANY.idx=j; return j; })
+    .catch(e=>{ const m=String((e&&e.message)||''); UANY.idxErr=(m==='http 404'||m==='format')?'missing':'net'; return null; })
+    .then(r=>{ UANYP.idx=null; return r; }); }
+function anyFileP(id){ if(UANY.F[id]) return Promise.resolve(UANY.F[id]); if(UANYP.F[id]) return UANYP.F[id];
+  const e=anyEntry(id); if(!e||!e.file||e.pending||!ANY_FILE_RE.test(String(e.file))) return Promise.resolve(null);
+  delete UANY.FE[id];
+  return UANYP.F[id]=fetchGzJson(e.file+'?s='+encodeURIComponent(String(e.sig||''))).then(j=>{
+      if(!j||typeof j!=='object'||j.v!==1||j.app_id!==id||!j.w||typeof j.w!=='object') throw new Error('format');
+      UANY.F[id]=j; return j; })
+    .catch(()=>{ UANY.FE[id]=true; return null; })
+    .then(r=>{ delete UANYP.F[id]; return r; }); }
+// /api/marks (the dashboard Worker: Access login, same-origin JSON) → {ok, status, data, msg}; never throws
+async function anyApi(method,path,body){ let ctl=null, tm=null;
+  try{ if(typeof AbortController!=='undefined'){ ctl=new AbortController(); tm=setTimeout(()=>{ try{ ctl.abort(); }catch(e){} },15000); }
+    const r=await fetch('/api/marks'+path,{method,credentials:'same-origin',redirect:'manual',cache:'no-store',
+      headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:ctl?ctl.signal:undefined});
+    if(r.type==='opaqueredirect'||r.status===401) return {ok:false,status:401,msg:'Login zaroori — page reload karo'};
+    let j=null; try{ j=await r.json(); }catch(e){ j=null; }
+    if(!j||typeof j!=='object') return {ok:false,status:r.status,msg:r.status===404?'Saved dates ka server abhi nahi laga':'Server se sahi jawab nahi aaya'};
+    if(!r.ok||j.ok===false) return {ok:false,status:r.status,msg:String(j.msg||'Server me dikkat — thodi der baad try karo'),data:j};
+    return {ok:true,status:r.status,data:j}; }
+  catch(e){ return {ok:false,status:0,msg:(e&&e.name==='AbortError')?'Server ne jawab nahi diya':'Server se jud nahi paaye'}; }
+  finally{ if(tm) clearTimeout(tm); } }
+function anyMarkOk(m){ return !!(m&&typeof m==='object'&&Number.isSafeInteger(m.id)&&typeof m.app_id==='string'&&typeof m.date==='string'&&ANY_DAY_RE.test(m.date)&&typeof m.name==='string'&&m.name); }
+function anyMarksSet(L){ UANY.marks=(Array.isArray(L)?L:[]).filter(anyMarkOk); UANY.marksErr=''; }
+function anyMarksP(){ if(UANYP.marks) return UANYP.marks;
+  return UANYP.marks=anyApi('GET','',null).then(r=>{
+      if(r.ok&&r.data&&Array.isArray(r.data.marks)){ anyMarksSet(r.data.marks); UANY.me=String(r.data.me||''); UANY.admin=r.data.admin===true; }
+      else UANY.marksErr=r.msg||'Server se jud nahi paaye';
+      UANYP.marks=null; return UANY.marks; }); }
+// what this screen needs, started once each (an answer re-draws the tab); app = the app page's app (its file)
+function anyKick(app){ const rr=()=>{ try{ uniRerender(); }catch(e){} };
+  if(!UANY.idx&&!UANY.idxErr&&!UANYP.idx) anyIdxP().then(rr);
+  if(UANY.marks===null&&!UANY.marksErr&&!UANYP.marks) anyMarksP().then(rr);
+  if(app&&UANY.idx&&!UANY.F[app]&&!UANY.FE[app]&&!UANYP.F[app]){ const e=anyEntry(app); if(e&&e.file&&!e.pending) anyFileP(app).then(rr); } }
+// a name as the API stores it (NFC, trimmed, 1–80 characters, no control / bidi character) — or null
+const ANY_BAD=new RegExp('['+[[0,31],[127,159],[1564,1564],[8206,8207],[8234,8238],[8294,8297]].map(([x,y])=>String.fromCharCode(x)+(y>x?'-'+String.fromCharCode(y):'')).join('')+']');
+function anyNameOk(v){ if(typeof v!=='string') return null; const s=v.normalize('NFC').trim(), n=[...s].length; return (n>=1&&n<=80&&!ANY_BAD.test(s))?s:null; }
+function anyMarksFor(id){ return (UANY.marks||[]).filter(m=>m.app_id===id||m.app_id==='*').sort((p,q)=>p.date<q.date?1:(p.date>q.date?-1:p.id-q.id)); }
+// ---- the app page: "📅 Apni date se tulna karo" at the top of 📦 Update impact ----
+function uniAnyBox(a){ try{ return uniAnyBox_(a); }catch(e){ return '<div class="uni-any" id="uni-any"><div class="uni-any-note faint">⚠️ Apni date wali tulna abhi dikh nahi payi.</div></div>'; } }
+function uniAnyBox_(a){
+  const id=a&&a.app_id; if(!id) return '';
+  if(UANY.app!==id) Object.assign(UANY,{app:id,date:'',name:'',star:false,msg:'',mc:''});
+  anyKick(id);
+  const title='<div class="uni-any-t">📅 Apni date se tulna karo <span class="faint">koi bhi din chuno (jaise ad placement badla, notification shuru) — uske pehle vs baad, update ke card jaisa</span></div>';
+  const wrap=h=>`<div class="uni-any" id="uni-any">${title}${h}</div>`, retry='<span class="lnk" onclick="uniAnyRetry()">Try again</span>';
+  if(!UANY.idx) return wrap(`<div class="uni-any-note${UANY.idxErr?'':' faint'}">${UANY.idxErr==='net'?ANY_TXT.net+' — '+retry:(UANY.idxErr?ANY_TXT.pending:ANY_TXT.load)}</div>`);
+  const e=anyEntry(id);
+  if(!e) return wrap(`<div class="uni-any-note">${anyNoFile(!!a.data_till)}</div>`);
+  if(e.pending||!e.file) return wrap(`<div class="uni-any-note">${ANY_TXT.pending}</div>`);
+  if(!e.first||!e.last) return wrap('<div class="uni-any-note">⏳ Abhi jaldi — is app ka itna data nahi ki kisi date ki tulna ho</div>');
+  const F=UANY.F[id], d=ANY_DAY_RE.test(UANY.date)?UANY.date:'', D=(F&&d)?anyDecode(F,d):null, N=UANY.win;
+  const can=!!(d&&anyNameOk(UANY.name)&&!UANY.saving);
+  const inp=`<div class="uni-any-in"><label class="uni-any-l">Date <input type="date" id="uni-any-d" min="${hAttr(e.first)}" max="${hAttr(e.last)}" value="${d}" onchange="uniAnyPick(this.value)"></label>`
+    +`<span class="uni-any-l">Before / after: ${uniImpSeg(N,'on',n=>`uniAnyWin(${n})`,D?(n=>!!D[String(n)]):null)}</span>`
+    +`<input type="text" id="uni-any-nm" maxlength="80" placeholder="Name (optional) — e.g. Banner ad hataya" aria-label="Name" value="${hAttr(UANY.name)}" oninput="uniAnyName(this.value)">`
+    +`<label class="uni-any-l" title="Har app ke card pe ye date dikhegi"><input type="checkbox" id="uni-any-star"${UANY.star?' checked':''} onchange="uniAnyStar(this.checked)"> All apps</label>`
+    +`<button class="uni-any-btn" id="uni-any-sv"${can?'':' disabled'} title="Team ke saath save — date aur naam zaroori" onclick="uniAnySave()">💾 Save</button>`
+    +`<span class="uni-any-msg${UANY.mc?' '+UANY.mc:''}" id="uni-any-msg">${hAttr(UANY.msg)}</span></div>`;
+  const span=`<div class="uni-any-note faint">Dates ${uniSpan(e.first,e.last)} · GA4 data ${uniD((F&&F.data_till)||e.data_till)} tak</div>`;
+  const old=e.fresh===false?`<div class="uni-any-note">⚠️ Ye tulna ${uniD((F&&F.data_till)||e.data_till)} tak ke GA4 data se bani hai — naya data agle refresh me</div>`:'';
+  let res;
+  if(!d) res=`<div class="uni-any-note faint">Date chuno — tulna turant dikhegi</div>`;
+  else if(!F) res=`<div class="uni-any-note${UANY.FE[id]?'':' faint'}">${UANY.FE[id]?ANY_TXT.net+' — '+retry:ANY_TXT.load}</div>`;
+  else if(!D) res=`<div class="uni-any-note">Ye date tulna ki range ke bahar hai — ${uniSpan(F.first,F.last)} me se chuno</div>`;
+  else res=uniAnyResult(a,F,D,N);
+  return wrap(inp+span+old+uniAnyMarksHtml(id)+res); }
+// an update by its label: "v2.3 update" · "App update" (a label that already says "update" is not said twice)
+function anyUpdW(u){ const l=String((u&&u.label)||'App update'); return hAttr(l)+(/update$/i.test(l)?'':' update'); }
+// the chosen date's comparison: the honest notes first (⏳ when it completes, an update released that day, the real updates
+// inside the windows), then the update blocks' own block
+function uniAnyResult(a,F,D,N0){
+  const N=D[String(N0)]?N0:[7,14,30,60].find(n=>D[String(n)]);
+  if(!N) return '<div class="uni-any-note">Is date ki tulna nahi ban payi — agle refresh me try hoga</div>';
+  const W=D[String(N)], v=W.verdict||{}, nm=String(UANY.name||'').trim(), notes=[];
+  const title=`📌 Aapki date: <span id="uni-any-nmt">${hAttr(nm||'Bina naam')}</span> — ${uniD(D.date)}`;
+  if(N!==N0) notes.push(`${N0}-din tulna is date ki nahi bani — ${N} din dikha rahe`);
+  // ⏳ when it completes: the day the GA4 data it needs is here (its ready_on + GA4's lag — the rows' "ready ~" day)
+  if(uniLvl(v.level)==='pending'&&v.ready_on&&!uniNever(v)) notes.push(`<b title="${hAttr('GA4 ka data '+uniD(v.ready_on)+' tak aane par poora — data ~'+uniLag()+' din der se aata hai')}">⏳ Abhi jaldi — ${uniD(uniAdd(v.ready_on,uniLag()))} ko poora hoga</b>`);
+  // an update released ON this date: its own card (with its version and adoption) is below in this card
+  (D.same||[]).forEach(u=>{ if(!u) return; const f=u.key?uniImpFind(a,u.key):null, af=f&&f.b&&f.b.windows&&f.b.windows.after&&f.b.windows.after.from;
+    const lnk=f?` — <span class="lnk" onclick="uniImp('${uniQ(u.key)}')">uska apna card dekho →</span>`:'';
+    const sh=af&&af!==uniAdd(D.date,1)?` <span class="faint">(us card ka After ${uniD(af)} se — jab aadhe users naye version pe the; isliye number thode alag)</span>`:'';
+    notes.push(`📦 Isi din ${anyUpdW(u)} aaya${lnk}${sh}`); });
+  // the app's real updates inside the windows — the engine's own (7 days: cut / overlap; 14 / 30 / 60: mixed)
+  const upd=u=>`${anyUpdW(u)} aaya${u&&u.date?' ('+uniD(u.date)+')':''}`;
+  if(N===7){ if(W.cut_by) notes.push(`Beech me ${upd(W.cut_by)} — After yahin tak (${W.after.days} din)`);
+    if(W.overlap_before) notes.push(`Before ke din me ${upd(W.overlap_before)} — Before me uska asar bhi`); }
+  else { (W.mixed||[]).forEach(u=>notes.push(`Beech me ${upd(u)} — farak dono ka mila-jula ho sakta hai`));
+    (W.mixed_before||[]).forEach(u=>notes.push(`Before ke ${N} din me ${upd(u)}`)); }
+  const blk=uniImpBlock(a,anyBlock(F,D),true,'uni',{n:N,title,go:n=>`uniAnyWin(${n})`});
+  return `<div class="uni-any-res" data-date="${D.date}" data-n="${N}">${notes.map(x=>`<div class="uni-any-note">${x}</div>`).join('')}${blk}</div>`; }
+// 📌 Saved dates of this app (and the "*" ones: every app); a tap re-opens that comparison
+function uniAnyMarksHtml(id){ const lb='<span class="uni-any-ml">📌 Saved dates:</span>';
+  if(UANY.marks===null) return `<div class="uni-any-mks">${lb}<span class="faint">${UANY.marksErr?'abhi nahi mil paye ('+hAttr(UANY.marksErr)+') — tulna phir bhi chalegi':'⏳'}</span></div>`;
+  const L=anyMarksFor(id);
+  if(!L.length) return `<div class="uni-any-mks">${lb}<span class="faint">abhi koi nahi — date chuno, naam likho, 💾 Save</span></div>`;
+  const nm=String(UANY.name||'').trim();
+  return `<div class="uni-any-mks">${lb}${L.map(m=>{ const on=m.date===UANY.date&&m.name===nm, mine=UANY.admin||(!!UANY.me&&m.who===UANY.me);
+    const tip='Save kiya: '+String(m.who||'').split('@')[0]+(m.at?' · '+smpIst(m.at):'')+(m.app_id==='*'?' · sab apps ke liye':'');
+    return `<span class="uni-any-mk${on?' on':''}" data-mk="${m.id}" title="${hAttr(tip)}" onclick="uniAnyMk(${m.id})">📌 ${hAttr(m.name)} · ${uniD(m.date)}${m.app_id==='*'?' · all apps':''}</span>`
+      +(mine?`<span class="uni-any-x" data-del="${m.id}" title="Hatao" onclick="uniAnyDel(${m.id})">×</span>`:''); }).join('')}</div>`; }
+// ---- the app page's handlers ----
+function uniAnyRetry(){ UANY.idxErr=''; if(UANY.app) delete UANY.FE[UANY.app]; UANY.all.err=''; uniRerender(); }
+// a date typed digit by digit passes through years like 0002 — only a date inside the input's range re-draws; the input
+// keeps its focus after the re-draw
+function anyInRange(v,id){ const el=document.getElementById(id), mn=el&&typeof el.min==='string'?el.min:'', mx=el&&typeof el.max==='string'?el.max:'';
+  return ANY_DAY_RE.test(v)&&(!mn||v>=mn)&&(!mx||v<=mx); }
+function anyRefocus(id){ try{ const a=document.activeElement; return a&&a.id===id?()=>{ const e=document.getElementById(id); if(e&&e.focus) e.focus(); }:()=>{}; }catch(e){ return ()=>{}; } }
+function uniAnyPick(v){ v=String(v||''); if(v&&!anyInRange(v,'uni-any-d')) return; const f=anyRefocus('uni-any-d');
+  UANY.date=ANY_DAY_RE.test(v)?v:''; UANY.msg=''; UANY.mc=''; uniRerender(); f(); }
+function uniAnyWin(n){ n=+n; if(!ANY_WINS.includes(n)) return; UANY.win=n; uniRerender(); }
+function uniAnyStar(on){ UANY.star=!!on; }
+function uniAnyMk(mid){ const m=(UANY.marks||[]).find(x=>x.id===mid); if(!m) return; Object.assign(UANY,{date:m.date,name:m.name,star:m.app_id==='*',msg:'',mc:''}); uniRerender(); }
+function anyMsg(t,c){ UANY.msg=t; UANY.mc=c||''; try{ const m=document.getElementById('uni-any-msg'); if(m){ m.textContent=t; m.className='uni-any-msg'+(c?' '+c:''); } }catch(e){} }
+// typing the name never re-draws the tab (the box keeps its focus): the title and the 💾 button follow it
+function uniAnyName(v){ UANY.name=String(v==null?'':v); anyMsg('','');
+  try{ const t=document.getElementById('uni-any-nmt'); if(t) t.textContent=UANY.name.trim()||'Bina naam';
+    const b=document.getElementById('uni-any-sv'); if(b) b.disabled=!(UANY.date&&anyNameOk(UANY.name)&&!UANY.saving); }catch(e){} }
+// 💾 Save: confirmed only when the API says ok; any failure says why (the comparison above keeps working)
+async function uniAnySave(){ const id=UANY.app, d=UANY.date, el=document.getElementById('uni-any-nm');
+  const nm=anyNameOk((el&&typeof el.value==='string')?el.value:UANY.name);
+  if(!id||!ANY_DAY_RE.test(String(d||''))){ anyMsg('Pehle date chuno','err'); return false; }
+  if(!nm){ anyMsg('Naam likho (1–80 akshar) — tabhi save hoga','err'); return false; }
+  if(UANY.saving) return false;
+  UANY.saving=true; UANY.name=nm; anyMsg('⏳ Save ho raha hai…','');
+  const r=await anyApi('POST','',{app_id:UANY.star?'*':id,date:d,name:nm});
+  UANY.saving=false;
+  const ok=!!(r.ok&&r.data&&r.data.ok===true&&anyMarkOk(r.data.mark));
+  if(ok){ anyMarksSet(Array.isArray(r.data.marks)?r.data.marks:(UANY.marks||[]).filter(m=>m.id!==r.data.mark.id).concat([r.data.mark]));
+    anyMsg(r.data.dup?'✅ Ye date pehle se saved hai':'✅ Saved — team ko bhi dikhega','ok'); }
+  else anyMsg('❌ Save nahi hua — '+String(r.msg||'server me dikkat').replace(/[.]+$/,'')+(r.status?' (HTTP '+r.status+')':'')+'. Tulna upar chal rahi hai.','err');
+  uniRerender(); return ok; }
+async function uniAnyDel(mid){ const m=(UANY.marks||[]).find(x=>x.id===mid); if(!m) return false;
+  if(typeof confirm==='function'&&!confirm('📌 "'+m.name+'" ('+uniD(m.date)+') hataye? Team ke liye bhi hat jayega.')) return false;
+  const r=await anyApi('POST','/delete',{id:mid});
+  const ok=!!(r.ok&&r.data&&r.data.ok===true);
+  if(ok){ anyMarksSet(Array.isArray(r.data.marks)?r.data.marks:(UANY.marks||[]).filter(x=>x.id!==mid)); anyMsg('✅ Hata diya','ok'); }
+  else anyMsg('❌ Hata nahi paaye — '+String(r.msg||'server me dikkat').replace(/[.]+$/,'')+(r.status?' (HTTP '+r.status+')':''),'err');
+  uniRerender(); return ok; }
+// from the All-apps tool: that app's page, its card at that date and window (a saved date of that day: its name)
+function uniAnyGo(id,d,N){ Object.assign(UANY,{app:id,date:ANY_DAY_RE.test(String(d||''))?d:'',win:ANY_WINS.includes(+N)?+N:7,name:'',star:false,msg:'',mc:''});
+  const m=anyMarksFor(id).find(x=>x.date===UANY.date); if(m){ UANY.name=m.name; UANY.star=m.app_id==='*'; }
+  show('uninstall'); uniOpen(id,true); try{ setTimeout(()=>uniJump('uni-any'),80); }catch(e){} }
+// ---- All apps: "📅 Ek date, sab apps" — one date, every app's card at once (each app's file loaded on "Show") ----
+const ANY_SW={halt:'bigda',hold:'dhyan',win:'behtar',continue:'normal',pending:'jaldi'};   // verdict → status word (smpUniRow's rule)
+const ANY_RANK={bigda:0,dhyan:1,normal:2,behtar:3,jaldi:4,lagu:5};                       // worst first
+function anyAllApps(){ const U=DATA&&DATA.uninstall, L=((U&&U.apps)||[]).filter(x=>x&&x.app_id&&uniVis(x.app_id)).map(x=>({app_id:x.app_id,app:x.app,data_till:x.data_till||null}));
+  const seen=new Set(L.map(x=>x.app_id));
+  ((UNI&&UNI.no_ga4)||[]).forEach(x=>{ if(x&&x.app_id&&!seen.has(x.app_id)&&uniVis(x.app_id)){ seen.add(x.app_id); L.push({app_id:x.app_id,app:x.app,noga4:true}); } });
+  return L; }
+// one app at date d, window N: its status word, verdict and headline row (the first worse row, else the first better, else
+// Purane users (roz)) — Before → After and the change it was judged on; why = the reason when there is nothing to judge
+function anyAllRow(x,d,N){ const id=x.app_id, o={id,app:x.app,sw:'lagu',lv:null,v:null,why:'',hl:'',hc:0,nw:0,same:[]};
+  const e=x.noga4?null:anyEntry(id);
+  if(!e){ o.why=anyNoFile(!x.noga4&&!!x.data_till); return o; }
+  if(e.pending||!e.file){ o.why=ANY_TXT.pending; return o; }
+  const F=UANY.F[id]; if(!F){ o.why=UANY.FE[id]?'File load nahi hui — Show dobara dabao':ANY_TXT.load; return o; }
+  const D=anyDecode(F,d);
+  if(!D){ o.why=(F.first&&d<F.first)?`Is date ki tulna nahi — app ki pehli date ${uniD(F.first)}`:`Is date ki tulna abhi nahi — data ${uniD(F.data_till)} tak`; return o; }
+  o.same=(D.same||[]).filter(Boolean);
+  const W=D[String(N)]; if(!W){ o.why=`${N}-din tulna is date ki nahi bani`; return o; }
+  const v=W.verdict||{}, lv=uniLvl(v.level);
+  o.v=v; o.lv=lv; o.nw=(v.worse||[]).length; o.sw=uniNever(v)?'lagu':(ANY_SW[lv]||'jaldi');
+  if(o.sw==='lagu') o.why=String(v.why||'Agla update bahut jaldi aaya — is date ka alag faisla nahi');
+  const k=(v.worse||[])[0]||(v.better||[])[0]||'returning_dau', R=(W.rows||{})[k];
+  if(lv==='pending'&&v.ready_on&&o.sw!=='lagu') o.why=`⏳ ${uniD(uniAdd(v.ready_on,uniLag()))} ko poora hoga`;
+  if(R&&typeof R==='object'){ const V=uniImpVals(R,k), b=V.f(R.before), af=V.f(R.after), ap=V.f(R.after_prov);
+    const ch=V.judged?uniImpJudged(R,k,uniImpBasis(R,k),V).t:(V.ch!=null?V.ch+' vs before':null);
+    if(b!=null||af!=null||ap!=null) o.hl=`${uniImpShort(k)}: ${b!=null?b:'—'} → ${af!=null?af:(ap!=null?ap+' ⏳':'—')}${ch?' · '+ch:''}`;
+    const x=R.extra||{}, j=V.judged?(k==='arpdau'?x.imp_adj:((k==='sessions'||k==='time')&&x.adj_change!=null?x.adj_change:R.change)):null;
+    o.hc=(j!=null&&isFinite(+j))?(V.pp?(+R.before>0?+j/100/+R.before:0):+j):0; }
+  return o; }
+// worst first: the status word, then more worse rows, then the bigger fall, then the app's name
+function anyAllSort(L){ return L.slice().sort((p,q)=>(ANY_RANK[p.sw]-ANY_RANK[q.sw])||(q.nw-p.nw)||(p.hc-q.hc)||String(smpName(p.id,p.app)).localeCompare(String(smpName(q.id,q.app)))); }
+function anyMarksOn(id,d){ return (UANY.marks||[]).filter(m=>m.date===d&&(m.app_id===id||m.app_id==='*')); }
+function uniAnyAllCard(){ try{ return uniAnyAllCard_(); }catch(e){ return '<div class="card faint" id="uni-anyall" style="margin-bottom:14px;font-size:12.5px">⚠️ 📅 Ek date, sab apps — ye hissa abhi dikh nahi paya.</div>'; } }
+function uniAnyAllCard_(){
+  anyKick(null);
+  const A=UANY.all, idx=UANY.idx, IA=(idx&&Array.isArray(idx.apps))?idx.apps.filter(x=>x&&x.first&&x.last):[];
+  const lo=IA.map(x=>x.first).sort()[0]||'', hi=IA.map(x=>x.last).sort().pop()||'';
+  const hd='<div class="ct uni-ct"><h3>📅 Ek date, sab apps</h3><span class="faint" style="font-size:11.5px">Har app alag · ek date ke pehle vs baad · row pe tap = us app ka poora card</span></div>';
+  const wrap=h=>`<div class="card" id="uni-anyall" style="margin-bottom:14px">${hd}${h}</div>`;
+  if(UANY.idxErr) return wrap(`<div class="uni-any-note">${UANY.idxErr==='net'?ANY_TXT.net+' — <span class="lnk" onclick="uniAnyRetry()">Try again</span>':'Tulna abhi nahi ban payi — agle refresh me try hoga'}</div>`);
+  const inp=`<div class="uni-any-in"><label class="uni-any-l">Date <input type="date" id="uni-anyall-d"${lo?` min="${hAttr(lo)}"`:''}${hi?` max="${hAttr(hi)}"`:''} value="${ANY_DAY_RE.test(A.date)?A.date:''}" onchange="uniAnyAllDate(this.value)"></label>`
+    +`<span class="uni-any-l">Before / after: ${uniImpSeg(A.win,'on',n=>`uniAnyAllWin(${n})`)}</span>`
+    +`<button class="uni-any-btn" id="uni-anyall-go"${A.run?' disabled':''} onclick="uniAnyAllRun()">${A.run?'⏳ Loading…':'Show'}</button></div>`;
+  const pg=A.run?`<div class="uni-any-note faint" id="uni-anyall-pg">⏳ ${A.done} / ${A.total} apps load hue…</div>`:'';
+  const err=A.err?`<div class="uni-any-note">${hAttr(A.err)}</div>`:'';
+  let body='';
+  if(A.rows&&ANY_DAY_RE.test(A.rdate)){ const d=A.rdate, N=A.rwin, L=anyAllSort(A.rows.map(x=>anyAllRow(x,d,N)));
+    const cnt={}; L.forEach(o=>{ cnt[o.sw]=(cnt[o.sw]||0)+1; });
+    const sum=Object.keys(ANY_RANK).filter(k=>cnt[k]).map(k=>`${SMP_WORD[k]} (${cnt[k]})`).join(' · ');
+    const row=o=>{ const mk=anyMarksOn(o.id,d), vc=(o.lv&&o.lv!=='pending'&&o.sw!=='lagu')?uniVerdChip(o.v,'uni'):'';
+      return `<div class="uni-anyr" data-sw="${o.sw}" data-app="${hAttr(o.id)}" onclick="uniAnyGo('${uniQ(o.id)}','${d}',${N})"><span class="ap">${smpAppHtml(o.id,o.app)}</span>`
+        +`<span class="pill ${SMP_WCLS[o.sw]}" data-st="${o.sw}">${SMP_WORD[o.sw]}</span>${vc}`
+        +(o.hl?`<span class="hl">${hAttr(o.hl)}</span>`:'')+(o.why?`<span class="faint">${hAttr(o.why)}</span>`:'')
+        +(o.same.length?`<span class="faint" title="Isi din update aaya — us app ke card me uska apna block bhi">📦 ${hAttr(o.same.map(u=>u.label||'App update').join(', '))}</span>`:'')
+        +(mk.length?`<span class="uni-any-pin" title="${hAttr(mk.map(m=>'📌 '+m.name).join(' · '))}">📌</span>`:'')+'<span class="lnk go">›</span></div>'; };
+    body=`<div class="uni-any-note faint" id="uni-anyall-sum">${uniD(d)} · ${N} din pehle vs ${N} din baad · ${sum}</div><div id="uni-anyall-list">${L.map(row).join('')}</div>`; }
+  else if(!A.run) body='<div class="uni-any-note faint">Date chuno aur Show dabao — har app ki file ek baar load hogi, phir date / window badalna turant</div>';
+  return wrap(inp+uniAnyAllMarks()+pg+err+body); }
+// 📌 the team's saved dates (one chip per date + name, newest first): a tap picks that date
+function uniAnyAllMarks(){ const L=[], seen=new Set(), A=UANY.all;
+  (UANY.marks||[]).slice().sort((p,q)=>p.date<q.date?1:(p.date>q.date?-1:p.id-q.id)).forEach(m=>{ const k=m.date+'|'+m.name; if(!seen.has(k)){ seen.add(k); L.push(m); } });
+  if(!L.length) return '';
+  return `<div class="uni-any-mks"><span class="uni-any-ml">📌 Saved dates:</span>${L.map(m=>`<span class="uni-any-mk${A.date===m.date?' on':''}" data-mk="${m.id}" title="${hAttr(m.app_id==='*'?'Sab apps':smpName(m.app_id,''))}" onclick="uniAnyAllPick('${m.date}')">📌 ${uniD(m.date)} · ${hAttr(m.name)}</span>`).join('')}</div>`; }
+function anyAllProgress(){ const A=UANY.all; try{ const p=document.getElementById('uni-anyall-pg'); if(p) p.textContent=`⏳ ${A.done} / ${A.total} apps load hue…`; }catch(e){} }
+// "Show": every visible app's file (4 at a time, the loaded ones kept) → the table; a newer click wins
+async function uniAnyAllRun(){ const A=UANY.all, el=document.getElementById('uni-anyall-d'), v=(el&&typeof el.value==='string'&&el.value)?el.value:A.date;
+  if(!ANY_DAY_RE.test(String(v||''))){ A.err='Pehle date chuno'; uniRerender(); return false; }
+  const tok=++A.tok, apps=anyAllApps();
+  Object.assign(A,{date:v,err:'',run:true,done:0,total:apps.filter(x=>!x.noga4).length}); uniRerender();
+  await anyIdxP();
+  if(tok!==A.tok) return false;
+  if(!UANY.idx){ Object.assign(A,{run:false,err:UANY.idxErr==='net'?ANY_TXT.net:'Tulna abhi nahi ban payi — agle refresh me try hoga'}); uniRerender(); return false; }
+  const q=apps.filter(x=>!x.noga4).map(x=>x.app_id);
+  A.total=q.length;
+  const one=async()=>{ while(q.length){ const id=q.shift(), e=anyEntry(id); if(e&&e.file&&!e.pending&&!UANY.F[id]) await anyFileP(id); A.done++; anyAllProgress(); } };
+  await Promise.all([one(),one(),one(),one()]);
+  if(tok!==A.tok) return false;
+  Object.assign(A,{run:false,rows:apps,rdate:A.date,rwin:A.win,loaded:true}); uniRerender(); return true; }
+function uniAnyAllWin(n){ n=+n; if(!ANY_WINS.includes(n)) return; const A=UANY.all; A.win=n; if(A.rows) A.rwin=n; uniRerender(); }
+function uniAnyAllDate(v){ v=String(v||''); if(v&&!anyInRange(v,'uni-anyall-d')) return; const f=anyRefocus('uni-anyall-d'), A=UANY.all;
+  A.date=ANY_DAY_RE.test(v)?v:''; A.err=''; if(A.loaded&&A.date) A.rdate=A.date; uniRerender(); f(); }
+function uniAnyAllPick(d){ const A=UANY.all; if(!ANY_DAY_RE.test(String(d||''))) return; A.date=d; A.err=''; if(A.loaded) A.rdate=d; uniRerender(); }
 // Alerts screen: uninstall cards, same look as the placement cards (read from DATA.uninstall — no lazy load)
 function uniAlertCards(list){
   const TT={rate_spike:'Uninstall rate spike',rate_drift:'Uninstall rate drift',rate_zero:'Zero uninstalls'};

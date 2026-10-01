@@ -9,12 +9,15 @@ The same Worker also saves the dashboard's **settings** (account names, app name
 Baseline approvals — `config/*.json` in the private repo) for admins, with its own GitHub token, so nobody has to keep
 a GitHub token in the browser any more (see [Settings saves](#settings-saves-apiconfig)).
 
+It also keeps the team's **📌 saved dates** of the Uninstall tab's "📅 Apni date se tulna karo" (compare any date: a
+date the team names, e.g. "Banner ad hataya", for one app or every app) — see [Saved dates](#saved-dates-apimarks).
+
 No runtime dependencies: WebCrypto, `fetch`, `DecompressionStream` and the D1 binding only.
 
 ```
 src/index.js   routing, validation, CSRF, response headers; everything that is not /api/* goes to the static site
 src/auth.js    Cloudflare Access JWT verification (fails closed)
-src/db.js      D1 schema (created automatically), every query and state rule
+src/db.js      D1 schema (created automatically), every query and state rule (the review and the 📌 saved dates)
 src/config.js  Settings saves: strict validation of the four config files, the GitHub contents-API write, the audit row
 schema.sql     the same DDL as db.js (documentation; a test keeps them equal)
 test/          node:test suites, a D1 fake over node:sqlite, test-only JWT helpers, devkeys.mjs (local e2e keys)
@@ -104,10 +107,11 @@ imports, so a missing module or export never reaches the Workers build); until t
 ## Database
 
 - **No manual migration:** the Worker creates its tables (`rv_meta`, `rv_state`, `rv_actions`, `rv_notes`,
-  `rv_flags`, `rv_snoozes`, `config_log`) on the first request of each isolate (`CREATE … IF NOT EXISTS`,
-  idempotent) and records `schema_version` (now 3). A new database gets the current DDL directly; an older one is
-  upgraded by `MIGRATIONS` in `db.js` (2: `rv_flags.dec_day` / `done_day`, the review day of a flag decision;
-  3: `config_log`, the audit of Settings saves).
+  `rv_flags`, `rv_snoozes`, `config_log`, `cmp_marks`, `cmp_marks_log`) on the first request of each isolate
+  (`CREATE … IF NOT EXISTS`, idempotent) and records `schema_version` (now 4). A new database gets the current DDL
+  directly; an older one is upgraded by `MIGRATIONS` in `db.js` (2: `rv_flags.dec_day` / `done_day`, the review day
+  of a flag decision; 3: `config_log`, the audit of Settings saves; 4: `cmp_marks` + `cmp_marks_log`, the 📌 saved
+  dates and their audit). Every migration only adds: the review and config data stay as they are.
 - `rv_actions` is append-only (the "who did what" history); every write adds its row in the same transaction.
 - **Backup / undo:** D1 Time Travel can restore the database to any minute of the last 30 days (Workers Paid;
   7 days on the Free plan) with `wrangler d1 time-travel restore <db> --timestamp=…`, run by the operator.
@@ -174,6 +178,27 @@ this API (404 on `/api/config/status`, or a network error).
   private config repo with **Contents: Read and write** only. The Worker never logs it and never returns it; a test
   checks every response and every console line.
 
+## Saved dates (`/api/marks`)
+
+The Uninstall tab's 📦 Update impact card compares any date the owner picks (the build precomputes every app × date).
+A date can be saved with a name, for that app or for every app (`"*"`), and the whole team sees it.
+
+| Method | Path | What |
+|---|---|---|
+| GET | `/api/marks` | `{marks: [{id, app_id, date, name, who, at}], me, admin}` — every live mark, newest date first |
+| POST | `/api/marks` | `{app_id, date, name}` → `{ok: true, mark, dup, marks}` — any logged-in user; the same app + date + name saved again (by anyone) is the same mark (`dup: true`, nothing written) |
+| POST | `/api/marks/delete` | `{id}` → `{ok: true, id, marks}` — its author or an admin (else `403`); gone already → `404` |
+
+- **Same rules as the Review API:** the Access JWT verified here (`401`), JSON + same-origin `Origin` (`415` / `403`),
+  ≤ 8 KiB bodies (`413`), no CORS headers.
+- **Validation** (`400` with `field` and a Hinglish `msg`): `app_id` = `ca-app-pub-<digits>~<digits>` or `"*"`;
+  `date` = a real calendar date of the last 400 days (IST, today included); `name` = 1–80 characters after NFC +
+  trim, with no control or bidi character (refused, never silently stripped). At most 2,000 live marks (`409`).
+- **Stored:** `cmp_marks` keeps who saved a mark and when; a delete only marks the row (`deleted_by`, `deleted_at`).
+  Every add / delete appends one row to the append-only `cmp_marks_log` in the same transaction.
+- The page works without this API (a static host, the Worker down): the comparison is drawn as usual, the 📌 list
+  says it could not be read and 💾 Save says why it failed.
+
 ## Tests
 
 ```bash
@@ -186,6 +211,8 @@ The tests run the real Worker entry against a D1 fake over `node:sqlite` and sig
 in the test (valid, expired, wrong `aud`/`iss`/`kid`, bad signature, `alg` confusion, missing header, …).
 `test/config.test.js` covers Settings saves against a fake GitHub (mocked `fetch`): admin only, CSRF, validation of
 each file, the sha retry on 409/422, the error mapping, the audit row, and that the token never leaks.
+`test/marks.test.js` covers the saved dates: auth, CSRF / body rules, validation, add / list / delete (author,
+another user, admin), `"*"` marks, concurrent saves / deletes, the audit rows and the v3 → v4 migration.
 `test/repo.test.js` also runs the robot's sync step — read straight from `.github/workflows/refresh.yml` — under
 `bash -eo pipefail` in seven states (folder missing, remote-only, syntax error, parses but does not link, no
 `package.json`, ok, no node) and

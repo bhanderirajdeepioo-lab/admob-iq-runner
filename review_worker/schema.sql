@@ -32,4 +32,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS rv_snoozes_one_live ON rv_snoozes(app, feature
 CREATE TABLE IF NOT EXISTS config_log (            -- append-only: every Settings save through /api/config/save
   id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT NOT NULL, at TEXT NOT NULL, file TEXT NOT NULL,
   bytes INTEGER NOT NULL, result TEXT NOT NULL, commit_sha TEXT);
-INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '3');
+CREATE TABLE IF NOT EXISTS cmp_marks (            -- 📌 saved dates of "compare any date" (app = an AdMob app id or '*')
+  id INTEGER PRIMARY KEY AUTOINCREMENT, app TEXT NOT NULL, date TEXT NOT NULL, name TEXT NOT NULL,
+  who TEXT NOT NULL, at TEXT NOT NULL, deleted_by TEXT, deleted_at TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS cmp_marks_one_live ON cmp_marks(app, date, name) WHERE deleted_at IS NULL;
+CREATE TABLE IF NOT EXISTS cmp_marks_log (        -- append-only: every add / delete of a saved date
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
+  act TEXT NOT NULL CHECK (act IN ('add','delete')), mark INTEGER NOT NULL,
+  app TEXT NOT NULL, date TEXT NOT NULL, name TEXT NOT NULL);
+INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '4');

@@ -436,9 +436,10 @@ EXTRA = {"returning_dau": (("rc", "raw_change", 3), ("is", "imputed_share", 3)),
          "uninstall_d0": ()}
 EXTRA["new_d7"] = EXTRA["new_d30"] = EXTRA["new_d1"]
 EXTRA["time"] = EXTRA["sessions"]
-# the decimals by unit (users whole; rates as a 0–1 share: 4 dp = 0.01 point) and by change unit
-VAL_DP = {"users": 0, "pct": 4, "num": 2, "sec": 0, "usd1k": 3}
-CHG_DP = {"rel": 3, "pp": 2}
+# the decimals by unit = the engine's own (impact.DP), so a chosen date's card shows exactly the numbers an update card
+# shows for the same date (one decimal less made ~3% of cells differ in the last digit); changes: rel 4 dp, points 2 dp
+VAL_DP = dict(I.DP)
+CHG_DP = {"rel": 4, "pp": 2}
 
 
 def _num(v, dp):

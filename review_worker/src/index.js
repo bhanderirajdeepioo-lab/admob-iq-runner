@@ -3,6 +3,8 @@
 //   /api/review/*   → this API (Access JWT verified here, then D1 binding REVIEW_DB)
 //   /api/config/*   → Settings saves (Access JWT, admins only; commits config/<file>.json with the GITHUB_TOKEN
 //                     secret — see config.js), audited in D1 (config_log)
+//   /api/marks      → 📌 saved dates of "compare any date" (Access JWT; GET all, POST add; /api/marks/delete: the
+//                     author or an admin) in D1 (cmp_marks, audited in cmp_marks_log — see db.js)
 //   other /api/*    → 404 JSON
 //   everything else → the static dashboard (env.ASSETS), exactly as without this Worker
 //
@@ -13,7 +15,7 @@
 import { ApiError, verifyAccess, isAdmin, _resetAuthForTests } from "./auth.js";
 import {
   FEATS, ensureSchema, getRev, getDayState, getAppView, getStates, getCalendar, applyAction, decideFlag,
-  _resetSchemaForTests,
+  _resetSchemaForTests, validateMark, validateDelete, listMarks, addMark, deleteMark,
 } from "./db.js";
 import { CFG_MSG, CONFIG_MAX_BYTES, serverSaveReady, githubConfig, validateSave, commitConfig, auditSave } from "./config.js";
 
@@ -23,6 +25,8 @@ const PREFIX = "/api/review/";
 const ROUTES = { me: "GET", day: "GET", calendar: "GET", action: "POST", decide: "POST" };
 const CONFIG_PREFIX = "/api/config/";
 const CONFIG_ROUTES = { status: "GET", save: "POST" };
+const MARKS_PATH = "/api/marks";
+const MARKS_ROUTES = { "": ["GET", "POST"], "/delete": ["POST"] };   // /api/marks · /api/marks/delete
 const MAX_BODY = 8192;
 const CONFIG_MAX_BODY = CONFIG_MAX_BYTES + 8192;   // {file, content}: the file (≤ 256 KiB as written) + the envelope
 const NOTE_MAX = 600;
@@ -461,11 +465,57 @@ async function configApi(request, env, url) {
   return CONFIG_HANDLERS[name]({ request, env, url, email, admin, body, now: new Date().toISOString() });
 }
 
+// ── 📌 saved dates (/api/marks; the rules live in db.js) ──────────────────────────────────────
+
+async function hMarksList(c) {
+  return json(200, { marks: await listMarks(c.db), me: c.email, admin: c.admin });
+}
+
+/** Any logged-in user: a strictly validated mark → D1 (+ its audit row) → {ok, mark, dup, marks}. */
+async function hMarksAdd(c) {
+  const m = validateMark(c.body, c.now);
+  const r = await addMark(c.db, m, c.email, c.now);
+  return json(200, { ok: true, mark: r.mark, dup: r.dup, marks: await listMarks(c.db) });
+}
+
+/** The mark's author or an admin → marked deleted (+ its audit row) → {ok, id, marks}. */
+async function hMarksDelete(c) {
+  const id = validateDelete(c.body);
+  await deleteMark(c.db, id, c.email, c.admin, c.now);
+  return json(200, { ok: true, id, marks: await listMarks(c.db) });
+}
+
+async function marksApi(request, env, url) {
+  const sub = url.pathname.slice(MARKS_PATH.length);
+  if (!Object.prototype.hasOwnProperty.call(MARKS_ROUTES, sub)) throw new ApiError(404, "not_found");
+  const allow = MARKS_ROUTES[sub];
+  if (!allow.includes(request.method)) throw new ApiError(405, "method_not_allowed", { allow: allow.join(", ") });
+
+  const { email } = await verifyAccess(request, env);
+  const admin = isAdmin(email, env);
+  const body = request.method === "POST" ? await readJsonBody(request, url, MAX_BODY, { msg: "Request bahut badi hai" }) : null;
+
+  const db = env.REVIEW_DB;
+  if (!db || typeof db.prepare !== "function" || typeof db.batch !== "function") {
+    throw new ApiError(500, "misconfigured");
+  }
+  try {
+    await ensureSchema(db);
+  } catch (e) {
+    console.error("marks-api: schema", errType(e));
+    throw new ApiError(503, "db_unavailable");
+  }
+  const c = { request, env, url, email, admin, body, db, now: new Date().toISOString() };
+  if (request.method === "GET") return hMarksList(c);
+  return sub === "/delete" ? hMarksDelete(c) : hMarksAdd(c);
+}
+
 async function route(request, env) {
   const url = new URL(request.url);
   const p = url.pathname;
   if (p.startsWith(PREFIX)) return api(request, env, url);
   if (p.startsWith(CONFIG_PREFIX)) return configApi(request, env, url);
+  if (p === MARKS_PATH || p.startsWith(MARKS_PATH + "/")) return marksApi(request, env, url);
   if (p === "/api" || p.startsWith("/api/")) throw new ApiError(404, "not_found");
   if (env && env.ASSETS && typeof env.ASSETS.fetch === "function") return env.ASSETS.fetch(request);
   throw new ApiError(404, "not_found");

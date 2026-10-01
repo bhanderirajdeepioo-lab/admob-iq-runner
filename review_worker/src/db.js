@@ -13,7 +13,7 @@ import { ApiError } from "./auth.js";
 
 export const FEATS = ["kamai", "uninstall", "active", "value", "update", "ads", "deduct", "mediation", "health", "setup"];
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 // The exact DDL of the spec (§B.5). review_worker/schema.sql must stay equal to this (a test checks).
 export const SCHEMA = `CREATE TABLE IF NOT EXISTS rv_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -50,19 +50,38 @@ CREATE UNIQUE INDEX IF NOT EXISTS rv_snoozes_one_live ON rv_snoozes(app, feature
 CREATE TABLE IF NOT EXISTS config_log (            -- append-only: every Settings save through /api/config/save
   id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT NOT NULL, at TEXT NOT NULL, file TEXT NOT NULL,
   bytes INTEGER NOT NULL, result TEXT NOT NULL, commit_sha TEXT);
-INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '3');`;
+CREATE TABLE IF NOT EXISTS cmp_marks (            -- 📌 saved dates of "compare any date" (app = an AdMob app id or '*')
+  id INTEGER PRIMARY KEY AUTOINCREMENT, app TEXT NOT NULL, date TEXT NOT NULL, name TEXT NOT NULL,
+  who TEXT NOT NULL, at TEXT NOT NULL, deleted_by TEXT, deleted_at TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS cmp_marks_one_live ON cmp_marks(app, date, name) WHERE deleted_at IS NULL;
+CREATE TABLE IF NOT EXISTS cmp_marks_log (        -- append-only: every add / delete of a saved date
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
+  act TEXT NOT NULL CHECK (act IN ('add','delete')), mark INTEGER NOT NULL,
+  app TEXT NOT NULL, date TEXT NOT NULL, name TEXT NOT NULL);
+INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '4');`;
 
 // Schema changes: MIGRATIONS[n] = [sql, …] upgrades version n-1 → n (run in order, one batch each). A NEW database
 // gets the current SCHEMA (and schema_version = SCHEMA_VERSION) directly; only an older database runs these.
 // 2: the review day of a flag decision (dec_day) and of "kaam ho gaya" (done_day) — before 09:00 IST the open day is
 //    still yesterday, so the IST date of dec_at / done_at is not the day the decision belongs to.
 // 3: config_log, the audit of Settings saves (POST /api/config/save: who, at, file, bytes, result, commit sha).
+// 4: cmp_marks (+ its one-live index) and cmp_marks_log — the 📌 saved dates of "compare any date" (/api/marks):
+//    who saved / deleted one and when; deleting only marks the row (deleted_by / deleted_at), the log keeps both.
 export const CONFIG_LOG_DDL = `CREATE TABLE IF NOT EXISTS config_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT NOT NULL, at TEXT NOT NULL, file TEXT NOT NULL,
   bytes INTEGER NOT NULL, result TEXT NOT NULL, commit_sha TEXT)`;
+export const MARKS_DDL = [`CREATE TABLE IF NOT EXISTS cmp_marks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, app TEXT NOT NULL, date TEXT NOT NULL, name TEXT NOT NULL,
+  who TEXT NOT NULL, at TEXT NOT NULL, deleted_by TEXT, deleted_at TEXT)`,
+"CREATE UNIQUE INDEX IF NOT EXISTS cmp_marks_one_live ON cmp_marks(app, date, name) WHERE deleted_at IS NULL",
+`CREATE TABLE IF NOT EXISTS cmp_marks_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
+  act TEXT NOT NULL CHECK (act IN ('add','delete')), mark INTEGER NOT NULL,
+  app TEXT NOT NULL, date TEXT NOT NULL, name TEXT NOT NULL)`];
 export const MIGRATIONS = {
   2: ["ALTER TABLE rv_flags ADD COLUMN dec_day TEXT", "ALTER TABLE rv_flags ADD COLUMN done_day TEXT"],
   3: [CONFIG_LOG_DDL],
+  4: MARKS_DDL,
 };
 
 /** One statement per entry (a ';' inside a trailing comment is not a statement end). */
@@ -517,4 +536,123 @@ export async function decideFlag(db, x) {
   const now = await getFlag(db, flag.id);
   if (!changes(res[0])) throw new ApiError(409, "conflict", { why: why(now) || "already_decided" });
   return now;
+}
+
+// ── 📌 saved dates of "compare any date" (GET /api/marks, POST /api/marks, POST /api/marks/delete) ──────────────────
+// The Uninstall tab's Update impact card: a date the team names ("Banner ad hataya") for one app or every app ("*").
+// index.js has already verified the Access login (JWT), the same-origin JSON POST rules and the body size; here the mark
+// is validated strictly and kept in cmp_marks (audit rows in cmp_marks_log). Any logged-in user may add a mark; only its
+// author or an admin may delete it (the row is only marked deleted, the log keeps both).
+
+export const MARK_APP_RE = /^ca-app-pub-\d{1,24}~\d{1,24}$/;   // an AdMob app id (config.js APP_RE) — or "*": every app
+export const MARK_NAME_MAX = 80;                // code points
+export const MARK_DAYS = 400;                   // a mark's date: a real day of the last 400 days (IST)
+export const MARKS_MAX = 2000;                  // live marks in all: a runaway client cannot fill D1
+// control characters (C0, DEL, C1) and the bidi controls (LRM / RLM / ALM, embeddings, overrides, isolates)
+const BAD_CHARS = /[\u0000-\u001F\u007F-\u009F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/;
+const MARK_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Hinglish reasons the page shows (the field stays in `field`). */
+export const MARK_MSG = {
+  app_id: "App galat hai",
+  date: "Date galat hai — pichhle 400 din ki koi asli date chuno",
+  name: "Naam 1–80 akshar ka ho (koi control / ulta-likhne wala character nahi)",
+  id: "Saved date galat hai",
+  not_author: "Ye date sirf jisne save ki wo (ya admin) hata sakta hai",
+  not_found: "Ye saved date ab nahi hai (shayad kisi ne hata di)",
+  too_many: "Bahut saari saved dates — pehle kuch purani hatao",
+};
+
+const bad = (field) => new ApiError(400, "bad_request", { field, msg: MARK_MSG[field] });
+
+function isMarkDay(s) {
+  if (typeof s !== "string" || !MARK_DAY_RE.test(s)) return false;
+  const t = Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+  return new Date(t).toISOString().slice(0, 10) === s;
+}
+
+/** The IST calendar day of an ISO instant (the dashboard's day). */
+export function istDay(nowIso) {
+  return new Date(Date.parse(nowIso) + 330 * 60000).toISOString().slice(0, 10);
+}
+
+/** The name as stored: NFC, trimmed; 1–80 code points with no control / bidi character (rejected, never stripped). */
+export function normName(v) {
+  if (typeof v !== "string" || v.length > MARK_NAME_MAX * 8) throw bad("name");
+  const s = v.normalize("NFC").trim();
+  const n = [...s].length;
+  if (n < 1 || n > MARK_NAME_MAX || BAD_CHARS.test(s)) throw bad("name");
+  return s;
+}
+
+/** POST /api/marks body → {app, date, name}. Unknown keys are ignored. */
+export function validateMark(b, nowIso) {
+  const app = b.app_id;
+  if (typeof app !== "string" || !(app === "*" || MARK_APP_RE.test(app))) throw bad("app_id");
+  const date = b.date;
+  const today = istDay(nowIso);
+  if (!isMarkDay(date) || date > today || date < addDays(today, -MARK_DAYS)) throw bad("date");
+  return { app, date, name: normName(b.name) };
+}
+
+/** POST /api/marks/delete body → the mark id. */
+export function validateDelete(b) {
+  const id = b.id;
+  if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) throw bad("id");
+  return id;
+}
+
+const MARK_COLS = "id, app AS app_id, date, name, who, at";
+
+/** Every live mark, newest date first. */
+export async function listMarks(db) {
+  const res = await db.prepare(`SELECT ${MARK_COLS} FROM cmp_marks WHERE deleted_at IS NULL ORDER BY date DESC, id DESC`).all();
+  return rows(res);
+}
+
+async function liveOne(db, app, date, name) {
+  return db.prepare(`SELECT ${MARK_COLS} FROM cmp_marks WHERE app = ? AND date = ? AND name = ? AND deleted_at IS NULL`)
+    .bind(app, date, name).first();
+}
+
+/**
+ * Add one mark (m = validateMark's) as `who` at `at` → {mark, dup}. The same app + date + name already saved (by anyone)
+ * → that one, dup: true (nothing written). One batch: the row and its audit row (cmp_marks_log), or neither.
+ */
+export async function addMark(db, m, who, at) {
+  const have = await liveOne(db, m.app, m.date, m.name);
+  if (have) return { mark: have, dup: true };
+  const n = Number(await db.prepare("SELECT COUNT(*) AS n FROM cmp_marks WHERE deleted_at IS NULL").first("n")) || 0;
+  if (n >= MARKS_MAX) throw new ApiError(409, "conflict", { why: "too_many", msg: MARK_MSG.too_many });
+  try {
+    await db.batch([
+      db.prepare("INSERT INTO cmp_marks (app, date, name, who, at) VALUES (?, ?, ?, ?, ?)").bind(m.app, m.date, m.name, who, at),
+      db.prepare("INSERT INTO cmp_marks_log (at, who, act, mark, app, date, name) " +
+        "SELECT ?, ?, 'add', id, app, date, name FROM cmp_marks WHERE id = last_insert_rowid()").bind(at, who),
+    ]);
+  } catch (e) {
+    // two people saving the same name on the same day at once: the one-live index refuses the second (its batch rolled
+    // back) — it gets the first one's mark
+    const won = await liveOne(db, m.app, m.date, m.name);
+    if (won) return { mark: won, dup: true };
+    throw e;
+  }
+  return { mark: await liveOne(db, m.app, m.date, m.name), dup: false };
+}
+
+/**
+ * Delete mark `id` as `who` (its author, or an admin) at `at` → the deleted mark. Marks the row deleted and appends the
+ * audit row in one batch; a mark deleted meanwhile → 404.
+ */
+export async function deleteMark(db, id, who, admin, at) {
+  const mk = await db.prepare(`SELECT ${MARK_COLS} FROM cmp_marks WHERE id = ? AND deleted_at IS NULL`).bind(id).first();
+  if (!mk) throw new ApiError(404, "not_found", { msg: MARK_MSG.not_found });
+  if (mk.who !== who && !admin) throw new ApiError(403, "forbidden", { msg: MARK_MSG.not_author });
+  const res = await db.batch([
+    db.prepare("UPDATE cmp_marks SET deleted_by = ?, deleted_at = ? WHERE id = ? AND deleted_at IS NULL").bind(who, at, id),
+    db.prepare("INSERT INTO cmp_marks_log (at, who, act, mark, app, date, name) " +
+      "SELECT ?, ?, 'delete', id, app, date, name FROM cmp_marks WHERE id = ? AND changes() = 1").bind(at, who, id),
+  ]);
+  if (!changes(res[0])) throw new ApiError(404, "not_found", { msg: MARK_MSG.not_found });
+  return mk;
 }
