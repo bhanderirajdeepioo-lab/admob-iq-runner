@@ -516,6 +516,26 @@ def _revenue_rows(repo):
     return list(agg.values())
 
 
+def started_day(ser, days, before, now):
+    """An ad-unit alert metric's "Shuru" (SPEC_SIMPLIFY §1.2): walking back from the latest finished day while the day's
+    value sits on the "now" side of the halfway point (before + now) / 2 → the earliest day of that run (the latest day
+    itself when the day before is not past halfway). ser / days: the metric's daily series over the finished days
+    (same length); before = the rule's baseline. Shown only — nothing decides on it."""
+    if not ser or not days or len(ser) != len(days):
+        return days[-1] if days else None
+    i = len(ser) - 1
+    try:
+        before, now = float(before), float(now)
+    except (TypeError, ValueError):
+        return days[i]
+    if before == now:
+        return days[i]
+    half, side = (before + now) / 2, (1 if now > before else -1)
+    while i > 0 and ser[i - 1] is not None and (ser[i - 1] - half) * side > 0:
+        i -= 1
+    return days[i]
+
+
 def build_from_db(repo, today=None):
     """Same dashboard structure, computed from REAL fetched rows in the store.
 
@@ -713,7 +733,8 @@ def build_from_db(repo, today=None):
                                            message=sig.message, place=pname, id=unit, app=aname,
                                            country=country, current=round(ser[-1], 4),
                                            base_rev=base_rev,
-                                           lost=(round(base_rev - series[-1], 2) if metric == "revenue" else None)))
+                                           lost=(round(base_rev - series[-1], 2) if metric == "revenue" else None),
+                                           started=started_day(ser, cdates, sig.baseline, ser[-1])))
 
     # Materiality gate: a placement must earn >= ALERT_MIN_SHARE of ITS OWN APP's baseline
     # revenue to alert (self-scaling per app, so a smaller app's important placements still fire
@@ -738,7 +759,8 @@ def build_from_db(repo, today=None):
                                          base_rev=c["base_rev"], severity=c["severity"],
                                          kind=c["kind"], lost=0.0, metrics=[])
         g["metrics"].append(dict(metric=c["metric"], message=c["message"],
-                                 current=c["current"], lost=c.get("lost"), kind=c["kind"]))
+                                 current=c["current"], lost=c.get("lost"), kind=c["kind"], started=c["started"],
+                                 _sev=c["severity"]))
         if _sevr.get(c["severity"], 9) < _sevr.get(g["severity"], 9):
             g["severity"], g["kind"] = c["severity"], c["kind"]
         if c["metric"] == "revenue" and c.get("lost"):
@@ -746,6 +768,10 @@ def build_from_db(repo, today=None):
     groups = list(by_place.values())
     for g in groups:                                # revenue first, then the rest — stable order
         g["metrics"].sort(key=lambda m: (m["metric"] != "revenue", m["metric"]))
+        # "Shuru" (SPEC_SIMPLIFY §1.2, shown only): the start of the first metric (in this order) that set its severity
+        g["started"] = next((m["started"] for m in g["metrics"] if m["_sev"] == g["severity"]), None)
+        for m in g["metrics"]:
+            m.pop("_sev", None)
     groups.sort(key=lambda g: (g["lost"] if g["lost"] else g["base_rev"]), reverse=True)
     ac = {"critical": 0, "warning": 0, "watch": 0}
     for g in groups:                                # count PLACEMENTS, not per-metric instances

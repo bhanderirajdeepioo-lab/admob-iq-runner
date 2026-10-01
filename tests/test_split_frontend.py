@@ -430,12 +430,15 @@ def test_a_host_without_a_split_keeps_its_old_lines(report):
     assert "Installs −33% vs 4 weeks" in n and "vs 4 weeks —" not in n and "pts" not in n
     e = L["err"]["text"]                                                                           # an engine failure: no block
     assert not L["err"]["split"] and "Installs −33% vs 4 weeks" in e and "vs 4 weeks —" not in e and "pts" not in e
-    # a "What changed?" row: the Installs tag goes when the block tells it
-    assert ">Installs</span>" in L["row0"]["html"] and 'class="split' not in L["row0"]["html"]
-    assert ">Installs</span>" not in L["row1"]["html"] and 'class="split' in L["row1"]["html"] and L["row1"]["html"].endswith("</span></span></div>")
-    # …but a notes-only or a "pata nahi" split does not tell the installs' part: the tag stays beside it
-    assert ">Installs</span>" in L["row2"]["html"] and "Saath me: naye users ka hissa 100 me 5 → 9" in L["row2"]["text"]
-    assert ">Installs</span>" in L["row3"]["html"]
+    # a "What changed?" row: the Installs line ("Saath me: naye installs bhi …", SPEC_SIMPLIFY §6.4) goes when the block
+    # tells it (SPEC_SPLIT S10)
+    tag = "Saath me: naye installs bhi badle (ads campaign?)"
+    assert tag in L["row0"]["html"] and 'class="split' not in L["row0"]["html"]
+    assert tag not in L["row1"]["html"] and 'class="split' in L["row1"]["html"] and L["row1"]["html"].endswith("</span></div></div></div>")
+    # …but a notes-only or a "pata nahi" split does not tell the installs' part: the line stays beside it
+    # (an ads-per-user row's one "Saath me:" is its kamai/user line, SPEC_SIMPLIFY §6.5 — the installs line yields to it)
+    assert "Saath me: kamai/user " in L["row2"]["html"] and "Saath me: naye users ka hissa 100 me 5 → 9" in L["row2"]["text"]
+    assert tag in L["row3"]["html"]
 
 
 def close(a, b, path=""):

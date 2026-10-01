@@ -2192,7 +2192,9 @@ def episodes(st, app_id, E, ready, advanced, now, recent_from):
     """Open / refresh / close this app's Active episodes from the READY conditions (each carrying `seed`). Pure: only
     `st` changes. Spike / break days ≤ SPIKE_MERGE_DAYS from an open one of the same kind fold into it and stay
     SPIKE_KEEP_DAYS after their last day; the rest close after CLOSE_EVALS advanced evaluations without their condition;
-    a return episode about installs older than ALERT_RECENT_DAYS closes at once. → this app's open episodes."""
+    a return episode about installs older than ALERT_RECENT_DAYS closes at once. → this app's open episodes.
+    SPEC_SIMPLIFY (shown only): a new episode keeps opened_at = now (never rewritten); a close adds closed_at = now and
+    close_reason (window_end: a return episode's installs aged out; else recovered)."""
     eps, closed = st.setdefault("episodes", {}), st.setdefault("closed", [])
     E = _d(E)
     E_iso, hit = E.isoformat(), set()
@@ -2213,7 +2215,7 @@ def episodes(st, app_id, E, ready, advanced, now, recent_from):
             ep = {"id": _eid(app_id, c, E_iso), "app_id": app_id, "family": c["family"], "metric": c["metric"],
                   "key_metric": c.get("key_metric") or c["metric"], "dir": c["dir"], "opened": E_iso,
                   "last_true": E_iso, "misses": 0, "notified_at": now if c["seed"] else None, "notified_dry": False,
-                  "seeded": bool(c["seed"]), "last": snap}
+                  "seeded": bool(c["seed"]), "last": snap, "opened_at": now}   # the run that opened it (kept)
             if spike:
                 ep["day"], ep["last_day"] = snap["day"], snap.get("last_day") or snap["day"]
                 ep["days"] = sorted(set(snap.get("days_list") or [snap["day"]]))
@@ -2245,7 +2247,7 @@ def episodes(st, app_id, E, ready, advanced, now, recent_from):
         hit.add(key)
     for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit and e["family"] == "act_return"
                 and e["last"].get("installs_to") and _d(e["last"]["installs_to"]) < recent_from]:
-        closed.append(dict(eps.pop(key), closed=E_iso))
+        closed.append(U.close_ep(eps.pop(key), E_iso, now, "window_end"))     # its installs aged out
     if advanced:
         for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit]:
             ep = eps[key]
@@ -2255,15 +2257,65 @@ def episodes(st, app_id, E, ready, advanced, now, recent_from):
                 ep["misses"] += 1
                 done = ep["misses"] >= CLOSE_EVALS
             if done:
-                closed.append(dict(eps.pop(key), closed=E_iso))
+                closed.append(U.close_ep(eps.pop(key), E_iso, now, "recovered"))
     keep = E - timedelta(days=CLOSED_KEEP_DAYS)
     st["closed"] = [e for e in closed if e["app_id"] != app_id or _d(e["closed"]) >= keep]
     return [e for e in eps.values() if e["app_id"] == app_id]
 
 
-def alert_obj(ep, app, E):
+def return_started(P, s, max_weeks=U.STARTED_MAX_WEEKS):
+    """An act_return alert's start ("Shuru", SPEC_SIMPLIFY §1.2): walk the weekly install-cohort return series back from
+    its install week (installs_from) — the same return day N, each week's usable install days pooled (_cw) — while a
+    week's rate is closer to the alert's now than to its before. → (the first install day of the earliest such week,
+    capped: all max_weeks weeks back were still closer to now). A week without data (or before the launch) ends the
+    walk; no series / numbers: (installs_from, False). Shown only."""
+    f = s.get("installs_from")
+    N, now, before = s.get("n"), s.get("now"), s.get("before")
+    if P is None or not f or N is None or now is None or before is None or now == before or not P.get("PA"):
+        return f, False
+    try:
+        N = int(N)
+        if not 1 <= N < len(P["PA"]) or P["PA"][N] is None:
+            return f, False
+        i0 = (_d(f) - P["hs"]).days
+        start = i0
+        for k in range(1, max_weeks + 1):
+            a = i0 - 7 * k
+            lo = max(a, P["i0"])
+            if lo > a + 6:
+                return _iso(P["hs"] + timedelta(days=start)), False
+            aw, tw, _ = _cw(P, N, lo, a + 6)
+            if not tw:
+                return _iso(P["hs"] + timedelta(days=start)), False
+            p = aw / tw
+            if not abs(p - now) < abs(p - before):
+                return _iso(P["hs"] + timedelta(days=start)), False
+            start = lo                               # (a week the launch cuts: its first day after the launch)
+        return _iso(P["hs"] + timedelta(days=start)), True
+    except Exception:                                # shown only: a failure never costs the alert
+        return f, False
+
+
+def started_of(ep, P=None):
+    """An Active episode (open or closed) → (started ISO or None, capped): act_drift = the story's start (since0, else
+    since); act_slow = its since; a spike / break = the episode's first day; act_return = return_started."""
+    s, fam = ep.get("last") or {}, ep.get("family")
+    if fam == "act_drift":
+        return ep.get("since0") or s.get("since"), False
+    if fam == "act_slow":
+        return s.get("since"), False
+    if fam in SPIKY:
+        return ep.get("day") or s.get("day"), False
+    if fam == "act_return":
+        return return_started(P, s)
+    return s.get("since") or s.get("day") or s.get("installs_from"), False
+
+
+def alert_obj(ep, app, E, P=None):
     """Episode → the alert object (uninstall's alert_obj keys + the Active ones). Rebuilt every build: a renamed app
-    shows its new name."""
+    shows its new name. P = the app's prepared series (an act_return's "started" walks its return series back).
+    SPEC_SIMPLIFY (shown only): started / started_cap, seeded, opened_at (None: opened before it was kept) and, closed,
+    closed_at / close_reason (None: closed before they were kept)."""
     s, E = ep["last"], _d(E)
     if ep["family"] == "act_break" and ep.get("days"):  # one break over several days: its whole span, and whether
         s = dict(s, day=ep["day"], last_day=ep["last_day"], days_list=ep["days"],   # it still runs on the newest
@@ -2285,14 +2337,17 @@ def alert_obj(ep, app, E):
            "release": dict(s["release"]) if s.get("release") else None, "linked": bool(s.get("linked")),
            "data_till": _iso(E), "text": text, "message": "%s: %s" % (app, text),
            "sp": s.get("sp") if attrib.ON else None}          # the change's split (SPEC_SPLIT), null allowed
+    st, cap = started_of(ep, P)
+    out.update(started=st, started_cap=bool(cap), seeded=bool(ep.get("seeded")), opened_at=ep.get("opened_at"))
     if "closed" in ep:
-        out.update(closed=ep["closed"], fresh=False, notify=False)
+        out.update(closed=ep["closed"], fresh=False, notify=False, closed_at=ep.get("closed_at"),
+                   close_reason=ep.get("close_reason"))
     return out
 
 
 def sort_alerts(alerts):
-    return sorted(alerts, key=lambda a: (SEV_ORDER.get(a["severity"], 9), not a["fresh"],
-                                         -_d(a["opened"]).toordinal(), a["app"].casefold(), a["id"]))
+    """warning, watch, good; the newest start ("started") first; then app, id (never fresh / opened: SPEC_SIMPLIFY)."""
+    return U.sort_alerts(alerts)
 
 
 # ── update link (§2.13) ─────────────────────────────────────────────────────────────────────────
@@ -2574,14 +2629,14 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
                 e.update(notified_at=now_iso, seeded=True)
     evs[app_id] = {"end": _iso(E), "src": src, "streak": streak, "since": since,
                    "claimed": {dr: r for dr, r in sorted(claimed.items()) if r}, "beta": beta, "inputs": inputs}
-    alerts = sort_alerts([alert_obj(e, app, E) for e in open_eps])
+    alerts = sort_alerts([alert_obj(e, app, E, P) for e in open_eps])
     by_id = {e["id"]: e for e in open_eps}
     for a in alerts:
         e = by_id[a["id"]]
         a["_metrics"] = _metrics_of(dict(e["last"], family=e["family"], metric=e["last"].get("metric", e["metric"])))
         if e["family"] == "act_break":
             a["_when"] = _break_when({"day": e.get("day") or a["day"], "days_list": e.get("days")}, E)
-    closed = [alert_obj(e, app, E) for e in state.get("closed") or [] if e["app_id"] == app_id]
+    closed = [alert_obj(e, app, E, P) for e in state.get("closed") or [] if e["app_id"] == app_id]
     closed.sort(key=lambda a: (a["closed"], a["opened"], a["id"]), reverse=True)
     # tiles
     tiles = {}
@@ -2656,6 +2711,8 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
                              % U.fmt_day(P["days"][d], E)})
     eps_all = open_eps + [e for e in state.get("closed") or [] if e["app_id"] == app_id]
     older = history(P, eps_all, udet)
+    for r in info + older:                            # "Shuru" (SPEC_SIMPLIFY, shown only): its since, else from
+        r["started"] = r.get("since") or r.get("from")
     # context + latest
     w_idx = [i for i in range(max(0, w0), iS + 1)] if iS >= 0 else []
     va = [P["a1"][i] for i in w_idx if P["valid"]["ret_dau"][i] and P["a1"][i] is not None]
@@ -2667,7 +2724,7 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
     iE = P["iE"]
     latest = {"day": iso[iE] if iE >= 0 else None, "ret_dau": P["R"][iE] if iE >= 0 else None,
               "a1": P["a1"][iE] if iE >= 0 else None, "prov": True}
-    summary = _summary(tiles, alerts, edges, P, E)
+    summary = _summary(tiles, U.legacy_order(alerts), edges, P, E)      # (the order it always read: the same line)
     for a in alerts:
         a.pop("_metrics", None)
         a.pop("_when", None)
@@ -2836,6 +2893,63 @@ def _summary(tiles, alerts, edges, P, E):
         parts.append("revenue")
     what = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " aur " + parts[-1]
     return {"kind": "ok", "text": "✅ Sab normal — %s apni normal range me." % what + suffix}
+
+
+# ── the All-apps lists in dashboard.json (SPEC_SIMPLIFY D10: they never depend on which per-app files were opened) ──
+
+INFO_PER_APP = 5            # dashboard["active"]["info"]: at most 5 rows per app, newest first …
+INFO_MAX_DAYS = 90          # … and only those that ended (to, else from) ≤ 90 days before the app's E
+CLOSED_RECENT_DAYS = 7      # dashboard["active"]["closed"]: the closed alerts closed ≤ 7 days before the app's E
+
+
+def _age_days(ref, day):
+    try:
+        return (_d(ref) - _d(day)).days
+    except (TypeError, ValueError):
+        return None
+
+
+def compact_info(detail, keep=INFO_PER_APP, max_days=INFO_MAX_DAYS):
+    """An Active detail's info + older rows → the compact rows dashboard["active"]["info"] lists: {app_id, src (info |
+    older), kind, metric, dir, from, to, rel, text, tags, prov, release, started, sp (only when there is one)} — at most
+    `keep` per app, newest first (by to, else from; an undated row counts as the app's E), none that ended more than
+    max_days before the app's E (data_till). Shown only."""
+    E = detail.get("data_till")
+    ch = detail.get("changes") or {}
+    rows = []
+    for si, src in enumerate(("info", "older")):
+        for j, r in enumerate(ch.get(src) or []):
+            day = r.get("to") or r.get("from")
+            age = _age_days(E, day) if day else 0
+            if age is not None and age > max_days:
+                continue
+            row = {"app_id": detail.get("app_id"), "src": src, "kind": r.get("kind"), "metric": r.get("metric"),
+                   "dir": r.get("dir"), "from": r.get("from"), "to": r.get("to"), "rel": r.get("rel"),
+                   "text": r.get("text"), "tags": list(r.get("tags") or []), "prov": bool(r.get("prov")),
+                   "release": dict(r["release"]) if r.get("release") else None,
+                   "started": r.get("started", r.get("since") or r.get("from"))}
+            if r.get("sp") is not None:
+                row["sp"] = r["sp"]
+            rows.append((age or 0, si, j, row))
+    rows.sort(key=lambda x: x[:3])
+    return [x[3] for x in rows[:keep]]
+
+
+def recent_closed(detail, days=CLOSED_RECENT_DAYS):
+    """An Active detail's closed alerts closed ≤ `days` before the app's E (data_till) — the same objects as
+    changes.closed. Shown only."""
+    E = detail.get("data_till")
+    out = []
+    for a in (detail.get("changes") or {}).get("closed") or []:
+        age = _age_days(E, a.get("closed"))
+        if age is not None and 0 <= age <= days:
+            out.append(a)
+    return out
+
+
+def sort_closed(alerts):
+    """dashboard["active"]["closed"]: the newest close first, then app, id (deterministic)."""
+    return sorted(alerts, key=lambda a: (-(_d(a["closed"]).toordinal()), a["app"].casefold(), a["id"]))
 
 
 # ── the portfolio's daily series ("📅 Daily — all apps"): every app's own daily arrays, summed day by day ─────────

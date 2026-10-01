@@ -11,6 +11,7 @@ money; the Alerts screen untouched when there is nothing to say; phone width; En
 country names from Intl with flags. Skipped where node is not installed."""
 
 import json
+from datetime import date
 import os
 import re
 import shutil
@@ -229,7 +230,7 @@ def test_country_rows(report, fixture):
             x = next(y for y in R if y["cc"] == cc)
             if s_ in ("top", "avg", "low", "keep", "slow", "costly"):
                 assert cls == "uni-pz" and s_ == x.get("verdict")                     # a verdict: emoji + words, never a colour
-        assert c["win"].startswith("Installs ") and "settled weeks" in c["win"], c["win"]
+        assert c["win"].startswith("Installs ") and "pakke hafte)" in c["win"], c["win"]      # (§6.4: settled → pakka)
         assert c["link"], r["app"]
         assert "of 100" in c["open_desk"] and c["open_sparks"] >= 1, r["app"]          # a tap: the sentence, the interval, 12-week lines
         assert c["open_phone"], r["app"]
@@ -376,53 +377,53 @@ def test_sample_note(report, fixture):
 
 def test_release_short_day_thin_and_older(report):
     x = report["syn"]["extras"]
-    assert x["rel_row"] and x["chip"]                                                 # 📦 row right above its week; both open Update impact
+    assert x["rel_row"] and not x["chip"]                                             # 📦 row right above its week (the "After vX" chip: the Shuru cell now, §6.4)
     tips = {t for t, _ in x["q"]}
     assert len(x["q"]) >= 2 and all(v.startswith("≈") for _, v in x["q"])
     assert "GA4 ka is din ka data poora nahi mila — andaza" in tips and any("scale ki" in t for t in tips)
-    assert x["closed"] == 1 and x["older"] == 1 and x["iap"] and x["thin"] and x["noads"] >= 3
+    assert x["closed"] == 1 and x["older"] == 0 and x["iap"] and x["thin"] and x["noads"] >= 3   # a year-old row: not listed (N3)
 
 
 def test_never_pays_back(report):
     n = report["syn"]["never"]
-    assert n["big"] == "Over 1 year" and n["chip"] == ["uni-pn", "💸 Not paying back in 1 year"] and n["cell"] and n["sub"]
+    assert n["big"] == "Over 1 year" and n["chip"] == ["uni-pn", "🔴 Bigda"] and n["cell"] and n["sub"]   # §6.4: 💸 Not paying back → 🔴 Bigda
 
 
 def test_changes_rows(report, fixture):
     for r in detailed(fixture):
         a, C = report["apps"][r["app"]], det(fixture, r).get("changes") or {}
         op = C.get("open") or []
-        assert a["chg_title"] == str(len(op)) and sorted(a["chg_rows"]) == sorted(x.get("family", "") for x in op)
-        assert a["all_normal"] == (not op)
-        assert a["info_rows"] == [o.get("kind") or "info" for o in C.get("info") or []]
-        assert a["closed_rows"] == len(C.get("closed") or []) and a["older_rows"] == len(C.get("older") or [])
-        rel = [x["release"]["key"] for x in op if (x.get("release") or {}).get("key")]
-        assert sorted(k for _, k, _ in a["rel_chips"]) == sorted(rel)
+        # SPEC_SIMPLIFY §6.3: "(n) … n shown · m folded below"; every open alert a row; info / older up to 90 days old
+        assert a["chg_counts"] and a["chg_title"] == str(a["chg_counts"][0]) and sorted(a["chg_rows"]) == sorted(x.get("family", "") for x in op)
+        assert a["all_normal"] == (a["chg_counts"] == [0, 0])
+        rec = lambda o: not o.get("from") or (date.fromisoformat(r["settled_till"]) - date.fromisoformat(o.get("started") or o["from"])).days <= 90
+        assert sorted(a["info_rows"]) == sorted(o.get("kind") or "info" for o in C.get("info") or [] if rec(o))
+        assert a["closed_rows"] == len(C.get("closed") or []) and a["older_rows"] == sum(1 for o in C.get("older") or [] if rec(o))
+        rel = [x["release"]["label"] for x in op if (x.get("release") or {}).get("key")]
+        assert sorted(a["rel_chips"]) == sorted(rel)                                  # "v1.4 ke baad" in the Shuru cell (§6.4)
 
 
 def test_alerts_screen_value_section_absent_when_empty(report, fixture):
     al = report["alerts"]
     assert al["absent"] == al["empty"] == al["bad"]                                  # nothing to say → not a byte more
     assert "💸 Install value" not in al["absent"] and "filterAlerts('value')" not in al["absent"]
-    A = [x for x in fixture["dv"].get("alerts") or []]
-    assert al["all"]["cards"] == len(A) and al["all"]["sub"] == bool(A) and al["all"]["chip"] == bool(A)
-    assert sorted(al["all"]["open_app"]) == sorted(x["app_id"] for x in A)
-    assert sorted(k for _, k in al["all"]["upd"]) == sorted(x["release"]["key"] for x in A if (x.get("release") or {}).get("key"))
+    # SPEC_SIMPLIFY §7: the Alerts screen is ad units only — never an Install value card, sub-heading or chip
+    assert al["all"]["cards"] == 0 and not al["all"]["sub"] and not al["all"]["chip"] and al["all"]["open_app"] == []
     for r in rows(fixture):
-        n = len([x for x in A if x.get("app") == r["app"]])
-        assert al["per_app"][r["app"]]["cards"] == n and al["per_app"][r["app"]]["sub"] == bool(n)
+        assert al["per_app"][r["app"]]["cards"] == 0 and not al["per_app"][r["app"]]["sub"]
 
 
 def test_portfolio(report, fixture):
     p, R = report["portfolio"], rows(fixture)
-    assert "Install value — all apps" in p["head"] and "settled till" in p["head"]
-    assert re.fullmatch(r"⚠️ \d+ apps? ka paisa dheere / ghate me · ✅ \d+ normal · ℹ️ \d+ no ads · ⏳ \d+ data aa raha( · ⚠️ \d+ not built this time)?", p["count"]), p["count"]
+    # SPEC_SIMPLIFY §6.1 first line; the count line in the six words
+    assert p["head"].startswith("Install value INSTALL VALUE · Sirf Google Ads wali apps (") and " tak judge hue · Pakka " in p["head"]
+    assert re.fullmatch(r"(🔴 \d+ Bigda \(paisa dheere / ghate me\) · )?⚪ \d+ Normal( · 🔴 \d+ Bigda \(1 saal me bhi paisa wapas nahi\))?( · 🟡 \d+ Dhyan do \(purani halat: 1 saal me bhi paisa wapas nahi\))? · — \d+ Ads nahi chal rahe( · ⏳ \d+ Abhi jaldi)?( · ⚠️ \d+ is baar nahi bane)?", p["count"]), p["count"]
     assert [t["m"] for t in p["pool"]] == ["spend", "b7", "b30", "ok"]
     assert all(re.search(r"\d+ of %d apps" % len(R), t["text"]) for t in p["pool"])
     assert p["table_heads"] == [["app", "App"], ["spend", "Ads spend (4 wks)"], ["cpi", "Cost per install"], ["b7", "Back in 7 days"], ["b30", "30 days"],
-                                ["pay", "Money back in"], ["best", "Best country"], ["weak", "Weakest country"], ["status", "Status"]]
+                                ["pay", "Paisa wapas (din me)"], ["best", "Best country"], ["weak", "Weakest country"], ["status", "Status"]]   # §6.4
     assert sorted(i for _, i in p["table_rows"]) == sorted(r["app_id"] for r in R)
-    assert p["chg_title"] == str(len(fixture["dv"].get("alerts") or []))
+    assert p["chg_title"] is not None and int(p["chg_title"]) <= len(fixture["dv"].get("alerts") or [])   # the rows shown (§6.3)
     for k, o in p["xp"]["open"].items():                                             # each chip opens exactly its apps
         kind, s_ = k.split(":")
         assert o["panel"] == k and o["panels"] == 1
@@ -486,7 +487,7 @@ def test_spend_not_in_yet_is_never_no_ads(report):
 
 def test_context_line_divides_by_the_weeks_it_has(report):
     f = report["fix"]
-    assert "Installs 1,000 /week" in f["ctx3"] and "Google Ads $100 /week" in f["ctx3"] and "(last 3 settled weeks)" in f["ctx3"]
+    assert "Installs 1,000 /week" in f["ctx3"] and "Google Ads $100 /week" in f["ctx3"] and "(pichhle 3 pakke hafte)" in f["ctx3"]
     assert "Google Ads ₹8,400 /week" in f["ctx3_inr"]                                   # 25,200 billed ÷ 3 weeks
     assert "Cost per install ₹8.40" in f["cpi3_inr"] and "Google Ads ₹25,200 ÷ 3,000" in f["cpi3_inr"]
 
@@ -542,3 +543,15 @@ def test_observed_90_day_value_has_no_approx_mark(report, fixture):
             seen += 1
             assert "90 din $" in sub and "90 din ≈" not in sub, sub
     assert seen
+
+
+def test_a_never_pays_back_level_that_was_already_there_is_purani_halat_not_red():
+    # SPEC_SIMPLIFY D6: a long-standing level is never 🔴 — "1 saal+" now AND before → 🟡 Dhyan do · purani halat;
+    # a NEW never-pays-back (before < 1 year) stays 🔴 Bigda
+    import pathlib, re as _re
+    s = pathlib.Path(__file__).resolve().parents[1].joinpath("frontend", "index.html").read_text()
+    chip = s[s.index("function valChip(k,M,als){"):]
+    chip = chip[:chip.index("\n}") if "\n}" in chip[:600] else 600]
+    assert "st==='never'&&M&&valOk(M.p0)&&+M.p0>=366" in chip and "🟡 Dhyan do · purani halat" in chip
+    summ = s[s.index("function valSumPortfolio(rows){"):][:1800]
+    assert "K.neverOld++" in summ and "🟡 ${K.neverOld} Dhyan do (purani halat: 1 saal me bhi paisa wapas nahi)" in summ

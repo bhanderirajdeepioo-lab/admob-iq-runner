@@ -166,7 +166,8 @@ def test_summary_rows_and_files_follow_the_contract(vsite):
     dash, files = vbuild(data, out)
     V = dash["value"]
     assert set(V) == {"v", "status", "asset_v", "horizon", "settled_till_min", "settled_till_max", "counts", "consts",
-                      "alerts", "alert_counts", "no_ga4", "apps", "spend_ccy"}
+                      "alerts", "alert_counts", "no_ga4", "apps", "spend_ccy",
+                      "info", "closed"}                           # info / closed: SPEC_SIMPLIFY (a contract extension)
     assert V["status"] == "ok" and V["horizon"] == 90 and re.match(r"^[0-9a-f]{12}$", V["asset_v"])
     assert V["counts"]["apps"] == 3 and V["counts"]["organic"] == 1 and V["counts"]["with_spend"] == 2
     assert V["counts"]["iday"] == {"wait": 0, "filling": 1, "whole": 2} and V["counts"]["cty"]["sampled"] == 1

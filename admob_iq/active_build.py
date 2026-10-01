@@ -158,6 +158,10 @@ def app_step(store, a, udet, key, st, now_iso, rev, market, stale, outdated, cfg
         row["_port"] = False
     row["_alerts"] = detail["changes"]["open"]
     row["_ret_from"] = detail["edges"]["ret_from"] if detail["edges"]["ret_state"] == "found" else None
+    try:                                             # the All-apps lists (SPEC_SIMPLIFY; shown only — a failure costs
+        row["_info"], row["_closed"] = act.compact_info(detail), act.recent_closed(detail)   # them, never the app)
+    except Exception:
+        row["_info"], row["_closed"] = [], []
     return row
 
 
@@ -201,14 +205,20 @@ def portfolio_step(out_dir, parts):
 
 def finish(dashboard, out_dir, rows, market, st, data_dir, no_ga4, cfg, status=None):
     """The end of the step: portfolio edge + state saved, stale files removed, the All-apps daily file, then
-    dashboard["active"] LAST. Never raises: a failure removes dashboard["active"] and prints the error type only."""
+    dashboard["active"] LAST. Never raises: a failure removes dashboard["active"] and prints the error type only.
+    info / closed (SPEC_SIMPLIFY): every app's compact info rows (engine compact_info: ≤ 5 per app, ≤ 90 days) and its
+    alerts closed in the last 7 days (recent_closed), so the All-apps lists never depend on the opened per-app files."""
     try:
         parts = [(r, r.pop("_port", None)) for r in rows]
         alerts = act.sort_alerts([al for r in rows for al in r.pop("_alerts", [])])
         edges = sorted(r.pop("_ret_from") for r in rows if r.get("_ret_from"))
+        info = [x for r in rows for x in r.pop("_info", None) or []]            # rows keep their app order
+        closed = act.sort_closed([a for r in rows for a in r.pop("_closed", None) or []])
         for r in rows:
             r.pop("_alerts", None)
             r.pop("_ret_from", None)
+            r.pop("_info", None)
+            r.pop("_closed", None)
         st["portfolio_edge"] = edges[len(edges) // 2] if edges else st.get("portfolio_edge")
         save_state(data_dir, st)
         keep = {r["file"] for r in rows if r.get("file")}
@@ -250,7 +260,7 @@ def finish(dashboard, out_dir, rows, market, st, data_dir, no_ga4, cfg, status=N
                "data_till_min": till[0] if till else None, "data_till_max": till[-1] if till else None,
                "settled_till_min": stl[0] if stl else None, "settled_till_max": stl[-1] if stl else None,
                "counts": cnt, "consts": c, "market": market or {"weeks": [], "latest": None},
-               "alerts": alerts, "alert_counts": ac,
+               "alerts": alerts, "alert_counts": ac, "info": info, "closed": closed,
                "no_ga4": [{"app_id": n["app_id"], "app": n["app"], "text": n["text"]} for n in no_ga4 or []],
                "portfolio": portfolio_step(out_dir, parts), "apps": rows}
         dashboard["active"] = out

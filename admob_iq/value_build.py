@@ -494,6 +494,11 @@ def app_step(store, a, udet, key, st, now_iso, rev, pre, cfg, out_dir, act_alert
         row.setdefault("_alerts", [])
         return row
     detail["no_ads"] = spend is None or not spend.get("sids")
+    try:                                                # the All-apps lists (SPEC_SIMPLIFY; shown only — a failure
+        row["_info"] = val.compact_info(detail)         # costs them, never the app)
+        row["_closed"] = val.recent_closed(row.get("_closed"), detail.get("settled_till"))
+    except Exception:
+        row["_info"], row["_closed"] = [], []
     name = PREFIX + key + ".json.gz"
     write_json_gz_stable(os.path.join(out_dir, name), detail)
     row.update(file=name, sig=_sig(detail))
@@ -556,7 +561,9 @@ def _clean_files(out_dir, keep):
 def finish(dashboard, out_dir, rows, pre, st, data_dir, no_ga4, cfg, status=None):
     """The end of the step: the portfolio curve shape + state saved, stale files removed, then dashboard["value"] LAST.
     Never raises: a failure removes dashboard["value"] and prints the error type only. Without any install-day file
-    yet nothing is written, set or printed."""
+    yet nothing is written, set or printed. info / closed (SPEC_SIMPLIFY): every app's compact info rows (engine
+    compact_info: ≤ 5 per app, ≤ 90 days) and its alerts closed in the last 7 days, so the All-apps lists never depend
+    on the opened per-app files."""
     try:
         if not any(r.get("_has") for r in rows):
             _clean_files(out_dir, set())
@@ -564,10 +571,14 @@ def finish(dashboard, out_dir, rows, pre, st, data_dir, no_ga4, cfg, status=None
             return
         alerts = val.sort_alerts([al for r in rows for al in (r.pop("_alerts", None) or [])])
         shapes = [r.pop("_shape", None) for r in rows]
+        info = [x for r in rows for x in r.pop("_info", None) or []]            # rows keep their app order
+        closed = val.act.sort_closed([a for r in rows for a in r.pop("_closed", None) or []])
         for r in rows:
             r.pop("_alerts", None)
             r.pop("_shape", None)
             r.pop("_has", None)
+            r.pop("_info", None)
+            r.pop("_closed", None)
         ps = val.portfolio_shape([s for s in shapes if s])
         st["portfolio_shape"] = ps or st.get("portfolio_shape") or {}
         save_state(data_dir, st)
@@ -614,6 +625,7 @@ def finish(dashboard, out_dir, rows, pre, st, data_dir, no_ga4, cfg, status=None
                               "spend_ccy": ((pre or {}).get("spend") or {}).get("ccy"),
                               "settled_till_min": stl[0] if stl else None, "settled_till_max": stl[-1] if stl else None,
                               "counts": cnt, "consts": c, "alerts": alerts, "alert_counts": ac,
+                              "info": info, "closed": closed,
                               "no_ga4": [{"app_id": n["app_id"], "app": n["app"], "text": n["text"]}
                                          for n in no_ga4 or []],
                               "apps": rows}

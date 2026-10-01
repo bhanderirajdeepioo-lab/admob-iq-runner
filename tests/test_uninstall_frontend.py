@@ -190,14 +190,18 @@ def test_each_apps_stay_tiles_say_what_the_engine_computed(report, fixture):
 
 
 def test_the_portfolio_pools_every_apps_curve_the_engines_way(report, fixture):
-    curves = [a["survival"]["all"] for a in fixture["asset"]["apps"]]
-    S, left = 1.0, []
-    for N in range(91):
-        X = sum(c["x"][N] for c in curves if N < len(c["x"]))
-        R = sum(c["r"][N] for c in curves if N < len(c["r"]))
-        S *= 1 - (min(1, X / R) if R > 0 else (1 if X > 0 else 0))
-        left.append(S)
-    assert report["pooled"] == [[N, per100(left[N])] for N in (1, 7, 30, 90)]
+    # SPEC_SIMPLIFY §6.2: one section = one window — the pooled "7 din baad bhi app me" of the apps whose day-7 verdict
+    # reads the SAME 4 settled install weeks (vs the 4 before), weighted by those weeks' users (was: every all-time curve)
+    vs = [a["survival"]["verdict"] for a in fixture["asset"]["apps"]]
+    vs = [v for v in vs if v and v["n"] == 7 and v["recent"]["users"] > 0 and v["prev"]["users"] > 0]
+    wk = lambda v: (v["recent"]["from"], v["recent"]["to"], v["prev"]["from"], v["prev"]["to"])
+    cnt = {}
+    for v in vs:
+        cnt[wk(v)] = cnt.get(wk(v), 0) + 1
+    top = sorted(cnt, key=lambda k: (-cnt[k], [-ord(c) for c in "|".join(k)]))[0]
+    V = [v for v in vs if wk(v) == top]
+    r = sum(v["recent"]["users"] * v["recent"]["left"] for v in V) / sum(v["recent"]["users"] for v in V)
+    assert report["pooled"] == [[7, per100(r)]]
 
 
 def test_the_all_time_normal_row_is_the_apps_own_curve_and_never_goes_down(report):
@@ -219,8 +223,8 @@ def test_an_open_install_alert_is_its_own_chip_never_under_a_plain_green_tick(re
     # the "Same as last month" count leaves out every app with an open install alert, and apps whose shown numbers
     # differ by min_pp or more without a real change ("Maybe changed"); worse / better stay where they were
     want, chips = expected_chips(fixture), report["xp"]["chips"]
-    assert chips["same"] == {"label": "Same as last month", "n": len(want["same"])} and want["same"]
-    assert chips["unsure"] == {"label": "Maybe changed", "n": len(want["unsure"])} and want["unsure"]
+    assert chips["same"] == {"label": "⚪ Normal", "n": len(want["same"])} and want["same"]           # SPEC_SIMPLIFY §6.4 words
+    assert chips["unsure"] == {"label": "⚪ Normal (farak pakka nahi)", "n": len(want["unsure"])} and want["unsure"]
     for a in fixture["asset"]["apps"]:
         for x in a["alerts"]:
             if x["family"] == "cohort" and x["dir"] == "up":
@@ -229,10 +233,10 @@ def test_an_open_install_alert_is_its_own_chip_never_under_a_plain_green_tick(re
 
 def test_every_status_chip_opens_exactly_its_apps(report, fixture):
     want, xp = expected_chips(fixture), report["xp"]
-    labels = {"worse": "Worse than last month", "wk_up": "Some install weeks worse", "better": "Better than last month",
-              "wk_dn": "Some install weeks better", "same": "Same as last month", "unsure": "Maybe changed",
-              "none": "Not enough data yet", "r_up": "Higher", "r_zero": "0 recorded", "r_dn": "Lower", "r_ok": "Normal",
-              "r_none": "No rate yet"}
+    labels = {"worse": "🔴 Bigda", "wk_up": "🟡 Dhyan do", "better": "🟢 Behtar",                  # SPEC_SIMPLIFY §6.4
+              "wk_dn": "🟢 Behtar (install hafte)", "same": "⚪ Normal", "unsure": "⚪ Normal (farak pakka nahi)",
+              "none": "⏳ Abhi jaldi", "r_up": "🔴 Bigda", "r_zero": "🟡 Dhyan do (0 record)", "r_dn": "🟢 Behtar", "r_ok": "⚪ Normal",
+              "r_none": "⏳ Abhi jaldi"}
     assert sum(1 for L in want.values() if L) >= 9                          # the fixture opens most of them
     for k, L in want.items():
         o = xp["open"][k]
@@ -250,7 +254,7 @@ def test_every_status_chip_opens_exactly_its_apps(report, fixture):
 def test_no_run_on_app_list_renders_by_default(report, fixture):
     xp, portfolio = report["xp"], report["portfolio"]
     assert xp["default_open"] is False                                        # no chip open, no app chip in the card
-    assert xp["glance"].strip().startswith("📌 At a glance All apps Stay after 1 day ")
+    assert xp["glance"].strip().startswith("SAB APPS MILAKAR (")                         # SPEC_SIMPLIFY §1.5: the grey band
     for a in fixture["asset"]["apps"]:
         assert a["app"] not in xp["glance"]                                   # counts only — the names wait for a tap
     for s in ("me kuch dino ke installs", "Roz ka uninstall rate:", "pichhle mahine se kam bache", "baaki 1", "baaki 2", "baaki 3",
@@ -312,7 +316,7 @@ def test_test_installs_before_the_launch_are_hidden_with_one_line_and_shown_on_a
         assert "test installs before launch (16 Jun) shown · Hide" in t and "🧪 Test installs (before launch 16 Jun)" in t
         assert "installs · test" in t and "── 2025 ──" in t and "── 2026 ──" in t        # the test weeks + their year
         assert "0 installs · test" not in t                                               # an empty test week: not a row
-        assert "Since GA4 start (20 Aug 2025):" in t and "20 Aug 2025–23 Sep 2026 · 400d" in t
+        assert "Since GA4 start (20 Aug 2025):" in t and "Pichhle 7 din (17–23 Sep)" in t   # the Period picker is hidden (§6.2)
         assert "(incl. test installs before launch 16 Jun 2026)" in t                      # next to a 2025 date: its year
     assert "(launch 16 Jun se; usse pehle ke test installs nahi)" in tx["detail|Demo Wallpapers|all|30|cp|false"]
     # more than a trickle a day before the launch: only "maybe test" (could be early real users)
@@ -324,12 +328,12 @@ def test_test_installs_before_the_launch_are_hidden_with_one_line_and_shown_on_a
 def test_every_date_says_its_year_when_it_is_not_obvious(report):
     tx = report["texts"]
     cal = tx["detail|Demo Caller – Test App|all|30|cp|false"]
-    assert "All time = 27 Jan–16 Sep 2026 ke saare pakke installs" in cal                # 8 months back: the year
+    assert "All time = 27 Jan–16 Sep ke saare pakke installs" in cal                     # this year: no year (SPEC_SIMPLIFY §1.1)
     assert "── 2026 ──" in tx["detail|Demo Caller – Test App|all|90|all|true"]         # the triangle's year rows
     assert "Installs 16–22 Sep" in cal                                                   # this month: plain
     wal = tx["pre|Demo Wallpapers|all"]                                                  # across a year: both years
-    assert "All time = 20 Aug 2025–16 Sep 2026 ke saare pakke installs" in wal and "20 Aug 2025–23 Sep 2026 · 400d" in wal
-    assert "2025–16 Sep ke" not in wal and "2025–23 Sep ·" not in wal
+    assert "All time = 20 Aug 2025–16 Sep 2026 ke saare pakke installs" in wal
+    assert "2025–16 Sep ke" not in wal
     assert "29 Dec 2025–4 Jan" in wal                  # a triangle week under its "── 2026 ──" row: the short form
 
 
@@ -338,48 +342,54 @@ def test_old_install_changes_are_info_in_a_collapsed_list_never_counted(report, 
     olds = [(a["app"], o) for a in fixture["asset"]["apps"] for o in a["old_changes"]]
     assert olds and all(o["checkpoint"] == "D180" for _, o in olds)
     n_open = len(fixture["dashboard_uninstall"]["alerts"])
-    assert report["plain_what_changed"] == str(n_open)                                   # not counted in "What changed?"
-    assert "▸ Older changes (%d) Show" % len(olds) in tx["portfolio_30d"] and "Mar 2026" not in glance
+    # SPEC_SIMPLIFY §6.3: "What changed? (n) Har app alag · n shown · m folded below" — every open alert and every old
+    # install week is a row (old ones: ℹ️ Jaankari / 🗄 in the folds, never an alert), nothing lost
+    shown, folded = report["what_changed_counts"]
+    # (a change older than 90 days — these March installs — is not listed anywhere, only in the app's charts: §1.3 / N3)
+    assert report["plain_what_changed"] == str(shown) and shown + folded == n_open
+    assert "Mar 2026" not in glance and "14–20 Mar" not in tx["portfolio_30d"]
     cal_closed = tx["detail|Demo Caller – Test App|all|30|cp|false"]
-    assert "▸ Older changes (1) Show" in cal_closed and "Installs 14–20 Mar 2026" not in cal_closed
-    assert "Closed alerts" not in cal_closed                                # none closed: no such list
+    assert "Installs 14–20 Mar" not in cal_closed.split("🧮")[0]
+    assert "▸ Closed (" not in cal_closed                                   # none closed: no such list
     cal_open = tx["detail|Demo Caller – Test App|all|90|all|true"]
-    # March installs are compared with the 4 weeks before THEM — "pichhle 4 hafte" would read as the last 4 weeks
-    assert ("Info 180 din ke andar 58% ne hataya — usse pehle ke 4 hafte (14 Feb–13 Mar 2026) me 52% "
-            "Installs 14–20 Mar 2026") in cal_open
-    assert "▸ Older changes (1) Hide" in cal_open and "60 din se purane installs ke badlaav — sirf jaankari" in cal_open
+    assert "180 din me hataane wale" not in cal_open                        # > 90 days old: not in the list (N3)
     # the full table's 180-day row: the same change — "Old installs", never "Normal" next to its arrow
-    assert re.search(r"180 days .*? ▲ \+6 pts 14–20 Mar 2026 ℹ️ Old installs 210 days", cal_open)
+    assert re.search(r"180 days .*? ▲ 100 me \+6 14–20 Mar ℹ️ Old installs 210 days", cal_open)   # (§1.7 "100 me", §1.1 no year)
 
 
 def test_what_changed_rows_carry_severity_dates_tags_and_open(report, fixture):
     p = report["texts"]["portfolio_30d"]
     ic = r"(?:[A-Z?] )?"                                     # the app icon (its letter when no image) before the name
-    # one row per open alert: severity pill · app · plain line · dates · Provisional / New · Open →
-    assert re.search(r"Worse " + ic + r"Demo Caller – Test App \d+ din ke andar [\d.]+% ne hataya, normal [\d.]+% — "
-                     r"[^—]*? se zyada Installs 16–22 Sep Provisional Open →", p)
-    assert re.search(r"Worse " + ic + r"Demo Launcher Ek din me achanak zyada uninstall — [^→]*? 23 Sep Provisional New Open →", p)
-    assert re.search(r"Watch " + ic + r"Demo Wallpapers Ek bhi uninstall record nahi hua — GA4 / Firebase tracking check karo "
-                     r"14 Sep New Open →", p)
-    assert re.search(r"Worse " + ic + r"Demo Weather Roz ka uninstall dheere dheere badh raha — har 1,000 active users me [\d.]+ → [\d.]+ "
-                     r"\(\+\d+%\) Since 12 Sep Provisional Open →", p)
-    assert re.search(r"Better " + ic + r"Demo Flashlight Install ke din hi [\d.]+% ne hataya, normal [\d.]+% — [^—]*? se kam "
-                     r"Installs 8–14 Sep Open →", p)
-    assert p.count("Open →") == len(fixture["dashboard_uninstall"]["alerts"])        # old changes: collapsed
-    # an app's own rows: no app, the same pill / dates / tags, and Open → (to its table or chart)
+    # SPEC_SIMPLIFY §6.3 + the owner's timestamp rule: status word · chip · app (size) · Open → / one fact / the grey
+    # 🕒 line (Alert bana · Data with ⏳ Pakka nahi · Badlaav shuru); good news and 30+ days old ones in the folds
+    ts = r"🕒 Alert bana: \d{1,2} [A-Z][a-z]{2}(?:, \d\d:\d\d IST)?(?: \(pehli jaanch me hi mila\))? · Data: "
+    # (an install-week watch is 🟡, SPEC_SIMPLIFY §1.8 — the old row called every "up" week Worse)
+    assert re.search(r"🟡 Dhyan do (?:🆕 Naya|🔁 Chal raha) " + ic + r"Demo Caller – Test App Open → Agle din hataane wale: 100 me [\d.]+ → [\d.]+ [^🕒]*"
+                     + ts + r"Installs 16–22 Sep · vs pehle \([^)]*\) · ⏳ Pakka nahi · \d+ [A-Z][a-z]{2} ko pakka · Badlaav shuru: ", p)
+    assert re.search(r"🔴 Bigda (?:🆕 Naya|🔁 Chal raha) " + ic + r"Demo Launcher Open → Ek din me zyada hataaye: har 1,000 users me [\d.]+, normal ~[\d.]+ [^🕒]*"
+                     + ts + r"Ek din: 23 Sep · vs normal range · ⏳ Pakka nahi", p)
+    assert re.search(r"🟡 Dhyan do (?:🆕 Naya|🔁 Chal raha) " + ic + r"Demo Wallpapers Open → Ek bhi uninstall record nahi hua Saath me: data me gadbad\? "
+                     r"GA4 / Firebase tracking check karo " + ts + r"Ek din: 14 Sep", p)
+    assert re.search(r"🔴 Bigda (?:🆕 Naya|🔁 Chal raha) " + ic + r"Demo Weather Open → Roz hataane wale: har 1,000 users me [\d.]+ → [\d.]+ "
+                     r"\(\+\d+%\) [^🕒]*" + ts + r"Roz ka avg 12–23 Sep · vs ", p)
+    assert "🟢 Good news (" in p and "Demo Flashlight" not in p.split("What changed?")[1].split("🟢 Good news")[0]   # good news: folded
+    assert "Provisional" not in p and " New " not in p
+    # an app's own rows: no app, the same word / chip / 🕒 line, and Open → (to its table or chart)
     cal = report["texts"]["detail|Demo Caller – Test App|all|30|cp|false"]
-    assert re.search(r"What changed\? \(2\) Worse \d+ din ke andar [^→]*? Installs 16–22 Sep Provisional Open →", cal)   # + v3.2's HALT
+    assert re.search(r"What changed\? \(\d\) Sirf ye app: Demo Caller – Test App · \d shown · \d folded below 🔴 Bigda (?:🆕 Naya|🔁 Chal raha) Open → "
+                     r"🛑 Update roko [^🕒]*? " + ts + r"v3\.2 \(10 Sep\) se pehle vs baad .*? 🟡 Dhyan do (?:🆕 Naya|🔁 Chal raha) Open → "
+                     r"Agle din hataane wale: [^🕒]*" + ts + r"Installs 16–22 Sep", cal)   # + v3.2's 🛑 first (🔴 before 🟡)
 
 
 def test_the_header_never_says_all_apps_over_one_apps_detail(report):
     h = report["header2"]
     # "All apps" picked in the header (here, or on another tab): the detail closes — the portfolio is shown
     assert h["all"]["app"] == "" and h["all"]["uniapp"] == "" and h["all"]["sel"] == '<option value="">All apps (0)</option>'
-    assert h["all"]["screen"].startswith('<h2 class="sc">Uninstall</h2><p class="scd">')
+    assert h["all"]["screen"].startswith('<h2 class="sc">Uninstall</h2><p class="scd smp-top">')      # (§6.1 first line)
     # another app picked: that app's detail; then "All apps": the portfolio (never the first app's detail again)
     assert h["other"]["app"] == h["B"] and h["other"]["uniapp"] == "" and "backlnk" in h["other"]["screen"]
-    assert h["back"]["app"] == "" and h["back"]["screen"].startswith('<h2 class="sc">Uninstall</h2><p class="scd">')
-    assert h["stale"]["screen"].startswith('<h2 class="sc">Uninstall</h2><p class="scd">')   # an old saved view
+    assert h["back"]["app"] == "" and h["back"]["screen"].startswith('<h2 class="sc">Uninstall</h2><p class="scd smp-top">')
+    assert h["stale"]["screen"].startswith('<h2 class="sc">Uninstall</h2><p class="scd smp-top">')   # an old saved view
 
 
 def test_overview_says_an_uninstall_only_app_has_no_admob_data(report):
@@ -399,7 +409,7 @@ def test_every_every_day_page_names_the_4_weeks_and_no_page_is_only_test_install
 
 def test_no_verdict_for_a_young_app_blames_its_age_not_the_data(report):
     t = report["texts"]["no_verdict_young_launch"]
-    assert "ℹ️ Not enough data" in t and "Pichhle mahine se tulna ~2 mahine ke data ke baad" in t and "adhoora/gayab" not in t
+    assert "⏳ Abhi jaldi" in t and "Pichhle mahine se tulna ~2 mahine ke data ke baad" in t and "adhoora/gayab" not in t
 
 
 def test_app_updates_are_a_line_right_above_the_install_week_they_fell_in(report):
@@ -411,46 +421,46 @@ def test_app_updates_are_a_line_right_above_the_install_week_they_fell_in(report
     for m in ("cp", "all"):                                  # the fixture's own updates (the engine's releases)
         cal, wea, lau, fla = (tx["rel|%s|%s|false|false" % (a, m)] for a in
                               ("Demo Caller – Test App", "Demo Weather", "Demo Launcher", "Demo QR Scanner"))
-        assert "📦 New update v3.2 — 10 Sep (mid-week) 7–13 Sep 📦 " in cal and legend in cal
-        assert re.search(r"14–20 Sep [^📦–]* 📦 New update v3\.2", cal)                   # between 14–20 and 7–13 Sep
-        assert re.search(r"20–26 Jul [^📦–]* 📦 New update v4\.1 — 15 Jul \(mid-week\) 13–19 Jul 📦 ", wea)
-        assert "📦 New update — 5 Aug (sudden jump in users updating) 3–9 Aug 📦 " in lau and legend in lau
+        assert "📦 Update v3.2 — 10 Sep (mid-week) 7–13 Sep 📦 " in cal and legend in cal
+        assert re.search(r"14–20 Sep [^📦–]* 📦 Update v3\.2", cal)                   # between 14–20 and 7–13 Sep
+        assert re.search(r"20–26 Jul [^📦–]* 📦 Update v4\.1 — 15 Jul \(mid-week\) 13–19 Jul 📦 ", wea)
+        assert "📦 Update — 5 Aug (sudden jump in users updating) 3–9 Aug 📦 " in lau and legend in lau
         assert "📦" not in fla                                                             # no update: no line, no legend
-        assert r["tips"]["Demo Caller – Test App|%s|false|false" % m] == ["New update v3.2 this week — 10 Sep"]
+        assert r["tips"]["Demo Caller – Test App|%s|false|false" % m] == ["Update v3.2 — 10 Sep"]
         assert r["tips"]["Demo Launcher|%s|false|false" % m] == [
-            "New update this week — 5 Aug (sudden jump in users updating)"]
+            "Update — 5 Aug (achanak kai users ne update kiya)"]
         # several in one week: ONE line naming them all (a version already called "v…" is not "vv…")
         two = tx["rel|two|" + m]
         assert "📦 3 updates: v3.2 (8 Sep), update (11 Sep), v3.2.1 (12 Sep) 7–13 Sep 📦 " in two
         assert two.count("updates:") == 1 and "vv" not in two
         assert r["tips"]["two|" + m] == ["3 updates this week: v3.2 (8 Sep), update (11 Sep), v3.2.1 (12 Sep)"]
         # in the newest (partial) week: under the year row, above that week, first thing after the 4-week row
-        assert re.search(r"4-week average .*? ── 2026 ── 📦 New update v3\.3 — 22 Sep \(mid-week\) "
+        assert re.search(r"4-week average .*? ── 2026 ── 📦 Update v3\.3 — 22 Sep \(mid-week\) "
                          r"21–23 Sep \(only 3 days\) 📦 [\d.k]+ installs", tx["rel|newest|" + m])
         assert "📦" not in tx["rel|none|" + m]
         # among the test installs before the launch: only while those are shown, with its year, under its year row
         assert "📦" not in tx["rel|test|%s|false" % m]
-        assert "── 2025 ── 📦 New update v1.1 — 24 Dec 2025 (mid-week) 22–28 Dec 📦 " in tx[
+        assert "── 2025 ── 📦 Update v1.1 — 24 Dec 2025 (mid-week) 22–28 Dec 📦 " in tx[
             "rel|test|%s|true" % m] and legend in tx["rel|test|%s|true" % m]
         # the week the launch cuts in two: the launch day's update above the first launched week, the last test
         # week's only while the test installs are shown
-        launch = ["New update v1.0 this week — 16 Jun"]
+        launch = ["Update v1.0 — 16 Jun"]
         assert r["tips"]["launch|%s|false" % m] == launch
-        assert r["tips"]["launch|%s|true" % m] == launch + ["New update v0.9 this week — 14 Jun"]
+        assert r["tips"]["launch|%s|true" % m] == launch + ["Update v0.9 — 14 Jun"]
     # "Every day" page 2 (days 31–61: the same weeks) keeps every 📦 line
     for pre in ("false", "true"):
         assert r["pages"]["Demo Caller – Test App|all|%s|page2" % pre] == 1
-        assert r["tips"]["Demo Caller – Test App|all|%s|page2" % pre] == ["New update v3.2 this week — 10 Sep"]
-        assert r["tips"]["Demo Weather|all|%s|page2" % pre] == ["New update v4.1 this week — 15 Jul"]
+        assert r["tips"]["Demo Caller – Test App|all|%s|page2" % pre] == ["Update v3.2 — 10 Sep"]
+        assert r["tips"]["Demo Weather|all|%s|page2" % pre] == ["Update v4.1 — 15 Jul"]
 
 
 # ── 📦 Update impact: the owner's verify gate ──────────────────────────────────────────────────────
 
 IMPACT_ROWS = ["returning_dau", "new_d1", "new_d7", "sessions", "time", "arpdau", "uninstall_d0"]
-IMPACT_LABELS = ["Returning DAU", "New users back next day (D1)", "New users back after 7 days (D7)", "Sessions per user",
-                 "Time per user", "Ad revenue per user", "Uninstall on install day"]
+IMPACT_LABELS = ["Purane users (roz)", "Users back next day", "Users back after 7 days", "Sessions per user",
+                 "Time per user", "Kamai har 1,000 users se (roz)", "Uninstall on install day"]
 IMPACT_HEADER = re.compile(r"📦 (v\S+( → v\S+)?|App update) — \d{1,2} [A-Z][a-z]{2}( \d{4})? · Verdict: "
-                           r"(✅ WIN|👍 CONTINUE|⚠️ HOLD|🛑 HALT|⏳ Too early)")
+                           r"(✅ Update achha gaya|👍 Chalne do|⚠️ Ruk ke jaancho|🛑 Update roko|⏳ Abhi jaldi)")
 
 
 def test_every_update_block_shows_the_four_must_haves_the_install_day_row_the_version_table_and_a_verdict(report, fixture):
@@ -467,7 +477,7 @@ def test_every_update_block_shows_the_four_must_haves_the_install_day_row_the_ve
         assert IMPACT_HEADER.search(blk["header"]), blk["header"]
         assert blk["heads"][0] == "Metric" and blk["heads"][1] == "Before (7 days)" and blk["heads"][3:5] == ["Change", "Status"]
         assert re.match(r"^After \((7 days|\d of 7 days)\)$", blk["heads"][2]), blk["heads"]
-        assert blk["heads"][5:] == ["Metric", "Older versions", b["versions_cmp"]["new_label"] or "New version", "Difference", "Status"]
+        assert blk["heads"][5:] == ["Metric", "Older versions", b["versions_cmp"]["new_label"] or "This version", "Difference", "Status"]
         assert blk["why"] and len(blk["statuses"]) == 9                # every row has its status pill
         kinds.add((b["kind"], b["verdict"]["level"]))
     assert {lv for _, lv in kinds} == {"halt", "hold", "continue", "win", None} and ("update", "continue") in kinds
@@ -486,15 +496,23 @@ def test_every_update_line_in_the_install_week_table_opens_its_block(report):
 
 
 def test_recent_updates_count_every_verdict_and_each_chip_shows_only_its_updates(report, fixture):
+    # SPEC_SIMPLIFY §6.5 "📦 Updates ka asar (pichhle 60 din)": 🛑 Update roko, ⚠️ Ruk ke jaancho, ✅ Update achha gaya —
+    # every one, in that order, no cut (a ⏰ late HOLD / HALT orders as that verdict) — then ONE folded line of counts
+    # "⏳ Abhi jaldi (n) · 👍 Chalne do (n) · — Faisla nahi (n)" that opens the rest (was: 5 verdict filter chips)
     counts = fixture["dashboard_uninstall"]["impact_counts"]
     p = report["impact"]["portfolio"]
-    labels = {"halt": "🛑 HALT", "hold": "⚠️ HOLD", "continue": "👍 CONTINUE", "win": "✅ WIN", "pending": "⏳ Too early"}
-    assert {k: v["n"] for k, v in p[""]["chips"].items()} == counts
-    assert {k: v["label"] for k, v in p[""]["chips"].items()} == labels
-    assert sorted(p[""]["rows"]) == sorted(k for k, n in counts.items() for _ in range(n)) and p[""]["on"] == []
-    for k, n in counts.items():
-        assert p[k]["rows"] == [k] * n and p[k]["on"] == [k], k
-    assert "No app updates" not in p[""]["text"] and "updated" in p[""]["text"]
+    ups = [u for a in fixture["dashboard_uninstall"]["apps"] for u in a.get("updates") or []]
+    late = [u for u in ups if (u.get("late") or {}).get("level") in ("hold", "halt") and u.get("level") not in ("halt", "hold")]
+    rank = {"halt": 0, "hold": 1, "win": 2}
+    lv = lambda u: u["late"]["level"] if u in late else u.get("level")
+    main = sorted((rank[lv(u)] for u in ups if lv(u) in rank))
+    assert len(p[""]["rows"]) == len(main) == counts.get("halt", 0) + counts.get("hold", 0) + counts.get("win", 0) + len(late)
+    assert p[""]["chips"] == {} and p[""]["on"] == []
+    rest = [u for u in ups if lv(u) not in rank]
+    assert "⏳ Abhi jaldi (" in p[""]["text"] and "· 👍 Chalne do (%d) ·" % sum(1 for u in rest if u.get("level") == "continue") in p[""]["text"]
+    assert "— Faisla nahi (" in p[""]["text"] and len(p["open"]["rows"]) == len(ups)
+    assert sorted(p["open"]["rows"]) == sorted(k for k, n in counts.items() for _ in range(n))
+    assert "No app updates" not in p[""]["text"] and "ne update kiya" in p[""]["text"]
 
 
 def test_update_alerts_on_the_alerts_screen_open_their_update(report, fixture):
@@ -527,12 +545,12 @@ def test_update_cards_say_what_their_numbers_are_and_never_hide_a_failure(report
     assert re.search(r'title="After hafte ke sabse naye din \(\d+ [A-Z][a-z]{2}\) tak kitne active users naye version pe', cal)
     # the change a row was judged on is the MAIN number (SPEC_WINDOWS §5): ARPDAU "Ads/user … vs expected", its plain
     # revenue change under it with eCPM (the market's); the old "net of the usual trend" / "(judged)" sub-lines are gone
-    assert re.search(r">Ads/user [−+]?[\d.]+% vs expected</span>", cal)
-    assert re.search(r">kamai/user [−+]?[\d.]+%? seedha \(eCPM [−+]?[\d.]+%? — market\)</div>", cal)
+    assert re.search(r">AdMob ads/user [−+]?[\d.]+% vs expected</span>", cal)
+    assert re.search(r">kamai/user [−+]?[\d.]+%? seedha \(ad rate [−+]?[\d.]+%? — bazaar\)</div>", cal)
     assert "net of the usual trend" not in cal and "(judged)" not in cal
     n = im["never"]
-    assert '⏳ Too early' in n["h"] and 'title="Agla update bahut jaldi aa gaya"' in n["h"] and ">No verdict</span>" in n["h"]
-    assert ">No verdict</span>" in n["p"]
+    assert '⏳ Abhi jaldi' in n["h"] and 'title="Agla update bahut jaldi aa gaya"' in n["h"] and ">— Faisla nahi (agla update jaldi aaya)</span>" in n["h"]
+    assert ">— Faisla nahi (agla update jaldi aaya)</span>" in n["p"]
     assert im["upd_throw"]
 
 
@@ -552,22 +570,22 @@ def test_rows_nobody_judged_show_only_the_plain_change_and_no_headline_comes_fro
         # (a row with a ⏰ late chip says its headline is the 7 days': "7 days: …" — review 2026-09-28)
         pre = "7 days: " if h["late"] else ""
         if h["head_row"] is None:
-            assert h["hl"] == (None if h["lv"] == "pending" else pre + "No clear change"), h
+            assert h["hl"] == (None if h["lv"] == "pending" else pre + "Koi pakka farak nahi"), h
         else:
             assert h["head_status"] in ("worse", "better") and h["hl"] and h["hl"].startswith(pre), h
-            assert h["hl"] != pre + "No clear change", h
-    assert sorted(h["hl"] for h in heads if h["lv"] == "continue") == ["7 days: No clear change"] + ["No clear change"] * 2
+            assert h["hl"] != pre + "Koi pakka farak nahi", h
+    assert sorted(h["hl"] for h in heads if h["lv"] == "continue") == ["7 days: Koi pakka farak nahi"] + ["Koi pakka farak nahi"] * 2
     assert [h["late"] for h in heads].count(True) == 1                       # Late Drop v2.0 (its late HOLD)
     # a young app that grew fast before its update (synthetic): Low data rows with a model level beside them
     s = d["synth"]
-    assert "1,200 1,300 +8.3% vs before Low data Update se pehle app tez badh raha tha (~×6.7/hafta)" in s["dau"]
+    assert "1,200 1,300 +8.3% vs before ⏳ Abhi jaldi (low data) Update se pehle app tez badh raha tha (~×6.7/hafta)" in s["dau"]
     assert "vs expected" not in s["dau"] and "9,000" not in s["dau"] and "−86%" not in s["dau"]
     assert "+5% vs before" in s["arp"] and "(judged)" not in s["arp"] and "+310%" not in s["arp"]
-    assert "impressions/user +40% · eCPM −30%" in s["arp"]                   # plain Before → After: still said
+    assert "ads har user +40% · ad rate −30%" in s["arp"]                   # plain Before → After: still said
     assert "+10% vs before" in s["ses"] and "net of the usual trend" not in s["ses"] and "−60%" not in s["ses"]
-    assert s["mini"].startswith("No clear change · Returning DAU low data · ") and "Ad revenue/user low data" in s["mini"]
+    assert s["mini"].startswith("Koi pakka farak nahi · Purane users (roz) kam data · ") and "Kamai/1,000 users kam data" in s["mini"]   # (no "low data" / "maybe" / "market": §6.4)
     assert "%" not in s["mini"] and "pts" not in s["mini"]
-    assert s["upd"].count("No clear change") == 2 and "−86%" not in s["upd"]  # a stale head on a Low data row: dropped
+    assert s["upd"].count("Koi pakka farak nahi") == 2 and "−86%" not in s["upd"]  # a stale head on a Low data row: dropped
     assert 'Normal trend : update se pehle koi number hafte me ×1.35 se tez badh / ghat raha ho' in im["how"]
 
 
@@ -579,25 +597,25 @@ def test_a_worse_or_better_row_is_headlined_by_what_it_was_judged_on_never_a_num
     # enough data yet", never "No clear change"
     d = report["impact"]["display"]
     hl = sorted(h["hl"] for h in d["heads"] if h["head_row"])
-    assert hl == ["Ads/user −7.8%", "D1 return +6 pts", "D1 return −2.5 pts", "Returning DAU −9.8% vs expected"], hl
+    assert hl == ["AdMob ads/user −7.8%", "Back next day 100 me +6", "Back next day 100 me −2.5", "Purane users (roz) −9.8% vs expected"], hl
     c = d["contra"]
-    assert '<span class="down">Ads/user −35%</span>' in c["mini"] and "+120%" not in c["mini"]
+    assert '<span class="down">AdMob ads/user −35%</span>' in c["mini"] and "+120%" not in c["mini"]
     # (SPEC_WINDOWS §5: the open row says "−8% vs expected" — the folded line uses the same word, not "net of trend")
     assert '<span class="down">Sessions/user −8% vs expected</span>' in c["mini"] and "+3%" not in c["mini"]
-    assert "Ads/user −35%" in c["upd"] and "+120%" not in c["upd"] and "No clear change" not in c["upd"]
-    assert '<span class="hl down">Ads/user −35%</span>' in c["upd_html"]
+    assert "AdMob ads/user −35%" in c["upd"] and "+120%" not in c["upd"] and "Koi pakka farak nahi" not in c["upd"]
+    assert '<span class="hl down">AdMob ads/user −35%</span>' in c["upd_html"]
     # the open rows (SPEC_WINDOWS §5): the judged "Ads/user −35%" / "−8% vs expected" is the main number, red; the plain
     # "kamai/user +120% seedha" / "seedha: +3% vs before" under it, never coloured
-    assert '<span style="font-weight:700;color:var(--bad)">Ads/user −35% vs expected</span>' in c["arp_cell"], c["arp_cell"]
-    assert re.search(r'<div class="s"[^>]*>kamai/user \+120% seedha \(eCPM \+210% — market\)</div>', c["arp_cell"]), c["arp_cell"]
+    assert '<span style="font-weight:700;color:var(--bad)">AdMob ads/user −35% vs expected</span>' in c["arp_cell"], c["arp_cell"]
+    assert re.search(r'<div class="s"[^>]*>kamai/user \+120% seedha \(ad rate \+210% — bazaar\)</div>', c["arp_cell"]), c["arp_cell"]
     assert '<span style="font-weight:700;color:var(--bad)">−8% vs expected</span>' in c["ses_cell"], c["ses_cell"]
     assert re.search(r'<div class="s"[^>]*>seedha: \+3% vs before</div>', c["ses_cell"]), c["ses_cell"]
     assert "color:" not in c["arp_cell"].split("</span>", 1)[1].split('<td class="st">')[0]   # nothing under the main number is coloured
     assert "color:" not in c["ses_cell"].split("</span>", 1)[1].split('<td class="st">')[0]
     # nothing measured
-    assert c["nd_mini"].startswith("Not enough data yet · Returning DAU low data · ") and "No clear change" not in c["nd_mini"]
-    assert "Not enough data yet" in c["nd_upd"] and "No clear change" not in c["nd_upd"]
-    assert 'title="Abhi koi number parkha nahi ja saka (Low data / No data)">Not enough data yet</span>' in c["nd_html"]
+    assert c["nd_mini"].startswith("⏳ Abhi jaldi · Purane users (roz) kam data · ") and "Koi pakka farak nahi" not in c["nd_mini"]
+    assert "⏳ Abhi jaldi" in c["nd_upd"] and "Koi pakka farak nahi" not in c["nd_upd"]
+    assert 'title="Abhi koi number parkha nahi ja saka (kam data / data nahi)">⏳ Abhi jaldi</span>' in c["nd_html"]
 
 
 # ── 📦 Before / after windows: 7 / 14 / 30 / 60 days (SPEC_WINDOWS §5) ─────────────────────────────────────────────
@@ -606,7 +624,7 @@ def test_a_worse_or_better_row_is_headlined_by_what_it_was_judged_on_never_a_num
 
 SEG = ["7 days", "14 days", "30 days", "60 days"]
 IMPACT_ROWS_30 = IMPACT_ROWS + ["new_d30"]
-D30_LABEL = "New users back after 30 days (D30)"
+D30_LABEL = "Users back after 30 days"
 LAG = 2
 
 
@@ -673,7 +691,7 @@ def test_windows_fixture_late_alerts_chips_and_what_changed_open_the_block_at_30
         assert [a["app_id"], a["release"]["key"]] in W["chg_late_app"], a["release"]
     ups = [(s["app_id"], u["key"]) for s in fixture["dashboard_uninstall"]["apps"] for u in s.get("updates") or [] if u.get("late")]
     assert ups and sorted((x[0], x[1]) for x in W["upd_late"]) == sorted(ups)
-    assert all(x[2] in ("⏰ 30 days: ⚠️ HOLD", "⏰ 30 days: 🛑 HALT") for x in W["upd_late"])
+    assert all(x[2] in ("30 din baad: ⚠️ Ruk ke jaancho", "30 din baad: 🛑 Update roko") for x in W["upd_late"])
 
 
 def test_windows_card_default_a_blocks_own_choice_and_the_viewers_memory(report):
@@ -710,8 +728,8 @@ def test_windows_actual_and_expected_label_every_model_number_and_only_on_judged
     c7 = V["7"]["cells"]
     assert "Actual: <b>2.40</b>" in c7["sessions"]["after"] and "Expected (bina update ke): 2.40" in c7["sessions"]["after"]
     assert "vs expected</span>" in c7["sessions"]["change"]
-    assert "Ads/user: 4.4 · expected (bina update ke) 4.4</div>" in c7["arpdau"]["after"] and "Actual: <b>$" in c7["arpdau"]["after"]
-    assert ">Ads/user −0.1% vs expected</span>" in c7["arpdau"]["change"]
+    assert "AdMob ads/user: 4.4 · expected (bina update ke) 4.4</div>" in c7["arpdau"]["after"] and "Actual: <b>$" in c7["arpdau"]["after"]
+    assert ">AdMob ads/user −0.1% vs expected</span>" in c7["arpdau"]["change"]
     for n in ("14", "30"):                                                # per-user rows at 14 / 30: plain, no model number
         for k in ("sessions", "time", "arpdau"):
             cc = V[n]["cells"][k]
@@ -720,7 +738,7 @@ def test_windows_actual_and_expected_label_every_model_number_and_only_on_judged
         assert "Actual: <b>" in V[n]["cells"]["returning_dau"]["after"]  # DAU keeps its expected level (3 weeks of trend)
     y = V["young"]["cells"]["returning_dau"]                              # a Low data DAU row: its number alone
     assert "Actual:" not in y["after"] and "xpected" not in y["after"] and "vs expected" not in y["change"] and ">5,765<" in y["after"]
-    assert "1,200 1,300 +8.3% vs before Low data" in report["impact"]["display"]["synth"]["dau"]
+    assert "1,200 1,300 +8.3% vs before ⏳ Abhi jaldi (low data)" in report["impact"]["display"]["synth"]["dau"]
 
 
 def test_windows_change_cell_main_number_is_the_judged_one_with_what_pakka_needs_and_plain_lines_never_coloured(report):
@@ -728,7 +746,7 @@ def test_windows_change_cell_main_number_is_the_judged_one_with_what_pakka_needs
     d30 = V["30"]["cells"]["returning_dau"]["change"]
     assert '<span style="font-weight:700">−3% vs expected</span>' in d30 and ">seedha: −2% vs before</div>" in d30
     assert re.search(r'<div class="s uni-need" title="Bina update ke bhi 30-din tulna aam taur pe ±25% hil jaata hai \(update se pehle ke hafton me yahi tulna karke napa\) — pakka tabhi jab farak isse ~3 guna ho">pakka: ≥ −52%</div>', d30), d30
-    assert "pakka: ≥ +7.4 pts" in V["30"]["cells"]["new_d1"]["change"] and "±2.5 pts" in V["30"]["cells"]["new_d1"]["change"]
+    assert "pakka: ≥ 100 me +7.4" in V["30"]["cells"]["new_d1"]["change"] and "100 me ±2.5" in V["30"]["cells"]["new_d1"]["change"]
     for n in ("7", "14", "30"):
         for k, cc in V[n]["cells"].items():
             subs = cc["change"].split("</span>", 1)[1] if "</span>" in cc["change"] else ""
@@ -736,7 +754,7 @@ def test_windows_change_cell_main_number_is_the_judged_one_with_what_pakka_needs
             assert "aam ±" not in cc["change"], (n, k)
             if n != "7" and k in ("sessions", "time"):
                 assert "seedha" not in cc["change"], (n, k)                # plain basis: one "vs before" number only
-    assert "kamai/user −10% seedha (eCPM +2% — market)" in V["30"]["cells"]["arpdau"]["change"]
+    assert "kamai/user −10% seedha (ad rate +2% — bazaar)" in V["30"]["cells"]["arpdau"]["change"]
 
 
 def test_windows_a_running_window_says_when_it_ends_and_when_its_verdict_comes(report, fixture):
@@ -745,18 +763,18 @@ def test_windows_a_running_window_says_when_it_ends_and_when_its_verdict_comes(r
     a0 = _d(b["windows"]["after"]["from"])
     end, jd = a0 + timedelta(days=59), a0 + timedelta(days=59 + 10 + LAG)
     v = V["60"]
-    assert v["heads"][:3] == ["Metric", "Before (60 days)", "After (12 of 60 days)"] and "(12 of 60 days settled)" in v["text"]
+    assert v["heads"][:3] == ["Metric", "Before (60 days)", "After (12 of 60 days)"] and "(60 me se 12 din pakke)" in v["text"]
     assert v["mini_text"] == "⏳ 60 din poore ~%s · faisla ~%s" % (day_txt(end.isoformat()), day_txt(jd.isoformat()))
     assert "Why: 60 din poore ~%s ko · faisla ~%s ko" % (day_txt(end.isoformat()), day_txt(jd.isoformat())) in v["text"]
     st = [c["status"] for c in v["cells"].values()]
     assert len(st) == 8 and all('data-st="pending"' in s for s in st)
     assert sum('<span title="60 din poore hone par faisla">ready ~%s</span>' % day_txt(jd.isoformat()) in s for s in st) == 7   # D30: its own day
-    assert "Verdict (60 days): ⏳ Too early" in v["header"]
+    assert "Verdict (60 days): ⏳ Abhi jaldi" in v["header"]
     nv = V["never"]                                                   # no row can ever fill: the engine's why, no date promised
     assert "faisla ~" not in nv["h"] and "faisla ~" not in nv["mini"] and "din poore ~" not in nv["mini"]
     assert "<b>Why:</b> Update app launch ke 60 din ke andar aaya — pehle ke poore 60 din nahi</div>" in nv["h"]
-    assert 'title="Update app launch ke 60 din ke andar aaya — pehle ke poore 60 din nahi">⏳ Too early</span>' in nv["mini"]
-    assert "Early" in V["30"]["header"] and 'title="D30 abhi baaki — faisla badal sakta hai">Early</span>' in V["30"]["h"]
+    assert 'title="Update app launch ke 60 din ke andar aaya — pehle ke poore 60 din nahi">⏳ Abhi jaldi</span>' in nv["mini"]
+    assert "⏳ Pehli jhalak (pakka nahi)" in V["30"]["header"] and 'title="30 din baad wapas abhi baaki — faisla badal sakta hai">⏳ Pehli jhalak (pakka nahi)</span>' in V["30"]["h"]
 
 
 def test_windows_mixed_told_and_the_version_table(report):
@@ -772,17 +790,17 @@ def test_windows_mixed_told_and_the_version_table(report):
     tb = report["win"]["syn"]["views"]["told_by"]                                             # the engine's told_by names it
     assert "7 din ke faisle me pehle hi dikha (v9.9)</div>" in tb["new_d1"]["status"] and "pehle hi dikha</div>" in tb["arpdau"]["status"]
     y = V["young"]["h"]                                                   # the app's short history: said once
-    assert "30-din tulna ke liye update se pehle ~26 hafte ka data chahiye — is app ke paas ~20 hafte ka tha; isliye kai rows 'Low data'" in y
+    assert "30-din tulna ke liye update se pehle ~26 hafte ka data chahiye — is app ke paas ~20 hafte ka tha; isliye kai rows ⏳ Abhi jaldi (low data)" in y
 
 
 def test_windows_late_chip_alert_card_what_changed_and_recent_updates_open_the_block_at_30(report):
     S = report["win"]["syn"]
     V, k = S["views"], S["views"]["k"]
-    chip = "onclick=\"event.stopPropagation();uniImp('%s','uni',30)\">⏰ 30 days: " % k
-    assert chip + "🛑 HALT</span>" in V["late_hdr"] and chip + "⚠️ HOLD</span>" in V["late_v30"]
+    chip = "onclick=\"event.stopPropagation();uniImp('%s','uni',30)\">30 din baad: " % k
+    assert chip + "🛑 Update roko</span>" in V["late_hdr"] and chip + "⚠️ Ruk ke jaancho</span>" in V["late_v30"]
     assert 'title="30 din baad naya nuksaan — 7 din me nahi dikha tha"' in V["late_hdr"]
     t = S["late_tap"]
-    assert t["call"] == "event.stopPropagation();uniImp('%s','uni',30)" % t["want"] and t["chip"] == "⏰ 30 days: ⚠️ HOLD"
+    assert t["call"] == "event.stopPropagation();uniImp('%s','uni',30)" % t["want"] and t["chip"] == "30 din baad: ⚠️ Ruk ke jaancho"
     assert t["open"] == t["want"] and t["wk"] == {t["want"]: 30} and t["hdr"] == "Verdict (30 days):"
     L = S["late_al"]
     go = "uniImpGo('%s','%s','uni',30)" % (L["app_id"], L["key"])
@@ -790,7 +808,7 @@ def test_windows_late_chip_alert_card_what_changed_and_recent_updates_open_the_b
     assert "💡 30 din baad naya nuksaan — agla rollout roko, jaanch karo." in L["card"]
     assert ('onclick="%s"' % go) in L["row_all"] and ("onclick=\"uniImp('%s','uni',30)\"" % L["key"]) in L["row_app"]
     assert L["when"] == "Update %s · %s · 30 din baad" % (L["label"], L["date"]) and L["sev"] == ["Worse", "p-r"]
-    assert L["upd"].count("uni-late") == 1 and ("onclick=\"event.stopPropagation();%s\">⏰ 30 days: ⚠️ HOLD</span>" % go) in L["upd"]
+    assert L["upd"].count("uni-late") == 1 and ("onclick=\"event.stopPropagation();%s\">30 din baad: ⚠️ Ruk ke jaancho</span>" % go) in L["upd"]
 
 
 def test_windows_how_we_compare_says_actual_expected_windows_and_the_late_alert(report):
@@ -818,14 +836,14 @@ def test_windows_selector_fits_one_line_at_375px():
 # ── review fixes (2026-09-28) ────────────────────────────────────────────────────────────────────────────────────────
 
 def test_windows_a_7_day_halt_stays_in_sight_when_the_card_shows_30_days(report):
-    # the card's remembered default 30 must never hide the 7-day verdict alerts come from (review: "⏳ Too early … 🔔
+    # the card's remembered default 30 must never hide the 7-day verdict alerts come from (review: "⏳ Abhi jaldi … 🔔
     # Alert" with no HALT anywhere) — judged or still running; a tap opens the block at 7; at 7 nothing is added
     f = report["win"]["syn"]["fix"]
     chip = ('<span class="pill p-r uni-v7" title="7 din ka faisla (alert isi se aata hai) — tap: 7 din dekho" '
-            "onclick=\"event.stopPropagation();uniImp('%s','uni',7)\">7 days: 🛑 HALT</span>" % f["k"])
+            "onclick=\"event.stopPropagation();uniImp('%s','uni',7)\">7 days: 🛑 Update roko</span>" % f["k"])
     for h in (f["halt30"], f["halt30run"], f["mix_closed"], f["nodata"]):
         assert "Verdict (30 days): " in h and chip in h, h
-    assert 'data-lv="pending"' in f["halt30run"] and "⏳ Too early" in f["halt30run"]
+    assert 'data-lv="pending"' in f["halt30run"] and "⏳ Abhi jaldi" in f["halt30run"]
     assert "uni-v7" not in f["halt7"] and "Verdict: <span class=\"pill p-r\" data-lv=\"halt\"" in f["halt7"]
 
 
@@ -833,7 +851,7 @@ def test_windows_a_folded_mixed_window_says_mila_jula_on_its_header_and_chip(rep
     f = report["win"]["syn"]["fix"]
     tip = "Is 30-din window me ye updates bhi aaye: v8.1 (1 Sep), v8.2 (8 Sep) — farak in sabka mila-jula ho sakta hai"
     assert '<span class="pill p-b uni-mixh" title="%s">Mixed +2</span>' % tip in f["mix_closed"]
-    assert 'title="Koi pakka nuksaan nahi — rollout chalne do · mila-jula (beech me 2 aur updates)">👍 CONTINUE' in f["mix_closed"]
+    assert 'title="Koi pakka nuksaan nahi — rollout chalne do · mila-jula (beech me 2 aur updates)">👍 Chalne do' in f["mix_closed"]
     assert "uni-mixh" not in f["mix_open_hdr"] and f["mix_open_meta"]                  # open: the meta line's pill
     assert "mila-jula (beech me 2 aur updates)" in f["mix_open_hdr"]
 
@@ -845,21 +863,21 @@ def test_windows_a_plain_per_user_row_shows_one_vs_before_number_the_one_it_was_
     ses, arp = f["plain"]["sessions"], f["plain"]["arpdau"]
     assert '<span style="font-weight:700;color:var(--bad)">−6% vs before</span>' in ses["change"] and "+4%" not in ses["change"]
     assert "seedha" not in ses["change"]
-    assert '<span style="font-weight:700;color:var(--bad)">Ads/user −6.5% vs before</span>' in arp["change"]
-    assert "impressions/user" not in arp["after"] and "kamai/user −1% seedha (eCPM +1% — market)" in arp["change"]
+    assert '<span style="font-weight:700;color:var(--bad)">AdMob ads/user −6.5% vs before</span>' in arp["change"]
+    assert "ads har user" not in arp["after"] and "kamai/user −1% seedha (ad rate +1% — bazaar)" in arp["change"]
     assert '<span class="down">Sessions/user −6% vs before</span>' in f["plain_mini"]
-    assert '<span class="down">Ads/user −6.5% vs before</span>' in f["plain_mini"]
+    assert '<span class="down">AdMob ads/user −6.5% vs before</span>' in f["plain_mini"]
 
 
 def test_windows_the_young_line_is_the_engines_own_reason_said_once_and_no_row_repeats_it(report):
     f, V = report["win"]["syn"]["fix"], report["win"]["syn"]["views"]
     # D30 alone short (its own 30 weeks): named, not "kai rows"; its pill tooltip keeps the reason, no sub-line
-    assert f["young1_line"] == "30-din tulna ke liye update se pehle ~30 hafte ka data chahiye — is app ke paas ~27 hafte ka tha; isliye D30 return 'Low data'"
+    assert f["young1_line"] == "30-din tulna ke liye update se pehle ~30 hafte ka data chahiye — is app ke paas ~27 hafte ka tha; isliye 'Back after 30 days' ⏳ Abhi jaldi (low data)"
     d30 = f["young1_cells"]["new_d30"]["status"]
     assert 'data-st="low" title="Update se pehle ka ~30 hafte ka data chahiye' in d30 and '<div class="s">' not in d30
     # two rows with different needs (DAU ~26 weeks, D30 its own ~30): one line, neither row repeats its reason under
     # its pill (each keeps its own weeks in the pill's tooltip)
-    assert f["young2_line"].endswith("isliye kai rows 'Low data'") and "~26 hafte" in f["young2_line"]
+    assert f["young2_line"].endswith("isliye kai rows ⏳ Abhi jaldi (low data)") and "~26 hafte" in f["young2_line"]
     for k, w in (("returning_dau", 26), ("new_d30", 30)):
         st = f["young2_cells"][k]["status"]
         assert 'title="Update se pehle ka ~%d hafte' % w in st and '<div class="s">' not in st, (k, st)
@@ -872,8 +890,8 @@ def test_windows_the_young_line_is_the_engines_own_reason_said_once_and_no_row_r
 def test_windows_a_long_window_nobody_could_measure_reads_not_enough_data_never_continue(report):
     f = report["win"]["syn"]["fix"]
     h = f["nodata"]
-    assert ('<span class="pill uni-pz" data-lv="nodata" title="%s">Not enough data</span>' % f["nodata_young_line"]) in h
-    assert "👍 CONTINUE" not in h.split("uni-v7")[0]
+    assert ('<span class="pill uni-pz" data-lv="nodata" title="%s">⏳ Abhi jaldi</span>' % f["nodata_young_line"]) in h
+    assert "👍 Chalne do" not in h.split("uni-v7")[0]
 
 
 def test_windows_one_failed_window_disables_only_its_button_and_the_dau_model_says_its_n_day_pairing(report):
@@ -894,7 +912,7 @@ def test_windows_one_failed_window_disables_only_its_button_and_the_dau_model_sa
 def test_recent_updates_a_late_chip_follows_the_7_day_headline_said_as_the_7_days(report):
     upd = report["win"]["syn"]["late_al"]["upd"]
     row = upd.split('<div class="uni-upd"')[1]
-    assert '<span class="hl muted" title="Koi number pakka kharab / behtar nahi hua">7 days: No clear change</span>' in row
-    assert row.index("7 days: No clear change") < row.index("uni-late")
+    assert '<span class="hl muted" title="Koi number pakka kharab / behtar nahi hua">7 days: Koi pakka farak nahi</span>' in row
+    assert row.index("7 days: Koi pakka farak nahi") < row.index("uni-late")
     other = upd.split('<div class="uni-upd"')[2]                          # (no late chip: today's words)
-    assert ">No clear change</span>" in other and "7 days:" not in other
+    assert ">Koi pakka farak nahi</span>" in other and "7 days:" not in other

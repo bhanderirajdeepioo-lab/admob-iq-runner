@@ -2282,7 +2282,10 @@ def episodes(st, app_id, E, conds, advanced, now, close=()):
     """Open / refresh / close this app's value episodes from this week's conditions (each carrying `seed`). Pure:
     returns the new {episodes, closed}. Nothing changes unless the week end advanced (hourly re-runs are no-ops).
     close = episode keys that close now (a version that left the newest ones C judges), if not true this week.
-    Dedupe (DEDUP): one notification per app, family group (pay_* / ver_ret / long_ret) and direction per N days."""
+    Dedupe (DEDUP): one notification per app, family group (pay_* / ver_ret / long_ret) and direction per N days.
+    SPEC_SIMPLIFY (shown only): a new episode keeps opened_at = now and week_from0 (its first changed week, the earliest
+    over its refreshes); a close adds closed_at = now and close_reason (recovered: the condition went away; window_end:
+    a version C no longer judges — evaluate_app also marks a pay_loss closed because the ads stopped)."""
     eps = {k: dict(e) for k, e in (st.get("episodes") or {}).items()}
     closed = [dict(e) for e in st.get("closed") or []]
     just_closed = []
@@ -2311,11 +2314,16 @@ def episodes(st, app_id, E, conds, advanced, now, close=()):
                         pay_now.add((grp, c["dir"]))
                 ep = {"id": _eid(app_id, c, E_iso), "app_id": app_id, "family": c["family"], "metric": c["metric"],
                       "cc": c.get("cc"), "dir": c["dir"], "opened": E_iso, "last_true": E_iso, "misses": 0,
-                      "notified_at": now if seed else None, "notified_dry": False, "seeded": seed, "last": snap}
+                      "notified_at": now if seed else None, "notified_dry": False, "seeded": seed, "last": snap,
+                      "opened_at": now}                   # the run that opened it (never rewritten)
+                if snap.get("week_from"):
+                    ep["week_from0"] = snap["week_from"]     # its first changed week ("Shuru" — shown only)
                 eps[key] = ep
             else:
                 was = ep["last"].get("severity")
                 ep.update(last_true=E_iso, misses=0, last=snap)
+                if snap.get("week_from"):                     # the earliest changed week this episode told
+                    ep["week_from0"] = min(ep.get("week_from0") or snap["week_from"], snap["week_from"])
                 if (snap.get("severity") == "warning" and was != "warning" and ep.get("notified_at") is not None
                         and not ep.get("seeded")):
                     ep["id"] = _eid(app_id, c, ep["opened"], "|warning")      # a watch that turned red: sent again
@@ -2327,8 +2335,9 @@ def episodes(st, app_id, E, conds, advanced, now, close=()):
         for key in [k for k in eps if k not in hit]:
             ep = eps[key]
             ep["misses"] = ep.get("misses", 0) + 1
-            if ep["misses"] >= (1 if ep["family"] == "pay_loss" else CLOSE_WEEKS) or key in close:
-                done = dict(eps.pop(key), closed=E_iso)
+            gone = ep["misses"] >= (1 if ep["family"] == "pay_loss" else CLOSE_WEEKS)
+            if gone or key in close:                       # (a version C no longer judges: its window ended)
+                done = U.close_ep(eps.pop(key), E_iso, now, "recovered" if gone else "window_end")
                 closed.append(done)
                 just_closed.append(done)
         keep = E - timedelta(days=CLOSED_KEEP_DAYS)
@@ -2413,10 +2422,21 @@ def p_phrase(p):
     return "~%d din me (andaza %s–%s)" % (p["p"], lo if lo is not None else "?", hi if hi is not None else ">365")
 
 
+def started_of(ep):
+    """A value episode → its "Shuru" (SPEC_SIMPLIFY §1.2, shown only): the first install week of the change — the
+    earliest changed week the episode told (week_from0), else its snapshot's week_from (ver_ret: the new version's first
+    compared install day; long_ret: the first day of its first month)."""
+    wf = (ep.get("last") or {}).get("week_from")
+    w0 = ep.get("week_from0")
+    return min(w0, wf) if (w0 and wf) else (w0 or wf)
+
+
 def alert_obj(ep, app_name, E, H, S=None, src_ccy=None):
     """Episode → the alert object (Active's alert keys + the value ones). Rebuilt every build. `text` carries money /
     country tokens (the page draws them in the viewer's currency); `message` (Telegram / email) is written out in USD,
-    the report currency. data_till = S, the newest install-day data the tab has read."""
+    the report currency. data_till = S, the newest install-day data the tab has read.
+    SPEC_SIMPLIFY (shown only): started (started_of) / started_cap (always False here), seeded, opened_at (None: opened
+    before it was kept) and, closed, closed_at / close_reason (None: closed before they were kept)."""
     s = dict(ep["last"], family=ep["family"], dir=ep["dir"], cc=ep.get("cc"))
     text = alert_text(s, app_name, H, E)
     out = {"id": ep["id"], "source": "value", "app_id": ep["app_id"], "app": app_name, "family": ep["family"],
@@ -2445,14 +2465,16 @@ def alert_obj(ep, app_name, E, H, S=None, src_ccy=None):
         out["move"] = dict(s["move"])
     if s.get("sp") is not None and attrib.ON:         # the change's split (SPEC_SPLIT) — only when there is one
         out["sp"] = s["sp"]
+    out.update(started=started_of(ep), started_cap=False, seeded=bool(ep.get("seeded")), opened_at=ep.get("opened_at"))
     if "closed" in ep:
-        out.update(closed=ep["closed"], fresh=False, notify=False)
+        out.update(closed=ep["closed"], fresh=False, notify=False, closed_at=ep.get("closed_at"),
+                   close_reason=ep.get("close_reason"))
     return out
 
 
 def sort_alerts(alerts):
-    return sorted(alerts, key=lambda a: (SEV_ORDER.get(a["severity"], 9), not a["fresh"],
-                                         -_d(a["opened"]).toordinal(), a["app"].casefold(), a["id"]))
+    """warning, watch, good; the newest start ("started") first; then app, id (never fresh / opened: SPEC_SIMPLIFY)."""
+    return U.sort_alerts(alerts)
 
 
 # ── tiles, info rows, summary (§2.6, §2.8) ──────────────────────────────────────────────────────
@@ -2676,6 +2698,12 @@ def _curve_note(w):
     stop = next((T[j] for j in range(jo + 1, 10) if med[j] is None), 365) if jo is not None else 7
     return ("abhi andaza nahi (curve ke liye is app ke %d aise hafte chahiye jinke %d din pure ho chuke)"
             % (REF_MIN, stop))
+
+
+def _ads_stale(weeks, pays, E):
+    """No judged ads week within ADS_STALE_DAYS of E (_info's "ab Google Ads kharcha nahi"): the ads stopped."""
+    jw = [w for w in weeks if w["judged"] and w["cj"][_tj(7)] and pays.get(w["W"])]
+    return not jw or (E - (jw[-1]["W"] + timedelta(days=6))).days > ADS_STALE_DAYS
 
 
 def _info(P, weeks, C, ci, just_closed, pays, E, spend_known, alerts=None):
@@ -2977,6 +3005,9 @@ def evaluate_app(store, ida, rev, spend, fx, udet_releases, st_app, portfolio_sh
         c["seed"] = _seed(c["family"], inputs, E, first, _seed_keys(c)) or bool(c.pop("_force_seed", False))
         c["est"] = P["sc"]["st"] != "ok" or bool(c.pop("_est", False))
     new_st, just_closed = episodes(base_st, app_id, E, conds, advanced, now_iso, close=close_now)
+    for ep in just_closed:                           # a pay_loss closed because the ads stopped: its window ended, the
+        if ep["family"] == "pay_loss" and _ads_stale(weeks, pays, E):          # money never came back (shown only)
+            ep["close_reason"] = "window_end"
     if advanced:
         new_ev = {"end_week": _iso(E), "src": src, "iday_v": ida.get("v"), "inputs": inputs,
                   "streak": {k: v for k, v in sorted(streak.items()) if v},
@@ -2987,11 +3018,13 @@ def evaluate_app(store, ida, rev, spend, fx, udet_releases, st_app, portfolio_sh
     src_ccy = (spend or {}).get("ccy") if spend else None
     open_eps = sorted(new_st["episodes"].values(), key=lambda e: e["id"])
     alerts = sort_alerts([alert_obj(e, app, E, H, S, src_ccy) for e in open_eps])
-    closed = sort_alerts([alert_obj(e, app, E, H, S, src_ccy) for e in new_st["closed"]])
+    closed = U.legacy_order([alert_obj(e, app, E, H, S, src_ccy) for e in new_st["closed"]])   # (history: its order)
     tiles = _tiles(P, weeks, pays, alerts, E, cty, H, have_spend=bool(spend))
-    info = _info(P, weeks, C, ci, just_closed, pays, E, spend is not None, alerts) + cd_info
+    info = _info(P, weeks, C, ci, just_closed, pays, E, spend is not None, U.legacy_order(alerts)) + cd_info
+    for r in info:                                   # "Shuru" (SPEC_SIMPLIFY, shown only): its since, else from
+        r["started"] = r.get("since") or r.get("from")
     ida_state, ida_pct, ida_left = _ida_state(ida, hs, S)
-    summary = _summary(tiles, alerts, weeks, pays, ida_state, ida_pct, ida_left, E, S)
+    summary = _summary(tiles, U.legacy_order(alerts), weeks, pays, ida_state, ida_pct, ida_left, E, S)
     ads_state = tiles.pop("ads", None)
     detail = _detail(store, ida, P, weeks, pays, shapes, cty, alerts, closed, info, tiles, summary, fx_mode, fx, H,
                      app_id, app, key, ida_state, ida_pct, ded, udet_releases, left=ida_left,
@@ -3000,6 +3033,7 @@ def evaluate_app(store, ida, rev, spend, fx, udet_releases, st_app, portfolio_sh
     detail["ads"] = ads_state                        # on / stopped / noads / none / spend_wait / thin / new
     row = _row(detail, weeks, pays, alerts, tiles, cty, ida_state, ida_pct, app_id, app, key, H)
     row["_alerts"] = alerts
+    row["_closed"] = closed                          # every closed one (value_build.finish: the last 7 days' go up)
     own = {}
     for jo in range(9):
         for j in range(jo + 1, 10):
@@ -3245,6 +3279,48 @@ def _wait_row(app_id, app, key, ida, hs):
             "summary": {"kind": "wait", "text": "⏳ Install-wise kamai ka data aa raha — agle fetch me."},
             "s": {"spend4": None, "spend4_src": None, "n4": None, "nw": None, "rev7_4": None, "spend7_4": None,
                   "n7_4": None, "rev30_4": None, "n30_4": None, "spend30_4": None}}
+
+
+# ── the All-apps lists in dashboard.json (SPEC_SIMPLIFY D10: they never depend on which per-app files were opened) ──
+
+INFO_PER_APP = act.INFO_PER_APP              # dashboard["value"]["info"]: ≤ 5 rows per app, newest first, none that
+INFO_MAX_DAYS = act.INFO_MAX_DAYS            # ended > 90 days before the app's settled day
+CLOSED_RECENT_DAYS = act.CLOSED_RECENT_DAYS  # dashboard["value"]["closed"]: closed ≤ 7 days before the settled day
+
+
+def compact_info(detail, keep=INFO_PER_APP, max_days=INFO_MAX_DAYS):
+    """A value detail's info (+ older, always empty here) rows → the compact rows dashboard["value"]["info"] lists:
+    {app_id, src, kind, from, to, text, cc (when the row has one), release (when it has one), started} — at most `keep`
+    per app, newest first (by to, else from; an undated row — the AdMob scale note — counts as current), none that
+    ended more than max_days before the app's settled day. Shown only."""
+    S = detail.get("settled_till")
+    ch = detail.get("changes") or {}
+    rows = []
+    for si, src in enumerate(("info", "older")):
+        for j, r in enumerate(ch.get(src) or []):
+            day = r.get("to") or r.get("from")
+            age = act._age_days(S, day) if day else 0
+            if age is not None and age > max_days:
+                continue
+            row = {"app_id": detail.get("app_id"), "src": src, "kind": r.get("kind"), "from": r.get("from"),
+                   "to": r.get("to"), "text": r.get("text"), "started": r.get("started", r.get("since") or r.get("from"))}
+            if "cc" in r:
+                row["cc"] = r["cc"]
+            if "release" in r:
+                row["release"] = dict(r["release"]) if isinstance(r["release"], dict) else r["release"]
+            rows.append((age or 0, si, j, row))
+    rows.sort(key=lambda x: x[:3])
+    return [x[3] for x in rows[:keep]]
+
+
+def recent_closed(closed, S, days=CLOSED_RECENT_DAYS):
+    """The closed value alerts (alert objects) closed ≤ `days` before the settled day S. Shown only."""
+    out = []
+    for a in closed or []:
+        age = act._age_days(S, a.get("closed"))
+        if age is not None and 0 <= age <= days:
+            out.append(a)
+    return out
 
 
 def portfolio_shape(shapes):

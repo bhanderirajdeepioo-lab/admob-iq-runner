@@ -554,12 +554,16 @@ def test_first_ever_evaluation_is_seeded_and_spike_days_close_a_week_later():
     assert eps == [] and st2["closed"][0]["family"] == "rate_spike"
 
 
-def test_alerts_sort_warning_watch_good_then_fresh_first():
-    mk = lambda sev, fresh, opened, app: {"severity": sev, "fresh": fresh, "opened": opened, "app": app, "id": app}  # noqa: E731
-    got = eng.sort_alerts([mk("good", True, "2026-09-19", "a"), mk("watch", False, "2026-09-10", "b"),
-                           mk("warning", False, "2026-09-18", "c"), mk("warning", True, "2026-09-17", "d"),
-                           mk("warning", False, "2026-09-18", "B")])
-    assert [a["app"] for a in got] == ["d", "B", "c", "b", "a"]
+def test_alerts_sort_warning_watch_good_then_newest_started_first():
+    # SPEC_SIMPLIFY: severity, then the newest start ("started") first, then app — never fresh / opened (the old order
+    # put the fresh "d" first; it is the oldest start here)
+    mk = lambda sev, fresh, opened, app, started: {"severity": sev, "fresh": fresh, "opened": opened, "app": app,  # noqa: E731
+                                                   "id": app, "started": started}
+    got = eng.sort_alerts([mk("good", True, "2026-09-19", "a", "2026-09-01"), mk("watch", False, "2026-09-10", "b", None),
+                           mk("warning", False, "2026-09-18", "c", "2026-09-12"),
+                           mk("warning", True, "2026-09-17", "d", "2026-08-01"),
+                           mk("warning", False, "2026-09-18", "B", "2026-09-12")])
+    assert [a["app"] for a in got] == ["B", "c", "d", "b", "a"]
 
 
 # ── messages ─────────────────────────────────────────────────────────────────────────────────────

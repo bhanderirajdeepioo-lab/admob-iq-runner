@@ -36,7 +36,7 @@ run(`DATA = {apps_catalog: [], today_date: '2026-09-25', alerts: {counts: {}, it
      for (const [n, j] of Object.entries(__FX.cohort_files || {})) UNICOH[n.slice(12, -8)] = uniCohPrep(j);`);
 const out = {};
 function scen(name, code) { try { out[name] = String(run(code)); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + (e.stack.match(/at [^\n]*/g) || []).slice(0, 4).join(' < ')); } }
-const RESET = `UNIAPP=''; APP=''; UNICSRC='all'; UNICRANGE='90'; UNITRI='cp'; UNITRIPAGE=0; UNITRIEXP=false; UNIOLDEXP=false; UNICLEXP=false; UNICPEXP=false; UNIDRANGE='90d'; UNIPRE=false; UNISTEXP=''; UNITIMEXP=false; UNIIMPOPEN=''; UNIIMPALL=false; UNIIMPHOW=false; UNIUPF=''; UNIUPALL=false; UNIIMPJUMP=''; UNIIMPWIN=7; UNIIMPWK={};`;
+const RESET = `SMPF={}; SMPALL=false; UNIAPP=''; APP=''; UNICSRC='all'; UNICRANGE='90'; UNITRI='cp'; UNITRIPAGE=0; UNITRIEXP=false; UNIOLDEXP=false; UNICLEXP=false; UNICPEXP=false; UNIDRANGE='90d'; UNIPRE=false; UNISTEXP=''; UNITIMEXP=false; UNIIMPOPEN=''; UNIIMPALL=false; UNIIMPHOW=false; UNIUPF=''; UNIUPALL=false; UNIIMPJUMP=''; UNIIMPWIN=7; UNIIMPWK={};`;
 for (const r of ['today', '7d', '30d', '90d', 'month', 'lastmonth', 'all', 'custom'])
   scen('portfolio_' + r, `${RESET} RANGE='${r}'; RCUSTOM={from:'2026-08-01',to:'2026-09-30'}; UNITRIEXP=${r === 'all'}; uniScreen()`);
 for (const k of ['app', 'ins', 'outs', 'net', 'rate', 'S7', 'D0', 'D1', 'D7', 'D30', 'alert'])
@@ -227,10 +227,10 @@ try { impact.never = JSON.parse(run(`(()=>{ const a=UNI.apps.find(x=>uniImpBlock
 // the Recent updates card failing to render: a visible placeholder (never silently gone)
 scen('upd_throw', `${RESET} RANGE='30d'; (()=>{ const keep=uniUpdatesCard; uniUpdatesCard=()=>{ throw new Error('x'); };
   try{ return uniScreen(); } finally{ uniUpdatesCard=keep; } })()`);
-impact.upd_throw = /<div class="card faint" id="uni-updates"[^>]*>⚠️ 📦 Recent updates — ye hissa abhi dikh nahi paya\.<\/div>/.test(out.upd_throw || '');
+impact.upd_throw = /<div class="card faint" id="uni-updates"[^>]*>⚠️ 📦 Updates ka asar — ye hissa abhi dikh nahi paya\.<\/div>/.test(out.upd_throw || '');
 // All apps "📦 Recent updates": the counts, and each verdict's rows alone
-for (const f of ['', 'halt', 'hold', 'continue', 'win', 'pending']) {
-  scen('upd|' + f, `${RESET} RANGE='30d'; UNIUPF='${f}'; uniScreen()`);
+for (const f of ['', 'open']) {
+  scen('upd|' + f, `${RESET} RANGE='30d'; UNIUPALL=${f === 'open'}; uniScreen()`);
   const h = ((out['upd|' + f] || '').split('id="uni-updates"')[1] || '').split('<div class="card')[0];
   impact.portfolio[f] = { chips: Object.fromEntries([...h.matchAll(/data-uf="([a-z]+)"[^>]*>([^<]*)<b>\((\d+)\)<\/b>/g)].map(m => [m[1], { label: m[2].trim(), n: +m[3] }])),
     rows: [...h.matchAll(/class="uni-upd" data-lv="([a-z]+)"/g)].map(m => m[1]), on: [...h.matchAll(/class="uni-sc [a-z]+ on" data-uf="([a-z]+)"/g)].map(m => m[1]),
@@ -251,26 +251,27 @@ for (const blk of impact.blocks) {
     if (IMP_MODEL.test(m[2])) impact.display.bad.push(blk.app + '|' + blk.key + '|' + m[1] + ': ' + itext(m[2]).slice(0, 200));
   }
 }
-const MINI_WORD = { same: 'normal', unsure: 'maybe', market: 'market', low: 'low data', pending: '⏳', na: '—' };
+const MINI_WORD = { same: 'normal', unsure: 'normal (pakka nahi)', market: 'normal (bazaar)', low: 'kam data', pending: '⏳', na: '—' };   // (the six words, as UNI_IST)
 for (const a of apps) for (const b of (a.impact && a.impact.updates) || []) {
   const h = run(`uniImpMini(${JSON.stringify(b)})`), spans = [...h.matchAll(/<span( class="(up|down)")?>([^<]*)<\/span>/g)].map(m => [m[2] || '', m[3]]);
   const rows = b.rows || {}, vrows = (b.versions_cmp && b.versions_cmp.rows) || {};
-  const shorts = { returning_dau: 'Returning DAU', new_d1: 'D1 return', new_d7: 'D7 return', sessions: 'Sessions/user', time: 'Time/user', arpdau: 'Ad revenue/user', uninstall_d0: 'Install-day uninstall' };
+  const shorts = { returning_dau: 'Purane users (roz)', new_d1: 'Back next day', new_d7: 'Back after 7 days', sessions: 'Sessions/user', time: 'Time/user', arpdau: 'Kamai/1,000 users', uninstall_d0: 'Install-day uninstall' };
   // a Worse / Better row: the change it was JUDGED on, said so (vs expected — DAU's model level, sessions / time net of
   // the trend: one word with the open row, SPEC_WINDOWS §5 · ads/user), its sign the status's (up = better, but more
   // install-day uninstalls = worse) — never a plain change pointing the other way
-  const judgedAs = { returning_dau: ['Returning DAU', ' vs expected'], sessions: ['Sessions/user', ' vs expected'], time: ['Time/user', ' vs expected'], arpdau: ['Ads/user', ''] };
+  const judgedAs = { returning_dau: ['Purane users (roz)', ' vs expected'], sessions: ['Sessions/user', ' vs expected'], time: ['Time/user', ' vs expected'], arpdau: ['AdMob ads/user', ''] };
   for (const [k, sh] of Object.entries(shorts)) {
     const st = rows[k].status, wbk = ['worse', 'better'].includes(st), [lb, sf] = wbk && judgedAs[k] ? judgedAs[k] : [sh, ''];
     const sp = spans.find(x => x[1].startsWith(lb + ' ')), sg = (st === 'worse') !== (k === 'uninstall_d0') ? '−' : '+';
-    const ok = wbk ? (sp && sp[0] === (st === 'worse' ? 'down' : 'up') && sp[1].startsWith(lb + ' ' + sg) && new RegExp('^' + lb + ' [−+][\\d.]+(%| pts)' + sf + '$').test(sp[1])) : (sp && sp[0] === '' && sp[1] === sh + ' ' + MINI_WORD[st]);
+    const sv = sp ? sp[1].replace(lb + ' 100 me ', lb + ' ') : '';   // a share's change: "100 me +6" (SPEC_SIMPLIFY §1.7)
+    const ok = wbk ? (sp && sp[0] === (st === 'worse' ? 'down' : 'up') && sv.startsWith(lb + ' ' + sg) && new RegExp('^' + lb.replace(/[()]/g, '\\$&') + ' [−+][\\d.]+%?' + sf + '$').test(sv)) : (sp && sp[0] === '' && sp[1] === sh + ' ' + MINI_WORD[st]);
     if (!ok) impact.display.mini_bad.push(a.app + '|' + b.key + '|' + k + ': ' + (sp ? sp.join('|') : 'missing'));
   }
   const all = Object.values(Object.assign({}, rows, vrows)), wb = all.some(r => r && ['worse', 'better'].includes(r.status));
-  const nj = all.filter(r => r && IMP_JUDGED.includes(r.status)).length, lead = nj ? 'No clear change' : 'Not enough data yet';
-  if (h.includes(lead) !== (!wb && !!(b.verdict && b.verdict.level)) || h.includes(nj ? 'Not enough data yet' : 'No clear change')) impact.display.mini_bad.push(a.app + '|' + b.key + ': ' + lead + ' ' + h.includes(lead));
+  const nj = all.filter(r => r && IMP_JUDGED.includes(r.status)).length, lead = nj ? 'Koi pakka farak nahi' : '⏳ Abhi jaldi';
+  if (h.includes(lead) !== (!wb && !!(b.verdict && b.verdict.level)) || (nj ? h.includes('⏳ Abhi jaldi ·') : h.includes('Koi pakka farak nahi'))) impact.display.mini_bad.push(a.app + '|' + b.key + ': ' + lead + ' ' + h.includes(lead));
 }
-{ const h = ((out['upd|'] || '').split('id="uni-updates"')[1] || '').split('<div class="card')[0];
+{ const h = ((out['upd|open'] || '').split('id="uni-updates"')[1] || '').split('<div class="card')[0];   // every update (the folded ⏳ / 👍 / — line opened)
   for (const m of h.matchAll(/<div class="uni-upd" data-lv="([a-z]+)" onclick="uniImpGo\('([^']*)','([^']*)'\)">([\s\S]*?)<span class="lnk go">/g)) {
     const a = apps.find(x => x.app_id === m[2]), b = ((a && a.impact && a.impact.updates) || []).find(x => x.key === m[3]);
     const hl = (m[4].match(/<span class="hl [a-z]+"[^>]*>([^<]*)<\/span>/) || [])[1] || null;
@@ -280,7 +281,7 @@ for (const a of apps) for (const b of (a.impact && a.impact.updates) || []) {
   }
 }
 // a young app that grew fast before its update (synthetic numbers): its rows Low data with a model level beside them
-try { impact.display.synth = JSON.parse(run(`(()=>{ ${RESET} const a0=UNI.apps.find(x=>uniImpBlocks(x).length), a=JSON.parse(JSON.stringify(a0)), b=uniImpBlocks(a)[0];
+try { impact.display.synth = JSON.parse(run(`(()=>{ ${RESET} UNIUPALL=true; const a0=UNI.apps.find(x=>uniImpBlocks(x).length), a=JSON.parse(JSON.stringify(a0)), b=uniImpBlocks(a)[0];
   const itx=h=>h.replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/\\s+/g,' ').trim();
   const why='Update se pehle app tez badh raha tha (~×6.7/hafta) — normal trend pakka nahi, isliye sirf pehle vs baad';
   for (const r of Object.values(b.rows).concat(Object.values(b.versions_cmp.rows))) if(r.status==='worse'||r.status==='better'){ r.status=r.raw_status='same'; }
@@ -299,7 +300,7 @@ try { impact.display.synth = JSON.parse(run(`(()=>{ ${RESET} const a0=UNI.apps.f
 // a Worse / Better per-user row whose plain change points the other way (synthetic): a HALT on ads/user −35% while
 // revenue/user rose +120% (eCPM), sessions −8% net of a trend while the number rose +3%; and a block nothing could
 // measure (every row Low data / No data: "Not enough data yet", never "No clear change")
-try { impact.display.contra = JSON.parse(run(`(()=>{ ${RESET} const a0=UNI.apps.find(x=>uniImpBlocks(x).length), a=JSON.parse(JSON.stringify(a0)), b=uniImpBlocks(a)[0];
+try { impact.display.contra = JSON.parse(run(`(()=>{ ${RESET} UNIUPALL=true; const a0=UNI.apps.find(x=>uniImpBlocks(x).length), a=JSON.parse(JSON.stringify(a0)), b=uniImpBlocks(a)[0];
   const itx=h=>h.replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/\\s+/g,' ').trim();
   for (const r of Object.values(b.rows).concat(Object.values(b.versions_cmp.rows))) if(r.status==='worse'||r.status==='better'){ r.status=r.raw_status='same'; }
   Object.assign(b.rows.arpdau,{status:'worse',raw_status:'worse',before:5,after:11,change:1.2,z:-9});
@@ -354,10 +355,12 @@ if (V2) for (const a of apps) for (const b of ((a.impact || {}).updates || [])) 
     dau: (rs.find(r => r.k === 'returning_dau') || {}).h || '', text: itext(h).slice(0, 2500) });
 }
 // the fixture's ⏰ late family on the other screens: Recent updates' chip, the What changed? rows (All apps, the app)
-win.upd_late = [...((out['upd|'] || '').split('id="uni-updates"')[1] || '').matchAll(/class="pill [a-z-]+ uni-late"[^>]*onclick="event\.stopPropagation\(\);uniImpGo\('([^']*)','([^']*)','uni',30\)">([^<]*)</g)].map(m => [m[1], m[2], m[3]]);
-win.chg_late = [...(out.portfolio_30d || '').matchAll(/<div class="uni-chg wa"[^>]*onclick="uniImpGo\('([^']*)','([^']*)','uni',30\)"/g)].map(m => [m[1], m[2]]);
+win.upd_late = [...((out['upd|open'] || '').split('id="uni-updates"')[1] || '').matchAll(/class="pill [a-z-]+ uni-late"[^>]*onclick="event\.stopPropagation\(\);uniImpGo\('([^']*)','([^']*)','uni',30\)">([^<]*)</g)].map(m => [m[1], m[2], m[3]]);
+scen('portfolio_folds', `${RESET} RANGE='30d'; SMPALL=true; uniScreen()`);   // every "What changed?" fold open (SPEC_SIMPLIFY §6.3)
+win.chg_late = [...(out.portfolio_folds || '').matchAll(/<div class="uni-chg wa"[^>]*onclick="uniImpGo\('([^']*)','([^']*)','uni',30\)"/g)].map(m => [m[1], m[2]]);
 win.chg_late_app = [];
-for (const a of apps) { const h = out[`detail|${a.app}|all|30|cp|false`] || '';
+for (const a of apps) { scen(`detail_folds|${a.app}`, `${RESET} RANGE='30d'; SMPALL=true; UNIAPP=${JSON.stringify(a.app_id)}; APP=${JSON.stringify(a.app)}; uniScreen()`);
+  const h = out[`detail_folds|${a.app}`] || '';
   for (const m of h.matchAll(/<span class="lnk" onclick="uniImp\('([^']*)','uni',30\)">Open →<\/span>/g)) win.chg_late_app.push([a.app_id, m[1]]); }
 // (b) made-up windows: the card default, a block's own choice, what survives a re-render, remembered / blocked storage
 const S = win.syn;
@@ -420,7 +423,7 @@ try { S.late_tap = JSON.parse(run(`(()=>{ ${RESET} const a=__winApp(UNI.apps.fin
     return JSON.stringify({call:m&&m[1], chip:m&&m[2], open:UNIIMPOPEN, wk:UNIIMPWK, want:b.key, hdr:(o.match(/Verdict( \\(\\d+ days\\))?:/)||[])[0]||null}); }
   finally{ UNI.apps[i]=keep; ${RESET} } })()`)); } catch (e) { errors.push('win late tap: ' + e.message); }
 // the late family on the other screens: the Alerts card, What changed? rows (All apps / one app), Recent updates' chip
-try { S.late_al = JSON.parse(run(`(()=>{ ${RESET} const a=UNI.apps.find(x=>uniImpBlocks(x).length), b=uniImpBlocks(a)[0];
+try { S.late_al = JSON.parse(run(`(()=>{ ${RESET} UNIUPALL=true; const a=UNI.apps.find(x=>uniImpBlocks(x).length), b=uniImpBlocks(a)[0];
   const al={family:'impact_late',level:'hold',severity:'watch',dir:'up',app:a.app,app_id:a.app_id,data_till:'2026-09-23',opened:'2026-09-23',fresh:true,
     release:{key:b.key,label:b.label||'App update',date:b.date},rows:{worse:['arpdau'],told:[]},mixed:[],window:30,
     text:(b.label||'App update')+' ke 30 din baad ads per user −14% · pehle 7 din me ye nahi dikha tha · HOLD — agla rollout roko, jaanch karo'};
@@ -524,14 +527,14 @@ const cohBad = [];
 for (const a of apps) {
   const cs = (a.alerts || []).filter(x => x.family === 'cohort'); if (!cs.length) continue;
   const t = text(run(`uniSumCard(UNI.apps.find(x=>x.app_id===${JSON.stringify(a.app_id)}))`));
-  if (/✅ Same as last month(?! · installs)/.test(t)) cohBad.push(a.app + ': plain same');
-  for (const x of cs) if (!t.includes((x.dir === 'up' ? '⚠️ Some install weeks worse · ' : '🟢 Some install weeks better · ') + run(`uniSpan(${JSON.stringify(x.installs_from)},${JSON.stringify(x.installs_to)})`))) cohBad.push(a.app + ': no alert chip');
+  if (/Vs last month ⚪ Normal(?! · (?:installs|100 me))/.test(t)) cohBad.push(a.app + ': plain same');
+  for (const x of cs) if (!t.includes((x.dir === 'up' ? '🟡 Dhyan do · installs ' : '🟢 Behtar · installs ') + run(`uniSpan(${JSON.stringify(x.installs_from)},${JSON.stringify(x.installs_to)})`))) cohBad.push(a.app + ': no alert chip');
 }
 // every verdict chip's number = the difference of the two numbers its comparison line shows
 const gapBad = [];
 for (const a of apps) {
   const t = text(run(`uniSumCard(UNI.apps.find(x=>x.app_id===${JSON.stringify(a.app_id)}))`));
-  const h = t.match(/(?:Worse|Better|Maybe worse|Maybe better) than last month [−+]([\d.]+)/), sb = t.match(/After (?:install day|\d+ days?): (?:≈ ?)?([\d.]+) of 100 stay in (?:the last 4|4 older) settled weeks \([^)]*\) vs ([\d.]+) in the 4 weeks before/);
+  const h = t.match(/(?:🔴 Bigda|🟢 Behtar|⚪ Normal) · 100 me [−+]([\d.]+)/), sb = t.match(/baad bhi app me: (?:≈ ?)?100 me ([\d.]+) — (?:pichhle 4|4 purane) pakke hafte ke installs \([^)]*\) · pehle ([\d.]+)/);
   if (h && (!sb || Math.abs(Math.abs(parseFloat(sb[1]) - parseFloat(sb[2])) - parseFloat(h[1])) > 1e-9)) gapBad.push(a.app);
 }
 // the curve's value labels (phone, the default 90 days and 30 days): the latest key day shown and day 7 always get one
@@ -589,17 +592,18 @@ console.log(JSON.stringify({
   totals, header, header2, pages, texts: Object.fromEntries(Object.entries(out).filter(([k]) => /^(pre\||detail\|[^|]*\|all\|90\|all\|true|portfolio_30d|detail\|[^|]*\|all\|30\|cp\|false|overview_no_admob|tripage1_caller|no_verdict_young_launch|maybe_test|rel\|(two|newest|none|test)\||rel\|[^|]*\|(cp|all)\|false\|false$)/.test(k)).map(([k, v]) => [k, T(k)])),
   rel, impact, win, alert_cards: out.alert_cards || '',
   plain_what_changed: (T('portfolio_30d').match(/What changed\? \((\d+)\)/) || [])[1],
+  what_changed_counts: (T('portfolio_30d').match(/What changed\? \(\d+\) Har app alag · (\d+) shown · (\d+) folded below/) || []).slice(1).map(Number),
   portfolio: T('portfolio_30d'),
   has: {
     curve_title: apps.every(a => has(`detail|${a.app}|all|30|cp|false`, '📉 How many stay — of 100 new users')),
     modes: ['First 30 days', 'First 90 days', 'All days'].every(s => has(A0, s)),
-    toggle: has(A0, 'Recent installs (90 days)') && has(A0, 'All time (all installs)'),
-    no_toggle_young: !has('detail|Demo Notes|all|30|cp|false', 'Recent installs (90 days)'),
+    toggle: has(A0, 'Last 90 days of installs') && has(A0, 'All time (all installs)'),
+    no_toggle_young: !has('detail|Demo Notes|all|30|cp|false', 'Last 90 days of installs'),
     what_changed: apps.every(a => has(`detail|${a.app}|all|30|cp|false`, '🔔 What changed? (')),
     all_normal: has('detail|Demo Notes|all|30|cp|false', '✅ All normal — no changes'),
     table_link: has(A0, 'Show full table') && !has(A0, 'Full table — new installs vs before'),
     table_open: has(A0open, '🧮 Full table — new installs vs before') && has(A0open, 'Hide full table'),
-    table_cols: ['Days after install', 'New installs: % gone', '4 weeks before', 'All time', 'Change', 'New installs from', 'Status']
+    table_cols: ['Days after install', 'Installs: 100 me kitne gaye', '4 weeks before', 'All time', 'Change', 'Installs from', 'Status']
       .every(s => has(A0open, '<th>' + s + '</th>')),
     avg4_row: has(A0, '4-week average') && has(A0open, '4-week average')
       && !Object.values(out).some(v => /Pichhle 4 hafte ka average|Sabse naye 4 pakke hafte/.test(v)),
@@ -609,69 +613,67 @@ console.log(JSON.stringify({
     tri_buttons: has(A0, '>Show all</span>') && has(`detail|${apps[0].app}|recent|all|cp|true`, '>Hide</span>'),
     box_line: has(A0, 'Har box = us hafte install karne walon me se us din tak kitne % ne app hata diya'),
     glance_app: apps.every(a => has(`detail|${a.app}|all|30|cp|false`, '📌 At a glance') && has(`detail|${a.app}|all|30|cp|false`, '>Vs last month<')
-      && /<div class="l">Daily uninstall rate(?: · (?:last|settled) 7 days)?<\/div>/.test(out[`detail|${a.app}|all|30|cp|false`] || '')) && has(A0, 'of 100 new users') && has(A0, '>Stay after 7 days<') && has(A0, 'per 1,000 active users'),
+      && /<div class="l">Daily uninstall rate(?: · (?:last 7 days|pakke 7 din))?<\/div>/.test(out[`detail|${a.app}|all|30|cp|false`] || '')) && has(A0, 'of 100 new users') && has(A0, '>7 din baad bhi app me<') && has(A0, 'per 1,000 active users'),
     daily_title: has(A0, '📊 Daily installs vs uninstalls') && ['30 days', '3 months', 'All time'].every(s => has(A0, '>' + s + '</span>')),
     back_link: has(A0, '<span class="backlnk" onclick="uniBack()">← All apps</span>'),
-    portfolio_titles: ['<h2 class="sc">Uninstall</h2><p class="scd"><b style="color:var(--ink2)">Installs vs uninstalls (GA4)</b>', '📌 At a glance', '>App status <span>',
+    portfolio_titles: ['<h2 class="sc">Uninstall</h2><p class="scd smp-top"><b style="color:var(--ink2)">UNINSTALL</b> · Har app alag (', 'SAB APPS MILAKAR (', '>App status <span>',
       '>Daily uninstall rate <span>', '🔔 What changed? (', '📋 All apps', '🔌 Apps without GA4 data (5)', '<b>When will I know?</b>']
       .every(s => has('portfolio_30d', s)),
-    portfolio_cols: ['Stay after 7 days', 'Installs', 'Uninstalls', 'Net', 'Daily rate /1k', 'Gone on install day', 'Gone in 1 day', 'Gone in 7 days', 'Gone in 30 days', 'Alerts']
+    portfolio_cols: ['7 din baad bhi app me', 'Installs', 'Uninstalls', 'Net', 'Uninstall rate', 'Gone on install day', 'Gone in 1 day', 'Gone in 7 days', 'Gone in 30 days', 'Alerts']
       .every(s => new RegExp('<th onclick="uniSort\\(\'[A-Za-z0-9]+\'\\)"[^>]*>' + s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + '( [▲▼])?</th>').test(out.portfolio_30d || '')),
     open_links: has('portfolio_30d', '<span class="lnk">Open →</span>') && has(A0, '>Open →</span>'),
-    row_pills: has('portfolio_30d', '<span class="pill p-r">Worse</span>') && has('portfolio_30d', '<span class="pill p-g">Better</span>') && has('portfolio_30d', '<span class="pill p-y">Watch</span>'),
+    row_pills: has('portfolio_30d', '<span class="pill p-r smp-w">🔴 Bigda</span>') && has('portfolio_30d', '<span class="pill p-y smp-w">🟡 Dhyan do</span>') && has('portfolio_30d', '🟢 Good news ('),
     avg4_says_weeks: has(A0, ' ke installs — har column me yahi installs; · = abhi itne din nahi hue') && !Object.values(out).some(v => v.includes('bade din ke liye purane installs')),
-    header_gone: has('portfolio_30d', 'Stay = saare pakke installs') && has('portfolio_30d', 'Gone in … = sabse naye 7 install-din (alag installs — jud kar 100 nahi)'),
-    decimal_gap: T('verdict_decimal').includes('⚠️ Worse than last month −2.5') && T('verdict_decimal').includes('After 7 days: 9.5 of 100 stay in the last 4 settled weeks')
+    header_gone: has('portfolio_30d', 'Ek column = ek install hafta: jis app ka us hafte ka data nahi, wahan "—"') && has('portfolio_30d', '<tr class="smp-hw">'),
+    decimal_gap: T('verdict_decimal').includes('🔴 Bigda · 100 me −2.5') && T('verdict_decimal').includes('7 din baad bhi app me: 100 me 9.5 — pichhle 4 pakke hafte ke installs')
       && /data-xp="worse"[\s\S]*<span class="x bad">−2\.5<\/span>/.test(out.verdict_decimal || ''),
     s7_arrow_day7_only: !/▲ \d/.test((out.verdict_day3 || '').split('id="uni-table"')[1] || 'x▲ 1') && /▲ 12→16/.test(T('portfolio_30d')),
     s7_no_mixed_arrow: !/\d%\s*▲\d/.test(T('portfolio_30d')),
     tiny_says_it: /data-sd="1" data-sv="[^"]+"/.test(out.tiny_app || '') && (out.tiny_app || '').includes('>Low data</span>') && /title="Low data — sirf [\d.k]+ installs/.test(out.tiny_app || '')
       && !T('tiny_app').includes('~2 hafte ke pakke data ke baad'),
-    old_no_verdict: T('no_verdict_old').includes('ℹ️ Not enough data') && T('no_verdict_old').includes('kai din ka GA4 data adhoora/gayab') && !T('no_verdict_old').includes('~2 mahine ke data ke baad'),
-    unsure_not_same: T('detail|Demo QR Scanner|all|30|cp|false').includes('ℹ️ Maybe ') && T('detail|Demo QR Scanner|all|30|cp|false').includes('abhi pakka nahi')
+    old_no_verdict: T('no_verdict_old').includes('⏳ Abhi jaldi') && T('no_verdict_old').includes('kai din ka GA4 data adhoora/gayab') && !T('no_verdict_old').includes('~2 mahine ke data ke baad'),
+    unsure_not_same: T('detail|Demo QR Scanner|all|30|cp|false').includes('⚪ Normal · 100 me ') && T('detail|Demo QR Scanner|all|30|cp|false').includes('abhi pakka nahi')
       && !T('detail|Demo QR Scanner|all|30|cp|false').includes('✅ Same as last month'),
     plain_words: !Object.values(out).some(v => /hamesha ka median|\(adhura\)|\b20\d\d-W\d\d\b/.test(text(v))),
     naye_installs_sub: !Object.values(out).some(v => /Naye installs \(\d/.test(text(v))),
     mix_note_all: has('portfolio_30d', 'All apps me har hafte apps ka mix badalta hai — sahi tulna ke liye upar se ek app chuno'),
     no_pooled_triangle: !Object.entries(out).some(([k, v]) => k.startsWith('portfolio') && v.includes('uni-tri-all')),
     mix_note_not_in_app: !has(A0, 'apps ka mix badalta hai'),
-    s7_col: has('portfolio_30d', 'Stay after 7 days'),
-    pooled_tiles: has('portfolio_30d', 'id="uni-pool"') && has('portfolio_30d', 'Saari apps ke pakke installs milakar'),
-    provisional_tag: has('portfolio_30d', '>Provisional</span>'),
-    new_tag: Object.values(out).some(v => v.includes('<span class="pill p-p">New</span>')) === apps.some(a => (a.alerts || []).some(x => x.fresh)),
+    s7_col: has('portfolio_30d', '7 din baad bhi app me'),
+    pooled_tiles: has('portfolio_30d', 'id="uni-pool"') && has('portfolio_30d', 'SAB APPS MILAKAR'),
+    provisional_tag: has('portfolio_30d', '⏳ Pakka nahi ·') && !Object.values(out).some(v => text(v).includes('Provisional')),
+    new_tag: !Object.values(out).some(v => v.includes('<span class="pill p-p">New</span>') || /\bNew\b/.test(text(v))),
     old_title_gone: !Object.values(out).some(v => v.includes('Har checkpoint') || v.includes('(cumulative)')),
-    worse_app: T('verdict_worse').includes('⚠️ Worse than last month −5'),
+    worse_app: T('verdict_worse').includes('🔴 Bigda · 100 me −5'),
     // the rate tile names its 7 days in the heading, their dates beside the number, the alert chip before "Provisional"
     rate_window: /Daily uninstall rate · last 7 days<\/div><div class="uni-rv">[\d.]+<small>per 1,000 active users · \d+–\d+ Sep<\/small>/.test(out[`detail|Demo Launcher|all|30|cp|false`] || '')
-      && /data-ra="1">⚠️ Spike · 23 Sep<\/span><span class="pill p-b"[^>]*>Provisional</.test(out[`detail|Demo Launcher|all|30|cp|false`] || ''),
+      && /data-ra="1">⚠️ Spike · 23 Sep<\/span><span class="pill p-b"[^>]*>⏳ Pakka nahi</.test(out[`detail|Demo Launcher|all|30|cp|false`] || ''),
     // the full table's 🔍 pill in English (the engine's Hinglish label rewritten from its own parts)
     zoom_pill: has(A0open, '🔍 Alert (19 Sep) — every day till 10 Oct')
-      && run(`uniZoomTxt({label:'Naya version 3.2 (10 Sep) — 1 Oct tak har din',reason:'release',until:'2026-10-01'})`) === 'New version 3.2 (10 Sep) — every day till 1 Oct'
+      && run(`uniZoomTxt({label:'Naya version 3.2 (10 Sep) — 1 Oct tak har din',reason:'release',until:'2026-10-01'})`) === 'Version 3.2 (10 Sep) — every day till 1 Oct'
       && run(`uniZoomTxt({label:'?',reason:'release',until:'2026-10-01'})`) === 'Every day till 1 Oct — after a new version',
     // "⏱️ When will I know?": one line by default, its points on a tap
     timing_fold: has('portfolio_30d', '⏱️ When will I know? Show') && !has('portfolio_30d', 'din der se aata hai')
       && (out.timing_open || '').split('<hr>').length === 2 && (out.timing_open || '').split('<hr>').every(h => text(h).includes('⏱️ When will I know? Hide') && text(h).includes('GA4 ka data 2 din der se aata hai')),
     fetched_english: /fetched (?:just now|\d+ min ago|\d+ h ago|\d+ days? ago)/.test(T(A0)) || !/fetched /.test(T(A0)),
-    events_note: has('detail|Demo Caller – Test App|all|30|cp|false', 'ℹ️ Estimate · 85 old days')
-      && !apps.some(a => a.app !== 'Demo Caller – Test App' && has(`detail|${a.app}|all|30|cp|false`, 'ℹ️ Estimate ·')),
+    events_note: has('detail|Demo Caller – Test App|all|30|cp|false', '≈ Andaza · 85 old days')
+      && !apps.some(a => a.app !== 'Demo Caller – Test App' && /≈ Andaza · \d+ old day/.test(out[`detail|${a.app}|all|30|cp|false`] || '')),
     incomplete_kept: has('detail|Demo Launcher|all|30|cp|false', '⚠️ Data incomplete · 1 day'),
     // a near-complete day filled up to its exact total: ONE "≈ Estimate" pill (its tooltip: how much came), a ≈ on the
     // numbers it moved; a row the still-incomplete day would empty takes OLDER installs and says so (English label,
     // Hinglish tooltip) — "Data incomplete" stays for that excluded day only
-    estimate_pill: has('detail|Demo Launcher|all|30|cp|false', '≈ Estimate · 1 partial day')
+    estimate_pill: has('detail|Demo Launcher|all|30|cp|false', '≈ Andaza · 1 partial day')
       && has('detail|Demo Launcher|all|30|cp|false', 'is din ka data ~89% aaya tha — total ke hisaab se poora kiya')
-      && !apps.some(a => a.app !== 'Demo Launcher' && has(`detail|${a.app}|all|30|cp|false`, '≈ Estimate ·')),
+      && !apps.some(a => a.app !== 'Demo Launcher' && /≈ Andaza · \d+ partial day/.test(out[`detail|${a.app}|all|30|cp|false`] || '')),
     estimate_cells: ['detail|Demo Launcher|all|90|all|true', 'detail|Demo Launcher|all|30|cp|false'].every(k => has(k, '<span class="uni-est"'))
       && has('detail|Demo Launcher|all|90|all|true', 'is din (20 Aug) ka data ~89% aaya tha — total ke hisaab se poora kiya')
       && !apps.some(a => a.app !== 'Demo Launcher' && has(`detail|${a.app}|all|90|all|true`, 'class="uni-est"')),
     older_installs: has('detail|Demo Launcher|all|90|all|true', '↩ Older installs · 3 Sep: data incomplete')
       && has('detail|Demo Launcher|all|90|all|true', 'purane installs liye — 3 Sep ka data adhoora')
-      && has('detail|Demo Launcher|all|90|all|true', '↩ 4 weeks before: older installs · 3 Sep: data incomplete')
-      // … and the portfolio's D cells say the same: WHICH window took older installs, and why (a break is "gayab")
-      && has('portfolio_30d', 'purane installs liye (&quot;4 weeks before&quot; ke liye) — 3 Sep ka data adhoora')
-      && has('portfolio_30d', 'purane installs liye — 14 Sep ka data gayab (0 uninstall record)'),
+      && has('detail|Demo Launcher|all|90|all|true', '↩ 4 weeks before: older installs · 3 Sep: data incomplete'),
+      // (the portfolio's D cells: one column = one install week now — SPEC_SIMPLIFY §6.2 — a cell of another week is "—")
     worse_portfolio: (() => { const p = (out.verdict_worse || '').split('<hr>');
-      return p.length === 3 && /data-k="worse"[^>]*><i class="dt"><\/i>Worse than last month <b>\(1\)<\/b>/.test(p[1]) && !/data-xp="/.test(p[1])
+      return p.length === 3 && /data-k="worse"[^>]*><i class="dt"><\/i>🔴 Bigda <b>\(1\)<\/b>/.test(p[1]) && !/data-xp="/.test(p[1])
         && /data-xp="worse"/.test(p[2]) && text(p[2].split('data-xp="worse"')[1] || '').includes(apps[0].app + ' −5'); })(),
   },
 }, null, 1));

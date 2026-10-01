@@ -727,7 +727,10 @@ def check_head(h, where):
 ALERT_KEYS = ("id", "source", "app_id", "app", "family", "dir", "severity", "unit", "checkpoint", "n", "also", "vs",
               "now", "before", "delta_pp", "rel", "z", "installs_from", "installs_to", "base_from", "base_to",
               "since", "day", "users", "opened", "last_seen", "fresh", "notify", "data_till", "message", "text",
-              "provisional", "estimate")
+              "provisional", "estimate",
+              "started", "started_cap", "seeded", "opened_at")      # + SPEC_SIMPLIFY (a contract extension)
+CLOSED_KEYS = ("closed", "closed_at", "close_reason")                  # a closed one: + these (SPEC_SIMPLIFY)
+CLOSE_REASONS = ("recovered", "superseded", "window_end", "seed_cleanup")
 
 
 IMPACT_ALERT_KEYS = ("release", "level", "rows")
@@ -745,7 +748,8 @@ def check_alert(a, closed=False):
     imp = a.get("family") == "impact"
     late = a.get("family") == "impact_late"
     _keys_sp(a, ALERT_KEYS + (IMPACT_ALERT_KEYS if imp else LATE_ALERT_KEYS if late else ())
-             + (("closed",) if closed else ()), "alert")
+             + (CLOSED_KEYS if closed else ()), "alert")
+    check_simplify(a, closed)
     assert not (imp or late) or "sp" not in a, a["id"]           # an update's verdict: its rows carry the splits
     assert a["source"] == "uninstall" and a["family"] in ("cohort", "rate_spike", "rate_drift", "rate_zero", "impact",
                                                            "impact_late")
@@ -809,6 +813,21 @@ def check_alert(a, closed=False):
     assert re.search("[%s-%s]" % (chr(0x900), chr(0x97F)), a["message"]) is None
     if closed:
         assert _iso(a["closed"])
+
+
+_NOW_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+
+def check_simplify(a, closed=False):
+    """The SPEC_SIMPLIFY keys of an alert object (uninstall, Active, Install value): started = an ISO day or None,
+    started_cap / seeded bools, opened_at = a run's UTC time or None (opened before it was kept); closed: closed_at the
+    same, close_reason one of CLOSE_REASONS or None (closed before it was kept)."""
+    assert a["started"] is None or _iso(a["started"]), a["started"]
+    assert isinstance(a["started_cap"], bool) and isinstance(a["seeded"], bool)
+    assert a["opened_at"] is None or _NOW_ISO.match(a["opened_at"]), a["opened_at"]
+    if closed:
+        assert a["closed_at"] is None or _NOW_ISO.match(a["closed_at"]), a["closed_at"]
+        assert a["close_reason"] is None or a["close_reason"] in CLOSE_REASONS, a["close_reason"]
 
 
 def check_summary(s):
@@ -979,7 +998,8 @@ def check_asset(asset, summary=None):
             check_alert(al, closed=True)
         for o in a["old_changes"]:                                         # older ones: info only
             _keys_sp(o, ("n", "checkpoint", "dir", "vs", "now", "before", "delta_pp", "z", "users", "installs_from",
-                         "installs_to", "base_from", "base_to", "text"), "old change")
+                         "installs_to", "base_from", "base_to", "text", "started", "started_cap"), "old change")
+            assert _iso(o["started"]) and o["started"] <= o["installs_from"] and isinstance(o["started_cap"], bool)
             assert o["installs_to"] < old and o["dir"] in ("up", "down") and o["checkpoint"] == "D%d" % o["n"]
     if summary is not None:
         assert [a["app_id"] for a in asset["apps"]] == [r["app_id"] for r in summary["apps"]]

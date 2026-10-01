@@ -205,8 +205,10 @@ MIN_RECENT_USERS = 300; MIN_EVENTS = 10    # normal approximation needs ≥10 on
 BIG_RECENT_USERS = 5000; BREADTH_MIN = 4; PERSIST_BIG = 2   # big apps: one bad install day or one run can't fire it
 WARN_PP = 5.0; WARN_REL = 0.25; ARROW_PP = 1.0
 CLOSE_EVALS = 3           # closes after 3 daily evaluations without the condition
-FRESH_EVALS = 3           # "naya" badge for 3 days after opening
+FRESH_EVALS = 3           # "naya" badge for 3 days after opening (notifications / other readers; never the order)
 HEAD4 = (0, 1, 7, 30)     # the portfolio table's D columns
+STARTED_MAX_WEEKS = 26    # "Shuru" walk-back (cohort_started): at most 26 install weeks back, then "6+ mahine se"
+CLOSE_REASONS = ("recovered", "superseded", "window_end", "seed_cleanup")   # an episode's close_reason (SPEC_SIMPLIFY)
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 SEV_ORDER = {"warning": 0, "watch": 1, "good": 2}
@@ -1578,7 +1580,7 @@ def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_befo
             ep = {"id": fingerprint(app_id, "uninstall_" + c["family"], None, c["dir"], opened),
                   "app_id": app_id, "family": c["family"], "dir": c["dir"], "opened": opened, "last_true": E_iso,
                   "misses": 0, "notified_at": now if first_eval else None, "notified_dry": False,
-                  "seeded": bool(first_eval), "last": snap}
+                  "seeded": bool(first_eval), "last": snap, "opened_at": now}   # the run that opened it (never rewritten)
             if spike:
                 ep["day"] = ep["last_day"] = snap["day"]
             eps[key] = ep
@@ -1594,7 +1596,7 @@ def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_befo
     if old_before is not None:
         for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit and e["family"] == "cohort"
                     and e["last"].get("installs_to") and _d(e["last"]["installs_to"]) < old_before]:
-            closed.append(dict(eps.pop(key), closed=E_iso))
+            closed.append(close_ep(eps.pop(key), E_iso, now, "window_end"))    # its installs aged out
     if advanced:                                     # (update-impact episodes: impact.update_impact_episodes /
         for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit     # update_late_episodes)
                     and e["family"] not in ("impact", "impact_late")]:
@@ -1605,13 +1607,75 @@ def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_befo
                 ep["misses"] += 1
                 done = ep["misses"] >= CLOSE_EVALS
             if done:
-                closed.append(dict(eps.pop(key), closed=E_iso))
+                closed.append(close_ep(eps.pop(key), E_iso, now, "recovered"))
     return [e for e in eps.values() if e["app_id"] == app_id]
 
 
-def alert_obj(ep, app, E):
+def close_ep(ep, E_iso, now, reason):
+    """An episode → its closed record: + closed (the data day), closed_at (the run that closed it, like opened_at) and
+    close_reason (CLOSE_REASONS) — shown only, nothing decides on the last two."""
+    return dict(ep, closed=E_iso, closed_at=now, close_reason=reason)
+
+
+def reopen_ep(ep):
+    """A closed record taken back (impact / impact_late): it is open again — its closed / closed_at / close_reason go,
+    its opened / opened_at stay."""
+    for k in ("closed", "closed_at", "close_reason"):
+        ep.pop(k, None)
+    return ep
+
+
+# ── "Shuru": the day a change began in the data (SPEC_SIMPLIFY §1.2) — shown only, nothing decides on it ────────────
+
+def cohort_started(cd, s, max_weeks=STARTED_MAX_WEEKS):
+    """A cohort alert's (or an old_changes row's) start: walk the weekly install-cohort series back from its install week
+    (installs_from) — the same checkpoint N, each week's clean complete install days pooled (_pool) — while a week's
+    share is closer to the alert's `now` than to its `before`. → (the first install day of the earliest such week — the
+    alert's own week when the week before is already closer to `before`, capped: True when all max_weeks weeks back were
+    still closer to `now`). A week without data ends the walk; no cohort data / numbers: (installs_from, False)."""
+    f = s.get("installs_from")
+    N, now, before = s.get("n"), s.get("now"), s.get("before")
+    if cd is None or not f or N is None or now is None or before is None or now == before:
+        return f, False
+    try:
+        i0 = (_d(f) - cd["hs"]).days
+        start = i0
+        for k in range(1, max_weeks + 1):
+            a = i0 - 7 * k
+            x, n, _ = _pool(cd, a, a + 6, int(N), clean=True)
+            if not n:
+                return _iso(cd["hs"] + timedelta(days=start)), False
+            p = x / n
+            if not abs(p - now) < abs(p - before):
+                return _iso(cd["hs"] + timedelta(days=start)), False
+            start = max(a, 0)                        # (a first week the history cuts: its first day there is)
+        return _iso(cd["hs"] + timedelta(days=start)), True
+    except Exception:                                # shown only: a failure never costs the alert
+        return f, False
+
+
+def started_of(ep, cd=None):
+    """An uninstall episode (open or closed) → (started ISO or None, capped): rate_drift = its since; a spike / zero day =
+    the episode's first day; an update's impact = its release date; a cohort alert = cohort_started (else installs_from)."""
+    s, fam = ep.get("last") or {}, ep.get("family")
+    if fam == "cohort":
+        return cohort_started(cd, s)
+    if fam == "rate_drift":
+        return s.get("since"), False
+    if fam in ("rate_spike", "rate_zero"):
+        return ep.get("day") or s.get("day"), False
+    if fam in ("impact", "impact_late"):
+        return (s.get("release") or {}).get("date") or s.get("R") or s.get("since"), False
+    return s.get("since") or s.get("day") or s.get("installs_from"), False
+
+
+def alert_obj(ep, app, E, cd=None):
     """Episode → the alert object the Alerts screen and the notifications read. The message is rebuilt
-    every build, so a renamed app shows its new name."""
+    every build, so a renamed app shows its new name. cd = the app's (post-launch) cohort data: a cohort alert's
+    "started" walks its weekly series back (cohort_started); without it, its installs_from.
+    SPEC_SIMPLIFY (shown only, nothing decides on them): started / started_cap (the day the change began in the data,
+    started_of), seeded, opened_at (the run that opened it; None for an episode opened before it was kept) and, closed,
+    closed_at / close_reason (None for an episode closed before they were kept)."""
     s, E = ep["last"], _d(E)
     prov = bool(s.get("prov")) and ep["dir"] == "up" and "closed" not in ep    # history: its days have settled
     text = alert_text(ep["family"], ep["dir"], dict(s, prov=prov), E)
@@ -1637,13 +1701,31 @@ def alert_obj(ep, app, E):
         out.update(release=dict(s.get("release") or {}), level=s.get("level"),     # released inside it
                    rows={k: list((s.get("rows") or {}).get(k) or []) for k in ("worse", "told")},
                    window=s.get("window"), mixed=list(s.get("mixed") or []))
+    st, cap = started_of(ep, cd)
+    out.update(started=st, started_cap=bool(cap), seeded=bool(ep.get("seeded")), opened_at=ep.get("opened_at"))
     if "closed" in ep:                                # history only: never "new", never (re)sent
-        out.update(closed=ep["closed"], fresh=False, notify=False)
+        out.update(closed=ep["closed"], fresh=False, notify=False, closed_at=ep.get("closed_at"),
+                   close_reason=ep.get("close_reason"))
     return out
 
 
+def _started_ord(a):
+    try:
+        return _d(a["started"]).toordinal() if a.get("started") else 0
+    except (TypeError, ValueError):
+        return 0
+
+
 def sort_alerts(alerts):
-    """warning, watch, good; fresh first; newest opened first; then app."""
+    """warning, watch, good; the newest start ("started") first; then app, id. Neither "fresh" nor "opened" orders it
+    (SPEC_SIMPLIFY: the page asks when the change began, not when the dashboard first saw it)."""
+    return sorted(alerts, key=lambda a: (SEV_ORDER.get(a["severity"], 9), -_started_ord(a), a["app"].casefold(),
+                                         a["id"]))
+
+
+def legacy_order(alerts):
+    """The order sort_alerts gave before SPEC_SIMPLIFY (fresh first, newest opened first) — for the readers that pick
+    "the first alert" of a kind (an app's one-line summary), so what they say stays exactly as before."""
     return sorted(alerts, key=lambda a: (SEV_ORDER.get(a["severity"], 9), not a["fresh"],
                                          -_d(a["opened"]).toordinal(), a["app"].casefold(), a["id"]))
 
@@ -1868,10 +1950,11 @@ def launch_out(whole, L, i0):
             "installs": sum(n[i0:]) if i0 else sum(n), "sure": pre <= LAUNCH_SURE_DAY * (i0 - f)}
 
 
-def old_changes(rows, recent_from, skip, ref):
+def old_changes(rows, recent_from, skip, ref, cd=None):
     """What moved at checkpoints whose newest install days ended before recent_from (ALERT_RECENT_DAYS): info for
     the "Purane badlaav" list only — never an episode, never sent, never counted. One item per firing (settled)
-    row and direction, newest installs first; skip = {dir: checkpoints the alert conditions already hold}."""
+    row and direction, newest installs first; skip = {dir: checkpoints the alert conditions already hold}.
+    + started / started_cap (SPEC_SIMPLIFY "Shuru", shown only): cohort_started over `cd`, else installs_from."""
     out = []
     for row in rows:
         t = row["recent"]["to"]
@@ -1886,6 +1969,8 @@ def old_changes(rows, recent_from, skip, ref):
             item["text"] = alert_text("cohort", dr, dict(c, old=True), ref)
             if c.get("sp") is not None:
                 item["sp"] = c["sp"]
+            st, cap = cohort_started(cd, item)
+            item.update(started=st, started_cap=bool(cap))
             out.append(item)
     return sorted(out, key=lambda o: (o["installs_to"], -o["n"], o["dir"]), reverse=True)
 
@@ -1974,9 +2059,11 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     lcond = next((c for c in iconds if c["family"] == "impact_late"), None)
     iconds = [c for c in iconds if c["family"] == "impact"]
     # (update_episodes returned every episode of the app in state, the late one too: listed once, from its own family)
+    later = [{"key": u.get("key"), "date": u.get("date"), "versions": list(u.get("versions") or [])}
+             for u in impact.get("updates") or []]         # the app's updates: a close's "superseded" (shown only)
     eps = ([e for e in eps if e["family"] not in ("impact", "impact_late")]
-           + imp.update_impact_episodes(state, app_id, E, iconds, advanced, now)
-           + (imp.update_late_episodes(state, app_id, E, lcond, advanced, now) if windows else []))
+           + imp.update_impact_episodes(state, app_id, E, iconds, advanced, now, releases=later)
+           + (imp.update_late_episodes(state, app_id, E, lcond, advanced, now, releases=later) if windows else []))
     if outdated:                                     # NOTHING goes out from an older store format — not even an
         for e in eps:                                # episode opened earlier whose send failed (still due)
             if e.get("notified_at") is None:
@@ -2001,8 +2088,8 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
                                             "held": {dr: r for dr, r in sorted(held.items()) if r}}
     if istate is not None:
         state["eval"][app_id]["impact"] = istate
-    alerts = sort_alerts([alert_obj(e, app, E) for e in eps])
-    closed = [alert_obj(e, app, E) for e in state.get("closed") or [] if e["app_id"] == app_id]
+    alerts = sort_alerts([alert_obj(e, app, E, cd) for e in eps])
+    closed = [alert_obj(e, app, E, cd) for e in state.get("closed") or [] if e["app_id"] == app_id]
     closed.sort(key=lambda a: (a["closed"], a["opened"], a["id"]), reverse=True)
     lit = {}                                         # checkpoint → (dir, late) of its open cohort alert
     for e in eps:
@@ -2068,7 +2155,7 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
               "lifetime": lifetime(cd, ds, i0),
               "triangle": triangle(cd, cp["list"], late, (sv or {}).get("all"), whole if i0 else None),
               "survival": sv, "releases": rels, "launch": launch_out(whole, L, i0),
-              "old_changes": old_changes(settled, recent_from, {dr: c["ns"] for dr, c in conds.items()}, E),
+              "old_changes": old_changes(settled, recent_from, {dr: c["ns"] for dr, c in conds.items()}, E, cd),
               "lateness": lateness(revision_sums(store)), "alerts": alerts, "alerts_closed": closed,
               "impact": impact}
     summary = {"app_id": app_id, "app": app, "data_till": _iso(E), "stale": bool(stale), "ready": cp["nmax"] >= 0,

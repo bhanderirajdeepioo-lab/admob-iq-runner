@@ -41,7 +41,7 @@ run(`DATA = {apps_catalog: [], today_date: ${JSON.stringify(TODAY)}, currency: '
      VALD = {}; for (const [k, d] of Object.entries(__FILES)) VALD[k] = d;`);
 const out = {};
 function scen(name, code) { try { out[name] = String(run(code)); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + (e.stack.match(/at [^\n]*/g) || []).slice(0, 4).join(' < ')); } }
-const RESET = `APP=''; VALAPP=''; innerWidth=375; CURVIEW=null; RANGE='30d'; VALWK='12'; VALSORT='n'; VALCM='d1'; VALCTYEXP=''; VALOLDEXP=false; VALCLEXP=false;
+const RESET = `SMPF={}; SMPALL=false; APP=''; VALAPP=''; innerWidth=375; CURVIEW=null; RANGE='30d'; VALWK='12'; VALSORT='n'; VALCM='d1'; VALCTYEXP=''; VALOLDEXP=false; VALCLEXP=false;
   VALTILEEXP=''; VALSTEXP=''; VALPSORT={k:'status',d:1}; VALTIMEXP=false; VALCHKEXP=false; VALJUMP=''; VALERR={}; VALL={};`;
 const rows = DV.apps || [], J = JSON.stringify;
 const det = r => FILES[r.key] || null;
@@ -79,7 +79,7 @@ scen('noga4|unknown', `${RESET} APP='Some Other App'; valScreen()`);
 // ── each app ──
 const MODES = [['base', ''], ['desktop', 'innerWidth=1280;'], ['wk26', `VALWK='26';`], ['wkall', `VALWK='all'; innerWidth=1280;`], ['inr', `CURVIEW='INR';`],
   ['sort_d1', `valSort('d1');`], ['sort_d7_desk', `innerWidth=1280; valSort('d7');`], ['sort_d30', `valSort('d30');`], ['sort_rpi_desk', `innerWidth=1280; valSort('rpi');`],
-  ['folds', `VALOLDEXP=true; VALCLEXP=true; VALCHKEXP=true; VALTIMEXP=true;`], ['folds_desk', `innerWidth=1280; VALOLDEXP=true; VALCLEXP=true; VALCHKEXP=true; VALTIMEXP=true;`],
+  ['folds', `SMPALL=true; VALOLDEXP=true; VALCLEXP=true; VALCHKEXP=true; VALTIMEXP=true;`], ['folds_desk', `SMPALL=true; innerWidth=1280; VALOLDEXP=true; VALCLEXP=true; VALCHKEXP=true; VALTIMEXP=true;`],
   ['tile_open', `VALTILEEXP='pay';`]];
 // valSort / valWK re-render through the page; in the vm that is a no-op, the state is what matters
 for (const r of rows) {
@@ -161,7 +161,7 @@ synth('extras', withPaid, `const W=d.weeks.filter(w=>w.judged).sort((p,q)=>p.fro
   const a0=Object.assign({family:'pay_slow',metric:'b7',severity:'watch',dir:'down',text:'Ads ka paisa wapas aane me der'},(d.changes.open||[])[0]||{},{app_id:d.app_id,app:d.app});
   d.changes=Object.assign({},d.changes,{open:[Object.assign({},a0,{release:{key:'ver:1.4@'+w1.from,label:'v1.4',date:w1.from}})],closed:[Object.assign({},a0,{closed:'2026-06-01',fresh:false})],
     older:[{kind:'spend',from:'2025-11-03',to:'2025-11-16',text:'3 Nov 2025 se Google Ads kharcha badha'}]});`,
-  `innerWidth=1280; VALWK='all'; VALOLDEXP=true; VALCLEXP=true; return valChangesCard(d)+'<hr>'+valPayCard(d,row);`);
+  `SMPALL=true; innerWidth=1280; VALWK='all'; VALOLDEXP=true; VALCLEXP=true; return valChangesCard(d)+'<hr>'+valPayCard(d,row);`);
 // a fold that throws renders its own small notice, the rest of the page stays
 synth('broken_part', withPaid, `Object.defineProperty(d,'countries',{get(){ throw new Error('boom'); }});`);
 // wrong shapes inside one app's file: the page still renders, unknown stays "—"
@@ -252,10 +252,11 @@ for (const r of rows) {
     tiles, tile_open: /class="uni-st val-t open" data-m="pay"/.test(out[`detail|${r.app}|tile_open`] || ''),
     summary: (sum.match(/<div class="val-line" data-kind="([^"]*)">([^<]*)<\/div>/) || []).slice(1), ctx: text(sec(sum, 'id="val-ctx"', '</div>')).replace(/^[^>]*>/, '').trim(),
     data_line: text(sec(sum, 'id="val-data"', '</div>')).replace(/^[^>]*>/, '').trim(),
-    chg_title: (h.match(/🔔 What changed\? \((\d+)\)/) || [])[1], chg_rows: [...sec(h, 'id="val-chg"', 'id="val-pay"').matchAll(/<div class="uni-chg na" data-fam="([^"]*)"/g)].map(m => m[1]),
-    all_normal: h.includes('✅ All normal — no changes'), info_rows: [...sec(h, 'id="val-chg"', 'id="val-pay"').matchAll(/data-info="([^"]*)"/g)].map(m => m[1]),
+    chg_title: (h.match(/🔔 What changed\? \((\d+)\)/) || [])[1], chg_counts: (text(sec(h, 'id="val-chg"', 'id="val-pay"')).match(/(\d+) shown · (\d+) folded below/) || []).slice(1).map(Number),
+    chg_rows: [...sec(f, 'id="val-chg"', 'id="val-pay"').matchAll(/<div class="uni-chg na" data-fam="([^"]*)"/g)].map(m => m[1]),
+    all_normal: h.includes('✅ All normal — no changes'), info_rows: [...sec(f, 'id="val-chg"', 'id="val-pay"').matchAll(/data-info="([^"]*)"/g)].map(m => m[1]),
     closed_rows: (sec(f, 'id="val-chg"', 'id="val-pay"').match(/<div class="uni-chg na cl"/g) || []).length, older_rows: (sec(f, 'id="val-chg"', 'id="val-pay"').match(/data-old="/g) || []).length,
-    rel_chips: [...sec(h, 'id="val-chg"', 'id="val-pay"').matchAll(/onclick="event\.stopPropagation\(\);uniImpGo\('([^']*)','([^']*)','act'\)">After ([^<]*)</g)].map(m => [m[1], m[2], m[3]]),
+    rel_chips: [...sec(f, 'id="val-chg"', 'id="val-pay"').matchAll(/Badlaav shuru: [^<]*? · ([^<]*?) ke baad<\/span>/g)].map(m => m[1]),   // (SPEC_SIMPLIFY §6.4: "After vX" → the Shuru cell)
     pay: { heads_phone: heads(pay), heads_desk: heads(payD), weeks_12: (pay.match(/<tr data-week="/g) || []).length, weeks_all: (payAll.match(/<tr data-week="/g) || []).length,
       imm: cells(payD).filter(c => /data-imm="1"/.test(c.a)).map(c => c.t), proj: cells(payD).filter(c => /data-proj="1"/.test(c.a)).map(c => c.t),
       proj_cls: (payD.match(/<td class="uni-num val-proj" data-proj="1"/g) || []).length, q: cells(payAll).filter(c => /data-q="1"/.test(c.a)).map(c => c.t),
@@ -276,7 +277,7 @@ for (const r of rows) {
       names: [...ctyD.matchAll(/<tr class="clk" data-cc="([^"]*)"[^>]*><td class="nm">([^<]*)/g)].map(m => [m[1], m[2].trim()]),
       strip: text(sec(ctyD, 'id="val-cstrip">', '</div>')).trim(), win: text(sec(ctyD, 'id="val-cwin"', '</div>')).replace(/^[^>]*>/, '').trim(),
       rest: [...sec(ctyD, 'id="val-rest">', '<div style="padding:4px 17px 14px">').matchAll(/<div>([\s\S]*?)<\/div>/g)].map(m => text(m[1]).trim()),
-      nogeo: ctyD.includes('id="val-nogeo"'), smp: ctyD.includes('id="val-smp"'), link: ctyD.includes(`onclick="show('countries')">AdMob eCPM by country → Country Strategy</span>`),
+      nogeo: ctyD.includes('id="val-nogeo"'), smp: ctyD.includes('id="val-smp"'), link: ctyD.includes(`onclick="show('countries')">AdMob ad rate, country ke hisaab se → Country Strategy</span>`),
       open_desk: text(sec(out[`detail|${r.app}|cty_open_desk`] || '', '<tr class="val-cx"', '</tr>')), open_phone: text(sec(out[`detail|${r.app}|cty_open`] || '', '<div class="val-cxd">', '</div></div></div>')),
       open_sparks: (sec(out[`detail|${r.app}|cty_open_desk`] || '', '<tr class="val-cx"', '</tr>').match(/<svg /g) || []).length,
       sort_d1: [...sec(out[`detail|${r.app}|sort_d1`] || '', 'id="val-ccards"', 'id="val-rest"').matchAll(/<div class="val-cc[^"]*" data-cc="([^"]*)" onclick/g)].map(m => m[1]),
@@ -301,7 +302,7 @@ const portfolio = { head: text(pH.slice(0, 900)).trim(), count: text(sec(pH, 'id
   strip_classes: [...sec(pH, 'class="act-strips"', 'id="val-chg"').matchAll(/<span class="uni-sc ([a-z-]+)( on)?" data-k="([a-z0-9_]+):([a-z_]+)"/g)].map(m => [m[1], m[3], m[4]]),
   ctyall: text(sec(pH, 'id="val-ctyall"', 'id="val-noads"')).slice(0, 1500), ctyall_rows: [...sec(pH, 'id="val-ctyall"', '</tbody>').matchAll(/<tr data-cc="([^"]*)"/g)].map(m => m[1]),
   ctyall_nofiles: T('portfolio_nofiles').includes('App kholo — uske countries yahan jud jayenge'),
-  noads: (pH.match(/<h3>ℹ️ Apps without Google Ads \((\d+)\)<\/h3>/) || [])[1], noga4: (pH.match(/<h3>🔌 Apps without GA4 data \((\d+)\)<\/h3>/) || [])[1],
+  noads: (pH.match(/<span>— Ads nahi chal rahe \((\d+)\)<\/span>/) || [])[1], noga4: (pH.match(/<h3>🔌 Apps without GA4 data \((\d+)\)<\/h3>/) || [])[1],   // (noads: SPEC_SIMPLIFY §6.5, one folded line of count)
   timing: T('portfolio_timing').includes('Alert tabhi jab 2 hafte lagatar ho.'), inr: (out.portfolio_inr || '').includes('₹'), xp, psorts };
 // Alerts screen
 const alertsOf = h => ({ sub: h.includes('💸 Install value (GA4 + Ads)'), cards: (h.match(/data-metrics="value"/g) || []).length, chip: h.includes(`onclick="filterAlerts('value')"`),
@@ -321,8 +322,8 @@ for (const [k, v] of Object.entries(out)) {
 const syn = {
   no_red: { pills: pills(out.no_red || ''), blue: [...(out.no_red || '').matchAll(/<span class="pill p-b" data-st="(worse|watch|better)"/g)].map(m => m[1]),
     strip: [...(out.no_red || '').matchAll(/<span class="uni-sc ([a-z-]+)( on)?" data-k="(pay|cpi):(worse|better)"/g)].map(m => [m[1], m[4]]) },
-  warn: { red_tile: /data-m="pay" data-st="worse"[\s\S]*?<span class="pill p-r" data-st="worse"/.test(out.warn || ''), row: (out.warn || '').includes('<span class="pill p-r">Worse</span>') },
-  unclean: { wait: [...(out.unclean || '').matchAll(/<span class="pill p-b" data-st="wait" title="([^"]*)">Wait<\/span>/g)].length, judged: [...(out.unclean || '').matchAll(/data-st="(keep|slow|costly|top|avg|low)"/g)].length,
+  warn: { red_tile: /data-m="pay" data-st="worse"[\s\S]*?<span class="pill p-r" data-st="worse"/.test(out.warn || ''), row: (out.warn || '').includes('<span class="pill p-r smp-w">🔴 Bigda</span>') },
+  unclean: { wait: [...(out.unclean || '').matchAll(/<span class="pill p-b" data-st="wait" title="([^"]*)">⏳ Abhi jaldi<\/span>/g)].length, judged: [...(out.unclean || '').matchAll(/data-st="(keep|slow|costly|top|avg|low)"/g)].length,
     approx: (sec(out.unclean || '', '<tr class="clk"', '</tbody>').match(/≈\d/g) || []).length, tip: (out.unclean || '').includes('In hafton me GA4 ne kuch installs/kamai kisi country me nahi baante'),
     text: text(out.unclean || '').slice(0, 600) },
   geo: { heads: [...sec(out.geo || '', '<thead>', '</thead>').matchAll(/<th[^>]*>([^<]*)/g)].map(m => m[1]), strip: text(sec(out.geo || '', 'id="val-cstrip">', '</div>')).trim(),

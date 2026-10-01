@@ -79,7 +79,7 @@ def test_sections_in_order_and_countries_slice_unchanged(report):
     for k in ("phone", "desk"):
         assert all(i > 0 for i in p[k]) and p[k] == sorted(p[k]), (k, p[k])
     assert p["off"][4] == -1 and p["off"][5] == -1 and p["off_has"] == []
-    assert p["titles"] == ["🧬 New users by app version", "🗓️ Long-term by install month"]
+    assert p["titles"] == ["🧬 Users by app version", "🗓️ Long-term by install month"]   # (no word "New", SPEC_SIMPLIFY §9 check 1)
     assert p["slice_same_desk"] and p["slice_same_phone"] and p["pay_same"]
     assert p["slice_off"]["rows"] and p["slice_off"]["heads"][0] == "Country"
 
@@ -172,7 +172,7 @@ def test_geo_tile_keep_costly(report):
 
 def test_geo_cost_alert_also_fewer_came_back(report):
     c = [x for x in report["chg"]["app"] if x["fam"] == "geo_cost"]
-    assert c and "· also fewer came back" in c[0]["t"] and c[0]["call"] == "valJump('val-cty')"
+    assert c and "Saath me: kam log wapas aaye" in c[0]["t"] and c[0]["call"] == "valJump('val-cty')"
     a = [x for x in report["alerts"]["cards"] if x["title"].startswith("💸 Country ads costly")]
     assert a and a[0]["title"].endswith("· also fewer came back")
 
@@ -208,24 +208,24 @@ def test_version_rows_newest_first_and_older_fold(report):
 def test_version_cells_wait_part_few(report):
     R = rows_by_ver(report["ver"]["desk"])
     new = R["2.3"]["cells"]
-    assert new[2] == "31* of 100" and IN_DAYS.match(new[3]) and IN_DAYS.match(new[4])   # never a small number
+    assert new[2] == "31⏳ of 100" and IN_DAYS.match(new[3]) and IN_DAYS.match(new[4])   # never a small number
     assert any("3 of 5 din ke installs itne purane" in t for t in R["2.3"]["titles"])
-    assert new[5].startswith("$0.0043*") and "in 3 days" in new[5]
-    assert R["2.2"]["cells"][4] == "4.9* of 100"
-    assert R["1.9"]["few"] and R["1.9"]["chip"] == ["p-b", "few", "Few installs"]
+    assert new[5].startswith("$0.0043⏳") and "in 3 days" in new[5]                # (⏳ = not all days in: SPEC_SIMPLIFY §1.4)
+    assert R["2.2"]["cells"][4] == "4.9⏳ of 100"
+    assert R["1.9"]["few"] and R["1.9"]["chip"] == ["p-b", "few", "⏳ Abhi jaldi · installs kam"]   # (the six words, §6.4)
     assert any("Sirf 66 users wapas aaye" in t for t in R["1.9"]["titles"])
     assert R["1.8"]["cells"][2] == "≈30 of 100" and R["1.8"]["cells"][4] == "No data"
     assert R["2.0"]["cells"][5].startswith("≈$0.0042")                                 # an estimate is ≈
-    assert R["2.2"]["cells"][6] == "−4.7 pts next day · −2.3 pts week vs v2.1"       # grey words, never a colour
+    assert R["2.2"]["cells"][6] == "agle din 100 me −4.7 · 7 din baad 100 me −2.3 vs v2.1"       # grey words, never a colour
     assert R["2.3"]["cells"][6] == "wait vs v2.2" and R["1.9"]["cells"][6] == "—"
 
 
 def test_version_chip_colours_only_with_alert(report):
     v = report["ver"]
     R = rows_by_ver(v["desk"])
-    assert R["2.2"]["chip"] == ["uni-pz", "worse", "🔻 Lower"] and R["2.0"]["chip"] == ["uni-pz", "better", "⭐ Higher"]
-    assert R["2.1"]["chip"] == ["uni-pz", "same", "– Same as before"] and R["2.3"]["chip"] == ["p-b", "wait", "Wait"]
-    for k, want, ver in (("watch", ["p-y", "watch", "Lower · watch"], 1), ("warn", ["p-r", "worse", "Lower · alert"], 1), ("good", ["p-g", "better", "Higher"], 3)):
+    assert R["2.2"]["chip"] == ["uni-pz", "worse", "🔴 Bigda"] and R["2.0"]["chip"] == ["uni-pz", "better", "🟢 Behtar"]   # (§1.8 / §6.4 words)
+    assert R["2.1"]["chip"] == ["uni-pz", "same", "⚪ Normal"] and R["2.3"]["chip"] == ["p-b", "wait", "⏳ Abhi jaldi"]
+    for k, want, ver in (("watch", ["p-y", "watch", "🟡 Dhyan do"], 1), ("warn", ["p-r", "worse", "🔴 Bigda"], 1), ("good", ["p-g", "better", "🟢 Behtar"], 3)):
         a = v["alert|" + k]
         for side in ("desk", "phone"):
             assert a[side][ver] == want, (k, side)
@@ -267,9 +267,9 @@ def test_version_phone_cards(report):
     C = {c["ver"]: c for c in v["phone"]["cards"]}
     assert list(C) == ["2.3", "2.2", "2.1", "2.0", "1.9", "1.8", "1.7", "1.6"]
     assert re.fullmatch(r"📦 v2\.2 · .+ · 14,000 installs", C["2.2"]["h"])
-    assert C["2.2"]["m"] == "27 of 100 next day (pichhla 32) · $0.021* per install (30 d)"
+    assert C["2.2"]["m"] == "27 of 100 next day (pichhla 32) · $0.021⏳ per install (30 d)"
     assert C["2.3"]["m"].endswith("30-day earning: in 26 days") and C["1.8"]["m"].endswith("30-day earning: No data")
-    assert C["1.9"]["chip"] == ["p-b", "few", "Few installs"]
+    assert C["1.9"]["chip"] == ["p-b", "few", "⏳ Abhi jaldi · installs kam"]
     op = [c for c in v["open_phone"]["cards"] if c["open"]]
     assert len(op) == 1 and op[0]["ver"] == "2.2" and "naye users kam ruk rahe" in op[0]["detail"]
 
@@ -277,7 +277,7 @@ def test_version_phone_cards(report):
 def test_impact_block_links_version_when_cd_on(report):
     i = report["imp"]
     for k in ("on_act", "on_uni"):
-        assert i[k]["text"] == "🧬 New users of v2.2 — 30 din tak kitne ruke, kitna kamaya →", k   # the newest version of the block
+        assert i[k]["text"] == "🧬 Users of v2.2 — 30 din tak kitne ruke, kitna kamaya →", k   # the newest version of the block
         assert i[k]["call"][1] == "2.2" and i[k]["call"][0].startswith("ca-app-pub-")
     for k in ("closed", "cd_off", "no_value", "other_app", "update_kind"):
         assert i[k]["link"] is None, k
@@ -288,22 +288,22 @@ def test_impact_block_links_version_when_cd_on(report):
 def test_money_back_rel_row_links_version(report):
     r = report["rel"]
     assert [c["cell"] != "" for c in r["has"]["desk"]] == [True] and [c["cell"] != "" for c in r["has"]["phone"]] == [True]
-    assert r["has"]["calls"] == [["2.2", "New users of v2.2 →"]] * 2
+    assert r["has"]["calls"] == [["2.2", "Users of v2.2 →"]] * 2
     assert all(c["cell"] == "" for c in r["missing"]["desk"] + r["missing"]["phone"]) and r["missing"]["calls"] == []
     assert all(c["cell"] == "" for c in r["no_cd"]["desk"])                            # an old file: the cell stays empty
 
 
 def test_alerts_screen_ver_ret_card(report):
-    cards = [c for c in report["alerts"]["cards"] if c["title"].startswith("💸 New users by version")]
+    cards = [c for c in report["alerts"]["cards"] if c["title"].startswith("💸 Users by version")]
     assert [c["sev"] for c in cards] == ["watch", "warning", "good"]
-    assert cards[0]["title"] == "💸 New users by version — v2.2 · came back next day"
-    assert cards[1]["title"] == "💸 New users by version — v2.2 · came back after a week"
+    assert cards[0]["title"] == "💸 Users by version — v2.2 · came back next day"
+    assert cards[1]["title"] == "💸 Users by version — v2.2 · came back after a week"
     assert cards[0]["btns"][0][0].startswith("valVerGo(") and cards[0]["btns"][0][0].endswith(",'2.2')")
     assert cards[0]["btns"][1][1] == "Update detail →" and "uniImpGo(" in cards[0]["btns"][1][0]
     assert "naye users kam ruk rahe" in cards[0]["cause"] and "zyada ruk rahe" in cards[2]["cause"]
-    assert report["alerts"]["sub"] and len(report["alerts"]["screen"]) == 5
+    assert not report["alerts"]["sub"] and len(report["alerts"]["screen"]) == 0     # the Alerts screen: ad units only (§7)
     rows = [x for x in report["chg"]["app"] if x["fam"] == "ver_ret"]
-    assert rows and all(x["call"].startswith("valVerJump(") for x in rows) and all("🧬 v2." in x["t"] for x in rows)
+    assert rows and all(x["call"].startswith("valVerJump(") for x in rows) and all(re.search(r"v2\.\d ke baad", x["t"]) for x in rows)   # (🧬 vX → the Shuru cell, §6.4)
     allr = [x for x in report["chg"]["all"] if x["fam"] == "ver_ret"]
     assert allr and all(x["call"].startswith("valVerGo(") for x in allr)
     assert ["ver_d30", "valJump('val-ver')"] in report["chg"]["info"] and ["ver_mix", "valJump('val-ver')"] in report["chg"]["info"]
@@ -363,7 +363,7 @@ def test_long_wait_nodata_few_cells(report):
                 assert not seen_wait or c in ("No data",), (x["key"], x["cells"])
     A = months(report["long"]["all"])
     last = A[-1]
-    assert last["cells"][6] == "No data" and last["part_tip"] and "poora data me nahi" in last["part_tip"] and last["label"].split()[1].endswith("*")
+    assert last["cells"][6] == "No data" and last["part_tip"] and "poora data me nahi" in last["part_tip"] and last["label"].split()[1].endswith("⏳")
     few = [x for x in M if any("Sirf 8 users wapas" in t for t in x["titles"])]
     assert len(few) == 1
     assert any(x["cells"][2].startswith("≈") for x in M)                             # a GA4 day not whole: ≈
@@ -420,7 +420,8 @@ def test_alerts_screen_long_ret_card(report):
     rows = [x for x in report["chg"]["app"] if x["fam"] == "long_ret"]
     assert rows and rows[0]["call"] == "valJump('val-long')"
     assert [x["call"] for x in report["chg"]["all"] if x["fam"] == "long_ret"][0].endswith(",'val-long')")
-    assert ["long_up", "valJump('val-long')"] in report["chg"]["info"] and ["long_up", "Long-term"] in report["chg"]["info_tags"]
+    # a Mar–Apr install-month row: > 90 days old — only in its own 🗓️ section, never in a list (SPEC_SIMPLIFY §1.3 / N3)
+    assert not any(k == "long_up" for k, _ in report["chg"]["info"]) and not report["chg"]["info_tags"]
     assert report["jumps"]["long"]["jump"] == "val-long" and report["jumps"]["long"]["calls"][0] == "value"
 
 
@@ -492,13 +493,13 @@ def test_version_short_part_few_and_phone_pair(report):
     sits beside the comparison's own number, never the version's all-days one."""
     v = report["ver"]
     R = rows_by_ver(v["fix|desk"])
-    assert R["2.1"]["chip"] == ["uni-pz", "short", "Too short to compare"] and not R["2.1"]["few"]
+    assert R["2.1"]["chip"] == ["uni-pz", "short", "— Faisla nahi (agla update jaldi aaya)"] and not R["2.1"]["few"]
     assert R["2.1"]["cells"][6] == "— vs v2.0" and any("tulna ke liye 3+ din chahiye" in t for t in R["2.1"]["titles"])
-    assert R["2.3"]["cells"][2] == "31* of 100" and any("Sirf 260 installs, 37 wapas aaye" in t for t in R["2.3"]["titles"])
-    assert R["2.2"]["cells"][2] == "34 of 100" and R["2.2"]["cells"][6].startswith("0 pts next day")
+    assert R["2.3"]["cells"][2] == "31⏳ of 100" and any("Sirf 260 installs, 37 wapas aaye" in t for t in R["2.3"]["titles"])
+    assert R["2.2"]["cells"][2] == "34 of 100" and R["2.2"]["cells"][6].startswith("agle din 100 me 0")   # (no "pts", §1.7)
     C = {c["ver"]: c for c in v["fix|phone"]["cards"]}
     assert C["2.2"]["m"].startswith("35 of 100 next day (pichhla 35)")                  # 34.51 vs 34.51: the same pair
-    assert C["2.1"]["chip"] == ["uni-pz", "short", "Too short to compare"]
+    assert C["2.1"]["chip"] == ["uni-pz", "short", "— Faisla nahi (agla update jaldi aaya)"]
 
 
 def test_version_link_to_a_newer_update_says_it_is_new(report):
@@ -506,9 +507,9 @@ def test_version_link_to_a_newer_update_says_it_is_new(report):
     assert v["link_new"]["vnone"].startswith("ℹ️ v9.9 abhi naya hai — install-day data ") and "row kuch din me aayegi" in v["link_new"]["vnone"]
     assert "rollout" not in v["link_new"]["vnone"] and "rollout" in v["link_old"]["vnone"]
     i = report["imp"]
-    assert re.fullmatch(r"🧬 New users of v2\.2 — abhi naya: install-day data .+ tak, number kuch din me →", i["newer"]["text"])
+    assert re.fullmatch(r"🧬 Users of v2\.2 — abhi naya: install-day data .+ tak, number kuch din me →", i["newer"]["text"])
     assert i["newer"]["call"][1] == "2.2" and i["newer"]["call"][2] > i["on_act"]["call"][2]
-    assert i["on_act"]["text"] == "🧬 New users of v2.2 — 30 din tak kitne ruke, kitna kamaya →"
+    assert i["on_act"]["text"] == "🧬 Users of v2.2 — 30 din tak kitne ruke, kitna kamaya →"
 
 
 def test_long_earning_not_yet_and_little_ads(report):

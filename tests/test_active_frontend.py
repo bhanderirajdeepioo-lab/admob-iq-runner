@@ -30,6 +30,10 @@ MON = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "No
 RANK = {"worse": 0, "break": 1, "watch": 2, "slow": 2, "better": 3, "maybe_dn": 4, "maybe_up": 4, "price_dn": 5, "price_up": 5,
         "growth": 6, "normal": 7, "low": 8, "noad": 8, "wait": 9}
 TILE_KEYS = ("ret_dau", "d1", "d7", "sess", "time", "arpdau")
+# SPEC_SIMPLIFY §1.8 / §6.4: exactly six status words — one per state (the metric is named by its tile / strip / column)
+WORD = {"worse": "🔴 Bigda", "watch": "🟡 Dhyan do", "slow": "🟡 Dhyan do", "break": "🟡 Dhyan do", "better": "🟢 Behtar",
+        "maybe_dn": "⚪ Normal", "maybe_up": "⚪ Normal", "normal": "⚪ Normal", "price_dn": "⚪ Normal", "price_up": "⚪ Normal",
+        "growth": "⏳ Abhi jaldi", "low": "⏳ Abhi jaldi", "wait": "⏳ Abhi jaldi", "noad": "— Lagu nahi"}
 
 
 @pytest.fixture(scope="module")
@@ -96,7 +100,8 @@ def test_detail_sections_in_order_with_english_titles(report, fixture):
         a = report["apps"][r["app"]]
         assert all(i > 0 for i in a["sections"]) and a["sections"] == sorted(a["sections"]), r["app"]
         assert a["daily_title"] and a["tri_title"] and a["use_title"] and a["rev_title"]
-        assert a["has_titles"] == ["📌 At a glance", "🔔 What changed? (", "📦 Update impact", "When will I know?", "← All apps"], r["app"]
+        # (SPEC_SIMPLIFY §6.5: the update card lives on the Uninstall tab — here its one-line link)
+        assert a["has_titles"] == ["📌 At a glance", "🔔 What changed? (", "📦 Is app ke updates ka asar", "When will I know?", "← All apps"], r["app"]
         assert {"7-day average", "Every day", "30 days", "3 months", "1 year", "All time"} <= set(a["chips_seen"]), r["app"]
 
 
@@ -116,7 +121,7 @@ def test_tile_returning_has_context_line(report, fixture):
     for r in rows(fixture):
         a = report["apps"][r["app"]]
         assert a["ctx"], r["app"]
-        assert a["ctx_text"].startswith("Active users") and "New installs" in a["ctx_text"]
+        assert a["ctx_text"].startswith("Active users") and "Installs" in a["ctx_text"]              # (no word "New": §9 check 1)
         c = det(fixture, r).get("ctx") or {}
         assert ("days ago" in a["ctx_text"]) == (c.get("old") is not None), r["app"]
         assert ("≈" in a["ctx_text"]) == bool(c.get("old") is not None and c.get("old_est")), r["app"]
@@ -167,15 +172,16 @@ def test_rev_tile_split(report, fixture):
         if t["st"] in ("noad", "wait"):
             assert t["big"] == "—" and "$0" not in t["text"]
             continue
-        assert "Ads/user" in t["text"] and "eCPM" in t["text"], (r["app"], t["text"])
+        assert "AdMob ads har user" in t["text"] and "Ad rate (1,000 ads ka)" in t["text"], (r["app"], t["text"])   # §6.4 words
         if t["big"] != "—":
             assert t["big"].startswith("≈"), (r["app"], t["big"])
         osh = (det(fixture, r).get("flags") or {}).get("other_share")
-        assert ("AdMob Network only · other networks ~" in t["text"]) == (osh is not None and osh >= 0.05), r["app"]
+        assert ("Sirf AdMob Network · dusre ad networks se ~" in t["text"]) == (osh is not None and osh >= 0.05), r["app"]
 
 
 def test_ads_dir_chip_is_prefixed(report):
-    assert report["syn"]["ads_dir"] == "Ads/user maybe lower"
+    # SPEC_SIMPLIFY §1.8: the status word alone, whose number it is in its "Saath me:" line
+    assert report["syn"]["ads_dir"] == "⚪ Normal | AdMob ads har user ke hisaab se"
 
 
 def test_no_ad_data_never_renders_zero(report, fixture):
@@ -203,9 +209,9 @@ def test_use_card_modes(report, fixture):
         if (det(fixture, r).get("edges") or {}).get("usage_state") == "wait":
             assert all(m["wait"] for m in u.values()), r["app"]
             continue
-        assert u["base"]["on"] == ["Time per user", "Returning", "7-day average"], (r["app"], u["base"])
+        assert u["base"]["on"] == ["Time per user", "Purane users (roz)", "7-day average"], (r["app"], u["base"])   # §6.4
         assert u["sess_all"]["on"] == ["Sessions per user", "All users", "7-day average"]
-        assert u["time_new_day"]["on"] == ["Time per user", "New installs", "Every day"]
+        assert u["time_new_day"]["on"] == ["Time per user", "Installs", "Every day"]
         assert u["time_new_day"]["context"] and not u["time_new_day"]["band"] and not u["base"]["band"]
     assert report["syn"]["usage_wait"]["tiles"] == 2 and report["syn"]["usage_wait"]["card"]
 
@@ -225,42 +231,44 @@ def test_version_table(report, fixture):
 
 
 def test_changes_rows(report, fixture):
+    # SPEC_SIMPLIFY §6.3: "What changed? (n) Sirf ye app: … · n shown · m folded below"; every open alert is a row (an
+    # act_slow told inside its act_drift, M5), info / older rows up to 90 days old in the folds; one of the 6 words each
     for r in rows(fixture):
         C, a = det(fixture, r).get("changes") or {}, report["apps"][r["app"]]
         op = C.get("open") or []
-        assert a["chg_title"] == str(len(op)), r["app"]
-        assert sorted(a["chg_rows"]) == sorted(x.get("family") or "" for x in op), r["app"]
-        assert a["info_rows"] == [o.get("kind") or "info" for o in C.get("info") or []], r["app"]
-        assert a["closed_rows"] == len(C.get("closed") or []) and a["older_rows"] == len(C.get("older") or []), r["app"]
+        slow_in_drift = [x for x in op if x.get("family") == "act_slow" and any(z.get("family") == "act_drift" and z.get("metric") == x.get("metric") for z in op)]
+        assert sorted(a["chg_rows"]) == sorted(x.get("family") or "" for x in op if x not in slow_in_drift), r["app"]
+        assert a["chg_counts"] and a["chg_title"] == str(a["chg_counts"][0]), r["app"]
+        assert sorted(a["info_rows"]) == sorted(o.get("kind") or "info" for o in C.get("info") or []
+                                                if not o.get("from") or (_date.fromisoformat(r["data_till"]) - _date.fromisoformat(o.get("started") or o["from"])).days <= 90), r["app"]
+        assert a["closed_rows"] == len(C.get("closed") or []), r["app"]
         for cls, lbl in a["sev_pills"]:
-            assert (cls, lbl) in (("p-r", "Worse"), ("p-y", "Watch"), ("p-g", "Better"), ("p-b", "Info"))
-        for x in op:
-            assert x.get("text") and x["text"] in report["texts"]["detail|%s|base" % r["app"]], (r["app"], x.get("text"))
+            assert (cls, lbl) in (("p-r", "🔴 Bigda"), ("p-y", "🟡 Dhyan do"), ("p-g", "🟢 Behtar"), ("p-b", "ℹ️ Jaankari"))
 
 
 def test_changes_all_normal(report, fixture):
-    seen = 0
     for r in rows(fixture):
-        op = (det(fixture, r).get("changes") or {}).get("open") or []
-        assert report["apps"][r["app"]]["all_normal"] == (not op), r["app"]
-        seen += not op
+        a = report["apps"][r["app"]]
+        # "✅ All normal — no changes" only when the list has no row at all (folded ones count: SPEC_SIMPLIFY §6.3)
+        assert a["all_normal"] == (a["chg_counts"] == [0, 0]), r["app"]
     t = report["portfolio"]
-    assert (t["chg_title"] == str(len(fixture["dashboard_active"].get("alerts") or [])))
-    assert sorted(t["chg_rows"]) == sorted(x["app_id"] for x in fixture["dashboard_active"].get("alerts") or [])
+    AL = fixture["dashboard_active"].get("alerts") or []
+    assert set(t["chg_rows"]) <= {x["app_id"] for x in AL} and t["chg_title"] == str(len(t["chg_rows"]))
 
 
 def test_early_look_row_is_provisional_and_uncounted(report):
     e = report["syn"]["early"]
-    assert e["row"] and e["pill"] and not e["counted"]
-    assert e["title"] == e["open"]                                    # "What changed? (n)" = open alerts only
+    assert e["row"] and e["pill"] and not e["counted"]               # an ℹ️ Jaankari row with its "⏳ Pakka nahi", never an alert
+    assert e["title"] is not None and int(e["title"]) <= int(e["open"])   # "What changed? (n)" = the rows shown (never the info row)
 
 
 def test_pkg_chip_opens_block_in_active(report, fixture):
+    # SPEC_SIMPLIFY §6.5 / D4: the update card lives on the Uninstall tab only — a 📦 chip here opens THAT block there
     imp = report["imp"]
     want = [(r["app"], x["key"]) for r in rows(fixture) for x in det(fixture, r).get("releases") or [] if x.get("key")]
     assert sorted((j["app"], j["key"]) for j in imp["jumps"]) == sorted(want)
     for j in imp["jumps"]:
-        assert j["open"] == j["key"] and j["rendered"] == j["key"] and j["jump"] == j["key"] and j["uni_open"] == "", j
+        assert j["open"] == "" and j["rendered"] is None and j["uni_open"] == j["key"], j
     assert all(c["known"] and c["call"] == c["key"] for c in imp["chips"])
     assert all(b["act"] and b["known"] for b in imp["badges"])
     if want:
@@ -271,16 +279,16 @@ def test_uniimpgo_act_path_shows_active(report):
     g = report["imp"].get("go")
     if g is None:
         pytest.skip("no app with an update block in the fixture")
-    assert g["calls"][0] == "show:active" and g["app"] == g["want"] and g["open"] == g["key"] and g["uni"] == "" and g["screen"]
+    assert g["calls"][0] == "show:uninstall" and g["uni"] == g["key"] and g["open"] == "" and not g["screen"]   # §6.5: the Uninstall tab's card
 
 
 def test_imp_card_in_active(report, fixture):
+    # SPEC_SIMPLIFY §6.5 / D4: no update card on the Active app page — one line "Is app ke updates ka asar → Uninstall tab ›"
     for r in rows(fixture):
         assert report["apps"][r["app"]]["imp_card"], r["app"]
     for b in report["imp"]["blocks"]:
-        assert b["n_open"] == 1 and b["open_key"] == b["key"] and b["id_act"] and not b["id_uni"], b
-        assert b["rows"] == 9, b                                          # 7 rows + the 2 version rows
-        assert b["acts"] and all("'act')" in c for c in b["acts"]), b["acts"][:5]
+        assert b["n_open"] == 0 and not b["id_act"] and not b["id_uni"] and b["rows"] == 0, b
+        assert b["acts"] == ["onclick=\"uniGo('%s')\"" % next(r["app_id"] for r in rows(fixture) if r["app"] == b["app"])], b["acts"]
 
 
 def test_no_duplicate_ids_across_tabs(report, fixture):
@@ -291,15 +299,12 @@ def test_no_duplicate_ids_across_tabs(report, fixture):
 
 
 def test_alerts_screen_active_section(report, fixture):
-    AL = fixture["dashboard_active"].get("alerts") or []
+    # SPEC_SIMPLIFY §7: the Alerts screen is ad units only — no Active users cards, sub-heading or filter chip
     A = report["alerts"]
-    assert A["all"]["cards"] == len(AL) and A["all"]["sub"] == bool(AL) and A["all"]["chip"] == bool(AL)
-    assert sorted(A["all"]["open_app"]) == sorted(x["app_id"] for x in AL)
-    assert sorted(map(tuple, A["all"]["upd"])) == sorted((x["app_id"], x["release"]["key"]) for x in AL if (x.get("release") or {}).get("key"))
+    assert A["all"]["cards"] == 0 and not A["all"]["sub"] and not A["all"]["chip"] and A["all"]["open_app"] == []
     for r in rows(fixture):
-        n = sum(1 for x in AL if x["app"] == r["app"])
         p = A["per_app"][r["app"]]
-        assert p["cards"] == n and p["sub"] == bool(n) and p["chip"] == bool(n), r["app"]
+        assert p["cards"] == 0 and not p["sub"] and not p["chip"], r["app"]
     assert A["no_active"]["cards"] == 0 and not A["no_active"]["sub"] and not A["no_active"]["chip"]
     assert "GA4 not connected" in A["no_active_tab"]
 
@@ -308,9 +313,10 @@ def test_portfolio_chips_open_exact_apps(report, fixture):
     xp = report["portfolio"]["xp"]
     assert not xp["default_open"]                                         # no app list by default
     for k in TILE_KEYS:
-        want = {}
-        for r in rows(fixture):
-            want.setdefault(st((r.get("m") or {}).get(k)), []).append(r["app"])
+        want = {}                                                          # one chip per status WORD (SPEC_SIMPLIFY §1.8), its id the
+        for r in rows(fixture):                                            # metric + its group's most urgent state
+            want.setdefault(WORD[st((r.get("m") or {}).get(k))], []).append((st((r.get("m") or {}).get(k)), r["app"]))
+        want = {min((s0 for s0, _ in L), key=lambda z: RANK[z]): [a for _, a in L] for L in want.values()}
         for s_, apps in want.items():
             c = xp["chips"].get("%s:%s" % (k, s_))
             assert c and c["n"] == len(apps), (k, s_, c, apps)
@@ -323,17 +329,13 @@ def test_portfolio_chips_open_exact_apps(report, fixture):
         s_ = (r.get("summary") or {}).get("kind")
         K["worse" if s_ == "worse" else "watch" if s_ in ("break", "watch", "slow") else "better" if s_ == "better" else "ok" if s_ in ("ok", "maybe") else "wait"] += 1
     c = report["portfolio"]["count"]
-    assert c.startswith("⚠️ %d app" % K["worse"]) and "🟡 %d watch" % K["watch"] in c and "✅ %d normal" % K["ok"] in c and "ℹ️ %d not enough data" % K["wait"] in c
+    assert c.startswith("🔴 %d Bigda" % K["worse"]) and "🟡 %d Dhyan do" % K["watch"] in c and "⚪ %d Normal" % K["ok"] in c and "⏳ %d Abhi jaldi" % K["wait"] in c
 
 
 def test_portfolio_recent_updates(report, fixture):
+    # SPEC_SIMPLIFY §6.5: "📦 Updates ka asar" is removed from the Active All-apps page (it is the Uninstall tab's)
     u = report["portfolio"]["updates"]
-    assert u["has"]
-    ids = {r["app_id"] for r in rows(fixture)}
-    assert all(act and app in ids for app, _, act in u["rows"])
-    assert u["uf"] and all(u["uf"])
-    n = sum(len(x.get("updates") or []) for x in fixture["dashboard_uninstall"]["apps"] if x["app_id"] in ids)
-    assert len(u["rows"]) == min(n, 10)
+    assert not u["has"] and u["rows"] == []
 
 
 def test_portfolio_table_sort(report, fixture):
@@ -341,7 +343,7 @@ def test_portfolio_table_sort(report, fixture):
     col = {"ret": ("ret_dau", "v"), "rel": ("ret_dau", "rel"), "d1": ("d1", "v"), "d7": ("d7", "v"), "sess": ("sess", "v"), "time": ("time", "v"), "rev": ("arpdau", "v")}
     heads = [k for k, _ in report["portfolio"]["table_heads"]]
     assert heads == ["app", "ret", "rel", "d1", "d7", "sess", "time", "rev", "status"]
-    assert [l for _, l in report["portfolio"]["table_heads"]] == ["App", "Returning/day", "vs 4 wks", "Next day", "After a week", "Sessions/user", "Time/user", "Rev/1k users", "Status"]
+    assert [l for _, l in report["portfolio"]["table_heads"]] == ["App", "Purane users (roz)", "vs 4 wks", "Next day", "After a week", "Sessions/user", "Time/user", "Kamai har 1,000 users se", "Status"]   # §6.4
     for key, order in report["portfolio"]["sorts"].items():
         k, d = key.split("|")
         assert sorted(order) == sorted(R), key
@@ -365,23 +367,23 @@ def test_honest_counts(report, fixture):
 
 
 def test_older_changes_never_dropped(report, fixture):
-    tot = 0
     for r in rows(fixture):
-        n = len((det(fixture, r).get("changes") or {}).get("older") or [])
-        assert report["apps"][r["app"]]["older_rows"] == n
-        tot += n
-    assert report["portfolio"]["older_open"] == tot                      # All apps: every loaded app's, none capped
-    assert report["portfolio"]["older_nofiles"]
+        O = (det(fixture, r).get("changes") or {}).get("older") or []
+        n = sum(1 for o in O if not o.get("from") or (_date.fromisoformat(r["data_till"]) - _date.fromisoformat(o.get("started") or o["from"])).days <= 90)
+        assert report["apps"][r["app"]]["older_rows"] == n                # > 90 days old: only in the charts (SPEC_SIMPLIFY §1.3)
+    # All apps: the build's compact rows (dashboard.json — the same before and after opening an app, §6.3)
+    info = fixture["dashboard_active"].get("info") or []
+    assert report["portfolio"]["older_open"] == sum(1 for o in info if o.get("src") == "older")
+    assert not report["portfolio"]["older_nofiles"]                       # no "open an app for its full history" any more
 
 
 def test_prov_and_est_marks(report, fixture):
     for r in rows(fixture):
         d, a = det(fixture, r), report["apps"][r["app"]]
         L = d.get("latest") or {}
-        if L.get("day"):
-            assert a["latest"].startswith("Latest GA4 day") and a["latest_prov"] == (L.get("prov") is not False), r["app"]
+        assert a["latest"] == ""                                          # one metric = one number: no single-day line (§6.5)
         assert a["prov_note"] == bool(d.get("settled_till") and d.get("data_till") and d["settled_till"] < d["data_till"]), r["app"]
-        assert "Provisional" in a["kpis_today"], r["app"]                     # "Today" = the newest GA4 day: provisional
+        assert "Pichhle 7 din (" in a["kpis_today"], r["app"]                  # a fixed 7 days, whatever the Period (§6.2)
     assert report["portfolio"]["prov_note"]
 
 
@@ -488,7 +490,8 @@ def test_grid_week_installs_unknown_reads_dash_never_0(report):
 def test_edge_states_render(report, fixture):
     for r in rows(fixture):
         E = det(fixture, r).get("edges") or {}
-        assert report["apps"][r["app"]]["edges"] == [t for t in E.get("text") or [] if t], r["app"]
+        # (the engine's sentences, said the SIMPLIFY way: no "D1 / D7" code, §6.4)
+        assert report["apps"][r["app"]]["edges"] == [re.sub(r"\bD1 ?/ ?D7\b", "agle din / 7 din baad", t).replace(" (mediation)", "") for t in E.get("text") or [] if t], r["app"]
         if E.get("ret_state") == "found" and E.get("ret_from"):
             assert any(day_words(E["ret_from"]) in t for t in E.get("text") or []), r["app"]
     s = report["syn"]
@@ -512,31 +515,10 @@ def test_phone_layout(report, fixture):
         assert a["phone_short"] and a["tile_open"], r["app"]
 
 
-CHIPS = {"ret_dau": {"worse": "Lower", "watch": "Lower · watch", "slow": "Slowly falling", "break": "Check tracking", "better": "Higher",
-                     "maybe_dn": "Maybe lower", "maybe_up": "Maybe higher", "normal": "Normal"},
-         "d": {"worse": "Fewer came back", "watch": "Fewer · watch", "better": "More came back", "maybe_dn": "Maybe fewer", "maybe_up": "Maybe more",
-               "normal": "Same"},
-         "sess": {"worse": "Fewer sessions", "watch": "Less · watch", "better": "More sessions", "maybe_dn": "Maybe less", "maybe_up": "Maybe more",
-                  "normal": "Normal"},
-         "time": {"worse": "Less time", "watch": "Less · watch", "better": "More time", "maybe_dn": "Maybe less", "maybe_up": "Maybe more",
-                  "normal": "Normal"},
-         "arpdau": {"worse": "Lower (fewer ads per user)", "watch": "Lower · watch", "better": "Higher", "maybe_dn": "Maybe lower",
-                    "maybe_up": "Maybe higher", "normal": "Normal", "price_dn": "Ad price lower", "price_up": "Ad price higher"}}
-COMMON = {"low": "Not enough data", "noad": "No ad data", "wait": "Waiting for data"}
-
-
 def chip_label(k, M):
-    """The §4.3 chip vocabulary: one set for tiles, strips and the table."""
-    s_ = st(M)
-    if s_ == "growth":
-        rel = (M or {}).get("rel")
-        return "Shrinking fast" if rel is not None and rel < 0 else "Growing fast" if rel is not None and rel > 0 else "Growing / shrinking fast"
-    if s_ in COMMON:
-        return COMMON[s_]
-    t = CHIPS["d" if k in ("d1", "d7") else k].get(s_) or CHIPS["ret_dau"].get(s_, "Normal")
-    if k == "arpdau" and (M or {}).get("why") == "ads_dir" and s_ in ("maybe_dn", "maybe_up", "watch", "better"):
-        t = "Ads/user " + t[0].lower() + t[1:]
-    return t
+    """SPEC_SIMPLIFY §1.8: one set for tiles, strips and the table — the status word of the state (was: a per-metric
+    English vocabulary, "Lower · watch", "Ads/user maybe lower", …)."""
+    return WORD[st(M)]
 
 
 def test_chip_vocabulary(report, fixture):
@@ -546,19 +528,20 @@ def test_chip_vocabulary(report, fixture):
             assert t["chip"] == chip_label(t["m"], tiles.get(t["m"])), (r["app"], t["m"], t["chip"])
     for key, c in report["portfolio"]["xp"]["chips"].items():
         k, s_ = key.split(":")
-        want = "Growing / shrinking fast" if s_ == "growth" else chip_label(k, {"st": s_})
+        want = chip_label(k, {"st": s_})
         assert c["label"] == want, (key, c["label"])
 
 
 # ── review fixes ────────────────────────────────────────────────────────────────────────────────
 
 def test_market_lines_count_moved_of_total_and_old_weeks_are_past(report):
+    # SPEC_SIMPLIFY §6.2 / §6.4: the market line is "Saath me: kai apps me ek saath — bazaar ka asar", always with its
+    # dates, and only while it is ≤ 14 days old (a month-old week: hidden, never told in the past tense)
     fx = report["fix"]
-    assert "eCPM down −10% in 13 of 15 apps" in fx["rev_market"], fx["rev_market"]       # of (moved) of apps (total)
-    assert fx["pf_market_now"].startswith("💱 Market-wide: is hafte 15 me se 13 apps ka eCPM −10%")
-    assert "kam dikhega, app ki galti nahi" in fx["pf_market_now"]
-    old = fx["pf_market_old"]                                                            # a month-old week: past tense
-    assert "is hafte" not in old and "dikhega" not in old and old.endswith("tha (ab ka nahi).") and "15 me se 13" in old
+    assert fx["rev_market"] == "", fx["rev_market"]                                       # a week of 1–7 Sep: > 14 days old
+    assert fx["pf_market_now"].startswith("Saath me: kai apps me ek saath — bazaar ka asar · ")
+    assert "15 me se 13 apps ka ad rate −10%" in fx["pf_market_now"] and "kam dikhegi, app ki galti nahi" in fx["pf_market_now"]
+    assert fx["pf_market_old"] == ""
 
 
 def test_install_part_keeps_its_sign(report):
@@ -583,14 +566,14 @@ def test_a_linked_alert_is_one_story_with_the_update_card(report):
     fx = report["fix"]
     assert "📦 Yahi badlaav v1.2 ke Update impact card me bhi hai" in fx["linked"]
     assert fx["total_unlinked"] is not None and fx["total_linked"] is not None
-    assert int(fx["total_linked"]) == int(fx["total_unlinked"]) - 1                     # counted once (by Uninstall)
+    assert int(fx["total_linked"]) == int(fx["total_unlinked"]) == 0                   # SPEC_SIMPLIFY §7: ad units only
 
 
 def test_waiting_metrics_say_why_on_the_all_apps_page(report):
     fx = report["fix"]
     by = {t["m"]: t["text"] for t in fx["pool_wait"]}
     for k in ("d1", "d7"):
-        assert "Wapsi (D1/D7) ka data agle GA4 fetch ke saath aayega" in by[k] and " of " not in by[k]
+        assert "Wapsi ka data agle GA4 fetch ke saath aayega" in by[k] and " of " not in by[k]
     for k in ("sess", "time"):
         assert "Sessions / time agle GA4 fetch me aayenge" in by[k]
     assert "Next day / After a week: wapsi ka data agle GA4 fetch ke saath" in fx["table_wait"]
@@ -629,25 +612,25 @@ def test_windows_in_active_have_their_own_default_act_onclicks_and_open_here_at_
     calls = [c for c in w["onclicks"] if c.startswith('onclick="uni')]
     assert calls and all("'act')" in c for c in calls), calls                        # every tap stays in this tab
     assert any(c.startswith('onclick="uniImpWinX(') for c in calls) and any(c.startswith('onclick="uniImpWX(') for c in calls)
-    assert w["late"] == ["event.stopPropagation();uniImp('%s','act',30)" % w["key"], "⏰ 30 days: ⚠️ HOLD"]
-    assert w["upd"] == ["event.stopPropagation();uniImpGo('%s','%s','act',30)" % (w["app_id"], w["key"]), "⏰ 30 days: 🛑 HALT"]
+    assert w["late"] == ["event.stopPropagation();uniImp('%s','act',30)" % w["key"], "30 din baad: ⚠️ Ruk ke jaancho"]   # §6.4 words
+    assert w["upd"] == ["event.stopPropagation();uniImpGo('%s','%s','act',30)" % (w["app_id"], w["key"]), "30 din baad: 🛑 Update roko"]
     assert all(i.startswith("act-") for i in w["ids"]), w["ids"]
 
 
 def test_windows_every_fixture_block_in_active_at_30(report):
     if not report["win"]["v2"]:
         pytest.skip("the committed Active fixture has no by_window yet (impact v1): the made-up windows above cover this tab")
-    for b in report["win"]["blocks"]:
-        assert b["id_act"] and b["hdr"] == "Verdict (30 days):" and b["rows"] == ["returning_dau", "new_d1", "new_d7", "sessions", "time", "arpdau", "uninstall_d0", "new_d30"], b
-        assert b["acts"] and all("'act')" in c for c in b["acts"]), b["acts"][:5]
+    for b in report["win"]["blocks"]:                                    # SPEC_SIMPLIFY §6.5: no block on the Active page
+        assert not b["id_act"] and b["hdr"] is None and b["rows"] == [], b
+        assert len(b["acts"]) == 1 and b["acts"][0].startswith('onclick="uniGo('), b["acts"]
 
 
 def test_the_note_says_upar_chuno_only_right_under_its_selector(report, fixture):
     # (review 2026-09-28) the note sat above the selector while saying "upar chuno", and showed on apps with no
     # selector at all: now under the selector (an app with updates) — else today's words, under the title
     seg = [report["apps"][r["app"]]["imp_seg"] for r in rows(fixture)]
-    assert any(seg) and not all(seg), seg
-    assert all(report["apps"][r["app"]]["imp_card"] for r in rows(fixture))
+    assert not any(seg), seg                                              # SPEC_SIMPLIFY §6.5: the card (and its note) is gone here
+    assert all(report["apps"][r["app"]]["imp_card"] for r in rows(fixture))   # … its one-line link instead
 
 
 # ── 📅 Daily — all apps (the All-apps page's day-by-day portfolio, active_portfolio.json.gz) ────────────────────────
@@ -758,7 +741,7 @@ def pf_days(F, vis=None, n_err=None):
 
 
 def _int(c):
-    return int(c.replace(",", "").replace("*", "").strip())
+    return int(c.replace(",", "").replace("*", "").replace("†", "").strip())         # († = some app's number left out)
 
 
 def _dur(c):
@@ -788,7 +771,7 @@ def check_pf_rows(rows_, days, usd_inr=1.0, sym="$"):
             assert row["tips"][2].startswith("≈%d%% of DAU missing — " % max(1, round(100 * r["ms"] / (r["dau"] + r["ms"])))), row["tips"][2]
         assert (c[2] == "—") if not r["k"] else _int(c[2]) == r["dau"], (row["day"], c[2])
         assert (c[3] == "—") if not r["rtn"] else _int(c[3]) == r["rt"], (row["day"], c[3])
-        assert row["star"] == (0 < r["rtn"] < r["k"]), row["day"]                          # some app's returning left out: "*"
+        assert row["star"] == (0 < r["rtn"] < r["k"]), row["day"]                          # some app's returning left out: "†"
         assert (c[4] == "—") if not r["nwn"] else _int(c[4]) == r["nw"], (row["day"], c[4])
         for j, N in ((5, "d1"), (6, "d7")):
             if r[N + "c"]:
@@ -817,9 +800,9 @@ def test_pf_section_sits_after_the_alerts_and_before_the_app_table(report):
     s = report["pf"]["s"]["90d"]
     assert s["has"] and "📅 Daily — all apps" in s["text"]
     o = s["order"]
-    assert 0 < o[0] < o[1] < o[2] < o[3] < o[4], o                                     # At a glance · What changed · updates · 📅 · table
-    assert s["heads"] == ["Date", "Apps with data", "DAU", "Returning", "New installs", "Came back next day %", "After a week %",
-                          "Sessions/user", "Time/user", "Ad revenue / 1,000 users", "vs same day last week"]
+    assert 0 < o[0] < o[1] < o[2] < o[3], o                                            # At a glance · What changed · 📅 · table (no updates card, §6.5)
+    assert s["heads"] == ["Date", "Apps with data", "DAU", "Purane users (roz)", "Installs", "Came back next day %", "After a week %",
+                          "Sessions/user", "Time/user", "Kamai har 1,000 users se", "vs same day last week"]
     assert report["pf"]["portfolio_30d"]["has"]                                        # the Period (header) never hides it
 
 
@@ -874,9 +857,9 @@ def test_pf_provisional_days_hatched_faded_and_pilled(report):
     assert any(days[d]["prov"] for d in shown) and s["hatch"] >= 1 and s["prov_note"]
     assert len(s["pts"]) == len(shown)
     for p, d in zip(s["pts"], shown):                                                   # the hover names the day and says provisional
-        assert p["l"].startswith("%s %s" % (_wd(d), _dm(d))) and p["l"].endswith(" · provisional") == days[d]["prov"], (d, p["l"])
+        assert p["l"].startswith("%s %s" % (_wd(d), _dm(d))) and p["l"].endswith(" · ⏳ pakka nahi") == days[d]["prov"], (d, p["l"])
     assert [r["day"] for r in s["rows"] if r["prov"]] == [d for d in sorted(days, reverse=True)[:14] if days[d]["prov"]]
-    assert "Provisional" in s["lgd"]
+    assert "⏳ Pakka nahi" in s["lgd"]                                                  # (was "Provisional", SPEC_SIMPLIFY §1.4)
 
 
 def _wd(d):
@@ -960,7 +943,7 @@ def test_pf_counts_in_full_past_a_million(report):
     s = report["pf"]["s"]["big"]
     assert max(r["dau"] for r in days.values()) >= 1_000_000
     check_pf_rows(s["rows"], days)
-    bad = [c for r in s["rows"] for c in r["cells"][2:5] if not re.fullmatch(r"—|\d{1,3}(,\d{3})*\s*\*?", c)]
+    bad = [c for r in s["rows"] for c in r["cells"][2:5] if not re.fullmatch(r"—|\d{1,3}(,\d{3})*\s*[*†]?", c)]
     assert not bad, bad[:3]
     assert re.search(r"\d{1,3},\d{3},\d{3} active users \(DAU\)", s["last"]), s["last"]
     assert all(re.fullmatch(r"\d{1,3}(,\d{3})* active users", p["v"]) for p in s["pts"])   # the chart's hover too
@@ -977,7 +960,7 @@ def test_pf_states_and_failure_isolation(report):
     S = report["pf"]["s"]
     assert "⏳ Roz ka data load ho raha hai" in S["loading"]["text"] and not S["loading"]["rows"]
     assert "Roz ka data load nahi hua" in S["error"]["text"] and "Try again" in S["error"]["text"]
-    assert not S["noptr"]["has"] and S["noptr"]["order"][3] == -1 and 0 < S["noptr"]["order"][1] < S["noptr"]["order"][4]   # no pointer: no section, the page as before
+    assert not S["noptr"]["has"] and S["noptr"]["order"][2] == -1 and 0 < S["noptr"]["order"][1] < S["noptr"]["order"][3]   # no pointer: no section, the page as before
     assert "Dikhne wali apps ka roz ka data abhi nahi" in S["empty"]["text"]
     assert "ye hissa abhi dikh nahi paya" in S["throw"]["text"] and report["pf"]["throw_rest"]
     assert S["broken"]["has"] and S["broken"]["rows"]                                  # junk values: "—", never NaN (checked for every scenario)
@@ -1023,7 +1006,7 @@ def test_pf_phone_width(report):
 def test_pf_honesty_notes(report):
     s = report["pf"]["s"]["90d"]
     assert "2 apps pe ho to 2 baar gina" in s["note"] and "same apps" in s["note"]
-    assert s["last"].startswith("📅 ") and "(latest settled day)" in s["last"] and "active users (DAU)" in s["last"]
+    assert s["last"].startswith("📅 ") and "(aakhri pakka din)" in s["last"] and "active users (DAU)" in s["last"]   # (no "latest" / "settled", §1.1 / §6.4)
     assert "vs last" in s["last"]
     assert "App count changed" in s["lgd"] or not s["marks"]
 
@@ -1167,7 +1150,7 @@ def test_pf_footnote_explains_the_star_and_the_marks(report):
     S = report["pf"]["s"]
     for k in ("90d", "all_rows", "broken", "stalebig"):
         s = S[k]
-        assert any(r["star"] for r in s["rows"]) == ("* (Returning) = " in s["note"]), k
+        assert any(r["star"] for r in s["rows"]) == ("† (Purane users) = " in s["note"]), k
     assert not any(r["star"] for r in S["broken"]["rows"])
     assert "khadi (upar-neeche) dotted line" in S["90d"]["note"] and "Dashed line wale din" not in S["90d"]["note"]
 

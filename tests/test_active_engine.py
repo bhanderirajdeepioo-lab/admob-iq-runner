@@ -51,7 +51,8 @@ M_KEYS = ("v", "base", "all", "rel", "pp", "z", "usual", "st", "why", "est", "n"
 ALERT_KEYS = ("id", "source", "app_id", "app", "family", "metric", "also", "dir", "severity", "unit", "now", "before",
               "rel", "delta_pp", "z", "since", "day", "installs_from", "installs_to", "base_from", "base_to", "users",
               "opened", "last_seen", "fresh", "notify", "provisional", "estimate", "tags", "release", "linked",
-              "data_till", "text", "message")
+              "data_till", "text", "message",
+              "started", "started_cap", "seeded", "opened_at")      # + SPEC_SIMPLIFY (a contract extension)
 
 
 def check_m(M, where, row=False):
@@ -65,7 +66,9 @@ def check_m(M, where, row=False):
 
 
 def check_alert(a, closed=False):
-    _keys_sp(a, ALERT_KEYS + (("closed",) if closed else ()), "alert")
+    _keys_sp(a, ALERT_KEYS + (("closed", "closed_at", "close_reason") if closed else ()), "alert")
+    from tests.uninstall_synth import check_simplify
+    check_simplify(a, closed)
     assert a["source"] == "active" and a["family"] in ("act_drift", "act_slow", "act_spike", "act_break", "act_return")
     assert a["metric"] in ("ret_dau", "usage", "sess", "time", "ads", "d1", "d3", "d7", "d14", "d30")
     assert a["dir"] in ("up", "down") and a["severity"] in ("warning", "watch", "good")
@@ -126,10 +129,13 @@ def check_detail(d, row=None):
     for a in ch["closed"]:
         check_alert(a, closed=True)
     for i in ch["info"]:
-        _keys_sp(i, ("kind", "metric", "dir", "from", "to", "rel", "text", "tags", "prov"), "info")
+        _keys_sp(i, ("kind", "metric", "dir", "from", "to", "rel", "text", "tags", "prov", "started"), "info")
+        assert i["started"] == i["from"]                                   # SPEC_SIMPLIFY "Shuru": no since → from
         assert i["kind"] in ("price", "installs", "market_wide", "early") and i["prov"] == (i["kind"] == "early")
     for o in ch["older"]:
-        _keys(o, ("kind", "metric", "dir", "from", "to", "before", "now", "rel", "z", "release", "text"), "older")
+        _keys(o, ("kind", "metric", "dir", "from", "to", "before", "now", "rel", "z", "release", "text", "started"),
+              "older")
+        assert o["started"] == o["from"]
         assert o["from"] <= o["to"] <= d["settled_till"]
     t = d["tri"]
     _keys(t, ("src", "cols", "cols_phone", "nmax", "stage", "label", "from", "edge", "ref", "ref_users", "ref_thin",

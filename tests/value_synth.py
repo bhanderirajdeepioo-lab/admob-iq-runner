@@ -23,6 +23,7 @@ import math
 import os
 import random
 import sys
+import zlib
 from datetime import date, datetime, timedelta, timezone
 
 END = date(2026, 9, 19)                 # the store's window_end (the build's settled GA4 day)
@@ -131,7 +132,10 @@ def _make(weeks=60, end=END, base=2000, seed=1, spend=True, cpi=0.06, cpi_jump=N
             k = (c, X)
             if k not in cn:
                 sd = cnoise / math.sqrt(max(n_c[X][c], 1.0))
-                cn[k] = math.exp(random.Random(hash((seed, c, X.toordinal())) & 0xffffffff).gauss(-sd * sd / 2, sd))
+                # keyed by a STABLE hash (zlib.crc32): Python's hash() of a str is salted per process (PYTHONHASHSEED),
+                # so the same seed drew other noise on every run and the null-countries test was flaky
+                key = zlib.crc32(("%s|%s|%d" % (seed, c, X.toordinal())).encode("utf-8"))
+                cn[k] = math.exp(random.Random(key).gauss(-sd * sd / 2, sd))
             f *= cn[k]
         if L == 0:
             return n_c[X][c] * cty[c][2] * 0.5 * f

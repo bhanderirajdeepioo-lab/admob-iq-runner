@@ -43,7 +43,7 @@ run(`DATA = {apps_catalog: [], today_date: ${JSON.stringify(TODAY)}, currency: '
      VALD = {}; for (const [k, d] of Object.entries(__FILES)) VALD[k] = d;`);
 const out = {};
 function scen(name, code) { try { out[name] = String(run(code)); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + (e.stack.match(/at [^\n]*/g) || []).slice(0, 4).join(' < ')); } }
-const RESET = `APP=''; VALAPP=''; innerWidth=375; CURVIEW=null; RANGE='30d'; VALWK='12'; VALSORT='n'; VALCM='d1'; VALCTYEXP=''; VALOLDEXP=false; VALCLEXP=false;
+const RESET = `SMPF={}; SMPALL=false; APP=''; VALAPP=''; innerWidth=375; CURVIEW=null; RANGE='30d'; VALWK='12'; VALSORT='n'; VALCM='d1'; VALCTYEXP=''; VALOLDEXP=false; VALCLEXP=false;
   VALTILEEXP=''; VALSTEXP=''; VALPSORT={k:'status',d:1}; VALTIMEXP=false; VALCHKEXP=false; VALJUMP=''; VALERR={}; VALL={}; VALVEROPEN=''; VALVEROLD=false; VALLONG='18'; VALVERAPP=''; VALVERDATE='';`;
 const rows = DV.apps || [], J = JSON.stringify;
 const det = r => FILES[r.key] || null;
@@ -264,8 +264,8 @@ synth('rel|no_cd', P, `d.by_version=[]; const W=(d.weeks||[]).filter(w=>w.judged
 // "What changed?" rows of the new families (on the app's page, and on All apps)
 synth('chg|app', P, `d.changes=Object.assign({},d.changes,{open:synAlerts(d),info:[{kind:'ver_d30',from:'2026-09-01',to:'2026-09-14',text:'v2.1 ke naye users 30 din baad kam: 100 me 5.4, pichhle v2.0 me 5.5'},
   {kind:'ver_mix',from:'2026-09-01',to:'2026-09-14',text:'v2.2 ke baad naye users kam ruk rahe — installs kam, alert nahi'},{kind:'long_up',from:'2026-03-01',to:'2026-04-30',text:'Mar–Apr 2026 ke installs 90 din baad zyada bache: 100 me 6.4, pehle 5.9'}]});`,
-  `return valChangesCard(d);`);
-synth('chg|all', P, `V.alerts=synAlerts(d);`, `APP=''; VALAPP=''; return valPortfolio();`);
+  `SMPALL=true; return valChangesCard(d);`);   // (every SIMPLIFY fold open)
+synth('chg|all', P, `V.alerts=synAlerts(d);`, `APP=''; VALAPP=''; SMPALL=true; return valPortfolio();`);
 // the Alerts screen: the new families' cards (title, what, Open → its own row / section, Update detail →)
 scen('alerts|cd', `${RESET} (()=>{ const keep=screenDiv, V=DATA.value, ka=V.alerts, d=VALD[${J(P.key)}]; screenDiv=id=>({dataset:{screen:id},innerHTML:''}); V.alerts=synAlerts(d);
   try{ return renderAlerts().innerHTML; } finally { screenDiv=keep; APP=''; V.alerts=ka; } })()`);
@@ -382,7 +382,7 @@ const ctySlice = h => { const c = sec(h, 'id="val-cty"', 'id="val-chk"');
     stpills: [...c.matchAll(/<span class="pill (p-r|p-g|p-y)" data-st="([a-z_]+)"/g)].map(m => m[1] + ':' + m[2]) }; };
 const paySlice = h => sec(h, 'id="val-pay"', 'id="val-cty"');
 const page = { phone: order(out['page|phone'] || ''), desk: order(out['page|desk'] || ''), off: order(out['page|off_desk'] || ''),
-  titles: ['🧬 New users by app version', '🗓️ Long-term by install month'].filter(x => T('page|desk').includes(x)),
+  titles: ['🧬 Users by app version', '🗓️ Long-term by install month'].filter(x => T('page|desk').includes(x)),
   slice_same_desk: J(ctySlice(out['page|off_desk'] || '')) === J(ctySlice(out['page|cd_desk'] || '')), slice_same_phone: J(Object.assign(ctySlice(out['page|off_phone'] || ''), { heads: null })) === J(Object.assign(ctySlice(out['page|cd_phone'] || ''), { heads: null })),   // a phone's Countries has no table (cards): its first <thead> is not its own
   pay_same: paySlice(out['page|off_desk'] || '') === paySlice(out['page|cd_desk'] || ''), slice_off: ctySlice(out['page|off_desk'] || ''),
   off_has: ['val-ver', 'val-long', 'uni-imp-ver', 'val-vlk'].filter(x => (out['page|off_desk'] || '').includes(x) || (out['page|off_phone'] || '').includes(x)),
@@ -393,7 +393,8 @@ const relOf = k => { const [a, b] = (out[k] || '').split('<hr>'); const f = h =>
   return { desk: f(a), phone: f(b), calls: [...(out[k] || '').matchAll(/onclick="valVerJump\('([^']*)'\)">([^<]*)</g)].map(m => [m[1], m[2]]) }; };
 const rel = { has: relOf('rel|has'), missing: relOf('rel|missing'), no_cd: relOf('rel|no_cd') };
 // "What changed?"
-const chgRows = h => [...h.matchAll(/<div class="uni-chg (na|wa)( cl)?" data-fam="([^"]*)"(?: onclick="([^"]*)")?>([\s\S]*?)<\/span><\/span><\/div>/g)].map(m => ({ fam: m[3], call: m[4] || (m[5].match(/<span class="lnk" onclick="([^"]*)">Open →/) || [])[1] || null, t: text(m[5]) }));
+// (SPEC_SIMPLIFY: one shared row — its inner block ends with the grey 🕒 timestamp line)
+const chgRows = h => [...h.matchAll(/<div class="uni-chg (na|wa)( cl)?" data-fam="([^"]*)"(?: onclick="([^"]*)")?><div class="smp-row">([\s\S]*?class="smp-ts">[\s\S]*?)<\/div><\/div><\/div>/g)].map(m => ({ fam: m[3], call: m[4] || (m[5].match(/<span class="lnk" onclick="([^"]*)">Open →/) || [])[1] || null, t: text(m[5]) }));
 const chg = { app: chgRows(out['chg|app'] || ''), all: chgRows(sec(out['chg|all'] || '', 'id="val-chg"', 'id="val-table"')),
   info: [...(out['chg|app'] || '').matchAll(/data-info="([^"]*)"[\s\S]*?<span class="lnk" onclick="([^"]*)">Open →/g)].map(m => [m[1], m[2]]), info_tags: [...(out['chg|app'] || '').matchAll(/data-info="([^"]*)"[\s\S]*?<span class="pill uni-pz">([^<]*)<\/span>/g)].map(m => [m[1], m[2]]) };
 // the Alerts screen

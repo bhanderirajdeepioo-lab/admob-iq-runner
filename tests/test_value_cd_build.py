@@ -80,15 +80,31 @@ def run_builds(tmp, s=None, seed_kw=None, days=(7, 0)):
     return got
 
 
+SIMPLIFY_KEYS = ("started", "started_cap", "opened_at", "closed_at", "close_reason", "week_from0")
+
+
+def _is_alert(obj):
+    return isinstance(obj, dict) and "id" in obj and "source" in obj and "family" in obj
+
+
 def _no_sp(obj):
-    """obj without the SPEC_SPLIT "sp" keys (the change's installs vs per-user split, an added explanation): the pins
-    below stay abd6ee8's — everything else must still be byte-identical."""
+    """obj without the SPEC_SPLIT "sp" keys (the change's installs vs per-user split, an added explanation) and without
+    the SPEC_SIMPLIFY additions (an alert's started / started_cap / seeded / opened_at / closed_at / close_reason, an
+    episode's opened_at / week_from0 / closed_at / close_reason, an info row's started, dashboard["value"]'s info /
+    closed lists), its alert lists in the order sort_alerts gave before SPEC_SIMPLIFY (the one specified change of
+    order): the pins below stay abd6ee8's — everything else must still be byte-identical."""
     if isinstance(obj, dict):
-        return {k: _no_sp(v) for k, v in obj.items() if k != "sp"}
+        section = "alert_counts" in obj and "horizon" in obj            # dashboard["value"]: + info / closed
+        return {k: _no_sp(v) for k, v in obj.items() if k != "sp" and k not in SIMPLIFY_KEYS
+                and not (k == "seeded" and _is_alert(obj)) and not (section and k in ("info", "closed"))}
     if isinstance(obj, list):
-        return [_no_sp(v) for v in obj]
-    if isinstance(obj, str) and obj.startswith("{") and '"sp"' in obj:     # value_state.json (its save_state text)
-        return json.dumps(_no_sp(json.loads(obj)), ensure_ascii=False, sort_keys=True, indent=1)
+        out = [_no_sp(v) for v in obj]
+        if out and all(_is_alert(v) for v in obj):
+            from admob_iq.engine import uninstall as U
+            out = U.legacy_order(out)
+        return out
+    if isinstance(obj, str) and obj.startswith("{") and any('"%s"' % k in obj for k in ("sp",) + SIMPLIFY_KEYS):
+        return json.dumps(_no_sp(json.loads(obj)), ensure_ascii=False, sort_keys=True, indent=1)   # value_state.json
     return obj
 
 
@@ -166,7 +182,8 @@ def test_cd_contract_objects(cd_builds):
     b = cd_builds[-1]
     V = b["value"]
     assert set(V) == {"v", "status", "asset_v", "horizon", "settled_till_min", "settled_till_max", "counts", "consts",
-                      "alerts", "alert_counts", "no_ga4", "apps", "spend_ccy"}
+                      "alerts", "alert_counts", "no_ga4", "apps", "spend_ccy",
+                      "info", "closed"}                           # info / closed: SPEC_SIMPLIFY (a contract extension)
     for r in V["apps"]:                                  # the summary rows: exactly the keys they had
         assert set(r) == {"app_id", "app", "key", "file", "sig", "status", "settled_till", "iday", "pay", "rpi", "cpi",
                           "cty", "alerts", "summary", "s", "src_ccy"}

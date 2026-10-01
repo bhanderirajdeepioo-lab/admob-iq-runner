@@ -1140,7 +1140,7 @@ def test_the_committed_active_fixture_is_what_the_build_writes(tmp_path):
     check_summary(U)
     assert set(A) == {"v", "status", "asset_v", "data_till_min", "data_till_max", "settled_till_min",
                       "settled_till_max", "counts", "consts", "market", "alerts", "alert_counts", "no_ga4", "portfolio",
-                      "apps"}
+                      "apps", "info", "closed"}                  # info / closed: SPEC_SIMPLIFY (a contract extension)
     for a in A["alerts"]:
         check_act_alert(a)
     assert A["alert_counts"] == {s: sum(1 for a in A["alerts"] if a["severity"] == s and not a["linked"])

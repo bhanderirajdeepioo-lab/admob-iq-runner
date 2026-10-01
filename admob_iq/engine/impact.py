@@ -2614,7 +2614,23 @@ def _same_update(e, c):
     return e.get("kind") == "update" and bool(R) and abs((_d(R) - _d(c["R"])).days) <= CHAIN_DAYS
 
 
-def update_impact_episodes(state, app_id, E, conds, advanced, now):
+def _superseded(ep, releases):
+    """Did a newer update of the app come out after this impact episode's own? releases = the app's updates known to
+    this evaluation ([{key, date, versions}], detail["impact"]["updates"]); its own block (same key or a version in
+    common) never counts. → its close_reason: "superseded", else "recovered" (shown only — nothing decides on it)."""
+    last = ep.get("last") or {}
+    R = last.get("R") or (last.get("release") or {}).get("date")
+    if not R:
+        return "recovered"
+    own = {str(v) for v in (ep.get("vers") or last.get("vers") or []) if v is not None}
+    for u in releases or ():
+        if (u.get("date") and u["date"] > R and u.get("key") != ep.get("block")
+                and not own & {str(v) for v in (u.get("versions") or []) if v is not None}):
+            return "superseded"
+    return "recovered"
+
+
+def update_impact_episodes(state, app_id, E, conds, advanced, now, releases=None):
     """Open / refresh / close this app's update-impact episodes (shared state["episodes"] / "closed", so
     mark_notified works unchanged). Pure: it only changes `state`. ONE episode per update and direction, for good: a bad
     block (HOLD / HALT) is "<app>|impact|<update>", a WIN "<app>|impact_win|<update>" (<update> = _ident: its first
@@ -2623,7 +2639,10 @@ def update_impact_episodes(state, app_id, E, conds, advanced, now):
     re-sends. An update whose episode closed (CLOSE_EVALS daily evaluations without its condition) and comes back takes
     that episode back — same id, nothing re-sent unless it goes above the highest level it reached (peak). A condition
     carrying seed (the app's first impact evaluation, an outdated store) is shown, not sent. An episode closes at once
-    (never sent) when its update is older than IMPACT_ALERT_DAYS. → this app's open impact episodes."""
+    (never sent) when its update is older than IMPACT_ALERT_DAYS. → this app's open impact episodes.
+    SPEC_SIMPLIFY (shown only): a new episode keeps opened_at = now; a close adds closed_at / close_reason (window_end:
+    its update aged out; superseded: a newer update — `releases`, the app's update dates — came out after it; else
+    recovered); an episode taken back from closed loses those and keeps its opened_at."""
     eps, closed = state.setdefault("episodes", {}), state.setdefault("closed", [])
     E = _d(E)
     E_iso, hit = E.isoformat(), set()
@@ -2640,8 +2659,7 @@ def update_impact_episodes(state, app_id, E, conds, advanced, now):
                 j = next((j for j in range(len(closed) - 1, -1, -1)
                           if closed[j].get("app_id") == app_id and _same_update(closed[j], c)), None)
                 if j is not None:
-                    ep = closed.pop(j)
-                    ep.pop("closed", None)
+                    ep = U.reopen_ep(closed.pop(j))
             if ep is not None:
                 eps[key] = ep
                 ep["misses"] = 0
@@ -2650,7 +2668,7 @@ def update_impact_episodes(state, app_id, E, conds, advanced, now):
                   "app_id": app_id, "family": "impact", "dir": c["dir"], "opened": E_iso, "last_true": E_iso,
                   "misses": 0, "notified_at": now if c["seed"] else None, "notified_dry": False,
                   "seeded": bool(c["seed"]), "block": c["block"], "vers": list(c["vers"]), "kind": c["kind"],
-                  "peak": lvl, "last": snap}
+                  "peak": lvl, "last": snap, "opened_at": now}
             eps[key] = ep
         else:
             ep["last_true"], ep["misses"] = E_iso, 0
@@ -2669,16 +2687,16 @@ def update_impact_episodes(state, app_id, E, conds, advanced, now):
         ep = eps[key]
         R = ep["last"].get("R") or ep["last"].get("since")
         if R and _d(R) < old_before:
-            closed.append(dict(eps.pop(key), closed=E_iso))
+            closed.append(U.close_ep(eps.pop(key), E_iso, now, "window_end"))
             continue
         if advanced:
             ep["misses"] += 1
             if ep["misses"] >= U.CLOSE_EVALS:
-                closed.append(dict(eps.pop(key), closed=E_iso))
+                closed.append(U.close_ep(eps.pop(key), E_iso, now, _superseded(ep, releases)))
     return [e for e in eps.values() if e["app_id"] == app_id and e.get("family") == "impact"]
 
 
-def update_late_episodes(state, app_id, E, cond, advanced, now):
+def update_late_episodes(state, app_id, E, cond, advanced, now, releases=None):
     """Open / refresh / close this app's ONE late-effect episode (family "impact_late", key "<app>|impact_late"; shared
     state["episodes"] / "closed", so mark_notified works unchanged). Pure: it only changes `state`. cond = the ready
     condition (impact_app) or None. id = fingerprint(app, "uninstall_impact_late", dir up, "<opened>|<update>|<level>")
@@ -2687,7 +2705,8 @@ def update_late_episodes(state, app_id, E, cond, advanced, now):
     advanced evaluations without a condition — at once (never sent) when its update is older than LATE_ALERT_DAYS. A
     closed one of the same update comes back (same id, nothing re-sent unless above its peak); another update's is a
     new episode. A seeded condition is shown, never sent. The 7-day family's episodes are never touched (_same_update
-    only matches family "impact"). → this app's open late episodes (0 or 1)."""
+    only matches family "impact"). → this app's open late episodes (0 or 1). opened_at / closed_at / close_reason as
+    update_impact_episodes (window_end: older than LATE_ALERT_DAYS)."""
     eps, closed = state.setdefault("episodes", {}), state.setdefault("closed", [])
     E = _d(E)
     E_iso = E.isoformat()
@@ -2701,8 +2720,7 @@ def update_late_episodes(state, app_id, E, cond, advanced, now):
                       if closed[j].get("app_id") == app_id and closed[j].get("family") == "impact_late"
                       and closed[j].get("ident") == ident), None)
             if j is not None:                        # the same update's late episode comes back: taken back
-                ep = closed.pop(j)
-                ep.pop("closed", None)
+                ep = U.reopen_ep(closed.pop(j))
                 ep["misses"] = 0
                 eps[key] = ep
         if ep is None:
@@ -2710,7 +2728,7 @@ def update_late_episodes(state, app_id, E, cond, advanced, now):
                   "app_id": app_id, "family": "impact_late", "dir": "up", "opened": E_iso, "last_true": E_iso,
                   "misses": 0, "notified_at": now if cond["seed"] else None, "notified_dry": False,
                   "seeded": bool(cond["seed"]), "block": cond["block"], "ident": ident, "vers": list(cond["vers"]),
-                  "kind": cond["kind"], "peak": lvl, "last": snap}
+                  "kind": cond["kind"], "peak": lvl, "last": snap, "opened_at": now}
             eps[key] = ep
         else:
             ep["last_true"], ep["misses"] = E_iso, 0
@@ -2724,9 +2742,9 @@ def update_late_episodes(state, app_id, E, cond, advanced, now):
     elif ep is not None:
         R = (ep.get("last") or {}).get("R")
         if R and _d(R) < E - timedelta(days=LATE_ALERT_DAYS):
-            closed.append(dict(eps.pop(key), closed=E_iso))
+            closed.append(U.close_ep(eps.pop(key), E_iso, now, "window_end"))
         elif advanced:
             ep["misses"] += 1
             if ep["misses"] >= U.CLOSE_EVALS:
-                closed.append(dict(eps.pop(key), closed=E_iso))
+                closed.append(U.close_ep(eps.pop(key), E_iso, now, _superseded(ep, releases)))
     return [e for e in eps.values() if e["app_id"] == app_id and e.get("family") == "impact_late"]

@@ -674,6 +674,21 @@ def test_null_countries_get_no_false_top_low_or_best_weakest():
     assert judged >= 60 and false <= 0.03 * judged and named == 0
 
 
+def test_country_noise_is_the_same_whatever_the_hash_seed():
+    """The null-countries test above draws its per-country noise from a seed: it must be the SAME noise on every run.
+    (It was keyed by Python's hash() of a str, salted per process — PYTHONHASHSEED=24 drew a sample that named a Best
+    country and failed the test.) Two interpreters with different hash seeds → identical install-day revenue."""
+    import subprocess
+    import sys
+    code = ("import hashlib, json; from tests import value_synth as vs; from tests.test_value_engine import app; "
+            "m = app(countries={'US': (0.6, 1.0, 0.008), 'IN': (0.4, 1.0, 0.008)}, base=3000, cnoise=4.0, seed=2); "
+            "print(hashlib.sha1(json.dumps(m['ida'], sort_keys=True, default=str).encode()).hexdigest())")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    got = {subprocess.run([sys.executable, "-c", code], cwd=root, check=True, capture_output=True, text=True,
+                          env=dict(os.environ, PYTHONHASHSEED=s)).stdout.strip() for s in ("1", "24")}
+    assert len(got) == 1 and len(next(iter(got))) == 40, got
+
+
 def test_country_verdict_gated_on_the_installs_its_value_comes_from():
     """Kenya at 0.1% of installs, then a campaign (×130 from 20 Aug): the D1 window holds thousands, but the older weeks
     its 30-day value comes from hold a few hundred at most — "few", with THAT count; never a verdict or a break-even."""
