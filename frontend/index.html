@@ -114,6 +114,48 @@
   .ain{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%;vertical-align:middle}   /* icon + name, the name wraps beside it */
   .ain>.ain-t{min-width:0}
   #appsel-ic{display:inline-flex;align-items:center}
+  /* header App picker (#apk): the button in the topbar + a list of every app WITH its icon (a native <select> can't show
+     images). Desktop: a popover under the button · phone (≤720px): a bottom sheet. Lives in <body> (not the topbar, whose
+     backdrop-filter would clip / re-anchor it); z 90 = above the topbar, Studio headers and the phone tab bar, below drawers. */
+  #apk-btn{display:inline-flex;align-items:center;gap:6px;min-width:0;width:220px;max-width:100%;background:none;border:none;padding:0;margin:0;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;text-align:left}
+  #apk-btn:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:5px}
+  #apk-btn.apk-quiet:focus-visible{outline:none}                /* focus came back from a mouse / touch pick */
+  #apk-nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .apk-cv{flex:none;color:var(--muted);font-size:12px;line-height:1;transition:transform .15s}
+  #apk-btn[aria-expanded="true"] .apk-cv{transform:rotate(180deg)}
+  .apk-pop{position:fixed;inset:0;z-index:90;pointer-events:none}
+  .apk-pop[hidden],.apk-none[hidden]{display:none!important}
+  .apk-scrim,.apk-grab{display:none}
+  .apk-box{position:absolute;left:var(--apk-x,auto);right:auto;top:var(--apk-y,60px);width:var(--apk-w,360px);max-height:var(--apk-mh,440px);display:flex;flex-direction:column;
+    background:var(--panel);border:1px solid var(--line2);border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.55);pointer-events:auto;overflow:hidden;animation:apk-in .14s ease-out}
+  @keyframes apk-in{from{opacity:0;transform:translateY(-4px)}}
+  .apk-sr{display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--line);color:var(--muted);flex:none}
+  #apk-q{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:7px 10px;color:var(--ink);font:inherit;font-size:13px;outline:none}
+  #apk-q::placeholder{color:var(--faint)}
+  #apk-q:focus{border-color:var(--cyan)}
+  #apk-list{list-style:none;margin:0;padding:5px;overflow-y:auto;overscroll-behavior:contain;flex:1 1 auto;min-height:0;outline:none}
+  .apk-o{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:8px;cursor:pointer;color:var(--ink2);font-size:13px;line-height:1.35;user-select:none}
+  .apk-o.act{background:var(--raise);color:#fff}
+  .apk-o.cur .apk-nm{color:#fff;font-weight:700}
+  .apk-tx{flex:1;min-width:0;display:flex;flex-direction:column}
+  .apk-nm{overflow-wrap:anywhere}
+  .apk-ac{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .apk-ck{flex:none;width:16px;text-align:center;color:var(--cyan);font-weight:800}
+  .apk-all{display:inline-flex;align-items:center;justify-content:center;flex:none;width:20px;height:20px;font-size:15px;line-height:1}
+  .apk-none{padding:16px 12px;color:var(--muted);font-size:12.5px;text-align:center}
+  @media(max-width:760px){#apk-btn{width:auto}}             /* phones/tablets: the topbar row sizes the control */
+  @media(max-width:720px){
+    .apk-scrim{display:block;position:absolute;inset:0;background:rgba(3,7,18,.6);pointer-events:auto}
+    .apk-box{left:0;right:0;top:auto;bottom:0;width:auto;max-height:78vh;max-height:78dvh;border-radius:16px 16px 0 0;border-bottom:none;
+      padding-bottom:env(safe-area-inset-bottom,0px);animation-name:apk-up;animation-duration:.2s}
+    @keyframes apk-up{from{transform:translateY(24px);opacity:.4}}
+    .apk-grab{display:block;flex:none;width:38px;height:4px;border-radius:4px;background:var(--line2);margin:8px auto 0}
+    .apk-sr{padding:10px 12px}
+    #apk-q{font-size:16px;padding:10px 12px}                    /* 16px: iOS does not zoom the page on focus */
+    #apk-list{padding:4px 6px 8px}
+    .apk-o{min-height:52px;padding:10px 12px;gap:12px;font-size:14.5px}
+  }
+  @media(prefers-reduced-motion:reduce){.apk-box{animation:none}}
   .kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}.kv:last-child{border-bottom:none}.kv .k{color:var(--muted)}.kv .v{font-weight:600}
   .meter{height:7px;background:var(--raise);border-radius:100px;overflow:hidden;width:70px}.meter i{display:block;height:100%}.meter.r i{background:var(--bad)}.meter.y i{background:var(--watch)}.meter.g i{background:var(--good)}
   .addbtn{border:1.5px dashed var(--line2);border-radius:13px;padding:20px;text-align:center;cursor:pointer;color:var(--cyan);font-weight:700;background:var(--panel2)}
@@ -2788,7 +2830,7 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
       <button class="hamb" onclick="toggleNav()" aria-label="Menu">☰</button>
       <div><h1 id="tb-title">Portfolio Overview</h1><div class="sub" id="tb-sub">Live · engine-computed</div></div>
       <div class="spacer"></div>
-      <label class="ctrl" style="cursor:pointer;gap:6px" title="Ek app choose karo — poora dashboard us app ka ho jayega"><span id="appsel-ic" aria-hidden="true">📱</span> <span class="cx">App:</span><select id="appsel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none;max-width:220px"></select></label>
+      <label class="ctrl" id="apk" for="apk-btn" style="cursor:pointer;gap:6px" title="Ek app choose karo — poora dashboard us app ka ho jayega"><span id="appsel-ic" aria-hidden="true">📱</span> <span class="cx">App:</span><select id="appsel" hidden tabindex="-1" aria-hidden="true"></select><button type="button" id="apk-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="apk-list"><span id="apk-nm">All apps</span><span class="apk-cv" aria-hidden="true">▾</span></button></label>
       <span class="ctrl" id="smp-pick" title="Yahan Period picker lagu nahi — har section ki dates us section me likhi hain">📅 Dates: har section me</span>
       <label class="ctrl" id="rangectl" style="cursor:pointer;gap:6px" title="Time period — poora dashboard isi window ka data dikhata hai"><span class="cx">🗓 Period:</span><select id="rangesel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none"><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="90d">90 days</option><option value="month">This month</option><option value="lastmonth">Last month</option><option value="all">All time</option><option value="custom">Custom…</option></select></label>
       <span class="ctrl" id="rangecustom" style="display:none;gap:6px"><input type="date" id="rc-from" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="cx">→</span><input type="date" id="rc-to" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="applyRangeCustom()">Apply</span></span>
@@ -2995,13 +3037,111 @@ function appNote(){ return APP ? `<div class="card" style="margin-bottom:14px;bo
 function appSelHtml(){ const _vapps=(DATA.apps||[]).filter(a=>appVisibleByName(a.name));   // hide unselected apps from the filter
   const opt=n=>`<option value="${hAttr(n)}"${n===APP?' selected':''}>${hAttr(n)}</option>`;
   return '<option value="">All apps ('+_vapps.length+')</option>'+(APP&&!_vapps.some(a=>a.name===APP)?opt(APP):'')+_vapps.map(a=>opt(a.name)).join(''); }
-// the selector's icon: the chosen app's logo, 📱 for "All apps"
-function appSelIcon(){ const el=document.getElementById('appsel-ic'); if(el) el.innerHTML=APP?appIcon(APP,18):'📱'; }
+// the selector's icon: the chosen app's logo, 📱 for "All apps" (+ the picker button's name — apkSync)
+function appSelIcon(){ const el=document.getElementById('appsel-ic'); if(el) el.innerHTML=APP?appIcon(APP,18):'📱'; apkSync(); }
 function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; APP=a;
   if(UNIAPP&&uniName(UNIAPP)!==a) UNIAPP='';   // the header left the app whose Uninstall detail was open: close it (never one app under "All apps")
   if(ACTAPP&&actName(ACTAPP)!==a) ACTAPP='';   // … and the Active users tab's
   if(VALAPP&&valName(VALAPP)!==a) VALAPP='';   // … and the Install value tab's
   render(); show(cur==='reportcard'?'placements':cur); window.scrollTo({top:0}); }
+// ---- the header's App picker (#apk) — owner: "isme icon nahi aaya abhi tak". A native <select> can't show images, so the
+// button opens our own list: every app with ITS icon (by app_id), its account when the name doesn't already say it, the
+// app in view ✓, a search box (app or account), ↑/↓ · Enter · Esc · Tab. The hidden <select id="appsel"> stays the one
+// source of the list (render() fills it from appSelHtml()) and in sync; a pick runs the same path as before: setApp(name).
+const APK={open:false, wired:false, items:[], rows:[], act:-1, pt:'', ptT:0};
+function apkEl(id){ return document.getElementById(id); }
+// an app's id (its own icon) + account label (the Accounts & Apps name, else the account's label, else its pub id)
+function apkAcc(name){ const cat=((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalog)||[]).filter(x=>x&&x.app_name===name);
+  if(!cat.length) return {id:'',acc:''};
+  const a=String(cat[0].account_id||''), one=cat.every(x=>String(x.account_id||'')===a);
+  const lab=one?(ACCNAMES[a]||((((DATA&&DATA.accounts)||[]).find(x=>x&&x.account_id===a))||{}).label||a):'';
+  return {id:cat.length===1?String(cat[0].app_id||''):'', acc:String(lab||'')}; }
+// the rows, from the hidden <select>'s options: [{v: app name ('' = All apps), t: label, id, acc, showAcc}]
+function apkItems(){ const s=apkEl('appsel'), o=(s&&s.options)||[], out=[];
+  for(let i=0;i<o.length;i++){ const v=String(o[i].value||''), t=String(o[i].textContent||v);
+    if(!v){ out.push({v:'',t:t||'All apps',id:'',acc:'',showAcc:false}); continue; }
+    const m=apkAcc(v), nm=t.toLowerCase(), ac=m.acc.toLowerCase();   // the account is shown only when the name doesn't carry it
+    const said=!ac||nm.includes(ac)||(ac.length>9&&nm.includes(ac.slice(0,8)+'…'));
+    out.push({v,t,id:m.id,acc:m.acc,showAcc:!said}); }
+  if(!out.length) out.push({v:'',t:'All apps',id:'',acc:'',showAcc:false});
+  return out; }
+function apkRow(it,i,on){ const cur=it.v===APP;
+  const ic=it.v?appIconId(it.id,it.v,20):'<span class="apk-all" aria-hidden="true">📱</span>';
+  return `<li role="option" id="apk-o-${i}" data-i="${i}" class="apk-o${on?' act':''}${cur?' cur':''}" aria-selected="${cur?'true':'false'}">${ic}`
+    +`<span class="apk-tx"><span class="apk-nm">${hAttr(it.t)}</span>${it.showAcc?`<span class="apk-ac">${hAttr(it.acc)}</span>`:''}</span>`
+    +`<span class="apk-ck" aria-hidden="true">${cur?'✓':''}</span></li>`; }
+// (re)draw the list for the search box; the highlighted row: `pref` (an app name) if still listed, else the first match
+// while searching, else the app in view
+function apkDraw(pref){ const L=apkEl('apk-list'), Q=apkEl('apk-q'), N=apkEl('apk-none'); if(!L) return;
+  const q=String((Q&&Q.value)||'').toLowerCase().trim().split(/\s+/).filter(Boolean);
+  APK.rows=APK.items.map((x,i)=>i).filter(i=>{ const h=(APK.items[i].t+' '+APK.items[i].acc).toLowerCase(); return q.every(w=>h.includes(w)); });
+  let k=pref!=null?APK.rows.findIndex(i=>APK.items[i].v===pref):-1;
+  if(k<0&&!q.length) k=APK.rows.findIndex(i=>APK.items[i].v===APP);
+  APK.act=APK.rows.length?Math.max(0,k):-1;
+  L.innerHTML=APK.rows.map((i,j)=>apkRow(APK.items[i],i,j===APK.act)).join('');
+  if(N) N.hidden=APK.rows.length>0;
+  apkAct(APK.act,true); }
+function apkAct(k,scroll){ const L=apkEl('apk-list'), Q=apkEl('apk-q'); APK.act=k;
+  const id=(k>=0&&APK.rows[k]!=null)?'apk-o-'+APK.rows[k]:'';
+  const old=L&&L.querySelector?L.querySelector('.apk-o.act'):null; if(old&&old.id!==id) old.classList.remove('act');
+  const el=id?apkEl(id):null; if(el){ el.classList.add('act'); if(scroll&&el.scrollIntoView) el.scrollIntoView({block:'nearest'}); }
+  [Q,L].forEach(x=>{ if(x){ if(id) x.setAttribute('aria-activedescendant',id); else x.removeAttribute('aria-activedescendant'); } }); }
+// desktop: under the App control, kept inside the window (phones: the CSS bottom sheet ignores these)
+function apkPlace(){ const P=apkEl('apk-pop'), W=apkEl('apk'); if(!P||!W||!W.getBoundingClientRect) return;
+  const r=W.getBoundingClientRect(), vw=innerWidth, vh=innerHeight, w=Math.min(Math.max(r.width,340),440,vw-16);
+  const x=Math.max(8,Math.min(r.left,vw-8-w)), y=Math.round(r.bottom+6);
+  P.style.setProperty('--apk-x',Math.round(x)+'px'); P.style.setProperty('--apk-y',y+'px'); P.style.setProperty('--apk-w',Math.round(w)+'px');
+  P.style.setProperty('--apk-mh',Math.max(180,Math.min(460,vh-y-12))+'px'); }
+// open: the search box takes focus (typed seed kept) — but a TOUCH open focuses the list, so the phone keyboard
+// doesn't cover the icons; a tap on the search box brings it up
+function apkOpen(toList,seed){ if(APK.open) return; const P=apkEl('apk-pop'), Q=apkEl('apk-q'), L=apkEl('apk-list'), B=apkEl('apk-btn'); if(!P||!Q) return;
+  APK.items=apkItems(); APK.open=true; Q.value=seed||''; P.hidden=false; if(B) B.setAttribute('aria-expanded','true');
+  apkPlace(); apkDraw(); try{ (toList&&L?L:Q).focus({preventScroll:true}); }catch(e){} }
+// back=true: focus returns to the button — `quiet` (a mouse / touch close) without the keyboard focus ring
+function apkClose(back,quiet){ if(!APK.open) return; APK.open=false; const P=apkEl('apk-pop'), B=apkEl('apk-btn');
+  if(P) P.hidden=true; if(B){ B.setAttribute('aria-expanded','false');
+    if(back){ if(quiet) B.classList.add('apk-quiet'); try{ B.focus({preventScroll:true}); }catch(e){} } } }
+function apkPick(k,quiet){ const i=APK.rows[k], it=i==null?null:APK.items[i]; if(!it) return; apkClose(true,quiet);
+  if(it.v===APP) return;                                  // the app already in view: nothing to redo (as with the native <select>)
+  const s=apkEl('appsel'); if(s) s.value=it.v;            // the hidden <select> follows (render() then rebuilds it the same)
+  setApp(it.v); }
+function apkKey(e){ if(!APK.open) return; const k=e.key, n=APK.rows.length, Q=apkEl('apk-q');
+  const mv=d=>{ e.preventDefault(); if(n) apkAct(Math.max(0,Math.min(n-1,(APK.act<0?(d>0?-1:n):APK.act)+d)),true); };
+  if(k==='ArrowDown') mv(1); else if(k==='ArrowUp') mv(-1); else if(k==='PageDown') mv(8); else if(k==='PageUp') mv(-8);
+  else if(k==='Enter'){ e.preventDefault(); if(APK.act>=0) apkPick(APK.act); }
+  else if(k==='Escape'){ e.preventDefault(); e.stopPropagation(); apkClose(true); }
+  else if(k==='Tab') apkClose(true);                      // focus back on the button; the browser's own Tab then moves on from it
+  else if(Q&&e.target!==Q&&k&&k.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey) Q.focus();   // typing on the list → the search box
+}
+function apkBtnKey(e){ if(APK.open) return; const k=e.key;
+  if(k==='ArrowDown'||k==='ArrowUp'){ e.preventDefault(); apkOpen(false); }
+  else if(k&&k.length===1&&/\S/.test(k)&&!e.ctrlKey&&!e.metaKey&&!e.altKey){ e.preventDefault(); e.stopPropagation(); apkOpen(false,k); } }
+// the button's face (from appSelIcon, i.e. every render): the app in view, else "All apps (N)"; an open list follows a refresh
+function apkSync(){ const it=apkItems(), t=APP?String(APP):((it[0]&&!it[0].v&&it[0].t)||'All apps');
+  const N=apkEl('apk-nm'), B=apkEl('apk-btn'); if(N) N.textContent=t; if(B) B.setAttribute('aria-label','App: '+t);
+  if(APK.open){ const pv=(APK.act>=0&&APK.rows[APK.act]!=null)?APK.items[APK.rows[APK.act]].v:null; APK.items=it; apkDraw(pv); } }
+function apkWire(){ const W=apkEl('apk'), B=apkEl('apk-btn'); if(APK.wired||!W||!B||!document.body) return; APK.wired=true;
+  const P=document.createElement('div'); P.id='apk-pop'; P.className='apk-pop'; P.hidden=true;
+  P.innerHTML='<div class="apk-scrim" id="apk-scrim"></div><div class="apk-box" id="apk-box"><div class="apk-grab" aria-hidden="true"></div>'
+    +'<div class="apk-sr"><span aria-hidden="true">🔍</span><input id="apk-q" type="text" role="combobox" aria-expanded="true" aria-controls="apk-list" aria-autocomplete="list"'
+    +' aria-label="Search app or account" placeholder="Search app or account…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go"></div>'
+    +'<ul id="apk-list" role="listbox" aria-label="Apps" tabindex="-1"></ul><div class="apk-none" id="apk-none" role="status" hidden>No apps found</div></div>';
+  document.body.appendChild(P);
+  const Q=apkEl('apk-q'), L=apkEl('apk-list'), X=apkEl('apk-box'), S=apkEl('apk-scrim');
+  const opt=e=>{ const o=e.target&&e.target.closest?e.target.closest('[role=option]'):null; return o?APK.rows.indexOf(+o.getAttribute('data-i')):-1; };
+  W.addEventListener('pointerdown',e=>{ APK.pt=e.pointerType||''; APK.ptT=Date.now(); });
+  B.addEventListener('click',e=>{ if(APK.open){ apkClose(true,e.detail>0); return; } apkOpen(APK.pt==='touch'&&Date.now()-APK.ptT<1500); });
+  B.addEventListener('keydown',e=>{ B.classList.remove('apk-quiet'); apkBtnKey(e); });
+  B.addEventListener('blur',()=>B.classList.remove('apk-quiet'));
+  X.addEventListener('keydown',apkKey);
+  Q.addEventListener('input',()=>apkDraw());
+  L.addEventListener('mousedown',e=>e.preventDefault());  // a click on a row keeps focus where it is (the search box)
+  L.addEventListener('click',e=>{ const k=opt(e); if(k>=0) apkPick(k,true); });
+  L.addEventListener('mousemove',e=>{ const k=opt(e); if(k>=0&&k!==APK.act) apkAct(k,false); });
+  S.addEventListener('click',()=>apkClose(true,true));    // phone: a tap above the sheet closes it
+  document.addEventListener('pointerdown',e=>{ if(!APK.open) return; const t=e.target;   // a click anywhere else closes it
+    if((P.contains&&P.contains(t))||(W.contains&&W.contains(t))) return; apkClose(false); },true);
+  window.addEventListener('resize',()=>{ if(APK.open) apkPlace(); }); }
 function searchCountries(q){ q=(q||'').trim().toUpperCase(); document.querySelectorAll('#cty-tbody tr').forEach((r,i)=>{ const n=(r.getAttribute('data-c')||'').toUpperCase(); r.style.display=(q?n.includes(q):i<30)?'':'none'; }); }
 
 // ---- Placement time-window engine (per ad unit, over the raw daily counts each
@@ -3080,6 +3220,7 @@ function render(){
     document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));
     const rs=document.getElementById('rangesel'); if(rs) rs.addEventListener('change',e=>setRange(e.target.value));
     const sel0=document.getElementById('appsel'); if(sel0) sel0.addEventListener('change',e=>setApp(e.target.value));
+    apkWire();                    // the App picker over it (button + list with every app's icon)
     document.addEventListener('click',e=>{const c=e.target.closest('.chip');if(c&&c.parentElement){c.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');}});
   }
   const bn=document.getElementById('banner');
