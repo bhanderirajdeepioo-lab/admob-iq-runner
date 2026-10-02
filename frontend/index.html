@@ -2101,6 +2101,8 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-clg{display:flex;flex-wrap:wrap;gap:4px 14px;padding:4px 18px 12px;font-size:11.5px;color:var(--muted);align-items:center}
 :is(#as-root,#as-layer) .as-clg .as-k{display:inline-flex;align-items:center;gap:5px}
 :is(#as-root,#as-layer) .as-clg .as-k i{display:inline-block;width:14px;height:3px;border-radius:2px}
+:is(#as-root,#as-layer) .as-hwait{padding:18px;font-size:13.5px;color:var(--ink2);line-height:1.6;margin-top:14px}
+:is(#as-root,#as-layer) .as-hwait .as-btn{margin-left:8px;min-height:32px}
 :is(#as-root,#as-layer) .as-cohw{overflow:auto;max-height:min(70vh,720px);margin:0 12px;padding:0 0 6px}   /* every install week since the app's start: the grid scrolls in its own box (no side padding: the sticky week column sits at its edge) */
 :is(#as-root,#as-layer) .as-coh{display:grid;gap:3px;min-width:420px}
 :is(#as-root,#as-layer) .as-cohw .as-coh .as-rh,:is(#as-root,#as-layer) .as-cohw .as-coh .as-stk{position:sticky;left:0;z-index:2;background:var(--panel);box-shadow:4px 0 0 var(--panel)}
@@ -3168,6 +3170,8 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-coh .us-chh{font:600 10px var(--us-num);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:center;padding:2px 0 4px}
 :is(#us-root,#us-layer) .us-coh .us-ref{outline:1px dashed var(--line2);background:transparent!important;color:var(--ink2)}
 :is(#us-root,#us-layer) .us-cohw .us-coh .us-rh,:is(#us-root,#us-layer) .us-cohw .us-coh .us-stk{position:sticky;left:0;z-index:2;background:var(--panel);box-shadow:4px 0 0 var(--panel)}
+:is(#us-root,#us-layer) .us-hwait{padding:18px;font-size:13.5px;color:var(--ink2);line-height:1.6;margin-top:14px}
+:is(#us-root,#us-layer) .us-hwait .us-btn{margin-left:8px;min-height:32px}
 :is(#us-root,#us-layer) .us-cohw .us-coh .us-chh{position:sticky;top:0;z-index:3;background:var(--panel);box-shadow:3px 0 0 var(--panel),0 3px 0 var(--panel),3px 3px 0 var(--panel)}
 :is(#us-root,#us-layer) .us-cohw .us-coh .us-chh.us-stk{left:0;z-index:4;box-shadow:4px 0 0 var(--panel),0 3px 0 var(--panel),4px 3px 0 var(--panel)}
 :is(#us-root,#us-layer) .us-coh .us-rh>span{white-space:nowrap}
@@ -7262,14 +7266,30 @@ function ensure(cb){ const p=ptr(); if(!p||LOADING||(RAW&&VER===p.v)||(ERR&&VER=
       RAW=j; VER=p.v; ERR=false; SIG=null; LOADING=false; cb&&cb(); })
     .catch(()=>{ ERR=!RAW; VER=p.v; LOADING=false; cb&&cb(); }); }
 function retry(){ ERR=false; VER=null; ensure(()=>uniRerender()); uniRerender(); }
-// decoded per render only when the file or the visible apps changed
-function prep(){ const sig=VER+'|'+RAW.apps.map(a=>vis(a.id)?1:0).join('')+'|'+RAW.noga.map(n=>vis(n.id)?1:0).join('');
+// the days BEFORE the span (owner, 2 Oct: "no trim" — a custom range / compare reaches the whole history): their own
+// file (meta.hist), made by the same build code — fetched only when a chosen range or compare needs a day before the
+// span, then merged in front of the span's arrays (one series, cell for cell). The days before a window a view reads:
+// 35 (the loss lens' normal, also of the compare; "Same day" / "Still in app" normal) and 42 before the range (the
+// timeline's 6 weeks) — the span holds them for the fixed choices, so only a custom range / compare can need more
+let HRAW=null, HLOAD=false, HERR=false, HFOR=null, WAITING=false;   // WAITING: the screen on view is the "loading the older days" one
+const histOk=()=>!!(HRAW&&RAW&&RAW.meta&&HRAW.gen===RAW.meta.gen&&HRAW.S===RAW.meta.H0);
+const H0=()=>(RAW&&RAW.meta&&RAW.meta.H0&&RAW.meta.hist)?RAW.meta.H0:M.S;   // the oldest day any app's history has
+function ensureHist(cb){ const m=RAW&&RAW.meta; if(!m||!m.hist||HLOAD||histOk()||(HERR&&HFOR===VER)) return; HLOAD=true; HFOR=VER;
+  fetchGzJson(m.hist+'?t='+Date.now()).then(j=>{ if(!j||j.v!==1||j.S!==m.H0||j.gen!==m.gen||!j.apps) throw new Error('format');
+      HRAW=j; HERR=false; HLOAD=false; SIG=null; cb&&cb(); })
+    .catch(()=>{ HERR=true; HLOAD=false; cb&&cb(); }); }
+// the first day the chosen range / compare reads, when it is before the loaded days and the older file is not in yet
+function needHist(){ if(!RAW||!RAW.meta||!RAW.meta.hist||histOk()) return null; const w=windows(), c=dAdd(w.cf,-35), r=dAdd(w.f,-42), d=c<r?c:r;
+  return d<RAW.meta.S?(d<RAW.meta.H0?RAW.meta.H0:d):null; }
+// decoded per render only when the file, the older days or the visible apps changed
+function prep(){ const sig=VER+'|'+(histOk()?'h':'')+'|'+RAW.apps.map(a=>vis(a.id)?1:0).join('')+'|'+RAW.noga.map(n=>vis(n.id)?1:0).join('');
   if(sig===SIG&&M) return; SIG=sig;
-  M=RAW.meta; N=M.n; YR=String(M.today).slice(0,4);
+  const HD=histOk()?HRAW:null;
+  M=HD?Object.assign({},RAW.meta,{S:HD.S,n:HD.n+RAW.meta.n}):RAW.meta; N=M.n; YR=String(M.today).slice(0,4);
   const keep=[], map={};
   RAW.apps.forEach((a0,k)=>{ if(!vis(a0.id)) return; map[k]=keep.length; keep.push(Object.assign({},a0)); });
   A=keep;
-  A.forEach((a,i)=>{ a.i=i; KEYS.forEach(k=>{ a[k]=dec(a[k]); });
+  A.forEach((a,i)=>{ a.i=i; const o=HD&&HD.apps[a.id]; KEYS.forEach(k=>{ a[k]=HD?((o&&o[k]!=null)?dec(o[k]):new Array(HD.n).fill(null)).concat(dec(a[k])):dec(a[k]); });
     a.fi=Math.max(0,ix(a.first)); a.al=[];
     a.coh={ref:a.coh.ref,w:a.coh.w.map(r=>({w:r[0],n:r[1],v:dec(r[2]),p:r[3],f:r[4]||r[0],t:r[5]||dAdd(r[0],6),part:r.length>4}))};
     ['md','lo','hi'].forEach(k=>{ a[k]=a[k].map(v=>v==null?null:v/1000); });   // stored ×1000 → per 1,000 active users
@@ -7341,7 +7361,7 @@ const rangeOf=()=>KWIN==='custom'?'c':(KW_N[KWIN]||7);
 const cmpOf=()=>KCMP==='custom'?'c':(KCMP==='month'?'month':'prev');
 
 /* ================= windows ================= */
-const clampD=s=>s<M.S?M.S:(s>M.E?M.E:s);
+const clampD=s=>s<H0()?H0():(s>M.E?M.E:s);
 function windows(){ let f,t; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t1=KWCUSTOM.to, f2=KCMPCUSTOM.from, t2=KCMPCUSTOM.to;
   if(R0==='c'&&f1&&t1){ f=clampD(f1); t=clampD(t1); if(f>t){ const x=f; f=t; t=x; } }
   else { t=M.E; f=dAdd(M.E,-((R0==='c'?30:+R0)-1)); }
@@ -7349,7 +7369,7 @@ function windows(){ let f,t; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t
   if(C0==='month'){ cf=addMonths(f,-1); ct=addMonths(t,-1); if(ct>=f) ct=dAdd(f,-1); }
   else if(C0==='c'&&f2&&t2){ cf=clampD(f2); ct=clampD(t2); if(cf>ct){ const x=cf; cf=ct; ct=x; } }
   else { ct=dAdd(f,-1); cf=dAdd(ct,-(L-1)); }
-  if(cf<M.S) cf=M.S; if(ct<cf) ct=cf;
+  if(cf<H0()) cf=H0(); if(ct<cf) ct=cf;
   return {f,t,L,cf,ct,cL:dDiff(cf,ct)+1}; }
 
 /* ================= core math (mirrors the dashboard's uniSums / uniKpiRow) ================= */
@@ -7602,14 +7622,14 @@ function winHtml(){ const firstK=dAdd(M.settled,1);
     +`<span>All ${A.length} apps: GA4 data till <b>${fd(M.E)}</b> (same day)</span>${kd}<span class="us-faint">Numbers = daily average<span class="us-kb"> · ⌨ <span class="us-kbd">7</span> <span class="us-kbd">1</span> <span class="us-kbd">3</span> <span class="us-kbd">6</span></span></span>`; }
 function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
   const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
-  const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${M.S}" max="${M.E}">`;
+  const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${M.E}">`;
   return `<div class="us-top-in"><div class="us-brand"><span class="us-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="4" y="1.5" width="10" height="15" rx="2.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 5.5v6m-2.6-2.4L9 11.7l2.6-2.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
     +`<div><div class="us-bn">Uninstall Studio</div><div class="us-sub">All apps · ${A.length} apps${NOGA.length?' + '+NOGA.length+' without GA4':''}</div></div></div>`
     +`<div class="us-ctrls"><div class="us-seg" id="us-rng" role="group" aria-label="Range">${rb('7','7 days','7')}${rb('14','14','1')}${rb('30','30','3')}${rb('60','60','6')}${rb('c','Custom','')}</div>`
     +`<label class="us-sel" for="us-cmp"><span>vs</span><select id="us-cmp"><option value="prev"${c0==='prev'?' selected':''}>Previous same days</option><option value="month"${c0==='month'?' selected':''}>Same days last month</option><option value="c"${c0==='c'?' selected':''}>Custom range…</option></select></label>`
     +`<div class="us-seg" id="us-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur==='USD'}">$</button></div></div></div>`
     +`<div class="us-custom" id="us-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="us-grp" id="us-cgA"${r0==='c'?'':' hidden'}>Range ${iv('us-cf1',W.f,'Range from')} – ${iv('us-ct1',W.t,'Range to')}</span>`
-    +`<span class="us-grp" id="us-cgB"${c0==='c'?'':' hidden'}>Compare ${iv('us-cf2',W.cf,'Compare from')} – ${iv('us-ct2',W.ct,'Compare to')}</span><span class="us-faint" id="us-cnote">Data ${fd(M.S)} to ${fd(M.E)}</span></div>`
+    +`<span class="us-grp" id="us-cgB"${c0==='c'?'':' hidden'}>Compare ${iv('us-cf2',W.cf,'Compare from')} – ${iv('us-ct2',W.ct,'Compare to')}</span><span class="us-faint" id="us-cnote">Data ${fd(pickMin())} to ${fd(M.E)}</span></div>`
     +`<div class="us-winline" id="us-winline">${winHtml()}</div>`; }
 function renderTop(){ const el=$('us-top'); if(!el) return;   // in place: the focused control keeps its focus
   const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
@@ -7617,7 +7637,7 @@ function renderTop(){ const el=$('us-top'); if(!el) return;   // in place: the f
   el.querySelectorAll('#us-cur button').forEach(b=>b.setAttribute('aria-pressed',String(cur===b.dataset.c)));
   const cm=$('us-cmp'); if(cm) cm.value=c0;
   const cr=$('us-customRow'); if(cr) cr.hidden=!(r0==='c'||c0==='c'); const ga=$('us-cgA'), gb=$('us-cgB'); if(ga) ga.hidden=r0!=='c'; if(gb) gb.hidden=c0!=='c';
-  [['us-cf1',W.f],['us-ct1',W.t],['us-cf2',W.cf],['us-ct2',W.ct]].forEach(([id,v])=>{ const x=$(id); if(x&&document.activeElement!==x){ x.min=M.S; x.max=M.E; x.value=v; } });
+  [['us-cf1',W.f],['us-ct1',W.t],['us-cf2',W.cf],['us-ct2',W.ct]].forEach(([id,v])=>{ const x=$(id); if(x&&document.activeElement!==x){ x.min=pickMin(); x.max=M.E; x.value=v; } });
   const wl=$('us-winline'); if(wl) wl.innerHTML=winHtml(); }
 
 /* ================= story strip ================= */
@@ -8366,7 +8386,7 @@ function footHtml(){ return `<summary>Ye number kaise bane? (chhoti si list)</su
 <li><b>Same day uninstall %</b> = range ke installs me se install ke din hi uninstall · <b>Still in app after 7 days</b> = jinka 7wa din is range me aaya, unme se kitne app me rahe · <b>Back next day</b> = jinka agla din is range me aaya, unme se kitne ne app khola.</li>
 <li><b>Rang</b> = app ka apna normal (install hafton ke numbers: pichhle 28 din ke installs; roz ka rate: engine ki range). Farak tabhi rangeen jab pakka ho (z ≥ 2, kam se kam 60 installs).</li>
 <li><b>⏳ Not final</b> = Firebase late data bhejta hai — ${fd(dAdd(M.settled,1))} ke baad ke din badal sakte hain. Status words aur alerts dashboard engine ke hain.</li>
-<li>Range / compare upar ke chunav se (Active users aur Install value ke saath ek hi) · ₹ / $ poore dashboard ka · Data ${fd(M.S)} – ${fd(M.E)} (${M.n} days) · App ke naam hamesha account ke saath · ${NOGA.length} app ka GA4 nahi (N/A).</li></ul>`; }
+<li>Range / compare upar ke chunav se (Active users aur Install value ke saath ek hi) · ₹ / $ poore dashboard ka · Data ${fd(H0())} – ${fd(M.E)} (${dDiff(H0(),M.E)+1} days${histOk()||!(RAW.meta&&RAW.meta.hist)?'':' · '+fd(RAW.meta.S)+' se pehle ke din range chunne pe load hote'}) · App ke naam hamesha account ke saath · ${NOGA.length} app ka GA4 nahi (N/A).</li></ul>`; }
 
 // "⏱️ When will I know?" (All apps): the older note's own lines (uniTimingItems — the same days, from the same constants)
 function whenHtml(){ let li=''; try{ li=uniTimingItems(); }catch(e){ li=''; } return `<summary>⏱️ When will I know? (kab pakka pata chalega)</summary><ul>${li}</ul>`; }
@@ -8375,7 +8395,17 @@ function whenHtml(){ let li=''; try{ li=uniTimingItems(); }catch(e){ li=''; } re
 // the whole Studio as HTML (the dashboard's uniScreen puts it in the Uninstall screen); the parts that need the page
 // (widths, the open drawer, count-up) follow in afterMount. VIEW: 'all' (All apps) or 'app' (one app's full page, PAGE).
 let VIEW='all', PAGE=null;
-function screen(note){ prep(); VIEW='all'; PAGE=null; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); engCompute(); font(); wire();
+// the date pickers' first day: the oldest day of history (on an app's page, that app's own first day)
+function pickMin(){ const h=H0(); if(VIEW==='app'&&PAGE){ const a=A.find(x=>x.id===PAGE); if(a&&a.first>h) return a.first; } return h; }
+// the chosen range / compare needs days before the span: the top bar stays (change it any time), the numbers wait for
+// the older days' file — never a number from a cut range
+function waitHtml(note,view,id){ VIEW=view; PAGE=id; W=windows(); WAITING=true; font(); wire(); if(ST.drawer>=0) closeDrawer();
+  const d=needHist(); ensureHist(()=>uniRerender());
+  const msg=HERR?`⚠️ ${fd(d)} se ${fd(dAdd(RAW.meta.S,-1))} tak ka purana data load nahi hua. <button class="us-btn" data-hretry="1">Try again</button>`
+    :`⏳ ${fd(d)} se ${fd(dAdd(RAW.meta.S,-1))} tak ka purana data load ho raha hai… <span class="us-faint">(purane din alag file me — sirf zarurat pe aate)</span>`;
+  setTimeout(()=>{ stick(); },0);
+  return `<div id="us-root"${view==='app'?' class="us-app-pg"':''}><div class="us-top" id="us-top">${topHtml()}</div><div class="us-wrap" id="us-main">${note||''}<section class="us-panel us-hwait" id="us-hwait" role="status">${msg}</section></div></div>`; }
+function screen(note){ prep(); if(needHist()) return waitHtml(note,'all',null); WAITING=false; VIEW='all'; PAGE=null; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); engCompute(); font(); wire();
   setTimeout(afterMount,0);
   return `<div id="us-root"><div class="us-top" id="us-top">${topHtml()}</div>`
     +`<div class="us-wrap" id="us-main">${note||''}<section class="us-story" id="us-story" aria-label="Most important things">${storyHtml()}</section>`
@@ -8387,7 +8417,7 @@ function screen(note){ prep(); VIEW='all'; PAGE=null; SPF='us-s'; spkN=0; for(co
 // is this app in the Studio's file (visible apps)? — else its older page stays as it was
 function has(id){ try{ prep(); return A.some(a=>a.id===id); }catch(e){ return false; } }
 // one app's full page (the top App selector, "Poora app page →", an app opened anywhere on the tab)
-function appScreen(id,note){ prep(); VIEW='app'; PAGE=id; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
+function appScreen(id,note){ prep(); if(needHist()) return waitHtml(note,'app',id); WAITING=false; VIEW='app'; PAGE=id; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
   if(ST.drawer>=0) closeDrawer();                       // (the quick look belongs to All apps)
   const i=A.findIndex(a=>a.id===id); setTimeout(afterMount,0);
   return `<div id="us-root" class="us-app-pg"><div class="us-top" id="us-top">${topHtml()}</div><div class="us-wrap" id="us-main">${note||''}<section id="us-apg" aria-label="App page">${pageHtml(i)}</section>`
@@ -8405,7 +8435,7 @@ function afterMount(){ const root=$('us-root'); if(!root) return; layer(); stick
   if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('us-drawer'); if(d&&!d.classList.contains('us-on')){ d.classList.add('us-on'); $('us-scrim').classList.add('us-on'); lock(true); } } } }
 // a Studio-only change (range, compare, a key): every section again, in place — the header keeps its focus
 let firstAll=true;
-function renderAll(){ const root=$('us-root'); if(!root){ uniRerender(); return; }
+function renderAll(){ const root=$('us-root'); if(!root||WAITING||needHist()){ uniRerender(); return; }
   const m=$('us-main'); if(m&&!RM&&!REFRESH_SILENT){ m.classList.remove('us-fresh'); void m.offsetWidth; m.classList.add('us-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('us-fresh'),700); }   // never on a silent background refresh — only a user-driven change earns the entrance flash
   SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop();
   const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
@@ -8467,6 +8497,7 @@ function wire(){ if(WIRED) return; WIRED=true;
   let rzT=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(!$('us-root')) return; stick(); if(Math.abs(innerWidth-lastW)<40) return; lastW=innerWidth; if(VIEW==='app'){ const el=$('us-apg'); PW=(el&&el.clientWidth)||PW; renderPage(); return; } renderTl(); if(ST.drawer>=0) renderDrawer(true); },180); }); }
 function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+dir+ord.length)%ord.length; ST.drawer=ord[q]; ST.did=A[ST.drawer].id; renderDrawer(); const d=$('us-drawer'); if(d) d.scrollTop=0; }
 function onClick(e){ const t=e.target; if(!inStudio(t)) return;
+  if(t.closest('[data-hretry]')){ HERR=false; HFOR=null; uniRerender(); return; }
   const fp=t.closest('[data-full]'); if(fp){ e.preventDefault(); fullPage(fp.getAttribute('data-full')); return; }
   if(t.closest('[data-back]')){ e.preventDefault(); hideTip(); try{ uniBack(); }catch(e2){} return; }
   const pn=t.closest('[data-pnav]'); if(pn){ hideTip(); navPage(+pn.getAttribute('data-pnav')); return; }
@@ -8521,7 +8552,7 @@ return {ptr, ensure, retry, screen, appScreen, has, hide, closeDrawer, openDrawe
      story:storyHtml, kpis:kpisHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml,
      eng:()=>{ engCompute(); return engHtml(); }, upl:uplHtml, when:whenHtml,
      page:id=>{ const i=A.findIndex(a=>a.id===id); return i<0?'':pageHtml(i); }, view:()=>({VIEW,PAGE}), SPK:()=>SPK, labels, navPage,
-     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage,
+     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, loadHist:j=>{ HRAW=j||null; HERR=j===null; HLOAD=false; HFOR=j===null?VER:null; SIG=null; }, histOk, needHist, pickMin, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage,
      gdCell, gdHtml:()=>gdHtml(), gdApp:(i,m)=>gdApp(R[i],m||'d'), GST, GDL, cohFull, cohRels, relsOf, curveH, curveTip}};
 })();
 
@@ -10555,15 +10586,31 @@ function ensure(cb){ const p=ptr(); if(!p||LOADING||(RAW&&VER===p.v)||(ERR&&VER=
       RAW=j; VER=p.v; ERR=false; SIG=null; LOADING=false; cb&&cb(); })
     .catch(()=>{ ERR=!RAW; VER=p.v; LOADING=false; cb&&cb(); }); }
 function retry(){ ERR=false; VER=null; ensure(()=>actRerender()); actRerender(); }
+// the days BEFORE the span (owner, 2 Oct: "no trim" — a custom range / compare reaches the whole history): their own
+// file (meta.hist), sliced by the build from the same per-app series — fetched only when a chosen range or compare needs
+// a day before the span, then merged in front of the span's arrays (one series, cell for cell). The days before a
+// window a view reads: 58 (its 28-day normal + the 30 install lags of "installs that came back") — the span holds them
+// for the fixed choices, so only a custom range / compare can need more
+let HRAW=null, HLOAD=false, HERR=false, HFOR=null, WAITING=false;   // WAITING: the screen on view is the "loading the older days" one
+const histOk=()=>!!(HRAW&&RAW&&RAW.meta&&HRAW.gen===RAW.meta.gen&&HRAW.S===RAW.meta.H0);
+const H0=()=>(RAW&&RAW.meta&&RAW.meta.H0&&RAW.meta.hist)?RAW.meta.H0:M.S;   // the oldest day any app's data has
+function ensureHist(cb){ const m=RAW&&RAW.meta; if(!m||!m.hist||HLOAD||histOk()||(HERR&&HFOR===VER)) return; HLOAD=true; HFOR=VER;
+  fetchGzJson(m.hist+'?t='+Date.now()).then(j=>{ if(!j||j.v!==1||j.S!==m.H0||j.gen!==m.gen||!j.apps) throw new Error('format');
+      HRAW=j; HERR=false; HLOAD=false; SIG=null; cb&&cb(); })
+    .catch(()=>{ HERR=true; HLOAD=false; cb&&cb(); }); }
+function needHist(){ if(!RAW||!RAW.meta||!RAW.meta.hist||histOk()) return null; const w=windows(), d=dAdd(w.cf<w.f?w.cf:w.f,-58);
+  return d<RAW.meta.S?(d<RAW.meta.H0?RAW.meta.H0:d):null; }
 const nwAt=(a,i)=>i>=0?(i<N?a.nw[i]:null):(i>=-a.pre.length?a.pre[a.pre.length+i]:undefined);
 // decoded per render only when the file or the visible apps changed (the file's own objects are never changed)
-function prep(){ const sig=VER+'|'+RAW.apps.map(a=>vis(a.id)?1:0).join('')+'|'+(RAW.noga||[]).map(n=>vis(n.id)?1:0).join('');
+function prep(){ const sig=VER+'|'+(histOk()?'h':'')+'|'+RAW.apps.map(a=>vis(a.id)?1:0).join('')+'|'+(RAW.noga||[]).map(n=>vis(n.id)?1:0).join('');
   if(sig===SIG&&M) return; SIG=sig;
-  M=RAW.meta; N=M.n; LG=M.LG; YR=String(M.today).slice(0,4); WD0=new Date(P(M.S)).getUTCDay(); SI=ix(M.settled);
+  const HD=histOk()?HRAW:null;
+  M=HD?Object.assign({},RAW.meta,{S:HD.S,n:HD.n+RAW.meta.n}):RAW.meta; N=M.n; LG=M.LG; YR=String(M.today).slice(0,4); WD0=new Date(P(M.S)).getUTCDay(); SI=ix(M.settled);
   const keep=[], map={};
   RAW.apps.forEach((a0,k)=>{ if(!vis(a0.id)) return; map[k]=keep.length; keep.push(Object.assign({},a0)); });
   A=keep;
-  A.forEach((a,i)=>{ a.i=i; KEYS.forEach(k=>{ a[k]=dec(a[k]); });
+  A.forEach((a,i)=>{ a.i=i; const o=HD&&HD.apps[a.id]; KEYS.forEach(k=>{ a[k]=HD?((o&&o[k]!=null)?dec(o[k]):new Array(HD.n).fill(null)).concat(dec(a[k])):dec(a[k]); });
+    if(HD){ a.pre=o&&o.pre!=null?o.pre:a.pre; a.steep=((o&&o.stp)||[]).concat(a.steep||[]); }
     a.rv=a.rv.map(v=>v==null?null:v/1000); a.su=a.su.map(v=>v==null?null:v/1000); a.im=a.im.map(v=>v==null?null:v/1000);
     a.pre=dec(a.pre); a.sh=dec(a.sh).map(v=>v/1e5);
     const off=N-M.bandDays; ['lo','hi','med'].forEach(k=>{ const v=dec(a.bnd[k]), o=new Array(N).fill(null); v.forEach((x,j)=>{ o[off+j]=x; }); a['b'+k]=o; });
@@ -10634,7 +10681,7 @@ const rangeOf=()=>KWIN==='custom'?'c':(KW_N[KWIN]||7);
 const cmpOf=()=>KCMP==='custom'?'c':(KCMP==='month'?'month':'prev');
 
 /* ================= windows ================= */
-const clampD=s=>s<M.S?M.S:(s>M.E?M.E:s);
+const clampD=s=>s<H0()?H0():(s>M.E?M.E:s);
 function windows(){ let f,t; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t1=KWCUSTOM.to, f2=KCMPCUSTOM.from, t2=KCMPCUSTOM.to;
   if(R0==='c'&&f1&&t1){ f=clampD(f1); t=clampD(t1); if(f>t){ const x=f; f=t; t=x; } }
   else { t=M.E; f=dAdd(M.E,-((R0==='c'?30:+R0)-1)); }
@@ -10642,7 +10689,7 @@ function windows(){ let f,t; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t
   if(C0==='month'){ cf=addMonths(f,-1); ct=addMonths(t,-1); if(ct>=f) ct=dAdd(f,-1); }
   else if(C0==='c'&&f2&&t2){ cf=clampD(f2); ct=clampD(t2); if(cf>ct){ const x=cf; cf=ct; ct=x; } }
   else { ct=dAdd(f,-1); cf=dAdd(ct,-(L-1)); }
-  if(cf<M.S) cf=M.S; if(ct<cf) ct=cf;
+  if(cf<H0()) cf=H0(); if(ct<cf) ct=cf;
   const ts=t>M.settled?M.settled:t;
   return {f,t,L,cf,ct,cL:dDiff(cf,ct)+1,ts,sL:ts>=f?dDiff(f,ts)+1:0}; }
 
@@ -10985,7 +11032,7 @@ function winHtml(){ const pv=W.t>M.settled, firstK=dAdd(M.settled,1);
     +`<span>All ${A.length} apps: GA4 data till <b>${fd(M.E)}</b> (same day)</span>${kd}<span>Users vs normal: <b>${W.sL?'final days '+pakkaSpan():'—'}</b> vs 4 weeks before</span><span class="as-faint">Numbers = daily average<span class="as-kb"> · ⌨ <span class="as-kbd">7</span> <span class="as-kbd">1</span> <span class="as-kbd">3</span> <span class="as-kbd">6</span></span></span>`; }
 function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
   const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
-  const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${M.S}" max="${M.E}">`;
+  const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${M.E}">`;
   return `<div class="as-top-in"><div class="as-brand"><span class="as-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="6.4" cy="6" r="2.6" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M1.8 15.2c.5-2.7 2.3-4.3 4.6-4.3s4.1 1.6 4.6 4.3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M12.2 3.6a2.5 2.5 0 0 1 0 4.9M13.3 10.9c1.6.4 2.6 1.9 2.9 4.3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg></span>`
     +(MODE==='page'?(()=>{ const o=pgO(); return `<div><div class="as-bn">Active users Studio</div><div class="as-sub"><button class="as-backb" data-back="1">← All apps</button> · ${o?ic(o.a,16,'ail')+esc(o.a.store)+' · '+esc(o.a.acc):''}</div></div></div>`; })()
       :`<div><div class="as-bn">Active users Studio</div><div class="as-sub">All apps · ${A.length} apps${NOGA.length?' + '+NOGA.length+' without GA4':''}</div></div></div>`)
@@ -10993,7 +11040,7 @@ function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
     +`<label class="as-sel" for="as-cmp"><span>vs</span><select id="as-cmp"><option value="prev"${c0==='prev'?' selected':''}>Previous same days</option><option value="month"${c0==='month'?' selected':''}>Same days last month</option><option value="c"${c0==='c'?' selected':''}>Custom range…</option></select></label>`
     +`<div class="as-seg" id="as-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur==='USD'}">$</button></div></div></div>`
     +`<div class="as-custom" id="as-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="as-grp" id="as-cgA"${r0==='c'?'':' hidden'}>Range ${iv('as-cf1',W.f,'Range from')} – ${iv('as-ct1',W.t,'Range to')}</span>`
-    +`<span class="as-grp" id="as-cgB"${c0==='c'?'':' hidden'}>Compare ${iv('as-cf2',W.cf,'Compare from')} – ${iv('as-ct2',W.ct,'Compare to')}</span><span class="as-faint" id="as-cnote">Data ${fd(M.S)} to ${fd(M.E)}</span></div>`
+    +`<span class="as-grp" id="as-cgB"${c0==='c'?'':' hidden'}>Compare ${iv('as-cf2',W.cf,'Compare from')} – ${iv('as-ct2',W.ct,'Compare to')}</span><span class="as-faint" id="as-cnote">Data ${fd(pickMin())} to ${fd(M.E)}</span></div>`
     +`<div class="as-winline" id="as-winline">${winHtml()}</div>`; }
 function renderTop(){ const el=$('as-top'); if(!el) return;   // in place: the focused control keeps its focus
   const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
@@ -11001,7 +11048,7 @@ function renderTop(){ const el=$('as-top'); if(!el) return;   // in place: the f
   el.querySelectorAll('#as-cur button').forEach(b=>b.setAttribute('aria-pressed',String(cur===b.dataset.c)));
   const cm=$('as-cmp'); if(cm) cm.value=c0;
   const cr=$('as-customRow'); if(cr) cr.hidden=!(r0==='c'||c0==='c'); const ga=$('as-cgA'), gb=$('as-cgB'); if(ga) ga.hidden=r0!=='c'; if(gb) gb.hidden=c0!=='c';
-  [['as-cf1',W.f],['as-ct1',W.t],['as-cf2',W.cf],['as-ct2',W.ct]].forEach(([id,v])=>{ const x=$(id); if(x&&document.activeElement!==x){ x.min=M.S; x.max=M.E; x.value=v; } });
+  [['as-cf1',W.f],['as-ct1',W.t],['as-cf2',W.cf],['as-ct2',W.ct]].forEach(([id,v])=>{ const x=$(id); if(x&&document.activeElement!==x){ x.min=pickMin(); x.max=M.E; x.value=v; } });
   const wl=$('as-winline'); if(wl) wl.innerHTML=winHtml(); }
 TIPS.prov=()=>`<div class="as-tt">⏳ Not final</div><div>GA4 ~${M.actLate} din tak late data jodta hai — ${span(dAdd(M.settled,1),M.E)} ke numbers abhi badal sakte hain (installs kam, isliye old users thode upar).</div><div class="as-tsm" style="margin-top:4px">Faisla (Users vs normal, rang, status) sirf pakke din pe — engine ka hi niyam.</div>`;
 
@@ -11473,7 +11520,7 @@ function appParts(o,wBig,wIo){ const a=o.a, L=o.L, det=detOf(a), oth=det?actOthe
     tri:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Install week × day${a.tri.w.length?' · all '+a.tri.w.length+(a.tri.w.length===1?' week':' weeks'):''}</div><h2 style="font-size:15px">How many new users came back</h2><div class="as-hint">Har row = ek hafte ke installs${a.tri.w.length?' · saare hafte, '+fd(a.tri.w[a.tri.w.length-1].f)+' se aaj tak (naya upar)':''} · cell = us din kitne % wapas aaye (engine ka grid)</div></div></div><div class="as-cohw">${triGrid(a)}</div><div class="as-clg"><span class="as-k"><i style="background:linear-gradient(90deg,#13213a,#a78bfa);width:40px;height:9px"></i>fewer → more back</span><span class="as-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="as-k">· = abhi us din tak nahi pahunche</span>${a.tri.w.some(r=>r.part)?'<span class="as-k">½ = adhoora data (kuch din ka data nahi)</span>':''}${a.tri.w.some(r=>r.nd)?'<span class="as-k">No data = GA4 ne us hafte ka wapsi data nahi diya</span>':''}</div>${Object.keys(triRels(a)).length?'<div class="as-clg" style="padding-top:0;color:var(--purple)">📦 = new update. Line ke upar = naye version ke installs, neeche = purane version ke.</div>':''}</div>`,
     als:(als.length||OLa.length)?`<div><div class="as-chg-h"><div><div class="as-eyebrow">This app's alerts</div><h2 style="font-size:15px">What changed?</h2></div></div>${als.length?`<div class="as-cards">${als.map(cardH).join('')}</div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>'}${oldFold(OLa,'pgold','30–90 days')}</div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>',
     ver:verHtml(o),
-    ups:ups.length?`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">📦 Updates · since ${fd(M.S)}</div><h2 style="font-size:15px">Updates and their effect</h2></div></div><div class="as-upd">${ups.map(r=>{ const ba=befAft(a,r[0]); return `<div class="as-u"><span class="as-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="as-faint">${UPDW(r[2]).replace(/^[^—]+— /,'')}</span>${ba?`<span class="as-ba">Old users/day ${ba}</span>`:''}</div>`; }).join('')}</div></div>`:'',
+    ups:ups.length?`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">📦 Updates · all ${ups.length}${ups.length?' · since '+fd(ups[ups.length-1][0]):''}</div><h2 style="font-size:15px">Updates and their effect</h2></div></div><div class="as-upd">${ups.map(r=>{ const ba=befAft(a,r[0]); return `<div class="as-u"><span class="as-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="as-faint">${UPDW(r[2]).replace(/^[^—]+— /,'')}</span>${ba?`<span class="as-ba">Old users/day ${ba}</span>`:''}</div>`; }).join('')}</div></div>`:'',
     dt:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Day by day</div><h2 style="font-size:15px">Daily numbers · ${span(W.f,W.t)}</h2></div></div><div class="as-tw" style="max-height:360px">${dt}</div></div>` }; }
 const appHead=(o,sz)=>{ const a=o.a; return `<h3 class="as-ainb">${ic(a,sz||28)}<span class="as-aint">${esc(a.store)} <span class="as-acn">· ${esc(a.acc)}</span></span></h3><div class="as-l2">${chip(o.pill)}${alBadge(a)}${szH(a)}${insTag(o)}<span>Data till ${fd(M.E)}${W.t>a.settled?' · ⏳ '+fd(dAdd(a.settled,1))+'+ not final':''}</span></div>`; };
 function drawerHtml(){ const o=R[ST.drawer], a=o.a, ord=navOrder(), pos=ord.indexOf(a.i), w=chartW(), P0=appParts(o,w,w);
@@ -11503,14 +11550,24 @@ function footHtml(){ return `<summary>Ye number kaise bane? (chhoti si list)</su
 <li><b>Back next day / after 7 / 30 days</b> = un install dino ke naye users me se kitne us din wapas aaye, jinka din-N range me aaya aur pakka hai · <b>Sessions, time</b> = old users ke, per user per day · <b>Revenue, ads</b> = per active user per day.</li>
 <li><b>Colour</b> = app ka apna normal (range se pehle ke 4 hafte). Farak tabhi rangeen jab pakka ho (wapsi: kam se kam 60 installs; baaki: aam utaar-chadhaav ka 2 guna) aur 5% se bada.</li>
 <li><b>⏳ Not final</b> = GA4 ~${M.actLate} din tak late data jodta hai — ${span(dAdd(M.settled,1),M.E)} badal sakte hain. KPI cards unhe dikhate hain (⏳), faisle sirf pakke din pe.</li>
-<li>Range / compare upar ke chunav se (Uninstall aur Install value ke saath ek hi) · ₹ / $ poore dashboard ka · Data ${fd(M.S)} – ${fd(M.E)} (${M.n} days) · app ka naam hamesha account ke saath · ${NOGA.length} app ka GA4 nahi (N/A).</li></ul>`; }
+<li>Range / compare upar ke chunav se (Uninstall aur Install value ke saath ek hi) · ₹ / $ poore dashboard ka · Data ${fd(H0())} – ${fd(M.E)} (${dDiff(H0(),M.E)+1} days${histOk()||!(RAW.meta&&RAW.meta.hist)?'':' · '+fd(RAW.meta.S)+' se pehle ke din range chunne pe load hote'}) · app ka naam hamesha account ke saath · ${NOGA.length} app ka GA4 nahi (N/A).</li></ul>`; }
 
 /* ================= render ================= */
 // the whole Studio as HTML (the dashboard's actScreen puts it in the Active users screen); the parts that need the page
 // (widths, the open drawer, count-up) follow in afterMount
 let MODE='all', PGID=null;                               // the All-apps Studio or one app's full page
 const pgO=()=>R.find(o=>o.a.id===PGID)||null;
-function screen(note){ MODE='all'; PGID=null; prep(); spkN=0; for(const k in SPK) delete SPK[k]; for(const k in CH) delete CH[k]; compute(); font(); wire();
+// the date pickers' first day: the oldest day of data (on an app's page, that app's own first day)
+function pickMin(){ const h=H0(); if(MODE==='page'&&PGID){ const a=A.find(x=>x.id===PGID); if(a&&a.first>h) return a.first; } return h; }
+// the chosen range / compare needs days before the span: the top bar stays (change it any time), the numbers wait for
+// the older days' file — never a number from a cut range
+function waitHtml(note,mode,id){ MODE=mode; PGID=id; W=windows(); WAITING=true; font(); wire(); if(ST.drawer>=0) closeDrawer();
+  const d=needHist(); ensureHist(()=>actRerender());
+  const msg=HERR?`⚠️ ${fd(d)} se ${fd(dAdd(RAW.meta.S,-1))} tak ka purana data load nahi hua. <button class="as-btn" data-hretry="1">Try again</button>`
+    :`⏳ ${fd(d)} se ${fd(dAdd(RAW.meta.S,-1))} tak ka purana data load ho raha hai… <span class="as-faint">(purane din alag file me — sirf zarurat pe aate)</span>`;
+  setTimeout(()=>{ stick(); },0);
+  return `<div id="as-root"${mode==='page'?' class="as-pgroot"':''}><div class="as-top" id="as-top">${topHtml()}</div><div class="as-wrap" id="as-main">${note||''}<section class="as-panel as-hwait" id="as-hwait" role="status">${msg}</section></div></div>`; }
+function screen(note){ MODE='all'; PGID=null; prep(); if(needHist()) return waitHtml(note,'all',null); WAITING=false; spkN=0; for(const k in SPK) delete SPK[k]; for(const k in CH) delete CH[k]; compute(); font(); wire();
   setTimeout(afterMount,0);
   return `<div id="as-root"><div class="as-top" id="as-top">${topHtml()}</div>`
     +`<div class="as-wrap" id="as-main">${note||''}<section class="as-story" id="as-story" aria-label="Most important things">${storyHtml()}</section>`
@@ -11520,7 +11577,7 @@ function screen(note){ MODE='all'; PGID=null; prep(); spkN=0; for(const k in SPK
     +`<details class="as-foot" id="as-foot">${footHtml()}</details></div></div>`; }
 // one app's full page (the dashboard's actScreen with an app chosen): the Studio's top bar (the shared range) + the drawer's
 // content laid out full width → null when this app is not in the Studio's file (the page then shows the older page)
-function page(id){ prep(); if(!A.some(a=>a.id===id)) return null; MODE='page'; PGID=id; if(ST.drawer>=0) closeDrawer();
+function page(id){ prep(); if(!A.some(a=>a.id===id)) return null; if(needHist()) return waitHtml('','page',id); WAITING=false; MODE='page'; PGID=id; if(ST.drawer>=0) closeDrawer();
   spkN=0; for(const k in SPK) delete SPK[k]; for(const k in CH) delete CH[k]; compute(); font(); wire();
   setTimeout(afterMount,0);
   return `<div id="as-root" class="as-pgroot"><div class="as-top" id="as-top">${topHtml()}</div><div class="as-wrap" id="as-main"><div class="as-pg" id="as-pg">${pageBody(pgO())}</div>`
@@ -11538,7 +11595,7 @@ function afterMount(){ const root=$('as-root'); if(!root) return; layer(); stick
   countUp();
   if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('as-drawer'); if(d&&!d.classList.contains('as-on')){ d.classList.add('as-on'); d.setAttribute('aria-hidden','false'); $('as-scrim').classList.add('as-on'); lock(true); } } } }
 // a Studio-only change (range, compare, a key): every section again, in place — the header keeps its focus
-function renderAll(){ const root=$('as-root'); if(!root){ actRerender(); return; }
+function renderAll(){ const root=$('as-root'); if(!root||WAITING||needHist()){ actRerender(); return; }
   const m=$('as-main'); if(m&&!RM&&!REFRESH_SILENT){ m.classList.remove('as-fresh'); void m.offsetWidth; m.classList.add('as-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('as-fresh'),700); }   // never on a silent background refresh — only a user-driven change earns the entrance flash
   spkN=0; for(const k in SPK) delete SPK[k]; for(const k in CH) delete CH[k]; compute(); renderTop();
   const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
@@ -11604,6 +11661,7 @@ function wire(){ if(WIRED) return; WIRED=true;
     if(MODE==='page'){ const pg=$('as-pg'); if(pg){ PGW=pg.clientWidth||PGW; pg.innerHTML=pageBody(pgO()); } } else renderTl(); if(ST.drawer>=0) renderDrawer(true); },180); }); }
 function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+dir+ord.length)%ord.length; ST.drawer=ord[q]; ST.did=A[ST.drawer].id; detLoad(A[ST.drawer]); renderDrawer(); const d=$('as-drawer'); if(d) d.scrollTop=0; }
 function onClick(e){ const t=e.target; if(!inStudio(t)) return;
+  if(t.closest('[data-hretry]')){ HERR=false; HFOR=null; actRerender(); return; }
   if(t.closest('[data-verall]')){ ST.verAll=!ST.verAll; if(MODE==='page'&&!t.closest('#as-layer')){ const pg=$('as-pg'); if(pg) pg.innerHTML=pageBody(pgO()); } if(ST.drawer>=0) renderDrawer(true); return; }
   const fp=t.closest('[data-full]'); if(fp){ e.preventDefault(); fullPage(fp.getAttribute('data-full')); return; }
   if(t.closest('[data-back]')){ e.preventDefault(); hideTip(); try{ actBack(); }catch(err){} return; }
@@ -11639,7 +11697,7 @@ return {ptr, ensure, retry, screen, page, hide, closeDrawer, openDrawer,
   // checks / tests (read-only views of the current state)
   _:{A:()=>A, R:()=>R, W:()=>W, PT:()=>PT, PC:()=>PC, PD:()=>PD, ST, ALERTS:()=>ALERTS, NOGA:()=>NOGA, M:()=>M, MODE:()=>MODE, page:()=>MODE==='page'?pageBody(pgO()):'', lens, cnt, perU, coh, pf, ix, dOf, windows,
      story:storyHtml, kpis:kpisHtml, kpis2:kpis2Html, ledger:ledgerHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml, top:topHtml,
-     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, fail:()=>{ RAW=null; ERR=true; VER=(ptr()||{}).v||'test'; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage, ageOf, fitLabels, TW,
+     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, loadHist:j=>{ HRAW=j||null; HERR=j===null; HLOAD=false; HFOR=j===null?VER:null; SIG=null; }, histOk, needHist, pickMin, fail:()=>{ RAW=null; ERR=true; VER=(ptr()||{}).v||'test'; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage, ageOf, fitLabels, TW,
      hon, honHtml, evOf, adRate, verRows, verHtml, oldsOf, detOf, HS:()=>HS}};
 })();
 
@@ -13211,14 +13269,14 @@ function winHtml(){ const im=immLine();
     +`<span>🎯 Target: money back in <b>${H} days</b></span>${kd}<span class="vs-faint">Install-day data till ${fd(M.settled)} · Google Ads till ${fd(M.spendTill)}<span class="vs-kb"> · ⌨ <span class="vs-kbd">7</span> <span class="vs-kbd">1</span> <span class="vs-kbd">3</span> <span class="vs-kbd">6</span></span></span>`; }
 function topHtml(){ const r0=rangeOf(), c0=cmpOf(), cur=curView();
   const rb=(v,l,k,t)=>`<button data-r="${v}" aria-pressed="${r0===v}" title="${t}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
-  const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${wS(0)}" max="${wE(NW-1)}">`;
+  const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${wE(NW-1)}">`;
   return `<div class="vs-top-in"><div class="vs-brand"><span class="vs-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="4" y="1.5" width="10" height="15" rx="2.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 5v8.2M11.2 6.6c-.4-.7-1.2-1.1-2.2-1.1-1.3 0-2.2.7-2.2 1.7 0 2.3 4.5 1.2 4.5 3.6 0 1-1 1.8-2.3 1.8-1.1 0-2-.5-2.4-1.3" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
     +`<div><div class="vs-bn">Value Studio</div><div class="vs-sub">${MODE==='p'&&AI[PGID]?ic(AI[PGID],16,'ail')+esc(AI[PGID].store)+' · '+esc(AI[PGID].acc):'All apps · '+A.length+' apps'+(NOGA.length?' + '+NOGA.length+' without GA4':'')}</div></div></div>`
     +`<div class="vs-ctrls"><div class="vs-seg" id="vs-rng" role="group" aria-label="Install weeks">${rb('7','7 days','7','1 install week')}${rb('14','14','1','2 install weeks')}${rb('30','30','3','4 install weeks')}${rb('60','60','6','8 install weeks')}${rb('c','Custom','','Custom install weeks')}</div>`
     +`<label class="vs-sel" for="vs-cmp"><span>vs</span><select id="vs-cmp"><option value="prev"${c0==='prev'?' selected':''}>Previous same weeks</option><option value="month"${c0==='month'?' selected':''}>4 weeks before (last month)</option><option value="c"${c0==='c'?' selected':''}>Custom weeks…</option></select></label>`
     +`<div class="vs-seg" id="vs-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur!=='INR'}">$</button></div></div></div>`
     +`<div class="vs-custom" id="vs-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="vs-grp" id="vs-cgA"${r0==='c'?'':' hidden'}>Install weeks ${iv('vs-cf1',wS(W.i0),'Range from')} – ${iv('vs-ct1',wE(W.i1),'Range to')}</span>`
-    +`<span class="vs-grp" id="vs-cgB"${c0==='c'?'':' hidden'}>Compare ${iv('vs-cf2',wS(W.c0),'Compare from')} – ${iv('vs-ct2',wE(W.c1),'Compare to')}</span><span class="vs-faint" id="vs-cnote">Full install weeks (Mon–Sun) · data ${fd(wS(0))} – ${fd(wE(NW-1))}</span></div>`
+    +`<span class="vs-grp" id="vs-cgB"${c0==='c'?'':' hidden'}>Compare ${iv('vs-cf2',wS(W.c0),'Compare from')} – ${iv('vs-ct2',wE(W.c1),'Compare to')}</span><span class="vs-faint" id="vs-cnote">Full install weeks (Mon–Sun) · data ${fd(pickMin())} – ${fd(wE(NW-1))}</span></div>`
     +`<div class="vs-winline" id="vs-winline">${winHtml()}</div>`; }
 function renderTop(){ const el=$('vs-top'); if(!el) return;   // in place: the focused control keeps its focus
   const r0=rangeOf(), c0=cmpOf(), cur=curView();
@@ -13226,7 +13284,7 @@ function renderTop(){ const el=$('vs-top'); if(!el) return;   // in place: the f
   el.querySelectorAll('#vs-cur button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c==='INR'?cur==='INR':cur!=='INR')));
   const cm=$('vs-cmp'); if(cm) cm.value=c0;
   const cr=$('vs-customRow'); if(cr) cr.hidden=!(r0==='c'||c0==='c'); const ga=$('vs-cgA'), gb=$('vs-cgB'); if(ga) ga.hidden=r0!=='c'; if(gb) gb.hidden=c0!=='c';
-  [['vs-cf1',wS(W.i0)],['vs-ct1',wE(W.i1)],['vs-cf2',wS(W.c0)],['vs-ct2',wE(W.c1)]].forEach(([id,v])=>{ const x=$(id); if(x&&document.activeElement!==x){ x.min=wS(0); x.max=wE(NW-1); x.value=v; } });
+  [['vs-cf1',wS(W.i0)],['vs-ct1',wE(W.i1)],['vs-cf2',wS(W.c0)],['vs-ct2',wE(W.c1)]].forEach(([id,v])=>{ const x=$(id); if(x&&document.activeElement!==x){ x.min=pickMin(); x.max=wE(NW-1); x.value=v; } });
   const wl=$('vs-winline'); if(wl) wl.innerHTML=winHtml(); }
 
 /* ================= story strip ================= */
@@ -13754,6 +13812,9 @@ function footHtml(){ return `<summary>How these numbers are made (chhoti si list
 // the whole Studio as HTML (the dashboard's valScreen puts it in the Install value screen); the parts that need the page
 // (widths, the open drawer, count-up) follow in afterMount
 let MODE='a', PGID=null;   // 'a' All apps · 'p' one app's full page (PGID)
+// the date pickers' first day: the oldest install week any app has (the week grid reaches it — no trim); on an app's page,
+// that app's own first week
+function pickMin(){ const a=MODE==='p'&&PGID?AI[PGID]:null; return wS(a&&a.first>0?a.first:0); }
 function has(id){ try{ if(!RAW) return false; prep(); return !!AI[id]; }catch(e){ return false; } }
 function page(id,note){ prep(); PEND=pendRows(); spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire(); MODE='p'; PGID=id; if(ST.drawer>=0) closeDrawer();
   const a=AI[id]; if(!a) throw new Error('app'); const o=R[a.i];

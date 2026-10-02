@@ -50,6 +50,8 @@ vm.createContext(ctx);
 try { vm.runInContext(fs.readFileSync(scriptPath, 'utf8'), ctx, { filename: 'index.js' }); } catch (e) { errors.push('TOPLEVEL ' + e.message); }
 const run = code => vm.runInContext(code, ctx);
 ctx.__DASH = J('dashboard.json'); ctx.__STUDIO = J('active_studio.json'); ctx.__ACTFILES = J('active_files.json');
+ctx.__HIST = fs.existsSync(path.join(dir, 'active_studio_old.json')) ? J('active_studio_old.json') : null;
+ctx.__FULL = fs.existsSync(path.join(dir, 'active_studio_full.json')) ? J('active_studio_full.json') : null;
 const out = {};
 function get(name, code) { try { out[name] = run(code); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + (e.stack.match(/at [^\n]*/g) || []).slice(0, 3).join(' < ')); } }
 const RESET = `KWIN='7'; KWCUSTOM={from:'',to:''}; KWERR=''; KCMP='prev'; KCMPCUSTOM={from:'',to:''}; KCMPERR=''; APP=''; ACTAPP=''; CURVIEW='USD'; ACTJUMP=''; ACTIMPJUMP='';`;
@@ -131,6 +133,23 @@ get('tri', `(()=>{ ${RESET} const r={}, A=AS._.A(); const a=A.slice().sort((x,y)
     r.o1=o1.f; r.o2=o2.f; r.nd=ndw.f; r.tipNd=__text(AS._.TIPS.trind(a.i,ndw.f)); r.tipRel=__text(AS._.TIPS.trel(a.i,o2.f));
   } finally{ a.rel=keepRel; keepW.forEach((w,j)=>Object.assign(W[j],w)); }
   ${RESET} actScreen(); __flush(); return JSON.stringify(r); })()`);
+// ── no trim: a custom range / compare before the span — the older days' file, only then; the same numbers as one file
+// reaching back that far (owner, 2 Oct) ─────────────────────────────────────────────────────────────────────────────
+get('hist', `(()=>{ ${RESET} const r={}; AS._.load(__STUDIO); AS._.loadHist(undefined);
+  const M0=__STUDIO.meta, add=(d,n)=>new Date(Date.parse(d+'T00:00:00Z')+n*864e5).toISOString().slice(0,10);
+  r.H0=M0.H0; r.S=M0.S; r.histName=M0.hist;
+  const h7=actScreen(); __flush(); r.defNeed=AS._.needHist(); r.pickMin=AS._.pickMin(); r.inputMin=(h7.match(/id="as-cf1"[^>]*min="([^"]*)"/)||[])[1]||null;
+  const f=add(M0.H0,70), t=add(f,29); KWIN='custom'; KWCUSTOM={from:f,to:t}; KCMP='prev';
+  r.need=AS._.needHist(); const hw=actScreen(); __flush(); r.wait=__text((hw.match(/<section class="as-panel as-hwait"[\\s\\S]*?<\\/section>/)||[''])[0]); r.waitTop=hw.indexOf('id="as-top"')>=0;
+  r.noNumbers=hw.indexOf('id="as-kpis"')<0;
+  AS._.loadHist(__HIST); const h1=actScreen(); __flush(); r.after=h1.indexOf('id="as-hwait"')<0&&h1.indexOf('id="as-kpis"')>=0; r.M={S:AS._.M().S,n:AS._.M().n};
+  const rows=()=>JSON.stringify({W:AS._.W(), R:AS._.R().map(${ROWS})});
+  r.merged=rows(); r.mergedHtml=__text(AS._.kpis());
+  AS._.load(__FULL); actScreen(); __flush(); r.full=rows(); r.fullHtml=__text(AS._.kpis()); r.fullNeed=AS._.needHist();
+  AS._.load(__STUDIO); AS._.loadHist(null); const he=actScreen(); __flush(); r.err=__text((he.match(/<section class="as-panel as-hwait"[\\s\\S]*?<\\/section>/)||[''])[0]); r.errNoNumbers=he.indexOf('id="as-kpis"')<0;
+  ${RESET} AS._.load(__STUDIO); AS._.loadHist(__HIST); const A=AS._.A(), late=A.slice().sort((x,y)=>x.first<y.first?1:-1)[0], row=actRows().find(x=>x.app_id===late.id);
+  APP=row.app; ACTAPP=late.id; const hp=actScreen(); __flush(); r.appFirst=late.first; r.appMin=(hp.match(/id="as-cf1"[^>]*min="([^"]*)"/)||[])[1]||null;
+  ${RESET} AS._.load(__STUDIO); AS._.loadHist(undefined); actScreen(); __flush(); return JSON.stringify(r); })()`);
 // ── every word the Studio shows (all ranges, the alert table, every drawer, the page, every tooltip) ────────────────
 get('texts', `(()=>{ const T=[]; for(const k of ['7','14','30','60']){ for(const c of ['prev','month']){ ${RESET} KWIN=k; KCMP=c; T.push(__text(__studio(actScreen()))); __flush(); } }
   ${RESET} actScreen(); __flush(); AS._.ST.chgView='table'; T.push(__text(AS._.chg())); AS._.ST.chgView='cards';

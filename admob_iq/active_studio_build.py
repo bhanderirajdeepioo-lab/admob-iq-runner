@@ -17,7 +17,14 @@ the app drawer) is worked out in the browser from it, for any range / compare th
     updates up to the span's end (📦, with the engine's verdict level), size class (badi / madhyam / chhoti: AdMob earnings + Google Ads spend a day), the
     engine's fast-change runs (steep) and the dashboard summary row's alert counts;
   * every open Active users alert, the ones closed in the last 7 days and the engine's installs / ad-price info rows;
-  * the apps without GA4 data, and meta (the span, today, the build time, fx, the late / lag days).
+  * the apps without GA4 data, and meta (the span, today, the build time, fx, the late / lag days, H0 = the oldest day
+    any app's data has, hist = the older days' file).
+
+The days BEFORE the span (back to H0: the owner, 2 Oct, "no trim" — a custom range / compare reaches the whole history)
+go to a second file, site/active_studio_old.json.gz = {v, S: H0, n: its days, gen, apps: {app id: the same compact
+arrays + pre (the 31 days of installs before H0) + stp (the fast-change runs before the span)}} — sliced from the very
+same per-app series, so old + span = one series, cell for cell. The page loads it only when a chosen range or compare
+needs a day before the span (the first load stays the span's small file).
 
 It reads what the Uninstall step (Active users inside it) wrote this build — active_<key>.json.gz, the All-apps daily
 file (DATA.active.portfolio) and uninstall.json.gz's lag — and the dashboard (in memory — exactly what dashboard.json.gz
@@ -45,6 +52,7 @@ from datetime import date, timedelta
 from .db import write_json_gz_stable
 
 FILE = "active_studio.json.gz"
+HFILE = "active_studio_old.json.gz"   # the days before the span (loaded by the page only when a range needs them)
 V = 1                 # the file's format (the page refuses another)
 SPAN = 180            # days per app: 60-day range + 60-day compare + its 28-day normal + 30 install lags
 BAND_DAYS = 70        # engine normal band kept only for the newest days (trend sparks, drawer chart)
@@ -323,6 +331,14 @@ def build_data(dash, PF, load, accn, appn, lag=2, counts=None):
     if not apps:
         return None
     idx_of = {x['id']: i for i, x in enumerate(apps)}
+    H0 = min([S] + [x['_g0'] for x in apps])         # the oldest day any app's data has
+    old = {}
+    for x in apps:
+        x.pop('_g0')
+        mk = x.pop('_old')
+        if diff(H0, S) > 0:
+            c, pre, stp = mk(H0)
+            old[x['id']] = dict({k: enc(v) for k, v in c.items()}, pre=enc(pre), stp=stp)
 
     # ---- alerts: open (DATA), recently closed, and the compact info rows (installs-only changes, ad price) -----------
     SEV = {'warning': 'bigda', 'watch': 'dhyan', 'good': 'behtar'}
@@ -372,8 +388,10 @@ def build_data(dash, PF, load, accn, appn, lag=2, counts=None):
 
     meta = {'S': S, 'E': E, 'n': SPAN, 'today': today, 'gen': gen, 'fx': round(fx, 4), 'actLate': act_late, 'lag': lag,
             'settled': SET, 'apps': len(apps), 'LG': LG, 'bandDays': BAND_DAYS, 'triCols': TRI_COLS,
-            'pfSettled': (AC.get('portfolio') or {}).get('settled_till'), 'mk': ((AC.get('market') or {}).get('latest'))}
-    return {'meta': meta, 'apps': apps, 'alerts': alerts, 'noga': noga}
+            'pfSettled': (AC.get('portfolio') or {}).get('settled_till'), 'mk': ((AC.get('market') or {}).get('latest')),
+            'H0': H0, 'hist': HFILE if diff(H0, S) > 0 else None}
+    hist = ({'v': V, 'S': H0, 'n': diff(H0, S), 'gen': gen, 'apps': old} if diff(H0, S) > 0 else None)
+    return {'meta': meta, 'apps': apps, 'alerts': alerts, 'noga': noga, '_hist': hist}
 
 
 def _app(r, names, size_of, paisa, pf_by, load, E, S, SET):
@@ -461,24 +479,38 @@ def _app(r, names, size_of, paisa, pf_by, load, E, S, SET):
             nz[key].append(None if sg is None else int(round(sg * 1e4)))
 
     # ---- the span the page gets
-    def sl(arr, f=None):
+    def sl(arr, f=None, lo=None, hi=None):
         out = []
-        for i in range(i0s, iE + 1):
+        for i in range(i0s if lo is None else lo, (iE if hi is None else hi) + 1):
             v = arr[i] if 0 <= i < H else None
             out.append(None if v is None else (f(v, i) if f else int(round(v))))
         return out
 
-    cols = {
-        'a1': sl(X['a1']), 'nw': sl(X['nw']), 'rt': sl(X['rt']), 'y': sl(X['y']),
-        'd1': sl(X['d1']), 'd7': sl(X['d7']), 'd30': sl(X['d30']),
-        'rv': sl(X['rv'], lambda v, i: int(round(v * 1000))),
-        'u': sl(X['u']),
-        'su': sl(X['s'], lambda v, i: int(round(v / X['u'][i] * 1000)) if X['u'][i] else None),
-        'tu': sl(X['t'], lambda v, i: int(round(v / X['u'][i])) if X['u'][i] else None),
-        'im': sl(X['imp'], lambda v, i: int(round(v / X['a1'][i] * 1000)) if X['a1'][i] else None),
-    }
-    # nw for the 30 lag days before the span (the oldest compare window's installs part)
-    pre = [None if (i < 0 or X['nw'][i] is None) else int(round(X['nw'][i])) for i in range(i0s - 31, i0s)]
+    def cols_of(lo=None, hi=None):
+        return {
+            'a1': sl(X['a1'], None, lo, hi), 'nw': sl(X['nw'], None, lo, hi), 'rt': sl(X['rt'], None, lo, hi),
+            'y': sl(X['y'], None, lo, hi), 'd1': sl(X['d1'], None, lo, hi), 'd7': sl(X['d7'], None, lo, hi),
+            'd30': sl(X['d30'], None, lo, hi),
+            'rv': sl(X['rv'], lambda v, i: int(round(v * 1000)), lo, hi),
+            'u': sl(X['u'], None, lo, hi),
+            'su': sl(X['s'], lambda v, i: int(round(v / X['u'][i] * 1000)) if X['u'][i] else None, lo, hi),
+            'tu': sl(X['t'], lambda v, i: int(round(v / X['u'][i])) if X['u'][i] else None, lo, hi),
+            'im': sl(X['imp'], lambda v, i: int(round(v / X['a1'][i] * 1000)) if X['a1'][i] else None, lo, hi),
+        }
+
+    def pre_of(i0):          # nw for the 31 lag days before day i0 (the oldest compare window's installs part)
+        return [None if (i < 0 or i >= H or X['nw'][i] is None) else int(round(X['nw'][i])) for i in range(i0 - 31, i0)]
+
+    cols = cols_of()
+    pre = pre_of(i0s)
+
+    def older(h0):
+        """the days h0 .. S−1 (the older days' file): the same arrays, the 31 days of installs before h0, the
+        fast-change runs before the span"""
+        ih = diff(g0, h0)
+        stp = [[max(f0, h0), min(t0, add(S, -1))] for f0, t0 in ((af.get('steep') or {}).get('ret_dau') or [])
+               if f0 < S and t0 >= h0]
+        return cols_of(ih, i0s - 1), pre_of(ih), stp
     bands = af.get('bands', {}).get('ret_dau') or {}
     bo = (diff(g0, ast) - i0s)
     bnd = {}
@@ -539,18 +571,19 @@ def _app(r, names, size_of, paisa, pf_by, load, E, S, SET):
         'pkg': '', 'K': X['K'], 'sh': enc([int(round(x * 1e5)) for x in (X['sh'] or [])]),
         'nz': nz, 'u1': (T.get('d1') or {}).get('usual'), 'u7': (T.get('d7') or {}).get('usual'),
         'tst': (T.get('ret_dau') or {}).get('st'), 'steep': st_rng,
-        'raw': cols, 'pre': enc(pre), 'bnd': bnd, 'rel': rel,
+        'raw': cols, 'pre': enc(pre), 'bnd': bnd, 'rel': rel, '_g0': g0, '_old': older,
         'tri': {'w': tw, 'ref': enc(tref)},
         'al': (r.get('alerts') or {}),
     }
 
 
 # ---- the build step -----------------------------------------------------------------------------------------------
-def _remove(out_dir):
-    try:
-        os.remove(os.path.join(out_dir, FILE))
-    except OSError:
-        pass
+def _remove(out_dir, which=(FILE, HFILE)):
+    for f in which:
+        try:
+            os.remove(os.path.join(out_dir, f))
+        except OSError:
+            pass
 
 
 def _lag(dashboard, out_dir):
@@ -585,8 +618,17 @@ def run(dashboard, out_dir, cfg_dir, s=None):
                               _lag(dashboard, out_dir), counts)
         if data is None:
             _remove(out_dir)
-            LINE = "active studio: apps 0, skipped %d, alerts 0, no ga4 0, kb 0" % counts.get("skipped", 0)
+            LINE = "active studio: apps 0, skipped %d, alerts 0, no ga4 0, kb 0, older days kb 0" % counts.get("skipped", 0)
             return []
+        hist = data.pop("_hist", None)
+        hgz = 0
+        if hist is not None:                   # the days before the span: their own file (a size cap of its own — past
+            hraw = json.dumps(hist, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+            hgz = len(gzip.compress(hraw, 9, mtime=0))     # it the span's file stands alone: ranges stop at the span)
+            if hgz > MAX_GZ:
+                hist, hgz = None, 0
+        if hist is None:
+            data["meta"].update(H0=data["meta"]["S"], hist=None)
         body = dict(data, v=V)
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         gz = len(gzip.compress(raw, 9, mtime=0))
@@ -595,10 +637,15 @@ def run(dashboard, out_dir, cfg_dir, s=None):
             LINE = "active studio: too big (%d kb), not written" % (gz // 1024)
             return []
         write_json_gz_stable(os.path.join(out_dir, FILE), body)
+        if hist is not None:
+            write_json_gz_stable(os.path.join(out_dir, HFILE), hist)
+        else:
+            _remove(out_dir, (HFILE,))
         act["studio"] = {"file": FILE, "v": hashlib.sha1(raw).hexdigest()[:12]}
-        LINE = ("active studio: apps %d, skipped %d, alerts %d, no ga4 %d, kb %d"
-                % (len(data["apps"]), counts.get("skipped", 0), len(data["alerts"]), len(data["noga"]), gz // 1024))
-        return [FILE]
+        LINE = ("active studio: apps %d, skipped %d, alerts %d, no ga4 %d, kb %d, older days kb %d"
+                % (len(data["apps"]), counts.get("skipped", 0), len(data["alerts"]), len(data["noga"]), gz // 1024,
+                   hgz // 1024))
+        return [FILE, HFILE] if hist is not None else [FILE]
     except Exception as e:
         act.pop("studio", None)
         _remove(out_dir)

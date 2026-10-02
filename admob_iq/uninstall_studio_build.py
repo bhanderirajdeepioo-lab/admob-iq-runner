@@ -18,7 +18,13 @@ the app drawer) is worked out in the browser from it, for any range / compare th
     updates up to the span's end (📦, with the engine's verdict level — the grid's 📦 lines reach its oldest week), size class (badi / madhyam / chhoti: AdMob earnings + Google Ads spend a day),
     the engine's own verdict kind and the dashboard summary row's alert counts;
   * every open uninstall alert (with its alert time / Badlaav shuru / data window) + the recently recovered ones;
-  * the apps without GA4 data, and meta (the span, today, the build time, fx, the late / lag days).
+  * the apps without GA4 data, and meta (the span, today, the build time, fx, the late / lag days, H0 = the oldest day
+    any app's history has, hist = the older days' file).
+
+The days BEFORE the span (back to H0: the owner, 2 Oct, "no trim" — a custom range / compare reaches the whole history)
+go to a second file, site/uninstall_studio_old.json.gz = {v, S: H0, n: its days, gen, apps: {app id: the same compact
+arrays}} — made by the very same per-day code, so old + span = one series, cell for cell. The page loads it only when a
+chosen range or compare needs a day before the span (the first load stays the span's small file).
 
 It reads what the Uninstall step wrote this build (uninstall.json.gz, uninstall_c_<key>.json.gz, active_<key>.json.gz)
 and the dashboard (in memory — exactly what dashboard.json.gz will hold) — the same inputs the approved demo generator
@@ -45,6 +51,7 @@ from datetime import date, timedelta
 from .db import write_json_gz_stable
 
 FILE = "uninstall_studio.json.gz"
+HFILE = "uninstall_studio_old.json.gz"   # the days before the span (loaded by the page only when a range needs them)
 V = 1                 # the file's format (the page refuses another)
 SPAN = 156            # days per app: 60-day range + 60-day compare + 35 days of 'normal' before the compare
 COH_COLS = [0, 1, 3, 7, 14, 30, 60, 90]
@@ -220,6 +227,7 @@ def build_data(dash, U, load, accn, appn, counts=None):
     E = min(a['data_till'] for a in ga)
     S = add(E, -(SPAN - 1))
     settled_min = min(a.get('settled_till') or E for a in ga)
+    H0 = min([S] + [_first(a) for a in ga])      # the oldest day any app's history has (its launch / data start)
 
     UNS = dash.get('uninstall') or {}
     srow = {x['app_id']: x for x in UNS.get('apps') or [] if isinstance(x, dict) and x.get('app_id')}
@@ -229,7 +237,7 @@ def build_data(dash, U, load, accn, appn, counts=None):
     skipped = 0
     for a in sorted(ga, key=lambda z: names.get(z['app_id'], {}).get('name', z['app'])):
         try:
-            apps.append(_app(a, names, size_of, paisa, srow, load, E, S))
+            apps.append(_app(a, names, size_of, paisa, srow, load, E, S, H0))
         except Exception:
             skipped += 1                  # this app's files missing / broken: left out (counted), never the Studio
     counts.update(apps=len(apps), skipped=skipped)
@@ -342,6 +350,7 @@ def build_data(dash, U, load, accn, appn, counts=None):
         if g is not None:
             gone['apps'][ap['id']] = g
     counts.update(gt=len(gone['apps']))
+    old = {}
     for ap in apps:
         cols = ap.pop('raw')
         for k, arr in cols.items():
@@ -349,19 +358,36 @@ def build_data(dash, U, load, accn, appn, counts=None):
             if dec(e) != arr:
                 raise ValueError('enc')
             ap[k] = e
+        oc = ap.pop('_old')
+        if diff(H0, S) > 0:
+            old[ap['id']] = {}
+            for k, arr in oc.items():
+                e = enc(arr)
+                if dec(e) != arr or len(arr) != diff(H0, S):
+                    raise ValueError('enc')
+                old[ap['id']][k] = e
     for al in alerts:
         al.pop('id', None)
 
     meta = {
         'cohCols': COH_COLS, 'S': S, 'E': E, 'n': SPAN, 'today': today, 'gen': gen, 'fx': round(fx, 4), 'late': late,
         'lag': lag, 'actLate': act_late, 'settled': settled_min, 'apps': len(apps), 'noga': len(noga),
-        'portfolioSettled': ACT.get('settled_till_min'),
+        'portfolioSettled': ACT.get('settled_till_min'), 'H0': H0, 'hist': HFILE if diff(H0, S) > 0 else None,
     }
-    return {'meta': meta, 'apps': apps, 'alerts': alerts, 'noga': noga, 'gt': gone}
+    hist = ({'v': V, 'S': H0, 'n': diff(H0, S), 'gen': gen, 'apps': old} if diff(H0, S) > 0 else None)
+    return {'meta': meta, 'apps': apps, 'alerts': alerts, 'noga': noga, 'gt': gone, '_hist': hist}
 
 
-def _app(a, names, size_of, paisa, srow, load, E, S):
-    """One app's Studio entry (its compact arrays still raw: 'raw')."""
+def _first(a):
+    """The app's first counted day: its launch (test installs before it never count), else its history's start."""
+    L = a.get('launch') or {}
+    return L['day'] if (L.get('hidden') and L.get('day')) else (a.get('history_start') or a['daily']['start'])
+
+
+def _app(a, names, size_of, paisa, srow, load, E, S, H0=None):
+    """One app's Studio entry (its compact arrays still raw: 'raw' = the span's days, '_old' = the days H0 .. S−1,
+    by the same per-day code)."""
+    H0 = H0 or S
     aid = a['app_id']
     nmo = names.get(aid) or {'name': a['app'], 'store': a['app'], 'acct': '', 'acc_id': ''}
     Dy = a['daily']
@@ -376,8 +402,7 @@ def _app(a, names, size_of, paisa, srow, load, E, S):
         v = arr[i]
         return v if num(v) else None
 
-    L = a.get('launch') or {}
-    first = L['day'] if (L.get('hidden') and L.get('day')) else (a.get('history_start') or st)
+    first = _first(a)
 
     # cohort file → gone-by-day-N per install day
     c = load('uninstall_c_%s.json.gz' % a['key'])
@@ -405,8 +430,9 @@ def _app(a, names, size_of, paisa, srow, load, E, S):
 
     cols = {k: [] for k in ('nw', 'un', 'a28', 'md', 'lo', 'hi', 'g0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'r1',
                             'rv', 'a1')}
-    for j in range(SPAN):
-        day = add(S, j)
+    nold = diff(H0, S)
+    for j in range(nold + SPAN):                    # H0 .. E: the older days first, then the span
+        day = add(H0, j)
         i = diff(st, day)
         nw, un, d_, rt = g('new', i), g('un', i), None, g('rate', i)
         if den is not None and 0 <= i < len(den) and num(den[i]):
@@ -515,7 +541,7 @@ def _app(a, names, size_of, paisa, srow, load, E, S):
         'first': first, 'settled': a.get('settled_till') or E, 'aset': aset, 'retFrom': ret_from,
         'stage': a.get('stage'), 'ready': bool(sr.get('ready', True)), 'vk': vk, 'pkg': a.get('package') or '',
         'ac': sr.get('alerts') or {},
-        'raw': cols, 'rel': rel, '_gt': gt,
+        'raw': {k: v[nold:] for k, v in cols.items()}, '_old': {k: v[:nold] for k, v in cols.items()}, 'rel': rel, '_gt': gt,
         'coh': {'ref': ref, 'w': [[w['w'], w['n'], enc(w['v']), int(''.join(map(str, w['p'])) or '0', 2), w['f'], w['t']]
                                   if w['part'] else [w['w'], w['n'], enc(w['v']), int(''.join(map(str, w['p'])) or '0', 2)]
                                   for w in weeks]},
@@ -621,11 +647,12 @@ def _gtable(a, c):
 
 
 # ---- the build step -----------------------------------------------------------------------------------------------
-def _remove(out_dir):
-    try:
-        os.remove(os.path.join(out_dir, FILE))
-    except OSError:
-        pass
+def _remove(out_dir, which=(FILE, HFILE)):
+    for f in which:
+        try:
+            os.remove(os.path.join(out_dir, f))
+        except OSError:
+            pass
 
 
 def run(dashboard, out_dir, cfg_dir, s=None):
@@ -646,8 +673,17 @@ def run(dashboard, out_dir, cfg_dir, s=None):
         data = build_data(dashboard, U, lambda n: _gz(os.path.join(out_dir, n)), accn, appn, counts)
         if data is None:
             _remove(out_dir)
-            LINE = "uninstall studio: apps 0, skipped %d, alerts 0, no ga4 0, kb 0" % counts.get("skipped", 0)
+            LINE = "uninstall studio: apps 0, skipped %d, alerts 0, no ga4 0, kb 0, older days kb 0" % counts.get("skipped", 0)
             return []
+        hist = data.pop("_hist", None)
+        hgz = 0
+        if hist is not None:                   # the days before the span: their own file (a size cap of its own — past
+            hraw = json.dumps(hist, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+            hgz = len(gzip.compress(hraw, 9, mtime=0))     # it the span's file stands alone: ranges stop at the span)
+            if hgz > MAX_GZ:
+                hist, hgz = None, 0
+        if hist is None:
+            data["meta"].update(H0=data["meta"]["S"], hist=None)
         body = dict(data, v=V)
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         gz = len(gzip.compress(raw, 9, mtime=0))
@@ -656,10 +692,15 @@ def run(dashboard, out_dir, cfg_dir, s=None):
             LINE = "uninstall studio: too big (%d kb), not written" % (gz // 1024)
             return []
         write_json_gz_stable(os.path.join(out_dir, FILE), body)
+        if hist is not None:
+            write_json_gz_stable(os.path.join(out_dir, HFILE), hist)
+        else:
+            _remove(out_dir, (HFILE,))
         uni["studio"] = {"file": FILE, "v": hashlib.sha1(raw).hexdigest()[:12]}
-        LINE = ("uninstall studio: apps %d, skipped %d, alerts %d, no ga4 %d, kb %d"
-                % (len(data["apps"]), counts.get("skipped", 0), len(data["alerts"]), len(data["noga"]), gz // 1024))
-        return [FILE]
+        LINE = ("uninstall studio: apps %d, skipped %d, alerts %d, no ga4 %d, kb %d, older days kb %d"
+                % (len(data["apps"]), counts.get("skipped", 0), len(data["alerts"]), len(data["noga"]), gz // 1024,
+                   hgz // 1024))
+        return [FILE, HFILE] if hist is not None else [FILE]
     except Exception as e:
         uni.pop("studio", None)
         _remove(out_dir)

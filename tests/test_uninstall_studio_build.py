@@ -27,7 +27,7 @@ from admob_iq.config import settings
 from tests import studio_synth as ss
 from tests.studio_reference import reference
 
-LINE = re.compile(r"^uninstall studio: apps \d+, skipped \d+, alerts \d+, no ga4 \d+, kb \d+$")
+LINE = re.compile(r"^uninstall studio: apps \d+, skipped \d+, alerts \d+, no ga4 \d+, kb \d+, older days kb \d+$")
 KEYS = ('nw', 'un', 'a28', 'md', 'lo', 'hi', 'g0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'r1', 'rv', 'a1')
 
 
@@ -66,6 +66,9 @@ def _beyond_the_demo(body, ref):
     newest 12 rows, cell for cell) and the 📦 updates reach back before the span (the demo: inside the span — the same
     rows there). Checked here, then put back to the demo's, so the rest is compared whole."""
     S, E = ref["meta"]["S"], ref["meta"]["E"]
+    body.pop("_hist", None)                                    # (the older days: their own file — see below)
+    h0, hist = body["meta"].pop("H0"), body["meta"].pop("hist")
+    assert h0 <= S and hist in (usb.HFILE, None) and (hist is None) == (h0 == S)
     for a, r in zip(body["apps"], ref["apps"]):
         assert a["id"] == r["id"]
         assert a["coh"]["ref"] == r["coh"]["ref"] and len(a["coh"]["w"]) >= len(r["coh"]["w"])
@@ -79,7 +82,7 @@ def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
     s, cfg, dash = site
     ref = reference(s)                                         # the frozen demo step, reading the site's files
     assert ref["apps"] and ref["alerts"] and ref["noga"]       # (the synthetic site exercises all of it)
-    assert _run(s, cfg, dash) == ["/uninstall_studio.json.gz"]
+    assert _run(s, cfg, dash) == ["/uninstall_studio.json.gz", "/uninstall_studio_old.json.gz"]
     body = _gz(os.path.join(s, usb.FILE))
     assert body.pop("v") == usb.V
     assert body.pop("gt")["apps"]                             # ("Gone by day N": its own block, after the demo —
@@ -91,7 +94,7 @@ def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
                          json.load(open(os.path.join(cfg, "account_names.json"))),
                          json.load(open(os.path.join(cfg, "app_names.json"))))
     got.pop("gt")
-    assert _beyond_the_demo(got, ref) == ref
+    assert got["_hist"] and _beyond_the_demo(got, ref) == ref
 
 
 # ── no trim: the install-week grid = every week since the app's start (owner, 2 Oct) ──────────────────────────────
@@ -187,7 +190,7 @@ def test_contract_pointer_and_deterministic_bytes(site, capsys):
     assert set(body) == {"v", "meta", "apps", "alerts", "noga", "gt"}     # (gt: tests/test_uninstall_studio_gone.py)
     M = body["meta"]
     assert set(M) == {"cohCols", "S", "E", "n", "today", "gen", "fx", "late", "lag", "actLate", "settled", "apps",
-                      "noga", "portfolioSettled"}
+                      "noga", "portfolioSettled", "H0", "hist"}
     assert M["n"] == usb.SPAN and M["cohCols"] == usb.COH_COLS and M["apps"] == len(body["apps"])
     assert M["fx"] == ss.FX and M["today"] == dash["today_date"] and M["gen"] == dash["generated_at"]
     for a in body["apps"]:
@@ -221,6 +224,66 @@ def test_headers_keep_the_file_out_of_stale_caches(site, capsys):
     txt = build_static.headers_text(["uninstall.json.gz"], dash, extra=extra)
     assert "/uninstall_studio.json.gz\n  Cache-Control: no-store\n\n" in txt
     assert txt.index("/uninstall_studio.json.gz") < txt.index("/index.html")
+
+
+# ── no trim: the days before the span — their own file, loaded by the page only when a range needs them ──────────
+
+def test_the_older_days_file_is_the_same_series_before_the_span(site, monkeypatch, capsys):
+    """uninstall_studio_old.json.gz holds every app's arrays for H0 (the oldest first day of any app) .. S−1; with the
+    span's arrays after them they are EXACTLY what one file reaching back to H0 holds (the same per-day code)."""
+    s, cfg, dash = site
+    assert _run(s, cfg, dash) == ["/uninstall_studio.json.gz", "/uninstall_studio_old.json.gz"]
+    body, hist = _gz(os.path.join(s, usb.FILE)), _gz(os.path.join(s, usb.HFILE))
+    M = body["meta"]
+    U = _gz(os.path.join(s, "uninstall.json.gz"))
+    firsts = [usb._first(a) for a in U["apps"] if a.get("data_till") and a.get("daily")]
+    assert M["H0"] == min(firsts) < M["S"] and M["hist"] == usb.HFILE
+    assert set(hist) == {"v", "S", "n", "gen", "apps"} and hist["v"] == usb.V and hist["S"] == M["H0"]
+    assert hist["n"] == usb.diff(M["H0"], M["S"]) and hist["gen"] == M["gen"]
+    assert set(hist["apps"]) == {a["id"] for a in body["apps"]}
+    # one file reaching back to H0 (the span made that long) = the older days + the span, array for array
+    monkeypatch.setattr(usb, "SPAN", usb.SPAN + hist["n"])
+    full = usb.build_data(dash, U, lambda n: _gz(os.path.join(s, n)), *[json.load(open(os.path.join(cfg, f)))
+                                                                       for f in ("account_names.json", "app_names.json")])
+    assert full["meta"]["S"] == M["H0"] and full["_hist"] is None
+    n_val = 0
+    for a, f in zip(body["apps"], full["apps"]):
+        assert a["id"] == f["id"]
+        for k in KEYS:
+            old, span = usb.dec(hist["apps"][a["id"]][k]), usb.dec(a[k])
+            assert len(old) == hist["n"] and old + span == usb.dec(f[k]), (a["nm"], k)
+            n_val += sum(v is not None for v in old)
+    assert n_val > 1000                                        # (the synthetic site has data before the span)
+
+
+def test_the_older_days_file_goes_with_its_span(site, monkeypatch, capsys):
+    """Too big alone: the span's file stands alone (H0 = S, no pointer — ranges stop at the span); switched off or failing:
+    both files go; every app young (nothing before the span): no older file."""
+    s, cfg, dash = site
+    _run(s, cfg, dash)
+    assert os.path.exists(os.path.join(s, usb.HFILE))
+    capsys.readouterr()
+    d2 = json.loads(json.dumps(dash))
+    d2["uninstall"].pop("studio")
+    orig = usb.gzip.compress                                   # the older days' body (it starts {"S": …) "too big"
+    monkeypatch.setattr(usb.gzip, "compress", lambda b, *a, **k: (b"x" * (usb.MAX_GZ + 1)) if b.startswith(b'{"S":') else orig(b, *a, **k))
+    assert _run(s, cfg, d2) == ["/uninstall_studio.json.gz"]
+    assert not os.path.exists(os.path.join(s, usb.HFILE))
+    M = _gz(os.path.join(s, usb.FILE))["meta"]
+    assert M["H0"] == M["S"] and M["hist"] is None
+    assert capsys.readouterr().err.strip().endswith(", older days kb 0")
+    monkeypatch.setattr(usb.gzip, "compress", orig)
+    _run(s, cfg, json.loads(json.dumps(d2)))
+    assert os.path.exists(os.path.join(s, usb.HFILE))
+    usb.off(s)
+    assert not os.path.exists(os.path.join(s, usb.FILE)) and not os.path.exists(os.path.join(s, usb.HFILE))
+
+
+def test_headers_keep_the_older_days_file_out_of_stale_caches(site, capsys):
+    s, cfg, dash = site
+    extra = _run(s, cfg, dash)
+    txt = build_static.headers_text(["uninstall.json.gz"], dash, extra=extra)
+    assert "/uninstall_studio_old.json.gz\n  Cache-Control: no-store\n\n" in txt
 
 
 # ── the size guard ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -270,7 +333,7 @@ def test_a_broken_app_costs_only_that_app(site, capsys):
     k = U["apps"][1]["key"]
     with open(os.path.join(s, "uninstall_c_%s.json.gz" % k), "wb") as f:
         f.write(b"broken")
-    assert _run(s, cfg, dash) == ["/uninstall_studio.json.gz"]
+    assert _run(s, cfg, dash) == ["/uninstall_studio.json.gz", "/uninstall_studio_old.json.gz"]
     body = _gz(os.path.join(s, usb.FILE))
     assert len(body["apps"]) == 3 and U["apps"][1]["app_id"] not in {a["id"] for a in body["apps"]}
     assert all(0 <= x["a"] < 3 for x in body["alerts"])         # its alerts never point at a missing app
@@ -298,9 +361,10 @@ def test_any_other_failure_costs_the_studio_only(site, monkeypatch, capsys, how)
             f.write(b"\x1f\x8bbroken")
     else:
         monkeypatch.setattr(usb, "build_data", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("secret-app-name")))
-    before = {n: open(os.path.join(s, n), "rb").read() for n in os.listdir(s) if n != usb.FILE}
+    before = {n: open(os.path.join(s, n), "rb").read() for n in os.listdir(s) if n not in (usb.FILE, usb.HFILE)}
     assert _run(s, cfg, d2) == []
     assert "studio" not in d2["uninstall"] and not os.path.exists(os.path.join(s, usb.FILE))
+    assert not os.path.exists(os.path.join(s, usb.HFILE))     # (the older days' file never outlives its span's)
     err = capsys.readouterr().err.strip()
     assert re.match(r"^uninstall studio skipped: [A-Za-z]+$", err) and "secret" not in err
     assert {n: open(os.path.join(s, n), "rb").read() for n in os.listdir(s)} == before   # nothing else touched
@@ -370,7 +434,8 @@ def test_the_log_is_one_counts_only_line(site, capsys):
     err = capsys.readouterr().err
     lines = err.strip().splitlines()
     assert len(lines) == 1 and LINE.match(lines[0]), err
-    assert lines[0] == "uninstall studio: apps 4, skipped 0, alerts %d, no ga4 2, kb %d" % (
-        len(_gz(os.path.join(s, usb.FILE))["alerts"]), int(lines[0].rsplit(" ", 1)[1]))
+    assert lines[0] == "uninstall studio: apps 4, skipped 0, alerts %d, no ga4 2, kb %d, older days kb %d" % (
+        len(_gz(os.path.join(s, usb.FILE))["alerts"]), int(lines[0].split(", kb ")[1].split(",")[0]),
+        int(lines[0].rsplit(" ", 1)[1]))
     for secret in [ss.NAMES[a] for a in ss.NAMES] + list(ss.PKG.values()) + list(ss.PKG) + [ss.P1, ss.P2, "Studio One"]:
         assert secret not in err

@@ -52,7 +52,7 @@ SIX = {"Worse", "Watch", "Better", "Normal", "Too early", "N/A"}
 def built(tmp_path_factory):
     root = str(tmp_path_factory.mktemp("astudio_fe"))
     site, cfg, dash = ss.make_site(root)
-    assert build_static._active_studio_step(dash, os.path.join(root, "data"), site, dict(settings())) == ["/active_studio.json.gz"]
+    assert build_static._active_studio_step(dash, os.path.join(root, "data"), site, dict(settings())) == ["/active_studio.json.gz", "/active_studio_old.json.gz"]
     fx = os.path.join(root, "fx")
     os.makedirs(fx)
     with gzip.open(os.path.join(site, asb.FILE), "rt", encoding="utf-8") as f:
@@ -61,7 +61,23 @@ def built(tmp_path_factory):
     for r in dash["active"]["apps"]:                           # each app's own file (the older app page, in full)
         with gzip.open(os.path.join(site, r["file"]), "rt", encoding="utf-8") as f:
             files[r["key"]] = json.load(f)
-    for name, body in (("dashboard.json", dash), ("active_studio.json", studio), ("active_files.json", files)):
+    with gzip.open(os.path.join(site, asb.HFILE), "rt", encoding="utf-8") as f:
+        hist = json.load(f)
+    # the same site as ONE file reaching back to the oldest day (the build's own code, the span made that long)
+    keep = asb.SPAN
+    try:
+        asb.SPAN = keep + hist["n"]
+        ld = lambda n: json.load(gzip.open(os.path.join(site, n), "rt", encoding="utf-8"))   # noqa: E731
+        full = asb.build_data(dash, ld(dash["active"]["portfolio"]["file"]), ld,
+                              *[json.load(open(os.path.join(cfg, f))) for f in ("account_names.json", "app_names.json")],
+                              asb._lag(dash, site))
+    finally:
+        asb.SPAN = keep
+    full.pop("_hist")
+    full["meta"]["hist"] = None
+    full = json.loads(json.dumps(dict(full, v=asb.V)))
+    for name, body in (("dashboard.json", dash), ("active_studio.json", studio), ("active_files.json", files),
+                       ("active_studio_old.json", hist), ("active_studio_full.json", full)):
         with open(os.path.join(fx, name), "w", encoding="utf-8") as f:
             json.dump(body, f)
     return fx, dash, studio
@@ -327,6 +343,22 @@ def test_came_back_grid_scrolls_in_its_box_with_its_column_names_on_top():
     assert re.search(r"\.as-cohw \.as-coh \.as-chh\{position:sticky;top:0;z-index:3;background:var\(--panel\)", css)
     assert re.search(r"\.as-cohw \.as-coh \.as-rh,:is\(#as-root,#as-layer\) \.as-cohw \.as-coh \.as-stk\{position:sticky;left:0", css)
     assert re.search(r"\(pointer:coarse\)\{:is\(#as-root,#as-layer\) \.as-coh \.as-relb\{display:inline-block;padding:9px", css)
+
+
+# ── no trim: custom ranges reach the whole history (owner, 2 Oct) ───────────────────────────────────────────────
+
+def test_an_old_custom_range_loads_the_older_days_and_shows_the_same_numbers(report):
+    h = J(report, "hist")
+    assert h["H0"] < h["S"] and h["histName"] == "active_studio_old.json.gz"
+    assert h["defNeed"] is None and h["pickMin"] == h["H0"] == h["inputMin"]
+    assert h["need"] and h["need"] < h["S"] and h["waitTop"] and h["noNumbers"]
+    assert h["wait"].startswith("⏳ ") and "tak ka purana data load ho raha hai…" in h["wait"]
+    assert h["after"] and h["M"]["S"] == h["H0"]
+    assert h["merged"] == h["full"] and h["mergedHtml"] == h["fullHtml"] and h["fullNeed"] is None
+    W = json.loads(h["merged"])["W"]
+    assert W["f"] < h["S"] and W["cf"] < W["f"] and W["L"] == 30
+    assert "load nahi hua" in h["err"] and "Try again" in h["err"] and h["errNoNumbers"]
+    assert h["appMin"] == max(h["appFirst"], h["H0"])
 
 
 # ── every alert, with the owner's timestamp line ───────────────────────────────────────────────────────────────

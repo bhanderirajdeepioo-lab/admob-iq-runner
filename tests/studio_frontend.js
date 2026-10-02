@@ -49,6 +49,8 @@ vm.createContext(ctx);
 try { vm.runInContext(fs.readFileSync(scriptPath, 'utf8'), ctx, { filename: 'index.js' }); } catch (e) { errors.push('TOPLEVEL ' + e.message); }
 const run = code => vm.runInContext(code, ctx);
 ctx.__DASH = J('dashboard.json'); ctx.__STUDIO = J('uninstall_studio.json'); ctx.__UNI = J('uninstall.json');
+ctx.__HIST = fs.existsSync(path.join(dir, 'uninstall_studio_old.json')) ? J('uninstall_studio_old.json') : null;
+ctx.__FULL = fs.existsSync(path.join(dir, 'uninstall_studio_full.json')) ? J('uninstall_studio_full.json') : null;
 const out = {};
 function get(name, code) { try { out[name] = run(code); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + (e.stack.match(/at [^\n]*/g) || []).slice(0, 3).join(' < ')); } }
 const RESET = `KWIN='7'; KWCUSTOM={from:'',to:''}; KWERR=''; KCMP='prev'; KCMPCUSTOM={from:'',to:''}; KCMPERR=''; APP=''; UNIAPP=''; CURVIEW='USD';`;
@@ -79,6 +81,31 @@ get('order7', `(()=>{ const R=US._.R(), A=US._.A();
     W: US._.W(), PT: (p=>({ins:p.ins,outs:p.outs,net:p.net,rate:p.rate,Ltot:p.Ltot,La:p.La,Lb:p.Lb,Lusd:p.Lusd}))(US._.PT()) }); })()`);
 get('rows30', `(()=>{ ${RESET} KWIN='30'; uniScreen(); return JSON.stringify({W:US._.W(), rows:US._.R().map(o=>({i:o.a.i,pill:o.pill,rank:o.rank,L:o.L.tot==null?{why:o.L.why}:{a:o.L.a,b:o.L.b,tot:o.L.tot,exp:o.L.exp,z:o.L.z,sig:o.L.sig,part:o.L.part,days:o.L.days},cells:[o.hd0.s,o.hr.s,o.hs7.s,o.hr1.s]}))}); })()`);
 
+// ── no trim: a custom range / compare before the span — the older days' file, only then; the same numbers as one file
+// reaching back that far (owner, 2 Oct: "pura data hona chaiye") ─────────────────────────────────────────────────────
+get('hist', `(()=>{ ${RESET} const r={}; US._.load(__STUDIO); US._.loadHist(undefined);
+  const M0=__STUDIO.meta, add=(d,n)=>new Date(Date.parse(d+'T00:00:00Z')+n*864e5).toISOString().slice(0,10);
+  r.H0=M0.H0; r.S=M0.S; r.histName=M0.hist;
+  uniScreen(); r.defNeed=US._.needHist(); r.pickMin=US._.pickMin();
+  const h7=uniScreen(); r.cnote=__text((h7.match(/<span class="us-faint" id="us-cnote">[^<]*/)||[''])[0]);
+  r.inputMin=(h7.match(/id="us-cf1"[^>]*min="([^"]*)"/)||[])[1]||null;
+  // a 30-day range well before the span, compare = the 30 days before it
+  const f=add(M0.H0,40), t=add(f,29); KWIN='custom'; KWCUSTOM={from:f,to:t}; KCMP='prev';
+  r.need=US._.needHist(); const hw=uniScreen(); r.wait=__text((hw.match(/<section class="us-panel us-hwait"[\\s\\S]*?<\\/section>/)||[''])[0]); r.waitTop=hw.indexOf('id="us-top"')>=0;
+  r.noNumbers=hw.indexOf('id="us-kpis"')<0;
+  // the older days arrive: the page, merged
+  US._.loadHist(__HIST); const h1=uniScreen(); r.after=h1.indexOf('id="us-hwait"')<0&&h1.indexOf('id="us-kpis"')>=0; r.M={S:US._.M().S,n:US._.M().n};
+  const rows=()=>JSON.stringify({W:US._.W(), PT:(p=>({ins:p.ins,outs:p.outs,net:p.net,rate:p.rate,Ltot:p.Ltot,Lusd:p.Lusd}))(US._.PT()),
+    R:US._.R().map(o=>({i:o.a.i,ins:o.s.ins,outs:o.s.outs,rate:o.s.rate,lo:o.s.lo,hi:o.s.hi,cins:o.c.ins,couts:o.c.outs,crate:o.c.rate,d0:o.d0.p,s7:o.s7.p,r1:o.r1.p,L:o.L.tot,Lc:o.Lc.tot,pill:o.pill}))});
+  r.merged=rows(); r.mergedHtml=__text(US._.kpis());
+  // the same choice on ONE file reaching back to H0 (the build's own code, the span made that long)
+  US._.load(__FULL); uniScreen(); r.full=rows(); r.fullHtml=__text(US._.kpis()); r.fullNeed=US._.needHist();
+  // a failed older-days file: the top bar + "Try again", never a number from a cut range
+  US._.load(__STUDIO); US._.loadHist(null); const he=uniScreen(); r.err=__text((he.match(/<section class="us-panel us-hwait"[\\s\\S]*?<\\/section>/)||[''])[0]); r.errNoNumbers=he.indexOf('id="us-kpis"')<0;
+  // an app's page: the pickers start at that app's own first day
+  ${RESET} US._.load(__STUDIO); US._.loadHist(__HIST); const A=US._.A(), late=A.slice().sort((x,y)=>x.first<y.first?1:-1)[0], row=DATA.uninstall.apps.find(x=>x.app_id===late.id);
+  APP=row.app; UNIAPP=late.id; const hp=uniScreen(); r.appFirst=late.first; r.appMin=(hp.match(/id="us-cf1"[^>]*min="([^"]*)"/)||[])[1]||null;
+  ${RESET} US._.load(__STUDIO); US._.loadHist(undefined); uniScreen(); return JSON.stringify(r); })()`);
 // ── the shared KPIWINDOW / compare / currency ───────────────────────────────────────────────────────────────────────
 get('kwin', `(()=>{ ${RESET} const r={};
   KWIN='30'; const h30=uniScreen(); r.ext30=US._.W().L; r.win30=/\\(30 days\\)/.test(h30);

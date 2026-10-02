@@ -271,6 +271,9 @@ def test_the_app_page_shows_every_week_version_month_and_check(report, built):
         if a["chkN"]:
             assert a["chk"].startswith("🔍 Data check:") and a["chkLi"] == a["chkN"] - 1   # every line (was the first)
     assert any(a["chkN"] > 1 for a in t["apps"]) and any(a["ver"] for a in t["apps"]) and any(a["lng"] for a in t["apps"])
+    # custom ranges reach the oldest week (the pickers start there; an app's page: its own first week)
+    assert t["inputMin"] == t["wS0"] == t["SW"] and t["appMin"] == t["appFirst"]
+    assert t["oldW"]["i0"] == 2 and t["oldW"]["i1"] == 5 and t["oldW"]["L"] == 4 and t["oldRows"] > 0
 
 
 # ── what's new: every alert with the owner's timestamp line ─────────────────────────────────────────────────────

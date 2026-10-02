@@ -80,7 +80,7 @@ def _gz(site, name):
 def act(tmp_path_factory):
     root = str(tmp_path_factory.mktemp("parity_act"))
     site, cfg, dash = ass.make_site(root)
-    assert build_static._active_studio_step(dash, os.path.join(root, "data"), site, dict(settings())) == ["/active_studio.json.gz"]
+    assert build_static._active_studio_step(dash, os.path.join(root, "data"), site, dict(settings())) == ["/active_studio.json.gz", "/active_studio_old.json.gz"]
     files = {r["key"]: _gz(site, r["file"]) for r in dash["active"]["apps"]}
     fx = os.path.join(root, "fx")
     _dump(fx, dashboard=dash, active_studio=_gz(site, asb.FILE), active_files=files,

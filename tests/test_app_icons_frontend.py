@@ -46,7 +46,7 @@ def _script():
 def report(tmp_path_factory):
     root = str(tmp_path_factory.mktemp("icons_fe"))
     site, _, dash = ss.make_site(root)
-    assert build_static._studio_step(dash, os.path.join(root, "data"), site, dict(settings())) == ["/uninstall_studio.json.gz"]
+    assert build_static._studio_step(dash, os.path.join(root, "data"), site, dict(settings())) == ["/uninstall_studio.json.gz", "/uninstall_studio_old.json.gz"]
     dash["app_icons"] = dict(ICON)
     fx = os.path.join(root, "fx")
     os.makedirs(fx)

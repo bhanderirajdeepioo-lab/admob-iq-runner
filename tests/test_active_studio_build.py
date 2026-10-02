@@ -29,7 +29,7 @@ from admob_iq.config import settings
 from tests import active_studio_synth as ss
 from tests.active_studio_reference import reference
 
-LINE = re.compile(r"^active studio: apps \d+, skipped \d+, alerts \d+, no ga4 \d+, kb \d+$")
+LINE = re.compile(r"^active studio: apps \d+, skipped \d+, alerts \d+, no ga4 \d+, kb \d+, older days kb \d+$")
 KEYS = ('a1', 'nw', 'rt', 'y', 'd1', 'd7', 'd30', 'rv', 'u', 'su', 'tu', 'im')
 
 
@@ -83,6 +83,9 @@ def _beyond_the_demo(s, body, ref):
     an exact .5 may read 1‰ lower there), and the 📦 updates reach back before the span (the demo: inside it — the same
     rows there). Checked here, then put back to the demo's, so the rest is compared whole."""
     S, E = ref["meta"]["S"], ref["meta"]["E"]
+    body.pop("_hist", None)                                    # (the older days: their own file — see below)
+    h0, hist = body["meta"].pop("H0"), body["meta"].pop("hist")
+    assert h0 <= S and hist in (asb.HFILE, None) and (hist is None) == (h0 == S)
     for a, r in zip(body["apps"], ref["apps"]):
         assert a["id"] == r["id"]
         eng = {x["from"]: x for x in _gz(os.path.join(s, "active_%s.json.gz" % a["k"]))["tri"]["rows"] if not x.get("pre")}
@@ -104,7 +107,7 @@ def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
     s, cfg, dash = site
     ref = _ref(s)                                               # the frozen demo step, reading the site's files
     assert ref["apps"] and ref["alerts"] and ref["noga"]        # (the synthetic site exercises all of it)
-    assert _run(s, cfg, dash) == ["/active_studio.json.gz"]
+    assert _run(s, cfg, dash) == ["/active_studio.json.gz", "/active_studio_old.json.gz"]
     body = _gz(os.path.join(s, asb.FILE))
     assert body.pop("v") == asb.V
     assert any(len(a["tri"]["w"]) > 10 for a in body["apps"])
@@ -114,7 +117,7 @@ def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
                          json.load(open(os.path.join(cfg, "account_names.json"))),
                          json.load(open(os.path.join(cfg, "app_names.json"))),
                          asb._lag(dash, s))
-    assert _beyond_the_demo(s, json.loads(json.dumps(got)), ref) == ref
+    assert got["_hist"] and _beyond_the_demo(s, json.loads(json.dumps(got)), ref) == ref
 
 
 # ── no trim: "How many new users came back" = every install week since the app's start (owner, 2 Oct) ─────────────
@@ -197,7 +200,7 @@ def test_contract_pointer_and_deterministic_bytes(site, capsys):
     assert set(body) == {"v", "meta", "apps", "alerts", "noga"}
     M = body["meta"]
     assert set(M) == {"S", "E", "n", "today", "gen", "fx", "actLate", "lag", "settled", "apps", "LG", "bandDays", "triCols",
-                      "pfSettled", "mk"}
+                      "pfSettled", "mk", "H0", "hist"}
     assert M["n"] == asb.SPAN and M["LG"] == asb.LG and M["triCols"] == asb.TRI_COLS and M["apps"] == len(body["apps"])
     assert M["fx"] == ss.FX and M["today"] == dash["today_date"] and M["gen"] == dash["generated_at"]
     for a in body["apps"]:
@@ -228,11 +231,76 @@ def test_contract_pointer_and_deterministic_bytes(site, capsys):
     assert open(p, "rb").read() == b1 and os.stat(p).st_mtime_ns == m1 and dash2["active"]["studio"] == ptr
 
 
+# ── no trim: the days before the span — their own file, loaded by the page only when a range needs them ──────────
+
+def test_the_older_days_file_is_the_same_series_before_the_span(site, monkeypatch, capsys):
+    """active_studio_old.json.gz holds every app's arrays for H0 (the oldest data day of any app) .. S−1, the 31 days of
+    installs before H0 and the fast-change runs before the span; with the span's arrays after them they are EXACTLY
+    what one file reaching back to H0 holds (sliced from the same per-app series)."""
+    s, cfg, dash = site
+    assert _run(s, cfg, dash) == ["/active_studio.json.gz", "/active_studio_old.json.gz"]
+    body, hist = _gz(os.path.join(s, asb.FILE)), _gz(os.path.join(s, asb.HFILE))
+    M = body["meta"]
+    assert M["H0"] < M["S"] and M["hist"] == asb.HFILE
+    assert set(hist) == {"v", "S", "n", "gen", "apps"} and hist["v"] == asb.V and hist["S"] == M["H0"]
+    assert hist["n"] == asb.diff(M["H0"], M["S"]) and hist["gen"] == M["gen"]
+    assert set(hist["apps"]) == {a["id"] for a in body["apps"]}
+    monkeypatch.setattr(asb, "SPAN", asb.SPAN + hist["n"])
+    full = asb.build_data(dash, _gz(os.path.join(s, "active_portfolio.json.gz")), lambda n: _gz(os.path.join(s, n)),
+                          json.load(open(os.path.join(cfg, "account_names.json"))),
+                          json.load(open(os.path.join(cfg, "app_names.json"))), asb._lag(dash, s))
+    assert full["meta"]["S"] == M["H0"] and full["_hist"] is None
+    n_val = 0
+    for a, f in zip(body["apps"], full["apps"]):
+        assert a["id"] == f["id"]
+        o = hist["apps"][a["id"]]
+        for k in KEYS:
+            old, span = asb.dec(o[k]), asb.dec(a[k])
+            assert len(old) == hist["n"] and old + span == asb.dec(f[k]), (a["nm"], k)
+            n_val += sum(v is not None for v in old)
+        assert asb.dec(o["pre"]) == asb.dec(f["pre"])            # the 31 days of installs before H0
+        assert sorted(o["stp"] + a["steep"]) == sorted(f["steep"]) or _joined(o["stp"] + a["steep"]) == _joined(f["steep"])
+    assert n_val > 1000
+
+
+def _joined(rs):
+    """fast-change runs as a set of days (a run cut at the span's first day is the same days)"""
+    out = set()
+    for f0, t0 in rs:
+        d = date.fromisoformat(f0)
+        while d.isoformat() <= t0:
+            out.add(d.isoformat())
+            d += timedelta(days=1)
+    return out
+
+
+def test_the_older_days_file_goes_with_its_span(site, monkeypatch, capsys):
+    s, cfg, dash = site
+    _run(s, cfg, dash)
+    assert os.path.exists(os.path.join(s, asb.HFILE))
+    capsys.readouterr()
+    d2 = json.loads(json.dumps(dash))
+    d2["active"].pop("studio")
+    orig = asb.gzip.compress                                   # the older days' body (it starts {"S": …) "too big"
+    monkeypatch.setattr(asb.gzip, "compress", lambda b, *a, **k: (b"x" * (asb.MAX_GZ + 1)) if b.startswith(b'{"S":') else orig(b, *a, **k))
+    assert _run(s, cfg, d2) == ["/active_studio.json.gz"]
+    assert not os.path.exists(os.path.join(s, asb.HFILE))
+    M = _gz(os.path.join(s, asb.FILE))["meta"]
+    assert M["H0"] == M["S"] and M["hist"] is None
+    assert capsys.readouterr().err.strip().endswith(", older days kb 0")
+    monkeypatch.setattr(asb.gzip, "compress", orig)
+    _run(s, cfg, json.loads(json.dumps(d2)))
+    assert os.path.exists(os.path.join(s, asb.HFILE))
+    asb.off(s)
+    assert not os.path.exists(os.path.join(s, asb.FILE)) and not os.path.exists(os.path.join(s, asb.HFILE))
+
+
 def test_headers_keep_the_file_out_of_stale_caches(site, capsys):
     s, cfg, dash = site
     extra = _run(s, cfg, dash)
     txt = build_static.headers_text(["uninstall.json.gz"], dash, extra=extra)
     assert "/active_studio.json.gz\n  Cache-Control: no-store\n\n" in txt
+    assert "/active_studio_old.json.gz\n  Cache-Control: no-store\n\n" in txt
     assert txt.index("/active_studio.json.gz") < txt.index("/index.html")
 
 
@@ -286,7 +354,7 @@ def test_a_broken_app_costs_only_that_app(site, capsys):
     rows = [r for r in dash["active"]["apps"] if r.get("file")]
     with open(os.path.join(s, rows[1]["file"]), "wb") as f:
         f.write(b"broken")
-    assert _run(s, cfg, dash) == ["/active_studio.json.gz"]
+    assert _run(s, cfg, dash) == ["/active_studio.json.gz", "/active_studio_old.json.gz"]
     body = _gz(os.path.join(s, asb.FILE))
     assert len(body["apps"]) == 3 and rows[1]["app_id"] not in {a["id"] for a in body["apps"]}
     assert all(0 <= x["a"] < 3 for x in body["alerts"])          # its alerts never point at a missing app
@@ -317,9 +385,10 @@ def test_any_other_failure_costs_the_studio_only(site, monkeypatch, capsys, how)
             f.write(b"\x1f\x8bbroken")
     else:
         monkeypatch.setattr(asb, "build_data", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("secret-app-name")))
-    before = {n: open(os.path.join(s, n), "rb").read() for n in os.listdir(s) if n != asb.FILE}
+    before = {n: open(os.path.join(s, n), "rb").read() for n in os.listdir(s) if n not in (asb.FILE, asb.HFILE)}
     assert _run(s, cfg, d2) == []
     assert "studio" not in d2["active"] and not os.path.exists(os.path.join(s, asb.FILE))
+    assert not os.path.exists(os.path.join(s, asb.HFILE))     # (the older days' file never outlives its span's)
     err = capsys.readouterr().err.strip()
     assert re.match(r"^active studio skipped: [A-Za-z]+$", err) and "secret" not in err
     assert {n: open(os.path.join(s, n), "rb").read() for n in os.listdir(s)} == before   # nothing else touched
@@ -338,7 +407,7 @@ def test_a_build_without_active_users_data_leaves_no_studio_file(site, capsys):
     d3["active"].pop("studio", None)
     d3["active"]["portfolio"] = None
     assert _run(s, cfg, d3) == [] and not os.path.exists(os.path.join(s, asb.FILE)) and "studio" not in d3["active"]
-    assert capsys.readouterr().err.strip() == "active studio: apps 0, skipped 0, alerts 0, no ga4 0, kb 0"
+    assert capsys.readouterr().err.strip() == "active studio: apps 0, skipped 0, alerts 0, no ga4 0, kb 0, older days kb 0"
 
 
 # ── the switch ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -394,7 +463,8 @@ def test_the_log_is_one_counts_only_line(site, capsys):
     err = capsys.readouterr().err
     lines = err.strip().splitlines()
     assert len(lines) == 1 and LINE.match(lines[0]), err
-    assert lines[0] == "active studio: apps 4, skipped 0, alerts %d, no ga4 2, kb %d" % (
-        len(_gz(os.path.join(s, asb.FILE))["alerts"]), int(lines[0].rsplit(" ", 1)[1]))
+    assert lines[0] == "active studio: apps 4, skipped 0, alerts %d, no ga4 2, kb %d, older days kb %d" % (
+        len(_gz(os.path.join(s, asb.FILE))["alerts"]), int(lines[0].split(", kb ")[1].split(",")[0]),
+        int(lines[0].rsplit(" ", 1)[1]))
     for secret in list(ss.NAMES.values()) + list(ss.PKG.values()) + list(ss.PKG) + [ss.A1, ss.A2, "Studio One"]:
         assert secret not in err

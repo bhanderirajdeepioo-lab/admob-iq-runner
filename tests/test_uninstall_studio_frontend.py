@@ -49,14 +49,29 @@ SIX = {"Worse", "Watch", "Better", "Normal", "Too early", "N/A"}
 def built(tmp_path_factory):
     root = str(tmp_path_factory.mktemp("studio_fe"))
     site, cfg, dash = ss.make_site(root)
-    assert build_static._studio_step(dash, os.path.join(root, "data"), site, dict(settings())) == ["/uninstall_studio.json.gz"]
+    assert build_static._studio_step(dash, os.path.join(root, "data"), site, dict(settings())) == ["/uninstall_studio.json.gz", "/uninstall_studio_old.json.gz"]
     fx = os.path.join(root, "fx")
     os.makedirs(fx)
     with gzip.open(os.path.join(site, usb.FILE), "rt", encoding="utf-8") as f:
         studio = json.load(f)
     with gzip.open(os.path.join(site, "uninstall.json.gz"), "rt", encoding="utf-8") as f:
         uni = json.load(f)
-    for name, body in (("dashboard.json", dash), ("uninstall_studio.json", studio), ("uninstall.json", uni)):
+    with gzip.open(os.path.join(site, usb.HFILE), "rt", encoding="utf-8") as f:
+        hist = json.load(f)
+    # the same site as ONE file reaching back to the oldest day (the build's own code, the span made that long)
+    keep = usb.SPAN
+    try:
+        usb.SPAN = keep + hist["n"]
+        full = usb.build_data(dash, uni, lambda n: json.load(gzip.open(os.path.join(site, n), "rt", encoding="utf-8")),
+                              *[json.load(open(os.path.join(os.path.dirname(site), "config", f)))
+                                for f in ("account_names.json", "app_names.json")])
+    finally:
+        usb.SPAN = keep
+    full.pop("_hist")
+    full["meta"]["hist"] = None
+    full = json.loads(json.dumps(dict(full, v=usb.V)))
+    for name, body in (("dashboard.json", dash), ("uninstall_studio.json", studio), ("uninstall.json", uni),
+                       ("uninstall_studio_old.json", hist), ("uninstall_studio_full.json", full)):
         with open(os.path.join(fx, name), "w", encoding="utf-8") as f:
             json.dump(body, f)
     # 📅 the app with an update: its impact_any file (the real engine), for the any-date box on the Studio app page
@@ -592,6 +607,27 @@ def test_install_week_grid_scrolls_in_its_box_with_its_column_names_on_top():
     assert re.search(r"\.us-cohw \.us-coh \.us-rh,:is\(#us-root,#us-layer\) \.us-cohw \.us-coh \.us-stk\{position:sticky;left:0", css)
     assert re.search(r"@media \(max-width:760px\),\(pointer:coarse\)\{:is\(#us-root,#us-layer\) \.us-coh \.us-relb\{display:inline-block;padding:9px", css)
     assert "function keepCoh(" in css and "keepCoh(inD?$('us-drawer'):$('us-apg')" in css   # % bache ⇄ Vs normal keeps its place
+
+
+# ── no trim: custom ranges reach the whole history (owner, 2 Oct) ───────────────────────────────────────────────
+
+def test_an_old_custom_range_loads_the_older_days_and_shows_the_same_numbers(report):
+    h = J(report, "hist")
+    assert h["H0"] < h["S"] and h["histName"] == "uninstall_studio_old.json.gz"
+    # the fixed choices never need the older days; the pickers start at the oldest day of history
+    assert h["defNeed"] is None and h["pickMin"] == h["H0"] == h["inputMin"] and h["cnote"].startswith("Data ")
+    # a range before the span: the top bar stays, the numbers wait for the older days (never from a cut range)
+    assert h["need"] and h["need"] < h["S"] and h["waitTop"] and h["noNumbers"]
+    assert re.fullmatch(r"⏳ \d{1,2} \w{3}( \d{4})? se \d{1,2} \w{3}( \d{4})? tak ka purana data load ho raha hai… \(purane din alag file me — sirf zarurat pe aate\)", h["wait"]), h["wait"]
+    # in: the page, its days from the oldest one — every number the same as one file reaching back that far
+    assert h["after"] and h["M"]["S"] == h["H0"]
+    assert h["merged"] == h["full"] and h["mergedHtml"] == h["fullHtml"] and h["fullNeed"] is None
+    W = json.loads(h["merged"])["W"]
+    assert W["f"] < h["S"] and W["cf"] < W["f"] and W["cL"] == W["L"] == 30
+    # it failed: "Try again", still no number
+    assert "load nahi hua" in h["err"] and "Try again" in h["err"] and h["errNoNumbers"]
+    # an app's page: the pickers start at that app's own first day
+    assert h["appMin"] == max(h["appFirst"], h["H0"])
 
 
 # ── 📉 How many stay (owner, 2 Oct: "purane view ka ye feature (How many stay) tumne new view me to gayab hi kar diya") ──

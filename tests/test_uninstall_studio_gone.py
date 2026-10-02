@@ -49,7 +49,7 @@ def _gz(p):
 def built(tmp_path_factory):
     root = str(tmp_path_factory.mktemp("gone"))
     site, cfg, dash = ss.make_site(root)
-    assert build_static._studio_step(dash, os.path.join(root, "data"), site, dict(settings())) == ["/uninstall_studio.json.gz"]
+    assert build_static._studio_step(dash, os.path.join(root, "data"), site, dict(settings())) == ["/uninstall_studio.json.gz", "/uninstall_studio_old.json.gz"]
     return root, site, cfg, dash, _gz(os.path.join(site, usb.FILE)), _gz(os.path.join(site, "uninstall.json.gz"))
 
 
@@ -204,12 +204,12 @@ def test_a_broken_app_costs_only_its_own_block(built, tmp_path, monkeypatch, cap
     monkeypatch.setattr(usb, "_gtable", gt)
     d2 = json.loads(json.dumps(dash))
     d2["uninstall"].pop("studio", None)
-    assert build_static._studio_step(d2, os.path.join(root, "data"), s, dict(settings())) == ["/uninstall_studio.json.gz"]
+    assert build_static._studio_step(d2, os.path.join(root, "data"), s, dict(settings())) == ["/uninstall_studio.json.gz", "/uninstall_studio_old.json.gz"]
     body = _gz(os.path.join(s, usb.FILE))
     assert bad in {a["id"] for a in body["apps"]} and bad not in body["gt"]["apps"]   # the app stays in the Studio
     assert len(body["gt"]["apps"]) == len(body["apps"]) - 1
     err = capsys.readouterr().err
-    assert re.match(r"^uninstall studio: apps 4, skipped 0, alerts \d+, no ga4 2, kb \d+$", err.strip()) and "secret" not in err
+    assert re.match(r"^uninstall studio: apps 4, skipped 0, alerts \d+, no ga4 2, kb \d+, older days kb \d+$", err.strip()) and "secret" not in err
 
 
 def test_the_file_stays_small(built):

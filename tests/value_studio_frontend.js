@@ -116,7 +116,13 @@ get('notrim', `(()=>{ ${RESET} valScreen(); const A=VS._.A(), M=VS._.M(), r={nw:
       head:__text((seg.match(/<h2[^>]*>[^<]*/)||[''])[0]), weekRows:(wt.match(/<tr class="(vs-rng)?">/g)||[]).length, weeks:a.N.filter(x=>x!=null).length, cap:__text((wt.match(/<span class="vs-faint">Since[^<]*/)||[''])[0]),
       verRows:(ver.match(/<tr>/g)||[]).length-1, ver:a.ver&&a.ver.r?a.ver.r.length:null, lngRows:(lng.match(/<tr>/g)||[]).length-1, lng:a.lng&&a.lng.rows?a.lng.rows.length:null,
       chk:__text(ck), chkN:(a.chk||[]).length, chkLi:(ck.match(/<li>/g)||[]).length}); });
-  APP=''; VALAPP=''; return JSON.stringify(r); })()`);
+  // a custom range from the oldest weeks (before the old 32-week grid): its weeks, not cut; the pickers start at the oldest
+  // install week (an app's page: its own first week)
+  ${RESET} const h0=valScreen(); r.inputMin=(h0.match(/id="vs-cf1"[^>]*min="([^"]*)"/)||[])[1]||null; r.wS0=VS._.wS(0);
+  KWIN='custom'; KWCUSTOM={from:VS._.wS(2),to:VS._.wE(5)}; KCMP='prev'; valScreen(); r.oldW=VS._.W(); r.oldRows=VS._.R().filter(o=>o.s&&o.s.insD!=null).length;
+  ${RESET} const a2=A.slice().sort((x,y)=>y.first-x.first)[0], row2=valRows().find(x=>x.app_id===a2.id); APP=row2.app; VALAPP=row2.app_id; const hp=valScreen();
+  r.appMin=(hp.match(/id="vs-cf1"[^>]*min="([^"]*)"/)||[])[1]||null; r.appFirst=VS._.wS(Math.max(0,a2.first));
+  ${RESET} APP=''; VALAPP=''; valScreen(); return JSON.stringify(r); })()`);
 // ── what's new: every engine alert with the owner's timestamp line; the Studio's own items say they are not alerts ────
 get('chg', `(()=>{ ${RESET} valScreen(); return VS._.chg(); })()`);
 get('alerts', `JSON.stringify(VS._.ALS().map(z=>({id:z.x.id,app:z.x.app_id,closed:!!z.closed})))`);
