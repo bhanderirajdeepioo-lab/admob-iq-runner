@@ -3366,11 +3366,12 @@ function appSelIcon(){ const el=document.getElementById('appsel-ic'); if(el) el.
 // the whole header App selector in step with APP: the hidden <select>'s list (appSelHtml) + the icon + the picker button —
 // render() and a jump that changes APP without a render (bGotoUnit)
 function appSelSync(){ const sel=document.getElementById('appsel'); if(sel) sel.innerHTML=appSelHtml(); appSelIcon(); }
-function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; APP=a;
+function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; const was=APP; APP=a;
   if(UNIAPP&&uniName(UNIAPP)!==a) UNIAPP='';   // the header left the app whose Uninstall detail was open: close it (never one app under "All apps")
   if(ACTAPP&&actName(ACTAPP)!==a) ACTAPP='';   // … and the Active users tab's
   if(VALAPP&&valName(VALAPP)!==a) VALAPP='';   // … and the Install value tab's
-  render(); show(cur==='reportcard'?'placements':cur); window.scrollTo({top:0}); }
+  render(); show(cur==='reportcard'?'placements':cur); window.scrollTo({top:0});
+  if(!was&&a) hbPush('app',hbAppUndo); else if(was&&!a) hbDrop('app'); }   // phone Back = "← All apps"
 // ---- the header's App picker (#apk) — owner: "isme icon nahi aaya abhi tak". A native <select> can't show images, so the
 // button opens our own list: every app with ITS icon (by app_id), its account when the name doesn't already say it, the
 // app in view ✓, a search box (app or account), ↑/↓ · Enter · Esc · Tab. The hidden <select id="appsel"> stays the one
@@ -3423,9 +3424,10 @@ function apkPlace(){ const P=apkEl('apk-pop'), W=apkEl('apk'); if(!P||!W||!W.get
 // doesn't cover the icons; a tap on the search box brings it up
 function apkOpen(toList,seed){ if(APK.open) return; const P=apkEl('apk-pop'), Q=apkEl('apk-q'), L=apkEl('apk-list'), B=apkEl('apk-btn'); if(!P||!Q) return;
   APK.items=apkItems(); APK.open=true; Q.value=seed||''; P.hidden=false; if(B) B.setAttribute('aria-expanded','true');
-  apkPlace(); apkDraw(); try{ (toList&&L?L:Q).focus({preventScroll:true}); }catch(e){} }
+  apkPlace(); apkDraw(); try{ (toList&&L?L:Q).focus({preventScroll:true}); }catch(e){}
+  if((typeof innerWidth==='number'?innerWidth:1e4)<=720) hbPush('apk',()=>apkClose(true,true)); }   // the phone sheet: Back closes it
 // back=true: focus returns to the button — `quiet` (a mouse / touch close) without the keyboard focus ring
-function apkClose(back,quiet){ if(!APK.open) return; APK.open=false; const P=apkEl('apk-pop'), B=apkEl('apk-btn');
+function apkClose(back,quiet){ if(!APK.open) return; APK.open=false; hbDrop('apk'); const P=apkEl('apk-pop'), B=apkEl('apk-btn');
   if(P) P.hidden=true; if(B){ B.setAttribute('aria-expanded','false');
     if(back){ if(quiet) B.classList.add('apk-quiet'); try{ B.focus({preventScroll:true}); }catch(e){} } } }
 function apkPick(k,quiet){ const i=APK.rows[k], it=i==null?null:APK.items[i]; if(!it) return; apkClose(true,quiet);
@@ -3517,11 +3519,12 @@ function curWinLabel(){ const w=curWinArr(); if(!w.length) return 'is range me d
   return (a===b?fmtD(a):fmtD(a)+'–'+fmtD(b))+' · '+w.length+'d'+(RANGE==='today'?' · live':''); }
 // re-render everything for the new window, then restore whatever the user was looking at
 function rerender(){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview';
+  HB.mute++; try{   // the same view rebuilt: no new Back step
   render();
   if(cur==='reportcard'&&PPID) goPlacement(PPID);
   else if(cur==='appdetail'&&ADAPP) openAppDetail(ADAPP);
   else if(cur==='placements'&&DETAIL_OPEN&&POPEN) openApp(POPEN);
-  else show(cur); }
+  else show(cur); }finally{ HB.mute--; } }
 function applyRangeCustom(){ const f=document.getElementById('rc-from'),t=document.getElementById('rc-to');
   if(f&&t){ RCUSTOM={from:f.value||"",to:t.value||""}; RANGE='custom'; rerender(); } }
 
@@ -3590,11 +3593,13 @@ async function refreshData(){
     if(DATA.value&&DATA.value.asset_v!==VALVER){ const sg={}; valRows().forEach(r=>{ sg[r.key]=r.sig; });   // new Install value build → drop the apps whose file changed
       Object.keys(VALD).forEach(k=>{ if(sg[k]!==VALSIG[k]){ delete VALD[k]; delete VALSIG[k]; } }); VALVER=DATA.value.asset_v; }
     VALERR={};
+    HB.mute++; try{   // the same view rebuilt: no new Back step
     render();
     if(cur==='appdetail'&&ADAPP) openAppDetail(ADAPP);                     // stay where the user was
     else if(cur==='reportcard'&&PPID) goPlacement(PPID);
     else if(cur==='placements'&&DETAIL_OPEN&&POPEN) openApp(POPEN);
     else if(cur && cur!=='overview') show(cur);
+    }finally{ HB.mute--; }
   }catch(e){ updateFreshness(); }                                          // network blip: keep last good data
 }
 function setRange(r){
@@ -3611,8 +3616,47 @@ function setRange(r){
   if(cust) cust.style.display='none';
   rerender();
 }
-function toggleNav(force){ document.body.classList[force===false?'remove':(force===true?'add':'toggle')]('nav-open'); }
-function closeNav(){ document.body.classList.remove('nav-open'); }
+function toggleNav(force){ document.body.classList[force===false?'remove':(force===true?'add':'toggle')]('nav-open');
+  hbOv('nav',document.body.classList.contains('nav-open'),closeNav); }
+function closeNav(){ document.body.classList.remove('nav-open'); hbDrop('nav'); }
+// ---- the phone's Back button / back swipe (mobile audit B-11). The page used to add no history step, so Back left the
+// dashboard. Now each thing open on top — the More menu, the App picker sheet, a Studio app drawer — and each drill page —
+// an app picked in the header (a Studio app page: Back = "← All apps"), the App Report — keeps ONE browser-history step:
+// Back closes / leaves the top one. Closing it on the page (✕, a tap outside, a pick, "← Back") takes its step off again,
+// so Back never needs two presses. The steps are plain markers {iqb: depth}; HB.st says what each one undoes. Changes are
+// synced once per task (a close + an open in one tap reuse the same step); a push waits while a step back is on its way.
+const HB={st:[],depth:0,busy:false,want:0,mute:0,q:false,t:0};
+function hbHist(){ try{ return (typeof history!=='undefined'&&history&&typeof history.pushState==='function'&&typeof history.go==='function')?history:null; }catch(e){ return null; } }
+function hbD(st){ return (st&&typeof st==='object'&&typeof st.iqb==='number'&&st.iqb>=0)?st.iqb:null; }
+try{ const H=hbHist(), d0=H?hbD(H.state):null; if(d0) HB.depth=d0; }catch(e){}   // a reload / restored tab can sit on an old step
+function hbPush(tag,undo){ if(HB.mute>0||!hbHist()||HB.st.some(x=>x.tag===tag)) return; HB.st.push({tag,undo}); hbLater(); }
+function hbDrop(tag){ const i=HB.st.map(x=>x.tag).lastIndexOf(tag); if(i<0) return; HB.st.splice(i,1); hbLater(); }
+function hbOv(tag,on,undo){ if(on) hbPush(tag,undo); else hbDrop(tag); }   // an overlay opened / closed (a Studio drawer's lock())
+function hbLater(){ if(HB.q) return; HB.q=true; Promise.resolve().then(()=>{ HB.q=false; hbSync(); }); }
+function hbSync(){ const H=hbHist(); if(!H||HB.busy) return; const want=HB.st.length;
+  try{
+    if(HB.depth>want){ HB.busy=true; HB.want=want; clearTimeout(HB.t); HB.t=setTimeout(hbUnstick,1500); H.go(want-HB.depth); return; }
+    if(HB.depth<want&&HB.depth===0&&hbD(H.state)==null) H.replaceState({iqb:0},'');   // mark the page's own step
+    while(HB.depth<want){ H.pushState({iqb:HB.depth+1},''); HB.depth++; }
+  }catch(e){ HB.busy=false; } }
+function hbUnstick(){ if(!HB.busy) return; HB.busy=false; const H=hbHist(), d=H?hbD(H.state):null; if(d!=null) HB.depth=d; hbSync(); }
+// a Review #hash left on a step we came back to, while another screen is open: drop it (else Review's hashchange jumps there)
+function hbFixHash(){ try{ const H=hbHist(), h=String((typeof location!=='undefined'&&location.hash)||''); if(!H||h.indexOf('#review')!==0) return;
+  const on=document.querySelector('.screen.on'); if(on&&on.dataset&&on.dataset.screen==='review') return;
+  H.replaceState({iqb:HB.depth},'',location.pathname+location.search); }catch(e){} }
+function hbPop(e){ const d=hbD(e&&e.state);
+  if(HB.busy){ HB.busy=false; clearTimeout(HB.t); HB.depth=d!=null?d:HB.want; hbFixHash(); hbSync(); return; }   // our own step back landed
+  const nd=d!=null?d:Math.max(0,HB.depth-1), n=HB.depth-nd; HB.depth=nd;   // the reader's Back (a step without our mark = one)
+  if(n>0){ const gone=HB.st.splice(Math.max(0,HB.st.length-n)).reverse(); HB.mute++;
+    try{ gone.forEach(x=>{ try{ if(x.undo) x.undo(); }catch(err){} }); }finally{ HB.mute--; } }
+  hbFixHash(); hbLater(); }
+try{ if(typeof window!=='undefined'&&window&&window.addEventListener) window.addEventListener('popstate',hbPop); }catch(e){}
+// Back on an app picked in the header: a Studio tab's own "← All apps" (it resets its app page), else the header to All apps
+function hbAppUndo(){ if(!APP) return; const on=document.querySelector('.screen.on'), cur=on?on.dataset.screen:'';
+  if(cur==='uninstall') uniBack(); else if(cur==='active') actBack(); else if(cur==='value') valBack(); else setApp(''); }
+// Back on the App Report: the screen it was opened from (as its "← Back")
+function hbAdUndo(){ const on=document.querySelector('.screen.on'), cur=on?on.dataset.screen:'';
+  if(cur==='appdetail') adBack(); else if(cur!==(AD_ORIGIN||'overview')) show(AD_ORIGIN||'overview'); }
 function ovToggle(ct){ ct.closest('.card').classList.toggle('open'); }
 function show(id){
   closeNav();                              // mobile: selecting a screen closes the drawer
@@ -3650,7 +3694,8 @@ let RVLAND=false, RVLANDOK=false;   // review/index.json lists a day → Review 
 function rvLanding(r){ try{ RVLAND=!!(r&&r.ok&&r.idx&&Array.isArray(r.idx.days)&&r.idx.days.length);
     const on=document.querySelector('.screen.on'), cur=on&&on.dataset?on.dataset.screen:'overview';
     if(RVLAND&&RVLANDOK&&cur==='overview'&&!rvParseHash(location.hash)){ show('review'); return true; } }catch(e){} return false; }
-function _navRestore(){
+function _navRestore(){ HB.mute++; try{ _navRestore0(); }finally{ HB.mute--; } }   // a restored view is no new Back step
+function _navRestore0(){
   let n=null; try{ n=JSON.parse(localStorage.getItem('navstate')||'null'); }catch(e){}
   if(!n||!n.screen||(n.t&&Date.now()-n.t>12*3600*1000)){ RVLANDOK=true; render(); return; }   // none/stale → Overview; Review once its index lists a day (load)
   if(n.app!=null) APP=n.app; if(n.range) RANGE=n.range;
@@ -3881,7 +3926,7 @@ function renderAppDetail(){return screenDiv('appdetail');}
 // switch the view (ad-units ↔ countries) without touching the period
 function adSetView(v){ ADVIEW=v; if(ADAPP) openAppDetail(ADAPP); }
 // go back to the portfolio overview
-function adBack(){ show(AD_ORIGIN||'overview'); }   // return to the screen we opened the app FROM
+function adBack(){ hbDrop('appdetail'); show(AD_ORIGIN||'overview'); }   // return to the screen we opened the app FROM
 // change THIS page's period — it drives the SAME global RANGE the whole dashboard uses,
 // so whatever was picked in Overview is the default here, and a change here sticks everywhere.
 function adSetRange(r){
@@ -3892,7 +3937,7 @@ function adSetRange(r){
 let AD_ORIGIN="overview";                 // the screen an app was opened FROM, so ← Back returns there
 function openAppDetail(name){
   const _adon=document.querySelector('.screen.on'); const _adcur=_adon?_adon.dataset.screen:'overview';
-  if(_adcur!=='appdetail') AD_ORIGIN=_adcur;   // remember origin (skip on self re-render/auto-refresh)
+  if(_adcur!=='appdetail'&&!HB.mute){ AD_ORIGIN=_adcur; hbPush('appdetail',hbAdUndo); }   // remember origin (skip on self re-render/auto-refresh) · phone Back returns there
   ADAPP=name;
   const s=document.querySelector('.screen[data-screen=appdetail]'); if(!s) return;
   const app=DATA.apps.find(a=>a.name===name)||{account:'',avg_health:0,at_risk:0,platform:''};
@@ -7520,7 +7565,7 @@ const UPDW=lv=>({halt:'Worse — rollout roko, hotfix bhejo',hold:'Watch — ruk
 TIPS.upd=(i,d)=>{ const a=A[+i], k=ix(d), b=avgAt(a,k-7,k-1), f=avgAt(a,k,Math.min(k+6,N-1));
   return a.rel.filter(r=>r[0]===d).map(r=>`<div class="us-tt">📦 ${esc(r[1])} · ${fd(d)}</div><div>${UPDW(r[2])}${r[3]||!r[2]?'':' (pakka nahi)'}</div>`).join('')
     +(b.rate!=null?trow('7 days before',fN(b.outs)+'/day ('+rp(b.rate)+')'):'')+(f.rate!=null?trow('After that ('+f.n+' days)',fN(f.outs)+'/day ('+rp(f.rate)+')'):''); };
-function lock(on){ try{ document.body.classList.toggle('us-lock',!!on); }catch(e){} }
+function lock(on){ try{ document.body.classList.toggle('us-lock',!!on); }catch(e){} try{ hbOv('us-drawer',!!on,closeDrawer); }catch(e){} }   // phone Back closes the drawer
 function openDrawer(i){ layer(); i=+i; if(!A[i]) return; ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('us-drawer'); d.classList.add('us-on'); d.setAttribute('aria-hidden','false'); $('us-scrim').classList.add('us-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.us-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
 function closeDrawer(){ ST.drawer=-1; ST.did=null; const d=$('us-drawer'); if(d){ d.classList.remove('us-on'); d.setAttribute('aria-hidden','true'); } const sc=$('us-scrim'); if(sc) sc.classList.remove('us-on'); lock(false); hideTip(); }
 function navOrder(){ return R.slice().sort((x,y)=>lossCmp(x,y)).map(o=>o.a.i); }
@@ -10433,7 +10478,7 @@ function triGrid(a){ const C=M.triCols, rows=a.tri.w; if(!rows.length) return '<
   return h+'</div>'; }
 TIPS.tri=(i,f,k)=>{ const a=A[+i], r=a.tri.w.find(x=>x.f===f), c=M.triCols[+k], v=r.v[+k], ref=a.tri.ref[+k], pvb=(r.p>>(M.triCols.length-1-k))&1;
   return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · installs ${span(r.f,r.t)}</div>${trow((+c===1?'Back next day':'Back after '+c+' days'),fN(r.n*v/1000)+' · '+pc(v/1000,1))}${trow('Installs',fN(r.n))}${ref!=null?trow('All-time normal',pc(ref/1000,1)):''}${pvb?'<div class="as-tsm">⏳ not final — late data aa raha</div>':''}`; };
-function lock(on){ try{ document.body.classList.toggle('as-lock',!!on); }catch(e){} }
+function lock(on){ try{ document.body.classList.toggle('as-lock',!!on); }catch(e){} try{ hbOv('as-drawer',!!on,closeDrawer); }catch(e){} }   // phone Back closes the drawer
 function openDrawer(i){ layer(); i=+i; if(!A[i]) return; detLoad(A[i]); ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('as-drawer'); d.classList.add('as-on'); d.setAttribute('aria-hidden','false'); $('as-scrim').classList.add('as-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.as-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
 function closeDrawer(){ ST.drawer=-1; ST.did=null; const d=$('as-drawer'); if(d){ d.classList.remove('as-on'); d.setAttribute('aria-hidden','true'); } const sc=$('as-scrim'); if(sc) sc.classList.remove('as-on'); lock(false); hideTip(); }
 function navOrder(){ return R.slice().sort(R.ordCmp).map(o=>o.a.i); }
@@ -12692,7 +12737,7 @@ function longTable(o){ const L=o.a.lng; if(!L) return ''; if(!L.rows||!L.rows.le
     const b=r.b365; const v365=L.rows[0].R['365'].v[r.r];
     return `<tr><td class="vs-l"><b>${lab}${r.part?' ⏳':''}</b>${r.rel?' <span title="'+r.rel+' update is mahine">📦</span>':''}<small>${fN(r.n)} installs</small></td>${['30','60','90','180','365'].map(t=>dc(r,t)).join('')}<td>${rc(r,'30')} · ${rc(r,'90')} · ${rc(r,'180')} · ${rc(r,'365')}</td><td>${b!=null&&v365!=null?(r.bf&1?'≈':'')+mP(cv(v365/(b/100),o.a.fxL))+'<small>'+(r.bf&1?'≈':'')+pc(b/100,0)+' back</small>':(r.bf&2?'<span class="vs-faint">Little ads</span>':'—')}</td></tr>`; }).join('');
   return `${L.t?`<div class="vs-secnote" style="padding-top:0">${eTxt(L.t,o.a.fxL)}</div>`:''}<div class="vs-tw" style="max-height:420px"><table class="vs-mini vs-dtbl"><thead><tr><th class="vs-l">Installed in</th><th>Day 30</th><th>Day 60</th><th>Day 90</th><th>Day 180</th><th>Day 365</th><th>Earning/install · 30d · 90d · 6mo · 1yr</th><th>1 yr vs cost/install</th></tr></thead><tbody>${rows}</tbody></table></div><div class="vs-secnote">Day N = kitne log install ke N-ve din app khol rahe (chhota % = installs me se) · 1 yr vs cost = us mahine ka cost/install, aur saal me kitna wapas · ≈ = andaza · ⏳ = mahina poora data me nahi</div>`; }
-function lock(on){ try{ document.body.classList.toggle('vs-lock',!!on); }catch(e){} }
+function lock(on){ try{ document.body.classList.toggle('vs-lock',!!on); }catch(e){} try{ hbOv('vs-drawer',!!on,closeDrawer); }catch(e){} }   // phone Back closes the drawer
 function openDrawer(i){ layer(); i=+i; if(!A[i]) return; detLoadV(A[i]); ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('vs-drawer'); d.classList.add('vs-on'); d.setAttribute('aria-hidden','false'); $('vs-scrim').classList.add('vs-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.vs-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
 function closeDrawer(){ ST.drawer=-1; ST.did=null; const d=$('vs-drawer'); if(d){ d.classList.remove('vs-on'); d.setAttribute('aria-hidden','true'); } const sc=$('vs-scrim'); if(sc) sc.classList.remove('vs-on'); lock(false); hideTip(); }
 function navOrder(){ return R.slice().sort((x,y)=>{ const a=x.s.profD, b=y.s.profD; if(a==null&&b!=null) return 1; if(b==null&&a!=null) return -1; if(a!=null&&b!=null&&a!==b) return a-b; return (y.s.insD||0)-(x.s.insD||0); }).map(o=>o.a.i); }
