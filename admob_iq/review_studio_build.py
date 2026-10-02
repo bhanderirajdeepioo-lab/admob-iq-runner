@@ -19,13 +19,17 @@ the switch off, a load failure — the Review tab is exactly the older one.
 
   run(dashboard, data_dir, out_dir, s, now) → the _headers patterns ([] or ["/review/*"]). Writes
   data/review/studio/<day>.json.gz ONCE per card (kept as long as the card is: frozen with it; a rebuilt card gets a
-  new one), publishes it byte-for-byte to site/review/studio/ and names it in site/review/index.json["studio"].
+  new one), publishes it byte-for-byte to site/review/studio/ and names it in site/review/index.json["studio"]. Every
+  PAST review day's kept file is published and named the same way (History opens a past day's card from it) — exactly
+  as it was built that day (never rebuilt, never re-worded) and never trimmed: every day, no "last N days". A past
+  file is named only while it is that day's own card's (same day, same card build time, this format, under the size
+  cap); otherwise that day's card is shown from the card document itself.
   off(out_dir): the switch (repo variable REVIEW_STUDIO=false) — site/review/studio/ and the pointer removed, nothing
   printed: the site exactly as without the feature.
 
 Failure-isolated: an app whose card cannot be read is left out (counted; the page shows that app from the card
-document); a missing / broken extra file costs only that chart; any other failure: no file, no pointer, the error TYPE
-only. Nothing is trimmed: every app, feature, row and point the card has is in the file. PRIVACY: the log line has the
+document); a missing / broken extra file costs only that chart; a past day's file that cannot be used costs only that
+day (counted); any other failure: no file, no pointer, the error TYPE only. Nothing is trimmed: every app, feature, row and point the card has is in the file. PRIVACY: the log line has the
 day and counts only.
 """
 
@@ -889,9 +893,61 @@ def _valid(body, day, card_at):
             and body.get('card_built_at') == card_at and isinstance(body.get('apps'), list))
 
 
+def _publish(canon, sd, d, card):
+    """The kept file of day d → its byte copy on the site (written only when it differs) and its pointer
+    {file, v, card} (v: the hash of its content, the page's cache key)."""
+    with open(canon, 'rb') as f:
+        raw_gz = f.read()
+    name = f'{d}.json.gz'
+    dst = os.path.join(sd, name)
+    try:
+        with open(dst, 'rb') as f:
+            same = f.read() == raw_gz
+    except OSError:
+        same = False
+    if not same:
+        tmp = dst + '.tmp'
+        with open(tmp, 'wb') as f:
+            f.write(raw_gz)
+        os.replace(tmp, dst)
+    raw = json.dumps(json.loads(gzip.decompress(raw_gz).decode('utf-8')), ensure_ascii=False, separators=(',', ':'),
+                     sort_keys=True).encode('utf-8')
+    return {'file': f'{DIR}/{name}', 'v': hashlib.sha1(raw).hexdigest()[:12], 'card': card}
+
+
+def _past_days(idx, od):
+    """The review days before the open day (the index's own list: go-live onwards), oldest first — all of them."""
+    out = set()
+    for x in idx.get('days') or []:
+        d = x.get('d') if isinstance(x, dict) else None
+        if isinstance(d, str) and _DAY.match(d) and d < od:
+            out.add(d)
+    return sorted(out)
+
+
+def _past(data_dir, out_dir, sd, d):
+    """A past day's kept file → (pointer, gz bytes) once published; None: no file for that day (before the Studio);
+    False: a file that cannot be used (unreadable, another format / day / card, too big) — that day only."""
+    from .review.store import read_doc
+    canon = os.path.join(_data_dir(data_dir), f'{d}.json.gz')
+    if not os.path.isfile(canon):
+        return None
+    try:
+        if os.path.getsize(canon) > MAX_GZ:
+            return False
+        doc = read_doc(os.path.join(data_dir, 'review', 'days', f'{d}.json.gz'), d) \
+            or read_doc(os.path.join(out_dir, 'review', 'days', f'{d}.json.gz'), d)
+        if doc is None or not _valid(_read_gz(canon), d, doc.get('built_at')):
+            return False
+        ptr = _publish(canon, sd, d, doc.get('built_at'))
+        return ptr, os.path.getsize(canon)
+    except Exception:
+        return False
+
+
 def run(dashboard, data_dir, out_dir, s=None, now=None):
-    """The open day's Studio file → ["/review/*"] (for _headers; the review step's own pattern covers it) or [] (no
-    open day, no card, a failure: no file, no pointer). Never raises."""
+    """The open day's Studio file (+ every past day's kept one) → ["/review/*"] (for _headers; the review step's own
+    pattern covers it) or [] (no open day, no card, a failure: no file, no pointer). Never raises."""
     global LINE
     LINE = None
     try:
@@ -932,35 +988,34 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             if not _valid(_read_gz(canon), od, doc.get('built_at')):
                 raise OSError('studio file not readable')
             status = 'built'
-        # publish: the open day's file only (byte copy), every other day's copy removed from the site
-        with open(canon, 'rb') as f:
-            raw_gz = f.read()
+        # publish EVERY kept day: the open day's file and each past day's (its byte copy + its pointer); the site
+        # copies no pointer names are removed
         sd = _site_dir(out_dir)
         os.makedirs(sd, exist_ok=True)
-        name = f'{od}.json.gz'
-        dst = os.path.join(sd, name)
-        try:
-            with open(dst, 'rb') as f:
-                same = f.read() == raw_gz
-        except OSError:
-            same = False
-        if not same:
-            tmp = dst + '.tmp'
-            with open(tmp, 'wb') as f:
-                f.write(raw_gz)
-            os.replace(tmp, dst)
+        ptrs = {od: _publish(canon, sd, od, doc.get('built_at'))}
+        past = {'n': 0, 'kb': 0, 'skipped': 0}
+        for d in _past_days(idx, od):
+            p = _past(data_dir, out_dir, sd, d)
+            if p is None:
+                continue
+            if p is False:
+                past['skipped'] += 1
+                continue
+            ptrs[d], past['n'], past['kb'] = p[0], past['n'] + 1, past['kb'] + p[1]
         for n in os.listdir(sd):
-            if n != name:
+            m = re.match(r'^(\d{4}-\d{2}-\d{2})\.json\.gz$', n)
+            if not (m and m.group(1) in ptrs):
                 try:
                     os.remove(os.path.join(sd, n))
                 except OSError:
                     pass
-        raw = json.dumps(_read_gz(canon), ensure_ascii=False, separators=(',', ':'), sort_keys=True).encode('utf-8')
-        idx['studio'] = {od: {'file': f'{DIR}/{name}', 'v': hashlib.sha1(raw).hexdigest()[:12],
-                              'card': doc.get('built_at')}}
+        idx['studio'] = {d: ptrs[d] for d in sorted(ptrs)}
         _write_json(ip, idx)
+        with open(canon, 'rb') as f:
+            kb = len(f.read()) // 1024
         LINE = (f"Review Studio: day {od} · {status} (apps {len((_read_gz(canon) or {}).get('apps') or [])}, "
-                f"skipped {counts.get('skipped', 0)}) · kb {len(raw_gz) // 1024}")
+                f"skipped {counts.get('skipped', 0)}) · kb {kb} · past days {past['n']} (kb {past['kb'] // 1024}, "
+                f"skipped {past['skipped']})")
         return ['/review/*']
     except Exception as e:
         _remove(out_dir)

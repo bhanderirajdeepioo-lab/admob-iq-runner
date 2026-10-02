@@ -34,7 +34,8 @@ from tests import review_studio_synth as ss
 from tests import review_synth as rs
 
 DAY, DS = rs.DAY, rs.DAY.isoformat()
-LINE = re.compile(r"^Review Studio: day \d{4}-\d{2}-\d{2} · (built|kept) \(apps \d+, skipped \d+\) · kb \d+$")
+LINE = re.compile(r"^Review Studio: day \d{4}-\d{2}-\d{2} · (built|kept) \(apps \d+, skipped \d+\) · kb \d+"
+                  r" · past days \d+ \(kb \d+, skipped \d+\)$")
 SECRETS = ([rs.A[i] for i in rs.A] + [rs.K[i] for i in rs.A] + list(rs.STORE.values()) + list(rs.PKG.values())
            + [rs.PUB, rs.PUB2, "Synth", "example", "$", "₹"])
 FIDS = ["kamai", "uninstall", "active", "value", "update", "ads", "deduct", "mediation", "health", "setup"]
@@ -238,14 +239,81 @@ def test_frozen_with_the_card_and_rebuilt_with_it(site):
     assert "rate" not in a3["f"]["uninstall"]          # counts that no longer give the card's own % are not shown
 
 
-def test_only_the_open_days_file_is_published(site):
+def _past_history(s, d, n):
+    """n synthetic PAST review days before DS (go-live = the oldest), each with its own frozen card (a copy of DS's,
+    its own day + build time) and its kept Studio file (a copy of DS's, that day's card) → {i: day}; the review step
+    then lists them all in index.json. Day i=2: its Studio file is another card's (a rebuilt card); i=3: not gzip;
+    i=4: no Studio file (before the Studio); i=5: another format; i=n+1: before go-live."""
+    doc, body = _doc(d), _gz(os.path.join(d, "review", "studio", f"{DS}.json.gz"))
+    days = {i: (DAY - timedelta(i)).isoformat() for i in range(1, n + 2)}
+    for i, p in days.items():
+        c = dict(doc, day=p, built_at=f"{p}T04:00:00Z")
+        with gzip.open(os.path.join(d, "review", "days", f"{p}.json.gz"), "wt", encoding="utf-8") as f:
+            json.dump(c, f)
+        if i == 4:
+            continue
+        b = dict(body, day=p, card_built_at=c["built_at"] if i != 2 else f"{p}T01:00:00Z", meta=dict(body["meta"], day=p))
+        if i == 5:
+            b["v"] = rsb.V + 1
+        sp = os.path.join(d, "review", "studio", f"{p}.json.gz")
+        if i == 3:
+            with open(sp, "wb") as f:
+                f.write(b"not gzip")
+        else:
+            with gzip.open(sp, "wt", encoding="utf-8") as f:
+                json.dump(b, f)
+    mp = os.path.join(d, "review", "meta.json")
+    with open(mp, encoding="utf-8") as f:
+        meta = json.load(f)
+    meta["go_live"] = days[n]
+    with open(mp, "w", encoding="utf-8") as f:
+        json.dump(meta, f)
+    with contextlib.redirect_stderr(io.StringIO()):
+        assert review_run(None, d, s, rs.NOW, today=DAY, env={"REVIEW_READY_IST": "09:00"})["ok"]
+    return days
+
+
+def test_every_past_days_kept_file_is_published_and_named_never_trimmed(site):
     s, d, dash = site
-    os.makedirs(os.path.join(s, "review", "studio"), exist_ok=True)
-    stale = os.path.join(s, "review", "studio", "2026-09-29.json.gz")
-    with open(stale, "wb") as f:
-        f.write(b"old")
     _step(s, d, dash)
-    assert os.listdir(os.path.join(s, "review", "studio")) == [f"{DS}.json.gz"]
+    ptr0 = _idx(s)["studio"][DS]
+    N = 45                                                     # more past days than any "last N" cap would keep
+    days = _past_history(s, d, N)
+    sd = os.path.join(s, "review", "studio")
+    for stale in ("2026-08-01.json.gz", f"{days[2]}.json.gz"):  # a day with no kept file, a rebuilt card's old copy
+        with open(os.path.join(sd, stale), "wb") as f:
+            f.write(b"old")
+    kept = {p: _raw(os.path.join(d, "review", "studio", f"{p}.json.gz")) for i, p in days.items() if i != 4}
+    paths, err = _step(s, d, dash)
+    assert paths == ["/review/*"] and len(err) == 1 and LINE.match(err[0]), err
+    good = [p for i, p in days.items() if i not in (2, 3, 4, 5, N + 1)]
+    assert len(good) == N - 4 and f" past days {N - 4} (kb " in err[0] and err[0].endswith(", skipped 3)")
+    idx = _idx(s)
+    assert [x["d"] for x in idx["days"]] == sorted(list(days.values())[:N] + [DS])     # (go-live onwards)
+    ptr = idx["studio"]
+    assert sorted(ptr) == sorted(good + [DS]) and ptr[DS] == ptr0                       # the open day's: unchanged
+    for p in good:
+        card = _gz(os.path.join(d, "review", "days", f"{p}.json.gz"))["built_at"]
+        assert ptr[p]["file"] == f"review/studio/{p}.json.gz" and ptr[p]["card"] == card
+        assert re.fullmatch(r"review/studio/\d{4}-\d{2}-\d{2}\.json\.gz", ptr[p]["file"])   # (the page's own pattern)
+        assert re.fullmatch(r"[0-9a-f]{12}", ptr[p]["v"])
+        assert _raw(os.path.join(sd, f"{p}.json.gz")) == kept[p]                       # a byte copy of the kept file
+    assert sorted(os.listdir(sd)) == sorted(f"{p}.json.gz" for p in good + [DS])       # nothing else on the site
+    # exactly as built that day: the kept files are never rewritten (also not the ones left out)
+    for p, raw in kept.items():
+        assert _raw(os.path.join(d, "review", "studio", f"{p}.json.gz")) == raw
+    # a second build changes nothing (same bytes, same index, no file rewritten)
+    m0 = {n: os.stat(os.path.join(sd, n)).st_mtime_ns for n in os.listdir(sd)}
+    i0 = _raw(os.path.join(s, "review", "index.json"))
+    _step(s, d, dash)
+    assert {n: os.stat(os.path.join(sd, n)).st_mtime_ns for n in os.listdir(sd)} == m0
+    assert _raw(os.path.join(s, "review", "index.json")) == i0
+    # a past day's file that becomes unusable costs only that day
+    with open(os.path.join(d, "review", "studio", f"{good[0]}.json.gz"), "wb") as f:
+        f.write(b"broken")
+    paths, err = _step(s, d, dash)
+    assert paths == ["/review/*"] and good[0] not in _idx(s)["studio"] and len(_idx(s)["studio"]) == N - 4
+    assert not os.path.exists(os.path.join(sd, f"{good[0]}.json.gz")) and err[0].endswith(", skipped 4)")
 
 
 # ── failure isolation ─────────────────────────────────────────────────────────────────────────────────────────────

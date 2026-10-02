@@ -456,9 +456,10 @@ def _review_step(dashboard, data_dir, out_dir, now=None):
 
 
 def _review_studio_step(dashboard, data_dir, out_dir, s, ran=True, now=None):
-    """🗂 Review Studio (admob_iq.review_studio_build): the Review tab's Studio — ONE lazy file for the open review day,
-    built once from that day's FROZEN cards (+ the site files the review step read), its pointer in
-    site/review/index.json and ONE counts-only line → its _headers patterns (the review step's "/review/*" covers it).
+    """🗂 Review Studio (admob_iq.review_studio_build): the Review tab's Studio — ONE lazy file per review day, built
+    once from that day's FROZEN cards (+ the site files the review step read) and kept; the open day's and EVERY past
+    day's (as built that day, never trimmed) published with their pointers in site/review/index.json, and ONE
+    counts-only line → its _headers patterns (the review step's "/review/*" covers it).
     OPTIONAL (REVIEW_STUDIO, default on) and failure-isolated: switched off (its files and pointer removed, nothing
     printed), without this build's review step (ran=False: nothing touched) or failing (the error TYPE only), every
     other output is exactly as without it."""
