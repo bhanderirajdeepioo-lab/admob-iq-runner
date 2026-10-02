@@ -7844,6 +7844,11 @@ function uniChg(r){ if(r==null||r===''||!isFinite(+r)) return '—'; const x=Mat
 function uniMoney(v,cur){ const b=baseCur(), c=cur||b, r=(DATA&&DATA.usd_inr)||83; let x=+v;
   if(c!==b){ if(c==='USD'&&b==='INR') x*=r; else if(c==='INR'&&b==='USD') x/=r; }
   return cm(x,2); }
+// money PER USER from an engine value stored per 1,000 users (unit 'usd1k'): ÷1,000, 3 significant digits below 1
+// ("$0.0221", "₹2.13") so a per-user figure never shows the per-1,000 number under a per-user label
+function uniMoneyPU(v1k,cur){ const b=baseCur(), c=cur||b, r=(DATA&&DATA.usd_inr)||83; let x=(+v1k)/1000;
+  if(c!==b){ if(c==='USD'&&b==='INR') x*=r; else if(c==='INR'&&b==='USD') x/=r; }
+  const y=x*cfx(), a=Math.abs(y); return (y<0?'\u2212':'')+csym()+(a>=1?a.toFixed(2):String(+a.toPrecision(3))); }
 // ---- 🧮 installs vs per-user split (SPEC_SPLIT), shared by Active users, Uninstall, Install value, Update impact and the
 // Alerts cards: every change → how much came from daily installs going up / down (ad spend) and how much is the real
 // per-user change (per 100 / per 1,000, then as actual numbers). The engines write a short list `sp` on each change;
@@ -8179,7 +8184,7 @@ const UNI_IMP_JUDGED=['worse','better','same','unsure','market'];
 function uniImpVals(R,k){ const u=R.unit||UNI_IMP_UNIT[k]||'num', pc=u==='pct', x=(R.extra&&typeof R.extra==='object')?R.extra:{};
   const ok=v=>v!=null&&v!==''&&isFinite(+v), aV=ok(R.after)?+R.after:null, pV=ok(R.after_prov)?+R.after_prov:null, bV=ok(R.before)?+R.before:null;
   const dp=pc?uniDP(aV!=null?aV:pV,bV):null, judged=UNI_IMP_JUDGED.includes(R.status);
-  const f=v=>!ok(v)?null:(pc?uniPctDP(+v,dp):(u==='users'?Math.round(+v).toLocaleString():(u==='sec'?uniDur(+v):(u==='usd1k'?uniMoney(+v,x.currency):(+v).toFixed(2)))));
+  const f=v=>!ok(v)?null:(pc?uniPctDP(+v,dp):(u==='users'?Math.round(+v).toLocaleString():(u==='sec'?uniDur(+v):(u==='usd1k'?uniMoneyPU(+v,x.currency):(+v).toFixed(2)))));
   const pp=(R.change_unit||(pc?'pp':'rel'))==='pp';
   let ch=null;
   if(!judged){ if(aV!=null&&bV!=null) ch=pp?(pc?uniPP(uniShownD(aV,bV,dp))+'%':null):(bV>0?uniChg(aV/bV-1):null); }
