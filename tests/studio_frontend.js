@@ -299,5 +299,55 @@ get('gd', `(()=>{ const r={}, A=US._.A(), GDL=US._.GDL;
   const keep=__STUDIO.gt; delete __STUDIO.gt; US._.load(__STUDIO); ${RESET} const h0=uniScreen(); US.openDrawer(0); r.nogd={panel:US._.gdHtml(), drawer:document.getElementById('us-drawer').innerHTML, screen:h0.indexOf('id="us-root"')>=0}; US.closeDrawer();
   __STUDIO.gt=keep; US._.load(__STUDIO); ${RESET} uniScreen();
   return JSON.stringify(r); })()`);
+// ── 📦 updates in the install-week grid (owner, 2 Oct: "agar kahi par bhi update aata he to vaha se divide kro"): the
+// older table's own release list and dates, a line right above the week each fell in, a tap → that update's block ──────
+get('crel', `(()=>{ ${RESET} const r={}, A=US._.A();
+  const a=A.find(x=>{ const d=(UNI.apps||[]).find(z=>z.app_id===x.id); return d&&uniImpBlocks(d).length&&x.coh.w.length>=8; });
+  const d=UNI.apps.find(z=>z.app_id===a.id), keep=d.releases, W=a.coh.w, row=DATA.uninstall.apps.find(x=>x.app_id===a.id);
+  const toks=h=>[...h.matchAll(/<div class="us-(crel|rh|cyr)"([^>]*)>([\\s\\S]*?)<\\/div>/g)].map(m=>({k:m[1],rw:(m[2].match(/data-rw="([^"]*)"/)||[])[1]||null,t:__text(m[3]),h:m[3]}));
+  r.weeks=W.map(w=>({w:w.w,f:w.f,t:w.t,part:!!w.part}));
+  // the synthetic updates: a mid-week one, two in one week, one on a week's first day, one before the grid's first week
+  const syn=[{date:uniAdd(W[1].f,3),kind:'version',version:'9.1'},{date:uniAdd(W[2].f,1),kind:'version',version:'9.2'},{date:uniAdd(W[2].f,5),kind:'version',version:'9.3'},
+    {date:W[3].f,kind:'version',version:'9.4'},{date:uniAdd(W[0].f,-10),kind:'version',version:'9.0'}];
+  r.orig=(keep||[]).map(x=>({date:x.date,version:x.version,key:uniRelKey(x),block:(uniImpFind(d,uniRelKey(x))||{b:{}}).b.key||null}));
+  d.releases=(keep||[]).concat(syn);
+  try{
+    const out={};
+    for(const m of ['abs','dev']){ US._.ST.cohMode=m; out[m]=toks(US._.cohFull(a)); }
+    r.modes=out; US._.ST.cohMode='abs';
+    // the app page and the drawer: the same lines, the legend under the grid
+    APP=row.app; UNIAPP=a.id; const h=uniScreen(), pg=h.slice(h.indexOf('id="us-apg"'),h.indexOf('id="uni-old-app"'));
+    const cw=pg.slice(pg.indexOf('class="us-cohw"')); r.page=toks(cw.slice(0,cw.indexOf('</div></div>')+12)).filter(x=>x.k!=='rh').map(x=>x.t);
+    r.pageLg=__text((pg.match(/<div class="us-clg us-rlg">[\\s\\S]*?<\\/div>/)||[''])[0]);
+    r.pageTaps=[...pg.matchAll(/data-rimp="([^"]*)"/g)].map(m=>m[1]);
+    r.pageBlocks=[...pg.matchAll(/id="uni-imp-([^"]*)"/g)].map(m=>m[1]);
+    r.secAfterGrid=pg.indexOf('id="us-imp"')>pg.indexOf('class="us-cohw"');
+    // the older page's own "Install week × day" (key days, every week shown): its 📦 lines, by the week below each
+    UNITRI='cp'; UNITRIEXP=true; const old=uniTriCard(d); UNITRIEXP=false;
+    const ot=[...old.matchAll(/<tr class="uni-rel"><td class="nm">([\\s\\S]*?)<\\/td>|<tr(?: style="[^"]*")?><td class="nm" style="white-space:nowrap">([^<]*)/g)].map(m=>m[1]!=null?{rel:__text(m[1])}:{wk:m[2].trim()});
+    r.old=[]; let pend=null; ot.forEach(x=>{ if(x.rel!=null) pend=x.rel; else { if(pend!=null) r.old.push({wk:x.wk,rel:pend}); pend=null; } });
+    r.newByLabel=W.map(w=>({lab:uniSpan(w.f,w.t,true),w:w.w}));
+    // a tap on a version: on the page → uniImp(key) (the older table's jump); in the drawer → closes it, uniImpGo(app, key)
+    const calls=[], kI=uniImp, kG=uniImpGo; uniImp=(k,t)=>calls.push(['uniImp',k,t||null]); uniImpGo=(id,k,t)=>calls.push(['uniImpGo',id,k,t]);
+    const key=r.pageTaps[0]||'';
+    const el=inD=>({getAttribute:x=>x==='data-rimp'?key:null, closest:q=>q==='#us-drawer'?(inD?{}:null):null});
+    const tg=inD=>({closest:q=>q==='#us-root,#us-layer'?{}:(q==='[data-rimp]'?el(inD):null), id:''});
+    try{ US._.onClick({target:tg(false),preventDefault(){},stopPropagation(){}});
+      const i=A.indexOf(a); US.openDrawer(i); const dh=document.getElementById('us-drawer').innerHTML;
+      r.drawer=toks(dh.slice(dh.indexOf('class="us-cohw"'))).filter(x=>x.k!=='rh').map(x=>x.t);
+      r.drawerTaps=[...dh.matchAll(/data-rimp="([^"]*)"/g)].map(m=>m[1]);
+      US._.onClick({target:tg(true),preventDefault(){},stopPropagation(){}}); r.drawerClosed=US._.ST.drawer===-1;
+    } finally{ uniImp=kI; uniImpGo=kG; }
+    r.calls=calls; r.key=key; r.id=a.id;
+    // the older detail not loaded (or failed): the Studio file's own updates, no tap
+    const U0=UNI; UNI=null; try{ r.noUni=toks(US._.cohFull(a)).filter(x=>x.k==='crel').map(x=>({t:x.t,tap:/data-rimp/.test(x.h)})); r.rel=a.rel; } finally{ UNI=U0; }
+    // weeks that cross a year: a "── 2026 ──" row over each year's weeks (and none on a page in one year)
+    const mk=(w,f,t,part)=>Object.assign({},W[W.length-1],{w,f,t,part:!!part});
+    const yA=Object.assign({},a,{coh:{ref:a.coh.ref,w:[mk('2025-12-15','2025-12-15','2025-12-21'),mk('2025-12-22','2025-12-22','2025-12-28'),mk('2025-12-29','2025-12-29','2026-01-04'),mk('2026-01-05','2026-01-05','2026-01-07',1)]}});
+    d.releases=[{date:'2025-12-31',kind:'version',version:'5.0'},{date:'2025-12-23',kind:'update',version:null}];
+    r.year=toks(US._.cohFull(yA)).map(x=>x.k+' '+x.t);
+    r.yearPage=pg.indexOf('class="us-cyr"')>=0;
+  } finally{ d.releases=keep; }
+  ${RESET} uniScreen(); return JSON.stringify(r); })()`);
 out.n = Object.keys(out).length;
 process.stdout.write(JSON.stringify({ errors, out }));

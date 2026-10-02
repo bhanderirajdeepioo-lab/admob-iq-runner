@@ -513,3 +513,59 @@ def test_the_studio_table_and_button_look_skips_the_card():
                 bare += 1
                 assert m.group(1) == ":not(:where(.us-impb *))", sel
     assert bare >= 8
+
+
+# ── 📦 updates in the install-week grid (owner, 2 Oct: "agar kahi par bhi update aata he to vaha se divide kro taki pata
+# chale effect") — the older "Install week × day" table's own release list, dates and placement ────────────────────────
+
+def test_install_week_grid_draws_a_line_above_each_updates_week(report):
+    c = J(report, "crel")
+    W, seq = c["weeks"], c["modes"]["abs"]
+    lines = {x["rw"]: x["t"] for x in seq if x["k"] == "crel"}
+    D = r"\(\d{1,2} \w{3}\)"
+    assert re.fullmatch(r"📦 v9\.1 %s — mid-week" % D, lines[W[1]["w"]])                     # one update mid-week
+    assert re.fullmatch(r"📦 v9\.2 %s · v9\.3 %s — mid-week" % (D, D), lines[W[2]["w"]])     # two in one week: one line
+    assert re.fullmatch(r"📦 v9\.4 %s — week start" % D, lines[W[3]["w"]])                    # on the week's first day
+    assert W[0]["w"] not in lines and not any("9.0" in t for t in lines.values())          # before the grid's weeks: none
+    assert re.fullmatch(r"📦 v1\.1 %s — mid-week" % D, lines[W[8]["w"]]) and len(lines) == 4  # (the app's real update)
+    for i, x in enumerate(seq):                     # each line right ABOVE its week's row, whose label carries a 📦
+        if x["k"] == "crel":
+            assert seq[i + 1]["k"] == "rh" and "📦" in seq[i + 1]["t"]
+    assert sum("📦" in x["t"] for x in seq if x["k"] == "rh") == 4
+    assert [x["t"] for x in seq] == [x["t"] for x in c["modes"]["dev"]]                    # the same in "Vs normal"
+    # the partial week says so, as the older table does
+    part = [w for w in W if w["part"]]
+    assert part and all(any(x["k"] == "rh" and "(only %d days)" % ((date.fromisoformat(w["t"]) - date.fromisoformat(w["f"])).days + 1)
+                            in x["t"] for x in seq) for w in part)
+    # the very lines the older table draws, above the same weeks (its table also has older weeks: "9.0" sits there)
+    lab = {x["lab"]: x["w"] for x in c["newByLabel"]}
+    both = [o for o in c["old"] if o["wk"] in lab]
+    assert len(both) == 4 and any("9.0" in o["rel"] and o["wk"] not in lab for o in c["old"])
+    for o in both:
+        assert re.findall(r"v[\d.]+", o["rel"]) == re.findall(r"v[\d.]+", lines[lab[o["wk"]]]), o
+    # the page and the drawer draw the same lines (no year row: these weeks are all in one year)
+    want = [x["t"] for x in seq if x["k"] != "rh"]
+    assert c["page"] == want and c["drawer"] == want and not c["yearPage"]
+    assert c["pageLg"] == "📦 = new update. Line ke upar = naye version ke installs, neeche = purane version ke. Tap 📦 → update impact."
+    _words_ok(" ".join(want + [c["pageLg"]]))
+
+
+def test_install_week_grid_update_tap_jumps_to_its_update_impact_block(report):
+    c = J(report, "crel")
+    key = c["orig"][0]["key"]
+    assert key == c["orig"][0]["block"] == c["key"]                       # the older table's key, a block of the card
+    assert set(c["pageTaps"]) == {key} and len(c["pageTaps"]) == 2        # the version on the line + the week's 📦
+    assert key in c["pageBlocks"] and c["secAfterGrid"]                    # …whose block is on this page, below the grid
+    assert set(c["drawerTaps"]) == {key}
+    # the page: the older table's own jump (uniImp) · the drawer: closed, the app page opened on that block (uniImpGo)
+    assert c["calls"] == [["uniImp", key, None], ["uniImpGo", c["id"], key, "uni"]] and c["drawerClosed"]
+    # no older detail (still loading / failed): the Studio file's own updates, no tap
+    assert c["noUni"] == [{"t": "📦 %s (%d %s) — mid-week" % (r[1], int(r[0][8:]), date.fromisoformat(r[0]).strftime("%b")), "tap": False}
+                          for r in c["rel"]]
+
+
+def test_install_week_grid_year_rows_only_when_the_weeks_cross_a_year(report):
+    c = J(report, "crel")
+    assert c["year"] == ["rh All-time normal all installs", "cyr ── 2026 ──", "rh 5–7 Jan 5,400 installs (only 3 days)",
+                         "crel 📦 v5.0 (31 Dec 2025) — mid-week", "rh 29 Dec 2025–4 Jan 📦 5,400 installs", "cyr ── 2025 ──",
+                         "crel 📦 Update (23 Dec 2025) — mid-week", "rh 22–28 Dec 2025 📦 5,400 installs", "rh 15–21 Dec 2025 5,400 installs"]

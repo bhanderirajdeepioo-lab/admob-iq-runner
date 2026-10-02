@@ -2678,7 +2678,7 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-clg{display:flex;flex-wrap:wrap;gap:4px 14px;padding:4px 18px 12px;font-size:11.5px;color:var(--muted);align-items:center}
 :is(#us-root,#us-layer) .us-clg .us-k{display:inline-flex;align-items:center;gap:5px}
 :is(#us-root,#us-layer) .us-clg .us-k i{display:inline-block;width:14px;height:3px;border-radius:2px}
-:is(#us-root,#us-layer) .us-cohw{overflow-x:auto;padding:0 12px 6px}
+:is(#us-root,#us-layer) .us-cohw{overflow-x:auto;margin:0 12px;padding:0 0 6px}   /* (no side padding: the sticky week column sits at the box's own edge) */
 :is(#us-root,#us-layer) .us-coh{display:grid;gap:3px;min-width:560px}
 :is(#us-root,#us-layer) .us-coh .us-c{border-radius:6px;min-height:30px;display:flex;align-items:center;justify-content:center;font:600 12.5px var(--us-num);font-variant-numeric:tabular-nums;position:relative}
 :is(#us-root,#us-layer) .us-coh .us-c.us-na{background:transparent;color:var(--faint);font-weight:400}
@@ -2687,6 +2687,20 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-coh .us-rh small{color:var(--faint);font-size:10.5px}
 :is(#us-root,#us-layer) .us-coh .us-chh{font:600 10px var(--us-num);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:center;padding:2px 0 4px}
 :is(#us-root,#us-layer) .us-coh .us-ref{outline:1px dashed var(--line2);background:transparent!important;color:var(--ink2)}
+:is(#us-root,#us-layer) .us-cohw .us-coh .us-rh,:is(#us-root,#us-layer) .us-cohw .us-coh .us-stk{position:sticky;left:0;z-index:2;background:var(--panel);box-shadow:4px 0 0 var(--panel)}
+:is(#us-root,#us-layer) .us-coh .us-rh>span{white-space:nowrap}
+:is(#us-root,#us-layer) .us-coh .us-crel{grid-column:1/-1;background:var(--purple-b);border-top:2px dashed var(--purple);border-radius:3px;padding:5px 0;color:var(--purple);font:700 11.5px/1.45 var(--us-font)}
+:is(#us-root,#us-layer) .us-coh .us-crel>span{position:sticky;left:0;display:inline-block;padding:0 9px;max-width:min(100%,calc(100vw - 64px));white-space:normal;overflow-wrap:anywhere}
+:is(#us-root,#us-layer) .us-coh .us-crel .us-mw{font-weight:500;color:#c4b5fd}
+:is(#us-root,#us-layer) .us-coh .us-cyr{grid-column:1/-1;font:700 11px var(--us-num);color:var(--muted);padding:5px 0 1px}
+:is(#us-root,#us-layer) .us-coh .us-cyr>span{position:sticky;left:0;padding:0 2px}
+:is(#us-root,#us-layer) .us-rl{cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
+:is(#us-root,#us-layer) .us-rl:hover,:is(#us-root,#us-layer) .us-rl:focus-visible{color:#fff}
+:is(#us-root,#us-layer) .us-relb{margin-left:4px;font-size:11px;cursor:help}
+:is(#us-root,#us-layer) .us-relb[data-rimp]{cursor:pointer}
+:is(#us-root,#us-layer) .us-rlg{padding-top:0;color:var(--purple)}
+:is(#us-root,#us-layer) .us-rlg b{font-weight:600;color:#c4b5fd}
+:is(#us-root,#us-layer) .us-seg[data-cohm] button{min-height:32px}
 :is(#us-root,#us-layer) .us-upd{display:flex;flex-direction:column;gap:6px;padding:0 18px 14px}
 :is(#us-root,#us-layer) .us-upd .us-u{display:flex;gap:10px;align-items:center;font-size:12.5px;flex-wrap:wrap}
 :is(#us-root,#us-layer) .us-upd .us-u .us-dt{font:600 12px var(--us-num);color:var(--muted);width:56px}
@@ -6878,7 +6892,7 @@ function expandH(o){ const a=o.a, i0=Math.max(0,Math.min(ix(W.f),N-28)), i1=ix(W
     lab:{last:i=>fdNoY(dOf(i0+i))+': '+fN(a.nw[i0+i])+' installs'}});
   const io2=spark({vals:a.un.slice(i0,i1+1),w:320,h:80,color:'var(--us-s-out)',area:1,dot:false});
   return `<div class="us-xin"><div><h4>Uninstall rate % · normal band${wi>0?' · last 4 weeks':''}</h4>${rate}</div><div><h4><span style="color:var(--us-s-in)">Installs</span> vs <span style="color:var(--us-s-out)">uninstalls</span> /day</h4><div style="position:relative">${io}<div style="position:absolute;inset:0;pointer-events:none">${io2}</div></div></div><div><h4>Install weeks · % still in app</h4>${cohMini(a)}</div><button class="us-btn us-go" data-go="${a.i}">Full app view →</button></div>`; }
-const cohLab=c=>c===0?'Install day':'Date '+c;
+const cohLab=c=>c===0?'Install day':'Day '+c;
 function cohMini(a){ const W2=a.coh.w.slice(-6), cols=[0,1,7,30]; const ci=cols.map(c=>M.cohCols.indexOf(c));
   return `<div class="us-coh" style="grid-template-columns:70px repeat(${cols.length},1fr);min-width:0">`+'<div></div>'+cols.map(c=>`<div class="us-chh">${cohLab(c)}</div>`).join('')
     +W2.slice().reverse().map(r=>`<div class="us-rh">${span(r.f,r.t)}</div>`+ci.map(k=>cohCell(a,r,k)).join('')).join('')+'</div>'; }
@@ -6895,11 +6909,40 @@ function cohCell(a,r,k){ const v=r.v[k]; if(v==null) return '<div class="us-c us
 TIPS.coh=(i,w,k)=>{ const a=A[+i], r=a.coh.w.find(x=>x.w===w), N0=M.cohCols[+k], v=r.v[+k], ref=a.coh.ref[+k], pv=(r.p>>(M.cohCols.length-1-k))&1;
   const stay=Math.round(r.n*v/1000);
   return `<div class="us-tt">${ic(a,14,'ail')}${esc(a.nm)} · installs ${span(r.f,r.t)}</div>${trow(N0===0?'Still in app after install day':N0+' days — still in app',pc(v/1000,1))}${trow('Installs',fN(r.n))}${trow('Still in app',fN(stay)+' users')}${ref!=null?trow('All-time normal',pc(ref/1000,1)):''}${ref!=null?trow('vs normal',fS(Math.round(r.n*(v-ref)/1000))+' users'):''}${pv?'<div class="us-tsm">⏳ not final — late data aa raha</div>':''}${r.part?'<div class="us-tsm">Adhoora hafta (launch / data ka kinara)</div>':''}`; };
-function cohFull(a){ const C=M.cohCols, rows=a.coh.w.slice().reverse();
-  let h=`<div class="us-coh" style="grid-template-columns:96px repeat(${C.length},minmax(52px,1fr))"><div class="us-chh" style="text-align:left">Install week</div>`+C.map(c=>`<div class="us-chh">${cohLab(c)}</div>`).join('');
+// 📦 the app's updates in the grid: the very list and dates the older "Install week × day" table draws its 📦 lines from
+// (the older detail's releases, oldest first); a version with a block in "📦 Update impact" is a tap to it (the same key the
+// older table uses). Only while that detail is not loaded (or failed), the Studio file's own updates — no tap
+const uDet=a=>{ try{ return ((typeof UNI!=='undefined'&&UNI&&UNI.apps)||[]).find(z=>z.app_id===a.id)||null; }catch(e){ return null; } };
+function relsOf(a){ const d=uDet(a);
+  if(d) return (d.releases||[]).filter(x=>x&&x.date).slice().sort((x,y)=>x.date<y.date?-1:(x.date>y.date?1:0))
+    .map(x=>({d:x.date,v:x.version?uniRelV(x):'Update',nv:!x.version,k:uniImpFind(d,uniRelKey(x))?uniRelKey(x):''}));
+  return (a.rel||[]).filter(r=>r&&r[0]).map(r=>({d:r[0],v:r[1]==='App update'?'Update':String(r[1]),k:''})); }
+// per install week: its updates — the line goes right ABOVE the week each fell in (as in the older table: the weeks above
+// it = installs of the new version, the ones below = of the old one); an update outside the grid's weeks gets no line
+function cohRels(a){ const L=relsOf(a), m={}; a.coh.w.forEach(r=>{ const k=L.filter(x=>x.d>=r.f&&x.d<=r.t); if(k.length) m[r.w]=k; }); return m; }
+const relMid=(r,L)=>L.some(x=>x.d>r.f);                       // out after the week's first day: that week's installs are mixed
+const relItem=x=>esc(x.v)+' ('+fd(x.d)+')';
+function relLine(r,L){ return '📦 '+L.map(x=>x.k?`<span class="us-rl" data-rimp="${esc(x.k)}" role="link" tabindex="0">${relItem(x)}</span>`:relItem(x)).join(' · ')
+  +' <span class="us-mw">— '+(relMid(r,L)?'mid-week':'week start')+'</span>'; }
+TIPS.crel=(i,w)=>{ const a=A[+i], r=a&&a.coh.w.find(x=>x.w===w), L=r?cohRels(a)[w]:null; if(!L) return '';
+  return `<div class="us-tt">${ic(a,14,'ail')}${esc(a.nm)} · installs ${span(r.f,r.t)}</div>`+L.map(x=>trow('📦 '+esc(x.v),fd(x.d))).join('')
+    +(L.some(x=>x.nv)?'<div class="us-tsm">Update (bina version) = us din achanak kai users ne app update kiya</div>':'')
+    +`<div class="us-tsm">${relMid(r,L)?'Update hafte ke beech aaya — is hafte ke installs dono versions ke':'Update hafte ke pehle din aaya — is hafte ke installs bhi naye version ke'}</div>`
+    +`<div class="us-tsm">Line ke upar = naye version ke installs, neeche = purane version ke${L.some(x=>x.k)?' · tap 📦 → update impact':''}</div>`; };
+function cohFull(a,cr){ const C=M.cohCols, rows=a.coh.w.slice().reverse(); cr=cr||cohRels(a);
+  let h=`<div class="us-coh" style="grid-template-columns:104px repeat(${C.length},minmax(52px,1fr))"><div class="us-chh us-stk" style="text-align:left">Install week</div>`+C.map(c=>`<div class="us-chh">${cohLab(c)}</div>`).join('');
   h+=`<div class="us-rh">All-time normal<small>all installs</small></div>`+C.map((c,k)=>a.coh.ref[k]==null?'<div class="us-c us-na">·</div>':`<div class="us-c us-ref">${pc(a.coh.ref[k]/1000,0)}</div>`).join('');
-  rows.forEach(r=>{ h+=`<div class="us-rh">${span(r.f,r.t)}<small>${fN(r.n)} installs</small></div>`+C.map((c,k)=>cohCell(a,r,k)).join(''); });
+  // a year row ("── 2026 ──") only when the weeks shown cross a year; then 📦 the updates of the week below, then the week
+  const multi=new Set(rows.map(r=>r.t.slice(0,4))).size>1; let yr='';
+  rows.forEach(r=>{ if(multi&&r.t.slice(0,4)!==yr){ yr=r.t.slice(0,4); h+=`<div class="us-cyr"><span>── ${yr} ──</span></div>`; }
+    const L=cr[r.w], go=L?((L.find(x=>x.k)||{}).k||''):'', nd=dDiff(r.f,r.t)+1;
+    if(L) h+=`<div class="us-crel" data-rw="${r.w}"><span>${relLine(r,L)}</span></div>`;
+    const badge=L?`<span class="us-relb" data-tk="crel:${a.i}:${r.w}"${go?` data-rimp="${esc(go)}" role="link" tabindex="0"`:''}>📦</span>`:'';
+    h+=`<div class="us-rh"><span>${span(r.f,r.t)}${badge}</span><small>${fN(r.n)} installs</small>${r.part?`<small>(only ${nd} ${nd===1?'day':'days'})</small>`:''}</div>`+C.map((c,k)=>cohCell(a,r,k)).join(''); });
   return h+'</div>'; }
+// the legend line under the grid (only when it has a 📦 line)
+function cohRelLg(cr){ const L=Object.values(cr||{}); if(!L.length) return '';
+  return `<div class="us-clg us-rlg">📦 = new update. Line ke upar = naye version ke installs, neeche = purane version ke.${L.some(x=>x.some(y=>y.k))?' <b>Tap 📦 → update impact.</b>':''}</div>`; }
 
 /* ================= numbers printed on the charts (labels that never overlap) ================= */
 // L: [{x,y,t,a:'start'|'middle'|'end',p:priority (lower = placed first),c:colour,fs,b:bold,dys:[vertical nudges]}];
@@ -7022,7 +7065,8 @@ function bodyHtml(o,mode){ const a=o.a, s=o.s, c=o.c;
   const als=sortAl(a.al);
   const ups=a.rel.slice().reverse();
   const hd=mode==='p'?'h2':'h2 style="font-size:15px"', he=mode==='p'?'h2':'h2';
-  const coh=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Install week × day</div><${hd}>How many still in app</${he}><div class="us-hint">Har row = ek hafte ke installs · cell = us din ke baad kitne % ne app rakha</div></div><div class="us-right"><div class="us-seg" id="us-cohM-${mode}" data-cohm="1"><button data-m="abs" aria-pressed="${ST.cohMode==='abs'}">% bache</button><button data-m="dev" aria-pressed="${ST.cohMode==='dev'}">Vs normal</button></div></div></div><div class="us-cohw">${cohFull(a)}</div><div class="us-clg">${ST.cohMode==='abs'?'<span class="us-k"><i style="background:linear-gradient(90deg,#13213a,#22d3ee);width:40px;height:9px"></i>fewer → more still in app</span>':'<span class="us-k"><i style="background:var(--us-h2);height:9px"></i>below normal</span><span class="us-k"><i style="background:var(--us-g2);height:9px"></i>above normal</span>'}<span class="us-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="us-k">· = abhi us din tak nahi pahunche</span></div></div>`;
+  const cr=cohRels(a);                                   // 📦 the updates in the install-week grid
+  const coh=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Install week × day</div><${hd}>How many still in app</${he}><div class="us-hint">Har row = ek hafte ke installs · cell = us din ke baad kitne % ne app rakha</div></div><div class="us-right"><div class="us-seg" id="us-cohM-${mode}" data-cohm="1"><button data-m="abs" aria-pressed="${ST.cohMode==='abs'}">% bache</button><button data-m="dev" aria-pressed="${ST.cohMode==='dev'}">Vs normal</button></div></div></div><div class="us-cohw">${cohFull(a,cr)}</div><div class="us-clg">${ST.cohMode==='abs'?'<span class="us-k"><i style="background:linear-gradient(90deg,#13213a,#22d3ee);width:40px;height:9px"></i>fewer → more still in app</span>':'<span class="us-k"><i style="background:var(--us-h2);height:9px"></i>below normal</span><span class="us-k"><i style="background:var(--us-g2);height:9px"></i>above normal</span>'}<span class="us-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="us-k">· = abhi us din tak nahi pahunche</span></div>${cohRelLg(cr)}</div>`;
   const alH=als.length?`<div><div class="us-chg-h"><div><div class="us-eyebrow">This app’s alerts</div><${hd}>What changed?</${he}></div></div><div class="us-cards">${als.map(cardH).join('')}</div></div>`:'<div class="us-ok">✅ Is app pe koi khula alert nahi</div>';
   const upL=ups.map(r=>{ const kk=ix(r[0]), b=avgAt(a,kk-7,kk-1), f=avgAt(a,kk,Math.min(kk+6,N-1));
       return `<div class="us-u"><span class="us-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="us-faint">${r[2]==='halt'?'Rollout roko, hotfix bhejo':(r[2]==='win'?'Good impact':(r[2]==='continue'?'Koi loss nahi dikha':(r[2]==='hold'?'Wait and check':'Measuring impact')))}</span>${b.rate!=null&&f.rate!=null?`<span class="us-num" style="font-size:12px;color:var(--ink2)">uninstalls ${fN(b.outs)}→${fN(f.outs)}/day (${rp(b.rate)}→${rp(f.rate)})</span>`:''}</div>`; }).join('');
@@ -7268,6 +7312,7 @@ function wire(){ if(WIRED) return; WIRED=true;
     else if(id==='us-cmp') setCmp(e.target.value); else if(/^us-c[ft][12]$/.test(id)) setDate(id,e.target.value); });
   document.addEventListener('keydown',e=>{ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.tagName==='INPUT'||tg.tagName==='SELECT'||tg.tagName==='TEXTAREA'||tg.isContentEditable));
     if(e.key==='Escape'){ if(ST.drawer>=0){ closeDrawer(); e.preventDefault(); } hideTip(); return; }
+    if((e.key==='Enter'||e.key===' ')&&tg&&tg.closest&&tg.closest('[data-rimp]')&&inStudio(tg)){ e.preventDefault(); tg.closest('[data-rimp]').click(); return; }
     if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
     if(ST.drawer>=0&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navDrawer(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
     if(VIEW==='app'&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navPage(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
@@ -7279,6 +7324,10 @@ function onClick(e){ const t=e.target; if(!inStudio(t)) return;
   const fp=t.closest('[data-full]'); if(fp){ e.preventDefault(); fullPage(fp.getAttribute('data-full')); return; }
   if(t.closest('[data-back]')){ e.preventDefault(); hideTip(); try{ uniBack(); }catch(e2){} return; }
   const pn=t.closest('[data-pnav]'); if(pn){ hideTip(); navPage(+pn.getAttribute('data-pnav')); return; }
+  // 📦 a version in the install-week grid → that update's block in "📦 Update impact" (the older table's own jump, uniImp):
+  // on the app page right there; from the drawer the app page opens on it (uniImpGo, as from All apps "Recent updates")
+  const ri=t.closest('[data-rimp]'); if(ri){ e.preventDefault(); hideTip(); const k=ri.getAttribute('data-rimp');
+    if(ri.closest('#us-drawer')){ const id=ST.did; closeDrawer(); try{ uniImpGo(id,k,'uni'); }catch(e2){} } else { try{ uniImp(k); }catch(e2){} } return; }
   const ab=t.closest('[data-al]'); if(ab&&ab.dataset.al!==''){ e.stopPropagation(); hideTip(); const k=ab.dataset.al, inD=!!ab.closest('#us-drawer');
     if(!inD&&ST.drawer>=0) closeDrawer();
     const root=inD?$('us-drawer'):(VIEW==='app'?$('us-apg'):$('us-chg')); let card=root&&root.querySelector('[data-alk="'+k+'"]');
@@ -7313,7 +7362,7 @@ return {ptr, ensure, retry, screen, appScreen, has, hide, closeDrawer, openDrawe
      story:storyHtml, kpis:kpisHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml,
      page:id=>{ const i=A.findIndex(a=>a.id===id); return i<0?'':pageHtml(i); }, view:()=>({VIEW,PAGE}), SPK:()=>SPK, labels, navPage,
      load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage,
-     gdCell, gdHtml:()=>gdHtml(), gdApp:(i,m)=>gdApp(R[i],m||'d'), GST, GDL}};
+     gdCell, gdHtml:()=>gdHtml(), gdApp:(i,m)=>gdApp(R[i],m||'d'), GST, GDL, cohFull, cohRels, relsOf}};
 })();
 
 function renderUninstall(){
