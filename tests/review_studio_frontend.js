@@ -82,10 +82,13 @@ async function fetchMock(url, opt) {
   return { type: 'basic', status, ok: status >= 200 && status < 300, json: async () => j };
 }
 const timers = [];
+// history: replaceState as before + pushState / go recorded (the full card's phone-Back step, via the dashboard's hbOv)
+const HIST = []; let HSTATE = null;
+const HISTORY = { replaceState(st) { HSTATE = st == null ? null : st; }, pushState(st) { HIST.push('push'); HSTATE = st; }, go(n) { HIST.push('go' + n); }, back() { HIST.push('back'); }, get state() { return HSTATE; } };
 const ctx = {
   console: { log() {}, info() {}, warn() {}, error: (...a) => errors.push('console.error ' + a.join(' ')) },
   window: any, document, localStorage: store(), sessionStorage: store(), navigator: any,
-  location: { href: 'http://localhost/', search: '', hash: '', pathname: '/', origin: 'http://localhost', reload() {} }, history: { replaceState() {} },
+  location: { href: 'http://localhost/', search: '', hash: '', pathname: '/', origin: 'http://localhost', reload() {} }, history: HISTORY,
   fetch: fetchMock, setTimeout: f => { timers.push(f); return timers.length; }, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
   requestAnimationFrame: () => 0, cancelAnimationFrame() {}, matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
   addEventListener() {}, removeEventListener() {}, DecompressionStream: any, Response: any, Blob: any, AbortController: undefined,
@@ -181,6 +184,37 @@ async function step(name, code) {
     const a=RVS._.A.find(x=>x.key===k), h=RVS._.listHtml(), m=RVS._.mapHtml(), d=RVS._.drawerHtml(k);
     const r={key:k, n:RVS._.A.length, raw:!!(a&&a.raw), card:h.indexOf('id="rs-c-'+k+'"')>=0, pill:h.indexOf('Studio data nahi — card ka text')>=0, map:m.indexOf('data-rsgo="'+k+'"')>=0, drawer:d.length>500};
     RVS._.load(__FX.studio); RVS._.syncNow(); return r; })()`);
+  // ── 📱 mobile fixes ──
+  // the toast: a tap clears it (the tap itself goes to the button under it — CSS pointer-events:none, tested on the CSS)
+  await step('toast_tap', `(()=>{ rvToast('✅ Reviewed — x'); const t=document.getElementById('rv-toast'); const shown=t.textContent; RV.toastAt=Date.now()-5000; rvToastTap(); const after=t.textContent;
+    rvToast('Fresh'); rvToastTap(); return {shown, afterTap:after, freshKept:t.textContent}; })()`);
+  // the Studio's own view: a tab picked in the "🗂 Old views" fold (rvSwitch) never switches the Studio, not even on the next render
+  await step('views', `(()=>{ const r={}; RVS._.setView('today'); rvSwitch('sum',false); RVS._.syncNow(); RVS._.render();
+    r.afterOldSum={studio:RVS.view(), old:RV.view, hash:rvHashFor(), panel:document.getElementById('rs-root').innerHTML.indexOf('id="rs-v-today"')>=0};
+    rvSwitch('hist',false); RVS._.render(); r.afterOldHist={studio:RVS.view(), old:RV.view, hash:rvHashFor()};
+    RVS._.setView('sum'); r.studioSum={studio:RVS.view(), old:RV.view, hash:rvHashFor(), panel:document.getElementById('rs-root').innerHTML.indexOf('id="rs-v-sum"')>=0};
+    RVS.want('hist'); r.want={studio:RVS.view(), hash:rvHashFor()}; RVS._.setView('today');
+    // all done on a ✅: the Studio says where the summary is, it does not jump
+    const pc=rvPendCount; rvPendCount=()=>0; RV.lastPend=1; RV.toastHold=0; rvMaybeDone(); rvPendCount=pc;
+    r.allDone={studio:RVS.view(), toast:document.getElementById('rv-toast').textContent}; return r; })()`);
+  // a teammate's change (the poll's render) waits while a Studio note box has focus; it runs once the box lets go
+  await step('typing', `(async()=>{ RVS._.cardAct('note',${JSON.stringify(K.pend)},null); const ta=document.getElementById('rs-pta'); ta.tagName='TEXTAREA'; Object.defineProperty(ta,'isConnected',{value:true});
+    document.activeElement=ta; const root=document.getElementById('rs-root'); root.innerHTML='SENTINEL'; RVS._.syncNow(); const held=root.innerHTML==='SENTINEL', typing=RVS._.typing();
+    document.activeElement=null; RVS._.flushLater(); await Promise.resolve(); await Promise.resolve(); RVS._.panelAct('close',null);
+    return {typing, held, rendered:root.innerHTML!=='SENTINEL'&&root.innerHTML.indexOf('rs-v-today')>=0}; })()`);
+  // coming back to Review: the reader's place (same day, same view), not the top of the page
+  await step('backY', `(()=>{ const sc=[]; const w0=window; window={scrollY:0,scrollTo:(x,y)=>{ sc.push(y); },addEventListener(){}};
+    RV.lastShow='review'; RV.lastY=12345; rvOnShow('uninstall'); const saved=RV.backY&&RV.backY.y; const keep=rvKeepScroll('review'); rvOnShow('review');
+    const r={saved, keep, restoredTo:sc.slice(-1)[0]};
+    RV.lastY=500; rvOnShow('overview'); RVS._.setView('sum'); r.otherView=rvKeepScroll('review'); RVS._.setView('today'); RV.backY=null; rvOnShow('review'); window=w0; return r; })()`);
+  // the full card adds ONE history entry (phone Back closes it); ✕ goes Back itself, a close that navigates on does not
+  const mt = 'await Promise.resolve(); await Promise.resolve();';
+  await step('drawerBack', `(async()=>{ const k=RVS._.A[0].key, r={};
+    RVS._.openDrawer(k); ${mt} RVS._.openDrawer(RVS._.A[1].key); ${mt}          // one step, also when the card moves to another app
+    RVS._.closeDrawer(); ${mt} hbPop({state:{iqb:0}}); ${mt}                     // ✕ takes the step off (the browser lands back)
+    RVS._.openDrawer(k); ${mt} hbPop({state:{iqb:0}}); ${mt}                     // the phone's Back closes the card
+    r.closedByBack=RVS._.ST.drawer===null; r.lock=document.body.classList.contains('rs-lock'); r.stack=HB.st.map(x=>x.tag); return r; })()`);
+  out.hist = HIST.slice();
   out.errors = errors;
   process.stdout.write(JSON.stringify(out));
 })();

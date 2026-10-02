@@ -921,7 +921,8 @@
   #rv-root .rv-grp .rv-card{background:var(--panel2)}
   #rv-root .rv-grp .rv-panel{background:var(--panel)}
   #rv-root .rv-toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13.5px;
-    font-weight:600;padding:8px 14px;border-radius:10px;max-width:calc(100% - 32px);z-index:80;box-shadow:0 6px 24px rgba(0,0,0,.45);transition:opacity .2s}
+    font-weight:600;padding:8px 14px;border-radius:10px;max-width:calc(100% - 32px);z-index:80;box-shadow:0 6px 24px rgba(0,0,0,.45);transition:opacity .2s;
+    pointer-events:none}   /* the toast only tells: a tap always goes to the button under it (it never swallows the next tap) */
   #rv-root .rv-toast:empty{opacity:0;padding:0;pointer-events:none;box-shadow:none}
   /* summary */
   #rv-root .rv-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
@@ -988,7 +989,9 @@
   #rv-root .rv-state h2{font-size:17px;font-weight:750}
   #rv-root .rv-state p{margin:6px 0 0;color:var(--ink2)}
   @media (max-width:760px){
-    #rv-root .rv-toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+    /* phone: where the dashboard's own toast sits (#btoast) — just above the tab bar, never in the middle of the cards; max 2 lines */
+    #rv-root .rv-toast{bottom:calc(72px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 24px);font-size:13px;line-height:1.4;
+      display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
   }
   @media (max-width:560px){
     #rv-root .rv-q{display:block}#rv-root .rv-q>div{display:block;margin-bottom:6px}#rv-root .rv-q dt{font-size:12px;text-transform:uppercase;letter-spacing:.05em}
@@ -1023,6 +1026,7 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
 :is(#rs-root,#rs-layer) .rv-m{font-variant-numeric:tabular-nums}
 /* ---------- the older tab, folded ---------- */
 #rs-old{margin-top:22px;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
+#rs-list,#rs-map,#rs-old,#rs-dayw{scroll-margin-top:calc(var(--rs-jump,0px) + 8px)}   /* --rs-jump: the sticky bars' height (stick()) */
 #rs-old>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;font-weight:700;font-size:14px;color:var(--ink)}
 #rs-old>summary::-webkit-details-marker{display:none}
 #rs-old>summary .rs-cv{display:inline-block;transition:transform .2s;color:var(--muted)}
@@ -1064,6 +1068,7 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
 :is(#rs-root,#rs-layer) .rs-eyebrow2{font:600 11px/1.2 var(--rs-num);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
 :is(#rs-root,#rs-layer) .rs-sub2{font:600 11px/1 var(--rs-num);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:6px 18px 4px}
 :is(#rs-root,#rs-layer) .rs-hint{font-size:12px;color:var(--muted);max-width:76ch}
+:is(#rs-root,#rs-layer) .rs-hint .rs-hp{display:none}
 :is(#rs-root,#rs-layer) .rs-ph .rs-right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 :is(#rs-root,#rs-layer) .rs-empty{padding:14px 18px 18px;color:var(--muted);font-size:12.5px}
 :is(#rs-root,#rs-layer) .rs-pad{padding:0 18px 12px}:is(#rs-root,#rs-layer) .rs-pad2{padding:0 18px 6px}
@@ -1158,7 +1163,7 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
 :is(#rs-root,#rs-layer) button.rs-hh:hover{background:var(--raise);color:var(--ink)}
 :is(#rs-root,#rs-layer) .rs-hh[aria-pressed="true"]{color:var(--cyan)}
 :is(#rs-root,#rs-layer) .rs-hh.rs-l{align-items:flex-start;text-align:left}
-:is(#rs-root,#rs-layer) .rs-hh.rs-r{align-items:flex-end;text-align:right}
+:is(#rs-root,#rs-layer) .rs-hh.rs-hr{align-items:flex-end;text-align:right}
 :is(#rs-root,#rs-layer) .rs-gsep{grid-column:1/-1;font:600 10.5px/1 var(--rs-num);letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:12px 4px 4px;display:flex;gap:8px;align-items:center}
 :is(#rs-root,#rs-layer) .rs-gsep::after{content:"";flex:1;height:1px;background:var(--line)}
 :is(#rs-root,#rs-layer) .rs-rk{display:flex;align-items:center;justify-content:center;font:600 12px var(--rs-num);color:var(--faint)}
@@ -1294,8 +1299,11 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
 /* ---------- table ---------- */
 :is(#rs-root,#rs-layer) .rs-tw{overflow:auto;border-radius:var(--rs-r);max-width:100%;border:1px solid var(--line);background:var(--panel);max-height:78vh}
 :is(#rs-root,#rs-layer) table.rs-st{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
-:is(#rs-root,#rs-layer) .rs-st th{font:600 10.5px/1.25 var(--rs-num);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;padding:9px 8px;background:var(--panel2);border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2}
-:is(#rs-root,#rs-layer) .rs-st th button{all:unset;cursor:pointer;display:inline-flex;gap:3px;align-items:center}
+:is(#rs-root,#rs-layer) .rs-st th{font:600 10.5px/1.25 var(--rs-num);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;padding:0;background:var(--panel2);border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2}
+:is(#rs-root,#rs-layer) .rs-st th button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;gap:3px;align-items:center;justify-content:flex-end;width:100%;min-height:36px;padding:9px 8px}
+:is(#rs-root,#rs-layer) .rs-st th.rs-tl button{justify-content:flex-start}
+:is(#rs-root,#rs-layer) .rs-st th:last-child{padding:9px 8px}   /* the ✅ column: no sort button */
+:is(#rs-root,#rs-layer) .rs-st th button:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
 :is(#rs-root,#rs-layer) .rs-st th.rs-sorted{color:var(--ink)}
 :is(#rs-root,#rs-layer) .rs-st .rs-ar{color:var(--cyan)}
 :is(#rs-root,#rs-layer) .rs-st th.rs-tl,:is(#rs-root,#rs-layer) .rs-st td.rs-tl{text-align:left}
@@ -1316,6 +1324,10 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
 #rs-layer .rs-scrim.rs-on{opacity:1;pointer-events:auto}
 #rs-layer .rs-drawer{position:fixed;top:0;right:0;bottom:0;width:min(1000px,100vw);background:var(--bg2);border-left:1px solid var(--line2);z-index:81;transform:translateX(102%);transition:transform .3s cubic-bezier(.2,.8,.2,1);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden}
 #rs-layer .rs-drawer.rs-on{transform:none;visibility:visible}
+/* the page's sidebar rule (aside{height:100vh; padding:18px 14px; border-right}) must not reach the full card: 100vh is
+   taller than a phone's visible screen (its last lines could not be scrolled into view) and the side padding cost 28 px */
+#rs-layer .rs-drawer{height:auto;padding-left:0;padding-right:0;border-right:0}
+#rs-layer .rs-drawer.rs-kb .rs-db{padding-bottom:calc(50px + 50vh)}   /* 📱 typing in the full card: room to lift the box above the keyboard */
 :is(#rs-root,#rs-layer) .rs-dh{position:sticky;top:0;z-index:5;background:rgba(12,21,39,.95);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 18px 10px;display:flex;gap:12px;align-items:flex-start}
 :is(#rs-root,#rs-layer) .rs-dh .rs-t{flex:1;min-width:0}
 :is(#rs-root,#rs-layer) .rs-dh h3{font-size:19px;font-weight:700;line-height:1.25;overflow-wrap:anywhere}
@@ -1448,11 +1460,13 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
   #rs-root .rs-hm .rs-nm{grid-column:1/span 3;padding-top:8px}
   #rs-root .rs-hm .rs-rv{grid-column:span 2;padding-top:8px}
   #rs-root .rs-hm .rs-hh.rs-l{grid-column:1/span 3}
-  #rs-root .rs-hm .rs-hh.rs-r{grid-column:span 2}
+  #rs-root .rs-hm .rs-hh.rs-hr{grid-column:span 2}
   #rs-root .rs-hc{min-height:46px;font-size:12px;letter-spacing:0}
   #rs-root .rs-hc .rs-cl{font-size:9.5px}
+  #rs-root .rs-hint .rs-hd{display:none}#rs-root .rs-hint .rs-hp{display:inline}   /* no column names, no hover here */
 }
-@container rs (max-width:420px){#rs-root .rs-hc .rs-cl{font-size:8.5px}}
+@container rs (max-width:420px){#rs-root .rs-hc .rs-cl{font-size:9px;letter-spacing:0}
+  #rs-root .rs-cw{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}   /* "10 pending" → "10" (read out in full) */
 @container rs (max-width:700px){
   #rs-root .rs-top{position:relative;top:auto}
   #rs-root .rs-top-in{padding:8px 12px 6px;gap:8px}
@@ -1483,6 +1497,26 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
   #rs-root .rs-srch{width:100%}
   #rs-root .rs-lh .rs-right{margin-left:0;width:100%}
   #rs-root .rs-me{order:5}
+  /* 📱 thumbs: the controls ≥ 36 px tall (₹ / $ 40×36), the tooltip triggers ≥ 32 */
+  #rs-root .rs-seg button,#rs-root .rs-fbar button,#rs-root .rs-btn.rs-sm{min-height:36px}
+  #rs-root .rs-seg button[data-rscur]{min-width:40px;padding-inline:10px;font-size:14px}
+  #rs-root .rs-fr{min-height:32px}
+  #rs-root .rs-mvl{gap:2px}#rs-root .rs-mvr{min-height:32px}
+  #rs-root .rs-fbr{min-height:36px}
+  #rs-root .rs-closed>summary,#rs-root .rs-foot summary{padding:9px 0}
+  /* the view tabs stay on ONE row (with a 🚩 count "History" used to drop to a second row inside the pill) */
+  #rs-root .rs-seg[role="tablist"]{flex-wrap:nowrap;max-width:100%;overflow-x:auto;scrollbar-width:none}
+  #rs-root .rs-seg[role="tablist"]::-webkit-scrollbar{display:none}
+  /* Summary: the 5th tile (⏳ Pending) takes the whole last row, not half of it */
+  #rs-root .rs-tiles>.rs-tile:last-child:nth-child(odd){grid-column:1/-1}
+  /* table: the PAGE scrolls (no 78vh box inside the page); # and App stay on screen while the numbers scroll sideways */
+  #rs-root .rs-tw{max-height:none;overscroll-behavior-x:contain}
+  #rs-root .rs-st th:first-child,#rs-root .rs-st td:first-child{position:sticky;left:0;z-index:1;width:30px;min-width:30px;max-width:30px;background:var(--panel)}
+  #rs-root .rs-st td:first-child,#rs-root .rs-st th:first-child button{padding-inline:6px 2px}
+  #rs-root .rs-st th:nth-child(2),#rs-root .rs-st td.rs-app{position:sticky;left:30px;z-index:1;min-width:150px;max-width:46vw;background:var(--panel);box-shadow:1px 0 0 var(--line2)}
+  #rs-root .rs-st th:first-child,#rs-root .rs-st th:nth-child(2){z-index:3;background:var(--panel2)}
+  #rs-root .rs-st tbody tr:hover td:is(:first-child,.rs-app){background:linear-gradient(rgba(28,44,71,.55),rgba(28,44,71,.55)),var(--panel)}
+  #rs-root .rs-st tbody tr.rs-kf td:is(:first-child,.rs-app){background:linear-gradient(rgba(34,211,238,.08),rgba(34,211,238,.08)),var(--panel)}
 }
 @media (max-width:1000px){#rs-layer .rs-dk{grid-template-columns:repeat(2,minmax(0,1fr))}#rs-layer .rs-fgrid{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:720px){
@@ -1496,7 +1530,10 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
   #rs-layer .rs-q dt{margin-top:4px}
   #rs-layer .rs-btn.rs-open{margin-left:0}
   #rs-layer .rs-kv{font-size:20px}
+  #rs-layer .rs-fbtn{min-height:34px;padding:6px 11px}
+  #rs-layer .rs-btn.rs-sm{min-height:36px}
 }
+@media (max-width:760px),(pointer:coarse){#rs-tip .rs-lk{display:inline-block;padding:8px 0;min-height:32px}}
 @media (prefers-reduced-motion:reduce){:is(#rs-root,#rs-layer) *,:is(#rs-root,#rs-layer) *::before{transition:none!important;animation:none!important}}
   /* ==== RS:END ==== */
   /* ===== 🧮 installs vs per-user split (SPEC_SPLIT): one block for every tab — a total, the installs' part, the real
@@ -14395,12 +14432,18 @@ function rvRoMsg(){ return RV.newDay?RV_NEWDAY_MSG:RV.auth===false?RV_TXT.auth_g
 // closed day — for an admin silently as an "admin sudhaar") and offer the new day's cards
 function rvNewDay(od){ try{ if(!RV.doc) return; if(od&&!(String(od)>RV.doc.day)) return; if(RV.newDay&&(!od||RV.newDay===od)) return;
     RV.newDay=od||RV.newDay||true; rvBanners(); rvUpdateAllRo(); }catch(e){} }
-// lvl: 0 = background (poll), 1 = the reader's own click (default), 2 = "ye raha summary". For 3 s a toast is only
-// replaced by one of the same or a higher level (a poll never hides a save / error message; a retry's ✅ always shows).
+// lvl: 0 = background (poll), 1 = the reader's own click (default), 2 = "ye raha summary". While it shows, a toast is
+// only replaced by one of the same or a higher level (a poll never hides a save / error message; a retry's ✅ always shows).
+// A short confirmation stays 2.2 s, a longer message 3.4 s; the reader's next tap clears it (the tap itself goes to the
+// button under it: the toast has pointer-events:none).
 function rvToast(msg,lvl){ try{ const t=document.getElementById("rv-toast"); if(!t) return; lvl=lvl==null?1:lvl;
     if(RV.toastHold>Date.now()&&lvl<(RV.toastLvl||0)) return;
-    RV.toastHold=Date.now()+3000; RV.toastLvl=lvl; t.textContent=msg; clearTimeout(RV.toastT);
-    RV.toastT=setTimeout(()=>{ t.textContent=""; },3400); }catch(e){} }
+    const ms=String(msg||"").length>60?3400:2200;
+    RV.toastHold=Date.now()+ms-400; RV.toastLvl=lvl; RV.toastAt=Date.now(); t.textContent=msg; clearTimeout(RV.toastT);
+    RV.toastT=setTimeout(()=>{ t.textContent=""; RV.toastHold=0; },ms);
+    if(!RV.toastWired){ RV.toastWired=true; document.addEventListener("click",rvToastTap,true); } }catch(e){} }
+function rvToastTap(){ try{ const t=document.getElementById("rv-toast"); if(!t||!t.textContent||Date.now()-(RV.toastAt||0)<600) return;
+    clearTimeout(RV.toastT); t.textContent=""; RV.toastHold=0; }catch(e){} }
 function rvFailMsg(r){ return RV_TXT.save_fail.replace("{msg}",String((r&&r.msg)||"Server me dikkat").replace(/[.。]+$/,"")); }
 async function rvApi(method,path,body){
   let ctl=null, tm=null;
@@ -14444,22 +14487,38 @@ function rvRestoreFocus(){ try{ const f=RV.focus; RV.focus=null;
     try{ el.focus({preventScroll:true}); }catch(_){ el.focus(); }
     if(f.s!=null&&el.setSelectionRange) try{ el.setSelectionRange(f.s,f.e); }catch(_){} }catch(e){} }
 function rvPendY(){ const p=RV.pendY; return (p&&Date.now()-p.t<2000)?p:null; }
-function rvKeepScroll(id){ return id==="review"&&(RV.lastShow==="review"||!!rvPendY()); }   // called by show() BEFORE rvOnShow
+function rvKeepScroll(id){ return id==="review"&&(RV.lastShow==="review"||!!rvPendY()||!!rvBackY()); }   // called by show() BEFORE rvOnShow
+// 📱 leaving Review for another tab (the full card's "Open in dashboard: …", the bottom nav) and coming back: the reader
+// lands where they were (same day, same view), not at the top of a ~30,000 px page. RV.lastY follows the scroll while
+// Review is on screen (read before show() hides it, so it is never the clamped value).
+function rvBackY(){ const b=RV.backY; return (b&&RV.lastShow!=="review"&&RV.doc&&b.day===RV.doc.day&&b.view===rvCurView())?b:null; }
 function rvOnShow(id){ try{
+    if(!RV.yWired){ RV.yWired=true; window.addEventListener("scroll",()=>{ if(RV.lastShow==="review") RV.lastY=window.scrollY; },{passive:true}); }
+    if(RV.lastShow==="review"&&id!=="review") RV.backY={y:RV.lastY!=null?RV.lastY:0,day:RV.doc&&RV.doc.day,view:rvCurView()};
+    const back=id==="review"?rvBackY():null;
     document.body.setAttribute("data-screen",id); RV.prevShow=RV.lastShow; RV.lastShow=id;
+    if(back){ RV.backY=null; RV.lastY=back.y; if(!rvPendY()&&Math.abs(window.scrollY-back.y)>1) window.scrollTo(0,back.y); }
     if(id==="review"){ const p=rvPendY(); RV.pendY=null; if(p&&Math.abs(window.scrollY-p.y)>1) window.scrollTo(0,p.y); rvSetHash(); rvPollStart(); }
-    else { rvPollStop(); if(RV.booted&&String(location.hash||"").indexOf("#review")===0) history.replaceState(null,"",location.pathname+location.search); }
+    else { rvPollStop(); if(RV.booted&&String(location.hash||"").indexOf("#review")===0) history.replaceState(history.state,"",location.pathname+location.search); }
   }catch(e){} }
 function rvParseHash(h){ const m=/^#review(?:\/(summary|history)(?:\/(\d{4}-\d{2}-\d{2}))?)?\/?$/.exec(String(h||""));
   if(!m) return null; return {view:m[1]==="summary"?"sum":m[1]==="history"?"hist":"today",day:m[2]||null}; }
-function rvHashFor(){ return "#review"+(RV.view==="sum"?"/summary":RV.view==="hist"?"/history"+(RV.histDay?"/"+RV.histDay:""):""); }
-function rvSetHash(){ try{ const h=rvHashFor(); if(location.hash!==h) history.replaceState(null,"",location.pathname+location.search+h); }catch(e){} }
+// the view on screen: the Review Studio's own view while the Studio is on (the older views in its "🗂 Old views" fold keep
+// RV.view for themselves — a tab picked in the fold never switches the Studio), else the older tab's
+function rvCurView(){ try{ if(RVS.on()) return RVS.view(); }catch(e){} return RV.view; }
+function rvHashFor(){ const v=rvCurView(); return "#review"+(v==="sum"?"/summary":v==="hist"?"/history"+(RV.histDay?"/"+RV.histDay:""):""); }
+function rvSetHash(){ try{ const h=rvHashFor(); if(location.hash!==h) history.replaceState(history.state,"",location.pathname+location.search+h); }catch(e){} }
 function rvBoot(){ try{
     if(RV.booted) return; RV.booted=true;
     const h=rvParseHash(RV.hash0||location.hash); RV.hash0="";
     if(h){ RV.view=h.view; RV.histDay=h.day; show("review"); }
+    // a Back / forward step of the dashboard's Back mechanism (hbPop; its steps carry {iqb}) only closes / leaves something:
+    // it never switches Review's view — the hash goes back to the view on screen. (A typed #hash still switches it.)
+    window.addEventListener("popstate",e=>{ if(e&&e.state&&typeof e.state.iqb==="number") RV.popAt=Date.now(); });
     window.addEventListener("hashchange",()=>{ try{ const x=rvParseHash(location.hash); if(!x) return;
-      RV.histDay=x.day||RV.histDay; if(RV.lastShow!=="review") { RV.view=x.view; show("review"); } else rvSwitch(x.view,false); }catch(e){} });
+      if(Date.now()-(RV.popAt||0)<600){ if(RV.lastShow==="review") rvSetHash(); return; }
+      RV.histDay=x.day||RV.histDay; let st=false; try{ st=RVS.on(); }catch(e){}
+      if(RV.lastShow!=="review") { RV.view=x.view; try{ RVS.want(x.view); }catch(e){} show("review"); } else if(st) RVS.want(x.view,true); else rvSwitch(x.view,false); }catch(e){} });
     document.addEventListener("visibilitychange",()=>{ try{ if(document.visibilityState==="visible"&&RV.lastShow==="review") rvPoll(); }catch(e){} });
     setTimeout(()=>{ rvBadge(); },3000);
   }catch(e){} }
@@ -14713,7 +14772,10 @@ function rvSyncSoon(){ try{ clearTimeout(RV.syncT); RV.syncT=setTimeout(async()=
     if(r.ok) rvApplyDay(r.data,false); },1500); }catch(e){} }
 function rvMaybeDone(){ try{ const p=rvPendCount(), was=RV.lastPend; RV.lastPend=p;
     if(p===0&&was>0&&RV.doc){ const k="rv_done_"+RV.doc.day; let seen=false; try{ seen=localStorage.getItem(k)==="1"; }catch(e){}
-      if(!seen){ try{ localStorage.setItem(k,"1"); }catch(e){} rvSwitch("sum",true); rvToast("All "+RV.doc.apps.length+" apps reviewed — ye raha summary",2); } } }catch(e){} }
+      if(!seen){ try{ localStorage.setItem(k,"1"); }catch(e){} let st=false; try{ st=RVS.on(); }catch(e){}
+        // the Studio never jumps the page on a ✅: it says where the summary is (its own "Summary" tab) instead
+        if(st) rvToast("✅ All "+RV.doc.apps.length+" apps reviewed — upar Summary tab me poora summary hai",2);
+        else { rvSwitch("sum",true); rvToast("All "+RV.doc.apps.length+" apps reviewed — ye raha summary",2); } } } }catch(e){} }
 // ---------------------------------------------------------------- panels (drafts live in RV.pn, so a re-render never loses text)
 function rvHasPanel(P,k){ return Object.keys(RV.pn).some(id=>id===P+"c:"+k||id.indexOf(P+"f:"+k+":")===0); }
 function rvPanelBox(id){ return RV.root?RV.root.querySelector('[data-rvpanel="'+id+'"]'):null; }
@@ -14938,7 +15000,10 @@ const RVS=(function(){
 'use strict';
 /* ================= state ================= */
 let FILE=null, FKEY='', LOADING=false, ERR='', ERRAT=0, ON=false, ORDER=null, SYQ=false, FA={}, A=[], AK={};
-const ST={mode:'cards',filter:'all',q:'',sort:{k:'order',d:1},gsort:'order',gfeat:null,drawer:null,dfid:null,focus:null,oldOpen:false,help:false};
+const ST={mode:'cards',filter:'all',q:'',sort:{k:'order',d:1},gsort:'order',gfeat:null,drawer:null,dfid:null,focus:null,oldOpen:false,help:false,view:null};
+// the Studio's OWN view (Today's review / Summary / History): set only by the Studio's tabs, its links and the #review hash.
+// The older views in the "🗂 Old views" fold keep RV.view — a tab picked there never switches the Studio.
+const VIEWS=['today','sum','hist'], SV=()=>VIEWS.indexOf(ST.view)>=0?ST.view:'today';
 let PNL=null;            // the one open panel: {slot, kind, key, f, fid, dec, g, keys, days, draft, opener}
 const HLOAD={}, HERR={}; let CALLOAD=false, CALAT=0;
 try{ const s=JSON.parse(localStorage.getItem('rs_pref_v1')||'{}'); if(s.mode==='table'||s.mode==='cards') ST.mode=s.mode; }catch(e){}
@@ -15019,6 +15084,7 @@ const topFeat=a=>{ const B=bads(a); if(a.top&&isBad(effSt(a,a.top))) return a.to
 
 /* ================= the layout: the Studio on top, the older tab folded under it ================= */
 function on(){ const r=RV.root; if(!r) return false; if(ON&&$('rs-root')&&$('rs-old')) return true;
+  if(ST.view==null) ST.view=VIEWS.indexOf(RV.view)>=0?RV.view:'today';   // the first time: the view the page was opened on (#review/summary …)
   ORDER=[...r.children]; const bans=r.querySelector('#rv-bans'), toast=r.querySelector('#rv-toast');
   const st=document.createElement('div'); st.id='rs-root';
   const fold=document.createElement('details'); fold.id='rs-old'; fold.className='rs-old'; if(ST.oldOpen) fold.open=true;
@@ -15030,7 +15096,7 @@ function on(){ const r=RV.root; if(!r) return false; if(ON&&$('rs-root')&&$('rs-
   // the Studio's tab keys stay in the Studio (the older tab's root handler would read them as ITS tabs)
   st.addEventListener('keydown',e=>{ const t=e.target; if(!(t&&t.getAttribute&&t.getAttribute('role')==='tab'&&t.hasAttribute('data-rsv'))) return;
     if(['ArrowRight','ArrowLeft','Home','End'].indexOf(e.key)<0) return; e.preventDefault(); e.stopPropagation();
-    const V=['today','sum','hist'], i=V.indexOf(RV.view||'today'), j=e.key==='Home'?0:(e.key==='End'?2:(i+(e.key==='ArrowRight'?1:-1)+3)%3); setView(V[j],true); });
+    const V=VIEWS, i=V.indexOf(SV()), j=e.key==='Home'?0:(e.key==='End'?2:(i+(e.key==='ArrowRight'?1:-1)+3)%3); setView(V[j],true); });
   r.classList.add('rs-on'); ON=true; layer(); return true; }
 function off(){ if(!ON) return; const r=RV.root; ON=false; closeDrawer(true); hideTip(); closePanel(true);
   try{ const st=$('rs-root'), fold=$('rs-old'); (ORDER||[]).forEach(n=>r.appendChild(n)); if(st) st.remove(); if(fold) fold.remove(); r.classList.remove('rs-on'); }catch(e){} }
@@ -15044,8 +15110,15 @@ function syncNow(){ SYQ=false;
     if(!FILE||FKEY!==k){ if(ERR===k&&Date.now()-ERRAT<60000){ off(); return; } if(!LOADING) load(p,k); }
     if(!RV.doc||RV.doc.day!==p.day||RV.doc.built_at!==p.card||RV.err==='doc'){ off(); return; }
     if(!FILE||FKEY!==k){ if(on()) renderLoading(); return; }
-    if(on()) render();
+    if(on()){ if(typing()){ LATER=true; return; } render(); }
   }catch(e){ try{ off(); }catch(_){} } }
+// 📱 the reader is typing in the Studio (a panel's note, the full card's note, the search box): a teammate's change (the
+// 60 s poll) must not rebuild the box under the fingers — on a phone that closes the keyboard mid-sentence. The render
+// waits (LATER) and runs once the box loses focus (wire(): focusout).
+let LATER=false;
+const isTF=e=>!!(e&&e.tagName&&e.isConnected!==false&&(e.tagName==='TEXTAREA'||(e.tagName==='INPUT'&&/^(text|search)$/i.test(e.type||'text')))&&(e.id==='rs-pta'||e.id==='rs-dw-note'||e.id==='rs-q'||inS(e)));
+function typing(){ return isTF(document.activeElement); }
+function flushLater(){ if(!LATER||typing()) return; LATER=false; sync(); }
 function paint(){ try{ const L=$('rs-layer'); if(L) rvPaint(L); }catch(e){} }
 
 /* ================= small html helpers ================= */
@@ -15112,7 +15185,7 @@ function barChart(ch,W,o){ o=o||{}; const H=o.h||150, pl=8, pr=ch.before!=null?7
   let last=-1; vals.forEach((v,i)=>{ if(v!=null) last=i; });
   if(ch.before!=null){ const y=Y(+ch.before); s+=`<line x1="${pl}" x2="${W-pr+4}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--watch)" stroke-dasharray="4 3" stroke-width="1.3"/>`+T(W-pr+8,y-2,BL,{c:'var(--watch)',fs:10,fw:500})+T(W-pr+8,y+10,vfmt(+ch.before,fmt,1),{c:'var(--watch)',fs:11,fw:700,h:1}); }
   (ch.marks||[]).forEach(([i,t])=>{ if(i==null||i>=n) return; s+=`<line x1="${(X(i)-bw/2).toFixed(1)}" x2="${(X(i)-bw/2).toFixed(1)}" y1="${pt-10}" y2="${H-pb}" stroke="var(--cyan)" stroke-dasharray="2 3" opacity=".7"/>`+T(Math.min(X(i)-bw/2+3,W-60),pt-12,t,{c:'var(--cyan)',fs:10}); });
-  vals.forEach((v,i)=>{ if(v==null) return; if(!(room||i===last||i===mi||i===mn)) return; const fs=room&&n>10?9.5:10.5; s+=T(X(i),Y(Math.max(v,0))-4,vfmt(v,fmt,1),{a:'middle',fs,c:i===last?'var(--ink)':'var(--ink2)',h:1}); });
+  vals.forEach((v,i)=>{ if(v==null) return; if(!(room||i===last||i===mi||i===mn)) return; const fs=room&&n>10?10:10.5; s+=T(X(i),Y(Math.max(v,0))-4,vfmt(v,fmt,1),{a:'middle',fs,c:i===last?'var(--ink)':'var(--ink2)',h:1}); });
   const step=Math.max(1,Math.ceil(n/Math.max(2,Math.floor(W/62))));
   (ch.labels||[]).forEach((l,i)=>{ if(i%step&&i!==n-1) return; if(i!==n-1&&n-1-i<step) return; s+=T(X(i),H-6,l,{a:'middle',c:'var(--faint)',fs:10,fw:500}); });
   s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
@@ -15128,7 +15201,7 @@ function unChart(a,W){ const U=a.x&&a.x.un; if(!U) return ''; const wk=U.wk.filt
   let s=`<svg class="rs-chart" data-ch="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Same day uninstall by install week"><defs><pattern id="ph${id}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="rgba(230,184,78,.18)"/><line x1="0" y1="0" x2="0" y2="5" stroke="rgba(230,184,78,.7)" stroke-width="2"/></pattern></defs>`;
   s+=`<line x1="${pl}" x2="${W-pr}" y1="${H-pb}" y2="${H-pb}" stroke="var(--line2)"/>`;
   wk.forEach((w,i)=>{ const y=Y(v[i]); s+=`<rect x="${(X(i)-bw*.33).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*.66).toFixed(1)}" height="${(H-pb-y).toFixed(1)}" rx="2" fill="${w.prov?`url(#ph${id})`:'var(--purple)'}" ${w.prov?'stroke="var(--watch)" stroke-width="1"':''}/>`+T(X(i),y-4,trim(v[i].toFixed(v[i]<10?1:0))+'%',{a:'middle',c:i===n-1?'var(--ink)':'var(--ink2)'});
-    const show=bw>=46||i%2===(n-1)%2; if(show) s+=T(X(i),H-pb+13,fd(w.f),{a:'middle',c:'var(--faint)',fs:9.5,fw:500})+(bw>=46?T(X(i),H-pb+25,nf.format(w.n),{a:'middle',c:'var(--faint)',fs:9,fw:500}):''); });
+    const show=bw>=46||i%2===(n-1)%2; if(show) s+=T(X(i),H-pb+13,fd(w.f),{a:'middle',c:'var(--faint)',fs:10,fw:500})+(bw>=46?T(X(i),H-pb+25,nf.format(w.n),{a:'middle',c:'var(--faint)',fs:10,fw:500}):''); });
   s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
   CH[id]={X,n,w:W,tip:i=>{ const w=wk[i]; return `<div class="rs-tt">Installs ${fd(w.f)}–${fd(w.t)}</div><div class="rs-row"><span>Same day uninstall</span><b>${nf.format(w.s)} of ${nf.format(w.n)}</b></div><div class="rs-row"><span>Share</span><b>${trim((100*w.s/w.n).toFixed(1))}%</b></div>${w.prov?`<div class="rs-tsm rs-prov">⏳ Not final — is app ka uninstall data ${esc(U.late)} din tak late aata hai</div>`:''}`; }};
   return `<div class="rs-chartp"><div class="rs-cap">Same day uninstall · by install week · bars = %, below = installs${wk.some(w=>w.prov)?' · <span class="rs-prov">hatched = ⏳ not final</span>':''}</div>${s}</div>`; }
@@ -15137,13 +15210,13 @@ function retChart(a,W){ const R=a.x&&a.x.ret; if(!R) return ''; const v=R.v, d=R
   const ok=v.filter(x=>x!=null); if(!ok.length) return ''; let mn=Math.min(...ok), mx=Math.max(...ok); const pd=(mx-mn)*.15||1; mn=Math.max(0,mn-pd); mx+=pd;
   const X=lin(0,n-1,pl+2,W-pr-2), Y=lin(mn,mx,H-pb,pt), si=R.final?d.indexOf(R.final):-1;
   let s=`<svg class="rs-chart" data-ch="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Returning users per day">`;
-  if(si>=0&&si<n-1){ const x0=(X(si)+X(si+1))/2; s+=`<rect x="${x0.toFixed(1)}" y="${pt-8}" width="${(W-pr-x0).toFixed(1)}" height="${H-pb-pt+8}" fill="rgba(230,184,78,.08)"/>`+T(W-pr-2,pt+2,'⏳ not final',{a:'end',c:'var(--watch)',fs:9.5}); }
+  if(si>=0&&si<n-1){ const x0=(X(si)+X(si+1))/2; s+=`<rect x="${x0.toFixed(1)}" y="${pt-8}" width="${(W-pr-x0).toFixed(1)}" height="${H-pb-pt+8}" fill="rgba(230,184,78,.08)"/>`+T(W-pr-2,pt+2,'⏳ not final',{a:'end',c:'var(--watch)',fs:10}); }
   s+=`<path d="${pathOf(v,X,Y)}L${X(n-1).toFixed(1)} ${H-pb}L${X(0).toFixed(1)} ${H-pb}Z" fill="var(--good)" opacity=".1"/><path d="${pathOf(v,X,Y)}" fill="none" stroke="var(--good)" stroke-width="2" stroke-linejoin="round"/>`;
   let mi=-1,mo=-1; v.forEach((x,i)=>{ if(x==null) return; if(mi<0||x>v[mi]) mi=i; if(mo<0||x<v[mo]) mo=i; });
   let fi=-1, li=-1; v.forEach((x,i)=>{ if(x!=null){ if(fi<0) fi=i; li=i; } });
   const lab=(i,c)=>{ const x=X(i), y=Y(v[i]); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${c}"/>`+T(Math.min(W-pr-2,Math.max(pl+2,x)),i===mo?y+14:y-6,nf.format(v[i]),{a:i===li?'end':(i===fi?'start':'middle'),c:'var(--ink)'}); };
   [...new Set([fi,li,mi,mo])].forEach(i=>{ if(i>=0&&v[i]!=null) s+=lab(i,i===li?'var(--good)':'var(--ink2)'); });
-  s+=T(pl,H-4,fd(d[0]),{c:'var(--faint)',fs:9.5,fw:500})+T(W-pr,H-4,fd(d[n-1]),{a:'end',c:'var(--faint)',fs:9.5,fw:500});
+  s+=T(pl,H-4,fd(d[0]),{c:'var(--faint)',fs:10,fw:500})+T(W-pr,H-4,fd(d[n-1]),{a:'end',c:'var(--faint)',fs:10,fw:500});
   s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
   CH[id]={X,n,w:W,tip:i=>`<div class="rs-tt">${esc(wd(d[i]).slice(0,3))}, ${fd(d[i])}</div><div class="rs-row"><span>Old users</span><b>${v[i]==null?'—':nf.format(v[i])}</b></div>${R.final&&d[i]>R.final?'<div class="rs-tsm rs-prov">⏳ Not final — GA4 abhi badal sakta hai</div>':''}`};
   return `<div class="rs-chartp"><div class="rs-cap">Old users per day · GA4 · ${fd(d[0])}–${fd(d[n-1])}${R.final?' (final till '+fd(R.final)+')':''}</div>${s}</div>`; }
@@ -15158,12 +15231,12 @@ function ringSvg(done,n){ const r=50, c=2*Math.PI*r, p=n?done/n:0;
   return `<svg class="rs-ring" viewBox="0 0 120 120" role="img" aria-label="${done} of ${n} reviewed"><circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--rs-raise2)" stroke-width="11"/><circle cx="60" cy="60" r="${r}" fill="none" stroke="${p>=1?'var(--good)':'var(--cyan)'}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${(c*p).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 60 60)"/><text class="rs-rl1" x="60" y="62" text-anchor="middle">${done}/${n}</text><text class="rs-rl2" x="60" y="80" text-anchor="middle">${Math.round(100*p)}% DONE</text></svg>`; }
 
 /* ================= header ================= */
-function topHtml(){ const M=FILE.meta, I=RV.idx||{}, me=RV.me, v=RV.view||'today';
+function topHtml(){ const M=FILE.meta, I=RV.idx||{}, me=RV.me, v=SV();
   const tab=(id,l,c)=>`<button type="button" role="tab" id="rs-tb-${id}" data-rsv="${id}" aria-selected="${v===id}" aria-controls="rs-v-${id}"${v===id?'':' tabindex="-1"'}>${l}${c?`<span class="rs-cnt">${c}</span>`:''}</button>`;
   const pend=A.length-doneN(), of=(S0().flags||[]).filter(x=>x.status==='open').length;
   const nx=I.next_snapshot?String(I.next_snapshot).slice(0,10):null;
   return `<div class="rs-top-in"><div class="rs-brand"><span class="rs-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="3.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M5.4 9.3l2.3 2.3 4.9-5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><div class="rs-bn">Review Studio</div><div class="rs-sub">${esc(M.wday)}, ${fd(M.day)} ${esc(String(M.day).slice(0,4))} · daily app review</div></div></div>`
-   +`<div class="rs-ctrls"><div class="rs-seg" role="tablist" aria-label="Review views">${tab('today',"Today's review",pend?pend+' pending':'✓')}${tab('sum','Summary',of?of+' 🚩':'')}${tab('hist','History','')}</div>`
+   +`<div class="rs-ctrls"><div class="rs-seg" role="tablist" aria-label="Review views">${tab('today',"Today's review",pend?pend+'<span class="rs-cw"> pending</span>':'✓')}${tab('sum','Summary',of?of+' 🚩':'')}${tab('hist','History','')}</div>`
    +`<div class="rs-seg" role="group" aria-label="Currency"><button type="button" data-rscur="INR" aria-pressed="${INR()}">₹</button><button type="button" data-rscur="USD" aria-pressed="${!INR()}">$</button></div>`
    +`<span class="rs-me" title="${esc(me&&me.email||'')}">${me?'👤 '+rvWho(me.email)+(me.admin?' · <b>Admin</b>':''):'👤 —'}</span>`
    +`<button class="rs-icb" type="button" id="rs-kbd" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">⌨️</button></div></div>`; }
@@ -15203,12 +15276,12 @@ function mapOrder(){ const L=A.slice();
   if(ST.gsort==='sev') return L.sort((x,y)=>(nRed(y)*10+nAmb(y))-(nRed(x)*10+nAmb(x))||((+y.k7||0)-(+x.k7||0)));
   return L; }
 function mapHtml(){ const FE0=FE();
-  let h=`<div class="rs-ph"><div><div class="rs-eyebrow">Feature map</div><h2>${A.length} apps × ${FE0.length} features</h2><div class="rs-hint">Har khana = ek app ka ek feature (naam khane me hi likha). Rang = haalat, number = asli badlaav. Hover / tap karo detail ke liye, click karo → poora card usi feature pe khulega. Column ka naam dabao → us feature ke hisaab se sort.</div></div>`
+  let h=`<div class="rs-ph"><div><div class="rs-eyebrow">Feature map</div><h2>${A.length} apps × ${FE0.length} features</h2><div class="rs-hint">Har khana = ek app ka ek feature (naam khane me hi likha). Rang = haalat, number = asli badlaav. <span class="rs-hd">Hover / tap karo detail ke liye, click karo → poora card usi feature pe khulega. Column ka naam dabao → us feature ke hisaab se sort.</span><span class="rs-hp">Khana tap karo → detail. Wahi khana dobara tap karo (ya “Open full card ›”) → poora card usi feature pe khulega. Sort: Review order / Revenue / Most issues.</span></div></div>`
    +`<div class="rs-right"><div class="rs-seg" role="group" aria-label="Sort apps">${[['order','Review order'],['rev','Revenue'],['sev','Most issues']].map(([k,l])=>`<button type="button" data-rsgsort="${k}" aria-pressed="${!ST.gfeat&&ST.gsort===k}">${l}</button>`).join('')}</div></div></div>`;
   h+='<div class="rs-mapw"><div class="rs-hm" role="grid" aria-label="Apps by feature">';
-  h+=`<div class="rs-hh rs-x" role="columnheader">#</div><div class="rs-hh rs-l" role="columnheader">App${ST.gfeat?` · sorted by ${esc(FN(ST.gfeat))}`:''}</div><div class="rs-hh rs-r" role="columnheader">Yesterday<br><span class="rs-w">vs usual</span></div>`;
+  h+=`<div class="rs-hh rs-x" role="columnheader">#</div><div class="rs-hh rs-l" role="columnheader">App${ST.gfeat?` · sorted by ${esc(FN(ST.gfeat))}`:''}</div><div class="rs-hh rs-hr" role="columnheader">Yesterday<br><span class="rs-w">vs usual</span></div>`;
   FE0.forEach(([f,n,s,i])=>{ h+=`<button type="button" class="rs-hh rs-fh" role="columnheader" data-rsgfeat="${f}" aria-pressed="${ST.gfeat===f}" data-tk="fh:${f}" aria-label="${esc(n)} — sort by this feature"><span class="rs-e">${i}</span><span class="rs-w">${esc(s)}</span></button>`; });
-  h+=`<div class="rs-hh rs-x" role="columnheader">Issues</div><div class="rs-hh rs-x rs-r" role="columnheader">Review</div>`;
+  h+=`<div class="rs-hh rs-x" role="columnheader">Issues</div><div class="rs-hh rs-x rs-hr" role="columnheader">Review</div>`;
   let lastG=null; const sep=!ST.gfeat&&ST.gsort==='order';
   mapOrder().forEach(a=>{ if(sep&&a.grp!==lastG){ lastG=a.grp; h+=`<div class="rs-gsep">${esc(GRP[a.grp])} · ${A.filter(x=>x.grp===a.grp).length}</div>`; }
     const r=rel(a.y,a.us), cls=r==null?'':(r>=0.1?'rs-up':(r<=-0.1?'rs-dn':''));
@@ -15292,11 +15365,18 @@ function layer(){ let L=$('rs-layer'); if(L) return L;
   L=document.createElement('div'); L.id='rs-layer';
   L.innerHTML='<div class="rs-scrim" id="rs-scrim"></div><aside class="rs-drawer" id="rs-drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Full card"></aside><div id="rs-tip" role="tooltip"></div><div id="rs-help" hidden><div class="rs-box" role="dialog" aria-modal="true" aria-labelledby="rs-help-h"><h3 id="rs-help-h">Keyboard</h3><dl><dt>'+kbd('j')+' '+kbd('k')+'</dt><dd>Next / previous card</dd><dt>'+kbd('r')+'</dt><dd>✅ Got it · Reviewed</dd><dt>'+kbd('i')+'</dt><dd>🚩 Important · Re-review</dd><dt>'+kbd('n')+'</dt><dd>📝 Note</dd><dt>'+kbd('o')+' / '+kbd('Enter')+'</dt><dd>Open full card</dd><dt>'+kbd('Esc')+'</dt><dd>Close panel / card</dd><dt>'+kbd('?')+'</dt><dd>This help</dd></dl><p class="rs-muted" style="font-size:12px;margin:12px 0 0">Type karte waqt (note likhte waqt) ye keys kaam nahi karti.</p><div style="margin-top:12px;text-align:right"><button class="rs-btn" type="button" id="rs-help-x">Close</button></div></div></div>';
   document.body.appendChild(L); wire(); return L; }
-function dwW(){ const d=Math.min(1000,innerWidth); return Math.max(260,d-(innerWidth<=720?28:36)-26); }
-function featBlock(a,f,wide){ const x=a.f[f]||{}, s=effSt(a,f), fi=fInfo(a.key,f), ff=fi.today||fi.carry, W=wide?dwW():Math.max(260,(dwW()-12)/(innerWidth<=1000?1:2)), ro=!canW();
+// chart widths = the boxes' real inner widths (a chart drawn wider is scaled down and its printed numbers shrink under 10 px):
+// dbIn = the full card's content width (the drawer's own width less its padding); the top chart's box takes 26 (padding +
+// border), a feature block's chart 54 (the block's 28 + the chart box's 26)
+function dbIn(){ const d=$('rs-drawer'); let w=Math.min(1000,innerWidth)-2;
+  try{ if(d&&d.clientWidth>0){ const c=getComputedStyle(d); w=d.clientWidth-(parseFloat(c.paddingLeft)||0)-(parseFloat(c.paddingRight)||0); } }catch(e){}
+  return Math.max(286,w-(innerWidth<=720?28:36)); }
+function dwW(){ return dbIn()-26; }
+function featBlock(a,f,wide){ const x=a.f[f]||{}, s=effSt(a,f), fi=fInfo(a.key,f), ff=fi.today||fi.carry, W=(wide?dbIn():Math.max(286,(dbIn()-12)/(innerWidth<=1000?1:2)))-28, ro=!canW();
   const z=rvSnz(RV.doc,S0(),a.key,f), raw=(a.f[f]||{}).st;
   const flab=fi.today?'🚩 Flagged ✓':(fi.carry?`🚩 ${dDiff(fi.carry.day,RV.doc.day)} days open`:(fi.kaam?'🛠 Fix assigned':'🚩 Flag'));
   let h=`<div class="rs-fb rs-s-${s} ${wide?'rs-wide':''}" id="rs-fb-${f}"><div class="rs-fb-h"><span class="rs-fe">${FI(f)}</span><b>${esc(FN(f))}</b>${chipSt(s)}${ageH(x.age)}${isNB(a,f)?'<span class="rs-nbchip">🆕 New & worse</span>':''}<span class="rs-ff"><button type="button" class="rs-fbtn" id="rs-ff-${esc(a.key)}-${f}" role="checkbox" aria-checked="${!!ff}" data-rsff="${esc(a.key)}:${f}" aria-label="🚩 Important · Re-review — ${esc(FN(f))}"${ro?' disabled':''}>${flab}</button>${isBad(raw)?`<button type="button" class="rs-fbtn" id="rs-sz-${esc(a.key)}-${f}" data-rssnz="${esc(a.key)}:${f}"${ro?' disabled':''}>${z?'💤 Snoozed till '+fd(z.until):'💤 Snooze'}</button>`:''}</span></div>`;
+  h+=`<div class="rs-pslot" id="rs-fps-${f}"></div>`;   // the 🚩 / 💤 panel: right under its buttons (not after the charts)
   h+=`<div class="rs-ln">${rt(lineOf(x))}</div>`;
   if(x.q){ h+=`<dl class="rs-q">${kitShow(x)?`<dt>How big</dt><dd>${kitShow(x)}</dd>`:''}<dt>Since</dt><dd>${esc(cameT(x))}${x.age?' · '+ageH(x.age):''}${x.age&&x.age.start?` · issue started ${fd(x.age.start)}`:''}${x.since?' · '+esc(x.since):''}</dd><dt>Data</dt><dd>${esc(winT(x))}${x.prov!=null?' · '+provH(x):''}</dd>${x.q.abhi?`<dt>Now</dt><dd>${rt(x.q.abhi)}</dd>`:''}${x.q.saath?`<dt>Also</dt><dd>${rt(x.q.saath)}</dd>`:''}</dl>`;
     if(x.q.karo) h+=`<div class="rs-next"><b>Next step:</b> ${esc(x.q.karo)}</div>`; }
@@ -15309,8 +15389,7 @@ function featBlock(a,f,wide){ const x=a.f[f]||{}, s=effSt(a,f), fi=fInfo(a.key,f
   if(f==='mediation') h+=medChart(a);
   if(f==='kamai'&&a.ser) h+=`<div class="rs-ts"><span>📈 14-day revenue chart upar hai</span></div>`;
   if(x.more&&x.more.length) h+=`<div class="rs-more"><span class="rs-eyebrow2">More in ${esc(FN(f))} (${x.more.length})</span>${x.more.map(m=>`<div class="rs-mr"><span class="rs-chip rs-st-${m.w==='info'?'wait':esc(m.w)} rs-chs"><i></i>${m.w==='info'?'Info':(STW[m.w]||'')}</span> ${rt(m.fact)}<small>${esc(m.src)} · ${esc(m.meta||'')}</small></div>`).join('')}</div>`;
-  h+=`<button type="button" class="rs-btn rs-sm rs-ghost rs-golink" data-rsgolink="${esc(a.key)}:${f}">Open in dashboard: ${esc(x.tab||RV_FEAT_TAB[f]||'dashboard')} ›</button>`;
-  h+=`<div class="rs-pslot" id="rs-fps-${f}"></div></div>`;
+  h+=`<button type="button" class="rs-btn rs-sm rs-ghost rs-golink" data-rsgolink="${esc(a.key)}:${f}">Open in dashboard: ${esc(x.tab||RV_FEAT_TAB[f]||'dashboard')} ›</button></div>`;
   return h; }
 function drawerHtml(a){ const k=a.key, B=bads(a), O=FID().filter(f=>B.indexOf(f)<0), M=FILE.meta, kp=rel(a.k7,a.kp7), r=rel(a.y,a.us);
   let h=`<div class="rs-dh">${avH(a,'rs-lg')}<div class="rs-t"><div class="rs-eyebrow rs-opt">Full card · #${a.rank} of ${A.length} · ${esc(GRP[a.grp])}</div><h3>${esc(String(a.name).trim())}${a.tag?` <span class="rs-tagw">${esc(a.tag)}</span>`:''} <span class="rs-acn">· ${esc(a.acct)}</span></h3><div class="rs-l2"><span class="rs-sz ${a.size==='badi'?'rs-badi':''}">${SIZE[a.size]||'—'}</span>${nbOf(a).length?'<span class="rs-nbchip">🆕 New & worse</span>':''}<span id="rs-dw-pill">${pillH(k)}</span><span class="rs-opt">Revenue till ${fd(M.admob_till)}${M.ga4_till?' · users till '+fd(M.ga4_till):''}</span></div></div><div class="rs-nav"><button class="rs-icb" type="button" data-rsdnav="-1" aria-label="Previous app (k)">‹</button><button class="rs-icb" type="button" data-rsdnav="1" aria-label="Next app (j)">›</button><button class="rs-icb" type="button" data-rsdclose="1" id="rs-dclose" aria-label="Close">✕</button></div></div>`;
@@ -15319,7 +15398,7 @@ function drawerHtml(a){ const k=a.key, B=bads(a), O=FID().filter(f=>B.indexOf(f)
    +`<div class="rs-kpi"><div class="rs-kl">Usual<span class="rs-kh">${M.usual?fd(M.usual.from)+'–'+fd(M.usual.to):''}</span></div><div class="rs-kv">${mH(a.us)}<small>/day</small></div><div class="rs-kd rs-fl"><span class="rs-vs">7-day daily avg</span></div></div>`
    +`<div class="rs-kpi"><div class="rs-kl">Last 7 days<span class="rs-kh">${M.w7?fd(M.w7.from)+'–'+fd(M.w7.to):''}</span></div><div class="rs-kv">${mH(a.k7)}<small>/day</small></div><div class="rs-kd ${kp>=0.1?'rs-up':(kp<=-0.1?'rs-dn':'rs-fl')}">${pct(kp)} <span class="rs-vs">vs ${mH(a.kp7,{s:'/day'})} before</span></div></div>`
    +`<div class="rs-kpi"><div class="rs-kl">Ads spend<span class="rs-kh">Google Ads · 4-wk avg</span></div><div class="rs-kv">${a.spend>0.05?mH(a.spend)+'<small>/day</small>':'—'}</div><div class="rs-kd rs-fl"><span class="rs-vs">${a.spend>0.05?(a.k7?mH(a.spend)+' = '+trim((100*a.spend/a.k7).toFixed(0))+'% of revenue':''):'No ads spend'}</span></div></div></div>`;
-  if(a.ser) h+=`<div class="rs-chartp"><div class="rs-cap">AdMob revenue per day · ${fd(M.d14[0])}–${fd(M.d14[13])} · dotted = usual${M.usual?' ('+fd(M.usual.from)+'–'+fd(M.usual.to)+' avg)':''}</div>${revChart(a,dwW()-26)}</div>`;
+  if(a.ser) h+=`<div class="rs-chartp"><div class="rs-cap">AdMob revenue per day · ${fd(M.d14[0])}–${fd(M.d14[13])} · dotted = usual${M.usual?' ('+fd(M.usual.from)+'–'+fd(M.usual.to)+' avg)':''}</div>${revChart(a,dwW())}</div>`;
   h+=`<div class="rs-sect"><h4>Issues · ${B.length}</h4>${B.length?`<div class="rs-fgrid">${B.map(f=>featBlock(a,f,true)).join('')}</div>`:'<div class="rs-muted rs-small">Koi Worse / Watch nahi ✅</div>'}</div>`;
   h+=`<div class="rs-sect"><h4>Other features · ${O.length}</h4><div class="rs-fgrid">${O.map(f=>featBlock(a,f,(f==='uninstall'&&a.x&&a.x.un)||(f==='active'&&a.x&&a.x.ret)||(f==='mediation'&&a.x&&a.x.med))).join('')}</div></div>`;
   h+=`<div class="rs-sect"><h4>Note</h4><div class="rs-pnl"><label for="rs-dw-note">Team ke liye note (is app ke liye)</label><textarea id="rs-dw-note" maxlength="600" placeholder="Jaise: developer ko bata diya, kal update aayega"${canW()?'':' disabled'}>${esc(ST.dnote||'')}</textarea><div class="rs-row2"><button type="button" class="rs-btn" id="rs-dw-notesave" data-rsdwnote="${esc(k)}"${canW()?'':' disabled'}>Save note</button><span class="rs-cc" id="rs-dw-cc">${(ST.dnote||'').length} / 600</span></div></div></div>`;
@@ -15331,13 +15410,20 @@ function logTxt(x){ const e=x.extra&&typeof x.extra==='object'?x.extra:{}; let w
   return w+(x.feature?' · '+esc(FN(x.feature)):(x.act==='flag'?' · Whole app':''))+(x.note?': “'+esc(x.note)+'”':'')+(e.admin_fix?' <span class="rs-faint">(admin fix)</span>':''); }
 function renderDrawer(keep){ const a=AK[ST.drawer]; const d=$('rs-drawer'); if(!a||!d){ closeDrawer(true); return; }
   const top=keep?d.scrollTop:0; d.innerHTML=drawerHtml(a); paint(); if(keep) d.scrollTop=top; fillPanel(); }
+// 📱 the phone's Back (Android back button / iOS edge swipe) closes the full card: the dashboard's one Back mechanism
+// (hbOv: one history step while the card is open; any close on the page takes the step off again)
 function openDrawer(k,f,noFocus){ layer(); if(!AK[k]) return; hideTip(); closePanel(true); ST.drawer=k; ST.focus=k; ST.dnote=''; renderDrawer(false);
   const d=$('rs-drawer'); d.classList.add('rs-on'); d.setAttribute('aria-hidden','false'); $('rs-scrim').classList.add('rs-on'); document.body.classList.add('rs-lock');
+  try{ hbOv('rs-drawer',true,()=>closeDrawer(false,true)); }catch(e){}
   ST.dOpener=document.activeElement&&document.activeElement.id||null;
-  setTimeout(()=>{ if(f){ const b=$('rs-fb-'+f); if(b){ b.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); b.classList.remove('rs-flash'); void b.offsetWidth; b.classList.add('rs-flash'); } } if(noFocus) return; const c=$('rs-dclose'); if(c) c.focus({preventScroll:true}); },60); }
-function closeDrawer(quiet){ if(ST.drawer==null) return; const k=ST.drawer; ST.drawer=null; const d=$('rs-drawer'); if(d){ d.classList.remove('rs-on'); d.setAttribute('aria-hidden','true'); d.innerHTML=''; }
+  setTimeout(()=>{ if(f){ const b=$('rs-fb-'+f); if(b){ toFeat(d,b); b.classList.remove('rs-flash'); void b.offsetWidth; b.classList.add('rs-flash'); } } if(noFocus) return; const c=$('rs-dclose'); if(c) c.focus({preventScroll:true}); },60); }
+// the feature's block just under the full card's sticky header (its height differs by app name and screen width)
+function toFeat(d,b){ try{ const h=d.querySelector('.rs-dh'), y=d.scrollTop+b.getBoundingClientRect().top-(h?h.getBoundingClientRect().bottom:d.getBoundingClientRect().top)-8;
+  d.scrollTo({top:Math.max(0,y),behavior:RM?'auto':'smooth'}); }catch(e){ try{ b.scrollIntoView({block:'start'}); }catch(_){} } }
+function closeDrawer(quiet,fromPop){ if(ST.drawer==null) return; const k=ST.drawer; ST.drawer=null; const d=$('rs-drawer'); if(d){ d.classList.remove('rs-on'); d.setAttribute('aria-hidden','true'); d.innerHTML=''; }
+  try{ hbDrop('rs-drawer'); }catch(e){}
   const sc=$('rs-scrim'); if(sc) sc.classList.remove('rs-on'); document.body.classList.remove('rs-lock'); hideTip(); if(PNL&&PNL.inDrawer) closePanel(true);
-  if(quiet) return; const c=$('rs-c-'+k); if(c&&RV.view==='today') c.focus({preventScroll:true}); else if(ST.dOpener&&$(ST.dOpener)) $(ST.dOpener).focus({preventScroll:true}); }
+  if(quiet) return; const c=$('rs-c-'+k); if(c&&SV()==='today') c.focus({preventScroll:true}); else if(ST.dOpener&&$(ST.dOpener)) $(ST.dOpener).focus({preventScroll:true}); }
 function dnav(dl){ const n=A.length; if(!n) return; let i=A.findIndex(a=>a.key===ST.drawer); i=(i+dl+n)%n; ST.drawer=A[i].key; ST.focus=ST.drawer; ST.dnote=''; closePanel(true); renderDrawer(false); const d=$('rs-drawer'); if(d) d.scrollTop=0; const b=$('rs-dclose'); if(b) b.focus({preventScroll:true}); }
 
 /* ================= summary ================= */
@@ -15396,7 +15482,7 @@ function histHtml(){ const I=RV.idx||{}, first=I.go_live, last=I.open_day; if(!f
       else h+=`<div class="rs-cd rs-fut"><span class="rs-cdn">${i}</span></div>`; }
     h+='</div>'; cur=dAdd(cur.slice(0,8)+String(dim).padStart(2,'0'),1); }
   h+=`<div class="rs-legend"><span class="rs-k"><span class="rs-sw" style="background:rgba(52,217,154,.45)"></span>All reviewed</span><span class="rs-k"><span class="rs-sw" style="background:rgba(230,184,78,.45)"></span>Partly</span><span class="rs-k"><span class="rs-sw" style="background:rgba(255,107,107,.35)"></span>Not reviewed</span><span class="rs-k"><span class="rs-sw rs-swnd"></span>No cards</span></div></section>`;
-  h+=dayHtml(sel);
+  h+=`<div id="rs-dayw">${dayHtml(sel)}</div>`;
   return h; }
 function dayHtml(d){ const I=RV.idx||{}, isOpen=d===I.open_day, inIdx=(I.days||[]).some(x=>x.d===d);
   if(!inIdx) return `<section class="rs-panel"><div class="rs-ph"><div><h2>${esc(wd(d))}, ${fd(d)}</h2><div class="rs-hint">Is din ke cards nahi bane (robot ne us din snapshot nahi banaya).</div></div></div></section>`;
@@ -15413,15 +15499,15 @@ function dayHtml(d){ const I=RV.idx||{}, isOpen=d===I.open_day, inIdx=(I.days||[
 async function loadDay(d){ if(HLOAD[d]) return; HLOAD[d]=1;
   try{ const doc=await rvLoadDoc(d); let S=null; if(RV.me){ const r=await rvApi('GET','day?d='+encodeURIComponent(d)); if(r.ok) S={...rvS(r.data,d),me:RV.me}; }
     if(!RV.hS[d]) RV.hS[d]=S||{...rvEmptyS(d),me:RV.me}; HERR[d]=0; }
-  catch(e){ HERR[d]=1; } finally{ HLOAD[d]=0; if(RV.view==='hist') renderView(); } }
+  catch(e){ HERR[d]=1; } finally{ HLOAD[d]=0; if(SV()==='hist') renderView(); } }
 async function ensureCal(){ const I=RV.idx; if(CALLOAD||RV.cal||!RV.me||!I||!I.go_live||!I.open_day||Date.now()-CALAT<60000) return; CALLOAD=true; CALAT=Date.now();
   try{ const r=await rvApi('GET','calendar?from='+I.go_live+'&to='+I.open_day); if(r.ok){ RV.cal=r.data; RV.calErr=false; } else RV.calErr=true; }
-  catch(e){ RV.calErr=true; } finally{ CALLOAD=false; if(RV.view==='hist') renderView(); } }
+  catch(e){ RV.calErr=true; } finally{ CALLOAD=false; if(SV()==='hist') renderView(); } }
 
 /* ================= render ================= */
 function renderLoading(){ const r=$('rs-root'); if(!r) return; if(r.getAttribute('data-st')==='load') return; r.setAttribute('data-st','load');
   r.innerHTML='<div class="rs-wrap"><div class="rs-panel rs-empty">⏳ Review Studio load ho raha hai… (purana Review tab neeche “🗂 Old views” me)</div></div>'; }
-function viewHtml(){ const v=RV.view||'today';
+function viewHtml(){ const v=SV();
   if(v==='sum') return `<section class="rs-view" id="rs-v-sum" role="tabpanel" aria-labelledby="rs-tb-sum">${sumHtml()}</section>`;
   if(v==='hist'){ ensureCal(); return `<section class="rs-view" id="rs-v-hist" role="tabpanel" aria-labelledby="rs-tb-hist">${histHtml()}</section>`; }
   return `<section class="rs-view" id="rs-v-today" role="tabpanel" aria-labelledby="rs-tb-today"><section class="rs-hero" aria-label="Today at a glance">${heroHtml()}</section><section class="rs-panel" id="rs-map" aria-label="Feature map">${mapHtml()}</section><section id="rs-list" aria-label="Apps">${listHtml()}</section><details class="rs-foot" id="rs-how"${ST.howOpen?' open':''}>${howHtml()}</details></section>`; }
@@ -15436,9 +15522,12 @@ function render(){ const r=$('rs-root'); if(!r) return;
   fillPanel(); stick();
   if(fid){ const el=$(fid); if(el&&el!==document.activeElement){ try{ el.focus({preventScroll:true}); if(sel&&el.setSelectionRange) el.setSelectionRange(sel[0],sel[1]); }catch(e){} } }
   if(ST.focus){ const c=$('rs-c-'+ST.focus)||document.querySelector(`#rs-root tbody tr[data-key="${ST.focus}"]`); if(c) c.classList.add('rs-kf'); } }
-function renderView(){ if(!ON||!FILE) return; render(); }
-function stick(){ const r=$('rs-root'); if(!r) return; try{ const tb=document.querySelector('.topbar'); const cs=tb?getComputedStyle(tb):null; r.style.setProperty('--rs-stick',(tb&&cs&&cs.position==='sticky'?tb.offsetHeight:0)+'px'); }catch(e){} }
-function setView(v,focusTab){ if(['today','sum','hist'].indexOf(v)<0) v='today'; RV.view=v; try{ rvTabsSync(); rvSetHash(); if(v==='sum'&&RV.sumDirty) rvRenderSum(); if(v==='hist'&&ST.oldOpen) rvHistEnter(); }catch(e){}
+function renderView(){ if(!ON||!FILE) return; if(typing()){ LATER=true; return; } render(); }
+function stick(){ const r=$('rs-root'); if(!r) return; try{ const tb=document.querySelector('.topbar'); const cs=tb?getComputedStyle(tb):null, h=tb&&cs&&cs.position==='sticky'?tb.offsetHeight:0; r.style.setProperty('--rs-stick',h+'px');
+  // --rs-jump (on the Review tab's root, so the Old views fold gets it too): every sticky bar above a jump's target —
+  // the site's top bar + the Studio's own bar where it is sticky (wide screens; on a phone it scrolls away)
+  const t=$('rs-top'), ts=t&&getComputedStyle(t).position==='sticky'?t.offsetHeight:0; (RV.root||r).style.setProperty('--rs-jump',(h+ts)+'px'); }catch(e){} }
+function setView(v,focusTab){ if(VIEWS.indexOf(v)<0) v='today'; ST.view=v; RV.view=v; try{ rvTabsSync(); rvSetHash(); if(v==='sum'&&RV.sumDirty) rvRenderSum(); if(v==='hist'&&ST.oldOpen) rvHistEnter(); }catch(e){}
   render(); if(focusTab){ const b=$('rs-tb-'+v); if(b) b.focus({preventScroll:true}); }
   const t=$('rs-root'); if(t) try{ const top=t.getBoundingClientRect().top, off=parseFloat(t.style.getPropertyValue('--rs-stick'))||0; if(top<off) scrollTo(0,Math.max(0,scrollY+top-off-8)); }catch(e){} }
 
@@ -15446,7 +15535,7 @@ function setView(v,focusTab){ if(['today','sum','hist'].indexOf(v)<0) v='today';
 function slotFor(k){ if(ST.drawer===k&&$('rs-dw-pslot')) return 'rs-dw-pslot'; return $('rs-ps-'+k)?'rs-ps-'+k:($('rs-dw-pslot')?'rs-dw-pslot':null); }
 function openPanel(p,opener){ if(PNL&&PNL.slot===p.slot&&PNL.kind===p.kind&&PNL.key===p.key&&PNL.f===p.f&&PNL.fid===p.fid&&PNL.dec===p.dec){ closePanel(); return; }
   closePanel(true); if(!p.slot||!$(p.slot)) return; p.draft=p.draft||''; p.opener=opener&&opener.id||null; p.inDrawer=!!($('rs-drawer')&&$('rs-drawer').contains($(p.slot))); PNL=p; fillPanel(true); }
-function closePanel(quiet){ if(!PNL) return; const p=PNL; PNL=null; const s=$(p.slot); if(s) s.innerHTML='';
+function closePanel(quiet){ if(!PNL) return; const p=PNL; PNL=null; const s=$(p.slot); if(s) s.innerHTML=''; if(LATER) setTimeout(flushLater,0);
   if(!quiet&&p.opener&&$(p.opener)) try{ $(p.opener).focus({preventScroll:true}); }catch(e){} }
 function panelBody(p){ const a=AK[p.key], btn=(act,t,pri)=>`<button type="button" class="rs-btn${pri?' rs-pri':' rs-ghost'}" data-rspa="${act}">${esc(t)}</button>`;
   const ta=(lab,ph)=>`<label for="rs-pta">${esc(lab)}</label><textarea id="rs-pta" maxlength="600" placeholder="${esc(ph)}">${esc(p.draft||'')}</textarea>`;
@@ -15471,7 +15560,25 @@ function panelBody(p){ const a=AK[p.key], btn=(act,t,pri)=>`<button type="button
   } return ''; }
 function fillPanel(focus){ if(!PNL) return; const s=$(PNL.slot); if(!s){ return; }
   s.innerHTML=`<div class="rs-pnl" role="group" aria-label="${esc(PNL.kind)}">${panelBody(PNL)}</div>`; paint();
-  if(focus){ const t=s.querySelector('textarea')||s.querySelector('input[type=radio]:checked')||s.querySelector('button'); if(t) try{ t.focus({preventScroll:false}); }catch(e){} } }
+  if(focus){ const t=s.querySelector('textarea')||s.querySelector('input[type=radio]:checked')||s.querySelector('button'), ph=phone();
+    if(t) try{ t.focus({preventScroll:ph}); }catch(e){}
+    if(ph){ const o=PNL.opener&&$(PNL.opener); reveal(s.querySelector('.rs-pnl'),o&&(o.closest('.rs-fb-h,.rs-acts')||o)); } } }
+// 📱 phone / touch: an inline panel opens FULLY visible — not behind the bottom nav, and its Save row in the upper part of
+// the screen, where the on-screen keyboard (~45% of the screen) does not cover it. The page (or the full card) scrolls so
+// the panel's top sits just under the sticky top bar (the full card: under its header); the button that opened it stays
+// on screen too when everything still fits. Desktop: unchanged (the browser's own focus scroll).
+function phone(){ try{ return innerWidth<=760||matchMedia('(pointer:coarse)').matches; }catch(e){ return innerWidth<=760; } }
+function topEdge(inD){ try{ if(inD){ const h=document.querySelector('#rs-drawer .rs-dh'); return h?Math.max(0,h.getBoundingClientRect().bottom):0; }
+  const tb=document.querySelector('.topbar'); if(!tb) return 0; const p=getComputedStyle(tb).position; return (p==='sticky'||p==='fixed')?Math.max(0,tb.getBoundingClientRect().bottom):0; }catch(e){ return 0; } }
+function reveal(box,head){ try{ if(!box||!box.getBoundingClientRect) return; const dr=$('rs-drawer'), inD=!!(dr&&dr.contains(box));
+  const vv=window.visualViewport, kb=!!(vv&&vv.height<innerHeight*0.8), bottom=kb?vv.offsetTop+vv.height:innerHeight;
+  const top=topEdge(inD)+8, safe=Math.min(bottom-8,kb?bottom-8:Math.round(innerHeight*0.55));    // keyboard open: its real top; else the upper 55%
+  const b=box.getBoundingClientRect(), sv=(box.lastElementChild||box).getBoundingClientRect();
+  if(b.top>=top&&sv.bottom<=safe) return;                                                     // already fully in view
+  let dy=b.top-top;                                                                            // the panel's top under the bar
+  if(head&&head.getBoundingClientRect){ const h=head.getBoundingClientRect(); if(h.top<b.top&&h.top-top<dy&&sv.bottom-(h.top-top)<=safe) dy=h.top-top; }
+  if(sv.bottom-dy>safe) dy=sv.bottom-safe;                                                     // a tall panel / a small screen: Save wins
+  if(Math.abs(dy)<2) return; if(inD) dr.scrollTop+=dy; else scrollBy(0,dy); }catch(e){} }
 
 /* ================= actions: the REAL Review API through the older tab's helpers ================= */
 const D0=()=>RV.doc.day;
@@ -15566,14 +15673,17 @@ function wire(){ if(WIRED) return; WIRED=true;
     const tp=$('rs-tip'); if(tp&&tp.classList.contains('rs-on')) hideTip(); },{passive:true});
   document.addEventListener('touchstart',e=>{ const p=e.touches[0]; if(!p||!inS(e.target)) return; if(e.target.closest('#rs-tip')) return;
     const t=e.target.closest('[data-tk]'), sv=!t&&e.target.closest('svg[data-ch]');
-    if(t){ const h=tipFor(t,true); if(h){ if(tipPinned&&PIN.el===t){ PIN.at=0; return; } showTip(h,p.clientX,p.clientY,true); PIN={el:t,at:Date.now()}; } return; }
-    if(sv){ const h=chartTip(sv,p.clientX); if(h){ showTip(h,p.clientX,p.clientY,true); PIN={el:sv,at:Date.now()}; } } },{passive:true});
+    if(t){ const h=tipFor(t,true); if(h){ if(tipPinned&&PIN.el===t){ PIN.at=0; return; } showTip(h,p.clientX,p.clientY,true); PIN={el:t,at:Date.now(),y:t.getBoundingClientRect().top}; } return; }
+    if(sv){ const h=chartTip(sv,p.clientX); if(h){ showTip(h,p.clientX,p.clientY,true); PIN={el:sv,at:Date.now(),y:sv.getBoundingClientRect().top}; } } },{passive:true});
   document.addEventListener('click',e=>{ if(!tipPinned) return; if(e.target.closest&&e.target.closest('#rs-tip')) return;
     if(PIN.el&&PIN.el.contains(e.target)&&Date.now()-PIN.at<800){ e.stopPropagation(); e.preventDefault(); return; }   // the first tap only pins
     hideTip(); },true);
   document.addEventListener('focusin',e=>{ const t=e.target.closest&&e.target.closest('[data-tk]'); if(!t||tipPinned||!inS(t)) return; const h=tipFor(t,false); if(!h) return; const r=t.getBoundingClientRect(); showTip(h,r.left+Math.min(r.width,40),r.bottom-8); });
   document.addEventListener('focusout',e=>{ if(!tipPinned&&e.target.closest&&e.target.closest('[data-tk]')&&inS(e.target)) hideTip(); });
-  addEventListener('scroll',()=>{ if(!tipPinned){ const tp=$('rs-tip'); if(tp&&tp.classList.contains('rs-on')) hideTip(); } },{passive:true});
+  // any scroll (the page, the full card, the table) hides a hover tooltip; a tooltip pinned by a tap goes once its box has
+  // moved more than 40 px (it would float over another app's row with the first app's numbers)
+  document.addEventListener('scroll',()=>{ const tp=$('rs-tip'); if(!tp||!tp.classList.contains('rs-on')) return; if(!tipPinned){ hideTip(); return; }
+    const el=PIN.el; if(!el||!el.isConnected){ hideTip(); return; } if(PIN.y!=null&&Math.abs(el.getBoundingClientRect().top-PIN.y)>40) hideTip(); },{capture:true,passive:true});
   document.addEventListener('click',onClick);
   document.addEventListener('keydown',e=>{ if(e.key!=='Enter'&&e.key!==' ') return; const sc=e.target.closest&&e.target.closest('#rs-root .rs-sc[role="button"][data-rsgo]'); if(sc){ e.preventDefault(); goTo(sc.getAttribute('data-rsgo')); } });
   document.addEventListener('input',e=>{ const t=e.target; if(!inS(t)) return;
@@ -15582,11 +15692,22 @@ function wire(){ if(WIRED) return; WIRED=true;
     if(t.id==='rs-dw-note'){ ST.dnote=t.value; const c=$('rs-dw-cc'); if(c) c.textContent=t.value.length+' / 600'; } });
   document.addEventListener('change',e=>{ const t=e.target; if(inS(t)&&t.getAttribute('data-rsdays')&&PNL) PNL.days=Number(t.value)===14?14:7; });
   document.addEventListener('toggle',e=>{ const t=e.target; if(t&&t.id==='rs-how') ST.howOpen=t.open; },true);
+  document.addEventListener('focusout',e=>{ if(LATER&&isTF(e.target)) setTimeout(flushLater,300); });
+  // a note box in the full card has focus: room below the card's end (.rs-kb), so even the last box can scroll up above the
+  // keyboard; taken away 400 ms after the box lets go (never under the finger of the tap that took the focus away)
+  document.addEventListener('focusin',e=>{ const t=e.target, d=$('rs-drawer'); if(!isTF(t)||!d||!d.contains(t)||!phone()) return; clearTimeout(wire.kb); d.classList.add('rs-kb');
+    if(t.id==='rs-dw-note') setTimeout(()=>reveal(t.closest('.rs-pnl'),null),60); });
+  document.addEventListener('focusout',e=>{ const d=$('rs-drawer'); if(!d||!d.classList.contains('rs-kb')) return; clearTimeout(wire.kb);
+    wire.kb=setTimeout(()=>{ const ae=document.activeElement; if(!(isTF(ae)&&d.contains(ae))) d.classList.remove('rs-kb'); },400); });
+  try{ if(window.visualViewport) visualViewport.addEventListener('resize',()=>{ const ae=document.activeElement; if(!isTF(ae)||ae.id==='rs-q') return; const p=ae.closest&&ae.closest('.rs-pnl'); if(p) reveal(p,null); }); }catch(e){}   // the held-back render (typing()), once the box lets go
   document.addEventListener('keydown',onKey);
   addEventListener('resize',()=>{ clearTimeout(wire.rz); wire.rz=setTimeout(()=>{ if(Math.abs(innerWidth-(wire.w||0))<40) return; wire.w=innerWidth; if(ST.drawer!=null) renderDrawer(true); },200); }); }
 function goTo(spec){ const [k,f]=String(spec).split(':'); openDrawer(k,f||null); }
 function jumpCard(k){ ST.filter='all'; ST.q=''; ST.mode='cards'; setView('today'); setFocus(k,true); }
 function onClick(e){ const t=e.target; if(!inS(t)) return;
+  // a tap on a button while a note box has focus (a phone keeps it focused): the box lets go first, so the render this
+  // click causes is never held back by typing() (the text itself stays: drafts are read from the box / PNL.draft)
+  if(t.closest('button,summary,[role="button"]')){ const ae=document.activeElement; if(ae!==t&&isTF(ae)) try{ ae.blur(); }catch(_){} }
   const pa=t.closest('[data-rspa]'); if(pa){ panelAct(pa.getAttribute('data-rspa'),pa); return; }
   const ac=t.closest('[data-rsact]'); if(ac){ cardAct(ac.getAttribute('data-rsact'),ac.getAttribute('data-k'),ac); return; }
   const ff=t.closest('[data-rsff]'); if(ff){ const [k,f]=ff.getAttribute('data-rsff').split(':'); featAct(k,f,ff); return; }
@@ -15599,7 +15720,7 @@ function onClick(e){ const t=e.target; if(!inS(t)) return;
   const dv=t.closest('[data-rsdnav]'); if(dv){ dnav(+dv.getAttribute('data-rsdnav')); return; }
   if(t.closest('[data-rsdclose]')||t.id==='rs-scrim'){ closeDrawer(); return; }
   const go=t.closest('[data-rsgo]'); if(go){ if(t.closest('#rs-tip')) hideTip(); goTo(go.getAttribute('data-rsgo')); return; }
-  const fl=t.closest('[data-rsfilter]'); if(fl){ const f=fl.getAttribute('data-rsfilter'), sc=fl.classList.contains('rs-sc'); ST.filter=(ST.filter===f&&sc)?'all':f; if(RV.view!=='today') setView('today'); else render(); if(sc){ const l=$('rs-list'); if(l) l.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); } return; }
+  const fl=t.closest('[data-rsfilter]'); if(fl){ const f=fl.getAttribute('data-rsfilter'), sc=fl.classList.contains('rs-sc'); ST.filter=(ST.filter===f&&sc)?'all':f; if(SV()!=='today') setView('today'); else render(); if(sc){ const l=$('rs-list'); if(l) l.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); } return; }
   const md=t.closest('[data-rsmode]'); if(md){ ST.mode=md.getAttribute('data-rsmode'); savePref(); render(); return; }
   const so=t.closest('[data-rssort]'); if(so){ const k=so.getAttribute('data-rssort'); ST.sort=ST.sort.k===k?{k,d:-ST.sort.d}:{k,d:1}; render(); return; }
   const gs=t.closest('[data-rsgsort]'); if(gs){ ST.gsort=gs.getAttribute('data-rsgsort'); ST.gfeat=null; render(); return; }
@@ -15607,7 +15728,9 @@ function onClick(e){ const t=e.target; if(!inS(t)) return;
   const gg=t.closest('[data-rsgfeatgo]'); if(gg){ ST.gfeat=gg.getAttribute('data-rsgfeatgo'); setView('today'); const m=$('rs-map'); if(m) m.scrollIntoView({block:'start'}); return; }
   const jp=t.closest('[data-rsjump]'); if(jp){ jumpCard(jp.getAttribute('data-rsjump')); return; }
   const od=t.closest('[data-rsoldday]'); if(od){ const d=od.getAttribute('data-rsoldday'), f=$('rs-old'); if(f){ f.open=true; ST.oldOpen=true; } try{ rvSwitch('hist',false); rvHistPick(d,false); }catch(e){} render(); setTimeout(()=>{ const x=$('rs-old'); if(x) x.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); },60); return; }
-  const dy=t.closest('[data-rsday]'); if(dy){ const d=dy.getAttribute('data-rsday'); HERR[d]=0; RV.histDay=d; try{ rvSetHash(); }catch(e){} render(); return; }
+  const dy=t.closest('[data-rsday]'); if(dy){ const d=dy.getAttribute('data-rsday'); HERR[d]=0; RV.histDay=d; try{ rvSetHash(); }catch(e){} render();
+    if(phone()&&dy.classList.contains('rs-cd')){ const w=$('rs-dayw'), r=w&&w.getBoundingClientRect(); if(r&&r.top>innerHeight*0.6) try{ w.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); }catch(e){} }   // the picked day's panel was below the fold
+    return; }
   const vv=t.closest('[data-rsv]'); if(vv){ closeDrawer(true); setView(vv.getAttribute('data-rsv'),vv.getAttribute('role')==='tab'); return; }
   const cu=t.closest('[data-rscur]'); if(cu){ const c=cu.getAttribute('data-rscur'); if((c==='INR')!==INR()){ const y=scrollY; try{ toggleCur(); }catch(e){} scrollTo(0,y); } return; }
   if(t.closest('#rs-kbd')){ toggleHelp(true); return; }
@@ -15626,7 +15749,7 @@ function onKey(e){ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.
   if(tg&&tg.closest&&tg.closest('#rs-old')) return;                          // the older views keep their own keys
   if(e.key==='?'){ toggleHelp(!ST.help); e.preventDefault(); return; }
   if(ST.help) return;
-  if((RV.view||'today')!=='today'&&ST.drawer==null) return;
+  if(SV()!=='today'&&ST.drawer==null) return;
   const k=e.key.toLowerCase();
   if(k==='j'||k==='k'){ e.preventDefault(); if(ST.drawer!=null) dnav(k==='j'?1:-1); else move(k==='j'?1:-1); return; }
   if(k==='r'){ const key=curKey(); if(key){ e.preventDefault(); doOk(key,$((ST.drawer!=null?'rs-d':'rs')+'-ok-'+key)); } return; }
@@ -15634,9 +15757,11 @@ function onKey(e){ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.
   if(k==='n'){ const key=curKey(); if(key){ e.preventDefault(); cardAct('note',key,$((ST.drawer!=null?'rs-d':'rs')+'-note-'+key)); } return; }
   if((k==='o'||e.key==='Enter')&&ST.drawer==null){ if(e.key==='Enter'&&tg&&tg.closest&&tg.closest('button,a,[role="button"]')) return; const key=curKey(); if(key){ e.preventDefault(); openDrawer(key); } } }
 
-return {sync, paint, retry, on:()=>ON, ready:()=>!!FILE,
+// the hash asked for a view (#review/summary …): the Studio follows (rendered when it is on)
+function want(v){ if(VIEWS.indexOf(v)<0) v='today'; if(ON&&FILE) setView(v); else ST.view=v; }
+return {sync, paint, retry, on:()=>ON, ready:()=>!!FILE, view:SV, want,
   _:{get FILE(){ return FILE; }, get A(){ return A; }, ST, TIPS, CH, render, prep, setView, openDrawer, closeDrawer, cardAct, featAct, snzAct, bulkAct, decAct, panelAct,
-     get PNL(){ return PNL; }, doOk, doKal, mapHtml, heroHtml, listHtml, sumHtml, histHtml, drawerHtml:k=>drawerHtml(AK[k]), tableHtml:()=>tableHtml(visible()), load:(j)=>{ FILE=j; FA={}; (j&&j.apps||[]).forEach(a=>{ FA[a.key]=a; }); FKEY=j?(j.day+'|'+j.card_built_at+'|'+((ptr()||{}).v||'')):''; ERR=''; }, fail:()=>{ FILE=null; FKEY=''; const p=ptr(); ERR=p?(p.day+'|'+p.card+'|'+(p.v||'')):'x'; ERRAT=Date.now(); }, syncNow}};
+     get PNL(){ return PNL; }, typing, flushLater, doOk, doKal, mapHtml, heroHtml, listHtml, sumHtml, histHtml, drawerHtml:k=>drawerHtml(AK[k]), tableHtml:()=>tableHtml(visible()), load:(j)=>{ FILE=j; FA={}; (j&&j.apps||[]).forEach(a=>{ FA[a.key]=a; }); FKEY=j?(j.day+'|'+j.card_built_at+'|'+((ptr()||{}).v||'')):''; ERR=''; }, fail:()=>{ FILE=null; FKEY=''; const p=ptr(); ERR=p?(p.day+'|'+p.card+'|'+(p.v||'')):'x'; ERRAT=Date.now(); }, syncNow}};
 })();
 /* ==== RS:END ==== */
 

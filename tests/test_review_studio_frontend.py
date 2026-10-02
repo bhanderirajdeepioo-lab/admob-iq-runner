@@ -191,3 +191,53 @@ def test_the_old_views_come_back_exactly_without_a_studio_file(report):
 def test_an_app_the_file_left_out_is_still_shown_from_its_card(report):
     r = report["raw"]
     assert r["n"] == 7 and r["raw"] and r["card"] and r["pill"] and r["map"] and r["drawer"]
+
+
+# ── 📱 the mobile fixes (the Review tab's phone audit): the toast, the Studio's own view, typing, coming back, phone Back ──
+def _css():
+    return open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8").read()
+
+
+def test_mobile_the_toast_never_catches_a_tap(report):
+    html = _css()
+    base, phone = re.findall(r"#rv-root \.rv-toast\{([^}]*)\}", html)[:2]
+    assert "pointer-events:none" in base                                       # a tap goes to the button under it
+    assert "bottom:calc(72px" in phone and "-webkit-line-clamp:2" in phone    # phone: where #btoast sits, above the tab bar
+    assert report["toast_tap"] == {"shown": "✅ Reviewed — x", "afterTap": "", "freshKept": "Fresh"}
+
+
+def test_mobile_the_studio_keeps_its_own_view(report):
+    v = report["views"]
+    assert v["afterOldSum"] == {"studio": "today", "old": "sum", "hash": "#review", "panel": True}
+    assert v["afterOldHist"] == {"studio": "today", "old": "hist", "hash": "#review"}
+    assert v["studioSum"] == {"studio": "sum", "old": "sum", "hash": "#review/summary", "panel": True}
+    assert v["want"]["studio"] == "hist" and v["want"]["hash"].startswith("#review/history")
+    assert v["allDone"]["studio"] == "today" and "Summary tab" in v["allDone"]["toast"]
+
+
+def test_mobile_a_poll_never_rebuilds_the_box_being_typed_in(report):
+    assert report["typing"] == {"typing": True, "held": True, "rendered": True}
+
+
+def test_mobile_coming_back_to_review_keeps_the_place(report):
+    assert report["backY"] == {"saved": 12345, "keep": True, "restoredTo": 12345, "otherView": False}
+
+
+def test_mobile_the_full_card_closes_on_the_phones_back(report):
+    # the dashboard's one Back mechanism (hbOv): one step per open card, ✕ takes it off, the phone's Back closes the card
+    assert report["hist"] == ["push", "go-1", "push"]
+    assert report["drawerBack"] == {"closedByBack": True, "lock": False, "stack": []}
+    assert "history.pushState(" not in _css() and "hbOv('rs-drawer',true," in _css() and "hbDrop('rs-drawer')" in _css()
+
+
+def test_mobile_phone_css_targets_and_layout():
+    html = _css()
+    phone = re.search(r"@container rs \(max-width:700px\)\{([\s\S]*?)\n\}", html).group(1)
+    assert "#rs-root .rs-seg button[data-rscur]{min-width:40px" in phone and "#rs-root .rs-seg button,#rs-root .rs-fbar button,#rs-root .rs-btn.rs-sm{min-height:36px}" in phone
+    assert '#rs-root .rs-seg[role="tablist"]{flex-wrap:nowrap' in phone
+    assert "#rs-root .rs-tw{max-height:none" in phone and "td.rs-app{position:sticky" in phone
+    assert "#rs-root .rs-tiles>.rs-tile:last-child:nth-child(odd){grid-column:1/-1}" in phone
+    assert re.search(r"\.rs-st th button\{all:unset;box-sizing:border-box;[^}]*width:100%;min-height:36px", html)
+    assert ".rs-hh.rs-hr{" in html and 'class="rs-hh rs-r"' not in html                          # no red "Yesterday vs usual"
+    assert "#rs-list,#rs-map,#rs-old,#rs-dayw{scroll-margin-top:calc(var(--rs-jump,0px) + 8px)}" in html
+
