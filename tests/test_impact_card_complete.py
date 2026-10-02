@@ -1,12 +1,12 @@
 """Nothing is missing from 📦 Update impact (owner, 1 Oct: "update impact me bahot sari jankari thi aur bhi, vo sab kaha
 gayi"): the Uninstall tab's per-app card and its All-apps "📦 Updates ka asar" list, rendered by the page script as it
-was at 3339e07 (before SPEC_SIMPLIFY, when the card was shown on both Uninstall and Active users) and by today's, on the
+was at 56e9d02 (before SPEC_SIMPLIFY, when the card was shown on both Uninstall and Active users) and by today's, on the
 committed synthetic fixture (tests/fixtures/uninstall_sample.json) — tests/impact_card_compare.js. Every app, every
 update block opened in turn, at every window it carries (7 / 14 / 30 / 60): the same sections, block keys, row ids,
 statuses, pills, every block's window buttons (the card-wide one is gone on purpose: owner, 2 Oct — one picker per
 block), "How we compare" bullets, version table, notes, verdict reason and the same numbers
 (label words may differ only as SPEC_SIMPLIFY §6.4 says). The list: every update the old one showed, with its verdict
-and every number. Skipped where node or the 3339e07 page (git history) is not available."""
+and every number. Skipped where node or the 56e9d02 page (git history) is not available."""
 
 import json
 import os
@@ -19,7 +19,7 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FX = os.path.join(ROOT, "tests", "fixtures", "uninstall_sample.json")
 NODE, GIT = shutil.which("node"), shutil.which("git")
-BEFORE = "3339e07"                      # the last commit before SPEC_SIMPLIFY: the card on both tabs
+BEFORE = "56e9d02"                      # the last commit before SPEC_SIMPLIFY: the card on both tabs
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
 
@@ -48,7 +48,7 @@ def test_renders_without_errors(report):
     assert report["errors"] == []
 
 
-def test_every_card_section_row_and_number_of_3339e07_is_on_the_uninstall_app_page(report):
+def test_every_card_section_row_and_number_of_56e9d02_is_on_the_uninstall_app_page(report):
     C = report["cards"]
     assert report["apps"] >= 5 and report["blocks"] >= 5 and report["windows"] > report["blocks"]   # 14 / 30 / 60 too
     assert all(c["old"] and c["new"] for c in C), [c for c in C if not (c["old"] and c["new"])]

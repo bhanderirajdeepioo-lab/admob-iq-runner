@@ -1,6 +1,6 @@
 // "Nothing may be missing from Update impact" (owner, 1 Oct): renders the Uninstall tab's 📦 Update impact card — every
 // app, every update block opened in turn, at every window the block carries (7 / 14 / 30 / 60) — and the All-apps
-// "📦 Updates ka asar" list with the REAL dashboard script of two versions (the card as it was at 3339e07, when it was
+// "📦 Updates ka asar" list with the REAL dashboard script of two versions (the card as it was at 56e9d02, when it was
 // shown on both Uninstall and Active users, and today's), in node vms with stub browser globals, on the same data. Each
 // render is reduced to its structure (sections, block keys, row ids, statuses, pills, windows, buttons) and the numbers
 // it shows — label words may differ (SPEC_SIMPLIFY §6.4: "D1 return" → "Back next day", "pts" → "100 me", HALT →
@@ -55,7 +55,7 @@ function render(ctx, tag, code) {
 
 // ── reading a render ──
 const dec = s => String(s).replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
-// (a date's year: §1.1 prints it only outside the current year — 3339e07 also printed it for a date ~4 months back;
+// (a date's year: §1.1 prints it only outside the current year — 56e9d02 also printed it for a date ~4 months back;
 // the day and month are compared, the year word is not)
 const norm = s => String(run(NEW, `smpInfoTxt(${JSON.stringify(dec(s))})`)).replace(/100 me /g, ' ').replace(/1,000 (users|ads)/g, ' ')
   .replace(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (19|20)\d\d\b/g, '$1');
@@ -89,7 +89,7 @@ function cardOf(h) {
   const B = c.split('<div class="uni-imp-b').slice(1);
   const head = c.split('<div class="uni-imp-b')[0];
   // (the card-wide 7 / 14 / 30 / 60 is gone on purpose — owner, 2 Oct: ONE picker per update block, the open block's own
-  // window buttons below are compared as before; the 📅 Any date tab is not part of the 3339e07 card)
+  // window buttons below are compared as before; the 📅 Any date tab is not part of the 56e9d02 card)
   return {
     flags: (cut(head, 'class="uni-imp-m"', '</div>').match(/<span class="pill /g) || []).length,
     how: (cut(c, '<ul class="uni-imp-how">', '</ul>').match(/<li>/g) || []).length,
