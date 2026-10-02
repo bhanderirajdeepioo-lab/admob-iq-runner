@@ -3276,6 +3276,7 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-lbl{pointer-events:none}
 :is(#us-root,#us-layer) .us-pgh{padding:16px 2px 6px;align-items:flex-start}
 :is(#us-root,#us-layer) .us-pgh .us-l2{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:11.5px;color:var(--faint)}
+:is(#us-root,#us-layer) .us-pgh .us-l2>span{min-width:0;overflow-wrap:anywhere}   /* (a long package name wraps on a phone, never past the page) */
 :is(#us-root,#us-layer) .us-pgh .us-lk{color:var(--cyan);cursor:pointer;text-transform:none;letter-spacing:0;font:600 12.5px var(--us-font)}
 :is(#us-root,#us-layer) .us-pgt{margin:0;font:700 22px/1.25 var(--us-font)}
 :is(#us-root,#us-layer) .us-pgt .us-acn{color:var(--muted);font-weight:500}

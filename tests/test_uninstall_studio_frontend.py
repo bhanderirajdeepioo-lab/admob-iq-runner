@@ -607,6 +607,8 @@ def test_install_week_grid_scrolls_in_its_box_with_its_column_names_on_top():
     assert re.search(r"\.us-cohw \.us-coh \.us-rh,:is\(#us-root,#us-layer\) \.us-cohw \.us-coh \.us-stk\{position:sticky;left:0", css)
     assert re.search(r"@media \(max-width:760px\),\(pointer:coarse\)\{:is\(#us-root,#us-layer\) \.us-coh \.us-relb\{display:inline-block;padding:9px", css)
     assert "function keepCoh(" in css and "keepCoh(inD?$('us-drawer'):$('us-apg')" in css   # % bache ⇄ Vs normal keeps its place
+    # the app page's head on a 360 px phone: a long package name wraps inside the page
+    assert ".us-pgh .us-l2>span{min-width:0;overflow-wrap:anywhere}" in css
 
 
 # ── no trim: custom ranges reach the whole history (owner, 2 Oct) ───────────────────────────────────────────────
