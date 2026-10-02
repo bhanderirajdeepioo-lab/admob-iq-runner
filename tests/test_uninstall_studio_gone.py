@@ -341,3 +341,21 @@ def test_a_file_without_the_block_still_renders(page):
     n = page["nogd"]
     assert n["screen"] and "agle refresh" in n["panel"] and "<table" not in n["panel"]
     assert "us-gbars" not in n["drawer"] and "How many still in app" in n["drawer"]
+
+
+def test_the_app_views_bars_share_one_track_at_every_width():
+    """Mobile audit A-02: a row with a long comparison text squeezed its own bar to a stub (each row was its own grid with
+    an auto, nowrap text column), so Day 1 at 35% drew no bar next to Same day at 30%. Every row now sits on the list's own
+    columns (subgrid; the text column the widest row's, wrapping past 300px) and a phone puts the text under the bar: the
+    bar's length depends on its % only."""
+    with open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8") as f:
+        html = f.read()
+    rule = lambda sel: re.findall(re.escape(":is(#us-root,#us-layer) " + sel) + r"\{([^}]*)\}", html)
+    assert "grid-template-columns:66px minmax(0,1fr) fit-content(300px)" in rule(".us-gbars")[0]
+    gbr = rule(".us-gbr")[0]
+    assert "grid-column:1/-1" in gbr and "grid-template-columns:subgrid" in gbr
+    assert "nowrap" not in rule(".us-gbv")[0] and "nowrap" in rule(".us-gbx")[0]   # wraps between its parts
+    for narrow in (r"@container us \(max-width:608px\)\{(:is\(#us-root,#us-layer\) \.us-st\.us-gdt.*?)\}\}", r"@media \(max-width:480px\)\{(:is\(#us-root,#us-layer\) \.us-gbars.*?)\}\}"):
+        blk = re.search(narrow, html, re.S).group(1)
+        assert re.search(r"\.us-gbr\{grid-column:auto;grid-template-columns:5\dpx minmax\(0,1fr\)", blk), blk   # label | bar
+        assert ".us-gbv{grid-column:2;text-align:left" in blk                                                 # text under the bar

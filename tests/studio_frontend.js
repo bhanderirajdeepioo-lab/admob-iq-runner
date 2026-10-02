@@ -349,5 +349,51 @@ get('crel', `(()=>{ ${RESET} const r={}, A=US._.A();
     r.yearPage=pg.indexOf('class="us-cyr"')>=0;
   } finally{ d.releases=keep; }
   ${RESET} uniScreen(); return JSON.stringify(r); })()`);
+// ── 📉 How many stay (owner, 2 Oct: "purane view ka ye feature (How many stay) tumne new view me to gayab hi kar diya"):
+// the older card's curve on the Studio app page and in the drawer — its numbers, toggles, printed %, one hover path ─────
+get('curve', `(()=>{ ${RESET} const r={}, A=US._.A(), ST=US._.ST;
+  const a=A.find(x=>{ const d=(UNI.apps||[]).find(z=>z.app_id===x.id); return d&&d.survival&&d.survival.recent&&(d.survival.all.left||[]).length>40; });
+  const d=UNI.apps.find(z=>z.app_id===a.id), row=DATA.uninstall.apps.find(x=>x.app_id===a.id); r.id=a.id;
+  const panel=h=>{ const i=h.indexOf('<div class="us-panel us-cv">'); if(i<0) return ''; const j=h.indexOf('<div class="us-panel">',i+10); return h.slice(i,j<0?h.length:j); };
+  const oldPts=h=>JSON.parse((h.match(/data-pts='([^']*)'/)||[])[1].replace(/&#39;/g,"'").replace(/&amp;/g,'&'));
+  const oldLab=h=>[...h.matchAll(/data-day="(\\d+)">([^<]*)</g)].map(m=>'Day '+m[1]+': '+m[2]);
+  const newLab=h=>[...h.matchAll(/<text class="us-lbl"[^>]*>([^<]*)<\\/text>/g)].map(m=>m[1]);
+  const geo=h=>{ const vb=(h.match(/viewBox="0 0 (\\d+) (\\d+)"/)||[]).slice(1).map(Number), L=[...h.matchAll(/<text class="us-lbl" x="([\\d.-]+)" y="([\\d.-]+)" font-size="([\\d.]+)"[^>]*>([^<]*)<\\/text>/g)].map(m=>({x:+m[1],y:+m[2],fs:+m[3],t:m[4]}));
+    const box=l=>[l.x,l.y-l.fs+1,l.x+l.t.length*l.fs*.56+3,l.y+3]; let ov=0; for(let p=0;p<L.length;p++) for(let q=p+1;q<L.length;q++){ const x=box(L[p]), y=box(L[q]); if(x[0]<y[2]&&x[2]>y[0]&&x[1]<y[3]&&x[3]>y[1]) ov++; }
+    return {inside:L.every(l=>{ const b=box(l); return b[0]>=0&&b[2]<=vb[0]+.5&&b[1]>=0&&b[3]<=vb[1]; }), overlap:ov}; };
+  APP=row.app; UNIAPP=a.id; r.combos=[];
+  for(const [cs,cr] of [['all','90'],['all','30'],['all','all'],['recent','90'],['recent','30']]){
+    ST.cvS=cs; ST.cvR=cr; UNICSRC=cs; UNICRANGE=cr;
+    const h=uniScreen(), pg=h.slice(h.indexOf('id="us-apg"'),h.indexOf('id="uni-old-app"')), cv=panel(pg), old=uniCurveCard(d);
+    const sid=(cv.match(/<svg viewBox="[^"]*" id="(us-s\\d+)" data-hv="1"/)||[])[1], S=US._.SPK()[sid], P=oldPts(old);
+    const tip=i=>__text(S.tip(i));
+    r.combos.push({cs,cr,n:S.n,oldN:P.length,newLab:newLab(cv),oldLab:oldLab(old),geo:geo(cv),
+      pressed:[...cv.matchAll(/<button data-v="([^"]+)" aria-pressed="true">/g)].map(m=>m[1]),
+      days:[0,1,3,7,14,30,60,90].filter(N=>N+1<S.n).map(N=>({N,tip:tip(N+1),old:P[N+1].v+' | '+P[N+1].s+' | '+P[N+1].l,left:(cs==='all'?uniSurvAll(d):d.survival.recent).left[N]})),
+      tip0:tip(0), ex:__text((cv.match(/<div class="us-cvex">[\\s\\S]*?<\\/div>/)||[''])[0]), lg:__text((cv.match(/<div class="us-clg">[\\s\\S]*?<\\/div>/)||[''])[0]),
+      dashed:/stroke-dasharray="6 4"/.test(cv), text:__text(cv)}); }
+  ST.cvS='all'; ST.cvR='90'; UNICSRC='all'; UNICRANGE='90';
+  // where: after "Gone by day N", before the install-week grid
+  const h=uniScreen(), pg=h.slice(h.indexOf('id="us-apg"'),h.indexOf('id="uni-old-app"'));
+  r.where={gone:pg.indexOf('us-gbars'), curve:pg.indexOf('class="us-panel us-cv"'), grid:pg.indexOf('class="us-cohw"'), oldKept:h.indexOf('id="uni-curve"')>h.indexOf('id="uni-old-app"')};
+  // the toggles: the Studio's own state (remembered), through its one click handler
+  const btn=(grp,v)=>({dataset:{v},closest:q=>q==='#us-drawer'?null:(q==='[data-cvs]'?(grp==='cvs'?{}:null):null)});
+  const tg=(grp,v)=>{ const b=btn(grp,v); return {closest:q=>q==='#us-root,#us-layer'?{}:(q==='[data-cvs] button,[data-cvr] button'?b:null), id:''}; };
+  const pressed=()=>[...panel(document.getElementById('us-apg').innerHTML).matchAll(/<button data-v="([^"]+)" aria-pressed="true">/g)].map(m=>m[1]);
+  US._.onClick({target:tg('cvr','30'),preventDefault(){},stopPropagation(){}}); r.tog1={cvR:ST.cvR, cvS:ST.cvS, pressed:pressed()};
+  US._.onClick({target:tg('cvs','recent'),preventDefault(){},stopPropagation(){}}); r.tog2={cvR:ST.cvR, cvS:ST.cvS, pressed:pressed(), saved:JSON.parse(localStorage.getItem('uninstallStudio.v1'))};
+  ST.cvS='all'; ST.cvR='90';
+  // the drawer: the same panel
+  const i=A.indexOf(a); US.openDrawer(i); const dh=document.getElementById('us-drawer').innerHTML; US.closeDrawer();
+  const dcv=panel(dh); r.drawer={has:!!dcv, svg:/<svg viewBox="[^"]*" id="us-d\\d+" data-hv="1" role="img" aria-label="How many stay chart">/.test(dcv), lab:newLab(dcv),
+    order:dh.indexOf('us-gbars')<dh.indexOf('class="us-panel us-cv"')&&dh.indexOf('class="us-panel us-cv"')<dh.indexOf('class="us-cohw"')};
+  // low data from day 5 (the older curve's own thin_from): dashed + faded from there, said in the legend and the tooltip
+  const C0=uniSurvAll(d), kt=C0.thin_from; C0.thin_from=5;
+  try{ const hl=panel(US._.curveH(a,'p','h2','h2')); r.thin={lg:__text((hl.match(/<div class="us-clg">[\\s\\S]*?<\\/div>/)||[''])[0]), dashed:/stroke-dasharray="6 4"/.test(hl),
+      tip7:__text(US._.curveTip(a,C0,7,5)), tip3:__text(US._.curveTip(a,C0,3,5)), faint:[...hl.matchAll(/fill="var\\(--faint\\)"[^>]*>(Day \\d+: [^<]*)</g)].map(m=>m[1])}; }
+  finally{ C0.thin_from=kt; }
+  // the older detail not there yet / failed: a short note, no chart
+  const U0=UNI; UNI=null; try{ r.loading=__text(panel(US._.curveH(a,'p','h2','h2'))); UNIERR=true; r.failed=__text(panel(US._.curveH(a,'p','h2','h2'))); } finally{ UNI=U0; UNIERR=false; }
+  ${RESET} uniScreen(); return JSON.stringify(r); })()`);
 out.n = Object.keys(out).length;
 process.stdout.write(JSON.stringify({ errors, out }));

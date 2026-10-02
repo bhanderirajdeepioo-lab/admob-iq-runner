@@ -368,7 +368,8 @@ def test_one_app_is_the_studio_app_page_with_the_whole_older_page_folded_under_i
     assert p["fold"] and p["oldNoStudio"]                  # the older page, byte for byte as without the Studio, in the fold
     #                                                        (but its 📦 Update impact card: one line — the card is up on the page)
     assert p["kwbar"]                                      # (its own KPI band lives in the fold, never above the Studio)
-    assert p["kpis"] == 8 and p["charts"] == 2 and p["coh"] and p["daytable"]
+    # 3 charts: the rate chart, installs vs uninstalls and (owner, 2 Oct) "📉 How many stay", the older page's curve
+    assert p["kpis"] == 8 and p["charts"] == 3 and p["coh"] and p["daytable"]
     assert p["cards"] == p["alerts"] and p["ts"] == p["alerts"]          # every alert of the app, each with its 🕒 line
     assert p["sameKpis"]                                   # the same numbers as the drawer (one computation)
     assert p["after7"] == 7 and p["html7"]                 # the shared range drives the page
@@ -569,3 +570,53 @@ def test_install_week_grid_year_rows_only_when_the_weeks_cross_a_year(report):
     assert c["year"] == ["rh All-time normal all installs", "cyr ── 2026 ──", "rh 5–7 Jan 5,400 installs (only 3 days)",
                          "crel 📦 v5.0 (31 Dec 2025) — mid-week", "rh 29 Dec 2025–4 Jan 📦 5,400 installs", "cyr ── 2025 ──",
                          "crel 📦 Update (23 Dec 2025) — mid-week", "rh 22–28 Dec 2025 📦 5,400 installs", "rh 15–21 Dec 2025 5,400 installs"]
+
+
+# ── 📉 How many stay (owner, 2 Oct: "purane view ka ye feature (How many stay) tumne new view me to gayab hi kar diya") ──
+
+def test_how_many_stay_is_on_the_studio_app_page_with_the_older_curves_numbers(report):
+    c = J(report, "curve")
+    w = c["where"]
+    assert 0 < w["gone"] < w["curve"] < w["grid"] and w["oldKept"]           # after Gone by day N, before the grid; old kept
+    assert [(x["cs"], x["cr"]) for x in c["combos"]] == [("all", "90"), ("all", "30"), ("all", "all"), ("recent", "90"), ("recent", "30")]
+    for x in c["combos"]:
+        assert x["n"] == x["oldN"]                         # the same days (install + day 0 … the last shown) as the older chart
+        assert x["pressed"] == [x["cs"], x["cr"]]          # both toggles say what is shown
+        for d in x["days"]:                                # the hover: the older chart's very numbers (its formats)
+            stay, gone, _ = d["old"].split(" | ")
+            pct = stay.replace(" stay", "").replace("estimate ", "≈ ")
+            assert "Still installed " + pct in d["tip"], (d, x["cs"], x["cr"])
+            g = gone.replace(" gone that day", "")
+            assert re.search(r"Gone that day [\d,.]+(?: lakh)? users \(%s\)" % re.escape(g), d["tip"]), d     # count first, % beside
+            assert d["tip"].count("day %d after install" % d["N"]) == 1 if d["N"] else "install day (same day)" in d["tip"]
+        # the % printed on the chart: day 1 / 3 / 7 / 14 / 30 … and the last day, each = the older chart's rounding,
+        # and every day both print reads the same; inside the chart, never on each other
+        last = x["n"] - 2
+        new = dict(t.split(": ") for t in x["newLab"])
+        old = dict(t.split(": ") for t in x["oldLab"])
+        assert "Day %d" % last in new and set(new) <= {"Day %d" % N for N in (1, 3, 7, 14, 30, 60, 90, 180, 365, 730, last)}
+        assert {k: v for k, v in new.items() if k in old} == {k: old[k] for k in new if k in old} and len(set(new) & set(old)) >= 3
+        assert x["geo"] == {"inside": True, "overlap": 0}
+        assert x["tip0"].endswith("install Still installed 100% Install ke waqt sab ke paas app")
+        assert x["lg"].startswith("% gone that day % still installed ≈ range")
+        assert ("Faded = low data" in x["lg"]) == x["dashed"]
+        assert x["ex"].startswith("Last 90 days = " if x["cs"] == "recent" else "All time = ")
+        assert "Laal bar = us din kitne gaye · hari line = ab tak kitne bache · saare laal bar + hari line = 100%." in x["ex"]
+        _words_ok(x["text"])
+        assert not re.search(r"\b100 me\b|1,000 me|per 1,000", x["text"])
+    by = {(x["cs"], x["cr"]): x for x in c["combos"]}
+    assert by[("all", "30")]["n"] == 32 and by[("all", "90")]["n"] == 92 and by[("all", "all")]["n"] > 92
+    assert by[("all", "90")]["days"][1]["left"] != by[("recent", "90")]["days"][1]["left"]   # the two sets of installs differ
+
+
+def test_how_many_stay_toggles_drawer_low_data_and_loading(report):
+    c = J(report, "curve")
+    assert c["tog1"] == {"cvR": "30", "cvS": "all", "pressed": ["all", "30"]}          # one click handler, the page redrawn
+    assert c["tog2"]["cvS"] == "recent" and c["tog2"]["pressed"] == ["recent", "30"]
+    assert c["tog2"]["saved"]["cvS"] == "recent" and c["tog2"]["saved"]["cvR"] == "30"  # remembered
+    assert c["drawer"]["has"] and c["drawer"]["svg"] and c["drawer"]["order"] and "Day 7: 11%" in c["drawer"]["lab"]
+    t = c["thin"]                                          # low data from day 5: faded / dashed, said in legend and tooltip
+    assert t["dashed"] and t["lg"].endswith("Faded = low data")
+    assert "Low data" in t["tip7"] and "Low data" not in t["tip3"]
+    assert t["faint"] and all(int(re.match(r"Day (\d+)", f).group(1)) >= 5 for f in t["faint"])
+    assert c["loading"].endswith("⏳ Is graph ka data load ho raha hai…") and c["failed"].endswith("⚠️ Is graph ka data load nahi hua — page refresh karo")

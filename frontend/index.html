@@ -2701,6 +2701,12 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-rlg{padding-top:0;color:var(--purple)}
 :is(#us-root,#us-layer) .us-rlg b{font-weight:600;color:#c4b5fd}
 :is(#us-root,#us-layer) .us-seg[data-cohm] button{min-height:32px}
+:is(#us-root,#us-layer) .us-cvctl{display:flex;flex-wrap:wrap;gap:8px 12px;padding:2px 18px 4px}
+:is(#us-root,#us-layer) .us-cvseg{flex-wrap:wrap;max-width:100%}
+:is(#us-root,#us-layer) .us-cvseg button{min-height:32px}
+:is(#us-root,#us-layer) .us-cvnote{padding:4px 18px 16px;font-size:12.5px;color:var(--muted)}
+:is(#us-root,#us-layer) .us-cvex{padding:0 18px 14px;font-size:11.5px;line-height:1.55;color:var(--faint)}
+:is(#us-root,#us-layer) .us-cvex b{color:var(--ink2);font-weight:600}
 :is(#us-root,#us-layer) .us-upd{display:flex;flex-direction:column;gap:6px;padding:0 18px 14px}
 :is(#us-root,#us-layer) .us-upd .us-u{display:flex;gap:10px;align-items:center;font-size:12.5px;flex-wrap:wrap}
 :is(#us-root,#us-layer) .us-upd .us-u .us-dt{font:600 12px var(--us-num);color:var(--muted);width:56px}
@@ -2810,8 +2816,11 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-gdt tbody tr[data-gdgo]{cursor:pointer}
 :is(#us-root,#us-layer) .us-gnm{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
 :is(#us-root,#us-layer) .us-mini.us-gdt th{cursor:default}
-:is(#us-root,#us-layer) .us-gbars{display:grid;gap:8px;padding:2px 18px 12px;max-width:1000px}
-:is(#us-root,#us-layer) .us-gbr{display:grid;grid-template-columns:66px minmax(0,1fr) minmax(128px,auto);gap:10px;align-items:center;border-radius:6px}
+:is(#us-root,#us-layer) .us-gbars{display:grid;grid-template-columns:66px minmax(0,1fr) fit-content(300px);gap:8px 10px;padding:2px 18px 12px;max-width:1000px}
+/* every row on the list's own columns (subgrid): one bar track for all 9 rows, so a bar's length depends on its % only —
+   never on how long that row's text is (the text column = the widest row's, wrapping past 300px); a phone puts the text
+   under the bar */
+:is(#us-root,#us-layer) .us-gbr{grid-column:1/-1;display:grid;grid-template-columns:66px minmax(0,1fr) 240px;grid-template-columns:subgrid;gap:8px 10px;align-items:center;border-radius:6px}
 :is(#us-root,#us-layer) .us-gbr:hover{background:rgba(34,211,238,.06)}
 :is(#us-root,#us-layer) .us-gbl{font:600 11px var(--us-num);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
 :is(#us-root,#us-layer) .us-gbt{position:relative;height:14px;background:var(--panel2);border-radius:4px}
@@ -2822,15 +2831,15 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-gbk.us-gbn2{width:0;margin-left:-1.5px;background:none!important;border-left:3px dotted var(--ink2);box-shadow:none}
 :is(#us-root,#us-layer) .us-gbk.us-gbn2.us-gbad{border-left-color:var(--bad)}
 :is(#us-root,#us-layer) .us-gbk.us-gbn2.us-ggood{border-left-color:var(--good)}
-:is(#us-root,#us-layer) .us-gbv{font:600 13px var(--us-num);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+:is(#us-root,#us-layer) .us-gbv{font:600 13px var(--us-num);font-variant-numeric:tabular-nums;text-align:right;min-width:0}
 :is(#us-root,#us-layer) .us-gbv b{font-size:14px;color:var(--ink)}
 :is(#us-root,#us-layer) .us-gbv small{display:block;font-size:10.5px;font-weight:500;color:var(--muted)}
-:is(#us-root,#us-layer) .us-gbx{font-weight:500;font-size:11.5px;color:var(--ink2)}
+:is(#us-root,#us-layer) .us-gbx{font-weight:500;font-size:11.5px;color:var(--ink2);white-space:nowrap}
 :is(#us-root,#us-layer) .us-gbx.us-gbad{color:var(--bad)}
 :is(#us-root,#us-layer) .us-gbx.us-ggood{color:var(--good)}
 :is(#us-root,#us-layer) .us-gbx.us-gb1{opacity:.8}
-@container us (max-width:608px){:is(#us-root,#us-layer) .us-st.us-gdt td:first-child{min-width:112px;max-width:128px}:is(#us-root,#us-layer) .us-gbars{padding-inline:14px}:is(#us-root,#us-layer) .us-gbr{grid-template-columns:56px minmax(0,1fr) auto;gap:8px}}
-@media (max-width:480px){:is(#us-root,#us-layer) .us-gbars{padding-inline:12px}:is(#us-root,#us-layer) .us-gbr{grid-template-columns:52px minmax(0,1fr) auto;gap:8px}}
+@container us (max-width:608px){:is(#us-root,#us-layer) .us-st.us-gdt td:first-child{min-width:112px;max-width:128px}:is(#us-root,#us-layer) .us-gbars{padding-inline:14px;grid-template-columns:minmax(0,1fr)}:is(#us-root,#us-layer) .us-gbr{grid-column:auto;grid-template-columns:56px minmax(0,1fr);gap:3px 8px}:is(#us-root,#us-layer) .us-gbv{grid-column:2;text-align:left}}
+@media (max-width:480px){:is(#us-root,#us-layer) .us-gbars{padding-inline:12px;grid-template-columns:minmax(0,1fr)}:is(#us-root,#us-layer) .us-gbr{grid-column:auto;grid-template-columns:52px minmax(0,1fr);gap:3px 8px}:is(#us-root,#us-layer) .us-gbv{grid-column:2;text-align:left}}
 #uni-old,#uni-old-app{margin:22px 0 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
 #uni-old>summary,#uni-old-app>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;padding:12px 16px;font-size:14px;font-weight:700;color:var(--ink2)}
 #uni-old>summary::-webkit-details-marker,#uni-old-app>summary::-webkit-details-marker{display:none}
@@ -6358,12 +6367,13 @@ function money(v,sign){ if(v==null||!isFinite(v)) return '—'; const inr=isINR(
 
 /* ================= state ================= */
 // range / compare = the dashboard's shared KPIWINDOW (KWIN / KWCUSTOM / KCMP / KCMPCUSTOM, kwSave); the rest is the Studio's
-const ST={sort:{k:'inr',d:-1},fst:new Set(),facc:'',fsz:'',q:'',open:new Set(),mapAll:false,srcAll:false,chgView:'cards',cohMode:'abs',
+const ST={sort:{k:'inr',d:-1},fst:new Set(),facc:'',fsz:'',q:'',open:new Set(),mapAll:false,srcAll:false,chgView:'cards',cohMode:'abs',cvS:'all',cvR:'90',
   drawer:-1,did:null,dScroll:0,ledger:false,folds:new Set()};
 const LS='uninstallStudio.v1';
 try{ const s=JSON.parse(localStorage.getItem(LS)||'{}')||{}; if(s.chgView==='cards'||s.chgView==='table') ST.chgView=s.chgView;
-  if(s.cohMode==='abs'||s.cohMode==='dev') ST.cohMode=s.cohMode; }catch(e){}
-function save(){ try{ localStorage.setItem(LS,JSON.stringify({chgView:ST.chgView,cohMode:ST.cohMode})); }catch(e){} }
+  if(s.cohMode==='abs'||s.cohMode==='dev') ST.cohMode=s.cohMode;
+  if(s.cvS==='all'||s.cvS==='recent') ST.cvS=s.cvS; if(s.cvR==='30'||s.cvR==='90'||s.cvR==='all') ST.cvR=s.cvR; }catch(e){}
+function save(){ try{ localStorage.setItem(LS,JSON.stringify({chgView:ST.chgView,cohMode:ST.cohMode,cvS:ST.cvS,cvR:ST.cvR})); }catch(e){} }
 const RM=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
 const rangeOf=()=>KWIN==='custom'?'c':(KW_N[KWIN]||7);
 const cmpOf=()=>KCMP==='custom'?'c':(KCMP==='month'?'month':'prev');
@@ -6940,6 +6950,71 @@ function cohFull(a,cr){ const C=M.cohCols, rows=a.coh.w.slice().reverse(); cr=cr
     const badge=L?`<span class="us-relb" data-tk="crel:${a.i}:${r.w}"${go?` data-rimp="${esc(go)}" role="link" tabindex="0"`:''}>📦</span>`:'';
     h+=`<div class="us-rh"><span>${span(r.f,r.t)}${badge}</span><small>${fN(r.n)} installs</small>${r.part?`<small>(only ${nd} ${nd===1?'day':'days'})</small>`:''}</div>`+C.map((c,k)=>cohCell(a,r,k)).join(''); });
   return h+'</div>'; }
+/* ================= "📉 How many stay" — the older page's survival curve, in the Studio's way ================= */
+// Owner (2 Oct): "purane view ka ye feature (How many stay) tumne new view me to gayab hi kar diya". The SAME curve and
+// numbers as the older card (uniCurveCard): the older detail's survival — all time (uniSurvAll: with the test installs only
+// while the older page shows them) or the last 90 days of installs (survival.recent) — its % formats (uni100 printed on
+// the chart, uniPctS in the tooltip, as the older chart's labels and hover); green line = % still installed (starts at
+// 100%, never rises), red bars = % of the ORIGINAL installs gone that day (bars + line = 100), the ≈ range band, faded
+// (dashed, lighter) from thin_from on = low data. Drawn at the real width (text stays readable on a phone), the key
+// days' % printed on it (never overlapping: dropped instead), one hover path (SPK → hov). The older chart has no 📦
+// marks (its x axis is days after install, not dates), so neither has this one.
+const cvTick=N=>N<0?'Install':(N===0?'Same day':'Day '+N);
+function curveTip(a,C,N,th){ const hd=t=>`<div class="us-tt">${ic(a,14,'ail')}${esc(a.nm)} · ${t}</div>`;
+  if(N<0) return hd('install')+trow('Still installed','100%')+'<div class="us-tsm">Install ke waqt sab ke paas app</div>';
+  const lf=C.left||[], gn=C.gone||[], x=Array.isArray(C.x)?C.x[N]:null, nn=Array.isArray(C.n)?C.n[N]:null;
+  const rg=(Array.isArray(C.lo)&&Array.isArray(C.hi)&&C.lo[N]!=null&&C.hi[N]!=null&&uniPctS(C.lo[N])!==uniPctS(C.hi[N]))?` <span class="us-faint">(≈ ${uniPctS(C.lo[N])}–${uniPctS(C.hi[N])})</span>`:'';
+  return hd(N===0?'install day (same day)':'day '+N+' after install')+trow('Still installed',uniPctS(lf[N])+rg)
+    +trow('Gone that day',x!=null?fN(x)+' users ('+uniPctS(gn[N])+')':uniPctS(gn[N]))+(nn!=null?trow('Installs counted',fN(nn)):'')
+    +(N>=th?'<div class="us-tsm">⏳ Low data — itne din tak kam installs pahunche</div>':''); }
+function curveSvg(a,C,top,mode){ const w=chartW(mode), h=innerWidth<=640?236:(mode==='p'?300:262), pl=40, pr=14, pt=20, pb=26, ph=h-pt-pb;
+  const lf=C.left||[], gn=C.gone||[], th=C.thin_from==null?top+1:C.thin_from, id=SPF+(++spkN);
+  const X=lin(-1,Math.max(1,top),pl,w-pr), Y=v=>pt+ph*(1-Math.max(0,Math.min(1,+v||0))), obs=[], L=[];
+  let s=`<svg viewBox="0 0 ${w} ${h}" id="${id}" data-hv="1" role="img" aria-label="How many stay chart">`;
+  [0,.25,.5,.75,1].forEach(f=>{ s+=`<line x1="${pl}" x2="${w-pr}" y1="${Y(f).toFixed(1)}" y2="${Y(f).toFixed(1)}" stroke="var(--line)" stroke-opacity="${f?.6:1}"/><text x="${pl-6}" y="${(Y(f)+3.5).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--faint)">${Math.round(f*100)}%</text>`; });
+  // red: % gone that day (of the original installs), lighter where the data is low
+  const bw=Math.max(1,Math.min(16,(w-pl-pr)/(top+2)*.7));
+  for(let N=0;N<=top;N++){ const g=+gn[N]||0; if(!(g>0)) continue; const hh=Math.max(.8,ph*Math.min(1,g)), x=X(N)-bw/2, y=pt+ph-hh;
+    s+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="1" fill="var(--bad)" fill-opacity="${N>=th?.25:.75}"/>`; obs.push([x,y,x+bw,pt+ph]); }
+  // ≈ range, then the green line (solid → dashed and faded from the low-data day on)
+  if(Array.isArray(C.lo)&&Array.isArray(C.hi)) s+=`<path d="${areaOf(C.lo.slice(0,top+1),C.hi.slice(0,top+1),X,Y)}" fill="var(--good)" fill-opacity=".16"/>`;
+  const val=N=>N<0?1:lf[N], P=N=>X(N).toFixed(1)+' '+Y(val(N)).toFixed(1), seq=(p,q)=>{ const o=[]; for(let N=p;N<=q;N++) if(val(N)!=null) o.push(N); return o; };
+  s+=`<path d="M${seq(-1,Math.min(top,th-1)).map(P).join(' L')}" fill="none" stroke="var(--good)" stroke-width="2.6" stroke-linejoin="round"/>`;
+  if(th<=top) s+=`<path d="M${seq(Math.max(-1,th-1),top).map(P).join(' L')}" fill="none" stroke="var(--good)" stroke-opacity=".45" stroke-width="2.2" stroke-dasharray="6 4"/>`;
+  obs.push(...ptsObs([1].concat(lf.slice(0,top+1)),i=>X(i-1),Y,3));
+  // the x axis: Install, the usual days, the last day — never two names on each other
+  const tw=N=>cvTick(N).length*10.5*.56+10, tk=[];
+  const ord=[-1,top,7,30,1,90,14,3,60,180,365,730]; for(let k=1;k<=Math.floor(top/30);k++) ord.push(k*30);
+  ord.filter((N,i,arr)=>N<=top&&arr.indexOf(N)===i).forEach(N=>{ const x=X(N); if(tk.some(p=>Math.abs(p.x-x)<(tw(p.N)+tw(N))/2)) return; tk.push({x,N}); });
+  tk.forEach(({x,N})=>{ const tx=Math.max(tw(N)/2-4,Math.min(x,w-tw(N)/2+4));
+    s+=`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${pt+ph}" y2="${pt+ph+4}" stroke="var(--line2)"/><text x="${tx.toFixed(1)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${cvTick(N)}</text>`; });
+  // the % printed at day 1, 3, 7, 14, 30 … and the last day shown (the older chart's own rounding: uni100)
+  const pri={}; [top,7,30,1,90,14,3,60,180,365,730].forEach((N,i)=>{ if(pri[N]==null) pri[N]=i+1; });
+  [1,3,7,14,30,60,90,180,365,730,top].filter((N,i,arr)=>N>=0&&N<=top&&lf[N]!=null&&arr.indexOf(N)===i).forEach(N=>{ const x=X(N), y=Y(lf[N]), f=N>=th;
+    s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="var(--good)"${f?' fill-opacity=".5"':''} stroke="var(--panel)" stroke-width="1.4"/>`; obs.push([x-4,y-4,x+4,y+4]);
+    L.push({x,y:y-8,t:'Day '+N+': '+uni100(lf[N])+'%',a:'middle',xs:[[x+7,'start',[12]],[x-7,'end',[12]]],p:pri[N]||30,b:1,fs:11,c:f?'var(--faint)':'var(--ink)',dys:[0,-12,24,36,-24]}); });   // centred on its dot (above / below) or right beside it at its height, else dropped
+  s+=`<line class="us-xh" x1="0" x2="0" y1="${pt}" y2="${pt+ph}" stroke="var(--ink2)" stroke-width="1" opacity="0"/><rect x="${pl}" y="${pt}" width="${w-pl-pr}" height="${ph}" fill="transparent"/>`;
+  s+=labels(L,[pl+2,2,w-2,pt+ph-2],obs)+'</svg>';
+  SPK[id]={n:top+2,X:i=>X(i-1),w,tip:i=>curveTip(a,C,i-1,th)};          // index 0 = the install (100%), i = day i−1
+  return `<div class="us-chart">${s}</div>`; }
+function curveH(a,mode,hd,he){ const d=uDet(a), SV=(d&&d.survival)||{};
+  const ph=`<div class="us-ph"><div><div class="us-eyebrow">Every day after install</div><${hd}>📉 How many stay</${he}><div class="us-hint">Hari line = install ke baad kitne % ke paas app abhi bhi hai · laal bar = us din kitne % ne hataya · hover / tap = us din ka hisaab</div></div></div>`;
+  const wrap=b=>`<div class="us-panel us-cv">${ph}${b}</div>`;
+  if(!d) return wrap(`<div class="us-cvnote">${(typeof UNIERR!=='undefined'&&UNIERR)?'⚠️ Is graph ka data load nahi hua — page refresh karo':'⏳ Is graph ka data load ho raha hai…'}</div>`);
+  const hasR=!!(SV.recent&&Array.isArray(SV.recent.left)&&SV.recent.left.length);
+  const src=(ST.cvS==='recent'&&hasR)?'recent':'all', C=(src==='all'?uniSurvAll(d):SV.recent)||{}, L=Array.isArray(C.left)?C.left.length:0;
+  if(!L) return wrap('<div class="us-cvnote">Abhi pakke din kam hain — ye graph ~2 hafte ke data ke baad banega.</div>');
+  const seg=(at,cur,opts,lab)=>`<div class="us-seg us-cvseg" ${at} role="group" aria-label="${lab}">${opts.map(([v,l])=>`<button data-v="${v}" aria-pressed="${cur===v}">${l}</button>`).join('')}</div>`;
+  const ctl=`<div class="us-cvctl">${hasR?seg('data-cvs="1"',src,[['all','All time (all installs)'],['recent','Last 90 days of installs']],'Which installs'):''}${seg('data-cvr="1"',ST.cvR,[['30','First 30 days'],['90','First 90 days'],['all','All days']],'Days shown')}</div>`;
+  const top=Math.min(L-1,ST.cvR==='30'?30:(ST.cvR==='90'?90:L-1)), thin=C.thin_from!=null&&C.thin_from<=top;
+  const lg=`<div class="us-clg"><span class="us-k"><i style="background:var(--bad);width:8px;height:9px"></i>% gone that day</span><span class="us-k"><i style="background:var(--good)"></i>% still installed</span><span class="us-k"><i style="background:rgba(52,217,154,.25);height:9px"></i>≈ range</span>${thin?'<span class="us-k"><i style="background:repeating-linear-gradient(90deg,rgba(52,217,154,.55) 0 5px,transparent 5px 8px)"></i>Faded = low data</span>':''}</div>`;
+  // the older card's own explanation (only settled install days count — as in the summary)
+  const upto=(d.settled_till&&C.to&&d.settled_till<C.to)?d.settled_till:C.to, LA=uniLaunch(d);
+  const who=src==='recent'?`<b>Last 90 days</b> = ${uniSpan(C.from,upto)} ke pakke installs — ye ${L-1} din tak hi pahunche (aage ke din "All time" me).`
+    :`<b>All time</b> = ${uniSpan(C.from,upto)} ke saare pakke installs${LA?(UNIPRE?` (launch ${uniLD(d,true)} se pehle ke ${uniTestWord(LA)} bhi)`:` (launch ${uniD(LA.day)} se; usse pehle ke ${uniTestWord(LA)} nahi)`):''}.`;
+  const clip=(C.clipped||[]).length?` ⚠️ ${C.clipped.length} din GA4 ke uninstall bache users se zyada the — wahan sab gaye maana (GA4 ke number andaaze hote hain).`:'';
+  const ex=`<div class="us-cvex">${who} Har din ka % un sab installs se jo us din tak pahunch chuke${d.settled_till?` (sirf pakke din — ${uniD(d.settled_till)} tak)`:''}. Laal bar = us din kitne gaye · hari line = ab tak kitne bache · saare laal bar + hari line = 100%. Line kabhi upar nahi jaati.${clip}</div>`;
+  return wrap(ctl+curveSvg(a,C,top,mode)+lg+ex); }
 // the legend line under the grid (only when it has a 📦 line)
 function cohRelLg(cr){ const L=Object.values(cr||{}); if(!L.length) return '';
   return `<div class="us-clg us-rlg">📦 = new update. Line ke upar = naye version ke installs, neeche = purane version ke.${L.some(x=>x.some(y=>y.k))?' <b>Tap 📦 → update impact.</b>':''}</div>`; }
@@ -6951,7 +7026,7 @@ function cohRelLg(cr){ const L=Object.values(cr||{}); if(!L.length) return '';
 const tW=(t,fs)=>String(t).length*fs*.56+3;
 function labels(L,box,obs,halo){ const taken=(obs||[]).slice(); let out='';
   L.filter(Boolean).sort((p,q)=>p.p-q.p).forEach(l=>{ const fs=l.fs||10.5, w=tW(l.t,fs);
-    for(const [lx,la] of [[l.x,l.a]].concat(l.xs||[])) for(const dy of (l.dys||[0,-12,12,-24,24])){ let x0=la==='end'?lx-w:(la==='middle'?lx-w/2:lx); const y=l.y+dy;
+    for(const [lx,la,ld] of [[l.x,l.a]].concat(l.xs||[])) for(const dy of (ld||l.dys||[0,-12,12,-24,24])){ let x0=la==='end'?lx-w:(la==='middle'?lx-w/2:lx); const y=l.y+dy;   // (an xs spot may bring its own nudges)
       x0=Math.max(box[0],Math.min(box[2]-w,x0)); const b=[x0,y-fs+1,x0+w,y+3];
       if(b[1]<box[1]||b[3]>box[3]) continue;
       if(taken.some(o=>b[0]<o[2]&&b[2]>o[0]&&b[1]<o[3]&&b[3]>o[1])) continue;
@@ -7077,8 +7152,9 @@ function bodyHtml(o,mode){ const a=o.a, s=o.s, c=o.c;
   const dtH=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Day by day</div><${hd}>Day by day · ${span(W.f,W.t)}</${he}></div></div><div class="us-tw" style="max-height:${mode==='p'?520:360}px">${dt}</div></div>`;
   const ch1=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Uninstall rate</div><${hd}>Uninstall rate % with normal band</${he}></div></div>${bigChart(a,o,mode)}</div>`;
   const ch2=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Installs vs uninstalls</div><${hd}>Installs vs uninstalls</${he}></div></div>${ioChart(a,mode)}</div>`;
-  if(mode==='p') return `<div class="us-dk us-pk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${coh}${alH}${imp||upH}${dtH}`;
-  return `<div class="us-dk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${coh}${alH}${upH}${dtH}`; }
+  const cv=curveH(a,mode,hd,he);                        // 📉 How many stay: after Gone by day N, before the grid
+  if(mode==='p') return `<div class="us-dk us-pk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${cv}${coh}${alH}${imp||upH}${dtH}`;
+  return `<div class="us-dk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${cv}${coh}${alH}${upH}${dtH}`; }
 // the app page's "📦 Update impact" section: the card comes from the dashboard (usImpHtml — '' when the app has no GA4
 // detail: then no section, the short list stays); upL = this page's own uninstall lines per update (7 days before → after)
 function impSec(a,upL){ let c=''; try{ c=typeof usImpHtml==='function'?usImpHtml(a.id):''; }catch(e){ c=''; } if(!c) return '';
@@ -7342,6 +7418,7 @@ function onClick(e){ const t=e.target; if(!inStudio(t)) return;
   const fb=t.closest('#us-fst button'); if(fb){ const s=fb.dataset.st; ST.fst.has(s)?ST.fst.delete(s):ST.fst.add(s); renderTbl(true); return; }
   const cv=t.closest('#us-chgV button'); if(cv){ ST.chgView=cv.dataset.v; const el=$('us-chg'); if(el) el.innerHTML=chgHtml(); save(); return; }
   const cm=t.closest('[data-cohm] button'); if(cm){ ST.cohMode=cm.dataset.m; save(); if(cm.closest('#us-drawer')) renderDrawer(true); else renderPage(); return; }
+  const cvb=t.closest('[data-cvs] button,[data-cvr] button'); if(cvb){ if(cvb.closest('[data-cvs]')) ST.cvS=cvb.dataset.v; else ST.cvR=cvb.dataset.v; save(); hideTip(); if(cvb.closest('#us-drawer')) renderDrawer(true); else renderPage(); return; }
   if(t.closest('#us-mapMore')){ ST.mapAll=!ST.mapAll; const el=$('us-map'); if(el) el.innerHTML=mapHtml(); return; }
   if(t.closest('#us-srcMore')){ ST.srcAll=!ST.srcAll; const el=$('us-src'); if(el) el.innerHTML=srcHtml(); return; }
   if(t.closest('#us-dClose')||t.id==='us-scrim'){ closeDrawer(); return; }
@@ -7362,7 +7439,7 @@ return {ptr, ensure, retry, screen, appScreen, has, hide, closeDrawer, openDrawe
      story:storyHtml, kpis:kpisHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml,
      page:id=>{ const i=A.findIndex(a=>a.id===id); return i<0?'':pageHtml(i); }, view:()=>({VIEW,PAGE}), SPK:()=>SPK, labels, navPage,
      load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage,
-     gdCell, gdHtml:()=>gdHtml(), gdApp:(i,m)=>gdApp(R[i],m||'d'), GST, GDL, cohFull, cohRels, relsOf}};
+     gdCell, gdHtml:()=>gdHtml(), gdApp:(i,m)=>gdApp(R[i],m||'d'), GST, GDL, cohFull, cohRels, relsOf, curveH, curveTip}};
 })();
 
 function renderUninstall(){
