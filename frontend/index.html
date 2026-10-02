@@ -369,6 +369,27 @@
   }
   @media(max-width:760px){ .topbar{--tbx:10px;padding-top:calc(6px + env(safe-area-inset-top,0px))} }   /* a phone: narrower sides, clear of the notch */
   @media(max-width:430px){ #curtoggle:not(.cur-x) #fx-rate{display:none} }   /* the $→₹ rate only while numbers are converted with it */
+  /* ===== More menu on a phone (B-05 / B-36): it ends above the tab bar (its last entry, Accounts & Apps, was behind it) and
+     scrolls there; the page under it stays put ===== */
+  @media(max-width:760px){
+    aside{height:auto;bottom:calc(58px + env(safe-area-inset-bottom,0px));padding:calc(10px + env(safe-area-inset-top,0px)) 12px 14px;overscroll-behavior:contain}
+    aside .brand{padding:4px 8px 8px}
+    aside .nav-lbl{padding:10px 10px 4px}
+    aside .nav button{padding:7px 10px;min-height:34px}
+    aside .side-foot{display:none}
+    body.nav-open{overflow:hidden}
+  }
+  /* ===== Form fields on a phone (A-14 / B-19): iPhone zooms the whole page when a field under 16px gets focus ===== */
+  @media(max-width:760px){
+    input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit]):not([type=reset]):not([type=color]):not([type=file]),select,textarea{font-size:16px!important}
+  }
+  /* ===== Studio drawers (A-15): the sticky header clears the notch / status bar itself (an iPhone home-screen app), so ‹ › ✕
+     stay reachable — the drawer's own top padding scrolled away under a sticky header ===== */
+  body :is(#us-root,#us-layer) .us-drawer,body :is(#as-root,#as-layer) .as-drawer,body :is(#vs-root,#vs-layer) .vs-drawer{padding-top:0}
+  body :is(#us-root,#us-layer) .us-dh,body :is(#as-root,#as-layer) .as-dh,body :is(#vs-root,#vs-layer) .vs-dh{padding-top:calc(12px + env(safe-area-inset-top,0px))}
+  @media(max-width:760px){
+    body :is(#us-root,#us-layer) .us-dh,body :is(#as-root,#as-layer) .as-dh,body :is(#vs-root,#vs-layer) .vs-dh{padding-top:calc(10px + env(safe-area-inset-top,0px))}
+  }
   /* ===== Uninstall (GA4) tab — wide tables scroll inside their card with the first column pinned ===== */
   #uni-root .lnk{color:var(--cyan);cursor:pointer;font-weight:600}
   .uni-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
