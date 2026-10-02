@@ -465,7 +465,7 @@ def test_app_updates_are_a_line_right_above_the_install_week_they_fell_in(report
 
 IMPACT_ROWS = ["returning_dau", "new_d1", "new_d7", "sessions", "time", "arpdau", "uninstall_d0"]
 IMPACT_LABELS = ["Old users/day", "Back next day", "Back after 7 days", "Sessions per user",
-                 "Time per user", "Revenue per user/day", "Uninstall on install day"]
+                 "Time per user", "Revenue per user/day", "Same day uninstall"]
 IMPACT_HEADER = re.compile(r"📦 (v\S+( → v\S+)?|App update) — \d{1,2} [A-Z][a-z]{2}( \d{4})? · Verdict: "
                            r"(✅ Update went well|👍 Keep|⚠️ Wait and check|🛑 Stop update|⏳ Too early)")
 
