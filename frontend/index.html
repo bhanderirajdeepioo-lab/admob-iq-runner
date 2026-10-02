@@ -6370,7 +6370,7 @@ const SMP={naya:10,theek:7,purana:30,drop:90,badi:300,chhoti:30};
 let SMPF={}, SMPALL=false, SMPAPPS=null, SMPAPPSK='';   // open folds (list id + fold) · every fold open (checks) · app names / sizes cache
 const SMP_WORD=WD.sti;
 const SMP_WCLS={bigda:'p-r',dhyan:'p-y',behtar:'p-g',normal:'uni-pz',jaldi:'p-b',lagu:'uni-pz',info:'p-b'};
-const SMP_REASON={recovered:'recovered',superseded:'new update',window_end:'window ended',seed_cleanup:'first-run cleanup'};
+const SMP_REASON={recovered:'recovered',superseded:'new update',window_end:'window ended',seed_cleanup:'first-run cleanup',rule_tuned:'alert rules tuned'};
 function smpToday(){ return (DATA&&DATA.today_date)||new Date().toISOString().slice(0,10); }
 function smpD(d){ return d?uniD(String(d).slice(0,10)):''; }
 function smpSpan(a,b){ return uniSpan(a,b); }
@@ -7351,6 +7351,7 @@ const STH_WHY={recovered:['Back to normal','number wapas apni normal range me aa
   superseded:['Newer update replaced it','is app ka naya update aa gaya — ab naye update ka asar naapa ja raha, purane ka alert band'],
   window_end:['Check window ended','jin installs / dino pe ye alert tha unka naapne ka samay poora ho gaya — aage naapne ko kuch nahi bacha'],
   seed_cleanup:['First-run cleanup','feature shuru hote waqt pehle se khule alert saaf kiye gaye — asli badlaav nahi'],
+  rule_tuned:['Alert rules tuned','alert ke niyam badle (8–10 pakke din, asli asar wala badlaav hi alert) — naye niyam me ye alert nahi banta, isliye band'],
   '':['Not recorded','purana alert — us waqt band hone ki wajah save nahi hoti thi']};
 function sthWhy(cr){ return STH_WHY[cr]||STH_WHY['']; }
 // how long an alert stayed open: its opened → closed data days (the engine keeps both on every closed alert)
