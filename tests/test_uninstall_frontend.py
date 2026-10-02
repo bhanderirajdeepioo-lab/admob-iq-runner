@@ -705,13 +705,15 @@ def test_windows_card_default_a_blocks_own_choice_and_the_viewers_memory(report)
     c = report["win"]["syn"]["card"]
     assert c["nblocks"] == 2 and _seg_on(c["card_seg"], 7)
     assert c["first"] == ["", ""]                                         # nothing chosen: 7
-    assert c["w30"] == [" (30 days)", " (30 days)"] and c["win"] == 30 and c["saved"] == [["imp_win_uni", "30"]]
+    # (owner, 2 Oct: ONE picker per block — the Uninstall card has no card-wide picker any more, so nothing of it is kept in
+    # this browser; uniImpWinX still sets every block's window for this view, as the Active users copy does)
+    assert c["w30"] == [" (30 days)", " (30 days)"] and c["win"] == 30 and c["saved"] == []
     assert c["over"] == [" (30 days)", " (60 days)"] and c["again"] == c["over"] and c["wk"] == {c["k1"]: 60}   # survives a re-render
     assert c["w14"] == [" (14 days)", " (14 days)"] and c["wk2"] == {}   # a new card default clears the block's own choice
     assert c["act_win"] in (None, "unread")                              # the Active tab's copy keeps its own
     assert _seg_on(c["open30_seg"], 30) and c["open30_blk"] == IMPACT_ROWS_30
     s = report["win"]["syn"]["store"]
-    assert s["remembered"] == [" (30 days)", " (30 days)"] and s["rwin"] == 30
+    assert s["remembered"] == ["", ""] and s["rwin"] is None             # a stored imp_win_uni is not read (no hidden default)
     assert s["blocked"] == ["", ""] and s["bwin"] is None and _seg_on(s["bseg"], 7)   # storage that throws: 7, no crash
     assert s["blocked60"] == [" (60 days)", " (60 days)"]
     assert s["dflt"] == [" (30 days)", ""] and s["dflt7"] == ["", ""]     # default_window 30 unless the viewer chose

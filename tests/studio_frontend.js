@@ -176,6 +176,8 @@ get('imppage', `(()=>{ ${RESET} const r={}, ptr=DATA.uninstall.studio;
   const sec=h=>h.slice(h.indexOf('id="us-imp"'),h.indexOf('id="uni-old-app"'));
   const h=uniScreen(), I=ids(h), iA=h.indexOf('id="us-apg"'), iF=h.indexOf('id="uni-old-app"'), iS=h.indexOf('id="us-imp"'), iC=h.indexOf('id="uni-impact"');
   r.dups=dups(h); r.n={card:I['uni-impact']||0, any:I['uni-any']||0, block:I['uni-imp-'+key]||0, section:I['us-imp']||0, up:I['uni-imp-up']||0};
+  // (📦 Updates is the card's first tab; 📅 Any date the other: drawn once too, in the same section)
+  UANY.tab='any'; { const h2=uniScreen(), I2=ids(h2); r.n2={card:I2['uni-impact']||0, any:I2['uni-any']||0, block:I2['uni-imp-'+key]||0, section:I2['us-imp']||0, dups:dups(h2)}; } UANY.tab='upd';
   const pg=h.slice(iA,iF), s=pg.indexOf('id="us-imp"');
   r.where={studio:iA>=0&&iA<iS&&iS<iC&&iC<iF, charts:pg.indexOf('data-hv="1"')>=0&&pg.lastIndexOf('data-hv="1"')<s,
     grid:pg.indexOf('class="us-cohw"')>=0&&pg.indexOf('class="us-cohw"')<s, gone:pg.indexOf('us-gbars')<s, alerts:pg.indexOf('class="us-ac ')<s,
@@ -195,6 +197,7 @@ get('imppage', `(()=>{ ${RESET} const r={}, ptr=DATA.uninstall.studio;
   // the card's 7 / 14 / 30 / 60 (every block) and one block's own — on the Studio page
   r.wins={state:uniImpWinsState(a), seg:pg.indexOf('uni-imp-cseg')>=0};
   uniImpWinX(30); const p30=sec(uniScreen()); r.wins.c30={on:p30.indexOf('<button class="on" onclick="uniImpWinX(30)">30 days</button>')>=0, verdict:p30.indexOf('Verdict (30 days)')>=0, saved:localStorage.getItem('imp_win_uni')};
+  r.wins.blockSegs=(p30.match(/<div class="uni-imp-seg">/g)||[]).length; r.wins.openBlocks=(p30.match(/data-open="1"/g)||[]).length;
   uniImpWX(key,14); const p14=sec(uniScreen()); r.wins.b14={verdict:p14.indexOf('Verdict (14 days)')>=0, on:p14.indexOf('<button class="on" onclick="uniImpWX(')>=0};
   uniImpWinX(7); localStorage.removeItem('imp_win_uni'); UNIIMPWIN=undefined; UNIIMPWK={};
   r.wins.back7=sec(uniScreen()).indexOf('Verdict (30 days)')<0;
@@ -202,8 +205,9 @@ get('imppage', `(()=>{ ${RESET} const r={}, ptr=DATA.uninstall.studio;
   const M={id:41,app_id:id,date:'',name:'Banner ad hataya',who:'team@example.test',at:'2026-09-20T05:00:00.000Z'};
   if(__IA){ UANY.idx={v:1,file_v:1,apps:[__IA.entry]}; UANY.idxErr=''; UANY.F[id]=__IA.body; M.date=uniAdd(__IA.body.first,120); }
   else { UANY.idx={v:1,file_v:1,apps:[]}; }
-  UANY.marks=[M]; UANY.marksErr=''; UANY.me='team@example.test'; UANY.admin=false;
-  const pa=sec(uniScreen()); r.any={file:!!__IA, inputs:pa.indexOf('id="uni-any-d"')>=0&&pa.indexOf('onchange="uniAnyPick(this.value)"')>=0, save:pa.indexOf('onclick="uniAnySave()"')>=0,
+  UANY.marks=[M]; UANY.marksErr=''; UANY.me='team@example.test'; UANY.admin=false; UANY.tab='any'; UANY.mode='date';
+  const pa=sec(uniScreen()); UANY.date=M.date; const pb=sec(uniScreen()); UANY.date='';
+  r.any={file:!!__IA, inputs:pa.indexOf('id="uni-any-d"')>=0&&pa.indexOf('onchange="uniAnyPick(this.value)"')>=0, save:pb.indexOf('onclick="uniAnySave()"')>=0,
     mark:pa.indexOf('onclick="uniAnyMk(41)"')>=0, del:pa.indexOf('onclick="uniAnyDel(41)"')>=0, box:pa.indexOf(uniAnyBox(a))>=0};
   const flow=()=>{ const calls=[], kf=fetch, kc=confirm, out={};
     fetch=(u,o)=>{ calls.push({url:String(u),method:(o&&o.method)||'GET',body:o&&o.body?JSON.parse(o.body):null,credentials:o&&o.credentials,redirect:o&&o.redirect}); return new Promise(()=>{}); };
@@ -211,10 +215,11 @@ get('imppage', `(()=>{ ${RESET} const r={}, ptr=DATA.uninstall.studio;
       UANY.marks=[M]; UANYP.marks=null; Object.assign(UANY,{date:'',name:'',star:false,msg:'',mc:'',saving:false,win:7});
       const h1=uniScreen(), on=(re)=>(h1.match(re)||[])[1]||'';
       new Function('return function(){'+on(/id="uni-any-d"[^>]*\\sonchange="([^"]*)"/)+'}')().call({value:M.date});   // the date picked
-      new Function('return function(){'+on(/id="uni-any-nm"[^>]*\\soninput="([^"]*)"/)+'}')().call({value:'Banner ad hataya'});
+      const h1b=uniScreen();                                                                             // (its 💾 row now)
+      new Function('return function(){'+((h1b.match(/id="uni-any-nm"[^>]*\\soninput="([^"]*)"/)||[])[1]||'')+'}')().call({value:'Banner ad hataya'});
       out.picked={date:UANY.date, name:UANY.name};
-      const h2=uniScreen(); out.result=__IA?h2.indexOf('<div class="uni-any-res" data-date="'+M.date+'"')>=0:null;
-      out.rows=__IA?(h2.split('<div class="uni-any-res"')[1]||'').split('<tr data-row="').length-1:null;
+      const h2=uniScreen(); out.result=__IA?h2.indexOf('<div class="any-res" id="uni-any-res" data-kind="date" data-date="'+M.date+'"')>=0:null;
+      out.rows=__IA?(h2.split('<div class="any-res"')[1]||'').split('<tr data-row="').length-1:null;
       eval((h2.match(/id="uni-any-sv"[^>]*\\sonclick="([^"]*)"/)||[])[1]||'');                               // 💾 Save
       UANY.saving=false; confirm=()=>true; eval((h2.match(/\\sonclick="(uniAnyDel\\(41\\))"/)||[])[1]||'');   // × (the author's)
       eval((h2.match(/\\sonclick="(uniAnyMk\\(41\\))"/)||[])[1]||''); out.mk={date:UANY.date, name:UANY.name};   // a saved date re-opens
@@ -223,7 +228,7 @@ get('imppage', `(()=>{ ${RESET} const r={}, ptr=DATA.uninstall.studio;
     } finally{ fetch=kf; confirm=kc; UANY.saving=false; UANYP.marks=null; }
     out.calls=calls; return out; };
   r.flowStudio=flow(); delete DATA.uninstall.studio; r.flowOld=flow(); DATA.uninstall.studio=ptr;
-  Object.assign(UANY,{date:'',name:'',star:false,msg:'',mc:'',win:7});
+  Object.assign(UANY,{date:'',name:'',star:false,msg:'',mc:'',win:7,tab:'upd'});
   // a 📦 jump from elsewhere (Alerts → "Update detail →", the Active users / Install value 📦 links): uniImpGo — the page is
   // drawn while the jump waits (setApp re-draws every screen), the block opens in the Studio section, the fold stays shut,
   // and the scroll waits for the page's own fit-to-width pass, then lands the block under the bars

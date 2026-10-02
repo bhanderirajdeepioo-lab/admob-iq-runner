@@ -634,7 +634,8 @@ def test_windows_in_active_have_their_own_default_act_onclicks_and_open_here_at_
     assert w["uni"] and set(w["uni"]) == {""} and w["uwin"] == 7                   # … the Uninstall tab's still at 7
     assert w["saved"] == [["imp_win_act", "30"]]
     assert w["note"] == "Ye card = har update ke 30 din pehle vs 30 din baad (choose above) · upar ke tiles = pichhle 7 pakke din"   # "upar chuno" -> "choose above"
-    assert set(w["act2"]) == {" (30 days)"} and set(w["uni2"]) == {" (60 days)"} and w["saved2"][-1] == ["imp_win_uni", "60"]
+    # (the Uninstall card keeps no card-wide window in this browser: one picker per block — only this tab's copy does)
+    assert set(w["act2"]) == {" (30 days)"} and set(w["uni2"]) == {" (60 days)"} and w["saved2"] == [["imp_win_act", "30"]]
     calls = [c for c in w["onclicks"] if c.startswith('onclick="uni')]
     assert calls and all("'act')" in c for c in calls), calls                        # every tap stays in this tab
     assert any(c.startswith('onclick="uniImpWinX(') for c in calls) and any(c.startswith('onclick="uniImpWX(') for c in calls)

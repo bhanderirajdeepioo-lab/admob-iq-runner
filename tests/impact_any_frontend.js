@@ -1,7 +1,7 @@
-// 📅 Compare any date — the page contract, rendered for real: runs the dashboard script (frontend/index.html's largest
-// <script>) in a node vm with stub browser globals and a SCRIPTED fetch (the synthetic impact_any files gzipped as the
-// build writes them, the dashboard Worker's /api/marks), on the apps tests/test_impact_any_frontend.py builds with the
-// real engine, and prints ONE JSON report; the Python test asserts on it.
+// 📅 Compare any date (📦 Update impact's "📅 Any date" tab, Around a date) — the page contract, rendered for real: runs
+// the dashboard script (frontend/index.html's largest <script>) in a node vm with stub browser globals and a SCRIPTED
+// fetch (the synthetic impact_any files gzipped as the build writes them, the dashboard Worker's /api/marks), on the apps
+// tests/test_impact_any_frontend.py builds with the real engine, and prints ONE JSON report; the Python test asserts on it.
 //   usage: node impact_any_frontend.js <script.js> <dir with fx.json + impact_any_*.json.gz>
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
@@ -82,10 +82,12 @@ run(`DATA = {apps_catalog: __FX.catalog, today_date: ${J(FX.today)}, latest_comp
   setApp = function (a) { APP = a; };   // (the header's App selector re-draws every screen: not this harness's business)`);
 const text = h => String(h).replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+const tight = h => String(h).replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();   // as the eye reads it
 const cut = (h, a, b) => { const i = h.indexOf(a); if (i < 0) return ''; const j = b ? h.indexOf(b, i + a.length) : -1; return h.slice(i, j < 0 ? undefined : j); };
 const tick = async (n = 6) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
 const settle = async () => { for (let i = 0; i < 4; i++) { await tick(); const p = run('[UANYP.idx, UANYP.marks, ...Object.values(UANYP.F)].filter(Boolean)'); if (!p.length) break; await Promise.all(p); } await tick(); };
 const card = i => String(run(`uniImpactCard(__AP[${i}])`));
+run(`UANY.tab = 'any'; UANY.mode = 'date'`);           // the 📅 Any date tab, Around a date (the tab's own tests: test_any_custom_frontend)
 const box = i => String(run(`uniAnyBox(__AP[${i}])`));
 const set = o => run(`Object.assign(UANY, ${J(o)})`);
 const fetches = re => NET.log.filter(x => re.test(x.url)).length;
@@ -93,6 +95,18 @@ const R = { errors, words: {} };
 const TEXTS = {};
 async function step(name, fn) { try { await fn(); } catch (e) { errors.push(name + ': ' + e.message + ' @ ' + ((e.stack || '').match(/at [^\n]*/g) || []).slice(0, 4).join(' < ')); } }
 
+// a row of the 📅 card: its Pehle / Baad / Badlaav cells (visible text), its result key and words, its "Kyun?" text
+function anyRows(h) {
+  const out = {};
+  for (const m of h.matchAll(/<tr data-row="([a-z_0-9]+)">([\s\S]*?)<\/tr>(?:<tr class="any-why" id="[^"]*" data-why="\1"(?: hidden)?><td colspan="5">([\s\S]*?)<\/td><\/tr>)?/g)) {
+    const cells = [...m[2].matchAll(/<td class="any-n[^"]*" data-h="[^"]*">([\s\S]*?)<\/td>/g)].map(x => text(x[1]));
+    const st = (m[2].match(/<td class="st">([\s\S]*?)<\/td>$/) || [])[1] || '';
+    out[m[1]] = { cells, st: (st.match(/data-st="([a-z]+)"/) || [])[1] || null, stt: text(st), why: m[3] ? text(m[3]) : null, kyun: /class="any-why-b"/.test(st) };
+  }
+  return out;
+}
+// the first number of a cell as the owner reads it ("Actual: 12,345 Expected …" → "12,345")
+const firstNum = c => /^—/.test(String(c)) ? '' : (String(c).replace(/^Actual: /, '').match(/\d+h \d+m|\d+m \d+s|[+−-]?[$₹]?\d[\d,]*(?:\.\d+)?%?/) || [''])[0];
 // a row of a rendered block: its three value cells (visible text), its status (key + the numbers of its cell), its split
 function rowsOf(h) {
   const out = {};
@@ -147,72 +161,65 @@ function sameCell(a, b) {
     const at = (d, win, name) => { set({ date: d, win: win || 7, name: name || '' }); picks++; return box(0); };
     let h = at(P.update_dates[P.update_dates.length - 1]);
     TEXTS.card_update_day = text(h);
-    const blk = cut(h, '<div class="uni-any-res"');
-    C.block_class = (blk.match(/<div class="(uni-imp-b[^"]*)"/) || [])[1];
-    C.title = text(cut(blk, '<span class="ht">', '</span>'));
-    C.title = text(cut(blk, '<div class="uni-imp-h uni-any-bh">', '<span class="pill')).replace(/ · Verdict.*$/, '');
-    C.verdict_chip = /<div class="uni-imp-h uni-any-bh">[\s\S]*?data-lv="/.test(blk);
-    const meta = text(cut(blk, '<div class="uni-imp-m">', '</div>'));
-    C.before_after = [/Before: /.test(meta), /After: /.test(meta)];
+    const res = cut(h, '<div class="any-res"');
+    C.block_class = (res.match(/<div class="(any-res)" id="uni-any-res"/) || [])[1];
+    C.title = tight(cut(res, '<div class="any-rt">', '</div>'));
+    C.dates_line = text(cut(res, '<div class="any-dl">', '</div>'));
+    C.no_update_words = !/Verdict|Expected \(without update\)|Actual:|pakka: ≥|seedha|👍 Keep|Keep\b/.test(text(res));
+    C.heads = [...cut(res, '<thead>', '</thead>').matchAll(/<th>([^<]*)<\/th>/g)].map(m => m[1]);
+    C.one_table = (res.match(/<table/g) || []).length;
     const same = (h.match(/<div class="uni-any-note">(📦 Isi din[\s\S]*?)<\/div>/) || [])[1] || '';
     C.same_note = text(same); C.same_link = (same.match(/onclick="([^"]*)"/) || [])[1] || null;
     C.window_buttons = [...cut(h, 'Before / after:', '</span></span>').matchAll(/<button( class="on")?( disabled)?[^>]*>(\d+) days<\/button>/g)].map(m => [+m[3], !!m[1], !!m[2]]);
+    C.pickers = (h.match(/>\d+ days<\/button>/g) || []).length;
     h = at(P.update_dates[P.update_dates.length - 1], 7, 'Banner ad hataya');
-    C.title_named = text(cut(h, '<div class="uni-imp-h uni-any-bh">', '<span class="pill')).replace(/ · Verdict.*$/, '');
+    C.title_named = tight(cut(h, '<div class="any-rt">', '</div>'));
     h = at(P.update_dates[P.update_dates.length - 1], 30);
-    C.at_30 = { n: (h.match(/<div class="uni-any-res" data-date="[^"]*" data-n="(\d+)"/) || [])[1], title: text(cut(h, '<div class="uni-imp-h uni-any-bh">', '</div>')) };
+    C.at_30 = { n: (h.match(/<div class="any-res" id="uni-any-res" data-kind="date" data-date="[^"]*" data-n="(\d+)"/) || [])[1], title: tight(cut(h, '<div class="any-rt">', '</div>')),
+      d30: /<tr data-row="new_d30">/.test(h) };
     TEXTS.card_30 = text(h);
-    // near today: every window still ⏳ — "⏳ Abhi jaldi — <ready_on> ko poora hoga"
+    // near today: every window still ⏳ — "⏳ Too early — <ready_on> ko poora hoga"
     h = at(P.last);
     C.pending_line = text((h.match(/<div class="uni-any-note"><b[^>]*>(⏳ Too early[\s\S]*?)<\/b>/) || [])[1] || '');
-    C.pending_rows = (cut(h, '<div class="uni-any-res"').match(/data-st="pending"/g) || []).length;
+    C.pending_rows = (cut(h, '<div class="any-res"').match(/data-st="early"/g) || []).length;
     TEXTS.card_pending = text(h);
-    const notes = hh => [...cut(hh, '<div class="uni-any-res"', '<div class="uni-imp-b').matchAll(/<div class="uni-any-note">([\s\S]*?)<\/div>/g)].map(m => text(m[1]));
-    h = at(P.cut); C.cut_note = notes(h).find(x => x.startsWith('Beech me')) || ''; TEXTS.card_cut = text(h);
-    h = at(P.overlap); C.overlap_note = notes(h).find(x => x.startsWith('Before ke din me')) || ''; TEXTS.card_overlap = text(h);
+    const notes = hh => [...cut(hh, '<div class="any-res"', '<div class="uni-scroll">').matchAll(/<div class="uni-any-note">([\s\S]*?)<\/div>/g)].map(m => text(m[1]));
+    h = at(P.cut); C.cut_note = notes(h).find(x => x.startsWith('⚠️') && x.includes('agla')) || ''; TEXTS.card_cut = text(h);
+    h = at(P.overlap); C.overlap_note = notes(h).find(x => x.includes('(Pehle me)')) || ''; C.overlap_link = /onclick="uniImp\('upd@/.test(cut(h, '<div class="any-res"', '<div class="uni-scroll">')); TEXTS.card_overlap = text(h);
     h = at(P.cut, 30); C.mixed_notes_30 = notes(h); TEXTS.card_mixed = text(h);
     h = at(run(`uniAdd(${J(P.first)}, -3)`)); C.outside = text(cut(h, '<div class="uni-any-note">Ye date', '</div>'));
     for (const d of [P.last, P.cut, P.overlap, ...P.update_dates]) fmt[d] = run(`uniD(${J(d)})`);
     for (const d of Object.values(FX.decoded[A.app_id])) for (const N of ['7', '14', '30', '60']) { const w = d[N]; if (!w) continue;
-      for (const x of [w.verdict.ready_on, w.cut_by && w.cut_by.date, w.overlap_before && w.overlap_before.date]) if (x && !fmt[x]) fmt[x] = run(`uniD(${J(x)})`);
+      for (const x of [w.verdict.ready_on, w.cut_by && w.cut_by.date, w.overlap_before && w.overlap_before.date, ...(w.mixed || []).map(u => u.date)]) if (x && !fmt[x]) fmt[x] = run(`uniD(${J(x)})`);
       if (w.verdict.ready_on) fmt['lag:' + w.verdict.ready_on] = run(`uniD(uniAdd(${J(w.verdict.ready_on)}, 2))`); }
     S.picks_without_fetch = NET.log.length === n0 ? picks : 0;
     S.file_once = fetches(/^impact_any_a1a1/);
   });
   R.fmt = fmt;
 
-  // ── 3. parity: a release date's card = that update's own block, row for row, at every window it has ──
+  // ── 3. parity: a release date's 📅 card shows that update's own numbers and statuses, row for row, at every window ──
+  // (the update block: the engine's full-precision asset; the 📅 card: the file's numbers at the precision the card shows —
+  // a last shown digit may round the other way). Status: the same words — unsure = Watch the bad way, else No change
   await step('parity', async () => {
-    const Pa = R.parity = { dates: 0, windows: 0, rows: 0, cells: 0, exact: 0, digit: 0, seedha: 0, seedha_borderline: 0, told: 0, split_rows: 0, diffs: [],
-      no_version_table: true, no_adoption: true, titles_ok: true };
-    // the plain "seedha: … vs before" line shows when it differs from the judged change by ≥ 0.005: the file keeps both to
-    // 3 decimals (the engine's asset 4–5), so a difference within a rounding step of 0.005 may land on the other side
-    const SEEDHA = / seedha: [+−]?[\d.]+% vs before/;
-    const borderline = (d, N, k) => { const r = ((FX.decoded[A.app_id][d] || {})[String(N)] || {}).rows[k] || {}, x = r.extra || {};
-      const j = (k === 'sessions' || k === 'time') && x.adj_change != null ? x.adj_change : r.change, pv = k === 'returning_dau' ? x.raw_change : r.change;
-      return j != null && pv != null && Math.abs(Math.abs(pv - j) - 0.005) <= 0.0011; };
-    const TOLD = / ?(· )?7 din ke faisle me pehle hi dikha( \([^)]*\))?$/;   // an update's "already told" (alerts): a date never alerts
+    const Pa = R.parity = { dates: 0, windows: 0, rows: 0, cells: 0, exact: 0, digit: 0, status_same: 0, diffs: [], no_version_table: true, no_adoption: true, titles_ok: true, kyun: 0 };
+    const MAP = { worse: ['worse'], better: ['better'], same: ['same'], market: ['same'], unsure: ['watch', 'same'], low: ['early'], pending: ['early'], na: ['na'] };
     for (const d of P.update_dates) { Pa.dates++;
       const key = run(`uniImpFind(__AP[0], 'upd@${d}').b.key`), wins = [7].concat(Object.keys(run(`uniImpFind(__AP[0], ${J(key)}).b.by_window || {}`)).map(Number));
       for (const N of wins) { Pa.windows++;
         const real = String(run(`UNIIMPWK = {${J(key)}: ${N}}; uniImpBlock(__AP[0], uniImpFind(__AP[0], ${J(key)}).b, true, 'uni')`));
         set({ date: d, win: N, name: '' });
-        const mine = cut(box(0), '<div class="uni-any-res"');
+        const mine = cut(box(0), '<div class="any-res"');
         if (/Same days: new version vs old versions|uni-imp-vnote/.test(mine)) Pa.no_version_table = false;
         if (/ updated<\/span>|Adoption |On this update or newer/.test(mine)) Pa.no_adoption = false;
-        if (!/📌 Your date: <span id="uni-any-nmt">No name<\/span> — /.test(mine)) Pa.titles_ok = false;
-        const ro = rowsOf(cut(real, '<div', '<div class="uni-imp-sub">')), rm = rowsOf(mine);   // (the update's version table: not a date's)
+        if (!tight(cut(mine, '<div class="any-rt">', '</div>')).startsWith('📅 ' + run(`uniD(${J(d)})`) + ': pehle vs baad (' + N + ' days)')) Pa.titles_ok = false;
+        const ro = rowsOf(cut(real, '<div', '<div class="uni-imp-sub">')), rm = anyRows(mine);
         if (J(Object.keys(ro)) !== J(Object.keys(rm))) { Pa.diffs.push({ d, N, rows: [Object.keys(ro), Object.keys(rm)] }); continue; }
-        for (const k of Object.keys(ro)) { Pa.rows++; const x = ro[k], y = rm[k];
-          if (x.sp != null) Pa.split_rows++;
-          const bad = [];
-          x.cells.forEach((c, j) => { Pa.cells++; const s = sameCell(c, y.cells[j]); if (s === 'exact') Pa.exact++; else if (s === 'digit') Pa.digit++;
-            else if (SEEDHA.test(c) !== SEEDHA.test(y.cells[j]) && sameCell(c.replace(SEEDHA, ''), y.cells[j].replace(SEEDHA, ''))) { Pa.seedha++; if (borderline(d, N, k)) Pa.seedha_borderline++; else bad.push(['seedha', c, y.cells[j]]); }
-            else bad.push(['cell' + j, c, y.cells[j]]); });
-          if (x.st !== y.st) bad.push(['status', x.st, y.st]);
-          if (TOLD.test(x.stt)) { Pa.told++; x.stn = (x.stt.replace(TOLD, '').match(/\d[\d,.]*/g) || []); }
-          if (J(x.stn) !== J(y.stn)) bad.push(['status numbers', x.stn, y.stn, x.stt, y.stt]);
-          if ((x.sp == null) !== (y.sp == null) || (x.sp != null && !sameCell(x.sp, y.sp))) bad.push(['split', x.sp, y.sp]);
+        for (const k of Object.keys(ro)) { Pa.rows++; const x = ro[k], y = rm[k], bad = [];
+          [0, 1].forEach(j => { const a = firstNum(x.cells[j]), b = firstNum(y.cells[j]); Pa.cells++;
+            if (!a && (y.cells[j] === '—' || !b)) { Pa.exact++; return; }
+            const s2 = sameCell(a, b); if (s2 === 'exact') Pa.exact++; else if (s2 === 'digit') Pa.digit++; else bad.push(['cell' + j, x.cells[j], y.cells[j]]); });
+          if ((MAP[x.st] || []).includes(y.st)) Pa.status_same++; else bad.push(['status', x.st, y.st]);
+          if (y.kyun) Pa.kyun++;
           if (bad.length && Pa.diffs.length < 6) Pa.diffs.push({ d, N, k, bad }); } } }
   });
 
@@ -223,14 +230,16 @@ function sameCell(a, b) {
     M.get = g ? { url: g.url, method: g.method, credentials: g.credentials, redirect: g.redirect } : null;
     set({ date: P.cut, win: 7, name: '', msg: '', mc: '' });
     let h = box(0);
-    const listed = hh => [...cut(hh, '<div class="uni-any-mks">', '</div>').matchAll(/<span class="uni-any-mk[^"]*"[^>]*>([\s\S]*?)<\/span>/g)].map(m => text(m[1]));
+    const listed = hh => [...cut(hh, '<div class="uni-any-mks">', '</div>').matchAll(/<button type="button" class="uni-any-mk[^"]*"[^>]*>([\s\S]*?)<\/button>/g)].map(m => text(m[1]));
     M.listed = listed(h); M.other_app_hidden = !/Doosri app ka/.test(h);
     M.delete_buttons = [...h.matchAll(/data-del="(\d+)"/g)].map(m => +m[1]);
     TEXTS.marks_box = text(h);
     const s = M.save = {};
     s.disabled_without_name = /id="uni-any-sv" disabled/.test(h);
     run(`uniAnyName('Banner ad hataya')`);
-    s.enabled_with_name = /<button class="uni-any-btn" id="uni-any-sv" title/.test(box(0));
+    s.enabled_with_name = /<button type="button" class="uni-any-btn" id="uni-any-sv" onclick/.test(box(0));
+    s.save_words = text(cut(box(0), '<div class="any-save"', '</div></div>'));
+    s.name_required = /aria-required="true"/.test(box(0)) && /placeholder="Naam \(zaroori\)/.test(box(0));
     // the API holds its answer: "⏳ Save ho raha hai…", nothing listed yet
     NET.api = 'hold'; const n0 = NET.log.length;
     const p = run('uniAnySave()'); await tick();
@@ -247,7 +256,7 @@ function sameCell(a, b) {
     for (const mode of ['down', 'e500', 'e401', 'static404', 'e400']) {
       NET.api = mode; const nm = 'Fail ' + mode; run(`uniAnyName(${J(nm)})`);
       const ok = await run('uniAnySave()'); const hh = box(0);
-      s[mode] = { ok, msg: run('UANY.msg'), comparison_still_there: /<div class="uni-any-res"/.test(hh) && /<tr data-row="returning_dau">/.test(hh), new_mark_listed: listed(hh).some(x => x.includes(nm)) };
+      s[mode] = { ok, msg: run('UANY.msg'), comparison_still_there: /<div class="any-res"/.test(hh) && /<tr data-row="returning_dau">/.test(hh), new_mark_listed: listed(hh).some(x => x.includes(nm)) };
       TEXTS['marks_err_' + mode] = text(hh); }
     NET.api = 'ok';
     // a name the API would refuse (a bidi control character) is never sent
@@ -255,7 +264,7 @@ function sameCell(a, b) {
     s.bad_name_not_sent = NET.log.length === n2; s.bad_name_msg = run('UANY.msg');
     // a tap on a saved date re-opens that comparison
     run('uniAnyMk(1)'); h = box(0);
-    M.pick_mark = { date: run('UANY.date'), name: run('UANY.name'), rendered: /<div class="uni-any-res" data-date="2026-08-15"/.test(h) && /Notification shuru<\/span> — /.test(h) };
+    M.pick_mark = { date: run('UANY.date'), name: run('UANY.name'), rendered: /<div class="any-res" id="uni-any-res" data-kind="date" data-date="2026-08-15"/.test(h) && /<span id="uni-any-nmt"> · Notification shuru<\/span>: pehle vs baad/.test(h) };
     // delete: cancelled → no call; confirmed → POST /api/marks/delete; a failure says so
     const dl = M.delete = {}; const n3 = NET.log.length;
     NET.confirm = false; await run('uniAnyDel(1)'); dl.cancelled_no_call = NET.log.length === n3;
@@ -266,9 +275,8 @@ function sameCell(a, b) {
     // the marks API down from the start: the list says so, the comparison works
     run(`UANY.marks = null; UANY.marksErr = ''; UANY.msg = ''`); NET.api = 'down'; box(0); await settle();
     set({ date: P.cut, win: 7 }); h = box(0);
-    M.list_down = text(cut(h, '<div class="uni-any-mks">', '</div></div>')).replace(/\s+/g, ' ');
-    M.list_down = text(cut(h, '<div class="uni-any-mks">', '<div class="uni-any-res"'));
-    M.list_down_comparison = /<div class="uni-any-res"/.test(h) && /<tr data-row="returning_dau">/.test(h);
+    M.list_down = text(cut(h, '<div class="uni-any-mks">', '</div>'));
+    M.list_down_comparison = /<div class="any-res"/.test(h) && /<tr data-row="returning_dau">/.test(h);
     TEXTS.marks_down = text(h);
     NET.api = 'ok'; run(`UANY.marks = null; UANY.marksErr = ''`); box(0); await settle();
   });
@@ -287,30 +295,33 @@ function sameCell(a, b) {
     await p; await tick();
     T.files_fetched = fetches(/^impact_any_[0-9a-f]{12}\.json/) - nf;
     const h = run('uniAnyAllCard()'); TEXTS.all = text(h);
-    const rows = [...h.matchAll(/<div class="uni-anyr" data-sw="([a-z]+)" data-app="([^"]*)" onclick="([^"]*)">([\s\S]*?)<span class="lnk go">/g)];
+    T.heads = [...cut(h, '<thead>', '</thead>').matchAll(/<th>([^<]*)<\/th>/g)].map(m => m[1]);
+    const rows = [...h.matchAll(/<tr class="any-ar" data-st="([a-z]+)" data-app="([^"]*)" tabindex="0" onclick="([^"]*)"[^>]*>([\s\S]*?)<\/tr>/g)];
     T.rows = rows.map(m => ({ sw: m[1], id: m[2], go: m[3].replace(/&quot;/g, '"'), app: text((m[4].match(/<span class="n">([\s\S]*?)<\/span>/) || [])[1] || ''),
       word: text((m[4].match(/<span class="pill [^"]*" data-st="[a-z]+">([\s\S]*?)<\/span>/) || [])[1] || ''),
-      verdict: text((m[4].match(/data-lv="[a-z]+"[^>]*>([\s\S]*?)<\/span>/) || [])[1] || ''), hl: text((m[4].match(/<span class="hl">([\s\S]*?)<\/span>/) || [])[1] || ''),
-      pin: /uni-any-pin/.test(m[4]) }));
+      metric: text((m[4].match(/<td class="any-m" data-h="Metric">([\s\S]*?)<\/td>/) || [])[1] || ''),
+      cells: [...m[4].matchAll(/<td class="any-n[^"]*" data-h="[^"]*">([\s\S]*?)<\/td>/g)].map(x => text(x[1])),
+      verdict: /data-lv=|Verdict|👍|🛑/.test(m[4]), pin: /uni-any-pin/.test(m[4]) }));
     T.marker_rows = T.rows.filter(r => r.pin).map(r => r.id).sort();
+    T.star_named = /📌 Sab pe \(all apps\)/.test(text(cut(h, 'id="uni-anyall-sum"', '</div>')));
     T.marker_chips = (cut(h, '<div class="uni-any-mks">', '</div>').match(/class="uni-any-mk/g) || []).length;
     const n0 = NET.log.length; run('uniAnyAllWin(30)'); const h30 = run('uniAnyAllCard()');
-    T.window_switch_instant = NET.log.length === n0 && /data-n|uni-anyall-sum/.test(h30) && /30 days before vs 30 days after/.test(text(h30));
-    T.rows_30 = (h30.match(/<div class="uni-anyr"/g) || []).length; TEXTS.all_30 = text(h30); run('uniAnyAllWin(7)');
+    T.window_switch_instant = NET.log.length === n0 && /uni-anyall-sum/.test(h30) && /30 days before vs 30 days after/.test(text(h30));
+    T.rows_30 = (h30.match(/<tr class="any-ar"/g) || []).length; TEXTS.all_30 = text(h30); run('uniAnyAllWin(7)');
     run(`uniAnyGo(${J(A.app_id)}, ${J(P.halt)}, 7)`);
     T.opened = JSON.parse(run('JSON.stringify({app: UANY.app, date: UANY.date, win: UANY.win, name: UANY.name})'));
     TEXTS.opened_card = text(box(0));
-    T.sort_unit = JSON.parse(run(`JSON.stringify(anyAllSort([{id:'l',app:'l',sw:'lagu',nw:0,hc:0},{id:'j',app:'j',sw:'jaldi',nw:0,hc:0},{id:'g',app:'g',sw:'behtar',nw:0,hc:0},
-      {id:'n',app:'n',sw:'normal',nw:0,hc:0},{id:'y',app:'y',sw:'dhyan',nw:1,hc:-0.1},{id:'w1a',app:'w1a',sw:'bigda',nw:1,hc:-0.05},
-      {id:'w1b',app:'w1b',sw:'bigda',nw:1,hc:-0.2},{id:'w2',app:'w2',sw:'bigda',nw:2,hc:0}]).map(o=>o.id))`));
+    T.sort_unit = JSON.parse(run(`JSON.stringify(anyAllSort([{id:'l',app:'l',res:'na',nw:0,hc:0},{id:'j',app:'j',res:'early',nw:0,hc:0},{id:'g',app:'g',res:'better',nw:0,hc:0},
+      {id:'n',app:'n',res:'same',nw:0,hc:0},{id:'y',app:'y',res:'watch',nw:1,hc:-0.1},{id:'w1a',app:'w1a',res:'worse',nw:1,hc:-0.05},
+      {id:'w1b',app:'w1b',res:'worse',nw:1,hc:-0.2},{id:'w2',app:'w2',res:'worse',nw:2,hc:0}]).map(o=>o.id))`));
     R.words.all_words = T.rows.map(r => r.word);
   });
 
   // ── 6. the other states: a stale file, a pending app, an app with no file, no index, the index unreachable ──
   await step('placement', async () => {       // the box: right under the card's title, on every app's card
-    const h = card(0), t = cut(h, '<div class="ct uni-ct"><h3>📦 Update impact</h3>', '</div>');
-    S.box_at_top = h.indexOf('<div class="uni-any" id="uni-any">') === h.indexOf(t) + t.length + '</div>'.length;
-    S.box_on_every_card = [1, 2, 3].map(i => card(i).includes('<div class="uni-any" id="uni-any">'));
+    const h = card(0);
+    S.box_at_top = /<div class="any-tabs" role="tablist"[\s\S]*?<\/div><div class="any-pane" id="uni-imp-pane" role="tabpanel" aria-labelledby="uni-imp-tab-any"><div class="uni-any" id="uni-any" data-mode="date">/.test(h);
+    S.box_on_every_card = [1, 2, 3].map(i => card(i).includes('<div class="uni-any" id="uni-any"'));
   });
   await step('states', async () => {
     S.fresh_has_no_stale_line = !/⚠️ Ye tulna /.test(box(0));

@@ -439,8 +439,10 @@ def _words_ok(t):
 
 def test_the_whole_update_impact_card_is_a_section_of_the_studio_app_page(report):
     m = J(report, "imppage")
-    assert m["n"] == {"card": 1, "any": 1, "block": 1, "section": 1, "up": 1}    # drawn ONCE; the fold keeps one line to it
+    assert m["n"] == {"card": 1, "any": 0, "block": 1, "section": 1, "up": 1}    # drawn ONCE; the fold keeps one line to it
     assert m["dups"] == []                                                      # no id twice on the whole screen
+    # its 📅 Any date tab: the any-date box instead of the update blocks, in the same section, drawn once
+    assert m["n2"] == {"card": 1, "any": 1, "block": 0, "section": 1, "dups": []}
     w = m["where"]          # on the Studio page: after every chart, Gone by day N, the install-week grid and the alerts —
     assert w == {"studio": True, "charts": True, "grid": True, "gone": True, "alerts": True, "table": True}   # right before the day-by-day table
     assert m["head"]                                                            # its heading: "📦 Update impact"
@@ -457,8 +459,10 @@ def test_the_whole_update_impact_card_is_a_section_of_the_studio_app_page(report
 
 def test_update_impact_windows_switch_on_the_studio_page(report):
     w = J(report, "imppage")["wins"]
-    assert w["state"] == "on" and w["seg"]                                      # the card's 7 / 14 / 30 / 60
-    assert w["c30"] == {"on": True, "verdict": True, "saved": "30"}             # every block at 30, remembered
+    # (owner, 2 Oct) ONE 7 / 14 / 30 / 60 per update block, inside it — no second, card-wide picker doing the same
+    assert w["state"] == "on" and not w["seg"]
+    assert w["c30"] == {"on": False, "verdict": True, "saved": None}            # (a code call still sets every block)
+    assert w["blockSegs"] == w["openBlocks"] == 1
     assert w["b14"] == {"verdict": True, "on": True}                            # one block's own 14
     assert w["back7"]
 

@@ -88,8 +88,9 @@ function cardOf(h) {
   if (!c) return null;
   const B = c.split('<div class="uni-imp-b').slice(1);
   const head = c.split('<div class="uni-imp-b')[0];
+  // (the card-wide 7 / 14 / 30 / 60 is gone on purpose — owner, 2 Oct: ONE picker per update block, the open block's own
+  // window buttons below are compared as before; the 📅 Any date tab is not part of the 3339e07 card)
   return {
-    seg: [...cut(head, 'uni-imp-cseg', '</span></div>').matchAll(/<button( class="on")?( disabled)?[^>]*>(\d+) days<\/button>/g)].map(m => [+m[3], !!m[1], !!m[2]]),
     flags: (cut(head, 'class="uni-imp-m"', '</div>').match(/<span class="pill /g) || []).length,
     how: (cut(c, '<ul class="uni-imp-how">', '</ul>').match(/<li>/g) || []).length,
     empty: /class="uni-empty"/.test(head),

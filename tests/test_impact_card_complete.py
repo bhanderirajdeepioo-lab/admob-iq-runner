@@ -3,7 +3,8 @@ gayi"): the Uninstall tab's per-app card and its All-apps "📦 Updates ka asar"
 was at 3339e07 (before SPEC_SIMPLIFY, when the card was shown on both Uninstall and Active users) and by today's, on the
 committed synthetic fixture (tests/fixtures/uninstall_sample.json) — tests/impact_card_compare.js. Every app, every
 update block opened in turn, at every window it carries (7 / 14 / 30 / 60): the same sections, block keys, row ids,
-statuses, pills, window buttons, "How we compare" bullets, version table, notes, verdict reason and the same numbers
+statuses, pills, every block's window buttons (the card-wide one is gone on purpose: owner, 2 Oct — one picker per
+block), "How we compare" bullets, version table, notes, verdict reason and the same numbers
 (label words may differ only as SPEC_SIMPLIFY §6.4 says). The list: every update the old one showed, with its verdict
 and every number. Skipped where node or the 3339e07 page (git history) is not available."""
 
