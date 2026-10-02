@@ -9006,10 +9006,11 @@ function uniMoney(v,cur){ const b=baseCur(), c=cur||b, r=(DATA&&DATA.usd_inr)||8
   if(c!==b){ if(c==='USD'&&b==='INR') x*=r; else if(c==='INR'&&b==='USD') x/=r; }
   return cm(x,2); }
 // money PER USER from an engine value stored per 1,000 users (unit 'usd1k'): ÷1,000, 3 significant digits below 1
-// ("$0.0221", "₹2.13") so a per-user figure never shows the per-1,000 number under a per-user label
-function uniMoneyPU(v1k,cur){ const b=baseCur(), c=cur||b, r=(DATA&&DATA.usd_inr)||83; let x=(+v1k)/1000;
+// ("$0.0221", "₹2.13") so a per-user figure never shows the per-1,000 number under a per-user label; sig = 4: one digit
+// more (a before → after pair that would print one number twice)
+function uniMoneyPU(v1k,cur,sig){ const b=baseCur(), c=cur||b, r=(DATA&&DATA.usd_inr)||83; let x=(+v1k)/1000;
   if(c!==b){ if(c==='USD'&&b==='INR') x*=r; else if(c==='INR'&&b==='USD') x/=r; }
-  const y=x*cfx(), a=Math.abs(y); return (y<0?'\u2212':'')+csym()+(a>=1?a.toFixed(2):String(+a.toPrecision(3))); }
+  const y=x*cfx(), a=Math.abs(y); return (y<0?'\u2212':'')+csym()+(a>=1?a.toFixed(sig>3?3:2):String(+a.toPrecision(sig>3?4:3))); }
 // ---- 🧮 installs vs per-user split (SPEC_SPLIT), shared by Active users, Uninstall, Install value, Update impact and the
 // Alerts cards: every change → how much came from daily installs going up / down (ad spend) and how much is the real
 // per-user change (per 100 / per 1,000, then as actual numbers). The engines write a short list `sp` on each change;
@@ -9180,7 +9181,9 @@ function splitNoteTxt(x){ if(!Array.isArray(x)) return ''; const f=SPLIT_NOTE[x[
 // the distinct notes of several hosts, once each (a card shows a "Saath me:" once, never on every tile / row)
 function splitNotesOnce(list,o){ try{ const seen=new Set(), nt=[]; (list||[]).forEach(n=>{ if(Array.isArray(n)&&!seen.has(n[0])&&splitNoteTxt(n)){ seen.add(n[0]); nt.push(n); } });
   return nt.length?splitBlock({v:1,code:'pu',note:nt},o||{}):''; }catch(e){ return ''; } }
-// the block: o.money (a per-user / per-install amount; o.moneyP / o.costP: the same with more digits), o.big (a total),
+// the block: o.money (a per-install amount; o.moneyP / o.costP: the same with more digits), o.big (a total), o.cur (the
+// revenue's currency: a "per user" amount is the engines' per-1,000-users value ÷ 1,000, uniMoneyPU — never the
+// per-1,000 number under a per-user label),
 // o.cost (a per-install cost), o.label (the Kul label), o.cls (an extra class), o.notes===false (its "Saath me:" lines
 // shown once elsewhere); none → one grey "pata nahi" line (never a fake 0), pu → only its Saath me: line
 function splitBlock(S,o){ try{ return splitBlock_(S,o||{}); }catch(e){ return ''; } }
@@ -9215,7 +9218,7 @@ function splitBlock_(S,o){ if(!S) return '';
   else if(c==='uc'){ fD=j(iT,H.before!=null?`${splitP100(H.before)}% ~ pehle 28 din me hata dete`:''); pD=ownD('har install pe'); }
   else if(c==='ur'||c==='uk'||c==='rr'){ const w={ur:'hataate',uk:'bache rehte',rr:'wapas aate'}[c], pp=splitP100Pair(H.before,H.after), on=S.on_now;
     fD=j(iT,`${pp[0]}% ${w}`); pD=`${pp[0]}% → ${pp[1]}%`+(C&&on&&sN(on.installs)?`; roz ~${splitAbout(on.installs)} installs pe`:''); }
-  else if(c==='rev'){ const [b,a]=pair(m,o.moneyP,H.before,H.after); fL='by users'; fD=j(iT,`per user ${b}`); pL='real change (revenue per user)'; pD=`per user ${b} → ${a}`; }
+  else if(c==='rev'){ const [b,a]=pair(v=>uniMoneyPU(v,o.cur),v=>uniMoneyPU(v,o.cur,4),H.before,H.after); fL='by users'; fD=j(iT,`per user ${b}`); pL='real change (revenue per user)'; pD=`per user ${b} → ${a}`; }
   else if(c==='ir'){ const [b,a]=pair(m,o.moneyP,H.before,H.after); fD=j(iT,`per install ${b}`); pL='real change (earning per install)'; pD=`${b} → ${a}`; }
   else if(c==='spd'){ const [b,a]=pair(cost,o.costP||o.moneyP,H.before,H.after); fD=j(iT,`per install ${b}`); pL='real change (cost per install)'; pD=`${b} → ${a}`; }
   else if(c==='vpi'){ const [cb,ca]=I?pair(cost,o.costP||o.moneyP,I.before,I.after):['',''], [vb,va]=pair(m,o.moneyP,H.before,H.after);
@@ -9467,7 +9470,7 @@ function uniImpSplit(k,R,o){ try{ if(!o||!o.sl||!R||typeof R!=='object') return 
   if(k==='returning_dau') return splitHtml('imp_dau',R);
   if(k==='new_d1'||k==='new_d7'||k==='new_d30') return splitHtml('imp_rate',Object.assign({_days:+k.slice(5)},R));
   if(k==='uninstall_d0') return splitHas(R)?splitHtml('rate',Object.assign({_days:0},R)):'';
-  if(k==='arpdau') return splitHtml('rev',R,{money:v=>actMoney(v,x.currency),big:v=>actMoney(v,x.currency,true),moneyP:v=>actMoneyP(v,x.currency),notes:false});
+  if(k==='arpdau') return splitHtml('rev',R,{money:v=>actMoney(v,x.currency),big:v=>actMoney(v,x.currency,true),moneyP:v=>actMoneyP(v,x.currency),cur:x.currency,notes:false});
   return ''; }catch(e){ return ''; } }
 // the window's mix notes (sessions / time judged: the new users' share or the installs moved a lot; the revenue row's
 // new-user share), said once under the table — never on every row
@@ -11430,7 +11433,7 @@ function actTile(d,k,label,tip,als,win){
 // 30+ day old users and the recent installs' own return), came back next day / after a week (installs × the share), ad
 // revenue per 1,000 users (users × revenue per user). The per-user tiles' "Saath me:" mix notes are said once, under
 // the tiles (actNoteBlock). '' without a split
-function actTileSplit(d,k,M,cur){ try{ const mo={money:v=>actMoney(v,cur),big:v=>actMoney(v,cur,true),moneyP:v=>actMoneyP(v,cur),notes:false}, sp=M&&M.sp, c=Array.isArray(sp)?sp[0]:null;
+function actTileSplit(d,k,M,cur){ try{ const mo={money:v=>actMoney(v,cur),big:v=>actMoney(v,cur,true),moneyP:v=>actMoneyP(v,cur),cur,notes:false}, sp=M&&M.sp, c=Array.isArray(sp)?sp[0]:null;
   if(!splitHas(M)) return '';
   if(k==='ret_dau') return splitHtml('act_tile_ret',Object.assign({_k:d.daily&&d.daily.old_k},M));
   if(k==='d1'||k==='d7') return splitHtml('act_tile_rr',Object.assign({_days:k==='d1'?1:7},M));
@@ -11484,7 +11487,7 @@ function actChangeRow(x,withApp,closed){ return smpRowHtml(smpActRow(x,withApp,c
 const SPLIT_ALK={ret:'act_alert_ret',rr:'rate',ur:'rate',uc:'uc',vpi:'vpi',ir:'ir',pu:'pu'};
 function splitAlKind(x){ const sp=x&&x.sp, c=Array.isArray(sp)?sp[0]:null; return SPLIT_ALK[c]||(x&&x.metric==='ret_dau'?'act_alert_ret':(x&&/^rate_(drift|spike)$/.test(x.family||'')?'uc':'rate')); }
 function actAlSplit(x,c){ if(!splitHas(x)) return ''; const k=splitAlKind(x), cur=(DATA&&DATA.active&&DATA.active.currency)||undefined;
-  return c?splitChip(k,x):splitHtml(k,x,{money:v=>actMoney(v,cur),big:v=>actMoney(v,cur,true),moneyP:v=>actMoneyP(v,cur),tag:'span'}); }
+  return c?splitChip(k,x):splitHtml(k,x,{money:v=>actMoney(v,cur),big:v=>actMoney(v,cur,true),moneyP:v=>actMoneyP(v,cur),cur,tag:'span'}); }
 // an info row (never an alert, never counted): ad price only · installs explained it · market-wide · ⏳ early look (provisional)
 const ACT_INFO={price:'Only ad rate changed (market)',installs:'Installs',market_wide:'Market-wide',early:'⏳ Early look'};
 function actInfoRow(o,app,id){ return smpRowHtml(smpActInfoRow(o,app,id),!!app); }

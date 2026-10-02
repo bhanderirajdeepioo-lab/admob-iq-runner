@@ -202,8 +202,10 @@ def test_the_spec_worked_examples_read_exactly(report):
     assert lines(report, "imp") == ["Old users/day: −3% (40,000 → 38,800)", "• due to installs: +2% (installs +15%)",
                                     "• trend already running: +1%", "• update impact: −6% → 🔴 Worse"]
     assert report["by"]["imp"]["line"] == "old users, daily: total −3% = from installs +2% + trend +1% + update −6%"
-    assert lines(report, "rev") == ["Revenue/day: −8% ($1,000 → $920)", "• by users: −10% (users −10%; per user $2.00)",
-                                    "• real change (revenue per user): +2% (per user $2.00 → $2.04) → ⚪ Normal"]
+    # revenue per user: the host's numbers are per 1,000 users (2.0 → 2.044) — the block says them PER USER (÷ 1,000;
+    # the per-1,000 number under a "per user" label read 1,000× too high: owner, 2 Oct)
+    assert lines(report, "rev") == ["Revenue/day: −8% ($1,000 → $920)", "• by users: −10% (users −10%; per user $0.002)",
+                                    "• real change (revenue per user): +2% (per user $0.002 → $0.00204) → ⚪ Normal"]
     assert report["by"]["rev"]["line"] == "daily revenue: total −8% = from users −10% + real +2%"
     assert lines(report, "vpi") == ["$Money back in 7 days (% of spend): −20% ($50 → $40)", "• due to install cost: −17% (per install $10.00 → $12.00)",
                                     "• real change (earning per install): −3% (per install $5.00 → $4.80) → 🟡 Watch"]
