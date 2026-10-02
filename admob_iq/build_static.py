@@ -530,6 +530,7 @@ def headers_text(uni_files, dashboard, extra=()):
             "/baseline_geo.json.gz\n  Cache-Control: no-store\n\n"
             "/adunit_country_daily.json.gz\n  Cache-Control: no-store\n\n"
             "/baseline_daily.json.gz\n  Cache-Control: no-store\n\n"
+            "/baseline_daily_old.json.gz\n  Cache-Control: no-store\n\n"
             "/selected_apps.json\n  Cache-Control: no-store\n\n"
             "/account_names.json\n  Cache-Control: no-store\n\n"
             "/app_names.json\n  Cache-Control: no-store\n\n"
@@ -1591,17 +1592,31 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # Two tiers: baseline.json (summaries + app-level country view) loads when the tab opens;
     # baseline_geo.json (per-ad-unit ALL countries) loads only on the first ad-unit drill.
     if baseline_payload is not None:
-        from .engine.baseline_report import compact_geo, build_daily_series
+        from .engine.baseline_report import compact_geo, build_daily_series, split_daily_series
         # Per-placement DAILY series for the placement-page chart, from the already-fetched reports (no
         # extra AdMob calls): the same unit-day rows as the ad-unit table — revenue from the mediation
         # report (every source), requests / matched from the ad-unit mediation report (no AD_SOURCE).
-        # Third lazy tier: baseline_daily.json loads only on drill.
+        # Third lazy tier: baseline_daily.json loads only on drill. NEVER trimmed (the owner: "no trim" —
+        # a placement's "All time" / Custom reaches its true first stored day). A placement's FIRST-LOAD
+        # window stays the recent DAILY_SPAN_DAYS days (same size as before); anything older ships in its
+        # own lazy file, baseline_daily_old.json.gz, fetched only when a chosen range reaches before it —
+        # the same split as uninstall_studio_old.json.gz.
         try:
             from .api.dataservice import _revenue_rows
             keep_ids = {u["id"] for u in baseline_payload.get("units", [])}
             daily = build_daily_series(_revenue_rows(repo), keep_ids=keep_ids)
+            recent, old = split_daily_series(daily)
             # Per-ad-unit DAILY series — grows with backfill depth, so ship GZIPPED (25MB-safe, lossless).
-            _shipgz(out_dir, "baseline_daily.json", {"units": daily})
+            _shipgz(out_dir, "baseline_daily.json",
+                   {"units": recent, "old": "baseline_daily_old.json.gz" if old else None})
+            if old:
+                _shipgz(out_dir, "baseline_daily_old.json", {"units": old})
+            else:                                   # nothing older than the span this build: drop any stale file
+                for _n in ("baseline_daily_old.json", "baseline_daily_old.json.gz"):
+                    try:
+                        os.remove(os.path.join(out_dir, _n))
+                    except OSError:
+                        pass
         except Exception as e:
             print(f"daily series skipped: {e}", file=sys.stderr)
         geo = compact_geo(baseline_payload.pop("unit_geo", {}))

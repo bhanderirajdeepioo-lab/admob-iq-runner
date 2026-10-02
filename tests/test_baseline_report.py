@@ -1,7 +1,8 @@
 """QA for the baseline report engine (Step 3)."""
 
 from admob_iq.db import nest_monthly, nest_daily
-from admob_iq.engine.baseline_report import build_baseline, build_daily_series, build_country_yday
+from admob_iq.engine.baseline_report import (build_baseline, build_daily_series, build_country_yday,
+                                              split_daily_series)
 
 
 def _cell(unit, country, month, days, req, matched, impr, clicks, earn,
@@ -99,6 +100,63 @@ def test_daily_series_null_on_zero_impressions_and_keep_filter():
     assert r["rev"] == [0.0] and r["req"] == [500]                # revenue/requests always present
     assert r["ecpm"] == [None] and r["ctr"] == [None] and r["show"] == [None]  # 0 impressions ⇒ blank, not fake 0
     assert r["match"] == [0.0]                                     # match uses ad_requests (present) ⇒ real 0
+
+
+def test_daily_series_never_trims_history_beyond_old_cap():
+    # the owner's rule: NEVER trim history. A placement with more days than the old
+    # (since-removed) 403-day cap must keep every single one, back to its true first stored
+    # day — so "All time" / Custom in the UI can reach the real start, not a rolling window.
+    from datetime import date, timedelta
+    start = date(2023, 1, 1)
+    n = 500                                           # comfortably past the old cap
+    rows = [_net("U1", (start + timedelta(days=i)).isoformat(), 100, 90, 80, 4, 400_000)
+            for i in range(n)]
+    out = build_daily_series(rows)
+    r = out["U1"]
+    assert len(r["d"]) == n                           # nothing trimmed
+    assert r["d"][0] == start.isoformat()              # "All time" reaches the true first day
+    assert r["d"][-1] == (start + timedelta(days=n - 1)).isoformat()
+    # every parallel array lines up with the (untrimmed) date array — no silent truncation
+    for k in ("rev", "req", "ctr", "match", "show", "ecpm"):
+        assert len(r[k]) == n
+
+
+def test_split_keeps_a_young_unit_whole_in_recent():
+    # fewer days than the span: everything stays in `recent` (bit-for-bit, unchanged shape), `old`
+    # gets nothing for this unit — a young portfolio ships no second file at all.
+    from datetime import date, timedelta
+    start = date(2026, 1, 1)
+    rows = [_net("U1", (start + timedelta(days=i)).isoformat(), 100, 90, 80, 4, 400_000)
+            for i in range(5)]
+    daily = build_daily_series(rows)
+    recent, old = split_daily_series(daily, span=10)
+    assert "U1" not in old
+    r = recent["U1"]
+    assert r["d"] == daily["U1"]["d"]              # untouched
+    assert r["h0"] == start.isoformat()             # true first day, even though nothing was split off
+
+
+def test_split_moves_pre_span_days_to_old_without_losing_any():
+    # more days than the span: `recent` keeps only the newest `span` days (+ h0 = the TRUE first day,
+    # reachable immediately for the Custom min / "All time" label even before `old` is fetched);
+    # `old` holds exactly the earlier days, and old + recent reproduces the untrimmed series exactly.
+    from datetime import date, timedelta
+    start = date(2023, 1, 1)
+    n = 20
+    span = 7
+    rows = [_net("U1", (start + timedelta(days=i)).isoformat(), 100, 90, 80, 4, 400_000 + i * 1000)
+            for i in range(n)]
+    daily = build_daily_series(rows)
+    recent, old = split_daily_series(daily, span=span)
+    r, o = recent["U1"], old["U1"]
+    assert len(r["d"]) == span and len(o["d"]) == n - span
+    assert r["h0"] == start.isoformat()                        # the true first day, not the span's start
+    assert r["d"][0] == (start + timedelta(days=n - span)).isoformat()   # recent = the newest `span` days
+    assert o["d"][-1] == (start + timedelta(days=n - span - 1)).isoformat()   # old = everything before it
+    assert o["name"] == daily["U1"]["name"] and o["app"] == daily["U1"]["app"]
+    # merging old back in front of recent reproduces the FULL untrimmed series, cell for cell
+    for k in ("d", "rev", "req", "ctr", "match", "show", "ecpm"):
+        assert o[k] + r[k] == daily["U1"][k]
 
 
 def _drow(unit, country, day, req, matched, impr, clicks, earn):

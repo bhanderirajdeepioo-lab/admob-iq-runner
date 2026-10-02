@@ -120,9 +120,6 @@ def _series_from_agg(ser, cap=None):
             "rev": [ser[m]["rev"] for m in ms]}
 
 
-DAILY_MAX_DAYS = 403          # keep the full ~13-month daily history (covers the "all time" toggle)
-
-
 def build_daily_series(unit_rows, keep_ids=None):
     """Per-placement DAILY series for the placement-page chart, from the rows already in the store (this
     adds ZERO extra AdMob API load). One point per ad_unit×day: revenue, ad-requests and all four rates
@@ -164,7 +161,7 @@ def build_daily_series(unit_rows, keep_ids=None):
             names[uid] = (r.get("unit_name"), r.get("app_name"))
     out = {}
     for uid, days in agg.items():
-        ds = sorted(days)[-DAILY_MAX_DAYS:]
+        ds = sorted(days)            # the owner's rule: never trim history — "all time" is every stored day
         us = src.get(uid, {})
         one_src = any(us.get(day) == {REQ_SRC_UNIT} for day in days)   # the unit has ad-unit report days
         rec = {"d": ds, "name": names.get(uid, (None, None))[0], "app": names.get(uid, (None, None))[1],
@@ -183,6 +180,43 @@ def build_daily_series(unit_rows, keep_ids=None):
             rec["ecpm"].append(round(metrics.ecpm(s["estimated_earnings_micros"], impr), 3) if impr else None)
         out[uid] = rec
     return out
+
+
+DAILY_SPAN_DAYS = 403    # first-load window per placement (covers 30d / 90d / "3 months" outright);
+                         # older days ship in the lazy baseline_daily_old.json.gz (split_daily_series
+                         # below) — fetched only when "All time" / Custom reaches before the span, the
+                         # same pattern as uninstall_studio_old.json.gz. Nothing is ever dropped.
+
+_DAILY_ARR_KEYS = ("d", "rev", "req", "ctr", "match", "show", "ecpm")
+
+
+def split_daily_series(daily, span=DAILY_SPAN_DAYS):
+    """Split build_daily_series's (uncapped) output into the first-load SPAN (most recent `span`
+    days per unit — this is what used to be the whole file, back when DAILY_MAX_DAYS silently
+    dropped everything older) and whatever lies before it. Keeps the common case (a placement
+    younger than the span) exactly as small as before; only a placement with MORE history pays for
+    it, and only in the second, lazy-loaded file.
+
+    Returns (recent, old):
+      * recent[uid] — the same shape build_daily_series returns, trimmed to the last `span` days,
+        PLUS `h0`: the placement's true first stored day (even before `old` is ever fetched, so the
+        UI's "All time" label / Custom date-picker minimum can reach it immediately).
+      * old[uid] — only for a unit that actually HAS pre-span days: the same shape, holding just
+        those earlier days. A unit with ≤ span days of history never appears here, so a young
+        portfolio ships no second file at all (nothing to merge, nothing to fetch)."""
+    recent, old = {}, {}
+    for uid, rec in daily.items():
+        d = rec.get("d") or []
+        n = len(d)
+        if n <= span:
+            recent[uid] = dict(rec, h0=(d[0] if d else None))
+            continue
+        cut = n - span
+        recent[uid] = dict(rec, h0=d[0], **{k: rec[k][cut:] for k in _DAILY_ARR_KEYS})
+        old[uid] = {k: rec[k][:cut] for k in _DAILY_ARR_KEYS}
+        old[uid]["name"] = rec.get("name")
+        old[uid]["app"] = rec.get("app")
+    return recent, old
 
 
 def build_country_yday(acd):

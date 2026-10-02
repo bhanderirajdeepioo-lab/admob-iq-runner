@@ -3515,6 +3515,8 @@ let BUNIT = null;                        // baseline: which ad-unit is opened as
 let BVIEW = 'units';                     // app detail view: 'units' (B) or 'countries' (A)
 let BGEO = null, BGLOADING = false;      // per-ad-unit ALL-country geo — lazy-loaded from baseline_geo.json
 let BDAILY = null, BDLOADING = false;    // per-ad-unit DAILY series — lazy-loaded from baseline_daily.json
+let BDOLDPTR = null, BDOLD = false, BDOLDLOADING = false;  // pre-span days (baseline_daily_old.json): the
+                                          // filename (or null), whether merged in yet, whether fetching now
 let ACD = null, ACDLOADING = false;      // ad-unit×country DAILY (current month) — lazy from adunit_country_daily.json
 let BDMETS = null;                       // placement daily chart: selected metrics (null → default to alert metrics)
 let BDRANGE = '30d';                     // daily chart window: 30d / 90d / all / custom
@@ -5567,7 +5569,16 @@ function loadBaselineGeo(cb){ if(BGEO){cb&&cb();return;} if(BGLOADING)return; BG
 // From the reports already fetched hourly (revenue: mediation, every source; requests / matched: the ad unit's own
 // totals from the mediation report without ad source) → NO extra AdMob calls.
 function loadBaselineDaily(cb){ if(BDAILY){cb&&cb();return;} if(BDLOADING)return; BDLOADING=true;
-  fetchGzJson('baseline_daily.json.gz?t='+Date.now()).catch(()=>fetchGzJson('baseline_daily.json?t='+Date.now())).then(j=>{BDAILY=(j&&j.units)||{};BDLOADING=false;cb&&cb();}).catch(()=>{BDLOADING=false;}); }
+  fetchGzJson('baseline_daily.json.gz?t='+Date.now()).catch(()=>fetchGzJson('baseline_daily.json?t='+Date.now())).then(j=>{BDAILY=(j&&j.units)||{};BDOLDPTR=(j&&j.old)||null;BDLOADING=false;cb&&cb();}).catch(()=>{BDLOADING=false;}); }
+// Pre-span days (baseline_daily_old.json — the owner, 2 Oct: "no trim"): the placement-page chart's
+// "All time" / Custom reach every stored day, so a placement older than the first-load span lazy-fetches
+// this ONE extra file (every unit's older days, fetched once) and merges each unit's days in FRONT of
+// its already-loaded span — same series, cell for cell, no gap and nothing dropped.
+function loadBaselineDailyOld(cb){ if(!BDOLDPTR||BDOLD||BDOLDLOADING){cb&&cb();return;} BDOLDLOADING=true;
+  fetchGzJson(BDOLDPTR+'?t='+Date.now()).then(j=>{ const u=(j&&j.units)||{};
+    Object.keys(u).forEach(uid=>{ const o=u[uid], r=BDAILY&&BDAILY[uid]; if(!r)return;
+      ['d','rev','req','ctr','match','show','ecpm'].forEach(k=>{ r[k]=(o[k]||[]).concat(r[k]||[]); }); });
+    BDOLD=true; BDOLDPTR=null; BDOLDLOADING=false; cb&&cb(); }).catch(()=>{BDOLDLOADING=false;cb&&cb();}); }
 // ad-unit×country DAILY (current month) — lazy-loaded once, so the per-placement country table can
 // window to the SELECTED period. Already-fetched data (from baseline) — no extra AdMob call.
 function loadACD(cb){ if(ACD){cb&&cb();return;} if(ACDLOADING)return; ACDLOADING=true;
@@ -5620,12 +5631,17 @@ function bDailyPanel(u){
   const rec=BDAILY[u.id];
   if(!rec||!(rec.d||[]).length){
     return `<div class="card span2" style="margin-bottom:14px"><div class="ct"><h3>📅 Daily graph</h3></div><div class="faint" style="font-size:12.5px;padding:12px 4px">Is placement ka daily data abhi nahi mila (agle robot run ke baad aayega).</div></div>`; }
+  // older days than the first-load span (owner: "no trim") live in their own lazy file — fetch it only
+  // when "All time" or a Custom date reaches before what's already loaded, then merge and re-render.
+  const needOld=BDOLDPTR&&rec.h0&&rec.h0<rec.d[0]&&(BDRANGE==='all'||(BDRANGE==='custom'&&BDCUSTOM.from&&BDCUSTOM.from<rec.d[0]));
+  if(needOld){ loadBaselineDailyOld(()=>{ if(BUNIT)bRerender(); });
+    return `<div class="card span2" style="margin-bottom:14px"><div class="ct"><h3>📅 ${u.name} · daily graph</h3></div><div class="muted" style="font-size:13px;padding:14px 4px">⏳ Purane din load ho rahe hain…</div></div>`; }
   if(BDUNIT!==u.id){ BDMETS=bDailyDefaults(u); BDUNIT=u.id; }            // (re)default when a different unit opens
   const fromAlert=bDailyDefaults(u), isAlertDef=fromAlert.every(k=>BDMETS.includes(k))&&BDMETS.length===fromAlert.length&&(u.approved&&fromAlert.some(k=>['above','below'].includes((u.status||{})[k])));
   // time-range chips
   const RGS=[['30d','30 days'],['90d','3 months'],['all','All time'],['custom','Custom']];
   const rgChips=RGS.map(([w,lab])=>`<button onclick="bDWin('${w}')" style="border:1px solid ${BDRANGE===w?'var(--cyan)':'var(--line2)'};background:${BDRANGE===w?'rgba(61,208,240,.16)':'var(--panel)'};color:${BDRANGE===w?'#fff':'var(--ink2)'};font:inherit;font-size:12px;font-weight:${BDRANGE===w?650:400};padding:5px 11px;border-radius:8px;cursor:pointer">${lab}</button>`).join('');
-  const d0=rec.d[0], dN=rec.d[rec.d.length-1];
+  const d0=rec.h0||rec.d[0], dN=rec.d[rec.d.length-1];   // min reaches the TRUE first day (h0) — the owner's "no trim"
   const customBox=BDRANGE==='custom'?`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px">
       <input id="bdcf" type="date" min="${d0}" max="${dN}" value="${BDCUSTOM.from||''}" style="background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:7px;padding:4px 8px;font:inherit;font-size:12px">
       <span class="faint" style="font-size:12px">se</span>
