@@ -2440,6 +2440,25 @@ body.vs-lock[data-screen="value"]{overflow:hidden}
 #val-old[open]>summary .vo-cv{transform:rotate(90deg)}
 #val-old>summary .vo-h{font-weight:500;font-size:12px;color:var(--faint)}
 #val-old>.vo-in{padding:4px 12px 12px}
+/* ---------- Value Studio: parity with the older views (week history, no-ads 30-day earning) ---------- */
+:is(#vs-root,#vs-layer) .vs-wkbar{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:0 18px 10px;font-size:11.5px}
+:is(#vs-root,#vs-layer) .vs-wkseg{display:flex;flex-wrap:wrap;max-width:100%}
+:is(#vs-root,#vs-layer) .vs-wkseg button{min-height:32px}
+:is(#vs-root,#vs-layer) .vs-wkt{font:600 9.5px/1 var(--vs-num);letter-spacing:.06em;text-transform:uppercase;color:var(--cyan);border:1px solid rgba(34,211,238,.45);border-radius:5px;padding:2px 4px;white-space:nowrap}
+:is(#vs-root,#vs-layer) .vs-wktw{max-height:420px}
+:is(#vs-root,#vs-layer) .vs-r30{display:block;font:500 10px/1.2 var(--vs-num);color:var(--ink2);letter-spacing:0}
+:is(#vs-root,#vs-layer) td.vs-r30c{color:var(--ink2)}
+:is(#vs-root,#vs-layer) .vs-hc .vs-r30{margin-top:2px}
+:is(#vs-root,#vs-layer) .vs-noads{margin:12px 18px 16px;padding:10px 12px;border:1px dashed var(--line2);border-radius:12px}
+:is(#vs-root,#vs-layer) .vs-noh{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.4}
+:is(#vs-root,#vs-layer) .vs-noh b{color:var(--ink2)}
+:is(#vs-root,#vs-layer) .vs-nol{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px}
+:is(#vs-root,#vs-layer) .vs-noa{display:flex;align-items:center;gap:7px;min-height:36px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 9px;text-align:left;min-width:0;color:var(--ink)}
+:is(#vs-root,#vs-layer) .vs-noa:hover{border-color:var(--line2)}
+:is(#vs-root,#vs-layer) .vs-noa .vs-non{flex:1;min-width:0;overflow:hidden;font-size:12.5px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+:is(#vs-root,#vs-layer) .vs-noa .vs-non .vs-acn{color:var(--muted)}
+:is(#vs-root,#vs-layer) .vs-noa b{font:650 13px var(--vs-num);font-variant-numeric:tabular-nums;white-space:nowrap}
+:is(#vs-root,#vs-layer) .vs-noa .vs-r30{display:inline;margin-left:2px;white-space:nowrap}
   /* ===== 🧭 UNINSTALL STUDIO (the Uninstall tab's All-apps view) — everything under #us-root / #us-layer, classes us-* ===== */
 :is(#us-root,#us-layer){--us-raise2:#1c2c47;--us-blue-s:#8fb8ff;--us-blue-b:#15284a;--us-h3:rgba(255,107,107,.62);--us-h2:rgba(255,107,107,.36);--us-h1:rgba(255,107,107,.18);--us-h0:#18263d;--us-g1:rgba(52,217,154,.16);--us-g2:rgba(52,217,154,.32);--us-g3:rgba(52,217,154,.54);--us-s-in:#22d3ee;--us-s-out:#a78bfa;--us-s-rate:#8fb8ff;--us-band:rgba(143,184,255,.13);--us-ghost:#7d8fae;--us-seq0:#13213a;--us-seq1:#0f5163;--us-seq2:#0f8299;--us-seq3:#22d3ee;--us-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--us-num:"IBM Plex Sans Condensed","Roboto Condensed","Arial Narrow",-apple-system,BlinkMacSystemFont,sans-serif;--us-r:14px;}
 #us-root,#us-layer{color:var(--ink);font:13.5px/1.5 var(--us-font);-webkit-font-smoothing:antialiased;text-align:left}
@@ -11709,7 +11728,8 @@ const tiny=v=>v!=null&&Math.abs(INR()?v:v*FXR())<10;                 // under �
 const mL=(v,sign)=>v==null||!isFinite(v)?'—':(tiny(v)?'~'+SYM()+'0':mT(v,sign));
 // per install (already in the view currency): "₹27.70", "₹0.35", "$0.021", "$0.0042"
 function mP(v,sign){ if(v==null||!isFinite(v)) return '—'; const a=Math.abs(v), sg=sign?(v>0?'+':(v<0?MI:'')):(v<0?MI:'');
-  let t; if(a===0) t='0'; else if(a>=100) t=(INR()?nfi:nf).format(Math.round(a)); else if(a>=0.1) t=a.toFixed(2); else if(a>=0.01) t=a.toFixed(3); else t=String(+a.toPrecision(2));
+  let t; if(a===0) t='0'; else if(a>=100) t=(INR()?nfi:nf).format(Math.round(a)); else if(a>=0.1) t=a.toFixed(2); else if(a>=0.01) t=a.toFixed(3);
+  else { const p=+a.toPrecision(2); t=p.toFixed(Math.min(12,Math.ceil(-Math.log10(p))+1)); }   // 2 significant digits, never "8.7e-7" (the old views' valMoney)
   return sg+SYM()+t; }
 const AZ='<span class="vs-est" title="≈ andaza — engine ka projection (asli aane pe badlega)">≈</span>';
 const az=b=>b?AZ:'';
@@ -11734,7 +11754,7 @@ function eTxt(t,fx){ return esc(p100(smpInfoTxt(String(t==null?'':t)))).replace(
 /* ================= state ================= */
 // range / compare = the dashboard's shared KPIWINDOW (KWIN / KWCUSTOM / KCMP / KCMPCUSTOM, kwSave); the rest is the Studio's
 const ST={sort:{k:'prof',d:1},fst:new Set(),facc:'',fsz:'',q:'',open:new Set(),mapAll:false,srcAll:false,chgView:'cards',
-  drawer:-1,did:null,dScroll:0,ledger:false,folds:new Set()};
+  drawer:-1,did:null,dScroll:0,ledger:false,folds:new Set(),wk:'12'};
 const LS='valueStudio.v1';
 try{ const s=JSON.parse(localStorage.getItem(LS)||'{}')||{}; if(s.chgView==='cards'||s.chgView==='table') ST.chgView=s.chgView; }catch(e){}
 function save(){ try{ localStorage.setItem(LS,JSON.stringify({chgView:ST.chgView})); }catch(e){} }
@@ -11850,6 +11870,48 @@ function ctyOf(a){ if(CTYC[a.i]&&CTYC[a.i].cur===curView()) return CTYC[a.i].L; 
       r.todo=!lens||!judged?{v:'',t:r.why}:(pill==='behtar'?{v:'badhao',t:'Is country me budget badhao'}:(pill==='normal'?{v:'chalao',t:'Barabar pe — chalne do'}:(pill==='dhyan'?{v:'ghatao',t:`Bid ghatao — install ${mP(r.beV)} se sasta chahiye (abhi ${mP(r.cpiV)})`}:{v:'roko',t:'Is country me ads roko — saal me bhi paisa wapas nahi'})));
       return r; }); }
   CTYC[a.i]={cur:curView(),L}; return L; }
+
+/* ================= the older views' data, read as they read it ================= */
+// the app's own detail file (VALD — the dashboard loads it for the app on screen; the drawer asks for it): every install week
+// since the start (the old "Money back by install week" table) and its closed alerts (up to 20)
+function detV(a){ try{ const r=valRows().find(x=>x&&x.app_id===a.id); return (r&&r.key&&VALD[r.key])||null; }catch(e){ return null; } }
+function detLoadV(a){ try{ const r=valRows().find(x=>x&&x.app_id===a.id); if(!r||!r.key||!r.file||r.status==='error'||VALD[r.key]||VALL[r.key]||VALERR[r.key]) return;
+  loadVALApp(r.key,()=>{ if(ST.drawer>=0&&A[ST.drawer]&&A[ST.drawer].id===a.id) renderDrawer(true); }); }catch(e){} }
+// a no-ads app's earning per install in 30 days: the range's own weeks that are 30+ days old, else the engine's tile (the old
+// views' "30-day earning per install" — the same number); in the view currency at today's rate, as the old views print it
+function r30Of(o){ const s=o.s, e=o.a.eng||{}; if(s.r30!=null) return {v:s.r30,src:'range'};
+  if(e.r30!=null&&isFinite(e.r30)) return {v:cv(+e.r30),src:'eng',f:e.r30f,t:e.r30t}; return null; }
+const r30H=(o,cls)=>{ const x=r30Of(o); return x?`<span class="${cls||''}" data-tk="r30:${o.a.i}">${mP(x.v)}<small class="vs-r30">30d · no ads</small></span>`:''; };
+// the app's closed value alerts: its detail file's own list (the old app page's — up to 20), else the dashboard's last 7 days
+function closedOf(a){ const det=detV(a), L=det&&det.changes&&Array.isArray(det.changes.closed)?det.changes.closed:null;
+  if(!L) return ALS.filter(z=>z.a===a&&z.closed);
+  const out=[]; L.forEach(x0=>{ if(!x0||typeof x0!=='object') return; const x=Object.assign({app_id:a.id,app:a.nm},x0); let r; try{ r=smpValRow(x,true,true); }catch(e){ return; }
+    if(r.sev==='info') r.sev='dhyan'; out.push({x,r,a,closed:true,st:r.started||null,fact:alFact(x),age:{t:r.theek?'✅ Fixed':'Band · '+fd(x.closed),tip:''}}); });
+  return out.sort((p,q)=>String(q.x.closed||'').localeCompare(String(p.x.closed||''))); }
+// one install week of the money-back table, from the Studio's file (week i) or from the detail file (its week object w) — the
+// same fields either way: installs, Google Ads spend (USD) + its week's rate, earning per install at each age (observed up to
+// the week's age, the engine's ≈ after it), the engine's own money-back days, profit / day by day H
+function wkFile(a,i){ const n=a.N[i]; if(n==null) return null; const sp=a.SP[i], q=pool([[a,i]]);
+  return {from:wS(i),to:wE(i),i,n,sp,fx:a.FX[i],kind:sp==null?'wait':(sp>0?'ads':'none'),jo:a.JO[i],v:a.V[i],qm:a.QM[i]||0,jd:a.JD[i],
+    pay:a.PF[i]==null?null:{p:a.PP[i],lo:a.PLO[i],hi:a.PHI[i],obs:!!(a.PF[i]&1),never:!!(a.PF[i]&2),rough:!!(a.PF[i]&4),port:!!(a.PF[i]&8),pct:a.P365[i]},
+    prof:q.jw?q.profV/7:null, rel:a.rel.filter(r=>wOf(r[0])===i).map(r=>({d:r[0],l:r[1]}))}; }
+function wkDet(a,w){ const ok=x=>x!=null&&x!==''&&isFinite(+x), jo=w.t_o!=null&&TT.indexOf(w.t_o)>=0?TT.indexOf(w.t_o):-1, n=ok(w.n)?+w.n:null; if(n==null) return null;
+  const v=TT.map((t,j)=>{ const x=j<=jo?(w.rpi||[])[j]:(w.rpip||[])[j]; return ok(x)?+x:null; }), sp=ok(w.spend)?+w.spend:null;
+  const kind=valSpendWait(w)?'wait':(valNoAds(w)?'none':'ads'), fx=(sp>0&&ok(w.spend_src))?w.spend_src/sp:(a.fxL||FXR());
+  let qm=0; for(let j=0;j<10;j++) if((w.est||[])[j]||(w.Lq||[])[j]) qm|=1<<j;
+  const p100=TT.map((t,j)=>{ const x=j<=jo?(w.L||[])[j]:(w.Lp||[])[j]; return ok(x)?+x:null; });   // the engine's own "back per 100 of ads" (the old table's number)
+  const P=w.pay&&typeof w.pay==='object'?w.pay:null, jd=!!w.judged;
+  return {from:w.from,to:w.to,i:wOf(w.from),n,sp,fx,kind,jo,v,p100,qm,jd,pay:P?{p:ok(P.p)?Math.round(+P.p):null,lo:ok(P.lo)?Math.round(+P.lo):null,hi:ok(P.hi)?Math.round(+P.hi):null,obs:!!P.obs,never:!!P.never,rough:!!(P.rough||P.hi_over),port:P.shape==='portfolio',pct:ok(P.pct365)?+P.pct365:null}:null,
+    prof:(jd&&sp>0&&n>0&&v[JH]!=null)?cv(n*v[JH]-sp,fx)/7:null, rel:w.release&&w.release.date?[{d:w.release.date,l:w.release.label||(w.release.version?'v'+w.release.version:'App update')}]:[]}; }
+// "back" as a % of the cost, rounded as the old table rounds its per-100 number (valP100): the same number, with a % sign
+const p100T=x=>{ const a=Math.abs(x); return (x<0?MI:'')+(a>=10?String(Math.round(a)):(a>=1?a.toFixed(1).replace(/\.0$/,''):(a===0?'0':String(+a.toPrecision(2)))))+'%'; };
+// the engine's money-back days of one week (engWeekPay's words)
+function payTxt(P,jd){ if(!P) return jd?'abhi andaza nahi':'—'; if(P.never) return '1 yr+'+(P.pct!=null?' ('+Math.round(P.pct)+'% saal me)':''); if(P.p==null) return '—';
+  return (P.obs?'':'≈')+P.p+' days'+(!P.obs?(P.port?' (low data, from other apps)':(P.rough?' (low data)':(P.lo!=null&&P.hi!=null&&P.lo!==P.hi?' ('+P.lo+'–'+P.hi+')':''))):''); }
+// the week rows of an app, newest first: the detail file's every week when it is loaded (the old table's), else the file's 32
+function wkAll(a){ const d=detV(a), W0=d&&Array.isArray(d.weeks)?d.weeks.filter(w=>w&&w.from&&w.to):null;
+  if(W0&&W0.length) return {src:'det',rows:W0.slice().sort((p,q)=>p.from<q.from?1:(p.from>q.from?-1:0)).map(w=>wkDet(a,w)).filter(Boolean)};
+  const L=[]; for(let i=NW-1;i>=Math.max(0,a.first);i--){ const r=wkFile(a,i); if(r) L.push(r); } return {src:'file',rows:L}; }
 
 /* ================= compute everything for the current windows ================= */
 let W, R=[], PT={}, PC={}, CT=[], WKP={};
@@ -12094,6 +12156,7 @@ TIPS.ptl=()=>{ const L=R.filter(o=>o.s.profD!=null).sort((x,y)=>x.s.profD-y.s.pr
 const COLS=()=>[['cpi','Cost / install','Google Ads kharcha ÷ saare naye installs (ads + organic)'],['b7','Back in 7 days','7 din me ek install ne kitna kamaya — CPI ka kitna %'],['v90','Earning by day '+H,'earning per install '+H+' din tak (≈ = engine ka andaza)'],['pb','Money back in','Ads ka poora paisa kitne din me wapas — target '+H]];
 const hcls=s=>s==null?'vs-na':(s===0?'':'vs-h'+s);
 function cellOf(o,k){ const h=o.heat[k], s=o.s;
+  if((!s.ads||s.thin)&&k==='v90'&&r30Of(o)) return {v:mP(r30Of(o).v),sub:'30d · no ads',s:null,r30:1};
   if(!s.ads||s.thin) return {v:null,why:why0(s)};
   if(k==='cpi') return {v:mP(s.cpiV),sub:h.n!=null?'normal '+mP(h.n):'',s:h.s};
   if(k==='b7'){ if(s.b7==null) return {v:null,why:s.imm7.length?'⏳ 7 days not complete yet':'—',wait:s.imm7.length?fd(pakka(Math.max(...s.imm7),7)):null}; return {v:az(s.q7)+mP(s.b7V),pc:pc(s.b7,0),sub:h.n!=null?'normal '+pc(h.n,0):'',s:h.s}; }
@@ -12115,10 +12178,12 @@ function mapHtml(){ const rows=R.filter(o=>o.s.ads||o.c.ads).sort((x,y)=>{ const
     const i1=W.i1, i0=Math.max(0,i1-11), wv=[], es=[]; for(let i=i0;i<=i1;i++){ const q=pool([[a,i]]); wv.push(q.jw?q.profV/7:null); es.push(pakka(i,H)>M.today); }
     h+=`<div class="vs-hc vs-tr" data-app="${a.i}">${spark({vals:wv,bars:1,zero:1,est:es,w:84,h:34,hpx:34,small:1,band:11,wpx:80,fmt:(v,j)=>(es[j]?'≈':'')+mL(v,true),tip:k2=>{ const i=i0+k2, q=pool([[a,i]]); return `<div class="vs-tt">${ic(a,14,'ail')}${esc(nameTxt(a))} · installs ${wkSpan(i)}</div>${trow('Profit/day',q.jw?az(pakka(i,H)>M.today).replace(/<[^>]+>/g,'')+mL(q.profV/7,true):'—')}${trow('Spend/day',mT(q.spV/7))}${trow('Money back in',pbTxt(q.pb))}${(i>=W.i0&&i<=W.i1)?'<div class="vs-tsm">in the chosen range</div>':''}`; }})}</div>`; });
   const sw=(cls)=>`<i style="background:var(--vs-${cls})"></i>`;
+  const NO=R.filter(o=>!o.s.ads&&!o.c.ads).sort((x,y)=>((r30Of(y)||{v:-1}).v)-((r30Of(x)||{v:-1}).v));
+  const noH=NO.length?`<div class="vs-noads"><div class="vs-noh"><b>No ads in this range (${NO.length})</b> · ek install ki kamai 30 din me — paisa-wapas nahi (ads nahi)</div><div class="vs-nol">${NO.map(o=>`<button class="vs-noa" data-app="${o.a.i}" data-go="${o.a.i}" data-tk="r30:${o.a.i}">${ic(o.a,16)}<span class="vs-non">${esc(o.a.store)} <span class="vs-acn">· ${esc(o.a.acc)}</span></span><b>${r30Of(o)?mP(r30Of(o).v):'—'}</b><small class="vs-r30">30d · no ads</small></button>`).join('')}</div></div>`:'';
   return `<div class="vs-ph"><div><div class="vs-eyebrow">Where profit, where loss</div><h2>Profit map</h2><div class="vs-hint">Sabse bada nuksaan upar · pill = ${H}-din target ke hisaab se haal · rang = app ka apna normal (range se pehle ke 8 hafte) · hover / tap = asli numbers</div></div></div>`
     +`<div class="vs-mapw"><div class="vs-hm" id="vs-hm">${h}</div></div>`
     +(rows.length>12?`<button class="vs-moreb" id="vs-mapMore">${ST.mapAll?'Only top 12':'Show all '+rows.length+' ads apps'}</button>`:'')
-    +`<div class="vs-legend"><span>Rang = app ka apna normal se:</span><span class="vs-sw">${sw('h3')}${sw('h2')}${sw('h1')}</span><span>bad</span><span class="vs-sw"><i style="background:var(--vs-h0)"></i></span><span>normal</span><span class="vs-sw">${sw('g1')}${sw('g2')}${sw('g3')}</span><span>good</span><span class="vs-sw"><i style="border:1px dashed var(--line2)"></i></span><span>low data</span><span>· ≈ = engine ka andaza · ${rest} apps pe is range me ads nahi (table me "N/A")</span></div>`; }
+    +`<div class="vs-legend"><span>Rang = app ka apna normal se:</span><span class="vs-sw">${sw('h3')}${sw('h2')}${sw('h1')}</span><span>bad</span><span class="vs-sw"><i style="background:var(--vs-h0)"></i></span><span>normal</span><span class="vs-sw">${sw('g1')}${sw('g2')}${sw('g3')}</span><span>good</span><span class="vs-sw"><i style="border:1px dashed var(--line2)"></i></span><span>low data</span><span>· ≈ = engine ka andaza · ${rest} apps pe is range me ads nahi (neeche, 30 din ki kamai ke saath)</span></div>${noH}`; }
 TIPS.app=i=>{ const o=R[+i], a=o.a; return `<div class="vs-tt">${ic(a,14,'ail')}${esc(nameTxt(a))}</div>${trow('Status ('+wkSpan(W.i0,W.i1)+')',SW[o.pill])}${trow('Next step',KYA[o.todo.v]||'—')}<div class="vs-tsm" style="margin:2px 0 4px">${esc(o.todo.t)}</div>${trow('Engine (dashboard)',esc(engWord(a)))}${trow('Size',a.sz==='badi'?'Big':(a.sz==='madhyam'?'Medium':'Small'))}<div class="vs-tsm">Click = poora app view</div>`; };
 TIPS.prof=i=>{ const o=R[+i], s=o.s, a=o.a;
   if(s.profD==null) return `<div class="vs-tt">${ic(a,14,'ail')}${esc(nameTxt(a))} · profit</div><div>— ${esc(why0(s)||'is range me koi judge hua hafta nahi')}</div>`;
@@ -12128,7 +12193,7 @@ TIPS.prof=i=>{ const o=R[+i], s=o.s, a=o.a;
     +(o.c.profD!=null?trow('before '+wkSpan(W.c0,W.c1),mL(o.c.profD,true)+'/day'):'')+`<div class="vs-tsm">Kamai = AdMob (sab networks), GA4 se install-day pe baanti · ≈ = ${H} din abhi pure nahi, engine ka andaza (app ke purane hafton ki chaal)</div>`; };
 TIPS.cell=(i,k)=>{ const o=R[+i], a=o.a, s=o.s, h=o.heat[k], c=o.c, lab=COLS().find(x=>x[0]===k);
   let b=`<div class="vs-tt">${ic(a,14,'ail')}${esc(nameTxt(a))} · ${lab[1]}</div>`;
-  if(!s.ads||s.thin) return b+'— '+esc(why0(s));
+  if(!s.ads||s.thin) return b+'— '+esc(why0(s))+(k==='v90'&&r30Of(o)?'<div class="vs-sep"></div>'+TIPS.r30(i):'');
   if(k==='cpi') b+=trow('Installs '+wkSpan(W.i0,W.i1),mP(s.cpiV))+(c.cpiV!=null?trow('before '+wkSpan(W.c0,W.c1),mP(c.cpiV)):'')+(h.n!=null?trow('Normal (8 weeks before)',mP(h.n)):'')+trow('Spend / installs',mT(s.spV)+' ÷ '+fN(s.insSp))+(a.NA&&s.insSp?'':'');
   if(k==='b7'){ if(s.b7==null) return b+'⏳ 7 days not complete yet'+(s.imm7.length?' — final on '+fd(pakka(Math.max(...s.imm7),7)):'');
     b+=trow('7-day earning / install',mP(s.b7V))+trow('Cost / install (same week)',mP(s.b7C))+trow('= back',pc(s.b7,0))+(c.b7!=null?trow('before',mP(c.b7V)+' ('+pc(c.b7,0)+')'):'')+(h.n!=null?trow('Normal',pc(h.n,0)):'')+(s.imm7.length?'<div class="vs-tsm">⏳ '+wkSpan(Math.min(...s.imm7),Math.max(...s.imm7))+' abhi shamil nahi</div>':''); }
@@ -12309,9 +12374,9 @@ function tblParts(){ const L=filtered(), k=ST.sort.k, d=ST.sort.d, TCs=TC();
   const head=TCs.map(([key,l,al])=>`<th class="${al||''}${k===key?' vs-sorted':''}" data-sort="${key}" title="Sort">${l}${key==='v90'||key==='pb'?' ≈':''}${k===key?`<span class="vs-ar">${d>0?'▲':'▼'}</span>`:''}</th>`).join('');
   const body=L.map(o=>{ const a=o.a, s=o.s, c=o.c, op=ST.open.has(a.i), ads=s.ads&&!s.thin;
     const i1=W.i1, i0=Math.max(0,i1-11), wv=[], es=[]; for(let i=i0;i<=i1;i++){ const q=pool([[a,i]]); wv.push(q.jw?q.profV/7:null); es.push(pakka(i,H)>M.today); }
-    const tr=ads||c.ads?spark({vals:wv,bars:1,zero:1,est:es,w:96,h:30,hpx:30,small:1,band:11,wpx:96,fmt:(v,j)=>(es[j]?'≈':'')+mL(v,true),tip:k2=>{ const i=i0+k2, q=pool([[a,i]]); return `<div class="vs-tt">${ic(a,14,'ail')}${esc(nameTxt(a))} · ${wkSpan(i)}</div>${trow('Profit/day',q.jw?mL(q.profV/7,true):'—')}${trow('Money back in',pbTxt(q.pb))}`; }}):(s.r30!=null?`<span class="vs-faint" style="font-size:11.5px">earning 30d ${mP(s.r30)}/install</span>`:'');
+    const tr=ads||c.ads?spark({vals:wv,bars:1,zero:1,est:es,w:96,h:30,hpx:30,small:1,band:11,wpx:96,fmt:(v,j)=>(es[j]?'≈':'')+mL(v,true),tip:k2=>{ const i=i0+k2, q=pool([[a,i]]); return `<div class="vs-tt">${ic(a,14,'ail')}${esc(nameTxt(a))} · ${wkSpan(i)}</div>${trow('Profit/day',q.jw?mL(q.profV/7,true):'—')}${trow('Money back in',pbTxt(q.pb))}`; }}):(r30Of(o)?`<span class="vs-faint" style="font-size:11.5px" data-tk="r30:${a.i}">earning in 30 days ${mP(r30Of(o).v)}/install</span>`:'');
     const b7=!ads?'<td class="vs-faint">—</td>':(s.b7==null?`<td class="vs-watch" style="font-size:12px">⏳ ${s.imm7.length?fd(pakka(Math.max(...s.imm7),7)):''}</td>`:`<td data-tk="cell:${a.i}:b7"><span class="vs-hcell ${hcls(o.heat.b7.s)}"><span class="vs-v" style="font-weight:600">${az(s.q7)}${mP(s.b7V)}</span><span class="vs-d" style="font-size:11px;color:var(--muted)">${pc(s.b7,0)} of CPI${c.b7!=null?' · was '+pc(c.b7,0):''}</span></span></td>`);
-    const v90=s.v90V==null?(ads?'<td class="vs-faint">—</td>':(s.r30!=null?`<td class="vs-faint" title="Ads nahi — 30 din ki kamai per install">${mP(s.r30)}<small style="display:block;font-size:10px">30d · no ads</small></td>`:'<td class="vs-faint">—</td>')):`<td data-tk="cell:${a.i}:v90"><span class="vs-hcell ${hcls(o.heat.v90.s)}"><span class="vs-v" style="font-weight:600">${az(s.est90)}${mP(s.v90V)}</span><span class="vs-d" style="font-size:11px;color:var(--muted)">${pc(1+s.marg,0)} of CPI</span></span></td>`;
+    const v90=s.v90V==null?(ads?'<td class="vs-faint">—</td>':(r30Of(o)?`<td class="vs-r30c">${r30H(o)}</td>`:'<td class="vs-faint">—</td>')):`<td data-tk="cell:${a.i}:v90"><span class="vs-hcell ${hcls(o.heat.v90.s)}"><span class="vs-v" style="font-weight:600">${az(s.est90)}${mP(s.v90V)}</span><span class="vs-d" style="font-size:11px;color:var(--muted)">${pc(1+s.marg,0)} of CPI</span></span></td>`;
     const pb=!s.pb?'<td class="vs-faint">—</td>':`<td data-tk="cell:${a.i}:pb"><span class="vs-hcell ${hcls(o.heat.pb.s)}"><span class="vs-v" style="font-weight:600;${(s.pb.never||s.pb.p>H)?'':'color:var(--good)'}">${pbTxt(s.pb)}</span><span class="vs-d" style="font-size:11px;color:var(--muted)">${c.pb?'before '+pbTxt(c.pb,true):'target '+H}</span></span></td>`;
     return `<tr data-app="${a.i}" class="${op?'vs-open':''}"><td><div class="vs-nmc"><button class="vs-xp" data-xp="${a.i}" aria-label="Expand" aria-expanded="${op}">▶</button><div><div data-go="${a.i}" style="cursor:pointer" data-tk="app:${a.i}">${nmH(a)}</div>${a.sz==='badi'?`<div style="margin-top:3px">${szH(a)}</div>`:''}</div></div></td>`
       +`<td class="vs-l"><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">${chip(o.pill)}${todoChip(o.todo)}</div></td>`
@@ -12407,17 +12472,30 @@ TIPS.dwk=(ai,i)=>{ const a=A[+ai]; i=+i; const q=pool([[a,i]]), e=pakka(i,H)>M.t
 TIPS.drel=(ai,d)=>{ const a=A[+ai]; return a.rel.filter(r=>r[0]===d).map(r=>`<div class="vs-tt">📦 ${esc(r[1])} · ${fd(d)}</div>`).join('')+'<div class="vs-tsm">Is din se naye install hafte</div>'; };
 function engWeekPay(a,i){ const pf=a.PF[i]; if(pf==null) return a.JD[i]?'abhi andaza nahi':'—'; if(pf&2) return '1 yr+'+(a.P365[i]!=null?' ('+Math.round(a.P365[i])+'% saal me)':''); if(a.PP[i]==null) return '—';
   const lo=a.PLO[i], hi=a.PHI[i]; return (pf&1?'':'≈')+a.PP[i]+' days'+(!(pf&1)?(pf&8?' (low data, from other apps)':(pf&4?' (low data)':(lo!=null&&hi!=null?' ('+lo+'–'+hi+')':''))):''); }
-function weekTable(o){ const a=o.a, rows=[]; for(let i=W.i1;i>=Math.max(a.first,Math.min(W.c0,W.i0));i--) rows.push(i);
-  const cell=(i,j)=>{ const v=a.V[i][j], jo=a.JO[i], fx=a.FX[i], cpi=a.SP[i]>0&&a.N[i]?a.SP[i]/a.N[i]:null;
-    if(pakka(i,TT[j])>M.today&&(jo==null||j>jo)){ return `<td class="vs-faint" title="Itne din abhi pure nahi — ${fd(pakka(i,TT[j]))} ko pakka">in ${dDiff(M.today,pakka(i,TT[j]))} d${v!=null&&a.JD[i]?`<small>≈${mP(cv(v,fx))}</small>`:''}</td>`; }
+// the money-back table, week by week (the old "💸 Money back by install week"): 12 / 26 / All weeks (or only the chosen +
+// compare weeks); every week since the start once the app's detail file is in (the app page loads it), no-ads apps too
+function weekTable(o){ const a=o.a, WA=wkAll(a), md=['rng','12','26','all'].includes(ST.wk)?ST.wk:'12', lo=wS(Math.min(W.c0,W.i0)), hi=wE(W.i1);
+  const rows=md==='rng'?WA.rows.filter(r=>r.from>=lo&&r.from<=hi):(md==='all'?WA.rows:WA.rows.slice(0,+md));
+  const paid=rows.some(r=>r.kind==='ads'||r.jd), nRng=WA.rows.filter(r=>r.from>=lo&&r.from<=hi).length;
+  const cell=(r,j)=>{ const v=r.v[j], t=TT[j], pk=dAdd(r.to,t+LAG), cpi=r.sp>0&&r.n?r.sp/r.n:null;
+    if(pk>M.today&&j>r.jo) return `<td class="vs-faint" data-tk="wkin:${pk}">in ${dDiff(M.today,pk)} d${v!=null&&r.jd?`<small>≈${mP(cv(v,r.fx))}</small>`:''}</td>`;
     if(v==null) return '<td class="vs-faint">—</td>';
-    const q=(a.QM[i]>>j)&1, pr=jo!=null&&j>jo; const ok=cpi!=null&&v>=cpi;
-    return `<td class="${ok?'vs-ok':''}">${pr||q?'≈':''}${mP(cv(v,fx))}${ok?' ✅':''}${cpi?`<small>${pc(v/cpi,0)}</small>`:''}</td>`; };
-  let body=''; rows.forEach(i=>{ if(a.N[i]==null) return; const inR=i>=W.i0&&i<=W.i1;
-    a.rel.filter(r=>wOf(r[0])===i).forEach(r=>{ body+=`<tr class="vs-wk-rel"><td colspan="11">📦 ${esc(r[1])} · ${fd(r[0])} — us hafte se naye users is update pe</td></tr>`; });
-    const sp=a.SP[i], fx=a.FX[i], q=pool([[a,i]]), e=pakka(i,H)>M.today;
-    body+=`<tr class="${inR?'vs-rng':'vs-prow'}"><td class="vs-l"><b>${wkSpan(i)}</b>${inR?'':' <span class="vs-faint">vs</span>'}</td><td>${fN(a.N[i])}</td><td>${sp==null?'<span class="vs-faint">aa raha</span>':(sp>0?mT(cv(sp,fx)):'<span class="vs-faint">No ads</span>')}</td><td>${sp>0&&a.N[i]?mP(cv(sp,fx)/a.N[i]):'—'}</td>${[1,3,5,7,9].map(j=>cell(i,j)).join('')}<td>${engWeekPay(a,i)}</td><td class="${profCls(q.jw?q.profV/7:null)}" style="font-weight:600">${q.jw?(e?'≈':'')+mL(q.profV/7,true):'—'}</td></tr>`; });
-  return `<div class="vs-tw" style="max-height:420px"><table class="vs-mini vs-dtbl"><thead><tr><th class="vs-l">Install week</th><th>Installs</th><th>Spend</th><th>Cost / install</th><th>Earning · 1 day</th><th>1 week</th><th>30 days</th><th>90 days</th><th>1 year</th><th>Money back in</th><th>Profit/day</th></tr></thead><tbody>${body}</tbody></table></div><div class="vs-secnote">Kamai = ek install ki kamai, install ke din se us din tak · chhota % = cost ka kitna wapas · ✅ = paisa wapas · ≈ = engine ka andaza · "in N d" = itne din abhi pure nahi (chhota number nahi dikhate) · Money back in = engine ka apna hisaab us hafte ka</div>`; }
+    const q=(r.qm>>j)&1, pr=j>r.jo, b=r.p100&&r.p100[j]!=null&&cpi!=null?r.p100[j]:(cpi?v/cpi*100:null), ok=b!=null&&b>=100;
+    return `<td class="${ok?'vs-ok':''}">${pr||q?'≈':''}${mP(cv(v,r.fx))}${ok?' ✅':''}${b!=null?`<small>${p100T(b)}</small>`:''}</td>`; };
+  let body=''; rows.forEach(r=>{ const inR=r.from>=wS(W.i0)&&r.from<=hi, inC=!inR&&r.from>=wS(W.c0)&&r.from<=wE(W.c1), e=dAdd(r.to,H+LAG)>M.today;
+    r.rel.forEach(x=>{ body+=`<tr class="vs-wk-rel"><td colspan="${paid?11:7}">📦 ${esc(x.l)} · ${fd(x.d)} — us hafte se naye users is update pe</td></tr>`; });
+    body+=`<tr class="${inR?'vs-rng':''}"><td class="vs-l"><b>${span(r.from,r.to)}</b>${inR?' <span class="vs-wkt">range</span>':(inC?' <span class="vs-faint">vs</span>':'')}</td><td>${fN(r.n)}</td>`
+      +(paid?`<td>${r.kind==='wait'?'<span class="vs-faint">aa raha</span>':(r.kind==='ads'?mT(cv(r.sp,r.fx)):'<span class="vs-faint">No ads</span>')}</td><td>${r.sp>0&&r.n?mP(cv(r.sp,r.fx)/r.n):'—'}</td>`:'')
+      +[1,3,5,7,9].map(j=>cell(r,j)).join('')
+      +(paid?`<td>${payTxt(r.pay,r.jd)}</td><td class="${profCls(r.prof)}" style="font-weight:600">${r.prof!=null?(e?'≈':'')+mL(r.prof,true):'—'}</td>`:'')+'</tr>'; });
+  const chips=[['12','12 weeks'],['26','26 weeks'],['all','All ('+WA.rows.length+')'],['rng','Chosen weeks ('+nRng+')']].map(([v,l])=>`<button data-wk="${v}" aria-pressed="${md===v}">${l}</button>`).join('');
+  const head=paid?'<th class="vs-l">Install week</th><th>Installs</th><th>Spend</th><th>Cost / install</th><th>Earning · 1 day</th><th>1 week</th><th>30 days</th><th>90 days</th><th>1 year</th><th>Money back in</th><th>Profit/day</th>'
+    :'<th class="vs-l">Install week</th><th>Installs</th><th>Earning per install · 1 day</th><th>1 week</th><th>30 days</th><th>90 days</th><th>1 year</th>';
+  return `<div class="vs-wkbar"><div class="vs-seg vs-wkseg" role="group" aria-label="Weeks">${chips}</div><span class="vs-faint">${WA.src==='det'?'Since '+fd(WA.rows.length?WA.rows[WA.rows.length-1].from:''):'Last '+WA.rows.length+' weeks'+(a.first>0?'':' in the Studio file')} · <span class="vs-wkt">range</span> = chosen weeks</span></div>`
+    +`<div class="vs-tw vs-wktw"><table class="vs-mini vs-dtbl"><thead><tr>${head}</tr></thead><tbody>${body||`<tr><td class="vs-l vs-faint" colspan="${paid?11:7}">In hafton me installs ka data nahi</td></tr>`}</tbody></table></div><div class="vs-secnote">${paid?'Kamai = ek install ki kamai, install ke din se us din tak · chhota % = cost ka kitna wapas · ✅ = paisa wapas · Money back in = engine ka apna hisaab us hafte ka':'Is app pe Google Ads kharcha nahi — paisa-wapas nahi, sirf ek install ki kamai (AdMob), install ke din se us din tak'} · ≈ = engine ka andaza · "in N d" = itne din abhi pure nahi (chhota number nahi dikhate)</div>`; }
+TIPS.r30=i=>{ const o=R[+i], a=o.a, x=r30Of(o); if(!x) return '';
+  return `<div class="vs-tt">${ic(a,14,'ail')}${esc(nameTxt(a))} · earning per install</div>${trow('In 30 days',mP(x.v))}${trow('Installs',x.src==='eng'?(x.f?span(x.f,x.t):'—')+' (engine)':wkSpan(W.i0,W.i1)+' · 30+ days old')}<div class="vs-tsm">${why0(o.s)||'Is range me ads nahi'} — isliye paisa-wapas nahi, sirf ek install ki 30 din ki kamai (AdMob)</div>`; };
+TIPS.wkin=d=>`<div class="vs-tt">Abhi pura nahi</div><div>Itne din abhi pure nahi — ${fd(d)} ko pakka. Chhota number nahi dikhate.</div>`;
 function ctyTable(o){ const a=o.a, C=a.cty; if(!C) return '<div class="vs-ok">Countries ka data nahi</div>';
   const L=ctyOf(a).slice().sort((p,q)=>{ const x=p.profD, y=q.profD; if(x==null&&y!=null) return 1; if(y==null&&x!=null) return -1; if(x!=null&&y!=null&&x!==y) return x-y; return q.n-p.n; });
   const all=C.all, dd=7*(C.wk||4);
@@ -12453,7 +12531,7 @@ function longTable(o){ const L=o.a.lng; if(!L) return ''; if(!L.rows||!L.rows.le
     return `<tr><td class="vs-l"><b>${lab}${r.part?' ⏳':''}</b>${r.rel?' <span title="'+r.rel+' update is mahine">📦</span>':''}<small>${fN(r.n)} installs</small></td>${['30','60','90','180','365'].map(t=>dc(r,t)).join('')}<td>${rc(r,'30')} · ${rc(r,'90')} · ${rc(r,'180')} · ${rc(r,'365')}</td><td>${b!=null&&v365!=null?(r.bf&1?'≈':'')+mP(cv(v365/(b/100),o.a.fxL))+'<small>'+(r.bf&1?'≈':'')+pc(b/100,0)+' back</small>':(r.bf&2?'<span class="vs-faint">Little ads</span>':'—')}</td></tr>`; }).join('');
   return `${L.t?`<div class="vs-secnote" style="padding-top:0">${eTxt(L.t,o.a.fxL)}</div>`:''}<div class="vs-tw" style="max-height:420px"><table class="vs-mini vs-dtbl"><thead><tr><th class="vs-l">Installed in</th><th>Day 30</th><th>Day 60</th><th>Day 90</th><th>Day 180</th><th>Day 365</th><th>Earning/install · 30d · 90d · 6mo · 1yr</th><th>1 yr vs cost/install</th></tr></thead><tbody>${rows}</tbody></table></div><div class="vs-secnote">Day N = kitne log install ke N-ve din app khol rahe (chhota % = installs me se) · 1 yr vs cost = us mahine ka cost/install, aur saal me kitna wapas · ≈ = andaza · ⏳ = mahina poora data me nahi</div>`; }
 function lock(on){ try{ document.body.classList.toggle('vs-lock',!!on); }catch(e){} }
-function openDrawer(i){ layer(); i=+i; if(!A[i]) return; ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('vs-drawer'); d.classList.add('vs-on'); d.setAttribute('aria-hidden','false'); $('vs-scrim').classList.add('vs-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.vs-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
+function openDrawer(i){ layer(); i=+i; if(!A[i]) return; detLoadV(A[i]); ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('vs-drawer'); d.classList.add('vs-on'); d.setAttribute('aria-hidden','false'); $('vs-scrim').classList.add('vs-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.vs-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
 function closeDrawer(){ ST.drawer=-1; ST.did=null; const d=$('vs-drawer'); if(d){ d.classList.remove('vs-on'); d.setAttribute('aria-hidden','true'); } const sc=$('vs-scrim'); if(sc) sc.classList.remove('vs-on'); lock(false); hideTip(); }
 function navOrder(){ return R.slice().sort((x,y)=>{ const a=x.s.profD, b=y.s.profD; if(a==null&&b!=null) return 1; if(b==null&&a!=null) return -1; if(a!=null&&b!=null&&a!==b) return a-b; return (y.s.insD||0)-(x.s.insD||0); }).map(o=>o.a.i); }
 function appBody(o,mode){ CM=mode; const a=o.a, s=o.s, c=o.c, ads=s.ads&&!s.thin;
@@ -12462,13 +12540,14 @@ function appBody(o,mode){ CM=mode; const a=o.a, s=o.s, c=o.c, ads=s.ads&&!s.thin
   const kp=k('Profit / loss','by day '+H,s.profD==null?'—':az(s.est90)+mL(s.profD,true)+'<span class="vs-ku">/day</span>',s.profD!=null&&c.profD!=null?deltaH(s.profD,c.profD,true,(v,sg)=>mL(v,sg),'/day'):nd,s.profD!=null?`spend ka ${fR(s.marg)} · 1 saal me ≈${mL(s.prof365D,true)}/day`:esc(why0(s)),profCls(s.profD),'prof:'+a.i)
     +k('Money back in','target '+H+' days',pbTxt(s.pb),s.pb&&c.pb?{cls:pbVal(s.pb)<pbVal(c.pb)?'vs-dn-good':(pbVal(s.pb)>pbVal(c.pb)?'vs-up-bad':'vs-flat'),h:`was ${pbTxt(c.pb)}`}:nd,pbBand(s.pb)||(s.pb&&s.pb.never&&s.pb.pct!=null?'saal bhar me '+pc(s.pb.pct,0)+' back':''),s.pb&&!s.pb.never&&s.pb.p<=H?'vs-good':(s.pb?'':'vs-faint'))
     +k('Back in 7 days','per install',s.b7==null?(s.imm7.length?'⏳':'—'):az(s.q7)+mP(s.b7V),s.b7!=null?{cls:c.b7==null?'':(s.b7>c.b7?'vs-up-good':'vs-dn-bad'),h:`${pc(s.b7,0)} of ${mP(s.b7C)}${c.b7!=null?' · was '+pc(c.b7,0):''}`}:{h:s.imm7.length?'<span class="vs-vs">final on '+fd(pakka(Math.max(...s.imm7),7))+'</span>':'<span class="vs-vs">—</span>'},'')
-    +k('Earning by day '+H,'per install',s.v90V==null?(s.r30!=null?'<span style="font-size:.7em">30d </span>'+mP(s.r30):'—'):az(s.est90)+mP(s.v90V),s.v90V!=null?{h:`${pc(1+s.marg,0)} of cost ${mP(s.cpiJV)}`}:{h:'<span class="vs-vs">'+(s.r30!=null?'no ads — 30-day earning':'—')+'</span>'},'')
+    +k(s.v90V==null&&r30Of(o)?'Earning in 30 days':'Earning by day '+H,'per install',s.v90V==null?(r30Of(o)?mP(r30Of(o).v):'—'):az(s.est90)+mP(s.v90V),s.v90V!=null?{h:`${pc(1+s.marg,0)} of cost ${mP(s.cpiJV)}`}:{h:'<span class="vs-vs">'+(r30Of(o)?'30d · no ads':'—')+'</span>'},s.v90V==null&&r30Of(o)?(r30Of(o).src==='eng'?'Installs '+span(r30Of(o).f,r30Of(o).t)+' (engine)':'Installs '+wkSpan(W.i0,W.i1)):'','',s.v90V==null&&r30Of(o)?'r30:'+a.i:'')
     +k('Ads spend','daily avg',ads?mT(s.spD)+'<span class="vs-ku">/day</span>':'<span style="font-size:.6em">No ads</span>',ads?deltaH(s.spD,c.spD,true,(v,sg)=>mT(v,sg),'/day'):nd,ads?'Total '+mT(s.spV):'')
     +k('Installs','daily avg',fN(s.insD)+'<span class="vs-ku">/day</span>',deltaH(s.insD,c.insD,true,fS,'/day'),ads&&s.insSp?'ads se ~'+pc(cells(a,W.i0,W.i1).reduce((q,[b,i])=>q+(b.NA[i]||0),0)/s.insSp,0):'')
     +k('Cost / install','blended',ads?mP(s.cpiV):'—',ads&&c.cpiV!=null?deltaH(s.cpiV,c.cpiV,false,(v,sg)=>mP(v,sg)):nd,ads?'Google Ads ÷ saare naye installs':'')
     +k('Engine says','dashboard',`<span style="font-size:.55em;line-height:1.2;display:block">${esc(engWord(a))}</span>`,{h:'<span class="vs-vs">'+esc(engPay(a))+'</span>'},'');
   const ver=verTable(o), lng=longTable(o);
   const myA=ALS.filter(z=>z.a===a&&!z.closed), inf=(a.info.length||myA.length)?`<div class="vs-cards">${myA.map(alCard).join('')}${a.info.map(x=>infoCard(a,x)).join('')}</div>`:'';
+  const clA=closedOf(a), clF=clA.length?`<details class="vs-fold" data-fold="pgclosed"${ST.folds.has('pgclosed')?' open':''}><summary><span class="vs-cv">▸</span><span>✅ Closed (${clA.length})</span><span class="vs-pv">engine ne band kiye · har ek apne 🕒 ke saath</span></summary><div class="vs-cards">${clA.map(alCard).join('')}</div></details>`:'';
   return `<div class="vs-db${mode==='p'?' vs-pgb':''}"><div class="vs-ac vs-s-${o.pill==='bigda'?'bigda':(o.pill==='dhyan'?'dhyan':(o.pill==='behtar'?'behtar':'info'))}" style="cursor:default"><div class="vs-todo" style="font-size:13px"><b>${WD.next}</b> ${todoChip(o.todo)} ${esc(o.todo.t)}</div><div class="vs-ts"><span>Engine line: ${eTxt(a.eng.sum,a.fxL)}</span></div></div>`
     +`<div class="vs-dk">${kp}</div>`
     +`<div class="vs-pg2">`+`<div class="vs-panel"><div class="vs-ph"><div><div class="vs-eyebrow">Money back — how many days</div><h2 style="font-size:15px">Earning per install vs cost per install</h2><div class="vs-hint">Install ke din se 1 saal tak · neeli line pili line ko kaate = paisa wapas</div></div></div>${curveChart(o)}</div>`
@@ -12477,7 +12556,7 @@ function appBody(o,mode){ CM=mode; const a=o.a, s=o.s, c=o.c, ads=s.ads&&!s.thin
     +`<div class="vs-panel"><div class="vs-ph"><div><div class="vs-eyebrow">Where to run ads, where to stop</div><h2 style="font-size:15px">Countries</h2></div></div>${ctyTable(o)}</div>`
     +(ver?`<div class="vs-panel"><div class="vs-ph"><div><div class="vs-eyebrow">🧬 Version on install day</div><h2 style="font-size:15px">Users by app version</h2></div></div>${ver}</div>`:'')
     +(lng?`<div class="vs-panel"><div class="vs-ph"><div><div class="vs-eyebrow">🗓️ Long-term</div><h2 style="font-size:15px">Long-term by install month</h2></div></div>${lng}</div>`:'')
-    +(inf?`<div><div class="vs-chg-h"><div><div class="vs-eyebrow">${myA.length?'Engine alerts + info':'Engine info (not an alert)'}</div><h2 style="font-size:15px">What's new for this app</h2></div></div>${inf}</div>`:'<div class="vs-ok">✅ Is app pe koi value alert ya engine info nahi</div>')
+    +(inf||clF?`<div><div class="vs-chg-h"><div><div class="vs-eyebrow">${myA.length?'Engine alerts + info':'Engine info (not an alert)'}</div><h2 style="font-size:15px">What's new for this app</h2></div></div>${inf||'<div class="vs-ok">✅ Is app pe koi khula value alert ya engine info nahi</div>'}${clF}</div>`:'<div class="vs-ok">✅ Is app pe koi value alert ya engine info nahi</div>')
     +(a.chk&&a.chk.length?`<div class="vs-secnote" style="padding:0 2px">🔍 Data check: ${eTxt(a.chk[0],a.fxL)}</div>`:'')+`${mode==='d'?`<div style="display:flex;justify-content:center;padding:6px 0 2px"><button class="vs-btn vs-full" data-full="${esc(a.id)}">Full app page →</button></div>`:''}</div>`; }
 function drawerHtml(){ const o=R[ST.drawer], a=o.a, ord=navOrder(), pos=ord.indexOf(a.i);
   return `<div class="vs-dh"><div class="vs-t"><div class="vs-eyebrow">App view · ${pos+1} / ${ord.length} (by loss) · installs ${wkSpan(W.i0,W.i1)}</div><h3 class="vs-ainb">${ic(a,28)}<span class="vs-aint">${esc(a.store)} <span class="vs-acn">· ${esc(a.acc)}</span></span></h3><div class="vs-l2">${chip(o.pill)}${todoChip(o.todo)}${szH(a)}<span>Install-day data till ${fd(a.settled)} · Google Ads till ${a.spT?fd(a.spT):'—'}</span></div>`
@@ -12596,8 +12675,9 @@ function wire(){ if(WIRED) return; WIRED=true;
     const m={'7':'7','1':'14','3':'30','6':'60'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
     if(e.key==='/'){ const q=$('vs-q'); if(q){ q.focus(); q.scrollIntoView({block:'center',behavior:RM?'auto':'smooth'}); e.preventDefault(); } } });
   let rzT=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(!$('vs-root')) return; stick(); fitAll(); if(Math.abs(innerWidth-lastW)<40) return; lastW=innerWidth; if(MODE==='p'){ const r=$('vs-root'); if(r){ PGW=r.clientWidth; renderPage(); } return; } renderTl(); if(ST.drawer>=0) renderDrawer(true); },180); }); }
-function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+dir+ord.length)%ord.length; ST.drawer=ord[q]; ST.did=A[ST.drawer].id; renderDrawer(); const d=$('vs-drawer'); if(d) d.scrollTop=0; }
+function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+dir+ord.length)%ord.length; ST.drawer=ord[q]; ST.did=A[ST.drawer].id; detLoadV(A[ST.drawer]); renderDrawer(); const d=$('vs-drawer'); if(d) d.scrollTop=0; }
 function onClick(e){ const t=e.target; if(!inStudio(t)) return;
+  const wb=t.closest('[data-wk]'); if(wb){ ST.wk=wb.dataset.wk; const inD=!!wb.closest('#vs-layer'); if(inD) renderDrawer(true); else if(MODE==='p') renderPage(); return; }
   const fp=t.closest('[data-full]'); if(fp){ e.preventDefault(); fullPage(fp.getAttribute('data-full')); return; }
   const rb=t.closest('#vs-rng button'); if(rb){ setRange(rb.dataset.r); return; }
   const cb=t.closest('#vs-cur button'); if(cb){ setCur(cb.dataset.c); return; }
@@ -12624,7 +12704,8 @@ return {ptr, ensure, retry, screen, page, has, hide, closeDrawer, openDrawer,
   // checks / tests (read-only views of the current state)
   _:{A:()=>A, R:()=>R, W:()=>W, PT:()=>PT, PC:()=>PC, CT:()=>CT, WKP:()=>WKP, ST, ALS:()=>ALS, NOGA:()=>NOGA, PEND:()=>PEND, M:()=>M, pool, cells, aggA, ctyOf, windows, pakka, wS, wE,
      fail:()=>{ RAW=null; ERR=true; VER=(ptr()||{}).v; SIG=null; }, fit:()=>{ fitLabels($('vs-root')); fitLabels($('vs-drawer')); }, MODE:()=>MODE, page:()=>MODE==='p'&&AI[PGID]?pageHtml(R[AI[PGID].i]):'', story:storyHtml, kpis:kpisHtml, ledger:ledgerHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml,
-     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, mT, mP, mL, onClick, setRange, setCmp, setDate, setCur, fullPage}};
+     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, mT, mP, mL, onClick, setRange, setCmp, setDate, setCur, fullPage,
+     r30Of, closedOf, wkAll, wkFile, wkDet, payTxt, weekTable, detV, p100T}};
 })();
 
 function renderValue(){
