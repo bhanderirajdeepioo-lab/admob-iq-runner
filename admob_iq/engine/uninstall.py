@@ -40,6 +40,13 @@ day × lag); output is what the tab shows and which alerts are open.
     E. A far checkpoint (D180, D330…) that moved is about installs from months ago — listed as information
     ("old_changes", the tab's collapsed "Purane badlaav"), never an episode, never sent, never counted; an
     episode about such old installs that an older build left open closes at once.
+  * ALERT POLICY (ALERT_POLICY, one rule set with the Active users / Install value tabs) — what becomes an alert: one
+    day is never one (a spike is shown in the band; 0 uninstalls needs ≥ 2 settled days); a rate drift rests on ≥ 10
+    settled days, both directions; a cohort change reads final install days only and opens after holding on
+    COHORT_PERSIST daily evaluations; each is MATERIAL (≥ MAT_UNINSTALLS more / fewer uninstalls a day; good news
+    GOOD_X × that); one shown, never sent, when it is back ≤ REOPEN_SEED_DAYS after it closed or an open Update impact
+    alert of the same direction already tells that update. The tab's own numbers (bands, rows, arrows) are unchanged.
+    The first build on these rules closes an open cohort / rate alert they would not open ("rule_tuned"), unsent.
   * LAUNCH — GA4 often holds months of a few TEST installs before an app went live (launch_day finds the first
     day of sustained real installs). Every install-day number — curves, triangle, checkpoints, alerts, verdict,
     summary — starts at the launch; the test days stay in the daily series, the cohort file, the triangle's
@@ -210,6 +217,19 @@ FRESH_EVALS = 3           # "naya" badge for 3 days after opening (notifications
 HEAD4 = (0, 1, 7, 30)     # the portfolio table's D columns
 STARTED_MAX_WEEKS = 26    # "Shuru" walk-back (cohort_started): at most 26 install weeks back, then "6+ mahine se"
 CLOSE_REASONS = ("recovered", "superseded", "window_end", "seed_cleanup", "rule_tuned")   # an episode's close_reason (SPEC_SIMPLIFY)
+# ── the alert policy (one rule set for the three GA4 tabs: an alert rests on ≥ 10 FINAL days, is material and holds;
+#    the tab's own numbers — bands, drift line, checkpoint rows — are unchanged) ──
+ALERT_POLICY = True          # the rules below gate what becomes an alert (off: the alerts exactly as before them)
+RULES_V = 2                  # the alert rules' version (eval[app].rules): a lower one is switched over once
+SPIKE_ALERT = False          # one unusual day is never an alert (the band shows it)
+ZERO_MIN_DAYS = 2            # 0 uninstalls on ≥ 2 settled days = a tracking break alert; one such day is shown only
+ALERT_DRIFT_DAYS = 10        # a rate drift alert: ≥ 10 settled days, both directions (never the provisional ones)
+COHORT_PERSIST = 3           # a cohort change opens once it held on 3 daily evaluations (≈ 9 install days, all final)
+MAT_UNINSTALLS = 50          # material: ≥ 50 more (or fewer) uninstalls a day
+GOOD_X = 2.0                 # good news: twice the floor and twice the minimum effect
+REOPEN_SEED_DAYS = 14        # the same story back ≤ 14 days after it closed: shown again, never re-sent
+CAUSE_BEFORE, CAUSE_AFTER = 3, 10   # a cohort / rate story starting in [R − 3, R + 10] of an open Update impact
+                                    # alert's release is that update's: shown with it, never sent on its own
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 SEV_ORDER = {"warning": 0, "watch": 1, "good": 2}
@@ -508,7 +528,7 @@ def _sp_uc(ds, a, s, aft, cal=None):
     return attrib.safe(build)
 
 
-def rate_drift(ds, n=None, want=None):
+def rate_drift(ds, n=None, want=None, min_days=DRIFT_MIN_DAYS):
     """A slow, steady change that ends at day n−1 (default E) → {since, before, now, rel, z, dir, …} or
     None. For every start s 7–42 days back, the days since s are judged against what the 4 weeks before
     s make expected (so the new level can't leak into its own baseline, and installs are allowed for):
@@ -516,7 +536,7 @@ def rate_drift(ds, n=None, want=None):
     wins (ties: the earlier s). before / now = rate per 1,000 expected at the old level vs actual.
     want = "up" / "down": only a change that way (see drift_now)."""
     n, best = ds["n"] if n is None else n, None
-    for L in range(DRIFT_MIN_DAYS, DRIFT_MAX_DAYS + 1):
+    for L in range(min_days, DRIFT_MAX_DAYS + 1):
         s = n - L
         if s < BAND_MIN_DAYS:
             break
@@ -571,6 +591,61 @@ def drift_now(ds, n=None):
         return dict(up, prov=late > 0)
     down = rate_drift(ds, n - late, "down")
     return dict(down, prov=False) if down else None
+
+
+def alert_drift(ds, n=None):
+    """The drift an ALERT may rest on (the policy): ≥ ALERT_DRIFT_DAYS settled days in either direction (never the
+    provisional ones), material (≥ MAT_UNINSTALLS more / fewer a day; fewer — good news — needs GOOD_X × that and
+    |z| ≥ GOOD_X × DRIFT_Z / 2). A rise wins over a fall. → the drift_now-shaped dict or None."""
+    n = ds["n"] if n is None else n
+    S = n - ds.get("late", 0)
+    for want in ("up", "down"):
+        d = rate_drift(ds, S, want, ALERT_DRIFT_DAYS)
+        if not d:
+            continue
+        per_day = d["extra"] / max(1, d["days"])
+        good = want == "down"
+        if per_day >= (GOOD_X if good else 1.0) * MAT_UNINSTALLS and (not good or abs(d["z"]) >= GOOD_X * DRIFT_Z / 2
+                                                                      and abs(d["rel"]) >= GOOD_X * DRIFT_MIN_REL):
+            return dict(d, prov=False)
+    return None
+
+
+def cohort_material(c):
+    """Is a cohort condition material? ≥ MAT_UNINSTALLS more uninstalls a day by its installs (fewer — good news —
+    GOOD_X × that, and ≥ GOOD_X × MIN_PP points)."""
+    try:
+        days = (_d(c["installs_to"]) - _d(c["installs_from"])).days + 1
+    except (TypeError, ValueError):
+        return False
+    per_day = abs(c["now"] - c["before"]) * (c.get("users") or 0) / max(1, days)
+    if c["dir"] == "down":
+        return per_day >= GOOD_X * MAT_UNINSTALLS and abs(c["delta_pp"] or 0) >= GOOD_X * MIN_PP
+    return per_day >= MAT_UNINSTALLS
+
+
+def _story_start(x):
+    last = x.get("last") or {}
+    v = x.get("since") or last.get("since") or x.get("installs_from") or last.get("installs_from") or x.get("day")
+    return _d(v) if v else None
+
+
+def policy_seed(c, eps_before, closed_before, E):
+    """Should a NEW cohort / rate_drift episode be shown but never sent? — the same story closed ≤ REOPEN_SEED_DAYS
+    ago (not by a rule change), or an open Update impact alert of the same direction whose release is in
+    [start − CAUSE_AFTER, start + CAUSE_BEFORE] (one cause, one alert)."""
+    a = _story_start(c)
+    for e in closed_before:
+        if (e.get("family") == c["family"] and e.get("dir") == c["dir"] and e.get("closed")
+                and e.get("close_reason") != "rule_tuned" and (_d(E) - _d(e["closed"])).days <= REOPEN_SEED_DAYS):
+            return True
+    for e in eps_before:
+        rel = (e.get("last") or {}).get("release") or {}
+        if e.get("family") in ("impact", "impact_late") and e.get("dir") == c["dir"] and rel.get("date") and a:
+            R = _d(rel["date"])
+            if R - timedelta(days=CAUSE_BEFORE) <= a <= R + timedelta(days=CAUSE_AFTER):
+                return True
+    return False
 
 
 # ── incomplete days: the near-complete ones filled up to their exact total ─────────────────────────
@@ -1576,7 +1651,7 @@ def _snap(c):
     return out
 
 
-def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_before=None):
+def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_before=None, hit_out=None):
     """Open / refresh / close this app's episodes from the conditions that are READY now. Pure: it only
     changes `state`. A new key opens an episode (on the app's first-ever evaluation it is SEEDED: shown,
     not sent); spike days ≤SPIKE_MERGE_DAYS from an open spike of the same kind fold into it. Only an
@@ -1586,7 +1661,8 @@ def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_befo
     eps, closed = state.setdefault("episodes", {}), state.setdefault("closed", [])
     E_iso, hit = _iso(_d(E)), set()
     for c in ready:
-        key, snap = c["key"], _snap(c)
+        seed = first_eval or bool(c.get("seed"))       # (a condition the policy shows but never sends)
+        key, snap = c["key"], _snap({k: v for k, v in c.items() if k != "seed"})
         ep = eps.get(key)
         spike = c["family"] in ("rate_spike", "rate_zero")
         if ep is None and spike:
@@ -1601,8 +1677,8 @@ def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_befo
             opened = E_iso
             ep = {"id": fingerprint(app_id, "uninstall_" + c["family"], None, c["dir"], opened),
                   "app_id": app_id, "family": c["family"], "dir": c["dir"], "opened": opened, "last_true": E_iso,
-                  "misses": 0, "notified_at": now if first_eval else None, "notified_dry": False,
-                  "seeded": bool(first_eval), "last": snap, "opened_at": now}   # the run that opened it (never rewritten)
+                  "misses": 0, "notified_at": now if seed else None, "notified_dry": False,
+                  "seeded": bool(seed), "last": snap, "opened_at": now}   # the run that opened it (never rewritten)
             if spike:
                 ep["day"] = ep["last_day"] = snap["day"]
             eps[key] = ep
@@ -1615,6 +1691,8 @@ def update_episodes(state, app_id, E, ready, advanced, first_eval, now, old_befo
             else:
                 ep["last"] = snap
         hit.add(key)
+    if hit_out is not None:
+        hit_out.update(hit)
     if old_before is not None:
         for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit and e["family"] == "cohort"
                     and e["last"].get("installs_to") and _d(e["last"]["installs_to"]) < old_before]:
@@ -2038,6 +2116,8 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     recent_from = E - timedelta(days=ALERT_RECENT_DAYS)
     prev = (state.get("eval") or {}).get(app_id)
     advanced, first = prev is None or E > _d(prev["end"]), prev is None
+    pol = ALERT_POLICY
+    switch = pol and not first and int(prev.get("rules") or 1) < RULES_V     # the first run on the tuned alert rules
     whole = cohort_data(store, E)
     L = launch_day(whole["n"])
     i0 = L if sum(whole["n"][:L]) else 0             # nothing to hide (only empty days before) → keep every day
@@ -2057,9 +2137,11 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     held = {dr: list(r) for dr, r in ((prev or {}).get("held") or {}).items()}   # claimed only while provisional
     conds = {}
     # up: the newest install days first (earliest signal), then the settled ones (the newest read low until
-    # their late data is in, so a moderate rise may show only once settled); down: settled only
+    # their late data is in, so a moderate rise may show only once settled); down: settled only. The alert policy
+    # reads FINAL install days only, both directions (the newest pass still decides the tab's ▲ arrows)
     near = lambda r: bool(r["recent"]["to"]) and _d(r["recent"]["to"]) >= recent_from      # noqa: E731
-    for dr, sets in (("up", ((rows, 0), (settled, late))), ("down", ((settled, late),))):
+    up_sets = ((settled, late),) if pol else ((rows, 0), (settled, late))
+    for dr, sets in (("up", up_sets), ("down", ((settled, late),))):
         for rs, lt in sets[:1] if not late else sets:
             rs = [r for r in rs if near(r)]          # the install days alerts are about: the last ALERT_RECENT_DAYS
             cl = _claimed(cd, claimed.get(dr))
@@ -2068,15 +2150,19 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
             news = new_cohort_rows(cd, rs, dr, cl, "%s|cohort|%s" % (app_id, dr) in eps_before, late)
             news = [r for r in news if near(r)]      # a row judged again without its claimed (newest) days can end
             c = cohort_conditions(news).get(dr)       # older: it must still be about recent installs
+            if c and pol and not cohort_material(c):  # too small to matter (or good news that is not big): shown
+                c = None                              # in the tab's rows, never an alert
             if c:
                 c["late"], c["prov"] = lt, dr == "up" and _d(c["installs_to"]) + timedelta(days=c["n"]) > S
                 conds[dr] = c
                 break
     drift = drift_now(ds)
+    adrift = alert_drift(ds) if pol else drift       # the drift an alert may rest on (≥ 10 final days, material)
     streak = dict((prev or {}).get("streak") or {})
     since = dict((prev or {}).get("since") or {})
     holding = {"cohort|up": "up" in conds, "cohort|down": "down" in conds,
-               "drift|up": bool(drift and drift["dir"] == "up"), "drift|down": bool(drift and drift["dir"] == "down")}
+               "drift|up": bool(adrift and adrift["dir"] == "up"),
+               "drift|down": bool(adrift and adrift["dir"] == "down")}
     if advanced:
         advance_streaks(streak, since, holding, E)
     ready = []
@@ -2084,14 +2170,32 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
         hd = c.pop("held")                                                # {N: its held install days}
         told = c.pop("told")                   # {N: its install days — the window, or the days a fall-back pooled}
         need = PERSIST_BIG if c["users"] >= BIG_RECENT_USERS else 1      # big apps: one run can't fire it
+        if pol:                                       # the policy: held on 3 daily evaluations (an open one: at once)
+            need = 1 if "%s|cohort|%s" % (app_id, dr) in eps_before else COHORT_PERSIST
         if first or streak.get("cohort|" + dr, 0) >= need:
             ready.append(dict(c, key="%s|cohort|%s" % (app_id, dr)))
             claimed[dr] = _add_ranges(claimed.get(dr), [w for ws in told.values() for w in ws])   # told now —
             real = _claimed(cd, [w for N, ws in told.items() if N not in hd for w in ws])  # all but the provisional ones
             keep = (_claimed(cd, held.get(dr)) | {i for f in hd.values() for i in f}) - real   # a row only held:
             held[dr] = _add_ranges([], [_win(cd, i, i) for i in sorted(keep)])   # claimed, not told
-    ready += rate_ready(ds, drift, app_id, streak, since, E, first)
-    eps = update_episodes(state, app_id, E, ready, advanced, first or outdated, now, recent_from)
+    ready += rate_ready(ds, adrift, app_id, streak, since, E, first)
+    if pol:
+        ready = [c for c in ready if SPIKE_ALERT or c["family"] != "rate_spike"]      # one day is never an alert
+        if sum(1 for c in ready if c["family"] == "rate_zero") < ZERO_MIN_DAYS:      # a tracking break: ≥ 2 days
+            ready = [c for c in ready if c["family"] != "rate_zero"]
+        closed_before = [e for e in state.get("closed") or [] if e["app_id"] == app_id]
+        mine_before = [e for e in eps_before.values() if e["app_id"] == app_id]
+        for c in ready:                              # shown, never sent: the switch-over run's new ones, a story back
+            if c["family"] in ("cohort", "rate_drift") and c["key"] not in eps_before:   # soon after it closed, one
+                c["seed"] = switch or policy_seed(c, mine_before, closed_before, E)       # an update already told
+    hit = set()
+    eps = update_episodes(state, app_id, E, ready, advanced, first or outdated, now, recent_from, hit)
+    if switch:                                       # the tuned rules take over: an open cohort / rate alert they
+        for k in [k for k, e in state["episodes"].items() if e["app_id"] == app_id    # would not open closes at once
+                  and e["family"] not in ("impact", "impact_late") and k not in hit]:   # ("rule_tuned"), never sent
+            state.setdefault("closed", []).append(close_ep(state["episodes"].pop(k), E.isoformat(), now, "rule_tuned"))
+        eps = [e for e in eps if e["family"] in ("impact", "impact_late") or e["id"] in
+               {x["id"] for x in state["episodes"].values()}]
     from . import impact as imp                      # (lazy: impact imports this module)
     impact, updates, iconds = imp.impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, first,
                                              advanced, outdated, now, windows_on=windows)
@@ -2127,6 +2231,8 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
                                             "held": {dr: r for dr, r in sorted(held.items()) if r}}
     if istate is not None:
         state["eval"][app_id]["impact"] = istate
+    if pol:
+        state["eval"][app_id]["rules"] = RULES_V
     alerts = sort_alerts([alert_obj(e, app, E, cd) for e in eps])
     closed = [alert_obj(e, app, E, cd) for e in state.get("closed") or [] if e["app_id"] == app_id]
     closed.sort(key=lambda a: (a["closed"], a["opened"], a["id"]), reverse=True)
