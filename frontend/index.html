@@ -3789,6 +3789,7 @@ async function refreshData(){
     if(cur==='appdetail'&&ADAPP) openAppDetail(ADAPP);                     // stay where the user was
     else if(cur==='reportcard'&&PPID) goPlacement(PPID);
     else if(cur==='placements'&&DETAIL_OPEN&&POPEN) openApp(POPEN);
+    else if(cur==='ecpm') show('ecpm');                                    // 📈 eCPM trend: repainted as it was (its app / range / sort live in EC)
     else if(cur && cur!=='overview') show(cur);
     silentScrollRestore(preY);
     uiRestoreFocus();                                                     // only now is the real screen visible (not display:none) and able to take focus

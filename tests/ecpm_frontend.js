@@ -5,7 +5,8 @@
 //     status), the Day and Month chart points (today's partial day never in them), what the chart prints;
 //   * the Overview "Avg eCPM" tile = the view's tiles for the same period (Yesterday / 7 days / 30 days), USD and INR;
 //   * the entry (the tile is a button into the view; an app picked in the header opens that app's view), the phone's Back
-//     button steps, leaving the view, sorting (default biggest loss first, low data last, every column toggles);
+//     button steps, leaving the view, the 5-min auto-refresh with a new build (the view back as it was, no jump), sorting
+//     (default biggest loss first, low data last, every column toggles);
 //   * the chart's tap rule: a tap (under 10px) pins the tooltip, a swipe / a cancelled pointer never does, a mouse hovers.
 // Prints ONE JSON report; tests/test_ecpm_frontend.py asserts on it (and recomputes the maths independently in Python).
 //   usage: node ecpm_frontend.js <script.js> <fixture.json>
@@ -158,6 +159,21 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
     run(`show('overview'); ecOpen();`); await settle(); const before = HIST.entries.length;
     run(`HB.mute++; try{ show('ecpm'); }finally{ HB.mute--; }`); await settle(); R.rerender = { st: J(`HB.st.map(x=>x.tag)`), added: HIST.entries.length - before, screen: SCREEN.id };
     run(`ecClose()`); await settle();
+    return R; });
+
+  // ── the 5-min auto-refresh with a NEW build: the view comes back as it was (app, range, Day/Month, sort), silently ────
+  await step('refresh', async () => {
+    run(`HB.st.length=0; HB.busy=false; HB.mute=0;`); await settle(); HIST.entries = [{ state: null, url: '/' }]; HIST.idx = 0; HIST.pending = []; run(`HB.depth=0;`);
+    SCREEN.id = 'overview'; run(`APP=''; renderEcpm(); ecOpen(); ecApp('Demo Gallery'); ecSetR('365'); ecSetG('month'); ecSort('u','name');`); await settle();
+    const scrolls = []; ctx.scrollTo = (...a) => scrolls.push(JSON.stringify(a)); ctx.scrollY = 1234;
+    run(`var __render0=render; render=function(){ window.__ax=null; renderEcpm(); show('overview'); };   // the real render(): every screen rebuilt (empty), ends on Overview
+         var __load0=loadDashboardData; loadDashboardData=function(){ const d=JSON.parse(JSON.stringify(__FX.dashboard)); d.generated_at='2026-03-11T07:00:00+00:00'; return Promise.resolve(d); };
+         LAST_BUILD='2026-03-11T06:00:00+00:00'; var __old=DATA;`);
+    await run(`refreshData()`); await settle();
+    const R = J(`({app:EC.app, r:EC.r, g:EC.g, usort:EC.usort, st:HB.st.map(x=>x.tag), newData:DATA!==__old, rebuilt:EC.cacheD===DATA,
+      units:EC.el.innerHTML.includes('Ad units · yesterday vs last 7 days'), month:EC.el.innerHTML.includes('Monthly eCPM'), silent:REFRESH_SILENT})`);
+    R.screen = SCREEN.id; R.scrolls = scrolls.filter(s => s.includes('"top":0')); R.hist = HIST.entries.length;
+    run(`render=__render0; loadDashboardData=__load0; DATA=__FX.dashboard; ecClose();`); await settle(); ctx.scrollTo = () => {}; ctx.scrollY = 0;
     return R; });
 
   // ── sorting ──────────────────────────────────────────────────────────────────────────────────────────────────────────

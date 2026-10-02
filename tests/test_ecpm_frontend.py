@@ -15,7 +15,7 @@ straight from the fixture's raw daily rows (never reusing the page's arithmetic)
     the chart prints (latest, range average dashed, min, max) + the tooltip's lines;
   * the Overview "Avg eCPM" tile equals the view for the same period (Yesterday / 7 / 30 days / This month), USD and INR;
   * the entry from the tile (and straight into an app's view when one is picked in the header), the phone's Back steps,
-    leaving the view, sorting, the tap-only tooltip pin;
+    leaving the view, the 5-min auto-refresh bringing it back as it was, sorting, the tap-only tooltip pin;
   * the payload carries the FULL daily history (no trim) — the view's "Full" range reads it.
 Skipped where node is not installed."""
 
@@ -389,6 +389,15 @@ def test_phone_back_steps(report):
 
 
 @needs_node
+def test_auto_refresh_brings_the_view_back_as_it_was(report):
+    r = report["refresh"]
+    assert r["newData"] and r["rebuilt"] and r["silent"] is False                          # a new build: re-summed from the new data
+    assert r["screen"] == "ecpm" and r["app"] == "Demo Gallery" and r["units"] and r["month"]
+    assert (r["r"], r["g"], r["usort"]) == ("365", "month", {"k": "name", "d": "asc"})
+    assert r["st"] == ["ecpm", "ecpm-app"] and r["scrolls"] == []                          # no new Back step, no jump to the top
+
+
+@needs_node
 def test_sorting(report):
     s = report["sort"]
     rows = {r["key"]: r for r in s["rows"]}
@@ -435,6 +444,7 @@ def test_no_tab_of_its_own_and_the_views_controls():
     h = _page()
     assert not re.search(r'<(button|a)[^>]*data-screen="ecpm"', h)                         # never a menu / tab-bar entry
     assert "${ecKpiTile(kpi('Avg eCPM',cm(k.ecpm),dspan,'muted',sparkbars(trendSeries)))}" in h
+    assert "else if(cur==='ecpm') show('ecpm');" in h                                     # the auto-refresh re-opens it
     assert "if(id==='ecpm') ecPaint(); else ecLeft();" in h and "root.append(renderEcpm());" in h
     assert 'body[data-screen="ecpm"] #rangectl' in h                                       # the header Period is not this view's
     for t in ("['30','30 days'],['90','90 days'],['365','1 year'],['all','Full']", "[['day','Day'],['month','Month']]",
