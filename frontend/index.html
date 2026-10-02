@@ -16443,6 +16443,39 @@ const lin=(d0,d1,r0,r1)=>{ const k=(d1-d0)?(r1-r0)/(d1-d0):0; return v=>r0+(v-d0
 function pathOf(vals,X,Y){ let d='',pen=false; vals.forEach((v,i)=>{ if(v==null||!isFinite(v)){ pen=false; return; } d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1); pen=true; }); return d; }
 const T=(x,y,s,o)=>{ o=o||{}; return `<text x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" text-anchor="${o.a||'start'}" font-size="${o.fs||10.5}" font-weight="${o.fw||600}" fill="${o.c||'var(--ink2)'}" class="rs-ct" stroke="var(--panel)" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${o.h?s:esc(s)}</text>`; };
 const TM=(usd,o)=>mH(usd,Object.assign({tag:'tspan'},o||{}));
+/* ---- chart labels: NOTHING ever overlaps — at any width (phones included), in ₹ and $ — and the key numbers stay
+   printed. Every label is measured (the page's own font, on a canvas; a safe estimate without one), kept inside its
+   chart, and printed only where it overlaps no label already placed (the most important ones first). ---- */
+let TWX=null;
+function tw(s,fs,fw){ const t=String(s==null?'':s).replace(/<[^>]*>/g,'').replace(/&(?:amp|lt|gt|quot|#39);/g,'x');
+  try{ if(TWX===null){ const c=document.createElement('canvas'); TWX=(c&&typeof c.getContext==='function'&&c.getContext('2d'))||false; }
+    if(TWX){ TWX.font=`${fw||600} ${fs||10.5}px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif`; const m=TWX.measureText(t).width; if(m>0) return m+1.5; } }catch(e){}
+  return t.length*(fs||10.5)*0.62; }
+// one chart's labels. at(x,y,txt,o,lo,hi) prints a label (o as T's) only where it fits: its box inside [lo, hi] (moved
+// in when needed) and clear of every label placed before it (o.g px apart, 3 by default); o.force: always (a fixed one)
+function LB(){ const B=[];
+  const free=(r,g)=>B.every(b=>r.x1+g<=b.x0||b.x1+g<=r.x0||r.y1+1<=b.y0||b.y1+1<=r.y0);
+  return { free,
+    at(x,y,txt,o,lo,hi){ o=o||{}; const fs=o.fs||10.5, w=tw(txt,fs,o.fw||600), a=o.a||'start', g=o.g==null?3:o.g;
+      let x0=a==='end'?x-w:(a==='middle'?x-w/2:x); if(lo!=null&&hi!=null) x0=Math.max(lo,Math.min(hi-w,x0));
+      const r={x0,x1:x0+w,y0:y-fs*0.95,y1:y+fs*0.3}; if(!o.force&&!free(r,g)) return '';
+      B.push(r); return T(x0,y,txt,Object.assign({},o,{a:'start'})); } }; }
+// x-axis labels: the longest form that fits — as given ("Th 17 Sep"), without the weekday ("17 Sep"), the day only
+// ("17" · "20" · "23", the month on the first one shown and where it changes) — on every k-th bar counted back from
+// the LAST one (the newest is always named), each inside [lo, hi] and clear of every other label
+const WKD=/^(?:Mo|Tu|We|Th|Fr|Sa|Su)[a-z]{0,7}\.?\s+(?=\d)/;
+function xAxis(L,labels,X,n,y,lo,hi,o){ o=Object.assign({c:'var(--faint)',fs:10,fw:500},o||{}); const fs=o.fs;
+  const form=(fi,idx)=>{ let pm=null; return idx.map((i,j)=>{ const l=String(labels[i]==null?'':labels[i]); if(fi===0) return l; const l1=l.replace(WKD,''); if(fi===1) return l1;
+    const m=/^(\d{1,2}) (\S+)$/.exec(l1); if(!m) return l1; const t=(j===0||m[2]!==pm)?l1:m[1]; pm=m[2]; return t; }); };
+  const fit=(fi,step)=>{ const idx=[]; for(let i=n-1;i>=0;i-=step) idx.unshift(i); const tx=form(fi,idx), rs=[];
+    for(let j=0;j<idx.length;j++){ if(!tx[j]) continue; const w=tw(tx[j],fs,o.fw), x0=Math.max(lo,Math.min(hi-w,X(idx[j])-w/2)), r={x0,x1:x0+w,y0:y-fs*0.95,y1:y+fs*0.3};
+      if(!L.free(r,5)||rs.some(q=>!(r.x1+5<=q.r.x0||q.r.x1+5<=r.x0))) return null; rs.push({r,x0,t:tx[j],i:idx[j]}); }
+    return rs; };
+  const best=fi=>{ for(let k=1;k<=n;k++){ const r=fit(fi,k); if(r) return {k,r}; } return null; };
+  const b0=best(0), b1=best(1), b2=best(2);
+  const pick=(b0&&b0.k<=2)?b0:((b1&&(b1.k<=3||!b2||b1.k<=b2.k))?b1:(b2||b1||b0));
+  if(!pick) return {s:'',idx:[]};
+  return {s:pick.r.map(q=>L.at(q.x0,y,q.t,Object.assign({},o,{a:'start',force:1}))).join(''),idx:pick.r.map(q=>q.i)}; }
 function vfmt(v,fmt,tag){ if(v==null||!isFinite(v)) return '—'; if(fmt==='usd') return tag?TM(v):mT(v); if(fmt==='p100') return trim(v.toFixed(v<10?1:0))+'%'; if(fmt==='pct2') return trim(v.toFixed(2))+'%'; if(fmt==='r1') return trim(v.toFixed(1)); return nf.format(Math.round(v)); }
 // the card's sparkline: 14 days of AdMob revenue, Yesterday + usual printed on it
 function revSpark(a){ const ser=a.ser; if(!ser||!ser.length) return '<div class="rs-nospk">14-day chart nahi (Studio data nahi)</div>';
@@ -16457,17 +16490,20 @@ function revSpark(a){ const ser=a.ser; if(!ser||!ser.length) return '<div class=
   s+=`<line x1="${pl}" x2="${w-pr}" y1="${uy.toFixed(1)}" y2="${uy.toFixed(1)}" stroke="var(--watch)" stroke-width="1.2" stroke-dasharray="4 3" opacity=".9"/>`;
   s+=`<path d="${pth}" fill="none" stroke="var(--rs-blue-s)" stroke-width="2" stroke-linejoin="round"/>`;
   s+=`<circle cx="${X(li).toFixed(1)}" cy="${yy.toFixed(1)}" r="4" fill="${col}" stroke="var(--panel)" stroke-width="1.5"/>`;
-  const close=Math.abs(yy-uy)<13, yl=close?(up?Math.min(yy,uy)-6:Math.max(yy,uy)+13):(yy<uy?yy-7:yy+14);
-  s+=T(X(li)-6,Math.max(11,Math.min(h-pb-2,yl)),'Yesterday '+TM(a.y),{a:'end',c:'var(--ink)',fs:11.5,fw:700,h:1});
-  const ul=close?(up?Math.max(yy,uy)+13:Math.min(yy,uy)-5):(uy<yy?uy-5:uy+13);
-  s+=T(pl+2,Math.max(11,Math.min(h-pb-2,ul)),'usual '+TM(a.us,{s:'/day'}),{c:'var(--watch)',fs:10.5,h:1});
+  const close=Math.abs(yy-uy)<13, yl=close?(up?Math.min(yy,uy)-6:Math.max(yy,uy)+13):(yy<uy?yy-7:yy+14), cl=y=>Math.max(11,Math.min(h-pb-2,y)), L=LB();
   const U=FILE.meta.usual||{};
-  s+=T(pl,h-2,fd(d14[0]),{c:'var(--faint)',fs:9.5,fw:500})+T(w-pr,h-2,fd(d14[n-1]),{a:'end',c:'var(--faint)',fs:9.5,fw:500})+(U.from?T(X(n-5),h-2,'usual '+rng(U.from,U.to),{a:'middle',c:'var(--faint)',fs:9.5,fw:500}):'');
+  s+=L.at(pl,h-2,fd(d14[0]),{c:'var(--faint)',fs:9.5,fw:500,force:1})+L.at(w-pr,h-2,fd(d14[n-1]),{a:'end',c:'var(--faint)',fs:9.5,fw:500,force:1});
+  s+=L.at(X(li)-6,cl(yl),'Yesterday '+TM(a.y),{a:'end',c:'var(--ink)',fs:11.5,fw:700,h:1,force:1},0,w);
+  const ul=close?(up?Math.max(yy,uy)+13:Math.min(yy,uy)-5):(uy<yy?uy-5:uy+13);
+  for(const y of [ul,uy-5,uy+13,11,h-pb-2]){ const t=L.at(pl+2,cl(y),'usual '+TM(a.us,{s:'/day'}),{c:'var(--watch)',fs:10.5,h:1},0,w); if(t){ s+=t; break; } }
+  if(U.from) s+=L.at(X(n-5),h-2,'usual '+rng(U.from,U.to),{a:'middle',c:'var(--faint)',fs:9.5,fw:500},0,w);
   s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-4}" y2="${h-pb}" stroke="var(--ink2)" stroke-width="1" opacity="0"/></svg>`;
   CH[id]={X,n,w,tip:i=>{ const v=ser[i], d=d14[i]; return `<div class="rs-tt">${esc(wd(d).slice(0,3))}, ${fd(d)}</div><div class="rs-row"><span>Revenue</span><b>${mH(v)}</b></div><div class="rs-row"><span>vs usual ${mH(a.us,{s:'/day'})}</span><b>${pct(rel(v,a.us))}</b></div>${i===n-1?`<div class="rs-tsm">Yesterday — card ka number (frozen ${esc(FILE.meta.built_ist)} IST)</div>`:''}`; }};
   return s; }
 // a bar chart for a card CHART dict (values printed: every bar when there is room, else last + max + min)
-function barChart(ch,W,o){ o=o||{}; const H=o.h||150, pl=8, pr=ch.before!=null?72:8, pt=22, pb=22, vals=(ch.vals||[]).map(v=>(v==null||!isFinite(v))?null:+v), n=vals.length, fmt=ch.fmt;
+function barChart(ch,W,o){ o=o||{}; const BL=o.bl||'before avg', bv=ch.before!=null?vfmt(+ch.before,ch.fmt,1):'';
+  // the right column ("usual/day" over its value) is as wide as its own two labels
+  const H=o.h||150, pl=8, pr=ch.before!=null?Math.max(60,Math.ceil(Math.max(tw(BL,10,500),tw(bv,11,700)))+12):8, pt=22, pb=22, vals=(ch.vals||[]).map(v=>(v==null||!isFinite(v))?null:+v), n=vals.length, fmt=ch.fmt;
   if(!n||vals.every(v=>v==null)) return '';
   const all=vals.concat(ch.before!=null?[+ch.before]:[]).filter(v=>v!=null&&isFinite(v)); let mx=Math.max(...all,0); if(!(mx>0)) mx=1; mx*=1.18;
   const bw=(W-pl-pr)/n, X=i=>pl+bw*(i+.5), Y=lin(0,mx,H-pb,pt), id='rs-ch'+(++chN);
@@ -16475,14 +16511,17 @@ function barChart(ch,W,o){ o=o||{}; const H=o.h||150, pl=8, pr=ch.before!=null?7
   s+=`<line x1="${pl}" x2="${W-pr}" y1="${H-pb}" y2="${H-pb}" stroke="var(--line2)"/>`;
   const ai=ch.after_idx;
   vals.forEach((v,i)=>{ if(v==null) return; const hi=ai==null||i>=ai, y=Y(Math.max(v,0)); s+=`<rect x="${(X(i)-bw*.34).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*.68).toFixed(1)}" height="${Math.max(1,H-pb-y).toFixed(1)}" rx="2" fill="${hi?(o.col||'var(--rs-blue-s)'):'var(--rs-raise2)'}" opacity="${hi?.95:1}"/>`; });
-  const BL=o.bl||'before avg';
   const room=bw>=34; let mi=-1,mn=-1; vals.forEach((v,i)=>{ if(v==null) return; if(mi<0||v>vals[mi]) mi=i; if(mn<0||v<vals[mn]) mn=i; });
   let last=-1; vals.forEach((v,i)=>{ if(v!=null) last=i; });
-  if(ch.before!=null){ const y=Y(+ch.before); s+=`<line x1="${pl}" x2="${W-pr+4}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--watch)" stroke-dasharray="4 3" stroke-width="1.3"/>`+T(W-pr+8,y-2,BL,{c:'var(--watch)',fs:10,fw:500})+T(W-pr+8,y+10,vfmt(+ch.before,fmt,1),{c:'var(--watch)',fs:11,fw:700,h:1}); }
-  (ch.marks||[]).forEach(([i,t])=>{ if(i==null||i>=n) return; s+=`<line x1="${(X(i)-bw/2).toFixed(1)}" x2="${(X(i)-bw/2).toFixed(1)}" y1="${pt-10}" y2="${H-pb}" stroke="var(--cyan)" stroke-dasharray="2 3" opacity=".7"/>`+T(Math.min(X(i)-bw/2+3,W-60),pt-12,t,{c:'var(--cyan)',fs:10}); });
-  vals.forEach((v,i)=>{ if(v==null) return; if(!(room||i===last||i===mi||i===mn)) return; const fs=room&&n>10?10:10.5; s+=T(X(i),Y(Math.max(v,0))-4,vfmt(v,fmt,1),{a:'middle',fs,c:i===last?'var(--ink)':'var(--ink2)',h:1}); });
-  const step=Math.max(1,Math.ceil(n/Math.max(2,Math.floor(W/62))));
-  (ch.labels||[]).forEach((l,i)=>{ if(i%step&&i!==n-1) return; if(i!==n-1&&n-1-i<step) return; s+=T(X(i),H-6,l,{a:'middle',c:'var(--faint)',fs:10,fw:500}); });
+  const L=LB(), hi=W-pr-(ch.before!=null?4:0);   // (the bars' labels never reach the right column)
+  if(ch.before!=null){ const y=Y(+ch.before), yl=Math.max(13,Math.min(H-pb-14,y)); s+=`<line x1="${pl}" x2="${W-pr+4}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--watch)" stroke-dasharray="4 3" stroke-width="1.3"/>`
+    +L.at(W-pr+8,yl-3,BL,{c:'var(--watch)',fs:10,fw:500,force:1})+L.at(W-pr+8,yl+11,bv,{c:'var(--watch)',fs:11,fw:700,h:1,force:1}); }
+  (ch.marks||[]).forEach(([i,t])=>{ if(i==null||i>=n) return; s+=`<line x1="${(X(i)-bw/2).toFixed(1)}" x2="${(X(i)-bw/2).toFixed(1)}" y1="${pt-10}" y2="${H-pb}" stroke="var(--cyan)" stroke-dasharray="2 3" opacity=".7"/>`;
+    for(const y of [pt-12,pt-1]){ const m=L.at(X(i)-bw/2+3,y,t,{c:'var(--cyan)',fs:10},1,hi); if(m){ s+=m; break; } } });
+  // the values on the bars: the newest, the highest and the lowest first, then (room) every other bar from the newest back
+  const fsV=room&&n>10?10:10.5, want=[last,mi,mn].concat(room?vals.map((v,i)=>n-1-i):[]);
+  [...new Set(want)].forEach(i=>{ if(i<0||vals[i]==null) return; s+=L.at(X(i),Y(Math.max(vals[i],0))-4,vfmt(vals[i],fmt,1),{a:'middle',fs:fsV,c:i===last?'var(--ink)':'var(--ink2)',h:1},1,hi); });
+  if(ch.labels) s+=xAxis(L,ch.labels,X,n,H-6,1,hi).s;
   s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
   const cap0=String(ch.cap||'').split(' · ')[0];
   CH[id]={X,n,w:W,tip:i=>`<div class="rs-tt">${esc((ch.labels||[])[i]||'')}</div><div class="rs-row"><span>${esc(cap0)}</span><b>${vfmt(vals[i],fmt,0)}</b></div>${ch.before!=null?`<div class="rs-row"><span>${esc(BL)}</span><b>${vfmt(+ch.before,fmt,0)}</b></div>`:''}${ch.tips&&ch.tips[i]?`<div class="rs-tsm">${esc(ch.tips[i])}</div>`:''}`};
@@ -16495,8 +16534,11 @@ function unChart(a,W){ const U=a.x&&a.x.un; if(!U) return ''; const wk=U.wk.filt
   const v=wk.map(w=>100*w.s/w.n), mx=Math.max(...v,1)*1.2, bw=(W-pl-pr)/n, X=i=>pl+bw*(i+.5), Y=lin(0,mx,H-pb,pt);
   let s=`<svg class="rs-chart" data-ch="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Same day uninstall by install week"><defs><pattern id="ph${id}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="rgba(230,184,78,.18)"/><line x1="0" y1="0" x2="0" y2="5" stroke="rgba(230,184,78,.7)" stroke-width="2"/></pattern></defs>`;
   s+=`<line x1="${pl}" x2="${W-pr}" y1="${H-pb}" y2="${H-pb}" stroke="var(--line2)"/>`;
-  wk.forEach((w,i)=>{ const y=Y(v[i]); s+=`<rect x="${(X(i)-bw*.33).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*.66).toFixed(1)}" height="${(H-pb-y).toFixed(1)}" rx="2" fill="${w.prov?`url(#ph${id})`:'var(--purple)'}" ${w.prov?'stroke="var(--watch)" stroke-width="1"':''}/>`+T(X(i),y-4,trim(v[i].toFixed(v[i]<10?1:0))+'%',{a:'middle',c:i===n-1?'var(--ink)':'var(--ink2)'});
-    const show=bw>=46||i%2===(n-1)%2; if(show) s+=T(X(i),H-pb+13,fd(w.f),{a:'middle',c:'var(--faint)',fs:10,fw:500})+(bw>=46?T(X(i),H-pb+25,nf.format(w.n),{a:'middle',c:'var(--faint)',fs:10,fw:500}):''); });
+  const L=LB();
+  wk.forEach((w,i)=>{ const y=Y(v[i]); s+=`<rect x="${(X(i)-bw*.33).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*.66).toFixed(1)}" height="${(H-pb-y).toFixed(1)}" rx="2" fill="${w.prov?`url(#ph${id})`:'var(--purple)'}" ${w.prov?'stroke="var(--watch)" stroke-width="1"':''}/>`; });
+  for(let i=n-1;i>=0;i--) s+=L.at(X(i),Y(v[i])-4,trim(v[i].toFixed(v[i]<10?1:0))+'%',{a:'middle',c:i===n-1?'var(--ink)':'var(--ink2)'},1,W-1);
+  const xa=xAxis(L,wk.map(w=>fd(w.f)),X,n,H-pb+13,1,W-1); s+=xa.s;
+  xa.idx.forEach(i=>{ s+=L.at(X(i),H-pb+25,nf.format(wk[i].n),{a:'middle',c:'var(--faint)',fs:10,fw:500},1,W-1); });
   s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
   CH[id]={X,n,w:W,tip:i=>{ const w=wk[i]; return `<div class="rs-tt">Installs ${fd(w.f)}–${fd(w.t)}</div><div class="rs-row"><span>Same day uninstall</span><b>${nf.format(w.s)} of ${nf.format(w.n)}</b></div><div class="rs-row"><span>Share</span><b>${trim((100*w.s/w.n).toFixed(1))}%</b></div>${w.prov?`<div class="rs-tsm rs-prov">⏳ Not final — is app ka uninstall data ${esc(U.late)} din tak late aata hai</div>`:''}`; }};
   return `<div class="rs-chartp"><div class="rs-cap">Same day uninstall · by install week · bars = %, below = installs${wk.some(w=>w.prov)?' · <span class="rs-prov">hatched = ⏳ not final</span>':''}</div>${s}</div>`; }
@@ -16505,13 +16547,16 @@ function retChart(a,W){ const R=a.x&&a.x.ret; if(!R) return ''; const v=R.v, d=R
   const ok=v.filter(x=>x!=null); if(!ok.length) return ''; let mn=Math.min(...ok), mx=Math.max(...ok); const pd=(mx-mn)*.15||1; mn=Math.max(0,mn-pd); mx+=pd;
   const X=lin(0,n-1,pl+2,W-pr-2), Y=lin(mn,mx,H-pb,pt), si=R.final?d.indexOf(R.final):-1;
   let s=`<svg class="rs-chart" data-ch="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Returning users per day">`;
-  if(si>=0&&si<n-1){ const x0=(X(si)+X(si+1))/2; s+=`<rect x="${x0.toFixed(1)}" y="${pt-8}" width="${(W-pr-x0).toFixed(1)}" height="${H-pb-pt+8}" fill="rgba(230,184,78,.08)"/>`+T(W-pr-2,pt+2,'⏳ not final',{a:'end',c:'var(--watch)',fs:10}); }
+  const L=LB();
+  if(si>=0&&si<n-1){ const x0=(X(si)+X(si+1))/2; s+=`<rect x="${x0.toFixed(1)}" y="${pt-8}" width="${(W-pr-x0).toFixed(1)}" height="${H-pb-pt+8}" fill="rgba(230,184,78,.08)"/>`+L.at(W-pr-2,pt+2,'⏳ not final',{a:'end',c:'var(--watch)',fs:10,force:1}); }
   s+=`<path d="${pathOf(v,X,Y)}L${X(n-1).toFixed(1)} ${H-pb}L${X(0).toFixed(1)} ${H-pb}Z" fill="var(--good)" opacity=".1"/><path d="${pathOf(v,X,Y)}" fill="none" stroke="var(--good)" stroke-width="2" stroke-linejoin="round"/>`;
   let mi=-1,mo=-1; v.forEach((x,i)=>{ if(x==null) return; if(mi<0||x>v[mi]) mi=i; if(mo<0||x<v[mo]) mo=i; });
   let fi=-1, li=-1; v.forEach((x,i)=>{ if(x!=null){ if(fi<0) fi=i; li=i; } });
-  const lab=(i,c)=>{ const x=X(i), y=Y(v[i]); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${c}"/>`+T(Math.min(W-pr-2,Math.max(pl+2,x)),i===mo?y+14:y-6,nf.format(v[i]),{a:i===li?'end':(i===fi?'start':'middle'),c:'var(--ink)'}); };
-  [...new Set([fi,li,mi,mo])].forEach(i=>{ if(i>=0&&v[i]!=null) s+=lab(i,i===li?'var(--good)':'var(--ink2)'); });
-  s+=T(pl,H-4,fd(d[0]),{c:'var(--faint)',fs:10,fw:500})+T(W-pr,H-4,fd(d[n-1]),{a:'end',c:'var(--faint)',fs:10,fw:500});
+  s+=L.at(W-pr,H-4,fd(d[n-1]),{a:'end',c:'var(--faint)',fs:10,fw:500,force:1})+L.at(pl,H-4,fd(d[0]),{c:'var(--faint)',fs:10,fw:500},0,W);
+  const lab=(i,c)=>{ const x=X(i), y=Y(v[i]), a=i===li?'end':(i===fi?'start':'middle'), ys=i===mo?[y+14,y-6]:[y-6,y+14];
+    let t=''; for(const yy of ys){ t=L.at(Math.min(W-pr-2,Math.max(pl+2,x)),Math.max(10,Math.min(H-pb+12,yy)),nf.format(v[i]),{a,c:'var(--ink)'},0,W); if(t) break; }
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${c}"/>`+t; };
+  [...new Set([li,fi,mi,mo])].forEach(i=>{ if(i>=0&&v[i]!=null) s+=lab(i,i===li?'var(--good)':'var(--ink2)'); });
   s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
   CH[id]={X,n,w:W,tip:i=>`<div class="rs-tt">${esc(wd(d[i]).slice(0,3))}, ${fd(d[i])}</div><div class="rs-row"><span>Old users</span><b>${v[i]==null?'—':nf.format(v[i])}</b></div>${R.final&&d[i]>R.final?'<div class="rs-tsm rs-prov">⏳ Not final — GA4 abhi badal sakta hai</div>':''}`};
   return `<div class="rs-chartp"><div class="rs-cap">Old users per day · GA4 · ${fd(d[0])}–${fd(d[n-1])}${R.final?' (final till '+fd(R.final)+')':''}</div>${s}</div>`; }
