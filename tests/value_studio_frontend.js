@@ -103,6 +103,20 @@ get('page', `(()=>{ ${RESET} valScreen(); const A=VS._.A(), a=A.find(x=>x.sz==='
   const nog=(DATA.value.no_ga4||[])[0]; if(nog){ APP=nog.app; VALAPP=''; const hn=valScreen(); r.nogaOld=hn.indexOf('vs-root')<0; }
   APP=''; VALAPP=''; return JSON.stringify(r); })()`);
 
+// ── no trim (owner, 2 Oct): the app page's week chart / week table, versions, install months and Data check — all ────
+get('notrim', `(()=>{ ${RESET} valScreen(); const A=VS._.A(), M=VS._.M(), r={nw:M.nw,SW:M.SW,apps:[]};
+  A.forEach(a=>{ const row=valRows().find(x=>x.app_id===a.id); APP=row.app; VALAPP=row.app_id; const h=valScreen();
+    const i=h.indexOf('Each install week'), seg=h.slice(i,h.indexOf('</svg>',i));
+    VS._.ST.wk='all'; const h2=valScreen(); VS._.ST.wk='12';
+    const wt=h2.slice(h2.indexOf('Week by week'),h2.indexOf('Where to run ads'));
+    const sec=t=>{ const i=h.indexOf(t); if(i<0) return ''; const j=h.indexOf('class="vs-eyebrow"',i); return h.slice(i,j<0?h.length:j); };
+    const ver=sec('Users by app version'), lng=sec('Long-term by install month');
+    const ck=(h.match(/<div class="vs-secnote vs-chk"[\\s\\S]*?<\\/div>/)||[''])[0];
+    r.apps.push({id:a.id, first:a.first, bars:new Set(seg.match(/data-tk="dwk:[^"]*"/g)||[]).size, hits:(seg.match(/<rect data-tk="dwk:[^"]*" x="[^"]*" y="[^"]*" width="[^"]*" height="[^"]*" fill="transparent"[/]>/g)||[]).length, relHit:(seg.match(/<g data-tk="drel:[^"]*"><rect [^>]*height="20" fill="transparent"[/]>/g)||[]).length, rels:(seg.match(/<g data-tk="drel:/g)||[]).length, judged:a.JD.slice(Math.max(0,a.first)).filter((x,k)=>VS._.pool([[a,Math.max(0,a.first)+k]]).jw).length,
+      head:__text((seg.match(/<h2[^>]*>[^<]*/)||[''])[0]), weekRows:(wt.match(/<tr class="(vs-rng)?">/g)||[]).length, weeks:a.N.filter(x=>x!=null).length, cap:__text((wt.match(/<span class="vs-faint">Since[^<]*/)||[''])[0]),
+      verRows:(ver.match(/<tr>/g)||[]).length-1, ver:a.ver&&a.ver.r?a.ver.r.length:null, lngRows:(lng.match(/<tr>/g)||[]).length-1, lng:a.lng&&a.lng.rows?a.lng.rows.length:null,
+      chk:__text(ck), chkN:(a.chk||[]).length, chkLi:(ck.match(/<li>/g)||[]).length}); });
+  APP=''; VALAPP=''; return JSON.stringify(r); })()`);
 // ── what's new: every engine alert with the owner's timestamp line; the Studio's own items say they are not alerts ────
 get('chg', `(()=>{ ${RESET} valScreen(); return VS._.chg(); })()`);
 get('alerts', `JSON.stringify(VS._.ALS().map(z=>({id:z.x.id,app:z.x.app_id,closed:!!z.closed})))`);

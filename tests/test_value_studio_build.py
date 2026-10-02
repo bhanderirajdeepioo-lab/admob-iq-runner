@@ -59,6 +59,45 @@ def _names(cfg):
 
 # ── parity with the approved demo ─────────────────────────────────────────────────────────────────────────────────
 
+def _beyond_the_demo(body, ref):
+    """The owner's "no trim" (2 Oct) goes past the frozen demo here only: the week grid reaches the oldest week any app
+    has (the demo: the 32 newest — they are its newest 32 weeks, every array, judged / why and the daily spend), every
+    version (the demo: 8), every install month (the demo: 15), every update (the demo: from 60 days before its grid)
+    and every Data check line (the demo: the first). Checked here, then put back to the demo's; the rest compared whole."""
+    M, R = body["meta"], ref["meta"]
+    k = M["nw"] - R["nw"]
+    assert R["nw"] == vsb.NW and k >= 0 and M["EW"] == R["EW"] and vsb.diff(M["SW"], R["SW"]) == 7 * k
+    for a, r in zip(body["apps"], ref["apps"]):
+        assert a["id"] == r["id"]
+        for key in WEEK:
+            assert vsb.dec(a[key])[k:] == vsb.dec(r[key]), key
+        for key in CHECK:
+            assert vsb.dec(a[key])[k * len(vsb.T):] == vsb.dec(r[key]), key
+        assert a["j"][k:] == r["j"] and a["why"][k:] == r["why"]
+        if r["spd"]:
+            assert vsb.dec(a["spd"])[7 * k:] == vsb.dec(r["spd"])
+        lo = vsb.add(R["SW"], -60)
+        assert [x for x in a["rel"] if x[0] >= lo] == r["rel"] and a["rel"] == sorted(a["rel"])
+        if r["ver"] and r["ver"].get("r") is not None:
+            assert a["ver"]["r"][:len(r["ver"]["r"])] == r["ver"]["r"] and len(r["ver"]["r"]) <= 8
+            assert {x: y for x, y in a["ver"].items() if x != "r"} == {x: y for x, y in r["ver"].items() if x != "r"}
+        if r["lng"] and r["lng"].get("k"):
+            n = len(r["lng"]["k"].split(","))
+            assert a["lng"]["k"].split(",")[:n] == r["lng"]["k"].split(",") and n <= 15
+            for x, y in r["lng"].items():
+                if x in ("t", "g", "k"):
+                    assert a["lng"][x] == y if x != "k" else True
+                elif x in ("part", "bf") or x[:2] in ("ds", "rf"):
+                    assert a["lng"][x][:n] == y, x
+                else:
+                    assert vsb.dec(a["lng"][x])[:n] == vsb.dec(y), x
+        assert a["chk"][:1] == r["chk"]
+        for x in WEEK + CHECK + ("j", "why", "spd", "rel", "ver", "lng", "chk"):
+            a[x] = r[x]
+    M["nw"], M["SW"] = R["nw"], R["SW"]
+    return body
+
+
 def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
     s, cfg, dash = site
     ref = reference(s)                                         # the frozen demo step, reading the site's files
@@ -66,9 +105,46 @@ def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
     assert _run(s, cfg, dash) == ["/value_studio.json.gz"]
     body = _gz(os.path.join(s, vsb.FILE))
     assert body.pop("v") == vsb.V
-    assert body == ref
+    assert body["meta"]["nw"] > vsb.NW                        # (the synthetic site reaches past 32 weeks)
+    assert _beyond_the_demo(body, ref) == ref
     got = vsb.build_data(dash, lambda n: _gz(os.path.join(s, n)), *_names(cfg))   # the module's own entry point
-    assert got == ref
+    assert _beyond_the_demo(got, ref) == ref
+
+
+# ── no trim (owner, 2 Oct): every week, version, install month, update and Data check line ─────────────────────────
+
+def test_every_week_version_month_update_and_check_line(site, capsys):
+    s, cfg, dash = site
+    _run(s, cfg, dash)
+    body = _gz(os.path.join(s, vsb.FILE))
+    M = body["meta"]
+    files = {r["app_id"]: _gz(os.path.join(s, r["file"])) for r in dash["value"]["apps"] if r.get("status") == "ok" and r.get("file")}
+    oldest = min(w["from"] for f in files.values() for w in f["weeks"])
+    assert M["SW"] == oldest and vsb.diff(M["SW"], M["EW"]) == 7 * (M["nw"] - 1)   # the grid starts at the oldest week
+    for a in body["apps"]:
+        f = files[a["id"]]
+        n = vsb.dec(a["n"])
+        assert {vsb.add(M["SW"], 7 * i): v for i, v in enumerate(n) if v is not None} == {w["from"]: round(w["n"]) for w in f["weeks"]}
+        BV, LG = f.get("by_version") or {}, f.get("long") or {}
+        if BV.get("state") in ("ok", "single"):
+            assert len(a["ver"]["r"]) == len(BV.get("rows") or [])
+        if LG.get("state") == "ok":
+            assert len(a["lng"]["k"].split(",")) == len(LG.get("rows") or [])
+        assert a["chk"] == list((f.get("scale") or {}).get("text") or [])
+
+
+def test_nothing_is_older_than_the_grid_is_dropped_from_the_updates(site, capsys):
+    s, cfg, dash = site
+    r0 = next(r for r in dash["value"]["apps"] if r.get("status") == "ok" and r.get("file") and
+              (_gz(os.path.join(s, r["file"])).get("by_version") or {}).get("rows"))
+    f = _gz(os.path.join(s, r0["file"]))
+    row = f["by_version"]["rows"][-1]
+    row["release"] = {"date": "2020-01-15", "version": "0.1", "key": "ver:0.1@2020-01-15"}
+    with gzip.open(os.path.join(s, r0["file"]), "wt", encoding="utf-8") as g:
+        json.dump(f, g)
+    _run(s, cfg, dash)
+    a = next(x for x in _gz(os.path.join(s, vsb.FILE))["apps"] if x["id"] == r0["app_id"])
+    assert ["2020-01-15", "v0.1"] in a["rel"]
 
 
 def test_the_synthetic_site_covers_the_studios_cases(site):
@@ -98,18 +174,18 @@ def test_contract_pointer_and_deterministic_bytes(site, capsys):
     M = body["meta"]
     assert set(M) == {"SW", "EW", "nw", "today", "gen", "fx", "H", "settled", "spendTill", "T", "alerts", "closed",
                       "alertCounts", "apps", "consts"}
-    assert M["nw"] == vsb.NW and M["T"] == vsb.T and M["apps"] == len(body["apps"]) and M["fx"] == ss.FX
+    assert M["nw"] >= vsb.NW and M["T"] == vsb.T and M["apps"] == len(body["apps"]) and M["fx"] == ss.FX
     assert M["today"] == dash["today_date"] and M["gen"] == dash["generated_at"] and M["H"] == 90
-    assert vsb.diff(M["SW"], M["EW"]) == 7 * (vsb.NW - 1)
+    assert vsb.diff(M["SW"], M["EW"]) == 7 * (M["nw"] - 1)
     for a in body["apps"]:
         assert set(a) == {"id", "k", "nm", "store", "acc", "sz", "paisa", "settled", "spT", "revT", "fxL", "j", "why",
                           "rel", "spd", "cty", "ver", "lng", "eng", "info", "chk"} | set(WEEK) | set(CHECK)
         for k in WEEK:
             arr = vsb.dec(a[k])
-            assert len(arr) == vsb.NW and vsb.enc(arr) == a[k] and all(v is None or isinstance(v, int) for v in arr)
+            assert len(arr) == M["nw"] and vsb.enc(arr) == a[k] and all(v is None or isinstance(v, int) for v in arr)
         for k in CHECK:
-            assert len(vsb.dec(a[k])) == vsb.NW * len(vsb.T)
-        assert len(a["j"]) == len(a["why"]) == vsb.NW
+            assert len(vsb.dec(a[k])) == M["nw"] * len(vsb.T)
+        assert len(a["j"]) == len(a["why"]) == M["nw"]
         assert a["sz"] in ("badi", "madhyam", "chhoti") and a["nm"].endswith(" · " + a["acc"])   # always with its account
         for x in a["info"]:
             assert len(x) == 6 and "100 me" not in x[5]

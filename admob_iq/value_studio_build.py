@@ -4,14 +4,15 @@ ONE compact lazy file, site/value_studio.json.gz, with exactly the data the page
 Studio (the one "Ads profit / loss per day" lens, the KPIs, the profit map, the countries, the timeline, "What's new",
 the apps table, the app drawer) is worked out in the browser from it, for any range / compare the viewer picks:
 
-  * per app, NW install weeks (Monday weeks, ending on the newest week ANY app has, so all apps share one week grid) of
+  * per app, EVERY install week since the oldest week ANY app has (at least NW; Monday weeks, ending on the newest week
+    ANY app has, so all apps share one week grid — the owner, 2 Oct: "no trim", a range reaches back as far as the data) of
     compact integer arrays (enc): installs (n), Google Ads spend in cents (sp) and as billed (sr), Google Ads installs
     (na), the week's observed-checkpoint index (jo), the ≈ checkpoints bitmask (q), judged / why per week, the earning
     per install at the 10 checkpoints (v, its ≈ band lo / hi, micro-USD) and the engine's own payback (pp / plo / phi /
     pf / p365);
   * per app: its updates (📦), its daily Google Ads spend (spd, billed ₹, from the Marketing ROAS cache), its countries
     (the engine's own window), versions (🧬), long-term by install month (🗓️), the engine's tiles / summary and its
-    info rows ("What's new"), size class (badi / madhyam / chhoti: AdMob earnings + Google Ads spend a day);
+    info rows ("What's new") — ALL its versions, install months, updates and Data check lines — size class (badi / madhyam / chhoti: AdMob earnings + Google Ads spend a day);
   * the apps without GA4 data, and meta (the week grid, today, the build time, fx, the horizon, the alert counts).
 
 It reads what the value step wrote this build (value_<key>.json.gz) and the dashboard (in memory — exactly what
@@ -42,7 +43,8 @@ from .db import write_json_gz_stable
 
 FILE = "value_studio.json.gz"
 V = 1                 # the file's format (the page refuses another)
-NW = 32               # install weeks per app (range 12 + compare 12 + the app's 8-week normal + slack)
+NW = 32               # the fewest install weeks per app (range 12 + compare 12 + the app's 8-week normal + slack); the grid
+                      # reaches back to the oldest week any app has (no trim)
 T = [0, 1, 3, 7, 14, 30, 60, 90, 180, 365]
 MAX_GZ = 1500000      # a hard cap far above the ~100 KB of a 30-app portfolio: past it the file is not written
                       # (counted, never a silent half file) — the page then keeps its older All-apps views
@@ -272,10 +274,10 @@ def build_data(dash, load, accn, appn, counts=None):
         p = paisa.get(aid, 0)
         return 'badi' if p >= 300 else ('chhoti' if p < 30 else 'madhyam')
 
-    # ---- the shipped install weeks: the NW newest Monday weeks up to the newest one any app has ---------------------
+    # ---- the shipped install weeks: every Monday week from the oldest one any app has (at least NW) to the newest ------
     rows = [r for r in Vd.get('apps') or [] if isinstance(r, dict) and r.get('status') == 'ok' and r.get('file')]
     files, skipped = {}, 0
-    newest = None
+    newest = oldest = None
     for r in rows:
         try:
             d = load(r['file'])
@@ -289,11 +291,14 @@ def build_data(dash, load, accn, appn, counts=None):
         for s in starts:
             if newest is None or s > newest:
                 newest = s
+            if oldest is None or s < oldest:
+                oldest = s
     if newest is None:
         counts.update(apps=0, skipped=skipped, info=0)
         return None
     EW = newest
-    SW = add(EW, -7 * (NW - 1))
+    nw = max(NW, diff(oldest, EW) // 7 + 1)
+    SW = add(EW, -7 * (nw - 1))
 
     info_by = defaultdict(list)
     for x in Vd.get('info') or []:
@@ -307,7 +312,7 @@ def build_data(dash, load, accn, appn, counts=None):
             continue
         try:
             entry, last = _app(r, files[r['app_id']], names, size_of, paisa, info_by, roas, rfx, dash, today, SW,
-                               settled, fx_now)
+                               settled, fx_now, nw)
         except Exception:
             skipped += 1                  # this app's data broken: left out (counted), never the Studio
             continue
@@ -327,7 +332,7 @@ def build_data(dash, load, accn, appn, counts=None):
                      'sz': size_of(x.get('app_id')), 'paisa': round(paisa.get(x.get('app_id'), 0), 2),
                      'why': x.get('text') or 'GA4 data nahi'})
 
-    meta = {'SW': SW, 'EW': EW, 'nw': NW, 'today': today, 'gen': gen, 'fx': round(fx_now, 4), 'H': H, 'settled': settled,
+    meta = {'SW': SW, 'EW': EW, 'nw': nw, 'today': today, 'gen': gen, 'fx': round(fx_now, 4), 'H': H, 'settled': settled,
             'spendTill': spend_till, 'T': T, 'alerts': len(Vd.get('alerts') or []), 'closed': len(Vd.get('closed') or []),
             'alertCounts': Vd.get('alert_counts'), 'apps': len(apps),
             'consts': {k: (Vd.get('consts') or {}).get(k) for k in ('spend_min_week', 'n_min_week', 'cty_judge', 'win_weeks',
@@ -335,7 +340,7 @@ def build_data(dash, load, accn, appn, counts=None):
     return {'meta': meta, 'apps': apps, 'noga': noga}
 
 
-def _app(r, d, names, size_of, paisa, info_by, roas, rfx, dash, today, SW, settled, fx_now):
+def _app(r, d, names, size_of, paisa, info_by, roas, rfx, dash, today, SW, settled, fx_now, nw=NW):
     """One app's Studio entry → (entry, the last day of its daily Google Ads spend shown, or None)."""
     aid = r['app_id']
     nmo = names.get(aid) or {'name': r['app'], 'store': r['app'], 'acct': '', 'dname': r['app']}
@@ -345,7 +350,7 @@ def _app(r, d, names, size_of, paisa, info_by, roas, rfx, dash, today, SW, settl
     V10, LO, HI = [], [], []
     fx_last = None
     rels = {}
-    for i in range(NW):
+    for i in range(nw):
         ws = add(SW, 7 * i)
         w = wk.get(ws)
         if not w:
@@ -416,9 +421,7 @@ def _app(r, d, names, size_of, paisa, info_by, roas, rfx, dash, today, SW, settl
                 rels.setdefault(R.get('key') or R['date'], R)
     rel = []
     seen = set()
-    for R in sorted(rels.values(), key=lambda z: z['date']):
-        if R['date'] < add(SW, -60):
-            continue
+    for R in sorted(rels.values(), key=lambda z: z['date']):           # every update (no trim)
         lab = ('v' + str(R['version'])) if R.get('version') else 'App update'
         if (R['date'], lab) in seen:
             continue
@@ -482,11 +485,11 @@ def _app(r, d, names, size_of, paisa, info_by, roas, rfx, dash, today, SW, settl
         for k in numk:
             cty['c_' + k] = E([r_[k] for r_ in crow])
 
-    # versions (🧬) — newest 8
+    # versions (🧬) — every one the engine has, newest first (no trim)
     ver = None
     if BV and BV.get('state') in ('ok', 'single'):
         vr = []
-        for x in sorted(BV.get('rows') or [], key=lambda z: z.get('from') or '', reverse=True)[:8]:
+        for x in sorted(BV.get('rows') or [], key=lambda z: z.get('from') or '', reverse=True):
             def m(M):
                 M = M or {}
                 return [ri(M.get('v'), 100), ri(M.get('ret')), ri(M.get('n')), M.get('st') or '', ri(M.get('in')),
@@ -510,10 +513,10 @@ def _app(r, d, names, size_of, paisa, info_by, roas, rfx, dash, today, SW, settl
     elif BV:
         ver = {'t': BV.get('text') or '', 'r': [], 'st': BV.get('state')}
 
-    # long-term by install month (🗓️) — newest 15
+    # long-term by install month (🗓️) — every month the engine has, newest first (no trim)
     lng = None
     if LG and LG.get('state') == 'ok':
-        L18 = sorted(LG.get('rows') or [], key=lambda z: z.get('key') or z.get('from') or '', reverse=True)[:15]
+        L18 = sorted(LG.get('rows') or [], key=lambda z: z.get('key') or z.get('from') or '', reverse=True)
         ST = {'ok': 'o', 'wait': 'w', 'few': 'f', 'nodata': 'n', 'part': 'p', '': '.'}
         lng = {'t': fix_long_text(LG.get('text') or '', LG), 'g': LG.get('grain'), 'k': ','.join(str(x.get('key')) for x in L18),
                'n': E([ri(x.get('n')) for x in L18]), 'part': ''.join('1' if x.get('part') else '0' for x in L18),
@@ -561,7 +564,7 @@ def _app(r, d, names, size_of, paisa, info_by, roas, rfx, dash, today, SW, settl
         'q': E(cols['q']), 'j': ''.join(jud), 'why': ''.join(why), 'v': E(V10), 'lo': E(LO), 'hi': E(HI),
         'pp': E(cols['pp']), 'plo': E(cols['plo']), 'phi': E(cols['phi']), 'pf': E(cols['pf']), 'p365': E(cols['p365']),
         'rel': rel, 'spd': E(spd) if spd else None, 'cty': cty, 'ver': ver, 'lng': lng, 'eng': eng, 'info': inf,
-        'chk': ((d.get('scale') or {}).get('text') or [])[:1],
+        'chk': list((d.get('scale') or {}).get('text') or []),            # every Data check line (no trim)
     }
     return entry, spend_last
 

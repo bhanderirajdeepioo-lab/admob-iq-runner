@@ -252,6 +252,27 @@ def test_the_full_app_page(report):
     assert any("→" in t and t.startswith("📦 v") for t in p["labels"]), p["labels"]   # 📦 version: before → after
 
 
+# ── no trim (owner, 2 Oct: "pura data hona chaiye") ─────────────────────────────────────────────────────────────
+
+def test_the_app_page_shows_every_week_version_month_and_check(report, built):
+    _, _, studio = built
+    t = J(report, "notrim")
+    assert t["nw"] == studio["meta"]["nw"] > 32 and t["SW"] == studio["meta"]["SW"]   # the week grid: the oldest week on
+    for a in t["apps"]:
+        # "Each install week": a bar for every judged week since the app's first (none cut at 32)
+        assert a["bars"] == a["judged"] == a["hits"], a      # …each with its whole column as the hover / tap target
+        assert a["relHit"] == a["rels"]                        # (📦 marks: their top strip only)
+        # "Week by week" → All: a row for every week the app has, "Since <its first week> · N weeks"
+        assert a["weekRows"] == a["weeks"] and re.fullmatch(r"Since \d{1,2} \w{3}( \d{4})? · %d weeks ·" % a["weeks"], a["cap"]), a
+        if a["ver"]:
+            assert a["verRows"] == a["ver"]                    # every version (was the newest 8)
+        if a["lng"]:
+            assert a["lngRows"] == a["lng"]                    # every install month (was the newest 15)
+        if a["chkN"]:
+            assert a["chk"].startswith("🔍 Data check:") and a["chkLi"] == a["chkN"] - 1   # every line (was the first)
+    assert any(a["chkN"] > 1 for a in t["apps"]) and any(a["ver"] for a in t["apps"]) and any(a["lng"] for a in t["apps"])
+
+
 # ── what's new: every alert with the owner's timestamp line ─────────────────────────────────────────────────────
 
 def test_whats_new_keeps_every_alert_with_its_timestamps(report, built):
