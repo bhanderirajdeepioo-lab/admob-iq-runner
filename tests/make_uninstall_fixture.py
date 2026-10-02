@@ -464,6 +464,8 @@ def active_fixture_json(fx):
 
 
 def main():
+    from tests.uninstall_synth import legacy_alert_policy
+    legacy_alert_policy()                         # (the showcase: every alert kind, the policy off)
     with tempfile.TemporaryDirectory() as tmp:
         text = fixture_json(build_fixture(tmp))
     os.makedirs(os.path.dirname(OUT), exist_ok=True)

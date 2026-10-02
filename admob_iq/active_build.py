@@ -176,6 +176,8 @@ def error_row(a, key):
 
 def consts(cfg):
     out = dict(act.CONSTS)
+    if act.ALERT_POLICY:                             # the alert policy's own constants (only when it gates the alerts)
+        out.update(policy=dict(act.POLICY_CONSTS))
     rc = act.retention_date(cfg.get("retention_changed"))
     out.update(retention_changed=rc.isoformat() if rc else None, impact=dict(imp.CONSTS))
     return out

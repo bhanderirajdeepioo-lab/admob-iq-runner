@@ -36,7 +36,7 @@ def test_active_a_drift_needs_ten_final_days():
     sent, d, *_ = daily(stays, rv2, a - timedelta(days=2), END, ast)
     first = [x for x in sent if x[1] == "act_drift" and x[3] == "down"][0]
     ep = [e for e in ast["episodes"].values() if e["family"] == "act_drift"][0]
-    assert ep["opened"] == first[0] and ep["last"]["days"] >= act.DRIFT_L[0] == 10
+    assert ep["opened"] == first[0] and ep["last"]["days"] >= act.ALERT_DRIFT_DAYS == 10
 
 
 def test_active_a_drift_is_seen_in_both_halves_of_its_window():
@@ -47,11 +47,11 @@ def test_active_a_drift_is_seen_in_both_halves_of_its_window():
                                           else 1.0))
     _, _, _, _, udet = run(st, rv)
     P = act.prepare(dict(st, window_end=END.isoformat()), udet, rv, END)
-    down = act._drift_at(P, "ret_dau", P["iS"])["down"]
+    down = act._drift_at(P, "ret_dau", P["iS"], alert=True)["down"]
     assert down is None                                                 # no ≥ 10-day window has both halves moved
     act.DRIFT_HALF, keep = 0.0, act.DRIFT_HALF
     try:
-        loose = act._drift_at(P, "ret_dau", P["iS"])["down"]
+        loose = act._drift_at(P, "ret_dau", P["iS"], alert=True)["down"]
     finally:
         act.DRIFT_HALF = keep
     assert loose is not None and loose["L"] >= 10                        # (the rule is what keeps it out)

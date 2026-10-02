@@ -15,6 +15,7 @@ from admob_iq.engine import active as act
 from admob_iq.engine import uninstall as eng
 from tests.uninstall_synth import DEFAULT_RET, END, active_udet, make_active_store, rollout
 
+ALERT_POLICY_TESTS = True                               # (tests/conftest.py: the alert policy ON — as in the build)
 S = END - timedelta(days=act.ACT_LATE_DAYS)             # the last settled activity day of END
 NOW = "2026-09-21T01:00:00Z"
 KEY = "0123456789ab"

@@ -1424,3 +1424,11 @@ def check_cohort_file(c, detail):
     assert len(c["lags"]) == H
     for i, lags in enumerate(c["lags"]):
         assert [l for l, _ in lags] == sorted(l for l, _ in lags) and all(0 <= l <= H - 1 - i for l, _ in lags)
+
+
+def legacy_alert_policy():
+    """The committed frontend fixtures are synthetic showcases of every alert kind, built with the alert policy OFF
+    (engine.active / uninstall / value ALERT_POLICY; tests/conftest.py does the same for the tests that check them)."""
+    from admob_iq.engine import active, uninstall, value
+    for mod in (active, uninstall, value):
+        mod.ALERT_POLICY = False

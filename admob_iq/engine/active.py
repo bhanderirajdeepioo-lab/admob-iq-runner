@@ -76,7 +76,7 @@ CENTRE_DAYS = 28
 CENTRE_MIN = 14
 SCALE_DAYS = 56
 SCALE_MIN = 28
-DRIFT_L = (10, 42)                      # a steady shift over ≥ 10 settled days (never a week or less)
+DRIFT_L = (7, 42)
 DRIFT_BASE = 28
 DRIFT_BASE_MIN = 21
 DRIFT_SIDE = .7
@@ -129,7 +129,9 @@ YS_MAX = 0.9                            # day's installs (Σ D1..D30 share; 30% 
 GAP_SHOW = 0.03
 VER_ROWS = 10
 # ── the alert policy (one rule set for the three GA4 tabs: an alert rests on ≥ 10 FINAL days, is material and holds) ──
+ALERT_POLICY = True                     # the rules below gate what becomes an alert (off: the alerts exactly as before)
 RULES_V = 2                             # the alert rules' version (eval[app].rules): a lower one is switched over once
+ALERT_DRIFT_DAYS = 10                   # a drift ALERT: a steady shift over ≥ 10 settled days (history still lists ≥ 7)
 SPIKE_ALERT = False                     # one unusual day is never an alert — it is listed (Older changes), not sent
 BREAK_MIN_DAYS = 2                      # a tracking break alerts only when it runs ≥ 2 settled days (1 day: listed)
 MAT_USERS = 500                         # material: the change moves ≥ 500 returning users a day …
@@ -203,10 +205,12 @@ CONSTS = {k.lower(): (list(v) if isinstance(v, tuple) else v) for k, v in dict(
     MARKET_WEEKS=MARKET_WEEKS, LINK_BEFORE=LINK_BEFORE, LINK_AFTER=LINK_AFTER, CLOSED_KEEP_DAYS=CLOSED_KEEP_DAYS,
     MODEL_BACK_DAYS=MODEL_BACK_DAYS, EDGE_RET_WINDOW=EDGE_RET_WINDOW, OTHER_NET_MIN=OTHER_NET_MIN,
     OTHER_NET_SWING=OTHER_NET_SWING, EARLY_FRAC=EARLY_FRAC, ALERT_RECENT_DAYS=ALERT_RECENT_DAYS,
-    YEAR_CLEAR_DAYS=YEAR_CLEAR_DAYS, COHORT_DAYS=COHORT_DAYS, RULES_V=RULES_V, SPIKE_ALERT=SPIKE_ALERT,
-    BREAK_MIN_DAYS=BREAK_MIN_DAYS, MAT_USERS=MAT_USERS, MAT_MONEY=MAT_MONEY, MAT_RET_USERS=MAT_RET_USERS, GOOD_X=GOOD_X,
+    YEAR_CLEAR_DAYS=YEAR_CLEAR_DAYS, COHORT_DAYS=COHORT_DAYS).items()}
+POLICY_CONSTS = {k.lower(): v for k, v in dict(
+    RULES_V=RULES_V, ALERT_DRIFT_DAYS=ALERT_DRIFT_DAYS, SPIKE_ALERT=SPIKE_ALERT, BREAK_MIN_DAYS=BREAK_MIN_DAYS,
+    MAT_USERS=MAT_USERS, MAT_MONEY=MAT_MONEY, MAT_RET_USERS=MAT_RET_USERS, GOOD_X=GOOD_X,
     RET_ALERT_RECENT=RET_ALERT_RECENT, REOPEN_SEED_DAYS=REOPEN_SEED_DAYS, ONE_CAUSE_DAYS=ONE_CAUSE_DAYS,
-    DRIFT_HALF=DRIFT_HALF, DRIFT_TAIL=DRIFT_TAIL).items()}
+    DRIFT_HALF=DRIFT_HALF, DRIFT_TAIL=DRIFT_TAIL).items()}    # (exported with the policy on: active_build.consts)
 
 
 # ── small helpers ────────────────────────────────────────────────────────────────────────────────
@@ -775,7 +779,7 @@ def _drift_table(P, m):
     return {"D": D, "G": G}
 
 
-def _drift_at(P, m, e, caps=None):
+def _drift_at(P, m, e, caps=None, alert=False):
     """The best steady shift ending at day e (settled), per direction → {"up": condition|None, "down": …} (§2.7
     act_drift). Each direction is judged on its own (a stale long rise never hides the current fall). A window's
     null is the same statistic at the 92 ends before the window starts (never the window itself, so a trend that
@@ -786,7 +790,8 @@ def _drift_at(P, m, e, caps=None):
     steep = P["steep"][m]
     span = DRIFT_NULL[1] - DRIFT_NULL[0]
     cands = {"up": [], "down": []}
-    for L in range(DRIFT_L[0], DRIFT_L[1] + 1):
+    strict = alert and ALERT_POLICY                   # an ALERT (the policy): ≥ ALERT_DRIFT_DAYS, both halves, today
+    for L in range(ALERT_DRIFT_DAYS if strict else DRIFT_L[0], DRIFT_L[1] + 1):
         x = D[L].get(e)
         if x is None or abs(math.exp(x) - 1) < MIN_REL[m]:
             continue
@@ -829,7 +834,7 @@ def _drift_at(P, m, e, caps=None):
             if not tot or same / tot < DRIFT_SIDE:
                 continue
             tail = [0.0, 0.0]                          # the newest DRIFT_TAIL settled days: the change still holds
-            k = 0
+            k = 0 if strict else DRIFT_TAIL
             for d in range(e, s - 1, -1):
                 if not valid[d]:
                     continue
@@ -837,8 +842,8 @@ def _drift_at(P, m, e, caps=None):
                 k += 1
                 if k == DRIFT_TAIL:
                     break
-            if any(h0 <= 0 or h1 <= 0 or (h1 / h0 - 1) * (1 if x > 0 else -1) < DRIFT_HALF * MIN_REL[m]
-                   for h0, h1 in half + [tail]):
+            if strict and any(h0 <= 0 or h1 <= 0 or (h1 / h0 - 1) * (1 if x > 0 else -1) < DRIFT_HALF * MIN_REL[m]
+                              for h0, h1 in half + [tail]):
                 continue                               # seen in both halves and still today — never one burst
             if m == "ret_dau" and abs(nw - eh) < DRIFT_MIN_USERS * math.sqrt(L):
                 continue
@@ -1941,7 +1946,7 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
             continue
         if m == "ads" and P["rev"] is None:
             continue
-        for dr_, c in _drift_at(P, m, iS, _caps(P, open_eps, m)).items():
+        for dr_, c in _drift_at(P, m, iS, _caps(P, open_eps, m), alert=True).items():
             if c:
                 drifts[(m, dr_)] = c
     for (m, dd), dr in list(drifts.items()):
@@ -1989,7 +1994,7 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
             imp_ = _impact(P, m, s, e, dr["bfrom"], dr["bto"], dr["rel"])
         c["impact"], c["_to"] = imp_, iso[e]
         big = abs(dr["z"]) >= WARN_Z and abs(dr["rel"]) >= GOOD_X * MIN_REL[m]
-        if not (_material(imp_, kind, GOOD_X) and big if dr["dir"] == "up" else _material(imp_, kind)):
+        if ALERT_POLICY and not (_material(imp_, kind, GOOD_X) and big if dr["dir"] == "up" else _material(imp_, kind)):
             info.append(_small_info(P, c, imp_))    # small (or good news that is not big): listed, never an alert
             continue
         drifts[(m, dd)]["cond"] = c
@@ -2033,8 +2038,8 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
         if rule == "info" or (rule == "cap" and sl["dir"] == "up"):
             info.append(_inst_info(P, sl["dir"], sl["rel"], iso[sl["s"]], iso[sl["e"]], slow=True,
                                    sp=_sp_ret(P, att, sl["s"], sl["e"], sl["bfrom"], sl["bto"], att["rb"])))
-        elif not (_material(imp_, "users", GOOD_X) and abs(sl["rel"]) >= GOOD_X * SLOW_MIN_REL if good
-                  else _material(imp_, "users")):
+        elif ALERT_POLICY and not (_material(imp_, "users", GOOD_X) and abs(sl["rel"]) >= GOOD_X * SLOW_MIN_REL
+                                   if good else _material(imp_, "users")):
             info.append(_small_info(P, c, imp_))
         else:
             if rule == "cap":
@@ -2052,7 +2057,7 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
                 else:
                     grp.append([d])
         for g in grp:
-            if len(g) < BREAK_MIN_DAYS:                # one broken day: listed (Older changes), never an alert
+            if ALERT_POLICY and len(g) < BREAK_MIN_DAYS:   # one broken day: listed (Older changes), never an alert
                 continue
             bs = [P["brk"][d] for d in g]
             kind = "zero" if all(b["kind"] == "zero" for b in bs) else "low"
@@ -2064,7 +2069,7 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
                         "since": None, "day": iso[g[0]], "last_day": iso[g[-1]], "days_list": [iso[x] for x in g],
                         "base_from": None, "base_to": None, "installs_from": None, "installs_to": None,
                         "delta_pp": None, "users": int(now or 0), "tags": [], "cap": None, "also": [], "est": False})
-    for m in DRIFT_METRICS if SPIKE_ALERT else ():   # one unusual day is never an alert (history lists it)
+    for m in DRIFT_METRICS if SPIKE_ALERT or not ALERT_POLICY else ():   # one day is never an alert (history lists it)
         f = P["fast"].get(m)
         if f is None or (only is not None and m not in only):
             continue
@@ -2119,7 +2124,7 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
         for N in RET_ALERT_NS:
             if N > nmax:
                 continue
-            st = _ret_stats(P, N, iS, recent=RET_ALERT_RECENT)
+            st = _ret_stats(P, N, iS, recent=RET_ALERT_RECENT if ALERT_POLICY else RET_RECENT)
             c = _ret_cond(P, st, recent_from)
             if c:
                 per[c["dir"]].append(c)
@@ -2203,8 +2208,8 @@ def _ret_cond(P, st, recent_from):
     vs_all = st["all"] is not None and (st["pw"] - st["all"]) * 100 * (1 if dr == "up" else -1) >= mp
     imp_ = _impact(P, "ret", st["r0"], st["r1"], st["b0"], st["b1"], d,
                    users=abs(d) * st["tw"] / max(1, st["cw"]))          # returners a day
-    ok = (_material(imp_, "ret", GOOD_X) and abs(d) * 100 >= GOOD_X * mp and st["sn"] is not None
-          if dr == "up" else _material(imp_, "ret"))
+    ok = not ALERT_POLICY or (_material(imp_, "ret", GOOD_X) and abs(d) * 100 >= GOOD_X * mp and st["sn"] is not None
+                              if dr == "up" else _material(imp_, "ret"))
     if dr == "up":
         sev = "good"
     elif abs(d) * 100 >= 2 * mp and st["sn"] is not None and not capped and vs_all:
@@ -2784,7 +2789,7 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
         state["closed"] = [e for e in state.get("closed") or [] if e["app_id"] != app_id]
         prev = None
     first = prev is None
-    switch = not first and int(prev.get("rules") or 1) < RULES_V     # the first run on the tuned rules (see below)
+    switch = ALERT_POLICY and not first and int(prev.get("rules") or 1) < RULES_V   # the first run on the tuned rules
     advanced = first or E > _d(prev["end"])
     ev = copy.deepcopy(prev) if prev else {}
     edges = _edges(P, store, ga4_trunc(store))
@@ -2844,7 +2849,7 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
             if not re_ or (E - _d(re_)).days < ACT_BURNIN_DAYS:
                 seed = True
             claimed[c["dir"]] = U._add_ranges(claimed.get(c["dir"]), [[c["installs_from"], c["installs_to"]]])
-        if not seed and c["family"] in STORY_FAMS and c["key"] not in (state.get("episodes") or {}):
+        if ALERT_POLICY and not seed and c["family"] in STORY_FAMS and c["key"] not in (state.get("episodes") or {}):
             if _reopened(c, closed_before, E):        # the same story back soon after it closed: shown, not re-sent
                 seed = True
             elif _same_cause(c, open_before + told_now):   # another metric of one cause already told: shown with it
@@ -2867,10 +2872,13 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
         for e in open_eps:
             if e.get("notified_at") is None:
                 e.update(notified_at=now_iso, seeded=True)
-    evs[app_id] = {"end": _iso(E), "src": src, "streak": streak, "since": since, "rules": RULES_V,
+    evs[app_id] = {"end": _iso(E), "src": src, "streak": streak, "since": since,
                    "claimed": {dr: r for dr, r in sorted(claimed.items()) if r}, "beta": beta, "inputs": inputs}
+    if ALERT_POLICY:
+        evs[app_id]["rules"] = RULES_V
     alerts = sort_alerts([alert_obj(e, app, E, P) for e in open_eps])
-    _with_others(alerts)                              # one cause, several metrics: each lists the others
+    if ALERT_POLICY:
+        _with_others(alerts)                          # one cause, several metrics: each lists the others
     by_id = {e["id"]: e for e in open_eps}
     for a in alerts:
         e = by_id[a["id"]]
