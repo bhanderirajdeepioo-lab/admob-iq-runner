@@ -1967,6 +1967,25 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-ac.as-oldc::before{background:var(--line2)}
 :is(#as-root,#as-layer) .as-vert td.as-l{white-space:nowrap}
 :is(#as-root,#as-layer) .as-vert td b{font-weight:600;color:var(--ink)}
+/* ---------- phones (the 2 Oct mobile audit): jumps below the sticky bars, tap targets, heat-cell contrast, cell labels, no table
+   scroll box inside the page, the changes table's App column pinned, the KPI sparklines full width ---------- */
+#as-root section,#as-root .as-panel,#as-root .as-fold,#as-root .as-ac,#as-root .as-ledger{scroll-margin-top:var(--as-jump,8px)}
+:is(#as-root,#as-layer) .as-st .as-xp{min-width:32px;min-height:32px;margin:-8px -4px -8px -8px;display:inline-grid;place-items:center;padding:0}
+:is(#as-root,#as-layer) .as-backb{min-height:36px;display:inline-flex;align-items:center;padding:0 6px;margin-left:-6px}
+:is(#as-root,#as-layer) .as-tlcue{color:var(--cyan);font-weight:600;white-space:nowrap}
+:is(#as-root,#as-layer) .as-hcl{display:none}
+:is(#as-root,#as-layer) .as-hc.as-h2 small,:is(#as-root,#as-layer) .as-hc.as-h2 .as-d,:is(#as-root,#as-layer) .as-hc.as-h2 .as-u,:is(#as-root,#as-layer) .as-hc.as-h-2 small,:is(#as-root,#as-layer) .as-hc.as-h-2 .as-d,:is(#as-root,#as-layer) .as-hc.as-h-2 .as-u,:is(#as-root,#as-layer) .as-hcell.as-h2 small,:is(#as-root,#as-layer) .as-hcell.as-h2 .as-d,:is(#as-root,#as-layer) .as-hcell.as-h2 .as-u,:is(#as-root,#as-layer) .as-hcell.as-h-2 small,:is(#as-root,#as-layer) .as-hcell.as-h-2 .as-d,:is(#as-root,#as-layer) .as-hcell.as-h-2 .as-u{color:rgba(255,255,255,.9)}
+:is(#as-root,#as-layer) .as-hcell.as-h2 .as-d span,:is(#as-root,#as-layer) .as-hcell.as-h3 .as-d span,:is(#as-root,#as-layer) .as-hcell.as-h-2 .as-d span{color:inherit!important}
+:is(#as-root,#as-layer) .as-hcell.as-h2 .as-v,:is(#as-root,#as-layer) .as-hcell.as-h-2 .as-v{color:#fff}
+:is(#as-root,#as-layer) .as-hcell.as-h3 .as-d,:is(#as-root,#as-layer) .as-hcell.as-h3 .as-u{color:rgba(255,255,255,.92)}
+:is(#as-root,#as-layer) .as-hcell.as-h-3 .as-v,:is(#as-root,#as-layer) .as-hcell.as-h-3 .as-d,:is(#as-root,#as-layer) .as-hcell.as-h-3 .as-d span,:is(#as-root,#as-layer) .as-hcell.as-h-3 .as-u{color:#04130d!important}
+@container as (max-width:608px){:is(#as-root,#as-layer) .as-hc .as-hcl{display:block;font:600 9.5px/1.1 var(--as-num);letter-spacing:.02em;opacity:.85;margin-bottom:2px;text-align:center}}
+@media (max-width:760px){:is(#as-root,#as-layer) .as-tw,:is(#as-root,#as-layer) .as-st-tw{max-height:none!important}
+:is(#as-root,#as-layer) .as-chgt td:first-child,:is(#as-root,#as-layer) .as-chgt th:first-child{position:sticky;left:0;z-index:1;background:var(--panel)}
+:is(#as-root,#as-layer) .as-chgt th:first-child{z-index:3;background:var(--panel2)}}
+@media (max-width:480px){:is(#as-root,#as-layer) .as-kpis .as-spw,:is(#as-root,#as-layer) .as-kpis2 .as-spw{flex-direction:column;align-items:stretch;gap:3px}
+:is(#as-root,#as-layer) .as-kpis .as-spl2,:is(#as-root,#as-layer) .as-kpis2 .as-spl2{width:auto!important;height:auto!important;display:flex;flex-wrap:wrap;gap:1px 8px;min-height:0}
+:is(#as-root,#as-layer) .as-kpis .as-spl2 span,:is(#as-root,#as-layer) .as-kpis2 .as-spl2 span{position:static;transform:none}}
   /* ===== /ACTIVE USERS STUDIO ===== */
   /* ===== 💸 INSTALL VALUE STUDIO (the Install value tab's All-apps view) — everything under #vs-root / #vs-layer, classes vs-* ===== */
 :is(#vs-root,#vs-layer){--vs-raise2:#1c2c47;--vs-blue-s:#8fb8ff;--vs-blue-b:#15284a;--vs-h3:rgba(255,107,107,.62);--vs-h2:rgba(255,107,107,.36);--vs-h1:rgba(255,107,107,.18);--vs-h0:#18263d;--vs-g1:rgba(52,217,154,.16);--vs-g2:rgba(52,217,154,.32);--vs-g3:rgba(52,217,154,.54);--vs-s-in:#22d3ee;--vs-s-out:#a78bfa;--vs-s-rate:#8fb8ff;--vs-band:rgba(143,184,255,.13);--vs-ghost:#7d8fae;--vs-seq0:#13213a;--vs-seq1:#0f5163;--vs-seq2:#0f8299;--vs-seq3:#22d3ee;--vs-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--vs-num:"IBM Plex Sans Condensed","Roboto Condensed","Arial Narrow",-apple-system,BlinkMacSystemFont,sans-serif;--vs-r:14px;}
@@ -2459,6 +2478,22 @@ body.vs-lock[data-screen="value"]{overflow:hidden}
 :is(#vs-root,#vs-layer) .vs-noa .vs-non .vs-acn{color:var(--muted)}
 :is(#vs-root,#vs-layer) .vs-noa b{font:650 13px var(--vs-num);font-variant-numeric:tabular-nums;white-space:nowrap}
 :is(#vs-root,#vs-layer) .vs-noa .vs-r30{display:inline;margin-left:2px;white-space:nowrap}
+/* phones (the 2 Oct mobile audit): jumps below the sticky bars, the ▶ tap target, heat-cell contrast, cell labels, no table scroll box
+   inside the page / the drawer, a compact drawer header (name + ‹ › ✕ stay on top, the chips scroll with the body) */
+#vs-root section,#vs-root .vs-panel,#vs-root .vs-fold,#vs-root .vs-ac,#vs-root .vs-ledger{scroll-margin-top:var(--vs-jump,8px)}
+:is(#vs-root,#vs-layer) .vs-st .vs-xp{min-width:32px;min-height:32px;margin:-8px -4px -8px -8px;display:inline-grid;place-items:center;padding:0}
+:is(#vs-root,#vs-layer) .vs-hcl{display:none}
+:is(#vs-root,#vs-layer) .vs-hc.vs-h2 small,:is(#vs-root,#vs-layer) .vs-hc.vs-h2 .vs-pc,:is(#vs-root,#vs-layer) .vs-hc.vs-h2 .vs-est,:is(#vs-root,#vs-layer) .vs-hc.vs-h-2 small,:is(#vs-root,#vs-layer) .vs-hc.vs-h-2 .vs-pc,:is(#vs-root,#vs-layer) .vs-hc.vs-h-2 .vs-est{color:rgba(255,255,255,.9)}
+:is(#vs-root,#vs-layer) .vs-hc.vs-h3 small,:is(#vs-root,#vs-layer) .vs-hc.vs-h3 .vs-pc,:is(#vs-root,#vs-layer) .vs-hc.vs-h3 .vs-est{color:#fff}
+:is(#vs-root,#vs-layer) .vs-hc.vs-h-3 small,:is(#vs-root,#vs-layer) .vs-hc.vs-h-3 .vs-pc,:is(#vs-root,#vs-layer) .vs-hc.vs-h-3 .vs-est{color:#04130d}
+:is(#vs-root,#vs-layer) .vs-hcell.vs-h2 .vs-v,:is(#vs-root,#vs-layer) .vs-hcell.vs-h2 .vs-d,:is(#vs-root,#vs-layer) .vs-hcell.vs-h2 .vs-est,:is(#vs-root,#vs-layer) .vs-hcell.vs-h3 .vs-v,:is(#vs-root,#vs-layer) .vs-hcell.vs-h3 .vs-d,:is(#vs-root,#vs-layer) .vs-hcell.vs-h3 .vs-est,:is(#vs-root,#vs-layer) .vs-hcell.vs-h-2 .vs-v,:is(#vs-root,#vs-layer) .vs-hcell.vs-h-2 .vs-d,:is(#vs-root,#vs-layer) .vs-hcell.vs-h-2 .vs-est{color:#fff!important}
+:is(#vs-root,#vs-layer) .vs-hcell.vs-h-3 .vs-v,:is(#vs-root,#vs-layer) .vs-hcell.vs-h-3 .vs-d,:is(#vs-root,#vs-layer) .vs-hcell.vs-h-3 .vs-est{color:#04130d!important}
+:is(#vs-root,#vs-layer) .vs-dhm{display:none}
+@container vs (max-width:608px){:is(#vs-root,#vs-layer) .vs-hc .vs-hcl{display:block;font:600 9.5px/1.1 var(--vs-num);letter-spacing:.02em;opacity:.85;margin-bottom:2px;text-align:center}}
+@media (max-width:760px){:is(#vs-root,#vs-layer) .vs-tw,:is(#vs-root,#vs-layer) .vs-st-tw{max-height:none!important}
+:is(#vs-root,#vs-layer) .vs-dh .vs-l2,:is(#vs-root,#vs-layer) .vs-dh .vs-full-r,:is(#vs-root,#vs-layer) .vs-dh .vs-eyebrow{display:none}
+:is(#vs-root,#vs-layer) .vs-dhm{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:10px 14px 0}
+:is(#vs-root,#vs-layer) .vs-dhm .vs-l2{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--faint)}}
   /* ===== 🧭 UNINSTALL STUDIO (the Uninstall tab's All-apps view) — everything under #us-root / #us-layer, classes us-* ===== */
 :is(#us-root,#us-layer){--us-raise2:#1c2c47;--us-blue-s:#8fb8ff;--us-blue-b:#15284a;--us-h3:rgba(255,107,107,.62);--us-h2:rgba(255,107,107,.36);--us-h1:rgba(255,107,107,.18);--us-h0:#18263d;--us-g1:rgba(52,217,154,.16);--us-g2:rgba(52,217,154,.32);--us-g3:rgba(52,217,154,.54);--us-s-in:#22d3ee;--us-s-out:#a78bfa;--us-s-rate:#8fb8ff;--us-band:rgba(143,184,255,.13);--us-ghost:#7d8fae;--us-seq0:#13213a;--us-seq1:#0f5163;--us-seq2:#0f8299;--us-seq3:#22d3ee;--us-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--us-num:"IBM Plex Sans Condensed","Roboto Condensed","Arial Narrow",-apple-system,BlinkMacSystemFont,sans-serif;--us-r:14px;}
 #us-root,#us-layer{color:var(--ink);font:13.5px/1.5 var(--us-font);-webkit-font-smoothing:antialiased;text-align:left}
@@ -9923,8 +9958,8 @@ function deltaH(now,bef,goodUp,fmt,unit,befFmt,live){ if(now==null||bef==null||l
 const sgnF=f=>v=>{ const t=f(Math.abs(v)); return (/^[^1-9]*$/.test(t)?'±':(v>0?'+':(v<0?MI:'±')))+t; };
 // a return number's change: the people first, the % beside it (now, pehle) — colour by the rate (the count also moves with installs)
 function retDl(c,p,cc,pp){ if(c==null||cc==null||p==null||pp==null) return {h:'<span class="as-vs">no data for before</span>'};
-  const dp=(p-pp)*100, same=Math.abs(dp)<.05, cls=(same||(Math.sign(c-cc)!==Math.sign(dp)&&Math.abs(c-cc)>=.5))?'as-flat':(dp>0?'as-up-good':'as-dn-bad');
-  return {cls,h:`${c>cc?'▲':(c<cc?'▼':'■')} ${fS(c-cc)}/day (${pc(p,1)}, was ${pc(pp,1)}) <span class="as-vs">vs ${fN(cc)}/day</span>`}; }
+  const dp=(p-pp)*100, same=Math.abs(dp)<.05, cls=same?'as-flat':(dp>0?'as-up-good':'as-dn-bad');
+  return {cls,h:`${fS(c-cc)}/day · rate ${same?'■':(dp>0?'▲':'▼')} ${pc(p,1)}, was ${pc(pp,1)} <span class="as-vs">vs ${fN(cc)}/day</span>`}; }
 const provIdx=()=>W.t>M.settled?Math.max(0,ix(dAdd(M.settled,1))-ix(W.f)):null;
 function kpisHtml(){ const provI=provIdx();
   const mk=(id,lab,hint,v,f,unit,extra,dl,spk,sub)=>`<div class="as-kpi" id="as-k-${id}"><div class="as-kl"><span>${lab}</span><span class="as-kh">${hint}</span></div><div class="as-kv"><span class="as-num" data-cu="${id}" data-v="${v==null?'':v}" data-f="${f}">${v==null?'—':FMT[f](v)}</span>${unit?`<span class="as-ku">${unit}</span>`:''}${extra||''}</div><div class="as-kd ${dl.cls||''}">${dl.h||dl}</div>${spk}<div class="as-ks">${sub||''}</div></div>`;
@@ -9988,6 +10023,7 @@ TIPS.honl=()=>{ const L=[]; for(let i=Math.min(N-1,ix(W.t));i>=Math.max(0,ix(W.c
 TIPS.ptl=()=>`<div class="as-tt">All apps · Users vs normal · final days ${pakkaSpan()}</div>${trow('Old users vs normal',fX(PT.Lfar)+'/day')}${trow('&nbsp;· due to installs',fX(PT.Lfi)+'/day')}${trow('&nbsp;· real change',fX(PT.Lasli)+'/day')}${Math.abs(PT.Lnone)>=1?trow('&nbsp;· unknown (no split)',fX(PT.Lnone)+'/day'):''}${trow(symOf()+'/day',moneyL(PT.Lusd,true)+' (real '+moneyL(PT.LusdA,true)+')')}<div class="as-sep"></div><div class="as-tsm">${PT.nL} of ${A.length} apps ka normal bana · har app apne normal se (same weekday, range se pehle ke 4 hafte). ${symOf()} = users × har app ki revenue per user.</div>`;
 
 /* ================= Users ka farak — map ================= */
+const CSH={d1:'Next day',d7:'7 days',tm:'Time/user',rv:'Rev./user'};   // a map cell's own label on a phone
 const COLS=[['d1','Back next day','Back next day — % of installs'],['d7','Back after 7 days','Back after 7 days — % of installs'],['tm','Time per user','Time per old user, per day'],['rv','Revenue per user','AdMob revenue per active user, per day']];
 function cellOf(o,k){ if(k==='d1'||k==='d7'){ const c=o[k], n=o[k+'n'], h=k==='d1'?o.h1:o.h7; return {v:c.p==null?null:pc(c.p,c.p<.1?1:0),nv:n.p==null?null:pc(n.p,n.p<.1?1:0),s:h.s,why:h.why}; }
   if(k==='tm') return {v:o.pu&&o.pu.tm!=null?dur(o.pu.tm):null,nv:o.pn&&o.pn.tm!=null?dur(o.pn.tm):null,s:o.htm.s,why:o.htm.why};
@@ -10001,7 +10037,7 @@ function mapHtml(){ const rows=R.slice().sort(R.ordCmp), shown=ST.mapAll?rows:ro
     const arrow=mv?`<i class="as-faint" title="before #${o.rankC}">${mv>0?'▲'+mv:'▼'+(-mv)}</i>`:'';
     h+=`<div class="as-rk" data-app="${a.i}" data-go="${a.i}" style="cursor:pointer">${o.rank||'·'}${arrow}</div><div class="as-nm" data-app="${a.i}" data-go="${a.i}" data-tk="app:${a.i}">${nmH(a)}<div style="display:flex;gap:5px;margin-top:4px;align-items:center;flex-wrap:wrap">${chip(o.pill)}${alBadge(a)}${szH(a)}${insTag(o)}</div></div>`
       +`<div class="as-inr" data-app="${a.i}" data-tk="far:${a.i}" data-go="${a.i}" style="cursor:pointer">${L&&L.far!=null?`<span class="${farCls(L)}">${L.usd!=null?moneyL(L.usd,true):fX(L.far)}</span><span class="as-u">${fX(L.far)} users/day</span>${splitBar(L,mxS,72)}${splitN(L)}`:'<span class="as-faint">—</span>'}</div>`;
-    COLS.forEach((c,ci)=>{ const x=cellOf(o,c[0]); h+=`<div class="as-hc ${hcls(x.s)}${ci?'':' as-c1'}" data-app="${a.i}" data-tk="cell:${a.i}:${c[0]}">${x.v==null?'—':x.v}${x.v!=null&&x.nv!=null?`<small>normal ${x.nv}</small>`:''}</div>`; });
+    COLS.forEach((c,ci)=>{ const x=cellOf(o,c[0]); h+=`<div class="as-hc ${hcls(x.s)}${ci?'':' as-c1'}" data-app="${a.i}" data-tk="cell:${a.i}:${c[0]}"><span class="as-hcl">${CSH[c[0]]}</span>${x.v==null?'—':x.v}${x.v!=null&&x.nv!=null?`<small>normal ${x.nv}</small>`:''}</div>`; });
     const i1=ix(W.t), i0=Math.max(0,Math.min(ix(W.f),i1-27));
     h+=`<div class="as-hc as-tr" data-app="${a.i}">${spark({vals:a.rt.slice(i0,i1+1),lo:a.blo.slice(i0,i1+1),hi:a.bhi.slice(i0,i1+1),w:88,h:34,hpx:34,pre:ix(W.f)-i0,color:L&&L.sigT?(L.far<0?'var(--bad)':'var(--good)'):'var(--as-s-ret)',
       lfs:9.5,labMax:52,lab:{f:fN},
@@ -10075,21 +10111,24 @@ function tlHtml(){ const i1=ix(W.t), i0=Math.max(0,Math.min(ix(W.f),i1-41)), n=i
   [[96,'📦 Updates'],[138,'🔔 Change started']].forEach(([y,l])=>{ s+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="0" y="${y+4}" font-size="11" fill="var(--muted)">${l}</text>`; });
   const pv=W.t>M.settled?ix(dAdd(M.settled,1))-i0:null; if(pv!=null&&pv<n){ s+=`<line x1="${(X(Math.max(0,pv))-hw).toFixed(1)}" x2="${(X(n-1)+hw).toFixed(1)}" y1="${h-22}" y2="${h-22}" stroke="var(--watch)" stroke-width="2.5"/>`; LB.push({x:X(n-1)+hw,y:h-30,t:'⏳ not final',p:4,a:'end',c:'var(--watch)',fs:10}); }
   const step=Math.max(n<=14?1:(n<=31?3:7),xStep(n,w-padL-padR)); for(let i=n-1;i>=0;i-=step){ s+=`<text x="${X(i)}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`; avoid.push({x:X(i)-16,y:h-15,w:32,h:13}); }
-  Object.keys(ups).sort().reverse().forEach((d,k)=>{ const L=ups[d], i=dDiff(f0,d), x=X(i), lv=L.some(z=>z[1][2]==='halt')?'var(--bad)':(L.some(z=>z[1][2]==='win')?'var(--good)':'var(--as-blue-s)');
-    s+=`<g class="as-mk" data-tk="tlu:${d}" data-tl="u:${d}"><line x1="${x}" x2="${x}" y1="${rt[i]!=null?Y(rt[i]):70}" y2="88" stroke="${lv}" stroke-opacity=".3"/><rect x="${x-7}" y="89" width="14" height="14" rx="3" transform="rotate(45 ${x} 96)" fill="${lv}"/>${L.length>1?`<text x="${x}" y="99.5" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0a1120">${L.length}</text>`:''}</g>`;
+  const clus=Mp=>{ const out=[]; Object.keys(Mp).sort().forEach(d=>{ const x=X(dDiff(f0,d)), c=out[out.length-1]; if(c&&x-c.x0<20){ c.ds.push(d); c.L=c.L.concat(Mp[d]); c.x1=x; } else out.push({ds:[d],L:Mp[d].slice(),x0:x,x1:x}); });
+    out.forEach(c=>{ c.x=(c.x0+c.x1)/2; c.key=c.ds.join(','); c.i=dDiff(f0,c.ds[c.ds.length-1]); c.sp=c.ds.length>1?span(c.ds[0],c.ds[c.ds.length-1]):fd(c.ds[0]); }); return out.reverse(); };
+  clus(ups).forEach((c,k)=>{ const L=c.L, i=c.i, x=c.x, d=c.ds[0], lv=L.some(z=>z[1][2]==='halt')?'var(--bad)':(L.some(z=>z[1][2]==='win')?'var(--good)':'var(--as-blue-s)');
+    s+=`<g class="as-mk" data-tk="tlu:${c.key}" data-tl="u:${c.key}"><rect x="${x-16}" y="80" width="32" height="32" fill="transparent"/><line x1="${x}" x2="${x}" y1="${rt[i]!=null?Y(rt[i]):70}" y2="88" stroke="${lv}" stroke-opacity=".3"/><rect x="${x-7}" y="89" width="14" height="14" rx="3" transform="rotate(45 ${x} 96)" fill="${lv}"/>${L.length>1?`<text x="${x}" y="99.5" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0a1120">${L.length}</text>`:''}</g>`;
     avoid.push({x:x-10,y:86,w:20,h:20});
-    LB.push({x,y:117,t:L.length===1?(L[0][1][1]+(befAft(L[0][0],d)?' · '+befAft(L[0][0],d):'')):(L.length+' updates · '+fd(d)),p:10+k,a:'middle',c:lv,fs:10,dys:[0,9]}); });
-  Object.keys(als).sort().reverse().forEach((d,k)=>{ const L=als[d], i=dDiff(f0,d), x=X(i), worst=L.map(z=>z[0].sev).sort((p,q)=>SORD[p]-SORD[q])[0], col=worst==='bigda'?'var(--bad)':(worst==='dhyan'?'var(--watch)':'var(--good)');
-    s+=`<g class="as-mk" data-tk="tla:${d}" data-tl="a:${d}">${L.some(z=>z[1])?`<text x="${x-12}" y="142" text-anchor="end" font-size="11" fill="var(--faint)">←</text>`:''}<circle cx="${x}" cy="138" r="${L.length>1?9:7}" fill="${col}"/>${L.length>1?`<text x="${x}" y="141.5" text-anchor="middle" font-size="10" font-weight="700" fill="#0a1120">${L.length}</text>`:''}</g>`;
+    LB.push({x,y:117,t:L.length===1?(L[0][1][1]+(befAft(L[0][0],d)?' · '+befAft(L[0][0],d):'')):(L.length+' updates · '+c.sp),p:10+k,a:'middle',c:lv,fs:10,dys:[0,9]}); });
+  clus(als).forEach((c,k)=>{ const L=c.L, x=c.x, d=c.ds[0], worst=L.map(z=>z[0].sev).sort((p,q)=>SORD[p]-SORD[q])[0], col=worst==='bigda'?'var(--bad)':(worst==='dhyan'?'var(--watch)':'var(--good)');
+    s+=`<g class="as-mk" data-tk="tla:${c.key}" data-tl="a:${c.key}"><circle cx="${x}" cy="138" r="16" fill="transparent"/>${L.some(z=>z[1])?`<text x="${x-12}" y="142" text-anchor="end" font-size="11" fill="var(--faint)">←</text>`:''}<circle cx="${x}" cy="138" r="${L.length>1?9:7}" fill="${col}"/>${L.length>1?`<text x="${x}" y="141.5" text-anchor="middle" font-size="10" font-weight="700" fill="#0a1120">${L.length}</text>`:''}</g>`;
     avoid.push({x:x-(L.some(z=>z[1])?22:10),y:128,w:L.some(z=>z[1])?32:20,h:20});
-    const x0=L[0][0], st=startedOf(x0); LB.push({x,y:158,t:L.length===1?fd(st)+' · '+alNums(x0).big+alNums(x0).u:(fd(d)+' · '+L.length+' alerts'),p:20+k,a:'middle',c:col,fs:10,dys:[0,8]}); });
+    const x0=L[0][0], st=startedOf(x0); LB.push({x,y:158,t:L.length===1?fd(st)+' · '+alNums(x0).big+alNums(x0).u:(c.sp+' · '+L.length+' alerts'),p:20+k,a:'middle',c:col,fs:10,dys:[0,8]}); });
   s+=fitLabels(LB,w,h,avoid).map(svgLab).join('')+'</svg>';
   const nU=Object.values(ups).reduce((t,L)=>t+L.length,0), nA=Object.values(als).reduce((t,L)=>t+L.length,0);
   tlHtml.ups=ups; tlHtml.als=als;
-  return `<div class="as-ph"><div><div class="as-eyebrow">When did it happen</div><h2>Timeline</h2><div class="as-hint">${span(f0,W.t)} · ${nU} updates · ${nA} open alerts on the day the change started (← = started earlier) · marker = list</div></div></div><div class="as-tlw">${s}</div>`; }
+  return `<div class="as-ph"><div><div class="as-eyebrow">When did it happen</div><h2>Timeline</h2><div class="as-hint">${span(f0,W.t)} · ${nU} updates · ${nA} open alerts on the day the change started (← = started earlier) · marker = list${w>(TLW||1000)?' · <b class="as-tlcue">← swipe for older days</b>':''}</div></div></div><div class="as-tlw">${s}</div>`; }
 function renderTl(){ const box=$('as-tl'); if(!box) return; TLW=box.clientWidth||TLW; box.innerHTML=tlHtml(); const tw=box.querySelector('.as-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; }
-TIPS.tlu=d=>{ const L=(tlHtml.ups||{})[d]||[]; return `<div class="as-tt">📦 ${fd(d)} · ${L.length} update</div>`+L.map(([a,r])=>`<div class="as-row"><span>${ic(a,14,'ail')}${esc(a.store)} · ${esc(a.acc)}</span><b>${esc(r[1])}</b></div><div class="as-tsm">${UPDW(r[2])}</div>`).join(''); };
-TIPS.tla=d=>{ const L=(tlHtml.als||{})[d]||[]; return `<div class="as-tt">🔔 ${fd(d)} · ${L.length} alert</div>`+L.map(([x,b])=>`<div class="as-row"><span>${ic(A[x.a],14,'ail')}${esc(A[x.a].store)} · ${esc(A[x.a].acc)}</span><b class="${x.sev==='bigda'?'as-bad':(x.sev==='dhyan'?'as-watch':'as-good')}">${SW[x.sev]}</b></div><div class="as-tsm">${esc(metName(x))}${b?' · started '+fd(startedOf(x)):''}</div>`).join(''); };
+const tlL=(M,d)=>String(d).split(',').reduce((o,x)=>o.concat((M||{})[x]||[]),[]), tlD=d=>{ const D=String(d).split(','); return D.length>1?span(D[0],D[D.length-1]):fd(D[0]); };
+TIPS.tlu=d=>{ const L=tlL(tlHtml.ups,d); return `<div class="as-tt">📦 ${tlD(d)} · ${L.length} update</div>`+L.map(([a,r])=>`<div class="as-row"><span>${ic(a,14,'ail')}${esc(a.store)} · ${esc(a.acc)}</span><b>${esc(r[1])}</b></div><div class="as-tsm">${UPDW(r[2])}</div>`).join(''); };
+TIPS.tla=d=>{ const L=tlL(tlHtml.als,d); return `<div class="as-tt">🔔 ${tlD(d)} · ${L.length} alert</div>`+L.map(([x,b])=>`<div class="as-row"><span>${ic(A[x.a],14,'ail')}${esc(A[x.a].store)} · ${esc(A[x.a].acc)}</span><b class="${x.sev==='bigda'?'as-bad':(x.sev==='dhyan'?'as-watch':'as-good')}">${SW[x.sev]}</b></div><div class="as-tsm">${esc(metName(x))}${b?' · started '+fd(startedOf(x)):''}</div>`).join(''); };
 
 /* ================= What changed (every engine alert — the owner's timestamp rules on each card / row) ================= */
 function slope(x){ const n=alNums(x); if(n.vn==null||n.vb==null) return '';
@@ -10131,8 +10170,8 @@ function oldCard(z){ const o=z.o, a=z.a, st=o.started||o.from, R0=o.release||nul
    +`<div class="as-app as-ainb">${ic(a,18)}<span class="as-aint">${esc(a.store)} <span class="as-acn">· ${esc(a.acc)}</span></span></div>`
    +`<div class="as-what" style="font-size:13px"><b>${esc(oldMet(o))}</b>${o.rel!=null&&isFinite(o.rel)?` <span class="${o.dir==='down'?'as-bad':'as-good'}">${o.dir==='down'?'▼':'▲'} ${fR(o.rel)}</span>`:''} · ${esc(smpInfoTxt(o.text||''))}</div>`
    +`<div class="as-ts"><span class="as-at">🕒 Alert time: — (purani finding · alert nahi, bheja nahi)</span><span>Change started: ${st?fd(st)+' · '+umar(ag):'—'}</span><br><span>Data: ${o.from?'Daily avg '+span(o.from,o.to):'—'}</span>${R0&&R0.label?`<span>📦 after ${esc(R0.label)}${R0.date?' ('+fd(R0.date)+')':''}</span>`:''}</div></div>`; }
-function oldTable(L){ return `<div class="as-panel as-tw" style="border-radius:var(--as-r)"><table class="as-mini"><thead><tr><th class="as-l">🕒 Alert time</th><th class="as-l">App</th><th class="as-l">What</th><th>Change</th><th class="as-l">Change started · Data</th></tr></thead><tbody>`
-  +L.map(z=>{ const o=z.o, a=z.a, st=o.started||o.from; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="as-l as-faint" style="white-space:normal;min-width:120px">— older finding · not an alert</td><td class="as-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="as-l" style="font-family:var(--as-font);white-space:normal;min-width:240px"><b>${esc(oldMet(o))}</b> · ${esc(smpInfoTxt(o.text||''))}</td><td class="${o.dir==='down'?'as-bad':'as-good'}" style="font-weight:600">${o.rel!=null&&isFinite(o.rel)?fR(o.rel):'—'}</td><td class="as-l" style="white-space:normal;min-width:190px">Change started: ${st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—'}<div class="as-tsm" style="font-size:10.5px">Data: ${o.from?'Daily avg '+span(o.from,o.to):'—'}${o.release&&o.release.label?' · 📦 after '+esc(o.release.label):''}</div></td></tr>`; }).join('')+'</tbody></table></div>'; }
+function oldTable(L){ return `<div class="as-panel as-tw" style="border-radius:var(--as-r)"><table class="as-mini as-chgt"><thead><tr><th class="as-l">App</th><th class="as-l">🕒 Alert time</th><th class="as-l">What</th><th>Change</th><th class="as-l">Change started · Data</th></tr></thead><tbody>`
+  +L.map(z=>{ const o=z.o, a=z.a, st=o.started||o.from; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="as-l" style="white-space:normal;min-width:150px">${nmH(a)}</td><td class="as-l as-faint" style="white-space:normal;min-width:120px">— older finding · not an alert</td><td class="as-l" style="font-family:var(--as-font);white-space:normal;min-width:240px"><b>${esc(oldMet(o))}</b> · ${esc(smpInfoTxt(o.text||''))}</td><td class="${o.dir==='down'?'as-bad':'as-good'}" style="font-weight:600">${o.rel!=null&&isFinite(o.rel)?fR(o.rel):'—'}</td><td class="as-l" style="white-space:normal;min-width:190px">Change started: ${st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—'}<div class="as-tsm" style="font-size:10.5px">Data: ${o.from?'Daily avg '+span(o.from,o.to):'—'}${o.release&&o.release.label?' · 📦 after '+esc(o.release.label):''}</div></td></tr>`; }).join('')+'</tbody></table></div>'; }
 const oldFold=(L,key,pv)=>L.length?`<details class="as-fold" data-fold="${key}"${ST.folds.has(key)?' open':''}><summary><span class="as-cv">▸</span><span>🗄 Older (${L.length}) · engine findings, not alerts</span><span class="as-pv">${pv}</span></summary>${ST.chgView==='table'?oldTable(L):`<div class="as-cards">${L.map(oldCard).join('')}</div>`}</details>`:'';
 function chgHtml(){ const B={'':[],purana:[],achhi:[],theek:[],chhoti:[],info:[]}; sortAl(ALERTS).forEach(x=>{ const f=foldOf(x); if(B[f]) B[f].push(x); });
   const OL=oldsOf(null);
@@ -10143,8 +10182,8 @@ function chgHtml(){ const B={'':[],purana:[],achhi:[],theek:[],chhoti:[],info:[]
     +oldFold(OL,'older',new Set(OL.map(z=>z.a)).size+' apps · 30–90 days');
   return `<div class="as-chg-h"><div><div class="as-eyebrow">New vs old</div><h2>What changed?</h2><div class="as-hint" style="font-size:12px;color:var(--muted)">${nV} shown · ${nF} folded below · ${fresh} new (today/yesterday) · engine alerts — range se alag</div></div><div class="as-right" style="margin-left:auto"><div class="as-seg" id="as-chgV"><button data-v="cards" aria-pressed="${ST.chgView==='cards'}">Cards</button><button data-v="table" aria-pressed="${ST.chgView==='table'}">Table</button></div></div></div>`
     +(nV?view(B['']):'<div class="as-ok">✅ Koi Worse / Watch alert dekhne layak nahi — baaki neeche</div>')+folds; }
-function alTable(L){ return `<div class="as-panel as-tw" style="border-radius:var(--as-r)"><table class="as-mini"><thead><tr><th class="as-l">Status</th><th class="as-l">🕒 Alert time</th><th class="as-l">App</th><th class="as-l">What</th><th>Change</th><th>Before → now</th><th>Installs · real</th><th>${symOf()}/day</th><th class="as-l">Next step</th><th class="as-l">Change started · Data</th></tr></thead><tbody>`
-  +L.map(x=>{ const a=A[x.a], n=alNums(x), st=startedOf(x), ag=ageOf(x), pk=pakkaOf(x), info=x.kind==='info'; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="as-l">${x.kind==='open'?chip(x.sev):chip('normal')}</td><td class="as-l"><span class="as-age${ag.fresh?' as-new':''}" title="${esc(ag.tip)}">${ag.t}</span>${info?'':`<div class="as-tsm" style="font-size:10.5px;white-space:normal;min-width:120px">🕒 Alert time: ${x.at?fist(x.at):(x.opened?'on data till '+fd(x.opened):'—')}</div>`}${x.kind==='closed'?`<div class="as-tsm" style="font-size:10.5px">Closed: ${x.cat?fist(x.cat):fd(x.closed)}</div>`:''}</td><td class="as-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="as-l" style="font-family:var(--as-font)">${esc(metName(x))}</td><td class="${x.sev==='bigda'||x.sev==='dhyan'?'as-bad':(x.sev==='behtar'?'as-good':'')}" style="font-weight:600">${n.big}<span class="as-faint" style="font-size:11px"> ${n.u}</span></td>`
+function alTable(L){ return `<div class="as-panel as-tw" style="border-radius:var(--as-r)"><table class="as-mini as-chgt"><thead><tr><th class="as-l">App</th><th class="as-l">Status</th><th class="as-l">🕒 Alert time</th><th class="as-l">What</th><th>Change</th><th>Before → now</th><th>Installs · real</th><th>${symOf()}/day</th><th class="as-l">Next step</th><th class="as-l">Change started · Data</th></tr></thead><tbody>`
+  +L.map(x=>{ const a=A[x.a], n=alNums(x), st=startedOf(x), ag=ageOf(x), pk=pakkaOf(x), info=x.kind==='info'; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="as-l" style="white-space:normal;min-width:150px">${nmH(a)}</td><td class="as-l">${x.kind==='open'?chip(x.sev):chip('normal')}</td><td class="as-l"><span class="as-age${ag.fresh?' as-new':''}" title="${esc(ag.tip)}">${ag.t}</span>${info?'':`<div class="as-tsm" style="font-size:10.5px;white-space:normal;min-width:120px">🕒 Alert time: ${x.at?fist(x.at):(x.opened?'on data till '+fd(x.opened):'—')}</div>`}${x.kind==='closed'?`<div class="as-tsm" style="font-size:10.5px">Closed: ${x.cat?fist(x.cat):fd(x.closed)}</div>`:''}</td><td class="as-l" style="font-family:var(--as-font)">${esc(metName(x))}</td><td class="${x.sev==='bigda'||x.sev==='dhyan'?'as-bad':(x.sev==='behtar'?'as-good':'')}" style="font-weight:600">${n.big}<span class="as-faint" style="font-size:11px"> ${n.u}</span></td>`
     +`<td>${n.fmt&&n.vb!=null?esc(n.fmt(n.vb))+' → '+esc(n.fmt(n.vn)):'—'}</td><td>${n.fi!=null?fX(n.fi)+' · '+fX(n.asli):'—'}</td><td>${n.usd!=null?moneyL(n.usdA!=null?n.usdA:n.usd,true):'—'}</td><td class="as-l" style="font-family:var(--as-font);white-space:normal;min-width:180px">${esc(todo(x))}</td>`
     +`<td class="as-l" style="white-space:normal;min-width:190px">Change started: ${st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—'}<div class="as-tsm" style="font-size:10.5px">Data: ${esc(dataOf(x))}${x.est?' · ≈':''}${pk?' · ⏳ Not final · final on '+fd(pk):''}</div></td></tr>`; }).join('')+'</tbody></table></div>'; }
 
@@ -10251,7 +10290,7 @@ function bigChart(o,W0){ const a=o.a, L=o.L, i1=ix(W.t), i0=Math.max(a.fi,Math.m
     avoid.push({x:X(j)-8,y:pt-28,w:16,h:16});
     const ba=befAft(a,r[0]); LB.push({x:X(j)+9,y:pt-20,t:r[1]+(ba?' · '+ba:''),p:10+(a.rel.length-k),c:col,dys:[0,-8]}); });
   a.al.forEach((x,k)=>{ if(!isOpen(x)) return; const d=startedOf(x); if(!d) return; const j=ix(d)-i0; if(j<0||j>=n) return; const col=x.sev==='bigda'?'var(--bad)':(x.sev==='dhyan'?'var(--watch)':'var(--good)'), nn=alNums(x);
-    s+=`<circle cx="${X(j)}" cy="${h-pb}" r="5" fill="${col}" stroke="var(--bg2)" stroke-width="2" data-tk="al:${x.k}"/>`; avoid.push({x:X(j)-6,y:h-pb-6,w:12,h:12});
+    s+=`<circle cx="${X(j)}" cy="${h-pb}" r="16" fill="transparent" data-tk="al:${x.k}"/><circle cx="${X(j)}" cy="${h-pb}" r="5" fill="${col}" stroke="var(--bg2)" stroke-width="2" data-tk="al:${x.k}"/>`; avoid.push({x:X(j)-6,y:h-pb-6,w:12,h:12});
     LB.push({x:X(j),y:h-pb-14,t:fd(d)+' · '+nn.big+nn.u,p:20+k,a:'middle',c:col,dys:[0,-12]}); });
   s+=fitLabels(LB,w,h,avoid).map(svgLab).join('');
   s+=`<line class="as-xh" x1="0" x2="0" y1="${pt}" y2="${h-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
@@ -10262,6 +10301,7 @@ function ioChart(o,W0){ const a=o.a, i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.
   const X=lin(-.5,n-.5,pl,w-pr), mid=pt+(h-pt-pb)/2, Y=v=>(v/mx)*((h-pt-pb)/2-2), bw=Math.max(1.5,(w-pl-pr)/n*.62), LB=[], avoid=[];
   let s=`<svg viewBox="0 0 ${w} ${h}"><line x1="${pl}" x2="${w-pr}" y1="${mid}" y2="${mid}" stroke="var(--line2)"/>`;
   s+=`<text x="${pl-6}" y="${pt+8}" text-anchor="end" font-size="10.5" fill="var(--faint)">${fN(mx)}</text><text x="${pl-6}" y="${mid+3.5}" text-anchor="end" font-size="10.5" fill="var(--faint)">0</text><text x="${pl-6}" y="${h-pb}" text-anchor="end" font-size="10.5" fill="var(--faint)">${fN(mx)}</text>`;
+  I.forEach((v,j)=>{ s+=`<rect x="${(X(j-.5)).toFixed(1)}" y="${pt}" width="${(X(j+.5)-X(j-.5)).toFixed(1)}" height="${h-pt-pb}" fill="transparent" data-tk="io:${a.i}:${i0+j}"/>`; });
   I.forEach((v,j)=>{ const op=i0+j>a.si?.5:1; if(v!=null){ s+=`<rect x="${X(j)-bw/2}" y="${mid-Y(v)}" width="${bw}" height="${Y(v)}" rx="1.5" fill="var(--as-s-in)" opacity="${op}" data-tk="io:${a.i}:${i0+j}"/>`; avoid.push({x:X(j)-bw/2,y:mid-Y(v),w:bw,h:Y(v)}); }
     if(Yv[j]!=null){ s+=`<rect x="${X(j)-bw/2}" y="${mid+1}" width="${bw}" height="${Y(Yv[j])}" rx="1.5" fill="var(--as-s-back)" opacity="${op}" data-tk="io:${a.i}:${i0+j}"/>`; avoid.push({x:X(j)-bw/2,y:mid+1,w:bw,h:Y(Yv[j])}); } });
   const step=xStep(n,w-pl-pr); for(let j=n-1;j>=0;j-=step){ s+=`<text x="${X(j)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fdNoY(dOf(i0+j))}</text>`; avoid.push({x:X(j)-17,y:h-19,w:34,h:14}); }
@@ -10394,9 +10434,14 @@ function page(id){ prep(); if(!A.some(a=>a.id===id)) return null; MODE='page'; P
   setTimeout(afterMount,0);
   return `<div id="as-root" class="as-pgroot"><div class="as-top" id="as-top">${topHtml()}</div><div class="as-wrap" id="as-main"><div class="as-pg" id="as-pg">${pageBody(pgO())}</div>`
     +`<details class="as-foot" id="as-foot">${footHtml()}</details></div></div>`; }
-function stick(){ const r=$('as-root'); if(!r) return; try{ const tb=document.querySelector('.topbar'); const cs=tb?getComputedStyle(tb):null;
-  r.style.setProperty('--as-stick',(tb&&cs&&cs.position==='sticky'?tb.offsetHeight:0)+'px'); }catch(e){} }
+function stick(){ const r=$('as-root'); if(!r) return; try{ const tb=document.querySelector('.topbar'); const cs=tb?getComputedStyle(tb):null, h0=tb&&cs&&cs.position==='sticky'?tb.offsetHeight:0;
+  r.style.setProperty('--as-stick',h0+'px'); const at=$('as-top'), h1=at&&getComputedStyle(at).position==='sticky'?at.offsetHeight:0;
+  r.style.setProperty('--as-jump',(h0+h1+8)+'px'); const L=$('as-layer'); if(L) L.style.setProperty('--as-jump','8px'); }catch(e){} }
+let RO=null;
 function afterMount(){ const root=$('as-root'); if(!root) return; layer(); stick();
+  try{ if(!RO&&typeof ResizeObserver!=='undefined') RO=new ResizeObserver(()=>{ const r=$('as-root'); if(!r||!r.offsetParent) return; stick(); if(MODE==='page') return;
+      const box=$('as-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.as-tlw'); if(tw&&!tw.scrollLeft&&tw.scrollWidth>tw.clientWidth) tw.scrollLeft=tw.scrollWidth; } });
+    if(RO){ RO.disconnect(); RO.observe(root); } }catch(e){}
   if(MODE==='page'){ const pg=$('as-pg'); if(pg&&pg.clientWidth&&Math.abs(pg.clientWidth-PGW)>24){ PGW=pg.clientWidth; spkN=0; for(const k in CH) delete CH[k]; pg.innerHTML=pageBody(pgO()); } countUp(); return; }
   const box=$('as-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.as-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; }
   countUp();
@@ -10433,9 +10478,17 @@ function wire(){ if(WIRED) return; WIRED=true;
   // a pinned tooltip closes on the next click elsewhere — never on the click a tap itself makes (that tap opened it)
   document.addEventListener('click',e=>{ if(!tipPinned||(e.target.closest&&e.target.closest('#as-tip'))) return;
     if(tapAt&&Date.now()-tapAt<900&&tapEl&&tapEl.contains&&tapEl.contains(e.target)) return; hideTip(); },true);
-  addEventListener('scroll',()=>{ if(!tipPinned){ const tipEl=$('as-tip'); if(tipEl&&tipEl.classList.contains('as-on')) hideTip(); } },{passive:true,capture:true});
-  // on a phone a tap shows the tooltip (pinned until the next tap elsewhere): a marked element, a small chart or a big one
-  document.addEventListener('touchstart',e=>{ const t=e.target; if(!inStudio(t)||t.closest('#as-tip')) return; const p=e.touches&&e.touches[0]; if(!p) return;
+  // any scroll (the page, the drawer, a table box, the timeline) hides the tooltip — a pinned one too: it would float over
+  // other rows (the scroll that a tap may cause itself is over before the tooltip opens: it opens on touchend)
+  addEventListener('scroll',()=>{ if(tapAt&&Date.now()-tapAt<350) return; const tipEl=$('as-tip'); if(tipEl&&tipEl.classList.contains('as-on')) hideTip(); },{passive:true,capture:true});
+  // on a phone a TAP shows the tooltip (pinned until the next tap elsewhere): a marked element, a small chart or a big one.
+  // A tap = the finger lifted within 600 ms, moved under 10 px and the page did not scroll — a swipe never pins one
+  let T0=null;
+  document.addEventListener('touchstart',e=>{ T0=null; const t=e.target; if(!inStudio(t)||t.closest('#as-tip')) return; const p=e.touches&&e.touches[0]; if(!p||e.touches.length>1) return;
+    T0={t,x:p.clientX,y:p.clientY,at:Date.now(),sy:scrollY,moved:false}; },{passive:true});
+  document.addEventListener('touchmove',e=>{ if(!T0) return; const p=e.touches&&e.touches[0]; if(!p||e.touches.length>1||Math.abs(p.clientX-T0.x)>10||Math.abs(p.clientY-T0.y)>10) T0.moved=true; },{passive:true});
+  document.addEventListener('touchcancel',()=>{ T0=null; },{passive:true});
+  document.addEventListener('touchend',()=>{ const s=T0; T0=null; if(!s||s.moved||Date.now()-s.at>600||Math.abs(scrollY-s.sy)>3) return; const t=s.t, p={clientX:s.x,clientY:s.y};
     const k0=t.closest('[data-tk]'); if(k0){ const [k,...args]=k0.getAttribute('data-tk').split(':'); const h=TIPS[k]&&TIPS[k](...args); if(h){ tapAt=Date.now(); tapEl=k0; showTip(h,p.clientX,p.clientY,true); return; } }
     const sv=t.closest('svg.as-spk'); if(sv&&SPK[sv.id]){ tapAt=Date.now(); tapEl=sv; spkHover(sv,p,true); return; }
     const bc=t.closest('svg[data-bc]'); if(bc&&CH[bc.dataset.bc]){ tapAt=Date.now(); tapEl=bc; chHover(bc,p,true); } },{passive:true});
@@ -10476,11 +10529,12 @@ function onClick(e){ const t=e.target; if(!inStudio(t)) return;
   const th=t.closest('th[data-sort]'); if(th){ const k=th.dataset.sort; ST.sort=ST.sort.k===k?{k,d:-ST.sort.d}:{k,d:(k==='app'||k==='st')?1:-1}; renderTbl(true); return; }
   const fb=t.closest('#as-fst button'); if(fb){ const s=fb.dataset.st; ST.fst.has(s)?ST.fst.delete(s):ST.fst.add(s); renderTbl(true); return; }
   const cv=t.closest('#as-chgV button'); if(cv){ ST.chgView=cv.dataset.v; const el=$('as-chg'); if(el) el.innerHTML=chgHtml(); save(); return; }
-  if(t.closest('#as-mapMore')){ ST.mapAll=!ST.mapAll; const el=$('as-map'); if(el) el.innerHTML=mapHtml(); return; }
-  if(t.closest('#as-srcMore')){ ST.srcAll=!ST.srcAll; const el=$('as-src'); if(el) el.innerHTML=srcHtml(); return; }
+  const keepAt=(id,f)=>{ const b=$(id), y0=b?b.getBoundingClientRect().top:null; f(); const b1=$(id); if(y0!=null&&b1) window.scrollBy(0,b1.getBoundingClientRect().top-y0); };
+  if(t.closest('#as-mapMore')){ keepAt('as-mapMore',()=>{ ST.mapAll=!ST.mapAll; const el=$('as-map'); if(el) el.innerHTML=mapHtml(); }); return; }
+  if(t.closest('#as-srcMore')){ keepAt('as-srcMore',()=>{ ST.srcAll=!ST.srcAll; const el=$('as-src'); if(el) el.innerHTML=srcHtml(); }); return; }
   if(t.closest('#as-dClose')||t.id==='as-scrim'){ closeDrawer(); return; }
   if(t.closest('#as-dPrev')||t.closest('#as-dNext')){ navDrawer(t.closest('#as-dPrev')?-1:1); return; }
-  const tl=t.closest('[data-tl]'); if(tl){ const [k,d]=tl.dataset.tl.split(':'); const L=k==='u'?(tlHtml.ups||{})[d]:(tlHtml.als||{})[d]; if(!L) return; const items=L.map(z=>k==='u'?z[0]:A[z[0].a]);
+  const tl=t.closest('[data-tl]'); if(tl){ const [k,d]=tl.dataset.tl.split(':'); const L=tlL(k==='u'?tlHtml.ups:tlHtml.als,d); if(!L.length) return; const items=L.map(z=>k==='u'?z[0]:A[z[0].a]);
     const uniq=[...new Set(items)]; if(uniq.length===1){ openDrawer(uniq[0].i); return; }
     const r=tl.getBoundingClientRect(); showTip((k==='u'?TIPS.tlu(d):TIPS.tla(d))+'<div class="as-sep"></div>'+uniq.map(a=>`<div><span class="as-lk" data-go="${a.i}">${ic(a,14,'ail')}${esc(a.store)} · ${esc(a.acc)} →</span></div>`).join(''),r.left+r.width/2,r.top+r.height,true); e.stopPropagation(); return; }
   const go=t.closest('[data-go]'); if(go&&!t.closest('select,input')){ if(MODE==='page'&&!t.closest('#as-layer')) return; hideTip(); openDrawer(+go.dataset.go); return; }
@@ -11092,7 +11146,7 @@ function actPoolKwTiles(rows){
   // keeps them on their OWN existing judged-install-week basis below, unaffected by this selector (like Uninstall's
   // "gone by day N" columns stay in the 📋 All apps table, never in the live uni-kpis row)
   const tiles=[tile('ret_dau','Old users/day',retV,smpCount,retV!=null?kwRateAvgLine(retV,A.days,retC,cmpEff,smpCount):''),
-    tile('new','Installs / day',A.nwn?A.nw:null,smpCount,kwCmpLine(A.nw,A.days,cmp?cmp.nw:null,cmpEff,smpCount)),
+    tile('new','Installs / day',A.nwn&&A.days?A.nw/A.days:null,smpCount,(A.nwn?'total '+smpCount(A.nw)+' · ':'')+kwCmpLine(A.nw,A.days,cmp?cmp.nw:null,cmpEff,smpCount)),
     tile('sess','Sessions per user',sessV,v=>actDec(v)+'<small>a day</small>',sessV!=null?kwRateAvgLine(sessV,A.days,sessC,cmpEff,actDec):''),
     tile('time','Time per user',timeV,v=>uniDur(v)+'<small>a day</small>',timeV!=null?kwRateAvgLine(timeV,A.days,timeC,cmpEff,uniDur):''),
     tile('arpdau','Revenue per user (/day)',arpV,v=>'≈ '+actMoneyP(v,cur),arpV!=null?kwRateMoneyLine(arpV,A.days,arpC,cmpEff,v=>actMoney(v,cur,true),v=>actMoneyP(v,cur),
@@ -12174,7 +12228,7 @@ function mapHtml(){ const rows=R.filter(o=>o.s.ads||o.c.ads).sort((x,y)=>{ const
     h+=`<div class="vs-rk" data-app="${a.i}" data-go="${a.i}" style="cursor:pointer">${rk}${arrow}</div><div class="vs-nm" data-app="${a.i}" data-go="${a.i}" data-tk="app:${a.i}">${nmH(a)}<div style="display:flex;gap:5px;margin-top:4px;align-items:center;flex-wrap:wrap">${chip(o.pill)}${todoChip(o.todo)}${szH(a)}</div></div>`
       +`<div class="vs-inr" data-app="${a.i}" data-tk="prof:${a.i}" data-go="${a.i}" style="cursor:pointer"><span class="${profCls(p)}">${p==null?'—':az(o.s.est90)+mL(p,true)}</span>${p!=null?`<span class="vs-bar ${p>=0?'vs-g':''}${tiny(p)?' vs-n':''}" style="width:${bw.toFixed(0)}px"></span><span class="vs-sub">${o.s.spD?fR(p/o.s.spD)+' of spend':''}</span>`:`<span class="vs-sub">${esc(o.pill==='lagu'?'no ads':'')}</span>`}</div>`;
     COLS().forEach((c,ci)=>{ const x=cellOf(o,c[0]);
-      h+=`<div class="vs-hc ${x.v==null?'vs-na':hcls(x.s)}${ci?'':' vs-c1'}" data-app="${a.i}" data-tk="cell:${a.i}:${c[0]}">${x.v==null?'<span>—</span>'+(x.wait?`<small>⏳ ${x.wait}</small>`:''):'<span style="white-space:nowrap">'+x.v+'</span>'}${x.pc?`<span class="vs-pc">${x.pc}</span>`:''}${x.sub?`<small>${x.sub}</small>`:''}</div>`; });
+      h+=`<div class="vs-hc ${x.v==null?'vs-na':hcls(x.s)}${ci?'':' vs-c1'}" data-app="${a.i}" data-tk="cell:${a.i}:${c[0]}"><span class="vs-hcl">${({cpi:'Cost/install',b7:'Back 7 days',v90:'By day '+H,pb:'Money back'})[c[0]]}</span>${x.v==null?'<span>—</span>'+(x.wait?`<small>⏳ ${x.wait}</small>`:''):'<span style="white-space:nowrap">'+x.v+'</span>'}${x.pc?`<span class="vs-pc">${x.pc}</span>`:''}${x.sub?`<small>${x.sub}</small>`:''}</div>`; });
     const i1=W.i1, i0=Math.max(0,i1-11), wv=[], es=[]; for(let i=i0;i<=i1;i++){ const q=pool([[a,i]]); wv.push(q.jw?q.profV/7:null); es.push(pakka(i,H)>M.today); }
     h+=`<div class="vs-hc vs-tr" data-app="${a.i}">${spark({vals:wv,bars:1,zero:1,est:es,w:84,h:34,hpx:34,small:1,band:11,wpx:80,fmt:(v,j)=>(es[j]?'≈':'')+mL(v,true),tip:k2=>{ const i=i0+k2, q=pool([[a,i]]); return `<div class="vs-tt">${ic(a,14,'ail')}${esc(nameTxt(a))} · installs ${wkSpan(i)}</div>${trow('Profit/day',q.jw?az(pakka(i,H)>M.today).replace(/<[^>]+>/g,'')+mL(q.profV/7,true):'—')}${trow('Spend/day',mT(q.spV/7))}${trow('Money back in',pbTxt(q.pb))}${(i>=W.i0&&i<=W.i1)?'<div class="vs-tsm">in the chosen range</div>':''}`; }})}</div>`; });
   const sw=(cls)=>`<i style="background:var(--vs-${cls})"></i>`;
@@ -12329,9 +12383,9 @@ function newsItems(){ const out=[], e=NW-1;
     out.push({a,o,i:e,s,nr,pv,pn,m,mn,dpr,better,st:pillOf(s),sev:better?'behtar':'bigda'}); });
   return out.sort((x,y)=>((x.better?1:0)-(y.better?1:0))||(Math.abs(y.dpr)-Math.abs(x.dpr))); }
 function newsCard(x){ const a=x.a, s=x.s, i=x.i, st=wS(i), ag=weekAge(i);
-  return `<div class="vs-ac vs-s-${x.sev}" data-app="${a.i}" data-go="${a.i}"><div class="vs-l1">${chip(x.st)}<span class="vs-age${ag.fresh?' vs-new':''}" title="${esc(ag.tip)}">${ag.t}</span><span class="vs-itag" style="${x.better?'color:var(--good);background:var(--good-b);border-color:rgba(52,217,154,.3)':'color:var(--bad);background:var(--bad-b);border-color:rgba(255,107,107,.3)'}">${x.better?'▲ better than its normal':'▼ worse than its normal'}</span>${szH(a)}</div>`
+  return `<div class="vs-ac vs-s-${x.sev}" data-app="${a.i}" data-go="${a.i}"><div class="vs-l1">${chip(x.sev)}<span class="vs-age${ag.fresh?' vs-new':''}" title="${esc(ag.tip)}">${ag.t}</span><span class="vs-itag" style="${x.better?'color:var(--good);background:var(--good-b);border-color:rgba(52,217,154,.3)':'color:var(--bad);background:var(--bad-b);border-color:rgba(255,107,107,.3)'}">${x.better?'▲ better than its normal':'▼ worse than its normal'}</span>${szH(a)}</div>`
    +`<div class="vs-app vs-ainb">${ic(a,18)}<span class="vs-aint">${esc(a.store)} <span class="vs-acn">· ${esc(a.acc)}</span></span></div>`
-   +`<div class="vs-mid"><div><div class="vs-big">${az(true)}${mL(x.dpr,true)}<small>/day</small></div><div class="vs-what">profit vs its normal · money back <b>${pbTxt(s.pb)}</b> (normal ${x.pn>=366?'1 yr+':'~'+x.pn+' d'}) · earning by day ${H} <b>${mP(s.v90V)}</b> of ${mP(s.cpiJV)} (${pc(1+x.m,0)}; normal ${pc(1+x.mn,0)})</div></div>${slope(1+x.mn,1+x.m,pc(1+x.mn,0),pc(1+x.m,0),!x.better)}</div>`
+   +`<div class="vs-mid"><div><div class="vs-big">${az(true)}${mL(x.dpr,true)}<small>/day</small></div><div class="vs-what">profit vs its normal · money back <b>${pbTxt(s.pb)}</b> (normal ${x.pn>=366?'1 yr+':'~'+x.pn+' d'}) · earning by day ${H} <b>${mP(s.v90V)}</b> of ${mP(s.cpiJV)} (${pc(1+x.m,0)}; normal ${pc(1+x.mn,0)}) · ${H}-day target: <b>${SW[x.st]}</b></div></div>${slope(1+x.mn,1+x.m,pc(1+x.mn,0),pc(1+x.m,0),!x.better)}</div>`
    +`<div class="vs-todo"><b>${WD.next}</b> ${esc(newsTodo(x))}</div>`
    +`<div class="vs-ts"><span>🕒 Alert time: — (Studio ka hisaab · engine alert nahi)</span><span>Change started: ${fd(st)} · ${umar(dDiff(st,M.today))}</span><br><span>Data: Installs ${wkSpan(i)} vs normal ${wkSpan(Math.max(0,i-8),i-1)} · ≈ ${H}-day earning (andaza)${pakka(i,7)>M.today?' · ⏳ 7-day final on '+fd(pakka(i,7)):''}${pakka(i,H)>M.today?' · ⏳ '+H+'-day final on '+fd(pakka(i,H)):''}</span></div></div>`; }
 function newsTodo(x){ if(!x.better) return x.o.todo.t;
@@ -12354,7 +12408,7 @@ function chgHtml(){ const news=newsItems(), infos=[]; A.forEach(a=>a.info.forEac
     +(old.length?`<details class="vs-fold" data-fold="old"${ST.folds.has('old')?' open':''}><summary><span class="vs-cv">▸</span><span>🗄 Old info (${old.length})</span><span class="vs-pv">${new Set(old.map(z=>z[0])).size} apps</span></summary>${view(old.map(([a,x])=>({t:'i',a,x})),z=>infoCard(z.a,z.x))}</details>`:'')
     +(cl.length?`<details class="vs-fold" data-fold="band"${ST.folds.has('band')?' open':''}><summary><span class="vs-cv">▸</span><span>✅ Band hue value alerts (${cl.length})</span><span class="vs-pv">${new Set(cl.map(z=>z.a)).size} apps</span></summary>${view(cl.map(z=>({t:'a',z})),q=>alCard(q.z))}</details>`:''); }
 function chgTable(L){ return `<div class="vs-panel vs-tw" style="border-radius:var(--vs-r)"><table class="vs-mini"><thead><tr><th class="vs-l">Status</th><th class="vs-l">App</th><th class="vs-l">What changed</th><th>Profit/day</th><th class="vs-l">Next step</th><th class="vs-l">🕒 Alert time</th><th class="vs-l">Change started</th><th class="vs-l">Data</th></tr></thead><tbody>`
-  +L.map(z=>{ if(z.t==='a') return alRow(z.z); if(z.t==='n'){ const x=z.x, a=x.a; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="vs-l">${chip(x.st)}</td><td class="vs-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="vs-l" style="font-family:var(--vs-font)">${x.better?'▲':'▼'} New week: money back in ${pbTxt(x.s.pb)} (normal ${x.pn>=366?'1 yr+':'~'+x.pn+'d'})</td><td class="${x.better?'vs-good':'vs-bad'}" style="font-weight:600">≈${mL(x.dpr,true)}</td><td class="vs-l" style="white-space:normal;min-width:160px;font-family:var(--vs-font)">${todoChip(x.o.todo)}</td><td class="vs-l vs-faint">— Studio · ${esc(weekAge(x.i).t)}</td><td class="vs-l">${fd(wS(x.i))} · ${umar(dDiff(wS(x.i),M.today))}</td><td class="vs-l vs-faint">${wkSpan(x.i)}</td></tr>`; }
+  +L.map(z=>{ if(z.t==='a') return alRow(z.z); if(z.t==='n'){ const x=z.x, a=x.a; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="vs-l">${chip(x.sev)}</td><td class="vs-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="vs-l" style="font-family:var(--vs-font)">${x.better?'▲ better':'▼ worse'} than its normal: money back in ${pbTxt(x.s.pb)} (normal ${x.pn>=366?'1 yr+':'~'+x.pn+'d'}) · ${H}-day target: ${SW[x.st]}</td><td class="${x.better?'vs-good':'vs-bad'}" style="font-weight:600">≈${mL(x.dpr,true)}</td><td class="vs-l" style="white-space:normal;min-width:160px;font-family:var(--vs-font)">${todoChip(x.o.todo)}</td><td class="vs-l vs-faint">— Studio · ${esc(weekAge(x.i).t)}</td><td class="vs-l">${fd(wS(x.i))} · ${umar(dDiff(wS(x.i),M.today))}</td><td class="vs-l vs-faint">${wkSpan(x.i)}</td></tr>`; }
     const a=z.a, x=z.x; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="vs-l"><span class="vs-itag">ℹ️ ${esc(INFK[x[0]]||'Info')}</span></td><td class="vs-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="vs-l" style="font-family:var(--vs-font);white-space:normal;min-width:220px">${eTxt(x[5],a.fxL)}</td><td class="vs-faint">—</td><td class="vs-l vs-faint">—</td><td class="vs-l vs-faint">— info · ${esc(infoAge(x).t)}</td><td class="vs-l">${x[3]||x[1]?fd(x[3]||x[1])+' · '+umar(dDiff(x[3]||x[1],M.today)):'—'}</td><td class="vs-l vs-faint">${x[1]?span(x[1],x[2]||x[1]):'—'}</td></tr>`; }).join('')+'</tbody></table></div>'; }
 
 /* ================= All apps (smart table) ================= */
@@ -12459,17 +12513,19 @@ function weekChart(o){ const a=o.a, ph=innerWidth<=640, w=chartW(), h=ph?190:210
   const rx=X(W.i0-i0-.5), rw=X(W.i1-i0+.5)-rx; if(W.i1>=i0) s+=`<rect x="${rx.toFixed(1)}" y="${pt-8}" width="${rw.toFixed(1)}" height="${h-pt-pb+8}" fill="rgba(34,211,238,.05)" stroke="rgba(34,211,238,.2)" stroke-dasharray="3 3"/>`;
   [mx,mx/2,0,-mx/2,-mx].forEach(t=>{ s+=`<line x1="${pl}" x2="${w-pr}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--line)" stroke-opacity="${t===0?1:.5}"/><text x="${pl-6}" y="${(Y(t)+3.5).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--faint)">${mL(t,t!==0)}</text>`; });
   v.forEach((x,k)=>{ if(x==null) return; const i=i0+k, e=pakka(i,H)>M.today; s+=`<rect data-tk="dwk:${a.i}:${i}" x="${(X(k)-bw/2).toFixed(1)}" y="${Math.min(Y(0),Y(x)).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1.5,Math.abs(Y(x)-Y(0))).toFixed(1)}" rx="2" fill="${x>=0?'var(--good)':'var(--bad)'}" opacity="${e?.5:.92}"${e?` stroke="${x>=0?'var(--good)':'var(--bad)'}" stroke-dasharray="2 2"`:''}/>`; });
-  a.rel.forEach(r=>{ const i=wOf(r[0]); if(i<i0||i>i1) return; const x=X(i-i0)-bw/2-2; s+=`<g data-tk="drel:${a.i}:${r[0]}"><line x1="${x}" x2="${x}" y1="${pt}" y2="${h-pb}" stroke="var(--purple)" stroke-opacity=".55" stroke-dasharray="1 3"/><text x="${x}" y="${pt-2}" text-anchor="middle" font-size="11">📦</text></g>`; });
+  const RC=[]; a.rel.slice().sort((p,q)=>p[0]<q[0]?-1:1).forEach(r=>{ const i=wOf(r[0]); if(i<i0||i>i1) return; const x=Math.max(pl+8,X(i-i0)-bw/2-2), c=RC[RC.length-1]; if(c&&x-c.x0<20){ c.L.push(r); c.x1=x; } else RC.push({L:[r],x0:x,x1:x}); });
+  RC.forEach(c=>{ c.x=(c.x0+c.x1)/2; c.key=c.L.map(r=>r[0]).join(','); const x=c.x;
+    s+=`<g data-tk="drel:${a.i}:${c.key}"><rect x="${(x-14).toFixed(1)}" y="${pt-16}" width="28" height="${h-pb-pt+16}" fill="transparent"/><line x1="${x}" x2="${x}" y1="${pt}" y2="${h-pb}" stroke="var(--purple)" stroke-opacity=".55" stroke-dasharray="1 3"/><text x="${x}" y="${pt-2}" text-anchor="middle" font-size="11">📦</text>${c.L.length>1?`<text x="${x+8}" y="${pt-7}" font-size="9.5" font-weight="700" fill="var(--purple)">${c.L.length}</text>`:''}</g>`; });
   const step=xStep(n,w-pl-pr); for(let k=n-1;k>=0;k-=step) s+=`<text x="${X(k).toFixed(1)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fdNoY(wS(i0+k))}</text>`;
   { const ob=[rbox(0,0,pl,h),rbox(0,h-pb,w,pb)], LB=[]; let li=-1, bi=-1;
     v.forEach((x,k)=>{ if(x==null) return; ob.push(rbox(X(k)-bw/2,Y(0),bw,Y(x)-Y(0))); li=k; if(bi<0||Math.abs(x)>Math.abs(v[bi])) bi=k; });
     const bl=(k,pri)=>{ const x=v[k], e=pakka(i0+k,H)>M.today; LB.push({x:X(k),y:x>=0?Y(x)-4:Y(x)+12,t:(e?'≈':'')+mL(x,true),a:'middle',fs:10.5,col:x>=0?'var(--good)':'var(--bad)',pri,clamp:1}); };
     if(li>=0) bl(li,1); if(bi>=0&&bi!==li) bl(bi,2);
-    a.rel.forEach(r=>{ const i=wOf(r[0]); if(i<i0||i>i1) return; const x=X(i-i0)-bw/2-2; ob.push(rbox(x-7,pt-14,14,14)); LB.push({x:x+8,y:pt+1,t:'📦 '+relTxt(a,r),fs:10,col:'var(--purple)',pri:3+dDiff(r[0],wE(i1))/1e4,alt:[{x:x-8,a:'end'},{x:x+8,y:pt+13},{x:x-8,y:pt+13,a:'end'}]}); });
+    RC.forEach(c=>{ const x=c.x, r=c.L[c.L.length-1]; ob.push(rbox(x-8,pt-16,c.L.length>1?22:16,16)); LB.push({x:x+8,y:pt+1,t:c.L.length>1?'📦 '+c.L.length+' updates':'📦 '+relTxt(a,r),fs:10,col:'var(--purple)',pri:3+dDiff(r[0],wE(i1))/1e4,alt:[{x:x-8,a:'end'},{x:x+8,y:pt+13},{x:x-8,y:pt+13,a:'end'}]}); });
     s+=svgLab(LB,ob,w,h); }
   return `<div class="vs-chart">${s}</svg></div><div class="vs-clg"><span class="vs-k"><i style="background:var(--good)"></i>profit</span><span class="vs-k"><i style="background:var(--bad)"></i>loss (profit/day, by day ${H})</span><span class="vs-k vs-faint">faded = ≈ andaza (${H} din abhi pure nahi)</span><span class="vs-k">📦 update</span><span class="vs-k" style="color:var(--cyan)">▭ chosen range</span></div>`; }
 TIPS.dwk=(ai,i)=>{ const a=A[+ai]; i=+i; const q=pool([[a,i]]), e=pakka(i,H)>M.today; return `<div class="vs-tt">${ic(a,14,'ail')}${esc(nameTxt(a))} · installs ${wkSpan(i)}</div>${trow('Profit/day',(e?'≈':'')+mL(q.jw?q.profV/7:null,true))}${trow('Installs',fN(a.N[i]))}${trow('Spend',mT(cv(a.SP[i],a.FX[i])))}${trow('Cost / install',mP(q.cpiV))}${trow('Earning by day '+H,(e?'≈':'')+mP(q.v90V))}${trow('Money back in (engine)',engWeekPay(a,i))}${e?'<div class="vs-tsm">≈ final on '+fd(pakka(i,H))+'</div>':''}`; };
-TIPS.drel=(ai,d)=>{ const a=A[+ai]; return a.rel.filter(r=>r[0]===d).map(r=>`<div class="vs-tt">📦 ${esc(r[1])} · ${fd(d)}</div>`).join('')+'<div class="vs-tsm">Is din se naye install hafte</div>'; };
+TIPS.drel=(ai,d)=>{ const a=A[+ai], D=String(d).split(','); return a.rel.filter(r=>D.includes(r[0])).map(r=>`<div class="vs-tt">📦 ${esc(relTxt(a,r))} · ${fd(r[0])}</div>`).join('')+'<div class="vs-tsm">Us din se naye install hafte is update pe</div>'; };
 function engWeekPay(a,i){ const pf=a.PF[i]; if(pf==null) return a.JD[i]?'abhi andaza nahi':'—'; if(pf&2) return '1 yr+'+(a.P365[i]!=null?' ('+Math.round(a.P365[i])+'% saal me)':''); if(a.PP[i]==null) return '—';
   const lo=a.PLO[i], hi=a.PHI[i]; return (pf&1?'':'≈')+a.PP[i]+' days'+(!(pf&1)?(pf&8?' (low data, from other apps)':(pf&4?' (low data)':(lo!=null&&hi!=null?' ('+lo+'–'+hi+')':''))):''); }
 // the money-back table, week by week (the old "💸 Money back by install week"): 12 / 26 / All weeks (or only the chosen +
@@ -12562,6 +12618,7 @@ function drawerHtml(){ const o=R[ST.drawer], a=o.a, ord=navOrder(), pos=ord.inde
   return `<div class="vs-dh"><div class="vs-t"><div class="vs-eyebrow">App view · ${pos+1} / ${ord.length} (by loss) · installs ${wkSpan(W.i0,W.i1)}</div><h3 class="vs-ainb">${ic(a,28)}<span class="vs-aint">${esc(a.store)} <span class="vs-acn">· ${esc(a.acc)}</span></span></h3><div class="vs-l2">${chip(o.pill)}${todoChip(o.todo)}${szH(a)}<span>Install-day data till ${fd(a.settled)} · Google Ads till ${a.spT?fd(a.spT):'—'}</span></div>`
     +`<div class="vs-full-r"><button class="vs-btn vs-full" id="vs-full" data-full="${esc(a.id)}" title="Money back by install week, countries, versions, long-term, Data check — sab is app ke page pe">Full app page →</button></div></div>`
     +`<button class="vs-icb" id="vs-dPrev" aria-label="Previous app" title="Previous app (←)">‹</button><button class="vs-icb" id="vs-dNext" aria-label="Next app" title="Next app (→)">›</button><button class="vs-icb" id="vs-dClose" aria-label="Band karo" title="Band karo (Esc)">✕</button></div>`
+    +`<div class="vs-dhm"><div class="vs-l2">${chip(o.pill)}${todoChip(o.todo)}${szH(a)}<span>Install-day data till ${fd(a.settled)} · Google Ads till ${a.spT?fd(a.spT):'—'}</span></div><button class="vs-btn vs-full" data-full="${esc(a.id)}">Full app page →</button></div>`
     +appBody(o,'d'); }
 // the full app page (one app picked on the tab: the App selector, "Poora app page →", a row of the older table) — the
 // drawer's content laid out for the full width, on the Studio's own range / compare
@@ -12614,9 +12671,15 @@ function screen(note){ MODE='a'; PGID=null; prep(); PEND=pendRows(); spkN=0; for
     +`<section class="vs-panel vs-tl" id="vs-tl">${tlHtml()}</section><section id="vs-chg">${chgHtml()}</section><section class="vs-panel" id="vs-tbl">${tblHtml()}</section>`
     +`<details class="vs-foot" id="vs-foot">${footHtml()}</details></div></div>`; }
 let stickT=0;
-function stick(){ const r=$('vs-root'); if(!r) return; try{ const tb=document.querySelector('.topbar'); const cs=tb?getComputedStyle(tb):null;
-  r.style.setProperty('--vs-stick',(tb&&cs&&cs.position==='sticky'?tb.offsetHeight:0)+'px'); }catch(e){} }
+function stick(){ const r=$('vs-root'); if(!r) return; try{ const tb=document.querySelector('.topbar'); const cs=tb?getComputedStyle(tb):null, h0=tb&&cs&&cs.position==='sticky'?tb.offsetHeight:0;
+  r.style.setProperty('--vs-stick',h0+'px'); const vt=$('vs-top'), h1=vt&&getComputedStyle(vt).position==='sticky'?vt.offsetHeight:0; r.style.setProperty('--vs-jump',(h0+h1+8)+'px'); }catch(e){} }
+// the Studio may render while its tab is hidden (₹ / $ on another tab, the 5-minute refresh): every size then reads 0 — the
+// printed labels and the timeline are measured again the moment it is on screen (a ResizeObserver on the root)
+let RO=null, ROW=0;
 function afterMount(){ const root=$('vs-root'); if(!root) return; layer(); stick();
+  try{ if(!RO&&typeof ResizeObserver!=='undefined') RO=new ResizeObserver(()=>{ const r=$('vs-root'); if(!r) return; const w=r.offsetParent?r.clientWidth:0, was=ROW; ROW=w; if(!w) return; stick(); fitAll();
+      if(MODE==='a'&&!was){ const box=$('vs-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.vs-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; } } });
+    if(RO){ RO.disconnect(); ROW=root.offsetParent?root.clientWidth:0; RO.observe(root); } }catch(e){}
   if(MODE==='p'){ const w0=root.clientWidth; if(w0&&Math.abs(w0-PGW)>2){ PGW=w0; renderPage(); } else bindCurve('p'); countUp(); fitAll(); return; }
   const box=$('vs-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.vs-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; }
   countUp(); fitAll();
@@ -12653,10 +12716,18 @@ function wire(){ if(WIRED) return; WIRED=true;
     const sv=t.closest('svg.vs-spk'); if(sv&&SPK[sv.id]){ spkHover(sv,e); return; }
     hideTip(); roots().forEach(r=>r.querySelectorAll('svg.vs-spk .vs-xh[opacity="1"]').forEach(l=>l.setAttribute('opacity','0'))); });
   document.addEventListener('click',e=>{ if(tipPinned&&!(e.target.closest&&e.target.closest('#vs-tip'))&&!(PIN.el&&Date.now()-PIN.at<800&&PIN.el.contains(e.target))) hideTip(); },true);
-  document.addEventListener('touchstart',e=>{ const t=e.target; if(!inStudio(t)) return; const k0=t.closest('[data-tk]');
-    if(!k0){ const sv=t.closest('svg.vs-spk'), p=e.touches[0]; if(sv&&SPK[sv.id]&&p){ spkHover(sv,{clientX:p.clientX,clientY:p.clientY}); tipPinned=true; PIN={el:sv,at:Date.now()}; const tp=$('vs-tip'); if(tp) tp.classList.add('vs-pin'); } return; }
+  // on a phone a TAP shows the tooltip, pinned (the finger lifted within 600 ms, moved under 10 px, the page did not scroll) —
+  // a swipe that starts on the map / a table / a chart never pins one; any scroll hides an open one
+  let T0=null;
+  document.addEventListener('touchstart',e=>{ T0=null; const t=e.target; if(!inStudio(t)||t.closest('#vs-tip')) return; const p=e.touches&&e.touches[0]; if(!p||e.touches.length>1) return;
+    T0={t,x:p.clientX,y:p.clientY,at:Date.now(),sy:scrollY,moved:false}; },{passive:true});
+  document.addEventListener('touchmove',e=>{ if(!T0) return; const p=e.touches&&e.touches[0]; if(!p||e.touches.length>1||Math.abs(p.clientX-T0.x)>10||Math.abs(p.clientY-T0.y)>10) T0.moved=true; },{passive:true});
+  document.addEventListener('touchcancel',()=>{ T0=null; },{passive:true});
+  document.addEventListener('touchend',()=>{ const s=T0; T0=null; if(!s||s.moved||Date.now()-s.at>600||Math.abs(scrollY-s.sy)>3) return; const t=s.t, p={clientX:s.x,clientY:s.y}; const k0=t.closest('[data-tk]');
+    if(!k0){ const sv=t.closest('svg.vs-spk'); if(sv&&SPK[sv.id]){ spkHover(sv,p); tipPinned=true; PIN={el:sv,at:Date.now()}; const tp=$('vs-tip'); if(tp) tp.classList.add('vs-pin'); } return; }
     PIN={el:k0,at:Date.now()};
-    const [k,...args]=k0.getAttribute('data-tk').split(':'); const h=TIPS[k]&&TIPS[k](...args); const p=e.touches[0]; if(h) showTip(h,p.clientX,p.clientY,true); },{passive:true});
+    const [k,...args]=k0.getAttribute('data-tk').split(':'); const h=TIPS[k]&&TIPS[k](...args); if(h) showTip(h,p.clientX,p.clientY,true); },{passive:true});
+  addEventListener('scroll',()=>{ if(PIN.at&&Date.now()-PIN.at<350) return; const tp=$('vs-tip'); if(tp&&tp.classList.contains('vs-on')) hideTip(); },{passive:true,capture:true});
   document.addEventListener('mouseover',e=>{ const t=e.target; if(!inStudio(t)&&hlApp==null) return; const a0=inStudio(t)?t.closest('[data-app]'):null; const id=a0?a0.getAttribute('data-app'):null;
     if(id===hlApp) return; hlApp=id;
     roots().forEach(r=>{ r.querySelectorAll('[data-app].vs-hl').forEach(el=>el.classList.remove('vs-hl'));
@@ -12685,8 +12756,9 @@ function onClick(e){ const t=e.target; if(!inStudio(t)) return;
   const th=t.closest('th[data-sort]'); if(th){ const k=th.dataset.sort; ST.sort=ST.sort.k===k?{k,d:-ST.sort.d}:{k,d:(k==='app'||k==='st'||k==='pb'||k==='cpi'||k==='prof')?1:-1}; renderTbl(true); return; }
   const fb=t.closest('#vs-fst button'); if(fb){ const s=fb.dataset.st; ST.fst.has(s)?ST.fst.delete(s):ST.fst.add(s); renderTbl(true); return; }
   const cv_=t.closest('#vs-chgV button'); if(cv_){ ST.chgView=cv_.dataset.v; const el=$('vs-chg'); if(el) el.innerHTML=chgHtml(); save(); return; }
-  if(t.closest('#vs-mapMore')){ ST.mapAll=!ST.mapAll; const el=$('vs-map'); if(el) el.innerHTML=mapHtml(); fitAll(); return; }
-  if(t.closest('#vs-srcMore')){ ST.srcAll=!ST.srcAll; const el=$('vs-src'); if(el) el.innerHTML=srcHtml(); return; }
+  const keepAt=(id,f)=>{ const b=$(id), y0=b?b.getBoundingClientRect().top:null; f(); const b1=$(id); if(y0!=null&&b1) window.scrollBy(0,b1.getBoundingClientRect().top-y0); };
+  if(t.closest('#vs-mapMore')){ keepAt('vs-mapMore',()=>{ ST.mapAll=!ST.mapAll; const el=$('vs-map'); if(el) el.innerHTML=mapHtml(); fitAll(); }); return; }
+  if(t.closest('#vs-srcMore')){ keepAt('vs-srcMore',()=>{ ST.srcAll=!ST.srcAll; const el=$('vs-src'); if(el) el.innerHTML=srcHtml(); }); return; }
   if(t.closest('#vs-dClose')||t.id==='vs-scrim'){ closeDrawer(); return; }
   if(t.closest('#vs-dPrev')||t.closest('#vs-dNext')){ navDrawer(t.closest('#vs-dPrev')?-1:1); return; }
   const tl=t.closest('[data-tl]'); if(tl){ const [k,d]=tl.dataset.tl.split(':'); const L=k==='u'?tlHtml.ups[d]:(k==='a'?tlHtml.als[d]:tlHtml.inf[d]); if(!L) return; const uniq=[...new Set(L.map(z=>k==='a'?z[0].a:z[0]))]; if(uniq.length===1){ openDrawer(uniq[0].i); return; }
