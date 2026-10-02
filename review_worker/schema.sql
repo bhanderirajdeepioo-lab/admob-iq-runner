@@ -40,4 +40,13 @@ CREATE TABLE IF NOT EXISTS cmp_marks_log (        -- append-only: every add / de
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
   act TEXT NOT NULL CHECK (act IN ('add','delete')), mark INTEGER NOT NULL,
   app TEXT NOT NULL, date TEXT NOT NULL, name TEXT NOT NULL);
-INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '4');
+CREATE TABLE IF NOT EXISTS cmp_ranges (           -- 📅 saved custom compares: two date ranges, Pehle (b_*) vs Baad (a_*)
+  id INTEGER PRIMARY KEY AUTOINCREMENT, app TEXT NOT NULL, b_from TEXT NOT NULL, b_to TEXT NOT NULL,
+  a_from TEXT NOT NULL, a_to TEXT NOT NULL, name TEXT NOT NULL,
+  who TEXT NOT NULL, at TEXT NOT NULL, deleted_by TEXT, deleted_at TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS cmp_ranges_one_live ON cmp_ranges(app, b_from, b_to, a_from, a_to, name) WHERE deleted_at IS NULL;
+CREATE TABLE IF NOT EXISTS cmp_ranges_log (       -- append-only: every add / delete of a saved compare
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
+  act TEXT NOT NULL CHECK (act IN ('add','delete')), cmp INTEGER NOT NULL, app TEXT NOT NULL,
+  b_from TEXT NOT NULL, b_to TEXT NOT NULL, a_from TEXT NOT NULL, a_to TEXT NOT NULL, name TEXT NOT NULL);
+INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '5');

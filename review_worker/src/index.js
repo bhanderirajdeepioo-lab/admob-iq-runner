@@ -4,7 +4,9 @@
 //   /api/config/*   → Settings saves (Access JWT, admins only; commits config/<file>.json with the GITHUB_TOKEN
 //                     secret — see config.js), audited in D1 (config_log)
 //   /api/marks      → 📌 saved dates of "compare any date" (Access JWT; GET all, POST add; /api/marks/delete: the
-//                     author or an admin) in D1 (cmp_marks, audited in cmp_marks_log — see db.js)
+//                     author or an admin) in D1 (cmp_marks, audited in cmp_marks_log — see db.js) — and the saved
+//                     CUSTOM compares (two ranges; a POST with before_* / after_*, a delete with kind "compare") in
+//                     cmp_ranges / cmp_ranges_log, listed beside the marks as `compares`
 //   other /api/*    → 404 JSON
 //   everything else → the static dashboard (env.ASSETS), exactly as without this Worker
 //
@@ -15,7 +17,8 @@
 import { ApiError, verifyAccess, isAdmin, _resetAuthForTests } from "./auth.js";
 import {
   FEATS, ensureSchema, getRev, getDayState, getAppView, getStates, getCalendar, applyAction, decideFlag,
-  _resetSchemaForTests, validateMark, validateDelete, listMarks, addMark, deleteMark,
+  _resetSchemaForTests, validateMark, validateDeleteAny, listMarks, addMark, deleteMark,
+  isCompareBody, validateCompare, listCompares, addCompare, deleteCompare,
 } from "./db.js";
 import { CFG_MSG, CONFIG_MAX_BYTES, serverSaveReady, githubConfig, validateSave, commitConfig, auditSave } from "./config.js";
 
@@ -467,22 +470,35 @@ async function configApi(request, env, url) {
 
 // ── 📌 saved dates (/api/marks; the rules live in db.js) ──────────────────────────────────────
 
-async function hMarksList(c) {
-  return json(200, { marks: await listMarks(c.db), me: c.email, admin: c.admin });
+// every answer carries both lists (an older page reads `marks` only)
+async function both(db) {
+  return { marks: await listMarks(db), compares: await listCompares(db) };
 }
 
-/** Any logged-in user: a strictly validated mark → D1 (+ its audit row) → {ok, mark, dup, marks}. */
+async function hMarksList(c) {
+  return json(200, { ...(await both(c.db)), me: c.email, admin: c.admin });
+}
+
+/** Any logged-in user: a strictly validated mark → D1 (+ its audit row) → {ok, mark, dup, marks, compares}; a body with
+ *  before_* / after_* is a custom compare → {ok, compare, dup, marks, compares}. */
 async function hMarksAdd(c) {
+  if (isCompareBody(c.body)) {
+    const v = validateCompare(c.body, c.now);
+    const r = await addCompare(c.db, v, c.email, c.now);
+    return json(200, { ok: true, compare: r.compare, dup: r.dup, ...(await both(c.db)) });
+  }
   const m = validateMark(c.body, c.now);
   const r = await addMark(c.db, m, c.email, c.now);
-  return json(200, { ok: true, mark: r.mark, dup: r.dup, marks: await listMarks(c.db) });
+  return json(200, { ok: true, mark: r.mark, dup: r.dup, ...(await both(c.db)) });
 }
 
-/** The mark's author or an admin → marked deleted (+ its audit row) → {ok, id, marks}. */
+/** The author or an admin → marked deleted (+ its audit row) → {ok, id, kind, marks, compares}; {id} alone = a date
+ *  mark (an older page's body), {id, kind: "compare"} = a saved compare. */
 async function hMarksDelete(c) {
-  const id = validateDelete(c.body);
-  await deleteMark(c.db, id, c.email, c.admin, c.now);
-  return json(200, { ok: true, id, marks: await listMarks(c.db) });
+  const { id, kind } = validateDeleteAny(c.body);
+  if (kind === "compare") await deleteCompare(c.db, id, c.email, c.admin, c.now);
+  else await deleteMark(c.db, id, c.email, c.admin, c.now);
+  return json(200, { ok: true, id, kind, ...(await both(c.db)) });
 }
 
 async function marksApi(request, env, url) {

@@ -1,12 +1,13 @@
 // 📌 Saved dates of "compare any date" (/api/marks): auth, CSRF / body rules, strict validation, add / list / delete
-// (the author or an admin), "*" marks, the audit rows, the v3 → v4 migration (review + config data kept) and the D1
-// budget. Synthetic data only (made-up app ids, example.test emails). node --test
+// (the author or an admin), "*" marks, the audit rows, the v3 → v5 migration (review + config data kept) and the D1
+// budget — and the saved CUSTOM compares (two ranges, schema v5): the same rules, listed beside the marks, the older
+// page's bodies unchanged (v4 → v5 keeps every mark). Synthetic data only (made-up app ids, example.test emails). node --test
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setup, makeIndex, K, D1, ORIGIN, OWNER, TEAMMATE, TEAM2 } from "./harness.js";
 import { FakeD1 } from "./fake_d1.js";
 import { SCHEMA, splitSql, ensureSchema, _resetSchemaForTests } from "../src/db.js";
-import { istDay, MARK_MSG, MARKS_MAX } from "../src/db.js";
+import { istDay, MARK_MSG, MARKS_MAX, CMPS_MAX, SCHEMA_VERSION } from "../src/db.js";
 
 const APP = "ca-app-pub-1001~3001";
 const APP2 = "ca-app-pub-1001~3002";
@@ -108,7 +109,7 @@ test("add / list: any logged-in user adds; who + when stored; the same app + dat
   const d1 = addD(TODAY(), -20), d2 = addD(TODAY(), -5);
   const empty = await list(t);
   assert.equal(empty.status, 200);
-  assert.deepEqual(empty.json, { marks: [], me: TEAMMATE, admin: false });
+  assert.deepEqual(empty.json, { marks: [], compares: [], me: TEAMMATE, admin: false });
   const a = await add(t, { app_id: APP, date: d1, name: "Banner ad hataya" });
   assert.equal(a.status, 200);
   assert.equal(a.json.ok, true);
@@ -201,10 +202,10 @@ test("at most MARKS_MAX live marks: one more → 409 with the Hinglish reason, n
   assert.equal(t.db.q("SELECT COUNT(*) AS n FROM cmp_marks_log")[0].n, 0);
 });
 
-test("a schema_version 3 database (the live Review DB) is migrated to 4: the marks work, review and config data untouched", async () => {
+test("a schema_version 3 database is migrated to 5: the marks and compares work, review and config data untouched", async () => {
   _resetSchemaForTests();
   const db = new FakeD1();
-  const v3 = splitSql(SCHEMA).filter((s) => !s.includes("cmp_marks") && !s.startsWith("INSERT"));
+  const v3 = splitSql(SCHEMA).filter((s) => !s.includes("cmp_marks") && !s.includes("cmp_ranges") && !s.startsWith("INSERT"));
   for (const s of v3) db.sqlite.exec(s);
   db.sqlite.exec("INSERT INTO rv_meta VALUES ('schema_version', '3')");
   db.sqlite.exec("INSERT INTO rv_state (day, app, st, who, at) VALUES ('2026-10-01','a1a1a1a1a1a1','ok','x@example.test','t')");
@@ -214,10 +215,11 @@ test("a schema_version 3 database (the live Review DB) is migrated to 4: the mar
   const before = ["rv_state", "rv_notes", "rv_actions", "config_log"].map((n) => db.q(`SELECT * FROM ${n}`));
   assert.equal(db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE name LIKE 'cmp_marks%'")[0].n, 0);
   const batches = db.batches;
-  assert.equal(await ensureSchema(db), 4);
-  assert.equal(db.batches, batches + 2, "the schema batch + one migration batch");
-  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "4" }]);
+  assert.equal(await ensureSchema(db), 5);
+  assert.equal(db.batches, batches + 3, "the schema batch + one batch per migration (4, 5)");
+  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "5" }]);
   assert.equal(db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('cmp_marks','cmp_marks_one_live','cmp_marks_log')")[0].n, 3);
+  assert.equal(db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('cmp_ranges','cmp_ranges_one_live','cmp_ranges_log')")[0].n, 3);
   assert.deepEqual(["rv_state", "rv_notes", "rv_actions", "config_log"].map((n) => db.q(`SELECT * FROM ${n}`)), before, "data kept");
   _resetSchemaForTests();
   // the same database behind the Worker: the review API and the marks both work
@@ -235,11 +237,146 @@ test("the marks endpoints stay inside the D1 Free budget (cold isolate) and neve
   const day = addD(TODAY(), -12);
   const cost = async (fn) => { t.resetCaches(); const n0 = t.db.statements.length; const r = await fn(); return [t.db.statements.length - n0, r]; };
   for (const [name, fn] of [["list", () => list(t)], ["add", () => add(t, { app_id: APP, date: day, name: "a" })],
-    ["dup", () => add(t, { app_id: APP, date: day, name: "a" })], ["delete", () => del(t, { id: 1 })]]) {
+    ["dup", () => add(t, { app_id: APP, date: day, name: "a" })], ["delete", () => del(t, { id: 1 })],
+    ["compare", () => add(t, { app_id: APP, name: "c", before_from: addD(day, -14), before_to: addD(day, -8), after_from: addD(day, -7), after_to: day })],
+    ["compare delete", () => del(t, { id: 1, kind: "compare" })]]) {
     const [n, r] = await cost(fn);
     assert.equal(r.status, 200, `${name}: ${r.text}`);
     assert.ok(n <= 50, `${name} used ${n} D1 statements`);
     assert.equal(r.headers.get("access-control-allow-origin"), null);
   }
   assert.equal(ORIGIN, "http://localhost");
+});
+
+// ── 📅 saved custom compares (two ranges; schema v5) ─────────────────────────────────────────────────────────────────
+const cmp = (bf, bt, af, at, name, app = APP) => ({ app_id: app, name, before_from: bf, before_to: bt, after_from: af, after_to: at });
+const clog = (t) => t.db.q("SELECT act, who, cmp, app, b_from, b_to, a_from, a_to, name FROM cmp_ranges_log ORDER BY id");
+
+test("compares: add / list / dup beside the marks; the answer carries both lists; who + when stored", async () => {
+  const t = await setup();
+  const T = TODAY(), b0 = addD(T, -60), b1 = addD(T, -54), a0 = addD(T, -30), a1 = addD(T, -24);
+  const m = await add(t, { app_id: APP, date: addD(T, -3), name: "Ek date" });
+  assert.deepEqual(m.json.compares, []);
+  const c = await add(t, cmp(b0, b1, a0, a1, "Diwali vs pehle"));
+  assert.equal(c.status, 200);
+  assert.equal(c.json.ok, true);
+  assert.equal(c.json.dup, false);
+  assert.deepEqual({ ...c.json.compare, at: "t" }, { id: 1, app_id: APP, before_from: b0, before_to: b1, after_from: a0, after_to: a1,
+    name: "Diwali vs pehle", who: TEAMMATE, at: "t" });
+  assert.equal(c.json.mark, undefined, "a compare is never a date mark");
+  assert.deepEqual(c.json.marks.map((x) => x.name), ["Ek date"], "the marks are untouched");
+  assert.equal(t.db.q("SELECT COUNT(*) AS n FROM cmp_marks")[0].n, 1);
+  const star = await add(t, cmp(addD(T, -400), addD(T, -394), addD(T, -10), addD(T, -4), "Saal bhar baad", "*"), { token: t.tokens.owner });
+  assert.equal(star.status, 200);
+  assert.deepEqual(star.json.compares.map((x) => [x.app_id, x.after_from]), [["*", addD(T, -10)], [APP, a0]], "newest Baad first");
+  const dup = await add(t, cmp(b0, b1, a0, a1, "  Diwali vs pehle "), { token: t.tokens.team2 });
+  assert.deepEqual([dup.json.dup, dup.json.compare.id, dup.json.compare.who], [true, 1, TEAMMATE]);
+  const other = await add(t, cmp(b0, b1, a0, addD(a1, 1), "Diwali vs pehle"));
+  assert.equal(other.json.dup, false, "other ranges = another compare");
+  const L = await list(t);
+  assert.deepEqual(Object.keys(L.json).sort(), ["admin", "compares", "marks", "me"]);
+  assert.equal(L.json.compares.length, 3);
+  assert.equal(L.json.marks.length, 1);
+  assert.deepEqual(clog(t).map((r) => [r.act, r.who, r.cmp, r.name]),
+    [["add", TEAMMATE, 1, "Diwali vs pehle"], ["add", OWNER, 2, "Saal bhar baad"], ["add", TEAMMATE, 3, "Diwali vs pehle"]]);
+  assert.equal(t.db.q("SELECT COUNT(*) AS n FROM cmp_marks_log")[0].n, 1, "the marks' log only has the mark");
+});
+
+test("compares: strict validation — real days of the last ~4 years, Pehle wholly before Baad, ≤ 400 days each, the name rule", async () => {
+  const t = await setup();
+  const T = TODAY(), name = "Tulna";
+  const B = [addD(T, -40), addD(T, -34)], A = [addD(T, -20), addD(T, -14)];
+  const cases = [
+    cmp(B[0], B[1], A[0], "2026-02-30", name), cmp(B[0], B[1], A[0], addD(T, 1), name), cmp(addD(T, -1501), B[1], A[0], A[1], name),
+    cmp(B[1], B[0], A[0], A[1], name), cmp(B[0], B[1], A[1], A[0], name), cmp(B[0], A[0], A[0], A[1], name),
+    cmp(A[0], A[1], B[0], B[1], name), cmp(addD(T, -900), addD(T, -500), A[0], A[1], name),
+    cmp(B[0], B[1], addD(T, -420), T, name), { app_id: APP, name, before_from: B[0], before_to: B[1], after_from: A[0] },
+    { app_id: APP, name, before_from: B[0], before_to: B[1], after_from: A[0], after_to: 5 },
+    cmp(B[0] + "T00:00", B[1], A[0], A[1], name),
+  ];
+  for (const body of cases) {
+    const r = await add(t, body);
+    assert.equal(r.status, 400, JSON.stringify(body));
+    assert.equal(r.json.field, "ranges", JSON.stringify(body));
+    assert.equal(r.json.msg, MARK_MSG.ranges);
+  }
+  for (const [body, field] of [[cmp(B[0], B[1], A[0], A[1], ""), "name"], [cmp(B[0], B[1], A[0], A[1], "a\u202Eb"), "name"],
+    [cmp(B[0], B[1], A[0], A[1], name, "com.demo"), "app_id"], [{ ...cmp(B[0], B[1], A[0], A[1], name), app_id: undefined }, "app_id"]]) {
+    const r = await add(t, body);
+    assert.equal(r.status, 400);
+    assert.equal(r.json.field, field);
+  }
+  assert.equal(t.db.q("SELECT COUNT(*) AS n FROM cmp_ranges")[0].n, 0);
+  // the edges that ARE allowed: one-day ranges, Baad ending today, 400 days in a range, ~4 years back
+  for (const b of [cmp(addD(T, -2), addD(T, -2), addD(T, -1), addD(T, -1), "ek din"), cmp(addD(T, -900), addD(T, -501), addD(T, -6), T, "400 din"),
+    cmp(addD(T, -1500), addD(T, -1494), addD(T, -7), addD(T, -1), "4 saal")]) assert.equal((await add(t, b)).status, 200, JSON.stringify(b));
+});
+
+test("compares: delete with kind 'compare' — the author OK, another user 403, an admin OK, twice → 404; {id} alone is still a date mark", async () => {
+  const t = await setup();
+  const T = TODAY();
+  const mk = (await add(t, { app_id: APP, date: addD(T, -5), name: "Date wali" })).json.mark;          // id 1 in cmp_marks
+  const c1 = (await add(t, cmp(addD(T, -40), addD(T, -34), addD(T, -20), addD(T, -14), "Ek"))).json.compare;   // id 1 in cmp_ranges
+  const c2 = (await add(t, cmp(addD(T, -40), addD(T, -34), addD(T, -20), addD(T, -14), "Do"), { token: t.tokens.team2 })).json.compare;
+  assert.equal(mk.id, c1.id, "two id spaces");
+  const no = await del(t, { id: c2.id, kind: "compare" });
+  assert.equal(no.status, 403);
+  assert.equal(no.json.msg, MARK_MSG.not_author);
+  // an older page's body {id}: the DATE mark with that id, never the compare
+  const old = await del(t, { id: mk.id });
+  assert.equal(old.status, 200);
+  assert.deepEqual([old.json.kind, old.json.marks.length, old.json.compares.length], ["date", 0, 2]);
+  const own = await del(t, { id: c1.id, kind: "compare" });
+  assert.equal(own.status, 200);
+  assert.deepEqual([own.json.ok, own.json.id, own.json.kind], [true, c1.id, "compare"]);
+  assert.deepEqual(own.json.compares.map((x) => x.id), [c2.id]);
+  assert.equal((await del(t, { id: c2.id, kind: "compare" }, { token: t.tokens.owner })).status, 200, "an admin may");
+  for (const id of [c1.id, 99]) assert.equal((await del(t, { id, kind: "compare" }, { token: t.tokens.owner })).status, 404);
+  for (const kind of ["mark", "", 1, "Compare"]) {
+    const r = await del(t, { id: c2.id, kind });
+    assert.equal(r.status, 400, String(kind));
+    assert.equal(r.json.field, "kind");
+  }
+  assert.deepEqual(t.db.q("SELECT id, deleted_by FROM cmp_ranges ORDER BY id").map((r) => [r.id, r.deleted_by]), [[c1.id, TEAMMATE], [c2.id, OWNER]]);
+  assert.deepEqual(clog(t).map((r) => [r.act, r.cmp]), [["add", c1.id], ["add", c2.id], ["delete", c1.id], ["delete", c2.id]]);
+});
+
+test("compares: at most CMPS_MAX live ones → 409; two people saving the same compare at once → one row", async () => {
+  const t = await setup();
+  const T = TODAY(), body = cmp(addD(T, -40), addD(T, -34), addD(T, -20), addD(T, -14), "Same", "*");
+  const [x, y] = await Promise.all([add(t, body), add(t, body, { token: t.tokens.team2 })]);
+  assert.deepEqual([x.status, y.status, x.json.compare.id], [200, 200, y.json.compare.id]);
+  assert.equal(t.db.q("SELECT COUNT(*) AS n FROM cmp_ranges")[0].n, 1);
+  const ins = t.db.sqlite.prepare("INSERT INTO cmp_ranges (app, b_from, b_to, a_from, a_to, name, who, at) VALUES ('*', ?, ?, ?, ?, ?, 'x@example.test', 't')");
+  for (let i = 1; i < CMPS_MAX; i++) ins.run(body.before_from, body.before_to, body.after_from, body.after_to, "c" + i);
+  const r = await add(t, { ...body, name: "one more" });
+  assert.equal(r.status, 409);
+  assert.deepEqual(r.json, { error: "conflict", msg: MARK_MSG.too_many_cmp, why: "too_many" });
+});
+
+test("a schema_version 4 database (the live one) → 5: every saved date kept and still listed / deletable, compares added", async () => {
+  _resetSchemaForTests();
+  const db = new FakeD1();
+  const v4 = splitSql(SCHEMA).filter((s) => !s.includes("cmp_ranges") && !s.startsWith("INSERT"));
+  for (const s of v4) db.sqlite.exec(s);
+  db.sqlite.exec("INSERT INTO rv_meta VALUES ('schema_version', '4')");
+  const d = addD(TODAY(), -9);
+  db.sqlite.exec(`INSERT INTO cmp_marks (app, date, name, who, at) VALUES ('${APP}', '${d}', 'Purani', '${TEAMMATE}', 't')`);
+  db.sqlite.exec(`INSERT INTO cmp_marks_log (at, who, act, mark, app, date, name) VALUES ('t', '${TEAMMATE}', 'add', 1, '${APP}', '${d}', 'Purani')`);
+  const batches = db.batches;
+  assert.equal(await ensureSchema(db), SCHEMA_VERSION);
+  assert.equal(SCHEMA_VERSION, 5);
+  assert.equal(db.batches, batches + 2, "the schema batch + migration 5");
+  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "5" }]);
+  _resetSchemaForTests();
+  const t = await setup();
+  t.env.REVIEW_DB = db;
+  const L = await list(t);
+  assert.deepEqual(L.json.marks.map((m) => [m.id, m.name]), [[1, "Purani"]]);
+  assert.deepEqual(L.json.compares, []);
+  const c = await add(t, cmp(addD(TODAY(), -40), addD(TODAY(), -34), addD(TODAY(), -20), addD(TODAY(), -14), "Nayi"));
+  assert.equal(c.status, 200);
+  assert.equal((await del(t, { id: 1 })).json.marks.length, 0, "the old mark deletes as before");
+  assert.equal(db.q("SELECT COUNT(*) AS n FROM cmp_ranges")[0].n, 1);
+  _resetSchemaForTests();
 });

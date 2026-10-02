@@ -13,7 +13,7 @@ import { ApiError } from "./auth.js";
 
 export const FEATS = ["kamai", "uninstall", "active", "value", "update", "ads", "deduct", "mediation", "health", "setup"];
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 // The exact DDL of the spec (§B.5). review_worker/schema.sql must stay equal to this (a test checks).
 export const SCHEMA = `CREATE TABLE IF NOT EXISTS rv_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -58,7 +58,16 @@ CREATE TABLE IF NOT EXISTS cmp_marks_log (        -- append-only: every add / de
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
   act TEXT NOT NULL CHECK (act IN ('add','delete')), mark INTEGER NOT NULL,
   app TEXT NOT NULL, date TEXT NOT NULL, name TEXT NOT NULL);
-INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '4');`;
+CREATE TABLE IF NOT EXISTS cmp_ranges (           -- 📅 saved custom compares: two date ranges, Pehle (b_*) vs Baad (a_*)
+  id INTEGER PRIMARY KEY AUTOINCREMENT, app TEXT NOT NULL, b_from TEXT NOT NULL, b_to TEXT NOT NULL,
+  a_from TEXT NOT NULL, a_to TEXT NOT NULL, name TEXT NOT NULL,
+  who TEXT NOT NULL, at TEXT NOT NULL, deleted_by TEXT, deleted_at TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS cmp_ranges_one_live ON cmp_ranges(app, b_from, b_to, a_from, a_to, name) WHERE deleted_at IS NULL;
+CREATE TABLE IF NOT EXISTS cmp_ranges_log (       -- append-only: every add / delete of a saved compare
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
+  act TEXT NOT NULL CHECK (act IN ('add','delete')), cmp INTEGER NOT NULL, app TEXT NOT NULL,
+  b_from TEXT NOT NULL, b_to TEXT NOT NULL, a_from TEXT NOT NULL, a_to TEXT NOT NULL, name TEXT NOT NULL);
+INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '5');`;
 
 // Schema changes: MIGRATIONS[n] = [sql, …] upgrades version n-1 → n (run in order, one batch each). A NEW database
 // gets the current SCHEMA (and schema_version = SCHEMA_VERSION) directly; only an older database runs these.
@@ -67,6 +76,9 @@ INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '4');`;
 // 3: config_log, the audit of Settings saves (POST /api/config/save: who, at, file, bytes, result, commit sha).
 // 4: cmp_marks (+ its one-live index) and cmp_marks_log — the 📌 saved dates of "compare any date" (/api/marks):
 //    who saved / deleted one and when; deleting only marks the row (deleted_by / deleted_at), the log keeps both.
+// 5: cmp_ranges (+ its one-live index) and cmp_ranges_log — the saved CUSTOM compares (two date ranges, Pehle vs Baad)
+//    of "compare any date", the same rules as cmp_marks. New tables only (IF NOT EXISTS): a v4 database keeps every
+//    mark, and an older client that never sends a range keeps working exactly as before.
 export const CONFIG_LOG_DDL = `CREATE TABLE IF NOT EXISTS config_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT NOT NULL, at TEXT NOT NULL, file TEXT NOT NULL,
   bytes INTEGER NOT NULL, result TEXT NOT NULL, commit_sha TEXT)`;
@@ -78,10 +90,20 @@ export const MARKS_DDL = [`CREATE TABLE IF NOT EXISTS cmp_marks (
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
   act TEXT NOT NULL CHECK (act IN ('add','delete')), mark INTEGER NOT NULL,
   app TEXT NOT NULL, date TEXT NOT NULL, name TEXT NOT NULL)`];
+export const RANGES_DDL = [`CREATE TABLE IF NOT EXISTS cmp_ranges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, app TEXT NOT NULL, b_from TEXT NOT NULL, b_to TEXT NOT NULL,
+  a_from TEXT NOT NULL, a_to TEXT NOT NULL, name TEXT NOT NULL,
+  who TEXT NOT NULL, at TEXT NOT NULL, deleted_by TEXT, deleted_at TEXT)`,
+"CREATE UNIQUE INDEX IF NOT EXISTS cmp_ranges_one_live ON cmp_ranges(app, b_from, b_to, a_from, a_to, name) WHERE deleted_at IS NULL",
+`CREATE TABLE IF NOT EXISTS cmp_ranges_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
+  act TEXT NOT NULL CHECK (act IN ('add','delete')), cmp INTEGER NOT NULL, app TEXT NOT NULL,
+  b_from TEXT NOT NULL, b_to TEXT NOT NULL, a_from TEXT NOT NULL, a_to TEXT NOT NULL, name TEXT NOT NULL)`];
 export const MIGRATIONS = {
   2: ["ALTER TABLE rv_flags ADD COLUMN dec_day TEXT", "ALTER TABLE rv_flags ADD COLUMN done_day TEXT"],
   3: [CONFIG_LOG_DDL],
   4: MARKS_DDL,
+  5: RANGES_DDL,
 };
 
 /** One statement per entry (a ';' inside a trailing comment is not a statement end). */
@@ -561,6 +583,9 @@ export const MARK_MSG = {
   not_author: "Ye date sirf jisne save ki wo (ya admin) hata sakta hai",
   not_found: "Ye saved date ab nahi hai (shayad kisi ne hata di)",
   too_many: "Bahut saari saved dates — pehle kuch purani hatao",
+  ranges: "Dono range galat hain — Pehle (from ≤ to) poori Baad se pehle ho, har range 400 din tak, pichhle ~4 saal me",
+  kind: "Kya hatana hai, samajh nahi aaya",
+  too_many_cmp: "Bahut saari saved tulna — pehle kuch purani hatao",
 };
 
 const bad = (field) => new ApiError(400, "bad_request", { field, msg: MARK_MSG[field] });
@@ -595,11 +620,97 @@ export function validateMark(b, nowIso) {
   return { app, date, name: normName(b.name) };
 }
 
-/** POST /api/marks/delete body → the mark id. */
+/** POST /api/marks/delete body → the id (a date mark; kind "compare" → a saved compare, validateDeleteAny). */
 export function validateDelete(b) {
   const id = b.id;
   if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) throw bad("id");
   return id;
+}
+
+/** POST /api/marks/delete body → {id, kind: "date" | "compare"}; no kind = a date mark (the body every older page sends). */
+export function validateDeleteAny(b) {
+  const id = validateDelete(b);
+  const k = b.kind;
+  if (k === undefined || k === null || k === "date") return { id, kind: "date" };
+  if (k === "compare") return { id, kind: "compare" };
+  throw bad("kind");
+}
+
+// ── 📅 saved CUSTOM compares (two ranges: Pehle b_from…b_to vs Baad a_from…a_to), the same rules as the marks ──────────
+// POST /api/marks with any of before_from / before_to / after_from / after_to is a compare; one without them is a date
+// mark (exactly as before). Listed by GET /api/marks as `compares` beside `marks`; deleted with {id, kind: "compare"}.
+export const CMP_DAYS = 1500;                   // a range day: a real day of the last ~4 years (IST) — "saal bhar ka farak"
+export const CMP_SPAN_MAX = 400;                // one range: at most 400 days
+export const CMPS_MAX = 2000;                   // live saved compares in all
+export const CMP_KEYS = ["before_from", "before_to", "after_from", "after_to"];
+
+/** A POST /api/marks body that is a compare (any range key present). */
+export function isCompareBody(b) {
+  return CMP_KEYS.some((k) => Object.prototype.hasOwnProperty.call(b, k));
+}
+
+/** POST /api/marks compare body → {app, bf, bt, af, at, name}: four real days of the last CMP_DAYS (IST), Pehle from ≤ to,
+ *  Baad from ≤ to, Pehle wholly before Baad, each range ≤ CMP_SPAN_MAX days. Unknown keys are ignored. */
+export function validateCompare(b, nowIso) {
+  const app = b.app_id;
+  if (typeof app !== "string" || !(app === "*" || MARK_APP_RE.test(app))) throw bad("app_id");
+  const today = istDay(nowIso), lo = addDays(today, -CMP_DAYS);
+  const [bf, bt, af, at] = CMP_KEYS.map((k) => b[k]);
+  const days = (x, y) => Math.round((Date.parse(y + "T00:00:00Z") - Date.parse(x + "T00:00:00Z")) / 86400000);
+  if (![bf, bt, af, at].every((d) => isMarkDay(d) && d <= today && d >= lo)) throw bad("ranges");
+  if (!(bf <= bt && bt < af && af <= at)) throw bad("ranges");
+  if (days(bf, bt) >= CMP_SPAN_MAX || days(af, at) >= CMP_SPAN_MAX) throw bad("ranges");
+  return { app, bf, bt, af, at, name: normName(b.name) };
+}
+
+const CMP_COLS = "id, app AS app_id, b_from AS before_from, b_to AS before_to, a_from AS after_from, a_to AS after_to, name, who, at";
+
+/** Every live saved compare, newest Baad first. */
+export async function listCompares(db) {
+  const res = await db.prepare(`SELECT ${CMP_COLS} FROM cmp_ranges WHERE deleted_at IS NULL ORDER BY a_from DESC, id DESC`).all();
+  return rows(res);
+}
+
+async function liveCompare(db, c) {
+  return db.prepare(`SELECT ${CMP_COLS} FROM cmp_ranges WHERE app = ? AND b_from = ? AND b_to = ? AND a_from = ? AND a_to = ? ` +
+    "AND name = ? AND deleted_at IS NULL").bind(c.app, c.bf, c.bt, c.af, c.at, c.name).first();
+}
+
+/** Add one compare (c = validateCompare's) as `who` at `at` → {compare, dup}: addMark's rules (the same app + ranges +
+ *  name already saved → that one, dup; one batch: the row and its audit row in cmp_ranges_log, or neither). */
+export async function addCompare(db, c, who, at) {
+  const have = await liveCompare(db, c);
+  if (have) return { compare: have, dup: true };
+  const n = Number(await db.prepare("SELECT COUNT(*) AS n FROM cmp_ranges WHERE deleted_at IS NULL").first("n")) || 0;
+  if (n >= CMPS_MAX) throw new ApiError(409, "conflict", { why: "too_many", msg: MARK_MSG.too_many_cmp });
+  try {
+    await db.batch([
+      db.prepare("INSERT INTO cmp_ranges (app, b_from, b_to, a_from, a_to, name, who, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(c.app, c.bf, c.bt, c.af, c.at, c.name, who, at),
+      db.prepare("INSERT INTO cmp_ranges_log (at, who, act, cmp, app, b_from, b_to, a_from, a_to, name) " +
+        "SELECT ?, ?, 'add', id, app, b_from, b_to, a_from, a_to, name FROM cmp_ranges WHERE id = last_insert_rowid()").bind(at, who),
+    ]);
+  } catch (e) {
+    const won = await liveCompare(db, c);
+    if (won) return { compare: won, dup: true };
+    throw e;
+  }
+  return { compare: await liveCompare(db, c), dup: false };
+}
+
+/** Delete compare `id` as `who` (its author, or an admin) at `at`: deleteMark's rules (only marked deleted + its audit
+ *  row, one batch; deleted meanwhile / never there → 404; someone else's → 403). */
+export async function deleteCompare(db, id, who, admin, at) {
+  const c = await db.prepare(`SELECT ${CMP_COLS} FROM cmp_ranges WHERE id = ? AND deleted_at IS NULL`).bind(id).first();
+  if (!c) throw new ApiError(404, "not_found", { msg: MARK_MSG.not_found });
+  if (c.who !== who && !admin) throw new ApiError(403, "forbidden", { msg: MARK_MSG.not_author });
+  const res = await db.batch([
+    db.prepare("UPDATE cmp_ranges SET deleted_by = ?, deleted_at = ? WHERE id = ? AND deleted_at IS NULL").bind(who, at, id),
+    db.prepare("INSERT INTO cmp_ranges_log (at, who, act, cmp, app, b_from, b_to, a_from, a_to, name) " +
+      "SELECT ?, ?, 'delete', id, app, b_from, b_to, a_from, a_to, name FROM cmp_ranges WHERE id = ? AND changes() = 1").bind(at, who, id),
+  ]);
+  if (!changes(res[0])) throw new ApiError(404, "not_found", { msg: MARK_MSG.not_found });
+  return c;
 }
 
 const MARK_COLS = "id, app AS app_id, date, name, who, at";
