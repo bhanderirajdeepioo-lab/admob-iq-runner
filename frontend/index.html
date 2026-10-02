@@ -3738,9 +3738,9 @@ function sumDaily(daily, winSet){
   (daily||[]).forEach(r=>{ if(winSet.has(r[0])){ e+=r[1]; im+=r[2]; rq+=r[3]; ma+=r[4]; ck+=r[5]; } });
   return {revenue:e/1e6, earn:e, impr:im, req:rq, matched:ma, clicks:ck,
           ecpm: im? e/(im*1000) : 0, match: rq? Math.min(1, ma/rq) : 0,
-          // show rate = impr/matched; impr is mediation (all sources), matched is network,
-          // so the cross-source ratio can nudge >100% — cap at 100% (its conceptual ceiling).
-          show: ma? Math.min(1, im/ma) : 0, ctr: im? ck/im : 0};
+          // show rate = impr/matched, both the ad unit's own totals (mediation report, every source) —
+          // AdMob's own ratio, so no 100% cap (an ad matched one day and shown the next can pass it)
+          show: ma? im/ma : 0, ctr: im? ck/im : 0};
 }
 function pRangeLabel(r){return {today:'Today',yesterday:'Yesterday','7d':'7 days','30d':'30 days','90d':'90 days',month:'This month',lastmonth:'Last month',all:'All time',custom:'Custom'}[r]||r;}
 // portfolio calendar axis (all placement dates), cached; invalidated each render()
@@ -4668,7 +4668,7 @@ function adDailySeries(appName){
     ecpm.push(o.i? o.e/(o.i*1000) : null);              // rates blank on 0-impression days
     ctr.push(o.i? o.c/o.i : null);
     match.push(o.q? Math.min(1,o.m/o.q) : null);
-    show.push(o.m? Math.min(1,o.i/o.m) : null); });
+    show.push(o.m? o.i/o.m : null); });
   return {d,rev,ecpm,ctr,match,show,req};
 }
 function adDailyWin(dates){ const n=dates.length, idx=[]; if(!n)return idx;
@@ -4709,7 +4709,7 @@ function adDailyPanel(appName){
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:2px 0 2px">${rgChips}</div>${customBox}
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:11px 0 4px">${metChips}</div>
     <div style="border-top:1px solid var(--line);margin-top:10px;padding-top:6px">${charts}</div>
-    <div class="faint" style="font-size:10.5px;margin-top:4px">Daily = network report (roz fetch hone wala) se — koi extra AdMob call nahi. Match/Show/eCPM 0-impression din pe blank. Ye graph ka apna range hai (upar ke KPIs selected period ke).</div></div>`;
+    <div class="faint" style="font-size:10.5px;margin-top:4px">Daily = AdMob mediation report se (ad-unit ke apne totals, sab ad sources) — koi extra AdMob call nahi. Match/Show/eCPM 0-impression din pe blank. Ye graph ka apna range hai (upar ke KPIs selected period ke).</div></div>`;
 }
 // windowed revenue chart: area of daily $ + dashed baseline (7-day median) + end dot
 function trendChart(pts, base, color){
@@ -5261,7 +5261,7 @@ function renderCountries(){
     let trueE=0;(APP?(DATA.placements||[]).filter(p=>p.app===APP):(DATA.placements||[])).forEach(p=>(p.daily||[]).forEach(r=>{if(winSet.has(r[0]))trueE+=r[1];}));
     const tot=trueE||Object.values(bag).reduce((a,b)=>a+b.e,0)||1;
     cs=Object.entries(bag).filter(([k,v])=>v.e>0).map(([country,v])=>({country,tier:tierMap[country]||3,
-      revenue:v.e/1e6,ecpm:v.i?v.e/(v.i*1000):0,match:v.q?Math.min(1,v.m/v.q):0,show:v.m?Math.min(1,v.i/v.m):0,
+      revenue:v.e/1e6,ecpm:v.i?v.e/(v.i*1000):0,match:v.q?Math.min(1,v.m/v.q):0,show:v.m?v.i/v.m:0,
       ctr:v.i?v.c/v.i:0,impressions:v.i,requests:v.q,share:v.e/tot}));
     cs.sort((a,b)=>b.revenue-a.revenue);
     ctyTotal=trueE/1e6;                            // true portfolio/app total (matches Overview)
@@ -5480,7 +5480,8 @@ function loadBaselineGeo(cb){ if(BGEO){cb&&cb();return;} if(BGLOADING)return; BG
   fetchGzJson('baseline_geo.json.gz?t='+Date.now()).then(j=>{BGEO=j||{};BGLOADING=false;cb&&cb();}).catch(()=>{BGLOADING=false;}); }
 
 // ===== PLACEMENT DAILY CHART (lazy baseline_daily.json — day-by-day per metric) =====
-// Straight from the network report already fetched hourly → NO extra AdMob calls.
+// From the reports already fetched hourly (revenue: mediation, every source; requests / matched: the ad unit's own
+// totals from the mediation report without ad source) → NO extra AdMob calls.
 function loadBaselineDaily(cb){ if(BDAILY){cb&&cb();return;} if(BDLOADING)return; BDLOADING=true;
   fetchGzJson('baseline_daily.json.gz?t='+Date.now()).catch(()=>fetchGzJson('baseline_daily.json?t='+Date.now())).then(j=>{BDAILY=(j&&j.units)||{};BDLOADING=false;cb&&cb();}).catch(()=>{BDLOADING=false;}); }
 // ad-unit×country DAILY (current month) — lazy-loaded once, so the per-placement country table can
@@ -5569,7 +5570,7 @@ function bDailyPanel(u){
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:2px 0 2px">${rgChips}</div>${customBox}
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:11px 0 4px">${metChips}</div>
     <div style="border-top:1px solid var(--line);margin-top:10px;padding-top:6px">${charts}</div>
-    <div class="faint" style="font-size:10.5px;margin-top:4px">Daily = network report (roz fetch hone wala) se — koi extra AdMob call nahi. Match/Show/eCPM 0-impression din pe blank.</div></div>`;
+    <div class="faint" style="font-size:10.5px;margin-top:4px">Daily = AdMob mediation report se (ad-unit ke apne totals, sab ad sources) — koi extra AdMob call nahi. Match/Show/eCPM 0-impression din pe blank.</div></div>`;
 }
 
 // ===== APPROVAL LAYER (client-side overlay + GitHub commit) =====

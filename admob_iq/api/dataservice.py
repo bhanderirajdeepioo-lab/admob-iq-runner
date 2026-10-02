@@ -472,26 +472,62 @@ def build_deductions_daily(repo):
     return {"dates": dates, "units": units, "data": data}
 
 
+# Where an ad-unit day's requests / matched requests came from (row["req_src"]):
+REQ_SRC_UNIT = "mediation_unit"     # the mediation report WITHOUT AD_SOURCE — the ad unit's own totals (truth)
+REQ_SRC_NETWORK = "network"         # FALLBACK: the network report = the "AdMob Network" source's share only
+
+
+def _unit_request_counts(repo):
+    """{(report_date, ad_unit_id): [ad_requests, matched_requests]} from the ad-unit mediation report
+    (no AD_SOURCE). Summed over the unit's format / platform rows (one of each per unit in practice).
+    Empty when the repo has no such table yet (an older store, PgRepo before its first pull)."""
+    from collections import defaultdict
+    fetch = getattr(repo, "fetch_mediation_unit", None)
+    out = defaultdict(lambda: [0, 0])
+    if fetch is None:
+        return out
+    try:
+        rows = fetch() or []
+    except Exception:
+        return out
+    for r in rows:
+        d = str(r.get("report_date") or "")
+        if d in ("", "None") or not r.get("ad_unit_id"):
+            continue
+        c = out[(d[:10], r["ad_unit_id"])]
+        c[0] += r.get("ad_requests", 0) or 0
+        c[1] += r.get("matched_requests", 0) or 0
+    return out
+
+
 def _revenue_rows(repo):
     """The number the AdMob UI shows for an account/app/placement INCLUDES third-party
     mediated networks, so the source of truth is the MEDIATION report summed across ad
     sources — NOT the AdMob-Network-only report (which undercounts by the mediated share).
 
     Collapse mediation to one row per (date, app, ad_unit, format, platform): sum
-    earnings/impressions/clicks across sources (each impression & dollar is distinct), and
-    take request counts from the network report per (date, ad_unit) — summing ad_requests
-    across bidding sources would multiply the same requests and wreck match-rate. If
-    mediation isn't set up, fall back to the network report (the two are equal then)."""
+    earnings/impressions/clicks across sources (each impression & dollar is distinct).
+
+    Requests / matched requests are NOT summed across sources (the sources overlap — one ad-unit request
+    is offered to several sources — so the sum is far above the ad unit's real requests). They come from
+    the ad-unit mediation report WITHOUT AD_SOURCE (repo.fetch_mediation_unit), per (date, ad_unit): the
+    exact numbers the AdMob UI shows, so match = matched / requests and show = impressions / matched are
+    one source on both sides. FALLBACK, only for an ad-unit day that report has no row for (its history
+    not pulled yet, or its pull failed this run): the network report's numbers, which are the "AdMob
+    Network" source's share only — row["req_src"] says which one a row carries (REQ_SRC_UNIT /
+    REQ_SRC_NETWORK; None = neither had the day). If mediation isn't set up, the network report is the
+    whole story (the two are equal then) and is returned as is."""
     from collections import defaultdict
     med = [r for r in repo.fetch_mediation() if str(r.get("report_date") or "") not in ("", "None")]
     net = repo.fetch_network()
     if not med:
         return net
-    reqs = defaultdict(lambda: {"ad_requests": 0, "matched_requests": 0})
+    unit_reqs = _unit_request_counts(repo)
+    net_reqs = defaultdict(lambda: {"ad_requests": 0, "matched_requests": 0})
     for r in net:
-        k = (str(r.get("report_date")), r.get("ad_unit_id"))
-        reqs[k]["ad_requests"] += r.get("ad_requests", 0) or 0
-        reqs[k]["matched_requests"] += r.get("matched_requests", 0) or 0
+        k = (str(r.get("report_date"))[:10], r.get("ad_unit_id"))
+        net_reqs[k]["ad_requests"] += r.get("ad_requests", 0) or 0
+        net_reqs[k]["matched_requests"] += r.get("matched_requests", 0) or 0
     agg = {}
     for r in med:
         key = (str(r.get("report_date")), r.get("app_id"), r.get("ad_unit_id"),
@@ -504,15 +540,26 @@ def _revenue_rows(repo):
                  "country": r.get("country") or "All", "format": r.get("format"),
                  "platform": r.get("platform"), "currency_code": r.get("currency_code") or "USD",
                  "impressions": 0, "clicks": 0, "estimated_earnings_micros": 0,
-                 "ad_requests": 0, "matched_requests": 0}
+                 "ad_requests": 0, "matched_requests": 0, "req_src": None}
             agg[key] = a
         a["impressions"] += r.get("impressions", 0) or 0
         a["clicks"] += r.get("clicks", 0) or 0
         a["estimated_earnings_micros"] += r.get("estimated_earnings_micros", 0) or 0
-    for key, a in agg.items():                       # clean per-ad-unit requests from network
-        rq = reqs.get((key[0], key[2]))
-        if rq:
-            a["ad_requests"], a["matched_requests"] = rq["ad_requests"], rq["matched_requests"]
+    # Requests per ad unit-day. A unit-day split over two (format, platform) keys carries its requests on
+    # the FIRST key only (so a unit's day total is never counted twice); every key is tagged with the source.
+    taken = set()
+    for key, a in agg.items():
+        uk = (key[0][:10], key[2])
+        if uk in unit_reqs:                          # the truth: the ad unit's own totals
+            src, cnt = REQ_SRC_UNIT, unit_reqs[uk]
+        elif uk in net_reqs:                         # FALLBACK: AdMob Network's share (no ad-unit row)
+            src, cnt = REQ_SRC_NETWORK, (net_reqs[uk]["ad_requests"], net_reqs[uk]["matched_requests"])
+        else:
+            continue
+        a["req_src"] = src
+        if uk not in taken:
+            taken.add(uk)
+            a["ad_requests"], a["matched_requests"] = cnt
     return list(agg.values())
 
 
@@ -677,18 +724,32 @@ def build_from_db(repo, today=None):
         today_rev = (round(metrics.micros_to_currency(drev.get(partial_day, 0)), 2)
                      if partial_day and partial_day not in complete_set else None)
         # per-day series → root-cause + multi-metric alerts (finished days only)
-        _da = defaultdict(lambda: {"req": 0, "matched": 0, "impr": 0, "clicks": 0})
+        _da = defaultdict(lambda: {"req": 0, "matched": 0, "impr": 0, "clicks": 0, "src": set()})
         for r in rows:
             d0 = str(r["report_date"])
             _da[d0]["req"] += r["ad_requests"]; _da[d0]["matched"] += r["matched_requests"]
             _da[d0]["impr"] += r["impressions"]; _da[d0]["clicks"] += r["clicks"]
-        match_ser = [round(metrics.match_rate(_da[d]["req"], _da[d]["matched"]), 4) for d in cdates]
+            _da[d0]["src"].add(r.get("req_src"))
+        # ONE series, ONE source for everything built on requests (match, show, the request count): the
+        # ad-unit mediation report. When this unit has any finished day from it, those series use ONLY
+        # its days — a FALLBACK day (network numbers = the AdMob Network source's share, far lower match)
+        # is left out, so it can never read as a drop / rise against the true history. Then the latest
+        # finished day must be one of them, or the request-based checks wait for it (rq_judge). A unit
+        # with no such day at all keeps the network series (one source, the old behaviour).
+        rq_days = [d for d in cdates if _da[d]["src"] == {REQ_SRC_UNIT}]
+        rq_judge = bool(rq_days) and rq_days[-1] == cdates[-1]
+        if not rq_days:
+            rq_days, rq_judge = cdates, True
+        match_ser = [round(metrics.match_rate(_da[d]["req"], _da[d]["matched"]), 4) for d in rq_days]
         ctr_ser = [round(metrics.ctr(_da[d]["impr"], _da[d]["clicks"]), 5) for d in cdates]
-        show_ser = [round(min(1.0, metrics.show_rate(_da[d]["matched"], _da[d]["impr"])), 4) for d in cdates]  # cap 100% (impr are mediation, matched network)
+        # no 100% cap: impressions and matched requests now come from the same report (the cap only hid
+        # the old mix of all-source impressions over AdMob-Network-only matched requests)
+        show_ser = [round(metrics.show_rate(_da[d]["matched"], _da[d]["impr"]), 4) for d in rq_days]
         ecpm_ser = [round(metrics.ecpm(drev[d], _da[d]["impr"]), 3) for d in cdates]
-        req_ser = [_da[d]["req"] for d in cdates]
-        cause = rootcause.classify(ecpm_change=_chg(ecpm_ser), match_change=_chg(match_ser),
-                                   show_change=_chg(show_ser), ctr_change=_chg(ctr_ser),
+        req_ser = [_da[d]["req"] for d in rq_days]
+        cause = rootcause.classify(ecpm_change=_chg(ecpm_ser),
+                                   match_change=_chg(match_ser) if rq_judge else None,
+                                   show_change=_chg(show_ser) if rq_judge else None, ctr_change=_chg(ctr_ser),
                                    deduction_high=(ded >= 0.15))
         _mean = (sum(series) / len(series)) if series else 0
         vol = round(((sum((v - _mean) ** 2 for v in series) / len(series)) ** 0.5 / _mean), 3) if _mean else 0.0
@@ -722,8 +783,13 @@ def build_from_db(repo, today=None):
         # `_alert_recent(latest)` skips DORMANT placements (last active days/months ago) so a stale,
         # long-past drop can't masquerade as a live "you're losing $X/day now" alert.
         if len(series) >= 3 and _alert_recent(latest):
-            for metric, ser in (("revenue", series), ("match_rate", match_ser), ("show_rate", show_ser),
-                                ("ctr", ctr_ser), ("requests", req_ser)):
+            for metric, ser, sdays, by_req in (("revenue", series, cdates, False),
+                                               ("match_rate", match_ser, rq_days, True),
+                                               ("show_rate", show_ser, rq_days, True),
+                                               ("ctr", ctr_ser, cdates, False),
+                                               ("requests", req_ser, rq_days, True)):
+                if by_req and (not rq_judge or len(ser) < 3):
+                    continue                        # request-based: latest day not from the one source yet
                 sig = rules.evaluate(metric, ser[-1], ser[:-1])
                 if sig.is_alert and sig.severity != "good":
                     # a show-rate drop is a lower-urgency (technical) signal → "watch", matching
@@ -734,7 +800,7 @@ def build_from_db(repo, today=None):
                                            country=country, current=round(ser[-1], 4),
                                            base_rev=base_rev,
                                            lost=(round(base_rev - series[-1], 2) if metric == "revenue" else None),
-                                           started=started_day(ser, cdates, sig.baseline, ser[-1])))
+                                           started=started_day(ser, sdays, sig.baseline, ser[-1])))
 
     # Materiality gate: a placement must earn >= ALERT_MIN_SHARE of ITS OWN APP's baseline
     # revenue to alert (self-scaling per app, so a smaller app's important placements still fire

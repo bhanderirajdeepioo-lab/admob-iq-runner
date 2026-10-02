@@ -123,25 +123,35 @@ def _series_from_agg(ser, cap=None):
 DAILY_MAX_DAYS = 403          # keep the full ~13-month daily history (covers the "all time" toggle)
 
 
-def build_daily_series(network_rows, keep_ids=None):
-    """Per-placement DAILY series for the placement-page chart, straight from the network report
-    (already fetched hourly — this adds ZERO extra AdMob API load). One point per ad_unit×day:
-    revenue, ad-requests and all four rates (CTR / match / show / eCPM), each DERIVED from the raw
-    daily counts exactly like the monthly baseline, so daily and monthly line up. A rate is null on
-    a day whose denominator is 0 (e.g. no impressions ⇒ no eCPM/CTR) — the chart shows a gap, never
-    a fake 0. `keep_ids` (the active baseline placements) limits the file to reachable units.
+def build_daily_series(unit_rows, keep_ids=None):
+    """Per-placement DAILY series for the placement-page chart, from the rows already in the store (this
+    adds ZERO extra AdMob API load). One point per ad_unit×day: revenue, ad-requests and all four rates
+    (CTR / match / show / eCPM), each DERIVED from the raw daily counts exactly like the monthly
+    baseline, so daily and monthly line up. A rate is null on a day whose denominator is 0 (e.g. no
+    impressions ⇒ no eCPM/CTR) — the chart shows a gap, never a fake 0. `keep_ids` (the active baseline
+    placements) limits the file to reachable units.
+
+    `unit_rows` = dataservice._revenue_rows: revenue / impressions / clicks from the mediation report
+    (every ad source) and requests / matched requests from the ad-unit mediation report (no AD_SOURCE),
+    the same numbers as the ad-unit table. A row may carry req_src: once a unit has ANY day from the
+    ad-unit report, a day without it (a FALLBACK day — network numbers, the AdMob Network source's share
+    only) shows no requests / match / show (null → a gap) so the chart's line is one source end to end.
+    Plain network rows (no req_src) are read as before.
 
     Output per unit: {d:[dates], rev, req, ctr, match, show, ecpm} — parallel arrays, dates ascending.
     Kept OUT of the always-loaded payloads; the UI lazy-fetches baseline_daily.json on first drill."""
+    from ..api.dataservice import REQ_SRC_UNIT
     agg = {}          # unit_id -> date -> summed raw counts
     names = {}        # unit_id -> (unit_name, app_name)
-    for r in network_rows:
+    src = {}          # unit_id -> date -> {req_src of its rows}
+    for r in unit_rows:
         uid = r.get("ad_unit_id")
         day = r.get("report_date")
         if not uid or not day:
             continue
         if keep_ids is not None and uid not in keep_ids:
             continue
+        day = str(day)[:10]
         d = agg.setdefault(uid, {})
         s = d.get(day)
         if s is None:
@@ -149,23 +159,27 @@ def build_daily_series(network_rows, keep_ids=None):
                           "clicks": 0, "estimated_earnings_micros": 0}
         for k in s:
             s[k] += r.get(k, 0) or 0
+        src.setdefault(uid, {}).setdefault(day, set()).add(r.get("req_src"))
         if uid not in names:
             names[uid] = (r.get("unit_name"), r.get("app_name"))
     out = {}
     for uid, days in agg.items():
         ds = sorted(days)[-DAILY_MAX_DAYS:]
+        us = src.get(uid, {})
+        one_src = any(us.get(day) == {REQ_SRC_UNIT} for day in days)   # the unit has ad-unit report days
         rec = {"d": ds, "name": names.get(uid, (None, None))[0], "app": names.get(uid, (None, None))[1],
                "rev": [], "req": [], "ctr": [], "match": [], "show": [], "ecpm": []}
         for day in ds:
             s = days[day]
             impr = s["impressions"]
+            req_ok = (not one_src) or us.get(day) == {REQ_SRC_UNIT}   # False on a fallback day → gap
             rec["rev"].append(round(metrics.micros_to_currency(s["estimated_earnings_micros"]), 2))
-            rec["req"].append(s["ad_requests"])
+            rec["req"].append(s["ad_requests"] if req_ok else None)
             rec["ctr"].append(round(metrics.ctr(impr, s["clicks"]), 5) if impr else None)
             rec["match"].append(round(metrics.match_rate(s["ad_requests"], s["matched_requests"]), 4)
-                                if s["ad_requests"] else None)
+                                if s["ad_requests"] and req_ok else None)
             rec["show"].append(round(metrics.show_rate(s["matched_requests"], impr), 4)
-                               if s["matched_requests"] else None)
+                               if s["matched_requests"] and req_ok else None)
             rec["ecpm"].append(round(metrics.ecpm(s["estimated_earnings_micros"], impr), 3) if impr else None)
         out[uid] = rec
     return out
