@@ -528,8 +528,9 @@ def test_install_week_grid_draws_a_line_above_each_updates_week(report):
     assert re.fullmatch(r"📦 v9\.1 %s — mid-week" % D, lines[W[1]["w"]])                     # one update mid-week
     assert re.fullmatch(r"📦 v9\.2 %s · v9\.3 %s — mid-week" % (D, D), lines[W[2]["w"]])     # two in one week: one line
     assert re.fullmatch(r"📦 v9\.4 %s — week start" % D, lines[W[3]["w"]])                    # on the week's first day
-    assert W[0]["w"] not in lines and not any("9.0" in t for t in lines.values())          # before the grid's weeks: none
-    assert re.fullmatch(r"📦 v1\.1 %s — mid-week" % D, lines[W[8]["w"]]) and len(lines) == 4  # (the app's real update)
+    assert W[0]["w"] not in lines and not any("9.0" in t for t in lines.values())          # before the app's start: none
+    w11 = next(w["w"] for w in W if w["f"] <= "2026-08-30" <= w["t"])                        # (the app's real update)
+    assert re.fullmatch(r"📦 v1\.1 %s — mid-week" % D, lines[w11]) and len(lines) == 4
     for i, x in enumerate(seq):                     # each line right ABOVE its week's row, whose label carries a 📦
         if x["k"] == "crel":
             assert seq[i + 1]["k"] == "rh" and "📦" in seq[i + 1]["t"]
@@ -539,10 +540,13 @@ def test_install_week_grid_draws_a_line_above_each_updates_week(report):
     part = [w for w in W if w["part"]]
     assert part and all(any(x["k"] == "rh" and "(only %d days)" % ((date.fromisoformat(w["t"]) - date.fromisoformat(w["f"])).days + 1)
                             in x["t"] for x in seq) for w in part)
-    # the very lines the older table draws, above the same weeks (its table also has older weeks: "9.0" sits there)
+    # the very lines the older table draws, above the same weeks — every week of it is in the grid now (no 12-week
+    # cut: the owner, 2 Oct, "13-19 july tak hi kyu? pura data hona chaiye"), the oldest ones too
     lab = {x["lab"]: x["w"] for x in c["newByLabel"]}
     both = [o for o in c["old"] if o["wk"] in lab]
-    assert len(both) == 4 and any("9.0" in o["rel"] and o["wk"] not in lab for o in c["old"])
+    assert len(both) == 4 == len(c["old"]) and not any("9.0" in o["rel"] for o in c["old"])
+    assert len(W) > 12 and c["pageRows"] == len(W) == c["drawerRows"]
+    assert c["pageHead"].startswith("Install week × day · all %d weeks " % len(W)) and "saare hafte" in c["pageHead"]
     for o in both:
         assert re.findall(r"v[\d.]+", o["rel"]) == re.findall(r"v[\d.]+", lines[lab[o["wk"]]]), o
     # the page and the drawer draw the same lines (no year row: these weeks are all in one year)
@@ -568,9 +572,22 @@ def test_install_week_grid_update_tap_jumps_to_its_update_impact_block(report):
 
 def test_install_week_grid_year_rows_only_when_the_weeks_cross_a_year(report):
     c = J(report, "crel")
+    # under its year row a week's label says no year again — the older table's own labels (uniSpan(…, noYr))
     assert c["year"] == ["rh All-time normal all installs", "cyr ── 2026 ──", "rh 5–7 Jan 5,400 installs (only 3 days)",
                          "crel 📦 v5.0 (31 Dec 2025) — mid-week", "rh 29 Dec 2025–4 Jan 📦 5,400 installs", "cyr ── 2025 ──",
-                         "crel 📦 Update (23 Dec 2025) — mid-week", "rh 22–28 Dec 2025 📦 5,400 installs", "rh 15–21 Dec 2025 5,400 installs"]
+                         "crel 📦 Update (23 Dec 2025) — mid-week", "rh 22–28 Dec 📦 5,400 installs", "rh 15–21 Dec 5,400 installs"]
+
+
+def test_install_week_grid_scrolls_in_its_box_with_its_column_names_on_top():
+    """Every week since the start makes a long grid: it scrolls in its own box (both ways), the column names stick to its
+    top (the corner "Install week" to both edges), the week column to its left; on a phone its 📦 taps are 32px."""
+    css = open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8").read()
+    assert re.search(r"\.us-cohw\{overflow:auto;max-height:min\(70vh,720px\)", css)
+    assert re.search(r"\.us-cohw \.us-coh \.us-chh\{position:sticky;top:0;z-index:3;background:var\(--panel\)", css)
+    assert re.search(r"\.us-cohw \.us-coh \.us-chh\.us-stk\{left:0;z-index:4", css)
+    assert re.search(r"\.us-cohw \.us-coh \.us-rh,:is\(#us-root,#us-layer\) \.us-cohw \.us-coh \.us-stk\{position:sticky;left:0", css)
+    assert re.search(r"@media \(max-width:760px\),\(pointer:coarse\)\{:is\(#us-root,#us-layer\) \.us-coh \.us-relb\{display:inline-block;padding:9px", css)
+    assert "function keepCoh(" in css and "keepCoh(inD?$('us-drawer'):$('us-apg')" in css   # % bache ⇄ Vs normal keeps its place
 
 
 # ── 📉 How many stay (owner, 2 Oct: "purane view ka ye feature (How many stay) tumne new view me to gayab hi kar diya") ──

@@ -255,7 +255,7 @@ get('imppage', `(()=>{ ${RESET} const r={}, ptr=DATA.uninstall.studio;
   r.noStudio={same:nz(ho)===nz(od), frame:ho.indexOf(fr)>=0, section:ho.indexOf('id="us-imp"')>=0, up:ho.indexOf('id="uni-imp-up"')>=0, fold:ho.indexOf('uni-old-app')>=0, dups:dups(ho)};
   // the drawer keeps its short list, pointing at the app page
   const i=US._.A().findIndex(x=>x.id===id); US.openDrawer(i); const dh=document.getElementById('us-drawer').innerHTML; US.closeDrawer();
-  r.drawer={short:dh.indexOf('Updates · since')>=0, hint:dh.indexOf('Poora Update impact card (kisi bhi date se tulna) app page pe')>=0, card:dh.indexOf('id="uni-impact"')>=0};
+  r.drawer={short:/📦 Updates · all \\d+ · since \\d/.test(dh), hint:dh.indexOf('Poora Update impact card (kisi bhi date se tulna) app page pe')>=0, card:dh.indexOf('id="uni-impact"')>=0};
   // an app without updates: the section still there (📅 any date works without one), its empty note, no uninstall lines
   const row0=DATA.uninstall.apps.find(x=>{ const z=(UNI.apps||[]).find(q=>q.app_id===x.app_id); return z&&z.daily&&!uniImpBlocks(z).length&&US._.A().some(q=>q.id===x.app_id); });
   if(row0){ APP=row0.app; UNIAPP=row0.app_id; const h0=uniScreen(); r.noUpd={section:h0.indexOf('id="us-imp"')>=0, card:(h0.match(/id="uni-impact"/g)||[]).length, lines:(sec(h0).match(/class="us-u"/g)||[]).length, dups:dups(h0)}; }
@@ -323,6 +323,9 @@ get('crel', `(()=>{ ${RESET} const r={}, A=US._.A();
     r.pageTaps=[...pg.matchAll(/data-rimp="([^"]*)"/g)].map(m=>m[1]);
     r.pageBlocks=[...pg.matchAll(/id="uni-imp-([^"]*)"/g)].map(m=>m[1]);
     r.secAfterGrid=pg.indexOf('id="us-imp"')>pg.indexOf('class="us-cohw"');
+    // no trim: every week of the file on the page (one row each), its count and first week on the panel's head
+    r.pageRows=toks(cw.slice(0,cw.indexOf('</div></div>')+12)).filter(x=>x.k==='rh').length-1;
+    r.pageHead=__text((pg.match(/<div class="us-eyebrow">Install week × day[^<]*<\\/div>[\\s\\S]*?<div class="us-hint">[\\s\\S]*?<\\/div>/)||[''])[0]);
     // the older page's own "Install week × day" (key days, every week shown): its 📦 lines, by the week below each
     UNITRI='cp'; UNITRIEXP=true; const old=uniTriCard(d); UNITRIEXP=false;
     const ot=[...old.matchAll(/<tr class="uni-rel"><td class="nm">([\\s\\S]*?)<\\/td>|<tr(?: style="[^"]*")?><td class="nm" style="white-space:nowrap">([^<]*)/g)].map(m=>m[1]!=null?{rel:__text(m[1])}:{wk:m[2].trim()});
@@ -336,6 +339,7 @@ get('crel', `(()=>{ ${RESET} const r={}, A=US._.A();
     try{ US._.onClick({target:tg(false),preventDefault(){},stopPropagation(){}});
       const i=A.indexOf(a); US.openDrawer(i); const dh=document.getElementById('us-drawer').innerHTML;
       r.drawer=toks(dh.slice(dh.indexOf('class="us-cohw"'))).filter(x=>x.k!=='rh').map(x=>x.t);
+      r.drawerRows=toks(dh.slice(dh.indexOf('class="us-cohw"'))).filter(x=>x.k==='rh').length-1;
       r.drawerTaps=[...dh.matchAll(/data-rimp="([^"]*)"/g)].map(m=>m[1]);
       US._.onClick({target:tg(true),preventDefault(){},stopPropagation(){}}); r.drawerClosed=US._.ST.drawer===-1;
     } finally{ uniImp=kI; uniImpGo=kG; }

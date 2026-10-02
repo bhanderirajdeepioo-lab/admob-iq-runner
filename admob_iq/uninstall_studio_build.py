@@ -13,8 +13,9 @@ the app drawer) is worked out in the browser from it, for any range / compare th
     engine's own checkpoint numbers — the ALL-TIME share of installs gone by day N (the dashboard table's "All time"),
     the LATEST final week (the engine's settled comparison: its newest install days whose day N is pakka) and the 4
     weeks before it, with counts, dates and the engine's alert / arrow — not tied to the range;
-  * per app: its install-week × day grid (% still installed, ×1000) + the engine's all-time reference row, its updates
-    (📦, with the engine's verdict level), size class (badi / madhyam / chhoti: AdMob earnings + Google Ads spend a day),
+  * per app: its install-week × day grid (% still installed, ×1000) — EVERY install week since the app's history start
+    (its launch, or the oldest day of data), never only the newest ones — + the engine's all-time reference row, ALL its
+    updates up to the span's end (📦, with the engine's verdict level — the grid's 📦 lines reach its oldest week), size class (badi / madhyam / chhoti: AdMob earnings + Google Ads spend a day),
     the engine's own verdict kind and the dashboard summary row's alert counts;
   * every open uninstall alert (with its alert time / Badlaav shuru / data window) + the recently recovered ones;
   * the apps without GA4 data, and meta (the span, today, the build time, fx, the late / lag days).
@@ -46,7 +47,6 @@ from .db import write_json_gz_stable
 FILE = "uninstall_studio.json.gz"
 V = 1                 # the file's format (the page refuses another)
 SPAN = 156            # days per app: 60-day range + 60-day compare + 35 days of 'normal' before the compare
-COH_WEEKS = 12        # install weeks in the cohort heatmap
 COH_COLS = [0, 1, 3, 7, 14, 30, 60, 90]
 GT_COLS = [0, 1, 3, 7, 14, 30, 45, 60, 90]   # "Gone by day N" (the owner's columns; 0 = the same day as the install)
 GT_LAGS = 90          # (the cohort cells read: lags 0..90 per install day)
@@ -443,22 +443,26 @@ def _app(a, names, size_of, paisa, srow, load, E, S):
         a1 = AD['a1'][ai] if 0 <= ai < len(AD.get('a1') or []) else None
         cols['a1'].append(int(a1) if num(a1) else None)
 
-    # updates (📦) inside the span, with the engine's verdict level
+    # updates (📦) with the engine's verdict level — ALL of them up to the span's end (the owner: "no trim"): the
+    # install-week grid draws its 📦 lines over the app's whole history, and a range reaches back as far as the data
     rel = []
     for u in (a.get('impact') or {}).get('updates') or []:
-        if u.get('date') and S <= u['date'] <= E:
+        if u.get('date') and u['date'] <= E:
             v = u.get('verdict') or {}
             rel.append([u['date'], u.get('label') or 'App update', v.get('level'), bool(v.get('final'))])
     seen = {r[0] for r in rel}
     for r in a.get('releases') or []:
-        if S <= r['date'] <= E and r['date'] not in seen and not any(0 <= diff(x[0], r['date']) <= 3 for x in rel):
+        if r.get('date') and r['date'] <= E and r['date'] not in seen and not any(0 <= diff(x[0], r['date']) <= 3 for x in rel):
             rel.append([r['date'], ('v' + r['version']) if r.get('version') else 'App update', None, False])
     rel.sort()
 
-    # install-week × day-since-install: % still installed (the 12 newest ISO weeks)
+    # install-week × day-since-install: % still installed — EVERY ISO week from the one the app's history starts in
+    # (its launch / the oldest cohort day) to the newest, as the older "Install week × day" table shows them
     lastMon = add(E, -D(E).weekday())
+    f_all = max(first, cst)
+    firstMon = add(f_all, -D(f_all).weekday())
     weeks = []
-    for w in range(COH_WEEKS - 1, -1, -1):
+    for w in range(diff(firstMon, lastMon) // 7, -1, -1):
         ws = add(lastMon, -7 * w)
         we = add(ws, 6)
         f0 = max(ws, first, cst)

@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shutil
+from datetime import date, timedelta
 
 import pytest
 
@@ -59,6 +60,21 @@ def _run(site, cfg, dash, **kw):
 
 # ── parity with the approved demo ─────────────────────────────────────────────────────────────────────────────────
 
+def _beyond_the_demo(body, ref):
+    """The owner's "no trim" (2 Oct: "13-19 july tak hi kyu? pura data hona chaiye") goes past the frozen demo in two
+    places only: the install-week grid has EVERY week since the app's start (the demo: the 12 newest — they are its
+    newest 12 rows, cell for cell) and the 📦 updates reach back before the span (the demo: inside the span — the same
+    rows there). Checked here, then put back to the demo's, so the rest is compared whole."""
+    S, E = ref["meta"]["S"], ref["meta"]["E"]
+    for a, r in zip(body["apps"], ref["apps"]):
+        assert a["id"] == r["id"]
+        assert a["coh"]["ref"] == r["coh"]["ref"] and len(a["coh"]["w"]) >= len(r["coh"]["w"])
+        assert a["coh"]["w"][len(a["coh"]["w"]) - len(r["coh"]["w"]):] == r["coh"]["w"]
+        assert [x for x in a["rel"] if S <= x[0] <= E] == r["rel"] and all(x[0] <= E for x in a["rel"])
+        a["coh"]["w"], a["rel"] = r["coh"]["w"], r["rel"]
+    return body
+
+
 def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
     s, cfg, dash = site
     ref = reference(s)                                         # the frozen demo step, reading the site's files
@@ -67,14 +83,83 @@ def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
     body = _gz(os.path.join(s, usb.FILE))
     assert body.pop("v") == usb.V
     assert body.pop("gt")["apps"]                             # ("Gone by day N": its own block, after the demo —
-    assert body == ref                                         #  tests/test_uninstall_studio_gone.py)
+    assert any(len(a["coh"]["w"]) > 12 for a in body["apps"])  #  tests/test_uninstall_studio_gone.py)
+    assert _beyond_the_demo(body, ref) == ref
     # and the module's own entry point, straight
     U = _gz(os.path.join(s, "uninstall.json.gz"))
     got = usb.build_data(dash, U, lambda n: _gz(os.path.join(s, n)),
                          json.load(open(os.path.join(cfg, "account_names.json"))),
                          json.load(open(os.path.join(cfg, "app_names.json"))))
     got.pop("gt")
-    assert got == ref
+    assert _beyond_the_demo(got, ref) == ref
+
+
+# ── no trim: the install-week grid = every week since the app's start (owner, 2 Oct) ──────────────────────────────
+
+def _monday(d):
+    d = date.fromisoformat(d)
+    return d - timedelta(days=d.weekday())
+
+
+def test_the_install_week_grid_has_every_week_since_the_apps_start(site, capsys):
+    """Every ISO week from the one the app's history starts in (its launch, or the oldest cohort day) to the newest,
+    none skipped; each cell recomputed here straight from the cohort file (installs of the week's days, gone by day N
+    = the uninstalls at lag ≤ N) — the older "Install week × day" table's own arithmetic."""
+    s, cfg, dash = site
+    _run(s, cfg, dash)
+    body = _gz(os.path.join(s, usb.FILE))
+    M, U = body["meta"], _gz(os.path.join(s, "uninstall.json.gz"))
+    E, cols = M["E"], M["cohCols"]
+    det = {a["app_id"]: a for a in U["apps"]}
+    n_old = 0
+    for a in body["apps"]:
+        c = _gz(os.path.join(s, "uninstall_c_%s.json.gz" % a["k"]))
+        start = max(a["first"], c["start"])
+        want = []
+        m = _monday(start)
+        while m <= _monday(E):
+            want.append(m.isoformat())
+            m += timedelta(days=7)
+        W = a["coh"]["w"]
+        assert [w[0] for w in W] == want, a["nm"]               # every week, oldest first, none skipped
+        n_old += sum(1 for w in W if w[0] < (_monday(E) - timedelta(days=7 * 11)).isoformat())
+        settled = det[a["id"]].get("settled_till") or E
+        for w in W:
+            f, t = (w[4], w[5]) if len(w) == 6 else (w[0], (date.fromisoformat(w[0]) + timedelta(days=6)).isoformat())
+            assert f == max(w[0], start) and t == min((date.fromisoformat(w[0]) + timedelta(days=6)).isoformat(), E)
+            assert (len(w) == 6) == (f != w[0] or t != (date.fromisoformat(w[0]) + timedelta(days=6)).isoformat())
+            idx = [(date.fromisoformat(f) - date.fromisoformat(c["start"])).days + k
+                   for k in range((date.fromisoformat(t) - date.fromisoformat(f)).days + 1)]
+            n = sum(c["new"][i] or 0 for i in idx)
+            assert w[1] == n
+            v, bits = usb.dec(w[2]), format(w[3], "0%db" % len(cols))
+            for k, N in enumerate(cols):
+                if (date.fromisoformat(t) + timedelta(days=N)).isoformat() > E or not n:
+                    assert v[k] is None and bits[k] == "0"
+                    continue
+                gone = sum(cnt for i in idx for lg, cnt in (c["lags"][i] or []) if lg <= N)
+                assert v[k] == int(round((1 - gone / n) * 1000)), (a["nm"], w[0], N)
+                assert bits[k] == ("1" if (date.fromisoformat(t) + timedelta(days=N)).isoformat() > settled else "0")
+    assert n_old > 40                                          # (the synthetic site reaches well past 12 weeks)
+
+
+def test_every_update_reaches_the_grid_even_before_the_span(site, capsys):
+    """📦 the updates: all of them up to the span's end (the grid's 📦 lines over its oldest weeks; "📦 Updates" lists
+    them all) — an update months before the span is there, one after the span's end is not."""
+    s, cfg, dash = site
+    U = _gz(os.path.join(s, "uninstall.json.gz"))
+    a0 = next(a for a in U["apps"] if a.get("daily") and a.get("releases"))
+    old_day = (date.fromisoformat(a0["daily"]["start"]) + timedelta(days=17)).isoformat()
+    a0["releases"] = [{"date": old_day, "version": "0.9", "kind": "version"}, {"date": "2099-01-01", "version": "9.9"}] + a0["releases"]
+    with gzip.open(os.path.join(s, "uninstall.json.gz"), "wt", encoding="utf-8") as f:
+        json.dump(U, f)
+    _run(s, cfg, dash)
+    body = _gz(os.path.join(s, usb.FILE))
+    a = next(x for x in body["apps"] if x["id"] == a0["app_id"])
+    assert old_day < body["meta"]["S"] and [old_day, "v0.9", None, False] in a["rel"]
+    assert all(r[0] <= body["meta"]["E"] for r in a["rel"]) and a["rel"] == sorted(a["rel"])
+    assert any(w[0] <= old_day <= (w[5] if len(w) == 6 else (date.fromisoformat(w[0]) + timedelta(days=6)).isoformat())
+               for w in a["coh"]["w"])                     # …and the grid has its week
 
 
 def test_the_synthetic_site_covers_the_studios_cases(site):
