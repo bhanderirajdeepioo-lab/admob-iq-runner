@@ -64,12 +64,22 @@ const norm = s => String(run(NEW, `smpInfoTxt(${JSON.stringify(dec(s))})`)).repl
 const nums = s => (norm(s).match(/[+−-]?\d[\d,]*(?:\.\d+)?%?/g) || []).map(x => x.replace(/%$/, '')).sort();
 const cut = (h, a, b) => { const i = h.indexOf(a); if (i < 0) return ''; const j = b ? h.indexOf(b, i + a.length) : -1; return h.slice(i, j < 0 ? undefined : j); };
 const pillClasses = s => [...s.matchAll(/<span class="pill ([^"]+)"/g)].map(m => m[1]).sort();
+// "Revenue per user/day" (row arpdau): the engine stores it per 1,000 users; the old card printed that number (its label
+// said "har 1,000 users se"), today's prints it PER USER (÷1,000, 3 significant digits below 1). On the OLD side the main
+// value of the before / after cells is turned into today's per-user form, so the comparison still checks it exactly
+const perUser = v => { const x = parseFloat(String(v).replace(/,/g, '')) / 1000, a = Math.abs(x); return a >= 1 ? a.toFixed(2) : String(+a.toPrecision(3)); };
+let SIDE = 'new';
 function rowsOf(t) {   // one table: every row id → {status, numbers in its value cells (not its label), its status cell's}
   const out = {};
   for (const m of t.matchAll(/<tr data-row="([a-z_0-9]+)">([\s\S]*?)<\/tr>/g)) {
     const cells = [...m[2].matchAll(/<td class="uni-num"[^>]*>([\s\S]*?)<\/td>/g)].map(x => x[1]);
     const st = (m[2].match(/<td class="st">([\s\S]*?)<\/td>/) || [])[1] || '';
-    out[m[1]] = { st: (st.match(/data-st="([a-z]+)"/) || [])[1] || null, cells: cells.map(nums), stn: nums(st) };
+    let cn = cells.map(nums);
+    if (m[1] === 'arpdau' && SIDE === 'old') cn = cn.map((ns, i) => {
+      if (i > 1 || !ns.length) return ns;   // before / after only (the change cell is a relative %, unchanged)
+      const first = (norm(cells[i]).match(/[+−-]?\d[\d,]*(?:\.\d+)?%?/) || [])[0]; if (!first || /%$/.test(first)) return ns;
+      const k = ns.indexOf(first); if (k < 0) return ns; const c = ns.slice(); c[k] = perUser(first); return c.sort(); });
+    out[m[1]] = { st: (st.match(/data-st="([a-z]+)"/) || [])[1] || null, cells: cn, stn: nums(st) };
   }
   return out;
 }
@@ -121,7 +131,7 @@ for (const a of (F.asset && F.asset.apps) || []) {
     const code = `APP=${JSON.stringify(a.app)}; UNIAPP=${JSON.stringify(a.app_id)}; ${set} return uniScreen();`;
     const ho = render(OLD, 'old ' + a.app + ' ' + nm, code), hn = render(NEW, 'new ' + a.app + ' ' + nm, code);
     R.renders += 2;
-    const co = cardOf(ho), cn = cardOf(hn);
+    SIDE = 'old'; const co = cardOf(ho); SIDE = 'new'; const cn = cardOf(hn);
     const item = { app_id: a.app_id, case: nm, old: !!co, new: !!cn, same: eq(co, cn), blocks: co ? co.blocks.length : 0,
       rows: co ? co.blocks.reduce((t, b) => t + Object.keys(b.rows || {}).length + Object.keys(b.ver_rows || {}).length, 0) : 0,
       numbers: co ? JSON.stringify(co).match(/"[+−-]?\d[\d,]*(?:\.\d+)?%?"/g)?.length || 0 : 0 };
