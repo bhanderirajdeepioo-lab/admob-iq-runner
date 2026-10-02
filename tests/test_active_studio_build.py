@@ -99,7 +99,13 @@ def _beyond_the_demo(s, body, ref):
         for x, y in zip(asb.dec(a["tri"]["ref"]), asb.dec(r["tri"]["ref"])):
             assert x == y or x == y + 1
         assert [x for x in a["rel"] if S <= x[0] <= E] == r["rel"] and all(x[0] <= E for x in a["rel"])
-        a["tri"], a["rel"] = r["tri"], r["rel"]
+        # the engine's normal band on EVERY day of the span (the demo: the newest 70 — its last 70 days, the same)
+        nb = ref["meta"]["bandDays"]
+        for k in ("lo", "hi", "med"):
+            assert len(asb.dec(a["bnd"][k])) == asb.SPAN and asb.dec(a["bnd"][k])[-nb:] == asb.dec(r["bnd"][k])
+        a["tri"], a["rel"], a["bnd"] = r["tri"], r["rel"], r["bnd"]
+    assert body["meta"]["bandDays"] == asb.SPAN
+    body["meta"]["bandDays"] = ref["meta"]["bandDays"]
     return body
 
 
@@ -246,11 +252,12 @@ def test_the_older_days_file_is_the_same_series_before_the_span(site, monkeypatc
     assert hist["n"] == asb.diff(M["H0"], M["S"]) and hist["gen"] == M["gen"]
     assert set(hist["apps"]) == {a["id"] for a in body["apps"]}
     monkeypatch.setattr(asb, "SPAN", asb.SPAN + hist["n"])
+    monkeypatch.setattr(asb, "BAND_DAYS", asb.SPAN)
     full = asb.build_data(dash, _gz(os.path.join(s, "active_portfolio.json.gz")), lambda n: _gz(os.path.join(s, n)),
                           json.load(open(os.path.join(cfg, "account_names.json"))),
                           json.load(open(os.path.join(cfg, "app_names.json"))), asb._lag(dash, s))
     assert full["meta"]["S"] == M["H0"] and full["_hist"] is None
-    n_val = 0
+    n_val = n_band = 0
     for a, f in zip(body["apps"], full["apps"]):
         assert a["id"] == f["id"]
         o = hist["apps"][a["id"]]
@@ -259,8 +266,11 @@ def test_the_older_days_file_is_the_same_series_before_the_span(site, monkeypatc
             assert len(old) == hist["n"] and old + span == asb.dec(f[k]), (a["nm"], k)
             n_val += sum(v is not None for v in old)
         assert asb.dec(o["pre"]) == asb.dec(f["pre"])            # the 31 days of installs before H0
+        for k in ("lo", "hi", "med"):                            # the engine's normal band on the older days too
+            assert asb.dec(o["bnd"][k]) + asb.dec(a["bnd"][k]) == asb.dec(f["bnd"][k])
+            n_band += sum(v is not None for v in asb.dec(o["bnd"][k]))
         assert sorted(o["stp"] + a["steep"]) == sorted(f["steep"]) or _joined(o["stp"] + a["steep"]) == _joined(f["steep"])
-    assert n_val > 1000
+    assert n_val > 1000 and n_band > 0
 
 
 def _joined(rs):

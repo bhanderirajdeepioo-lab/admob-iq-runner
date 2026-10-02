@@ -10609,11 +10609,12 @@ function prep(){ const sig=VER+'|'+(histOk()?'h':'')+'|'+RAW.apps.map(a=>vis(a.i
   const keep=[], map={};
   RAW.apps.forEach((a0,k)=>{ if(!vis(a0.id)) return; map[k]=keep.length; keep.push(Object.assign({},a0)); });
   A=keep;
-  A.forEach((a,i)=>{ a.i=i; const o=HD&&HD.apps[a.id]; KEYS.forEach(k=>{ a[k]=HD?((o&&o[k]!=null)?dec(o[k]):new Array(HD.n).fill(null)).concat(dec(a[k])):dec(a[k]); });
+  A.forEach((a,i)=>{ a.i=i; const o=HD&&HD.apps[a.id], o0=o; KEYS.forEach(k=>{ a[k]=HD?((o&&o[k]!=null)?dec(o[k]):new Array(HD.n).fill(null)).concat(dec(a[k])):dec(a[k]); });
     if(HD){ a.pre=o&&o.pre!=null?o.pre:a.pre; a.steep=((o&&o.stp)||[]).concat(a.steep||[]); }
     a.rv=a.rv.map(v=>v==null?null:v/1000); a.su=a.su.map(v=>v==null?null:v/1000); a.im=a.im.map(v=>v==null?null:v/1000);
     a.pre=dec(a.pre); a.sh=dec(a.sh).map(v=>v/1e5);
-    const off=N-M.bandDays; ['lo','hi','med'].forEach(k=>{ const v=dec(a.bnd[k]), o=new Array(N).fill(null); v.forEach((x,j)=>{ o[off+j]=x; }); a['b'+k]=o; });
+    const off=N-M.bandDays; ['lo','hi','med'].forEach(k=>{ const v=dec(a.bnd[k]), o=new Array(N).fill(null); v.forEach((x,j)=>{ o[off+j]=x; });
+      if(HD&&o0&&o0.bnd&&o0.bnd[k]) dec(o0.bnd[k]).forEach((x,j)=>{ if(j<HD.n) o[j]=x; }); a['b'+k]=o; });   // (the older days' band in front)
     a.fi=Math.max(0,ix(a.first)); a.si=Math.min(N-1,ix(a.settled));
     a.ol=a.rt.map((r,j)=>(r!=null&&a.y[j]!=null)?r-a.y[j]:null);
     a.tri={ref:dec(a.tri.ref),w:a.tri.w.map(r=>{ const fl=r[5]||0; return {f:r[0],t:r[1],n:r[2],v:fl&1?M.triCols.map(()=>null):dec(r[3]),p:r[4],nd:!!(fl&1),part:!!(fl&2),q:!!(fl&4)}; })};

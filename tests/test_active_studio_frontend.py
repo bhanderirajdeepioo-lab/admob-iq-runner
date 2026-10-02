@@ -64,15 +64,15 @@ def built(tmp_path_factory):
     with gzip.open(os.path.join(site, asb.HFILE), "rt", encoding="utf-8") as f:
         hist = json.load(f)
     # the same site as ONE file reaching back to the oldest day (the build's own code, the span made that long)
-    keep = asb.SPAN
+    keep, keepb = asb.SPAN, asb.BAND_DAYS
     try:
-        asb.SPAN = keep + hist["n"]
+        asb.SPAN = asb.BAND_DAYS = keep + hist["n"]
         ld = lambda n: json.load(gzip.open(os.path.join(site, n), "rt", encoding="utf-8"))   # noqa: E731
         full = asb.build_data(dash, ld(dash["active"]["portfolio"]["file"]), ld,
                               *[json.load(open(os.path.join(cfg, f))) for f in ("account_names.json", "app_names.json")],
                               asb._lag(dash, site))
     finally:
-        asb.SPAN = keep
+        asb.SPAN, asb.BAND_DAYS = keep, keepb
     full.pop("_hist")
     full["meta"]["hist"] = None
     full = json.loads(json.dumps(dict(full, v=asb.V)))

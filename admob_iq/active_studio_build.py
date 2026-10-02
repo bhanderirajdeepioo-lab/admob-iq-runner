@@ -10,7 +10,7 @@ the app drawer) is worked out in the browser from it, for any range / compare th
     days), the recent installs coming back that day (y), came back on day 1 / 7 / 30 per install day (d1 / d7 / d30),
     AdMob revenue ×1000 (rv), the returning users' sessions (su, ×1000 per user) and seconds (tu) per user and their
     count (u), ads per active user ×1000 (im); the installs of the 31 days before the span (pre); the engine's normal
-    band for the newest BAND_DAYS days (bnd);
+    band for the span's days (bnd — every day of it: a range in the span shows the engine's band);
   * per app: its per-day return curve (sh, the engine's split weights), the lens' own noise at the 91 earlier ends for a
     grid of window lengths (nz — the "pakka" test), the engine's install-week × day grid (tri — EVERY install week since
     the app's start, as the older "How many came back" table: weeks without data / with part data flagged), ALL its
@@ -22,7 +22,8 @@ the app drawer) is worked out in the browser from it, for any range / compare th
 
 The days BEFORE the span (back to H0: the owner, 2 Oct, "no trim" — a custom range / compare reaches the whole history)
 go to a second file, site/active_studio_old.json.gz = {v, S: H0, n: its days, gen, apps: {app id: the same compact
-arrays + pre (the 31 days of installs before H0) + stp (the fast-change runs before the span)}} — sliced from the very
+arrays + pre (the 31 days of installs before H0) + stp (the fast-change runs before the span) + bnd (the engine's normal
+band on those days)}} — sliced from the very
 same per-app series, so old + span = one series, cell for cell. The page loads it only when a chosen range or compare
 needs a day before the span (the first load stays the span's small file).
 
@@ -55,7 +56,8 @@ FILE = "active_studio.json.gz"
 HFILE = "active_studio_old.json.gz"   # the days before the span (loaded by the page only when a range needs them)
 V = 1                 # the file's format (the page refuses another)
 SPAN = 180            # days per app: 60-day range + 60-day compare + its 28-day normal + 30 install lags
-BAND_DAYS = 70        # engine normal band kept only for the newest days (trend sparks, drawer chart)
+BAND_DAYS = SPAN      # engine normal band for every day of the span (trend sparks, drawer chart) — the owner, 2 Oct, "no
+                      # trim": it was the newest 70 only, so an older range drew no band; the older days carry theirs
 LG = [1, 2, 3, 4, 5, 7, 11, 14, 21, 27, 42, 57]   # window lengths (settled days) of the noise grid
 NULL_DAYS = 91        # 13 weeks of earlier ends (engine NULL_WEEKS)
 NULL_MIN = 21
@@ -337,8 +339,8 @@ def build_data(dash, PF, load, accn, appn, lag=2, counts=None):
         x.pop('_g0')
         mk = x.pop('_old')
         if diff(H0, S) > 0:
-            c, pre, stp = mk(H0)
-            old[x['id']] = dict({k: enc(v) for k, v in c.items()}, pre=enc(pre), stp=stp)
+            c, pre, stp, ob = mk(H0)
+            old[x['id']] = dict({k: enc(v) for k, v in c.items()}, pre=enc(pre), stp=stp, bnd=ob)
 
     # ---- alerts: open (DATA), recently closed, and the compact info rows (installs-only changes, ad price) -----------
     SEV = {'warning': 'bigda', 'watch': 'dhyan', 'good': 'behtar'}
@@ -510,7 +512,11 @@ def _app(r, names, size_of, paisa, pf_by, load, E, S, SET):
         ih = diff(g0, h0)
         stp = [[max(f0, h0), min(t0, add(S, -1))] for f0, t0 in ((af.get('steep') or {}).get('ret_dau') or [])
                if f0 < S and t0 >= h0]
-        return cols_of(ih, i0s - 1), pre_of(ih), stp
+        bo2 = diff(g0, ast)
+        ob = {k2: enc([int(round(v)) if num(v) else None
+                       for v in [((bands.get(k2) or [])[i - bo2] if 0 <= i - bo2 < len(bands.get(k2) or []) else None)
+                                 for i in range(ih, i0s)]]) for k2 in ('lo', 'hi', 'med')}
+        return cols_of(ih, i0s - 1), pre_of(ih), stp, ob
     bands = af.get('bands', {}).get('ret_dau') or {}
     bo = (diff(g0, ast) - i0s)
     bnd = {}
