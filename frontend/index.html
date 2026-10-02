@@ -3429,7 +3429,7 @@ function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?
   if(UNIAPP&&uniName(UNIAPP)!==a) UNIAPP='';   // the header left the app whose Uninstall detail was open: close it (never one app under "All apps")
   if(ACTAPP&&actName(ACTAPP)!==a) ACTAPP='';   // … and the Active users tab's
   if(VALAPP&&valName(VALAPP)!==a) VALAPP='';   // … and the Install value tab's
-  render(); show(cur==='reportcard'?'placements':cur); window.scrollTo({top:0});
+  render(); show(cur==='reportcard'?'placements':cur); if(!REFRESH_SILENT) window.scrollTo({top:0});
   if(!was&&a) hbPush('app',hbAppUndo); else if(was&&!a) hbDrop('app'); }   // phone Back = "← All apps"
 // ---- the header's App picker (#apk) — owner: "isme icon nahi aaya abhi tak". A native <select> can't show images, so the
 // button opens our own list: every app with ITS icon (by app_id), its account when the name doesn't already say it, the
@@ -3589,14 +3589,38 @@ function applyRangeCustom(){ const f=document.getElementById('rc-from'),t=docume
 
 // the Alerts badge = ad-unit critical + warning + the approved-range breaches (SPEC_SIMPLIFY §7: the GA4 tabs are not in it)
 function alertsBadgeN(){ const c=(DATA&&DATA.alerts&&DATA.alerts.counts)||{}; return (c.critical||0)+(c.warning||0)+((DATA&&DATA.range_alerts)||[]).length; }
+// render() tears #screens down to empty and rebuilds every tab from scratch, so a focused <input>/<textarea> (typing
+// in Settings, a Studio search box, …) loses the caret even though its VALUE survives (it's baked from JS state). Save
+// which field had focus + its selection before the rebuild, put it back after — same idea as rvSaveFocus for Review.
+let UIFOCUS=null;
+function uiSaveFocus(){
+  try{
+    const a=document.activeElement; UIFOCUS=null;
+    if(!a||!a.id||a===document.body) return;
+    const tag=a.tagName;
+    if(tag!=='INPUT'&&tag!=='TEXTAREA'&&!a.isContentEditable) return;
+    let s=null,e=null; try{ s=a.selectionStart; e=a.selectionEnd; }catch(_){}
+    UIFOCUS={id:a.id,s,e};
+  }catch(_){ UIFOCUS=null; }
+}
+function uiRestoreFocus(){
+  try{
+    const f=UIFOCUS; UIFOCUS=null; if(!f) return;
+    const el=document.getElementById(f.id); if(!el) return;
+    try{ el.focus({preventScroll:true}); }catch(_){ el.focus(); }
+    if(f.s!=null&&el.setSelectionRange) try{ el.setSelectionRange(f.s,f.e); }catch(_){}
+  }catch(_){}
+}
 function render(){
   window.__ax=null;              // invalidate the cached calendar axis (data may have changed)
   rvSaveFocus();                 // Review tab: remember a focused field inside #rv-root (its node survives this rebuild)
+  uiSaveFocus();                 // … and any other field on the page (Settings, a Studio search box, …)
   const root=document.getElementById('screens');root.innerHTML='';
   root.append(renderOverview(),renderPlacements(),renderReport(),renderAppDetail(),renderMovers(),renderAlerts(),
               renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderActive(),renderUninstall(),renderDateWise(),renderReco(),renderHealth(),renderSettings(),renderValue());
   root.append(renderReview());   // ONE persistent node: drafts / open panels survive the 5-min refresh and the ₹/$ toggle
   rvRestoreFocus();
+  uiRestoreFocus();
   document.getElementById('nav-alert').textContent=alertsBadgeN();
   {const _tb=document.getElementById('tab-alert');if(_tb){const _n=alertsBadgeN();_tb.textContent=_n;_tb.classList.toggle('on',_n>0);}}
   appSelSync();
@@ -3637,12 +3661,30 @@ function updateFreshness(){
   if(tz&&tzt&&DATA&&DATA.report_tz_label){ tzt.textContent=DATA.report_tz_label; tz.style.display='inline-flex';
     if(tza){ const m=/\(([^()]{1,8})\)\s*$/.exec(DATA.report_tz_label); tza.textContent=m?m[1]:DATA.report_tz_label; } }   // a phone shows the short name: "IST"
 }
+let LAST_BUILD=null;        // DATA.generated_at as last seen (set on first load too) — the robot builds hourly, so most
+                             // 5-min polls see the SAME build: nothing to redraw, only the "X min ago" clock ticks.
+let REFRESH_SILENT=false;   // true while a background refresh is quietly repainting: no scroll-to-top, no entrance
+                             // animation, no nav/menu auto-close — the reader should never notice it happened.
+function silentScrollRestore(y){                                           // keep the reader's place after an in-place rebuild
+  if(y==null) return;
+  requestAnimationFrame(()=>{
+    const max=Math.max(0,(document.documentElement.scrollHeight||0)-innerHeight);
+    const to=Math.min(y,max);
+    if(Math.abs((window.scrollY||0)-to)>1) window.scrollTo(0,to);
+  });
+}
 async function refreshData(){
   const active=document.querySelector('.screen.on');
   const cur=active?active.dataset.screen:'overview';
   try{
-    try{ DATA=await loadDashboardData(); }                                 // gzipped primary (25MB-safe), plain fallback
-    catch(_){ const r=await fetch(API_BASE+"/dashboard",{cache:"no-store"}); DATA=await r.json(); }
+    let NEW;
+    try{ NEW=await loadDashboardData(); }                                 // gzipped primary (25MB-safe), plain fallback
+    catch(_){ const r=await fetch(API_BASE+"/dashboard",{cache:"no-store"}); NEW=await r.json(); }
+    const build=NEW&&NEW.generated_at;
+    if(LAST_BUILD!=null&&build!=null&&build===LAST_BUILD){                 // same build as last time: nothing actually
+      DATA=NEW; updateFreshness(); return; }                               // changed — don't touch the DOM, don't blink
+    if(build!=null) LAST_BUILD=build;
+    DATA=NEW;
     if(UNI&&DATA.uninstall&&DATA.uninstall.asset_v!==UNIVER){ UNI=null; UNICOH={}; UNICOHERR={}; }   // new GA4 build → re-fetch the lazy uninstall detail
     UNIERR=false;                                                          // a failed uninstall load retries on the next open
     if(DATA.active&&DATA.active.asset_v!==ACTVER){ const sg={}; actRows().forEach(r=>{ sg[r.key]=r.sig; });   // new Active build → drop the apps whose file changed
@@ -3652,13 +3694,15 @@ async function refreshData(){
     if(DATA.value&&DATA.value.asset_v!==VALVER){ const sg={}; valRows().forEach(r=>{ sg[r.key]=r.sig; });   // new Install value build → drop the apps whose file changed
       Object.keys(VALD).forEach(k=>{ if(sg[k]!==VALSIG[k]){ delete VALD[k]; delete VALSIG[k]; } }); VALVER=DATA.value.asset_v; }
     VALERR={};
-    HB.mute++; try{   // the same view rebuilt: no new Back step
+    const preY=window.scrollY;                                            // the data DID change: rebuild in place, but land back exactly where the reader was
+    HB.mute++; REFRESH_SILENT=true; try{   // the same view rebuilt: no new Back step, no top-jump, no entrance flash
     render();
     if(cur==='appdetail'&&ADAPP) openAppDetail(ADAPP);                     // stay where the user was
     else if(cur==='reportcard'&&PPID) goPlacement(PPID);
     else if(cur==='placements'&&DETAIL_OPEN&&POPEN) openApp(POPEN);
     else if(cur && cur!=='overview') show(cur);
-    }finally{ HB.mute--; }
+    silentScrollRestore(preY);
+    }finally{ HB.mute--; REFRESH_SILENT=false; }
   }catch(e){ updateFreshness(); }                                          // network blip: keep last good data
 }
 function setRange(r){
@@ -3716,9 +3760,11 @@ function hbAppUndo(){ if(!APP) return; const on=document.querySelector('.screen.
 // Back on the App Report: the screen it was opened from (as its "← Back")
 function hbAdUndo(){ const on=document.querySelector('.screen.on'), cur=on?on.dataset.screen:'';
   if(cur==='appdetail') adBack(); else if(cur!==(AD_ORIGIN||'overview')) show(AD_ORIGIN||'overview'); }
-function ovToggle(ct){ ct.closest('.card').classList.toggle('open'); }
+const OVOPEN={};   // Overview's mobile accordion cards (Top movers / Needs attention) — which ones the reader opened; state-backed so a re-render (auto-refresh) doesn't silently re-collapse them
+function ovToggle(ct){ const card=ct.closest('.card'); card.classList.toggle('open');
+  const k=card.classList.contains('ov-movers')?'movers':card.classList.contains('ov-attn')?'attn':''; if(k) OVOPEN[k]=card.classList.contains('open'); }
 function show(id){
-  closeNav();                              // mobile: selecting a screen closes the drawer
+  if(!REFRESH_SILENT) closeNav();          // mobile: selecting a screen closes the drawer (not a silent background refresh — don't shut a menu the reader has open)
   if(id==='baseline') loadBaseline();     // lazy-fetch the baseline payload on first open
   if(id==='mediation') loadMED(()=>medRerender());   // lazy-fetch daily-by-source → window to period
   if(id==='deductions') loadDED(()=>dedRerender());  // lazy-fetch per-unit decay → window to period
@@ -3734,7 +3780,7 @@ function show(id){
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-sub').textContent=TITLES[id][1];}
   const _rvKeep=rvKeepScroll(id);           // Review re-shown by the 5-min refresh / ₹⇄$: stay where the reader was
   rvOnShow(id);                             // body[data-screen] (hides App / Period on Review) + the #review hash
-  if(!_rvKeep) window.scrollTo({top:0});
+  if(!_rvKeep&&!REFRESH_SILENT) window.scrollTo({top:0});   // a silent background refresh never jumps the page
   _navSave();                               // remember where we are (restored on reload / tab return)
 }
 // ---- Remember & restore the current view across a page reload or a mobile tab-discard, so coming back
@@ -3912,8 +3958,8 @@ function renderOverview(){
         <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Google Ads installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">ads only · not all installs</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>Day-1 rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">frozen</div></th><th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users · live</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Day-1</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
       <div class="ov-datewise card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${dwRows.length} days</span></h3><span class="lnk" onclick="openDateWise('')">View more →</span></div>${dateWiseTable(dwRows)}</div>
       <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0',spend:SHOWSP?spendSeries:null,spendColor:'#e6b84e'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span>${SHOWSP?'<span><i class="dot" style="background:#e6b84e"></i> Ad spend</span>':''}<span class="faint" style="font-size:11px">· tap / hover a day for its numbers</span></div></div>
-      <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
-      <div class="ov-attn card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
+      <div class="ov-movers card ov-coll${OVOPEN.movers?' open':''}"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
+      <div class="ov-attn card ov-coll${OVOPEN.attn?' open':''}"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
     </div>`;
   return s;
 }
@@ -3974,7 +4020,7 @@ function openApp(name){
     <p class="faint" style="font-size:12px;margin-top:10px">${ps.length} placements · ${winLbl} · row → Report Card. ${RANGE==='today'?'Aaj ka din abhi chal raha hai (live/partial).':RANGE==='custom'?'Custom range (literal dates).':'Poore complete din.'}</p>`;
   document.querySelector('.screen[data-screen=placements]').classList.add('on');
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen==='placements'));
-  window.scrollTo({top:0});
+  if(!REFRESH_SILENT) window.scrollTo({top:0});
 }
 
 // ---------- REPORT CARD (empty shell; filled by goPlacement) ----------
@@ -4116,7 +4162,7 @@ function openAppDetail(name){
   document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
   const tt=document.getElementById('tb-title'), ts=document.getElementById('tb-sub');
   if(tt)tt.innerHTML=`<span class="ain">${appIcon(name,22)}<span class="ain-t">${hAttr(name)}</span></span>`; if(ts)ts.textContent='Ad-unit & country wise · '+pRangeLabel(RANGE);
-  window.scrollTo({top:0});
+  if(!REFRESH_SILENT) window.scrollTo({top:0});
 }
 // ===== App-report DAILY metric panel (metric chips + low/high/avg + hover) — app-level, from
 // each placement's per-day raw counts (no extra AdMob call; rates recomputed from summed counts). =====
@@ -7872,7 +7918,7 @@ function afterMount(){ const root=$('us-root'); if(!root) return; layer(); stick
 // a Studio-only change (range, compare, a key): every section again, in place — the header keeps its focus
 let firstAll=true;
 function renderAll(){ const root=$('us-root'); if(!root){ uniRerender(); return; }
-  const m=$('us-main'); if(m&&!RM){ m.classList.remove('us-fresh'); void m.offsetWidth; m.classList.add('us-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('us-fresh'),700); }
+  const m=$('us-main'); if(m&&!RM&&!REFRESH_SILENT){ m.classList.remove('us-fresh'); void m.offsetWidth; m.classList.add('us-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('us-fresh'),700); }   // never on a silent background refresh — only a user-driven change earns the entrance flash
   SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop();
   const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
   if(VIEW==='app'){ renderPage(); set('us-foot',footHtml()); countUp(); return; }
@@ -10675,7 +10721,7 @@ function afterMount(){ const root=$('as-root'); if(!root) return; layer(); stick
   if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('as-drawer'); if(d&&!d.classList.contains('as-on')){ d.classList.add('as-on'); d.setAttribute('aria-hidden','false'); $('as-scrim').classList.add('as-on'); lock(true); } } } }
 // a Studio-only change (range, compare, a key): every section again, in place — the header keeps its focus
 function renderAll(){ const root=$('as-root'); if(!root){ actRerender(); return; }
-  const m=$('as-main'); if(m&&!RM){ m.classList.remove('as-fresh'); void m.offsetWidth; m.classList.add('as-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('as-fresh'),700); }
+  const m=$('as-main'); if(m&&!RM&&!REFRESH_SILENT){ m.classList.remove('as-fresh'); void m.offsetWidth; m.classList.add('as-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('as-fresh'),700); }   // never on a silent background refresh — only a user-driven change earns the entrance flash
   spkN=0; for(const k in SPK) delete SPK[k]; for(const k in CH) delete CH[k]; compute(); renderTop();
   const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
   if(MODE==='page'){ const o=pgO(); if(!o){ actRerender(); return; } const pg=$('as-pg'); if(pg&&pg.clientWidth) PGW=pg.clientWidth; set('as-pg',pageBody(o)); set('as-foot',footHtml()); if(ST.drawer>=0) renderDrawer(true); countUp(); return; }
@@ -12915,7 +12961,7 @@ function afterMount(){ const root=$('vs-root'); if(!root) return; layer(); stick
 function renderPage(){ const el=$('vs-pgbody'), a=AI[PGID]; if(!el||!a){ valRerender(); return; } el.innerHTML=pageHtml(R[a.i]); bindCurve('p'); fitAll(); }
 function renderAll(){ const root=$('vs-root'); if(!root){ valRerender(); return; }
   if(MODE==='p'){ spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop(); renderPage(); return; }
-  const m=$('vs-main'); if(m&&!RM){ m.classList.remove('vs-fresh'); void m.offsetWidth; m.classList.add('vs-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('vs-fresh'),700); }
+  const m=$('vs-main'); if(m&&!RM&&!REFRESH_SILENT){ m.classList.remove('vs-fresh'); void m.offsetWidth; m.classList.add('vs-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('vs-fresh'),700); }   // never on a silent background refresh — only a user-driven change earns the entrance flash
   spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop();
   const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
   set('vs-story',storyHtml()); set('vs-kpis',kpisHtml()); set('vs-ledgerT',ledgerHtml()); set('vs-map',mapHtml()); set('vs-src',srcHtml());
@@ -15785,6 +15831,7 @@ async function load(){
       try{ DATA = await loadDashboardData(); }                                 // gzipped primary (25MB-safe), plain fallback
       catch(_){ const r = await fetch(API_BASE+"/dashboard", {cache:"no-store"}); DATA = await r.json(); }
     }
+    LAST_BUILD=(DATA&&DATA.generated_at)||null;   // so the first 5-min refreshData() correctly sees "same build, nothing changed" if the robot hasn't run again yet
     try{ CURVIEW=localStorage.getItem("curview")||null; }catch(e){}   // restore chosen currency view
     kwLoad();                                // restore the shared KPI-window period + comparison choice
     curSyncUI();
