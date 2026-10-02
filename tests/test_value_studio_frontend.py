@@ -290,6 +290,22 @@ def test_the_charts_print_their_numbers(report):
     assert len(L["tl"]) >= 1                                                # the timeline: the latest week at least
 
 
+def test_back_in_7_days_tile_clean_empty_state(report):
+    """vs-k-b7 (the portfolio 'Back in 7 days' KPI tile): the default 7-day window has no settled install week yet
+    (data-v=""), so the big number must be a clean "—" — never the old "— of — · —" — and the small line must give
+    a short Hinglish reason instead of the "of <blank>" trailer."""
+    screen7 = report["out"]["screen7"]
+    i = screen7.index('<div class="vs-kpi" id="vs-k-b7">')
+    j = screen7.index('<div class="vs-kpi"', i + 1)
+    tile = screen7[i:j]
+    kv = re.search(r'<div class="vs-kv">(.*?)</div>', tile, re.S).group(1)
+    ks = re.search(r'<div class="vs-ks">(.*?)</div>', tile, re.S).group(1)
+    assert 'data-v=""' in kv, "fixture's default 7-day window is expected to have no settled week yet"
+    assert re.sub(r"<[^>]+>", "", kv).strip() == "—"                        # a clean dash, never "— of — · —"
+    assert "of " not in kv and "·" not in kv
+    assert "7 din ka data abhi nahi" in ks
+
+
 # ── the words ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 def test_words(report):

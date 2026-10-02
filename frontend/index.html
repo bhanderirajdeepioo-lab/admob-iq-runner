@@ -32,7 +32,7 @@
   .nav button .badge{margin-left:auto;font-size:10px;font-weight:800;background:var(--bad);color:#fff;padding:1px 7px;border-radius:100px}
   .side-foot{margin-top:16px;padding:12px 10px;border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
   main{flex:1;min-width:0}
-  .topbar{position:sticky;top:0;z-index:10;background:rgba(10,17,32,.85);backdrop-filter:blur(9px);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:12px}
+  .topbar{position:sticky;top:0;z-index:10;background:rgba(10,17,32,.85);backdrop-filter:blur(9px);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;row-gap:8px}
   .topbar h1{font-size:17px;margin:0;font-weight:750}.topbar .sub{color:var(--muted);font-size:12px}
   .spacer{flex:1}.ctrl{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line2);color:var(--ink2);font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:9px;cursor:pointer;white-space:nowrap}
   .ctrl .cx{color:var(--muted);font-weight:500}
@@ -56,11 +56,11 @@
   .sk{background:linear-gradient(90deg,var(--panel) 25%,var(--raise) 37%,var(--panel) 63%);background-size:200% 100%;animation:iqshim 1.4s ease-in-out infinite;border-radius:8px}
   .skcard{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:13px 15px}
   .skln{height:12px;border-radius:6px}
-  .skgrid{display:grid;gap:14px;grid-template-columns:repeat(4,1fr);margin-bottom:14px}
-  @media(max-width:1000px){.skgrid{grid-template-columns:repeat(2,1fr)}}
+  .skgrid{display:grid;gap:14px;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px}
+  @media(max-width:1000px){.skgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   h2.sc{font-size:20px;margin:0 0 3px;font-weight:800}p.scd{margin:0 0 16px;color:var(--muted);font-size:13px}
-  .row{display:grid;gap:14px}.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:repeat(3,1fr)}.c4{grid-template-columns:repeat(4,1fr)}.c5{grid-template-columns:repeat(5,1fr)}.c6{grid-template-columns:repeat(6,1fr)}.c7{grid-template-columns:repeat(7,1fr)}.c8{grid-template-columns:repeat(8,1fr)}.c9{grid-template-columns:repeat(9,1fr)}.span2{grid-column:span 2}
-  @media(max-width:1000px){.c4,.c5{grid-template-columns:repeat(2,1fr)}.c6,.c7,.c8,.c9{grid-template-columns:repeat(3,1fr)}.c3{grid-template-columns:1fr}.span2{grid-column:auto}}
+  .row{display:grid;gap:14px}.c2{grid-template-columns:repeat(2,minmax(0,1fr))}.c3{grid-template-columns:repeat(3,minmax(0,1fr))}.c4{grid-template-columns:repeat(4,minmax(0,1fr))}.c5{grid-template-columns:repeat(5,minmax(0,1fr))}.c6{grid-template-columns:repeat(6,minmax(0,1fr))}.c7{grid-template-columns:repeat(7,minmax(0,1fr))}.c8{grid-template-columns:repeat(8,minmax(0,1fr))}.c9{grid-template-columns:repeat(9,minmax(0,1fr))}.span2{grid-column:span 2}
+  @media(max-width:1000px){.c4,.c5{grid-template-columns:repeat(2,minmax(0,1fr))}.c6,.c7,.c8,.c9{grid-template-columns:repeat(3,minmax(0,1fr))}.c3{grid-template-columns:minmax(0,1fr)}.span2{grid-column:auto}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 17px}.card.pad0{padding:0;overflow:hidden}
   .ct{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.ct h3{font-size:14px;margin:0;font-weight:700}.ct .lnk{font-size:11.5px;color:var(--cyan);cursor:pointer;font-weight:600}
   .muted{color:var(--muted)}.faint{color:var(--faint)}.up{color:var(--good)}.down{color:var(--bad)}.flat{color:var(--watch)}
@@ -82,7 +82,7 @@
   .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
   .chip{font-size:12px;font-weight:600;padding:6px 12px;border-radius:100px;border:1px solid var(--line2);color:var(--ink2);background:var(--panel);cursor:pointer}
   .chip.on{background:linear-gradient(90deg,var(--blue2),var(--cyan2));color:#fff;border-color:transparent}
-  .feed{display:grid;gap:8px}
+  .feed{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
   .al{display:flex;gap:10px;align-items:flex-start;background:var(--panel2);border:1px solid var(--line);border-left:3px solid;border-radius:9px;padding:10px 12px;font-size:12.5px;color:var(--ink2)}
   .al b{color:#fff}.al.crit{border-left-color:var(--bad)}.al.warning{border-left-color:var(--watch)}.al.watch{border-left-color:#6ea8ff}.al.good{border-left-color:var(--good);background:linear-gradient(90deg,rgba(52,217,154,.06),var(--panel2))}.al.p{border-left-color:var(--purple)}
   .alert{display:flex;gap:13px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-left:4px solid;border-radius:11px;padding:13px 15px}
@@ -215,8 +215,8 @@
     .topbar label.ctrl select{max-width:100%!important;width:100%}
     .content{padding:15px 12px 40px;max-width:100%}
     h2.sc{font-size:18px}
-    .row.c2,.row.c3{grid-template-columns:1fr}
-    .row.c4,.row.c5,.row.c6,.row.c7,.row.c8,.row.c9{grid-template-columns:1fr 1fr}
+    .row.c2,.row.c3{grid-template-columns:minmax(0,1fr)}
+    .row.c4,.row.c5,.row.c6,.row.c7,.row.c8,.row.c9{grid-template-columns:repeat(2,minmax(0,1fr))}
     .span2{grid-column:auto}
     .kpi .v{font-size:21px}
     th,td{padding:9px 10px}
@@ -231,7 +231,7 @@
     /* KPIs stay 2-up on phones (bigger numbers). 3 classes so this still wins over the
        .row.c4/.c5 → 1-column rule in the ≤430px block below. With Ad spend that's 5 tiles,
        so the last one spans the full width instead of sitting alone in half. */
-    .ov-kpi.row.c4,.ov-kpi.row.c5,.ov-kpi.row.c6,.ov-kpi.row.c7,.ov-kpi.row.c8,.ov-kpi.row.c9{grid-template-columns:1fr 1fr;gap:10px}
+    .ov-kpi.row.c4,.ov-kpi.row.c5,.ov-kpi.row.c6,.ov-kpi.row.c7,.ov-kpi.row.c8,.ov-kpi.row.c9{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .ov-kpi.row.c5>.kpi:nth-child(5){grid-column:1/-1}
     .ov-kpi.row.c7>.kpi:nth-child(7){grid-column:1/-1}
     .ov-kpi.row.c9>.kpi:nth-child(9){grid-column:1/-1}
@@ -246,7 +246,7 @@
   }
   /* ---------- PHONE ---------- */
   @media(max-width:430px){
-    .row.c4,.row.c5{grid-template-columns:1fr}
+    .row.c4,.row.c5{grid-template-columns:minmax(0,1fr)}
     .kpi .v{font-size:22px}
     h2.sc{font-size:17px}
     .content{padding:13px 10px 36px}
@@ -463,6 +463,7 @@
     .uni-imp-t td:nth-child(2){grid-area:b}.uni-imp-t td:nth-child(3){grid-area:a}.uni-imp-t td:nth-child(4){grid-area:c}
     .uni-imp-t td[data-h]::before{content:attr(data-h);display:block;font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
     .uni-imp-t td .s{white-space:normal}
+    .uni-imp-t td.st .pill{white-space:normal;max-width:100%;padding:2px 7px;line-height:1.3}
   }
   /* ===== Active users (GA4) tab — the Uninstall tab's .uni-* look; its own bits are act-* (no red / green without an alert) ===== */
   #act-root .lnk{color:var(--cyan);cursor:pointer;font-weight:600}
@@ -11507,8 +11508,8 @@ function kpisHtml(){ const wk=[],cw=[]; for(let i=W.i0;i<=W.i1;i++) wk.push(i); 
   const d3=b7!=null&&b7c!=null?{cls:Math.abs(b7-b7c)<.005?'vs-flat':(b7>b7c?'vs-up-good':'vs-dn-bad'),h:`${Math.abs(b7-b7c)<.005?'■':(b7>b7c?'▲':'▼')} was ${mP(PC.b7V)} of ${mP(PC.b7C)} (${pc(b7c,0)})`}:{h:'<span class="vs-vs">no data for before</span>'};
   const sp3=spark({vals:ser(cx,p=>p.b7==null?null:p.b7*100),pre,wpx:250,fmt:(v,j)=>{ const p=WKP[cx[j]]; return p&&p.b7!=null?mP(p.b7V)+' · '+pc(p.b7,0):''; },avg:b7==null?null:b7*100,avgLab:b7==null?'':'range '+mP(PT.b7V)+' · '+pc(b7,0),color:'var(--cyan)',tip:tipW('Back in 7 days',p=>p.b7==null?'⏳ abhi nahi':mP(p.b7V)+' of '+mP(p.b7C)+' ('+pc(p.b7,0)+')')});
   const w7=[]; for(let i=W.i0;i<=W.i1;i++) if(pakka(i,7)<=M.today) w7.push(i);
-  const k3=mk('b7','Back in 7 days','per install',`${cu('b7',PT.b7V,'p',PT.q7?'≈':'')}<span class="vs-ku">of ${mP(PT.b7C)} · ${pc(b7,0)}</span>`,d3,sp3,
-    w7.length?`Installs ${wkSpan(w7[0],w7[w7.length-1])}${w7.length<W.L?' · <span class="vs-watch">⏳ '+wkSpan(w7[w7.length-1]+1,W.i1)+' · final on '+fd(pakka(W.i1,7))+'</span>':''}`:'<span class="vs-watch">⏳ in hafton ke 7 din abhi pure nahi</span>');
+  const k3=mk('b7','Back in 7 days','per install',PT.b7V==null?cu('b7',null,'p',''):`${cu('b7',PT.b7V,'p',PT.q7?'≈':'')}<span class="vs-ku">of ${mP(PT.b7C)} · ${pc(b7,0)}</span>`,d3,sp3,
+    PT.b7V==null?'<span class="vs-watch">⏳ 7 din ka data abhi nahi</span>':(w7.length?`Installs ${wkSpan(w7[0],w7[w7.length-1])}${w7.length<W.L?' · <span class="vs-watch">⏳ '+wkSpan(w7[w7.length-1]+1,W.i1)+' · final on '+fd(pakka(W.i1,7))+'</span>':''}`:'<span class="vs-watch">⏳ in hafton ke 7 din abhi pure nahi</span>'));
   // 4 · ads spend (calendar days, summed — real daily values in the sparkline)
   const dd=[], dc=[]; const dayArr=(f,t)=>{ const o=[]; for(let k=dDiff(M.SW,f);k<=dDiff(M.SW,t);k++){ let s=0,h=false; A.forEach(a=>{ if(a.SPD&&k>=0&&k<a.SPD.length&&a.SPD[k]!=null){ s+=a.SPD[k]; h=true; } }); o.push(h?(INR()?s:s/FXR()):null); } return o; };
   const sd=dayArr(wS(x0),wE(W.i1)), sdc=dayArr(wS(W.c0),wE(W.c1));
