@@ -6093,15 +6093,18 @@ function uniFoldX(open,label,n,call){ return `<div class="uni-fold" onclick="${c
 function uniOldDays(){ const c=UNI&&UNI.consts; return (c&&c.alert_recent_days!=null)?+c.alert_recent_days:60; }
 function uniOldNote(){ const d=uniOldDays();
   return `<div class="faint" style="font-size:11px;margin:6px 0 2px;line-height:1.5">ℹ️ ${d} din se purane installs ke badlaav — sirf jaankari. Inka alert nahi aata, upar ki ginti me nahi.</div>`; }
-function uniTimingNote(){ const c=UNI&&UNI.consts, L=(c&&c.lag_days!=null)?+c.lag_days:2, LD=uniLateDays(), lt=uniLateTxt(UNI&&UNI.lateness), la=uniLateTxt(UNI&&UNI.lateness,'a1');
-  const th=`<div class="th" onclick="uniTNX()"><span class="cv${UNITIMEXP?' on':''}">▸</span><span>⏱️ <b>When will I know?</b></span><span class="lnk" style="margin-left:auto;font-size:12px">${UNITIMEXP?'Hide':'Show'}</span></div>`;
-  if(!UNITIMEXP) return `<div class="note uni-tn" id="uni-timing">${th}</div>`;
-  return `<div class="note uni-tn" id="uni-timing">${th}<ul class="tb">
+// the lines of "⏱️ When will I know?" (the older note, and the Studio's All-apps footer: US whenHtml)
+function uniTimingItems(){ const c=UNI&&UNI.consts, L=(c&&c.lag_days!=null)?+c.lag_days:2, LD=uniLateDays(), lt=uniLateTxt(UNI&&UNI.lateness), la=uniLateTxt(UNI&&UNI.lateness,'a1');
+  return `
     <li>GA4 ka data ${L} din der se aata hai. Sabse jaldi <b>uninstall rate</b> batata hai (~${L} din).</li>
     <li>"Uninstalled within N days" ka badlav install ke N + ${L} din baad dikhta hai — agle din wala ~${1+L} din baad, 7 din wala ~${7+L} din baad, 30 din wala ~${30+L} din baad.</li>
     <li>Firebase uninstall ka data <b>${LD} din tak late</b> bhejta hai, aur late data sirf <b>badhata</b> hai: "zyada uninstall" ki khabar ⏳ pakka nahi wale data se bhi aa jaati hai, par "kam uninstall" ki achhi khabar, 0-uninstall wala din aur ▼ sirf pakke data se (${LD} din baad).${lt?` Sab apps me naapa hua: ${lt} uninstalls aa chuke hote hain.`:''}</li>
     <li>Khabar tab aati hai jab kai din ke installs me badlav pakka ho — ek din ka jhatka nahi; ek install-hafte ki khabar ek hi baar aati hai. Roz ke rate ka dheere dheere badlav ~10 din me pakka hota hai.</li>
-    <li>📦 <b>Update impact</b> (active users, sessions, time, kamai): GA4 ka activity data <b>${L+uniIC('act_late_days',3)} din purana hone par pakka</b> — isse naye din halke dikhte hain, faisla unse nahi.${la?` Sab apps me naapa hua: ${la} active users aa chuke hote hain.`:''} Pehla faisla update ke ~${uniIC('impact_min_days',3)} pakke din baad, poora (7 din baad wapas aane walon ke saath) ~3 hafte baad.</li></ul></div>`; }
+    <li>📦 <b>Update impact</b> (active users, sessions, time, kamai): GA4 ka activity data <b>${L+uniIC('act_late_days',3)} din purana hone par pakka</b> — isse naye din halke dikhte hain, faisla unse nahi.${la?` Sab apps me naapa hua: ${la} active users aa chuke hote hain.`:''} Pehla faisla update ke ~${uniIC('impact_min_days',3)} pakke din baad, poora (7 din baad wapas aane walon ke saath) ~3 hafte baad.</li>`; }
+function uniTimingNote(){
+  const th=`<div class="th" onclick="uniTNX()"><span class="cv${UNITIMEXP?' on':''}">▸</span><span>⏱️ <b>When will I know?</b></span><span class="lnk" style="margin-left:auto;font-size:12px">${UNITIMEXP?'Hide':'Show'}</span></div>`;
+  if(!UNITIMEXP) return `<div class="note uni-tn" id="uni-timing">${th}</div>`;
+  return `<div class="note uni-tn" id="uni-timing">${th}<ul class="tb">${uniTimingItems()}</ul></div>`; }
 const UNI_STAGE={naya:['p-b','🆕 New app · every day'],badh_raha:['p-y','📈 Growing · every day in week 1, then 10/14/21/30…'],stable:['p-g','✅ Stable · 1, 3, 7, 14, 30, 45, 60…']};
 
 // ======================================================================================================
@@ -7549,6 +7552,8 @@ function uniPortfolio(parts){
   const dets=rows.map(r=>r.a).filter(a=>a&&a.data_till);
   try{ sum=dets.length?uniSumPortfolio(dets,kpis,rows.length):''; }catch(e){ sum=''; }
   }
+  else { const dets=rows.map(r=>r.a).filter(a=>a&&a.data_till);   // the fold: the band again (its status / rate chips,
+    try{ sum=dets.length?uniSumPortfolio(dets,'',rows.length):''; }catch(e){ sum=''; } }   // the pooled number) — no range KPIs
   const alCard=smpList(L,{id:'uni',tab:'uni',withApp:true,cardId:'uni-alerts',scope:'Each app'});
   // every app with GA4 (sortable): one column = one install week (the latest settled one), printed in its header
   const s7=a=>{ const c=a&&a.survival&&a.survival.all; return (c&&Array.isArray(c.left)&&c.left.length>7)?c.left[7]:null; };
@@ -7607,7 +7612,7 @@ function uniPortfolio(parts){
     ${noG.map(x=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">${smpAppHtml(x.app_id,x.app)}<span class="muted" style="font-size:12.5px">${hAttr(x.text||uniReason(x.reason))}</span></div>`).join('')}</div>`:'';
   let upd=''; try{ upd=uniUpdatesCard(rows); }catch(e){   // 📦 every visible app's updates + verdicts (a failure says so)
     upd='<div class="card faint" id="uni-updates" style="margin-bottom:14px;font-size:12.5px">⚠️ 📦 Update impact — ye hissa abhi dikh nahi paya.</div>'; }
-  if(parts) return {note,alCard,upd,any:uniAnyAllCard(),table,noCard,timing:uniTimingNote()};
+  if(parts) return {note,sum,alCard,upd,any:uniAnyAllCard(),table,noCard,timing:uniTimingNote()};
   const sNote=(US.ptr()&&US.failed())?`<div class="note">⚠️ Uninstall Studio load nahi hua — purane views dikh rahe hain. <span class="lnk" onclick="US.retry()">Try again</span></div>`:'';
   return head+sNote+note+sum+alCard+upd+uniAnyAllCard()+table+noCard+uniTimingNote();
 }
@@ -7645,24 +7650,31 @@ function usPortfolio(){
   if(US.ready()){ try{ top=US.screen(P0?P0.note:''); }
     catch(e){ top=`<div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Uninstall Studio dikhane me dikkat aayi — <span class="lnk" onclick="US.retry()">Try again</span></div></div>`; } }
   else top=`<h2 class="sc">Uninstall</h2><div class="card"><div class="muted" style="font-size:14px;padding:20px">⏳ Uninstall Studio load ho raha hai…</div></div>`;
+  // the 📦 Update impact list is the Studio's own section (after the Timeline) — drawn ONCE: the fold keeps one line to it.
+  // The Studio still loading / failing / its list not drawn: the card stays in the fold, exactly as before
+  const up=US.ready()&&top.indexOf('id="us-upl-list"')>=0;
   const inner=UNIERR?`<div class="muted" style="font-size:13px;padding:12px 4px">⚠️ Old views load nahi hue — <span class="lnk" onclick="UNIERR=false;uniRerender();loadUNI(()=>uniRerender())">Try again</span></div>`
-    :(!P0?'<div class="muted" style="font-size:13px;padding:12px 4px">⏳ Old views load ho rahe hain…</div>':P0.upd+P0.any+P0.table+P0.alCard+P0.noCard+P0.timing);
-  return (US.ready()?'':(P0?P0.note:''))+top+`<details id="uni-old"${UNIOLDOPEN?' open':''} ontoggle="UNIOLDOPEN=this.open"><summary><span class="uo-cv">▸</span><span>🗂 Old views</span><span class="uo-h">📦 Update impact · 📅 Ek date, sab apps · 📋 All apps table · 🔔 What changed? (purani list)</span></summary><div class="uo-in">${inner}</div></details>`; }
-// All apps: the grey "SAB APPS MILAKAR" band — the pooled "7 din baad bhi app me" (the apps whose verdict reads the SAME
-// 4 settled install weeks, vs the 4 before: one window, printed) and the pooled 7-day KPIs — then, per app ("Har app
-// alag"), each app's own verdict counted into the status chips (apps are not mixed into one verdict — a change in the app
-// mix alone would look like a change) and each app's daily rate into the rate chips. A chip opens its app list.
-// An app with an open install alert is not counted "Normal": it is in "🟡 Dhyan do" / "🟢 Behtar (install hafte)".
-function uniSumPortfolio(dets,kpis,nApps){
+    :(!P0?'<div class="muted" style="font-size:13px;padding:12px 4px">⏳ Old views load ho rahe hain…</div>':P0.sum+(up?uniUpdUpLine():P0.upd)+P0.any+P0.table+P0.alCard+P0.noCard+P0.timing);
+  const hint=(up?'All apps together (status chips) · ':'All apps together (status chips) · 📦 Update impact · ')+'📅 Ek date, sab apps · 📋 All apps table · 🔔 What changed? (purani list)';
+  return (US.ready()?'':(P0?P0.note:''))+top+`<details id="uni-old"${UNIOLDOPEN?' open':''} ontoggle="UNIOLDOPEN=this.open"><summary><span class="uo-cv">▸</span><span>🗂 Old views</span><span class="uo-h">${hint}</span></summary><div class="uo-in">${inner}</div></details>`; }
+// the older All-apps card's place in the fold when the Studio shows the list: one line, a tap scrolls up to it
+function uniUpdUpLine(){ return `<div class="card" id="uni-upd-up" style="margin-bottom:14px;padding:11px 16px;font-size:13px">📦 Update impact → <span class="lnk" onclick="uniJump('us-upl')">upar</span> <span class="faint" style="font-size:11.5px">(Studio me, Timeline ke neeche — verdict filter ke saath)</span></div>`; }
+// the visible apps as the older All-apps views read them: {s: the DATA.uninstall.apps row, a: its GA4 detail (UNI) or null}
+// — the Studio's "All apps together" panel and 📦 list use exactly these rows (so their numbers are the older views')
+function usPfRows(){ const det={}; ((UNI&&UNI.apps)||[]).forEach(x=>{ det[x.app_id]=x; });
+  return (((DATA&&DATA.uninstall)||{}).apps||[]).filter(x=>uniVis(x.app_id)).map(x=>({s:x,a:det[x.app_id]||null})); }
+// the band's numbers, ONE computation: the older band (the fold, uniSumPortfolio) and the Studio's "All apps together"
+// panel (US engHtml) read the same object, so their counts and the pooled number are the same by construction —
+// {pool: {r, p (pooled left, now / before), su, pu (installs), ku (≈ installs still in app), w: [from, to, pfrom, pto], n
+// (apps pooled), apps}, status / rate: [[key, chip label, colour, app list, what the list means]], vw, rw}
+function uniSumData(dets){
   const Vs=dets.map(a=>a.survival&&a.survival.verdict).filter(v=>v&&v.n===7&&v.recent&&v.prev&&v.recent.left!=null&&v.prev.left!=null&&v.recent.users>0&&v.prev.users>0);
   const wk=v=>v.recent.from+'|'+v.recent.to+'|'+v.prev.from+'|'+v.prev.to, cnt={}; Vs.forEach(v=>{ cnt[wk(v)]=(cnt[wk(v)]||0)+1; });
   const top=Object.keys(cnt).sort((p,q)=>cnt[q]-cnt[p]||(q<p?-1:1))[0], V=top?Vs.filter(v=>wk(v)===top):[];
-  let tile='<div class="uni-empty">👥 Still in app after 7 days — ~2 hafte ke pakke data ke baad dikhega</div>';
+  let pool=null;
   if(V.length){ const w=top.split('|'), su=V.reduce((t,v)=>t+v.recent.users,0), pu=V.reduce((t,v)=>t+v.prev.users,0);
     const r=V.reduce((t,v)=>t+v.recent.users*v.recent.left,0)/su, p=V.reduce((t,v)=>t+v.prev.users*v.prev.left,0)/pu;
-    tile=`<div class="uni-tiles" id="uni-pool" style="--n:1">${uniStayTile(7,r,`of new users · before ${uni100(p)}%`,'')}</div>
-      <div class="smp-per" style="margin:6px 0 0">Still in app after 7 days · installs ${smpSpan(w[0],w[1])} vs pehle (${smpSpan(w[2],w[3])}) · ${V.length} apps (${dets.length} me se — jinka yahi install hafta hai)</div>
-      <div class="faint" style="font-size:10.5px;margin-top:2px">(install hafte ke hisaab se — upar ka chunav ispe nahi)</div>`; }
+    pool={r,p,su,pu,ku:r*su,kp:p*pu,w,n:V.length,apps:dets.filter(a=>V.indexOf(a.survival&&a.survival.verdict)>=0)}; }
   const W=[],B=[],same=[],uns=[],none=[],NU=[],ND=[];
   dets.forEach(a=>{ const v=a.survival&&a.survival.verdict, k=uniVKind(v), coh=uniCohAlerts(a);
     coh.forEach(x=>(x.dir==='up'?NU:ND).push([a,x]));
@@ -7679,12 +7691,12 @@ function uniSumPortfolio(dets,kpis,nApps){
     if(!S.up.length&&!S.zero.length&&!S.dn.length){ if(S.has) RK.push({a}); else RN.push({a}); } });
   // [key, chip label, colour, app list, what the list means (a short Hinglish line)]
   const status=[
-    ['worse','🔴 Worse','bad',W.map(a=>({a,x:gap(a),xc:'bad',t:vsp(a)})),'Last 4 final install weeks vs the 4 weeks before — fewer still in app'],
+    ['worse','🔴 Worse','bad',W.map(a=>({a,x:gap(a),xc:'bad',t:vsp(a),v:1})),'Last 4 final install weeks vs the 4 weeks before — fewer still in app'],
     ['wk_up','🟡 Watch','bad',weeks(NU).map(o=>Object.assign(o,{xc:'bad'})),'In hafton ke installs normal se zyada app hata rahe — details "What changed?" me'],
-    ['better','🟢 Better','good',B.map(a=>({a,x:gap(a),xc:'good',t:vsp(a)})),'Last 4 final install weeks vs the 4 weeks before — more still in app'],
+    ['better','🟢 Better','good',B.map(a=>({a,x:gap(a),xc:'good',t:vsp(a),v:1})),'Last 4 final install weeks vs the 4 weeks before — more still in app'],
     ['wk_dn','🟢 Better (install weeks)','good',weeks(ND).map(o=>Object.assign(o,{xc:'good'})),'In hafton ke installs normal se kam app hata rahe'],
-    ['same','⚪ Normal','ok',same.map(a=>({a})),'Pichhle 4 pakke hafte ke installs pichhle mahine jaise hi ruke'],
-    ['unsure','⚪ Normal (no clear difference)','info',uns.map(a=>({a,x:gap(a),t:vsp(a)})),'Farak dikha, par itna aam utaar-chadhaav me bhi aata hai — abhi pakka nahi'],
+    ['same','⚪ Normal','ok',same.map(a=>({a,v:1})),'Pichhle 4 pakke hafte ke installs pichhle mahine jaise hi ruke'],
+    ['unsure','⚪ Normal (no clear difference)','info',uns.map(a=>({a,x:gap(a),t:vsp(a),v:1})),'Farak dikha, par itna aam utaar-chadhaav me bhi aata hai — abhi pakka nahi'],
     ['none','⏳ Too early','info',none.map(a=>({a})),'Naya app ya installs kam — pichhle mahine se tulna abhi nahi']];
   const rate=[
     ['r_up','🔴 Worse','bad',RU,'Roz ka uninstall rate normal se zyada — ya ek din ka jhatka / dheere dheere badhna'],
@@ -7692,11 +7704,27 @@ function uniSumPortfolio(dets,kpis,nApps){
     ['r_dn','🟢 Better','good',RD,'Roz ka uninstall rate normal se kam'],
     ['r_ok','⚪ Normal','ok',RK,'Pichhle 7 din ka rate normal range me'],
     ['r_none','⏳ Too early','info',RN,'Rate 28 din ke GA4 data ke baad aata hai']];
+  const vw=V.length?top.split('|'):null, rw=dets.map(a=>a.rate_now&&a.rate_now.from&&a.rate_now.to?a.rate_now.from+'|'+a.rate_now.to:'').filter(Boolean).sort().pop();
+  return {pool,status,rate,vw,rw}; }
+// All apps: the grey "SAB APPS MILAKAR" band — the pooled "7 din baad bhi app me" (the apps whose verdict reads the SAME
+// 4 settled install weeks, vs the 4 before: one window, printed) and the pooled 7-day KPIs — then, per app ("Har app
+// alag"), each app's own verdict counted into the status chips (apps are not mixed into one verdict — a change in the app
+// mix alone would look like a change) and each app's daily rate into the rate chips. A chip opens its app list.
+// An app with an open install alert is not counted "Normal": it is in "🟡 Dhyan do" / "🟢 Behtar (install hafte)".
+// kpis '' (the Studio's fold: the Studio has its own range KPIs): the band without them
+function uniSumPortfolio(dets,kpis,nApps){
+  const D=uniSumData(dets), P=D.pool;
+  let tile='<div class="uni-empty">👥 Still in app after 7 days — ~2 hafte ke pakke data ke baad dikhega</div>';
+  if(P){ const w=P.w;
+    tile=`<div class="uni-tiles" id="uni-pool" style="--n:1">${uniStayTile(7,P.r,`of new users · before ${uni100(P.p)}%`,'')}</div>
+      <div class="smp-per" style="margin:6px 0 0">Still in app after 7 days · installs ${smpSpan(w[0],w[1])} vs pehle (${smpSpan(w[2],w[3])}) · ${P.n} apps (${dets.length} me se — jinka yahi install hafta hai)</div>
+      <div class="faint" style="font-size:10.5px;margin-top:2px">(install hafte ke hisaab se — upar ka chunav ispe nahi)</div>`; }
+  const status=D.status, rate=D.rate;
   // an open chip's app list sits right under that chip (it takes a whole line of the strip)
   const strip=(G,cls)=>`<div class="uni-scs${cls?' '+cls:''}">${G.filter(g=>g[3].length).map(([k,l,c,L,why])=>`<span class="uni-sc ${c}${UNISTEXP===k?' on':''}" data-k="${k}" onclick="uniSX('${k}')"><i class="dt"></i>${l} <b>(${L.length})</b><span class="cv">▾</span></span>`
     +(UNISTEXP===k?`<div class="uni-xp ${c}" data-xp="${k}"><div class="uni-xph"><b>${l}</b><span class="faint">${why}</span></div><div class="uni-acs">${L.map(o=>uniAppChip(o.a,o.x,o.xc,o.t)).join('')}</div></div>`:'')).join('')}</div>`;
-  const vw=V.length?top.split('|'):null, rw=dets.map(a=>a.rate_now&&a.rate_now.from&&a.rate_now.to?a.rate_now.from+'|'+a.rate_now.to:'').filter(Boolean).sort().pop();
-  return `<div class="card" id="uni-sum" style="margin-bottom:14px"><div class="smp-band"><div class="smp-bl">ALL APPS TOGETHER (${nApps||dets.length} apps)</div>${tile}<div style="margin-top:10px">${kpis||''}</div></div>
+  const vw=D.vw, rw=D.rw;
+  return `<div class="card" id="uni-sum" style="margin-bottom:14px"><div class="smp-band"><div class="smp-bl">ALL APPS TOGETHER (${nApps||dets.length} apps)</div>${tile}${kpis?`<div style="margin-top:10px">${kpis}</div>`:''}</div>
     <div class="uni-sec">App status <span>· Each app · ${vw?`installs ${smpSpan(vw[0],vw[1])} vs pehle (${smpSpan(vw[2],vw[3])})`:'pichhle 4 pakke hafte vs usse pehle ke 4'} · chip pe tap = uski apps</span></div>${strip(status,'rows')}
     <div class="uni-sec">Uninstall rate <span>· Each app · pichhle 7 din${rw?' ('+smpSpan(...rw.split('|'))+')':''} vs normal range</span></div>${strip(rate)}</div>`; }
 function uniDetail(id,viaApp,moved){
@@ -8750,15 +8778,14 @@ function uniImpactCard(a,t,o){
   let body=B.slice(0,S).map(blk).join('');
   if(B.length>S) body+=`<div class="uni-fold" onclick="uniImpAllX(${impA(t).slice(1)})"><span class="cv${all?' on':''}">▸</span><span>${all?'Hide older updates':'Show older updates ('+(B.length-S)+')'}</span></div>`+(all?B.slice(S).map((b,j)=>blk(b,S+j)).join(''):'');
   return wrap(seg+(seg?note(N0,true):note(7,false))+flags+how+body,''); }
-// All apps "📦 Recent updates": every visible app's updates of the last IMPACT_LIST_DAYS days (summary row .updates),
-// newest first, with verdict count chips (a tap = only that verdict); a row opens that app at that update's block
-function uniUpdatesCard(rows,t){
-  const LD=uniIC('impact_list_days',60,t), has=rows.some(r=>Array.isArray(r.s.updates)), st=impS(t), X=impA(t);
-  const hd=`<div class="ct uni-ct"><h3>📦 Update impact (last ${LD} days)</h3><span class="faint" style="font-size:11.5px">Har app alag · har update: 7 din pehle vs 7 din baad</span></div>`;
-  const wrap=h=>`<div class="card" id="${IMPT[impT(t)].p}updates" style="margin-bottom:14px">${hd}${h}</div>`;
-  if(!has) return wrap('<div class="uni-empty">⏳ Update impact agle robot run ke baad dikhega</div>');
-  const L=[]; rows.forEach(r=>(r.s.updates||[]).forEach(u=>{ if(u&&typeof u==='object'&&u.key&&u.date) L.push({s:r.s,a:r.a,u,sz:smpApp(r.s.app_id,r.s.app).size}); }));
-  if(!L.length) return wrap(`<div class="uni-ok" style="color:var(--muted)">Pichhle ${LD} din me koi update nahi</div>`);
+// All apps "📦 Update impact": every visible app's updates of the last IMPACT_LIST_DAYS days (summary row .updates) —
+// 🛑 / ⚠️ / ✅ first (a ⏰ late HOLD / HALT orders as that verdict), small apps last, newest first; then the ⏳ / 👍 / — ones.
+// ONE list, drawn by the older card (uniUpdatesCard, in the fold) and the Studio's All-apps section (US uplHtml, the same
+// rows, with a verdict filter): {LD, has, L, main, rest, grp(o) (the filter's group: halt / hold / win / pending /
+// continue / never), n (per group), row(o) (one row's html: a tap opens that app at that update's block)}
+function uniUpdList(rows,t){
+  const LD=uniIC('impact_list_days',60,t), has=rows.some(r=>Array.isArray(r.s.updates)), X=impA(t);
+  const L=[]; if(has) rows.forEach(r=>(r.s.updates||[]).forEach(u=>{ if(u&&typeof u==='object'&&u.key&&u.date) L.push({s:r.s,a:r.a,u,sz:smpApp(r.s.app_id,r.s.app).size}); }));
   // 🛑 Update roko, ⚠️ Ruk ke jaancho, ✅ Update achha gaya — every one (no cut), small apps last, newest first; then ONE
   // folded line of counts: ⏳ Abhi jaldi · 👍 Chalne do · — Faisla nahi (a tap opens those rows)
   // a ⏰ late HOLD / HALT (30 days) orders as that verdict — it is one
@@ -8788,6 +8815,16 @@ function uniUpdatesCard(rows,t){
       +(u.early&&lv!=='pending'?'<span class="pill p-b" title="Abhi poore 7 pakke din nahi — faisla badal sakta hai">⏳ Early look (not final)</span>':'')
       +(uniNever(f?f.b.verdict:{level:u.level,final:u.final})?UNI_NEVER_PILL(f?f.b.verdict:null):'')
       +(pr?'<span class="pill p-b" title="Kuch number naye din ke — late data abhi aa raha">⏳ Not final</span>':'')+'<span class="lnk go">›</span></div>'; };
+  const grp=o=>ORD[lvOf(o)]!=null?lvOf(o):(never(o)?'never':uniLvl(o.u.level)), n={halt:0,hold:0,win:0,pending:0,continue:0,never:0};
+  L.forEach(o=>{ const g=grp(o); if(n[g]!=null) n[g]++; });
+  return {LD,has,L,main,rest,nW,nC,nN,grp,n,row}; }
+function uniUpdatesCard(rows,t){
+  const st=impS(t), X=impA(t), U=uniUpdList(rows,t), LD=U.LD, main=U.main, rest=U.rest, row=U.row;
+  const hd=`<div class="ct uni-ct"><h3>📦 Update impact (last ${LD} days)</h3><span class="faint" style="font-size:11.5px">Har app alag · har update: 7 din pehle vs 7 din baad</span></div>`;
+  const wrap=h=>`<div class="card" id="${IMPT[impT(t)].p}updates" style="margin-bottom:14px">${hd}${h}</div>`;
+  if(!U.has) return wrap('<div class="uni-empty">⏳ Update impact agle robot run ke baad dikhega</div>');
+  if(!U.L.length) return wrap(`<div class="uni-ok" style="color:var(--muted)">Pichhle ${LD} din me koi update nahi</div>`);
+  const nW=U.nW, nC=U.nC, nN=U.nN;
   const list=main.length?main.map(row).join(''):'<div class="uni-ok" style="color:var(--muted)">No 🛑 / ⚠️ / ✅ verdict</div>';
   const cnt=`⏳ Too early (${nW}) · 👍 Keep (${nC}) · — No verdict (${nN})`;
   const more=rest.length?`<div class="uni-fold" data-fold="upd-rest" onclick="uniUPX(${X.slice(1)})"><span class="cv${st.uall?' on':''}">▸</span><span>${cnt}</span><span class="lnk" style="margin-left:auto;font-size:12px">${st.uall?'Hide':'Show'}</span></div>`+(st.uall?rest.map(row).join(''):''):'';
