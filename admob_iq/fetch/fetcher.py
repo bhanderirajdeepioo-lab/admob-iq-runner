@@ -31,6 +31,36 @@ def build_mediation_row(raw: Dict) -> Dict:
     return row
 
 
+def build_mediation_unit_row(raw: Dict) -> Dict:
+    """Ad-unit totals for one day from the mediation report WITHOUT AD_SOURCE — the ad unit's own
+    requests / matched requests (the source of truth for its match and show rate). Lean on purpose:
+    only the keys the readers need, since the table spans the whole history."""
+    return {"report_date": raw["report_date"], "account_id": raw.get("account_id"),
+            "app_id": raw.get("app_id"), "app_name": raw.get("app_name"),
+            "ad_unit_id": raw.get("ad_unit_id"), "unit_name": raw.get("unit_name"),
+            "format": raw.get("format"), "platform": raw.get("platform"),
+            "ad_requests": raw.get("ad_requests", 0) or 0,
+            "matched_requests": raw.get("matched_requests", 0) or 0,
+            "impressions": raw.get("impressions", 0) or 0, "clicks": raw.get("clicks", 0) or 0,
+            "estimated_earnings_micros": raw.get("estimated_earnings_micros", 0) or 0,
+            "currency_code": raw.get("currency_code", "USD")}
+
+
+def pull_mediation_unit(client, repo, start: date, end: date, dim_filters=None) -> int:
+    """Pull the ad-unit mediation report (no AD_SOURCE) for [start, end] into the repo. Returns the
+    row count. A client or repo without it (an older test double) is a no-op, never an error."""
+    fetch = getattr(client, "mediation_unit_report", None)
+    put = getattr(repo, "upsert_mediation_unit", None)
+    if fetch is None or put is None:
+        return 0
+    n = 0
+    rows = fetch(start, end, dim_filters=dim_filters) if dim_filters else fetch(start, end)
+    for raw in rows:
+        put(build_mediation_unit_row(raw))
+        n += 1
+    return n
+
+
 def build_pc_row(raw: Dict) -> Dict:
     return {"account_id": raw.get("account_id"), "app_id": raw.get("app_id"),
             "app_name": raw.get("app_name"), "ad_unit_id": raw.get("ad_unit_id"),
@@ -137,6 +167,18 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
             print(f"account {acct.get('account_id')} skipped this run (auth/report error): {e}", file=sys.stderr)
             totals.setdefault("account_errors", []).append({"account_id": acct.get("account_id"), "error": str(e)[:200]})
             continue
+        # Ad-unit totals (mediation, NO AD_SOURCE) over the same window as the network report — the
+        # ad unit's own requests / matched requests. Its own try: a failure here costs only these rows
+        # (the readers then fall back to the network numbers for the days it has no row), never the
+        # account's revenue pull. The older history is filled once by build_static's marked backfill.
+        try:
+            totals["mediation_unit"] = totals.get("mediation_unit", 0) + pull_mediation_unit(
+                client, repo, n_start, end)
+        except Exception as e:
+            import sys
+            print(f"mediation ad-unit report skipped for {acct.get('account_id')}: {type(e).__name__}: {e}",
+                  file=sys.stderr)
+            totals.setdefault("mediation_unit_errors", []).append(acct.get("account_id"))
         # Country breakdown is a SEPARATE, additive report. Pull it in <=90-day chunks so a
         # long history backfill never rides on one huge request, and a transient failure on
         # one chunk doesn't lose the rest (each chunk is best-effort). Never let a hiccup

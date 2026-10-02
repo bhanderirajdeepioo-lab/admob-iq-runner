@@ -18,6 +18,18 @@ MEDIATION_DIMENSIONS = ["DATE", "APP", "AD_UNIT", "AD_SOURCE", "FORMAT", "PLATFO
 MEDIATION_METRICS = ["AD_REQUESTS", "MATCHED_REQUESTS", "IMPRESSIONS", "CLICKS",
                      "ESTIMATED_EARNINGS", "OBSERVED_ECPM"]
 
+# Ad-unit totals per day from the MEDIATION report with NO AD_SOURCE (and no COUNTRY) — the numbers the
+# AdMob UI shows for an ad unit. This is the source of truth for an ad unit's REQUESTS and MATCHED
+# REQUESTS (so its match rate and show rate):
+#   * the network report counts only the "AdMob Network" source, so its requests / matched are that
+#     one source's share, not the ad unit's;
+#   * the mediation report WITH AD_SOURCE gives one request row per source, and the sources OVERLAP
+#     (one ad-unit request is offered to several sources), so per-source requests must never be summed.
+# Same dimensions as the network report, so the same row volume; it rides the safe-fetch splitter.
+MEDIATION_UNIT_DIMENSIONS = ["DATE", "APP", "AD_UNIT", "FORMAT", "PLATFORM"]
+MEDIATION_UNIT_METRICS = ["AD_REQUESTS", "MATCHED_REQUESTS", "IMPRESSIONS", "CLICKS",
+                          "ESTIMATED_EARNINGS"]
+
 # Country view: a SEPARATE, lightweight report by (date, app, country) — small volume
 # (~countries × apps × days), fetched from the mediation report so per-country revenue is
 # complete (includes third-party sources). Kept out of the granular per-placement report so
@@ -165,6 +177,37 @@ class MockAdMobClient:
                                    "ad_source": src, "source_name": src, "mediation_group": "",
                                    "country": country, "format": fmt, "platform": platform,
                                    "currency_code": "USD", "observed_ecpm_micros": 3_000_000, **raw}
+
+    def mediation_unit_report(self, start: date, end: date,
+                              dim_filters: List[Dict] = None) -> Iterator[Dict]:
+        """Ad-unit totals per day (no AD_SOURCE): impressions / clicks / earnings are the sum of the
+        mock mediation sources (so revenue agrees with mediation_report), while requests are the ad
+        unit's own — below the sum of the per-source requests, since sources overlap as in the real
+        report (matched ≥ impressions, requests ≥ matched)."""
+        days = (end - start).days
+        keep = _filter_app_ids(dim_filters)
+        for i in range(days + 1):
+            d = start + timedelta(days=i)
+            for app_id, _, platform in self.APPS:
+                if keep is not None and app_id not in keep:
+                    continue
+                for unit, fmt in self.UNITS[app_id]:
+                    tot = {"ad_requests": 0, "matched_requests": 0, "impressions": 0, "clicks": 0,
+                           "estimated_earnings_micros": 0}
+                    for country in self.COUNTRIES:
+                        src = [{k: v // 2 for k, v in self._base(unit + s, country, i).items()}
+                               for s in ("AdMob Network", "AppLovin")]
+                        impr = sum(x["impressions"] for x in src)
+                        matched = int(impr / 0.96) + 1
+                        tot["impressions"] += impr
+                        tot["clicks"] += sum(x["clicks"] for x in src)
+                        tot["estimated_earnings_micros"] += sum(x["estimated_earnings_micros"] for x in src)
+                        tot["matched_requests"] += matched
+                        tot["ad_requests"] += int(matched / (0.7 if country == "ID" else 0.93)) + 1
+                    yield {"report_date": d, "account_id": self.account_id,
+                           "app_id": app_id, "app_name": self.APP_NAMES.get(app_id, app_id),
+                           "ad_unit_id": unit, "unit_name": self.UNIT_NAMES.get(unit, unit),
+                           "format": fmt, "platform": platform, "currency_code": "USD", **tot}
 
     def country_report(self, start: date, end: date) -> Iterator[Dict]:
         days = (end - start).days
@@ -444,6 +487,19 @@ class AdMobClient:
         # source of truth (all ad sources), so the per-app revenue backfill must pull it per app too.
         for r in self._fetch_range("mediationReport", start, end,
                                    MEDIATION_DIMENSIONS, MEDIATION_METRICS,
+                                   dim_filters=dim_filters):
+            r["account_id"] = self.account_id
+            r["currency_code"] = self.currency
+            yield r
+
+    def mediation_unit_report(self, start: date, end: date,
+                              dim_filters: List[Dict] = None) -> Iterator[Dict]:
+        """Per (date, app, ad_unit, format, platform) totals from the mediation report with NO
+        AD_SOURCE — the ad unit's own requests / matched requests (see MEDIATION_UNIT_DIMENSIONS).
+        Safe-fetch split so it never truncates. dim_filters (optional) scopes it to specific apps —
+        the per-app history backfill pulls it per app like the network and mediation reports."""
+        for r in self._fetch_range("mediationReport", start, end,
+                                   MEDIATION_UNIT_DIMENSIONS, MEDIATION_UNIT_METRICS,
                                    dim_filters=dim_filters):
             r["account_id"] = self.account_id
             r["currency_code"] = self.currency

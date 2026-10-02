@@ -84,6 +84,27 @@ CREATE TABLE IF NOT EXISTS mediation_daily (
 CREATE INDEX IF NOT EXISTS ix_med_date       ON mediation_daily (report_date);
 CREATE INDEX IF NOT EXISTS ix_med_source     ON mediation_daily (ad_source, report_date);
 
+-- ---- Ad-unit daily totals from the mediation report WITHOUT ad source ----
+-- The ad unit's own requests / matched requests (the numbers the AdMob UI shows for it). The per-source
+-- rows above overlap on requests (one request is offered to several sources), so they are never summed.
+CREATE TABLE IF NOT EXISTS mediation_unit_daily (
+    report_date               DATE   NOT NULL,
+    account_id                TEXT   NOT NULL,
+    app_id                    TEXT   NOT NULL,
+    ad_unit_id                TEXT   NOT NULL,
+    format                    TEXT   NOT NULL,
+    platform                  TEXT   NOT NULL,
+    ad_requests               BIGINT NOT NULL DEFAULT 0,
+    matched_requests          BIGINT NOT NULL DEFAULT 0,
+    impressions               BIGINT NOT NULL DEFAULT 0,
+    clicks                    BIGINT NOT NULL DEFAULT 0,
+    estimated_earnings_micros BIGINT NOT NULL DEFAULT 0,
+    currency_code             TEXT   NOT NULL DEFAULT 'USD',
+    pulled_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (report_date, account_id, app_id, ad_unit_id, format, platform)
+);
+CREATE INDEX IF NOT EXISTS ix_mu_unit_date ON mediation_unit_daily (ad_unit_id, report_date);
+
 -- ---- Earnings snapshots (APPEND-ONLY) — revenue-deduction / decay tracking ----
 -- Every pull writes a fresh row so we can see day D's estimate change over time:
 -- D+1 = $100 -> D+3 = $88 -> finalized $80.

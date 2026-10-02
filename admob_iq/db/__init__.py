@@ -1,6 +1,8 @@
 """DB layer. Three interchangeable repos, same tiny interface the fetcher needs:
     init_schema(), upsert_network(row), upsert_mediation(row), append_snapshot(row)
     + fetch_network(), fetch_mediation(), fetch_snapshots(), has_data()
+    + upsert_mediation_unit(row) / fetch_mediation_unit(): ad-unit totals per day from the mediation
+      report WITHOUT AD_SOURCE — the source of truth for an ad unit's requests / matched requests
 
 - `InMemoryRepo` — tests / dry-run (nothing persists).
 - `FileRepo`     — history in flat JSON files, NO database. This is what makes a
@@ -102,6 +104,7 @@ class InMemoryRepo:
     def __init__(self):
         self.network, self.mediation, self.snapshots, self.country = [], [], [], []
         self.placement_country = []
+        self.mediation_unit = []               # ad-unit totals per day (mediation, no AD_SOURCE)
         self.acm = {"units": {}, "data": {}}   # ad-unit×country monthly rollup (compact nested)
         self.acd = {"month": "", "dates": [], "units": {}, "data": {}}   # current-month daily
 
@@ -116,6 +119,12 @@ class InMemoryRepo:
 
     def upsert_country(self, row):
         self.country.append(row)
+
+    def upsert_mediation_unit(self, row):
+        self.mediation_unit.append(row)
+
+    def fetch_mediation_unit(self):
+        return self.mediation_unit
 
     def upsert_placement_country(self, row):
         self.placement_country.append(row)
@@ -227,6 +236,18 @@ class PgRepo:
 
     def fetch_country(self):
         return self._rows("SELECT * FROM country_daily")
+
+    _MU_COLS = ["report_date", "account_id", "app_id", "ad_unit_id", "format", "platform",
+                "ad_requests", "matched_requests", "impressions", "clicks",
+                "estimated_earnings_micros", "currency_code"]
+
+    def upsert_mediation_unit(self, row):
+        row.setdefault("currency_code", "USD")
+        self._upsert("mediation_unit_daily", self._MU_COLS,
+                     ["report_date", "account_id", "app_id", "ad_unit_id", "format", "platform"], row)
+
+    def fetch_mediation_unit(self):
+        return self._rows("SELECT * FROM mediation_unit_daily")
 
     def upsert_placement_country(self, row):
         cols = ["account_id", "app_id", "ad_unit_id", "country", "ad_requests",
@@ -346,6 +367,7 @@ class FileRepo:
                "country", "format"]
     COUNTRY_PK = ["report_date", "account_id", "app_id", "country"]
     PC_PK = ["account_id", "app_id", "ad_unit_id", "country"]
+    MU_PK = ["report_date", "account_id", "app_id", "ad_unit_id", "format", "platform"]
 
     def __init__(self, data_dir: str = "data"):
         self.dir = data_dir
@@ -353,9 +375,12 @@ class FileRepo:
                       "med": os.path.join(data_dir, "mediation.json"),
                       "snap": os.path.join(data_dir, "snapshots.json"),
                       "country": os.path.join(data_dir, "country.json"),
-                      "pc": os.path.join(data_dir, "placement_country.json")}
+                      "pc": os.path.join(data_dir, "placement_country.json"),
+                      # ad-unit totals per day from the mediation report WITHOUT AD_SOURCE (the ad
+                      # unit's own requests / matched requests) — full daily history, never rolled up
+                      "mu": os.path.join(data_dir, "mediation_unit.json")}
         self._pk = {"net": self.NET_PK, "med": self.MED_PK, "snap": self.SNAP_PK,
-                    "country": self.COUNTRY_PK, "pc": self.PC_PK}
+                    "country": self.COUNTRY_PK, "pc": self.PC_PK, "mu": self.MU_PK}
         self._rows = {}   # name -> list (lazy-loaded)
         self._pos = {}    # name -> {key: index}
         # ad-unit×country baseline: compact NESTED structures, own files (not the flat model)
@@ -404,6 +429,13 @@ class FileRepo:
     def upsert_placement_country(self, row):
         row.setdefault("currency_code", "USD")
         self._upsert("pc", row)
+
+    def upsert_mediation_unit(self, row):
+        row.setdefault("currency_code", "USD")
+        self._upsert("mu", row)
+
+    def fetch_mediation_unit(self):
+        return self._load("mu")
 
     def fetch_placement_country(self):
         return self._load("pc")

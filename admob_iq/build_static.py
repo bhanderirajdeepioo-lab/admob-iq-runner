@@ -109,6 +109,12 @@ def data_quality(repo, totals):
         dq["reports"].append(_span_check(list(repo.fetch_country()), "country", entity_key="country"))
     except Exception as e:
         print(f"data-quality country check skipped: {e}", file=sys.stderr)
+    try:                                             # ad-unit totals (requests / matched source of truth)
+        mu = list(getattr(repo, "fetch_mediation_unit", list)())
+        if mu:
+            dq["reports"].append(_span_check(mu, "mediation_unit"))
+    except Exception as e:
+        print(f"data-quality mediation_unit check skipped: {e}", file=sys.stderr)
     dq["ok"] = not dq["truncations"] and all(r.get("ok", True) for r in dq["reports"])
     if dq["truncations"]:
         print(f"data-quality: {len(dq['truncations'])} UNSPLITTABLE truncation(s) — data incomplete!",
@@ -599,6 +605,9 @@ class _AppFilteredRepo:
     def fetch_mediation(self):
         return self._flat(self._r.fetch_mediation())
 
+    def fetch_mediation_unit(self):
+        return self._flat(getattr(self._r, "fetch_mediation_unit", list)())
+
     def fetch_country(self):
         return self._flat(self._r.fetch_country())
 
@@ -719,6 +728,9 @@ class _DisambiguatedRepo:
 
     def fetch_mediation(self):
         return self._rows(self._r.fetch_mediation())
+
+    def fetch_mediation_unit(self):
+        return self._rows(getattr(self._r, "fetch_mediation_unit", list)())
 
     def fetch_country(self):
         return self._rows(self._r.fetch_country())
@@ -938,7 +950,7 @@ def _backfill_network_selected_apps(accounts, repo, today, *, mode, client_id, c
     import json as _json
     from datetime import timedelta
     from collections import defaultdict
-    from .fetch.fetcher import make_client, build_network_row, build_mediation_row
+    from .fetch.fetcher import make_client, build_network_row, build_mediation_row, pull_mediation_unit
     from .fetch.admob_client import _app_filter
     from .engine.app_select import load_selection, selected_ids
 
@@ -998,6 +1010,9 @@ def _backfill_network_selected_apps(accounts, repo, today, *, mode, client_id, c
             # all-time revenue stays shallow even when network is deep.
             for raw in client.mediation_report(ds, today, dim_filters=flt):
                 repo.upsert_mediation(build_mediation_row(raw))
+            # ...and the ad-unit totals (no AD_SOURCE): the app's requests / matched requests for its
+            # whole history, so a newly ticked app's match / show rate is right from its first day
+            pull_mediation_unit(client, repo, ds, today, dim_filters=flt)
             newly.add(app_id)
         except Exception as e:
             print(f"network backfill failed for {aid}/{app_id}: {e}", file=sys.stderr)
@@ -1010,6 +1025,121 @@ def _backfill_network_selected_apps(accounts, repo, today, *, mode, client_id, c
         except Exception as e:
             print(f"network_bf_apps save failed: {e}", file=sys.stderr)
     return n
+
+
+# ── One-time history backfill of the ad-unit mediation report (no AD_SOURCE) ──────────────────────────────
+# That report is the source of truth for an ad unit's requests / matched requests (match and show rate).
+# run_once pulls its recent window every run; this fills the WHOLE stored history once — chunked and
+# resumable, so no run can time out or truncate:
+#   * per account it runs from the account's earliest stored network / mediation day (the dashboard's
+#     own history start) up to yesterday, newest chunk first, MU_CHUNK_DAYS days per request (each
+#     request still rides the safe-fetch splitter, so the 100k-row cap can never cut it short);
+#   * progress lives in data/mediation_unit_bf.json, saved only AFTER repo.flush() — an interrupted run
+#     just redoes its chunks; a failed chunk stops that account for this run and is retried next run;
+#   * a run stops starting chunks after MU_BACKFILL_BUDGET_SEC (default 20 min) and the next run goes on;
+#   * when every account reaches its start, data/.mediation_unit_backfilled is written and this step
+#     never runs again. An account (or app) that shows up later is pulled whole by the per-app backfill.
+MU_STATE_FILE = "mediation_unit_bf.json"
+MU_MARKER = ".mediation_unit_backfilled"
+MU_CHUNK_DAYS = 30
+
+
+def _mu_history_starts(repo):
+    """{account_id: earliest stored report day (network or mediation)} — where the dashboard's own
+    history begins, so the ad-unit report covers exactly the days the dashboard shows."""
+    out = {}
+    for fetch in (repo.fetch_network, repo.fetch_mediation):
+        for r in fetch():
+            a, d = r.get("account_id"), str(r.get("report_date") or "")[:10]
+            if a and len(d) == 10 and d != "None" and (a not in out or d < out[a]):
+                out[a] = d
+    return out
+
+
+def _backfill_mediation_unit_history(accounts, repo, today, *, mode, client_id, client_secret, currency,
+                                     data_dir, budget_sec=None, clock=None):
+    """Advance the one-time ad-unit mediation history backfill by as many chunks as the time budget allows.
+    Returns (state, done, info): the caller persists them with _save_mu_backfill AFTER repo.flush(), so a
+    chunk is only ever recorded as done once its rows are on disk. info = counts only (chunks, rows,
+    truncations). Never raises for one account's failure."""
+    import json as _json
+    import time
+    from .fetch.fetcher import make_client, pull_mediation_unit
+    if os.path.exists(os.path.join(data_dir, MU_MARKER)):
+        return None, True, {"chunks": 0, "rows": 0, "truncations": []}
+    clock = clock or time.monotonic
+    if budget_sec is None:
+        budget_sec = float(os.getenv("MU_BACKFILL_BUDGET_SEC", "1200") or "1200")
+    try:
+        with open(os.path.join(data_dir, MU_STATE_FILE), encoding="utf-8") as f:
+            state = _json.load(f) or {}
+    except Exception:
+        state = {}
+    st = state.setdefault("accounts", {})
+    state["v"] = 1
+    by_id = {a.get("account_id"): a for a in accounts if a.get("account_id")}
+    if not st:                                     # first run: one entry per account with stored history
+        yday = (today - timedelta(days=1)).isoformat()
+        for aid, start in sorted(_mu_history_starts(repo).items()):
+            if aid in by_id:
+                st[aid] = {"start": start, "next_end": yday}
+    info = {"chunks": 0, "rows": 0, "truncations": []}
+    t0 = clock()
+    for aid in sorted(st):
+        e = st[aid]
+        if e.get("done"):
+            continue
+        if aid not in by_id:                       # no longer configured → nothing to pull with
+            e["done"], e["note"] = True, "account not configured"
+            continue
+        if e["next_end"] < e["start"]:
+            e["done"] = True
+            continue
+        try:
+            client = make_client(by_id[aid], mode, client_id, client_secret, currency)
+        except Exception as ex:
+            print(f"mediation ad-unit backfill: client failed for {aid}: {type(ex).__name__}", file=sys.stderr)
+            continue
+        start = date.fromisoformat(e["start"])
+        while not e.get("done"):
+            if clock() - t0 >= budget_sec:
+                break
+            ce = date.fromisoformat(e["next_end"])
+            cs = max(start, ce - timedelta(days=MU_CHUNK_DAYS - 1))
+            try:
+                info["rows"] += pull_mediation_unit(client, repo, cs, ce)
+            except Exception as ex:                # keep next_end: this chunk is retried next run
+                print(f"mediation ad-unit backfill: chunk {cs}..{ce} failed for {aid}: "
+                      f"{type(ex).__name__}: {ex}", file=sys.stderr)
+                break
+            info["chunks"] += 1
+            e["next_end"] = (cs - timedelta(days=1)).isoformat()
+            if cs <= start:
+                e["done"] = True
+        info["truncations"].extend(getattr(client, "truncations", []) or [])
+        if clock() - t0 >= budget_sec:
+            break
+    done = bool(st) and all(e.get("done") for e in st.values())
+    if not st:                                     # no stored history at all → nothing to backfill
+        done = True
+    left = sum(1 for e in st.values() if not e.get("done"))
+    print(f"mediation ad-unit history backfill: {info['chunks']} chunk(s), {info['rows']} rows this run; "
+          f"{len(st) - left}/{len(st)} account(s) complete", file=sys.stderr)
+    return state, done, info
+
+
+def _save_mu_backfill(data_dir, state, done):
+    """Persist the backfill progress (and, when complete, the marker). Call AFTER repo.flush()."""
+    if state is None:
+        return
+    os.makedirs(data_dir, exist_ok=True)
+    path = os.path.join(data_dir, MU_STATE_FILE)
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
+        json.dump(state, f, sort_keys=True, indent=1)
+    os.replace(path + ".tmp", path)
+    if done:
+        with open(os.path.join(data_dir, MU_MARKER), "w", encoding="utf-8") as f:
+            f.write("mediation ad-unit report backfilled over the whole stored history\n")
 
 
 def build(out_dir="site", data_dir="data", today=None, mode=None):
@@ -1113,7 +1243,24 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                                             data_dir=data_dir)
         except Exception as e:
             print(f"per-app revenue backfill skipped: {e}", file=sys.stderr)
+    # One-time (chunked, resumable) history of the ad-unit mediation report — the ad unit's own requests /
+    # matched requests. Progress is saved only after the flush below; a failure costs only this step.
+    mu_bf = None
+    if mode == "live" and has_creds:
+        try:
+            mu_bf = _backfill_mediation_unit_history(
+                accounts, repo, today, mode=mode, client_id=s["google_client_id"],
+                client_secret=s["google_client_secret"], currency=s["report_currency"], data_dir=data_dir)
+            totals.setdefault("truncations", []).extend(mu_bf[2].get("truncations") or [])
+        except Exception as e:
+            mu_bf = None
+            print(f"mediation ad-unit history backfill skipped: {type(e).__name__}: {e}", file=sys.stderr)
     repo.flush()          # persist the refreshed history to disk (committed by CI)
+    if mu_bf is not None:
+        try:
+            _save_mu_backfill(data_dir, mu_bf[0], mu_bf[1])
+        except Exception as e:
+            print(f"mediation ad-unit backfill state save skipped: {type(e).__name__}", file=sys.stderr)
     if did_backfill and repo.has_data():           # mark done only after a successful deep pull
         os.makedirs(data_dir, exist_ok=True)
         with open(marker, "w", encoding="utf-8") as f:
@@ -1445,11 +1592,14 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # baseline_geo.json (per-ad-unit ALL countries) loads only on the first ad-unit drill.
     if baseline_payload is not None:
         from .engine.baseline_report import compact_geo, build_daily_series
-        # Per-placement DAILY series for the placement-page chart, from the already-fetched network
-        # report (no extra AdMob calls). Third lazy tier: baseline_daily.json loads only on drill.
+        # Per-placement DAILY series for the placement-page chart, from the already-fetched reports (no
+        # extra AdMob calls): the same unit-day rows as the ad-unit table — revenue from the mediation
+        # report (every source), requests / matched from the ad-unit mediation report (no AD_SOURCE).
+        # Third lazy tier: baseline_daily.json loads only on drill.
         try:
+            from .api.dataservice import _revenue_rows
             keep_ids = {u["id"] for u in baseline_payload.get("units", [])}
-            daily = build_daily_series(repo.fetch_network(), keep_ids=keep_ids)
+            daily = build_daily_series(_revenue_rows(repo), keep_ids=keep_ids)
             # Per-ad-unit DAILY series — grows with backfill depth, so ship GZIPPED (25MB-safe, lossless).
             _shipgz(out_dir, "baseline_daily.json", {"units": daily})
         except Exception as e:
