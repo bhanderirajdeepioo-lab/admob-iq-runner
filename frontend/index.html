@@ -60,11 +60,25 @@
   @media(max-width:1000px){.skgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   h2.sc{font-size:20px;margin:0 0 3px;font-weight:800}p.scd{margin:0 0 16px;color:var(--muted);font-size:13px}
   .row{display:grid;gap:14px}.c2{grid-template-columns:repeat(2,minmax(0,1fr))}.c3{grid-template-columns:repeat(3,minmax(0,1fr))}.c4{grid-template-columns:repeat(4,minmax(0,1fr))}.c5{grid-template-columns:repeat(5,minmax(0,1fr))}.c6{grid-template-columns:repeat(6,minmax(0,1fr))}.c7{grid-template-columns:repeat(7,minmax(0,1fr))}.c8{grid-template-columns:repeat(8,minmax(0,1fr))}.c9{grid-template-columns:repeat(9,minmax(0,1fr))}.span2{grid-column:span 2}
+  /* A KPI tile is never narrower than its number: once a many-tile row's tiles would drop below ~170-200px it
+     wraps into BALANCED rows (9 → 5+4 → 3+3+3, 8 → 4+4, 7 → 4+3, 6 → 3+3, 5 → 3+2), never 8+1. Widths are the
+     viewport: content = viewport − 220px sidebar − 2×24px padding. (≤1000px rules below still win.) */
+  @media(max-width:2179px){.c9{grid-template-columns:repeat(5,minmax(0,1fr))}}
+  @media(max-width:1765px){.c8{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  @media(max-width:1576px){.c7{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  @media(max-width:1387px){.c6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:1173px){.c5,.c9{grid-template-columns:repeat(3,minmax(0,1fr))}}
   @media(max-width:1000px){.c4,.c5{grid-template-columns:repeat(2,minmax(0,1fr))}.c6,.c7,.c8,.c9{grid-template-columns:repeat(3,minmax(0,1fr))}.c3{grid-template-columns:minmax(0,1fr)}.span2{grid-column:auto}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 17px}.card.pad0{padding:0;overflow:hidden}
   .ct{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.ct h3{font-size:14px;margin:0;font-weight:700}.ct .lnk{font-size:11.5px;color:var(--cyan);cursor:pointer;font-weight:600}
   .muted{color:var(--muted)}.faint{color:var(--faint)}.up{color:var(--good)}.down{color:var(--bad)}.flat{color:var(--watch)}
-  .kpi .l{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase}.kpi .v{font-size:24px;font-weight:800;margin-top:4px;letter-spacing:-.01em}.kpi .d{font-size:12px;font-weight:700;margin-top:3px}
+  .kpi .l{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase}.kpi .v{font-size:24px;font-weight:800;margin-top:4px;letter-spacing:-.01em}
+  /* …and the big number scales with ITS tile's width (cqi = 1% of the tile's content box), so it always fits, capped at
+     the design size (--vmax) so wide tiles look as before: 14cqi fits a 12-character "₹888,888,888" (7.0em); .vl (13-15
+     characters, "-₹100,000,000", "₹1,000,000,000") 12cqi (8.3em); .vxl (16+, a placement / country name) 10cqi. Text
+     wraps at spaces; a single over-long word breaks rather than sticking out (never needed for a number). */
+  .kpi{container-type:inline-size}
+  .kpi .v{--fit:14cqi;font-size:min(var(--vmax,24px),var(--fit));overflow-wrap:anywhere}.kpi .v.vl{--fit:12cqi}.kpi .v.vxl{--fit:10cqi}.kpi .d{font-size:12px;font-weight:700;margin-top:3px}
   .spark{display:flex;align-items:flex-end;gap:2px;height:26px;margin-top:10px}.spark i{flex:1;background:linear-gradient(180deg,var(--cyan),var(--blue2));border-radius:2px;opacity:.85;min-height:3px}
   .spark.g i{background:linear-gradient(180deg,#6ee7b7,var(--good))}.spark.r i{background:linear-gradient(180deg,#ff9a9a,var(--bad))}
   .spark.o i{background:linear-gradient(180deg,#fcd34d,var(--watch))}   /* ad spend — its own colour, not "bad" */
@@ -218,7 +232,7 @@
     .row.c2,.row.c3{grid-template-columns:minmax(0,1fr)}
     .row.c4,.row.c5,.row.c6,.row.c7,.row.c8,.row.c9{grid-template-columns:repeat(2,minmax(0,1fr))}
     .span2{grid-column:auto}
-    .kpi .v{font-size:21px}
+    .kpi .v{--vmax:21px}
     th,td{padding:9px 10px}
     /* wide tables scroll INSIDE their card instead of squishing the page */
     .card.pad0{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -236,7 +250,7 @@
     .ov-kpi.row.c7>.kpi:nth-child(7){grid-column:1/-1}
     .ov-kpi.row.c9>.kpi:nth-child(9){grid-column:1/-1}
     .ov-kpi .kpi{padding:15px 13px}
-    .ov-kpi .kpi .v{font-size:25px;margin-top:5px}
+    .ov-kpi .kpi .v{--vmax:25px;margin-top:5px}
     .ov-kpi .kpi .l{font-size:11.5px}
     .ov-coll .ct{cursor:pointer;margin-bottom:0;user-select:none}
     .ov-coll .feed{display:none;margin-top:12px}
@@ -247,7 +261,7 @@
   /* ---------- PHONE ---------- */
   @media(max-width:430px){
     .row.c4,.row.c5{grid-template-columns:minmax(0,1fr)}
-    .kpi .v{font-size:22px}
+    .kpi .v{--vmax:22px}
     h2.sc{font-size:17px}
     .content{padding:13px 10px 36px}
     .topbar>label.ctrl,.topbar #rangecustom{flex:1 1 100%}
@@ -3042,7 +3056,9 @@ function filterAlerts(f){document.querySelectorAll('.screen[data-screen=alerts] 
 function filterPlDetail(f){document.querySelectorAll('#pl-detail tbody tr').forEach(r=>{if(r.classList.contains('grp')){r.style.display='';return;}let s=true;if(f==='improving')s=r.dataset.dir==='up';else if(f==='declining')s=r.dataset.dir==='down';else if(f!=='all')s=r.dataset.fmt===f;r.style.display=s?'':'none';});}
 
 function screenDiv(id){const d=document.createElement('section');d.className='screen';d.dataset.screen=id;return d;}
-function kpi(l,v,d,cls,spark){return `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="d ${cls||'muted'}">${d||''}</div>${spark||''}</div>`;}
+// .vl / .vxl: a value of 13+ / 16+ characters gets a smaller fit-to-tile size (see .kpi .v) — layout only, value unchanged
+function kpi(l,v,d,cls,spark){const n=String(v==null?'':v).replace(/<[^>]*>/g,'').replace(/&[a-z#0-9]+;/gi,'_').length, vl=n>15?' vl vxl':(n>12?' vl':'');
+  return `<div class="card kpi"><div class="l">${l}</div><div class="v${vl}">${v}</div><div class="d ${cls||'muted'}">${d||''}</div>${spark||''}</div>`;}
 function fmtD(s){const p=String(s||'').split('-');if(p.length<3)return s||'';const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return (+p[2])+' '+(mo[(+p[1])-1]||'');}
 function rangeSpan(k){if(!k||!k.from||!k.to)return '';const f=fmtD(k.from),t=fmtD(k.to);return (k.from===k.to?f:f+'–'+t)+(k.days?` · ${k.days}d`:'');}
 function fmtN(n){n=+n||0;if(n>=1e6)return (n/1e6).toFixed(1)+'M';if(n>=1e3)return (n/1e3).toFixed(1)+'k';return String(Math.round(n));}
