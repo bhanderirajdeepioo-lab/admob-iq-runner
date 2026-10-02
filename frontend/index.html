@@ -324,6 +324,89 @@
   :is(#us-root,#us-layer) .us-ks b,:is(#as-root,#as-layer) .as-ks b,:is(#vs-root,#vs-layer) .vs-ks b{white-space:nowrap}
   /* the KPIWINDOW Compare select fits a 360px phone */
   .kw-cmp-l{min-width:0;max-width:100%;flex-wrap:wrap}.kw-cmp-l select{min-width:0;max-width:100%}
+  /* ===== 📈 eCPM trend — opened from the Overview "Avg eCPM" tile (no tab of its own) ===== */
+  .ec-kpi{position:relative;cursor:pointer;transition:border-color .12s,background .12s}
+  .ec-kpi:hover{border-color:var(--cyan);background:#13223a}.ec-kpi:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .ec-kpi .l{padding-right:58px}
+  .ec-kpi .ec-hint{position:absolute;top:16px;right:17px;font-size:10.5px;font-weight:700;color:var(--cyan);white-space:nowrap;line-height:1.4}
+  body[data-screen="ecpm"] #rangectl,body[data-screen="ecpm"] #rangecustom{display:none!important}   /* the view has its own range */
+  #ec-root{min-width:0}
+  .ec-nav{display:flex;align-items:center;gap:2px 16px;flex-wrap:wrap;margin:-4px 0 8px}
+  .ec-nav .spacer{flex:1}
+  .ec-lnk{display:inline-flex;align-items:center;gap:5px;min-height:34px;padding:2px 0;background:none;border:none;color:var(--cyan);font:inherit;font-size:13px;font-weight:650;cursor:pointer;white-space:nowrap}
+  .ec-lnk:disabled{color:var(--faint);cursor:default}
+  .ec-hd{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;border:1px solid var(--line2);background:linear-gradient(90deg,#12213a,transparent);margin-bottom:14px;min-width:0}
+  .ec-hd>div{min-width:0}.ec-hd>div:first-child{flex:none}.ec-hd .big{font-size:19px;font-weight:800;color:#fff;overflow-wrap:anywhere;line-height:1.3}
+  .ec-hd .sub{font-size:12.5px;color:var(--muted);line-height:1.55;overflow-wrap:anywhere;margin-top:2px}
+  .ec-hd .sub b{color:var(--ink2)}
+  .ec-kpis{margin-bottom:14px}
+  .ec-kpis .kpi .d{font-weight:600;line-height:1.45;overflow-wrap:anywhere}
+  .ec-kpis .kpi .d b{white-space:nowrap;font-weight:750}
+  .ec-kpis .kpi .ec-w{display:block;font-size:11px;font-weight:500;color:var(--faint);margin-top:2px}
+  .ec-cc{margin-bottom:14px;min-width:0}
+  .ec-cc .ct{flex-wrap:wrap;gap:6px 12px;align-items:flex-start}
+  .ec-ctl{display:flex;gap:8px 10px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+  .ec-seg{display:inline-flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden;background:var(--panel);max-width:100%}
+  .ec-seg button{min-height:34px;background:none;border:none;border-right:1px solid var(--line);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:600;padding:5px 12px;cursor:pointer;white-space:nowrap}
+  .ec-seg button:last-child{border-right:none}.ec-seg button:hover:not(.on){background:var(--raise)}
+  .ec-seg button.on{background:linear-gradient(90deg,var(--blue2),var(--cyan2));color:#fff}
+  .ec-chw{position:relative;min-height:200px}
+  .ec-chw svg{display:block;width:100%;height:auto;overflow:visible}
+  .ec-chw svg text{font-family:inherit}
+  .ec-tip{position:absolute;left:0;top:0;z-index:6;min-width:176px;max-width:250px;background:#0b1220;border:1px solid #38507a;border-radius:9px;padding:8px 11px;font-size:12px;color:var(--ink2);box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;line-height:1.5}
+  .ec-tip.on{display:block}
+  .ec-tip .d{font-size:11.5px;color:var(--muted);font-weight:650}
+  .ec-tip .v{font-size:17px;font-weight:800;color:#fff;margin:0 0 3px}.ec-tip .v small{font-size:11px;font-weight:600;color:var(--muted);margin-left:4px}
+  .ec-tip .r{display:flex;justify-content:space-between;gap:14px}
+  .ec-tip .r b{color:#fff;white-space:nowrap;font-weight:700}.ec-tip .r b.up{color:var(--good)}.ec-tip .r b.down{color:var(--bad)}
+  .ec-tip .x{font-size:10.5px;color:var(--faint);margin-top:3px}
+  .ec-lg{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:8px}
+  .ec-lg i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+  .ec-lg i.ec-lb{height:9px;width:9px;border-radius:2px;background:#8496b5;opacity:.35}
+  .ec-lg i.ec-la{background:none;border-top:2px dashed #c2cee3;height:0}
+  .ec-note{font-size:11.5px;color:var(--faint);line-height:1.55;margin-top:6px;overflow-wrap:anywhere}
+  .ec-note b{color:var(--muted)}
+  .ec-tc{padding:0;margin-bottom:14px;min-width:0;overflow:hidden}
+  .ec-tc>.ct{padding:14px 16px 0;margin-bottom:6px;flex-wrap:wrap;gap:4px 12px;align-items:baseline}
+  .ec-tc>.ec-note{padding:0 16px;margin-top:0}
+  .ec-tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:8px;border-top:1px solid var(--line)}
+  .ec-t{min-width:880px}
+  .ec-t th{padding:0;white-space:nowrap;text-align:right}
+  .ec-t th button{display:inline-flex;align-items:center;justify-content:flex-end;gap:4px;width:100%;min-height:40px;padding:6px 12px;background:none;border:none;color:inherit;font:inherit;line-height:1.25;text-align:right;text-transform:inherit;letter-spacing:inherit;cursor:pointer;white-space:nowrap}
+  .ec-t th button:hover{color:#fff}.ec-t th.ec-on button{color:var(--cyan)}
+  .ec-t th .ec-ar{font-size:9px}
+  .ec-t th.ec-nos{padding:6px 12px}
+  .ec-t td{white-space:nowrap;text-align:right;padding:9px 12px;font-variant-numeric:tabular-nums}
+  .ec-t th:first-child,.ec-t td:first-child{position:sticky;left:0;z-index:1;background:var(--panel);text-align:left;white-space:normal;min-width:200px;max-width:280px;box-shadow:1px 0 0 var(--line)}
+  .ec-t th:first-child button{justify-content:flex-start}
+  .ec-t thead th:first-child{background:var(--panel2);z-index:2}
+  .ec-t tbody tr.clk:hover td{background:var(--raise)}
+  .ec-t tbody tr.ec-low td:not(:first-child){color:var(--faint)}
+  .ec-t td.up,.ec-t td .up{color:var(--good)}.ec-t td.down,.ec-t td .down{color:var(--bad)}
+  .ec-an{display:flex;align-items:center;gap:9px;min-width:0}
+  .ec-an>span:last-child{min-width:0;overflow-wrap:anywhere;line-height:1.35}
+  .ec-an b{color:#fff;font-weight:650}.ec-an small{display:block;font-size:11px;color:var(--muted);font-weight:500}
+  .ec-fmt{display:inline-block;font-size:10.5px;font-weight:700;color:#8fd4ff;background:#15294a;border-radius:100px;padding:0 7px;margin-top:2px}
+  .ec-st{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:100px;white-space:nowrap}
+  .ec-st.bigda{background:var(--bad-b);color:var(--bad)}.ec-st.dhyan{background:var(--watch-b);color:var(--watch)}.ec-st.behtar{background:var(--good-b);color:var(--good)}
+  .ec-st.normal{background:var(--raise);color:var(--ink2)}.ec-st.jaldi,.ec-st.lagu{background:transparent;color:var(--faint);border:1px solid var(--line2)}
+  .ec-st small{display:block;font-size:10px;font-weight:600}
+  .ec-sp{display:block;width:96px;height:26px;margin-left:auto}
+  .ec-more{display:flex;justify-content:center;padding:6px 10px 10px}
+  .ec-more button{min-height:34px;background:var(--raise);border:1px solid var(--line2);border-radius:8px;color:var(--ink2);font:inherit;font-size:12.5px;font-weight:600;padding:5px 14px;cursor:pointer}
+  @media(max-width:760px){
+    .ec-hd{padding:12px 13px;gap:10px}.ec-hd .big{font-size:17px}
+    .ec-t th:first-child,.ec-t td:first-child{min-width:136px;max-width:152px}
+    .ec-t td{padding:9px 10px}.ec-t th button{padding:6px 10px}
+    .ec-an{gap:7px}
+    .ec-seg button{min-height:36px;padding:5px 11px}
+    .ec-kpi .l{padding-right:52px}
+    .ov-kpi .ec-kpi .ec-hint{top:15px;right:13px}
+    .ec-kpis.row.c4{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .ec-kpis .kpi{padding:13px 12px}.ec-kpis .kpi .d{font-size:11.5px}
+  }
+  @media(max-width:430px){ .ec-seg button{padding:5px 9px;font-size:12px}
+    .ec-tip{min-width:0;padding:6px 9px;font-size:11.5px;line-height:1.4}.ec-tip .v{font-size:15px;margin:0 0 2px} }
   /* "Stay after N days" / Active-users tiles: the number scales with its tile (like .kpi .v) — never past the edge */
   .uni-st{container-type:inline-size}
   /* ===== Phase 3: touch polish + iOS/Android standalone (add-to-home-screen) ===== */
@@ -3368,6 +3451,7 @@ const TITLES={overview:["Portfolio Overview","Live · engine-computed"],placemen
   uninstall:["Uninstall","Installs vs uninstalls (GA4)"],
   review:["Daily Review","One card per app per day · team review"],
   datewise:["Date-wise Report","Har din · spend · installs · revenue · P/L"],
+  ecpm:["eCPM trend","Daily · monthly · har app · ad units"],
   settings:["Accounts & Apps","Connect · auto-sync"]};
 
 // ---- small chart helpers (compute from data) ----
@@ -3622,6 +3706,7 @@ function render(){
   const root=document.getElementById('screens');root.innerHTML='';
   root.append(renderOverview(),renderPlacements(),renderReport(),renderAppDetail(),renderMovers(),renderAlerts(),
               renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderActive(),renderUninstall(),renderDateWise(),renderReco(),renderHealth(),renderSettings(),renderValue());
+  root.append(renderEcpm());     // 📈 eCPM trend (from the Overview "Avg eCPM" tile): an empty shell, filled by show('ecpm')
   root.append(renderReview());   // ONE persistent node: drafts / open panels survive the 5-min refresh and the ₹/$ toggle
   rvRestoreFocus();
   document.getElementById('nav-alert').textContent=alertsBadgeN();
@@ -3783,6 +3868,7 @@ function show(id){
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
   document.querySelectorAll('.botbar .tabbtn').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-sub').textContent=TITLES[id][1];}
+  if(id==='ecpm') ecPaint(); else ecLeft();   // 📈 eCPM trend: filled when shown (its own range); leaving it takes its Back steps off
   const _rvKeep=rvKeepScroll(id);           // Review re-shown by the 5-min refresh / ₹⇄$: stay where the reader was
   rvOnShow(id);                             // body[data-screen] (hides App / Period on Review) + the #review hash
   if(!_rvKeep&&!REFRESH_SILENT) window.scrollTo({top:0});   // a silent background refresh never jumps the page
@@ -3954,7 +4040,7 @@ function renderOverview(){
         ${SHOWSP?kpi('Google Ads installs',instTot?Math.round(instTot).toLocaleString():'—','ads only · '+dspan,'muted',sparkbars(instSeries,'o')):''}
         ${SHOWSP?kpi('New revenue',money(newRevTot),'new users (GAds) · '+dspan,'muted'):''}
         ${SHOWSP?kpi('Old revenue',plFmt(oldRevTot),'Rev − Day-1 · '+dspan,'muted'):''}
-        ${kpi('Avg eCPM',cm(k.ecpm),dspan,'muted',sparkbars(trendSeries))}
+        ${ecKpiTile(kpi('Avg eCPM',cm(k.ecpm),dspan,'muted',sparkbars(trendSeries)))}
         ${kpi('Match rate',pct(k.match_rate||0),dspan,'muted',sparkbars(trendSeries,'g'))}
         ${lastTile}
       </div>
@@ -3969,6 +4055,313 @@ function renderOverview(){
   return s;
 }
 
+// ===================== 📈 eCPM TREND — opened from the Overview "Avg eCPM" tile (no tab of its own) =====================
+// Owner: "ecpm kpi pe click kru to ek eCPM trend view … daily avg eCPM history, default last 30 days, full pe pura history,
+// day wise, month wise … overall for all apps; niche sab app ka yesterday ka eCPM + last 7 days ke saath comparison (plus
+// hua ya minus); app pe click → us app ka same view (+ ad units)". Every number is summed from the per-placement daily
+// counts each placement already carries ([date, earn_micros, impr, req, matched, clicks] — the FULL history, the same rows
+// the Overview KPIs, App Report and Placements read), with the dashboard's own definition: eCPM = earnings ÷ impressions ×
+// 1000 over the same days, and the same windows (windowDates) — so "Yesterday" / "Last 7 days" / "Last 30 days" here are
+// the Overview "Avg eCPM" tile for those periods. Today's partial day is never used. Money stays in the report currency
+// (cm / money convert for the ₹⇄$ toggle).
+const EC_MIN_IMPR=1000;       // fewer impressions than this on "yesterday" → "low data": shown, never judged (N/A)
+const EC_SWING_FLOOR=0.02;    // the smallest "usual day-to-day swing" a status is judged against (2%)
+const EC_SWING_MIN=7;         // day-to-day pairs needed before a status is judged (else "Too early")
+const EC={app:'',hdr:null,r:'30',g:'day',sort:{k:'imp',d:'asc'},usort:{k:'imp',d:'asc'},csort:{k:'imp',d:'asc'},
+  idle:{a:false,u:false,c:false},cmax:false,rows:{},el:null,cache:null,cacheD:null,ucache:{},ch:null,pin:false,booted:false,wired:false};
+const EC_STO={bigda:0,dhyan:1,normal:2,behtar:3,jaldi:4,lagu:5};
+const EC_DEF={name:'asc',y:'desc',w7:'desc',pct:'asc',imp:'asc',yi:'desc',st:'asc'};
+// ---- the maths (pure: no DOM) ----
+// the windows, exactly the dashboard's: complete days = the calendar axis minus the partial today
+function ecWin(){ const ax=gAxis(), T=DATA.today_date||'', comp=T?ax.filter(d=>d!==T):ax.slice();
+  const y=windowDates(ax,'yesterday'), d7=windowDates(ax,'7d'), d30=windowDates(ax,'30d'), mtd=windowDates(ax,'month'), L=y[0]||'';
+  const n=comp.length, cut=(a,b)=>comp.slice(Math.max(0,n-a),Math.max(0,n-b));
+  let lm=[]; if(L){ const yy=+L.slice(0,4), mm=+L.slice(5,7), dom=+L.slice(8,10), pm=mm>1?yy+'-'+String(mm-1).padStart(2,'0'):(yy-1)+'-12';
+    lm=comp.filter(d=>d.slice(0,7)===pm&&+d.slice(8,10)<=dom); }   // the same days of last month (1st … yesterday's date)
+  return {ax,comp,T,L,y,d7,d30,mtd,lm,p7:cut(14,7),p30:cut(60,30),sw:cut(31,1),s30:comp.slice(-30)}; }
+// day → [earn_micros, impressions] maps: the portfolio and every app (today's partial day left out), built once per DATA
+function ecAgg(){ if(EC.cache&&EC.cacheD===DATA) return EC.cache;
+  const T=DATA.today_date||'', pf={}, apps={};
+  (DATA.placements||[]).forEach(p=>{ const a=apps[p.app]||(apps[p.app]={});
+    (p.daily||[]).forEach(r=>{ const d=r&&r[0]; if(!d||d===T) return; const e=+r[1]||0, i=+r[2]||0;
+      const x=pf[d]||(pf[d]=[0,0]); x[0]+=e; x[1]+=i; const z=a[d]||(a[d]=[0,0]); z[0]+=e; z[1]+=i; }); });
+  EC.cache={pf,apps}; EC.cacheD=DATA; EC.ucache={}; return EC.cache; }
+// one app's ad units, each with its own day map (built when that app is opened)
+function ecUnits(app){ if(EC.cacheD===DATA&&EC.ucache[app]) return EC.ucache[app]; const T=DATA.today_date||'';
+  const out=(DATA.placements||[]).filter(p=>p.app===app).map(p=>{ const dm={};
+    (p.daily||[]).forEach(r=>{ const d=r&&r[0]; if(!d||d===T) return; const z=dm[d]||(dm[d]=[0,0]); z[0]+=+r[1]||0; z[1]+=+r[2]||0; });
+    return {id:p.id,name:p.name||p.id,format:p.format||'',dm}; });
+  ecAgg(); EC.ucache[app]=out; return out; }
+function ecDm(rows){ const T=DATA.today_date||'', dm={}; (rows||[]).forEach(r=>{ const d=r&&r[0]; if(!d||d===T) return; const z=dm[d]||(dm[d]=[0,0]); z[0]+=+r[1]||0; z[1]+=+r[2]||0; }); return dm; }
+function ecSum(dm,days){ let e=0,i=0; for(const d of days||[]){ const x=dm[d]; if(x){ e+=x[0]; i+=x[1]; } } return {e,i,ec:i?e/(i*1000):null}; }
+function ecFirst(dm){ let f=''; for(const d in dm){ const x=dm[d]; if(x&&(x[1]>0||x[0]>0)&&(!f||d<f)) f=d; } return f; }
+// the usual day-to-day swing: the median |day-to-day % change| of eCPM over the 30 days before yesterday (days with
+// ≥ EC_MIN_IMPR impressions only); null when fewer than EC_SWING_MIN pairs (a new / thin app → "Too early")
+function ecSwing(dm,days){ const v=(days||[]).map(d=>{ const x=dm[d]; return (x&&x[1]>=EC_MIN_IMPR&&x[0]>0)?x[0]/(x[1]*1000):null; }), ch=[];
+  for(let k=1;k<v.length;k++) if(v[k]!=null&&v[k-1]!=null) ch.push(Math.abs(v[k]/v[k-1]-1));
+  if(ch.length<EC_SWING_MIN) return null; ch.sort((a,b)=>a-b); const m=ch.length>>1; return ch.length%2?ch[m]:(ch[m-1]+ch[m])/2; }
+// the status (keys = the dashboard's status words, WD.st): a drop beyond 2× the app's own usual swing = Worse, beyond 1× =
+// Watch, a rise beyond 2× = Better, else Normal; yesterday under EC_MIN_IMPR impressions = N/A (low data, not judged)
+function ecStatus(pct,swing,yi){ if(!(yi>=EC_MIN_IMPR)) return 'lagu'; if(swing==null||pct==null) return 'jaldi';
+  const s=Math.max(swing,EC_SWING_FLOOR); if(pct<=-2*s) return 'bigda'; if(pct<=-s) return 'dhyan'; if(pct>=2*s) return 'behtar'; return 'normal'; }
+// one table row: yesterday vs the last 7 days (incl. yesterday — the dashboard's "Last 7 days"); impact/day = yesterday's
+// impressions × (yesterday's eCPM − the 7-day avg) ÷ 1000 (report currency)
+function ecRow(dm,W){ const y=ecSum(dm,W.y), w=ecSum(dm,W.d7), chg=(y.ec!=null&&w.ec!=null)?y.ec-w.ec:null;
+  const pct=(chg!=null&&w.ec)?chg/w.ec:null, imp=chg!=null?y.i*chg/1000:null, swing=ecSwing(dm,W.sw), m30=ecSum(dm,W.s30);
+  return {y:y.ec,yi:y.i,ye:y.e,w7:w.ec,wi:w.i,chg,pct,imp,swing,st:ecStatus(pct,swing,y.i),act:m30.i>0,
+    spark:W.s30.map(d=>{ const x=dm[d]; return (x&&x[1])?x[0]/(x[1]*1000):null; })}; }
+function ecSortRows(rows,S){ const k=S.k, dir=S.d==='desc'?-1:1, lowLast=k!=='name'&&k!=='yi';
+  const val=r=>k==='name'?String(r.label||'').toLowerCase():(k==='st'?EC_STO[r.st]:r[k]);
+  return rows.slice().sort((a,b)=>{ const la=a.st==='lagu', lb=b.st==='lagu'; if(lowLast&&la!==lb) return la?1:-1;
+    const va=val(a), vb=val(b); if(va==null||vb==null){ if(va!=null) return -1; if(vb!=null) return 1; }
+    else if(k==='name'){ const c=va.localeCompare(vb); if(c) return dir*c; }
+    else if(va!==vb) return dir*(va-vb);
+    if(k!=='imp'&&(a.imp||0)!==(b.imp||0)) return (a.imp||0)-(b.imp||0);
+    return String(a.label||'').localeCompare(String(b.label||'')); }); }
+// the chart's points: Day = one per complete day of the range; Month = whole calendar months (month earnings ÷ month
+// impressions × 1000), the month of yesterday "partial" unless yesterday was its last day. Each point keeps the one before it
+// (pv, even from outside the range) for the tooltip's "vs previous day / month".
+function ecMonthEnd(d){ const t=new Date(Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10)+1)); return t.getUTCDate()===1; }
+function ecPts(dm,W,first,r,g){ const comp=first?W.comp.filter(d=>d>=first):W.comp.slice(); if(!comp.length) return [];
+  let days=r==='all'?comp:comp.slice(-(+r||30));
+  if(g==='month'){ const m0=days[0].slice(0,7), by={}, ord=[];
+    comp.forEach(d=>{ const m=d.slice(0,7); let o=by[m]; if(!o){ o=by[m]={k:m,e:0,i:0,n:0,d0:d,d1:d}; ord.push(o); } const x=dm[d]; if(x){ o.e+=x[0]; o.i+=x[1]; } o.n++; o.d1=d; });
+    const ms=ord.map(o=>({k:o.k,e:o.e,i:o.i,n:o.n,ec:o.i?o.e/(o.i*1000):null,low:o.i>0&&o.i<EC_MIN_IMPR,
+      partial:o.k===String(W.L||'').slice(0,7)&&!ecMonthEnd(W.L),from:(o.d0.slice(8,10)!=='01')?o.d0:''}));
+    ms.forEach((p,i)=>{ p.pv=i?ms[i-1].ec:null; });
+    return ms.filter(p=>p.k>=m0); }
+  const at=comp.length-days.length;
+  return days.map((d,j)=>{ const x=dm[d], e=x?x[0]:0, i=x?x[1]:0, pd=comp[at+j-1], px=pd?dm[pd]:null;
+    return {k:d,e,i,ec:i?e/(i*1000):null,low:i>0&&i<EC_MIN_IMPR,pv:(px&&px[1])?px[0]/(px[1]*1000):null}; }); }
+// what the chart prints: the range average (earnings ÷ impressions of the whole range), min, max, latest
+function ecPtStats(pts){ const ok=pts.map((p,i)=>[p,i]).filter(([p])=>p.ec!=null), rel=ok.filter(([p])=>!p.low), base=rel.length?rel:ok;
+  if(!ok.length) return {avg:null,min:-1,max:-1,last:-1};
+  let e=0,i=0; pts.forEach(p=>{ e+=p.e||0; i+=p.i||0; });
+  let mn=base[0], mx=base[0]; base.forEach(q=>{ if(q[0].ec<mn[0].ec) mn=q; if(q[0].ec>mx[0].ec) mx=q; });
+  return {avg:i?e/(i*1000):null,min:mn[1],max:mx[1],last:ok[ok.length-1][1],rel:rel.length?true:false}; }
+// ---- formatting ----
+function ecPct(p){ if(p==null||!isFinite(p)) return '—'; const v=Math.abs(p*100); return (p<0&&v>=0.05?'−':(p>0&&v>=0.05?'+':''))+v.toFixed(1)+'%'; }
+function ecCm(v){ return (v==null||!isFinite(v))?'—':cm(v); }
+function ecCmS(v){ if(v==null||!isFinite(v)) return '—'; const t=cm(Math.abs(v)); return (t===cm(0)?'':(v<0?'−':'+'))+t; }
+function ecMoney(v){ if(v==null||!isFinite(v)) return '—'; const x=Math.abs(v)*cfx(), dp=x<100?2:0;
+  return csym()+x.toLocaleString(undefined,{minimumFractionDigits:dp,maximumFractionDigits:dp}); }
+function ecMoneyS(v){ if(v==null||!isFinite(v)) return '—'; const t=ecMoney(v); return (/^\D*0(\.00)?$/.test(t)?'':(v<0?'−':'+'))+t; }
+function ecCls(p){ return p==null?'':(p>0.0005?'up':(p<-0.0005?'down':'')); }
+function ecAx(v){ const x=v*cfx(); if(Math.abs(x)<1e-9) return csym()+'0'; return csym()+(x<10?x.toFixed(2):(x<100?x.toFixed(1):Math.round(x).toLocaleString())); }
+const EC_MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function ecDL(d){ if(!d) return ''; const t=new Date(Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10)));
+  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][t.getUTCDay()]+', '+(+d.slice(8,10))+' '+EC_MO[+d.slice(5,7)-1]+' '+d.slice(0,4); }
+function ecML(m){ return m?(EC_MO[+m.slice(5,7)-1]||m)+' '+m.slice(0,4):''; }
+function ecSpan(days){ if(!days||!days.length) return ''; const a=days[0], b=days[days.length-1]; return a===b?fmtD(a):fmtD(a)+'–'+fmtD(b); }
+function ecYear(d){ return d?fmtD(d)+' '+d.slice(0,4):''; }
+// ---- the chart (an SVG drawn at its real width: 1 unit = 1 px, so its text is the same size on a phone) ----
+function ecChartSvg(pts,W,month){ const n=pts.length; if(!n) return null; const S=ecPtStats(pts); if(S.last<0) return null;
+  const nar=W<560, H=nar?Math.round(Math.max(240,Math.min(280,W*.74))):290, F=nar?{ax:10.5,lb:11,big:12.5}:{ax:11.5,lb:12,big:13.5};
+  const inL=p=>p.ec!=null&&(!S.rel||!p.low), base=pts.filter(inL);
+  let lo=Math.min(...base.map(p=>p.ec)), hi=Math.max(...base.map(p=>p.ec)); if(S.avg!=null){ lo=Math.min(lo,S.avg); hi=Math.max(hi,S.avg); }
+  const kx=cfx()||1, sp=(hi-lo)||Math.abs(hi)*.1||1, r0=Math.max(0,lo-sp*.2)*kx, r1=(hi+sp*.32)*kx, st0=(r1-r0)/4, mg=Math.pow(10,Math.floor(Math.log10(st0))),
+    stp=[1,2,2.5,5,10].map(m=>m*mg).find(v=>v>=st0)||10*mg, d0=Math.max(0,Math.floor(r0/stp)*stp), d1=Math.ceil(r1/stp)*stp, tk=[];   // round gridline values (in the shown currency)
+  for(let v=d0;v<=d1+stp*1e-6;v+=stp) tk.push(v/kx); const y0=d0/kx, y1=d1/kx;
+  const mT=nar?20:22, mB=nar?24:28, mR=nar?8:16, mL=Math.round(Math.max(nar?36:46,Math.max(...tk.map(v=>ecAx(v).length))*F.ax*.6+12));
+  const pw=W-mL-mR, ph=H-mT-mB, X=i=>mL+(n<=1?pw/2:pw*i/(n-1)), Y=v=>mT+ph*(1-(Math.min(Math.max(v,y0),y1)-y0)/((y1-y0)||1));
+  const f1=v=>(+v).toFixed(1), lbl=(x,y,t,o)=>`<text x="${f1(x)}" y="${f1(y)}" text-anchor="${o.a||'middle'}" font-size="${o.s||F.lb}" font-weight="${o.w||700}" fill="${o.c||'#eaf6ff'}" stroke="#111d31" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${t}</text>`;
+  let g=''; tk.forEach(v=>{ const y=f1(Y(v)); g+=`<line x1="${mL}" y1="${y}" x2="${W-mR}" y2="${y}" stroke="#22314f" stroke-width="1"/><text x="${mL-6}" y="${f1(+y+4)}" text-anchor="end" font-size="${F.ax}" fill="#8496b5">${ecAx(v)}</text>`; });
+  const mi=Math.max(...pts.map(p=>p.i||0))||1, bw=Math.max(1,Math.min(28,pw/n*.62));
+  const bars=pts.map((p,i)=>{ if(!p.i) return ''; const h=Math.max(1,ph*.3*p.i/mi); return `M${f1(X(i)-bw/2)} ${f1(mT+ph)}h${f1(bw)}v${f1(-h)}h${f1(-bw)}Z`; }).join('');
+  let segs=[], cur=null; pts.forEach((p,i)=>{ if(inL(p)){ if(!cur){ cur=[]; segs.push(cur); } cur.push(i); } else if(p.ec==null) cur=null; });   // a low-data day is stepped over (hollow dot), a day with no impressions breaks the line
+  const line=segs.map(s=>'M'+s.map(i=>f1(X(i))+' '+f1(Y(pts[i].ec))).join(' L')).join(' ');
+  const dots=n<=62?pts.map((p,i)=>inL(p)?`<circle cx="${f1(X(i))}" cy="${f1(Y(p.ec))}" r="${n>31?2:2.8}" fill="#3dd0f0"/>`:'').join(''):'';
+  const lows=pts.map((p,i)=>(p.ec!=null&&!inL(p))?`<circle cx="${f1(X(i))}" cy="${f1(Y(p.ec))}" r="3" fill="none" stroke="#8496b5" stroke-width="1.4"/>`:'').join('');
+  const part=month&&pts[n-1].partial&&pts[n-1].ec!=null?`<circle cx="${f1(X(n-1))}" cy="${f1(Y(pts[n-1].ec))}" r="7" fill="none" stroke="#e6b84e" stroke-width="1.4" stroke-dasharray="3 2"/>`:'';
+  // printed: the range average (dashed), min, max, latest — a label that would sit on another is merged into it
+  let pr='', avl='';
+  if(S.avg!=null){ const ay=Y(S.avg); avl=`<line x1="${mL}" y1="${f1(ay)}" x2="${W-mR}" y2="${f1(ay)}" stroke="#c2cee3" stroke-opacity=".75" stroke-width="1.3" stroke-dasharray="6 5"/>`;
+    pr+=lbl(mL+6,ay-6,'avg '+cm(S.avg),{a:'start',s:F.lb,w:650,c:'#c2cee3'}); }
+  const L=S.last, lx=X(L), ly=Y(pts[L].ec), tags={}; tags[L]=[]; if(S.max===L) tags[L].push('max'); if(S.min===L&&S.min!==S.max) tags[L].push('min');
+  const tw=t=>String(t).length*F.lb*.58, clampX=(x,t)=>Math.min(Math.max(x,mL+tw(t)/2+2),W-mR-tw(t)/2-2);
+  const ltxt=cm(pts[L].ec)+(tags[L].length?' · '+tags[L].join(' · '):''), lbelow=S.min===L&&S.max!==L, lyT=lbelow?ly+18:Math.max(ly-10,mT-4);
+  const lAnchorX=Math.min(lx-8,W-mR), lLeft=lAnchorX-tw(ltxt);
+  const near=(x,y,t)=>{ const a=x-tw(t)/2, b=x+tw(t)/2; return b>lLeft-6&&a<lAnchorX+6&&Math.abs(y-lyT)<15; };
+  [['max',S.max,-9],['min',S.min,17]].forEach(([nm,i,dy])=>{ if(i<0||i===L||(nm==='min'&&S.min===S.max)) return; const t=nm+' '+cm(pts[i].ec), x=X(i), y=Y(pts[i].ec);
+    let ty=y+dy, tx=clampX(x,t), an='middle';
+    if(ty<mT-4||ty>mT+ph-3){ ty=y+4; an=x+8+tw(t)<=W-mR?'start':'end'; tx=an==='start'?x+8:x-8; }   // no room above / below it: beside the point
+    else if(near(tx,ty,t)) ty+=nm==='max'?-14:14;
+    pr+=`<circle cx="${f1(x)}" cy="${f1(y)}" r="4" fill="#0b1220" stroke="${nm==='max'?'#34d99a':'#ff6b6b'}" stroke-width="2"/>`+lbl(tx,ty,t,{a:an,c:nm==='max'?'#7ef0c2':'#ffa3a3',w:650}); });
+  pr+=`<circle cx="${f1(lx)}" cy="${f1(ly)}" r="4.6" fill="#3dd0f0" stroke="#0b1220" stroke-width="1.4"/>`+lbl(lAnchorX,lyT,ltxt,{a:'end',s:F.big,w:750});
+  // x labels: days (≤120) · month starts (longer) · months; thinned from the end so two never touch
+  const xs=[]; if(month) pts.forEach((p,i)=>xs.push([i,bMon(p.k)+(p.partial?'*':'')]));
+  else if(n<=120){ const step=Math.max(1,Math.ceil(n/Math.max(2,Math.floor(pw/(nar?58:70))))); for(let i=n-1;i>=0;i-=step) xs.push([i,fmtD(pts[i].k)]); }
+  else pts.forEach((p,i)=>{ if(i===0||p.k.slice(8,10)==='01') xs.push([i,bMon(p.k.slice(0,7))]); });
+  const xw=t=>String(t).length*F.ax*.6; let xl='', left=1e9;
+  xs.sort((a,b)=>b[0]-a[0]).forEach(([i,t])=>{ let x=X(i), an='middle'; if(x+xw(t)/2>W-1){ x=W-1; an='end'; } else if(x-xw(t)/2<1){ x=1; an='start'; }
+    const r=an==='end'?x:(an==='start'?x+xw(t):x+xw(t)/2), l=r-xw(t); if(r+6>left) return; left=l;
+    xl+=`<line x1="${f1(X(i))}" y1="${f1(mT+ph)}" x2="${f1(X(i))}" y2="${f1(mT+ph+4)}" stroke="#3a4a66"/><text x="${f1(x)}" y="${H-(nar?6:8)}" text-anchor="${an}" font-size="${F.ax}" fill="#8496b5">${t}</text>`; });
+  const hov=`<line class="ec-gl" x1="0" x2="0" y1="${mT}" y2="${f1(mT+ph)}" stroke="#cfe8ff" stroke-opacity=".45" stroke-width="1" style="visibility:hidden"/><circle class="ec-hd" r="5.2" fill="#3dd0f0" stroke="#fff" stroke-width="1.6" style="visibility:hidden"/>`;
+  const sum=`${month?'Monthly':'Daily'} eCPM: latest ${cm(pts[L].ec)}, range avg ${S.avg!=null?cm(S.avg):'—'}, min ${cm(pts[S.min].ec)}, max ${cm(pts[S.max].ec)}`;
+  const svg=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${hAttr(sum)}">${g}<path d="${bars}" fill="#8496b5" fill-opacity=".16"/>${avl}<path d="${line}" fill="none" stroke="#3dd0f0" stroke-width="${n>200?1.6:2.3}" stroke-linejoin="round"/>${dots}${lows}${part}${xl}${pr}${hov}</svg>`;
+  return {svg,W,H,mT,ph,xs:pts.map((p,i)=>X(i)),ys:pts.map(p=>p.ec!=null?Y(p.ec):null),S}; }
+// the tooltip of one point: date (or month), eCPM, earnings, impressions, the change vs the previous day / month
+function ecTipHtml(p,month,pin){ const d=p.pv!=null&&p.ec!=null?p.ec-p.pv:null, q=d!=null&&p.pv?d/p.pv:null;
+  const head=month?ecML(p.k)+(p.partial?` · so far (${p.n} ${p.n===1?'day':'days'})`:'')+(p.from?` · from ${fmtD(p.from)}`:''):ecDL(p.k);
+  return `<div class="d">${head}</div><div class="v">${ecCm(p.ec)}<small>eCPM</small></div>`
+    +`<div class="r"><span>Earnings</span><b>${ecMoney((p.e||0)/1e6)}</b></div><div class="r"><span>Impressions</span><b>${Math.round(p.i||0).toLocaleString()}</b></div>`
+    +`<div class="r"><span>vs previous ${month?'month':'day'}</span><b class="${ecCls(q)}">${d==null?'—':ecCmS(d)+' ('+ecPct(q)+')'}</b></div>`
+    +(p.low?'<div class="x">⚠ Low data — 1,000 se kam impressions</div>':'')+(pin?'<div class="x">Bahar tap karo = band</div>':''); }
+function ecSpark(v,st){ const W=96,H=26, ok=v.map((x,i)=>[x,i]).filter(q=>q[0]!=null); if(ok.length<2) return '<span class="faint">—</span>';
+  const mn=Math.min(...ok.map(q=>q[0])), mx=Math.max(...ok.map(q=>q[0])), r=(mx-mn)||1, X=i=>2+(W-4)*i/Math.max(1,v.length-1), Y=x=>3+(H-6)*(1-(x-mn)/r);
+  const col={bigda:'#ff6b6b',dhyan:'#e6b84e',behtar:'#34d99a'}[st]||'#3dd0f0';
+  let d='', on=false; v.forEach((x,i)=>{ if(x==null){ on=false; return; } d+=(on?' L':' M')+X(i).toFixed(1)+' '+Y(x).toFixed(1); on=true; });
+  const l=ok[ok.length-1]; return `<svg class="ec-sp" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${d.trim()}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round"/><circle cx="${X(l[1]).toFixed(1)}" cy="${Y(l[0]).toFixed(1)}" r="2.4" fill="${col}"/></svg>`; }
+// ---- the view ----
+function renderEcpm(){ const s=screenDiv('ecpm'); EC.el=s; return s; }
+// the Overview "Avg eCPM" tile → a button into this view (pointer + "Trend →")
+function ecKpiTile(h){ return String(h).replace('<div class="card kpi">',`<div class="card kpi ec-kpi" role="button" tabindex="0" title="eCPM trend kholo — daily / monthly history, har app" onclick="ecOpen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ecOpen()}"><span class="ec-hint" aria-hidden="true">Trend →</span>`); }
+function ecOn(){ const on=document.querySelector('.screen.on'); return !!(on&&on.dataset&&on.dataset.screen==='ecpm'); }
+function ecSave(){ try{ localStorage.setItem('ecpmview',JSON.stringify({app:EC.app,r:EC.r,g:EC.g})); }catch(e){} }
+function ecOpen(){ EC.hdr=APP; EC.app=APP||''; EC.r='30'; EC.g='day'; EC.pin=false; EC.booted=true;
+  hbOv('ecpm',true,ecUndo); show('ecpm'); }
+function ecUndo(){ if(ecOn()) show('overview'); }                        // phone Back on the view → Overview
+function ecAppUndo(){ if(ecOn()&&!APP){ EC.app=''; ecPaint(); window.scrollTo({top:0}); } }   // phone Back on an app → All apps
+function ecClose(){ hbDrop('ecpm-app'); hbDrop('ecpm'); show('overview'); }
+function ecLeft(){ EC.pin=false; if(!HB.st.some(x=>x.tag==='ecpm'||x.tag==='ecpm-app')) return;
+  Promise.resolve().then(()=>{ if(ecOn()) return; hbDrop('ecpm-app'); hbDrop('ecpm'); }); }   // left by the menu / a link: no Back step stays behind
+function ecApp(name){ if(!name) return; if(APP){ setApp(name); return; } EC.app=name; hbOv('ecpm-app',true,ecAppUndo); ecPaint(); window.scrollTo({top:0}); }
+function ecAllApps(){ if(APP){ setApp(''); window.scrollTo({top:0}); return; } hbDrop('ecpm-app'); EC.app=''; ecPaint(); window.scrollTo({top:0}); }
+function ecSetR(r){ EC.r=r; EC.pin=false; ecPaintChart(); ecSave(); }
+function ecSetG(g){ EC.g=g; EC.pin=false; ecPaintChart(); ecSave(); }
+function ecSort(t,k){ const key={a:'sort',u:'usort',c:'csort'}[t], S=EC[key]; if(S.k===k) S.d=S.d==='asc'?'desc':'asc'; else { S.k=k; S.d=EC_DEF[k]||'desc'; }
+  const el=document.getElementById('ec-tb-'+t); if(el) el.innerHTML=ecTableHtml(t); }
+function ecIdle(t){ EC.idle[t]=!EC.idle[t]; const el=document.getElementById('ec-tb-'+t); if(el) el.innerHTML=ecTableHtml(t); }
+function ecAppLbl(name){ const id=appIdOf(name); let a={}; try{ a=smpApp(id,name)||{}; }catch(e){} const store=a.store||name, acct=a.acct||((DATA.apps||[]).find(x=>x.name===name)||{}).account||'';
+  return {id,store,tag:a.tag||'',acct,label:store+(a.tag||'')}; }
+// the rows of one table (a: All apps · u: the open app's ad units · c: its countries)
+function ecRowsFor(t,W){ if(t==='a'){ const A=ecAgg().apps; return Object.keys(A).map(n=>{ const L=ecAppLbl(n); return Object.assign(ecRow(A[n],W),{key:n,label:L.label,lbl:L}); }); }
+  if(t==='u') return ecUnits(EC.app).map(u=>Object.assign(ecRow(u.dm,W),{key:u.id,label:u.name,fmt:u.format}));
+  const cd=(DATA.countries_daily||{})[EC.app]||{}; return Object.keys(cd).map(c=>Object.assign(ecRow(ecDm(cd[c]),W),{key:c,label:cName(c)+' '+c,cc:c})); }
+const EC_CTOP=15;   // the countries table opens on its first 15 rows (in the chosen sort); "Show all" lists the rest
+function ecCAll(){ EC.cmax=!EC.cmax; const el=document.getElementById('ec-tb-c'); if(el) el.innerHTML=ecTableHtml('c'); }
+function ecTableHtml(t){ const all=EC.rows[t]||[], S=EC[{a:'sort',u:'usort',c:'csort'}[t]], idle=all.filter(r=>!r.act), srt=ecSortRows(EC.idle[t]?all:all.filter(r=>r.act),S);
+  const cut=t==='c'&&!EC.cmax&&srt.length>EC_CTOP+3, rows=cut?srt.slice(0,EC_CTOP):srt;
+  const first={a:'App',u:'Ad unit',c:'Country'}[t];
+  const COLS=[['name',first],['y','Yesterday<br>eCPM'],['w7','Last 7 days<br>avg'],['pct','Change'],['imp',csym()+' impact<br>/day'],['yi','Yesterday<br>impr'],['','30 days'],['st','Status']];
+  const th=COLS.map(([k,l])=>{ if(!k) return `<th class="ec-nos">${l}</th>`; const on=S.k===k;
+    return `<th class="${on?'ec-on':''}" aria-sort="${on?(S.d==='asc'?'ascending':'descending'):'none'}"><button type="button" onclick="ecSort('${t}','${k}')">${l}${on?`<span class="ec-ar" aria-hidden="true">${S.d==='asc'?'▲':'▼'}</span>`:''}</button></th>`; }).join('');
+  const nameCell=r=>{ if(t==='a'){ const L=r.lbl; return `<span class="ec-an">${appIconId(L.id,L.store,22)}<span><b>${hAttr(L.store)}${hAttr(L.tag)}</b>${L.acct?`<small>${hAttr(L.acct)}</small>`:''}</span></span>`; }
+    if(t==='u') return `<span class="ec-an"><span><b>${hAttr(r.label)}</b>${r.fmt?`<br><span class="ec-fmt">${hAttr(r.fmt)}</span>`:''}</span></span>`;
+    return `<span class="ec-an"><span><b>${hAttr(cName(r.cc))}</b><small>${hAttr(r.cc)}</small></span></span>`; };
+  const body=rows.map(r=>{ const c=ecCls(r.pct), low=r.st==='lagu';
+    const clk=t==='a'?` class="clk${low?' ec-low':''}" tabindex="0" data-n="${hAttr(r.key)}" onclick="ecApp(this.dataset.n)" onkeydown="if(event.key==='Enter'){ecApp(this.dataset.n)}"`:(low?' class="ec-low"':'');
+    return `<tr${clk}><td>${nameCell(r)}</td><td style="font-weight:700;color:${low?'':'#fff'}">${ecCm(r.y)}</td><td>${ecCm(r.w7)}</td>`
+      +`<td class="${c}">${r.chg==null?'—':`<b>${ecCmS(r.chg)}</b> (${ecPct(r.pct)})`}</td><td class="${c}">${r.imp==null?'—':`<b>${ecMoneyS(r.imp)}</b>/day`}</td>`
+      +`<td title="${Math.round(r.yi).toLocaleString()} impressions">${r.yi?fmtN(r.yi):'0'}</td><td>${ecSpark(r.spark,r.st)}</td>`
+      +`<td><span class="ec-st ${r.st}">${WD.st[r.st]}${low?`<small>${r.yi?'low data':'no data'}</small>`:''}</span></td></tr>`; }).join('');
+  const what={a:'apps',u:'ad units',c:'countries'}[t];
+  const more=(t==='c'&&(cut||EC.cmax)&&srt.length>EC_CTOP+3?`<div class="ec-more"><button type="button" onclick="ecCAll()">${cut?`Show all ${srt.length} countries`:`Show top ${EC_CTOP} only`}</button></div>`:'')
+    +(idle.length?`<div class="ec-more"><button type="button" onclick="ecIdle('${t}')">${EC.idle[t]?`Hide ${idle.length} ${what} with no data in 30 days`:`Show ${idle.length} more ${what} (no data in 30 days)`}</button></div>`:'');
+  if(!rows.length) return `<div class="ec-note" style="padding:12px 16px">Pichhle 30 din me koi data nahi.</div>${more}`;
+  return `<div class="ec-tw"><table class="ec-t"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>${more}`; }
+// the 4 tiles: Yesterday (vs the 7-day avg) · Last 7 days · Last 30 days · This month vs the same days last month
+function ecKpis(dm,W){ const s=d=>ecSum(dm,d), y=s(W.y), w7=s(W.d7), p7=s(W.p7), d30=s(W.d30), p30=s(W.p30), mtd=s(W.mtd), lm=s(W.lm);
+  const cmp=(a,b,what)=>{ if(a.ec==null||b.ec==null) return `<span class="faint">${what}: —</span>`; const p=(a.ec-b.ec)/b.ec;
+    return `(<b class="${ecCls(p)}">${ecPct(p)}</b> vs ${what} <b>${cm(b.ec)}</b>)`; };
+  const w=t=>`<span class="ec-w">${t}</span>`;
+  return `<div class="row c4 ec-kpis">${kpi('Yesterday eCPM',ecCm(y.ec),cmp(y,w7,'7-day avg')+w(ecSpan(W.y)+(y.i?' · '+fmtN(y.i)+' impr':'')),'muted')}`
+    +kpi('Last 7 days',ecCm(w7.ec),cmp(w7,p7,'previous 7 days')+w(ecSpan(W.d7)),'muted')
+    +kpi('Last 30 days',ecCm(d30.ec),cmp(d30,p30,'previous 30 days')+w(ecSpan(W.d30)),'muted')
+    +kpi('This month vs last month',ecCm(mtd.ec),cmp(mtd,lm,'same days last month')+w(ecSpan(W.mtd)+(W.lm.length?' vs '+ecSpan(W.lm):'')),'muted')+'</div>'; }
+// the chart card's points for what is open (the portfolio, or one app)
+function ecChartDm(){ const A=ecAgg(); return EC.app?(A.apps[EC.app]||{}):A.pf; }
+function ecPaintChart(){ const box=document.getElementById('ec-cc'); if(!box) return; box.innerHTML=ecChartCard(); ecDraw(); }
+function ecChartCard(){ const W=EC.W||ecWin(), dm=ecChartDm(), first=EC.app?ecFirst(dm):(W.comp[0]||''), mo=EC.g==='month';
+  const pts=ecPts(dm,W,first,EC.r,EC.g); EC.ch={pts,month:mo,g:null};
+  const seg=(cur,fn,opts)=>`<div class="ec-seg" role="group">${opts.map(([v,l])=>`<button type="button" class="${cur===v?'on':''}" aria-pressed="${cur===v}" onclick="${fn}('${v}')">${l}</button>`).join('')}</div>`;
+  const S=ecPtStats(pts), nm=EC.app?ecAppLbl(EC.app).label:'all apps';
+  const dl=pts.length?(mo?ecML(pts[0].k)+' – '+ecML(pts[pts.length-1].k)+' · '+pts.length+' months':ecYear(pts[0].k)+' – '+ecYear(pts[pts.length-1].k)+' · '+pts.length+' days'):'';
+  const facts=S.last>=0?`<b>${dl}</b> · latest <b>${cm(pts[S.last].ec)}</b> · avg <b>${S.avg!=null?cm(S.avg):'—'}</b> · min <b>${cm(pts[S.min].ec)}</b> (${mo?bMon(pts[S.min].k):fmtD(pts[S.min].k)}) · max <b>${cm(pts[S.max].ec)}</b> (${mo?bMon(pts[S.max].k):fmtD(pts[S.max].k)})`:'Is range me data nahi.';
+  const hist=first&&W.L?`Poori history: <b>${ecYear(first)}</b> se <b>${ecYear(W.L)}</b> tak (${W.comp.filter(d=>d>=first).length.toLocaleString()} din) — <b>Full</b> pe sab.`:'';
+  return `<div class="ct"><h3>📈 ${mo?'Monthly':'Daily'} eCPM · ${hAttr(nm)}</h3><span class="faint" style="font-size:11.5px">hover / tap = us ${mo?'mahine':'din'} ke numbers</span></div>
+    <div class="ec-ctl">${seg(EC.r,'ecSetR',[['30','30 days'],['90','90 days'],['365','1 year'],['all','Full']])}${seg(EC.g,'ecSetG',[['day','Day'],['month','Month']])}</div>
+    <div class="ec-chw" id="ec-chw"><div class="ec-svgw"></div><div class="ec-tip" role="status" aria-live="polite"></div></div>
+    <div class="ec-lg"><span><i style="background:#3dd0f0"></i>eCPM</span><span><i class="ec-la"></i>range avg</span><span><i class="ec-lb"></i>impressions (faint)</span><span><i style="background:#34d99a"></i>max</span><span><i style="background:#ff6b6b"></i>min</span></div>
+    <div class="ec-note">${facts}</div>
+    <div class="ec-note">${mo?'Month = mahine ki kamai ÷ mahine ke impressions × 1000. '+(pts.length&&pts[pts.length-1].partial?`<b>${bMon(pts[pts.length-1].k)}*</b> = abhi tak (adhura mahina). `:''):''}Aaj${W.T?' ('+fmtD(W.T)+')':''} ka adhura din kahin shamil nahi — sirf poore din. ${hist}</div>`; }
+function ecDraw(){ const w=document.getElementById('ec-chw'), C=EC.ch; if(!w||!C) return; const box=w.querySelector('.ec-svgw'); if(!box) return;
+  const W=Math.max(260,Math.round(w.clientWidth||btcGuessW())); const g=ecChartSvg(C.pts,W,C.month); C.g=g; C.cw=W;
+  box.innerHTML=g?g.svg:'<div class="faint" style="font-size:12.5px;padding:24px 4px">Is range me data nahi.</div>';
+  const t=w.querySelector('.ec-tip'); if(t) t.classList.remove('on'); EC.pin=false;
+  if(!w.__ecw){ w.__ecw=true; let st=null;
+    w.addEventListener('pointermove',e=>{ if(e.pointerType==='mouse'){ if(!EC.pin) ecTip(e.clientX,false); } else if(st) st.m=Math.max(st.m,Math.hypot(e.clientX-st.x,e.clientY-st.y)); });
+    w.addEventListener('pointerleave',e=>{ if(e.pointerType==='mouse'&&!EC.pin) ecTipOff(); });
+    w.addEventListener('pointerdown',e=>{ if(e.pointerType!=='mouse') st={x:e.clientX,y:e.clientY,m:0}; });
+    w.addEventListener('pointercancel',()=>{ st=null; });                    // the finger started a scroll: never pinned
+    w.addEventListener('pointerup',e=>{ if(e.pointerType==='mouse') return; const s=st; st=null; if(!s) return;
+      if(Math.max(s.m,Math.hypot(e.clientX-s.x,e.clientY-s.y))<10) ecTip(e.clientX,true); }); }   // a tap (under 10px) pins it
+  ecWire(); }
+function ecTip(cx,pin){ const C=EC.ch, w=document.getElementById('ec-chw'); if(!C||!C.g||!w) return; const sv=w.querySelector('svg'), t=w.querySelector('.ec-tip'); if(!sv||!t) return;
+  const r=sv.getBoundingClientRect(); if(!r.width) return; const fx=(cx-r.left)*C.g.W/r.width; let bi=-1, bd=1e9;
+  C.pts.forEach((p,i)=>{ if(p.ec==null) return; const d=Math.abs(C.g.xs[i]-fx); if(d<bd){ bd=d; bi=i; } }); if(bi<0) return;
+  const x=C.g.xs[bi], y=C.g.ys[bi], gl=sv.querySelector('.ec-gl'), hd=sv.querySelector('.ec-hd');
+  if(gl){ gl.setAttribute('x1',x); gl.setAttribute('x2',x); gl.style.visibility='visible'; } if(hd){ hd.setAttribute('cx',x); hd.setAttribute('cy',y); hd.style.visibility='visible'; }
+  t.innerHTML=ecTipHtml(C.pts[bi],C.month,pin); t.classList.add('on');
+  const wr=w.getBoundingClientRect(), k=r.width/C.g.W, sx=r.left-wr.left+x*k, sy=r.top-wr.top+y*k, tw=t.offsetWidth, th=t.offsetHeight, ww=w.clientWidth, wh=w.clientHeight;
+  let left=sx+16, top=sy-th/2;
+  if(left+tw>ww) left=sx-16-tw;
+  if(left<0){ left=Math.max(0,Math.min(ww-tw,sx-tw/2));                // no room beside it (a phone): above / below the point
+    top=sy-th-12>=0?sy-th-12:(sy+12+th<=wh?sy+12:(sy>wh/2?0:wh-th)); }
+  t.style.left=Math.round(left)+'px'; t.style.top=Math.round(Math.max(0,Math.min(Math.max(0,wh-th),top)))+'px'; EC.pin=!!pin; }
+function ecTipOff(){ const w=document.getElementById('ec-chw'); if(!w) return; const t=w.querySelector('.ec-tip'); if(t) t.classList.remove('on');
+  w.querySelectorAll('.ec-gl,.ec-hd').forEach(el=>{ el.style.visibility='hidden'; }); EC.pin=false; }
+function ecWire(){ if(EC.wired) return; EC.wired=true;
+  document.addEventListener('pointerdown',e=>{ if(!EC.pin) return; const t=e.target; if(t&&t.closest&&t.closest('#ec-chw')) return; ecTipOff(); },true);   // a tap elsewhere closes a pinned tooltip
+  let tm=0; window.addEventListener('resize',()=>{ clearTimeout(tm); tm=setTimeout(()=>{ const w=document.getElementById('ec-chw');
+    if(ecOn()&&w&&EC.ch&&Math.abs((w.clientWidth||0)-(EC.ch.cw||0))>2) ecDraw(); },120); }); }
+function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.querySelector('.screen[data-screen=ecpm]'); if(!s||!DATA) return;
+  if(!EC.booted){ EC.booted=true; let sv=null; try{ sv=JSON.parse(localStorage.getItem('ecpmview')||'null'); }catch(e){}   // a reload / restored tab: the same view
+    if(sv){ if(['30','90','365','all'].includes(sv.r)) EC.r=sv.r; if(sv.g==='month'||sv.g==='day') EC.g=sv.g; }
+    EC.hdr=APP; EC.app=APP||((sv&&sv.app&&ecAgg().apps[sv.app])?sv.app:''); }
+  if(EC.hdr!==APP){ EC.hdr=APP; EC.app=APP||''; }       // the header App picker drives the view
+  if(!EC.app) hbDrop('ecpm-app');                       // back on All apps: no "app" Back step stays behind
+  const W=ecWin(); EC.W=W; EC.pin=false;
+  const A=ecAgg(), first=W.comp[0]||'', T=W.T?` · aaj (${fmtD(W.T)}) ka adhura din shamil nahi`:'';
+  const hint=`<b>eCPM = har 1,000 ads (impressions) pe kamai</b> = kamai ÷ impressions × 1000 · data till <b>${ecYear(W.L)}</b>${T}`;
+  let h;
+  if(!EC.app){
+    EC.rows={a:ecRowsFor('a',W)};
+    h=`<div class="ec-nav"><button type="button" class="ec-lnk" onclick="ecClose()">← Overview</button></div>
+      <div class="ec-hd"><div style="font-size:26px">📈</div><div><div class="big">eCPM trend · All apps</div><div class="sub">${hint} · history <b>${ecYear(first)}</b> se (${W.comp.length.toLocaleString()} din)</div></div></div>
+      ${ecKpis(A.pf,W)}<div class="card ec-cc" id="ec-cc">${ecChartCard()}</div>
+      <div class="card ec-tc"><div class="ct"><h3>All apps · yesterday vs last 7 days</h3><span class="faint" style="font-size:11.5px">row pe tap = us app ka eCPM trend · column pe tap = sort</span></div>
+        <div class="ec-note">Sabse zyada <b>${csym()} nuksan</b> wali app sabse upar. <b>Change</b> = kal ka eCPM − last 7 days avg (kal samet 7 poore din). <b>${csym()} impact/day</b> = kal ke impressions × (kal ka eCPM − 7-day avg) ÷ 1,000 — sirf eCPM badalne se kal kitna kam / zyada kamaya.</div>
+        <div id="ec-tb-a">${ecTableHtml('a')}</div>
+        <div class="ec-note" style="padding:0 16px 14px">${ecStatusNote()}</div></div>`;
+  } else {
+    const name=EC.app, L=ecAppLbl(name), dm=A.apps[name], ap=(DATA.apps||[]).find(x=>x.name===name)||{};
+    if(!dm){ h=`<div class="ec-nav"><button type="button" class="ec-lnk" onclick="ecAllApps()">← All apps (eCPM)</button><button type="button" class="ec-lnk" onclick="ecClose()">← Overview</button></div>
+      <div class="ec-hd"><div>${appIconId(L.id,L.store,34)}</div><div><div class="big">${hAttr(L.label)}</div><div class="sub">Is app ka AdMob (kamai) data nahi — eCPM nahi ban sakta.</div></div></div>`; }
+    else {
+      if(EC.rows.app!==name) EC.cmax=false; EC.rows={app:name,u:ecRowsFor('u',W),c:ecRowsFor('c',W)};
+      const order=ecSortRows(Object.keys(A.apps).map(n=>Object.assign(ecRow(A.apps[n],W),{key:n,label:ecAppLbl(n).label})).filter(r=>r.act||r.key===name),EC.sort).map(r=>r.key);
+      const ix=order.indexOf(name), pv=ix>0?order[ix-1]:'', nx=ix>=0&&ix<order.length-1?order[ix+1]:'';
+      const nb=(n,t)=>`<button type="button" class="ec-lnk" ${n?`data-n="${hAttr(n)}" onclick="ecApp(this.dataset.n)" title="${hAttr(ecAppLbl(n).label)}"`:'disabled'}>${t}</button>`;
+      const cfirst=Object.values((DATA.countries_daily||{})[name]||{}).reduce((m,rows)=>{ const d=rows&&rows[0]&&rows[0][0]; return d&&(!m||d<m)?d:m; },'');
+      h=`<div class="ec-nav"><button type="button" class="ec-lnk" onclick="ecAllApps()">← All apps (eCPM)</button><button type="button" class="ec-lnk" onclick="ecClose()">← Overview</button><span class="spacer"></span>${nb(pv,'‹ Prev app')}${nb(nx,'Next app ›')}</div>
+        <div class="ec-hd"><div>${appIconId(L.id,L.store,38)}</div><div><div class="big">${hAttr(L.label)}</div><div class="sub">${L.acct?hAttr(L.acct)+' · ':''}${ap.platform?hAttr(ap.platform)+' · ':''}${EC.rows.u.length} ad units · ${hint} · history <b>${ecYear(ecFirst(dm))}</b> se</div></div></div>
+        ${ecKpis(dm,W)}<div class="card ec-cc" id="ec-cc">${ecChartCard()}</div>
+        <div class="card ec-tc"><div class="ct"><h3>Ad units · yesterday vs last 7 days</h3><span class="faint" style="font-size:11.5px">kis ad unit ka eCPM gira · column pe tap = sort</span></div>
+          <div class="ec-note">Har ad unit ka apna eCPM (format ke saath). Sabse zyada <b>${csym()} nuksan</b> wali unit sabse upar.</div>
+          <div id="ec-tb-u">${ecTableHtml('u')}</div><div class="ec-note" style="padding:0 16px 14px">${ecStatusNote()}</div></div>
+        ${EC.rows.c.length?`<div class="card ec-tc"><div class="ct"><h3>Countries · yesterday vs last 7 days</h3><span class="faint" style="font-size:11.5px">kis desh me eCPM gira</span></div>
+          <div class="ec-note">AdMob country report se (top 50 desh, history ${cfirst?ecYear(cfirst):'—'} se) — totals upar wale app number se thode alag ho sakte hain.</div>
+          <div id="ec-tb-c">${ecTableHtml('c')}</div></div>`:''}`;
+    }
+  }
+  s.innerHTML=`<div id="ec-root">${h}</div>`;
+  const tt=document.getElementById('tb-title'), ts=document.getElementById('tb-sub');
+  if(EC.app){ if(tt) tt.textContent='eCPM · '+ecAppLbl(EC.app).label; if(ts) ts.textContent='eCPM trend · daily · monthly · ad units'; }
+  else { if(tt) tt.textContent=TITLES.ecpm[0]; if(ts) ts.textContent=TITLES.ecpm[1]; }
+  ecSave(); ecDraw();
+  try{ requestAnimationFrame(()=>{ const w=document.getElementById('ec-chw'); if(w&&EC.ch&&Math.abs((w.clientWidth||0)-(EC.ch.cw||0))>2) ecDraw(); }); }catch(e){} }
+function ecStatusNote(){ return `<b>Status</b> — har row apne <b>roz ke normal utaar-chadhaav</b> se judge hoti hai (pichhle 30 din ka median day-to-day badlav): <b>Worse</b> = 2× se zyada gira · <b>Watch</b> = gira, par 2× se kam · <b>Better</b> = 2× se zyada badha · <b>Normal</b> = apni range me · <b>Too early</b> = abhi kaafi din ka data nahi · <b>N/A</b> = kal ${EC_MIN_IMPR.toLocaleString()} se kam impressions (low data — judge nahi kiya).`; }
 // ---------- PLACEMENTS (2-level) ----------
 function fmtCount(ps){const b={};ps.forEach(p=>b[p.format]=(b[p.format]||0)+1);return b;}
 function renderPlacements(){
