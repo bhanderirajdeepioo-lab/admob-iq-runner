@@ -3750,7 +3750,7 @@ function renderOverview(){
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'This app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">click an app → full report</span></div>
         <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>Day-1 rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">frozen</div></th><th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users · live</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Day-1</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
       <div class="ov-datewise card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${dwRows.length} days</span></h3><span class="lnk" onclick="openDateWise('')">View more →</span></div>${dateWiseTable(dwRows)}</div>
-      <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0',spend:SHOWSP?spendSeries:null,spendColor:'#e6b84e'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span>${SHOWSP?'<span><i class="dot" style="background:#e6b84e"></i> Ad spend</span>':''}<span class="faint" style="font-size:11px">· hover for revenue</span></div></div>
+      <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0',spend:SHOWSP?spendSeries:null,spendColor:'#e6b84e'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span>${SHOWSP?'<span><i class="dot" style="background:#e6b84e"></i> Ad spend</span>':''}<span class="faint" style="font-size:11px">· tap / hover a day for its numbers</span></div></div>
       <div class="ov-movers card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
       <div class="ov-attn card ov-coll"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
     </div>`;
@@ -4046,10 +4046,19 @@ function bMon(m){ if(!m||m.length<7)return m||''; const MO=['Jan','Feb','Mar','A
 //   idp      – a prefix for the chart's own SVG ids (Active users tab: 'act-', so every id in that tab starts with it)
 //   lines    – [{v:[],color,dash,width}] extra dashed series drawn gap-aware (null = a break, never 0); the first one's value
 //              joins the hover (Active users tab: old users, the normal line)
+// B-01: a chart narrower than 700px is drawn at its REAL width (1 unit = 1 px), so its text is 10.5–12.5 px on a phone
+// instead of 4 px (a 1000-unit drawing shrunk to 319 px). opts.cw = the width to draw at; without it a first guess from the
+// window, then btcFit() redraws the chart at its measured width once it is on screen (and again when that width changes).
+// A chart 700px+ wide keeps the 1000-unit drawing exactly as before.
+function btcGuessW(cw){ if(cw>0) return cw; const w=(typeof innerWidth==='number'&&innerWidth>0)?innerWidth:1280;
+  return w<=430?w-56:(w<=760?w-60:w-304); }   // the card's inner width: phone · tablet without the menu · beside the 220px menu
 function bTrendChart(months, values, opts){
   opts=opts||{}; const fmt=opts.fmt||(v=>''+v); const col=opts.color||'#3dd0f0'; const xlab=opts.xlab||bMon;
   const n=(months||[]).length; if(!n) return '<div class="muted" style="font-size:12px;padding:14px 4px">No trend data</div>';
-  const W=1000,H=260,mL=56,mR=18,mT=16,mB=30, pw=W-mL-mR, ph=H-mT-mB;
+  const cw=btcGuessW(opts.cw), nar=cw>0&&cw<700;
+  const W=nar?Math.max(240,Math.round(cw)):1000, H=nar?Math.round(Math.max(170,Math.min(230,W*.56))):260, mR=nar?10:18, mT=nar?18:16, mB=nar?24:30;
+  const F=nar?{y:11,x:11,pt:11,mk:11,last:12.5,mark:12,sh:10.5,ch:6.3}:{y:13,x:12.5,pt:12,mk:12,last:14,mark:13,sh:11.5,ch:7.2};   // font sizes (px when narrow)
+  let mL=56, pw=W-mL-mR; const ph=H-mT-mB;
   const G=!!opts.gaps, dim=opts.dim||[];
   const vals=G?values.map(v=>(v==null||v===''||isNaN(+v))?null:+v):values.map(v=>+v||0); const sp=(opts.spend||[]).map(v=>+v||0);   // optional overlay (ad spend)
   const real=G?vals.filter(v=>v!=null):vals;
@@ -4060,6 +4069,8 @@ function bTrendChart(months, values, opts){
   const XL=(opts.lines||[]).map(l=>({c:l.color||'#8496b5',d:l.dash||'5 4',w:l.width||2,v:(l.v||[]).map(x=>(x==null||x===''||isNaN(+x))?null:+x)}));
   const xlMax=[]; XL.forEach(l=>l.v.forEach(x=>{ if(x!=null) xlMax.push(x); }));
   const vmax=(Math.max(...real,...(sp.length?sp:[0]),...bMax,...xlMax,0)*1.08)||1, vmin=0;
+  { let L=0; for(let k=0;k<=4;k++) L=Math.max(L,String(fmt(vmax*k/4)).length);   // the y-axis column fits its longest label
+    mL=nar?Math.round(Math.min(W*.3,Math.max(34,L*F.ch+12))):Math.round(Math.min(130,Math.max(56,L*F.ch+14))); pw=W-mL-mR; }
   const xn=opts.xnum?months.map(Number):null, x0=xn?Math.min(...xn):0, x1=xn?Math.max(...xn):0;
   const xi=xn?(i=> mL + (x1>x0? pw*(xn[i]-x0)/(x1-x0) : pw/2)):(i=> mL + (n<=1? pw/2 : pw*i/(n-1)));
   const yv=v=> mT + ph*(1-(v-vmin)/((vmax-vmin)||1));
@@ -4077,12 +4088,12 @@ function bTrendChart(months, values, opts){
   let grid='';
   for(let k=0;k<=4;k++){ const v=vmax*k/4, y=yv(v).toFixed(1);
     grid+=`<line x1="${mL}" y1="${y}" x2="${W-mR}" y2="${y}" stroke="#22314f" stroke-width="1"/>`
-        + `<text x="${mL-9}" y="${(+y+4).toFixed(1)}" text-anchor="end" font-size="13" fill="#8496b5">${fmt(v)}</text>`; }
-  const step=Math.max(1,Math.ceil(n/8)); let xl='';
+        + `<text x="${mL-(nar?6:9)}" y="${(+y+4).toFixed(1)}" text-anchor="end" font-size="${F.y}" fill="#8496b5">${fmt(v)}</text>`; }
+  const step=Math.max(1,Math.ceil(n/(nar?Math.max(2,Math.floor(pw/56)):8))); let xl='';
   let xShow=null;
   if(xn){ // xnum: the days people read first (D0, D1, D3, D7, D14, D30, D45, D60, D90, then every 30) and the end point
     // get a label whenever their text has room; any other point only with ≥46 units free on both sides
-    xShow=new Set(); const at=[], wd=i=>String(xlab(months[i])).length*7.2;
+    xShow=new Set(); const at=[], wd=i=>String(xlab(months[i])).length*F.ch;
     const room=(i,gap)=>at.every(j=>Math.abs(xi(i)-xi(j))>=(gap==null?(wd(i)+wd(j))/2+16:gap));
     const ms=[0,1,3,7,14,30,45,60,90], pri=xn.map((v,i)=>[v,i]).filter(([v])=>ms.includes(v)||(v>90&&v%30===0))
       .sort((p,q)=>{ const a=ms.indexOf(p[0]), b=ms.indexOf(q[0]); return (a<0?99:a)-(b<0?99:b)||p[0]-q[0]; }).map(p=>p[1]);
@@ -4091,24 +4102,31 @@ function bTrendChart(months, values, opts){
   else if(G||bLo.length){ // dates (opt-in: gaps / band charts): every step-th + the last, never two on top of each other
     xShow=new Set(); for(let i=0;i<n;i+=step) xShow.add(i);
     const k=Math.floor((n-1)/step)*step; if(k!==n-1){ if(xi(n-1)-xi(k)<46) xShow.delete(k); xShow.add(n-1); } }
-  for(let i=0;i<n;i++){ if(xShow?!xShow.has(i):(i%step!==0 && i!==n-1)) continue; const x=xi(i).toFixed(1);
+  const wl=i=>String(xlab(months[i])).length*F.ch;   // a date label's width
+  if(!xShow){ xShow=new Set(); for(let i=0;i<n;i+=step) xShow.add(i); const k=Math.floor((n-1)/step)*step;   // every step-th + the last,
+    if(k!==n-1){ if(xi(n-1)-xi(k)<(wl(k)+wl(n-1))/2+6) xShow.delete(k); xShow.add(n-1); } }                  // never two on top of each other
+  const xbox=i=>{ const x=xi(i), tw=wl(i); return x+tw/2>W-1?[W-1-tw,W-1,W-1,'end']:(x-tw/2<1?[1,1+tw,1,'start']:[x-tw/2,x+tw/2,x,'middle']); };   // the end labels stay inside
+  { const ix=[...xShow].sort((a,b)=>a-b), keep=new Set(); let left=1e9;   // never two labels touching: thin from the end, the last always kept
+    for(let j=ix.length-1;j>=0;j--){ const b=xbox(ix[j]); if(j===ix.length-1||b[1]+6<=left){ keep.add(ix[j]); left=b[0]; } } xShow=keep; }
+  for(let i=0;i<n;i++){ if(!xShow.has(i)) continue; const x=xi(i).toFixed(1), bx=xbox(i);
+    const tx=bx[3]==='middle'?x:bx[2], an=bx[3];
     xl+=`<line x1="${x}" y1="${mT+ph}" x2="${x}" y2="${mT+ph+4}" stroke="#3a4a66" stroke-width="1"/>`
-      + `<text x="${x}" y="${H-9}" text-anchor="middle" font-size="12.5" fill="#8496b5">${xlab(months[i])}</text>`; }
+      + `<text x="${tx}" y="${H-(nar?7:9)}" text-anchor="${an}" font-size="${F.x}" fill="#8496b5">${xlab(months[i])}</text>`; }
   const dots=vals.map((v,i)=>(G&&v==null)?'':`<circle cx="${xi(i).toFixed(1)}" cy="${yv(v).toFixed(1)}" r="${n>28?2.2:3}" fill="${col}"${dim[i]?' fill-opacity=".35"':''}><title>${xlab(months[i])} · ${fmt(v)}</title></circle>`).join('');
   let li=n-1; if(G){ while(li>0&&vals[li]==null) li--; }
   const lx=xi(li), ly=yv(vals[li]);
   let ptl='', ptX=-1e9;                              // ptLabels: skip a label that would sit on the previous one or on the end callout
   if(opts.ptLabels) vals.forEach((v,i)=>{ if(v==null||i===li) return; const x=xi(i);
     if(x-ptX<40||(lx-x<60&&Math.abs(yv(v)-ly)<20)) return; ptX=x;
-    ptl+=`<text x="${xi(i).toFixed(1)}" y="${Math.max(yv(v)-9,12).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="600" fill="#cfe0f5"${dim[i]?' fill-opacity=".45"':''}>${fmt(v)}</text>`; });
+    ptl+=`<text x="${xi(i).toFixed(1)}" y="${Math.max(yv(v)-9,12).toFixed(1)}" text-anchor="middle" font-size="${F.pt}" font-weight="600" fill="#cfe0f5"${dim[i]?' fill-opacity=".45"':''}>${fmt(v)}</text>`; });
   let marksEl='';
   (opts.marks||[]).forEach(m=>{ const mi=xn?xn.indexOf(+m.x):months.indexOf(m.x); if(mi<0) return; const mx=xi(mi).toFixed(1), mc=m.color||'#ffd479';
     marksEl+=`<line x1="${mx}" y1="${mT}" x2="${mx}" y2="${(mT+ph).toFixed(1)}" stroke="${mc}" stroke-width="1.4" stroke-dasharray="4 4"/>`
-      +(m.label?`<text x="${mx}" y="${(mT-3).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="${mc}">${m.label}</text>`:''); });
-  const last=`<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="4.5" fill="${col}"/><text x="${(lx-7).toFixed(1)}" y="${(Math.max(ly-9,14)).toFixed(1)}" text-anchor="end" font-size="14" font-weight="700" fill="#eaf6ff">${fmt(vals[li])}</text>`;
+      +(m.label?`<text x="${mx}" y="${(mT-3).toFixed(1)}" text-anchor="middle" font-size="${F.mk}" font-weight="700" fill="${mc}">${m.label}</text>`:''); });
+  const last=`<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="4.5" fill="${col}"/><text x="${(lx-7).toFixed(1)}" y="${(Math.max(ly-9,14)).toFixed(1)}" text-anchor="end" font-size="${F.last}" font-weight="700" fill="#eaf6ff">${fmt(vals[li])}</text>`;
   let markEl='';
   if(opts.mark){ const mi=months.indexOf(opts.mark); if(mi>=0){ const mx=xi(mi).toFixed(1);
-    markEl=`<line x1="${mx}" y1="${mT}" x2="${mx}" y2="${(mT+ph).toFixed(1)}" stroke="#ffd479" stroke-width="1.4" stroke-dasharray="4 4"/><circle cx="${mx}" cy="${yv(vals[mi]).toFixed(1)}" r="5.5" fill="#ffd479"/><text x="${mx}" y="${(mT-3).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="700" fill="#ffd479">${fmt(vals[mi])}</text>`; } }
+    markEl=`<line x1="${mx}" y1="${mT}" x2="${mx}" y2="${(mT+ph).toFixed(1)}" stroke="#ffd479" stroke-width="1.4" stroke-dasharray="4 4"/><circle cx="${mx}" cy="${yv(vals[mi]).toFixed(1)}" r="5.5" fill="#ffd479"/><text x="${mx}" y="${(mT-3).toFixed(1)}" text-anchor="middle" font-size="${F.mark}" font-weight="700" fill="#ffd479">${fmt(vals[mi])}</text>`; } }
   bTrendChart._n=(bTrendChart._n||0)+1; const gid=(opts.idp||'')+'gBT'+bTrendChart._n;   // unique gradient id per chart (idp: a tab's id prefix)
   // hover layer: a transparent overlay snaps to the nearest point → guide line + dot + value label
   const x0v=i=>(!sp.length&&XL.length&&XL[0].v[i]!=null)?XL[0].v[i]:null;   // the first extra line joins the hover (no spend)
@@ -4133,8 +4151,9 @@ function bTrendChart(months, values, opts){
   if(shOn){ const sx=Math.max(mL,xi(sh.from)-(n>1&&!xn?pw/(n-1)/2:0));
     const sy=ly<mT+ph/2?mT+ph-6:mT+13;             // the label sits in the half AWAY from the last point's value label
     shadeEl=`<rect x="${sx.toFixed(1)}" y="${mT}" width="${Math.max(0,W-mR-sx).toFixed(1)}" height="${ph.toFixed(1)}" fill="url(#${gid}h)"/>`
-      +(sh.label?`<text x="${(W-mR-4).toFixed(1)}" y="${sy.toFixed(1)}" text-anchor="end" font-size="11.5" font-weight="600" fill="#8496b5">${sh.label}</text>`:''); }
-  return `<svg viewBox="0 0 ${W} ${H}" data-pts='${ptsAttr}' style="width:100%;height:auto;display:block">
+      +(sh.label?`<text x="${(W-mR-4).toFixed(1)}" y="${sy.toFixed(1)}" text-anchor="end" font-size="${F.sh}" font-weight="600" fill="#8496b5">${sh.label}</text>`:''); }
+  const bk=btcKeep(opts._btc,months,values,opts);   // kept so btcFit() can redraw it at its real width
+  return `<svg viewBox="0 0 ${W} ${H}" data-pts='${ptsAttr}' id="${bk}" data-w="${W}" style="width:100%;height:auto;display:block">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".26"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient>${shOn?`<pattern id="${gid}h" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="8" fill="#8496b5" fill-opacity=".16"/></pattern>`:''}</defs>
     ${grid}${shadeEl}${bandEl}<path d="${areaD}" fill="url(#${gid})"/><path d="${lineD}" fill="none" stroke="${col}" stroke-width="2.4"/>${spEl}
     ${xl}${dots}${ptl}${markEl}${marksEl}${last}${hov}</svg>`;
@@ -4164,6 +4183,34 @@ function bChartHover(ev,ov){ const svg=ov.ownerSVGElement; if(!svg)return;
     tg.style.visibility='visible'; }
 }
 function bChartLeave(ov){ const svg=ov.ownerSVGElement; if(!svg)return; ['.bcg','.bch','.bch2','.bct'].forEach(s=>{const el=svg.querySelector(s); if(el)el.style.visibility='hidden';}); }
+// btcFit (B-01): every bTrendChart on the page is watched (a MutationObserver finds new ones, a ResizeObserver their width);
+// when its real width is under 700px and not what it was drawn at (a phone guess off, a 2-column card, a fold opened, the
+// screen turned), it is redrawn at that width — and back to the 1000-unit drawing when it grows past 700px. Hidden charts
+// (another screen) wait until they are shown. Same data, same options — only the drawing size changes.
+const BTC=new Map(); let btcSeq=0, btcRO=null, btcMO=null;
+// btcKeep: the chart's arguments under its id (a tab's id prefix kept: 'act-btc3'), for btcFit's redraw
+function btcKeep(k,m,v,o){ k=k||((o&&o.idp||'')+'btc'+(++btcSeq)); const oo=Object.assign({},o); delete oo._btc; delete oo.cw; BTC.set(k,{m,v,o:oo});
+  if(BTC.size>800){ let i=0; for(const kk of [...BTC.keys()]){ if(i++>=300) break; try{ if(!document.getElementById(kk)) BTC.delete(kk); }catch(e){} } }   // drawn but never shown
+  btcWatch(); return k; }
+function btcWatch(){ if(btcMO) return;
+  try{ if(typeof MutationObserver!=='function'||typeof ResizeObserver!=='function'||!document.body||typeof document.body.nodeType!=='number') return;
+    btcRO=new ResizeObserver(es=>{ es.forEach(e=>btcFit(e.target)); });
+    const Q='svg[data-w][id*="btc"]', obs=el=>{ if(!el.hasAttribute('data-btco')){ el.setAttribute('data-btco','1'); btcRO.observe(el); } };
+    btcMO=new MutationObserver(recs=>{ recs.forEach(r=>r.addedNodes.forEach(nd=>{ if(nd.nodeType!==1) return;
+      if(nd.matches&&nd.matches(Q)) obs(nd); else if(nd.firstElementChild) nd.querySelectorAll(Q).forEach(obs); })); });
+    btcMO.observe(document.body,{childList:true,subtree:true});
+    document.querySelectorAll(Q).forEach(obs);
+  }catch(e){} }
+function btcFit(sv){ try{
+  const k=sv.id;
+  if(!sv.isConnected){ if(btcRO) btcRO.unobserve(sv); if(k&&!document.getElementById(k)) BTC.delete(k); return; }
+  const w=Math.round(sv.getBoundingClientRect().width); if(!(w>0)) return;   // not on screen now: fitted when it shows
+  const dw=+sv.getAttribute('data-w')||1000, nar=dw<1000;
+  if(w>=700){ if(!nar) return; } else if(nar&&Math.abs(w-dw)<=Math.max(12,dw*.05)) return;
+  const a=BTC.get(k); if(!a) return;
+  const html=bTrendChart(a.m,a.v,Object.assign({},a.o,{cw:w>=700?1000:w,_btc:k}));
+  if(html.indexOf('<svg')===0) sv.outerHTML=html;
+  }catch(e){} }
 // app-level "where did the drop concentrate" — window vs the equal prior window, per country
 function dropByCountry(app, winArr){
   const cd=(DATA.countries_daily||{})[app]; if(!cd||!winArr||!winArr.length) return null;
