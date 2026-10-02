@@ -1397,7 +1397,7 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
    the name to a few letters a line); a chip or a pill in the name's column wraps inside it, never past its edge */
 :is(#rs-root,#rs-layer) .rs-rc-h{flex-wrap:wrap}
 :is(#rs-root,#rs-layer) .rs-rh-t{flex-basis:150px}
-:is(#rs-root,#rs-layer) :is(.rs-rh-t,.rs-dh .rs-t) .rs-l2>*{max-width:100%;white-space:normal}
+:is(#rs-root,#rs-layer) :is(.rs-rh-t,.rs-dh .rs-t) .rs-l2 :is(*,.rs-pill){max-width:100%;white-space:normal}
 :is(#rs-root,#rs-layer) .rs-rc-m{display:grid;grid-template-columns:minmax(150px,200px) minmax(0,1fr);gap:12px;align-items:center}
 :is(#rs-root,#rs-layer) .rs-lbl{font:600 10.5px/1.2 var(--rs-num);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 :is(#rs-root,#rs-layer) .rs-mny .rs-big{font:700 26px/1.1 var(--rs-num);font-variant-numeric:tabular-nums;white-space:nowrap;margin-top:2px}
