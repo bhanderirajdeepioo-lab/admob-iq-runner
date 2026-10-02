@@ -16,7 +16,10 @@ an estimate carries ≈, a projection is marked.
 
 Alerts (pay_slow, pay_loss, geo_move, geo_cost, iv_link) are evaluated once per settled week end. They keep the
 Active tab's rules against floods: the first evaluation, a new input (28-day burn-in) and a moved GA4 stream are
-seeded (shown, never sent); hourly re-runs with the same week end change nothing.
+seeded (shown, never sent); hourly re-runs with the same week end change nothing. The alert policy of the GA4 tabs
+(ALERT_POLICY): a country / version / month change opens only when MATERIAL (material(): ≥ MAT_MONEY a day, or ≥
+MAT_RET_USERS returners a day; good news twice that); the first build on it closes an open alert it would not open
+("rule_tuned"), unsent. Closed alerts are kept for good (every one in the app's lazy file).
 
 Behind flags, both off by default (SPEC_CD_GEO; off = every output exactly as before): GADS_GEO hands the engine
 Google Ads cost per country as a week envelope (_Geo: a week's cost is used only while Google Ads' own country total
@@ -99,7 +102,7 @@ LINK_DROP = 0.7
 LINK_MIN_REV = 50
 BURNIN_DAYS = 28
 CLOSE_WEEKS = 2
-CLOSED_KEEP_DAYS = 400
+CLOSED_KEEP_DAYS = None         # closed alerts are kept for good (the owner's rule: history is never trimmed)
 # the engine's own (not in the spec's list; every one is exported in CONSTS too)
 PAY_BASE_WEEKS = 8                                 # "the 8 weeks before"
 PAY_BASE_MIN = 6                                   # … at least 6 of them judged
@@ -165,6 +168,13 @@ GEO_XX_NOADS = 0.005            # unmapped above this share of the window's cost
 GEO_BACK_REL = 0.15             # a country's money back is "seen" only when the earning weeks' own cost per install is
                                 # within ±15% of the window's (the ₹ back per ₹100 uses those weeks' own cost)
 GEOCOST_DEDUP_DAYS = 7          # one geo_cost notification per app per 7 days (the rest shown, not sent)
+# ── the alert policy (one rule set for the three GA4 tabs; here every window is ≥ 2 settled weeks already): an alert
+#    is MATERIAL — the money or the returners it moves a day — and good news only when twice that ──
+ALERT_POLICY = True             # off: the alerts exactly as before the policy
+RULES_V = 2                     # the alert rules' version (eval.rules): a lower one is switched over once
+MAT_MONEY = 5.0                 # USD a day at stake (geo_cost: lost on its installs; rpi: earning per install moved)
+MAT_RET_USERS = 50              # returners a day (d1 … d90: the points moved × installs a day)
+GOOD_X = 2.0                    # good news: twice the floor
 # one notification per app, family group and direction per N days (episodes): the pay_* rule, generalised
 VER_DEDUP_DAYS = 7
 LONG_DEDUP_DAYS = 28
@@ -2286,6 +2296,32 @@ def _eid(app_id, c, opened, extra=""):
                        opened + extra)
 
 
+def material(c):
+    """Is a condition (or an episode's snapshot + family / dir) material? The money a day it moves (geo_cost: (cost −
+    earning) per install × installs a day; rpi metrics: the earning per install moved × installs a day) ≥ MAT_MONEY, or
+    the returners a day (d-metrics: the points moved × installs a day) ≥ MAT_RET_USERS; good news: GOOD_X × that. The
+    money-back / link families judge money already (their spend floors): always material. Unknown sizes: material."""
+    fam, m = c.get("family"), str(c.get("metric") or "")
+    if fam not in ("geo_cost", "geo_move", "ver_ret", "long_ret"):
+        return True
+    k = GOOD_X if c.get("dir") == "up" else 1.0
+    try:
+        days = max(1, (_d(c["week_to"]) - _d(c["week_from"])).days + 1)
+        per = (c.get("users") or 0) / days
+    except (KeyError, TypeError, ValueError):
+        return True
+    now, before = c.get("now"), c.get("before")
+    if fam == "geo_cost":
+        if now is not None and before is not None:
+            return (now - before) * per >= k * MAT_MONEY
+        return (c.get("spend") or 0) / 7 >= k * MAT_MONEY
+    if now is None or before is None:
+        return True
+    if m.startswith("rpi"):
+        return abs(now - before) * per >= k * MAT_MONEY
+    return abs(now - before) / 100 * per >= k * MAT_RET_USERS
+
+
 def episodes(st, app_id, E, conds, advanced, now, close=()):
     """Open / refresh / close this app's value episodes from this week's conditions (each carrying `seed`). Pure:
     returns the new {episodes, closed}. Nothing changes unless the week end advanced (hourly re-runs are no-ops).
@@ -2348,8 +2384,9 @@ def episodes(st, app_id, E, conds, advanced, now, close=()):
                 done = U.close_ep(eps.pop(key), E_iso, now, "recovered" if gone else "window_end")
                 closed.append(done)
                 just_closed.append(done)
-        keep = E - timedelta(days=CLOSED_KEEP_DAYS)
-        closed = [e for e in closed if _d(e["closed"]) >= keep]
+        if CLOSED_KEEP_DAYS is not None:
+            keep = E - timedelta(days=CLOSED_KEEP_DAYS)
+            closed = [e for e in closed if _d(e["closed"]) >= keep]
     return {"episodes": eps, "closed": closed}, just_closed
 
 
@@ -3012,10 +3049,17 @@ def evaluate_app(store, ida, rev, spend, fx, udet_releases, st_app, portfolio_sh
             del streak[k]
     conds = (_conditions(P, weeks, pays, H, E, ci, C, udet_releases, act_alerts, geo, streak, app_ref, market)
              + cd_conds if advanced else [])
+    if ALERT_POLICY:                                 # too small to matter: the tab's tables show it, never an alert
+        conds = [c for c in conds if material(c)]
+    switch = ALERT_POLICY and ev is not None and int(ev.get("rules") or 1) < RULES_V
     for c in conds:
         c["seed"] = _seed(c["family"], inputs, E, first, _seed_keys(c)) or bool(c.pop("_force_seed", False))
         c["est"] = P["sc"]["st"] != "ok" or bool(c.pop("_est", False))
     new_st, just_closed = episodes(base_st, app_id, E, conds, advanced, now_iso, close=close_now)
+    if switch:                                       # the tuned rules take over: an open alert they would not open
+        for k in [k for k, e in new_st["episodes"].items()                                # closes at once, unsent
+                  if not material(dict(e.get("last") or {}, family=e["family"], dir=e["dir"]))]:
+            new_st["closed"].append(U.close_ep(new_st["episodes"].pop(k), _iso(E), now_iso, "rule_tuned"))
     for ep in just_closed:                           # a pay_loss closed because the ads stopped: its window ended, the
         if ep["family"] == "pay_loss" and _ads_stale(weeks, pays, E):          # money never came back (shown only)
             ep["close_reason"] = "window_end"
@@ -3025,6 +3069,8 @@ def evaluate_app(store, ida, rev, spend, fx, udet_releases, st_app, portfolio_sh
                   "cty_sets": {"cur": (cty or {}).get("sets") or {"top": [], "low": []}, "prev": cs.get("cur")}}
     else:
         new_ev = ev
+    if ALERT_POLICY and new_ev is not None and new_ev.get("rules") != RULES_V:
+        new_ev = dict(new_ev, rules=RULES_V)
     new_st["eval"] = new_ev
     src_ccy = (spend or {}).get("ccy") if spend else None
     open_eps = sorted(new_st["episodes"].values(), key=lambda e: e["id"])
@@ -3148,7 +3194,7 @@ def _detail(store, ida, P, weeks, pays, shapes, cty, alerts, closed, info, tiles
             "countries": cty or {"win": None, "geo": False, "smp": False, "app": None, "rows": [],
                                  "small": {"countries": 0, "n": 0, "zz": 0}, "unknown": {"n": 0},
                                  "unassigned": {"n": 0, "rev_share": None}, "state": "wait"},
-            "changes": {"open": alerts, "closed": closed[-20:], "info": info, "older": []},
+            "changes": {"open": alerts, "closed": closed, "info": info, "older": []},   # every closed one (lazy file)
             "by_version": by_version if by_version is not None else [], "long": long if long is not None else []}
 
 
