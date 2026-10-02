@@ -328,6 +328,12 @@ export async function getFlag(db, id) {
   return r ? flagObj(r) : null;
 }
 
+/** One note row by id (deleted ones too): {id, day, app, who, deleted} or null. */
+export async function getNote(db, id) {
+  const r = await db.prepare("SELECT id, day, app, who, deleted_at FROM rv_notes WHERE id = ?").bind(id).first();
+  return r ? { id: Number(r.id), day: r.day, app: r.app, who: r.who, deleted: r.deleted_at != null } : null;
+}
+
 async function openFlagFor(db, app, feature) {
   const r = await db.prepare(`SELECT ${FLAG_COLS} FROM rv_flags WHERE app = ? AND ifnull(feature,'*') = ? ` +
     "AND status = 'open'").bind(app, feature ?? "*").first();
@@ -364,7 +370,7 @@ export async function getCalendar(db, from, to) {
 const NO_OPEN_APP_FLAG = "NOT EXISTS (SELECT 1 FROM rv_flags WHERE day = ? AND app = ? AND feature IS NULL AND status = 'open')";
 
 /**
- * Apply one review action. `a` = {act, d, openDay, app, feature, note, days, apps, flagId, who, at,
+ * Apply one review action. `a` = {act, d, openDay, app, feature, note, days, apps, flagId, noteId, who, at,
  * label, labels (Map key→label), extra}. Returns {app} (single) or {changed} (bulk_ok).
  * @throws {ApiError} 409 conflict (why …) · 403 forbidden (why not_raised_today) · 404 not_found
  */
@@ -399,6 +405,23 @@ export async function applyAction(db, a) {
         db.prepare("INSERT INTO rv_state (day, app, st, snz, who, at) VALUES (?, ?, 'ok', ?, ?, ?) " +
           "ON CONFLICT(day, app) DO NOTHING").bind(a.d, a.app, JSON.stringify(snz), a.who, a.at),
       ]);
+      return { app: a.app };
+    }
+    case "note_edit": {
+      // a note's text changed (History's admin fix, or the author on the open day): the old row is only marked deleted
+      // and the new text is a new row — both kept, and the log row (ref = the edited note) has the new text. All three
+      // only while the edited note is still there (an undo in between → 409, nothing written).
+      const live = "EXISTS (SELECT 1 FROM rv_notes WHERE id = ? AND day = ? AND app = ? AND deleted_at IS NULL)";
+      const args = [a.noteId, a.d, a.app];
+      const res = await db.batch([
+        logStmt(db, { ...base, act: "note_edit", app: a.app, note: a.note, ref: a.noteId, extra: a.extra },
+          { guard: live, guardArgs: args }),
+        db.prepare(`INSERT INTO rv_notes (day, app, app_label, text, who, at) SELECT ?, ?, ?, ?, ?, ? WHERE ${live}`)
+          .bind(a.d, a.app, a.label || "", a.note, a.who, a.at, ...args),
+        db.prepare("UPDATE rv_notes SET deleted_by = ?, deleted_at = ? WHERE id = ? AND day = ? AND app = ? " +
+          "AND deleted_at IS NULL").bind(a.who, a.at, ...args),
+      ]);
+      if (!changes(res[0])) throw new ApiError(409, "conflict", { why: "note_gone" });
       return { app: a.app };
     }
     case "flag": {

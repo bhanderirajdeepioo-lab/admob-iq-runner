@@ -97,8 +97,8 @@ imports, so a missing module or export never reaches the Workers build); until t
   (`👍 Theek hai` · `🛠 Kaam do` · `⛔ Band karo` · `✅ Kaam ho gaya`), correct older days and save Settings.
   Everyone the Access policy lets in can review.
 - **Open day:** the Worker reads `site/review/index.json` through the `ASSETS` binding (the same file the page
-  reads). Writes go to its `open_day`; other days get `403 day_closed` (admins may still fix `ok`/`note`/`undo`/
-  `bulk_ok` on an older snapshot day from History). The page's "Aaj ka review" sends `live: true`: if a newer
+  reads). Writes go to its `open_day`; other days get `403 day_closed` (admins may still fix `ok`/`note`/`note_edit`/
+  `undo`/`bulk_ok` on an older snapshot day from History). The page's "Aaj ka review" sends `live: true`: if a newer
   snapshot opened while the page was open, that click gets `409 day_moved` (+ `open_day`) instead of landing on
   yesterday. With no index yet, every action POST gets `409 review_not_started`.
 - **`ACCESS_JWKS_JSON` is TEST-ONLY.** It is honoured only when the request itself is for `localhost`,
@@ -130,11 +130,16 @@ imports, so a missing module or export never reaches the Workers build); until t
 | GET | `me` | `{email, admin, open_day, go_live, server_time}` |
 | GET | `day?d=YYYY-MM-DD` | the day's states, notes, flags (incl. carried-over open ones), snoozes, `prev.kal`, log, `rev` |
 | GET | `calendar?from=&to=` | per-day counts for History (≤ 400 days) |
-| POST | `action` | `{d, act, app?, feature?, note?, days?, apps?, flag_id?, live?}` — `ok, note, kal, flag, unflag, undo, snooze, unsnooze, bulk_ok` |
+| POST | `action` | `{d, act, app?, feature?, note?, days?, apps?, flag_id?, note_id?, live?}` — `ok, note, note_edit, kal, flag, unflag, undo, snooze, unsnooze, bulk_ok` |
 | POST | `decide` | admin only: `{flag_id, decision: theek|kaam|band|done, note}` (note required for kaam / band) |
 
 Errors: `{"error": code, "msg": "<short Hinglish>", "why"?, "field"?}` with 400 / 401 / 403 / 404 / 405 / 409 /
 413 / 415 / 500 / 503.
+
+`note_edit` (`{d, act: "note_edit", app, note_id, note}`) changes the text of one note of that day and app: only its
+author or an admin (else `403 forbidden`, `why: "not_author"`), on the open day — or by an admin on an older day, as a
+History admin fix. The old row is only marked deleted and the new text is a new row (the log row's `ref` is the edited
+note), so no text is ever lost; a note already gone → `404`, gone between the check and the write → `409 note_gone`.
 
 ## Settings saves (`/api/config/*`)
 

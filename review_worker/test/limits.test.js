@@ -4,7 +4,7 @@
 // Every endpoint is measured on a COLD isolate (schema check included), which is the worst case.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { setup, makeIndex, D1 } from "./harness.js";
+import { setup, makeIndex, K, D0, D1 } from "./harness.js";
 
 const D1_FREE_QUERIES = 50;
 const MAX_PARAMS = 100;
@@ -35,7 +35,11 @@ test("every endpoint stays under the D1 Free budget of 50 queries per request (c
   await run("me", () => t.get("me"));
   await run("ok", () => t.act({ act: "ok", app: A }));
   await run("kal", () => t.act({ act: "kal", app: A }));
+  const nt = await t.act({ act: "note", app: A, note: "n" });
   await run("note", () => t.act({ act: "note", app: A, note: "n" }));
+  await run("note_edit", () => t.act({ act: "note_edit", app: A, note_id: nt.json.notes[0].id, note: "m" }, own));
+  const on = await t.act({ d: D0, act: "note", app: K.a, note: "o" }, own);   // (K.a: in the older day's snapshot)
+  await run("note_edit (older day, admin)", () => t.act({ d: D0, act: "note_edit", app: K.a, note_id: on.json.notes[0].id, note: "p" }, own));
   await run("flag feature", () => t.act({ act: "flag", app: A, feature: "kamai" }));
   await run("flag conflict", () => t.act({ act: "flag", app: A, feature: "kamai" }), 409);
   await run("flag app", () => t.act({ act: "flag", app: B }));
@@ -51,7 +55,7 @@ test("every endpoint stays under the D1 Free budget of 50 queries per request (c
   await run("day", () => t.get(`day?d=${D1}`));
   await run("day (older)", () => t.get("day?d=2026-10-01", own));
   await run("calendar", () => t.get("calendar?from=2025-09-01&to=2026-10-05"));
-  assert.ok(Object.keys(seen).length >= 18);
+  assert.ok(Object.keys(seen).length >= 20);
 });
 
 test("bulk_ok uses the same number of D1 statements for 2 apps and for 60 apps", async () => {

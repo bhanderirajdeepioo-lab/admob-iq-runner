@@ -16,7 +16,7 @@
 
 import { ApiError, verifyAccess, isAdmin, _resetAuthForTests } from "./auth.js";
 import {
-  FEATS, ensureSchema, getRev, getDayState, getAppView, getStates, getCalendar, applyAction, decideFlag,
+  FEATS, ensureSchema, getRev, getDayState, getAppView, getStates, getCalendar, getNote, applyAction, decideFlag,
   _resetSchemaForTests, validateMark, validateDeleteAny, listMarks, addMark, deleteMark,
   isCompareBody, validateCompare, listCompares, addCompare, deleteCompare,
 } from "./db.js";
@@ -35,8 +35,8 @@ const CONFIG_MAX_BODY = CONFIG_MAX_BYTES + 8192;   // {file, content}: the file 
 const NOTE_MAX = 600;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const KEY_RE = /^[0-9a-f]{12}$/;
-const ACTS = new Set(["ok", "note", "kal", "flag", "unflag", "undo", "snooze", "unsnooze", "bulk_ok"]);
-const FIX_ACTS = new Set(["ok", "note", "undo", "bulk_ok"]);   // admin corrections allowed on older days
+const ACTS = new Set(["ok", "note", "note_edit", "kal", "flag", "unflag", "undo", "snooze", "unsnooze", "bulk_ok"]);
+const FIX_ACTS = new Set(["ok", "note", "note_edit", "undo", "bulk_ok"]);   // admin corrections allowed on older days
 const DECISIONS = new Set(["theek", "kaam", "band", "done"]);
 const INDEX_TTL_MS = 60 * 1000;
 const INDEX_MISS_TTL_MS = 15 * 1000;
@@ -77,7 +77,9 @@ const CONFLICT_MSG = {
   not_kaam: "Ye 🚩 abhi kaam me nahi hai",
   already_decided: "Is 🚩 pe faisla ho chuka hai",
   day_moved: "Naye din ke cards aa gaye — upar “Open” dabao",
+  note_gone: "Ye note ab nahi raha — kisi ne hata diya",
 };
+const NOT_AUTHOR_MSG = "Ye note sirf jisne likha wo (ya admin) badal sakta hai";
 
 // ── per-isolate caches (test-only reset below) ──────────────────────────────────────────────────
 let indexCache = null;        // {at, val}
@@ -332,10 +334,11 @@ async function hAction(c) {
   if (feature !== null && (typeof feature !== "string" || !FEATS.includes(feature))) throw bad("feature");
   if ((act === "snooze" || act === "unsnooze") && feature === null) throw bad("feature");
   const note = normNote(b.note);
-  if (act === "note" && !note) throw bad("note");
+  if ((act === "note" || act === "note_edit") && !note) throw bad("note");
+  if (act === "note_edit" && !posInt(b.note_id)) throw bad("note_id");
   if (act === "snooze" && b.days !== 7 && b.days !== 14) throw bad("days");
 
-  // which day may be written: the open day; admins may correct an older snapshot day (ok/note/undo/bulk_ok)
+  // which day may be written: the open day; admins may correct an older snapshot day (ok/note/note_edit/undo/bulk_ok)
   const openDay = idx.open_day;
   let adminFix = false;
   if (d !== openDay) {
@@ -366,6 +369,14 @@ async function hAction(c) {
     if (typeof b.app !== "string" || !KEY_RE.test(b.app) || !labels.has(b.app)) throw bad("app");
     a.app = b.app;
     a.label = labels.get(b.app) || "";
+  }
+
+  if (act === "note_edit") {
+    // the note must be THIS day's and THIS app's, still there; only its author or an admin may change its text
+    const n = await getNote(c.db, b.note_id);
+    if (!n || n.deleted || n.day !== d || n.app !== a.app) throw new ApiError(404, "not_found");
+    if (n.who !== c.email && !c.admin) throw new ApiError(403, "forbidden", { why: "not_author", msg: NOT_AUTHOR_MSG });
+    a.noteId = n.id;
   }
 
   const r = await applyAction(c.db, a);
