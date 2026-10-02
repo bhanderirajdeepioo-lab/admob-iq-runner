@@ -57,6 +57,7 @@ run(`DATA=__DASH; ${RESET} AS._.load(__STUDIO); Object.assign(ACTD,__ACTFILES);`
 const text = h => String(h).replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 ctx.__text = text;
+ctx.dAddT = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
 // the Studio's own words (the older views folded under it are the tab's earlier screens, kept exactly as they were)
 const STUDIO_ONLY = h => { const a = h.indexOf('id="as-root"'), b = h.indexOf('id="act-old"'); return h.slice(a < 0 ? 0 : a, b < 0 ? h.length : b); };
 ctx.__studio = STUDIO_ONLY;
@@ -112,6 +113,24 @@ get('page', `(()=>{ ${RESET} const r={}, A=AS._.A(), a=A.find(x=>x.ready&&x.rel.
   ACTJUMP='act-chg'; ACTJT=Date.now(); r.foldOpenOnJump=/<details id="act-old" open/.test(actScreen()); ACTJUMP='';
   ${RESET} return JSON.stringify(r); })()`);
 
+// ── "How many new users came back": EVERY install week (owner, 2 Oct: "pura data hona chaiye"), as the older table ──
+get('tri', `(()=>{ ${RESET} const r={}, A=AS._.A(); const a=A.slice().sort((x,y)=>y.tri.w.length-x.tri.w.length)[0], row=actRows().find(x=>x.app_id===a.id);
+  const toks=h=>[...h.matchAll(/<div class="as-(crel|rh|cyr|nd)"([^>]*)>([\\s\\S]*?)<\\/div>/g)].map(m=>({k:m[1],t:__text(m[3])}));
+  const grid=h=>{ const i=h.indexOf('class="as-cohw"'); if(i<0) return []; const g=h.slice(i); return toks(g.slice(0,g.indexOf('<div class="as-clg">'))); };
+  r.weeks=a.tri.w.map(w=>({f:w.f,t:w.t,n:w.n})); r.id=a.id;
+  // the older table (every week shown): its week labels and installs
+  const d=ACTD[row.key]; ACTTRIEXP=true; const old=actTriCard(d); ACTTRIEXP=false;
+  r.old=[...old.matchAll(/<tr(?: style="[^"]*")? data-week="([^"]*)"><td class="nm" style="white-space:nowrap">([^<]*)/g)].map(m=>({w:m[1],lab:m[2].trim()}));
+  // synthetic: an update in an old week, two in one week, and a week GA4 gave no return data for
+  const W=a.tri.w, keepRel=a.rel, keepW=W.map(w=>Object.assign({},w));
+  const o1=W[W.length-3], o2=W[W.length-6], ndw=W[W.length-8];
+  a.rel=keepRel.concat([[dAddT(o1.f,2),'v0.5',null,false],[o2.f,'v0.7',null,false],[dAddT(o2.f,3),'App update',null,false]]).sort((x,y)=>x[0]<y[0]?-1:1);
+  Object.assign(ndw,{nd:true,v:ndw.v.map(()=>null),p:0});
+  try{ APP=row.app; ACTAPP=a.id; const h=actScreen(); __flush(); r.page=grid(h); r.pageHead=__text((h.match(/<div class="as-eyebrow">Install week × day[^<]*<\\/div>[\\s\\S]*?<div class="as-hint">[\\s\\S]*?<\\/div>/)||[''])[0]);
+    ${RESET} actScreen(); __flush(); AS.openDrawer(a.i); r.drawer=grid(document.getElementById('as-drawer').innerHTML); AS.closeDrawer();
+    r.o1=o1.f; r.o2=o2.f; r.nd=ndw.f; r.tipNd=__text(AS._.TIPS.trind(a.i,ndw.f)); r.tipRel=__text(AS._.TIPS.trel(a.i,o2.f));
+  } finally{ a.rel=keepRel; keepW.forEach((w,j)=>Object.assign(W[j],w)); }
+  ${RESET} actScreen(); __flush(); return JSON.stringify(r); })()`);
 // ── every word the Studio shows (all ranges, the alert table, every drawer, the page, every tooltip) ────────────────
 get('texts', `(()=>{ const T=[]; for(const k of ['7','14','30','60']){ for(const c of ['prev','month']){ ${RESET} KWIN=k; KCMP=c; T.push(__text(__studio(actScreen()))); __flush(); } }
   ${RESET} actScreen(); __flush(); AS._.ST.chgView='table'; T.push(__text(AS._.chg())); AS._.ST.chgView='cards';

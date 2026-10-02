@@ -2101,8 +2101,20 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-clg{display:flex;flex-wrap:wrap;gap:4px 14px;padding:4px 18px 12px;font-size:11.5px;color:var(--muted);align-items:center}
 :is(#as-root,#as-layer) .as-clg .as-k{display:inline-flex;align-items:center;gap:5px}
 :is(#as-root,#as-layer) .as-clg .as-k i{display:inline-block;width:14px;height:3px;border-radius:2px}
-:is(#as-root,#as-layer) .as-cohw{overflow-x:auto;padding:0 12px 6px}
+:is(#as-root,#as-layer) .as-cohw{overflow:auto;max-height:min(70vh,720px);margin:0 12px;padding:0 0 6px}   /* every install week since the app's start: the grid scrolls in its own box (no side padding: the sticky week column sits at its edge) */
 :is(#as-root,#as-layer) .as-coh{display:grid;gap:3px;min-width:420px}
+:is(#as-root,#as-layer) .as-cohw .as-coh .as-rh,:is(#as-root,#as-layer) .as-cohw .as-coh .as-stk{position:sticky;left:0;z-index:2;background:var(--panel);box-shadow:4px 0 0 var(--panel)}
+:is(#as-root,#as-layer) .as-cohw .as-coh .as-chh{position:sticky;top:0;z-index:3;background:var(--panel);box-shadow:3px 0 0 var(--panel),0 3px 0 var(--panel),3px 3px 0 var(--panel)}
+:is(#as-root,#as-layer) .as-cohw .as-coh .as-chh.as-stk{left:0;z-index:4;box-shadow:4px 0 0 var(--panel),0 3px 0 var(--panel),4px 3px 0 var(--panel)}
+:is(#as-root,#as-layer) .as-coh .as-rh>span{white-space:nowrap}
+:is(#as-root,#as-layer) .as-coh .as-nd{grid-column:span var(--as-ndc,5);border:1px dashed var(--line2);border-radius:6px;min-height:30px;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:var(--faint)}
+:is(#as-root,#as-layer) .as-coh .as-crel{grid-column:1/-1;background:var(--purple-b);border-top:2px dashed var(--purple);border-radius:3px;padding:5px 0;color:var(--purple);font:700 11.5px/1.45 var(--as-font)}
+:is(#as-root,#as-layer) .as-coh .as-crel>span{position:sticky;left:0;display:inline-block;padding:0 9px;max-width:min(100%,calc(100vw - 64px));white-space:normal;overflow-wrap:anywhere}
+:is(#as-root,#as-layer) .as-coh .as-crel .as-mw{font-weight:500;color:#c4b5fd}
+:is(#as-root,#as-layer) .as-coh .as-cyr{grid-column:1/-1;font:700 11px var(--as-num);color:var(--muted);padding:5px 0 1px}
+:is(#as-root,#as-layer) .as-coh .as-cyr>span{position:sticky;left:0;padding:0 2px}
+:is(#as-root,#as-layer) .as-coh .as-relb{margin-left:4px;font-size:11px;cursor:help}
+@media (max-width:760px),(pointer:coarse){:is(#as-root,#as-layer) .as-coh .as-relb{display:inline-block;padding:9px;margin:-9px -9px -9px -5px;line-height:14px}}
 :is(#as-root,#as-layer) .as-coh .as-c{border-radius:6px;min-height:30px;display:flex;align-items:center;justify-content:center;font:600 12.5px var(--as-num);font-variant-numeric:tabular-nums;position:relative}
 :is(#as-root,#as-layer) .as-coh .as-c.as-na{background:transparent;color:var(--faint);font-weight:400}
 :is(#as-root,#as-layer) .as-coh .as-c.as-pv::after{content:"";position:absolute;right:3px;top:3px;width:5px;height:5px;border-radius:50%;background:var(--watch)}
@@ -10555,7 +10567,7 @@ function prep(){ const sig=VER+'|'+RAW.apps.map(a=>vis(a.id)?1:0).join('')+'|'+(
     const off=N-M.bandDays; ['lo','hi','med'].forEach(k=>{ const v=dec(a.bnd[k]), o=new Array(N).fill(null); v.forEach((x,j)=>{ o[off+j]=x; }); a['b'+k]=o; });
     a.fi=Math.max(0,ix(a.first)); a.si=Math.min(N-1,ix(a.settled));
     a.ol=a.rt.map((r,j)=>(r!=null&&a.y[j]!=null)?r-a.y[j]:null);
-    a.tri={ref:dec(a.tri.ref),w:a.tri.w.map(r=>({f:r[0],t:r[1],n:r[2],v:dec(r[3]),p:r[4]}))};
+    a.tri={ref:dec(a.tri.ref),w:a.tri.w.map(r=>{ const fl=r[5]||0; return {f:r[0],t:r[1],n:r[2],v:fl&1?M.triCols.map(()=>null):dec(r[3]),p:r[4],nd:!!(fl&1),part:!!(fl&2),q:!!(fl&4)}; })};
     a.stp=(a.steep||[]).map(r=>[ix(r[0]),ix(r[1])]); a.al=[]; });
   ALERTS=(RAW.alerts||[]).filter(x=>x&&x.a>=0&&map[x.a]!=null).map(x=>Object.assign({},x,{a:map[x.a]}));
   ALERTS.forEach((x,k)=>{ x.k=k; A[x.a].al.push(x); });
@@ -11378,15 +11390,32 @@ TIPS.upd=(i,d)=>{ const a=A[+i]; return a.rel.filter(r=>r[0]===d).map(r=>`<div c
 function seqCol(v,lo,hi){ if(v==null) return ''; const t=Math.max(0,Math.min(1,(v-lo)/Math.max(1e-6,hi-lo)));
   const c0=[19,33,58], c1=[167,139,250], m=c0.map((x,i)=>Math.round(x+(c1[i]-x)*Math.pow(t,1.1)));
   return `background:rgb(${m.join(',')});color:${t>.62?'#160b33':'var(--ink)'}`; }
+// EVERY install week since the app's start (owner, 2 Oct: "pura data hona chaiye" — no 10-week cut), newest first, as the
+// older "How many came back" table: a year row when the weeks cross a year, a 📦 line right above the week each update
+// fell in (the weeks above it = installs of the new version), "(only N days)", ½ = part data, a week GA4 gave no return
+// data for says so; the grid scrolls in its own box, the column names on top, the week column on the left
+const triRels=a=>{ const m={}; (a.rel||[]).forEach(r=>{ const w=a.tri.w.find(x=>r[0]>=x.f&&r[0]<=x.t); if(w) (m[w.f]=m[w.f]||[]).push(r); }); return m; };
+const triRelItem=r=>esc(r[1]==='App update'?'Update':r[1])+' ('+fd(r[0])+')';
 function triGrid(a){ const C=M.triCols, rows=a.tri.w; if(!rows.length) return '<div class="as-faint" style="padding:6px 18px 14px;font-size:12.5px">Wapsi ka grid abhi nahi</div>';
-  let h=`<div class="as-coh" style="grid-template-columns:104px repeat(${C.length},minmax(56px,1fr))"><div class="as-chh" style="text-align:left">Install week</div>`+C.map(c=>`<div class="as-chh">${backW(c)}</div>`).join('');
+  let h=`<div class="as-coh" style="grid-template-columns:minmax(104px,max-content) repeat(${C.length},minmax(56px,1fr));--as-ndc:${C.length}"><div class="as-chh as-stk" style="text-align:left">Install week</div>`+C.map(c=>`<div class="as-chh">${backW(c)}</div>`).join('');
   h+=`<div class="as-rh">All-time normal<small>saare installs</small></div>`+C.map((c,k)=>a.tri.ref[k]==null?'<div class="as-c as-na">·</div>':`<div class="as-c as-ref">${pc(a.tri.ref[k]/1000,1)}</div>`).join('');
-  rows.forEach(r=>{ h+=`<div class="as-rh">${span(r.f,r.t)}<small>${fN(r.n)} installs</small></div>`+C.map((c,k)=>{ const v=r.v[k]; if(v==null) return '<div class="as-c as-na">·</div>';
+  const multi=new Set(rows.map(r=>r.t.slice(0,4))).size>1, cr=triRels(a); let yr='';
+  const wl=(f,t)=>!multi?span(f,t):(f===t?fdNoY(f):(f.slice(0,4)!==t.slice(0,4)?fdNoY(f)+' '+f.slice(0,4):(f.slice(0,7)===t.slice(0,7)?String(+f.slice(8)):fdNoY(f)))+'–'+fdNoY(t));
+  rows.forEach(r=>{ if(multi&&r.t.slice(0,4)!==yr){ yr=r.t.slice(0,4); h+=`<div class="as-cyr"><span>── ${yr} ──</span></div>`; }
+    const L=cr[r.f], nd=dDiff(r.f,r.t)+1;
+    if(L) h+=`<div class="as-crel" data-rw="${r.f}"><span>📦 ${L.map(triRelItem).join(' · ')} <span class="as-mw">— ${L.some(x=>x[0]>r.f)?'mid-week':'week start'}</span></span></div>`;
+    h+=`<div class="as-rh"><span>${wl(r.f,r.t)}${L?`<span class="as-relb" data-tk="trel:${a.i}:${r.f}">📦</span>`:''}</span><small>${fN(r.n)} installs${r.part?' · ½ part data':''}</small>${nd<7?`<small>(only ${nd} ${nd===1?'day':'days'})</small>`:''}</div>`;
+    if(r.nd){ h+=`<div class="as-nd" data-tk="trind:${a.i}:${r.f}">No data</div>`; return; }
+    h+=C.map((c,k)=>{ const v=r.v[k]; if(v==null) return '<div class="as-c as-na">·</div>';
     const col=rows.map(x=>x.v[k]).filter(x=>x!=null).concat(a.tri.ref[k]!=null?[a.tri.ref[k]]:[]), pvb=(r.p>>(C.length-1-k))&1;
-    return `<div class="as-c${pvb?' as-pv':''}" style="${seqCol(v,Math.min(...col)*.9,Math.max(...col))}" data-tk="tri:${a.i}:${r.f}:${k}">${pc(v/1000,1)}</div>`; }).join(''); });
+    return `<div class="as-c${pvb?' as-pv':''}" style="${seqCol(v,Math.min(...col)*.9,Math.max(...col))}" data-tk="tri:${a.i}:${r.f}:${k}">${pc(v/1000,1)}${r.part?'<sup>½</sup>':''}</div>`; }).join(''); });
   return h+'</div>'; }
 TIPS.tri=(i,f,k)=>{ const a=A[+i], r=a.tri.w.find(x=>x.f===f), c=M.triCols[+k], v=r.v[+k], ref=a.tri.ref[+k], pvb=(r.p>>(M.triCols.length-1-k))&1;
-  return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · installs ${span(r.f,r.t)}</div>${trow((+c===1?'Back next day':'Back after '+c+' days'),fN(r.n*v/1000)+' · '+pc(v/1000,1))}${trow('Installs',fN(r.n))}${ref!=null?trow('All-time normal',pc(ref/1000,1)):''}${pvb?'<div class="as-tsm">⏳ not final — late data aa raha</div>':''}`; };
+  return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · installs ${span(r.f,r.t)}</div>${trow((+c===1?'Back next day':'Back after '+c+' days'),fN(r.n*v/1000)+' · '+pc(v/1000,1))}${trow('Installs',fN(r.n))}${ref!=null?trow('All-time normal',pc(ref/1000,1)):''}${pvb?'<div class="as-tsm">⏳ not final — late data aa raha</div>':''}${r.part?'<div class="as-tsm">½ adhoora data — kuch din ka data nahi / GA4 ki shuruaat se pehle</div>':''}${r.q?'<div class="as-tsm">? GA4 ki purani seema check nahi ho sakti (installs kam)</div>':''}`; };
+TIPS.trind=(i,f)=>{ const a=A[+i], r=a.tri.w.find(x=>x.f===f); return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · installs ${span(r.f,r.t)}</div>${trow('Installs',fN(r.n))}<div class="as-tsm">No data — GA4 ne us hafte ke installs ka wapsi data nahi diya</div>`; };
+TIPS.trel=(i,f)=>{ const a=A[+i], r=a.tri.w.find(x=>x.f===f), L=r?triRels(a)[f]:null; if(!L) return '';
+  return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · installs ${span(r.f,r.t)}</div>`+L.map(x=>trow('📦 '+esc(x[1]==='App update'?'Update':x[1]),fd(x[0]))).join('')
+    +`<div class="as-tsm">${L.some(x=>x[0]>r.f)?'Update hafte ke beech aaya — us hafte ke installs dono versions ke':'Update hafte ke pehle din aaya — us hafte ke installs bhi naye version ke'}</div><div class="as-tsm">Line ke upar = naye version ke installs, neeche = purane version ke</div>`; };
 function lock(on){ try{ document.body.classList.toggle('as-lock',!!on); }catch(e){} try{ hbOv('as-drawer',!!on,closeDrawer); }catch(e){} }   // phone Back closes the drawer
 function openDrawer(i){ layer(); i=+i; if(!A[i]) return; detLoad(A[i]); ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('as-drawer'); d.classList.add('as-on'); d.setAttribute('aria-hidden','false'); $('as-scrim').classList.add('as-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.as-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
 function closeDrawer(){ ST.drawer=-1; ST.did=null; const d=$('as-drawer'); if(d){ d.classList.remove('as-on'); d.setAttribute('aria-hidden','true'); } const sc=$('as-scrim'); if(sc) sc.classList.remove('as-on'); lock(false); hideTip(); }
@@ -11439,7 +11468,7 @@ function appParts(o,wBig,wIo){ const a=o.a, L=o.L, det=detOf(a), oth=det?actOthe
     verdict, kp:`<div class="as-dk">${kp}</div>`,
     big:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Old users, day by day</div><h2 style="font-size:15px">Old users vs the app's normal</h2><div class="as-hint">Laal / hara = Users vs normal (pakke din, same weekday ka normal)</div></div></div>${bigChart(o,wBig)}</div>`,
     io:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Due to installs?</div><h2 style="font-size:15px">Installs vs the new users who came back</h2><div class="as-hint">Installs badhe/ghate to installs that came back bhi badalta hai — ye "due to installs" wala hissa hai</div></div></div>${ioChart(o,wIo)}</div>`,
-    tri:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Install week × day</div><h2 style="font-size:15px">How many new users came back</h2><div class="as-hint">Har row = ek hafte ke installs · cell = us din kitne % wapas aaye (engine ka grid)</div></div></div><div class="as-cohw">${triGrid(a)}</div><div class="as-clg"><span class="as-k"><i style="background:linear-gradient(90deg,#13213a,#a78bfa);width:40px;height:9px"></i>fewer → more back</span><span class="as-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="as-k">· = abhi us din tak nahi pahunche</span></div></div>`,
+    tri:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Install week × day${a.tri.w.length?' · all '+a.tri.w.length+(a.tri.w.length===1?' week':' weeks'):''}</div><h2 style="font-size:15px">How many new users came back</h2><div class="as-hint">Har row = ek hafte ke installs${a.tri.w.length?' · saare hafte, '+fd(a.tri.w[a.tri.w.length-1].f)+' se aaj tak (naya upar)':''} · cell = us din kitne % wapas aaye (engine ka grid)</div></div></div><div class="as-cohw">${triGrid(a)}</div><div class="as-clg"><span class="as-k"><i style="background:linear-gradient(90deg,#13213a,#a78bfa);width:40px;height:9px"></i>fewer → more back</span><span class="as-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="as-k">· = abhi us din tak nahi pahunche</span>${a.tri.w.some(r=>r.part)?'<span class="as-k">½ = adhoora data (kuch din ka data nahi)</span>':''}${a.tri.w.some(r=>r.nd)?'<span class="as-k">No data = GA4 ne us hafte ka wapsi data nahi diya</span>':''}</div>${Object.keys(triRels(a)).length?'<div class="as-clg" style="padding-top:0;color:var(--purple)">📦 = new update. Line ke upar = naye version ke installs, neeche = purane version ke.</div>':''}</div>`,
     als:(als.length||OLa.length)?`<div><div class="as-chg-h"><div><div class="as-eyebrow">This app's alerts</div><h2 style="font-size:15px">What changed?</h2></div></div>${als.length?`<div class="as-cards">${als.map(cardH).join('')}</div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>'}${oldFold(OLa,'pgold','30–90 days')}</div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>',
     ver:verHtml(o),
     ups:ups.length?`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">📦 Updates · since ${fd(M.S)}</div><h2 style="font-size:15px">Updates and their effect</h2></div></div><div class="as-upd">${ups.map(r=>{ const ba=befAft(a,r[0]); return `<div class="as-u"><span class="as-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="as-faint">${UPDW(r[2]).replace(/^[^—]+— /,'')}</span>${ba?`<span class="as-ba">Old users/day ${ba}</span>`:''}</div>`; }).join('')}</div></div>`:'',

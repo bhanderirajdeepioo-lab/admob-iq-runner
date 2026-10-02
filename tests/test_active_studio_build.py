@@ -15,9 +15,11 @@ import copy
 import gzip
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
+from datetime import date, timedelta
 
 import pytest
 
@@ -69,6 +71,35 @@ def _ref(s):
 
 # ── parity with the approved demo ─────────────────────────────────────────────────────────────────────────────────
 
+def _half(p):
+    """the engine's share ×1000 lands exactly on .5 (its 4 decimals): the demo rounds it half-to-even, the page half up"""
+    return abs(round(p * 1000, 6) - int(round(p * 1000, 6)) - 0.5) < 1e-9
+
+
+def _beyond_the_demo(s, body, ref):
+    """The owner's "no trim" (2 Oct) goes past the frozen demo here only: the "How many came back" grid has EVERY install
+    week since the app's start (the demo: the 10 newest with numbers — they are rows of it, the same dates, installs
+    and ⏳ bits), its cells rounded half up as the older table prints them (0.0545 → "5.5%"; the demo: half to even, so
+    an exact .5 may read 1‰ lower there), and the 📦 updates reach back before the span (the demo: inside it — the same
+    rows there). Checked here, then put back to the demo's, so the rest is compared whole."""
+    S, E = ref["meta"]["S"], ref["meta"]["E"]
+    for a, r in zip(body["apps"], ref["apps"]):
+        assert a["id"] == r["id"]
+        eng = {x["from"]: x for x in _gz(os.path.join(s, "active_%s.json.gz" % a["k"]))["tri"]["rows"] if not x.get("pre")}
+        mine = {w[0]: w for w in a["tri"]["w"]}
+        assert len(a["tri"]["w"]) >= len(r["tri"]["w"])
+        for w in r["tri"]["w"]:
+            m = mine[w[0]]
+            assert m[1:3] == w[1:3] and m[4] == w[4]
+            for k, (x, y) in enumerate(zip(asb.dec(m[3]), asb.dec(w[3]))):
+                assert x == y or (x == y + 1 and _half(eng[w[0]]["v"][asb.TRI_COLS[k]])), (a["nm"], w[0], k)
+        for x, y in zip(asb.dec(a["tri"]["ref"]), asb.dec(r["tri"]["ref"])):
+            assert x == y or x == y + 1
+        assert [x for x in a["rel"] if S <= x[0] <= E] == r["rel"] and all(x[0] <= E for x in a["rel"])
+        a["tri"], a["rel"] = r["tri"], r["rel"]
+    return body
+
+
 def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
     s, cfg, dash = site
     ref = _ref(s)                                               # the frozen demo step, reading the site's files
@@ -76,13 +107,67 @@ def test_the_file_holds_exactly_the_demo_generators_numbers(site, capsys):
     assert _run(s, cfg, dash) == ["/active_studio.json.gz"]
     body = _gz(os.path.join(s, asb.FILE))
     assert body.pop("v") == asb.V
-    assert body == ref
+    assert any(len(a["tri"]["w"]) > 10 for a in body["apps"])
+    assert _beyond_the_demo(s, body, ref) == ref
     # and the module's own entry point, straight
     got = asb.build_data(dash, _gz(os.path.join(s, "active_portfolio.json.gz")), lambda n: _gz(os.path.join(s, n)),
                          json.load(open(os.path.join(cfg, "account_names.json"))),
                          json.load(open(os.path.join(cfg, "app_names.json"))),
                          asb._lag(dash, s))
-    assert json.loads(json.dumps(got)) == ref
+    assert _beyond_the_demo(s, json.loads(json.dumps(got)), ref) == ref
+
+
+# ── no trim: "How many new users came back" = every install week since the app's start (owner, 2 Oct) ─────────────
+
+def test_the_came_back_grid_has_every_install_week_of_the_older_table(site, capsys):
+    """Every week the older "How many came back" table shows (the engine's tri rows without the hidden test installs),
+    newest first, none skipped — also a week whose day 1 is not reached yet and a week GA4 gave no return data for
+    ("No data", flag 1); part data = flag 2, GA4's old limit unchecked = flag 4; each cell = the engine's share ×1000,
+    half up (as the older table prints it)."""
+    s, cfg, dash = site
+    a0 = next(a for a in _gz(os.path.join(s, "active_portfolio.json.gz"))["apps"])
+    key = next(r["key"] for r in dash["active"]["apps"] if r["app_id"] == a0["app_id"])
+    af = _gz(os.path.join(s, "active_%s.json.gz" % key))
+    nd = af["tri"]["rows"][5]
+    nd.update(nodata=True, q=True)                             # a week GA4 gave no return data for
+    _wgz(os.path.join(s, "active_%s.json.gz" % key), af)
+    _run(s, cfg, dash)
+    body = _gz(os.path.join(s, asb.FILE))
+    n_old = 0
+    for a in body["apps"]:
+        eng = sorted((x for x in _gz(os.path.join(s, "active_%s.json.gz" % a["k"]))["tri"]["rows"] if not x.get("pre")),
+                     key=lambda x: x["from"], reverse=True)
+        W = a["tri"]["w"]
+        assert [(w[0], w[1], w[2]) for w in W] == [(x["from"], x["to"], x["users"]) for x in eng], a["nm"]
+        n_old += max(0, len(W) - 10)
+        for w, x in zip(W, eng):
+            fl = (1 if x.get("nodata") else 0) | (2 if x.get("part") else 0) | (4 if x.get("q") else 0)
+            assert (w[5] if len(w) == 6 else 0) == fl
+            v = asb.dec(w[3])
+            for k, N in enumerate(asb.TRI_COLS):
+                p = None if x.get("nodata") else (x.get("v") or [None] * 31)[N]
+                assert v[k] == (None if p is None else int(math.floor(round(p * 1000, 6) + 0.5)))
+            if x.get("nodata"):
+                assert v == [None] * len(asb.TRI_COLS) and w[4] == 0
+    assert n_old > 60
+    a = next(x for x in body["apps"] if x["k"] == key)
+    w = next(w for w in a["tri"]["w"] if w[0] == nd["from"])
+    assert w[5] == 1 | 4 | (2 if nd.get("part") else 0)
+    assert asb._k1000(0.0545) == 55 and asb._k1000(0.0085) == 9 and asb._k1000(0.1) == 100
+
+
+def test_every_update_reaches_the_grid_even_before_the_span(site, capsys):
+    s, cfg, dash = site
+    r0 = next(r for r in dash["active"]["apps"] if r.get("file") and r.get("status") != "error")
+    af = _gz(os.path.join(s, r0["file"]))
+    old_day = (date.fromisoformat(af["daily"]["start"]) + timedelta(days=12)).isoformat()
+    af["releases"] = [{"date": old_day, "version": "0.9"}, {"date": "2099-01-01", "version": "9.9"}] + (af.get("releases") or [])
+    _wgz(os.path.join(s, r0["file"]), af)
+    _run(s, cfg, dash)
+    body = _gz(os.path.join(s, asb.FILE))
+    a = next(x for x in body["apps"] if x["id"] == r0["app_id"])
+    assert old_day < body["meta"]["S"] and [old_day, "v0.9", None, False] in a["rel"]
+    assert all(x[0] <= body["meta"]["E"] for x in a["rel"])
 
 
 def test_the_synthetic_site_covers_the_studios_cases(site):
@@ -129,7 +214,7 @@ def test_contract_pointer_and_deterministic_bytes(site, capsys):
         assert a["nm"].endswith(" · " + a["acc"])                       # always with its account
         assert len(asb.dec(a["tri"]["ref"])) == len(asb.TRI_COLS)
         for w in a["tri"]["w"]:
-            assert len(w) == 5 and len(asb.dec(w[3])) == len(asb.TRI_COLS)
+            assert len(w) in (5, 6) and len(asb.dec(w[3])) == len(asb.TRI_COLS) and (len(w) == 5 or w[5] in range(1, 8))
     for x in body["alerts"]:
         assert 0 <= x["a"] < len(body["apps"]) and x["sev"] in ("bigda", "dhyan", "behtar", "normal")
         assert x["kind"] in ("open", "closed", "info")
@@ -217,7 +302,8 @@ def test_an_app_without_its_daily_slice_keeps_its_own_file_numbers(site, capsys)
     body = _gz(os.path.join(s, asb.FILE))
     a = next(x for x in body["apps"] if x["id"] == gone)
     assert set(asb.dec(a["rt"])) == {None} and any(v is not None for v in asb.dec(a["y"]))   # (the generator's own rule)
-    assert body == dict(_ref(s), v=asb.V)
+    ref = _ref(s)
+    assert body.pop("v") == asb.V and _beyond_the_demo(s, body, ref) == ref
 
 
 @pytest.mark.parametrize("how", ["portfolio", "raise"])

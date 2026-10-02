@@ -288,6 +288,47 @@ def test_one_apps_page_is_the_studio_with_the_whole_older_page_folded_under_it(r
     assert p["foldOpenOnJump"]                                  # a jump into the older page (Alerts → this app) opens it
 
 
+# ── "How many new users came back": every install week (owner, 2 Oct: "13-19 july tak hi kyu? pura data hona chaiye") ──
+
+def test_came_back_grid_shows_every_week_of_the_older_table(report):
+    t = J(report, "tri")
+    W, old = t["weeks"], t["old"]
+    assert len(W) > 10 and [w["f"] for w in W] == [o["w"] for o in old]        # the older table's weeks, all, newest first
+    for view in ("page", "drawer"):
+        rows = [x for x in t[view] if x["k"] == "rh"][1:]                       # (row 1 = All-time normal)
+        assert len(rows) == len(W), view
+        assert [x["t"].split(" 📦")[0].split(" ")[0] for x in rows] == [o["lab"].split(" ")[0] for o in old], view
+        # a year row over each year's weeks (these weeks cross a year), oldest at the bottom
+        yrs = [x["t"] for x in t[view] if x["k"] == "cyr"]
+        assert yrs == sorted(yrs, reverse=True) and len(yrs) >= 2 and all(re.fullmatch(r"── \d{4} ──", y) for y in yrs)
+        # 📦 a line right ABOVE the week each update fell in (old weeks too), the week's label carries a 📦
+        seq = t[view]
+        lines = [(i, x["t"]) for i, x in enumerate(seq) if x["k"] == "crel"]
+        assert any("v0.5" in l for _, l in lines) and any(re.search(r"v0\.7 \(.*\) · Update \(", l) for _, l in lines)
+        for i, l in lines:
+            assert seq[i + 1]["k"] == "rh" and "📦" in seq[i + 1]["t"] and re.search(r"— (mid-week|week start)$", l)
+        # a week GA4 gave no return data for: its row says "No data" (as the older table), never a 0
+        nd = [x["t"] for x in seq if x["k"] == "nd"]
+        assert nd == ["No data"]
+        # a partial week says how many days
+        assert any(re.search(r"\(only \d+ days?\)", x["t"]) for x in rows)
+    assert t["pageHead"].startswith("Install week × day · all %d weeks " % len(W)) and "saare hafte" in t["pageHead"]
+    assert "No data — GA4 ne us hafte ke installs ka wapsi data nahi diya" in t["tipNd"]
+    assert "📦 v0.7" in t["tipRel"] and "Update hafte ke" in t["tipRel"]
+    words = " ".join([t["tipNd"], t["tipRel"], t["pageHead"]] + [x["t"] for x in t["page"]])
+    for n in sorted(set(ss.NAMES.values()), key=len, reverse=True):
+        words = words.replace(n, "<app>")
+    assert not (BANNED.search(words) or BANNED_CASE.search(words) or DEVA.search(words)) and "NaN" not in words
+
+
+def test_came_back_grid_scrolls_in_its_box_with_its_column_names_on_top():
+    css = open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8").read()
+    assert re.search(r"\.as-cohw\{overflow:auto;max-height:min\(70vh,720px\)", css)
+    assert re.search(r"\.as-cohw \.as-coh \.as-chh\{position:sticky;top:0;z-index:3;background:var\(--panel\)", css)
+    assert re.search(r"\.as-cohw \.as-coh \.as-rh,:is\(#as-root,#as-layer\) \.as-cohw \.as-coh \.as-stk\{position:sticky;left:0", css)
+    assert re.search(r"\(pointer:coarse\)\{:is\(#as-root,#as-layer\) \.as-coh \.as-relb\{display:inline-block;padding:9px", css)
+
+
 # ── every alert, with the owner's timestamp line ───────────────────────────────────────────────────────────────
 
 def test_what_changed_keeps_every_alert_with_its_timestamps(report):

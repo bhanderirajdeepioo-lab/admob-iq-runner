@@ -12,8 +12,9 @@ the app drawer) is worked out in the browser from it, for any range / compare th
     count (u), ads per active user ×1000 (im); the installs of the 31 days before the span (pre); the engine's normal
     band for the newest BAND_DAYS days (bnd);
   * per app: its per-day return curve (sh, the engine's split weights), the lens' own noise at the 91 earlier ends for a
-    grid of window lengths (nz — the "pakka" test), the engine's install-week × day grid (tri), its updates (📦, with
-    the engine's verdict level), size class (badi / madhyam / chhoti: AdMob earnings + Google Ads spend a day), the
+    grid of window lengths (nz — the "pakka" test), the engine's install-week × day grid (tri — EVERY install week since
+    the app's start, as the older "How many came back" table: weeks without data / with part data flagged), ALL its
+    updates up to the span's end (📦, with the engine's verdict level), size class (badi / madhyam / chhoti: AdMob earnings + Google Ads spend a day), the
     engine's fast-change runs (steep) and the dashboard summary row's alert counts;
   * every open Active users alert, the ones closed in the last 7 days and the engine's installs / ad-price info rows;
   * the apps without GA4 data, and meta (the span, today, the build time, fx, the late / lag days).
@@ -52,7 +53,6 @@ NULL_DAYS = 91        # 13 weeks of earlier ends (engine NULL_WEEKS)
 NULL_MIN = 21
 SIGMA_FLOOR = 0.01
 SPREAD = 1.2533
-TRI_WEEKS = 10
 TRI_COLS = [1, 3, 7, 14, 30]
 MAX_GZ = 1500000      # a hard cap far above the ~90 KB a 27-app portfolio takes: past it the file is not written
                       # (counted, never a silent half file and never a trimmed one) — the page keeps its older views
@@ -64,6 +64,12 @@ def enabled(s):
 
 
 # ---- dates / numbers (the demo generator's helpers) --------------------------------------------------------------
+def _k1000(p):
+    """A share (the engine's 4 decimals) ×1000, half rounded UP — as the older table prints it (0.0545 → 55 → "5.5%",
+    never Python's half-to-even 54 → "5.4%")."""
+    return int(math.floor(round(p * 1000, 6) + 0.5))
+
+
 def D(s):
     return date.fromisoformat(s[:10])
 
@@ -485,35 +491,38 @@ def _app(r, names, size_of, paisa, pf_by, load, E, S, SET):
             o.append(int(round(v)) if num(v) else None)
         bnd[k2] = enc(o)
 
-    # updates (📦) inside the span with the engine's verdict level
+    # updates (📦) with the engine's verdict level — ALL of them up to the span's end (the owner: "no trim"): the
+    # install-week grid draws its 📦 lines over the app's whole history, and a range reaches back as far as the data
     rel = []
     for u in (af.get('impact') or {}).get('updates') or []:
-        if u.get('date') and S <= u['date'] <= E:
+        if u.get('date') and u['date'] <= E:
             v = u.get('verdict') or {}
             rel.append([u['date'], u.get('label') or 'App update', v.get('level'), bool(v.get('final'))])
     seen = {x[0] for x in rel}
     for x in af.get('releases') or []:
-        if S <= x['date'] <= E and x['date'] not in seen and not any(0 <= diff(z[0], x['date']) <= 3 for z in rel):
+        if x.get('date') and x['date'] <= E and x['date'] not in seen and not any(0 <= diff(z[0], x['date']) <= 3 for z in rel):
             rel.append([x['date'], ('v' + x['version']) if x.get('version') else 'App update', None, False])
             seen.add(x['date'])
     rel.sort()
 
-    # return grid: newest install weeks × day 1 / 3 / 7 / 14 / 30 (the engine's tri rows)
+    # return grid: EVERY install week (newest first) × day 1 / 3 / 7 / 14 / 30 — the engine's tri rows, all of them since
+    # the app's start (the test installs before a launch stay out, as the older table hides them); a week with no
+    # return data from GA4 / part data / GA4's old limit unchecked gets a 6th item, flags: 1 no data · 2 part · 4 '?'
     tw = []
     for row in (tri.get('rows') or []):
-        if row.get('pre') or row.get('nodata'):
+        if row.get('pre') or not row.get('from') or not row.get('to'):
             continue
         v = row.get('v') or []
         pv = row.get('prov') or []
-        vals = [int(round(v[k] * 1000)) if k < len(v) and num(v[k]) else None for k in TRI_COLS]
-        if all(x is None for x in vals):
-            continue
-        bits = int(''.join('1' if (k < len(pv) and pv[k]) else '0' for k in TRI_COLS), 2)
-        tw.append([row.get('from'), row.get('to'), row.get('users'), enc(vals), bits])
-        if len(tw) >= TRI_WEEKS:
-            break
+        nd = bool(row.get('nodata'))
+        vals = [None if nd else (_k1000(v[k]) if k < len(v) and num(v[k]) else None) for k in TRI_COLS]
+        bits = 0 if nd else int(''.join('1' if (k < len(pv) and pv[k]) else '0' for k in TRI_COLS), 2)
+        w = [row.get('from'), row.get('to'), row.get('users'), enc(vals), bits]
+        fl = (1 if nd else 0) | (2 if row.get('part') else 0) | (4 if row.get('q') else 0)
+        tw.append(w + [fl] if fl else w)
+    tw.sort(key=lambda z: z[0], reverse=True)                # (newest first, as the older table)
     ref = tri.get('ref') or []
-    tref = [int(round(ref[k] * 1000)) if k < len(ref) and num(ref[k]) else None for k in TRI_COLS]
+    tref = [_k1000(ref[k]) if k < len(ref) and num(ref[k]) else None for k in TRI_COLS]
 
     T = af.get('tiles') or {}
     st_rng = []
