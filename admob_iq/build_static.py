@@ -193,6 +193,16 @@ def _split_tail(a, s):
     return " · " + t if t else ""
 
 
+def notify_status(s):
+    """The Alerts screen's Telegram / Email lines: is each channel really sending? Booleans only — never a token, chat id or
+    address. A channel sends only with NOTIFY_DRY_RUN off AND its setup in place (send_telegram / send_email skip otherwise)."""
+    live = not s.get("notify_dry_run", True)
+    smtp = s.get("smtp") or {}
+    return {"dry_run": not live,
+            "telegram": bool(live and s.get("telegram_token") and s.get("telegram_chat")),
+            "email": bool(live and smtp.get("host") and smtp.get("to"))}
+
+
 def send_alerts(dashboard, s):
     """Telegram gets the urgent ones live; email gets the full daily digest.
     dry_run (the default until creds are set) just formats — nothing leaks.
@@ -1158,6 +1168,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # the dashboard now matches their AdMob app.
     dashboard["report_tz"] = report_tz
     dashboard["report_tz_label"] = _tz_label(report_tz)
+    dashboard["notify"] = notify_status(s)              # Alerts screen: Telegram / Email On or Off (read-only)
     # Freshness stamp (UTC) so the UI can show "last updated X min ago".
     dashboard["generated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     # Data-integrity summary: proves the pull has no truncation holes (or names any it found).

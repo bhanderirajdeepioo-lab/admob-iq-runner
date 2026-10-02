@@ -401,6 +401,9 @@
   .stlnk{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;margin:-8px -6px -8px 0;vertical-align:middle;border-radius:8px;
     color:var(--muted);text-decoration:none;font-size:13px;font-weight:700}
   .stlnk:hover,.stlnk:focus-visible{color:var(--cyan);background:var(--raise)}
+  /* ===== Alerts (B-12): rule / channel status is plain text, not a switch — nothing on this page turns them on or off ===== */
+  .rule .rst{flex:none;min-width:34px;font-size:11.5px;font-weight:800;color:var(--muted);white-space:nowrap}
+  .rule .rst.on{color:var(--good)}
   /* ===== Uninstall (GA4) tab — wide tables scroll inside their card with the first column pinned ===== */
   #uni-root .lnk{color:var(--cyan);cursor:pointer;font-weight:600}
   .uni-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -4472,6 +4475,14 @@ function rangeAlertCard(){ const ra=(DATA.range_alerts||[]).filter(x=>!APP||x.ap
   return `<div class="card" style="margin-bottom:14px;border-color:#5a3a3a;background:linear-gradient(160deg,#241320,var(--panel))">
     <div class="ct"><h3>⚠️ ${ra.length} ${ra.length===1?'placement':'placements'} out of their <b>approved range</b></h3><span class="lnk" onclick="show('baseline')">Open in Baseline →</span></div>
     ${rows}${ra.length>12?`<div class="faint" style="font-size:11px;padding-top:6px">+${ra.length-12} aur… (Baseline tab me poora)</div>`:''}</div>`; }
+// Alerts → Notifications: what the last data build says about each channel (DATA.notify, booleans only) — read-only text,
+// never a switch: sending is turned on in the setup (GitHub settings), not on this page
+function ntSt(ch){ const n=DATA&&DATA.notify; if(!n||typeof n!=='object') return '<span class="rst" title="Status agle data refresh ke baad dikhega">—</span>';
+  return n[ch]?'<span class="rst on">✓ On</span>':'<span class="rst">Off</span>'; }
+function ntNote(){ const n=DATA&&DATA.notify, how='Critical turant, warnings hourly batch.', set=' On / Off setup (GitHub settings) se hota hai, is page se nahi.';
+  if(!n||typeof n!=='object') return how+set+' Status agle data refresh ke baad yahan dikhega.';
+  if(n.dry_run) return 'Abhi test mode (dry run) — koi message nahi jaata.'+set;
+  return how+(n.telegram&&n.email?'':(n.telegram||n.email?' Jo Off hai uska setup baaki hai.':' Dono ka setup baaki hai.'))+set; }
 function renderAlerts(){
   const s=screenDiv('alerts');const a=DATA.alerts;
   const items=(a.items||[]).filter(x=>!APP||x.app===APP);
@@ -4508,8 +4519,8 @@ function renderAlerts(){
     <div class="chips"><span class="chip on" onclick="filterAlerts('all')">All</span><span class="chip" onclick="filterAlerts('critical')">🔴 Critical</span><span class="chip" onclick="filterAlerts('warning')">🟠 Warning</span><span class="chip" style="margin-left:8px" onclick="filterAlerts('revenue')">Revenue</span><span class="chip" onclick="filterAlerts('requests')">Requests</span><span class="chip" onclick="filterAlerts('match_rate')">Match rate</span><span class="chip" onclick="filterAlerts('ctr')">CTR</span></div>
     <div class="row c3"><div class="span2" style="display:grid;gap:10px;align-content:start">${list}</div>
     <div style="display:grid;gap:14px;align-content:start">
-      <div class="card"><div class="ct"><h3>Alert rules</h3></div><div class="muted" style="font-size:12px;margin:-4px 0 10px">Sirf un placements pe jinki revenue <b style="color:var(--ink2)">us app ke total ka ≥${pctTxt}</b> ho${minU?` (ya min ${minU}/day)`:''}${appFloor!=null?` — ${appIcon(APP,14,'ail')}${APP} ≈ ${money(appFloor)}/day`:''} — improvements yahan nahi (wo Movers me).</div>${rules.map((r,i)=>`<div class="rule"><span class="tgl"></span><div style="flex:1">${r[0]}</div><span class="pill ${r[2]}">${r[1]}</span></div>`).join('')}<div style="font-size:11px;color:var(--muted);margin-top:9px">Compare: <b>aakhri poora din</b> (kal${DATA.latest_complete?', '+smpD(DATA.latest_complete):''}) vs <b>pichhle 7 dino ka median</b>. Aaj (adhura din) count nahi hota. Har data pull pe check.</div></div>
-      <div class="card"><div class="ct"><h3>Notifications</h3></div><div class="rule"><span style="font-size:15px">✈️</span><div style="flex:1">Telegram <span class="muted" style="font-size:11px">· free</span></div><span class="tgl"></span></div><div class="rule"><span style="font-size:15px">✉️</span><div style="flex:1">Email <span class="muted" style="font-size:11px">· free</span></div><span class="tgl"></span></div><div style="font-size:11px;color:var(--muted);margin-top:9px">Critical turant, warnings hourly batch.</div></div>
+      <div class="card"><div class="ct"><h3>Alert rules</h3></div><div class="muted" style="font-size:12px;margin:-4px 0 10px">Sirf un placements pe jinki revenue <b style="color:var(--ink2)">us app ke total ka ≥${pctTxt}</b> ho${minU?` (ya min ${minU}/day)`:''}${appFloor!=null?` — ${appIcon(APP,14,'ail')}${APP} ≈ ${money(appFloor)}/day`:''} — improvements yahan nahi (wo Movers me).</div>${rules.map((r,i)=>`<div class="rule"><span class="rst on">✓ On</span><div style="flex:1">${r[0]}</div><span class="pill ${r[2]}">${r[1]}</span></div>`).join('')}<div style="font-size:11px;color:var(--muted);margin-top:9px">Ye rules engine me fixed hain — har data pull pe chalte hain, yahan se on / off nahi hote. Compare: <b>aakhri poora din</b> (kal${DATA.latest_complete?', '+smpD(DATA.latest_complete):''}) vs <b>pichhle 7 dino ka median</b>. Aaj (adhura din) count nahi hota. Har data pull pe check.</div></div>
+      <div class="card"><div class="ct"><h3>Notifications</h3></div><div class="rule"><span style="font-size:15px">✈️</span><div style="flex:1">Telegram <span class="muted" style="font-size:11px">· free</span></div>${ntSt('telegram')}</div><div class="rule"><span style="font-size:15px">✉️</span><div style="flex:1">Email <span class="muted" style="font-size:11px">· free</span></div>${ntSt('email')}</div><div style="font-size:11px;color:var(--muted);margin-top:9px">${ntNote()}</div></div>
     </div></div>`;
   return s;
 }
