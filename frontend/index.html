@@ -17236,7 +17236,7 @@ function onKey(e){ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.
 function want(v){ if(VIEWS.indexOf(v)<0) v='today'; if(ON&&FILE) setView(v); else ST.view=v; }
 return {sync, paint, retry, on:()=>ON, ready:()=>!!FILE, view:SV, want,
   _:{get FILE(){ return FILE; }, get A(){ return A; }, ST, TIPS, CH, render, prep, setView, openDrawer, closeDrawer, cardAct, featAct, snzAct, bulkAct, decAct, panelAct,
-     get PNL(){ return PNL; }, typing, flushLater, doOk, doKal, hctx, dayHtml, hRowAct, hBulk, hPanelAct, hBack, hAdm, hst, HF, get CX(){ return CX; }, mapHtml, heroHtml, listHtml, sumHtml, histHtml, drawerHtml:k=>drawerHtml(AK[k]), tableHtml:()=>tableHtml(visible()), load:(j)=>{ FILE=j; FA={}; (j&&j.apps||[]).forEach(a=>{ FA[a.key]=a; }); FKEY=j?(j.day+'|'+j.card_built_at+'|'+((ptr()||{}).v||'')):''; ERR=''; }, fail:()=>{ FILE=null; FKEY=''; const p=ptr(); ERR=p?(p.day+'|'+p.card+'|'+(p.v||'')):'x'; ERRAT=Date.now(); }, syncNow}};
+     get PNL(){ return PNL; }, typing, flushLater, doOk, doKal, tw, hctx, dayHtml, hRowAct, hBulk, hPanelAct, hBack, hAdm, hst, HF, get CX(){ return CX; }, mapHtml, heroHtml, listHtml, sumHtml, histHtml, drawerHtml:k=>drawerHtml(AK[k]), tableHtml:()=>tableHtml(visible()), load:(j)=>{ FILE=j; FA={}; (j&&j.apps||[]).forEach(a=>{ FA[a.key]=a; }); FKEY=j?(j.day+'|'+j.card_built_at+'|'+((ptr()||{}).v||'')):''; ERR=''; }, fail:()=>{ FILE=null; FKEY=''; const p=ptr(); ERR=p?(p.day+'|'+p.card+'|'+(p.v||'')):'x'; ERRAT=Date.now(); }, syncNow}};
 })();
 /* ==== RS:END ==== */
 

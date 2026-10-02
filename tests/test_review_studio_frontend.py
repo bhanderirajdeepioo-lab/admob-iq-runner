@@ -346,3 +346,15 @@ def test_history_a_teammate_sees_the_same_day_without_the_admin_buttons(report):
     h = T["html"]
     assert "data-rshact" not in h and "data-rshbulk" not in h and "🔒 Ye din band ho chuka" in h
     assert all(f'data-rshapp="{a["key"]}"' in h for a in report["_fx"]["day"]["apps"])
+
+
+# ── 📱 chart labels never overlap (the owner: key values printed on the charts — and readable on a phone) ──────────────
+def test_chart_labels_never_overlap_at_any_width_and_keep_the_key_values(report):
+    L = report["labels"]
+    assert L["charts"] > 150 and L["texts"] > 1500                            # every chart of every card, 4 widths × ₹/$
+    assert L["issues"] == [] and L["missing"] == []                           # no overlap, nothing outside, key values on
+    for w in ("360", "375", "414"):                                           # a phone: short dates (no weekday) …
+        assert all(not re.search(r"\b(?:Mo|Tu|We|Th|Fr|Sa|Su) \d", x) for x in L["xl"][w]), (w, L["xl"][w])
+    assert any(re.search(r"\b(?:Mo|Tu|We|Th|Fr|Sa|Su) \d", x) for x in L["xl"]["1280"])     # … a wide screen: the full ones
+    html = _css()
+    assert "function LB(){" in html and "function xAxis(" in html and "function tw(" in html

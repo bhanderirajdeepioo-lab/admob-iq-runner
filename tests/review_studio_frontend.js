@@ -277,6 +277,33 @@ async function step(name, code) {
     const h=RVS._.dayHtml(${JSON.stringify(PD)}); RVS._.hRowAct('ok',${JSON.stringify(P.noted)},null); RV.me=me; return {html:h, adm:RVS._.hAdm(${JSON.stringify(PD)})}; })()`);
   out.r_hteam = { req: reqs() };
   out.hhist = HIST.slice(h0);
+  // ── 📱 chart labels: every app's full card and list card, at 360 / 375 / 414 / 1280, in $ and ₹, with long amounts
+  // (the series ×60, uneven): no two labels of a chart overlap, none leaves its chart, the key values are printed ──
+  await step('labels', `(()=>{ const out={charts:0, texts:0, issues:[], missing:[], xl:{}};
+    const st=JSON.parse(JSON.stringify(__FX.studio)); st.apps.forEach((a,k)=>{ ['y','us','k7','kp7'].forEach(f=>{ if(a[f]!=null) a[f]=a[f]*60; });
+      if(a.ser) a.ser=a.ser.map((v,i,s)=>i===s.length-1?a.y:Math.round(a.us*(0.72+0.5*Math.abs(Math.sin(i*1.7+k))))); });
+    const d0=RV.doc; RV.doc=JSON.parse(JSON.stringify(RV.doc)); RV.doc.apps.forEach(a=>{ ['y','us','k7','kp7'].forEach(f=>{ if(a[f]!=null) a[f]=a[f]*60; }); });
+    RVS._.closeDrawer(true); RVS._.load(st); RVS._.syncNow(); RVS._.prep();
+    const strip=t=>t.replace(/<[^>]*>/g,'').replace(/&(?:amp|lt|gt|quot|#39);/g,'x');
+    const check=(html,where,keys)=>{ const re=/<svg class="rs-(?:chart|spk)"[^>]*viewBox="0 0 ([\\d.]+) ([\\d.]+)"[^>]*aria-label="([^"]*)"[^>]*>([\\s\\S]*?)<\\/svg>/g; let m;
+      while((m=re.exec(html))){ const W=+m[1], cap=m[3], R=[]; out.charts++;
+        const tr=/<text x="([-\\d.]+)" y="([-\\d.]+)" text-anchor="(\\w+)" font-size="([\\d.]+)" font-weight="(\\d+)"[^>]*>([\\s\\S]*?)<\\/text>/g; let t;
+        while((t=tr.exec(m[4]))){ const x=+t[1], y=+t[2], fs=+t[4], txt=strip(t[6]), w=RVS._.tw(txt,fs,+t[5]); out.texts++;
+          if(t[3]!=='start') out.issues.push([where,cap,'anchor',txt]);
+          const r={x0:x,x1:x+w,y0:y-fs*0.95,y1:y+fs*0.3,t:txt};
+          if(r.x0<-0.5||r.x1>W+0.5) out.issues.push([where,cap,'outside',txt,Math.round(r.x0),Math.round(r.x1),W]);
+          R.forEach(q=>{ if(Math.min(r.x1,q.x1)-Math.max(r.x0,q.x0)>0.5&&Math.min(r.y1,q.y1)-Math.max(r.y0,q.y0)>0.5) out.issues.push([where,cap,'overlap',q.t,txt]); }); R.push(r); }
+        (keys[cap]||[]).forEach(k=>{ if(!R.some(q=>q.t===k)) out.missing.push([where,cap,k]); });
+        if(/^App AdMob revenue/.test(cap)) (out.xl[where.split(' ')[0]]=out.xl[where.split(' ')[0]]||new Set()).add(R.filter(q=>q.y0>130).map(q=>q.t).join('|')); } };
+    const fx=RV.doc.fx, M=(v,s)=>rvMoney(v,s||'',0,0,fx);
+    for(const w of [360,375,414,1280]) for(const cur of ['USD','INR']){ innerWidth=w; CURVIEW=cur;
+      RVS._.A.forEach(a=>{ const k=a.key, keys={'App AdMob revenue · /day':a.ser?[M(a.ser[a.ser.length-1]),'usual/day',M(a.us)]:[]};
+        check(RVS._.drawerHtml(k), w+' '+cur+' '+k, keys);
+      });
+      const L=RVS._.listHtml(); check(L, w+' '+cur+' list', {});   // (every list card's sparkline: Yesterday and usual on it)
+      RVS._.A.forEach(a=>{ if(!a.ser) return; ['Yesterday '+M(a.y),'usual '+M(a.us,'/day')].forEach(t=>{ if(strip(L).indexOf(t)<0) out.missing.push([w+' '+cur,'spark',a.key,t]); }); }); }
+    innerWidth=1280; CURVIEW='USD'; RV.doc=d0; RVS._.load(__FX.studio); RVS._.syncNow(); RVS._.prep();
+    Object.keys(out.xl).forEach(k=>{ out.xl[k]=[...out.xl[k]]; }); out.issues=out.issues.slice(0,20); out.missing=out.missing.slice(0,20); return out; })()`);
   out.errors = errors;
   process.stdout.write(JSON.stringify(out));
 })();
