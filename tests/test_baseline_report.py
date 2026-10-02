@@ -159,6 +159,23 @@ def test_split_moves_pre_span_days_to_old_without_losing_any():
         assert o[k] + r[k] == daily["U1"][k]
 
 
+def test_geo_country_series_never_trims_history_beyond_old_cap():
+    # the owner's rule: NEVER trim history. A country with more months than the old (since-removed)
+    # 13-month GEO_SERIES_MONTHS cap must carry every one of them in its baseline_geo series — the
+    # ad-unit page's single-month (🗓️) stepper reaches any month the portfolio has, and used to go
+    # silently blank past 13 months for this exact reason.
+    months = ["2024-%02d" % m for m in range(1, 13)] + ["2025-%02d" % m for m in range(1, 4)]  # 15 months
+    assert len(months) == 15
+    cells = [_cell("U1", "US", mo, 30, 10000, 9000, 8000, 80, 40_000_000, 0.008, 0.012, 4.5, 5.5)
+             for mo in months]
+    acm = nest_monthly({"units": {}, "data": {}}, cells)
+    rep = build_baseline(acm, nest_daily([]), active_since="2020-01")
+    uid = rep["units"][0]["id"]
+    row = next(c for c in rep["unit_geo"][uid] if c["country"] == "US")
+    assert row["series"]["mo"] == months                      # all 15 months, not the last 13
+    assert len(row["series"]["ecpm"]) == 15
+
+
 def _drow(unit, country, day, req, matched, impr, clicks, earn):
     return dict(ad_unit_id=unit, country=country, report_date=day, app_id="a",
                 app_name="App", unit_name="u", ad_requests=req, matched_requests=matched,

@@ -4768,6 +4768,7 @@ function adDailyPanel(appName){
   const S=adDailySeries(appName);
   if(!S.d.length) return `<div class="card span2" style="margin-bottom:14px"><div class="ct"><h3>📅 Daily graph</h3></div><div class="faint" style="font-size:12.5px;padding:14px 4px">Is app ka daily data nahi.</div></div>`;
   const idx=adDailyWin(S.d); const days=idx.map(i=>S.d[i]);
+  const spanYr=bSpansYears(days[0],days[days.length-1]);   // ≥11 months showing → the axis / tooltip / label need the year
   const RGS=[['30d','30 days'],['90d','3 months'],['all','All time'],['custom','Custom']];
   const rgChips=RGS.map(([w,lab])=>`<button onclick="adDWin('${w}')" style="border:1px solid ${ADRANGE===w?'var(--cyan)':'var(--line2)'};background:${ADRANGE===w?'rgba(61,208,240,.16)':'var(--panel)'};color:${ADRANGE===w?'#fff':'var(--ink2)'};font:inherit;font-size:12px;font-weight:${ADRANGE===w?650:400};padding:5px 11px;border-radius:8px;cursor:pointer">${lab}</button>`).join('');
   const d0=S.d[0], dN=S.d[S.d.length-1];
@@ -4787,9 +4788,9 @@ function adDailyPanel(appName){
         <span style="font-weight:700;color:#fff;font-size:13.5px"><i style="width:9px;height:9px;border-radius:50%;background:${cfg.col};display:inline-block;margin-right:6px"></i>${cfg.lab}</span>
         <span style="color:${cfg.col};font-weight:700;font-size:13px">now ${bDFmt(k,st.latest)}</span>
         <span class="faint" style="font-size:11.5px">this window — low ${bDFmt(k,st.min)} · high ${bDFmt(k,st.max)} · avg ${bDFmt(k,st.avg)}</span></div>`;
-      return `<div style="margin:6px 0 12px">${head}${bTrendChart(days,vals,{color:cfg.col,fmt:v=>bDFmt(k,v),xlab:bDay})}</div>`;
+      return `<div style="margin:6px 0 12px">${head}${bTrendChart(days,vals,{color:cfg.col,fmt:v=>bDFmt(k,v),xlab:d=>bDay(d,spanYr)})}</div>`;
     }).join(''); }
-  const winLbl=ADRANGE==='all'?`full ${S.d.length}-day history`:(ADRANGE==='custom'?(days.length?`${bDay(days[0])} – ${bDay(days[days.length-1])} · ${days.length} days`:'custom'):(ADRANGE==='90d'?'last 90 days':'last 30 days'));
+  const winLbl=ADRANGE==='all'?`full ${S.d.length}-day history`:(ADRANGE==='custom'?(days.length?`${bDay(days[0],spanYr)} – ${bDay(days[days.length-1],spanYr)} · ${days.length} days`:'custom'):(ADRANGE==='90d'?'last 90 days':'last 30 days'));
   return `<div class="card span2" style="margin-bottom:14px;border-color:#2b3f5e">
     <div class="ct"><h3>📅 ${appIcon(appName,18,'ail')}${appName} · daily graph</h3><span class="faint" style="font-size:11.5px">${winLbl} · pick a metric to see it daily · hover for value</span></div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:2px 0 2px">${rgChips}</div>${customBox}
@@ -5606,7 +5607,11 @@ function placementGeo(p){
 const BDCFG=[{k:'ecpm',lab:'eCPM',col:'#3dd0f0'},{k:'rev',lab:'Revenue',col:'#4ade80'},{k:'ctr',lab:'CTR',col:'#f0a63d'},
              {k:'match',lab:'Match rate',col:'#a78bfa'},{k:'show',lab:'Show rate',col:'#f472b6'},{k:'req',lab:'Requests',col:'#94a3b8'}];
 const BDLAB={ecpm:'eCPM',rev:'Revenue',ctr:'CTR',match:'Match rate',show:'Show rate',req:'Requests'};
-function bDay(d){ if(!d)return''; const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; const p=(''+d).split('-'); if(p.length<3)return d; return (+p[2])+' '+(MO[(+p[1])-1]||p[1]); }
+function bDay(d,yr){ if(!d)return''; const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; const p=(''+d).split('-'); if(p.length<3)return d;
+  const s=(+p[2])+' '+(MO[(+p[1])-1]||p[1]); return yr?s+" '"+p[0].slice(2):s; }   // yr: append "'YY" (same short form as bMon)
+// true when a (ascending ISO) date range spans ≥11 months — ambiguous across years without one ("20 Jun" could be
+// any of 3+ years on an "All time" chart), so the axis / tooltip / window label then carries the year too.
+function bSpansYears(d0,dN){ if(!d0||!dN) return false; const y0=+d0.slice(0,4),m0=+d0.slice(5,7),y1=+dN.slice(0,4),m1=+dN.slice(5,7); return (y1-y0)*12+(m1-m0)>=11; }
 function bDFmt(k,v){ if(v==null||isNaN(v))return'—';
   if(k==='rev')return csym()+(+v*cfx()).toLocaleString(undefined,{maximumFractionDigits:(+v*cfx()<100?2:0)});
   if(k==='req')return (+v).toLocaleString();
@@ -5653,6 +5658,7 @@ function bDailyPanel(u){
       <i style="width:9px;height:9px;border-radius:50%;background:${on?m.col:'#3a4a66'};display:inline-block"></i>${m.lab}${isAl?' <span style="font-size:9.5px;color:#ffb4b4">●alert</span>':''}</button>`;}).join('');
   // one small-multiple chart per selected metric
   const idx=bDailyWin(rec); const days=idx.map(i=>rec.d[i]);
+  const spanYr=bSpansYears(days[0],days[days.length-1]);   // ≥11 months showing → the axis / tooltip / label need the year
   const sel=(BDMETS||[]);
   let charts;
   if(!sel.length){ charts=`<div class="faint" style="font-size:12.5px;padding:16px 4px">Upar se ek ya zyada metric select karo — uska daily graph yahan aayega.</div>`; }
@@ -5662,9 +5668,9 @@ function bDailyPanel(u){
         <span style="font-weight:700;color:#fff;font-size:13.5px"><i style="width:9px;height:9px;border-radius:50%;background:${cfg.col};display:inline-block;margin-right:6px"></i>${cfg.lab}</span>
         <span style="color:${cfg.col};font-weight:700;font-size:13px">now ${bDFmt(k,st.latest)}</span>
         <span class="faint" style="font-size:11.5px">this window — low ${bDFmt(k,st.min)} · high ${bDFmt(k,st.max)} · avg ${bDFmt(k,st.avg)}</span></div>`;
-      return `<div style="margin:6px 0 12px">${head}${bTrendChart(days,vals,{color:cfg.col,fmt:v=>bDFmt(k,v),xlab:bDay})}</div>`;
+      return `<div style="margin:6px 0 12px">${head}${bTrendChart(days,vals,{color:cfg.col,fmt:v=>bDFmt(k,v),xlab:d=>bDay(d,spanYr)})}</div>`;
     }).join(''); }
-  const winLbl=BDRANGE==='all'?`full ${rec.d.length}-day history`:(BDRANGE==='custom'?(days.length?`${bDay(days[0])} – ${bDay(days[days.length-1])} · ${days.length} days`:'custom'):(BDRANGE==='90d'?'last 90 days':'last 30 days'));
+  const winLbl=BDRANGE==='all'?`full ${rec.d.length}-day history`:(BDRANGE==='custom'?(days.length?`${bDay(days[0],spanYr)} – ${bDay(days[days.length-1],spanYr)} · ${days.length} days`:'custom'):(BDRANGE==='90d'?'last 90 days':'last 30 days'));
   return `<div class="card span2" style="margin-bottom:14px;border-color:#2b3f5e">
     <div class="ct"><h3>📅 ${u.name} · daily graph</h3><span class="faint" style="font-size:11.5px">${winLbl} · ${isAlertDef?'alert wali metric auto-selected':'metric select karke daily dekho'}</span></div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:2px 0 2px">${rgChips}</div>${customBox}

@@ -98,16 +98,17 @@ def _series_stats(by_month):
             "months_n": len(months)}
 
 
-GEO_SERIES_MONTHS = 13        # per-country series cap: covers 3m/6m/12m windows (All time uses the prebuilt range)
 GEO_SERIES_TOP = 40           # only the top-N countries per unit (by revenue) carry a series — the tiny tail
                               # keeps its prebuilt all-time range (period recompute focuses on countries that matter)
 
 
 def _series_from_agg(ser, cap=None):
     """Compact per-month series (already-aggregated monthly points) so the UI can recompute the
-    standard range / latest / status / trend for ANY chosen window (3m / 6m / 12m / all) without a
-    re-fetch. Short arrays keyed by metric + impressions + revenue per month. `cap` keeps only the
-    most recent N months (used for the huge per-country geo file; units keep full history)."""
+    standard range / latest / status / trend for ANY chosen window (3m / 6m / 12m / all), or any
+    single month, without a re-fetch. Short arrays keyed by metric + impressions + revenue per
+    month. `cap` (optional, unused by any current caller — the owner's rule is "no trim": every
+    series ships every month) keeps only the most recent N months, if a future caller ever needs
+    a bounded series again."""
     ms = sorted(ser)
     if cap and len(ms) > cap:
         ms = ms[-cap:]
@@ -309,8 +310,12 @@ def build_baseline(acm, acd, *, active_since=None, top_countries=12):
 
     def _country_list(country_month_cells, with_series=False):
         """Country baseline rows for a {country: {month: [cells]}} map (app-level A + unit-level).
-        `with_series` attaches the (capped) monthly series to the TOP `GEO_SERIES_TOP` countries by
-        revenue only — the tiny tail keeps its prebuilt all-time range, so the geo file stays lean."""
+        `with_series` attaches the FULL monthly series (every month the country has — the owner:
+        "no trim") to the TOP `GEO_SERIES_TOP` countries by revenue only — the tiny tail keeps its
+        prebuilt all-time range, so the geo file stays focused on the countries that matter. The
+        series feeds BOTH the 3m/6m/12m/All period picker AND the single-month (🗓️) stepper on an
+        ad-unit's own page, and that stepper reaches ANY month the portfolio's market trend has —
+        capping the series here used to make an older month's per-country numbers go silently blank."""
         tmp = []
         for c, months_cells in country_month_cells.items():
             ser = {m: _agg_month(cells) for m, cells in months_cells.items()}
@@ -321,7 +326,7 @@ def build_baseline(acm, acd, *, active_since=None, top_countries=12):
         if with_series:
             for i, (row, ser) in enumerate(tmp):
                 if i < GEO_SERIES_TOP:
-                    row["series"] = _series_from_agg(ser, cap=GEO_SERIES_MONTHS)
+                    row["series"] = _series_from_agg(ser)
         return [row for row, _ in tmp]
 
     units_out = []
