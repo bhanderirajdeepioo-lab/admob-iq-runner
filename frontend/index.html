@@ -1579,6 +1579,42 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
 :is(#rs-root,#rs-layer) .rs-foot{font-size:12px;color:var(--muted)}
 :is(#rs-root,#rs-layer) .rs-foot summary{cursor:pointer;color:var(--ink2);font-weight:600}
 :is(#rs-root,#rs-layer) .rs-foot ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px;max-width:110ch}
+/* ---------- 📅 History: the picked day (summary · every app · admin fixes) and a past day's read-only card ---------- */
+:is(#rs-root,#rs-layer) .rs-hsum{display:grid;grid-template-columns:minmax(0,150px) minmax(0,150px) minmax(0,1fr);gap:10px;padding:0 18px 12px}
+:is(#rs-root,#rs-layer) .rs-hst{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:9px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+:is(#rs-root,#rs-layer) .rs-hst .rs-t,:is(#rs-root,#rs-layer) .rs-hby .rs-t{font:600 10.5px/1.2 var(--rs-num);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+:is(#rs-root,#rs-layer) .rs-hst b{font:700 26px/1.1 var(--rs-num);font-variant-numeric:tabular-nums;color:var(--ink)}
+:is(#rs-root,#rs-layer) .rs-hst small{font-size:11.5px;color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-hst.rs-hst-ok{border-color:rgba(52,217,154,.4)}:is(#rs-root,#rs-layer) .rs-hst.rs-hst-ok b{color:var(--good)}
+:is(#rs-root,#rs-layer) .rs-hst.rs-hst-pend{border-color:rgba(230,184,78,.45)}:is(#rs-root,#rs-layer) .rs-hst.rs-hst-pend b{color:var(--watch)}
+:is(#rs-root,#rs-layer) .rs-hby{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:9px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+:is(#rs-root,#rs-layer) .rs-hbyl{display:flex;flex-wrap:wrap;gap:6px}
+:is(#rs-root,#rs-layer) .rs-pill.rs-p-adm{color:var(--purple);border-color:rgba(167,139,250,.45);background:var(--purple-b)}
+:is(#rs-root,#rs-layer) .rs-hadm{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:0 18px 10px}
+:is(#rs-root,#rs-layer) .rs-hadm .rs-hint{flex:1 1 260px}
+:is(#rs-root,#rs-layer) .rs-hlist{list-style:none;margin:0;padding:0 12px 12px;display:flex;flex-direction:column}
+:is(#rs-root,#rs-layer) .rs-hr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:9px 6px;border-bottom:1px solid rgba(33,50,73,.6);min-width:0}
+:is(#rs-root,#rs-layer) .rs-hr:last-child{border-bottom:0}
+:is(#rs-root,#rs-layer) .rs-hr.rs-hr-pend{background:linear-gradient(90deg,rgba(230,184,78,.06),transparent 60%)}
+:is(#rs-root,#rs-layer) .rs-happ{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:9px;flex:1 1 240px;min-width:0;min-height:44px;border-radius:9px;padding:3px 6px}
+:is(#rs-root,#rs-layer) .rs-happ:hover{background:var(--raise)}
+:is(#rs-root,#rs-layer) .rs-happ:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+:is(#rs-root,#rs-layer) .rs-hnm{display:flex;flex-direction:column;min-width:0;flex:1;gap:1px}
+:is(#rs-root,#rs-layer) .rs-hnm .rs-nmt{font-weight:650;color:var(--ink);overflow-wrap:anywhere;line-height:1.3}
+:is(#rs-root,#rs-layer) .rs-hrv{font-size:11.5px;color:var(--faint)}
+:is(#rs-root,#rs-layer) .rs-hgo{color:var(--cyan);font-size:20px;line-height:1;flex:none}
+:is(#rs-root,#rs-layer) .rs-hr>.rs-pill{flex:none;margin-left:auto}
+:is(#rs-root,#rs-layer) .rs-hmeta{flex:1 0 100%;font-size:12px;line-height:1.45;color:var(--ink2);padding-left:37px;display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere}
+:is(#rs-root,#rs-layer) .rs-hacts{flex:1 0 100%;padding-left:37px;margin-top:4px}
+:is(#rs-root,#rs-layer) .rs-hr>.rs-pslot{flex:1 0 100%;min-width:0}
+:is(#rs-root,#rs-layer) .rs-hr>.rs-pslot:not(:empty){padding:6px 0 2px 37px}
+:is(#rs-root,#rs-layer) .rs-hnm2{display:flex;flex-direction:column;gap:6px}
+:is(#rs-root,#rs-layer) .rs-hnm2 .rs-radio{align-items:flex-start;min-height:32px;line-height:1.35}
+:is(#rs-root,#rs-layer) .rs-hnm2 .rs-radio input{margin-top:2px;flex:none}
+:is(#rs-root,#rs-layer) .rs-hbl{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--ink2);max-height:160px;overflow:auto}
+:is(#rs-root,#rs-layer) .rs-robar{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;border:1px solid var(--line2);background:var(--panel2);border-radius:11px;padding:9px 12px;font-size:12.5px;color:var(--ink2);line-height:1.45}
+:is(#rs-root,#rs-layer) .rs-robar>span:last-child{flex:1 1 240px;min-width:0}
+:is(#rs-root,#rs-layer) .rs-dpast{color:var(--cyan)}
 /* ---------- tooltip / key help ---------- */
 #rs-tip{position:fixed;z-index:95;pointer-events:none;background:#0b1424;border:1px solid var(--line2);border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.45;color:var(--ink2);box-shadow:0 12px 30px rgba(0,0,0,.5);max-width:min(340px,calc(100vw - 20px));opacity:0;visibility:hidden;transition:opacity .1s;left:0;top:0}
 #rs-tip.rs-on{opacity:1;visibility:visible}
@@ -1672,6 +1708,15 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
   #rs-root .rs-st th:first-child,#rs-root .rs-st th:nth-child(2){z-index:3;background:var(--panel2)}
   #rs-root .rs-st tbody tr:hover td:is(:first-child,.rs-app){background:linear-gradient(rgba(28,44,71,.55),rgba(28,44,71,.55)),var(--panel)}
   #rs-root .rs-st tbody tr.rs-kf td:is(:first-child,.rs-app){background:linear-gradient(rgba(34,211,238,.08),rgba(34,211,238,.08)),var(--panel)}
+  /* 📅 History's picked day: the two counts side by side, "Reviewed by" under them; the app rows use the full width */
+  #rs-root .rs-hsum{grid-template-columns:repeat(2,minmax(0,1fr));padding:0 14px 12px}
+  #rs-root .rs-hby{grid-column:1/-1}
+  #rs-root .rs-hlist{padding:0 6px 10px}
+  #rs-root .rs-hr{padding:9px 4px}
+  #rs-root .rs-hr>.rs-pslot:not(:empty){padding-left:0}
+  #rs-root .rs-hr>.rs-pill{margin-left:37px}
+  #rs-root .rs-hadm{padding:0 14px 10px}
+  #rs-root .rs-cd .rs-cx{font-size:14px}   /* the "reviewed/apps" count inside a 7-column phone calendar cell */
 }
 @media (max-width:1000px){#rs-layer .rs-dk{grid-template-columns:repeat(2,minmax(0,1fr))}#rs-layer .rs-fgrid{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:720px){
@@ -14957,7 +15002,7 @@ const RV_WDAY=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Satu
 const RV_DEC={theek:"OK",kaam:"Assign task",band:"Close",done:"Done"};
 const RV_DEC_LAB={theek:"Theek hai — koi kaam nahi. Note (zaroori nahi):",kaam:"Kaam do — kya karna hai, kisko?",
   band:"Band karo — kya band karna hai (ad unit / campaign / rollout)?",done:"Kaam ho gaya — kya kiya? (zaroori nahi)"};
-const RV_ACT_LAB={ok:"✅ Reviewed",note:"📝 Note",kal:"🔁 Check again tomorrow",flag:"🚩 Re-review",unflag:"🚩 Removed",
+const RV_ACT_LAB={ok:"✅ Reviewed",note:"📝 Note",note_edit:"📝 Note edited",kal:"🔁 Check again tomorrow",flag:"🚩 Re-review",unflag:"🚩 Removed",
   undo:"↩ Undone",snooze:"💤 Snoozed",unsnooze:"💤 Snooze removed",bulk_ok:"✅ Group reviewed",decide:"🧑‍💼 Decision"};
 const RV_FX={v:null};   // fallback rate holder (the page passes doc.fx explicitly wherever it renders money)
 // Detail links → the dashboard tab for that feature (SPEC §C.6 RV_LINK)
@@ -15806,7 +15851,7 @@ function rvAfter(P,d,keys){ if(P==="t"){ rvUpdateToday(keys,true); rvRenderSum()
 // quietly re-read a History day after an admin correction (its log, notes, flags as the server has them)
 function rvHistSync(d){ try{ clearTimeout(RV.hsyncT); RV.hsyncT=setTimeout(async()=>{ try{ if(!RV.me||!RV.hS[d]) return;
       const r=await rvApi("GET","day?d="+encodeURIComponent(d)); if(!r.ok||!r.data||r.data.d!==d) return;
-      RV.hS[d]={...rvS(r.data,d),me:RV.me};
+      RV.hS[d]={...rvS(r.data,d),me:RV.me}; try{ RVS.sync(); }catch(e){}   // (the Studio's History too: its log, its "admin fix")
       if(RV.histDay===d&&!Object.keys(RV.pn).some(id=>id.indexOf("hc:")===0||id.indexOf("hf:")===0||id==="g:hist")){ const fo=document.activeElement&&document.activeElement.id; rvRenderHistDay(d,false);
         if(fo){ const el=document.getElementById(fo); if(el) try{ el.focus({preventScroll:true}); }catch(_){} } } }catch(e){} },900); }catch(e){} }
 async function rvAction(btn,P,d,body,okMsg,panelId){
@@ -15950,8 +15995,16 @@ const ST={mode:'cards',filter:'all',q:'',sort:{k:'order',d:1},gsort:'order',gfea
 // the Studio's OWN view (Today's review / Summary / History): set only by the Studio's tabs, its links and the #review hash.
 // The older views in the "🗂 Old views" fold keep RV.view — a tab picked there never switches the Studio.
 const VIEWS=['today','sum','hist'], SV=()=>VIEWS.indexOf(ST.view)>=0?ST.view:'today';
-let PNL=null;            // the one open panel: {slot, kind, key, f, fid, dec, g, keys, days, draft, opener}
-const HLOAD={}, HERR={}; let CALLOAD=false, CALAT=0;
+let PNL=null;            // the one open panel: {slot, kind, key, f, fid, dec, g, keys, days, draft, opener, d (History), mode}
+const HLOAD={}, HERR={}, HF={}; let CALLOAD=false, CALAT=0;   // HF[d]: a past day's Studio file {st:'load'|'ok'|'none', j}
+// 📅 History: a PAST day is drawn from that day's own frozen files only — its card document (review/days/<d>.json.gz),
+// its Studio file when the index names one, its review state as it stood at the end of that day (rvHistS) — never from
+// today's. CX = that day's context while its parts are drawn (inDay swaps FILE / FA / A / AK and DOC() / S0() read it);
+// null = the open day (the live Studio). A past day is read-only: canW() is false inside it.
+let CX=null;
+const DOC=()=>CX?CX.doc:RV.doc;
+function inDay(x,fn){ if(!x) return fn(); const s0=[FILE,FA,A,AK,CX]; FILE=x.file; FA=x.FA; A=x.A; AK=x.AK; CX=x;
+  try{ return fn(); }finally{ [FILE,FA,A,AK,CX]=s0; } }
 try{ const s=JSON.parse(localStorage.getItem('rs_pref_v1')||'{}'); if(s.mode==='table'||s.mode==='cards') ST.mode=s.mode; }catch(e){}
 function savePref(){ try{ localStorage.setItem('rs_pref_v1',JSON.stringify({mode:ST.mode})); }catch(e){} }
 const $=id=>document.getElementById(id);
@@ -15968,7 +16021,7 @@ const ST_TXT={pend:'⏳ Pending',ok:'✅ Reviewed',note:'📝 Reviewed + note',f
 const ST_CLS={pend:'rs-p-pend',ok:'rs-p-ok',note:'rs-p-ok',flag:'rs-p-flag',kal:'rs-p-kal'};
 const DEC={theek:'👍 Fine · close',kaam:'🛠 Assign fix',band:'⛔ Stop',done:'✅ Fix done'};
 const DEC_LAB={theek:'Fine — koi kaam nahi. Note (zaroori nahi):',kaam:'Assign fix — kya karna hai, kisko? (zaroori)',band:'Stop — kya band karna hai (ad unit / campaign / rollout)? (zaroori)',done:'Fix done — kya kiya? (zaroori nahi)'};
-const ACT={ok:'✅ Reviewed',note:'📝 Note',kal:'🔁 Check again tomorrow',flag:'🚩 Re-review',unflag:'🚩 Removed',undo:'↩ Undo',snooze:'💤 Snoozed',unsnooze:'💤 Snooze removed',bulk_ok:'✅ Reviewed (group)',decide:'🧑‍💼 Admin decision'};
+const ACT={ok:'✅ Reviewed',note:'📝 Note',note_edit:'📝 Note edited',kal:'🔁 Check again tomorrow',flag:'🚩 Re-review',unflag:'🚩 Removed',undo:'↩ Undo',snooze:'💤 Snoozed',unsnooze:'💤 Snooze removed',bulk_ok:'✅ Reviewed (group)',decide:'🧑‍💼 Admin decision'};
 const isBad=s=>s==='red'||s==='amber';
 const RM=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
 
@@ -15984,7 +16037,7 @@ const esc=s=>rvEsc(s);
 const nf=new Intl.NumberFormat('en-US');
 const trim=s=>s.indexOf('.')>=0?s.replace(/0+$/,'').replace(/\.$/,''):s;
 const MI='−';
-const FXR=()=>Number((FILE&&FILE.meta&&FILE.meta.fx)||(RV.doc&&RV.doc.fx))||null;
+const FXR=()=>Number((FILE&&FILE.meta&&FILE.meta.fx)||(DOC()&&DOC().fx))||null;
 const INR=()=>{ try{ return curView()==='INR'; }catch(e){ return false; } };
 // money: the older tab's own spans (rvMSpan) — ₹ / $ follows the dashboard's currency and rvPaint repaints them
 const mH=(usd,o)=>{ o=o||{}; if(usd==null||!isFinite(usd)) return '—'; return rvMSpan({usd:+usd,s:o.s||'',sign:o.sign?1:0,p:o.p?2:0},FXR(),o.tag); };
@@ -15996,7 +16049,8 @@ const when=iso=>{ const t=rvWhen(iso); return t?t+' IST':''; };
 const rng=(a,b)=>(!a||!b)?fd(a||b):(String(a).slice(0,7)===String(b).slice(0,7)?(+String(a).slice(8,10))+'–'+fd(b):fd(a)+'–'+fd(b));
 
 /* ================= the file (and the apps of the card on screen) ================= */
-function ptr(){ const I=RV.idx, d=(RV.doc&&RV.doc.day)||(I&&I.open_day), p=I&&I.studio&&d?I.studio[d]:null;
+function ptr(){ const I=RV.idx, d=(RV.doc&&RV.doc.day)||(I&&I.open_day); return d?ptrOf(d):null; }
+function ptrOf(d){ const I=RV.idx, p=I&&I.studio&&d?I.studio[d]:null;
   return (p&&typeof p.file==='string'&&/^review\/studio\/\d{4}-\d{2}-\d{2}\.json\.gz$/.test(p.file)&&typeof p.card==='string')?Object.assign({day:d},p):null; }
 function valid(j,p){ return !!(j&&j.v===1&&j.day===p.day&&j.card_built_at===p.card&&j.meta&&Array.isArray(j.apps)&&Array.isArray(j.feats)); }
 function load(p,k){ LOADING=true;
@@ -16008,23 +16062,23 @@ function retry(){ ERR=''; ERRAT=0; sync(); }
 function fromDoc(a){ const F={}; FID().forEach(f=>{ const x=(a.f&&a.f[f])||{}; F[f]={st:x.st||'nodata',line:x.line,t:x.t,info:x.info||[],kis:x.kis||null,q:null,k:null}; });
   return {key:a.key,id:a.app_id,name:a.name||a.dname||a.key,tag:'',acct:a.acct||'',pkg:a.pkg||'',dname:a.dname||'',size:a.size,small:!!a.small,
     k7:a.k7,kp7:a.kp7,y:a.y,us:a.us,spend:a.spend,tier:a.tier,nb:a.nb||[],head:a.head||{},top:null,icon:null,ser:null,f:F,x:{},raw:true}; }
-function S0(){ return RV.S||rvEmptyS(RV.doc&&RV.doc.day); }
+function S0(){ return CX?CX.S:(RV.S||rvEmptyS(RV.doc&&RV.doc.day)); }
 function prep(){ const doc=RV.doc, S=S0(), L=rvLayout(doc,S), ord=L.top.concat(L.ok,L.small); A=[]; AK={};
   ord.forEach((k,i)=>{ const d=rvAppOf(doc,k); if(!d) return; const base=FA[k]||fromDoc(d);
     const a=Object.assign({},base,{grp:L.top.indexOf(k)>=0?'top':(L.ok.indexOf(k)>=0?'ok':'small'),rank:i+1,trank:L.top.indexOf(k)+1,doc:d});
     A.push(a); AK[k]=a; });
   return L; }
-const effSt=(a,f)=>rvEffSt(RV.doc,S0(),a.key,f);
+const effSt=(a,f)=>rvEffSt(DOC(),S0(),a.key,f);
 const stOf=k=>rvStOf(S0(),k);
 const bads=a=>FID().filter(f=>isBad(effSt(a,f))).sort((x,y)=>SEV[effSt(a,y)]-SEV[effSt(a,x)]);
 const nRed=a=>FID().filter(f=>effSt(a,f)==='red').length, nAmb=a=>FID().filter(f=>effSt(a,f)==='amber').length;
-const isNB=(a,f)=>(a.nb||[]).indexOf(f)>=0&&!rvSnz(RV.doc,S0(),a.key,f);
-const nbOf=a=>(a.nb||[]).filter(f=>!rvSnz(RV.doc,S0(),a.key,f));
-const fInfo=(k,f)=>rvFlagInfo(RV.doc,S0(),k,f);
+const isNB=(a,f)=>(a.nb||[]).indexOf(f)>=0&&!rvSnz(DOC(),S0(),a.key,f);
+const nbOf=a=>(a.nb||[]).filter(f=>!rvSnz(DOC(),S0(),a.key,f));
+const fInfo=(k,f)=>rvFlagInfo(DOC(),S0(),k,f);
 const featFlag=(k,f)=>{ const x=fInfo(k,f); return x.today||x.carry||null; };
 const openFlags=k=>(S0().flags||[]).filter(x=>x.app===k&&(x.status==='open'||x.status==='kaam'));
 const doneN=()=>A.filter(a=>stOf(a.key)!=='pend').length;
-const canW=()=>rvCanWrite();
+const canW=()=>!CX&&rvCanWrite();
 const nameP=a=>String(a.name||'').trim()+(a.tag?' '+a.tag:'')+' · '+(a.acct||'');
 const topFeat=a=>{ const B=bads(a); if(a.top&&isBad(effSt(a,a.top))) return a.top; return B[0]||a.top||null; };
 
@@ -16076,7 +16130,7 @@ const avH=(a,cls)=>{ const u=iconOf(a), ch=esc((String(a.name||'?').trim()[0]||'
 const nameH=a=>`<span class="rs-nmt">${esc(String(a.name||'').trim())}${a.tag?` <span class="rs-tagw">${esc(a.tag)}</span>`:''} <span class="rs-acn">· ${esc(a.acct)}</span></span>`;
 const chipSt=s=>`<span class="rs-chip rs-st-${s}"><i></i>${STW[s]||s}</span>`;
 const ageH=g=>g?`<span class="rs-age ${g.k!=='open'?'rs-new':''}">${esc(g.txt)}</span>`:'';
-const pillH=k=>{ const s=stOf(k); return `<span class="rs-pill ${ST_CLS[s]}">${ST_TXT[s]}</span>`; };
+const pillH=k=>{ if(CX&&!CX.known) return '<span class="rs-pill">— Not loaded</span>'; const s=stOf(k); return `<span class="rs-pill ${ST_CLS[s]}">${ST_TXT[s]}</span>`; };
 const WHY={'first card':'on the first card','feature started':'when the feature started'};
 function cameT(x){ const f=x.first; if(!f) return ''; return '🕒 Came '+(f.at?when(f.at):fd(f.d))+(f.why?' · '+(WHY[f.why]||f.why):''); }
 function winT(x){ const k=x.q?x.q.kis:rtp(x.kis); return k?'📊 '+k:''; }
@@ -16282,8 +16336,8 @@ function actsHtml(a,inDrawer){ const k=a.key, s=stOf(k), ro=!canW(), dis=ro?` di
   const has=s!=='pend'||(S0().notes||[]).some(n=>n.app===k)||(S0().flags||[]).some(x=>x.app===k&&x.day===RV.doc.day&&x.status==='open');
   const ai=fInfo(k,'app');
   return `<div class="rs-acts" role="group" aria-label="Review actions"><button type="button" class="rs-btn rs-ok" id="${P}-ok-${esc(k)}" data-rsact="ok" data-k="${esc(k)}" aria-pressed="${s==='ok'||s==='note'}"${dis}>✅ Got it · Reviewed</button><button type="button" class="rs-btn" id="${P}-note-${esc(k)}" data-rsact="note" data-k="${esc(k)}"${dis}>📝 Note</button><button type="button" class="rs-btn rs-imp" id="${P}-imp-${esc(k)}" data-rsact="imp" data-k="${esc(k)}" role="checkbox" aria-checked="${s==='flag'||!!ai.today}"${dis}>🚩 Important · Re-review</button><button type="button" class="rs-btn rs-kal" id="${P}-kal-${esc(k)}" data-rsact="kal" data-k="${esc(k)}" aria-pressed="${s==='kal'}" title="Khud kal dobara dekhna hai — admin ko nahi jaata"${ro?' disabled':''}>🔁 Check again tomorrow</button>${has?`<button type="button" class="rs-btn rs-ghost" id="${P}-undo-${esc(k)}" data-rsact="undo" data-k="${esc(k)}"${dis}>↩ Undo</button>`:''}${inDrawer?'':`<button type="button" class="rs-btn rs-open" id="${P}-open-${esc(k)}" data-rsact="open" data-k="${esc(k)}">Open full card ›</button>`}</div>`; }
-function byHtml(a){ const k=a.key, S=S0(), s=S.states[k], st=stOf(k), d=RV.doc.day; let L=[];
-  if(!s) L.push(`<span>⏳ Not reviewed yet · card frozen ${fd(d)}, ${esc(FILE.meta.built_ist)} IST</span>`);
+function byHtml(a){ const k=a.key, S=S0(), s=S.states[k], st=stOf(k), d=DOC().day; let L=[];
+  if(!s) L.push(`<span>${CX&&!CX.known?'Review status not loaded (review server nahi mila)':`⏳ ${CX?'Pending — not reviewed that day':'Not reviewed yet'}`} · card frozen ${fd(d)}, ${esc(FILE.meta.built_ist)} IST</span>`);
   else L.push(`<span class="rs-lg">${ST_TXT[st==='note'?'ok':st]} · <b>${rvWho(s.who)}</b> · ${esc(when(s.at))}${s.st==='kal'?' <span class="rs-faint">· kal ke card pe upar aayega (sirf aapke liye)</span>':''}</span>`);
   (S.notes||[]).filter(n=>n.app===k).forEach(n=>L.push(`<span class="rs-lg">📝 <b>${rvWho(n.who)}</b> · ${esc(when(n.at))}: <span class="rs-ink">${esc(n.text)}</span></span>`));
   (S.flags||[]).filter(x=>x.app===k&&x.status!=='withdrawn'&&(x.day===d||x.status==='open'||x.status==='kaam')).forEach(x=>{
@@ -16319,10 +16373,12 @@ function dbIn(){ const d=$('rs-drawer'); let w=Math.min(1000,innerWidth)-2;
   return Math.max(286,w-(innerWidth<=720?28:36)); }
 function dwW(){ return dbIn()-26; }
 function featBlock(a,f,wide){ const x=a.f[f]||{}, s=effSt(a,f), fi=fInfo(a.key,f), ff=fi.today||fi.carry, W=(wide?dbIn():Math.max(286,(dbIn()-12)/(innerWidth<=1000?1:2)))-28, ro=!canW();
-  const z=rvSnz(RV.doc,S0(),a.key,f), raw=(a.f[f]||{}).st;
-  const flab=fi.today?'🚩 Flagged ✓':(fi.carry?`🚩 ${dDiff(fi.carry.day,RV.doc.day)} days open`:(fi.kaam?'🛠 Fix assigned':'🚩 Flag'));
-  let h=`<div class="rs-fb rs-s-${s} ${wide?'rs-wide':''}" id="rs-fb-${f}"><div class="rs-fb-h"><span class="rs-fe">${FI(f)}</span><b>${esc(FN(f))}</b>${chipSt(s)}${ageH(x.age)}${isNB(a,f)?'<span class="rs-nbchip">🆕 New & worse</span>':''}<span class="rs-ff"><button type="button" class="rs-fbtn" id="rs-ff-${esc(a.key)}-${f}" role="checkbox" aria-checked="${!!ff}" data-rsff="${esc(a.key)}:${f}" aria-label="🚩 Important · Re-review — ${esc(FN(f))}"${ro?' disabled':''}>${flab}</button>${isBad(raw)?`<button type="button" class="rs-fbtn" id="rs-sz-${esc(a.key)}-${f}" data-rssnz="${esc(a.key)}:${f}"${ro?' disabled':''}>${z?'💤 Snoozed till '+fd(z.until):'💤 Snooze'}</button>`:''}</span></div>`;
-  h+=`<div class="rs-pslot" id="rs-fps-${f}"></div>`;   // the 🚩 / 💤 panel: right under its buttons (not after the charts)
+  const z=rvSnz(DOC(),S0(),a.key,f), raw=(a.f[f]||{}).st;
+  const flab=fi.today?'🚩 Flagged ✓':(fi.carry?`🚩 ${dDiff(fi.carry.day,DOC().day)} days open`:(fi.kaam?'🛠 Fix assigned':'🚩 Flag'));
+  const btns=CX?(ff||fi.kaam?`<span class="rs-pill rs-pxs ${fi.kaam&&!ff?'rs-p-kaam':'rs-p-flag'}">${ff?'🚩 Flagged':'🛠 Fix assigned'}</span>`:'')+(z?`<span class="rs-pill rs-pxs">💤 Snoozed</span>`:'')   // a past day: what was on it, no buttons
+    :`<button type="button" class="rs-fbtn" id="rs-ff-${esc(a.key)}-${f}" role="checkbox" aria-checked="${!!ff}" data-rsff="${esc(a.key)}:${f}" aria-label="🚩 Important · Re-review — ${esc(FN(f))}"${ro?' disabled':''}>${flab}</button>${isBad(raw)?`<button type="button" class="rs-fbtn" id="rs-sz-${esc(a.key)}-${f}" data-rssnz="${esc(a.key)}:${f}"${ro?' disabled':''}>${z?'💤 Snoozed till '+fd(z.until):'💤 Snooze'}</button>`:''}`;
+  let h=`<div class="rs-fb rs-s-${s} ${wide?'rs-wide':''}" id="rs-fb-${f}"><div class="rs-fb-h"><span class="rs-fe">${FI(f)}</span><b>${esc(FN(f))}</b>${chipSt(s)}${ageH(x.age)}${isNB(a,f)?'<span class="rs-nbchip">🆕 New & worse</span>':''}<span class="rs-ff">${btns}</span></div>`;
+  if(!CX) h+=`<div class="rs-pslot" id="rs-fps-${f}"></div>`;   // the 🚩 / 💤 panel: right under its buttons (not after the charts)
   h+=`<div class="rs-ln">${rt(lineOf(x))}</div>`;
   if(x.q){ h+=`<dl class="rs-q">${kitShow(x)?`<dt>How big</dt><dd>${kitShow(x)}</dd>`:''}<dt>Since</dt><dd>${esc(cameT(x))}${x.age?' · '+ageH(x.age):''}${x.age&&x.age.start?` · issue started ${fd(x.age.start)}`:''}${x.since?' · '+esc(x.since):''}</dd><dt>Data</dt><dd>${esc(winT(x))}${x.prov!=null?' · '+provH(x):''}</dd>${x.q.abhi?`<dt>Now</dt><dd>${rt(x.q.abhi)}</dd>`:''}${x.q.saath?`<dt>Also</dt><dd>${rt(x.q.saath)}</dd>`:''}</dl>`;
     if(x.q.karo) h+=`<div class="rs-next"><b>Next step:</b> ${esc(x.q.karo)}</div>`; }
@@ -16335,11 +16391,11 @@ function featBlock(a,f,wide){ const x=a.f[f]||{}, s=effSt(a,f), fi=fInfo(a.key,f
   if(f==='mediation') h+=medChart(a);
   if(f==='kamai'&&a.ser) h+=`<div class="rs-ts"><span>📈 14-day revenue chart upar hai</span></div>`;
   if(x.more&&x.more.length) h+=`<div class="rs-more"><span class="rs-eyebrow2">More in ${esc(FN(f))} (${x.more.length})</span>${x.more.map(m=>`<div class="rs-mr"><span class="rs-chip rs-st-${m.w==='info'?'wait':esc(m.w)} rs-chs"><i></i>${m.w==='info'?'Info':(STW[m.w]||'')}</span> ${rt(m.fact)}<small>${esc(m.src)} · ${esc(m.meta||'')}</small></div>`).join('')}</div>`;
-  h+=`<button type="button" class="rs-btn rs-sm rs-ghost rs-golink" data-rsgolink="${esc(a.key)}:${f}">Open in dashboard: ${esc(x.tab||RV_FEAT_TAB[f]||'dashboard')} ›</button></div>`;
-  return h; }
-function drawerHtml(a){ const k=a.key, B=bads(a), O=FID().filter(f=>B.indexOf(f)<0), M=FILE.meta, kp=rel(a.k7,a.kp7), r=rel(a.y,a.us);
-  let h=`<div class="rs-dh">${avH(a,'rs-lg')}<div class="rs-t"><div class="rs-eyebrow rs-opt">Full card · #${a.rank} of ${A.length} · ${esc(GRP[a.grp])}</div><h3>${esc(String(a.name).trim())}${a.tag?` <span class="rs-tagw">${esc(a.tag)}</span>`:''} <span class="rs-acn">· ${esc(a.acct)}</span></h3><div class="rs-l2"><span class="rs-sz ${a.size==='badi'?'rs-badi':''}">${SIZE[a.size]||'—'}</span>${nbOf(a).length?'<span class="rs-nbchip">🆕 New & worse</span>':''}<span id="rs-dw-pill">${pillH(k)}</span><span class="rs-opt">Revenue till ${fd(M.admob_till)}${M.ga4_till?' · users till '+fd(M.ga4_till):''}</span></div></div><div class="rs-nav"><button class="rs-icb" type="button" data-rsdnav="-1" aria-label="Previous app (k)">‹</button><button class="rs-icb" type="button" data-rsdnav="1" aria-label="Next app (j)">›</button><button class="rs-icb" type="button" data-rsdclose="1" id="rs-dclose" aria-label="Close">✕</button></div></div>`;
-  h+=`<div class="rs-db"><div id="rs-dw-acts">${actsHtml(a,true)}</div><div id="rs-dw-pslot" class="rs-pslot"></div>`;
+  if(!CX) h+=`<button type="button" class="rs-btn rs-sm rs-ghost rs-golink" data-rsgolink="${esc(a.key)}:${f}">Open in dashboard: ${esc(x.tab||RV_FEAT_TAB[f]||'dashboard')} ›</button>`;
+  return h+'</div>'; }
+function drawerHtml(a){ const k=a.key, B=bads(a), O=FID().filter(f=>B.indexOf(f)<0), M=FILE.meta, kp=rel(a.k7,a.kp7), r=rel(a.y,a.us), past=!!CX, dd=DOC().day;
+  let h=`<div class="rs-dh">${avH(a,'rs-lg')}<div class="rs-t"><div class="rs-eyebrow ${past?'rs-dpast':'rs-opt'}">${past?`📅 ${esc(wd(dd))}, ${fd(dd)} · frozen card · read-only`:`Full card · #${a.rank} of ${A.length} · ${esc(GRP[a.grp])}`}</div><h3>${esc(String(a.name).trim())}${a.tag?` <span class="rs-tagw">${esc(a.tag)}</span>`:''} <span class="rs-acn">· ${esc(a.acct)}</span></h3><div class="rs-l2"><span class="rs-sz ${a.size==='badi'?'rs-badi':''}">${SIZE[a.size]||'—'}</span>${nbOf(a).length?'<span class="rs-nbchip">🆕 New & worse</span>':''}<span id="rs-dw-pill">${pillH(k)}</span><span class="rs-opt">Revenue till ${fd(M.admob_till)}${M.ga4_till?' · users till '+fd(M.ga4_till):''}</span></div></div><div class="rs-nav"><button class="rs-icb" type="button" data-rsdnav="-1" aria-label="Previous app (k)">‹</button><button class="rs-icb" type="button" data-rsdnav="1" aria-label="Next app (j)">›</button><button class="rs-icb" type="button" data-rsdclose="1" id="rs-dclose" aria-label="Close">✕</button></div></div>`;
+  h+=past?`<div class="rs-db">${roBar(a)}`:`<div class="rs-db"><div id="rs-dw-acts">${actsHtml(a,true)}</div><div id="rs-dw-pslot" class="rs-pslot"></div>`;
   h+=`<div class="rs-dk"><div class="rs-kpi"><div class="rs-kl">Yesterday<span class="rs-kh">${fd(M.admob_till)}</span></div><div class="rs-kv">${mH(a.y)}</div><div class="rs-kd ${r>=0.1?'rs-up':(r<=-0.1?'rs-dn':'rs-fl')}">${mH((+a.y||0)-(+a.us||0),{sign:1})} (${pct(r)}) <span class="rs-vs">vs usual</span></div></div>`
    +`<div class="rs-kpi"><div class="rs-kl">Usual<span class="rs-kh">${M.usual?fd(M.usual.from)+'–'+fd(M.usual.to):''}</span></div><div class="rs-kv">${mH(a.us)}<small>/day</small></div><div class="rs-kd rs-fl"><span class="rs-vs">7-day daily avg</span></div></div>`
    +`<div class="rs-kpi"><div class="rs-kl">Last 7 days<span class="rs-kh">${M.w7?fd(M.w7.from)+'–'+fd(M.w7.to):''}</span></div><div class="rs-kv">${mH(a.k7)}<small>/day</small></div><div class="rs-kd ${kp>=0.1?'rs-up':(kp<=-0.1?'rs-dn':'rs-fl')}">${pct(kp)} <span class="rs-vs">vs ${mH(a.kp7,{s:'/day'})} before</span></div></div>`
@@ -16347,18 +16403,24 @@ function drawerHtml(a){ const k=a.key, B=bads(a), O=FID().filter(f=>B.indexOf(f)
   if(a.ser) h+=`<div class="rs-chartp"><div class="rs-cap">AdMob revenue per day · ${fd(M.d14[0])}–${fd(M.d14[13])} · dotted = usual${M.usual?' ('+fd(M.usual.from)+'–'+fd(M.usual.to)+' avg)':''}</div>${revChart(a,dwW())}</div>`;
   h+=`<div class="rs-sect"><h4>Issues · ${B.length}</h4>${B.length?`<div class="rs-fgrid">${B.map(f=>featBlock(a,f,true)).join('')}</div>`:'<div class="rs-muted rs-small">Koi Worse / Watch nahi ✅</div>'}</div>`;
   h+=`<div class="rs-sect"><h4>Other features · ${O.length}</h4><div class="rs-fgrid">${O.map(f=>featBlock(a,f,(f==='uninstall'&&a.x&&a.x.un)||(f==='active'&&a.x&&a.x.ret)||(f==='mediation'&&a.x&&a.x.med))).join('')}</div></div>`;
-  h+=`<div class="rs-sect"><h4>Note</h4><div class="rs-pnl"><label for="rs-dw-note">Team ke liye note (is app ke liye)</label><textarea id="rs-dw-note" maxlength="600" placeholder="Jaise: developer ko bata diya, kal update aayega"${canW()?'':' disabled'}>${esc(ST.dnote||'')}</textarea><div class="rs-row2"><button type="button" class="rs-btn" id="rs-dw-notesave" data-rsdwnote="${esc(k)}"${canW()?'':' disabled'}>Save note</button><span class="rs-cc" id="rs-dw-cc">${(ST.dnote||'').length} / 600</span></div></div></div>`;
-  h+=`<div class="rs-sect"><h4>This app today · who did what</h4>${byHtml(a)}<div class="rs-logl">${(S0().log||[]).filter(x=>x.app===k).map(x=>`<span>${logTxt(x)} <span class="rs-e">· ${rvWho(x.who)} · ${esc(when(x.at))}</span></span>`).join('')||'<span class="rs-e">Aaj is card pe abhi kuchh nahi hua</span>'}</div><button type="button" class="rs-btn rs-sm rs-ghost rs-golink" data-rsv="hist">History (calendar) ›</button></div>`;
+  if(!past) h+=`<div class="rs-sect"><h4>Note</h4><div class="rs-pnl"><label for="rs-dw-note">Team ke liye note (is app ke liye)</label><textarea id="rs-dw-note" maxlength="600" placeholder="Jaise: developer ko bata diya, kal update aayega"${canW()?'':' disabled'}>${esc(ST.dnote||'')}</textarea><div class="rs-row2"><button type="button" class="rs-btn" id="rs-dw-notesave" data-rsdwnote="${esc(k)}"${canW()?'':' disabled'}>Save note</button><span class="rs-cc" id="rs-dw-cc">${(ST.dnote||'').length} / 600</span></div></div></div>`;
+  h+=`<div class="rs-sect"><h4>${past?`This app on ${esc(wd(dd).slice(0,3))}, ${fd(dd)}`:'This app today'} · who did what</h4>${byHtml(a)}<div class="rs-logl">${(S0().log||[]).filter(x=>x.app===k).map(x=>`<span>${logTxt(x)} <span class="rs-e">· ${rvWho(x.who)} · ${esc(when(x.at))}</span></span>`).join('')||`<span class="rs-e">${past?'Us din is card pe kisi ne kuchh nahi kiya':'Aaj is card pe abhi kuchh nahi hua'}</span>`}</div>${past?'':'<button type="button" class="rs-btn rs-sm rs-ghost rs-golink" data-rsv="hist">History (calendar) ›</button>'}</div>`;
   if(a.pkg) h+=`<div class="rs-pkg">${esc(a.pkg)}</div>`;
   return h+'</div>'; }
+// a past day's card: what it is (Read-only, the day, when it froze) instead of the buttons — admin fixes live in the list
+function roBar(a){ const d=DOC().day, M=FILE.meta, adm=hAdm(d);
+  return `<div class="rs-robar" role="note"><span class="rs-pill rs-pxs">🔒 Read-only</span> <span><b>${esc(wd(d))}, ${fd(d)}</b> ka card — jaisa review ke waqt tha (🧊 frozen ${fd(d)}, ${esc(M.built_ist||'')} IST). Buttons sirf aaj ke card pe hain.${CX.studio?'':' Is din ki Studio file site pe nahi, isliye card ka apna text dikh raha hai (charts nahi).'}${adm?' Admin sudhaar (✅ / 📝 / ↩) History ki list me hai.':''}</span></div>`; }
 function logTxt(x){ const e=x.extra&&typeof x.extra==='object'?x.extra:{}; let w=ACT[x.act]||esc(x.act);
   if(x.act==='decide') w='🧑‍💼 Decision: '+esc(DEC[e.decision]||e.decision||''); if(x.act==='snooze'&&e.days) w+=' '+e.days+' days'; if(e.bulk) w=ACT.bulk_ok;
   return w+(x.feature?' · '+esc(FN(x.feature)):(x.act==='flag'?' · Whole app':''))+(x.note?': “'+esc(x.note)+'”':'')+(e.admin_fix?' <span class="rs-faint">(admin fix)</span>':''); }
-function renderDrawer(keep){ const a=AK[ST.drawer]; const d=$('rs-drawer'); if(!a||!d){ closeDrawer(true); return; }
-  const top=keep?d.scrollTop:0; d.innerHTML=drawerHtml(a); paint(); if(keep) d.scrollTop=top; fillPanel(); }
+let DX=null;   // the context a PAST day's full card was drawn with (its tooltips read the same)
+function renderDrawer(keep){ const x=ST.dday?hctx(ST.dday):null, a=ST.dday?(x&&x.AK[ST.drawer]):AK[ST.drawer]; const d=$('rs-drawer'); DX=x; if(!a||!d){ closeDrawer(true); return; }
+  const top=keep?d.scrollTop:0; d.innerHTML=x?inDay(x,()=>drawerHtml(a)):drawerHtml(a); paint(); if(keep) d.scrollTop=top; fillPanel(); }
 // 📱 the phone's Back (Android back button / iOS edge swipe) closes the full card: the dashboard's one Back mechanism
 // (hbOv: one history step while the card is open; any close on the page takes the step off again)
-function openDrawer(k,f,noFocus){ layer(); if(!AK[k]) return; hideTip(); closePanel(true); ST.drawer=k; ST.focus=k; ST.dnote=''; renderDrawer(false);
+// day (History): a PAST day's frozen card, read-only (ST.dday); none / the open day = today's card
+function openDrawer(k,f,noFocus,day){ layer(); const past=!!day&&day!==((RV.idx&&RV.idx.open_day)||''), x=past?hctx(day):null; if(past?!(x&&x.AK[k]):!AK[k]) return;
+  hideTip(); closePanel(true); ST.dday=past?day:null; ST.drawer=k; if(!past) ST.focus=k; ST.dnote=''; renderDrawer(false);
   const d=$('rs-drawer'); d.classList.add('rs-on'); d.setAttribute('aria-hidden','false'); $('rs-scrim').classList.add('rs-on'); document.body.classList.add('rs-lock');
   try{ hbOv('rs-drawer',true,()=>closeDrawer(false,true)); }catch(e){}
   ST.dOpener=document.activeElement&&document.activeElement.id||null;
@@ -16366,11 +16428,11 @@ function openDrawer(k,f,noFocus){ layer(); if(!AK[k]) return; hideTip(); closePa
 // the feature's block just under the full card's sticky header (its height differs by app name and screen width)
 function toFeat(d,b){ try{ const h=d.querySelector('.rs-dh'), y=d.scrollTop+b.getBoundingClientRect().top-(h?h.getBoundingClientRect().bottom:d.getBoundingClientRect().top)-8;
   d.scrollTo({top:Math.max(0,y),behavior:RM?'auto':'smooth'}); }catch(e){ try{ b.scrollIntoView({block:'start'}); }catch(_){} } }
-function closeDrawer(quiet,fromPop){ if(ST.drawer==null) return; const k=ST.drawer; ST.drawer=null; const d=$('rs-drawer'); if(d){ d.classList.remove('rs-on'); d.setAttribute('aria-hidden','true'); d.innerHTML=''; }
-  try{ hbDrop('rs-drawer'); }catch(e){}
+function closeDrawer(quiet,fromPop){ if(ST.drawer==null) return; const k=ST.drawer, past=!!ST.dday; ST.drawer=null; ST.dday=null; const d=$('rs-drawer'); if(d){ d.classList.remove('rs-on'); d.setAttribute('aria-hidden','true'); d.innerHTML=''; }
+  try{ hbDrop('rs-drawer'); }catch(e){} DX=null;
   const sc=$('rs-scrim'); if(sc) sc.classList.remove('rs-on'); document.body.classList.remove('rs-lock'); hideTip(); if(PNL&&PNL.inDrawer) closePanel(true);
-  if(quiet) return; const c=$('rs-c-'+k); if(c&&SV()==='today') c.focus({preventScroll:true}); else if(ST.dOpener&&$(ST.dOpener)) $(ST.dOpener).focus({preventScroll:true}); }
-function dnav(dl){ const n=A.length; if(!n) return; let i=A.findIndex(a=>a.key===ST.drawer); i=(i+dl+n)%n; ST.drawer=A[i].key; ST.focus=ST.drawer; ST.dnote=''; closePanel(true); renderDrawer(false); const d=$('rs-drawer'); if(d) d.scrollTop=0; const b=$('rs-dclose'); if(b) b.focus({preventScroll:true}); }
+  if(quiet) return; const c=!past&&$('rs-c-'+k); if(c&&SV()==='today') c.focus({preventScroll:true}); else if(ST.dOpener&&$(ST.dOpener)) $(ST.dOpener).focus({preventScroll:true}); }
+function dnav(dl){ const L=ST.dday?((hctx(ST.dday)||{}).A||[]):A, n=L.length; if(!n) return; let i=L.findIndex(a=>a.key===ST.drawer); i=(i+dl+n)%n; ST.drawer=L[i].key; if(!ST.dday) ST.focus=ST.drawer; ST.dnote=''; closePanel(true); renderDrawer(false); const d=$('rs-drawer'); if(d) d.scrollTop=0; const b=$('rs-dclose'); if(b) b.focus({preventScroll:true}); }
 
 /* ================= summary ================= */
 function sumHtml(){ const S=S0(), d=RV.doc.day, n=A.length, dn=doneN(), me=RV.me; const cnt={ok:0,note:0,flag:0,kal:0,pend:0}; A.forEach(a=>cnt[stOf(a.key)]++);
@@ -16413,7 +16475,7 @@ function sumHtml(){ const S=S0(), d=RV.doc.day, n=A.length, dn=doneN(), me=RV.me
 function calOf(){ const I=RV.idx; let cal=(RV.cal&&RV.cal.days)?{...RV.cal.days}:{}; if(RV.S&&I&&I.open_day) cal[I.open_day]={...(cal[I.open_day]||{}),rev:Object.keys(RV.S.states||{}).length}; return cal; }
 function histHtml(){ const I=RV.idx||{}, first=I.go_live, last=I.open_day; if(!first||!last) return '<div class="rs-empty rs-panel">History abhi nahi</div>';
   const snap={}; (I.days||[]).forEach(x=>{ if(x&&x.d) snap[x.d]=Number(x.apps)||0; }); const cal=calOf(), sel=RV.histDay||last;
-  let h=`<section class="rs-panel"><div class="rs-ph"><div><div class="rs-eyebrow">History</div><h2>Daily review · ${fd(first)} – ${fd(last)}</h2><div class="rs-hint">History ${fd(first)} se shuru hui (jab review chalu hua) — sirf asli din dikhte hain. Har din ke cards ${esc(I.ready_ist||'09:00')} IST ke baad freeze hote hain, isliye yahan wahi dikhta hai jo review ke waqt tha.</div></div></div>`;
+  let h=`<section class="rs-panel" id="rs-hcal"><div class="rs-ph"><div><div class="rs-eyebrow">History</div><h2>Daily review · ${fd(first)} – ${fd(last)}</h2><div class="rs-hint">History ${fd(first)} se shuru hui (jab review chalu hua) — sirf asli din dikhte hain. Har din ke cards ${esc(I.ready_ist||'09:00')} IST ke baad freeze hote hain, isliye yahan wahi dikhta hai jo review ke waqt tha.</div></div></div>`;
   if(RV.calErr||(!RV.me&&!RV.cal)) h+='<div class="rs-empty">Pichhle dino ki ginti abhi nahi mili (review server) — din pe tap karke cards dekh sakte ho.</div>';
   let cur=first; const nx=I.next_snapshot?String(I.next_snapshot).slice(0,10):null;
   while(cur<=last){ const y=+cur.slice(0,4), m=+cur.slice(5,7), m0=cur.slice(0,8)+'01', dow=(new Date(P(m0)).getUTCDay()+6)%7, dim=new Date(Date.UTC(y,m,0)).getUTCDate();
@@ -16433,19 +16495,88 @@ function histHtml(){ const I=RV.idx||{}, first=I.go_live, last=I.open_day; if(!f
 function dayHtml(d){ const I=RV.idx||{}, isOpen=d===I.open_day, inIdx=(I.days||[]).some(x=>x.d===d);
   if(!inIdx) return `<section class="rs-panel"><div class="rs-ph"><div><h2>${esc(wd(d))}, ${fd(d)}</h2><div class="rs-hint">Is din ke cards nahi bane (robot ne us din snapshot nahi banaya).</div></div></div></section>`;
   const doc=isOpen?RV.doc:RV.hdocs[d], S=isOpen?S0():RV.hS[d];
-  if(!doc||!S){ if(HERR[d]) return `<section class="rs-panel"><div class="rs-empty">Is din ke cards load nahi ho paaye. <button type="button" class="rs-btn rs-sm" data-rsday="${d}">Try again</button></div></section>`; loadDay(d); return `<section class="rs-panel"><div class="rs-empty">⏳ ${fd(d)} ke cards load ho rahe hain…</div></section>`; }
-  const apps=(doc.apps||[]).filter(a=>a&&a.key), n=apps.length, cnt={ok:0,note:0,flag:0,kal:0,pend:0}; apps.forEach(a=>cnt[rvStOf(S,a.key)]++); const x=n-cnt.pend;
-  const lab=k=>{ const a=rvAppOf(doc,k); return a?(a.name||a.dname||k)+' · '+(a.acct||''):k; };
-  const built=doc.built_at?when(doc.built_at):'';
-  let h=`<section class="rs-panel"><div class="rs-ph"><div><div class="rs-eyebrow">Selected day</div><h2 id="rs-dayh" tabindex="-1">${esc(wd(d))}, ${fd(d)} · ${x}/${n} reviewed</h2>${x<n?'<div class="rs-hint rs-bad">⏳ Is din ka review baaki hai</div>':'<div class="rs-hint rs-good">✅ Sab reviewed</div>'}</div><div class="rs-right">${isOpen?'<button class="rs-btn rs-sm" type="button" data-rsv="today">Open this day\'s cards ›</button>':`<button class="rs-btn rs-sm" type="button" data-rsoldday="${d}">Open this day's cards ›</button>`}</div></div>`;
-  h+=`<div class="rs-pills rs-pstat">${[['ok','✅ Reviewed'],['note','📝 + note'],['flag','🚩 Re-review'],['kal','🔁 Tomorrow'],['pend','⏳ Pending']].map(([k,l])=>`<span class="rs-pill ${ST_CLS[k]}">${l} · ${cnt[k]}</span>`).join('')}${built?`<span class="rs-pill">🧊 frozen ${esc(built)}</span>`:''}${doc.counts?`<span class="rs-pill">${doc.counts.red} Worse · ${doc.counts.amber} Watch apps (card tier)</span>`:''}</div>`;
-  if(!isOpen) h+=`<div class="rs-hint rs-pad2">Purane din ke cards (aur admin sudhaar — ✅ / 📝 / ↩) “🗂 Old views” → History me khulte hain.</div>`;
-  h+=`<div class="rs-ph rs-ph2"><div><h2 class="rs-h14">Who did what</h2></div></div><div class="rs-lst">${(S.log||[]).length?S.log.map(y=>{ const a=y.app?rvAppOf(doc,y.app):null; return `<div class="rs-li"><div class="rs-tx">${logTxt(y)}${y.app?` — <b>${esc(lab(y.app))}</b>`:''}<br><span class="rs-mt">${rvWho(y.who)} · ${esc(when(y.at))}</span></div></div>`; }).join(''):'<div class="rs-empty">Is din abhi kisi ne kuchh nahi kiya</div>'}</div></section>`;
+  if(!doc||!S||(!isOpen&&ptrOf(d)&&(!HF[d]||HF[d].st==='load'))){ if(HERR[d]) return `<section class="rs-panel"><div class="rs-empty">Is din ke cards load nahi ho paaye. <button type="button" class="rs-btn rs-sm" data-rsday="${d}">Try again</button></div></section>`; loadDay(d); return `<section class="rs-panel"><div class="rs-empty">⏳ ${fd(d)} ke cards load ho rahe hain…</div></section>`; }
+  // the open day: the live Studio (its own apps and state); a past day: that day's own files (hctx), drawn inside them
+  const x=isOpen?{d,doc,raw:S,live:true,A:A.slice().sort(byRev),AK}:hctx(d);
+  if(!x) return `<section class="rs-panel"><div class="rs-empty">Is din ko dikhane me dikkat hui.</div></section>`;
+  return isOpen?dayBody(x):inDay(x,()=>dayBody(x)); }
+// the day's list order: revenue (the card's 7-day average a day), the biggest app first — the day page's "Revenue" order
+const byRev=(p,q)=>((+q.k7||0)-(+p.k7||0))||String(p.name||'').localeCompare(String(q.name||''));
+// one app's review on that day, from its state row: pend | ok | note (ok + a note that day) | kal | flag
+function hst(S,k){ const s=S&&S.states&&S.states[k]; if(!s||!s.st) return 'pend'; if(s.st==='flag'||s.st==='kal') return s.st; return (S.notes||[]).some(n=>n&&n.app===k)?'note':'ok'; }
+const HST={ok:['✅ Reviewed','rs-p-ok'],note:['📝 Reviewed + note','rs-p-ok'],kal:['🔁 Check again tomorrow','rs-p-kal'],flag:['🚩 Important','rs-p-flag'],pend:['⏳ Pending','rs-p-pend']};
+// History admin fixes: an admin, a PAST snapshot day the server says may be written (GET day: writable), login still on
+function hAdm(d){ const I=RV.idx||{}, S=RV.hS[d];
+  return !!(d&&RV.me&&RV.me.admin&&RV.auth!==false&&I.open_day&&d<I.open_day&&(I.days||[]).some(x=>x&&x.d===d)&&S&&S.d===d&&S.writable); }
+const hPast=d=>!!(d&&RV.idx&&RV.idx.open_day&&d<RV.idx.open_day);
+// a past day's context: its card document, its Studio file (only when the index names one for that day and it is that
+// card's), its state as it stood at the end of that day; the apps built exactly as the Studio builds today's
+function hctx(d){ const doc=RV.hdocs[d], S1=RV.hS[d]; if(!doc||!S1||doc.day!==d) return null;
+  const f=HF[d]&&HF[d].st==='ok'?HF[d].j:null, D=doc.data||{}, t=Date.parse(doc.built_at||'');
+  const file=f||{v:1,day:d,feats:null,apps:[],meta:{day:d,wday:doc.weekday||wd(d),admob_till:D.admob_till,ga4_till:D.ga4_till,settled_till:D.settled_till,ga4_lag:D.ga4_lag,
+    usual:D.usual||null,w7:D.w7||null,p7:D.p7||null,fx:doc.fx,built_ist:isNaN(t)?'':new Date(t+330*60000).toISOString().slice(11,16),d14:null,how:doc.how||[]}};
+  const x={d,doc,raw:S1,S:rvHistS(S1,d),file,studio:!!f,known:!!(RV.me&&S1.open_day),FA:{},A:[],AK:{}};   // known: the review server answered for d
+  (file.apps||[]).forEach(a=>{ if(a&&a.key) x.FA[a.key]=a; });
+  inDay(x,()=>{ const L=rvLayout(doc,x.S), ord=L.top.concat(L.ok,L.small);
+    ord.forEach((k,i)=>{ const dd=rvAppOf(doc,k); if(!dd) return; const a=Object.assign({},x.FA[k]||fromDoc(dd),{grp:L.top.indexOf(k)>=0?'top':(L.ok.indexOf(k)>=0?'ok':'small'),rank:i+1,trank:L.top.indexOf(k)+1,doc:dd});
+      x.A.push(a); x.AK[k]=a; }); });
+  x.A.sort(byRev); return x; }
+function dayBody(x){ const d=x.d, doc=x.doc, S=x.raw, I=RV.idx||{}, past=!x.live, R=x.A, n=R.length, adm=past&&hAdm(d);
+  const known=!!RV.me&&(x.live?!RV.meErr:!!(S&&S.open_day));            // the review server answered for this day
+  const cnt={ok:0,note:0,flag:0,kal:0,pend:0}; R.forEach(a=>cnt[hst(S,a.key)]++); const done=n-cnt.pend;
+  const by={}; R.forEach(a=>{ const s=S.states&&S.states[a.key]; if(s&&s.who) by[s.who]=(by[s.who]||0)+1; });
+  const who=Object.keys(by).sort((p,q)=>by[q]-by[p]||(p<q?-1:1));
+  const fixN=new Set((S.log||[]).filter(y=>y&&y.app&&y.extra&&typeof y.extra==='object'&&y.extra.admin_fix).map(y=>y.app)).size;
+  const built=doc.built_at?when(doc.built_at):'', lab=k=>{ const a=rvAppOf(doc,k); return a?(a.name||a.dname||k)+' · '+(a.acct||''):k; };
+  const yr=String(d).slice(0,4);
+  let h=`<section class="rs-panel" id="rs-hday" aria-labelledby="rs-dayh"><div class="rs-ph"><div><div class="rs-eyebrow">${past?'Selected day · read-only':'Selected day · today (open)'}</div><h2 id="rs-dayh" tabindex="-1">${esc(wd(d))}, ${fd(d)} ${esc(yr)}</h2>`
+    +`<div class="rs-hint">${[known?(cnt.pend?(past?'⏳ Is din ka review poora nahi hua':'⏳ Aaj ka review chal raha hai'):'✅ Sab apps reviewed'):'',built?`🧊 cards frozen ${esc(built)}`:''].filter(Boolean).join(' · ')}</div></div>`
+    +`<div class="rs-right">${x.live?'<button class="rs-btn rs-sm" type="button" data-rsv="today">Open today\'s review ›</button>':''}</div></div>`;
+  h+=`<div class="rs-hsum"><div class="rs-hst rs-hst-ok"><span class="rs-t">✅ Reviewed</span><b>${known?done:'—'}</b><small>of ${n} apps</small></div>`
+    +`<div class="rs-hst ${known&&cnt.pend?'rs-hst-pend':'rs-hst-zero'}"><span class="rs-t">⏳ Pending</span><b>${known?cnt.pend:'—'}</b><small>${known?(cnt.pend?(past?'not reviewed that day':'not reviewed yet'):'none'):'not loaded'}</small></div>`
+    +`<div class="rs-hby"><span class="rs-t">👤 Reviewed by</span><span class="rs-hbyl">${known?(who.length?who.map(w=>`<span class="rs-pill rs-pxs">${rvWho(w)} · ${by[w]} ${by[w]===1?'app':'apps'}</span>`).join(''):'<span class="rs-faint">Abhi kisi ne nahi</span>'):'<span class="rs-faint">—</span>'}${fixN?`<span class="rs-pill rs-pxs rs-p-adm">🧑‍💼 Admin fix · ${fixN} ${fixN===1?'app':'apps'}</span>`:''}</span></div></div>`;
+  if(known) h+=`<div class="rs-pills rs-pstat">${[['ok','✅ Reviewed'],['note','📝 + note'],['flag','🚩 Important'],['kal','🔁 Tomorrow'],['pend','⏳ Pending']].map(([k,l])=>`<span class="rs-pill ${HST[k][1]}">${l} · ${cnt[k]}</span>`).join('')}${doc.counts?`<span class="rs-pill">Card tier: ${doc.counts.red} Worse · ${doc.counts.amber} Watch apps</span>`:''}</div>`;
+  else h+=`<div class="rs-hint rs-pad2 rs-watch">⚠️ Review server se ${past?'is din':'aaj'} ki haalat nahi mili — kisne review kiya ye abhi nahi dikh sakta. Cards dekh sakte ho.</div>`;
+  if(adm) h+=`<div class="rs-hadm" role="group" aria-label="Admin fix"><span class="rs-pill rs-pxs rs-p-adm">🧑‍💼 Admin fix</span><span class="rs-hint">✅ = us din reviewed · 📝 = note likho / badlo · ↩ = us din ka review hatao. Log me “(admin fix)” likha jayega.</span>${cnt.pend?`<button class="rs-btn rs-ok rs-sm" type="button" id="rs-h-bulk" data-rshbulk="${d}">✅ All pending (${cnt.pend})</button>`:''}</div><div class="rs-pslot rs-pad2" id="rs-hbslot"></div>`;
+  else if(past&&known) h+=`<div class="rs-hint rs-pad2">🔒 Ye din band ho chuka — sirf admin sudhaar kar sakta hai.</div>`;
+  h+=`</section>`;
+  h+=`<section class="rs-panel" aria-labelledby="rs-hlh"><div class="rs-ph"><div><div class="rs-eyebrow">Apps · ${n}</div><h2 id="rs-hlh">Every app ${past?'that day':'today'}</h2><div class="rs-hint">Order: revenue (card ka 7-day avg) — sabse badi app upar. App pe tap karo → ${past?'us din ka card, read-only (jaisa review ke waqt tha)':'aaj ka card'}.</div></div></div>`
+    +`<ul class="rs-hlist">${R.map(a=>hrowHtml(a,x,adm,known)).join('')}</ul></section>`;
+  h+=`<section class="rs-panel"><div class="rs-ph rs-ph2"><div><h2 class="rs-h14">Who did what</h2></div></div><div class="rs-lst">${(S.log||[]).length?S.log.map(y=>`<div class="rs-li"><div class="rs-tx">${logTxt(y)}${y.app?` — <b>${esc(lab(y.app))}</b>`:''}<br><span class="rs-mt">${rvWho(y.who)} · ${esc(when(y.at))}</span></div></div>`).join(''):`<div class="rs-empty">${past?'Is din kisi ne kuchh nahi kiya':'Aaj abhi kisi ne kuchh nahi kiya'}</div>`}</div></section>`;
   return h; }
+// one app of the day: its icon + name (tap → that day's card), a labelled status box, who / when (IST, with the date),
+// its notes, the feature 🚩s raised that day — and, for an admin on a past day, ✅ / 📝 / ↩
+function hrowHtml(a,x,adm,known){ const k=a.key, d=x.d, S=x.raw, s=S.states&&S.states[k], st=hst(S,k), past=!x.live;
+  const nts=(S.notes||[]).filter(n=>n&&n.app===k), fl=(S.flags||[]).filter(f=>f&&f.app===k&&f.day===d&&f.status!=='withdrawn');
+  // "(admin fix)": only on what an admin fix itself wrote (its log row has the same who + time)
+  const fixed=(who,at,acts)=>(S.log||[]).some(y=>y&&y.app===k&&acts.indexOf(y.act)>=0&&y.who===who&&y.at===at&&y.extra&&typeof y.extra==='object'&&y.extra.admin_fix);
+  const wf=fl.find(f=>!f.feature), fix=!!s&&fixed(s.who,s.at,['ok','bulk_ok']);
+  const [pl,pc]=known?HST[st]:['— Not loaded',''];
+  let line='';
+  if(known&&st!=='pend'){   // (pending: the labelled box says it)
+    line=`${st==='kal'?'🔁 Check again tomorrow':(st==='flag'?'🚩 Important · Re-review':'✅ Reviewed')} by <b>${rvWho(s.who)}</b> · ${esc(when(s.at))}${fix?' <span class="rs-faint">(admin fix)</span>':''}`;
+    if(st==='flag'&&wf) line+=wf.decision?` · 🧑‍💼 Admin: <b>${esc(DEC[wf.decision]||wf.decision)}</b>${wf.dec_note?' — '+esc(wf.dec_note):''}`:(wf.status==='open'?' · <span class="rs-faint">admin ka faisla baaki</span>':'');
+    if(st==='flag'&&wf&&wf.note) line+=`<br><span class="rs-nt">“${esc(wf.note)}”</span>`; }
+  let h=`<li class="rs-hr${st==='pend'&&known?' rs-hr-pend':''}" id="rs-hr-${esc(k)}"><button type="button" class="rs-happ" id="rs-h-app-${esc(k)}" data-rshapp="${esc(k)}" aria-label="${esc(nameP(a))} — open the ${fd(d)} card${past?' (read-only)':''}">${avH(a,'rs-sm')}<span class="rs-hnm">${nameH(a)}<span class="rs-hrv">7-day avg ${mH(a.k7,{s:'/day'})} · yesterday ${mH(a.y)}</span></span><span class="rs-hgo" aria-hidden="true">›</span></button>`
+    +`<span class="rs-pill ${pc}">${pl}</span>`;
+  const meta=(line?[`<span>${line}</span>`]:[]).concat(nts.map(n=>`<span>📝 <span class="rs-nt">“${esc(n.text)}”</span> <span class="rs-faint">— ${rvWho(n.who)}, ${esc(when(n.at))}${fixed(n.who,n.at,['note','note_edit'])?' (admin fix)':''}</span></span>`),
+    fl.filter(f=>f.feature).map(f=>`<span>🚩 ${esc(FN(f.feature))} <span class="rs-faint">· ${rvWho(f.raised_by)}, ${esc(when(f.raised_at))}${f.decision?' · admin: '+esc(DEC[f.decision]||f.decision):(f.status==='open'?' · admin ka faisla baaki':'')}</span>${f.note?` <span class="rs-nt">“${esc(f.note)}”</span>`:''}</span>`));
+  if(meta.length) h+=`<div class="rs-hmeta">${meta.join('')}</div>`;
+  if(adm) h+=`<div class="rs-acts rs-hacts" role="group" aria-label="Admin fix — ${esc(nameP(a))}">${st==='pend'||st==='kal'?`<button type="button" class="rs-btn rs-ok rs-sm" id="rs-h-ok-${esc(k)}" data-rshact="ok" data-k="${esc(k)}">✅ Mark reviewed</button>`:''}<button type="button" class="rs-btn rs-sm" id="rs-h-note-${esc(k)}" data-rshact="note" data-k="${esc(k)}">📝 ${nts.length?'Edit note':'Add note'}</button>${st!=='pend'||nts.length?`<button type="button" class="rs-btn rs-ghost rs-sm" id="rs-h-undo-${esc(k)}" data-rshact="undo" data-k="${esc(k)}">↩ Undo</button>`:''}</div><div class="rs-pslot" id="rs-hps-${esc(k)}"></div>`;
+  return h+'</li>'; }
+// a past day: its card document + its review state (GET day) + its Studio file when the index names one (else the
+// card's own text is shown — never today's file)
 async function loadDay(d){ if(HLOAD[d]) return; HLOAD[d]=1;
-  try{ const doc=await rvLoadDoc(d); let S=null; if(RV.me){ const r=await rvApi('GET','day?d='+encodeURIComponent(d)); if(r.ok) S={...rvS(r.data,d),me:RV.me}; }
-    if(!RV.hS[d]) RV.hS[d]=S||{...rvEmptyS(d),me:RV.me}; HERR[d]=0; }
-  catch(e){ HERR[d]=1; } finally{ HLOAD[d]=0; if(SV()==='hist') renderView(); } }
+  try{ const p=hPast(d)?ptrOf(d):null; if(p&&!HF[d]) HF[d]={st:'load'};
+    const [doc,j]=await Promise.all([rvLoadDoc(d), p&&HF[d].st==='load'?fetchGzJson(p.file+'?v='+encodeURIComponent(p.v||'')).catch(()=>null):Promise.resolve(null)]);
+    if(p&&HF[d].st==='load') HF[d]=(j&&valid(j,p)&&j.card_built_at===doc.built_at)?{st:'ok',j}:{st:'none'};
+    let S=null; if(RV.me){ const r=await rvApi('GET','day?d='+encodeURIComponent(d)); if(r.ok&&r.data&&r.data.d===d) S={...rvS(r.data,d),me:RV.me}; }
+    if(S) RV.hS[d]=S; else if(!RV.hS[d]) RV.hS[d]={...rvEmptyS(d),me:RV.me}; HERR[d]=0; }
+  catch(e){ HERR[d]=1; if(HF[d]&&HF[d].st==='load') HF[d]={st:'none'}; } finally{ HLOAD[d]=0; if(SV()==='hist') renderView(); } }
+// a day picked again: its state re-read quietly (another admin may have fixed it meanwhile)
+async function hFresh(d){ if(!RV.me||!hPast(d)||!RV.hdocs[d]||HLOAD[d]) return; HLOAD[d]=1;
+  try{ const r=await rvApi('GET','day?d='+encodeURIComponent(d)); if(r.ok&&r.data&&r.data.d===d) RV.hS[d]={...rvS(r.data,d),me:RV.me}; }
+  catch(e){} finally{ HLOAD[d]=0; if(SV()==='hist'&&RV.histDay===d) renderView(); } }
 async function ensureCal(){ const I=RV.idx; if(CALLOAD||RV.cal||!RV.me||!I||!I.go_live||!I.open_day||Date.now()-CALAT<60000) return; CALLOAD=true; CALAT=Date.now();
   try{ const r=await rvApi('GET','calendar?from='+I.go_live+'&to='+I.open_day); if(r.ok){ RV.cal=r.data; RV.calErr=false; } else RV.calErr=true; }
   catch(e){ RV.calErr=true; } finally{ CALLOAD=false; if(SV()==='hist') renderView(); } }
@@ -16464,7 +16595,7 @@ function render(){ const r=$('rs-root'); if(!r) return;
   for(const k in CH) delete CH[k]; chN=0; prep();
   r.removeAttribute('data-st');
   r.innerHTML=`<div class="rs-top" id="rs-top">${topHtml()}</div>${winHtml()}<div class="rs-wrap" id="rs-main">${viewHtml()}</div>`;
-  if(ST.drawer!=null){ if(AK[ST.drawer]) renderDrawer(true); else closeDrawer(true); }
+  if(ST.drawer!=null){ if(ST.dday||AK[ST.drawer]) renderDrawer(true); else closeDrawer(true); }   // (renderDrawer closes a past card whose day is gone)
   fillPanel(); stick();
   if(fid){ const el=$(fid); if(el&&el!==document.activeElement){ try{ el.focus({preventScroll:true}); if(sel&&el.setSelectionRange) el.setSelectionRange(sel[0],sel[1]); }catch(e){} } }
   if(ST.focus){ const c=$('rs-c-'+ST.focus)||document.querySelector(`#rs-root tbody tr[data-key="${ST.focus}"]`); if(c) c.classList.add('rs-kf'); } }
@@ -16474,6 +16605,8 @@ function stick(){ const r=$('rs-root'); if(!r) return; try{ const tb=document.qu
   // the site's top bar + the Studio's own bar where it is sticky (wide screens; on a phone it scrolls away)
   const t=$('rs-top'), ts=t&&getComputedStyle(t).position==='sticky'?t.offsetHeight:0; (RV.root||r).style.setProperty('--rs-jump',(h+ts)+'px'); }catch(e){} }
 function setView(v,focusTab){ if(VIEWS.indexOf(v)<0) v='today'; ST.view=v; RV.view=v; try{ rvTabsSync(); rvSetHash(); if(v==='sum'&&RV.sumDirty) rvRenderSum(); if(v==='hist'&&ST.oldOpen) rvHistEnter(); }catch(e){}
+  try{ hbOv('rs-hday',v==='hist'&&hPast(RV.histDay),hBack); }catch(e){}
+  if(PNL&&PNL.d&&v!=='hist') closePanel(true);
   render(); if(focusTab){ const b=$('rs-tb-'+v); if(b) b.focus({preventScroll:true}); }
   const t=$('rs-root'); if(t) try{ const top=t.getBoundingClientRect().top, off=parseFloat(t.style.getPropertyValue('--rs-stick'))||0; if(top<off) scrollTo(0,Math.max(0,scrollY+top-off-8)); }catch(e){} }
 
@@ -16501,11 +16634,22 @@ function panelBody(p){ const a=AK[p.key], btn=(act,t,pri)=>`<button type="button
     case 'snzoff': { const z=rvSnz(RV.doc,S0(),p.key,p.f); return `<h4>💤 Snoozed · ${esc(fl)}</h4>`+help(`${z&&z.until?'Till '+fd(z.until):'Hidden'}${z&&z.who?' · '+rvWho(z.who)+' · '+esc(when(z.at)):''}${z&&z.note?' · “'+esc(z.note)+'”':''}`)+row0(btn('snz-off','Remove snooze',1)+btn('close','Cancel')); }
     case 'bulk': { const keys=p.keys||[], bad=keys.filter(k=>AK[k]&&bads(AK[k]).length), r=bad.filter(k=>nRed(AK[k])).length;
       return `<h4>✅ Mark all ${keys.length} reviewed?</h4>`+help(bad.length?`<b class="rs-watch">${WD.st.dhyan}:</b> in me ${bad.length} apps me Worse/Watch baat hai (${r} Worse, ${bad.length-r} Watch): ${bad.map(k=>esc(nameP(AK[k]))).join(', ')}. Chhoti apps hain, isliye ek saath — chahein to pehle unke card kholo.`:'Sab normal hain. (jin pe pehle se kuch hai, wo waise hi rahenge)')+row0(btn('bulk-yes','Yes, mark all reviewed',1)+btn('close','No')); }
+    case 'hnote': { const nts=hNotes(p.d,p.key), m=p.mode, ed=m!=='add';
+      return `<h4>📝 Note · ${esc(nameP(a))} · ${fd(p.d)}</h4>`
+       +(nts.length?`<div class="rs-hnm2" role="radiogroup" aria-label="Edit a note or add a new one">${nts.map(n=>`<label class="rs-radio"><input type="radio" name="rs-nmode" value="${n.id}" data-rsnmode="1"${String(m)===String(n.id)?' checked':''}> <span>✏️ Edit: “${esc(String(n.text).length>60?String(n.text).slice(0,60)+'…':n.text)}” <span class="rs-faint">— ${rvWho(n.who)}, ${esc(when(n.at))}</span></span></label>`).join('')}<label class="rs-radio"><input type="radio" name="rs-nmode" value="add" data-rsnmode="1"${m==='add'?' checked':''}> <span>➕ Add a new note</span></label></div>`:'')
+       +help(`Admin sudhaar — ${esc(wd(p.d))}, ${fd(p.d)} ke review me jayega, log me “(admin fix)”.${ed?' Purana text bhi log me rehta hai.':''}`)
+       +ta(ed?'Note text (edit)':'New note for the team','Jaise: developer ko bata diya, agle update me fix')+row(btn('hnote-save',ed?'Save changes':'Save note',1)+btn('close','Cancel')); }
+    case 'hundo': return `<h4>↩ Undo · ${esc(nameP(a))} · ${fd(p.d)}</h4>`+help(`${esc(wd(p.d))}, ${fd(p.d)} ka is app ka review hata dein? Uska state (✅ / 🔁 / 🚩), us din ke notes aur us din ke khule 🚩 — sab hat jayenge, app “⏳ Pending” ho jayegi. Log me “(admin fix)” likha jayega.`)+row0(btn('hundo-yes','Yes, undo',1)+btn('close','No'));
+    case 'hbulk': { const keys=p.keys||[];
+      return `<h4>✅ Mark all ${keys.length} pending ${keys.length===1?'app':'apps'} reviewed on ${esc(wd(p.d))}, ${fd(p.d)}?</h4>`+help('Admin sudhaar: in sab pe ✅ Reviewed lagega (aapke naam se), log me “(admin fix)”. Jin pe pehle se kuchh hai, wo waise hi rahenge.')
+       +`<div class="rs-hbl">${keys.map(k=>`<span>${AK[k]?esc(nameP(AK[k])):esc(k)}</span>`).join('')}</div>`+row0(btn('hbulk-yes',`Yes, mark all ${keys.length} reviewed`,1)+btn('close','No')); }
     case 'dec': { const x=(S0().flags||[]).find(y=>y.id===p.fid), a2=x&&AK[x.app], c=x?(a2?nameP(a2):(x.app_label||x.app))+' · '+(x.feature?FN(x.feature):'Whole app')+' — ':'';
       return `<h4>🧑‍💼 ${esc(DEC[p.dec])}</h4>`+ta(c+DEC_LAB[p.dec],p.dec==='kaam'?'Jaise: developer ko bolo — agle update me ad unit theek kare':(p.dec==='band'?'Jaise: rewarded ad unit band karo':''))+row(btn('dec-save','Confirm: '+DEC[p.dec],1)+btn('close','Cancel')); }
   } return ''; }
+const PLAB={note:'📝 Note',imp:'🚩 Important · Re-review',impcarry:'🚩 Open flag',undo:'↩ Undo',flag:'🚩 Flag one feature',unflag:'🚩 Remove flag',carry:'🚩 Open flag',kaam:'🛠 Fix assigned',snz:'💤 Snooze',snzoff:'💤 Snoozed',bulk:'✅ Mark all reviewed',dec:'🧑‍💼 Admin decision',hnote:'📝 Note (admin fix)',hundo:'↩ Undo (admin fix)',hbulk:'✅ All pending (admin fix)'};
 function fillPanel(focus){ if(!PNL) return; const s=$(PNL.slot); if(!s){ return; }
-  s.innerHTML=`<div class="rs-pnl" role="group" aria-label="${esc(PNL.kind)}">${panelBody(PNL)}</div>`; paint();
+  const x=PNL.d?hctx(PNL.d):null; if(PNL.d&&!x){ closePanel(true); return; }
+  s.innerHTML=`<div class="rs-pnl" role="group" aria-label="${esc(PLAB[PNL.kind]||PNL.kind)}">${inDay(x,()=>panelBody(PNL))}</div>`; paint();
   if(focus){ const t=s.querySelector('textarea')||s.querySelector('input[type=radio]:checked')||s.querySelector('button'), ph=phone();
     if(t) try{ t.focus({preventScroll:ph}); }catch(e){}
     if(ph){ const o=PNL.opener&&$(PNL.opener); reveal(s.querySelector('.rs-pnl'),o&&(o.closest('.rs-fb-h,.rs-acts')||o)); } } }
@@ -16539,6 +16683,7 @@ function doKal(k,btn){ if(!guard()) return; const s=stOf(k); if(s==='flag'){ rvT
   rvAction(btn||null,'t',D0(),{app:k,act:'kal'},'🔁 Check again tomorrow — '+nameP(AK[k])).then(ok=>{ if(ok&&PNL&&PNL.key===k&&!String(PNL.draft||'').trim()) closePanel(true); }); }
 function draftOf(){ const t=$('rs-pta'); return ((t?t.value:(PNL&&PNL.draft))||'').trim(); }
 function panelAct(a,btn){ const p=PNL; if(!p) return; if(a==='close'){ closePanel(); return; }
+  if(p.d) return hPanelAct(a,btn,p);
   const k=p.key, d=D0(), name=k&&AK[k]?nameP(AK[k]):'';
   const done=ok=>{ if(!ok) return false; const op=p.opener; if(PNL===p) closePanel(true); const el=op&&$(op); if(el&&!el.disabled) try{ el.focus({preventScroll:true}); }catch(e){} return true; };
   if(a==='note-save'){ const v=draftOf(); if(!v){ rvToast('Note khaali hai'); const t=$('rs-pta'); if(t) t.focus(); return; } return rvAction(btn,'t',d,{app:k,act:'note',note:v},'📝 Note saved',null).then(done); }
@@ -16557,6 +16702,35 @@ function panelAct(a,btn){ const p=PNL; if(!p) return; if(a==='close'){ closePane
       closePanel(true); const x=res.flag; rvUpdateToday([x.app],false); rvRenderSum(); rvSyncSoon();
       if(RV.view==='hist'&&RV.histDay&&RV.hS[RV.histDay]&&$('rv-dayp')) try{ rvRenderHistDay(RV.histDay,false); }catch(e){}
       rvToast('🧑‍💼 Decision: '+DEC[p.dec]+' · '+(x.feature?FN(x.feature):'Whole app')); const h=$('rs-h-adm'); if(h) try{ h.focus({preventScroll:true}); }catch(e){} })(); } }
+// ── History admin fixes on a PAST day: the older views' own request (rvAction 'h' → POST action {d, act, app…}, never
+// `live`), the Worker allows them for an admin only (FIX_ACTS); the answer is merged into RV.hS[d] (shared with the fold)
+function hNotes(d,k){ const S=RV.hS[d]; return ((S&&S.notes)||[]).filter(n=>n&&n.app===k); }
+function hName(d,k){ return rvAppLabel(RV.hdocs[d],k); }
+function hAct(btn,d,body,okMsg){ if(!hAdm(d)){ rvToast(RV.auth===false?rvRoMsg():'Ye din band ho chuka — sirf admin sudhaar kar sakta hai'); return Promise.resolve(false); }
+  RV.histDay=d;                                                                // (rvAction reads the History day from RV.histDay)
+  return rvAction(btn,'h',d,body,okMsg,null).then(ok=>{ renderView(); return ok; }); }
+function hRowAct(act,k,btn){ const d=RV.histDay; if(!hPast(d)||!hAdm(d)) return; const S=RV.hS[d], st=hst(S,k), slot='rs-hps-'+k, nm=hName(d,k);
+  if(act==='ok'){ if(st==='ok'||st==='note'){ rvToast('Pehle se reviewed hai'); return; } if(st==='flag'){ rvToast(RV_TXT.flag_block); return; }
+    return hAct(btn,d,{app:k,act:'ok'},'✅ Reviewed — '+nm+' · '+fd(d)+' (admin fix)').then(ok=>{ if(PNL&&PNL.d===d&&PNL.key===k&&!String(PNL.draft||'').trim()) closePanel(true); if(ok) focusSoft('rs-h-undo-'+k,'rs-h-app-'+k); }); }
+  if(act==='note'){ const nts=hNotes(d,k), last=nts[nts.length-1]; return openPanel({slot,kind:'hnote',key:k,d,mode:last?last.id:'add',draft:last?last.text:''},btn); }
+  if(act==='undo') return openPanel({slot,kind:'hundo',key:k,d},btn); }
+function hBulk(btn){ const d=RV.histDay, x=hPast(d)&&hAdm(d)?hctx(d):null; if(!x) return; const keys=x.A.map(a=>a.key).filter(k=>hst(x.raw,k)==='pend'); if(!keys.length) return;
+  openPanel({slot:'rs-hbslot',kind:'hbulk',d,keys},btn); }
+function focusSoft(id,fb){ const ok=e=>!!(e&&e.isConnected&&!e.disabled&&e.offsetParent!==null); let el=$(id); if(!ok(el)) el=$(fb); if(ok(el)) try{ el.focus({preventScroll:true}); }catch(e){} }
+// "▸ the calendar" (the phone's Back, one step): a past day picked → back to the calendar on today
+function hBack(){ RV.histDay=null; if(PNL&&PNL.d) closePanel(true); try{ rvSetHash(); }catch(e){} if(SV()!=='hist') return; render();
+  const c=$('rs-hcal'); if(c) try{ const t=c.getBoundingClientRect().top; if(t<0) c.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); }catch(e){} }
+function hPanelAct(a,btn,p){ const k=p.key, d=p.d, nm=k?hName(d,k):'';
+  const done=ok=>{ if(!ok) return false; const op=p.opener; if(PNL===p) closePanel(true); focusSoft(op,k?'rs-h-app-'+k:'rs-dayh'); return true; };
+  if(a==='hnote-save'){ const v=draftOf(); if(!v){ rvToast('Note khaali hai'); const t=$('rs-pta'); if(t) t.focus(); return; }
+    const n=p.mode!=='add'?hNotes(d,k).find(x=>String(x.id)===String(p.mode)):null;
+    if(p.mode!=='add'&&!n){ rvToast('Ye note ab nahi raha — naya note likh sakte ho'); p.mode='add'; fillPanel(true); return; }
+    if(n&&n.text===v){ rvToast('Kuch badla nahi'); return; }
+    return hAct(btn,d,n?{app:k,act:'note_edit',note_id:Number(n.id),note:v}:{app:k,act:'note',note:v},(n?'📝 Note changed — ':'📝 Note saved — ')+nm+' · '+fd(d)+' (admin fix)').then(done); }
+  if(a==='hundo-yes') return hAct(btn,d,{app:k,act:'undo'},'↩ Undone — '+nm+' · '+fd(d)+' (admin fix)').then(done);
+  if(a==='hbulk-yes'){ const keys=(p.keys||[]).filter(x=>hst(RV.hS[d],x)==='pend'); if(!keys.length){ closePanel(); return; }
+    return (async()=>{ let ok=true; for(let i=0;i<keys.length&&ok;i+=60) ok=await hAct(btn,d,{act:'bulk_ok',apps:keys.slice(i,i+60)},null);
+      if(ok){ if(PNL===p) closePanel(true); rvToast('✅ '+keys.length+(keys.length===1?' app':' apps')+' reviewed — '+fd(d)+' (admin fix)'); focusSoft('rs-dayh'); } })(); } }
 function cardAct(act,k,btn){ const a=AK[k]; if(!a) return; ST.focus=k;
   if(act==='open'){ openDrawer(k); return; }
   if(!guard()) return; const st=stOf(k); let slot=slotFor(k);
@@ -16603,8 +16777,10 @@ const TIPS={
     next:`<div class="rs-tt">⏭ Next cards</div>Agle cards ${fd(String(I.next_snapshot||'').slice(0,10))} ko ${esc(I.ready_ist||'09:00')} IST ke baad pehle robot run pe (aam taur pe ~10 baje tak).`}[k]||''; },
 };
 function chartTip(sv,cx){ const S=CH[sv.getAttribute('data-ch')]; if(!S) return null; const r=sv.getBoundingClientRect(), fx=(cx-r.left)/r.width*S.w; let best=0,bd=1e9; for(let i=0;i<S.n;i++){ const d=Math.abs(S.X(i)-fx); if(d<bd){ bd=d; best=i; } }
-  const xh=sv.querySelector('.rs-xh'); if(xh){ xh.setAttribute('x1',S.X(best)); xh.setAttribute('x2',S.X(best)); xh.setAttribute('opacity','1'); } return S.tip(best); }
-function tipFor(t,pin){ const [k,...args]=t.getAttribute('data-tk').split(':'); return TIPS[k]?TIPS[k](...args,pin):''; }
+  const xh=sv.querySelector('.rs-xh'); if(xh){ xh.setAttribute('x1',S.X(best)); xh.setAttribute('x2',S.X(best)); xh.setAttribute('opacity','1'); } return inDay(pastOf(sv),()=>S.tip(best)); }
+function tipFor(t,pin){ const [k,...args]=t.getAttribute('data-tk').split(':'); return TIPS[k]?inDay(pastOf(t),()=>TIPS[k](...args,pin)):''; }
+// an element inside a PAST day's full card → that day's context (its apps, its ₹ rate), else null (today)
+function pastOf(el){ if(!ST.dday||!DX) return null; const d=$('rs-drawer'); return d&&d.contains(el)?DX:null; }
 const inS=t=>!!(t&&t.closest&&t.closest('#rs-root,#rs-layer'));
 const shownNow=()=>{ const r=$('rs-root'); return !!(ON&&FILE&&r&&document.body.getAttribute('data-screen')==='review'&&r.offsetParent!==null); };
 
@@ -16636,7 +16812,10 @@ function wire(){ if(WIRED) return; WIRED=true;
     if(t.id==='rs-q'){ ST.q=t.value; const b=$('rs-lbody'); if(b){ b.innerHTML=ST.mode==='table'?tableHtml(visible()):cardsHtml(visible()); paint(); fillPanel(); } }
     if(t.id==='rs-pta'&&PNL){ PNL.draft=t.value; const c=$('rs-pcc'); if(c) c.textContent=t.value.length+' / 600'; }
     if(t.id==='rs-dw-note'){ ST.dnote=t.value; const c=$('rs-dw-cc'); if(c) c.textContent=t.value.length+' / 600'; } });
-  document.addEventListener('change',e=>{ const t=e.target; if(inS(t)&&t.getAttribute('data-rsdays')&&PNL) PNL.days=Number(t.value)===14?14:7; });
+  document.addEventListener('change',e=>{ const t=e.target; if(inS(t)&&t.getAttribute('data-rsdays')&&PNL) PNL.days=Number(t.value)===14?14:7;
+    if(inS(t)&&t.getAttribute('data-rsnmode')&&PNL&&PNL.kind==='hnote'){ const ta=$('rs-pta'), cur=ta?ta.value:(PNL.draft||''), nts=hNotes(PNL.d,PNL.key);
+      const txt=m=>{ const n=nts.find(x=>String(x.id)===String(m)); return n?n.text:''; }, m=t.value==='add'?'add':Number(t.value);
+      PNL.draft=(!cur.trim()||cur===txt(PNL.mode))?txt(m):cur; PNL.mode=m; fillPanel(false); const b=$('rs-pta'); if(b) try{ b.focus({preventScroll:true}); }catch(_){} } });
   document.addEventListener('toggle',e=>{ const t=e.target; if(t&&t.id==='rs-how') ST.howOpen=t.open; },true);
   document.addEventListener('focusout',e=>{ if(LATER&&isTF(e.target)) setTimeout(flushLater,300); });
   // a note box in the full card has focus: room below the card's end (.rs-kb), so even the last box can scroll up above the
@@ -16673,8 +16852,12 @@ function onClick(e){ const t=e.target; if(!inS(t)) return;
   const gf=t.closest('[data-rsgfeat]'); if(gf){ const f=gf.getAttribute('data-rsgfeat'); ST.gfeat=ST.gfeat===f?null:f; render(); return; }
   const gg=t.closest('[data-rsgfeatgo]'); if(gg){ ST.gfeat=gg.getAttribute('data-rsgfeatgo'); setView('today'); const m=$('rs-map'); if(m) m.scrollIntoView({block:'start'}); return; }
   const jp=t.closest('[data-rsjump]'); if(jp){ jumpCard(jp.getAttribute('data-rsjump')); return; }
-  const od=t.closest('[data-rsoldday]'); if(od){ const d=od.getAttribute('data-rsoldday'), f=$('rs-old'); if(f){ f.open=true; ST.oldOpen=true; } try{ rvSwitch('hist',false); rvHistPick(d,false); }catch(e){} render(); setTimeout(()=>{ const x=$('rs-old'); if(x) x.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); },60); return; }
-  const dy=t.closest('[data-rsday]'); if(dy){ const d=dy.getAttribute('data-rsday'); HERR[d]=0; RV.histDay=d; try{ rvSetHash(); }catch(e){} render();
+  const ha=t.closest('[data-rshapp]'); if(ha){ const k=ha.getAttribute('data-rshapp'), d=RV.histDay||((RV.idx&&RV.idx.open_day)||''); if(hPast(d)) openDrawer(k,null,false,d); else openDrawer(k); return; }
+  const hx=t.closest('[data-rshact]'); if(hx){ hRowAct(hx.getAttribute('data-rshact'),hx.getAttribute('data-k'),hx); return; }
+  if(t.closest('[data-rshbulk]')){ hBulk(t.closest('[data-rshbulk]')); return; }
+  const dy=t.closest('[data-rsday]'); if(dy){ const d=dy.getAttribute('data-rsday'), was=RV.histDay; HERR[d]=0; RV.histDay=d; try{ rvSetHash(); }catch(e){}
+    if(PNL&&PNL.d&&PNL.d!==d) closePanel(true); try{ hbOv('rs-hday',hPast(d),hBack); }catch(e){}   // 📱 a past day = one Back step (Back → the calendar)
+    hFresh(d); render();
     if(phone()&&dy.classList.contains('rs-cd')){ const w=$('rs-dayw'), r=w&&w.getBoundingClientRect(); if(r&&r.top>innerHeight*0.6) try{ w.scrollIntoView({block:'start',behavior:RM?'auto':'smooth'}); }catch(e){} }   // the picked day's panel was below the fold
     return; }
   const vv=t.closest('[data-rsv]'); if(vv){ closeDrawer(true); setView(vv.getAttribute('data-rsv'),vv.getAttribute('role')==='tab'); return; }
@@ -16698,6 +16881,7 @@ function onKey(e){ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.
   if(SV()!=='today'&&ST.drawer==null) return;
   const k=e.key.toLowerCase();
   if(k==='j'||k==='k'){ e.preventDefault(); if(ST.drawer!=null) dnav(k==='j'?1:-1); else move(k==='j'?1:-1); return; }
+  if(ST.dday) return;                                                          // a past day's card: read-only
   if(k==='r'){ const key=curKey(); if(key){ e.preventDefault(); doOk(key,$((ST.drawer!=null?'rs-d':'rs')+'-ok-'+key)); } return; }
   if(k==='i'){ const key=curKey(); if(key){ e.preventDefault(); cardAct('imp',key,$((ST.drawer!=null?'rs-d':'rs')+'-imp-'+key)); } return; }
   if(k==='n'){ const key=curKey(); if(key){ e.preventDefault(); cardAct('note',key,$((ST.drawer!=null?'rs-d':'rs')+'-note-'+key)); } return; }
@@ -16707,7 +16891,7 @@ function onKey(e){ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.
 function want(v){ if(VIEWS.indexOf(v)<0) v='today'; if(ON&&FILE) setView(v); else ST.view=v; }
 return {sync, paint, retry, on:()=>ON, ready:()=>!!FILE, view:SV, want,
   _:{get FILE(){ return FILE; }, get A(){ return A; }, ST, TIPS, CH, render, prep, setView, openDrawer, closeDrawer, cardAct, featAct, snzAct, bulkAct, decAct, panelAct,
-     get PNL(){ return PNL; }, typing, flushLater, doOk, doKal, mapHtml, heroHtml, listHtml, sumHtml, histHtml, drawerHtml:k=>drawerHtml(AK[k]), tableHtml:()=>tableHtml(visible()), load:(j)=>{ FILE=j; FA={}; (j&&j.apps||[]).forEach(a=>{ FA[a.key]=a; }); FKEY=j?(j.day+'|'+j.card_built_at+'|'+((ptr()||{}).v||'')):''; ERR=''; }, fail:()=>{ FILE=null; FKEY=''; const p=ptr(); ERR=p?(p.day+'|'+p.card+'|'+(p.v||'')):'x'; ERRAT=Date.now(); }, syncNow}};
+     get PNL(){ return PNL; }, typing, flushLater, doOk, doKal, hctx, dayHtml, hRowAct, hBulk, hPanelAct, hBack, hAdm, hst, HF, get CX(){ return CX; }, mapHtml, heroHtml, listHtml, sumHtml, histHtml, drawerHtml:k=>drawerHtml(AK[k]), tableHtml:()=>tableHtml(visible()), load:(j)=>{ FILE=j; FA={}; (j&&j.apps||[]).forEach(a=>{ FA[a.key]=a; }); FKEY=j?(j.day+'|'+j.card_built_at+'|'+((ptr()||{}).v||'')):''; ERR=''; }, fail:()=>{ FILE=null; FKEY=''; const p=ptr(); ERR=p?(p.day+'|'+p.card+'|'+(p.v||'')):'x'; ERRAT=Date.now(); }, syncNow}};
 })();
 /* ==== RS:END ==== */
 

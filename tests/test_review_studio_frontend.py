@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import subprocess
+from datetime import timedelta
 
 import pytest
 
@@ -30,6 +31,22 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIDS = ["kamai", "uninstall", "active", "value", "update", "ads", "deduct", "mediation", "health", "setup"]
 SHORT = ["Revenue", "Uninstall", "Active", "Value", "Update", "Ads", "Deduct", "Mediation", "Health", "Setup"]
 DS = rs.DAY.isoformat()
+PD = (rs.DAY - timedelta(1)).isoformat()          # a PAST review day (History)
+
+
+def _past_state():
+    """A synthetic GET day answer for the past day PD: 4 apps reviewed (one with a note, one 🔁, one whole-app 🚩), 3
+    pending; the Worker says an admin may write it (History's admin fixes)."""
+    K, at = rs.K, f"{PD}T05:00:00.000Z"
+    st = lambda s, who: {"st": s, "who": who, "at": at, "snz": []}
+    flag = {"id": 901, "day": PD, "app": K[2], "app_label": "", "feature": None, "note": "Synthetic flag", "raised_by": rs.OWNER,
+            "raised_at": at, "status": "open", "decision": None, "dec_note": None, "dec_by": None, "dec_at": None,
+            "done_note": None, "done_by": None, "done_at": None, "wd_by": None, "wd_at": None}
+    return {"d": PD, "open_day": DS, "writable": True, "rev": 9,
+            "states": {K[1]: st("ok", rs.TEAM), K[3]: st("kal", rs.OWNER), K[8]: st("ok", rs.TEAM), K[2]: st("flag", rs.OWNER)},
+            "notes": [{"id": 900, "app": K[8], "text": "Old note — synthetic", "who": rs.TEAM, "at": at}],
+            "flags": [flag], "snoozes": [], "prev": None,
+            "log": [{"id": 9, "at": at, "who": rs.TEAM, "act": "ok", "app": K[1], "feature": None, "note": None, "ref": None, "extra": None}]}
 
 
 def _script(tmp):
@@ -59,7 +76,8 @@ def report(tmp_path_factory):
     fx = {"index": index, "day": day, "studio": studio, "state": rs.daystate(rs.DAY),
           "me": {"email": "owner@example.test", "admin": True, "open_day": DS, "go_live": index["go_live"],
                  "server_time": f"{DS}T05:30:00.000Z"},
-          "keys": {"ok": K[1], "kal": K[2], "note": K[8], "imp": K[5], "feat": K[1], "f": "kamai", "pend": K[3]}}
+          "keys": {"ok": K[1], "kal": K[2], "note": K[8], "imp": K[5], "feat": K[1], "f": "kamai", "pend": K[3]},
+          "past": {"day": PD, "state": _past_state(), "pend": K[5], "noted": K[8]}}
     fp = os.path.join(tmp, "fx.json")
     with open(fp, "w", encoding="utf-8") as f:
         json.dump(fx, f, ensure_ascii=False)
@@ -241,3 +259,90 @@ def test_mobile_phone_css_targets_and_layout():
     assert ".rs-hh.rs-hr{" in html and 'class="rs-hh rs-r"' not in html                          # no red "Yesterday vs usual"
     assert "#rs-list,#rs-map,#rs-old,#rs-dayw{scroll-margin-top:calc(var(--rs-jump,0px) + 8px)}" in html
 
+
+
+# ── 📅 History: a PAST day — every app, who reviewed, that day's own card (read-only), the admin fixes ──────────────────
+def test_history_past_day_lists_every_app_by_revenue_with_who_reviewed(report):
+    H = report["h_day"]
+    assert H["adm"] is True and H["known"] is True and H["studio"] is False   # no Studio file named for PD: the card's own text
+    assert H["fetched"] == [f"review/days/{PD}.json.gz"]                       # that day's own card document only
+    keys = [a["key"] for a in report["_fx"]["day"]["apps"]]
+    assert sorted(H["keys"]) == sorted(keys) and H["k7"] == sorted(H["k7"], reverse=True)   # every app, revenue order
+    h = H["html"]
+    pos = [h.index(f'id="rs-hr-{k}"') for k in H["keys"]]
+    assert pos == sorted(pos)
+    assert "Reviewed by" in h and "team" in h and "owner" in h
+    assert re.search(r'✅ Reviewed</span><b>4</b><small>of 7 apps', h) and re.search(r'⏳ Pending</span><b>3</b>', h)
+    K, P = rs.K, report["_fx"]["past"]
+    for k in keys:
+        assert f'data-rshapp="{k}"' in h                                       # a tap opens that day's card
+    assert "📝 <span class=\"rs-nt\">“Old note — synthetic”</span>" in h      # the note, with who / when (IST, date)
+    assert re.search(r"✅ Reviewed by <b><span class=\"rv-who\"[^>]*>team</span></b> · \d+ Sept?, \d\d:\d\d IST", h)
+    assert "🚩 Important · Re-review by" in h and "admin ka faisla baaki" in h
+    for k in (rs.K[4], rs.K[5], rs.K[6]):                                       # the 3 pending: a labelled "⏳ Pending" box
+        assert re.search(f'id="rs-hr-{k}"[\\s\\S]*?<span class="rs-pill rs-p-pend">⏳ Pending</span>', h), k
+    # every coloured box says what it is
+    for lab in ("✅ Reviewed · ", "📝 + note · ", "🚩 Important · ", "🔁 Tomorrow · ", "⏳ Pending · "):
+        assert lab in h, lab
+    # admin: ✅ (pending / 🔁 only), 📝 on every app, ↩ where there is something to undo, ✅ All pending
+    assert h.count('data-rshact="note"') == 7 and h.count('data-rshact="ok"') == 4 and h.count('data-rshact="undo"') == 4
+    assert f'data-rshbulk="{PD}"' in h and "✅ All pending (3)" in h
+    assert "Old views" not in h and "data-rsoldday" not in h
+    assert H["stack"] == ["rs-hday"]                                            # 📱 a past day = one Back step
+
+
+def test_history_past_card_is_that_days_frozen_card_read_only(report):
+    C, today = report["h_card"], report["h_day"]["today"]
+    assert C["dday"] == PD and C["cx"] is True                                  # (the context is only swapped while drawing)
+    h = C["html"]
+    assert "PAST-ONLY card line" in h and "PAST-ONLY card line" not in today    # that day's card, never today's
+    assert "🔒 Read-only" in h and "frozen card · read-only" in h and "charts nahi" in h
+    for bad in ('data-rsact=', 'data-rsff=', 'data-rssnz=', 'id="rs-dw-note"', 'data-rsgolink=', 'data-rsdwnote='):
+        assert bad not in h, bad
+    assert report["h_render"] == {"dday": PD, "past": True, "view": "hist", "day": PD}   # survives a render (refresh / poll)
+    B = report["h_back"]
+    assert B["stack0"] == ["rs-hday", "rs-drawer"]
+    assert B["card"] == {"drawer": None, "dday": None, "stack": ["rs-hday"]}  # Back: the card first …
+    assert B["day"] == {"histDay": None, "stack": [], "view": "hist"}           # … then the day (the calendar again)
+    assert report["hhist"][:2] == ["push", "push"]
+
+
+def test_history_past_card_reads_that_days_studio_file_when_the_index_names_it(report):
+    S = report["h_studio2"]
+    assert S["studio"] is True and f"review/studio/{PD}.json.gz" in S["fetched"]
+    assert "PAST-STUDIO line" in S["html"] and "charts nahi" not in S["html"]
+    assert report["h_studio_other"] == {"studio": False, "hf": "none"}          # another card's file: not used
+
+
+def test_history_admin_fixes_send_the_older_views_requests(report):
+    K, P = rs.K, report["_fx"]["past"]
+    for name in ("r_hok", "r_hnote", "r_hedit", "r_hundo", "r_hbulk"):
+        for x in report[name]["req"]:
+            assert x["method"] == "POST" and x["url"] == "/api/review/action" and x["ct"] == "application/json", (name, x)
+            assert "live" not in x["body"] and x["body"]["d"] == PD, (name, x)   # an admin fix on THAT day, never the open one
+    assert _bodies(report["r_hok"]) == [{"d": PD, "app": P["pend"], "act": "ok"}] and report["r_hok"]["st"] == "ok"
+    assert "(admin fix)" in report["r_hok"]["toast"]
+    assert report["r_hok_again"] == {"req": [], "toast": "Pehle se reviewed hai"}
+    assert report["h_note_add"] == {"kind": "hnote", "mode": "add", "slot": f"rs-hps-{P['pend']}"}
+    assert _bodies(report["r_hnote"]) == [{"d": PD, "app": P["pend"], "act": "note", "note": "Admin note — synthetic"}]
+    E = report["h_note_edit"]
+    assert E["mode"] == 900 and E["draft"] == "Old note — synthetic" and E["same"] == "Kuch badla nahi" and E["open"] is True
+    assert "✏️ Edit: “Old note — synthetic”" in E["panel"] and "➕ Add a new note" in E["panel"]
+    assert _bodies(report["r_hedit"]) == [{"d": PD, "app": P["noted"], "act": "note_edit", "note_id": 900, "note": "Old note — edited"}]
+    assert report["r_hedit"]["notes"] == ["Old note — edited"]
+    assert report["r_hundo0"]["req"] == []                                      # ↩: the in-page confirm first
+    assert _bodies(report["r_hundo"]) == [{"d": PD, "app": P["noted"], "act": "undo"}] and report["r_hundo"]["st"] == "pend"
+    B = report["h_bulk"]
+    assert B["kind"] == "hbulk" and report["r_hbulk0"]["req"] == []             # ✅ All pending: the in-page confirm first
+    assert B["keys"] == [k for k in B["order"] if k in B["keys"]] and "Yes, mark all" in B["panel"]
+    (b,) = _bodies(report["r_hbulk"])
+    assert b == {"d": PD, "act": "bulk_ok", "apps": B["keys"]} and report["r_hbulk"]["pend"] == 0
+    assert "confirm(" not in re.search(r"const RVS=\(function\(\)\{([\s\S]*?)\n\}\)\(\);", _css()).group(1)
+
+
+def test_history_a_teammate_sees_the_same_day_without_the_admin_buttons(report):
+    T = report["h_team"]
+    assert T["adm"] is False and report["r_hteam"]["req"] == []
+    h = T["html"]
+    assert "data-rshact" not in h and "data-rshbulk" not in h and "🔒 Ye din band ho chuka" in h
+    assert all(f'data-rshapp="{a["key"]}"' in h for a in report["_fx"]["day"]["apps"])

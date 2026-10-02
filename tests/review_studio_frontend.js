@@ -50,13 +50,16 @@ const store = () => { const m = {}; return { getItem: k => (k in m ? m[k] : null
 const REQ = []; let REV = 100, FID = 500, NID = 500, SID = 500; let NEXT = null;   // NEXT: a forced response for the next call
 const NOW = '2026-10-01T06:00:00.000Z';
 function apiAnswer(path, method, body) {
-  const S = vm.runInContext('RV.S', ctx), me = FX.me.email, d = FX.day.day;
+  // an action on a PAST day (History's admin fixes) works on that day's state; everything else on the open day's
+  const d = body && body.d && body.d !== FX.day.day ? body.d : FX.day.day;
+  const S = d === FX.day.day ? vm.runInContext('RV.S', ctx) : vm.runInContext(`RV.hS[${JSON.stringify(d)}]`, ctx), me = vm.runInContext('RV.me.email', ctx);
   const view = app => ({ ok: true, rev: ++REV, d, app, state: S.states[app] || null, notes: S.notes.filter(n => n.app === app),
     flags: S.flags.filter(f => f.app === app), snoozes: S.snoozes.filter(z => z.app === app) });
   if (path === 'action') {
     const a = body.app; const st = s => ({ st: s, who: me, at: NOW, snz: [] });
     if (body.act === 'ok' || body.act === 'kal') { const v = view(a); v.state = st(body.act); return v; }
     if (body.act === 'note') { const v = view(a); v.notes = v.notes.concat([{ id: ++NID, app: a, text: body.note, who: me, at: NOW }]); if (!v.state) v.state = st('ok'); return v; }
+    if (body.act === 'note_edit') { const v = view(a); v.notes = v.notes.filter(n => n.id !== body.note_id).concat([{ id: ++NID, app: a, text: body.note, who: me, at: NOW }]); return v; }
     if (body.act === 'flag') { const v = view(a); v.flags = v.flags.concat([{ id: ++FID, day: d, app: a, app_label: '', feature: body.feature, note: body.note || '', raised_by: me, raised_at: NOW, status: 'open', decision: null }]); if (body.feature == null) v.state = st('flag'); return v; }
     if (body.act === 'unflag') { const v = view(a); v.flags = v.flags.map(f => f.id === body.flag_id ? { ...f, status: 'withdrawn', wd_by: me, wd_at: NOW } : f); return v; }
     if (body.act === 'undo') { const v = view(a); v.state = null; v.notes = []; v.flags = v.flags.map(f => f.day === d && f.status === 'open' ? { ...f, status: 'withdrawn' } : f); return v; }
@@ -66,7 +69,9 @@ function apiAnswer(path, method, body) {
   }
   if (path === 'decide') { const f = S.flags.find(x => x.id === body.flag_id); const dec = body.decision;
     return { ok: true, rev: ++REV, flag: { ...f, status: dec === 'kaam' ? 'kaam' : 'closed', decision: dec === 'done' ? f.decision : dec, dec_note: dec === 'done' ? f.dec_note : body.note, dec_by: me, dec_at: NOW, ...(dec === 'done' ? { done_note: body.note, done_by: me, done_at: NOW } : {}) } }; }
-  if (path.startsWith('day')) return { ...FX.state, d };
+  if (path.startsWith('day')) { const q = new URLSearchParams(path.split('?')[1] || '').get('d');
+    if (FX.past && q === FX.past.day) return { ...FX.past.state, writable: !!vm.runInContext('RV.me&&RV.me.admin', ctx) };
+    return { ...FX.state, d }; }
   if (path.startsWith('calendar')) return { days: { [d]: { rev: 3, kal: 1, flag: 1, notes: 1, people: 2 } } };
   if (path === 'me') return FX.me;
   return { error: 'not_found', msg: 'Nahi mila' };
@@ -78,7 +83,7 @@ async function fetchMock(url, opt) {
   const path = u.slice('/api/review/'.length), body = opt.body ? JSON.parse(opt.body) : null;
   REQ.push({ url: u, method: opt.method, headers: opt.headers || {}, credentials: opt.credentials, body });
   let status = 200, j;
-  if (NEXT) { ({ status, j } = NEXT); NEXT = null; } else j = apiAnswer(path.split('?')[0], opt.method, body);
+  if (NEXT) { ({ status, j } = NEXT); NEXT = null; } else j = apiAnswer(path.startsWith('day') ? path : path.split('?')[0], opt.method, body);
   return { type: 'basic', status, ok: status >= 200 && status < 300, json: async () => j };
 }
 const timers = [];
@@ -215,6 +220,63 @@ async function step(name, code) {
     RVS._.openDrawer(k); ${mt} hbPop({state:{iqb:0}}); ${mt}                     // the phone's Back closes the card
     r.closedByBack=RVS._.ST.drawer===null; r.lock=document.body.classList.contains('rs-lock'); r.stack=HB.st.map(x=>x.tag); return r; })()`);
   out.hist = HIST.slice();
+  // ── 📅 History: a PAST day, from ITS OWN files (the card document; its Studio file only when the index names one for
+  // it), never from today's; the list, read-only cards, the admin fixes through the older views' own requests ──
+  const PD = FX.past.day, h0 = HIST.length;
+  run(`(()=>{ const PD=${JSON.stringify(PD)}, doc=JSON.parse(JSON.stringify(__FX.day)); doc.day=PD; doc.weekday='Wednesday'; doc.built_at=PD+'T04:00:00Z';
+    const k0=doc.apps[0].key; doc.apps[0].f.kamai.line='PAST-ONLY card line';
+    const st=JSON.parse(JSON.stringify(__FX.studio)); st.day=PD; st.card_built_at=doc.built_at; st.meta={...st.meta,day:PD,fx:50};
+    const sa=st.apps.find(a=>a.key===k0); sa.f.kamai.line='PAST-STUDIO line'; if(sa.f.kamai.q) sa.f.kamai.q.kya='PAST-STUDIO line';
+    __PAST={doc,studio:st,k0}; __FETCH=[];
+    fetchGzJson=async u=>{ __FETCH.push(String(u).split('?')[0]); if(String(u).indexOf('review/days/'+PD)===0) return __PAST.doc; if(String(u).indexOf('review/studio/'+PD)===0) return __PAST.studio; throw new Error('not found'); };
+    RV.idx={...RV.idx,go_live:PD,days:[{d:PD,apps:doc.apps.length,file:'review/days/'+PD+'.json.gz'}].concat(RV.idx.days)}; })()`);
+  const K0 = run('__PAST.k0');
+  await step('h_pick', `(async()=>{ RVS._.closeDrawer(true); RV.histDay=${JSON.stringify(PD)}; RVS._.setView('hist'); for(let i=0;i<20;i++) await Promise.resolve(); return true; })()`);
+  await tick(); await tick();
+  await step('h_day', `(()=>{ const PD=${JSON.stringify(PD)}, x=RVS._.hctx(PD), h=RVS._.dayHtml(PD);
+    return {html:h, keys:x.A.map(a=>a.key), k7:x.A.map(a=>+a.k7||0), studio:x.studio, known:x.known, fetched:__FETCH.slice(), stack:HB.st.map(y=>y.tag), adm:RVS._.hAdm(PD),
+      today:RVS._.drawerHtml(${JSON.stringify(K0)})}; })()`);
+  await step('h_card', `(()=>{ RVS._.openDrawer(${JSON.stringify(K0)},null,true,${JSON.stringify(PD)}); const d=document.getElementById('rs-drawer');
+    return {html:d.innerHTML, dday:RVS._.ST.dday, drawer:RVS._.ST.drawer, cx:RVS._.CX===null}; })()`);
+  // the 5-min refresh / a poll: the Studio renders again — the past card and the day stay
+  await step('h_render', `(()=>{ RVS._.render(); return {dday:RVS._.ST.drawer&&RVS._.ST.dday, past:document.getElementById('rs-drawer').innerHTML.indexOf('PAST-ONLY card line')>=0, view:RVS.view(), day:RV.histDay}; })()`);
+  // the phone's Back: the card first, then the day (back to the calendar on today)
+  await step('h_back', `(async()=>{ const r={stack0:HB.st.map(y=>y.tag)}; hbPop({state:{iqb:1}}); await Promise.resolve(); await Promise.resolve();
+    r.card={drawer:RVS._.ST.drawer, dday:RVS._.ST.dday, stack:HB.st.map(y=>y.tag)}; hbPop({state:{iqb:0}}); await Promise.resolve(); await Promise.resolve();
+    r.day={histDay:RV.histDay, stack:HB.st.map(y=>y.tag), view:RVS.view()}; return r; })()`);
+  // the index names a Studio file for that day (and it is that card's): the past card is drawn from it
+  await step('h_studio', `(async()=>{ const PD=${JSON.stringify(PD)}; RV.histDay=PD; RV.idx={...RV.idx,studio:{...RV.idx.studio,[PD]:{file:'review/studio/'+PD+'.json.gz',card:__PAST.doc.built_at,v:'s1'}}};
+    delete RVS._.HF[PD]; RVS._.render(); for(let i=0;i<20;i++) await Promise.resolve(); return true; })()`);
+  await tick(); await tick();
+  await step('h_studio2', `(()=>{ const PD=${JSON.stringify(PD)}, x=RVS._.hctx(PD); RVS._.openDrawer(${JSON.stringify(K0)},null,true,PD); const h=document.getElementById('rs-drawer').innerHTML; RVS._.closeDrawer(true);
+    const bad=JSON.parse(JSON.stringify(__PAST.studio)); bad.card_built_at=PD+'T01:00:00Z'; __PAST.studio=bad; delete RVS._.HF[PD]; RVS._.render();
+    return {studio:x.studio, html:h, fetched:__FETCH.slice()}; })()`);
+  await tick(); await tick();
+  await step('h_studio_other', `(()=>{ const x=RVS._.hctx(${JSON.stringify(PD)}); return {studio:x.studio, hf:RVS._.HF[${JSON.stringify(PD)}].st}; })()`);
+  // admin fixes: ✅ / 📝 add / 📝 edit / ↩ (after its in-page confirm) / ✅ All pending (after its in-page confirm)
+  const P = FX.past;
+  REQ.splice(0); run('RV.toastHold=0;');                                       // (an earlier step's toast is not held any more)
+  await step('h_ok', `RVS._.hRowAct('ok',${JSON.stringify(P.pend)},null)`); out.r_hok = { req: reqs(), st: run(`RVS._.hst(RV.hS[${JSON.stringify(PD)}],${JSON.stringify(P.pend)})`), toast: toast() };
+  await step('h_ok_again', `RV.toastHold=0, RVS._.hRowAct('ok',${JSON.stringify(P.pend)},null)`); out.r_hok_again = { req: reqs(), toast: toast() };
+  await step('h_note_add', `(()=>{ RVS._.hRowAct('note',${JSON.stringify(P.pend)},null); const p=RVS._.PNL, r={kind:p.kind, mode:p.mode, slot:p.slot}; document.getElementById('rs-pta').value='Admin note — synthetic'; RVS._.panelAct('hnote-save',null); return r; })()`);
+  out.r_hnote = { req: reqs(), notes: run(`RV.hS[${JSON.stringify(PD)}].notes.filter(n=>n.app===${JSON.stringify(P.pend)}).map(n=>n.text)`) };
+  await step('h_note_edit', `(()=>{ RV.toastHold=0; RVS._.hRowAct('note',${JSON.stringify(P.noted)},null); const p=RVS._.PNL, r={mode:p.mode, draft:p.draft, panel:document.getElementById(p.slot).innerHTML};
+    document.getElementById('rs-pta').value=p.draft; RVS._.panelAct('hnote-save',null); r.same=document.getElementById('rv-toast').textContent; r.open=!!RVS._.PNL;
+    document.getElementById('rs-pta').value='Old note — edited'; RVS._.panelAct('hnote-save',null); return r; })()`);
+  out.r_hedit = { req: reqs(), notes: run(`RV.hS[${JSON.stringify(PD)}].notes.filter(n=>n.app===${JSON.stringify(P.noted)}).map(n=>n.text)`) };
+  await step('h_undo', `(()=>{ RVS._.hRowAct('undo',${JSON.stringify(P.noted)},null); const r={kind:RVS._.PNL.kind}; r.reqBefore=0; return r; })()`);
+  out.r_hundo0 = { req: reqs() };
+  await step('h_undo2', `RVS._.panelAct('hundo-yes',null)`);
+  out.r_hundo = { req: reqs(), st: run(`RVS._.hst(RV.hS[${JSON.stringify(PD)}],${JSON.stringify(P.noted)})`) };
+  await step('h_bulk', `(()=>{ RVS._.hBulk(null); const p=RVS._.PNL; return {kind:p.kind, keys:p.keys, panel:document.getElementById(p.slot).innerHTML, order:RVS._.hctx(${JSON.stringify(PD)}).A.map(a=>a.key)}; })()`);
+  out.r_hbulk0 = { req: reqs() };
+  await step('h_bulk2', `RVS._.panelAct('hbulk-yes',null)`);
+  out.r_hbulk = { req: reqs(), pend: run(`RVS._.hctx(${JSON.stringify(PD)}).A.filter(a=>RVS._.hst(RV.hS[${JSON.stringify(PD)}],a.key)==='pend').length`) };
+  // a teammate: the same day, the same list — no admin buttons, and a click does nothing
+  await step('h_team', `(()=>{ const me=RV.me; RV.me={...me,admin:false}; RV.hS[${JSON.stringify(PD)}]={...RV.hS[${JSON.stringify(PD)}],writable:false};
+    const h=RVS._.dayHtml(${JSON.stringify(PD)}); RVS._.hRowAct('ok',${JSON.stringify(P.noted)},null); RV.me=me; return {html:h, adm:RVS._.hAdm(${JSON.stringify(PD)})}; })()`);
+  out.r_hteam = { req: reqs() };
+  out.hhist = HIST.slice(h0);
   out.errors = errors;
   process.stdout.write(JSON.stringify(out));
 })();
