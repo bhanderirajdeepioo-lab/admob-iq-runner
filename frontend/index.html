@@ -2504,6 +2504,71 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 @media (max-width:480px){:is(#us-root,#us-layer) .us-kv .us-num{font-size:27px}
 :is(#us-root,#us-layer) .us-kpi{padding:12px 12px 8px}
 :is(#us-root,#us-layer) .us-sc .us-big{font-size:23px}}
+/* ---------- all apps together: the engine's verdict (the older band, restored) ---------- */
+:is(#us-root,#us-layer) .us-eg{display:grid;grid-template-columns:minmax(240px,310px) minmax(0,1fr);gap:14px 20px;padding:0 18px 16px;align-items:start}
+:is(#us-root,#us-layer) .us-ek{background:var(--panel2);padding-bottom:12px}
+:is(#us-root,#us-layer) .us-ek .us-kv{cursor:default}
+:is(#us-root,#us-layer) .us-ek .us-ks{margin-top:8px}
+:is(#us-root,#us-layer) .us-eb{display:grid;gap:5px;margin-top:10px}
+:is(#us-root,#us-layer) .us-ebr{display:grid;grid-template-columns:50px minmax(0,1fr) 42px;gap:8px;align-items:center;font-size:11.5px;color:var(--muted);border-radius:6px;padding:3px 2px;cursor:default}
+:is(#us-root,#us-layer) .us-ebr:hover{background:rgba(34,211,238,.06)}
+:is(#us-root,#us-layer) .us-ebl{white-space:nowrap}
+:is(#us-root,#us-layer) .us-ebt{position:relative;height:12px;background:var(--line);border-radius:4px;overflow:hidden}
+:is(#us-root,#us-layer) .us-ebt i{position:absolute;left:0;top:0;bottom:0;background:var(--us-ghost);border-radius:4px}
+:is(#us-root,#us-layer) .us-ebn .us-ebt i{background:var(--cyan)}
+:is(#us-root,#us-layer) .us-ebr b{font:650 13px var(--us-num);color:var(--ink);font-variant-numeric:tabular-nums;text-align:right}
+:is(#us-root,#us-layer) .us-ers{min-width:0}
+:is(#us-root,#us-layer) .us-erow{display:flex;flex-direction:column;gap:8px;min-width:0}
+:is(#us-root,#us-layer) .us-erow+.us-erow{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+:is(#us-root,#us-layer) .us-erl{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline}
+:is(#us-root,#us-layer) .us-erl b{color:var(--ink);font-weight:650;font-size:13.5px}
+:is(#us-root,#us-layer) .us-echs{display:flex;flex-wrap:wrap;gap:6px}
+:is(#us-root,#us-layer) .us-ech{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:4px 11px;border-radius:999px;border:1px solid var(--line2);background:var(--panel2);font-size:12.5px;font-weight:600;color:var(--ink2);white-space:nowrap;max-width:100%}
+:is(#us-root,#us-layer) .us-ech b{font-weight:700;color:var(--ink)}
+:is(#us-root,#us-layer) .us-ech .us-cv{font-size:10px;color:var(--faint);transition:transform .2s}
+:is(#us-root,#us-layer) .us-ech[aria-expanded="true"] .us-cv{transform:rotate(180deg)}
+:is(#us-root,#us-layer) .us-ech:hover{border-color:var(--cyan)}
+:is(#us-root,#us-layer) .us-ech.us-ec-bad{border-color:rgba(255,107,107,.4)}
+:is(#us-root,#us-layer) .us-ech.us-ec-good{border-color:rgba(52,217,154,.4)}
+:is(#us-root,#us-layer) .us-ech.us-ec-watch{border-color:rgba(230,184,78,.45)}
+:is(#us-root,#us-layer) .us-ech.us-ec-info{border-style:dashed}
+:is(#us-root,#us-layer) .us-ech[aria-expanded="true"]{background:var(--us-raise2);color:#fff;box-shadow:inset 0 0 0 1px rgba(34,211,238,.45)}
+:is(#us-root,#us-layer) .us-exp{border:1px solid var(--line2);border-left-width:3px;border-radius:10px;background:var(--panel2);padding:10px 12px;min-width:0}
+:is(#us-root,#us-layer) .us-exp.us-ec-bad{border-left-color:var(--bad)}
+:is(#us-root,#us-layer) .us-exp.us-ec-good{border-left-color:var(--good)}
+:is(#us-root,#us-layer) .us-exp.us-ec-watch{border-left-color:var(--watch)}
+:is(#us-root,#us-layer) .us-exh{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.45}
+:is(#us-root,#us-layer) .us-exh b{color:var(--ink)}
+:is(#us-root,#us-layer) .us-eaps{display:flex;flex-wrap:wrap;gap:6px}
+:is(#us-root,#us-layer) .us-eap{display:inline-flex;align-items:center;flex-wrap:wrap;gap:2px 9px;min-height:32px;padding:3px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);max-width:100%;min-width:0}
+:is(#us-root,#us-layer) .us-eapn{cursor:pointer;min-width:0;display:inline-flex}
+:is(#us-root,#us-layer) .us-eapn:hover .us-aint{text-decoration:underline;text-underline-offset:2px}
+:is(#us-root,#us-layer) .us-eapx{font:650 12.5px/1.3 var(--us-num);font-variant-numeric:tabular-nums;color:var(--ink2);cursor:help;overflow-wrap:anywhere}
+:is(#us-root,#us-layer) .us-eapx.us-ec-bad{color:var(--bad)}
+:is(#us-root,#us-layer) .us-eapx.us-ec-good{color:var(--good)}
+:is(#us-root,#us-layer) .us-eapx.us-ec-watch{color:var(--watch)}
+:is(#us-root,#us-layer) .us-eapx.us-eapi{color:var(--muted);font-weight:500}
+@container us (max-width:760px){:is(#us-root,#us-layer) .us-eg{grid-template-columns:minmax(0,1fr);padding-inline:14px}}
+@media (max-width:480px){:is(#us-root,#us-layer) .us-eg{padding-inline:12px}:is(#us-root,#us-layer) .us-ech{white-space:normal;text-align:left}}
+/* ---------- 📦 Update impact on All apps: the older card's rows (.us-impb, their own look) + a verdict filter ---------- */
+:is(#us-root,#us-layer) .us-ufs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:0 18px 10px}
+:is(#us-root,#us-layer) .us-ufl{font-size:12px;color:var(--muted);font-weight:600;margin-right:2px}
+:is(#us-root,#us-layer) .us-ufs button{min-height:32px;padding:4px 11px;border-radius:999px;border:1px solid var(--line2);background:transparent;font-size:12.5px;font-weight:600;color:var(--ink2);white-space:nowrap}
+:is(#us-root,#us-layer) .us-ufs button b{color:var(--ink);font-weight:700;margin-left:2px}
+:is(#us-root,#us-layer) .us-ufs button:hover:not(:disabled){border-color:var(--cyan)}
+:is(#us-root,#us-layer) .us-ufs button[aria-pressed="true"]{background:var(--us-raise2);color:#fff;box-shadow:inset 0 0 0 1px rgba(34,211,238,.45)}
+:is(#us-root,#us-layer) .us-ufs button:disabled{opacity:.45;cursor:default}
+:is(#us-root,#us-layer) .us-ufm{font-size:12.5px;color:var(--muted);padding:4px 2px 8px;line-height:1.45}
+:is(#us-root,#us-layer) .us-ufm b{color:var(--ink)}
+:is(#us-root,#us-layer) .us-ufold{display:flex;width:100%;align-items:center;gap:8px;min-height:38px;margin:0;padding:8px 2px;border:0;border-top:1px solid var(--line);background:none;font:600 12.5px/1.35 var(--us-font);color:var(--ink2);cursor:pointer;text-align:left}
+:is(#us-root,#us-layer) .us-ufold:hover{background:var(--raise)}
+:is(#us-root,#us-layer) .us-ufold .us-cv{color:var(--faint);transition:transform .2s}
+:is(#us-root,#us-layer) .us-ufold[aria-expanded="true"] .us-cv{transform:rotate(90deg)}
+:is(#us-root,#us-layer) .us-ufold .us-lk{margin-left:auto;color:var(--cyan);font-size:12px}
+:is(#us-root,#us-layer) .us-ufn{font-size:11px;margin-top:8px;line-height:1.5}
+:is(#us-root,#us-layer) .us-fchips button .us-fn{font-weight:700;margin-left:2px;color:var(--ink2)}
+@container us (max-width:608px){:is(#us-root,#us-layer) .us-ufs{padding-inline:14px}}
+@media (max-width:480px){:is(#us-root,#us-layer) .us-ufs{padding-inline:12px}}
 /* ---------- ledger ---------- */
 :is(#us-root,#us-layer) .us-ledger summary{list-style:none;cursor:pointer;display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink2);font-weight:600;padding:6px 12px;border:1px solid var(--line2);border-radius:999px;background:var(--panel)}
 :is(#us-root,#us-layer) .us-ledger summary::-webkit-details-marker{display:none}
@@ -6416,7 +6481,7 @@ function money(v,sign){ if(v==null||!isFinite(v)) return '—'; const inr=isINR(
 /* ================= state ================= */
 // range / compare = the dashboard's shared KPIWINDOW (KWIN / KWCUSTOM / KCMP / KCMPCUSTOM, kwSave); the rest is the Studio's
 const ST={sort:{k:'inr',d:-1},fst:new Set(),facc:'',fsz:'',q:'',open:new Set(),mapAll:false,srcAll:false,chgView:'cards',cohMode:'abs',cvS:'all',cvR:'90',
-  drawer:-1,did:null,dScroll:0,ledger:false,folds:new Set()};
+  drawer:-1,did:null,dScroll:0,ledger:false,folds:new Set(),eng:'',when:false};
 const LS='uninstallStudio.v1';
 try{ const s=JSON.parse(localStorage.getItem(LS)||'{}')||{}; if(s.chgView==='cards'||s.chgView==='table') ST.chgView=s.chgView;
   if(s.cohMode==='abs'||s.cohMode==='dev') ST.cohMode=s.cohMode;
@@ -6750,6 +6815,57 @@ function ledgerHtml(){ const insD=PT.ins!=null?PT.ins/W.L:null, outD=PT.outs!=nu
     rows+=`<tr class="${d>M.settled?'us-prow':''}"><td class="us-l">${fd(d)}${d>M.settled?' ⏳':''}</td><td>${fN(PD.nw[i])}</td><td>${fN(PD.un[i])}</td><td>${fS(PD.net[i])}</td><td><span class="us-hcell ${hs}">${rp(r)}</span></td><td>${PT.Lday[i-ix(W.f)]==null?'—':fX(PT.Lday[i-ix(W.f)])}</td></tr>`; }
   return `<table class="us-mini"><thead><tr><th class="us-l">Date</th><th>Installs</th><th>Uninstalls</th><th>Net</th><th>Uninstall rate</th><th>Lost above normal</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td class="us-l" style="font-weight:600">Daily avg</td><td>${fN(insD)}</td><td>${fN(outD)}</td><td>${fS(netD)}</td><td>${rp(PT.rate)}</td><td>${fX(PT.Ltot)}</td></tr></tfoot></table>`; }
 
+/* ================= all apps together: the engine's verdict (the older grey band, restored) ================= */
+// What the range lens does not say, from the older All-apps band (the fold: uniSumPortfolio): the ENGINE's verdict per app
+// (its last 4 final install weeks vs the 4 before — the dashboard's own words), the pooled "Still in app after 7 days" of
+// the apps judged on the same weeks, and every app's uninstall-rate state. The SAME numbers (uniSumData on the older
+// views' rows, usPfRows), in the Studio's look: the pooled KPI with its two windows drawn and printed, then two chip rows
+// (a count each; a tap = that chip's apps, a name = the app view). Not tied to the range (said on it).
+let ENG=null;
+function engCompute(){ ENG=null; let rows; try{ if(typeof UNI==='undefined'||!UNI) return; rows=usPfRows(); }catch(e){ return; }
+  try{ const dets=rows.map(r=>r.a).filter(a=>a&&a.data_till); if(!dets.length) return;
+    const D=uniSumData(dets); D.nApps=rows.length; D.nDets=dets.length; D.VL=[]; D.AI={}; A.forEach(a=>{ D.AI[a.id]=a.i; }); ENG=D; }
+  catch(e){ ENG={err:1}; } }
+const ENGW={worse:'Worse',better:'Better',unsure:'Normal (no clear difference)',same:'Normal',low:'Too early',none:'Too early'};
+function engApp(o){ const D=ENG, i=D.AI[o.a.app_id], c=o.xc==='bad'?'bad':(o.xc==='good'?'good':(o.xc==='watch'?'watch':''));
+  const nm=i!=null?`<span class="us-eapn" data-go="${i}" data-app="${i}">${nmH(A[i])}</span>`:`<span class="us-eapn" data-uopen="${esc(o.a.app_id)}"><span class="us-nmt">${esc(o.a.app)}</span></span>`;
+  let vi=-1; if(o.v&&o.a.survival&&o.a.survival.verdict){ D.VL.push(o.a); vi=D.VL.length-1; }
+  const tk=vi>=0?` data-tk="engv:${vi}"`:'';
+  return `<span class="us-eap">${nm}${o.x?`<span class="us-eapx${c?' us-ec-'+c:''}"${tk}>${esc(o.x)}</span>`:(vi>=0?`<span class="us-eapx us-eapi"${tk}>${uni100(o.a.survival.verdict.recent.left)}%</span>`:'')}</span>`; }
+function engRow(G,lab,sub){ const vis=G.filter(g=>g[3].length);
+  const chips=vis.map(([k,l,c,L])=>`<button class="us-ech us-ec-${c}" data-eng="${k}" aria-expanded="${ST.eng===k}">${esc(l)} <b>· ${L.length} ${L.length===1?'app':'apps'}</b><span class="us-cv" aria-hidden="true">▾</span></button>`).join('');
+  const g=vis.find(x=>x[0]===ST.eng);
+  const open=g?`<div class="us-exp us-ec-${g[2]}" data-engx="${g[0]}"><div class="us-exh"><b>${esc(g[1])}</b> — ${esc(g[4])}</div><div class="us-eaps">${g[3].map(engApp).join('')}</div></div>`:'';
+  return `<div class="us-erow"><div class="us-erl"><b>${lab}</b><span>${sub}</span></div><div class="us-echs">${chips||'<span class="us-faint">—</span>'}</div>${open}</div>`; }
+function engHtml(){ const head=h=>`<div class="us-ph"><div><div class="us-eyebrow">All apps together · engine verdict</div><h2>App status: last 4 weeks vs the 4 before</h2><div class="us-hint">${h}</div></div></div>`;
+  if(!ENG){ const err=typeof UNIERR!=='undefined'&&UNIERR; return head(err?'⚠️ Engine ka faisla load nahi hua — neeche "Old views" me "Try again"':'⏳ Engine ka faisla load ho raha hai…'); }
+  if(ENG.err) return head('⚠️ Ye hissa abhi dikh nahi paya.');
+  const D=ENG, P=D.pool; D.VL=[];
+  let kpi;
+  if(!P) kpi=`<div class="us-kpi us-ek" id="us-k-s7"><div class="us-kl"><span>Still in app after 7 days</span><span class="us-kh">all apps</span></div><div class="us-kv"><span class="us-num">—</span></div><div class="us-ks">~2 hafte ke pakke data ke baad dikhega</div></div>`;
+  else { const w=P.w, r=uni100(P.r), p=uni100(P.p), g=+(parseFloat(r)-parseFloat(p)).toFixed(1);
+    const bar=(k,lab,v,cls)=>`<div class="us-ebr${cls}" data-tk="engk:${k}"><span class="us-ebl">${lab}</span><span class="us-ebt"><i style="width:${Math.max(0,Math.min(100,v*100)).toFixed(1)}%"></i></span><b>${uni100(v)}%</b></div>`;
+    kpi=`<div class="us-kpi us-ek" id="us-k-s7"><div class="us-kl"><span>Still in app after 7 days</span><span class="us-kh">all apps</span></div>`
+      +`<div class="us-kv" data-tk="engk:r"><span class="us-num">${r}%</span><span class="us-ku">of new users</span></div>`
+      +`<div class="us-kd us-flat">${g?(g<0?'▼':'▲')+' '+p+'% → '+r+'%':'■ same as before ('+p+'%)'} <span class="us-vs">vs installs ${span(w[2],w[3])}</span></div>`
+      +`<div class="us-eb">${bar('p','Before',P.p,'')}${bar('r','Now',P.r,' us-ebn')}</div>`
+      +`<div class="us-ks">≈ <b>${fN(P.ku)}</b> of ${fN(P.su)} installs still in app · installs ${span(w[0],w[1])} · ${P.n} of ${D.nDets} apps (jinka yahi install hafta hai)</div></div>`; }
+  const vw=D.vw, rw=D.rw?D.rw.split('|'):null;
+  const rows=engRow(D.status,'App status',`engine verdict · ${vw?'installs '+span(vw[0],vw[1])+' vs '+span(vw[2],vw[3]):'pichhle 4 pakke hafte vs usse pehle ke 4'}`)
+    +engRow(D.rate,'Uninstall rate',`each app · last 7 days${rw?' ('+span(rw[0],rw[1])+')':''} vs normal range`);
+  return head(`Engine ka faisla har app pe: pichhle 4 pakke install hafte ke installs vs usse pehle ke 4 · upar ki range se alag · chip pe tap = apps · naam pe tap = app view`)
+    +`<div class="us-eg">${kpi}<div class="us-ers">${rows}</div></div>`; }
+TIPS.engk=k=>{ const P=ENG&&ENG.pool; if(!P) return ''; const w=P.w;
+  return `<div class="us-tt">Still in app after 7 days · all apps</div>`
+    +trow('Now · installs '+span(w[0],w[1]),uni100(P.r)+'%')+`<div class="us-tsm">≈ ${fN(P.ku)} of ${fN(P.su)} installs still in app</div>`
+    +trow('Before · installs '+span(w[2],w[3]),uni100(P.p)+'%')+`<div class="us-tsm">≈ ${fN(P.kp)} of ${fN(P.pu)} installs still in app</div>`
+    +`<div class="us-sep"></div><div class="us-tsm">${P.n} of ${ENG.nDets} apps — jinka engine faisla inhi hafton pe hai · apps ka mix badalne se bhi ye number hil sakta hai, isliye har app ka apna faisla chips me</div>`; };
+TIPS.engv=vi=>{ const a=ENG&&ENG.VL[+vi]; if(!a) return ''; const v=a.survival.verdict, i=ENG.AI[a.app_id], k=uniVKind(v), g=uniVGap(v);
+  return `<div class="us-tt">${i!=null?ic(A[i],14,'ail')+esc(A[i].nm):esc(a.app)}</div><div class="us-tsm">Still in app after ${v.n} days</div>`
+    +trow('Last 4 final weeks · '+span(v.recent.from,v.recent.to),uni100(v.recent.left)+'%')+`<div class="us-tsm">${fN(v.recent.users)} installs</div>`
+    +trow('4 weeks before · '+span(v.prev.from,v.prev.to),uni100(v.prev.left)+'%')+`<div class="us-tsm">${fN(v.prev.users)} installs</div>`
+    +`<div class="us-sep"></div>${g!=null?trow('Change',(g>0?'+':(g<0?MI:'±'))+uniGapTxt(g)+'%'):''}<div class="us-tsm"><b>${ENGW[k]||'—'}</b> — ${k==='worse'||k==='better'?'engine ke alert rules se pakka badlaav':(k==='unsure'?'farak dikha, par aam utaar-chadhaav jitna — pakka nahi':(k==='low'?'installs kam — pakka nahi keh sakte':'pichhle mahine jaise'))}</div>`; };
+
 /* ================= Nuksaan ka map (heatmap) ================= */
 const COLS=[['d0','Same day uninstall','Same day uninstall — % installs'],['rate','Uninstall rate','Uninstall rate — % of daily active users'],['s7','Still in app after 7 days','Still in app after 7 days — % installs'],['r1','Back next day','Next-day return — % installs']];
 function cellOf(o,k){ if(k==='rate'){ const s=o.s, h=o.hr; return {v:s.rate==null?null:rp(s.rate),s:h.s,why:h.why}; }
@@ -6862,6 +6978,31 @@ function renderTl(){ const box=$('us-tl'); if(!box) return; TLW=box.clientWidth|
 TIPS.tlu=d=>{ const L=tlHtml.ups[d]||[]; return `<div class="us-tt">📦 ${fd(d)} · ${L.length} update</div>`+L.map(([a,r])=>`<div class="us-row"><span>${ic(a,14,'ail')}${esc(bnm(a))} · ${esc(a.acc)}</span><b>${esc(r[1])}</b></div><div class="us-tsm">${UPDW(r[2])}</div>`).join(''); };
 TIPS.tla=d=>{ const L=tlHtml.als[d]||[]; return `<div class="us-tt">🔔 ${fd(d)} · ${L.length} alert</div>`+L.map(([x,b])=>`<div class="us-row"><span>${ic(A[x.a],14,'ail')}${esc(bnm(A[x.a]))} · ${esc(A[x.a].acc)}</span><b class="${x.sev==='bigda'?'us-bad':(x.sev==='dhyan'?'us-watch':'us-good')}">${SW[x.sev]}</b></div><div class="us-tsm">${esc(metName(x))}${b?' · started '+fd(startedOf(x)):''}</div>`).join(''); };
 
+/* ================= 📦 Update impact — every app's updates (the older All-apps card, as a section) ================= */
+// Right under the Timeline (its 📦 diamonds are these updates): the older card's own list (uniUpdList — the same rows, order,
+// verdict, the change it was judged on, % updated, the ⏰ "After 30 days" late-loss pill; a row = that app's page at that
+// update's 📦 block: uniImpGo) with a verdict filter (a chip per verdict with its count; the six status words, the row
+// chips keep the card's own) and the ⏳ / 👍 / — fold. The rows keep the card's look (.us-impb, as on the app page). The
+// last 60 days, not the range (said). Drawn ONCE: the fold keeps one line to it (uniUpdUpLine).
+const UPG=[['halt','🛑','Worse'],['hold','⚠️','Watch'],['win','✅','Better'],['continue','👍','Normal'],['pending','⏳','Too early'],['never','—','N/A']];
+const upMeaning=k=>k==='never'?'— No verdict: agla update bahut jaldi aa gaya — is update ka alag faisla nahi hoga':(UNI_VERD[k]?UNI_VERD[k][0]+': '+UNI_VERD[k][2]:'');
+function uplHtml(){ let U=null, err=false; try{ if(typeof UNI!=='undefined'&&UNI) U=uniUpdList(usPfRows(),'uni'); }catch(e){ err=true; }
+  const LD=U?U.LD:60;
+  const head=`<div class="us-ph"><div><div class="us-eyebrow">📦 Updates · each app · last ${LD} days</div><h2>📦 Update impact</h2><div class="us-hint">Har update: 7 din pehle vs 7 din baad — verdict, kis number pe faisla hua, kitne users ne update kiya · row pe tap = us app ka page, us update pe · upar ki range se alag</div></div></div>`;
+  if(err) return head+'<div class="us-impb us-faint">⚠️ 📦 Update impact — ye hissa abhi dikh nahi paya.</div>';
+  if(!U) return head+`<div class="us-impb us-faint">${typeof UNIERR!=='undefined'&&UNIERR?'⚠️ Update impact load nahi hua — neeche "Old views" me "Try again"':'⏳ Update impact load ho raha hai…'}</div>`;
+  if(!U.has) return head+'<div class="us-impb us-faint" id="us-upl-list">⏳ Update impact agle robot run ke baad dikhega</div>';
+  if(!U.L.length) return head+`<div class="us-impb" id="us-upl-list"><div class="us-ok">Pichhle ${LD} din me koi update nahi</div></div>`;
+  const st=impS('uni'), F=U.n[st.uf]!=null?st.uf:'';
+  const chips=`<div class="us-ufs" role="group" aria-label="Verdict filter"><span class="us-ufl">Update verdict</span><button data-upf="" aria-pressed="${!F}">All updates <b>${U.L.length}</b></button>`
+    +UPG.map(([k,e,w])=>`<button class="us-uf-${k}" data-upf="${k}" aria-pressed="${F===k}"${U.n[k]?'':' disabled'}>${e} ${w} <b>${U.n[k]}</b></button>`).join('')+'</div>';
+  let body;
+  if(F){ const L=(['halt','hold','win'].indexOf(F)>=0?U.main:U.rest).filter(o=>U.grp(o)===F);
+    body=`<div class="us-ufm">${esc(upMeaning(F))} · <b>${L.length}</b> ${L.length===1?'update':'updates'}</div>`+L.map(U.row).join(''); }
+  else { body=(U.main.length?U.main.map(U.row).join(''):'<div class="us-ok">No 🛑 / ⚠️ / ✅ verdict</div>')
+    +(U.rest.length?`<button class="us-ufold" data-upx="1" aria-expanded="${!!st.uall}"><span class="us-cv">▸</span><span>⏳ Too early (${U.nW}) · 👍 Normal (${U.nC}) · — N/A (${U.nN})</span><span class="us-lk">${st.uall?'Hide':'Show'}</span></button>`+(st.uall?U.rest.map(U.row).join(''):''):''); }
+  return head+chips+`<div class="us-impb" id="us-upl-list">${body}<div class="us-faint us-ufn">Har update: 7 din pehle vs 7 din baad — old users/day, naye users ki wapsi (agle din / 7 din baad), sessions / time har user, kamai har user. Row pe tap = us app ka page, us update ke 📦 block pe.</div></div>`; }
+
 /* ================= Kya badla? (every engine alert — the owner's timestamp rules on each card) ================= */
 function slope(x){ const v=alertVals(x); if(v.now==null||v.bef==null) return '';
   const lo=Math.min(v.now,v.bef), hi=Math.max(v.now,v.bef), pad=(hi-lo)*.35+1e-6, Y=lin(lo-pad,hi+pad,46,10), col=x.sev==='bigda'?'var(--bad)':(x.sev==='dhyan'?'var(--watch)':(x.sev==='behtar'?'var(--good)':'var(--ink2)'));
@@ -6912,6 +7053,8 @@ function pctCell(o,k){ const c=k==='rate'?null:o[k], cc=k==='rate'?null:o[k+'c']
   return `<td data-tk="cell:${o.a.i}:${k}"><span class="us-hcell ${hcls(h.s)}"><span class="us-v" style="font-weight:600">${pc(c.p,1)}</span>${ppl!=null?`<span class="us-d" style="font-size:11px;color:${Math.abs(ppl)<.5?'var(--muted)':(bad?'var(--bad)':'var(--good)')}">${ppl>0?'▲':'▼'}${fN(Math.abs(ppl))} users · ${pc(cc.p,0)}</span>`:''}</span></td>`; }
 function lostCell(o){ const L=o.L; if(!L||L.tot==null) return `<td class="us-faint" data-tk="inr:${o.a.i}">—</td>`;
   return `<td data-tk="inr:${o.a.i}"><div class="us-cellv"><span class="us-v ${lossCls(o)}">${fX(L.tot)}</span>${splitN(o)}</div></td>`; }
+// a status filter chip's count: the apps with that pill in the chosen range (N/A: the apps without GA4)
+const fstN=s=>R.filter(o=>o.pill===s).length+(s==='lagu'?NOGA.length:0);
 function filtered(){ const q=ST.q.trim().toLowerCase();
   return R.filter(o=>{ const a=o.a; if(ST.fst.size&&!ST.fst.has(o.pill)) return false; if(ST.facc&&a.acc!==ST.facc) return false; if(ST.fsz&&a.sz!==ST.fsz) return false;
     if(q&&(a.store+' '+a.acc+' '+a.pkg).toLowerCase().indexOf(q)<0) return false; return true; }); }
@@ -6934,7 +7077,7 @@ function tblParts(){ const L=filtered(), k=ST.sort.k, d=ST.sort.d;
   return {head,body,cnt:L.length+NG.length,tot:A.length+NOGA.length}; }
 function tblHtml(){ const P0=tblParts();
   const accs=[...new Set(A.map(a=>a.acc).concat(NOGA.map(n=>n.acc)))].sort();
-  const bar=`<div class="us-tbar"><input class="us-srch" id="us-q" type="search" placeholder="App ya account dhoondo…  ( / )" value="${esc(ST.q)}" aria-label="Search apps"><div class="us-fchips" id="us-fst">${Object.keys(SW).map(s=>`<button class="us-f-${s}" data-st="${s}" aria-pressed="${ST.fst.has(s)}">${SW[s]}</button>`).join('')}</div>`
+  const bar=`<div class="us-tbar"><input class="us-srch" id="us-q" type="search" placeholder="App ya account dhoondo…  ( / )" value="${esc(ST.q)}" aria-label="Search apps"><div class="us-fchips" id="us-fst">${Object.keys(SW).map(s=>`<button class="us-f-${s}" data-st="${s}" aria-pressed="${ST.fst.has(s)}">${SW[s]} <b class="us-fn">${fstN(s)}</b></button>`).join('')}</div>`
     +`<select class="us-tsel" id="us-facc" aria-label="Account"><option value="">All accounts</option>${accs.map(x=>`<option${ST.facc===x?' selected':''}>${esc(x)}</option>`).join('')}</select>`
     +`<select class="us-tsel" id="us-fsz" aria-label="Size"><option value="">All sizes</option>${['badi','madhyam','chhoti'].map(x=>`<option value="${x}"${ST.fsz===x?' selected':''}>${x==='badi'?'Big':(x==='madhyam'?'Medium':'Small')}</option>`).join('')}</select><span class="us-tcount">${P0.cnt} / ${P0.tot} apps</span></div>`;
   return `<div class="us-ph"><div><div class="us-eyebrow">Each app · full table</div><h2>All apps</h2><div class="us-hint">Pill = is range ka haal · 🔔 = engine alert · column = sort · ▶ = mini charts · rang = app ka apna normal · ▲▼ = vs ${span(W.cf,W.ct)}</div></div></div>${bar}<div class="us-tw us-st-tw"><table class="us-st"><thead id="us-thead"><tr>${P0.head}</tr></thead><tbody id="us-tbody">${P0.body}</tbody></table></div>`; }
@@ -7360,18 +7503,22 @@ function footHtml(){ return `<summary>Ye number kaise bane? (chhoti si list)</su
 <li><b>⏳ Not final</b> = Firebase late data bhejta hai — ${fd(dAdd(M.settled,1))} ke baad ke din badal sakte hain. Status words aur alerts dashboard engine ke hain.</li>
 <li>Range / compare upar ke chunav se (Active users aur Install value ke saath ek hi) · ₹ / $ poore dashboard ka · Data ${fd(M.S)} – ${fd(M.E)} (${M.n} days) · App ke naam hamesha account ke saath · ${NOGA.length} app ka GA4 nahi (N/A).</li></ul>`; }
 
+// "⏱️ When will I know?" (All apps): the older note's own lines (uniTimingItems — the same days, from the same constants)
+function whenHtml(){ let li=''; try{ li=uniTimingItems(); }catch(e){ li=''; } return `<summary>⏱️ When will I know? (kab pakka pata chalega)</summary><ul>${li}</ul>`; }
+
 /* ================= render ================= */
 // the whole Studio as HTML (the dashboard's uniScreen puts it in the Uninstall screen); the parts that need the page
 // (widths, the open drawer, count-up) follow in afterMount. VIEW: 'all' (All apps) or 'app' (one app's full page, PAGE).
 let VIEW='all', PAGE=null;
-function screen(note){ prep(); VIEW='all'; PAGE=null; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
+function screen(note){ prep(); VIEW='all'; PAGE=null; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); engCompute(); font(); wire();
   setTimeout(afterMount,0);
   return `<div id="us-root"><div class="us-top" id="us-top">${topHtml()}</div>`
     +`<div class="us-wrap" id="us-main">${note||''}<section class="us-story" id="us-story" aria-label="Most important things">${storyHtml()}</section>`
     +`<section aria-label="Portfolio KPIs"><div class="us-kpis" id="us-kpis">${kpisHtml()}</div><details class="us-ledger" id="us-ledger" style="margin-top:10px"${ST.ledger?' open':''}><summary>📋 Day by day — table</summary><div class="us-panel us-tw" id="us-ledgerT" style="border-radius:var(--us-r);max-height:380px">${ledgerHtml()}</div></details></section>`
+    +`<section class="us-panel us-eng" id="us-eng" aria-label="All apps together">${engHtml()}</section>`
     +`<section class="us-duo"><article class="us-panel" id="us-map">${mapHtml()}</article><article class="us-panel" id="us-src">${srcHtml()}</article></section>`
-    +`<section class="us-panel us-tl" id="us-tl">${tlHtml()}</section><section id="us-chg">${chgHtml()}</section><section class="us-panel" id="us-tbl">${tblHtml()}</section><section class="us-panel" id="us-gd">${gdHtml()}</section>`
-    +`<details class="us-foot" id="us-foot">${footHtml()}</details></div></div>`; }
+    +`<section class="us-panel us-tl" id="us-tl">${tlHtml()}</section><section class="us-panel us-upl" id="us-upl" aria-label="Update impact">${uplHtml()}</section><section id="us-chg">${chgHtml()}</section><section class="us-panel" id="us-tbl">${tblHtml()}</section><section class="us-panel" id="us-gd">${gdHtml()}</section>`
+    +`<details class="us-foot" id="us-foot">${footHtml()}</details><details class="us-foot" id="us-when"${ST.when?' open':''}>${whenHtml()}</details></div></div>`; }
 // is this app in the Studio's file (visible apps)? — else its older page stays as it was
 function has(id){ try{ prep(); return A.some(a=>a.id===id); }catch(e){ return false; } }
 // one app's full page (the top App selector, "Poora app page →", an app opened anywhere on the tab)
@@ -7397,8 +7544,8 @@ function renderAll(){ const root=$('us-root'); if(!root){ uniRerender(); return;
   SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop();
   const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
   if(VIEW==='app'){ renderPage(); set('us-foot',footHtml()); countUp(); return; }
-  set('us-story',storyHtml()); set('us-kpis',kpisHtml()); set('us-ledgerT',ledgerHtml()); set('us-map',mapHtml()); set('us-src',srcHtml());
-  renderTl(); set('us-chg',chgHtml()); renderTbl(false); set('us-foot',footHtml()); if(ST.drawer>=0) renderDrawer(true); countUp(); }
+  engCompute(); set('us-story',storyHtml()); set('us-kpis',kpisHtml()); set('us-ledgerT',ledgerHtml()); set('us-eng',engHtml()); set('us-map',mapHtml()); set('us-src',srcHtml());
+  renderTl(); set('us-upl',uplHtml()); set('us-chg',chgHtml()); renderTbl(false); set('us-foot',footHtml()); if(ST.drawer>=0) renderDrawer(true); countUp(); }
 // the shared choice changed here: the other tabs that read it (Active users, Install value) follow, after this paints
 function shared(){ kwSave(); renderAll(); setTimeout(()=>{ try{ actRerender(); }catch(e){} try{ valRerender(); }catch(e){} },30); }
 function setRange(r){ if(r==='c'){ if(!KWCUSTOM.from||!KWCUSTOM.to) KWCUSTOM={from:W.f,to:W.t}; KWIN='custom'; } else KWIN=String(r); KWERR=''; shared(); }
@@ -7428,7 +7575,7 @@ function wire(){ if(WIRED) return; WIRED=true;
     roots().forEach(r=>{ r.querySelectorAll('[data-app].us-hl').forEach(el=>el.classList.remove('us-hl'));
       if(id!=null) r.querySelectorAll('[data-app="'+id+'"]').forEach(el=>el.classList.add('us-hl')); }); });
   document.addEventListener('toggle',e=>{ const t=e.target; if(!inStudio(t)) return;
-    if(t.id==='us-ledger') ST.ledger=t.open; else if(t.dataset&&t.dataset.fold){ t.open?ST.folds.add(t.dataset.fold):ST.folds.delete(t.dataset.fold); } },true);
+    if(t.id==='us-ledger') ST.ledger=t.open; else if(t.id==='us-when') ST.when=t.open; else if(t.dataset&&t.dataset.fold){ t.open?ST.folds.add(t.dataset.fold):ST.folds.delete(t.dataset.fold); } },true);
   document.addEventListener('click',onClick);
   document.addEventListener('input',e=>{ if(e.target.id==='us-q'){ ST.q=e.target.value; renderTbl(true); } });
   document.addEventListener('change',e=>{ const id=e.target.id; if(!inStudio(e.target)) return;
@@ -7458,6 +7605,10 @@ function onClick(e){ const t=e.target; if(!inStudio(t)) return;
     if(!card&&inD){ closeDrawer(); card=document.querySelector('#us-chg [data-alk="'+k+'"]'); }
     if(card){ const fold=card.closest('details'); if(fold) fold.open=true; card.scrollIntoView({behavior:RM?'auto':'smooth',block:'center'}); card.classList.remove('us-flash'); void card.offsetWidth; card.classList.add('us-flash'); }
     return; }
+  const ec=t.closest('[data-eng]'); if(ec){ const k=ec.dataset.eng; ST.eng=ST.eng===k?'':k; hideTip(); const el=$('us-eng'); if(el) el.innerHTML=engHtml(); return; }
+  const uo=t.closest('[data-uopen]'); if(uo){ hideTip(); try{ uniOpen(uo.dataset.uopen); }catch(e2){} return; }
+  const uf=t.closest('[data-upf]'); if(uf){ if(uf.disabled) return; const k=uf.dataset.upf; impSet('uni',{uf:impS('uni').uf===k?'':k,uall:false}); const el=$('us-upl'); if(el) el.innerHTML=uplHtml(); return; }
+  if(t.closest('[data-upx]')){ impSet('uni',{uall:!impS('uni').uall}); const el=$('us-upl'); if(el) el.innerHTML=uplHtml(); return; }
   const rb=t.closest('#us-rng button'); if(rb){ setRange(rb.dataset.r); return; }
   const cb=t.closest('#us-cur button'); if(cb){ setCur(cb.dataset.c); return; }
   const fl=t.closest('[data-filter]'); if(fl){ ST.fst=new Set([fl.dataset.filter]); renderTbl(); const tb=$('us-tbl'); if(tb) tb.scrollIntoView({behavior:RM?'auto':'smooth',block:'start'}); return; }
@@ -7485,6 +7636,7 @@ return {ptr, ensure, retry, screen, appScreen, has, hide, closeDrawer, openDrawe
   // checks / tests (read-only views of the current state)
   _:{A:()=>A, R:()=>R, W:()=>W, PT:()=>PT, PC:()=>PC, ST, ALERTS:()=>ALERTS, NOGA:()=>NOGA, M:()=>M, sums, cohR, cohW, pool, loss, ix, dOf, windows,
      story:storyHtml, kpis:kpisHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml,
+     eng:()=>{ engCompute(); return engHtml(); }, upl:uplHtml, when:whenHtml,
      page:id=>{ const i=A.findIndex(a=>a.id===id); return i<0?'':pageHtml(i); }, view:()=>({VIEW,PAGE}), SPK:()=>SPK, labels, navPage,
      load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage,
      gdCell, gdHtml:()=>gdHtml(), gdApp:(i,m)=>gdApp(R[i],m||'d'), GST, GDL, cohFull, cohRels, relsOf, curveH, curveTip}};

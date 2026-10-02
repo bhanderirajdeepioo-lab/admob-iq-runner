@@ -131,7 +131,8 @@ get('others', `(()=>{ const r={}; ${RESET}
   delete DATA.uninstall.studio; const old=uniScreen(); DATA.uninstall.studio=ptr;
   r.old_view={kw:old.indexOf('uni-kw-bar')>=0, studio:old.indexOf('us-root')>=0||old.indexOf('uni-old')>=0, table:old.indexOf('uni-table')>=0};
   const st=uniScreen(); r.studio_view={root:st.indexOf('id="us-root"')>=0, kw:st.indexOf('uni-kw-bar')>=0, fold:st.indexOf('id="uni-old"')>=0,
-    folded:['uni-updates','uni-anyall','uni-table','uni-alerts'].map(id=>{ const i=st.indexOf('id="'+id+'"'); return i>st.indexOf('id="uni-old"'); })};
+    folded:['uni-sum','uni-upd-up','uni-anyall','uni-table','uni-alerts'].map(id=>{ const i=st.indexOf('id="'+id+'"'); return i>st.indexOf('id="uni-old"'); }),
+    updCard:st.indexOf('id="uni-updates"')<0, updSection:st.indexOf('id="us-upl-list"')>0&&st.indexOf('id="us-upl-list"')<st.indexOf('id="uni-old"')};
   return JSON.stringify(r); })()`);
 get('loading', `(()=>{ ${RESET} US._.load(null); const h=uniScreen(); US._.load(__STUDIO); const h2=uniScreen();
   return JSON.stringify({wait:h.indexOf('Uninstall Studio load ho raha hai')>=0&&h.indexOf('id="uni-old"')>=0&&h.indexOf('us-root')<0, back:h2.indexOf('id="us-root"')>=0}); })()`);
@@ -395,5 +396,127 @@ get('curve', `(()=>{ ${RESET} const r={}, A=US._.A(), ST=US._.ST;
   // the older detail not there yet / failed: a short note, no chart
   const U0=UNI; UNI=null; try{ r.loading=__text(panel(US._.curveH(a,'p','h2','h2'))); UNIERR=true; r.failed=__text(panel(US._.curveH(a,'p','h2','h2'))); } finally{ UNI=U0; UNIERR=false; }
   ${RESET} uniScreen(); return JSON.stringify(r); })()`);
+// ── parity with the older All-apps views (owner, 2 Oct: "parity aur speed"): the grey "ALL APPS TOGETHER" band back in the
+// fold; the same numbers in the Studio's "All apps together" panel (the engine's 4-weeks-vs-4-before verdict as chips with
+// counts + app lists, the pooled "Still in app after 7 days"); the 📦 Update impact list as a Studio section (the card's
+// rows, a verdict filter, a row = that app's page at that update); "⏱️ When will I know?"; counts on the status chips ────
+get('parity', `(()=>{ ${RESET} const r={}, nz=h=>h.replace(/(id="|url\\(#|href="#)([A-Za-z_-]*?)\\d+/g,'$1$2#');
+  const ids=h=>{ const m={}; for(const x of h.matchAll(/\\sid="([^"]*)"/g)) m[x[1]]=(m[x[1]]||0)+1; return m; };
+  const dups=h=>{ const m=ids(h); return Object.keys(m).filter(k=>m[k]>1); };
+  UNIOLDOPEN=true; const h=uniScreen(); UNIOLDOPEN=false;
+  const iR=h.indexOf('id="us-root"'), iF=h.indexOf('id="uni-old"'), studio=h.slice(iR,iF), fold=h.slice(iF);
+  r.dups=dups(h);
+  // the fold: the band again — the pooled tile and both chip rows, no range KPIs (the Studio has its own)
+  const band=fold.slice(fold.indexOf('id="uni-sum"'));
+  r.fold={band:fold.indexOf('id="uni-sum"')>0&&fold.indexOf('ALL APPS TOGETHER')>0, pool:band.indexOf('id="uni-pool"')>0, kw:fold.indexOf('uni-kw-bar')>=0,
+    secs:(band.match(/<div class="uni-sec">(App status|Uninstall rate) /g)||[]).length, first:fold.indexOf('id="uni-sum"')<fold.indexOf('id="uni-upd-up"')};
+  const oldChips=[...band.matchAll(/<span class="uni-sc [a-z]+[^"]*" data-k="([a-z_]+)"[^>]*><i class="dt"><\\/i>([^<]*) <b>\\((\\d+)\\)<\\/b>/g)].map(m=>[m[1],m[2],+m[3]]);
+  const pool=(band.match(/data-sd="7" data-sv="([^"]*)"/)||[])[1], before=(band.match(/of new users · before ([\\d.]+)%/)||[])[1];
+  const napps=(band.match(/· (\\d+) apps \\((\\d+) me se/)||[]).slice(1).map(Number);
+  // the Studio panel: the same chips (key, label, count), the same pooled number, before, apps
+  const eng=studio.slice(studio.indexOf('id="us-eng"'));
+  const newChips=[...eng.matchAll(/<button class="us-ech us-ec-[a-z]+" data-eng="([a-z_]+)" aria-expanded="[a-z]+">([^<]*) <b>· (\\d+) apps?<\\/b>/g)].map(m=>[m[1],m[2].replace(/&amp;/g,'&'),+m[3]]);
+  const kpi=eng.slice(eng.indexOf('id="us-k-s7"'));
+  r.eng={old:oldChips, now:newChips, pool:[pool, (kpi.match(/<span class="us-num">([\\d.]+)%<\\/span>/)||[])[1]], before:[before, (kpi.match(/data-tk="engk:p"><span class="us-ebl">Before<\\/span>[\\s\\S]*?<b>([\\d.]+)%<\\/b>/)||[])[1]],
+    apps:[napps, (kpi.match(/· (\\d+) of (\\d+) apps \\(jinka/)||[]).slice(1).map(Number)], where:studio.indexOf('id="us-kpis"')<studio.indexOf('id="us-eng"')&&studio.indexOf('id="us-eng"')<studio.indexOf('id="us-map"'),
+    rows:(eng.match(/<div class="us-erl"><b>[^<]*<\\/b>/g)||[]).map(x=>x.replace(/<[^>]*>/g,''))};
+  r.engTip=__text(US._.TIPS.engk('r'));
+  // a chip → its apps: the same apps as the older band's open chip, each a link to the app view (or its page)
+  const D=uniSumData(usPfRows().map(x=>x.a).filter(a=>a&&a.data_till)); r.lists={};
+  D.status.concat(D.rate).filter(g=>g[3].length).forEach(g=>{ US._.ST.eng=g[0]; const x=US._.eng(); UNISTEXP=g[0]; const o=uniSumPortfolio(usPfRows().map(z=>z.a).filter(a=>a&&a.data_till),'',1); UNISTEXP='';
+    const exp=x.slice(x.indexOf('data-engx="'+g[0]+'"'));
+    r.lists[g[0]]={now:[...exp.matchAll(/data-(?:go|uopen)="([^"]+)"/g)].map(m=>{ const i=+m[1]; return isNaN(i)?m[1]:US._.A()[i].id; }),
+      old:[...o.matchAll(/class="uni-ac" data-app="([^"]+)"/g)].map(m=>m[1]), names:g[3].map(o2=>o2.a.app),
+      x:[...exp.matchAll(/class="us-eapx[^"]*"(?: data-tk="engv:(\\d+)")?>([^<]*)</g)].map(m=>[m[1]==null?null:+m[1],m[2]]),
+      tips:[...exp.matchAll(/data-tk="(engv:\\d+)"/g)].map(m=>__text(US._.TIPS.engv(m[1].split(':')[1]))), text:__text(exp)}; });
+  US._.ST.eng='';
+  // 📦 Update impact: a Studio section right after the Timeline, the older card's rows, drawn ONCE (the fold: one line)
+  const rows=usPfRows(), card=uniUpdatesCard(rows), U=uniUpdList(rows,'uni'), sec=studio.slice(studio.indexOf('id="us-upl"'),studio.indexOf('id="us-chg"'));
+  r.upd={where:studio.indexOf('id="us-tl"')<studio.indexOf('id="us-upl"')&&studio.indexOf('id="us-upl"')<studio.indexOf('id="us-chg"'),
+    n:U.L.length, main:U.main.length, rest:U.rest.length, groups:U.n, old:{nW:U.nW,nC:U.nC,nN:U.nN},
+    rowsSame:U.main.every(o=>sec.indexOf(U.row(o))>=0)&&U.main.every(o=>card.indexOf(U.row(o))>=0),
+    restHidden:U.rest.every(o=>sec.indexOf(U.row(o))<0),
+    chips:[...sec.matchAll(/<button(?: class="us-uf-([a-z]+)")? data-upf="([a-z]*)" aria-pressed="(true|false)"( disabled)?>([^<]*)<b>(\\d+)<\\/b>/g)].map(m=>({k:m[2],on:m[3]==='true',dis:!!m[4],t:m[5].trim(),n:+m[6]})),
+    go:[...sec.matchAll(/class="uni-upd" data-lv="[a-z]+" onclick="(uniImpGo\\('[^']*','[^']*'\\))"/g)].map(m=>m[1]),
+    late:(sec.match(/uni-late/g)||[]).length, updated:(sec.match(/% updated</g)||[]).length,
+    foldLine:fold.indexOf('id="uni-upd-up"')>0&&fold.indexOf('onclick="uniJump(\\'us-upl\\')"')>0, card:fold.indexOf('id="uni-updates"')>=0,
+    text:__text(sec)};
+  const filt={};
+  for(const k of ['halt','hold','win','pending','continue','never']){ impSet('uni',{uf:k,uall:false}); const x=US._.upl();
+    filt[k]={rows:(x.match(/class="uni-upd" /g)||[]).length, want:U.L.filter(o=>U.grp(o)===k).length, on:x.indexOf('data-upf="'+k+'" aria-pressed="true"')>0, text:__text(x)}; }
+  impSet('uni',{uf:'',uall:true}); const xa=US._.upl(); filt.all={rows:(xa.match(/class="uni-upd" /g)||[]).length, want:U.L.length};
+  impSet('uni',{uf:'',uall:false}); r.filt=filt;
+  // the click path: a chip / the fold re-draw the section in place (the rest of the page untouched)
+  const el=document.getElementById('us-upl'); el.innerHTML=US._.upl(); const before0=document.getElementById('us-map').innerHTML;
+  const fake=(attrs)=>({ closest:q=>{ const m=q.match(/^\\[data-([a-z]+)\\]$/); if(m&&attrs[m[1]]!=null) return {dataset:{[m[1]]:attrs[m[1]]},disabled:false}; if(q==='#us-root,#us-layer') return {}; return null; }, id:'' });
+  const click=a=>US._.onClick({target:fake(a),preventDefault(){},stopPropagation(){}});
+  click({upf:'halt'}); r.click={uf:impS('uni').uf, sec:el.innerHTML.indexOf('data-upf="halt" aria-pressed="true"')>0};
+  click({upf:'halt'}); r.click.off=impS('uni').uf==='';
+  click({upx:'1'}); r.click.uall=impS('uni').uall; click({upx:'1'}); r.click.uall2=impS('uni').uall;
+  const g0=D.status.find(g=>g[3].length)[0]; click({eng:g0}); r.click.eng=US._.ST.eng===g0&&document.getElementById('us-eng').innerHTML.indexOf('data-engx="'+g0+'"')>0;
+  click({eng:g0}); r.click.eng2=US._.ST.eng===''; r.click.mapSame=document.getElementById('us-map').innerHTML===before0;
+  // ⏱️ When will I know? (All apps): the older note's very lines
+  r.when={sec:studio.indexOf('<details class="us-foot" id="us-when">')>0, same:studio.indexOf('<ul>'+uniTimingItems()+'</ul>')>0, text:__text(US._.when())};
+  // the status filter chips of the apps table say how many apps each (the range's pill)
+  const tb=US._.tbl(); r.fst=[...tb.matchAll(/data-st="([a-z]+)" aria-pressed="(?:true|false)">([^<]*) <b class="us-fn">(\\d+)<\\/b>/g)].map(m=>[m[1],m[2],+m[3]]);
+  r.fstWant=Object.keys(US._.ST.fst.size?{}:{}).length; r.R=US._.R().map(o=>o.pill); r.noga=US._.NOGA().length;
+  // the Studio's file loading / failing: the old card stays in the fold, nothing twice
+  US._.load(null); const hl=uniScreen(); US._.load(__STUDIO); r.loading={card:hl.indexOf('id="uni-updates"')>0, line:hl.indexOf('id="uni-upd-up"')>=0, band:hl.indexOf('id="uni-sum"')>0, dups:dups(hl)};
+  const ks=US.screen; US.screen=()=>{ throw new Error('boom'); }; const hx=uniScreen(); US.screen=ks;
+  r.failed={card:hx.indexOf('id="uni-updates"')>0, line:hx.indexOf('id="uni-upd-up"')>=0, dups:dups(hx)};
+  // no Studio file: the older All-apps view exactly as before (its own band with the KPIs, its card)
+  const ptr=DATA.uninstall.studio; delete DATA.uninstall.studio; const ho=uniScreen(); DATA.uninstall.studio=ptr;
+  r.noStudio={band:ho.indexOf('id="uni-sum"')>0&&ho.indexOf('uni-kw-bar')>0, card:ho.indexOf('id="uni-updates"')>0, studio:ho.indexOf('us-root')>=0};
+  // the older views' detail still loading: the panel and the section wait, never break
+  const keepU=UNI; UNI=null; const hw=uniScreen(); UNI=keepU; r.wait={eng:hw.indexOf('Engine ka faisla load ho raha hai')>0, upd:hw.indexOf('Update impact load ho raha hai')>0, root:hw.indexOf('id="us-root"')>=0};
+  ${RESET} uniScreen(); return JSON.stringify(r); })()`);
+// the same, on every kind of chip and verdict: the synthetic apps given worse / better / unsure / low verdicts (two install
+// windows), install-week / rate alerts, and updates of every verdict (late loss, % updated, the change judged on) —
+// the Studio's counts, lists, pooled number and rows must be the older band's / card's, one for one
+get('parity2', `(()=>{ ${RESET} const r={}, keepU=JSON.stringify(UNI.apps), keepD=JSON.stringify(DATA.uninstall.apps);
+  try{
+    const A0=UNI.apps.filter(a=>a&&a.data_till), W1={from:'2026-08-09',to:'2026-09-05'}, W0={from:'2026-07-12',to:'2026-08-08'};
+    const V=(fires,dir,rl,pl,ru,pu,low,w1,w0)=>({n:7,recent:Object.assign({users:ru,k:28,left:rl},w1||W1),prev:Object.assign({users:pu,k:28,left:pl},w0||W0),delta_pp:+((pl-rl)*100).toFixed(1),z:3,fires,dir,low_sample:!!low,fallback:null,est:null});
+    const kinds=[V(true,'worse',.40,.52,1000,1200), V(true,'better',.61,.50,900,800), V(false,null,.55,.50,700,650), V(false,null,.30,.31,60,50,true,{from:'2026-08-02',to:'2026-08-29'},{from:'2026-07-05',to:'2026-08-01'})];
+    A0.forEach((a,i)=>{ a.survival=Object.assign({},a.survival,{verdict:kinds[i%kinds.length]}); a.alerts=(a.alerts||[]).filter(x=>x.family!=='cohort'&&!/^rate_/.test(x.family||'')); });
+    A0[0].alerts.push({family:'rate_spike',dir:'up',day:'2026-09-14'}); A0[1].alerts.push({family:'rate_drift',dir:'down',since:'2026-09-01'});
+    A0[2].alerts.push({family:'rate_zero',day:'2026-09-15'}); A0[3].alerts.push({family:'cohort',dir:'up',installs_from:'2026-09-06',installs_to:'2026-09-12'});
+    const ups=[['halt',{level:'halt',final:true,head:{row:'new_d1',change:-25.6,unit:'pct'},adoption:.81}],['hold',{level:'hold',final:true,head:{row:'uninstall_d0',change:6.5,unit:'pp'},adoption:.5}],
+      ['win',{level:'win',final:true,head:{row:'uninstall_d0',change:-3.1,unit:'pp'},adoption:.57}],['late',{level:'continue',final:true,late:{level:'hold'},adoption:.9,judged:4}],
+      ['cont',{level:'continue',final:true,adoption:.94,judged:5}],['wait',{level:null,final:false,ready_on:'2026-10-01'}],['never',{level:null,final:true,why:'Agla update 2 din me aaya'}]];
+    const rowsD=DATA.uninstall.apps.filter(x=>uniVis(x.app_id)); let d=20;
+    ups.forEach(([k,u],j)=>{ const s0=rowsD[j%rowsD.length]; s0.updates=(s0.updates||[]).concat([Object.assign({key:'syn-'+k,date:'2026-09-'+String(d--).padStart(2,'0'),label:'v9.'+j},u)]); });
+    UNIOLDOPEN=true; const h=uniScreen(); UNIOLDOPEN=false;
+    const iF=h.indexOf('id="uni-old"'), studio=h.slice(h.indexOf('id="us-root"'),iF), fold=h.slice(iF), band=fold.slice(fold.indexOf('id="uni-sum"'));
+    const dets=usPfRows().map(x=>x.a).filter(a=>a&&a.data_till), D=uniSumData(dets);
+    r.old=[...band.matchAll(/data-k="([a-z_]+)"[^>]*><i class="dt"><\\/i>([^<]*) <b>\\((\\d+)\\)<\\/b>/g)].map(m=>[m[1],+m[3]]);
+    const eng=studio.slice(studio.indexOf('id="us-eng"'));
+    r.now=[...eng.matchAll(/data-eng="([a-z_]+)" aria-expanded="[a-z]+">[^<]*<b>· (\\d+) apps?<\\/b>/g)].map(m=>[m[1],+m[2]]);
+    r.pool={old:(band.match(/data-sd="7" data-sv="([^"]*)"/)||[])[1], now:(eng.match(/<span class="us-num">([\\d.]+)%<\\/span>/)||[])[1], before:(band.match(/before ([\\d.]+)%/)||[])[1],
+      nowBefore:(eng.match(/data-tk="engk:p"><span class="us-ebl">Before<\\/span>[\\s\\S]*?<b>([\\d.]+)%<\\/b>/)||[])[1], P:D.pool&&{r:D.pool.r,p:D.pool.p,n:D.pool.n,su:D.pool.su,ku:D.pool.ku,w:D.pool.w},
+      apps:(eng.match(/· (\\d+) of (\\d+) apps \\(jinka/)||[]).slice(1).map(Number), oldApps:(band.match(/· (\\d+) apps \\((\\d+) me se/)||[]).slice(1).map(Number)};
+    r.lists={}; D.status.concat(D.rate).filter(g=>g[3].length).forEach(g=>{ US._.ST.eng=g[0]; const x=US._.eng(); UNISTEXP=g[0]; const o=uniSumPortfolio(dets,'',1); UNISTEXP='';
+      const exp=x.slice(x.indexOf('data-engx="'+g[0]+'"')), oxp=o.slice(o.indexOf('data-xp="'+g[0]+'"'));
+      r.lists[g[0]]={now:[...exp.matchAll(/class="us-eapx[^"]*"(?: data-tk="engv:\\d+")?>([^<]*)</g)].map(m=>m[1]),
+        old:[...oxp.matchAll(/<span class="x(?: [a-z]+)?">([^<]*)<\\/span>/g)].map(m=>m[1]), n:(exp.match(/class="us-eap"/g)||[]).length, oldN:(oxp.match(/class="uni-ac"/g)||[]).length,
+        tips:[...exp.matchAll(/data-tk="engv:(\\d+)"/g)].map(m=>__text(US._.TIPS.engv(m[1])))}; });
+    US._.ST.eng='';
+    // the 📦 list: every verdict, the card's rows, the late pill, % updated, the change judged on, the filter counts
+    const rows=usPfRows(), U=uniUpdList(rows,'uni'), card=uniUpdatesCard(rows), sec=US._.upl();
+    r.upd={n:U.L.length, groups:U.n, old:{nW:U.nW,nC:U.nC,nN:U.nN,main:U.main.length}, mainSame:U.main.every(o=>sec.indexOf(U.row(o))>=0&&card.indexOf(U.row(o))>=0),
+      order:U.main.map(o=>o.u.key), late:(sec.match(/class="pill [a-z-]+ uni-late"[^>]*>After 30 days: [^<]*/g)||[]).map(x=>x.replace(/^.*>/,'')),
+      updated:(sec.match(/>\\d+% updated</g)||[]).length, judged:(sec.match(/<span class="hl (?:up|down|muted)">[^<]*/g)||[]).map(x=>x.replace(/^.*>/,'')),
+      chips:[...sec.matchAll(/data-upf="([a-z]*)" aria-pressed="(?:true|false)"(?: disabled)?>[^<]*<b>(\\d+)<\\/b>/g)].map(m=>[m[1],+m[2]]),
+      fold:(sec.match(/⏳ Too early \\((\\d+)\\) · 👍 Normal \\((\\d+)\\) · — N\\/A \\((\\d+)\\)/)||[]).slice(1).map(Number),
+      cardFold:(card.match(/⏳ Too early \\((\\d+)\\) · 👍 Keep \\((\\d+)\\) · — No verdict \\((\\d+)\\)/)||[]).slice(1).map(Number),
+      go:[...sec.matchAll(/class="uni-upd" data-lv="[a-z]+" onclick="uniImpGo\\('([^']*)','([^']*)'\\)"/g)].map(m=>m[2]), text:__text(sec)};
+    r.filt={}; for(const k of ['halt','hold','win','pending','continue','never']){ impSet('uni',{uf:k,uall:false}); const x=US._.upl();
+      r.filt[k]=[...x.matchAll(/onclick="uniImpGo\\('[^']*','([^']*)'\\)"/g)].map(m=>m[1]); }
+    impSet('uni',{uf:'',uall:false});
+    r.words=[__text(studio)].concat(Object.keys(r.lists).map(k=>{ US._.ST.eng=k; return __text(US._.eng()); })); US._.ST.eng='';
+  } finally{ UNI.apps=JSON.parse(keepU); DATA.uninstall.apps=JSON.parse(keepD); }
+  ${RESET} uniScreen(); return JSON.stringify(r); })()`);
+// the same panel / list in ₹ and $ and every range (their numbers are not money and not the range's: they never move)
+get('parityStable', `(()=>{ const out=[]; for(const c of ['INR','USD']) for(const k of ['7','30','60']){ ${RESET} CURVIEW=c; KWIN=k; uniScreen(); out.push(US._.eng()+'|'+US._.upl()); } ${RESET} return JSON.stringify(out); })()`);
 out.n = Object.keys(out).length;
 process.stdout.write(JSON.stringify({ errors, out }));

@@ -330,7 +330,8 @@ def test_other_tabs_and_the_app_page_are_unaffected(report):
     assert o["apppage_studio"] and o["apppage_old_kept"] and o["apppage_old_alone"]
     assert o["old_view"] == {"kw": True, "studio": False, "table": True}        # no Studio file: the older view, as before
     assert o["studio_view"]["root"] and not o["studio_view"]["kw"] and o["studio_view"]["fold"]   # no duplicate KPI band
-    assert all(o["studio_view"]["folded"])                     # 📦 + 📅, the table, the older What changed: in "Purane views"
+    assert all(o["studio_view"]["folded"])                     # the band, 📦 (one line), 📅, the table, the older What changed: folded
+    assert o["studio_view"]["updCard"] and o["studio_view"]["updSection"]   # the 📦 list is the Studio's own section, drawn once
     L = J(report, "loading")
     assert L == {"wait": True, "back": True}
 
@@ -620,3 +621,101 @@ def test_how_many_stay_toggles_drawer_low_data_and_loading(report):
     assert "Low data" in t["tip7"] and "Low data" not in t["tip3"]
     assert t["faint"] and all(int(re.match(r"Day (\d+)", f).group(1)) >= 5 for f in t["faint"])
     assert c["loading"].endswith("⏳ Is graph ka data load ho raha hai…") and c["failed"].endswith("⚠️ Is graph ka data load nahi hua — page refresh karo")
+
+
+# ── parity with the older All-apps views (owner, 2 Oct: "parity aur speed") ───────────────────────────────────────────
+
+def _words_all(t):
+    _words_ok(t)
+    assert not re.search(r"\b100 me\b|\b1,000 me\b|\bhar 1,000\b|per 1,000", t), t[:200]
+
+
+def test_the_all_apps_band_is_back_in_the_fold(report):
+    p = J(report, "parity")
+    assert p["dups"] == []
+    # the grey "ALL APPS TOGETHER" band: the pooled tile and both chip rows — first in the fold, without range KPIs
+    assert p["fold"] == {"band": True, "pool": True, "kw": False, "secs": 2, "first": True}
+    for k in ("loading", "failed"):                            # the Studio not there: the band and the card, nothing twice
+        assert p[k]["card"] and not p[k]["line"] and p[k]["dups"] == [], (k, p[k])
+    assert p["loading"]["band"]
+    assert p["noStudio"] == {"band": True, "card": True, "studio": False}       # no Studio file: as before (its KPIs too)
+
+
+def test_the_studio_panel_has_the_older_bands_numbers(report):
+    p = J(report, "parity")
+    e = p["eng"]
+    assert e["where"] and e["rows"] == ["App status", "Uninstall rate"]
+    assert e["now"] == e["old"] and e["now"]                   # the same chips, labels and counts as the older band
+    assert e["pool"][0] == e["pool"][1] and e["before"][0] == e["before"][1] and e["pool"][0]
+    assert e["apps"][0] == e["apps"][1]                        # "21 of 27 apps": the apps judged on the same weeks
+    assert "installs" in p["engTip"] and "Now" in p["engTip"] and "Before" in p["engTip"]
+    for k, L in p["lists"].items():                            # a chip's apps = the older chip's apps; a name opens the app
+        assert L["names"] and len(L["now"]) == len(L["names"]), (k, L)
+        _words_all(L["text"])
+        for t in L["tips"]:
+            assert "Last 4 final weeks" in t and "4 weeks before" in t and "installs" in t, t
+    assert p["click"] == {"uf": "halt", "sec": True, "off": True, "uall": True, "uall2": False, "eng": True, "eng2": True, "mapSame": True}
+    assert p["wait"] == {"eng": True, "upd": True, "root": True}   # the older views' file still loading: the parts wait
+
+
+def test_the_studio_panel_matches_on_every_kind_of_chip(report):
+    q = J(report, "parity2")
+    kinds = {k for k, _ in q["old"]}
+    assert {"worse", "better", "unsure", "wk_up", "r_up", "r_zero", "r_dn", "r_ok"} <= kinds, kinds
+    assert q["now"] == q["old"]
+    P = q["pool"]
+    assert P["old"] == P["now"] and P["before"] == P["nowBefore"] and P["apps"] == P["oldApps"] == [3, 4]
+    # the pooled number: Σ installs × still in app ÷ Σ installs, over the apps judged on the SAME weeks (the low-data app
+    # on other weeks is left out), recomputed here
+    r = (1000 * .40 + 900 * .61 + 700 * .55) / 2600
+    assert abs(P["P"]["r"] - r) < 1e-9 and P["P"]["su"] == 2600 and P["P"]["ku"] == round(r * 2600) == 1334
+    for k, L in q["lists"].items():
+        assert L["now"] == L["old"] or (k == "same" and not L["old"]), (k, L)   # the same gap / reason per app
+        assert L["n"] == L["oldN"], (k, L)
+    assert q["lists"]["worse"]["now"] == ["−12"] and q["lists"]["better"]["now"] == ["+11"]
+    assert q["lists"]["r_up"]["now"] == ["Spike · 14 Sep"] and q["lists"]["r_zero"]["now"] == ["0 recorded · 15 Sep"]
+    for t in q["words"]:
+        _words_all(t)
+
+
+def test_update_impact_is_a_studio_section_with_the_cards_rows(report):
+    p = J(report, "parity")
+    u = p["upd"]
+    assert u["where"] and u["rowsSame"] and u["restHidden"] and u["foldLine"] and not u["card"]
+    _words_all(u["text"])
+    q = J(report, "parity2")["upd"]
+    assert q["n"] == 8 and q["mainSame"]
+    assert q["order"] == ["syn-halt", "syn-hold", "syn-late", "syn-win"]          # 🛑, ⚠️ (the ⏰ late one too), ✅ — the card's order
+    assert q["go"] == q["order"]                                # a row = that app's page at that update (uniImpGo)
+    assert q["late"] == ["After 30 days: ⚠️ Wait and check"]
+    assert q["updated"] == 4 and q["judged"] == ["Back next day −25.6%", "Same day uninstall +6.5%", "Same day uninstall −3.1%"]
+    # the filter: a chip per verdict with its count, the six status words; the counts are the card's own
+    assert q["chips"] == [["", 8], ["halt", 1], ["hold", 2], ["win", 1], ["continue", 2], ["pending", 1], ["never", 1]]
+    assert q["fold"] == q["cardFold"] == [1, 2, 1]
+    assert q["groups"] == {"halt": 1, "hold": 2, "win": 1, "pending": 1, "continue": 2, "never": 1}
+    f = J(report, "parity2")["filt"]
+    assert f["halt"] == ["syn-halt"] and f["hold"] == ["syn-hold", "syn-late"] and f["win"] == ["syn-win"]
+    assert f["pending"] == ["syn-wait"] and f["never"] == ["syn-never"] and "syn-cont" in f["continue"]
+    _words_all(q["text"])
+    pf = p["filt"]
+    for k, v in pf.items():
+        assert v["rows"] == v["want"], (k, v)
+        if k != "all":
+            assert v["on"]
+            _words_all(v["text"])
+
+
+def test_when_will_i_know_and_the_status_chip_counts(report):
+    p = J(report, "parity")
+    assert p["when"]["sec"] and p["when"]["same"]
+    _words_all(p["when"]["text"])
+    fst = dict((k, n) for k, _, n in p["fst"])
+    for k in set(fst) - {"lagu"}:
+        assert fst[k] == p["R"].count(k), (k, fst)
+    assert fst["lagu"] == p["R"].count("lagu") + p["noga"]
+    assert [w for _, w, _ in p["fst"]][:6] == ["Worse", "Watch", "Better", "Normal", "Too early", "N/A"]
+
+
+def test_the_panel_and_the_list_do_not_follow_the_range_or_the_currency(report):
+    out = json.loads(report["out"]["parityStable"])
+    assert len(out) == 6 and len(set(out)) == 1
