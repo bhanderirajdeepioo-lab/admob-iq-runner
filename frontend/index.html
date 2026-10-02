@@ -13602,6 +13602,18 @@ function valAlertCards(list){
       ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
       <div class="aact">${btn}</div></div></div>`; }).join(''); }
 
+// Recommendations, "Out of approved range": ONE row per placement (B-18). An ad unit with 3 metrics out of range used to be 3
+// rows — "3 placements" and its weekly $ added 3 times (about 3x its real stake). Grouped by ad unit (id,
+// else name + app), its metrics listed together in the row; rev(place, app) is called once per placement. Pure → tested.
+function recoRangeRows(ra,rev,txt){ const by=new Map(), T=txt||(m=>String(m||''));
+  (ra||[]).forEach(a=>{ if(!a) return; const k=a.id?'id:'+a.id:'pa:'+String(a.place||'')+'|'+String(a.app||'');
+    let r=by.get(k); if(!r){ r={app:a.app,place:a.place,id:a.id,goto:'unit',msgs:[],mets:[],rev:rev(a.place,a.app)}; by.set(k,r); }
+    const m=T(a.message||''); if(m&&r.msgs.indexOf(m)<0) r.msgs.push(m); if(a.metric&&r.mets.indexOf(a.metric)<0) r.mets.push(a.metric); });
+  return [...by.values()].map(r=>Object.assign(r,{n:Math.max(1,r.msgs.length),sub:r.msgs.join(' · ')})).sort((a,b)=>b.rev-a.rev); }
+// the page's totals: each placement counted ONCE and its money once, even when two cards name it (key = name + app)
+function recoTotals(cards,keyOf){ const seen=new Map();
+  (cards||[]).forEach(c=>(c.rows||[]).forEach(r=>{ const k=keyOf(r); seen.set(k,Math.max(seen.get(k)||0,+r.rev||0)); }));
+  let t=0; seen.forEach(v=>{ t+=v; }); return {total:t,placements:seen.size}; }
 function renderReco(){
   const s=screenDiv('reco');const r=DATA.recommendations||{items:[],root_cause:[]};
   const comp=gAxis().filter(d=>d!==(DATA.today_date||''));
@@ -13626,10 +13638,10 @@ function renderReco(){
   });
   // 2) approved-range breaches → investigate
   const ra=(DATA.range_alerts||[]).filter(x=>!APP||x.app===APP);
-  if(ra.length) cards.push({action:'Out of approved range — investigate', conf:'high',
-    why:'Ye placements apni "normal" range se hile — floor / demand / mediation / quality check karo.',
-    rows: ra.map(a=>({app:a.app,place:a.place,sub:smpInfoTxt(a.message||''),rev:revOf(a.place,a.app),id:a.id,goto:'unit'})).sort((a,b)=>b.rev-a.rev),
-    total: ra.reduce((a,x)=>a+revOf(x.place,x.app),0)});
+  if(ra.length){ const rows=recoRangeRows(ra,revOf,smpInfoTxt);
+    cards.push({action:'Out of approved range — investigate', conf:'high',
+      why:'Ye placements apni "normal" range se hile — floor / demand / mediation / quality check karo.',
+      rows, total: rows.reduce((a,x)=>a+x.rev,0)}); }
   // 3) IVT / high deduction → check traffic
   const ded=((DATA.deductions&&DATA.deductions.rows)||[]).filter(x=>x.flag==='ivt'&&(!APP||x.app===APP));
   if(ded.length) cards.push({action:'Invalid traffic (IVT) — traffic source check karo', conf:'high',
@@ -13638,14 +13650,17 @@ function renderReco(){
     total: ded.reduce((a,x)=>a+(x.revenue||0),0)});
   cards.sort((a,b)=>b.total-a.total);
 
-  const totalOpp=cards.reduce((a,c)=>a+c.total,0);
-  const totalPl=cards.reduce((a,c)=>a+c.rows.length,0);
+  const tot=recoTotals(cards,r=>baseName(r.place)+'|'+(r.app||''));
+  const totalOpp=tot.total, totalPl=tot.placements;
   const cardHtml=cards.map((c,i)=>{
     const shown=c.rows.slice(0,6);
-    const rows=shown.map(rw=>`<div class="rc-row" onclick="${rw.goto==='unit'?`bGotoUnit('${rw.id}')`:`goPlacement('${rw.id}')`}" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line);cursor:pointer">
+    // a placement with several out-of-range metrics: ONE row, its metrics listed together on their own line (B-18)
+    const rows=shown.map(rw=>{ const many=rw.n>1;
+      return `<div class="rc-row" onclick="${rw.goto==='unit'?`bGotoUnit('${rw.id}')`:`goPlacement('${rw.id}')`}" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;padding:7px 0;border-top:1px solid var(--line);cursor:pointer">
         ${rw.app?appIcon(rw.app,16):''}<b class="rc-nm">${rw.place}</b>
-        <span class="faint rc-sub">${rw.sub}</span>
-        <span class="rc-amt">${revCell(rw.rev)}</span></div>`).join('');
+        ${many?'':`<span class="faint rc-sub">${rw.sub}</span>`}
+        <span class="rc-amt">${revCell(rw.rev)}</span>
+        ${many?`<div class="faint" style="order:4;flex:1 1 100%;font-size:11px;line-height:1.5;padding-left:24px;overflow-wrap:anywhere"><span class="pill p-y" style="font-size:10px;margin-right:5px">${rw.n} metrics</span>${rw.sub}</div>`:''}</div>`; }).join('');
     const more=c.rows.length>6?`<div class="faint" style="font-size:11px;padding-top:7px">+${c.rows.length-6} more placements — biggest $ first</div>`:'';
     return `<div class="card"><div style="display:flex;gap:12px;align-items:flex-start">
       <div style="font-size:18px;font-weight:800;color:var(--faint);min-width:22px">${i+1}</div>
@@ -13653,7 +13668,7 @@ function renderReco(){
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <b style="font-size:14.5px">${c.action}</b>
           <span class="pill ${c.conf==='high'?'p-r':'p-y'}">${c.conf}</span>
-          <span class="pill p-b">${c.rows.length} placements</span>
+          <span class="pill p-b">${c.rows.length} placement${c.rows.length===1?'':'s'}</span>
           ${c.ab?'<span class="pill p-g" style="font-size:10px">Confirmed by A/B</span>':''}
           <span class="spacer"></span>
           <span style="font-weight:800;color:var(--cyan);font-size:15px">${revCell(c.total)}</span><span class="faint" style="font-size:11px">/wk at stake</span>
