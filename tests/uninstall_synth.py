@@ -730,7 +730,7 @@ ALERT_KEYS = ("id", "source", "app_id", "app", "family", "dir", "severity", "uni
               "provisional", "estimate",
               "started", "started_cap", "seeded", "opened_at", "alert_at")   # + SPEC_SIMPLIFY (a contract extension)
 CLOSED_KEYS = ("closed", "closed_at", "close_reason")                  # a closed one: + these (SPEC_SIMPLIFY)
-CLOSE_REASONS = ("recovered", "superseded", "window_end", "seed_cleanup")
+CLOSE_REASONS = ("recovered", "superseded", "window_end", "seed_cleanup", "rule_tuned")
 
 
 IMPACT_ALERT_KEYS = ("release", "level", "rows")

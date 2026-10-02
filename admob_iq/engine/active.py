@@ -19,11 +19,19 @@ row.
   * TILES: the last 7 SETTLED days vs the 28 before, judged against the same statistic at earlier ends (an empirical
     null — activity days move together, so √n errors are 2–4× too small). Uncentred on purpose: a steady decline reads
     "lower". Red / green only with an open alert; otherwise at most blue "Maybe".
-  * ALERTS: act_drift (a steady shift, best of 36 start days, empirical null), act_spike (a day outside the band),
-    act_break (tracking: a1 = 0, or R under half its normal), act_slow (3 months of slow decline), act_return (new users
-    coming back on day N, recent week vs the 4 weeks before). Only settled days are judged (≤ E − ACT_LATE_DAYS); an
-    obvious crash on a provisional day is an "Early look" info row only. Ad-spend swings are attributed to installs, not
-    blamed on old users (§2.8); an eCPM-only move is the market's ("Ad price"), never an app alert.
+  * ALERTS: act_drift (a steady shift over ≥ 10 settled days, empirical null), act_break (tracking: a1 = 0, or R under
+    half its normal, ≥ 2 settled days), act_slow (3 months of slow decline), act_return (new users coming back on day N,
+    the newest 14 install days vs the 4 weeks before). Only settled days are judged (≤ E − ACT_LATE_DAYS); an obvious
+    crash on a provisional day is an "Early look" info row only. Ad-spend swings are attributed to installs, not blamed
+    on old users (§2.8); an eCPM-only move is the market's ("Ad price"), never an app alert.
+  * THE ALERT POLICY (one rule set for the three GA4 tabs — the owner's metrics do not move meaningfully day to day):
+    one unusual day is never an alert (act_spike only lists it); a shift is seen in both halves of its window and on
+    its newest days; it is MATERIAL (≥ MAT_USERS returning users or ≥ MAT_MONEY a day; return rates ≥ MAT_RET_USERS
+    returners a day) — else an info row "small"; good news only when GOOD_X × that, ≥ 2 × the minimum effect and
+    |z| ≥ WARN_Z; the same story back ≤ REOPEN_SEED_DAYS after it closed, or another metric of the same app and
+    direction that began ≤ ONE_CAUSE_DAYS from an open alert, is shown, never sent again (the alerts of one cause list
+    each other: "saath me"). The first build on these rules (eval[app].rules < RULES_V) closes an open alert they would
+    not open with close_reason "rule_tuned" and sends nothing new.
   * EPISODES live in this tab's own state (active_state.json, owned by active_build): open → notify once → close after
     CLOSE_EVALS quiet advanced evaluations. The first evaluation, a moved stream, an outdated store, an input that just
     appeared (burn-in) and an episode that an open Update impact alert already covers are SEEDED: shown, never sent.
@@ -68,7 +76,7 @@ CENTRE_DAYS = 28
 CENTRE_MIN = 14
 SCALE_DAYS = 56
 SCALE_MIN = 28
-DRIFT_L = (7, 42)
+DRIFT_L = (10, 42)                      # a steady shift over ≥ 10 settled days (never a week or less)
 DRIFT_BASE = 28
 DRIFT_BASE_MIN = 21
 DRIFT_SIDE = .7
@@ -120,6 +128,20 @@ RET_SUM_MAX = 3.0                       # without return data: returners from th
 YS_MAX = 0.9                            # day's installs (Σ D1..D30 share; 30% D1 falling ~k^−½ gives 2.85), ≤ 90% of R
 GAP_SHOW = 0.03
 VER_ROWS = 10
+# ── the alert policy (one rule set for the three GA4 tabs: an alert rests on ≥ 10 FINAL days, is material and holds) ──
+RULES_V = 2                             # the alert rules' version (eval[app].rules): a lower one is switched over once
+SPIKE_ALERT = False                     # one unusual day is never an alert — it is listed (Older changes), not sent
+BREAK_MIN_DAYS = 2                      # a tracking break alerts only when it runs ≥ 2 settled days (1 day: listed)
+MAT_USERS = 500                         # material: the change moves ≥ 500 returning users a day …
+MAT_MONEY = 5.0                         # … or ≥ 5 a day of ad revenue (the revenue's currency — USD; other: users only)
+MAT_RET_USERS = 50                      # return rates: ≥ 50 more / fewer new users coming back a day
+GOOD_X = 2.0                            # good news: twice the floor, ≥ 2 × the minimum effect and |z| ≥ WARN_Z
+RET_ALERT_RECENT = 14                   # act_return judges the newest 14 install days (both 7-day halves moved)
+REOPEN_SEED_DAYS = 14                   # the same story back ≤ 14 days after it closed: shown again, never re-sent
+ONE_CAUSE_DAYS = 7                      # another metric of the same app and direction that began ≤ 7 days from an
+                                        # open alert's start: the same cause — shown with it, never sent again
+DRIFT_HALF = 0.5                        # each half of a drift window — and its newest DRIFT_TAIL days — moved ≥ half
+DRIFT_TAIL = 3                          # the minimum effect, the same way (a dip that is over never becomes an alert)
 
 # read-only reuse
 ALERT_RECENT_DAYS = U.ALERT_RECENT_DAYS
@@ -181,7 +203,10 @@ CONSTS = {k.lower(): (list(v) if isinstance(v, tuple) else v) for k, v in dict(
     MARKET_WEEKS=MARKET_WEEKS, LINK_BEFORE=LINK_BEFORE, LINK_AFTER=LINK_AFTER, CLOSED_KEEP_DAYS=CLOSED_KEEP_DAYS,
     MODEL_BACK_DAYS=MODEL_BACK_DAYS, EDGE_RET_WINDOW=EDGE_RET_WINDOW, OTHER_NET_MIN=OTHER_NET_MIN,
     OTHER_NET_SWING=OTHER_NET_SWING, EARLY_FRAC=EARLY_FRAC, ALERT_RECENT_DAYS=ALERT_RECENT_DAYS,
-    YEAR_CLEAR_DAYS=YEAR_CLEAR_DAYS, COHORT_DAYS=COHORT_DAYS).items()}
+    YEAR_CLEAR_DAYS=YEAR_CLEAR_DAYS, COHORT_DAYS=COHORT_DAYS, RULES_V=RULES_V, SPIKE_ALERT=SPIKE_ALERT,
+    BREAK_MIN_DAYS=BREAK_MIN_DAYS, MAT_USERS=MAT_USERS, MAT_MONEY=MAT_MONEY, MAT_RET_USERS=MAT_RET_USERS, GOOD_X=GOOD_X,
+    RET_ALERT_RECENT=RET_ALERT_RECENT, REOPEN_SEED_DAYS=REOPEN_SEED_DAYS, ONE_CAUSE_DAYS=ONE_CAUSE_DAYS,
+    DRIFT_HALF=DRIFT_HALF, DRIFT_TAIL=DRIFT_TAIL).items()}
 
 
 # ── small helpers ────────────────────────────────────────────────────────────────────────────────
@@ -790,16 +815,31 @@ def _drift_at(P, m, e, caps=None):
             g = G[s]
             eh = nw = dw = 0.0
             same = tot = 0
+            half = [[0.0, 0.0], [0.0, 0.0]]                # (Σ expected, Σ actual) of the window's two halves
             for d in range(s, e + 1):
                 if not valid[d]:
                     continue
                 ex = den[d] * g[wd[d]]
                 eh, nw, dw = eh + ex, nw + num[d], dw + den[d]
+                hh = half[0 if d < s + L // 2 else 1]
+                hh[0], hh[1] = hh[0] + ex, hh[1] + num[d]
                 if ex > 0:
                     tot += 1
                     same += 1 if ((num[d] / ex) > 1) == (x > 0) else 0
             if not tot or same / tot < DRIFT_SIDE:
                 continue
+            tail = [0.0, 0.0]                          # the newest DRIFT_TAIL settled days: the change still holds
+            k = 0
+            for d in range(e, s - 1, -1):
+                if not valid[d]:
+                    continue
+                tail[0], tail[1] = tail[0] + den[d] * g[wd[d]], tail[1] + num[d]
+                k += 1
+                if k == DRIFT_TAIL:
+                    break
+            if any(h0 <= 0 or h1 <= 0 or (h1 / h0 - 1) * (1 if x > 0 else -1) < DRIFT_HALF * MIN_REL[m]
+                   for h0, h1 in half + [tail]):
+                continue                               # seen in both halves and still today — never one burst
             if m == "ret_dau" and abs(nw - eh) < DRIFT_MIN_USERS * math.sqrt(L):
                 continue
             out[dr] = {"metric": m, "L": L, "s": s, "e": e, "z": z, "D": x, "rel": math.exp(x) - 1,
@@ -885,19 +925,19 @@ def _cw(P, N, lo, hi):
     return pa[hi + 1] - pa[lo], pn[hi + 1] - pn[lo], pc[hi + 1] - pc[lo]
 
 
-def _ret_null(P, N, r1):
-    """σ_null: the spread of the same recent-vs-4-weeks Δ at shifts 7..91 install days back, fully usable windows only
-    (≥ NULL_MIN shifts) → σ or None."""
+def _ret_null(P, N, r1, recent=RET_RECENT):
+    """σ_null: the spread of the same recent-vs-4-weeks Δ (recent = that many install days) at shifts 7..91 install days
+    back, fully usable windows only (≥ NULL_MIN shifts) → σ or None."""
     vals = []
     for sh in range(RET_NULL_SHIFTS[0], RET_NULL_SHIFTS[1] + 1):
         e1 = r1 - sh
-        e0 = e1 - RET_RECENT + 1
+        e0 = e1 - recent + 1
         b1, b0 = e0 - 1, e0 - RET_PREV
         if b0 < P["i0"]:
             break
         aw, tw, cw = _cw(P, N, e0, e1)
         ab, tb, cb = _cw(P, N, b0, b1)
-        if cw < RET_RECENT or cb < RET_PREV or not tw or not tb:
+        if cw < recent or cb < RET_PREV or not tw or not tb:
             continue
         vals.append(aw / tw - ab / tb)
     if len(vals) < NULL_MIN:
@@ -920,10 +960,11 @@ def _phi_at(P, N, lo, hi):
     return U._phi(each)
 
 
-def _ret_stats(P, N, iS, sig=True):
-    """Recent 7 install days (c + N ≤ S) vs the 28 before, + all-time: the numbers the tile and act_return judge."""
+def _ret_stats(P, N, iS, sig=True, recent=RET_RECENT):
+    """Recent 7 install days (c + N ≤ S; act_return: RET_ALERT_RECENT) vs the 28 before, + all-time: the numbers the
+    tile and act_return judge."""
     r1 = iS - N
-    r0 = r1 - RET_RECENT + 1
+    r0 = r1 - recent + 1
     b1, b0 = r0 - 1, r0 - RET_PREV
     if b0 < P["i0"]:
         b0 = P["i0"]
@@ -936,11 +977,17 @@ def _ret_stats(P, N, iS, sig=True):
     pbar = (aw + ab) / (tw + tb)
     phi = _phi_at(P, N, b0, b1)
     naive = math.sqrt(max(pbar * (1 - pbar), 0.0) * (1 / tw + 1 / tb) * phi)
-    sn = _ret_null(P, N, r1) if sig else None
+    sn = _ret_null(P, N, r1, recent) if sig else None
     se = max(naive, sn or 0.0) or None
     pa, ta, ca = _ret_ref(P, N, P["i0"], r0 - 1)
     out.update(pw=pw, pb=pb, d=pw - pb, se=se, z=(pw - pb) / se if se else None, sn=sn, phi=phi,
-               all=pa if ca >= RET_ALL_MIN else None, all_days=ca, mpp=min_pp(pb))
+               all=pa if ca >= RET_ALL_MIN else None, all_days=ca, mpp=min_pp(pb), recent=recent)
+    if recent > RET_RECENT:                          # the alert window's two halves (older, newer): each one's own Δ
+        h = r0 + recent // 2
+        out["halves"] = []
+        for lo, hi in ((r0, h - 1), (h, r1)):
+            a_, t_, _ = _cw(P, N, lo, hi)
+            out["halves"].append((a_ / t_ - pb) if t_ else None)
     return out
 
 
@@ -1813,6 +1860,65 @@ def _inst_info(P, dr, rel, frm, to, slow=False, sp=None):
                     % (U.fmt_rel(rel), " (3 mahine me)" if slow else "", "zyada" if rel > 0 else "kam")}
 
 
+def _rev_day(P, a, b):
+    """Mean ad revenue per revenue-known day over [a, b] (the revenue's currency), or None."""
+    if P["rev"] is None:
+        return None
+    c = _psum(P["pc"]["arpdau"], a, b)
+    return _psum(P["pn"]["arpdau"], a, b) / 1000 / c if c else None
+
+
+def _rev_user(P, a, b):
+    """Ad revenue per active user per day over [a, b], or None."""
+    if P["rev"] is None:
+        return None
+    u = _psum(P["pd"]["arpdau"], a, b)
+    return _psum(P["pn"]["arpdau"], a, b) / 1000 / u if u else None
+
+
+def _impact(P, m, w0, w1, b0, b1, rel, users=None):
+    """How much a change moves a day → {users, money, cur}: users = the returning users it moved (ret_dau / slow / return:
+    `users` given; sessions / time / ads: |rel| × the window's returning users), money = the ad revenue a day at stake
+    (users × revenue per user for returning users; |rel| × revenue a day for the per-user metrics). None = unknown."""
+    if users is None:
+        c = _psum(P["pc"]["ret_dau"], w0, w1)
+        users = abs(rel) * _psum(P["pn"]["ret_dau"], w0, w1) / c if c else None
+        rd = _rev_day(P, b0, b1)
+        money = abs(rel) * rd if rd is not None else None
+    else:
+        ru = _rev_user(P, b0, b1)
+        money = users * ru if ru is not None else None
+    return {"users": None if users is None else int(round(users)), "money": None if money is None else _m4(money),
+            "cur": P["currency"]}
+
+
+def _material(imp_, kind, k=1.0):
+    """Is the change material (k × the floors)? Returning users / usage: ≥ MAT_USERS users or ≥ MAT_MONEY a day; ads:
+    the money (users only when the revenue is not in USD); return rates: ≥ MAT_RET_USERS returners a day."""
+    users = imp_.get("users") or 0
+    if kind == "ret":
+        return users >= k * MAT_RET_USERS
+    usd = imp_.get("money") is not None and imp_.get("cur") == "USD"
+    money_ok = usd and imp_["money"] >= k * MAT_MONEY
+    if kind == "ads":
+        return money_ok if usd else users >= k * MAT_USERS
+    return money_ok or users >= k * MAT_USERS
+
+
+def _small_info(P, c, imp_):
+    """A change the detectors saw that is no alert — too small to matter, or good news that is not big → an info row
+    (the same sentence, + why it is not an alert)."""
+    good = c["dir"] == "up"
+    txt = alert_text(dict(c, release=None, tags=[t for t in c.get("tags") or [] if t != "installs"]), P["E"])
+    u = imp_.get("users")
+    size = (" (roz ~%s %s)" % (_users(u), "users" if c["family"] != "act_return" else "log")) if u else ""
+    txt += " — %s%s, alert nahi" % ("achha badlaav par bada nahi" if good else "chhota badlaav", size)
+    frm = c.get("since") or c.get("installs_from") or c.get("day")
+    to = c.get("installs_to") or c.get("_to") or frm
+    return {"kind": "small", "metric": c["metric"], "dir": c["dir"], "from": frm, "to": to, "rel": _m4(c.get("rel")),
+            "tags": [], "prov": False, "sp": c.get("sp"), "text": txt}
+
+
 def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
     """Every condition that holds at settled end iS (drift, slow, spikes, breaks, returns) + the info rows (installs,
     price) — before persistence, seeding and links. ev = this app's eval state (claimed install ranges); told = this
@@ -1875,6 +1981,17 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
                 if tn is not None and _sgn(tn) == _sgn(dr["rel"]) and abs(tn) >= 0.5 * abs(dr["rel"]):
                     c["tags"].append("time")
                     c["rel_t"] = tn
+        kind = "ads" if m == "ads" else "users"
+        if m == "ret_dau":
+            imp_ = _impact(P, m, s, e, dr["bfrom"], dr["bto"], dr["rel"],
+                           users=abs(dr["act_sum"] - dr["exp_sum"]) / max(1, dr["den_sum"]))
+        else:
+            imp_ = _impact(P, m, s, e, dr["bfrom"], dr["bto"], dr["rel"])
+        c["impact"], c["_to"] = imp_, iso[e]
+        big = abs(dr["z"]) >= WARN_Z and abs(dr["rel"]) >= GOOD_X * MIN_REL[m]
+        if not (_material(imp_, kind, GOOD_X) and big if dr["dir"] == "up" else _material(imp_, kind)):
+            info.append(_small_info(P, c, imp_))    # small (or good news that is not big): listed, never an alert
+            continue
         drifts[(m, dd)]["cond"] = c
     for dd in ("down", "up"):
         usage = [m for m in ("sess", "time") if (m, dd) in drifts and "cond" in drifts[(m, dd)]]
@@ -1909,9 +2026,16 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
              "installs_from": None, "installs_to": None, "delta_pp": None, "users": _int(sl["now"]),
              "tags": [], "cap": None, "also": [], "est": False, "inst": _inst_snap(att, sl["rel"]),
              "sp": _sp_ret(P, att, sl["s"], sl["e"], sl["bfrom"], sl["bto"])}
+        imp_ = _impact(P, "ret_dau", sl["s"], sl["e"], sl["bfrom"], sl["bto"], sl["rel"],
+                       users=abs(sl["now"] - sl["before"]))
+        c["impact"], c["_to"] = imp_, iso[sl["e"]]
+        good = sl["dir"] == "up"
         if rule == "info" or (rule == "cap" and sl["dir"] == "up"):
             info.append(_inst_info(P, sl["dir"], sl["rel"], iso[sl["s"]], iso[sl["e"]], slow=True,
                                    sp=_sp_ret(P, att, sl["s"], sl["e"], sl["bfrom"], sl["bto"], att["rb"])))
+        elif not (_material(imp_, "users", GOOD_X) and abs(sl["rel"]) >= GOOD_X * SLOW_MIN_REL if good
+                  else _material(imp_, "users")):
+            info.append(_small_info(P, c, imp_))
         else:
             if rule == "cap":
                 c["cap"], c["tags"], c["est"] = "watch", ["installs"], att["est"]
@@ -1928,6 +2052,8 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
                 else:
                     grp.append([d])
         for g in grp:
+            if len(g) < BREAK_MIN_DAYS:                # one broken day: listed (Older changes), never an alert
+                continue
             bs = [P["brk"][d] for d in g]
             kind = "zero" if all(b["kind"] == "zero" for b in bs) else "low"
             d, b = g[-1], bs[-1]
@@ -1938,7 +2064,7 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
                         "since": None, "day": iso[g[0]], "last_day": iso[g[-1]], "days_list": [iso[x] for x in g],
                         "base_from": None, "base_to": None, "installs_from": None, "installs_to": None,
                         "delta_pp": None, "users": int(now or 0), "tags": [], "cap": None, "also": [], "est": False})
-    for m in DRIFT_METRICS:
+    for m in DRIFT_METRICS if SPIKE_ALERT else ():   # one unusual day is never an alert (history lists it)
         f = P["fast"].get(m)
         if f is None or (only is not None and m not in only):
             continue
@@ -1993,12 +2119,16 @@ def conditions(P, iS, ev, open_eps, beta, recent_from, told=None):
         for N in RET_ALERT_NS:
             if N > nmax:
                 continue
-            st = _ret_stats(P, N, iS)
+            st = _ret_stats(P, N, iS, recent=RET_ALERT_RECENT)
             c = _ret_cond(P, st, recent_from)
             if c:
                 per[c["dir"]].append(c)
-        for dr, cs in per.items():
+        for dr, cs in list(per.items()):
+            small = sorted((c for c in cs if c.get("_small")), key=lambda c: -abs(c["z"]))
+            cs = [c for c in cs if not c.get("_small")]
             if not cs:
+                if small:
+                    info.append(_small_info(P, small[0], small[0]["impact"]))
                 continue
             cs.sort(key=lambda c: -abs(c["z"]))
             c = cs[0]
@@ -2030,7 +2160,8 @@ def _ret_cond(P, st, recent_from):
     if "pw" not in st or st["se"] is None or st["z"] is None:
         return None
     N, iso = st["N"], P["iso"]
-    if st["cw"] < 5 or st["cb"] < 21 or st["r1"] < 0:
+    rec = st.get("recent", RET_RECENT)
+    if st["cw"] < max(5, rec * 5 // 7) or st["cb"] < 21 or st["r1"] < 0:
         return None
     if P["days"][st["r1"]] < recent_from:
         return None
@@ -2052,7 +2183,7 @@ def _ret_cond(P, st, recent_from):
             side += 1 if (pc - st["pb"] > 0) == (d > 0) else 0
             if n > bt:
                 big, bt = c, n
-        if side < 4:
+        if side < (4 * rec + 6) // 7:
             return None
         if big is not None:
             aw2, tw2 = st["aw"] - P["A"][big][N], st["tw"] - P["new"][big]
@@ -2061,6 +2192,8 @@ def _ret_cond(P, st, recent_from):
             d2 = aw2 / tw2 - st["pb"]
             if _sgn(d2) != _sgn(d) or abs(d2) * 100 < mp or abs(d2 / st["se"]) < zlim:
                 return None
+    if any(h is None or h * _sgn(d) * 100 < 0.5 * mp for h in st.get("halves") or ()):
+        return None                                   # both halves of the install days moved, the same way
     dr = "up" if d > 0 else "down"
     sw_w, sw_b = _mean_new(P, st["r0"], st["r1"]), _mean_new(P, st["b0"], st["b1"])
     swing = (sw_w / sw_b - 1) if sw_w is not None and sw_b else None
@@ -2068,6 +2201,10 @@ def _ret_cond(P, st, recent_from):
     if capped and dr == "up":                         # a campaign / country mix: never sent as good news
         return None
     vs_all = st["all"] is not None and (st["pw"] - st["all"]) * 100 * (1 if dr == "up" else -1) >= mp
+    imp_ = _impact(P, "ret", st["r0"], st["r1"], st["b0"], st["b1"], d,
+                   users=abs(d) * st["tw"] / max(1, st["cw"]))          # returners a day
+    ok = (_material(imp_, "ret", GOOD_X) and abs(d) * 100 >= GOOD_X * mp and st["sn"] is not None
+          if dr == "up" else _material(imp_, "ret"))
     if dr == "up":
         sev = "good"
     elif abs(d) * 100 >= 2 * mp and st["sn"] is not None and not capped and vs_all:
@@ -2080,7 +2217,8 @@ def _ret_cond(P, st, recent_from):
             "installs_from": iso[st["r0"]], "installs_to": iso[st["r1"]], "base_from": iso[st["b0"]],
             "base_to": iso[st["b1"]], "users": int(st["tw"]), "vs": ["prev", "all"] if vs_all else ["prev"],
             "tags": ["installs"] if capped else [], "cap": "watch" if (capped or st["sn"] is None) else None,
-            "inst_swing": swing, "also": [], "est": False, "_r0": st["r0"], "_r1": st["r1"], "sp": _sp_rr(st)}
+            "inst_swing": swing, "also": [], "est": False, "_r0": st["r0"], "_r1": st["r1"], "sp": _sp_rr(st),
+            "impact": imp_, "_small": not ok}
 
 
 # ── text (§2.15) ────────────────────────────────────────────────────────────────────────────────
@@ -2200,7 +2338,7 @@ def _eid(app_id, c, opened, extra=""):
                                                  c["metric"]), None, c["dir"], opened + extra)
 
 
-def episodes(st, app_id, E, ready, advanced, now, recent_from):
+def episodes(st, app_id, E, ready, advanced, now, recent_from, hit_out=None):
     """Open / refresh / close this app's Active episodes from the READY conditions (each carrying `seed`). Pure: only
     `st` changes. Spike / break days ≤ SPIKE_MERGE_DAYS from an open one of the same kind fold into it and stay
     SPIKE_KEEP_DAYS after their last day; the rest close after CLOSE_EVALS advanced evaluations without their condition;
@@ -2257,6 +2395,8 @@ def episodes(st, app_id, E, ready, advanced, now, recent_from):
             if c["seed"] and ep.get("notified_at") is None:
                 ep.update(notified_at=now, seeded=True)
         hit.add(key)
+    if hit_out is not None:                          # (the keys this run's conditions refreshed or opened)
+        hit_out.update(hit)
     for key in [k for k, e in eps.items() if e["app_id"] == app_id and k not in hit and e["family"] == "act_return"
                 and e["last"].get("installs_to") and _d(e["last"]["installs_to"]) < recent_from]:
         closed.append(U.close_ep(eps.pop(key), E_iso, now, "window_end"))     # its installs aged out
@@ -2557,6 +2697,73 @@ def market(revs, till):
 
 # ── one app: evaluate → detail + summary row ────────────────────────────────────────────────────
 
+STORY_FAMS = ("act_drift", "act_slow", "act_return")
+WITH_WORD = {"ret_dau": "old users", "usage": "sessions + time per user", "sess": "sessions per user",
+             "time": "time per user", "ads": "ads per user", "d1": "back next day", "d3": "back after 3 days",
+             "d7": "back after 7 days", "d14": "back after 14 days", "d30": "back after 30 days"}
+
+
+def _story_metric(c):
+    return c.get("key_metric") if c.get("family") == "act_drift" else (
+        "ret" if c.get("family") == "act_return" else c.get("metric"))
+
+
+def _story_start(x):
+    """When a condition's / an episode's / an alert's story began (a date) — since, else its install days, else day."""
+    last = x.get("last") or {}
+    v = (x.get("since0") or x.get("since") or last.get("since") or x.get("installs_from") or last.get("installs_from")
+         or x.get("day") or last.get("day") or x.get("opened"))
+    return _d(v) if v else None
+
+
+def _reopened(c, closed, E):
+    """Did the same story (family, metric, direction) close ≤ REOPEN_SEED_DAYS before E (not by a rule change)?"""
+    for e in closed or []:
+        if (e.get("family") == c["family"] and e.get("dir") == c["dir"] and _story_metric(e) == _story_metric(c)
+                and e.get("closed") and e.get("close_reason") != "rule_tuned"
+                and (E - _d(e["closed"])).days <= REOPEN_SEED_DAYS):
+            return True
+    return False
+
+
+def _same_cause(c, others):
+    """Is another story (a different metric, the same direction) that began ≤ ONE_CAUSE_DAYS from this one open or
+    told this run? Then this one is the same cause: shown with it, never sent on its own."""
+    a = _story_start(c)
+    for o in others:
+        if o.get("family") not in STORY_FAMS or o.get("dir") != c["dir"]:
+            continue
+        if (o.get("family"), _story_metric(o)) == (c["family"], _story_metric(c)):
+            continue
+        b = _story_start(o)
+        if a and b and abs((a - b).days) <= ONE_CAUSE_DAYS:
+            return True
+    return False
+
+
+def _with_others(alerts):
+    """Open alerts of one app, one direction, whose stories began ≤ ONE_CAUSE_DAYS apart are one cause: each one's
+    text (and message) lists the others' metrics ("saath me: …")."""
+    for a in alerts:
+        if a["family"] not in STORY_FAMS:
+            continue
+        sa = _d(a["started"]) if a.get("started") else None
+        mine = a["metric"]
+        words = []
+        for b in alerts:
+            if b is a or b["family"] not in STORY_FAMS or b["dir"] != a["dir"] or b["metric"] == mine:
+                continue
+            sb = _d(b["started"]) if b.get("started") else None
+            if sa and sb and abs((sa - sb).days) <= ONE_CAUSE_DAYS:
+                w = WITH_WORD.get(b["metric"], b["metric"])
+                if w not in words:
+                    words.append(w)
+        if words:
+            t = " · saath me: %s bhi %s" % (", ".join(words), "kam" if a["dir"] == "down" else "zyada")
+            a["text"] += t
+            a["message"] += t
+
+
 def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, stale=False, outdated=False,
              late_un=U.LATE_DAYS, cfg=None):
     """Evaluate one app → (detail, row). Changes only `state` (this tab's own, active_state.json); `udet` (the uninstall
@@ -2577,6 +2784,7 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
         state["closed"] = [e for e in state.get("closed") or [] if e["app_id"] != app_id]
         prev = None
     first = prev is None
+    switch = not first and int(prev.get("rules") or 1) < RULES_V     # the first run on the tuned rules (see below)
     advanced = first or E > _d(prev["end"])
     ev = copy.deepcopy(prev) if prev else {}
     edges = _edges(P, store, ga4_trunc(store))
@@ -2607,6 +2815,9 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
         U.advance_streaks(streak, since, holding, E)
     claimed = {dr: list(r) for dr, r in (ev.get("claimed") or {}).items()}
     ready = []
+    open_before = [e for e in eps_before if "closed" not in e]
+    told_now = []                                     # the new stories this run already tells (one per cause)
+    conds = sorted(conds, key=lambda c: (SEV_ORDER.get(c.get("severity"), 9), -abs(c.get("z") or 0)))
     for c in conds:
         if c["family"] in ("act_drift", "act_slow"):
             k = "%s|%s|%s" % (c["family"], c["key_metric"], c["dir"])
@@ -2615,7 +2826,7 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
                 continue
         c["key"] = _key(c, app_id)
         rel, cap = _link(c, udet)
-        seed = first or bool(outdated)
+        seed = first or bool(outdated) or switch      # the switch-over run: whatever is new is shown, never sent
         if rel is not None:
             c["release"] = rel
             if cap is not None:                       # an open Update impact alert already covers it: no double send
@@ -2633,16 +2844,33 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
             if not re_ or (E - _d(re_)).days < ACT_BURNIN_DAYS:
                 seed = True
             claimed[c["dir"]] = U._add_ranges(claimed.get(c["dir"]), [[c["installs_from"], c["installs_to"]]])
+        if not seed and c["family"] in STORY_FAMS and c["key"] not in (state.get("episodes") or {}):
+            if _reopened(c, closed_before, E):        # the same story back soon after it closed: shown, not re-sent
+                seed = True
+            elif _same_cause(c, open_before + told_now):   # another metric of one cause already told: shown with it
+                seed = True
+            else:
+                told_now.append(c)
         c["seed"] = seed
         ready.append(c)
-    open_eps = episodes(state, app_id, E, ready, advanced, now_iso, recent_from)
+    hit = set()
+    open_eps = episodes(state, app_id, E, ready, advanced, now_iso, recent_from, hit)
+    if switch:                                        # the tuned rules take over: an open alert they would not open
+        keep = []                                     # now closes at once ("rule_tuned") and is never sent
+        for k in [k for k, e in state["episodes"].items() if e["app_id"] == app_id]:
+            if k in hit:
+                keep.append(state["episodes"][k])
+            else:
+                state["closed"].append(U.close_ep(state["episodes"].pop(k), _iso(E), now_iso, "rule_tuned"))
+        open_eps = keep
     if outdated:
         for e in open_eps:
             if e.get("notified_at") is None:
                 e.update(notified_at=now_iso, seeded=True)
-    evs[app_id] = {"end": _iso(E), "src": src, "streak": streak, "since": since,
+    evs[app_id] = {"end": _iso(E), "src": src, "streak": streak, "since": since, "rules": RULES_V,
                    "claimed": {dr: r for dr, r in sorted(claimed.items()) if r}, "beta": beta, "inputs": inputs}
     alerts = sort_alerts([alert_obj(e, app, E, P) for e in open_eps])
+    _with_others(alerts)                              # one cause, several metrics: each lists the others
     by_id = {e["id"]: e for e in open_eps}
     for a in alerts:
         e = by_id[a["id"]]

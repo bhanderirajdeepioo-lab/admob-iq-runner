@@ -131,7 +131,7 @@ def check_detail(d, row=None):
     for i in ch["info"]:
         _keys_sp(i, ("kind", "metric", "dir", "from", "to", "rel", "text", "tags", "prov", "started"), "info")
         assert i["started"] == i["from"]                                   # SPEC_SIMPLIFY "Shuru": no since → from
-        assert i["kind"] in ("price", "installs", "market_wide", "early") and i["prov"] == (i["kind"] == "early")
+        assert i["kind"] in ("price", "installs", "market_wide", "early", "small") and i["prov"] == (i["kind"] == "early")
     for o in ch["older"]:
         _keys(o, ("kind", "metric", "dir", "from", "to", "before", "now", "rel", "z", "release", "text", "started"),
               "older")
@@ -344,33 +344,38 @@ def make_ext(st, rv, days):
     return st2, rv2
 
 
-def test_sudden_drop_opens_spike():
-    day = S - timedelta(days=1)                                          # one settled day at −40% old users
+def test_one_unusual_day_is_listed_never_an_alert():
+    """The alert policy: one day outside the normal band (−40% old users) is never an alert — the owner's metrics do not
+    change meaningfully day to day. It is listed under Older changes once it is a few days old, never sent."""
+    day = S - timedelta(days=4)                                          # one settled day at −40% old users
     st, rv = quiet(old=lambda d: 20000 * (0.6 if d == day else 1.0))
     ast = {}
-    d, *_ = run(st, rv, END - timedelta(days=2), astate=ast)            # still provisional: nothing judged
-    assert opened(d) == []
-    d, *_ = run(st, rv, END - timedelta(days=1), astate=ast)            # settled: a spike, sent
-    d, *_ = run(st, rv, END, astate=ast)
-    sp = [a for a in d["changes"]["open"] if a["family"] == "act_spike"]
-    assert [(a["metric"], a["dir"], a["severity"], a["day"]) for a in sp] == [("ret_dau", "down", "watch", day.isoformat())]
-    assert sp[0]["notify"] and sp[0]["text"].startswith("%s ko old users achanak kam: " % eng.fmt_day(day))
-    assert d["tiles"]["ret_dau"]["st"] == "watch"
+    for k in range(6, -1, -1):
+        d, *_ = run(st, rv, END - timedelta(days=k), astate=ast)
+        assert opened(d) == [] and not ast["episodes"], k
+    older = [o for o in d["changes"]["older"] if o["kind"] == "act_spike" and o["metric"] == "ret_dau"]
+    assert [(o["dir"], o["from"]) for o in older] == [("down", day.isoformat())]
+    assert older[0]["text"].startswith("%s ko old users achanak kam: " % eng.fmt_day(day))
+    assert d["tiles"]["ret_dau"]["st"] not in ("worse", "watch")
 
 
 def test_tracking_break_is_a_watch_and_never_a_drift():
     day = S - timedelta(days=1)
-    st, rv = quiet(a1={day: 0})
+    one, rv1 = quiet(a1={day: 0})                                       # ONE broken day: left out, listed, no alert
+    d1, *_ = run(one, rv1)
+    assert d1["changes"]["open"] == [] and day.isoformat() in d1["daily"]["breaks"]
+    i = (day - date.fromisoformat(d1["history_start"])).days
+    assert d1["daily"]["ret"][i] is None and d1["tiles"]["ret_dau"]["n"] == 6
+    st, rv = quiet(a1={day - timedelta(days=1): 0, day: 0})             # two settled days running: Check tracking
     d, *_ = run(st, rv)
     br = [a for a in d["changes"]["open"] if a["family"] == "act_break"]
-    assert [(a["severity"], a["day"]) for a in br] == [("watch", day.isoformat())]
+    assert [(a["severity"], a["day"]) for a in br] == [("watch", (day - timedelta(days=1)).isoformat())]
     assert "ek bhi active user nahi" in br[0]["text"] and d["summary"]["kind"] == "break"
-    i = (day - date.fromisoformat(d["history_start"])).days
     assert d["daily"]["ret"][i] is None and day.isoformat() in d["daily"]["breaks"]
     assert not [a for a in d["changes"]["open"] if a["family"] in ("act_drift", "act_spike")]
-    assert d["tiles"]["ret_dau"]["st"] == "break" and d["tiles"]["ret_dau"]["n"] == 6
+    assert d["tiles"]["ret_dau"]["st"] == "break" and d["tiles"]["ret_dau"]["n"] == 5
     low = S - timedelta(days=2)                                          # R under half its normal: tracking too
-    st2, rv2 = quiet(old=lambda x: 20000 * (0.3 if x == low else 1.0))
+    st2, rv2 = quiet(old=lambda x: 20000 * (0.3 if low <= x <= low + timedelta(days=1) else 1.0))
     d2, *_ = run(st2, rv2)
     assert [(a["family"], a["day"]) for a in d2["changes"]["open"]] == [("act_break", low.isoformat())]
     assert "normal ke aadhe se bhi kam" in d2["changes"]["open"][0]["text"]
@@ -542,7 +547,7 @@ def test_pre_launch_test_installs_are_left_out():
 # ── 7. new users coming back ─────────────────────────────────────────────────────────────────────
 
 def test_d1_drop_opens_return_alert_and_provisional_cells_never_colour():
-    lo = S - timedelta(days=7)                                           # the newest settled install week at D1
+    lo = S - timedelta(days=14)                                          # the newest 2 settled install weeks at D1
     st, rv = quiet(new=2000, rho=lambda c, k: DEFAULT_RET(k) - (0.04 if k == 1 and lo <= c <= S - timedelta(days=1)
                                                                   else 0.0))
     d, *_ = run(st, rv, astate={"eval": {}, "episodes": {}, "closed": []})
@@ -606,7 +611,7 @@ def test_every_return_rate_is_over_the_install_days_ga4_new_users_never_the_coho
     "new"). The cohort's own total t (here 8% above new — still a usable cohort) never divides: tiles, act_return and
     the grid (all-time normal, 4-week average, weeks) read exactly as when t = new. (Every cohort here is usable, so no
     returner is imputed: ρ̂ is proved by the next test.)"""
-    lo = S - timedelta(days=7)
+    lo = S - timedelta(days=14)                                          # (act_return reads 14 install days)
     kw = dict(new=2000,
               rho=lambda c, k: DEFAULT_RET(k) - (0.04 if k == 1 and lo <= c <= S - timedelta(days=1) else 0.0))
     st, rv = quiet(**kw)
@@ -619,9 +624,9 @@ def test_every_return_rate_is_over_the_install_days_ga4_new_users_never_the_coho
             assert d["tiles"][k][f] == base["tiles"][k][f], (k, f)
     t1 = d["tiles"]["d1"]
     assert t1["s"][1] == 2000 * t1["n"] and t1["s"][3] == 2000 * t1["nb"]     # Σ new users, not Σ t
-    assert abs(t1["base"] - 0.3) < 0.002 and abs(t1["v"] - 0.26) < 0.002
+    assert abs(t1["base"] - (21 * 0.30 + 7 * 0.26) / 28) < 0.002 and abs(t1["v"] - 0.26) < 0.002   # (its base: 1 drop week)
     ra = [a for a in d["changes"]["open"] if a["family"] == "act_return"]
-    assert [(a["metric"], a["dir"]) for a in ra] == [("d1", "down")] and ra[0]["users"] == 2000 * t1["n"]
+    assert [(a["metric"], a["dir"]) for a in ra] == [("d1", "down")] and ra[0]["users"] == 2000 * act.RET_ALERT_RECENT
     assert ra[0]["text"].startswith("Back next day kam: 26%, pehle 30% (")
     g, gb = d["tri"], base["tri"]
     assert g["ref"] == gb["ref"] and g["ref_users"] == gb["ref_users"] and g["avg4"] == gb["avg4"]
@@ -631,7 +636,7 @@ def test_every_return_rate_is_over_the_install_days_ga4_new_users_never_the_coho
     last = sorted(st["ret"])[-40]
     assert d["daily"]["coh"]["t"][-40] == st["ret"][last]["t"] != 2000        # t itself is kept as stored
     # an install day whose GA4 new users are unknown has no rate (never 0): left out of both sums
-    gone = (lo + timedelta(days=2)).isoformat()
+    gone = (S - timedelta(days=5)).isoformat()                         # (inside the tile's newest 7 install days)
     st2 = copy.deepcopy(st)
     del st2["daily"][gone]
     d2, _, _, _, udet = run(st2, rv)
@@ -791,7 +796,7 @@ def test_new_input_is_seeded_and_burned_in():
         use = [a for a in d["changes"]["open"] if a["metric"] in ("time", "usage")]
         assert use and all(a["notify"] is not seeded for a in use), (since, use)
     # return data found only 5 days ago: its alerts are seeded (all and the noise still settle)
-    lo = S - timedelta(days=7)
+    lo = S - timedelta(days=14)
     st2, rv2 = quiet(new=2000, rho=lambda c, k: DEFAULT_RET(k) - (0.04 if k == 1 and lo <= c <= S - timedelta(days=1)
                                                                    else 0.0))
     ast, ust = {}, {}
@@ -871,7 +876,7 @@ def _impact_alert(level, rows, R):
 
 
 def test_an_open_update_impact_alert_covers_the_same_change():
-    drop = S - timedelta(days=9)
+    drop = S - timedelta(days=13)                                        # ≥ 10 settled days on every settle run
     R = drop - timedelta(days=1)
     st, rv = quiet(old=lambda d: 20000 * (0.85 if d >= drop else 1.0))
     halt = _impact_alert("hold", {"worse": ["returning_dau"], "better": []}, R)
@@ -937,16 +942,16 @@ def test_calibration_steady_noise_stays_quiet():
 
 
 def test_the_same_install_week_never_re_alerts_at_a_later_day():
-    X = S - timedelta(days=16)                                           # one install week comes back less on every day
-    st, rv = quiet(new=2000, rho=lambda c, k: DEFAULT_RET(k) * (0.8 if X <= c <= X + timedelta(days=6) else 1.0))
-    first = X + timedelta(days=6 + 1 + act.ACT_LATE_DAYS)                # its D1 settled: the first alert
+    X = S - timedelta(days=23)                               # two install weeks come back less on every day
+    st, rv = quiet(new=2000, rho=lambda c, k: DEFAULT_RET(k) * (0.8 if X <= c <= X + timedelta(days=13) else 1.0))
+    first = X + timedelta(days=13 + 1 + act.ACT_LATE_DAYS)               # their D1 settled: the first alert
     ast, ust = {}, {}
     run(st, rv, END - timedelta(days=60), ast, ust)                      # the return data's burn-in is long over
     sent, d, ast, _ = daily(st, rv, first - timedelta(days=8), END, ast, ust)   # from before its first install day
     ret = [x for x in sent if x[1] == "act_return"]
     assert [x[2:4] for x in ret] == [("d1", "down")], ret                 # D3 / D7 of the same week later: old news
     cl = ast["eval"]["a"]["claimed"]["down"]                             # the install days it told about: claimed
-    assert cl[0][0] <= X.isoformat() and cl[-1][1] >= (X + timedelta(days=6)).isoformat()
+    assert cl[0][0] <= X.isoformat() and cl[-1][1] >= (X + timedelta(days=13)).isoformat()
 
 
 # ── 13. review fixes: outages, install swings, reversals, re-tellings, real $0 ad days, young apps ───────────────
@@ -985,7 +990,7 @@ def test_a_tracking_outage_that_runs_on_is_one_break_story():
         for E, d in out:
             fams = {a["family"] for a in d["changes"]["open"]}
             assert fams <= {"act_break"}, (name, E, fams)                  # never a drift / slow / spike (recovery too)
-            if X <= E - timedelta(days=act.ACT_LATE_DAYS) <= days[-1]:    # every outage day: one story, the tile says it
+            if X < E - timedelta(days=act.ACT_LATE_DAYS) <= days[-1]:     # from its 2nd day: one story, the tile says it
                 assert d["tiles"]["ret_dau"]["st"] == "break" and d["summary"]["kind"] == "break", (name, E)
                 assert len(d["changes"]["open"]) == 1 and d["changes"]["open"][0]["day"] == X.isoformat()
         E, d = next((E, d) for E, d in out if E - timedelta(days=act.ACT_LATE_DAYS) == days[-1])
@@ -1038,7 +1043,10 @@ def test_a_growth_that_turns_into_a_fall_is_told_as_a_fall():
         return 300 * 1.28 ** (min(t, 112) / 7) * 0.8 ** (max(0, t - 112) / 7)
     st, _ = make_active_store(200, seed=0, old=old, new=40, usage=False, revenue=False, ret=False, **LIVE)
     sent, out = adaily(st, None, turn - timedelta(days=4), turn + timedelta(days=48))
-    assert [x for x in sent if x[3] == "down" and x[0] <= (turn + timedelta(days=13)).isoformat()], sent  # ≤ 10 days
+    down = [x for x in sent if x[3] == "down"]
+    assert down and down[0][1] == "act_drift" and down[0][0] <= (turn + timedelta(days=28)).isoformat(), sent
+    # (the policy: one day is never an alert — the fall is told by the steady-shift rule, the same day it was before;
+    # the weeks of growth sit in its 4-week normal, so it shows once the level is under that normal)
     for E, d in out:
         k = (E - timedelta(days=act.ACT_LATE_DAYS) - turn).days
         t = d["tiles"]["ret_dau"]
@@ -1080,10 +1088,9 @@ def test_a_day_admob_reports_0_ads_is_a_real_0():
                                                                             (END - timedelta(days=400)).isoformat())}},
            "episodes": {}, "closed": []}
     d, *_ = run(st, rv, astate=ast)
-    ads = [a for a in d["changes"]["open"] if a["metric"] == "ads"]
-    assert [(a["family"], a["severity"], a["notify"]) for a in ads] == [("act_spike", "warning", True)]
+    assert not [a for a in d["changes"]["open"] if a["metric"] == "ads"]     # 3 days: listed, never an alert
     t = d["tiles"]["ads"]
-    assert t["n"] == 7 and t["rel"] < -0.3 and t["st"] == "worse" and d["tiles"]["arpdau"]["n"] == 7
+    assert t["n"] == 7 and t["rel"] < -0.3 and t["st"] == "maybe_dn" and d["tiles"]["arpdau"]["n"] == 7
     i = (S - timedelta(days=1) - date.fromisoformat(d["history_start"])).days
     assert d["daily"]["imp"][i] == 0 and d["daily"]["rev"][i] == 0     # 0, never "No ad data"
 
@@ -1129,11 +1136,12 @@ def test_the_old_users_split_needs_the_same_return_days_on_both_sides():
 
 
 def test_an_open_alert_decides_a_tile_that_would_say_not_enough_data():
-    drop = S - timedelta(days=9)                                         # a small app (under 200 returning users a day)
-    st, _ = quiet(old=lambda d: 150 * (0.7 if d >= drop else 1.0), new=20, ret=False, usage=False, revenue=False)
+    drop = S - timedelta(days=13)                       # a small app (under 200 returning users a day) earning well:
+    st, rv = quiet(old=lambda d: 150 * (0.7 if d >= drop else 1.0), new=20, ret=False, usage=False,   # the drop
+                   ecpm=lambda d: 60.0)                 # costs ≥ MAT_MONEY a day, so it is material
     ast, ust = {}, {}
-    run(st, None, END - timedelta(days=30), ast, ust)
-    d = settle(st, None, END, ast, ust)
+    run(st, rv, END - timedelta(days=30), ast, ust)
+    d = settle(st, rv, END, ast, ust)
     al = [a for a in d["changes"]["open"] if a["metric"] == "ret_dau" and a["dir"] == "down"]
     assert al and d["tiles"]["ret_dau"]["st"] in ("worse", "watch") and d["tiles"]["ret_dau"]["why"] is None
     assert d["summary"]["kind"] in ("worse", "watch")

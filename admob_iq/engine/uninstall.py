@@ -209,7 +209,7 @@ CLOSE_EVALS = 3           # closes after 3 daily evaluations without the conditi
 FRESH_EVALS = 3           # "naya" badge for 3 days after opening (notifications / other readers; never the order)
 HEAD4 = (0, 1, 7, 30)     # the portfolio table's D columns
 STARTED_MAX_WEEKS = 26    # "Shuru" walk-back (cohort_started): at most 26 install weeks back, then "6+ mahine se"
-CLOSE_REASONS = ("recovered", "superseded", "window_end", "seed_cleanup")   # an episode's close_reason (SPEC_SIMPLIFY)
+CLOSE_REASONS = ("recovered", "superseded", "window_end", "seed_cleanup", "rule_tuned")   # an episode's close_reason (SPEC_SIMPLIFY)
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 SEV_ORDER = {"warning": 0, "watch": 1, "good": 2}
