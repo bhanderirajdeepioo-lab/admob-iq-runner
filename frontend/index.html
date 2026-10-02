@@ -1945,6 +1945,28 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-pg2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
 :is(#as-root,#as-layer) .as-pg2:empty{display:none}
 @container as (max-width:979px){:is(#as-root,#as-layer) .as-pg2{grid-template-columns:minmax(0,1fr)}}
+/* ---------- parity with the older views: honesty guards, older findings, versions, ad rate ---------- */
+:is(#as-root,#as-layer) .as-evw{position:relative;flex:1 1 auto;min-width:0}
+:is(#as-root,#as-layer) .as-evw>.as-spk{width:100%}
+:is(#as-root,#as-layer) .as-spw>.as-evw>.as-spk{margin-top:0}
+:is(#as-root,#as-layer) .as-evl{position:absolute;top:-4px;transform:translateX(-50%);font:700 10px/1 var(--as-num);padding:1px 2px;border-radius:3px;background:var(--panel);pointer-events:none;white-space:nowrap}
+:is(#as-root,#as-layer) .as-hon{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:10px;font-size:12px;color:var(--ink2);line-height:1.4}
+:is(#as-root,#as-layer) .as-hon-ok{color:var(--muted)}
+:is(#as-root,#as-layer) .as-hon .as-hl{font-weight:650;color:var(--watch)}
+:is(#as-root,#as-layer) .as-hch{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line2);border-radius:999px;padding:4px 9px;background:var(--panel);font-size:11.5px;color:var(--ink2);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;min-height:26px;cursor:default}
+:is(#as-root,#as-layer) .as-hch-up{border-color:rgba(34,211,238,.45);color:var(--cyan)}
+:is(#as-root,#as-layer) .as-hch-dn,:is(#as-root,#as-layer) .as-hch-miss{border-color:rgba(230,184,78,.45);color:var(--watch)}
+:is(#as-root,#as-layer) .as-hon .as-hx{color:var(--muted);flex:1 1 260px;min-width:0}
+:is(#as-root,#as-layer) .as-lnote{font-size:11.5px;color:var(--muted);line-height:1.5;padding:8px 10px;white-space:normal}
+:is(#as-root,#as-layer) .as-hup{color:var(--cyan);font-weight:700}
+:is(#as-root,#as-layer) .as-hdn{color:var(--watch);font-weight:700}
+:is(#as-root,#as-layer) td.as-honc{white-space:nowrap}
+:is(#as-root,#as-layer) .as-incrow td{color:var(--muted)}
+:is(#as-root,#as-layer) .as-incrow td:first-child{box-shadow:inset 3px 0 0 var(--watch)}
+:is(#as-root,#as-layer) .as-tago{font:600 10.5px/1 var(--as-font);color:var(--ink2);border:1px dashed var(--line2);border-radius:999px;padding:4px 8px;white-space:nowrap}
+:is(#as-root,#as-layer) .as-ac.as-oldc::before{background:var(--line2)}
+:is(#as-root,#as-layer) .as-vert td.as-l{white-space:nowrap}
+:is(#as-root,#as-layer) .as-vert td b{font-weight:600;color:var(--ink)}
   /* ===== /ACTIVE USERS STUDIO ===== */
   /* ===== 💸 INSTALL VALUE STUDIO (the Install value tab's All-apps view) — everything under #vs-root / #vs-layer, classes vs-* ===== */
 :is(#vs-root,#vs-layer){--vs-raise2:#1c2c47;--vs-blue-s:#8fb8ff;--vs-blue-b:#15284a;--vs-h3:rgba(255,107,107,.62);--vs-h2:rgba(255,107,107,.36);--vs-h1:rgba(255,107,107,.18);--vs-h0:#18263d;--vs-g1:rgba(52,217,154,.16);--vs-g2:rgba(52,217,154,.32);--vs-g3:rgba(52,217,154,.54);--vs-s-in:#22d3ee;--vs-s-out:#a78bfa;--vs-s-rate:#8fb8ff;--vs-band:rgba(143,184,255,.13);--vs-ghost:#7d8fae;--vs-seq0:#13213a;--vs-seq1:#0f5163;--vs-seq2:#0f8299;--vs-seq3:#22d3ee;--vs-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--vs-num:"IBM Plex Sans Condensed","Roboto Condensed","Arial Narrow",-apple-system,BlinkMacSystemFont,sans-serif;--vs-r:14px;}
@@ -9475,7 +9497,7 @@ const backW=n=>+n===1?'Next day':('After '+n+' days');
 /* ================= state ================= */
 // range / compare = the dashboard's shared KPIWINDOW (KWIN / KWCUSTOM / KCMP / KCMPCUSTOM, kwSave); the rest is the Studio's
 const ST={sort:{k:'inr',d:-1},fst:new Set(),facc:'',fsz:'',q:'',open:new Set(),mapAll:false,srcAll:false,chgView:'cards',
-  drawer:-1,did:null,dScroll:0,ledger:false,folds:new Set()};
+  drawer:-1,did:null,dScroll:0,ledger:false,folds:new Set(),verAll:false};
 const LS='activeStudio.v1';
 try{ const s=JSON.parse(localStorage.getItem(LS)||'{}')||{}; if(s.chgView==='cards'||s.chgView==='table') ST.chgView=s.chgView; }catch(e){}
 function save(){ try{ localStorage.setItem(LS,JSON.stringify({chgView:ST.chgView})); }catch(e){} }
@@ -9620,6 +9642,41 @@ function foldOf(x){ const a=A[x.a], st=startedOf(x), ag=st?dDiff(st,M.today):nul
   if(x.kind==='closed') return 'theek'; if(x.kind==='info') return 'info'; if(a.sz==='chhoti') return 'chhoti'; if(x.sev==='behtar') return 'achhi';
   if(x.sev==='bigda'||x.sev==='dhyan') return (ag==null||ag<=30||a.sz==='badi')?'':'purana'; return 'info'; }
 
+/* ================= the older views' data, read through their own helpers (never re-done here) ================= */
+// the app's own detail file (ACTD — the dashboard loads it for the app on screen; the drawer asks for it): its versions,
+// its engine tiles (ad rate), the other ad networks' share and its older findings
+function detOf(a){ try{ const r=actRows().find(x=>x&&x.app_id===a.id); return (r&&r.key&&ACTD[r.key])||null; }catch(e){ return null; } }
+function detLoad(a){ try{ const r=actRows().find(x=>x&&x.app_id===a.id); if(!r||!r.key||!r.file||r.status==='error'||ACTD[r.key]||ACTL[r.key]||ACTERR[r.key]) return;
+  loadACTApp(r.key,()=>{ if(ST.drawer>=0&&A[ST.drawer]&&A[ST.drawer].id===a.id) renderDrawer(true); }); }catch(e){} }
+// "📅 Daily — all apps" (ACTPF, loaded with the All-apps page): the old view's own day sums over the visible apps — who joined /
+// left (+1 / −1), the days a big app's data is missing (⏸️), "vs same day last week" over the same apps only
+let HS=null, HM={};
+function pfS(){ try{ if(typeof ACTPF==='undefined'||!ACTPF) return null; const S=actPfSeries(actRows().filter(r=>uniVis(r.app_id))); return S&&S.n?S:null; }catch(e){ return null; } }
+function honPrep(){ HS=pfS(); HM={}; if(HS){ try{ actPfMarks(HS,0).forEach(m=>{ HM[m.i]=m.o; }); }catch(e){} } }
+// one Studio day's honesty notes (index i on the Studio's calendar): k of n apps, ⏸️ a big app missing (≈x% of the day's users),
+// the apps that joined (+1) / stopped (−1) that day, "vs same day last week" (same apps)
+function hon(i){ const S=HS; if(!S) return null; const j=dDiff(S.from,dOf(i)); if(j<0||j>=S.n) return null; const mk=HM[j]||[]; let M={gap:[],late:[],brk:[],err:[]}; try{ M=actPfMiss(S,j); }catch(e){}
+  return {j,d:dOf(i),k:S.ap[j],n:S.nn[j],inc:!!(S.inc[j]&&S.ap[j]>0),pc:S.inc[j]?actPfPc(S,j):0,gap:M.gap,late:M.late,err:M.err||[],brk:M.brk,
+    up:mk.filter(c=>c.s>0).map(c=>c.p),dn:mk.filter(c=>c.s<0).map(c=>c.p),wow:S.wow[j],wowc:S.wowc[j],pv:!!S.pv[j]}; }
+const pnm=(L,k)=>{ k=k||4; return L.slice(0,k).map(p=>esc(p.name)).join(', ')+(L.length>k?' +'+(L.length-k)+' more':''); };
+// what a day's totals carry (the tooltip lines of a chart point / a table row)
+function honTip(i){ const h=hon(i); if(!h) return ''; const o=[];
+  if(h.up.length) o.push(`<div class="as-tsm" style="color:var(--cyan)">+${h.up.length} app joined: ${pnm(h.up)} — us din ka uchhaal growth nahi</div>`);
+  if(h.dn.length) o.push(`<div class="as-tsm" style="color:var(--watch)">${MI}${h.dn.length} app stopped: ${pnm(h.dn)} — us din ki giravat app band hone se</div>`);
+  if(h.inc) o.push(`<div class="as-tsm" style="color:var(--watch)">⏸️ ≈${h.pc}% of active users missing — ${pnm(h.gap.concat(h.late),3)} ka data is din nahi; total kam dikhta hai, ye girawat nahi</div>`);
+  return o.join(''); }
+// the markers on a day-by-day sparkline over [f,t]: +1 / −1 (apps joined / stopped) and ⏸ (a big app's data missing)
+function evOf(f,t){ const out=[]; if(!HS) return out; for(let i=ix(f),k=0;i<=ix(t);i++,k++){ const h=hon(i); if(!h) continue;
+  if(h.up.length) out.push({i:k,t:'+'+h.up.length,c:'var(--cyan)'}); if(h.dn.length) out.push({i:k,t:MI+h.dn.length,c:'var(--watch)'}); if(h.inc) out.push({i:k,t:'⏸',c:'var(--watch)',miss:1}); }
+  return out; }
+// ad rate (the old view's "Ad rate": AdMob revenue ÷ ads shown, the number its tile and chart print) over [i0,i1]: only the days
+// with active users, revenue and ads all known
+function adRate(a,i0,i1){ i0=Math.max(i0,a.fi,0); i1=Math.min(i1,N-1); let rv=0,im=0,nd=0;
+  for(let i=i0;i<=i1;i++){ const x=a.a1[i]; if(x&&a.rv[i]!=null&&a.im[i]!=null&&a.im[i]>0){ rv+=a.rv[i]; im+=a.im[i]*x; nd++; } }
+  return im>0?{v:rv/im*1000,days:nd,im,f:dOf(i0),t:dOf(i1)}:null; }
+const AR_FEW=1000;                                       // fewer ads than this in a window: its rate is noise — no % change
+const arM=v=>actMoney(v,baseCur());                      // the old view's own ad-rate format (2 decimals, ₹ / $)
+
 /* ================= compute everything for the current window ================= */
 let W, R=[], PT={}, PC={};
 // portfolio day by day over the whole span (actPfSeries' own rules: returning only on days the apps with a number hold ≥ 98% of DAU)
@@ -9644,7 +9701,7 @@ function pf(f,t){ const i0=Math.max(0,ix(f)), i1=Math.min(N-1,ix(t)), D=PD, s={d
   Object.assign(s,{ret:rn?rt/rn:null,retDays:rn,ins:nn?nw/nn:null,a1:an?a1/an:null,rev:rvn?rv/rvn:null,arp:ra?rv/ra:null,se:sU?sS/sU:null,tm:tU?tT/tU:null,ad:ia?im/ia:null,prov:i1>SI});
   const ts=Math.min(ix(t),SI); ['d1','d7','d30'].forEach(k=>{ const Nn=KN[k]; let kk=0,n=0,dn=0; for(let i=Math.max(0,ix(f)-Nn);i<=ts-Nn;i++){ if(D[k+'n'][i]){ kk+=D[k+'k'][i]; n+=D[k+'n'][i]; dn++; } } s[k]=n?kk/n:null; s[k+'c']=dn?kk/dn:null; s[k+'n']=n; });
   return s; }
-function compute(){ W=windows();
+function compute(){ W=windows(); honPrep();
   R=A.map(a=>{ const o={a}; o.c=cnt(a,W.f,W.t); o.cc=cnt(a,W.cf,W.ct);
     const F=ix(W.f), Fc=ix(W.cf);
     o.pu=perU(a,F,Math.min(ix(W.t),a.si)); o.pn=F-28>=a.fi?perU(a,F-28,F-1):null; o.pc=perU(a,Fc,Math.min(ix(W.ct),a.si));
@@ -9658,6 +9715,7 @@ function compute(){ W=windows();
     o.h1=heatR(o.d1,o.d1n,a.u1); o.h7=heatR(o.d7,o.d7n,a.u7); o.h30=heatR(o.d30,o.d30n,null);
     o.hse=heatU(o.pu&&o.pu.se,o.pn&&o.pn.se,sgOf(a.nz.se,L)); o.htm=heatU(o.pu&&o.pu.tm,o.pn&&o.pn.tm,sgOf(a.nz.tm,L));
     o.hrv=heatU(o.pu&&o.pu.rv,o.pn&&o.pn.rv,sgOf(a.nz.rv,L)); o.had=heatU(o.pu&&o.pu.ad,o.pn&&o.pn.ad,sgOf(a.nz.ad,L));
+    o.ar=adRate(a,F,Math.min(ix(W.t),a.si)); o.arc=adRate(a,Fc,Math.min(ix(W.ct),a.si));
     const te=Math.min(ix(W.t),a.si); o.steep=a.stp.some(r=>r[0]<=te&&r[1]>=te-6);
     o.ins=insLed(o.L); o.pill=pillOf(o);
     return o; });
@@ -9724,8 +9782,12 @@ function spark(o){ const w=o.w||280, h=o.h||54, pad=4, vals=o.vals, n=vals.lengt
   if(o.prov!=null&&o.prov<n){ const x0=X(Math.max(0,o.prov))-(o.prov>0?(X(1)-X(0))/2:0); s+=`<line x1="${x0.toFixed(1)}" x2="${(w-pad+1).toFixed(1)}" y1="${h-1}" y2="${h-1}" stroke="var(--watch)" stroke-width="2.5" vector-effect="non-scaling-stroke" opacity=".85"/>`; }
   let li=-1; for(let i=n-1;i>=0;i--) if(vals[i]!=null){ li=i; break; }
   if(li>=0&&o.dot!==false) s+=`<ellipse cx="${X(li).toFixed(1)}" cy="${Y(vals[li]).toFixed(1)}" rx="3.2" ry="${(3.2*(o.hpx?h/o.hpx:1)).toFixed(2)}" fill="${col}" stroke="var(--panel)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+  const EV=(o.ev||[]).filter(e=>e&&e.i>=0&&e.i<n);
+  EV.forEach(e=>{ const x=X(e.i).toFixed(1); if(e.miss){ if(vals[e.i]!=null) s+=`<ellipse cx="${x}" cy="${Y(vals[e.i]).toFixed(1)}" rx="3.2" ry="${(3.2*(o.hpx?h/o.hpx:1)).toFixed(2)}" fill="var(--panel)" stroke="${e.c}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`; }
+    else s+=`<line x1="${x}" x2="${x}" y1="0" y2="${h}" stroke="${e.c}" stroke-width="1.2" stroke-dasharray="2 2" vector-effect="non-scaling-stroke" opacity=".9"/>`; });
   s+=`<line class="as-xh" x1="0" x2="0" y1="0" y2="${h}" stroke="var(--ink2)" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0"/></svg>`;
   if(o.tip) SPK[id]={n,tip:o.tip,X,w};
+  if(EV.length){ let lx=-99; const lb=EV.map(e=>{ const p=X(e.i)/w*100; if(p-lx<8) return ''; lx=p; return `<span class="as-evl" style="left:${Math.max(3,Math.min(97,p)).toFixed(1)}%;color:${e.c}">${e.t}</span>`; }).join(''); s=`<div class="as-evw">${s}${lb}</div>`; }
   return wrap(s); }
 const HATCH='<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><pattern id="as-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="rgba(230,184,78,.05)"/><line x1="0" y1="0" x2="0" y2="6" stroke="rgba(230,184,78,.28)" stroke-width="2"/></pattern><pattern id="as-insH" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="rgba(34,211,238,.18)"/><line x1="0" y1="0" x2="0" y2="6" stroke="rgba(34,211,238,.85)" stroke-width="3"/></pattern></defs></svg>';
 
@@ -9848,35 +9910,62 @@ const provIdx=()=>W.t>M.settled?Math.max(0,ix(dAdd(M.settled,1))-ix(W.f)):null;
 function kpisHtml(){ const provI=provIdx();
   const mk=(id,lab,hint,v,f,unit,extra,dl,spk,sub)=>`<div class="as-kpi" id="as-k-${id}"><div class="as-kl"><span>${lab}</span><span class="as-kh">${hint}</span></div><div class="as-kv"><span class="as-num" data-cu="${id}" data-v="${v==null?'':v}" data-f="${f}">${v==null?'—':FMT[f](v)}</span>${unit?`<span class="as-ku">${unit}</span>`:''}${extra||''}</div><div class="as-kd ${dl.cls||''}">${dl.h||dl}</div>${spk}<div class="as-ks">${sub||''}</div></div>`;
   const tipD=(lab,arr,carr,fmt)=>i=>{ const d=dAdd(W.f,i), j=Math.round(i*(W.cL-1)/Math.max(1,W.L-1)), cd=dAdd(W.cf,j), v=arr[i], c=carr[j];
-    return `<div class="as-tt">${fd(d)}${d>M.settled?' ⏳':''}</div>${trow(lab,fmt(v))}${trow('<span class="as-tsm">before · '+fd(cd)+'</span>',fmt(c))}${d>M.settled?'<div class="as-tsm">⏳ not final · final on '+fd(dAdd(d,M.actLate+M.lag))+'</div>':''}`; };
+    return `<div class="as-tt">${fd(d)}${d>M.settled?' ⏳':''}</div>${trow(lab,fmt(v))}${trow('<span class="as-tsm">before · '+fd(cd)+'</span>',fmt(c))}${d>M.settled?'<div class="as-tsm">⏳ not final · final on '+fd(dAdd(d,M.actLate+M.lag))+'</div>':''}${honTip(ix(d))}`; };
+  const EVR=evOf(W.f,W.t);
   const S=(k)=>seriesFor(PD[k],W.f,W.t), C=(k)=>seriesFor(PD[k],W.cf,W.ct);
   const fM=v=>money(v), fMs=sgnF(v=>money(v).replace(/^[−]/,''));
   const AV=(v,f)=>({v,t:'avg '+f(v)}), PH=(v,f)=>({v,t:'before '+f(v),c:'var(--as-ghost)'});
-  const ret=mk('ret','Old users/day','daily avg',PT.ret,'n','/day','',deltaH(PT.ret,PC.ret,true,fS,'/day',fN),spark({vals:S('ret'),ghost:C('ret'),prov:provI,color:'var(--as-s-ret)',area:1,tip:tipD('Old users/day',S('ret'),C('ret'),fN),lab:{f:fN,marks:[AV(PT.ret,fN),PH(PC.ret,fN)]}}),
+  const ret=mk('ret','Old users/day','daily avg',PT.ret,'n','/day','',deltaH(PT.ret,PC.ret,true,fS,'/day',fN),spark({vals:S('ret'),ghost:C('ret'),prov:provI,color:'var(--as-s-ret)',area:1,ev:EVR,tip:tipD('Old users/day',S('ret'),C('ret'),fN),lab:{f:fN,marks:[AV(PT.ret,fN),PH(PC.ret,fN)]}}),
     `<span data-tk="ptl:0">Users vs normal: <b class="${PT.Lfar<0?'as-bad':'as-good'}">${fX(PT.Lfar)}/day</b> = <span class="as-insc">installs</span> <b>${fX(PT.Lfi)}</b> + real <b>${fX(PT.Lasli)}</b>${Math.abs(PT.Lnone)>=3?' + unknown '+fX(PT.Lnone):''}</span>`);
-  const ins=mk('ins','Installs','new users/day',PT.ins,'n','/day','',deltaH(PT.ins,PC.ins,true,fS,'/day',fN),spark({vals:S('ins'),ghost:C('ins'),prov:provI,color:'var(--as-s-in)',area:1,tip:tipD('Installs',S('ins'),C('ins'),fN),lab:{f:fN,marks:[AV(PT.ins,fN),PH(PC.ins,fN)]}}),
+  const ins=mk('ins','Installs','new users/day',PT.ins,'n','/day','',deltaH(PT.ins,PC.ins,true,fS,'/day',fN),spark({vals:S('ins'),ghost:C('ins'),prov:provI,color:'var(--as-s-in)',area:1,ev:EVR,tip:tipD('Installs',S('ins'),C('ins'),fN),lab:{f:fN,marks:[AV(PT.ins,fN),PH(PC.ins,fN)]}}),
     `Effect of installs on old users: <b>${fX(PT.Lfi)}/day</b> <span class="as-faint">(final days)</span>`);
   const d1c=PT.d1c, d1p=PT.d1;
   const back=mk('d1','Back next day','of new users',d1c,'n','/day',`<span class="as-kp">${pc(d1p,1)}</span>`,retDl(d1c,d1p,PC.d1c,PC.d1),
     spark({vals:seriesFor(PD.d1,dAdd(W.f,-1),dAdd(W.ts,-1)),ghost:seriesFor(PD.d1,dAdd(W.cf,-1),dAdd(W.ct,-1)),color:'var(--as-s-back)',tip:i=>{ const d=dAdd(dAdd(W.f,-1),i); return `<div class="as-tt">Installs ${fd(d)}</div>${trow('Came back',fN(PD.d1k[ix(d)]))}${trow('Back next day',pc(PD.d1[ix(d)],1))}${trow('Installs',fN(PD.d1n[ix(d)]))}`; },
       lab:{f:(v,i)=>fN(PD.d1k[ix(dAdd(dAdd(W.f,-1),i))])+' ('+pc(v,1)+')',marks:[{v:PT.d1,t:'avg '+fN(d1c)+' ('+pc(d1p,1)+')'},{v:PC.d1,t:'before '+fN(PC.d1c)+' ('+pc(PC.d1,1)+')',c:'var(--as-ghost)'}]}}),
     `Install day ${PT.d1n?span(dAdd(W.f,-1),dAdd(W.ts,-1)):'—'} · ${fN(PT.d1n)} installs`);
-  const rev=mk('rev','Ad revenue','AdMob · /day',PT.rev,'m','/day',`<span class="as-kp">${moneyU(PT.arp)}<span class="as-ku"> /user</span></span>`,deltaH(PT.rev,PC.rev,true,fMs,'/day',fM),spark({vals:S('rev'),ghost:C('rev'),prov:provI,color:'var(--as-s-rev)',area:1,tip:tipD('Revenue',S('rev'),C('rev'),fM),lab:{f:fM,marks:[AV(PT.rev,fM),PH(PC.rev,fM)]}}),
+  const rev=mk('rev','Ad revenue','AdMob · /day',PT.rev,'m','/day',`<span class="as-kp">${moneyU(PT.arp)}<span class="as-ku"> /user</span></span>`,deltaH(PT.rev,PC.rev,true,fMs,'/day',fM),spark({vals:S('rev'),ghost:C('rev'),prov:provI,color:'var(--as-s-rev)',area:1,ev:EVR,tip:tipD('Revenue',S('rev'),C('rev'),fM),lab:{f:fM,marks:[AV(PT.rev,fM),PH(PC.rev,fM)]}}),
     `Users vs normal ≈ <b class="${PT.Lusd<0?'as-bad':'as-good'}">${moneyL(PT.Lusd,true)}/day</b> · real ${moneyL(PT.LusdA,true)}`);
   return ret+ins+back+rev; }
 function kpis2Html(){ const provI=provIdx(), S=(k)=>seriesFor(PD[k],W.f,W.t), C=(k)=>seriesFor(PD[k],W.cf,W.ct);
   const sm=(id,lab,v,f,extra,dl,spk)=>`<div class="as-kpi" id="as-k-${id}"><div class="as-kl"><span>${lab}</span></div><div class="as-kv"><span class="as-num" data-cu="${id}" data-v="${v==null?'':v}" data-f="${f}">${v==null?'—':FMT[f](v)}</span>${extra||''}</div><div class="as-kd ${dl.cls||''}">${dl.h||dl}</div>${spk}</div>`;
-  const mini=(k,c,f,av)=>spark({vals:S(k),ghost:C(k),prov:provI,color:c,h:30,hpx:30,tip:null,lfs:9.5,labMax:96,lab:{f,marks:av!=null?[{v:av,t:'avg '+f(av)}]:[]}});
+  const mini=(k,c,f,av,ev)=>spark({vals:S(k),ghost:C(k),prov:provI,color:c,h:30,hpx:30,tip:null,lfs:9.5,labMax:96,ev,lab:{f,marks:av!=null?[{v:av,t:'avg '+f(av)}]:[]}});
   const back=(k,N,c)=>spark({vals:seriesFor(PD[k],dAdd(W.f,-N),dAdd(W.ts,-N)),color:c,h:30,hpx:30,lfs:9.5,labMax:96,lab:{f:(v,i)=>fN(PD[k+'k'][ix(dAdd(dAdd(W.f,-N),i))])+' ('+pc(v,1)+')',marks:PT[k]!=null?[{v:PT[k],t:'avg '+fN(PT[k+'c'])+' ('+pc(PT[k],1)+')'}]:[]}});
-  return sm('a1','Active users',PT.a1,'n','<span class="as-ku">/day</span>',deltaH(PT.a1,PC.a1,true,fS,'',fN),mini('a1','var(--as-s-ret)',fN,PT.a1))
+  return sm('a1','Active users',PT.a1,'n','<span class="as-ku">/day</span>',deltaH(PT.a1,PC.a1,true,fS,'',fN),mini('a1','var(--as-s-ret)',fN,PT.a1,evOf(W.f,W.t)))
     +sm('d7','Back after 7 days',PT.d7c,'n',`<span class="as-kp">${pc(PT.d7,1)}</span>`,retDl(PT.d7c,PT.d7,PC.d7c,PC.d7),back('d7',7,'var(--as-s-back)'))
     +sm('d30','Back after 30 days',PT.d30c,'n',`<span class="as-kp">${pc(PT.d30,1)}</span>`,retDl(PT.d30c,PT.d30,PC.d30c,PC.d30),back('d30',30,'var(--as-s-back)'))
     +sm('se','Sessions per user',PT.se,'f','<span class="as-ku">a day</span>',deltaH(PT.se,PC.se,true,v=>sgnF(d2)(v),'',d2),mini('se','var(--as-s-use)',d2,PT.se))
     +sm('tm','Time per user',PT.tm,'d','<span class="as-ku">a day</span>',deltaH(PT.tm,PC.tm,true,v=>sgnF(dur)(v),'',dur),mini('tm','var(--as-s-use)',dur,PT.tm))
     +sm('ad','Ads per user',PT.ad,'f','<span class="as-ku">a day</span>',deltaH(PT.ad,PC.ad,true,v=>sgnF(d2)(v),'',d2),mini('ad','var(--as-s-rev)',d2,PT.ad)); }
-function ledgerHtml(){ let rows=''; for(let i=ix(W.t);i>=ix(W.f);i--){ const d=dOf(i), lf=PT.Lday[i];
-    rows+=`<tr class="${d>M.settled?'as-prow':''}"><td class="as-l">${fd(d)}${d>M.settled?' ⏳':''}</td><td>${fN(PD.ret[i])}</td><td class="${lf==null?'as-faint':(lf<0?'as-bad':'as-good')}">${lf==null?(d>M.settled?'⏳':'—'):fX(lf)}</td><td>${fN(PD.ins[i])}</td><td>${fN(PD.a1[i])}</td><td>${PD.d1[i-1]!=null&&d<=M.settled?fN(PD.d1k[i-1])+' · '+pc(PD.d1[i-1],1):'—'}</td><td>${money(PD.rev[i])}</td><td>${moneyU(PD.arp[i])}</td><td>${dur(PD.tm[i])}</td></tr>`; }
-  return `<table class="as-mini"><thead><tr><th class="as-l">Day</th><th>Old users/day</th><th>vs normal</th><th>Installs</th><th>Active users</th><th>Back next day</th><th>Ad revenue</th><th>Revenue per user</th><th>Time per user</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td class="as-l" style="font-weight:600">Daily avg</td><td>${fN(PT.ret)}</td><td>${fX(PT.Lfar)}</td><td>${fN(PT.ins)}</td><td>${fN(PT.a1)}</td><td>${fN(PT.d1c)} · ${pc(PT.d1,1)}</td><td>${money(PT.rev)}</td><td>${moneyU(PT.arp)}</td><td>${dur(PT.tm)}</td></tr></tfoot></table>`; }
+// the days of the range, newest first — with the old date-wise view's guards (actPfSeries): "Apps with data" k of n (+1 / −1 =
+// an app joined / stopped that day, ⏸️ = a big app's data missing: that day's totals read low, faded), back after 7 days,
+// sessions per user and "vs same day last week" over the same apps only
+function ledgerHtml(){ let rows=''; const hs=!!HS;
+  for(let i=ix(W.t);i>=ix(W.f);i--){ const d=dOf(i), lf=PT.Lday[i], h=hon(i), inc=!!(h&&h.inc), pv=d>M.settled, tk=inc?` data-tk="hon:${i}"`:'';
+    const apC=!hs?'<td class="as-faint">⏳</td>':(!h?'<td class="as-faint">—</td>':`<td data-tk="hon:${i}" class="as-honc">${h.k} of ${h.n}${inc?' ⏸️':''}${h.up.length?` <b class="as-hup">+${h.up.length}</b>`:''}${h.dn.length?` <b class="as-hdn">${MI}${h.dn.length}</b>`:''}</td>`);
+    const ok7=i-7>=0&&PD.d7[i-7]!=null&&d<=M.settled;
+    rows+=`<tr class="${pv?'as-prow':''}${inc?' as-incrow':''}"><td class="as-l">${fd(d)}${pv?' ⏳':''}</td>${apC}<td${tk}>${fN(PD.ret[i])}</td><td class="${lf==null?'as-faint':(lf<0?'as-bad':'as-good')}">${lf==null?(pv?'⏳':'—'):fX(lf)}</td><td${tk}>${fN(PD.ins[i])}</td><td${tk}>${fN(PD.a1[i])}</td><td>${PD.d1[i-1]!=null&&d<=M.settled?fN(PD.d1k[i-1])+' · '+pc(PD.d1[i-1],1):'—'}</td><td>${ok7?fN(PD.d7k[i-7])+' · '+pc(PD.d7[i-7],1):'—'}</td><td>${d2(PD.se[i])}</td><td>${dur(PD.tm[i])}</td><td${tk}>${money(PD.rev[i])}</td><td>${moneyU(PD.arp[i])}</td>${!h||h.wow==null?'<td class="as-faint">—</td>':`<td data-tk="wow:${i}">${uniChg(h.wow)}</td>`}</tr>`; }
+  return `<table class="as-mini as-ldg"><thead><tr><th class="as-l">Day</th><th>Apps with data</th><th>Old users/day</th><th>vs normal</th><th>Installs</th><th>Active users</th><th>Back next day</th><th>Back after 7 days</th><th>Sessions per user</th><th>Time per user</th><th>Ad revenue</th><th>Revenue per user</th><th>vs same day last week</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td class="as-l" style="font-weight:600">Daily avg</td><td>—</td><td>${fN(PT.ret)}</td><td>${fX(PT.Lfar)}</td><td>${fN(PT.ins)}</td><td>${fN(PT.a1)}</td><td>${fN(PT.d1c)} · ${pc(PT.d1,1)}</td><td>${fN(PT.d7c)} · ${pc(PT.d7,1)}</td><td>${d2(PT.se)}</td><td>${dur(PT.tm)}</td><td>${money(PT.rev)}</td><td>${moneyU(PT.arp)}</td><td>—</td></tr></tfoot></table>`
+    +`<div class="as-lnote">Apps with data = us din kitni apps ka data aaya (cell pe ruko: kaun nahi) · <b class="as-hup">+1</b> / <b class="as-hdn">${MI}1</b> = us din app judi / ruki — total ka uchhaal growth nahi · ⏸️ = kisi badi app ka data nahi: us din ka total kam (halka dikhaya), ye girawat nahi · vs same day last week = sirf wo apps jinka dono din data hai (same apps)${hs?'':' · ⏳ ginti ka data load ho raha hai'}</div>`; }
+// the guard under the headline ▲▼: the apps that joined / stopped between "before" and the range's end and the range's days a
+// big app's data is missing — the totals carry them (a join reads as growth, a missing day as a drop); none: one quiet line
+function honHtml(){ if(!HS) return '';
+  const ev=[], miss=[], c0=Math.max(0,ix(W.cf)+1), t0=Math.min(N-1,ix(W.t));
+  for(let i=c0;i<=t0;i++){ const h=hon(i); if(!h) continue; h.up.forEach(p=>ev.push({i,p,s:1})); h.dn.forEach(p=>ev.push({i,p,s:-1})); if(h.inc&&i>=ix(W.f)) miss.push(i); }
+  const ht=hon(t0);
+  if(!ev.length&&!miss.length) return `<div class="as-hon as-hon-ok">✓ Same ${ht?ht.n:A.length} apps in the range and before · koi badi app ka data missing nahi — ▲▼ asli farak hai</div>`;
+  ev.sort((x,y)=>y.i-x.i);
+  const ch=ev.slice(0,5).map(e=>`<span class="as-hch ${e.s>0?'as-hch-up':'as-hch-dn'}" data-tk="hon:${e.i}">${e.s>0?'+1 app joined':MI+'1 app stopped'} · ${fd(dOf(e.i))} · ${appIconId(e.p.a&&e.p.a.app_id,e.p.name,14,'ail')}${esc(e.p.name)}</span>`).join('')
+    +(ev.length>5?`<span class="as-hch" data-tk="honl:0">+${ev.length-5} more</span>`:'')
+    +(miss.length?`<span class="as-hch as-hch-miss" data-tk="honm:0">⏸️ Big app data missing · ${miss.length} ${miss.length===1?'day':'days'} (${miss.slice(0,4).map(i=>fdNoY(dOf(i))).join(', ')}${miss.length>4?' …':''})</span>`:'');
+  return `<div class="as-hon"><span class="as-hl">⚠️ Totals pe asar</span>${ch}<span class="as-hx">${ev.length?'Apps ki ginti badli — ▲▼ me nayi / ruki app ka hissa bhi hai, ye growth / drop nahi. ':''}${miss.length?'⏸️ din ka total kam dikhta hai, girawat nahi. ':''}Din-wise: 📋 Day by day.</span></div>`; }
+TIPS.hon=i=>{ const h=hon(+i); if(!h) return '';
+  return `<div class="as-tt">${fd(h.d)} · apps with data</div>${trow('Apps with data',h.k+' of '+h.n)}${h.gap.length?trow('No data',pnm(h.gap,6)):''}${h.late.length?trow('Not in yet',pnm(h.late,6)):''}${h.err.length?trow('Not built this time',pnm(h.err,6)):''}${h.brk.length?trow('Tracking check',pnm(h.brk,6)):''}${honTip(+i)}${!h.gap.length&&!h.late.length&&!h.err.length&&!h.up.length&&!h.dn.length?'<div class="as-tsm">Data for all apps</div>':''}${h.pv?'<div class="as-tsm">⏳ not final</div>':''}`; };
+TIPS.wow=i=>{ const h=hon(+i); if(!h||h.wow==null) return ''; return `<div class="as-tt">${fd(h.d)} vs ${fd(dAdd(h.d,-7))}</div>${trow('Active users, same apps',uniChg(h.wow))}<div class="as-tsm">Sirf wo ${h.wowc} apps jinka dono din data hai (same apps) — nayi / ruki app se % nahi badalta${h.pv?' · ⏳ not final':''}</div>`; };
+TIPS.honm=()=>{ const L=[]; for(let i=ix(W.f);i<=Math.min(N-1,ix(W.t));i++){ const h=hon(i); if(h&&h.inc) L.push(h); }
+  return `<div class="as-tt">⏸️ Big app data missing · ${L.length} ${L.length===1?'day':'days'}</div>`+L.map(h=>trow(fd(h.d),'≈'+h.pc+'% · '+pnm(h.gap.concat(h.late),3))).join('')+'<div class="as-tsm">Us din kisi badi app ka data nahi aaya — total kam dikhta hai, ye girawat nahi</div>'; };
+TIPS.honl=()=>{ const L=[]; for(let i=Math.min(N-1,ix(W.t));i>=Math.max(0,ix(W.cf)+1);i--){ const h=hon(i); if(!h) continue; h.up.forEach(p=>L.push(trow(fd(h.d),'+1 '+esc(p.name)))); h.dn.forEach(p=>L.push(trow(fd(h.d),MI+'1 '+esc(p.name)))); }
+  return `<div class="as-tt">Apps joined / stopped · ${span(W.cf,W.t)}</div>${L.join('')}`; };
 TIPS.ptl=()=>`<div class="as-tt">All apps · Users vs normal · final days ${pakkaSpan()}</div>${trow('Old users vs normal',fX(PT.Lfar)+'/day')}${trow('&nbsp;· due to installs',fX(PT.Lfi)+'/day')}${trow('&nbsp;· real change',fX(PT.Lasli)+'/day')}${Math.abs(PT.Lnone)>=1?trow('&nbsp;· unknown (no split)',fX(PT.Lnone)+'/day'):''}${trow(symOf()+'/day',moneyL(PT.Lusd,true)+' (real '+moneyL(PT.LusdA,true)+')')}<div class="as-sep"></div><div class="as-tsm">${PT.nL} of ${A.length} apps ka normal bana · har app apne normal se (same weekday, range se pehle ke 4 hafte). ${symOf()} = users × har app ki revenue per user.</div>`;
 
 /* ================= Users ka farak — map ================= */
@@ -10011,11 +10100,28 @@ function cardH(x){ const a=A[x.a], ag=ageOf(x), n=alNums(x), info=x.kind==='info
 TIPS.al=k=>{ const x=ALERTS[+k], a=A[x.a], n=alNums(x); return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)}</div>${trow(esc(metName(x)),(n.fmt&&n.vb!=null?esc(n.fmt(n.vb))+' → '+esc(n.fmt(n.vn)):n.big))}${trow('How',FAM[x.fam]||x.fam)}${n.fi!=null?trow('▨ due to installs',fX(n.fi)+'/day')+trow('■ real change',fX(n.asli)+'/day'):''}${x.net!=null?trow('Other ad networks’ share',x.net[1]+'% → '+x.net[2]+'%'):''}<div class="as-tsm" style="margin-top:4px">${esc(ageOf(x).tip)} · click = app view</div>`; };
 function sortAl(L){ const SZ={badi:0,madhyam:1,chhoti:2}, u=x=>{ const n=alNums(x), v=n.usdA!=null?n.usdA:n.usd; return v!=null?Math.abs(v):-1; };
   return L.slice().sort((p,q)=>(SORD[p.sev]-SORD[q.sev])||(u(q)-u(p))||(SZ[A[p.a].sz]-SZ[A[q.a].sz])||((ageOf(p).fresh?0:1)-(ageOf(q).fresh?0:1))||String(startedOf(q)||'').localeCompare(String(startedOf(p)||''))); }
+// the engine's older findings (changes that started 30–90 days ago — not alerts, never sent): the old "What changed?" list's 🗄
+// rows. One app: its detail file's own list (ACTD, the old app page's); else the dashboard's (DATA.active.info, src "older")
+function oldsOf(a){ const d=a?detOf(a):null; let L;
+  if(d&&d.changes&&Array.isArray(d.changes.older)) L=d.changes.older.map(o=>({o,a}));
+  else { const id2={}; A.forEach(b=>{ id2[b.id]=b; }); L=((typeof DATA!=='undefined'&&DATA&&DATA.active&&DATA.active.info)||[]).filter(o=>o&&o.src==='older'&&id2[o.app_id]&&(!a||o.app_id===a.id)).map(o=>({o,a:id2[o.app_id]})); }
+  return L.filter(z=>z.o&&typeof z.o==='object').sort((p,q)=>String(q.o.started||q.o.from||'').localeCompare(String(p.o.started||p.o.from||''))); }
+const oldMet=o=>MET[o.metric]||FAM[o.kind]||'Change';
+function oldCard(z){ const o=z.o, a=z.a, st=o.started||o.from, R0=o.release||null, ag=st?Math.max(0,dDiff(st,M.today)):null;
+  return `<div class="as-ac as-s-info as-oldc" data-app="${a.i}" data-go="${a.i}"><div class="as-l1"><span class="as-tago">🗄 Older finding · not an alert</span><span class="as-age">${st?'Started '+umar(ag)+' ago':'—'}</span>${szH(a)}</div>`
+   +`<div class="as-app as-ainb">${ic(a,18)}<span class="as-aint">${esc(a.store)} <span class="as-acn">· ${esc(a.acc)}</span></span></div>`
+   +`<div class="as-what" style="font-size:13px"><b>${esc(oldMet(o))}</b>${o.rel!=null&&isFinite(o.rel)?` <span class="${o.dir==='down'?'as-bad':'as-good'}">${o.dir==='down'?'▼':'▲'} ${fR(o.rel)}</span>`:''} · ${esc(smpInfoTxt(o.text||''))}</div>`
+   +`<div class="as-ts"><span class="as-at">🕒 Alert time: — (purani finding · alert nahi, bheja nahi)</span><span>Change started: ${st?fd(st)+' · '+umar(ag):'—'}</span><br><span>Data: ${o.from?'Daily avg '+span(o.from,o.to):'—'}</span>${R0&&R0.label?`<span>📦 after ${esc(R0.label)}${R0.date?' ('+fd(R0.date)+')':''}</span>`:''}</div></div>`; }
+function oldTable(L){ return `<div class="as-panel as-tw" style="border-radius:var(--as-r)"><table class="as-mini"><thead><tr><th class="as-l">🕒 Alert time</th><th class="as-l">App</th><th class="as-l">What</th><th>Change</th><th class="as-l">Change started · Data</th></tr></thead><tbody>`
+  +L.map(z=>{ const o=z.o, a=z.a, st=o.started||o.from; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="as-l as-faint" style="white-space:normal;min-width:120px">— older finding · not an alert</td><td class="as-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="as-l" style="font-family:var(--as-font);white-space:normal;min-width:240px"><b>${esc(oldMet(o))}</b> · ${esc(smpInfoTxt(o.text||''))}</td><td class="${o.dir==='down'?'as-bad':'as-good'}" style="font-weight:600">${o.rel!=null&&isFinite(o.rel)?fR(o.rel):'—'}</td><td class="as-l" style="white-space:normal;min-width:190px">Change started: ${st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—'}<div class="as-tsm" style="font-size:10.5px">Data: ${o.from?'Daily avg '+span(o.from,o.to):'—'}${o.release&&o.release.label?' · 📦 after '+esc(o.release.label):''}</div></td></tr>`; }).join('')+'</tbody></table></div>'; }
+const oldFold=(L,key,pv)=>L.length?`<details class="as-fold" data-fold="${key}"${ST.folds.has(key)?' open':''}><summary><span class="as-cv">▸</span><span>🗄 Older (${L.length}) · engine findings, not alerts</span><span class="as-pv">${pv}</span></summary>${ST.chgView==='table'?oldTable(L):`<div class="as-cards">${L.map(oldCard).join('')}</div>`}</details>`:'';
 function chgHtml(){ const B={'':[],purana:[],achhi:[],theek:[],chhoti:[],info:[]}; sortAl(ALERTS).forEach(x=>{ const f=foldOf(x); if(B[f]) B[f].push(x); });
-  const nV=B[''].length, nF=Object.keys(B).filter(k=>k).reduce((t,k)=>t+B[k].length,0), fresh=ALERTS.filter(x=>isOpen(x)&&ageOf(x).fresh).length;
+  const OL=oldsOf(null);
+  const nV=B[''].length, nF=Object.keys(B).filter(k=>k).reduce((t,k)=>t+B[k].length,0)+OL.length, fresh=ALERTS.filter(x=>isOpen(x)&&ageOf(x).fresh).length;
   const view=L=>ST.chgView==='table'?alTable(L):`<div class="as-cards">${L.map(cardH).join('')}</div>`;
-  const F=[['achhi','🟢 Good news'],['info','ℹ️ Info — installs / bazaar ka asar (alert nahi)'],['theek','✅ Closed — last 7 days'],['chhoti','Small apps'],['purana','🗄 Older than 30 days']];
-  const folds=F.filter(([k])=>B[k].length).map(([k,l])=>`<details class="as-fold" data-fold="${k}"${ST.folds.has(k)?' open':''}><summary><span class="as-cv">▸</span><span>${l} (${B[k].length})</span><span class="as-pv">${new Set(B[k].map(x=>x.a)).size} apps</span></summary>${view(B[k])}</details>`).join('');
+  const F=[['achhi','🟢 Good news'],['info','ℹ️ Info — installs / bazaar ka asar (alert nahi)'],['theek','✅ Closed — last 7 days'],['chhoti','Small apps'],['purana','📌 Open over 30 days']];
+  const folds=F.filter(([k])=>B[k].length).map(([k,l])=>`<details class="as-fold" data-fold="${k}"${ST.folds.has(k)?' open':''}><summary><span class="as-cv">▸</span><span>${l} (${B[k].length})</span><span class="as-pv">${new Set(B[k].map(x=>x.a)).size} apps</span></summary>${view(B[k])}</details>`).join('')
+    +oldFold(OL,'older',new Set(OL.map(z=>z.a)).size+' apps · 30–90 days');
   return `<div class="as-chg-h"><div><div class="as-eyebrow">New vs old</div><h2>What changed?</h2><div class="as-hint" style="font-size:12px;color:var(--muted)">${nV} shown · ${nF} folded below · ${fresh} new (today/yesterday) · engine alerts — range se alag</div></div><div class="as-right" style="margin-left:auto"><div class="as-seg" id="as-chgV"><button data-v="cards" aria-pressed="${ST.chgView==='cards'}">Cards</button><button data-v="table" aria-pressed="${ST.chgView==='table'}">Table</button></div></div></div>`
     +(nV?view(B['']):'<div class="as-ok">✅ Koi Worse / Watch alert dekhne layak nahi — baaki neeche</div>')+folds; }
 function alTable(L){ return `<div class="as-panel as-tw" style="border-radius:var(--as-r)"><table class="as-mini"><thead><tr><th class="as-l">Status</th><th class="as-l">🕒 Alert time</th><th class="as-l">App</th><th class="as-l">What</th><th>Change</th><th>Before → now</th><th>Installs · real</th><th>${symOf()}/day</th><th class="as-l">Next step</th><th class="as-l">Change started · Data</th></tr></thead><tbody>`
@@ -10163,34 +10269,60 @@ function triGrid(a){ const C=M.triCols, rows=a.tri.w; if(!rows.length) return '<
 TIPS.tri=(i,f,k)=>{ const a=A[+i], r=a.tri.w.find(x=>x.f===f), c=M.triCols[+k], v=r.v[+k], ref=a.tri.ref[+k], pvb=(r.p>>(M.triCols.length-1-k))&1;
   return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · installs ${span(r.f,r.t)}</div>${trow((+c===1?'Back next day':'Back after '+c+' days'),fN(r.n*v/1000)+' · '+pc(v/1000,1))}${trow('Installs',fN(r.n))}${ref!=null?trow('All-time normal',pc(ref/1000,1)):''}${pvb?'<div class="as-tsm">⏳ not final — late data aa raha</div>':''}`; };
 function lock(on){ try{ document.body.classList.toggle('as-lock',!!on); }catch(e){} }
-function openDrawer(i){ layer(); i=+i; if(!A[i]) return; ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('as-drawer'); d.classList.add('as-on'); d.setAttribute('aria-hidden','false'); $('as-scrim').classList.add('as-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.as-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
+function openDrawer(i){ layer(); i=+i; if(!A[i]) return; detLoad(A[i]); ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('as-drawer'); d.classList.add('as-on'); d.setAttribute('aria-hidden','false'); $('as-scrim').classList.add('as-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.as-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
 function closeDrawer(){ ST.drawer=-1; ST.did=null; const d=$('as-drawer'); if(d){ d.classList.remove('as-on'); d.setAttribute('aria-hidden','true'); } const sc=$('as-scrim'); if(sc) sc.classList.remove('as-on'); lock(false); hideTip(); }
 function navOrder(){ return R.slice().sort(R.ordCmp).map(o=>o.a.i); }
 // one app's sections (the drawer and the full page show the same content; the page lays it out for its width)
-function appParts(o,wBig,wIo){ const a=o.a, L=o.L;
+// by app version (the old app page's own table — ACTD's versions): share of users now, sessions / time per user and "vs previous
+// version (same days)" Better / Worse — the numbers as the old table prints them (its own formatters)
+const VERW={higher:'behtar',lower:'bigda',same:'normal',maybe:'normal'};
+function verRows(a){ const d=detOf(a); if(!d) return null; const V=(d.versions||[]).filter(v=>v&&typeof v==='object'), MM=(d.versions_more||[]).filter(v=>v&&typeof v==='object');
+  const main=V.filter(v=>!v.kind), tail=V.filter(v=>v.kind); return {main,more:MM,tail,F:d.flags||{},rows:main.concat(ST.verAll?MM:[]).concat(tail),all:main.length+MM.length+tail.length}; }
+const verLab=v=>v.kind==='rest'?'Other versions (under 1% each)':(v.kind==='x'?'Version not set':esc(uniRelV({version:v.ver})));
+function verHtml(o){ const a=o.a, VR=verRows(a), hd=`<div class="as-ph"><div><div class="as-eyebrow">📦 By app version · same days</div><h2 style="font-size:15px">Users by app version</h2><div class="as-hint">Har version ke old users · sessions / time per user · vs previous version = same din pe pichhle version wale users se</div></div></div>`;
+  if(!VR){ let ld=false; try{ const r=actRows().find(x=>x&&x.app_id===a.id); ld=!!(r&&r.key&&ACTL[r.key]); }catch(e){} return ld?`<div class="as-panel">${hd}<div class="as-faint" style="padding:0 18px 14px;font-size:12.5px">⏳ Version data load ho raha hai…</div></div>`:''; }
+  if(!VR.rows.length) return '';
+  const tr=(v,k)=>{ const s=v.vs&&typeof v.vs==='object'?v.vs:null;
+    const vs=s?`Sessions <b>${uniChg(s.rel_s)}</b> · Time <b>${uniChg(s.rel_t)}</b>`:'<span class="as-faint">—</span>';
+    const stc=s&&VERW[s.st]?chip(VERW[s.st])+(s.st==='maybe'?' <span class="as-faint" style="font-size:11px">not sure</span>':''):'<span class="as-faint">—</span>';
+    return `<tr data-tk="ver:${a.i}:${k}"><td class="as-l"><b>${verLab(v)}</b></td><td class="as-l">${v.from?fd(v.from):'—'}</td><td>${actOk(v.share)?uniPct(+v.share):'—'}</td><td>${actDec(v.sess)}</td><td>${uniDur(v.time)}</td><td class="as-l">${vs}</td><td class="as-l">${stc}</td></tr>`; };
+  return `<div class="as-panel">${hd}<div class="as-tw"><table class="as-mini as-vert"><thead><tr><th class="as-l">Version</th><th class="as-l">Out since</th><th>Users now</th><th>Sessions per user</th><th>Time per user</th><th class="as-l">vs previous version (same days)</th><th class="as-l">Status</th></tr></thead><tbody>${VR.rows.map(tr).join('')}</tbody></table></div>`
+    +(VR.more.length?`<button class="as-moreb" data-verall="1">${ST.verAll?'Show fewer versions':'Show all versions ('+VR.all+')'}</button>`:'')
+    +`<div class="as-lnote" style="padding:8px 18px 14px">Old users = GA4 ke 'returning' + 'not set' users. Users now = aakhri pakke din sab versions ke users me is version ka hissa.${VR.F.vuse_split===false?' Version ke hisaab se sessions / time sab users ke (GA4 split nahi deta).':''}</div></div>`; }
+TIPS.ver=(i,k)=>{ const a=A[+i], VR=verRows(a); if(!VR) return ''; const v=VR.rows[+k]; if(!v) return ''; const s=v.vs&&typeof v.vs==='object'?v.vs:null;
+  return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · ${verLab(v)}</div>${trow('Out since',v.from?fd(v.from):'—')}${trow('Share of users now',actOk(v.share)?uniPct(+v.share):'—')}${trow('Old users (its days added up)',actNum(v.users))}${trow('Sessions per user',actDec(v.sess))}${trow('Time per user',uniDur(v.time))}`
+    +(s?trow('vs previous version',`Sessions ${uniChg(s.rel_s)} · Time ${uniChg(s.rel_t)}`)+`<div class="as-tsm">${s.st==='maybe'?(s.why==='few'?'Pehle ke updates kam — naye version ka aam farak abhi pata nahi':'Abhi pakka nahi — farak aam utaar-chadhaav jitna'):'Same din, pichhle version wale users se — jaldi update karne walo ka aam farak hata ke'}</div>`:''); };
+TIPS.ar=i=>{ const o=R[+i], a=o.a, x=o.ar, c=o.arc, d=detOf(a), T=d&&d.tiles&&d.tiles.ecpm;
+  return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · Ad rate</div>${trow('Final days '+(x?span(x.f,x.t):''),x?arM(x.v)+' · '+fN(x.im)+' ads':'—')}${c?trow('Before '+span(c.f,c.t),arM(c.v)+' · '+fN(c.im)+' ads'):''}${x&&c&&x.im>=AR_FEW&&c.im>=AR_FEW?trow('Change',fR(relp(x.v,c.v))):''}`
+    +(T&&actOk(T.v)?trow('Engine · last 7 final days',actMoney(T.v,actCurOf(d))+(actOk(T.rel)?' ('+uniChg(T.rel)+' vs 4 weeks)':'')):'')
+    +`<div class="as-sep"></div><div class="as-tsm">Ad rate = AdMob kamai ÷ dikhaye gaye ads (AdMob jaisa rate, sirf AdMob Network). Ads per user wahi aur ad rate badla = bazaar ka asar, app ka nahi.</div>`; };
+TIPS.oth=i=>{ const a=A[+i], d=detOf(a), F=(d&&d.flags)||{}, x=actOther(F);
+  return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · Other ad networks</div>${trow('Other networks’ share of ad revenue',actOk(F.other_share)?uniPct(+F.other_share):'—')}${trow('More on top of AdMob Network','~'+x+'%')}<div class="as-tsm">Yahan ki revenue sirf AdMob Network ki hai — dusre ad networks ki kamai isme nahi. Asli kamai ~${x}% zyada.</div>`; };
+function appParts(o,wBig,wIo){ const a=o.a, L=o.L, det=detOf(a), oth=det?actOther(det.flags):0, arR=o.ar&&o.arc?relp(o.ar.v,o.arc.v):null, seR=o.pu&&o.pc?relp(o.pu.se,o.pc.se):null;
   const k=(lab,hint,v,f,unit,extra,dl,sub,tk)=>`<div class="as-kpi"${tk?` data-tk="${tk}"`:''}><div class="as-kl"><span>${lab}</span><span class="as-kh">${hint}</span></div><div class="as-kv"><span class="as-num">${v==null?'—':FMT[f](v)}</span>${unit?`<span class="as-ku">${unit}</span>`:''}${extra||''}</div><div class="as-kd ${dl.cls||''}">${dl.h||dl}</div><div class="as-ks">${sub||''}</div></div>`;
   const rd=(c,cc)=>retDl(c.p!=null?c.cd:null,c.p,cc.p!=null?cc.cd:null,cc.p);
   const fMs=sgnF(v=>money(v).replace(/^[−]/,''));
   const kp=k('Old users/day','daily avg',o.c.rt,'n','/day','',deltaH(o.c.rt,o.cc.rt,true,fS,'/day',fN,o.cc.live),o.c.prov?'⏳ some days not final':'')
     +k('Installs','daily avg',o.c.nw,'n','/day','',deltaH(o.c.nw,o.cc.nw,true,fS,'/day',fN,o.cc.live),'')
     +`<div class="as-kpi" data-tk="far:${a.i}"><div class="as-kl"><span>Users vs normal</span><span class="as-kh">vs normal · final days</span></div><div class="as-kv"><span class="as-num ${farCls(L)}">${L&&L.far!=null?fX(L.far):'—'}</span><span class="as-ku">/day</span></div><div class="as-kd ${farCls(L)}">${L&&L.far!=null?'≈ '+moneyL(L.usd,true)+'/day ('+fR(L.relT)+')':'<span class="as-vs">'+esc((L&&L.why)||'')+'</span>'}</div><div class="as-ks">${L&&L.far!=null?'<span class="as-insc">installs</span> <b>'+(L.fi==null?'?':fX(L.fi))+'</b> · real <b class="'+asliCls(L)+'">'+(L.asli==null?'?':fX(L.asli))+'</b>'+(realA(L)?' · clear':''):''}</div></div>`
-    +k('Ad revenue','AdMob · /day',o.c.rv,'m','/day',`<span class="as-kp">${moneyU(o.pu&&o.pu.rv)}<span class="as-ku"> /user</span></span>`,deltaH(o.c.rv,o.cc.rv,true,fMs,'/day',v=>money(v),o.cc.live),a.est?'≈ (timezone blend)':'')
+    +k('Ad revenue','AdMob · /day',o.c.rv,'m','/day',`<span class="as-kp">${moneyU(o.pu&&o.pu.rv)}<span class="as-ku"> /user</span></span>`,deltaH(o.c.rv,o.cc.rv,true,fMs,'/day',v=>money(v),o.cc.live),(a.est?'≈ (timezone blend) · ':'')+'AdMob Network only'+(oth?` · <span data-tk="oth:${a.i}">other networks add <b>~${oth}%</b> more</span>`:''))
     +k('Back next day','back',o.d1.p!=null?o.d1.cd:null,'n','/day',o.d1.p!=null?`<span class="as-kp">${pc(o.d1.p,1)}</span>`:'',rd(o.d1,o.d1c),o.d1.n?fN(o.d1.n)+' installs · '+span(o.d1.f,o.d1.t):esc(o.h1.why||''))
     +k('7 days','back',o.d7.p!=null?o.d7.cd:null,'n','/day',o.d7.p!=null?`<span class="as-kp">${pc(o.d7.p,1)}</span>`:'',rd(o.d7,o.d7c),o.d7.n?'installs '+span(o.d7.f,o.d7.t):'')
-    +k('Sessions · time','per old user, per day',o.pu&&o.pu.se,'f','',`<span class="as-kp">· ${dur(o.pu&&o.pu.tm)}</span>`,deltaH(o.pu&&o.pu.tm,o.pc&&o.pc.tm,true,v=>sgnF(dur)(v),'',dur),'time ▲▼ vs before')
-    +k('Ads per user','per day',o.pu&&o.pu.ad,'f','','',deltaH(o.pu&&o.pu.ad,o.pc&&o.pc.ad,true,v=>sgnF(d2)(v),'',d2),'');
+    +k('Sessions · time','per old user, per day',o.pu&&o.pu.se,'f','',`<span class="as-kp">· ${dur(o.pu&&o.pu.tm)}</span>`,deltaH(o.pu&&o.pu.tm,o.pc&&o.pc.tm,true,v=>sgnF(dur)(v),'',dur),`Sessions <b>${seR!=null?fR(seR):'—'}</b>${o.pc&&o.pc.se!=null?' (was '+d2(o.pc.se)+')':''} · ▲▼ = time`)
+    +k('Ads per user','per day',o.pu&&o.pu.ad,'f','','',deltaH(o.pu&&o.pu.ad,o.pc&&o.pc.ad,true,v=>sgnF(d2)(v),'',d2),o.ar?`<span data-tk="ar:${a.i}">Ad rate <b>${arM(o.ar.v)}</b>${o.ar.im<AR_FEW||(o.arc&&o.arc.im<AR_FEW)?' · few ads — tulna pakki nahi':(arR!=null?' ('+fR(arR)+', was '+arM(o.arc.v)+')':'')}</span>`:'<span class="as-faint">Ad rate — (ads ka data nahi)</span>');
   const days=[]; for(let i=ix(W.t);i>=Math.max(ix(W.f),a.fi);i--) days.push(i);
   const dt=`<table class="as-mini"><thead><tr><th class="as-l">Day</th><th>Old users/day</th><th>vs normal</th><th>Installs</th><th>Back next day</th><th>Time per user</th><th>Revenue</th><th>Revenue per user</th><th class="as-l">Events</th></tr></thead><tbody>`+days.map(i=>{ const d=dOf(i), inW=L&&L.W&&L.W.indexOf(i)>=0, f=inW?a.rt[i]-L.exp(i):null;
     const ev=a.rel.filter(x=>x[0]===d).map(x=>'📦 '+esc(x[1])).concat(a.al.filter(x=>isOpen(x)&&startedOf(x)===d).map(x=>'🔔 '+SW[x.sev])).join(' · ');
     return `<tr class="${i>a.si?'as-prow':''}"><td class="as-l">${fd(d)}${i>a.si?' ⏳':''}</td><td>${fN(a.rt[i])}</td><td class="${f==null?'as-faint':(f<0?'as-bad':'as-good')}">${f==null?(i>a.si?'⏳':'—'):fX(f)}</td><td>${fN(a.nw[i])}</td><td>${a.d1[i-1]!=null&&a.nw[i-1]&&i<=a.si?fN(a.d1[i-1])+' · '+pc(a.d1[i-1]/a.nw[i-1],1):'—'}</td><td>${dur(a.tu[i])}</td><td>${money(a.rv[i])}</td><td>${a.rv[i]!=null&&a.a1[i]?moneyU(a.rv[i]/a.a1[i]):'—'}</td><td class="as-l" style="font-family:var(--as-font);font-size:12px">${ev}</td></tr>`; }).join('')+'</tbody></table>';
-  const als=sortAl(a.al), ups=a.rel.slice().reverse();
+  const als=sortAl(a.al), ups=a.rel.slice().reverse(), OLa=oldsOf(a);
   const verdict=`<div class="as-verdict">${chip(o.pill)}<span>${L&&L.far!=null?`Old users <b class="${farCls(L)}">${fX(L.far)}/day</b> vs normal (${fR(L.relT)}) = <span class="as-insc">installs</span> <b>${L.fi==null?'?':fX(L.fi)}</b> + real <b class="${asliCls(L)}">${L.asli==null?'?':fX(L.asli)}</b>${L.usd!=null?' · ≈ <b>'+moneyL(L.usd,true)+'/day</b>':''} <span class="as-faint">· final days ${span(L.f,L.t)}</span>`:esc((L&&L.why)||whyJaldi(o)||'')}</span><span class="as-todo"><b>Next step:</b> ${esc(appTodo(o))}</span></div>`;
   return {
     verdict, kp:`<div class="as-dk">${kp}</div>`,
     big:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Old users, day by day</div><h2 style="font-size:15px">Old users vs the app's normal</h2><div class="as-hint">Laal / hara = Users vs normal (pakke din, same weekday ka normal)</div></div></div>${bigChart(o,wBig)}</div>`,
     io:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Due to installs?</div><h2 style="font-size:15px">Installs vs the new users who came back</h2><div class="as-hint">Installs badhe/ghate to installs that came back bhi badalta hai — ye "due to installs" wala hissa hai</div></div></div>${ioChart(o,wIo)}</div>`,
     tri:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Install week × day</div><h2 style="font-size:15px">How many new users came back</h2><div class="as-hint">Har row = ek hafte ke installs · cell = us din kitne % wapas aaye (engine ka grid)</div></div></div><div class="as-cohw">${triGrid(a)}</div><div class="as-clg"><span class="as-k"><i style="background:linear-gradient(90deg,#13213a,#a78bfa);width:40px;height:9px"></i>fewer → more back</span><span class="as-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="as-k">· = abhi us din tak nahi pahunche</span></div></div>`,
-    als:als.length?`<div><div class="as-chg-h"><div><div class="as-eyebrow">This app's alerts</div><h2 style="font-size:15px">What changed?</h2></div></div><div class="as-cards">${als.map(cardH).join('')}</div></div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>',
+    als:(als.length||OLa.length)?`<div><div class="as-chg-h"><div><div class="as-eyebrow">This app's alerts</div><h2 style="font-size:15px">What changed?</h2></div></div>${als.length?`<div class="as-cards">${als.map(cardH).join('')}</div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>'}${oldFold(OLa,'pgold','30–90 days')}</div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>',
+    ver:verHtml(o),
     ups:ups.length?`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">📦 Updates · since ${fd(M.S)}</div><h2 style="font-size:15px">Updates and their effect</h2></div></div><div class="as-upd">${ups.map(r=>{ const ba=befAft(a,r[0]); return `<div class="as-u"><span class="as-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="as-faint">${UPDW(r[2]).replace(/^[^—]+— /,'')}</span>${ba?`<span class="as-ba">Old users/day ${ba}</span>`:''}</div>`; }).join('')}</div></div>`:'',
     dt:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Day by day</div><h2 style="font-size:15px">Daily numbers · ${span(W.f,W.t)}</h2></div></div><div class="as-tw" style="max-height:360px">${dt}</div></div>` }; }
 const appHead=(o,sz)=>{ const a=o.a; return `<h3 class="as-ainb">${ic(a,sz||28)}<span class="as-aint">${esc(a.store)} <span class="as-acn">· ${esc(a.acc)}</span></span></h3><div class="as-l2">${chip(o.pill)}${alBadge(a)}${szH(a)}${insTag(o)}<span>Data till ${fd(M.E)}${W.t>a.settled?' · ⏳ '+fd(dAdd(a.settled,1))+'+ not final':''}</span></div>`; };
@@ -10198,14 +10330,14 @@ function drawerHtml(){ const o=R[ST.drawer], a=o.a, ord=navOrder(), pos=ord.inde
   return `<div class="as-dh"><div class="as-t"><div class="as-eyebrow">App view · ${pos+1} / ${ord.length} (biggest difference first) · ${span(W.f,W.t)}</div>${appHead(o)}`
     +`<div class="as-full-r"><button class="as-btn as-full" id="as-full" data-full="${esc(a.id)}" title="Is app ka poora page — yahi sab, badi jagah pe, aur neeche purana page bhi">Full app page →</button></div></div>`
     +`<button class="as-icb" id="as-dPrev" aria-label="Previous app" title="Previous app (←)">‹</button><button class="as-icb" id="as-dNext" aria-label="Next app" title="Next app (→)">›</button><button class="as-icb" id="as-dClose" aria-label="Close" title="Close (Esc)">✕</button></div>`
-    +`<div class="as-db">${P0.verdict}${P0.kp}${P0.big}${P0.io}${P0.tri}${P0.als}${P0.ups}${P0.dt}`
+    +`<div class="as-db">${P0.verdict}${P0.kp}${P0.big}${P0.io}${P0.tri}${P0.als}${P0.ups}${P0.ver}${P0.dt}`
     +`<div style="display:flex;justify-content:center;padding:6px 0 2px"><button class="as-btn as-full" data-full="${esc(a.id)}">Full app page →</button></div></div>`; }
 function renderDrawer(keep){ if(ST.drawer<0) return; const d=$('as-drawer'); if(!d) return; const y=d.scrollTop;
   d.innerHTML=drawerHtml(); if(keep) d.scrollTop=keep===true?y:keep; }
 // the app's full page: the same sections, laid out for the page's width (two columns where the page is wide)
 const twoCol=()=>PGW>=980;
 function pageBody(o){ const W1=Math.max(300,PGW-22), W2=twoCol()?Math.max(300,Math.floor((PGW-16)/2)-22):W1, P0=appParts(o,W1,W2);
-  return `<div class="as-pgh">${appHead(o,32)}</div>${P0.verdict}${P0.kp}${P0.big}<div class="as-pg2">${P0.io}${P0.tri}</div>${P0.als}<div class="as-pg2">${P0.ups}${P0.dt}</div>`; }
+  return `<div class="as-pgh">${appHead(o,32)}</div>${P0.verdict}${P0.kp}${P0.big}<div class="as-pg2">${P0.io}${P0.tri}</div>${P0.als}<div class="as-pg2">${P0.ups}${P0.dt}</div>${P0.ver}`; }
 // "Poora app page →": the app's existing Active users page (tiles, charts, the return grid, its What changed? …)
 function fullPage(id){ closeDrawer(); try{ actOpen(id); }catch(e){} }
 
@@ -10232,7 +10364,7 @@ function screen(note){ MODE='all'; PGID=null; prep(); spkN=0; for(const k in SPK
   setTimeout(afterMount,0);
   return `<div id="as-root"><div class="as-top" id="as-top">${topHtml()}</div>`
     +`<div class="as-wrap" id="as-main">${note||''}<section class="as-story" id="as-story" aria-label="Most important things">${storyHtml()}</section>`
-    +`<section aria-label="All apps KPIs"><div class="as-kpis" id="as-kpis">${kpisHtml()}</div><div class="as-kpis2" id="as-kpis2">${kpis2Html()}</div><details class="as-ledger" id="as-ledger" style="margin-top:10px"${ST.ledger?' open':''}><summary>📋 Day by day — table</summary><div class="as-panel as-tw" id="as-ledgerT" style="border-radius:var(--as-r);max-height:380px">${ledgerHtml()}</div></details></section>`
+    +`<section aria-label="All apps KPIs"><div class="as-kpis" id="as-kpis">${kpisHtml()}</div><div class="as-kpis2" id="as-kpis2">${kpis2Html()}</div><div id="as-hon">${honHtml()}</div><details class="as-ledger" id="as-ledger" style="margin-top:10px"${ST.ledger?' open':''}><summary>📋 Day by day — table</summary><div class="as-panel as-tw" id="as-ledgerT" style="border-radius:var(--as-r);max-height:380px">${ledgerHtml()}</div></details></section>`
     +`<section class="as-duo"><article class="as-panel" id="as-map">${mapHtml()}</article><article class="as-panel" id="as-src">${srcHtml()}</article></section>`
     +`<section class="as-panel as-tl" id="as-tl">${tlHtml()}</section><section id="as-chg">${chgHtml()}</section><section class="as-panel" id="as-tbl">${tblHtml()}</section>`
     +`<details class="as-foot" id="as-foot">${footHtml()}</details></div></div>`; }
@@ -10256,7 +10388,7 @@ function renderAll(){ const root=$('as-root'); if(!root){ actRerender(); return;
   spkN=0; for(const k in SPK) delete SPK[k]; for(const k in CH) delete CH[k]; compute(); renderTop();
   const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
   if(MODE==='page'){ const o=pgO(); if(!o){ actRerender(); return; } const pg=$('as-pg'); if(pg&&pg.clientWidth) PGW=pg.clientWidth; set('as-pg',pageBody(o)); set('as-foot',footHtml()); if(ST.drawer>=0) renderDrawer(true); countUp(); return; }
-  set('as-story',storyHtml()); set('as-kpis',kpisHtml()); set('as-kpis2',kpis2Html()); set('as-ledgerT',ledgerHtml()); set('as-map',mapHtml()); set('as-src',srcHtml());
+  set('as-story',storyHtml()); set('as-kpis',kpisHtml()); set('as-kpis2',kpis2Html()); set('as-hon',honHtml()); set('as-ledgerT',ledgerHtml()); set('as-map',mapHtml()); set('as-src',srcHtml());
   renderTl(); set('as-chg',chgHtml()); renderTbl(false); set('as-foot',footHtml()); if(ST.drawer>=0) renderDrawer(true); countUp(); }
 // the shared choice changed here: the other tabs that read it (Uninstall, Install value) follow, after this paints
 function shared(){ kwSave(); renderAll(); setTimeout(()=>{ try{ uniRerender(); }catch(e){} try{ valRerender(); }catch(e){} },30); }
@@ -10307,8 +10439,9 @@ function wire(){ if(WIRED) return; WIRED=true;
     if(e.key==='/'){ const q=$('as-q'); if(q){ q.focus(); q.scrollIntoView({block:'center',behavior:RM?'auto':'smooth'}); e.preventDefault(); } } });
   let rzT=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(!$('as-root')) return; stick(); if(Math.abs(innerWidth-lastW)<40) return; lastW=innerWidth;
     if(MODE==='page'){ const pg=$('as-pg'); if(pg){ PGW=pg.clientWidth||PGW; pg.innerHTML=pageBody(pgO()); } } else renderTl(); if(ST.drawer>=0) renderDrawer(true); },180); }); }
-function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+dir+ord.length)%ord.length; ST.drawer=ord[q]; ST.did=A[ST.drawer].id; renderDrawer(); const d=$('as-drawer'); if(d) d.scrollTop=0; }
+function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+dir+ord.length)%ord.length; ST.drawer=ord[q]; ST.did=A[ST.drawer].id; detLoad(A[ST.drawer]); renderDrawer(); const d=$('as-drawer'); if(d) d.scrollTop=0; }
 function onClick(e){ const t=e.target; if(!inStudio(t)) return;
+  if(t.closest('[data-verall]')){ ST.verAll=!ST.verAll; if(MODE==='page'&&!t.closest('#as-layer')){ const pg=$('as-pg'); if(pg) pg.innerHTML=pageBody(pgO()); } if(ST.drawer>=0) renderDrawer(true); return; }
   const fp=t.closest('[data-full]'); if(fp){ e.preventDefault(); fullPage(fp.getAttribute('data-full')); return; }
   if(t.closest('[data-back]')){ e.preventDefault(); hideTip(); try{ actBack(); }catch(err){} return; }
   const ab=t.closest('[data-al]'); if(ab&&ab.dataset.al!==''){ e.stopPropagation(); hideTip(); const k=ab.dataset.al, inD=!!ab.closest('#as-drawer');
@@ -10342,7 +10475,8 @@ return {ptr, ensure, retry, screen, page, hide, closeDrawer, openDrawer,
   // checks / tests (read-only views of the current state)
   _:{A:()=>A, R:()=>R, W:()=>W, PT:()=>PT, PC:()=>PC, PD:()=>PD, ST, ALERTS:()=>ALERTS, NOGA:()=>NOGA, M:()=>M, MODE:()=>MODE, page:()=>MODE==='page'?pageBody(pgO()):'', lens, cnt, perU, coh, pf, ix, dOf, windows,
      story:storyHtml, kpis:kpisHtml, kpis2:kpis2Html, ledger:ledgerHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml, top:topHtml,
-     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, fail:()=>{ RAW=null; ERR=true; VER=(ptr()||{}).v||'test'; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage, ageOf, fitLabels, TW}};
+     load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, fail:()=>{ RAW=null; ERR=true; VER=(ptr()||{}).v||'test'; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage, ageOf, fitLabels, TW,
+     hon, honHtml, evOf, adRate, verRows, verHtml, oldsOf, detOf, HS:()=>HS}};
 })();
 
 // ---------- 👥 ACTIVE USERS (GA4) ----------
