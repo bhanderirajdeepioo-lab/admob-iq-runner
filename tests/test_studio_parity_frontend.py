@@ -6,7 +6,7 @@ real data). Every brought-in number is checked against the OLD view's own helper
   Active users
   * an app's "Users by app version" = the old actVerTable, row by row and cell by cell ("Show all versions" too);
   * ad rate = the engine tile's own number on its own window; "other networks add ~x% more" = the old actOther;
-  * the engine's older findings (30-90 days, not alerts) in a "🗄 Older (N)" fold — All apps (DATA.active.info) and the app
+  * the engine's older findings (30-90 days, not alerts) in a "▸ Older changes (N)" fold — All apps (DATA.active.info) and the app
     page (its own file) — each with its 🕒 line;
   * All apps, day by day: "Apps with data" k of n, ⏸️ a big app's day missing, +1 / −1 apps joined / stopped, "vs same day
     last week" (same apps) = the old 📅 Daily helpers (actPfSeries / actPfMarks); the markers on the sparklines and the guard
@@ -16,7 +16,7 @@ real data). Every brought-in number is checked against the OLD view's own helper
   Install value
   * week by week: 12 / 26 / All weeks — every week of the app's detail file = the old "Money back by install week" table;
   * a no-ads app's 30-day earning per install (= the old row's) where the Studio said "—": table, map, drawer, app page;
-  * the app page's closed alerts in a "✅ Closed (N)" fold with their 🕒 line; no "Other small countries (0)" row;
+  * the app page's closed alerts in a "▸ Closed alerts (N)" fold with their 🕒 line; no "Other small countries (0)" row;
   * the words (English labels, Hinglish in Roman script only, no banned word, never "100 me" / "per 1,000"). Skipped where node
     is not installed."""
 
@@ -161,7 +161,8 @@ def test_other_networks_line(act):
 def test_older_findings_fold(act):
     o = J(act[0], "older")
     chg, page, tbl = o["chg"], o["page"], o["tbl"]
-    assert re.search(r"🗄 Older \(2\) · engine findings, not alerts", chg)              # the two DATA.active.info rows
+    assert re.search(r"Older changes \(2\)</span><span class=\"as-pv\">2 apps</span>", chg)       # the two DATA.active.info rows
+    assert "Engine ki purani findings" in chg
     assert "📌 Open over 30 days" not in chg or "🗄 Older than 30 days" not in chg
     cards = re.findall(r'<div class="as-ac as-s-info as-oldc".*?</div></div>', chg, re.S)
     assert len(cards) == 2
@@ -169,7 +170,7 @@ def test_older_findings_fold(act):
         t = re.sub(r"<[^>]+>", " ", c)
         assert "🕒 Alert time: — (purani finding" in t and "Change started:" in t and "Data: Daily avg" in t
         assert "📦 after v9.9" in t and "−42%" in t
-    assert re.search(r"🗄 Older \(3\)", page)                                           # the app's own file: 3 rows
+    assert re.search(r"Older changes \(3\)", page)                                    # the app's own file: 3 rows
     assert "<th class=\"as-l\">App</th>" in tbl                                         # the table view: App first
 
 
@@ -294,9 +295,11 @@ def test_closed_alerts_fold(val):
     c = J(val[0], "closed")
     assert c["n"] == 1
     p = c["page"]
-    assert re.search(r"✅ Closed \(1\)", p)
-    t = re.sub(r"<[^>]+>", " ", p[p.index("✅ Closed (1)"):])
-    assert "🕒 Alert time:" in t and "Closed:" in t and "Change started:" in t
+    assert re.search(r"Closed alerts \(1\)", p)
+    t = re.sub(r"<[^>]+>", " ", p[p.index("Closed alerts (1)"):])
+    assert "🕒 Alert time:" in t and "Change started:" in t
+    assert re.search(r"Opened\s+10 Aug\s+as\s+Worse", t) and re.search(r"Closed\s+1 Sep", t) and re.search(r"Open for\s+22 days", t)
+    assert "Why closed:" in t
 
 
 def test_no_small_countries_zero_row(val):

@@ -114,7 +114,7 @@ get('notrim', `(()=>{ ${RESET} valScreen(); const A=VS._.A(), M=VS._.M(), r={nw:
     const ck=(h.match(/<div class="vs-secnote vs-chk"[\\s\\S]*?<\\/div>/)||[''])[0];
     r.apps.push({id:a.id, first:a.first, bars:new Set(seg.match(/data-tk="dwk:[^"]*"/g)||[]).size, hits:(seg.match(/<rect data-tk="dwk:[^"]*" x="[^"]*" y="[^"]*" width="[^"]*" height="[^"]*" fill="transparent"[/]>/g)||[]).length, relHit:(seg.match(/<g data-tk="drel:[^"]*"><rect [^>]*height="20" fill="transparent"[/]>/g)||[]).length, rels:(seg.match(/<g data-tk="drel:/g)||[]).length, judged:a.JD.slice(Math.max(0,a.first)).filter((x,k)=>VS._.pool([[a,Math.max(0,a.first)+k]]).jw).length,
       head:__text((seg.match(/<h2[^>]*>[^<]*/)||[''])[0]), weekRows:(wt.match(/<tr class="(vs-rng)?">/g)||[]).length, weeks:a.N.filter(x=>x!=null).length, cap:__text((wt.match(/<span class="vs-faint">Since[^<]*/)||[''])[0]),
-      verRows:(ver.match(/<tr>/g)||[]).length-1, ver:a.ver&&a.ver.r?a.ver.r.length:null, lngRows:(lng.match(/<tr>/g)||[]).length-1, lng:a.lng&&a.lng.rows?a.lng.rows.length:null,
+      verRows:(ver.match(/<tr[ >]/g)||[]).length-1, ver:a.ver&&a.ver.r?a.ver.r.length:null, lngRows:(lng.match(/<tr>/g)||[]).length-1, lng:a.lng&&a.lng.rows?a.lng.rows.length:null,
       chk:__text(ck), chkN:(a.chk||[]).length, chkLi:(ck.match(/<li>/g)||[]).length}); });
   // a custom range from the oldest weeks (before the old 32-week grid): its weeks, not cut; the pickers start at the oldest
   // install week (an app's page: its own first week)

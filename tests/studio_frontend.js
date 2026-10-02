@@ -179,7 +179,7 @@ get('page', `(()=>{ ${RESET} const r={}, row=DATA.uninstall.apps.find(x=>US._.A(
   r.text=__text(pg);
   // the same numbers as the drawer: the KPI tiles of both read one computation
   const i=US._.A().findIndex(a=>a.id===id); US.openDrawer(i); const dh=document.getElementById('us-drawer').innerHTML; US.closeDrawer();
-  const kt=x=>__text((x.match(/<div class="us-dk[^"]*">[\\s\\S]*?<\\/div><\\/div><\\/div><div class="us-panel">/)||[''])[0]);
+  const kt=x=>__text((x.match(/<div class="us-dk[^"]*">[\\s\\S]*?<\\/div><\\/div><\\/div><div class="us-panel"[^>]*>/)||[''])[0]);
   r.sameKpis=kt(dh)!==''&&kt(dh)===kt(pg);
   // the shared range drives the page too
   US._.setRange('7'); r.after7=US._.W().L; r.html7=__text(document.getElementById('us-apg').innerHTML).indexOf('Day by day')>=0;
@@ -573,7 +573,7 @@ get('mobile', `(()=>{ ${RESET} uniScreen(); const r={}, tip=()=>{ const t=docume
   r.scrollCapture=(__LST.scroll||[]).some(x=>x.o&&x.o.capture&&x.o.passive);
   // A-06: What changed? as a table — App first (sticky), then status, alert
   US._.ST.chgView='table'; const ch=US._.chg(); US._.ST.chgView='cards';
-  r.table={heads:[...ch.matchAll(/<th class="us-l">([^<]*)<\\/th>/g)].slice(0,3).map(m=>m[1]), first:/<tr data-app="\\d+" data-go="\\d+" style="cursor:pointer"><td class="us-l us-alapp">/.test(ch), cls:ch.indexOf('<table class="us-mini us-alt">')>=0};
+  r.table={heads:[...ch.matchAll(/<th class="us-l">([^<]*)<\\/th>/g)].slice(0,3).map(m=>m[1]), first:/<tr data-app="\\d+" data-go="\\d+" data-hgo="[^"]+" style="cursor:pointer"><td class="us-l us-alapp">/.test(ch), cls:ch.indexOf('<table class="us-mini us-alt">')>=0};
   // A-10: every Loss-map cell says its metric
   const mp=US._.map(); r.cellLabels=[...mp.matchAll(/<span class="us-hcl">([^<]*)<\\/span>/g)].map(m=>m[1]); r.cells=(mp.match(/data-tk="cell:/g)||[]).length;
   // A-11: Timeline markers ≥ 28px apart (nearby days merged, the count and every item kept), a 28px tap circle each

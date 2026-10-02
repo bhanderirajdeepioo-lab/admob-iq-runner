@@ -2069,6 +2069,19 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-fold>summary .as-pv{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint);white-space:nowrap}
 :is(#as-root,#as-layer) .as-fold .as-cards{padding:0 12px 12px}
 :is(#as-root,#as-layer) .as-ok{padding:16px;border:1px dashed var(--line2);border-radius:12px;color:var(--ink2)}
+/* 🗂 alert history: Open → on every card / row, the two folds (Older changes · Closed alerts), a closed alert's own line, the jump's flash */
+:is(#as-root,#as-layer) .as-opn{margin-left:auto;display:inline-flex;align-items:center;min-height:32px;padding:0 2px;color:var(--cyan);font:600 12.5px/1 var(--as-font);white-space:nowrap;cursor:pointer}
+:is(#as-root,#as-layer) .as-opn:hover,:is(#as-root,#as-layer) .as-opn:focus-visible{text-decoration:underline;text-underline-offset:3px}
+:is(#as-root,#as-layer) .as-aht{font:600 11px/1 var(--as-font);color:var(--ink2);border:1px dashed var(--line2);border-radius:999px;padding:4px 8px;white-space:nowrap}
+:is(#as-root,#as-layer) .as-ahl{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:12px;color:var(--ink2);background:var(--raise);border-radius:8px;padding:6px 9px;line-height:1.4}
+:is(#as-root,#as-layer) .as-ahl b{color:var(--ink);font-weight:600}
+:is(#as-root,#as-layer) .as-ahg{display:flex;flex-wrap:wrap;gap:2px 14px;padding:0 14px 10px;font-size:11.5px;color:var(--muted);line-height:1.45}
+:is(#as-root,#as-layer) .as-ahg b{color:var(--ink2);font-weight:600}
+:is(#as-root,#as-layer) .as-ahe{padding:2px 14px 12px;font-size:12.5px;color:var(--muted)}
+:is(#as-root,#as-layer) .as-ahj{animation:as-flash 1.8s ease-out}
+:is(#as-root,#as-layer) .as-ac.as-ahc{gap:6px;padding:11px 14px 10px}
+:is(#as-root,#as-layer) .as-ac .as-ahm{min-width:0}
+:is(#as-root,#as-layer) .as-ac.as-ahc .as-big{font-size:22px;color:var(--ink)}
 /* ---------- smart table ---------- */
 :is(#as-root,#as-layer) .as-tbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:0 18px 12px}
 :is(#as-root,#as-layer) .as-srch{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:6px 10px;min-width:200px;flex:1 1 200px;max-width:320px;color:var(--ink)}
@@ -2549,6 +2562,19 @@ body.vs-lock[data-screen="value"]{overflow:hidden}
 :is(#vs-root,#vs-layer) .vs-fold>summary .vs-pv{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint);white-space:nowrap}
 :is(#vs-root,#vs-layer) .vs-fold .vs-cards{padding:0 12px 12px}
 :is(#vs-root,#vs-layer) .vs-ok{padding:16px;border:1px dashed var(--line2);border-radius:12px;color:var(--ink2)}
+/* 🗂 alert history: Open → on every card / row, the two folds (Older changes · Closed alerts), a closed alert's own line, the jump's flash */
+:is(#vs-root,#vs-layer) .vs-opn{margin-left:auto;display:inline-flex;align-items:center;min-height:32px;padding:0 2px;color:var(--cyan);font:600 12.5px/1 var(--vs-font);white-space:nowrap;cursor:pointer}
+:is(#vs-root,#vs-layer) .vs-opn:hover,:is(#vs-root,#vs-layer) .vs-opn:focus-visible{text-decoration:underline;text-underline-offset:3px}
+:is(#vs-root,#vs-layer) .vs-aht{font:600 11px/1 var(--vs-font);color:var(--ink2);border:1px dashed var(--line2);border-radius:999px;padding:4px 8px;white-space:nowrap}
+:is(#vs-root,#vs-layer) .vs-ahl{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:12px;color:var(--ink2);background:var(--raise);border-radius:8px;padding:6px 9px;line-height:1.4}
+:is(#vs-root,#vs-layer) .vs-ahl b{color:var(--ink);font-weight:600}
+:is(#vs-root,#vs-layer) .vs-ahg{display:flex;flex-wrap:wrap;gap:2px 14px;padding:0 14px 10px;font-size:11.5px;color:var(--muted);line-height:1.45}
+:is(#vs-root,#vs-layer) .vs-ahg b{color:var(--ink2);font-weight:600}
+:is(#vs-root,#vs-layer) .vs-ahe{padding:2px 14px 12px;font-size:12.5px;color:var(--muted)}
+:is(#vs-root,#vs-layer) .vs-ahj{animation:vs-flash 1.8s ease-out}
+:is(#vs-root,#vs-layer) .vs-ac.vs-ahc{gap:6px;padding:11px 14px 10px}
+:is(#vs-root,#vs-layer) .vs-ac .vs-ahm{min-width:0}
+:is(#vs-root,#vs-layer) .vs-ac.vs-ahc .vs-big{font-size:22px;color:var(--ink)}
 /* ---------- smart table ---------- */
 :is(#vs-root,#vs-layer) .vs-tbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:0 18px 12px}
 :is(#vs-root,#vs-layer) .vs-srch{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:6px 10px;min-width:200px;flex:1 1 200px;max-width:320px;color:var(--ink)}
@@ -3134,6 +3160,19 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-fold>summary .us-pv{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint);white-space:nowrap}
 :is(#us-root,#us-layer) .us-fold .us-cards{padding:0 12px 12px}
 :is(#us-root,#us-layer) .us-ok{padding:16px;border:1px dashed var(--line2);border-radius:12px;color:var(--ink2)}
+/* 🗂 alert history: Open → on every card / row, the two folds (Older changes · Closed alerts), a closed alert's own line, the jump's flash */
+:is(#us-root,#us-layer) .us-opn{margin-left:auto;display:inline-flex;align-items:center;min-height:32px;padding:0 2px;color:var(--cyan);font:600 12.5px/1 var(--us-font);white-space:nowrap;cursor:pointer}
+:is(#us-root,#us-layer) .us-opn:hover,:is(#us-root,#us-layer) .us-opn:focus-visible{text-decoration:underline;text-underline-offset:3px}
+:is(#us-root,#us-layer) .us-aht{font:600 11px/1 var(--us-font);color:var(--ink2);border:1px dashed var(--line2);border-radius:999px;padding:4px 8px;white-space:nowrap}
+:is(#us-root,#us-layer) .us-ahl{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:12px;color:var(--ink2);background:var(--raise);border-radius:8px;padding:6px 9px;line-height:1.4}
+:is(#us-root,#us-layer) .us-ahl b{color:var(--ink);font-weight:600}
+:is(#us-root,#us-layer) .us-ahg{display:flex;flex-wrap:wrap;gap:2px 14px;padding:0 14px 10px;font-size:11.5px;color:var(--muted);line-height:1.45}
+:is(#us-root,#us-layer) .us-ahg b{color:var(--ink2);font-weight:600}
+:is(#us-root,#us-layer) .us-ahe{padding:2px 14px 12px;font-size:12.5px;color:var(--muted)}
+:is(#us-root,#us-layer) .us-ahj{animation:us-flash 1.8s ease-out}
+:is(#us-root,#us-layer) .us-ac.us-ahc{gap:6px;padding:11px 14px 10px}
+:is(#us-root,#us-layer) .us-ac .us-ahm{min-width:0}
+:is(#us-root,#us-layer) .us-ac.us-ahc .us-big{font-size:22px;color:var(--ink)}
 /* ---------- smart table ---------- */
 :is(#us-root,#us-layer) .us-tbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:0 18px 12px}
 :is(#us-root,#us-layer) .us-srch{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:6px 10px;min-width:200px;flex:1 1 200px;max-width:320px;color:var(--ink)}
@@ -6650,7 +6689,7 @@ function uniJump(sec,t){ if(sec==='uni-cp'&&!UNICPEXP){ UNICPEXP=true; uniRerend
   const tb=document.querySelector('.topbar'), y=window.scrollY||window.pageYOffset||0;
   let off=((tb&&tb.offsetHeight)||0)+8;
   // the Studio's own bar sticks under the top bar on a wide screen (a phone scrolls it away): the target lands under it too
-  try{ const sb=document.getElementById('us-top'); if(sb&&sb.offsetHeight&&getComputedStyle(sb).position==='sticky') off+=sb.offsetHeight; }catch(e2){}
+  try{ ['us-top','as-top','vs-top'].forEach(id=>{ const sb=document.getElementById(id); if(sb&&sb.offsetHeight&&getComputedStyle(sb).position==='sticky') off+=sb.offsetHeight; }); }catch(e2){}
   window.scrollTo({top:Math.max(0,e.getBoundingClientRect().top+y-off),behavior:'smooth'}); }
 function uniTNX(){ UNITIMEXP=!UNITIMEXP; uniRerender(); }   // "⏱️ When will I know?": open / close
 // 📦 Update impact: ONE card, shown in two tabs — t = 'uni' (Uninstall; the default, its ids uni-…, state UNIIMP* / UNIUP*)
@@ -7271,6 +7310,56 @@ function kwCmpApply(tag){ const f=document.getElementById(tag+'-kwc-f'), t=docum
 // ======================================================================================================
 
 // ======================================================================================================
+// 🗂 ALERT HISTORY IN THE STUDIOS (owner, 2 Oct: "vo aana chaiye" — the older views had it, the Studios lost it). Shared by
+// the Uninstall (US), Active users (AS) and Install value (VS) Studios: under every "What changed?" (All apps, an app's
+// page, its quick look) two folds — "▸ Older changes (N)" (the engine's findings that were never alerts) and "▸ Closed
+// alerts (N)" (each with when it opened, when it closed, how long it stayed open and why, in plain words) — and an
+// "Open →" on every card and row: the older views' own targets (an install-week change → the install-week table, a rate →
+// the daily chart, an update → its 📦 block …) on that app's page; a tap on a card is the same. p = the Studio's prefix:
+// every class written here is the Studio's own ("us-…" / "as-…" / "vs-…"), styled by its own CSS. Nothing is trimmed:
+// every row, folded, counted.
+// ======================================================================================================
+// why an alert closed (the engine's close_reason) — a short English label, the Hinglish meaning under the fold's head
+const STH_WHY={recovered:['Back to normal','number wapas apni normal range me aa gaya, engine ne alert khud band kiya'],
+  superseded:['Newer update replaced it','is app ka naya update aa gaya — ab naye update ka asar naapa ja raha, purane ka alert band'],
+  window_end:['Check window ended','jin installs / dino pe ye alert tha unka naapne ka samay poora ho gaya — aage naapne ko kuch nahi bacha'],
+  seed_cleanup:['First-run cleanup','feature shuru hote waqt pehle se khule alert saaf kiye gaye — asli badlaav nahi'],
+  '':['Not recorded','purana alert — us waqt band hone ki wajah save nahi hoti thi']};
+function sthWhy(cr){ return STH_WHY[cr]||STH_WHY['']; }
+// how long an alert stayed open: its opened → closed data days (the engine keeps both on every closed alert)
+function sthDays(op,cl){ if(!op||!cl) return null; const n=uniDiff(String(op).slice(0,10),String(cl).slice(0,10)); return isFinite(n)?Math.max(0,n):null; }
+function sthDur(n){ return n==null?'—':(n<=0?'same day':(n===1?'1 day':(n<30?n+' days':(n<90?Math.round(n/7)+' weeks':Math.round(n/30)+' months')))); }
+// a closed alert's own line: Opened (as <its status then>) · Closed · Open for · Why closed. Both moments are the runs' IST
+// times when the engine kept both (opened_at, closed_at); else both are the data days it judged on (opened / closed — an
+// older alert, or one opened before run times were kept: its alert_at is the run that SENT it, not the one that opened it)
+// — never one of each, so "Open for" always matches the two dates shown
+function sthClosedLine(p,o){ const w=sthWhy(o.cr), oa=smpRunAt(o.openedAt), ca=smpRunAt(o.closedAt), run=!!(oa&&ca);
+  const op=run?smpIst(oa):(o.opened?smpD(o.opened):'—'), cl=run?smpIst(ca):(o.closed?smpD(o.closed):'—');
+  return `<div class="${p}-ahl"><span>Opened <b>${op}</b>${o.was?` as <b>${o.was}</b>`:''}</span><span>Closed <b>${cl}</b>${run?'':' <i title="Engine ke data ka din (run ka time record nahi)">(data days)</i>'}</span>`
+    +`<span>Open for <b>${sthDur(run?Math.max(0,uniDiff(smpIstDay(Date.parse(oa)),smpIstDay(Date.parse(ca)))):sthDays(o.opened,o.closed))}</b></span><span title="${hAttr(w[1])}">Why closed: <b>${w[0]}</b></span></div>`; }
+// the reasons present in a closed list, each with its Hinglish meaning (under the fold's head)
+function sthWhyLeg(crs){ const ks=[...new Set(crs.map(c=>STH_WHY[c]?c:''))];
+  return ks.map(k=>`<span><b>${STH_WHY[k][0]}</b> = ${STH_WHY[k][1]}</span>`).join(''); }
+// "Open →" (a card's / a row's own link; the card's tap does the same)
+function sthGo(p){ return `<span class="${p}-opn" role="link" tabindex="0">Open →</span>`; }
+// one history fold: "▸ <label> (N)" + a short hint (its apps — it never wraps, so it stays short on a phone); inside, first
+// what the list is (Hinglish, wraps), then the rows; an empty one says so (always shown — the owner sees where history lives)
+function sthFold(p,key,open,label,n,pv,body,empty,lead){
+  return `<details class="${p}-fold ${p}-ahf" data-fold="${key}"${open?' open':''}><summary><span class="${p}-cv">▸</span><span>${label} (${n==null?'…':n})</span><span class="${p}-pv">${pv}</span></summary>`
+    +(lead?`<div class="${p}-ahg">${lead}</div>`:'')+(n?body:`<div class="${p}-ahe">${empty}</div>`)+'</details>'; }
+// a jump on a Studio page: the target (and a row inside it) brought under the sticky bars — the dashboard's top bar and,
+// while it sticks, the Studio's own (<p>-top) — opened if it sits in a closed fold, then flashed
+function sthJump(el,p,row){ if(!el||!el.getBoundingClientRect) return false;
+  for(let d=el.closest?el.closest('details'):null; d; d=d.parentElement&&d.parentElement.closest?d.parentElement.closest('details'):null) if(!d.open) d.open=true;
+  const tb=document.querySelector('.topbar'), y=window.scrollY||window.pageYOffset||0; let off=((tb&&tb.offsetHeight)||0)+8;
+  try{ const sb=document.getElementById(p+'-top'); if(sb&&sb.offsetHeight&&getComputedStyle(sb).position==='sticky') off+=sb.offsetHeight; }catch(e){}
+  let rm=false; try{ rm=matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+  window.scrollTo({top:Math.max(0,el.getBoundingClientRect().top+y-off),behavior:rm?'auto':'smooth'});
+  [el,row].forEach(x=>{ if(!x||!x.classList) return; x.classList.remove(p+'-ahj'); void x.offsetWidth; x.classList.add(p+'-ahj'); });
+  return true; }
+// ======================================================================================================
+
+// ======================================================================================================
 // 🧭 UNINSTALL STUDIO — the Uninstall tab's All-apps view (the owner-approved "Uninstall Studio" design: "kafi badiya
 // dikh raha he"). ONE lazy file, uninstall_studio.json.gz (admob_iq/uninstall_studio_build.py — exactly the data the
 // approved demo was made from), and every number worked out here for the range / compare the viewer picks:
@@ -7499,7 +7588,8 @@ const SORD={bigda:0,dhyan:1,behtar:2,normal:3,jaldi:4,lagu:5};
 const chip=k=>`<span class="us-chip us-st-${k}"><i></i>${SW[k]}</span>`;
 // an alert's age chip — the dashboard's vocabulary (IST): 🆕 Naya alert · aaj HH:MM · 🆕 Kal aaya · 📌 N din se khula ·
 // 📌 <date> se khula · 📌 Shuru se khula (<date>) · ✅ Theek ho gaya; s = the short form for the 🔔 badge
-function ageOf(x){ if(x.closed) return {t:'✅ Fixed',s:'Fixed',tip:'Closed: '+(x.cat?fist(x.cat):fd(x.closed)),n:dDiff(x.closed,M.today),fresh:false};
+function ageOf(x){ if(x.closed){ const fx=x.theek!==false&&x.cr==='recovered';   // ✅ Fixed: recovered in the last 7 days (the file's own closed ones are only those)
+    return {t:fx?'✅ Fixed':'✅ Closed · '+fd(x.closed),s:fx?'Fixed':'Closed',tip:'Closed: '+(x.cat?fist(x.cat):fd(x.closed)),n:dDiff(x.closed,M.today),fresh:false}; }
   if(!x.at) return {t:'📌 Open',s:'Open',tip:'Alert ka time record nahi'+(x.opened?' — on data till '+fd(x.opened):''),n:null};
   const z=ist(x.at); if(!z) return {t:'📌 Open',s:'Open',tip:'Alert ka time record nahi',n:null};
   const n=Math.max(0,dDiff(z.day,NOW.day)), tip='Alert time: '+fist(x.at);
@@ -7519,7 +7609,8 @@ const MET={rate_drift:'Uninstall rate',rate_spike:'One-day uninstall spike',rate
   uninstall_d0:'Same day uninstall',new_d1:'Back next day',new_d7:'Back after 7 days',new_d30:'Back after 30 days',returning_dau:'Old users/day'};
 const metName=x=>MET[x.m]||(/^D\d+$/.test(x.m||'')?((+x.m.slice(1))===0?'Same day uninstall':((+x.m.slice(1))===1?'Uninstalled within 1 day':(+x.m.slice(1))+' days uninstalled')):'Change');
 function todo(x){ const up=x.dir==='up', f=x.fam, n=+x.n||0;
-  if(x.closed) return 'Kuch nahi — wapas normal';
+  if(x.closed) return x.cr==='recovered'?'Kuch nahi — wapas normal':'Kuch nahi — alert band ho gaya';
+  if(x.hk==='old') return 'Kuch nahi — purane installs ka badlaav, sirf jaankari';
   if(f==='impact'||f==='impact_late'){ return x.lv==='halt'?'Rollout rok do, hotfix bhejo':(x.lv==='hold'?'Rollout rok ke 2–3 din aur dekho':(x.lv==='win'?'Isi disha me aage badho':'Update ka asar dekhte raho')); }
   if(f==='rate_zero') return 'GA4 / Firebase tracking check karo';
   if(!up) return 'Kuch nahi — jo badla wo chalne do';
@@ -7943,27 +8034,106 @@ function bigOf(x){ if(x.ppl==null){ return {n:fR(relp(x.now,x.bef))||'—',u:'',
   return {n:fS(p),u:'/day',w}; }
 // the grey line (owner's rule, every alert): 🕒 Alert aaya (IST) · Data (+ ⏳ Pakka nahi) · Badlaav shuru (+ its age) · Band hua
 function tsH(x){ const st=startedOf(x), pk=pakkaOf(x);
-  return `<span>🕒 Alert time: ${x.at?fist(x.at):(x.opened?'on data till '+fd(x.opened):'—')}</span><span>Data: ${esc(dataOf(x)||'—')}${x.est?' · ≈':''}${pk?' · ⏳ Not final · final on '+fd(pk):''}</span>`
-    +`<br><span>Change started: ${x.cap?'6+ months':(st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—')}${x.rl?' · '+esc(x.rl)+' after':''}</span>${x.closed?`<span>Closed: ${x.cat?fist(x.cat):fd(x.closed)}</span>`:''}`; }
-function cardH(x){ const a=A[x.a], ag=ageOf(x), b=bigOf(x), v=alertVals(x);
+  return `<span>🕒 Alert time: ${x.hk==='old'?'— (not an alert, never sent)':(x.at?fist(x.at):(x.opened?'on data till '+fd(x.opened):'—'))}</span><span>Data: ${esc(dataOf(x)||'—')}${x.est?' · ≈':''}${pk?' · ⏳ Not final · final on '+fd(pk):''}</span>`
+    +`<br><span>Change started: ${x.cap?'6+ months':(st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—')}${x.rl?' · '+esc(x.rl)+' after':''}</span>${x.closed&&!x.hk?`<span>Closed: ${x.cat?fist(x.cat):fd(x.closed)}</span>`:''}`; }
+// a card's status: an open alert its own; a closed one Normal when it recovered, else N/A (no verdict now — it closed for
+// another reason); an older change none (it says "not an alert")
+const stOf=x=>x.closed?(x.cr==='recovered'?'normal':'lagu'):x.sev;
+function cardH(x){ const a=A[x.a], ag=ageOf(x), b=bigOf(x), v=alertVals(x), H=x.hk, st=startedOf(x);
   const fresh=ag.fresh?' us-new':'';
-  return `<div class="us-ac us-s-${x.sev}" data-app="${a.i}" data-go="${a.i}" data-alk="${x.k}" data-tk="al:${x.k}"><div class="us-l1">${x.closed?chip('behtar'):chip(x.sev)}<span class="us-age${fresh}" title="${esc(ag.tip)}">🔔 ${ag.t}</span>${szH(a)}</div>`
+  const l1=H==='old'?`<span class="us-aht">🗄 Older · not an alert</span><span class="us-age">${st?umar(Math.max(0,dDiff(st,M.today)))+' ago':'—'}</span>`
+    :`${chip(stOf(x))}<span class="us-age${fresh}" title="${esc(ag.tip)}">🔔 ${ag.t}</span>`;
+  return `<div class="us-ac us-s-${H?'ah':x.sev}${H?' us-ahc':''}" data-app="${a.i}" data-go="${a.i}" data-hgo="${esc(goOf(x))}"${H?'':` data-alk="${x.k}" data-tk="al:${x.k}"`}><div class="us-l1">${l1}${szH(a)}${sthGo('us')}</div>`
    +`<div class="us-app us-ainb">${ic(a,18)}<span class="us-aint">${esc(bnm(a))} <span class="us-acn">· ${esc(a.acc)}</span></span></div>`
-   +`<div class="us-mid"><div><div class="us-big">${b.n}<small>${b.u}</small></div><div class="us-what">${b.w} · ${esc(metName(x))}${v.now!=null?` (<b>${pc(v.now,v.dp)}</b>, was ${pc(v.bef,v.dp)})`:''}${x.usd!=null?` · <b>≈ ${moneyL(Math.abs(x.usd))}/day</b>${x.fam==='cohort'?' (in installs)':''}`:''}</div></div>${slope(x)}</div>`
-   +`<div class="us-todo"><b>${WD.next}</b> ${esc(todo(x))}</div>`
+   +`<div class="${H?'us-ahm':'us-mid'}"><div><div class="us-big">${b.n}<small>${b.u}</small></div><div class="us-what">${b.w} · ${esc(metName(x))}${v.now!=null?` (<b>${pc(v.now,v.dp)}</b>, was ${pc(v.bef,v.dp)})`:''}${x.usd!=null?` · <b>≈ ${moneyL(Math.abs(x.usd))}/day</b>${x.fam==='cohort'?' (in installs)':''}`:''}</div></div>${H?'':slope(x)}</div>`
+   // a history card (closed / older): compact — no slope, no "Next step" (nothing to do); a closed one says its own story
+   +(x.closed&&H?sthClosedLine('us',{opened:x.opened,openedAt:x.oa,closed:x.closed,closedAt:x.cat,cr:x.cr,was:SW[x.sev]}):'')
+   +(H?'':`<div class="us-todo"><b>${WD.next}</b> ${esc(todo(x))}</div>`)
    +`<div class="us-ts">${tsH(x)}</div></div>`; }
 TIPS.al=k=>{ const x=ALERTS[+k], v=alertVals(x); return `<div class="us-tt">${ic(A[x.a],14,'ail')}${esc(A[x.a].nm)}</div><div>${esc(metName(x))}${v.now!=null?': '+pc(v.bef,v.dp)+' → '+pc(v.now,v.dp):''}</div><div class="us-tsm" style="margin-top:4px">${esc(ageOf(x).tip)} · click = app view</div>`; };
 function sortAl(L){ const SZ={badi:0,madhyam:1,chhoti:2}, u=x=>x.usd!=null?Math.abs(x.usd):-1; return L.slice().sort((p,q)=>(SORD[p.sev]-SORD[q.sev])||(u(q)-u(p))||(SZ[A[p.a].sz]-SZ[A[q.a].sz])||((ageOf(p).fresh?0:1)-(ageOf(q).fresh?0:1))||String(startedOf(q)||'').localeCompare(String(startedOf(p)||''))); }
-function chgHtml(){ const B={'':[],purana:[],achhi:[],theek:[],chhoti:[],info:[]}; sortAl(ALERTS).forEach(x=>{ const f=foldOf(x); (B[f]||B.info).push(x); });
-  const nV=B[''].length, nF=Object.keys(B).filter(k=>k).reduce((t,k)=>t+B[k].length,0), fresh=ALERTS.filter(x=>!x.closed&&ageOf(x).fresh).length;
+// the open alerts as cards (the closed ones — the file's "✅ Fixed" too — are in "▸ Closed alerts", with every other closed one)
+function chgHtml(){ const B={'':[],purana:[],achhi:[],chhoti:[],info:[]}; sortAl(ALERTS.filter(x=>!x.closed)).forEach(x=>{ const f=foldOf(x); (B[f]||B.info).push(x); });
+  const HS=hist(null);
+  const nV=B[''].length, nF=Object.keys(B).filter(k=>k).reduce((t,k)=>t+B[k].length,0)+HS.old.length+HS.cl.length, fresh=ALERTS.filter(x=>!x.closed&&ageOf(x).fresh).length;
   const view=L=>ST.chgView==='table'?alTable(L):`<div class="us-cards">${L.map(cardH).join('')}</div>`;
   const chsz=new Map(); B.chhoti.forEach(x=>{ const a=A[x.a]; chsz.set(a.i,a.paisa); });
-  const F=[['achhi','🟢 Good news'],['theek','✅ Fixed — last 7 days'],['chhoti','Small apps'],['purana','🗄 Older than 30 days'],['info','ℹ️ Info']];
-  const folds=F.filter(([k])=>B[k].length).map(([k,l])=>`<details class="us-fold" data-fold="${k}"${ST.folds.has(k)?' open':''}><summary><span class="us-cv">▸</span><span>${l} (${B[k].length})${k==='chhoti'?' · '+money([...chsz.values()].reduce((t,v)=>t+v,0))+'/day':''}</span><span class="us-pv">${new Set(B[k].map(x=>x.a)).size} apps</span></summary>${view(B[k])}</details>`).join('');
+  const F=[['achhi','🟢 Good news'],['chhoti','Small apps'],['purana','📌 Open over 30 days'],['info','ℹ️ Info']];
+  const folds=F.filter(([k])=>B[k].length).map(([k,l])=>`<details class="us-fold" data-fold="${k}"${ST.folds.has(k)?' open':''}><summary><span class="us-cv">▸</span><span>${l} (${B[k].length})${k==='chhoti'?' · '+money([...chsz.values()].reduce((t,v)=>t+v,0))+'/day':''}</span><span class="us-pv">${new Set(B[k].map(x=>x.a)).size} apps</span></summary>${view(B[k])}</details>`).join('')
+    +histHtml(HS,'h',true);
   return `<div class="us-chg-h"><div><div class="us-eyebrow">New vs old</div><h2>What changed?</h2><div class="us-hint" style="font-size:12px;color:var(--muted)">${nV} shown · ${nF} folded below · ${fresh} new (today/yesterday) · engine ke alerts — range se alag</div></div><div class="us-right" style="margin-left:auto"><div class="us-seg" id="us-chgV"><button data-v="cards" aria-pressed="${ST.chgView==='cards'}">Cards</button><button data-v="table" aria-pressed="${ST.chgView==='table'}">Table</button></div></div></div>`
     +(nV?view(B['']):'<div class="us-ok">✅ Koi Worse / Watch badlaav dekhne layak nahi — baaki neeche band</div>')+folds; }
-function alTable(L){ return `<div class="us-panel us-tw" style="border-radius:var(--us-r)"><table class="us-mini us-alt"><thead><tr><th class="us-l">App</th><th class="us-l">Status</th><th class="us-l">Alert</th><th class="us-l">What changed</th><th>Users/day</th><th>Before → Now</th><th>${symOf()}/day</th><th class="us-l">Next step</th><th class="us-l">Change started</th><th class="us-l">🕒 Alert time</th></tr></thead><tbody>`
-  +L.map(x=>{ const a=A[x.a], b=bigOf(x), v=alertVals(x), st=startedOf(x), ag=ageOf(x); return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="us-l us-alapp">${nmH(a)}</td><td class="us-l">${x.closed?chip('behtar'):chip(x.sev)}</td><td class="us-l"><span class="us-age${ag.fresh?' us-new':''}" title="${esc(ag.tip)}">${ag.t}</span></td><td class="us-l" style="font-family:var(--us-font)">${esc(metName(x))}</td><td class="${x.sev==='bigda'||x.sev==='dhyan'?'us-bad':'us-good'}" style="font-weight:600">${b.n}</td><td>${v.now!=null?pc(v.bef,v.dp)+' → '+pc(v.now,v.dp):'—'}</td><td>${x.usd!=null?money(Math.abs(x.usd)):'—'}</td><td class="us-l" style="font-family:var(--us-font);white-space:normal;min-width:180px">${esc(todo(x))}</td><td class="us-l">${x.cap?'6+ months':(st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—')}</td><td class="us-l">${x.at?fist(x.at):'—'}<div class="us-tsm" style="white-space:normal;min-width:160px">Data: ${esc(dataOf(x)||'—')}${pakkaOf(x)?' · ⏳ final on '+fd(pakkaOf(x)):''}</div></td></tr>`; }).join('')+'</tbody></table></div>'; }
+function alTable(L){ return `<div class="us-panel us-tw" style="border-radius:var(--us-r)"><table class="us-mini us-alt"><thead><tr><th class="us-l">App</th><th class="us-l">Status</th><th class="us-l">Alert</th><th class="us-l">What changed</th><th>Users/day</th><th>Before → Now</th><th>${symOf()}/day</th><th class="us-l">Next step</th><th class="us-l">Change started</th><th class="us-l">🕒 Alert time</th><th class="us-l">Open</th></tr></thead><tbody>`
+  +L.map(x=>{ const a=A[x.a], b=bigOf(x), v=alertVals(x), st=startedOf(x), ag=ageOf(x), old=x.hk==='old', w=x.closed?sthWhy(x.cr):null;
+    return `<tr data-app="${a.i}" data-go="${a.i}" data-hgo="${esc(goOf(x))}" style="cursor:pointer"><td class="us-l us-alapp">${nmH(a)}</td><td class="us-l">${old?'<span class="us-aht">🗄 Older change</span>':chip(stOf(x))}</td><td class="us-l">${old?'<span class="us-age">not an alert</span>':`<span class="us-age${ag.fresh?' us-new':''}" title="${esc(ag.tip)}">${ag.t}</span>`}${w?`<div class="us-tsm" style="white-space:normal;min-width:150px">Opened ${fd(x.opened)} as ${SW[x.sev]} · closed ${fd(x.closed)} · open for ${sthDur(sthDays(x.opened,x.closed))} · Why closed: ${w[0]}</div>`:''}</td><td class="us-l" style="font-family:var(--us-font)">${esc(metName(x))}</td><td class="${x.sev==='bigda'||x.sev==='dhyan'?'us-bad':'us-good'}" style="font-weight:600">${b.n}</td><td>${v.now!=null?pc(v.bef,v.dp)+' → '+pc(v.now,v.dp):'—'}</td><td>${x.usd!=null?money(Math.abs(x.usd)):'—'}</td><td class="us-l" style="font-family:var(--us-font);white-space:normal;min-width:180px">${esc(todo(x))}</td><td class="us-l">${x.cap?'6+ months':(st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—')}</td><td class="us-l">${old?'— not an alert':(x.at?fist(x.at):'—')}<div class="us-tsm" style="white-space:normal;min-width:160px">Data: ${esc(dataOf(x)||'—')}${pakkaOf(x)?' · ⏳ final on '+fd(pakkaOf(x)):''}</div></td><td class="us-l">${sthGo('us')}</td></tr>`; }).join('')+'</tbody></table></div>'; }
+
+/* ================= 🗂 alert history: "▸ Older changes (N)" · "▸ Closed alerts (N)" · Open → (the older views' targets) ======= */
+// every closed alert and every older change of the visible apps (one app: id) — the very lists the older "What changed?"
+// showed (the older views' detail, UNI: each app's alerts_closed and old_changes; nothing trimmed), in this file's alert
+// shape: an engine alert packed as the build packs it (uninstall_studio_build.pack_alert: the same fields, the same users /
+// ₹ a day from this file's own arrays). Until that detail is in, the closed ones this file has ("✅ Fixed") stand in (wait)
+const uRaw=()=>{ try{ return (typeof UNI!=='undefined'&&UNI&&Array.isArray(UNI.apps))?UNI.apps:null; }catch(e){ return null; } };
+const okN=v=>typeof v==='number'&&isFinite(v);
+function avgDen(a,f,t){ let s=0,n=0; for(let i=Math.max(0,ix(f));i<=Math.min(N-1,ix(t));i++){ const v=a.a28[i]; if(v){ s+=v; n++; } } return n?s/n:null; }
+function arpOf(a){ let rv=0,a1=0; for(let i=Math.max(0,N-28);i<N;i++){ if(a.rv[i]!=null) rv+=a.rv[i]; if(a.a1[i]!=null) a1+=a.a1[i]; } return a1?rv/100/a1:null; }
+function pplOf(x,a){ const f=x.family, nw=x.now, bf=x.before, u=x.users, perWk=()=>u*(nw-bf)/Math.max(1,dDiff(x.installs_from,x.installs_to)+1);
+  if(f==='cohort'&&okN(nw)&&okN(bf)&&okN(u)&&x.installs_from&&x.installs_to) return [perWk(),'gaye'];
+  if((f==='rate_drift'||f==='rate_spike')&&okN(nw)&&okN(bf)){ const fr=x.since||x.day, to=f==='rate_drift'?x.data_till:x.day, dn=fr&&to?avgDen(a,fr,to):null; if(dn) return [(nw-bf)/1000*dn,'gaye']; }
+  if(f==='impact'||f==='impact_late'){ const R=x.rows||{}, m=((R.worse&&R.worse.length?R.worse:R.better)||[])[0];
+    if(m==='uninstall_d0'&&okN(nw)&&okN(bf)&&okN(u)&&x.installs_from) return [perWk(),'gaye'];
+    if((m==='new_d1'||m==='new_d7'||m==='new_d30')&&okN(nw)&&okN(bf)&&okN(u)&&x.installs_from) return [perWk(),'wapas'];
+    if(m==='returning_dau'&&okN(nw)&&okN(bf)) return [nw-bf,'wapas']; }
+  return [null,null]; }
+function sevOf(x){ const f=x.family; if(f==='impact'||f==='impact_late'){ const l={halt:'bigda',hold:'dhyan',win:'behtar'}[x.level]; if(l) return l; } if(f==='rate_zero') return 'dhyan';
+  const s=x.severity; return s==='warning'||s==='critical'?'bigda':(s==='good'?'behtar':(s==='watch'?'dhyan':'normal')); }
+function metOf(x){ const f=x.family; if(f==='cohort') return 'D'+(+x.n||0); if(f==='impact'||f==='impact_late'){ const R=x.rows||{}; return ((R.worse&&R.worse.length?R.worse:R.better)||[''])[0]||''; } return f; }
+function packH(x,a,hk){ const P=pplOf(x,a), arp=arpOf(a), rel=x.release||{}, cl=hk==='closed';
+  return {a:a.i,k:-1,hk,fam:x.family,m:metOf(x),sev:sevOf(x),dir:x.dir,n:x.n,now:x.now,bef:x.before,unit:x.unit,users:x.users,if:x.installs_from,it:x.installs_to,
+    bf:x.base_from,bt:x.base_to,since:x.since,day:x.day,at:x.opened_at||x.alert_at||null,oa:x.opened_at||null,seeded:!!x.seeded,opened:x.opened||null,prov:false,est:!!x.estimate,
+    started:x.started,cap:!!x.started_cap,dt:x.data_till,vs:x.vs||[],rl:rel.label,rd:rel.date,rk:rel.key||'',lv:x.level,tx:x.text||'',
+    ppl:P[0]==null?null:Math.round(P[0]*10)/10,kind:P[1],usd:(P[0]==null||P[1]!=='gaye'||!arp)?null:P[0]*arp,
+    closed:cl?x.closed:null,cr:cl?(x.close_reason||null):null,cat:cl?(x.closed_at||null):null,
+    // ✅ Fixed (the older views' smpTheek): recovered ≤ 7 days ago, was Worse / Watch, not a small app, open ≥ 1 run
+    theek:cl&&x.close_reason==='recovered'&&smpAge(x.closed)!=null&&smpAge(x.closed)<=7&&(x.severity==='warning'||x.severity==='watch')&&a.sz!=='chhoti'&&!(x.opened&&x.closed<=x.opened)}; }
+const sortCl=L=>L.sort((p,q)=>String(q.closed||'').localeCompare(String(p.closed||''))||String(q.cat||'').localeCompare(String(p.cat||''))||String(startedOf(q)||'').localeCompare(String(startedOf(p)||'')));
+function hist(id){ const U=uRaw(), by={}; A.forEach(a=>{ by[a.id]=a; });
+  if(!U) return {cl:sortCl(ALERTS.filter(x=>x.closed&&(!id||A[x.a].id===id)).map(x=>Object.assign({},x,{hk:'closed'}))),old:[],wait:true};
+  const cl=[], old=[];
+  U.forEach(d=>{ const a=d&&by[d.app_id]; if(!a||(id&&a.id!==id)) return;
+    (Array.isArray(d.alerts_closed)?d.alerts_closed:[]).forEach(x=>{ if(x&&typeof x==='object'&&x.closed) cl.push(packH(x,a,'closed')); });
+    (Array.isArray(d.old_changes)?d.old_changes:[]).forEach(o=>{ if(o&&typeof o==='object') old.push(packH(Object.assign({family:'cohort'},o),a,'old')); }); });
+  return {cl:sortCl(cl),old:old.sort((p,q)=>String(startedOf(q)||'').localeCompare(String(startedOf(p)||''))),wait:false}; }
+// the two folds (k: the fold keys' stem — 'h' All apps, 'pgh' the app page, 'dh' the quick look); tbl: All apps' Cards / Table
+function histHtml(HS,k,tbl){ const view=L=>tbl&&ST.chgView==='table'?alTable(L):`<div class="us-cards">${L.map(cardH).join('')}</div>`, na=L=>{ if(k!=='h') return ''; const n=new Set(L.map(x=>x.a)).size; return n+(n===1?' app':' apps'); };
+  return sthFold('us',k+'old',ST.folds.has(k+'old'),'Older changes',HS.wait?null:HS.old.length,HS.wait?'⏳':na(HS.old),view(HS.old),HS.wait?'⏳ Older changes load ho rahe hain…':'Koi purana badlaav nahi',
+      `<span>${(()=>{ try{ return uniOldDays(); }catch(e){ return 60; } })()} din se purane installs ke badlaav — sirf jaankari, inka alert nahi aata · naya pehle</span>`)
+    +sthFold('us',k+'cl',ST.folds.has(k+'cl'),'Closed alerts',HS.cl.length,na(HS.cl),view(HS.cl),'Abhi tak koi alert band nahi hua',
+      `<span>Har band alert: kab khula, kab band hua, kitne din khula raha aur kyun · naya band pehle${HS.wait?' · ⏳ poori list load ho rahi':''}</span>`+sthWhyLeg(HS.cl.map(x=>x.cr))); }
+// an update's release key for an alert of this file (its pack has the label and date, not the key): DATA's open alerts, then the detail's
+function rkOf(x){ if(x.rk) return x.rk; const id=A[x.a].id, d=(uRaw()||[]).find(z=>z&&z.app_id===id);
+  const L=[].concat((typeof DATA!=='undefined'&&DATA&&DATA.uninstall&&DATA.uninstall.alerts)||[],(d&&d.alerts)||[]);
+  const r=L.find(z=>z&&z.app_id===id&&z.family===x.fam&&z.release&&z.release.key&&(!x.rd||z.release.date===x.rd)); return r?String(r.release.key):''; }
+// "Open →" — the older views' own target (smpUniGo), "<app>|<section>|<arg>|<n>": an update's (late) impact → its 📦 block
+// (a late one at 30 days); an install-week change → the install-week table (here "How many still in app", its week and day
+// flashed); a rate → the daily chart (here "Uninstall rate % with normal band")
+function goOf(x){ const a=A[x.a];
+  if(x.fam==='impact'||x.fam==='impact_late') return a.i+'|imp|'+rkOf(x)+'|'+(x.fam==='impact_late'?30:'');
+  if(x.fam==='cohort') return a.i+'|coh|'+(x.if||'')+'|'+(x.it||'')+'|'+(+x.n||0);
+  return a.i+'|rate'; }
+let PJ=null;   // a jump waiting for its app page (opened from All apps / the quick look): {id, s: the target, t}
+function goH(spec,inD){ const s=String(spec).split('|'), a=A[+s[0]]; if(!a) return; hideTip();
+  if(s[1]==='imp'&&s[2]){ const n=s[3]?+s[3]:undefined;
+    if(!inD&&VIEW==='app'&&PAGE===a.id){ try{ uniImp(s[2],'uni',n); }catch(e){} } else { closeDrawer(); try{ uniImpGo(a.id,s[2],'uni',n); }catch(e){} } return; }
+  if(!inD&&VIEW==='app'&&PAGE===a.id){ jumpTo(s); return; }
+  PJ={id:a.id,s,t:Date.now()}; closeDrawer(); try{ uniOpen(a.id); }catch(e){} }
+function jumpTo(s){ const sec=s[1], el=$(sec==='imp'?'us-imp':'us-pg-'+sec); if(!el) return false; let row=null;
+  if(sec==='coh'&&s[2]){ const a=A.find(z=>z.id===PAGE), f=s[2], t=s[3]||s[2], box=el.querySelector('.us-cohw'), r=a&&a.coh.w.find(w=>w.f<=t&&w.t>=f);
+    const rh=r&&box?box.querySelector('[data-cw="'+r.w+'"]'):null;
+    if(rh){ const k=M.cohCols.indexOf(+s[4]), c=k>=0?box.querySelector('[data-tk="coh:'+a.i+':'+r.w+':'+k+'"]'):null; row=c||rh;
+      try{ const hd=box.querySelector('.us-chh'), br=box.getBoundingClientRect(); box.scrollTop+=rh.getBoundingClientRect().top-br.top-(hd?hd.offsetHeight:0)-30;
+        if(c) box.scrollLeft+=c.getBoundingClientRect().left-br.left-rh.offsetWidth-12; }catch(e){} } }
+  return sthJump(el,'us',row); }
+function pjNow(){ if(!PJ) return; if(Date.now()-PJ.t>15000){ PJ=null; return; } if(VIEW!=='app'||PJ.id!==PAGE) return; if(jumpTo(PJ.s)) PJ=null; }
 
 /* ================= the apps table ================= */
 const TC=[['app','App','us-l'],['st','Status · 🔔 alert','us-l'],['ins','Installs/day'],['outs','Uninstalls/day'],['d0','Same day uninstall %'],['rate','Uninstall rate %'],['s7','Still in app after 7 days %'],['r1','Back next day %'],['lost','Lost above normal'],['inr','Loss/day'],['trend','Trend','us-l']];
@@ -8070,7 +8240,7 @@ function cohFull(a,cr){ const C=M.cohCols, rows=a.coh.w.slice().reverse(); cr=cr
     const L=cr[r.w], go=L?((L.find(x=>x.k)||{}).k||''):'', nd=dDiff(r.f,r.t)+1;
     if(L) h+=`<div class="us-crel" data-rw="${r.w}"><span>${relLine(r,L)}</span></div>`;
     const badge=L?`<span class="us-relb" data-tk="crel:${a.i}:${r.w}"${go?` data-rimp="${esc(go)}" role="link" tabindex="0"`:''}>📦</span>`:'';
-    h+=`<div class="us-rh"><span>${wl(r.f,r.t)}${badge}</span><small>${fN(r.n)} installs</small>${r.part?`<small>(only ${nd} ${nd===1?'day':'days'})</small>`:''}</div>`+C.map((c,k)=>cohCell(a,r,k)).join(''); });
+    h+=`<div class="us-rh" data-cw="${r.w}"><span>${wl(r.f,r.t)}${badge}</span><small>${fN(r.n)} installs</small>${r.part?`<small>(only ${nd} ${nd===1?'day':'days'})</small>`:''}</div>`+C.map((c,k)=>cohCell(a,r,k)).join(''); });
   return h+'</div>'; }
 /* ================= "📉 How many stay" — the older page's survival curve, in the Studio's way ================= */
 // Owner (2 Oct): "purane view ka ye feature (How many stay) tumne new view me to gayab hi kar diya". The SAME curve and
@@ -8259,13 +8429,13 @@ function bodyHtml(o,mode){ const a=o.a, s=o.s, c=o.c;
   const dt=`<table class="us-mini"><thead><tr><th class="us-l">Date</th><th>Installs</th><th>Uninstalls</th><th>Net</th><th>Uninstall rate</th><th>Same day uninstall %</th><th class="us-l">Events</th></tr></thead><tbody>`+days.map(i=>{ const d=dOf(i), r=a.rate[i], hs=(r!=null&&a.hi[i]!=null)?(r>a.hi[i]?'us-h3':(r<a.lo[i]?'us-h-2':'')):'';
     const ev=a.rel.filter(x=>x[0]===d).map(x=>'📦 '+esc(x[1])).concat(a.al.filter(x=>!x.closed&&startedOf(x)===d).map(x=>'🔔 '+SW[x.sev])).join(' · ');
     return `<tr class="${d>a.settled?'us-prow':''}"><td class="us-l">${fd(d)}${d>a.settled?' ⏳':''}</td><td>${fN(a.nw[i])}</td><td>${fN(a.un[i])}</td><td>${fS((a.nw[i]||0)-(a.un[i]||0))}</td><td><span class="us-hcell ${hs}">${rp(r)}</span></td><td>${a.g0[i]!=null&&a.nw[i]?pc(a.g0[i]/a.nw[i],1):'—'}</td><td class="us-l" style="font-family:var(--us-font);font-size:12px">${ev}</td></tr>`; }).join('')+'</tbody></table>';
-  const als=sortAl(a.al);
+  const als=sortAl(a.al.filter(x=>!x.closed));          // (the closed ones: "▸ Closed alerts" below the open cards)
   const ups=a.rel.slice().reverse();
   const hd=mode==='p'?'h2':'h2 style="font-size:15px"', he=mode==='p'?'h2':'h2';
   const cr=cohRels(a);                                   // 📦 the updates in the install-week grid
   const nW=a.coh.w.length, w0=nW?a.coh.w[0]:null;
-  const coh=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Install week × day${nW?' · all '+nW+(nW===1?' week':' weeks'):''}</div><${hd}>How many still in app</${he}><div class="us-hint">Har row = ek hafte ke installs${w0?' · saare hafte, '+fd(w0.f)+' se aaj tak (naya upar)':''} · cell = us din ke baad kitne % ne app rakha</div></div><div class="us-right"><div class="us-seg" id="us-cohM-${mode}" data-cohm="1"><button data-m="abs" aria-pressed="${ST.cohMode==='abs'}">% bache</button><button data-m="dev" aria-pressed="${ST.cohMode==='dev'}">Vs normal</button></div></div></div><div class="us-cohw" data-cohbox="${mode}">${cohFull(a,cr)}</div><div class="us-clg">${ST.cohMode==='abs'?'<span class="us-k"><i style="background:linear-gradient(90deg,#13213a,#22d3ee);width:40px;height:9px"></i>fewer → more still in app</span>':'<span class="us-k"><i style="background:var(--us-h2);height:9px"></i>below normal</span><span class="us-k"><i style="background:var(--us-g2);height:9px"></i>above normal</span>'}<span class="us-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="us-k">· = abhi us din tak nahi pahunche</span></div>${cohRelLg(cr)}</div>`;
-  const alH=als.length?`<div><div class="us-chg-h"><div><div class="us-eyebrow">This app’s alerts</div><${hd}>What changed?</${he}></div></div><div class="us-cards">${als.map(cardH).join('')}</div></div>`:'<div class="us-ok">✅ Is app pe koi khula alert nahi</div>';
+  const coh=`<div class="us-panel"${mode==='p'?' id="us-pg-coh"':''}><div class="us-ph"><div><div class="us-eyebrow">Install week × day${nW?' · all '+nW+(nW===1?' week':' weeks'):''}</div><${hd}>How many still in app</${he}><div class="us-hint">Har row = ek hafte ke installs${w0?' · saare hafte, '+fd(w0.f)+' se aaj tak (naya upar)':''} · cell = us din ke baad kitne % ne app rakha</div></div><div class="us-right"><div class="us-seg" id="us-cohM-${mode}" data-cohm="1"><button data-m="abs" aria-pressed="${ST.cohMode==='abs'}">% bache</button><button data-m="dev" aria-pressed="${ST.cohMode==='dev'}">Vs normal</button></div></div></div><div class="us-cohw" data-cohbox="${mode}">${cohFull(a,cr)}</div><div class="us-clg">${ST.cohMode==='abs'?'<span class="us-k"><i style="background:linear-gradient(90deg,#13213a,#22d3ee);width:40px;height:9px"></i>fewer → more still in app</span>':'<span class="us-k"><i style="background:var(--us-h2);height:9px"></i>below normal</span><span class="us-k"><i style="background:var(--us-g2);height:9px"></i>above normal</span>'}<span class="us-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="us-k">· = abhi us din tak nahi pahunche</span></div>${cohRelLg(cr)}</div>`;
+  const alH=`<div${mode==='p'?' id="us-pg-chg"':''}><div class="us-chg-h"><div><div class="us-eyebrow">This app’s alerts</div><${hd}>What changed?</${he}></div></div>${als.length?`<div class="us-cards">${als.map(cardH).join('')}</div>`:'<div class="us-ok">✅ Is app pe koi khula alert nahi</div>'}${histHtml(hist(a.id),mode==='p'?'pgh':'dh',false)}</div>`;
   const upL=ups.map(r=>{ const kk=ix(r[0]), b=avgAt(a,kk-7,kk-1), f=avgAt(a,kk,Math.min(kk+6,N-1));
       return `<div class="us-u"><span class="us-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="us-faint">${r[2]==='halt'?'Rollout roko, hotfix bhejo':(r[2]==='win'?'Good impact':(r[2]==='continue'?'Koi loss nahi dikha':(r[2]==='hold'?'Wait and check':'Measuring impact')))}</span>${b.rate!=null&&f.rate!=null?`<span class="us-num" style="font-size:12px;color:var(--ink2)">uninstalls ${fN(b.outs)}→${fN(f.outs)}/day (${rp(b.rate)}→${rp(f.rate)})</span>`:''}</div>`; }).join('');
   const upH=ups.length?`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · all ${ups.length}${ups.length?' · since '+fd(ups[ups.length-1][0]):''}</div><${hd}>Update impact</${he}><div class="us-hint">${mode==='p'?'Poora Update impact card (kisi bhi date se tulna) neeche "Old views" me':'Poora Update impact card (kisi bhi date se tulna) app page pe'}</div></div></div><div class="us-upd">${upL}</div></div>`:'';
@@ -8273,7 +8443,7 @@ function bodyHtml(o,mode){ const a=o.a, s=o.s, c=o.c;
   // 30 / 60 days, 📅 any date, 📌 saved dates) as its own section, the uninstall lines above it; '' → the short list
   const imp=mode==='p'?impSec(a,upL):'';
   const dtH=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Day by day</div><${hd}>Day by day · ${span(W.f,W.t)}</${he}></div></div><div class="us-tw" style="max-height:${mode==='p'?520:360}px">${dt}</div></div>`;
-  const ch1=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Uninstall rate</div><${hd}>Uninstall rate % with normal band</${he}></div></div>${bigChart(a,o,mode)}</div>`;
+  const ch1=`<div class="us-panel"${mode==='p'?' id="us-pg-rate"':''}><div class="us-ph"><div><div class="us-eyebrow">Uninstall rate</div><${hd}>Uninstall rate % with normal band</${he}></div></div>${bigChart(a,o,mode)}</div>`;
   const ch2=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Installs vs uninstalls</div><${hd}>Installs vs uninstalls</${he}></div></div>${ioChart(a,mode)}</div>`;
   const cv=curveH(a,mode,hd,he);                        // 📉 How many stay: after Gone by day N, before the grid
   if(mode==='p') return `<div class="us-dk us-pk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${cv}${coh}${alH}${imp||upH}${dtH}`;
@@ -8476,7 +8646,7 @@ function stick(){ const r=$('us-root'); if(!r) return; try{ const tb=document.qu
 function renderPage(){ const el=$('us-apg'); if(!el||VIEW!=='app') return; const i=A.findIndex(a=>a.id===PAGE); if(i<0) return;
   for(const k in SPK) if(k.indexOf('us-s')===0) delete SPK[k]; SPF='us-s'; spkN=0; el.innerHTML=pageHtml(i); }
 function afterMount(){ const root=$('us-root'); if(!root) return; layer(); stick();
-  if(VIEW==='app'){ const el=$('us-apg'); const w=el&&el.clientWidth; if(w&&Math.abs(w-PW)>40){ PW=w; renderPage(); } countUp(); return; }
+  if(VIEW==='app'){ const el=$('us-apg'); const w=el&&el.clientWidth; if(w&&Math.abs(w-PW)>40){ PW=w; renderPage(); } countUp(); pjNow(); return; }
   const box=$('us-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.us-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; }
   countUp();
   if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('us-drawer'); if(d&&!d.classList.contains('us-on')){ d.classList.add('us-on'); $('us-scrim').classList.add('us-on'); lock(true); } } } }
@@ -8536,6 +8706,7 @@ function wire(){ if(WIRED) return; WIRED=true;
   document.addEventListener('keydown',e=>{ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.tagName==='INPUT'||tg.tagName==='SELECT'||tg.tagName==='TEXTAREA'||tg.isContentEditable));
     if(e.key==='Escape'){ if(ST.drawer>=0){ closeDrawer(); e.preventDefault(); } hideTip(); return; }
     if((e.key==='Enter'||e.key===' ')&&tg&&tg.closest&&tg.closest('[data-rimp]')&&inStudio(tg)){ e.preventDefault(); tg.closest('[data-rimp]').click(); return; }
+    if((e.key==='Enter'||e.key===' ')&&tg&&tg.closest&&tg.closest('.us-opn')&&inStudio(tg)){ e.preventDefault(); tg.click(); return; }
     if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
     if(ST.drawer>=0&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navDrawer(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
     if(VIEW==='app'&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navPage(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
@@ -8552,6 +8723,8 @@ function onClick(e){ const t=e.target; if(!inStudio(t)) return;
   // on the app page right there; from the drawer the app page opens on it (uniImpGo, as from All apps "Recent updates")
   const ri=t.closest('[data-rimp]'); if(ri){ e.preventDefault(); hideTip(); const k=ri.getAttribute('data-rimp');
     if(ri.closest('#us-drawer')){ const id=ST.did; closeDrawer(); try{ uniImpGo(id,k,'uni'); }catch(e2){} } else { try{ uniImp(k); }catch(e2){} } return; }
+  // a "What changed?" card / row (open, closed or an older change): Open → — and a tap anywhere on it — goes to its target
+  const hg=t.closest('[data-hgo]'); if(hg&&!t.closest('select,input,summary')){ e.preventDefault(); goH(hg.getAttribute('data-hgo'),!!hg.closest('#us-drawer')); return; }
   const ab=t.closest('[data-al]'); if(ab&&ab.dataset.al!==''){ e.stopPropagation(); hideTip(); const k=ab.dataset.al, inD=!!ab.closest('#us-drawer');
     if(!inD&&ST.drawer>=0) closeDrawer();
     const root=inD?$('us-drawer'):(VIEW==='app'?$('us-apg'):$('us-chg')); let card=root&&root.querySelector('[data-alk="'+k+'"]');
@@ -8600,7 +8773,8 @@ return {ptr, ensure, retry, screen, appScreen, has, hide, closeDrawer, openDrawe
      eng:()=>{ engCompute(); return engHtml(); }, upl:uplHtml, when:whenHtml,
      page:id=>{ const i=A.findIndex(a=>a.id===id); return i<0?'':pageHtml(i); }, view:()=>({VIEW,PAGE}), SPK:()=>SPK, labels, navPage,
      load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, loadHist:j=>{ HRAW=j||null; HERR=j===null; HLOAD=false; HFOR=j===null?VER:null; SIG=null; }, histOk, needHist, pickMin, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage,
-     gdCell, gdHtml:()=>gdHtml(), gdApp:(i,m)=>gdApp(R[i],m||'d'), GST, GDL, cohFull, cohRels, relsOf, curveH, curveTip}};
+     gdCell, gdHtml:()=>gdHtml(), gdApp:(i,m)=>gdApp(R[i],m||'d'), GST, GDL, cohFull, cohRels, relsOf, curveH, curveTip,
+     hist, goOf, goH, jumpTo, PJ:()=>PJ, pjNow, histHtml}};
 })();
 
 function renderUninstall(){
@@ -10811,7 +10985,7 @@ function whyJaldi(o){ const a=o.a; if(!a.ready) return 'Naya app — engine ki n
 // an alert's age chip — the dashboard's vocabulary (IST): 🆕 Naya alert · aaj HH:MM · 🆕 Kal aaya · 📌 N din se khula ·
 // 📌 <date> se khula · 📌 Shuru se khula (<date>); a closed one ✅ Band ho gaya; an engine info row ℹ️ Jaankari;
 // s = the short form for the 🔔 badge
-function ageOf(x){ if(x.kind==='closed') return {t:'✅ Closed',s:'Closed',tip:'Closed: '+(x.cat?fist(x.cat):fd(x.closed)),fresh:false};
+function ageOf(x){ if(x.kind==='closed'){ const fx=!!x.theek; return {t:fx?'✅ Fixed':'✅ Closed · '+fd(x.closed),s:fx?'Fixed':'Closed',tip:'Closed: '+(x.cat?fist(x.cat):fd(x.closed)),fresh:false}; }
   if(x.kind==='info') return {t:'ℹ️ Info',s:'Info',tip:'Engine ki jaankari — alert nahi',fresh:false};
   const z=x.at?ist(x.at):null;
   if(!z) return {t:'📌 Open',s:'Open',tip:'Alert ka time record nahi'+(x.opened?' — on data till '+fd(x.opened):''),fresh:false};
@@ -10842,7 +11016,7 @@ function alNums(x){ const a=A[x.a], m=x.m;
   if(m==='ecpm'||x.fam==='price') return {big:fR(x.rel),u:'ad rate',w:'ads per user wahi — bazaar ka asar',d:x.rel};
   return {big:fR(x.rel),u:'',w:x.dir==='down'?'ghata':'badha',d:x.rel}; }
 function todo(x){ const f=x.fam, m=x.m, up=x.dir==='up', tg=x.tags||[], ins=tg.indexOf('installs')>=0, mix=tg.indexOf('mix')>=0;
-  if(x.kind==='closed') return 'Kuch nahi — alert band ho gaya';
+  if(x.kind==='closed') return x.cr==='recovered'?'Kuch nahi — wapas normal':'Kuch nahi — alert band ho gaya';
   if(x.kind==='info'&&f==='installs') return 'App me kuch nahi — ye installs / ad spend ka asar hai';
   if(f==='price'||m==='ecpm') return 'Kuch nahi — bazaar ka ad rate, app ka nahi';
   if(f==='act_break') return 'GA4 / Firebase tracking check karo';
@@ -11313,16 +11487,19 @@ function spxH(n){ if(n.fi==null||n.d==null) return ''; const mx=Math.max(Math.ab
 function tsH(x){ const st=startedOf(x), pk=pakkaOf(x), info=x.kind==='info';
   return (info?'':`<span class="as-at">🕒 Alert time: ${x.at?fist(x.at):(x.opened?'on data till '+fd(x.opened):'—')}</span>`)
     +`<span>${info?'🕒 ':''}Data: ${esc(dataOf(x))}${x.est?' · ≈':''}${pk?' · ⏳ Not final · final on '+fd(pk):''}</span>`
-    +`<br><span>Change started: ${st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—'}</span>${x.rl?`<span>📦 ${esc(x.rl)}${x.rd?' ('+fd(x.rd)+')':''}</span>`:''}${x.kind==='closed'?`<span>Closed: ${x.cat?fist(x.cat):fd(x.closed)}</span>`:''}`; }
-function cardH(x){ const a=A[x.a], ag=ageOf(x), n=alNums(x), info=x.kind==='info', sev=info?'info':(x.kind==='closed'?'normal':x.sev);
-  const chipH=info?'<span class="as-chip as-st-normal"><i></i>Normal</span>':(x.kind==='closed'?chip('normal'):chip(x.sev));
+    +`<br><span>Change started: ${st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—'}</span>${x.rl?`<span>📦 ${esc(x.rl)}${x.rd?' ('+fd(x.rd)+')':''}</span>`:''}${x.kind==='closed'&&!x.hk?`<span>Closed: ${x.cat?fist(x.cat):fd(x.closed)}</span>`:''}`; }
+// a card's status: an open alert its own; a closed one Normal when it recovered, else N/A (closed for another reason)
+const stOf=x=>x.kind==='closed'?(x.cr==='recovered'?'normal':'lagu'):(x.kind==='info'?'normal':x.sev);
+function cardH(x){ const a=A[x.a], ag=ageOf(x), n=alNums(x), info=x.kind==='info', H=x.hk, sev=info?'info':(x.kind==='closed'?(H?'ah':'normal'):x.sev);
+  const chipH=info?'<span class="as-chip as-st-normal"><i></i>Normal</span>':chip(stOf(x));
   const vv=(n.vn!=null&&n.vb!=null&&n.fmt)?` (<b>${esc(n.fmt(n.vn))}</b>, was ${esc(n.fmt(n.vb))}${x.rel!=null?', '+fR(x.rel):''})`:'';
   const money_=n.usd!=null?` · <b>≈ ${moneyL(n.usdA!=null?n.usdA:n.usd,true)}/day</b>${n.usdA!=null?' (real)':''}`:(n.net?` · dusre ad networks ka hissa <b>${n.net[1]}% → ${n.net[2]}%</b> (${symOf()} asar pakka nahi)`:'');
-  return `<div class="as-ac as-s-${sev}" data-app="${a.i}" data-go="${a.i}" data-alk="${x.k}" data-tk="al:${x.k}"><div class="as-l1">${chipH}<span class="as-age${ag.fresh?' as-new':''}" title="${esc(ag.tip)}">${info?'':'🔔 '}${ag.t}</span>${szH(a)}${(x.tags||[]).indexOf('installs')>=0||info&&x.fam==='installs'?'<span class="as-tagi">📥 installs</span>':''}</div>`
+  return `<div class="as-ac as-s-${sev}${H?' as-ahc':''}" data-app="${a.i}" data-go="${a.i}" data-hgo="${esc(goOf(x))}"${H?'':` data-alk="${x.k}" data-tk="al:${x.k}"`}><div class="as-l1">${chipH}<span class="as-age${ag.fresh?' as-new':''}" title="${esc(ag.tip)}">${info?'':'🔔 '}${ag.t}</span>${szH(a)}${(x.tags||[]).indexOf('installs')>=0||info&&x.fam==='installs'?'<span class="as-tagi">📥 installs</span>':''}${sthGo('as')}</div>`
    +`<div class="as-app as-ainb">${ic(a,18)}<span class="as-aint">${esc(a.store)} <span class="as-acn">· ${esc(a.acc)}</span></span></div>`
-   +`<div class="as-mid"><div><div class="as-big">${n.big}<small>${n.u}</small></div><div class="as-what">${esc(n.w)} · ${esc(metName(x))}${vv}${money_}</div></div>${slope(x)}</div>`
-   +spxH(n)
-   +`<div class="as-todo"><b>Next step:</b> ${esc(todo(x))}</div>`
+   +`<div class="${H?'as-ahm':'as-mid'}"><div><div class="as-big">${n.big}<small>${n.u}</small></div><div class="as-what">${esc(n.w)} · ${esc(metName(x))}${vv}${money_}</div></div>${H?'':slope(x)}</div>`
+   +(H?'':spxH(n))
+   // a closed alert from the history: compact (no slope, no "Next step"), with when it opened / closed, how long, why
+   +(H?sthClosedLine('as',{opened:x.opened,openedAt:x.oa,closed:x.closed,closedAt:x.cat,cr:x.cr,was:SW[x.sev]}):`<div class="as-todo"><b>Next step:</b> ${esc(todo(x))}</div>`)
    +`<div class="as-ts">${tsH(x)}</div></div>`; }
 TIPS.al=k=>{ const x=ALERTS[+k], a=A[x.a], n=alNums(x); return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)}</div>${trow(esc(metName(x)),(n.fmt&&n.vb!=null?esc(n.fmt(n.vb))+' → '+esc(n.fmt(n.vn)):n.big))}${trow('How',FAM[x.fam]||x.fam)}${n.fi!=null?trow('▨ due to installs',fX(n.fi)+'/day')+trow('■ real change',fX(n.asli)+'/day'):''}${x.net!=null?trow('Other ad networks’ share',x.net[1]+'% → '+x.net[2]+'%'):''}<div class="as-tsm" style="margin-top:4px">${esc(ageOf(x).tip)} · click = app view</div>`; };
 function sortAl(L){ const SZ={badi:0,madhyam:1,chhoti:2}, u=x=>{ const n=alNums(x), v=n.usdA!=null?n.usdA:n.usd; return v!=null?Math.abs(v):-1; };
@@ -11335,26 +11512,68 @@ function oldsOf(a){ const d=a?detOf(a):null; let L;
   return L.filter(z=>z.o&&typeof z.o==='object').sort((p,q)=>String(q.o.started||q.o.from||'').localeCompare(String(p.o.started||p.o.from||''))); }
 const oldMet=o=>MET[o.metric]||FAM[o.kind]||'Change';
 function oldCard(z){ const o=z.o, a=z.a, st=o.started||o.from, R0=o.release||null, ag=st?Math.max(0,dDiff(st,M.today)):null;
-  return `<div class="as-ac as-s-info as-oldc" data-app="${a.i}" data-go="${a.i}"><div class="as-l1"><span class="as-tago">🗄 Older finding · not an alert</span><span class="as-age">${st?'Started '+umar(ag)+' ago':'—'}</span>${szH(a)}</div>`
+  return `<div class="as-ac as-s-info as-oldc" data-app="${a.i}" data-go="${a.i}" data-hgo="${esc(goOld(z))}"><div class="as-l1"><span class="as-tago">🗄 Older · not an alert</span><span class="as-age">${st?umar(ag)+' ago':'—'}</span>${szH(a)}${sthGo('as')}</div>`
    +`<div class="as-app as-ainb">${ic(a,18)}<span class="as-aint">${esc(a.store)} <span class="as-acn">· ${esc(a.acc)}</span></span></div>`
    +`<div class="as-what" style="font-size:13px"><b>${esc(oldMet(o))}</b>${o.rel!=null&&isFinite(o.rel)?` <span class="${o.dir==='down'?'as-bad':'as-good'}">${o.dir==='down'?'▼':'▲'} ${fR(o.rel)}</span>`:''} · ${esc(smpInfoTxt(o.text||''))}</div>`
    +`<div class="as-ts"><span class="as-at">🕒 Alert time: — (purani finding · alert nahi, bheja nahi)</span><span>Change started: ${st?fd(st)+' · '+umar(ag):'—'}</span><br><span>Data: ${o.from?'Daily avg '+span(o.from,o.to):'—'}</span>${R0&&R0.label?`<span>📦 after ${esc(R0.label)}${R0.date?' ('+fd(R0.date)+')':''}</span>`:''}</div></div>`; }
-function oldTable(L){ return `<div class="as-panel as-tw" style="border-radius:var(--as-r)"><table class="as-mini as-chgt"><thead><tr><th class="as-l">App</th><th class="as-l">🕒 Alert time</th><th class="as-l">What</th><th>Change</th><th class="as-l">Change started · Data</th></tr></thead><tbody>`
-  +L.map(z=>{ const o=z.o, a=z.a, st=o.started||o.from; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="as-l" style="white-space:normal;min-width:150px">${nmH(a)}</td><td class="as-l as-faint" style="white-space:normal;min-width:120px">— older finding · not an alert</td><td class="as-l" style="font-family:var(--as-font);white-space:normal;min-width:240px"><b>${esc(oldMet(o))}</b> · ${esc(smpInfoTxt(o.text||''))}</td><td class="${o.dir==='down'?'as-bad':'as-good'}" style="font-weight:600">${o.rel!=null&&isFinite(o.rel)?fR(o.rel):'—'}</td><td class="as-l" style="white-space:normal;min-width:190px">Change started: ${st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—'}<div class="as-tsm" style="font-size:10.5px">Data: ${o.from?'Daily avg '+span(o.from,o.to):'—'}${o.release&&o.release.label?' · 📦 after '+esc(o.release.label):''}</div></td></tr>`; }).join('')+'</tbody></table></div>'; }
-const oldFold=(L,key,pv)=>L.length?`<details class="as-fold" data-fold="${key}"${ST.folds.has(key)?' open':''}><summary><span class="as-cv">▸</span><span>🗄 Older (${L.length}) · engine findings, not alerts</span><span class="as-pv">${pv}</span></summary>${ST.chgView==='table'?oldTable(L):`<div class="as-cards">${L.map(oldCard).join('')}</div>`}</details>`:'';
-function chgHtml(){ const B={'':[],purana:[],achhi:[],theek:[],chhoti:[],info:[]}; sortAl(ALERTS).forEach(x=>{ const f=foldOf(x); if(B[f]) B[f].push(x); });
-  const OL=oldsOf(null);
-  const nV=B[''].length, nF=Object.keys(B).filter(k=>k).reduce((t,k)=>t+B[k].length,0)+OL.length, fresh=ALERTS.filter(x=>isOpen(x)&&ageOf(x).fresh).length;
+function oldTable(L){ return `<div class="as-panel as-tw" style="border-radius:var(--as-r)"><table class="as-mini as-chgt"><thead><tr><th class="as-l">App</th><th class="as-l">🕒 Alert time</th><th class="as-l">What</th><th>Change</th><th class="as-l">Change started · Data</th><th class="as-l">Open</th></tr></thead><tbody>`
+  +L.map(z=>{ const o=z.o, a=z.a, st=o.started||o.from; return `<tr data-app="${a.i}" data-go="${a.i}" data-hgo="${esc(goOld(z))}" style="cursor:pointer"><td class="as-l" style="white-space:normal;min-width:150px">${nmH(a)}</td><td class="as-l as-faint" style="white-space:normal;min-width:120px">— older finding · not an alert</td><td class="as-l" style="font-family:var(--as-font);white-space:normal;min-width:240px"><b>${esc(oldMet(o))}</b> · ${esc(smpInfoTxt(o.text||''))}</td><td class="${o.dir==='down'?'as-bad':'as-good'}" style="font-weight:600">${o.rel!=null&&isFinite(o.rel)?fR(o.rel):'—'}</td><td class="as-l" style="white-space:normal;min-width:190px">Change started: ${st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—'}<div class="as-tsm" style="font-size:10.5px">Data: ${o.from?'Daily avg '+span(o.from,o.to):'—'}${o.release&&o.release.label?' · 📦 after '+esc(o.release.label):''}</div></td><td class="as-l">${sthGo('as')}</td></tr>`; }).join('')+'</tbody></table></div>'; }
+
+/* ================= 🗂 alert history: "▸ Older changes (N)" · "▸ Closed alerts (N)" · Open → (the older views' targets) ======= */
+// the closed alerts, as the older views list them: one app — its detail file's own list (ACTD changes.closed, the old app page's),
+// else the dashboard's; All apps — the dashboard's (DATA.active.closed: the last 7 days, the old All-apps list), never a
+// per-app file. Each in this file's alert shape (active_studio_build.pack: the same fields), so the card reads as the open ones
+const SEVK={warning:'bigda',watch:'dhyan',good:'behtar'};
+function packH(x,a){ const r=x.release||{}, sp=x.sp;
+  return {a:a.i,k:-1,hk:'closed',kind:'closed',fam:x.family||x.kind,m:x.metric,sev:SEVK[x.severity]||'normal',dir:x.dir,now:x.now,bef:x.before,rel:x.rel,unit:x.unit,users:x.users,
+    if:x.installs_from,it:x.installs_to,bf:x.base_from,bt:x.base_to,since:x.since||x.from,day:x.day,at:x.alert_at||x.opened_at||null,oa:x.opened_at||null,seeded:!!x.seeded,
+    opened:x.opened||null,prov:false,est:!!x.estimate,started:x.started,dt:x.data_till||x.to,tags:x.tags||[],rl:r.label,rd:r.date,
+    sp:(Array.isArray(sp)&&sp[0]==='ret')?sp:null,net:(Array.isArray(sp)&&sp[0]==='pu'&&sp.length>1)?sp[1]:null,closed:x.closed,cat:x.closed_at||null,cr:x.close_reason||null,to:x.to,
+    // ✅ Fixed (the older views' smpTheek): recovered ≤ 7 days ago, was Worse / Watch, not a small app, open ≥ 1 run
+    theek:x.close_reason==='recovered'&&smpAge(x.closed)!=null&&smpAge(x.closed)<=7&&(x.severity==='warning'||x.severity==='watch')&&a.sz!=='chhoti'&&!(x.opened&&x.closed<=x.opened)}; }
+function closedOf(a){ const d=a?detOf(a):null, by={}; A.forEach(b=>{ by[b.id]=b; });
+  const L=(d&&d.changes&&Array.isArray(d.changes.closed))?d.changes.closed.map(x=>Object.assign({app_id:a.id},x))
+    :(((typeof DATA!=='undefined'&&DATA&&DATA.active&&DATA.active.closed)||[]).filter(x=>x&&by[x.app_id]&&(!a||x.app_id===a.id)));
+  return L.filter(x=>x&&typeof x==='object'&&x.closed&&by[x.app_id]).map(x=>packH(x,by[x.app_id]))
+    .sort((p,q)=>String(q.closed||'').localeCompare(String(p.closed||''))||String(q.cat||'').localeCompare(String(p.cat||''))||String(startedOf(q)||'').localeCompare(String(startedOf(p)||''))); }
+// the two folds (k: the fold keys' stem — 'h' All apps, 'pgh' the app page, 'dh' the quick look); tbl: All apps' Cards / Table
+function histHtml(a,k,tbl){ const OL=oldsOf(a), CL=closedOf(a), all=!a, T=tbl&&ST.chgView==='table', na=n=>n+(n===1?' app':' apps');
+  return sthFold('as',k+'old',ST.folds.has(k+'old'),'Older changes',OL.length,all?na(new Set(OL.map(z=>z.a.i)).size):'30–90 days',
+      T?oldTable(OL):`<div class="as-cards">${OL.map(oldCard).join('')}</div>`,'Koi purani finding nahi',
+      `<span>Engine ki purani findings — badlaav jo 30–90 din pehle shuru hue, alert nahi (bheje nahi) · naya pehle${all?' · yahan har app ki 5 tak (dashboard ki list); har app ki poori list uske page pe':''}</span>`)
+    +sthFold('as',k+'cl',ST.folds.has(k+'cl'),'Closed alerts',CL.length,all?na(new Set(CL.map(x=>x.a)).size)+' · last 7 days':'',
+      T?alTable(CL):`<div class="as-cards">${CL.map(cardH).join('')}</div>`,all?'Pichhle 7 din me koi alert band nahi hua':'Is app ka koi alert band nahi hua',
+      `<span>Har band alert: kab khula, kab band hua, kitne din khula raha aur kyun · naya band pehle${all?' · yahan pichhle 7 din ke; har app ki poori list uske page pe':''}</span>`+sthWhyLeg(CL.map(x=>x.cr))); }
+// "Open →" — the older views' own target (smpActRow / actChangesCard: actJump(ACT_SEC[metric])), "<app>|<section>": old users →
+// "Old users vs the app's normal" (here); new users coming back → "How many new users came back" (here); sessions / time and ads /
+// revenue / ad rate have no chart here → that very section of the app's older page (the "🗂 Old views" fold opens: old:<id>)
+const SECA=(m,f)=>f==='price'||m==='ecpm'||m==='ads'||m==='arpdau'?'old:act-rev':(m==='sess'||m==='time'||m==='usage'?'old:act-use':(/^d\d+$/.test(m||'')?'tri':'big'));
+const goOf=x=>A[x.a].i+'|'+SECA(x.m,x.fam);
+const goOld=z=>z.a.i+'|'+SECA(z.o.metric,z.o.kind);
+let PJ=null;   // a jump waiting for its app page (opened from All apps / the quick look): {id, sec, t}
+function goH(spec,inD){ const s=String(spec).split('|'), a=A[+s[0]], sec=s[1]||'big'; if(!a) return; hideTip();
+  const here=!inD&&MODE==='page'&&PGID===a.id;
+  if(sec.indexOf('old:')===0){ ACTJUMP=sec.slice(4); ACTJT=Date.now(); if(here){ actRerender(); return; } closeDrawer(); try{ actOpen(a.id); actJumpNow(); }catch(e){} return; }
+  if(here){ jumpTo(sec); return; }
+  PJ={id:a.id,sec,t:Date.now()}; closeDrawer(); try{ actOpen(a.id); }catch(e){} }
+function jumpTo(sec){ return sthJump($('as-pg-'+sec),'as'); }
+// (the app's detail file still loading: its arrival redraws the page — the jump is made again then, once, so it stays flashed)
+function pjNow(){ if(!PJ) return; if(Date.now()-PJ.t>15000){ PJ=null; return; } if(MODE!=='page'||PJ.id!==PGID) return;
+  let wait=false; try{ const r=actRows().find(x=>x&&x.app_id===PGID); wait=!!(r&&r.key&&ACTL[r.key]); }catch(e){}
+  if(jumpTo(PJ.sec)&&!wait) PJ=null; }
+function chgHtml(){ const B={'':[],purana:[],achhi:[],chhoti:[],info:[]}; sortAl(ALERTS.filter(x=>x.kind!=='closed')).forEach(x=>{ const f=foldOf(x); if(B[f]) B[f].push(x); });
+  const nH=oldsOf(null).length+closedOf(null).length;
+  const nV=B[''].length, nF=Object.keys(B).filter(k=>k).reduce((t,k)=>t+B[k].length,0)+nH, fresh=ALERTS.filter(x=>isOpen(x)&&ageOf(x).fresh).length;
   const view=L=>ST.chgView==='table'?alTable(L):`<div class="as-cards">${L.map(cardH).join('')}</div>`;
-  const F=[['achhi','🟢 Good news'],['info','ℹ️ Info — installs / bazaar ka asar (alert nahi)'],['theek','✅ Closed — last 7 days'],['chhoti','Small apps'],['purana','📌 Open over 30 days']];
+  const F=[['achhi','🟢 Good news'],['info','ℹ️ Info — installs / bazaar ka asar (alert nahi)'],['chhoti','Small apps'],['purana','📌 Open over 30 days']];
   const folds=F.filter(([k])=>B[k].length).map(([k,l])=>`<details class="as-fold" data-fold="${k}"${ST.folds.has(k)?' open':''}><summary><span class="as-cv">▸</span><span>${l} (${B[k].length})</span><span class="as-pv">${new Set(B[k].map(x=>x.a)).size} apps</span></summary>${view(B[k])}</details>`).join('')
-    +oldFold(OL,'older',new Set(OL.map(z=>z.a)).size+' apps · 30–90 days');
+    +histHtml(null,'h',true);
   return `<div class="as-chg-h"><div><div class="as-eyebrow">New vs old</div><h2>What changed?</h2><div class="as-hint" style="font-size:12px;color:var(--muted)">${nV} shown · ${nF} folded below · ${fresh} new (today/yesterday) · engine alerts — range se alag</div></div><div class="as-right" style="margin-left:auto"><div class="as-seg" id="as-chgV"><button data-v="cards" aria-pressed="${ST.chgView==='cards'}">Cards</button><button data-v="table" aria-pressed="${ST.chgView==='table'}">Table</button></div></div></div>`
     +(nV?view(B['']):'<div class="as-ok">✅ Koi Worse / Watch alert dekhne layak nahi — baaki neeche</div>')+folds; }
-function alTable(L){ return `<div class="as-panel as-tw" style="border-radius:var(--as-r)"><table class="as-mini as-chgt"><thead><tr><th class="as-l">App</th><th class="as-l">Status</th><th class="as-l">🕒 Alert time</th><th class="as-l">What</th><th>Change</th><th>Before → now</th><th>Installs · real</th><th>${symOf()}/day</th><th class="as-l">Next step</th><th class="as-l">Change started · Data</th></tr></thead><tbody>`
-  +L.map(x=>{ const a=A[x.a], n=alNums(x), st=startedOf(x), ag=ageOf(x), pk=pakkaOf(x), info=x.kind==='info'; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="as-l" style="white-space:normal;min-width:150px">${nmH(a)}</td><td class="as-l">${x.kind==='open'?chip(x.sev):chip('normal')}</td><td class="as-l"><span class="as-age${ag.fresh?' as-new':''}" title="${esc(ag.tip)}">${ag.t}</span>${info?'':`<div class="as-tsm" style="font-size:10.5px;white-space:normal;min-width:120px">🕒 Alert time: ${x.at?fist(x.at):(x.opened?'on data till '+fd(x.opened):'—')}</div>`}${x.kind==='closed'?`<div class="as-tsm" style="font-size:10.5px">Closed: ${x.cat?fist(x.cat):fd(x.closed)}</div>`:''}</td><td class="as-l" style="font-family:var(--as-font)">${esc(metName(x))}</td><td class="${x.sev==='bigda'||x.sev==='dhyan'?'as-bad':(x.sev==='behtar'?'as-good':'')}" style="font-weight:600">${n.big}<span class="as-faint" style="font-size:11px"> ${n.u}</span></td>`
+function alTable(L){ return `<div class="as-panel as-tw" style="border-radius:var(--as-r)"><table class="as-mini as-chgt"><thead><tr><th class="as-l">App</th><th class="as-l">Status</th><th class="as-l">🕒 Alert time</th><th class="as-l">What</th><th>Change</th><th>Before → now</th><th>Installs · real</th><th>${symOf()}/day</th><th class="as-l">Next step</th><th class="as-l">Change started · Data</th><th class="as-l">Open</th></tr></thead><tbody>`
+  +L.map(x=>{ const a=A[x.a], n=alNums(x), st=startedOf(x), ag=ageOf(x), pk=pakkaOf(x), info=x.kind==='info', w=x.hk?sthWhy(x.cr):null; return `<tr data-app="${a.i}" data-go="${a.i}" data-hgo="${esc(goOf(x))}" style="cursor:pointer"><td class="as-l" style="white-space:normal;min-width:150px">${nmH(a)}</td><td class="as-l">${chip(stOf(x))}</td><td class="as-l"><span class="as-age${ag.fresh?' as-new':''}" title="${esc(ag.tip)}">${ag.t}</span>${info?'':`<div class="as-tsm" style="font-size:10.5px;white-space:normal;min-width:120px">🕒 Alert time: ${x.at?fist(x.at):(x.opened?'on data till '+fd(x.opened):'—')}</div>`}${x.kind==='closed'?`<div class="as-tsm" style="font-size:10.5px;white-space:normal;min-width:150px">${w?`Opened ${fd(x.opened)} as ${SW[x.sev]} · closed ${fd(x.closed)} · open for ${sthDur(sthDays(x.opened,x.closed))} · Why closed: ${w[0]}`:'Closed: '+(x.cat?fist(x.cat):fd(x.closed))}</div>`:''}</td><td class="as-l" style="font-family:var(--as-font)">${esc(metName(x))}</td><td class="${x.sev==='bigda'||x.sev==='dhyan'?'as-bad':(x.sev==='behtar'?'as-good':'')}" style="font-weight:600">${n.big}<span class="as-faint" style="font-size:11px"> ${n.u}</span></td>`
     +`<td>${n.fmt&&n.vb!=null?esc(n.fmt(n.vb))+' → '+esc(n.fmt(n.vn)):'—'}</td><td>${n.fi!=null?fX(n.fi)+' · '+fX(n.asli):'—'}</td><td>${n.usd!=null?moneyL(n.usdA!=null?n.usdA:n.usd,true):'—'}</td><td class="as-l" style="font-family:var(--as-font);white-space:normal;min-width:180px">${esc(todo(x))}</td>`
-    +`<td class="as-l" style="white-space:normal;min-width:190px">Change started: ${st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—'}<div class="as-tsm" style="font-size:10.5px">Data: ${esc(dataOf(x))}${x.est?' · ≈':''}${pk?' · ⏳ Not final · final on '+fd(pk):''}</div></td></tr>`; }).join('')+'</tbody></table></div>'; }
+    +`<td class="as-l" style="white-space:normal;min-width:190px">Change started: ${st?fd(st)+' · '+umar(Math.max(0,dDiff(st,M.today))):'—'}<div class="as-tsm" style="font-size:10.5px">Data: ${esc(dataOf(x))}${x.est?' · ≈':''}${pk?' · ⏳ Not final · final on '+fd(pk):''}</div></td><td class="as-l">${sthGo('as')}</td></tr>`; }).join('')+'</tbody></table></div>'; }
 
 /* ================= All apps table ================= */
 const TC=[['app','App','as-l'],['st','Status · 🔔','as-l'],['ret','Old users / day'],['ins','Installs / day'],['inr','Users vs normal'],['d1','Back next day'],['d7','7 days'],['d30','30 days'],['se','Sessions per user'],['tm','Time per user'],['ad','Ads per user'],['rv','Revenue per user']];
@@ -11543,7 +11762,7 @@ TIPS.ar=i=>{ const o=R[+i], a=o.a, x=o.ar, c=o.arc, d=detOf(a), T=d&&d.tiles&&d.
     +`<div class="as-sep"></div><div class="as-tsm">Ad rate = AdMob kamai ÷ dikhaye gaye ads (AdMob jaisa rate, sirf AdMob Network). Ads per user wahi aur ad rate badla = bazaar ka asar, app ka nahi.</div>`; };
 TIPS.oth=i=>{ const a=A[+i], d=detOf(a), F=(d&&d.flags)||{}, x=actOther(F);
   return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · Other ad networks</div>${trow('Other networks’ share of ad revenue',actOk(F.other_share)?uniPct(+F.other_share):'—')}${trow('More on top of AdMob Network','~'+x+'%')}<div class="as-tsm">Yahan ki revenue sirf AdMob Network ki hai — dusre ad networks ki kamai isme nahi. Asli kamai ~${x}% zyada.</div>`; };
-function appParts(o,wBig,wIo){ const a=o.a, L=o.L, det=detOf(a), oth=det?actOther(det.flags):0, arR=o.ar&&o.arc?relp(o.ar.v,o.arc.v):null, seR=o.pu&&o.pc?relp(o.pu.se,o.pc.se):null;
+function appParts(o,wBig,wIo,pg){ const a=o.a, L=o.L, det=detOf(a), oth=det?actOther(det.flags):0, arR=o.ar&&o.arc?relp(o.ar.v,o.arc.v):null, seR=o.pu&&o.pc?relp(o.pu.se,o.pc.se):null;
   const k=(lab,hint,v,f,unit,extra,dl,sub,tk)=>`<div class="as-kpi"${tk?` data-tk="${tk}"`:''}><div class="as-kl"><span>${lab}</span><span class="as-kh">${hint}</span></div><div class="as-kv"><span class="as-num">${v==null?'—':FMT[f](v)}</span>${unit?`<span class="as-ku">${unit}</span>`:''}${extra||''}</div><div class="as-kd ${dl.cls||''}">${dl.h||dl}</div><div class="as-ks">${sub||''}</div></div>`;
   const rd=(c,cc)=>retDl(c.p!=null?c.cd:null,c.p,cc.p!=null?cc.cd:null,cc.p);
   const fMs=sgnF(v=>money(v).replace(/^[−]/,''));
@@ -11559,14 +11778,14 @@ function appParts(o,wBig,wIo){ const a=o.a, L=o.L, det=detOf(a), oth=det?actOthe
   const dt=`<table class="as-mini"><thead><tr><th class="as-l">Day</th><th>Old users/day</th><th>vs normal</th><th>Installs</th><th>Back next day</th><th>Time per user</th><th>Revenue</th><th>Revenue per user</th><th class="as-l">Events</th></tr></thead><tbody>`+days.map(i=>{ const d=dOf(i), inW=L&&L.W&&L.W.indexOf(i)>=0, f=inW?a.rt[i]-L.exp(i):null;
     const ev=a.rel.filter(x=>x[0]===d).map(x=>'📦 '+esc(x[1])).concat(a.al.filter(x=>isOpen(x)&&startedOf(x)===d).map(x=>'🔔 '+SW[x.sev])).join(' · ');
     return `<tr class="${i>a.si?'as-prow':''}"><td class="as-l">${fd(d)}${i>a.si?' ⏳':''}</td><td>${fN(a.rt[i])}</td><td class="${f==null?'as-faint':(f<0?'as-bad':'as-good')}">${f==null?(i>a.si?'⏳':'—'):fX(f)}</td><td>${fN(a.nw[i])}</td><td>${a.d1[i-1]!=null&&a.nw[i-1]&&i<=a.si?fN(a.d1[i-1])+' · '+pc(a.d1[i-1]/a.nw[i-1],1):'—'}</td><td>${dur(a.tu[i])}</td><td>${money(a.rv[i])}</td><td>${a.rv[i]!=null&&a.a1[i]?moneyU(a.rv[i]/a.a1[i]):'—'}</td><td class="as-l" style="font-family:var(--as-font);font-size:12px">${ev}</td></tr>`; }).join('')+'</tbody></table>';
-  const als=sortAl(a.al), ups=a.rel.slice().reverse(), OLa=oldsOf(a);
+  const als=sortAl(a.al.filter(x=>x.kind!=='closed')), ups=a.rel.slice().reverse();
   const verdict=`<div class="as-verdict">${chip(o.pill)}<span>${L&&L.far!=null?`Old users <b class="${farCls(L)}">${fX(L.far)}/day</b> vs normal (${fR(L.relT)}) = <span class="as-insc">installs</span> <b>${L.fi==null?'?':fX(L.fi)}</b> + real <b class="${asliCls(L)}">${L.asli==null?'?':fX(L.asli)}</b>${L.usd!=null?' · ≈ <b>'+moneyL(L.usd,true)+'/day</b>':''} <span class="as-faint">· final days ${span(L.f,L.t)}</span>`:esc((L&&L.why)||whyJaldi(o)||'')}</span><span class="as-todo"><b>Next step:</b> ${esc(appTodo(o))}</span></div>`;
   return {
     verdict, kp:`<div class="as-dk">${kp}</div>`,
-    big:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Old users, day by day</div><h2 style="font-size:15px">Old users vs the app's normal</h2><div class="as-hint">Laal / hara = Users vs normal (pakke din, same weekday ka normal)</div></div></div>${bigChart(o,wBig)}</div>`,
+    big:`<div class="as-panel"${pg?' id="as-pg-big"':''}><div class="as-ph"><div><div class="as-eyebrow">Old users, day by day</div><h2 style="font-size:15px">Old users vs the app's normal</h2><div class="as-hint">Laal / hara = Users vs normal (pakke din, same weekday ka normal)</div></div></div>${bigChart(o,wBig)}</div>`,
     io:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Due to installs?</div><h2 style="font-size:15px">Installs vs the new users who came back</h2><div class="as-hint">Installs badhe/ghate to installs that came back bhi badalta hai — ye "due to installs" wala hissa hai</div></div></div>${ioChart(o,wIo)}</div>`,
-    tri:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Install week × day${a.tri.w.length?' · all '+a.tri.w.length+(a.tri.w.length===1?' week':' weeks'):''}</div><h2 style="font-size:15px">How many new users came back</h2><div class="as-hint">Har row = ek hafte ke installs${a.tri.w.length?' · saare hafte, '+fd(a.tri.w[a.tri.w.length-1].f)+' se aaj tak (naya upar)':''} · cell = us din kitne % wapas aaye (engine ka grid)</div></div></div><div class="as-cohw">${triGrid(a)}</div><div class="as-clg"><span class="as-k"><i style="background:linear-gradient(90deg,#13213a,#a78bfa);width:40px;height:9px"></i>fewer → more back</span><span class="as-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="as-k">· = abhi us din tak nahi pahunche</span>${a.tri.w.some(r=>r.part)?'<span class="as-k">½ = adhoora data (kuch din ka data nahi)</span>':''}${a.tri.w.some(r=>r.nd)?'<span class="as-k">No data = GA4 ne us hafte ka wapsi data nahi diya</span>':''}</div>${Object.keys(triRels(a)).length?'<div class="as-clg" style="padding-top:0;color:var(--purple)">📦 = new update. Line ke upar = naye version ke installs, neeche = purane version ke.</div>':''}</div>`,
-    als:(als.length||OLa.length)?`<div><div class="as-chg-h"><div><div class="as-eyebrow">This app's alerts</div><h2 style="font-size:15px">What changed?</h2></div></div>${als.length?`<div class="as-cards">${als.map(cardH).join('')}</div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>'}${oldFold(OLa,'pgold','30–90 days')}</div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>',
+    tri:`<div class="as-panel"${pg?' id="as-pg-tri"':''}><div class="as-ph"><div><div class="as-eyebrow">Install week × day${a.tri.w.length?' · all '+a.tri.w.length+(a.tri.w.length===1?' week':' weeks'):''}</div><h2 style="font-size:15px">How many new users came back</h2><div class="as-hint">Har row = ek hafte ke installs${a.tri.w.length?' · saare hafte, '+fd(a.tri.w[a.tri.w.length-1].f)+' se aaj tak (naya upar)':''} · cell = us din kitne % wapas aaye (engine ka grid)</div></div></div><div class="as-cohw">${triGrid(a)}</div><div class="as-clg"><span class="as-k"><i style="background:linear-gradient(90deg,#13213a,#a78bfa);width:40px;height:9px"></i>fewer → more back</span><span class="as-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="as-k">· = abhi us din tak nahi pahunche</span>${a.tri.w.some(r=>r.part)?'<span class="as-k">½ = adhoora data (kuch din ka data nahi)</span>':''}${a.tri.w.some(r=>r.nd)?'<span class="as-k">No data = GA4 ne us hafte ka wapsi data nahi diya</span>':''}</div>${Object.keys(triRels(a)).length?'<div class="as-clg" style="padding-top:0;color:var(--purple)">📦 = new update. Line ke upar = naye version ke installs, neeche = purane version ke.</div>':''}</div>`,
+    als:`<div${pg?' id="as-pg-chg"':''}><div class="as-chg-h"><div><div class="as-eyebrow">This app's alerts</div><h2 style="font-size:15px">What changed?</h2></div></div>${als.length?`<div class="as-cards">${als.map(cardH).join('')}</div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>'}${histHtml(a,pg?'pgh':'dh',false)}</div>`,
     ver:verHtml(o),
     ups:ups.length?`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">📦 Updates · all ${ups.length}${ups.length?' · since '+fd(ups[ups.length-1][0]):''}</div><h2 style="font-size:15px">Updates and their effect</h2></div></div><div class="as-upd">${ups.map(r=>{ const ba=befAft(a,r[0]); return `<div class="as-u"><span class="as-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="as-faint">${UPDW(r[2]).replace(/^[^—]+— /,'')}</span>${ba?`<span class="as-ba">Old users/day ${ba}</span>`:''}</div>`; }).join('')}</div></div>`:'',
     dt:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Day by day</div><h2 style="font-size:15px">Daily numbers · ${span(W.f,W.t)}</h2></div></div><div class="as-tw" style="max-height:360px">${dt}</div></div>` }; }
@@ -11581,7 +11800,7 @@ function renderDrawer(keep){ if(ST.drawer<0) return; const d=$('as-drawer'); if(
   d.innerHTML=drawerHtml(); if(keep) d.scrollTop=keep===true?y:keep; }
 // the app's full page: the same sections, laid out for the page's width (two columns where the page is wide)
 const twoCol=()=>PGW>=980;
-function pageBody(o){ const W1=Math.max(300,PGW-22), W2=twoCol()?Math.max(300,Math.floor((PGW-16)/2)-22):W1, P0=appParts(o,W1,W2);
+function pageBody(o){ const W1=Math.max(300,PGW-22), W2=twoCol()?Math.max(300,Math.floor((PGW-16)/2)-22):W1, P0=appParts(o,W1,W2,true);
   return `<div class="as-pgh">${appHead(o,32)}</div>${P0.verdict}${P0.kp}${P0.big}<div class="as-pg2">${P0.io}${P0.tri}</div>${P0.als}<div class="as-pg2">${P0.ups}${P0.dt}</div>${P0.ver}`; }
 // "Poora app page →": the app's existing Active users page (tiles, charts, the return grid, its What changed? …)
 function fullPage(id){ closeDrawer(); try{ actOpen(id); }catch(e){} }
@@ -11638,7 +11857,7 @@ function afterMount(){ const root=$('as-root'); if(!root) return; layer(); stick
   try{ if(!RO&&typeof ResizeObserver!=='undefined') RO=new ResizeObserver(()=>{ const r=$('as-root'); if(!r||!r.offsetParent) return; stick(); if(MODE==='page') return;
       const box=$('as-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.as-tlw'); if(tw&&!tw.scrollLeft&&tw.scrollWidth>tw.clientWidth) tw.scrollLeft=tw.scrollWidth; } });
     if(RO){ RO.disconnect(); RO.observe(root); } }catch(e){}
-  if(MODE==='page'){ const pg=$('as-pg'); if(pg&&pg.clientWidth&&Math.abs(pg.clientWidth-PGW)>24){ PGW=pg.clientWidth; spkN=0; for(const k in CH) delete CH[k]; pg.innerHTML=pageBody(pgO()); } countUp(); return; }
+  if(MODE==='page'){ const pg=$('as-pg'); if(pg&&pg.clientWidth&&Math.abs(pg.clientWidth-PGW)>24){ PGW=pg.clientWidth; spkN=0; for(const k in CH) delete CH[k]; pg.innerHTML=pageBody(pgO()); } countUp(); pjNow(); return; }
   const box=$('as-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.as-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; }
   countUp();
   if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('as-drawer'); if(d&&!d.classList.contains('as-on')){ d.classList.add('as-on'); d.setAttribute('aria-hidden','false'); $('as-scrim').classList.add('as-on'); lock(true); } } } }
@@ -11701,6 +11920,7 @@ function wire(){ if(WIRED) return; WIRED=true;
     else if(id==='as-cmp') setCmp(e.target.value); else if(/^as-c[ft][12]$/.test(id)) setDate(id,e.target.value); });
   document.addEventListener('keydown',e=>{ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.tagName==='INPUT'||tg.tagName==='SELECT'||tg.tagName==='TEXTAREA'||tg.isContentEditable));
     if(e.key==='Escape'){ if(ST.drawer>=0){ closeDrawer(); e.preventDefault(); } hideTip(); return; }
+    if((e.key==='Enter'||e.key===' ')&&tg&&tg.closest&&tg.closest('.as-opn')&&inStudio(tg)){ e.preventDefault(); tg.click(); return; }
     if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
     if(ST.drawer>=0&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navDrawer(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
     const m={'7':'7','1':'14','3':'30','6':'60'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
@@ -11713,6 +11933,8 @@ function onClick(e){ const t=e.target; if(!inStudio(t)) return;
   if(t.closest('[data-verall]')){ ST.verAll=!ST.verAll; if(MODE==='page'&&!t.closest('#as-layer')){ const pg=$('as-pg'); if(pg) pg.innerHTML=pageBody(pgO()); } if(ST.drawer>=0) renderDrawer(true); return; }
   const fp=t.closest('[data-full]'); if(fp){ e.preventDefault(); fullPage(fp.getAttribute('data-full')); return; }
   if(t.closest('[data-back]')){ e.preventDefault(); hideTip(); try{ actBack(); }catch(err){} return; }
+  // a "What changed?" card / row (open, closed or an older finding): Open → — and a tap anywhere on it — goes to its target
+  const hg=t.closest('[data-hgo]'); if(hg&&!t.closest('select,input,summary')){ e.preventDefault(); goH(hg.getAttribute('data-hgo'),!!hg.closest('#as-drawer')); return; }
   const ab=t.closest('[data-al]'); if(ab&&ab.dataset.al!==''){ e.stopPropagation(); hideTip(); const k=ab.dataset.al, inD=!!ab.closest('#as-drawer');
     if(!inD&&ST.drawer>=0) closeDrawer();
     const root=inD?$('as-drawer'):(MODE==='page'?$('as-pg'):$('as-chg')); let card=root&&root.querySelector('[data-alk="'+k+'"]');
@@ -11746,7 +11968,7 @@ return {ptr, ensure, retry, screen, page, hide, closeDrawer, openDrawer,
   _:{A:()=>A, R:()=>R, W:()=>W, PT:()=>PT, PC:()=>PC, PD:()=>PD, ST, ALERTS:()=>ALERTS, NOGA:()=>NOGA, M:()=>M, MODE:()=>MODE, page:()=>MODE==='page'?pageBody(pgO()):'', lens, cnt, perU, coh, pf, ix, dOf, windows,
      story:storyHtml, kpis:kpisHtml, kpis2:kpis2Html, ledger:ledgerHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml, top:topHtml,
      load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, loadHist:j=>{ HRAW=j||null; HERR=j===null; HLOAD=false; HFOR=j===null?VER:null; SIG=null; }, histOk, needHist, pickMin, fail:()=>{ RAW=null; ERR=true; VER=(ptr()||{}).v||'test'; }, TIPS, money, moneyL, onClick, setRange, setCmp, setDate, fullPage, ageOf, fitLabels, TW,
-     hon, honHtml, evOf, adRate, verRows, verHtml, oldsOf, detOf, HS:()=>HS}};
+     hon, honHtml, evOf, adRate, verRows, verHtml, oldsOf, detOf, HS:()=>HS, closedOf, histHtml, goOf, goOld, goH, jumpTo, PJ:()=>PJ, pjNow}};
 })();
 
 // ---------- 👥 ACTIVE USERS (GA4) ----------
@@ -13133,11 +13355,13 @@ function detLoadV(a){ try{ const r=valRows().find(x=>x&&x.app_id===a.id); if(!r|
 function r30Of(o){ const s=o.s, e=o.a.eng||{}; if(s.r30!=null) return {v:s.r30,src:'range'};
   if(e.r30!=null&&isFinite(e.r30)) return {v:cv(+e.r30),src:'eng',f:e.r30f,t:e.r30t}; return null; }
 const r30H=(o,cls)=>{ const x=r30Of(o); return x?`<span class="${cls||''}" data-tk="r30:${o.a.i}">${mP(x.v)}<small class="vs-r30">30d · no ads</small></span>`:''; };
-// the app's closed value alerts: its detail file's own list (the old app page's — up to 20), else the dashboard's last 7 days
-function closedOf(a){ const det=detV(a), L=det&&det.changes&&Array.isArray(det.changes.closed)?det.changes.closed:null;
+// the app's closed value alerts: its detail file's own list (the old app page's — the engine keeps the last 20), else the
+// dashboard's last 7 days (a = null: every Studio app's, the dashboard's — the old All-apps list)
+function closedOf(a){ if(!a) return ALS.filter(z=>z.closed).sort((p,q)=>String(q.x.closed||'').localeCompare(String(p.x.closed||'')));
+  const det=detV(a), L=det&&det.changes&&Array.isArray(det.changes.closed)?det.changes.closed:null;
   if(!L) return ALS.filter(z=>z.a===a&&z.closed);
   const out=[]; L.forEach(x0=>{ if(!x0||typeof x0!=='object') return; const x=Object.assign({app_id:a.id,app:a.nm},x0); let r; try{ r=smpValRow(x,true,true); }catch(e){ return; }
-    if(r.sev==='info') r.sev='dhyan'; out.push({x,r,a,closed:true,st:r.started||null,fact:alFact(x),age:{t:r.theek?'✅ Fixed':'Band · '+fd(x.closed),tip:''}}); });
+    if(r.sev==='info') r.sev='dhyan'; out.push({x,r,a,closed:true,st:r.started||null,fact:alFact(x),age:{t:r.theek?'✅ Fixed':'✅ Closed · '+fd(x.closed),tip:''}}); });
   return out.sort((p,q)=>String(q.x.closed||'').localeCompare(String(p.x.closed||''))); }
 // one install week of the money-back table, from the Studio's file (week i) or from the detail file (its week object w) — the
 // same fields either way: installs, Google Ads spend (USD) + its week's rate, earning per install at each age (observed up to
@@ -13551,19 +13775,22 @@ function alFact(x){ const f=x.family, nw=+x.now, bf=+x.before, N=String(x.metric
 function alerts(){ const V=(typeof DATA!=='undefined'&&DATA&&DATA.value)||{}, out=[];
   const one=(x,closed)=>{ const a=AI[x.app_id]; if(!a) return; let r; try{ r=smpValRow(x,true,closed); }catch(e){ return; }
     if(r.sev==='info') r.sev='dhyan';
-    out.push({x,r,a,closed,st:r.started||null,fact:alFact(x),age:closed?{t:r.theek?'✅ Fixed':'Band · '+fd(x.closed),tip:''}:smpAgeChip(r)}); };
+    out.push({x,r,a,closed,st:r.started||null,fact:alFact(x),age:closed?{t:r.theek?'✅ Fixed':'✅ Closed · '+fd(x.closed),tip:''}:smpAgeChip(r)}); };
   (Array.isArray(V.alerts)?V.alerts:[]).forEach(x=>{ if(x&&typeof x==='object') one(x,false); });
   (Array.isArray(V.closed)?V.closed:[]).forEach(x=>{ if(x&&typeof x==='object') one(x,true); });
   ALS=out.sort((p,q)=>(SORD[p.r.sev]-SORD[q.r.sev])||((smpIsNew(q.r)?1:0)-(smpIsNew(p.r)?1:0))||String(q.st||'').localeCompare(String(p.st||''))); }
-function alTs(z){ const r=z.r, at=smpAlertAt(r), ca=smpRunAt(r.closedAt);
-  return `<span>🕒 Alert time: ${at?smpIst(at):smpDataDay(r.opened)}</span><span>Change started: ${esc(smpShuru(r))}${r.relLabel?' · after '+esc(r.relLabel):''}</span><br><span>Data: ${esc(r.data||'—')}${r.andaza?' · ≈':''}${z.x.provisional?' · '+esc(smpPakka(null)):''}</span>${z.closed?`<span>Closed: ${ca?smpIst(ca):smpDataDay(r.closed)}${r.closeReason&&SMP_REASON[r.closeReason]?' ('+SMP_REASON[r.closeReason]+')':''}</span>`:''}`; }
-function alCard(z){ const a=z.a, r=z.r, sev=z.closed?(r.theek?'behtar':'normal'):r.sev;
-  return `<div class="vs-ac vs-s-${sev}" data-app="${a.i}" data-go="${a.i}"><div class="vs-l1">${chip(sev)}<span class="vs-age${!z.closed&&smpIsNew(r)?' vs-new':''}" title="${esc(z.age.tip||'')}">🔔 ${esc(z.age.t)}</span><span class="vs-itag">${esc(ALF[z.x.family]||'Install value')}</span>${szH(a)}</div>`
+function alTs(z){ const r=z.r, at=smpAlertAt(r);
+  return `<span>🕒 Alert time: ${at?smpIst(at):smpDataDay(r.opened)}</span><span>Change started: ${esc(smpShuru(r))}${r.relLabel?' · after '+esc(r.relLabel):''}</span><br><span>Data: ${esc(r.data||'—')}${r.andaza?' · ≈':''}${z.x.provisional?' · '+esc(smpPakka(null)):''}</span>`; }
+// a card's status: an open alert its own; a closed one Normal when it recovered, else N/A (closed for another reason)
+const stOfZ=z=>z.closed?(z.r.closeReason==='recovered'?'normal':'lagu'):z.r.sev;
+function alCard(z){ const a=z.a, r=z.r, sev=stOfZ(z);
+  return `<div class="vs-ac vs-s-${z.closed?'ah':sev}${z.closed?' vs-ahc':''}" data-app="${a.i}" data-go="${a.i}" data-hgo="${esc(goAl(z))}"><div class="vs-l1">${chip(sev)}<span class="vs-age${!z.closed&&smpIsNew(r)?' vs-new':''}" title="${esc(z.age.tip||'')}">🔔 ${esc(z.age.t)}</span><span class="vs-itag">${esc(ALF[z.x.family]||'Install value')}</span>${szH(a)}${sthGo('vs')}</div>`
    +`<div class="vs-app vs-ainb">${ic(a,18)}<span class="vs-aint">${esc(a.store)} <span class="vs-acn">· ${esc(a.acc)}</span></span></div>`
    +`<div class="vs-what" style="font-size:13px">${z.fact}</div>${(r.saath||[]).slice(0,1).map(t=>`<div class="vs-what">Also: ${esc(t)}</div>`).join('')}`
+   +(z.closed?sthClosedLine('vs',{opened:r.opened,openedAt:z.x.opened_at,closed:r.closed,closedAt:r.closedAt,cr:r.closeReason,was:SW[r.sev]}):'')
    +`<div class="vs-ts">${alTs(z)}</div></div>`; }
-function alRow(z){ const a=z.a, r=z.r, sev=z.closed?(r.theek?'behtar':'normal'):r.sev, at=smpAlertAt(r);
-  return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="vs-l">${chip(sev)}</td><td class="vs-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="vs-l" style="font-family:var(--vs-font);white-space:normal;min-width:220px">${z.fact}</td><td class="vs-faint">—</td><td class="vs-l vs-faint">${esc(ALF[z.x.family]||'')}</td><td class="vs-l">${at?smpIst(at):smpDataDay(r.opened)} · ${esc(z.age.t)}</td><td class="vs-l">${esc(smpShuru(r))}</td><td class="vs-l vs-faint">${esc(r.data||'—')}</td></tr>`; }
+function alRow(z){ const a=z.a, r=z.r, sev=stOfZ(z), at=smpAlertAt(r), w=z.closed?sthWhy(r.closeReason):null;
+  return `<tr data-app="${a.i}" data-go="${a.i}" data-hgo="${esc(goAl(z))}" style="cursor:pointer"><td class="vs-l">${chip(sev)}</td><td class="vs-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="vs-l" style="font-family:var(--vs-font);white-space:normal;min-width:220px">${z.fact}</td><td class="vs-faint">—</td><td class="vs-l vs-faint">${esc(ALF[z.x.family]||'')}</td><td class="vs-l">${at?smpIst(at):smpDataDay(r.opened)} · ${esc(z.age.t)}${w?`<div class="vs-tsm" style="white-space:normal;min-width:150px">Opened ${fd(r.opened)} as ${SW[r.sev]} · closed ${fd(r.closed)} · open for ${sthDur(sthDays(r.opened,r.closed))} · Why closed: ${w[0]}</div>`:''}</td><td class="vs-l">${esc(smpShuru(r))}</td><td class="vs-l vs-faint">${esc(r.data||'—')}</td><td class="vs-l">${sthGo('vs')}</td></tr>`; }
 
 const INFK={mix:'Country mix',new_cty:'New country',paid:'Ads share',spend:'Ads spend',k:'Data scale',gap:'Country data',ver_d30:'Version',ver_mix:'Version',long_up:'Long-term',closed:'Closed',market:'Market'};
 function slope(b,a,lab0,lab1,bad){ if(a==null||b==null) return ''; const lo=Math.min(a,b), hi=Math.max(a,b), pad=(hi-lo)*.35+1e-6, Y=lin(lo-pad,hi+pad,46,10), col=bad?'var(--bad)':'var(--good)';
@@ -13580,7 +13807,7 @@ function newsItems(){ const out=[], e=NW-1;
     out.push({a,o,i:e,s,nr,pv,pn,m,mn,dpr,better,st:pillOf(s),sev:better?'behtar':'bigda'}); });
   return out.sort((x,y)=>((x.better?1:0)-(y.better?1:0))||(Math.abs(y.dpr)-Math.abs(x.dpr))); }
 function newsCard(x){ const a=x.a, s=x.s, i=x.i, st=wS(i), ag=weekAge(i);
-  return `<div class="vs-ac vs-s-${x.sev}" data-app="${a.i}" data-go="${a.i}"><div class="vs-l1">${chip(x.sev)}<span class="vs-age${ag.fresh?' vs-new':''}" title="${esc(ag.tip)}">${ag.t}</span><span class="vs-itag" style="${x.better?'color:var(--good);background:var(--good-b);border-color:rgba(52,217,154,.3)':'color:var(--bad);background:var(--bad-b);border-color:rgba(255,107,107,.3)'}">${x.better?'▲ better than its normal':'▼ worse than its normal'}</span>${szH(a)}</div>`
+  return `<div class="vs-ac vs-s-${x.sev}" data-app="${a.i}" data-go="${a.i}" data-hgo="${a.i}|wk"><div class="vs-l1">${chip(x.sev)}<span class="vs-age${ag.fresh?' vs-new':''}" title="${esc(ag.tip)}">${ag.t}</span><span class="vs-itag" style="${x.better?'color:var(--good);background:var(--good-b);border-color:rgba(52,217,154,.3)':'color:var(--bad);background:var(--bad-b);border-color:rgba(255,107,107,.3)'}">${x.better?'▲ better than its normal':'▼ worse than its normal'}</span>${szH(a)}${sthGo('vs')}</div>`
    +`<div class="vs-app vs-ainb">${ic(a,18)}<span class="vs-aint">${esc(a.store)} <span class="vs-acn">· ${esc(a.acc)}</span></span></div>`
    +`<div class="vs-mid"><div><div class="vs-big">${az(true)}${mL(x.dpr,true)}<small>/day</small></div><div class="vs-what">profit vs its normal · money back <b>${pbTxt(s.pb)}</b> (normal ${x.pn>=366?'1 yr+':'~'+x.pn+' d'}) · earning by day ${H} <b>${mP(s.v90V)}</b> of ${mP(s.cpiJV)} (${pc(1+x.m,0)}; normal ${pc(1+x.mn,0)}) · ${H}-day target: <b>${SW[x.st]}</b></div></div>${slope(1+x.mn,1+x.m,pc(1+x.mn,0),pc(1+x.m,0),!x.better)}</div>`
    +`<div class="vs-todo"><b>${WD.next}</b> ${esc(newsTodo(x))}</div>`
@@ -13590,23 +13817,65 @@ function newsTodo(x){ if(!x.better) return x.o.todo.t;
   if(x.st==='normal') return 'Sudhar raha, ab barabar ke paas — 2 hafte aur dekho, phir badhao';
   return 'Sudhar raha, par abhi bhi '+H+' din me paisa wapas nahi — kharcha mat badhao; '+'“'+WD.act[x.o.todo.v]+'” wala faisla rakho, 2 hafte dekho'; }
 function infoCard(a,x){ const st=x[3]||x[1], ag=st?dDiff(st,M.today):null, ia=infoAge(x);
-  return `<div class="vs-ac vs-s-info" data-app="${a.i}" data-go="${a.i}"><div class="vs-l1"><span class="vs-itag">ℹ️ ${esc(INFK[x[0]]||'Info')}</span><span class="vs-age${ia.fresh?' vs-new':''}" title="${esc(ia.tip)}">${ia.t}</span>${szH(a)}</div>`
+  return `<div class="vs-ac vs-s-info" data-app="${a.i}" data-go="${a.i}" data-hgo="${esc(goInf(a,x))}"><div class="vs-l1"><span class="vs-itag">ℹ️ ${esc(INFK[x[0]]||'Info')}</span><span class="vs-age${ia.fresh?' vs-new':''}" title="${esc(ia.tip)}">${ia.t}</span>${szH(a)}${sthGo('vs')}</div>`
    +`<div class="vs-app vs-ainb">${ic(a,18)}<span class="vs-aint">${esc(a.store)} <span class="vs-acn">· ${esc(a.acc)}</span></span></div><div class="vs-what" style="font-size:13px">${x[4]?'<span class="vs-flag">'+flag(x[4])+'</span>':''}${eTxt(x[5],a.fxL)}</div>`
    +`<div class="vs-ts"><span>🕒 Alert time: — (engine info · alert nahi, bheja nahi)</span><span>Change started: ${st?fd(st)+' · '+umar(ag):'—'}</span><br><span>Data: ${x[1]?'Installs '+span(x[1],x[2]||x[1]):'last 4 weeks'}${x[2]&&x[2]>M.settled?' · ⏳ final on '+fd(dAdd(x[2],LAG)):''} · build ${fist(M.gen)}</span></div></div>`; }
 function chgHtml(){ const news=newsItems(), infos=[]; A.forEach(a=>a.info.forEach(x=>infos.push([a,x])));
   infos.sort((p,q)=>String(q[1][3]||q[1][1]||'').localeCompare(String(p[1][3]||p[1][1]||'')));
-  const fresh=infos.filter(([a,x])=>{ const d=x[3]||x[1]; return d&&dDiff(d,M.today)<=30; }), old=infos.filter(z=>fresh.indexOf(z)<0);
+  const fresh=infos.filter(([a,x])=>!iOld(x)), old=oldsOf(null);
   const view=(L,f)=>ST.chgView==='table'?chgTable(L):`<div class="vs-cards">${L.map(f).join('')}</div>`;
   const op=ALS.filter(z=>!z.closed), cl=ALS.filter(z=>z.closed);
   const al=`<div class="vs-ok2" style="margin-bottom:12px"><span style="font-size:18px">🔔</span><div><b>Value alerts: ${op.length} khule</b> · ${cl.length} band (pichhle 7 din) — ${op.length?'neeche har alert, kab aaya ke saath (engine ka, range se alag).':'engine ne paisa-wapas, country, version ya long-term ka koi alert nahi khola.'} <span class="vs-faint">Aakhri check: ${fist(M.gen)} · install-day data ${fd(M.settled)} tak.</span> Neeche Studio ka apna hisaab (naya hafta vs app ka normal) aur engine ki jaankari — dono alert nahi.</div></div>`;
   return `<div class="vs-chg-h"><div><div class="vs-eyebrow">New vs old</div><h2>What's new</h2><div class="vs-hint" style="font-size:12px;color:var(--muted)">${op.length?op.length+' value alerts · ':''}${news.length} apps: new week differs from normal · ${fresh.length} engine info (30 days) · ${old.length} older folded below</div></div><div class="vs-right" style="margin-left:auto"><div class="vs-seg" id="vs-chgV"><button data-v="cards" aria-pressed="${ST.chgView==='cards'}">Cards</button><button data-v="table" aria-pressed="${ST.chgView==='table'}">Table</button></div></div></div>`
     +al+(op.length?view(op.map(z=>({t:'a',z})),q=>alCard(q.z)):'')+(news.length?view(news.map(x=>({t:'n',x})),z=>newsCard(z.x)):'<div class="vs-ok">✅ Kisi app ka naya hafta uske normal se bahut alag nahi</div>')
     +(fresh.length?`<details class="vs-fold" data-fold="info"${ST.folds.has('info')?' open':''}><summary><span class="vs-cv">▸</span><span>ℹ️ Engine info — last 30 days (${fresh.length}) · ${Object.entries(fresh.reduce((m,z)=>{ const k=INFK[z[1][0]]||'Info'; m[k]=(m[k]||0)+1; return m; },{})).sort((p,q)=>q[1]-p[1]).map(([k,n])=>k+' '+n).join(' · ')}</span><span class="vs-pv">${new Set(fresh.map(z=>z[0])).size} apps</span></summary>${view(fresh.map(([a,x])=>({t:'i',a,x})),z=>infoCard(z.a,z.x))}</details>`:'')
-    +(old.length?`<details class="vs-fold" data-fold="old"${ST.folds.has('old')?' open':''}><summary><span class="vs-cv">▸</span><span>🗄 Old info (${old.length})</span><span class="vs-pv">${new Set(old.map(z=>z[0])).size} apps</span></summary>${view(old.map(([a,x])=>({t:'i',a,x})),z=>infoCard(z.a,z.x))}</details>`:'')
-    +(cl.length?`<details class="vs-fold" data-fold="band"${ST.folds.has('band')?' open':''}><summary><span class="vs-cv">▸</span><span>✅ Band hue value alerts (${cl.length})</span><span class="vs-pv">${new Set(cl.map(z=>z.a)).size} apps</span></summary>${view(cl.map(z=>({t:'a',z})),q=>alCard(q.z))}</details>`:''); }
-function chgTable(L){ return `<div class="vs-panel vs-tw" style="border-radius:var(--vs-r)"><table class="vs-mini"><thead><tr><th class="vs-l">Status</th><th class="vs-l">App</th><th class="vs-l">What changed</th><th>Profit/day</th><th class="vs-l">Next step</th><th class="vs-l">🕒 Alert time</th><th class="vs-l">Change started</th><th class="vs-l">Data</th></tr></thead><tbody>`
-  +L.map(z=>{ if(z.t==='a') return alRow(z.z); if(z.t==='n'){ const x=z.x, a=x.a; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="vs-l">${chip(x.sev)}</td><td class="vs-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="vs-l" style="font-family:var(--vs-font)">${x.better?'▲ better':'▼ worse'} than its normal: money back in ${pbTxt(x.s.pb)} (normal ${x.pn>=366?'1 yr+':'~'+x.pn+'d'}) · ${H}-day target: ${SW[x.st]}</td><td class="${x.better?'vs-good':'vs-bad'}" style="font-weight:600">≈${mL(x.dpr,true)}</td><td class="vs-l" style="white-space:normal;min-width:160px;font-family:var(--vs-font)">${todoChip(x.o.todo)}</td><td class="vs-l vs-faint">— Studio · ${esc(weekAge(x.i).t)}</td><td class="vs-l">${fd(wS(x.i))} · ${umar(dDiff(wS(x.i),M.today))}</td><td class="vs-l vs-faint">${wkSpan(x.i)}</td></tr>`; }
-    const a=z.a, x=z.x; return `<tr data-app="${a.i}" data-go="${a.i}" style="cursor:pointer"><td class="vs-l"><span class="vs-itag">ℹ️ ${esc(INFK[x[0]]||'Info')}</span></td><td class="vs-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="vs-l" style="font-family:var(--vs-font);white-space:normal;min-width:220px">${eTxt(x[5],a.fxL)}</td><td class="vs-faint">—</td><td class="vs-l vs-faint">—</td><td class="vs-l vs-faint">— info · ${esc(infoAge(x).t)}</td><td class="vs-l">${x[3]||x[1]?fd(x[3]||x[1])+' · '+umar(dDiff(x[3]||x[1],M.today)):'—'}</td><td class="vs-l vs-faint">${x[1]?span(x[1],x[2]||x[1]):'—'}</td></tr>`; }).join('')+'</tbody></table></div>'; }
+    +histHtml(null,'h',true); }
+
+/* ================= 🗂 alert history: "▸ Older changes (N)" · "▸ Closed alerts (N)" · Open → (the older views' targets) ======= */
+// the older changes: the engine's info rows that started more than 30 days ago (the older views' "🗄 Older than 30 days";
+// the value engine keeps no separate "older" list) — All apps: this file's (the dashboard's DATA.value.info); one app: its
+// rows here + the ones only its detail file has (changes.info / changes.older: the old app page's own list, nothing trimmed)
+const iDay=x=>x[3]||x[1]||'';
+const iOld=x=>{ const d=iDay(x); return !!d&&dDiff(d,M.today)>30; };
+function oldsOf(a){ const L=[]; (a?[a]:A).forEach(b=>b.info.forEach(x=>{ if(iOld(x)) L.push([b,x]); }));
+  const det=a?detV(a):null, ch=det&&det.changes;
+  if(ch){ const k=x=>[x[0],x[1]||'',x[2]||'',x[4]||''].join('|'), seen=new Set(a.info.map(k));
+    [].concat(Array.isArray(ch.info)?ch.info:[],Array.isArray(ch.older)?ch.older:[]).forEach(o=>{ if(!o||typeof o!=='object') return; const x=[o.kind||'info',o.from||null,o.to||null,o.started||null,o.cc||'',String(o.text||'')];
+      if(iOld(x)&&!seen.has(k(x))){ seen.add(k(x)); L.push([a,x]); } }); }
+  return L.sort((p,q)=>String(iDay(q[1])).localeCompare(String(iDay(p[1])))); }
+// the two folds (k: the fold keys' stem — 'h' All apps, 'pgh' the app page, 'dh' the quick look); tbl: All apps' Cards / Table
+function histHtml(a,k,tbl){ const OL=oldsOf(a), CL=closedOf(a), all=!a, T=tbl&&ST.chgView==='table';
+  const v=(L,f)=>T?chgTable(L):`<div class="vs-cards">${L.map(f).join('')}</div>`;
+  const na=n=>n+(n===1?' app':' apps');
+  return sthFold('vs',k+'old',ST.folds.has(k+'old'),'Older changes',OL.length,all?na(new Set(OL.map(z=>z[0])).size):'30+ days',
+      v(OL.map(([b,x])=>({t:'i',a:b,x})),z=>infoCard(z.a,z.x)),'Koi purani engine info nahi',
+      '<span>Engine ki jaankari jo 30 din se pehle shuru hui — alert nahi (bheji nahi) · naya pehle</span>')
+    +sthFold('vs',k+'cl',ST.folds.has(k+'cl'),'Closed alerts',CL.length,all?na(new Set(CL.map(z=>z.a)).size)+' · last 7 days':'',
+      v(CL.map(z=>({t:'a',z})),q=>alCard(q.z)),all?'Pichhle 7 din me koi value alert band nahi hua':'Is app ka koi value alert band nahi hua',
+      `<span>Har band alert: kab khula, kab band hua, kitne din khula raha aur kyun · naya band pehle${all?' · yahan pichhle 7 din ke; har app ki poori list (aakhri 20) uske page pe':''}</span>`+sthWhyLeg(CL.map(z=>z.r.closeReason))); }
+// "Open →" — the older views' own target (smpValRow: valJump(VAL_SEC[family]) · smpValInfoRow: VAL_ISEC[kind]), "<app>|<section>|<arg>":
+// money back → "Week by week" (here: the money-back-by-install-week table), a country → Countries, a version → Users by app
+// version (its row flashed), long-term → Long-term, the GA4 ↔ AdMob link / data scale → the 🔍 Data check line; a section
+// this app's page does not draw → that very section of its older page (the "🗂 Old views" fold opens: old:<id>)
+const VSEC={'val-pay':'wk','val-cty':'cty','val-ver':'ver','val-long':'lng','val-chk':'chk'};
+function goAl(z){ const x=z.x, o=VAL_SEC[x.family]||'val-pay', vl=x.family==='ver_ret'?valAlVer(x):''; return z.a.i+'|'+VSEC[o]+'|'+o+'|'+vl; }
+function goInf(a,x){ const o=VAL_ISEC[x[0]]||'val-pay'; return a.i+'|'+VSEC[o]+'|'+o+'|'; }
+let PJ=null;   // a jump waiting for its app page (opened from All apps / the quick look): {id, s, t}
+function goH(spec,inD){ const s=String(spec).split('|'), a=A[+s[0]]; if(!a) return; hideTip();
+  if(!inD&&MODE==='p'&&PGID===a.id){ jumpTo(s); return; }
+  PJ={id:a.id,s,t:Date.now()}; closeDrawer(); try{ valOpen(a.id); }catch(e){} }
+function jumpTo(s){ const el=$('vs-pg-'+(s[1]||'wk'));
+  if(!el){ const o=s[2]||'val-pay'; if(o==='val-chk') VALCHKEXP=true; if(o==='val-ver'&&s[3]) VALVEROPEN=''; VALJUMP=o; VALJT=Date.now(); valRerender(); return true; }   // (the older page's section)
+  let row=null; if(s[1]==='ver'&&s[3]) row=[...el.querySelectorAll('tr[data-vl]')].find(r=>r.getAttribute('data-vl')===s[3])||null;
+  if(row){ try{ const box=row.closest('.vs-tw'); if(box) box.scrollTop+=row.getBoundingClientRect().top-box.getBoundingClientRect().top-40; }catch(e){} }
+  return sthJump(el,'vs',row); }
+// (the app's detail file still loading: its arrival redraws the page — the jump is made again then, once, so it stays flashed)
+function pjNow(){ if(!PJ) return; if(Date.now()-PJ.t>15000){ PJ=null; return; } if(MODE!=='p'||PJ.id!==PGID) return;
+  let wait=false; try{ const r=valRows().find(x=>x&&x.app_id===PGID); wait=!!(r&&r.key&&VALL[r.key]); }catch(e){}
+  const j=PJ; if(!wait) PJ=null; jumpTo(j.s); }
+function chgTable(L){ return `<div class="vs-panel vs-tw" style="border-radius:var(--vs-r)"><table class="vs-mini"><thead><tr><th class="vs-l">Status</th><th class="vs-l">App</th><th class="vs-l">What changed</th><th>Profit/day</th><th class="vs-l">Next step</th><th class="vs-l">🕒 Alert time</th><th class="vs-l">Change started</th><th class="vs-l">Data</th><th class="vs-l">Open</th></tr></thead><tbody>`
+  +L.map(z=>{ if(z.t==='a') return alRow(z.z); if(z.t==='n'){ const x=z.x, a=x.a; return `<tr data-app="${a.i}" data-go="${a.i}" data-hgo="${a.i}|wk" style="cursor:pointer"><td class="vs-l">${chip(x.sev)}</td><td class="vs-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="vs-l" style="font-family:var(--vs-font)">${x.better?'▲ better':'▼ worse'} than its normal: money back in ${pbTxt(x.s.pb)} (normal ${x.pn>=366?'1 yr+':'~'+x.pn+'d'}) · ${H}-day target: ${SW[x.st]}</td><td class="${x.better?'vs-good':'vs-bad'}" style="font-weight:600">≈${mL(x.dpr,true)}</td><td class="vs-l" style="white-space:normal;min-width:160px;font-family:var(--vs-font)">${todoChip(x.o.todo)}</td><td class="vs-l vs-faint">— Studio · ${esc(weekAge(x.i).t)}</td><td class="vs-l">${fd(wS(x.i))} · ${umar(dDiff(wS(x.i),M.today))}</td><td class="vs-l vs-faint">${wkSpan(x.i)}</td><td class="vs-l">${sthGo('vs')}</td></tr>`; }
+    const a=z.a, x=z.x; return `<tr data-app="${a.i}" data-go="${a.i}" data-hgo="${esc(goInf(a,x))}" style="cursor:pointer"><td class="vs-l"><span class="vs-itag">ℹ️ ${esc(INFK[x[0]]||'Info')}</span></td><td class="vs-l" style="white-space:normal;min-width:170px">${nmH(a)}</td><td class="vs-l" style="font-family:var(--vs-font);white-space:normal;min-width:220px">${eTxt(x[5],a.fxL)}</td><td class="vs-faint">—</td><td class="vs-l vs-faint">—</td><td class="vs-l vs-faint">— info · ${esc(infoAge(x).t)}</td><td class="vs-l">${x[3]||x[1]?fd(x[3]||x[1])+' · '+umar(dDiff(x[3]||x[1],M.today)):'—'}</td><td class="vs-l vs-faint">${x[1]?span(x[1],x[2]||x[1]):'—'}</td><td class="vs-l">${sthGo('vs')}</td></tr>`; }).join('')+'</tbody></table></div>'; }
 
 /* ================= All apps (smart table) ================= */
 const TC=()=>[['app','App','vs-l'],['st','Status · Next step','vs-l'],['sp','Spend/day'],['ins','Installs/day'],['cpi','Cost / install'],['b7','Back in 7 days'],['v90','Earning by day '+H],['pb','Money back in'],['prof','Profit/day'],['trend','12 weeks','vs-l']];
@@ -13777,7 +14046,7 @@ function verTable(o){ const V=o.a.ver; if(!V) return '';
     return `<td${st==='few'?' class="vs-faint"':''}>${ret!=null?fN(ret):'—'}<small>${pc(v/10000,0)}${st==='part'?' ⏳':''}</small></td>`; };
   const rm=m=>{ if(!m) return '—'; const [v,st,e,inn]=m; if(st==='wait') return `<span class="vs-faint">in ${inn||'?'} d</span>`; if(v==null) return '—'; return (e?'≈':'')+mP(cv(v/1e6,o.a.fxL))+(st==='part'?'⏳':''); };
   const rows=V.r.map(x=>{ const [lab,f,t,n,dys,cur,d1,d7,d30,r1,r7,r30,vd,vsl,v0,v1,w0,w1,rd]=x;
-    return `<tr><td class="vs-l"><b>${rd?'📦 ':''}${esc(lab)}</b>${cur?' <span class="vs-sz">Current</span>':''}<small>${span(f,t)} · ${fN(n)} installs</small></td>${rc(d1)}${rc(d7)}${rc(d30)}<td>${rm(r1)} · ${rm(r7)} · ${rm(r30)}</td><td class="vs-l" style="font-family:var(--vs-font);font-size:12px;white-space:normal;min-width:130px">${vsl&&v0!=null&&v1!=null?`next day ${pc(v1/10000,0)} vs ${pc(v0/10000,0)}${w0!=null&&w1!=null?' · 7 days '+pc(w1/10000,0)+' vs '+pc(w0/10000,0):''}<small>vs ${esc(vsl)}</small>`:'<span class="vs-faint">—</span>'}</td><td class="vs-l">${VV[vd]?chip(VV[vd]):'<span class="vs-faint">—</span>'}</td></tr>`; }).join('');
+    return `<tr data-vl="${esc(lab)}"><td class="vs-l"><b>${rd?'📦 ':''}${esc(lab)}</b>${cur?' <span class="vs-sz">Current</span>':''}<small>${span(f,t)} · ${fN(n)} installs</small></td>${rc(d1)}${rc(d7)}${rc(d30)}<td>${rm(r1)} · ${rm(r7)} · ${rm(r30)}</td><td class="vs-l" style="font-family:var(--vs-font);font-size:12px;white-space:normal;min-width:130px">${vsl&&v0!=null&&v1!=null?`next day ${pc(v1/10000,0)} vs ${pc(v0/10000,0)}${w0!=null&&w1!=null?' · 7 days '+pc(w1/10000,0)+' vs '+pc(w0/10000,0):''}<small>vs ${esc(vsl)}</small>`:'<span class="vs-faint">—</span>'}</td><td class="vs-l">${VV[vd]?chip(VV[vd]):'<span class="vs-faint">—</span>'}</td></tr>`; }).join('');
   const cr=V.r.find(x=>x[5])||V.r[0], d1=cr[6], d7=cr[7];
   const lead=`<b>${esc(cr[0])}</b> (${fd(cr[1])} se, ${fN(cr[3])} installs): ${d1&&d1[1]!=null?fN(d1[1])+' back next day ('+pc(d1[0]/10000,0)+')':'agle din wala abhi nahi'}${d7&&d7[1]!=null?' · back after 7 days '+fN(d7[1])+' ('+pc(d7[0]/10000,0)+')':''}${cr[13]&&cr[14]!=null&&cr[15]!=null?` · same umar pe ${esc(cr[13])} se tulna: next day ${pc(cr[15]/10000,0)} vs ${pc(cr[14]/10000,0)}`:''}${V.tail?' — '+esc(V.tail):''}`;
   return `<div class="vs-secnote" style="padding-top:0">${lead}</div><div class="vs-tw" style="max-height:420px"><table class="vs-mini vs-dtbl"><thead><tr><th class="vs-l">Version (on install day)</th><th>Back next day</th><th>Back after 7 days</th><th>Back after 30 days</th><th>Earning/install · 1d · 7d · 30d</th><th class="vs-l">vs previous</th><th class="vs-l">Status</th></tr></thead><tbody>${rows}</tbody></table></div><div class="vs-secnote">Number = kitne log wapas aaye (chhota % = installs me se) · ⏳ = sirf kuch din ke installs itne purane · tulna: naye version ke pehle 28 din vs pichhle ke aakhri 28 din</div>`; }
@@ -13805,18 +14074,19 @@ function appBody(o,mode){ CM=mode; const a=o.a, s=o.s, c=o.c, ads=s.ads&&!s.thin
     +k('Cost / install','blended',ads?mP(s.cpiV):'—',ads&&c.cpiV!=null?deltaH(s.cpiV,c.cpiV,false,(v,sg)=>mP(v,sg)):nd,ads?'Google Ads ÷ saare naye installs':'')
     +k('Engine says','dashboard',`<span style="font-size:.55em;line-height:1.2;display:block">${esc(engWord(a))}</span>`,{h:'<span class="vs-vs">'+esc(engPay(a))+'</span>'},'');
   const ver=verTable(o), lng=longTable(o);
-  const myA=ALS.filter(z=>z.a===a&&!z.closed), inf=(a.info.length||myA.length)?`<div class="vs-cards">${myA.map(alCard).join('')}${a.info.map(x=>infoCard(a,x)).join('')}</div>`:'';
-  const clA=closedOf(a), clF=clA.length?`<details class="vs-fold" data-fold="pgclosed"${ST.folds.has('pgclosed')?' open':''}><summary><span class="vs-cv">▸</span><span>✅ Closed (${clA.length})</span><span class="vs-pv">engine ne band kiye · har ek apne 🕒 ke saath</span></summary><div class="vs-cards">${clA.map(alCard).join('')}</div></details>`:'';
+  // the open alerts and the engine info of the last 30 days as cards; the closed alerts and the older info in the two history folds
+  const myA=ALS.filter(z=>z.a===a&&!z.closed), fI=a.info.filter(x=>!iOld(x)), inf=(fI.length||myA.length)?`<div class="vs-cards">${myA.map(alCard).join('')}${fI.map(x=>infoCard(a,x)).join('')}</div>`:'';
+  const pg=mode==='p', id=k=>pg?` id="vs-pg-${k}"`:'';
   return `<div class="vs-db${mode==='p'?' vs-pgb':''}"><div class="vs-ac vs-s-${o.pill==='bigda'?'bigda':(o.pill==='dhyan'?'dhyan':(o.pill==='behtar'?'behtar':'info'))}" style="cursor:default"><div class="vs-todo" style="font-size:13px"><b>${WD.next}</b> ${todoChip(o.todo)} ${esc(o.todo.t)}</div><div class="vs-ts"><span>Engine line: ${eTxt(a.eng.sum,a.fxL)}</span></div></div>`
     +`<div class="vs-dk">${kp}</div>`
-    +`<div class="vs-pg2">`+`<div class="vs-panel"><div class="vs-ph"><div><div class="vs-eyebrow">Money back — how many days</div><h2 style="font-size:15px">Earning per install vs cost per install</h2><div class="vs-hint">Install ke din se 1 saal tak · neeli line pili line ko kaate = paisa wapas</div></div></div>${curveChart(o)}</div>`
+    +`<div class="vs-pg2">`+`<div class="vs-panel"${id('cur')}><div class="vs-ph"><div><div class="vs-eyebrow">Money back — how many days</div><h2 style="font-size:15px">Earning per install vs cost per install</h2><div class="vs-hint">Install ke din se 1 saal tak · neeli line pili line ko kaate = paisa wapas</div></div></div>${curveChart(o)}</div>`
 +`<div class="vs-panel"><div class="vs-ph"><div><div class="vs-eyebrow">Each install week</div><h2 style="font-size:15px">Profit / loss per day · ${wkSpan(Math.max(0,a.first),NW-1)}</h2></div></div>${weekChart(o)}</div>`+`</div>`
-    +`<div class="vs-panel"><div class="vs-ph"><div><div class="vs-eyebrow">Install weeks, with confidence</div><h2 style="font-size:15px">Week by week</h2></div></div>${weekTable(o)}</div>`
-    +`<div class="vs-panel"><div class="vs-ph"><div><div class="vs-eyebrow">Where to run ads, where to stop</div><h2 style="font-size:15px">Countries</h2></div></div>${ctyTable(o)}</div>`
-    +(ver?`<div class="vs-panel"><div class="vs-ph"><div><div class="vs-eyebrow">🧬 Version on install day</div><h2 style="font-size:15px">Users by app version</h2></div></div>${ver}</div>`:'')
-    +(lng?`<div class="vs-panel"><div class="vs-ph"><div><div class="vs-eyebrow">🗓️ Long-term</div><h2 style="font-size:15px">Long-term by install month</h2></div></div>${lng}</div>`:'')
-    +(inf||clF?`<div><div class="vs-chg-h"><div><div class="vs-eyebrow">${myA.length?'Engine alerts + info':'Engine info (not an alert)'}</div><h2 style="font-size:15px">What's new for this app</h2></div></div>${inf||'<div class="vs-ok">✅ Is app pe koi khula value alert ya engine info nahi</div>'}${clF}</div>`:'<div class="vs-ok">✅ Is app pe koi value alert ya engine info nahi</div>')
-    +(a.chk&&a.chk.length?`<div class="vs-secnote vs-chk" style="padding:0 2px">🔍 Data check: ${eTxt(a.chk[0],a.fxL)}${a.chk.length>1?`<ul>${a.chk.slice(1).map(t=>`<li>${eTxt(t,a.fxL)}</li>`).join('')}</ul>`:''}</div>`:'')+`${mode==='d'?`<div style="display:flex;justify-content:center;padding:6px 0 2px"><button class="vs-btn vs-full" data-full="${esc(a.id)}">Full app page →</button></div>`:''}</div>`; }
+    +`<div class="vs-panel"${id('wk')}><div class="vs-ph"><div><div class="vs-eyebrow">Install weeks, with confidence</div><h2 style="font-size:15px">Week by week</h2></div></div>${weekTable(o)}</div>`
+    +`<div class="vs-panel"${id('cty')}><div class="vs-ph"><div><div class="vs-eyebrow">Where to run ads, where to stop</div><h2 style="font-size:15px">Countries</h2></div></div>${ctyTable(o)}</div>`
+    +(ver?`<div class="vs-panel"${id('ver')}><div class="vs-ph"><div><div class="vs-eyebrow">🧬 Version on install day</div><h2 style="font-size:15px">Users by app version</h2></div></div>${ver}</div>`:'')
+    +(lng?`<div class="vs-panel"${id('lng')}><div class="vs-ph"><div><div class="vs-eyebrow">🗓️ Long-term</div><h2 style="font-size:15px">Long-term by install month</h2></div></div>${lng}</div>`:'')
+    +`<div${id('chg')}><div class="vs-chg-h"><div><div class="vs-eyebrow">${myA.length?'Engine alerts + info':'Engine info (not an alert)'}</div><h2 style="font-size:15px">What's new for this app</h2></div></div>${inf||'<div class="vs-ok">✅ Is app pe koi khula value alert ya engine info nahi</div>'}${histHtml(a,pg?'pgh':'dh',false)}</div>`
+    +(a.chk&&a.chk.length?`<div class="vs-secnote vs-chk"${id('chk')} style="padding:0 2px">🔍 Data check: ${eTxt(a.chk[0],a.fxL)}${a.chk.length>1?`<ul>${a.chk.slice(1).map(t=>`<li>${eTxt(t,a.fxL)}</li>`).join('')}</ul>`:''}</div>`:'')+`${mode==='d'?`<div style="display:flex;justify-content:center;padding:6px 0 2px"><button class="vs-btn vs-full" data-full="${esc(a.id)}">Full app page →</button></div>`:''}</div>`; }
 function drawerHtml(){ const o=R[ST.drawer], a=o.a, ord=navOrder(), pos=ord.indexOf(a.i);
   return `<div class="vs-dh"><div class="vs-t"><div class="vs-eyebrow">App view · ${pos+1} / ${ord.length} (by loss) · installs ${wkSpan(W.i0,W.i1)}</div><h3 class="vs-ainb">${ic(a,28)}<span class="vs-aint">${esc(a.store)} <span class="vs-acn">· ${esc(a.acc)}</span></span></h3><div class="vs-l2">${chip(o.pill)}${todoChip(o.todo)}${szH(a)}<span>Install-day data till ${fd(a.settled)} · Google Ads till ${a.spT?fd(a.spT):'—'}</span></div>`
     +`<div class="vs-full-r"><button class="vs-btn vs-full" id="vs-full" data-full="${esc(a.id)}" title="Money back by install week, countries, versions, long-term, Data check — sab is app ke page pe">Full app page →</button></div></div>`
@@ -13886,7 +14156,7 @@ function afterMount(){ const root=$('vs-root'); if(!root) return; layer(); stick
   try{ if(!RO&&typeof ResizeObserver!=='undefined') RO=new ResizeObserver(()=>{ const r=$('vs-root'); if(!r) return; const w=r.offsetParent?r.clientWidth:0, was=ROW; ROW=w; if(!w) return; stick(); fitAll();
       if(MODE==='a'&&!was){ const box=$('vs-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.vs-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; } } });
     if(RO){ RO.disconnect(); ROW=root.offsetParent?root.clientWidth:0; RO.observe(root); } }catch(e){}
-  if(MODE==='p'){ const w0=root.clientWidth; if(w0&&Math.abs(w0-PGW)>2){ PGW=w0; renderPage(); } else bindCurve('p'); countUp(); fitAll(); return; }
+  if(MODE==='p'){ const w0=root.clientWidth; if(w0&&Math.abs(w0-PGW)>2){ PGW=w0; renderPage(); } else bindCurve('p'); countUp(); fitAll(); pjNow(); return; }
   const box=$('vs-tl'); if(box&&box.clientWidth&&Math.abs(box.clientWidth-TLW)>2) renderTl(); else { const tw=box&&box.querySelector('.vs-tlw'); if(tw) tw.scrollLeft=tw.scrollWidth; }
   countUp(); fitAll();
   if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('vs-drawer'); if(d&&!d.classList.contains('vs-on')){ d.classList.add('vs-on'); $('vs-scrim').classList.add('vs-on'); lock(true); } } } }
@@ -13947,6 +14217,7 @@ function wire(){ if(WIRED) return; WIRED=true;
     else if(id==='vs-cmp') setCmp(e.target.value); else if(/^vs-c[ft][12]$/.test(id)) setDate(id,e.target.value); });
   document.addEventListener('keydown',e=>{ if(!shownNow()) return; const tg=e.target, typing=!!(tg&&(tg.tagName==='INPUT'||tg.tagName==='SELECT'||tg.tagName==='TEXTAREA'||tg.isContentEditable));
     if(e.key==='Escape'){ if(ST.drawer>=0){ closeDrawer(); e.preventDefault(); } hideTip(); return; }
+    if((e.key==='Enter'||e.key===' ')&&tg&&tg.closest&&tg.closest('.vs-opn')&&inStudio(tg)){ e.preventDefault(); tg.click(); return; }
     if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
     if(MODE==='a'&&ST.drawer>=0&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navDrawer(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
     const m={'7':'7','1':'14','3':'30','6':'60'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
@@ -13956,6 +14227,8 @@ function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+di
 function onClick(e){ const t=e.target; if(!inStudio(t)) return;
   const wb=t.closest('[data-wk]'); if(wb){ ST.wk=wb.dataset.wk; const inD=!!wb.closest('#vs-layer'); if(inD) renderDrawer(true); else if(MODE==='p') renderPage(); return; }
   const fp=t.closest('[data-full]'); if(fp){ e.preventDefault(); fullPage(fp.getAttribute('data-full')); return; }
+  // a "What's new" card / row (an alert, open or closed, a week, an info row): Open → — and a tap anywhere on it — goes to its target
+  const hg=t.closest('[data-hgo]'); if(hg&&!t.closest('select,input,summary')){ e.preventDefault(); goH(hg.getAttribute('data-hgo'),!!hg.closest('#vs-drawer')); return; }
   const rb=t.closest('#vs-rng button'); if(rb){ setRange(rb.dataset.r); return; }
   const cb=t.closest('#vs-cur button'); if(cb){ setCur(cb.dataset.c); return; }
   const xp=t.closest('[data-xp]'); if(xp){ const i=+xp.dataset.xp; ST.open.has(i)?ST.open.delete(i):ST.open.add(i); renderTbl(true); return; }
@@ -13983,7 +14256,7 @@ return {ptr, ensure, retry, screen, page, has, hide, closeDrawer, openDrawer,
   _:{A:()=>A, R:()=>R, W:()=>W, PT:()=>PT, PC:()=>PC, CT:()=>CT, WKP:()=>WKP, ST, ALS:()=>ALS, NOGA:()=>NOGA, PEND:()=>PEND, M:()=>M, pool, cells, aggA, ctyOf, windows, pakka, wS, wE,
      fail:()=>{ RAW=null; ERR=true; VER=(ptr()||{}).v; SIG=null; }, fit:()=>{ fitLabels($('vs-root')); fitLabels($('vs-drawer')); }, MODE:()=>MODE, page:()=>MODE==='p'&&AI[PGID]?pageHtml(R[AI[PGID].i]):'', story:storyHtml, kpis:kpisHtml, ledger:ledgerHtml, map:mapHtml, src:srcHtml, tl:tlHtml, chg:chgHtml, tbl:tblHtml, drawer:()=>ST.drawer>=0?drawerHtml():'', foot:footHtml,
      load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; SIG=null; }, TIPS, mT, mP, mL, onClick, setRange, setCmp, setDate, setCur, fullPage,
-     r30Of, closedOf, wkAll, wkFile, wkDet, payTxt, weekTable, detV, p100T}};
+     r30Of, closedOf, wkAll, wkFile, wkDet, payTxt, weekTable, detV, p100T, oldsOf, histHtml, goAl, goInf, goH, jumpTo, PJ:()=>PJ, pjNow}};
 })();
 
 function renderValue(){

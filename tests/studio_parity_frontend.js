@@ -76,11 +76,11 @@ if (mode === 'active') {
   // 3 · other ad networks: "other networks add ~x% more" (the old actOther) only when their share is known
   get('other', `(()=>{ ${RESET} ${FRESH} const a=AS._.A()[0], d=AS._.detOf(a); const off=__text(${PAGE(0)}); d.flags=Object.assign({},d.flags,{other_share:0.3}); const on=__text(${PAGE(0)}); const x=actOther(d.flags);
     const tip=__text(AS._.TIPS.oth(a.i)); ${RESET} ${FRESH} return {off:off.indexOf('other networks add')>=0, on, x, tip}; })()`);
-  // 4 · the engine's older findings: the All-apps "🗄 Older (N)" fold (DATA.active.info, src older) and the app page's (its file's)
+  // 4 · the engine's older findings: the All-apps "▸ Older changes (N)" fold (DATA.active.info, src older) and the app page's (its file's)
   get('older', `(()=>{ ${RESET} ${FRESH} const A=AS._.A(), mkO=(a,k)=>({app_id:a.id,src:'older',kind:'act_drift',metric:k?'sess':'ret_dau',dir:'down',from:AS._.dOf(40+k),to:AS._.dOf(100),rel:-0.42+k/100,
       text:'old users ke sessions per user kam: 6.08 → 3.51/day (−42%)',tags:[],prov:false,release:{date:AS._.dOf(38),key:'ver:9.9@x',label:'v9.9'},started:AS._.dOf(40+k)});
     DATA.active.info=(DATA.active.info||[]).concat([mkO(A[0],0),mkO(A[1],1)]); AS._.detOf(A[0]).changes.older=[mkO(A[0],0),mkO(A[0],2),mkO(A[0],3)];
-    actScreen(); __flush(); AS._.ST.folds=new Set(['older','pgold']); const chg=AS._.chg(); AS._.ST.chgView='table'; const tbl=AS._.chg(); AS._.ST.chgView='cards'; const page=${PAGE(0)}; AS._.ST.folds=new Set();
+    actScreen(); __flush(); AS._.ST.folds=new Set(['hold','pghold']); const chg=AS._.chg(); AS._.ST.chgView='table'; const tbl=AS._.chg(); AS._.ST.chgView='cards'; const page=${PAGE(0)}; AS._.ST.folds=new Set();
     DATA=JSON.parse(JSON.stringify(__DASH)); ${RESET} ${FRESH} return {chg, tbl, page:page.slice(page.indexOf('id="as-pg"'),page.indexOf('id="act-old"'))}; })()`);
   // 5 · All apps day by day: the old date-wise view's guards (actPfSeries) in the Studio's table, markers and the guard line
   get('hon', `(()=>{ ${RESET} ${FRESH} KWIN='60'; actScreen(); __flush(); const S=actPfSeries(actRows().filter(r=>uniVis(r.app_id))), W=AS._.W(), ix=AS._.ix, dOf=AS._.dOf;
@@ -128,10 +128,10 @@ if (mode === 'active') {
     return {nm:a.nm, r30:VS._.r30Of(VS._.R()[a.i]), eng:a.eng.r30, old:(row.rpi||{}).d30, oldTxt:valMoney((row.rpi||{}).d30), mp:VS._.mP(a.eng.r30), inrTxt, oldInr,
       tblRow:__rows(tbl).find(x=>x.attrs.indexOf('data-app="'+a.i+'"')>=0), mapHas:map.indexOf('vs-noads')>=0&&map.indexOf('data-tk="r30:'+a.i+'"')>=0, map:__text(map.slice(map.indexOf('vs-noads'))),
       drawer:__text(dr), page:__text(page.slice(page.indexOf('id="vs-root"'),page.indexOf('id="val-oldapp"'))), tip:__text(VS._.TIPS.r30(a.i))}; })()`);
-  // 3 · the app page's closed alerts: a "✅ Closed (N)" fold, each with its 🕒 line (from the app's file, the old page's list)
+  // 3 · the app page's closed alerts: a "▸ Closed alerts (N)" fold, each with its 🕒 line (from the app's file, the old page's list)
   get('closed', `(()=>{ ${RESET} ${FRESH} const a=VS._.A()[0], d=VS._.detV(a);
     d.changes=Object.assign({},d.changes,{closed:[{app_id:a.id,app:a.nm,family:'pay_slow',metric:'pay',severity:'warning',dir:'down',now:140,before:80,opened:'2026-08-10',closed:'2026-09-01',closed_at:'2026-09-02T03:30:00Z',alert_at:'2026-08-11T04:00:00Z',started:'2026-08-03',text:'Paisa wapas ab 140 din me (pehle 80)',data_till:'2026-08-30',reason:'recovered'}]});
-    VS._.ST.folds=new Set(['pgclosed']); const h=${PAGE('a.id')}; VS._.ST.folds=new Set(); const n=VS._.closedOf(a).length; ${FRESH} ${RESET}
+    VS._.ST.folds=new Set(['pghcl']); const h=${PAGE('a.id')}; VS._.ST.folds=new Set(); const n=VS._.closedOf(a).length; ${FRESH} ${RESET}
     return {n, page:h.slice(h.indexOf('id="vs-root"'),h.indexOf('id="val-oldapp"'))}; })()`);
   // 4 · "Other small countries (0)" is not a row (the GA4 'other' bucket alone); the unmatched Google Ads cost stays said
   get('small', `(()=>{ ${RESET} ${FRESH} valScreen(); __flush(); const a=VS._.A().find(x=>x.cty&&x.cty.rows&&x.cty.rows.length), C=a.cty, keep=[C.small,C.unm];
