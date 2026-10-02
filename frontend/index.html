@@ -390,6 +390,13 @@
   @media(max-width:760px){
     body :is(#us-root,#us-layer) .us-dh,body :is(#as-root,#as-layer) .as-dh,body :is(#vs-root,#vs-layer) .vs-dh{padding-top:calc(10px + env(safe-area-inset-top,0px))}
   }
+  /* ===== Toast (bToast, B-13): above the phone tab bar, and it never blocks a tap on the page under it — only its own
+     buttons / links take taps ===== */
+  #btoast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:max-content;max-width:calc(100vw - 24px);
+    background:#12213a;border:1px solid var(--line2);color:#fff;padding:10px 18px;border-radius:10px;z-index:9999;font-size:13.5px;line-height:1.45;
+    text-align:center;overflow-wrap:anywhere;box-shadow:0 6px 24px rgba(0,0,0,.4);pointer-events:none}
+  #btoast :is(a,button,[onclick]){pointer-events:auto}
+  @media(max-width:760px){ #btoast{bottom:calc(72px + env(safe-area-inset-bottom,0px))} }
   /* ===== Uninstall (GA4) tab — wide tables scroll inside their card with the first column pinned ===== */
   #uni-root .lnk{color:var(--cyan);cursor:pointer;font-weight:600}
   .uni-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -5146,7 +5153,9 @@ async function ghCommitDirect(path,obj,msg,okMsg,noTokMsg){ const tok=ghToken();
 function ghToken(){ try{return localStorage.getItem('gh_tok')||''}catch(e){return''} }
 function ghSetToken(t){ try{localStorage.setItem('gh_tok',t)}catch(e){} }
 function ghForget(){ try{localStorage.removeItem('gh_tok')}catch(e){} bToast('Token bhula diya'); bRerender(); }
-function bToast(msg){ let t=document.getElementById('btoast'); if(!t){t=document.createElement('div');t.id='btoast';t.style.cssText='position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#12213a;border:1px solid var(--line2);color:#fff;padding:10px 18px;border-radius:10px;z-index:9999;font-size:13.5px;box-shadow:0 6px 24px rgba(0,0,0,.4)';document.body.appendChild(t);} t.textContent=msg; t.style.opacity='1'; clearTimeout(t._h); t._h=setTimeout(()=>{t.style.transition='opacity .5s';t.style.opacity='0';},2600); }
+// the toast: its look and place live in CSS (#btoast — above the phone tab bar); pointer-events:none so a tap on the page
+// under it still lands (only a button / link inside it takes taps)
+function bToast(msg){ let t=document.getElementById('btoast'); if(!t){t=document.createElement('div');t.id='btoast';t.setAttribute('role','status');t.style.cssText='pointer-events:none';document.body.appendChild(t);} t.textContent=msg; t.style.opacity='1'; clearTimeout(t._h); t._h=setTimeout(()=>{t.style.transition='opacity .5s';t.style.opacity='0';},2600); }
 // movement of a value vs a range (mirrors engine _status)
 function bMov(v,rng){ if(!rng||v==null||rng[0]==null)return'na'; const lo=rng[0],hi=rng[1],sp=(hi-lo)||(Math.abs(hi)*0.05+1e-9); return v<lo-0.05*sp?'below':v>hi+0.05*sp?'above':'in'; }
 function bDirn(s,a){ if(!s||!a||s[0]==null||a[0]==null)return'same'; const sm=(s[0]+s[1])/2,am=(a[0]+a[1])/2; if(am===0)return sm>0?'up':'same'; const d=(sm-am)/Math.abs(am); return d>0.05?'up':d<-0.05?'down':'same'; }
