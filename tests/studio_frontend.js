@@ -56,6 +56,11 @@ run(`DATA=__DASH; UNI=__UNI; UNIERR=false; UNICOH={}; ${RESET} US._.load(__STUDI
 const text = h => String(h).replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 ctx.__text = text;
+// the older app page (no Studio) as the Studio page's fold holds it: the 📦 Update impact card (exactly uniImpactCard's
+// output for that app, ids normalised) replaced by the one line to the Studio page's section
+run(`function __upLine(h){ const nz=x=>x.replace(/(id="|url\\(#|href="#)([A-Za-z_-]*?)\\d+/g,'$1$2#');
+  const a=((UNI&&UNI.apps)||[]).find(z=>z.app_id===UNIAPP), c=a?nz(uniImpactCard(a)):''; if(!c||h.indexOf(c)<0) return '__no card__';
+  return h.replace(c,nz(uniImpUpLine())); }`);
 
 // ── the screen, its order and the consistency rules ─────────────────────────────────────────────────────────────────
 get('screen7', `(()=>{ ${RESET} return uniScreen(); })()`);
@@ -120,8 +125,9 @@ get('others', `(()=>{ const r={}; ${RESET}
   r.active_same=on.a===off.a; r.value_same=on.v===off.v;
   const nm=DATA.uninstall.apps[0].app; APP=nm; UNIAPP=DATA.uninstall.apps[0].app_id; const nz=h=>h.replace(/(id="|url\\(#|href="#)([A-Za-z_-]*?)\\d+/g,'$1$2#');   // (the page's own chart-id counters)
   const p1=nz(uniScreen()); delete DATA.uninstall.studio; const p2=nz(uniScreen()); DATA.uninstall.studio=ptr;
-  // one app: the Studio app page, and the WHOLE older app page (as it is without the Studio) folded under it
-  r.apppage_old_kept=p1.indexOf('<div class="uo-in">'+p2+'</div>')>=0; r.apppage_studio=p1.indexOf('id="us-root" class="us-app-pg"')>=0&&p1.indexOf('id="uni-old-app"')>p1.indexOf('id="us-apg"'); r.apppage_old_alone=p2.indexOf('us-root')<0; APP=''; UNIAPP='';
+  // one app: the Studio app page, and the WHOLE older app page (as it is without the Studio) folded under it — but its
+  // 📦 Update impact card, which is the Studio page's own section now (owner, 2 Oct), is one line there (drawn once)
+  r.apppage_old_kept=p1.indexOf('<div class="uo-in">'+__upLine(p2)+'</div>')>=0; r.apppage_studio=p1.indexOf('id="us-root" class="us-app-pg"')>=0&&p1.indexOf('id="uni-old-app"')>p1.indexOf('id="us-apg"'); r.apppage_old_alone=p2.indexOf('us-root')<0; APP=''; UNIAPP='';
   delete DATA.uninstall.studio; const old=uniScreen(); DATA.uninstall.studio=ptr;
   r.old_view={kw:old.indexOf('uni-kw-bar')>=0, studio:old.indexOf('us-root')>=0||old.indexOf('uni-old')>=0, table:old.indexOf('uni-table')>=0};
   const st=uniScreen(); r.studio_view={root:st.indexOf('id="us-root"')>=0, kw:st.indexOf('uni-kw-bar')>=0, fold:st.indexOf('id="uni-old"')>=0,
@@ -137,7 +143,7 @@ get('page', `(()=>{ ${RESET} const r={}, row=DATA.uninstall.apps.find(x=>US._.A(
   r.root=h.indexOf('id="us-root" class="us-app-pg"')>=0; r.apg=h.indexOf('id="us-apg"')>=0; r.back=/data-back="1"[^>]*>← All apps/.test(h);
   r.nav=(h.match(/data-pnav="(-1|1)"/g)||[]).length; r.top=/id="us-rng"/.test(h); r.kwbar=h.indexOf('uni-kw-bar')>h.indexOf('id="uni-old-app"');
   delete DATA.uninstall.studio; const old=uniScreen(); DATA.uninstall.studio=ptr;
-  r.fold=nz(h).indexOf('<div class="uo-in">'+nz(old)+'</div>')>=0; r.oldNoStudio=old.indexOf('us-root')<0;
+  r.fold=nz(h).indexOf('<div class="uo-in">'+__upLine(nz(old))+'</div>')>=0; r.oldNoStudio=old.indexOf('us-root')<0;
   const pg=h.slice(h.indexOf('id="us-apg"'),h.indexOf('id="uni-old-app"'));
   r.kpis=(pg.match(/class="us-kpi"/g)||[]).length; r.charts=(pg.match(/<svg viewBox="[^"]*" id="us-s\\d+" data-hv="1"/g)||[]).length;
   r.coh=pg.indexOf('class="us-coh"')>=0; r.daytable=pg.indexOf('Day by day')>=0; r.cards=(pg.match(/class="us-ac /g)||[]).length; r.alerts=US._.A().find(a=>a.id===id).al.length;
@@ -155,6 +161,104 @@ get('page', `(()=>{ ${RESET} const r={}, row=DATA.uninstall.apps.find(x=>US._.A(
   APP='Demo Clock'; UNIAPP=''; const nh=uniScreen(); r.noGa4=nh.indexOf('us-root')<0;
   ${RESET} return JSON.stringify(r); })()`);
 get('pageWords', `(()=>{ ${RESET} const T=[]; US._.A().forEach(a=>{ const row=DATA.uninstall.apps.find(x=>x.app_id===a.id); if(!row) return; APP=row.app; UNIAPP=a.id; for(const k of ['7','30','60']){ KWIN=k; const h=uniScreen(); T.push(__text(h.slice(h.indexOf('id="us-root"'),h.indexOf('id="uni-old-app"')))); } }); ${RESET} return JSON.stringify(T); })()`);
+
+// ── 📦 Update impact on the app page (owner, 2 Oct: "update impact vala isme bhi kar do"): the WHOLE card as the page's own
+// section — after the charts, right before the day-by-day table — drawn ONCE (the fold: one line to it); its windows,
+// 📅 any date (a real impact_any file of the app when the test made one), 📌 saved dates through the same /api/marks
+// calls, the 📦 jumps from elsewhere; and every fallback (Studio still loading / failing / not there) as before ─────────
+ctx.__IA = fs.existsSync(path.join(dir, 'impact_any_app.json')) ? J('impact_any_app.json') : null;
+get('imppage', `(()=>{ ${RESET} const r={}, ptr=DATA.uninstall.studio;
+  const row=DATA.uninstall.apps.find(x=>{ const a=(UNI.apps||[]).find(z=>z.app_id===x.app_id); return a&&uniImpBlocks(a).length&&US._.A().some(s=>s.id===x.app_id); });
+  const id=row.app_id, a=UNI.apps.find(z=>z.app_id===id), key=uniImpBlocks(a)[0].key; r.id=id; r.key=key; APP=row.app; UNIAPP=id;
+  const ids=h=>{ const m={}; for(const x of h.matchAll(/\\sid="([^"]*)"/g)) m[x[1]]=(m[x[1]]||0)+1; return m; };
+  const dups=h=>{ const m=ids(h); return Object.keys(m).filter(k=>m[k]>1); };
+  const sec=h=>h.slice(h.indexOf('id="us-imp"'),h.indexOf('id="uni-old-app"'));
+  const h=uniScreen(), I=ids(h), iA=h.indexOf('id="us-apg"'), iF=h.indexOf('id="uni-old-app"'), iS=h.indexOf('id="us-imp"'), iC=h.indexOf('id="uni-impact"');
+  r.dups=dups(h); r.n={card:I['uni-impact']||0, any:I['uni-any']||0, block:I['uni-imp-'+key]||0, section:I['us-imp']||0, up:I['uni-imp-up']||0};
+  const pg=h.slice(iA,iF), s=pg.indexOf('id="us-imp"');
+  r.where={studio:iA>=0&&iA<iS&&iS<iC&&iC<iF, charts:pg.indexOf('data-hv="1"')>=0&&pg.lastIndexOf('data-hv="1"')<s,
+    grid:pg.indexOf('class="us-cohw"')>=0&&pg.indexOf('class="us-cohw"')<s, gone:pg.indexOf('us-gbars')<s, alerts:pg.indexOf('class="us-ac ')<s,
+    table:pg.indexOf('</div></section><div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Day by day</div>')>s};
+  r.head=pg.indexOf('<section class="us-panel us-imp" id="us-imp" aria-label="Update impact"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · before vs after</div><h2>📦 Update impact</h2>')>=0;
+  r.shortList=pg.indexOf('Updates · since')>=0;                     // (the short list is not drawn a second time)
+  r.lines=(pg.slice(s).match(/class="us-u"/g)||[]).length; r.rel=US._.A().find(x=>x.id===id).rel.length;
+  r.secText=__text(pg.slice(s,pg.indexOf('<div class="us-impb">')));
+  const fold=h.slice(iF); r.fold={line:fold.indexOf('id="uni-imp-up"')>=0&&fold.indexOf('onclick="usImpTo()"')>=0, card:fold.indexOf('id="uni-impact"')>=0,
+    any:fold.indexOf('id="uni-any"')>=0, open:fold.indexOf('<details id="uni-old-app" class="uni-oldv" open')===0, open0:UNIOLDAPPOPEN,
+    text:__text(fold.slice(0,fold.indexOf('</summary>')))+' | '+__text(uniImpUpLine())};
+  // the very card of the older page: only its frame and title line are the section's now
+  const old=uniImpactCard(a), bare=uniImpactCard(a,undefined,{bare:true});
+  const fr='<div class="card" id="uni-impact" style="margin-bottom:14px"><div class="ct uni-ct"><h3>📦 Update impact</h3><span class="faint" style="font-size:11.5px">every app update · before vs after · newest first</span></div>';
+  const H=x=>(x.match(/\\son(?:click|change|input)="[^"]*"/g)||[]).sort().join('|');
+  r.same={frame:old.indexOf(fr)===0, body:bare==='<div class="uni-imp-bare" id="uni-impact">'+old.slice(fr.length), onPage:pg.indexOf(bare)>=0, handlers:H(old)===H(bare)&&H(bare).length>0};
+  // the card's 7 / 14 / 30 / 60 (every block) and one block's own — on the Studio page
+  r.wins={state:uniImpWinsState(a), seg:pg.indexOf('uni-imp-cseg')>=0};
+  uniImpWinX(30); const p30=sec(uniScreen()); r.wins.c30={on:p30.indexOf('<button class="on" onclick="uniImpWinX(30)">30 days</button>')>=0, verdict:p30.indexOf('Verdict (30 days)')>=0, saved:localStorage.getItem('imp_win_uni')};
+  uniImpWX(key,14); const p14=sec(uniScreen()); r.wins.b14={verdict:p14.indexOf('Verdict (14 days)')>=0, on:p14.indexOf('<button class="on" onclick="uniImpWX(')>=0};
+  uniImpWinX(7); localStorage.removeItem('imp_win_uni'); UNIIMPWIN=undefined; UNIIMPWK={};
+  r.wins.back7=sec(uniScreen()).indexOf('Verdict (30 days)')<0;
+  // 📅 any date + 📌 saved dates: the box's inputs on the Studio page, a real comparison, the very calls to /api/marks
+  const M={id:41,app_id:id,date:'',name:'Banner ad hataya',who:'team@example.test',at:'2026-09-20T05:00:00.000Z'};
+  if(__IA){ UANY.idx={v:1,file_v:1,apps:[__IA.entry]}; UANY.idxErr=''; UANY.F[id]=__IA.body; M.date=uniAdd(__IA.body.first,120); }
+  else { UANY.idx={v:1,file_v:1,apps:[]}; }
+  UANY.marks=[M]; UANY.marksErr=''; UANY.me='team@example.test'; UANY.admin=false;
+  const pa=sec(uniScreen()); r.any={file:!!__IA, inputs:pa.indexOf('id="uni-any-d"')>=0&&pa.indexOf('onchange="uniAnyPick(this.value)"')>=0, save:pa.indexOf('onclick="uniAnySave()"')>=0,
+    mark:pa.indexOf('onclick="uniAnyMk(41)"')>=0, del:pa.indexOf('onclick="uniAnyDel(41)"')>=0, box:pa.indexOf(uniAnyBox(a))>=0};
+  const flow=()=>{ const calls=[], kf=fetch, kc=confirm, out={};
+    fetch=(u,o)=>{ calls.push({url:String(u),method:(o&&o.method)||'GET',body:o&&o.body?JSON.parse(o.body):null,credentials:o&&o.credentials,redirect:o&&o.redirect}); return new Promise(()=>{}); };
+    try{ UANY.marks=null; UANY.marksErr=''; UANYP.marks=null; const h0=uniScreen();                     // the saved dates load with the page
+      UANY.marks=[M]; UANYP.marks=null; Object.assign(UANY,{date:'',name:'',star:false,msg:'',mc:'',saving:false,win:7});
+      const h1=uniScreen(), on=(re)=>(h1.match(re)||[])[1]||'';
+      new Function('return function(){'+on(/id="uni-any-d"[^>]*\\sonchange="([^"]*)"/)+'}')().call({value:M.date});   // the date picked
+      new Function('return function(){'+on(/id="uni-any-nm"[^>]*\\soninput="([^"]*)"/)+'}')().call({value:'Banner ad hataya'});
+      out.picked={date:UANY.date, name:UANY.name};
+      const h2=uniScreen(); out.result=__IA?h2.indexOf('<div class="uni-any-res" data-date="'+M.date+'"')>=0:null;
+      out.rows=__IA?(h2.split('<div class="uni-any-res"')[1]||'').split('<tr data-row="').length-1:null;
+      eval((h2.match(/id="uni-any-sv"[^>]*\\sonclick="([^"]*)"/)||[])[1]||'');                               // 💾 Save
+      UANY.saving=false; confirm=()=>true; eval((h2.match(/\\sonclick="(uniAnyDel\\(41\\))"/)||[])[1]||'');   // × (the author's)
+      eval((h2.match(/\\sonclick="(uniAnyMk\\(41\\))"/)||[])[1]||''); out.mk={date:UANY.date, name:UANY.name};   // a saved date re-opens
+      out.where=[h0,h2].map(x=>{ const o=x.indexOf('id="uni-old-app"'), y=x.indexOf('id="uni-any"'), q=x.indexOf('id="us-imp"');
+        return y<0?'none':(o>=0&&y>o?'fold':(q>=0&&y>q?'studio':'page')); });
+    } finally{ fetch=kf; confirm=kc; UANY.saving=false; UANYP.marks=null; }
+    out.calls=calls; return out; };
+  r.flowStudio=flow(); delete DATA.uninstall.studio; r.flowOld=flow(); DATA.uninstall.studio=ptr;
+  Object.assign(UANY,{date:'',name:'',star:false,msg:'',mc:'',win:7});
+  // a 📦 jump from elsewhere (Alerts → "Update detail →", the Active users / Install value 📦 links): uniImpGo — the page is
+  // drawn while the jump waits (setApp re-draws every screen), the block opens in the Studio section, the fold stays shut,
+  // and the scroll waits for the page's own fit-to-width pass, then lands the block under the bars
+  const keep={show, setApp, _navSave, st:setTimeout, ge:document.getElementById, w:window}, Q=[], sc=[]; let HJ='';
+  show=()=>{}; _navSave=()=>{}; setApp=n=>{ APP=n; HJ=uniScreen(); }; setTimeout=f=>{ Q.push(f); return Q.length; };
+  document.getElementById=x=>(x==='uni-imp-'+key)?{closest:q=>q==='#us-root'?{}:null,getBoundingClientRect:()=>({top:900,height:40})}:(x==='us-top'?null:keep.ge(x));
+  window={scrollY:100,pageYOffset:100,scrollTo:o=>sc.push(o)};
+  try{ APP=''; UNIAPP=''; UNIOLDAPPOPEN=false; uniImpGo(id,key,'uni');
+    const pj=sec(HJ), fj=HJ.slice(HJ.indexOf('id="uni-old-app"'));
+    r.jump={drawn:!!HJ, open:pj.indexOf('id="uni-imp-'+key+'" data-key="'+key+'" data-open="1"')>=0, fold:fj.indexOf('<details id="uni-old-app" class="uni-oldv" open')===0||UNIOLDAPPOPEN,
+      waited:sc.length===0&&Q.length>=1, cleared:impS('uni').jump===''};
+    Q.splice(0).forEach(f=>f()); r.jump.scroll=sc.slice(); sc.length=0;
+    // the 📦 line in the install-week table (in the fold) → the same block, up in the section
+    const mk=(fj.match(/\\sonclick="(uniImp\\('[^']*'\\))"/)||[])[1]||''; r.jump.marker=mk;
+    if(mk){ impSet('uni',{open:'-'}); eval(mk); const pm=sec(uniScreen()); r.jump.markerOpen=pm.indexOf('data-open="1"')>=0&&uniImpFind(a,impS('uni').open).b.key===key;
+      Q.splice(0).forEach(f=>f()); r.jump.markerScroll=sc.slice(); }
+  } finally{ show=keep.show; setApp=keep.setApp; _navSave=keep._navSave; setTimeout=keep.st; document.getElementById=keep.ge; window=keep.w; }
+  impSet('uni',{open:'',jump:'',all:false}); UNIOLDAPPOPEN=false; APP=row.app; UNIAPP=id;
+  // the Studio's file still loading: no Studio page yet — the card in the fold as before, a waiting 📦 jump opens the fold
+  US._.load(null); impSet('uni',{open:key,jump:key,jt:Date.now()}); const hl=uniScreen(); US._.load(__STUDIO); impSet('uni',{jump:'',open:''});
+  r.loading={card:hl.indexOf('id="uni-impact"')>hl.indexOf('id="uni-old-app"')&&hl.indexOf('id="uni-old-app"')>=0, section:hl.indexOf('id="us-imp"')>=0, up:hl.indexOf('id="uni-imp-up"')>=0,
+    open:hl.indexOf('<details id="uni-old-app" class="uni-oldv" open')>=0, dups:dups(hl)}; UNIOLDAPPOPEN=false;
+  // the Studio failing to draw the page: the card stays in the fold (never lost, never twice)
+  const kA=US.appScreen; US.appScreen=()=>{ throw new Error('boom'); }; const hx=uniScreen(); US.appScreen=kA;
+  r.failed={card:(hx.match(/id="uni-impact"/g)||[]).length, inFold:hx.indexOf('id="uni-impact"')>hx.indexOf('id="uni-old-app"'), up:hx.indexOf('id="uni-imp-up"')>=0, dups:dups(hx)};
+  // no Studio file: the older page, as it was (the framed card, no section, no fold, no line)
+  const nz=x=>x.replace(/(id="|url\\(#|href="#)([A-Za-z_-]*?)\\d+/g,'$1$2#');
+  delete DATA.uninstall.studio; const ho=uniScreen(), od=uniDetail(id,true); DATA.uninstall.studio=ptr;
+  r.noStudio={same:nz(ho)===nz(od), frame:ho.indexOf(fr)>=0, section:ho.indexOf('id="us-imp"')>=0, up:ho.indexOf('id="uni-imp-up"')>=0, fold:ho.indexOf('uni-old-app')>=0, dups:dups(ho)};
+  // the drawer keeps its short list, pointing at the app page
+  const i=US._.A().findIndex(x=>x.id===id); US.openDrawer(i); const dh=document.getElementById('us-drawer').innerHTML; US.closeDrawer();
+  r.drawer={short:dh.indexOf('Updates · since')>=0, hint:dh.indexOf('Poora Update impact card (kisi bhi date se tulna) app page pe')>=0, card:dh.indexOf('id="uni-impact"')>=0};
+  // an app without updates: the section still there (📅 any date works without one), its empty note, no uninstall lines
+  const row0=DATA.uninstall.apps.find(x=>{ const z=(UNI.apps||[]).find(q=>q.app_id===x.app_id); return z&&z.daily&&!uniImpBlocks(z).length&&US._.A().some(q=>q.id===x.app_id); });
+  if(row0){ APP=row0.app; UNIAPP=row0.app_id; const h0=uniScreen(); r.noUpd={section:h0.indexOf('id="us-imp"')>=0, card:(h0.match(/id="uni-impact"/g)||[]).length, lines:(sec(h0).match(/class="us-u"/g)||[]).length, dups:dups(h0)}; }
+  ${RESET} UANY.app=''; return JSON.stringify(r); })()`);
 
 // ── every chart: one hover path (registered, no own listener), its numbers printed on it, labels never overlapping ──
 get('charts', `(()=>{ ${RESET} const r={}, A=US._.A(); const ids=[];

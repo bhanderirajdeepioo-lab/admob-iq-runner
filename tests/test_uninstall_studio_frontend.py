@@ -12,7 +12,10 @@ site (tests/studio_synth.py; no real data). Checked here:
   * every "Kya badla?" alert, with the owner's timestamp line (🕒 Alert aaya in IST, the age chip, Badlaav shuru, Data);
   * the words (English labels, Hinglish in Roman script only, no banned word, never "100 me" / "1,000 me", no NaN);
   * the rest of the page unaffected (Active users, Install value and the app page are byte-identical with and without the
-    Studio; without its file the older All-apps view is exactly as before). Skipped where node is not installed."""
+    Studio — but the app page's 📦 Update impact card, which is the Studio app page's own section (owner, 2 Oct: "update
+    impact vala isme bhi kar do"; one line in the fold) with its windows, 📅 any date, 📌 saved dates (the same
+    /api/marks calls) and 📦 jumps; without its file the older views are exactly as before). Skipped where node is not
+    installed."""
 
 import gzip
 import json
@@ -28,7 +31,9 @@ import pytest
 from admob_iq import build_static
 from admob_iq import uninstall_studio_build as usb
 from admob_iq.config import settings
+from admob_iq.engine import impact_any as ia
 from tests import studio_synth as ss
+from tests.uninstall_synth import END
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NODE = shutil.which("node")
@@ -54,6 +59,12 @@ def built(tmp_path_factory):
     for name, body in (("dashboard.json", dash), ("uninstall_studio.json", studio), ("uninstall.json", uni)):
         with open(os.path.join(fx, name), "w", encoding="utf-8") as f:
             json.dump(body, f)
+    # 📅 the app with an update: its impact_any file (the real engine), for the any-date box on the Studio app page
+    st, rv = ss.stores()[ss.G1]
+    body, failed = ia.build_app(dict(st, window_end=END.isoformat()), rv, ss.G1, "a1b2c3d4e5f6", "sig-test", 7)
+    assert failed == 0 and body["n"] > 100
+    with open(os.path.join(fx, "impact_any_app.json"), "w", encoding="utf-8") as f:
+        json.dump({"body": body, "entry": ia.index_entry(body, "impact_any_a1b2c3d4e5f6.json.gz")}, f)
     return fx, dash, studio
 
 
@@ -314,7 +325,8 @@ def test_words(report):
 def test_other_tabs_and_the_app_page_are_unaffected(report):
     o = J(report, "others")
     assert o["active_same"] and o["value_same"]
-    # one app: the Studio app page, and the whole older app page — exactly as it is without the Studio — folded under it
+    # one app: the Studio app page, and the whole older app page — exactly as it is without the Studio — folded under it,
+    # its 📦 Update impact card alone being one line there (the card is the Studio page's own section: owner, 2 Oct)
     assert o["apppage_studio"] and o["apppage_old_kept"] and o["apppage_old_alone"]
     assert o["old_view"] == {"kw": True, "studio": False, "table": True}        # no Studio file: the older view, as before
     assert o["studio_view"]["root"] and not o["studio_view"]["kw"] and o["studio_view"]["fold"]   # no duplicate KPI band
@@ -354,6 +366,7 @@ def test_one_app_is_the_studio_app_page_with_the_whole_older_page_folded_under_i
     assert p["view"] == {"VIEW": "app", "PAGE": p["id"]}
     assert p["root"] and p["apg"] and p["back"] and p["nav"] == 2 and p["top"]      # ← All apps, ‹ ›, the shared range bar
     assert p["fold"] and p["oldNoStudio"]                  # the older page, byte for byte as without the Studio, in the fold
+    #                                                        (but its 📦 Update impact card: one line — the card is up on the page)
     assert p["kwbar"]                                      # (its own KPI band lives in the fold, never above the Studio)
     assert p["kpis"] == 8 and p["charts"] == 2 and p["coh"] and p["daytable"]
     assert p["cards"] == p["alerts"] and p["ts"] == p["alerts"]          # every alert of the app, each with its 🕒 line
@@ -410,3 +423,93 @@ def test_labels_drop_rather_than_overlap(report):
     assert "Cccc 3,000 (3.0%)" in texts                     # nudged down to a free spot
     for x, y, t in got:                                     # all inside the box
         assert 0 <= x and x + len(t) * 10.5 * .56 + 3 <= 200.5 and y + 3 <= 60 and y - 10.5 + 1 >= 0
+
+
+# ── 📦 Update impact on the app page (owner, 2 Oct: "update impact vala isme bhi kar do") ───────────────────────────────
+
+def _words_ok(t):
+    assert t and not DEVA.search(t)
+    for w in ("undefined", "NaN", "[object Object]", "Infinity"):
+        assert w not in t, (w, t[:200])
+    m = BANNED.search(t) or BANNED_CASE.search(t)
+    assert not m, (m.group(0), t[max(0, m.start() - 80):m.end() + 40])
+
+
+def test_the_whole_update_impact_card_is_a_section_of_the_studio_app_page(report):
+    m = J(report, "imppage")
+    assert m["n"] == {"card": 1, "any": 1, "block": 1, "section": 1, "up": 1}    # drawn ONCE; the fold keeps one line to it
+    assert m["dups"] == []                                                      # no id twice on the whole screen
+    w = m["where"]          # on the Studio page: after every chart, Gone by day N, the install-week grid and the alerts —
+    assert w == {"studio": True, "charts": True, "grid": True, "gone": True, "alerts": True, "table": True}   # right before the day-by-day table
+    assert m["head"]                                                            # its heading: "📦 Update impact"
+    assert not m["shortList"] and m["lines"] == m["rel"] >= 1                   # the uninstall lines per update inside it, not a 2nd panel
+    # everything the card has: the older page's card byte for byte, only its frame + title line now the section's
+    assert m["same"] == {"frame": True, "body": True, "onPage": True, "handlers": True}
+    f = m["fold"]
+    assert f["line"] and not f["card"] and not f["any"] and not f["open"] and not f["open0"]
+    assert "📦 Update impact → upar" in f["text"] and "(📦 Update impact ab upar)" in f["text"]
+    for t in (m["secText"], f["text"]):
+        _words_ok(t)
+    assert "Uninstalls per day" in m["secText"] and re.search(r"uninstalls [\d,]+→[\d,]+/day \(\d+(?:\.\d+)?%→\d+(?:\.\d+)?%\)", m["secText"])
+
+
+def test_update_impact_windows_switch_on_the_studio_page(report):
+    w = J(report, "imppage")["wins"]
+    assert w["state"] == "on" and w["seg"]                                      # the card's 7 / 14 / 30 / 60
+    assert w["c30"] == {"on": True, "verdict": True, "saved": "30"}             # every block at 30, remembered
+    assert w["b14"] == {"verdict": True, "on": True}                            # one block's own 14
+    assert w["back7"]
+
+
+def test_any_date_and_saved_dates_on_the_studio_page_make_the_same_calls(report):
+    m = J(report, "imppage")
+    assert m["any"] == {"file": True, "inputs": True, "save": True, "mark": True, "del": True, "box": True}
+    S, O = m["flowStudio"], m["flowOld"]                                         # the Studio page · the older page (no Studio)
+    assert S["where"] == ["studio", "studio"] and O["where"] == ["page", "page"]
+    assert S["picked"] == O["picked"] and S["picked"]["name"] == "Banner ad hataya" and re.match(r"^\d{4}-\d\d-\d\d$", S["picked"]["date"])
+    assert S["result"] and O["result"] and S["rows"] == O["rows"] > 0           # the chosen date's comparison, the same rows
+    assert S["mk"] == S["picked"]                                               # a 📌 saved date re-opens it
+    base = {"credentials": "same-origin", "redirect": "manual"}
+    want = [dict(base, url="/api/marks", method="GET", body=None),
+            dict(base, url="/api/marks", method="POST", body={"app_id": m["id"], "date": S["picked"]["date"], "name": "Banner ad hataya"}),
+            dict(base, url="/api/marks/delete", method="POST", body={"id": 41})]
+    assert S["calls"] == want and O["calls"] == want                            # same endpoints, same bodies
+
+
+def test_update_impact_jumps_land_on_the_studio_section(report):
+    j = J(report, "imppage")["jump"]
+    # Alerts → "Update detail →" (uniImpGo): the page drawn while the jump waits opens that block in the section, the
+    # fold stays shut; the scroll waits for the page's fit-to-width pass, then puts the block under the bars
+    assert j["drawn"] and j["open"] and not j["fold"] and j["waited"] and j["cleared"]
+    assert j["scroll"] == [{"top": 992, "behavior": "smooth"}]                  # 900 on screen + 100 scrolled − 8
+    # the 📦 line of the install-week table (in the fold) → the same block, up in the section
+    assert j["marker"].startswith("uniImp(") and j["markerOpen"] and j["markerScroll"] == j["scroll"]
+
+
+def test_update_impact_fallbacks_keep_the_card_where_it_was(report):
+    m = J(report, "imppage")
+    # the Studio's file still loading: the card in the fold as before, a waiting 📦 jump opens the fold
+    assert m["loading"] == {"card": True, "section": False, "up": False, "open": True, "dups": []}
+    # the Studio failing to draw its page: the card stays in the fold — never lost, never twice
+    assert m["failed"] == {"card": 1, "inFold": True, "up": False, "dups": []}
+    # no Studio file: the older app page exactly as it was (its framed card, no section, no fold, no line)
+    assert m["noStudio"] == {"same": True, "frame": True, "section": False, "up": False, "fold": False, "dups": []}
+    # the drawer keeps its short list, pointing at the app page
+    assert m["drawer"] == {"short": True, "hint": True, "card": False}
+    # an app with no update: the section still there (📅 any date works without one), no uninstall lines
+    assert m["noUpd"] == {"section": True, "card": 1, "lines": 0, "dups": []}
+
+
+def test_the_studio_table_and_button_look_skips_the_card():
+    with open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8") as f:
+        html = f.read()
+    css = html[html.index("UNINSTALL STUDIO (the Uninstall tab's All-apps view)"):html.index("</style>")]
+    css = re.sub(r"/\*.*?\*/", "", css[css.index("*/") + 2:], flags=re.S)
+    bare = 0
+    for rule in re.findall(r"([^{}]+)\{[^{}]*\}", re.sub(r"@(media|container)[^{]*\{", "", css)):
+        for sel in rule.replace(":is(#us-root,#us-layer)", "§").split(","):
+            m = re.fullmatch(r"§ (?:table|th|td|button|input|select|tbody tr(?::hover td)?)(:not\(.*\))?", sel.strip())
+            if m:                                   # a plain element rule of the Studio: never on the card (its own look)
+                bare += 1
+                assert m.group(1) == ":not(:where(.us-impb *))", sel
+    assert bare >= 8

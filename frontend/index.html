@@ -2361,13 +2361,13 @@ body.vs-lock[data-screen="value"]{overflow:hidden}
   /* ===== 🧭 UNINSTALL STUDIO (the Uninstall tab's All-apps view) — everything under #us-root / #us-layer, classes us-* ===== */
 :is(#us-root,#us-layer){--us-raise2:#1c2c47;--us-blue-s:#8fb8ff;--us-blue-b:#15284a;--us-h3:rgba(255,107,107,.62);--us-h2:rgba(255,107,107,.36);--us-h1:rgba(255,107,107,.18);--us-h0:#18263d;--us-g1:rgba(52,217,154,.16);--us-g2:rgba(52,217,154,.32);--us-g3:rgba(52,217,154,.54);--us-s-in:#22d3ee;--us-s-out:#a78bfa;--us-s-rate:#8fb8ff;--us-band:rgba(143,184,255,.13);--us-ghost:#7d8fae;--us-seq0:#13213a;--us-seq1:#0f5163;--us-seq2:#0f8299;--us-seq3:#22d3ee;--us-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--us-num:"IBM Plex Sans Condensed","Roboto Condensed","Arial Narrow",-apple-system,BlinkMacSystemFont,sans-serif;--us-r:14px;}
 #us-root,#us-layer{color:var(--ink);font:13.5px/1.5 var(--us-font);-webkit-font-smoothing:antialiased;text-align:left}
-:is(#us-root,#us-layer) td{color:inherit}
+:is(#us-root,#us-layer) td:not(:where(.us-impb *)){color:inherit}
 :is(#us-root,#us-layer) [hidden]{display:none!important}
 #us-root{position:relative;min-width:0;container:us/inline-size}
 body:not([data-screen="uninstall"]) #us-layer{display:none}
 body.us-lock[data-screen="uninstall"]{overflow:hidden}
-:is(#us-root,#us-layer) button,:is(#us-root,#us-layer) select,:is(#us-root,#us-layer) input{font:inherit;color:inherit}
-:is(#us-root,#us-layer) button{cursor:pointer}
+:is(#us-root,#us-layer) button:not(:where(.us-impb *)),:is(#us-root,#us-layer) select:not(:where(.us-impb *)),:is(#us-root,#us-layer) input:not(:where(.us-impb *)){font:inherit;color:inherit}
+:is(#us-root,#us-layer) button:not(:where(.us-impb *)){cursor:pointer}
 :is(#us-root,#us-layer) :focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:6px}
 :is(#us-root,#us-layer) .us-num,:is(#us-root,#us-layer) .us-n{font-family:var(--us-num);font-variant-numeric:tabular-nums}
 :is(#us-root,#us-layer) .us-muted{color:var(--muted)}
@@ -2451,12 +2451,12 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-ledger .us-tw{margin-top:10px}
 /* ---------- tables ---------- */
 :is(#us-root,#us-layer) .us-tw{overflow:auto;border-radius:0 0 var(--us-r) var(--us-r);max-width:100%}
-:is(#us-root,#us-layer) table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
-:is(#us-root,#us-layer) th{font:600 10.5px/1.25 var(--us-num);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;padding:9px 8px;background:var(--panel2);border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2}
+:is(#us-root,#us-layer) table:not(:where(.us-impb *)){border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+:is(#us-root,#us-layer) th:not(:where(.us-impb *)){font:600 10.5px/1.25 var(--us-num);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;padding:9px 8px;background:var(--panel2);border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2}
 :is(#us-root,#us-layer) th.us-l,:is(#us-root,#us-layer) td.us-l{text-align:left}
-:is(#us-root,#us-layer) td{padding:7px 8px;border-bottom:1px solid rgba(33,50,73,.7);text-align:right;white-space:nowrap;font-family:var(--us-num);font-variant-numeric:tabular-nums;font-size:13px}
-:is(#us-root,#us-layer) tbody tr{transition:background .15s}
-:is(#us-root,#us-layer) tbody tr:hover td{background:rgba(28,44,71,.55)}
+:is(#us-root,#us-layer) td:not(:where(.us-impb *)){padding:7px 8px;border-bottom:1px solid rgba(33,50,73,.7);text-align:right;white-space:nowrap;font-family:var(--us-num);font-variant-numeric:tabular-nums;font-size:13px}
+:is(#us-root,#us-layer) tbody tr:not(:where(.us-impb *)){transition:background .15s}
+:is(#us-root,#us-layer) tbody tr:hover td:not(:where(.us-impb *)){background:rgba(28,44,71,.55)}
 :is(#us-root,#us-layer) .us-mini td{padding:5px 10px;font-size:12.5px}
 :is(#us-root,#us-layer) .us-prow td{color:var(--muted)}
 /* ---------- status chips ---------- */
@@ -2756,6 +2756,13 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-pgt{margin:0;font:700 22px/1.25 var(--us-font)}
 :is(#us-root,#us-layer) .us-pgt .us-acn{color:var(--muted);font-weight:500}
 :is(#us-root,#us-layer) .us-pgb{display:flex;flex-direction:column;gap:16px;margin-top:10px}
+/* 📦 Update impact on the app page: the dashboard's own card (classes uni-*) in .us-impb, with its own look — the generic
+   table / th / td / button rules above skip .us-impb, and its text is the dashboard's 14px */
+:is(#us-root,#us-layer) .us-imp .us-upd{padding-bottom:12px}
+:is(#us-root,#us-layer) .us-updl{font-size:11.5px}
+:is(#us-root,#us-layer) .us-impb{padding:2px 18px 16px;min-width:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+@container us (max-width:608px){:is(#us-root,#us-layer) .us-impb{padding-inline:14px}}
+@media (max-width:480px){:is(#us-root,#us-layer) .us-impb{padding-inline:12px}}
 :is(#us-root,#us-layer) .us-pk{grid-template-columns:repeat(4,minmax(0,1fr))}
 @container us (max-width:700px){:is(#us-root,#us-layer) .us-pk{grid-template-columns:repeat(2,minmax(0,1fr))}:is(#us-root,#us-layer) .us-pgt{font-size:17px}}
 @container us (max-width:448px){:is(#us-root,#us-layer) .us-sl-a{display:none}}
@@ -5593,7 +5600,10 @@ function uniSX(k){ UNISTEXP=UNISTEXP===k?'':k; uniRerender(); }   // All apps: o
 // (scrolled to just under the sticky top bar — its height differs on a phone — never beneath it)
 function uniJump(sec,t){ if(sec==='uni-cp'&&!UNICPEXP){ UNICPEXP=true; uniRerender(); }
   const e=document.getElementById(sec); if(!e||!e.getBoundingClientRect) return;
-  const tb=document.querySelector('.topbar'), off=((tb&&tb.offsetHeight)||0)+8, y=window.scrollY||window.pageYOffset||0;
+  const tb=document.querySelector('.topbar'), y=window.scrollY||window.pageYOffset||0;
+  let off=((tb&&tb.offsetHeight)||0)+8;
+  // the Studio's own bar sticks under the top bar on a wide screen (a phone scrolls it away): the target lands under it too
+  try{ const sb=document.getElementById('us-top'); if(sb&&sb.offsetHeight&&getComputedStyle(sb).position==='sticky') off+=sb.offsetHeight; }catch(e2){}
   window.scrollTo({top:Math.max(0,e.getBoundingClientRect().top+y-off),behavior:'smooth'}); }
 function uniTNX(){ UNITIMEXP=!UNITIMEXP; uniRerender(); }   // "⏱️ When will I know?": open / close
 // 📦 Update impact: ONE card, shown in two tabs — t = 'uni' (Uninstall; the default, its ids uni-…, state UNIIMP* / UNIUP*)
@@ -5643,7 +5653,11 @@ let UNIIMPJT=0;
 function uniImpJumpNow(t){ const s=impS(t), k=s.jump; if(!k) return; if(Date.now()-s.jt>15000){ impSet(t,{jump:''}); return; }
   const f=uniImpFind(IMPT[impT(t)].det(),k), id=IMPT[impT(t)].p+'imp-'+(f?f.b.key:k), e=document.getElementById(id);
   const r=(e&&e.getBoundingClientRect)?e.getBoundingClientRect():null; if(!r||!(r.height>0)) return;   // not on screen yet: stays pending
-  impSet(t,{jump:''}); uniJump(id,t); }
+  impSet(t,{jump:''});
+  // on the Studio app page the page first fits its charts to the screen width (afterMount, queued by this same render):
+  // the scroll waits for that, so it lands on the block where it ends up
+  if(e.closest&&e.closest('#us-root')){ setTimeout(()=>uniJump(id,t),0); return; }
+  uniJump(id,t); }
 // ---- small helpers (dates are ISO YYYY-MM-DD, done in UTC so no local-timezone day shift) ----
 const _uD=s=>Date.parse(s+'T00:00:00Z');
 function uniAdd(s,n){ return new Date(_uD(s)+n*864e5).toISOString().slice(0,10); }
@@ -6993,13 +7007,23 @@ function bodyHtml(o,mode){ const a=o.a, s=o.s, c=o.c;
   const hd=mode==='p'?'h2':'h2 style="font-size:15px"', he=mode==='p'?'h2':'h2';
   const coh=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Install week × day</div><${hd}>How many still in app</${he}><div class="us-hint">Har row = ek hafte ke installs · cell = us din ke baad kitne % ne app rakha</div></div><div class="us-right"><div class="us-seg" id="us-cohM-${mode}" data-cohm="1"><button data-m="abs" aria-pressed="${ST.cohMode==='abs'}">% bache</button><button data-m="dev" aria-pressed="${ST.cohMode==='dev'}">Vs normal</button></div></div></div><div class="us-cohw">${cohFull(a)}</div><div class="us-clg">${ST.cohMode==='abs'?'<span class="us-k"><i style="background:linear-gradient(90deg,#13213a,#22d3ee);width:40px;height:9px"></i>fewer → more still in app</span>':'<span class="us-k"><i style="background:var(--us-h2);height:9px"></i>below normal</span><span class="us-k"><i style="background:var(--us-g2);height:9px"></i>above normal</span>'}<span class="us-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="us-k">· = abhi us din tak nahi pahunche</span></div></div>`;
   const alH=als.length?`<div><div class="us-chg-h"><div><div class="us-eyebrow">This app’s alerts</div><${hd}>What changed?</${he}></div></div><div class="us-cards">${als.map(cardH).join('')}</div></div>`:'<div class="us-ok">✅ Is app pe koi khula alert nahi</div>';
-  const upH=ups.length?`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · since ${fd(M.S)}</div><${hd}>Update impact</${he}><div class="us-hint">${mode==='p'?'Poora Update impact card (kisi bhi date se tulna) neeche "Old views" me':'Poora Update impact card (kisi bhi date se tulna) app page pe'}</div></div></div><div class="us-upd">${ups.map(r=>{ const kk=ix(r[0]), b=avgAt(a,kk-7,kk-1), f=avgAt(a,kk,Math.min(kk+6,N-1));
-      return `<div class="us-u"><span class="us-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="us-faint">${r[2]==='halt'?'Rollout roko, hotfix bhejo':(r[2]==='win'?'Good impact':(r[2]==='continue'?'Koi loss nahi dikha':(r[2]==='hold'?'Wait and check':'Measuring impact')))}</span>${b.rate!=null&&f.rate!=null?`<span class="us-num" style="font-size:12px;color:var(--ink2)">uninstalls ${fN(b.outs)}→${fN(f.outs)}/day (${rp(b.rate)}→${rp(f.rate)})</span>`:''}</div>`; }).join('')}</div></div>`:'';
+  const upL=ups.map(r=>{ const kk=ix(r[0]), b=avgAt(a,kk-7,kk-1), f=avgAt(a,kk,Math.min(kk+6,N-1));
+      return `<div class="us-u"><span class="us-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="us-faint">${r[2]==='halt'?'Rollout roko, hotfix bhejo':(r[2]==='win'?'Good impact':(r[2]==='continue'?'Koi loss nahi dikha':(r[2]==='hold'?'Wait and check':'Measuring impact')))}</span>${b.rate!=null&&f.rate!=null?`<span class="us-num" style="font-size:12px;color:var(--ink2)">uninstalls ${fN(b.outs)}→${fN(f.outs)}/day (${rp(b.rate)}→${rp(f.rate)})</span>`:''}</div>`; }).join('');
+  const upH=ups.length?`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · since ${fd(M.S)}</div><${hd}>Update impact</${he}><div class="us-hint">${mode==='p'?'Poora Update impact card (kisi bhi date se tulna) neeche "Old views" me':'Poora Update impact card (kisi bhi date se tulna) app page pe'}</div></div></div><div class="us-upd">${upL}</div></div>`:'';
+  // the full app page: the WHOLE 📦 Update impact card (the dashboard's own — every update's before vs after at 7 / 14 /
+  // 30 / 60 days, 📅 any date, 📌 saved dates) as its own section, the uninstall lines above it; '' → the short list
+  const imp=mode==='p'?impSec(a,upL):'';
   const dtH=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Day by day</div><${hd}>Day by day · ${span(W.f,W.t)}</${he}></div></div><div class="us-tw" style="max-height:${mode==='p'?520:360}px">${dt}</div></div>`;
   const ch1=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Uninstall rate</div><${hd}>Uninstall rate % with normal band</${he}></div></div>${bigChart(a,o,mode)}</div>`;
   const ch2=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Installs vs uninstalls</div><${hd}>Installs vs uninstalls</${he}></div></div>${ioChart(a,mode)}</div>`;
-  if(mode==='p') return `<div class="us-dk us-pk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${coh}${alH}${upH}${dtH}`;
+  if(mode==='p') return `<div class="us-dk us-pk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${coh}${alH}${imp||upH}${dtH}`;
   return `<div class="us-dk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${coh}${alH}${upH}${dtH}`; }
+// the app page's "📦 Update impact" section: the card comes from the dashboard (usImpHtml — '' when the app has no GA4
+// detail: then no section, the short list stays); upL = this page's own uninstall lines per update (7 days before → after)
+function impSec(a,upL){ let c=''; try{ c=typeof usImpHtml==='function'?usImpHtml(a.id):''; }catch(e){ c=''; } if(!c) return '';
+  return `<section class="us-panel us-imp" id="us-imp" aria-label="Update impact"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · before vs after</div><h2>📦 Update impact</h2>`
+    +`<div class="us-hint">Har update ka asar: update se pehle vs baad (7 / 14 / 30 / 60 din) · naya update sabse upar · 📅 kisi bhi date se tulna, naam ke saath save</div></div></div>`
+    +(upL?`<div class="us-upd"><div class="us-faint us-updl">Uninstalls per day — 7 din pehle → 7 din baad</div>${upL}</div>`:'')+`<div class="us-impb">${c}</div></section>`; }
 function drawerHtml(){ const o=R[ST.drawer], a=o.a, ord=navOrder(), pos=ord.indexOf(a.i);
   return `<div class="us-dh"><div class="us-t"><div class="us-eyebrow">App view · ${pos+1} / ${ord.length} (loss ke kram me) · ${span(W.f,W.t)}</div><h3 class="us-ainb">${ic(a,28)}<span class="us-aint">${esc(bnm(a))} <span class="us-acn">· ${esc(a.acc)}</span></span></h3><div class="us-l2">${chip(o.pill)}${alBadge(a)}${szH(a)}<span class="us-pkg">${esc(a.pkg)}</span><span>Data till ${fd(M.E)}${W.t>a.settled?' · ⏳ '+fd(dAdd(a.settled,1))+'+ pakka nahi':''}</span></div>`
     +`<div class="us-full-r"><button class="us-btn us-full" id="us-full" data-full="${esc(a.id)}" title="Is app ka poora page: bade charts, saare tables, Update impact card aur kisi bhi date se tulna">Full app page →</button></div></div>`
@@ -7405,14 +7429,28 @@ function usOn(){ return !!US.ptr()&&!US.failed(); }
 // 🧭 one app (the top App selector, "Poora app page →", an app opened anywhere on the tab): the Studio's full-width app page
 // (the drawer's content laid out wide, the shared range / compare) + "Purane views": the WHOLE older app page, folded —
 // Since launch, test installs, 📦 Update impact with any-date compare, What changed?, the split blocks, every table
+// The 📦 Update impact card (owner, 2 Oct: "update impact vala isme bhi kar do") is a section of the Studio app page —
+// after its charts, before the day-by-day table (usImpHtml) — drawn ONCE: the fold keeps one line to it (uniImpUpLine).
+// The Studio's file still loading / the Studio failing: the card stays in the fold, exactly as before.
 let UNIOLDAPPOPEN=false;
-function usAppPage(id){ const old=uniDetail(id,true);
-  try{ if(impS('uni').jump) UNIOLDAPPOPEN=true; }catch(e){}   // a 📦 tap waiting for its Update impact block: the fold opens for it
-  let top;
-  if(US.ready()){ try{ top=US.appScreen(id); }
+function usAppPage(id){ const mv=US.ready();
+  let old=uniDetail(id,true,mv), top;
+  if(mv){ try{ top=US.appScreen(id); }
     catch(e){ top=`<div class="card"><div class="muted" style="font-size:14px;padding:14px 4px">⚠️ Uninstall Studio dikhane me dikkat aayi — <span class="lnk" onclick="US.retry()">Try again</span></div></div>`; } }
   else top=`<span class="backlnk" onclick="uniBack()">← All apps</span><div class="card"><div class="muted" style="font-size:14px;padding:20px">⏳ Uninstall Studio load ho raha hai…</div></div>`;
-  return top+`<details id="uni-old-app" class="uni-oldv"${UNIOLDAPPOPEN?' open':''} ontoggle="UNIOLDAPPOPEN=this.open"><summary><span class="uo-cv">▸</span><span>🗂 Old views</span><span class="uo-h">Since launch · test installs · 📦 Update impact (kisi bhi date se tulna) · What changed? · install-week table · sab tables</span></summary><div class="uo-in">${old}</div></details>`; }
+  const up=mv&&top.indexOf('id="us-imp"')>=0;              // the card is on the Studio page above
+  if(mv&&!up) old=uniDetail(id,true);                      // (it could not be drawn there: the fold keeps it)
+  if(!up) try{ if(impS('uni').jump) UNIOLDAPPOPEN=true; }catch(e){}   // a 📦 tap waiting for its block in the fold: the fold opens for it
+  const hint=up?'Since launch · test installs · What changed? · install-week table · sab tables (📦 Update impact ab upar)':'Since launch · test installs · 📦 Update impact (kisi bhi date se tulna) · What changed? · install-week table · sab tables';
+  return top+`<details id="uni-old-app" class="uni-oldv"${UNIOLDAPPOPEN?' open':''} ontoggle="UNIOLDAPPOPEN=this.open"><summary><span class="uo-cv">▸</span><span>🗂 Old views</span><span class="uo-h">${hint}</span></summary><div class="uo-in">${old}</div></details>`; }
+// the Studio app page's "📦 Update impact" section body: the app's whole card (uniImpactCard, bare) — '' when the app has
+// no GA4 detail yet (the older page has no card then either); a card that fails says so in its place, never vanishes
+function usImpHtml(id){ const a=((UNI&&UNI.apps)||[]).find(z=>z.app_id===id);
+  if(!a||!a.daily||!a.data_till) return '';
+  try{ return uniImpactCard(a,undefined,{bare:true})||''; }
+  catch(e){ return '<div class="uni-imp-bare faint" id="uni-impact" style="font-size:12.5px">⚠️ 📦 Update impact — ye hissa abhi dikh nahi paya.</div>'; } }
+// "📦 Update impact → upar" (the fold's line): scroll to the section
+function usImpTo(){ uniJump('us-imp'); }
 function usPortfolio(){
   const P0=(UNI&&!UNIERR)?uniPortfolio(true):null;
   let top;
@@ -7473,7 +7511,7 @@ function uniSumPortfolio(dets,kpis,nApps){
   return `<div class="card" id="uni-sum" style="margin-bottom:14px"><div class="smp-band"><div class="smp-bl">ALL APPS TOGETHER (${nApps||dets.length} apps)</div>${tile}<div style="margin-top:10px">${kpis||''}</div></div>
     <div class="uni-sec">App status <span>· Each app · ${vw?`installs ${smpSpan(vw[0],vw[1])} vs pehle (${smpSpan(vw[2],vw[3])})`:'pichhle 4 pakke hafte vs usse pehle ke 4'} · chip pe tap = uski apps</span></div>${strip(status,'rows')}
     <div class="uni-sec">Uninstall rate <span>· Each app · pichhle 7 din${rw?' ('+smpSpan(...rw.split('|'))+')':''} vs normal range</span></div>${strip(rate)}</div>`; }
-function uniDetail(id,viaApp){
+function uniDetail(id,viaApp,moved){
   const U=DATA.uninstall, x=(U.apps||[]).find(z=>z.app_id===id)||{}, a=((UNI&&UNI.apps)||[]).find(z=>z.app_id===id);
   const name=(a&&a.app)||x.app||id;
   const back=`<span class="backlnk" onclick="uniBack()">← All apps</span>`;   // clears the header's App too
@@ -7507,8 +7545,12 @@ function uniDetail(id,viaApp){
     +uniKpiRow(sm?[sm]:[],cmpSm?[cmpSm]:[],w,cmpW,kprov?' · '+smpPakka(uniAdd(w.to,uniLateDays()+uniLag())):'')
     +`<div class="faint" style="font-size:11px;margin:-6px 0 14px">Only this app · upar ke 4 number is chune hue period ke. Baaki sab ka apna range likha hai.</div>`;
   const safe=f=>{ try{ return f(a)||''; }catch(e){ return '<div class="card faint" style="margin-bottom:14px;font-size:12.5px">⚠️ Ye hissa abhi dikh nahi paya.</div>'; } };
-  return hdr+safe(uniSumCard)+safe(uniChangesCard)+safe(uniImpactCard)+kpis+UNI_SECTIONS.map(safe).join('')+uniTimingNote();
+  // moved: the 📦 Update impact card is on the Studio app page above (its own section) — here one line to it, never twice
+  const imp=moved?uniImpUpLine():safe(uniImpactCard);
+  return hdr+safe(uniSumCard)+safe(uniChangesCard)+imp+kpis+UNI_SECTIONS.map(safe).join('')+uniTimingNote();
 }
+// the older page's place of the card when the Studio app page shows it: one line, a tap scrolls up to it
+function uniImpUpLine(){ return `<div class="card" id="uni-imp-up" style="margin-bottom:14px;padding:11px 16px;font-size:13px">📦 Update impact → <span class="lnk" onclick="usImpTo()">upar</span> <span class="faint" style="font-size:11.5px">(app page pe, charts ke baad — kisi bhi date se tulna bhi wahin)</span></div>`; }
 // the honest totals: every install since the launch, and how many install DAYS the "Stay" numbers come from (a day
 // whose GA4 data is broken is left out of them — said, with how many)
 function uniTotalsLine(a,C){ const L=a.launch||{}, Lh=uniLaunch(a), pre=!!(UNIPRE&&Lh);
@@ -8488,13 +8530,15 @@ function uniImpHow(t){ const HO=impS(t).how, IC=(k,d)=>uniIC(k,d,t), th=`<div cl
     <li>30 din pe naya nuksaan (jo 7 din me nahi dikha) ho to <b>⏰ Late</b> alert — ek app ka ek hi, 2 din lagatar dikhne pe.</li></ul>`; }
 // the app's "📦 Update impact" card: newest first — the newest (or the tapped) block open, the others one line each; the
 // newest IMPACT_SHOW listed, older ones behind "Show older updates (n)" (never dropped)
-function uniImpactCard(a,t){
-  const I=a&&a.impact, st0=impS(t), hd=`<div class="ct uni-ct"><h3>📦 Update impact</h3><span class="faint" style="font-size:11.5px">every app update · before vs after · newest first</span></div>`;
+// o.bare (the Studio app page's own "📦 Update impact" section, usImpHtml): the same card without its frame and title
+// line — the section says them — same id, same contents, same calls
+function uniImpactCard(a,t,o){
+  const I=a&&a.impact, st0=impS(t), bare=!!(o&&o.bare), hd=bare?'':`<div class="ct uni-ct"><h3>📦 Update impact</h3><span class="faint" style="font-size:11.5px">every app update · before vs after · newest first</span></div>`;
   // the Active users copy: its windows differ from the tiles above it (the two can disagree) — said once: under the
   // title, or (a 7 / 14 / 30 / 60 selector shown) right under that selector — "(upar chuno)" only then
   const note=(N,pick)=>impT(t)==='act'?`<div class="faint act-imp-note" style="font-size:11.5px;margin:${pick?'-2px':'-4px'} 0 8px">Ye card = har update ke ${N} din pehle vs ${N} din baad${pick?' (choose above)':''} · upar ke tiles = pichhle 7 pakke din</div>`:'';
   // 📅 the "compare any date" box at the top (the Uninstall tab's card: the one with the app's page)
-  const wrap=(h,nt)=>`<div class="card" id="${IMPT[impT(t)].p}impact" style="margin-bottom:14px">${hd}${impT(t)==='uni'?uniAnyBox(a):''}${nt==null?note(7,false):''}${h}</div>`;
+  const wrap=(h,nt)=>`<div ${bare?'class="uni-imp-bare"':'class="card"'} id="${IMPT[impT(t)].p}impact"${bare?'':' style="margin-bottom:14px"'}>${hd}${impT(t)==='uni'?uniAnyBox(a):''}${nt==null?note(7,false):''}${h}</div>`;
   if(!I||typeof I!=='object') return wrap('<div class="uni-empty">⏳ Update impact agle robot run ke baad dikhega — GA4 se sessions, time aur naye users ki wapsi ka data aa raha hai.</div>');
   const B=uniImpBlocks(a), S=uniImpShow(t), F=(I.flags&&typeof I.flags==='object')?I.flags:{}, fl=[], st=impS(t);
   if(F.revenue==='none') fl.push(['No AdMob revenue','Is app ki AdMob kamai nahi mili — "Ad revenue per user" nahi dikhega']);
