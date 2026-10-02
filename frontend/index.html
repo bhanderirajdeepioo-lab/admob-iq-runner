@@ -10523,7 +10523,7 @@ const ACT_TILES=[['ret_dau','Old users/day','Roz ke active users me se us din ke
 function actTile(d,k,label,tip,als,win){
   const T=d.tiles||{}, M=T[k]||null, st=actSt(M), dm=k==='d1'||k==='d7', cur=actCurOf(d), F=d.flags||{}, v=M&&M.v, ok=actOk(v), sm=[];
   let big='—';
-  if(ok) big=k==='ret_dau'?actNum(v):(dm?uni100(v)+'<small>%</small>':(k==='sess'?actDec(v)+'<small>a day</small>':(k==='time'?uniDur(v)+'<small>a day</small>':((F.tz_blend||F.rev_est||(M&&M.est)?'≈ ':'')+actMoney(v,cur)))));
+  if(ok) big=k==='ret_dau'?actNum(v):(dm?uni100(v)+'<small>%</small>':(k==='sess'?actDec(v)+'<small>a day</small>':(k==='time'?uniDur(v)+'<small>a day</small>':((F.tz_blend||F.rev_est||(M&&M.est)?'≈ ':'')+actMoneyU(v,cur)))));   // arpdau: the engine's per-1,000 value said PER USER
   // the change vs the 4 weeks before: % (points for D1 / D7), grey — the numbers are never coloured
   let ch=null; if(M&&dm){ const pp=actOk(M.pp)?+M.pp:((ok&&actOk(M.base))?(+v-M.base)*100:null); if(pp!=null) ch=uniPP(pp)+'%'; } else if(M&&actOk(M.rel)) ch=uniChg(M.rel);
   const chn=(st==='low'&&ch)?((M&&M.why==='young')?'Naya app — tulna baad me':'Tulna pakki nahi'):'';   // not judged: no big % next to "Not enough data"
@@ -10780,7 +10780,7 @@ function actTriCard(d){
     :'<div class="muted" style="font-size:12.5px;padding:4px 17px 12px">Abhi kisi din tak kaafi installs nahi pahunche.</div>';
   const more=(vis.length>12?`<div style="padding:10px 17px 4px"><span class="lnk" style="font-size:12px" onclick="actTX()">${ACTTRIEXP?'Hide':'Show all '+vis.length+' weeks'}</span></div>`:'')
     +(edge&&!all?`<div class="faint" style="font-size:10.5px;padding:6px 17px 0;color:#8fb8ff">↧ Install-day return data starts ${uniD(edge)}</div>`:'')
-    +(nRel?`<div class="faint" style="font-size:10.5px;padding:6px 17px 0">📦 = new update. <b style="color:var(--purple)">Tap 📦 to see its impact</b> (before vs after, in Update impact above).</div>`:'');
+    +(nRel?`<div class="faint" style="font-size:10.5px;padding:6px 17px 0">📦 = new update. <b style="color:var(--purple)">Tap 📦 to see its impact</b> (before vs after — Uninstall → app page → 📦 Update impact).</div>`:'');
   return wrap(actRetChart(d,X,T)+`<div style="padding:12px 17px 0;font-size:12px;color:var(--ink2);line-height:1.5">Har row = ek hafte ke naye users · kitne % ne us din app khola · hara = normal se zyada · laal = kam · halka = abhi aa raha · ½ = adhoora data</div>
     <div style="padding:8px 17px 0"><div class="chips" style="margin-bottom:8px">${chips}</div></div>${tbl}${more}<div style="height:12px"></div>`); }
 // ---- "⏱️ Sessions & time per user" + the version table ----
@@ -11003,7 +11003,7 @@ function actPortfolio(parts){
   const trows=sorted.map(r=>{ const R=g(r,'ret_dau'), sub=r.status==='error'?'⚠️ Is baar nahi bana':(r.stale?'⚠️ Old data':(!r.ready?'⏳ Too early — normal range baad me':''));
     return `<tr class="clk" data-app="${hAttr(r.app)}" onclick="actOpen('${uniQ(r.app_id)}')"><td class="nm" style="min-width:170px;max-width:260px;white-space:normal">${smpAppHtml(r.app_id,r.app)}${sub?`<div class="faint" style="font-size:10.5px;font-weight:400">${sub}</div>`:''}</td>`
       +td(actNum(R.v))+`<td class="uni-num faint">${actOk(R.rel)&&actSt(R)!=='low'?uniChg(R.rel):'—'}</td>`+td(dv(g(r,'d1')))+td(dv(g(r,'d7')))+td(actDec(g(r,'sess').v))+td(uniDur(g(r,'time').v))
-      +td(actOk(g(r,'arpdau').v)?'≈ '+actMoney(g(r,'arpdau').v,cur):'—')+`<td style="white-space:nowrap">${actStatusCell(r)}</td></tr>`; }).join('')
+      +td(actOk(g(r,'arpdau').v)?'≈ '+actMoneyU(g(r,'arpdau').v,cur):'—')+`<td style="white-space:nowrap">${actStatusCell(r)}</td></tr>`; }).join('')
     ||`<tr><td colspan="${TH.length}" class="muted" style="padding:16px">GA4 se judi koi app abhi nahi.</td></tr>`;
   const wl=[(actAllWait(rows,'d1')&&actAllWait(rows,'d7'))?'Back next day / Back after 7 days: wapsi ka data agle GA4 fetch ke saath':'',(actAllWait(rows,'sess')&&actAllWait(rows,'time'))?'Sessions per user / Time per user: agle GA4 fetch me':''].filter(Boolean);
   const table=`<div class="card pad0" id="act-table" style="margin-bottom:14px"><div class="ct uni-ct" style="padding:16px 17px 0"><h3>📋 All apps</h3><span class="faint" style="font-size:11.5px">row pe tap = app ki detail · column pe tap = sort</span></div>${wl.length?`<div class="faint" id="act-table-wait" style="font-size:11.5px;padding:6px 17px 0">⏳ ${wl.join(' · ')}</div>`:''}
@@ -11033,7 +11033,7 @@ function asPortfolio(){
     'All apps together · What changed? (old list) · 📦 Update impact · 📅 Daily — all apps · 📋 All apps table','all'); }
 // 🧭 one app with the Studio: its Studio page (the drawer's content laid out full width, on the shared range) + its WHOLE
 // older page folded under it; an app the Studio's file does not have (or a page that cannot draw): the older page as before
-function asAppPage(r){ const old=actAppOld(r), hint='Is app ka poora purana page — tiles, charts, 📦 Update impact (kisi bhi date se tulna), wapsi ka grid, What changed?';
+function asAppPage(r){ const old=actAppOld(r), hint='Is app ka poora purana page — tiles, charts, wapsi ka grid, What changed? · 📦 update ka asar: Uninstall → app page → 📦 Update impact';
   if(!AS.ready()) return AS_WAIT+asFold(old,hint,'pg');
   let top=null; try{ top=AS.page(r.app_id); }catch(e){ top=null; }
   return top==null?old:top+asFold(old,hint,'pg'); }
@@ -12290,8 +12290,11 @@ function ctyTable(o){ const a=o.a, C=a.cty; if(!C) return '<div class="vs-ok">Co
   const tr=x=>`<tr data-tk="crow:${a.i}:${x.cc}"><td class="vs-l">${ctyH(x.cc)}<small>${fN(x.n)} installs · ${pc(x.sh,0)}</small></td><td>${x.noads?'<span class="vs-faint">No ads</span>':mP(x.cpiV)}</td><td>${x.beV==null?'—':(x.est?'≈':'')+mP(x.beV)}</td><td class="${x.lens?profCls(x.beV-x.cpiV):'vs-faint'}">${x.lens?mP(x.beV-x.cpiV,true):'—'}</td><td class="${x.judged?profCls(x.profD):'vs-faint'}" style="font-weight:600">${x.lens?mL(x.profD,true):'—'}</td><td>${x.pp!=null?(x.fl&128?'':'≈')+x.pp+' d':(x.never?'1 yr+':(x.up?'>'+x.up+' d':'—'))}</td><td class="vs-l">${chip(x.pill)}</td><td class="vs-l">${x.judged?todoChip(x.todo):`<span class="vs-faint" style="font-size:11.5px" title="${esc(x.why)}">${x.noads?'— organic':'Not judged yet'}</span>`}</td></tr>`;
   const head=`<tr><th class="vs-l">Country</th><th>Cost / install</th><th>Earning by day ${H}</th><th>Profit / install</th><th>Profit/day</th><th>Money back in</th><th class="vs-l">Status</th><th class="vs-l">Next step</th></tr>`;
   const allR=all?`<tr style="background:var(--raise)"><td class="vs-l"><b>🌍 All countries</b><small>${fN(all.n)} installs</small></td><td>${C.total&&all.n?mP(cv(C.total/100/all.n,C.fx)):'—'}</td><td>${all.be!=null?((all.fl&1)?'≈':'')+mP(cv(all.be,C.fx)):'—'}</td><td colspan="5" class="vs-l vs-faint">app · engine ki window ${span(C.f,C.t)}</td></tr>`:'';
-  const sm=C.small||[]; const smR=sm[0]?`<tr><td class="vs-l vs-faint" colspan="8">Other small countries (${fN(sm[1]||0)}) — ${fN(sm[0])} installs${sm[2]?' · Google Ads '+mT(cv(sm[2]/100,C.fx))+' ('+pc((sm[3]||0)/1e4,0)+' of ads cost)':''} · judge nahi${(C.unm||[])[0]?' · '+mT(cv(C.unm[0]/100,C.fx))+' kisi country se match nahi hua':''}</td></tr>`:'';
-  const notes=[]; const wy=[...new Set(L.filter(x=>!x.judged&&!x.noads).map(x=>x.why))].filter(Boolean); if(wy.length) notes.push('"Not judged yet": '+wy.map(esc).join(' / '));
+  // "Other small countries (N)": only when there ARE small countries (N > 0) — the GA4 "other" bucket alone is not one; the
+  // Google Ads cost no country matched is then said in the notes under the table (never lost)
+  const sm=C.small||[], unmH=(C.unm||[])[0]?mT(cv(C.unm[0]/100,C.fx))+' kisi country se match nahi hua':'';
+  const smR=sm[0]&&sm[1]>0?`<tr><td class="vs-l vs-faint" colspan="8">Other small countries (${fN(sm[1])}) — ${fN(sm[0])} installs${sm[2]?' · Google Ads '+mT(cv(sm[2]/100,C.fx))+' ('+pc((sm[3]||0)/1e4,0)+' of ads cost)':''} · judge nahi${unmH?' · '+unmH:''}</td></tr>`:'';
+  const notes=[]; if(!smR&&unmH) notes.push('Google Ads: '+unmH+'.'); const wy=[...new Set(L.filter(x=>!x.judged&&!x.noads).map(x=>x.why))].filter(Boolean); if(wy.length) notes.push('"Not judged yet": '+wy.map(esc).join(' / '));
   if(!C.geo) notes.push('Google Ads ka country-wise kharcha is app ke liye nahi'+(C.gw==='noads'?' (in hafton me ads nahi)':'')+' — profit nahi bana.'); if(C.smp) notes.push('≈ Is app ka country data GA4 sample se — country ke number andaza.'); if(C.st==='low') notes.push('Engine ne abhi kisi country ka faisla nahi kiya (GA4 country data adhoora / installs kam) — sab "Too early".');
   return `<div class="vs-secnote" style="padding-top:0">Installs ${span(C.f,C.t)} (${C.wk} final weeks) · earning by day ${H} = us country ke purane installs ki asli kamai, ya ≈ · range se alag</div><div class="vs-tw" style="max-height:420px"><table class="vs-mini vs-dtbl"><thead>${head}</thead><tbody>${allR}${L.map(tr).join('')}${smR}</tbody></table></div>${notes.length?`<div class="vs-secnote">${notes.join(' · ')}</div>`:''}`; }
 TIPS.crow=(ai,cc)=>{ const a=A[+ai], x=ctyOf(a).find(z=>z.cc===cc); if(!x) return '';
