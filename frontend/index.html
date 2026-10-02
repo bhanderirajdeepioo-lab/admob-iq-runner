@@ -293,6 +293,39 @@
     .mpl{font-size:12px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
     .mchev{color:var(--faint);font-size:20px;flex:none}
   }
+  /* ===== Nothing sticks out of its box (overflow sweep, every tab × 360–2560px × ₹/$) ===== */
+  /* wide tables scroll INSIDE their card at every width (it was clipped, unreachable, at 761–1000px: ROAS, Mediation) */
+  .card.pad0{overflow-x:auto;overflow-y:hidden}
+  /* 761–1000px (sidebar shown): the Overview "Needs attention" column was ~160px — Top movers + Needs attention stack */
+  @media(max-width:1000px){.ov-movers{grid-column:1/-1}.ov-attn{grid-column:1/-1;grid-row:7}}
+  /* Movers / Recommendations rows: names WRAP (2 lines) instead of being cut to a few letters */
+  .mv-nm,.mv-sub,.rc-nm,.rc-sub,.bl-apph{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
+  .mv-row{display:flex;align-items:center;gap:10px;padding:9px 6px;border-top:1px solid var(--line);cursor:pointer}
+  .mv-nm{font-weight:650;font-size:13px;color:#fff}.mv-sub{font-size:11px}
+  .mv-amt{text-align:right;min-width:120px;flex:none}
+  .rc-nm{color:#fff;font-size:12.5px;flex:1;min-width:0}.rc-sub{font-size:11px;max-width:44%}.rc-amt{font-weight:700;font-size:12.5px;min-width:72px;text-align:right;flex:none}
+  .bl-apph{flex:1;min-width:0;margin-right:10px}
+  @media(max-width:1180px){.mv-lists{grid-template-columns:minmax(0,1fr)}}   /* Gainers above Losers: room for the names */
+  @media(max-width:1440px){.ov-apps th,.ov-apps td{padding-left:10px;padding-right:10px}}   /* 11 columns: no stray 6px scroll in ₹ */
+  .ov-apps td:not(:first-child),td.up,td.down,.ov-datewise td:first-child,.dw-full td:first-child{white-space:nowrap}   /* "-₹1,234,567" / "1 Oct" never split */
+  @media(max-width:1000px){.mv-amt{min-width:0;max-width:44%}th,td{padding:9px 10px}.card.pad0 th,.card.pad0 td{padding-inline:8px}}
+  @media(max-width:760px){
+    .rc-row{flex-wrap:wrap;row-gap:3px}.rc-sub{order:3;flex:1 1 100%;max-width:none;padding-left:24px}
+    /* the key column stays on screen while a wide table scrolls sideways */
+    .card.pad0 table th:first-child,.card.pad0 table td:first-child{position:sticky;left:0;z-index:1;background:var(--panel);min-width:140px;max-width:160px}
+    .card.pad0 table thead th:first-child{background:var(--panel2)}
+    .dw-tot td:first-child{background:var(--panel2)}
+    .card.pad0 table td:first-child{box-shadow:1px 0 0 var(--line);overflow-wrap:anywhere}
+  }
+  @media(max-width:430px){.mv-row .microbar{display:none}.mv-row{gap:8px}.mv-amt{max-width:36%}}
+  /* Accounts & Apps: a long publisher id never pushes the "✓ Connected" pill out (and the pill keeps its shape) */
+  .set-acch{gap:6px 8px;align-items:flex-start;flex-wrap:wrap}.set-acch>div{min-width:0;overflow-wrap:anywhere}.set-acch .pill{flex:none}
+  /* a signed ₹ amount in a Studio KPI's small line never splits after its sign */
+  :is(#us-root,#us-layer) .us-ks b,:is(#as-root,#as-layer) .as-ks b,:is(#vs-root,#vs-layer) .vs-ks b{white-space:nowrap}
+  /* the KPIWINDOW Compare select fits a 360px phone */
+  .kw-cmp-l{min-width:0;max-width:100%;flex-wrap:wrap}.kw-cmp-l select{min-width:0;max-width:100%}
+  /* "Stay after N days" / Active-users tiles: the number scales with its tile (like .kpi .v) — never past the edge */
+  .uni-st{container-type:inline-size}
   /* ===== Phase 3: touch polish + iOS/Android standalone (add-to-home-screen) ===== */
   body{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}
   @media(max-width:760px){
@@ -322,10 +355,11 @@
   .uni-ct{flex-wrap:wrap;gap:6px 12px}
   /* At a glance: big "Stay after N days" tiles, the verdict + daily-rate panels, meta line, footnote */
   .uni-tiles{display:grid;gap:10px;grid-template-columns:repeat(var(--n,4),minmax(0,1fr))}
+  @media(max-width:1180px){.uni-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.uni-tiles>.uni-st:last-child:nth-child(odd of .uni-st){grid-column:1/-1}}   /* wide enough for a 32px number */
   /* a tile is a column: a label that wraps on a narrow tile pushes nothing out of line — the number sits at the same height */
   .uni-st{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:12px 14px 13px;min-width:0;display:flex;flex-direction:column}
   .uni-st .l,.uni-pan .l{font-size:12px;color:var(--muted);font-weight:650;line-height:1.3}
-  .uni-st .v{font-size:32px;font-weight:800;color:#fff;line-height:1.05;margin-top:auto;padding-top:7px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .uni-st .v{font-size:32px;font-size:min(var(--uvmax,32px),14cqi);font-weight:800;color:#fff;line-height:1.05;margin-top:auto;padding-top:7px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
   .uni-st .c{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .uni-st .bar{height:5px;border-radius:100px;background:var(--raise);margin-top:10px;overflow:hidden}
   .uni-st .bar i{display:block;height:100%;border-radius:100px;background:linear-gradient(90deg,var(--cyan2),var(--good))}
@@ -452,12 +486,12 @@
     .uni-chg .mt>.dt:first-child{min-width:0}
     /* the "Stay after N days" tiles: 2 a row (like the KPI rows) — a lone last tile takes the whole row */
     .uni-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .uni-tiles>.uni-st:last-child:nth-child(odd){grid-column:1/-1}
+    .uni-tiles>.uni-st:last-child:nth-child(odd of .uni-st){grid-column:1/-1}
     .uni-g2{grid-template-columns:1fr}                /* "Vs last month" and the daily rate: each the full width */
   }
   @media(max-width:760px){
     .uni-fold .hint{flex-basis:100%;padding-left:18px}
-    .uni-st .v{font-size:28px}
+    .uni-st .v{--uvmax:28px}
     .uni-scs.rows{flex-direction:column;gap:6px}
     .uni-scs.rows .uni-sc{border-radius:10px;padding:9px 12px}.uni-scs.rows .uni-sc b{margin-left:auto}
     .uni-imp-mini{margin-left:0}
@@ -532,7 +566,7 @@
   @media(max-width:430px){      /* a phone tile: label, number, "−3% · 4 wks" and its chip — a tap shows the rest */
     .act-t .act-lg{display:none}.act-t .act-sh{display:inline}
     .act-t:not(.open) .act-x{display:none}.act-t{cursor:pointer}.act-pt{cursor:default}
-    .act-t .v{font-size:24px}
+    .act-t .v{--uvmax:24px}
     .act-pfc{white-space:normal}    /* 📅 a chip wraps on a phone — its date is never cut off */
   }
   /* ===== 💸 Install value tab — the Uninstall / Active .uni-* look; its own bits are val-* (no red / green without an alert,
@@ -981,7 +1015,8 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
 :is(#rs-root,#rs-layer) .rs-bdown{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 :is(#rs-root,#rs-layer) .rs-bd{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px 4px;text-align:center;min-width:0}
 :is(#rs-root,#rs-layer) .rs-bd b{display:block;font:700 17px/1.1 var(--rs-num)}
-:is(#rs-root,#rs-layer) .rs-bd span{display:block;font-size:10.5px;color:var(--muted);line-height:1.2;margin-top:2px}
+:is(#rs-root,#rs-layer) .rs-bd span{display:block;font-size:10.5px;font-size:min(10.5px,21cqi);color:var(--muted);line-height:1.2;margin-top:2px}
+:is(#rs-root,#rs-layer) .rs-bd{container-type:inline-size}
 :is(#rs-root,#rs-layer) .rs-bd.rs-on{border-color:var(--line2);background:var(--raise)}
 :is(#rs-root,#rs-layer) .rs-tsl{font-size:11.5px;color:var(--faint);line-height:1.45}
 :is(#rs-root,#rs-layer) .rs-story{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
@@ -1069,7 +1104,8 @@ body.rs-lock[data-screen="review"]{overflow:hidden}
 :is(#rs-root,#rs-layer) .rs-hc{position:relative;border:0;border-radius:7px;min-height:46px;display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;font:650 12.5px/1 var(--rs-num);font-variant-numeric:tabular-nums;color:var(--ink);transition:transform .12s,box-shadow .12s;padding:2px 2px;white-space:nowrap;min-width:0}
 :is(#rs-root,#rs-layer) .rs-hc:hover{transform:scale(1.06);box-shadow:0 0 0 1px var(--line2),0 6px 18px rgba(0,0,0,.35);z-index:3}
 :is(#rs-root,#rs-layer) .rs-hc .rs-cl{display:block;font:600 8.5px/1 var(--rs-num);letter-spacing:.03em;text-transform:uppercase;opacity:.85;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-:is(#rs-root,#rs-layer) .rs-hc .rs-cv2{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+:is(#rs-root,#rs-layer) .rs-hc .rs-cv2{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:min(12.5px,24cqi)}
+:is(#rs-root,#rs-layer) .rs-hc{container-type:inline-size}
 :is(#rs-root,#rs-layer) .rs-s-red.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-red{background:var(--rs-c-red);color:#fff}
 :is(#rs-root,#rs-layer) .rs-s-amber.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-amber{background:var(--rs-c-amber);color:#1d1404}
 :is(#rs-root,#rs-layer) .rs-s-green.rs-hc,:is(#rs-root,#rs-layer) .rs-fc.rs-s-green{background:var(--rs-c-green);color:#e9fff5}
@@ -1669,7 +1705,7 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-dvb .as-sg.as-ag{background:var(--good)}
 :is(#as-root,#as-layer) .as-dvb .as-sg.as-aq{background:rgba(194,206,227,.38)}
 :is(#as-root,#as-layer) .as-dvn{font:600 12.5px var(--as-num);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-:is(#as-root,#as-layer) .as-dvi{font:500 12px var(--as-num);text-align:right;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+:is(#as-root,#as-layer) .as-dvi{font:500 12px var(--as-num);text-align:right;color:var(--muted);white-space:normal;font-variant-numeric:tabular-nums}
 :is(#as-root,#as-layer) .as-dvi.as-good{color:var(--good)}
 :is(#as-root,#as-layer) .as-dvi.as-bad{color:var(--bad)}
 :is(#as-root,#as-layer) .as-dvh{display:grid;grid-template-columns:minmax(0,1fr) 62px 62px 66px;gap:8px 10px;padding:2px 20px 2px;font:600 10px var(--as-num);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
@@ -1698,6 +1734,8 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-ac .as-app .as-acn{color:var(--muted);font-weight:500}
 :is(#as-root,#as-layer) .as-ac .as-mid{display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:10px;align-items:center}
 :is(#as-root,#as-layer) .as-ac .as-big{font:700 30px/1 var(--as-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+:is(#as-root,#as-layer) .as-ac .as-mid>div:first-child{container-type:inline-size}
+:is(#as-root,#as-layer) .as-ac .as-big{font-size:min(30px,17cqi)}   /* "+₹1,234" never splits after its sign in a narrow card */
 :is(#as-root,#as-layer) .as-ac .as-big small{font:600 12.5px var(--as-num);color:var(--muted);margin-left:5px;letter-spacing:0}
 :is(#as-root,#as-layer) .as-ac.as-s-bigda .as-big{color:var(--bad)}
 :is(#as-root,#as-layer) .as-ac.as-s-dhyan .as-big{color:var(--watch)}
@@ -1709,7 +1747,7 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-ac .as-spx .as-row{display:flex;align-items:center;gap:7px}
 :is(#as-root,#as-layer) .as-ac .as-spx .as-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--raise);flex:1;min-width:40px;max-width:120px}
 :is(#as-root,#as-layer) .as-ac .as-spx .as-bar span{display:block;height:6px}
-:is(#as-root,#as-layer) .as-ac .as-spx .as-bar.as-dv{position:relative;overflow:visible;display:block}
+:is(#as-root,#as-layer) .as-ac .as-spx .as-bar.as-dv{position:relative;overflow:visible;display:block;padding:0}
 :is(#as-root,#as-layer) .as-ac .as-spx .as-bar.as-dv span{position:absolute;top:0}
 :is(#as-root,#as-layer) .as-ac .as-spx .as-bar.as-dv i{position:absolute;left:50%;top:-2px;width:1px;height:10px;background:var(--line2)}
 :is(#as-root,#as-layer) .as-ac .as-todo{font-size:12.5px;color:var(--ink);background:var(--raise);border-radius:8px;padding:6px 9px;line-height:1.35}
@@ -1746,6 +1784,7 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-st th{cursor:pointer;user-select:none;white-space:normal;vertical-align:bottom;min-width:58px;max-width:98px}
 :is(#as-root,#as-layer) .as-st th.as-l{max-width:none}
 :is(#as-root,#as-layer) .as-st .as-alb{white-space:normal;text-align:left;line-height:1.25;max-width:124px}
+:is(#as-root,#as-layer) .as-hm .as-nm .as-alb{white-space:normal;text-align:left;line-height:1.25;max-width:100%}
 :is(#as-root,#as-layer) .as-st th .as-ar{color:var(--cyan);margin-left:3px}
 :is(#as-root,#as-layer) .as-st th.as-sorted{color:var(--ink)}
 :is(#as-root,#as-layer) .as-st td:first-child,:is(#as-root,#as-layer) .as-st th:first-child{position:sticky;left:0;z-index:1;text-align:left}
@@ -2086,9 +2125,9 @@ body.vs-lock[data-screen="value"]{overflow:hidden}
 :is(#vs-root,#vs-layer) .vs-moreb:hover{background:var(--raise)}
 /* ---------- diverging bars ---------- */
 :is(#vs-root,#vs-layer) .vs-src-sum{padding:0 18px 8px;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted)}
-:is(#vs-root,#vs-layer) .vs-src-sum b{font:700 18px var(--vs-num);color:var(--ink);font-variant-numeric:tabular-nums}
+:is(#vs-root,#vs-layer) .vs-src-sum b{font:700 18px var(--vs-num);color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
 :is(#vs-root,#vs-layer) .vs-dv{padding:4px 12px 4px}
-:is(#vs-root,#vs-layer) .vs-dvr{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;gap:3px 12px;align-items:baseline;padding:6px 8px 7px;border-radius:8px;cursor:pointer}
+:is(#vs-root,#vs-layer) .vs-dvr{display:grid;grid-template-columns:minmax(0,1fr) auto 86px;gap:3px 12px;align-items:baseline;padding:6px 8px 7px;border-radius:8px;cursor:pointer}
 :is(#vs-root,#vs-layer) .vs-dvr .vs-dvb{grid-column:1/-1}
 :is(#vs-root,#vs-layer) .vs-dvr:hover,:is(#vs-root,#vs-layer) .vs-dvr.vs-hl{background:rgba(34,211,238,.07)}
 :is(#vs-root,#vs-layer) .vs-dvr .vs-nmt{font-size:12px}
@@ -2103,7 +2142,7 @@ body.vs-lock[data-screen="value"]{overflow:hidden}
 :is(#vs-root,#vs-layer) .vs-dvr.vs-q .vs-dvb{filter:grayscale(1);opacity:.45}
 :is(#vs-root,#vs-layer) .vs-dvn{font:600 13px var(--vs-num);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 :is(#vs-root,#vs-layer) .vs-dvi{font:500 12px var(--vs-num);text-align:right;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
-:is(#vs-root,#vs-layer) .vs-dvh{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;gap:8px 12px;padding:2px 20px 2px;font:600 10px var(--vs-num);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+:is(#vs-root,#vs-layer) .vs-dvh{display:grid;grid-template-columns:minmax(0,1fr) auto 86px;gap:8px 12px;padding:2px 20px 2px;font:600 10px var(--vs-num);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
 :is(#vs-root,#vs-layer) .vs-dvh span:nth-child(2),:is(#vs-root,#vs-layer) .vs-dvh span:nth-child(3){text-align:right}
 :is(#vs-root,#vs-layer) .vs-dvh .vs-axl{grid-column:1/-1;display:flex;justify-content:space-between;text-transform:none;letter-spacing:0;font:500 11px var(--vs-font)}
 :is(#vs-root,#vs-layer) .vs-dvrest{margin:4px 6px 0;padding:7px 6px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
@@ -2128,6 +2167,8 @@ body.vs-lock[data-screen="value"]{overflow:hidden}
 :is(#vs-root,#vs-layer) .vs-ac .vs-app .vs-acn{color:var(--muted);font-weight:500}
 :is(#vs-root,#vs-layer) .vs-ac .vs-mid{display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:10px;align-items:center}
 :is(#vs-root,#vs-layer) .vs-ac .vs-big{font:700 30px/1 var(--vs-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+:is(#vs-root,#vs-layer) .vs-ac .vs-mid>div:first-child{container-type:inline-size}
+:is(#vs-root,#vs-layer) .vs-ac .vs-big{font-size:min(30px,17cqi)}   /* "+₹1,234" never splits after its sign in a narrow card */
 :is(#vs-root,#vs-layer) .vs-ac .vs-big small{font:600 12.5px var(--vs-num);color:var(--muted);margin-left:5px;letter-spacing:0}
 :is(#vs-root,#vs-layer) .vs-ac.vs-s-bigda .vs-big{color:var(--bad)}
 :is(#vs-root,#vs-layer) .vs-ac.vs-s-dhyan .vs-big{color:var(--watch)}
@@ -2214,6 +2255,10 @@ body.vs-lock[data-screen="value"]{overflow:hidden}
 :is(#vs-root,#vs-layer) .vs-dk .vs-kpi{padding:11px 13px 9px}
 :is(#vs-root,#vs-layer) .vs-dk .vs-kv .vs-num{font-size:26px}
 @media (max-width:760px){:is(#vs-root,#vs-layer) .vs-dk{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container vs (max-width:700px){:is(#vs-root,#vs-layer) .vs-dk{grid-template-columns:repeat(2,minmax(0,1fr))}}
+:is(#vs-root,#vs-layer) .vs-dk .vs-kpi{container-type:inline-size}
+:is(#vs-root,#vs-layer) .vs-dk .vs-kv{flex-wrap:wrap;row-gap:2px}
+:is(#vs-root,#vs-layer) .vs-dk .vs-kv .vs-num{font-size:min(26px,13cqi);white-space:normal}
 :is(#vs-root,#vs-layer) .vs-chart{padding:4px 10px 8px}
 :is(#vs-root,#vs-layer) .vs-chart svg{display:block;width:100%;height:auto;overflow:visible}
 :is(#vs-root,#vs-layer) .vs-clg{display:flex;flex-wrap:wrap;gap:4px 14px;padding:4px 18px 12px;font-size:11.5px;color:var(--muted);align-items:center}
@@ -4065,12 +4110,12 @@ function renderMovers(){
   const totGain=gain.reduce((a,x)=>a+x.delta,0), totLoss=loss.reduce((a,x)=>a+x.delta,0);
   const pctTxt=x=>x.pct==null?'new':((x.pct>=0?'+':'−')+Math.round(Math.abs(x.pct)*100)+'%');
   const row=(x,i,cls)=>{ const f=x.p;
-    return `<div onclick="goPlacement('${f.id||''}')" style="display:flex;align-items:center;gap:10px;padding:9px 6px;border-top:1px solid var(--line);cursor:pointer">
+    return `<div class="mv-row" onclick="goPlacement('${f.id||''}')">
       <span class="faint" style="font-size:11px;min-width:16px;text-align:right">${i+1}</span>
       <span class="hs ${f.band}">${f.health}</span>
-      <div style="flex:1;min-width:0"><div style="font-weight:650;font-size:13px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</div><div class="faint" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.app?appIcon(f.app,14,'ail')+f.app:''}${f.format?' · '+f.format:''}</div></div>
+      <div style="flex:1;min-width:0"><div class="mv-nm">${f.name}</div><div class="faint mv-sub">${f.app?appIcon(f.app,14,'ail')+f.app:''}${f.format?' · '+f.format:''}</div></div>
       ${microbar(f.trend||[])}
-      <div style="text-align:right;min-width:120px">
+      <div class="mv-amt">
         <div class="${cls}" style="font-weight:800;font-size:14px">${x.delta>=0?'+':'−'}${revCell(x.delta)}</div>
         <div class="faint" style="font-size:10.5px">${pctTxt(x)} WoW · now ${revCell(x.cur)}/wk</div></div></div>`; };
   const CAP=25;
@@ -4084,7 +4129,7 @@ function renderMovers(){
       ${kpi('📉 Lost',totLoss?'−'+revCell(totLoss):'—',loss.length+' placements ↓',totLoss?'down':'muted')}
       ${kpi('Net WoW',(totGain+totLoss>=0?'+':'−')+revCell(totGain+totLoss),'this window',totGain+totLoss>=0?'up':'down')}
       ${kpi('Biggest mover',bigStr,bigDelta,'muted')}</div>
-    <div class="row c2">
+    <div class="row c2 mv-lists">
       <div class="card pad0"><div class="ct" style="padding:15px 16px 0"><h3 style="color:var(--good)">📈 Gainers (${gain.length})</h3><span class="faint" style="font-size:11px">$ badha · WoW</span></div><div style="padding:2px 10px 10px">${listOf(gain,'up','Is window me koi material gainer nahi.')}</div></div>
       <div class="card pad0"><div class="ct" style="padding:15px 16px 0"><h3 style="color:var(--bad)">📉 Losers (${loss.length})</h3><span class="faint" style="font-size:11px">$ gira · WoW</span></div><div style="padding:2px 10px 10px">${listOf(loss,'down','Is window me koi material loser nahi.')}</div></div></div>`;
   return s;
@@ -5142,7 +5187,7 @@ function renderBaseline(){
       const mv=us.filter(u=>Object.values(u.status||{}).some(v=>v==='above'||v==='below')).length;
       const amk=(b.market_by_app||{})[an]||{ecpm:[],months:[]}; const _ai=BMONTH?(amk.months||[]).indexOf(BMONTH):(amk.ecpm.length-1); const ae=amk.ecpm[_ai]||0, ap=amk.ecpm[_ai-1]||0, amom=ap?((ae-ap)/ap*100):0;
       return `<div class="card" style="cursor:pointer;border-color:${mv?'#5a3a3a':'var(--line2)'}" data-app="${(an||'').replace(/"/g,'&quot;')}" onclick="bDrill(this.dataset.app)">
-        <div class="ct"><h3 style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${appIcon(an,18)} ${an}</h3><span class="lnk">open →</span></div>
+        <div class="ct"><h3 class="bl-apph">${appIcon(an,18)} ${an}</h3><span class="lnk" style="flex:none">open →</span></div>
         <div class="row c2" style="margin:2px 0 9px"><div><div class="big">${money(rev)}</div><div class="faint" style="font-size:11px">revenue${BMONTH?(' · '+bMon(BMONTH)):(isAll?(' · through '+(am.last||'')):(' · last '+BWIN[BPERIOD]+'mo'))}</div>${isAll&&cur?`<div class="up" style="font-size:10.5px">+${money(cur)} ${(b.data_range||{}).current_month} MTD → ${money(rev+cur)}</div>`:''}</div>
           <div><div class="big">${cm(ae)} <span class="pill ${amom>=0?'p-g':'p-r'}" style="font-size:10px">${(amom>=0?'+':'')+amom.toFixed(1)}%</span></div><div class="faint" style="font-size:11px">market eCPM · MoM</div></div></div>
         <div class="lgd" style="font-size:12px"><span>${us.length} placements</span>${mv?`<span class="down">${mv} out of range</span>`:'<span class="up">all normal</span>'}</div></div>`;
@@ -11971,10 +12016,11 @@ function curveChart(o){ const s=o.s, c=o.c, a=o.a, ph=innerWidth<=640, w=chartW(
   svg+=`<line id="vs-${CM}curx" x1="0" x2="0" y1="${pt}" y2="${h-pb}" stroke="var(--ink2)" opacity="0"/><rect x="${pl}" y="${pt}" width="${w-pl-pr}" height="${h-pt-pb}" fill="transparent" id="vs-${CM}curr"/></svg>`;
   curveChart.st=curveChart.st||{}; curveChart.st[CM]={X,w,V2,G,CPI,CPIc,jo,lo,hi,organic};
   return `<div class="vs-chart">${svg}</div><div class="vs-clg"><span class="vs-k"><i style="background:var(--cyan)"></i>Earning per install · ${wkSpan(W.i0,W.i1)}</span><span class="vs-k"><i style="background:var(--cyan);opacity:.5"></i>--- ≈ aage ka andaza</span>${lo?'<span class="vs-k"><i style="background:rgba(34,211,238,.25);height:9px"></i>≈ range</span>':''}${G?`<span class="vs-k"><i style="background:var(--vs-ghost)"></i>before (${wkSpan(W.c0,W.c1)})</span>`:''}${CPI!=null?'<span class="vs-k"><i style="background:var(--watch)"></i>Cost / install</span>':''}<span class="vs-k">○ = money back</span></div>`; }
-function weekChart(o){ const a=o.a, ph=innerWidth<=640, w=chartW(), h=ph?190:210, pl=ph?50:60, pr=14, pt=16, pb=26, i0=Math.max(0,a.first), i1=NW-1, n=i1-i0+1;
+function weekChart(o){ const a=o.a, ph=innerWidth<=640, w=chartW(), h=ph?190:210, pl0=ph?50:60, pr=14, pt=16, pb=26, i0=Math.max(0,a.first), i1=NW-1, n=i1-i0+1;
   const v=[]; for(let i=i0;i<=i1;i++){ const q=pool([[a,i]]); v.push(q.jw?q.profV/7:null); }
   const vv=v.filter(x=>x!=null); if(!vv.length) return '<div class="vs-chart vs-faint" style="padding:20px">Is app pe in hafton me judge hone layak ads kharcha nahi</div>';
-  const mx=Math.max(...vv.map(Math.abs))*1.15||1, X=lin(-.5,n-.5,pl,w-pr), Y=x=>pt+(h-pt-pb)/2-(x/mx)*((h-pt-pb)/2), bw=Math.max(3,(w-pl-pr)/n*.68);
+  // the y-axis labels' room grows with their text ("+₹1.23 lakh" is wider than "+$1,234") so they never stick out on the left
+  const mx=Math.max(...vv.map(Math.abs))*1.15||1, pl=Math.max(pl0,Math.ceil(Math.max(...[mx,mx/2].map(t=>String(mL(t,true)).length))*5.9)+8), X=lin(-.5,n-.5,pl,w-pr), Y=x=>pt+(h-pt-pb)/2-(x/mx)*((h-pt-pb)/2), bw=Math.max(3,(w-pl-pr)/n*.68);
   let s=`<svg viewBox="0 0 ${w} ${h}">`;
   const rx=X(W.i0-i0-.5), rw=X(W.i1-i0+.5)-rx; if(W.i1>=i0) s+=`<rect x="${rx.toFixed(1)}" y="${pt-8}" width="${rw.toFixed(1)}" height="${h-pt-pb+8}" fill="rgba(34,211,238,.05)" stroke="rgba(34,211,238,.2)" stroke-dasharray="3 3"/>`;
   [mx,mx/2,0,-mx/2,-mx].forEach(t=>{ s+=`<line x1="${pl}" x2="${w-pr}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--line)" stroke-opacity="${t===0?1:.5}"/><text x="${pl-6}" y="${(Y(t)+3.5).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--faint)">${mL(t,t!==0)}</text>`; });
@@ -13069,10 +13115,10 @@ function renderReco(){
   const totalPl=cards.reduce((a,c)=>a+c.rows.length,0);
   const cardHtml=cards.map((c,i)=>{
     const shown=c.rows.slice(0,6);
-    const rows=shown.map(rw=>`<div onclick="${rw.goto==='unit'?`bGotoUnit('${rw.id}')`:`goPlacement('${rw.id}')`}" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line);cursor:pointer">
-        ${rw.app?appIcon(rw.app,16):''}<b style="color:#fff;font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${rw.place}</b>
-        <span class="faint" style="font-size:11px;max-width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${rw.sub}</span>
-        <span style="font-weight:700;font-size:12.5px;min-width:72px;text-align:right">${revCell(rw.rev)}</span></div>`).join('');
+    const rows=shown.map(rw=>`<div class="rc-row" onclick="${rw.goto==='unit'?`bGotoUnit('${rw.id}')`:`goPlacement('${rw.id}')`}" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line);cursor:pointer">
+        ${rw.app?appIcon(rw.app,16):''}<b class="rc-nm">${rw.place}</b>
+        <span class="faint rc-sub">${rw.sub}</span>
+        <span class="rc-amt">${revCell(rw.rev)}</span></div>`).join('');
     const more=c.rows.length>6?`<div class="faint" style="font-size:11px;padding-top:7px">+${c.rows.length-6} more placements — biggest $ first</div>`:'';
     return `<div class="card"><div style="display:flex;gap:12px;align-items:flex-start">
       <div style="font-size:18px;font-weight:800;color:var(--faint);min-width:22px">${i+1}</div>
@@ -13121,7 +13167,7 @@ function renderSettings(){
   // /api/config/status: the server saves (no token box) · a non-admin cannot save (buttons off)
   const cfgSrv=!!(CFGST&&CFGST.reach&&CFGST.server_save), cfgLock=!!(CFGST&&CFGST.reach&&CFGST.admin===false);
   const cfgLockNote=`<span data-cfg="admin-only" class="faint" style="font-size:11.5px">🔒 ${CFG_TXT.admin_only}</span>`;
-  const cards=accts.map(a=>`<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><div><div class="appname">🏢 ${ACCNAMES[a.account_id]||a.label}</div><div class="muted" style="font-size:12px">${a.account_id}</div></div><span class="pill p-g">✓ Connected</span></div><div class="kv"><span class="k">OAuth token</span><span class="v" style="color:var(--good)">${a.token}</span></div><div class="kv"><span class="k">Apps</span><span class="v">${a.apps.length}</span></div><div class="kv"><span class="k">Last sync</span><span class="v">${a.last_sync}</span></div>
+  const cards=accts.map(a=>`<div class="card"><div class="set-acch" style="display:flex;justify-content:space-between;margin-bottom:10px"><div><div class="appname">🏢 ${ACCNAMES[a.account_id]||a.label}</div><div class="muted" style="font-size:12px">${a.account_id}</div></div><span class="pill p-g">✓ Connected</span></div><div class="kv"><span class="k">OAuth token</span><span class="v" style="color:var(--good)">${a.token}</span></div><div class="kv"><span class="k">Apps</span><span class="v">${a.apps.length}</span></div><div class="kv"><span class="k">Last sync</span><span class="v">${a.last_sync}</span></div>
     <div style="margin-top:12px"><div class="muted" style="font-size:11.5px;margin-bottom:5px">Account name <span class="faint">— jin apps ke naam same hain unpe ye tag lagega</span></div>
       <input type="text" value="${(ACCNAMES[a.account_id]||'').replace(/"/g,'&quot;')}" placeholder="e.g.: Main Studio" oninput="accNameSet('${a.account_id}',this.value)"
              style="width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;color:var(--ink);font-size:13px;font-family:inherit"></div>
