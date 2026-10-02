@@ -22,12 +22,12 @@ function mk(id) { const e = { id, _html: '', attrs: {}, classList: classList(), 
   querySelector: () => mk('_q'), querySelectorAll: () => [], addEventListener() {}, removeEventListener() {}, appendChild() {},
   getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 20 }), focus() {}, scrollIntoView() {}, closest: () => null };
   return e; }
-const ELS = {};
+const ELS = {}, LST = {};   // (the document's listeners, kept so a test can fire a touch / scroll at them)
 const body = mk('body');
 const document = new Proxy({
   getElementById: id => (/^us-/.test(String(id)) ? (ELS[id] = ELS[id] || mk(id)) : any),
   createElement: () => mk('_new'), body, head: mk('head'), documentElement: mk('html'),
-  querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, removeEventListener() {}, activeElement: null,
+  querySelector: () => null, querySelectorAll: () => [], addEventListener(k, f, o) { (LST[k] = LST[k] || []).push({ f, o }); }, removeEventListener() {}, activeElement: null,
 }, { get: (t, k) => (k in t ? t[k] : any) });
 const LSB = {};
 const localStorage = { getItem: k => (k in LSB ? LSB[k] : null), setItem: (k, v) => { LSB[k] = String(v); }, removeItem: k => { delete LSB[k]; } };
@@ -44,7 +44,7 @@ const ctx = {
   getComputedStyle: () => any, innerWidth: 1280, innerHeight: 900, scrollY: 0, scrollTo() {}, alert() {}, confirm: () => false,
   IntersectionObserver: any, ResizeObserver: any, MutationObserver: any, Event: any, CustomEvent: any, HTMLElement: any,
 };
-ctx.globalThis = ctx; ctx.self = ctx;
+ctx.globalThis = ctx; ctx.self = ctx; ctx.__LST = LST;
 vm.createContext(ctx);
 try { vm.runInContext(fs.readFileSync(scriptPath, 'utf8'), ctx, { filename: 'index.js' }); } catch (e) { errors.push('TOPLEVEL ' + e.message); }
 const run = code => vm.runInContext(code, ctx);
@@ -427,7 +427,7 @@ get('parity', `(()=>{ ${RESET} const r={}, nz=h=>h.replace(/(id="|url\\(#|href="
     const exp=x.slice(x.indexOf('data-engx="'+g[0]+'"'));
     r.lists[g[0]]={now:[...exp.matchAll(/data-(?:go|uopen)="([^"]+)"/g)].map(m=>{ const i=+m[1]; return isNaN(i)?m[1]:US._.A()[i].id; }),
       old:[...o.matchAll(/class="uni-ac" data-app="([^"]+)"/g)].map(m=>m[1]), names:g[3].map(o2=>o2.a.app),
-      x:[...exp.matchAll(/class="us-eapx[^"]*"(?: data-tk="engv:(\\d+)")?>([^<]*)</g)].map(m=>[m[1]==null?null:+m[1],m[2]]),
+      x:[...exp.matchAll(/class="us-eapx[^"]*"(?: data-tk="engv:(\\d+)")?[^>]*>([^<]*)</g)].map(m=>[m[1]==null?null:+m[1],m[2]]),
       tips:[...exp.matchAll(/data-tk="(engv:\\d+)"/g)].map(m=>__text(US._.TIPS.engv(m[1].split(':')[1]))), text:__text(exp)}; });
   US._.ST.eng='';
   // 📦 Update impact: a Studio section right after the Timeline, the older card's rows, drawn ONCE (the fold: one line)
@@ -497,7 +497,7 @@ get('parity2', `(()=>{ ${RESET} const r={}, keepU=JSON.stringify(UNI.apps), keep
       apps:(eng.match(/· (\\d+) of (\\d+) apps \\(jinka/)||[]).slice(1).map(Number), oldApps:(band.match(/· (\\d+) apps \\((\\d+) me se/)||[]).slice(1).map(Number)};
     r.lists={}; D.status.concat(D.rate).filter(g=>g[3].length).forEach(g=>{ US._.ST.eng=g[0]; const x=US._.eng(); UNISTEXP=g[0]; const o=uniSumPortfolio(dets,'',1); UNISTEXP='';
       const exp=x.slice(x.indexOf('data-engx="'+g[0]+'"')), oxp=o.slice(o.indexOf('data-xp="'+g[0]+'"'));
-      r.lists[g[0]]={now:[...exp.matchAll(/class="us-eapx[^"]*"(?: data-tk="engv:\\d+")?>([^<]*)</g)].map(m=>m[1]),
+      r.lists[g[0]]={now:[...exp.matchAll(/class="us-eapx[^"]*"[^>]*>([^<]*)</g)].map(m=>m[1]),
         old:[...oxp.matchAll(/<span class="x(?: [a-z]+)?">([^<]*)<\\/span>/g)].map(m=>m[1]), n:(exp.match(/class="us-eap"/g)||[]).length, oldN:(oxp.match(/class="uni-ac"/g)||[]).length,
         tips:[...exp.matchAll(/data-tk="engv:(\\d+)"/g)].map(m=>__text(US._.TIPS.engv(m[1])))}; });
     US._.ST.eng='';
@@ -518,5 +518,36 @@ get('parity2', `(()=>{ ${RESET} const r={}, keepU=JSON.stringify(UNI.apps), keep
   ${RESET} uniScreen(); return JSON.stringify(r); })()`);
 // the same panel / list in ₹ and $ and every range (their numbers are not money and not the range's: they never move)
 get('parityStable', `(()=>{ const out=[]; for(const c of ['INR','USD']) for(const k of ['7','30','60']){ ${RESET} CURVIEW=c; KWIN=k; uniScreen(); out.push(US._.eng()+'|'+US._.upl()); } ${RESET} return JSON.stringify(out); })()`);
+// ── the phone audit (A-01, A-06, A-10, A-11) on the Studio's own code ──────────────────────────────────────────────
+get('mobile', `(()=>{ ${RESET} uniScreen(); const r={}, tip=()=>{ const t=document.getElementById('us-tip'); return {on:t.classList.contains('us-on'), pin:t.classList.contains('us-pin')}; };
+  const fire=(k,e)=>(__LST[k]||[]).forEach(x=>x.f(e)), T=(x,y)=>({clientX:x,clientY:y});
+  const cell={closest:q=>q==='#us-root,#us-layer'?{}:(q==='[data-tk]'?{getAttribute:()=>'cell:0:d0'}:null)};
+  US.hide();
+  // a swipe that starts on a cell: no tip
+  fire('touchstart',{target:cell,touches:[T(100,300)]}); fire('touchmove',{target:cell,touches:[T(102,260)]}); fire('touchend',{target:cell,changedTouches:[T(102,200)]}); r.swipe=tip();
+  // a tap: the tip pins
+  fire('touchstart',{target:cell,touches:[T(100,300)]}); fire('touchend',{target:cell,changedTouches:[T(103,302)]}); r.tap=tip();
+  // a long press: no tip
+  US.hide(); const now=Date.now, t0=now(); try{ Date.now=()=>t0; fire('touchstart',{target:cell,touches:[T(100,300)]}); Date.now=()=>t0+900; fire('touchend',{target:cell,changedTouches:[T(100,300)]}); } finally{ Date.now=now; } r.long=tip();
+  // two fingers (a pinch): no tip
+  fire('touchstart',{target:cell,touches:[T(100,300),T(160,300)]}); fire('touchend',{target:cell,changedTouches:[T(100,300)]}); r.pinch=tip();
+  // a pinned tip goes away on a scroll (not right at the tap)
+  fire('touchstart',{target:cell,touches:[T(100,300)]}); fire('touchend',{target:cell,changedTouches:[T(100,300)]}); r.pinned=tip().pin;
+  fire('scroll',{target:{}}); r.scrollAtOnce=tip().pin; try{ const t1=now(); Date.now=()=>t1+2000; fire('scroll',{target:{}}); } finally{ Date.now=now; } r.scrollLater=tip();
+  r.scrollCapture=(__LST.scroll||[]).some(x=>x.o&&x.o.capture&&x.o.passive);
+  // A-06: What changed? as a table — App first (sticky), then status, alert
+  US._.ST.chgView='table'; const ch=US._.chg(); US._.ST.chgView='cards';
+  r.table={heads:[...ch.matchAll(/<th class="us-l">([^<]*)<\\/th>/g)].slice(0,3).map(m=>m[1]), first:/<tr data-app="\\d+" data-go="\\d+" style="cursor:pointer"><td class="us-l us-alapp">/.test(ch), cls:ch.indexOf('<table class="us-mini us-alt">')>=0};
+  // A-10: every Loss-map cell says its metric
+  const mp=US._.map(); r.cellLabels=[...mp.matchAll(/<span class="us-hcl">([^<]*)<\\/span>/g)].map(m=>m[1]); r.cells=(mp.match(/data-tk="cell:/g)||[]).length;
+  // A-11: Timeline markers ≥ 28px apart (nearby days merged, the count and every item kept), a 28px tap circle each
+  const A=US._.A(), W=US._.W(), keep=A.map(a=>a.rel.slice());
+  try{ A.forEach((a,i)=>{ for(let k=0;k<6;k++){ const d=US._.dOf(US._.ix(W.t)-k-i); a.rel.push([d,'v9.'+i+'.'+k,k%2?'win':'halt',true]); } });
+    const tl=US._.tl(), xs=k=>[...tl.matchAll(new RegExp('data-tl="'+k+':[^"]*"><circle class="us-mkh" cx="([\\\\d.]+)"','g'))].map(m=>+m[1]).sort((p,q)=>p-q);
+    const gaps=L=>L.slice(1).map((x,i)=>x-L[i]); r.tl={u:xs('u'), gapU:Math.min(...gaps(xs('u'))), hit:(tl.match(/class="us-mkh" cx="[\\d.]+" cy="\\d+" r="14"/g)||[]).length,
+      marks:(tl.match(/class="us-mk"/g)||[]).length, items:Object.values(US._.tl.ups||{}).reduce((t,L)=>t+L.length,0), want:A.reduce((t,a)=>t+a.rel.filter(x=>x[0]>=US._.dOf(Math.max(0,Math.min(US._.ix(W.f),US._.ix(W.t)-41)))&&x[0]<=W.t).length,0),
+      tips:Object.keys(US._.tl.ups||{}).map(d=>__text(US._.TIPS.tlu(d))), notFinal:/<text x="[\\d.]+" y="\\d+" font-size="10" fill="var\\(--watch\\)">⏳ not final<\\/text>/.test(tl)}; }
+  finally{ A.forEach((a,i)=>{ a.rel=keep[i]; }); }
+  US.hide(); ${RESET} uniScreen(); return JSON.stringify(r); })()`);
 out.n = Object.keys(out).length;
 process.stdout.write(JSON.stringify({ errors, out }));

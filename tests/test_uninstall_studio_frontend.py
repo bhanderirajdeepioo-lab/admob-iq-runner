@@ -719,3 +719,96 @@ def test_when_will_i_know_and_the_status_chip_counts(report):
 def test_the_panel_and_the_list_do_not_follow_the_range_or_the_currency(report):
     out = json.loads(report["out"]["parityStable"])
     assert len(out) == 6 and len(set(out)) == 1
+
+
+# ── the phone audit (mobile_audit A-01, A-04 .. A-12) on the All-apps view and the Studio's shared code ────────────────
+
+def test_a_tooltip_pins_on_a_tap_never_on_a_swipe(report):
+    m = J(report, "mobile")
+    assert m["swipe"] == {"on": False, "pin": False}            # a scroll that starts on a cell pins nothing (A-01)
+    assert m["tap"] == {"on": True, "pin": True}                # a tap shows the numbers, pinned
+    assert m["long"] == {"on": False, "pin": False} and m["pinch"] == {"on": False, "pin": False}
+    assert m["pinned"] and m["scrollAtOnce"] and m["scrollLater"] == {"on": False, "pin": False} and m["scrollCapture"]
+
+
+def test_what_changed_table_the_map_cells_and_the_timeline_on_a_phone(report):
+    m = J(report, "mobile")
+    assert m["table"] == {"heads": ["App", "Status", "Alert"], "first": True, "cls": True}      # A-06: App first, sticky
+    assert m["cells"] and len(m["cellLabels"]) == m["cells"]                                       # A-10: each cell its metric
+    assert set(m["cellLabels"]) == {"Same day", "Rate", "In app day 7", "Back day 1"}
+    t = m["tl"]                                                                                      # A-11
+    assert len(t["u"]) >= 3 and t["gapU"] >= 28 and t["hit"] == t["marks"]                         # apart, each a 28px circle
+    assert t["items"] == t["want"] == 25                                                            # merged, never dropped
+    assert any("updates" in x and "Sep ·" in x for x in t["tips"])                                  # a merged one lists each day
+    assert t["notFinal"]
+    for x in t["tips"]:
+        _words_all(x)
+
+
+def _css(html):
+    css = html[html.index("UNINSTALL STUDIO (the Uninstall tab's All-apps view)"):html.index("</style>")]
+    return re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+
+
+def _lum(c):
+    def ch(v):
+        v /= 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * ch(c[0]) + 0.7152 * ch(c[1]) + 0.0722 * ch(c[2])
+
+
+def _cr(a, b):
+    la, lb = _lum(a), _lum(b)
+    return (max(la, lb) + .05) / (min(la, lb) + .05)
+
+
+def test_heat_cells_text_reads_at_4_5_to_1():
+    """A-09: every line in a coloured cell (the map, the tables, Gone by day N) — the small second line too — reaches
+    4.5 : 1 on its cell, the cell's colour laid over the panel."""
+    with open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8") as f:
+        html = f.read()
+    hx = lambda h: tuple(int(h.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+    root = re.search(r":root\{([^}]*)\}", html).group(1)
+    var = lambda k: re.search(r"--%s:(#[0-9a-f]{6})" % k, root).group(1)
+    panel, ink2 = hx(var("panel")), hx(var("ink2"))
+    css = _css(html)
+    us = re.search(r":is\(#us-root,#us-layer\)\{([^}]*)\}", css).group(1)
+    for k, want in (("h1", ink2), ("h2", ink2), ("g1", ink2), ("g2", ink2), ("h3", (255, 255, 255)), ("g3", (255, 255, 255))):
+        r, g, b, a = [float(x) for x in re.search(r"--us-%s:rgba\(([\d.]+),([\d.]+),([\d.]+),([\d.]+)\)" % k, us).groups()]
+        bg = tuple(round(c * a + p * (1 - a)) for c, p in zip((r, g, b), panel))
+        assert _cr(want, bg) >= 4.5, (k, _cr(want, bg))
+    rules = {}
+    for sels, body in re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"@(media|container)[^{]*\{", "", css)):
+        for sel in sels.replace(":is(#us-root,#us-layer)", "§").split(","):
+            rules.setdefault(sel.strip().replace("§", ":is(#us-root,#us-layer)"), []).append(body)
+    P = ":is(#us-root,#us-layer) "
+    for h in (".us-h1", ".us-h2", ".us-h-1", ".us-h-2"):         # the second line: light ink on the light / mid cells
+        for t in ("small", ".us-gtn", ".us-hcl"):
+            assert "color:var(--ink2)!important;opacity:1!important" in rules.get(P + h + " " + t, []), (h, t)
+        assert "color:var(--ink2)!important" in rules.get(P + ".us-hcell" + h + " .us-d", []), h
+    for h in (".us-h3", ".us-h-3"):                               # white on the strong cells, every line
+        for t in ("small", ".us-gtn", ".us-gtp", ".us-hcl", ".us-d", ".us-v"):
+            assert "color:#fff!important;opacity:1!important" in rules.get(P + h + " " + t, []), (h, t)
+
+
+def test_phone_jumps_scroll_boxes_and_tap_sizes():
+    with open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8") as f:
+        html = f.read()
+    css = _css(html)
+    # A-04: a jump lands below the sticky bars (stick() keeps both heights current)
+    assert "scroll-margin-top:calc(var(--us-stick,0px) + var(--us-toph,0px) + 10px)" in css
+    assert "r.style.setProperty('--us-toph'," in html
+    # A-05: on a phone the big tables have no inner vertical scroll (the page scrolls)
+    assert "@media (max-width:760px){:is(#us-root,#us-layer) .us-tw.us-st-tw{max-height:none}}" in css
+    # A-07: a long list collapses in place
+    assert "moreToggle('us-mapMore'" in html and "moreToggle('us-srcMore'" in html
+    # A-08: the loss column wraps instead of clipping on a phone
+    assert ":is(#us-root,#us-layer) .us-hm .us-inr{overflow:visible}" in css
+    # A-12: ▶, ← All apps and the saved date's × are 32px targets
+    assert re.search(r"\.us-st \.us-xp\{min-width:32px;min-height:32px", css)
+    assert re.search(r"\.us-lk\[data-back\]\{display:inline-flex;align-items:center;min-height:32px", css)
+    assert re.search(r"\.uni-any-x\{[^}]*min-width:32px;min-height:32px", html)
+    for sel in (".us-ech{", ".us-ufs button{", ".us-eap{"):
+        assert re.search(re.escape(sel) + r"[^}]*min-height:32px", css), sel
+    # A-18: the older views' 1000-wide charts get their own sideways scroller on a phone
+    assert "#uni-old-app svg[data-pts]{min-width:720px}" in css
