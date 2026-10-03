@@ -116,6 +116,11 @@ jobs:
           GADS_GEO:             ${{ vars.GADS_GEO || 'false' }}
           VALUE_CD:             ${{ vars.VALUE_CD || 'false' }}
           VALUE_PAYBACK_DAYS:   ${{ vars.VALUE_PAYBACK_DAYS }}
+          # Audience (GA4 active users by install day over the trailing 1, 2, 3 … month windows, at most once a day per
+          # app; data/ga4_audience/ in the private repo): GA4_AUDIENCE=true (repo variable) switches it on, off until set;
+          # GA4_AUDIENCE_BUDGET_SEC = its seconds per build (empty: 180)
+          GA4_AUDIENCE:         ${{ vars.GA4_AUDIENCE || 'false' }}
+          GA4_AUDIENCE_BUDGET_SEC: ${{ vars.GA4_AUDIENCE_BUDGET_SEC }}
           # Update impact card: IMPACT_WINDOWS=false (repo variable) turns off its 14 / 30 / 60-day windows and the
           # late-effect alerts without a code push (the 7-day card as before)
           IMPACT_WINDOWS:       ${{ vars.IMPACT_WINDOWS || 'true' }}

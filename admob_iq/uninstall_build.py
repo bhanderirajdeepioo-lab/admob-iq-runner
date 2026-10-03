@@ -225,6 +225,14 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         status = gu.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic)
     except Exception:
         status = None                                   # carry on from what is stored
+    aud_line = None
+    if s.get("ga4_audience"):                           # 👥 Audience (GA4_AUDIENCE, off by default): its own GA4 reads,
+        try:                                            # store and state, after the Uninstall fetch — imported only here:
+            from .fetch import ga4_audience as gaud     # a failure costs that step only, never this tab
+            aud_line = gaud.log_line(gaud.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                      budget=s.get("ga4_audience_budget_sec") or gaud.BUDGET_SEC))
+        except Exception as e:
+            aud_line = "ga4 audience skipped: %s" % type(e).__name__
     state = gu.load_state(data_dir)
     os.makedirs(out_dir, exist_ok=True)
     details, rows, no_ga4, files = [], [], [], [ASSET]
@@ -391,6 +399,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
              ", impact_late alerts %d (new %d)" % (len(il), sum(1 for al in il if al["notify"]))
              + (", windows failed %d" % wf if wf else "") if cfg["impact_windows"] else ""),
           file=sys.stderr)
+    if aud_line:                                        # the Audience step's ONE counts line (only when it is on)
+        print(aud_line, file=sys.stderr)
     if cfg.get("iday"):                                 # the install-day fetch's ONE counts line (only when it ran)
         try:
             il = gu.iday_log_line(status)

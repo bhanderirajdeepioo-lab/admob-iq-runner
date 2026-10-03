@@ -94,6 +94,11 @@ def settings() -> dict:
         "value_cd": _env("VALUE_CD", "false").lower() == "true",
         "iday_max_calls": _int_env(("IDAY_MAX_CALLS",), 120),           # install-day GA4 calls per app fetch
         "iday_cty_days": _int_env(("IDAY_CTY_DAYS",), 400),             # how far back countries are read
+        # 👥 Audience: GA4 active users by install day over the trailing 1, 2, 3 … month windows (fetch.ga4_audience;
+        # engine.audience turns them into dead users by months since their last open). Off: nothing of it is read,
+        # written or printed. GA4_AUDIENCE_BUDGET_SEC = its own seconds per build (no app is started past it)
+        "ga4_audience": _env("GA4_AUDIENCE", "false").lower() == "true",
+        "ga4_audience_budget_sec": _int_env(("GA4_AUDIENCE_BUDGET_SEC",), 180),
     }
 
 
