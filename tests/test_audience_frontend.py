@@ -7,11 +7,13 @@ step). Checked here, the page's own arithmetic against an independent recount in
   * numbers: each app's buckets between its window months = engine.audience's last_open (users and the dead_lo curve);
     the all-apps pool = the build's portfolio (tiered months, dead / dead_lo, install months, most month) and journey /
     long-term / money; the GA4 app shows its dead_lo – dead range; the money scenario (10 % and "By age");
-  * $ / ₹: the dashboard's currency (₹ = $ × usd_inr), on every money string;
-  * app switching (a table row, the in-page select, the header App picker), the phone's Back button, leaving the screen;
-  * "Kyun? ▸" folds, mode chips, "Show all months", the currency buttons, the day picker;
-  * the 5-min refresh with a new build: same app / mode / day / open folds, no jump to the top, no new Back step, the
-    new file fetched;
+  * $ / ₹: the dashboard's currency (₹ = $ × usd_inr), on every money string, switched by the top bar's 💱 (toggleCur);
+  * the top bar drives the view: its App picker (setApp), a table row / Enter / "← All apps" setting it, the phone's
+    Back button, leaving the screen, an app Audience has no row for; no picker / toggle / title block of its own, one
+    "Data till … · N apps · x GA4, y andaza" line;
+  * "Kyun? ▸" folds, mode chips, "Show all months", the day picker;
+  * the 5-min refresh with a new build: same app / ₹ / mode / day / open folds, no jump to the top, no new Back step,
+    the new file fetched;
   * tooltips: hover on a mouse, a tap pins, a swipe never does; the month chart's numbers and crosshair;
   * no pointer (AUDIENCE_TAB off): the screen says so (and render() keeps the nav item hidden).
 Skipped where node is not installed."""
@@ -89,6 +91,10 @@ def test_every_section_renders_on_all_apps(report):
         assert '<div class="au-l">%s</div>' % label in h
     assert "1 apps GA4 (lagbhag exact) · 3 andaza" in h and "SAMPLE numbers — asli nahi" in h
     assert "Demo Clock" in h                                                            # the apps without GA4: named
+    # the top bar's App / ₹$ drive the screen: no picker, toggle or title block of its own — one line under the top bar
+    assert 'id="au-app"' not in h and "data-au-cur" not in h and 'class="au-hd"' not in h and "<h2" not in h
+    assert h.startswith('<div id="au-root"><div class="au-meta">Data till ')
+    assert re.search(r'<div class="au-meta">Data till \d{1,2} [A-Z][a-z]{2} \d{4} · 4 apps · 1 GA4, 3 andaza</div>', h)
     for sec in ("au-s-mdead", "au-s-mact"):                                             # "Top" = the answer's month
         part = h[h.index('id="%s"' % sec):]
         part = part[:part.index("</section>")]
@@ -101,7 +107,8 @@ def test_each_apps_page_carries_its_own_tag_and_no_table(report, world):
     by = world["by"]
     for name, e in by.items():
         h = report["apps"][e["k"]]
-        assert 'id="au-s-table"' not in h and 'class="au-crumb"' in h
+        assert 'id="au-s-table"' not in h and 'class="au-crumb"' in h and "data-au-cur" not in h and 'id="au-app"' not in h
+        assert re.search(r'<div class="au-meta">Data till \d{1,2} [A-Z][a-z]{2} \d{4}</div>', h)
     g = report["apps"][by[GA4]["k"]]
     au = by[GA4]["au"]
     assert '<span class="au-tg">GA4 (lagbhag exact)</span>' in g
@@ -194,18 +201,35 @@ def test_money_in_dollars_and_rupees(report, world):
 
 # ── navigation ──────────────────────────────────────────────────────────────────────────────────────────────────────
 @needs_node
-def test_app_switching_and_the_phones_back_button(report, world):
+def test_the_top_bars_app_drives_the_view_and_a_row_sets_it(report, world):
     v = report["nav"]
-    big = world["body"]["apps"][0]
-    assert v["row"]["app"] == big["k"] and v["row"]["st"] == ["aud-app"] and v["row"]["idx"] == 1 and v["row"]["crumb"]
-    assert v["row"]["title"] == "Audience · Demo Gallery" and v["row"]["table"] is False
-    assert v["back"] == {"app": "", "st": [], "idx": 0, "table": True}                   # Back = All apps
-    assert v["select"]["app"] == world["body"]["apps"][1]["k"] and v["select"]["st"] == ["aud-app"]
-    assert v["selectAll"] == {"app": "", "st": [], "idx": 0} and v["allBtn"] == {"app": "", "st": [], "idx": 0}
-    assert v["left"] == {"screen": "placements", "st": [], "app": ""}                    # leaving: no Back step left over
-    assert v["header"]["app"] == v["header"]["want"] and v["header"]["st"] == [] and v["header"]["crumb"]
-    assert v["headerRow"]["sets"] == [big["n"]] and v["headerAll"]["sets"] == [big["n"], ""] and v["headerAll"]["APP"] == ""
-    assert v["noApp"]["app"] == "!" and "Is app ka Audience data nahi" in v["noApp"]["html"]
+    big, second = world["body"]["apps"][0], world["body"]["apps"][1]
+    r = v["row"]                                                                         # a row → the GLOBAL App (setApp)
+    assert r["sets"] == [big["n"]] and r["APP"] == big["n"] and r["app"] == big["k"] and r["screen"] == "audience"
+    assert r["st"] == ["app"] and r["idx"] == 1 and r["crumb"] and r["table"] is False   # the top bar's own Back step
+    assert r["title"] == "Audience · Demo Gallery"
+    assert v["back"] == {"app": "", "APP": "", "st": [], "idx": 0, "table": True, "screen": "audience"}   # Back = All apps
+    assert v["enter"] == {"APP": second["n"], "app": second["k"], "st": ["app"]}         # Enter on a row: the same
+    assert v["header"]["app"] == v["header"]["want"] and v["header"]["st"] == ["app"] and v["header"]["crumb"] and not v["header"]["table"]
+    assert v["allBtn"] == {"app": "", "APP": "", "st": [], "idx": 0}                     # "← All apps" = the top bar's All apps
+    assert v["left"] == {"screen": "placements", "st": ["app"], "APP": second["n"]}      # the top bar keeps the app across tabs
+    assert v["back2"] == {"app": second["k"], "crumb": True}
+
+
+@needs_node
+def test_an_app_without_audience_data_says_so_in_one_line(report):
+    v = report["nav"]
+    n = v["noApp"]
+    assert n["app"] == "!" and n["st"] == ["app"]
+    assert '<p>Is app ka GA4 data nahi — Audience nahi ban sakta</p>' in n["html"] and 'data-au-all="1"' in n["html"]
+    assert 'id="au-strip"' not in n["html"] and "au-crumb" not in n["html"] and "au-meta" not in n["html"]
+    assert v["noAppBack"] == {"APP": "", "app": "", "st": [], "table": True}
+
+
+@needs_node
+def test_two_apps_with_one_name_the_row_tapped_is_shown(report):
+    d = report["nav"]["dup"]
+    assert d["none"] == d["want"][0] and d["picked"] == d["want"][1]
 
 
 @needs_node
@@ -214,7 +238,9 @@ def test_folds_chips_currency_and_day(report):
     assert c["closed"] and c["opened"] == {"set": ["dead"], "attr": True} and c["reclosed"] == {"set": [], "attr": False}
     assert c["mode"] == {"mode": "age", "on": True, "table": True}
     assert c["more"]["before"] == 6 and c["more"]["after"] > 6 and c["more"]["set"] == ["mdead"] and c["more"]["btn"]
-    assert c["inr"] == {"cur": "INR", "on": True, "rupee": True} and c["usd"] == {"cur": "USD", "on": True}
+    # the top bar's 💱: the screen repainted at once in ₹, then back in $ (nothing of its own to click)
+    assert c["inr"] == {"cur": "INR", "rupee": True, "screen": "audience", "repainted": True, "mode": "10", "own": False}
+    assert c["usd"] == {"cur": "USD", "dollar": True, "screen": "audience"}
     assert c["day"] == {"day": "2026-03-15", "val": True} and c["dayChip"] == {"day": "2026-01-01", "on": True}
 
 
@@ -223,8 +249,8 @@ def test_the_refresh_brings_the_view_back_as_it_was(report):
     r = report["refresh"]
     assert r["screen"] == "audience" and r["newData"] and r["silent"] is False
     assert r["S"] == {"app": r["want"], "mode": "age", "day": "2026-02-01", "open": ["money", "dead"]}
-    assert r["st"] == ["aud-app"] and r["hist"] == 2 and r["scrolls"] == []             # no new Back step, no jump
-    assert r["crumb"] and r["fold"] and r["ageOn"]
+    assert r["st"] == ["app"] and r["hist"] == 2 and r["scrolls"] == []                 # no new Back step, no jump
+    assert r["crumb"] and r["fold"] and r["ageOn"] and r["cur"] == "INR" and r["rupee"]   # the top bar's App and ₹ kept
     assert r["fetched"] == ["audience.json.gz?v=0123456789ab"]                           # the new build's file
 
 

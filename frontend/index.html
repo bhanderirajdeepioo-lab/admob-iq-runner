@@ -2328,18 +2328,9 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 body[data-screen="audience"] #rangectl,body[data-screen="audience"] #rangecustom{display:none!important}   /* every section says its own dates */
 body[data-screen="audience"] #smp-pick{display:inline-flex}
 #au-root{container:au/inline-size;--au-open:#1f9e6e;--au-month:#3f7fe0;--au-sleep:#c05a9a;--au-has:#a65cc4;--au-gone:#d9443f;--au-long:#1f9e6e;max-width:1360px}
-#au-root .au-hd{display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap;margin:0 0 12px}
-#au-root .au-hdt{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 260px}
-#au-root .au-logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--blue2),var(--cyan));display:grid;place-items:center;font-size:18px;flex:none}
-#au-root .au-hdt h2{font-size:18px;margin:0;font-weight:800;line-height:1.2;color:#fff}
-#au-root .au-hdt .au-sub{color:var(--muted);font-size:12px;line-height:1.35}
-#au-root .au-ctl{display:flex;gap:8px;align-items:center;flex:1 1 300px;justify-content:flex-end;min-width:0}
-#au-root .au-sel{appearance:none;-webkit-appearance:none;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238496b5'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--line2);color:var(--ink);font-family:inherit;font-size:16px;font-weight:650;line-height:1.2;padding:7px 28px 7px 11px;border-radius:9px;min-width:0;flex:1 1 auto;max-width:420px;height:40px}
-@media (min-width:700px){#au-root .au-sel{font-size:13px}}
-#au-root .au-seg{display:inline-flex;background:var(--panel);border:1px solid var(--line2);border-radius:9px;overflow:hidden;flex:none;height:40px}
-#au-root .au-seg button{background:none;border:none;color:var(--ink2);font-family:inherit;font-size:13px;font-weight:700;padding:0 13px;cursor:pointer;border-right:1px solid var(--line);min-width:44px}
-#au-root .au-seg button:last-child{border-right:none}
-#au-root .au-seg button.on{background:linear-gradient(90deg,var(--blue2),var(--cyan2));color:#fff}
+#au-root .au-meta{color:var(--muted);font-size:12px;line-height:1.4;margin:0 0 12px}   /* the one line under the top bar (App / ₹$ are the top bar's) */
+#au-root .au-none{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap}
+#au-root .au-none p{margin:0;color:var(--ink2);font-size:14px;font-weight:650;flex:1 1 240px}
 #au-root .au-crumb{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;margin:2px 0 12px}
 #au-root .au-back{background:none;border:1px solid var(--line2);color:var(--cyan);font-family:inherit;font-size:12.5px;font-weight:700;padding:7px 11px;border-radius:8px;cursor:pointer;min-height:36px}
 #au-root .au-apn{display:flex;align-items:center;gap:9px;min-width:0;flex:1 1 220px}
@@ -4750,12 +4741,13 @@ function ecStatusNote(){ return `<b>Status</b> — har row apne <b>roz ke normal
 // it, who went quiet and for how many months, and what waking them could earn. Every number is printed (the number
 // first, its % beside it); every coloured box says what it is; long explanations sit behind "Kyun? ▸". Dead users by
 // months come from GA4 ("GA4 (lagbhag exact)", a dead_lo – dead range) or, until an app's GA4 read is complete, from
-// the cohort-curve estimate ("andaza"). The header App picker drives the view (as the eCPM trend); a row of the
-// all-apps table opens that app (the phone's Back = "← All apps"); the 5-min refresh repaints it as it was.
+// the cohort-curve estimate ("andaza"). The top bar's App picker and ₹/$ drive the view, as on every other tab (no
+// picker / toggle of its own); a row of the all-apps table sets that App (so the top bar names it; the phone's Back =
+// "← All apps"); the 5-min refresh repaints it as it was.
 const AU=(function(){
 'use strict';
 let RAW=null, VER=null, LOADING=false, ERR=false, EL=null, PSIG=null, APPS=[], BYK={}, ALL=null;
-const S={app:'',mode:'10',day:null,hdr:null,open:new Set(),mall:new Set(),booted:false,wired:false};
+const S={app:'',pick:'',mode:'10',day:null,open:new Set(),mall:new Set(),booted:false,wired:false};   // app = the top bar's App as a key ('' all, '!' none)
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 const $=id=>document.getElementById(id);
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -4772,7 +4764,7 @@ const short=n=>String(n||'').split(' · ')[0];
 const acct=n=>String(n||'').includes(' · ')?String(n).split(' · ').slice(1).join(' · '):'';
 const WD_=m=>Math.floor(m*365.25/12);                    // engine.audience.window_days
 function tierMonths(age){ const out=[]; let n=0; for(let g=0;g<400;g++){ n+=n<12?1:(n<24?3:6); out.push(n); if(WD_(n)>=age) break; } return out; }   // engine.audience.tier_months
-// ---- money: the file's currency (AdMob, USD) → the dashboard's ₹ / $ view (the header's toggle) ----
+// ---- money: the file's currency (AdMob, USD) → the dashboard's ₹ / $ view (the top bar's toggle: curView / toggleCur) ----
 function fx(){ return (RAW&&RAW.fx)||(DATA&&DATA.usd_inr)||83; }
 function mv(v){ const c=(RAW&&RAW.cur)||'USD', w=curView(); if(w===c) return v; if(c==='USD'&&w==='INR') return v*fx(); if(c==='INR'&&w==='USD') return v/fx(); return v; }
 function M(usd,d){ if(usd==null||!isFinite(usd)) return '—'; const v=mv(usd), s=csym(), a=Math.abs(v);
@@ -5132,61 +5124,50 @@ function wire(){ if(S.wired) return; S.wired=true;
     if(e.key==='Escape'){ hideTip(); return; }
     if((e.key==='Enter'||e.key===' ')&&t.matches&&t.matches('tr[data-au-k]')){ e.preventDefault(); openApp(t.getAttribute('data-au-k')); } });
   document.addEventListener('change',e=>{ const t=e.target; if(!inAu(t)) return;
-    if(t.id==='au-dday'&&t.value){ S.day=t.value; save(); paint(); }
-    else if(t.id==='au-app'){ const k=t.value; if(k==='all') allApps(); else openApp(k); } });
+    if(t.id==='au-dday'&&t.value){ S.day=t.value; save(); paint(); } });
   document.addEventListener('toggle',e=>{ const t=e.target; if(!inAu(t)||!t.dataset||!t.dataset.kyun) return; t.open?S.open.add(t.dataset.kyun):S.open.delete(t.dataset.kyun); },true);
   let rz=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(!onScreen()||Math.abs(innerWidth-lastW)<20) return; lastW=innerWidth; hideTip(); drawMonth(cur()); },150); }); }
 function onClick(e){ const t=e.target; if(!inAu(t)) return;
   const md=t.closest('[data-au-mode]'); if(md){ S.mode=md.dataset.auMode; save(); paint(); return; }
   const dy=t.closest('[data-au-day]'); if(dy){ S.day=dy.dataset.auDay; save(); paint(); return; }
-  const cb=t.closest('[data-au-cur]'); if(cb){ setCur(cb.dataset.auCur); return; }
   const mo=t.closest('[data-au-more]'); if(mo){ const id=mo.dataset.auMore; S.mall.has(id)?S.mall.delete(id):S.mall.add(id); const y0=mo.getBoundingClientRect().top; paint();
     const b1=document.querySelector(`[data-au-more="${id}"]`); if(b1){ const d=b1.getBoundingClientRect().top-y0; if(Math.abs(d)>1) window.scrollBy(0,d); } return; }
   if(t.closest('[data-au-retry]')){ retry(); return; }
   if(t.closest('[data-au-all]')){ allApps(); return; }
   const k=t.closest('[data-au-k]'); if(k){ openApp(k.getAttribute('data-au-k')); } }
-function setCur(c){ if(c===curView()) return; const y=window.scrollY||0; try{ toggleCur(); }catch(e){} try{ if(curView()!==c) toggleCur(); }catch(e){} window.scrollTo(0,y); }
-// ---- navigation: the header App picker drives the view; a table row / the select opens one app (phone Back = All apps) ----
+// ---- navigation: the top bar's App picker (APP) drives the view; a table row / "← All apps" set it (setApp) ----
+// setApp re-renders and re-shows this screen and owns the phone's Back step ('app' → hbAppUndo = All apps), as on
+// every other tab. S.pick: the row tapped, so of two same-named apps the one tapped is the one shown.
 function onScreen(){ const on=document.querySelector('.screen.on'); return !!(on&&on.dataset&&on.dataset.screen==='audience'); }
 function keyOfName(name){ if(!RAW||!name) return ''; const id=appIdOf(name); const xs=RAW.apps.filter(a=>vis(a.id));
-  const r=(id&&xs.find(a=>a.id===id))||xs.find(a=>a.n===name)||xs.find(a=>short(a.n)===name); return r?r.k:'!'; }
-function openApp(k){ if(!k||!BYK[k]){ return; } const a=BYK[k];
-  if(APP){ setApp(a.n); return; }                                    // an app picked in the header: the header follows
-  S.app=k; hbOv('aud-app',true,appUndo); hideTip(); save(); paint(); window.scrollTo({top:0}); }
-function allApps(){ hideTip(); if(APP){ setApp(''); window.scrollTo({top:0}); return; } hbDrop('aud-app'); S.app=''; save(); paint(); window.scrollTo({top:0}); }
-function appUndo(){ if(onScreen()&&!APP){ S.app=''; save(); paint(); window.scrollTo({top:0}); } }   // phone Back on an app → All apps
-function left(){ hideTip(); if(!HB.st.some(x=>x.tag==='aud-app')) return; Promise.resolve().then(()=>{ if(onScreen()) return; hbDrop('aud-app'); S.app=''; }); }
-function save(){ try{ localStorage.setItem('audview',JSON.stringify({app:S.app,mode:S.mode,day:S.day})); }catch(e){} }
+  const r=xs.find(a=>a.k===S.pick&&a.n===name)||(id&&xs.find(a=>a.id===id))||xs.find(a=>a.n===name)||xs.find(a=>short(a.n)===name); return r?r.k:'!'; }
+function openApp(k){ if(!k||!BYK[k]) return; hideTip(); S.pick=k; setApp(BYK[k].n); }
+function allApps(){ hideTip(); if(APP){ setApp(''); return; } paint(); window.scrollTo({top:0}); }
+function left(){ hideTip(); }
+function save(){ try{ localStorage.setItem('audview',JSON.stringify({mode:S.mode,day:S.day})); }catch(e){} }
 function boot(){ if(S.booted) return; S.booted=true; let sv=null; try{ sv=JSON.parse(localStorage.getItem('audview')||'null'); }catch(e){}
-  if(sv){ if(['5','10','20','age'].includes(sv.mode)) S.mode=sv.mode; if(typeof sv.day==='string'&&/^\d{4}-\d\d-\d\d$/.test(sv.day)) S.day=sv.day; if(typeof sv.app==='string') S.app=sv.app; }
-  S.hdr=APP; if(APP) S.app=''; }
+  if(sv){ if(['5','10','20','age'].includes(sv.mode)) S.mode=sv.mode; if(typeof sv.day==='string'&&/^\d{4}-\d\d-\d\d$/.test(sv.day)) S.day=sv.day; } }
 // ---- the view ----
 function render(){ const s=screenDiv('audience'); EL=s; return s; }
 function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector('.screen[data-screen=audience]'); if(!s||typeof DATA==='undefined'||!DATA) return;
   wire(); boot();
   const p=ptr();
-  if(!p){ s.innerHTML=`<div id="au-root"><h2 class="sc">Audience</h2><div class="au-card"><div class="au-wait">🔌 Audience ka data is build me nahi bana (GA4 data chahiye) — agle robot run me aayega.</div></div></div>`; return; }
+  if(!p){ s.innerHTML=`<div id="au-root"><div class="au-card"><div class="au-wait">🔌 Audience ka data is build me nahi bana (GA4 data chahiye) — agle robot run me aayega.</div></div></div>`; return; }
   if(!RAW||VER!==p.v) ensure(()=>{ if(onScreen()) paint(); });
-  if(!RAW){ s.innerHTML=`<div id="au-root"><h2 class="sc">Audience</h2><div class="au-card">${ERR?'<div class="au-wait">⚠️ Audience ka data load nahi hua. <span class="lnk" data-au-retry="1" style="cursor:pointer;color:var(--cyan)">Try again</span></div>':'<div class="au-wait">⏳ Audience load ho raha hai…</div>'}</div></div>`; return; }
+  if(!RAW){ s.innerHTML=`<div id="au-root"><div class="au-card">${ERR?'<div class="au-wait">⚠️ Audience ka data load nahi hua. <span class="lnk" data-au-retry="1" style="cursor:pointer;color:var(--cyan)">Try again</span></div>':'<div class="au-wait">⏳ Audience load ho raha hai…</div>'}</div></div>`; return; }
   prep();
-  if(S.hdr!==APP){ S.hdr=APP; S.app=APP?keyOfName(APP):''; hbDrop('aud-app'); }
-  else if(APP&&!S.app) S.app=keyOfName(APP);
-  if(S.app&&!BYK[S.app]&&S.app!=='!') S.app='';
-  if(!S.app) hbDrop('aud-app');
+  S.app=APP?keyOfName(APP):'';                                         // the top bar's App ('!' = Audience has no row for it)
   const none=S.app==='!', a=none?null:(S.app?BYK[S.app]:ALL), isAll=!S.app;
-  const sel=`<select class="au-sel" id="au-app" aria-label="App"><option value="all"${isAll?' selected':''}>All apps (${APPS.length})</option>${APPS.map(x=>`<option value="${esc(x.k)}"${S.app===x.k?' selected':''}>${esc(x.n)}</option>`).join('')}</select>`;
-  const seg=`<div class="au-seg" role="group" aria-label="Currency">${[['USD','$'],['INR','₹']].map(([c,l])=>`<button type="button" data-au-cur="${c}" class="${curView()===c?'on':''}" aria-pressed="${curView()===c}">${l}</button>`).join('')}</div>`;
-  const E=RAW.E||'';
-  const hd=`<div class="au-hd"><div class="au-hdt"><div class="au-logo" aria-hidden="true">👪</div><div style="min-width:0"><h2>Audience</h2><div class="au-sub">Data till ${DT(E)} · ${isAll?APPS.length+' apps':esc(short(a?a.n:APP))}</div></div></div><div class="au-ctl">${sel}${seg}</div></div>`;
+  const nG=APPS.filter(x=>isGa4(x.au)).length, nA=APPS.length-nG;
+  const meta=`<div class="au-meta">Data till ${DT(RAW.E||'')}${isAll?` · ${APPS.length} apps · ${[nG?nG+' GA4':'',nA?nA+' andaza':''].filter(Boolean).join(', ')}`:''}</div>`;
   let h;
-  if(none) h=`<div class="au-crumb"><button type="button" class="au-back" data-au-all="1">← All apps</button><div class="au-apn">${appIconId(appIdOf(APP),APP,30)}<span><b>${esc(APP)}</b></span></div></div>
-    <div class="au-card"><div class="au-wait">🔌 Is app ka Audience data nahi — iska GA4 (Firebase) data nahi, ya ye app abhi select nahi.</div></div>`;
+  if(none) h=`<div class="au-card au-none"><p>Is app ka GA4 data nahi — Audience nahi ban sakta</p><button type="button" class="au-back" data-au-all="1">← All apps</button></div>`;
   else { const crumb=isAll?'':`<div class="au-crumb"><button type="button" class="au-back" data-au-all="1">← All apps</button><div class="au-apn">${appIconId(a.id,short(a.n),30)}<span><b>${esc(short(a.n))}</b><small>${esc(acct(a.n))}${acct(a.n)?' · ':''}${a.lh?'launch '+DT(a.L)+' (pehle ke test installs curves me nahi) · ':''}${srcTag(a.au,false)}</small></span></div></div>`;
-    h=crumb+`<div class="au-strip" id="au-strip">${secStrip(a)}</div>`
+    h=meta+crumb+`<div class="au-strip" id="au-strip">${secStrip(a)}</div>`
       +`<div class="au-grid">${isAll?'<p class="au-intro au-wide" style="margin:0">Saare apps mila ke — neeche har sawaal ka jawab. Table me kisi app pe tap karo — us app ka view khulega.</p>':''}`
       +secPhone(a)+secDay(a)+secJourney(a)+secPakke(a)+secDead(a)+secDeadMonths(a)+secActMonths(a)+secDauMix(a)+secMoney(a)+secHow()+(isAll?secTable():'')+secModule(a)+'</div>'
       +`<div class="au-foot"><b>In apps ka GA4 data nahi:</b> ${(RAW.no_ga4||[]).map(esc).join(', ')||'—'}.<br>Revenue = AdMob (Active users tab jaisa) · ₹ rate ${fx().toFixed(2)} (dashboard ka usd_inr) · numbers Active users / Uninstall / Install value tabs ki definitions se · "GA4 (lagbhag exact)" = GA4 se gina, "andaza" = model se.</div>`; }
-  s.innerHTML=`<div id="au-root">${hd}${h}</div>`;
+  s.innerHTML=`<div id="au-root">${h}</div>`;
   const tt=$('tb-title'), ts=$('tb-sub');
   if(tt&&ts){ if(a&&!isAll){ tt.textContent='Audience · '+short(a.n); ts.textContent=TITLES.audience[1]; } else { tt.textContent=TITLES.audience[0]; ts.textContent=TITLES.audience[1]; } }
   if(a) drawMonth(a);
@@ -5195,7 +5176,7 @@ function show(){ paint(); }
 return {ptr, ensure, render, paint, show, left, retry, ready:()=>!!RAW&&!!ptr(),
   // checks / tests (read-only views of the current state)
   _:{S, el:()=>EL, RAW:()=>RAW, APPS:()=>APPS, ALL:()=>ALL, BYK:()=>BYK, tipPinned:()=>tipPinned, load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; PSIG=null; ALL=null; }, prep:()=>{ if(RAW) prep(); },
-     bucketsOf, dAt, loAt, bLab, tierMonths, mostOf, wake, wakeAll, monthLine, dayAgg, TIPS, SPK, hov, keyOfName, openApp, allApps, appUndo, cur, M, MC, CN, P,
+     bucketsOf, dAt, loAt, bLab, tierMonths, mostOf, wake, wakeAll, monthLine, dayAgg, TIPS, SPK, hov, keyOfName, openApp, allApps, cur, M, MC, CN, P,
      sec:{strip:secStrip,phone:secPhone,journey:secJourney,pakke:secPakke,dead:secDead,mdead:secDeadMonths,mact:secActMonths,dau:secDauMix,money:secMoney,table:secTable,day:secDay,module:secModule}}};
 })();
 function renderAudience(){ return AU.render(); }

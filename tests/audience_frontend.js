@@ -5,9 +5,11 @@
 //   * the render: every section, the tags (GA4 / andaza / being read), the strip, the table, the module panels;
 //   * the numbers the page works out: buckets per app, the all-apps pool (dead / dead_lo on tiered months, journey,
 //     long-term, money), the most dead / active month, $ and ₹ strings;
-//   * app switching (a table row, the in-page select, the header App picker), the phone's Back button, leaving the screen,
-//   * "Kyun? ▸" folds, the money mode chips, "Show all months", the currency buttons;
-//   * the 5-min refresh with a new build: the view comes back as it was (app, mode, day, open folds), silently;
+//   * the top bar drives the view: its App (setApp — a table row sets it too, so the top bar names the app tapped), the
+//     phone's Back button (its 'app' step), an app the top bar has but Audience has no row for, its ₹ / $ (toggleCur);
+//     no App picker / currency buttons / title block of the screen's own;
+//   * "Kyun? ▸" folds, the money mode chips, "Show all months";
+//   * the 5-min refresh with a new build: the view comes back as it was (app, ₹, mode, day, open folds), silently;
 //   * the tooltip rule: a mouse hovers, a TAP pins, a swipe never pins; the chart's numbers on hover;
 //   * no pointer (the switch off): the screen says so and the nav item stays hidden.
 // Prints ONE JSON report; tests/test_audience_frontend.py asserts on it.
@@ -93,6 +95,8 @@ const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-roo
 (async () => {
   run(`DATA=__FX.dashboard; APP=''; CURVIEW=null; RANGE='today'; window.__ax=null;`);
   run(`var __show0=show; show=function(id){ __setScreen(id); return __show0(id); };`);
+  // render() rebuilds every tab; setApp / toggleCur (→ rerender) call it — here only the Audience shell is rebuilt
+  run(`var __render0=render; render=function(){ window.__ax=null; renderAudience(); show('overview'); };`);
   run(`AU._.load(__FX.audience);`);
 
   // ── the render ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -112,8 +116,8 @@ const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-roo
 
   // ── every app's own page (GA4 / estimate / being read / young) ─────────────────────────────────────────────────────
   await step('apps', () => { const R = {}; SCREEN.id = 'audience';
-    for (const k of J('AU._.APPS().map(a=>a.k)')) { run(`AU._.S.app='${k}'; AU.paint();`); R[k] = html(); }
-    run(`AU._.S.app=''; AU.paint();`); return R; });
+    for (const [k, n] of J('AU._.APPS().map(a=>[a.k,a.n])')) { run(`AU._.S.pick='${k}'; APP=${JSON.stringify(n)}; AU.paint();`); R[k] = html(); }
+    run(`APP=''; AU.paint();`); return R; });
 
   // ── money strings in $ and ₹ ─────────────────────────────────────────────────────────────────────────────────────────
   await step('money', () => { const R = {};
@@ -121,37 +125,45 @@ const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-roo
       R[c] = { m: J(`[AU._.M(1234.4),AU._.M(2.25),AU._.M(0.0123,2),AU._.MC(12345),AU._.M(0)]`), html: html() }; }
     run(`CURVIEW=null; AU.paint();`); return R; });
 
-  // ── app switching + the phone's Back button ──────────────────────────────────────────────────────────────────────────
+  // ── the top bar's App drives the view; a table row sets it; the phone's Back button ─────────────────────────────────────
   await step('nav', async () => { const R = {};
     run(`HB.st.length=0; HB.busy=false; HB.mute=0;`); await settle(); HIST.entries = [{ state: null, url: '/' }]; HIST.idx = 0; HIST.pending = []; run(`HB.depth=0;`);
-    SCREEN.id = 'overview'; run(`show('audience')`); await settle();
-    const k = run(`AU._.APPS()[0].k`), k2 = run(`AU._.APPS()[1].k`);
-    // a table row (the click handler on the document)
+    SCREEN.id = 'overview'; run(`APP=''; show('audience')`); await settle();
+    const k = run(`AU._.APPS()[0].k`), k2 = run(`AU._.APPS()[1].k`), n2 = run(`AU._.APPS()[1].n`);
+    const st = () => J('HB.st.map(x=>x.tag)');
+    // a table row (the click handler on the document) → the GLOBAL App (setApp) = that app; the top bar's Back step
+    run(`var __sets=[]; var __setApp1=setApp; setApp=function(a){ __sets.push(a); return __setApp1(a); };`);
     fire('click', { target: tgt({ '[data-au-k]': { getAttribute: () => k } }) }); await settle();
-    R.row = { app: run('AU._.S.app'), st: J('HB.st.map(x=>x.tag)'), idx: HIST.idx, crumb: html().includes('class="au-crumb"'), title: run(`document.getElementById('tb-title').textContent`),
-      table: html().includes('id="au-s-table"') };
-    await userBack();
-    R.back = { app: run('AU._.S.app'), st: J('HB.st.map(x=>x.tag)'), idx: HIST.idx, table: html().includes('id="au-s-table"') };
-    // the in-page select (its change handler)
-    fire('change', { target: tgt({}, { id: 'au-app', value: k2 }) }); await settle();
-    R.select = { app: run('AU._.S.app'), st: J('HB.st.map(x=>x.tag)') };
-    fire('change', { target: tgt({}, { id: 'au-app', value: 'all' }) }); await settle();
-    R.selectAll = { app: run('AU._.S.app'), st: J('HB.st.map(x=>x.tag)'), idx: HIST.idx };
-    // "← All apps" on the page
-    run(`AU._.openApp('${k}')`); await settle(); fire('click', { target: tgt({ '[data-au-all]': {} }) }); await settle();
-    R.allBtn = { app: run('AU._.S.app'), st: J('HB.st.map(x=>x.tag)'), idx: HIST.idx };
-    // leaving the screen with an app open: its Back step goes too
-    run(`AU._.openApp('${k}')`); await settle(); run(`show('placements')`); await settle();
-    R.left = { screen: SCREEN.id, st: J('HB.st.map(x=>x.tag)'), app: run('AU._.S.app') };
-    // the header App picker drives the view; a row then moves the header (setApp)
-    run(`var __sets=[]; var __setApp0=setApp; setApp=function(a){ __sets.push(a); APP=a; AU.paint(); };`);
-    const name2 = run(`AU._.APPS()[1].n`);
-    run(`APP=${JSON.stringify(name2)}; show('audience');`); await settle();
-    R.header = { app: run('AU._.S.app'), want: k2, st: J('HB.st.map(x=>x.tag)'), crumb: html().includes(name2.split(' · ')[0]) };
-    run(`AU._.openApp('${k}')`); await settle(); R.headerRow = { sets: J('__sets'), app: run('AU._.S.app') };
-    run(`AU._.allApps()`); await settle(); R.headerAll = { sets: J('__sets'), app: run('AU._.S.app'), APP: run('APP') };
-    run(`APP='Not An Audience App'; AU.paint();`); R.noApp = { app: run('AU._.S.app'), html: html() };
-    run(`setApp=__setApp0; APP=''; AU.paint();`); await settle();
+    R.row = { app: run('AU._.S.app'), APP: run('APP'), sets: J('__sets'), st: st(), idx: HIST.idx, crumb: html().includes('class="au-crumb"'),
+      title: run(`document.getElementById('tb-title').textContent`), table: html().includes('id="au-s-table"'), screen: SCREEN.id };
+    await userBack();                                                                   // Back = All apps (hbAppUndo → setApp(''))
+    R.back = { app: run('AU._.S.app'), APP: run('APP'), st: st(), idx: HIST.idx, table: html().includes('id="au-s-table"'), screen: SCREEN.id };
+    // Enter on a focused row: the same
+    fire('keydown', { key: 'Enter', target: Object.assign(tgt({}), { matches: sel => sel === 'tr[data-au-k]', getAttribute: () => k2 }) }); await settle();
+    R.enter = { APP: run('APP'), app: run('AU._.S.app'), st: st() };
+    run(`setApp('')`); await settle();
+    // the top bar's App picker (apkPick → setApp) → this app's view at once
+    run(`setApp(${JSON.stringify(n2)})`); await settle();
+    R.header = { app: run('AU._.S.app'), want: k2, st: st(), crumb: html().includes(n2.split(' · ')[0]) && html().includes('class="au-crumb"'), table: html().includes('id="au-s-table"') };
+    // "← All apps" on the page → the top bar's All apps, its Back step gone
+    fire('click', { target: tgt({ '[data-au-all]': {} }) }); await settle();
+    R.allBtn = { app: run('AU._.S.app'), APP: run('APP'), st: st(), idx: HIST.idx };
+    // leaving the screen with an app open: the top bar keeps the app (as on every tab); coming back shows it again
+    run(`setApp(${JSON.stringify(n2)})`); await settle(); run(`show('placements')`); await settle();
+    R.left = { screen: SCREEN.id, st: st(), APP: run('APP') };
+    run(`show('audience')`); await settle(); R.back2 = { app: run('AU._.S.app'), crumb: html().includes('class="au-crumb"') };
+    run(`setApp('')`); await settle();
+    // an app the top bar has but Audience has no row for: one line + "← All apps"
+    run(`setApp('Not An Audience App')`); await settle();
+    R.noApp = { app: run('AU._.S.app'), html: html(), st: st() };
+    fire('click', { target: tgt({ '[data-au-all]': {} }) }); await settle();
+    R.noAppBack = { APP: run('APP'), app: run('AU._.S.app'), st: st(), table: html().includes('id="au-s-table"') };
+    // two apps with one name: the row tapped is the one shown
+    run(`var __raw=AU._.RAW(); var __dup=JSON.parse(JSON.stringify(__raw)); __dup.apps[1].n=__dup.apps[0].n; AU._.load(__dup); AU._.S.pick='';`);
+    const n0 = run(`__dup.apps[0].n`);
+    R.dup = { none: run(`AU._.keyOfName(${JSON.stringify(n0)})`), picked: run(`AU._.S.pick=__dup.apps[1].k; AU._.keyOfName(${JSON.stringify(n0)})`),
+      want: J(`[__dup.apps[0].k, __dup.apps[1].k]`) };
+    run(`AU._.load(__raw); AU._.S.pick=''; setApp=__setApp1; APP=''; AU.paint();`); await settle();
     return R; });
 
   // ── folds, chips, currency buttons ───────────────────────────────────────────────────────────────────────────────────
@@ -168,12 +180,13 @@ const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-roo
     const before = (html().match(/data-at="m:[^"]*:d"/g) || []).length / 2;
     fire('click', { target: tgt({ '[data-au-more]': { dataset: { auMore: 'mdead' }, getBoundingClientRect: () => ({ top: 0 }) } }) });
     R.more = { before, after: (html().match(/data-at="m:[^"]*:d"/g) || []).length / 2, set: J('[...AU._.S.mall]'), btn: html().includes('Show top 6 only') };
-    run(`var __rr0=rerender; rerender=function(){ AU.paint(); };`);
-    fire('click', { target: tgt({ '[data-au-cur]': { dataset: { auCur: 'INR' } } }) });
-    R.inr = { cur: run('curView()'), on: /data-au-cur="INR" class="on"/.test(html()), rupee: html().includes('₹') };
-    fire('click', { target: tgt({ '[data-au-cur]': { dataset: { auCur: 'USD' } } }) });
-    R.usd = { cur: run('curView()'), on: /data-au-cur="USD" class="on"/.test(html()) };
-    run(`rerender=__rr0;`);
+    // the top bar's 💱 (toggleCur → rerender → this screen repainted at once, in ₹ then back in $)
+    const el0 = run('AU._.el()');
+    run(`toggleCur()`);
+    R.inr = { cur: run('curView()'), rupee: html().includes('₹ / month') && !html().includes('$ / month'), screen: SCREEN.id, repainted: run('AU._.el()') !== el0,
+      mode: run('AU._.S.mode'), own: /data-au-cur|class="au-seg"/.test(html()) };
+    run(`toggleCur()`);
+    R.usd = { cur: run('curView()'), dollar: html().includes('$ / month') && !html().includes('₹ / month'), screen: SCREEN.id };
     fire('change', { target: tgt({}, { id: 'au-dday', value: '2026-03-15' }) });
     R.day = { day: run('AU._.S.day'), val: html().includes('value="2026-03-15"') };
     fire('click', { target: tgt({ '[data-au-day]': { dataset: { auDay: '2026-01-01' } } }) });
@@ -185,19 +198,18 @@ const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-roo
     run(`HB.st.length=0; HB.busy=false; HB.mute=0;`); await settle(); HIST.entries = [{ state: null, url: '/' }]; HIST.idx = 0; HIST.pending = []; run(`HB.depth=0;`);
     SCREEN.id = 'overview'; run(`APP=''; show('audience');`); await settle();
     const k = run(`AU._.APPS()[1].k`);
-    run(`AU._.openApp('${k}'); AU._.S.mode='age'; AU._.S.day='2026-02-01'; AU._.S.open.add('money'); AU._.S.open.add('dead'); AU.paint();`); await settle();
+    run(`AU._.openApp('${k}'); toggleCur(); AU._.S.mode='age'; AU._.S.day='2026-02-01'; AU._.S.open.add('money'); AU._.S.open.add('dead'); AU.paint();`); await settle();
     const scrolls = []; ctx.scrollTo = (...a) => scrolls.push(JSON.stringify(a)); ctx.scrollY = 1234;
     FETCHED.length = 0;
-    run(`var __render0=render; render=function(){ window.__ax=null; renderAudience(); show('overview'); };
-         var __load0=loadDashboardData; loadDashboardData=function(){ const d=JSON.parse(JSON.stringify(__FX.dashboard)); d.generated_at='2026-09-23T07:30:00Z'; d.audience=Object.assign({},d.audience,{v:'0123456789ab'}); return Promise.resolve(d); };
+    run(`var __load0=loadDashboardData; loadDashboardData=function(){ const d=JSON.parse(JSON.stringify(__FX.dashboard)); d.generated_at='2026-09-23T07:30:00Z'; d.audience=Object.assign({},d.audience,{v:'0123456789ab'}); return Promise.resolve(d); };
          LAST_BUILD=__FX.dashboard.generated_at; var __old=DATA;`);
     await run(`refreshData()`); await settle();
     const h = html();
-    const R = J(`({S:{app:AU._.S.app,mode:AU._.S.mode,day:AU._.S.day,open:[...AU._.S.open]}, st:HB.st.map(x=>x.tag), newData:DATA!==__old, silent:REFRESH_SILENT})`);
+    const R = J(`({S:{app:AU._.S.app,mode:AU._.S.mode,day:AU._.S.day,open:[...AU._.S.open]}, st:HB.st.map(x=>x.tag), newData:DATA!==__old, silent:REFRESH_SILENT, cur:curView()})`);
     R.want = k; R.screen = SCREEN.id; R.scrolls = scrolls.filter(s => s.includes('"top":0')); R.hist = HIST.entries.length;
     R.crumb = h.includes('class="au-crumb"'); R.fold = /data-kyun="money" open/.test(h) && /data-kyun="dead" open/.test(h);
-    R.ageOn = /class="au-chip on" data-au-mode="age"/.test(h); R.fetched = FETCHED.filter(u => u.includes('audience.json.gz'));
-    run(`render=__render0; loadDashboardData=__load0; DATA=__FX.dashboard; AU._.load(__FX.audience); AU._.allApps();`); await settle(); ctx.scrollTo = () => {}; ctx.scrollY = 0;
+    R.ageOn = /class="au-chip on" data-au-mode="age"/.test(h); R.rupee = h.includes('₹') && !h.includes('$'); R.fetched = FETCHED.filter(u => u.includes('audience.json.gz'));
+    run(`loadDashboardData=__load0; DATA=__FX.dashboard; AU._.load(__FX.audience); toggleCur(); AU._.allApps();`); await settle(); ctx.scrollTo = () => {}; ctx.scrollY = 0;
     return R; });
 
   // ── tooltips: a mouse hovers, a tap pins, a swipe never pins; the chart's numbers ────────────────────────────────────
