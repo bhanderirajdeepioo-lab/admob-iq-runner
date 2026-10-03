@@ -15,6 +15,9 @@ limits (developers.cloudflare.com/workers/platform/limits):
   * file size     at most 25 MiB a file. An oversize file never ships: the previous good copy (the build starts from a
                   copy of the live site) takes its place, otherwise the file is left out of the site. Data inside a
                   file is NEVER trimmed ("never trim history"): the report says the feature needs a split.
+                  Exception, the CORE files (what the first page load needs: CORE_FILES): never left out. With no
+                  good previous copy they ship as they are, the report says the deploy WILL be rejected, and
+                  Cloudflare then keeps the old site live, which beats a dashboard that cannot open.
   * asset paths   a name the upload would reject (control characters, backslash, ? and # , a broken % escape, a path
                   over 512 characters) is left out of the site. Cloudflare publishes no path rule for Workers static
                   assets; these are conservative, and they only ever match a name this site never generates.
@@ -46,6 +49,10 @@ MAX_NAME_BYTES = 255
 NOSTORE = "Cache-Control: no-store"
 REPORT_NAME = "deploy_guard.json"
 PREV_DIRNAME = ".deploy_guard_prev"
+# What the page needs to open (frontend/index.html boot: loadDashboardData, loadAppSel / loadAccNames / loadAppNames,
+# rvFetchIndex, and the head's manifest + icons). Left out of the site, the dashboard would not open at all.
+CORE_FILES = ("index.html", "dashboard.json.gz", "dashboard.json", "selected_apps.json", "account_names.json",
+              "app_names.json", "review/index.json", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png")
 _META = ("_headers", "_redirects", ".assetsignore")     # read by Cloudflare, never uploaded as assets (and not counted)
 _MAX_LISTED = 50                                         # names kept per list in the report (the log never has any)
 
@@ -239,7 +246,7 @@ def _inventory(out_dir):
     return out
 
 
-def _check_files(out_dir, prev_dir, rep, fixed):
+def _check_files(out_dir, prev_dir, rep, fixed, unfixed):
     """Asset paths and sizes: a file a deploy would reject never ships. Then the file count (reported, never deleted)."""
     bad, over = [], []
     for rel, size in _inventory(out_dir):
@@ -255,21 +262,27 @@ def _check_files(out_dir, prev_dir, rep, fixed):
                     os.remove(full)                           # never write through a link
                 shutil.copyfile(prev, full)
                 action = "kept_previous_copy"
-            else:
+            elif rel in CORE_FILES:
+                action = "core_shipped_as_is"                 # the page cannot open without it: the deploy is rejected,
+            else:                                             # Cloudflare keeps the old site live
                 os.remove(full)
                 action = "left_out"
             over.append({"file": rel, "mib": round(size / 1048576, 2), "action": action})
     inv = _inventory(out_dir)
     rep["files"] = {"count": len(inv), "max": MAX_FILES, "over_limit": len(inv) > MAX_FILES,
                     "largest_mib": round(max([s for _r, s in inv] or [0]) / 1048576, 2)}
-    kept = sum(1 for o in over if o["action"] == "kept_previous_copy")
-    rep["oversize"] = {"max_mib": MAX_FILE_BYTES // 1048576, "count": len(over), "kept_previous": kept,
+    n = {a: sum(1 for o in over if o["action"] == a) for a in ("kept_previous_copy", "left_out", "core_shipped_as_is")}
+    rep["oversize"] = {"max_mib": MAX_FILE_BYTES // 1048576, "count": len(over), "kept_previous": n["kept_previous_copy"],
+                       "left_out": n["left_out"], "core_shipped": n["core_shipped_as_is"],
                        "files": over[:_MAX_LISTED], "needs_split": [o["file"] for o in over][:_MAX_LISTED]}
     rep["bad_paths"] = {"count": len(bad), "files": bad[:_MAX_LISTED]}
-    if kept:
-        fixed.append(f"{kept} oversize file{'s' if kept != 1 else ''} at the previous copy")
-    if len(over) - kept:
-        fixed.append(f"{len(over) - kept} oversize file{'s' if len(over) - kept != 1 else ''} left out")
+    if n["kept_previous_copy"]:
+        fixed.append(f"{n['kept_previous_copy']} oversize file{'s' if n['kept_previous_copy'] != 1 else ''} at the previous copy")
+    if n["left_out"]:
+        fixed.append(f"{n['left_out']} oversize file{'s' if n['left_out'] != 1 else ''} left out")
+    if n["core_shipped_as_is"]:
+        unfixed.append(f"core files over {MAX_FILE_BYTES // 1048576} MiB with no previous copy: {n['core_shipped_as_is']} "
+                       f"(shipped as is, the deploy will be rejected)")
     if bad:
         fixed.append(f"{len(bad)} bad asset name{'s' if len(bad) != 1 else ''} left out")
     return [rel for rel, _s in inv]
@@ -372,7 +385,7 @@ def run(out_dir, prev_dir=None, report_path=None, log=True):
     fixed, unfixed = rep["fixed"], rep["unfixed"]
     files = []
     try:
-        files = _check_files(out_dir, prev_dir, rep, fixed)
+        files = _check_files(out_dir, prev_dir, rep, fixed, unfixed)
     except Exception as e:                                    # the guard must never break a build
         unfixed.append(f"files check failed ({type(e).__name__})")
     for name, check in (("headers", lambda: _check_headers(out_dir, files, rep, fixed, unfixed)),
@@ -428,12 +441,18 @@ def annotations(rep):
     carry COUNTS only: no file name, no app, no amount."""
     out = []
     for u in rep.get("unfixed") or []:
+        if u.startswith("core files over"):
+            continue                                          # its own, plainer line below
         out.append(f"::warning::deploy guard could not fix: {u}. Cloudflare may reject the deploy; the data is still pushed.")
     ov = (rep.get("oversize") or {})
-    if ov.get("count"):
-        kept = ov.get("kept_previous", 0)
-        out.append(f"::warning::deploy guard: {ov['count']} file(s) over {ov.get('max_mib', 25)} MiB ({kept} kept at the "
-                   f"previous copy, the rest left out): that feature needs a split. Nothing was trimmed.")
+    if ov.get("core_shipped"):
+        out.append(f"::warning::deploy guard: {ov['core_shipped']} core file(s) over {ov.get('max_mib', 25)} MiB with no good "
+                   f"previous copy were shipped as they are: Cloudflare WILL reject this deploy and keep the old site live "
+                   f"until that file is split. Nothing was trimmed; the data is still pushed.")
+    if ov.get("count") and ov["count"] > ov.get("core_shipped", 0):
+        out.append(f"::warning::deploy guard: {ov['count'] - ov.get('core_shipped', 0)} file(s) over {ov.get('max_mib', 25)} MiB "
+                   f"({ov.get('kept_previous', 0)} kept at the previous copy, {ov.get('left_out', 0)} left out): that feature "
+                   f"needs a split. Nothing was trimmed.")
     bp = (rep.get("bad_paths") or {})
     if bp.get("count"):
         out.append(f"::warning::deploy guard: {bp['count']} file name(s) a deploy would reject were left out.")

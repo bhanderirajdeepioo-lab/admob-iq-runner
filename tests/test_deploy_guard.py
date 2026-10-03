@@ -320,6 +320,54 @@ def test_exactly_25_mib_ships_one_byte_more_does_not(tmp_path):
     assert sorted(os.listdir(site)) == ["edge.json.gz"] and rep["oversize"]["count"] == 1
 
 
+def test_a_core_file_over_the_cap_ships_as_is_and_the_warning_says_the_deploy_will_be_rejected(tmp_path):
+    """index.html, dashboard.json.gz, the other boot files: never left out. No good previous copy → shipped as it is;
+    Cloudflare then rejects the deploy and the OLD site stays live, which beats a dashboard that cannot open."""
+    site = _site(tmp_path, ["keep.json"])
+    _put(site, "dashboard.json.gz", b"\0" * (26 << 20))
+    _put(site, "review/index.json", b"\0" * (26 << 20))
+    _put(site, "other_feature.json.gz", b"\0" * (26 << 20))                              # not core
+    prev = str(tmp_path / "prev")
+    _put(prev, "review/index.json", b"{}")                                              # this one has a good previous copy
+    rep = dg.run(site, prev_dir=prev)
+    assert os.path.getsize(os.path.join(site, "dashboard.json.gz")) == 26 << 20            # shipped as it is
+    assert open(os.path.join(site, "review", "index.json"), "rb").read() == b"{}"          # the previous copy wins
+    assert not os.path.exists(os.path.join(site, "other_feature.json.gz"))                  # non-core: left out
+    ov = rep["oversize"]
+    assert (ov["count"], ov["core_shipped"], ov["kept_previous"], ov["left_out"]) == (3, 1, 1, 1)
+    assert not rep["ok"] and rep["unfixed"] == ["core files over 25 MiB with no previous copy: 1 (shipped as is, the deploy will be rejected)"]
+    ann = dg.annotations(rep)
+    assert len(ann) == 2 and all(a.startswith("::warning::") for a in ann)
+    assert "1 core file(s) over 25 MiB" in ann[0] and "WILL reject this deploy" in ann[0] and "old site live" in ann[0]
+    assert "2 file(s) over 25 MiB (1 kept at the previous copy, 1 left out)" in ann[1] and "needs a split" in ann[1]
+    assert not any("dashboard" in a or "review" in a or "other_feature" in a for a in ann)           # counts only
+
+
+def test_a_core_file_whose_previous_copy_is_over_the_cap_too_ships_the_new_one(tmp_path):
+    site = _site(tmp_path, [])
+    _put(site, "index.html", b"\0" * (26 << 20))
+    prev = str(tmp_path / "prev")
+    _put(prev, "index.html", b"\0" * (27 << 20))
+    rep = dg.run(site, prev_dir=prev)
+    assert os.path.getsize(os.path.join(site, "index.html")) == 26 << 20 and rep["oversize"]["core_shipped"] == 1
+
+
+def test_the_core_list_is_what_the_first_page_load_fetches():
+    """The names the page's boot fetches (frontend/index.html: load(), the head) must all be core."""
+    page = open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8").read()
+    boot = page[page.index("async function load(){"):]
+    for needle in ("loadDashboardData()", "rvFetchIndex()", "loadAppSel()", "loadAccNames()", "loadAppNames()"):
+        assert needle in boot, needle
+    assert 'fetchGzJson("dashboard.json.gz"' in page and "fetch('selected_apps.json?t='" in page
+    assert "fetch('account_names.json?t='" in page and "fetch('app_names.json?t='" in page
+    assert 'fetch("review/index.json?t="' in page and 'rel="manifest" href="manifest.webmanifest"' in page
+    assert 'rel="apple-touch-icon" href="icon-180.png"' in page
+    for n in ("index.html", "dashboard.json.gz", "dashboard.json", "selected_apps.json", "account_names.json",
+              "app_names.json", "review/index.json", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"):
+        assert n in dg.CORE_FILES, n
+    assert "baseline.json" not in dg.CORE_FILES                   # lazy: fetched when its tab opens
+
+
 def test_oversize_file_under_a_folder_is_found(tmp_path):
     site = _site(tmp_path, ["x.json"])
     _put(site, "review/2026-10-01.json", b"\0" * (26 << 20))
@@ -523,12 +571,25 @@ def test_build_starts_from_the_live_site_so_an_oversize_file_falls_back_to_it(tm
     assert not os.path.exists(tmp_path / dg.PREV_DIRNAME)
 
 
-def test_build_with_no_live_site_leaves_an_oversize_file_out(tmp_path, monkeypatch):
+def test_build_with_no_live_site_ships_an_oversize_core_file_and_leaves_a_non_core_one_out(tmp_path, monkeypatch, capsys):
+    """No live site to fall back to: the page itself (core) ships as it is and the report says the deploy will be
+    rejected; a non-core file is left out. (Cap lowered to 1 MiB: the 2 MiB page is over it.)"""
     monkeypatch.setattr(dg, "MAX_FILE_BYTES", 1 << 20)
     _mock_build(tmp_path)
-    assert not os.path.exists(tmp_path / "site" / "index.html")
-    assert os.path.exists(tmp_path / "site" / "dashboard.json.gz")                    # the rest of the site is whole
-    assert json.load(open(tmp_path / "deploy_guard.json"))["oversize"]["files"][0]["action"] == "left_out"
+    assert os.path.getsize(tmp_path / "site" / "index.html") > 1 << 20                  # shipped as it is, not left out
+    assert os.path.exists(tmp_path / "site" / "dashboard.json.gz")
+    rep = json.load(open(tmp_path / "deploy_guard.json"))
+    assert rep["oversize"]["files"][0]["action"] == "core_shipped_as_is" and rep["oversize"]["core_shipped"] == 1
+    assert not rep["ok"] and rep["unfixed"][0].startswith("core files over 1 MiB with no previous copy: 1")
+    assert "NOT FIXED: core files over" in capsys.readouterr().err
+
+
+def test_build_leaves_a_non_core_oversize_file_out(tmp_path, monkeypatch):
+    monkeypatch.setattr(dg, "MAX_FILE_BYTES", 10)                       # every small file is over; only core ones ship
+    _mock_build(tmp_path)
+    left = set(os.listdir(tmp_path / "site"))
+    assert "approved_ranges.json" not in left and "robots.txt" not in left        # not needed to open the page
+    assert {"index.html", "dashboard.json.gz", "selected_apps.json", "account_names.json", "app_names.json"} <= left
 
 
 def test_a_crashing_guard_never_breaks_the_build_and_leaves_no_stale_report(tmp_path, monkeypatch, capsys):
