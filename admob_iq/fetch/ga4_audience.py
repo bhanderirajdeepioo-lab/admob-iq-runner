@@ -6,37 +6,50 @@ THE REQUEST — the owner's method on the Data API: metric activeUsers, dimensio
 Android stream (ga4.Ga4App), over trailing date ranges that all END on E, the latest FINAL activity day:
     E        = ga4_uninstall.settled_end − FINAL_LAG_DAYS (today − 2 in the property's timezone from noon, else − 3; GA4
                activity is final 3 days later — the Active users tab's settled_till, the install-value reads' F);
-    window N = [E − w_N + 1, E], w_N = floor(N × 30.4375) days (30, 60, 91, 121, …, 365 at N = 12), N = 1, 2, … up to the
-               first window that holds the app's whole history (the Uninstall store's history_start);
+    windows  = TIERED months (engine.audience.tier_months): 1, 2 … 12, then 15, 18, 21, 24, then every 6 months (30,
+               36 …) up to the first window that holds the app's whole history (the Uninstall store's history_start);
+               window N months = [E − w + 1, E], w = floor(N × 30.4375) days. Past a year a coarser step costs far fewer
+               tokens (a 1,300-day app: 20 windows, ~9,500 range-days, instead of 43 monthly ones, ~28,800);
     "dau"    = E alone: actives on E by install day ("today's DAU by install month" — on the latest FINAL day, ~5 days
                back: the days after it are still filling in. FINAL_LAG_DAYS = 0 would read the robot's settled day
                itself, ~2 days back, with its newest days a little low).
-Up to RANGES_PER_CALL (4, the Data API's limit) named date ranges per request (GA4 adds the dateRange dimension), every
-row paged (Ga4App.report_all: offset += limit up to rowCount), metricAggregations TOTAL (GA4's own distinct actives of
-each range: the split's self-check). A request that needed more than one page with 2+ ranges is asked again range by
-range: one dimension is one total order, so offset paging can't repeat or skip a row.
+Named date ranges, up to RANGES_PER_CALL (4, the Data API's limit) per request while the call's token estimate stays
+under CALL_EST_CAP (a big app's long windows go one or two a call: smaller steps fit an hourly bucket and resume
+cleanly). Every row paged (Ga4App.report_all), metricAggregations TOTAL (GA4's own distinct actives of each range: the
+split's self-check). A request that needed more than one page with 2+ ranges is asked again range by range.
+
+RESUMABLE — a big app's read spans runs. The store keeps the latest COMPLETE result at its top level and the read in
+progress under "partial": {E, history_start, months, windows, ranges {name: result} (the ranges done), slicing {name:
+state} ("(other)" re-asks under way), calls, tokens, units, runs, started_at}. Every finished call is kept; a run that
+hits the quota, its budget or a call cap stops and the next run (or hour) goes on from there — never from the start.
+E is FROZEN for a partial: when a new final day appears before it completes, the old E is finished first, then the
+read rolls forward to the new E (in the same run when quota and time allow).
+
+TOKENS — estimated per call as k × Σ (range days × install days in the history) ("range-days × rows": GA4 charges by
+the data a report scans and the rows it returns; a firstSessionDate split returns up to one row per install day). k is
+PER APP: measured from its own calls (tokens ÷ units, state "k" — its last run's) and used next time; PRIOR_K before
+its first call, calibrated on the first probe's biggest apps (~1,500 tokens for a call of four ~1,250-day windows over
+~1,300 install days); small apps paid far less, and their own k replaces it after one call. A slice of an "(other)"
+re-ask is estimated like the whole range (if GA4 charges by the data scanned, a slice costs as much).
 
 NEVER HIDDEN — flagged in the store:
-  * "(other)" rows (GA4 folds what it can't keep into one row) or metadata.dataLossFromOtherRow: the request is asked
-    again in slices of IN_LIST_DAYS install days (firstSessionDate inList — the uninstall cells' trick), within
-    MAX_CALLS; whatever still sits in "(other)" stays there per window (store "other"), never spread over install days;
+  * "(other)" rows (GA4 folds what it can't keep into one row): that range is asked again by install-day slices
+    (firstSessionDate inList, ≤ IN_LIST_MAX days each; a slice that still has "(other)" is halved down to IN_LIST_MIN
+    days, then kept flagged) — resumable slice by slice. metadata.dataLossFromOtherRow without any "(other)" row
+    re-asks every range of that call (the response can't say which). Whatever still sits in "(other)" stays there per
+    window (store "other"), never spread over install days;
   * "(not set)" first-session days (store "not_set"); install days before history_start stay in by_fsd as GA4 gave
     them (engine.audience shows them apart);
   * thresholding (subjectToThresholding: small counts withheld), sampling, a cut report (truncated), TOTAL refused (a
     400: asked without it, no_total), a split whose Σ rows is off TOTAL by more than 5% (cov_off {window: Σ ÷ TOTAL}).
 
-THE STORE (deterministic gzip, rewritten only when its content changes): {v, app_id, package, property_id, stream_id,
-time_zone, history_start, E, fetched_at, windows [w_1 …], by_fsd {install day: [actives in window N …]} (0 = no row),
-total / other / not_set [per window], dau_by_fsd {install day: actives on E}, dau {total, other, not_set}, flags,
-calls, tokens}. Whole or nothing: an app whose reads stop half-way (quota, budget, an error) keeps its old store.
-
 IN THE BUILD (uninstall_build, only with the repo variable GA4_AUDIENCE=true): after the Uninstall fetch, each selected
-app with an Uninstall store is read again when a new final day E appears — at most once a day per app; a failed one
-waits RETRY_HOURS. Its own run budget (GA4_AUDIENCE_BUDGET_SEC): no app starts past it, a started one stops at 2×.
-QUOTA (per property): an app starts only when its token estimate (its last fetch's tokens, else calls ×
-TOKENS_PER_CALL_EST) leaves every hourly token bucket above HOUR_FLOOR; every call first checks the last snapshot
-(quota_stop) and a 429 stops the property for the run — the Uninstall fetch of the next hour keeps its quota. State
-(private): data/ga4_audience/state.json. Nothing here prints: the build log gets ONE counts-only line (log_line).
+app with an Uninstall store is read when it has a partial read or a new final day E — a complete app at most once a day;
+a failed one waits RETRY_HOURS. Its own run budget (GA4_AUDIENCE_BUDGET_SEC): no app starts past it, a started one stops
+at 2× (its progress kept). QUOTA (per property): a call goes only when its estimate leaves every hourly token bucket of
+the last snapshot above HOUR_FLOOR (and the daily one above 10%); every call first checks the snapshot (quota_stop) and a
+429 stops the property for the run — the Uninstall fetch of the next hour keeps its quota. State (private):
+data/ga4_audience/state.json. Nothing here prints: the build log gets ONE counts-only line (log_line).
 """
 
 import json
@@ -48,29 +61,32 @@ from . import ga4
 from . import ga4_uninstall as gu
 from .. import ga4_probe
 from ..db import write_json_gz_stable
-from ..engine.audience import window_days
+from ..engine.audience import tier_months, window_days
 
 DIR = "ga4_audience"
 FINAL_LAG_DAYS = gu.ACT_LATE_DAYS   # E = the robot's settled day − 3: GA4 activity is final then (the Active users tab)
-STORE_V = 1                 # the store format: another one is read again in full at the next run
+STORE_V = 2                 # 2: tiered windows + the resumable partial read (another format: read again)
 RANGES_PER_CALL = 4         # date ranges per runReport (the Data API's limit)
 PAGE_ROWS = 100000          # rows per page (≤ 4 ranges × one row per install day: one page, even at 1,300 days)
-IN_LIST_DAYS = 120          # an "(other)" request is asked again in slices of 120 install days (the size the uninstall
-                            # cohorts' inList ran live)
-MAX_CALLS = 60              # calls per app per fetch at most (a 3.5-year app needs 12; the rest is "(other)" re-asks)
-HOUR_FLOOR = 0.5            # an app starts only if its estimate leaves each hourly token bucket ≥ half; a call stops
-                            # under half (the install-value backfill's own floor)
+IN_LIST_MAX = 400           # an "(other)" range is asked again in slices of ≤ 400 install days (inList values) …
+IN_LIST_MIN = 30            # … a slice that still has "(other)" is halved, down to 30 days (then kept, flagged)
+MAX_CALLS = 40              # calls per app per RUN at most (its read goes on in the next run)
+PRIOR_K = 2.5e-4            # tokens per unit (range-day × install day) before an app's own calls are measured
+CALL_EST_CAP = 1500         # a call takes another range (≤ 4) only while its estimate stays under this many tokens
+HOUR_FLOOR = 0.5            # a call goes only if its estimate leaves each hourly token bucket ≥ half (and stops under
+                            # half: the install-value backfill's own floor) …
+DAY_FLOOR = 0.1             # … and the daily bucket ≥ 10% (the Uninstall fetch's own stop)
 COUNT_FLOOR = {"serverErrorsPerProjectPerHour": 4, "potentiallyThresholdedRequestsPerHour": 5}
 COV_LO, COV_HI = 0.95, 1.05  # Σ rows ÷ GA4's TOTAL outside this → cov_off (user counts are sketches: ±1–2% is noise)
 COV_MIN_USERS = 200         # (a window with fewer actives is not judged)
-TOKENS_PER_CALL_EST = 25    # a-priori tokens per call before an app's first fetch (then its own measured tokens)
 BUDGET_SEC = 180            # the build's own budget for this step
 RETRY_HOURS = 3.0           # a failed app waits this long
 DAU = "dau"
 
 
 class Stop(Exception):
-    """The app's reads stop here: the property's quota, a 429, or the run's budget. Its old store stays."""
+    """The app's reads stop here: the property's quota, a call's estimate that doesn't fit, a 429, the run's budget
+    or its call cap. Whatever was read is kept (the partial read)."""
 
 
 def _int(v):
@@ -78,6 +94,10 @@ def _int(v):
         return int(float(v))
     except (TypeError, ValueError):
         return 0
+
+
+def _d(s):
+    return gu._d(s)
 
 
 def _err(e):
@@ -93,30 +113,60 @@ def _err(e):
     return {"type": type(e).__name__}
 
 
-# ── the plan: windows, ranges, requests ─────────────────────────────────────────────────────────────
+# ── the plan: windows, ranges, calls, tokens ────────────────────────────────────────────────────────
 
 def final_end(tz_name, now):
     """E, the latest FINAL activity day: the robot's settled day (gu.settled_end) − FINAL_LAG_DAYS."""
     return gu.settled_end(tz_name, now) - timedelta(days=FINAL_LAG_DAYS)
 
 
-def windows_for(end, hs):
-    """Window lengths (days) for N = 1, 2, … up to the first window holding every install day since `hs`."""
-    age, out, n = (end - hs).days + 1, [], 1
-    while True:
-        out.append(window_days(n))
-        if out[-1] >= age:
-            return out
-        n += 1
+def install_days(end, hs):
+    """Install days in the history: the rows a firstSessionDate split can return (the token estimate's "rows")."""
+    return max(1, (end - hs).days + 1)
 
 
-def ranges_for(end, hs):
+def months_for(end, hs):
+    return tier_months(install_days(end, hs))
+
+
+def ranges_for(end, hs, months=None):
     """[(name, start, end)]: "dau" (E alone), then "w<days>" for every window — all ending on E."""
-    return [(DAU, end, end)] + [("w%d" % w, end - timedelta(days=w - 1), end) for w in windows_for(end, hs)]
+    ms = months or months_for(end, hs)
+    return [(DAU, end, end)] + [("w%d" % window_days(m), end - timedelta(days=window_days(m) - 1), end) for m in ms]
 
 
-def groups(rs, k=RANGES_PER_CALL):
-    return [rs[i:i + k] for i in range(0, len(rs), k)]
+def _days_of(rg):
+    return (rg[2] - rg[1]).days + 1
+
+
+def estimate(group, rows, k):
+    """Tokens a call of these ranges should cost: k × Σ range days × rows."""
+    return k * sum(_days_of(rg) for rg in group) * rows
+
+
+def next_group(todo, rows, k):
+    """The next call's ranges: the first one left, then more (≤ RANGES_PER_CALL) while the estimate stays under
+    CALL_EST_CAP."""
+    g = [todo[0]]
+    for rg in todo[1:RANGES_PER_CALL]:
+        if estimate(g + [rg], rows, k) > CALL_EST_CAP:
+            break
+        g.append(rg)
+    return g
+
+
+def plan_calls(end, hs, k=PRIOR_K):
+    """One app's request plan (no "(other)" re-asks) → {windows, months, ranges, calls, range_days, install_days, units,
+    tokens_est}."""
+    rs, rows = ranges_for(end, hs), install_days(end, hs)
+    calls, todo = 0, list(rs)
+    while todo:
+        g = next_group(todo, rows, k)
+        todo = todo[len(g):]
+        calls += 1
+    rd = sum(_days_of(rg) for rg in rs)
+    return {"windows": len(rs) - 1, "months": months_for(end, hs), "ranges": len(rs), "calls": calls,
+            "range_days": rd, "install_days": rows, "units": rd * rows, "tokens_est": int(round(k * rd * rows))}
 
 
 def request_body(group, total=True):
@@ -127,14 +177,6 @@ def request_body(group, total=True):
     if total:
         body["metricAggregations"] = ["TOTAL"]
     return body
-
-
-def plan_calls(end, hs, per_call=TOKENS_PER_CALL_EST):
-    """One app's request plan → {windows, ranges, calls, range_days (Σ days the ranges cover), tokens_est}."""
-    rs = ranges_for(end, hs)
-    n = len(groups(rs))
-    return {"windows": len(rs) - 1, "ranges": len(rs), "calls": n,
-            "range_days": sum((b - a).days + 1 for _, a, b in rs), "tokens_est": n * per_call}
 
 
 # ── quota ───────────────────────────────────────────────────────────────────────────────────────────
@@ -159,28 +201,32 @@ def quota_stop(q):
     return None
 
 
-def fits(q, est):
-    """Does an app's token estimate leave every hourly token bucket (of the last snapshot) above HOUR_FLOOR?"""
-    for k in ("tokensPerHour", "tokensPerProjectPerHour"):
+FLOORS = {"tokensPerHour": HOUR_FLOOR, "tokensPerProjectPerHour": HOUR_FLOOR, "tokensPerDay": DAY_FLOOR}
+
+
+def fits(q, est, floors=None):
+    """Does a call's token estimate leave every token bucket of the last snapshot above its floor (FLOORS)?"""
+    for k, floor in (floors or FLOORS).items():
         b = (q or {}).get(k) or {}
         if "remaining" in b:
             left = _int(b["remaining"])
             total = max(gu.QUOTA_CAP[k], _int(b.get("consumed")) + left)
-            if left - est < HOUR_FLOOR * total:
+            if left - est < floor * total:
                 return False
     return True
 
 
 class App(ga4.Ga4App):
-    """ga4.Ga4App (stream-pinned, paged, returnPropertyQuota) whose every call first passes its PROPERTY's gate and the
-    run's clock (raises Stop), and which counts tokens (tokensPerDay consumed) and keeps each read's metadata + TOTAL.
-    over() → a reason to stop the run (or None); tick() → called once per call (a heartbeat); gate(quota) → a reason."""
+    """ga4.Ga4App (stream-pinned, paged, returnPropertyQuota) whose every call first passes its PROPERTY's gate, the
+    run's clock and the call's own estimate (self.est must fit — raises Stop), and which counts tokens (tokensPerDay
+    consumed) and units (the estimate's) and keeps each read's metadata + TOTAL. over() → a reason to stop the run (or
+    None); tick() → called once per call (a heartbeat); gate(quota) → a reason; floors → fits()'s floors."""
 
-    def __init__(self, token, property_id, stream_id, prop=None, over=None, tick=None, gate=quota_stop):
+    def __init__(self, token, property_id, stream_id, prop=None, over=None, tick=None, gate=quota_stop, floors=None):
         super().__init__(token, property_id, stream_id)
         self.prop = new_prop() if prop is None else prop
-        self.over, self.tick, self.gate = over, tick, gate
-        self.tok, self.no_total, self.split_reads = 0, False, 0
+        self.over, self.tick, self.gate, self.floors = over, tick, gate, floors
+        self.tok, self.units, self.est, self.no_total, self.split_reads = 0, 0, 0, False, 0
         self.begin()
 
     def begin(self):
@@ -199,6 +245,8 @@ class App(ga4.Ga4App):
         if why:
             p["stop"] = why
             raise Stop(why)
+        if self.est and p["quota"] and not fits(p["quota"], self.est, self.floors):
+            raise Stop("quota_est")                     # this call would take a bucket under its floor: next run
         if self.tick:
             self.tick()
         try:
@@ -278,55 +326,116 @@ def read(ga, group, extra=None):
     return parse(rows, ga.totals, group, ga.meta, ga.truncated(rows))
 
 
-def _in_slices(hs, end):
-    days = gu._days(hs, end)
-    return [days[i:i + IN_LIST_DAYS] for i in range(0, len(days), IN_LIST_DAYS)]
-
-
-def read_group(ga, group, hs, end, flags, max_calls=MAX_CALLS):
-    """read() one group; when any of its ranges has "(other)" users or GA4's dataLossFromOtherRow, the group is asked
-    again in slices of IN_LIST_DAYS install days (hs..end, firstSessionDate inList) — if the app's call cap allows —
-    and those slices replace its install days; days outside them (before hs) and "(not set)" stay from the first read,
-    its TOTAL too (other_first: what "(other)" held before). Without the room, the first read is kept, flagged."""
-    res = read(ga, group)
-    if not any(r["other"] or r["loss_other"] for r in res.values()):
-        return res
-    slices = _in_slices(hs, end)
-    if ga.calls + len(slices) > max_calls:
-        flags["other_kept"] += 1
-        return res
-    again = {n: {"by": {}, "other": 0, "thresh": False, "loss_other": False, "sampled": False, "truncated": False,
-                 "bad": 0} for n, _, _ in group}
-    for sl in slices:
-        part = read(ga, group, extra=[ga4._in_list("firstSessionDate", [d.strftime("%Y%m%d") for d in sl])])
-        for n, p in part.items():
-            a = again[n]
-            for x, u in p["by"].items():
-                a["by"][x] = a["by"].get(x, 0) + u
-            a["other"] += p["other"] + p["not_set"]      # inList can't match "(not set)": anything else is "(other)"
-            a["bad"] += p["bad"]
-            for f in ("thresh", "loss_other", "sampled", "truncated"):
-                a[f] = a[f] or p[f]
-    lo, hi = hs.isoformat(), end.isoformat()
-    for n, r in res.items():
-        a = again[n]
-        by = {x: u for x, u in r["by"].items() if not lo <= x <= hi}
-        by.update(a["by"])
-        r.update(by=by, other_first=r["other"], other=a["other"], loss_other=a["loss_other"], bad=r["bad"] + a["bad"],
-                 thresh=r["thresh"] or a["thresh"], sampled=r["sampled"] or a["sampled"],
-                 truncated=r["truncated"] or a["truncated"])
-    flags["other_reasked"] += 1
+def _counted(ga, group, rows, k, extra=None, as_days=None):
+    """read() with this call's estimate set (the gate) and its units counted once the read went through."""
+    days = as_days if as_days is not None else sum(_days_of(rg) for rg in group)
+    ga.est = k * days * rows
+    res = read(ga, group, extra)
+    ga.units += days * rows
     return res
 
 
-def fetch_app(ga, end, hs, max_calls=MAX_CALLS):
-    """Every window + the DAU day of one app → its store (without the app's ids — refresh_all / the probe add them).
-    Raises (Stop, or the read's error) instead of returning a partial store."""
-    rs = ranges_for(end, hs)
-    flags = {"other_reasked": 0, "other_kept": 0}
-    res = {}
-    for g in groups(rs):
-        res.update(read_group(ga, g, hs, end, flags, max_calls))
+# ── the partial read (resumable) ────────────────────────────────────────────────────────────────────
+
+def new_partial(end, hs, property_id, stream_id, now_iso):
+    """A read of one final day E, frozen until it completes."""
+    ms = months_for(end, hs)
+    return {"E": end.isoformat(), "history_start": hs.isoformat(), "property_id": str(property_id),
+            "stream_id": str(stream_id), "months": ms, "windows": [window_days(m) for m in ms], "ranges": {},
+            "slicing": {}, "calls": 0, "tokens": 0, "units": 0, "runs": 0, "started_at": now_iso, "updated_at": now_iso}
+
+
+def progress(part):
+    """{done, total, slicing} ranges of a partial read."""
+    total = len(part.get("windows") or []) + 1
+    return {"done": len(part.get("ranges") or {}), "total": total, "slicing": len(part.get("slicing") or {})}
+
+
+def _spans(hs, end, size=None):
+    """[hs, end] in near-equal spans of ≤ size (IN_LIST_MAX) days → [[from ISO, to ISO], …]."""
+    size = size or IN_LIST_MAX
+    days = gu._days(hs, end)
+    n = max(1, -(-len(days) // size))
+    step = -(-len(days) // n)
+    return [[days[i].isoformat(), days[min(i + step, len(days)) - 1].isoformat()] for i in range(0, len(days), step)]
+
+
+def _acc():
+    return {"by": {}, "other": 0, "bad": 0, "thresh": False, "loss_other": False, "sampled": False,
+            "truncated": False}
+
+
+def _slice_step(ga, part, name, rg, k, rows):
+    """One slice of an "(other)" re-ask (resumable: the slicing state lives in the partial)."""
+    s = part["slicing"][name]
+    lo, hi = s["todo"][0]
+    days = gu._days(_d(lo), _d(hi))
+    r = _counted(ga, [rg], rows, k, extra=[ga4._in_list("firstSessionDate", [d.strftime("%Y%m%d") for d in days])],
+                 as_days=_days_of(rg))                 # estimated like the whole range (see TOKENS)
+    s["todo"].pop(0)
+    s["reads"] += 1
+    if (r[name]["other"] or r[name]["loss_other"]) and len(days) > IN_LIST_MIN:
+        mid = days[len(days) // 2 - 1].isoformat()
+        s["todo"][:0] = [[lo, mid], [(_d(mid) + timedelta(days=1)).isoformat(), hi]]
+        s["halved"] += 1
+    else:
+        a, p = s["acc"], r[name]
+        for x, u in p["by"].items():
+            a["by"][x] = a["by"].get(x, 0) + u
+        a["other"] += p["other"] + p["not_set"]         # inList can't match "(not set)": anything else is "(other)"
+        a["bad"] += p["bad"]
+        for f in ("thresh", "loss_other", "sampled", "truncated"):
+            a[f] = a[f] or p[f]
+    if not s["todo"]:
+        f, a = s["first"], s["acc"]
+        lo_h, hi_h = part["history_start"], part["E"]
+        by = {x: u for x, u in f["by"].items() if not lo_h <= x <= hi_h}
+        by.update(a["by"])
+        part["ranges"][name] = dict(f, by=by, other_first=f["other"], other=a["other"], loss_other=a["loss_other"],
+                                    bad=f["bad"] + a["bad"], thresh=f["thresh"] or a["thresh"],
+                                    sampled=f["sampled"] or a["sampled"], truncated=f["truncated"] or a["truncated"],
+                                    sliced=s["reads"], halved=s["halved"])
+        del part["slicing"][name]
+
+
+def advance(ga, part, k=PRIOR_K, max_calls=MAX_CALLS):
+    """Read on: "(other)" slices under way first, then the next call of ranges not read yet → True once every range is
+    done. Raises Stop (quota, budget, the call cap) or the read's error — every finished call is already in `part`."""
+    end, hs = _d(part["E"]), _d(part["history_start"])
+    rs = ranges_for(end, hs, part["months"])
+    by_name = {rg[0]: rg for rg in rs}
+    rows = install_days(end, hs)
+    while True:
+        slicing = [n for n, _, _ in rs if n in part["slicing"]]
+        todo = [rg for rg in rs if rg[0] not in part["ranges"] and rg[0] not in part["slicing"]]
+        if not slicing and not todo:
+            return True
+        if ga.calls >= max_calls:
+            raise Stop("calls")
+        t0, c0, u0 = ga.tok, ga.calls, ga.units
+        try:
+            if slicing:
+                _slice_step(ga, part, slicing[0], by_name[slicing[0]], k, rows)
+                continue
+            group = next_group(todo, rows, k)
+            res = _counted(ga, group, rows, k)
+            any_row = any(r["other"] for r in res.values())
+            for n, r in res.items():
+                if r["other"] or (r["loss_other"] and not any_row):
+                    part["slicing"][n] = {"first": r, "todo": _spans(hs, end), "acc": _acc(), "reads": 0, "halved": 0}
+                else:
+                    part["ranges"][n] = r
+        finally:
+            part["calls"] += ga.calls - c0
+            part["tokens"] += ga.tok - t0
+            part["units"] += ga.units - u0
+
+
+def complete(part):
+    """A partial read whose every range is done → the store's top-level (complete) fields."""
+    end, hs = _d(part["E"]), _d(part["history_start"])
+    rs = ranges_for(end, hs, part["months"])
+    res = part["ranges"]
     names = [n for n, _, _ in rs if n != DAU]
     by = {}
     for i, n in enumerate(names):
@@ -344,17 +453,70 @@ def fetch_app(ga, end, hs, max_calls=MAX_CALLS):
     def which(key):
         return [n for n in every if res[n].get(key)]
     d = res[DAU]
-    return {"v": STORE_V, "E": end.isoformat(), "history_start": hs.isoformat(),
-            "windows": [int(n[1:]) for n in names], "by_fsd": by,
+    return {"complete": True, "E": part["E"], "history_start": part["history_start"], "months": list(part["months"]),
+            "windows": list(part["windows"]), "by_fsd": by,
             "total": [res[n]["total"] for n in names], "other": [res[n]["other"] for n in names],
             "not_set": [res[n]["not_set"] for n in names],
             "dau_by_fsd": dict(d["by"]), "dau": {"total": d["total"], "other": d["other"], "not_set": d["not_set"]},
             "flags": {"thresholded": which("thresh"), "other": which("other"), "loss_other": which("loss_other"),
                       "other_first": {n: res[n]["other_first"] for n in every if res[n].get("other_first")},
+                      "sliced": {n: res[n]["sliced"] for n in every if res[n].get("sliced")},
                       "sampled": which("sampled"), "truncated": which("truncated"), "cov_off": cov,
-                      "no_total": ga.no_total, "split_reads": ga.split_reads, "rows": sum(res[n]["rows"] for n in every),
-                      "bad_users": sum(res[n]["bad"] for n in every), **flags},
-            "calls": ga.calls, "tokens": ga.tok}
+                      "rows": sum(res[n]["rows"] for n in every), "bad_users": sum(res[n]["bad"] for n in every)},
+            "calls": part["calls"], "tokens": part["tokens"], "units": part["units"], "runs": part["runs"],
+            "started_at": part["started_at"]}
+
+
+TOP = ("complete", "E", "history_start", "months", "windows", "by_fsd", "total", "other", "not_set", "dau_by_fsd", "dau",
+       "flags", "calls", "tokens", "units", "runs", "started_at", "fetched_at")
+
+
+def step(ga, store, end, hs, route, now_iso, k=PRIOR_K, max_calls=MAX_CALLS, roll=True):
+    """One app's turn, in place on `store` (its saved dict, or {} for a new one) → "fresh" (nothing to read), "fetched"
+    (a read completed this turn) or raises Stop / an error with every finished call kept in store["partial"]. A partial
+    of another stream is dropped; a partial is finished on ITS E before anything else; a complete store older than E
+    (or of another stream or history start) starts a new partial — and roll=True starts it right after finishing an
+    older one, in the same turn."""
+    pid, sid = str(route["property_id"]), str(route["stream_id"])
+    store.setdefault("v", STORE_V)
+    if store.get("v") != STORE_V or (store.get("complete") and (str(store.get("property_id")),
+                                                                 str(store.get("stream_id"))) != (pid, sid)):
+        for f in TOP + ("partial",):
+            store.pop(f, None)
+        store["v"] = STORE_V
+    part = store.get("partial")
+    if part and (part.get("property_id"), part.get("stream_id")) != (pid, sid):
+        part = store["partial"] = None
+    done = None
+    while True:
+        if not part:
+            if store.get("complete") and _d(store["E"]) >= end and store.get("history_start") == hs.isoformat():
+                return done or "fresh"
+            if done and not roll:
+                return done
+            part = store["partial"] = new_partial(end, hs, pid, sid, now_iso)
+        part["runs"] += 1
+        part["updated_at"] = now_iso
+        advance(ga, part, k, max_calls)
+        for f in TOP:
+            store.pop(f, None)
+        store.update(complete(part), property_id=pid, stream_id=sid, fetched_at=now_iso)
+        store.pop("partial", None)
+        part, done = None, "fetched"
+        if not roll:
+            return done
+
+
+def fetch_app(ga, end, hs, max_calls=10 ** 6, k=PRIOR_K):
+    """A whole read of one app in one go → its complete store fields (no ids). Raises instead of a partial."""
+    part = new_partial(end, hs, ga.property_id, ga.stream_id, None)
+    advance(ga, part, k, max_calls)
+    return complete(part)
+
+
+def measured_k(ga, old=None):
+    """The app's tokens per unit from this turn's calls (its old k when none were measured)."""
+    return round(ga.tok / ga.units, 9) if ga.units and ga.tok else old
 
 
 def flag_summary(store):
@@ -385,7 +547,12 @@ def store_meta(store):
     """What plan() needs — kept in state, so planning never opens a store."""
     if not store:
         return None
-    return {k: store.get(k) for k in ("v", "E", "history_start", "property_id", "stream_id")}
+    m = {k: store.get(k) for k in ("v", "complete", "E", "history_start", "property_id", "stream_id")}
+    p = store.get("partial")
+    if p:
+        m.update(partial_E=p.get("E"), partial_stream=[p.get("property_id"), p.get("stream_id")],
+                 partial_progress=progress(p))
+    return m
 
 
 def load_state(data_dir):
@@ -421,25 +588,27 @@ def save_state(data_dir, state):
 # ── the build's run ─────────────────────────────────────────────────────────────────────────────────
 
 def plan(app_st, meta, uni_meta, route, end, now, retry_hours=RETRY_HOURS):
-    """"fetch" or None for one app this run. meta = its Audience store's store_meta (None: no store); uni_meta = its
-    Uninstall store's (gu.store_meta). Due when there is no store (or another format / stream / history start) or a
-    newer final day E exists — so at most once a day; a failed app waits retry_hours."""
+    """"continue" (a partial read of this stream is under way), "fetch" (a new read is due) or None for one app this
+    run. meta = its Audience store's store_meta (None: no store); uni_meta = its Uninstall store's (gu.store_meta). A
+    complete store is due once a newer final day E exists — at most once a day; a failed app waits retry_hours."""
     if app_st.get("fail") and gu._hours_since(app_st.get("last_try"), now) < retry_hours:
         return None
     if not meta or _int(meta.get("v")) != STORE_V:
         return "fetch"
-    if (str(meta.get("property_id")), str(meta.get("stream_id"))) != (str(route.get("property_id")),
-                                                                       str(route.get("stream_id"))):
+    here = [str(route.get("property_id")), str(route.get("stream_id"))]
+    if meta.get("partial_E") and [str(v) for v in meta.get("partial_stream") or []] == here:
+        return "continue"
+    if not meta.get("complete") or [str(meta.get("property_id")), str(meta.get("stream_id"))] != here:
         return "fetch"
     if meta.get("history_start") != (uni_meta or {}).get("history_start"):
         return "fetch"                                  # the windows must reach the Uninstall history's first day
-    if not meta.get("E") or gu._d(meta["E"]) < end:
+    if not meta.get("E") or _d(meta["E"]) < end:
         return "fetch"
     return None
 
 
-COUNTS = ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred", "waiting", "calls", "tokens", "flagged",
-          "other", "thresholded", "cov_off")
+COUNTS = ("selected", "with_ga4", "fetched", "partial", "fresh", "failed", "deferred", "waiting", "calls", "tokens",
+          "flagged", "other", "thresholded", "cov_off")
 
 
 def _uni_meta(ust, data_dir, aid, route):
@@ -457,10 +626,10 @@ def _uni_meta(ust, data_dir, aid, route):
 
 
 def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDGET_SEC):
-    """Fetch what is due for every selected app (`apps` = uninstall_build's list; an app without a package or sharing
-    another's is skipped) → {"counts": COUNTS, "apps": {app id: fetched|fresh|failed|deferred|waiting}}. Reads the
-    Uninstall state's routes and timezones and each app's Uninstall store meta (never writes them). Never raises;
-    never prints."""
+    """Read on for every selected app (`apps` = uninstall_build's list; an app without a package or sharing another's
+    is skipped) → {"counts": COUNTS, "apps": {app id: fetched|partial|fresh|failed|deferred|waiting}} (partial: read on,
+    not complete yet). Reads the Uninstall state's routes and timezones and each app's Uninstall store meta (never
+    writes them). Never raises; never prints."""
     now = now or datetime.now(timezone.utc)
     t0 = clock()
     counts = dict.fromkeys(COUNTS, 0)
@@ -488,26 +657,26 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
             um = _uni_meta(ust, data_dir, aid, r)
             tz = ust["tz"].get(r["property_id"]) or (um or {}).get("time_zone") or "UTC"
             end = final_end(tz, now)
-            if not um or gu._d(um["history_start"]) > end:
+            if not um or _d(um["history_start"]) > end:
                 out["apps"][aid] = "waiting"            # no Uninstall store of this stream yet / no final day yet
                 continue
             meta = st.get("meta") if os.path.exists(store_path(data_dir, aid)) else None
-            if plan(st, meta, um, r, end, now, retry) is None:
+            kind = plan(st, meta, um, r, end, now, retry)
+            if kind is None:
                 out["apps"][aid] = "failed" if st.get("fail") else "fresh"
                 continue
-            todo.append((a, st, r, tz, end, gu._d(um["history_start"])))
-        # last run's deferred first, then the longest unfetched
-        todo.sort(key=lambda t: (not t[1].get("deferred"), t[1].get("last_ok") is not None, t[1].get("last_ok") or "",
-                                 t[0]["app_id"]))
+            todo.append((kind, a, st, r, tz, end, _d(um["history_start"])))
+        # reads under way first (finish before anything new), then last run's deferred, then the longest unfetched
+        todo.sort(key=lambda t: (t[0] != "continue", not t[2].get("deferred"), t[2].get("last_ok") is not None,
+                                 t[2].get("last_ok") or "", t[1]["app_id"]))
         props = {}
 
         def over():
             return "budget" if clock() - t0 >= 2 * budget else None
-        for a, st, r, tz, end, hs in todo:
+        for kind, a, st, r, tz, end, hs in todo:
             aid, pid = a["app_id"], r["property_id"]
             prop = props.setdefault(pid, new_prop())
-            est = _int(st.get("tokens")) or plan_calls(end, hs)["tokens_est"]
-            if clock() - t0 >= budget or prop["stop"] or not fits(prop["quota"], est):
+            if clock() - t0 >= budget or prop["stop"]:
                 st["deferred"] = True
                 out["apps"][aid] = "deferred"
                 continue
@@ -524,20 +693,20 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                 out["apps"][aid] = "failed"
                 continue
             ga = App(access[owner], pid, r["stream_id"], prop, over=over)
+            path = store_path(data_dir, aid)
+            store = (load_store(path) or {}) if os.path.exists(path) else {}
             try:
-                store = fetch_app(ga, end, hs)
-                store.update(app_id=aid, package=a["package"], property_id=str(pid), stream_id=str(r["stream_id"]),
-                             time_zone=tz, fetched_at=now_iso)
-                save_store(store_path(data_dir, aid), store)
+                res = step(ga, store, end, hs, r, now_iso, float(st.get("k") or PRIOR_K))
                 st.pop("deferred", None)
                 st.pop("stopped", None)
-                st.update(key=gu.file_key(aid), last_try=now_iso, last_ok=now_iso, fail=None, fail_detail=None,
-                          calls=ga.calls, tokens=ga.tok, meta=store_meta(store), flags=flag_summary(store))
-                out["apps"][aid] = "fetched"
-                fetched.append(st["flags"])
-            except Stop as e:                           # quota / budget: the old store stays, next run again
+                st.update(last_try=now_iso, fail=None, fail_detail=None)
+                if res == "fetched":
+                    st.update(last_ok=now_iso, flags=flag_summary(store))
+                    fetched.append(st["flags"])
+                out["apps"][aid] = res
+            except Stop as e:                           # quota / budget / call cap: what was read stays, next run on
                 st.update(deferred=True, stopped=str(e))
-                out["apps"][aid] = "deferred"
+                out["apps"][aid] = "partial" if ga.calls else "deferred"
             except Exception as e:
                 fk = gu._fail_kind(e)
                 st.update(last_try=now_iso, fail=fk, fail_detail=_err(e))
@@ -545,6 +714,15 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                     prop["stop"] = prop["stop"] or "quota"
                 out["apps"][aid] = "failed"
             finally:
+                if ga.calls or store.get("partial"):
+                    store.update(app_id=aid, package=a["package"], time_zone=tz)
+                    save_store(path, store)
+                if store:
+                    st["meta"] = store_meta(store)
+                st["key"] = gu.file_key(aid)
+                st["k"] = measured_k(ga, st.get("k"))
+                if ga.calls:
+                    st.update(calls=ga.calls, tokens=ga.tok)
                 counts["calls"] += ga.calls
                 counts["tokens"] += ga.tok
                 store = None
@@ -562,11 +740,11 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
 def log_line(status):
     """The build log's ONE line for this step — counts only (no names, ids, dates or user numbers)."""
     c = (status or {}).get("counts") or {}
-    n = _int(c.get("fetched"))
-    line = ("ga4 audience: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, calls %d, "
-            "tokens %d (~%d per fetched app), flagged %d (other %d, thresholded %d, coverage off %d)"
-            % tuple([_int(c.get(k)) for k in ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred",
-                                              "waiting", "calls", "tokens")]
+    n = _int(c.get("fetched")) + _int(c.get("partial"))
+    line = ("ga4 audience: apps %d, with GA4 %d, fetched %d, partial %d, fresh %d, failed %d, deferred %d, waiting %d, "
+            "calls %d, tokens %d (~%d per app read), flagged %d (other %d, thresholded %d, coverage off %d)"
+            % tuple([_int(c.get(k)) for k in ("selected", "with_ga4", "fetched", "partial", "fresh", "failed",
+                                              "deferred", "waiting", "calls", "tokens")]
                     + [_int(c.get("tokens")) // n if n else 0]
                     + [_int(c.get(k)) for k in ("flagged", "other", "thresholded", "cov_off")]))
     if (status or {}).get("error"):

@@ -94,16 +94,12 @@ class Population:
                 out[u[0].isoformat()] = out.get(u[0].isoformat(), 0) + 1
         return out
 
-    def aud_store(self, hs=None, windows=None):
-        """The Audience store GA4 would give (exact counts; no "(other)", no thresholding)."""
+    def aud_store(self, hs=None, months=None):
+        """The complete Audience store GA4 would give on the tiered windows (exact counts; no "(other)", no
+        thresholding). months: other window months (default: engine.audience.tier_months of the history)."""
         hs = hs or self.start
-        if windows is None:
-            windows, n = [], 1
-            while True:
-                windows.append(eng.window_days(n))
-                if windows[-1] >= (self.end - hs).days + 1:
-                    break
-                n += 1
+        months = list(months or eng.tier_months((self.end - hs).days + 1))
+        windows = [eng.window_days(m) for m in months]
         by = {}
         tot = []
         for i, w in enumerate(windows):
@@ -112,7 +108,8 @@ class Population:
                 by.setdefault(x, [0] * len(windows))[i] = u
             tot.append(sum(got.values()))
         dau = self.actives(self.end, self.end)
-        return {"v": 1, "E": self.end.isoformat(), "history_start": hs.isoformat(), "windows": list(windows),
+        return {"v": 2, "complete": True, "E": self.end.isoformat(), "history_start": hs.isoformat(), "months": months,
+                "windows": windows,
                 "by_fsd": by, "total": tot, "other": [0] * len(windows), "not_set": [0] * len(windows),
                 "dau_by_fsd": dau, "dau": {"total": sum(dau.values()), "other": 0, "not_set": 0}, "flags": {}}
 
@@ -134,11 +131,17 @@ class FakeGA4:
     """runReport over Populations: truths = {(property id, stream id): Population}. Options: other_over = N (a range
     with more than N first-session days and no inList filter folds the rest into "(other)", with dataLossFromOtherRow),
     thresholded / sampled (metadata), no_total (a 400 on metricAggregations), fail(body) → HTTP status or None,
-    quota = {bucket: remaining} (the hourly buckets reported with every call), tokens = tokens a call costs."""
+    quota = {bucket: remaining} (fixed, reported with every call), hourly = {bucket: remaining at the start} (each call's
+    tokens come off it), tokens = tokens a call costs (a number, or a function of the request body), loss_only = the
+    dataLossFromOtherRow flag without any "(other)" row, other_slices = "(other)" even under an inList filter."""
 
     def __init__(self, truths, other_over=None, thresholded=False, sampled=False, no_total=False, fail=None,
-                 quota=None, tokens=7, not_set=0):
+                 quota=None, tokens=7, not_set=0, loss_only=False, hourly=None, other_slices=False):
         self.truths, self.other_over, self.thresholded, self.sampled = truths, other_over, thresholded, sampled
+        self.loss_only = loss_only              # dataLossFromOtherRow on a read without inList, but no "(other)" row
+        self.hourly = dict(hourly or {})        # {bucket: remaining at the start}: each call's tokens come off it
+        self.other_slices = other_slices        # fold into "(other)" even under an inList filter
+        self.hour_left = {}
         self.no_total, self.fail, self.quota, self.tokens, self.not_set = no_total, fail, dict(quota or {}), tokens, not_set
         self.bodies = []
         self.day_left = {}
@@ -165,11 +168,16 @@ class FakeGA4:
                 assert e["filter"]["fieldName"] == "firstSessionDate"
                 in_list = set(e["filter"]["inListFilter"]["values"])
         resp = self.answer(pop, body, in_list)
-        left = self.day_left.setdefault(pid, 200000) - self.tokens
+        tok = self.tokens(body) if callable(self.tokens) else self.tokens
+        left = self.day_left.setdefault(pid, 200000) - tok
         self.day_left[pid] = left
-        q = {"tokensPerDay": {"consumed": self.tokens, "remaining": left}}
+        q = {"tokensPerDay": {"consumed": tok, "remaining": left}}
         for k, v in self.quota.items():
-            q[k] = {"consumed": self.tokens, "remaining": v}
+            q[k] = {"consumed": tok, "remaining": v}
+        for k, v in self.hourly.items():
+            left = self.hour_left.setdefault((pid, k), v) - tok
+            self.hour_left[(pid, k)] = left
+            q[k] = {"consumed": tok, "remaining": left}
         resp["propertyQuota"] = q
         return Resp(body=resp)
 
@@ -190,7 +198,7 @@ class FakeGA4:
             elif self.not_set:
                 cells["(not set)"] = self.not_set
             tot = sum(cells.values())
-            if self.other_over and in_list is None and len(cells) > self.other_over:
+            if self.other_over and (in_list is None or self.other_slices) and len(cells) > self.other_over:
                 keep = sorted(cells)[-(self.other_over - 1):]
                 folded = sum(u for f, u in cells.items() if f not in keep)
                 cells = {f: cells[f] for f in keep}
@@ -209,7 +217,7 @@ class FakeGA4:
         resp = {"dimensionHeaders": [{"name": n} for n in names], "metricHeaders": [{"name": "activeUsers"}],
                 "rows": [enc(r) for r in rows[off:off + lim]], "rowCount": len(rows),
                 "metadata": {"currencyCode": "USD"}}
-        if lost:
+        if lost or (self.loss_only and in_list is None):
             resp["metadata"]["dataLossFromOtherRow"] = True
         if self.thresholded:
             resp["metadata"]["subjectToThresholding"] = True
