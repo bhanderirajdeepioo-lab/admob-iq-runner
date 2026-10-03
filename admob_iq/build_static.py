@@ -1797,7 +1797,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # — no-store forces every request to fetch the freshest file from origin.
     with open(os.path.join(out_dir, "_headers"), "w", encoding="utf-8") as f:
         f.write(headers_text(uni_files, dashboard, extra=list(review_paths) + [p for p in rstudio_paths if p not in review_paths]
-                             + any_paths + vstudio_paths + as_paths + studio_paths + aud_paths))
+                             + aud_paths + any_paths + vstudio_paths + as_paths + studio_paths))
 
     alerts = send_alerts(dashboard, s)
     _uninstall_mark_sent(dashboard, data_dir, s, alerts)

@@ -400,7 +400,7 @@ def test_build_static_runs_the_step_after_the_studios_and_before_the_dashboard_i
     body = src[src.index("def build("):]
     i_v, i_a = body.index("_value_studio_step(dashboard"), body.index("_audience_step(dashboard")
     i_d, i_h = body.index('_shipgz(out_dir, "dashboard.json", dashboard)'), body.index("headers_text(uni_files")
-    assert i_v < i_a < i_d < i_h and "+ aud_paths))" in body
+    assert i_v < i_a < i_d < i_h and "+ aud_paths + any_paths" in body
 
 
 def test_it_runs_on_the_files_the_real_uninstall_build_writes(tmp_path):

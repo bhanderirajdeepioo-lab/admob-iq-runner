@@ -249,7 +249,7 @@ def test_the_nav_item_follows_the_pointer_and_the_screen_is_in_every_list():
     assert "root.append(renderAudience());" in h and "if(id==='audience') AU.show(); else AU.left();" in h
     assert "else if(cur==='audience') show('audience');" in h                           # refreshData's re-open list
     assert 'audience:["Audience",' in h and 'body[data-screen="audience"] #rangectl' in h
-    css = h[h.index("/* ---------- 👥 Audience"):h.index("</style>", h.index("/* ---------- 👥 Audience"))]
+    css = h[h.index("/* ---------- 👥 Audience"):h.index("/* ---------- /Audience ---------- */")]
     for line in css.splitlines()[1:]:                                                    # every rule scoped
         if line.strip() and not line.startswith("@") and "{" in line:
             sel = line.split("{")[0]
