@@ -191,6 +191,20 @@ def test_a_rule_with_two_splats_is_rewritten_into_valid_ones(tmp_path):
     assert not build_static.headers_cover(out, "icon-192.png")
 
 
+def test_130_splat_rules_collapse_too_and_a_second_run_changes_nothing(tmp_path):
+    names = ["fam%03d_%d.json" % (i, j) for i in range(130) for j in (1, 2)] + ["index.html", "icon-192.png"]
+    text = ("/*\n  X-Robots-Tag: noindex\n\n" + "".join("/fam%03d_*\n  Cache-Control: no-store\n\n" % i for i in range(130))
+            + "/index.html\n  Cache-Control: no-cache\n")
+    site = _site(tmp_path, names, text)
+    rep = dg.run(site)
+    out = open(os.path.join(site, "_headers"), encoding="utf-8").read()
+    assert rep["ok"] and rep["headers"]["rewritten"] and dg.headers_rule_count(out) <= 4
+    assert all(build_static.headers_cover(out, n) for n in names if n.startswith("fam"))
+    assert not any(build_static.headers_cover(out, n) for n in ("index.html", "icon-192.png"))
+    rep2 = dg.run(site)
+    assert open(os.path.join(site, "_headers"), encoding="utf-8").read() == out and not rep2["headers"]["rewritten"]
+
+
 def test_headers_the_guard_cannot_shrink_are_reported_and_left_alone(tmp_path):
     """Rules that are not plain no-store rules are not the guard's to merge: 120 of them stay as they are, loudly."""
     text = "".join("/p%03d\n  X-Custom: v%d\n\n" % (i, i) for i in range(120))
@@ -384,3 +398,98 @@ def test_snapshot_keeps_the_live_site_beside_it_and_replaces_a_leftover(tmp_path
     dg.discard(prev)
     assert not os.path.exists(prev)
     assert dg.snapshot(str(tmp_path / "no_such_site")) is None
+
+
+# ── build() wiring ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+def _mock_build(tmp_path, **kw):
+    return build_static.build(out_dir=str(tmp_path / "site"), data_dir=str(tmp_path / "data"),
+                              today=date(2026, 7, 23), mode="mock", **kw)
+
+
+def test_build_runs_the_guard_last_and_leaves_a_normal_site_byte_identical(tmp_path, monkeypatch, capsys):
+    seen = {}
+    real = dg.run
+
+    def spy(out_dir, prev_dir=None, **kw):
+        seen["headers"] = open(os.path.join(out_dir, "_headers"), "rb").read()
+        seen["tree"] = _tree(out_dir)
+        seen["prev"] = prev_dir
+        return real(out_dir, prev_dir=prev_dir, **kw)
+
+    monkeypatch.setattr(dg, "run", spy)
+    _mock_build(tmp_path)
+    site = str(tmp_path / "site")
+    assert open(os.path.join(site, "_headers"), "rb").read() == seen["headers"]      # byte-identical _headers
+    assert _tree(site) == seen["tree"]                                                # and every other file
+    assert os.path.exists(tmp_path / "deploy_guard.json") and not os.path.exists(os.path.join(site, "deploy_guard.json"))
+    rep = json.load(open(tmp_path / "deploy_guard.json", encoding="utf-8"))
+    assert rep["ok"] and rep["fixed"] == [] and rep["headers"]["rewritten"] is False
+    assert rep["files"]["count"] == len([n for n in _tree(site) if n != "_headers"])
+    assert re.search(r"^deploy guard: rules \d+/100, files \d+/20000, largest [\d.]+ MiB, fixed: none$",
+                     capsys.readouterr().err, re.M)
+    assert seen["prev"] is None or not os.path.exists(seen["prev"])                  # the copy of the live site is gone
+
+
+def test_build_collapses_a_bloated_headers_text(tmp_path, monkeypatch):
+    keys = _keys(150)
+    real = build_static.headers_text
+
+    def bloated(uni, dash, extra=()):
+        return real(uni, dash, extra=list(extra) + ["/zz_%s.json.gz" % k for k in keys])
+
+    monkeypatch.setattr(build_static, "headers_text", bloated)
+    # the site must hold the files those rules name, as a real feature's would
+    real_guard = dg.run
+
+    def with_files(out_dir, prev_dir=None, **kw):
+        for k in keys:
+            _put(out_dir, "zz_%s.json.gz" % k)
+        return real_guard(out_dir, prev_dir=prev_dir, **kw)
+
+    monkeypatch.setattr(dg, "run", with_files)
+    _mock_build(tmp_path)
+    out = open(tmp_path / "site" / "_headers", encoding="utf-8").read()
+    assert dg.headers_rule_count(out) <= 20 and "/zz_*\n  Cache-Control: no-store" in out
+    assert all(build_static.headers_cover(out, "zz_%s.json.gz" % k) for k in keys)
+    assert build_static.headers_cover(out, "dashboard.json.gz") and not build_static.headers_cover(out, "index.html")
+    assert json.load(open(tmp_path / "deploy_guard.json"))["headers"]["rewritten"] is True
+
+
+def test_build_starts_from_the_live_site_so_an_oversize_file_falls_back_to_it(tmp_path, monkeypatch, capsys):
+    """The workflow pulls the live site into site/ before the build. A file that then comes out over the cap is put back
+    as it was in the live site (here the cap is lowered to 1 MiB so the 2 MiB page is the one over it)."""
+    site = tmp_path / "site"
+    os.makedirs(site)
+    (site / "index.html").write_bytes(b"<html>the live page</html>")
+    monkeypatch.setattr(dg, "MAX_FILE_BYTES", 1 << 20)
+    _mock_build(tmp_path)
+    assert (site / "index.html").read_bytes() == b"<html>the live page</html>"
+    rep = json.load(open(tmp_path / "deploy_guard.json"))
+    assert rep["oversize"]["kept_previous"] == 1 and rep["oversize"]["needs_split"] == ["index.html"]
+    assert "need a split" in capsys.readouterr().err
+    assert not os.path.exists(tmp_path / dg.PREV_DIRNAME)
+
+
+def test_build_with_no_live_site_leaves_an_oversize_file_out(tmp_path, monkeypatch):
+    monkeypatch.setattr(dg, "MAX_FILE_BYTES", 1 << 20)
+    _mock_build(tmp_path)
+    assert not os.path.exists(tmp_path / "site" / "index.html")
+    assert os.path.exists(tmp_path / "site" / "dashboard.json.gz")                    # the rest of the site is whole
+    assert json.load(open(tmp_path / "deploy_guard.json"))["oversize"]["files"][0]["action"] == "left_out"
+
+
+def test_a_crashing_guard_never_breaks_the_build_and_leaves_no_stale_report(tmp_path, monkeypatch, capsys):
+    (tmp_path / "deploy_guard.json").write_text('{"ok": true, "summary": "from an older run"}')
+    monkeypatch.setattr(dg, "run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    r = _mock_build(tmp_path)
+    assert r["revenue"] > 0 and os.path.exists(tmp_path / "site" / "dashboard.json.gz")
+    assert "deploy guard skipped: RuntimeError" in capsys.readouterr().err
+    assert not os.path.exists(tmp_path / "deploy_guard.json") and not os.path.exists(tmp_path / dg.PREV_DIRNAME)
+
+
+def test_the_guard_is_the_last_step_of_build():
+    import inspect
+    src = inspect.getsource(build_static.build)
+    assert src.index("_guard_snapshot(out_dir)") < src.index("settings()")
+    assert src.index("_uninstall_mark_sent(") < src.index("_deploy_guard_step(out_dir, guard_prev)") < src.index("return {")

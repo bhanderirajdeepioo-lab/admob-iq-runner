@@ -1168,7 +1168,36 @@ def _save_mu_backfill(data_dir, state, done):
             f.write("mediation ad-unit report backfilled over the whole stored history\n")
 
 
+def _guard_snapshot(out_dir):
+    """The site this build STARTS from (the workflow pulls the live site into site/ first) → a copy beside it, so a file
+    that comes out over Cloudflare's 25 MiB cap can fall back to its previous good copy. Never raises."""
+    try:
+        return deploy_guard.snapshot(out_dir)
+    except Exception as e:
+        print(f"deploy guard snapshot skipped: {type(e).__name__}", file=sys.stderr)
+        return None
+
+
+def _deploy_guard_step(out_dir, prev_dir):
+    """Cloudflare deploy guard (admob_iq/deploy_guard.py) on the FINISHED site: _headers over 100 rules rewritten into the
+    fewest splat rules, an oversize file back to its previous copy (or left out, never trimmed), file count / names /
+    _redirects checked → ONE counts-only log line + deploy_guard.json next to the site. Failure-isolated: it never
+    breaks the build and never blocks the push (the workflow turns the report into counts-only ::warning:: lines)."""
+    try:
+        return deploy_guard.run(out_dir, prev_dir=prev_dir)
+    except Exception as e:
+        print(f"deploy guard skipped: {type(e).__name__}", file=sys.stderr)
+        try:                                       # a report from an older run would claim a check that did not happen
+            os.remove(os.path.join(os.path.dirname(os.path.abspath(out_dir)), deploy_guard.REPORT_NAME))
+        except OSError:
+            pass
+        return None
+    finally:
+        deploy_guard.discard(prev_dir)
+
+
 def build(out_dir="site", data_dir="data", today=None, mode=None):
+    guard_prev = _guard_snapshot(out_dir)
     s = settings()
     accounts = resolve_accounts()
     mode = mode or s["fetch_mode"]
@@ -1743,6 +1772,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
 
     alerts = send_alerts(dashboard, s)
     _uninstall_mark_sent(dashboard, data_dir, s, alerts)
+    # the site is final: Cloudflare must never be able to reject it (limits checked, _headers / oversize files fixed)
+    _deploy_guard_step(out_dir, guard_prev)
     return {"mode": mode, "fetch": totals, "alerts_sent": len(alerts),
             "out": out_dir, "revenue": dashboard["kpis"]["revenue"]}
 
