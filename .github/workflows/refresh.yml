@@ -159,6 +159,14 @@ jobs:
             exit 1
           fi
 
+      - name: Deploy guard report (Cloudflare limits, counts only)
+        # admob_iq/deploy_guard.py ran at the end of the build. It keeps the site inside Cloudflare's deploy limits
+        # (_headers rules, file count, file size, file names) and fixes what it can. Whatever it could NOT fix becomes a
+        # ::warning:: here, COUNTS ONLY (this log is public: no file or app names, no amounts). It never stops the push
+        # below: the data is pushed either way, so a deploy can only stay stuck for a reason outside our content.
+        continue-on-error: true
+        run: python -m admob_iq.deploy_guard annotate deploy_guard.json
+
       - name: Push refreshed data + site back to the PRIVATE repo
         run: |
           cp -f frontend/index.html site/index.html 2>/dev/null || true

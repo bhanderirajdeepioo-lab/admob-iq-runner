@@ -493,3 +493,22 @@ def test_the_guard_is_the_last_step_of_build():
     src = inspect.getsource(build_static.build)
     assert src.index("_guard_snapshot(out_dir)") < src.index("settings()")
     assert src.index("_uninstall_mark_sent(") < src.index("_deploy_guard_step(out_dir, guard_prev)") < src.index("return {")
+
+
+# ── the workflow ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+def _steps():
+    with open(os.path.join(ROOT, ".github", "workflows", "refresh.yml"), encoding="utf-8") as f:
+        return yaml.safe_load(f)["jobs"]["refresh"]["steps"]
+
+
+def test_workflow_warns_with_counts_only_and_still_pushes():
+    steps = _steps()
+    run = [str(s.get("run") or "") for s in steps]
+    b = next(i for i, r in enumerate(run) if "admob_iq.build_static" in r)
+    g = next(i for i, r in enumerate(run) if "admob_iq.deploy_guard annotate" in r)
+    p = next(i for i, s in enumerate(steps) if str(s.get("name", "")).startswith("Push refreshed data"))
+    assert b < g < p                                                          # build → report → push
+    assert steps[g].get("continue-on-error") is True and "if" not in steps[g]  # a warning never stops the push
+    assert "if" not in steps[p]
+    assert "deploy_guard.json" in run[g] and "tee" not in run[g] and "cat " not in run[g]    # the report itself is never dumped

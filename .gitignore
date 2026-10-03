@@ -32,6 +32,10 @@ __pycache__/
 /ga4/
 /ga4_out/
 
+# Cloudflare deploy guard (runtime only): its report names files, and the copy of the live site it keeps aside is real data
+/deploy_guard.json
+/.deploy_guard_prev/
+
 # Review Worker local dev (review_worker/README.md): wrangler's local state holds the local D1 (notes, flags and the
 # app names clicked while testing against a copy of the real site) — never commit any of it
 .state/
