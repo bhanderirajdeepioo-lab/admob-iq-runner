@@ -5100,7 +5100,7 @@ const TIPS={
     const ch=S.mode==='age'?chanceOf(b.f):Number(S.mode)/100;
     return `<div class="au-th">${bLab(b.f,b.t)} se nahi khola</div><div class="au-tr"><span>Users</span><b>${N(b.v)} (${P(b.v,a.au.inst)})</b></div>`
       +(b.vl!=null&&b.vl!==b.v?`<div class="au-tr"><span>Range ke neeche wale curve se</span><b>${N(b.vl)}</b></div>`:'')
-      +`<div class="au-tr"><span>Money mode me wapas</span><b>${Math.round(ch*100)}%</b></div><div style="margin-top:3px;color:var(--muted)">${isGa4(a.au)?'GA4 (lagbhag exact)':'andaza'} · ${DT(a.au.E)} tak</div>`; },
+      +`<div class="au-tr"><span>Money mode me wapas</span><b>${Math.round(ch*100)}%</b></div><div style="margin-top:3px;color:var(--muted)">${isGa4(a.au)?'GA4 (lagbhag exact)':(a.au.src==='mix'?'GA4 + andaza':'andaza')} · ${DT(a.au.E)} tak</div>`; },
   m:(k,sec)=>{ const a=cur(), x=a&&monthRows(a).find(r=>r.k===k); if(!x) return '';
     return `<div class="au-th">${MLAB(k)} ke installs</div><div class="au-tr"><span>Installs</span><b>${N(x.n)}</b></div><div class="au-tr"><span>Still installed</span><b>${N(x.inst)} (${P(x.inst,x.n)})</b></div>`
       +`<div class="au-tr"><span>Sleeping 1+ month</span><b>${x.lo!=null&&x.lo!==x.dead?N(x.lo)+'–':''}${N(x.dead)} (${P(x.dead,x.n)})</b></div><div class="au-tr"><span>Opened in last month</span><b>${N(x.act)} (${P(x.act,x.n)})</b></div>`
@@ -5190,7 +5190,7 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
 function show(){ paint(); }
 return {ptr, ensure, render, paint, show, left, retry, ready:()=>!!RAW&&!!ptr(),
   // checks / tests (read-only views of the current state)
-  _:{S, RAW:()=>RAW, APPS:()=>APPS, ALL:()=>ALL, BYK:()=>BYK, load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; PSIG=null; ALL=null; }, prep:()=>{ if(RAW) prep(); },
+  _:{S, el:()=>EL, RAW:()=>RAW, APPS:()=>APPS, ALL:()=>ALL, BYK:()=>BYK, tipPinned:()=>tipPinned, load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; PSIG=null; ALL=null; }, prep:()=>{ if(RAW) prep(); },
      bucketsOf, dAt, loAt, bLab, tierMonths, mostOf, wake, wakeAll, monthLine, dayAgg, TIPS, SPK, hov, keyOfName, openApp, allApps, appUndo, cur, M, MC, CN, P,
      sec:{strip:secStrip,phone:secPhone,journey:secJourney,pakke:secPakke,dead:secDead,mdead:secDeadMonths,mact:secActMonths,dau:secDauMix,money:secMoney,table:secTable,day:secDay,module:secModule}}};
 })();

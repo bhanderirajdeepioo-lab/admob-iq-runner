@@ -1,0 +1,234 @@
+// 👥 Audience tab (frontend/index.html) — the page side, run for real: the dashboard script (the page's largest <script>)
+// in a node vm with stub browser globals, a small DOM, a FAKE browser history and the document listeners recorded (so
+// clicks / changes / toggles / touches reach the page's own handlers), on the SYNTHETIC world tests/test_audience_frontend.py
+// builds (made-up apps, ids and money — no real data). It reports:
+//   * the render: every section, the tags (GA4 / andaza / being read), the strip, the table, the module panels;
+//   * the numbers the page works out: buckets per app, the all-apps pool (dead / dead_lo on tiered months, journey,
+//     long-term, money), the most dead / active month, $ and ₹ strings;
+//   * app switching (a table row, the in-page select, the header App picker), the phone's Back button, leaving the screen,
+//   * "Kyun? ▸" folds, the money mode chips, "Show all months", the currency buttons;
+//   * the 5-min refresh with a new build: the view comes back as it was (app, mode, day, open folds), silently;
+//   * the tooltip rule: a mouse hovers, a TAP pins, a swipe never pins; the chart's numbers on hover;
+//   * no pointer (the switch off): the screen says so and the nav item stays hidden.
+// Prints ONE JSON report; tests/test_audience_frontend.py asserts on it.
+//   usage: node audience_frontend.js <script.js> <fixture.json>
+'use strict';
+const fs = require('fs'), vm = require('vm');
+const [scriptPath, fxPath] = process.argv.slice(2);
+const errors = [];
+const any = new Proxy(function () {}, {
+  get: (t, k) => k === Symbol.toPrimitive ? (() => '') : (k === 'then' ? undefined : (k === 'length' ? 0 : any)),
+  apply: () => any, construct: () => any, set: () => true, has: () => true,
+});
+const ELS = {};
+function mk(tag) {
+  const cls = new Set(), attrs = {}, on = {};
+  const el = {
+    tagName: String(tag || 'div').toUpperCase(), id: '', innerHTML: '', textContent: '', dataset: {}, children: [], parentElement: null,
+    style: { cssText: '', visibility: '', setProperty() {} }, clientWidth: 0, clientHeight: 0, offsetWidth: 0, offsetHeight: 0, on, hidden: false,
+    classList: { add: (...a) => a.forEach(x => cls.add(x)), remove: (...a) => a.forEach(x => cls.delete(x)), contains: x => cls.has(x),
+      toggle: (x, f) => { const o = f === undefined ? !cls.has(x) : !!f; o ? cls.add(x) : cls.delete(x); return o; } },
+    get className() { return [...cls].join(' '); }, set className(v) { cls.clear(); String(v).split(/\s+/).filter(Boolean).forEach(x => cls.add(x)); },
+    setAttribute(k, v) { attrs[k] = String(v); if (k === 'id') { el.id = String(v); ELS[el.id] = el; } }, getAttribute: k => (k in attrs ? attrs[k] : null),
+    removeAttribute(k) { delete attrs[k]; }, hasAttribute: k => k in attrs,
+    appendChild(c) { c.parentElement = el; el.children.push(c); return c; }, append(...cs) { cs.forEach(c => el.appendChild(c)); },
+    addEventListener(t, f) { (on[t] = on[t] || []).push(f); }, removeEventListener() {}, querySelector: () => null, querySelectorAll: () => [], closest: () => null,
+    contains: () => false, focus() {}, blur() {}, scrollIntoView() {}, replaceWith() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }),
+  };
+  return el;
+}
+const BODY = mk('body');
+['tb-title', 'tb-sub', 'nav-alert', 'tab-alert', 'banner'].forEach(id => mk('div').setAttribute('id', id));
+const SCREEN = { id: 'overview' };
+const DOCL = {};
+const document = new Proxy({
+  getElementById: id => ELS[id] || null, createElement: mk, body: BODY, head: mk('head'), documentElement: mk('html'),
+  querySelector: sel => (sel === '.screen.on' ? { dataset: { screen: SCREEN.id } } : null), querySelectorAll: () => [],
+  addEventListener(t, f) { (DOCL[t] = DOCL[t] || []).push(f); }, removeEventListener() {},
+}, { get: (t, k) => (k in t ? t[k] : any) });
+const fire = (type, e) => (DOCL[type] || []).forEach(f => f(Object.assign({ preventDefault() {}, stopPropagation() {} }, e)));
+const LOC = { href: 'http://localhost/', search: '', hash: '', pathname: '/', origin: 'http://localhost', reload() {} };
+const POP = [];
+const HIST = { entries: [{ state: null, url: '/' }], idx: 0, pending: [] };
+const history = {
+  get length() { return HIST.entries.length; }, get state() { return HIST.entries[HIST.idx].state; },
+  pushState(st, _t, url) { HIST.entries.splice(HIST.idx + 1); HIST.entries.push({ state: JSON.parse(JSON.stringify(st)), url: url || '/' }); HIST.idx++; },
+  replaceState(st) { HIST.entries[HIST.idx].state = st == null ? null : JSON.parse(JSON.stringify(st)); },
+  go(n) { HIST.pending.push(n); }, back() { history.go(-1); }, forward() { history.go(1); },
+};
+function land() { while (HIST.pending.length) { const n = HIST.pending.shift(), to = HIST.idx + n;
+  if (to < 0 || to >= HIST.entries.length) continue; HIST.idx = to; POP.forEach(f => f({ type: 'popstate', state: HIST.entries[to].state })); } }
+const store = () => { const b = {}; return { getItem: k => (k in b ? b[k] : null), setItem: (k, v) => { b[k] = String(v); }, removeItem: k => { delete b[k]; } }; };
+const FETCHED = [];
+const ctx = {
+  console: { log() {}, info() {}, warn() {}, error: (...a) => errors.push('console.error ' + a.join(' ')) },
+  document, localStorage: store(), sessionStorage: store(), navigator: any, location: LOC, history,
+  fetch: url => { FETCHED.push(String(url)); return new Promise(() => {}); }, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+  requestAnimationFrame: () => 0, cancelAnimationFrame() {}, matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
+  addEventListener: (type, fn) => { if (type === 'popstate') POP.push(fn); }, removeEventListener() {},
+  DecompressionStream: any, Response: any, Blob: any, AbortController: any,
+  URLSearchParams, URL, TextDecoder, TextEncoder, Intl, Date, Math, JSON, Promise, Array, Object, Number, String, Boolean, RegExp,
+  Error, TypeError, Set, Map, WeakMap, Symbol, Float64Array, Uint8Array, isNaN, isFinite, parseInt, parseFloat,
+  encodeURIComponent, decodeURIComponent, performance: { now: () => 0 }, getComputedStyle: () => any, innerWidth: 1280,
+  innerHeight: 900, scrollY: 0, scrollTo() {}, scrollBy() {}, alert() {}, confirm: () => false, prompt: () => null,
+  IntersectionObserver: any, ResizeObserver: any, MutationObserver: any, Event: any, CustomEvent: any, HTMLElement: any, Node: any,
+};
+ctx.window = ctx; ctx.globalThis = ctx; ctx.self = ctx;
+vm.createContext(ctx);
+try { vm.runInContext(fs.readFileSync(scriptPath, 'utf8'), ctx, { filename: 'index.js' }); } catch (e) { errors.push('TOPLEVEL ' + e.message); }
+const run = code => vm.runInContext(code, ctx);
+const J = code => JSON.parse(JSON.stringify(run(code)));
+const tick = () => new Promise(r => setImmediate(r));
+const settle = async () => { await tick(); land(); await tick(); land(); await tick(); };
+const userBack = async () => { history.back(); land(); await settle(); };
+ctx.__FX = JSON.parse(fs.readFileSync(fxPath, 'utf8'));
+ctx.__setScreen = id => { SCREEN.id = id; };
+const out = {};
+const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { errors.push(name + ': ' + (e.stack || e.message)); } };
+const html = () => run('AU._.el().innerHTML');
+// a fake event target inside the screen: closest() answers the selectors the handlers ask
+const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-root') return {}; for (const k of Object.keys(m)) if (sel === k) return m[k]; return null; }, matches: () => false }, extra || {});
+
+(async () => {
+  run(`DATA=__FX.dashboard; APP=''; CURVIEW=null; RANGE='today'; window.__ax=null;`);
+  run(`var __show0=show; show=function(id){ __setScreen(id); return __show0(id); };`);
+  run(`AU._.load(__FX.audience);`);
+
+  // ── the render ────────────────────────────────────────────────────────────────────────────────────────────────────────
+  await step('render', () => { run(`renderAudience(); show('audience');`);
+    const h = html();
+    return { screen: SCREEN.id, ids: [...h.matchAll(/<section class="au-card[^"]*" id="([^"]+)"/g)].map(m => m[1]), strip: (h.match(/class="au-st"/g) || []).length,
+      title: run(`document.getElementById('tb-title').textContent`), html: h, S: J('AU._.S') }; });
+
+  // ── the numbers the page works out ───────────────────────────────────────────────────────────────────────────────────
+  await step('numbers', () => J(`(()=>{ const A=AU._.ALL(), apps={}; AU._.APPS().forEach(a=>{ apps[a.k]={bk:a.bk,deadTot:a.deadTot,
+      w10:AU._.wake(a,'10'),wage:AU._.wake(a,'age'),d3:AU._.dAt(a.au,3),l3:AU._.loAt(a.au,3)}; });
+    return {apps, all:{mo:A.au.mo,d:A.au.d,lo:A.au.lo,src:A.au.src,inst:A.au.inst,ins:A.au.ins,m:A.au.m,most:A.au.most,j:A.j,lt:A.lt,arp:A.arp,pm:A.pm,
+      inst2:A.inst,sl:A.sl,deadTot:A.deadTot,bk:A.bk,w10:AU._.wakeAll('10'),wage:AU._.wakeAll('age'),bands:A.au.bands},
+      tier:[AU._.tierMonths(30),AU._.tierMonths(31),AU._.tierMonths(400),AU._.tierMonths(1300)],
+      lab:[AU._.bLab(0,1),AU._.bLab(1,2),AU._.bLab(12,15),AU._.bLab(24,30),AU._.bLab(24,36),AU._.bLab(36,null),AU._.bLab(15,null)],
+      p:[AU._.P(1,3),AU._.P(1,30000),AU._.P(0,5),AU._.P(5,0)]}; })()`));
+
+  // ── every app's own page (GA4 / estimate / being read / young) ─────────────────────────────────────────────────────
+  await step('apps', () => { const R = {}; SCREEN.id = 'audience';
+    for (const k of J('AU._.APPS().map(a=>a.k)')) { run(`AU._.S.app='${k}'; AU.paint();`); R[k] = html(); }
+    run(`AU._.S.app=''; AU.paint();`); return R; });
+
+  // ── money strings in $ and ₹ ─────────────────────────────────────────────────────────────────────────────────────────
+  await step('money', () => { const R = {};
+    for (const c of ['USD', 'INR']) { run(`CURVIEW=${c === 'USD' ? 'null' : "'INR'"}; AU.paint();`);
+      R[c] = { m: J(`[AU._.M(1234.4),AU._.M(2.25),AU._.M(0.0123,2),AU._.MC(12345),AU._.M(0)]`), html: html() }; }
+    run(`CURVIEW=null; AU.paint();`); return R; });
+
+  // ── app switching + the phone's Back button ──────────────────────────────────────────────────────────────────────────
+  await step('nav', async () => { const R = {};
+    run(`HB.st.length=0; HB.busy=false; HB.mute=0;`); await settle(); HIST.entries = [{ state: null, url: '/' }]; HIST.idx = 0; HIST.pending = []; run(`HB.depth=0;`);
+    SCREEN.id = 'overview'; run(`show('audience')`); await settle();
+    const k = run(`AU._.APPS()[0].k`), k2 = run(`AU._.APPS()[1].k`);
+    // a table row (the click handler on the document)
+    fire('click', { target: tgt({ '[data-au-k]': { getAttribute: () => k } }) }); await settle();
+    R.row = { app: run('AU._.S.app'), st: J('HB.st.map(x=>x.tag)'), idx: HIST.idx, crumb: html().includes('class="au-crumb"'), title: run(`document.getElementById('tb-title').textContent`),
+      table: html().includes('id="au-s-table"') };
+    await userBack();
+    R.back = { app: run('AU._.S.app'), st: J('HB.st.map(x=>x.tag)'), idx: HIST.idx, table: html().includes('id="au-s-table"') };
+    // the in-page select (its change handler)
+    fire('change', { target: tgt({}, { id: 'au-app', value: k2 }) }); await settle();
+    R.select = { app: run('AU._.S.app'), st: J('HB.st.map(x=>x.tag)') };
+    fire('change', { target: tgt({}, { id: 'au-app', value: 'all' }) }); await settle();
+    R.selectAll = { app: run('AU._.S.app'), st: J('HB.st.map(x=>x.tag)'), idx: HIST.idx };
+    // "← All apps" on the page
+    run(`AU._.openApp('${k}')`); await settle(); fire('click', { target: tgt({ '[data-au-all]': {} }) }); await settle();
+    R.allBtn = { app: run('AU._.S.app'), st: J('HB.st.map(x=>x.tag)'), idx: HIST.idx };
+    // leaving the screen with an app open: its Back step goes too
+    run(`AU._.openApp('${k}')`); await settle(); run(`show('placements')`); await settle();
+    R.left = { screen: SCREEN.id, st: J('HB.st.map(x=>x.tag)'), app: run('AU._.S.app') };
+    // the header App picker drives the view; a row then moves the header (setApp)
+    run(`var __sets=[]; var __setApp0=setApp; setApp=function(a){ __sets.push(a); APP=a; AU.paint(); };`);
+    const name2 = run(`AU._.APPS()[1].n`);
+    run(`APP=${JSON.stringify(name2)}; show('audience');`); await settle();
+    R.header = { app: run('AU._.S.app'), want: k2, st: J('HB.st.map(x=>x.tag)'), crumb: html().includes(name2.split(' · ')[0]) };
+    run(`AU._.openApp('${k}')`); await settle(); R.headerRow = { sets: J('__sets'), app: run('AU._.S.app') };
+    run(`AU._.allApps()`); await settle(); R.headerAll = { sets: J('__sets'), app: run('AU._.S.app'), APP: run('APP') };
+    run(`APP='Not An Audience App'; AU.paint();`); R.noApp = { app: run('AU._.S.app'), html: html() };
+    run(`setApp=__setApp0; APP=''; AU.paint();`); await settle();
+    return R; });
+
+  // ── folds, chips, currency buttons ───────────────────────────────────────────────────────────────────────────────────
+  await step('controls', async () => { const R = {};
+    SCREEN.id = 'audience'; run(`AU._.allApps(); AU._.S.open.clear(); AU._.S.mall.clear(); AU._.S.mode='10'; AU.paint();`); await settle();
+    R.closed = /data-kyun="dead"(?! open)/.test(html()) && !/data-kyun="dead" open/.test(html());
+    fire('toggle', { target: tgt({}, { dataset: { kyun: 'dead' }, open: true }) }); run('AU.paint()');
+    R.opened = { set: J('[...AU._.S.open]'), attr: /data-kyun="dead" open/.test(html()) };
+    fire('toggle', { target: tgt({}, { dataset: { kyun: 'dead' }, open: false }) }); run('AU.paint()');
+    R.reclosed = { set: J('[...AU._.S.open]'), attr: /data-kyun="dead" open/.test(html()) };
+    fire('click', { target: tgt({ '[data-au-mode]': { dataset: { auMode: 'age' } } }) });
+    R.mode = { mode: run('AU._.S.mode'), on: /class="au-chip on" data-au-mode="age"/.test(html()), table: html().includes('By age wake up =') };
+    fire('click', { target: tgt({ '[data-au-mode]': { dataset: { auMode: '10' } } }) });
+    const before = (html().match(/data-at="m:[^"]*:d"/g) || []).length / 2;
+    fire('click', { target: tgt({ '[data-au-more]': { dataset: { auMore: 'mdead' }, getBoundingClientRect: () => ({ top: 0 }) } }) });
+    R.more = { before, after: (html().match(/data-at="m:[^"]*:d"/g) || []).length / 2, set: J('[...AU._.S.mall]'), btn: html().includes('Show top 6 only') };
+    run(`var __rr0=rerender; rerender=function(){ AU.paint(); };`);
+    fire('click', { target: tgt({ '[data-au-cur]': { dataset: { auCur: 'INR' } } }) });
+    R.inr = { cur: run('curView()'), on: /data-au-cur="INR" class="on"/.test(html()), rupee: html().includes('₹') };
+    fire('click', { target: tgt({ '[data-au-cur]': { dataset: { auCur: 'USD' } } }) });
+    R.usd = { cur: run('curView()'), on: /data-au-cur="USD" class="on"/.test(html()) };
+    run(`rerender=__rr0;`);
+    fire('change', { target: tgt({}, { id: 'au-dday', value: '2026-03-15' }) });
+    R.day = { day: run('AU._.S.day'), val: html().includes('value="2026-03-15"') };
+    fire('click', { target: tgt({ '[data-au-day]': { dataset: { auDay: '2026-01-01' } } }) });
+    R.dayChip = { day: run('AU._.S.day'), on: /class="au-chip on" data-au-day="2026-01-01"/.test(html()) };
+    return R; });
+
+  // ── the 5-min refresh with a NEW build: the view comes back as it was, silently ─────────────────────────────────────
+  await step('refresh', async () => {
+    run(`HB.st.length=0; HB.busy=false; HB.mute=0;`); await settle(); HIST.entries = [{ state: null, url: '/' }]; HIST.idx = 0; HIST.pending = []; run(`HB.depth=0;`);
+    SCREEN.id = 'overview'; run(`APP=''; show('audience');`); await settle();
+    const k = run(`AU._.APPS()[1].k`);
+    run(`AU._.openApp('${k}'); AU._.S.mode='age'; AU._.S.day='2026-02-01'; AU._.S.open.add('money'); AU._.S.open.add('dead'); AU.paint();`); await settle();
+    const scrolls = []; ctx.scrollTo = (...a) => scrolls.push(JSON.stringify(a)); ctx.scrollY = 1234;
+    FETCHED.length = 0;
+    run(`var __render0=render; render=function(){ window.__ax=null; renderAudience(); show('overview'); };
+         var __load0=loadDashboardData; loadDashboardData=function(){ const d=JSON.parse(JSON.stringify(__FX.dashboard)); d.generated_at='2026-09-23T07:30:00Z'; d.audience=Object.assign({},d.audience,{v:'0123456789ab'}); return Promise.resolve(d); };
+         LAST_BUILD=__FX.dashboard.generated_at; var __old=DATA;`);
+    await run(`refreshData()`); await settle();
+    const h = html();
+    const R = J(`({S:{app:AU._.S.app,mode:AU._.S.mode,day:AU._.S.day,open:[...AU._.S.open]}, st:HB.st.map(x=>x.tag), newData:DATA!==__old, silent:REFRESH_SILENT})`);
+    R.want = k; R.screen = SCREEN.id; R.scrolls = scrolls.filter(s => s.includes('"top":0')); R.hist = HIST.entries.length;
+    R.crumb = h.includes('class="au-crumb"'); R.fold = /data-kyun="money" open/.test(h) && /data-kyun="dead" open/.test(h);
+    R.ageOn = /class="au-chip on" data-au-mode="age"/.test(h); R.fetched = FETCHED.filter(u => u.includes('audience.json.gz'));
+    run(`render=__render0; loadDashboardData=__load0; DATA=__FX.dashboard; AU._.load(__FX.audience); AU._.allApps();`); await settle(); ctx.scrollTo = () => {}; ctx.scrollY = 0;
+    return R; });
+
+  // ── tooltips: a mouse hovers, a tap pins, a swipe never pins; the chart's numbers ────────────────────────────────────
+  await step('tips', async () => { const R = {};
+    SCREEN.id = 'audience'; run(`AU._.allApps(); AU.paint();`);
+    const bar = { getAttribute: () => 'b:2' };
+    fire('mousemove', { target: tgt({ '[data-at]': bar }), clientX: 100, clientY: 200 });
+    const tip = () => ELS['au-tip'];
+    R.hover = { on: tip() && tip().classList.contains('au-on'), pin: tip() && tip().classList.contains('au-pin'), html: tip() && tip().innerHTML, pinned: run('AU._.tipPinned()') };
+    run(`document.getElementById('au-tip').classList.remove('au-on','au-pin')`);
+    const t = tgt({ '[data-at]': bar });
+    fire('touchstart', { target: t, touches: [{ clientX: 50, clientY: 60 }] }); fire('touchend', { target: t, changedTouches: [{ clientX: 53, clientY: 64 }] });
+    R.tap = { on: tip().classList.contains('au-on'), pin: tip().classList.contains('au-pin'), pinned: run('AU._.tipPinned()') };
+    run(`document.getElementById('au-tip').classList.remove('au-on','au-pin')`);
+    fire('touchstart', { target: t, touches: [{ clientX: 50, clientY: 60 }] }); fire('touchmove', { touches: [{ clientX: 50, clientY: 90 }] });
+    fire('touchend', { target: t, changedTouches: [{ clientX: 50, clientY: 61 }] });
+    R.swipe = { on: tip().classList.contains('au-on') };
+    // the month chart: drawn at the box's width, every point's numbers on hover, the latest-but-one read out under it
+    const box = mk('div'); box.setAttribute('id', 'au-mline'); box.clientWidth = 600; const rd = mk('div'); rd.setAttribute('id', 'au-mread');
+    run(`AU.paint()`);
+    R.chart = { svg: box.innerHTML.slice(0, 200), labels: [...box.innerHTML.matchAll(/font-weight="800" fill="#fff">([^<]+)</g)].map(m => m[1]), read: rd.innerHTML,
+      spk: J(`(()=>{ const g=AU._.SPK['au-mchart']; return g?{n:g.n,w:g.w,last:g.tip(g.n-1)}:null; })()`) };
+    const xh = mk('line');
+    const sv = { id: 'au-mchart', getBoundingClientRect: () => ({ left: 0, width: 600 }), querySelector: () => xh };
+    ctx.__sv = sv; R.hov = run(`AU._.hov(__sv, 599, 40, true)`); R.hovTip = tip().innerHTML; R.hovPin = run('AU._.tipPinned()'); R.xh = xh.getAttribute('opacity');
+    delete ELS['au-mline']; delete ELS['au-mread'];
+    return R; });
+
+  // ── the switch off: no pointer in this build ─────────────────────────────────────────────────────────────────────────
+  await step('off', () => { run(`var __a=DATA.audience; delete DATA.audience; AU.paint();`); const h = html(); const p = run('!!AU.ptr()'); run(`DATA.audience=__a; AU.paint();`); return { html: h, ptr: p }; });
+
+  out.errors = errors;
+  process.stdout.write(JSON.stringify(out));
+})().catch(e => { errors.push('MAIN ' + (e.stack || e.message)); out.errors = errors; process.stdout.write(JSON.stringify(out)); });
