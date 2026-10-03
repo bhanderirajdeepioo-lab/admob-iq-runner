@@ -444,6 +444,31 @@ def _active_studio_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+def _audience_step(dashboard, data_dir, out_dir, s):
+    """👥 Audience tab (admob_iq.audience_build): who still has each app, who opens it, who went quiet and for how many
+    months — ONE lazy file from what the Uninstall step (Active users inside it) wrote this build + the GA4 Audience
+    stores, its pointer dashboard["audience"] and ONE counts-only line → its _headers path (one splat rule). OPTIONAL
+    (AUDIENCE_TAB, default on) and failure-isolated: switched off (its file removed, nothing printed) or failing (the
+    error TYPE only), every other output is exactly as without it."""
+    try:
+        from . import audience_build as aub
+        if not aub.enabled(s):
+            aub.off(out_dir)
+            return []
+        paths = aub.run(dashboard, data_dir, out_dir, s)
+        line = aub.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return list(paths)
+    except Exception as e:
+        try:
+            dashboard.pop("audience", None)
+        except Exception:
+            pass
+        print(f"audience skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 def _review_step(dashboard, data_dir, out_dir, now=None):
     """Daily App Review (admob_iq.review): freezes today's cards once (after REVIEW_READY_IST), publishes every day's
     snapshot to site/review/ and writes site/review/index.json → the _headers patterns it needs. OPTIONAL: off unless
@@ -1636,6 +1661,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # 💸 Install value Studio (the Install value tab's All-apps view): one lazy file from what the value step just wrote —
     # OPTIONAL (VALUE_STUDIO) and failure-isolated; without this build's Install value data it leaves no file behind
     vstudio_paths = _value_studio_step(dashboard, data_dir, out_dir, s)
+    # 👥 Audience tab (who still has each app, who went quiet and for how many months): one lazy file from what the
+    # same step wrote + the GA4 Audience stores — OPTIONAL (AUDIENCE_TAB) and failure-isolated; without this build's
+    # Active users data it leaves no file behind
+    aud_paths = _audience_step(dashboard, data_dir, out_dir, s)
 
     os.makedirs(out_dir, exist_ok=True)
     # dashboard.json is the primary payload and GROWS with history depth (placements + countries_daily),
@@ -1768,7 +1797,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # — no-store forces every request to fetch the freshest file from origin.
     with open(os.path.join(out_dir, "_headers"), "w", encoding="utf-8") as f:
         f.write(headers_text(uni_files, dashboard, extra=list(review_paths) + [p for p in rstudio_paths if p not in review_paths]
-                             + any_paths + vstudio_paths + as_paths + studio_paths))
+                             + any_paths + vstudio_paths + as_paths + studio_paths + aud_paths))
 
     alerts = send_alerts(dashboard, s)
     _uninstall_mark_sent(dashboard, data_dir, s, alerts)

@@ -78,6 +78,9 @@ def settings() -> dict:
         # 💸 Install value Studio: the Install value tab's All-apps view (value_studio.json.gz, one lazy file; never an
         # alert) — off: no file, no pointer, the tab's older All-apps views exactly as before (a rollback without a push)
         "value_studio": _env("VALUE_STUDIO", "true").lower() == "true",
+        # 👥 Audience tab: who still has each app, who opens it, who went quiet and for how many months (audience.json.gz,
+        # one lazy file; never an alert) — off: no file, no pointer, the page without the tab (a rollback without a push)
+        "audience_tab": _env("AUDIENCE_TAB", "true").lower() == "true",
         # 🗂 Review Studio: the Review tab's Studio (review/studio/<day>.json.gz, one lazy file per review day, frozen with
         # that day's cards; never an alert) — off: no file, no pointer, the older Review tab exactly as before
         "review_studio": _env("REVIEW_STUDIO", "true").lower() == "true",
