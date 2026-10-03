@@ -191,6 +191,36 @@ def test_a_rule_with_two_splats_is_rewritten_into_valid_ones(tmp_path):
     assert not build_static.headers_cover(out, "icon-192.png")
 
 
+def test_a_family_with_a_non_data_sibling_never_gets_the_non_data_file_cached_no_more(tmp_path):
+    """feat_*.json.gz are data (120 exact rules) but feat_logo.png sits in the same family: a /feat_* splat would cache-
+    control the picture too, so the guard falls back to the file type (/*.json.gz) and the picture stays as it was."""
+    data = ["feat_%03d.json.gz" % i for i in range(120)]
+    names = data + ["feat_logo.png", "index.html"]
+    text = ("/*\n  X-Robots-Tag: noindex\n\n" + "".join("/%s\n  Cache-Control: no-store\n\n" % n for n in data)
+            + "/index.html\n  Cache-Control: no-cache\n")
+    site = _site(tmp_path, names, text)
+    rep = dg.run(site)
+    out = open(os.path.join(site, "_headers"), encoding="utf-8").read()
+    assert rep["ok"] and rep["headers"]["over_covered"] == 0 and dg.headers_rule_count(out) <= 4
+    assert all(build_static.headers_cover(out, n) for n in data)
+    assert not build_static.headers_cover(out, "feat_logo.png") and not build_static.headers_cover(out, "index.html")
+
+
+def test_when_even_the_last_resort_cannot_fit_the_deploy_still_wins(tmp_path):
+    """150 data files with no extension and nothing in common cannot share a rule: the _headers keeps to the cap (a
+    rejected deploy would freeze the whole site) and the files that lost their no-store are counted, loudly."""
+    data = [hashlib.md5(b"n%d" % i).hexdigest() for i in range(150)]
+    text = ("/*\n  X-Robots-Tag: noindex\n\n" + "".join("/%s\n  Cache-Control: no-store\n\n" % n for n in data)
+            + "/index.html\n  Cache-Control: no-cache\n")
+    site = _site(tmp_path, data + ["index.html"], text)
+    rep = dg.run(site)
+    out = open(os.path.join(site, "_headers"), encoding="utf-8").read()
+    assert dg.headers_rule_count(out) == dg.HEADERS_MAX_RULES
+    assert rep["headers"]["uncovered"] == 52 and not rep["ok"]
+    assert sum(1 for n in data if build_static.headers_cover(out, n)) == 98
+    assert "headers 52 data files lost no-store" in rep["unfixed"]
+
+
 def test_130_splat_rules_collapse_too_and_a_second_run_changes_nothing(tmp_path):
     names = ["fam%03d_%d.json" % (i, j) for i in range(130) for j in (1, 2)] + ["index.html", "icon-192.png"]
     text = ("/*\n  X-Robots-Tag: noindex\n\n" + "".join("/fam%03d_*\n  Cache-Control: no-store\n\n" % i for i in range(130))
@@ -231,6 +261,7 @@ def test_collapse_never_uncovers_a_file_whatever_the_names(tmp_path):
         for n in data:
             assert build_static.headers_cover(new, n), (trial, n)
         assert not build_static.headers_cover(new, "index.html")
+        assert not any(build_static.headers_cover(new, o) for o in others)         # no other site file became no-store
         assert new.startswith("/*\n  X-Robots-Tag: noindex\n\n") and new.endswith("/index.html\n  Cache-Control: no-cache\n")
 
 
