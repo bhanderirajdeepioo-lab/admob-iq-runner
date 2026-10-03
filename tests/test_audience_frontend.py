@@ -89,6 +89,11 @@ def test_every_section_renders_on_all_apps(report):
         assert '<div class="au-l">%s</div>' % label in h
     assert "1 apps GA4 (lagbhag exact) · 3 andaza" in h and "SAMPLE numbers — asli nahi" in h
     assert "Demo Clock" in h                                                            # the apps without GA4: named
+    for sec in ("au-s-mdead", "au-s-mact"):                                             # "Top" = the answer's month
+        part = h[h.index('id="%s"' % sec):]
+        part = part[:part.index("</section>")]
+        month = re.search(r'<div class="au-ans"><b>([A-Z][a-z]{2} \d{4})</b>', part).group(1)
+        assert part.count('<span class="au-topb">Top</span>') == 1 and month + ' <span class="au-topb">Top</span>' in part
 
 
 @needs_node

@@ -2417,6 +2417,7 @@ body[data-screen="audience"] #smp-pick{display:inline-flex}
 #au-root .au-hb.au-red .au-hbar{background:var(--au-gone)}
 #au-root .au-hb [data-at]{cursor:default}
 #au-root .au-topb{display:inline-block;font-size:9.5px;font-weight:800;background:var(--watch-b);color:var(--watch);padding:0 5px;border-radius:5px;vertical-align:1px}
+#au-root .au-newb{display:inline-block;font-size:9.5px;font-weight:800;background:var(--purple-b);color:var(--purple);padding:0 5px;border-radius:5px;vertical-align:1px}
 #au-root .au-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 #au-root .au-tile{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px 11px;min-width:0}
 #au-root .au-tile .au-l{font-size:11px;color:var(--muted);font-weight:750;text-transform:uppercase;letter-spacing:.03em;line-height:1.3}
@@ -4934,27 +4935,29 @@ function secDead(a){ const title='Sleeping users: months since last open';
     <p class="au-note">Data: ${DT(au.E)} tak · bar = us mahine-range me aakhri baar khola</p>
     ${WHY(why[0],why[1],why[2])}</section>`; }
 function monthRows(a){ return a.au.m.map(r=>({k:r[0],n:r[1],inst:r[2],dead:r[3],lo:r[4],young:!!r[5],act:Math.max(0,r[2]-r[3]),actHi:r[4]==null?null:Math.max(0,r[2]-r[4]),dau:r[6]})).filter(x=>x.n>0); }
-function monthBars(list,key,color,sec){ const mx=Math.max(1,...list.map(x=>x[key]));
-  return list.map((x,i)=>`<div class="au-hl">${MLAB(x.k)}${i===0?' <span class="au-topb">Top</span>':''}</div><div class="au-ht" data-at="m:${x.k}:${sec}"><span class="au-hbar" style="width:${Math.max(0.6,100*x[key]/mx)}%;background:${color}"></span></div><div class="au-hv" data-at="m:${x.k}:${sec}">${N(x[key])}<small>${P(x[key],x.n)}</small></div>`).join(''); }
+// the bars, biggest first; "Top" = the answer's month (a whole month: no install day in the last month); "new" = a month
+// with installs from the last month (they had little time to go quiet — never the answer)
+function monthBars(list,key,color,sec,topK){ const mx=Math.max(1,...list.map(x=>x[key]));
+  return list.map(x=>`<div class="au-hl">${MLAB(x.k)}${x.k===topK?' <span class="au-topb">Top</span>':(x.young?' <span class="au-newb">new</span>':'')}</div><div class="au-ht" data-at="m:${x.k}:${sec}"><span class="au-hbar" style="width:${Math.max(0.6,100*x[key]/mx)}%;background:${color}"></span></div><div class="au-hv" data-at="m:${x.k}:${sec}">${N(x[key])}<small>${P(x[key],x.n)}</small></div>`).join(''); }
 function moreBtn(id,n){ return n>6?`<div class="au-more"><button type="button" data-au-more="${id}">${S.mall.has(id)?'Show top 6 only':`Show all ${n} months`}</button></div>`:''; }
 function secDeadMonths(a){ const ms=monthRows(a).filter(x=>x.dead>0).sort((p,q)=>q.dead-p.dead||(p.k<q.k?-1:1)), title='Install month with the most sleeping users';
   if(!ms.length) return `<section class="au-card" id="au-s-mdead"><h3>${title}</h3><div class="au-na">Abhi koi sleeping user nahi (app naya hai).</div></section>`;
   const mo=a.au.most&&a.au.most.dead, c=mo&&mo.count, sh=mo&&mo.share, show=S.mall.has('mdead')?ms:ms.slice(0,6);
-  const t=c?{k:c.month,dead:c.users,n:c.installs}:ms[0];
+  const t=c?{k:c.month,dead:c.users,n:c.installs}:ms[0]; if(!S.mall.has('mdead')&&!show.some(x=>x.k===t.k)){ const r=ms.find(x=>x.k===t.k); if(r) show.push(r); }   // the answer's month always has its bar
   const loT=r=>r&&r.lo!=null&&r.lo!==r.dead?` (range ${N(r.lo)}–${N(r.dead)})`:'';
   return `<section class="au-card" id="au-s-mdead"><h3>${title} ${srcTag(a.au,true)}</h3>
     <div class="au-ans"><b>${MLAB(t.k)}</b> ke installs: <b>${N(t.dead)}</b>${loT(ms.find(x=>x.k===t.k))} sleeping — us mahine ke installs ka ${P(t.dead,t.n)}.${sh&&sh.month!==t.k?` % me sabse zyada: <b>${MLAB(sh.month)}</b> (${P(sh.users,sh.installs)}).`:''}</div>
-    <div class="au-hb" role="img" aria-label="Sleeping users by install month">${monthBars(show,'dead','var(--au-sleep)','d')}</div>${moreBtn('mdead',ms.length)}
+    <div class="au-hb" role="img" aria-label="Sleeping users by install month">${monthBars(show,'dead','var(--au-sleep)','d',t.k)}</div>${moreBtn('mdead',ms.length)}
     ${WHY('mdead','Sleeping = phone me hai, 1+ mahine se nahi khola · % = us mahine ke installs me se.',`Sabse upar wala mahina sirf poore (1+ mahine purane) mahino me se chuna. % wala sirf un mahino me jinke kam se kam ${N(Math.max(100,0.01*(a.au.ins||0)))} installs (1%). ${ms.length>6?`Pehle top 6 dikhte hain (${ms.length} mahino me se) — "Show all" se sab.`:''}`)}
   </section>`; }
 function secActMonths(a){ const ms=monthRows(a).filter(x=>x.act>0).sort((p,q)=>q.act-p.act||(p.k<q.k?-1:1)), title='Install month with the most active users';
   if(!ms.length) return '';
   const mo=a.au.most&&a.au.most.active, c=mo&&mo.count, sh=mo&&mo.share, show=S.mall.has('mact')?ms:ms.slice(0,6);
-  const t=c?{k:c.month,act:c.users,n:c.installs}:ms[0];
+  const t=c?{k:c.month,act:c.users,n:c.installs}:ms[0]; if(!S.mall.has('mact')&&!show.some(x=>x.k===t.k)){ const r=ms.find(x=>x.k===t.k); if(r) show.push(r); }   // the answer's month always has its bar
   return `<section class="au-card" id="au-s-mact"><h3>${title} ${srcTag(a.au,true)}</h3>
     <div class="au-ans"><b>${MLAB(t.k)}</b> ke installs: <b>${N(t.act)}</b> abhi bhi active — ${P(t.act,t.n)} of us mahine ke installs.${sh&&sh.month!==t.k?` % me sabse acha: <b>${MLAB(sh.month)}</b> (${P(sh.users,sh.installs)}).`:''}</div>
-    <div class="au-hb" role="img" aria-label="Active users by install month">${monthBars(show,'act','var(--au-open)','a')}</div>${moreBtn('mact',ms.length)}
-    ${WHY('mact','Active = phone me hai aur pichhle 1 mahine me khola.','Upar ka jawab sirf poore (1+ mahine purane) mahino me se. Naye mahine bars me upar aate hain kyunki unhe chhodne ka time kam mila.')}
+    <div class="au-hb" role="img" aria-label="Active users by install month">${monthBars(show,'act','var(--au-open)','a',t.k)}</div>${moreBtn('mact',ms.length)}
+    ${WHY('mact','Active = phone me hai aur pichhle 1 mahine me khola · "new" = pichhle 1 mahine ke installs wala mahina.','Upar ka jawab (Top) sirf poore (1+ mahine purane) mahino me se. "new" wale mahine bars me upar aa sakte hain kyunki unhe chhodne ka time kam mila — isliye wo jawab nahi.')}
   </section>`; }
 const BANDS=[['Last 1 month','pichhle 30 din me install','#9cc2ff','#0a1120'],['1–3 months','1–3 mahine pehle install','#6b9cf2','#0a1120'],['3–12 months','3–12 mahine pehle install','#3f72d6','#fff'],['1 year+','1 saal se zyada purane','#2a4f9e','#fff']];
 function secDauMix(a){ const b=a.au.bands; if(!b||!b.reduce((s,v)=>s+v,0)) return '';
