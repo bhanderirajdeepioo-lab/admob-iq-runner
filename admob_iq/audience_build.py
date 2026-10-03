@@ -571,7 +571,7 @@ def app_entry(aa, ua, st, p, cf, x, cur, store, uni_filled_of, aud_mode=None):
               for N, v in journey.items()},
         "lt": {L: [_r(v["v"], 5), v["n"]] for L, v in longt.items()},
         "pk": pakke_today, "au": au, "dm": round(model_total), "maxm": int(tmax // MONTH),
-        "arp": _r(arpdau, 8), "pm": _r(per_mau, 8), "rev28": round(rev28, 2),
+        "arp": _r(arpdau, 8), "pm": _r(per_mau, 8), "rev28": round(rev28, 2), "a128": int(round(a1_28)),
         "dw": {"s": iso(dstart), "n": dw_n, "u": dw_u, "f": "".join(dw_f)},
     }
     extra = {"own": own, "ret_arpu": ret_arpu, "freq": freq, "old_dau": old_dau, "old_a28": old_a28,
@@ -705,7 +705,8 @@ def build_data(dashboard, data_dir, out_dir, counts, aud_mode=None):
     counts["coming"] = sum(1 for e in entries if e["au"].get("coming"))
     entries.sort(key=lambda e: -e["inst"])
     noga = [str(n.get("app") or "") for n in (U.get("no_ga4") or []) if n.get("app")]
-    return {"gen": dashboard.get("generated_at"), "fx": dashboard.get("usd_inr"), "E": max(e["E"] for e in entries),
+    return {"gen": dashboard.get("generated_at"), "fx": dashboard.get("usd_inr"), "cur": PF.get("currency") or "USD",
+            "E": max(e["E"] for e in entries),
             "apps": entries, "no_ga4": noga,
             "all": {"j": allj, "lt": alll, "rev28": round(sum(x["rev28"] for x in extras), 2),
                     "a1_28": sum(x["a1_28"] for x in extras), "au": portfolio_au(entries)}}
