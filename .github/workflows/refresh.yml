@@ -182,6 +182,10 @@ jobs:
             rm -rf data site && mkdir -p data site
             cp -a ../data/. data/ 2>/dev/null || true
             cp -a ../site/. site/ 2>/dev/null || true
+            # Deploy guard report (admob_iq/deploy_guard.py) → PRIVATE data/ only, for the watchdog on the Mac; never site/
+            # (it names files). Any copy from an earlier run is removed first, so a missing report is never mistaken for a fresh one.
+            rm -f data/deploy_guard.json
+            if [ -f ../deploy_guard.json ]; then cp -f ../deploy_guard.json data/deploy_guard.json; fi
             # Review API (Worker) code → private worker/. Synced only when this checkout has it, every file parses AND
             # index.js links (a real import: a missing module / export passes --check but fails the Workers build);
             # otherwise worker/ stays exactly as on the remote (a missing folder never breaks this push).

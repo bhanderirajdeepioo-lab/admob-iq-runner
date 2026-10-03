@@ -625,3 +625,14 @@ def test_workflow_warns_with_counts_only_and_still_pushes():
     assert steps[g].get("continue-on-error") is True and "if" not in steps[g]  # a warning never stops the push
     assert "if" not in steps[p]
     assert "deploy_guard.json" in run[g] and "tee" not in run[g] and "cat " not in run[g]    # the report itself is never dumped
+
+
+def test_workflow_copies_the_report_into_the_private_repo_data_never_the_site():
+    """The watchdog on the Mac reads data/deploy_guard.json from the PRIVATE repo; it is in the same push as the data."""
+    steps = _steps()
+    push = next(s for s in steps if str(s.get("name", "")).startswith("Push refreshed data"))["run"]
+    assert "cp -f ../deploy_guard.json data/deploy_guard.json" in push
+    assert "rm -f data/deploy_guard.json" in push                                  # a stale report never outlives its run
+    assert push.index("rm -rf data site") < push.index("rm -f data/deploy_guard.json") \
+        < push.index("cp -f ../deploy_guard.json data/deploy_guard.json") < push.index("git add -A data site")
+    assert "site/deploy_guard.json" not in push and "../deploy_guard.json site" not in push
