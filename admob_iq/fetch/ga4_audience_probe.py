@@ -173,6 +173,33 @@ def probe_unit(run, unit, token, data_dir, now, prop, old=None):
     return res
 
 
+def rederive(out, units, data_dir, skip=()):
+    """The complete results carried over from the last report (not probed now: `skip`) → derived again with this
+    engine and the Uninstall store as it is now (an older report's store sits under "store"), so the portfolio holds
+    every complete app. A failure keeps the result as it was (its derived marked stale)."""
+    by_pkg = {u["package"]: u for u in units or []}
+    for p, a in out.items():
+        if p in skip or not a.get("complete") or p not in by_pkg:
+            continue
+        store = a.get("audience") or a.get("store")
+        if not isinstance(store, dict):
+            continue
+        try:
+            aid, uni = pick_store(by_pkg[p], data_dir)
+            if aid is None:
+                raise ValueError(uni)
+            try:
+                from admob_iq.engine import uninstall as ue
+                uni = ue.fill_days(uni)
+            except Exception:
+                pass
+            a["derived"] = eng.derive_app(store, uni)
+            a["rederived"] = True
+        except Exception as e:
+            a["derived_stale"] = type(e).__name__
+        uni = None
+
+
 def _stat(v):
     v = sorted(x for x in v if x is not None)
     if not v:
@@ -216,9 +243,10 @@ def public_line(c):
 
 
 def run_probe(units, data_dir, cid, sec, tokens, now=None, budget=BUDGET_SEC, clock=time.monotonic, workers=WORKERS,
-              old=None, carried=None, total=None):
+              old=None, carried=None, total=None, all_units=None):
     """Probe every unit → the report (dict). old = {package: the last report's result} to resume from; carried = results
-    kept as they are. Never raises for one app's failure; prints counts-only progress."""
+    kept as they are (their numbers derived again: all_units = every unit of the build). Never raises for one app's
+    failure; prints counts-only progress."""
     run = Run(budget, clock)
     now = now or datetime.now(timezone.utc)
     rt, access = dict(tokens), {}
@@ -246,7 +274,9 @@ def run_probe(units, data_dir, cid, sec, tokens, now=None, budget=BUDGET_SEC, cl
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         list(ex.map(one, pr._groups(units)))
-    derived = [a["derived"] for a in out.values() if isinstance(a.get("derived"), dict)]
+    if carried:
+        rederive(out, all_units, data_dir, skip=set(done_now))
+    derived = [a["derived"] for a in out.values() if isinstance(a.get("derived"), dict) and a.get("complete")]
     total = total or len(out)
     return {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run_started": gu._now_iso(now),
             "rules": {"E": "latest final activity day: settled day (today-2 from noon, else -3; property tz) - %d"
@@ -309,7 +339,7 @@ def main(env=None, now=None, clock=time.monotonic):
               1 for u in todo if ((old.get(u["package"]) or {}).get("audience") or {}).get("partial"))
              if resume else ""), flush=True)
     report = run_probe(todo, data_dir, cid, sec, tokens, now=now, budget=budget, clock=clock, old=old,
-                       carried=carried, total=len(known | set(carried)))
+                       carried=carried, total=len(known | set(carried)), all_units=units)
     print(public_line(report["counts"]), flush=True)
     if not pr.write_private(OUT_PATH, pr._dump(report), "ga4 audience probe"):
         sys.exit("private repo write failed")            # stderr: hidden by the workflow step

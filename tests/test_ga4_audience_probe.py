@@ -104,7 +104,9 @@ def test_the_apps_input_picks_apps_by_package_key_or_app_id_and_the_rest_is_carr
     assert f.bodies and all(b["dimensionFilter"]["andGroup"]["expressions"][1]["filter"]["stringFilter"]["value"] == SID
                             for _, b in f.bodies)                   # only that app was asked
     assert set(rep["apps"]) == {PKG, PKG_B, PKG_C}                  # the others carried over from the last report
-    assert rep["apps"][PKG_B] == first["apps"][PKG_B] and rep["counts"]["apps_now"] == 1
+    kept = dict(rep["apps"][PKG_B])
+    assert kept.pop("rederived") is True and kept == first["apps"][PKG_B]                 # carried, numbers derived again
+    assert rep["counts"]["apps_now"] == 1 and rep["portfolio"]["apps"] == 3
 
 
 def test_resume_goes_on_with_a_partial_read_and_keeps_complete_apps(world, monkeypatch, capsys, tmp_path):
@@ -147,8 +149,27 @@ def test_resume_finishes_the_partial_and_derives_it(world, monkeypatch, tmp_path
         assert a["audience"]["runs"] == 2 and "partial" not in a["audience"]
     done = {p for p, a in first["apps"].items() if a["complete"]}
     for p in done:
-        assert rep["apps"][p] == first["apps"][p]                    # complete ones carried, not asked again
+        kept = dict(rep["apps"][p])
+        assert kept.pop("rederived") is True and kept == first["apps"][p]    # complete ones carried, not asked again
     assert rep["portfolio"]["apps"] == 3
+
+
+def test_an_older_reports_complete_app_is_derived_again_into_the_portfolio(world, monkeypatch, tmp_path):
+    data, pops, f = world
+    root = os.path.dirname(data)
+    pop = pops[A2][2]
+    legacy = pop.aud_store()                                         # the first probe's store: "store", no months
+    for key in ("months", "complete", "v"):
+        legacy.pop(key)
+    os.makedirs(os.path.join(root, "ga4"))
+    with open(os.path.join(root, ap.OUT_PATH), "w", encoding="utf-8") as fh:
+        json.dump({"apps": {PKG_B: {"package": PKG_B, "complete": True, "store": legacy, "derived": {"months": {}}}}},
+                  fh)
+    rep = _main(monkeypatch, root, {}, GITHUB_EVENT_PATH=_event(tmp_path, apps=gu.file_key(A3)),
+                AUDIENCE_RESUME="true")
+    b = rep["apps"][PKG_B]
+    assert b["rederived"] and b["derived"]["dead"] == eng.derive_app(pop.aud_store(), pop.uni_store())["dead"]
+    assert rep["portfolio"]["apps"] == 2 and set(rep["apps"]) == {PKG_B, PKG_C}
 
 
 def test_the_probe_stops_at_its_budget_and_still_writes_what_it_has(world, monkeypatch):

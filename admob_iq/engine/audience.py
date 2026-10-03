@@ -379,12 +379,14 @@ def _sum_into(dst, src, k):
 
 
 def portfolio(apps):
-    """Every app's derive_app result (a list; an entry with "err" is skipped) → the portfolio on the union of their
-    months (an app without one of them: young past its own last window when that window held all its history, else
-    None), calendar install months summed across apps, the last-open buckets, the most dead / active month, the DAU on
+    """Every app's derive_app result (a list; an entry with "err" is skipped) → the portfolio on the tiered months up to
+    the longest window (an app without one of them: young past its own last window when that window held all its
+    history, else None), calendar install months summed across apps, the last-open buckets, the most dead / active month, the DAU on
     each app's E by install month, the marks, and the apps' E range."""
     ok = [a for a in apps if isinstance(a, dict) and "err" not in a and "installs" in a]
-    glob = sorted({mo for a in ok for mo in a["months"]}) or [1]
+    # the tiered months up to the longest window any app has (an app read on another step — e.g. monthly — has every
+    # one of them below its own last window)
+    glob = tier_months(window_days(max([mo for a in ok for mo in a["months"]] or [1])))
     k = len(glob)
     tot, mos, marks = {}, {}, {}
     _sum_into(tot, {"days": 0, "installs": 0, "uninstalled": 0, "installed": 0,

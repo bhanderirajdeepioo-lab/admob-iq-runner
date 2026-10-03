@@ -275,6 +275,18 @@ def test_portfolio_sums_apps_on_the_union_of_their_months_and_extends_a_young_ap
     assert eng.portfolio([])["apps"] == 0
 
 
+def test_portfolio_keeps_the_tiered_months_when_an_app_was_read_monthly():
+    pop = Population(days=500, per_day=4, seed=5)
+    monthly = eng.derive_app(pop.aud_store(months=list(range(1, 18))), pop.uni_store())   # an older, monthly read
+    tiered = eng.derive_app(pop.aud_store(), pop.uni_store())
+    p = eng.portfolio([monthly, tiered])
+    assert p["months"] == tiered["months"] == list(range(1, 13)) + [15, 18]
+    for i, mo in enumerate(p["months"]):
+        j = monthly["months"].index(mo) if mo in monthly["months"] else None
+        assert p["dead"][i] == tiered["dead"][i] + (monthly["dead"][j] if j is not None else 0)
+    assert monthly["dead"] and sum(b["users"] for b in p["last_open"]) == p["installed"]
+
+
 def test_portfolio_months_an_app_lacks_below_its_last_window_are_unknown():
     x = E - timedelta(days=200)
     short = eng.derive_app(*_one_day(x, 10, {}, [5, 6, 7], [1, 2, 3]))        # not full: stops at 3 months
