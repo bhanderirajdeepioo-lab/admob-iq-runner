@@ -52,18 +52,22 @@ _MAX_LISTED = 50                                         # names kept per list i
 
 # ── _headers primitives (build_static re-exports these) ─────────────────────────────────────────────────────────────
 
+_PATH_LINE = re.compile(r"^([^\s]+://|/)")
+
+
 def parse_headers(text):
-    """A _headers text → [(pattern, [header lines])], the way Cloudflare reads it: an unindented line starts a rule, the
-    indented lines under it are its headers; blank lines and # comments mean nothing."""
+    """A _headers text → [(pattern, [header lines])], the way Cloudflare's parser reads it (wrangler parseHeaders): each
+    line is trimmed, blank lines and # comments mean nothing, a line starting with "/" (or "scheme://") opens a rule and
+    every other line is a header of the rule above."""
     rules = []
-    for ln in text.splitlines():
-        if not ln.strip() or ln.lstrip().startswith("#"):
+    for raw in text.split("\n"):
+        ln = raw.strip()
+        if not ln or ln.startswith("#"):
             continue
-        if ln[0] in " \t":
-            if rules:
-                rules[-1][1].append(ln.strip())
-        else:
-            rules.append((ln.strip(), []))
+        if _PATH_LINE.match(ln):
+            rules.append((ln, []))
+        elif rules:
+            rules[-1][1].append(ln)
     return rules
 
 
@@ -307,22 +311,28 @@ def _check_headers(out_dir, files, rep, fixed, unfixed):
 
 
 def _check_redirects(out_dir, rep, unfixed):
+    """Counted the way Cloudflare's parser does (wrangler parseRedirects): a rule needs 2 or 3 tokens; it is static until
+    the FIRST dynamic one (a splat * or a :placeholder in its source), and every rule after that counts as dynamic."""
     path = os.path.join(out_dir, "_redirects")
     r = rep["redirects"] = {"present": os.path.isfile(path), "static": 0, "dynamic": 0, "long_lines": 0}
     if not r["present"]:
         return
+    can_static = True
     with open(path, encoding="utf-8", errors="replace") as f:
         for ln in f:
-            ln = ln.rstrip("\r\n")
-            if not ln.strip() or ln.lstrip().startswith("#"):
+            ln = ln.strip()
+            if not ln or ln.startswith("#"):
                 continue
-            src = ln.split()[0]
-            if "*" in src or re.search(r":[A-Za-z]", src):
-                r["dynamic"] += 1
-            else:
-                r["static"] += 1
             if len(ln) > REDIRECTS_MAX_LINE:
                 r["long_lines"] += 1
+            tokens = re.sub(r"\s+#.*$", "", ln).split()
+            if not 2 <= len(tokens) <= 3:
+                continue                                    # Cloudflare ignores a line like that
+            if can_static and "*" not in tokens[0] and not re.search(r":[A-Za-z]", tokens[0]):
+                r["static"] += 1
+            else:
+                r["dynamic"] += 1
+                can_static = False
     if r["static"] > REDIRECTS_MAX_STATIC:
         unfixed.append(f"redirects static {r['static']}>{REDIRECTS_MAX_STATIC}")
     if r["dynamic"] > REDIRECTS_MAX_DYNAMIC:

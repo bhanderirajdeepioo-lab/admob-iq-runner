@@ -238,6 +238,8 @@ def test_headers_primitives_read_cloudflares_format():
     text = ("# a comment\n/*\n  X-Robots-Tag: noindex\n\n\n/a.json\n  Cache-Control: no-store\n"
             "/b_*\n  Cache-Control: no-store\n  X-Other: 1\n")
     assert dg.headers_rule_count(text) == 3                                    # blank lines mean nothing, comments too
+    assert dg.parse_headers("  /trimmed\n    X-Y: 1\nhttps://h.example/p\n  A: b\n") == \
+        [("/trimmed", ["X-Y: 1"]), ("https://h.example/p", ["A: b"])]       # lines are trimmed; a path starts with / or scheme://
     assert dg.headers_cover(text, "a.json") and dg.headers_cover(text, "/b_x/y.gz") and not dg.headers_cover(text, "c.json")
     assert dg.headers_cover(text, "anything", "X-Robots-Tag: noindex")
     assert build_static.headers_cover is dg.headers_cover and build_static.HEADERS_MAX_RULES == 100
@@ -324,18 +326,37 @@ def test_bad_asset_names_are_left_out_and_odd_but_legal_ones_stay(tmp_path):
     assert dg.bad_asset_path("x/y.json.gz") is None and dg.bad_asset_path("a" * 600) == "length"
 
 
+def _redirects(static, dynamic):
+    st = ["/old%d /new%d 301\n" % (i, i) for i in range(static)]
+    dy = ["/g%d/* /h%d/:splat 302\n" % (i, i) for i in range(dynamic)]
+    return "# comment\n\n" + "".join(st + dy)
+
+
 def test_redirects_limits(tmp_path):
-    ok = "# comment\n\n" + "".join("/old%d /new%d 301\n" % (i, i) for i in range(2000)) \
-        + "".join("/blog/:slug /posts/:slug 301\n" if i == 0 else "/g%d/* /h%d/:splat 302\n" % (i, i) for i in range(100))
     site = _site(tmp_path, ["a.json"])
-    open(os.path.join(site, "_redirects"), "w").write(ok)
-    rep = dg.run(site)
+
+    def check(text):
+        open(os.path.join(site, "_redirects"), "w").write(text)
+        return dg.run(site)
+
+    rep = check(_redirects(2000, 100))
     assert (rep["redirects"]["static"], rep["redirects"]["dynamic"]) == (2000, 100) and rep["ok"]
-    open(os.path.join(site, "_redirects"), "w").write(ok + "/one-more /x 301\n/another/* /y/:splat 301\n")
+    assert rep["files"]["count"] == 1                                                      # _redirects: not an asset
+    rep = check(_redirects(2001, 1))
+    assert not rep["ok"] and rep["unfixed"] == ["redirects static 2001>2000"]
+    rep = check(_redirects(1, 101))
+    assert not rep["ok"] and rep["unfixed"] == ["redirects dynamic 101>100"]
+    assert open(os.path.join(site, "_redirects")).read() == _redirects(1, 101)             # reported, never edited
+
+
+def test_redirects_after_the_first_dynamic_rule_all_count_as_dynamic(tmp_path):
+    """Cloudflare's parser: a rule is static only until the first dynamic one; every later rule counts as dynamic."""
+    site = _site(tmp_path, ["a.json"])
+    text = "/blog/:slug /posts/:slug 301\n" + "".join("/old%d /new%d 301\n" % (i, i) for i in range(100))
+    open(os.path.join(site, "_redirects"), "w").write(text + "not-a-rule\n/x /y 301 # a comment\n")
     rep = dg.run(site)
-    assert not rep["ok"] and "redirects static 2001>2000" in rep["unfixed"] and "redirects dynamic 101>100" in rep["unfixed"]
-    assert open(os.path.join(site, "_redirects")).read().endswith("/another/* /y/:splat 301\n")   # reported, never edited
-    assert rep["files"]["count"] == 1                                                              # _redirects: not an asset
+    assert (rep["redirects"]["static"], rep["redirects"]["dynamic"]) == (0, 102)          # 1 + 100 + the commented rule
+    assert rep["unfixed"] == ["redirects dynamic 102>100"]
 
 
 def test_no_redirects_file_no_redirects_part_in_the_line(tmp_path, capsys):
