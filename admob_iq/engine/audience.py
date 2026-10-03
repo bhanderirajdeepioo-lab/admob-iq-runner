@@ -68,6 +68,7 @@ IMPOSSIBLE = ("un_gt_new", "act_gt_inst")
 CLAMPED = ("un_gt_act", "non_mono")
 MARKS = IMPOSSIBLE + CLAMPED
 ARRAYS = ("act", "un_in", "alive", "dead", "dead_lo", "young", "missing")
+UN_LATE_DAYS = 7                      # app_remove arrives up to ~7 days late (engine.uninstall.LATE_DAYS)
 
 
 def window_days(n):
@@ -222,7 +223,8 @@ def most(months, installs_total):
 
 def dau_split(aud, hs, daily):
     """DAU on E by install month: dau_by_fsd summed by month; installs before the history, "(other)", "(not set)"
-    apart; checked against the Uninstall store's daily actives of E (cov)."""
+    apart; checked against the Uninstall store's daily actives of E (cov). (One day: a user who opened on E and
+    uninstalled the same day is in it — not taken out.)"""
     e = str(aud.get("E"))
     by, before = {}, 0
     for x, u in (aud.get("dau_by_fsd") or {}).items():
@@ -239,10 +241,12 @@ def dau_split(aud, hs, daily):
             "cov": _ratio(users, _int(a1)) if a1 else None}
 
 
-def derive_app(aud, uni, per_day=False):
+def derive_app(aud, uni, per_day=False, un_late_days=UN_LATE_DAYS):
     """One app's Audience numbers (module docstring) from its Audience store `aud` and its Uninstall store `uni`. →
     {E, history_start, windows (days of windows 1..K), months_n K, full, installs … (the app's group), months
-    {YYYY-MM: group}, most, dau, checks, flags} (+ per_day {X: …} when asked)."""
+    {YYYY-MM: group}, most, dau, checks, flags} (+ per_day {X: …} when asked). flags.un_provisional_days: the days up
+    to E inside the Uninstall store's newest un_late_days (app_remove still arriving there: installed may read a little
+    high, dead a little low)."""
     end, hs = _d(aud["E"]), _d(uni["history_start"])
     w = [int(v) for v in aud.get("windows") or []]
     m = len(w)
@@ -291,6 +295,7 @@ def derive_app(aud, uni, per_day=False):
     unpl = sum(_int(v) for d, v in (uni.get("unplaced") or {}).items() if lo <= d <= hi)
     flags = dict(aud.get("flags") or {})
     flags.update(un_till=we, un_days_missing=max(0, (end - _d(we)).days) if we else None,
+                 un_provisional_days=max(0, (end - _d(we)).days + un_late_days) if we else None,
                  un_incomplete_days=len(inc), un_unplaced=unpl, history_capped=bool(uni.get("history_capped")),
                  impossible_cells=sum(v[0] for v in out["impossible"].values()),
                  clamped_cells=sum(v[0] for v in out["clamped"].values()))

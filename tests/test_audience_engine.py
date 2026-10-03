@@ -203,6 +203,9 @@ def test_uninstall_store_gaps_are_flagged():
     uni["history_capped"] = True
     f = eng.derive_app(pop.aud_store(), uni)["flags"]
     assert (f["un_days_missing"], f["un_incomplete_days"], f["un_unplaced"], f["history_capped"]) == (2, 1, 3, True)
+    assert f["un_provisional_days"] == 2 + 7
+    f = eng.derive_app(pop.aud_store(), pop.uni_store())["flags"]          # window_end = E + 3: E − 3 .. E provisional
+    assert (f["un_days_missing"], f["un_provisional_days"]) == (0, 4)
 
 
 def test_actives_installed_before_the_history_are_shown_apart():

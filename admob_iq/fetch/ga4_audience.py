@@ -4,11 +4,13 @@ active in each trailing window of 1, 2, 3 … months — straight from GA4, no a
 
 THE REQUEST — the owner's method on the Data API: metric activeUsers, dimension firstSessionDate, pinned to the app's
 Android stream (ga4.Ga4App), over trailing date ranges that all END on E, the latest FINAL activity day:
-    E        = ga4_uninstall.settled_end − ACT_LATE_DAYS (today − 2 in the property's timezone from noon, else − 3; GA4
+    E        = ga4_uninstall.settled_end − FINAL_LAG_DAYS (today − 2 in the property's timezone from noon, else − 3; GA4
                activity is final 3 days later — the Active users tab's settled_till, the install-value reads' F);
     window N = [E − w_N + 1, E], w_N = floor(N × 30.4375) days (30, 60, 91, 121, …, 365 at N = 12), N = 1, 2, … up to the
                first window that holds the app's whole history (the Uninstall store's history_start);
-    "dau"    = E alone: actives on E by install day (today's DAU by install month).
+    "dau"    = E alone: actives on E by install day ("today's DAU by install month" — on the latest FINAL day, ~5 days
+               back: the days after it are still filling in. FINAL_LAG_DAYS = 0 would read the robot's settled day
+               itself, ~2 days back, with its newest days a little low).
 Up to RANGES_PER_CALL (4, the Data API's limit) named date ranges per request (GA4 adds the dateRange dimension), every
 row paged (Ga4App.report_all: offset += limit up to rowCount), metricAggregations TOTAL (GA4's own distinct actives of
 each range: the split's self-check). A request that needed more than one page with 2+ ranges is asked again range by
@@ -49,6 +51,7 @@ from ..db import write_json_gz_stable
 from ..engine.audience import window_days
 
 DIR = "ga4_audience"
+FINAL_LAG_DAYS = gu.ACT_LATE_DAYS   # E = the robot's settled day − 3: GA4 activity is final then (the Active users tab)
 STORE_V = 1                 # the store format: another one is read again in full at the next run
 RANGES_PER_CALL = 4         # date ranges per runReport (the Data API's limit)
 PAGE_ROWS = 100000          # rows per page (≤ 4 ranges × one row per install day: one page, even at 1,300 days)
@@ -93,8 +96,8 @@ def _err(e):
 # ── the plan: windows, ranges, requests ─────────────────────────────────────────────────────────────
 
 def final_end(tz_name, now):
-    """E, the latest FINAL activity day: the robot's settled day (gu.settled_end) − ACT_LATE_DAYS."""
-    return gu.settled_end(tz_name, now) - timedelta(days=gu.ACT_LATE_DAYS)
+    """E, the latest FINAL activity day: the robot's settled day (gu.settled_end) − FINAL_LAG_DAYS."""
+    return gu.settled_end(tz_name, now) - timedelta(days=FINAL_LAG_DAYS)
 
 
 def windows_for(end, hs):
