@@ -536,11 +536,52 @@ def headers_text(uni_files, dashboard, extra=()):
             "/account_names.json\n  Cache-Control: no-store\n\n"
             "/app_names.json\n  Cache-Control: no-store\n\n"
             "/uninstall.json.gz\n  Cache-Control: no-store\n\n"
-            + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in uni_files if n != "uninstall.json.gz")
-            + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in _active_files(dashboard))
-            + "".join(f"/{n}\n  Cache-Control: no-store\n\n" for n in _value_files(dashboard))
+            + "".join(f"{p}\n  Cache-Control: no-store\n\n" for p in _nostore_rules(
+                [n for n in uni_files if n != "uninstall.json.gz"] + _active_files(dashboard) + _value_files(dashboard)))
             + "".join(f"{p}\n  Cache-Control: no-store\n\n" for p in extra)
             + "/index.html\n  Cache-Control: no-cache\n")
+
+
+# Cloudflare reads at most 100 rules from _headers and REJECTS the whole deploy past that — one rule per app per
+# GA4 tab (3 tabs × every app) crossed it on 2 Oct and stopped every deploy. So the per-app lazy files share ONE
+# splat rule per tab ("/active_*" …): same no-store, a fixed rule count however many apps there are.
+_PER_APP_RULES = (("uninstall_c_", "/uninstall_c_*"), ("active_", "/active_*"), ("value_", "/value_*"))
+HEADERS_MAX_RULES = 100
+
+
+def _nostore_rules(names):
+    """Site file names → their no-store rules, in order, each once: a per-app lazy file ("<prefix><12-hex key>.json.gz")
+    becomes its tab's splat rule; any other file keeps its own exact rule."""
+    out = []
+    for n in names:
+        rule = "/" + n
+        for pre, pat in _PER_APP_RULES:
+            if re.fullmatch(re.escape(pre) + r"[0-9a-f]{12}\.json\.gz", n):
+                rule = pat
+                break
+        if rule not in out:
+            out.append(rule)
+    return out
+
+
+def headers_cover(text, name, header="Cache-Control: no-store"):
+    """True when a rule of the _headers `text` that sets `header` matches "/name" (Cloudflare's splat: * = any run of
+    characters). Lets a check say "this file is never cached" without caring whether its rule is exact or a splat."""
+    path = "/" + name.lstrip("/")
+    for block in text.split("\n\n"):
+        lines = block.strip("\n").split("\n")
+        if not lines or not lines[0].startswith("/"):
+            continue
+        pat = lines[0].strip()
+        if any(ln.strip() == header for ln in lines[1:]) and \
+                re.fullmatch(".*".join(re.escape(x) for x in pat.split("*")), path):
+            return True
+    return False
+
+
+def headers_rule_count(text):
+    """The number of rules (path lines) in a _headers text — Cloudflare rejects the deploy past HEADERS_MAX_RULES."""
+    return sum(1 for ln in text.split("\n") if ln.startswith("/"))
 
 
 def _active_files(dashboard):

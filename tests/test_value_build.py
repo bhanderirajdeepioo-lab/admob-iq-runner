@@ -288,9 +288,11 @@ def test_stale_value_files_removed(vsite):
     assert os.path.exists(os.path.join(out, "value_notes.txt"))
     headers = build_static.headers_text(files, dash)
     for n in names:
-        assert "/%s\n  Cache-Control: no-store\n" % n in headers
+        assert build_static.headers_cover(headers, n), n
+    # the per-app files share ONE splat rule (Cloudflare's 100-rule cap): without the tab, only that rule goes
+    assert "/value_*\n  Cache-Control: no-store\n\n" in headers
     assert build_static.headers_text(files, {k: v for k, v in dash.items() if k != "value"}) == \
-        headers.replace("".join("/%s\n  Cache-Control: no-store\n\n" % n for n in names), "")
+        headers.replace("/value_*\n  Cache-Control: no-store\n\n", "")
 
 
 def test_prepass_reads_no_country_revenue(vsite, monkeypatch):

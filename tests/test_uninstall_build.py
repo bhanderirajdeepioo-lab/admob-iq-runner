@@ -981,7 +981,7 @@ def test_active_files_are_in_headers_stale_ones_removed_and_nothing_private_ship
     assert os.path.exists(os.path.join(out, "active_notes.txt"))                   # not ours: left alone
     headers = build_static.headers_text(files, dash)
     for n in names + files[1:]:
-        assert "/%s\n  Cache-Control: no-store\n" % n in headers
+        assert build_static.headers_cover(headers, n), n
     shipped = json.dumps(dash["active"], ensure_ascii=False)
     for name in os.listdir(out):
         if name.endswith(".json.gz"):
@@ -1297,7 +1297,7 @@ def test_active_portfolio_file_is_written_pointed_to_and_in_headers(asite):
     assert (P["from"], P["to"], P["settled_till"]) == (body["from"], body["to"], body["settled_till"])
     assert P["days"] == len(body["total"]["n"]) and P["to"] == END.isoformat()
     assert len(json.dumps(P, separators=(",", ":"))) <= 300                        # the first load stays small
-    assert "/%s\n  Cache-Control: no-store\n" % P["file"] in build_static.headers_text(files, dash)
+    assert build_static.headers_cover(build_static.headers_text(files, dash), P["file"])
     assert P["file"] not in files                                                   # run_uninstall's list: unchanged
     dets = {}
     for r in dash["active"]["apps"]:

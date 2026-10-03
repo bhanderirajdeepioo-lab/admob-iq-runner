@@ -868,3 +868,35 @@ def test_headers_forbid_framing_everywhere():
     first = h.split("\n\n")[0]
     assert first.startswith("/*\n") and "  X-Frame-Options: DENY\n" in first + "\n"
     assert "  Content-Security-Policy: frame-ancestors 'none'" in first
+
+
+def test_headers_stay_under_cloudflares_rule_cap_however_many_apps():
+    """Cloudflare rejects the WHOLE deploy when _headers has more than 100 rules (2 Oct: one rule per app per GA4 tab
+    crossed it and every deploy failed). Per-app lazy files share one splat rule per tab, so the count never grows
+    with the number of apps — and every file is still never cached."""
+    keys = ["%012x" % (0xa11ce0000000 + i) for i in range(400)]
+    dash = {"active": {"apps": [{"file": "active_%s.json.gz" % k} for k in keys],
+                       "portfolio": {"file": "active_portfolio.json.gz"}},
+            "value": {"apps": [{"file": "value_%s.json.gz" % k} for k in keys]}}
+    uni = ["uninstall.json.gz"] + ["uninstall_c_%s.json.gz" % k for k in keys]
+    extra = ["/review/*", "/impact_any_*", "/value_studio.json.gz", "/active_studio.json.gz",
+             "/active_studio_old.json.gz", "/uninstall_studio.json.gz", "/uninstall_studio_old.json.gz"]
+    text = build_static.headers_text(uni, dash, extra=extra)
+    assert build_static.headers_rule_count(text) <= build_static.HEADERS_MAX_RULES // 2
+    for k in keys:
+        for n in ("active_%s.json.gz" % k, "value_%s.json.gz" % k, "uninstall_c_%s.json.gz" % k):
+            assert build_static.headers_cover(text, n), n
+    for n in ("active_portfolio.json.gz", "uninstall.json.gz", "dashboard.json.gz", "baseline_daily_old.json.gz",
+              "review/2026-10-01.json", "impact_any_abc.json.gz", "value_studio.json.gz"):
+        assert build_static.headers_cover(text, n), n
+    assert build_static.headers_cover(text, "index.html", "Cache-Control: no-cache")
+    assert not build_static.headers_cover(text, "index.html")          # the page itself is no-cache, not no-store
+    assert not build_static.headers_cover(text, "icon-192.png")
+
+
+def test_headers_cover_reads_exact_and_splat_rules():
+    text = "/*\n  X-Robots-Tag: noindex\n\n/a.json\n  Cache-Control: no-store\n\n/b_*\n  Cache-Control: no-store\n"
+    assert build_static.headers_cover(text, "a.json") and build_static.headers_cover(text, "/b_x.json.gz")
+    assert not build_static.headers_cover(text, "a.json.gz") and not build_static.headers_cover(text, "c.json")
+    assert build_static.headers_cover(text, "anything", "X-Robots-Tag: noindex")
+    assert build_static.headers_rule_count(text) == 3
