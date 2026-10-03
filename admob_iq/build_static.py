@@ -27,6 +27,9 @@ from .fetch import fetcher
 from .fetch.coverage import verify_coverage, verify_entity_spans
 from .api.dataservice import build_from_db, build_dashboard, empty_dashboard
 from .alerting import notify as notifier
+from . import deploy_guard
+# the _headers primitives live in deploy_guard (it needs them and must not import this module); same names here
+from .deploy_guard import HEADERS_MAX_RULES, headers_cover, headers_rule_count      # noqa: F401
 
 _ICON = {"critical": "🔴", "warning": "🟠", "watch": "🟡", "good": "🎉"}
 
@@ -545,8 +548,8 @@ def headers_text(uni_files, dashboard, extra=()):
 # Cloudflare reads at most 100 rules from _headers and REJECTS the whole deploy past that — one rule per app per
 # GA4 tab (3 tabs × every app) crossed it on 2 Oct and stopped every deploy. So the per-app lazy files share ONE
 # splat rule per tab ("/active_*" …): same no-store, a fixed rule count however many apps there are.
+# deploy_guard (run on the finished site, end of build()) is the general net for any other feature that adds a rule per file.
 _PER_APP_RULES = (("uninstall_c_", "/uninstall_c_*"), ("active_", "/active_*"), ("value_", "/value_*"))
-HEADERS_MAX_RULES = 100
 
 
 def _nostore_rules(names):
@@ -562,26 +565,6 @@ def _nostore_rules(names):
         if rule not in out:
             out.append(rule)
     return out
-
-
-def headers_cover(text, name, header="Cache-Control: no-store"):
-    """True when a rule of the _headers `text` that sets `header` matches "/name" (Cloudflare's splat: * = any run of
-    characters). Lets a check say "this file is never cached" without caring whether its rule is exact or a splat."""
-    path = "/" + name.lstrip("/")
-    for block in text.split("\n\n"):
-        lines = block.strip("\n").split("\n")
-        if not lines or not lines[0].startswith("/"):
-            continue
-        pat = lines[0].strip()
-        if any(ln.strip() == header for ln in lines[1:]) and \
-                re.fullmatch(".*".join(re.escape(x) for x in pat.split("*")), path):
-            return True
-    return False
-
-
-def headers_rule_count(text):
-    """The number of rules (path lines) in a _headers text — Cloudflare rejects the deploy past HEADERS_MAX_RULES."""
-    return sum(1 for ln in text.split("\n") if ln.startswith("/"))
 
 
 def _active_files(dashboard):
