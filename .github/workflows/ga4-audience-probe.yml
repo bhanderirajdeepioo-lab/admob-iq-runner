@@ -1,0 +1,62 @@
+# One-off: the Audience fetch (admob_iq/fetch/ga4_audience.py — GA4 active users by first-session day over the trailing
+# 1, 2, 3 … month windows) once for EVERY GA4 app, with its numbers (admob_iq/engine/audience.py: dead users by months
+# since their last open) — real numbers before the repo variable GA4_AUDIENCE switches it on in the hourly build.
+# See admob_iq/fetch/ga4_audience_probe.py. Read-only against GA4 and against the PRIVATE repo's data; the only write is
+# ga4/audience_probe.json in the PRIVATE repo. This repo's Actions log is PUBLIC: it shows progress counts and one line
+# of counts only; stderr (which could echo request details) is hidden.
+name: ga4-audience-probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_apps:
+        description: "probe only the N smallest apps (0 = all)"
+        required: false
+        default: "0"
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-audience-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30          # the probe starts no GA4 call after 22 min and then writes what it has
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Read the PRIVATE data (read-only clone)
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing"; exit 1; }
+          test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
+          # the token goes in a header for this one command only: never into a URL, a file or .git/config
+          auth=$(printf 'x-access-token:%s' "$DATA_REPO_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          git -c http.extraheader="AUTHORIZATION: basic $auth" clone -q --depth=1 \
+            "https://github.com/$DATA_REPO.git" _private > /dev/null 2>&1 \
+            || { echo "::error::could not clone the private data repo (details kept off the public log)"; exit 1; }
+          echo "private data: $(ls -1 _private/data/ga4_uninstall 2>/dev/null | wc -l) file(s)"
+      - name: Run
+        env:
+          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          AUDIENCE_DATA_DIR: _private
+          AUDIENCE_MAX_APPS: ${{ github.event.inputs.max_apps }}
+          PYTHONUNBUFFERED: "1"
+        run: python -m admob_iq.fetch.ga4_audience_probe 2>/tmp/audience.err || { echo "::error::audience probe failed (details kept off the public log)"; exit 1; }
