@@ -2447,6 +2447,15 @@ body[data-screen="audience"] #smp-pick{display:inline-flex}
 #au-root table.au-apps .au-rk{color:var(--faint);font-weight:700;font-size:11.5px;width:22px}
 #au-root .au-hs{display:none}
 @container au (min-width:560px){#au-root .au-hs{display:table-cell}}
+/* the all-apps table on a phone (its box < 560 px): 3 columns that fit (no sideways scroll) — App (+ installed under the
+   name) · Sleeping · money, in short numbers (2.6M, 412K); the full ones on hover / a tap (tip "t"). .au-dk = the desktop
+   form only, .au-ph = the phone form only. */
+@container au (min-width:560px){#au-root .au-ph{display:none!important}}
+@container au (max-width:559.98px){#au-root .au-dk{display:none!important}}
+@container au (max-width:559.98px){#au-root table.au-apps th,#au-root table.au-apps td{padding-left:4px;padding-right:4px}}
+@container au (max-width:559.98px){#au-root table.au-apps th.au-r{white-space:normal}#au-root table.au-apps td.au-r{width:1%}}
+@container au (max-width:559.98px){#au-root table.au-apps td.au-nm{min-width:0;overflow-wrap:anywhere}#au-root table.au-apps td.au-nm .au-tg{white-space:normal}}
+@container au (max-width:559.98px){#au-root table.au-bk th.au-r{white-space:normal}#au-root table.au-bk td:first-child{white-space:nowrap}}   /* "Money from waking": fits as it is; a header may wrap, "2–4 months" not */
 #au-root ul.au-how{margin:4px 0 0;padding-left:18px;color:var(--ink2);font-size:13px;line-height:1.5}
 #au-root ul.au-how li{margin-bottom:7px}
 #au-root ul.au-how b{color:#fff}
@@ -4994,12 +5003,13 @@ function secHow(){ return `<section class="au-card" id="au-s-how"><h3>How to wak
     <li><b>Re-engagement ads</b> — jis app ka sleeping pool bada hai (All apps wali table), wahan Google Ads me app engagement campaign — sirf tab jab upar ka ${csym()}/mahina andaza uski cost se zyada ho.</li>
     <li><b>Dhyan se:</b> notification bahut zyada mat bhejo — Play ki spam / notification policy ka khayal. Android 13+ pe notification permission chahiye aur kaafi users ne off rakhi hai, isliye FCM sirf kuch sleeping users tak hi pahunchegi.</li></ul></section>`; }
 function secTable(){ const lbl=S.mode==='age'?'By age':S.mode+'%';
-  const rows=APPS.map(x=>({x,q:wake(x)})).sort((p,q)=>(q.q.usd-p.q.usd)||(q.x.sl-p.x.sl)).map(({x,q},i)=>
-    `<tr class="au-clk" tabindex="0" data-au-k="${esc(x.k)}"><td class="au-rk au-hs">${i+1}</td><td class="au-nm"><span class="au-nmw">${appIconId(x.id,short(x.n),22)}<span>${esc(short(x.n))}<small>${esc(acct(x.n))}${acct(x.n)?' · ':''}${srcTag(x.au,false)}</small></span></span></td>
-      <td class="au-r au-hs">${N(x.inst)}</td><td class="au-r">${x.kam?'data kam':`${N(x.sl)}<small style="display:block;color:var(--muted);font-weight:600">${P(x.sl,x.inst)}</small>`}</td><td class="au-r au-m">${x.kam?'—':M(q.usd)}</td></tr>`).join('');
+  // each number twice: the desktop form (.au-dk, as it was) and the phone form (.au-ph: short, its tip = the full numbers)
+  const rows=APPS.map(x=>({x,q:wake(x)})).sort((p,q)=>(q.q.usd-p.q.usd)||(q.x.sl-p.x.sl)).map(({x,q},i)=>{ const at=`data-at="t:${esc(x.k)}"`;
+    return `<tr class="au-clk" tabindex="0" data-au-k="${esc(x.k)}"><td class="au-rk au-hs">${i+1}</td><td class="au-nm"><span class="au-nmw">${appIconId(x.id,short(x.n),22)}<span>${esc(short(x.n))}<small class="au-ph" ${at}>${x.kam?'installed: data kam':CN(x.inst)+' installed'}</small><small>${esc(acct(x.n))}${acct(x.n)?' · ':''}${srcTag(x.au,false)}</small></span></span></td>
+      <td class="au-r au-hs">${N(x.inst)}</td><td class="au-r">${x.kam?'data kam':`<span class="au-dk">${N(x.sl)}</span><span class="au-ph" ${at}>${CN(x.sl)}</span><small style="display:block;color:var(--muted);font-weight:600">${P(x.sl,x.inst)}</small>`}</td><td class="au-r au-m">${x.kam?'—':`<span class="au-dk">${M(q.usd)}</span><span class="au-ph" ${at}>${MC(q.usd)}</span>`}</td></tr>`; }).join('');
   return `<section class="au-card au-wide" id="au-s-table"><h3>Money sleeping in each app</h3>
-    <div class="au-h2s">Sabse zyada paise wala upar · row pe tap karo — us app ka view khulega</div>
-    <div class="au-tw"><table class="au-apps"><thead><tr><th class="au-rk au-hs">#</th><th>App</th><th class="au-r au-hs">Installed</th><th class="au-r">Sleeping<br>28+ days</th><th class="au-r">${lbl} wake up =<br>${csym()} / month</th></tr></thead><tbody>${rows}</tbody></table></div></section>`; }
+    <div class="au-h2s"><span class="au-dk">Sabse zyada paise wala upar · row pe tap karo — us app ka view khulega</span><span class="au-ph">Sabse zyada paise wala upar · app ke naam pe tap — us app ka view · number pe tap — poora number</span></div>
+    <div class="au-tw"><table class="au-apps"><thead><tr><th class="au-rk au-hs">#</th><th>App</th><th class="au-r au-hs">Installed</th><th class="au-r"><span class="au-dk">Sleeping<br>28+ days</span><span class="au-ph">Sleeping</span></th><th class="au-r"><span class="au-dk">${lbl} wake up =<br>${csym()} / month</span><span class="au-ph">${lbl} wapas = ${csym()}/mahina</span></th></tr></thead><tbody>${rows}</tbody></table></div></section>`; }
 const FEAT=[[/gallery|photo/i,['View photos','Hide / vault','Edit photo','Share','Slideshow']],[/calc/i,['Basic calc','History','Scientific','Unit converter','Theme']],
   [/messag|sms/i,['Read SMS','Send SMS','Block spam','Caller screen','Backup']],[/music|mp3|player/i,['Play songs','Equalizer','Playlist','Search','Sleep timer']],
   [/pdf|document|scanner|reader/i,['Open file','Scan','Convert','Share','Search']],[/calendar/i,['View calendar','Add event','Reminder','Widget','Holidays']],
@@ -5101,6 +5111,10 @@ const TIPS={
     return `<div class="au-th">${MLAB(k)} ke installs</div><div class="au-tr"><span>Installs</span><b>${N(x.n)}</b></div><div class="au-tr"><span>Still installed</span><b>${N(x.inst)} (${P(x.inst,x.n)})</b></div>`
       +`<div class="au-tr"><span>Sleeping 1+ month</span><b>${x.lo!=null&&x.lo!==x.dead?N(x.lo)+'–':''}${N(x.dead)} (${P(x.dead,x.n)})</b></div><div class="au-tr"><span>Opened in last month</span><b>${N(x.act)} (${P(x.act,x.n)})</b></div>`
       +(x.young?'<div style="margin-top:3px;color:var(--muted)">Naya mahina — kuch installs 1 mahine se kam purane</div>':''); },
+  t:(...k)=>{ const x=BYK[k.join(':')]; if(!x) return ''; const q=wake(x), lbl=S.mode==='age'?'By age':S.mode+'%';   // the all-apps table on a phone
+    return `<div class="au-th">${esc(short(x.n))}</div><div class="au-tr"><span>Installed now</span><b>${x.kam?'data kam':N(x.inst)}</b></div>`
+      +`<div class="au-tr"><span>Sleeping 28+ days</span><b>${x.kam?'data kam':N(x.sl)+' ('+P(x.sl,x.inst)+')'}</b></div>`
+      +`<div class="au-tr"><span>${lbl} wapas = ${csym()} / mahina</span><b>${x.kam?'—':M(q.usd)}</b></div>`; },
   u:i=>{ const a=cur(), b=a&&a.au.bands; if(!b) return ''; const tot=b.reduce((s,v)=>s+v,0); return `<div class="au-th">${BANDS[+i][0]}</div><div class="au-tr"><span>${BANDS[+i][1]}</span><b>${N(b[+i])} (${P(b[+i],tot)})</b></div>`; }};
 const inAu=t=>!!(t&&t.closest&&t.closest('#au-root'));
 function tipFor(t){ const k0=t.closest&&t.closest('[data-at]'); if(!k0) return null; const [k,...args]=k0.getAttribute('data-at').split(':'); return TIPS[k]?TIPS[k](...args):null; }
@@ -5134,6 +5148,7 @@ function onClick(e){ const t=e.target; if(!inAu(t)) return;
     const b1=document.querySelector(`[data-au-more="${id}"]`); if(b1){ const d=b1.getBoundingClientRect().top-y0; if(Math.abs(d)>1) window.scrollBy(0,d); } return; }
   if(t.closest('[data-au-retry]')){ retry(); return; }
   if(t.closest('[data-au-all]')){ allApps(); return; }
+  if(tipPinned&&Date.now()-tipT<700&&t.closest('[data-at]')) return;     // the tap just pinned a number's tip (table: phone form)
   const k=t.closest('[data-au-k]'); if(k){ openApp(k.getAttribute('data-au-k')); } }
 // ---- navigation: the top bar's App picker (APP) drives the view; a table row / "← All apps" set it (setApp) ----
 // setApp re-renders and re-shows this screen and owns the phone's Back step ('app' → hbAppUndo = All apps), as on

@@ -8,6 +8,8 @@ step). Checked here, the page's own arithmetic against an independent recount in
     the all-apps pool = the build's portfolio (tiered months, dead / dead_lo, install months, most month) and journey /
     long-term / money; the GA4 app shows its dead_lo – dead range; the money scenario (10 % and "By age");
   * $ / ₹: the dashboard's currency (₹ = $ × usd_inr), on every money string, switched by the top bar's 💱 (toggleCur);
+  * the all-apps table on a phone: installed under the name, short numbers (2.6M, 412K), the full ones in a tip; a tap
+    on a number shows it (the app stays shut), a tap on the name opens the app; the desktop form beside it unchanged;
   * the top bar drives the view: its App picker (setApp), a table row / Enter / "← All apps" setting it, the phone's
     Back button, leaving the screen, an app Audience has no row for; no picker / toggle / title block of its own, one
     "Data till … · N apps · x GA4, y andaza" line;
@@ -20,6 +22,7 @@ Skipped where node is not installed."""
 
 import gzip
 import json
+import math
 import os
 import re
 import shutil
@@ -194,9 +197,73 @@ def test_money_in_dollars_and_rupees(report, world):
     assert report["money"]["INR"]["m"] == want
     top = max(world["body"]["apps"], key=lambda e: report["numbers"]["apps"][e["k"]]["w10"]["usd"])
     usd = report["numbers"]["apps"][top["k"]]["w10"]["usd"]
-    cell = lambda v, s: '<td class="au-r au-m">%s%s</td>' % (s, _n(v) if v >= 10 else ("%.1f" % v))
+    cell = lambda v, s: '<td class="au-r au-m"><span class="au-dk">%s%s</span>' % (s, _n(v) if v >= 10 else ("%.1f" % v))   # the desktop form
     assert cell(usd, "$") in report["money"]["USD"]["html"] and cell(usd * fx, "₹") in report["money"]["INR"]["html"]
     assert "₹ / month" in report["money"]["INR"]["html"] and "$ / month" in report["money"]["USD"]["html"]
+
+
+# ── the all-apps table on a phone ─────────────────────────────────────────────────────────────────────────────────────
+def _jr(v):                                                                              # Math.round (half up)
+    return int(math.floor(v + 0.5))
+
+
+def _cn(v):                                                                              # the page's CN: 2.6M · 412K · 4.1K · 950
+    a = abs(v)
+    if a >= 1e6:
+        return ("%.0f" if a >= 1e8 else "%.1f") % (v / 1e6) + "M"
+    if a >= 1e4:
+        return "%dK" % _jr(v / 1e3)
+    if a >= 1e3:
+        return "%.1fK" % (v / 1e3)
+    return _n(v)
+
+
+def _mc(v, s):                                                                           # the page's MC (v already in s)
+    a = abs(v)
+    if a >= 1e3:
+        return s + _cn(v)
+    if a >= 10:
+        return s + "{:,}".format(_jr(v))
+    if a >= 1:
+        return s + "%.1f" % v
+    return s + ("0" if a == 0 else repr(float("%.2g" % v)))
+
+
+@needs_node
+def test_the_phone_table_uses_short_numbers_with_the_full_ones_in_a_tip(report, world):
+    ph, fx = report["phone"], world["dash"]["usd_inr"]
+    by_k = {e["k"]: e for e in world["body"]["apps"]}
+    for cur, sym, f in (("USD", "$", 1.0), ("INR", "₹", fx)):
+        r = ph[cur]
+        assert '<span class="au-dk">Sleeping<br>28+ days</span><span class="au-ph">Sleeping</span>' in r["head"]
+        assert '<span class="au-ph">10%% wapas = %s/mahina</span>' % sym in r["head"] and "10%% wake up =<br>%s / month" % sym in r["head"]
+        assert "number pe tap — poora number" in r["hint"] and "row pe tap karo — us app ka view khulega" in r["hint"]
+        for row in r["rows"]:
+            e, usd = by_k[row["k"]], report["numbers"]["apps"][row["k"]]["w10"]["usd"]
+            if e["kam"]:
+                assert row["inst"] == "installed: data kam"
+                continue
+            assert row["inst"] == _cn(e["inst"]) + " installed"                           # under the name, short
+            assert row["sl"] == _cn(e["sl"]) and row["slDk"] == _n(e["sl"])                 # phone short · desktop full
+            dk, k, short = row["money"]
+            assert k == row["k"] and short == _mc(usd * f, sym) and dk.startswith(sym)
+    big = world["body"]["apps"][0]
+    t = ph["USD"]["tip"]                                                                  # the tip: the full numbers
+    assert "<b>%s</b>" % _n(big["inst"]) in t and "<b>%s (" % _n(big["sl"]) in t and "10% wapas = $ / mahina" in t
+
+
+@needs_node
+def test_a_tap_on_a_number_shows_its_tip_a_tap_on_the_name_opens_the_app(report, world):
+    ph = report["phone"]
+    big = world["body"]["apps"][0]
+    assert ph["numTap"]["pinned"] is True and ph["numTap"]["sets"] == [] and _n(big["inst"]) in ph["numTap"]["tip"]
+    assert ph["nameTap"]["sets"] == [big["n"]]
+
+
+def test_the_phone_rules_hide_one_form_each():
+    h = open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8").read()
+    assert "@container au (min-width:560px){#au-root .au-ph{display:none!important}}" in h
+    assert "@container au (max-width:559.98px){#au-root .au-dk{display:none!important}}" in h
 
 
 # ── navigation ──────────────────────────────────────────────────────────────────────────────────────────────────────

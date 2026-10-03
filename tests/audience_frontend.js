@@ -8,6 +8,8 @@
 //   * the top bar drives the view: its App (setApp — a table row sets it too, so the top bar names the app tapped), the
 //     phone's Back button (its 'app' step), an app the top bar has but Audience has no row for, its ₹ / $ (toggleCur);
 //     no App picker / currency buttons / title block of the screen's own;
+//   * the all-apps table's phone form (.au-ph: installed under the name, short numbers, a tip "t" with the full ones; a
+//     tap on a number shows that tip and does not open the app, a tap on the name does);
 //   * "Kyun? ▸" folds, the money mode chips, "Show all months";
 //   * the 5-min refresh with a new build: the view comes back as it was (app, ₹, mode, day, open folds), silently;
 //   * the tooltip rule: a mouse hovers, a TAP pins, a swipe never pins; the chart's numbers on hover;
@@ -124,6 +126,31 @@ const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-roo
     for (const c of ['USD', 'INR']) { run(`CURVIEW=${c === 'USD' ? 'null' : "'INR'"}; AU.paint();`);
       R[c] = { m: J(`[AU._.M(1234.4),AU._.M(2.25),AU._.M(0.0123,2),AU._.MC(12345),AU._.M(0)]`), html: html() }; }
     run(`CURVIEW=null; AU.paint();`); return R; });
+
+  // ── the all-apps table on a phone: short numbers, the full ones in a tip; a tap on a number vs on the name ────────────
+  await step('phone', async () => { const R = {};
+    SCREEN.id = 'audience'; run(`APP=''; AU._.S.mode='10'; AU.paint();`);
+    for (const c of ['USD', 'INR']) { run(`CURVIEW=${c === 'USD' ? 'null' : "'INR'"}; AU.paint();`);
+      const h = html(), t = h.slice(h.indexOf('id="au-s-table"'));
+      R[c] = { rows: J(`AU._.APPS().map(a=>a.k)`).map(k => { const tr = t.slice(t.indexOf(`data-au-k="${k}"`)); const row = tr.slice(0, tr.indexOf('</tr>'));
+          return { k, inst: (row.match(/<small class="au-ph" data-at="t:[^"]+">([^<]*)<\/small>/) || [])[1],
+            sl: (row.match(/<span class="au-ph" data-at="t:[^"]+">([^<]*)<\/span><small/) || [])[1],
+            money: (row.match(/<td class="au-r au-m"><span class="au-dk">([^<]*)<\/span><span class="au-ph" data-at="t:([^"]+)">([^<]*)<\/span><\/td>/) || []).slice(1),
+            slDk: (row.match(/<span class="au-dk">([\d,]+)<\/span>/) || [])[1] }; }),
+        head: (t.match(/<thead>.*?<\/thead>/s) || [''])[0], hint: (t.match(/<div class="au-h2s">.*?<\/div>/s) || [''])[0],
+        tip: run(`AU._.TIPS.t(AU._.APPS()[0].k)`) }; }
+    run(`CURVIEW=null; AU.paint();`);
+    // a tap on a number: its tip pins and the click that follows does NOT open the app; a tap on the name opens it
+    run(`var __sets=[]; var __setApp2=setApp; setApp=function(a){ __sets.push(a); APP=a; AU.paint(); };`);
+    const k = run(`AU._.APPS()[0].k`);
+    const num = tgt({ '[data-at]': { getAttribute: () => 't:' + k }, '[data-au-k]': { getAttribute: () => k } });
+    fire('touchstart', { target: num, touches: [{ clientX: 300, clientY: 400 }] }); fire('touchend', { target: num, changedTouches: [{ clientX: 301, clientY: 401 }] });
+    fire('click', { target: num });
+    R.numTap = { pinned: run('AU._.tipPinned()'), tip: ELS['au-tip'] && ELS['au-tip'].innerHTML, sets: J('__sets') };
+    fire('click', { target: tgt({ '[data-au-k]': { getAttribute: () => k } }) });
+    R.nameTap = { sets: J('__sets') };
+    run(`setApp=__setApp2; APP=''; AU.paint(); document.getElementById('au-tip').classList.remove('au-on','au-pin');`);
+    return R; });
 
   // ── the top bar's App drives the view; a table row sets it; the phone's Back button ─────────────────────────────────────
   await step('nav', async () => { const R = {};
