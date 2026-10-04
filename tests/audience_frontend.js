@@ -11,7 +11,10 @@
 //   * the all-apps table's phone form (.au-ph: installed under the name, short numbers, a tip "t" with the full ones; a
 //     tap on a number shows that tip and does not open the app, a tap on the name does);
 //   * "Kyun? ▸" folds, the money mode chips, "Show all months";
-//   * the 5-min refresh with a new build: the view comes back as it was (app, ₹, mode, day, open folds), silently;
+//   * "Paise ka calculator": every app's one-open money, every lever combination (app and All apps), the card as it
+//     renders (apps + All apps, $ and ₹), the all-apps table's money and its fixed order, the chips (set, lit, remembered,
+//     restored by a page load's boot, bad saved values ignored), a row of the opens table as a lever;
+//   * the 5-min refresh with a new build: the view comes back as it was (app, ₹, mode, opens, eCPM, day, open folds), silently;
 //   * the tooltip rule: a mouse hovers, a TAP pins, a swipe never pins; the chart's numbers on hover;
 //   * no pointer (the switch off): the screen says so and the nav item stays hidden.
 // Prints ONE JSON report; tests/test_audience_frontend.py asserts on it.
@@ -109,12 +112,63 @@ const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-roo
 
   // ── the numbers the page works out ───────────────────────────────────────────────────────────────────────────────────
   await step('numbers', () => J(`(()=>{ const A=AU._.ALL(), apps={}; AU._.APPS().forEach(a=>{ apps[a.k]={bk:a.bk,deadTot:a.deadTot,
-      w10:AU._.wake(a,'10'),wage:AU._.wake(a,'age'),d3:AU._.dAt(a.au,3),l3:AU._.loAt(a.au,3)}; });
+      w10:AU._.wake(a,'10'),wage:AU._.wake(a,'age'),d3:AU._.dAt(a.au,3),l3:AU._.loAt(a.au,3),c10:AU._.calc(a,AU._.FIX),wd:AU._.wakeDays(a)}; });
     return {apps, all:{mo:A.au.mo,d:A.au.d,lo:A.au.lo,src:A.au.src,inst:A.au.inst,ins:A.au.ins,m:A.au.m,most:A.au.most,j:A.j,lt:A.lt,arp:A.arp,pm:A.pm,
       inst2:A.inst,sl:A.sl,deadTot:A.deadTot,bk:A.bk,w10:AU._.wakeAll('10'),wage:AU._.wakeAll('age'),bands:A.au.bands},
       tier:[AU._.tierMonths(30),AU._.tierMonths(31),AU._.tierMonths(400),AU._.tierMonths(1300)],
       lab:[AU._.bLab(0,1),AU._.bLab(1,2),AU._.bLab(12,15),AU._.bLab(24,30),AU._.bLab(24,36),AU._.bLab(36,null),AU._.bLab(15,null)],
       p:[AU._.P(1,3),AU._.P(1,30000),AU._.P(0,5),AU._.P(5,0)]}; })()`));
+
+  // ── "Paise ka calculator": one open's money, the levers, the result, the table, the eCPM box, all apps ──────────────
+  await step('calc', async () => { const R = {}; SCREEN.id = 'audience';
+    const MODES = ['5', '10', '20', 'age'], OPS = ['data', '1', '2', '5', '10', '20', '30'], ECS = ['-10', '0', '10', '20'];
+    R.po = J(`(()=>{ const o={}; AU._.APPS().forEach(a=>{ o[a.k]=AU._.perOpen(a); }); return o; })()`);
+    R.grid = {}; R.all = {};
+    for (const m of MODES) for (const op of OPS) for (const ec of ECS) { const o = JSON.stringify({ mode: m, opens: op, ecpm: ec });
+      R.grid[m + '|' + op + '|' + ec] = J(`(()=>{ const o={}; AU._.APPS().forEach(a=>{ const c=AU._.calc(a,${o}); delete c.p; o[a.k]=c; }); return o; })()`);
+      R.all[m + '|' + op + '|' + ec] = J(`AU._.calcAll(${o})`); }
+    R.mo = { USD: [], INR: [] };
+    for (const c of ['USD', 'INR']) { run(`CURVIEW=${c === 'USD' ? 'null' : "'INR'"}`);
+      R.mo[c] = J(`[12.345, 1.2345, 0.4321, 0.0123, 0.00517, 0.000204, 0].map(v=>AU._.MO(v))`); }
+    run(`CURVIEW=null`);
+    // the card as it renders: an app (each), All apps; at a few lever settings, in $ and ₹
+    const card = () => { const h = html(), i = h.indexOf('<section class="au-card" id="au-s-money">'); return i < 0 ? '' : h.slice(i, h.indexOf('</section>', i) + 10); };
+    const setL = (m, op, ec) => run(`AU._.S.mode='${m}'; AU._.S.opens='${op}'; AU._.S.ecpm='${ec}';`);
+    R.cards = {};
+    for (const [k, n] of J('AU._.APPS().map(a=>[a.k,a.n])').concat([['all', '']])) {
+      for (const [m, op, ec, c] of [['10', 'data', '0', 'USD'], ['20', '5', '10', 'USD'], ['age', '30', '-10', 'INR'], ['5', 'data', '20', 'INR']]) {
+        setL(m, op, ec); run(`CURVIEW=${c === 'USD' ? 'null' : "'INR'"}; AU._.S.pick='${k === 'all' ? '' : k}'; APP=${JSON.stringify(n)}; AU.paint();`);
+        R.cards[[k, m, op, ec, c].join('|')] = card(); } }
+    run(`CURVIEW=null; APP=''; AU.paint();`);
+    // the all-apps table: money at the levers, the order fixed (10% · data se · eCPM 0)
+    const order = () => { const h = html(), t = h.slice(h.indexOf('id="au-s-table"')); return [...t.matchAll(/<tr class="au-clk" tabindex="0" data-au-k="([^"]+)">/g)].map(x => x[1]); };
+    const money = () => { const h = html(), t = h.slice(h.indexOf('id="au-s-table"')); return [...t.matchAll(/<td class="au-r au-m">(?:<span class="au-dk">([^<]*)<\/span>|—)/g)].map(x => x[1] || '—'); };
+    R.table = {};
+    for (const [m, op, ec] of [['10', 'data', '0'], ['age', '1', '20'], ['5', '30', '-10']]) { setL(m, op, ec); run('AU.paint()');
+      R.table[[m, op, ec].join('|')] = { order: order(), money: money(), h2s: (html().slice(html().indexOf('id="au-s-table"')).match(/<div class="au-h2s">(.*?)<\/div>/s) || [])[1] }; }
+    // the chips: a tap sets the lever, lights it, and is remembered (localStorage → a fresh page load's boot)
+    setL('10', 'data', '0'); run(`localStorage.removeItem('audview'); AU.paint();`);
+    fire('click', { target: tgt({ '[data-au-opens]': { dataset: { auOpens: '5' } } }) });
+    fire('click', { target: tgt({ '[data-au-ecpm]': { dataset: { auEcpm: '20' } } }) });
+    fire('click', { target: tgt({ '[data-au-mode]': { dataset: { auMode: '20' } } }) });
+    R.chips = { S: J('[AU._.S.mode,AU._.S.opens,AU._.S.ecpm]'), on: ['mode="20"', 'opens="5"', 'ecpm="20"'].map(x => new RegExp('class="au-chip on" data-au-' + x).test(html())),
+      ls: JSON.parse(run(`localStorage.getItem('audview')`) || 'null'), row: /<tr class="au-on" data-au-opens="5">/.test(html()) };
+    run(`AU._.S.booted=false; AU._.S.mode='10'; AU._.S.opens='data'; AU._.S.ecpm='0'; AU._.boot();`);
+    R.boot = J('[AU._.S.mode,AU._.S.opens,AU._.S.ecpm]');
+    run(`localStorage.setItem('audview',JSON.stringify({mode:'7',opens:'7',ecpm:'15'})); AU._.S.booted=false; AU._.S.mode='10'; AU._.S.opens='data'; AU._.S.ecpm='0'; AU._.boot();`);
+    R.bootBad = J('[AU._.S.mode,AU._.S.opens,AU._.S.ecpm]');
+    // a row of the opens table is a lever too
+    fire('click', { target: tgt({ '[data-au-opens]': { dataset: { auOpens: '10' } } }) });
+    R.rowTap = run('AU._.S.opens');
+    setL('10', 'data', '0'); run(`localStorage.removeItem('audview'); APP=''; AU.paint();`);
+    // an app without the calculator's inputs (no eCPM): its card says so, the table shows "—", All apps leaves it out
+    run(`var __raw2=AU._.RAW(); var __nd=JSON.parse(JSON.stringify(__raw2)); __nd.apps[1].ec=null; AU._.load(__nd); AU.paint();`);
+    const k1 = run('__nd.apps[1].k'), n1 = run('__nd.apps[1].n');
+    R.noData = { k: k1, po: J(`AU._.perOpen(AU._.BYK()['${k1}'])`), all: J(`AU._.calcAll({mode:'10',opens:'data',ecpm:'0'})`), w: run(`AU._.wake(AU._.BYK()['${k1}'],'10').w`),
+      order: order(), money: money(), allCard: card() };
+    run(`AU._.S.pick='${k1}'; APP=${JSON.stringify(n1)}; AU.paint();`); R.noData.card = card(); R.noData.strip = (html().match(/If 10% wake up: money \/ month<\/div><div class="au-n">([^<]*)</) || [])[1];
+    run(`AU._.load(__raw2); AU._.S.pick=''; APP=''; AU.paint();`);
+    return R; });
 
   // ── every app's own page (GA4 / estimate / being read / young) ─────────────────────────────────────────────────────
   await step('apps', () => { const R = {}; SCREEN.id = 'audience';
@@ -225,18 +279,19 @@ const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-roo
     run(`HB.st.length=0; HB.busy=false; HB.mute=0;`); await settle(); HIST.entries = [{ state: null, url: '/' }]; HIST.idx = 0; HIST.pending = []; run(`HB.depth=0;`);
     SCREEN.id = 'overview'; run(`APP=''; show('audience');`); await settle();
     const k = run(`AU._.APPS()[1].k`);
-    run(`AU._.openApp('${k}'); toggleCur(); AU._.S.mode='age'; AU._.S.day='2026-02-01'; AU._.S.open.add('money'); AU._.S.open.add('dead'); AU.paint();`); await settle();
+    run(`AU._.openApp('${k}'); toggleCur(); AU._.S.mode='age'; AU._.S.opens='5'; AU._.S.ecpm='10'; AU._.S.day='2026-02-01'; AU._.S.open.add('money'); AU._.S.open.add('dead'); AU.paint();`); await settle();
     const scrolls = []; ctx.scrollTo = (...a) => scrolls.push(JSON.stringify(a)); ctx.scrollY = 1234;
     FETCHED.length = 0;
     run(`var __load0=loadDashboardData; loadDashboardData=function(){ const d=JSON.parse(JSON.stringify(__FX.dashboard)); d.generated_at='2026-09-23T07:30:00Z'; d.audience=Object.assign({},d.audience,{v:'0123456789ab'}); return Promise.resolve(d); };
          LAST_BUILD=__FX.dashboard.generated_at; var __old=DATA;`);
     await run(`refreshData()`); await settle();
     const h = html();
-    const R = J(`({S:{app:AU._.S.app,mode:AU._.S.mode,day:AU._.S.day,open:[...AU._.S.open]}, st:HB.st.map(x=>x.tag), newData:DATA!==__old, silent:REFRESH_SILENT, cur:curView()})`);
+    const R = J(`({S:{app:AU._.S.app,mode:AU._.S.mode,opens:AU._.S.opens,ecpm:AU._.S.ecpm,day:AU._.S.day,open:[...AU._.S.open]}, st:HB.st.map(x=>x.tag), newData:DATA!==__old, silent:REFRESH_SILENT, cur:curView()})`);
     R.want = k; R.screen = SCREEN.id; R.scrolls = scrolls.filter(s => s.includes('"top":0')); R.hist = HIST.entries.length;
     R.crumb = h.includes('class="au-crumb"'); R.fold = /data-kyun="money" open/.test(h) && /data-kyun="dead" open/.test(h);
-    R.ageOn = /class="au-chip on" data-au-mode="age"/.test(h); R.rupee = h.includes('₹') && !h.includes('$'); R.fetched = FETCHED.filter(u => u.includes('audience.json.gz'));
-    run(`loadDashboardData=__load0; DATA=__FX.dashboard; AU._.load(__FX.audience); toggleCur(); AU._.allApps();`); await settle(); ctx.scrollTo = () => {}; ctx.scrollY = 0;
+    R.ageOn = /class="au-chip on" data-au-mode="age"/.test(h); R.leversOn = /class="au-chip on" data-au-opens="5"/.test(h) && /class="au-chip on" data-au-ecpm="10"/.test(h);
+    R.rupee = h.includes('₹') && !h.includes('$'); R.fetched = FETCHED.filter(u => u.includes('audience.json.gz'));
+    run(`loadDashboardData=__load0; DATA=__FX.dashboard; AU._.load(__FX.audience); toggleCur(); AU._.S.opens='data'; AU._.S.ecpm='0'; AU._.allApps();`); await settle(); ctx.scrollTo = () => {}; ctx.scrollY = 0;
     return R; });
 
   // ── tooltips: a mouse hovers, a tap pins, a swipe never pins; the chart's numbers ────────────────────────────────────

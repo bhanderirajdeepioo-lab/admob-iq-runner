@@ -6,7 +6,11 @@ step). Checked here, the page's own arithmetic against an independent recount in
     hai"), the all-apps table only on All apps, the 🔒 module panels marked SAMPLE;
   * numbers: each app's buckets between its window months = engine.audience's last_open (users and the dead_lo curve);
     the all-apps pool = the build's portfolio (tiered months, dead / dead_lo, install months, most month) and journey /
-    long-term / money; the GA4 app shows its dead_lo – dead range; the money scenario (10 % and "By age");
+    long-term / money; the GA4 app shows its dead_lo – dead range; the woken users (10 % and "By age");
+  * "Paise ka calculator": one open = A ads × eCPM ÷ 1000 (old users where the app has its own, else all users; the
+    all-users R × sessions = arp), every lever combination = N × K × R × (1 + e), All apps = Σ every app's own, the card
+    (each line can be redone by hand; the opens table with its row lit; the eCPM box; the old tiles gone, the asleep-for
+    table behind "Kyun? ▸"), per-open decimals, the money table's fixed order, the chips set / lit / remembered;
   * $ / ₹: the dashboard's currency (₹ = $ × usd_inr), on every money string, switched by the top bar's 💱 (toggleCur);
   * the all-apps table on a phone: installed under the name, short numbers (2.6M, 412K), the full ones in a tip; a tap
     on a number shows it (the app stays shut), a tap on the name opens the app; the desktop form beside it unchanged;
@@ -14,7 +18,7 @@ step). Checked here, the page's own arithmetic against an independent recount in
     Back button, leaving the screen, an app Audience has no row for; no picker / toggle / title block of its own, one
     "Data till … · N apps · x GA4, y andaza" line;
   * "Kyun? ▸" folds, mode chips, "Show all months", the day picker;
-  * the 5-min refresh with a new build: same app / ₹ / mode / day / open folds, no jump to the top, no new Back step,
+  * the 5-min refresh with a new build: same app / ₹ / mode / opens / eCPM / day / open folds, no jump to the top, no new Back step,
     the new file fetched;
   * tooltips: hover on a mouse, a tap pins, a swipe never does; the month chart's numbers and crosshair;
   * no pointer (AUDIENCE_TAB off): the screen says so (and render() keeps the nav item hidden).
@@ -179,29 +183,277 @@ def _wake_days(e, apps):
     return 1 + sum(r1 + (r7 - r1) * (t - 1) / 6 if t <= 7 else r7 + (r30 - r7) * (t - 7) / 23 for t in range(1, 30))
 
 
+CHANCE = lambda f: .15 if f < 2 else .08 if f < 4 else .04 if f < 7 else .02
+
+
+def _woken(e, r, mode):
+    """N: the woken users of one app at a "Kitne jaagein" lever (the page's wake)."""
+    if e["kam"] or not e["sl"]:
+        return 0
+    if mode == "age":
+        return sum(b["v"] * CHANCE(b["f"]) for b in r["bk"] if b["f"] >= 1 and b["v"])
+    return r["deadTot"] * int(mode) / 100
+
+
 @needs_node
-def test_the_money_scenario(report, world):
-    """A woken sleeper opens once, then drifts away like the app's NEW users (its own 1 / 7 / 30-day curve), earning an
-    OLD user's day each time it opens: money = woken × days × ra, users per day = woken × days ÷ 30 — never a loyal
-    regular's whole month (the owner, 4 Oct: the old "purane user jaisa 1 mahina" estimate read too high)."""
-    chance = lambda f: .15 if f < 2 else .08 if f < 4 else .04 if f < 7 else .02
+def test_the_woken_users_and_their_drift_away_days(report, world):
+    """N = a share of the sleeping users (5 / 10 / 20 %, or By age); a woken sleeper opens once, then drifts away like
+    the app's NEW users (its own 1 / 7 / 30-day curve): days a month = 1 + Σ(day 1…29) share, users a day = N × days ÷ 30
+    (the owner, 4 Oct: never a loyal regular's whole month)."""
     apps = world["body"]["apps"]
-    tot10 = totAge = 0.0
-    for e in world["body"]["apps"]:
+    totW = totAge = 0.0
+    for e in apps:
         r = report["numbers"]["apps"][e["k"]]
         au = e["au"]
         dead_tot = au["d"][au["mo"].index(1)] if au["src"] == "ga4" else e["sl"]
         assert r["deadTot"] == dead_tot
-        w = 0 if e["kam"] or not e["sl"] else dead_tot * 0.1
-        days = _wake_days(e, apps) if w else 0
-        assert 1 <= days <= 30 or not w
-        assert _close(r["w10"]["w"], w, 1e-9) and _close(r["w10"]["usd"], w * days * (e["ra"] or 0), 1e-9)
-        assert _close(r["w10"]["users"], w * days / 30, 1e-9)
-        wa = sum(b["v"] * chance(b["f"]) for b in r["bk"] if b["f"] >= 1 and b["v"])
+        w = _woken(e, r, "10")
+        days = _wake_days(e, apps)
+        assert 1 <= days <= 30 and _close(r["wd"], days, 1e-9)
+        assert _close(r["w10"]["w"], w, 1e-9) and _close(r["w10"]["users"], w * (days if w else 0) / 30, 1e-9)
+        wa = _woken(e, r, "age")
         assert _close(r["wage"]["w"], wa, 1e-9) and _close(r["wage"]["users"], wa * (days if wa else 0) / 30, 1e-9)
-        tot10 += r["w10"]["usd"]
-        totAge += r["wage"]["usd"]
-    assert _close(report["numbers"]["all"]["w10"]["usd"], tot10, 1e-9) and _close(report["numbers"]["all"]["wage"]["usd"], totAge, 1e-9)
+        totW += w
+        totAge += wa
+    assert _close(report["numbers"]["all"]["w10"]["w"], totW, 1e-9) and _close(report["numbers"]["all"]["wage"]["w"], totAge, 1e-9)
+
+
+# ── "Paise ka calculator" ───────────────────────────────────────────────────────────────────────────────────────────
+MODES, OPS, ECS = ("5", "10", "20", "age"), ("data", "1", "2", "5", "10", "20", "30"), ("-10", "0", "10", "20")
+
+
+def _po(e):
+    """One open's money (the page's perOpen): OLD users where the app has its own (R = ra ÷ sessions per returning user
+    a day, A = R × 1000 ÷ eCPM), else ALL users (A = ads per user a day ÷ sessions per user a day, R = A × eCPM ÷ 1000)."""
+    if not (e.get("ec") or 0) > 0:
+        return None
+    if e["own"] and (e.get("ra") or 0) > 0 and (e.get("spr") or 0) > 0:
+        R = e["ra"] / e["spr"]
+        return {"b": "old", "s": e["spr"], "E": e["ec"], "R": R, "A": R * 1000 / e["ec"]}
+    if (e.get("ads") or 0) > 0 and (e.get("spu") or 0) > 0:
+        A = e["ads"] / e["spu"]
+        return {"b": "all", "s": e["spu"], "E": e["ec"], "A": A, "R": A * e["ec"] / 1000}
+    return None
+
+
+def _calc(e, r, apps, mode, op, ec):
+    """N users × K opens × R × (1 + e) a month; users a day = N × active days ÷ 30 (the page's calc)."""
+    p = _po(e)
+    if p is None:
+        return None
+    w, days = _woken(e, r, mode), _wake_days(e, apps)
+    Kd = max(1, _jr(days * p["s"]))
+    K = Kd if op == "data" else int(op)
+    ad = days if op == "data" else min(30, max(1, K / p["s"]))
+    return {"w": w, "K": K, "Kd": Kd, "R": p["R"], "A": p["A"], "E": p["E"],
+            "usd": w * K * p["R"] * (1 + int(ec) / 100), "users": w * ad / 30}
+
+
+@needs_node
+def test_one_open_is_ads_times_ecpm(report, world):
+    """R = A × eCPM ÷ 1000 for every app: its old users where it has its own, else all users — and the all-users R ×
+    sessions per user a day is the revenue per daily user (arp) again."""
+    po = report["calc"]["po"]
+    bases = {}
+    for e in world["body"]["apps"]:
+        want, got = _po(e), po[e["k"]]
+        assert got["b"] == want["b"] and all(_close(got[k], want[k], 1e-9) for k in ("s", "E", "R", "A"))
+        assert _close(got["A"] * got["E"] / 1000, got["R"], 1e-9)
+        assert _close(e["ads"] / e["spu"] * e["ec"] / 1000 * e["spu"], e["arp"], 1e-5)        # R_all × sessions = arp
+        if got["b"] == "old":
+            assert _close(got["R"] * got["s"], e["ra"], 1e-9)                                  # R × sessions = ra
+        bases[e["n"]] = got["b"]
+    assert bases == {GA4: "old", EST: "old", PART: "old", YOUNG: "all"}
+
+
+@needs_node
+def test_every_lever_is_users_times_opens_times_per_open(report, world):
+    """Every app, every lever: money = N × K × R × (1 + e); K = 'data se' (drift-away days × sessions a day, rounded) or
+    1 … 30; users a day = N × (days, or K ÷ sessions a day within 1 … 30) ÷ 30."""
+    apps = world["body"]["apps"]
+    n = 0
+    for m in MODES:
+        for op in OPS:
+            for ec in ECS:
+                g = report["calc"]["grid"]["|".join((m, op, ec))]
+                for e in apps:
+                    want, got = _calc(e, report["numbers"]["apps"][e["k"]], apps, m, op, ec), g[e["k"]]
+                    assert got["ok"] is True and got["K"] == want["K"] and got["Kd"] == want["Kd"]
+                    for k in ("w", "R", "usd", "users"):
+                        assert _close(got[k], want[k], 1e-9), (e["n"], m, op, ec, k)
+                    n += 1
+    assert n == 4 * 7 * 4 * 4
+    g = report["calc"]["grid"]
+    for e in apps:                                                                 # the levers move it the obvious way
+        k = e["k"]
+        assert _close(g["10|5|0"][k]["usd"] * 2, g["10|10|0"][k]["usd"], 1e-9)
+        assert _close(g["10|5|10"][k]["usd"], g["10|5|0"][k]["usd"] * 1.1, 1e-9)
+        assert _close(g["20|5|0"][k]["usd"], g["10|5|0"][k]["usd"] * 2, 1e-9)
+
+
+@needs_node
+def test_all_apps_is_the_sum_of_each_apps_own(report, world):
+    """All apps = Σ every app's own N × K × R × (1 + e); the K, R, ads and eCPM it shows are the averages that multiply
+    back (K and 'data se' by woken users, R / ads / eCPM by woken opens)."""
+    for key, t in report["calc"]["all"].items():
+        g = report["calc"]["grid"][key]
+        xs = list(g.values())
+        w = sum(x["w"] for x in xs)
+        wK = sum(x["w"] * x["K"] for x in xs)
+        assert _close(t["usd"], sum(x["usd"] for x in xs), 1e-9) and _close(t["w"], w, 1e-9)
+        assert _close(t["users"], sum(x["users"] for x in xs), 1e-9) and t["skip"] == 0
+        assert _close(t["K"], wK / w, 1e-9) and _close(t["Kd"], sum(x["w"] * x["Kd"] for x in xs) / w, 1e-9)
+        assert _close(t["R"], sum(x["w"] * x["K"] * x["R"] for x in xs) / wK, 1e-9)
+        assert _close(t["w"] * t["K"] * t["R"] * (1 + int(key.split("|")[2]) / 100), t["usd"], 1e-9)   # multiplies back
+        assert _close(t["A"] * t["E"] / 1000, t["R"], 1e-9)
+
+
+_NUM = r"[\d,]+(?:\.\d+)?"
+
+
+def _v(s):
+    return float(s.replace(",", ""))
+
+
+def _mok(shown, v):
+    """A number the page's M printed (whole from 10, 1 decimal from 1, 2 significant digits below) is v."""
+    a = abs(v)
+    if a >= 9.5:
+        return abs(shown - v) <= 0.5 + 1e-9
+    if a >= 0.95:
+        return abs(shown - v) <= 0.05 + 1e-9
+    return abs(shown - v) <= 0.051 * a + 1e-12
+
+
+def _card(report, k, m, op, ec, cur):
+    return report["calc"]["cards"]["|".join((k, m, op, ec, cur))]
+
+
+@needs_node
+def test_the_card_one_open_levers_result_table_and_ecpm_box(report, world):
+    """The card, as it renders (every app + All apps, $ and ₹): the number first, every line one that can be redone by
+    hand — "~A ads × eCPM E ÷ 1000 = R har baar", "N users × K baar × R × (1+e) = ≈ X / mahina", the opens → money table
+    (the chosen row lit), the eCPM box (today's users + the woken ones); the old tiles and chain gone, the ₹0 note kept,
+    the asleep-for table behind "Kyun? ▸"."""
+    fx = world["dash"]["usd_inr"]
+    apps = world["body"]["apps"]
+    for k in [e["k"] for e in apps] + ["all"]:
+        e = next((x for x in apps if x["k"] == k), None)
+        for m, op, ec, cur in (("10", "data", "0", "USD"), ("20", "5", "10", "USD"), ("age", "30", "-10", "INR"), ("5", "data", "20", "INR")):
+            h = _card(report, k, m, op, ec, cur)
+            sym, f = ("$", 1.0) if cur == "USD" else ("₹", fx)
+            t = report["calc"]["all" if k == "all" else "grid"]["|".join((m, op, ec))]
+            c = t if k == "all" else t[k]
+            assert "Paise ka calculator" in h and "Sleeping users aaj <b>%s0</b> dete hain" % sym in h
+            for gone in ("au-tiles", "Per daily active user", "Old user, per day", "Money from waking", "au-chain", "Money estimate"):
+                assert gone not in h
+            # every coloured box carries its label
+            for box, lab in (("au-po", "1 baar app kholne pe kamai"), ("au-calc", "Extra money / month"), ("au-ecb", "eCPM ")):
+                assert re.search(r'<div class="%s"><div class="au-l">%s' % (box, re.escape(lab)), h), (box, lab)
+            # 1 · one open
+            po = re.search(r'<div class="au-eq">~(%s) ads × eCPM %s(%s) ÷ 1000 = <b>%s(%s)</b> har baar</div>' % (_NUM, re.escape(sym), _NUM, re.escape(sym), _NUM), h)
+            A, E, R = _v(po.group(1)), _v(po.group(2)), _v(po.group(3))
+            assert abs(A - c["A"]) <= 0.006 + 0.051 * c["A"] and _close(E, c["E"] * f, 0.006) and _close(R, c["R"] * f, 0.051)
+            assert _close(A * E / 1000, R, 0.08)                                                   # redo by hand
+            # 2 · the levers: the chosen chip of each lit
+            for at, v in (("mode", m), ("opens", op), ("ecpm", ec)):
+                assert h.count('class="au-chip on" data-au-%s=' % at) == 1 and 'class="au-chip on" data-au-%s="%s"' % (at, v) in h
+            assert 'data-au-opens="data">Data se (~' in h
+            # 3 · the result, one line
+            rs = re.search(r'<div class="au-eq"><b>(%s)</b> users × <b>(~?)(%s)</b> baar × <b>%s(%s)</b>( \(avg\))?(?: × <b>(%s)</b>)? = <b>≈ %s(%s) / mahina</b></div>'
+                           % (_NUM, _NUM, re.escape(sym), _NUM, _NUM, re.escape(sym), _NUM), h)
+            Nn, til, K, Rr, avg, fac, X = _v(rs.group(1)), rs.group(2), _v(rs.group(3)), _v(rs.group(4)), rs.group(5), rs.group(6), _v(rs.group(7))
+            assert Nn == _jr(c["w"]) and _close(Rr, R, 1e-9) and (avg is not None) == (k == "all")
+            assert (til == "~") == (k == "all" and op == "data") and (K == c["K"] if k != "all" else abs(K - c["K"]) <= 0.05)
+            assert (fac is None) == (ec == "0") and (fac is None or _close(_v(fac), 1 + int(ec) / 100, 1e-9))
+            assert _mok(X, c["usd"] * f) and '<div class="au-n">≈ %s' % sym in h
+            assert _close(Nn * K * Rr * (_v(fac) if fac else 1), X, 0.06 + 0.5 / Nn + 0.05 / K)    # redo by hand (N whole)
+            assert "+%s users/day (mahine ka avg) · pehle din +%s" % (_n(c["users"]), _n(c["w"])) in h
+            # 4 · opens → money: 1 / 2 / 5 / 10 / 20 / 30 + the "data se" row in its place, the chosen one lit
+            tb = h[h.index("Kitni baar khole → %s/mahina" % sym):]
+            rows = re.findall(r'<tr class="(au-on)?" data-au-opens="(\w+)"><td>(.*?)</td><td class="au-r"><b>%s(%s)</b></td></tr>' % (re.escape(sym), _NUM), tb)
+            assert [x[1] for x in rows if x[1] != "data"] == ["1", "2", "5", "10", "20", "30"] and len(rows) == 7
+            assert [x[1] for x in rows if x[0]] == [op]
+            if k == "all":                                  # every app its own K: "data se" leads, its avg K named
+                assert rows[0][1] == "data" and "har app ka apna · avg ~" in rows[0][2] and "row 1 … 30 ke beech" in tb
+            else:                                           # one app: in its place among 1 … 30
+                Ks = [c["Kd"] if x[1] == "data" else int(x[1]) for x in rows]
+                assert Ks == sorted(Ks) and "~%d baar <small>data se</small>" % c["Kd"] in tb
+            for on, o, _lab, v in rows:
+                cc = report["calc"]["all" if k == "all" else "grid"]["|".join((m, o, ec))]
+                cc = cc if k == "all" else cc[k]
+                assert _mok(_v(v), cc["usd"] * f)
+            # 5 · the eCPM box: +10% when the lever is 0, else the lever
+            eb = 0.10 if ec == "0" else int(ec) / 100
+            rev28 = sum(x["rev28"] for x in apps) if k == "all" else e["rev28"]
+            x0 = report["calc"]["all" if k == "all" else "grid"]["|".join((m, op, "0"))]
+            x0 = (x0 if k == "all" else x0[k])["usd"]
+            box = h[h.index('class="au-ecb"'):]
+            assert ("eCPM %s ka asar" % ("+%d%%" % round(eb * 100) if eb > 0 else "−%d%%" % round(-eb * 100))) in box
+            vals = [(_v(x[1]), x[0]) for x in re.findall(r"<b>([+−])%s(%s) / month</b>" % (re.escape(sym), _NUM), box)]
+            vals = [(-v if sg == "−" else v) for v, sg in [(a_, b_) for a_, b_ in vals]]
+            want = [rev28 * 30 / 28 * eb * f, x0 * eb * f, (rev28 * 30 / 28 + x0) * eb * f]
+            assert len(vals) == 3 and all(_mok(a_, b_) for a_, b_ in zip(vals, want))
+            # Kyun: the basis, "data se", the asleep-for table — all behind the fold
+            kb = h[h.index('<details class="au-kyun" data-kyun="money"'):]
+            assert "<th>Asleep for</th>" in kb and "<th>Asleep for</th>" not in h[:h.index('<details class="au-kyun"')]
+            assert "1 open = 1 session" in kb and "Data se" in kb
+            if k != "all":
+                assert ("Purane (30+ din) user ki ek din ki kamai" in kb) == (_po(e)["b"] == "old")
+                assert ("Naya app — purane users ka apna hisaab nahi" in kb) == (_po(e)["b"] == "all")
+
+
+@needs_node
+def test_per_open_money_keeps_its_decimals(report, world):
+    """Per-open money: 2 decimals under 10, three significant digits below 0.1 (never "0.00"), whole numbers from 10."""
+    fx = world["dash"]["usd_inr"]
+    assert report["calc"]["mo"]["USD"] == ["$12", "$1.23", "$0.43", "$0.0123", "$0.00517", "$0.000204", "$0"]
+    want = []
+    for v in (12.345, 1.2345, 0.4321, 0.0123, 0.00517, 0.000204):
+        x = v * fx
+        want.append("₹" + (_n(x) if x >= 10 else "%.2f" % x if x >= 0.1 else repr(float("%.3g" % x))))
+    assert report["calc"]["mo"]["INR"] == want + ["₹0"]
+
+
+@needs_node
+def test_the_all_apps_table_follows_the_levers_in_a_fixed_order(report, world):
+    """The money-by-app table: each app's money at the calculator's levers, the rows ordered by the 10% · data se · eCPM 0
+    scenario whatever the levers say (stable — no row jumps on a chip tap)."""
+    t = report["calc"]["table"]
+    base = t["10|data|0"]["order"]
+    fixed = sorted(world["body"]["apps"], key=lambda e: (-report["calc"]["grid"]["10|data|0"][e["k"]]["usd"], -e["sl"]))
+    assert base == [e["k"] for e in fixed]
+    for key, v in t.items():
+        assert v["order"] == base
+        g = report["calc"]["grid"][key]
+        for k, cell in zip(v["order"], v["money"]):
+            usd = g[k]["usd"]
+            assert cell == "$" + (_n(usd) if usd >= 10 else ("%.1f" % usd if usd >= 1 else repr(float("%.2g" % usd))))
+    assert "(10% jaagein · data se · eCPM 0)" in t["10|data|0"]["h2s"] and "(By age jaagein · 1 baar · eCPM +20%)" in t["age|1|20"]["h2s"]
+    assert "(5% jaagein · 30 baar · eCPM −10%)" in t["5|30|-10"]["h2s"] and "order hamesha 10% · data se · eCPM 0 pe" in t["5|30|-10"]["h2s"]
+
+
+@needs_node
+def test_an_app_without_the_calculators_inputs_says_so(report, world):
+    d = report["calc"]["noData"]
+    assert d["po"] is None and d["w"] > 0 and _close(d["all"]["skip"], d["w"], 1e-9)
+    g = report["calc"]["grid"]["10|data|0"]
+    assert _close(d["all"]["usd"], sum(x["usd"] for k, x in g.items() if k != d["k"]), 1e-9)       # Σ of the others
+    assert _close(d["all"]["w"], sum(x["w"] for k, x in g.items() if k != d["k"]), 1e-9)
+    assert "Is app ka GA4 sessions / AdMob impressions data nahi" in d["card"] and "au-calc" not in d["card"]
+    assert "Sleeping users aaj" in d["card"] and d["strip"] == "—"
+    assert d["money"][d["order"].index(d["k"])] == "—"
+    assert "%s users ke apps ka sessions / eCPM data nahi (paise me nahi gine)" % _n(d["w"]) in d["allCard"]
+
+
+@needs_node
+def test_the_chips_set_light_and_remember_the_levers(report):
+    c = report["calc"]
+    assert c["chips"]["S"] == ["20", "5", "20"] and c["chips"]["on"] == [True, True, True] and c["chips"]["row"]
+    assert {k: c["chips"]["ls"][k] for k in ("mode", "opens", "ecpm")} == {"mode": "20", "opens": "5", "ecpm": "20"}
+    assert c["boot"] == ["20", "5", "20"]                                         # a page load restores them
+    assert c["bootBad"] == ["10", "data", "0"]                                    # an unknown saved value: the default
+    assert c["rowTap"] == "10"                                                    # a row of the opens table is a lever
 
 
 @needs_node
@@ -218,8 +470,8 @@ def test_money_in_dollars_and_rupees(report, world):
     assert report["money"]["USD"]["m"] == ["$1,234", "$2.3", "$0.012", "$12K", "$0"]
     want = ["₹" + _n(1234.4 * fx), "₹" + _n(2.25 * fx), "₹%.1f" % (0.0123 * fx), "₹%.1fM" % (12345 * fx / 1e6), "₹0"]
     assert report["money"]["INR"]["m"] == want
-    top = max(world["body"]["apps"], key=lambda e: report["numbers"]["apps"][e["k"]]["w10"]["usd"])
-    usd = report["numbers"]["apps"][top["k"]]["w10"]["usd"]
+    top = max(world["body"]["apps"], key=lambda e: report["numbers"]["apps"][e["k"]]["c10"]["usd"])
+    usd = report["numbers"]["apps"][top["k"]]["c10"]["usd"]
     cell = lambda v, s: '<td class="au-r au-m"><span class="au-dk">%s%s</span>' % (s, _n(v) if v >= 10 else ("%.1f" % v))   # the desktop form
     assert cell(usd, "$") in report["money"]["USD"]["html"] and cell(usd * fx, "₹") in report["money"]["INR"]["html"]
     assert "₹ / month" in report["money"]["INR"]["html"] and "$ / month" in report["money"]["USD"]["html"]
@@ -262,7 +514,7 @@ def test_the_phone_table_uses_short_numbers_with_the_full_ones_in_a_tip(report, 
         assert '<span class="au-ph">10%% wapas = %s/mahina</span>' % sym in r["head"] and "10%% wake up =<br>%s / month" % sym in r["head"]
         assert "number pe tap — poora number" in r["hint"] and "row pe tap karo — us app ka view khulega" in r["hint"]
         for row in r["rows"]:
-            e, usd = by_k[row["k"]], report["numbers"]["apps"][row["k"]]["w10"]["usd"]
+            e, usd = by_k[row["k"]], report["numbers"]["apps"][row["k"]]["c10"]["usd"]
             if e["kam"]:
                 assert row["inst"] == "installed: data kam"
                 continue
@@ -338,9 +590,9 @@ def test_folds_chips_currency_and_day(report):
 def test_the_refresh_brings_the_view_back_as_it_was(report):
     r = report["refresh"]
     assert r["screen"] == "audience" and r["newData"] and r["silent"] is False
-    assert r["S"] == {"app": r["want"], "mode": "age", "day": "2026-02-01", "open": ["money", "dead"]}
+    assert r["S"] == {"app": r["want"], "mode": "age", "opens": "5", "ecpm": "10", "day": "2026-02-01", "open": ["money", "dead"]}
     assert r["st"] == ["app"] and r["hist"] == 2 and r["scrolls"] == []                 # no new Back step, no jump
-    assert r["crumb"] and r["fold"] and r["ageOn"] and r["cur"] == "INR" and r["rupee"]   # the top bar's App and ₹ kept
+    assert r["crumb"] and r["fold"] and r["ageOn"] and r["leversOn"] and r["cur"] == "INR" and r["rupee"]   # App, ₹, levers kept
     assert r["fetched"] == ["audience.json.gz?v=0123456789ab"]                           # the new build's file
 
 

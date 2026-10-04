@@ -2409,23 +2409,36 @@ body[data-screen="audience"] #smp-pick{display:inline-flex}
 #au-root .au-hb [data-at]{cursor:default}
 #au-root .au-topb{display:inline-block;font-size:9.5px;font-weight:800;background:var(--watch-b);color:var(--watch);padding:0 5px;border-radius:5px;vertical-align:1px}
 #au-root .au-newb{display:inline-block;font-size:9.5px;font-weight:800;background:var(--purple-b);color:var(--purple);padding:0 5px;border-radius:5px;vertical-align:1px}
-#au-root .au-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-#au-root .au-tile{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px 11px;min-width:0}
-#au-root .au-tile .au-l{font-size:11px;color:var(--muted);font-weight:750;text-transform:uppercase;letter-spacing:.03em;line-height:1.3}
-#au-root .au-tile .au-n{font-size:20px;font-weight:850;color:#fff;margin-top:3px;overflow-wrap:anywhere;line-height:1.2}
-#au-root .au-tile .au-n small{font-size:12px;color:var(--muted);font-weight:650}
-#au-root .au-tile .au-w{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.35}
-#au-root .au-wake{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
-#au-root .au-wake h4{font-size:14.5px;margin:0 0 4px;color:#fff;font-weight:800}
 #au-root .au-zero{font-size:12.5px;color:var(--ink2);background:var(--panel2);border-left:3px solid var(--au-sleep);border-radius:7px;padding:7px 10px;margin:6px 0 10px}
 #au-root .au-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 10px}
 #au-root .au-chips .au-cl{font-size:12px;color:var(--muted);font-weight:700;margin-right:2px}
 #au-root .au-chip{font-family:inherit;font-size:12.5px;font-weight:700;padding:7px 12px;border-radius:100px;border:1px solid var(--line2);color:var(--ink2);background:var(--panel);cursor:pointer;min-height:36px}
 #au-root .au-chip.on{background:linear-gradient(90deg,var(--blue2),var(--cyan2));color:#fff;border-color:transparent}
-#au-root .au-res{display:flex;flex-wrap:wrap;gap:8px}
-#au-root .au-rb{flex:1 1 140px;background:var(--good-b);border-radius:11px;padding:9px 12px;min-width:0}
-#au-root .au-rb .au-l{font-size:11px;color:var(--good);font-weight:800;text-transform:uppercase;letter-spacing:.03em}
-#au-root .au-rb .au-n{font-size:22px;font-weight:850;color:#fff;line-height:1.2;overflow-wrap:anywhere}
+/* "Paise ka calculator": one open's money (au-po), the levers (au-lv: the question on its own line), the result
+   (au-calc), opens → money (au-kt, the chosen row lit; a row tap = that lever), the eCPM box (au-ecb) — every box labelled */
+#au-root .au-po{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin:0 0 10px;min-width:0}
+#au-root .au-po .au-l,#au-root .au-calc .au-l,#au-root .au-ecb .au-l{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;line-height:1.3;color:var(--muted)}
+#au-root .au-pn{font-size:22px;font-weight:850;color:#fff;line-height:1.2;margin-top:2px;overflow-wrap:anywhere}
+#au-root .au-pn small{font-size:12.5px;color:var(--muted);font-weight:650}
+#au-root .au-eq{font-size:13px;color:var(--ink2);line-height:1.5;margin-top:3px;overflow-wrap:anywhere}
+#au-root .au-eq b{color:#fff;white-space:nowrap}
+#au-root .au-po .au-w,#au-root .au-calc .au-w{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+#au-root .au-lv{margin:2px 0 8px}
+#au-root .au-lv .au-cl{flex:1 1 100%;color:var(--ink2)}
+#au-root .au-calc{background:var(--good-b);border-radius:11px;padding:10px 12px;margin:4px 0 0;min-width:0}
+#au-root .au-calc .au-l{color:var(--good)}
+#au-root .au-calc .au-n{font-size:24px;font-weight:850;color:#fff;line-height:1.2;overflow-wrap:anywhere}
+#au-root table.au-kt{margin-top:0}
+#au-root table.au-kt tr[data-au-opens]{cursor:pointer}
+#au-root table.au-kt td small{color:var(--muted);font-weight:650;font-size:11px;margin-left:3px}
+#au-root table.au-kt tr.au-on td{background:var(--good-b);color:#fff}
+#au-root table.au-kt tr.au-on td:first-child{box-shadow:inset 3px 0 0 var(--good)}
+#au-root .au-ecb{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--cyan);border-radius:10px;padding:9px 11px;margin-top:12px;min-width:0}
+#au-root .au-ecb .au-l small{text-transform:none;letter-spacing:0;font-weight:600}
+#au-root .au-er{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-top:6px}
+#au-root .au-er b{color:#fff;white-space:nowrap}
+#au-root .au-ew{font-size:11.5px;color:var(--muted);line-height:1.35;overflow-wrap:anywhere}
+#au-root .au-er.au-et{border-top:1px solid var(--line2);padding-top:6px;margin-top:8px;font-weight:700}
 #au-root table.au-bk{width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px}
 #au-root table.au-bk th{text-align:left;color:var(--muted);font-size:11px;font-weight:700;padding:5px 6px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.03em}
 #au-root table.au-bk td{padding:6px 6px;border-bottom:1px solid var(--line);color:var(--ink2)}
@@ -2456,6 +2469,7 @@ body[data-screen="audience"] #smp-pick{display:inline-flex}
 @container au (max-width:559.98px){#au-root table.au-apps th.au-r{white-space:normal}#au-root table.au-apps td.au-r{width:1%}}
 @container au (max-width:559.98px){#au-root table.au-apps td.au-nm{min-width:0;overflow-wrap:anywhere}#au-root table.au-apps td.au-nm .au-tg{white-space:normal}}
 @container au (max-width:559.98px){#au-root table.au-bk th.au-r{white-space:normal}#au-root table.au-bk td:first-child{white-space:nowrap}}   /* "Money from waking": fits as it is; a header may wrap, "2–4 months" not */
+@container au (max-width:559.98px){#au-root table.au-kt td:first-child{white-space:normal}#au-root table.au-kt td small{display:inline-block;margin-left:0}}   /* the opens table: "Data se · har app ka apna …" may wrap */
 #au-root ul.au-how{margin:4px 0 0;padding-left:18px;color:var(--ink2);font-size:13px;line-height:1.5}
 #au-root ul.au-how li{margin-bottom:7px}
 #au-root ul.au-how b{color:#fff}
@@ -4756,7 +4770,7 @@ function ecStatusNote(){ return `<b>Status</b> — har row apne <b>roz ke normal
 const AU=(function(){
 'use strict';
 let RAW=null, VER=null, LOADING=false, ERR=false, EL=null, PSIG=null, APPS=[], BYK={}, ALL=null;
-const S={app:'',pick:'',mode:'10',day:null,open:new Set(),mall:new Set(),booted:false,wired:false};   // app = the top bar's App as a key ('' all, '!' none)
+const S={app:'',pick:'',mode:'10',opens:'data',ecpm:'0',day:null,open:new Set(),mall:new Set(),booted:false,wired:false};   // app = the top bar's App as a key ('' all, '!' none); mode / opens / ecpm = the calculator's levers
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 const $=id=>document.getElementById(id);
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -4841,17 +4855,16 @@ function allAgg(){ const ok=APPS.filter(a=>!a.kam); const sum=f=>ok.reduce((s,a)
   const lt={}; ['30','60','90','180','270','365'].forEach(L=>{ const xs=APPS.filter(a=>a.lt&&a.lt[L]); const w=xs.reduce((s,a)=>s+a.lt[L][1],0);
     if(w) lt[L]=[xs.reduce((s,a)=>s+a.lt[L][0]*a.lt[L][1],0)/w,w,xs.length]; });
   const rev28=APPS.reduce((s,a)=>s+(a.rev28||0),0), a128=APPS.reduce((s,a)=>s+(a.a128||0),0);
-  const A={k:'all',all:true,n:'All apps',inst:sum(a=>a.inst),a1:sum(a=>a.a1),a28:sum(a=>a.a28),a28k:sum(a=>a.a28k),un28:sum(a=>a.un28),
+  const A={k:'all',all:true,n:'All apps',rev28,inst:sum(a=>a.inst),a1:sum(a=>a.a1),a28:sum(a=>a.a28),a28k:sum(a=>a.a28k),un28:sum(a=>a.un28),
     sl:sum(a=>a.sl),ins:sum(a=>a.ins),rem:sum(a=>a.rem),dm:sum(a=>a.dm),maxm:Math.max(0,...ok.map(a=>a.maxm)),pk:sum(a=>a.pk),
     arp:a128?rev28/a128:null,pm:sum(a=>a.a28)?sum(a=>a.rev28)/sum(a=>a.a28)*30/28:null,j,lt,kam:false,nk:APPS.length-ok.length,
     E:APPS.length?APPS[0].E:'',L:'',hs:'',au,deadTot:sum(a=>a.deadTot)};
   A.bk=bucketsOf(au,au.inst); return A; }
-// ---- the money scenario: a share of the sleeping users wakes up ----
+// ---- the money scenario: a share of the sleeping users wakes up (N), and how many days a month each opens ----
 // A woken sleeper opens the app once (the day it wakes), then drifts away again the way this app's NEW users do: its own
 // "opened that day" shares on day 1 / 7 / 30, joined linearly day by day. A sleeper woken up is not a loyal regular, so it
-// is not counted like one. Each day it opens, it earns what an OLD user (30+ days) of the app earns in a day (ra): it is an
-// old install, with no first-day onboarding ads. Per woken user per month: days = 1 + Σ(day 1…29) share; money = days × ra;
-// users per day (month average) = days ÷ 30. Apps without their own 1 / 7 / 30 points use all apps' curve.
+// is not counted like one. Per woken user per month: days = 1 + Σ(day 1…29) share; users per day (month average) =
+// days ÷ 30. Apps without their own 1 / 7 / 30 points use all apps' curve.
 function portJ(){ if(portJ.c&&portJ.n===APPS.length) return portJ.c; const j={};
   ['1','7','30'].forEach(k=>{ const xs=APPS.filter(a=>a.j&&a.j[k]); const w=xs.reduce((t,a)=>t+a.j[k][3],0);
     j[k]=w?[xs.reduce((t,a)=>t+a.j[k][0]*a.j[k][3],0)/w,0,0,w]:null; });
@@ -4861,23 +4874,56 @@ function wakeDays(a){ const own=a&&a.j&&a.j['1']&&a.j['7']&&a.j['30']; const j=o
   const r1=j['1'][0]||0, r7=j['7'][0]||0, r30=j['30'][0]||0; let d=1;
   for(let t=1;t<=29;t++) d+=t<=7?r1+(r7-r1)*(t-1)/6:r7+(r30-r7)*(t-7)/23;
   return d; }
-function wake(a,mode){ mode=mode||S.mode; if(a.kam||!a.sl) return {w:0,days:0,users:0,usd:0};
+function wake(a,mode){ mode=mode||S.mode; if(a.kam||!a.sl) return {w:0,days:0,users:0};
   let w=0; if(mode==='age') a.bk.forEach(b=>{ if(b.f>=1&&b.v) w+=b.v*chanceOf(b.f); }); else w=a.deadTot*Number(mode)/100;
-  const days=wakeDays(a); return {w,days,users:w*days/30,usd:w*days*(a.ra||0)}; }
-function wakeAll(mode){ const t={w:0,wd:0,users:0,usd:0}; APPS.forEach(x=>{ const q=wake(x,mode); t.w+=q.w; t.wd+=q.w*q.days; t.users+=q.users; t.usd+=q.usd; });
+  const days=wakeDays(a); return {w,days,users:w*days/30}; }
+function wakeAll(mode){ const t={w:0,wd:0,users:0}; APPS.forEach(x=>{ const q=wake(x,mode); t.w+=q.w; t.wd+=q.w*q.days; t.users+=q.users; });
   t.days=t.w?t.wd/t.w:0; return t; }
+// ---- "Paise ka calculator" (the owner, 4 Oct: "agar user 1, 2 … X baar khole to kitna ₹, agar eCPM 10% plus …") ----
+// One open (one session) earns R = A ads × eCPM ÷ 1000 (the 28 days of the money, AdMob + GA4 sessions):
+//   * OLD users where the app has its own (a.own): R = an old (30+ day) user's money per active day (ra) ÷ sessions per
+//     returning user per day (spr, the Active tab's "sessions per user"); eCPM is the app's own (AdMob has no age split),
+//     so A = R × 1000 ÷ eCPM;
+//   * otherwise ALL users: A = ads per user per day ÷ sessions per user per day (spu), R = A × eCPM ÷ 1000 (so R × spu =
+//     arp, the revenue per daily user).
+// Levers: N woken users (S.mode), K opens a month each (S.opens: 'data' = the drift-away days × that basis' sessions per
+// active day, rounded — or 1 … 30) and the eCPM change e (S.ecpm, %). Money a month = N × K × R × (1 + e); users a day
+// (month average) = N × active days ÷ 30 (active days: the drift-away days for 'data', else K ÷ sessions a day, 1 … 30).
+// All apps = Σ of every app's own (its own R and K); its K / R / A / eCPM shown are the averages that multiply back.
+const OPENS=['1','2','5','10','20','30'], ECPMS=[['-10','−10%'],['0','0'],['10','+10%'],['20','+20%']];
+const FIX={mode:'10',opens:'data',ecpm:'0'};              // the all-apps table's order (stable whatever the levers say)
+function perOpen(a){ if(!a||a.all||!(a.ec>0)) return null;
+  if(a.own&&a.ra>0&&a.spr>0){ const R=a.ra/a.spr; return {b:'old',s:a.spr,E:a.ec,R,A:R*1000/a.ec}; }
+  if(a.ads>0&&a.spu>0){ const A=a.ads/a.spu; return {b:'all',s:a.spu,E:a.ec,A,R:A*a.ec/1000}; }
+  return null; }
+function calc(a,o){ o=o||{}; const mode=o.mode||S.mode, op=o.opens||S.opens, ec=String(o.ecpm!=null?o.ecpm:S.ecpm), e=Number(ec)/100;
+  if(a&&a.all) return calcAll({mode,opens:op,ecpm:ec});
+  const q=wake(a,mode), p=perOpen(a), days=wakeDays(a);
+  if(!p) return {w:q.w,K:0,Kd:0,R:null,A:null,E:null,e,usd:0,users:q.users,ok:false,p:null};
+  const Kd=Math.max(1,Math.round(days*p.s)), K=op==='data'?Kd:Number(op), ad=op==='data'?days:Math.min(30,Math.max(1,K/p.s));
+  return {w:q.w,K,Kd,R:p.R,A:p.A,E:p.E,e,usd:q.w*K*p.R*(1+e),users:q.w*ad/30,ok:true,p}; }
+function calcAll(o){ const t={w:0,usd:0,users:0,skip:0,ok:true,all:true,e:Number(o.ecpm)/100}; let wK=0, wKd=0, wKR=0, wKA=0, wKAE=0;
+  APPS.forEach(x=>{ const c=calc(x,o); if(!c.ok){ t.skip+=c.w; return; } const k=c.w*c.K;
+    t.w+=c.w; t.usd+=c.usd; t.users+=c.users; wK+=k; wKd+=c.w*c.Kd; wKR+=k*c.R; wKA+=k*c.A; wKAE+=k*c.A*c.E; });
+  t.K=t.w?wK/t.w:0; t.Kd=t.w?wKd/t.w:0; t.R=wK?wKR/wK:null; t.A=wK?wKA/wK:null; t.E=wKA?wKAE/wKA:null; return t; }
+// per-open money: 2 decimals under 10 (₹0.43, ₹2.17, $1.20); below 0.1 three significant digits ($0.00517, ₹0.0429)
+function MO(usd){ if(usd==null||!isFinite(usd)) return '—'; const v=mv(usd), a=Math.abs(v);
+  if(a>=10||a===0) return M(usd); return csym()+(a>=0.1?v.toFixed(2):Number(v.toPrecision(3)).toString()); }
+const fA=v=>v==null||!isFinite(v)?'—':(v>=10?String(Math.round(v)):v>=1?v.toFixed(1):v.toFixed(2));        // ads per open
+const fK=(v,all)=>!all||Math.abs(v-Math.round(v))<0.05?String(Math.round(v)):(Math.round(v*10)/10).toFixed(1);   // opens a month (All apps: an average, 1 decimal)
+const fE=e=>e>0?'+'+Math.round(e*100)+'%':e<0?'−'+Math.round(-e*100)+'%':'0';
 // one short line + the rest behind "Kyun? ▸" (closed until tapped; stays open across a repaint)
 const WHY=(id,shortT,long)=>`<p class="au-note">${shortT}</p>`+(long?`<details class="au-kyun" data-kyun="${id}"${S.open.has(id)?' open':''}><summary>Kyun? <span class="au-ar">▸</span></summary><div class="au-kb">${long}</div></details>`:'');
 function rangeTxt(lo,hi,fmt){ fmt=fmt||N; if(lo==null||hi==null) return fmt(hi); return Math.round(lo)===Math.round(hi)?fmt(hi):fmt(lo)+'–'+fmt(hi); }
 // ---- the sections ----
-function secStrip(a){ const d3=dAt(a.au,3), l3=loAt(a.au,3), young=!a.all&&a.maxm<3, t10=a.all?wakeAll('10'):wake(a,'10');
+function secStrip(a){ const d3=dAt(a.au,3), l3=loAt(a.au,3), young=!a.all&&a.maxm<3, t10=calc(a,FIX);   // 10% · data se · eCPM 0
   const t=(c,l,n,sub)=>`<div class="au-st" style="--sc:${c}"><div class="au-l">${l}</div><div class="au-n">${n}</div><div class="au-s">${sub}</div></div>`;
   if(a.kam) return t('var(--au-month)','Installed now','data kam','is app ka installed sahi nahi ban raha')+t('var(--au-open)','Opened today',CN(a.a1),DT(a.E));
   return t('var(--au-month)','Installed now',CN(a.inst),'abhi phone me (andaza)')
     +t('var(--au-sleep)','Sleeping 28+ days',`${CN(a.sl)} <small>${P(a.sl,a.inst)}</small>`,'phone me hai, 28+ din se nahi khola')
     +t('var(--au-sleep)','Dead 3+ months',young||d3==null?'—':`${rangeTxt(a.au.lo?l3:null,d3,CN)} <small>${P(d3,a.au.inst)}</small>`,
        young?`app naya hai (${DT(a.L)} se)`:(isGa4(a.au)?'GA4 (lagbhag exact)':(a.au.src==='mix'?'GA4 + andaza':'andaza')))
-    +t('var(--good)','If 10% wake up: money / month',`≈ ${MC(t10.usd)}`,`+${CN(t10.users)} users / day`); }
+    +t('var(--good)','If 10% wake up: money / month',t10.ok?`≈ ${MC(t10.usd)}`:'—',`+${CN(t10.users)} users / day`); }
 function secPhone(a){ const today=a.a1, month=Math.max(0,a.a28k-a.a1), sleep=a.sl, tot=a.inst;
   let bar='', leg='';
   if(a.kam) bar=`<div class="au-kam">⚠️ Data kam — is app me install − uninstall (${N(a.inst)}) se 28-din active users (${N(a.a28k)}) zyada aa rahe, isliye ye split galat hoga. Sirf aaj ke users: <b>${N(a.a1)}</b>.</div>`;
@@ -4992,43 +5038,79 @@ function secDauMix(a){ const b=a.au.bands; if(!b||!b.reduce((s,v)=>s+v,0)) retur
     <div class="au-h2s">${DT(a.E)} ko jinhone app khola, wo kab install hue the</div>
     <div class="au-ans">${N(tot)} users ne khola: <b>${P(b[0],tot)}</b> last 1 month ke install · <b>${P(b[3],tot)}</b> 1 saal+ purane.</div>
     ${bar}${leg}<p class="au-note">GA4 me us din ke active users, unki install date ke hisaab se (Install value tab ka data).</p>${mlist}</section>`; }
-function secMoney(a){ const isAll=!!a.all, r=isAll?wakeAll():wake(a);
-  const chips=[['5','5%'],['10','10%'],['20','20%'],['age','By age (15% → 2%)']].map(([k,t])=>`<button type="button" class="au-chip${S.mode===k?' on':''}" data-au-mode="${k}">${t}</button>`).join('');
+function secMoney(a){ const isAll=!!a.all, r=calc(a), lbl=S.mode==='age'?'By age':S.mode+'%';
+  const chip=(at,k,t,on)=>`<button type="button" class="au-chip${on?' on':''}" data-au-${at}="${k}">${t}</button>`;
+  const lever=(lab,aria,cs)=>`<div class="au-chips au-lv" role="group" aria-label="${aria}"><span class="au-cl">${lab}</span>${cs}</div>`;
+  // the asleep-for table (behind "Kyun? ▸"): who comes back, by how long asleep
   let tD=0, tB=0;
   const rows=GROUPS.map(([g,f0,f1])=>{ let dead=0, back=0;
     (isAll?APPS.filter(x=>!x.kam):[a]).forEach(x=>x.bk.forEach(b=>{ if(b.f>=f0&&b.f<f1&&b.v){ const ch=S.mode==='age'?chanceOf(b.f):Number(S.mode)/100; dead+=b.v; back+=b.v*ch; } }));
     tD+=dead; tB+=back; const ch=S.mode==='age'?chanceOf(f0):Number(S.mode)/100;
     return `<tr><td>${g}</td><td class="au-r">${N(dead)}</td><td class="au-r">${Math.round(ch*100)}%</td><td class="au-r"><b>${N(back)}</b></td></tr>`; }).join('')
     +`<tr class="au-tot"><td>Total</td><td class="au-r">${N(tD)}</td><td class="au-r">${P(tB,tD)}</td><td class="au-r"><b>${N(tB)}</b></td></tr>`;
-  const days=r.days||0, perDay=r.w&&days?r.usd/(r.w*days):(a.ra||0), D1=days<10?days.toFixed(1):String(Math.round(days));
-  const assume='Jaaga hua user ek din app kholega, phir naye user ki tarah dheere-dheere phir chhod dega — isliye mahine me sirf ~'+D1+' din kholega '
-    +(isAll?'(har app ka apna naye-user curve: 1 / 7 / 30 din baad kitne khol rahe)':'(is app ke naye users: 1 din baad '+Math.round(100*((a.j&&a.j['1']||[0])[0]))+'%, 7 din baad '+Math.round(100*((a.j&&a.j['7']||[0])[0]))+'%, 30 din baad '+Math.round(100*((a.j&&a.j['30']||[0])[0]))+'% khol rahe)')
-    +'. Har din ki kamai purane (30+ din) user jitni: '+M2(perDay)+' — wo purana install hai, naye user ke pehle din ke extra ads nahi milte'
-    +(isAll||a.own?'':' (naya app — sab apps ka aam hisaab)')+'. Pakka "loyal" user maan ke chalna zyada ho jaata, isliye ye kam wala, sach ke kareeb andaza hai.';
-  const tbl=S.mode==='age'?'':` <b>${S.mode}%</b> mode me 1+ mahine wale sab sleeping users (${isGa4(a.au)?'GA4 ka upar wala number':'phone card ka sleeping'}) pe ${S.mode}%; table sirf mahine ka split dikhati hai.`;
-  return `<section class="au-card" id="au-s-money"><h3>Money estimate <span class="au-tag au-est">andaza</span></h3>
-    <div class="au-h2s">AdMob revenue, pichhle 28 din (${DT(addDays(a.E,-27))} – ${DT(a.E)})</div>
-    <div class="au-tiles"><div class="au-tile"><div class="au-l">Per daily active user</div><div class="au-n">${M2(a.arp)}<small> / day</small></div><div class="au-w">jo user us din app khole, ek din me itna</div></div>
-      <div class="au-tile"><div class="au-l">Old user, per day</div><div class="au-n">${M2(perDay)}<small> / day</small></div><div class="au-w">30+ din purana user, ek din me itna — jaage users ka hisaab isi se</div></div></div>
-    <div class="au-wake"><h4>Money from waking sleeping users</h4>
-      <div class="au-zero">Sleeping users aaj <b>${M(0)}</b> dete hain — ye chale bhi jaayein to aaj ke daily users aur revenue pe koi asar nahi. Isliye inhe jagane ki koshish me abhi ke revenue ka koi risk nahi.</div>
-      <div class="au-chips" role="group" aria-label="How many come back"><span class="au-cl">How many come back:</span>${chips}</div>
-      ${a.kam?'<div class="au-kam">Data kam — is app ka andaza nahi.</div>':`<div class="au-res"><div class="au-rb"><div class="au-l">Extra users / day</div><div class="au-n">+${N(r.users)}</div><div class="au-w">mahine ka avg · pehle din +${N(r.w)}</div></div><div class="au-rb"><div class="au-l">Extra money / month</div><div class="au-n">≈ ${M(r.usd)}</div></div></div>
-      <p class="au-note au-chain" style="margin-top:8px"><b>${N(r.w)}</b> users jaagein × har ek mahine me ~<b>${D1} din</b> khole × <b>${M2(perDay)}</b> har din = <b>≈ ${M(r.usd)} / mahina</b></p>
-      <table class="au-bk"><thead><tr><th>Asleep for</th><th class="au-r">Users</th><th class="au-r">Come back</th><th class="au-r">Wake up</th></tr></thead><tbody>${rows}</tbody></table>`}
-      ${WHY('money','Maan ke chale: jaaga hua user naye user ki tarah dheere-dheere phir chhod dega.',assume+tbl+(S.mode==='age'?' <b>By age</b> = aam andaza: jitna purana so raha, utna kam chance (1–2 mahine 15%, 2–4: 8%, 4–7: 4%, 7+: 2%).':''))}
-    </div></section>`; }
+  const head=`<section class="au-card" id="au-s-money"><h3>Paise ka calculator <span class="au-tag au-est">andaza</span></h3>
+    <div class="au-h2s">AdMob revenue + GA4 sessions, pichhle 28 din (${DT(addDays(a.E,-27))} – ${DT(a.E)})</div>
+    <div class="au-zero">Sleeping users aaj <b>${M(0)}</b> dete hain — ye chale bhi jaayein to aaj ke daily users aur revenue pe koi asar nahi. Isliye inhe jagane ki koshish me abhi ke revenue ka koi risk nahi.</div>`;
+  if(a.kam) return head+'<div class="au-kam">Data kam — is app ka andaza nahi.</div></section>';
+  if(!r.ok||r.R==null) return head+'<div class="au-kam">Is app ka GA4 sessions / AdMob impressions data nahi — 1 baar kholne ki kamai nahi ban sakti.</div></section>';
+  const p=r.p, ec0=S.ecpm==='0', eb=ec0?0.1:r.e;
+  // 1 · one open's money
+  const po=`<div class="au-po"><div class="au-l">1 baar app kholne pe kamai${isAll?' (avg)':''}</div>
+      <div class="au-pn">${MO(r.R)} <small>har baar</small></div>
+      <div class="au-eq">~${fA(r.A)} ads × eCPM ${M2(r.E)} ÷ 1000 = <b>${MO(r.R)}</b> har baar</div>
+      <div class="au-w">${isAll?'har app ka apna — jaage users ke opens ka avg':p.b==='old'?'purane (30+ din) users ka':'sab users ka (naya app)'} · 1 baar = 1 session</div></div>`;
+  // 2 · the three levers
+  const levers=lever('Kitne jaagein:','How many wake up',[['5','5%'],['10','10%'],['20','20%'],['age','By age (15% → 2%)']].map(([k,t])=>chip('mode',k,t,S.mode===k)).join(''))
+    +lever('Har jaaga user mahine me kitni baar khole:','Opens a month',[['data',`Data se (~${fK(r.Kd,isAll)})`]].concat(OPENS.map(k=>[k,k])).map(([k,t])=>chip('opens',k,t,S.opens===k)).join(''))
+    +lever('eCPM badle:','eCPM change',ECPMS.map(([k,t])=>chip('ecpm',k,t,S.ecpm===k)).join(''));
+  // 3 · the result, one line that multiplies back
+  const Kt=(isAll&&S.opens==='data'?'~':'')+fK(r.K,isAll);
+  const res=`<div class="au-calc"><div class="au-l">Extra money / month</div><div class="au-n">≈ ${M(r.usd)}</div>
+      <div class="au-eq"><b>${N(r.w)}</b> users × <b>${Kt}</b> baar × <b>${MO(r.R)}</b>${isAll?' (avg)':''}${r.e?` × <b>${(1+r.e).toFixed(1)}</b>`:''} = <b>≈ ${M(r.usd)} / mahina</b></div>
+      <div class="au-w">+${N(r.users)} users/day (mahine ka avg) · pehle din +${N(r.w)}${isAll&&r.skip?` · ${N(r.skip)} users ke apps ka sessions / eCPM data nahi (paise me nahi gine)`:''}</div></div>`;
+  // 4 · opens a month → money a month, at the chosen N and eCPM: an app's "data se" row in its place; on All apps it
+  // leads the table (every app its own K and ₹/open: the apps opened most often earn least per open, so its total does
+  // not sit between the 1 … 30 rows)
+  const list=OPENS.map(k=>({k,K:Number(k)})), at=isAll?0:list.findIndex(x=>x.K>r.Kd);
+  list.splice(at<0?list.length:at,0,{k:'data',K:r.Kd});
+  const trs=list.map(x=>{ const c=calc(a,{opens:x.k}), on=S.opens===x.k;
+    return `<tr class="${on?'au-on':''}" data-au-opens="${x.k}"><td>${x.k==='data'?(isAll?`Data se <small>har app ka apna · avg ~${fK(x.K,true)} baar</small>`:`~${fK(x.K)} baar <small>data se</small>`):x.k+' baar'}</td><td class="au-r"><b>${M(c.usd)}</b></td></tr>`; }).join('');
+  const tbl=`<div class="au-dsub">Kitni baar khole → ${csym()}/mahina <span>(${lbl} jaagein · eCPM ${fE(r.e)})</span></div>
+    <table class="au-bk au-kt"><thead><tr><th>Opens a month (each)</th><th class="au-r">${csym()} / month</th></tr></thead><tbody>${trs}</tbody></table>`
+    +(isAll?'<p class="au-note" style="margin-top:4px">Data se = har app apne hisaab se kitni baar khulta hai — jo apps zyada khulte hain unka ₹/open kam hai, isliye ye row 1 … 30 ke beech seedhi nahi baithti.</p>'.replace('₹',csym()):'');
+  // 5 · what an eCPM change does: today's users (the app's month now) + the woken users
+  const mon=(a.rev28||0)*30/28, x0=calc(a,{ecpm:'0'}).usd, sg=v=>(v<0?'−':'+')+M(Math.abs(v));
+  const ecb=`<div class="au-ecb"><div class="au-l">eCPM ${fE(eb)} ka asar${ec0?' <small>(lever 0 pe: +10% dikhaya)</small>':''}</div>
+      <div class="au-er"><span>Today's users</span><b>${sg(mon*eb)} / month</b></div><div class="au-ew">abhi ${M(mon)} / mahina (AdMob, 28 din × 30/28) × ${fE(eb)}</div>
+      <div class="au-er"><span>Woken users</span><b>${sg(x0*eb)} / month</b></div><div class="au-ew">upar ke ${M(x0)} / mahina (eCPM 0 pe) × ${fE(eb)}</div>
+      <div class="au-er au-et"><span>Total</span><b>${sg((mon+x0)*eb)} / month</b></div></div>`;
+  // "Kyun? ▸": which users the per-open money is from, where "data se" comes from, the asleep-for table
+  let why;
+  if(isAll){ const xs=APPS.filter(x=>!x.kam).map(perOpen).filter(Boolean), nO=xs.filter(q=>q.b==='old').length;
+    why=`<b>1 open = 1 session</b> (GA4). Har app ka apna ${csym()}/open: purane (30+ din) users ka jahan apna data hai (${nO} apps), warna sab users ka (${xs.length-nO} naye apps). Upar ka ${csym()}/open, ads aur eCPM jaage users ke opens ka avg hai — isliye users × baar × ${csym()} = total. <b>Data se</b> = har app ka apna (jaage users ke hisaab se avg ~${fK(r.Kd,true)} baar).`; }
+  else { const ownJ=a.j&&a.j['1']&&a.j['7']&&a.j['30'], j=k=>Math.round(100*((ownJ?a.j:portJ())[k]||[0])[0]), days=wakeDays(a), d1=days<10?days.toFixed(1):String(Math.round(days));
+    const Aall=a.ads/a.spu, Rall=Aall*a.ec/1000;
+    why=(p.b==='old'?`<b>1 open = 1 session</b> (GA4). Purane (30+ din) user ki ek din ki kamai ${M2(a.ra)} ÷ din me ~${a.spr.toFixed(1)} baar app kholna (GA4 returning users) = <b>${MO(p.R)}</b> har baar. eCPM ${M2(p.E)} = AdMob revenue ÷ impressions × 1000, pure app ka (umar ke hisaab se nahi milta) — isliye ads = ${MO(p.R)} ÷ eCPM × 1000 = ~${fA(p.A)}.`
+          +(a.ads>0&&a.spu>0?` Sab users ka (naye bhi): ~${fA(Aall)} ads, ${MO(Rall)} har baar — naye user pehle din zyada ads dekhte hain.`:'')
+        :`<b>1 open = 1 session</b> (GA4). Naya app — purane users ka apna hisaab nahi, isliye sab users ka: din me ~${fA(a.ads)} ads ÷ ~${a.spu.toFixed(1)} baar kholna = ~${fA(p.A)} ads har baar × eCPM ${M2(p.E)} ÷ 1000 = <b>${MO(p.R)}</b> (thoda zyada ho sakta — naye user pehle din zyada ads dekhte hain).`)
+      +` <b>Data se ~${r.Kd} baar</b>: jaaga hua user ek din app kholega, phir naye user ki tarah dheere-dheere phir chhod dega (${ownJ?'is app':'sab apps'} ke naye users: 1 din baad ${j('1')}%, 7 din baad ${j('7')}%, 30 din baad ${j('30')}% khol rahe) — mahine me ~${d1} din × din me ~${p.s.toFixed(1)} baar = ~${r.Kd}.`
+      +` Users/day = jaage users × din ÷ 30${S.opens==='data'?'':` (${r.K} baar ÷ ${p.s.toFixed(1)} = ~${Math.min(30,Math.max(1,r.K/p.s)).toFixed(1)} din)`}.`; }
+  why+=` <b>${lbl}</b> jaagein: ${S.mode==='age'?'aam andaza — jitna purana so raha, utna kam chance (1–2 mahine 15%, 2–4: 8%, 4–7: 4%, 7+: 2%).':`1+ mahine wale sab sleeping users (${isGa4(a.au)?'GA4 ka upar wala number':'phone card ka sleeping'}) pe ${S.mode}%; neeche ki table sirf mahine ka split hai.`}`
+    +`<table class="au-bk"><thead><tr><th>Asleep for</th><th class="au-r">Users</th><th class="au-r">Come back</th><th class="au-r">Wake up</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return head+po+levers+res+tbl+ecb
+    +WHY('money','Maan ke chale: jaaga hua user naye user ki tarah dheere-dheere phir chhod dega.',why)+'</section>'; }
 function secHow(){ return `<section class="au-card" id="au-s-how"><h3>How to wake them</h3><ul class="au-how">
     <li><b>Notification (FCM)</b> — kuch kaam ki cheez bhejo (naye photos ka collage, phone storage saaf karo, aaj ka reminder) — "We miss you" type nahi.</li>
     <li><b>Re-engagement ads</b> — jis app ka sleeping pool bada hai (All apps wali table), wahan Google Ads me app engagement campaign — sirf tab jab upar ka ${csym()}/mahina andaza uski cost se zyada ho.</li>
     <li><b>Dhyan se:</b> notification bahut zyada mat bhejo — Play ki spam / notification policy ka khayal. Android 13+ pe notification permission chahiye aur kaafi users ne off rakhi hai, isliye FCM sirf kuch sleeping users tak hi pahunchegi.</li></ul></section>`; }
-function secTable(){ const lbl=S.mode==='age'?'By age':S.mode+'%';
-  // each number twice: the desktop form (.au-dk, as it was) and the phone form (.au-ph: short, its tip = the full numbers)
-  const rows=APPS.map(x=>({x,q:wake(x)})).sort((p,q)=>(q.q.usd-p.q.usd)||(q.x.sl-p.x.sl)).map(({x,q},i)=>{ const at=`data-at="t:${esc(x.k)}"`;
+function secTable(){ const lbl=S.mode==='age'?'By age':S.mode+'%', ko=S.opens==='data'?'data se':S.opens+' baar';
+  // each number twice: the desktop form (.au-dk, as it was) and the phone form (.au-ph: short, its tip = the full numbers);
+  // the money = the calculator's levers, the ORDER = its fixed 10% · data se · eCPM 0 (rows never jump on a lever tap)
+  const rows=APPS.map(x=>({x,q:calc(x),o:calc(x,FIX)})).sort((p,q)=>(q.o.usd-p.o.usd)||(q.x.sl-p.x.sl)).map(({x,q},i)=>{ const at=`data-at="t:${esc(x.k)}"`;
     return `<tr class="au-clk" tabindex="0" data-au-k="${esc(x.k)}"><td class="au-rk au-hs">${i+1}</td><td class="au-nm"><span class="au-nmw">${appIconId(x.id,short(x.n),22)}<span>${esc(short(x.n))}<small class="au-ph" ${at}>${x.kam?'installed: data kam':CN(x.inst)+' installed'}</small><small>${esc(acct(x.n))}${acct(x.n)?' · ':''}${srcTag(x.au,false)}</small></span></span></td>
-      <td class="au-r au-hs">${N(x.inst)}</td><td class="au-r">${x.kam?'data kam':`<span class="au-dk">${N(x.sl)}</span><span class="au-ph" ${at}>${CN(x.sl)}</span><small style="display:block;color:var(--muted);font-weight:600">${P(x.sl,x.inst)}</small>`}</td><td class="au-r au-m">${x.kam?'—':`<span class="au-dk">${M(q.usd)}</span><span class="au-ph" ${at}>${MC(q.usd)}</span>`}</td></tr>`; }).join('');
+      <td class="au-r au-hs">${N(x.inst)}</td><td class="au-r">${x.kam?'data kam':`<span class="au-dk">${N(x.sl)}</span><span class="au-ph" ${at}>${CN(x.sl)}</span><small style="display:block;color:var(--muted);font-weight:600">${P(x.sl,x.inst)}</small>`}</td><td class="au-r au-m">${x.kam||!q.ok?'—':`<span class="au-dk">${M(q.usd)}</span><span class="au-ph" ${at}>${MC(q.usd)}</span>`}</td></tr>`; }).join('');
   return `<section class="au-card au-wide" id="au-s-table"><h3>Money sleeping in each app</h3>
-    <div class="au-h2s"><span class="au-dk">Sabse zyada paise wala upar · row pe tap karo — us app ka view khulega</span><span class="au-ph">Sabse zyada paise wala upar · app ke naam pe tap — us app ka view · number pe tap — poora number</span></div>
+    <div class="au-h2s">${csym()} = upar ke calculator se (${lbl} jaagein · ${ko} · eCPM ${fE(Number(S.ecpm)/100)}) · order hamesha 10% · data se · eCPM 0 pe<br><span class="au-dk">Sabse zyada paise wala upar · row pe tap karo — us app ka view khulega</span><span class="au-ph">Sabse zyada paise wala upar · app ke naam pe tap — us app ka view · number pe tap — poora number</span></div>
     <div class="au-tw"><table class="au-apps"><thead><tr><th class="au-rk au-hs">#</th><th>App</th><th class="au-r au-hs">Installed</th><th class="au-r"><span class="au-dk">Sleeping<br>28+ days</span><span class="au-ph">Sleeping</span></th><th class="au-r"><span class="au-dk">${lbl} wake up =<br>${csym()} / month</span><span class="au-ph">${lbl} wapas = ${csym()}/mahina</span></th></tr></thead><tbody>${rows}</tbody></table></div></section>`; }
 const FEAT=[[/gallery|photo/i,['View photos','Hide / vault','Edit photo','Share','Slideshow']],[/calc/i,['Basic calc','History','Scientific','Unit converter','Theme']],
   [/messag|sms/i,['Read SMS','Send SMS','Block spam','Caller screen','Backup']],[/music|mp3|player/i,['Play songs','Equalizer','Playlist','Search','Sleep timer']],
@@ -5131,10 +5213,10 @@ const TIPS={
     return `<div class="au-th">${MLAB(k)} ke installs</div><div class="au-tr"><span>Installs</span><b>${N(x.n)}</b></div><div class="au-tr"><span>Still installed</span><b>${N(x.inst)} (${P(x.inst,x.n)})</b></div>`
       +`<div class="au-tr"><span>Sleeping 1+ month</span><b>${x.lo!=null&&x.lo!==x.dead?N(x.lo)+'–':''}${N(x.dead)} (${P(x.dead,x.n)})</b></div><div class="au-tr"><span>Opened in last month</span><b>${N(x.act)} (${P(x.act,x.n)})</b></div>`
       +(x.young?'<div style="margin-top:3px;color:var(--muted)">Naya mahina — kuch installs 1 mahine se kam purane</div>':''); },
-  t:(...k)=>{ const x=BYK[k.join(':')]; if(!x) return ''; const q=wake(x), lbl=S.mode==='age'?'By age':S.mode+'%';   // the all-apps table on a phone
+  t:(...k)=>{ const x=BYK[k.join(':')]; if(!x) return ''; const q=calc(x), lbl=S.mode==='age'?'By age':S.mode+'%';   // the all-apps table on a phone
     return `<div class="au-th">${esc(short(x.n))}</div><div class="au-tr"><span>Installed now</span><b>${x.kam?'data kam':N(x.inst)}</b></div>`
       +`<div class="au-tr"><span>Sleeping 28+ days</span><b>${x.kam?'data kam':N(x.sl)+' ('+P(x.sl,x.inst)+')'}</b></div>`
-      +`<div class="au-tr"><span>${lbl} wapas = ${csym()} / mahina</span><b>${x.kam?'—':M(q.usd)}</b></div>`; },
+      +`<div class="au-tr"><span>${lbl} wapas = ${csym()} / mahina</span><b>${x.kam||!q.ok?'—':M(q.usd)}</b></div>`; },
   u:i=>{ const a=cur(), b=a&&a.au.bands; if(!b) return ''; const tot=b.reduce((s,v)=>s+v,0); return `<div class="au-th">${BANDS[+i][0]}</div><div class="au-tr"><span>${BANDS[+i][1]}</span><b>${N(b[+i])} (${P(b[+i],tot)})</b></div>`; }};
 const inAu=t=>!!(t&&t.closest&&t.closest('#au-root'));
 function tipFor(t){ const k0=t.closest&&t.closest('[data-at]'); if(!k0) return null; const [k,...args]=k0.getAttribute('data-at').split(':'); return TIPS[k]?TIPS[k](...args):null; }
@@ -5163,6 +5245,8 @@ function wire(){ if(S.wired) return; S.wired=true;
   let rz=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(!onScreen()||Math.abs(innerWidth-lastW)<20) return; lastW=innerWidth; hideTip(); drawMonth(cur()); },150); }); }
 function onClick(e){ const t=e.target; if(!inAu(t)) return;
   const md=t.closest('[data-au-mode]'); if(md){ S.mode=md.dataset.auMode; save(); paint(); return; }
+  const op=t.closest('[data-au-opens]'); if(op){ S.opens=op.dataset.auOpens; save(); paint(); return; }
+  const ec=t.closest('[data-au-ecpm]'); if(ec){ S.ecpm=ec.dataset.auEcpm; save(); paint(); return; }
   const dy=t.closest('[data-au-day]'); if(dy){ S.day=dy.dataset.auDay; save(); paint(); return; }
   const mo=t.closest('[data-au-more]'); if(mo){ const id=mo.dataset.auMore; S.mall.has(id)?S.mall.delete(id):S.mall.add(id); const y0=mo.getBoundingClientRect().top; paint();
     const b1=document.querySelector(`[data-au-more="${id}"]`); if(b1){ const d=b1.getBoundingClientRect().top-y0; if(Math.abs(d)>1) window.scrollBy(0,d); } return; }
@@ -5179,9 +5263,10 @@ function keyOfName(name){ if(!RAW||!name) return ''; const id=appIdOf(name); con
 function openApp(k){ if(!k||!BYK[k]) return; hideTip(); S.pick=k; setApp(BYK[k].n); }
 function allApps(){ hideTip(); if(APP){ setApp(''); return; } paint(); window.scrollTo({top:0}); }
 function left(){ hideTip(); }
-function save(){ try{ localStorage.setItem('audview',JSON.stringify({mode:S.mode,day:S.day})); }catch(e){} }
+function save(){ try{ localStorage.setItem('audview',JSON.stringify({mode:S.mode,opens:S.opens,ecpm:S.ecpm,day:S.day})); }catch(e){} }
 function boot(){ if(S.booted) return; S.booted=true; let sv=null; try{ sv=JSON.parse(localStorage.getItem('audview')||'null'); }catch(e){}
-  if(sv){ if(['5','10','20','age'].includes(sv.mode)) S.mode=sv.mode; if(typeof sv.day==='string'&&/^\d{4}-\d\d-\d\d$/.test(sv.day)) S.day=sv.day; } }
+  if(sv){ if(['5','10','20','age'].includes(sv.mode)) S.mode=sv.mode; if(['data'].concat(OPENS).includes(sv.opens)) S.opens=sv.opens;
+    if(ECPMS.some(([k])=>k===sv.ecpm)) S.ecpm=sv.ecpm; if(typeof sv.day==='string'&&/^\d{4}-\d\d-\d\d$/.test(sv.day)) S.day=sv.day; } }
 // ---- the view ----
 function render(){ const s=screenDiv('audience'); EL=s; return s; }
 function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector('.screen[data-screen=audience]'); if(!s||typeof DATA==='undefined'||!DATA) return;
@@ -5211,7 +5296,7 @@ function show(){ paint(); }
 return {ptr, ensure, render, paint, show, left, retry, ready:()=>!!RAW&&!!ptr(),
   // checks / tests (read-only views of the current state)
   _:{S, el:()=>EL, RAW:()=>RAW, APPS:()=>APPS, ALL:()=>ALL, BYK:()=>BYK, tipPinned:()=>tipPinned, load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; PSIG=null; ALL=null; }, prep:()=>{ if(RAW) prep(); },
-     bucketsOf, dAt, loAt, bLab, tierMonths, mostOf, wake, wakeAll, monthLine, dayAgg, TIPS, SPK, hov, keyOfName, openApp, allApps, cur, M, MC, CN, P,
+     bucketsOf, dAt, loAt, bLab, tierMonths, mostOf, wake, wakeAll, wakeDays, perOpen, calc, calcAll, FIX, MO, M2, save, boot, monthLine, dayAgg, TIPS, SPK, hov, keyOfName, openApp, allApps, cur, M, MC, CN, P,
      sec:{strip:secStrip,phone:secPhone,journey:secJourney,pakke:secPakke,dead:secDead,mdead:secDeadMonths,mact:secActMonths,dau:secDauMix,money:secMoney,table:secTable,day:secDay,module:secModule}}};
 })();
 function renderAudience(){ return AU.render(); }
