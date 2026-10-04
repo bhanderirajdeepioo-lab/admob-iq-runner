@@ -11,8 +11,10 @@ and detail, and the all-apps table (the page sorts it by money) — and the poin
   * the journey on day 1 / 7 / 30 / 90 (opened = the Active tab's pooled return rate, removed = the Uninstall tab's
     survival "all", has = the rest), the long-term return (install-day iday grain, enough installs behind each knot),
     "pakke" users (installed 90+ days ago and opened on E, iday age bands), today's DAU by install age (iday bands);
-  * money: revenue per daily / monthly user (AdMob, the 28 days to E), and a woken sleeping user = a normal OLD user of
-    that app for one month (its own open rate and revenue per day; a young app takes the all-apps typical ones);
+  * money: revenue per daily / monthly user (AdMob, the 28 days to E), an OLD user's revenue per active day (its own;
+    a young app takes the all-apps typical old/all ratio), and the page's "paise ka calculator" inputs on the same 28
+    days (usage28: impressions, ads per user, eCPM, sessions per user — all users and returning users — from the Active
+    users tab's own per-app file);
   * day-wise: every install day's installs and removals by when (the Uninstall tab's own cells and flags).
 
 DEAD USERS BY MONTHS SINCE THE LAST OPEN — per app, whichever exists:
@@ -28,7 +30,8 @@ DEAD USERS BY MONTHS SINCE THE LAST OPEN — per app, whichever exists:
 
 Inputs (all written earlier in this build — no GA4 / AdMob call here): the dashboard in memory (active.apps,
 active.portfolio, uninstall.asset, usd_inr), site/uninstall.json.gz, site/uninstall_c_<key>.json.gz,
-site/<active portfolio file>, data/ga4_uninstall/<key>.json.gz (+ iday/<key>[.old].json.gz) and
+site/<active portfolio file>, site/active_<key>.json.gz (the Active tab's per-app file: the calculator's inputs only — a
+missing one costs just those), data/ga4_uninstall/<key>.json.gz (+ iday/<key>[.old].json.gz) and
 data/ga4_audience/<key>.json.gz. Nothing is trimmed: every app, install day and install month since the launch.
 
   run(dashboard, data_dir, out_dir, s) → the _headers no-store paths (["/audience*"] — ONE splat rule for this file and
@@ -299,6 +302,55 @@ def dead_model(n_c, I_c, A_c, f_c, r, target, young_keep, windows):
     return sum(out.values()), k, how, per
 
 
+def usage28(det, rev_days, w28):
+    """The calculator's per-open inputs, from the Active users tab's own per-app daily arrays (active_<key>.json.gz,
+    written earlier in this build — its "ads per user", "eCPM" and "sessions per user" tiles' sums) over the money's 28
+    days → {imp28, ads, ec, spu, spr, sd}, every value None when the arrays lack it:
+      * imp28 = Σ AdMob impressions on the days rev28 counts (rev_days: its revenue known, active users > 0); ads =
+        imp28 ÷ Σ those days' active users (impressions per active user per day); ec = eCPM = Σ revenue ÷ imp28 × 1000;
+      * over the 28 days whose GA4 usage day is whole (its returning slot known — the tab's own rule): spu = Σ sessions ÷
+        Σ active users of every slot (new + returning + other: all users), spr = the returning slot alone (users
+        installed before that day — the tab's "sessions per user"), sd = those days."""
+    out = {"imp28": None, "ads": None, "ec": None, "spu": None, "spr": None, "sd": 0}
+    dl = (det or {}).get("daily") if isinstance(det, dict) else None
+    if not isinstance(dl, dict) or not dl.get("start"):
+        return out
+    d0 = D(dl["start"])
+    n = len(dl.get("a1") or [])
+
+    def at(arr, k):
+        i = (D(k) - d0).days
+        return arr[i] if isinstance(arr, list) and 0 <= i < len(arr) and 0 <= i < n else None
+    imp = rv = au = 0.0
+    seen = 0
+    for k in rev_days:
+        im, r, a = at(dl.get("imp"), k), at(dl.get("rev"), k), at(dl.get("a1"), k)
+        if im is None or r is None or not a:
+            continue
+        imp += im
+        rv += r
+        au += a
+        seen += 1
+    if seen and imp > 0:
+        out.update(imp28=int(round(imp)), ads=_r(imp / au), ec=_r(rv / imp * 1000))
+    u, s = dl.get("u") or {}, dl.get("s") or {}
+    su = uu = sr = ur = 0.0
+    for k in w28:
+        r_u = at(u.get("r"), k)
+        if not r_u:
+            continue
+        uu += sum(at(u.get(g), k) or 0 for g in "nro")
+        su += sum(at(s.get(g), k) or 0 for g in "nro")
+        ur += r_u
+        sr += at(s.get("r"), k) or 0
+        out["sd"] += 1
+    if uu > 0 and su > 0:
+        out["spu"] = _r(su / uu)
+    if ur > 0 and sr > 0:
+        out["spr"] = _r(sr / ur)
+    return out
+
+
 def lags_of(cf, day):
     """The Uninstall tab's cells (fill_days-filled) of one install day → {lag: users}."""
     j = (D(day) - D(cf["start"])).days
@@ -393,9 +445,10 @@ def andaza_part(day_c, n_c, I_c, A_c, per, mos, wins, sc, cf, new, E, w1):
 
 
 # ── one app ──────────────────────────────────────────────────────────────────────────────────────────────────────────
-def app_entry(aa, ua, st, p, cf, x, cur, store, uni_filled_of, aud_mode=None):
+def app_entry(aa, ua, st, p, cf, x, cur, store, uni_filled_of, aud_mode=None, det=None):
     """One app (active row aa, uninstall detail ua, Uninstall store st, portfolio arrays p, cohort file cf, iday x + its
-    current file, GA4 Audience store or None) → (its page entry, its private extras for the all-apps step)."""
+    current file, GA4 Audience store or None, the Active tab's per-app file or None) → (its page entry, its private
+    extras for the all-apps step)."""
     E = D(aa["settled_till"])
     hs = D(st["history_start"])
     launch = D(ua["launch"]["day"]) if (ua.get("launch") or {}).get("day") else hs
@@ -422,6 +475,7 @@ def app_entry(aa, ua, st, p, cf, x, cur, store, uni_filled_of, aud_mode=None):
     rev28 = a1_28 = 0.0
     old_rev = old_users = 0.0
     rev_days = 0
+    rev_list = []
     for k in w28:
         i = idx.get(k)
         if i is None:
@@ -432,6 +486,7 @@ def app_entry(aa, ua, st, p, cf, x, cur, store, uni_filled_of, aud_mode=None):
         rev28 += rv
         a1_28 += av
         rev_days += 1
+        rev_list.append(k)
         dd = idays.get(k)
         if dd and dd.get("ab") and dd.get("rev"):
             ab = dd["ab"]
@@ -574,6 +629,10 @@ def app_entry(aa, ua, st, p, cf, x, cur, store, uni_filled_of, aud_mode=None):
         "arp": _r(arpdau, 8), "pm": _r(per_mau, 8), "rev28": round(rev28, 2), "a128": int(round(a1_28)),
         "dw": {"s": iso(dstart), "n": dw_n, "u": dw_u, "f": "".join(dw_f)},
     }
+    try:                                        # the calculator's inputs: a broken Active file costs only them
+        entry.update(usage28(det, rev_list, w28))
+    except Exception:
+        entry.update(usage28(None, (), ()))
     extra = {"own": own, "ret_arpu": ret_arpu, "freq": freq, "old_dau": old_dau, "old_a28": old_a28,
              "arpdau": arpdau, "rev28": rev28, "a1_28": a1_28, "journey": journey, "long": longt,
              "ga4_err": ga4_err, "scale": scale, "k": kfit, "k_how": how}
@@ -661,8 +720,15 @@ def build_data(dashboard, data_dir, out_dir, counts, aud_mode=None):
                 except Exception:
                     store = None
                     counts["store_bad"] = counts.get("store_bad", 0) + 1
+            det = None
+            dp = os.path.join(out_dir, aa["file"]) if isinstance(aa.get("file"), str) else None
+            if dp and os.path.exists(dp):
+                try:
+                    det = _gz(dp)
+                except Exception:
+                    counts["usage_bad"] = counts.get("usage_bad", 0) + 1
             entry, extra = app_entry(aa, uapps[key], st, pf[key], cf, x, cur, store,
-                                     lambda st=st: ueng.fill_days(st), aud_mode=aud_mode)
+                                     lambda st=st: ueng.fill_days(st), aud_mode=aud_mode, det=det)
         except Exception:
             counts["skipped"] = counts.get("skipped", 0) + 1
             continue

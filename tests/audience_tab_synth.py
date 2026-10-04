@@ -6,6 +6,8 @@ make_world(root) writes what admob_iq.audience_build reads, in the shapes the ea
   * data/ga4_uninstall/<key>.json.gz (history_start, daily new / un / a1 / a28, cohorts, ret, ret_from) and
     data/ga4_uninstall/iday/<key>.json.gz (x: install-day long-term opens, days: age bands on each activity day);
   * data/ga4_audience/<key>.json.gz — a COMPLETE tiered store for one app, a partial-only read for another;
+  * site/active_<key>.json.gz — the Active users tab's per-app file, only the daily arrays the calculator reads (a1, rev,
+    AdMob impressions, GA4 usage per new / returning / other slot; Demo Timer has incomplete usage days);
 and returns the dashboard (in memory, as dashboard.json.gz would hold it).
 
   Demo Gallery · Studio Nine   500 days, a complete GA4 Audience store (tiered months)      → "ga4"
@@ -189,6 +191,30 @@ def audience_store(st, complete=True):
                                     calls=1, tokens=10, units=100, runs=1, started_at=GEN)}
 
 
+def active_detail(st, pa, seed, inc_every=None):
+    """The Active users tab's per-app file (engine.active's daily shape), only what the Audience calculator reads: a1 /
+    new / rev / imp (its own eCPM) and GA4 usage per slot (u, s: new / returning / other). Every inc_every-th day's usage
+    is incomplete: all its slots null (the tab's rule)."""
+    keys = sorted(k for k in st["daily"] if k <= iso(E + timedelta(days=3)))
+    ecpm = 3.0 + 0.7 * seed                       # $ per 1,000 impressions
+    a1, new = pa["a1"], pa["new"]
+    u = {g: [] for g in "nro"}
+    s = {g: [] for g in "nro"}
+    for i in range(len(keys)):
+        if inc_every and i % inc_every == 0:
+            for g in "nro":
+                u[g].append(None)
+                s[g].append(None)
+            continue
+        nu, ru, ou = new[i], max(0, a1[i] - new[i]), a1[i] // 50
+        for g, v, per in (("n", nu, 2.6), ("r", ru, 1.7 + 0.1 * seed), ("o", ou, 1.0)):
+            u[g].append(v)
+            s[g].append(int(round(v * per)))
+    return {"app_id": pa["app_id"], "app": pa["app"], "key": pa["key"], "history_start": keys[0],
+            "daily": {"start": keys[0], "a1": a1, "new": new, "rev": pa["rev"],
+                      "imp": [int(round(r / ecpm * 1000)) for r in pa["rev"]], "u": u, "s": s}}
+
+
 def make_world(root):
     """→ (data dir, site dir, dashboard)."""
     data, site = os.path.join(root, "data"), os.path.join(root, "site")
@@ -215,6 +241,9 @@ def make_world(root):
         a1 = [st["daily"][k]["a1"] for k in keys]
         papps.append({"key": key, "app": name, "app_id": aid, "start": keys[0], "currency": "USD", "a1": a1,
                       "new": [st["daily"][k]["new"] for k in keys], "rev": [round(v * 0.0021, 4) for v in a1]})
+        if name != "Demo Broken":
+            _wgz(os.path.join(site, "active_%s.json.gz" % key),
+                 active_detail(st, papps[-1], i + 1, inc_every=5 if name == "Demo Timer · A/c 77" else None))
         p_from = min(p_from or keys[0], keys[0])
         rows.append({"key": key, "app": name, "app_id": aid, "file": "active_%s.json.gz" % key,
                      "settled_till": iso(E), "data_till": iso(E + timedelta(days=3)), "status": "ok"})

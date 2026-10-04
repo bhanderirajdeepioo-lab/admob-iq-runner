@@ -3,7 +3,8 @@
 
   * the demo's formulas, recomputed here straight from the synthetic stores: the phone split (installed = Σ new − Σ un,
     sleeping = installed − (a28 − un28), "data kam"), the journey, the long-term return, the money model (own old users,
-    and a young app's all-apps typical), "pakke" users, today's DAU by install age, the day-wise removals and flags;
+    and a young app's all-apps typical), the calculator's inputs (the Active tab's own impressions / eCPM / sessions
+    sums; R × sessions = arp; no Active file → no inputs, the app stays), "pakke" users, today's DAU by install age, the day-wise removals and flags;
   * dead users by months: a COMPLETE GA4 Audience store is engine.audience's own numbers (months from the store, the
     dead_lo … dead range, most dead / active month, DAU by install month), the portfolio on the engine's tiered months;
     no complete result (a partial read, a broken store, a failing derive) → the cohort-curve estimate on the same tiered
@@ -157,6 +158,61 @@ def test_money_is_the_demos_old_user_model(world):
     assert y["own"] is False and y["fq"] is not None and y["ra"] is not None
     ratios = sorted(x["ra"] / x["arp"] for x in own)
     assert _close(y["ra"], round(y["arp"] * ratios[len(ratios) // 2], 8), 1e-4)
+
+
+def _calc_inputs(world, e):
+    """The calculator's inputs recounted from the Active tab's per-app file: impressions on the money's days (revenue
+    known, active users > 0), eCPM, ads per user; sessions per user (all slots / returning) over the whole usage days."""
+    dl = _gz(os.path.join(world["site"], "active_%s.json.gz" % e["k"]))["daily"]
+    d0 = date.fromisoformat(dl["start"])
+    imp = rev = a1 = 0
+    su = uu = sr = ur = sd = 0
+    for i in range(28):
+        j = (E - timedelta(days=i) - d0).days
+        if dl["rev"][j] is not None and dl["a1"][j]:
+            imp, rev, a1 = imp + dl["imp"][j], rev + dl["rev"][j], a1 + dl["a1"][j]
+        if dl["u"]["r"][j]:
+            uu += sum(dl["u"][g][j] for g in "nro")
+            su += sum(dl["s"][g][j] for g in "nro")
+            ur, sr, sd = ur + dl["u"]["r"][j], sr + dl["s"]["r"][j], sd + 1
+    return {"imp28": imp, "ads": imp / a1, "ec": rev / imp * 1000, "spu": su / uu, "spr": sr / ur, "sd": sd, "rev": rev}
+
+
+def test_the_calculators_inputs_are_the_active_tabs_own_sums(world):
+    """One open (session) earns A ads × eCPM ÷ 1000, A = ads per user per day ÷ sessions per user per day — so R × the
+    sessions per user per day is the revenue per daily user (arp) again: the same 28 days, the same sums."""
+    for e in world["body"]["apps"]:
+        w = _calc_inputs(world, e)
+        assert e["imp28"] == w["imp28"] and e["sd"] == w["sd"] and abs(w["rev"] - e["rev28"]) < 0.006
+        for k in ("ads", "ec", "spu", "spr"):
+            assert _close(e[k], round(w[k], 6), 1e-9), (e["n"], k)
+        R = e["ads"] / e["spu"] * e["ec"] / 1000                                   # all users: one open's money
+        assert _close(R * e["spu"], e["arp"], 1e-5)                                # × sessions a day = arp
+        assert 1.0 < e["spr"] < e["spu"] * 2 and e["ads"] > 0 and e["ec"] > 0
+    assert _app(world, PART)["sd"] < 28 and _app(world, GA4)["sd"] == 28           # incomplete usage days: not counted
+
+
+def test_without_the_active_tabs_file_the_calculator_has_no_inputs_and_the_app_stays(fresh):
+    data, site, dash = fresh
+    k = sy.key_of(sy.APPS[1][0])
+    os.remove(os.path.join(site, "active_%s.json.gz" % k))
+    with open(os.path.join(site, "active_%s.json.gz" % sy.key_of(sy.APPS[2][0])), "wb") as f:
+        f.write(b"not a gzip")
+    counts = {}
+    body = ab.build_data(dash, data, site, counts)
+    by = {e["k"]: e for e in body["apps"]}
+    assert len(body["apps"]) == 4 and counts.get("skipped") == 1 and counts.get("usage_bad") == 1
+    det = _gz(os.path.join(site, "active_%s.json.gz" % sy.key_of(sy.APPS[0][0])))
+    det["daily"]["imp"] = "not a list"                             # arrays of the wrong kind: no inputs, the app stays
+    det["daily"]["u"] = {"r": [{"x": 1}] * len(det["daily"]["a1"])}
+    with gzip.open(os.path.join(site, "active_%s.json.gz" % sy.key_of(sy.APPS[0][0])), "wt", encoding="utf-8") as f:
+        json.dump(det, f)
+    body = ab.build_data(dash, data, site, counts)
+    by = {e["k"]: e for e in body["apps"]}
+    assert len(body["apps"]) == 4 and by[sy.key_of(sy.APPS[0][0])]["ec"] is None and by[sy.key_of(sy.APPS[0][0])]["sd"] == 0
+    for kk in (k, sy.key_of(sy.APPS[2][0])):
+        assert all(by[kk][f] is None for f in ("imp28", "ads", "ec", "spu", "spr")) and by[kk]["sd"] == 0
+        assert by[kk]["arp"] is not None and by[kk]["ra"] is not None                # the rest of the money as before
 
 
 def test_pakke_and_todays_users_by_install_age_are_the_iday_bands(world):
@@ -412,4 +468,5 @@ def test_it_runs_on_the_files_the_real_uninstall_build_writes(tmp_path):
     assert counts.get("skipped", 0) == 0 and len(body["apps"]) == len(dash["active"]["apps"])
     for e in body["apps"]:
         assert len(e["dw"]["n"]) == (date.fromisoformat(e["E"]) - date.fromisoformat(e["dw"]["s"])).days + 1
+        assert all(e[k] for k in ("imp28", "ads", "ec", "spu", "spr", "sd"))           # the calculator's inputs read
         assert e["au"]["mo"] == aud_eng.tier_months((date.fromisoformat(e["E"]) - date.fromisoformat(e["L"])).days + 1)
