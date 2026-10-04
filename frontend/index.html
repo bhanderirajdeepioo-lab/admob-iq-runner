@@ -3739,6 +3739,113 @@ let BDCUSTOM = {from:'', to:''};         // custom date window (YYYY-MM-DD)
 let BDUNIT = null;                       // unit BDMETS was initialised for (re-default when the unit changes)
 let BCULPRIT = 'yday';                    // culprit card lens: 'yday' (yesterday, default) or 'month'
 let BCEXPAND = false;                     // culprit card: show ALL affected countries vs top 6
+// ---- STAY PUT — owner, on his iPhone: "kuchh change karte he to upar chala jata he page … pure dashboard me check karo".
+// Many controls rebuild a whole screen (innerHTML / render()), and iOS Safari has no CSS scroll anchoring: a chip tap
+// mid-page threw the page back to the top. ONE layer for every screen instead of a fix in every handler:
+//  * pointerdown / click / change / keydown (Enter, Space), capture phase: the control is recorded — a signature (tag + its
+//    id / data-* / onclick / aria-label / name / href / for; else its child-index path inside its screen), where it sits on
+//    the screen, the screen, APP and scrollY;
+//  * a scroll the CODE asks for — window.scrollTo / scroll / scrollBy, Element.scrollIntoView, a focus() on a field off
+//    screen (a new screen or app, "Open →", Back, a drill-down) — is marked intentional, and the layer then leaves the page alone;
+//  * after the handlers (a microtask, two frames, 150 and 400 ms: iOS settles late): same screen, same APP, nothing
+//    intentional, the reader did not scroll (touchmove / wheel / scroll keys) and the control — found again — moved > 3px →
+//    scrollBy the difference. Not found (the view under it changed) → nothing. A control in a sticky bar (the top bar's ₹/$
+//    and Period, a Studio's filter bar) keeps scrollY instead; one in a fixed layer (drawer, sheet, tip) is left alone.
+//    Text fields are never anchored (the phone keyboard scrolls the page on purpose); a <select> / date field on its change.
+// The layer's own scrolls (and SP.keepY, which rerender() uses to stay on the reader's place) are not "intentional".
+const SP=(function(){
+  const S={seq:0,intent:0,user:0,quiet:0,P:null,T:null,on:false};
+  const api={st:S,keep:0};   // keep > 0: a same-view rebuild is running (rerender) — show() must not jump to the top
+  const hasW=()=>typeof window!=='undefined'&&!!window&&typeof document!=='undefined'&&!!document;
+  function quietly(f){ S.quiet++; try{ f(); }catch(e){} finally{ S.quiet--; } }
+  function wrap(o,k){ try{ const f=o&&o[k]; if(typeof f!=='function'||f.__sp) return;
+    const g=function(){ if(!S.quiet) S.intent=++S.seq; return f.apply(this,arguments); }; g.__sp=1; o[k]=g; }catch(e){} }
+  const CTAG={BUTTON:1,A:1,SELECT:1,INPUT:1,TEXTAREA:1,LABEL:1,SUMMARY:1};
+  const CROLE={button:1,tab:1,switch:1,checkbox:1,radio:1,option:1,link:1,menuitem:1};
+  const isData=n=>n.length>5&&n.slice(0,5)==='data-';
+  const isScr=x=>!!(x&&x.classList&&x.classList.contains('screen'));
+  function isCtl(x){ if(CTAG[x.tagName]) return true; const g=k=>x.getAttribute?x.getAttribute(k):null, r=g('role');
+    if(r&&CROLE[r]) return true; if(g('onclick')!=null||g('tabindex')!=null) return true;
+    const at=x.attributes; if(at) for(let i=0;i<at.length;i++) if(isData(at[i].name)) return true; return false; }
+  // the control a tap belongs to: the nearest one up from the target (stops at the screen), else the target itself
+  function ctlOf(t){ let x=t&&t.nodeType===3?t.parentElement:t; const x0=x;
+    for(let d=0;x&&d<10;d++,x=x.parentElement){ if(x===document.body||x===document.documentElement||isScr(x)) break; if(x.tagName&&isCtl(x)) return x; }
+    return x0&&x0.nodeType===1?x0:null; }
+  const typing=x=>{ const tg=x.tagName; if(tg==='TEXTAREA'||x.isContentEditable) return true; if(tg!=='INPUT') return false;
+    return !/^(checkbox|radio|button|submit|reset|image|color|range|file)$/.test(String(x.type||'').toLowerCase()); };
+  const picker=x=>x.tagName==='SELECT'||(x.tagName==='INPUT'&&/^(date|month|week|time|datetime-local)$/.test(String(x.type||'').toLowerCase()));
+  function sigOf(x){ let s=String(x.tagName), n=0; const at=x.attributes;
+    if(at) for(let i=0;i<at.length;i++){ const k=at[i].name;
+      if(k==='id'||k==='onclick'||k==='aria-label'||k==='name'||k==='href'||k==='for'||isData(k)){ s+='\u0001'+k+'='+at[i].value; n++; }
+      else if(k==='type'||k==='role') s+='\u0001'+k+'='+at[i].value; }
+    return n?s:''; }
+  const txt=x=>{ if(!x) return ''; const n=x.getElementsByTagName?x.getElementsByTagName('*').length:0;   // a big block: its size, not its text
+    return n>300?'#'+n:String(x.textContent||'').replace(/\s+/g,' ').trim().slice(0,60); };
+  const scrEl=()=>document.querySelector('.screen.on');
+  const scrId=()=>{ const o=scrEl(); return (o&&o.dataset&&o.dataset.screen)||''; };
+  const appNow=()=>{ try{ return typeof APP!=='undefined'?APP:''; }catch(e){ return ''; } };
+  const tags=(root,tag)=>Array.prototype.slice.call(root.getElementsByTagName(tag));
+  function pathOf(x,root){ const p=[]; for(;x&&x!==root;x=x.parentElement){ const par=x.parentElement; if(!par) return null; p.unshift(Array.prototype.indexOf.call(par.children,x)); } return x===root?p:null; }
+  function byPath(root,p){ let x=root; for(let i=0;x&&p&&i<p.length;i++) x=x.children[p[i]]; return x||null; }
+  function inScreen(x){ for(;x;x=x.parentElement) if(isScr(x)) return true; return false; }
+  // what to keep in place: 'el' the control (or the box it scrolls in), 'y' scrollY (a sticky bar), null (a fixed layer)
+  function snap(c,ev){ if(!c||!hasW()) return null;
+    let mode='el', a=c;
+    for(let x=c;x&&x!==document.body&&x!==document.documentElement;x=x.parentElement){ let cs=null; try{ cs=getComputedStyle(x); }catch(e){} if(!cs) break;
+      if(cs.position==='fixed') return null;                                   // a drawer, a sheet, a tip, the tab bar
+      if(cs.position==='sticky'&&cs.top&&cs.top!=='auto'){ mode='y'; break; }  // the top bar, a Studio's filter bar
+      if(x!==c&&(cs.overflowY==='auto'||cs.overflowY==='scroll')&&x.scrollHeight>x.clientHeight+1) a=x; }   // a box that scrolls on its own
+    const sc=inScreen(a), root=sc?scrEl():document.body; if(!root||(!sc&&a.querySelector&&a.querySelector('.screen'))) return null;   // empty space around the screens
+    const r=a.getBoundingClientRect?a.getBoundingClientRect():null; if(!r) return null;
+    const T={ctl:c,el:a,mode,tag:a.tagName,sig:sigOf(a),i:-1,n:0,txt:txt(a),path:pathOf(a,root),sc,scr:scrId(),app:appNow(),top:r.top,y:+window.scrollY||0,t0:Date.now(),ev};
+    if(T.sig){ const L=tags(root,T.tag).filter(x=>sigOf(x)===T.sig); T.i=L.indexOf(a); T.n=L.length; }
+    return T; }
+  function find(T){ const root=T.sc?scrEl():document.body; if(!root) return null;
+    if(T.el&&T.el.isConnected!==false&&root.contains&&root.contains(T.el)) return T.el;   // the same node (nothing rebuilt)
+    if(T.sig){ const L=tags(root,T.tag).filter(x=>sigOf(x)===T.sig);
+      if(L.length===1&&(T.n===1||txt(L[0])===T.txt)) return L[0]; if(L.length===T.n&&L[T.i]) return L[T.i];
+      const m=L.filter(x=>txt(x)===T.txt); if(m.length===1) return m[0]; if(L.length) return null; }   // none left with that signature
+    const p=byPath(root,T.path); return p&&p.tagName===T.tag&&txt(p)===T.txt?p:null; }   // (its onclick carried a state: open ⇄ closed) → its path
+  function chk(T){ if(S.T!==T||T.done) return;
+    if(S.user>T.seq||S.intent>T.seq||scrId()!==T.scr||appNow()!==T.app){ T.done=true; return; }   // the reader / the code moved on
+    let d;
+    if(T.mode==='y') d=T.y-(+window.scrollY||0);
+    else { const el=find(T); if(!el||!el.getBoundingClientRect) return; const r=el.getBoundingClientRect(); if(!r||(!r.width&&!r.height)) return; d=r.top-T.top; }
+    if(Math.abs(d)>3) quietly(()=>window.scrollBy(0,d)); }
+  function arm(T){ if(!T) return; T.seq=++S.seq; T.ta=Date.now(); T.done=false; S.T=T; S.P=null; const c=()=>chk(T);
+    try{ setTimeout(c,0); setTimeout(c,150); setTimeout(()=>{ c(); T.done=true; },400); }catch(e){}
+    try{ requestAnimationFrame(()=>{ c(); requestAnimationFrame(c); }); }catch(e){} }
+  const live=c=>{ const T=S.T; return !!(T&&!T.done&&Date.now()-T.ta<700&&(T.ctl===c||(T.ctl&&T.ctl.control===c)||(c&&c.control===T.ctl))); };
+  function onDown(e){ const c=ctlOf(e.target); S.P=(c&&!typing(c)&&!picker(c))?snap(c,'down'):null; }
+  function onAct(e){ const c=ctlOf(e.target); if(!c||typing(c)) return;
+    if(e.type==='click'&&picker(c)) return;                                    // a <select> / date: on its change
+    if(c.tagName==='A'&&/^#./.test(c.getAttribute('href')||'')) return;        // an in-page #link scrolls on purpose
+    if(e.type==='keydown'){ if(e.key!=='Enter'&&e.key!==' ') return; }
+    if(live(c)) return;                                                        // the click of a key press / a checkbox's change
+    const P=S.P; arm(P&&P.ctl===c&&Date.now()-P.t0<1500?P:snap(c,e.type)); }
+  function onKey(e){ const k=e.key;
+    if(k==='Enter'||k===' '){ const c=ctlOf(e.target); if(c&&!typing(c)&&c!==document.body&&isCtl(c)) return onAct(e); if(k==='Enter') return; }
+    if(/^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End| )$/.test(k)&&!(e.target&&typing(e.target))) S.user=++S.seq; }
+  function after(){ const T=S.T; if(T&&!T.done) Promise.resolve().then(()=>chk(T)); }   // window, bubble phase: after every handler
+  function user(){ S.user=++S.seq; S.P=null; }   // a finger / wheel scroll: the tap it started (if any) is not a tap
+  function install(){ if(S.on||!hasW()) return; S.on=true;
+    wrap(window,'scrollTo'); wrap(window,'scroll'); wrap(window,'scrollBy');
+    try{ if(typeof Element!=='undefined'&&Element.prototype) wrap(Element.prototype,'scrollIntoView'); }catch(e){}
+    try{ const P=typeof HTMLElement!=='undefined'&&HTMLElement.prototype, f=P&&P.focus;   // focus() that has to scroll to a
+      if(typeof f==='function'&&!f.__sp){ const g=function(o){ try{ if(!S.quiet&&!(o&&o.preventScroll)&&this.getBoundingClientRect){   // field off screen = on purpose
+          const r=this.getBoundingClientRect(), h=+window.innerHeight; if(r.bottom<0||r.top>h) S.intent=++S.seq; } }catch(e){} return f.apply(this,arguments); };
+        g.__sp=1; P.focus=g; } }catch(e){}
+    const on=(t,f,o)=>{ try{ window.addEventListener(t,f,o); }catch(e){} };
+    on('pointerdown',onDown,true); on('click',onAct,true); on('change',onAct,true); on('keydown',onKey,true);
+    on('click',after,false); on('change',after,false); on('keydown',after,false);
+    on('touchmove',user,{capture:true,passive:true}); on('wheel',user,{capture:true,passive:true}); }
+  // rerender(): back to the reader's place after a same-view rebuild (clamped to the new page) — not "intentional"
+  api.keepY=function(y){ if(y==null||!isFinite(y)||!hasW()) return; quietly(()=>{ const de=document.documentElement, mx=(de?+de.scrollHeight:NaN)-(+window.innerHeight);
+    const to=isFinite(mx)?Math.max(0,Math.min(y,mx)):y; if(Math.abs((+window.scrollY||0)-to)>1) window.scrollTo(0,to); }); };
+  api.quietly=quietly; api.install=install; api._={snap,find,chk,arm,sigOf,ctlOf,onDown,onAct,onKey,after,user};
+  install();
+  return api;
+})();
 const CUR_SYM={USD:"$",INR:"₹",EUR:"€",GBP:"£",JPY:"¥",BRL:"R$",AUD:"A$",CAD:"C$",SGD:"S$"};
 let CURVIEW=null;                                        // active display currency ('USD'/'INR'); boot sets it
 function baseCur(){ return (DATA&&DATA.currency)||"USD"; }
@@ -4054,13 +4161,14 @@ function curWin(){ return new Set(curWinArr()); }
 function curWinLabel(){ const w=curWinArr(); if(!w.length) return 'is range me data nahi'; const a=w[0],b=w[w.length-1];
   return (a===b?fmtD(a):fmtD(a)+'–'+fmtD(b))+' · '+w.length+'d'+(RANGE==='today'?' · live':''); }
 // re-render everything for the new window, then restore whatever the user was looking at
-function rerender(){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview';
-  HB.mute++; try{   // the same view rebuilt: no new Back step
+function rerender(){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; const y=window.scrollY||0;
+  HB.mute++; SP.keep++; try{   // the same view rebuilt: no new Back step, no jump to the top (₹/$, Period, a fetch landing)
   render();
   if(cur==='reportcard'&&PPID) goPlacement(PPID);
   else if(cur==='appdetail'&&ADAPP) openAppDetail(ADAPP);
   else if(cur==='placements'&&DETAIL_OPEN&&POPEN) openApp(POPEN);
-  else show(cur); }finally{ HB.mute--; } }
+  else show(cur); }finally{ HB.mute--; SP.keep--; }
+  SP.keepY(y); }   // render() empties #screens first (the page shrinks for a moment): back to the reader's place
 function applyRangeCustom(){ const f=document.getElementById('rc-from'),t=document.getElementById('rc-to');
   if(f&&t){ RCUSTOM={from:f.value||"",to:t.value||""}; RANGE='custom'; rerender(); } }
 
@@ -4269,7 +4377,7 @@ function show(id){
   if(id==='audience') AU.show(); else AU.left();   // 👪 Audience: the same (its lazy file loads on the first open)
   const _rvKeep=rvKeepScroll(id);           // Review re-shown by the 5-min refresh / ₹⇄$: stay where the reader was
   rvOnShow(id);                             // body[data-screen] (hides App / Period on Review) + the #review hash
-  if(!_rvKeep&&!REFRESH_SILENT) window.scrollTo({top:0});   // a silent background refresh never jumps the page
+  if(!_rvKeep&&!REFRESH_SILENT&&!SP.keep) window.scrollTo({top:0});   // a silent background refresh / a same-view rebuild (rerender) never jumps the page
   _navSave();                               // remember where we are (restored on reload / tab return)
 }
 // ---- Remember & restore the current view across a page reload or a mobile tab-discard, so coming back
@@ -5258,9 +5366,9 @@ function wire(){ if(S.wired) return; S.wired=true;
   document.addEventListener('toggle',e=>{ const t=e.target; if(!inAu(t)||!t.dataset||!t.dataset.kyun) return; t.open?S.open.add(t.dataset.kyun):S.open.delete(t.dataset.kyun); },true);
   let rz=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(!onScreen()||Math.abs(innerWidth-lastW)<20) return; lastW=innerWidth; hideTip(); drawMonth(cur()); },150); }); }
 function onClick(e){ const t=e.target; if(!inAu(t)) return;
-  const md=t.closest('[data-au-mode]'); if(md){ S.mode=md.dataset.auMode; save(); paint(); return; }
-  const op=t.closest('[data-au-opens]'); if(op){ S.opens=op.dataset.auOpens; save(); paint(); return; }
-  const ec=t.closest('[data-au-ecpm]'); if(ec){ S.ecpm=ec.dataset.auEcpm; save(); paint(); return; }
+  const md=t.closest('[data-au-mode]'); if(md){ S.mode=md.dataset.auMode; save(); levers(); return; }
+  const op=t.closest('[data-au-opens]'); if(op){ S.opens=op.dataset.auOpens; save(); levers(); return; }
+  const ec=t.closest('[data-au-ecpm]'); if(ec){ S.ecpm=ec.dataset.auEcpm; save(); levers(); return; }
   const dy=t.closest('[data-au-day]'); if(dy){ S.day=dy.dataset.auDay; save(); paint(); return; }
   const mo=t.closest('[data-au-more]'); if(mo){ const id=mo.dataset.auMore; S.mall.has(id)?S.mall.delete(id):S.mall.add(id); const y0=mo.getBoundingClientRect().top; paint();
     const b1=document.querySelector(`[data-au-more="${id}"]`); if(b1){ const d=b1.getBoundingClientRect().top-y0; if(Math.abs(d)>1) window.scrollBy(0,d); } return; }
@@ -5306,11 +5414,25 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   if(tt&&ts){ if(a&&!isAll){ tt.textContent='Audience · '+short(a.n); ts.textContent=TITLES.audience[1]; } else { tt.textContent=TITLES.audience[0]; ts.textContent=TITLES.audience[1]; } }
   if(a) drawMonth(a);
   try{ requestAnimationFrame(()=>{ const b=$('au-mline'), sv=b&&b.querySelector('svg'); if(a&&b&&sv&&Math.abs((b.clientWidth||0)-(+sv.getAttribute('width')||0))>2) drawMonth(a); }); }catch(e){} }
+// a calculator lever (how many wake up · opens a month · eCPM change) feeds only the money card, the strip and the all-apps
+// table: those three are redrawn in place — the rest of the screen (the month chart and its reading, open folds, the
+// reader's place on the page) is not touched (owner, iPhone: a chip tap mid-page threw the page to the top). Anything
+// unexpected (another app in the top bar, a new file, the card not on screen) → the full paint().
+function levers(){ const p=ptr(), s=(EL&&EL.isConnected!==false)?EL:null;
+  if(!s||!RAW||!p||VER!==p.v||!onScreen()||typeof DATA==='undefined'||!DATA) return paint();
+  const k=APP?keyOfName(APP):''; if(k!==S.app||k==='!'||(k&&!BYK[k])) return paint();
+  const a=k?BYK[k]:ALL, money=$('au-s-money'); if(!a||!money) return paint();
+  const f=document.activeElement, fk=f&&f.dataset?['auMode','auOpens','auEcpm'].find(x=>f.dataset[x]!=null):null, fv=fk?f.dataset[fk]:null, ft=f&&f.tagName;
+  money.outerHTML=secMoney(a);
+  const st=$('au-strip'); if(st) st.innerHTML=secStrip(a);
+  const tb=$('au-s-table'); if(tb&&!k) tb.outerHTML=secTable();
+  if(fk){ const at='data-'+fk.replace(/[A-Z]/g,m=>'-'+m.toLowerCase()), n=document.querySelector(`#au-root ${String(ft||'button').toLowerCase()}[${at}="${fv}"]`);   // a keyboard reader keeps the chip
+    if(n&&n.focus) try{ n.focus({preventScroll:true}); }catch(e){} } }
 function show(){ paint(); }
 return {ptr, ensure, render, paint, show, left, retry, ready:()=>!!RAW&&!!ptr(),
   // checks / tests (read-only views of the current state)
   _:{S, el:()=>EL, RAW:()=>RAW, APPS:()=>APPS, ALL:()=>ALL, BYK:()=>BYK, tipPinned:()=>tipPinned, load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; PSIG=null; ALL=null; }, prep:()=>{ if(RAW) prep(); },
-     bucketsOf, dAt, loAt, bLab, tierMonths, mostOf, wake, wakeAll, wakeDays, perOpen, calc, calcAll, FIX, MO, M2, save, boot, monthLine, dayAgg, TIPS, SPK, hov, keyOfName, openApp, allApps, cur, M, MC, CN, P,
+     bucketsOf, dAt, loAt, bLab, tierMonths, mostOf, wake, wakeAll, wakeDays, perOpen, calc, calcAll, FIX, MO, M2, save, boot, monthLine, dayAgg, TIPS, SPK, hov, keyOfName, openApp, allApps, cur, M, MC, CN, P, levers,
      sec:{strip:secStrip,phone:secPhone,journey:secJourney,pakke:secPakke,dead:secDead,mdead:secDeadMonths,mact:secActMonths,dau:secDauMix,money:secMoney,table:secTable,day:secDay,module:secModule}}};
 })();
 function renderAudience(){ return AU.render(); }
@@ -5370,7 +5492,7 @@ function openApp(name){
     <p class="faint" style="font-size:12px;margin-top:10px">${ps.length} placements · ${winLbl} · row → Report Card. ${RANGE==='today'?'Aaj ka din abhi chal raha hai (live/partial).':RANGE==='custom'?'Custom range (literal dates).':'Poore complete din.'}</p>`;
   document.querySelector('.screen[data-screen=placements]').classList.add('on');
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen==='placements'));
-  if(!REFRESH_SILENT) window.scrollTo({top:0});
+  if(!REFRESH_SILENT&&!SP.keep) window.scrollTo({top:0});   // not inside a same-view rebuild (rerender keeps the reader's place)
 }
 
 // ---------- REPORT CARD (empty shell; filled by goPlacement) ----------
@@ -5512,7 +5634,7 @@ function openAppDetail(name){
   document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
   const tt=document.getElementById('tb-title'), ts=document.getElementById('tb-sub');
   if(tt)tt.innerHTML=`<span class="ain">${appIcon(name,22)}<span class="ain-t">${hAttr(name)}</span></span>`; if(ts)ts.textContent='Ad-unit & country wise · '+pRangeLabel(RANGE);
-  if(!REFRESH_SILENT) window.scrollTo({top:0});
+  if(!REFRESH_SILENT&&!SP.keep) window.scrollTo({top:0});   // not inside a same-view rebuild (rerender keeps the reader's place)
 }
 // ===== App-report DAILY metric panel (metric chips + low/high/avg + hover) — app-level, from
 // each placement's per-day raw counts (no extra AdMob call; rates recomputed from summed counts). =====

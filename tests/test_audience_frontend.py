@@ -482,6 +482,25 @@ def test_the_chips_set_light_and_remember_the_levers(report):
 
 
 @needs_node
+def test_a_lever_redraws_only_the_money_card_strip_and_table(report):
+    """Owner, on his iPhone: a calculator chip tap mid-page threw the page to the top — every tap rebuilt the whole
+    screen. A lever now redraws only what it feeds, in place; the rest of the screen (the month chart, open folds, the
+    reader's place) is not touched — and what is redrawn is exactly what a full paint would draw."""
+    r = report["levers_partial"]
+    a = r["all"]
+    assert a["screen"] == "SCREEN-KEPT"                                           # the screen itself never rebuilt
+    assert a["S"] == ["20", "5", "10"] and {k: a["ls"][k] for k in ("mode", "opens", "ecpm")} == {"mode": "20", "opens": "5", "ecpm": "10"}
+    assert a["money"] and a["money"] == a["want"]["money"]                        # = the full paint's card at those levers
+    assert 'class="au-chip on" data-au-opens="5"' in a["money"] and 'class="au-chip on" data-au-mode="20"' in a["money"]
+    assert 'data-kyun="money" open' in a["money"]                                 # an open "Kyun? ▸" stays open
+    assert a["table"] and a["table"] == a["want"]["table"] and a["strip"] == a["want"]["strip"]
+    p = r["app"]
+    assert p["screen"] == "SCREEN-KEPT" and p["money"] == p["want"] and 'class="au-chip on" data-au-ecpm="10"' in p["money"]
+    assert p["table"] == "TABLE-UNTOUCHED"                                        # one app: no all-apps table
+    assert r["noCard"] and r["appMoved"]                                          # anything unexpected → the full paint
+
+
+@needs_node
 def test_tiers_labels_and_shares(report):
     n = report["numbers"]
     assert n["tier"] == [aud_eng.tier_months(30), aud_eng.tier_months(31), aud_eng.tier_months(400), aud_eng.tier_months(1300)]

@@ -160,5 +160,21 @@ run('var __REAL_SHOW = show;');   // scenarios 1-3 stub out show() — scenario 
     return { duringSilent, normal };
   });
 
+  // ── 5. rerender() — ₹/$, Period, a lazy file landing: the SAME view rebuilt. Owner (iPhone): "kuchh change karte he to upar
+  // chala jata he page". The real show() must not jump to the top inside it, and the reader's place comes back (clamped). ──
+  await step('rerender_keeps_place', async () => {
+    run(`render = function () { scrollY = 0; };   // the teardown: #screens emptied, the page clamped to the top
+         show = __REAL_SHOW; REFRESH_SILENT = false;`);
+    const one = (fn, y, h) => { ctx.scrollY = y; ctx.innerHeight = 900; DOC_ROOT.scrollHeight = h; ctx.__scrollCalls.length = 0;
+      const i0 = run('SP.st.intent'); run(fn);
+      return { scrollY: ctx.scrollY, calls: ctx.__scrollCalls.slice(), keep: run('SP.keep'), mute: run('HB.mute'), quiet: run('SP.st.intent') === i0 }; };
+    SCREEN.id = 'movers';
+    const r = { rerender: one('rerender()', 2500, 6000), cur: one('toggleCur()', 1800, 6000), short: one('rerender()', 5000, 3000) };
+    run('REFRESH_SILENT = false;');
+    ctx.__scrollCalls.length = 0; const i0 = run('SP.st.intent'); run(`__REAL_SHOW('overview')`);   // a real screen change still jumps — on purpose
+    r.nav = { calls: ctx.__scrollCalls.slice(), intent: run('SP.st.intent') > i0 };
+    return r;
+  });
+
   process.stdout.write(JSON.stringify({ errors, out }));
 })().catch(e => { errors.push('MAIN ' + (e.stack || e.message)); process.stdout.write(JSON.stringify({ errors, out })); });

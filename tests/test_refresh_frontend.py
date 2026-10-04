@@ -96,3 +96,15 @@ def test_show_silent_skips_scroll_and_nav_close(report):
     assert r["duringSilent"]["navOpen"] is True        # an open mobile menu is left alone during a silent refresh
     assert r["normal"]["scrollCalls"] == 1             # the ordinary (non-refresh) path is unchanged
     assert r["normal"]["navOpen"] is False
+
+
+# ── rerender(): the same view rebuilt (₹/$, Period, a fetch landing) keeps the reader's place ────────────────────────
+@needs_node
+def test_rerender_keeps_the_readers_place(report):
+    r = O(report, "rerender_keeps_place")
+    for k, y in (("rerender", 2500), ("cur", 1800)):
+        assert r[k]["calls"] == [[0, y]], r[k]                  # no scrollTo(top:0) from show(); one restore, back to y
+        assert r[k]["scrollY"] == y and r[k]["keep"] == 0 and r[k]["mute"] == 0
+        assert r[k]["quiet"] is True                              # the restore is not an "intentional" scroll
+    assert r["short"]["calls"] == [[0, 2100]] and r["short"]["scrollY"] == 2100   # 3000 − 900: clamped to the new page
+    assert r["nav"]["calls"] == [[{"top": 0}]] and r["nav"]["intent"] is True       # a real screen change still jumps

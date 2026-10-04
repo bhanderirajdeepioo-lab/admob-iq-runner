@@ -330,6 +330,42 @@ const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-roo
     delete ELS['au-mline']; delete ELS['au-mread'];
     return R; });
 
+  // ── a calculator lever redraws ONLY the money card, the strip and the all-apps table, in place (owner, iPhone: a chip
+  // tap mid-page threw the page to the top — the whole screen was rebuilt). The rest of the screen is not touched. ────
+  await step('levers_partial', async () => { const R = {};
+    const ids = ['au-root', 'au-s-money', 'au-strip', 'au-s-table'];
+    const stubs = () => { const o = {}; for (const id of ids) { o[id] = mk(id === 'au-strip' ? 'div' : 'section'); o[id].setAttribute('id', id); } return o; };
+    const unstub = () => ids.forEach(id => { delete ELS[id]; });
+    const sec = (h, id) => { const i = h.indexOf(`id="${id}"`); if (i < 0) return null; const s = h.lastIndexOf('<section', i); return h.slice(s, h.indexOf('</section>', i) + 10); };
+    const strip = h => (h.match(/<div class="au-strip" id="au-strip">([\s\S]*?)<\/div><div class="au-grid">/) || [])[1];
+    const clicks = () => { fire('click', { target: tgt({ '[data-au-opens]': { dataset: { auOpens: '5' } } }) });
+      fire('click', { target: tgt({ '[data-au-mode]': { dataset: { auMode: '20' } } }) });
+      fire('click', { target: tgt({ '[data-au-ecpm]': { dataset: { auEcpm: '10' } } }) }); };
+    // All apps: three lever taps
+    SCREEN.id = 'audience'; run(`localStorage.removeItem('audview'); APP=''; AU._.S.pick=''; AU._.S.mode='10'; AU._.S.opens='data'; AU._.S.ecpm='0'; AU._.S.open.clear(); AU._.S.open.add('money'); AU.paint();`);
+    let E = stubs(); run(`AU._.el().innerHTML='SCREEN-KEPT'`);
+    clicks();
+    R.all = { screen: html(), money: E['au-s-money'].outerHTML || '', strip: E['au-strip'].innerHTML, table: E['au-s-table'].outerHTML || '',
+      S: J('[AU._.S.mode,AU._.S.opens,AU._.S.ecpm]'), ls: JSON.parse(run(`localStorage.getItem('audview')`) || 'null') };
+    unstub(); run('AU.paint()'); const full = html();   // the same levers, the whole screen painted: the three parts must match it
+    R.all.want = { money: sec(full, 'au-s-money'), table: sec(full, 'au-s-table'), strip: strip(full) };
+    // one app: its money card and strip; there is no all-apps table to redraw
+    const [k1, n1] = J('AU._.APPS().filter(a=>!a.kam).map(a=>[a.k,a.n])[0]');
+    run(`AU._.S.pick='${k1}'; APP=${JSON.stringify(n1)}; AU._.S.mode='10'; AU._.S.opens='data'; AU._.S.ecpm='0'; AU.paint();`);
+    E = stubs(); E['au-s-table'].outerHTML = 'TABLE-UNTOUCHED'; run(`AU._.el().innerHTML='SCREEN-KEPT'`);
+    clicks();
+    R.app = { screen: html(), money: E['au-s-money'].outerHTML || '', table: E['au-s-table'].outerHTML };
+    unstub(); run('AU.paint()'); R.app.want = sec(html(), 'au-s-money');
+    // anything unexpected → the whole screen: the card not on screen; the top bar on another app since the last paint
+    run(`AU.paint()`); E = stubs(); delete ELS['au-s-money']; run(`AU._.el().innerHTML='SCREEN-KEPT'`);
+    fire('click', { target: tgt({ '[data-au-opens]': { dataset: { auOpens: '2' } } }) });
+    R.noCard = html() !== 'SCREEN-KEPT' && html().includes('id="au-s-money"'); unstub();
+    run(`AU.paint()`); E = stubs(); run(`APP=''; AU._.S.pick=''; AU._.el().innerHTML='SCREEN-KEPT'`);
+    fire('click', { target: tgt({ '[data-au-opens]': { dataset: { auOpens: '1' } } }) });
+    R.appMoved = html() !== 'SCREEN-KEPT' && html().includes('id="au-s-table"'); unstub();
+    run(`localStorage.removeItem('audview'); APP=''; AU._.S.pick=''; AU._.S.mode='10'; AU._.S.opens='data'; AU._.S.ecpm='0'; AU._.S.open.clear(); AU.paint();`);
+    return R; });
+
   // ── the switch off: no pointer in this build ─────────────────────────────────────────────────────────────────────────
   await step('off', () => { run(`var __a=DATA.audience; delete DATA.audience; AU.paint();`); const h = html(); const p = run('!!AU.ptr()'); run(`DATA.audience=__a; AU.paint();`); return { html: h, ptr: p }; });
 
