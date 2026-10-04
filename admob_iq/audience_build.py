@@ -15,6 +15,10 @@ and detail, and the all-apps table (the page sorts it by money) — and the poin
     a young app takes the all-apps typical old/all ratio), and the page's "paise ka calculator" inputs on the same 28
     days (usage28: impressions, ads per user, eCPM, sessions per user — all users and returning users — from the Active
     users tab's own per-app file);
+  * "data se" (the calculator's default opens a month): each app's return curve FITTED on its own last 12 install
+    weeks (fit_curve: weighted least squares, power-law or exponential decay with a plateau) → expected active days in
+    30, a P10–P90 range from weekly refits, and K = days × the per-open basis' sessions per active day; too few installs
+    → the all-apps fit;
   * day-wise: every install day's installs and removals by when (the Uninstall tab's own cells and flags).
 
 DEAD USERS BY MONTHS SINCE THE LAST OPEN — per app, whichever exists:
@@ -351,6 +355,167 @@ def usage28(det, rev_days, w28):
     return out
 
 
+# ── "Data se": a woken user's opens a month, from a return curve FITTED on the app's own past installs ───────────────
+# (the owner, 4 Oct: "isme tum ML use kar sakte ho based on back date data"). A woken sleeper is taken to drift away
+# the way the app's new users do; its expected active days in the first 30 = 1 + Σ_{d=1..29} r(d), r(d) = the share of
+# an install day's users who open the app on day d. r is fitted, not read point by point: weighted least squares over
+# install days (weights = installs; final days only) of two decay-with-plateau families — power law p + b·d^−k and
+# exponential p + b·e^(−d/τ) — the one with the smaller weighted error wins. The page multiplies the days by the app's
+# sessions per active day (K opens a month). The range is the install-weighted P10 / P90 of the same fit redone week by
+# week. An app with too few installs in the window takes the all-apps fit (all apps' installs pooled).
+FIT_WEEKS, FIT_LAG, FIT_DAYS = 12, 30, 30   # the last 12 install weeks whose days 1 … 30 are all final
+FIT_MIN = 3000                              # installs in the window for an app's own curve
+FIT_WEEK_MIN, FIT_MIN_WEEKS = 100, 4        # a weekly refit needs 100 installs; a range needs 4 such weeks
+_FAM = {"pow": (lambda d, t: d ** -t, 0.02, 4.0), "exp": (lambda d, t: math.exp(-d / t), 0.3, 300.0)}
+
+
+def fit_weeks(store, launch, E, new):
+    """The fit's window: the last FIT_WEEKS install weeks whose days 1 … 30 are all final — week j = install days
+    E−30−7j−6 … E−30−7j — usable cohorts only (pooled_ret's rule: ok, t > 0, a0/t in [0.9, 1.1], on or after ret_from
+    and the launch, new > 0) → [[n, a, installs]] per week, n[d] / a[d] = Σ new / Σ day-d openers of its cohorts."""
+    ret = store.get("ret") or {}
+    rf = D(store["ret_from"]) if store.get("ret_from") else None
+    last = E - timedelta(days=FIT_LAG)
+    weeks = [[[0] * (FIT_DAYS + 1), [0] * (FIT_DAYS + 1), 0] for _ in range(FIT_WEEKS)]
+    for c, e in ret.items():
+        cd = D(c)
+        off = (last - cd).days
+        if not 0 <= off < 7 * FIT_WEEKS or cd < launch or (rf and cd < rf) or not e.get("ok"):
+            continue
+        t = int(e.get("t") or 0)
+        a = [int(x or 0) for x in (e.get("a") or [])]
+        n = new.get(c) or 0
+        if t <= 0 or not a or not .9 <= a[0] / t <= 1.1 or n <= 0:
+            continue
+        w = weeks[off // 7]
+        w[2] += n
+        for d in range(1, FIT_DAYS + 1):
+            if len(a) > d:
+                w[0][d] += n
+                w[1][d] += a[d]
+    return weeks
+
+
+def _wls(pts, xs):
+    """min Σ w (y − p − b·x)² with p, b ≥ 0 (closed form) → (error, p, b)."""
+    Sw = Sx = Sy = Sxx = Sxy = 0.0
+    for (_, w, y), x in zip(pts, xs):
+        Sw += w
+        Sx += w * x
+        Sy += w * y
+        Sxx += w * x * x
+        Sxy += w * x * y
+    den = Sw * Sxx - Sx * Sx
+    b = (Sw * Sxy - Sx * Sy) / den if den > 1e-300 else 0.0
+    p = (Sy - b * Sx) / Sw
+    if p < 0:
+        p, b = 0.0, (Sxy / Sxx if Sxx > 0 else 0.0)
+    if b < 0:
+        p, b = Sy / Sw, 0.0
+    return sum(w * (y - p - b * x) ** 2 for (_, w, y), x in zip(pts, xs)), p, b
+
+
+def fit_curve(n, a):
+    """Weighted least squares of r(d) over d = 1 … 30 (weights = installs: Σ over install days of n_c·(y_cd − r(d))² =
+    Σ_d N_d·(ȳ_d − r(d))² + const, so the per-day sums n[d], a[d] are enough) → {"f": family, "p", "b", "t"} or None
+    (fewer than 3 days with installs). For a fixed shape t the model is linear in (p, b); t by a log grid, then a
+    golden-section refine around the best grid point; the family with the smaller weighted error wins."""
+    pts = [(d, n[d], a[d] / n[d]) for d in range(1, len(n)) if n[d] > 0]
+    if len(pts) < 3:
+        return None
+    best = None
+    for fam, (fx, lo, hi) in _FAM.items():
+        def err(lt, fx=fx):
+            return _wls(pts, [fx(d, math.exp(lt)) for d, _, _ in pts])
+        L0, L1, G = math.log(lo), math.log(hi), 40
+        grid = [L0 + (L1 - L0) * i / (G - 1) for i in range(G)]
+        i = min(range(G), key=lambda j: err(grid[j])[0])
+        x0, x1 = grid[max(0, i - 1)], grid[min(G - 1, i + 1)]
+        g = (5 ** .5 - 1) / 2
+        c, e = x1 - g * (x1 - x0), x0 + g * (x1 - x0)
+        fc, fe = err(c)[0], err(e)[0]
+        for _ in range(40):
+            if fc < fe:
+                x1, e, fe = e, c, fc
+                c = x1 - g * (x1 - x0)
+                fc = err(c)[0]
+            else:
+                x0, c, fc = c, e, fe
+                e = x0 + g * (x1 - x0)
+                fe = err(e)[0]
+        lt = (x0 + x1) / 2
+        sse, p, b = err(lt)
+        if best is None or sse < best[0]:
+            best = (sse, {"f": fam, "p": p, "b": b, "t": math.exp(lt)})
+    return best[1]
+
+
+def curve_at(f, d):
+    """The fitted share opening on day d ≥ 1, clipped to [0, 1]."""
+    return min(1.0, max(0.0, f["p"] + f["b"] * _FAM[f["f"]][0](d, f["t"])))
+
+
+def curve_days(f):
+    """Expected active days in the first 30 (the woken day counts): 1 + Σ_{d=1..29} r(d)."""
+    return 1 + sum(curve_at(f, d) for d in range(1, FIT_LAG))
+
+
+def wpct(vals, ws, q):
+    """The install-weighted percentile q of vals (each value at the middle of its weight; linear between)."""
+    xs = sorted(zip(vals, ws))
+    tot = float(sum(w for _, w in xs))
+    pts, acc = [], 0.0
+    for v, w in xs:
+        pts.append(((acc + w / 2) / tot, v))
+        acc += w
+    if q <= pts[0][0]:
+        return pts[0][1]
+    if q >= pts[-1][0]:
+        return pts[-1][1]
+    for (q0, v0), (q1, v1) in zip(pts, pts[1:]):
+        if q0 <= q <= q1:
+            return v0 + (v1 - v0) * (q - q0) / (q1 - q0) if q1 > q0 else v1
+    return pts[-1][1]
+
+
+def fit_app(weeks):
+    """The window's weeks → {"d": days, "d10", "d90", "f": the fit, "n": installs, "wk": weeks refitted} or None: the
+    pooled fit's days, and the install-weighted P10 / P90 of the weekly refits (weeks with FIT_WEEK_MIN installs; none
+    with fewer than FIT_MIN_WEEKS of them), widened to hold the pooled answer."""
+    n = [sum(w[0][d] for w in weeks) for d in range(FIT_DAYS + 1)]
+    a = [sum(w[1][d] for w in weeks) for d in range(FIT_DAYS + 1)]
+    f = fit_curve(n, a)
+    if f is None:
+        return None
+    d = curve_days(f)
+    wk = []
+    for w in weeks:
+        if w[2] >= FIT_WEEK_MIN:
+            fw = fit_curve(w[0], w[1])
+            if fw is not None:
+                wk.append((curve_days(fw), w[2]))
+    d10 = d90 = None
+    if len(wk) >= FIT_MIN_WEEKS:
+        d10 = min(d, wpct([v for v, _ in wk], [x for _, x in wk], 0.1))
+        d90 = max(d, wpct([v for v, _ in wk], [x for _, x in wk], 0.9))
+    return {"d": d, "d10": d10, "d90": d90, "f": f, "n": sum(w[2] for w in weeks), "wk": len(wk)}
+
+
+def _jround(v):
+    return int(math.floor(v + 0.5))                     # the page's Math.round (half up)
+
+
+def kf_entry(fit, src, s):
+    """The file's "kf" block: days (4 decimals), the fit, and K / K10 / K90 = max(1, round(days × s)) with s = the
+    sessions per active day the page's per-open money uses (None: no K)."""
+    r4 = lambda v: None if v is None else round(v, 4)
+    d, d10, d90 = r4(fit["d"]), r4(fit["d10"]), r4(fit["d90"])
+    K = lambda v: None if v is None or not s else max(1, _jround(v * s))
+    f = fit["f"]
+    return {"src": src, "d": d, "d10": d10, "d90": d90, "K": K(d), "K10": K(d10), "K90": K(d90), "n": fit["n"],
+            "wk": fit["wk"], "fit": {"f": f["f"], "p": _r(f["p"]), "b": _r(f["b"]), "t": _r(f["t"])}}
+
+
 def lags_of(cf, day):
     """The Uninstall tab's cells (fill_days-filled) of one install day → {lag: users}."""
     j = (D(day) - D(cf["start"])).days
@@ -633,9 +798,13 @@ def app_entry(aa, ua, st, p, cf, x, cur, store, uni_filled_of, aud_mode=None, de
         entry.update(usage28(det, rev_list, w28))
     except Exception:
         entry.update(usage28(None, (), ()))
+    try:                                        # the "data se" fit's window (a broken return store costs only it)
+        fw = fit_weeks(st, launch, E, new)
+    except Exception:
+        fw = None
     extra = {"own": own, "ret_arpu": ret_arpu, "freq": freq, "old_dau": old_dau, "old_a28": old_a28,
              "arpdau": arpdau, "rev28": rev28, "a1_28": a1_28, "journey": journey, "long": longt,
-             "ga4_err": ga4_err, "scale": scale, "k": kfit, "k_how": how}
+             "ga4_err": ga4_err, "scale": scale, "k": kfit, "k_how": how, "fw": fw}
     return entry, extra
 
 
@@ -750,6 +919,36 @@ def build_data(dashboard, data_dir, out_dir, counts, aud_mode=None):
             e["fq"] = _r(f_all, 5)
             e["ra"] = _r((x["arpdau"] or 0) * ratio, 8) if ratio is not None else None
             e["own"] = False
+    # "data se": each app's own fitted curve (FIT_MIN installs in the window), else the all-apps fit (every app's window
+    # pooled); K with the sessions per active day of the page's per-open basis (old users where it has its own)
+    all_kf = None
+    try:
+        fws = [x["fw"] for x in extras if x.get("fw")]
+        all_fit = fit_app([[[sum(f[j][0][d] for f in fws) for d in range(FIT_DAYS + 1)],
+                            [sum(f[j][1][d] for f in fws) for d in range(FIT_DAYS + 1)],
+                            sum(f[j][2] for f in fws)] for j in range(FIT_WEEKS)]) if fws else None
+        if all_fit is not None:
+            all_kf = kf_entry(all_fit, "all", None)
+    except Exception:
+        all_fit = None
+        counts["fit_bad"] = counts.get("fit_bad", 0) + 1
+    for e, x in zip(entries, extras):
+        try:
+            fw = x.get("fw")
+            own_fit = fit_app(fw) if fw and sum(w[2] for w in fw) >= FIT_MIN else None
+            fit, src = (own_fit, "own") if own_fit is not None else (all_fit, "all")
+            if (e.get("ec") or 0) > 0 and e["own"] and (e.get("ra") or 0) > 0 and (e.get("spr") or 0) > 0:
+                s_ = e["spr"]
+            elif (e.get("ec") or 0) > 0 and (e.get("ads") or 0) > 0 and (e.get("spu") or 0) > 0:
+                s_ = e["spu"]
+            else:
+                s_ = None
+            e["kf"] = kf_entry(fit, src, s_) if fit is not None else None
+            if e["kf"] is not None and src == "all":
+                e["kf"]["n"] = sum(w[2] for w in fw) if fw else 0        # the app's own installs in the window
+        except Exception:
+            e["kf"] = None
+            counts["fit_bad"] = counts.get("fit_bad", 0) + 1
     # all apps together (journey / long-term weighted by each app's installs base; money sums)
     allj = {}
     for N in JOURNEY_DAYS:
@@ -775,7 +974,7 @@ def build_data(dashboard, data_dir, out_dir, counts, aud_mode=None):
             "E": max(e["E"] for e in entries),
             "apps": entries, "no_ga4": noga,
             "all": {"j": allj, "lt": alll, "rev28": round(sum(x["rev28"] for x in extras), 2),
-                    "a1_28": sum(x["a1_28"] for x in extras), "au": portfolio_au(entries)}}
+                    "a1_28": sum(x["a1_28"] for x in extras), "au": portfolio_au(entries), "kf": all_kf}}
 
 
 def aud_eng_dir():

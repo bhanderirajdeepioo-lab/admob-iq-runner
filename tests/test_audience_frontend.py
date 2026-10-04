@@ -7,7 +7,8 @@ step). Checked here, the page's own arithmetic against an independent recount in
   * numbers: each app's buckets between its window months = engine.audience's last_open (users and the dead_lo curve);
     the all-apps pool = the build's portfolio (tiered months, dead / dead_lo, install months, most month) and journey /
     long-term / money; the GA4 app shows its dead_lo – dead range; the woken users (10 % and "By age");
-  * "Paise ka calculator": one open = A ads × eCPM ÷ 1000 (old users where the app has its own, else all users; the
+  * "Paise ka calculator" (its "data se" K = the build's fitted curve × sessions, its range; no fit → the day 1 / 7 / 30
+    join): one open = A ads × eCPM ÷ 1000 (old users where the app has its own, else all users; the
     all-users R × sessions = arp), every lever combination = N × K × R × (1 + e), All apps = Σ every app's own, the card
     (each line can be redone by hand; the opens table with its row lit; the eCPM box; the old tiles gone, the asleep-for
     table behind "Kyun? ▸"), per-open decimals, the money table's fixed order, the chips set / lit / remembered;
@@ -167,9 +168,12 @@ def test_the_all_apps_pool_is_the_builds_portfolio(report, world):
     assert A["sl"] == sum(e["sl"] for e in world["body"]["apps"] if not e["kam"])
 
 
-def _wake_days(e, apps):
-    """Mirror of the page's wakeDays: 1 + Σ(day 1…29) of the app's new-user "opened that day" share, joined linearly
-    between its day 1 / 7 / 30 points (all apps' install-weighted curve when the app lacks one of them)."""
+def _wake_days(e, apps, fitted=True):
+    """Mirror of the page's wakeDays: the build's fitted active days in 30 (kf.d); without a fit, 1 + Σ(day 1…29) of the
+    app's new-user "opened that day" share, joined linearly between its day 1 / 7 / 30 points (all apps' install-weighted
+    curve when the app lacks one of them)."""
+    if fitted and (e.get("kf") or {}).get("d"):
+        return e["kf"]["d"]
     j = e.get("j") or {}
     if not all(j.get(k) for k in ("1", "7", "30")):
         j = {}
@@ -278,7 +282,8 @@ def test_every_lever_is_users_times_opens_times_per_open(report, world):
                 g = report["calc"]["grid"]["|".join((m, op, ec))]
                 for e in apps:
                     want, got = _calc(e, report["numbers"]["apps"][e["k"]], apps, m, op, ec), g[e["k"]]
-                    assert got["ok"] is True and got["K"] == want["K"] and got["Kd"] == want["Kd"]
+                    assert got["ok"] is True and got["K"] == want["K"] and got["Kd"] == want["Kd"] == e["kf"]["K"]
+                    assert (got["K10"], got["K90"]) == (e["kf"]["K10"], e["kf"]["K90"])
                     for k in ("w", "R", "usd", "users"):
                         assert _close(got[k], want[k], 1e-9), (e["n"], m, op, ec, k)
                     n += 1
@@ -359,6 +364,16 @@ def test_the_card_one_open_levers_result_table_and_ecpm_box(report, world):
             for at, v in (("mode", m), ("opens", op), ("ecpm", ec)):
                 assert h.count('class="au-chip on" data-au-%s=' % at) == 1 and 'class="au-chip on" data-au-%s="%s"' % (at, v) in h
             assert 'data-au-opens="data">Data se (~' in h
+            # the "data se" line: where K comes from, its range
+            lvn = re.search(r'<div class="au-lvn">(.*?)</div>', h).group(1)
+            if k == "all":
+                assert lvn.startswith("Data se: har app ka apna curve — avg ~") and ", range " in lvn
+            else:
+                kf = e["kf"]
+                src = "pichhle installs ka curve" if kf["src"] == "own" else "sab apps ke pichhle installs ka curve — is app ke installs kam"
+                assert lvn == "Data se: ~%d baar (%s, range %d–%d)" % (kf["K"], src, kf["K10"], kf["K90"]), lvn
+                kb0 = h[h.index('<details class="au-kyun" data-kyun="money"'):]
+                assert "curve fit kiya (ML" in kb0 and ("is app ke apne pichhle installs (12 hafte, %s)" % _n(kf["n"]) in kb0) == (kf["src"] == "own")
             # 3 · the result, one line
             rs = re.search(r'<div class="au-eq"><b>(%s)</b> users × <b>(~?)(%s)</b> baar × <b>%s(%s)</b>( \(avg\))?(?: × <b>(%s)</b>)? = <b>≈ %s(%s) / mahina</b></div>'
                            % (_NUM, _NUM, re.escape(sym), _NUM, _NUM, re.escape(sym), _NUM), h)
@@ -444,6 +459,16 @@ def test_an_app_without_the_calculators_inputs_says_so(report, world):
     assert "Sleeping users aaj" in d["card"] and d["strip"] == "—"
     assert d["money"][d["order"].index(d["k"])] == "—"
     assert "%s users ke apps ka sessions / eCPM data nahi (paise me nahi gine)" % _n(d["w"]) in d["allCard"]
+
+
+@needs_node
+def test_without_a_fit_data_se_is_the_day_1_7_30_join(report, world):
+    d = report["calc"]["noFit"]
+    e = next(x for x in world["body"]["apps"] if x["k"] == d["k"])
+    assert _close(d["wd"], _wake_days(e, world["body"]["apps"], fitted=False), 1e-9) and d["K10"] is None
+    assert "Data se: ~%d baar (naye users ke 1 / 7 / 30 din se)" % d["Kd"] in d["card"] and "curve fit kiya" not in d["card"]
+    big = world["body"]["apps"][0]["kf"]
+    assert report["calc"]["noRange"] == "Data se: ~%d baar (pichhle installs ka curve, range nahi — kam hafton me kaafi installs)" % big["K"]
 
 
 @needs_node

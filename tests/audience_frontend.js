@@ -168,6 +168,16 @@ const tgt = (m, extra) => Object.assign({ closest: sel => { if (sel === '#au-roo
       order: order(), money: money(), allCard: card() };
     run(`AU._.S.pick='${k1}'; APP=${JSON.stringify(n1)}; AU.paint();`); R.noData.card = card(); R.noData.strip = (html().match(/If 10% wake up: money \/ month<\/div><div class="au-n">([^<]*)</) || [])[1];
     run(`AU._.load(__raw2); AU._.S.pick=''; APP=''; AU.paint();`);
+    // a fit without a range (fewer than 4 weeks with enough installs): the line says so
+    run(`var __nr=JSON.parse(JSON.stringify(__raw2)); __nr.apps[0].kf.d10=null; __nr.apps[0].kf.d90=null; AU._.load(__nr); AU._.S.pick=__nr.apps[0].k; APP=__nr.apps[0].n; AU.paint();`);
+    R.noRange = (html().match(/<div class="au-lvn">(.*?)<\/div>/) || [])[1];
+    run(`AU._.load(__raw2); AU._.S.pick=''; APP=''; AU.paint();`);
+    // an app without the build's fitted curve: "data se" = its day 1 / 7 / 30 points joined (as before the fit)
+    run(`var __nf=JSON.parse(JSON.stringify(__raw2)); delete __nf.apps[2].kf; AU._.load(__nf); AU.paint();`);
+    const k2 = run('__nf.apps[2].k'), n2 = run('__nf.apps[2].n');
+    R.noFit = { k: k2, wd: run(`AU._.wakeDays(AU._.BYK()['${k2}'])`), Kd: run(`AU._.calc(AU._.BYK()['${k2}'],AU._.FIX).Kd`), K10: run(`AU._.calc(AU._.BYK()['${k2}'],AU._.FIX).K10`) };
+    run(`AU._.S.pick='${k2}'; APP=${JSON.stringify(n2)}; AU.paint();`); R.noFit.card = card();
+    run(`AU._.load(__raw2); AU._.S.pick=''; APP=''; AU.paint();`);
     return R; });
 
   // ── every app's own page (GA4 / estimate / being read / young) ─────────────────────────────────────────────────────

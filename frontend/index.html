@@ -2425,6 +2425,7 @@ body[data-screen="audience"] #smp-pick{display:inline-flex}
 #au-root .au-po .au-w,#au-root .au-calc .au-w{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.35}
 #au-root .au-lv{margin:2px 0 8px}
 #au-root .au-lv .au-cl{flex:1 1 100%;color:var(--ink2)}
+#au-root .au-lvn{font-size:11.5px;color:var(--muted);line-height:1.35;margin:-4px 0 10px}
 #au-root .au-calc{background:var(--good-b);border-radius:11px;padding:10px 12px;margin:4px 0 0;min-width:0}
 #au-root .au-calc .au-l{color:var(--good)}
 #au-root .au-calc .au-n{font-size:24px;font-weight:850;color:#fff;line-height:1.2;overflow-wrap:anywhere}
@@ -4861,15 +4862,17 @@ function allAgg(){ const ok=APPS.filter(a=>!a.kam); const sum=f=>ok.reduce((s,a)
     E:APPS.length?APPS[0].E:'',L:'',hs:'',au,deadTot:sum(a=>a.deadTot)};
   A.bk=bucketsOf(au,au.inst); return A; }
 // ---- the money scenario: a share of the sleeping users wakes up (N), and how many days a month each opens ----
-// A woken sleeper opens the app once (the day it wakes), then drifts away again the way this app's NEW users do: its own
-// "opened that day" shares on day 1 / 7 / 30, joined linearly day by day. A sleeper woken up is not a loyal regular, so it
-// is not counted like one. Per woken user per month: days = 1 + Σ(day 1…29) share; users per day (month average) =
-// days ÷ 30. Apps without their own 1 / 7 / 30 points use all apps' curve.
+// A woken sleeper opens the app once (the day it wakes), then drifts away again the way this app's NEW users do. A
+// sleeper woken up is not a loyal regular, so it is not counted like one. Per woken user per month: days = 1 + Σ(day
+// 1…29) share opening that day; users per day (month average) = days ÷ 30. The shares are the build's curve FITTED on
+// the app's own last 12 install weeks (a.kf: audience_build.fit_curve — the all-apps fit for an app with few installs);
+// without one, its day 1 / 7 / 30 points joined linearly (all apps' curve when it lacks them).
 function portJ(){ if(portJ.c&&portJ.n===APPS.length) return portJ.c; const j={};
   ['1','7','30'].forEach(k=>{ const xs=APPS.filter(a=>a.j&&a.j[k]); const w=xs.reduce((t,a)=>t+a.j[k][3],0);
     j[k]=w?[xs.reduce((t,a)=>t+a.j[k][0]*a.j[k][3],0)/w,0,0,w]:null; });
   portJ.c=j; portJ.n=APPS.length; return j; }
-function wakeDays(a){ const own=a&&a.j&&a.j['1']&&a.j['7']&&a.j['30']; const j=own?a.j:portJ();
+function wakeDays(a){ if(a&&a.kf&&a.kf.d>0) return a.kf.d;
+  const own=a&&a.j&&a.j['1']&&a.j['7']&&a.j['30']; const j=own?a.j:portJ();
   if(!j['1']||!j['7']||!j['30']) return 1;
   const r1=j['1'][0]||0, r7=j['7'][0]||0, r30=j['30'][0]||0; let d=1;
   for(let t=1;t<=29;t++) d+=t<=7?r1+(r7-r1)*(t-1)/6:r7+(r30-r7)*(t-7)/23;
@@ -4899,13 +4902,16 @@ function perOpen(a){ if(!a||a.all||!(a.ec>0)) return null;
 function calc(a,o){ o=o||{}; const mode=o.mode||S.mode, op=o.opens||S.opens, ec=String(o.ecpm!=null?o.ecpm:S.ecpm), e=Number(ec)/100;
   if(a&&a.all) return calcAll({mode,opens:op,ecpm:ec});
   const q=wake(a,mode), p=perOpen(a), days=wakeDays(a);
-  if(!p) return {w:q.w,K:0,Kd:0,R:null,A:null,E:null,e,usd:0,users:q.users,ok:false,p:null};
-  const Kd=Math.max(1,Math.round(days*p.s)), K=op==='data'?Kd:Number(op), ad=op==='data'?days:Math.min(30,Math.max(1,K/p.s));
-  return {w:q.w,K,Kd,R:p.R,A:p.A,E:p.E,e,usd:q.w*K*p.R*(1+e),users:q.w*ad/30,ok:true,p}; }
-function calcAll(o){ const t={w:0,usd:0,users:0,skip:0,ok:true,all:true,e:Number(o.ecpm)/100}; let wK=0, wKd=0, wKR=0, wKA=0, wKAE=0;
+  if(!p) return {w:q.w,K:0,Kd:0,K10:null,K90:null,R:null,A:null,E:null,e,usd:0,users:q.users,ok:false,p:null};
+  const kOf=d=>d==null?null:Math.max(1,Math.round(d*p.s)), Kd=kOf(days), K=op==='data'?Kd:Number(op), ad=op==='data'?days:Math.min(30,Math.max(1,K/p.s));
+  const kf=a.kf&&a.kf.d>0?a.kf:null;
+  return {w:q.w,K,Kd,K10:kf?kOf(kf.d10):null,K90:kf?kOf(kf.d90):null,R:p.R,A:p.A,E:p.E,e,usd:q.w*K*p.R*(1+e),users:q.w*ad/30,ok:true,p}; }
+function calcAll(o){ const t={w:0,usd:0,users:0,skip:0,ok:true,all:true,e:Number(o.ecpm)/100}; let wK=0, wKd=0, wKR=0, wKA=0, wKAE=0, wr=0, w10=0, w90=0;
   APPS.forEach(x=>{ const c=calc(x,o); if(!c.ok){ t.skip+=c.w; return; } const k=c.w*c.K;
-    t.w+=c.w; t.usd+=c.usd; t.users+=c.users; wK+=k; wKd+=c.w*c.Kd; wKR+=k*c.R; wKA+=k*c.A; wKAE+=k*c.A*c.E; });
-  t.K=t.w?wK/t.w:0; t.Kd=t.w?wKd/t.w:0; t.R=wK?wKR/wK:null; t.A=wK?wKA/wK:null; t.E=wKA?wKAE/wKA:null; return t; }
+    t.w+=c.w; t.usd+=c.usd; t.users+=c.users; wK+=k; wKd+=c.w*c.Kd; wKR+=k*c.R; wKA+=k*c.A; wKAE+=k*c.A*c.E;
+    if(c.K10!=null&&c.K90!=null){ wr+=c.w; w10+=c.w*c.K10; w90+=c.w*c.K90; } });
+  t.K=t.w?wK/t.w:0; t.Kd=t.w?wKd/t.w:0; t.R=wK?wKR/wK:null; t.A=wK?wKA/wK:null; t.E=wKA?wKAE/wKA:null;
+  t.K10=wr?w10/wr:null; t.K90=wr?w90/wr:null; return t; }   // the range: the apps that have one, by woken users
 // per-open money: 2 decimals under 10 (₹0.43, ₹2.17, $1.20); below 0.1 three significant digits ($0.00517, ₹0.0429)
 function MO(usd){ if(usd==null||!isFinite(usd)) return '—'; const v=mv(usd), a=Math.abs(v);
   if(a>=10||a===0) return M(usd); return csym()+(a>=0.1?v.toFixed(2):Number(v.toPrecision(3)).toString()); }
@@ -5038,6 +5044,11 @@ function secDauMix(a){ const b=a.au.bands; if(!b||!b.reduce((s,v)=>s+v,0)) retur
     <div class="au-h2s">${DT(a.E)} ko jinhone app khola, wo kab install hue the</div>
     <div class="au-ans">${N(tot)} users ne khola: <b>${P(b[0],tot)}</b> last 1 month ke install · <b>${P(b[3],tot)}</b> 1 saal+ purane.</div>
     ${bar}${leg}<p class="au-note">GA4 me us din ke active users, unki install date ke hisaab se (Install value tab ka data).</p>${mlist}</section>`; }
+// the "data se" line under the opens lever: where its K comes from and how sure it is (the fit's weekly P10–P90)
+function kfLine(a,r,isAll){ const rng=(lo,hi)=>lo!=null&&hi!=null?`, range ${fK(lo,isAll)}–${fK(hi,isAll)}`:', range nahi — kam hafton me kaafi installs';
+  if(isAll) return `Data se: har app ka apna curve — avg ~${fK(r.Kd,true)} baar${rng(r.K10,r.K90)}`;
+  if(!(a.kf&&a.kf.d>0)) return `Data se: ~${r.Kd} baar (naye users ke 1 / 7 / 30 din se)`;
+  return `Data se: ~${r.Kd} baar (${a.kf.src==='own'?'pichhle installs ka curve':'sab apps ke pichhle installs ka curve — is app ke installs kam'}${rng(r.K10,r.K90)})`; }
 function secMoney(a){ const isAll=!!a.all, r=calc(a), lbl=S.mode==='age'?'By age':S.mode+'%';
   const chip=(at,k,t,on)=>`<button type="button" class="au-chip${on?' on':''}" data-au-${at}="${k}">${t}</button>`;
   const lever=(lab,aria,cs)=>`<div class="au-chips au-lv" role="group" aria-label="${aria}"><span class="au-cl">${lab}</span>${cs}</div>`;
@@ -5062,6 +5073,7 @@ function secMoney(a){ const isAll=!!a.all, r=calc(a), lbl=S.mode==='age'?'By age
   // 2 · the three levers
   const levers=lever('Kitne jaagein:','How many wake up',[['5','5%'],['10','10%'],['20','20%'],['age','By age (15% → 2%)']].map(([k,t])=>chip('mode',k,t,S.mode===k)).join(''))
     +lever('Har jaaga user mahine me kitni baar khole:','Opens a month',[['data',`Data se (~${fK(r.Kd,isAll)})`]].concat(OPENS.map(k=>[k,k])).map(([k,t])=>chip('opens',k,t,S.opens===k)).join(''))
+    +`<div class="au-lvn">${kfLine(a,r,isAll)}</div>`
     +lever('eCPM badle:','eCPM change',ECPMS.map(([k,t])=>chip('ecpm',k,t,S.ecpm===k)).join(''));
   // 3 · the result, one line that multiplies back
   const Kt=(isAll&&S.opens==='data'?'~':'')+fK(r.K,isAll);
@@ -5087,13 +5099,15 @@ function secMoney(a){ const isAll=!!a.all, r=calc(a), lbl=S.mode==='age'?'By age
   // "Kyun? ▸": which users the per-open money is from, where "data se" comes from, the asleep-for table
   let why;
   if(isAll){ const xs=APPS.filter(x=>!x.kam).map(perOpen).filter(Boolean), nO=xs.filter(q=>q.b==='old').length;
-    why=`<b>1 open = 1 session</b> (GA4). Har app ka apna ${csym()}/open: purane (30+ din) users ka jahan apna data hai (${nO} apps), warna sab users ka (${xs.length-nO} naye apps). Upar ka ${csym()}/open, ads aur eCPM jaage users ke opens ka avg hai — isliye users × baar × ${csym()} = total. <b>Data se</b> = har app ka apna (jaage users ke hisaab se avg ~${fK(r.Kd,true)} baar).`; }
+    why=`<b>1 open = 1 session</b> (GA4). Har app ka apna ${csym()}/open: purane (30+ din) users ka jahan apna data hai (${nO} apps), warna sab users ka (${xs.length-nO} naye apps). Upar ka ${csym()}/open, ads aur eCPM jaage users ke opens ka avg hai — isliye users × baar × ${csym()} = total. <b>Data se</b> = har app ka apna, uske pichhle installs pe fit kiya curve (kam installs wale apps: sab apps ka curve) — jaage users ke hisaab se avg ~${fK(r.Kd,true)} baar.`; }
   else { const ownJ=a.j&&a.j['1']&&a.j['7']&&a.j['30'], j=k=>Math.round(100*((ownJ?a.j:portJ())[k]||[0])[0]), days=wakeDays(a), d1=days<10?days.toFixed(1):String(Math.round(days));
     const Aall=a.ads/a.spu, Rall=Aall*a.ec/1000;
     why=(p.b==='old'?`<b>1 open = 1 session</b> (GA4). Purane (30+ din) user ki ek din ki kamai ${M2(a.ra)} ÷ din me ~${a.spr.toFixed(1)} baar app kholna (GA4 returning users) = <b>${MO(p.R)}</b> har baar. eCPM ${M2(p.E)} = AdMob revenue ÷ impressions × 1000, pure app ka (umar ke hisaab se nahi milta) — isliye ads = ${MO(p.R)} ÷ eCPM × 1000 = ~${fA(p.A)}.`
           +(a.ads>0&&a.spu>0?` Sab users ka (naye bhi): ~${fA(Aall)} ads, ${MO(Rall)} har baar — naye user pehle din zyada ads dekhte hain.`:'')
         :`<b>1 open = 1 session</b> (GA4). Naya app — purane users ka apna hisaab nahi, isliye sab users ka: din me ~${fA(a.ads)} ads ÷ ~${a.spu.toFixed(1)} baar kholna = ~${fA(p.A)} ads har baar × eCPM ${M2(p.E)} ÷ 1000 = <b>${MO(p.R)}</b> (thoda zyada ho sakta — naye user pehle din zyada ads dekhte hain).`)
-      +` <b>Data se ~${r.Kd} baar</b>: jaaga hua user ek din app kholega, phir naye user ki tarah dheere-dheere phir chhod dega (${ownJ?'is app':'sab apps'} ke naye users: 1 din baad ${j('1')}%, 7 din baad ${j('7')}%, 30 din baad ${j('30')}% khol rahe) — mahine me ~${d1} din × din me ~${p.s.toFixed(1)} baar = ~${r.Kd}.`
+      +(a.kf&&a.kf.d>0
+        ?` <b>Data se ~${r.Kd} baar</b>: ${a.kf.src==='own'?`is app ke apne pichhle installs (12 hafte, ${N(a.kf.n)}) pe`:`sab apps ke pichhle installs pe (is app ke ${N(a.kf.n)} installs 3,000 se kam)`} curve fit kiya (ML: din-ba-din kitne khol rahe) — naya user pehle 30 din me ~${d1} din kholta hai × din me ~${p.s.toFixed(1)} baar = ~${r.Kd}${r.K10!=null?`; range ${r.K10}–${r.K90} = alag-alag hafton ke installs se`:''}.`
+        :` <b>Data se ~${r.Kd} baar</b>: jaaga hua user ek din app kholega, phir naye user ki tarah dheere-dheere phir chhod dega (${ownJ?'is app':'sab apps'} ke naye users: 1 din baad ${j('1')}%, 7 din baad ${j('7')}%, 30 din baad ${j('30')}% khol rahe) — mahine me ~${d1} din × din me ~${p.s.toFixed(1)} baar = ~${r.Kd}.`)
       +` Users/day = jaage users × din ÷ 30${S.opens==='data'?'':` (${r.K} baar ÷ ${p.s.toFixed(1)} = ~${Math.min(30,Math.max(1,r.K/p.s)).toFixed(1)} din)`}.`; }
   why+=` <b>${lbl}</b> jaagein: ${S.mode==='age'?'aam andaza — jitna purana so raha, utna kam chance (1–2 mahine 15%, 2–4: 8%, 4–7: 4%, 7+: 2%).':`1+ mahine wale sab sleeping users (${isGa4(a.au)?'GA4 ka upar wala number':'phone card ka sleeping'}) pe ${S.mode}%; neeche ki table sirf mahine ka split hai.`}`
     +`<table class="au-bk"><thead><tr><th>Asleep for</th><th class="au-r">Users</th><th class="au-r">Come back</th><th class="au-r">Wake up</th></tr></thead><tbody>${rows}</tbody></table>`;

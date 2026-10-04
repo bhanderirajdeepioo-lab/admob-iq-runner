@@ -4,7 +4,9 @@
   * the demo's formulas, recomputed here straight from the synthetic stores: the phone split (installed = Σ new − Σ un,
     sleeping = installed − (a28 − un28), "data kam"), the journey, the long-term return, the money model (own old users,
     and a young app's all-apps typical), the calculator's inputs (the Active tab's own impressions / eCPM / sessions
-    sums; R × sessions = arp; no Active file → no inputs, the app stays), "pakke" users, today's DAU by install age, the day-wise removals and flags;
+    sums; R × sessions = arp; no Active file → no inputs, the app stays), the "data se" return curve fitted on each
+    app's own last 12 install weeks (known curves back within 2 %, weighted least squares, the weekly P10–P90, the
+    all-apps fit for a young app, K = days × the basis' sessions), "pakke" users, today's DAU by install age, the day-wise removals and flags;
   * dead users by months: a COMPLETE GA4 Audience store is engine.audience's own numbers (months from the store, the
     dead_lo … dead range, most dead / active month, DAU by install month), the portfolio on the engine's tiered months;
     no complete result (a partial read, a broken store, a failing derive) → the cohort-curve estimate on the same tiered
@@ -16,7 +18,9 @@
 import copy
 import gzip
 import json
+import math
 import os
+import random
 import re
 import shutil
 from datetime import date, timedelta
@@ -213,6 +217,132 @@ def test_without_the_active_tabs_file_the_calculator_has_no_inputs_and_the_app_s
     for kk in (k, sy.key_of(sy.APPS[2][0])):
         assert all(by[kk][f] is None for f in ("imp28", "ads", "ec", "spu", "spr")) and by[kk]["sd"] == 0
         assert by[kk]["arp"] is not None and by[kk]["ra"] is not None                # the rest of the money as before
+
+
+# ── "data se": the return curve fitted on each app's own past installs ─────────────────────────────────────────────
+SHAPES = {                                                   # known curves: share of an install day opening on day d
+    "power + plateau": lambda d: 0.05 + 0.30 * d ** -0.6,
+    "power": lambda d: 0.32 * d ** -0.55,
+    "exponential + plateau": lambda d: 0.04 + 0.35 * math.exp(-d / 5),
+    "stretched (weibull) + plateau": lambda d: 0.06 + 0.30 * math.exp(-(d / 3) ** 0.5),
+    "steep": lambda d: 0.01 + 0.25 * d ** -1.2,
+    "flat": lambda d: 0.40 + 0.20 * d ** -0.3,
+}
+
+
+def _cohorts(r, noise, seed=7, days=84):
+    """84 install days of 300 … 1,500 installs, each day d's openers = installs × r(d) (+ binomial-sized noise) → the
+    fit's per-day sums."""
+    rng = random.Random(seed)
+    n, a = [0] * 31, [0] * 31
+    for _ in range(days):
+        k = rng.randint(300, 1500)
+        for d in range(1, 31):
+            m = k * r(d)
+            n[d] += k
+            a[d] += max(0, int(round(m + (rng.gauss(0, math.sqrt(m * (1 - r(d)))) if noise else 0))))
+    return n, a
+
+
+@pytest.mark.parametrize("name", sorted(SHAPES))
+@pytest.mark.parametrize("noise", [False, True])
+def test_the_fitted_curve_gives_back_the_known_active_days_within_2pc(name, noise):
+    r = SHAPES[name]
+    truth = 1 + sum(r(d) for d in range(1, 30))              # expected active days in 30 (the woken day counts)
+    f = ab.fit_curve(*_cohorts(r, noise))
+    assert f["f"] in ("pow", "exp") and f["p"] >= 0 and f["b"] >= 0
+    assert abs(ab.curve_days(f) / truth - 1) < 0.02, (name, noise, ab.curve_days(f), truth)
+    assert all(0 <= ab.curve_at(f, d) <= 1 for d in range(1, 31))
+
+
+def test_the_fit_is_weighted_least_squares_over_install_days():
+    """Σ over install days of installs × (share − r(d))² = the same over the per-day sums: a day with 10× the installs
+    pulls the curve 10× as hard (two curves mixed: the fit lands near the heavy one)."""
+    hi, lo = SHAPES["power"], SHAPES["flat"]
+    n1, a1 = _cohorts(hi, False, days=60)
+    n2, a2 = _cohorts(lo, False, days=6)
+    f = ab.fit_curve([x + y for x, y in zip(n1, n2)], [x + y for x, y in zip(a1, a2)])
+    pooled = 1 + sum((a1[d] + a2[d]) / (n1[d] + n2[d]) for d in range(1, 30))
+    assert abs(ab.curve_days(f) / pooled - 1) < 0.02
+    assert ab.fit_curve([0] * 31, [0] * 31) is None and ab.fit_curve([0, 5, 5] + [0] * 28, [0, 1, 1] + [0] * 28) is None
+
+
+def test_weighted_percentiles():
+    assert [ab.wpct([4, 1, 3, 2], [1, 1, 1, 1], q) for q in (0.1, 0.5, 0.9)] == [1, 2.5, 4]
+    assert _close(ab.wpct([1, 2], [9, 1], 0.5), 1.1) and ab.wpct([5], [3], 0.9) == 5    # the heavy week holds most
+
+
+def test_every_app_gets_its_own_fit_or_the_all_apps_one(world):
+    """Own curve with ≥ 3,000 installs in the last 12 install weeks whose days 1 … 30 are final (E−113 … E−30); a young
+    app takes the all-apps fit (every app's window pooled). K = max(1, round(days × sessions per active day of the
+    page's per-open basis)); the range from the weekly refits holds the answer."""
+    body = world["body"]
+    truth = 1 + sum(sy.ret_rate(d) for d in range(1, 30))
+    lo, hi = E - timedelta(days=30 + 83), E - timedelta(days=30)
+    for e in body["apps"]:
+        kf = e["kf"]
+        st = _st(world, e["k"])
+        win = sum(int(v["new"]) for k, v in st["daily"].items() if lo <= date.fromisoformat(k) <= hi
+                  and date.fromisoformat(k) >= date.fromisoformat(e["L"]))
+        assert kf["n"] == win
+        assert kf["src"] == ("own" if win >= ab.FIT_MIN else "all")
+        assert abs(kf["d"] / truth - 1) < 0.02 and kf["fit"]["f"] in ("pow", "exp")
+        assert kf["d10"] <= kf["d"] <= kf["d90"] and kf["wk"] == 12
+        s = e["spr"] if e["own"] and e["ra"] and e["spr"] and e["ec"] else e["spu"]
+        for k, d in (("K", "d"), ("K10", "d10"), ("K90", "d90")):
+            assert kf[k] == max(1, int(math.floor(kf[d] * s + 0.5)))
+    assert [e["kf"]["src"] for e in body["apps"] if e["n"] == YOUNG] == ["all"]
+    assert sorted(e["n"] for e in body["apps"] if e["kf"]["src"] == "own") == sorted([GA4, EST, PART])
+    a = body["all"]["kf"]
+    assert a["src"] == "all" and a["K"] is None and a["n"] == sum(e["kf"]["n"] for e in body["apps"])
+    y = _app(world, YOUNG)["kf"]
+    assert (y["d"], y["d10"], y["d90"], y["fit"]) == (a["d"], a["d10"], a["d90"], a["fit"])
+
+
+def test_the_range_is_the_weekly_refits_install_weighted(fresh):
+    """Weeks that open more / less often: the weekly refits spread, P10 < the pooled answer < P90."""
+    data, site, dash = fresh
+    k = sy.key_of(sy.APPS[0][0])
+    p = os.path.join(data, "ga4_uninstall", k + ".json.gz")
+    st = _gz(p)
+    for c, e in st["ret"].items():
+        wk = (E - timedelta(days=30) - date.fromisoformat(c)).days // 7
+        f = 1.0 + 0.08 * ((wk % 5) - 2)                                       # weeks 0.84× … 1.16× as sticky
+        e["a"] = [e["a"][0]] + [int(x * f) for x in e["a"][1:]]
+    with gzip.open(p, "wt", encoding="utf-8") as fh:
+        json.dump(st, fh)
+    body = ab.build_data(dash, data, site, {})
+    kf = next(e for e in body["apps"] if e["k"] == k)["kf"]
+    assert kf["d10"] < kf["d"] < kf["d90"] and kf["d90"] / kf["d10"] > 1.15 and kf["K10"] <= kf["K"] <= kf["K90"]
+
+
+def test_a_failing_fit_costs_only_the_fit(fresh, monkeypatch):
+    """The fit's window failing for one app: that app takes the all-apps curve; the fit itself failing: no "kf" (the page
+    falls back to the day 1 / 7 / 30 points) — the app and the rest of the file as before."""
+    data, site, dash = fresh
+    k = sy.key_of(sy.APPS[1][0])
+    real = ab.fit_weeks
+
+    def boom(store, launch, E_, new):
+        if store["daily"] is _st_daily[0]:
+            raise ValueError("x")
+        return real(store, launch, E_, new)
+    _st_daily = [None]
+    real_entry = ab.app_entry
+
+    def entry(aa, ua, st, *a, **kw):
+        _st_daily[0] = st["daily"] if aa["key"] == k else None
+        return real_entry(aa, ua, st, *a, **kw)
+    monkeypatch.setattr(ab, "fit_weeks", boom)
+    monkeypatch.setattr(ab, "app_entry", entry)
+    body = ab.build_data(copy.deepcopy(dash), data, site, {})
+    e = next(e for e in body["apps"] if e["k"] == k)
+    assert len(body["apps"]) == 4 and e["kf"]["src"] == "all" and e["kf"]["n"] == 0 and e["arp"] is not None
+    monkeypatch.setattr(ab, "fit_app", lambda w: (_ for _ in ()).throw(ValueError("x")))
+    counts = {}
+    body = ab.build_data(copy.deepcopy(dash), data, site, counts)
+    assert len(body["apps"]) == 4 and all(e["kf"] is None for e in body["apps"]) and body["all"]["kf"] is None
+    assert counts["fit_bad"] == 3                     # the all-apps fit + the two apps whose own fit was tried
 
 
 def test_pakke_and_todays_users_by_install_age_are_the_iday_bands(world):
