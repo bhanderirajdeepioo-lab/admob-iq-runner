@@ -163,9 +163,29 @@ def test_the_all_apps_pool_is_the_builds_portfolio(report, world):
     assert A["sl"] == sum(e["sl"] for e in world["body"]["apps"] if not e["kam"])
 
 
+def _wake_days(e, apps):
+    """Mirror of the page's wakeDays: 1 + Σ(day 1…29) of the app's new-user "opened that day" share, joined linearly
+    between its day 1 / 7 / 30 points (all apps' install-weighted curve when the app lacks one of them)."""
+    j = e.get("j") or {}
+    if not all(j.get(k) for k in ("1", "7", "30")):
+        j = {}
+        for k in ("1", "7", "30"):
+            xs = [a["j"][k] for a in apps if (a.get("j") or {}).get(k)]
+            w = sum(x[3] for x in xs)
+            j[k] = [sum(x[0] * x[3] for x in xs) / w] if w else None
+        if not all(j.values()):
+            return 1.0
+    r1, r7, r30 = j["1"][0] or 0, j["7"][0] or 0, j["30"][0] or 0
+    return 1 + sum(r1 + (r7 - r1) * (t - 1) / 6 if t <= 7 else r7 + (r30 - r7) * (t - 7) / 23 for t in range(1, 30))
+
+
 @needs_node
 def test_the_money_scenario(report, world):
+    """A woken sleeper opens once, then drifts away like the app's NEW users (its own 1 / 7 / 30-day curve), earning an
+    OLD user's day each time it opens: money = woken × days × ra, users per day = woken × days ÷ 30 — never a loyal
+    regular's whole month (the owner, 4 Oct: the old "purane user jaisa 1 mahina" estimate read too high)."""
     chance = lambda f: .15 if f < 2 else .08 if f < 4 else .04 if f < 7 else .02
+    apps = world["body"]["apps"]
     tot10 = totAge = 0.0
     for e in world["body"]["apps"]:
         r = report["numbers"]["apps"][e["k"]]
@@ -173,9 +193,12 @@ def test_the_money_scenario(report, world):
         dead_tot = au["d"][au["mo"].index(1)] if au["src"] == "ga4" else e["sl"]
         assert r["deadTot"] == dead_tot
         w = 0 if e["kam"] or not e["sl"] else dead_tot * 0.1
-        assert _close(r["w10"]["w"], w, 1e-9) and _close(r["w10"]["usd"], w * e["fq"] * e["ra"] * 30, 1e-9)
+        days = _wake_days(e, apps) if w else 0
+        assert 1 <= days <= 30 or not w
+        assert _close(r["w10"]["w"], w, 1e-9) and _close(r["w10"]["usd"], w * days * (e["ra"] or 0), 1e-9)
+        assert _close(r["w10"]["users"], w * days / 30, 1e-9)
         wa = sum(b["v"] * chance(b["f"]) for b in r["bk"] if b["f"] >= 1 and b["v"])
-        assert _close(r["wage"]["w"], wa, 1e-9) and _close(r["wage"]["users"], wa * e["fq"], 1e-9)
+        assert _close(r["wage"]["w"], wa, 1e-9) and _close(r["wage"]["users"], wa * (days if wa else 0) / 30, 1e-9)
         tot10 += r["w10"]["usd"]
         totAge += r["wage"]["usd"]
     assert _close(report["numbers"]["all"]["w10"]["usd"], tot10, 1e-9) and _close(report["numbers"]["all"]["wage"]["usd"], totAge, 1e-9)

@@ -4778,6 +4778,9 @@ function fx(){ return (RAW&&RAW.fx)||(DATA&&DATA.usd_inr)||83; }
 function mv(v){ const c=(RAW&&RAW.cur)||'USD', w=curView(); if(w===c) return v; if(c==='USD'&&w==='INR') return v*fx(); if(c==='INR'&&w==='USD') return v/fx(); return v; }
 function M(usd,d){ if(usd==null||!isFinite(usd)) return '—'; const v=mv(usd), s=csym(), a=Math.abs(v);
   if(a>=10) return s+Math.round(v).toLocaleString('en-US'); if(a>=1) return s+v.toFixed(1); if(a===0) return s+'0'; return s+Number(v.toPrecision(d||2)).toString(); }
+// per-day money with 2 decimals under 10 (₹1.31, $0.0136), so "users × days × per day" can be redone by hand
+function M2(usd){ if(usd==null||!isFinite(usd)) return '—'; const v=mv(usd), a=Math.abs(v);
+  return a>=10||a===0?M(usd):csym()+(a>=1?v.toFixed(2):Number(v.toPrecision(3)).toString()); }
 function MC(usd){ if(usd==null||!isFinite(usd)) return '—'; const v=mv(usd); return Math.abs(v)>=1e3?csym()+CN(v):M(usd); }
 // ---- the file ----
 function ptr(){ const p=(typeof DATA!=='undefined'&&DATA&&DATA.audience)||null; return (p&&typeof p.file==='string'&&/^[\w.-]+\.json\.gz$/.test(p.file))?p:null; }
@@ -4843,11 +4846,26 @@ function allAgg(){ const ok=APPS.filter(a=>!a.kam); const sum=f=>ok.reduce((s,a)
     arp:a128?rev28/a128:null,pm:sum(a=>a.a28)?sum(a=>a.rev28)/sum(a=>a.a28)*30/28:null,j,lt,kam:false,nk:APPS.length-ok.length,
     E:APPS.length?APPS[0].E:'',L:'',hs:'',au,deadTot:sum(a=>a.deadTot)};
   A.bk=bucketsOf(au,au.inst); return A; }
-// ---- the money scenario: a share of the sleeping users comes back, each like a normal OLD user of that app for a month ----
-function wake(a,mode){ mode=mode||S.mode; if(a.kam||!a.sl) return {w:0,users:0,usd:0};
+// ---- the money scenario: a share of the sleeping users wakes up ----
+// A woken sleeper opens the app once (the day it wakes), then drifts away again the way this app's NEW users do: its own
+// "opened that day" shares on day 1 / 7 / 30, joined linearly day by day. A sleeper woken up is not a loyal regular, so it
+// is not counted like one. Each day it opens, it earns what an OLD user (30+ days) of the app earns in a day (ra): it is an
+// old install, with no first-day onboarding ads. Per woken user per month: days = 1 + Σ(day 1…29) share; money = days × ra;
+// users per day (month average) = days ÷ 30. Apps without their own 1 / 7 / 30 points use all apps' curve.
+function portJ(){ if(portJ.c&&portJ.n===APPS.length) return portJ.c; const j={};
+  ['1','7','30'].forEach(k=>{ const xs=APPS.filter(a=>a.j&&a.j[k]); const w=xs.reduce((t,a)=>t+a.j[k][3],0);
+    j[k]=w?[xs.reduce((t,a)=>t+a.j[k][0]*a.j[k][3],0)/w,0,0,w]:null; });
+  portJ.c=j; portJ.n=APPS.length; return j; }
+function wakeDays(a){ const own=a&&a.j&&a.j['1']&&a.j['7']&&a.j['30']; const j=own?a.j:portJ();
+  if(!j['1']||!j['7']||!j['30']) return 1;
+  const r1=j['1'][0]||0, r7=j['7'][0]||0, r30=j['30'][0]||0; let d=1;
+  for(let t=1;t<=29;t++) d+=t<=7?r1+(r7-r1)*(t-1)/6:r7+(r30-r7)*(t-7)/23;
+  return d; }
+function wake(a,mode){ mode=mode||S.mode; if(a.kam||!a.sl) return {w:0,days:0,users:0,usd:0};
   let w=0; if(mode==='age') a.bk.forEach(b=>{ if(b.f>=1&&b.v) w+=b.v*chanceOf(b.f); }); else w=a.deadTot*Number(mode)/100;
-  const users=w*(a.fq||0); return {w,users,usd:users*(a.ra||0)*30}; }
-function wakeAll(mode){ const t={w:0,users:0,usd:0}; APPS.forEach(x=>{ const q=wake(x,mode); t.w+=q.w; t.users+=q.users; t.usd+=q.usd; }); return t; }
+  const days=wakeDays(a); return {w,days,users:w*days/30,usd:w*days*(a.ra||0)}; }
+function wakeAll(mode){ const t={w:0,wd:0,users:0,usd:0}; APPS.forEach(x=>{ const q=wake(x,mode); t.w+=q.w; t.wd+=q.w*q.days; t.users+=q.users; t.usd+=q.usd; });
+  t.days=t.w?t.wd/t.w:0; return t; }
 // one short line + the rest behind "Kyun? ▸" (closed until tapped; stays open across a repaint)
 const WHY=(id,shortT,long)=>`<p class="au-note">${shortT}</p>`+(long?`<details class="au-kyun" data-kyun="${id}"${S.open.has(id)?' open':''}><summary>Kyun? <span class="au-ar">▸</span></summary><div class="au-kb">${long}</div></details>`:'');
 function rangeTxt(lo,hi,fmt){ fmt=fmt||N; if(lo==null||hi==null) return fmt(hi); return Math.round(lo)===Math.round(hi)?fmt(hi):fmt(lo)+'–'+fmt(hi); }
@@ -4982,21 +5000,23 @@ function secMoney(a){ const isAll=!!a.all, r=isAll?wakeAll():wake(a);
     tD+=dead; tB+=back; const ch=S.mode==='age'?chanceOf(f0):Number(S.mode)/100;
     return `<tr><td>${g}</td><td class="au-r">${N(dead)}</td><td class="au-r">${Math.round(ch*100)}%</td><td class="au-r"><b>${N(back)}</b></td></tr>`; }).join('')
     +`<tr class="au-tot"><td>Total</td><td class="au-r">${N(tD)}</td><td class="au-r">${P(tB,tD)}</td><td class="au-r"><b>${N(tB)}</b></td></tr>`;
-  const days=isAll?null:(a.fq||0)*30;
-  const assume=isAll?'Maan ke chale: wapas aaya user 1 mahina us app ke normal purane user jaisa chalega (har app ka apna "mahine me kitne din kholta" aur "ek din ki kamai").'
-    :`Maan ke chale: wapas aaya user 1 mahina normal purane user jaisa chalega — mahine me ~${days<10?days.toFixed(1):Math.round(days)} din kholega, har din ~${M(a.ra,2)} kamayega${a.own?'':' (naya app — ye do number sab apps ke aam hisaab se)'}.`;
+  const days=r.days||0, perDay=r.w&&days?r.usd/(r.w*days):(a.ra||0), D1=days<10?days.toFixed(1):String(Math.round(days));
+  const assume='Jaaga hua user ek din app kholega, phir naye user ki tarah dheere-dheere phir chhod dega — isliye mahine me sirf ~'+D1+' din kholega '
+    +(isAll?'(har app ka apna naye-user curve: 1 / 7 / 30 din baad kitne khol rahe)':'(is app ke naye users: 1 din baad '+Math.round(100*((a.j&&a.j['1']||[0])[0]))+'%, 7 din baad '+Math.round(100*((a.j&&a.j['7']||[0])[0]))+'%, 30 din baad '+Math.round(100*((a.j&&a.j['30']||[0])[0]))+'% khol rahe)')
+    +'. Har din ki kamai purane (30+ din) user jitni: '+M2(perDay)+' — wo purana install hai, naye user ke pehle din ke extra ads nahi milte'
+    +(isAll||a.own?'':' (naya app — sab apps ka aam hisaab)')+'. Pakka "loyal" user maan ke chalna zyada ho jaata, isliye ye kam wala, sach ke kareeb andaza hai.';
   const tbl=S.mode==='age'?'':` <b>${S.mode}%</b> mode me 1+ mahine wale sab sleeping users (${isGa4(a.au)?'GA4 ka upar wala number':'phone card ka sleeping'}) pe ${S.mode}%; table sirf mahine ka split dikhati hai.`;
   return `<section class="au-card" id="au-s-money"><h3>Money estimate <span class="au-tag au-est">andaza</span></h3>
     <div class="au-h2s">AdMob revenue, pichhle 28 din (${DT(addDays(a.E,-27))} – ${DT(a.E)})</div>
-    <div class="au-tiles"><div class="au-tile"><div class="au-l">Per daily active user</div><div class="au-n">${M(a.arp,2)}<small> / day</small></div><div class="au-w">jo user us din app khole, ek din me itna</div></div>
-      <div class="au-tile"><div class="au-l">Per monthly user</div><div class="au-n">${M(a.pm,2)}<small> / month</small></div><div class="au-w">28 din me kabhi bhi khola, mahine me itna</div></div></div>
+    <div class="au-tiles"><div class="au-tile"><div class="au-l">Per daily active user</div><div class="au-n">${M2(a.arp)}<small> / day</small></div><div class="au-w">jo user us din app khole, ek din me itna</div></div>
+      <div class="au-tile"><div class="au-l">Old user, per day</div><div class="au-n">${M2(perDay)}<small> / day</small></div><div class="au-w">30+ din purana user, ek din me itna — jaage users ka hisaab isi se</div></div></div>
     <div class="au-wake"><h4>Money from waking sleeping users</h4>
       <div class="au-zero">Sleeping users aaj <b>${M(0)}</b> dete hain — ye chale bhi jaayein to aaj ke daily users aur revenue pe koi asar nahi. Isliye inhe jagane ki koshish me abhi ke revenue ka koi risk nahi.</div>
       <div class="au-chips" role="group" aria-label="How many come back"><span class="au-cl">How many come back:</span>${chips}</div>
-      ${a.kam?'<div class="au-kam">Data kam — is app ka andaza nahi.</div>':`<div class="au-res"><div class="au-rb"><div class="au-l">Extra users / day</div><div class="au-n">+${N(r.users)}</div></div><div class="au-rb"><div class="au-l">Extra money / month</div><div class="au-n">≈ ${M(r.usd)}</div></div></div>
-      <p class="au-note" style="margin-top:8px">${N(r.w)} users jaagein → purane user jaisa har din inme se ~${P(r.users,r.w)} app kholenge → <b>+${N(r.users)} users / day</b>.</p>
+      ${a.kam?'<div class="au-kam">Data kam — is app ka andaza nahi.</div>':`<div class="au-res"><div class="au-rb"><div class="au-l">Extra users / day</div><div class="au-n">+${N(r.users)}</div><div class="au-w">mahine ka avg · pehle din +${N(r.w)}</div></div><div class="au-rb"><div class="au-l">Extra money / month</div><div class="au-n">≈ ${M(r.usd)}</div></div></div>
+      <p class="au-note au-chain" style="margin-top:8px"><b>${N(r.w)}</b> users jaagein × har ek mahine me ~<b>${D1} din</b> khole × <b>${M2(perDay)}</b> har din = <b>≈ ${M(r.usd)} / mahina</b></p>
       <table class="au-bk"><thead><tr><th>Asleep for</th><th class="au-r">Users</th><th class="au-r">Come back</th><th class="au-r">Wake up</th></tr></thead><tbody>${rows}</tbody></table>`}
-      ${WHY('money','Maan ke chale: wapas aaya user 1 mahina normal purane user jaisa chalega.',assume+tbl+(S.mode==='age'?' <b>By age</b> = aam andaza: jitna purana so raha, utna kam chance (1–2 mahine 15%, 2–4: 8%, 4–7: 4%, 7+: 2%).':''))}
+      ${WHY('money','Maan ke chale: jaaga hua user naye user ki tarah dheere-dheere phir chhod dega.',assume+tbl+(S.mode==='age'?' <b>By age</b> = aam andaza: jitna purana so raha, utna kam chance (1–2 mahine 15%, 2–4: 8%, 4–7: 4%, 7+: 2%).':''))}
     </div></section>`; }
 function secHow(){ return `<section class="au-card" id="au-s-how"><h3>How to wake them</h3><ul class="au-how">
     <li><b>Notification (FCM)</b> — kuch kaam ki cheez bhejo (naye photos ka collage, phone storage saaf karo, aaj ka reminder) — "We miss you" type nahi.</li>
