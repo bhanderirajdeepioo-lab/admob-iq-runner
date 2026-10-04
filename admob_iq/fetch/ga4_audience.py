@@ -43,6 +43,17 @@ NEVER HIDDEN — flagged in the store:
   * thresholding (subjectToThresholding: small counts withheld), sampling, a cut report (truncated), TOTAL refused (a
     400: asked without it, no_total), a split whose Σ rows is off TOTAL by more than 5% (cov_off {window: Σ ÷ TOTAL}).
 
+HISTORY (data/ga4_audience_hist/<key>.json.gz, private): a complete read replaces the previous one, so each time an app's
+read completes for a NEW E its monthly aggregates are appended as one compact snapshot (engine.audience.snapshot: per
+install month the installs, the still installed, alive / act / dead_lo per window — a few KB, never the install days):
+{"v": 1, "snaps": {E: …}}. EVERY snapshot is kept (the owner's rule: history is never trimmed — if its size ever matters,
+it is reported, not capped), the same E is never appended twice, and a partial read never writes. It is taken the moment
+a read completes (step's on_done), so an older E finished and rolled past in the same turn still gets its snapshot, and
+for the complete store a run finds without a snapshot of its E (the first run after this was added). A failure here
+never costs the read or the build: it is counted ("history failed" in the log line) and tried again next run, and an
+unreadable history file is left alone (never overwritten with a fresh one). engine.audience.comeback() measures from it
+how many sleepers open the app again on their own — not shown on the page yet.
+
 IN THE BUILD (uninstall_build, only with the repo variable GA4_AUDIENCE=true): after the Uninstall fetch, each selected
 app with an Uninstall store is read when it has a partial read or a new final day E — a complete app at most once a day;
 a failed one waits RETRY_HOURS. Its own run budget (GA4_AUDIENCE_BUDGET_SEC): no app starts past it, a started one stops
@@ -61,9 +72,11 @@ from . import ga4
 from . import ga4_uninstall as gu
 from .. import ga4_probe
 from ..db import write_json_gz_stable
+from ..engine import audience as aeng
 from ..engine.audience import tier_months, window_days
 
 DIR = "ga4_audience"
+HIST_DIR = "ga4_audience_hist"
 FINAL_LAG_DAYS = gu.ACT_LATE_DAYS   # E = the robot's settled day − 3: GA4 activity is final then (the Active users tab)
 STORE_V = 2                 # 2: tiered windows + the resumable partial read (another format: read again)
 RANGES_PER_CALL = 4         # date ranges per runReport (the Data API's limit)
@@ -471,12 +484,13 @@ TOP = ("complete", "E", "history_start", "months", "windows", "by_fsd", "total",
        "flags", "calls", "tokens", "units", "runs", "started_at", "fetched_at")
 
 
-def step(ga, store, end, hs, route, now_iso, k=PRIOR_K, max_calls=MAX_CALLS, roll=True):
+def step(ga, store, end, hs, route, now_iso, k=PRIOR_K, max_calls=MAX_CALLS, roll=True, on_done=None):
     """One app's turn, in place on `store` (its saved dict, or {} for a new one) → "fresh" (nothing to read), "fetched"
     (a read completed this turn) or raises Stop / an error with every finished call kept in store["partial"]. A partial
     of another stream is dropped; a partial is finished on ITS E before anything else; a complete store older than E
     (or of another stream or history start) starts a new partial — and roll=True starts it right after finishing an
-    older one, in the same turn."""
+    older one, in the same turn. on_done(store) is called with each COMPLETE result the moment it is in `store` (before
+    the next read starts: one per E completed this turn); whatever it raises is dropped — it never costs the read."""
     pid, sid = str(route["property_id"]), str(route["stream_id"])
     store.setdefault("v", STORE_V)
     if store.get("v") != STORE_V or (store.get("complete") and (str(store.get("property_id")),
@@ -503,6 +517,11 @@ def step(ga, store, end, hs, route, now_iso, k=PRIOR_K, max_calls=MAX_CALLS, rol
         store.update(complete(part), property_id=pid, stream_id=sid, fetched_at=now_iso)
         store.pop("partial", None)
         part, done = None, "fetched"
+        if on_done:
+            try:
+                on_done(store)
+            except Exception:
+                pass
         if not roll:
             return done
 
@@ -541,6 +560,62 @@ def load_store(path):
 
 def save_store(path, store):
     return write_json_gz_stable(path, store)
+
+
+def hist_path(data_dir, app_id):
+    return os.path.join(data_dir, HIST_DIR, gu.file_key(app_id) + ".json.gz")
+
+
+def load_hist(path):
+    """An app's history ({"v", "snaps": {E: snapshot}}): {} when there is no file yet, None when the file exists but
+    cannot be read (or is of a newer format) — that one is never written over."""
+    if not os.path.exists(path):
+        return {}
+    h = gu.load_store(path)
+    if isinstance(h, dict) and isinstance(h.get("snaps"), dict) and _int(h.get("v")) <= aeng.HIST_V:
+        return h
+    return None
+
+
+def save_hist(path, hist):
+    return write_json_gz_stable(path, hist)
+
+
+def load_all_hist(data_dir):
+    """Every app's history file → {file key: history} (a missing folder → {}; an unreadable or newer-format file is left
+    out) — what engine.audience.comeback_all takes."""
+    d = os.path.join(data_dir, HIST_DIR)
+    out = {}
+    for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if name.endswith(".json.gz"):
+            h = load_hist(os.path.join(d, name))
+            if h:
+                out[name[:-len(".json.gz")]] = h
+    return out
+
+
+def record_history(data_dir, app_id, store, uni=None):
+    """A COMPLETE store (never a partial read) → its snapshot appended to the app's history file → "added", or "exists"
+    (that E is already there: nothing is read further, nothing is written) or "skipped" (the store is not complete).
+    `uni` = the app's Uninstall store (loaded when not given). Raises when the history file is unreadable or the
+    Uninstall store missing / not derivable: the caller counts it, and the file stays as it was."""
+    if store.get("complete") is not True or not store.get("windows") or not store.get("E"):
+        return "skipped"
+    e = str(store["E"])[:10]
+    path = hist_path(data_dir, app_id)
+    hist = load_hist(path)
+    if hist is None:
+        raise ValueError("history file unreadable")
+    if e in (hist.get("snaps") or {}):
+        return "exists"
+    from ..engine import uninstall as ueng
+    uni = uni or gu.load_store(gu.store_path(data_dir, app_id))
+    if not uni or not uni.get("history_start"):
+        raise ValueError("no Uninstall store")
+    snap = aeng.snapshot(aeng.derive_app(store, ueng.fill_days(uni)))
+    aeng.hist_append(hist, e, snap)
+    save_hist(path, hist)
+    return "added"
 
 
 def store_meta(store):
@@ -608,7 +683,7 @@ def plan(app_st, meta, uni_meta, route, end, now, retry_hours=RETRY_HOURS):
 
 
 COUNTS = ("selected", "with_ga4", "fetched", "partial", "fresh", "failed", "deferred", "waiting", "calls", "tokens",
-          "flagged", "other", "thresholded", "cov_off")
+          "flagged", "other", "thresholded", "cov_off", "hist", "hist_failed")
 
 
 def _uni_meta(ust, data_dir, aid, route):
@@ -629,7 +704,9 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
     """Read on for every selected app (`apps` = uninstall_build's list; an app without a package or sharing another's
     is skipped) → {"counts": COUNTS, "apps": {app id: fetched|partial|fresh|failed|deferred|waiting}} (partial: read on,
     not complete yet). Reads the Uninstall state's routes and timezones and each app's Uninstall store meta (never
-    writes them). Never raises; never prints."""
+    writes them). Every complete read's snapshot goes to the app's history (record_history; counts hist = snapshots
+    added, hist_failed = tries that failed; state hist_E = the last E known to be in the file). Never raises; never
+    prints."""
     now = now or datetime.now(timezone.utc)
     t0 = clock()
     counts = dict.fromkeys(COUNTS, 0)
@@ -643,6 +720,17 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                                             "GA4_REFRESH_TOKEN": cfg.get("refresh_token") or ""})
         owner_rt, access = dict(tokens), {}
         retry = float(cfg.get("retry_hours") or RETRY_HOURS)
+
+        def keep(aid, st, store):
+            """The history hook: a complete store's snapshot → counts and st["hist_E"]. Never raises."""
+            try:
+                res = record_history(data_dir, aid, store)
+            except Exception:
+                counts["hist_failed"] += 1
+                return
+            counts["hist"] += res == "added"
+            if res in ("added", "exists"):
+                st["hist_E"] = str(store["E"])[:10]
         todo = []
         for a in apps:
             if a.get("same_as") or not a.get("package"):
@@ -661,6 +749,8 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                 out["apps"][aid] = "waiting"            # no Uninstall store of this stream yet / no final day yet
                 continue
             meta = st.get("meta") if os.path.exists(store_path(data_dir, aid)) else None
+            if meta and meta.get("complete") and meta.get("E") and st.get("hist_E") != meta["E"]:
+                keep(aid, st, load_store(store_path(data_dir, aid)) or {})     # a complete read with no snapshot yet
             kind = plan(st, meta, um, r, end, now, retry)
             if kind is None:
                 out["apps"][aid] = "failed" if st.get("fail") else "fresh"
@@ -696,7 +786,8 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
             path = store_path(data_dir, aid)
             store = (load_store(path) or {}) if os.path.exists(path) else {}
             try:
-                res = step(ga, store, end, hs, r, now_iso, float(st.get("k") or PRIOR_K))
+                res = step(ga, store, end, hs, r, now_iso, float(st.get("k") or PRIOR_K),
+                           on_done=lambda s_, aid=aid, st=st: keep(aid, st, s_))
                 st.pop("deferred", None)
                 st.pop("stopped", None)
                 st.update(last_try=now_iso, fail=None, fail_detail=None)
@@ -747,6 +838,10 @@ def log_line(status):
                                               "deferred", "waiting", "calls", "tokens")]
                     + [_int(c.get("tokens")) // n if n else 0]
                     + [_int(c.get(k)) for k in ("flagged", "other", "thresholded", "cov_off")]))
+    if _int(c.get("hist")):
+        line += ", history +%d" % _int(c.get("hist"))
+    if _int(c.get("hist_failed")):
+        line += ", history failed %d" % _int(c.get("hist_failed"))
     if (status or {}).get("error"):
         line += ", error %s" % status["error"]
     return line

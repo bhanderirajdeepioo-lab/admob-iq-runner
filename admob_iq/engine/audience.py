@@ -60,9 +60,14 @@ install day inside window 1 — the newest month's installs all opened within th
 share only months with ≥ max(MIN_MONTH_INSTALLS, MIN_MONTH_SHARE of all installs) installs (a few test installs must not
 win). "dead" = dead(1) (installed, not opened in the last month), "active" = alive(1). DAU on E by install month:
 dau_by_fsd summed by month; users installed before the history ("before_history"), "(other)" and "(not set)" shown apart.
+
+HISTORY + COMEBACK (the bottom of this file): each complete read's monthly aggregates are kept as one snapshot per E
+(snapshot / hist_append), and comeback() measures from two snapshots one month apart how many users who had not opened
+for N months opened again on their own. Not shown on the page yet.
 """
 
-from datetime import date
+import calendar
+from datetime import date, timedelta
 
 MONTH_DAYS = 365.25 / 12              # window N months = floor(N × 30.4375) days: 30, 60, 91 … 365 (12) … 730 (24)
 TIERS = ((12, 1), (24, 3), (None, 6))  # (up to N months, step): monthly to 12, quarterly to 24, then every 6 months
@@ -415,3 +420,281 @@ def portfolio(apps):
     return dict(tot, apps=len(ok), skipped=len(apps) - len(ok), months=glob,
                 windows=[window_days(mo) for mo in glob], E_min=es[0] if es else None, E_max=es[-1] if es else None,
                 months_by=dict(sorted(mos.items())), most=most(mos, tot["installs"]), dau=dau, marks=marks)
+
+
+# ── history: one compact snapshot per complete read, and the COMEBACK measured from it ───────────────────────────────
+#
+# Each complete read REPLACES the store, so on its own it keeps no history. fetch.ga4_audience therefore appends, for
+# every NEW E, one snapshot of the read's monthly aggregates to data/ga4_audience_hist/<key>.json.gz — never replaced,
+# never trimmed:
+#     {"v": 1, "snaps": {E: {"months": [N_1 … N_K],
+#                            "m": {install month: [installs, installed, alive_1 … alive_K, act_1 … act_K,
+#                                                  dead_lo_1 … dead_lo_K]},
+#                            "q": [flags]}}}
+# installs / installed / alive / dead_lo are derive_app's own monthly sums (installed = installs − uninstalls up to E;
+# alive_N = installed AND opened in the last N months; dead_lo_N = the dead range's lower end), act_N = GA4's raw
+# activeUsers of the window summed over the month's install days (UNclamped, uninstalled users included). `q` = the
+# store's data-quality flags (thresholded / other / …) the snapshot was read with.
+#
+# THE COMEBACK IDENTITY. GA4 windows are cumulative DISTINCT users: act_k(E) = users who opened at least once in
+# [E − w_k + 1, E]. Take two snapshots E1 < E2 with g = E2 − E1 days and a window j at E2 whose length is the window k
+# at E1 plus g (w_j = w_k + g; consecutive months' windows are 30 or 31 days apart, so j = k + 1 when g = w_{k+1} − w_k).
+# Both windows then start on the same day, so, exactly:
+#       window_j(E2)  =  window_k(E1)  ∪  (E1, E2]
+#       act_j(E2) − act_k(E1)  =  | opened in (E1, E2]  but NOT in window_k(E1) |  =: back_k
+# back_k is a plain set difference — no uninstall bookkeeping, no clamp: everybody in it was INSTALLED on E1 (a user opens
+# only while installed) and had not opened for ≥ k months at E1, and opened at least once in the next g days. That is the
+# number we want: sleepers (dead ≥ k months at E1) who came back on their own. A user who opens in (E1, E2] and then
+# uninstalls inside it still counts (he did open). A reinstall is a NEW GA4 user (new first-session day): never a comeback.
+# The windows differ by exactly g days, so the pair of snapshots is picked per k with E2 − E1 = w_{k+1} − w_k (30 or 31).
+# A pair even one day off adds or drops the one day at the window's edge — the users whose last open was that very day —
+# and that is NOT small: on a synthetic population with known truth back_k came out 13–17% off at k = 1, 15–47% at
+# k = 2 … 4 and over 100% off for the older sleepers (k ≥ 7), so such pairs are never used.
+#
+# THE SLEEPERS (the denominator) at E1 are dead_k(E1) = installed − alive_k — the Audience tab's own number — and, like
+# the page, it is a RANGE: [dead_lo, dead]. The upper end counts every user who uninstalled inside the window as having
+# opened in it (see "THE APPROXIMATION" above); a clean-up uninstall without an open makes dead read high by exactly those
+# users. back_k does not depend on that approximation, only the rate does: rate = back ÷ dead (the page's number; the
+# lower end of the rate), rate_max = back ÷ dead_lo (its upper end). The true rate is between them.
+#
+# A CELL is one install month: mature months only (the month's last day ≤ E1), so no install of the interval itself
+# (those users opened on their install day and are not sleepers) enters act_j(E2). A month's back_k can wobble below 0
+# (GA4's distinct counts are sketches, ±1–2% per install day; the month's sum averages some of it out): it is kept as
+# is inside sums (clamping each month would bias the total up) and only the final total is floored at 0.
+#
+# WHAT AGGREGATES CANNOT TELL (stated, not hidden):
+#   * WHO — only counts. Nothing follows a user from one snapshot to the next, so "came back" means "opened at least once
+#     in the g days after E1", and a user can come back in two different intervals (when he went quiet again for ≥ k months).
+#   * the exact sleep age — the rows are cumulative ("dead ≥ k months"), a mix of ages. The page's By-age brackets
+#     (BANDS) are differences of rows (back_a − back_b over sleepers_a − sleepers_b); the two rows may come from pairs 30
+#     and 31 days apart (an error of about one day's comebacks of the older sleepers — ~3% of back_b).
+#   * the denominator's clean-up uninstallers — the range above.
+#   * 12+ months asleep — the monthly windows stop at 12, and 12 → 15 months is a 91-day step, so ≥ 12 months is not
+#     measured on the one-month step; it sits inside the open "7+" band.
+#   * seasonality — one interval is one month; the chain below adds the months that follow each other (earliest first,
+#     intervals never overlap; a snapshot missing at E1 + g just skips ahead to the next one that has its partner).
+#   * noise — back_k is a small difference of two big sketched counts: a row is `enough` only with ≥ MIN_BACK comebacks
+#     out of ≥ MIN_SLEEPERS sleepers.
+#   The first number needs two snapshots 30 days apart: with daily snapshots, the 31st day of the history.
+
+HIST_V = 1
+HIST_FLAGS = ("thresholded", "other", "loss_other", "sampled", "truncated", "cov_off")
+COMEBACK_KS = tuple(range(1, 12))       # dead ≥ k months, k = 1 … 11: the windows up to 12 months are 30–31 days apart
+BANDS = ((1, 2), (2, 4), (4, 7), (7, None))   # months asleep — the page's "By age" brackets (frontend GROUPS)
+MIN_BACK = 30                           # a row is quoted only with ≥ 30 comebacks …
+MIN_SLEEPERS = 200                      # … out of ≥ 200 sleepers
+
+
+def snapshot(out):
+    """One complete read, derived (derive_app's result) → its compact history snapshot (the layout above). Install
+    months without installs are left out; everything else is kept, every window."""
+    months = [int(m) for m in out["months"]]
+    rows = {}
+    for mo, g in sorted(out["months_by"].items()):
+        if g["installs"]:
+            rows[mo] = [int(g["installs"]), int(g["installed"])] + [int(v) for v in g["alive"]] \
+                + [int(v) for v in g["act"]] + [int(v) for v in g["dead_lo"]]
+    flags = out.get("flags") or {}
+    return {"months": months, "m": rows, "q": [f for f in HIST_FLAGS if flags.get(f)]}
+
+
+def hist_append(hist, e, snap):
+    """Add the snapshot of final day `e` (ISO) to `hist` (in place: {"v", "snaps": {E: snapshot}}) → True when added,
+    False when that E is already there. A snapshot is never replaced and never dropped: the history only grows."""
+    snaps = hist.setdefault("snaps", {})
+    hist.setdefault("v", HIST_V)
+    e = str(e)[:10]
+    if e in snaps:
+        return False
+    snaps[e] = snap
+    return True
+
+
+def _view(e, snap):
+    """A stored snapshot → its parts (the final day as a date, months → column, install month → ints)."""
+    months = [int(v) for v in snap.get("months") or []]
+    k = len(months)
+    rows = {mo: [_int(v) for v in r] for mo, r in (snap.get("m") or {}).items() if len(r) >= 2 + 3 * k}
+    return {"e": _d(e), "months": months, "K": k, "at": {n: i for i, n in enumerate(months)}, "rows": rows,
+            "q": [str(f) for f in snap.get("q") or []]}
+
+
+def _month_end(mo):
+    y, m = int(mo[:4]), int(mo[5:7])
+    return date(y, m, calendar.monthrange(y, m)[1])
+
+
+def _measure(v1, v2, k):
+    """{install month: [back, dead_lo, dead, installs drift]} for k months at v1's E1 and the next month's window at v2's
+    E2 (the identity above), over the mature install months both snapshots have; None when a window is missing."""
+    i1, i2 = v1["at"].get(k), v2["at"].get(k + 1)
+    if i1 is None or i2 is None:
+        return None
+    out = {}
+    for mo, r1 in v1["rows"].items():
+        r2 = v2["rows"].get(mo)
+        if r2 is None or _month_end(mo) > v1["e"]:
+            continue
+        out[mo] = [r2[2 + v2["K"] + i2] - r1[2 + v1["K"] + i1],          # act_{k+1}(E2) − act_k(E1)
+                   r1[2 + 2 * v1["K"] + i1],                             # dead_lo_k(E1)
+                   r1[1] - r1[2 + i1],                                   # dead_k(E1) = installed − alive_k
+                   abs(r2[0] - r1[0])]
+    return out
+
+
+def _chain(dates, gap, ok):
+    """Non-overlapping intervals [(E1, E2 = E1 + gap)] over the sorted snapshot days, earliest first: each next E1 is
+    the first snapshot on or after the previous E2 whose partner E1 + gap exists (and ok(E1, E2))."""
+    have, out, free = set(dates), [], None
+    for d in dates:
+        if free is not None and d < free:
+            continue
+        e2 = d + timedelta(days=gap)
+        if e2 in have and ok(d, e2):
+            out.append((d, e2))
+            free = e2
+    return out
+
+
+def _sums(ivs):
+    """Σ over intervals and months → back (raw), dead_lo, dead, installs drift, {install month: [back, lo, dead]}."""
+    back = lo = hi = drift = 0
+    by = {}
+    for iv in ivs:
+        for mo, (b, l, h, dr) in iv["m"].items():
+            back, lo, hi, drift = back + b, lo + l, hi + h, drift + dr
+            c = by.setdefault(mo, [0, 0, 0])
+            c[0], c[1], c[2] = c[0] + b, c[1] + l, c[2] + h
+    return back, lo, hi, drift, by
+
+
+def _numbers(n, back, lo, hi, min_back, min_sleepers):
+    """One table row's numbers from its counts: back (floored at 0; back_raw as summed), the sleepers' range, the rate
+    on the page's dead number (rate) and on its lower end (rate_max), and whether the row can be quoted (enough)."""
+    if not n:                                              # nothing measured yet: no numbers, not zeros
+        return {"intervals": 0, "sleepers": None, "sleepers_lo": None, "back": None, "back_raw": None, "rate": None,
+                "rate_max": None, "enough": False}
+    b = max(0, back)
+    return {"intervals": n, "sleepers": hi, "sleepers_lo": lo, "back": b, "back_raw": back, "rate": _ratio(b, hi),
+            "rate_max": _ratio(b, lo), "enough": bool(back >= min_back and hi >= min_sleepers)}
+
+
+def comeback(hist, min_back=MIN_BACK, min_sleepers=MIN_SLEEPERS):
+    """One app's COMEBACK table (the identity and its limits above) from its history ({"v", "snaps": {E: snapshot}}, or
+    the snaps dict itself): per months slept k = 1 … 11, the sleepers (dead ≥ k months) on each interval's first day E1,
+    how many of them opened again within the next 30–31 days, and the rate. → {status, enough, ready_on, snapshots, first,
+    last, rows, bands, by_month, flags, installs_drift, min_back, min_sleepers}:
+      status    "no_history" (under 2 snapshots), "too_short" (no two snapshots exactly w_{k+1} − w_k days apart yet:
+                ready_on = the first day one can exist), "thin" (measured, but no row has min_back comebacks out of
+                min_sleepers sleepers), "ok". enough = (status == "ok").
+      rows      [{slept k, gap_days, intervals n, span [first E1, last E2], sleepers (dead), sleepers_lo, back, back_raw,
+                rate, rate_max, enough, q}] — cumulative: "slept ≥ k months".
+      bands     the page's By-age brackets (BANDS) as differences of rows, over the intervals both rows have: [{label,
+                from, to, intervals, sleepers, sleepers_lo, back, back_raw, rate, rate_max, enough}].
+      by_month  {install month: {k: [back, dead_lo, dead]}} — the rows' sums split by install month (mature months).
+      flags     the data-quality flags (q) of the snapshots behind the rows; installs_drift = the most users any row's
+                months gained or lost in `installs` between the two snapshots of its intervals (0 normally).
+    Pure: no I/O, no prints."""
+    snaps = hist.get("snaps", hist) if isinstance(hist, dict) else {}
+    views = {}
+    for e, snap in snaps.items():
+        try:
+            v = _view(e, snap)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        views[v["e"]] = v
+    dates = sorted(views)
+    per = {}
+    for k in COMEBACK_KS:
+        gap = window_days(k + 1) - window_days(k)
+        pairs = _chain(dates, gap, lambda a, b, k=k: bool(_measure(views[a], views[b], k)))
+        per[k] = {"gap": gap, "ivs": [{"pair": (a, b), "m": _measure(views[a], views[b], k),
+                                       "q": set(views[a]["q"]) | set(views[b]["q"])} for a, b in pairs]}
+    rows, by_month, flags, drift = [], {}, set(), 0
+    for k in COMEBACK_KS:
+        gap, ivs = per[k]["gap"], per[k]["ivs"]
+        if not ivs and not any(k in v["at"] and k + 1 in v["at"] for v in views.values()):
+            continue                                       # this app has no such window (a young app's short list)
+        back, lo, hi, dr, by = _sums(ivs)
+        row = {"slept": k, "gap_days": gap, "span": None, "q": []}
+        if ivs:
+            q = set().union(*[iv["q"] for iv in ivs])
+            row.update(span=[ivs[0]["pair"][0].isoformat(), ivs[-1]["pair"][1].isoformat()], q=sorted(q))
+            flags |= q
+        row.update(_numbers(len(ivs), back, lo, hi, min_back, min_sleepers))
+        rows.append(row)
+        drift = max(drift, dr)
+        for mo, c in by.items():
+            by_month.setdefault(mo, {})[str(k)] = c
+    bands = []
+    for a, b in BANDS:
+        ks = [a] + ([b] if b else [])
+        n = min([len(per[k]["ivs"]) for k in ks])
+        band = {"label": "%d–%d months" % (a, b) if b else "%d+ months" % a, "from": a, "to": b}
+        sa = _sums(per[a]["ivs"][:n])
+        sb = _sums(per[b]["ivs"][:n]) if b else (0, 0, 0, 0, {})
+        band.update(_numbers(n, sa[0] - sb[0], sa[1] - sb[1], sa[2] - sb[2], min_back, min_sleepers))
+        bands.append(band)
+    measured = any(r["intervals"] for r in rows)
+    if len(dates) < 2:
+        status = "no_history"
+    elif not measured:
+        status = "too_short"
+    else:
+        status = "ok" if any(r["enough"] for r in rows) else "thin"
+    return {"v": HIST_V, "status": status, "enough": status == "ok",
+            "ready_on": (dates[0] + timedelta(days=min(per[k]["gap"] for k in COMEBACK_KS))).isoformat()
+            if dates and not measured else None,
+            "snapshots": len(dates), "first": dates[0].isoformat() if dates else None,
+            "last": dates[-1].isoformat() if dates else None, "rows": rows, "bands": bands,
+            "by_month": dict(sorted(by_month.items())), "flags": sorted(flags), "installs_drift": drift,
+            "min_back": min_back, "min_sleepers": min_sleepers}
+
+
+def comeback_portfolio(results, min_back=MIN_BACK, min_sleepers=MIN_SLEEPERS):
+    """Every app's comeback() result (a list; an entry with "err" or without rows is skipped) → the portfolio's table: per
+    row and band the counts summed over the apps that have it (a rate from the sums, never an average of rates), the
+    number of apps and intervals behind it, and the same status / enough / ready_on flags (ready_on: the earliest of the
+    apps')."""
+    ok = [r for r in results if isinstance(r, dict) and "err" not in r and "rows" in r]
+    rows, bands = {}, {}
+    for r in ok:
+        for src, dst, key in ((r["rows"], rows, "slept"), (r["bands"], bands, "label")):
+            for x in src:
+                if not x.get("intervals"):
+                    continue
+                c = dst.setdefault(x[key], {f: x[f] for f in ((key, "gap_days") if key == "slept" else
+                                                                  ("label", "from", "to"))})
+                for f in ("apps", "intervals", "sleepers", "sleepers_lo", "back_raw"):
+                    c[f] = c.get(f, 0) + (1 if f == "apps" else x[f])
+    out_rows, out_bands = [], []
+    for k in COMEBACK_KS:
+        c = rows.get(k)
+        if c:
+            c.update(_numbers(c["intervals"], c["back_raw"], c["sleepers_lo"], c["sleepers"], min_back, min_sleepers))
+            out_rows.append(c)
+    for a, b in BANDS:
+        label = "%d–%d months" % (a, b) if b else "%d+ months" % a
+        c = bands.get(label) or {"label": label, "from": a, "to": b, "apps": 0}
+        c.update(_numbers(c.get("intervals", 0), c.get("back_raw", 0), c.get("sleepers_lo", 0), c.get("sleepers", 0),
+                          min_back, min_sleepers))
+        out_bands.append(c)
+    stats = [r["status"] for r in ok]
+    measured = any(s in ("ok", "thin") for s in stats)
+    if measured:
+        status = "ok" if any(r["enough"] for r in out_rows) else "thin"
+    else:
+        status = "too_short" if any(s == "too_short" for s in stats) else "no_history"
+    ready = [r["ready_on"] for r in ok if r.get("ready_on")]
+    return {"v": HIST_V, "status": status, "enough": status == "ok", "ready_on": min(ready) if ready and not measured
+            else None, "apps": len(ok), "measured_apps": sum(1 for s in stats if s in ("ok", "thin")),
+            "skipped": len(results) - len(ok), "rows": out_rows, "bands": out_bands,
+            "flags": sorted(set().union(*[set(r.get("flags") or []) for r in ok])),
+            "min_back": min_back, "min_sleepers": min_sleepers}
+
+
+def comeback_all(hists, min_back=MIN_BACK, min_sleepers=MIN_SLEEPERS):
+    """{app key: its history} (fetch.ga4_audience.load_all_hist) → {"apps": {key: comeback(history)}, "portfolio":
+    comeback_portfolio(...)}: the per-app and the portfolio "comeback by months slept" tables in one call."""
+    apps = {k: comeback(h, min_back, min_sleepers) for k, h in sorted((hists or {}).items())}
+    return {"apps": apps, "portfolio": comeback_portfolio(list(apps.values()), min_back, min_sleepers)}
