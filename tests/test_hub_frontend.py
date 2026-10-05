@@ -171,7 +171,7 @@ def test_app_report_controls_stay_put(report):
     r = O(report, "appreport_controls")
     assert r["on"]["keep"] == [1, 1, 1, 1] and r["on"]["keepAfter"] == 0 and set(r["on"]["ad"]) == {"Demo Gallery"}
     assert (r["on"]["st"]["tab"], r["on"]["st"]["scr"], r["on"]["st"]["depth"]) == ("revenue", "appdetail", 1)   # no extra Back step
-    assert r["off"] == {"keep": [0, 0], "keepAfter": 0}                                                          # off: as before
+    assert r["off"] == {"keep": [1, 1], "keepAfter": 0}                                                          # off too: no jump (owner, 4 Oct)
 
 
 @needs_node
@@ -267,7 +267,7 @@ def test_structure():
     assert "if((n<0||d==null)&&typeof HUB!=='undefined'&&HUB.on&&hubPop(d,nd)) return;" in js
     assert "if(x&&x.hub&&x.url!=null) H.pushState({iqb:HB.depth+1},'',location.pathname+location.search+x.url); else H.pushState({iqb:HB.depth+1},'');" in js
     assert "if(!HUB.on) hbOv('ecpm',true,ecUndo); show('ecpm'); }" in js
-    assert "function adRedraw(){ if(!ADAPP) return; if(!HUB.on){ openAppDetail(ADAPP); return; } SP.keep++; try{ openAppDetail(ADAPP); }finally{ SP.keep--; } }" in js
+    assert "function adRedraw(){ if(!ADAPP) return; SP.keep++; try{ openAppDetail(ADAPP); }finally{ SP.keep--; } }" in js
     for f in ("function adSetView(v){ ADVIEW=v; adRedraw(); }", "function adDWin(w){ ADRANGE=w; adRedraw(); }"):
         assert f in js
     assert "hubInit();" in js and js.index("hubInit();") < js.index("_navRestore();                           // restore the LAST")
