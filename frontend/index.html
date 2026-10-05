@@ -340,6 +340,7 @@
   .ec-hd .sub{font-size:12.5px;color:var(--muted);line-height:1.55;overflow-wrap:anywhere;margin-top:2px}
   .ec-hd .sub b{color:var(--ink2)}
   .ec-kpis{margin-bottom:14px}
+  @media(max-width:1000px){.ec-kpis.row.c5>.kpi:first-child{grid-column:1/-1}}   /* 2-up: Today on its own row, then the 4 */
   .ec-kpis .kpi .d{font-weight:600;line-height:1.45;overflow-wrap:anywhere}
   .ec-kpis .kpi .d b{white-space:nowrap;font-weight:750}
   .ec-kpis .kpi .ec-w{display:block;font-size:11px;font-weight:500;color:var(--faint);margin-top:2px}
@@ -402,7 +403,7 @@
     .ec-seg button{min-height:36px;padding:5px 11px}
     .ec-kpi .l{padding-right:52px}
     .ov-kpi .ec-kpi .ec-hint{top:15px;right:13px}
-    .ec-kpis.row.c4{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .ec-kpis.row.c4,.ec-kpis.row.c5{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .ec-kpis .kpi{padding:13px 12px}.ec-kpis .kpi .d{font-size:11.5px}
   }
   @media(max-width:430px){ .ec-seg button{padding:5px 9px;font-size:12px}
@@ -5262,12 +5263,19 @@ function ecTableHtml(t){ const all=EC.rows[t]||[], S=EC[{a:'sort',u:'usort',c:'c
     +(idle.length?`<div class="ec-more"><button type="button" onclick="ecIdle('${t}')">${EC.idle[t]?`Hide ${idle.length} ${what} with no data in 30 days`:`Show ${idle.length} more ${what} (no data in 30 days)`}</button></div>`:'');
   if(!rows.length) return `<div class="ec-note" style="padding:12px 16px">Pichhle 30 din me koi data nahi.</div>${more}`;
   return `<div class="ec-tw"><table class="ec-t"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>${more}`; }
-// the 4 tiles: Yesterday (vs the 7-day avg) · Last 7 days · Last 30 days · This month vs the same days last month
-function ecKpis(dm,W){ const s=d=>ecSum(dm,d), y=s(W.y), w7=s(W.d7), p7=s(W.p7), d30=s(W.d30), p30=s(W.p30), mtd=s(W.mtd), lm=s(W.lm);
+// today so far (owner: "where is today's eCPM?"): the portfolio or one app, from today's partial AdMob day — live, not final
+function ecToday(app){ const T=(DATA&&DATA.today_date)||''; let e=0,i=0;
+  if(T) (DATA.placements||[]).forEach(p=>{ if(app&&p.app!==app) return; (p.daily||[]).forEach(r=>{ if(r&&r[0]===T){ e+=+r[1]||0; i+=+r[2]||0; } }); });
+  return {T,e,i,ec:i?e/(i*1000):null}; }
+// the tiles: Today (live, so far) · Yesterday (vs the 7-day avg) · Last 7 days · Last 30 days · This month vs the same days last month
+function ecKpis(dm,W,td){ const s=d=>ecSum(dm,d), y=s(W.y), w7=s(W.d7), p7=s(W.p7), d30=s(W.d30), p30=s(W.p30), mtd=s(W.mtd), lm=s(W.lm);
   const cmp=(a,b,what)=>{ if(a.ec==null||b.ec==null) return `<span class="faint">${what}: —</span>`; const p=(a.ec-b.ec)/b.ec;
     return `(<b class="${ecCls(p)}">${ecPct(p)}</b> vs ${what} <b>${cm(b.ec)}</b>)`; };
   const w=t=>`<span class="ec-w">${t}</span>`;
-  return `<div class="row c4 ec-kpis">${kpi('Yesterday eCPM',ecCm(y.ec),cmp(y,w7,'7-day avg')+w(ecSpan(W.y)+(y.i?' · '+fmtN(y.i)+' impr':'')),'muted')}`
+  // a part of a day vs a whole one: the % is shown plain (no red / green) — it is only a first look; the day is judged tomorrow
+  const tt=td&&td.T?kpi('Today eCPM · live',ecCm(td.ec),(td.ec!=null&&y.ec?`(<b>${ecPct((td.ec-y.ec)/y.ec)}</b> vs yesterday <b>${cm(y.ec)}</b>)`:`<span class="faint">${td.i?'yesterday: —':'aaj ka data abhi nahi aaya'}</span>`)
+    +w(fmtD(td.T)+' · ab tak'+(td.i?' · '+fmtN(td.i)+' impr':'')+(td.i&&td.i<EC_MIN_IMPR?' · low data':'')+' · not final'),'muted'):'';
+  return `<div class="row ${tt?'c5':'c4'} ec-kpis">${tt}${kpi('Yesterday eCPM',ecCm(y.ec),cmp(y,w7,'7-day avg')+w(ecSpan(W.y)+(y.i?' · '+fmtN(y.i)+' impr':'')),'muted')}`
     +kpi('Last 7 days',ecCm(w7.ec),cmp(w7,p7,'previous 7 days')+w(ecSpan(W.d7)),'muted')
     +kpi('Last 30 days',ecCm(d30.ec),cmp(d30,p30,'previous 30 days')+w(ecSpan(W.d30)),'muted')
     +kpi('This month vs last month',ecCm(mtd.ec),cmp(mtd,lm,'same days last month')+w(ecSpan(W.mtd)+(W.lm.length?' vs '+ecSpan(W.lm):'')),'muted')+'</div>'; }
@@ -5324,14 +5332,14 @@ function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.qu
   if(EC.hdr!==APP){ EC.hdr=APP; EC.app=APP||''; }       // the header App picker drives the view
   if(!EC.app) hbDrop('ecpm-app');                       // back on All apps: no "app" Back step stays behind
   const W=ecWin(); EC.W=W; EC.pin=false;
-  const A=ecAgg(), first=W.comp[0]||'', T=W.T?` · aaj (${fmtD(W.T)}) ka adhura din shamil nahi`:'';
+  const A=ecAgg(), first=W.comp[0]||'', T=W.T?` · aaj (${fmtD(W.T)}) ka adhura din sirf <b>Today</b> tile me (chart / table me nahi)`:'';
   const hint=`<b>eCPM = har 1,000 ads (impressions) pe kamai</b> = kamai ÷ impressions × 1000 · data till <b>${ecYear(W.L)}</b>${T}`;
   let h;
   if(!EC.app){
     EC.rows={a:ecRowsFor('a',W)};
     h=`<div class="ec-nav"><button type="button" class="ec-lnk" onclick="ecClose()">← Overview</button></div>
       <div class="ec-hd"><div style="font-size:26px">📈</div><div><div class="big">eCPM trend · All apps</div><div class="sub">${hint} · history <b>${ecYear(first)}</b> se (${W.comp.length.toLocaleString()} din)</div></div></div>
-      ${ecKpis(A.pf,W)}<div class="card ec-cc" id="ec-cc">${ecChartCard()}</div>
+      ${ecKpis(A.pf,W,ecToday(''))}<div class="card ec-cc" id="ec-cc">${ecChartCard()}</div>
       <div class="card ec-tc"><div class="ct"><h3>All apps · yesterday vs last 7 days</h3><span class="faint" style="font-size:11.5px">row pe tap = us app ka eCPM trend · column pe tap = sort</span></div>
         <div class="ec-note">Sabse zyada <b>${csym()} nuksan</b> wali app sabse upar. <b>Change</b> = kal ka eCPM − last 7 days avg (kal samet 7 poore din). <b>${csym()} impact/day</b> = kal ke impressions × (kal ka eCPM − 7-day avg) ÷ 1,000 — sirf eCPM badalne se kal kitna kam / zyada kamaya.</div>
         <div id="ec-tb-a">${ecTableHtml('a')}</div>
@@ -5348,7 +5356,7 @@ function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.qu
       const cfirst=Object.values((DATA.countries_daily||{})[name]||{}).reduce((m,rows)=>{ const d=rows&&rows[0]&&rows[0][0]; return d&&(!m||d<m)?d:m; },'');
       h=`<div class="ec-nav"><button type="button" class="ec-lnk" onclick="ecAllApps()">← All apps (eCPM)</button><button type="button" class="ec-lnk" onclick="ecClose()">← Overview</button><span class="spacer"></span>${nb(pv,'‹ Prev app')}${nb(nx,'Next app ›')}</div>
         <div class="ec-hd"><div>${appIconId(L.id,L.store,38)}</div><div><div class="big">${hAttr(L.label)}</div><div class="sub">${L.acct?hAttr(L.acct)+' · ':''}${ap.platform?hAttr(ap.platform)+' · ':''}${EC.rows.u.length} ad units · ${hint} · history <b>${ecYear(ecFirst(dm))}</b> se</div></div></div>
-        ${ecKpis(dm,W)}<div class="card ec-cc" id="ec-cc">${ecChartCard()}</div>
+        ${ecKpis(dm,W,ecToday(name))}<div class="card ec-cc" id="ec-cc">${ecChartCard()}</div>
         <div class="card ec-tc"><div class="ct"><h3>Ad units · yesterday vs last 7 days</h3><span class="faint" style="font-size:11.5px">kis ad unit ka eCPM gira · column pe tap = sort</span></div>
           <div class="ec-note">Har ad unit ka apna eCPM (format ke saath). Sabse zyada <b>${csym()} nuksan</b> wali unit sabse upar.</div>
           <div id="ec-tb-u">${ecTableHtml('u')}</div><div class="ec-note" style="padding:0 16px 14px">${ecStatusNote()}</div></div>

@@ -344,6 +344,12 @@ def test_overview_tile_equals_the_view(report, cur):
     assert tiles["Yesterday eCPM"] == r["yesterday"]["overview"]
     assert tiles["Last 7 days"] == r["7d"]["overview"] and tiles["Last 30 days"] == r["30d"]["overview"]
     assert tiles["This month vs last month"] == r["month"]["overview"]
+    # Today (live, first tile): today's partial day only — the same number summed from today's rows; one app's too
+    t = r["today"]
+    assert t["T"] and t["own"] and tiles["Today eCPM · live"] == t["own"] == t["fn"] and t["app"] == t["appFn"]
+    assert list(tiles)[0] == "Today eCPM · live" and 'class="row c5 ec-kpis"' in r["html"]
+    assert re.search(r"\(<b>[+−]?\d+\.\d%</b> vs yesterday <b>" + re.escape("₹" if cur == "INR" else "$"), r["html"])   # plain %: a part of a day
+    assert " · ab tak · " in r["html"] and " · not final" in r["html"] and t["none"]["ec"] is None
     sym = "₹" if cur == "INR" else "$"
     assert all(v.startswith(sym) for v in tiles.values())
     # number first, % beside it: "(−4.2% vs 7-day avg ₹310.00)"
@@ -454,7 +460,7 @@ def test_no_tab_of_its_own_and_the_views_controls():
     assert ".ec-t th:first-child,.ec-t td:first-child{position:sticky;left:0" in css      # the App column stays on screen
     assert ".ec-tw{overflow-x:auto" in css                                                 # the table scrolls inside its card
     assert re.search(r"\.ec-seg button\{min-height:3[2-9]px", css) and re.search(r"\.ec-lnk\{[^}]*min-height:3[2-9]px", css)
-    assert "@media(max-width:760px)" in css and ".ec-kpis.row.c4{grid-template-columns:repeat(2,minmax(0,1fr))" in css
+    assert "@media(max-width:760px)" in css and ".ec-kpis.row.c4,.ec-kpis.row.c5{grid-template-columns:repeat(2,minmax(0,1fr))" in css
 
 
 def test_the_payload_keeps_every_day_of_history():

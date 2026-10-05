@@ -116,6 +116,9 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
       run(`RANGE='today'; window.__ax=null; renderEcpm(); EC.app=''; EC.hdr=''; EC.booted=true; ecPaint();`);
       res.tiles = [...run(`EC.el.innerHTML`).matchAll(/<div class="card kpi"><div class="l">([^<]*)<\/div><div class="v[^"]*">([^<]*)<\/div>/g)].map(m => [m[1], m[2]]);
       res.html = run(`EC.el.innerHTML`);
+      // Today (live): the tile = today's rows only, summed here on their own (and one app's)
+      res.today = J(`(()=>{ const T=DATA.today_date; let e=0,i=0,ea=0,ia=0; (DATA.placements||[]).forEach(p=>(p.daily||[]).forEach(r=>{ if(r[0]===T){ e+=r[1]; i+=r[2]; if(p.app==='New Timer'){ ea+=r[1]; ia+=r[2]; } } }));
+        return {T, own:i?ecCm(e/(i*1000)):null, fn:ecCm(ecToday('').ec), app:ia?ecCm(ea/(ia*1000)):null, appFn:ecCm(ecToday('New Timer').ec), none:(()=>{ const k=DATA.today_date; DATA.today_date=''; const x=ecToday(''); DATA.today_date=k; return x; })()}; })()`);
       return res; });
   }
   run(`CURVIEW=null; RANGE='today'; window.__ax=null;`);
