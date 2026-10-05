@@ -1196,6 +1196,7 @@ body.hub-on .botbar .tabbtn.hub-x{display:none}
 body.hub-in .topbar h1 .ain{max-width:100%;overflow:hidden}
 body.hub-in .topbar h1 .ain-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hub-ov{margin:0 0 4px}
+body.hub-in .screen[data-screen=appdetail]>.backlnk:first-child{display:none}   /* the App Report as a tab: the tab bar / phone Back replace its "← Back" */
 .hub-hd{display:flex;align-items:center;gap:14px;margin:2px 0 14px;min-width:0}
 .hub-hd>.aicon{flex:none}
 .hub-hn{min-width:0}
@@ -4727,7 +4728,8 @@ function hubEc(name){ try{ const A=ecAgg(), dm=A&&A.apps&&A.apps[name]; if(!dm) 
 function hubOvHtml(name){ const acc=apkAcc(name).acc, R=hubRev(name), ac=hubAct(name), al=hubAlerts(name), ec=hubEc(name), D=R.day?fmtD(R.day):'';
   const ch=R.usual?(R.rev-R.usual)/R.usual:null, chT=ch==null?'':` (${ch>=0?'+':'−'}${Math.abs(Math.round(ch*100))}%)`;
   const dau=ac&&ac.latest&&ac.latest.a1!=null?ac.latest:null;
-  const k1=kpi(`💵 Revenue · ${D}`,money(R.rev),R.usual!=null?`usual ${money(R.usual)}/day${chT}`:'AdMob',ch==null?'muted':(ch>=0?'up':'down'));
+  const mv=v=>Math.abs(v)>=10?money(v):cm(v);   // cents for a small app (as the App Report's own cells)
+  const k1=kpi(`💵 Revenue · ${D}`,mv(R.rev),R.usual!=null?`usual ${mv(R.usual)}/day${chT}`:'AdMob',ch==null?'muted':(ch>=0?'up':'down'));
   const k2=kpi('👥 DAU',dau?Math.round(dau.a1).toLocaleString():'—',dau?`${fmtD(dau.day)} · GA4${dau.prov?' · not final':''}`:'GA4 data nahi','muted');
   const k3=kpi(`📈 eCPM · ${D}`,ec&&ec.y!=null?cm(ec.y):'—',ec&&ec.w7!=null?`7-day avg ${cm(ec.w7)}${ec.pct!=null?' ('+ecPct(ec.pct)+')':''}`:'',ec&&ec.pct!=null?ecCls(ec.pct):'muted');
   const k4=kpi('🔔 Open alerts',String(al.n),`ad units ${al.ad.length+al.rg.length} · users ${al.g4}`,al.n?'down':'muted');
