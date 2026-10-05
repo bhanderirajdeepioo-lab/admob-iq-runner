@@ -4554,7 +4554,7 @@ function _navRestore0(){
 // URL); a same-view rebuild (rerender, the 5-min refresh: HB.mute) only rewrites the URL. Old screen names keep working:
 // show('active') = the Active users tab of the scope in view.
 const HUB={on:false,inHub:false,tab:'overview',seq:0,hold:0,inner:0,nav:false,cur:null,boot:false,tmark:false,hash0:'',
-  keys:null,keysFor:null,kc:{},rv:{idx:null,idxAt:0,files:{},busy:{},want:14,st:{},stBusy:{},loading:false}};
+  keys:null,keysFor:null,kc:{},rv:{idx:null,idxAt:0,files:{},busy:{},want:14,stBusy:{},loading:false,cbs:[]}};
 const HUB_LS='iq_layout';
 // tab id → [label, icon, screen at All apps, screen at an app] ('' = the tab is not in that scope)
 const HUB_T={overview:['Overview','📊','overview','overview'],revenue:['Revenue & Ad units','💵','placements','appdetail'],
