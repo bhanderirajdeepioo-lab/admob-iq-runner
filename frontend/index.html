@@ -6000,7 +6000,7 @@ function renderAppDetail(){return screenDiv('appdetail');}
 function adSetView(v){ ADVIEW=v; adRedraw(); }
 // the App Report drawn again by one of its own controls (view / period / daily window / metric). ✨ In the hub (its "Revenue &
 // Ad units" tab) a same-view rebuild — the page stays where the reader is (stay-put), never back to the top; off = as before.
-function adRedraw(){ if(!ADAPP) return; if(!HUB.on){ openAppDetail(ADAPP); return; } SP.keep++; try{ openAppDetail(ADAPP); }finally{ SP.keep--; } }
+function adRedraw(){ if(!ADAPP) return; SP.keep++; try{ openAppDetail(ADAPP); }finally{ SP.keep--; } }   // its own controls keep the page where it is, in both layouts
 // go back to the portfolio overview
 function adBack(){ hbDrop('appdetail'); show(AD_ORIGIN||'overview'); }   // return to the screen we opened the app FROM
 // change THIS page's period — it drives the SAME global RANGE the whole dashboard uses,
