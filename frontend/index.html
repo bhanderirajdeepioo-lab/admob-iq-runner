@@ -1160,6 +1160,87 @@
   @media (prefers-reduced-motion:reduce){#rv-root *{transition:none!important;scroll-behavior:auto!important}}
   /* ==== RV:END ==== */
   /* ==== RS:BEGIN ==== */
+/* ✨ App Hub (new layout, BETA — off by default): its nav (Review · Home · Alerts · Recommendations · Accounts & Apps), the
+   switch, the sticky tab bar (a full-width last row of the sticky top bar, so a Studio's own sticky bar measures it with the
+   top bar), the App Overview (head + feature cards) and the Review history tab. Off = none of this shows. */
+.hub-nav{display:none}
+body.hub-on .hub-nav{display:block}
+body.hub-on .nav-classic{display:none}
+.botbar .tabbtn[data-hnav]{display:none}
+body.hub-on .botbar .tabbtn[data-hnav]{display:flex}
+body.hub-on .botbar .tabbtn.hub-x{display:none}
+.hub-beta{margin:14px 2px 0;padding:12px 0 0;border-top:1px solid var(--line)}
+#hub-beta{width:100%;display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;color:var(--ink);font:inherit;font-size:13px;font-weight:700;padding:9px 10px;cursor:pointer;text-align:left;min-height:44px}
+#hub-beta:hover{background:var(--raise)}
+#hub-beta:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+#hub-beta .hbk{flex:none;width:34px;height:20px;border-radius:999px;background:var(--line2);position:relative;transition:background .15s}
+#hub-beta .hbk::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s}
+#hub-beta[aria-checked="true"] .hbk{background:var(--cyan2)}
+#hub-beta[aria-checked="true"] .hbk::after{transform:translateX(14px)}
+#hub-beta .hbt{min-width:0;flex:1;line-height:1.3}
+#hub-beta .hbb{font-size:9.5px;font-weight:800;color:#0a1120;background:var(--watch);border-radius:999px;padding:1px 6px;margin-left:3px;vertical-align:1px;text-transform:uppercase;letter-spacing:.04em}
+#hub-beta .hbs{flex:none;font-size:11px;font-weight:800;color:var(--muted)}
+#hub-beta[aria-checked="true"] .hbs{color:var(--cyan)}
+.hub-beta .hbh{font-size:11px;color:var(--faint);margin:6px 2px 0;line-height:1.45}
+@media(prefers-reduced-motion:reduce){#hub-beta .hbk,#hub-beta .hbk::after{transition:none}}
+.hub-bar{flex:1 1 100%;order:99;display:flex;gap:2px;position:relative;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;margin:0 -24px -12px;padding:0 18px;border-top:1px solid var(--line)}
+.hub-bar[hidden]{display:none}
+.hub-bar::-webkit-scrollbar{display:none}
+.hub-tab{flex:none;display:inline-flex;align-items:center;gap:6px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:650;padding:9px 11px 8px;min-height:42px;cursor:pointer;white-space:nowrap}
+.hub-tab:hover{color:#fff}
+.hub-tab.on{color:#fff;border-bottom-color:var(--cyan)}
+.hub-tab .hti{font-size:14px}
+.hub-tab:focus-visible{outline:2px solid var(--cyan);outline-offset:-4px;border-radius:7px}
+@media(max-width:1000px){.hub-bar{margin:0 calc(-1*var(--tbx,24px)) -6px;padding:0 max(4px,calc(var(--tbx,24px) - 6px))}}
+@media(max-width:760px){.hub-tab{font-size:12.5px;padding:8px 9px 7px;min-height:40px}}
+.hub-ov{margin:0 0 4px}
+.hub-hd{display:flex;align-items:center;gap:14px;margin:2px 0 14px;min-width:0}
+.hub-hd>.aicon{flex:none}
+.hub-hn{min-width:0}
+.hub-nm{font-size:20px;font-weight:800;color:#fff;line-height:1.25;overflow-wrap:anywhere}
+.hub-ac{font-size:12.5px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.hub-kp{margin-bottom:16px}
+.hub-fh{display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap;margin:2px 0 10px}
+.hub-fh h3{margin:0;font-size:15px;font-weight:800;color:#fff}
+.hub-fn{font-size:11.5px;color:var(--faint);line-height:1.4}
+.hub-fcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px;margin-bottom:18px}
+.card.hub-fc{display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:12px 13px;min-width:0}
+.hub-fc[data-st=bigda]{border-color:#5a2a30}
+.hub-fc[data-st=dhyan]{border-color:#5a4a24}
+.hfc-h{display:flex;align-items:center;gap:7px;font-weight:750;color:#fff;font-size:13.5px;min-width:0;max-width:100%}
+.hfc-i{font-size:15px;flex:none}
+.hfc-n{min-width:0;overflow-wrap:anywhere}
+.hub-st{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:800;border-radius:999px;padding:2px 9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);white-space:nowrap;max-width:100%}
+.hub-st.st-bigda,.hub-rc.st-bigda{background:var(--bad-b);border-color:#6b2a2e;color:#ffb3b3}
+.hub-st.st-dhyan,.hub-rc.st-dhyan{background:var(--watch-b);border-color:#6b5522;color:#f3d48a}
+.hub-st.st-behtar,.hub-rc.st-behtar{background:var(--good-b);border-color:#1f6b52;color:#8ff0c8}
+.hub-st.st-jaldi{color:var(--muted)}
+.hub-st.st-lagu{color:var(--faint);background:var(--panel2)}
+.hub-st.st-info{background:rgba(59,130,246,.12);border-color:#2b4a7a;color:#a9c6ff}
+.hfc-l{font-size:12.5px;color:var(--ink2);line-height:1.45;overflow-wrap:anywhere;flex:1;width:100%}
+.hfc-l b{color:#fff}
+.hfc-o{background:none;border:none;color:var(--cyan);font:inherit;font-weight:750;font-size:12.5px;padding:4px 0;cursor:pointer;min-height:32px}
+.hfc-o:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:6px}
+.hub-sep{display:flex;align-items:center;gap:10px;margin:4px 0 14px;color:var(--muted);font-size:12.5px;font-weight:800;min-width:0}
+.hub-sep>span{min-width:0;overflow-wrap:anywhere}
+.hub-sep::after{content:"";flex:1 0 24px;height:1px;background:var(--line)}
+@media(max-width:760px){.hub-kp.row.c4{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.hub-kp .kpi{padding:15px 13px}   /* 2-up, as Overview's own KPIs */
+  .hub-fcs{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card.hub-fc{padding:10px;gap:6px}.hfc-h{font-size:12.5px;gap:5px}
+  .hfc-l{font-size:12px}.hub-st{font-size:11px;padding:1px 7px}.hub-nm{font-size:17px}.hub-hd{gap:11px}}
+@media(max-width:339px){.hub-fcs{grid-template-columns:minmax(0,1fr)}}
+.hub-rl{display:grid;gap:10px}
+.card.hub-rd{padding:12px 14px}
+.hub-rdd{display:flex;align-items:center;gap:8px;font-size:14px;color:#fff;margin-bottom:6px}
+.hub-rdo{margin-left:auto;background:none;border:none;color:var(--cyan);font:inherit;font-weight:750;font-size:12.5px;cursor:pointer;min-height:32px;padding:0 4px;white-space:nowrap}
+.hub-rh{font-size:12.5px;color:var(--ink2);margin-bottom:8px;overflow-wrap:anywhere}
+.hub-rcs{display:flex;flex-wrap:wrap;gap:6px}
+.hub-rc{font-size:11.5px;border:1px solid var(--line2);border-radius:999px;padding:2px 8px;color:var(--muted);background:var(--panel2);max-width:100%;overflow-wrap:anywhere}
+.hub-rc b{font-weight:800}
+.hub-rst{margin-top:9px;font-size:12.5px;color:var(--ink2);overflow-wrap:anywhere}
+.hub-rs{font-weight:800}
+.hub-rs-flag{color:#ffb3b3}.hub-rs-kal{color:#f3d48a}.hub-rs-pend{color:var(--muted)}
+.hub-rn{font-size:12px;color:var(--muted);margin-top:4px}
+.hub-more{margin-top:12px;background:var(--panel);border:1px solid var(--line2);color:var(--ink2);font:inherit;font-weight:700;font-size:13px;padding:9px 14px;border-radius:9px;cursor:pointer;min-height:40px}
   /* ===== 🗂 REVIEW STUDIO (the Review tab's Studio) — everything under #rs-root / #rs-layer, classes rs-* ===== */
 :is(#rs-root,#rs-layer){--rs-raise2:#1c2c47;--rs-blue-s:#8fb8ff;--rs-blue-b:#15284a;--rs-band:rgba(143,184,255,.07);--rs-c-red:rgba(255,107,107,.78);--rs-c-amber:rgba(230,184,78,.70);--rs-c-green:rgba(52,217,154,.42);--rs-c-normal:#1a2a42;--rs-c-wait:#16284a;--rs-c-snz:#232a3a;--rs-num:"IBM Plex Sans Condensed","Roboto Condensed","Arial Narrow",-apple-system,BlinkMacSystemFont,sans-serif;--rs-emo:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;--rs-r:14px}
 #rs-root,#rs-layer{color:var(--ink);font:13.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased;text-align:left}
@@ -3662,6 +3743,16 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 <div class="app">
   <aside>
     <div class="brand"><div class="logo">◈</div><div class="nm">AdMob IQ<small>Revenue Intelligence</small></div></div>
+    <div class="hub-nav" id="hub-nav">
+      <ul class="nav">
+        <li><button type="button" data-hnav="review" onclick="hubNavPage('review')"><span class="i">✅</span> Review <span class="badge" id="nav-review-h" hidden></span></button></li>
+        <li><button type="button" data-hnav="home" onclick="hubHome()"><span class="i">🏠</span> Home</button></li>
+        <li><button type="button" data-hnav="alerts" onclick="hubNavPage('alerts')"><span class="i">🔔</span> Alerts <span class="badge" id="nav-alert-h">·</span></button></li>
+        <li><button type="button" data-hnav="reco" onclick="hubNavPage('reco')"><span class="i">💡</span> Recommendations</button></li>
+        <li><button type="button" data-hnav="settings" onclick="hubNavPage('settings')"><span class="i">⚙️</span> Accounts &amp; Apps</button></li>
+      </ul>
+    </div>
+    <div class="nav-classic">
     <div class="nav-lbl">Analyse</div>
     <ul class="nav" id="nav">
       <li><button data-screen="review"><span class="i">✅</span> Review <span class="badge" id="nav-review" hidden></span></button></li>
@@ -3684,6 +3775,9 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
     </ul>
     <div class="nav-lbl">Setup</div>
     <ul class="nav"><li><button data-screen="settings"><span class="i">⚙️</span> Accounts &amp; Apps</button></li></ul>
+    </div>
+    <div class="hub-beta"><button type="button" id="hub-beta" role="switch" aria-checked="false" onclick="hubToggle()"><span class="hbk" aria-hidden="true"></span><span class="hbt">✨ Try new layout<span class="hbb">beta</span></span><span class="hbs" id="hub-beta-s">Off</span></button>
+      <div class="hbh">Ek app = ek page, saare features uske tabs me. Pasand na aaye to yahin se wapas Off.</div></div>
     <div class="side-foot">Live · engine-computed<br>v0.2 · click to explore</div>
   </aside>
   <div class="nav-scrim" onclick="closeNav()"></div>
@@ -3701,6 +3795,7 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
       </div>
       <span class="live" id="freshness" title="Data kab update hua"><span class="dot-live"></span> <span id="fresh-txt">Live</span></span>
       <span class="ctrl" id="tzchip" title="Ye numbers is time zone par hain — aapke AdMob account ke hisab se (isliye aapki AdMob app se match karte hain)" style="display:none">🕐 <span id="tz-txt"></span><span id="tz-ab"></span></span>
+      <div class="hub-bar" id="hub-bar" role="tablist" aria-label="App tabs" hidden onkeydown="hubBarKey(event)"></div>
     </div>
     <div class="content" id="content"><div id="banner"></div><div id="screens"><div class="iqload" id="bootload">
       <div class="lhead"><div class="iqspin"></div><h2>Your dashboard is loading</h2></div>
@@ -3721,10 +3816,12 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
     </div></div></div>
   </main>
   <nav class="botbar" aria-label="Primary">
-    <button class="tabbtn" data-screen="review" onclick="show('review')"><span class="ti">✅</span>Review<span class="tbadge" id="tab-review"></span></button>
-    <button class="tabbtn" data-screen="overview" onclick="show('overview')"><span class="ti">📊</span>Overview</button>
-    <button class="tabbtn" data-screen="mediation" onclick="show('mediation')"><span class="ti">🔗</span>Mediation</button>
-    <button class="tabbtn" data-screen="alerts" onclick="show('alerts')"><span class="ti">🔔</span>Alerts<span class="tbadge" id="tab-alert"></span></button>
+    <button class="tabbtn" data-screen="review" onclick="navTap('review')"><span class="ti">✅</span>Review<span class="tbadge" id="tab-review"></span></button>
+    <button class="tabbtn" data-hnav="home" onclick="hubHome()"><span class="ti">🏠</span>Home</button>
+    <button class="tabbtn hub-x" data-screen="overview" onclick="show('overview')"><span class="ti">📊</span>Overview</button>
+    <button class="tabbtn hub-x" data-screen="mediation" onclick="show('mediation')"><span class="ti">🔗</span>Mediation</button>
+    <button class="tabbtn" data-screen="alerts" onclick="navTap('alerts')"><span class="ti">🔔</span>Alerts<span class="tbadge" id="tab-alert"></span></button>
+    <button class="tabbtn" data-hnav="reco" onclick="hubNavPage('reco')"><span class="ti">💡</span>Ideas</button>
     <button class="tabbtn" onclick="toggleNav()"><span class="ti">⋯</span>More</button>
   </nav>
 </div>
@@ -4034,7 +4131,9 @@ function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?
   if(UNIAPP&&uniName(UNIAPP)!==a) UNIAPP='';   // the header left the app whose Uninstall detail was open: close it (never one app under "All apps")
   if(ACTAPP&&actName(ACTAPP)!==a) ACTAPP='';   // … and the Active users tab's
   if(VALAPP&&valName(VALAPP)!==a) VALAPP='';   // … and the Install value tab's
+  if(HUB.on&&HUB.inHub){ render(); show(hubHost(hubTabs(a).indexOf(HUB.tab)>=0?HUB.tab:'overview',a)); if(!REFRESH_SILENT) window.scrollTo({top:0}); return; }   // ✨ hub: the same tab, the new scope
   render(); show(cur==='reportcard'?'placements':cur); if(!REFRESH_SILENT) window.scrollTo({top:0});
+  if(HUB.on) return;   // ✨ hub (a page outside Home): the hub's own Back step covers the app change
   if(!was&&a) hbPush('app',hbAppUndo); else if(was&&!a) hbDrop('app'); }   // phone Back = "← All apps"
 // ---- the header's App picker (#apk) — owner: "isme icon nahi aaya abhi tak". A native <select> can't show images, so the
 // button opens our own list: every app with ITS icon (by app_id), its account when the name doesn't already say it, the
@@ -4226,21 +4325,23 @@ function render(){
   window.__ax=null;              // invalidate the cached calendar axis (data may have changed)
   rvSaveFocus();                 // Review tab: remember a focused field inside #rv-root (its node survives this rebuild)
   const root=document.getElementById('screens');root.innerHTML='';
-  root.append(renderOverview(),renderPlacements(),renderReport(),renderAppDetail(),renderMovers(),renderAlerts(),
+  root.append(hubOv(renderOverview()),renderPlacements(),renderReport(),renderAppDetail(),renderMovers(),renderAlerts(),
               renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderActive(),renderUninstall(),renderDateWise(),renderReco(),renderHealth(),renderSettings(),renderValue());
   root.append(renderEcpm());     // 📈 eCPM trend (from the Overview "Avg eCPM" tile): an empty shell, filled by show('ecpm')
   root.append(renderAudience()); // 👪 Audience: an empty shell, filled by show('audience') (its app / mode / day / open folds live in AU)
   { const li=document.getElementById('nav-aud-li'); if(li) li.hidden=!AU.ptr(); }   // the tab only when this build wrote its file
+  if(HUB.on) root.append(renderHubRv());   // ✨ hub: an app's ✅ Review history tab
   root.append(renderReview());   // ONE persistent node: drafts / open panels survive the 5-min refresh and the ₹/$ toggle
   rvRestoreFocus();
   document.getElementById('nav-alert').textContent=alertsBadgeN();
+  {const _h=document.getElementById('nav-alert-h');if(_h)_h.textContent=alertsBadgeN();}
   {const _tb=document.getElementById('tab-alert');if(_tb){const _n=alertsBadgeN();_tb.textContent=_n;_tb.classList.toggle('on',_n>0);}}
   appSelSync();
   const rsel=document.getElementById('rangesel'); if(rsel) rsel.value=RANGE;
   const rcust=document.getElementById('rangecustom'); if(rcust) rcust.style.display=(RANGE==='custom'?'inline-flex':'none');
   if(!window.__wired){            // attach static listeners once (survives auto-refresh re-renders)
     window.__wired=true;
-    document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));
+    document.querySelectorAll('.nav button[data-screen]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));   // (the hub's nav has its own)
     const rs=document.getElementById('rangesel'); if(rs) rs.addEventListener('change',e=>setRange(e.target.value));
     const sel0=document.getElementById('appsel'); if(sel0) sel0.addEventListener('change',e=>setApp(e.target.value));
     apkWire();                    // the App picker over it (button + list with every app's icon)
@@ -4253,7 +4354,7 @@ function render(){
     else { bn.innerHTML=''; }
   }
   updateFreshness();
-  show('overview');
+  HUB.hold++; try{ show('overview'); }finally{ HUB.hold--; }   // ✨ hub: not a route — the caller shows the real screen next
 }
 // ---- live freshness + auto-refresh ----
 function relTime(iso){
@@ -4356,16 +4457,19 @@ function hbSync(){ const H=hbHist(); if(!H||HB.busy) return; const want=HB.st.le
   try{
     if(HB.depth>want){ HB.busy=true; HB.want=want; clearTimeout(HB.t); HB.t=setTimeout(hbUnstick,1500); H.go(want-HB.depth); return; }
     if(HB.depth<want&&HB.depth===0&&hbD(H.state)==null) H.replaceState({iqb:0},'');   // mark the page's own step
-    while(HB.depth<want){ H.pushState({iqb:HB.depth+1},''); HB.depth++; }
+    while(HB.depth<want){ const x=HB.st[HB.depth];   // ✨ a hub step: its own #home… URL
+      if(x&&x.hub&&x.url!=null) H.pushState({iqb:HB.depth+1},'',location.pathname+location.search+x.url); else H.pushState({iqb:HB.depth+1},''); HB.depth++; }
   }catch(e){ HB.busy=false; } }
 function hbUnstick(){ if(!HB.busy) return; HB.busy=false; const H=hbHist(), d=H?hbD(H.state):null; if(d!=null) HB.depth=d; hbSync(); }
 // a Review #hash left on a step we came back to, while another screen is open: drop it (else Review's hashchange jumps there)
-function hbFixHash(){ try{ const H=hbHist(), h=String((typeof location!=='undefined'&&location.hash)||''); if(!H||h.indexOf('#review')!==0) return;
+function hbFixHash(){ try{ const H=hbHist(), h=String((typeof location!=='undefined'&&location.hash)||''); if(H&&typeof HUB!=='undefined'&&hubFixUrl(h)) return; if(!H||h.indexOf('#review')!==0) return;
   const on=document.querySelector('.screen.on'); if(on&&on.dataset&&on.dataset.screen==='review') return;
   H.replaceState({iqb:HB.depth},'',location.pathname+location.search); }catch(e){} }
 function hbPop(e){ const d=hbD(e&&e.state);
   if(HB.busy){ HB.busy=false; clearTimeout(HB.t); HB.depth=d!=null?d:HB.want; hbFixHash(); hbSync(); return; }   // our own step back landed
-  const nd=d!=null?d:Math.max(0,HB.depth-1), n=HB.depth-nd; HB.depth=nd;   // the reader's Back (a step without our mark = one)
+  const nd=d!=null?d:Math.max(0,HB.depth-1), n=HB.depth-nd;
+  if((n<0||d==null)&&typeof HUB!=='undefined'&&HUB.on&&hubPop(d,nd)) return;   // ✨ hub: Forward onto a tab / a typed #home…
+  HB.depth=nd;   // the reader's Back (a step without our mark = one)
   if(n>0){ const gone=HB.st.splice(Math.max(0,HB.st.length-n)).reverse(); HB.mute++;
     try{ gone.forEach(x=>{ try{ if(x.undo) x.undo(); }catch(err){} }); }finally{ HB.mute--; } }
   hbFixHash(); hbLater(); }
@@ -4380,6 +4484,7 @@ const OVOPEN={};   // Overview's mobile accordion cards (Top movers / Needs atte
 function ovToggle(ct){ const card=ct.closest('.card'); card.classList.toggle('open');
   const k=card.classList.contains('ov-movers')?'movers':card.classList.contains('ov-attn')?'attn':''; if(k) OVOPEN[k]=card.classList.contains('open'); }
 function show(id){
+  if(HUB.on&&!HUB.hold){ id=hubPre(id); if(id==null) return; }   // ✨ hub: which tab / page this is (an app's App Report: drawn there)
   if(!REFRESH_SILENT) closeNav();          // mobile: selecting a screen closes the drawer (not a silent background refresh — don't shut a menu the reader has open)
   if(id==='baseline') loadBaseline();     // lazy-fetch the baseline payload on first open
   if(id==='mediation') loadMED(()=>medRerender());   // lazy-fetch daily-by-source → window to period
@@ -4400,6 +4505,7 @@ function show(id){
   rvOnShow(id);                             // body[data-screen] (hides App / Period on Review) + the #review hash
   if(!_rvKeep&&!REFRESH_SILENT&&!SP.keep) window.scrollTo({top:0});   // a silent background refresh / a same-view rebuild (rerender) never jumps the page
   _navSave();                               // remember where we are (restored on reload / tab return)
+  if(HUB.on&&!HUB.hold) hubPost(id);        // ✨ hub: the tab bar, the nav, the title, #home/… in the URL
 }
 // ---- Remember & restore the current view across a page reload or a mobile tab-discard, so coming back
 // keeps you on the SAME screen (and app/period) instead of snapping to Overview. ----
@@ -4408,7 +4514,8 @@ function _navSave(){
     const on=document.querySelector('.screen.on'); const screen=on?on.dataset.screen:'overview';
     localStorage.setItem('navstate', JSON.stringify({screen, app:APP, range:RANGE,
       adapp:(typeof ADAPP!=='undefined'?ADAPP:''), ppid:(typeof PPID!=='undefined'?PPID:''),
-      uniapp:(typeof UNIAPP!=='undefined'?UNIAPP:''), actapp:(typeof ACTAPP!=='undefined'?ACTAPP:''), valapp:(typeof VALAPP!=='undefined'?VALAPP:''), t:Date.now()}));
+      uniapp:(typeof UNIAPP!=='undefined'?UNIAPP:''), actapp:(typeof ACTAPP!=='undefined'?ACTAPP:''), valapp:(typeof VALAPP!=='undefined'?VALAPP:''), t:Date.now(),
+      hub:(typeof HUB!=='undefined'&&HUB.on)?{in:HUB.inHub,tab:HUB.tab}:undefined}));
   }catch(e){}
 }
 let RVLAND=false, RVLANDOK=false;   // review/index.json lists a day → Review is the landing screen · no recent saved view (deep links / the hash still win)
@@ -4416,7 +4523,7 @@ let RVLAND=false, RVLANDOK=false;   // review/index.json lists a day → Review 
 // view, no #review… deep link — rvBoot opens those) and the reader is still on the first screen
 function rvLanding(r){ try{ RVLAND=!!(r&&r.ok&&r.idx&&Array.isArray(r.idx.days)&&r.idx.days.length);
     const on=document.querySelector('.screen.on'), cur=on&&on.dataset?on.dataset.screen:'overview';
-    if(RVLAND&&RVLANDOK&&cur==='overview'&&!rvParseHash(location.hash)){ show('review'); return true; } }catch(e){} return false; }
+    if(RVLAND&&RVLANDOK&&cur==='overview'&&!rvParseHash(location.hash)&&!(HUB.on&&hubParse(HUB.hash0))){ const m=HUB.on; if(m) HB.mute++; try{ show('review'); }finally{ if(m) HB.mute--; } return true; } }catch(e){} return false; }   // (✨ hub: the landing is no Back step)
 function _navRestore(){ HB.mute++; try{ _navRestore0(); }finally{ HB.mute--; } }   // a restored view is no new Back step
 function _navRestore0(){
   let n=null; try{ n=JSON.parse(localStorage.getItem('navstate')||'null'); }catch(e){}
@@ -4432,6 +4539,315 @@ function _navRestore0(){
     if(n.screen && n.screen!=='overview'){ show(n.screen); return; }
   }catch(e){}
 }
+
+// ==== ✨ APP HUB — the new layout (BETA). Owner, 5 Oct 2026: "app choose karo → us app ka EK page, saare features uske
+// tabs me." Behind a switch: "✨ Try new layout (beta)" in the sidebar (= the phone's More menu) or ?layout=hub in the URL
+// (?layout=classic turns it off); remembered in localStorage; default OFF. OFF = the old layout exactly — every hook in the
+// page returns early on !HUB.on.
+// Same tabs, scope switch: the header App picker sets the scope ("All apps" = the portfolio, an app = that app); Home = a hub
+// with a sticky tab bar (inside the sticky top bar). Every tab HOSTS an existing screen — show(id) / openAppDetail() as
+// before, their content, numbers and logic untouched; the hub only decides which one is on, paints the bar, and keeps
+// #home/<all|appkey>/<tab> in the URL (Back / Forward / refresh / bookmarks). appkey = sha1(app_id)[:12], the same opaque key
+// as the review / GA4 files (no app name in the URL). Each tab or app change = ONE phone Back step (HB: tag hub…, its own
+// URL); a same-view rebuild (rerender, the 5-min refresh: HB.mute) only rewrites the URL. Old screen names keep working:
+// show('active') = the Active users tab of the scope in view.
+const HUB={on:false,inHub:false,tab:'overview',seq:0,hold:0,inner:0,nav:false,cur:null,boot:false,tmark:false,hash0:'',
+  keys:null,keysFor:null,kc:{},rv:{idx:null,idxAt:0,files:{},busy:{},want:14,st:{},stBusy:{},loading:false}};
+const HUB_LS='iq_layout';
+// tab id → [label, icon, screen at All apps, screen at an app] ('' = the tab is not in that scope)
+const HUB_T={overview:['Overview','📊','overview','overview'],revenue:['Revenue & Ad units','💵','placements','appdetail'],
+  ecpm:['eCPM','📈','ecpm','ecpm'],active:['Active users','👥','active','active'],uninstall:['Uninstall','🚪','uninstall','uninstall'],
+  value:['Install value','💸','value','value'],audience:['Audience','👪','audience','audience'],mediation:['Mediation','🔗','mediation','mediation'],
+  roas:['Marketing ROAS','💰','roas','roas'],baseline:['Baseline','📐','baseline','baseline'],deductions:['Deductions','📉','deductions','deductions'],
+  health:['Account Health','🛡️','health','health'],movers:['Movers','↕️','movers','movers'],alerts:['Alerts','🔔','','alerts'],
+  review:['Review history','✅','','hubrv']};
+const HUB_ALL=['overview','revenue','ecpm','active','uninstall','value','audience','mediation','roas','baseline','deductions','health','movers'];
+const HUB_APP=['overview','revenue','ecpm','active','uninstall','value','audience','baseline','alerts','review','mediation','roas','deductions','health','movers'];
+const HUB_PAGE={review:1,reco:1,settings:1};                                    // left-nav pages outside Home (Alerts: below)
+const HUB_DRILL={datewise:'overview',countries:'overview',reportcard:'revenue'};   // drill pages: inside the tab they came from
+function hubLsGet(){ try{ return localStorage.getItem(HUB_LS); }catch(e){ return null; } }
+function hubLsSet(v){ try{ if(v) localStorage.setItem(HUB_LS,v); else localStorage.removeItem(HUB_LS); }catch(e){} }
+function hubScr(){ const o=document.querySelector('.screen.on'); return (o&&o.dataset&&o.dataset.screen)||''; }
+function hubBody(){ const b=document.body; if(!b||!b.classList) return; b.classList.toggle('hub-on',!!HUB.on); b.classList.toggle('hub-in',!!(HUB.on&&HUB.inHub));
+  const bar=document.getElementById('hub-bar'); if(bar) bar.hidden=!(HUB.on&&HUB.inHub); }
+function hubSwitchSync(){ const b=document.getElementById('hub-beta'), t=document.getElementById('hub-beta-s'); if(b) b.setAttribute('aria-checked',HUB.on?'true':'false'); if(t) t.textContent=HUB.on?'On':'Off'; }
+// boot: ?layout=hub | classic wins (and is remembered), else the stored choice; the param then leaves the URL
+function hubInit(){ let q=null; try{ HUB.hash0=String(location.hash||''); }catch(e){}   // the URL's own hash (a bookmark), before the hub writes one
+  try{ const m=/[?&]layout=([a-z]+)/i.exec(String(location.search||'')); q=m?m[1].toLowerCase():null; }catch(e){}
+  if(q==='hub'||q==='new'||q==='beta') hubLsSet('hub'); else if(q==='classic'||q==='old'||q==='off') hubLsSet('');
+  if(q) try{ const s=String(location.search).replace(/([?&])layout=[^&]*(&|$)/i,(m,a,b)=>b?a:'').replace(/[?&]$/,''); history.replaceState(history.state,'',location.pathname+s+location.hash); }catch(e){}
+  HUB.on=hubLsGet()==='hub'; hubBody(); hubSwitchSync(); }
+// the switch (sidebar / More): the same screen, redrawn in the other layout — no Back step, no jump
+function hubToggle(force){ const on=force==null?!HUB.on:!!force; if(on===HUB.on){ hubSwitchSync(); return; } hubLsSet(on?'hub':'');
+  if(on){ HUB.on=true; HUB.cur=null; HUB.inHub=false; hubBody(); hubSwitchSync(); rerender(); hubBody(); return; }
+  HUB.on=false; HUB.inHub=false; HUB.cur=null; hubBody(); hubSwitchSync();
+  if(hubScr()==='hubrv') document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.dataset.screen==='overview'));
+  const had=HB.st.length; HB.st=HB.st.filter(x=>!x.hub); if(HB.st.length!==had) hbLater();   // the tab steps go with the hub
+  hubUrl(''); rerender(); }
+// ---- app key ⇄ name. The key = sha1(app_id)[:12] (the app's highest-revenue AdMob id, as its icon; else a GA4 tab's id) ----
+function hubSha1(str){ const u=unescape(encodeURIComponent(String(str))), l=u.length, W=[];
+  for(let i=0;i<l;i++) W[i>>2]=(W[i>>2]||0)|(u.charCodeAt(i)<<(24-8*(i&3)));
+  W[l>>2]=(W[l>>2]||0)|(0x80<<(24-8*(l&3))); const nb=((l+8)>>6)+1; W[nb*16-1]=l*8;
+  let h0=0x67452301,h1=0xEFCDAB89,h2=0x98BADCFE,h3=0x10325476,h4=0xC3D2E1F0; const w=new Array(80), rol=(x,n)=>(x<<n)|(x>>>(32-n));
+  for(let b=0;b<nb*16;b+=16){ for(let t=0;t<80;t++) w[t]=t<16?(W[b+t]|0):rol(w[t-3]^w[t-8]^w[t-14]^w[t-16],1);
+    let a=h0,c1=h1,c2=h2,c3=h3,c4=h4;
+    for(let t=0;t<80;t++){ const f=t<20?((c1&c2)|(~c1&c3))+0x5A827999:t<40?(c1^c2^c3)+0x6ED9EBA1:t<60?((c1&c2)|(c1&c3)|(c2&c3))+0x8F1BBCDC:(c1^c2^c3)+0xCA62C1D6;
+      const tmp=(rol(a,5)+f+c4+w[t])|0; c4=c3; c3=c2; c2=rol(c1,30); c1=a; a=tmp; }
+    h0=(h0+a)|0; h1=(h1+c1)|0; h2=(h2+c2)|0; h3=(h3+c3)|0; h4=(h4+c4)|0; }
+  return [h0,h1,h2,h3,h4].map(x=>('00000000'+(x>>>0).toString(16)).slice(-8)).join(''); }
+function hubAppId(name){ const D=(typeof DATA!=='undefined'&&DATA)||{};
+  const cat=(D.apps_catalog||[]).filter(x=>x&&x.app_name===name).sort((a,b)=>(b.rev||0)-(a.rev||0)); if(cat.length&&cat[0].app_id) return String(cat[0].app_id);
+  for(const k of ['uninstall','active','value']){ const x=((D[k]&&D[k].apps)||[]).find(y=>y&&y.app===name&&y.app_id); if(x) return String(x.app_id); }
+  return ''; }
+function hubKeyOf(name){ if(!name) return 'all'; if(HUB.kc[name]) return HUB.kc[name];
+  const id=hubAppId(name), k=id?hubSha1(id).slice(0,12):'n'+hubSha1('name:'+name).slice(0,11); HUB.kc[name]=k; return k; }
+function hubNames(){ const D=(typeof DATA!=='undefined'&&DATA)||{}, s=new Set(); (D.apps||[]).forEach(a=>{ if(a&&a.name) s.add(a.name); });
+  ['uninstall','active','value'].forEach(k=>((D[k]&&D[k].apps)||[]).forEach(a=>{ if(a&&a.app) s.add(a.app); })); if(APP) s.add(APP); return [...s]; }
+// '' = All apps; null = no app with that key in this build
+function hubNameOf(key){ if(!key||key==='all') return '';
+  if(HUB.keysFor!==DATA){ HUB.kc={}; HUB.keys={}; HUB.keysFor=DATA; } let n=HUB.keys[key];
+  if(n==null){ HUB.keys={}; hubNames().forEach(x=>{ const k=hubKeyOf(x); if(!(k in HUB.keys)) HUB.keys[k]=x; }); n=HUB.keys[key]; }
+  return n==null?null:n; }
+// ---- routes ----
+function hubParse(h){ const m=/^#home(?:\/([a-z0-9]{1,16})(?:\/([a-z]+))?)?\/?$/.exec(String(h||'')); return m?{key:m[1]||'all',tab:m[2]||''}:null; }
+function hubTabs(app){ let au=false; try{ au=!!AU.ptr(); }catch(e){} return (app?HUB_APP:HUB_ALL).filter(t=>t!=='audience'||au); }
+function hubHost(t,app){ const x=HUB_T[t]; return x?(app?x[3]:x[2]):''; }
+function hubHashOf(r){ return '#home/'+hubKeyOf(r.a)+'/'+r.t; }
+function hubHash(){ return hubHashOf({a:APP,t:HUB.tab}); }
+function hubSame(a,b){ return !!a&&!!b&&!!a.h===!!b.h&&a.a===b.a&&(a.h?a.t===b.t:a.p===b.p); }
+// which tab / screen a show(id) is, in the scope `app`, from the state st {inHub, tab}
+function hubResolve(id,app,st){ const T=hubTabs(app), cur=st&&T.indexOf(st.tab)>=0?st.tab:'overview';
+  if(id==='home') return {inHub:true,tab:cur,screen:hubHost(cur,app)};
+  if(HUB_PAGE[id]) return {inHub:false,tab:st.tab,screen:id};
+  if(id==='alerts') return app&&st.inHub?{inHub:true,tab:'alerts',screen:'alerts'}:{inHub:false,tab:st.tab,screen:'alerts'};
+  const t=T.find(x=>hubHost(x,app)===id); if(t) return {inHub:true,tab:t,screen:id};
+  // a screen of the other scope (show(cur) after an app change, an App Report at All apps …): the same tab here, else Overview
+  const o=Object.keys(HUB_T).find(x=>hubHost(x,!app)===id);
+  if(o){ const tt=T.indexOf(o)>=0?o:(st.inHub&&T.indexOf(st.tab)>=0&&id!==hubHost(st.tab,!app)?st.tab:'overview'); return {inHub:true,tab:tt,screen:hubHost(tt,app)}; }
+  if(HUB_DRILL[id]) return {inHub:true,tab:st.inHub&&T.indexOf(st.tab)>=0?st.tab:HUB_DRILL[id],screen:id};
+  return {inHub:false,tab:st.tab,screen:id}; }
+// show(id) → the screen to show (null = handled here). The new route takes its Back step NOW, before the screen's own hash work.
+function hubPre(id){ if(HUB.hold) return id;
+  const r=HUB.nav?{inHub:false,tab:HUB.tab,screen:id}:hubResolve(id,APP,{inHub:HUB.inHub,tab:HUB.tab}); HUB.nav=false;
+  HUB.inHub=r.inHub; HUB.tab=r.tab; hubMark(r.inHub?{h:1,a:APP,t:r.tab}:{h:0,a:APP,p:r.screen});
+  if(r.screen==='appdetail'&&APP&&!HUB.inner){   // an app's "Revenue & Ad units" = its App Report, drawn by openAppDetail
+    if(!REFRESH_SILENT) closeNav(); try{ ecLeft(); }catch(e){} try{ AU.left(); }catch(e){}
+    HUB.inner++; HB.mute++; try{ openAppDetail(APP); }finally{ HB.mute--; HUB.inner--; } return null; }   // (muted: its own 'appdetail' step — the hub's covers it)
+  return r.screen; }
+function hubMark(route){ const prev=HUB.cur; HUB.cur=route; if(!prev||!HUB.boot||hubSame(prev,route)) return; hubStep(prev,route.h?hubHashOf(route):''); }
+// one Back step per tap (a tab + an app change in the same tap = one), its URL pushed with it
+function hubStep(prev,url){ if(HB.mute>0||!hbHist()) return;
+  const last=HB.st[HB.st.length-1]; if(HUB.tmark&&last&&last.hub){ last.url=url; return; }
+  HB.st.push({tag:'hub'+(++HUB.seq),hub:1,url,undo:()=>hubRestore(prev)});
+  HUB.tmark=true; Promise.resolve().then(()=>{ HUB.tmark=false; }); hbSync(); }
+function hubRestore(p){ if(!HUB.on||!p) return;
+  if(p.h){ hubGo(p.a,p.t); return; }
+  if(p.a!==APP){ HUB.inHub=false; setApp(p.a); } HUB.nav=true; show(p.p); }
+// after a screen is on: the bar, the nav, the title, the URL
+function hubPost(id){ if(!HUB.on||HUB.hold) return;
+  hubBody(); hubBar(); hubNavSync(id); if(HUB.inHub) hubTitle(id);
+  if(id==='hubrv') hubRvShow(); else if(id==='overview'&&APP&&!REFRESH_SILENT) hubCardsPaint();   // (data that landed while away)
+  hubUrl(HUB.inHub?hubHash():''); }
+function hubUrl(u){ const H=hbHist(); if(!H) return; const h=String((typeof location!=='undefined'&&location.hash)||'');
+  try{ if(u){ if(h!==u) H.replaceState(H.state,'',location.pathname+location.search+u); }
+    else if(h.indexOf('#home')===0) H.replaceState(H.state,'',location.pathname+location.search); }catch(e){} }
+// hbFixHash: the route in view owns the hash (a step we came back to may carry another one); off → a #home hash goes
+function hubFixUrl(h){ if(!HUB.on){ if(String(h).indexOf('#home')!==0) return false; hubUrl(''); return true; }
+  if(HUB.inHub){ hubUrl(hubHash()); return true; } if(String(h).indexOf('#home')===0){ hubUrl(''); return true; } return false; }
+// the phone's Forward onto a hub step / a typed or bookmarked #home… (no step mark): routed, with a Back step of its own
+function hubPop(d,nd){ if(!HUB.on) return false; const r=hubParse(location.hash); if(!r) return false;
+  const name=hubNameOf(r.key); if(name==null) return false; const H=hbHist(); if(!H) return false;
+  const T=hubTabs(name), tab=T.indexOf(r.tab)>=0?r.tab:'overview', to={h:1,a:name,t:tab};
+  if(d!=null&&nd!==HB.depth+1) return false;
+  if(hubSame(HUB.cur,to)&&d!=null) return false;
+  const prev=HUB.cur; HB.st.push({tag:'hub'+(++HUB.seq),hub:1,url:hubHashOf(to),undo:()=>hubRestore(prev)}); HB.depth++;
+  if(d==null) try{ H.replaceState({iqb:HB.depth},'',location.href); }catch(e){}
+  HB.mute++; try{ hubGo(name,tab); }finally{ HB.mute--; } return true; }
+function hubGo(app,tab,o){ app=app||''; if(!HUB_T[tab]||hubTabs(app).indexOf(tab)<0) tab='overview';
+  if(!HUB.on){ if(app!==APP) setApp(app); show(hubHost(tab,app)||'overview'); return; }
+  if(HUB.inHub&&app===APP&&tab===HUB.tab&&hubScr()===hubHost(tab,app)){ if(!REFRESH_SILENT) closeNav(); return; }   // already there
+  HUB.inHub=true; HUB.tab=tab;
+  if(app!==APP) setApp(app); else show(hubHost(tab,app)); }
+function hubTab(t){ hubGo(APP,t); }
+function hubHome(){ hubGo(APP,HUB.inHub?'overview':HUB.tab); }
+function hubNavPage(p){ if(!HUB.on){ show(p); return; } HUB.nav=true; show(p); }
+function navTap(p){ if(HUB.on) hubNavPage(p); else show(p); }   // the phone bar's Review / Alerts: the page (never an app's tab)
+// openAppDetail(name): from the All-apps Overview's app list = the app's own page (its Overview tab); from anywhere else = its
+// "Revenue & Ad units" tab (false = draw it here: the same report again — a view / period / metric change, a refresh)
+function hubOpenApp(name){ if(!HUB.on||HUB.inner||!name) return false; if(name===APP&&HUB.inHub&&HUB.tab==='revenue') return false;
+  hubGo(name,!APP&&HUB.inHub&&hubScr()==='overview'?'overview':'revenue'); return true; }
+// the first view: a #home… URL wins (a bookmark / refresh), else the restored screen through the hub
+function hubBoot(){ if(!HUB.on) return; HB.mute++;
+  try{ const r=hubParse(HUB.hash0), name=r?hubNameOf(r.key):null;
+    if(r&&name!=null){ HUB.inHub=true; HUB.tab=r.tab||'overview'; if(name!==APP){ setApp(name); } else show(hubHost(hubTabs(name).indexOf(HUB.tab)>=0?HUB.tab:'overview',name)); return; }
+    let n=null; try{ n=JSON.parse(localStorage.getItem('navstate')||'null'); }catch(e){}
+    if(n&&n.hub&&n.hub.in&&HUB_T[n.hub.tab]&&(!n.t||Date.now()-n.t<12*3600*1000)){ HUB.inHub=true; HUB.tab=n.hub.tab; show(hubHost(hubTabs(APP).indexOf(HUB.tab)>=0?HUB.tab:'overview',APP)); return; }
+    const sc=hubScr(); if(sc==='appdetail'&&ADAPP) openAppDetail(ADAPP); else show(sc||'overview'); }
+  finally{ HB.mute--; } }
+function hubReady(){ HUB.boot=true; }
+// ---- the bar (in the sticky top bar: a Studio's own sticky bar measures it with the top bar), the nav, the title ----
+function hubBar(){ const b=document.getElementById('hub-bar'); if(!b) return; b.hidden=!HUB.inHub; if(!HUB.inHub) return;
+  const T=hubTabs(APP), sig=(APP?'a|':'p|')+T.join(',');
+  if(b.getAttribute('data-sig')!==sig){ b.setAttribute('data-sig',sig);
+    b.setAttribute('aria-label',APP?'App tabs':'All apps tabs');
+    b.innerHTML=T.map(t=>`<button type="button" role="tab" class="hub-tab" id="hub-t-${t}" data-tab="${t}" aria-selected="false" tabindex="-1" onclick="hubTab('${t}')"><span class="hti" aria-hidden="true">${HUB_T[t][1]}</span>${HUB_T[t][0]}</button>`).join(''); }
+  let on=null; (b.querySelectorAll?b.querySelectorAll('.hub-tab'):[]).forEach(x=>{ const a=x.getAttribute('data-tab')===HUB.tab; x.setAttribute('aria-selected',a?'true':'false'); x.tabIndex=a?0:-1; x.classList.toggle('on',a); if(a) on=x; });
+  if(on&&b.clientWidth){ const L=on.offsetLeft, R=L+on.offsetWidth, sl=b.scrollLeft, w=b.clientWidth;   // the tab in view: the bar's own sideways scroll, never the page
+    if(L<sl+8) b.scrollLeft=Math.max(0,L-28); else if(R>sl+w-8) b.scrollLeft=R-w+28; } }
+function hubBarKey(e){ const k=e.key; if(k!=='ArrowRight'&&k!=='ArrowLeft'&&k!=='Home'&&k!=='End') return; const T=hubTabs(APP); let i=T.indexOf(HUB.tab); if(i<0) return;
+  e.preventDefault(); i=k==='Home'?0:k==='End'?T.length-1:(i+(k==='ArrowRight'?1:-1)+T.length)%T.length; hubTab(T[i]);
+  const x=document.getElementById('hub-t-'+T[i]); if(x) try{ x.focus({preventScroll:true}); }catch(err){} }
+function hubNavSync(id){ const home=HUB.inHub;
+  document.querySelectorAll('[data-hnav]').forEach(b=>b.classList.toggle('active',home?b.getAttribute('data-hnav')==='home':b.getAttribute('data-hnav')===id));
+  document.querySelectorAll('.botbar .tabbtn[data-screen]').forEach(b=>b.classList.toggle('active',!home&&b.getAttribute('data-screen')===id));
+  const na=document.getElementById('nav-alert-h'); if(na) na.textContent=alertsBadgeN(); }
+function hubTitle(id){ const tt=document.getElementById('tb-title'), ts=document.getElementById('tb-sub'), L=(HUB_T[HUB.tab]||[''])[0];
+  if(APP){ if(tt) tt.innerHTML=`<span class="ain">${appIcon(APP,22)}<span class="ain-t">${hAttr(APP)}</span></span>`; if(ts) ts.textContent=L+(TITLES[id]&&id!=='overview'?' · '+TITLES[id][1]:''); }
+  else if(ts&&TITLES[id]) ts.textContent='All apps · '+TITLES[id][1]; }
+
+// ---- 📱 App Overview: the app's head (icon, name, account, key numbers) + one small card per feature, above the old Overview ----
+function hubOv(s){ if(!HUB.on||!APP||!s) return s;
+  try{ const d=document.createElement('div'); d.className='hub-ov'; d.id='hub-ov'; d.innerHTML=hubOvHtml(APP); s.insertBefore(d,s.firstChild); }catch(e){}
+  const o=hubRvOpen(); if(!o||!o.f) hubRvEnsure(hubCardsPaint);   // today's Review card: the cards repaint in place when it lands
+  return s; }
+function hubDay(){ return (DATA&&DATA.latest_complete)||''; }
+// the app's AdMob day: revenue / impressions on `day`, and its usual (the 7 complete days before it, per day)
+function hubRev(name){ const L=hubDay(), T=(DATA&&DATA.today_date)||''; const ax=gAxis().filter(d=>d!==T&&d<L).slice(-7), ws=new Set(ax);
+  let e=0,i=0,ue=0; (DATA.placements||[]).forEach(p=>{ if(p.app!==name) return; (p.daily||[]).forEach(r=>{ if(r[0]===L){ e+=r[1]; i+=r[2]; } else if(ws.has(r[0])) ue+=r[1]; }); });
+  return {day:L,rev:e/1e6,impr:i,usual:ax.length?ue/1e6/ax.length:null,n:ax.length}; }
+function hubAct(name){ return ((DATA.active&&DATA.active.apps)||[]).find(x=>x&&x.app===name)||null; }
+// open alerts: ad units (critical / warning / watch) + approved-range breaches + the GA4 tabs' open (not "good") alerts
+function hubAlerts(name){ const ad=((DATA.alerts&&DATA.alerts.items)||[]).filter(x=>x&&x.app===name), rg=(DATA.range_alerts||[]).filter(x=>x&&x.app===name);
+  const g4=[DATA.uninstall,DATA.active,DATA.value].reduce((n,s)=>n+((s&&s.alerts)||[]).filter(x=>x&&x.app===name&&x.severity!=='good').length,0);
+  return {ad,rg,g4,n:ad.length+rg.length+g4,lost:ad.reduce((t,x)=>t+(+x.lost>0?+x.lost:0),0)}; }
+function hubEc(name){ try{ const A=ecAgg(), dm=A&&A.apps&&A.apps[name]; if(!dm) return null; return ecRow(dm,ecWin()); }catch(e){ return null; } }
+function hubOvHtml(name){ const acc=apkAcc(name).acc, R=hubRev(name), ac=hubAct(name), al=hubAlerts(name), ec=hubEc(name), D=R.day?fmtD(R.day):'';
+  const ch=R.usual?(R.rev-R.usual)/R.usual:null, chT=ch==null?'':` (${ch>=0?'+':'−'}${Math.abs(Math.round(ch*100))}%)`;
+  const dau=ac&&ac.latest&&ac.latest.a1!=null?ac.latest:null;
+  const k1=kpi(`💵 Revenue · ${D}`,money(R.rev),R.usual!=null?`usual ${money(R.usual)}/day${chT}`:'AdMob',ch==null?'muted':(ch>=0?'up':'down'));
+  const k2=kpi('👥 DAU',dau?Math.round(dau.a1).toLocaleString():'—',dau?`${fmtD(dau.day)} · GA4${dau.prov?' · not final':''}`:'GA4 data nahi','muted');
+  const k3=kpi(`📈 eCPM · ${D}`,ec&&ec.y!=null?cm(ec.y):'—',ec&&ec.w7!=null?`7-day avg ${cm(ec.w7)}${ec.pct!=null?' ('+ecPct(ec.pct)+')':''}`:'',ec&&ec.pct!=null?ecCls(ec.pct):'muted');
+  const k4=kpi('🔔 Open alerts',String(al.n),`ad units ${al.ad.length+al.rg.length} · users ${al.g4}`,al.n?'down':'muted');
+  const D2=(typeof DATA!=='undefined'&&DATA)||{}, gaT=ac&&ac.data_till?` · GA4 till ${fmtD(ac.data_till)}`:'';
+  return `<div class="hub-hd">${appIcon(name,46)}<div class="hub-hn"><div class="hub-nm">${hAttr(name)}${storeLnk(name)}</div>`
+    +`<div class="hub-ac">${acc?'🅐 '+hAttr(acc)+' · ':''}AdMob till ${fmtD(D2.latest_complete)}${gaT}</div></div></div>`
+    +`<div class="row c4 hub-kp">${k1}${k2}${k3}${k4}</div>`
+    +`<div class="hub-fh"><h3>Features</h3><span class="hub-fn" id="hub-fn">${hubFcNote()}</span></div>`
+    +`<div class="hub-fcs" id="hub-fcs">${hubCardsHtml(name)}</div>`
+    +`<div class="hub-sep"><span>📊 Overview · revenue, date-wise, ad units</span></div>`; }
+const HUB_RVST={red:'bigda',amber:'dhyan',green:'behtar',normal:'normal',wait:'jaldi',na:'lagu',nodata:'lagu'};
+// card id, tab, label, icon, source (rv:<review feature> = today's Review card for the app)
+const HUB_FC=[['revenue','revenue','Revenue & Ad units','💵','rv:kamai'],['ecpm','ecpm','eCPM','📈','ecpm'],['active','active','Active users','👥','rv:active'],
+  ['uninstall','uninstall','Uninstall','🚪','rv:uninstall'],['update','uninstall','Update impact','📦','rv:update'],['value','value','Install value','💸','rv:value'],
+  ['audience','audience','Audience','👪','aud'],['baseline','baseline','Baseline','📐','base'],['alerts','alerts','Alerts','🔔','alerts'],
+  ['review','review','Review history','✅','review'],['mediation','mediation','Mediation','🔗','rv:mediation'],['roas','roas','Marketing ROAS','💰','rv:ads'],
+  ['deductions','deductions','Deductions','📉','rv:deduct'],['health','health','Account Health','🛡️','rv:health'],['movers','movers','Movers','↕️','movers']];
+function hubStChip(st){ const k=WD.sti[st]?st:'lagu'; return `<span class="hub-st st-${k}">${WD.sti[k]}</span>`; }
+// today's Review card (the Studio file of the open day) for the app: {day, a} · null while loading / none
+function hubRvOpen(){ const I=HUB.rv.idx||RV.idx; const d=I&&I.open_day; return d?{d,f:HUB.rv.files[d]}:null; }
+function hubRvApp(f,name){ if(!f||!Array.isArray(f.apps)) return null; const k=hubKeyOf(name);
+  return f.apps.find(a=>a&&a.key===k)||f.apps.find(a=>a&&(a.dname===name||a.name===name))||null; }
+function hubFcNote(){ const o=hubRvOpen();
+  return o&&o.f&&o.f.day?`Status = aaj ka ✅ Review card (${fmtD(o.f.day)}) · eCPM, Audience, Baseline, Alerts = dashboard ka apna data`
+    :(HUB.rv.loading||!HUB.rv.idx?'⏳ Review card load ho raha hai…':'Review card abhi nahi — eCPM, Audience, Baseline, Alerts dashboard ke apne data se'); }
+function hubCardsHtml(name){ const o=hubRvOpen(), ra=o&&o.f?hubRvApp(o.f,name):null, fx=o&&o.f&&o.f.meta?o.f.meta.fx:null; let au=false; try{ au=!!AU.ptr(); }catch(e){}
+  return HUB_FC.filter(c=>c[0]!=='audience'||au).map(c=>{ const x=hubCard(c,name,ra,o,fx);
+    return `<div class="card hub-fc" data-st="${x.st}" data-fc="${c[0]}"><div class="hfc-h"><span class="hfc-i" aria-hidden="true">${c[3]}</span><span class="hfc-n">${c[2]}</span></div>`
+      +`${hubStChip(x.st)}<div class="hfc-l">${x.line}</div><button type="button" class="hfc-o" onclick="hubTab('${c[1]}')" aria-label="Open ${hAttr(c[2])}">Open →</button></div>`; }).join(''); }
+function hubCard(c,name,ra,o,fx){ const src=c[4];
+  if(src.indexOf('rv:')===0){ const f=src.slice(3), x=ra&&ra.f?ra.f[f]:null;
+    if(!o||!o.f) return {st:'lagu',line:HUB.rv.loading||!HUB.rv.idx?'⏳ loading…':'Review card nahi'};
+    if(!x||!x.st) return {st:'lagu',line:'No data'};
+    return {st:HUB_RVST[x.st]||'lagu',line:x.line!=null?rvRt(x.line,fx):rvEsc(x.t||'')}; }
+  if(src==='ecpm'){ const e=hubEc(name); if(!e||e.y==null) return {st:'lagu',line:'eCPM ka data nahi'};
+    return {st:e.st||'lagu',line:`<b>${cm(e.y)}</b> on ${fmtD(hubDay())}${e.w7!=null?` · 7-day avg ${cm(e.w7)}${e.pct!=null?' ('+ecPct(e.pct)+')':''}`:''}`}; }
+  if(src==='alerts'){ const al=hubAlerts(name), adN=al.ad.length+al.rg.length;
+    if(!al.n) return {st:'normal',line:'<b>0</b> open alerts'};
+    const sev=al.ad.some(x=>x.severity==='critical'||x.severity==='warning')||al.rg.some(x=>x.severity==='warning')?'bigda':'dhyan';
+    return {st:sev,line:`<b>${al.n}</b> open · ad units ${adN}${al.lost>0?` (~${money(al.lost)}/day loss)`:''} · users ${al.g4}`}; }
+  if(src==='base'){ const rg=(DATA.range_alerts||[]).filter(x=>x&&x.app===name), ids=new Set((DATA.placements||[]).filter(p=>p.app===name).map(p=>p.id));
+    const nr=Object.keys((typeof APPR!=='undefined'&&APPR&&APPR.placements)||{}).filter(k=>ids.has(k)).length;
+    if(rg.length) return {st:rg.some(x=>x.severity==='warning')?'bigda':'dhyan',line:`<b>${rg.length}</b> ad ${rg.length===1?'unit':'units'} outside approved range · ${hAttr(rg[0].place||'')}`};
+    if(!nr) return {st:'lagu',line:'No approved range set yet'};
+    return {st:'normal',line:`<b>${nr}</b> ad ${nr===1?'unit':'units'} with a range · all inside`}; }
+  if(src==='movers'){ const comp=gAxis().filter(d=>d!==(DATA.today_date||'')), cs=new Set(comp.slice(-7)), ps=new Set(comp.slice(-14,-7)); let c=0,p=0, top=null;
+    (DATA.placements||[]).forEach(q=>{ if(q.app!==name) return; let a=0,b=0; (q.daily||[]).forEach(r=>{ if(cs.has(r[0])) a+=r[1]; else if(ps.has(r[0])) b+=r[1]; }); c+=a; p+=b;
+      const dl=(a-b)/1e6; if(!top||Math.abs(dl)>Math.abs(top.d)) top={n:q.name,d:dl}; });
+    c/=1e6; p/=1e6; if(!c&&!p) return {st:'lagu',line:'No AdMob revenue'};
+    const ch=p>0?(c-p)/p:null, sg=v=>(v<0?'−':'+')+money(Math.abs(v));
+    return {st:'info',line:`<b>${sg(c-p)}</b> last 7 days vs 7 before${ch!=null?` (${ch>=0?'+':'−'}${Math.abs(Math.round(ch*100))}%)`:''}${top&&top.d?` · top: ${hAttr(top.n)} ${sg(top.d)}`:''}`}; }
+  if(src==='aud'){ let a=null, r=null, CNf=null;
+    try{ if(AU.ready()){ AU._.prep(); const k=AU._.keyOfName(name); a=AU._.BYK()[k]||null; CNf=AU._.CN; if(a&&!a.kam) r=AU._.stripReach(a); }
+      else AU.ensure(()=>{ hubCardsPaint(); try{ if(hubScr()==='audience') AU.paint(); }catch(e){} }); }catch(e){}   // (AU's own paint waits on the same load)
+    if(!a){ let rd=false; try{ rd=AU.ready(); }catch(e){} return {st:'lagu',line:rd?'Is app ka GA4 audience data nahi':'⏳ loading…'}; }
+    if(a.kam) return {st:'lagu',line:`Data kam · opened today <b>${CNf(a.a1)}</b>`};
+    return {st:'info',line:`<b>${CNf(a.sl)}</b> sleeping · ⚠️ <b>${CNf(r?r.dz:null)}</b> danger zone · 📲 ${CNf(r?r.push:null)} push se`}; }
+  if(src==='review'){ if(!o||!o.f) return {st:'lagu',line:HUB.rv.loading||!HUB.rv.idx?'⏳ loading…':'Review card nahi'};
+    if(!ra) return {st:'lagu',line:`Is app ka card ${fmtD(o.f.day)} me nahi`};
+    const n={red:0,amber:0}; Object.values(ra.f||{}).forEach(x=>{ if(x&&n[x.st]!=null) n[x.st]++; });
+    const S=(RV.me&&RV.doc&&RV.doc.day===o.f.day&&RV.S)?RV.S:null, s=S&&S.states?S.states[ra.key]:null;   // the team's state only when logged in (else unknown)
+    const rs=s&&s.st?(s.st==='flag'?'🚩 Re-review':s.st==='kal'?'🔁 Check again tomorrow':'✅ Reviewed'):(S?'⏳ Pending':'');
+    return {st:n.red?'bigda':n.amber?'dhyan':'normal',line:`Card ${fmtD(o.f.day)}: <b>${n.red}</b> Worse · <b>${n.amber}</b> Watch${rs?' · '+rs:''}`}; }
+  return {st:'lagu',line:''}; }
+function hubCardsPaint(){ const el=document.getElementById('hub-fcs'); if(!el||!HUB.on||!APP) return; el.innerHTML=hubCardsHtml(APP);
+  const n=document.getElementById('hub-fn'); if(n) n.textContent=hubFcNote(); }
+// the review index + the open day's Studio file (then repaint the cards in place: same size, no jump)
+function hubRvEnsure(cb){ const R=HUB.rv; R.cbs=R.cbs||[]; if(cb) R.cbs.push(cb); if(R.loading) return;   // every caller's callback runs once it lands
+  const fresh=R.idx&&Date.now()-R.idxAt<10*60*1000, od=fresh&&R.idx.open_day, done=()=>{ const L=R.cbs.splice(0); L.forEach(f=>{ try{ f(); }catch(e){} }); };
+  if(fresh&&(!od||R.files[od])){ done(); return; }
+  R.loading=true;
+  (fresh?Promise.resolve({ok:true,idx:R.idx}):rvFetchIndex()).then(r=>{ if(r&&r.ok&&r.idx){ R.idx=r.idx; R.idxAt=Date.now(); } const d=R.idx&&R.idx.open_day; return d?hubRvFile(d):null; })
+    .catch(()=>{}).then(()=>{ R.loading=false; done(); }); }
+function hubRvFile(d){ const R=HUB.rv, I=R.idx; if(R.files[d]) return Promise.resolve(R.files[d]); if(R.busy[d]) return R.busy[d];
+  const p=I&&I.studio?I.studio[d]:null;
+  if(!p||typeof p.file!=='string'||!/^review\/studio\/\d{4}-\d{2}-\d{2}\.json\.gz$/.test(p.file)){ R.files[d]={none:true,day:d}; return Promise.resolve(R.files[d]); }
+  R.busy[d]=fetchGzJson(p.file+'?v='+encodeURIComponent(p.v||'')).then(j=>{ R.files[d]=(j&&Array.isArray(j.apps)&&j.day===d)?j:{none:true,day:d}; })
+    .catch(()=>{ R.files[d]={err:true,day:d}; }).then(()=>{ delete R.busy[d]; return R.files[d]; });
+  return R.busy[d]; }
+
+// ---- ✅ Review history (that app): each review day's card for the app — every feature's status — and what the team did ----
+function renderHubRv(){ const s=screenDiv('hubrv'); s.innerHTML=hubRvHtml(); return s; }
+function hubRvShow(){ hubRvEnsure(()=>{ hubRvMore(0); });
+  let p=null; try{ p=rvEnsure(); }catch(e){} Promise.resolve(p).then(()=>{ hubRvStates(hubRvDays().slice(0,HUB.rv.want)); hubRvPaint(); }).catch(()=>{}); }
+// load the Studio files (and, logged in, the team's review state) of the newest R.want days, then repaint
+function hubRvMore(add){ const R=HUB.rv; R.want+=add||0; const days=hubRvDays().slice(0,R.want);
+  const need=days.filter(d=>!R.files[d]); Promise.all(need.map(d=>hubRvFile(d))).then(()=>{ hubRvPaint(); hubRvStates(days); }); if(!need.length) hubRvPaint(); }
+function hubRvDays(){ const I=HUB.rv.idx; return ((I&&I.days)||[]).map(x=>x&&x.d).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))).sort().reverse(); }
+// the team's review state per day (GET only, as Review's own History): today = RV.S, a past day = RV.hS (cached there for Review too)
+function hubRvStates(days){ const R=HUB.rv; if(!RV.me) return; const od=(R.idx&&R.idx.open_day)||'';
+  days.forEach(d=>{ if(d===od||RV.hS[d]||R.stBusy[d]) return; R.stBusy[d]=true;
+    rvApi('GET','day?d='+encodeURIComponent(d)).then(r=>{ if(r&&r.ok&&r.data) RV.hS[d]={...rvS(r.data,d),me:RV.me}; }).catch(()=>{}).then(()=>{ delete R.stBusy[d]; hubRvPaint(); }); }); }
+function hubRvPaint(){ const s=document.querySelector('.screen[data-screen=hubrv]'); if(!s) return; s.innerHTML=hubRvHtml(); }
+function hubRvState(d,key){ if(!RV.me) return null; const od=(HUB.rv.idx&&HUB.rv.idx.open_day)||''; const S=d===od?(RV.doc&&RV.doc.day===d?RV.S:null):RV.hS[d]; if(!S) return null;
+  const s=S.states&&S.states[key], notes=(S.notes||[]).filter(n=>n&&n.app===key);
+  const st=!s||!s.st?'pend':(s.st==='flag'||s.st==='kal'?s.st:(notes.length?'note':'ok'));
+  return {st,by:s&&s.by,at:s&&s.at,notes}; }
+const HUB_RVS={ok:'✅ Reviewed',note:'📝 Reviewed + note',kal:'🔁 Check again tomorrow',flag:'🚩 Re-review (Important)',pend:'⏳ Pending'};
+function hubRvHtml(){ const R=HUB.rv, name=APP;
+  const h=`<h2 class="sc">Review history${name?' · '+appIcon(name,20,'ail')+hAttr(name):''}</h2><p class="scd">Har din ka ✅ Review card is app ke liye — har feature ka status, aur team ne kya kiya. Din pe “Open card →” = Review me wahi card.</p>`;
+  if(!name) return h+'<div class="card"><div class="muted">Upar App picker se ek app chuno.</div></div>';
+  if(!R.idx) return h+`<div class="card"><div class="muted">${R.loading?'⏳ Review history load ho rahi hai…':'Review abhi chalu nahi (review/index.json nahi mila).'}</div></div>`;
+  const days=hubRvDays(), show=days.slice(0,R.want), key=hubKeyOf(name);
+  if(!days.length) return h+'<div class="card"><div class="muted">Abhi koi review din nahi.</div></div>';
+  const rows=show.map(d=>{ const f=R.files[d];
+    if(!f) return `<div class="card hub-rd"><div class="hub-rdd">${hubRvDay(d)}</div><div class="muted">⏳ loading…</div></div>`;
+    const a=hubRvApp(f,name);
+    if(!a) return `<div class="card hub-rd"><div class="hub-rdd">${hubRvDay(d)}</div><div class="muted">${f.err?'⚠️ Is din ka card load nahi hua':f.none?'Is din ka Studio card nahi':'Is din ke review me ye app nahi thi'}</div></div>`;
+    const fx=f.meta&&f.meta.fx, chips=(f.feats||[]).map(F=>{ const x=a.f&&a.f[F[0]]; const st=HUB_RVST[x&&x.st]||'lagu', bad=st==='bigda'||st==='dhyan'||st==='behtar';
+      return `<span class="hub-rc st-${st}${bad?' hub-rcb':''}" title="${hAttr(F[1])}: ${hAttr(x&&x.t?x.t:WD.st[st])}"><span aria-hidden="true">${F[3]||''}</span> ${hAttr(F[2]||F[1])}: <b>${WD.st[st]}</b>${bad&&x.k?' · '+hAttr(x.k):''}</span>`; }).join('');
+    const S=hubRvState(d,a.key||key);
+    const rs=S?`<span class="hub-rs hub-rs-${S.st}">${HUB_RVS[S.st]}</span>${S.by?' · '+rvWho(S.by):''}${S.at?' · '+rvEsc(rvWhen(S.at)):''}${S.notes.map(n=>`<div class="hub-rn">📝 ${rvEsc(n.text||n.note||'')}${n.by?' — '+rvWho(n.by):''}</div>`).join('')}`
+      :`<span class="faint">${RV.me?'⏳ review state…':'Review state: login ke baad dikhega'}</span>`;
+    const hd=a.head&&a.head.text?`<div class="hub-rh">${rvEsc(a.head.text)}</div>`:'';
+    return `<div class="card hub-rd"><div class="hub-rdd">${hubRvDay(d)}<button type="button" class="lnk hub-rdo" onclick="hubRvGo('${d}')">Open card →</button></div>${hd}<div class="hub-rcs">${chips}</div><div class="hub-rst">${rs}</div></div>`; }).join('');
+  const more=days.length>show.length?`<button type="button" class="hub-more" onclick="hubRvMore(14)">Show older days (${days.length-show.length} more)</button>`:'';
+  return h+`<div class="hub-rl">${rows}</div>${more}`; }
+function hubRvDay(d){ const W=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], t=new Date(d+'T00:00:00Z'); return `<b>${fmtD(d)}</b> <span class="faint">${W[t.getUTCDay()]||''}</span>`; }
+// Review (left nav) at that day's History, the app's card open in its drawer once the day is in
+function hubRvGo(d){ const key=hubKeyOf(APP), od=(HUB.rv.idx&&HUB.rv.idx.open_day)||'', v=d===od?'today':'hist';
+  try{ if(v==='hist') RV.histDay=d; RV.view=v; RVS.want(v); }catch(e){}
+  hubNavPage('review'); let n=0; const t=setInterval(()=>{ n++; try{ RVS._.openDrawer(key,null,true,v==='hist'?d:undefined); if(RVS._.ST.drawer===key){ clearInterval(t); return; } }catch(e){} if(n>40) clearInterval(t); },250); }
+// ==== /APP HUB ====
 
 // ---------- OVERVIEW ----------
 const DATEWISE_DEFAULT_DAYS=15;   // Overview mini-table shows the latest N complete days; full report uses the selected period
@@ -4746,7 +5162,7 @@ function ecKpiTile(h){ return String(h).replace('<div class="card kpi">',`<div c
 function ecOn(){ const on=document.querySelector('.screen.on'); return !!(on&&on.dataset&&on.dataset.screen==='ecpm'); }
 function ecSave(){ try{ localStorage.setItem('ecpmview',JSON.stringify({app:EC.app,r:EC.r,g:EC.g})); }catch(e){} }
 function ecOpen(){ EC.hdr=APP; EC.app=APP||''; EC.r='30'; EC.g='day'; EC.pin=false; EC.booted=true;
-  hbOv('ecpm',true,ecUndo); show('ecpm'); }
+  if(!HUB.on) hbOv('ecpm',true,ecUndo); show('ecpm'); }
 function ecUndo(){ if(ecOn()) show('overview'); }                        // phone Back on the view → Overview
 function ecAppUndo(){ if(ecOn()&&!APP){ EC.app=''; ecPaint(); window.scrollTo({top:0}); } }   // phone Back on an app → All apps
 function ecClose(){ hbDrop('ecpm-app'); hbDrop('ecpm'); show('overview'); }
@@ -5587,6 +6003,7 @@ function adSetRange(r){
 }
 let AD_ORIGIN="overview";                 // the screen an app was opened FROM, so ← Back returns there
 function openAppDetail(name){
+  if(hubOpenApp(name)) return;   // ✨ hub: an app's report = its "Revenue & Ad units" tab
   const _adon=document.querySelector('.screen.on'); const _adcur=_adon?_adon.dataset.screen:'overview';
   if(_adcur!=='appdetail'&&!HB.mute){ AD_ORIGIN=_adcur; hbPush('appdetail',hbAdUndo); }   // remember origin (skip on self re-render/auto-refresh) · phone Back returns there
   ADAPP=name;
@@ -5709,6 +6126,7 @@ function openAppDetail(name){
   const tt=document.getElementById('tb-title'), ts=document.getElementById('tb-sub');
   if(tt)tt.innerHTML=`<span class="ain">${appIcon(name,22)}<span class="ain-t">${hAttr(name)}</span></span>`; if(ts)ts.textContent='Ad-unit & country wise · '+pRangeLabel(RANGE);
   if(!REFRESH_SILENT&&!SP.keep) window.scrollTo({top:0});   // not inside a same-view rebuild (rerender keeps the reader's place)
+  if(HUB.on) hubPost('appdetail');
 }
 // ===== App-report DAILY metric panel (metric chips + low/high/avg + hover) — app-level, from
 // each placement's per-day raw counts (no extra AdMob call; rates recomputed from summed counts). =====
@@ -16983,7 +17401,7 @@ function rvRenderHistDay(d,focus){ const box=rvQ("#rv-dayp"), doc=RV.hdocs[d], S
   rvPaint(box);
   if(focus){ const h=rvQ("#rv-dayh"); if(h) try{ h.focus({preventScroll:true}); }catch(_){} } }
 // ---------------------------------------------------------------- badge (nav + bottom bar)
-function rvBadgeSet(n,red){ try{ [["nav-review",false],["tab-review",true]].forEach(([id,tb])=>{ const el=document.getElementById(id); if(!el) return;
+function rvBadgeSet(n,red){ try{ [["nav-review",false],["nav-review-h",false],["tab-review",true]].forEach(([id,tb])=>{ const el=document.getElementById(id); if(!el) return;
     if(!n){ el.textContent=""; if(tb) el.classList.remove("on"); else el.hidden=true; return; }
     el.textContent=n; el.classList.toggle("rv-n",!red); if(tb) el.classList.add("on"); else el.hidden=false; }); }catch(e){} }
 function rvBadgeFromState(){ try{ if(!RV.doc||!RV.S||!RV.me) { if(!RV.doc) rvBadgeSet(null); return; }
@@ -18218,12 +18636,15 @@ async function load(){
     try{ CURVIEW=localStorage.getItem("curview")||null; }catch(e){}   // restore chosen currency view
     kwLoad();                                // restore the shared KPI-window period + comparison choice
     curSyncUI();
+    hubInit();                               // ✨ the new layout (beta): ?layout=hub / the stored switch
     _navRestore();                           // restore the LAST screen (app/period too) if recent, else Overview …
+    hubBoot();                               // ✨ hub: a #home/… URL (bookmark / refresh) wins; else the restored screen as a tab
     // … SPEC_SIMPLIFY (owner-approved): ✅ Review is the landing screen once review/index.json lists a day (a recent saved
     // view and a #review… deep link still win)
     rvFetchIndex().then(rvLanding).catch(()=>{});
 
     rvBoot();                                // #review… deep links win over navstate; the Review badge (3 s later)
+    hubReady();                              // ✨ hub: from here on every tab / app change is a Back step
     loadAppSel();                            // which apps the user kept (hides unselected)
     loadAccNames();                          // friendly names for the AdMob accounts
     loadAppNames();                          // the user's own names for apps (✏️ on App Report)
