@@ -43,7 +43,7 @@ function mk(tag) {
   return el;
 }
 const idEl = id => { const e = mk('div'); e.setAttribute('id', id); return e; };
-['tb-title', 'tb-sub', 'hub-back', 'nav-alert', 'nav-alert-h', 'fresh-txt', 'tab-alert', 'hub-beta', 'hub-beta-s', 'rangesel', 'rangecustom', 'banner', 'screens'].forEach(idEl);
+['tb-title', 'tb-sub', 'hub-back', 'apk-nm', 'appsel-ic', 'nav-alert', 'nav-alert-h', 'fresh-txt', 'tab-alert', 'hub-beta', 'hub-beta-s', 'rangesel', 'rangecustom', 'banner', 'screens'].forEach(idEl);
 const BAR = idEl('hub-bar'); BAR.hidden = true;
 const BODY = mk('body');
 const SCREEN_IDS = ['overview', 'placements', 'reportcard', 'appdetail', 'movers', 'alerts', 'deductions', 'countries', 'baseline', 'mediation', 'roas',
@@ -141,7 +141,8 @@ run(`DATA=__DATA; CURVIEW=null;
   var __adk=[];
   openAppDetail=function(name){ if(hubOpenApp(name)) return; __ad.push(name); __adk.push(SP.keep); ADAPP=name;
     document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('on',x.dataset.screen==='appdetail')); rvOnShow('appdetail'); if(HUB.on) hubPost('appdetail'); };`);
-const S = () => run(`({scr:hubScr(),app:APP,inHub:HUB.inHub,tab:HUB.tab,on:HUB.on,bar:!document.getElementById('hub-bar').hidden,back:!document.getElementById('hub-back').hidden,
+const S = () => run(`({scr:hubScr(),app:APP,inHub:HUB.inHub,tab:HUB.tab,on:HUB.on,bar:!document.getElementById('hub-bar').hidden,back:!document.getElementById('hub-back').hidden,pk:document.getElementById('apk-nm').textContent,
+  pkIc:document.getElementById('appsel-ic').innerHTML.indexOf('aicon')>=0,hubApp:document.body.classList.contains('hub-app'),ico:(document.getElementById('hub-ico-css')||{}).textContent||'',
   hubOn:document.body.classList.contains('hub-on'),hubIn:document.body.classList.contains('hub-in'),depth:HB.depth,st:HB.st.map(x=>x.tag)})`);
 const H = () => ({ hash: LOC.hash, idx: HIST.idx, len: HIST.entries.length, urls: HIST.entries.map(e => e.url) });
 const userBack = async () => { history.back(); HIST.calls.pop(); land(); await settle(); };
@@ -251,8 +252,11 @@ const fresh = async (opt) => { opt = opt || {};   // a new page load: history, U
     SCROLLS.length = 0; run(`hubExit()`); await settle(); const out2 = { ...S(), y: last() };
     await fresh({ search: '?layout=hub', hash: `#home/${k}/ecpm` }); const bm = S(); SCROLLS.length = 0; run(`hubExit()`); await settle(); const out3 = { ...S(), y: last() };
     await fresh({ search: '?layout=hub', hash: `#home/${k}/review` }); run(`hubExit()`); await settle(); const out4 = S();
-    await fresh({}); run(`setApp('Demo Gallery')`); await settle(); const classic = S(); run(`hubExit()`); await settle(); const classic2 = S();
-    return { home, inApp, out1, back1, out2, bm, out3, out4, classic, classic2 }; });
+    await fresh({}); run(`setApp('Demo Gallery'); appSelIcon()`); await settle(); const classic = S(); run(`hubExit()`); await settle(); const classic2 = S();   // (appSelIcon: as the real render())
+    const esc = run(`(()=>{ const k=[HUB.on,HUB.inHub,APP]; HUB.on=true; HUB.inHub=true; APP='Say "Hi" \\\\ ok'; hubIcoCss(); const t=document.getElementById('hub-ico-css').textContent;
+      [HUB.on,HUB.inHub,APP]=k; hubIcoCss(); return t; })()`);
+    const icon = run(`appIcon('Demo Gallery',20)`), iconId = run(`appIconId('${IDS.big}','Demo Gallery',20)`);
+    return { home, inApp, out1, back1, out2, bm, out3, out4, classic, classic2, esc, icon, iconId }; });
 
   // ── App Overview cards ──────────────────────────────────────────────────────────────────────────────────────────────
   const K = run(`hubKeyOf('Demo Gallery')`), money = (usd, s) => ({ usd, s: s || '', sign: 0, p: 0 });

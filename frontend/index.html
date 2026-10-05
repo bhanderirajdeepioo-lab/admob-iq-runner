@@ -1195,13 +1195,16 @@ body.hub-on .botbar .tabbtn.hub-x{display:none}
 @media(max-width:760px){.hub-tab{font-size:12.5px;padding:8px 9px 7px;min-height:40px}}
 body.hub-in .topbar h1 .ain{max-width:100%;overflow:hidden}
 body.hub-in .topbar h1 .ain-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:1000px){   /* the title is the app's only name on the page: up to 2 lines, never cut to a few letters */
+  body.hub-app .topbar h1{white-space:normal}
+  body.hub-app .topbar h1 .ain-t{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;line-height:1.25;overflow-wrap:anywhere}}
 .hub-ov{margin:0 0 4px}
 body.hub-in .screen[data-screen=appdetail]>.backlnk:first-child{display:none}   /* the App Report as a tab: the tab bar / phone Back replace its "← Back" */
-.hub-hd{display:flex;align-items:center;gap:14px;margin:2px 0 14px;min-width:0}
-.hub-hd>.aicon{flex:none}
-.hub-hn{min-width:0}
-.hub-nm{font-size:20px;font-weight:800;color:#fff;line-height:1.25;overflow-wrap:anywhere}
-.hub-ac{font-size:12.5px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.hub-hd{margin:0 0 14px;min-width:0}
+.hub-ac{font-size:12.5px;color:var(--muted);line-height:1.6;overflow-wrap:anywhere}
+.hub-ps{color:var(--cyan);font-weight:700;text-decoration:none;white-space:nowrap;padding:4px 0}
+.hub-ps:hover,.hub-ps:focus-visible{text-decoration:underline}
+body.hub-app #apk>.cx{display:none}body.hub-app #apk-btn{width:auto}   /* "📱 Change app ▾" — the app itself is named once, in the title */
 .hub-kp{margin-bottom:16px}
 .hub-kh{display:flex;align-items:baseline;gap:2px 8px;flex-wrap:wrap;margin:0 0 8px;font-size:12px;color:var(--muted);min-width:0}
 .hub-kh b{color:var(--ink2);font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
@@ -1242,7 +1245,7 @@ body.hub-in .screen[data-screen=appdetail]>.backlnk:first-child{display:none}   
 .hub-sep::after{content:"";flex:1 0 24px;height:1px;background:var(--line)}
 @media(max-width:760px){.hub-kp.row.c4{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.hub-kp .kpi{padding:15px 13px}   /* 2-up, as Overview's own KPIs */
   .hub-fcs{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card.hub-fc{padding:10px;gap:6px}.hfc-h{font-size:12.5px;gap:5px}
-  .hfc-l{font-size:12px}.hub-st{font-size:11px;padding:1px 7px}.hub-nm{font-size:17px}.hub-hd{gap:11px}}
+  .hfc-l{font-size:12px}.hub-st{font-size:11px;padding:1px 7px}}
 @media(max-width:339px){.hub-fcs{grid-template-columns:minmax(0,1fr)}}
 .hub-rl{display:grid;gap:10px}
 .card.hub-rd{padding:12px 14px}
@@ -4019,18 +4022,19 @@ function _appIconColor(name){ const P=['#3dd0f0','#4ade80','#f0a63d','#a78bfa','
 // One icon box for both lookups: decoration only (aria-hidden, alt=""), lazy + async so a long list never waits on logos;
 // the letter is drawn by CSS (data-l), so it is never read out or copied as part of the name. A logo that fails to load
 // turns into the same letter-avatar. cls: extra class ('ail' = inline before a name in running text).
-function _appIconHtml(url,name,size,cls){ size=+size||20; const rad=Math.max(4,Math.round(size*0.24)), col=_appIconColor(name);
+function _appIconHtml(url,name,size,cls,aid){ size=+size||20; const rad=Math.max(4,Math.round(size*0.24)), col=_appIconColor(name);
   const ch=(String(name==null?'':name).trim().charAt(0)||'?').toUpperCase();
   const st=`width:${size}px;height:${size}px;border-radius:${rad}px;font-size:${Math.round(size*0.5)}px;--ac:${col};--acb:${col}22`;
-  const u=(typeof url==='string'&&/^https?:\/\//.test(url))?url:null, c='aicon'+(cls?' '+cls:'');
-  if(u) return `<span class="${c}" aria-hidden="true" data-l="${hAttr(ch)}" style="${st}"><img src="${hAttr(u)}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('aicon-l');this.remove()"></span>`;
-  return `<span class="${c} aicon-l" aria-hidden="true" data-l="${hAttr(ch)}" style="${st}"></span>`; }
+  const u=(typeof url==='string'&&/^https?:\/\//.test(url))?url:null, c='aicon'+(cls?' '+cls:''),
+    at=` data-ian="${hAttr(String(name==null?'':name))}"`+(aid?` data-iid="${hAttr(String(aid))}"`:'');   // which app (the hub hides the open one's own)
+  if(u) return `<span class="${c}" aria-hidden="true"${at} data-l="${hAttr(ch)}" style="${st}"><img src="${hAttr(u)}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('aicon-l');this.remove()"></span>`;
+  return `<span class="${c} aicon-l" aria-hidden="true"${at} data-l="${hAttr(ch)}" style="${st}"></span>`; }
 function appIcon(name,size,cls){ return _appIconHtml(_appIconUrl(name),name,size,cls); }
 // App icon BY APP_ID: that app's OWN logo (DATA.app_icons[app_id]). Same-named apps (two accounts' "Gallery", a
 // "(2024 wala)" twin) each get their own — never a same-named cousin's; an id with no logo → its letter-avatar.
 // No id known → by name (appIcon).
 function appIconId(id,name,size,cls){ if(!id) return appIcon(name,size,cls);
-  const m=(typeof DATA!=='undefined'&&DATA&&DATA.app_icons)||{}; return _appIconHtml(m[id]||null,name,size,cls); }
+  const m=(typeof DATA!=='undefined'&&DATA&&DATA.app_icons)||{}; return _appIconHtml(m[id]||null,name,size,cls,id); }
 // Play Store URL for an Android PACKAGE (guard out numeric iOS store ids / junk).
 function _playUrl(pkg){ return (pkg && /^[A-Za-z][\w.]*\.[\w.]+$/.test(pkg)) ? 'https://play.google.com/store/apps/details?id='+encodeURIComponent(pkg) : null; }
 // Play Store URL for an app NAME: its highest-revenue app_id → package (DATA.app_store_ids), else the
@@ -4140,7 +4144,9 @@ function appSelHtml(){ const _vapps=(DATA.apps||[]).filter(a=>appVisibleByName(a
   const opt=n=>`<option value="${hAttr(n)}"${n===APP?' selected':''}>${hAttr(n)}</option>`;
   return '<option value="">All apps ('+_vapps.length+')</option>'+(APP&&!_vapps.some(a=>a.name===APP)?opt(APP):'')+_vapps.map(a=>opt(a.name)).join(''); }
 // the selector's icon: the chosen app's logo, 📱 for "All apps" (+ the picker button's name — apkSync)
-function appSelIcon(){ const el=document.getElementById('appsel-ic'); if(el) el.innerHTML=APP?appIcon(APP,18):'📱'; apkSync(); }
+function appSelIcon(){ const el=document.getElementById('appsel-ic'); if(el) el.innerHTML=APP&&!hubAppOn()?appIcon(APP,18):'📱'; apkSync(); }
+// ✨ hub, inside an app: the top bar's title shows the app (its logo + name, once) — the picker is only the way to another app
+function hubAppOn(){ try{ return !!(HUB.on&&HUB.inHub&&APP); }catch(e){ return false; } }
 // the whole header App selector in step with APP: the hidden <select>'s list (appSelHtml) + the icon + the picker button —
 // render() and a jump that changes APP without a render (bGotoUnit)
 function appSelSync(){ const sel=document.getElementById('appsel'); if(sel) sel.innerHTML=appSelHtml(); appSelIcon(); }
@@ -4227,7 +4233,7 @@ function apkBtnKey(e){ if(APK.open) return; const k=e.key;
   else if(k&&k.length===1&&/\S/.test(k)&&!e.ctrlKey&&!e.metaKey&&!e.altKey){ e.preventDefault(); e.stopPropagation(); apkOpen(false,k); } }
 // the button's face (from appSelIcon, i.e. every render): the app in view, else "All apps (N)"; an open list follows a refresh
 function apkSync(){ const it=apkItems(), t=APP?String(APP):((it[0]&&!it[0].v&&it[0].t)||'All apps');
-  const N=apkEl('apk-nm'), B=apkEl('apk-btn'); if(N) N.textContent=t; if(B) B.setAttribute('aria-label','App: '+t);
+  const sw=APP&&hubAppOn(), N=apkEl('apk-nm'), B=apkEl('apk-btn'); if(N) N.textContent=sw?'Change app':t; if(B) B.setAttribute('aria-label',sw?'Change app (now: '+t+')':'App: '+t);
   if(APK.open){ const pv=(APK.act>=0&&APK.rows[APK.act]!=null)?APK.items[APK.rows[APK.act]].v:null; APK.items=it; apkDraw(pv); } }
 function apkWire(){ const W=apkEl('apk'), B=apkEl('apk-btn'); if(APK.wired||!W||!B||!document.body) return; APK.wired=true;
   const P=document.createElement('div'); P.id='apk-pop'; P.className='apk-pop'; P.hidden=true;
@@ -4587,7 +4593,20 @@ function hubLsSet(v){ try{ if(v) localStorage.setItem(HUB_LS,v); else localStora
 function hubScr(){ const o=document.querySelector('.screen.on'); return (o&&o.dataset&&o.dataset.screen)||''; }
 function hubBody(){ const b=document.body; if(!b||!b.classList) return; b.classList.toggle('hub-on',!!HUB.on); b.classList.toggle('hub-in',!!(HUB.on&&HUB.inHub));
   const bar=document.getElementById('hub-bar'); if(bar) bar.hidden=!(HUB.on&&HUB.inHub);
-  const bk=document.getElementById('hub-back'); if(bk) bk.hidden=!(HUB.on&&HUB.inHub&&APP); }
+  const bk=document.getElementById('hub-back'); if(bk) bk.hidden=!(HUB.on&&HUB.inHub&&APP);
+  b.classList.toggle('hub-app',!!(HUB.on&&HUB.inHub&&APP)); try{ appSelIcon(); }catch(e){} hubIcoCss(); }   // the picker's face follows the scope
+// inside an app the app's logo shows ONCE, in the top bar's title (owner: "logo ek page me 3-3 jagah … bahot sari tab me"): its
+// own logo in the pages goes; other apps' logos (a ROAS campaign of another app …) stay
+// (by its name, and by its app ids: the Studios draw it by id under the store name, without the " · account")
+function hubIcoCss(){ const a=HUB.on&&HUB.inHub&&APP?String(APP):''; let el=document.getElementById('hub-ico-css');
+  if(!el){ if(!a||!document.head) return; el=document.createElement('style'); el.id='hub-ico-css'; document.head.appendChild(el); }
+  const q=v=>String(v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/[\n\r\f]/g,' ');
+  const css=a?[`[data-ian="${q(a)}"]`].concat(hubAppIds(a).map(i=>`[data-iid="${q(i)}"]`)).map(x=>'body.hub-app .screen .aicon'+x).join(',')+'{display:none!important}':'';
+  if(el.textContent!==css) el.textContent=css; }
+function hubAppIds(name){ const D=(typeof DATA!=='undefined'&&DATA)||{}, s=new Set();
+  (D.apps_catalog||[]).forEach(x=>{ if(x&&x.app_name===name&&x.app_id) s.add(String(x.app_id)); });
+  ['uninstall','active','value'].forEach(k=>((D[k]&&D[k].apps)||[]).forEach(x=>{ if(x&&x.app===name&&x.app_id) s.add(String(x.app_id)); }));
+  return [...s].sort(); }
 function hubSwitchSync(){ const b=document.getElementById('hub-beta'), t=document.getElementById('hub-beta-s'); if(b) b.setAttribute('aria-checked',HUB.on?'true':'false'); if(t) t.textContent=HUB.on?'On':'Off'; }
 // boot: ?layout=hub | classic wins (and is remembered), else the stored choice; the param then leaves the URL
 function hubInit(){ let q=null; try{ HUB.hash0=String(location.hash||''); }catch(e){}   // the URL's own hash (a bookmark), before the hub writes one
@@ -4764,8 +4783,9 @@ function hubOvHtml(name){ const acc=apkAcc(name).acc, R=hubRev(name), ac=hubAct(
   const k3=kpi(`📈 eCPM · ${D}`,ec&&ec.y!=null?cm(ec.y):'—',ec&&ec.w7!=null?`7-day avg ${cm(ec.w7)}${ec.pct!=null?' ('+ecPct(ec.pct)+')':''}`:'',ec&&ec.pct!=null?ecCls(ec.pct):'muted');
   const k4=kpi('🔔 Open alerts',String(al.n),`ad units ${al.ad.length+al.rg.length} · users ${al.g4}`,al.n?'down':'muted');
   const D2=(typeof DATA!=='undefined'&&DATA)||{}, gaT=ac&&ac.data_till?` · GA4 till ${fmtD(ac.data_till)}`:'';
-  return `<div class="hub-hd">${appIcon(name,46)}<div class="hub-hn"><div class="hub-nm">${hAttr(name)}${storeLnk(name)}</div>`
-    +`<div class="hub-ac">${acc?'🅐 '+hAttr(acc)+' · ':''}AdMob till ${fmtD(D2.latest_complete)}${gaT}</div></div></div>`
+  const su=_appStoreUrl(name);   // the app's logo + name: once, in the top bar's title (owner: "logo ek page me 3-3 jagah")
+  return `<div class="hub-hd"><div class="hub-ac">${acc?'🅐 '+hAttr(acc)+' · ':''}AdMob till ${fmtD(D2.latest_complete)}${gaT}`
+    +`${su?` · <a class="hub-ps" href="${hAttr(su)}" target="_blank" rel="noopener">Play Store ↗</a>`:''}</div></div>`
     +`<div class="hub-kh"><b>Latest day</b><span>${D||'—'}</span></div>`
     +`<div class="row c4 hub-kp">${k1}${k2}${k3}${k4}</div>`
     +`<div class="hub-kpp" id="hub-kpp"><div class="hub-kh"><b>Period</b><span>${hAttr(curWinLabel())} · upar 🗓 Period se badlo</span></div></div>`
@@ -5007,7 +5027,8 @@ function renderOverview(){
   const appCards=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const rev=g.e/1e6;const sp=SPA[ap2.name]||0;const pl=rev-sp;const inst=INST[ap2.name];const ec=g.i?g.e/(g.i*1000):0;
     const meta=SHOWSP?`${inst!=null?Math.round(inst).toLocaleString()+' inst':'—'} · ${sp>0?money(sp)+' spend':'organic'} · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`:`${g.i?cm(ec)+' eCPM':'—'} · ${ap2.placements} pl · <span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span>`;
     return `<div class="mrow" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><span class="mic">${appIcon(ap2.name,34)}</span><div class="mmid"><div class="mname">${appNm(ap2.name)}</div>${appAccTag(ap2.name)}<div class="mmeta">${meta}</div></div><div class="mright"><div class="mrev">${money(rev)}</div>${SHOWSP?`<div class="mpl ${pl>=0?'up':'down'}">${plFmt(pl)}</div>`:''}</div><span class="mchev">›</span></div>`;}).join('');
-  const lastTile=ap?kpi('Placements',(ap.placements||fp.length),appIcon(APP,14,'ail')+APP.slice(0,16),'muted'):kpi('Apps · Accounts',DATA.kpis.apps+' · '+DATA.kpis.accounts,'','muted');
+  const hubA=(()=>{ try{ return !!(HUB.on&&APP); }catch(e){ return false; } })();   // ✨ hub: the title names the app
+  const lastTile=ap?kpi('Placements',(ap.placements||fp.length),hubA?'ad units':appIcon(APP,14,'ail')+APP.slice(0,16),'muted'):kpi('Apps · Accounts',DATA.kpis.apps+' · '+DATA.kpis.accounts,'','muted');
   const moversBody=`${inc.slice(0,2).map(p=>`<div class="al good"><span>▲</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${appIcon(p.app,14,'ail')}${p.app}</span></div>`).join('')}
         ${dec.slice(0,2).map(p=>`<div class="al crit"><span>▼</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${appIcon(p.app,14,'ail')}${p.app}</span></div>`).join('')||(inc.length?'':'<div class="muted" style="font-size:12px">Is app me abhi mover nahi.</div>')}`;
   s.innerHTML=`${ap?`<div class="verdict ov-app" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div>${appIcon(APP,32)}</div><div><div class="big">${APP}</div><div class="muted" style="font-size:12.5px">Only this app’s data${ap.platform?' · '+ap.platform:''} · ${ap.placements} placements</div></div><div class="spacer"></div><span class="lnk" onclick="setApp('')">✕ Show all apps</span></div>`:''}

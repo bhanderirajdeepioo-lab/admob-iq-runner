@@ -236,7 +236,8 @@ def test_app_overview_cards(report):
     none = {x["id"]: x for x in c["none"]}                                                         # the card file still loading
     assert none["revenue"]["line"] == "⏳ loading…" and none["ecpm"]["st"] == "bigda"
     h = c["head"]
-    assert "Demo Gallery" in h and "🅐 pub-0000000000000001" in h and "💵 Revenue · " in h and "usual $" in h and "/day (−" in h
+    assert h.strip().startswith("🅐 pub-0000000000000001 · AdMob till ") and "Demo Gallery" not in h[:h.index("Latest day")]   # the logo + name: in the title only
+    assert "💵 Revenue · " in h and "usual $" in h and "/day (−" in h
     assert "👥 DAU 123,456" in h and "GA4 · not final" in h and "🔔 Open alerts 3 ad units 2 · users 1" in h and "Features" in h
     assert h.index("Latest day") < h.index("💵 Revenue · ") < h.index("Period") < h.index("Features")   # the app's KPIs first, then Features
     assert c["ov"] == {"same": True, "kids": 1, "id": "hub-ov"} and c["ovAll"] == 0                  # All apps: no app head
@@ -252,6 +253,17 @@ def test_back_arrow_out_of_an_app(report):
     assert r["bm"]["back"] and (r["out3"]["app"], r["out3"]["tab"], r["out3"]["scr"]) == ("", "ecpm", "ecpm") and not r["out3"]["y"]   # a bookmark: same tab
     assert (r["out4"]["app"], r["out4"]["tab"], r["out4"]["scr"]) == ("", "overview", "overview")   # an app-only tab → All apps' Overview
     assert not r["classic"]["back"] and r["classic2"]["app"] == "Demo Gallery"   # the old layout: no ←, hubExit does nothing
+    # the App picker: inside an app (hub) only "Change app" (the title names the app, its logo once); elsewhere the app / All apps
+    assert (r["inApp"]["pk"], r["inApp"]["pkIc"], r["inApp"]["hubApp"]) == ("Change app", False, True)
+    assert r["home"]["pk"].startswith("All apps") and not r["home"]["hubApp"] and not r["out1"]["hubApp"] and r["out1"]["pk"].startswith("All apps")
+    assert (r["classic"]["pk"], r["classic"]["pkIc"], r["classic"]["hubApp"]) == ("Demo Gallery", True, False)
+    # the open app's own logo inside the pages: hidden by one rule (the title keeps it); other apps' logos untouched; off outside an app
+    assert r["inApp"]["ico"] == ('body.hub-app .screen .aicon[data-ian="Demo Gallery"],'                # by name, and by its app id
+                                 'body.hub-app .screen .aicon[data-iid="ca-app-pub-0000000000000001~1000000001"]{display:none!important}')
+    assert r["home"]["ico"] == "" and r["out1"]["ico"] == "" and r["classic"]["ico"] == ""
+    assert r["esc"] == 'body.hub-app .screen .aicon[data-ian="Say \\"Hi\\" \\\\ ok"]{display:none!important}'   # a quote / backslash in a name
+    assert ' data-ian="Demo Gallery" data-l="D" ' in r["icon"]
+    assert ' data-ian="Demo Gallery" data-iid="ca-app-pub-0000000000000001~1000000001" data-l="D" ' in r["iconId"]   # a Studio's icon, by id
 
 
 def test_structure():

@@ -30,7 +30,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 ROW = re.compile(r'<li role="option" id="apk-o-(\d+)" data-i="(\d+)" class="([^"]*)" aria-selected="(true|false)">(.*?)</li>', re.S)
-ICON = re.compile(r'<span class="aicon[^"]*" aria-hidden="true" data-l="([^"]*)" style="width:(\d+)px[^"]*">(?:<img src="([^"]*)"[^>]*>)?</span>')
+ICON = re.compile(r'<span class="aicon[^"]*" aria-hidden="true"(?: data-ian="[^"]*")?(?: data-iid="[^"]*")? data-l="([^"]*)" style="width:(\d+)px[^"]*">(?:<img src="([^"]*)"[^>]*>)?</span>')
 VISIBLE = ["Demo Gallery · Alpha Studio", "Demo Gallery · pub-2000…", "Puzzle Quest", 'Tom & Jerry "Run" <2>',
            "Very Long Name Calculator Pro Plus With Many Extra Words To Wrap Nicely"]
 

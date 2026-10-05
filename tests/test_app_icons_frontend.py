@@ -75,7 +75,7 @@ def J(report, k):
 def _icons(h):
     """[(size, url or None, letter)] for every app icon in an html string, in order."""
     out = []
-    for m in re.finditer(r'<span class="aicon[^"]*" aria-hidden="true" data-l="([^"]*)" style="width:(\d+)px[^"]*">(<img src="([^"]*)"[^>]*>)?</span>', h):
+    for m in re.finditer(r'<span class="aicon[^"]*" aria-hidden="true"(?: data-ian="[^"]*")?(?: data-iid="[^"]*")? data-l="([^"]*)" style="width:(\d+)px[^"]*">(<img src="([^"]*)"[^>]*>)?</span>', h):
         out.append((int(m.group(2)), m.group(4), m.group(1)))
     return out
 
@@ -120,11 +120,11 @@ def test_the_studio_puts_each_apps_own_icon_beside_its_name(report):
     twin = re.search(r'<span class="us-nmt us-ain">(<span class="aicon[^>]*>(?:<img[^>]*>)?</span>)<span class="us-aint">Demo Gallery <span class="us-acn">· Studio One</span></span></span></div></div></td><td class="us-l">', s["tbl"])
     assert twin and _icons(twin.group(1)) == [(16, None, "D")]
     # the drawer header (28px) and the full app page header (32px), the app's own icon
-    assert re.search(r'<h3 class="us-ainb"><span class="aicon[^"]*" aria-hidden="true" data-l="[^"]*" style="width:28px', s["drawer"])
-    assert re.search(r'<h2 class="us-pgt us-ainb"><span class="aicon[^"]*" aria-hidden="true" data-l="[^"]*" style="width:32px', s["page"])
+    assert re.search(r'<h3 class="us-ainb"><span class="aicon[^"]*" aria-hidden="true"(?: data-ian="[^"]*")?(?: data-iid="[^"]*")? data-l="[^"]*" style="width:28px', s["drawer"])
+    assert re.search(r'<h2 class="us-pgt us-ainb"><span class="aicon[^"]*" aria-hidden="true"(?: data-ian="[^"]*")?(?: data-iid="[^"]*")? data-l="[^"]*" style="width:32px', s["page"])
     assert _icons(s["page"])[0][1] == ICON.get(s["apps"][0]["id"])
     # a tooltip names its app with a small inline icon
-    assert re.match(r'<div class="us-tt"><span class="aicon ail[^"]*" aria-hidden="true" data-l="[^"]*" style="width:14px', s["tip_app"])
+    assert re.match(r'<div class="us-tt"><span class="aicon ail[^"]*" aria-hidden="true"(?: data-ian="[^"]*")?(?: data-iid="[^"]*")? data-l="[^"]*" style="width:14px', s["tip_app"])
     # every alert card's app line
     cards = re.findall(r'<div class="us-app us-ainb">(<span class="aicon[^>]*>(?:<img[^>]*>)?</span>)', s["chg"])
     assert len(cards) == s["chg"].count('class="us-app')
