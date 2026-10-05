@@ -659,7 +659,7 @@ def test_the_strips_sleeping_tile_says_who_push_can_reach(report, world):
             r = report["numbers"]["apps"][k]["reach"]
         assert _close(r["push"], push, 1e-9) and _close(r["dz"], dz, 1e-9) and _close(r["ads"], ads, 1e-9)
         line = re.search(r'<div class="au-rch" title="[^"]*">(.*?)</div>', st).group(1)
-        assert line == ('<span>📲 <b>%s</b> push se</span> · <span class="au-rdz">⚠️ <b>%s</b> danger zone</span> · <span>📢 <b>%s</b> sirf ads se</span>'
+        assert line == ('<span class="au-rl">1+ mahine:</span> <span>📲 <b>%s</b> push se</span> · <span class="au-rdz">⚠️ <b>%s</b> danger zone</span> · <span>📢 <b>%s</b> sirf ads se</span>'
                         % (_cn(push), _cn(dz), _cn(ads))), (k, line)
         assert st.index('<div class="au-l">Sleeping 28+ days</div>') < st.index('class="au-rch"') < st.index("Dead 3+ months")
         users = report["numbers"]["all"]["w10"]["push"]["users"] if k == "all" else report["numbers"]["apps"][k]["c10"]["users"]

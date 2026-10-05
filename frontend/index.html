@@ -5079,7 +5079,7 @@ function secStrip(a){ const d3=dAt(a.au,3), l3=loAt(a.au,3), young=!a.all&&a.max
   const t=(c,l,n,sub,more)=>`<div class="au-st" style="--sc:${c}"><div class="au-l">${l}</div><div class="au-n">${n}</div><div class="au-s">${sub}</div>${more||''}</div>`;
   if(a.kam) return t('var(--au-month)','Installed now','data kam','is app ka installed sahi nahi ban raha')+t('var(--au-open)','Opened today',CN(a.a1),DT(a.E));
   // who of the sleepers a notification can still reach — the Sleeping card's bars (1+ month): 📲 1–2 · ⚠️ 2–3 · 📢 3+ months
-  const r=stripReach(a), rch=`<div class="au-rch" title="1+ mahine wale sleeping: 📲 1–2 mahine · ⚠️ 2–3 mahine (danger zone, abhi push se) · 📢 3+ mahine (Android app ko so deta hai)"><span>📲 <b>${CN(r.push)}</b> push se</span> · <span class="au-rdz">⚠️ <b>${CN(r.dz)}</b> danger zone</span> · <span>📢 <b>${CN(r.ads)}</b> sirf ads se</span></div>`;
+  const r=stripReach(a), rch=`<div class="au-rch" title="1+ mahine wale sleeping: 📲 1–2 mahine · ⚠️ 2–3 mahine (danger zone, abhi push se) · 📢 3+ mahine (Android app ko so deta hai)"><span class="au-rl">1+ mahine:</span> <span>📲 <b>${CN(r.push)}</b> push se</span> · <span class="au-rdz">⚠️ <b>${CN(r.dz)}</b> danger zone</span> · <span>📢 <b>${CN(r.ads)}</b> sirf ads se</span></div>`;
   return t('var(--au-month)','Installed now',CN(a.inst),'abhi phone me (andaza)')
     +t('var(--au-sleep)','Sleeping 28+ days',`${CN(a.sl)} <small>${P(a.sl,a.inst)}</small>`,'phone me hai, 28+ din se nahi khola',rch)
     +t('var(--au-sleep)','Dead 3+ months',young||d3==null?'—':`${rangeTxt(a.au.lo?l3:null,d3,CN)} <small>${P(d3,a.au.inst)}</small>`,
