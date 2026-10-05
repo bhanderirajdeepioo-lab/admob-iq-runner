@@ -1203,6 +1203,19 @@ body.hub-in .screen[data-screen=appdetail]>.backlnk:first-child{display:none}   
 .hub-nm{font-size:20px;font-weight:800;color:#fff;line-height:1.25;overflow-wrap:anywhere}
 .hub-ac{font-size:12.5px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
 .hub-kp{margin-bottom:16px}
+.hub-kh{display:flex;align-items:baseline;gap:2px 8px;flex-wrap:wrap;margin:0 0 8px;font-size:12px;color:var(--muted);min-width:0}
+.hub-kh b{color:var(--ink2);font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.hub-kh span{min-width:0;overflow-wrap:anywhere}
+.hub-kpp{margin-bottom:18px}
+.hub-kpp>.ov-kpi{margin:0}
+@media(min-width:761px){.ov.ov-nk{margin-top:-14px}}   /* its first grid row (the tiles) moved up: no empty row gap */
+.hub-back{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;height:36px;padding:0 12px 0 9px;border-radius:10px;
+  border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px;font-weight:750;cursor:pointer;white-space:nowrap}
+.hub-back[hidden]{display:none}
+.hub-back:hover{background:var(--raise)}
+.hub-back:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.hbk-a{font-size:19px;line-height:1;margin-top:-2px}
+@media(max-width:760px){.hub-back{width:40px;height:36px;padding:0}.hbk-t{display:none}}   /* a phone: the arrow alone, before the app's name */
 .hub-fh{display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap;margin:2px 0 10px}
 .hub-fh h3{margin:0;font-size:15px;font-weight:800;color:#fff}
 .hub-fn{font-size:11.5px;color:var(--faint);line-height:1.4}
@@ -3787,6 +3800,7 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
   <main>
     <div class="topbar">
       <button class="hamb" onclick="toggleNav()" aria-label="Menu">☰</button>
+      <button type="button" class="hub-back" id="hub-back" hidden onclick="hubExit()" title="App se bahar — All apps pe wapas" aria-label="Back to All apps"><span class="hbk-a" aria-hidden="true">←</span><span class="hbk-t">All apps</span></button>
       <div><h1 id="tb-title">Portfolio Overview</h1><div class="sub" id="tb-sub">Live · engine-computed</div></div>
       <div class="spacer"></div>
       <div class="tb-ctl">
@@ -4572,14 +4586,15 @@ function hubLsGet(){ try{ return localStorage.getItem(HUB_LS); }catch(e){ return
 function hubLsSet(v){ try{ if(v) localStorage.setItem(HUB_LS,v); else localStorage.removeItem(HUB_LS); }catch(e){} }
 function hubScr(){ const o=document.querySelector('.screen.on'); return (o&&o.dataset&&o.dataset.screen)||''; }
 function hubBody(){ const b=document.body; if(!b||!b.classList) return; b.classList.toggle('hub-on',!!HUB.on); b.classList.toggle('hub-in',!!(HUB.on&&HUB.inHub));
-  const bar=document.getElementById('hub-bar'); if(bar) bar.hidden=!(HUB.on&&HUB.inHub); }
+  const bar=document.getElementById('hub-bar'); if(bar) bar.hidden=!(HUB.on&&HUB.inHub);
+  const bk=document.getElementById('hub-back'); if(bk) bk.hidden=!(HUB.on&&HUB.inHub&&APP); }
 function hubSwitchSync(){ const b=document.getElementById('hub-beta'), t=document.getElementById('hub-beta-s'); if(b) b.setAttribute('aria-checked',HUB.on?'true':'false'); if(t) t.textContent=HUB.on?'On':'Off'; }
 // boot: ?layout=hub | classic wins (and is remembered), else the stored choice; the param then leaves the URL
 function hubInit(){ let q=null; try{ HUB.hash0=String(location.hash||''); }catch(e){}   // the URL's own hash (a bookmark), before the hub writes one
   try{ const m=/[?&]layout=([a-z]+)/i.exec(String(location.search||'')); q=m?m[1].toLowerCase():null; }catch(e){}
   if(q==='hub'||q==='new'||q==='beta') hubLsSet('hub'); else if(q==='classic'||q==='old'||q==='off') hubLsSet('');
   if(q) try{ const s=String(location.search).replace(/([?&])layout=[^&]*(&|$)/i,(m,a,b)=>b?a:'').replace(/[?&]$/,''); history.replaceState(history.state,'',location.pathname+s+location.hash); }catch(e){}
-  HUB.on=hubLsGet()==='hub'; hubBody(); hubSwitchSync();
+  HUB.on=hubLsGet()==='hub'; hubBody(); hubSwitchSync(); hubYWire();
   if(!HUB.on&&HUB.hash0.indexOf('#home')===0) hubUrl(''); }   // off: a hub link opens the old layout (its #home… goes)
 // the switch (sidebar / More): the same screen, redrawn in the other layout — no Back step, no jump
 function hubToggle(force){ const on=force==null?!HUB.on:!!force; if(on===HUB.on){ hubSwitchSync(); return; } hubLsSet(on?'hub':'');
@@ -4638,7 +4653,8 @@ function hubPre(id){ if(HUB.hold) return id;
     if(!REFRESH_SILENT) closeNav(); try{ ecLeft(); }catch(e){} try{ AU.left(); }catch(e){}
     HUB.inner++; HB.mute++; try{ openAppDetail(APP); }finally{ HB.mute--; HUB.inner--; } return null; }   // (muted: its own 'appdetail' step — the hub's covers it)
   return r.screen; }
-function hubMark(route){ const prev=HUB.cur; HUB.cur=route; if(!prev||!HUB.boot||hubSame(prev,route)) return; hubStep(prev,route.h?hubHashOf(route):''); }
+function hubMark(route){ const prev=HUB.cur; HUB.cur=route; if(prev&&!prev.a&&route.a) HUB.from=prev;   // the All-apps view an app was opened from (the ← goes back there)
+  if(!prev||!HUB.boot||hubSame(prev,route)) return; hubStep(prev,route.h?hubHashOf(route):''); }
 // one Back step per tap (a tab + an app change in the same tap = one), its URL pushed with it
 function hubStep(prev,url){ if(HB.mute>0||!hbHist()) return;
   const last=HB.st[HB.st.length-1]; if(HUB.tmark&&last&&last.hub){ last.url=url; return; }
@@ -4673,6 +4689,15 @@ function hubGo(app,tab,o){ app=app||''; if(!HUB_T[tab]||hubTabs(app).indexOf(tab
   HUB.inHub=true; HUB.tab=tab;
   if(app!==APP) setApp(app); else show(hubHost(tab,app)); }
 function hubTab(t){ hubGo(APP,t); }
+// ← in the top bar (inside an app; owner: "app me andar gaye, fir bahar kaise nikle"): out to All apps — the view the app was
+// opened from, at the spot the reader left it; else (opened by a link / bookmark) All apps on the same tab, or its Overview
+function hubExit(){ if(!HUB.on||!APP) return; const f=HUB.from, T=hubTabs('');
+  const to=f&&!f.a?(f.h?{h:1,a:'',t:T.indexOf(f.t)>=0?f.t:'overview'}:f):{h:1,a:'',t:T.indexOf(HUB.tab)>=0?HUB.tab:'overview'};
+  const y=to.h&&f&&f.h&&to.t===f.t?(+HUBY[to.t]||0):0;
+  hubRestore(to); if(y>0) try{ window.scrollTo({top:y}); }catch(e){} }
+const HUBY={};   // All apps: how far down each tab was (kept while scrolling there) — the ← lands back on the row that was tapped
+function hubYWire(){ if(HUB.yw) return; HUB.yw=true;
+  try{ window.addEventListener('scroll',()=>{ if(HUB.on&&HUB.inHub&&!APP) HUBY[HUB.tab]=+window.scrollY||0; },{passive:true}); }catch(e){} }
 function hubHome(){ hubGo(APP,HUB.inHub?'overview':HUB.tab); }
 function hubNavPage(p){ if(!HUB.on){ show(p); return; } HUB.nav=true; show(p); }
 function navTap(p){ if(HUB.on) hubNavPage(p); else show(p); }   // the phone bar's Review / Alerts: the page (never an app's tab)
@@ -4711,7 +4736,12 @@ function hubTitle(id){ const tt=document.getElementById('tb-title'), ts=document
 
 // ---- 📱 App Overview: the app's head (icon, name, account, key numbers) + one small card per feature, above the old Overview ----
 function hubOv(s){ if(!HUB.on||!APP||!s) return s;
-  try{ const d=document.createElement('div'); d.className='hub-ov'; d.id='hub-ov'; d.innerHTML=hubOvHtml(APP); s.insertBefore(d,s.firstChild); }catch(e){}
+  try{ const d=document.createElement('div'); d.className='hub-ov'; d.id='hub-ov'; d.innerHTML=hubOvHtml(APP); s.insertBefore(d,s.firstChild);
+    // owner: "sab KPI upar, uske neeche feature" — the Overview's own period tiles move up under the latest-day ones; its
+    // "Only this app" strip goes (the head above + the top bar's ← say which app, and the way out)
+    const k=s.querySelector('.ov>.ov-kpi'), p=d.querySelector('#hub-kpp'), v=s.querySelector('.ov-app');
+    if(k&&p){ p.appendChild(k); const g=s.querySelector('.ov'); if(g) g.classList.add('ov-nk'); } else if(p&&p.parentNode) p.parentNode.removeChild(p);
+    if(v&&v.parentNode) v.parentNode.removeChild(v); }catch(e){}
   const o=hubRvOpen(); if(!o||!o.f) hubRvEnsure(hubCardsPaint);   // today's Review card: the cards repaint in place when it lands
   return s; }
 function hubDay(){ return (DATA&&DATA.latest_complete)||''; }
@@ -4736,10 +4766,12 @@ function hubOvHtml(name){ const acc=apkAcc(name).acc, R=hubRev(name), ac=hubAct(
   const D2=(typeof DATA!=='undefined'&&DATA)||{}, gaT=ac&&ac.data_till?` · GA4 till ${fmtD(ac.data_till)}`:'';
   return `<div class="hub-hd">${appIcon(name,46)}<div class="hub-hn"><div class="hub-nm">${hAttr(name)}${storeLnk(name)}</div>`
     +`<div class="hub-ac">${acc?'🅐 '+hAttr(acc)+' · ':''}AdMob till ${fmtD(D2.latest_complete)}${gaT}</div></div></div>`
+    +`<div class="hub-kh"><b>Latest day</b><span>${D||'—'}</span></div>`
     +`<div class="row c4 hub-kp">${k1}${k2}${k3}${k4}</div>`
+    +`<div class="hub-kpp" id="hub-kpp"><div class="hub-kh"><b>Period</b><span>${hAttr(curWinLabel())} · upar 🗓 Period se badlo</span></div></div>`
     +`<div class="hub-fh"><h3>Features</h3><span class="hub-fn" id="hub-fn">${hubFcNote()}</span></div>`
     +`<div class="hub-fcs" id="hub-fcs">${hubCardsHtml(name)}</div>`
-    +`<div class="hub-sep"><span>📊 Overview · revenue, date-wise, ad units</span></div>`; }
+    +`<div class="hub-sep"><span>📊 More · revenue table, date-wise, chart</span></div>`; }
 const HUB_RVST={red:'bigda',amber:'dhyan',green:'behtar',normal:'normal',wait:'jaldi',na:'lagu',nodata:'lagu'};
 // card id, tab, label, icon, source (rv:<review feature> = today's Review card for the app)
 const HUB_FC=[['revenue','revenue','Revenue & Ad units','💵','rv:kamai'],['ecpm','ecpm','eCPM','📈','ecpm'],['active','active','Active users','👥','rv:active'],
@@ -4978,7 +5010,7 @@ function renderOverview(){
   const lastTile=ap?kpi('Placements',(ap.placements||fp.length),appIcon(APP,14,'ail')+APP.slice(0,16),'muted'):kpi('Apps · Accounts',DATA.kpis.apps+' · '+DATA.kpis.accounts,'','muted');
   const moversBody=`${inc.slice(0,2).map(p=>`<div class="al good"><span>▲</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${appIcon(p.app,14,'ail')}${p.app}</span></div>`).join('')}
         ${dec.slice(0,2).map(p=>`<div class="al crit"><span>▼</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${appIcon(p.app,14,'ail')}${p.app}</span></div>`).join('')||(inc.length?'':'<div class="muted" style="font-size:12px">Is app me abhi mover nahi.</div>')}`;
-  s.innerHTML=`${ap?`<div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div>${appIcon(APP,32)}</div><div><div class="big">${APP}</div><div class="muted" style="font-size:12.5px">Only this app’s data${ap.platform?' · '+ap.platform:''} · ${ap.placements} placements</div></div><div class="spacer"></div><span class="lnk" onclick="setApp('')">✕ Show all apps</span></div>`:''}
+  s.innerHTML=`${ap?`<div class="verdict ov-app" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div>${appIcon(APP,32)}</div><div><div class="big">${APP}</div><div class="muted" style="font-size:12.5px">Only this app’s data${ap.platform?' · '+ap.platform:''} · ${ap.placements} placements</div></div><div class="spacer"></div><span class="lnk" onclick="setApp('')">✕ Show all apps</span></div>`:''}
     <div class="ov">
       <div class="ov-kpi row ${SHOWSP?'c9':'c4'}">
         ${kpi('Revenue',money(k.revenue),dspan,'muted',sparkbars(trendSeries,'g'))}

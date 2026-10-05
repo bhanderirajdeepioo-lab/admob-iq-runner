@@ -43,7 +43,7 @@ function mk(tag) {
   return el;
 }
 const idEl = id => { const e = mk('div'); e.setAttribute('id', id); return e; };
-['tb-title', 'tb-sub', 'nav-alert', 'nav-alert-h', 'fresh-txt', 'tab-alert', 'hub-beta', 'hub-beta-s', 'rangesel', 'rangecustom', 'banner', 'screens'].forEach(idEl);
+['tb-title', 'tb-sub', 'hub-back', 'nav-alert', 'nav-alert-h', 'fresh-txt', 'tab-alert', 'hub-beta', 'hub-beta-s', 'rangesel', 'rangecustom', 'banner', 'screens'].forEach(idEl);
 const BAR = idEl('hub-bar'); BAR.hidden = true;
 const BODY = mk('body');
 const SCREEN_IDS = ['overview', 'placements', 'reportcard', 'appdetail', 'movers', 'alerts', 'deductions', 'countries', 'baseline', 'mediation', 'roas',
@@ -141,14 +141,14 @@ run(`DATA=__DATA; CURVIEW=null;
   var __adk=[];
   openAppDetail=function(name){ if(hubOpenApp(name)) return; __ad.push(name); __adk.push(SP.keep); ADAPP=name;
     document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('on',x.dataset.screen==='appdetail')); rvOnShow('appdetail'); if(HUB.on) hubPost('appdetail'); };`);
-const S = () => run(`({scr:hubScr(),app:APP,inHub:HUB.inHub,tab:HUB.tab,on:HUB.on,bar:!document.getElementById('hub-bar').hidden,
+const S = () => run(`({scr:hubScr(),app:APP,inHub:HUB.inHub,tab:HUB.tab,on:HUB.on,bar:!document.getElementById('hub-bar').hidden,back:!document.getElementById('hub-back').hidden,
   hubOn:document.body.classList.contains('hub-on'),hubIn:document.body.classList.contains('hub-in'),depth:HB.depth,st:HB.st.map(x=>x.tag)})`);
 const H = () => ({ hash: LOC.hash, idx: HIST.idx, len: HIST.entries.length, urls: HIST.entries.map(e => e.url) });
 const userBack = async () => { history.back(); HIST.calls.pop(); land(); await settle(); };
 const userFwd = async () => { history.forward(); HIST.calls.pop(); land(); await settle(); };
 const fresh = async (opt) => { opt = opt || {};   // a new page load: history, URL, storage and the hub state from scratch
   run(`HB.st.length=0; HB.busy=false; HB.mute=0; HB.depth=0; HUB.on=false; HUB.inHub=false; HUB.tab='overview'; HUB.cur=null; HUB.boot=false; HUB.nav=false; HUB.hold=0;
-    HUB.kc={}; HUB.keys=null; HUB.keysFor=null; APP=''; ADAPP=''; UNIAPP=''; ACTAPP=''; VALAPP='';`);
+    HUB.kc={}; HUB.keys=null; HUB.keysFor=null; HUB.from=null; APP=''; ADAPP=''; UNIAPP=''; ACTAPP=''; VALAPP='';`);
   HIST.entries = [{ state: null, url: '/' + (opt.search || '') + (opt.hash || '') }]; HIST.idx = 0; HIST.calls = []; HIST.pending = []; HIST.left = false;
   LOC.search = opt.search || ''; LOC.hash = opt.hash || '';
   if (!opt.keepStore) { run(`try{ localStorage.removeItem('iq_layout'); localStorage.removeItem('navstate'); }catch(e){}`); }
@@ -239,6 +239,20 @@ const fresh = async (opt) => { opt = opt || {};   // a new page load: history, U
     run(`show('uninstall')`); await settle(); const later = { ...S(), hash: LOC.hash };
     run(`hubToggle(true)`); await settle(); const again = { ...S(), hash: LOC.hash };
     return { before, after, later, again }; });
+
+  // the top bar's ← (inside an app): out to the All-apps view it was opened from, at the spot it was left; a bookmark: same tab
+  await step('exit', async () => { const k = run(`hubKeyOf('Demo Gallery')`), last = () => SCROLLS[SCROLLS.length - 1];
+    await fresh({ search: '?layout=hub' }); const home = S();
+    run(`HUBY.overview=1500`); run(`openAppDetail('Demo Gallery')`); await settle(); const inApp = S(); run(`hubTab('ecpm')`); await settle();
+    SCROLLS.length = 0; run(`hubExit()`); await settle(); const out1 = { ...S(), hash: LOC.hash, y: last() };
+    await userBack(); const back1 = { ...S(), hash: LOC.hash };
+    await fresh({ search: '?layout=hub' }); run(`hubTab('active')`); await settle(); run(`HUBY.active=800`);
+    run(`hubGo('Demo Gallery','active')`); await settle(); run(`hubTab('alerts')`); await settle();
+    SCROLLS.length = 0; run(`hubExit()`); await settle(); const out2 = { ...S(), y: last() };
+    await fresh({ search: '?layout=hub', hash: `#home/${k}/ecpm` }); const bm = S(); SCROLLS.length = 0; run(`hubExit()`); await settle(); const out3 = { ...S(), y: last() };
+    await fresh({ search: '?layout=hub', hash: `#home/${k}/review` }); run(`hubExit()`); await settle(); const out4 = S();
+    await fresh({}); run(`setApp('Demo Gallery')`); await settle(); const classic = S(); run(`hubExit()`); await settle(); const classic2 = S();
+    return { home, inApp, out1, back1, out2, bm, out3, out4, classic, classic2 }; });
 
   // ── App Overview cards ──────────────────────────────────────────────────────────────────────────────────────────────
   const K = run(`hubKeyOf('Demo Gallery')`), money = (usd, s) => ({ usd, s: s || '', sign: 0, p: 0 });

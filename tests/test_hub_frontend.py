@@ -238,7 +238,20 @@ def test_app_overview_cards(report):
     h = c["head"]
     assert "Demo Gallery" in h and "🅐 pub-0000000000000001" in h and "💵 Revenue · " in h and "usual $" in h and "/day (−" in h
     assert "👥 DAU 123,456" in h and "GA4 · not final" in h and "🔔 Open alerts 3 ad units 2 · users 1" in h and "Features" in h
+    assert h.index("Latest day") < h.index("💵 Revenue · ") < h.index("Period") < h.index("Features")   # the app's KPIs first, then Features
     assert c["ov"] == {"same": True, "kids": 1, "id": "hub-ov"} and c["ovAll"] == 0                  # All apps: no app head
+
+
+def test_back_arrow_out_of_an_app(report):
+    r = O(report, "exit")
+    assert not r["home"]["back"] and r["inApp"]["back"] and r["inApp"]["app"] == "Demo Gallery"   # All apps: no ←; inside an app: shown
+    o = r["out1"]                                                   # opened from the All-apps Overview, left from its eCPM tab
+    assert (o["app"], o["inHub"], o["tab"], o["scr"], o["back"], o["hash"], o["y"]) == ("", True, "overview", "overview", False, "#home/all/overview", 1500)
+    assert (r["back1"]["app"], r["back1"]["tab"], r["back1"]["back"]) == ("Demo Gallery", "ecpm", True)   # phone Back: into the app again
+    assert (r["out2"]["app"], r["out2"]["tab"], r["out2"]["scr"], r["out2"]["y"]) == ("", "active", "active", 800)   # from All apps' Active users
+    assert r["bm"]["back"] and (r["out3"]["app"], r["out3"]["tab"], r["out3"]["scr"]) == ("", "ecpm", "ecpm") and not r["out3"]["y"]   # a bookmark: same tab
+    assert (r["out4"]["app"], r["out4"]["tab"], r["out4"]["scr"]) == ("", "overview", "overview")   # an app-only tab → All apps' Overview
+    assert not r["classic"]["back"] and r["classic2"]["app"] == "Demo Gallery"   # the old layout: no ←, hubExit does nothing
 
 
 def test_structure():
@@ -254,6 +267,9 @@ def test_structure():
     assert 'id="nav-review-h"' in hub_nav and 'id="nav-alert-h"' in hub_nav
     top = page[page.index('<div class="topbar">'):page.index('<div class="content" id="content">')]
     assert '<div class="hub-bar" id="hub-bar" role="tablist" aria-label="App tabs" hidden onkeydown="hubBarKey(event)"></div>' in top
+    assert re.search(r'<button type="button" class="hub-back" id="hub-back" hidden onclick="hubExit\(\)"[^>]*aria-label="Back to All apps">'
+                     r'<span class="hbk-a" aria-hidden="true">←</span><span class="hbk-t">All apps</span></button>', top)
+    assert top.index('id="hub-back"') < top.index('id="tb-title"')                                   # the ← sits before the app's name
     bot = page[page.index('<nav class="botbar"'):page.index("</nav>", page.index('<nav class="botbar"'))]
     assert "navTap('review')" in bot and "navTap('alerts')" in bot and 'data-hnav="home"' in bot and 'data-hnav="reco"' in bot
     assert bot.count('class="tabbtn hub-x"') == 2
