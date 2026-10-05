@@ -1193,6 +1193,8 @@ body.hub-on .botbar .tabbtn.hub-x{display:none}
 .hub-tab:focus-visible{outline:2px solid var(--cyan);outline-offset:-4px;border-radius:7px}
 @media(max-width:1000px){.hub-bar{margin:0 calc(-1*var(--tbx,24px)) -6px;padding:0 max(4px,calc(var(--tbx,24px) - 6px))}}
 @media(max-width:760px){.hub-tab{font-size:12.5px;padding:8px 9px 7px;min-height:40px}}
+body.hub-in .topbar h1 .ain{max-width:100%;overflow:hidden}
+body.hub-in .topbar h1 .ain-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hub-ov{margin:0 0 4px}
 .hub-hd{display:flex;align-items:center;gap:14px;margin:2px 0 14px;min-width:0}
 .hub-hd>.aicon{flex:none}
@@ -4576,7 +4578,8 @@ function hubInit(){ let q=null; try{ HUB.hash0=String(location.hash||''); }catch
   try{ const m=/[?&]layout=([a-z]+)/i.exec(String(location.search||'')); q=m?m[1].toLowerCase():null; }catch(e){}
   if(q==='hub'||q==='new'||q==='beta') hubLsSet('hub'); else if(q==='classic'||q==='old'||q==='off') hubLsSet('');
   if(q) try{ const s=String(location.search).replace(/([?&])layout=[^&]*(&|$)/i,(m,a,b)=>b?a:'').replace(/[?&]$/,''); history.replaceState(history.state,'',location.pathname+s+location.hash); }catch(e){}
-  HUB.on=hubLsGet()==='hub'; hubBody(); hubSwitchSync(); }
+  HUB.on=hubLsGet()==='hub'; hubBody(); hubSwitchSync();
+  if(!HUB.on&&HUB.hash0.indexOf('#home')===0) hubUrl(''); }   // off: a hub link opens the old layout (its #home… goes)
 // the switch (sidebar / More): the same screen, redrawn in the other layout — no Back step, no jump
 function hubToggle(force){ const on=force==null?!HUB.on:!!force; if(on===HUB.on){ hubSwitchSync(); return; } hubLsSet(on?'hub':'');
   if(on){ HUB.on=true; HUB.cur=null; HUB.inHub=false; hubBody(); hubSwitchSync(); rerender(); hubBody(); return; }
@@ -4656,7 +4659,7 @@ function hubFixUrl(h){ if(!HUB.on){ if(String(h).indexOf('#home')!==0) return fa
   if(HUB.inHub){ hubUrl(hubHash()); return true; } if(String(h).indexOf('#home')===0){ hubUrl(''); return true; } return false; }
 // the phone's Forward onto a hub step / a typed or bookmarked #home… (no step mark): routed, with a Back step of its own
 function hubPop(d,nd){ if(!HUB.on) return false; const r=hubParse(location.hash); if(!r) return false;
-  const name=hubNameOf(r.key); if(name==null) return false; const H=hbHist(); if(!H) return false;
+  const name=hubNameOf(r.key)||''; const H=hbHist(); if(!H) return false;   // (an app no longer in the build: All apps, same tab)
   const T=hubTabs(name), tab=T.indexOf(r.tab)>=0?r.tab:'overview', to={h:1,a:name,t:tab};
   if(d!=null&&nd!==HB.depth+1) return false;
   if(hubSame(HUB.cur,to)&&d!=null) return false;
@@ -4678,8 +4681,8 @@ function hubOpenApp(name){ if(!HUB.on||HUB.inner||!name) return false; if(name==
   hubGo(name,!APP&&HUB.inHub&&hubScr()==='overview'?'overview':'revenue'); return true; }
 // the first view: a #home… URL wins (a bookmark / refresh), else the restored screen through the hub
 function hubBoot(){ if(!HUB.on) return; HB.mute++;
-  try{ const r=hubParse(HUB.hash0), name=r?hubNameOf(r.key):null;
-    if(r&&name!=null){ HUB.inHub=true; HUB.tab=r.tab||'overview'; if(name!==APP){ setApp(name); } else show(hubHost(hubTabs(name).indexOf(HUB.tab)>=0?HUB.tab:'overview',name)); return; }
+  try{ const r=hubParse(HUB.hash0), name=r?(hubNameOf(r.key)||''):null;   // (an app no longer in the build: All apps, same tab)
+    if(r){ HUB.inHub=true; HUB.tab=r.tab||'overview'; if(name!==APP){ setApp(name); } else show(hubHost(hubTabs(name).indexOf(HUB.tab)>=0?HUB.tab:'overview',name)); return; }
     let n=null; try{ n=JSON.parse(localStorage.getItem('navstate')||'null'); }catch(e){}
     if(n&&n.hub&&n.hub.in&&HUB_T[n.hub.tab]&&(!n.t||Date.now()-n.t<12*3600*1000)){ HUB.inHub=true; HUB.tab=n.hub.tab; show(hubHost(hubTabs(APP).indexOf(HUB.tab)>=0?HUB.tab:'overview',APP)); return; }
     const sc=hubScr(); if(sc==='appdetail'&&ADAPP) openAppDetail(ADAPP); else show(sc||'overview'); }
@@ -4757,8 +4760,9 @@ function hubCardsHtml(name){ const o=hubRvOpen(), ra=o&&o.f?hubRvApp(o.f,name):n
 function hubCard(c,name,ra,o,fx){ const src=c[4];
   if(src.indexOf('rv:')===0){ const f=src.slice(3), x=ra&&ra.f?ra.f[f]:null;
     if(!o||!o.f) return {st:'lagu',line:HUB.rv.loading||!HUB.rv.idx?'⏳ loading…':'Review card nahi'};
+    if(!ra) return {st:'lagu',line:`Not in the ${fmtD(o.f.day)} Review card`};
     if(!x||!x.st) return {st:'lagu',line:'No data'};
-    return {st:HUB_RVST[x.st]||'lagu',line:x.line!=null?rvRt(x.line,fx):rvEsc(x.t||'')}; }
+    const ln=x.line!=null?rvRt(x.line,fx):rvEsc(x.t||''); return {st:HUB_RVST[x.st]||'lagu',line:ln||(x.st==='nodata'?'No data':'—')}; }
   if(src==='ecpm'){ const e=hubEc(name); if(!e||e.y==null) return {st:'lagu',line:'eCPM ka data nahi'};
     return {st:e.st||'lagu',line:`<b>${cm(e.y)}</b> on ${fmtD(hubDay())}${e.w7!=null?` · 7-day avg ${cm(e.w7)}${e.pct!=null?' ('+ecPct(e.pct)+')':''}`:''}`}; }
   if(src==='alerts'){ const al=hubAlerts(name), adN=al.ad.length+al.rg.length;
