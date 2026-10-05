@@ -7,9 +7,14 @@ step). Checked here, the page's own arithmetic against an independent recount in
   * numbers: each app's buckets between its window months = engine.audience's last_open (users and the dead_lo curve);
     the all-apps pool = the build's portfolio (tiered months, dead / dead_lo, install months, most month) and journey /
     long-term / money; the GA4 app shows its dead_lo – dead range; the woken users (10 % and "By age");
+  * who a notification can still reach (Android 12+ hibernates an app unused ~3 months: no push until it is opened):
+    the sleeping bars in two groups (📲 1–3 months · 📢 3+ months) whose subtotals = the sums of their bars, the ⚠️
+    danger zone (the 2–3 months bar), the strip's "📲 push · ⚠️ danger zone · 📢 sirf ads" line = the same bars;
   * "Paise ka calculator" (its "data se" K = the build's fitted curve × sessions, its range; no fit → the day 1 / 7 / 30
-    join): one open = A ads × eCPM ÷ 1000 (old users where the app has its own, else all users; the
-    all-users R × sessions = arp), every lever combination = N × K × R × (1 + e), All apps = Σ every app's own, the card
+    join): "Kahan se jagayein" (📲 only the 1–3 month sleepers count, 📢 only the 3+ month ones, Dono all — push + ads =
+    both), one open = A ads × eCPM ÷ 1000 (old users where the app has its own, else all users; the
+    all-users R × sessions = arp), every lever combination = N × K × R × (1 + e), the ads break-even K × R × (1 + e) =
+    money ÷ woken users (the "How to wake them" card: the data one), All apps = Σ every app's own, the card
     (each line can be redone by hand; the opens table with its row lit; the eCPM box; the old tiles gone, the asleep-for
     table behind "Kyun? ▸"), per-open decimals, the money table's fixed order, the chips set / lit / remembered;
   * $ / ₹: the dashboard's currency (₹ = $ × usd_inr), on every money string, switched by the top bar's 💱 (toggleCur);
@@ -188,15 +193,29 @@ def _wake_days(e, apps, fitted=True):
 
 
 CHANCE = lambda f: .15 if f < 2 else .08 if f < 4 else .04 if f < 7 else .02
+VIAS = ("push", "ads", "both")
 
 
-def _woken(e, r, mode):
-    """N: the woken users of one app at a "Kitne jaagein" lever (the page's wake)."""
+def _in_via(f, via):
+    """The calculator's "Kahan se jagayein": 📲 push = asleep 1–3 months (a notification still reaches them), 📢 ads = 3+
+    months (Android 12+ has put the app to sleep — only ads / Play), Dono = every sleeper (1+ month)."""
+    return f >= 1 and (via == "both" or (f >= 3 if via == "ads" else f < 3))
+
+
+def _base(r, via):
+    """The sleepers a choice wakes from (the % levers): ads = the 3+ month bars (≤ every sleeper), push = the rest."""
+    t = r["deadTot"]
+    ads = min(t, sum(b["v"] for b in r["bk"] if b["f"] >= 3 and b["v"]))
+    return ads if via == "ads" else t - ads if via == "push" else t
+
+
+def _woken(e, r, mode, via="both"):
+    """N: the woken users of one app at a "Kahan se" × "Kitne jaagein" lever (the page's wake)."""
     if e["kam"] or not e["sl"]:
         return 0
     if mode == "age":
-        return sum(b["v"] * CHANCE(b["f"]) for b in r["bk"] if b["f"] >= 1 and b["v"])
-    return r["deadTot"] * int(mode) / 100
+        return sum(b["v"] * CHANCE(b["f"]) for b in r["bk"] if _in_via(b["f"], via) and b["v"])
+    return _base(r, via) * int(mode) / 100
 
 
 @needs_node
@@ -205,25 +224,28 @@ def test_the_woken_users_and_their_drift_away_days(report, world):
     the app's NEW users (its own 1 / 7 / 30-day curve): days a month = 1 + Σ(day 1…29) share, users a day = N × days ÷ 30
     (the owner, 4 Oct: never a loyal regular's whole month)."""
     apps = world["body"]["apps"]
-    totW = totAge = 0.0
+    totW, totAge = {}, {}
     for e in apps:
         r = report["numbers"]["apps"][e["k"]]
         au = e["au"]
         dead_tot = au["d"][au["mo"].index(1)] if au["src"] == "ga4" else e["sl"]
         assert r["deadTot"] == dead_tot
-        w = _woken(e, r, "10")
         days = _wake_days(e, apps)
         assert 1 <= days <= 30 and _close(r["wd"], days, 1e-9)
-        assert _close(r["w10"]["w"], w, 1e-9) and _close(r["w10"]["users"], w * (days if w else 0) / 30, 1e-9)
-        wa = _woken(e, r, "age")
-        assert _close(r["wage"]["w"], wa, 1e-9) and _close(r["wage"]["users"], wa * (days if wa else 0) / 30, 1e-9)
-        totW += w
-        totAge += wa
-    assert _close(report["numbers"]["all"]["w10"]["w"], totW, 1e-9) and _close(report["numbers"]["all"]["wage"]["w"], totAge, 1e-9)
+        for via in VIAS:
+            w = _woken(e, r, "10", via)
+            assert _close(r["w10"][via]["w"], w, 1e-9) and _close(r["w10"][via]["users"], w * (days if w else 0) / 30, 1e-9)
+            wa = _woken(e, r, "age", via)
+            assert _close(r["wage"][via]["w"], wa, 1e-9) and _close(r["wage"][via]["users"], wa * (days if wa else 0) / 30, 1e-9)
+            totW[via] = totW.get(via, 0) + w
+            totAge[via] = totAge.get(via, 0) + wa
+    for via in VIAS:
+        assert _close(report["numbers"]["all"]["w10"][via]["w"], totW[via], 1e-9) and _close(report["numbers"]["all"]["wage"][via]["w"], totAge[via], 1e-9)
 
 
 # ── "Paise ka calculator" ───────────────────────────────────────────────────────────────────────────────────────────
 MODES, OPS, ECS = ("5", "10", "20", "age"), ("data", "1", "2", "5", "10", "20", "30"), ("-10", "0", "10", "20")
+G = lambda *k: "|".join(k)                                  # a lever setting's key: via|mode|opens|ecpm
 
 
 def _po(e):
@@ -240,17 +262,17 @@ def _po(e):
     return None
 
 
-def _calc(e, r, apps, mode, op, ec):
+def _calc(e, r, apps, via, mode, op, ec):
     """N users × K opens × R × (1 + e) a month; users a day = N × active days ÷ 30 (the page's calc)."""
     p = _po(e)
     if p is None:
         return None
-    w, days = _woken(e, r, mode), _wake_days(e, apps)
+    w, days = _woken(e, r, mode, via), _wake_days(e, apps)
     Kd = max(1, _jr(days * p["s"]))
     K = Kd if op == "data" else int(op)
     ad = days if op == "data" else min(30, max(1, K / p["s"]))
-    return {"w": w, "K": K, "Kd": Kd, "R": p["R"], "A": p["A"], "E": p["E"],
-            "usd": w * K * p["R"] * (1 + int(ec) / 100), "users": w * ad / 30}
+    return {"w": w, "K": K, "Kd": Kd, "R": p["R"], "A": p["A"], "E": p["E"], "base": _base(r, via),
+            "usd": w * K * p["R"] * (1 + int(ec) / 100), "users": w * ad / 30, "be": K * p["R"] * (1 + int(ec) / 100)}
 
 
 @needs_node
@@ -276,24 +298,26 @@ def test_every_lever_is_users_times_opens_times_per_open(report, world):
     1 … 30; users a day = N × (days, or K ÷ sessions a day within 1 … 30) ÷ 30."""
     apps = world["body"]["apps"]
     n = 0
-    for m in MODES:
-        for op in OPS:
-            for ec in ECS:
-                g = report["calc"]["grid"]["|".join((m, op, ec))]
-                for e in apps:
-                    want, got = _calc(e, report["numbers"]["apps"][e["k"]], apps, m, op, ec), g[e["k"]]
-                    assert got["ok"] is True and got["K"] == want["K"] and got["Kd"] == want["Kd"] == e["kf"]["K"]
-                    assert (got["K10"], got["K90"]) == (e["kf"]["K10"], e["kf"]["K90"])
-                    for k in ("w", "R", "usd", "users"):
-                        assert _close(got[k], want[k], 1e-9), (e["n"], m, op, ec, k)
-                    n += 1
-    assert n == 4 * 7 * 4 * 4
+    for via in VIAS:
+        for m in MODES:
+            for op in OPS:
+                for ec in ECS:
+                    g = report["calc"]["grid"][G(via, m, op, ec)]
+                    for e in apps:
+                        want, got = _calc(e, report["numbers"]["apps"][e["k"]], apps, via, m, op, ec), g[e["k"]]
+                        assert got["ok"] is True and got["K"] == want["K"] and got["Kd"] == want["Kd"] == e["kf"]["K"]
+                        assert (got["K10"], got["K90"]) == (e["kf"]["K10"], e["kf"]["K90"])
+                        for k in ("w", "base", "R", "usd", "users", "be"):
+                            assert _close(got[k], want[k], 1e-9), (e["n"], via, m, op, ec, k)
+                        n += 1
+    assert n == 3 * 4 * 7 * 4 * 4
     g = report["calc"]["grid"]
     for e in apps:                                                                 # the levers move it the obvious way
         k = e["k"]
-        assert _close(g["10|5|0"][k]["usd"] * 2, g["10|10|0"][k]["usd"], 1e-9)
-        assert _close(g["10|5|10"][k]["usd"], g["10|5|0"][k]["usd"] * 1.1, 1e-9)
-        assert _close(g["20|5|0"][k]["usd"], g["10|5|0"][k]["usd"] * 2, 1e-9)
+        for via in VIAS:
+            assert _close(g[G(via, "10", "5", "0")][k]["usd"] * 2, g[G(via, "10", "10", "0")][k]["usd"], 1e-9)
+            assert _close(g[G(via, "10", "5", "10")][k]["usd"], g[G(via, "10", "5", "0")][k]["usd"] * 1.1, 1e-9)
+            assert _close(g[G(via, "20", "5", "0")][k]["usd"], g[G(via, "10", "5", "0")][k]["usd"] * 2, 1e-9)
 
 
 @needs_node
@@ -309,8 +333,10 @@ def test_all_apps_is_the_sum_of_each_apps_own(report, world):
         assert _close(t["users"], sum(x["users"] for x in xs), 1e-9) and t["skip"] == 0
         assert _close(t["K"], wK / w, 1e-9) and _close(t["Kd"], sum(x["w"] * x["Kd"] for x in xs) / w, 1e-9)
         assert _close(t["R"], sum(x["w"] * x["K"] * x["R"] for x in xs) / wK, 1e-9)
-        assert _close(t["w"] * t["K"] * t["R"] * (1 + int(key.split("|")[2]) / 100), t["usd"], 1e-9)   # multiplies back
+        assert _close(t["w"] * t["K"] * t["R"] * (1 + int(key.split("|")[3]) / 100), t["usd"], 1e-9)   # multiplies back
         assert _close(t["A"] * t["E"] / 1000, t["R"], 1e-9)
+        assert (t["be"] is None) == (t["w"] == 0) and (t["be"] is None or _close(t["be"], t["usd"] / t["w"], 1e-9))   # break-even
+        assert _close(t["base"], sum(x["base"] for x in xs), 1e-9)
 
 
 _NUM = r"[\d,]+(?:\.\d+)?"
@@ -330,8 +356,12 @@ def _mok(shown, v):
     return abs(shown - v) <= 0.051 * a + 1e-12
 
 
-def _card(report, k, m, op, ec, cur):
-    return report["calc"]["cards"]["|".join((k, m, op, ec, cur))]
+def _card(report, k, via, m, op, ec, cur):
+    return report["calc"]["cards"]["|".join((k, via, m, op, ec, cur))]
+
+
+CARDS = (("push", "10", "data", "0", "USD"), ("ads", "20", "5", "10", "USD"), ("both", "age", "30", "-10", "INR"),
+         ("push", "5", "data", "20", "INR"), ("ads", "age", "data", "0", "INR"), ("both", "10", "2", "20", "USD"))
 
 
 @needs_node
@@ -344,10 +374,10 @@ def test_the_card_one_open_levers_result_table_and_ecpm_box(report, world):
     apps = world["body"]["apps"]
     for k in [e["k"] for e in apps] + ["all"]:
         e = next((x for x in apps if x["k"] == k), None)
-        for m, op, ec, cur in (("10", "data", "0", "USD"), ("20", "5", "10", "USD"), ("age", "30", "-10", "INR"), ("5", "data", "20", "INR")):
-            h = _card(report, k, m, op, ec, cur)
+        for via, m, op, ec, cur in CARDS:
+            h = _card(report, k, via, m, op, ec, cur)
             sym, f = ("$", 1.0) if cur == "USD" else ("₹", fx)
-            t = report["calc"]["all" if k == "all" else "grid"]["|".join((m, op, ec))]
+            t = report["calc"]["all" if k == "all" else "grid"][G(via, m, op, ec)]
             c = t if k == "all" else t[k]
             assert "Paise ka calculator" in h and "Sleeping users aaj <b>%s0</b> dete hain" % sym in h
             for gone in ("au-tiles", "Per daily active user", "Old user, per day", "Money from waking", "au-chain", "Money estimate"):
@@ -361,7 +391,7 @@ def test_the_card_one_open_levers_result_table_and_ecpm_box(report, world):
             assert abs(A - c["A"]) <= 0.006 + 0.051 * c["A"] and _close(E, c["E"] * f, 0.006) and _close(R, c["R"] * f, 0.051)
             assert _close(A * E / 1000, R, 0.08)                                                   # redo by hand
             # 2 · the levers: the chosen chip of each lit
-            for at, v in (("mode", m), ("opens", op), ("ecpm", ec)):
+            for at, v in (("via", via), ("mode", m), ("opens", op), ("ecpm", ec)):
                 assert h.count('class="au-chip on" data-au-%s=' % at) == 1 and 'class="au-chip on" data-au-%s="%s"' % (at, v) in h
             assert 'data-au-opens="data">Data se (~' in h
             # the "data se" line: where K comes from, its range
@@ -382,8 +412,26 @@ def test_the_card_one_open_levers_result_table_and_ecpm_box(report, world):
             assert (til == "~") == (k == "all" and op == "data") and (K == c["K"] if k != "all" else abs(K - c["K"]) <= 0.05)
             assert (fac is None) == (ec == "0") and (fac is None or _close(_v(fac), 1 + int(ec) / 100, 1e-9))
             assert _mok(X, c["usd"] * f) and '<div class="au-n">≈ %s' % sym in h
-            assert _close(Nn * K * Rr * (_v(fac) if fac else 1), X, 0.06 + 0.5 / Nn + 0.05 / K)    # redo by hand (N whole)
+            assert X == 0 if Nn == 0 else _close(Nn * K * Rr * (_v(fac) if fac else 1), X, 0.06 + 0.5 / Nn + 0.05 / K)   # redo by hand (N whole; 📢 a young app: nobody)
             assert "+%s users/day (mahine ka avg) · pehle din +%s" % (_n(c["users"]), _n(c["w"])) in h
+            # the woken users: the sleepers this "Kahan se" counts, × the share (or by age)
+            vn = {"push": "📲 1–3 mahine wale", "ads": "📢 3+ mahine wale", "both": "Sab sleeping (📲 + 📢)"}[via]
+            wl = re.search(r'<div class="au-w au-wn">(.*?)</div>', h).group(1)
+            assert wl == "%s: <b>%s</b> sleeping%s = <b>%s</b> users" % (
+                vn, _nj(c["base"]), " · by age (jitna purana, utna kam %)" if m == "age" else " × %s%%" % m, _nj(c["w"])), wl
+            # 📢 Ads / Dono: an ad's break-even = one woken user's month (K × R × (1 + e)) = money ÷ woken users
+            bm = re.search(r'<div class="au-be">📢 Ad ka kharcha ek wapas aaye user pe <b>~%s(%s)</b> se kam hona chahiye, warna ghata\.'
+                           % (re.escape(sym), _NUM), h)
+            if via == "push":
+                assert bm is None and 'class="au-be"' not in h
+            else:
+                ra = report["calc"]["all" if k == "all" else "grid"][G("ads", m, op, ec)]
+                ra = ra if k == "all" else ra[k]
+                assert _close(_v(bm.group(1)), ra["be"] * f, 0.051)
+                assert _close(ra["be"], ra["K"] * ra["R"] * (1 + int(ec) / 100), 1e-9)
+                assert ra["w"] == 0 or _close(ra["be"], ra["usd"] / ra["w"], 1e-9)
+                bl = re.search(r'<div class="au-be">.*?<div class="au-w">(.*?)</div></div>', h, re.S).group(1)
+                assert bl.startswith("%s%s = " % (sym, bm.group(1))) and "ek jaage user ki 1 mahine ki kamai" in bl
             # 4 · opens → money: 1 / 2 / 5 / 10 / 20 / 30 + the "data se" row in its place, the chosen one lit
             tb = h[h.index("Kitni baar khole → %s/mahina" % sym):]
             rows = re.findall(r'<tr class="(au-on)?" data-au-opens="(\w+)"><td>(.*?)</td><td class="au-r"><b>%s(%s)</b></td></tr>' % (re.escape(sym), _NUM), tb)
@@ -395,13 +443,13 @@ def test_the_card_one_open_levers_result_table_and_ecpm_box(report, world):
                 Ks = [c["Kd"] if x[1] == "data" else int(x[1]) for x in rows]
                 assert Ks == sorted(Ks) and "~%d baar <small>data se</small>" % c["Kd"] in tb
             for on, o, _lab, v in rows:
-                cc = report["calc"]["all" if k == "all" else "grid"]["|".join((m, o, ec))]
+                cc = report["calc"]["all" if k == "all" else "grid"][G(via, m, o, ec)]
                 cc = cc if k == "all" else cc[k]
                 assert _mok(_v(v), cc["usd"] * f)
             # 5 · the eCPM box: +10% when the lever is 0, else the lever
             eb = 0.10 if ec == "0" else int(ec) / 100
             rev28 = sum(x["rev28"] for x in apps) if k == "all" else e["rev28"]
-            x0 = report["calc"]["all" if k == "all" else "grid"]["|".join((m, op, "0"))]
+            x0 = report["calc"]["all" if k == "all" else "grid"][G(via, m, op, "0")]
             x0 = (x0 if k == "all" else x0[k])["usd"]
             box = h[h.index('class="au-ecb"'):]
             assert ("eCPM %s ka asar" % ("+%d%%" % round(eb * 100) if eb > 0 else "−%d%%" % round(-eb * 100))) in box
@@ -435,24 +483,26 @@ def test_the_all_apps_table_follows_the_levers_in_a_fixed_order(report, world):
     """The money-by-app table: each app's money at the calculator's levers, the rows ordered by the 10% · data se · eCPM 0
     scenario whatever the levers say (stable — no row jumps on a chip tap)."""
     t = report["calc"]["table"]
-    base = t["10|data|0"]["order"]
-    fixed = sorted(world["body"]["apps"], key=lambda e: (-report["calc"]["grid"]["10|data|0"][e["k"]]["usd"], -e["sl"]))
+    base = t[G("push", "10", "data", "0")]["order"]
+    fixed = sorted(world["body"]["apps"], key=lambda e: (-report["calc"]["grid"][G("push", "10", "data", "0")][e["k"]]["usd"], -e["sl"]))
     assert base == [e["k"] for e in fixed]
     for key, v in t.items():
         assert v["order"] == base
         g = report["calc"]["grid"][key]
         for k, cell in zip(v["order"], v["money"]):
             usd = g[k]["usd"]
-            assert cell == "$" + (_n(usd) if usd >= 10 else ("%.1f" % usd if usd >= 1 else repr(float("%.2g" % usd))))
-    assert "(10% jaagein · data se · eCPM 0)" in t["10|data|0"]["h2s"] and "(By age jaagein · 1 baar · eCPM +20%)" in t["age|1|20"]["h2s"]
-    assert "(5% jaagein · 30 baar · eCPM −10%)" in t["5|30|-10"]["h2s"] and "order hamesha 10% · data se · eCPM 0 pe" in t["5|30|-10"]["h2s"]
+            assert cell == "$" + (_n(usd) if usd >= 10 else ("%.1f" % usd if usd >= 1 else "0" if usd == 0 else repr(float("%.2g" % usd))))
+    assert "(📲 Notification · 10% jaagein · data se · eCPM 0)" in t[G("push", "10", "data", "0")]["h2s"]
+    assert "(Dono · By age jaagein · 1 baar · eCPM +20%)" in t[G("both", "age", "1", "20")]["h2s"]
+    assert "(📢 Ads / Play · 5% jaagein · 30 baar · eCPM −10%)" in t[G("ads", "5", "30", "-10")]["h2s"]
+    assert "order hamesha 📲 Notification · 10% · data se · eCPM 0 pe" in t[G("ads", "5", "30", "-10")]["h2s"]
 
 
 @needs_node
 def test_an_app_without_the_calculators_inputs_says_so(report, world):
     d = report["calc"]["noData"]
     assert d["po"] is None and d["w"] > 0 and _close(d["all"]["skip"], d["w"], 1e-9)
-    g = report["calc"]["grid"]["10|data|0"]
+    g = report["calc"]["grid"][G("push", "10", "data", "0")]
     assert _close(d["all"]["usd"], sum(x["usd"] for k, x in g.items() if k != d["k"]), 1e-9)       # Σ of the others
     assert _close(d["all"]["w"], sum(x["w"] for k, x in g.items() if k != d["k"]), 1e-9)
     assert "Is app ka GA4 sessions / AdMob impressions data nahi" in d["card"] and "au-calc" not in d["card"]
@@ -475,9 +525,12 @@ def test_without_a_fit_data_se_is_the_day_1_7_30_join(report, world):
 def test_the_chips_set_light_and_remember_the_levers(report):
     c = report["calc"]
     assert c["chips"]["S"] == ["20", "5", "20"] and c["chips"]["on"] == [True, True, True] and c["chips"]["row"]
-    assert {k: c["chips"]["ls"][k] for k in ("mode", "opens", "ecpm")} == {"mode": "20", "opens": "5", "ecpm": "20"}
-    assert c["boot"] == ["20", "5", "20"]                                         # a page load restores them
-    assert c["bootBad"] == ["10", "data", "0"]                                    # an unknown saved value: the default
+    assert c["chips"]["via"] == "ads" and c["chips"]["viaOn"]                      # "Kahan se jagayein": one lit
+    assert c["chips"]["viaChips"] == [["push", "📲 Notification (1–3 mahine)"], ["ads", "📢 Ads / Play (3+ mahine)"], ["both", "Dono"]]
+    assert {k: c["chips"]["ls"][k] for k in ("via", "mode", "opens", "ecpm")} == {"via": "ads", "mode": "20", "opens": "5", "ecpm": "20"}
+    assert c["boot"] == ["20", "5", "20", "ads"]                                  # a page load restores them
+    assert c["bootBad"] == ["10", "data", "0", "push"]                            # an unknown saved value: the default
+    assert c["dflt"]["S"] == "push" and c["dflt"]["w"] == c["dflt"]["wPush"]       # 📲 Notification by default
     assert c["rowTap"] == "10"                                                    # a row of the opens table is a lever
 
 
@@ -489,7 +542,8 @@ def test_a_lever_redraws_only_the_money_card_strip_and_table(report):
     r = report["levers_partial"]
     a = r["all"]
     assert a["screen"] == "SCREEN-KEPT"                                           # the screen itself never rebuilt
-    assert a["S"] == ["20", "5", "10"] and {k: a["ls"][k] for k in ("mode", "opens", "ecpm")} == {"mode": "20", "opens": "5", "ecpm": "10"}
+    assert a["S"] == ["20", "5", "10", "both"] and {k: a["ls"][k] for k in ("via", "mode", "opens", "ecpm")} == {"via": "both", "mode": "20", "opens": "5", "ecpm": "10"}
+    assert 'class="au-chip on" data-au-via="both"' in a["money"] and 'class="au-be"' in a["money"]   # the "Kahan se" chip: the same in-place redraw
     assert a["money"] and a["money"] == a["want"]["money"]                        # = the full paint's card at those levers
     assert 'class="au-chip on" data-au-opens="5"' in a["money"] and 'class="au-chip on" data-au-mode="20"' in a["money"]
     assert 'data-kyun="money" open' in a["money"]                                 # an open "Kyun? ▸" stays open
@@ -521,9 +575,183 @@ def test_money_in_dollars_and_rupees(report, world):
     assert "₹ / month" in report["money"]["INR"]["html"] and "$ / month" in report["money"]["USD"]["html"]
 
 
+# ── who a notification can still reach (Android 12+ app hibernation at ~3 months) ──────────────────────────────────────
+def _pp(a, b):                                                                           # the page's P (a share as text)
+    if not b or a is None:
+        return ""
+    p = 100 * a / b
+    if a != 0 and abs(p) < 0.05:
+        return "<0.1%"
+    v = _jr(p * 10) / 10 if abs(p) < 10 else _jr(p)
+    return ("%d" % v if v == int(v) else "%s" % v) + "%"
+
+
+def _sec(h, sid):
+    i = h.index('id="%s"' % sid)
+    return h[h.rindex("<section", 0, i):h.index("</section>", i)]
+
+
+def _groups(bk):
+    """The bars' sums: 📲 push = Σ 1 ≤ f < 3 (dz = its 2–3 months bar), 📢 ads = Σ f ≥ 3."""
+    push = sum(b["v"] for b in bk if 1 <= b["f"] < 3 and b["v"])
+    dz = sum(b["v"] for b in bk if b["f"] == 2 and b["v"])
+    ads = sum(b["v"] for b in bk if b["f"] >= 3 and b["v"])
+    return push, dz, ads
+
+
+def _pages(report, world):
+    """(key, page html, bars, installed) for every app and All apps."""
+    out = [(e["k"], report["apps"][e["k"]], report["numbers"]["apps"][e["k"]]["bk"], e["au"]["inst"]) for e in world["body"]["apps"]]
+    return out + [("all", report["render"]["html"], report["numbers"]["all"]["bk"], report["numbers"]["all"]["inst"])]
+
+
+PUSH_HEAD = '📲 Notification se pahunch sakte<small>(1–3 mahine)</small>'
+ADS_HEAD = "📢 Sirf Ads / Play se<small>(3+ mahine — Android 12+ app ko 'so' deta hai, notification nahi pahunchti)</small>"
+
+
+@needs_node
+def test_the_sleeping_bars_split_at_three_months_with_subtotals(report, world):
+    """The Sleeping card's bars in two labelled groups — 📲 1–3 months (a notification still reaches them) and 📢 3+ months
+    (Android 12+ has put the app to sleep: only ads / Play) — each with its subtotal (the number first, its % of installed
+    beside it) = the sum of its own bars; the two together = every 1+ month sleeper; the rule cited under "Kyun? ▸"."""
+    young = world["by"][YOUNG]["k"]
+    for k, h, bk, inst in _pages(report, world):
+        d = _sec(h, "au-s-dead")
+        push, dz, ads = _groups(bk)
+        heads = re.findall(r'<div class="au-gh" style="--gc:var\(--au-(\w+)\)"><div class="au-gt">(.*?)</div><div class="au-gv">([\d,]+)<small>([^<]*)</small></div></div>', d)
+        assert [(x[0], x[1]) for x in heads] == [("sleep", PUSH_HEAD), ("ads", ADS_HEAD)], k
+        assert [x[2] for x in heads] == [_nj(push), _nj(ads)] and [x[3] for x in heads] == [_pp(push, inst), _pp(ads, inst)], k
+        assert push + ads == sum(b["v"] for b in bk if b["f"] >= 1 and b["v"])            # together: every 1+ month sleeper
+        # every bar sits under its own group: 1–2 / 2–3 months under 📲, 3+ months under 📢
+        i_ads = d.index(ADS_HEAD)
+        labs = re.findall(r'<div class="au-hl">([^<]+?)(?: <span class="au-dzb">⚠️ Danger</span>)?</div><div class="au-ht" data-at', d)
+        assert len(labs) >= (1 if k == young else 3)
+        for lab in re.findall(r'<div class="au-hl">([^<]+?)(?: <span class="au-dzb">⚠️ Danger</span>)?</div><div class="au-ht" data-at', d):
+            f0 = int(re.match(r"(\d+)", lab).group(1)) * (12 if "year" in lab else 1)
+            pos = d.index('<div class="au-hl">' + lab)
+            assert (pos > i_ads) == (f0 >= 3), (k, lab)
+        assert "<b>3 mahine kyun?</b> Android 12+ ~3 mahine na khule app ko \"so\" (hibernate) deta hai" in d[d.index('data-kyun="dead"'):]
+        # ⚠️ the danger zone: the 2–3 months bar, in the warning colour, its count with its %
+        if k == young:                                                   # 1 month of data: no 2–3 months bar, nobody 3+
+            assert 'class="au-dz"' not in d and "— abhi koi nahi · data 1 mahine tak" in d and heads[1][2] == "0"
+            continue
+        assert d.count('<span class="au-dzb">⚠️ Danger</span>') == 1 and '<div class="au-hl">2–3 months <span class="au-dzb">⚠️ Danger</span></div>' in d
+        assert "background:var(--au-dz)" in d and d.count("background:var(--au-dz)") == 1
+        assert ('<div class="au-dz">⚠️ <b>Danger zone (61–90 din)</b>: <b class="au-dzn">%s</b> (%s) — abhi nahi jagaye to ~3 mahine pe '
+                'Android app ko so dega, phir notification nahi pahunchegi.</div>' % (_nj(dz), _pp(dz, inst))) in d, k
+
+
+@needs_node
+def test_the_strips_sleeping_tile_says_who_push_can_reach(report, world):
+    """Under "Sleeping 28+ days": 📲 push se (1–2 months) · ⚠️ danger zone (2–3 months) · 📢 sirf ads se (3+ months) — the
+    Sleeping card's own bars, so 📢 = the "Dead 3+ months" tile beside it; All apps = Σ every app. The money tile: 10% of
+    the 📲 1–3 month sleepers (the calculator's default), so named."""
+    tot = [0, 0, 0]
+    for k, h, bk, inst in _pages(report, world):
+        st = h[h.index('<div class="au-strip" id="au-strip">'):h.index('<div class="au-grid">')]
+        if k == "all":
+            push, dz, ads = tot
+            r = report["numbers"]["all"]["reach"]
+        else:
+            p, dz, ads = _groups(bk)
+            push = p - dz
+            tot = [tot[0] + push, tot[1] + dz, tot[2] + ads]
+            r = report["numbers"]["apps"][k]["reach"]
+        assert _close(r["push"], push, 1e-9) and _close(r["dz"], dz, 1e-9) and _close(r["ads"], ads, 1e-9)
+        line = re.search(r'<div class="au-rch" title="[^"]*">(.*?)</div>', st).group(1)
+        assert line == ('<span>📲 <b>%s</b> push se</span> · <span class="au-rdz">⚠️ <b>%s</b> danger zone</span> · <span>📢 <b>%s</b> sirf ads se</span>'
+                        % (_cn(push), _cn(dz), _cn(ads))), (k, line)
+        assert st.index('<div class="au-l">Sleeping 28+ days</div>') < st.index('class="au-rch"') < st.index("Dead 3+ months")
+        users = report["numbers"]["all"]["w10"]["push"]["users"] if k == "all" else report["numbers"]["apps"][k]["c10"]["users"]
+        assert "📲 notification se (1–3 mahine) · +%s users / day" % _cn(users) in st
+    assert report["numbers"]["all"]["fix"] == {"via": "push", "mode": "10", "opens": "data", "ecpm": "0"}
+
+
+@needs_node
+def test_kahan_se_counts_only_the_sleepers_that_way_can_reach(report, world):
+    """📲 Notification: only the 1–3 month sleepers; 📢 Ads / Play: only the 3+ month ones; Dono: all — so push + ads =
+    both (users and money, every lever); on a GA4 app the 📲 base is exactly its 1–3 month bars. The asleep-for table
+    behind "Kyun? ▸" dims the rows the choice leaves out."""
+    for e in world["body"]["apps"]:
+        r = report["numbers"]["apps"][e["k"]]
+        b = r["base"]
+        push, dz, ads = _groups(r["bk"])
+        assert _close(b["push"] + b["ads"], b["both"], 1e-9) and b["both"] == r["deadTot"]
+        assert _close(b["ads"], min(r["deadTot"], ads), 1e-9) and r["split"] == {"push": push, "dz": dz, "ads": ads}
+        if e["au"]["src"] == "ga4":
+            assert _close(b["push"], push, 1e-9)
+        for mode in ("10", "age"):
+            w = r["w10" if mode == "10" else "wage"]
+            assert _close(w["push"]["w"] + w["ads"]["w"], w["both"]["w"], 1e-9)
+        assert _close(r["wage"]["ads"]["w"], sum(x["v"] * CHANCE(x["f"]) for x in r["bk"] if x["f"] >= 3 and x["v"]), 1e-9)
+    g = report["calc"]["grid"]
+    for m in MODES:
+        for op in ("data", "5"):
+            for ec in ("0", "10"):
+                for k in g[G("both", m, op, ec)]:
+                    x = [g[G(v, m, op, ec)][k] for v in VIAS]
+                    assert _close(x[0]["usd"] + x[1]["usd"], x[2]["usd"], 1e-9) and _close(x[0]["w"] + x[1]["w"], x[2]["w"], 1e-9)
+                a = [report["calc"]["all"][G(v, m, op, ec)] for v in VIAS]
+                assert _close(a[0]["usd"] + a[1]["usd"], a[2]["usd"], 1e-9)
+    # the asleep-for table: the rows outside the choice dimmed, the total = the rows it counts
+    for via, m, op, ec, cur in CARDS:
+        kb = _card(report, "all", via, m, op, ec, cur)
+        kb = kb[kb.index("<th>Asleep for</th>"):]
+        rows = re.findall(r'<tr( class="au-off")?><td>([^<]+)</td><td class="au-r">([\d,]+)</td><td class="au-r">([^<]+)</td><td class="au-r"><b>([^<]+)</b></td></tr>', kb)
+        assert [x[1] for x in rows] == ["1–2 months", "2–3 months", "3–4 months", "4–7 months", "7+ months"]
+        on = [bool(x[0]) is False for x in rows]
+        assert on == [_in_via(f, via) for f in (1, 2, 3, 4, 7)]
+        assert all(x[3] == "—" and x[4] == "—" for x in rows if x[0])
+        tot = re.search(r'<tr class="au-tot"><td>Total[^<]*</td><td class="au-r">([\d,]+)</td>', kb).group(1)
+        assert abs(_v(tot) - sum(_v(x[2]) for x in rows if not x[0])) <= 3                 # whole numbers each
+
+
+@needs_node
+def test_how_to_wake_them_and_the_module_panels_note(report, world):
+    """"How to wake them": 📲 push for 1–3 months · 📢 3+ months = Google Ads app engagement (the DATA break-even: data se
+    K × R, fixed whatever the levers) + Play update notes / promotional content · 🛡️ prevention ("Pause app activity if
+    unused", the official intent, sparingly) · 🪜 the new users' ladder. The 🔒 "Last opened" panel: FCM misses hibernated
+    phones."""
+    fx = world["dash"]["usd_inr"]
+    for k, n in [(e["k"], e["n"]) for e in world["body"]["apps"]] + [("all", "")]:
+        for via, m, op, ec, cur in CARDS:
+            h = report["calc"]["how"]["|".join((k, via, m, op, ec, cur))]
+            sym, f = ("$", 1.0) if cur == "USD" else ("₹", fx)
+            lis = re.findall(r"<li>(.*?)</li>", h, re.S)
+            assert len(lis) == 4 and [re.match(r"<b>(.*?)</b>", x).group(1) for x in lis] == [
+                "📲 1–3 mahine — notification (FCM):", "📢 3+ mahine — sirf phone ke bahar se:", "🛡️ Rokna:", "🪜 Naye users ke liye ladder:"]
+            assert "⚠️ 2–3 mahine wale pehle" in lis[0] and "We miss you" in lis[0]
+            assert "Google Ads app engagement campaign" in lis[1] and "Play Store pe update notes + promotional content" in lis[1]
+            assert '"Pause app activity if unused"' in lis[2] and "official intent" in lis[2] and "Kam use karo" in lis[2]
+            assert "3, 7, 14, 30, 45, 60 din" in lis[3] and "~75 din" in lis[3] and "holdout" in lis[3] and "Last app engagement" in lis[3]
+            c = report["calc"]["howBe"][k]
+            bm = re.search(r"ek wapas aaye user pe kharcha <b>~%s(%s)</b> se kam ho tabhi faayda \((avg, )?data se ~(%s) baar × %s(%s)\)"
+                           % (re.escape(sym), _NUM, _NUM, re.escape(sym), _NUM), lis[1])
+            assert bm and _close(_v(bm.group(1)), c["be"] * f, 0.051) and (bm.group(2) is not None) == (k == "all")
+            assert _close(c["be"], c["K"] * c["R"], 1e-9)                                    # data se K × R (eCPM 0)
+            assert abs(_v(bm.group(3)) - c["K"]) <= (0.05 if k == "all" else 0) and _close(_v(bm.group(4)), c["R"] * f, 0.051)
+    m = _sec(report["render"]["html"], "au-s-module")
+    assert ('⚠️ FCM wali "abhi bhi installed" ginti me so gaye (hibernated, Android 12+) phones nahi aayenge — isliye 3+ mahine '
+            'wale sleeping kam gine jaayenge.') in m and m.index("🔒 Last opened") < m.index("so gaye (hibernated")
+
+
+@needs_node
+def test_a_bars_tip_names_the_way_that_reaches_it(report):
+    t = report["tips"]["reach"]
+    assert "⚠️ danger zone — abhi notification" in t["push"]["dz"] and "📲 notification" in t["push"]["one"] and "📢 sirf ads / Play" in t["push"]["ads"]
+    off = "— (is choice me nahi)"
+    assert off not in t["push"]["dz"] and off not in t["push"]["one"] and off in t["push"]["ads"]
+    assert off in t["ads"]["dz"] and off in t["ads"]["one"] and off not in t["ads"]["ads"]
+    assert all(off not in x for x in t["both"].values())
+
+
 # ── the all-apps table on a phone ─────────────────────────────────────────────────────────────────────────────────────
 def _jr(v):                                                                              # Math.round (half up)
     return int(math.floor(v + 0.5))
+
+
+def _nj(v):                                                                              # the page's N: Math.round, grouped
+    return "{:,}".format(_jr(v))
 
 
 def _cn(v):                                                                              # the page's CN: 2.6M · 412K · 4.1K · 950
@@ -634,7 +862,7 @@ def test_folds_chips_currency_and_day(report):
 def test_the_refresh_brings_the_view_back_as_it_was(report):
     r = report["refresh"]
     assert r["screen"] == "audience" and r["newData"] and r["silent"] is False
-    assert r["S"] == {"app": r["want"], "mode": "age", "opens": "5", "ecpm": "10", "day": "2026-02-01", "open": ["money", "dead"]}
+    assert r["S"] == {"app": r["want"], "via": "ads", "mode": "age", "opens": "5", "ecpm": "10", "day": "2026-02-01", "open": ["money", "dead"]}
     assert r["st"] == ["app"] and r["hist"] == 2 and r["scrolls"] == []                 # no new Back step, no jump
     assert r["crumb"] and r["fold"] and r["ageOn"] and r["leversOn"] and r["cur"] == "INR" and r["rupee"]   # App, ₹, levers kept
     assert r["fetched"] == ["audience.json.gz?v=0123456789ab"]                           # the new build's file

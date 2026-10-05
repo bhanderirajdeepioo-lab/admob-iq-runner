@@ -2327,7 +2327,7 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 /* ---------- 👥 Audience (the approved Audience demo, ported: every rule scoped to #au-root / #au-tip) ---------- */
 body[data-screen="audience"] #rangectl,body[data-screen="audience"] #rangecustom{display:none!important}   /* every section says its own dates */
 body[data-screen="audience"] #smp-pick{display:inline-flex}
-#au-root{container:au/inline-size;--au-open:#1f9e6e;--au-month:#3f7fe0;--au-sleep:#c05a9a;--au-has:#a65cc4;--au-gone:#d9443f;--au-long:#1f9e6e;max-width:1360px}
+#au-root{container:au/inline-size;--au-open:#1f9e6e;--au-month:#3f7fe0;--au-sleep:#c05a9a;--au-has:#a65cc4;--au-gone:#d9443f;--au-long:#1f9e6e;--au-ads:#7d8fb8;--au-dz:var(--watch);max-width:1360px}
 #au-root .au-meta{color:var(--muted);font-size:12px;line-height:1.4;margin:0 0 12px}   /* the one line under the top bar (App / ₹$ are the top bar's) */
 #au-root .au-none{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap}
 #au-root .au-none p{margin:0;color:var(--ink2);font-size:14px;font-weight:650;flex:1 1 240px}
@@ -2407,6 +2407,27 @@ body[data-screen="audience"] #smp-pick{display:inline-flex}
 #au-root .au-hna{font-size:11.5px;color:var(--faint)}
 #au-root .au-hb.au-red .au-hbar{background:var(--au-gone)}
 #au-root .au-hb [data-at]{cursor:default}
+/* the sleeping bars in two groups at the 3-month line (Android 12+ app hibernation): 📲 1–3 months (a notification still
+   reaches them; the 2–3 months bar = ⚠️ danger zone) · 📢 3+ months (only ads / Play) — each group with its subtotal */
+#au-root .au-gh{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;gap:2px 10px;flex-wrap:wrap;background:var(--panel2);border-left:3px solid var(--gc,var(--au-sleep));border-radius:8px;padding:6px 9px;margin:8px 0 1px;min-width:0}
+#au-root .au-gh:first-child{margin-top:0}
+#au-root .au-gt{font-size:12.5px;font-weight:800;color:#fff;line-height:1.3;flex:1 1 170px;min-width:0;overflow-wrap:anywhere}
+#au-root .au-gt small{display:block;font-size:11px;font-weight:600;color:var(--muted);line-height:1.35}
+#au-root .au-gv{font-size:15px;font-weight:850;color:#fff;white-space:nowrap}
+#au-root .au-gv small{color:var(--muted);font-weight:650;font-size:12px;margin-left:4px}
+#au-root .au-dzb{display:inline-block;font-size:9.5px;font-weight:800;background:var(--watch-b);color:var(--watch);padding:0 5px;border-radius:5px;vertical-align:1px;white-space:nowrap}
+#au-root .au-dz{grid-column:1/-1;background:var(--watch-b);color:var(--ink2);border-left:3px solid var(--au-dz);border-radius:7px;padding:6px 9px;margin:1px 0 3px;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+#au-root .au-dz b{color:var(--watch)}
+#au-root .au-dz b.au-dzn{color:#fff}
+#au-root .au-st .au-rch{font-size:11.5px;color:var(--ink2);line-height:1.35;margin-top:4px;padding-top:4px;border-top:1px solid var(--line)}
+#au-root .au-st .au-rch span{white-space:nowrap}
+#au-root .au-st .au-rch b{color:#fff;font-weight:800}
+#au-root .au-st .au-rch .au-rdz b{color:var(--watch)}
+#au-root .au-be{background:var(--watch-b);border-radius:11px;padding:9px 12px;margin:8px 0 0;font-size:12.5px;color:var(--ink2);line-height:1.45;min-width:0}
+#au-root .au-be b{color:#fff;white-space:nowrap}
+#au-root .au-be .au-w{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.35;overflow-wrap:anywhere}
+#au-root table.au-bk tr.au-off td{color:var(--faint)}
+#au-root table.au-bk tr.au-off td b{color:var(--faint);font-weight:650}
 #au-root .au-topb{display:inline-block;font-size:9.5px;font-weight:800;background:var(--watch-b);color:var(--watch);padding:0 5px;border-radius:5px;vertical-align:1px}
 #au-root .au-newb{display:inline-block;font-size:9.5px;font-weight:800;background:var(--purple-b);color:var(--purple);padding:0 5px;border-radius:5px;vertical-align:1px}
 #au-root .au-zero{font-size:12.5px;color:var(--ink2);background:var(--panel2);border-left:3px solid var(--au-sleep);border-radius:7px;padding:7px 10px;margin:6px 0 10px}
@@ -4879,7 +4900,7 @@ function ecStatusNote(){ return `<b>Status</b> — har row apne <b>roz ke normal
 const AU=(function(){
 'use strict';
 let RAW=null, VER=null, LOADING=false, ERR=false, EL=null, PSIG=null, APPS=[], BYK={}, ALL=null;
-const S={app:'',pick:'',mode:'10',opens:'data',ecpm:'0',day:null,open:new Set(),mall:new Set(),booted:false,wired:false};   // app = the top bar's App as a key ('' all, '!' none); mode / opens / ecpm = the calculator's levers
+const S={app:'',pick:'',via:'push',mode:'10',opens:'data',ecpm:'0',day:null,open:new Set(),mall:new Set(),booted:false,wired:false};   // app = the top bar's App as a key ('' all, '!' none); via / mode / opens / ecpm = the calculator's levers
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 const $=id=>document.getElementById(id);
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -4926,7 +4947,25 @@ function loAt(au,m){ if(!au||!au.mo) return null; if(!au.lo) return dAt(au,m); c
 function bLab(f,t){ if(t==null) return (f>=24&&f%12===0)?(f/12)+'+ years':f+'+ months';
   if(f>=12&&f%12===0&&t%12===0) return (f/12)+'–'+(t/12)+' years'; return f+'–'+t+' months'; }
 const chanceOf=f=>f<2?.15:f<4?.08:f<7?.04:.02;           // "By age": the longer asleep, the lower the chance
-const GROUPS=[['1–2 months',1,2],['2–4 months',2,4],['4–7 months',4,7],['7+ months',7,1e9]];
+const GROUPS=[['1–2 months',1,2],['2–3 months',2,3],['3–4 months',3,4],['4–7 months',4,7],['7+ months',7,1e9]];   // split at the 3-month line
+// ---- who a notification can still reach: Android 12+ "app hibernation" — an app unused for a few months (commonly ~3) is
+// put to sleep: its permissions reset, no background jobs, NO push (high-priority FCM too) and its cache cleared, until the
+// user opens it again (Android 11: the permissions reset only). So the sleeping bars split at 3 months:
+//   'push' = asleep 1–3 months (a notification still reaches them; 2–3 months = ⚠️ the danger zone, ~61–90 days: not woken
+//            now, Android puts the app to sleep at ~3 months); 'ads' = 3+ months (only outside the phone: Google Ads
+//            app-engagement campaigns, Play Store promotional content / update notes).
+const HIB=3, DZ=2;
+const VIAS=[['push','📲 Notification (1–3 mahine)'],['ads','📢 Ads / Play (3+ mahine)'],['both','Dono']];
+const VIA_N={push:'📲 1–3 mahine wale',ads:'📢 3+ mahine wale',both:'Sab sleeping (📲 + 📢)'};
+const inVia=(f,via)=>f>=1&&(via==='both'||(via==='ads'?f>=HIB:f<HIB));
+// the bars' own sums (users; GA4: the upper number, as the bars): push = Σ 1 ≤ f < 3 (dz = its 2–3 months bar), ads = Σ f ≥ 3
+function split(bk){ const o={push:0,dz:0,ads:0}; (bk||[]).forEach(b=>{ if(b.f<1||!b.v) return; if(b.f>=HIB) o.ads+=b.v; else { o.push+=b.v; if(b.f===DZ) o.dz+=b.v; } }); return o; }
+// the sleepers a "Kahan se" choice wakes from (the "%" levers): 'both' = every sleeper (deadTot, as before); 'ads' = the 3+
+// month bars; 'push' = the rest — so push + ads = both, and on a GA4 app push = the 1–3 month bars exactly
+function viaBase(a,via){ const t=a.deadTot||0, ads=Math.min(t,split(a.bk).ads); return via==='ads'?ads:via==='push'?t-ads:t; }
+// the strip's line: the same bars (📲 1–2 months · ⚠️ 2–3 months · 📢 3+ months = the card's "1+ mahine"), All apps = Σ apps
+function stripReach(a){ if(a.all){ const t={push:0,dz:0,ads:0}; APPS.filter(x=>!x.kam).forEach(x=>{ const q=stripReach(x); t.push+=q.push; t.dz+=q.dz; t.ads+=q.ads; }); return t; }
+  const q=split(a.bk); return {push:q.push-q.dz,dz:q.dz,ads:q.ads}; }
 const isGa4=au=>!!au&&au.src==='ga4';
 function srcTag(au,block){ const cls=block?'au-tag':'au-tg';
   if(!au) return '';
@@ -4985,10 +5024,13 @@ function wakeDays(a){ if(a&&a.kf&&a.kf.d>0) return a.kf.d;
   const r1=j['1'][0]||0, r7=j['7'][0]||0, r30=j['30'][0]||0; let d=1;
   for(let t=1;t<=29;t++) d+=t<=7?r1+(r7-r1)*(t-1)/6:r7+(r30-r7)*(t-7)/23;
   return d; }
-function wake(a,mode){ mode=mode||S.mode; if(a.kam||!a.sl) return {w:0,days:0,users:0};
-  let w=0; if(mode==='age') a.bk.forEach(b=>{ if(b.f>=1&&b.v) w+=b.v*chanceOf(b.f); }); else w=a.deadTot*Number(mode)/100;
-  const days=wakeDays(a); return {w,days,users:w*days/30}; }
-function wakeAll(mode){ const t={w:0,wd:0,users:0}; APPS.forEach(x=>{ const q=wake(x,mode); t.w+=q.w; t.wd+=q.w*q.days; t.users+=q.users; });
+// via ("Kahan se jagayein"): only the sleepers that way can reach count — 'push' the 1–3 month ones, 'ads' the 3+ month
+// ones, 'both' every one (By age: each bar of the group × its chance; a %: that share of viaBase)
+function wake(a,mode,via){ mode=mode||S.mode; via=via||S.via; if(a.kam||!a.sl) return {w:0,days:0,users:0,base:0};
+  const base=viaBase(a,via); let w=0;
+  if(mode==='age') a.bk.forEach(b=>{ if(inVia(b.f,via)&&b.v) w+=b.v*chanceOf(b.f); }); else w=base*Number(mode)/100;
+  const days=wakeDays(a); return {w,days,users:w*days/30,base}; }
+function wakeAll(mode,via){ const t={w:0,wd:0,users:0,base:0}; APPS.forEach(x=>{ const q=wake(x,mode,via); t.w+=q.w; t.wd+=q.w*q.days; t.users+=q.users; t.base+=q.base; });
   t.days=t.w?t.wd/t.w:0; return t; }
 // ---- "Paise ka calculator" (the owner, 4 Oct: "agar user 1, 2 … X baar khole to kitna ₹, agar eCPM 10% plus …") ----
 // One open (one session) earns R = A ads × eCPM ÷ 1000 (the 28 days of the money, AdMob + GA4 sessions):
@@ -5002,23 +5044,26 @@ function wakeAll(mode){ const t={w:0,wd:0,users:0}; APPS.forEach(x=>{ const q=wa
 // (month average) = N × active days ÷ 30 (active days: the drift-away days for 'data', else K ÷ sessions a day, 1 … 30).
 // All apps = Σ of every app's own (its own R and K); its K / R / A / eCPM shown are the averages that multiply back.
 const OPENS=['1','2','5','10','20','30'], ECPMS=[['-10','−10%'],['0','0'],['10','+10%'],['20','+20%']];
-const FIX={mode:'10',opens:'data',ecpm:'0'};              // the all-apps table's order (stable whatever the levers say)
+const FIX={via:'push',mode:'10',opens:'data',ecpm:'0'};  // the all-apps table's order and the strip's money tile (stable whatever the levers say)
 function perOpen(a){ if(!a||a.all||!(a.ec>0)) return null;
   if(a.own&&a.ra>0&&a.spr>0){ const R=a.ra/a.spr; return {b:'old',s:a.spr,E:a.ec,R,A:R*1000/a.ec}; }
   if(a.ads>0&&a.spu>0){ const A=a.ads/a.spu; return {b:'all',s:a.spu,E:a.ec,A,R:A*a.ec/1000}; }
   return null; }
-function calc(a,o){ o=o||{}; const mode=o.mode||S.mode, op=o.opens||S.opens, ec=String(o.ecpm!=null?o.ecpm:S.ecpm), e=Number(ec)/100;
-  if(a&&a.all) return calcAll({mode,opens:op,ecpm:ec});
-  const q=wake(a,mode), p=perOpen(a), days=wakeDays(a);
-  if(!p) return {w:q.w,K:0,Kd:0,K10:null,K90:null,R:null,A:null,E:null,e,usd:0,users:q.users,ok:false,p:null};
+function calc(a,o){ o=o||{}; const via=o.via||S.via, mode=o.mode||S.mode, op=o.opens||S.opens, ec=String(o.ecpm!=null?o.ecpm:S.ecpm), e=Number(ec)/100;
+  if(a&&a.all) return calcAll({via,mode,opens:op,ecpm:ec});
+  const q=wake(a,mode,via), p=perOpen(a), days=wakeDays(a);
+  if(!p) return {w:q.w,base:q.base,K:0,Kd:0,K10:null,K90:null,R:null,A:null,E:null,e,usd:0,users:q.users,be:null,ok:false,p:null};
   const kOf=d=>d==null?null:Math.max(1,Math.round(d*p.s)), Kd=kOf(days), K=op==='data'?Kd:Number(op), ad=op==='data'?days:Math.min(30,Math.max(1,K/p.s));
   const kf=a.kf&&a.kf.d>0?a.kf:null;
-  return {w:q.w,K,Kd,K10:kf?kOf(kf.d10):null,K90:kf?kOf(kf.d90):null,R:p.R,A:p.A,E:p.E,e,usd:q.w*K*p.R*(1+e),users:q.w*ad/30,ok:true,p}; }
-function calcAll(o){ const t={w:0,usd:0,users:0,skip:0,ok:true,all:true,e:Number(o.ecpm)/100}; let wK=0, wKd=0, wKR=0, wKA=0, wKAE=0, wr=0, w10=0, w90=0;
-  APPS.forEach(x=>{ const c=calc(x,o); if(!c.ok){ t.skip+=c.w; return; } const k=c.w*c.K;
+  // be = the break-even of an ad: what one woken user brings in its month (K opens × R per open × (1 + e)) — an ad
+  // that costs more per user won back loses money
+  return {w:q.w,base:q.base,K,Kd,K10:kf?kOf(kf.d10):null,K90:kf?kOf(kf.d90):null,R:p.R,A:p.A,E:p.E,e,usd:q.w*K*p.R*(1+e),users:q.w*ad/30,be:K*p.R*(1+e),ok:true,p}; }
+function calcAll(o){ const t={w:0,base:0,usd:0,users:0,skip:0,ok:true,all:true,e:Number(o.ecpm)/100}; let wK=0, wKd=0, wKR=0, wKA=0, wKAE=0, wr=0, w10=0, w90=0;
+  APPS.forEach(x=>{ const c=calc(x,o); t.base+=c.base||0; if(!c.ok){ t.skip+=c.w; return; } const k=c.w*c.K;
     t.w+=c.w; t.usd+=c.usd; t.users+=c.users; wK+=k; wKd+=c.w*c.Kd; wKR+=k*c.R; wKA+=k*c.A; wKAE+=k*c.A*c.E;
     if(c.K10!=null&&c.K90!=null){ wr+=c.w; w10+=c.w*c.K10; w90+=c.w*c.K90; } });
   t.K=t.w?wK/t.w:0; t.Kd=t.w?wKd/t.w:0; t.R=wK?wKR/wK:null; t.A=wK?wKA/wK:null; t.E=wKA?wKAE/wKA:null;
+  t.be=t.w&&t.R!=null?t.K*t.R*(1+t.e):null;                 // = usd ÷ w: the woken users' average month
   t.K10=wr?w10/wr:null; t.K90=wr?w90/wr:null; return t; }   // the range: the apps that have one, by woken users
 // per-open money: 2 decimals under 10 (₹0.43, ₹2.17, $1.20); below 0.1 three significant digits ($0.00517, ₹0.0429)
 function MO(usd){ if(usd==null||!isFinite(usd)) return '—'; const v=mv(usd), a=Math.abs(v);
@@ -5030,14 +5075,16 @@ const fE=e=>e>0?'+'+Math.round(e*100)+'%':e<0?'−'+Math.round(-e*100)+'%':'0';
 const WHY=(id,shortT,long)=>`<p class="au-note">${shortT}</p>`+(long?`<details class="au-kyun" data-kyun="${id}"${S.open.has(id)?' open':''}><summary>Kyun? <span class="au-ar">▸</span></summary><div class="au-kb">${long}</div></details>`:'');
 function rangeTxt(lo,hi,fmt){ fmt=fmt||N; if(lo==null||hi==null) return fmt(hi); return Math.round(lo)===Math.round(hi)?fmt(hi):fmt(lo)+'–'+fmt(hi); }
 // ---- the sections ----
-function secStrip(a){ const d3=dAt(a.au,3), l3=loAt(a.au,3), young=!a.all&&a.maxm<3, t10=calc(a,FIX);   // 10% · data se · eCPM 0
-  const t=(c,l,n,sub)=>`<div class="au-st" style="--sc:${c}"><div class="au-l">${l}</div><div class="au-n">${n}</div><div class="au-s">${sub}</div></div>`;
+function secStrip(a){ const d3=dAt(a.au,3), l3=loAt(a.au,3), young=!a.all&&a.maxm<3, t10=calc(a,FIX);   // 📲 push · 10% · data se · eCPM 0
+  const t=(c,l,n,sub,more)=>`<div class="au-st" style="--sc:${c}"><div class="au-l">${l}</div><div class="au-n">${n}</div><div class="au-s">${sub}</div>${more||''}</div>`;
   if(a.kam) return t('var(--au-month)','Installed now','data kam','is app ka installed sahi nahi ban raha')+t('var(--au-open)','Opened today',CN(a.a1),DT(a.E));
+  // who of the sleepers a notification can still reach — the Sleeping card's bars (1+ month): 📲 1–2 · ⚠️ 2–3 · 📢 3+ months
+  const r=stripReach(a), rch=`<div class="au-rch" title="1+ mahine wale sleeping: 📲 1–2 mahine · ⚠️ 2–3 mahine (danger zone, abhi push se) · 📢 3+ mahine (Android app ko so deta hai)"><span>📲 <b>${CN(r.push)}</b> push se</span> · <span class="au-rdz">⚠️ <b>${CN(r.dz)}</b> danger zone</span> · <span>📢 <b>${CN(r.ads)}</b> sirf ads se</span></div>`;
   return t('var(--au-month)','Installed now',CN(a.inst),'abhi phone me (andaza)')
-    +t('var(--au-sleep)','Sleeping 28+ days',`${CN(a.sl)} <small>${P(a.sl,a.inst)}</small>`,'phone me hai, 28+ din se nahi khola')
+    +t('var(--au-sleep)','Sleeping 28+ days',`${CN(a.sl)} <small>${P(a.sl,a.inst)}</small>`,'phone me hai, 28+ din se nahi khola',rch)
     +t('var(--au-sleep)','Dead 3+ months',young||d3==null?'—':`${rangeTxt(a.au.lo?l3:null,d3,CN)} <small>${P(d3,a.au.inst)}</small>`,
        young?`app naya hai (${DT(a.L)} se)`:(isGa4(a.au)?'GA4 (lagbhag exact)':(a.au.src==='mix'?'GA4 + andaza':'andaza')))
-    +t('var(--good)','If 10% wake up: money / month',t10.ok?`≈ ${MC(t10.usd)}`:'—',`+${CN(t10.users)} users / day`); }
+    +t('var(--good)','If 10% wake up: money / month',t10.ok?`≈ ${MC(t10.usd)}`:'—',`📲 notification se (1–3 mahine) · +${CN(t10.users)} users / day`); }
 function secPhone(a){ const today=a.a1, month=Math.max(0,a.a28k-a.a1), sleep=a.sl, tot=a.inst;
   let bar='', leg='';
   if(a.kam) bar=`<div class="au-kam">⚠️ Data kam — is app me install − uninstall (${N(a.inst)}) se 28-din active users (${N(a.a28k)}) zyada aa rahe, isliye ye split galat hoga. Sirf aaj ke users: <b>${N(a.a1)}</b>.</div>`;
@@ -5093,21 +5140,31 @@ function secDead(a){ const title='Sleeping users: months since last open';
   const au=a.au, tot=dAt(au,1), tl=loAt(au,1), reach=a.maxm, ga4=isGa4(au), showLo=!!au.lo;
   if(!a.all&&(reach<1||!tot)) return `<section class="au-card" id="au-s-dead"><h3>${title} ${srcTag(au,true)}</h3>
     <div class="au-ans">Abhi koi nahi — app naya hai (${DT(a.L)} se).</div><div class="au-na">1+ mahine se soya hua user abhi ${reach<1?'ho hi nahi sakta':'nahi dikh raha'}. Mahine ka split 1–2 mahine baad aayega.</div></section>`;
-  const bs=a.bk.map((b,i)=>Object.assign({i},b)).filter(b=>b.f>=1), mxv=Math.max(1,...bs.map(b=>b.v||0));
+  const bs=a.bk.map((b,i)=>Object.assign({i},b)).filter(b=>b.f>=1), mxv=Math.max(1,...bs.map(b=>b.v||0)), sp=split(a.bk);
   let cut=null, top=null;
   bs.forEach(b=>{ if(b.v!=null&&(top==null||b.v>top.v)) top=b; });
-  const rows=bs.map(b=>{ if(b.f>Math.max(1,reach)&&!(b.v>0.5)){ if(cut==null) cut=b.f; return ''; }
-    const v=b.v||0; return `<div class="au-hl">${bLab(b.f,b.t)}</div><div class="au-ht" data-at="b:${b.i}"><span class="au-hbar" style="width:${Math.max(0.6,100*v/mxv)}%"></span></div><div class="au-hv" data-at="b:${b.i}">${b.v==null?'—':N(v)}<small>${P(v,au.inst)}</small></div>`; }).join('')
-    +(cut==null?'':`<div class="au-hl">${bLab(cut,null)}</div><div class="au-ht au-hspan"><span class="au-hna">— data ${reach} mahine tak${a.all?'':` (app ${DT(a.L)} se)`}</span></div>`);
+  // two groups at the 3-month line, each with its subtotal (= the sum of its bars); the 2–3 months bar = ⚠️ danger zone
+  const cutRow=()=>`<div class="au-hl">${bLab(cut,null)}</div><div class="au-ht au-hspan"><span class="au-hna">— data ${reach} mahine tak${a.all?'':` (app ${DT(a.L)} se)`}</span></div>`;
+  const bar=b=>{ if(b.f>Math.max(1,reach)&&!(b.v>0.5)){ if(cut==null) cut=b.f; return ''; }
+    const v=b.v||0, dz=b.f===DZ, col=b.f>=HIB?'var(--au-ads)':dz?'var(--au-dz)':'var(--au-sleep)';
+    return `<div class="au-hl">${bLab(b.f,b.t)}${dz?' <span class="au-dzb">⚠️ Danger</span>':''}</div><div class="au-ht" data-at="b:${b.i}"><span class="au-hbar" style="width:${Math.max(0.6,100*v/mxv)}%;background:${col}"></span></div><div class="au-hv" data-at="b:${b.i}">${b.v==null?'—':N(v)}<small>${P(v,au.inst)}</small></div>`
+      +(dz&&b.v!=null?`<div class="au-dz">⚠️ <b>Danger zone (61–90 din)</b>: <b class="au-dzn">${N(v)}</b> (${P(v,au.inst)}) — abhi nahi jagaye to ~3 mahine pe Android app ko so dega, phir notification nahi pahunchegi.</div>`:''); };
+  const head=(c,t,sub,v)=>`<div class="au-gh" style="--gc:${c}"><div class="au-gt">${t}<small>${sub}</small></div><div class="au-gv">${N(v)}<small>${P(v,au.inst)}</small></div></div>`;
+  const grp=xs=>{ const c0=cut, h=xs.map(bar).join(''); return h+(c0==null&&cut!=null?cutRow():''); };   // "— data N mahine tak" closes the group it starts in
+  const pushRows=grp(bs.filter(b=>b.f<HIB)), adsRows=grp(bs.filter(b=>b.f>=HIB));
+  const rows=head('var(--au-sleep)','📲 Notification se pahunch sakte','(1–3 mahine)',sp.push)+pushRows
+    +head('var(--au-ads)','📢 Sirf Ads / Play se',"(3+ mahine — Android 12+ app ko 'so' deta hai, notification nahi pahunchti)",sp.ads)
+    +(adsRows||`<div class="au-hl">3+ months</div><div class="au-ht au-hspan"><span class="au-hna">— abhi koi nahi · data ${reach} mahine tak${a.all?'':` (app ${DT(a.L)} se)`}</span></div>`);
   const diff=a.sl?(tot-a.sl)/a.sl:0;
   const cl=(au.clamps&&au.clamps.un_gt_act)||{}, clk=Object.keys(cl).map(Number).sort((p,q)=>p-q), clPick=clk.filter((m,i)=>m===1||m===3||m===6||m===12||i===clk.length-1);
   const clTxt=clPick.length?`<br><b>Bina khole hataye (GA4 se pakka, kam se kam):</b> `+clPick.map(m=>`${m} mahine: ${N(cl[m][1])}`).join(' · ')+'.':'';
   const range=showLo?`<div class="au-range">Dead 1+ month: <b>${rangeTxt(tl,tot)}</b> users <span style="color:var(--muted)">(${P(tl,au.inst)}–${P(tot,au.inst)} of ${N(au.inst)} installed)</span></div>`:'';
+  const hib=`<b>3 mahine kyun?</b> Android 12+ ~3 mahine na khule app ko "so" (hibernate) deta hai — tab notification (high-priority FCM bhi) nahi pahunchti, jab tak user khud app na khole. Android 11: sirf permissions reset.<br>`;
   const why=ga4||au.src==='mix'
     ? ['dead','Range = sahi number in dono ke beech: kuch log app khole bina hi hata dete hain.',
-       `<b>Kaise:</b> har install din ke users me se — abhi bhi installed − (N mahine me khole − usi beech hataye) = N+ mahine se nahi khola (upar wala number). Agar window me hatane wale kisi ne bhi pehle nahi khola tha, to neeche wala number. Kuch log app khole bina hi hata dete hain, isliye sahi number in dono ke beech hai.${clTxt}<br>Bars upar wale number se. Install-din wise (30+ din) <b>${N(tot)}</b> · Phone card ka sleeping (28+ din) <b>${N(a.sl)}</b> — fark ${Math.abs(diff)<0.005?'0%':(diff>0?'+':'−')+(Math.abs(diff)*100).toFixed(Math.abs(diff)<0.1?1:0)+'%'}.${au.src==='mix'?`<br>${au.n_andaza} apps abhi andaza se (GA4 read baaki).`:''}`]
+       `${hib}<b>Kaise:</b> har install din ke users me se — abhi bhi installed − (N mahine me khole − usi beech hataye) = N+ mahine se nahi khola (upar wala number). Agar window me hatane wale kisi ne bhi pehle nahi khola tha, to neeche wala number. Kuch log app khole bina hi hata dete hain, isliye sahi number in dono ke beech hai.${clTxt}<br>Bars upar wale number se. Install-din wise (30+ din) <b>${N(tot)}</b> · Phone card ka sleeping (28+ din) <b>${N(a.sl)}</b> — fark ${Math.abs(diff)<0.005?'0%':(diff>0?'+':'−')+(Math.abs(diff)*100).toFixed(Math.abs(diff)<0.1?1:0)+'%'}.${au.src==='mix'?`<br>${au.n_andaza} apps abhi andaza se (GA4 read baaki).`:''}`]
     : ['dead','Abhi andaza (return curve se) — GA4 read poora hote hi lagbhag exact.',
-       `Install-din wise total (30+ din nahi khola) <b>${N(tot)}</b> · Phone card ka sleeping (28+ din) <b>${N(a.sl)}</b> — fark ${Math.abs(diff)<0.005?'0%':(diff>0?'+':'−')+(Math.abs(diff)*100).toFixed(Math.abs(diff)<0.1?1:0)+'%'} (28 vs 30 din ka fark).<br><b>Abhi ye andaza hai:</b> return curve (D1–D30 + 45 … 365 din) se kis umar me khulna band hua, baad ke uninstall ghata ke; total phone card ke sleeping pe scale kiya (cohort curve ka apna total ${N(a.dm)}).${au.coming?'<br><b>GA4 data aa raha hai:</b> is app ka GA4 read chal raha hai — poora hote hi yahan lagbhag exact number.':''}<br><b>Module lagne ke baad ye exact hoga:</b> roz ki notification pahunchne pe har phone ki aakhri open date aayegi.`];
+       `${hib}Install-din wise total (30+ din nahi khola) <b>${N(tot)}</b> · Phone card ka sleeping (28+ din) <b>${N(a.sl)}</b> — fark ${Math.abs(diff)<0.005?'0%':(diff>0?'+':'−')+(Math.abs(diff)*100).toFixed(Math.abs(diff)<0.1?1:0)+'%'} (28 vs 30 din ka fark).<br><b>Abhi ye andaza hai:</b> return curve (D1–D30 + 45 … 365 din) se kis umar me khulna band hua, baad ke uninstall ghata ke; total phone card ke sleeping pe scale kiya (cohort curve ka apna total ${N(a.dm)}).${au.coming?'<br><b>GA4 data aa raha hai:</b> is app ka GA4 read chal raha hai — poora hote hi yahan lagbhag exact number.':''}<br><b>Module lagne ke baad ye exact hoga:</b> roz ki notification pahunchne pe har phone ki aakhri open date aayegi.`];
   return `<section class="au-card" id="au-s-dead"><h3>${title} ${srcTag(au,true)}</h3>
     <div class="au-ans"><b>${rangeTxt(showLo?tl:null,tot)}</b> users phone me hain par 1+ mahine se nahi khola${top&&top.v?` — sabse zyada <b>${bLab(top.f,top.t)}</b> wale (${N(top.v)})`:''}.</div>
     ${range}<div class="au-hb" role="img" aria-label="Sleeping users by months since last open">${rows}</div>
@@ -5160,13 +5217,15 @@ function kfLine(a,r,isAll){ const rng=(lo,hi)=>lo!=null&&hi!=null?`, range ${fK(
 function secMoney(a){ const isAll=!!a.all, r=calc(a), lbl=S.mode==='age'?'By age':S.mode+'%';
   const chip=(at,k,t,on)=>`<button type="button" class="au-chip${on?' on':''}" data-au-${at}="${k}">${t}</button>`;
   const lever=(lab,aria,cs)=>`<div class="au-chips au-lv" role="group" aria-label="${aria}"><span class="au-cl">${lab}</span>${cs}</div>`;
-  // the asleep-for table (behind "Kyun? ▸"): who comes back, by how long asleep
+  // the asleep-for table (behind "Kyun? ▸"): who comes back, by how long asleep — the rows outside the "Kahan se" group
+  // dimmed with "—" (they do not count), the total = the group's rows
   let tD=0, tB=0;
-  const rows=GROUPS.map(([g,f0,f1])=>{ let dead=0, back=0;
+  const rows=GROUPS.map(([g,f0,f1])=>{ let dead=0, back=0; const on=inVia(f0,S.via);
     (isAll?APPS.filter(x=>!x.kam):[a]).forEach(x=>x.bk.forEach(b=>{ if(b.f>=f0&&b.f<f1&&b.v){ const ch=S.mode==='age'?chanceOf(b.f):Number(S.mode)/100; dead+=b.v; back+=b.v*ch; } }));
-    tD+=dead; tB+=back; const ch=S.mode==='age'?chanceOf(f0):Number(S.mode)/100;
-    return `<tr><td>${g}</td><td class="au-r">${N(dead)}</td><td class="au-r">${Math.round(ch*100)}%</td><td class="au-r"><b>${N(back)}</b></td></tr>`; }).join('')
-    +`<tr class="au-tot"><td>Total</td><td class="au-r">${N(tD)}</td><td class="au-r">${P(tB,tD)}</td><td class="au-r"><b>${N(tB)}</b></td></tr>`;
+    if(on){ tD+=dead; tB+=back; } const ch=S.mode==='age'?chanceOf(f0):Number(S.mode)/100;
+    return on?`<tr><td>${g}</td><td class="au-r">${N(dead)}</td><td class="au-r">${Math.round(ch*100)}%</td><td class="au-r"><b>${N(back)}</b></td></tr>`
+      :`<tr class="au-off"><td>${g}</td><td class="au-r">${N(dead)}</td><td class="au-r">—</td><td class="au-r"><b>—</b></td></tr>`; }).join('')
+    +`<tr class="au-tot"><td>Total${S.via==='both'?'':' '+(S.via==='push'?'📲':'📢')}</td><td class="au-r">${N(tD)}</td><td class="au-r">${P(tB,tD)}</td><td class="au-r"><b>${N(tB)}</b></td></tr>`;
   const head=`<section class="au-card" id="au-s-money"><h3>Paise ka calculator <span class="au-tag au-est">andaza</span></h3>
     <div class="au-h2s">AdMob revenue + GA4 sessions, pichhle 28 din (${DT(addDays(a.E,-27))} – ${DT(a.E)})</div>
     <div class="au-zero">Sleeping users aaj <b>${M(0)}</b> dete hain — ye chale bhi jaayein to aaj ke daily users aur revenue pe koi asar nahi. Isliye inhe jagane ki koshish me abhi ke revenue ka koi risk nahi.</div>`;
@@ -5179,15 +5238,21 @@ function secMoney(a){ const isAll=!!a.all, r=calc(a), lbl=S.mode==='age'?'By age
       <div class="au-eq">~${fA(r.A)} ads × eCPM ${M2(r.E)} ÷ 1000 = <b>${MO(r.R)}</b> har baar</div>
       <div class="au-w">${isAll?'har app ka apna — jaage users ke opens ka avg':p.b==='old'?'purane (30+ din) users ka':'sab users ka (naya app)'} · 1 baar = 1 session</div></div>`;
   // 2 · the three levers
-  const levers=lever('Kitne jaagein:','How many wake up',[['5','5%'],['10','10%'],['20','20%'],['age','By age (15% → 2%)']].map(([k,t])=>chip('mode',k,t,S.mode===k)).join(''))
+  const levers=lever('Kahan se jagayein:','Where to wake them from',VIAS.map(([k,t])=>chip('via',k,t,S.via===k)).join(''))
+    +lever('Kitne jaagein:','How many wake up',[['5','5%'],['10','10%'],['20','20%'],['age','By age (15% → 2%)']].map(([k,t])=>chip('mode',k,t,S.mode===k)).join(''))
     +lever('Har jaaga user mahine me kitni baar khole:','Opens a month',[['data',`Data se (~${fK(r.Kd,isAll)})`]].concat(OPENS.map(k=>[k,k])).map(([k,t])=>chip('opens',k,t,S.opens===k)).join(''))
     +`<div class="au-lvn">${kfLine(a,r,isAll)}</div>`
     +lever('eCPM badle:','eCPM change',ECPMS.map(([k,t])=>chip('ecpm',k,t,S.ecpm===k)).join(''));
   // 3 · the result, one line that multiplies back
   const Kt=(isAll&&S.opens==='data'?'~':'')+fK(r.K,isAll);
-  const res=`<div class="au-calc"><div class="au-l">Extra money / month</div><div class="au-n">≈ ${M(r.usd)}</div>
+  const wl=`<div class="au-w au-wn">${VIA_N[S.via]}: <b>${N(r.base)}</b> sleeping${S.mode==='age'?' · by age (jitna purana, utna kam %)':` × ${S.mode}%`} = <b>${N(r.w)}</b> users</div>`;
+  const res=`<div class="au-calc"><div class="au-l">Extra money / month</div><div class="au-n">≈ ${M(r.usd)}</div>${wl}
       <div class="au-eq"><b>${N(r.w)}</b> users × <b>${Kt}</b> baar × <b>${MO(r.R)}</b>${isAll?' (avg)':''}${r.e?` × <b>${(1+r.e).toFixed(1)}</b>`:''} = <b>≈ ${M(r.usd)} / mahina</b></div>
       <div class="au-w">+${N(r.users)} users/day (mahine ka avg) · pehle din +${N(r.w)}${isAll&&r.skip?` · ${N(r.skip)} users ke apps ka sessions / eCPM data nahi (paise me nahi gine)`:''}</div></div>`;
+  // 📢 Ads / Dono: an ad pays only while it costs less per user won back than that user's month (K opens × R per open)
+  const ra=S.via==='push'?null:(S.via==='ads'?r:calc(a,{via:'ads'}));
+  const be=!ra||ra.be==null?'':`<div class="au-be">📢 Ad ka kharcha ek wapas aaye user pe <b>~${MO(ra.be)}</b> se kam hona chahiye, warna ghata.
+      <div class="au-w">${MO(ra.be)} = ${(isAll&&S.opens==='data'?'~':'')+fK(ra.K,isAll)} baar × ${MO(ra.R)}${isAll?' (avg)':''}${ra.e?` × ${(1+ra.e).toFixed(1)}`:''} — ek jaage user ki 1 mahine ki kamai${isAll?' (har app ka alag — app chuno)':''}</div></div>`;
   // 4 · opens a month → money a month, at the chosen N and eCPM: an app's "data se" row in its place; on All apps it
   // leads the table (every app its own K and ₹/open: the apps opened most often earn least per open, so its total does
   // not sit between the 1 … 30 rows)
@@ -5195,7 +5260,7 @@ function secMoney(a){ const isAll=!!a.all, r=calc(a), lbl=S.mode==='age'?'By age
   list.splice(at<0?list.length:at,0,{k:'data',K:r.Kd});
   const trs=list.map(x=>{ const c=calc(a,{opens:x.k}), on=S.opens===x.k;
     return `<tr class="${on?'au-on':''}" data-au-opens="${x.k}"><td>${x.k==='data'?(isAll?`Data se <small>har app ka apna · avg ~${fK(x.K,true)} baar</small>`:`~${fK(x.K)} baar <small>data se</small>`):x.k+' baar'}</td><td class="au-r"><b>${M(c.usd)}</b></td></tr>`; }).join('');
-  const tbl=`<div class="au-dsub">Kitni baar khole → ${csym()}/mahina <span>(${lbl} jaagein · eCPM ${fE(r.e)})</span></div>
+  const tbl=`<div class="au-dsub">Kitni baar khole → ${csym()}/mahina <span>(${VIA_N[S.via]} · ${lbl} jaagein · eCPM ${fE(r.e)})</span></div>
     <table class="au-bk au-kt"><thead><tr><th>Opens a month (each)</th><th class="au-r">${csym()} / month</th></tr></thead><tbody>${trs}</tbody></table>`
     +(isAll?'<p class="au-note" style="margin-top:4px">Data se = har app apne hisaab se kitni baar khulta hai — jo apps zyada khulte hain unka ₹/open kam hai, isliye ye row 1 … 30 ke beech seedhi nahi baithti.</p>'.replace('₹',csym()):'');
   // 5 · what an eCPM change does: today's users (the app's month now) + the woken users
@@ -5217,22 +5282,28 @@ function secMoney(a){ const isAll=!!a.all, r=calc(a), lbl=S.mode==='age'?'By age
         ?` <b>Data se ~${r.Kd} baar</b>: ${a.kf.src==='own'?`is app ke apne pichhle installs (12 hafte, ${N(a.kf.n)}) pe`:`sab apps ke pichhle installs pe (is app ke ${N(a.kf.n)} installs 3,000 se kam)`} curve fit kiya (ML: din-ba-din kitne khol rahe) — naya user pehle 30 din me ~${d1} din kholta hai × din me ~${p.s.toFixed(1)} baar = ~${r.Kd}${r.K10!=null?`; range ${r.K10}–${r.K90} = alag-alag hafton ke installs se`:''}.`
         :` <b>Data se ~${r.Kd} baar</b>: jaaga hua user ek din app kholega, phir naye user ki tarah dheere-dheere phir chhod dega (${ownJ?'is app':'sab apps'} ke naye users: 1 din baad ${j('1')}%, 7 din baad ${j('7')}%, 30 din baad ${j('30')}% khol rahe) — mahine me ~${d1} din × din me ~${p.s.toFixed(1)} baar = ~${r.Kd}.`)
       +` Users/day = jaage users × din ÷ 30${S.opens==='data'?'':` (${r.K} baar ÷ ${p.s.toFixed(1)} = ~${Math.min(30,Math.max(1,r.K/p.s)).toFixed(1)} din)`}.`; }
-  why+=` <b>${lbl}</b> jaagein: ${S.mode==='age'?'aam andaza — jitna purana so raha, utna kam chance (1–2 mahine 15%, 2–4: 8%, 4–7: 4%, 7+: 2%).':`1+ mahine wale sab sleeping users (${isGa4(a.au)?'GA4 ka upar wala number':'phone card ka sleeping'}) pe ${S.mode}%; neeche ki table sirf mahine ka split hai.`}`
+  const vt={push:'sirf 1–3 mahine wale sleeping (sab sleeping − 3+ mahine wale) — notification inhi tak pahunchti hai',ads:'sirf 3+ mahine wale sleeping — Android 12+ app ko so deta hai, inhe sirf ads / Play Store se laaya ja sakta hai',both:'sab sleeping (📲 1–3 mahine + 📢 3+ mahine)'}[S.via];
+  why+=` <b>Kahan se:</b> ${vt}.`
+    +` <b>${lbl}</b> jaagein: ${S.mode==='age'?'aam andaza — jitna purana so raha, utna kam chance (1–2 mahine 15%, 2–4: 8%, 4–7: 4%, 7+: 2%).':`upar ke group ke sleeping users (${isGa4(a.au)?'GA4 ka upar wala number':'phone card ka sleeping'}) pe ${S.mode}%; neeche ki table sirf mahine ka split hai.`}`
     +`<table class="au-bk"><thead><tr><th>Asleep for</th><th class="au-r">Users</th><th class="au-r">Come back</th><th class="au-r">Wake up</th></tr></thead><tbody>${rows}</tbody></table>`;
-  return head+po+levers+res+tbl+ecb
+  return head+po+levers+res+be+tbl+ecb
     +WHY('money','Maan ke chale: jaaga hua user naye user ki tarah dheere-dheere phir chhod dega.',why)+'</section>'; }
-function secHow(){ return `<section class="au-card" id="au-s-how"><h3>How to wake them</h3><ul class="au-how">
-    <li><b>Notification (FCM)</b> — kuch kaam ki cheez bhejo (naye photos ka collage, phone storage saaf karo, aaj ka reminder) — "We miss you" type nahi.</li>
-    <li><b>Re-engagement ads</b> — jis app ka sleeping pool bada hai (All apps wali table), wahan Google Ads me app engagement campaign — sirf tab jab upar ka ${csym()}/mahina andaza uski cost se zyada ho.</li>
-    <li><b>Dhyan se:</b> notification bahut zyada mat bhejo — Play ki spam / notification policy ka khayal. Android 13+ pe notification permission chahiye aur kaafi users ne off rakhi hai, isliye FCM sirf kuch sleeping users tak hi pahunchegi.</li></ul></section>`; }
-function secTable(){ const lbl=S.mode==='age'?'By age':S.mode+'%', ko=S.opens==='data'?'data se':S.opens+' baar';
+// the break-even here is the DATA one (opens "data se", eCPM 0) — fixed, whatever the calculator's levers say
+function secHow(a){ const c=a&&!a.kam?calc(a,{via:'ads',mode:'10',opens:'data',ecpm:'0'}):null, isAll=!!(a&&a.all);
+  const be=c&&c.be!=null?` — ek wapas aaye user pe kharcha <b>~${MO(c.be)}</b> se kam ho tabhi faayda (${isAll?'avg, ':''}data se ~${fK(c.K,isAll)} baar × ${MO(c.R)})`:' — tabhi jab ek wapas aaye user pe kharcha uski mahine ki kamai se kam ho';
+  return `<section class="au-card" id="au-s-how"><h3>How to wake them</h3><ul class="au-how">
+    <li><b>📲 1–3 mahine — notification (FCM):</b> kaam ki cheez bhejo (naye photos ka collage, storage saaf, aaj ka reminder), "We miss you" nahi. <b>⚠️ 2–3 mahine wale pehle</b> — 3 mahine ke baad notification nahi pahunchegi. Kam bhejo (Play spam policy; Android 13+ pe permission chahiye).</li>
+    <li><b>📢 3+ mahine — sirf phone ke bahar se:</b> Google Ads app engagement campaign${be}; aur Play Store pe update notes + promotional content.</li>
+    <li><b>🛡️ Rokna:</b> jin apps ka chalte rehna zaroori hai (reminder, caller ID), unke active users se ek baar "Pause app activity if unused" band karwao — Android ke official intent se. Kam use karo.</li>
+    <li><b>🪜 Naye users ke liye ladder:</b> app na kholne ke 3, 7, 14, 30, 45, 60 din pe kaam ki notification, aur ~75 din pe "aakhri mauka" (Android ~90 din pe so deta hai). User wapas aaye to ladder ruk jaye. 10% ko notification na bhejo (holdout) taaki asli fayda naap sakein. Firebase notification composer me "Last app engagement" se bina code ke ho sakta hai.</li></ul></section>`; }
+function secTable(){ const lbl=S.mode==='age'?'By age':S.mode+'%', ko=S.opens==='data'?'data se':S.opens+' baar', vl={push:'📲 Notification',ads:'📢 Ads / Play',both:'Dono'}[S.via];
   // each number twice: the desktop form (.au-dk, as it was) and the phone form (.au-ph: short, its tip = the full numbers);
   // the money = the calculator's levers, the ORDER = its fixed 10% · data se · eCPM 0 (rows never jump on a lever tap)
   const rows=APPS.map(x=>({x,q:calc(x),o:calc(x,FIX)})).sort((p,q)=>(q.o.usd-p.o.usd)||(q.x.sl-p.x.sl)).map(({x,q},i)=>{ const at=`data-at="t:${esc(x.k)}"`;
     return `<tr class="au-clk" tabindex="0" data-au-k="${esc(x.k)}"><td class="au-rk au-hs">${i+1}</td><td class="au-nm"><span class="au-nmw">${appIconId(x.id,short(x.n),22)}<span>${esc(short(x.n))}<small class="au-ph" ${at}>${x.kam?'installed: data kam':CN(x.inst)+' installed'}</small><small>${esc(acct(x.n))}${acct(x.n)?' · ':''}${srcTag(x.au,false)}</small></span></span></td>
       <td class="au-r au-hs">${N(x.inst)}</td><td class="au-r">${x.kam?'data kam':`<span class="au-dk">${N(x.sl)}</span><span class="au-ph" ${at}>${CN(x.sl)}</span><small style="display:block;color:var(--muted);font-weight:600">${P(x.sl,x.inst)}</small>`}</td><td class="au-r au-m">${x.kam||!q.ok?'—':`<span class="au-dk">${M(q.usd)}</span><span class="au-ph" ${at}>${MC(q.usd)}</span>`}</td></tr>`; }).join('');
   return `<section class="au-card au-wide" id="au-s-table"><h3>Money sleeping in each app</h3>
-    <div class="au-h2s">${csym()} = upar ke calculator se (${lbl} jaagein · ${ko} · eCPM ${fE(Number(S.ecpm)/100)}) · order hamesha 10% · data se · eCPM 0 pe<br><span class="au-dk">Sabse zyada paise wala upar · row pe tap karo — us app ka view khulega</span><span class="au-ph">Sabse zyada paise wala upar · app ke naam pe tap — us app ka view · number pe tap — poora number</span></div>
+    <div class="au-h2s">${csym()} = upar ke calculator se (${vl} · ${lbl} jaagein · ${ko} · eCPM ${fE(Number(S.ecpm)/100)}) · order hamesha 📲 Notification · 10% · data se · eCPM 0 pe<br><span class="au-dk">Sabse zyada paise wala upar · row pe tap karo — us app ka view khulega</span><span class="au-ph">Sabse zyada paise wala upar · app ke naam pe tap — us app ka view · number pe tap — poora number</span></div>
     <div class="au-tw"><table class="au-apps"><thead><tr><th class="au-rk au-hs">#</th><th>App</th><th class="au-r au-hs">Installed</th><th class="au-r"><span class="au-dk">Sleeping<br>28+ days</span><span class="au-ph">Sleeping</span></th><th class="au-r"><span class="au-dk">${lbl} wake up =<br>${csym()} / month</span><span class="au-ph">${lbl} wapas = ${csym()}/mahina</span></th></tr></thead><tbody>${rows}</tbody></table></div></section>`; }
 const FEAT=[[/gallery|photo/i,['View photos','Hide / vault','Edit photo','Share','Slideshow']],[/calc/i,['Basic calc','History','Scientific','Unit converter','Theme']],
   [/messag|sms/i,['Read SMS','Send SMS','Block spam','Caller screen','Backup']],[/music|mp3|player/i,['Play songs','Equalizer','Playlist','Search','Sleep timer']],
@@ -5251,7 +5322,7 @@ function secModule(a){ const SP='<span class="au-spl">sample</span>', pk=r2(a.a1
     <div class="au-ans">Ye panels design dikhane ke liye hain — numbers <b>sample</b> hain. Module abhi kisi app me nahi laga.</div>
     <div class="au-mgrid">
       <div class="au-mp"><h4>🔒 Loyal users (exact) ${SP}</h4><div class="au-mq">28 me se 20+ din app kholne wale kitne?</div><div class="au-mn">${N(pk)} <small>${P(pk,a.a1)} of DAU · sample</small></div>${spark}<div class="au-mw">Har hafte ka count (sample) — trend upar/neeche dikhega.</div></div>
-      <div class="au-mp"><h4>🔒 Last opened ${SP}</h4><div class="au-mq">Har installed phone: kitne din se nahi khola (exact)</div><div class="au-hb" role="img" aria-label="Days since last open (sample)">${lastRows}</div><div class="au-mw">FCM delivery + aud_lod (last open date) se — andaza nahi, har phone ka.</div></div>
+      <div class="au-mp"><h4>🔒 Last opened ${SP}</h4><div class="au-mq">Har installed phone: kitne din se nahi khola (exact)</div><div class="au-hb" role="img" aria-label="Days since last open (sample)">${lastRows}</div><div class="au-mw">FCM delivery + aud_lod (last open date) se — andaza nahi, har phone ka.</div><div class="au-mw">⚠️ FCM wali "abhi bhi installed" ginti me so gaye (hibernated, Android 12+) phones nahi aayenge — isliye 3+ mahine wale sleeping kam gine jaayenge.</div></div>
       <div class="au-mp"><h4>🔒 Top features ${SP}</h4><div class="au-mq">Kaunsa feature kitne users roz use karte?</div>${fl?`<div class="au-hb" role="img" aria-label="Top features (sample)">${featRows}</div>`:'<div class="au-na">Har app ke apne features — upar se app chuno.</div>'}<div class="au-mw">% = us din ke active users me se (sample).</div></div>
       <div class="au-mp"><h4>🔒 Notification on / off ${SP}</h4><div class="au-mq">Kitne phones pe notification on hai?</div>
         <div class="au-stack" role="img" aria-label="Notification on / off (sample)"><i style="width:${on*100}%;background:var(--faint)">On ${Math.round(on*100)}%</i><i style="width:${(1-on)*100}%;background:var(--line2)">Off ${Math.round((1-on)*100)}%</i></div>
@@ -5327,10 +5398,11 @@ function hov(sv,cx,cy,pin){ const G=SPK[sv.id]; if(!G) return false; const r=sv.
 function cur(){ return S.app&&BYK[S.app]?BYK[S.app]:ALL; }
 const TIPS={
   b:i=>{ const a=cur(), b=a&&a.bk[+i]; if(!b) return '';
-    const ch=S.mode==='age'?chanceOf(b.f):Number(S.mode)/100;
+    const ch=S.mode==='age'?chanceOf(b.f):Number(S.mode)/100, on=inVia(b.f,S.via);
     return `<div class="au-th">${bLab(b.f,b.t)} se nahi khola</div><div class="au-tr"><span>Users</span><b>${N(b.v)} (${P(b.v,a.au.inst)})</b></div>`
       +(b.vl!=null&&b.vl!==b.v?`<div class="au-tr"><span>Range ke neeche wale curve se</span><b>${N(b.vl)}</b></div>`:'')
-      +`<div class="au-tr"><span>Money mode me wapas</span><b>${Math.round(ch*100)}%</b></div><div style="margin-top:3px;color:var(--muted)">${isGa4(a.au)?'GA4 (lagbhag exact)':(a.au.src==='mix'?'GA4 + andaza':'andaza')} · ${DT(a.au.E)} tak</div>`; },
+      +`<div class="au-tr"><span>Pahunch</span><b>${b.f>=HIB?'📢 sirf ads / Play':b.f===DZ?'⚠️ danger zone — abhi notification':'📲 notification'}</b></div>`
+      +`<div class="au-tr"><span>Money mode me wapas</span><b>${on?Math.round(ch*100)+'%':'— (is choice me nahi)'}</b></div><div style="margin-top:3px;color:var(--muted)">${isGa4(a.au)?'GA4 (lagbhag exact)':(a.au.src==='mix'?'GA4 + andaza':'andaza')} · ${DT(a.au.E)} tak</div>`; },
   m:(k,sec)=>{ const a=cur(), x=a&&monthRows(a).find(r=>r.k===k); if(!x) return '';
     return `<div class="au-th">${MLAB(k)} ke installs</div><div class="au-tr"><span>Installs</span><b>${N(x.n)}</b></div><div class="au-tr"><span>Still installed</span><b>${N(x.inst)} (${P(x.inst,x.n)})</b></div>`
       +`<div class="au-tr"><span>Sleeping 1+ month</span><b>${x.lo!=null&&x.lo!==x.dead?N(x.lo)+'–':''}${N(x.dead)} (${P(x.dead,x.n)})</b></div><div class="au-tr"><span>Opened in last month</span><b>${N(x.act)} (${P(x.act,x.n)})</b></div>`
@@ -5338,6 +5410,7 @@ const TIPS={
   t:(...k)=>{ const x=BYK[k.join(':')]; if(!x) return ''; const q=calc(x), lbl=S.mode==='age'?'By age':S.mode+'%';   // the all-apps table on a phone
     return `<div class="au-th">${esc(short(x.n))}</div><div class="au-tr"><span>Installed now</span><b>${x.kam?'data kam':N(x.inst)}</b></div>`
       +`<div class="au-tr"><span>Sleeping 28+ days</span><b>${x.kam?'data kam':N(x.sl)+' ('+P(x.sl,x.inst)+')'}</b></div>`
+      +(x.kam?'':(()=>{ const r=stripReach(x); return `<div class="au-tr"><span>📲 push se · ⚠️ danger · 📢 sirf ads</span><b>${N(r.push)} · ${N(r.dz)} · ${N(r.ads)}</b></div>`; })())
       +`<div class="au-tr"><span>${lbl} wapas = ${csym()} / mahina</span><b>${x.kam||!q.ok?'—':M(q.usd)}</b></div>`; },
   u:i=>{ const a=cur(), b=a&&a.au.bands; if(!b) return ''; const tot=b.reduce((s,v)=>s+v,0); return `<div class="au-th">${BANDS[+i][0]}</div><div class="au-tr"><span>${BANDS[+i][1]}</span><b>${N(b[+i])} (${P(b[+i],tot)})</b></div>`; }};
 const inAu=t=>!!(t&&t.closest&&t.closest('#au-root'));
@@ -5366,6 +5439,7 @@ function wire(){ if(S.wired) return; S.wired=true;
   document.addEventListener('toggle',e=>{ const t=e.target; if(!inAu(t)||!t.dataset||!t.dataset.kyun) return; t.open?S.open.add(t.dataset.kyun):S.open.delete(t.dataset.kyun); },true);
   let rz=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(!onScreen()||Math.abs(innerWidth-lastW)<20) return; lastW=innerWidth; hideTip(); drawMonth(cur()); },150); }); }
 function onClick(e){ const t=e.target; if(!inAu(t)) return;
+  const vi=t.closest('[data-au-via]'); if(vi){ S.via=vi.dataset.auVia; save(); levers(); return; }
   const md=t.closest('[data-au-mode]'); if(md){ S.mode=md.dataset.auMode; save(); levers(); return; }
   const op=t.closest('[data-au-opens]'); if(op){ S.opens=op.dataset.auOpens; save(); levers(); return; }
   const ec=t.closest('[data-au-ecpm]'); if(ec){ S.ecpm=ec.dataset.auEcpm; save(); levers(); return; }
@@ -5385,9 +5459,9 @@ function keyOfName(name){ if(!RAW||!name) return ''; const id=appIdOf(name); con
 function openApp(k){ if(!k||!BYK[k]) return; hideTip(); S.pick=k; setApp(BYK[k].n); }
 function allApps(){ hideTip(); if(APP){ setApp(''); return; } paint(); window.scrollTo({top:0}); }
 function left(){ hideTip(); }
-function save(){ try{ localStorage.setItem('audview',JSON.stringify({mode:S.mode,opens:S.opens,ecpm:S.ecpm,day:S.day})); }catch(e){} }
+function save(){ try{ localStorage.setItem('audview',JSON.stringify({via:S.via,mode:S.mode,opens:S.opens,ecpm:S.ecpm,day:S.day})); }catch(e){} }
 function boot(){ if(S.booted) return; S.booted=true; let sv=null; try{ sv=JSON.parse(localStorage.getItem('audview')||'null'); }catch(e){}
-  if(sv){ if(['5','10','20','age'].includes(sv.mode)) S.mode=sv.mode; if(['data'].concat(OPENS).includes(sv.opens)) S.opens=sv.opens;
+  if(sv){ if(VIAS.some(([k])=>k===sv.via)) S.via=sv.via; if(['5','10','20','age'].includes(sv.mode)) S.mode=sv.mode; if(['data'].concat(OPENS).includes(sv.opens)) S.opens=sv.opens;
     if(ECPMS.some(([k])=>k===sv.ecpm)) S.ecpm=sv.ecpm; if(typeof sv.day==='string'&&/^\d{4}-\d\d-\d\d$/.test(sv.day)) S.day=sv.day; } }
 // ---- the view ----
 function render(){ const s=screenDiv('audience'); EL=s; return s; }
@@ -5407,14 +5481,14 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   else { const crumb=isAll?'':`<div class="au-crumb"><button type="button" class="au-back" data-au-all="1">← All apps</button><div class="au-apn">${appIconId(a.id,short(a.n),30)}<span><b>${esc(short(a.n))}</b><small>${esc(acct(a.n))}${acct(a.n)?' · ':''}${a.lh?'launch '+DT(a.L)+' (pehle ke test installs curves me nahi) · ':''}${srcTag(a.au,false)}</small></span></div></div>`;
     h=meta+crumb+`<div class="au-strip" id="au-strip">${secStrip(a)}</div>`
       +`<div class="au-grid">${isAll?'<p class="au-intro au-wide" style="margin:0">Saare apps mila ke — neeche har sawaal ka jawab. Table me kisi app pe tap karo — us app ka view khulega.</p>':''}`
-      +secPhone(a)+secDay(a)+secJourney(a)+secPakke(a)+secDead(a)+secDeadMonths(a)+secActMonths(a)+secDauMix(a)+secMoney(a)+secHow()+(isAll?secTable():'')+secModule(a)+'</div>'
+      +secPhone(a)+secDay(a)+secJourney(a)+secPakke(a)+secDead(a)+secDeadMonths(a)+secActMonths(a)+secDauMix(a)+secMoney(a)+secHow(a)+(isAll?secTable():'')+secModule(a)+'</div>'
       +`<div class="au-foot"><b>In apps ka GA4 data nahi:</b> ${(RAW.no_ga4||[]).map(esc).join(', ')||'—'}.<br>Revenue = AdMob (Active users tab jaisa) · ₹ rate ${fx().toFixed(2)} (dashboard ka usd_inr) · numbers Active users / Uninstall / Install value tabs ki definitions se · "GA4 (lagbhag exact)" = GA4 se gina, "andaza" = model se.</div>`; }
   s.innerHTML=`<div id="au-root">${h}</div>`;
   const tt=$('tb-title'), ts=$('tb-sub');
   if(tt&&ts){ if(a&&!isAll){ tt.textContent='Audience · '+short(a.n); ts.textContent=TITLES.audience[1]; } else { tt.textContent=TITLES.audience[0]; ts.textContent=TITLES.audience[1]; } }
   if(a) drawMonth(a);
   try{ requestAnimationFrame(()=>{ const b=$('au-mline'), sv=b&&b.querySelector('svg'); if(a&&b&&sv&&Math.abs((b.clientWidth||0)-(+sv.getAttribute('width')||0))>2) drawMonth(a); }); }catch(e){} }
-// a calculator lever (how many wake up · opens a month · eCPM change) feeds only the money card, the strip and the all-apps
+// a calculator lever (where from · how many wake up · opens a month · eCPM change) feeds only the money card, the strip and the all-apps
 // table: those three are redrawn in place — the rest of the screen (the month chart and its reading, open folds, the
 // reader's place on the page) is not touched (owner, iPhone: a chip tap mid-page threw the page to the top). Anything
 // unexpected (another app in the top bar, a new file, the card not on screen) → the full paint().
@@ -5422,7 +5496,7 @@ function levers(){ const p=ptr(), s=(EL&&EL.isConnected!==false)?EL:null;
   if(!s||!RAW||!p||VER!==p.v||!onScreen()||typeof DATA==='undefined'||!DATA) return paint();
   const k=APP?keyOfName(APP):''; if(k!==S.app||k==='!'||(k&&!BYK[k])) return paint();
   const a=k?BYK[k]:ALL, money=$('au-s-money'); if(!a||!money) return paint();
-  const f=document.activeElement, fk=f&&f.dataset?['auMode','auOpens','auEcpm'].find(x=>f.dataset[x]!=null):null, fv=fk?f.dataset[fk]:null, ft=f&&f.tagName;
+  const f=document.activeElement, fk=f&&f.dataset?['auVia','auMode','auOpens','auEcpm'].find(x=>f.dataset[x]!=null):null, fv=fk?f.dataset[fk]:null, ft=f&&f.tagName;
   money.outerHTML=secMoney(a);
   const st=$('au-strip'); if(st) st.innerHTML=secStrip(a);
   const tb=$('au-s-table'); if(tb&&!k) tb.outerHTML=secTable();
@@ -5432,8 +5506,8 @@ function show(){ paint(); }
 return {ptr, ensure, render, paint, show, left, retry, ready:()=>!!RAW&&!!ptr(),
   // checks / tests (read-only views of the current state)
   _:{S, el:()=>EL, RAW:()=>RAW, APPS:()=>APPS, ALL:()=>ALL, BYK:()=>BYK, tipPinned:()=>tipPinned, load:j=>{ RAW=j; VER=(ptr()||{}).v||'test'; ERR=false; PSIG=null; ALL=null; }, prep:()=>{ if(RAW) prep(); },
-     bucketsOf, dAt, loAt, bLab, tierMonths, mostOf, wake, wakeAll, wakeDays, perOpen, calc, calcAll, FIX, MO, M2, save, boot, monthLine, dayAgg, TIPS, SPK, hov, keyOfName, openApp, allApps, cur, M, MC, CN, P, levers,
-     sec:{strip:secStrip,phone:secPhone,journey:secJourney,pakke:secPakke,dead:secDead,mdead:secDeadMonths,mact:secActMonths,dau:secDauMix,money:secMoney,table:secTable,day:secDay,module:secModule}}};
+     bucketsOf, dAt, loAt, bLab, tierMonths, mostOf, split, viaBase, stripReach, wake, wakeAll, wakeDays, perOpen, calc, calcAll, FIX, MO, M2, save, boot, monthLine, dayAgg, TIPS, SPK, hov, keyOfName, openApp, allApps, cur, M, MC, CN, P, levers,
+     sec:{strip:secStrip,phone:secPhone,journey:secJourney,pakke:secPakke,dead:secDead,mdead:secDeadMonths,mact:secActMonths,dau:secDauMix,money:secMoney,how:secHow,table:secTable,day:secDay,module:secModule}}};
 })();
 function renderAudience(){ return AU.render(); }
 // ---------- PLACEMENTS (2-level) ----------
