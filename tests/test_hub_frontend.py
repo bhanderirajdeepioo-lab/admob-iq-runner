@@ -240,6 +240,7 @@ def test_structure():
                      r'<span class="hbb">beta</span>.*<span class="hbs" id="hub-beta-s">Off</span></button>', page)
     aside = page[page.index("<aside>"):page.index("</aside>")]
     assert 'id="hub-beta"' in aside and '<div class="nav-classic">' in aside
+    assert aside.index('class="brand"') < aside.index('id="hub-beta"') < aside.index('class="hub-nav"') < aside.index('class="nav-classic"')   # seen without scrolling
     hub_nav = aside[aside.index('<div class="hub-nav"'):aside.index('<div class="nav-classic">')]
     assert re.findall(r'data-hnav="(\w+)"', hub_nav) == ["review", "home", "alerts", "reco", "settings"]
     assert 'id="nav-review-h"' in hub_nav and 'id="nav-alert-h"' in hub_nav

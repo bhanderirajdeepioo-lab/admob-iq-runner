@@ -1169,7 +1169,7 @@ body.hub-on .nav-classic{display:none}
 .botbar .tabbtn[data-hnav]{display:none}
 body.hub-on .botbar .tabbtn[data-hnav]{display:flex}
 body.hub-on .botbar .tabbtn.hub-x{display:none}
-.hub-beta{margin:14px 2px 0;padding:12px 0 0;border-top:1px solid var(--line)}
+.hub-beta{margin:0 2px 6px;padding:0 0 12px;border-bottom:1px solid var(--line)}   /* right under the brand: seen without scrolling (the phone's More menu too) */
 #hub-beta{width:100%;display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;color:var(--ink);font:inherit;font-size:13px;font-weight:700;padding:9px 10px;cursor:pointer;text-align:left;min-height:44px}
 #hub-beta:hover{background:var(--raise)}
 #hub-beta:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
@@ -3745,6 +3745,8 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 <div class="app">
   <aside>
     <div class="brand"><div class="logo">◈</div><div class="nm">AdMob IQ<small>Revenue Intelligence</small></div></div>
+    <div class="hub-beta"><button type="button" id="hub-beta" role="switch" aria-checked="false" onclick="hubToggle()"><span class="hbk" aria-hidden="true"></span><span class="hbt">✨ Try new layout<span class="hbb">beta</span></span><span class="hbs" id="hub-beta-s">Off</span></button>
+      <div class="hbh">Ek app = ek page, saare features uske tabs me. Pasand na aaye to yahin se wapas Off.</div></div>
     <div class="hub-nav" id="hub-nav">
       <ul class="nav">
         <li><button type="button" data-hnav="review" onclick="hubNavPage('review')"><span class="i">✅</span> Review <span class="badge" id="nav-review-h" hidden></span></button></li>
@@ -3778,8 +3780,6 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
     <div class="nav-lbl">Setup</div>
     <ul class="nav"><li><button data-screen="settings"><span class="i">⚙️</span> Accounts &amp; Apps</button></li></ul>
     </div>
-    <div class="hub-beta"><button type="button" id="hub-beta" role="switch" aria-checked="false" onclick="hubToggle()"><span class="hbk" aria-hidden="true"></span><span class="hbt">✨ Try new layout<span class="hbb">beta</span></span><span class="hbs" id="hub-beta-s">Off</span></button>
-      <div class="hbh">Ek app = ek page, saare features uske tabs me. Pasand na aaye to yahin se wapas Off.</div></div>
     <div class="side-foot">Live · engine-computed<br>v0.2 · click to explore</div>
   </aside>
   <div class="nav-scrim" onclick="closeNav()"></div>
