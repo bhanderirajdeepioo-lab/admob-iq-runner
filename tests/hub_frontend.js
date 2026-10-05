@@ -138,7 +138,8 @@ run(`DATA=__DATA; CURVIEW=null;
   actEnsure=function(){}; valEnsure=function(){}; rvEnsure=function(){ return Promise.resolve(); }; rvBadge=function(){};
   US.ensure=function(){}; AS.ensure=function(){}; VS.ensure=function(){}; AU.show=function(){}; AU.left=function(){};
   // the App Report: the page's own hooks around a stand-in body (the real one draws the whole report from DATA)
-  openAppDetail=function(name){ if(hubOpenApp(name)) return; __ad.push(name); ADAPP=name;
+  var __adk=[];
+  openAppDetail=function(name){ if(hubOpenApp(name)) return; __ad.push(name); __adk.push(SP.keep); ADAPP=name;
     document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('on',x.dataset.screen==='appdetail')); rvOnShow('appdetail'); if(HUB.on) hubPost('appdetail'); };`);
 const S = () => run(`({scr:hubScr(),app:APP,inHub:HUB.inHub,tab:HUB.tab,on:HUB.on,bar:!document.getElementById('hub-bar').hidden,
   hubOn:document.body.classList.contains('hub-on'),hubIn:document.body.classList.contains('hub-in'),depth:HB.depth,st:HB.st.map(x=>x.tag)})`);
@@ -209,6 +210,15 @@ const fresh = async (opt) => { opt = opt || {};   // a new page load: history, U
     run(`hubHome()`); await settle(); r.home = { ...S(), hash: LOC.hash };
     run(`openAppDetail('Puzzle Quest')`); await settle(); r.appdetail = S();
     run(`hubGo('','overview')`); await settle(); run(`HUB.inHub=true`); run(`openAppDetail('Tiny Notes')`); await settle(); r.ovList = S();
+    return r; });
+  // the App Report's own controls (view / period / daily window / metric): in the hub a same-view rebuild (SP.keep: no jump to
+  // the top); off = exactly as before (no keep)
+  await step('appreport_controls', async () => { const r = {};
+    await fresh({ search: '?layout=hub' }); run(`hubGo('Demo Gallery','revenue')`); await settle(); run('__adk.length=0; __ad.length=0;');
+    run(`adSetView('countries'); adDWin('90d'); adDMetric('ecpm'); adSetRange('7d');`); await settle();
+    r.on = { keep: run('__adk.slice()'), ad: run('__ad.slice()'), st: S(), keepAfter: run('SP.keep') };
+    await fresh(); run(`ADAPP='Demo Gallery'; __adk.length=0;`); run(`adSetView('units'); adDWin('30d');`); await settle();
+    r.off = { keep: run('__adk.slice()'), keepAfter: run('SP.keep') }; run(`RANGE='today'; ADMETS=['rev','ecpm'];`);
     return r; });
   await step('refresh', async () => {
     const k = run(`hubKeyOf('Puzzle Quest')`);

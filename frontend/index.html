@@ -5995,7 +5995,10 @@ function renderReport(){return screenDiv('reportcard');}
 // ---------- APP DETAIL (per-app report: ad-unit wise + country wise, one period) ----------
 function renderAppDetail(){return screenDiv('appdetail');}
 // switch the view (ad-units ↔ countries) without touching the period
-function adSetView(v){ ADVIEW=v; if(ADAPP) openAppDetail(ADAPP); }
+function adSetView(v){ ADVIEW=v; adRedraw(); }
+// the App Report drawn again by one of its own controls (view / period / daily window / metric). ✨ In the hub (its "Revenue &
+// Ad units" tab) a same-view rebuild — the page stays where the reader is (stay-put), never back to the top; off = as before.
+function adRedraw(){ if(!ADAPP) return; if(!HUB.on){ openAppDetail(ADAPP); return; } SP.keep++; try{ openAppDetail(ADAPP); }finally{ SP.keep--; } }
 // go back to the portfolio overview
 function adBack(){ hbDrop('appdetail'); show(AD_ORIGIN||'overview'); }   // return to the screen we opened the app FROM
 // change THIS page's period — it drives the SAME global RANGE the whole dashboard uses,
@@ -6003,7 +6006,7 @@ function adBack(){ hbDrop('appdetail'); show(AD_ORIGIN||'overview'); }   // retu
 function adSetRange(r){
   if(r==='custom'){ setRange('custom'); return; }         // reveal the top-bar date inputs; Apply re-renders
   RANGE=r; const sel=document.getElementById('rangesel'); if(sel) sel.value=r;
-  if(ADAPP) openAppDetail(ADAPP);
+  adRedraw();
 }
 let AD_ORIGIN="overview";                 // the screen an app was opened FROM, so ← Back returns there
 function openAppDetail(name){
@@ -6153,9 +6156,9 @@ function adDailyWin(dates){ const n=dates.length, idx=[]; if(!n)return idx;
   if(ADRANGE==='all'){ for(let i=0;i<n;i++)idx.push(i); return idx; }
   if(ADRANGE==='custom'){ const f=ADCUSTOM.from,t=ADCUSTOM.to; for(let i=0;i<n;i++){ if((!f||dates[i]>=f)&&(!t||dates[i]<=t))idx.push(i);} return idx; }
   const days=ADRANGE==='90d'?90:30; for(let i=Math.max(0,n-days);i<n;i++)idx.push(i); return idx; }
-function adDMetric(k){ const i=ADMETS.indexOf(k); if(i>=0)ADMETS.splice(i,1); else ADMETS.push(k); if(ADAPP)openAppDetail(ADAPP); }
-function adDWin(w){ ADRANGE=w; if(ADAPP)openAppDetail(ADAPP); }
-function adDCustomApply(){ const f=document.getElementById('adcf'),t=document.getElementById('adct'); ADCUSTOM={from:f?f.value:'',to:t?t.value:''}; ADRANGE='custom'; if(ADAPP)openAppDetail(ADAPP); }
+function adDMetric(k){ const i=ADMETS.indexOf(k); if(i>=0)ADMETS.splice(i,1); else ADMETS.push(k); adRedraw(); }
+function adDWin(w){ ADRANGE=w; adRedraw(); }
+function adDCustomApply(){ const f=document.getElementById('adcf'),t=document.getElementById('adct'); ADCUSTOM={from:f?f.value:'',to:t?t.value:''}; ADRANGE='custom'; adRedraw(); }
 function adDailyPanel(appName){
   const S=adDailySeries(appName);
   if(!S.d.length) return `<div class="card span2" style="margin-bottom:14px"><div class="ct"><h3>📅 Daily graph</h3></div><div class="faint" style="font-size:12.5px;padding:14px 4px">Is app ka daily data nahi.</div></div>`;
