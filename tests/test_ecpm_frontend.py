@@ -497,3 +497,16 @@ def test_today_tile_same_time_yesterday(report):
     assert "kal isi samay ka point nahi" in r["missing"] and "kal-isi-samay tulna" not in r["missing"]
     for k in ("stale", "none"):                                   # no points for today: yesterday's whole day, no note
         assert " · poora din)" in r[k] and "kal isi" not in r[k] and " · ab tak · " in r[k]
+
+
+@needs_node
+def test_today_tile_small_chart(report):
+    r = report["intra"]
+    sp = r["spk"]
+    assert sp.startswith('<div class="ec-spk" data-s="') and 'onpointermove="ecSpkAt(event,this)"' in sp and 'onclick="ecSpkAt(event,this)"' in sp
+    assert '<path d="M' in sp and 'class="ec-spy"' in sp and 'class="ec-spt0"' in sp and 'class="ec-spd"' in sp   # yesterday + today + now
+    assert "<span>00:00</span><span>12:00</span><span>24:00</span>" in sp and '<span class="ec-spl-y">kal</span>' in sp
+    assert [p[0] for p in r["pts"]] == [540, 600]                     # 10 impressions at 00:30: under 2% of the day, left out
+    assert abs(r["val"][0] - 3.0) < 1e-9 and r["val"][1] is None and r["val"][2] is None   # 10:00 between 09:00 / 11:00; a 12 h gap; before any
+    assert 'class="ec-spy"' not in r["spk1"] and "kal · " in r["spk1"] and " se</span>" in r["spk1"]   # no yesterday yet: today alone, when kal starts
+    assert r["tileSpk"]

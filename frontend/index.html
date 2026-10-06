@@ -345,6 +345,19 @@
   .ec-kpis .kpi .d b{white-space:nowrap;font-weight:750}
   .ec-kpis .kpi .ec-w{display:block;font-size:11px;font-weight:500;color:var(--faint);margin-top:2px}
   .ec-kpis .kpi .ec-hr{color:var(--muted);font-size:11.5px;margin-top:4px}.ec-kpis .kpi .ec-hr b{color:var(--ink2)}   /* the last hour, today vs yesterday */
+  .ec-spk{position:relative;margin-top:10px;touch-action:pan-y;cursor:crosshair}
+  .ec-spk svg{display:block;width:100%;height:52px;overflow:visible}
+  .ec-spk path{fill:none;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+  .ec-spt0{stroke:#3dd0f0;stroke-width:2}.ec-spy{stroke:#8fa3c4;stroke-width:1.5;opacity:.55}
+  .ec-spd{fill:#3dd0f0}.ec-spg{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 2;vector-effect:non-scaling-stroke}
+  .ec-spg0{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+  .ec-spx{display:flex;justify-content:space-between;font-size:9.5px;color:var(--faint);margin-top:3px;font-variant-numeric:tabular-nums}
+  .ec-spl{display:flex;gap:12px;font-size:10.5px;color:var(--muted);margin-top:3px}
+  .ec-spl span::before{content:"";display:inline-block;width:12px;height:2px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .ec-spl-t::before{background:#3dd0f0}.ec-spl-y::before{background:#8fa3c4;opacity:.6}
+  .ec-sptip{position:absolute;bottom:calc(100% + 4px);left:0;white-space:nowrap;background:var(--raise);border:1px solid var(--line2);border-radius:8px;
+    padding:4px 8px;font-size:11px;color:var(--ink2);box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none;z-index:3}
+  .ec-sptip b{color:#fff}
   .ec-cc{margin-bottom:14px;min-width:0}
   .ec-cc .ct{flex-wrap:wrap;gap:6px 12px;align-items:flex-start}
   .ec-ctl{display:flex;gap:8px 10px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
@@ -5306,6 +5319,37 @@ function ecIntra(app){ const X=DATA&&DATA.ecpm_intraday; if(!X||X.today!==DATA.t
   const ec=v=>v&&v[1]>0?v[0]/(v[1]*1000):null;
   return {since:X.since,m,now:[now[1],now[2]],ec:ec([now[1],now[2]]),ya,yEc:ec(ya),hrM:hr?m-hr[0]:0,hEc:ec(th),yhEc:ec(yh)}; }
 function ecHm(m){ return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+// the Today tile's small chart (owner: "AdMob ka SS dekho, esa chhota chart KPI tile me"): today's eCPM so far through the
+// day vs yesterday's, on one 00:00–24:00 axis, from the robot's points. A point on a sliver of the day's impressions
+// (< 2% of that day's latest, or < EC_MIN_IMPR) is left out — its eCPM is noise. Hover / tap = that time's two numbers.
+function ecSpkPts(pts){ const last=pts.length?+pts[pts.length-1][2]||0:0, thr=Math.max(EC_MIN_IMPR,last*0.02);
+  return pts.filter(p=>+p[2]>=thr&&+p[1]>=0).map(p=>[+p[0],+p[1]/(+p[2]*1000),+p[1],+p[2]]); }
+function ecSpark(app){ const X=DATA&&DATA.ecpm_intraday; if(!X||X.today!==DATA.today_date) return '';
+  const S=app?(X.apps||{})[app]:X; if(!S) return ''; const t=ecSpkPts(S.t||[]), y=ecSpkPts(S.y||[]); if(!t.length&&!y.length) return '';
+  const W=240,H=52,P=4, all=t.concat(y).map(p=>p[1]); let lo=Math.min(...all), hi=Math.max(...all); const pad=(hi-lo)*0.12||hi*0.05||1; lo-=pad; hi+=pad;
+  const X_=m=>(m/1440*W).toFixed(1), Y_=v=>(P+(H-2*P)*(1-(v-lo)/(hi-lo))).toFixed(1), path=a=>a.map((p,k)=>(k?'L':'M')+X_(p[0])+' '+Y_(p[1])).join(' ');
+  const nw=t[t.length-1], data=hAttr(JSON.stringify({t:t.map(p=>[p[0],p[2],p[3]]),y:y.map(p=>[p[0],p[2],p[3]])}));
+  return `<div class="ec-spk" data-s="${data}" onpointermove="ecSpkAt(event,this)" onclick="ecSpkAt(event,this)" onpointerleave="ecSpkOut(this)">`
+    +`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="eCPM today so far vs yesterday, through the day">`
+    +`<line x1="${W/2}" y1="0" x2="${W/2}" y2="${H}" class="ec-spg0"/>`
+    +(y.length>1?`<path d="${path(y)}" class="ec-spy"/>`:'')+(t.length>1?`<path d="${path(t)}" class="ec-spt0"/>`:'')
+    +(nw?`<circle cx="${X_(nw[0])}" cy="${Y_(nw[1])}" r="2.6" class="ec-spd"/>`:'')
+    +`<line class="ec-spg" x1="0" y1="0" x2="0" y2="${H}" visibility="hidden"/></svg>`
+    +`<div class="ec-spx"><span>00:00</span><span>12:00</span><span>24:00</span></div>`
+    +`<div class="ec-spl"><span class="ec-spl-t">aaj</span><span class="ec-spl-y">kal${y.length>1?'':' · '+fmtD(ecNextDay(DATA.today_date))+' se'}</span></div>`
+    +`<div class="ec-sptip" hidden></div></div>`; }
+// eCPM so far at minute m of a day's points [minute, earnings micros, impressions] (between two points ≤ 3 h apart)
+function ecSpkVal(pts,m){ let a=null,b=null; for(const p of pts){ if(p[0]<=m) a=p; else { b=p; break; } } let v=null;
+  if(a&&b&&b[0]-a[0]<=180){ const f=(m-a[0])/(b[0]-a[0]); v=[a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f]; } else if(a&&m-a[0]<=90) v=[a[1],a[2]];
+  return v&&v[1]>0?v[0]/(v[1]*1000):null; }
+function ecSpkAt(ev,el){ let d; try{ d=JSON.parse(el.getAttribute('data-s')); }catch(e){ return; } const r=el.getBoundingClientRect(); if(!r.width) return;
+  const fx=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)), m=Math.round(fx*1440);
+  const last=d.t.length?d.t[d.t.length-1][0]:-1, tv=m<=last?ecSpkVal(d.t,m):null, yv=ecSpkVal(d.y,m);
+  const g=el.querySelector('.ec-spg'), tip=el.querySelector('.ec-sptip'); if(!g||!tip) return;
+  g.setAttribute('x1',(fx*240).toFixed(1)); g.setAttribute('x2',(fx*240).toFixed(1)); g.setAttribute('visibility','visible');
+  tip.innerHTML=`<b>${ecHm(Math.min(m,1439))}</b> · aaj ${tv!=null?'<b>'+cm(tv)+'</b>':'—'} · kal ${yv!=null?'<b>'+cm(yv)+'</b>':'—'}`; tip.hidden=false;
+  tip.style.left=Math.max(0,Math.min(r.width-tip.offsetWidth,fx*r.width-tip.offsetWidth/2))+'px'; }
+function ecSpkOut(el){ const g=el.querySelector('.ec-spg'), tip=el.querySelector('.ec-sptip'); if(g) g.setAttribute('visibility','hidden'); if(tip) tip.hidden=true; }
 // the tiles: Today (live, so far) · Yesterday (vs the 7-day avg) · Last 7 days · Last 30 days · This month vs the same days last month
 function ecKpis(dm,W,td){ const s=d=>ecSum(dm,d), y=s(W.y), w7=s(W.d7), p7=s(W.p7), d30=s(W.d30), p30=s(W.p30), mtd=s(W.mtd), lm=s(W.lm);
   const cmp=(a,b,what)=>{ if(a.ec==null||b.ec==null) return `<span class="faint">${what}: —</span>`; const p=(a.ec-b.ec)/b.ec;
@@ -5319,7 +5363,7 @@ function ecKpis(dm,W,td){ const s=d=>ecSum(dm,d), y=s(W.y), w7=s(W.d7), p7=s(W.p
     +(ix&&ix.hEc!=null?`<span class="ec-w ec-hr">pichhle ${ix.hrM} min: <b>${cm(ix.hEc)}</b>${ix.yhEc!=null?` · kal isi waqt <b>${cm(ix.yhEc)}</b>`:''}</span>`:'')
     +w(fmtD(td.T)+(ix&&ix.m!=null&&!ix.none?' · '+ecHm(ix.m)+' tak':' · ab tak')+(td.i?' · '+fmtN(td.i)+' impr':'')+(td.i&&td.i<EC_MIN_IMPR?' · low data':'')+' · not final'
       +(ix&&!sm&&ix.since?(ix.since>=td.T?` · kal-isi-samay tulna ${fmtD(ecNextDay(td.T))} se`:' · kal isi samay ka point nahi'):''));
-  const tt=td&&td.T?kpi('Today eCPM · live',ecCm(td.ec),tsub,'muted'):'';
+  const tt=td&&td.T?kpi('Today eCPM · live',ecCm(td.ec),tsub,'muted',ecSpark(td.app||'')):'';
   return `<div class="row ${tt?'c5':'c4'} ec-kpis">${tt}${kpi('Yesterday eCPM',ecCm(y.ec),cmp(y,w7,'7-day avg')+w(ecSpan(W.y)+(y.i?' · '+fmtN(y.i)+' impr':'')),'muted')}`
     +kpi('Last 7 days',ecCm(w7.ec),cmp(w7,p7,'previous 7 days')+w(ecSpan(W.d7)),'muted')
     +kpi('Last 30 days',ecCm(d30.ec),cmp(d30,p30,'previous 30 days')+w(ecSpan(W.d30)),'muted')

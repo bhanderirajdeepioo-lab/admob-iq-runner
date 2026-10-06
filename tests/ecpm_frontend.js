@@ -134,7 +134,11 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
     run(`DATA.ecpm_intraday.y=[]; DATA.ecpm_intraday.since=DATA.today_date`); const first = tiles();        // the first day: "from tomorrow"
     run(`DATA.ecpm_intraday.since='2026-01-01'`); const missing = tiles();
     run(`DATA.ecpm_intraday.today='1999-01-01'`); const stale = tiles(); run(`delete DATA.ecpm_intraday`); const none = tiles();
-    return { full, ix, gap, gapNear, late, near, first, missing, stale, none, next: run(`fmtD(ecNextDay(DATA.today_date))`) }; });
+    // the tile's small chart: today's line + yesterday's, a point on a sliver of the day's impressions left out
+    run(`DATA.ecpm_intraday={v:1,today:DATA.today_date,since:'2026-01-01',apps:{},t:[[30,5e3,10],[540,2e6,1000],[600,6e6,2000]],y:[[540,3e6,1000],[660,6e6,2000],[1430,9e6,3000]]};`);
+    const spk = run(`ecSpark('')`), pts = J(`ecSpkPts(DATA.ecpm_intraday.t)`), val = J(`[ecSpkVal(DATA.ecpm_intraday.y,600), ecSpkVal(DATA.ecpm_intraday.y,1000), ecSpkVal(DATA.ecpm_intraday.y,10)]`);
+    run(`DATA.ecpm_intraday.y=[]`); const spk1 = run(`ecSpark('')`); const tileSpk = tiles().includes('class="ec-spk"'); run(`delete DATA.ecpm_intraday`);
+    return { full, ix, gap, gapNear, late, near, first, spk, pts, val, spk1, tileSpk, missing, stale, none, next: run(`fmtD(ecNextDay(DATA.today_date))`) }; });
   await step('money_fmt', () => { run(`CURVIEW='INR'`); const r = J(`[ecCm(2),ecCmS(-0.26),ecCmS(0.000001),ecMoneyS(-1234.5),ecMoneyS(0.5),ecMoneyS(0),ecPct(-0.0812),ecPct(0.0004),ecPct(null),ecAx(0),ecAx(250/90),ecAx(12000/90)]`);
     run(`CURVIEW=null`); return { inr: r, usd: J(`[ecCm(2),ecCmS(-0.26),ecMoneyS(-1234.5),ecMoneyS(0.5),ecAx(2.5)]`) }; });
 
