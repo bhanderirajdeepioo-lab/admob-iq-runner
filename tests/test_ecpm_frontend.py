@@ -491,7 +491,7 @@ def test_today_tile_same_time_yesterday(report):
     ix = r["ix"]
     assert ix["m"] == 600 and abs(ix["yEc"] - 3.0) < 1e-9 and ix["hrM"] == 60 and abs(ix["hEc"] - 4.0) < 1e-9 and abs(ix["yhEc"] - 3.0) < 1e-9
     assert re.search(r'\(<b class="(up|down|)">[+−]?\d+\.\d%</b> vs kal isi samay <b>\$3\.00</b>\)', r["full"])   # like with like: coloured
-    assert "pichhle 60 min: <b>$4.00</b> · kal isi waqt <b>$3.00</b>" in r["full"] and " · 10:00 tak · " in r["full"]
+    assert "pichhle 60 min: <b>$4.00</b> · kal isi waqt <b>$3.00</b>" in r["full"] and " · 10:00 AM tak · " in r["full"]
     assert r["gap"]["yEc"] is None and r["late"]["yEc"] is None and abs(r["near"]["yEc"] - 3.0) < 1e-9 and abs(r["gapNear"]["yEc"] - 3.0) < 1e-9
     assert "kal-isi-samay tulna " + r["next"] + " se" in r["first"] and " · poora din)" in r["first"]
     assert "kal isi samay ka point nahi" in r["missing"] and "kal-isi-samay tulna" not in r["missing"]
@@ -505,11 +505,22 @@ def test_today_tile_small_chart(report):
     sp = r["spk"]
     assert sp.startswith('<div class="ec-spk" data-s="') and 'onpointermove="ecSpkAt(event,this)"' in sp and 'onclick="ecSpkAt(event,this)"' in sp
     assert '<path d="M' in sp and 'class="ec-spy"' in sp and 'class="ec-spt0"' in sp and 'class="ec-spd"' in sp   # yesterday + today + now
-    assert "<span>00:00</span><span>12:00</span><span>24:00</span>" in sp and '<span class="ec-spl-y">kal</span>' in sp
+    assert "<span>12 AM</span><span>12 PM</span><span>12 AM</span>" in sp and '<span class="ec-spl-y">yesterday</span>' in sp   # 12-hour clock
     assert [p[0] for p in r["pts"]] == [540, 600]                     # 10 impressions at 00:30: under 2% of the day, left out
     assert abs(r["val"][0] - 3.0) < 1e-9 and r["val"][1] is None and r["val"][2] is None   # 10:00 between 09:00 / 11:00; a 12 h gap; before any
-    assert 'class="ec-spy"' not in r["spk1"] and "kal · " in r["spk1"] and " se</span>" in r["spk1"]   # no yesterday yet: today alone, when kal starts
+    assert 'class="ec-spy"' not in r["spk1"] and '<span class="ec-spl-y">yesterday · from ' in r["spk1"]   # no yesterday yet: today alone, when kal starts
     assert r["tileSpk"]
     # the table's own row sparkline (ecSpark(values, status)) still draws: the tile's chart has its own name (a same-named
     # function had replaced it, 6 Oct — every row's 30-day line went blank)
     assert r["rowSpk"].count("<svg") >= 3 and "ec-spk" not in r["rowSpk"]
+
+
+# owner: "ha sab tiles me laga do" — every eCPM tile has its small daily chart; "format 12 hr" for the times
+@needs_node
+def test_every_tile_has_a_chart_and_12_hour_times(report):
+    r = report["tilecharts"]
+    assert r["hm"] == ["12:00 AM", "10:00 AM", "12:00 PM", "1:05 PM", "11:59 PM"]
+    assert r["n"] == 5 and r["legends"] == [["today", "yesterday · from " + r["next"]], ["daily", "7-day avg"],
+                                            ["last 7 days", "previous 7"], ["last 30 days", "previous 30"], ["this month", "last month"]]
+    assert r["avgLine"] == 1 and r["prevLines"] == 3            # Yesterday: its 7-day avg dashed; the 3 period tiles: the period before
+    assert r["onePt"] == "" and "M" in r["gap"] and r["gap"].count("M") == 2   # a lone point: no chart; a day without data: a gap

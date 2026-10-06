@@ -139,6 +139,15 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
     const spk = run(`ecTodaySpark('')`), pts = J(`ecSpkPts(DATA.ecpm_intraday.t)`), val = J(`[ecSpkVal(DATA.ecpm_intraday.y,600), ecSpkVal(DATA.ecpm_intraday.y,1000), ecSpkVal(DATA.ecpm_intraday.y,10)]`);
     run(`DATA.ecpm_intraday.y=[]`); const spk1 = run(`ecTodaySpark('')`); const tileSpk = tiles().includes('class="ec-spk"'); const rowSpk = run(`EC.rows={a:ecRowsFor('a',ecWin())}; ecTableHtml('a')`); run(`delete DATA.ecpm_intraday`);
     return { full, ix, gap, gapNear, late, near, first, spk, pts, val, spk1, tileSpk, rowSpk, missing, stale, none, next: run(`fmtD(ecNextDay(DATA.today_date))`) }; });
+  // every tile's chart + the 12-hour clock
+  await step('tilecharts', () => { const T = run(`DATA.today_date`);
+    run(`DATA.ecpm_intraday={v:1,today:DATA.today_date,since:DATA.today_date,apps:{},t:[[540,2e6,1000],[600,6e6,2000]],y:[]};`);
+    const h = run(`EC.app=''; ecPaint(); EC.el.innerHTML.split('class="card ec-cc"')[0]`); run(`delete DATA.ecpm_intraday`);
+    const legends = [...h.matchAll(/<div class="ec-spl">([\s\S]*?)<\/div>/g)].map(m => [...m[1].matchAll(/<span class="ec-spl-[a-z]">([^<]*)<\/span>/g)].map(x => x[1]));
+    const gap = J(`(()=>{ const dm={'2026-01-01':[3e6,1000],'2026-01-03':[4e6,1000],'2026-01-04':[5e6,1000]}; const s=ecPairSpark(dm,['2026-01-01','2026-01-02','2026-01-03','2026-01-04'],null,'x',''); return (/class="ec-spt0" ?|<path d="([^"]*)" class="ec-spt0"/.exec(s)||[])[1]||''; })()`);
+    return { hm: J(`[0,600,720,785,1439].map(ecHm)`), n: (h.match(/class="ec-spk"/g) || []).length, legends,
+      avgLine: (h.match(/class="ec-spa"/g) || []).length, prevLines: (h.match(/class="ec-spy"/g) || []).length,
+      onePt: run(`ecPairSpark({'2026-01-01':[1e6,100]},['2026-01-01'],null,'x','')`), gap, next: run(`fmtD(ecNextDay(DATA.today_date))`) }; });
   await step('money_fmt', () => { run(`CURVIEW='INR'`); const r = J(`[ecCm(2),ecCmS(-0.26),ecCmS(0.000001),ecMoneyS(-1234.5),ecMoneyS(0.5),ecMoneyS(0),ecPct(-0.0812),ecPct(0.0004),ecPct(null),ecAx(0),ecAx(250/90),ecAx(12000/90)]`);
     run(`CURVIEW=null`); return { inr: r, usd: J(`[ecCm(2),ecCmS(-0.26),ecMoneyS(-1234.5),ecMoneyS(0.5),ecAx(2.5)]`) }; });
 
