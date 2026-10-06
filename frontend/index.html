@@ -5324,7 +5324,7 @@ function ecHm(m){ return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%6
 // (< 2% of that day's latest, or < EC_MIN_IMPR) is left out — its eCPM is noise. Hover / tap = that time's two numbers.
 function ecSpkPts(pts){ const last=pts.length?+pts[pts.length-1][2]||0:0, thr=Math.max(EC_MIN_IMPR,last*0.02);
   return pts.filter(p=>+p[2]>=thr&&+p[1]>=0).map(p=>[+p[0],+p[1]/(+p[2]*1000),+p[1],+p[2]]); }
-function ecSpark(app){ const X=DATA&&DATA.ecpm_intraday; if(!X||X.today!==DATA.today_date) return '';
+function ecTodaySpark(app){ const X=DATA&&DATA.ecpm_intraday; if(!X||X.today!==DATA.today_date) return '';
   const S=app?(X.apps||{})[app]:X; if(!S) return ''; const t=ecSpkPts(S.t||[]), y=ecSpkPts(S.y||[]); if(!t.length&&!y.length) return '';
   const W=240,H=52,P=4, all=t.concat(y).map(p=>p[1]); let lo=Math.min(...all), hi=Math.max(...all); const pad=(hi-lo)*0.12||hi*0.05||1; lo-=pad; hi+=pad;
   const X_=m=>(m/1440*W).toFixed(1), Y_=v=>(P+(H-2*P)*(1-(v-lo)/(hi-lo))).toFixed(1), path=a=>a.map((p,k)=>(k?'L':'M')+X_(p[0])+' '+Y_(p[1])).join(' ');
@@ -5363,7 +5363,7 @@ function ecKpis(dm,W,td){ const s=d=>ecSum(dm,d), y=s(W.y), w7=s(W.d7), p7=s(W.p
     +(ix&&ix.hEc!=null?`<span class="ec-w ec-hr">pichhle ${ix.hrM} min: <b>${cm(ix.hEc)}</b>${ix.yhEc!=null?` · kal isi waqt <b>${cm(ix.yhEc)}</b>`:''}</span>`:'')
     +w(fmtD(td.T)+(ix&&ix.m!=null&&!ix.none?' · '+ecHm(ix.m)+' tak':' · ab tak')+(td.i?' · '+fmtN(td.i)+' impr':'')+(td.i&&td.i<EC_MIN_IMPR?' · low data':'')+' · not final'
       +(ix&&!sm&&ix.since?(ix.since>=td.T?` · kal-isi-samay tulna ${fmtD(ecNextDay(td.T))} se`:' · kal isi samay ka point nahi'):''));
-  const tt=td&&td.T?kpi('Today eCPM · live',ecCm(td.ec),tsub,'muted',ecSpark(td.app||'')):'';
+  const tt=td&&td.T?kpi('Today eCPM · live',ecCm(td.ec),tsub,'muted',ecTodaySpark(td.app||'')):'';
   return `<div class="row ${tt?'c5':'c4'} ec-kpis">${tt}${kpi('Yesterday eCPM',ecCm(y.ec),cmp(y,w7,'7-day avg')+w(ecSpan(W.y)+(y.i?' · '+fmtN(y.i)+' impr':'')),'muted')}`
     +kpi('Last 7 days',ecCm(w7.ec),cmp(w7,p7,'previous 7 days')+w(ecSpan(W.d7)),'muted')
     +kpi('Last 30 days',ecCm(d30.ec),cmp(d30,p30,'previous 30 days')+w(ecSpan(W.d30)),'muted')

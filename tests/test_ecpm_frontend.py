@@ -510,3 +510,6 @@ def test_today_tile_small_chart(report):
     assert abs(r["val"][0] - 3.0) < 1e-9 and r["val"][1] is None and r["val"][2] is None   # 10:00 between 09:00 / 11:00; a 12 h gap; before any
     assert 'class="ec-spy"' not in r["spk1"] and "kal · " in r["spk1"] and " se</span>" in r["spk1"]   # no yesterday yet: today alone, when kal starts
     assert r["tileSpk"]
+    # the table's own row sparkline (ecSpark(values, status)) still draws: the tile's chart has its own name (a same-named
+    # function had replaced it, 6 Oct — every row's 30-day line went blank)
+    assert r["rowSpk"].count("<svg") >= 3 and "ec-spk" not in r["rowSpk"]
