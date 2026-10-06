@@ -258,6 +258,12 @@ const fresh = async (opt) => { opt = opt || {};   // a new page load: history, U
     const icon = run(`appIcon('Demo Gallery',20)`), iconId = run(`appIconId('${IDS.big}','Demo Gallery',20)`);
     return { home, inApp, out1, back1, out2, bm, out3, out4, classic, classic2, esc, icon, iconId }; });
 
+  // owner: "5 Oct me Yesterday likho, 6 me Today": one-day periods say which; longer ones keep their dates
+  await step('labels', () => { const L = {}; for (const r of ['today', 'yesterday', '7d']) { run(`RANGE='${r}'; window.__ax=null;`);
+      L[r] = { lbl: run(`curWinLabel()`), dates: run(`curWinDates()`), name: run(`hubPerName()`) }; }
+    run(`RANGE='today'; window.__ax=null;`);
+    return { L, rel: [run(`relDay(DATA.today_date)`), run(`relDay(DATA.latest_complete)`), run(`relDay('2025-01-01')`)], T: run(`fmtD(DATA.today_date)`), Y: run(`fmtD(DATA.latest_complete)`) }; });
+
   // ── App Overview cards ──────────────────────────────────────────────────────────────────────────────────────────────
   const K = run(`hubKeyOf('Demo Gallery')`), money = (usd, s) => ({ usd, s: s || '', sign: 0, p: 0 });
   ctx.__RVF = { v: 1, day: LAST, feats: [['kamai', 'Revenue · eCPM', 'Revenue', '💰'], ['uninstall', 'Uninstall', 'Uninstall', '🗑️'], ['active', 'Active users', 'Active', '👥'],

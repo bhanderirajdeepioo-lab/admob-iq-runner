@@ -482,3 +482,18 @@ def test_the_payload_keeps_every_day_of_history():
     daily = d["placements"][0]["daily"]
     assert len(daily) == n and daily[0][0] == first.isoformat() and daily[-1][0] == (first + timedelta(days=n - 1)).isoformat()
     assert d["latest_complete"] == daily[-1][0]
+
+
+# ── 📈 Today tile: same time yesterday + the last hour (owner, 6 Oct: "yesterday same time pe kitna tha aur abhi kitna") ──
+@needs_node
+def test_today_tile_same_time_yesterday(report):
+    r = report["intra"]
+    ix = r["ix"]
+    assert ix["m"] == 600 and abs(ix["yEc"] - 3.0) < 1e-9 and ix["hrM"] == 60 and abs(ix["hEc"] - 4.0) < 1e-9 and abs(ix["yhEc"] - 3.0) < 1e-9
+    assert re.search(r'\(<b class="(up|down|)">[+−]?\d+\.\d%</b> vs kal isi samay <b>\$3\.00</b>\)', r["full"])   # like with like: coloured
+    assert "pichhle 60 min: <b>$4.00</b> · kal isi waqt <b>$3.00</b>" in r["full"] and " · 10:00 tak · " in r["full"]
+    assert r["gap"]["yEc"] is None and r["late"]["yEc"] is None and abs(r["near"]["yEc"] - 3.0) < 1e-9 and abs(r["gapNear"]["yEc"] - 3.0) < 1e-9
+    assert "kal-isi-samay tulna " + r["next"] + " se" in r["first"] and " · poora din)" in r["first"]
+    assert "kal isi samay ka point nahi" in r["missing"] and "kal-isi-samay tulna" not in r["missing"]
+    for k in ("stale", "none"):                                   # no points for today: yesterday's whole day, no note
+        assert " · poora din)" in r[k] and "kal isi" not in r[k] and " · ab tak · " in r[k]

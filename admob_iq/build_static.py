@@ -469,6 +469,14 @@ def _audience_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+def _intraday_step(dashboard, data_dir, report_tz, now=None):
+    from . import intraday_build as ib
+    ib.step(dashboard, data_dir, report_tz, now)
+    line = ib.pop_line()
+    if line:
+        print(line, file=sys.stderr)
+
+
 def _review_step(dashboard, data_dir, out_dir, now=None):
     """Daily App Review (admob_iq.review): freezes today's cards once (after REVIEW_READY_IST), publishes every day's
     snapshot to site/review/ and writes site/review/index.json → the _headers patterns it needs. OPTIONAL: off unless
@@ -1665,6 +1673,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # same step wrote + the GA4 Audience stores — OPTIONAL (AUDIENCE_TAB) and failure-isolated; without this build's
     # Active users data it leaves no file behind
     aud_paths = _audience_step(dashboard, data_dir, out_dir, s)
+
+    # 📈 eCPM "same time yesterday": this build's point of today's totals so far (data/ecpm_intraday.json) — never for
+    # the sample data, failure-isolated, counts-only line
+    _intraday_step(dashboard, data_dir, report_tz)
 
     os.makedirs(out_dir, exist_ok=True)
     # dashboard.json is the primary payload and GROWS with history depth (placements + countries_daily),

@@ -122,6 +122,19 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
       return res; });
   }
   run(`CURVIEW=null; RANGE='today'; window.__ax=null;`);
+  // 📈 same time yesterday (DATA.ecpm_intraday, made up here): yesterday at 10:00 = between its 09:00 and 11:00 points;
+  // the last hour = today's 10:00 point minus its 09:00 one, and the same hour yesterday
+  await step('intra', () => { const T = run(`DATA.today_date`), tiles = () => run(`EC.app=''; ecPaint(); EC.el.innerHTML.split('class="card ec-cc"')[0]`);
+    const X = { v: 1, today: T, yday: 'x', since: '2026-01-01', t: [[540, 2e6, 1000], [600, 6e6, 2000]], y: [[540, 3e6, 1000], [660, 6e6, 2000]], apps: {} };
+    run(`DATA.ecpm_intraday=${JSON.stringify(X)}`); const full = tiles(), ix = J(`ecIntra('')`);
+    run(`DATA.ecpm_intraday.y=[[480,3e6,1000],[900,9e6,3000]]`); const gap = J(`ecIntra('')`);           // 7 h apart, 2 h after the first: none
+    run(`DATA.ecpm_intraday.y=[[540,3e6,1000],[900,9e6,3000]]`); const gapNear = J(`ecIntra('')`);       // 6 h apart, 1 h after the first: that point
+    run(`DATA.ecpm_intraday.y=[[500,3e6,1000]]`); const late = J(`ecIntra('')`);                            // its last point 100 min before: none
+    run(`DATA.ecpm_intraday.y=[[530,3e6,1000]]`); const near = J(`ecIntra('')`);                            // 70 min before: that point
+    run(`DATA.ecpm_intraday.y=[]; DATA.ecpm_intraday.since=DATA.today_date`); const first = tiles();        // the first day: "from tomorrow"
+    run(`DATA.ecpm_intraday.since='2026-01-01'`); const missing = tiles();
+    run(`DATA.ecpm_intraday.today='1999-01-01'`); const stale = tiles(); run(`delete DATA.ecpm_intraday`); const none = tiles();
+    return { full, ix, gap, gapNear, late, near, first, missing, stale, none, next: run(`fmtD(ecNextDay(DATA.today_date))`) }; });
   await step('money_fmt', () => { run(`CURVIEW='INR'`); const r = J(`[ecCm(2),ecCmS(-0.26),ecCmS(0.000001),ecMoneyS(-1234.5),ecMoneyS(0.5),ecMoneyS(0),ecPct(-0.0812),ecPct(0.0004),ecPct(null),ecAx(0),ecAx(250/90),ecAx(12000/90)]`);
     run(`CURVIEW=null`); return { inr: r, usd: J(`[ecCm(2),ecCmS(-0.26),ecMoneyS(-1234.5),ecMoneyS(0.5),ecAx(2.5)]`) }; });
 

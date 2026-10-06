@@ -236,10 +236,12 @@ def test_app_overview_cards(report):
     none = {x["id"]: x for x in c["none"]}                                                         # the card file still loading
     assert none["revenue"]["line"] == "⏳ loading…" and none["ecpm"]["st"] == "bigda"
     h = c["head"]
-    assert h.strip().startswith("🅐 pub-0000000000000001 · AdMob till ") and "Demo Gallery" not in h[:h.index("Latest day")]   # the logo + name: in the title only
+    assert h.strip().startswith("🅐 pub-0000000000000001 · AdMob till ") and "Demo Gallery" not in h[:h.index("Yesterday")]   # the logo + name: in the title only
     assert "💵 Revenue · " in h and "usual $" in h and "/day (−" in h
     assert "👥 DAU 123,456" in h and "GA4 · not final" in h and "🔔 Open alerts 3 ad units 2 · users 1" in h and "Features" in h
-    assert h.index("Latest day") < h.index("💵 Revenue · ") < h.index("Period") < h.index("Features")   # the app's KPIs first, then Features
+    assert h.index("Yesterday") < h.index("💵 Revenue · Yesterday") < h.index("📈 eCPM · Yesterday") < h.index("Features")   # the app's KPIs first, then Features
+    # owner: "5 Oct me Yesterday likho, 6 me Today": the last full day = Yesterday; the Period caption names the period (Today …)
+    assert re.search(r"Yesterday \d{1,2} [A-Z][a-z]{2} ", h) and re.search(r" (Today|Yesterday|Last 7 days|Last 30 days|This month|All time|Custom) ", h[h.index("📈 eCPM"):h.index("Features")])
     assert c["ov"] == {"same": True, "kids": 1, "id": "hub-ov"} and c["ovAll"] == 0                  # All apps: no app head
 
 
@@ -307,3 +309,12 @@ def test_structure():
     i = css.index("/* ✨ App Hub (new layout, BETA"); assert i < css.index("/* ===== 🗂 REVIEW STUDIO")
     assert ".hub-nav{display:none}" in css and "body.hub-on .nav-classic{display:none}" in css and ".hub-bar[hidden]{display:none}" in css
     assert "overflow-x:auto" in css[css.index(".hub-bar{"):css.index(".hub-bar[hidden]")]       # the bar scrolls in its own box
+
+
+def test_today_yesterday_labels(report):
+    r = O(report, "labels")
+    T, Y, L = r["T"], r["Y"], r["L"]
+    assert r["rel"] == ["Today", "Yesterday", ""]
+    assert L["today"] == {"lbl": "Today · " + T + " · live", "dates": T + " · live", "name": "Today"}
+    assert L["yesterday"] == {"lbl": "Yesterday · " + Y, "dates": Y, "name": "Yesterday"}
+    assert L["7d"]["name"] == "Last 7 days" and L["7d"]["lbl"].endswith(" · 7d") and "Today" not in L["7d"]["lbl"] and L["7d"]["dates"] == L["7d"]["lbl"]

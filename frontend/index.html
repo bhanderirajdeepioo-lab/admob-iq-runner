@@ -344,6 +344,7 @@
   .ec-kpis .kpi .d{font-weight:600;line-height:1.45;overflow-wrap:anywhere}
   .ec-kpis .kpi .d b{white-space:nowrap;font-weight:750}
   .ec-kpis .kpi .ec-w{display:block;font-size:11px;font-weight:500;color:var(--faint);margin-top:2px}
+  .ec-kpis .kpi .ec-hr{color:var(--muted);font-size:11.5px;margin-top:4px}.ec-kpis .kpi .ec-hr b{color:var(--ink2)}   /* the last hour, today vs yesterday */
   .ec-cc{margin-bottom:14px;min-width:0}
   .ec-cc .ct{flex-wrap:wrap;gap:6px 12px;align-items:flex-start}
   .ec-ctl{display:flex;gap:8px 10px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
@@ -4302,8 +4303,15 @@ function curWinArr(){ const ax=gAxis(); let cf=RCUSTOM.from,ct=RCUSTOM.to;
   if(RANGE==='custom'){ if(!cf)cf=(ax.length>30?ax[ax.length-30]:ax[0]||''); if(!ct)ct=(DATA.latest_complete||ax[ax.length-1]||''); }
   return windowDates(ax, RANGE, cf, ct); }
 function curWin(){ return new Set(curWinArr()); }
-function curWinLabel(){ const w=curWinArr(); if(!w.length) return 'is range me data nahi'; const a=w[0],b=w[w.length-1];
+function curWinLabel(){ const w=curWinArr(); if(!w.length) return 'is range me data nahi'; const a=w[0],b=w[w.length-1], r=a===b?relDay(a):'';
+  if(r) return r+' · '+fmtD(a)+(r==='Today'?' · live':'');   // owner: "5 Oct me Yesterday likho, 6 me Today" — one day says which
   return (a===b?fmtD(a):fmtD(a)+'–'+fmtD(b))+' · '+w.length+'d'+(RANGE==='today'?' · live':''); }
+// the window's dates alone (no "Today" / "Yesterday" word): for a caption that already names the period
+function curWinDates(){ const w=curWinArr(); if(!w.length) return 'is range me data nahi'; const a=w[0],b=w[w.length-1];
+  return (a===b?fmtD(a):fmtD(a)+'–'+fmtD(b)+' · '+w.length+'d')+(a===b&&relDay(a)==='Today'?' · live':''); }
+// "Today" / "Yesterday" for the AdMob day of this build (DATA.today_date, the report's own time zone) and the one before; else ''
+function relDay(d){ const T=(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||''; if(!d||!T) return ''; if(d===T) return 'Today';
+  const t=Date.parse(T+'T00:00:00Z'); return isFinite(t)&&d===new Date(t-864e5).toISOString().slice(0,10)?'Yesterday':''; }
 // re-render everything for the new window, then restore whatever the user was looking at
 function rerender(){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; const y=window.scrollY||0;
   HB.mute++; SP.keep++; try{   // the same view rebuilt: no new Back step, no jump to the top (₹/$, Period, a fetch landing)
@@ -4765,6 +4773,9 @@ function hubOv(s){ if(!HUB.on||!APP||!s) return s;
   const o=hubRvOpen(); if(!o||!o.f) hubRvEnsure(hubCardsPaint);   // today's Review card: the cards repaint in place when it lands
   return s; }
 function hubDay(){ return (DATA&&DATA.latest_complete)||''; }
+// the top bar's Period, as a caption: "Today" / "Yesterday" / "Last 7 days" … (a one-day custom range: its Today / Yesterday)
+function hubPerName(){ if(RANGE==='custom'){ const w=curWinArr(); return (w.length===1&&relDay(w[0]))||'Custom'; }
+  return {today:'Today',yesterday:'Yesterday','7d':'Last 7 days','30d':'Last 30 days','90d':'Last 90 days',month:'This month',lastmonth:'Last month',all:'All time'}[RANGE]||'Period'; }
 // the app's AdMob day: revenue / impressions on `day`, and its usual (the 7 complete days before it, per day)
 function hubRev(name){ const L=hubDay(), T=(DATA&&DATA.today_date)||''; const ax=gAxis().filter(d=>d!==T&&d<L).slice(-7), ws=new Set(ax);
   let e=0,i=0,ue=0; (DATA.placements||[]).forEach(p=>{ if(p.app!==name) return; (p.daily||[]).forEach(r=>{ if(r[0]===L){ e+=r[1]; i+=r[2]; } else if(ws.has(r[0])) ue+=r[1]; }); });
@@ -4776,20 +4787,21 @@ function hubAlerts(name){ const ad=((DATA.alerts&&DATA.alerts.items)||[]).filter
   return {ad,rg,g4,n:ad.length+rg.length+g4,lost:ad.reduce((t,x)=>t+(+x.lost>0?+x.lost:0),0)}; }
 function hubEc(name){ try{ const A=ecAgg(), dm=A&&A.apps&&A.apps[name]; if(!dm) return null; return ecRow(dm,ecWin()); }catch(e){ return null; } }
 function hubOvHtml(name){ const acc=apkAcc(name).acc, R=hubRev(name), ac=hubAct(name), al=hubAlerts(name), ec=hubEc(name), D=R.day?fmtD(R.day):'';
+  const rd=relDay(R.day), DL=rd||D;   // the tiles say "Yesterday" (the caption keeps the date once)
   const ch=R.usual?(R.rev-R.usual)/R.usual:null, chT=ch==null?'':` (${ch>=0?'+':'−'}${Math.abs(Math.round(ch*100))}%)`;
   const dau=ac&&ac.latest&&ac.latest.a1!=null?ac.latest:null;
   const mv=v=>Math.abs(v)>=10?money(v):cm(v);   // cents for a small app (as the App Report's own cells)
-  const k1=kpi(`💵 Revenue · ${D}`,mv(R.rev),R.usual!=null?`usual ${mv(R.usual)}/day${chT}`:'AdMob',ch==null?'muted':(ch>=0?'up':'down'));
+  const k1=kpi(`💵 Revenue · ${DL}`,mv(R.rev),R.usual!=null?`usual ${mv(R.usual)}/day${chT}`:'AdMob',ch==null?'muted':(ch>=0?'up':'down'));
   const k2=kpi('👥 DAU',dau?Math.round(dau.a1).toLocaleString():'—',dau?`${fmtD(dau.day)} · GA4${dau.prov?' · not final':''}`:'GA4 data nahi','muted');
-  const k3=kpi(`📈 eCPM · ${D}`,ec&&ec.y!=null?cm(ec.y):'—',ec&&ec.w7!=null?`7-day avg ${cm(ec.w7)}${ec.pct!=null?' ('+ecPct(ec.pct)+')':''}`:'',ec&&ec.pct!=null?ecCls(ec.pct):'muted');
+  const k3=kpi(`📈 eCPM · ${DL}`,ec&&ec.y!=null?cm(ec.y):'—',ec&&ec.w7!=null?`7-day avg ${cm(ec.w7)}${ec.pct!=null?' ('+ecPct(ec.pct)+')':''}`:'',ec&&ec.pct!=null?ecCls(ec.pct):'muted');
   const k4=kpi('🔔 Open alerts',String(al.n),`ad units ${al.ad.length+al.rg.length} · users ${al.g4}`,al.n?'down':'muted');
   const D2=(typeof DATA!=='undefined'&&DATA)||{}, gaT=ac&&ac.data_till?` · GA4 till ${fmtD(ac.data_till)}`:'';
   const su=_appStoreUrl(name);   // the app's logo + name: once, in the top bar's title (owner: "logo ek page me 3-3 jagah")
   return `<div class="hub-hd"><div class="hub-ac">${acc?'🅐 '+hAttr(acc)+' · ':''}AdMob till ${fmtD(D2.latest_complete)}${gaT}`
     +`${su?` · <a class="hub-ps" href="${hAttr(su)}" target="_blank" rel="noopener">Play Store ↗</a>`:''}</div></div>`
-    +`<div class="hub-kh"><b>Latest day</b><span>${D||'—'}</span></div>`
+    +`<div class="hub-kh"><b>${rd||'Last full day'}</b><span>${D||'—'}</span></div>`
     +`<div class="row c4 hub-kp">${k1}${k2}${k3}${k4}</div>`
-    +`<div class="hub-kpp" id="hub-kpp"><div class="hub-kh"><b>Period</b><span>${hAttr(curWinLabel())} · upar 🗓 Period se badlo</span></div></div>`
+    +`<div class="hub-kpp" id="hub-kpp"><div class="hub-kh"><b>${hubPerName()}</b><span>${hAttr(curWinDates())} · upar 🗓 Period se badlo</span></div></div>`
     +`<div class="hub-fh"><h3>Features</h3><span class="hub-fn" id="hub-fn">${hubFcNote()}</span></div>`
     +`<div class="hub-fcs" id="hub-fcs">${hubCardsHtml(name)}</div>`
     +`<div class="hub-sep"><span>📊 More · revenue table, date-wise, chart</span></div>`; }
@@ -5266,15 +5278,39 @@ function ecTableHtml(t){ const all=EC.rows[t]||[], S=EC[{a:'sort',u:'usort',c:'c
 // today so far (owner: "where is today's eCPM?"): the portfolio or one app, from today's partial AdMob day — live, not final
 function ecToday(app){ const T=(DATA&&DATA.today_date)||''; let e=0,i=0;
   if(T) (DATA.placements||[]).forEach(p=>{ if(app&&p.app!==app) return; (p.daily||[]).forEach(r=>{ if(r&&r[0]===T){ e+=+r[1]||0; i+=+r[2]||0; } }); });
-  return {T,e,i,ec:i?e/(i*1000):null}; }
+  return {T,app:app||'',e,i,ec:i?e/(i*1000):null}; }
+function ecNextDay(d){ const t=Date.parse(d+'T00:00:00Z'); return isFinite(t)?new Date(t+864e5).toISOString().slice(0,10):d; }
+// 📈 "same time yesterday" (owner: "yesterday same time pe kitna tha aur abhi kitna hai … hourly"): the robot keeps a point
+// of today's totals so far at every build (DATA.ecpm_intraday: [minute of day, earnings micros, impressions], report time
+// zone). Yesterday's totals at this build's minute = between its two points around it (≤ 3 h apart), or its last point
+// up to 90 min before; the last hour = this point minus today's point 30–120 min back, and the same span yesterday.
+function ecIntra(app){ const X=DATA&&DATA.ecpm_intraday; if(!X||X.today!==DATA.today_date) return null;
+  const S=app?(X.apps||{})[app]:X; if(!S||!(S.t||[]).length) return {since:X.since,none:true};
+  const t=S.t, y=S.y||[], now=t[t.length-1], m=now[0];
+  const at=(pts,mm)=>{ let a=null,b=null; for(const p of pts){ if(p[0]<=mm) a=p; else { b=p; break; } }
+    if(a&&a[0]===mm) return [a[1],a[2]];
+    if(a&&b&&b[0]-a[0]<=180){ const f=(mm-a[0])/(b[0]-a[0]); return [a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f]; }
+    return a&&mm-a[0]<=90?[a[1],a[2]]:null; };
+  const ya=y.length?at(y,m):null;
+  let hr=null; for(let k=t.length-2;k>=0;k--){ const g=m-t[k][0]; if(g>=30&&g<=120){ hr=t[k]; break; } if(g>120) break; }
+  const th=hr?[now[1]-hr[1],now[2]-hr[2]]:null, yb=hr&&y.length?at(y,hr[0]):null, yh=ya&&yb?[ya[0]-yb[0],ya[1]-yb[1]]:null;
+  const ec=v=>v&&v[1]>0?v[0]/(v[1]*1000):null;
+  return {since:X.since,m,now:[now[1],now[2]],ec:ec([now[1],now[2]]),ya,yEc:ec(ya),hrM:hr?m-hr[0]:0,hEc:ec(th),yhEc:ec(yh)}; }
+function ecHm(m){ return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
 // the tiles: Today (live, so far) · Yesterday (vs the 7-day avg) · Last 7 days · Last 30 days · This month vs the same days last month
 function ecKpis(dm,W,td){ const s=d=>ecSum(dm,d), y=s(W.y), w7=s(W.d7), p7=s(W.p7), d30=s(W.d30), p30=s(W.p30), mtd=s(W.mtd), lm=s(W.lm);
   const cmp=(a,b,what)=>{ if(a.ec==null||b.ec==null) return `<span class="faint">${what}: —</span>`; const p=(a.ec-b.ec)/b.ec;
     return `(<b class="${ecCls(p)}">${ecPct(p)}</b> vs ${what} <b>${cm(b.ec)}</b>)`; };
   const w=t=>`<span class="ec-w">${t}</span>`;
-  // a part of a day vs a whole one: the % is shown plain (no red / green) — it is only a first look; the day is judged tomorrow
-  const tt=td&&td.T?kpi('Today eCPM · live',ecCm(td.ec),(td.ec!=null&&y.ec?`(<b>${ecPct((td.ec-y.ec)/y.ec)}</b> vs yesterday <b>${cm(y.ec)}</b>)`:`<span class="faint">${td.i?'yesterday: —':'aaj ka data abhi nahi aaya'}</span>`)
-    +w(fmtD(td.T)+' · ab tak'+(td.i?' · '+fmtN(td.i)+' impr':'')+(td.i&&td.i<EC_MIN_IMPR?' · low data':'')+' · not final'),'muted'):'';
+  // vs yesterday AT THE SAME TIME (both days through the same AdMob delay → like with like: red / green); without
+  // yesterday's points yet, vs yesterday's whole day, plain (a part of a day vs a whole one is only a first look)
+  const ix=td&&td.T?ecIntra(td.app||''):null, sm=ix&&ix.yEc!=null&&td.ec!=null;
+  const tsub=!(td&&td.T)?'':(sm?`(<b class="${ecCls((td.ec-ix.yEc)/ix.yEc)}">${ecPct((td.ec-ix.yEc)/ix.yEc)}</b> vs kal isi samay <b>${cm(ix.yEc)}</b>)`
+      :(td.ec!=null&&y.ec?`(<b>${ecPct((td.ec-y.ec)/y.ec)}</b> vs yesterday <b>${cm(y.ec)}</b> · poora din)`:`<span class="faint">${td.i?'yesterday: —':'aaj ka data abhi nahi aaya'}</span>`))
+    +(ix&&ix.hEc!=null?`<span class="ec-w ec-hr">pichhle ${ix.hrM} min: <b>${cm(ix.hEc)}</b>${ix.yhEc!=null?` · kal isi waqt <b>${cm(ix.yhEc)}</b>`:''}</span>`:'')
+    +w(fmtD(td.T)+(ix&&ix.m!=null&&!ix.none?' · '+ecHm(ix.m)+' tak':' · ab tak')+(td.i?' · '+fmtN(td.i)+' impr':'')+(td.i&&td.i<EC_MIN_IMPR?' · low data':'')+' · not final'
+      +(ix&&!sm&&ix.since?(ix.since>=td.T?` · kal-isi-samay tulna ${fmtD(ecNextDay(td.T))} se`:' · kal isi samay ka point nahi'):''));
+  const tt=td&&td.T?kpi('Today eCPM · live',ecCm(td.ec),tsub,'muted'):'';
   return `<div class="row ${tt?'c5':'c4'} ec-kpis">${tt}${kpi('Yesterday eCPM',ecCm(y.ec),cmp(y,w7,'7-day avg')+w(ecSpan(W.y)+(y.i?' · '+fmtN(y.i)+' impr':'')),'muted')}`
     +kpi('Last 7 days',ecCm(w7.ec),cmp(w7,p7,'previous 7 days')+w(ecSpan(W.d7)),'muted')
     +kpi('Last 30 days',ecCm(d30.ec),cmp(d30,p30,'previous 30 days')+w(ecSpan(W.d30)),'muted')
@@ -6927,7 +6963,7 @@ function renderMediation(){
   const appMedCard=`<div class="card pad0" style="margin-bottom:14px"><div class="ct" style="padding:16px 17px 0"><h3>🔗 App-wise — AdMob vs other mediation</h3><span class="muted" style="font-size:12px">har app me AdMob ke <b>alawa</b> (Meta, etc.) se kitna aaya · ${othTotal>0?`total <b style="color:#a78bfa">${money(othTotal)}</b> other`:'abhi sab AdMob se'}</span></div>
     <table style="margin-top:10px"><thead><tr><th>App</th><th>Total</th><th>AdMob</th><th>Other mediation</th><th>Other %</th><th>Top other source</th></tr></thead><tbody>${appMedRows}</tbody></table></div>`;
   const periodPill=covered
-    ? `<span class="pill p-g" style="font-size:11px;vertical-align:middle">⏱ ${pRangeLabel(RANGE)}</span> <span class="muted" style="font-size:12px">${curWinLabel()} — jo period upar select kiya wahi</span>`
+    ? `<span class="pill p-g" style="font-size:11px;vertical-align:middle">⏱ ${pRangeLabel(RANGE)}</span> <span class="muted" style="font-size:12px">${curWinDates()} — jo period upar select kiya wahi</span>`
     : `<span class="pill p-y" style="font-size:11px;vertical-align:middle">all-time</span> <span class="muted" style="font-size:12px">${MEDLOADING?'⏳ period-wise data load ho raha hai…':(['90d','all'].includes(RANGE)?'is lambe period ka granular mediation abhi utni history me nahi — poora aggregate dikha rahe hain':'daily mediation load hone par period-wise ho jayega')}</span>`;
   s.innerHTML=`<h2 class="sc">Mediation${APP?' · '+appIcon(APP,20,'ail')+APP:''} — network competition</h2><p class="scd">Har ad source ka fill, eCPM aur revenue share — sab real (AdMob + third-party).</p>
     <div style="margin:0 0 12px">${periodPill}</div>
