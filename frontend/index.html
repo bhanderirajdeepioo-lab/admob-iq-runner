@@ -1245,7 +1245,8 @@ body.hub-app #apk>.cx{display:none}body.hub-app #apk-btn{width:auto}   /* "📱 
 .hub-sep{display:flex;align-items:center;gap:10px;margin:4px 0 14px;color:var(--muted);font-size:12.5px;font-weight:800;min-width:0}
 .hub-sep>span{min-width:0;overflow-wrap:anywhere}
 .hub-sep::after{content:"";flex:1 0 24px;height:1px;background:var(--line)}
-@media(max-width:760px){.hub-kp.row.c4{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.hub-kp .kpi{padding:15px 13px}   /* 2-up, as Overview's own KPIs */
+@media(max-width:1000px){.hub-kp.row.c5>.kpi:last-child{grid-column:1/-1}}   /* 5 tiles 2-up: the last one on its own row */
+@media(max-width:760px){.hub-kp.row.c4,.hub-kp.row.c5{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.hub-kp .kpi{padding:15px 13px}   /* 2-up, as Overview's own KPIs */
   .hub-fcs{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card.hub-fc{padding:10px;gap:6px}.hfc-h{font-size:12.5px;gap:5px}
   .hfc-l{font-size:12px}.hub-st{font-size:11px;padding:1px 7px}}
 @media(max-width:339px){.hub-fcs{grid-template-columns:minmax(0,1fr)}}
@@ -4780,6 +4781,10 @@ function hubPerName(){ if(RANGE==='custom'){ const w=curWinArr(); return (w.leng
 function hubRev(name){ const L=hubDay(), T=(DATA&&DATA.today_date)||''; const ax=gAxis().filter(d=>d!==T&&d<L).slice(-7), ws=new Set(ax);
   let e=0,i=0,ue=0; (DATA.placements||[]).forEach(p=>{ if(p.app!==name) return; (p.daily||[]).forEach(r=>{ if(r[0]===L){ e+=r[1]; i+=r[2]; } else if(ws.has(r[0])) ue+=r[1]; }); });
   return {day:L,rev:e/1e6,impr:i,usual:ax.length?ue/1e6/ax.length:null,n:ax.length}; }
+// the app's Google Ads spend on `day` and its usual (the same 7 days as hubRev, per day) — USD; null when ROAS is off
+function hubSpend(name){ if(!roasOn()) return null; const L=hubDay(), T=(DATA&&DATA.today_date)||'', dd=((DATA.roas.by_app||{})[name]||{}).daily||{};
+  const ax=gAxis().filter(d=>d!==T&&d<L).slice(-7); let u=0; ax.forEach(d=>{ u+=+dd[d]||0; });
+  return {y:(+dd[L]||0)/1e6,usual:ax.length?u/1e6/ax.length:null}; }
 function hubAct(name){ return ((DATA.active&&DATA.active.apps)||[]).find(x=>x&&x.app===name)||null; }
 // open alerts: ad units (critical / warning / watch) + approved-range breaches + the GA4 tabs' open (not "good") alerts
 function hubAlerts(name){ const ad=((DATA.alerts&&DATA.alerts.items)||[]).filter(x=>x&&x.app===name), rg=(DATA.range_alerts||[]).filter(x=>x&&x.app===name);
@@ -4795,12 +4800,16 @@ function hubOvHtml(name){ const acc=apkAcc(name).acc, R=hubRev(name), ac=hubAct(
   const k2=kpi('👥 DAU',dau?Math.round(dau.a1).toLocaleString():'—',dau?`${fmtD(dau.day)} · GA4${dau.prov?' · not final':''}`:'GA4 data nahi','muted');
   const k3=kpi(`📈 eCPM · ${DL}`,ec&&ec.y!=null?cm(ec.y):'—',ec&&ec.w7!=null?`7-day avg ${cm(ec.w7)}${ec.pct!=null?' ('+ecPct(ec.pct)+')':''}`:'',ec&&ec.pct!=null?ecCls(ec.pct):'muted');
   const k4=kpi('🔔 Open alerts',String(al.n),`ad units ${al.ad.length+al.rg.length} · users ${al.g4}`,al.n?'down':'muted');
+  // owner: "yesterday me spending KPI bhi add karo" — that day's Google Ads spend, its ROAS (revenue ÷ spend) and its usual
+  const sp=hubSpend(name), roas=sp&&sp.y>0?R.rev/sp.y:null, sc=sp&&sp.usual?(sp.y-sp.usual)/sp.usual:null;
+  const kS=sp?kpi(`📣 Ad spend · ${DL}`,sp.y>0?mv(sp.y):'—',(sp.y>0?`ROAS ${roas.toFixed(2)}×`:'No spend')
+      +(sp.usual?` · usual ${mv(sp.usual)}/day${sc!=null&&sp.y>0?` (${sc>=0?'+':'−'}${Math.abs(Math.round(sc*100))}%)`:''}`:(sp.y>0?'':' · Google Ads')),roas==null?'muted':(roas>=1?'up':'down')):'';
   const D2=(typeof DATA!=='undefined'&&DATA)||{}, gaT=ac&&ac.data_till?` · GA4 till ${fmtD(ac.data_till)}`:'';
   const su=_appStoreUrl(name);   // the app's logo + name: once, in the top bar's title (owner: "logo ek page me 3-3 jagah")
   return `<div class="hub-hd"><div class="hub-ac">${acc?'🅐 '+hAttr(acc)+' · ':''}AdMob till ${fmtD(D2.latest_complete)}${gaT}`
     +`${su?` · <a class="hub-ps" href="${hAttr(su)}" target="_blank" rel="noopener">Play Store ↗</a>`:''}</div></div>`
     +`<div class="hub-kh"><b>${rd||'Last full day'}</b><span>${D||'—'}</span></div>`
-    +`<div class="row c4 hub-kp">${k1}${k2}${k3}${k4}</div>`
+    +`<div class="row ${kS?'c5':'c4'} hub-kp">${k1}${kS}${k3}${k2}${k4}</div>`
     +`<div class="hub-kpp" id="hub-kpp"><div class="hub-kh"><b>${hubPerName()}</b><span>${hAttr(curWinDates())} · upar 🗓 Period se badlo</span></div></div>`
     +`<div class="hub-fh"><h3>Features</h3><span class="hub-fn" id="hub-fn">${hubFcNote()}</span></div>`
     +`<div class="hub-fcs" id="hub-fcs">${hubCardsHtml(name)}</div>`

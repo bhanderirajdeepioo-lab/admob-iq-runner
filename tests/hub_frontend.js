@@ -292,7 +292,11 @@ const fresh = async (opt) => { opt = opt || {};   // a new page load: history, U
     const small = parse(run(`hubCardsHtml('Puzzle Quest')`));
     run(`HUB.rv.files={}; HUB.rv.idx=null; HUB.rv.loading=false;`); const none = parse(run(`hubCardsHtml('Demo Gallery')`));
     const head = run(`hubOvHtml('Demo Gallery')`).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    // Google Ads spend (made up): $4.00 on each of the 7 days before yesterday, $5.00 yesterday
+    run(`DATA.roas={configured:true,by_app:{'Demo Gallery':{daily:Object.fromEntries(gAxis().filter(d=>d!==DATA.today_date).slice(-8).map((d,k)=>[d,k===7?5e6:4e6]))}}}`);
+    const headSp = run(`hubOvHtml('Demo Gallery')`).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '), rowSp = run(`hubOvHtml('Demo Gallery')`).includes('class="row c5 hub-kp"');
+    run(`delete DATA.roas`);
     const ov = run(`(()=>{ const s=document.createElement('section'); const r=hubOv(s); return {same:r===s, kids:s.children.length, id:s.children[0]&&s.children[0].id}; })()`);
     run(`APP=''`); const ovAll = run(`(()=>{ const s=document.createElement('section'); hubOv(s); return s.children.length; })()`);
-    return { usd, inr, small, none, head, ov, ovAll, day: LAST }; });
+    return { usd, inr, small, none, head, headSp, rowSp, ov, ovAll, day: LAST }; });
 })().then(() => { process.stdout.write(JSON.stringify({ errors, out })); }, e => { errors.push('MAIN ' + (e.stack || e.message)); process.stdout.write(JSON.stringify({ errors, out })); });

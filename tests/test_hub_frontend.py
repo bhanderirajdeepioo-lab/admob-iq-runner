@@ -243,6 +243,11 @@ def test_app_overview_cards(report):
     # owner: "5 Oct me Yesterday likho, 6 me Today": the last full day = Yesterday; the Period caption names the period (Today …)
     assert re.search(r"Yesterday \d{1,2} [A-Z][a-z]{2} ", h) and re.search(r" (Today|Yesterday|Last 7 days|Last 30 days|This month|All time|Custom) ", h[h.index("📈 eCPM"):h.index("Features")])
     assert c["ov"] == {"same": True, "kids": 1, "id": "hub-ov"} and c["ovAll"] == 0                  # All apps: no app head
+    # owner: "yesterday me spending KPI bhi add karo": that day's Google Ads spend, ROAS, its usual — beside Revenue
+    hs = c["headSp"]
+    assert re.search(r"📣 Ad spend · Yesterday \$5\.00 ROAS \d+\.\d\d× · usual \$4\.00/day \(\+25%\)", hs) and c["rowSp"]
+    assert hs.index("💵 Revenue · Yesterday") < hs.index("📣 Ad spend") < hs.index("📈 eCPM · Yesterday") < hs.index("👥 DAU") < hs.index("🔔 Open alerts")
+    assert "📣 Ad spend" not in h                                                                     # ROAS off: no spend tile
 
 
 def test_back_arrow_out_of_an_app(report):
