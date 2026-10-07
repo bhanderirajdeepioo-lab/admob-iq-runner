@@ -198,6 +198,7 @@
   .ov-datewise th,.ov-datewise td,.dw-full th,.dw-full td{border-right:1px solid var(--line)}   /* Excel-style dividers */
   .ov-datewise th:last-child,.ov-datewise td:last-child,.dw-full th:last-child,.dw-full td:last-child{border-right:none}
   .dw-tot td{border-top:2px solid var(--line2);font-weight:700;background:var(--panel2)}
+  .dw-bar{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:14px 17px 4px;position:sticky;left:0}
   /* Marketing ROAS — per-app campaign breakdown (campaign + Google Ads account) */
   .cbhd{font-size:11px;padding:6px 0 4px}
   .cbrk{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--line)}
@@ -4967,18 +4968,30 @@ function dateWiseRows(dates,appName){
 }
 // Render the date-wise table (newest day first) with a totals footer. Spend/installs/new/old/P-L
 // columns only when ROAS (Google Ads) is configured — same gate as the app table.
-function dateWiseTable(rows){
-  const on=roasOn();
+// month rows: each calendar month of the period summed (its day count beside it — a month the period cuts is partial)
+function dwMonthRows(rows){ const m={}, F=['rev','spend','inst','newrev','day1','oldrev','pl'];
+  rows.forEach(r=>{ const k=r.d.slice(0,7), x=m[k]||(m[k]={d:k,n:0,rev:0,spend:0,inst:0,newrev:0,day1:0,oldrev:0,pl:0}); x.n++; F.forEach(f=>{ x[f]+=r[f]||0; }); });
+  return Object.values(m).sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0); }
+function fmtMon(k){ const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return (mo[+String(k).slice(5,7)-1]||'')+' '+String(k).slice(0,4); }
+function dateWiseTable(rows,mode){
+  const on=roasOn(), mon=mode==='month', days=rows.length; if(mon) rows=dwMonthRows(rows);
   const plF=(n)=>(n<0?'-':'')+csym()+Number(Math.abs(n)*cfx()).toLocaleString(undefined,{maximumFractionDigits:0});
   if(!rows.length) return '<div class="muted" style="font-size:13px;padding:16px 17px">Is range me kisi din ka data nahi.</div>';
-  const head=`<thead><tr><th>Date</th>${on?'<th>Spend</th><th>Google Ads installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">ads only · not all installs</div></th>':''}<th>Revenue</th>${on?'<th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Day-1</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}</tr></thead>`;
-  const body=rows.slice().reverse().map(r=>`<tr><td class="nm">${fmtD(r.d)}</td>${on?`<td>${r.spend>0?money(r.spend):'—'}</td><td>${r.inst?Math.round(r.inst).toLocaleString():'—'}</td>`:''}<td style="font-weight:700">${money(r.rev)}</td>${on?`<td>${r.newrev>0?money(r.newrev):'—'}</td><td class="${r.oldrev<0?'down':''}">${plF(r.oldrev)}</td><td class="${r.pl>=0?'up':'down'}">${plF(r.pl)}</td>`:''}</tr>`).join('');
+  const head=`<thead><tr><th>${mon?'Month':'Date'}</th>${on?'<th>Spend</th><th>Google Ads installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">ads only · not all installs</div></th>':''}<th>Revenue</th>${on?'<th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Day-1</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}</tr></thead>`;
+  const body=rows.slice().reverse().map(r=>`<tr><td class="nm">${mon?`${fmtMon(r.d)} <span class="faint" style="font-weight:500">· ${r.n}d</span>`:fmtD(r.d)}</td>${on?`<td>${r.spend>0?money(r.spend):'—'}</td><td>${r.inst?Math.round(r.inst).toLocaleString():'—'}</td>`:''}<td style="font-weight:700">${money(r.rev)}</td>${on?`<td>${r.newrev>0?money(r.newrev):'—'}</td><td class="${r.oldrev<0?'down':''}">${plF(r.oldrev)}</td><td class="${r.pl>=0?'up':'down'}">${plF(r.pl)}</td>`:''}</tr>`).join('');
   const T=rows.reduce((t,r)=>({rev:t.rev+r.rev,spend:t.spend+r.spend,inst:t.inst+r.inst,newrev:t.newrev+r.newrev,oldrev:t.oldrev+r.oldrev,pl:t.pl+r.pl}),{rev:0,spend:0,inst:0,newrev:0,oldrev:0,pl:0});
-  const foot=`<tr class="dw-tot"><td class="nm">Total · ${rows.length}d</td>${on?`<td>${money(T.spend)}</td><td>${Math.round(T.inst).toLocaleString()}</td>`:''}<td>${money(T.rev)}</td>${on?`<td>${money(T.newrev)}</td><td class="${T.oldrev<0?'down':''}">${plF(T.oldrev)}</td><td class="${T.pl>=0?'up':'down'}">${plF(T.pl)}</td>`:''}</tr>`;
+  const foot=`<tr class="dw-tot"><td class="nm">Total · ${mon?rows.length+' months · ':''}${days}d</td>${on?`<td>${money(T.spend)}</td><td>${Math.round(T.inst).toLocaleString()}</td>`:''}<td>${money(T.rev)}</td>${on?`<td>${money(T.newrev)}</td><td class="${T.oldrev<0?'down':''}">${plF(T.oldrev)}</td><td class="${T.pl>=0?'up':'down'}">${plF(T.pl)}</td>`:''}</tr>`;
   return `<table style="margin-top:10px">${head}<tbody>${body}${foot}</tbody></table>`;
 }
 // Full-screen date-wise report — windowed to the SELECTED period (curWin). Re-renders on period change.
 let DWAPP="";   // when set, the Date-wise Report screen is scoped to this ONE app (from an app's "View more")
+let DWMODE=(()=>{ try{ return localStorage.getItem('iq_dwmode')==='month'?'month':'day'; }catch(e){ return 'day'; } })();
+function dwBoxHtml(){ const rows=dateWiseRows(curWinArr(), DWAPP||undefined);
+  return `<div class="dw-bar"><div class="ec-seg" role="group" aria-label="Rows by">`
+    +[['day','Day'],['month','Month']].map(([k,l])=>`<button type="button" class="${DWMODE===k?'on':''}" aria-pressed="${DWMODE===k}" onclick="dwSetMode('${k}')">${l}</button>`).join('')
+    +`</div><span class="faint" style="font-size:11.5px">${DWMODE==='month'?'har mahine ka total · upar wale Period ke andar':'har din ki row'}</span></div>`+dateWiseTable(rows,DWMODE); }
+function dwSetMode(m){ DWMODE=m==='month'?'month':'day'; try{ localStorage.setItem('iq_dwmode',DWMODE); }catch(e){}
+  const b=document.getElementById('dw-box'); if(b) b.innerHTML=dwBoxHtml(); }
 function openDateWise(app){ DWAPP=app||'';
   const old=document.querySelector('.screen[data-screen=datewise]');   // re-render with the new scope (show() alone only toggles visibility)
   if(old){ const f=renderDateWise(); old.replaceWith(f); }
@@ -4986,12 +4999,11 @@ function openDateWise(app){ DWAPP=app||'';
 function renderDateWise(){
   const s=screenDiv('datewise');
   const app=DWAPP||'';
-  const rows=dateWiseRows(curWinArr(), app||undefined);
   const scope=app?(' · '+appIcon(app,14,'ail')+app):(APP?(' · '+appIcon(APP,14,'ail')+APP):'');
   const back=app?`<span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="openAppDetail('${app.replace(/'/g,"\\'")}')">← ${appIcon(app,16,'ail')}${app}</span>`
                 :`<span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="show('overview')">← Overview</span>`;
   s.innerHTML=`<div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div style="font-size:22px">📅</div><div><div class="big">Date-wise report</div><div class="muted" style="font-size:12.5px">Har din ka spend · installs · revenue · new/old · P/L — <b>${curWinLabel()}</b>${scope}. Period upar se badlo.</div></div><div class="spacer"></div>${back}</div>
-    <div class="card pad0 dw-full">${dateWiseTable(rows)}</div>`;
+    <div class="card pad0 dw-full" id="dw-box">${dwBoxHtml()}</div>`;
   return s;
 }
 // an ad-unit alert's change, from the engine's message: a rate's "85% → 56%" first, else its "42%" / "3×" (display rule: never points)

@@ -148,6 +148,13 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
     return { hm: J(`[0,600,720,785,1439].map(ecHm)`), n: (h.match(/class="ec-spk"/g) || []).length, legends,
       avgLine: (h.match(/class="ec-spa"/g) || []).length, prevLines: (h.match(/class="ec-spy"/g) || []).length,
       onePt: run(`ecPairSpark({'2026-01-01':[1e6,100]},['2026-01-01'],null,'x','')`), gap, next: run(`fmtD(ecNextDay(DATA.today_date))`) }; });
+  // the Date-wise report's Month rows (owner: "date-wise to aa hi raha hai, ek option month ka bhi … table me hi")
+  await step('datewise_month', () => { run(`RANGE='all'; window.__ax=null;`);
+    const rows = J(`dateWiseRows(curWinArr())`), mon = J(`dwMonthRows(dateWiseRows(curWinArr()))`);
+    const tblM = run(`dateWiseTable(dateWiseRows(curWinArr()),'month')`), tblD = run(`dateWiseTable(dateWiseRows(curWinArr()),'day')`);
+    run(`DWMODE='month'`); const box = run(`dwBoxHtml()`); run(`dwSetMode('day')`);
+    const res = { rows, mon, tblM, tblD, box, ls: run(`localStorage.getItem('iq_dwmode')`), mode: run(`DWMODE`) };
+    run(`RANGE='today'; window.__ax=null;`); return res; });
   await step('money_fmt', () => { run(`CURVIEW='INR'`); const r = J(`[ecCm(2),ecCmS(-0.26),ecCmS(0.000001),ecMoneyS(-1234.5),ecMoneyS(0.5),ecMoneyS(0),ecPct(-0.0812),ecPct(0.0004),ecPct(null),ecAx(0),ecAx(250/90),ecAx(12000/90)]`);
     run(`CURVIEW=null`); return { inr: r, usd: J(`[ecCm(2),ecCmS(-0.26),ecMoneyS(-1234.5),ecMoneyS(0.5),ecAx(2.5)]`) }; });
 

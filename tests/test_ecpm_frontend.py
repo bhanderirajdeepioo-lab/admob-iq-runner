@@ -524,3 +524,30 @@ def test_every_tile_has_a_chart_and_12_hour_times(report):
                                             ["last 7 days", "previous 7"], ["last 30 days", "previous 30"], ["this month", "last month"]]
     assert r["avgLine"] == 1 and r["prevLines"] == 3            # Yesterday: its 7-day avg dashed; the 3 period tiles: the period before
     assert r["onePt"] == "" and "M" in r["gap"] and r["gap"].count("M") == 2   # a lone point: no chart; a day without data: a gap
+
+
+# ── the Date-wise report: Day | Month rows (owner, 7 Oct: "ek option month ka bhi … all time ya jo bhi period … table me hi") ──
+@needs_node
+def test_datewise_month_rows(report):
+    r = report["datewise_month"]
+    rows, mon = r["rows"], r["mon"]
+    want = {}
+    for x in rows:                                               # summed here on their own, per calendar month
+        w = want.setdefault(x["d"][:7], {"n": 0, "rev": 0.0, "pl": 0.0})
+        w["n"] += 1
+        w["rev"] += x["rev"]
+        w["pl"] += x["pl"]
+    assert [m["d"] for m in mon] == sorted(want) and len(mon) >= 3
+    for m in mon:
+        assert m["n"] == want[m["d"]]["n"] and abs(m["rev"] - want[m["d"]]["rev"]) < 1e-6 and abs(m["pl"] - want[m["d"]]["pl"]) < 1e-6
+    t = r["tblM"]
+    assert "<th>Month</th>" in t and "<th>Date</th>" not in t and "Dec 2025 <span" in t
+    assert re.search(r'Total · %d months · %dd</td>' % (len(mon), len(rows)), t)
+    first = mon[0]
+    assert re.search(r'>Dec 2025 <span class="faint"[^>]*>· %dd</span>' % first["n"], t)   # a month the period cuts says its days
+    assert t.index(">Mar 2026 <") < t.index(">Dec 2025 <")          # newest month first, as the day rows
+    assert "<th>Date</th>" in r["tblD"] and "Total · %dd</td>" % len(rows) in r["tblD"]
+    b = r["box"]
+    assert '<div class="ec-seg" role="group" aria-label="Rows by">' in b and \
+        '<button type="button" class="on" aria-pressed="true" onclick="dwSetMode(\'month\')">Month</button>' in b
+    assert (r["ls"], r["mode"]) == ("day", "day")                   # the choice is remembered on this device
