@@ -122,7 +122,7 @@ def test_value_off_changes_nothing(tmp_path, monkeypatch, capsys):
     assert "value" in on[1] and "value" not in off[1]
     assert not [n for n in os.listdir(off[3]) if n.startswith("value_")]
     assert not os.path.exists(vb.state_path(off[2]))
-    assert {k: v for k, v in on[1].items() if k != "value"} == off[1]
+    assert {k: v for k, v in on[1].items() if k not in ("value", "roi")} == off[1]   # 📈 ROI rides the value step
 
 
 def test_uninstall_and_active_outputs_unchanged(tmp_path, monkeypatch, capsys):

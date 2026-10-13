@@ -109,6 +109,13 @@ def settings() -> dict:
         # has, the last 15 days every 6 hours). Off: nothing of it is read, written or printed
         "ga4_firstopen": _env("GA4_FIRSTOPEN", "false").lower() == "true",
         "ga4_firstopen_budget_sec": _int_env(("GA4_FIRSTOPEN_BUDGET_SEC",), 150),
+        # 📈 Day-wise ROI: every day 0 … 30 of each install day's GA4 ad revenue (fetch.ga4_cohort: a one-time backfill
+        # from the GA4 history start, the last 35 days every 6 hours). Off: nothing of it is read, written or printed
+        "ga4_cohort": _env("GA4_COHORT", "false").lower() == "true",
+        "ga4_cohort_budget_sec": _int_env(("GA4_COHORT_BUDGET_SEC",), 150),
+        # 📈 ROI in the Install value tab (roi_<key>.json.gz + roi.json.gz): day-wise ROI, countries keep / cut,
+        # lifetime P/L — off: no file, no pointer (the tab exactly as before)
+        "roi_tab": _env("ROI_TAB", "true").lower() == "true",
     }
 
 

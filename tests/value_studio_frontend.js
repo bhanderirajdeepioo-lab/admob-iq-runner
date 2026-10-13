@@ -99,7 +99,7 @@ get('page', `(()=>{ ${RESET} valScreen(); const A=VS._.A(), a=A.find(x=>x.sz==='
   r.sections=['Money back — how many days','Each install week','Week by week','Countries'].every(t=>h.indexOf(t)>=0);
   r.labels=(h.match(/<text class="vs-cl"[^>]*>[^<]+</g)||[]).map(x=>x.replace(/<[^>]*>/g,'').replace(/<$/,''));
   KWIN='60'; const h60=valScreen(); r.range60=VS._.W().L===8&&/data-r="60" aria-pressed="true"/.test(h60);
-  const ptr=DATA.value.studio; delete DATA.value.studio; r.noPtrSame=valScreen()===valAppOld(row); DATA.value.studio=ptr;
+  const ptr=DATA.value.studio; delete DATA.value.studio; r.noPtrSame=valScreen()===roiWrap(valAppOld(row),row.app_id); /* the older page exactly (+ 📈 ROI, its own section) */ DATA.value.studio=ptr;
   const nog=(DATA.value.no_ga4||[])[0]; if(nog){ APP=nog.app; VALAPP=''; const hn=valScreen(); r.nogaOld=hn.indexOf('vs-root')<0; }
   APP=''; VALAPP=''; return JSON.stringify(r); })()`);
 
@@ -150,7 +150,7 @@ get('others', `(()=>{ const r={}; ${RESET}
   const ptr=DATA.value.studio, snap=()=>{ APP=''; let u='', a=''; try{ u=uniScreen(); }catch(e){ u='ERR'; } try{ a=actScreen(); }catch(e){ a='ERR'; } return {u,a}; };
   const on=snap(); delete DATA.value.studio; const off=snap(); DATA.value.studio=ptr;
   r.uninstall_same=on.u===off.u; r.active_same=on.a===off.a;
-  delete DATA.value.studio; const old=valScreen(); r.old_is_portfolio=old===valPortfolio(); DATA.value.studio=ptr;
+  delete DATA.value.studio; const old=valScreen(); r.old_is_portfolio=old===roiWrap(valPortfolio(),''); /* (+ 📈 ROI) */ DATA.value.studio=ptr;
   r.old_view={studio:old.indexOf('vs-root')>=0||old.indexOf('val-old')>=0, kw:old.indexOf('val-kw-bar')>=0, table:old.indexOf('val-table')>=0};
   const st=valScreen(); r.studio_view={root:st.indexOf('id="vs-root"')>=0, kw:st.indexOf('val-kw-bar')>=0, fold:st.indexOf('id="val-old"')>=0,
     folded:['val-paytop','val-chg','val-table','val-ctyall','val-timing'].map(id=>{ const i=st.indexOf('id="'+id+'"'); return i>st.indexOf('id="val-old"'); }),

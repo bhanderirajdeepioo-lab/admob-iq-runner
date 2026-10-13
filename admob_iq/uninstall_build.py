@@ -241,6 +241,14 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                   file=sys.stderr)
         except Exception as e:
             print("ga4 first open skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_cohort"):                             # 📈 Day-wise ROI (GA4_COHORT): every day 0 … 30 of each install
+        try:                                            # day's ad revenue — its own reads and store, a failure costs
+            from .fetch import ga4_cohort as gco        # that step only
+            print(gco.log_line(gco.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                               budget=s.get("ga4_cohort_budget_sec") or gco.BUDGET_SEC)),
+                  file=sys.stderr)
+        except Exception as e:
+            print("ga4 cohort skipped: %s" % type(e).__name__, file=sys.stderr)
     state = gu.load_state(data_dir)
     os.makedirs(out_dir, exist_ok=True)
     details, rows, no_ga4, files = [], [], [], [ASSET]
@@ -277,6 +285,15 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         except Exception as e:
             val_on = False
             print("ga4 value skipped: %s" % type(e).__name__, file=sys.stderr)
+    roi_acc = None                                  # 📈 ROI (a section of Install value: its own files, never the
+    try:                                            # tab's) — rides the value step; a failure costs only the ROI
+        from . import roi_build as rb
+        if val_on and rb.enabled(s):
+            roi_acc = rb.start()
+        else:
+            rb.off(out_dir)
+    except Exception as e:
+        print("roi skipped: %s" % type(e).__name__, file=sys.stderr)
     late_sums = {"un": {}, "new": {}, "a1": {}, "fetches": 0}    # every app's late-data re-reads, pooled
     any_acc = None                                  # 📦 compare any date (impact_any_build: its own files, never an
     try:                                            # alert) — imported only here: a failure costs that feature only
@@ -335,6 +352,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                 except Exception:
                     vb.drop_app(val_st, aid)
                 val_rows.append(vb.error_row(a, key))
+            if roi_acc is not None:                     # (never raises: a failure costs only this app's ROI file)
+                rb.app_step(roi_acc, store, a, key, rev, val_pre, val_cfg, out_dir, data_dir, now)
         if any_acc is not None:                         # (never raises: a failure costs only this app's file)
             iab.app_step(any_acc, out_dir, store, a, key, path, rev, cfg["late_days"])
         eng.revision_sums(store, late_sums)
@@ -422,6 +441,11 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
     if val_on:                                          # dashboard["value"] after that (its log line: build_static's)
         vb.finish(dashboard, out_dir, val_rows, val_pre, val_st, data_dir, no_ga4, val_cfg,
                   dashboard["uninstall"]["status"])
+    if roi_acc is not None:                             # dashboard["roi"] (its log line: build_static's)
+        try:
+            rb.finish(roi_acc, dashboard, out_dir)
+        except Exception as e:
+            print("roi skipped: %s" % type(e).__name__, file=sys.stderr)
     if attrib.FAILS:                                    # a split that could not be worked out (never a verdict): counted
         print("split failed: %d" % attrib.FAILS, file=sys.stderr)          # — counts only, and only when any
     return files

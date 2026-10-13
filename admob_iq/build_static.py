@@ -489,6 +489,19 @@ def _firstopen_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+def _roi_paths(dashboard):
+    """📈 ROI (admob_iq.roi_build, written inside the uninstall step): its ONE counts-only line and its _headers path
+    (one splat rule) when it wrote its files."""
+    try:
+        from . import roi_build as rb
+        line = rb.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return list(rb.HEADER_PATHS) if dashboard.get("roi") else []
+    except Exception:
+        return []
+
+
 def _intraday_step(dashboard, data_dir, report_tz, now=None):
     from . import intraday_build as ib
     ib.step(dashboard, data_dir, report_tz, now)
@@ -1693,7 +1706,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # same step wrote + the GA4 Audience stores — OPTIONAL (AUDIENCE_TAB) and failure-isolated; without this build's
     # Active users data it leaves no file behind
     aud_paths = _audience_step(dashboard, data_dir, out_dir, s)
-    aud_paths = aud_paths + _firstopen_step(dashboard, data_dir, out_dir, s)
+    aud_paths = aud_paths + _firstopen_step(dashboard, data_dir, out_dir, s) + _roi_paths(dashboard)
 
     # 📈 eCPM "same time yesterday": this build's point of today's totals so far (data/ecpm_intraday.json) — never for
     # the sample data, failure-isolated, counts-only line

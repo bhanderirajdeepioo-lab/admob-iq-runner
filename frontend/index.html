@@ -2443,6 +2443,85 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-kpis .as-spl2,:is(#as-root,#as-layer) .as-kpis2 .as-spl2{width:auto!important;height:auto!important;display:flex;flex-wrap:wrap;gap:1px 8px;min-height:0}
 :is(#as-root,#as-layer) .as-kpis .as-spl2 span,:is(#as-root,#as-layer) .as-kpis2 .as-spl2 span{position:static;transform:none}}
   /* ===== /ACTIVE USERS STUDIO ===== */
+/* ---------- 📈 ROI (a section of 💸 Install value: everything under .roi / #roi-root, classes roi-*) ---------- */
+.roi{position:relative;margin:18px 0 16px;padding:16px 0 0;border-top:1px solid var(--line2);min-width:0}
+.roi-hd{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:12px}
+.roi-eye{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.roi h2{margin:2px 0 0;font-size:17px;color:#fff;text-wrap:balance}
+.roi-seg{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--panel2);border:1px solid var(--line2);border-radius:11px;padding:3px;max-width:100%}
+.roi-seg button{min-height:36px;padding:6px 12px;border:0;border-radius:8px;background:none;color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.roi-seg button[aria-selected="true"]{background:var(--blue2);color:#fff}
+.roi-card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin-bottom:14px;min-width:0}
+.roi-ct{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px;margin-bottom:10px}
+.roi-ct h3{margin:0;font-size:14px;color:#fff}
+.roi-note{color:var(--muted);font-size:12px;line-height:1.5;margin:6px 0 0}
+.roi-note b{color:var(--ink2)}
+.roi-why{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--ink2);margin:0 0 12px;line-height:1.5}
+.roi-why b{color:#fff}
+.roi-cut{background:var(--bad-b);border:1px solid #6b2a2e;border-radius:10px;padding:9px 12px}
+.roi-ks6{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.roi-k{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;min-width:0}
+.roi-kl{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.roi-kv{font-size:20px;font-weight:800;color:#fff;margin:4px 0 2px;font-variant-numeric:tabular-nums;line-height:1.25}
+.roi-kv small{font-size:11.5px;font-weight:700;display:inline-block}
+.roi-ks{font-size:11.5px;color:var(--muted);line-height:1.4}
+.roi-ks b{color:var(--ink2)}
+.roi-kg{border-color:#1f6b52}.roi-kb{border-color:#6b2a2e}
+.roi-up{color:var(--good)}.roi-dn{color:var(--bad)}
+.roi-g2{display:grid;grid-template-columns:minmax(0,1fr);gap:0 14px}
+@media (min-width:1180px){.roi-g2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.roi-ch svg{display:block;overflow:visible;touch-action:pan-y}
+.roi-ch text{fill:var(--faint);font-size:11px}
+.roi-ch .g{stroke:var(--line);stroke-width:1}
+.roi-ch .ref{stroke:var(--watch);stroke-dasharray:5 4;stroke-width:1.2}
+.roi-ch .reft{fill:var(--watch);font-size:10.5px;font-weight:700}
+.roi-ch .ln{fill:none;stroke-width:2.2;stroke-linejoin:round;stroke:var(--blue)}
+.roi-ch .pt{stroke:none;fill:var(--blue)}
+.roi-ch .lv{font-weight:800;font-size:11px;fill:var(--ink2)}
+.roi-ch .hit{fill:transparent;cursor:crosshair}
+.roi-ch .bar{fill:var(--blue)}
+.roi .c1{--c:#7d8fb8}.roi .c2{--c:#34d99a}.roi .c3{--c:#a78bfa}.roi .c4{--c:#22d3ee}.roi .c5{--c:#e6b84e}.roi .c6{--c:#ff8fa3}
+.roi-ch .ln.c1,.roi-ch .ln.c2,.roi-ch .ln.c3,.roi-ch .ln.c4,.roi-ch .ln.c5,.roi-ch .ln.c6{stroke:var(--c)}
+.roi-ch .pt.c1,.roi-ch .pt.c2,.roi-ch .pt.c3,.roi-ch .pt.c4,.roi-ch .pt.c5,.roi-ch .pt.c6,.roi-ch .lv.c1,.roi-ch .lv.c2,.roi-ch .lv.c3,.roi-ch .lv.c4,.roi-ch .lv.c5,.roi-ch .lv.c6{fill:var(--c)}
+.roi-lg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted);margin-top:6px}
+.roi-lg span::before{content:"";display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle;background:var(--c,var(--blue))}
+.roi-tip{position:absolute;z-index:20;max-width:280px;background:#0b1220;border:1px solid #38507a;border-radius:9px;padding:7px 10px;font-size:12px;color:var(--ink2);box-shadow:0 8px 24px rgba(0,0,0,.5);line-height:1.5;pointer-events:none}
+.roi-tip b{color:#fff}
+.roi-ctl{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.roi-mini{display:inline-flex;flex-wrap:wrap;gap:2px;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:2px}
+.roi-mini button{min-height:32px;padding:4px 10px;border:0;border-radius:7px;background:none;color:var(--ink2);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.roi-mini button[aria-pressed="true"]{background:var(--raise);color:#fff;box-shadow:inset 0 0 0 1px var(--line2)}
+.roi-tw{overflow:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--line);max-height:640px}
+.roi-t{min-width:640px;font-size:12.5px}
+.roi-t th{white-space:nowrap;text-align:right;padding:8px 10px;position:sticky;top:0;z-index:2;background:var(--panel2)}
+.roi-t th:has(button){padding:0}
+.roi-t th button{display:flex;align-items:center;justify-content:flex-end;width:100%;min-height:36px;padding:6px 10px;background:none;border:none;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer;white-space:nowrap}
+.roi-t th[aria-sort="ascending"] button,.roi-t th[aria-sort="descending"] button{color:var(--cyan)}
+.roi-t td{white-space:nowrap;text-align:right;padding:7px 10px;font-variant-numeric:tabular-nums}
+.roi-t td small{color:var(--faint);font-size:11px}
+.roi-t th:first-child,.roi-t td:first-child{position:sticky;left:0;z-index:1;background:var(--panel);text-align:left;box-shadow:1px 0 0 var(--line)}
+.roi-t thead th:first-child{z-index:3;background:var(--panel2)}
+.roi-t td.roi-nm{color:#fff;font-weight:600}
+.roi-t tbody tr.clk{cursor:pointer}.roi-t tbody tr.clk:hover td{background:var(--raise)}
+.roi-heat td.roi-g{background:rgba(52,217,154,.16);color:#bff5df}
+.roi-heat td.roi-w{background:rgba(230,184,78,.13);color:#f3d48a}
+.roi-heat td.roi-b{background:rgba(255,107,107,.10);color:#ffc2c2}
+.roi-heat td.roi-nf{opacity:.62;font-style:italic}
+.roi-t td.roi-na{color:var(--faint)}
+.roi span.roi-g{color:var(--good)}.roi span.roi-w{color:var(--watch)}.roi span.roi-b{color:var(--bad)}
+.roi-an{display:inline-flex;align-items:center;gap:9px}.roi-an .aicon{flex:none}
+.roi-chips{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0 0 12px}
+.roi-cc{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2)}
+.roi-cc b{color:#fff}
+.roi-more{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+.roi-btn,.roi-lnk{min-height:34px;padding:4px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.roi-q{color:var(--watch);font-weight:800;cursor:help}
+.roi-xr td{background:var(--panel2)!important;padding:8px 10px 12px;text-align:left}
+.roi-xr td:first-child{position:static}
+.roi-sub{min-width:560px}
+.roi-cv{color:var(--muted)}
+@media (max-width:760px){.roi-ks6{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.roi-k{padding:9px 10px}.roi-kv{font-size:16.5px}
+  .roi-t th:first-child,.roi-t td:first-child{max-width:150px;white-space:normal}.roi-seg button{padding:6px 9px;font-size:12px}.roi-card{padding:12px}}
 /* ---------- 🆕 First open (scoped to the screen) ---------- */
 body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecustom{display:none!important}   /* every number says its own days */
 .screen[data-screen="firstopen"]{max-width:1360px}
@@ -4912,6 +4991,7 @@ function hubFcNote(){ const o=hubRvOpen();
     :(HUB.rv.loading||!HUB.rv.idx?'⏳ Review card load ho raha hai…':'Review card abhi nahi — eCPM, Audience, Baseline, Alerts dashboard ke apne data se'); }
 function hubCardsHtml(name){ const o=hubRvOpen(), ra=o&&o.f?hubRvApp(o.f,name):null, fx=o&&o.f&&o.f.meta?o.f.meta.fx:null; let au=false, fo=false; try{ au=!!AU.ptr(); }catch(e){} try{ fo=!!FO.ptr(); }catch(e){}
   return HUB_FC.filter(c=>(c[0]!=='audience'||au)&&(c[0]!=='firstopen'||fo)).map(c=>{ const x=hubCard(c,name,ra,o,fx);
+    if(c[0]==='value') try{ roiCardLine(x,name); }catch(e){}   // 📈 + the ROI line (from the dashboard's own pointer)
     return `<div class="card hub-fc" data-st="${x.st}" data-fc="${c[0]}"><div class="hfc-h"><span class="hfc-i" aria-hidden="true">${c[3]}</span><span class="hfc-n">${c[2]}</span></div>`
       +`${hubStChip(x.st)}<div class="hfc-l">${x.line}</div><button type="button" class="hfc-o" onclick="hubTab('${c[1]}')" aria-label="Open ${hAttr(c[2])}">Open →</button></div>`; }).join(''); }
 function hubCard(c,name,ra,o,fx){ const src=c[4];
@@ -4951,6 +5031,9 @@ function hubCard(c,name,ra,o,fx){ const src=c[4];
     const rs=s&&s.st?(s.st==='flag'?'🚩 Re-review':s.st==='kal'?'🔁 Check again tomorrow':'✅ Reviewed'):(S?'⏳ Pending':'');
     return {st:n.red?'bigda':n.amber?'dhyan':'normal',line:`Card ${fmtD(o.f.day)}: <b>${n.red}</b> Worse · <b>${n.amber}</b> Watch${rs?' · '+rs:''}`}; }
   return {st:'lagu',line:''}; }
+function roiCardLine(x,name){ const id=hubAppId(name), a=id&&DATA.roi&&DATA.roi.apps?DATA.roi.apps[id]:null; if(!a||a.r7==null) return;
+  const pc=v=>Math.round(v*100)+'%';
+  x.line=(x.line?x.line+' · ':'')+`📈 D7 ROAS <b>${pc(a.r7)}</b>${a.u7!=null?` (usual ${pc(a.u7)})`:''}${a.pb!=null?` · wapas ~${a.pb}d`:''}`; }
 function hubCardsPaint(){ const el=document.getElementById('hub-fcs'); if(!el||!HUB.on||!APP) return; el.innerHTML=hubCardsHtml(APP);
   const n=document.getElementById('hub-fn'); if(n) n.textContent=hubFcNote(); }
 // the review index + the open day's Studio file (then repaint the cards in place: same size, no jump)
@@ -6329,6 +6412,266 @@ function left(){ }
 return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate}};
 })();
 function renderFirstOpen(){ return FO.render(); }
+// ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from
+// first day of the app … delta, breakeven, % wise", "dono karo, AdMob matched, sirf google ads", countries "konsa rakhna
+// he konsa nikalna he, konsi me jaldi roi milta he", and "bahot saare tab na ban jaye": no tab of its own). Three views:
+// Day-wise ROI (every install day × day 0, 1, 2 … 30 and 60 / 90 / 180 / 365), Countries: keep / cut, Lifetime P/L.
+// Lazy files (roi_build): roi.json.gz (All apps) and roi_<key>.json.gz (one app). It sits between the Value Studio and
+// "🗂 Old views" (roiWrap) and never changes either. Money: USD in the files, the top bar's ₹ / $ on the page.
+const ROI=(()=>{
+let ALL=null, ALLV=null, ALLERR=false, ALLBUSY=false;
+const AF={}, AERR={}, ABUSY={};                       // one app's file by key
+let VIEW='day', GRAIN='day', MET='roas', SHOW=60, LSHOW=60, LG='month', CTYO='', CSORT={k:'dec',dir:1}, ASORT={k:'st',dir:1};
+const ST_KEY={Worse:'bigda',Watch:'dhyan',Better:'behtar',Normal:'normal','Too early':'jaldi','N/A':'lagu'};
+const ST_RANK={Worse:0,Watch:1,Better:2,Normal:3,'Too early':4,'N/A':5};
+const DEC_CLS={Scale:'behtar',Keep:'normal',Watch:'dhyan',Cut:'bigda','Too little data':'lagu','Too early':'jaldi',Better:'behtar',Worse:'bigda',Normal:'normal'};
+const DEC_ICON={Scale:'🚀',Keep:'✅',Watch:'🟡',Cut:'✂️','Too little data':'—','Too early':'⏳',Better:'🟢',Worse:'🔴',Normal:'⚪'};
+const DEC_RANK={Cut:0,Watch:1,Scale:2,Keep:3,Worse:4,Better:5,Normal:6,'Too early':7,'Too little data':8};
+const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ok=v=>v!=null&&isFinite(v);
+const MI='−';
+function M(v,sign){ if(!ok(v)) return '—'; const x=v*cfx(), a=Math.abs(x), inr=curView()==='INR';
+  const s=a>=100?Math.round(a).toLocaleString(inr?'en-IN':'en-US'):a>=10?a.toFixed(0):a.toFixed(a>=1?1:2);
+  return (x<0?MI:(sign&&x>0?'+':''))+csym()+s; }
+function MP(v){ if(!ok(v)) return '—'; const x=v*cfx(), a=Math.abs(x);   // per install: small money
+  return (x<0?MI:'')+csym()+(a>=10?a.toFixed(1):a>=1?a.toFixed(2):a>=0.1?a.toFixed(3):a.toFixed(4)); }
+const P=v=>ok(v)?Math.round(v*100)+'%':'—';
+const N=v=>ok(v)?Math.round(v).toLocaleString('en-US'):'—';
+const fd=s=>{ try{ return fmtD(s)+' '+String(s).slice(2,4); }catch(e){ return s; } };
+const fdy=s=>{ try{ return fmtD(s)+' '+String(s).slice(0,4); }catch(e){ return s; } };
+function chip(st){ return hubStChip(ST_KEY[st]||'lagu'); }
+function dchip(d){ return `<span class="hub-st st-${DEC_CLS[d]||'lagu'}">${DEC_ICON[d]||''} ${E(d)}</span>`; }
+const PBT=d=>d===0?'same day':`~${d} days`;
+function roasCls(v){ return !ok(v)?'':v>=1?'roi-g':v>=0.5?'roi-w':'roi-b'; }
+// ---- pointer + lazy files ----
+function ptr(){ const p=(typeof DATA!=='undefined'&&DATA&&DATA.roi)||null; return (p&&p.file==='roi.json.gz')?p:null; }
+function appPtr(aid){ const p=ptr(); const a=p&&p.apps?p.apps[aid]:null; return (a&&/^roi_[0-9a-f]{12}\.json\.gz$/.test(a.file||''))?a:null; }
+function ensureAll(cb){ const p=ptr(); if(!p||ALLBUSY||(ALL&&ALLV===p.v)) return; ALLBUSY=true;
+  fetchGzJson(p.file+'?v='+encodeURIComponent(p.v)).then(j=>{ if(!j||j.v!==1||!Array.isArray(j.apps)) throw new Error('format'); ALL=j; ALLV=p.v; ALLERR=false; })
+    .catch(()=>{ ALLERR=true; }).then(()=>{ ALLBUSY=false; cb&&cb(); }); }
+function ensureApp(aid,cb){ const a=appPtr(aid); if(!a) return; const k=a.file; if(ABUSY[k]||(AF[k]&&AF[k]._v===ALLV0())) return; ABUSY[k]=true;
+  fetchGzJson(k+'?v='+encodeURIComponent((ptr()||{}).v||'')).then(j=>{ if(!j||j.v!==1||!Array.isArray(j.rows)) throw new Error('format'); j._v=ALLV0(); AF[k]=j; AERR[k]=false; })
+    .catch(()=>{ AERR[k]=true; }).then(()=>{ ABUSY[k]=false; cb&&cb(); }); }
+function ALLV0(){ return (ptr()||{}).v||''; }
+// ---- the block (what roiWrap puts in the page) ----
+function block(aid){
+  if(!ptr()) return ''; wire();
+  return `<section class="roi" id="roi-root" data-aid="${E(aid||'')}" aria-label="ROI">${inner(aid)}<div class="roi-tip" hidden></div></section>`; }
+function inner(aid){
+  const tabs=[['day','📅 Day-wise ROI'],['cty','🌍 Countries: keep / cut'],['life','💰 Lifetime P/L']];
+  const hd=`<div class="roi-hd"><div><div class="roi-eye">📈 ROI · revenue AdMob se matched · spend sirf Google Ads</div><h2>Return on ads${aid?'':' · All apps'}</h2></div>`
+    +`<div class="roi-seg" role="tablist">${tabs.map(([k,l])=>`<button type="button" role="tab" aria-selected="${VIEW===k}" data-roi-view="${k}">${l}</button>`).join('')}</div></div>`;
+  return hd+`<div id="roi-body">${body(aid)}</div>`; }
+function wait(msg,retry){ return `<div class="roi-card"><p class="roi-note">${retry?`⚠️ ${msg} <button type="button" class="roi-lnk" data-roi-retry="1">Try again</button>`:'⏳ '+msg}</p></div>`; }
+function body(aid){
+  if(!aid){ if(!ALL){ if(ALLERR) return wait('ROI data load nahi hua.',1); ensureAll(repaint); return wait('ROI load ho raha hai…'); } return allView(); }
+  const a=appPtr(aid); if(!a) return `<div class="roi-card"><p class="roi-note">Is app ka ROI data abhi nahi (GA4 install-day data ya Google Ads spend chahiye).</p></div>`;
+  const d=AF[a.file]; if(!d){ if(AERR[a.file]) return wait('Is app ka ROI data load nahi hua.',1); ensureApp(aid,repaint); return wait('ROI load ho raha hai…'); }
+  return VIEW==='cty'?ctyView(d):VIEW==='life'?lifeView(d.life,d.life_till,d):dayView(d); }
+function root(){ return (typeof document!=='undefined'&&document.getElementById)?document.getElementById('roi-root'):null; }
+function repaint(){ const r=root(); if(!r) return; const b=r.querySelector('#roi-body'); if(b){ b.innerHTML=body(r.dataset.aid); } }
+// ---- shared pieces ----
+function tile(lab,big,sub,cls){ return `<div class="roi-k${cls?' '+cls:''}"><div class="roi-kl">${lab}</div><div class="roi-kv">${big}</div><div class="roi-ks">${sub||''}</div></div>`; }
+function vs(r,u,fmt){ if(!ok(r)) return '—'; const f=fmt||P; if(!ok(u)) return f(r); const up=r>=u;
+  return `${f(r)} <small class="${up?'roi-up':'roi-dn'}">${up?'▲':'▼'} usual ${f(u)}</small>`; }
+function seg(name,cur,opts){ return `<span class="roi-mini" role="group">${opts.map(([k,l])=>`<button type="button" data-roi-${name}="${k}" aria-pressed="${cur===k}">${l}</button>`).join('')}</span>`; }
+// a line chart: xs = [label], series = [{cls, name, pts:[[i, y, tip]]}] — y as a share (1 = 100%) or money; numbers printed at each line's end
+const CHW=()=>(typeof window!=='undefined'&&window.innerWidth&&window.innerWidth<640)?380:720;   // a phone: a narrower drawing, so its text stays readable
+function lineChart(xs,series,o){ o=o||{}; const W=CHW(), H=(o.h||230)*(W<720?0.9:1), m={t:14,r:W<720?50:58,b:26,l:W<720?40:46}, n=xs.length;
+  const all=series.flatMap(s=>s.pts.map(p=>p[1])).filter(ok); if(!all.length) return '<p class="roi-note">Abhi chart ke liye data nahi.</p>';
+  let lo=o.zero===false?Math.min(...all):Math.min(0,...all), hi=Math.max(...all, o.ref!=null?o.ref*1.05:-Infinity); if(hi===lo) hi=lo+1;
+  const raw=(hi-lo)/4, p10=Math.pow(10,Math.floor(Math.log10(raw))), st=[1,2,2.5,5,10].map(k=>k*p10).find(k=>k>=raw)||raw;   // round ticks
+  lo=Math.floor(lo/st)*st; hi=Math.ceil(hi/st)*st; const ticks=[]; for(let v=lo;v<=hi+st/2;v+=st) ticks.push(v);
+  const X=i=>m.l+(W-m.l-m.r)*(n<=1?0.5:i/(n-1)), Y=v=>m.t+(H-m.t-m.b)*(1-(v-lo)/(hi-lo)), f=o.fmt||P;
+  const grid=ticks.map(v=>`<line class="g" x1="${m.l}" x2="${W-m.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text class="ax" x="${m.l-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${E(f(v))}</text>`).join('');
+  const step=Math.max(1,Math.ceil(n/((o.xt||10)*(W<720?0.6:1))));
+  const xl=xs.map((l,i)=>((n-1-i)%step===0)?`<text class="ax" x="${X(i).toFixed(1)}" y="${H-8}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${E(l)}</text>`:'').join('');
+  const ref=o.ref!=null&&o.ref>=lo&&o.ref<=hi?`<line class="ref" x1="${m.l}" x2="${W-m.r}" y1="${Y(o.ref)}" y2="${Y(o.ref)}"/><text class="reft" x="${W-m.r+4}" y="${Y(o.ref)+4}">${E(W<720?'100%':(o.refl||'100%'))}</text>`:'';
+  const lines=series.map((s,si)=>{ const pts=s.pts.filter(p=>ok(p[1])); if(!pts.length) return ''; const d=pts.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' ');
+    const last=pts[pts.length-1];
+    return `<path class="ln ${s.cls||''}" d="${d}"/>`+pts.map(p=>`<circle class="pt ${s.cls||''}" cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="${o.dots===false?0:2.6}"/>`).join('')
+      +`<text class="lv ${s.cls||''}" x="${(X(last[0])+5).toFixed(1)}" y="${(Y(last[1])+4+(si%2?8:-2)).toFixed(1)}">${E(f(last[1]))}</text>`; }).join('');
+  const hits=xs.map((l,i)=>{ const tip=series.map(s=>{ const p=s.pts.find(q=>q[0]===i); return p&&ok(p[1])?`${E(s.name)}: <b>${E(f(p[1]))}</b>${p[2]?' · '+p[2]:''}`:''; }).filter(Boolean).join('<br>');
+    const x0=i===0?m.l:(X(i-1)+X(i))/2, x1=i===n-1?W-m.r:(X(i)+X(i+1))/2;
+    return tip?`<rect class="hit" x="${x0.toFixed(1)}" y="${m.t}" width="${Math.max(1,x1-x0).toFixed(1)}" height="${H-m.t-m.b}" data-tip="${E('<b>'+E(l)+'</b><br>'+tip)}"/>`:''; }).join('');
+  const lg=series.length>1?`<div class="roi-lg">${series.map(s=>`<span class="${s.cls||''}">${E(s.name)}</span>`).join('')}</div>`:'';
+  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${E(o.label||'chart')}">${grid}${xl}${ref}${lines}${hits}</svg></div>${lg}`; }
+function barChart(labels,vals,o){ o=o||{}; const W=CHW(),H=o.h||200,m={t:18,r:12,b:26,l:W<720?40:46},n=vals.length, f=o.fmt||MP;
+  const v2=vals.filter(ok); if(!v2.length) return '<p class="roi-note">Abhi chart ke liye data nahi.</p>';
+  const hi=Math.max(...v2)*1.12||1, bw=(W-m.l-m.r)/n, Y=v=>m.t+(H-m.t-m.b)*(1-v/hi);
+  const show=new Set(o.show||(W<720?[0,7,14,30]:[0,1,3,7,14,30]).filter(i=>i<n));
+  const bars=vals.map((v,i)=>ok(v)?`<rect class="bar" x="${(m.l+i*bw+1).toFixed(1)}" y="${Y(Math.max(0,v)).toFixed(1)}" width="${Math.max(1,bw-2).toFixed(1)}" height="${(H-m.b-Y(Math.max(0,v))).toFixed(1)}"/>`
+      +(show.has(i)?`<text class="lv" x="${(m.l+i*bw+bw/2).toFixed(1)}" y="${(Y(Math.max(0,v))-4).toFixed(1)}" text-anchor="middle">${E(f(v))}</text>`:''):'').join('');
+  const xl=labels.map((l,i)=>show.has(i)||i===n-1?`<text class="ax" x="${(m.l+i*bw+bw/2).toFixed(1)}" y="${H-8}" text-anchor="middle">${E(l)}</text>`:'').join('');
+  const hits=vals.map((v,i)=>ok(v)?`<rect class="hit" x="${(m.l+i*bw).toFixed(1)}" y="${m.t}" width="${bw.toFixed(1)}" height="${H-m.t-m.b}" data-tip="${E('<b>'+E(labels[i])+'</b><br>'+(o.tip?o.tip(i):E(f(v))))}"/>`:'').join('');
+  const gl=[0,0.5,1].map(t=>hi*t/1.12).map(v=>`<line class="g" x1="${m.l}" x2="${W-m.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text class="ax" x="${m.l-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${E(f(v))}</text>`).join('');
+  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${E(o.label||'chart')}">${gl}${bars}${xl}${hits}</svg></div>`; }
+// ---- 📅 Day-wise ROI ----
+const R={X:0,n:1,na:2,sp:3,d:4,df:5,u:6,t:7,s:8,sd:9,be:10,st:11,q:12};
+function cols(d,rows){ const T=d.T||[0,1,3,7,14,30,60,90,180,365]; const exact=rows.some(r=>Array.isArray(r[R.d])&&r[R.d].length);
+  const c=[]; if(exact&&GRAIN==='day'){ for(let L=0;L<(d.lags||31);L++) c.push({a:L,lab:'D'+L,ex:true}); }
+  else T.filter(a=>a<=30).forEach((a,j)=>c.push({a,lab:'D'+a,j}));
+  T.forEach((a,j)=>{ if(a>30) c.push({a,lab:'D'+a,j}); }); return c; }
+// a row's cumulative revenue at a column: [value, final?]
+function cum(r,c,T){ const dd=r[R.d]; if(c.ex){ if(Array.isArray(dd)&&c.a<dd.length) return [dd[c.a], c.a<r[R.df]];
+    const j=T.indexOf(c.a); if(!Array.isArray(dd)&&j>=0&&r[R.t]&&r[R.t][j]!=null) return [r[R.t][j],true]; return [null,false]; }
+  if(c.a<=30&&Array.isArray(dd)&&c.a<dd.length&&c.a>=r[R.df]) return [dd[c.a],false];      // seen, not final yet
+  const j=T.indexOf(c.a); const v=r[R.t]?r[R.t][j]:null; return [v, v!=null]; }
+function groupRows(d){ const rows=d.rows||[]; if(GRAIN==='day') return rows.slice().reverse().map(r=>({k:r[R.X],lab:r[R.X],rows:[r]}));
+  const g=new Map(); rows.forEach(r=>{ const x=r[R.X]; let k; if(GRAIN==='month') k=x.slice(0,7); else { const dt=new Date(x+'T00:00:00Z'), w=(dt.getUTCDay()+6)%7; dt.setUTCDate(dt.getUTCDate()-w); k=dt.toISOString().slice(0,10); }
+    if(!g.has(k)) g.set(k,[]); g.get(k).push(r); });
+  return [...g.entries()].sort((a,b)=>a[0]<b[0]?1:-1).map(([k,rs])=>({k,lab:k,rows:rs})); }
+function agg(gr,c,T){ let v=0, fin=true; for(const r of gr.rows){ const [x,f]=cum(r,c,T); if(!ok(x)) return [null,false]; v+=x; fin=fin&&f; } return [v,fin]; }
+function sumK(gr,i){ let s=0; for(const r of gr.rows){ if(r[i]==null) return null; s+=+r[i]; } return s; }
+function rowLabel(gr,d){ if(GRAIN==='month') return fmtMon(gr.k); if(GRAIN==='week'){ const e=new Date(gr.k+'T00:00:00Z'); e.setUTCDate(e.getUTCDate()+6); return fmtD(gr.k)+'–'+fmtD(e.toISOString().slice(0,10))+' '+gr.k.slice(2,4); }
+  return relLab(d,gr.k)+fd(gr.k); }
+function relLab(d,x){ const nw=d.newest; if(!nw) return ''; if(x===nw) return 'Today · '; const y=new Date(nw+'T00:00:00Z'); y.setUTCDate(y.getUTCDate()-1); return x===y.toISOString().slice(0,10)?'Yesterday · ':''; }
+function cell(v,base,met,prev,n){ if(!ok(v)) return null;
+  if(met==='roas') return base?v/base:null; if(met==='rev') return v; if(met==='ltv') return n?v/n:null; if(met==='delta') return ok(prev)?v-prev:v; return v; }
+function fmtCell(x,met){ return met==='roas'?P(x):met==='ltv'?MP(x):M(x); }
+function cohortTable(d){ const T=d.T, groups=groupRows(d), C=cols(d,d.rows||[]), shown=groups.slice(0,SHOW);
+  const head=`<tr><th>Install ${GRAIN==='day'?'date':GRAIN}</th><th>Status</th><th>Installs</th><th>Spend</th><th>CPI</th>${C.map(c=>`<th>${c.lab}</th>`).join('')}<th>So far</th><th>Breakeven</th></tr>`;
+  const body=shown.map(gr=>{ const n=sumK(gr,R.n)||0, sp=sumK(gr,R.sp); let prev=null;
+    const st=GRAIN==='day'?gr.rows[0][R.st]:null;
+    const cells=C.map(c=>{ const [v,fin]=agg(gr,c,T); const x=cell(v,sp,MET,prev,n); prev=ok(v)?v:prev; if(!ok(x)) return '<td class="roi-na">·</td>';
+      const ro=sp?v/sp:null; return `<td class="${roasCls(ro)}${fin?'':' roi-nf'}" title="${E(c.lab+': '+M(v)+(sp?' · ROAS '+P(ro):'')+(fin?'':' · not final'))}">${fmtCell(x,MET)}</td>`; }).join('');
+    let so=null, be=null;
+    if(GRAIN==='day'){ const r=gr.rows[0]; so=r[R.s]; be=r[R.be]; }
+    else { so=gr.rows.reduce((a,r)=>a+(+r[R.s]||0),0); }
+    const beTxt=be?`${be[1]?'':'≤ '}day ${be[0]}`:(sp&&ok(so)?`<small>${P(so/sp)} back</small>`:'—');
+    const q=GRAIN==='day'&&gr.rows[0][R.q]?' <span class="roi-q" title="Is din ka GA4 read install-day read se match nahi hua — numbers ≈">≈</span>':'';
+    return `<tr><td class="roi-nm">${E(rowLabel(gr,d))}${q}</td><td>${st?chip(st):''}</td><td>${N(n)}</td><td>${M(sp)}</td><td>${sp&&n?MP(sp/n):'—'}</td>${cells}<td>${M(so)}${sp&&ok(so)?` <small>${P(so/sp)}</small>`:''}</td><td>${beTxt}</td></tr>`; }).join('');
+  const more=groups.length>shown.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-more="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-more="all">Show all ${groups.length}</button><span class="roi-note">${shown.length} of ${groups.length}</span></div>`:'';
+  return `<div class="roi-ctl">${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div>`
+    +`<div class="roi-tw"><table class="roi-t roi-heat"><thead>${head}</thead><tbody>${body}</tbody></table></div>${more}`
+    +`<p class="roi-note">Har cell = us install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ke users ki us din tak ki <b>kul kamai</b> (${MET==='roas'?'spend ka %':MET==='ltv'?'per install':MET==='delta'?'pichhle column se kitni badhi':'paisa'}). Rang: hara = spend wapas (≥100%), peela = 50–100%, laal = 50% se kam. Halka = abhi final nahi. ${GRAIN!=='day'?'Hafte / mahine ka cell tabhi jab uske saare din us umar tak pahunch gaye.':''}</p>`; }
+function monthCurves(d){ const T=d.T, ms=(d.months||[]).filter(m=>m[2]>0).slice(-6);
+  if(!ms.length) return '<p class="roi-note">Abhi kisi install mahine pe Google Ads spend nahi.</p>';
+  const cls=['c1','c2','c3','c4','c5','c6'];
+  const series=ms.map((m,i)=>({name:fmtMon(m[0]),cls:cls[(cls.length-ms.length+i)%cls.length],pts:T.map((a,j)=>[j,m[3][j]!=null?m[3][j]/m[2]:null,m[3][j]!=null?`${E(M(m[3][j]))} of ${E(M(m[2]))}`:''])}));
+  return lineChart(T.map(a=>'D'+a),series,{ref:1,refl:'Breakeven 100%',label:'ROAS by days since install, per install month',xt:10}); }
+function deltaChart(d){ const rows=(d.rows||[]).filter(r=>Array.isArray(r[R.d])&&r[R.n]>0);
+  if(!rows.length) return '';
+  const L=(d.lags||31), sums=new Array(L).fill(0), ns=new Array(L).fill(0), take=rows.slice(-35);
+  take.forEach(r=>{ const dd=r[R.d]; for(let i=0;i<L&&i<r[R.df];i++){ sums[i]+=(dd[i]-(i?dd[i-1]:0)); ns[i]+=r[R.n]; } });
+  const vals=sums.map((s,i)=>ns[i]?s/ns[i]:null);
+  return `<div class="roi-card"><div class="roi-ct"><h3>Har din ki nayi kamai · per install</h3><span class="roi-note">pichhle 35 install-din (sirf final din) · bar pe tap = number</span></div>`
+    +barChart(vals.map((v,i)=>'D'+i),vals,{fmt:MP,label:'Revenue added on each day since install, per install',tip:i=>`${E(MP(vals[i]))} per install on day ${i} · ${N(ns[i])} installs`})
+    +`<p class="roi-note">Install ke din (D0) sabse zyada kamai, phir har din kitni nayi aati hai — isse pata chalta hai paisa kitni jaldi aata hai aur kab dheema hota hai.</p></div>`; }
+function dayView(d){ const s=d.sum||{}, pl=s.pools||{}, g=a=>(pl[a]||{}), r=a=>(g(a).r||{}), u=a=>(g(a).u||{});
+  const tdy=(s.today||[]).slice().reverse();
+  const tdTile=(row,lab)=>{ if(!row) return tile(lab,'—','');
+    const sp=row[R.sp], so=row[R.s], rl=relLab(d,row[R.X]).replace(' · ','');
+    return tile((rl||'Install day')+' · '+fmtD(row[R.X]),`${M(so)}`,`${N(row[R.n])} installs · spend ${M(sp)}${sp?` · <b>${P(so/sp)}</b> back`:''} · <i>${row[R.df]>0?'so far':'not final'}</i>`); };
+  const pbTxt=s.pb!=null?PBT(s.pb):s.nb?`Not by day ${s.nb[0]}`:(s.best?'Not yet':'—'),
+    pbSub=s.pb!=null?`${E(fmtMon(s.pbm||''))} installs ka 100% wapas`:s.nb?`sirf ${P(s.nb[1])} wapas (${E(fmtMon(s.nb[2]))} installs)`:(s.best?`abhi ${P(s.best[1])} by day ${s.best[0]} (${E(fmtMon(s.best[2]||''))})`:'');
+  const why=`${chip(s.st||'N/A')} <span>Pichhle ${d.consts?d.consts.n_recent:7} install-din ka <b>D7 ROAS ${P(s.r7)}</b>${ok(s.u7)?` · usual (usse pehle ke ${d.consts?d.consts.n_usual:28} din) ${P(s.u7)}`:''}${s.pb!=null?` · paisa wapas ${s.pb===0?'usi din':'~'+s.pb+' din me'} (${E(fmtMon(s.pbm||''))} installs)`:s.nb?` · ${E(fmtMon(s.nb[2]))} ke installs ${s.nb[0]} din me sirf ${P(s.nb[1])} wapas`:''}</span>`;
+  const cov=ok(s.cov)?`GA4 me AdMob ka ${P(s.cov)} revenue dikhta hai — har install-din ka hissa GA4 se, total AdMob ka (matched).`:'Revenue GA4 ke install-din split × AdMob ka total.';
+  const kp=`<div class="roi-ks6">${tdTile(tdy[0],'Today')}${tdTile(tdy[1],'Yesterday')}`
+    +tile('Cost / install',MP(s.cpi),'Google Ads ÷ saare naye installs (7 din)')
+    +tile('D0 ROAS',vs(r(0).roas,u(0).roas),'install ke din')+tile('D7 ROAS',vs(r(7).roas,u(7).roas),'7 din me')
+    +tile('D30 ROAS',vs(r(30).roas,u(30).roas),'30 din me')+tile('D90 ROAS',vs(r(90).roas,u(90).roas),'90 din me')
+    +tile('Money back in',pbTxt,pbSub)
+    +tile('LTV D30',vs(r(30).ltv,u(30).ltv,MP),'per install, 30 din')
+    +tile('Back next day',vs((s.ret||{})['1']&&s.ret['1'].r,(s.ret||{})['1']&&s.ret['1'].u),'D1 retention')+`</div>`;
+  return `<div class="roi-why">${why}</div>${kp}`
+    +(()=>{ const dc=deltaChart(d); return `<div class="${dc?'roi-g2':''}"><div class="roi-card"><div class="roi-ct"><h3>ROAS by day · har install mahina</h3><span class="roi-note">dashed = 100% (breakeven) · point pe tap = number</span></div>${monthCurves(d)}</div>${dc}</div>`; })()
+    +`<div class="roi-card"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D365 tak</h3><span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohortTable(d)}</div>`
+    +`<p class="roi-note">${cov} Spend = Google Ads (us din ke rate se USD). Installs = GA4 ke naye users (ads + organic) — isliye ROAS "blended" hai. Aakhri ${d.consts?d.consts.final_lag:3} din final nahi.${s.tie&&s.tie.off?` ≈ = ${s.tie.off} din ka GA4 read match nahi hua.`:''}</p>`; }
+// ---- 🌍 Countries: keep / cut ----
+function ctyView(d){ const c=d.cty||{}, rows=(c.rows||[]).slice(); if(!rows.length) return `<div class="roi-card"><p class="roi-note">Is app ka country data abhi nahi.</p></div>`;
+  const cnt=k=>rows.filter(x=>x.dec===k).length, order=['Scale','Keep','Watch','Cut','Too early','Too little data','Better','Normal','Worse'];
+  const chips=`<div class="roi-chips">${order.filter(k=>cnt(k)).map(k=>`<span class="roi-cc">${dchip(k)} <b>${cnt(k)}</b></span>`).join('')}</div>`;
+  const w=c.win||{}, wk=w.weeks||w.size||4, cut=c.cut||{};
+  const bud=cut.n?`<div class="roi-why roi-cut"><span>✂️ <b>${cut.n}</b> ${cut.n===1?'country':'countries'} Cut layak: pichhle ${wk} hafte me inpe <b>${M(cut.spend)}</b> kharch (kul ${M(cut.spend_all)} ka ${P(cut.spend_all?cut.spend/cut.spend_all:null)}), aur inke installs 90 din me ~<b>${M(cut.rev90)}</b> kamate hain. Hatane se har hafte ~<b>${M((cut.spend-cut.rev90)/wk)}</b> bachega.</span></div>`
+    :`<div class="roi-why"><span>✅ Koi country Cut layak nahi — ${wk} hafte ke installs dekhe (payback target ${c.H||90} din).</span></div>`;
+  const key=x=>CSORT.k==='dec'?(DEC_RANK[x.dec]??9)*1e12-(x.spend||0):CSORT.k==='spend'?-(x.spend||0):CSORT.k==='r30'?-((x.back||{})['30']||-1):CSORT.k==='pay'?((x.pay||{}).p??1e9):CSORT.k==='n'?-(x.n||0):0;
+  rows.sort((a,b)=>CSORT.dir*(key(a)-key(b)));
+  const th=(k,l)=>`<th aria-sort="${CSORT.k===k?(CSORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-roi-csort="${k}">${l}</button></th>`;
+  const bk=(x,k)=>{ const v=(x.back||{})[k]; return ok(v)?`<span class="${roasCls(v/100)}">${(k==='90'&&(x.back_proj||x.back_est))?'≈':''}${Math.round(v)}%</span>`:'—'; };
+  const pay=x=>{ const p=x.pay||{}; if(p.p!=null) return `${p.obs?'':'~'}${p.p} days${p.lo!=null&&p.hi!=null?` <small>(${p.lo}–${p.hi})</small>`:''}`; if(p.never) return '<small>1 saal me nahi</small>'; return '—'; };
+  const mt=cc=>{ const ms=((c.months||{})[cc]||[]).slice().reverse(); if(!ms.length) return '<p class="roi-note">Is country ki month-wise history abhi nahi.</p>';
+    const rr=v=>ok(v)?`<span class="${roasCls(v)}">${P(v)}</span>`:'—', part=(k,w)=>k<w&&k?` <small title="${k} of ${w} weeks complete">${k}/${w}w</small>`:'';
+    return `<table class="roi-t roi-sub"><thead><tr><th>Install month</th><th>Installs</th><th>Ads spend</th><th>Ads installs</th><th>CPI</th><th>ROAS 7d</th><th>ROAS 30d</th><th>ROAS 90d</th></tr></thead><tbody>`
+      +ms.map(m=>`<tr><td class="roi-nm">${E(fmtMon(m[0]))}</td><td>${N(m[1])}</td><td>${M(m[2])}</td><td>${N(m[3])}</td><td>${m[1]?MP(m[2]/m[1]):'—'}</td><td>${rr(m[4])}${part(m[8],m[7])}</td><td>${rr(m[5])}${part(m[9],m[7])}</td><td>${rr(m[6])}${part(m[10],m[7])}</td></tr>`).join('')+`</tbody></table>`; };
+  const body=rows.map(x=>`<tr class="clk" data-roi-cty="${E(x.cc)}"><td class="roi-nm">${valFlag(x.cc)}&nbsp;${E(valCtyName(x.cc))}</td><td>${dchip(x.dec)}</td><td>${N(x.n)}<small> ${ok(x.share)?P(x.share):''}</small></td><td>${M(x.spend)}</td><td>${MP(x.cpi)}</td><td>${bk(x,'7')}</td><td>${bk(x,'30')}</td><td>${bk(x,'90')}</td><td>${pay(x)}</td><td>${ok((x.ret||{}).d1)?Math.round(x.ret.d1)+'%':'—'}</td><td class="roi-cv">${CTYO===x.cc?'▾':'▸'}</td></tr>`
+      +(CTYO===x.cc?`<tr class="roi-xr"><td colspan="11">${mt(x.cc)}</td></tr>`:'')).join('');
+  return chips+bud+`<div class="roi-card"><div class="roi-ct"><h3>Countries · rakhna ya hatana</h3><span class="roi-note">installs ${E(fd(w.from||''))}–${E(fd(w.to||''))} · country pe tap = har mahine ka ROAS · column pe tap = sort</span></div>`
+    +`<div class="roi-tw"><table class="roi-t"><thead><tr><th>Country</th>${th('dec','Decision')}${th('n','Installs')}${th('spend','Ads spend')}<th>CPI</th><th>ROAS 7d</th>${th('r30','ROAS 30d')}<th>ROAS 90d</th>${th('pay','Money back')}<th>Back next day</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`
+    +`<p class="roi-note"><b>Scale</b> = paisa ${Math.round((c.H||90)/2)} din se pehle pakka wapas, budget badhao · <b>Keep</b> = ${c.H||90} din me wapas · <b>Watch</b> = dheere wapas (${c.H||90}–${2*(c.H||90)} din) · <b>Cut</b> = saal bhar me bhi wapas nahi / bahut mehenga · <b>Too little data</b> = installs kam, faisla nahi. <b>Better / Worse / Normal</b> = Google Ads ka cost is country me bahut kam (spend ka faisla nahi) — sirf kamai app ki baaki countries se zyada / kam / barabar. ROAS = Google Ads ke har ₹100 pe kitna wapas (us country ke installs ki kamai, AdMob matched). ≈ = andaza (app ki apni purani curve se).</p></div>`; }
+// ---- 💰 Lifetime P/L ----
+function lifeView(life,till,d){ life=life||[]; if(!life.length) return `<div class="roi-card"><p class="roi-note">Lifetime data abhi nahi.</p></div>`;
+  const tl=till||life[life.length-1][0], done=life.filter(x=>x[0]<=tl), live=life.filter(x=>x[0]>tl);
+  let cr=0, cs=0, first=null, firstNeg=null; const cum=done.map(x=>{ cr+=+x[1]||0; cs+=+x[2]||0; if(first==null&&cs>0&&cr>=cs) first=x[0]; return [x[0],cr,cs]; });
+  for(let i=cum.length-1;i>=0;i--){ if(cum[i][1]<cum[i][2]){ if(i===cum.length-1) firstNeg=null; break; } }
+  const pr=cr-cs, inProfit=pr>=0;
+  let since=null; for(let i=cum.length-1;i>=0;i--){ if((cum[i][1]>=cum[i][2])!==inProfit){ since=cum[i+1]?cum[i+1][0]:null; break; } if(i===0) since=cum[0][0]; }
+  const lastD=done[done.length-1]||[], liveD=live[live.length-1];
+  const kp=`<div class="roi-ks6">`+tile('Lifetime revenue',M(cr),`AdMob · ${E(fdy(done[0][0]))} se ${E(fd(tl))} tak`)+tile('Lifetime ads spend',M(cs),'Google Ads')
+    +tile('Profit / loss',`<span class="${inProfit?'roi-up':'roi-dn'}">${M(pr,true)}</span>`,cs?`ROAS <b>${P(cr/cs)}</b>`:'ads nahi',inProfit?'roi-kg':'roi-kb')
+    +tile(inProfit?'Profit me since':'Loss me since',since?E(fdy(since)):'—',first?`pehli baar profit: ${E(fdy(first))}`:'abhi tak kabhi profit nahi')
+    +tile('Last full day · '+E(fmtD(lastD[0]||'')),M(lastD[1]),`spend ${M(lastD[2])} · <b>${M((lastD[1]||0)-(lastD[2]||0),true)}</b>`)
+    +(liveD&&+liveD[1]>0?tile('Today · live',M(liveD[1]),`spend ${M(liveD[2])} · <i>abhi pura din nahi</i>`):'')+`</div>`;
+  const step=Math.max(1,Math.ceil(cum.length/400)), pts=cum.filter((x,i)=>i%step===0||i===cum.length-1);
+  const ch=lineChart(pts.map(x=>fd(x[0])),[{name:'Revenue (cumulative)',cls:'c2',pts:pts.map((x,i)=>[i,x[1]])},{name:'Ads spend (cumulative)',cls:'c5',pts:pts.map((x,i)=>[i,x[2]])}],
+    {fmt:v=>M(v),dots:false,label:'Cumulative revenue vs cumulative ads spend',xt:6,h:240});
+  const mon=new Map(); done.forEach(x=>{ const k=x[0].slice(0,7); const e=mon.get(k)||[0,0,0]; e[0]+=+x[1]||0; e[1]+=+x[2]||0; e[2]++; mon.set(k,e); });
+  let run=0; const mrows=[...mon.entries()].map(([k,e])=>{ run+=e[0]-e[1]; return [k,e[0],e[1],run,e[2]]; }).reverse();
+  const tbl=LG==='month'?`<table class="roi-t"><thead><tr><th>Month</th><th>Revenue</th><th>Ads spend</th><th>Profit / loss</th><th>ROAS</th><th>Total profit till then</th></tr></thead><tbody>`
+      +mrows.map(m=>`<tr><td class="roi-nm">${E(fmtMon(m[0]))}${m[4]<new Date(+m[0].slice(0,4),+m[0].slice(5,7),0).getDate()?` <small>${m[4]}d</small>`:''}</td><td>${M(m[1])}</td><td>${M(m[2])}</td><td class="${m[1]>=m[2]?'roi-up':'roi-dn'}">${M(m[1]-m[2],true)}</td><td class="${roasCls(m[2]?m[1]/m[2]:null)}">${m[2]?P(m[1]/m[2]):'—'}</td><td class="${m[3]>=0?'roi-up':'roi-dn'}">${M(m[3],true)}</td></tr>`).join('')+`</tbody></table>`
+    :(()=>{ const rs=cum.slice().reverse(), sh=rs.slice(0,LSHOW);
+        return `<table class="roi-t"><thead><tr><th>Day</th><th>Revenue</th><th>Ads spend</th><th>Profit / loss</th><th>Total profit till then</th></tr></thead><tbody>`
+          +sh.map((x,i)=>{ const o=done[done.length-1-i]; const p=(+o[1]||0)-(+o[2]||0); return `<tr><td class="roi-nm">${E(fdy(x[0]))}</td><td>${M(o[1])}</td><td>${M(o[2])}</td><td class="${p>=0?'roi-up':'roi-dn'}">${M(p,true)}</td><td class="${x[1]>=x[2]?'roi-up':'roi-dn'}">${M(x[1]-x[2],true)}</td></tr>`; }).join('')
+          +`</tbody></table>`+(rs.length>sh.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-lmore="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-lmore="all">Show all ${rs.length}</button></div>`:''); })();
+  return kp+`<div class="roi-card"><div class="roi-ct"><h3>Revenue vs ads spend · pehle din se</h3><span class="roi-note">line pe tap = us din tak ka total</span></div>${ch}</div>`
+    +`<div class="roi-card"><div class="roi-ct"><h3>${LG==='month'?'Every month':'Every day'}</h3>${seg('lg',LG,[['month','Month'],['day','Day']])}</div><div class="roi-tw">${tbl}</div></div>`
+    +`<p class="roi-note">Revenue = AdMob (saare ad sources, ${d&&d.app?'is app ke':'saare apps ke'} saare users — ads + organic), spend = Google Ads. Totals ${E(fd(tl))} tak (us din tak dono ka pura data). ${live.length?'Uske baad ke din live — totals me nahi.':''}</p>`; }
+// ---- All apps ----
+function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life_till,null);
+  if(VIEW==='cty'){ const rows=A.apps.filter(x=>x.cut).sort((a,b)=>b.cut-a.cut);
+    return `<div class="roi-card"><div class="roi-ct"><h3>Countries · har app</h3><span class="roi-note">app pe tap = us app ke countries</span></div>`
+      +(rows.length?`<div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th><th>Cut layak countries</th><th>Status</th></tr></thead><tbody>${rows.map(x=>`<tr class="clk" data-roi-app="${E(x.app_id)}"><td class="roi-nm"><span class="roi-an">${appIconId(x.app_id,x.app,22)}<span>${E(x.app)}</span></span></td><td>✂️ <b>${x.cut}</b></td><td>${chip(x.st)}</td></tr>`).join('')}</tbody></table></div>`
+        :'<p class="roi-note">Kisi app me abhi koi country Cut layak nahi.</p>')+`</div>`; }
+  const apps=A.apps.filter(x=>uniVis(x.app_id)), cnt=k=>apps.filter(x=>x.st===k).length;
+  const key=x=>ASORT.k==='st'?ST_RANK[x.st]*1e12-((x.life||[])[1]||0):ASORT.k==='r7'?-(x.r7??-1):ASORT.k==='r30'?-(x.r30??-1):ASORT.k==='pb'?(x.pb??1e9):ASORT.k==='lp'?((x.life||[])[0]-(x.life||[])[1]):ASORT.k==='sp'?-((x.life||[])[1]||0):0;
+  apps.sort((a,b)=>ASORT.dir*(key(a)-key(b))||String(a.app).localeCompare(b.app));
+  const th=(k,l)=>`<th aria-sort="${ASORT.k===k?(ASORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-roi-asort="${k}">${l}</button></th>`;
+  const chips=`<div class="roi-chips">${['Worse','Watch','Better','Normal','Too early','N/A'].map(k=>`<span class="roi-cc">${chip(k)} <b>${cnt(k)}</b></span>`).join('')}</div>`;
+  const tb=`<div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th>${th('st','Status')}${th('r7','D7 ROAS')}${th('r30','D30 ROAS')}${th('pb','Money back')}<th>CPI</th>${th('sp','Lifetime spend')}<th>Lifetime revenue</th>${th('lp','Lifetime P/L')}<th>Cut countries</th></tr></thead><tbody>`
+    +apps.map(x=>{ const l=x.life||[0,0], p=(l[0]||0)-(l[1]||0); return `<tr class="clk" data-roi-app="${E(x.app_id)}"><td class="roi-nm"><span class="roi-an">${appIconId(x.app_id,x.app,22)}<span>${E(x.app)}</span></span></td><td>${chip(x.st)}</td><td>${vs(x.r7,x.u7)}</td><td>${vs(x.r30,x.u30)}</td><td>${x.pb!=null?PBT(x.pb):x.nb?`<small>not by D${x.nb[0]} (${P(x.nb[1])})</small>`:(x.best?`<small>${P(x.best[1])} by D${x.best[0]}</small>`:'—')}</td><td>${MP(x.cpi)}</td><td>${M(l[1])}</td><td>${M(l[0])}</td><td class="${p>=0?'roi-up':'roi-dn'}">${M(p,true)}</td><td>${x.cut?'✂️ '+x.cut:'—'}</td></tr>`; }).join('')+`</tbody></table></div>`;
+  const pm=(A.months||[]).filter(m=>m[2]>0);
+  const pc=pm.length?lineChart(A.T.map(a=>'D'+a),pm.slice(-6).map((m,i,arr)=>({name:fmtMon(m[0]),cls:['c1','c2','c3','c4','c5','c6'][6-arr.length+i],pts:A.T.map((a,j)=>[j,m[3][j]!=null?m[3][j]/m[2]:null,m[3][j]!=null?`${E(M(m[3][j]))} of ${E(M(m[2]))}`:''])})),{ref:1,refl:'Breakeven 100%',label:'Portfolio ROAS by days since install, per install month'}):'';
+  return chips+`<div class="roi-card"><div class="roi-ct"><h3>Har app · ROI</h3><span class="roi-note">app pe tap = us app ka Day-wise ROI · Status = pichhle 7 install-din ka D7 ROAS vs usual</span></div>${tb}</div>`
+    +(pc?`<div class="roi-card"><div class="roi-ct"><h3>Saare apps (jin pe ads) · ROAS by day · har install mahina</h3><span class="roi-note">dashed = 100%</span></div>${pc}</div>`:''); }
+// ---- events (one delegated listener on the block; every toggle keeps the tapped control in place) ----
+function hold(r){ r.style.minHeight=Math.max(r.offsetHeight,parseFloat(r.style.minHeight)||0)+'px'; }
+let WIRED=false;
+function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventListener) return; WIRED=true;
+  const tip=()=>{ const r=root(); return r&&r.querySelector('.roi-tip'); };
+  const show=(ev,h)=>{ const t=tip(), r=root(); if(!t||!r) return; t.innerHTML=h; t.hidden=false; const b=r.getBoundingClientRect(); let x=ev.clientX-b.left+12, y=ev.clientY-b.top+12;
+    if(x+t.offsetWidth>b.width) x=Math.max(0,ev.clientX-b.left-t.offsetWidth-12); t.style.left=x+'px'; t.style.top=y+'px'; };
+  document.addEventListener('pointermove',ev=>{ const t0=ev.target; if(!(t0&&t0.closest&&t0.closest('#roi-root'))){ const t=tip(); if(t&&!t.hidden) t.hidden=true; return; }
+    const h=t0.closest('[data-tip]'); if(h) show(ev,h.getAttribute('data-tip')); else { const t=tip(); if(t) t.hidden=true; } },{passive:true});
+  document.addEventListener('click',ev=>{ const t=ev.target; const r=t&&t.closest&&t.closest('#roi-root'); if(!r) return; const at=(sel)=>t.closest(sel);
+    const h=at('[data-tip]'); if(h){ show(ev,h.getAttribute('data-tip')); return; }
+    const keep=(el,fn)=>{ const y0=el.getBoundingClientRect().top; hold(r); fn(); const sel=el.getAttribute('data-roi-sel'); const b=sel?r.querySelector(sel):null; if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };
+    let b;
+    if((b=at('[data-roi-view]'))){ b.setAttribute('data-roi-sel',`[data-roi-view="${b.dataset.roiView}"]`); keep(b,()=>{ VIEW=b.dataset.roiView; r.querySelectorAll('[data-roi-view]').forEach(x=>x.setAttribute('aria-selected',String(x.dataset.roiView===VIEW))); repaint(); }); return; }
+    if((b=at('[data-roi-grain]'))){ b.setAttribute('data-roi-sel',`[data-roi-grain="${b.dataset.roiGrain}"]`); keep(b,()=>{ GRAIN=b.dataset.roiGrain; SHOW=60; repaint(); }); return; }
+    if((b=at('[data-roi-met]'))){ b.setAttribute('data-roi-sel',`[data-roi-met="${b.dataset.roiMet}"]`); keep(b,()=>{ MET=b.dataset.roiMet; repaint(); }); return; }
+    if((b=at('[data-roi-lg]'))){ b.setAttribute('data-roi-sel',`[data-roi-lg="${b.dataset.roiLg}"]`); keep(b,()=>{ LG=b.dataset.roiLg; LSHOW=60; repaint(); }); return; }
+    if((b=at('[data-roi-more]'))){ SHOW=b.dataset.roiMore==='all'?1e9:SHOW+60; repaint(); return; }
+    if((b=at('[data-roi-lmore]'))){ LSHOW=b.dataset.roiLmore==='all'?1e9:LSHOW+60; repaint(); return; }
+    if((b=at('[data-roi-csort]'))){ const k=b.dataset.roiCsort; b.setAttribute('data-roi-sel',`[data-roi-csort="${k}"]`); keep(b,()=>{ CSORT={k,dir:CSORT.k===k?-CSORT.dir:1}; repaint(); }); return; }
+    if((b=at('[data-roi-asort]'))){ const k=b.dataset.roiAsort; b.setAttribute('data-roi-sel',`[data-roi-asort="${k}"]`); keep(b,()=>{ ASORT={k,dir:ASORT.k===k?-ASORT.dir:1}; repaint(); }); return; }
+    if((b=at('[data-roi-cty]'))){ const cc=b.dataset.roiCty; b.setAttribute('data-roi-sel',`[data-roi-cty="${cc}"]`); keep(b,()=>{ CTYO=CTYO===cc?'':cc; repaint(); }); return; }
+    if((b=at('[data-roi-retry]'))){ ALLERR=false; Object.keys(AERR).forEach(k=>AERR[k]=false); repaint(); return; }
+    if((b=at('[data-roi-app]'))){ const id=b.dataset.roiApp, x=(ALL&&ALL.apps||[]).find(z=>z.app_id===id); const nm=x?(((DATA.apps_catalog||[]).find(c=>c.app_id===id)||{}).app_name||x.app):null; if(nm) setApp(nm); return; } }); }
+return {ptr, appPtr, block, repaint, _:{cols, cum, groupRows, agg, cell, lifeView, ctyView, dayView, allView, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+})();
+// the Install value page with the ROI block between the Value Studio and "🗂 Old views" (or at the end)
+function roiWrap(html,aid){ let b=''; try{ b=ROI.block(aid); }catch(e){ b=''; } if(!b) return html;
+  const ks=['<details id="val-oldapp"','<details id="val-old"']; for(const k of ks){ const i=html.indexOf(k); if(i>=0) return html.slice(0,i)+b+html.slice(i); } return html+b; }
 // ---------- PLACEMENTS (2-level) ----------
 function fmtCount(ps){const b={};ps.forEach(p=>b[p.format]=(b[p.format]||0)+1);return b;}
 function renderPlacements(){
@@ -16087,8 +16430,8 @@ function valScreen(){
   const V=DATA.value, h2='<h2 class="sc">Install value</h2>';
   if(!V) return h2+`<div class="card" id="val-off" style="padding:24px 20px"><div style="font-weight:750;color:#fff;font-size:14.5px">💸 Not switched on yet</div><div class="muted" style="font-size:13.5px;line-height:1.6;margin-top:6px">Har install kitna kamata hai, Google Ads ka paisa kitne din me wapas aata hai aur kaunse country me ads chalane layak — ye GA4 install-day data + AdMob + Google Ads se banta hai. Chalu hone ke baad yahan dikhega.</div></div>`;
   if(APP){ const r=valCurRow(); if(!r) return valNoGa4(APP);
-    const old=valAppOld(r); return vsAppOn(r)?vsAppPage(r,old):old; }    // one app → 💸 the Studio's app page (+ the older page folded under it)
-  return vsOn()?vsPortfolio():valPortfolio(); }    // "All apps" → 💸 the Value Studio (+ the older views folded under it)
+    const old=valAppOld(r); return roiWrap(vsAppOn(r)?vsAppPage(r,old):old, r.app_id); }    // one app → 💸 the Studio's app page (+ 📈 ROI, + the older page folded under it)
+  return roiWrap(vsOn()?vsPortfolio():valPortfolio(), ''); }    // "All apps" → 💸 the Value Studio (+ 📈 ROI, + the older views folded under it)
 // one app's older Install value page (exactly as before the Studio)
 function valAppOld(r){
     const back=`<span class="backlnk" onclick="valBack()">← All apps</span>`, top=back+`<div class="uni-hd" style="margin-bottom:10px"><span style="font-size:18px;font-weight:800;color:#fff">${appChip(r.app,22,r.app_id)}</span></div>`;

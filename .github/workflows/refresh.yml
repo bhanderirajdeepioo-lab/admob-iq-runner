@@ -126,6 +126,12 @@ jobs:
           # GA4_FIRSTOPEN=false (repo variable) stops the reads without a code push
           GA4_FIRSTOPEN:        ${{ vars.GA4_FIRSTOPEN || 'true' }}
           GA4_FIRSTOPEN_BUDGET_SEC: ${{ vars.GA4_FIRSTOPEN_BUDGET_SEC }}
+          # 📈 Day-wise ROI: every day 0 … 30 of each install day's GA4 ad revenue (admob_iq/fetch/ga4_cohort.py;
+          # data/ga4_cohort/ in the private repo, kept for good): GA4_COHORT=false stops the reads without a code push;
+          # ROI_TAB=false takes the ROI section off the Install value tab
+          GA4_COHORT:           ${{ vars.GA4_COHORT || 'true' }}
+          GA4_COHORT_BUDGET_SEC: ${{ vars.GA4_COHORT_BUDGET_SEC }}
+          ROI_TAB:              ${{ vars.ROI_TAB || 'true' }}
           # Update impact card: IMPACT_WINDOWS=false (repo variable) turns off its 14 / 30 / 60-day windows and the
           # late-effect alerts without a code push (the 7-day card as before)
           IMPACT_WINDOWS:       ${{ vars.IMPACT_WINDOWS || 'true' }}
