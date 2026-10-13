@@ -1,0 +1,68 @@
+# One-off: the STRICT first-open funnel (owner: "splash se home user zyada nahi ho sakta"): GA4's funnel report, closed,
+# per app — first_open → Splash → Home (and Language / Permission / Intro), in order, so a step never exceeds the Splash;
+# and Home with the Splash at any time after first_open (a first run in the background, opened later). The last 60 days by
+# day and the full history by month. See admob_iq/fetch/ga4_funnel_probe.py. Read-only against GA4 and the PRIVATE repo's
+# data (it reads the first-open probe's report for each app's screens); the only write is ga4/funnel_probe.json in the
+# PRIVATE repo. This repo's Actions log is PUBLIC: progress counts and one line of counts only; stderr is hidden.
+name: ga4-funnel-probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_apps:
+        description: "probe only the N smallest apps (0 = all)"
+        required: false
+        default: "0"
+      resume:
+        description: "continue the last report: complete apps kept, the rest asked"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-funnel-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30          # the probe starts no GA4 call after 22 min and then writes what it has
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Read the PRIVATE data (read-only clone)
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing"; exit 1; }
+          test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
+          # the token goes in a header for this one command only: never into a URL, a file or .git/config
+          auth=$(printf 'x-access-token:%s' "$DATA_REPO_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          git -c http.extraheader="AUTHORIZATION: basic $auth" clone -q --depth=1 \
+            "https://github.com/$DATA_REPO.git" _private > /dev/null 2>&1 \
+            || { echo "::error::could not clone the private data repo (details kept off the public log)"; exit 1; }
+          echo "private data: $(ls -1 _private/data/ga4_uninstall 2>/dev/null | wc -l) file(s)"
+      - name: Run
+        env:
+          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          FUNNEL_DATA_DIR: _private
+          FUNNEL_MAX_APPS: ${{ github.event.inputs.max_apps }}
+          FUNNEL_RESUME: ${{ github.event.inputs.resume }}
+          PYTHONUNBUFFERED: "1"
+        run: python -m admob_iq.fetch.ga4_funnel_probe 2>/tmp/funnel.err || { echo "::error::funnel probe failed (details kept off the public log)"; exit 1; }
