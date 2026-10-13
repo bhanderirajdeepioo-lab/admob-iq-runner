@@ -2516,6 +2516,8 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-more{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
 .roi-btn,.roi-lnk{min-height:34px;padding:4px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
 .roi-q{color:var(--watch);font-weight:800;cursor:help}
+.roi-ok{color:var(--good);font-weight:700}.roi-wt{color:var(--watch);font-weight:700}
+.roi-t tr.roi-tot td{border-top:2px solid var(--line2);font-weight:800;color:#fff;background:var(--panel2)}
 .roi-xr td{background:var(--panel2)!important;padding:8px 10px 12px;text-align:left}
 .roi-xr td:first-child{position:static}
 .roi-sub{min-width:560px}
@@ -6446,7 +6448,7 @@ function renderFirstOpen(){ return FO.render(); }
 const ROI=(()=>{
 let ALL=null, ALLV=null, ALLERR=false, ALLBUSY=false;
 const AF={}, AERR={}, ABUSY={};                       // one app's file by key
-let VIEW='day', GRAIN='day', MET='roas', SHOW=60, LSHOW=60, LG='month', CTYO='', CSORT={k:'dec',dir:1}, ASORT={k:'st',dir:1};
+let VIEW='day', GRAIN='day', MET='roas', SHOW=60, LSHOW=60, LG='cohort', CTYO='', CSORT={k:'dec',dir:1}, ASORT={k:'st',dir:1};
 const ST_KEY={Worse:'bigda',Watch:'dhyan',Better:'behtar',Normal:'normal','Too early':'jaldi','N/A':'lagu'};
 const ST_RANK={Worse:0,Watch:1,Better:2,Normal:3,'Too early':4,'N/A':5};
 const DEC_CLS={Scale:'behtar',Keep:'normal',Watch:'dhyan',Cut:'bigda','Too little data':'lagu','Too early':'jaldi',Better:'behtar',Worse:'bigda',Normal:'normal'};
@@ -6535,7 +6537,10 @@ function body(aid){
   if(!aid){ if(!ALL){ if(ALLERR) return wait('ROI data load nahi hua.',1); ensureAll(repaint); return wait('ROI load ho raha hai…'); } CCY=ALL.ccy||null; return allView(); }
   const a=appPtr(aid); if(!a) return `<div class="roi-card"><p class="roi-note">Is app ka ROI data abhi nahi (GA4 install-day data ya Google Ads spend chahiye).</p></div>`;
   const d=AF[a.file]; if(!d){ if(AERR[a.file]) return wait('Is app ka ROI data load nahi hua.',1); ensureApp(aid,repaint); return wait('ROI load ho raha hai…'); }
-  CCY=d.ccy||null; return VIEW==='cty'?ctyView(d):VIEW==='life'?lifeView(d.life,d.life_till,d):dayView(d); }
+  CCY=d.ccy||null; return VIEW==='cty'?ctyView(d):VIEW==='life'?lifeView(d.life,d.life_till,d,coOf(d)):dayView(d); }
+// install days for the install-month P/L: [day, installs, spend USD, spend as billed, revenue so far USD] + month curves
+function coOf(d){ return {T:d.T, rows:(d.rows||[]).map(r=>[r[R.X],r[R.n],r[R.sp],r[R.spi],r[R.s]]), months:(d.months||[]).map(m=>[m[0],m[2],m[3],m[6]])}; }
+function coAll(A){ return {T:A.T, rows:(A.rows||[]).map(r=>[r[0],r[1],r[2],r[5],r[6]]), months:(A.months||[]).map(m=>[m[0],m[2],m[3],m[6]])}; }
 function root(){ return (typeof document!=='undefined'&&document.getElementById)?document.getElementById('roi-root'):null; }
 function repaint(){ const r=root(); if(!r) return; const b=r.querySelector('#roi-body'); if(b){ b.innerHTML=body(r.dataset.aid); }
   const h=r.querySelector('#roi-hero'); if(h){ h.innerHTML=hero(r.dataset.aid); } }
@@ -6665,7 +6670,26 @@ function ctyView(d){ const c=d.cty||{}, rows=(c.rows||[]).slice(); if(!rows.leng
     +`<div class="roi-tw"><table class="roi-t"><thead><tr><th>Country</th>${th('dec','Decision')}${th('n','Installs')}${th('spend','Ads spend')}<th>CPI</th><th>ROAS 7d</th>${th('r30','ROAS 30d')}<th>ROAS 90d</th>${th('pay','Money back')}<th>Back next day</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`
     +`<p class="roi-note"><b>Scale</b> = paisa ${Math.round((c.H||90)/2)} din se pehle pakka wapas, budget badhao · <b>Keep</b> = ${c.H||90} din me wapas · <b>Watch</b> = dheere wapas (${c.H||90}–${2*(c.H||90)} din) · <b>Cut</b> = saal bhar me bhi wapas nahi / bahut mehenga · <b>Too little data</b> = installs kam, faisla nahi. <b>Better / Worse / Normal</b> = Google Ads ka cost is country me bahut kam (spend ka faisla nahi) — sirf kamai app ki baaki countries se zyada / kam / barabar. ROAS = Google Ads ke har ₹100 pe kitna wapas (us country ke installs ki kamai, AdMob matched). ≈ = andaza (app ki apni purani curve se).</p></div>`; }
 // ---- 💰 Lifetime P/L ----
-function lifeView(life,till,d){ life=life||[]; if(d) CCY=d.ccy||null; if(!life.length) return `<div class="roi-card"><p class="roi-note">Lifetime data abhi nahi.</p></div>`;
+// install-month P/L (owner, 13 Oct: "december 2025 se april 2026 tak ka month ab profit me aa chuke he"): each install month's
+// Google Ads spend vs what ITS users earned so far (AdMob-matched, to day 365) — ROAS and profit in the view currency, so
+// the % and the sign always agree; paid back on the day its own curve (every day of the month complete) crossed the spend
+function cohortPL(co){ const T=co.T||[0,1,3,7,14,30,60,90,180,365], g=new Map();
+  (co.rows||[]).forEach(r=>{ const k=String(r[0]).slice(0,7); const e=g.get(k)||{n:0,sp:0,spi:0,spk:0,bi:true,s:0,days:0};
+    e.days++; if(r[2]==null) return;            // a day past the spend data (today): not in the month yet
+    e.n+=+r[1]||0; e.sp+=+r[2]; e.spk++; if(r[3]==null) e.bi=false; else e.spi+=+r[3]; e.s+=+r[4]||0; g.set(k,e); });
+  const cur=new Map((co.months||[]).map(m=>[m[0],m]));
+  let tS=0,tR=0, first=null; const rows=[...g.entries()].filter(([k,e])=>e.spk>0&&e.sp>0).sort((a,b)=>a[0]<b[0]?1:-1).map(([k,e])=>{
+    const spv=billed()&&e.bi?e.spi:RV(e.sp), rv=RV(e.s), pl=rv-spv, ro=spv?rv/spv:null; tS+=spv; tR+=rv; first=k;
+    let day=null; const m=cur.get(k); if(m&&m[1]){ const sv=billed()&&m[3]!=null?m[3]:RV(m[1]); let last=[0,0];
+      for(let j=0;j<T.length;j++){ const v=m[2][j]; if(v==null) break; const q=RV(v)/sv; if(q>=1){ day=q>last[1]?Math.round(last[0]+(T[j]-last[0])*(1-last[1])/(q-last[1])):T[j]; break; } last=[T[j],q]; } }
+    const st=ro==null?'—':ro>=1?`<span class="roi-ok">✅ Wapas aa gaya${day!=null?(day===0?' · usi din':` · ~day ${day}`):''}</span>`:`<span class="roi-wt">⏳ ${P(ro)} wapas</span>`;
+    const full=new Date(+k.slice(0,4),+k.slice(5,7),0).getDate();
+    return `<tr><td class="roi-nm">${E(fmtMon(k))}${e.spk<full?` <small>${e.spk}d</small>`:''}</td><td>${N(e.n)}</td><td>${MV(spv)}</td><td>${MV(rv)}</td><td class="${pl>=0?'roi-up':'roi-dn'}">${MV(pl,true)}</td><td class="${roasCls(ro)}">${P(ro)}</td><td>${st}</td></tr>`; }).join('');
+  if(!rows) return '<p class="roi-note">Abhi kisi install mahine pe Google Ads spend nahi.</p>';
+  const tp=tR-tS;
+  return `<table class="roi-t"><thead><tr><th>Install month</th><th>Installs</th><th>Ads spend</th><th>Revenue so far</th><th>Profit / loss so far</th><th>ROAS so far</th><th>Paisa wapas?</th></tr></thead><tbody>${rows}`
+    +`<tr class="roi-tot"><td class="roi-nm">Total <small>${E(fmtMon(first||''))} se</small></td><td></td><td>${MV(tS)}</td><td>${MV(tR)}</td><td class="${tp>=0?'roi-up':'roi-dn'}">${MV(tp,true)}</td><td class="${roasCls(tS?tR/tS:null)}">${P(tS?tR/tS:null)}</td><td></td></tr></tbody></table>`; }
+function lifeView(life,till,d,co){ life=life||[]; if(d) CCY=d.ccy||null; if(!life.length) return `<div class="roi-card"><p class="roi-note">Lifetime data abhi nahi.</p></div>`;
   const tl=till||life[life.length-1][0], done=life.filter(x=>x[0]<=tl), live=life.filter(x=>x[0]>tl);
   const V=x=>[x[0],RV(+x[1]||0)||0,SV(+x[2]||0,x[3]!=null?+x[3]:null)||0];   // [day, revenue, spend] in the view currency
   const dv=done.map(V), lv=live.map(V);
@@ -6674,26 +6698,30 @@ function lifeView(life,till,d){ life=life||[]; if(d) CCY=d.ccy||null; if(!life.l
   let since=null; for(let i=cum.length-1;i>=0;i--){ if((cum[i][1]>=cum[i][2])!==inProfit){ since=cum[i+1]?cum[i+1][0]:null; break; } if(i===0) since=cum[0][0]; }
   const lastD=dv[dv.length-1]||[], liveD=lv[lv.length-1];
   const kp=`<div class="roi-ks6">`+tile('Lifetime revenue',MV(cr),`AdMob · ${E(fdy(done[0][0]))} se ${E(fd(tl))} tak`)+tile('Lifetime ads spend',MV(cs),billed()?'Google Ads · jitna bill hua':'Google Ads')
-    +tile('Profit / loss',`<span class="${inProfit?'roi-up':'roi-dn'}">${MV(pr,true)}</span>`,cs?`ROAS <b>${P(cr/cs)}</b>`:'ads nahi',inProfit?'roi-kg':'roi-kb')
+    +tile('Profit / loss · cash',`<span class="${inProfit?'roi-up':'roi-dn'}">${MV(pr,true)}</span>`,cs?`ROAS <b>${P(cr/cs)}</b> · saara revenue − saara spend`:'ads nahi',inProfit?'roi-kg':'roi-kb')
     +tile(inProfit?'Profit me since':'Loss me since',since?E(fdy(since)):'—',first?`pehli baar profit: ${E(fdy(first))}`:'abhi tak kabhi profit nahi')
     +tile('Last full day · '+E(fmtD(lastD[0]||'')),MV(lastD[1]),`spend ${MV(lastD[2])} · <b>${MV((lastD[1]||0)-(lastD[2]||0),true)}</b>`)
-    +(liveD&&liveD[1]>0?tile('Today · live',MV(liveD[1]),`spend ${MV(liveD[2])} · <i>abhi pura din nahi</i>`):'')+`</div>`;
+    +(liveD&&liveD[1]>0?tile('Today · live',MV(liveD[1]),`spend ${MV(liveD[2])} · <i>abhi pura din nahi</i>`):'')
+    +(()=>{ if(!co) return ''; const g=new Map(); (co.rows||[]).forEach(r=>{ const k=String(r[0]).slice(0,7); const e=g.get(k)||{sp:0,spi:0,bi:true,s:0,ok:true}; if(r[2]==null) e.ok=false; else e.sp+=+r[2]; if(r[3]==null) e.bi=false; else e.spi+=+r[3]; e.s+=+r[4]||0; g.set(k,e); });
+      const ms=[...g.values()].filter(e=>e.ok&&e.sp>0); if(!ms.length) return ''; const paid=ms.filter(e=>RV(e.s)>=(billed()&&e.bi?e.spi:RV(e.sp))).length;
+      return tile('Install months in profit',`${paid} <small>of ${ms.length}</small>`,'har mahine ke installs ki ab tak ki kamai ≥ us mahine ka spend',paid*2>=ms.length?'roi-kg':''); })()+`</div>`;
   const step=Math.max(1,Math.ceil(cum.length/400)), pts=cum.filter((x,i)=>i%step===0||i===cum.length-1);
   const ch=lineChart(pts.map(x=>fd(x[0])),[{name:'Revenue (cumulative)',cls:'c2',pts:pts.map((x,i)=>[i,x[1]])},{name:'Ads spend (cumulative)',cls:'c5',pts:pts.map((x,i)=>[i,x[2]])}],
-    {fmt:v=>MV(v),dots:false,label:'Cumulative revenue vs cumulative ads spend',xt:6,h:240});
+    {fmt:v=>MC(v),dots:false,label:'Cumulative revenue vs cumulative ads spend',xt:6,h:240});
   const mon=new Map(); dv.forEach(x=>{ const k=x[0].slice(0,7); const e=mon.get(k)||[0,0,0]; e[0]+=x[1]; e[1]+=x[2]; e[2]++; mon.set(k,e); });
   let run=0; const mrows=[...mon.entries()].map(([k,e])=>{ run+=e[0]-e[1]; return [k,e[0],e[1],run,e[2]]; }).reverse();
-  const tbl=LG==='month'?`<table class="roi-t"><thead><tr><th>Month</th><th>Revenue</th><th>Ads spend</th><th>Profit / loss</th><th>ROAS</th><th>Total profit till then</th></tr></thead><tbody>`
+  const tbl=LG==='cohort'?cohortPL(co||{}):LG==='month'?`<table class="roi-t"><thead><tr><th>Calendar month</th><th>Revenue (us mahine aaya)</th><th>Ads spend (us mahine gaya)</th><th>Profit / loss</th><th>ROAS</th><th>Total profit till then</th></tr></thead><tbody>`
       +mrows.map(m=>`<tr><td class="roi-nm">${E(fmtMon(m[0]))}${m[4]<new Date(+m[0].slice(0,4),+m[0].slice(5,7),0).getDate()?` <small>${m[4]}d</small>`:''}</td><td>${MV(m[1])}</td><td>${MV(m[2])}</td><td class="${m[1]>=m[2]?'roi-up':'roi-dn'}">${MV(m[1]-m[2],true)}</td><td class="${roasCls(m[2]?m[1]/m[2]:null)}">${m[2]?P(m[1]/m[2]):'—'}</td><td class="${m[3]>=0?'roi-up':'roi-dn'}">${MV(m[3],true)}</td></tr>`).join('')+`</tbody></table>`
     :(()=>{ const rs=cum.slice().reverse(), sh=rs.slice(0,LSHOW);
         return `<table class="roi-t"><thead><tr><th>Day</th><th>Revenue</th><th>Ads spend</th><th>Profit / loss</th><th>Total profit till then</th></tr></thead><tbody>`
           +sh.map((x,i)=>{ const o=dv[dv.length-1-i]; const p=o[1]-o[2]; return `<tr><td class="roi-nm">${E(fdy(x[0]))}</td><td>${MV(o[1])}</td><td>${MV(o[2])}</td><td class="${p>=0?'roi-up':'roi-dn'}">${MV(p,true)}</td><td class="${x[1]>=x[2]?'roi-up':'roi-dn'}">${MV(x[1]-x[2],true)}</td></tr>`; }).join('')
           +`</tbody></table>`+(rs.length>sh.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-lmore="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-lmore="all">Show all ${rs.length}</button></div>`:''); })();
   return kp+`<div class="roi-card"><div class="roi-ct"><h3>Revenue vs ads spend · pehle din se</h3><span class="roi-note">line pe tap = us din tak ka total</span></div>${ch}</div>`
-    +`<div class="roi-card"><div class="roi-ct"><h3>${LG==='month'?'Every month':'Every day'}</h3>${seg('lg',LG,[['month','Month'],['day','Day']])}</div><div class="roi-tw">${tbl}</div></div>`
+    +`<div class="roi-card"><div class="roi-ct"><h3>${LG==='cohort'?'Install month · har mahine ke installs ne ab tak kitna kamaya':LG==='month'?'Calendar month · us mahine kitna aaya, kitna gaya':'Every day'}</h3>${seg('lg',LG,[['cohort','Install month'],['month','Calendar month'],['day','Day']])}</div><div class="roi-tw">${tbl}</div>`
+    +(LG==='cohort'?`<p class="roi-note"><b>Install month</b> = us mahine aaye users (ads + organic) ki aaj tak ki kamai (AdMob matched, install se 1 saal tak) vs us mahine ka Google Ads spend — purane mahine samay ke saath profit me aate hain. <b>Calendar month</b> = us mahine saare users se kitna aaya vs us mahine kitna spend gaya (cash).</p>`:'')+`</div>`
     +`<p class="roi-note">Revenue = AdMob (saare ad sources, ${d&&d.app?'is app ke':'saare apps ke'} saare users — ads + organic), spend = Google Ads (₹ me jitna bill hua). Totals ${E(fd(tl))} tak (us din tak dono ka pura data). ${live.length?'Uske baad ke din live — totals me nahi.':''}</p>`; }
 // ---- All apps ----
-function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life_till,null);
+function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life_till,null,coAll(A));
   if(VIEW==='cty'){ const rows=A.apps.filter(x=>x.cut).sort((a,b)=>b.cut-a.cut);
     return `<div class="roi-card"><div class="roi-ct"><h3>Countries · har app</h3><span class="roi-note">app pe tap = us app ke countries</span></div>`
       +(rows.length?`<div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th><th>Cut layak countries</th><th>Status</th></tr></thead><tbody>${rows.map(x=>`<tr class="clk" data-roi-app="${E(x.app_id)}"><td class="roi-nm"><span class="roi-an">${appIconId(x.app_id,x.app,22)}<span>${E(x.app)}</span></span></td><td>✂️ <b>${x.cut}</b></td><td>${chip(x.st)}</td></tr>`).join('')}</tbody></table></div>`
@@ -6740,7 +6768,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, ctyView, dayView, allView, hero, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)

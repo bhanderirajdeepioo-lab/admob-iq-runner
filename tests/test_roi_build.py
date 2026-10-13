@@ -133,7 +133,8 @@ def test_finish_pointer_header_and_isolation(tmp_path):
                      "st": "Worse", "r7": 0.4, "u7": 0.6, "pb": 40, "life": [10.0, 12.0], "cut": 2})
     open(os.path.join(out, "roi_aaaaaaaaaaaa.json.gz"), "w").close()
     acc.life = {"2026-10-01": [5.0, 6.0, 500.0]}
-    acc.rows = {"2026-10-01": {"n": 10, "sp": 6.0, "spi": 500.0, "t": [1.0] * 10, "ok": [True] + [False] * 9, "apps": 1}}
+    acc.rows = {"2026-10-01": {"n": 10, "sp": 6.0, "spi": 500.0, "s": 4.0, "t": [1.0] * 10, "ok": [True] + [False] * 9,
+                               "apps": 1}}
     acc.ccy = {"INR"}
     acc.till = ["2026-10-01", "2026-10-01", "2026-09-01"]
     dash = {"roi": {"old": 1}}
@@ -146,7 +147,8 @@ def test_finish_pointer_header_and_isolation(tmp_path):
     with gzip.open(os.path.join(out, "roi.json.gz"), "rt") as f:
         body = json.load(f)
     assert body["rows"][0][3][:2] == [1.0, None] and body["life_till"] == "2026-10-01"
-    assert body["rows"][0][5] == 500.0 and body["months"][0][6] == 500.0 and body["ccy"] == "INR"
+    assert body["rows"][0][5] == 500.0 and body["rows"][0][6] == 4.0 and body["months"][0][6] == 500.0
+    assert body["ccy"] == "INR"
     assert body["months"][0][0] == "2026-10"
     assert not os.path.exists(os.path.join(out, "roi_0123456789ab.json.gz"))   # stale file removed
     line = rb.pop_line()

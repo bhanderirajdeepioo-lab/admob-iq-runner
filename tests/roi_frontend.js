@@ -111,7 +111,16 @@ function appFile() {
     ctx.curView = () => 'INR'; ctx.cfx = () => 100; ctx.csym = () => '₹';
     const hlr = U.lifeView([['2026-09-29', 5, 20, 1800], ['2026-09-30', 30, 5, 450]], '2026-09-30', Object.assign({}, d, { ccy: 'INR' }));
     out.life_inr = hlr.includes('₹2,250') && hlr.includes('₹3,500') && hlr.includes('+₹1,250');   // spend as billed (not 25 × 100)
+    // install-month P/L: Dec paid back (its own curve crosses between day 3 and 7), Jan not yet; ₹ = as billed, % in ₹ too
+    const co = { T, rows: [['2025-12-01', 100, 10, 900, 15], ['2025-12-02', 100, 10, 900, 15], ['2026-01-01', 100, 10, 900, 4]],
+      months: [['2025-12', 20, [4, 8, 12, 24, null, null, null, null, null, null], 1800], ['2026-01', 10, [1, null, null, null, null, null, null, null, null, null], 900]] };
+    const cp = U.cohortPL(co);
+    out.co_rows = [...cp.matchAll(/<td class="roi-nm">([^<]+?)\s*(?:<small>([^<]+)<\/small>)?<\/td>/g)].map(m => m[1] + (m[2] ? ' · ' + m[2] : ''));
+    out.co_paid = cp.includes('✅ Wapas aa gaya · ~day 5') && cp.includes('⏳ 44% wapas');
+    out.co_total = cp.includes('₹3,400') && cp.includes('+₹700') && cp.includes('₹2,700');   // 3,400 − 2,700 billed
     ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
+    const cpu = U.cohortPL(co);
+    out.co_usd = cpu.includes('⏳ 40% wapas') && cpu.includes('✅ Wapas aa gaya · ~day 6');
     // all apps
     U.setAll({ v: 1, T, apps: [{ app_id: 'id-b', app: 'Beta', st: 'Normal', r7: 0.5, u7: 0.5, r30: 0.9, life: [10, 5], cut: 0 },
       { app_id: 'id-a', app: 'Alpha', st: 'Worse', r7: 0.2, u7: 0.5, pb: null, best: [30, 0.6, '2026-09'], life: [5, 10], cut: 2 },

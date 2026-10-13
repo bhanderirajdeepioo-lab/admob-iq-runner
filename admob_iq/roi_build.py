@@ -530,11 +530,12 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
         for r in rows:
             if not (r["sp"] and r["sp"] > 0):
                 continue
-            p = acc.rows.setdefault(_iso(r["X"]), {"n": 0, "sp": 0.0, "spi": 0.0, "t": [0.0] * len(T),
+            p = acc.rows.setdefault(_iso(r["X"]), {"n": 0, "sp": 0.0, "spi": 0.0, "s": 0.0, "t": [0.0] * len(T),
                                                     "ok": [True] * len(T), "apps": 0})
             p["n"] += r["n"]
             p["sp"] += r["sp"]
             p["spi"] += r.get("spi") or 0
+            p["s"] += r["s"] or 0                       # each app's install day: its revenue so far
             p["apps"] += 1
             for j in range(len(T)):
                 if r["t"][j] is None:
@@ -570,9 +571,9 @@ def finish(acc, dashboard, out_dir):
             LINE = "roi: apps 0, skipped %d, failed %d" % (acc.skipped, acc.fails)
             return []
         rows = [[d, p["n"], _r(p["sp"]), [(_r(p["t"][j]) if p["ok"][j] else None) for j in range(len(T))], p["apps"],
-                 _r(p["spi"], 2)] for d, p in sorted(acc.rows.items())]
+                 _r(p["spi"], 2), _r(p.get("s", 0.0))] for d, p in sorted(acc.rows.items())]
         months = {}
-        for d, n, sp, t, k, spi in rows:
+        for d, n, sp, t, k, spi, _so in rows:
             e = months.setdefault(d[:7], {"n": 0, "sp": 0.0, "spi": 0.0, "t": [0.0] * len(T), "ok": [True] * len(T),
                                           "days": 0})
             e["n"] += n
