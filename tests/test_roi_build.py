@@ -107,7 +107,8 @@ def test_life_and_countries():
            "all_days": {"2026-10-01": [6_000_000, 1], "2026-10-02": [8_000_000, 1]}}
     spend = {"daily": {"2026-09-30": 3_000_000, "2026-10-02": 2_000_000}, "till": "2026-10-02"}
     life = rb._life(rev, spend, lambda d: 0.5, 0.1)
-    assert life == [["2026-09-30", 0, 1.5], ["2026-10-01", 5.4, 0], ["2026-10-02", 7.2, 1.0]]   # all sources, −10%
+    assert life == [["2026-09-30", 0, 1.5, 3.0], ["2026-10-01", 5.4, 0, 0], ["2026-10-02", 7.2, 1.0, 2.0]]   # all sources,
+    # −10% deduction; spend in USD at that day's rate and as billed
     assert rb._life_till(rev, spend) == "2026-10-02"
     det = {"countries": {"win": {"weeks": 4}, "rows": [
         {"cc": "AA", "verdict": "keep", "sure": True, "pay": {"p": 20}, "cpi": {"v": 0.1, "spend": 100.0},
@@ -118,7 +119,7 @@ def test_life_and_countries():
         {"cc": "DD", "verdict": "few", "cpi": {}, "n": 5}, {"cc": "EE", "verdict": "slow", "n": 50}]}}
     c = rb._countries(det, 90)
     assert [x["dec"] for x in c["rows"]] == ["Scale", "Keep", "Cut", "Too little data", "Watch"]
-    assert c["cut"] == {"n": 1, "spend": 200.0, "rev90": 40.0, "spend_all": 350.0}
+    assert c["cut"] == {"n": 1, "spend": 200.0, "spend_src": 0.0, "rev90": 40.0, "spend_all": 350.0, "weeks": 4}
 
 
 def test_finish_pointer_header_and_isolation(tmp_path):
@@ -131,18 +132,21 @@ def test_finish_pointer_header_and_isolation(tmp_path):
     acc.apps.append({"app_id": "a~1", "app": "Alpha", "key": "aaaaaaaaaaaa", "file": "roi_aaaaaaaaaaaa.json.gz",
                      "st": "Worse", "r7": 0.4, "u7": 0.6, "pb": 40, "life": [10.0, 12.0], "cut": 2})
     open(os.path.join(out, "roi_aaaaaaaaaaaa.json.gz"), "w").close()
-    acc.life = {"2026-10-01": [5.0, 6.0]}
-    acc.rows = {"2026-10-01": {"n": 10, "sp": 6.0, "t": [1.0] * 10, "ok": [True] + [False] * 9, "apps": 1}}
+    acc.life = {"2026-10-01": [5.0, 6.0, 500.0]}
+    acc.rows = {"2026-10-01": {"n": 10, "sp": 6.0, "spi": 500.0, "t": [1.0] * 10, "ok": [True] + [False] * 9, "apps": 1}}
+    acc.ccy = {"INR"}
     acc.till = ["2026-10-01", "2026-10-01", "2026-09-01"]
     dash = {"roi": {"old": 1}}
     assert rb.finish(acc, dash, out) == ["/roi*"]
     p = dash["roi"]
+    assert p["ccy"] == "INR"
     assert p["file"] == "roi.json.gz" and p["apps"]["a~1"] == {"file": "roi_aaaaaaaaaaaa.json.gz", "st": "Worse",
                                                                 "r7": 0.4, "u7": 0.6, "pb": 40, "nb": None,
                                                                 "life": [10.0, 12.0], "cut": 2}
     with gzip.open(os.path.join(out, "roi.json.gz"), "rt") as f:
         body = json.load(f)
     assert body["rows"][0][3][:2] == [1.0, None] and body["life_till"] == "2026-10-01"
+    assert body["rows"][0][5] == 500.0 and body["months"][0][6] == 500.0 and body["ccy"] == "INR"
     assert body["months"][0][0] == "2026-10"
     assert not os.path.exists(os.path.join(out, "roi_0123456789ab.json.gz"))   # stale file removed
     line = rb.pop_line()

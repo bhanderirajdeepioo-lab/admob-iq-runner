@@ -11,7 +11,7 @@
 'use strict';
 const fs = require('fs'), vm = require('vm');
 const html = fs.readFileSync(process.argv[2], 'utf8');
-const a = html.indexOf('const ROI=(()=>{'), b = html.indexOf('return html+b; }', html.indexOf('function roiWrap(html,aid)')) + 'return html+b; }'.length - 1;
+const END = '</details>`; }', a = html.indexOf('const ROI=(()=>{'), b = html.indexOf(END, html.indexOf('function roiWrap(html,aid)')) + END.length - 1;
 const c0 = html.indexOf('function roiCardLine(x,name)'), c1 = html.indexOf('function hubCardsPaint(){');
 const out = {}, errors = [];
 if (a < 0 || b < 0 || c0 < 0) { console.log(JSON.stringify({ errors: ['ROI module not found'] })); process.exit(0); }
@@ -68,7 +68,8 @@ function appFile() {
     out.no_ptr = ctx.roiWrap('<div>studio</div><details id="val-oldapp">old</details>', 'id-a') === '<div>studio</div><details id="val-oldapp">old</details>';
     ctx.DATA = { roi: { file: 'roi.json.gz', v: 'v1', apps: { 'id-a': { file: 'roi_aaaaaaaaaaaa.json.gz', st: 'Watch', r7: 0.4, u7: 0.5, pb: 12 } } } };
     const w = ctx.roiWrap('<div>studio</div><details id="val-oldapp">old</details>', 'id-a');
-    out.wrap_order = w.indexOf('studio') < w.indexOf('id="roi-root"') && w.indexOf('id="roi-root"') < w.indexOf('val-oldapp');
+    out.wrap_order = w.indexOf('id="roi-root"') < w.indexOf('id="val-more"') && w.indexOf('id="val-more"') < w.indexOf('studio')
+      && w.indexOf('studio') < w.indexOf('val-oldapp');                         // ROI first; the Studio + old views folded
     out.wrap_loading = w.includes('ROI load ho raha hai');
     // the app file, put in place as if loaded
     const d = appFile();
@@ -80,7 +81,9 @@ function appFile() {
     out.old_fallback = [U.cum(old, C[7], T), U.cum(old, C[8], T)];
     const html1 = U.dayView(d);
     out.day_today = html1.includes('Today · 13 Oct') && html1.includes('Yesterday · 12 Oct');
-    out.day_tiles = ['Cost / install', 'D7 ROAS', 'Money back in', '~12 days'].every(s => html1.includes(s));
+    out.day_tiles = ['D0 ROAS', 'D30 ROAS', 'LTV D30', 'Back next day'].every(s => html1.includes(s));
+    const hh = U.hero('id-a');
+    out.hero = ['Money back in', '~12 days', 'D7 ROAS', 'Cost / install', 'Lifetime profit / loss', 'Ads profit me'].every(s => hh.includes(s));
     out.day_rows = (html1.match(/<tr><td class="roi-nm">/g) || []).length;          // the first 60 install days
     out.day_more = html1.includes('Show all 70');
     out.day_be = html1.includes('day 9');
@@ -105,15 +108,21 @@ function appFile() {
     out.life_total = hl.includes('$45') && hl.includes('$30') && hl.includes('+$15');
     out.life_since = hl.includes('Profit me since') && hl.includes('30 Sep 2026');
     out.life_live = hl.includes('Today · live');
+    ctx.curView = () => 'INR'; ctx.cfx = () => 100; ctx.csym = () => '₹';
+    const hlr = U.lifeView([['2026-09-29', 5, 20, 1800], ['2026-09-30', 30, 5, 450]], '2026-09-30', Object.assign({}, d, { ccy: 'INR' }));
+    out.life_inr = hlr.includes('₹2,250') && hlr.includes('₹3,500') && hlr.includes('+₹1,250');   // spend as billed (not 25 × 100)
+    ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
     // all apps
-    U.setAll({ v: 1, T, apps: [{ app_id: 'id-b', app: 'Beta', st: 'Normal', r7: 0.5, u7: 0.5, life: [10, 5], cut: 0 },
+    U.setAll({ v: 1, T, apps: [{ app_id: 'id-b', app: 'Beta', st: 'Normal', r7: 0.5, u7: 0.5, r30: 0.9, life: [10, 5], cut: 0 },
       { app_id: 'id-a', app: 'Alpha', st: 'Worse', r7: 0.2, u7: 0.5, pb: null, best: [30, 0.6, '2026-09'], life: [5, 10], cut: 2 },
       { app_id: 'id-hidden', app: 'Hidden', st: 'Worse', life: [1, 1], cut: 0 }], life: [], months: [], rows: [] });
     const ha = U.allView();
     out.all_order = [...ha.matchAll(/data-roi-app="([^"]+)"/g)].map(m => m[1]);
     out.all_icons = (ha.match(/class="aicon"/g) || []).length;
+    const hA = U.hero('');
+    out.hero_all = hA.includes('Sabse bada loss') && hA.includes('Best ROI') && hA.includes('Sabse zyada gira');
     // the hub card line
-    const x = { st: 'normal', line: 'Money back in 90 days' };
+    const x = { st: 'normal', line: 'Money back in ~108 days' };
     ctx.roiCardLine(x, 'Alpha Pick');
     out.card = x.line;
   } catch (e) { errors.push(String(e && e.stack || e)); }

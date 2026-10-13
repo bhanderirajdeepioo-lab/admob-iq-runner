@@ -34,7 +34,7 @@ def test_block_place(out):
 def test_day_wise(out):
     assert out["cols"] == [35, "D0", "D30", "D60", "D365"]              # every day 0 … 30, then 60 / 90 / 180 / 365
     assert out["old_fallback"] == [[8, True], [None, False]]           # older days: the checkpoints, never a guess
-    assert out["day_today"] and out["day_tiles"] and out["day_be"] and out["day_tie"]
+    assert out["day_today"] and out["day_tiles"] and out["hero"] and out["day_be"] and out["day_tie"]
     assert out["day_rows"] == 60 and out["day_more"]                   # 60 at a time, "Show all" (nothing dropped)
     assert out["months"] == [["2026-10", 13], ["2026-09", 30], ["2026-08", 27]]
     assert out["month_cols"] == ["D0", "D1", "D3", "D7", "D14", "D30"] and out["month_d0"] == 30
@@ -44,15 +44,16 @@ def test_day_wise(out):
 
 def test_countries_life_all(out):
     assert out["cty_cut"] and out["cty_order"] == ["BB", "CC", "AA"] and out["cty_chips"] == 3
-    assert out["life_total"] and out["life_since"] and out["life_live"]
+    assert out["life_total"] and out["life_since"] and out["life_live"] and out["life_inr"]   # ₹ = as billed
+    assert out["hero_all"]
     assert out["all_order"] == ["id-a", "id-b"] and out["all_icons"] == 2
-    assert out["card"] == "Money back in 90 days · 📈 D7 ROAS <b>40%</b> (usual 50%) · wapas ~12d"
+    assert out["card"] == "📈 D7 ROAS <b>40%</b> (usual 50%) · paisa wapas ~12 days"   # ROI's own numbers replace the card's
 
 
 def test_wiring():
     with open(PAGE, encoding="utf-8") as f:
         p = f.read()
-    assert "return roiWrap(vsAppOn(r)?vsAppPage(r,old):old, r.app_id);" in p
+    assert "return roiWrap(vsAppOn(r)?vsAppPage(r,old):old, r.app_id);" in p and 'id="val-more"' in p
     assert "return roiWrap(vsOn()?vsPortfolio():valPortfolio(), '');" in p
     assert "if(c[0]==='value') try{ roiCardLine(x,name); }catch(e){}" in p
     assert ".roi{position:relative;" in p

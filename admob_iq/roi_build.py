@@ -82,7 +82,7 @@ class Acc:
     """The portfolio, gathered app by app."""
 
     def __init__(self):
-        self.apps, self.life, self.rows, self.fails, self.skipped, self.till = [], {}, {}, 0, 0, []
+        self.apps, self.life, self.rows, self.fails, self.skipped, self.till, self.ccy = [], {}, {}, 0, 0, [], set()
 
 
 def start():
@@ -130,10 +130,11 @@ def _cohorts(P, spend, fxf, co, today):
     for X in sorted(keys):
         e, c = xs.get(X), co_x.get(_iso(X))
         n = e["n"] if e else (int((c.get("u") or [0])[0] or 0) if c else 0)
-        sp = None
+        sp = spi = None
         n_ads = None
         if spend and sp_first and sp_till and sp_first <= X <= sp_till:
-            sp = (spend["daily"].get(_iso(X)) or 0) / 1e6 * (fxf(X) or 0)
+            spi = (spend["daily"].get(_iso(X)) or 0) / 1e6           # as billed (the spend cache's own currency)
+            sp = spi * (fxf(X) or 0)                                 # USD at that day's rate
             n_ads = spend["installs"].get(_iso(X))
         d = u = None
         df = 0
@@ -178,8 +179,8 @@ def _cohorts(P, spend, fxf, co, today):
                         break
         iu = {L: int(e["u"][i]) for L, i in ULAG_IX.items()
               if e and pr.all(pr.g, X, X + timedelta(days=L))} if e else {}
-        rows.append({"X": X, "n": n, "na": n_ads, "sp": sp, "d": d, "df": df, "u": u, "t": t, "s": s, "sd": sd,
-                     "be": be, "e": e, "iu": iu})
+        rows.append({"X": X, "n": n, "na": n_ads, "sp": sp, "spi": spi, "d": d, "df": df, "u": u, "t": t, "s": s,
+                     "sd": sd, "be": be, "e": e, "iu": iu})
     return rows
 
 
@@ -221,14 +222,15 @@ def _months(rows):
     g = {}
     for r in rows:
         m = _iso(r["X"])[:7]
-        e = g.setdefault(m, {"n": 0, "sp": 0.0, "spk": True, "t": [0.0] * len(T), "ok": [True] * len(T), "days": 0,
-                             "dsp": 0})
+        e = g.setdefault(m, {"n": 0, "sp": 0.0, "spi": 0.0, "spk": True, "t": [0.0] * len(T), "ok": [True] * len(T),
+                             "days": 0, "dsp": 0})
         e["n"] += r["n"]
         e["days"] += 1
         if r["sp"] is None:
             e["spk"] = False
         else:
             e["sp"] += r["sp"]
+            e["spi"] += r.get("spi") or 0
             e["dsp"] += 1 if r["sp"] > 0 else 0
         for j in range(len(T)):
             if r["t"][j] is None:
@@ -236,7 +238,8 @@ def _months(rows):
             else:
                 e["t"][j] += r["t"][j]
     return [[m, e["n"], _r(e["sp"]) if e["spk"] else None,
-             [(_r(e["t"][j]) if e["ok"][j] else None) for j in range(len(T))], e["days"], e["dsp"]]
+             [(_r(e["t"][j]) if e["ok"][j] else None) for j in range(len(T))], e["days"], e["dsp"],
+             _r(e["spi"], 2) if e["spk"] else None]
             for m, e in sorted(g.items())]
 
 
@@ -270,7 +273,7 @@ def _summary(rows, P, co_off, tie_checked, today):
     # payback: the newest install month (≥ $100 Google Ads, spend on ≥ 80% of its days) whose own curve crossed 100% —
     # but never past the newest MATURE month (its curve reached day 90): if that one has not crossed, "not by day N"
     pb = best = pbm = nb = None
-    for m, n, sp, t, days, dsp in reversed(_months(rows)):
+    for m, n, sp, t, days, dsp, _spi in reversed(_months(rows)):
         if not sp or sp < MIN_MONTH_SPEND or dsp < days * 0.8:
             continue
         curve = [(a, (t[j] / sp) if t[j] is not None else None) for j, a in enumerate(T)]
@@ -286,10 +289,11 @@ def _summary(rows, P, co_off, tie_checked, today):
             break
     jud = [r for r in rows if _judged(r)]
     rec = jud[-N_RECENT:]
-    cpi = None
+    cpi = cpi_src = None
     if rec:
         n = sum(r["n"] for r in rec)
         cpi = _r(sum(r["sp"] for r in rec) / n, 6) if n else None
+        cpi_src = _r(sum(r.get("spi") or 0 for r in rec) / n, 4) if n else None
     r7, u7 = (pools[str(7)]["r"] or {}).get("roas"), (pools[str(7)]["u"] or {}).get("roas")
     if not jud:
         st = "N/A"
@@ -309,32 +313,34 @@ def _summary(rows, P, co_off, tie_checked, today):
     last = rows[-2:] if rows else []
     return {"st": st, "r7": r7, "u7": u7, "pools": pools, "pb": pb, "pbm": pbm, "nb": nb,
             "best": list(best) if best else None,
-            "cpi": cpi, "ret": {str(L): {"r": _ret(rows, L), "u": _ret(rows, L, False)} for L in (1, 3, 7, 14, 30)},
+            "cpi": cpi, "cpi_src": cpi_src, "ret": {str(L): {"r": _ret(rows, L), "u": _ret(rows, L, False)} for L in (1, 3, 7, 14, 30)},
             "cov": cov, "tie": {"checked": tie_checked, "off": len(co_off)},
             "today": [_row_out(r) for r in last]}
 
 
 def _row_out(r):
     return [_iso(r["X"]), r["n"], _r(r["na"], 2), _r(r["sp"]), r["d"], r["df"], r["u"], r["t"], r["s"], r["sd"],
-            r["be"], r.get("st"), 1 if r.get("q") else 0]
+            r["be"], r.get("st"), 1 if r.get("q") else 0, _r(r.get("spi"), 2)]
 
 
 def _life(rev, spend, fxf, ded_rate):
-    """[[day, AdMob revenue, Google Ads spend]] for every day either has (USD)."""
+    """[[day, AdMob revenue (USD), Google Ads spend (USD at that day's rate), spend as billed]] for every day either has."""
     out = {}
     days = (rev or {}).get("all_days") or (rev or {}).get("days") or {}
     f = 1.0 - float(ded_rate or 0)
     for d, v in days.items():
         if v and v[0]:
-            out.setdefault(d, [0.0, 0.0])[0] += v[0] / 1e6 * f
+            out.setdefault(d, [0.0, 0.0, 0.0])[0] += v[0] / 1e6 * f
     if spend:
         for d, v in (spend.get("daily") or {}).items():
             if v:
                 try:
-                    out.setdefault(d, [0.0, 0.0])[1] += v / 1e6 * (fxf(_d(d)) or 0)
+                    e = out.setdefault(d, [0.0, 0.0, 0.0])
+                    e[1] += v / 1e6 * (fxf(_d(d)) or 0)
+                    e[2] += v / 1e6
                 except ValueError:
                     continue
-    return [[d, _r(v[0]), _r(v[1])] for d, v in sorted(out.items())]
+    return [[d, _r(v[0]), _r(v[1]), _r(v[2], 2)] for d, v in sorted(out.items())]
 
 
 def _life_till(rev, spend):
@@ -364,6 +370,7 @@ def _countries(detail, H):
         rpi = r.get("rpi") or {}
         rows.append({"cc": r.get("cc"), "dec": dec, "eng": v, "n": r.get("n"), "share": r.get("share"),
                      "cpi": cp.get("v"), "cpi_ads": cp.get("ads"), "spend": cp.get("spend"), "dl": cp.get("dl"),
+                     "spend_src": cp.get("spend_src"), "cpi_src": cp.get("src"),
                      "paid": cp.get("paid"),
                      "back": {k: back.get(k) for k in ("7", "30", "90")} if back else None,
                      "back_est": bool(back.get("90_est") or back.get("30_est")) if back else False,
@@ -376,8 +383,10 @@ def _countries(detail, H):
     win = c.get("win")
     return {"rows": rows, "win": win, "geo_why": c.get("geo_why"), "H": H,
             "cut": {"n": len(cut), "spend": _r(sum(x["spend"] for x in cut)),
+                    "spend_src": _r(sum(x.get("spend_src") or 0 for x in cut), 2),
                     "rev90": _r(sum((x["rpi"].get("90") or 0) * (x["n"] or 0) for x in cut)),
-                    "spend_all": _r(sum(x["spend"] or 0 for x in rows))}}
+                    "spend_all": _r(sum(x["spend"] or 0 for x in rows)),
+                    "weeks": (win or {}).get("weeks") or (win or {}).get("size")}}
 
 
 def _cty_months(P, ida, pre, sids, fxf):
@@ -389,7 +398,7 @@ def _cty_months(P, ida, pre, sids, fxf):
     ages = ((7, 3), (30, 5), (90, 7))               # (days, the last CBANDS band of it)
     geo = (pre or {}).get("geo") or {}
     gw = (geo.get("weeks") or {})
-    cost = {}                                       # (Monday, cc) → [USD, downloads]
+    cost = {}                                       # (Monday, cc) → [USD, downloads, as billed]
     for sid in sids or ():
         for W, cs in (gw.get(sid) or {}).items():
             try:
@@ -398,9 +407,10 @@ def _cty_months(P, ida, pre, sids, fxf):
                 continue
             for cc, v in (cs or {}).items():
                 if isinstance(v, list) and v:
-                    e = cost.setdefault((W, cc), [0.0, 0.0])
+                    e = cost.setdefault((W, cc), [0.0, 0.0, 0.0])
                     e[0] += (v[0] or 0) / 1e6 * rate
                     e[1] += float(v[1] or 0) if len(v) > 1 and v[1] is not None else 0.0
+                    e[2] += (v[0] or 0) / 1e6
     out = {}
     for W, slots in (ida.get("c") or {}).items():
         try:
@@ -418,11 +428,12 @@ def _cty_months(P, ida, pre, sids, fxf):
                 continue
             if cc in ("--", "ZZ"):
                 continue
-            sp, dl = cost.get((W, cc), [0.0, 0.0])
-            e = out.setdefault(cc, {}).setdefault(W[:7], {"n": 0, "sp": 0.0, "dl": 0.0, "w": 0,
+            sp, dl, spi = cost.get((W, cc), [0.0, 0.0, 0.0])
+            e = out.setdefault(cc, {}).setdefault(W[:7], {"n": 0, "sp": 0.0, "spi": 0.0, "dl": 0.0, "w": 0,
                                                           "r": [0.0] * 3, "s": [0.0] * 3, "k": [0] * 3})
             e["n"] += int(cell.get("n") or 0)
             e["sp"] += sp
+            e["spi"] += spi
             e["dl"] += dl
             e["w"] += 1
             r = cell.get("r") or []
@@ -438,7 +449,7 @@ def _cty_months(P, ida, pre, sids, fxf):
     for cc, ms in out.items():
         res[cc] = [[m, e["n"], _r(e["sp"]), _r(e["dl"], 1)]
                    + [(_r(e["r"][i] / e["s"][i]) if e["k"][i] and e["s"][i] > 0 else None) for i in range(3)]
-                   + [e["w"]] + list(e["k"]) for m, e in sorted(ms.items())]
+                   + [e["w"]] + list(e["k"]) + [_r(e["spi"], 2)] for m, e in sorted(ms.items())]
     return res
 
 
@@ -498,26 +509,32 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
         write_json_gz_stable(os.path.join(out_dir, name), body)
         if body["life_till"] and spend and spend.get("sids"):
             acc.till.append(body["life_till"])
-        lt = [sum(x[1] or 0 for x in life), sum(x[2] or 0 for x in life)]
+        if spend and spend.get("ccy"):
+            acc.ccy.add(spend["ccy"])
+        lt_till = body["life_till"]                    # lifetime totals to the last day both sides are in (as the page)
+        done = [x for x in life if not lt_till or x[0] <= lt_till]
+        lt = [sum(x[1] or 0 for x in done), sum(x[2] or 0 for x in done), sum(x[3] or 0 for x in done)]
         acc.apps.append({"app_id": aid, "app": a["app_name"], "key": key, "file": name, "st": summ["st"],
-                         "r7": summ["r7"], "u7": summ["u7"], "pb": summ["pb"], "pbm": summ["pbm"], "nb": summ["nb"],
-                         "best": summ["best"],
+                         "r7": summ["r7"], "u7": summ["u7"], "pb": summ["pb"], "pbm": summ["pbm"], "best": summ["best"],
                          "cpi": summ["cpi"],
                          "r30": (summ["pools"]["30"]["r"] or {}).get("roas"),
                          "u30": (summ["pools"]["30"]["u"] or {}).get("roas"),
-                         "life": [_r(lt[0], 2), _r(lt[1], 2)], "cut": cty["cut"]["n"],
+                         "life": [_r(lt[0], 2), _r(lt[1], 2), _r(lt[2], 2)], "cut": cty["cut"]["n"],
+                         "cut_save": cty["cut"], "cpi_src": summ["cpi_src"], "nb": summ["nb"],
                          "first": life[0][0] if life else None, "ads": bool(spend and spend.get("sids"))})
-        for d, rv, sp in life:
-            p = acc.life.setdefault(d, [0.0, 0.0])
+        for d, rv, sp, spi in life:
+            p = acc.life.setdefault(d, [0.0, 0.0, 0.0])
             p[0] += rv or 0
             p[1] += sp or 0
+            p[2] += spi or 0
         for r in rows:
             if not (r["sp"] and r["sp"] > 0):
                 continue
-            p = acc.rows.setdefault(_iso(r["X"]), {"n": 0, "sp": 0.0, "t": [0.0] * len(T), "ok": [True] * len(T),
-                                                    "apps": 0})
+            p = acc.rows.setdefault(_iso(r["X"]), {"n": 0, "sp": 0.0, "spi": 0.0, "t": [0.0] * len(T),
+                                                    "ok": [True] * len(T), "apps": 0})
             p["n"] += r["n"]
             p["sp"] += r["sp"]
+            p["spi"] += r.get("spi") or 0
             p["apps"] += 1
             for j in range(len(T)):
                 if r["t"][j] is None:
@@ -552,13 +569,15 @@ def finish(acc, dashboard, out_dir):
             _clean(out_dir, set())
             LINE = "roi: apps 0, skipped %d, failed %d" % (acc.skipped, acc.fails)
             return []
-        rows = [[d, p["n"], _r(p["sp"]), [(_r(p["t"][j]) if p["ok"][j] else None) for j in range(len(T))], p["apps"]]
-                for d, p in sorted(acc.rows.items())]
+        rows = [[d, p["n"], _r(p["sp"]), [(_r(p["t"][j]) if p["ok"][j] else None) for j in range(len(T))], p["apps"],
+                 _r(p["spi"], 2)] for d, p in sorted(acc.rows.items())]
         months = {}
-        for d, n, sp, t, k in rows:
-            e = months.setdefault(d[:7], {"n": 0, "sp": 0.0, "t": [0.0] * len(T), "ok": [True] * len(T), "days": 0})
+        for d, n, sp, t, k, spi in rows:
+            e = months.setdefault(d[:7], {"n": 0, "sp": 0.0, "spi": 0.0, "t": [0.0] * len(T), "ok": [True] * len(T),
+                                          "days": 0})
             e["n"] += n
             e["sp"] += sp or 0
+            e["spi"] += spi or 0
             e["days"] += 1
             for j in range(len(T)):
                 if t[j] is None:
@@ -566,13 +585,14 @@ def finish(acc, dashboard, out_dir):
                 else:
                     e["t"][j] += t[j]
         body = {"v": V, "T": list(T), "apps": sorted(acc.apps, key=lambda x: x["app"].casefold()),
-                "life": [[d, _r(v[0]), _r(v[1])] for d, v in sorted(acc.life.items())], "rows": rows,
+                "life": [[d, _r(v[0]), _r(v[1]), _r(v[2], 2)] for d, v in sorted(acc.life.items())], "rows": rows,
                 "months": [[m, e["n"], _r(e["sp"]), [(_r(e["t"][j]) if e["ok"][j] else None) for j in range(len(T))],
-                            e["days"], e["days"]] for m, e in sorted(months.items())],
+                            e["days"], e["days"], _r(e["spi"], 2)] for m, e in sorted(months.items())],
+                "ccy": next(iter(acc.ccy)) if len(acc.ccy) == 1 else None,
                 "life_till": max(set(acc.till), key=lambda d: (acc.till.count(d), d)) if acc.till else None}
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         write_json_gz_stable(os.path.join(out_dir, ALL_FILE), body)
-        dashboard["roi"] = {"file": ALL_FILE, "v": hashlib.sha1(raw).hexdigest()[:12],
+        dashboard["roi"] = {"file": ALL_FILE, "v": hashlib.sha1(raw).hexdigest()[:12], "ccy": body["ccy"],
                             "apps": {x["app_id"]: {k: x.get(k) for k in ("file", "st", "r7", "u7", "pb", "nb", "life", "cut")}
                                      for x in acc.apps}}
         _clean(out_dir, {x["file"] for x in acc.apps} | {ALL_FILE})
