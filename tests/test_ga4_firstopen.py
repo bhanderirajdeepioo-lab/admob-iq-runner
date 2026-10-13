@@ -87,6 +87,17 @@ def test_a_step_nobody_reached_is_zero_not_missing():
     assert days["2026-10-01"] == {"first_open": 100, "splash": 90, "home": 0, "splash_any": 92, "home_any": 0, "intro": 0}
 
 
+def test_an_empty_chunk_costs_one_call():
+    class Empty(FakeGA):
+        def funnel(self, body):
+            j = super().funnel(body)
+            j["funnelTable"]["rows"] = []
+            return j
+    ga = Empty()
+    assert gf.read_chunk(ga, {"splash": "S", "home": "H", "language": "L", "intro": "I"}, date(2026, 6, 1), date(2026, 6, 15)) == {}
+    assert ga.calls == 1
+
+
 def test_sampling_is_kept_per_day():
     class Sampled(FakeGA):
         def funnel(self, body):

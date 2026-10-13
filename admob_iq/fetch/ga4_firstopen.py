@@ -204,6 +204,8 @@ def read_chunk(ga, steps, a, b):
         j = ga.funnel(funnel_body(steps["splash"], steps[step], a, b, "date", any_time=f == "home_any"))
         t, smp = parse_table(j), sampling(j)
         fo, sp, st = t.get("first_open") or {}, t.get("splash") or {}, t.get("step") or {}
+        if f == "home" and not (fo or sp or st):
+            return days                                 # no day at all (older than GA4 keeps): the other funnels neither
         for d in set(fo) | set(sp) | set(st):
             put(d, f, st.get(d, 0))
             if smp is not None and len(d) == 8:
