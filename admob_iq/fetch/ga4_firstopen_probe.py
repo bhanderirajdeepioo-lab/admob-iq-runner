@@ -191,10 +191,10 @@ class Run(pr.Run):
 
 def run_probe(units, data_dir, cid, sec, tokens, budget=BUDGET_SEC, clock=time.monotonic, workers=WORKERS, carried=None):
     run = Run(budget, clock)
-    access = {}
+    rt, access = dict(tokens), {}                  # owner_tokens gives (owner, refresh token) pairs
     for owner in sorted({u.get("owner") or "" for u in units}):
         try:
-            access[owner] = ga4.access_token(cid, sec, tokens[owner]) if owner in tokens else None
+            access[owner] = ga4.access_token(cid, sec, rt[owner]) if owner in rt else None
         except Exception:
             access[owner] = None
     out, lock, done = dict(carried or {}), threading.Lock(), []

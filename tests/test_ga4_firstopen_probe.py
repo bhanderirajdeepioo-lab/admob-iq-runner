@@ -83,7 +83,7 @@ def test_main_writes_privately_resumes_and_prints_counts_only(monkeypatch, capsy
     monkeypatch.setattr(fp.vr, "units_from_state", lambda st: [_unit(PKG), _unit(PKG_B)])
     monkeypatch.setattr(fp.gu, "load_state", lambda d: {})
     monkeypatch.setattr(fp.ga4, "access_token", lambda c, s, r: "tok")
-    monkeypatch.setattr(fp.ga4_probe, "owner_tokens", lambda env: ({"o": "rt"}, None))
+    monkeypatch.setattr(fp.ga4_probe, "owner_tokens", lambda env: ([("o", "rt")], None))   # pairs, as the real one
     put = {}
     monkeypatch.setattr(fp.pr, "write_private", lambda path, text, msg: bool(put.update({path: text})) or True)
     env = {"GA4_CLIENT_ID": "c", "GA4_CLIENT_SECRET": "s", "FIRSTOPEN_DATA_DIR": str(tmp_path)}
