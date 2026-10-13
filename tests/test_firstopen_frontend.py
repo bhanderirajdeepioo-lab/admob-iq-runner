@@ -43,6 +43,7 @@ def test_pointer_and_lazy_load(out):
 def test_all_apps(out):
     assert out["all_chips"] == [["Worse", 1], ["Watch", 0], ["Better", 1], ["Normal", 1], ["Too early", 0], ["N/A", 0]]
     assert out["all_rows"] == ["Alpha Pick", "Beta Pick", "Gamma"] and not out["all_hidden"]   # Worse first; the picker's names
+    assert out["all_icons"] == [["id-a", "Alpha Pick", "Alpha Pick"], ["id-b", "Beta Pick", "Beta Pick"], ["id-c", "Gamma", "Gamma"]]   # every name with its own logo
     assert out["all_smp"] and out["all_zero_pts"]
     assert out["sort_rows"] == ["Beta Pick", "Gamma", "Alpha Pick"]
     assert out["filt_rows"] == ["Alpha Pick"] and out["filt_minh"] == "900px"   # the page keeps its height (no jump)

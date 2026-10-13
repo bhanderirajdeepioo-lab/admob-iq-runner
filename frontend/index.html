@@ -2470,7 +2470,7 @@ body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecust
 .fo-t thead th{position:sticky;top:0;z-index:2;background:var(--panel2)}.fo-t thead th:first-child{z-index:3}
 .fo-t td.fo-stc{text-align:left}
 .fo-t td small{display:block;color:var(--faint);font-size:11px}
-.fo-t td.fo-nm{color:#fff;font-weight:600}.fo-t td.fo-nf{color:var(--muted)}
+.fo-t td.fo-nm{color:#fff;font-weight:600}.fo-an{display:inline-flex;align-items:center;gap:9px}.fo-an .aicon{flex:none}.fo-t td.fo-nf{color:var(--muted)}
 .fo-t tbody tr.clk{cursor:pointer}.fo-t tbody tr.clk:hover td{background:var(--raise)}
 .fo-t td.up{color:var(--good)}.fo-t td.down{color:var(--bad)}
 .fo-crumb{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px;color:var(--muted);font-size:12px}
@@ -6239,7 +6239,7 @@ function tableHtml(){ const cols=[['app','App'],['rank','Status'],['s2h','Splash
   const head=cols.map(([k,l])=>`<th aria-sort="${SORT.k===k?(SORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-fo-sort="${k}">${l}</button></th>`).join('')+'<th>Steps (of Splash)</th>';
   const byk={}; (RAW.apps||[]).forEach(a=>{ byk[a.key]=a; });
   const rows=sortRows((RAW.summary||[]).filter(x=>byk[x.key]&&vis(byk[x.key].app_id)&&(!FILT||x.status===FILT)));
-  const body=rows.map(x=>{ const nm=nameOf(byk[x.key]); return `<tr class="clk" data-fo-app="${E(nm)}"><td class="fo-nm">${E(nm)}</td><td class="fo-stc">${chip(x.status)}${x.why?`<small>${E(x.why)}</small>`:''}</td>`
+  const body=rows.map(x=>{ const a=byk[x.key], nm=nameOf(a); return `<tr class="clk" data-fo-app="${E(nm)}"><td class="fo-nm"><span class="fo-an">${appIconId(a.app_id,nm,22)}<span>${E(nm)}</span></span></td><td class="fo-stc">${chip(x.status)}${x.why?`<small>${E(x.why)}</small>`:''}</td>`
     +`<td>${SMP(x.sample)}<b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td><td class="${x.change!=null&&x.change<=-0.02?'down':x.change!=null&&x.change>=0.05?'up':''}">${PT(x.change)}</td>`
     +`<td>${P(x.s2h_any)}</td><td>${P(x.opened)}</td><td>${N(x.fo_day)}</td><td>${E(stepsText(x))}</td></tr>`; }).join('')||`<tr><td colspan="9" class="faint">Is status me koi app nahi</td></tr>`;
   return `<div class="fo-tw"><table class="fo-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`; }

@@ -37,6 +37,7 @@ const ctx = {
   fmtMon: k => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+String(k).slice(5, 7) - 1] + ' ' + String(k).slice(0, 4),
   setApp: n => { APPSET.push(n); },
   hubStChip: k => `<span class="hub-st st-${k}">${k}</span>`,
+  appIconId: (id, name, size) => `<span class="aicon" data-iid="${id}" data-ian="${name}" data-sz="${size}"></span>`,
   WD: { sti: { bigda: '🔴 Worse', dhyan: '🟡 Watch', behtar: '🟢 Better', normal: '⚪ Normal', jaldi: '⏳ Too early', lagu: '— N/A' } },
   uniVis: id => id !== 'id-hidden',
   appIdOf: name => ({ 'Alpha Pick': 'id-a', 'Beta Pick': 'id-b' })[name] || '',
@@ -90,6 +91,7 @@ const tick = () => new Promise(r => setTimeout(r, 0));
     out.all_chips = [...h.matchAll(/data-fo-filt="([^"]+)"[^>]*><span>[^<]*<\/span> <b>(\d+)<\/b>/g)].map(m => [m[1], +m[2]]);
     out.all_rows = [...h.matchAll(/<tr class="clk" data-fo-app="([^"]+)"/g)].map(m => m[1]);
     out.all_hidden = h.includes('Hidden');
+    out.all_icons = [...h.matchAll(/<td class="fo-nm"><span class="fo-an"><span class="aicon" data-iid="([^"]+)" data-ian="([^"]+)" data-sz="22"><\/span><span>([^<]+)<\/span>/g)].map(m => [m[1], m[2], m[3]]);
     out.all_smp = /fo-smp[^>]*>≈<\/span><b>90%<\/b>/.test(h);
     out.all_zero_pts = h.includes('>0 pts<') && !h.includes('−0 pts');
     // a column sort (Splash → Home, high first) and the chip filter
