@@ -469,6 +469,26 @@ def _audience_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+def _firstopen_step(dashboard, data_dir, out_dir, s):
+    """🆕 First open tab (admob_iq.firstopen_build): one lazy file from the private funnel stores, its pointer and ONE
+    counts-only line → its _headers path (one splat rule). Switched off (FIRSTOPEN_TAB=false) or failing: the file
+    removed, nothing else changes."""
+    try:
+        from . import firstopen_build as fob
+        if not fob.enabled(s):
+            fob.off(out_dir)
+            return []
+        paths = fob.run(dashboard, data_dir, out_dir, s)
+        line = fob.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return list(paths)
+    except Exception as e:
+        dashboard.pop("firstopen", None)
+        print(f"first open skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 def _intraday_step(dashboard, data_dir, report_tz, now=None):
     from . import intraday_build as ib
     ib.step(dashboard, data_dir, report_tz, now)
@@ -1673,6 +1693,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # same step wrote + the GA4 Audience stores — OPTIONAL (AUDIENCE_TAB) and failure-isolated; without this build's
     # Active users data it leaves no file behind
     aud_paths = _audience_step(dashboard, data_dir, out_dir, s)
+    aud_paths = aud_paths + _firstopen_step(dashboard, data_dir, out_dir, s)
 
     # 📈 eCPM "same time yesterday": this build's point of today's totals so far (data/ecpm_intraday.json) — never for
     # the sample data, failure-isolated, counts-only line

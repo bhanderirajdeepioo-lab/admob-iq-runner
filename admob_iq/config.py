@@ -81,6 +81,9 @@ def settings() -> dict:
         # 👥 Audience tab: who still has each app, who opens it, who went quiet and for how many months (audience.json.gz,
         # one lazy file; never an alert) — off: no file, no pointer, the page without the tab (a rollback without a push)
         "audience_tab": _env("AUDIENCE_TAB", "true").lower() == "true",
+        # 🆕 First open tab: first_open → Splash → Home (and Language / Permission / Intro) per app per day, the strict GA4
+        # funnel kept for good by fetch.ga4_firstopen (firstopen.json.gz, one lazy file) — off: no file, no pointer
+        "firstopen_tab": _env("FIRSTOPEN_TAB", "true").lower() == "true",
         # 🗂 Review Studio: the Review tab's Studio (review/studio/<day>.json.gz, one lazy file per review day, frozen with
         # that day's cards; never an alert) — off: no file, no pointer, the older Review tab exactly as before
         "review_studio": _env("REVIEW_STUDIO", "true").lower() == "true",
@@ -102,6 +105,10 @@ def settings() -> dict:
         # written or printed. GA4_AUDIENCE_BUDGET_SEC = its own seconds per build (no app is started past it)
         "ga4_audience": _env("GA4_AUDIENCE", "false").lower() == "true",
         "ga4_audience_budget_sec": _int_env(("GA4_AUDIENCE_BUDGET_SEC",), 180),
+        # 🆕 First open: GA4 funnel reads (fetch.ga4_firstopen: the screens weekly, a one-time backfill of what GA4 still
+        # has, the last 15 days every 6 hours). Off: nothing of it is read, written or printed
+        "ga4_firstopen": _env("GA4_FIRSTOPEN", "false").lower() == "true",
+        "ga4_firstopen_budget_sec": _int_env(("GA4_FIRSTOPEN_BUDGET_SEC",), 150),
     }
 
 

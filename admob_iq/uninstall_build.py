@@ -233,6 +233,14 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                                                       budget=s.get("ga4_audience_budget_sec") or gaud.BUDGET_SEC))
         except Exception as e:
             aud_line = "ga4 audience skipped: %s" % type(e).__name__
+    if s.get("ga4_firstopen"):                          # 🆕 First open (GA4_FIRSTOPEN, off by default): its own funnel
+        try:                                            # reads and store, a failure costs that step only
+            from .fetch import ga4_firstopen as gfo
+            print(gfo.log_line(gfo.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                               budget=s.get("ga4_firstopen_budget_sec") or gfo.BUDGET_SEC)),
+                  file=sys.stderr)
+        except Exception as e:
+            print("ga4 first open skipped: %s" % type(e).__name__, file=sys.stderr)
     state = gu.load_state(data_dir)
     os.makedirs(out_dir, exist_ok=True)
     details, rows, no_ga4, files = [], [], [], [ASSET]

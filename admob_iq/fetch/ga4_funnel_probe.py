@@ -48,77 +48,8 @@ CHUNK = 15                          # the funnel breakdown returns at most 15 va
 SPLASH_WITHIN = "600s"
 STEP_WITHIN = "3600s"
 STEPS = ("home", "home_any", "language", "permission", "intro")
-_NOT = re.compile(r"callercad|caller|audiencenetwork|adactivity|^ad[a-z]*activity$|fullscreenwebview|playcore|interstitial|"
-                  r"welcome|proxy|license|about|hint|dexter|tedpermission", re.I)
-
-
-def kind(c):
-    """A screen class → its first-open step ('splash' / 'language' / 'permission' / 'intro' / 'home') or None."""
-    l = (c or "").lower()
-    if not l or l == "(not set)" or re.search(r"callercad|audiencenetwork|adactivity|^ad[a-z]*activity$|fullscreenwebview|"
-                                             r"playcore|interstitial|welcome", l):
-        return None
-    if "lang" in l:
-        return "language"
-    if re.search(r"permission|consent|privacy", l):
-        return "permission"
-    if re.search(r"intro|onboard|tutorial|guide", l):
-        return "intro"
-    if re.search(r"splash|launch|start|gateway", l):
-        return "splash"
-    if re.search(r"main|home", l) and not re.search(r"search|dialog", l):
-        return "home"
-    return None
-
-
-def pick_steps(disc):
-    """disc = [[class, first-session users], …] → {step: class} (Splash and Home needed for the funnel)."""
-    best = {}
-    for c, n in disc:
-        k = kind(c)
-        if k and (k not in best or n > best[k][1]):
-            best[k] = (c, n)
-    if "home" not in best:                         # a home with its own name: the most-seen screen that is no step
-        rest = [(c, n) for c, n in disc if c and c != "(not set)" and not kind(c) and not _NOT.search(c)]
-        if rest:
-            best["home"] = max(rest, key=lambda x: x[1])
-    return {k: v[0] for k, v in best.items()}
-
-
-def _screen(cls):
-    return {"funnelEventFilter": {"eventName": "screen_view", "funnelParameterFilterExpression": {"funnelParameterFilter": {
-        "eventParameterName": "firebase_screen_class", "stringFilter": {"matchType": "EXACT", "value": cls}}}}}
-
-
-def funnel_body(splash, cls, start, end, breakdown, any_time=False):
-    sp = {"name": "splash", "filterExpression": _screen(splash)}
-    if not any_time:
-        sp["withinDurationFromPriorStep"] = SPLASH_WITHIN
-    return {"dateRanges": [{"startDate": start.isoformat(), "endDate": end.isoformat()}],
-            "funnel": {"isOpenFunnel": False, "steps": [
-                {"name": "first_open", "filterExpression": {"funnelEventFilter": {"eventName": "first_open"}}}, sp,
-                {"name": "step", "withinDurationFromPriorStep": STEP_WITHIN, "filterExpression": _screen(cls)}]},
-            "funnelBreakdown": {"breakdownDimension": {"name": breakdown}, "limit": str(CHUNK)}}
-
-
-def parse_table(j):
-    """The funnel table → {step name: {breakdown value: activeUsers}} (the step names without GA4's '1. ' prefix)."""
-    t = (j or {}).get("funnelTable") or {}
-    dims = [h.get("name") for h in t.get("dimensionHeaders") or []]
-    mets = [h.get("name") for h in t.get("metricHeaders") or []]
-    out = {}
-    for r in t.get("rows") or []:
-        dv = [x.get("value") for x in r.get("dimensionValues") or []]
-        mv = [x.get("value") for x in r.get("metricValues") or []]
-        row = dict(zip(dims, dv))
-        step = re.sub(r"^\d+\.\s*", "", str(row.get("funnelStepName") or ""))
-        b = next((row[d] for d in dims if d != "funnelStepName"), "")
-        users = dict(zip(mets, mv)).get("activeUsers")
-        try:
-            out.setdefault(step, {})[str(b)] = int(float(users or 0))
-        except ValueError:
-            continue
-    return out
+# the screens and the funnel: the hourly fetch's own (one logic for both)
+from admob_iq.fetch.ga4_firstopen import _screen, funnel_body, kind, parse_table, pick_steps  # noqa: E402,F401
 
 
 class _Alpha(ga4.Ga4App):

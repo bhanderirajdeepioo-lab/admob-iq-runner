@@ -2443,6 +2443,65 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-kpis .as-spl2,:is(#as-root,#as-layer) .as-kpis2 .as-spl2{width:auto!important;height:auto!important;display:flex;flex-wrap:wrap;gap:1px 8px;min-height:0}
 :is(#as-root,#as-layer) .as-kpis .as-spl2 span,:is(#as-root,#as-layer) .as-kpis2 .as-spl2 span{position:static;transform:none}}
   /* ===== /ACTIVE USERS STUDIO ===== */
+/* ---------- 🆕 First open (scoped to the screen) ---------- */
+body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecustom{display:none!important}   /* every number says its own days */
+.screen[data-screen="firstopen"]{max-width:1360px}
+.screen[data-screen="firstopen"] .fo-card{margin-bottom:14px}
+.screen[data-screen="firstopen"] .fo-card .ct{flex-wrap:wrap;gap:4px 12px;align-items:baseline}
+.fo-note{color:var(--muted);font-size:12px;line-height:1.5;margin:0 0 12px;max-width:820px}.fo-note b{color:var(--ink2)}
+.fo-lead{font-size:12.5px}
+.fo-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.fo-chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:4px 12px;border-radius:999px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.fo-chip b{font-size:14px;color:#fff;font-variant-numeric:tabular-nums}
+.fo-chip.st-bigda{background:var(--bad-b);border-color:#6b2a2e;color:#ffb3b3}.fo-chip.st-dhyan{background:var(--watch-b);border-color:#6b5522;color:#f3d48a}
+.fo-chip.st-behtar{background:var(--good-b);border-color:#1f6b52;color:#8ff0c8}.fo-chip.st-jaldi,.fo-chip.st-lagu{color:var(--muted);background:var(--panel2)}
+.fo-chip[aria-pressed="true"]{outline:2px solid var(--cyan);outline-offset:1px}
+.fo-tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--line)}
+.fo-tall{max-height:560px;overflow-y:auto}
+.fo-t{min-width:760px}.fo-t.fo-mini{min-width:560px}
+.fo-t th{white-space:nowrap;text-align:right;padding:0}
+.fo-t th:not(:has(button)){padding:9px 12px}
+.fo-t th button{display:flex;align-items:center;justify-content:flex-end;width:100%;min-height:40px;padding:6px 12px;background:none;border:none;color:inherit;font:inherit;line-height:1.25;text-transform:inherit;letter-spacing:inherit;cursor:pointer;white-space:nowrap}
+.fo-t th[aria-sort="ascending"] button,.fo-t th[aria-sort="descending"] button{color:var(--cyan)}
+.fo-t td{white-space:nowrap;text-align:right;padding:9px 12px;font-variant-numeric:tabular-nums}
+.fo-t td b{color:#fff}
+.fo-t th:first-child,.fo-t td:first-child{position:sticky;left:0;z-index:1;background:var(--panel);text-align:left;white-space:normal;min-width:170px;max-width:260px;box-shadow:1px 0 0 var(--line)}
+.fo-t th:first-child button{justify-content:flex-start}
+.fo-t thead th{position:sticky;top:0;z-index:2;background:var(--panel2)}.fo-t thead th:first-child{z-index:3}
+.fo-t td.fo-stc{text-align:left}
+.fo-t td small{display:block;color:var(--faint);font-size:11px}
+.fo-t td.fo-nm{color:#fff;font-weight:600}.fo-t td.fo-nf{color:var(--muted)}
+.fo-t tbody tr.clk{cursor:pointer}.fo-t tbody tr.clk:hover td{background:var(--raise)}
+.fo-t td.up{color:var(--good)}.fo-t td.down{color:var(--bad)}
+.fo-crumb{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px;color:var(--muted);font-size:12px}
+.fo-back{min-height:36px;padding:4px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.fo-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:0 14px}
+@media (min-width:1180px){.fo-grid{grid-template-columns:minmax(300px,1fr) minmax(0,2fr)}}
+.fo-bar{display:grid;grid-template-columns:86px minmax(0,1fr) auto;align-items:center;gap:10px;margin:0 0 12px;font-size:12.5px}
+.fo-bl{color:var(--ink2);font-weight:600}
+.fo-bt{position:relative;height:16px;border-radius:5px;background:var(--panel2);overflow:hidden}
+.fo-bt i{position:absolute;left:0;top:0;bottom:0;background:var(--blue);border-radius:5px}.fo-bt i.h{background:var(--good)}
+.fo-bt u{position:absolute;left:0;bottom:0;height:3px;background:var(--watch);text-decoration:none}
+.fo-bv{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.fo-bv b{color:#fff}.fo-bv small{color:var(--faint)}
+.fo-chart{position:relative;min-height:210px}
+.fo-chart svg{display:block;overflow:visible;touch-action:pan-y}
+.fo-chart text{fill:var(--faint);font-size:10.5px}
+.fo-chart line.g{stroke:var(--line);stroke-width:1}
+.fo-chart path{fill:none;stroke-width:2;stroke-linejoin:round}.fo-chart path.h{stroke:var(--good)}.fo-chart path.o{stroke:var(--blue);stroke-width:1.5;opacity:.8}
+.fo-chart circle.hd{fill:var(--good)}.fo-chart text.hl{fill:var(--good);font-weight:800;font-size:11.5px}.fo-chart text.ol{fill:var(--blue);font-weight:700;font-size:11px}
+.fo-chart line.rule{stroke:var(--muted);stroke-dasharray:3 3}
+.fo-tip{position:absolute;top:0;z-index:6;min-width:170px;max-width:250px;background:#0b1220;border:1px solid #38507a;border-radius:9px;padding:7px 10px;font-size:12px;color:var(--ink2);box-shadow:0 8px 24px rgba(0,0,0,.5);line-height:1.5;pointer-events:none}
+.fo-tip b{color:#fff}
+.fo-lg{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:11.5px;color:var(--muted);margin-top:6px}
+.fo-lg span::before{content:"";display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.fo-lg .a::before{background:var(--good)}.fo-lg .b::before{background:var(--blue)}.fo-lg .c::before{background:none;border-top:2px dashed var(--muted);height:0}
+.fo-chart path.nf{stroke-dasharray:4 4;opacity:.55}
+.fo-smp{color:var(--watch);font-weight:800;margin-right:3px;cursor:help}
+@media (max-width:760px){.fo-grid{grid-template-columns:minmax(0,1fr)}
+  .fo-t th:first-child,.fo-t td:first-child{min-width:128px;max-width:150px}.fo-t td{padding:9px 10px}.fo-t th button{padding:6px 10px}
+  .fo-bar{grid-template-columns:74px minmax(0,1fr) auto;gap:8px}.fo-tip{min-width:0;font-size:11.5px}
+  .fo-t.fo-mini{min-width:0}.fo-mini th{white-space:normal;line-height:1.25}.fo-mini th:not(:has(button)),.fo-mini td{padding:8px 6px}
+  .fo-mini th:first-child,.fo-mini td:first-child{min-width:80px;max-width:100px}.fo-mini td{font-size:12.5px}.fo-mini th{font-size:10px;letter-spacing:.02em}.fo-wide{display:none}}
 /* ---------- 👥 Audience (the approved Audience demo, ported: every rule scoped to #au-root / #au-tip) ---------- */
 body[data-screen="audience"] #rangectl,body[data-screen="audience"] #rangecustom{display:none!important}   /* every section says its own dates */
 body[data-screen="audience"] #smp-pick{display:inline-flex}
@@ -3807,6 +3866,7 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
       <li><button data-screen="active"><span class="i">👥</span> Active users</button></li>
       <li><button data-screen="uninstall"><span class="i">🚪</span> Uninstall</button></li>
       <li id="nav-aud-li" hidden><button data-screen="audience"><span class="i">👪</span> Audience</button></li>
+      <li id="nav-fo-li" hidden><button data-screen="firstopen"><span class="i">🆕</span> First open</button></li>
     </ul>
     <div class="nav-lbl">Act</div>
     <ul class="nav">
@@ -4107,6 +4167,7 @@ const TITLES={overview:["Portfolio Overview","Live · engine-computed"],placemen
   active:["Active users","Old users, comebacks, time & ad revenue (GA4)"],
   uninstall:["Uninstall","Installs vs uninstalls (GA4)"],
   audience:["Audience","Who has the app · who opens it · who went quiet (GA4)"],
+  firstopen:["First open","Pehli baar khola → Splash → Home · full history (GA4)"],
   review:["Daily Review","One card per app per day · team review"],
   datewise:["Date-wise Report","Har din · spend · installs · revenue · P/L"],
   ecpm:["eCPM trend","Daily · monthly · har app · ad units"],
@@ -4379,6 +4440,8 @@ function render(){
   root.append(renderEcpm());     // 📈 eCPM trend (from the Overview "Avg eCPM" tile): an empty shell, filled by show('ecpm')
   root.append(renderAudience()); // 👪 Audience: an empty shell, filled by show('audience') (its app / mode / day / open folds live in AU)
   { const li=document.getElementById('nav-aud-li'); if(li) li.hidden=!AU.ptr(); }   // the tab only when this build wrote its file
+  root.append(renderFirstOpen()); // 🆕 First open: the same (filled by show('firstopen'), its lazy file loads on the first open)
+  { const li=document.getElementById('nav-fo-li'); if(li) li.hidden=!FO.ptr(); }
   if(HUB.on) root.append(renderHubRv());   // ✨ hub: an app's ✅ Review history tab
   root.append(renderReview());   // ONE persistent node: drafts / open panels survive the 5-min refresh and the ₹/$ toggle
   rvRestoreFocus();
@@ -4550,6 +4613,7 @@ function show(id){
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-sub').textContent=TITLES[id][1];}
   if(id==='ecpm') ecPaint(); else ecLeft();   // 📈 eCPM trend: filled when shown (its own range); leaving it takes its Back steps off
   if(id==='audience') AU.show(); else AU.left();   // 👪 Audience: the same (its lazy file loads on the first open)
+  if(id==='firstopen') FO.show();                  // 🆕 First open: the same
   const _rvKeep=rvKeepScroll(id);           // Review re-shown by the 5-min refresh / ₹⇄$: stay where the reader was
   rvOnShow(id);                             // body[data-screen] (hides App / Period on Review) + the #review hash
   if(!_rvKeep&&!REFRESH_SILENT&&!SP.keep) window.scrollTo({top:0});   // a silent background refresh / a same-view rebuild (rerender) never jumps the page
@@ -4606,12 +4670,12 @@ const HUB_LS='iq_layout';
 // tab id → [label, icon, screen at All apps, screen at an app] ('' = the tab is not in that scope)
 const HUB_T={overview:['Overview','📊','overview','overview'],revenue:['Revenue & Ad units','💵','placements','appdetail'],
   ecpm:['eCPM','📈','ecpm','ecpm'],active:['Active users','👥','active','active'],uninstall:['Uninstall','🚪','uninstall','uninstall'],
-  value:['Install value','💸','value','value'],audience:['Audience','👪','audience','audience'],mediation:['Mediation','🔗','mediation','mediation'],
+  value:['Install value','💸','value','value'],audience:['Audience','👪','audience','audience'],firstopen:['First open','🆕','firstopen','firstopen'],mediation:['Mediation','🔗','mediation','mediation'],
   roas:['Marketing ROAS','💰','roas','roas'],baseline:['Baseline','📐','baseline','baseline'],deductions:['Deductions','📉','deductions','deductions'],
   health:['Account Health','🛡️','health','health'],movers:['Movers','↕️','movers','movers'],alerts:['Alerts','🔔','','alerts'],
   review:['Review history','✅','','hubrv']};
-const HUB_ALL=['overview','revenue','ecpm','active','uninstall','value','audience','mediation','roas','baseline','deductions','health','movers'];
-const HUB_APP=['overview','revenue','ecpm','active','uninstall','value','audience','baseline','alerts','review','mediation','roas','deductions','health','movers'];
+const HUB_ALL=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','mediation','roas','baseline','deductions','health','movers'];
+const HUB_APP=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','baseline','alerts','review','mediation','roas','deductions','health','movers'];
 const HUB_PAGE={review:1,reco:1,settings:1};                                    // left-nav pages outside Home (Alerts: below)
 const HUB_DRILL={datewise:'overview',countries:'overview',reportcard:'revenue'};   // drill pages: inside the tab they came from
 function hubLsGet(){ try{ return localStorage.getItem(HUB_LS); }catch(e){ return null; } }
@@ -4674,7 +4738,8 @@ function hubNameOf(key){ if(!key||key==='all') return '';
   return n==null?null:n; }
 // ---- routes ----
 function hubParse(h){ const m=/^#home(?:\/([a-z0-9]{1,16})(?:\/([a-z]+))?)?\/?$/.exec(String(h||'')); return m?{key:m[1]||'all',tab:m[2]||''}:null; }
-function hubTabs(app){ let au=false; try{ au=!!AU.ptr(); }catch(e){} return (app?HUB_APP:HUB_ALL).filter(t=>t!=='audience'||au); }
+function hubTabs(app){ let au=false, fo=false; try{ au=!!AU.ptr(); }catch(e){} try{ fo=!!FO.ptr(); }catch(e){}
+  return (app?HUB_APP:HUB_ALL).filter(t=>(t!=='audience'||au)&&(t!=='firstopen'||fo)); }
 function hubHost(t,app){ const x=HUB_T[t]; return x?(app?x[3]:x[2]):''; }
 function hubHashOf(r){ return '#home/'+hubKeyOf(r.a)+'/'+r.t; }
 function hubHash(){ return hubHashOf({a:APP,t:HUB.tab}); }
@@ -4834,7 +4899,7 @@ const HUB_RVST={red:'bigda',amber:'dhyan',green:'behtar',normal:'normal',wait:'j
 // card id, tab, label, icon, source (rv:<review feature> = today's Review card for the app)
 const HUB_FC=[['revenue','revenue','Revenue & Ad units','💵','rv:kamai'],['ecpm','ecpm','eCPM','📈','ecpm'],['active','active','Active users','👥','rv:active'],
   ['uninstall','uninstall','Uninstall','🚪','rv:uninstall'],['update','uninstall','Update impact','📦','rv:update'],['value','value','Install value','💸','rv:value'],
-  ['audience','audience','Audience','👪','aud'],['baseline','baseline','Baseline','📐','base'],['alerts','alerts','Alerts','🔔','alerts'],
+  ['audience','audience','Audience','👪','aud'],['firstopen','firstopen','First open','🆕','fo'],['baseline','baseline','Baseline','📐','base'],['alerts','alerts','Alerts','🔔','alerts'],
   ['review','review','Review history','✅','review'],['mediation','mediation','Mediation','🔗','rv:mediation'],['roas','roas','Marketing ROAS','💰','rv:ads'],
   ['deductions','deductions','Deductions','📉','rv:deduct'],['health','health','Account Health','🛡️','rv:health'],['movers','movers','Movers','↕️','movers']];
 function hubStChip(st){ const k=WD.sti[st]?st:'lagu'; return `<span class="hub-st st-${k}">${WD.sti[k]}</span>`; }
@@ -4845,8 +4910,8 @@ function hubRvApp(f,name){ if(!f||!Array.isArray(f.apps)) return null; const k=h
 function hubFcNote(){ const o=hubRvOpen();
   return o&&o.f&&o.f.day?`Status = aaj ka ✅ Review card (${fmtD(o.f.day)}) · eCPM, Audience, Baseline, Alerts = dashboard ka apna data`
     :(HUB.rv.loading||!HUB.rv.idx?'⏳ Review card load ho raha hai…':'Review card abhi nahi — eCPM, Audience, Baseline, Alerts dashboard ke apne data se'); }
-function hubCardsHtml(name){ const o=hubRvOpen(), ra=o&&o.f?hubRvApp(o.f,name):null, fx=o&&o.f&&o.f.meta?o.f.meta.fx:null; let au=false; try{ au=!!AU.ptr(); }catch(e){}
-  return HUB_FC.filter(c=>c[0]!=='audience'||au).map(c=>{ const x=hubCard(c,name,ra,o,fx);
+function hubCardsHtml(name){ const o=hubRvOpen(), ra=o&&o.f?hubRvApp(o.f,name):null, fx=o&&o.f&&o.f.meta?o.f.meta.fx:null; let au=false, fo=false; try{ au=!!AU.ptr(); }catch(e){} try{ fo=!!FO.ptr(); }catch(e){}
+  return HUB_FC.filter(c=>(c[0]!=='audience'||au)&&(c[0]!=='firstopen'||fo)).map(c=>{ const x=hubCard(c,name,ra,o,fx);
     return `<div class="card hub-fc" data-st="${x.st}" data-fc="${c[0]}"><div class="hfc-h"><span class="hfc-i" aria-hidden="true">${c[3]}</span><span class="hfc-n">${c[2]}</span></div>`
       +`${hubStChip(x.st)}<div class="hfc-l">${x.line}</div><button type="button" class="hfc-o" onclick="hubTab('${c[1]}')" aria-label="Open ${hAttr(c[2])}">Open →</button></div>`; }).join(''); }
 function hubCard(c,name,ra,o,fx){ const src=c[4];
@@ -4872,6 +4937,7 @@ function hubCard(c,name,ra,o,fx){ const src=c[4];
     c/=1e6; p/=1e6; if(!c&&!p) return {st:'lagu',line:'No AdMob revenue'};
     const ch=p>0?(c-p)/p:null, sg=v=>(v<0?'−':'+')+money(Math.abs(v));
     return {st:'info',line:`<b>${sg(c-p)}</b> last 7 days vs 7 before${ch!=null?` (${ch>=0?'+':'−'}${Math.abs(Math.round(ch*100))}%)`:''}${top&&top.d?` · top: ${hAttr(top.n)} ${sg(top.d)}`:''}`}; }
+  if(src==='fo'){ try{ return FO.card(name); }catch(e){ return {st:'lagu',line:'First open ka data nahi'}; } }   // 🆕 from the dashboard's own pointer (no file load)
   if(src==='aud'){ let a=null, r=null, CNf=null;
     try{ if(AU.ready()){ AU._.prep(); const k=AU._.keyOfName(name); a=AU._.BYK()[k]||null; CNf=AU._.CN; if(a&&!a.kam) r=AU._.stripReach(a); }
       else AU.ensure(()=>{ hubCardsPaint(); try{ if(hubScr()==='audience') AU.paint(); }catch(e){} }); }catch(e){}   // (AU's own paint waits on the same load)
@@ -6124,6 +6190,145 @@ return {ptr, ensure, render, paint, show, left, retry, ready:()=>!!RAW&&!!ptr(),
      sec:{strip:secStrip,phone:secPhone,journey:secJourney,pakke:secPakke,dead:secDead,mdead:secDeadMonths,mact:secActMonths,dau:secDauMix,money:secMoney,how:secHow,table:secTable,day:secDay,module:secModule}}};
 })();
 function renderAudience(){ return AU.render(); }
+// ---- 🆕 First open (owner, 13 Oct: "splash se home tak kitne pahunch rahe hain for the first time", the FULL history, at a
+// glance what is a problem / good / normal). One lazy file (firstopen.json.gz, firstopen_build): per app every day of the
+// strict GA4 funnel first_open → Splash (10 min) → Home (60 min) — Home never above Splash — and Language / Permission /
+// Intro the same way; "incl. late open" = the Splash at any time after first_open. All apps: status chips + a table (tap
+// = the app); an app: Today / Yesterday / 7 days / usual, the steps, every day as a chart (hover / tap = numbers), every
+// month, every day. The top bar's App picker drives it (setApp), as on every tab.
+const FO=(()=>{
+let RAW=null, VER=null, LOADING=false, ERR=false, EL=null, SORT={k:'rank',dir:1}, TIP=null;
+const IX={first_open:1,splash:2,home:3,splash_any:4,home_any:5,language:6,permission:7,intro:8,sample:9};
+const SMP=v=>v!=null&&v<1?`<span class="fo-smp" title="GA4 ne sirf ~${Math.max(1,Math.round(v*100))}% data padha (sampling): numbers lagbhag hain">≈</span>`:'';
+const STEP_NAME={splash:'Splash',intro:'Intro',language:'Language',permission:'Permission',home:'Home'};
+const ST_KEY={Worse:'bigda',Watch:'dhyan',Better:'behtar',Normal:'normal','Too early':'jaldi','N/A':'lagu'};
+const RANK={Worse:0,Watch:1,Better:2,Normal:3,'Too early':4,'N/A':5};
+const P=v=>v==null||!isFinite(v)?'—':Math.round(v*100)+'%';
+const N=v=>v==null||!isFinite(v)?'—':Math.round(v).toLocaleString('en-US');
+const PT=v=>{ if(v==null) return '—'; const r=Math.round(Math.abs(v)*100); return r===0?'0 pts':(v>0?'+':'−')+r+' pts'; };
+const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const vis=id=>{ try{ return uniVis(id); }catch(e){ return true; } };   // the apps hidden in Settings stay hidden here too
+let FILT='';   // the status chip tapped ('' = every app)
+// the top bar's name for an app id (the App picker's), else the file's own name
+function nameOf(a){ const c=((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalog)||[]).find(z=>z.app_id===a.app_id); return (c&&c.app_name)||a.app; }
+function appOf(name){ if(!RAW||!name) return null; const id=appIdOf(name), xs=(RAW.apps||[]).filter(a=>vis(a.app_id));
+  return (id&&xs.find(a=>a.app_id===id))||xs.find(a=>a.app===name)||xs.find(a=>nameOf(a)===name)||null; }
+function ptr(){ const p=(typeof DATA!=='undefined'&&DATA&&DATA.firstopen)||null; return (p&&typeof p.file==='string'&&/^[\w.-]+\.json\.gz$/.test(p.file))?p:null; }
+function ensure(cb){ const p=ptr(); if(!p||LOADING||(RAW&&VER===p.v)||(ERR&&VER===p.v)) return; LOADING=true;
+  fetchGzJson(p.file+'?v='+encodeURIComponent(p.v||'')).then(j=>{ if(!j||j.v!==1||!Array.isArray(j.apps)) throw new Error('format');
+      RAW=j; VER=p.v; ERR=false; LOADING=false; cb&&cb(); })
+    .catch(()=>{ ERR=!RAW; VER=p.v; LOADING=false; cb&&cb(); }); }
+function onScreen(){ const on=document.querySelector('.screen.on'); return !!(on&&on.dataset&&on.dataset.screen==='firstopen'); }
+function render(){ const s=screenDiv('firstopen'); EL=s; return s; }
+function sum(rows,f){ let t=0; for(const r of rows) t+=+r[IX[f]]||0; return t; }
+function rate(a,b){ return b>0?a/b:null; }
+// the hub's app card: from the dashboard's own pointer (no file load)
+function card(name){ const p=ptr(), id=appIdOf(name), x=p&&p.apps?((id&&Object.values(p.apps).find(v=>v&&v.id===id))||p.apps[name]||null):null;
+  if(!p) return {st:'lagu',line:'First open ka data nahi'};
+  if(!x) return {st:'lagu',line:'Is app ka GA4 funnel nahi'};
+  return {st:ST_KEY[x.status]||'lagu',line:`Splash → Home <b>${P(x.s2h)}</b> · usual ${P(x.usual)}${x.change!=null?' ('+PT(x.change)+')':''}`}; }
+function chip(st){ return hubStChip(ST_KEY[st]||'lagu'); }
+// ---- all apps ----
+function sortRows(rows){ const k=SORT.k; return rows.slice().sort((a,b)=>{ const va=k==='rank'?RANK[a.status]:a[k], vb=k==='rank'?RANK[b.status]:b[k];
+  if(va==null&&vb==null) return (b.fo_day||0)-(a.fo_day||0); if(va==null) return 1; if(vb==null) return -1;
+  if(typeof va==='string') return SORT.dir*va.localeCompare(vb)||(b.fo_day||0)-(a.fo_day||0);
+  return SORT.dir*(va-vb)||(b.fo_day||0)-(a.fo_day||0); }); }
+function stepsText(x){ return Object.entries(x.steps||{}).map(([k,v])=>({language:'Lang',permission:'Perm',intro:'Intro'}[k]||k)+' '+P(v[0])).join(' · ')||'—'; }
+function tableHtml(){ const cols=[['app','App'],['rank','Status'],['s2h','Splash → Home'],['usual','Usual'],['change','Change'],['s2h_any','Incl. late open'],
+    ['opened','Opened app'],['fo_day','First opens / day']];
+  const head=cols.map(([k,l])=>`<th aria-sort="${SORT.k===k?(SORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-fo-sort="${k}">${l}</button></th>`).join('')+'<th>Steps (of Splash)</th>';
+  const byk={}; (RAW.apps||[]).forEach(a=>{ byk[a.key]=a; });
+  const rows=sortRows((RAW.summary||[]).filter(x=>byk[x.key]&&vis(byk[x.key].app_id)&&(!FILT||x.status===FILT)));
+  const body=rows.map(x=>{ const nm=nameOf(byk[x.key]); return `<tr class="clk" data-fo-app="${E(nm)}"><td class="fo-nm">${E(nm)}</td><td class="fo-stc">${chip(x.status)}${x.why?`<small>${E(x.why)}</small>`:''}</td>`
+    +`<td>${SMP(x.sample)}<b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td><td class="${x.change!=null&&x.change<=-0.02?'down':x.change!=null&&x.change>=0.05?'up':''}">${PT(x.change)}</td>`
+    +`<td>${P(x.s2h_any)}</td><td>${P(x.opened)}</td><td>${N(x.fo_day)}</td><td>${E(stepsText(x))}</td></tr>`; }).join('')||`<tr><td colspan="9" class="faint">Is status me koi app nahi</td></tr>`;
+  return `<div class="fo-tw"><table class="fo-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`; }
+function allHtml(){ const ok=new Set((RAW.apps||[]).filter(a=>vis(a.app_id)).map(a=>a.key)), S=(RAW.summary||[]).filter(x=>ok.has(x.key)), c=k=>S.filter(x=>x.status===k).length;
+  const till=(RAW.apps||[]).reduce((m,a)=>a.final_till>m?a.final_till:m,'');
+  return `<div class="fo-chips" role="group" aria-label="Filter by status">${['Worse','Watch','Better','Normal','Too early','N/A'].map(k=>`<button type="button" class="fo-chip st-${ST_KEY[k]}" data-fo-filt="${k}" aria-pressed="${FILT===k}"><span>${WD.sti[ST_KEY[k]]}</span> <b>${c(k)}</b></button>`).join('')}</div>`
+    +`<div class="card fo-card"><div class="ct"><h3>All apps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">app pe tap = us app ka poora funnel · column pe tap = sort · status chip pe tap = sirf wo apps</span></div>`
+    +`<div id="fo-tb">${tableHtml()}</div></div>`
+    +`<p class="fo-note">Final till ${fmtD(till)} (aakhri 2 din GA4 me abhi badalte hain). Status = Splash → Home pichhle 7 final din vs usse pehle ke 28 din: 5 pts gira Worse, 2 pts Watch, 5 pts badha Better. 200 se kam Splash users (7 din) = N/A, 35 din se kam history = Too early.</p>`; }
+// ---- one app ----
+function months(rows){ const m=new Map(); for(const r of rows){ const k=r[0].slice(0,7); if(!m.has(k)) m.set(k,[]); m.get(k).push(r); } return [...m.entries()].reverse(); }
+function stepBars(a,x){ const out=[]; for(const k of ['intro','language','permission','home']){ if(k!=='home'&&!(a.steps||{})[k]) continue;
+    const v=k==='home'?[x.s2h,x.usual]:((x.steps||{})[k]||[null,null]);
+    out.push(`<div class="fo-bar"><span class="fo-bl">${STEP_NAME[k]}</span><span class="fo-bt"><i style="width:${Math.max(0,Math.min(100,(v[0]||0)*100))}%"${k==='home'?' class="h"':''}></i><u style="width:${Math.max(0,Math.min(100,(v[1]||0)*100))}%"></u></span><span class="fo-bv"><b>${P(v[0])}</b> <small>usual ${P(v[1])}</small></span></div>`); }
+  return out.join(''); }
+function appHtml(a,x){ const rows=a.days||[], fin=rows.filter(r=>r[0]<=a.final_till), t=rows[rows.length-1], y=rows[rows.length-2];
+  const cell=(r,f)=>r?f(r):'—', op=r=>P(rate(+r[IX.splash],+r[IX.first_open])), sh=r=>P(rate(+r[IX.home],+r[IX.splash])), sa=r=>P(rate(+r[IX.home_any],+r[IX.splash_any]));
+  const scr=Object.entries(a.steps||{}).map(([k,c])=>`<b>${STEP_NAME[k]||k}</b> = ${E(c)}`).join(' · ');
+  const mini=`<div class="fo-tw"><table class="fo-t fo-mini"><thead><tr><th></th><th>Today</th><th>Yesterday</th><th>Last 7 days</th><th>Usual<span class="fo-wide"> (4 weeks before)</span></th></tr></thead><tbody>`
+    +`<tr><td>First opens <small class="faint">/ day</small></td><td>${cell(t,r=>N(r[IX.first_open]))}</td><td>${cell(y,r=>N(r[IX.first_open]))}</td><td>${N(x.fo_day)}</td><td>${N(x.fo_day_usual)}</td></tr>`
+    +`<tr><td>Opened app</td><td>${cell(t,op)}</td><td>${cell(y,op)}</td><td>${P(x.opened)}</td><td>${P(x.opened_usual)}</td></tr>`
+    +`<tr><td>Splash → Home</td><td>${cell(t,sh)}</td><td>${cell(y,sh)}</td><td><b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td></tr>`
+    +`<tr><td>Incl. late open</td><td>${cell(t,sa)}</td><td>${cell(y,sa)}</td><td>${P(x.s2h_any)}</td><td>—</td></tr></tbody></table></div>`
+    +`<p class="fo-note">Today aur Yesterday abhi final nahi. Screens counted: ${scr}.${x.sample!=null?` <span class="fo-smp">≈</span> = GA4 ne is app ke funnel me sirf ~${Math.max(1,Math.round(x.sample*100))}% data padha (sampling): users ki ginti lagbhag hai, % ka direction sahi.`:''}</p>`;
+  const has=['intro','language','permission'].filter(k=>(a.steps||{})[k]);
+  const mt=`<div class="fo-tw"><table class="fo-t"><thead><tr><th>Month</th><th>First opens</th><th>Splash</th>${has.map(k=>`<th>${STEP_NAME[k]}</th>`).join('')}<th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
+    +months(rows).map(([m,rs])=>`<tr><td class="fo-nm">${fmtMon(m)} <small>· ${rs.length}d</small></td><td>${N(sum(rs,'first_open'))}</td><td>${N(sum(rs,'splash'))}</td>${has.map(k=>`<td>${N(sum(rs,k))}</td>`).join('')}<td>${N(sum(rs,'home'))}</td><td><b>${P(rate(sum(rs,'home'),sum(rs,'splash')))}</b></td><td>${P(rate(sum(rs,'splash'),sum(rs,'first_open')))}</td></tr>`).join('')
+    +`</tbody></table></div>`;
+  const dt=`<div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day</th><th>First opens</th><th>Splash</th>${has.map(k=>`<th>${STEP_NAME[k]}</th>`).join('')}<th>Home</th><th>Splash → Home</th><th>Incl. late open</th></tr></thead><tbody>`
+    +rows.slice().reverse().map(r=>`<tr><td class="fo-nm${r[0]>a.final_till?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(r[0])} ${r[0].slice(0,4)}${r[0]>a.final_till?' · not final':''}</td><td>${N(r[IX.first_open])}</td><td>${N(r[IX.splash])}</td>${has.map(k=>`<td>${r[IX[k]]==null?'—':N(r[IX[k]])}</td>`).join('')}<td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${sa(r)}</td></tr>`).join('')
+    +`</tbody></table></div>`;
+  return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''} · history ${fmtD(a.first_day)} ${a.first_day.slice(0,4)} se${(a.steps_changed||[]).length?' · screens badle '+(a.steps_changed||[]).map(c=>fmtD(c.at)).join(', '):''}</span></div>`
+    +`<div class="card fo-card"><div class="ct"><h3>Today · Yesterday · last 7 days · usual</h3></div>${mini}</div>`
+    +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${stepBars(a,x)}</div>`
+    +`<div class="card fo-card"><div class="ct"><h3>Every day · full history</h3><span class="faint" style="font-size:11.5px">hover / tap = us din ke numbers</span></div><div class="fo-chart" id="fo-chart"></div>`
+    +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last 2 days)</span></div></div></div>`
+    +`<div class="card fo-card"><div class="ct"><h3>Every month</h3><span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${mt}</div>`
+    +`<div class="card fo-card"><div class="ct"><h3>Every day</h3><span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${dt}</div>`; }
+// the daily chart: Splash → Home and Opened app for every day kept, the last value printed; hover / tap = that day
+function drawChart(a){ const box=document.getElementById('fo-chart'); if(!box) return; const rows=a.days||[]; if(rows.length<2){ box.innerHTML='<div class="faint" style="padding:20px 0">Abhi ek hi din ka data</div>'; return; }
+  const W=Math.max(280,box.clientWidth||600), H=210, m={t:12,r:46,b:24,l:38}, n=rows.length;
+  const X=i=>m.l+(W-m.l-m.r)*i/(n-1), Y=v=>m.t+(H-m.t-m.b)*(1-Math.max(0,Math.min(1,v)));
+  const ser=k=>rows.map((r,i)=>[i,k==='h'?rate(+r[IX.home],+r[IX.splash]):rate(+r[IX.splash],+r[IX.first_open])]);
+  const path=pts=>{ let d='',up=false; for(const [i,v] of pts){ if(v==null){ up=false; continue; } d+=(up?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; up=true; } return d; };
+  let nf=rows.findIndex(r=>r[0]>a.final_till); if(nf<0) nf=n;   // the first not-final day (the last 2: GA4 still adds to them)
+  const fin=pts=>pts.slice(0,nf), tail=pts=>nf<n?pts.slice(Math.max(0,nf-1)):[];
+  const grid=[0,0.25,0.5,0.75,1].map(v=>`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" class="g"/><text x="${m.l-6}" y="${Y(v)+4}" text-anchor="end">${Math.round(v*100)}%</text>`).join('');
+  const ticks=[0,Math.floor((n-1)/2),n-1].map(i=>`<text x="${X(i)}" y="${H-6}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${fmtD(rows[i][0])}</text>`).join('');
+  const lastOf=pts=>{ for(let k=pts.length-1;k>=0;k--) if(pts[k][1]!=null) return pts[k]; return null; };
+  const sh=ser('h'), so=ser('o'), lh=lastOf(fin(sh)), lo=lastOf(fin(so));
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Splash to Home and Opened app, every day">${grid}${ticks}`
+    +`<path d="${path(fin(so))}" class="o"/><path d="${path(fin(sh))}" class="h"/><path d="${path(tail(so))}" class="o nf"/><path d="${path(tail(sh))}" class="h nf"/>`
+    +(lh?`<circle cx="${X(lh[0])}" cy="${Y(lh[1])}" r="3" class="hd"/><text x="${X(lh[0])+5}" y="${Y(lh[1])-4}" class="hl">${P(lh[1])}</text>`:'')
+    +(lo?`<text x="${X(lo[0])+5}" y="${Y(lo[1])+12}" class="ol">${P(lo[1])}</text>`:'')
+    +`<line class="rule" y1="${m.t}" y2="${H-m.b}" x1="0" x2="0" visibility="hidden"/></svg><div class="fo-tip" hidden></div>`;
+  const svg=box.querySelector('svg'), tip=box.querySelector('.fo-tip'), rule=svg.querySelector('.rule');
+  const at=ev=>{ const r=svg.getBoundingClientRect(); if(!r.width) return; const x=(ev.clientX-r.left)*W/r.width, i=Math.max(0,Math.min(n-1,Math.round((x-m.l)/(W-m.l-m.r)*(n-1)))), d=rows[i];
+    rule.setAttribute('x1',X(i)); rule.setAttribute('x2',X(i)); rule.setAttribute('visibility','visible');
+    tip.innerHTML=`<b>${fmtD(d[0])} ${d[0].slice(0,4)}</b>${d[0]>a.final_till?' · not final':''}<br>Splash → Home <b>${P(rate(+d[IX.home],+d[IX.splash]))}</b> (${N(d[IX.home])} of ${N(d[IX.splash])})<br>Opened app ${P(rate(+d[IX.splash],+d[IX.first_open]))} · first opens ${N(d[IX.first_open])}${d[IX.sample]!=null&&d[IX.sample]<1?`<br>≈ GA4 sampling: ~${Math.max(1,Math.round(d[IX.sample]*100))}% data padha`:''}`;
+    tip.hidden=false; const px=X(i)*r.width/W; tip.style.left=Math.max(0,Math.min(r.width-tip.offsetWidth,px-tip.offsetWidth/2))+'px'; };
+  svg.addEventListener('pointermove',at); svg.addEventListener('click',at);
+  svg.addEventListener('pointerleave',()=>{ tip.hidden=true; rule.setAttribute('visibility','hidden'); }); }
+function wire(){ const s=EL; if(!s||s.dataset.foWired) return; s.dataset.foWired='1';
+  s.addEventListener('click',e=>{ const t=e.target;
+    const so=t.closest('[data-fo-sort]'); if(so){ const k=so.dataset.foSort; SORT={k,dir:SORT.k===k?-SORT.dir:(k==='app'||k==='rank'?1:-1)};
+      const tb=document.getElementById('fo-tb'); if(tb) tb.innerHTML=tableHtml(); return; }
+    const fl=t.closest('[data-fo-filt]'); if(fl){ FILT=FILT===fl.dataset.foFilt?'':fl.dataset.foFilt;
+      s.style.minHeight=Math.max(s.offsetHeight,parseFloat(s.style.minHeight)||0)+'px';   // a shorter list never pulls the page (and the chip) up
+      s.querySelectorAll('[data-fo-filt]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.foFilt===FILT)));
+      const tb=document.getElementById('fo-tb'); if(tb) tb.innerHTML=tableHtml(); return; }
+    if(t.closest('[data-fo-retry]')){ ERR=false; VER=null; ensure(()=>{ if(onScreen()) paint(); }); paint(); return; }
+    if(t.closest('[data-fo-all]')){ setApp(''); return; }
+    const row=t.closest('tr[data-fo-app]'); if(row){ setApp(row.dataset.foApp); } }); }
+function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector('.screen[data-screen=firstopen]'); if(!s||typeof DATA==='undefined'||!DATA) return;
+  EL=s; wire(); s.style.minHeight='';
+  const p=ptr();
+  if(!p){ s.innerHTML='<div class="card fo-card"><p class="fo-note">🔌 First open ka data is build me nahi bana (GA4 funnel chahiye) — agle robot run me aayega.</p></div>'; return; }
+  if(!RAW||VER!==p.v) ensure(()=>{ if(onScreen()) paint(); });
+  if(!RAW){ s.innerHTML=`<div class="card fo-card"><p class="fo-note">${ERR?'⚠️ Data load nahi hua. <span class="lnk" data-fo-retry="1" style="cursor:pointer;color:var(--cyan)">Try again</span>':'⏳ Loading…'}</p></div>`; return; }
+  const a=APP?appOf(APP):null, x=a?(RAW.summary||[]).find(z=>z.key===a.key):null;
+  const head=`<p class="fo-note fo-lead"><b>First open funnel</b> (GA4, sirf sahi kram me): pehli baar app khola → 10 min me <b>Splash</b> → 1 ghante me <b>Home</b>. Isliye Home kabhi Splash se zyada nahi. <b>Opened app</b> = pehli baar chalne walon me se kitno ne turant Splash dekha; <b>incl. late open</b> = baad me pehli baar khola tab bhi.</p>`;
+  if(APP&&!a){ s.innerHTML=head+`<div class="card fo-card"><p class="fo-note">Is app ka GA4 funnel data nahi.</p><button type="button" class="fo-back" data-fo-all="1">← All apps</button></div>`; return; }
+  s.innerHTML=head+(a?appHtml(a,x||{}):allHtml());
+  if(a) drawChart(a); }
+function show(){ paint(); }
+function left(){ }
+return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate}};
+})();
+function renderFirstOpen(){ return FO.render(); }
 // ---------- PLACEMENTS (2-level) ----------
 function fmtCount(ps){const b={};ps.forEach(p=>b[p.format]=(b[p.format]||0)+1);return b;}
 function renderPlacements(){
