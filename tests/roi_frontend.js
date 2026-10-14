@@ -145,7 +145,12 @@ function appFile() {
                          cty: [{ cc: 'AA', share: [0.5, 0.4], d1: [30, 32], rpi7: [0.1, 0.09], cpi: [1, 0.9], dec: 'Watch', ecpm: [2.5, 2] }],
                          split: { rev: [12, 10], imp: [5000, 4500], ecpm: [2.4, 2.2], users: 0.1, ipu: 0.01, mix: 0.05, rate: 0.03,
                                   mix_top: [['AA', 0.04, 0.5, 0.4, 2]], rate_top: [['AA', 0.02, 2.5, 2]] } },
-      parts: { mix: 1.12, mix_on: true } };
+      parts: { mix: 1.12, mix_on: true, org: 4 } };
+    // users / installs / uninstalls by who: DAU 100 = 60 old + 20 organic + 20 paid; installs 10 = 4 organic + 6 paid
+    d.fc.f.dau_p = { old: Array(H).fill(60), org: Array(H).fill(20), paid: Array(H).fill(20) };
+    d.fc.f.un = { old: Array(H).fill(3), org: Array(H).fill(1), paid: Array(H).fill(2) };
+    d.fc.f.spd = 7; d.fc.f.spi30 = 700; d.fc.f.sp30 = 7;
+    d.fc.hist.un = Array(180).fill(5); d.fc.cal['90'].un_mape = 0.12; d.fc.cal['90'].un_n = 9;
     d.life = [['2026-10-01', 100, 150, 15000]]; d.life_till = '2026-10-01';
     U.set('FCH', '90'); U.set('FCM', 0);
     const fv = U.fcView(d);
@@ -157,6 +162,14 @@ function appFile() {
     out.fc_split = ['Revenue / din', '▲ +20%', '= Users (DAU)', '▲ +10%', '× Ads per user', '▲ +1.0%', '× Country mix', '▲ +5.0%',
       '× eCPM (same country)', '▲ +3.0%', 'Country mix</b> kisne badla', '40% → <b>50%</b>', 'eCPM ' + '$2.00 → <b>$2.50</b>', '×1.12', 'country-wise curves</b> pe chal raha',
       'eCPM abhi / X'].every(s => fv.includes(s));
+    // users card: installs 10/day (as the last 30), uninstalls 6 vs 5 (+20%, worse), DAU 100 vs 100, the 30-day blocks
+    out.fc_users = ['Users, installs &amp; uninstalls', 'Installs / din · agle 30 din', 'Uninstalls / din · agle 30 din', '▲ +20%',
+      'DAU · din 90', 'Din 1–30', 'Din 61–90', 'Pichhle 30 din', 'Pichhle 7 din', 'abhi (7 din)', 'data-roi-fcu="un"', 'back-test me ±12%', 'pichhle 7 din',
+      '30 din avg'].every(s => fv.includes(s)) && !fv.includes('Din 91–120');
+    U.set('FCM', 1);                                             // spend ×2: paid users / installs / uninstalls double
+    const fu2 = U.fcOut(d);
+    out.fc_users_slider = fu2.includes('>16<') && fu2.includes('>8<') && fu2.includes('>120<');
+    U.set('FCM', 0);
     const d2 = JSON.parse(JSON.stringify(d)); delete d2.fc.drv.split; d2.fc.parts = { mix: null }; d2.fc.drv.cty[0].ecpm = undefined;
     const fv2 = U.fcView(d2);
     out.fc_split_off = !fv2.includes('× Country mix') && !fv2.includes('average install se') && !fv2.includes('eCPM abhi / X');

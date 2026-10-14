@@ -2520,6 +2520,7 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-q{color:var(--watch);font-weight:800;cursor:help}
 .roi-ok{color:var(--good);font-weight:700}.roi-wt{color:var(--watch);font-weight:700}
 .roi-t tr.roi-tot td{border-top:2px solid var(--line2);font-weight:800;color:#fff;background:var(--panel2)}
+.roi-t tr.roi-act td{background:var(--panel2);color:var(--ink2)}
 .roi-xr td{background:var(--panel2)!important;padding:8px 10px 12px;text-align:left}
 .roi-xr td:first-child{position:static}
 .roi-sub{min-width:560px}
@@ -6751,7 +6752,7 @@ function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life
 // changeable "dashboard me dedo") — the app's own model (forecast_build): revenue / spend / profit / breakeven for the
 // next 30 / 90 / 180 days with its measured range, why it moves (now vs the usual), how right it was (back-tests and
 // the live check), what it learnt, and the start of the real run. Spend slider: the paid installs scale with it exactly.
-let FCH='90', FCM=0;
+let FCH='90', FCM=0, FCU='dau';
 const FC_P={hl:'Curve: kitne purane installs se seekhe (half-life din)',K:'Naye install-din ki apni kamai pe bharosa (K)',w:'eCPM level: kitne din ka',g:'Season (Dec/Jan) ka asar',W:'Installs/CPI: kitne din ka',m:'Purane users ka tareeka',r:'Naye installs pe abhi ka badlav',c:'Country-wise curves'};
 const FC_C={installs:'installs (naye users)',retention:'retention (users kitne ruke)',arpdau:'ARPDAU / eCPM (har user ki kamai)'};
 function fcTot(f,m){ return f.old.map((v,i)=>(v||0)+(f.org[i]||0)+m*(f.paid[i]||0)); }
@@ -6765,7 +6766,7 @@ function fcView(d){ const fc=d.fc; CCY=d.ccy||null;
   const any=hs.some(h=>rd[h]);
   const sv=billed()&&fc.f.spi!=null?fc.f.spi:RV(fc.f.sp[0]||0);
   const ctl=`<div class="roi-fc-ctl"><span class="roi-mini" role="group" aria-label="Kitne din aage">${chips}</span>`
-    +((fc.f.sp[0]||0)>0?`<label class="roi-fc-sl"><span>Google Ads spend <b id="roi-fc-ml">${FCM>=0?'+':'−'}${Math.abs(Math.round(FCM*100))}%</b> <small>(abhi ${MV(sv)}/din)</small></span><input type="range" id="roi-fc-m" min="-100" max="100" step="10" value="${Math.round(FCM*100)}" aria-label="Spend badlo"></label>`:'<span class="roi-note">Is app pe abhi Google Ads spend nahi — forecast sirf organic</span>')+`</div>`;
+    +((fc.f.sp[0]||0)>0?`<label class="roi-fc-sl"><span>Google Ads spend <b id="roi-fc-ml">${FCM>=0?'+':'−'}${Math.abs(Math.round(FCM*100))}%</b> <small>(abhi ${MV(sv)}/din = pichhle ${fc.f.spd||30} din${fc.f.spi30!=null||fc.f.sp30!=null?` · 30 din avg ${MV(billed()&&fc.f.spi30!=null?fc.f.spi30:RV(fc.f.sp30||0))}/din`:''})</small></span><input type="range" id="roi-fc-m" min="-100" max="100" step="10" value="${Math.round(FCM*100)}" aria-label="Spend badlo"></label>`:'<span class="roi-note">Is app pe abhi Google Ads spend nahi — forecast sirf organic</span>')+`</div>`;
   return (any?ctl+`<div id="roi-fc-out">${fcOut(d)}</div>`:`<div class="roi-card"><p class="roi-note">⏳ Model ko abhi kaafi tests nahi mile — 30 din ka forecast <b>${E(fd((fc.ready_from||{})['30']||''))}</b> se (shuru ke din: ${E(fdy(fc.start))}).</p></div>`)
     +fcWhy(d)+fcAcc(d)+fcLearn(d)+fcStart(d); }
 function fcOut(d){ const fc=d.fc, f=fc.f, H=+FCH, m=1+FCM, c=(fc.cal||{})[FCH]||{};
@@ -6777,11 +6778,63 @@ function fcOut(d){ const fc=d.fc, f=fc.f, H=+FCH, m=1+FCM, c=(fc.cal||{})[FCH]||
   const be=p0>=0?(cross&&!cross[1]?`<span class="roi-dn">Loss me jaayega ~${E(fd(cross[0]))}</span>`:`<span class="roi-up">Profit me hai</span>`):(cross&&cross[1]?`<span class="roi-up">Profit me aayega ~${E(fd(cross[0]))}</span>`:`<span class="roi-dn">6 mahine me nahi</span>`);
   const acc=c.mape_normal!=null?`±${P(c.mape_normal)} normal din · ±${P(c.mape)} sab tests`:(c.mape!=null?`±${P(c.mape)}`:'—');
   const kp=`<div class="roi-ks6">`+tile(`Revenue · agle ${H} din`,MC(R),`80% chance: ${MC(lo)} – ${MC(hi)}`,'roi-kg')
-    +tile(`Google Ads spend · ${H} din`,MC(S),FCM?`slider: ${FCM>0?'+':'−'}${Math.abs(Math.round(FCM*100))}%`:'pichhle 30 din jaisa')
+    +tile(`Google Ads spend · ${H} din`,MC(S),FCM?`slider: ${FCM>0?'+':'−'}${Math.abs(Math.round(FCM*100))}%`:`pichhle ${f.spd||30} din jaisa`)
     +tile(`Profit / loss · ${H} din`,`<span class="${Pr>=0?'roi-up':'roi-dn'}">${MC(Pr,true)}</span>`,`ROAS ${P(S?R/S:null)}`,Pr>=0?'roi-kg':'roi-kb')
     +tile('Breakeven (lifetime)',be,`abhi lifetime ${MC(p0,true)}`)
     +tile('Kitna sahi (back-test)',acc,`${c.n||0} tests · ${c.ev_rate?Math.round(c.ev_rate*100)+'% me achanak jhatka':'koi jhatka nahi'}`)+`</div>`;
-  return kp+`<div class="roi-card"><div class="roi-ct"><h3>Roz ka revenue · pichhle 90 din asli + agle ${H} din forecast</h3><span class="roi-note">halka rang = 80% range · line pe tap = us din</span></div>${fcChart(fc,H,rev,spd)}</div>`; }
+  return kp+`<div class="roi-card"><div class="roi-ct"><h3>Roz ka revenue · pichhle 90 din asli + agle ${H} din forecast</h3><span class="roi-note">halka rang = 80% range · line pe tap = us din</span></div>${fcChart(fc,H,rev,spd)}</div>`+fcUsers(d,rev,spd); }
+// users, installs and uninstalls the forecast carries (owner: "spending chalu rahega to DAU badhenge, aage ka uninstall
+// bhi hoga"): every day's new installs (organic + spend ÷ CPI) join on their retention curve and leave on their
+// uninstall curve (both learnt per app from its own install days); the spend slider moves only the paid part
+function fcUsers(d,rev,spd){ const fc=d.fc, f=fc.f, h=fc.hist||{}, H=+FCH, m=1+FCM; if(!f.dau_p) return '';
+  const mix=(o,i)=>(o.old[i]||0)+(o.org[i]||0)+m*(o.paid[i]||0);
+  const org=fc.parts&&ok(fc.parts.org)?+fc.parts.org:0;
+  const fu={dau:f.dau.map((_,i)=>mix(f.dau_p,i)), n:f.n.map(v=>org+(v-org)*m), un:f.un?f.un.old.map((_,i)=>mix(f.un,i)):null};
+  const hs={dau:(h.dau||[]).slice(-90), n:(h.n||[]).slice(-90), un:(h.un||[]).slice(-90)};
+  const avg=(a,i0,i1)=>{ let s=0,k=0; for(let i=i0;i<i1&&i<a.length;i++){ if(ok(a[i])){ s+=a[i]; k++; } } return k?s/k:null; };
+  const last=(a,n)=>avg(a,Math.max(0,a.length-n),a.length);
+  const hrev=(h.rev||[]).slice(-30).map(v=>ok(v)?RV(v):null), hsp=(billed()?(h.spi||[]):(h.sp||[]).map(v=>ok(v)?RV(v):null)).slice(-30);
+  const ch=(a,b,good)=>{ if(!ok(a)||!ok(b)||!b) return ''; const x=a/b-1, up=x>=0; return ` <span class="${Math.abs(x)<0.02?'':(up===good?'roi-up':'roi-dn')}">${up?'▲ +':'▼ −'}${Math.abs(Math.round(x*100))}%</span>`; };
+  // "abhi" = the last 7 days (the spend run-rate the forecast keeps); the table adds the last 30 days
+  const i30=avg(fu.n,0,30), u30=fu.un?avg(fu.un,0,30):null, a7=last(hs.n,7), b7=last(hs.un,7), a0=last(hs.n,30), b0=last(hs.un,30);
+  const dEnd=fu.dau[H-1], dNow=last(hs.dau,7), arpF=avg(rev,0,H)/avg(fu.dau,0,H);
+  const arp=n=>{ const r=avg(hrev,Math.max(0,hrev.length-n),hrev.length), u=last(hs.dau,n); return ok(r)&&u?r/u:null; }, arpA=arp(7);
+  const kp=`<div class="roi-ks6">`+tile('Installs / din · agle 30 din',N(i30),`abhi (7 din) ${N(a7)}${ch(i30,a7,true)}`)
+    +tile('Uninstalls / din · agle 30 din',fu.un?N(u30):'—',fu.un?`abhi (7 din) ${N(b7)}${ch(u30,b7,false)}`:'uninstall data nahi')
+    +tile(`DAU · din ${H}`,N(dEnd),`abhi (7 din) ${N(dNow)}${ch(dEnd,dNow,true)}`)
+    +tile(`ARPDAU · agle ${H} din`,MPV(arpF),`abhi (7 din) ${MPV(arpA)}${ch(arpF,arpA,true)}`)+`</div>`;
+  const met=[['dau','DAU'],['n','Installs'],['un','Uninstalls']].filter(x=>fu[x[0]]);
+  const chips=`<span class="roi-mini" role="group" aria-label="Kaunsa chart">${met.map(([k,l])=>`<button type="button" data-roi-fcu="${k}" aria-pressed="${FCU===k}">${l}</button>`).join('')}</span>`;
+  const k=fu[FCU]?FCU:'dau';
+  // 30-day blocks: what each part of the next H days looks like, beside the last 30 actual days
+  const rows=[[`Pichhle 30 din <small>asli</small>`,a0,b0,last(hs.dau,30),arp(30),avg(hrev,0,30),avg(hsp,0,30)],
+    [`Pichhle 7 din <small>asli</small>`,a7,b7,dNow,arpA,avg(hrev,23,30),avg(hsp,23,30)]];
+  for(let b=0;b<H;b+=30){ const r=avg(rev,b,b+30), du=avg(fu.dau,b,b+30); rows.push([`Din ${b+1}–${b+30}`,avg(fu.n,b,b+30),fu.un?avg(fu.un,b,b+30):null,du,r/du,r,avg(spd,b,b+30)]); }
+  const tb=`<table class="roi-t roi-sub"><thead><tr><th>Kab</th><th>Installs / din</th><th>Uninstalls / din</th><th>DAU</th><th>ARPDAU</th><th>Revenue / din</th><th>Spend / din</th><th>Profit / din</th></tr></thead><tbody>`
+    +rows.map((r,i)=>{ const pr=ok(r[5])&&ok(r[6])?r[5]-r[6]:null; return `<tr${i>1?'':' class="roi-act"'}><td class="roi-nm">${r[0]}</td><td>${N(r[1])}</td><td>${N(r[2])}</td><td>${N(r[3])}</td><td>${MPV(r[4])}</td><td>${MC(r[5])}</td><td>${MC(r[6])}</td><td class="${pr==null?'':pr>=0?'roi-up':'roi-dn'}">${MC(pr,true)}</td></tr>`; }).join('')+`</tbody></table>`;
+  const ac=(fc.cal||{})[FCH]||{};
+  const note=`<p class="roi-note">Har din ke naye installs (organic + spend ÷ CPI) apne retention curve pe judte hain aur apne uninstall curve pe jaate hain — dono curve isi app ke apne purane install-dino se seekhe (din 0, 1, 2 … 855 tak). Purane users bhi isi tarah ghatte hain. Slider sirf paid installs ka hissa badalta hai.${ok(ac.un_mape)?` Uninstall forecast back-test me ±${P(ac.un_mape)} (${FCH} din, ${ac.un_n} tests).`:''}</p>`;
+  return `<div class="roi-card" id="roi-fc-users"><div class="roi-ct"><h3>Users, installs &amp; uninstalls · forecast</h3>${chips}</div>${kp}<div id="roi-fc-uc">${fcLine(fc,H,hs[k],fu[k],met.find(x=>x[0]===k)[1])}</div><div class="roi-tw" style="margin-top:10px">${tb}</div>${note}</div>`; }
+// one count series: the last 90 actual days + the next H forecast days (values printed at today and at the end)
+function fcLine(fc,H,hist,fut,label){ const W=CHW(), Hh=W<720?190:220, m={t:16,r:W<720?54:70,b:26,l:W<720?44:52};
+  const hr=hist||[], n0=hr.length, fr=(fut||[]).slice(0,H), n=n0+fr.length; if(!n0&&!fr.length) return '';
+  const all=[...hr,...fr].filter(ok); if(!all.length) return '<p class="roi-note">Data nahi.</p>';
+  let top=Math.max(...all)*1.08; const raw=top/4, p10=Math.pow(10,Math.floor(Math.log10(raw))), st=[1,2,2.5,5,10].map(k=>k*p10).find(k=>k>=raw)||raw; top=Math.ceil(top/st)*st;
+  const X=i=>m.l+(W-m.l-m.r)*i/Math.max(1,n-1), Y=v=>m.t+(Hh-m.t-m.b)*(1-v/top);
+  const ticks=[]; for(let v=0;v<=top+st/2;v+=st) ticks.push(v);
+  const sh=v=>v>=1e6?(v/1e6).toFixed(v>=1e7?0:1)+'M':v>=1e3?(v/1e3).toFixed(v>=1e4?0:1)+'K':String(Math.round(v));
+  const grid=ticks.map(v=>`<line class="g" x1="${m.l}" x2="${W-m.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text class="ax" x="${m.l-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${E(sh(v))}</text>`).join('');
+  const d0h=fcDay(fc.f.d0,-n0), lab=i=>fd(fcDay(d0h,i));
+  const xs=[0,n0-1,n-1].map(i=>`<text class="ax" x="${X(i).toFixed(1)}" y="${Hh-8}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${E(i===n0-1?'aaj':lab(i))}</text>`).join('');
+  const path=(arr,off)=>arr.map((v,i)=>ok(v)?`${i&&ok(arr[i-1])?'L':'M'}${X(i+off).toFixed(1)} ${Y(v).toFixed(1)}`:'').join(' ');
+  const la=hr[n0-1], lf=fr[fr.length-1];
+  const lines=`<path class="ln c4" d="${path(hr,0)}"/><path class="ln c2" d="${path([la].concat(fr),n0-1)}"/>`
+    +(ok(la)?`<text class="lv c4" x="${X(n0-1)-4}" y="${Y(la)-8}" text-anchor="end">${E(N(la))}</text>`:'')+(ok(lf)?`<text class="lv c2" x="${X(n-1)+5}" y="${Y(lf)+4}">${E(sh(lf))}</text>`:'');
+  const today=`<line class="ref" x1="${X(n0-1)}" x2="${X(n0-1)}" y1="${m.t}" y2="${Hh-m.b}"/>`;
+  const hits=Array.from({length:n},(_,i)=>{ const isF=i>=n0, v=isF?fr[i-n0]:hr[i];
+    const tip=`<b>${E(lab(i))}</b>${isF?' · forecast':' · asli'}<br>${E(label)} <b>${E(N(v))}</b>`;
+    const x0=i===0?m.l:(X(i-1)+X(i))/2, x1=i===n-1?W-m.r:(X(i)+X(i+1))/2; return `<rect class="hit" x="${x0.toFixed(1)}" y="${m.t}" width="${Math.max(1,x1-x0).toFixed(1)}" height="${Hh-m.t-m.b}" data-tip="${E(tip)}"/>`; }).join('');
+  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="${E(label)}: actual and forecast">${grid}${today}${lines}${xs}${hits}</svg></div><div class="roi-lg"><span class="c4">Asli ${E(label)}</span><span class="c2">Forecast</span></div>`; }
 function fcChart(fc,H,rev,spd){ const W=CHW(), Hh=W<720?220:250, m={t:16,r:W<720?54:70,b:26,l:W<720?44:52};
   const hr=(fc.hist.rev||[]).slice(-90).map(v=>RV(v)), n0=hr.length, n=n0+H, c=(fc.cal||{})[String(H)]||{};
   const fr=rev.slice(0,H), lo=fr.map(v=>v*(1+(c.lo||0))), hi=fr.map(v=>v*(1+(c.hi||0)));
@@ -6892,6 +6945,7 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=at('[data-roi-csort]'))){ const k=b.dataset.roiCsort; b.setAttribute('data-roi-sel',`[data-roi-csort="${k}"]`); keep(b,()=>{ CSORT={k,dir:CSORT.k===k?-CSORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-asort]'))){ const k=b.dataset.roiAsort; b.setAttribute('data-roi-sel',`[data-roi-asort="${k}"]`); keep(b,()=>{ ASORT={k,dir:ASORT.k===k?-ASORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-cty]'))){ const cc=b.dataset.roiCty; b.setAttribute('data-roi-sel',`[data-roi-cty="${cc}"]`); keep(b,()=>{ CTYO=CTYO===cc?'':cc; repaint(); }); return; }
+    if((b=at('[data-roi-fcu]'))){ b.setAttribute('data-roi-sel',`[data-roi-fcu="${b.dataset.roiFcu}"]`); keep(b,()=>{ FCU=b.dataset.roiFcu; const o=document.getElementById('roi-fc-out'), a=appPtr(r.dataset.aid), dd=a?AF[a.file]:null; if(o&&dd) o.innerHTML=fcOut(dd); }); return; }
     if((b=at('[data-roi-fch]'))){ b.setAttribute('data-roi-sel',`[data-roi-fch="${b.dataset.roiFch}"]`); keep(b,()=>{ FCH=b.dataset.roiFch; repaint(); }); return; }
     if((b=at('[data-roi-fcsave]'))){ const i=document.getElementById('roi-fc-sd'); const v=i&&i.value; if(v&&/^\d{4}-\d{2}-\d{2}$/.test(v)) fcSaveStart(b.dataset.roiFcsave,v); return; }
     if((b=at('[data-roi-fcauto]'))){ fcSaveStart(b.dataset.roiFcauto,null); return; }

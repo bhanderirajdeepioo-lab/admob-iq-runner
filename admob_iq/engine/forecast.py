@@ -62,6 +62,9 @@ CKC = 1000.0                          # installs a country needs before its own 
 BIX = [next((i for i, (lo, hi) in enumerate(CB) if lo <= L <= hi), len(CB) - 1) for L in range(MAX_AGE + 1)]
 UIX = [-1 if L == 0 else max(i for i, g in enumerate(CL) if g <= L) for L in range(MAX_AGE + 1)]
 HW = {30: 0.5, 90: 0.3, 180: 0.2}     # the objective's horizon weights
+SPEND_DAYS = 7                        # the live forecast's spend: today's run-rate = the mean of the last 7 days
+UBANDS = ((31, 60), (61, 90), (91, 180), (181, 365), (366, 730))   # uninstall curve: daily to 30, then these bands
+UN_HL = 90                            # … newer install days weigh more (half-life, days)
 ONE = timedelta(days=1)
 
 
@@ -341,7 +344,9 @@ def _model_day(coh, D, a, s, start, T, fx=None, users=False):
 
 def forecast(app, T, p, spend=None, h=H, seas=None):
     """The forecast from origin T with parameters p → {"rev": {old, org, paid}, "dau", "n", "sp"} lists of h days, plus
-    the parts it used. spend: {day: USD} for the future days (None = the mean of the last 30 days, every day)."""
+    the parts it used. spend: {day: USD} for the future days (None = the mean of the last SPEND_DAYS days, every day).
+    + "dau_p" / "un" {old, org, paid}: active users and uninstalls a day by who they are (un: None without the
+    Uninstall store's install day × lag cells)."""
     coh, days, start = app["coh"], app["days"], app["start"]
     fx_all, fnew_all = mix_at(app, T, p["hl"])
     fx, fnew = (fx_all, fnew_all) if p.get("c") else ({}, None)
@@ -397,9 +402,10 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
     lift, ulift = recent_lift(coh, T, start, a, u, fx) if p.get("r") else (1.0, 1.0)
     lift = 1.0 + p.get("r", 0.0) * (lift - 1.0)
     ulift = 1.0 + p.get("r", 0.0) * (ulift - 1.0)
-    if spend is None:
-        k, tot = 0, 0.0
-        D = T - timedelta(days=29)
+    if spend is None:                                   # today's run-rate: the last SPEND_DAYS days' spend, with
+        org, per_usd = installs_model(days, T, SPEND_DAYS)   # THEIR organic installs and cost per install (the same
+        k, tot = 0, 0.0                                       # campaigns / countries — they move together)
+        D = T - timedelta(days=SPEND_DAYS - 1)
         while D <= T:
             e = days.get(D)
             if e:
@@ -411,6 +417,10 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
     seas = seas or {m: 1.0 for m in range(1, 13)}
     s0 = seas.get(T.month, 1.0) or 1.0
     old, orgr, paid, dau, nn, sp = [], [], [], [], [], []
+    du_o, du_g, du_p = [], [], []
+    q = uninstall_curve(app, T, start)
+    un_o, un_g, un_p = [], [], []
+    un_rest = un_rest0(app, T, start, q) if q else 0.0
     past = [(X, c["n"] * s.get(X, 1.0), c["n"], _wk(fx, X)) for X, c in coh.items() if start <= X <= T and c.get("n")]
     fut = []
     for i in range(1, h + 1):
@@ -419,28 +429,46 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
         lvl_d = lvl * g
         o = 0.0
         du = 0.0
+        uo = 0.0
         for X, ns, n0, f in past:
             age = (D - X).days
             if age < len(a):
                 o += ns * a[age] * _fr(f, age)
                 du += n0 * u[age] * _fu(f, age)
+                if q:
+                    uo += n0 * q[age]
         spd = spend.get(D, 0.0)
         fut.append((D, org, per_usd * spd))
-        r_org = r_paid = u_new = 0.0
+        r_org = r_paid = u_org = u_paid = q_org = q_paid = 0.0
         for F, no, npd in fut:
             age = (D - F).days
             if age < len(a):
                 fr = _fr(fnew, age) * lift
                 r_org += no * a[age] * fr
                 r_paid += npd * a[age] * fr
-                u_new += (no + npd) * u[age] * ulift * _fu(fnew, age)
+                fu = u[age] * ulift * _fu(fnew, age)
+                u_org += no * fu
+                u_paid += npd * fu
+                if q:
+                    q_org += no * q[age]
+                    q_paid += npd * q[age]
+        u_new = u_org + u_paid
         old.append(o * lvl_d + rest0 * math.exp(-rho * i) * g)
         orgr.append(r_org * lvl_d)
         paid.append(r_paid * lvl_d)
         dau.append((du + u_new) * ulv + urest0 * math.exp(-urho * i))
+        du_o.append(du * ulv + urest0 * math.exp(-urho * i))
+        du_g.append(u_org * ulv)
+        du_p.append(u_paid * ulv)
+        if q:
+            un_o.append(uo + un_rest)
+            un_g.append(q_org)
+            un_p.append(q_paid)
         nn.append(org + per_usd * spd)
         sp.append(spd)
     return {"rev": {"old": old, "org": orgr, "paid": paid}, "dau": dau, "n": nn, "sp": sp,
+            "dau_p": {"old": du_o, "org": du_g, "paid": du_p},
+            "un": {"old": un_o, "org": un_g, "paid": un_p} if q else None,
             "parts": {"level": lvl, "ulevel": ulv, "rest": rest0, "rho": rho, "lift": lift, "ulift": ulift,
                       "mix": (_cumf(_cum(a), fnew_all, 90) / sum(a[:91])) if fnew_all and sum(a[:91]) > 0 else None,
                       "mix_on": bool(fnew), "org": org, "per_usd": per_usd, "maxage": maxage,
@@ -574,6 +602,98 @@ def mix_at(app, T, hl):
     return memo[k]
 
 
+def _unc_prep(app):
+    """The Uninstall store's install day × lag cells → per install day (daily lags 0..30, each UBANDS band's total, the
+    newest lag it has) — once per app (every origin and setting reuses it)."""
+    if "_uncp" not in app:
+        out = {}
+        for X, cells in (app.get("unc") or {}).items():
+            dl = [0.0] * 31
+            bs = [0.0] * len(UBANDS)
+            for L, v in cells.items():
+                if L <= 30:
+                    dl[L] += v
+                else:
+                    for j, (lo, hi) in enumerate(UBANDS):
+                        if lo <= L <= hi:
+                            bs[j] += v
+                            break
+            out[X] = (dl, bs)
+        app["_uncp"] = out
+    return app["_uncp"]
+
+
+def uninstall_curve(app, T, start):
+    """q[age]: uninstalls per install on day `age` of an install day — the triangle again: each age learnt only from
+    install days ≥ start that reached it by T (the Uninstall store's install day × lag cells; newer weigh more,
+    half-life UN_HL), daily to day 30, then the UBANDS bands (each keeps its measured total), then a power-law tail.
+    None without cells. Memoised per T."""
+    memo = app.setdefault("_unq", {})
+    if T in memo:
+        return memo[T]
+    pre = _unc_prep(app)
+    if not pre:
+        memo[T] = None
+        return None
+    num, den, bnum, bden = [0.0] * 31, [0.0] * 31, [0.0] * len(UBANDS), [0.0] * len(UBANDS)
+    for X, (dl, bs) in pre.items():
+        if X < start or X > T:
+            continue
+        n = (app["coh"].get(X) or {}).get("n")
+        if not n:
+            continue
+        lim = (T - X).days
+        w = 0.5 ** (lim / UN_HL)
+        for L in range(0, min(30, lim) + 1):
+            num[L] += w * dl[L]
+            den[L] += w * n
+        for j, (lo, hi) in enumerate(UBANDS):
+            if hi <= lim:
+                bnum[j] += w * bs[j]
+                bden[j] += w * n * (hi - lo + 1)
+    if not den[0]:
+        memo[T] = None
+        return None
+    pts = {L: num[L] / den[L] for L in range(31) if den[L] and num[L] > 0}
+    for j, (lo, hi) in enumerate(UBANDS):
+        if bden[j] and bnum[j] > 0:
+            pts[(lo + hi) // 2] = bnum[j] / bden[j]
+    q = _fill(pts, MAX_AGE)
+    for L in range(31):                                  # the measured days exactly (zero days stay zero)
+        if den[L]:
+            q[L] = num[L] / den[L]
+    for j, (lo, hi) in enumerate(UBANDS):
+        if bden[j]:
+            want = bnum[j] / bden[j] * (hi - lo + 1)
+            have = sum(q[lo:hi + 1])
+            if have > 0:
+                for L in range(lo, hi + 1):
+                    q[L] *= want / have
+    memo[T] = q
+    return q
+
+
+def un_rest0(app, T, start, q):
+    """The uninstalls the install-day model does not place (install days before the start / outside the store, the
+    store's unplaced ones): the median of actual − model over the last 14 days (never below 0), kept flat."""
+    days, coh = app["days"], app["coh"]
+    vals = []
+    for i in range(14):
+        D = T - timedelta(days=i)
+        act = (days.get(D) or {}).get("un")
+        if act is None:
+            continue
+        m = 0.0
+        for X, c in coh.items():
+            if X < start or X > D or not c.get("n"):
+                continue
+            age = (D - X).days
+            if age < len(q):
+                m += c["n"] * q[age]
+        vals.append(max(0.0, act - m))
+    return sorted(vals)[len(vals) // 2] if vals else 0.0
+
+
 def _sum(lst, k):
     return sum(lst[:k])
 
@@ -625,7 +745,13 @@ def backtest(app, p, seas=None, ors=None):
                     break
             if ev:
                 row["ev"][hz] = ev
-            row["h"][hz] = {"pred": pr, "act": ar, "err": pr / ar - 1.0,
+            un_e = None
+            if f.get("un"):
+                aun = sum(e.get("un") or 0 for e in act)
+                pun = sum(_sum(f["un"][k], hz) for k in ("old", "org", "paid"))
+                if aun > 0 and all(e.get("un") is not None for e in act):
+                    un_e = pun / aun - 1.0
+            row["h"][hz] = {"pred": pr, "act": ar, "err": pr / ar - 1.0, "un_err": un_e,
                             "n_err": (pn / an - 1.0) if an else None, "dau_err": (pu / au - 1.0) if au else None,
                             "arp_err": ((pr / pu) / (ar / au) - 1.0) if pu and au else None}
         if row["h"]:
@@ -758,7 +884,9 @@ def calibrate(bt):
             return v[lo] + (v[hi] - v[lo]) * (i - lo)
         ca = [abs((1 + e) / (1 + bias) - 1) for e in errs]
         cn = [abs((1 + e) / (1 + bias) - 1) for e in norm]
+        ue = [abs(r["h"][hz]["un_err"]) for r in allr if r["h"][hz].get("un_err") is not None]
         out[hz] = {"bias": bias, "lo": q(0.1), "hi": q(0.9), "mape": sum(ca) / len(ca), "n": len(errs),
+                   "un_mape": (sum(ue) / len(ue)) if ue else None, "un_n": len(ue),
                    "mape_normal": (sum(cn) / len(cn)) if cn else None, "n_normal": len(cn),
                    "ev_rate": 1 - len(norm) / len(errs)}
     return out

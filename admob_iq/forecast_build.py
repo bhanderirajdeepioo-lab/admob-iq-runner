@@ -98,7 +98,7 @@ def start(data_dir, now=None, clock=time.monotonic):
 
 
 # ── inputs ──────────────────────────────────────────────────────────────────────────────────────────────────────────
-def inputs(rows, P, ida, life, life_till):
+def inputs(rows, P, ida, life, life_till, unst=None):
     """The engine's app: coh {X: {n, d, df, u, uf, t, ul}}, days {D: {rev, sp, spi, n, na, dau}}, last, cty {week:
     {slot: {n, r, u}}} (the install-day file's country cells)."""
     S = P["S"]
@@ -128,7 +128,18 @@ def inputs(rows, P, ida, life, life_till):
     for w, cells in ((ida or {}).get("c") or {}).items():          # the install-week country cells → the country mix
         if isinstance(cells, dict) and cells:
             cty[_d(w)] = {k: e for k, e in cells.items() if isinstance(e, dict)}
-    return {"coh": coh, "days": days, "last": till or (max(days) if days else S), "cty": cty}
+    unc = {}
+    for k, cells in ((unst or {}).get("cohorts") or {}).items():    # the Uninstall store: install day × lag uninstalls
+        try:
+            unc[_d(k)] = {int(L): int(v or 0) for L, v in (cells or {}).items()}
+        except (ValueError, TypeError):
+            continue
+    for k, v in ((unst or {}).get("daily") or {}).items():           # … and each day's uninstalls (app_remove users)
+        if isinstance(v, dict) and v.get("un") is not None:
+            D = _d(k)
+            if not till or D <= till:
+                days.setdefault(D, {})["un"] = v["un"]
+    return {"coh": coh, "days": days, "last": till or (max(days) if days else S), "cty": cty, "unc": unc}
 
 
 # ── the bias correction folded into the days ────────────────────────────────────────────────────────────────────────
@@ -305,6 +316,33 @@ def drivers(app, rows, ida, cty_rows, rev_cty=None):
     return out
 
 
+# ── the page's series (a full model run and a kept one alike) ───────────────────────────────────────────────────────
+def series(app, p, cal, seas):
+    """The forecast from the newest day with settings p (spend = the last F.SPEND_DAYS days' run-rate, the bias
+    correction of cal) → the page's f + hist: revenue / active users / uninstalls by who (old users, organic, paid),
+    installs, spend; the actual last HIST_DAYS days beside it."""
+    last = app["last"]
+    f = F.forecast(app, last, p, h=F.H, seas=seas)
+    fac = corrected(f["rev"], cal)
+    ser = {k: [_r(v * fac[i], 4) for i, v in enumerate(f["rev"][k])] for k in ("old", "org", "paid")}
+    hist0 = last - timedelta(days=HIST_DAYS - 1)
+    hd = [app["days"].get(hist0 + timedelta(days=i)) or {} for i in range(HIST_DAYS)]
+
+    def run_rate(k, n):
+        ds = [app["days"].get(last - timedelta(days=i)) or {} for i in range(n)]
+        return sum(e.get(k) or 0 for e in ds) / float(n)
+    out = {"f": {"d0": _iso(last + timedelta(days=1)), **ser, "dau": [_r(v, 1) for v in f["dau"]],
+                 "dau_p": {k: [_r(v, 1) for v in f["dau_p"][k]] for k in ("old", "org", "paid")},
+                 "un": {k: [_r(v, 1) for v in f["un"][k]] for k in ("old", "org", "paid")} if f.get("un") else None,
+                 "n": [_r(v, 1) for v in f["n"]], "sp": [_r(v, 4) for v in f["sp"]],
+                 "spi": _r(run_rate("spi", F.SPEND_DAYS), 2), "spd": F.SPEND_DAYS,
+                 "spi30": _r(run_rate("spi", 30), 2), "sp30": _r(run_rate("sp", 30), 4)},
+           "hist": {"d0": _iso(hist0), "rev": [_r(e.get("rev"), 4) for e in hd], "sp": [_r(e.get("sp"), 4) for e in hd],
+                    "spi": [_r(e.get("spi"), 2) for e in hd], "dau": [e.get("dau") for e in hd],
+                    "n": [e.get("n") for e in hd], "un": [e.get("un") for e in hd]}}
+    return out, f, ser
+
+
 # ── one app ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 def _events(bt):
     seen, out = [], []
@@ -318,10 +356,10 @@ def _events(bt):
     return sorted(out, key=lambda e: e["at"])
 
 
-def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None):
+def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None, unst=None):
     """→ the page's forecast for this app (None: nothing yet). Never raises."""
     try:
-        app = inputs(rows, P, ida, life, life_till)
+        app = inputs(rows, P, ida, life, life_till, unst)
         for D, e in app["days"].items():                 # the portfolio season, pooled from every app
             if e.get("rev") and e.get("dau"):
                 p = run.pool.setdefault(D, {"rev": 0.0, "dau": 0.0})
@@ -346,6 +384,15 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
                     fc["drv"] = drivers(app, rows, ida, cty_rows, rev_cty)
                 except Exception:
                     pass
+                try:                                     # … and so is one forecast with the kept settings: today's data
+                    if old.get("p") and app["last"] >= _d(old["T"]):    # and spend run-rate, users and uninstalls
+                        cal = {int(h): {"bias": b} for h, b in (old.get("bias") or {}).items()} or \
+                            {int(h): c for h, c in (fc.get("cal") or {}).items()}
+                        sr, _, _ = series(app, dict(F.DEFAULT, **old["p"]), cal, run.season or F.season(app["days"]))
+                        fc.update(sr)
+                        fc["T"] = _iso(app["last"])
+                except Exception:
+                    pass
                 return fc
             if run.left() <= 0:
                 run.skipped += 1
@@ -355,14 +402,8 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
         p, bt, steps = F.tune(app, seas, start_p=prev_p)
         sc_prev = F.score(F.backtest(app, prev_p, seas)) if prev_p and prev_p != p else None
         cal = F.calibrate(bt)
-        f = F.forecast(app, app["last"], p, h=F.H, seas=seas)
-        fac = corrected(f["rev"], cal)
-        ser = {k: [_r(v * fac[i], 4) for i, v in enumerate(f["rev"][k])] for k in ("old", "org", "paid")}
+        sr, f, ser = series(app, p, cal, seas)
         last = app["last"]
-        hist0 = last - timedelta(days=HIST_DAYS - 1)
-        hd = [app["days"].get(hist0 + timedelta(days=i)) or {} for i in range(HIST_DAYS)]
-        k30 = [app["days"].get(last - timedelta(days=i)) or {} for i in range(30)]
-        spi_day = sum(e.get("spi") or 0 for e in k30) / 30.0
         # readiness: a horizon shows once enough tests could score it; else the day it will
         ready, ready_from = {}, {}
         for hz in F.HORIZONS:
@@ -395,17 +436,14 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
         fc = {"v": V, "made": today, "T": _iso(last), "start": _iso(app["start"]), "start_auto": _iso(auto) if auto else None,
               "start_set": _iso(mine) if mine else None, "p": p, "ready": ready, "ready_from": ready_from,
               "cal": {str(h): {k: (_r(v, 4) if isinstance(v, float) else v) for k, v in c.items()} for h, c in cal.items()},
-              "f": {"d0": _iso(last + timedelta(days=1)), **ser, "dau": [_r(v, 1) for v in f["dau"]],
-                    "n": [_r(v, 1) for v in f["n"]], "sp": [_r(v, 4) for v in f["sp"]], "spi": _r(spi_day, 2)},
-              "hist": {"d0": _iso(hist0), "rev": [_r(e.get("rev"), 4) for e in hd], "sp": [_r(e.get("sp"), 4) for e in hd],
-                       "spi": [_r(e.get("spi"), 2) for e in hd], "dau": [e.get("dau") for e in hd],
-                       "n": [e.get("n") for e in hd]},
+              **sr,
               "bt": [[r["T"]] + [(_r(r["h"][hz]["err"], 4) if hz in r["h"] else None) for hz in F.HORIZONS]
                      + [sorted((r.get("ev") or {}).keys())] for r in bt],
               "events": _events(bt), "att": {k: _r(v, 3) for k, v in att.items()} if att else None,
               "log": log[-15:], "checks": checks[-60:], "drv": drivers(app, rows, ida, cty_rows, rev_cty),
               "parts": {k: _r(v, 6) if isinstance(v, float) else v for k, v in f["parts"].items()}}
         _write(path, {"v": V, "made_at": run.now.isoformat(), "start": _iso(app["start"]), "T": _iso(last), "p": p,
+                      "bias": {str(h): c.get("bias") for h, c in cal.items()},
                       "log": log, "live": live, "fc": fc})
         run.ran += 1
         return fc

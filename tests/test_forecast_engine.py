@@ -208,3 +208,51 @@ def test_tune_starts_from_an_older_run_without_the_newer_settings():
     old["gone"] = 1                                       # a setting a later version dropped
     p, bt, steps = F.tune(app, None, start_p=old, passes=1)
     assert set(p) == set(F.DEFAULT) and bt
+
+
+def q_true(L):                    # uninstalls per install on day L of an install day
+    return 0.25 if L == 0 else 0.03 / L ** 0.9
+
+
+def with_uninstalls(app):
+    """+ the Uninstall store's install day × lag cells and each day's uninstalls (the truth q_true)."""
+    unc = {}
+    for X, c in app["coh"].items():
+        lim = (LAST - X).days
+        unc[X] = {L: c["n"] * q_true(L) for L in range(0, min(lim, 400) + 1)}
+    for D in app["days"]:
+        app["days"][D]["un"] = sum(app["coh"][X]["n"] * q_true((D - X).days) for X in app["coh"]
+                                   if X <= D and (D - X).days <= 400)
+    app["unc"] = unc
+    return app
+
+
+def test_users_and_uninstalls_by_who_and_todays_spend():
+    app = with_uninstalls(make())
+    T = date(2025, 9, 1)
+    f = F.forecast(app, T, dict(F.DEFAULT, g=0.0), h=90,
+                   spend={T + timedelta(days=i): 500.0 for i in range(1, 91)})
+    for i in (0, 45, 89):                                 # the parts add up to the totals
+        assert abs(sum(f["dau_p"][k][i] for k in ("old", "org", "paid")) - f["dau"][i]) < 1e-6
+    un = [sum(f["un"][k][i] for k in ("old", "org", "paid")) for i in range(90)]
+    act = [app["days"][T + timedelta(days=i)]["un"] for i in range(1, 91)]
+    assert abs(sum(un) / sum(act) - 1) < 0.03          # the uninstall curve (the triangle) meets the truth
+    assert f["un"]["paid"][0] > 0 and abs(f["un"]["paid"][0] / f["un"]["org"][0] - 1) < 0.01   # 1,000 + 1,000 a day
+    bt = F.backtest(app, dict(F.DEFAULT, g=0.0), None)
+    errs = [r["h"][30]["un_err"] for r in bt if 30 in r["h"]]
+    assert errs and max(abs(e) for e in errs) < 0.05 and F.calibrate(bt)[30]["un_mape"] < 0.05
+    # the live default spend = today's run-rate (the last 7 days), not the 30-day mean
+    for i in range(7):
+        app["days"][T - timedelta(days=i)]["sp"] = 1000.0
+    f2 = F.forecast(app, T, dict(F.DEFAULT, g=0.0), h=30)
+    assert f2["sp"][0] == 1000.0
+    # … with ITS cost per install: 1,000 paid installs on $1,000 a day those days = 1 per $ (not the older 2 per $)
+    for i in range(7):
+        app["days"][T - timedelta(days=i)]["n"] = 2000
+        app["days"][T - timedelta(days=i)]["na"] = 1000
+    f4 = F.forecast(app, T, dict(F.DEFAULT, g=0.0), h=30)
+    assert abs(f4["parts"]["per_usd"] - 1.0) < 1e-9 and abs(f4["n"][0] - 2000) < 1e-6
+    # without the store: no uninstall series, nothing else moves
+    plain = make()
+    f3 = F.forecast(plain, T, dict(F.DEFAULT, g=0.0), h=30)
+    assert f3["un"] is None and f3["rev"]["old"] == F.forecast(app, T, dict(F.DEFAULT, g=0.0), h=30)["rev"]["old"]

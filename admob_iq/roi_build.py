@@ -514,7 +514,7 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
             decs = {x["cc"]: x["dec"] for x in cty["rows"]}
             eng = [dict(x, dec=decs.get(x.get("cc"))) for x in (((detail or {}).get("countries") or {}).get("rows") or [])]
             body["fc"] = fob.app_step(acc.fc, aid, key, rows, P, ida, life, body["life_till"], eng,
-                                      rev_cty=(rev or {}).get("cty"))
+                                      rev_cty=(rev or {}).get("cty"), unst=store)
             fcs = fc_summary(body["fc"])
         except Exception:
             body["fc"] = None
