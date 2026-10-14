@@ -75,9 +75,45 @@ def _gads_geo_step(s, data_dir, spend, today):
         return
     try:
         from .fetch.gads_geo import geo_step
-        print(geo_step(s, data_dir, spend, today), file=sys.stderr)
+        _days = _gads_geo_days(s, data_dir, spend)              # GADS_ARCHIVE: the same chunks by day (or None)
+        print(geo_step(s, data_dir, spend, today, days=_days) if _days is not None
+              else geo_step(s, data_dir, spend, today), file=sys.stderr)
+        if _days is not None:
+            try:
+                from .fetch.gads_geo_day import day_step
+                print(day_step(s, data_dir, spend, today, _days), file=sys.stderr)
+            except Exception as _de:
+                print(f"gads geo days skipped: {type(_de).__name__}", file=sys.stderr)
     except Exception as _ge:
         print(f"gads geo skipped: {type(_ge).__name__}", file=sys.stderr)
+
+
+def _gads_geo_days(s, data_dir, spend):
+    """GADS_ARCHIVE on: the open country × day store (fetch.gads_geo_day) the geo chunks also write to, else None. Its own
+    try: a failure here leaves the geo step exactly as without it."""
+    if not s.get("gads_archive"):
+        return None
+    try:
+        from .fetch.gads_geo_day import open_store
+        return open_store(data_dir, spend)
+    except Exception as _oe:
+        print(f"gads geo days skipped: {type(_oe).__name__}", file=sys.stderr)
+        return None
+
+
+def _gads_archive_step(s, data_dir, spend, today):
+    """The ROAS step, after the geo step: the Google Ads archive (fetch.gads_archive — settings + change history, rows per
+    campaign × day, spend by hour; private data/ only, nothing shown), only when GADS_ARCHIVE is on. Its own try — a
+    failure costs only the archive's update (spend, ROAS and every other output are unchanged). `spend` is only read.
+    Counts-only lines."""
+    if not s.get("gads_archive"):
+        return
+    try:
+        from .fetch.gads_archive import archive_step
+        for _ln in archive_step(s, data_dir, spend, today):
+            print(_ln, file=sys.stderr)
+    except Exception as _ae:
+        print(f"gads archive skipped: {type(_ae).__name__}", file=sys.stderr)
 
 
 def data_quality(repo, totals):
@@ -1613,6 +1649,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 except Exception as _ce:
                     print(f"roas cache write skipped: {_ce}", file=sys.stderr)
             _gads_geo_step(s, data_dir, spend, today)          # GADS_GEO only; its own try, reads `spend` only
+            _gads_archive_step(s, data_dir, spend, today)      # GADS_ARCHIVE only; its own try, reads `spend` only
             store_ids = resolve_store_ids(accounts, data_dir, dashboard.get("apps_catalog"),
                                           client_id=s["google_client_id"], client_secret=s["google_client_secret"],
                                           currency=s["report_currency"], make_client=make_client, mode="live")

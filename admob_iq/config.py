@@ -95,6 +95,10 @@ def settings() -> dict:
         "value_cpi": _env("VALUE_CPI", "blended"),                      # the main cost per install
         "value_deduct": _env("VALUE_DEDUCT", "true").lower() == "true", # a per-app deduction rate, when one exists
         "gads_geo": _env("GADS_GEO", "false").lower() == "true",        # Google Ads cost by country (after the probe)
+        # 🗄 Google Ads archive (fetch.gads_archive, private data/ only, never shown): the daily settings + change-history
+        # archive (ads_archive/), the rows per campaign × day (ads_campaign_day/), spend by hour (ads_hourly/) and, with
+        # GADS_GEO, country × day (ads_geo_day/). Off: nothing of it is asked, written or printed; no existing number moves
+        "gads_archive": _env("GADS_ARCHIVE", "false").lower() == "true",
         # the Install value tab's C (new users by app version) and D (long-term by install month) — no new GA4 call,
         # both read the install-day files; off: nothing of them is computed, written or shown (SPEC_CD_GEO §S.1)
         "value_cd": _env("VALUE_CD", "false").lower() == "true",

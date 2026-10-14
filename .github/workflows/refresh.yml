@@ -115,6 +115,11 @@ jobs:
           GA4_VALUE:            ${{ vars.GA4_VALUE || 'false' }}
           GADS_GEO:             ${{ vars.GADS_GEO || 'false' }}
           VALUE_CD:             ${{ vars.VALUE_CD || 'false' }}
+          # 🗄 Google Ads archive (admob_iq/fetch/gads_archive.py; PRIVATE data/ads_archive/, ads_campaign_day/,
+          # ads_hourly/, ads_geo_day/ only — nothing is shown and no dashboard number reads it): the daily settings +
+          # change history (Google keeps changes only ~30 days, so it is on from the start), rows per campaign × day,
+          # spend by hour and (with GADS_GEO) country × day. GADS_ARCHIVE=false (repo variable) stops it without a push
+          GADS_ARCHIVE:         ${{ vars.GADS_ARCHIVE || 'true' }}
           VALUE_PAYBACK_DAYS:   ${{ vars.VALUE_PAYBACK_DAYS }}
           # Audience (GA4 active users by install day over the trailing 1, 2, 3 … month windows, at most once a day per
           # app; data/ga4_audience/ in the private repo): GA4_AUDIENCE=true (repo variable) switches it on, off until set;

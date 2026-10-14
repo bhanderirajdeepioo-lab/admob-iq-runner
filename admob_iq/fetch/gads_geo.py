@@ -276,6 +276,8 @@ class _Ctx:
         self.ccy = {}
         self._usd = {}
         self.map_failed = False                     # the by-id country map failed / was stopped in this build
+        self.days = None                            # GADS_ARCHIVE: the country × day store (gads_geo_day) the chunks
+                                                    # also commit to — never read back here
 
     def ready(self):
         if self.ok is not None:
@@ -493,6 +495,11 @@ def _chunk(ctx, cache, spend, a, b, today, stats, backfill):
             continue
         cache["weeks"][sid][w][cc] = [cost, dl]
     stats["stores"] |= replace
+    if ctx.days is not None and not ctx.days.broken:    # the same rows by day (gads_geo_day); its own try: the weekly
+        try:                                            # cache above is already committed and never depends on it
+            ctx.days.commit(res, answered, replace, dlnull, a, b, iso, ctx.rate, weeks=cache["weeks"])
+        except Exception:
+            ctx.days.broken = True
     return "ok"
 
 
@@ -556,9 +563,11 @@ def public_line(st, state, calls, errors):
 
 
 def geo_step(s, data_dir, spend, today, *, now=time.time, clock=time.monotonic, search=None, token=None,
-             fx_fn=None, max_calls=GEO_MAX_CALLS, max_sec=GEO_MAX_SEC):
+             fx_fn=None, max_calls=GEO_MAX_CALLS, max_sec=GEO_MAX_SEC, days=None):
     """The build's geo step (GADS_GEO on): refresh when due, then backfill; the cache saved → the public counts line.
-    `spend` = the merged spend cache (read only, never changed). search / token / fx_fn / now / clock: injectable."""
+    `spend` = the merged spend cache (read only, never changed). search / token / fx_fn / now / clock: injectable.
+    days: an open gads_geo_day.DayStore (GADS_ARCHIVE) every committed chunk also writes its days to (saved by the
+    caller); None = as before."""
     today = _d(today)
     st = _stats()
     if not _usable(s, spend):
@@ -574,6 +583,7 @@ def geo_step(s, data_dir, spend, today, *, now=time.time, clock=time.monotonic, 
     _prune(cache, today)
     run = _Run(clock, max_calls, max_sec)
     ctx = _Ctx(s, run, search, token, fx_fn, base)
+    ctx.days = days
     end = (today - timedelta(days=1)).isoformat()
     t = int(now())
 

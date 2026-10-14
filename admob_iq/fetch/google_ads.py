@@ -104,15 +104,23 @@ def _child_accounts(login_customer_id, dev_token, access_token):
     return out
 
 
-def _app_spend_for(customer_id, login_customer_id, dev_token, access_token, start, end):
+def _campaign_id(camp):
+    """campaign.id of a row's campaign (the selected id, else the id at the end of its resource name) → str or ""."""
+    v = camp.get("id")
+    if v in (None, ""):
+        v = str(camp.get("resourceName") or "").rsplit("/", 1)[-1]
+    return str(v or "")
+
+
+def _app_spend_for(customer_id, login_customer_id, dev_token, access_token, start, end, search=None):
     """App-campaign cost rows for ONE account over [start,end]. Includes paused/removed campaigns
-    (historical cost still counts); status is kept for display."""
+    (historical cost still counts); status is kept for display. `search` (default _search) is injectable."""
     q = ("SELECT campaign.id, campaign.name, campaign.status, "
          "campaign.app_campaign_setting.app_id, metrics.cost_micros, segments.date "
          "FROM campaign WHERE segments.date BETWEEN '%s' AND '%s' "
          "AND campaign.app_campaign_setting.app_id != '' AND metrics.cost_micros > 0" % (start, end))
     out = []
-    for row in _search(customer_id, login_customer_id, dev_token, access_token, q):
+    for row in (search or _search)(customer_id, login_customer_id, dev_token, access_token, q):
         camp = row.get("campaign") or {}
         sid = _norm_store(((camp.get("appCampaignSetting") or {}).get("appId")))
         if not sid:
@@ -124,19 +132,21 @@ def _app_spend_for(customer_id, login_customer_id, dev_token, access_token, star
     return out
 
 
-def _app_installs_for(customer_id, login_customer_id, dev_token, access_token, start, end):
+def _app_installs_for(customer_id, login_customer_id, dev_token, access_token, start, end, search=None):
     """App-campaign INSTALLS + CONVERSION VALUE for ONE account over [start,end], keyed to the SAME
     store id as spend. Deliberately a SEPARATE query from _app_spend_for so a metric/version problem
     here can never break the (proven) spend pull — the caller runs it best-effort. Installs are
     Google Ads campaign-attributed app installs (NOT the app's total install base). conversions_value
     is the value Google Ads tracks for those conversions (in the account's currency) — with a
-    first-day (D0) tROAS setup this IS the first-day value, so value ÷ spend = the Google-Ads ROAS."""
-    q = ("SELECT campaign.app_campaign_setting.app_id, "
+    first-day (D0) tROAS setup this IS the first-day value, so value ÷ spend = the Google-Ads ROAS.
+    campaign.id is selected too (rows are campaign × day either way — FROM campaign): the per-campaign store
+    (fetch.gads_campaign_day) keeps it; the store sums here never read it."""
+    q = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, "
          "metrics.biddable_app_install_conversions, metrics.conversions_value, segments.date "
          "FROM campaign WHERE segments.date BETWEEN '%s' AND '%s' "
          "AND campaign.app_campaign_setting.app_id != ''" % (start, end))
     out = []
-    for row in _search(customer_id, login_customer_id, dev_token, access_token, q):
+    for row in (search or _search)(customer_id, login_customer_id, dev_token, access_token, q):
         camp = row.get("campaign") or {}
         sid = _norm_store(((camp.get("appCampaignSetting") or {}).get("appId")))
         if not sid:
@@ -144,22 +154,22 @@ def _app_installs_for(customer_id, login_customer_id, dev_token, access_token, s
         m = row.get("metrics") or {}
         out.append({"store_id": sid, "date": (row.get("segments") or {}).get("date"),
                     "installs": float(m.get("biddableAppInstallConversions") or 0),
-                    "convval": float(m.get("conversionsValue") or 0)})
+                    "convval": float(m.get("conversionsValue") or 0), "campaign_id": _campaign_id(camp)})
     return out
 
 
-def _app_convval_lag_for(customer_id, login_customer_id, dev_token, access_token, start, end):
+def _app_convval_lag_for(customer_id, login_customer_id, dev_token, access_token, start, end, search=None):
     """DAY-1 conversion value per store/date: the value from conversions that happened WITHIN ONE DAY
     of the click (segments.conversion_lag_bucket = LESS_THAN_ONE_DAY). Google keeps this lag breakdown
     for PAST dates too, so it's retroactive — it survives the later restatement of the full value, which
     is exactly the 'day-1 vs matured' the UI wants. Best-effort + SEPARATE query (a version/field
-    problem here can never touch spend, installs, or the live convval)."""
-    q = ("SELECT campaign.app_campaign_setting.app_id, metrics.conversions_value, segments.date, "
+    problem here can never touch spend, installs, or the live convval). campaign.id: as in _app_installs_for."""
+    q = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, metrics.conversions_value, segments.date, "
          "segments.conversion_lag_bucket "
          "FROM campaign WHERE segments.date BETWEEN '%s' AND '%s' "
          "AND campaign.app_campaign_setting.app_id != ''" % (start, end))
     out = []
-    for row in _search(customer_id, login_customer_id, dev_token, access_token, q):
+    for row in (search or _search)(customer_id, login_customer_id, dev_token, access_token, q):
         seg = row.get("segments") or {}
         if str(seg.get("conversionLagBucket")) != "LESS_THAN_ONE_DAY":
             continue                                          # keep only the <1-day (day-1) bucket
@@ -168,7 +178,31 @@ def _app_convval_lag_for(customer_id, login_customer_id, dev_token, access_token
         if not sid:
             continue
         out.append({"store_id": sid, "date": seg.get("date"),
-                    "convval": float((row.get("metrics") or {}).get("conversionsValue") or 0)})
+                    "convval": float((row.get("metrics") or {}).get("conversionsValue") or 0),
+                    "campaign_id": _campaign_id(camp)})
+    return out
+
+
+def _app_hourly_spend_for(customer_id, login_customer_id, dev_token, access_token, start, end, search=None):
+    """App-campaign COST by HOUR for ONE account over [start, end] → rows {store_id, campaign_id, date, hour,
+    cost_micros} (account currency micros; date and hour in the ACCOUNT's time zone). The spend query plus
+    segments.hour (fetch.gads_hourly; every filtered field selected). Read-only."""
+    q = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, segments.date, segments.hour, metrics.cost_micros "
+         "FROM campaign WHERE segments.date BETWEEN '%s' AND '%s' "
+         "AND campaign.app_campaign_setting.app_id != '' AND metrics.cost_micros > 0" % (start, end))
+    out = []
+    for row in (search or _search)(customer_id, login_customer_id, dev_token, access_token, q):
+        camp = row.get("campaign") or {}
+        seg = row.get("segments") or {}
+        sid = _norm_store((camp.get("appCampaignSetting") or {}).get("appId"))
+        try:
+            hour = int(seg.get("hour"))
+        except (TypeError, ValueError):
+            hour = -1
+        if not sid or not 0 <= hour <= 23:
+            continue
+        out.append({"store_id": sid, "campaign_id": _campaign_id(camp), "date": str(seg.get("date") or ""),
+                    "hour": hour, "cost_micros": int((row.get("metrics") or {}).get("costMicros") or 0)})
     return out
 
 
@@ -476,9 +510,25 @@ def apply_campaign_accounts(spend, cmap):
     return spend
 
 
+# The per-campaign × day rows the last live fetch_app_spend downloaded (spend, installs + value, day-1 value), kept
+# aside — only while GADS_ARCHIVE is on — for the per-campaign store (fetch.gads_campaign_day), which take_rows()
+# hands over once. The rows are the SAME list objects the store sums above are made of: nothing here changes them.
+_TAKEN = {}
+
+
+def take_rows():
+    """→ the rows the last live fetch_app_spend kept aside ({} when none), then forgets them:
+    {"start", "end", "accounts": [{id, currency, ...}], "spend": [...], "inst": [...], "d1": [...]}."""
+    global _TAKEN
+    out, _TAKEN = _TAKEN, {}
+    return out
+
+
 def fetch_app_spend(s, start, end, *, mode="live"):
     """Return {daily:{store_id:{date:usd_micros}}, campaigns:{store_id:[...]}, currency_src, fx} or
     None when Google Ads isn't configured / a call fails. `s` is config.settings()."""
+    global _TAKEN
+    _TAKEN = {}
     if mode == "mock":
         return _mock_spend(start, end)
     dev = s.get("google_ads_dev_token"); mcc = s.get("google_ads_login_customer_id")
@@ -534,7 +584,7 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     for a in accounts:
         try:
             for r in _app_installs_for(a["id"], mcc, dev, token, start, end):
-                r["currency"] = a["currency"]; inst_rows.append(r)
+                r["currency"] = a["currency"]; r["account"] = a["id"]; inst_rows.append(r)
         except Exception as e:
             print("roas: installs/convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
     agg["installs"] = _aggregate_installs(inst_rows)
@@ -545,10 +595,13 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     for a in accounts:
         try:
             for r in _app_convval_lag_for(a["id"], mcc, dev, token, start, end):
-                r["currency"] = a["currency"]; d1_rows.append(r)
+                r["currency"] = a["currency"]; r["account"] = a["id"]; d1_rows.append(r)
         except Exception as e:
             print("roas: day-1 convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
     agg["convval_day1"] = _aggregate_convval(d1_rows, base=agg["currency_src"])
+    if s.get("gads_archive"):                    # the per-campaign store's input (never part of the returned cache)
+        _TAKEN = {"start": str(start), "end": str(end), "accounts": [dict(a) for a in accounts],
+                  "spend": rows, "inst": inst_rows, "d1": d1_rows}
     return agg
 
 
