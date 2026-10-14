@@ -38,6 +38,7 @@ const GOOD = {
       "ca-app-pub-1001/3002": { approved_at: "2026-08", range: { ctr: [1, 2] }, countries: { IN: { ctr: [1, 2] } } },   // old flat shape
     },
   },
+  forecast_starts: { [APP(PUB, 11)]: "2025-10-13" },
 };
 
 /**
@@ -193,7 +194,7 @@ test("save: the written file (indent 1) is capped at 256 KiB; a body above the r
 
 // ── validation ──────────────────────────────────────────────────────────────────────────────────
 
-test("validation: each of the four files in its real shape is accepted", async (tt) => {
+test("validation: each of the five files in its real shape is accepted", async (tt) => {
   const gh = fakeGitHub(tt);
   const t = await cfg();
   for (const [file, content] of Object.entries(GOOD)) {
@@ -203,7 +204,8 @@ test("validation: each of the four files in its real shape is accepted", async (
     assert.equal(r.json.file, file);
   }
   assert.deepEqual(gh.puts().map((c) => c.url.split("/contents/")[1]),
-    ["config/account_names.json", "config/app_names.json", "config/selected_apps.json", "config/approved_ranges.json"]);
+    ["config/account_names.json", "config/app_names.json", "config/selected_apps.json", "config/approved_ranges.json",
+      "config/forecast_starts.json"]);
   assert.equal((await t.save({ file: "account_names", content: {} })).status, 200, "an empty map is valid");
 });
 
@@ -242,6 +244,11 @@ const BAD = [
   ["approved_ranges", { placements: { u1: { metrics: [] } } }, "\"metrics\" object"],
   ["approved_ranges", { placements: { u1: { countries: { US: [1, 2] } } } }, "country"],
   ["approved_ranges", { placements: { ["u".repeat(201)]: {} } }, "Placement id galat"],
+  ["forecast_starts", [], "object hona chahiye"],
+  ["forecast_starts", { [PUB]: "2025-01-01" }, "App id galat"],
+  ["forecast_starts", { [APP(PUB, 1)]: "2025-02-30" }, "start date galat"],
+  ["forecast_starts", { [APP(PUB, 1)]: "13-10-2025" }, "start date galat"],
+  ["forecast_starts", { [APP(PUB, 1)]: 20251013 }, "start date galat"],
 ];
 
 test("validation: every broken shape → 400 with a Hinglish reason (incl. a selected app of another publisher)", async (tt) => {

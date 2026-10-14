@@ -2549,6 +2549,14 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-hc-a{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--ink2);max-width:100%}.roi-hc-a>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:1100px){.roi-hero{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:760px){.roi-hero{padding:14px;gap:12px}.roi-hh{font-size:16px}.roi-hns{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.roi-hv{font-size:18px}.roi-hcs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.roi-fc-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;margin:0 0 12px}
+.roi-mini button[disabled]{opacity:.45;cursor:not-allowed}.roi-mini button small{font-size:10.5px;color:var(--faint)}
+.roi-fc-sl{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink2);min-width:220px;flex:1 1 220px;max-width:420px}
+.roi-fc-sl b{color:#fff}.roi-fc-sl small{color:var(--faint)}.roi-fc-sl input{width:100%;accent-color:var(--cyan)}
+.roi-ch .band{fill:rgba(52,217,154,.16);stroke:none}.roi-ch .ln.dash{stroke-dasharray:5 4;stroke-width:1.6}
+.roi-lgr{font-size:12.5px;color:var(--ink2);padding:7px 0;border-bottom:1px solid var(--line);line-height:1.5}.roi-lgr b{color:#fff}
+.roi-fc-st{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:13px;color:var(--ink2)}
+.roi-fc-st input[type=date]{min-height:34px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font:inherit;color-scheme:dark}
 /* ---------- 🆕 First open (scoped to the screen) ---------- */
 body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecustom{display:none!important}   /* every number says its own days */
 .screen[data-screen="firstopen"]{max-width:1360px}
@@ -6492,7 +6500,7 @@ function block(aid){
   if(!ptr()) return ''; wire();
   return `<section class="roi" id="roi-root" data-aid="${E(aid||'')}" aria-label="ROI">${inner(aid)}<div class="roi-tip" hidden></div></section>`; }
 function inner(aid){
-  const tabs=[['day','📅 Day-wise ROI'],['cty','🌍 Countries'],['life','💰 Lifetime P/L']];
+  const tabs=[['day','📅 Day-wise ROI'],['cty','🌍 Countries'],['life','💰 Lifetime P/L'],['fc','🔮 Forecast']];
   const hd=`<div class="roi-hd"><div><div class="roi-eye">📈 Return on ads · revenue AdMob se matched · spend Google Ads</div></div>`
     +`<div class="roi-seg" role="tablist">${tabs.map(([k,l])=>`<button type="button" role="tab" aria-selected="${VIEW===k}" data-roi-view="${k}">${l}</button>`).join('')}</div></div>`;
   return `<div id="roi-hero">${hero(aid)}</div>`+hd+`<div id="roi-body">${body(aid)}</div>`; }
@@ -6537,7 +6545,7 @@ function body(aid){
   if(!aid){ if(!ALL){ if(ALLERR) return wait('ROI data load nahi hua.',1); ensureAll(repaint); return wait('ROI load ho raha hai…'); } CCY=ALL.ccy||null; return allView(); }
   const a=appPtr(aid); if(!a) return `<div class="roi-card"><p class="roi-note">Is app ka ROI data abhi nahi (GA4 install-day data ya Google Ads spend chahiye).</p></div>`;
   const d=AF[a.file]; if(!d){ if(AERR[a.file]) return wait('Is app ka ROI data load nahi hua.',1); ensureApp(aid,repaint); return wait('ROI load ho raha hai…'); }
-  CCY=d.ccy||null; return VIEW==='cty'?ctyView(d):VIEW==='life'?lifeView(d.life,d.life_till,d,coOf(d)):dayView(d); }
+  CCY=d.ccy||null; return VIEW==='cty'?ctyView(d):VIEW==='life'?lifeView(d.life,d.life_till,d,coOf(d)):VIEW==='fc'?fcView(d):dayView(d); }
 // install days for the install-month P/L: [day, installs, spend USD, spend as billed, revenue so far USD] + month curves
 function coOf(d){ return {T:d.T, rows:(d.rows||[]).map(r=>[r[R.X],r[R.n],r[R.sp],r[R.spi],r[R.s]]), months:(d.months||[]).map(m=>[m[0],m[2],m[3],m[6]])}; }
 function coAll(A){ return {T:A.T, rows:(A.rows||[]).map(r=>[r[0],r[1],r[2],r[5],r[6]]), months:(A.months||[]).map(m=>[m[0],m[2],m[3],m[6]])}; }
@@ -6721,7 +6729,7 @@ function lifeView(life,till,d,co){ life=life||[]; if(d) CCY=d.ccy||null; if(!lif
     +(LG==='cohort'?`<p class="roi-note"><b>Install month</b> = us mahine aaye users (ads + organic) ki aaj tak ki kamai (AdMob matched, install se 1 saal tak) vs us mahine ka Google Ads spend — purane mahine samay ke saath profit me aate hain. <b>Calendar month</b> = us mahine saare users se kitna aaya vs us mahine kitna spend gaya (cash).</p>`:'')+`</div>`
     +`<p class="roi-note">Revenue = AdMob (saare ad sources, ${d&&d.app?'is app ke':'saare apps ke'} saare users — ads + organic), spend = Google Ads (₹ me jitna bill hua). Totals ${E(fd(tl))} tak (us din tak dono ka pura data). ${live.length?'Uske baad ke din live — totals me nahi.':''}</p>`; }
 // ---- All apps ----
-function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life_till,null,coAll(A));
+function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life_till,null,coAll(A)); if(VIEW==='fc') return fcAll();
   if(VIEW==='cty'){ const rows=A.apps.filter(x=>x.cut).sort((a,b)=>b.cut-a.cut);
     return `<div class="roi-card"><div class="roi-ct"><h3>Countries · har app</h3><span class="roi-note">app pe tap = us app ke countries</span></div>`
       +(rows.length?`<div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th><th>Cut layak countries</th><th>Status</th></tr></thead><tbody>${rows.map(x=>`<tr class="clk" data-roi-app="${E(x.app_id)}"><td class="roi-nm"><span class="roi-an">${appIconId(x.app_id,x.app,22)}<span>${E(x.app)}</span></span></td><td>✂️ <b>${x.cut}</b></td><td>${chip(x.st)}</td></tr>`).join('')}</tbody></table></div>`
@@ -6737,6 +6745,107 @@ function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life
   const pc=pm.length?lineChart(A.T.map(a=>'D'+a),pm.slice(-6).map((m,i,arr)=>({name:fmtMon(m[0]),cls:['c1','c2','c3','c4','c5','c6'][6-arr.length+i],pts:A.T.map((a,j)=>[j,m[3][j]!=null?m[3][j]/m[2]:null,m[3][j]!=null?`${E(M(m[3][j]))} of ${E(MS(m[2],m[6]))}`:''])})),{ref:1,refl:'Breakeven 100%',label:'Portfolio ROAS by days since install, per install month'}):'';
   return chips+`<div class="roi-card"><div class="roi-ct"><h3>Har app · ROI</h3><span class="roi-note">app pe tap = us app ka Day-wise ROI · Status = pichhle 7 install-din ka D7 ROAS vs usual</span></div>${tb}</div>`
     +(pc?`<div class="roi-card"><div class="roi-ct"><h3>Saare apps (jin pe ads) · ROAS by day · har install mahina</h3><span class="roi-note">dashed = 100%</span></div>${pc}</div>`:''); }
+// ---- 🔮 Forecast (owner, 14 Oct: "next 6 month ka prediction … AI back testing … khud learn karega", start date
+// changeable "dashboard me dedo") — the app's own model (forecast_build): revenue / spend / profit / breakeven for the
+// next 30 / 90 / 180 days with its measured range, why it moves (now vs the usual), how right it was (back-tests and
+// the live check), what it learnt, and the start of the real run. Spend slider: the paid installs scale with it exactly.
+let FCH='90', FCM=0;
+const FC_P={hl:'Curve: kitne purane installs se seekhe (half-life din)',K:'Naye install-din ki apni kamai pe bharosa (K)',w:'eCPM level: kitne din ka',g:'Season (Dec/Jan) ka asar',W:'Installs/CPI: kitne din ka',m:'Purane users ka tareeka'};
+const FC_C={installs:'installs (naye users)',retention:'retention (users kitne ruke)',arpdau:'ARPDAU / eCPM (har user ki kamai)'};
+function fcTot(f,m){ return f.old.map((v,i)=>(v||0)+(f.org[i]||0)+m*(f.paid[i]||0)); }
+function fcSum(a,h){ let s=0; for(let i=0;i<h&&i<a.length;i++) s+=a[i]; return s; }
+function fcDay(d0,i){ const x=new Date(d0+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+i); return x.toISOString().slice(0,10); }
+function fcView(d){ const fc=d.fc; CCY=d.ccy||null;
+  if(!fc) return `<div class="roi-card"><p class="roi-note">🔮 Is app ka forecast abhi bana nahi — robot roz ek baar har app ka model chalata hai (agle run me aayega). Ya app ke paas abhi kaafi din ka data nahi.</p></div>`;
+  const rd=fc.ready||{}, hs=['30','90','180'];
+  if(!rd[FCH]) FCH=hs.filter(h=>rd[h]).pop()||'30';
+  const chips=hs.map(h=>rd[h]?`<button type="button" data-roi-fch="${h}" aria-pressed="${FCH===h}">${h} din</button>`:`<button type="button" disabled title="${E('Data kam — '+fd((fc.ready_from||{})[h]||'')+' se')}">${h} din <small>${E(fd((fc.ready_from||{})[h]||''))} se</small></button>`).join('');
+  const any=hs.some(h=>rd[h]);
+  const sv=billed()&&fc.f.spi!=null?fc.f.spi:RV(fc.f.sp[0]||0);
+  const ctl=`<div class="roi-fc-ctl"><span class="roi-mini" role="group" aria-label="Kitne din aage">${chips}</span>`
+    +((fc.f.sp[0]||0)>0?`<label class="roi-fc-sl"><span>Google Ads spend <b id="roi-fc-ml">${FCM>=0?'+':'−'}${Math.abs(Math.round(FCM*100))}%</b> <small>(abhi ${MV(sv)}/din)</small></span><input type="range" id="roi-fc-m" min="-100" max="100" step="10" value="${Math.round(FCM*100)}" aria-label="Spend badlo"></label>`:'<span class="roi-note">Is app pe abhi Google Ads spend nahi — forecast sirf organic</span>')+`</div>`;
+  return (any?ctl+`<div id="roi-fc-out">${fcOut(d)}</div>`:`<div class="roi-card"><p class="roi-note">⏳ Model ko abhi kaafi tests nahi mile — 30 din ka forecast <b>${E(fd((fc.ready_from||{})['30']||''))}</b> se (shuru ke din: ${E(fdy(fc.start))}).</p></div>`)
+    +fcWhy(d)+fcAcc(d)+fcLearn(d)+fcStart(d); }
+function fcOut(d){ const fc=d.fc, f=fc.f, H=+FCH, m=1+FCM, c=(fc.cal||{})[FCH]||{};
+  const rev=fcTot(f,m).map(v=>RV(v)), spd=(billed()&&f.spi!=null)?f.sp.map(v=>f.spi*(v>0?1:0)*m):f.sp.map(v=>RV(v)*m);
+  const R=fcSum(rev,H), S=fcSum(spd,H), Pr=R-S, lo=R*(1+(c.lo||0)), hi=R*(1+(c.hi||0));
+  // breakeven: lifetime cash P/L so far + the forecast's daily profit
+  let p0=0; const till=d.life_till; for(const x of d.life||[]){ if(till&&x[0]>till) continue; p0+=(RV(+x[1]||0)||0)-(SV(+x[2]||0,x[3]!=null?+x[3]:null)||0); }
+  let cum=p0, cross=null; for(let i=0;i<rev.length;i++){ const before=cum; cum+=rev[i]-spd[i]; if(cross==null&&((before<0&&cum>=0)||(before>=0&&cum<0))) cross=[fcDay(f.d0,i),cum>=0]; }
+  const be=p0>=0?(cross&&!cross[1]?`<span class="roi-dn">Loss me jaayega ~${E(fd(cross[0]))}</span>`:`<span class="roi-up">Profit me hai</span>`):(cross&&cross[1]?`<span class="roi-up">Profit me aayega ~${E(fd(cross[0]))}</span>`:`<span class="roi-dn">6 mahine me nahi</span>`);
+  const acc=c.mape_normal!=null?`±${P(c.mape_normal)} normal din · ±${P(c.mape)} sab tests`:(c.mape!=null?`±${P(c.mape)}`:'—');
+  const kp=`<div class="roi-ks6">`+tile(`Revenue · agle ${H} din`,MC(R),`80% chance: ${MC(lo)} – ${MC(hi)}`,'roi-kg')
+    +tile(`Google Ads spend · ${H} din`,MC(S),FCM?`slider: ${FCM>0?'+':'−'}${Math.abs(Math.round(FCM*100))}%`:'pichhle 30 din jaisa')
+    +tile(`Profit / loss · ${H} din`,`<span class="${Pr>=0?'roi-up':'roi-dn'}">${MC(Pr,true)}</span>`,`ROAS ${P(S?R/S:null)}`,Pr>=0?'roi-kg':'roi-kb')
+    +tile('Breakeven (lifetime)',be,`abhi lifetime ${MC(p0,true)}`)
+    +tile('Kitna sahi (back-test)',acc,`${c.n||0} tests · ${c.ev_rate?Math.round(c.ev_rate*100)+'% me achanak jhatka':'koi jhatka nahi'}`)+`</div>`;
+  return kp+`<div class="roi-card"><div class="roi-ct"><h3>Roz ka revenue · pichhle 90 din asli + agle ${H} din forecast</h3><span class="roi-note">halka rang = 80% range · line pe tap = us din</span></div>${fcChart(fc,H,rev,spd)}</div>`; }
+function fcChart(fc,H,rev,spd){ const W=CHW(), Hh=W<720?220:250, m={t:16,r:W<720?54:70,b:26,l:W<720?44:52};
+  const hr=(fc.hist.rev||[]).slice(-90).map(v=>RV(v)), n0=hr.length, n=n0+H, c=(fc.cal||{})[String(H)]||{};
+  const fr=rev.slice(0,H), lo=fr.map(v=>v*(1+(c.lo||0))), hi=fr.map(v=>v*(1+(c.hi||0)));
+  const all=[...hr,...hi].filter(ok); if(!all.length) return '<p class="roi-note">Data nahi.</p>';
+  let top=Math.max(...all)*1.08; const raw=top/4, p10=Math.pow(10,Math.floor(Math.log10(raw))), st=[1,2,2.5,5,10].map(k=>k*p10).find(k=>k>=raw)||raw; top=Math.ceil(top/st)*st;
+  const X=i=>m.l+(W-m.l-m.r)*i/(n-1), Y=v=>m.t+(Hh-m.t-m.b)*(1-v/top);
+  const ticks=[]; for(let v=0;v<=top+st/2;v+=st) ticks.push(v);
+  const grid=ticks.map(v=>`<line class="g" x1="${m.l}" x2="${W-m.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text class="ax" x="${m.l-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${E(MC(v))}</text>`).join('');
+  const d0h=fcDay(fc.f.d0,-n0), lab=i=>fd(fcDay(d0h,i));
+  const xs=[0,n0-1,n-1].concat(H>60?[n0-1+Math.round(H/2)]:[]).map(i=>`<text class="ax" x="${X(i).toFixed(1)}" y="${Hh-8}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${E(i===n0-1?'aaj':lab(i))}</text>`).join('');
+  const path=(arr,off)=>arr.map((v,i)=>ok(v)?`${i?'L':'M'}${X(i+off).toFixed(1)} ${Y(v).toFixed(1)}`:'').join(' ');
+  const band=`<path class="band" d="${hi.map((v,i)=>`${i?'L':'M'}${X(n0+i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ')} ${lo.slice().reverse().map((v,i)=>`L${X(n0+lo.length-1-i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ')} Z"/>`;
+  const today=`<line class="ref" x1="${X(n0-1)}" x2="${X(n0-1)}" y1="${m.t}" y2="${Hh-m.b}"/>`;
+  const la=hr[n0-1], lf=fr[H-1];
+  const lines=`<path class="ln c4" d="${path(hr,0)}"/><path class="ln c2" d="${path([hr[n0-1]].concat(fr),n0-1)}"/>`+(spd.some(v=>v>0)?`<path class="ln c5 dash" d="${path(spd.slice(0,H),n0)}"/>`:'')
+    +(ok(la)?`<text class="lv c4" x="${X(n0-1)-4}" y="${Y(la)-8}" text-anchor="end">${E(MC(la))}</text>`:'')+(ok(lf)?`<text class="lv c2" x="${X(n-1)+5}" y="${Y(lf)+4}">${E(MC(lf))}</text>`:'');
+  const hits=Array.from({length:n},(_,i)=>{ const isF=i>=n0, j=i-n0, v=isF?fr[j]:hr[i];
+    const tip=`<b>${E(lab(i))}</b>${isF?' · forecast':' · asli'}<br>Revenue <b>${E(MV(v))}</b>${isF?`<br>range ${E(MV(lo[j]))} – ${E(MV(hi[j]))}${spd[j]?`<br>spend ${E(MV(spd[j]))}`:''}`:''}`;
+    const x0=i===0?m.l:(X(i-1)+X(i))/2, x1=i===n-1?W-m.r:(X(i)+X(i+1))/2; return `<rect class="hit" x="${x0.toFixed(1)}" y="${m.t}" width="${Math.max(1,x1-x0).toFixed(1)}" height="${Hh-m.t-m.b}" data-tip="${E(tip)}"/>`; }).join('');
+  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Daily revenue: actual and forecast">${grid}${band}${today}${lines}${xs}${hits}</svg></div><div class="roi-lg"><span class="c4">Asli revenue</span><span class="c2">Forecast</span>${spd.some(v=>v>0)?'<span class="c5">Google Ads spend</span>':''}</div>`; }
+function fcWhy(d){ const fc=d.fc, v=fc.drv||{}; if(!v.installs) return '';
+  const row=(lab,a,fmt,good)=>{ if(!a||!ok(a[0])) return ''; const ch=ok(a[1])&&a[1]?a[0]/a[1]-1:null, up=ch!=null&&ch>=0, gd=good==null?null:(up===good);
+    return `<tr><td class="roi-nm">${lab}</td><td>${fmt(a[0])}</td><td>${ok(a[1])?fmt(a[1]):'—'}</td><td class="${gd==null?'':gd?'roi-up':'roi-dn'}">${ch==null?'—':(up?'▲ +':'▼ −')+Math.abs(Math.round(ch*100))+'%'}</td></tr>`; };
+  const pc=x=>P(x), mpv=x=>MPV(RV(x)), num=x=>N(x), mv=x=>MV(RV(x));
+  const t=`<table class="roi-t roi-sub"><thead><tr><th>Cheez</th><th>Abhi (14 din)</th><th>Usual (X)</th><th>Badlav</th></tr></thead><tbody>`
+    +row('Installs / din',v.installs,num,true)+row('Google Ads spend / din',v.spend,mv,null)+row('Cost / install (CPI)',v.cpi,mpv,false)
+    +row('Back next day (D1)',v.d1,pc,true)+row('Day 7 retention',v.d7,pc,true)+row('DAU',v.dau,num,true)+row('ARPDAU (har user ki kamai / din)',v.arpdau,mpv,true)+`</tbody></table>`;
+  const cty=(v.cty||[]).filter(c=>c.share&&(c.share[0]||c.share[1]));
+  const ct=cty.length?`<table class="roi-t roi-sub"><thead><tr><th>Country</th><th>Installs share abhi / X</th><th>D1 abhi / X</th><th>Kamai D7 abhi / X</th><th>CPI abhi / X</th><th>Decision</th></tr></thead><tbody>`
+    +cty.map(c=>{ const two=(a,f,good)=>{ if(!a||!ok(a[0])) return '—'; const ch=ok(a[1])&&a[1]?a[0]/a[1]-1:null, up=ch!=null&&ch>=0; return `${f(a[0])} <small class="${ch==null||good==null?'':(up===good?'roi-up':'roi-dn')}">/ ${ok(a[1])?f(a[1]):'—'}</small>`; };
+      return `<tr><td class="roi-nm">${valFlag(c.cc)}&nbsp;${E(valCtyName(c.cc))}</td><td>${two(c.share,pc,null)}</td><td>${two(c.d1,x=>Math.round(x)+'%',true)}</td><td>${two(c.rpi7,mpv,true)}</td><td>${two(c.cpi,mpv,false)}</td><td>${c.dec?dchip(c.dec):'—'}</td></tr>`; }).join('')+`</tbody></table>`:'';
+  const att=fc.att?`<p class="roi-note">Pichhle tests me forecast ki galti kahan se aayi: ${Object.entries(fc.att).sort((a,b)=>b[1]-a[1]).map(([k,x])=>`<b>${Math.round(x*100)}%</b> ${E(FC_C[k]||k)}`).join(' · ')}.</p>`:'';
+  return `<div class="roi-card"><div class="roi-ct"><h3>Forecast kyun upar / neeche · abhi vs usual (X)</h3><span class="roi-note">X = usse pehle ke 8 hafte · model in sab ko apne aap use karta hai</span></div><div class="roi-tw">${t}</div>${ct?`<div class="roi-tw" style="margin-top:10px">${ct}</div>`:''}${att}</div>`; }
+function fcAcc(d){ const fc=d.fc, bt=fc.bt||[]; if(!bt.length) return '';
+  const cal=fc.cal||{}, hs=['30','90','180'];
+  const sum=`<table class="roi-t roi-sub"><thead><tr><th>Kitne din aage</th><th>Normal din me error</th><th>Sab tests (jhatkon samet)</th><th>80% range</th><th>Tests</th></tr></thead><tbody>`
+    +hs.filter(h=>cal[h]).map(h=>{ const c=cal[h]; return `<tr><td class="roi-nm">${h} din</td><td><b>±${P(c.mape_normal!=null?c.mape_normal:c.mape)}</b></td><td>±${P(c.mape)}</td><td>${Math.round((c.lo||0)*100)}% … +${Math.round((c.hi||0)*100)}%</td><td>${c.n}${c.ev_rate?` <small>(${Math.round(c.ev_rate*100)}% jhatka)</small>`:''}</td></tr>`; }).join('')+`</tbody></table>`;
+  const ix=hs.indexOf(FCH)>=0?hs.indexOf(FCH):0, vals=bt.map(r=>r[1+ix]);
+  const ch=barChart(bt.map(r=>fd(r[0])),vals.map(v=>ok(v)?Math.abs(v):null),{fmt:v=>Math.round(v*100)+'%',show:[],label:'Back-test error by test date',tip:i=>{ const v=vals[i]; const ev=(bt[i][4]||[]).map(String).indexOf(String(hs[ix]))>=0; return ok(v)?`Forecast ${v>=0?'zyada':'kam'} by <b>${Math.abs(Math.round(v*100))}%</b> (${hs[ix]} din)${ev?'<br>⚡ is beech achanak jhatka':''}`:'—'; }});
+  const ck=(fc.checks||[]).filter(x=>String(x.h)===FCH).slice(-6).reverse();
+  const live=ck.length?`<p class="roi-note"><b>Asli check</b> (jo forecast pehle bana, ab ke asli se): ${ck.map(x=>`${E(fd(x.made))}: ${x.err>=0?'+':'−'}${Math.abs(Math.round(x.err*100))}%`).join(' · ')}</p>`:`<p class="roi-note">Asli check: roz ka forecast save ho raha hai — ${FCH} din baad har din ka asli se milan yahan dikhega.</p>`;
+  const ev=(fc.events||[]).slice(-8).reverse();
+  const evh=ev.length?`<p class="roi-note">⚡ <b>Achanak jhatke</b> (koi model pehle se nahi dekh sakta — range inke bina, upar alag likha): ${ev.map(e=>`${E(fd(e.at))} ${e.kind==='installs'?'installs':'ARPDAU'} ×${e.x}`).join(' · ')}</p>`:'';
+  return `<div class="roi-card"><div class="roi-ct"><h3>Kitna sahi tha · back-test</h3><span class="roi-note">har 2 hafte pe purane din se ${hs[ix]} din aage ka forecast vs asli · bar = error</span></div><div class="roi-tw">${sum}</div>${ch}${live}${evh}</div>`; }
+function fcLearn(d){ const fc=d.fc, log=(fc.log||[]).slice().reverse(); if(!log.length) return '';
+  const pd=p=>Object.entries(p||{}).map(([k,v])=>`${E(FC_P[k]||k)}: <b>${E(k==='hl'&&v>=100000?'sab barabar':k==='m'?(v==='split'?'alag, ghatte hue':'ek ratio'):k==='g'?(v?'on':'off'):String(v))}</b>`).join(' · ');
+  return `<div class="roi-card"><div class="roi-ct"><h3>Model kya seekh raha hai</h3><span class="roi-note">roz naye data pe dobara test → jo setting sabse sahi, wahi</span></div>`
+    +log.slice(0,6).map(x=>`<div class="roi-lgr"><b>${E(fd(x.d))}</b> · ${x.changed&&x.changed.length?`badla: ${x.changed.map(k=>E(FC_P[k]||k)).join(', ')}`:'settings wahi'}${x.sc_old!=null?` · error ${P(x.sc_old)} → <b>${P(x.sc)}</b>`:(x.sc!=null?` · error <b>${P(x.sc)}</b>`:'')}${x.cause?` · zyada galti: ${E(FC_C[x.cause]||x.cause)}`:''}${x.bias30?` · bias ${x.bias30>0?'+':'−'}${Math.abs(Math.round(x.bias30*100))}% theek kiya`:''}</div>`).join('')
+    +`<p class="roi-note">Abhi ki settings: ${pd(fc.p)}.</p></div>`; }
+function fcStart(d){ const fc=d.fc, set=fc.start_set;
+  return `<div class="roi-card"><div class="roi-ct"><h3>Model kahan se gine · start date</h3><span class="roi-note">shuru ke trial / organic 20–50 downloads wale din chhod ke</span></div>`
+    +`<div class="roi-fc-st"><span>Abhi: <b>${E(fdy(fc.start))}</b> ${set?'<span class="hub-st st-dhyan">aapka</span>':'<span class="hub-st st-normal">auto</span>'} · auto: ${E(fdy(fc.start_auto||''))}</span>`
+    +`<input type="date" id="roi-fc-sd" value="${E(fc.start)}" aria-label="Start date"><button type="button" class="roi-btn" data-roi-fcsave="${E(d.app_id)}">Save</button>${set?`<button type="button" class="roi-btn" data-roi-fcauto="${E(d.app_id)}">Auto pe wapas</button>`:''}</div>`
+    +`<p class="roi-note">Save ke baad agle robot run (~1 ghanta) me model naye start se dobara seekhega. Sirf admin badal sakta hai.</p></div>`; }
+function fcSaveStart(aid,day){ const cur=Object.assign({},(DATA.roi&&DATA.roi.starts)||{}); if(day) cur[aid]=day; else delete cur[aid];
+  ghCommitFile('config/forecast_starts.json',cur,day?('forecast start → '+day):'forecast start → auto',day?'✅ Start date save — agle robot run me forecast naye start se banega':'✅ Auto start — agle robot run me'); }
+function fcAll(){ const A=ALL, apps=A.apps.filter(x=>uniVis(x.app_id)&&x.fc);
+  if(!apps.length) return `<div class="roi-card"><p class="roi-note">🔮 Forecast abhi ban raha hai — robot roz ek baar har app ka model chalata hai.</p></div>`;
+  const rv=x=>RV(x), rd=x=>k=>x.fc.ready&&x.fc.ready[k];
+  const T={r30:0,r90:0,r180:0,a30:0,n30:0,n90:0,n180:0};          // totals of the apps whose horizon is ready (and their own last 30 days)
+  apps.forEach(x=>{ ['30','90','180'].forEach(k=>{ if(rd(x)(k)){ T['r'+k]+=rv(x.fc['r'+k]||0)||0; T['n'+k]++; if(k==='30') T.a30+=rv(x.fc.a30||0)||0; } }); });
+  const body=apps.slice().sort((a,b)=>(b.fc.r90||0)-(a.fc.r90||0)).map(x=>{ const f=x.fc, ch=f.a30?((f.r30||0)/f.a30-1):null;
+    const ok30=rd(x)('30');
+    return `<tr class="clk" data-roi-app="${E(x.app_id)}"><td class="roi-nm"><span class="roi-an">${appIconId(x.app_id,x.app,22)}<span>${E(x.app)}</span></span></td><td>${MC(rv(f.a30))}</td><td>${ok30?MC(rv(f.r30)):'⏳'}</td><td class="${ch==null||!ok30?'':ch>=0?'roi-up':'roi-dn'}">${ch==null||!ok30?'—':(ch>=0?'▲ +':'▼ −')+Math.abs(Math.round(ch*100))+'%'}</td><td>${rd(x)('90')?MC(rv(f.r90)):'⏳'}</td><td>${rd(x)('180')?MC(rv(f.r180)):'⏳'}</td><td>${ok(f.e30)?'±'+P(f.e30):'—'}</td></tr>`; }).join('');
+  return `<div class="roi-ks6">${tile('Pichhle 30 din (asli)',MC(T.a30),`${T.n30} apps (jin ka forecast ready)`)}${tile('Agle 30 din',MC(T.r30),`${T.a30?((T.r30/T.a30-1)>=0?'▲ +':'▼ −')+Math.abs(Math.round((T.r30/T.a30-1)*100))+'% · ':''}${T.n30} apps`)}${tile('Agle 90 din',MC(T.r90),`${T.n90} apps`)}${tile('Agle 180 din',MC(T.r180),`${T.n180} apps`)}</div>`
+    +`<div class="roi-card"><div class="roi-ct"><h3>Har app · forecast</h3><span class="roi-note">app pe tap = us app ka poora forecast · spend = pichhle 30 din jaisa</span></div><div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th><th>Pichhle 30 din</th><th>Agle 30 din</th><th>Badlav</th><th>Agle 90 din</th><th>Agle 180 din</th><th>Kitna sahi (30 din)</th></tr></thead><tbody>${body}</tbody></table></div></div>`; }
 // ---- events (one delegated listener on the block; every toggle keeps the tapped control in place) ----
 function hold(r){ r.style.minHeight=Math.max(r.offsetHeight,parseFloat(r.style.minHeight)||0)+'px'; }
 let WIRED=false;
@@ -6746,6 +6855,9 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if(x+t.offsetWidth>b.width) x=Math.max(0,ev.clientX-b.left-t.offsetWidth-12); t.style.left=x+'px'; t.style.top=y+'px'; };
   document.addEventListener('pointermove',ev=>{ const t0=ev.target; if(!(t0&&t0.closest&&t0.closest('#roi-root'))){ const t=tip(); if(t&&!t.hidden) t.hidden=true; return; }
     const h=t0.closest('[data-tip]'); if(h) show(ev,h.getAttribute('data-tip')); else { const t=tip(); if(t) t.hidden=true; } },{passive:true});
+  document.addEventListener('input',ev=>{ const t=ev.target; if(!t||t.id!=='roi-fc-m') return; FCM=(+t.value||0)/100;
+    const l=document.getElementById('roi-fc-ml'); if(l) l.textContent=(FCM>=0?'+':'−')+Math.abs(Math.round(FCM*100))+'%';
+    const r=root(), o=document.getElementById('roi-fc-out'); if(r&&o){ const a=appPtr(r.dataset.aid), d=a?AF[a.file]:null; if(d) o.innerHTML=fcOut(d); } });
   document.addEventListener('click',ev=>{ const t=ev.target; const r=t&&t.closest&&t.closest('#roi-root'); if(!r) return; const at=(sel)=>t.closest(sel);
     const h=at('[data-tip]'); if(h){ show(ev,h.getAttribute('data-tip')); return; }
     const keep=(el,fn)=>{ const y0=el.getBoundingClientRect().top; hold(r); fn(); const sel=el.getAttribute('data-roi-sel'); const b=sel?r.querySelector(sel):null; if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };
@@ -6759,6 +6871,9 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=at('[data-roi-csort]'))){ const k=b.dataset.roiCsort; b.setAttribute('data-roi-sel',`[data-roi-csort="${k}"]`); keep(b,()=>{ CSORT={k,dir:CSORT.k===k?-CSORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-asort]'))){ const k=b.dataset.roiAsort; b.setAttribute('data-roi-sel',`[data-roi-asort="${k}"]`); keep(b,()=>{ ASORT={k,dir:ASORT.k===k?-ASORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-cty]'))){ const cc=b.dataset.roiCty; b.setAttribute('data-roi-sel',`[data-roi-cty="${cc}"]`); keep(b,()=>{ CTYO=CTYO===cc?'':cc; repaint(); }); return; }
+    if((b=at('[data-roi-fch]'))){ b.setAttribute('data-roi-sel',`[data-roi-fch="${b.dataset.roiFch}"]`); keep(b,()=>{ FCH=b.dataset.roiFch; repaint(); }); return; }
+    if((b=at('[data-roi-fcsave]'))){ const i=document.getElementById('roi-fc-sd'); const v=i&&i.value; if(v&&/^\d{4}-\d{2}-\d{2}$/.test(v)) fcSaveStart(b.dataset.roiFcsave,v); return; }
+    if((b=at('[data-roi-fcauto]'))){ fcSaveStart(b.dataset.roiFcauto,null); return; }
     if((b=at('[data-roi-retry]'))){ ALLERR=false; Object.keys(AERR).forEach(k=>AERR[k]=false); repaint(); return; }
     if((b=at('[data-roi-app]'))){ const id=b.dataset.roiApp, x=(ALL&&ALL.apps||[]).find(z=>z.app_id===id); const nm=x?(((DATA.apps_catalog||[]).find(c=>c.app_id===id)||{}).app_name||x.app):null; if(nm) setApp(nm); return; } }); }
 // the hub's Install value card: ROI's own numbers (the actual ones — owner: "data alag ho to vo actual number dikhao")
@@ -6768,7 +6883,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)
@@ -8041,7 +8156,7 @@ const CFG_TXT={server:'Save dashboard ke server se hota hai (aapke login se) —
   admin_only:'Sirf admin settings badal sakta hai',no_token:'Pehle 🔑 GitHub token daalo (Settings → Accounts & Apps)',
   ok:'✅ Save ho gaya — robot agle run me poora apply karega (hide + fetch band)',net:'❌ Save fail (network/token)'};
 let CFGST=null, CFGST_P=null;      // /api/config/status → null (not asked yet) · {reach:false} · {reach:true,server_save,admin}
-function cfgFileKey(path){ const m=/^config\/(account_names|app_names|selected_apps|approved_ranges)\.json$/.exec(String(path||'')); return m?m[1]:null; }
+function cfgFileKey(path){ const m=/^config\/(account_names|app_names|selected_apps|approved_ranges|forecast_starts)\.json$/.exec(String(path||'')); return m?m[1]:null; }
 // GET /api/config/status answer → CFGST. 404, a network error, or a page that is not the API's JSON = API not reachable.
 function cfgStatusOf(r){ if(!r||!r.status||r.status===404) return {reach:false};
   const j=r.data; if(r.status===200&&j&&typeof j==='object'&&typeof j.server_save==='boolean') return {reach:true,server_save:j.server_save,admin:j.admin===true};

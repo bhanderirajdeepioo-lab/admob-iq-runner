@@ -130,6 +130,30 @@ function appFile() {
     out.all_icons = (ha.match(/class="aicon"/g) || []).length;
     const hA = U.hero('');
     out.hero_all = hA.includes('Sabse bada loss') && hA.includes('Best ROI') && hA.includes('Sabse zyada gira');
+    // 🔮 forecast: 90 days ready; spend +50% scales only the paid part; breakeven from the lifetime P/L
+    const f0 = '2026-10-14', H = 180;
+    d.fc = { v: 1, made: '2026-10-14', T: '2026-10-13', start: '2026-02-01', start_auto: '2026-02-01', start_set: null,
+      p: { hl: 90, K: 30, w: 7, g: 0, W: 28, m: 'ratio' }, ready: { '30': true, '90': true, '180': false }, ready_from: { '180': '2027-01-10' },
+      cal: { '30': { bias: 0, lo: -0.1, hi: 0.1, mape: 0.08, mape_normal: 0.05, n: 20, n_normal: 18, ev_rate: 0.1 },
+             '90': { bias: 0, lo: -0.2, hi: 0.1, mape: 0.12, mape_normal: 0.1, n: 12, n_normal: 12, ev_rate: 0 } },
+      f: { d0: f0, old: Array(H).fill(5), org: Array(H).fill(1), paid: Array(H).fill(4), dau: Array(H).fill(100), n: Array(H).fill(10),
+           sp: Array(H).fill(8), spi: 800 },
+      hist: { d0: '2026-04-17', rev: Array(180).fill(9), sp: Array(180).fill(8), spi: Array(180).fill(800), dau: Array(180).fill(100), n: Array(180).fill(10) },
+      bt: [['2026-08-01', 0.05, 0.1, null, []], ['2026-08-15', -0.2, null, null, [30]]], events: [{ at: '2026-08-20', kind: 'installs', x: 3.1 }],
+      att: { installs: 0.2, retention: 0.3, arpdau: 0.5 }, log: [{ d: '2026-10-14', p: { w: 7 }, sc_old: 0.09, sc: 0.06, changed: ['w'], cause: 'arpdau', bias30: 0.02 }],
+      checks: [], drv: { installs: [10, 8], spend: [8, 6], cpi: [0.8, 0.75], d1: [0.3, 0.32], d7: [0.1, 0.1], dau: [100, 90], arpdau: [0.09, 0.08],
+                         cty: [{ cc: 'AA', share: [0.5, 0.4], d1: [30, 32], rpi7: [0.1, 0.09], cpi: [1, 0.9], dec: 'Watch' }] } };
+    d.life = [['2026-10-01', 100, 150, 15000]]; d.life_till = '2026-10-01';
+    U.set('FCH', '90'); U.set('FCM', 0);
+    const fv = U.fcView(d);
+    out.fc_tiles = fv.includes('Revenue · agle 90 din') && fv.includes('$900') && fv.includes('$720') && fv.includes('+$180');
+    out.fc_ready = fv.includes('180 din <small>10 Jan') && fv.includes('±10% normal din');   // 90 days picked: its own accuracy
+    out.fc_be = fv.includes('Profit me aayega');                   // −$50 lifetime + $2 a day → crosses in ~25 days
+    out.fc_parts = ['Forecast kyun upar', 'Kitna sahi tha', 'Model kya seekh raha hai', 'start date', 'Achanak jhatke'].every(s => fv.includes(s));
+    U.set('FCM', 0.5);
+    const fo = U.fcOut(d);
+    out.fc_slider = (fo.match(/\$1,080/g) || []).length === 2 && fo.includes('$0.00');   // revenue 900 + 0.5 × 360 = spend 720 × 1.5
+    U.set('FCM', 0);
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };
     ctx.roiCardLine(x, 'Alpha Pick');

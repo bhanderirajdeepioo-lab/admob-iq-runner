@@ -143,7 +143,7 @@ def test_finish_pointer_header_and_isolation(tmp_path):
     assert p["ccy"] == "INR"
     assert p["file"] == "roi.json.gz" and p["apps"]["a~1"] == {"file": "roi_aaaaaaaaaaaa.json.gz", "st": "Worse",
                                                                 "r7": 0.4, "u7": 0.6, "pb": 40, "nb": None,
-                                                                "life": [10.0, 12.0], "cut": 2}
+                                                                "life": [10.0, 12.0], "cut": 2, "fc": None}
     with gzip.open(os.path.join(out, "roi.json.gz"), "rt") as f:
         body = json.load(f)
     assert body["rows"][0][3][:2] == [1.0, None] and body["life_till"] == "2026-10-01"

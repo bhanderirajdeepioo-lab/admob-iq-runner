@@ -51,6 +51,10 @@ def test_countries_life_all(out):
     assert out["card"] == "📈 D7 ROAS <b>40%</b> (usual 50%) · paisa wapas ~12 days"   # ROI's own numbers replace the card's
 
 
+def test_forecast_view(out):
+    assert out["fc_tiles"] and out["fc_ready"] and out["fc_be"] and out["fc_parts"] and out["fc_slider"]
+
+
 def test_wiring():
     with open(PAGE, encoding="utf-8") as f:
         p = f.read()

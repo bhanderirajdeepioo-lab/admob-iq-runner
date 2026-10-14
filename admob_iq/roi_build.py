@@ -83,6 +83,7 @@ class Acc:
 
     def __init__(self):
         self.apps, self.life, self.rows, self.fails, self.skipped, self.till, self.ccy = [], {}, {}, 0, 0, [], set()
+        self.fc = None                              # 🔮 the forecast step's run (forecast_build), made on the first app
 
 
 def start():
@@ -505,6 +506,17 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
                 "life_till": _life_till(rev, spend), "cty": cty,
                 "consts": {"n_recent": N_RECENT, "n_usual": N_USUAL, "min_spend": MIN_SPEND, "min_n": MIN_N,
                            "worse": WORSE, "watch": WATCH, "better": BETTER, "final_lag": gco.FINAL_LAG}}
+        fcs = None
+        try:                                            # 🔮 the forecast (its own budget and daily cadence; a failure
+            from . import forecast_build as fob         # costs only it)
+            if acc.fc is None:
+                acc.fc = fob.start(data_dir, now)
+            decs = {x["cc"]: x["dec"] for x in cty["rows"]}
+            eng = [dict(x, dec=decs.get(x.get("cc"))) for x in (((detail or {}).get("countries") or {}).get("rows") or [])]
+            body["fc"] = fob.app_step(acc.fc, aid, key, rows, P, ida, life, body["life_till"], eng)
+            fcs = fc_summary(body["fc"])
+        except Exception:
+            body["fc"] = None
         name = PREFIX + key + ".json.gz"
         write_json_gz_stable(os.path.join(out_dir, name), body)
         if body["life_till"] and spend and spend.get("sids"):
@@ -520,7 +532,7 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
                          "r30": (summ["pools"]["30"]["r"] or {}).get("roas"),
                          "u30": (summ["pools"]["30"]["u"] or {}).get("roas"),
                          "life": [_r(lt[0], 2), _r(lt[1], 2), _r(lt[2], 2)], "cut": cty["cut"]["n"],
-                         "cut_save": cty["cut"], "cpi_src": summ["cpi_src"], "nb": summ["nb"],
+                         "cut_save": cty["cut"], "cpi_src": summ["cpi_src"], "nb": summ["nb"], "fc": fcs,
                          "first": life[0][0] if life else None, "ads": bool(spend and spend.get("sids"))})
         for d, rv, sp, spi in life:
             p = acc.life.setdefault(d, [0.0, 0.0, 0.0])
@@ -548,6 +560,21 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
 
 
 # ── the end ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+def fc_summary(fc):
+    """The pointer's forecast line: next 30 / 90 / 180 days revenue (corrected), the accuracy, what is ready."""
+    if not fc or not fc.get("f"):
+        return None
+    f = fc["f"]
+    tot = [a + b + c for a, b, c in zip(f["old"], f["org"], f["paid"])]
+    out = {"ready": fc.get("ready"), "made": fc.get("made"), "sp": (f.get("sp") or [None])[0], "spi": f.get("spi"),
+           "a30": _r(sum(v or 0 for v in ((fc.get("hist") or {}).get("rev") or [])[-30:]), 2)}
+    for h in (30, 90, 180):
+        out["r%d" % h] = _r(sum(tot[:h]), 2) if len(tot) >= h else None
+        c = (fc.get("cal") or {}).get(str(h)) or {}
+        out["e%d" % h] = c.get("mape_normal") if c.get("mape_normal") is not None else c.get("mape")
+    return out
+
+
 def _clean(out_dir, keep):
     try:
         names = os.listdir(out_dir)
@@ -594,7 +621,8 @@ def finish(acc, dashboard, out_dir):
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         write_json_gz_stable(os.path.join(out_dir, ALL_FILE), body)
         dashboard["roi"] = {"file": ALL_FILE, "v": hashlib.sha1(raw).hexdigest()[:12], "ccy": body["ccy"],
-                            "apps": {x["app_id"]: {k: x.get(k) for k in ("file", "st", "r7", "u7", "pb", "nb", "life", "cut")}
+                            "starts": {k: v.isoformat() for k, v in (acc.fc.starts if acc.fc is not None else {}).items()},
+                            "apps": {x["app_id"]: {k: x.get(k) for k in ("file", "st", "r7", "u7", "pb", "nb", "life", "cut", "fc")}
                                      for x in acc.apps}}
         _clean(out_dir, {x["file"] for x in acc.apps} | {ALL_FILE})
         sts = {}
@@ -603,6 +631,10 @@ def finish(acc, dashboard, out_dir):
         LINE = ("roi: apps %d, worse %d, watch %d, better %d, normal %d, too early %d, n/a %d, skipped %d, failed %d"
                 % tuple([len(acc.apps)] + [sts.get(k, 0) for k in ("Worse", "Watch", "Better", "Normal", "Too early",
                                                                      "N/A")] + [acc.skipped, acc.fails]))
+        if acc.fc is not None:
+            from . import forecast_build as fob
+            fob.finish(acc.fc)
+            LINE += "; " + fob.line(acc.fc)
         return list(HEADER_PATHS)
     except Exception as e:
         dashboard.pop("roi", None)

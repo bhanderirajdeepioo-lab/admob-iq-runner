@@ -1,0 +1,619 @@
+"""🔮 Revenue forecast — the engine (pure: no I/O, no clock, no prints). Owner, 14 Oct 2026: "app 6 month ka he to next 6
+month ka prediction … retention, day1, country wise … AI back testing … agar result alag milta he to AI khud learn
+karega" — and his triangle: the install day 180 days old has every day observed; the one 179 days old gets its day 180
+from the users who already reached it; the one 178 days old its days 179 and 180, and so on.
+
+The model (everything from the app's own measured data; nothing typed in):
+  revenue(D) = level(D) × Σ_install-days X  installs(X) × scale(X) × a(D − X)
+    a(age)   — revenue per install on day `age` of an install day, learnt from the install days that REACHED that age
+               (exact day by day to day 30, then the 31–60 / 61–90 / 91–180 / 181–365 bands, then a power-law tail),
+               newer install days weighted more (half-life `hl`) — the triangle;
+    scale(X) — what install day X really earned so far vs the curve, trusted more the older X is (credibility `K`):
+               an install day that did better keeps doing better;
+    level(D) — actual AdMob revenue ÷ the model on recent days (eCPM, the users older than the tracked install days):
+               its median over the last `w` days, times the month-of-year eCPM season (strength `g`);
+    installs — future installs = organic + Google Ads spend ÷ the recent cost of a paid install (window `W` days).
+  DAU the same way with the retention curve (users active on day `age` per install) → ARPDAU = revenue ÷ DAU.
+Forecast = three parts, so a spend change is exact: old users + organic installs + paid installs (× spend multiplier).
+
+Back-testing ("AI back testing"): from every ORIGIN_STEP-th past day (the newest MAX_ORIGINS), the whole model is rebuilt
+with ONLY the data known that day, forecasts the next 30 / 90 / 180 days with the spend that really happened, and is
+compared with the real revenue. The parameters (hl, K, w, g, W) are chosen by those tests (coordinate descent, newer
+tests weigh more), then a measured bias correction; the misses are split into installs, retention (DAU) and ARPDAU
+(eCPM) — what changed. The bands (P10–P90) are the tests' own error spread. A horizon is shown only once enough tests
+exist for it (readiness) — the model decides, per app, from its own data.
+"""
+import bisect
+import math
+from datetime import date, timedelta
+
+T_AGES = (0, 1, 3, 7, 14, 30, 60, 90, 180, 365)
+BANDS = ((31, 60, 6), (61, 90, 7), (91, 180, 8), (181, 365, 9))      # (from, to, the T index of its end)
+ULAGS = (0, 1, 3, 7, 14, 30, 45, 60, 90, 120, 180, 270, 365)
+MAX_AGE = 900                         # ages beyond: 0 (the tail)
+H = 180
+HORIZONS = (30, 90, 180)
+ORIGIN_STEP = 14
+MAX_ORIGINS = 26                      # the newest ~year of tests
+MIN_TESTS = 4                         # a horizon is shown once this many tests could score it
+MIN_HIST = 42                         # days after the start before the first test origin
+GRID = {"m": ("ratio", "split"), "hl": (45, 90, 180, 100000), "K": (7, 30, 90), "w": (3, 7, 14, 28), "g": (0.0, 1.0),
+        "W": (14, 28)}
+DEFAULT = {"m": "ratio", "hl": 90, "K": 30, "w": 14, "g": 1.0, "W": 28}
+# m — how the users the install-day model does not cover (installed before the start / the GA4 history, very old)
+#     are carried: "ratio" = revenue ÷ model on recent days, kept flat; "split" = their own revenue (actual − model),
+#     decaying at its measured pace (the last 90 days' slope, never growing)
+HW = {30: 0.5, 90: 0.3, 180: 0.2}     # the objective's horizon weights
+ONE = timedelta(days=1)
+
+
+def _d(s):
+    return s if isinstance(s, date) else date.fromisoformat(s)
+
+
+def _iso(d):
+    return d.isoformat()
+
+
+# ── the curve (per install) from the install days known at T ────────────────────────────────────────────────────────
+def _known(c, X, T):
+    """An install day's cumulative revenue known at T: [(age, cum USD)] ascending (exact final days, complete
+    checkpoints)."""
+    out = {}
+    lim = (T - X).days
+    d, df = c.get("d") or [], c.get("df") or 0
+    for L in range(min(len(d), df, lim + 1)):
+        if d[L] is not None:
+            out[L] = d[L]
+    t = c.get("t") or []
+    for j, a in enumerate(T_AGES):
+        if j < len(t) and t[j] is not None and a <= lim and (a > 30 or a not in out):
+            out[a] = t[j]
+    return sorted(out.items())
+
+
+def _uknown(c, X, T):
+    """An install day's active users known at T: {age: users} (exact final days, the install-day file's lags)."""
+    out = {}
+    lim = (T - X).days
+    u, uf = c.get("u") or [], c.get("uf") or 0
+    for L in range(min(len(u), uf, lim + 1)):
+        out[L] = u[L]
+    ul = c.get("ul") or []
+    for j, a in enumerate(ULAGS):
+        if j < len(ul) and ul[j] is not None and a <= lim and a not in out:
+            out[a] = ul[j]
+    return out
+
+
+def _fill(points, maxage):
+    """{age: per-day value at that age} sparse → a dense list 0..maxage: log-linear between points, a power-law tail
+    after the last (fitted on ages ≥ 14, slope clipped), 0 before nothing is known."""
+    ages = sorted(a for a, v in points.items() if v is not None and v > 0)
+    out = [0.0] * (maxage + 1)
+    if not ages:
+        return out
+    for a in range(0, ages[0] + 1):
+        out[a] = points[ages[0]] if a == ages[0] else (points.get(a) or points[ages[0]])
+    for i in range(len(ages) - 1):
+        a0, a1 = ages[i], ages[i + 1]
+        v0, v1 = points[a0], points[a1]
+        for a in range(a0, a1 + 1):
+            if a1 == a0:
+                out[a] = v0
+                continue
+            x0, x1, x = math.log(a0 + 1), math.log(a1 + 1), math.log(a + 1)
+            out[a] = math.exp(math.log(v0) + (math.log(v1) - math.log(v0)) * (x - x0) / (x1 - x0))
+    last = ages[-1]
+    tail = [a for a in ages if a >= 14]
+    beta = 1.0
+    if len(tail) >= 2:
+        xs = [math.log(a + 1) for a in tail]
+        ys = [math.log(points[a]) for a in tail]
+        mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+        den = sum((x - mx) ** 2 for x in xs)
+        if den > 0:
+            beta = -sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
+    beta = min(2.0, max(0.3, beta))
+    v = points[last]
+    for a in range(last + 1, maxage + 1):
+        out[a] = v * ((a + 1) / (last + 1)) ** (-beta)
+    return out
+
+
+def curve(coh, T, start, hl):
+    """(a, u, maxage): revenue per install and active users per install on each day of age, learnt from the install
+    days ≥ start known at T (newer ones weigh more: half-life hl days)."""
+    num, den = {}, {}
+    bnum, bden = {}, {}
+    unum, uden = {}, {}
+    maxage = 0
+    for X, c in coh.items():
+        if X < start or X > T or not c.get("n"):
+            continue
+        n = c["n"]
+        w = 0.5 ** ((T - X).days / hl) if hl < 99999 else 1.0
+        k = _known(c, X, T)
+        if not k:
+            continue
+        kd = dict(k)
+        maxage = max(maxage, k[-1][0])
+        for L in range(0, 31):                              # day by day (exact) — or a checkpoint band spread evenly
+            if L in kd and (L == 0 or L - 1 in kd):
+                inc = kd[L] - (kd[L - 1] if L else 0.0)
+                num[L] = num.get(L, 0.0) + w * max(0.0, inc)
+                den[L] = den.get(L, 0.0) + w * n
+        exact = any(L in kd for L in (2, 4, 5))
+        if not exact:                                       # checkpoints only: 0, 1, 2–3, 4–7, 8–14, 15–30
+            prev = None
+            for a in (0, 1, 3, 7, 14, 30):
+                if a in kd:
+                    lo = 0 if prev is None else prev + 1
+                    inc = kd[a] - (kd[prev] if prev is not None else 0.0)
+                    for L in range(lo, a + 1):
+                        num[L] = num.get(L, 0.0) + w * max(0.0, inc) / (a - lo + 1)
+                        den[L] = den.get(L, 0.0) + w * n
+                    prev = a
+                else:
+                    break
+        for lo, hi, j in BANDS:
+            a0 = T_AGES[j - 1]
+            if hi in kd and a0 in kd:
+                inc = max(0.0, kd[hi] - kd[a0])
+                bnum[(lo, hi)] = bnum.get((lo, hi), 0.0) + w * inc
+                bden[(lo, hi)] = bden.get((lo, hi), 0.0) + w * n * (hi - lo + 1)
+        uk = _uknown(c, X, T)
+        for L, v in uk.items():
+            unum[L] = unum.get(L, 0.0) + w * v
+            uden[L] = uden.get(L, 0.0) + w * n
+    pts = {L: num[L] / den[L] for L in num if den.get(L)}
+    for (lo, hi), v in bnum.items():
+        if bden.get((lo, hi)):
+            pts[(lo + hi) // 2] = v / bden[(lo, hi)]
+    a = _fill(pts, MAX_AGE)
+    for (lo, hi), v in bnum.items():                        # each band keeps its measured total
+        if not bden.get((lo, hi)):
+            continue
+        want = v / bden[(lo, hi)] * (hi - lo + 1)
+        have = sum(a[lo:hi + 1])
+        if have > 0:
+            f = want / have
+            for L in range(lo, hi + 1):
+                a[L] *= f
+    upts = {L: unum[L] / uden[L] for L in unum if uden.get(L)}
+    u = _fill(upts, MAX_AGE)
+    return a, u, maxage
+
+
+def scales(coh, T, start, a, K):
+    """Each install day's scale: what it earned so far ÷ what the curve says, trusted (age + 1) / (age + 1 + K)."""
+    cum = [0.0] * (len(a) + 1)
+    for i, v in enumerate(a):
+        cum[i + 1] = cum[i] + v
+    out = {}
+    for X, c in coh.items():
+        if X < start or X > T or not c.get("n"):
+            continue
+        k = _known(c, X, T)
+        if not k:
+            out[X] = 1.0
+            continue
+        age, v = k[-1]
+        exp = cum[min(age, len(a) - 1) + 1] * c["n"]
+        raw = v / exp if exp > 0 else 1.0
+        s = 1.0 + (raw - 1.0) * (age + 1) / (age + 1 + K)
+        out[X] = min(5.0, max(0.2, s))
+    return out
+
+
+# ── installs, level, season ─────────────────────────────────────────────────────────────────────────────────────────
+def installs_model(days, T, W):
+    """(organic per day, paid installs per USD) from the last W days to T: organic = GA4 installs above the Google Ads
+    ones; paid per USD = the rest ÷ spend."""
+    n = sp = org = 0.0
+    k = ko = 0
+    D = T - timedelta(days=W - 1)
+    while D <= T:
+        e = days.get(D)
+        if e and e.get("n") is not None:
+            k += 1
+            nd, na_d, spd = e.get("n") or 0, e.get("na"), e.get("sp") or 0
+            n += nd
+            sp += spd
+            if na_d is not None or spd <= 0:            # a day without Google Ads installs: organic only if no spend
+                org += max(0.0, nd - (na_d or 0))
+                ko += 1
+        D += ONE
+    if not k:
+        return 0.0, 0.0
+    if sp <= 0:
+        return n / k, 0.0
+    org_d = org / ko if ko else 0.0
+    paid = max(0.0, n - org_d * k)
+    return org_d, paid / sp
+
+
+def season_all(day_sets):
+    """The portfolio's month-of-year index (every app's revenue ÷ DAU pooled) — steadier than one app's own."""
+    pool = {}
+    for days in day_sets:
+        for D, e in days.items():
+            r, u = e.get("rev"), e.get("dau")
+            if r and u:
+                x = pool.setdefault(D, {"rev": 0.0, "dau": 0.0})
+                x["rev"] += r
+                x["dau"] += u
+    return season(pool)
+
+
+def season(days):
+    """Month-of-year index of the ARPDAU-like ratio revenue ÷ DAU (1 = average), from every full year in `days`
+    (none: all 1)."""
+    by = {}
+    for D, e in days.items():
+        r, u = e.get("rev"), e.get("dau")
+        if r and u:
+            by.setdefault((D.year, D.month), [0.0, 0.0])
+            by[(D.year, D.month)][0] += r
+            by[(D.year, D.month)][1] += u
+    if len(by) < 13:
+        return {m: 1.0 for m in range(1, 13)}
+    yr = {}
+    for (y, m), (r, u) in by.items():
+        yr.setdefault(y, []).append(r / u)
+    idx = {m: [] for m in range(1, 13)}
+    for (y, m), (r, u) in by.items():
+        base = sum(yr[y]) / len(yr[y])
+        if len(yr[y]) >= 6 and base > 0:
+            idx[m].append((r / u) / base)
+    out = {}
+    for m in range(1, 13):
+        v = idx[m]
+        out[m] = (sum(v) / len(v)) if len(v) >= 1 else 1.0
+    mean = sum(out.values()) / 12
+    return {m: out[m] / mean for m in out}
+
+
+# ── one forecast from origin T ──────────────────────────────────────────────────────────────────────────────────────
+def _model_day(coh, D, a, s, start, T, limit_future=None):
+    tot = 0.0
+    for X, c in coh.items():
+        if X < start or X > D or X > T:
+            continue
+        age = (D - X).days
+        if age < len(a):
+            tot += c["n"] * s.get(X, 1.0) * a[age]
+    return tot
+
+
+def forecast(app, T, p, spend=None, h=H, seas=None):
+    """The forecast from origin T with parameters p → {"rev": {old, org, paid}, "dau", "n", "sp"} lists of h days, plus
+    the parts it used. spend: {day: USD} for the future days (None = the mean of the last 30 days, every day)."""
+    coh, days, start = app["coh"], app["days"], app["start"]
+    a, u, maxage = curve(coh, T, start, p["hl"])
+    s = scales(coh, T, start, a, p["K"])
+    # level: actual ÷ model on the last w days
+    lv, ul = [], []
+    D = T - timedelta(days=p["w"] - 1)
+    while D <= T:
+        e = days.get(D)
+        if e and e.get("rev"):
+            m = _model_day(coh, D, a, s, start, T)
+            if m > 0:
+                lv.append(e["rev"] / m)
+        if e and e.get("dau"):
+            mu = _model_day(coh, D, u, {}, start, T)
+            if mu > 0:
+                ul.append(e["dau"] / mu)
+        D += ONE
+    lvl = sorted(lv)[len(lv) // 2] if lv else 1.0
+    ulv = sorted(ul)[len(ul) // 2] if ul else 1.0
+    rest0, rho, urest0, urho = 0.0, 0.0, 0.0, 0.0
+    if p.get("m") == "split":                           # the uncovered users: their own revenue, decaying
+        lvl = 1.0
+        pts, upts = [], []
+        D = T - timedelta(days=89)
+        while D <= T:
+            e = days.get(D)
+            if e and e.get("rev"):
+                r = e["rev"] - _model_day(coh, D, a, s, start, T)
+                if r > 0:
+                    pts.append(((D - T).days, math.log(r)))
+            if e and e.get("dau"):
+                q = e["dau"] - _model_day(coh, D, u, {}, start, T)
+                if q > 0:
+                    upts.append(((D - T).days, math.log(q)))
+            D += ONE
+
+        def fit(pp):
+            if len(pp) < 20:
+                return 0.0, 0.0
+            recent = sorted(v for x, v in pp if x > -p["w"])
+            lvl0 = math.exp(recent[len(recent) // 2]) if recent else 0.0
+            mx = sum(x for x, _ in pp) / len(pp)
+            my = sum(v for _, v in pp) / len(pp)
+            den = sum((x - mx) ** 2 for x, _ in pp)
+            slope = sum((x - mx) * (v - my) for x, v in pp) / den if den else 0.0
+            return lvl0, max(0.0, -slope)
+        rest0, rho = fit(pts)
+        urest0, urho = fit(upts)
+        ulv = 1.0
+    org, per_usd = installs_model(days, T, p["W"])
+    if spend is None:
+        k, tot = 0, 0.0
+        D = T - timedelta(days=29)
+        while D <= T:
+            e = days.get(D)
+            if e:
+                k += 1
+                tot += e.get("sp") or 0
+            D += ONE
+        base = tot / k if k else 0.0
+        spend = {T + timedelta(days=i): base for i in range(1, h + 1)}
+    seas = seas or {m: 1.0 for m in range(1, 13)}
+    s0 = seas.get(T.month, 1.0) or 1.0
+    old, orgr, paid, dau, nn, sp = [], [], [], [], [], []
+    past = [(X, c["n"] * s.get(X, 1.0), c["n"]) for X, c in coh.items() if start <= X <= T and c.get("n")]
+    fut = []
+    for i in range(1, h + 1):
+        D = T + timedelta(days=i)
+        g = (seas.get(D.month, 1.0) / s0) ** p["g"] if s0 else 1.0
+        lvl_d = lvl * g
+        o = 0.0
+        du = 0.0
+        for X, ns, n0 in past:
+            age = (D - X).days
+            if age < len(a):
+                o += ns * a[age]
+                du += n0 * u[age]
+        spd = spend.get(D, 0.0)
+        fut.append((D, org, per_usd * spd))
+        r_org = r_paid = u_new = 0.0
+        for F, no, npd in fut:
+            age = (D - F).days
+            if age < len(a):
+                r_org += no * a[age]
+                r_paid += npd * a[age]
+                u_new += (no + npd) * u[age]
+        old.append(o * lvl_d + rest0 * math.exp(-rho * i) * g)
+        orgr.append(r_org * lvl_d)
+        paid.append(r_paid * lvl_d)
+        dau.append((du + u_new) * ulv + urest0 * math.exp(-urho * i))
+        nn.append(org + per_usd * spd)
+        sp.append(spd)
+    return {"rev": {"old": old, "org": orgr, "paid": paid}, "dau": dau, "n": nn, "sp": sp,
+            "parts": {"level": lvl, "ulevel": ulv, "rest": rest0, "rho": rho, "org": org, "per_usd": per_usd, "maxage": maxage,
+                      "a30": sum(a[:31]), "a90": sum(a[:91]), "a180": sum(a[:181]), "u1": u[1] if len(u) > 1 else None,
+                      "u7": u[7] if len(u) > 7 else None}}
+
+
+def _sum(lst, k):
+    return sum(lst[:k])
+
+
+# ── back-testing ────────────────────────────────────────────────────────────────────────────────────────────────────
+def origins(app):
+    """Test origins: every ORIGIN_STEP days back from the last actual day − 30, the newest MAX_ORIGINS, ≥ MIN_HIST
+    days after the start."""
+    last, start = app["last"], app["start"]
+    out, T = [], last - timedelta(days=30)
+    while T >= start + timedelta(days=MIN_HIST) and len(out) < MAX_ORIGINS:
+        out.append(T)
+        T -= timedelta(days=ORIGIN_STEP)
+    return sorted(out)
+
+
+def backtest(app, p, seas=None, ors=None):
+    """[{T, h: {30: {pred, act, err, n_err, dau_err, arp_err}, …}}] — every forecast with the spend that really happened."""
+    days, last = app["days"], app["last"]
+    jumps = app.get("_jumps")
+    if jumps is None:
+        jumps = app["_jumps"] = {D: event(days, D) for D in days if event(days, D)}
+    res = []
+    for T in (ors if ors is not None else origins(app)):
+        hmax = min(H, (last - T).days)
+        if hmax < HORIZONS[0]:
+            continue
+        sp = {T + timedelta(days=i): (days.get(T + timedelta(days=i)) or {}).get("sp") or 0.0 for i in range(1, hmax + 1)}
+        f = forecast(app, T, p, spend=sp, h=hmax, seas=seas)
+        rev = [o + g + q for o, g, q in zip(f["rev"]["old"], f["rev"]["org"], f["rev"]["paid"])]
+        row = {"T": _iso(T), "h": {}, "ev": {}}
+        for hz in HORIZONS:
+            if hz > hmax:
+                continue
+            act = [days.get(T + timedelta(days=i)) or {} for i in range(1, hz + 1)]
+            ar = sum(e.get("rev") or 0 for e in act)
+            if ar <= 0:
+                continue
+            pr = _sum(rev, hz)
+            an = sum(e.get("n") or 0 for e in act)
+            pn = _sum(f["n"], hz)
+            au = sum(e.get("dau") or 0 for e in act)
+            pu = _sum(f["dau"], hz)
+            ev = None
+            for k in range(0, hz - 29, 7):                  # an abrupt jump starting anywhere inside this horizon
+                ev = jumps.get(T + timedelta(days=k))
+                if ev:
+                    ev = dict(ev, at=_iso(T + timedelta(days=k)))
+                    break
+            if ev:
+                row["ev"][hz] = ev
+            row["h"][hz] = {"pred": pr, "act": ar, "err": pr / ar - 1.0,
+                            "n_err": (pn / an - 1.0) if an else None, "dau_err": (pu / au - 1.0) if au else None,
+                            "arp_err": ((pr / pu) / (ar / au) - 1.0) if pu and au else None}
+        if row["h"]:
+            res.append(row)
+    return res
+
+
+EV_N = (0.4, 2.5)      # installs over the next 30 days ÷ the 28 before, with spend within ×1.5 — organic jump / drop
+EV_ARP = (0.6, 1.5)    # ARPDAU over the next 30 days ÷ the 28 before — eCPM / ads shock
+
+
+def _win(days, a, b):
+    n = sp = rev = dau = 0.0
+    k = 0
+    D = a
+    while D <= b:
+        e = days.get(D)
+        if e:
+            k += 1
+            n += e.get("n") or 0
+            sp += e.get("sp") or 0
+            rev += e.get("rev") or 0
+            dau += e.get("dau") or 0
+        D += ONE
+    return k, n, sp, rev, dau
+
+
+def event(days, T):
+    """A sudden change no model sees coming, measured AFTER the fact: installs ×2.5 / ×0.4 with spend not moving like
+    it, or ARPDAU ×1.5 / ×0.6 → its words (None: a normal test)."""
+    k0, n0, s0, r0, u0 = _win(days, T - timedelta(days=27), T)
+    k1, n1, s1, r1, u1 = _win(days, T + ONE, T + timedelta(days=30))
+    if not k0 or not k1:
+        return None
+    n0, n1, s0, s1 = n0 / k0, n1 / k1, s0 / k0, s1 / k1
+    if n0 > 0:
+        q = n1 / n0
+        steady = (s0 <= 0 and s1 <= 0) or (s0 > 0 and 1 / 1.5 <= s1 / s0 <= 1.5)
+        if steady and (q > EV_N[1] or q < EV_N[0]):
+            return {"kind": "installs", "x": round(q, 2)}
+    if u0 > 0 and u1 > 0 and r0 > 0:
+        q = (r1 / u1) / (r0 / u0)
+        if q > EV_ARP[1] or q < EV_ARP[0]:
+            return {"kind": "arpdau", "x": round(q, 2)}
+    return None
+
+
+def normal(bt, hz=None):
+    """The tests without a sudden change inside (per horizon: a test keeps its other horizons)."""
+    out = []
+    for r in bt:
+        ev = r.get("ev") or {}
+        h = {k: v for k, v in r["h"].items() if k not in ev and (hz is None or k == hz)}
+        if h:
+            out.append(dict(r, h=h))
+    return out
+
+
+EV_W = 0.3             # a test with a sudden change inside still teaches, at this weight
+
+
+def score(bt):
+    """The tuning objective: the weighted mean |error| (newer tests weigh more; horizons by HW; a sudden-change test
+    at EV_W)."""
+    tot = wsum = 0.0
+    n = len(bt)
+    for i, r in enumerate(bt):
+        rw = 0.5 + 0.5 * (i + 1) / n
+        ev = r.get("ev") or {}
+        for hz, x in r["h"].items():
+            w = HW.get(hz, 0.1) * rw * (EV_W if hz in ev else 1.0)
+            tot += w * abs(x["err"])
+            wsum += w
+    return tot / wsum if wsum else None
+
+
+def tune(app, seas=None, start_p=None, passes=2):
+    """Coordinate descent over GRID on the back-test score → (best params, its back-test, every step tried)."""
+    ors = origins(app)
+    if not ors:
+        return dict(start_p or DEFAULT), [], []
+    p = dict(start_p or DEFAULT)
+    cache = {}
+
+    def run(q):
+        key = tuple(sorted(q.items()))
+        if key not in cache:
+            bt = backtest(app, q, seas, ors)
+            cache[key] = (score(bt), bt)
+        return cache[key]
+    best, bt = run(p)
+    steps = [{"p": dict(p), "score": best}]
+    for _ in range(passes):
+        changed = False
+        for k, vals in GRID.items():
+            for v in vals:
+                if v == p[k]:
+                    continue
+                q = dict(p, **{k: v})
+                sc, b2 = run(q)
+                if sc is not None and (best is None or sc < best - 1e-4):
+                    p, best, bt, changed = q, sc, b2, True
+                    steps.append({"p": dict(p), "score": sc, "changed": k})
+        if not changed:
+            break
+    return p, bt, steps
+
+
+def calibrate(bt):
+    """Per horizon, from the tests: the bias correction (median error of the newer half of the NORMAL tests, shrunk by
+    their count), the P10 / P90 band of the corrected normal errors (all tests when too few are normal), the mean
+    |error| of every test and of the normal ones, and how often a sudden change hit → {h: {...}}."""
+    out = {}
+    for hz in HORIZONS:
+        allr = [r for r in bt if hz in r["h"]]
+        if len(allr) < MIN_TESTS:
+            continue
+        errs = [r["h"][hz]["err"] for r in allr]
+        norm = [r["h"][hz]["err"] for r in allr if hz not in (r.get("ev") or {})]
+        base = norm if len(norm) >= MIN_TESTS else errs
+        recent = base[len(base) // 2:]
+        med = sorted(recent)[len(recent) // 2]
+        bias = med * len(recent) / (len(recent) + 3)
+        corr = sorted((1 + e) / (1 + bias) - 1 for e in base)
+
+        def q(p, v=corr):
+            i = p * (len(v) - 1)
+            lo = int(math.floor(i))
+            hi = min(len(v) - 1, lo + 1)
+            return v[lo] + (v[hi] - v[lo]) * (i - lo)
+        ca = [abs((1 + e) / (1 + bias) - 1) for e in errs]
+        cn = [abs((1 + e) / (1 + bias) - 1) for e in norm]
+        out[hz] = {"bias": bias, "lo": q(0.1), "hi": q(0.9), "mape": sum(ca) / len(ca), "n": len(errs),
+                   "mape_normal": (sum(cn) / len(cn)) if cn else None, "n_normal": len(cn),
+                   "ev_rate": 1 - len(norm) / len(errs)}
+    return out
+
+
+def attribution(bt, hz=30):
+    """The misses of the newest tests split into installs, retention (DAU beyond installs) and ARPDAU (eCPM) — the share
+    of the error's size each explains (log terms)."""
+    parts = {"installs": 0.0, "retention": 0.0, "arpdau": 0.0}
+    k = 0
+    for r in bt[-8:]:
+        x = r["h"].get(hz)
+        if not x or x["dau_err"] is None or x["arp_err"] is None:
+            continue
+        ln_tot = math.log(max(1e-6, 1 + x["err"]))
+        ln_d = math.log(max(1e-6, 1 + x["dau_err"]))
+        ln_a = math.log(max(1e-6, 1 + x["arp_err"]))
+        ln_n = math.log(max(1e-6, 1 + (x["n_err"] or 0.0))) * 0.3     # new users are a part of DAU over 30 days
+        ln_r = ln_d - ln_n
+        tot = abs(ln_n) + abs(ln_r) + abs(ln_a)
+        if tot <= 0 or abs(ln_tot) < 1e-9:
+            continue
+        parts["installs"] += abs(ln_n) / tot
+        parts["retention"] += abs(ln_r) / tot
+        parts["arpdau"] += abs(ln_a) / tot
+        k += 1
+    if not k:
+        return None
+    return {key: v / k for key, v in parts.items()}
+
+
+def auto_start(days, min_n=100):
+    """The first day of the app's real run: the first 14 days in a row where installs stay ≥ max(min_n, 20% of the
+    median of the next 60 days) on 12 of the 14 (the trial / test days before it are left out)."""
+    ds = sorted(days)
+    vals = [days[d].get("n") or 0 for d in ds]
+    for i in range(len(ds)):
+        nxt = sorted(vals[i:i + 60])
+        if len(nxt) < 14:
+            break
+        floor = max(min_n, 0.2 * nxt[len(nxt) // 2])
+        win = vals[i:i + 14]
+        if sum(1 for v in win if v >= floor) >= 12 and vals[i] >= floor:
+            return ds[i]
+    return ds[0] if ds else None

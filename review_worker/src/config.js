@@ -11,7 +11,7 @@
 
 import { ApiError } from "./auth.js";
 
-export const CONFIG_FILES = ["account_names", "app_names", "selected_apps", "approved_ranges"];
+export const CONFIG_FILES = ["account_names", "app_names", "selected_apps", "approved_ranges", "forecast_starts"];
 export const CONFIG_MAX_BYTES = 256 * 1024;        // every file, as written (JSON.stringify(obj, null, 1), UTF-8)
 export const GH_USER_AGENT = "admob-iq-dashboard";
 export const GH_RETRIES = 3;                       // 409 / 422 on the PUT → refetch the sha and retry, up to 3 times
@@ -127,8 +127,25 @@ function vApprovedRanges(c) {
   }
 }
 
+const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function vForecastStarts(c) {
+  // 🔮 the start of an app's real run for the forecast (the trial days before it left out): {app id: "YYYY-MM-DD"}
+  if (!isObj(c)) throw invalid("forecast_starts ek object hona chahiye: {\"ca-app-pub-…~…\": \"YYYY-MM-DD\"}");
+  for (const [k, v] of Object.entries(c)) {
+    if (!APP_RE.test(k)) throw invalid(`App id galat: ${show(k)} (ca-app-pub-<digits>~<digits> hona chahiye)`);
+    const m = typeof v === "string" ? DAY_RE.exec(v) : null;
+    const d = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+    if (!m || !d || d.getUTCFullYear() !== +m[1] || d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3]
+        || +m[1] < 2015 || +m[1] > 2100) {
+      throw invalid(`${show(k)} ki start date galat: YYYY-MM-DD chahiye`);
+    }
+  }
+}
+
 const VALIDATORS = {
   account_names: vAccountNames, app_names: vAppNames, selected_apps: vSelectedApps, approved_ranges: vApprovedRanges,
+  forecast_starts: vForecastStarts,
 };
 
 /**
