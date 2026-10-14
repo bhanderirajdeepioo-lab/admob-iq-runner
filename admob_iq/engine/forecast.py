@@ -12,7 +12,12 @@ The model (everything from the app's own measured data; nothing typed in):
                an install day that did better keeps doing better;
     level(D) — actual AdMob revenue ÷ the model on recent days (eCPM, the users older than the tracked install days):
                its median over the last `w` days, times the month-of-year eCPM season (strength `g`);
-    installs — future installs = organic + Google Ads spend ÷ the recent cost of a paid install (window `W` days).
+    installs — future installs = organic + Google Ads spend ÷ the recent cost of a paid install (window `W` days);
+    country  — (c on) each install day on ITS countries' own curves (revenue per install to day 90 and users at each lag,
+               per country, from the GA4 install-week country cells), the installs still to come on the newest mix —
+               owner: "achhe ecpm vali country me install jyada aaye … us country ka life time back data ke curve pe";
+    lift     — (r) the newest 14 install days' own lift vs the curve carried to the installs still to come (an app
+               change that raised day-1 revenue shows at once).
   DAU the same way with the retention curve (users active on day `age` per install) → ARPDAU = revenue ÷ DAU.
 Forecast = three parts, so a spend change is exact: old users + organic installs + paid installs (× spend multiplier).
 
@@ -38,11 +43,24 @@ MAX_ORIGINS = 26                      # the newest ~year of tests
 MIN_TESTS = 4                         # a horizon is shown once this many tests could score it
 MIN_HIST = 42                         # days after the start before the first test origin
 GRID = {"m": ("ratio", "split"), "hl": (45, 90, 180, 100000), "K": (7, 30, 90), "w": (3, 7, 14, 28), "g": (0.0, 1.0),
-        "W": (14, 28)}
-DEFAULT = {"m": "ratio", "hl": 90, "K": 30, "w": 14, "g": 1.0, "W": 28}
+        "W": (14, 28), "r": (0.0, 0.5, 1.0), "c": (0, 1)}
+DEFAULT = {"m": "ratio", "hl": 90, "K": 30, "w": 14, "g": 1.0, "W": 28, "r": 0.0, "c": 0}
+RECENT = 14            # r — the newest install days' own lift (revenue and users vs the curve, pooled) carried to the
+                       #     installs still to come: 0 none, 0.5 half, 1 all (an app change / a better country mix shows
+                       #     at once, not only as the curve slowly learns it)
 # m — how the users the install-day model does not cover (installed before the start / the GA4 history, very old)
 #     are carried: "ratio" = revenue ÷ model on recent days, kept flat; "split" = their own revenue (actual − model),
 #     decaying at its measured pace (the last 90 days' slope, never growing)
+# c — country mix (1 on): every install day's revenue and users follow ITS countries' own curves (from the GA4
+#     install-week country cells: each country's revenue per install in each band to day 90 and its users at each lag,
+#     ÷ every install's) — so a day with more installs from a high-eCPM country earns more along that country's curve,
+#     and the installs still to come take the newest two weeks' country mix. Past day 90 a country keeps its 61–90
+#     standing. The curve a(age) is learnt mix-free (each install day ÷ its own mix), so old and new mixes compare.
+CB = ((0, 0), (1, 1), (2, 3), (4, 7), (8, 14), (15, 30), (31, 60), (61, 90))   # the cells' revenue bands
+CL = (1, 3, 7, 14, 30, 60, 90)                                                   # … and their users' lags
+CKC = 1000.0                          # installs a country needs before its own figures are trusted half-way
+BIX = [next((i for i, (lo, hi) in enumerate(CB) if lo <= L <= hi), len(CB) - 1) for L in range(MAX_AGE + 1)]
+UIX = [-1 if L == 0 else max(i for i, g in enumerate(CL) if g <= L) for L in range(MAX_AGE + 1)]
 HW = {30: 0.5, 90: 0.3, 180: 0.2}     # the objective's horizon weights
 ONE = timedelta(days=1)
 
@@ -121,9 +139,22 @@ def _fill(points, maxage):
     return out
 
 
-def curve(coh, T, start, hl):
+def _fr(f, L):
+    return f[0][BIX[L]] if f else 1.0
+
+
+def _fu(f, L):
+    return f[1][UIX[L]] if f and UIX[L] >= 0 else 1.0
+
+
+def _wk(fx, X):
+    return fx.get(X - timedelta(days=X.weekday())) if fx else None
+
+
+def curve(coh, T, start, hl, fx=None):
     """(a, u, maxage): revenue per install and active users per install on each day of age, learnt from the install
-    days ≥ start known at T (newer ones weigh more: half-life hl days)."""
+    days ≥ start known at T (newer ones weigh more: half-life hl days). fx: the country mix by week (see mix) — then
+    each install day counts as n × its mix factor, so a / u are an average install's."""
     num, den = {}, {}
     bnum, bden = {}, {}
     unum, uden = {}, {}
@@ -133,6 +164,7 @@ def curve(coh, T, start, hl):
             continue
         n = c["n"]
         w = 0.5 ** ((T - X).days / hl) if hl < 99999 else 1.0
+        f = _wk(fx, X)
         k = _known(c, X, T)
         if not k:
             continue
@@ -142,7 +174,7 @@ def curve(coh, T, start, hl):
             if L in kd and (L == 0 or L - 1 in kd):
                 inc = kd[L] - (kd[L - 1] if L else 0.0)
                 num[L] = num.get(L, 0.0) + w * max(0.0, inc)
-                den[L] = den.get(L, 0.0) + w * n
+                den[L] = den.get(L, 0.0) + w * n * _fr(f, L)
         exact = any(L in kd for L in (2, 4, 5))
         if not exact:                                       # checkpoints only: 0, 1, 2–3, 4–7, 8–14, 15–30
             prev = None
@@ -152,7 +184,7 @@ def curve(coh, T, start, hl):
                     inc = kd[a] - (kd[prev] if prev is not None else 0.0)
                     for L in range(lo, a + 1):
                         num[L] = num.get(L, 0.0) + w * max(0.0, inc) / (a - lo + 1)
-                        den[L] = den.get(L, 0.0) + w * n
+                        den[L] = den.get(L, 0.0) + w * n * _fr(f, L)
                     prev = a
                 else:
                     break
@@ -161,11 +193,11 @@ def curve(coh, T, start, hl):
             if hi in kd and a0 in kd:
                 inc = max(0.0, kd[hi] - kd[a0])
                 bnum[(lo, hi)] = bnum.get((lo, hi), 0.0) + w * inc
-                bden[(lo, hi)] = bden.get((lo, hi), 0.0) + w * n * (hi - lo + 1)
+                bden[(lo, hi)] = bden.get((lo, hi), 0.0) + w * n * (hi - lo + 1) * _fr(f, lo)
         uk = _uknown(c, X, T)
         for L, v in uk.items():
             unum[L] = unum.get(L, 0.0) + w * v
-            uden[L] = uden.get(L, 0.0) + w * n
+            uden[L] = uden.get(L, 0.0) + w * n * _fu(f, L)
     pts = {L: num[L] / den[L] for L in num if den.get(L)}
     for (lo, hi), v in bnum.items():
         if bden.get((lo, hi)):
@@ -185,11 +217,31 @@ def curve(coh, T, start, hl):
     return a, u, maxage
 
 
-def scales(coh, T, start, a, K):
-    """Each install day's scale: what it earned so far ÷ what the curve says, trusted (age + 1) / (age + 1 + K)."""
+def _cum(a):
     cum = [0.0] * (len(a) + 1)
     for i, v in enumerate(a):
         cum[i + 1] = cum[i] + v
+    return cum
+
+
+def _cumf(cum, f, age):
+    """Σ a(0..age) × the mix factor at each age (cum = _cum(a))."""
+    age = min(age, len(cum) - 2)
+    if not f:
+        return cum[age + 1]
+    tot = 0.0
+    for b, (lo, hi) in enumerate(CB):
+        if lo > age:
+            break
+        top = age if b == len(CB) - 1 else min(age, hi)
+        tot += f[0][b] * (cum[top + 1] - cum[lo])
+    return tot
+
+
+def scales(coh, T, start, a, K, fx=None):
+    """Each install day's scale: what it earned so far ÷ what the curve (× its country mix) says, trusted
+    (age + 1) / (age + 1 + K)."""
+    cum = _cum(a)
     out = {}
     for X, c in coh.items():
         if X < start or X > T or not c.get("n"):
@@ -199,7 +251,7 @@ def scales(coh, T, start, a, K):
             out[X] = 1.0
             continue
         age, v = k[-1]
-        exp = cum[min(age, len(a) - 1) + 1] * c["n"]
+        exp = _cumf(cum, _wk(fx, X), age) * c["n"]
         raw = v / exp if exp > 0 else 1.0
         s = 1.0 + (raw - 1.0) * (age + 1) / (age + 1 + K)
         out[X] = min(5.0, max(0.2, s))
@@ -275,14 +327,15 @@ def season(days):
 
 
 # ── one forecast from origin T ──────────────────────────────────────────────────────────────────────────────────────
-def _model_day(coh, D, a, s, start, T, limit_future=None):
+def _model_day(coh, D, a, s, start, T, fx=None, users=False):
     tot = 0.0
     for X, c in coh.items():
         if X < start or X > D or X > T:
             continue
         age = (D - X).days
         if age < len(a):
-            tot += c["n"] * s.get(X, 1.0) * a[age]
+            f = _wk(fx, X)
+            tot += c["n"] * s.get(X, 1.0) * a[age] * (_fu(f, age) if users else _fr(f, age))
     return tot
 
 
@@ -290,19 +343,21 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
     """The forecast from origin T with parameters p → {"rev": {old, org, paid}, "dau", "n", "sp"} lists of h days, plus
     the parts it used. spend: {day: USD} for the future days (None = the mean of the last 30 days, every day)."""
     coh, days, start = app["coh"], app["days"], app["start"]
-    a, u, maxage = curve(coh, T, start, p["hl"])
-    s = scales(coh, T, start, a, p["K"])
+    fx_all, fnew_all = mix_at(app, T, p["hl"])
+    fx, fnew = (fx_all, fnew_all) if p.get("c") else ({}, None)
+    a, u, maxage = curve(coh, T, start, p["hl"], fx)
+    s = scales(coh, T, start, a, p["K"], fx)
     # level: actual ÷ model on the last w days
     lv, ul = [], []
     D = T - timedelta(days=p["w"] - 1)
     while D <= T:
         e = days.get(D)
         if e and e.get("rev"):
-            m = _model_day(coh, D, a, s, start, T)
+            m = _model_day(coh, D, a, s, start, T, fx)
             if m > 0:
                 lv.append(e["rev"] / m)
         if e and e.get("dau"):
-            mu = _model_day(coh, D, u, {}, start, T)
+            mu = _model_day(coh, D, u, {}, start, T, fx, True)
             if mu > 0:
                 ul.append(e["dau"] / mu)
         D += ONE
@@ -316,11 +371,11 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
         while D <= T:
             e = days.get(D)
             if e and e.get("rev"):
-                r = e["rev"] - _model_day(coh, D, a, s, start, T)
+                r = e["rev"] - _model_day(coh, D, a, s, start, T, fx)
                 if r > 0:
                     pts.append(((D - T).days, math.log(r)))
             if e and e.get("dau"):
-                q = e["dau"] - _model_day(coh, D, u, {}, start, T)
+                q = e["dau"] - _model_day(coh, D, u, {}, start, T, fx, True)
                 if q > 0:
                     upts.append(((D - T).days, math.log(q)))
             D += ONE
@@ -339,6 +394,9 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
         urest0, urho = fit(upts)
         ulv = 1.0
     org, per_usd = installs_model(days, T, p["W"])
+    lift, ulift = recent_lift(coh, T, start, a, u, fx) if p.get("r") else (1.0, 1.0)
+    lift = 1.0 + p.get("r", 0.0) * (lift - 1.0)
+    ulift = 1.0 + p.get("r", 0.0) * (ulift - 1.0)
     if spend is None:
         k, tot = 0, 0.0
         D = T - timedelta(days=29)
@@ -353,7 +411,7 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
     seas = seas or {m: 1.0 for m in range(1, 13)}
     s0 = seas.get(T.month, 1.0) or 1.0
     old, orgr, paid, dau, nn, sp = [], [], [], [], [], []
-    past = [(X, c["n"] * s.get(X, 1.0), c["n"]) for X, c in coh.items() if start <= X <= T and c.get("n")]
+    past = [(X, c["n"] * s.get(X, 1.0), c["n"], _wk(fx, X)) for X, c in coh.items() if start <= X <= T and c.get("n")]
     fut = []
     for i in range(1, h + 1):
         D = T + timedelta(days=i)
@@ -361,20 +419,21 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
         lvl_d = lvl * g
         o = 0.0
         du = 0.0
-        for X, ns, n0 in past:
+        for X, ns, n0, f in past:
             age = (D - X).days
             if age < len(a):
-                o += ns * a[age]
-                du += n0 * u[age]
+                o += ns * a[age] * _fr(f, age)
+                du += n0 * u[age] * _fu(f, age)
         spd = spend.get(D, 0.0)
         fut.append((D, org, per_usd * spd))
         r_org = r_paid = u_new = 0.0
         for F, no, npd in fut:
             age = (D - F).days
             if age < len(a):
-                r_org += no * a[age]
-                r_paid += npd * a[age]
-                u_new += (no + npd) * u[age]
+                fr = _fr(fnew, age) * lift
+                r_org += no * a[age] * fr
+                r_paid += npd * a[age] * fr
+                u_new += (no + npd) * u[age] * ulift * _fu(fnew, age)
         old.append(o * lvl_d + rest0 * math.exp(-rho * i) * g)
         orgr.append(r_org * lvl_d)
         paid.append(r_paid * lvl_d)
@@ -382,9 +441,137 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
         nn.append(org + per_usd * spd)
         sp.append(spd)
     return {"rev": {"old": old, "org": orgr, "paid": paid}, "dau": dau, "n": nn, "sp": sp,
-            "parts": {"level": lvl, "ulevel": ulv, "rest": rest0, "rho": rho, "org": org, "per_usd": per_usd, "maxage": maxage,
+            "parts": {"level": lvl, "ulevel": ulv, "rest": rest0, "rho": rho, "lift": lift, "ulift": ulift,
+                      "mix": (_cumf(_cum(a), fnew_all, 90) / sum(a[:91])) if fnew_all and sum(a[:91]) > 0 else None,
+                      "mix_on": bool(fnew), "org": org, "per_usd": per_usd, "maxage": maxage,
                       "a30": sum(a[:31]), "a90": sum(a[:91]), "a180": sum(a[:181]), "u1": u[1] if len(u) > 1 else None,
                       "u7": u[7] if len(u) > 7 else None}}
+
+
+def recent_lift(coh, T, start, a, u, fx=None):
+    """The newest RECENT install days, pooled: (revenue so far ÷ the curve's, active users ÷ the curve's) at each one's
+    own known age — how much better / worse the installs of right now do than the curve (× their country mix) says
+    (1 = the same)."""
+    cum = _cum(a)
+    obs = exp = uobs = uexp = 0.0
+    lo = T - timedelta(days=RECENT - 1)
+    for X, c in coh.items():
+        if X < max(lo, start) or X > T or not c.get("n"):
+            continue
+        f = _wk(fx, X)
+        k = _known(c, X, T)
+        if k:
+            age, v = k[-1]
+            obs += v
+            exp += _cumf(cum, f, age) * c["n"]
+        for L, v in _uknown(c, X, T).items():
+            if 1 <= L <= 30 and L < len(u):
+                uobs += v
+                uexp += u[L] * c["n"] * _fu(f, L)
+    lift = min(3.0, max(0.33, obs / exp)) if exp > 0 else 1.0
+    ulift = min(3.0, max(0.33, uobs / uexp)) if uexp > 0 else 1.0
+    return lift, ulift
+
+
+def mix(cty, T, hl, start):
+    """The country mix at T from the install-week country cells {week Monday: {slot: {"n", "r": [revenue in each CB
+    band], "u": [active users at each CL lag]}}} ("gap" = the installs / revenue no country was read for: average).
+    m[country][band] = its revenue per install in the band ÷ every install's — from the weeks complete for that band at
+    T only (newer weigh more: half-life hl), trusted n ÷ (n + CKC) — and its users per install at each lag likewise.
+    A week's factor = Σ its countries' install shares × their m (1 = an average install).
+    → ({week: (rf, uf)}, (rf, uf) of the newest two complete weeks — the installs still to come) — ({}, None) without
+    cells."""
+    weeks = sorted(W for W in (cty or {}) if start - timedelta(days=6) <= W <= T)
+    if not weeks:
+        return {}, None
+    nb, nl = len(CB), len(CL)
+    rs, us = {}, {}
+    ra = [[0.0, 0.0] for _ in range(nb)]
+    ua = [[0.0, 0.0] for _ in range(nl)]
+    for W in weeks:
+        wt = 0.5 ** ((T - W).days / hl) if hl < 99999 else 1.0
+        end = W + timedelta(days=6)
+        cells = cty[W]
+        for b, (lo, hi) in enumerate(CB):
+            if end + timedelta(days=hi) > T:
+                break
+            for k, e in cells.items():
+                n, r = e.get("n") or 0, (e.get("r") or [0] * nb)[b]
+                ra[b][0] += wt * r
+                ra[b][1] += wt * n
+                if k != "gap":
+                    x = rs.setdefault(k, [[0.0, 0.0] for _ in range(nb)])
+                    x[b][0] += wt * r
+                    x[b][1] += wt * n
+        for j, g in enumerate(CL):
+            if end + timedelta(days=g) > T:
+                break
+            for k, e in cells.items():
+                if k == "gap" or not e.get("u"):
+                    continue
+                n, v = e.get("n") or 0, e["u"][j]
+                ua[j][0] += wt * v
+                ua[j][1] += wt * n
+                x = us.setdefault(k, [[0.0, 0.0] for _ in range(nl)])
+                x[j][0] += wt * v
+                x[j][1] += wt * n
+
+    def rel(per, tot, nk):
+        """{country: [m per band / lag]}: shrunk to 1, a band no week completed yet carries the one before, and
+        normalised so the learning weeks' own mix averages exactly 1."""
+        out = {k: [1.0] * nk for k in per}
+        for b in range(nk):
+            R, N = tot[b]
+            if N <= 0 or R <= 0:
+                for k in per:
+                    out[k][b] = out[k][b - 1] if b else 1.0
+                continue
+            ref = 0.0
+            for k, x in per.items():
+                r, n = x[b]
+                m = (r / n) / (R / N) if n > 0 else (out[k][b - 1] if b else 1.0)
+                m = 1.0 + (m - 1.0) * (n / (n + CKC)) if n > 0 else m
+                out[k][b] = min(10.0, max(0.05, m))
+                ref += max(0.0, n) / N * out[k][b]
+            ref += max(0.0, 1.0 - sum(max(0.0, x[b][1]) for x in per.values()) / N)      # the gap: 1
+            if ref > 0:
+                for k in per:
+                    out[k][b] /= ref
+        return out
+    mr, mu = rel(rs, ra, nb), rel(us, ua, nl)
+
+    def fac(cells_list):
+        tot = sum(e.get("n") or 0 for cells in cells_list for e in cells.values())
+        if tot <= 0:
+            return None
+        rf, uf = [0.0] * nb, [0.0] * nl
+        for cells in cells_list:
+            for k, e in cells.items():
+                q = (e.get("n") or 0) / tot
+                r, v = mr.get(k), mu.get(k)
+                for b in range(nb):
+                    rf[b] += q * (r[b] if r else 1.0)
+                for j in range(nl):
+                    uf[j] += q * (v[j] if v else 1.0)
+        return [max(0.05, x) for x in rf], [max(0.05, x) for x in uf]
+    fx = {}
+    for W in weeks:
+        f = fac([cty[W]])
+        if f:
+            fx[W] = f
+    done = [W for W in weeks if W + timedelta(days=6) <= T][-2:]
+    return fx, (fac([cty[W] for W in done]) if done else None)
+
+
+def mix_at(app, T, hl):
+    """mix() for this app at T, kept (tuning asks again and again)."""
+    if not app.get("cty"):
+        return {}, None
+    memo = app.setdefault("_mix", {})
+    k = (T, hl)
+    if k not in memo:
+        memo[k] = mix(app["cty"], T, hl, app["start"])
+    return memo[k]
 
 
 def _sum(lst, k):
@@ -518,9 +705,9 @@ def score(bt):
 def tune(app, seas=None, start_p=None, passes=2):
     """Coordinate descent over GRID on the back-test score → (best params, its back-test, every step tried)."""
     ors = origins(app)
-    if not ors:
-        return dict(start_p or DEFAULT), [], []
-    p = dict(start_p or DEFAULT)
+    p = dict(DEFAULT, **{k: v for k, v in (start_p or {}).items() if k in DEFAULT})   # (a run saved before a setting
+    if not ors:                                                                       #  existed starts it at default)
+        return p, [], []
     cache = {}
 
     def run(q):

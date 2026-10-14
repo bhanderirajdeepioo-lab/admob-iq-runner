@@ -99,7 +99,8 @@ def start(data_dir, now=None, clock=time.monotonic):
 
 # ── inputs ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 def inputs(rows, P, ida, life, life_till):
-    """The engine's app: coh {X: {n, d, df, u, uf, t, ul}}, days {D: {rev, sp, spi, n, na, dau}}, last."""
+    """The engine's app: coh {X: {n, d, df, u, uf, t, ul}}, days {D: {rev, sp, spi, n, na, dau}}, last, cty {week:
+    {slot: {n, r, u}}} (the install-day file's country cells)."""
     S = P["S"]
     till = _d(life_till) if life_till else None
     days, coh = {}, {}
@@ -123,7 +124,11 @@ def inputs(rows, P, ida, life, life_till):
             D = _d(k)
             if not till or D <= till:
                 days.setdefault(D, {})["dau"] = v["a"]
-    return {"coh": coh, "days": days, "last": till or (max(days) if days else S)}
+    cty = {}
+    for w, cells in ((ida or {}).get("c") or {}).items():          # the install-week country cells → the country mix
+        if isinstance(cells, dict) and cells:
+            cty[_d(w)] = {k: e for k, e in cells.items() if isinstance(e, dict)}
+    return {"coh": coh, "days": days, "last": till or (max(days) if days else S), "cty": cty}
 
 
 # ── the bias correction folded into the days ────────────────────────────────────────────────────────────────────────
@@ -169,7 +174,66 @@ def _avg(days, a, b, key, per=None):
     return (num / den) if den else None
 
 
-def drivers(app, rows, ida, cty_rows):
+def split(app, rev_cty, a_now, b_now, a_x, b_x):
+    """Why the revenue per day moved, the last 14 days vs X (the 8 weeks before) — four factors that multiply back to
+    the revenue change exactly: users (GA4 DAU) × ad impressions per user × the country mix (more of the impressions
+    from high-eCPM countries, at X's eCPMs) × each country's own eCPM (now vs X, at today's mix). AdMob country report;
+    None without enough days. + the countries that moved the mix / their eCPM most."""
+    if not rev_cty:
+        return None
+
+    def win(a, b):
+        by, k, A, nd = {}, 0, 0.0, 0
+        D = a
+        while D <= b:
+            x = rev_cty.get(D.isoformat())
+            if x:
+                k += 1
+                for cc, v in x.items():
+                    e = by.setdefault(cc, [0.0, 0.0])
+                    e[0] += v[0] / 1e6
+                    e[1] += v[1]
+            dau = (app["days"].get(D) or {}).get("dau")
+            if dau:
+                A += dau
+                nd += 1
+            D += timedelta(days=1)
+        return by, k, (A / nd if nd else None)
+    bn, kn, An = win(a_now, b_now)
+    bx, kx, Ax = win(a_x, b_x)
+    En, In = sum(v[0] for v in bn.values()), sum(v[1] for v in bn.values())
+    Ex, Ix = sum(v[0] for v in bx.values()), sum(v[1] for v in bx.values())
+    if kn < 7 or kx < 28 or En <= 0 or Ex <= 0 or In <= 0 or Ix <= 0:
+        return None
+    ex = Ex / Ix
+    ecx = {cc: (v[0] / v[1] if v[1] > 0 else ex) for cc, v in bx.items()}
+    at_x = sum(v[1] / In * ecx.get(cc, ex) for cc, v in bn.items())       # today's mix at X's eCPMs
+    out = {"rev": [_r(En / kn, 4), _r(Ex / kx, 4)], "imp": [_r(In / kn, 1), _r(Ix / kx, 1)],
+           "ecpm": [_r(En / In * 1000, 4), _r(ex * 1000, 4)],
+           "mix": _r(at_x / ex - 1, 4), "rate": _r((En / In) / at_x - 1, 4) if at_x > 0 else None}
+    if An and Ax:
+        out["users"] = _r(An / Ax - 1, 4)
+        out["ipu"] = _r(((In / kn) / An) / ((Ix / kx) / Ax) - 1, 4)
+    else:                                                # no DAU: users and ads per user stay one "impressions" factor
+        out["imps"] = _r((In / kn) / (Ix / kx) - 1, 4)
+    mv, rt = [], []
+    for cc in set(bn) | set(bx):
+        sn = bn.get(cc, [0, 0])[1] / In
+        sx = bx.get(cc, [0, 0])[1] / Ix
+        mv.append((cc, (sn - sx) * (ecx.get(cc, ex) - ex) / ex, sn, sx))
+        if cc in bn and bn[cc][1] > 0 and cc in bx and bx[cc][1] > 0:
+            rt.append((cc, sn * (bn[cc][0] / bn[cc][1] - ecx[cc]) / at_x, bn[cc][0] / bn[cc][1], ecx[cc]))
+    mv.sort(key=lambda t: -abs(t[1]))
+    rt.sort(key=lambda t: -abs(t[1]))
+    out["mix_top"] = [[cc, _r(x, 4), _r(sn, 4), _r(sx, 4), _r(ecx.get(cc, ex) * 1000, 4)] for cc, x, sn, sx in mv[:4]
+                      if abs(x) >= 0.005]
+    out["rate_top"] = [[cc, _r(x, 4), _r(e1 * 1000, 4), _r(e0 * 1000, 4)] for cc, x, e1, e0 in rt[:4] if abs(x) >= 0.005]
+    out["by"] = {cc: [_r(v[0] / v[1] * 1000, 4) if v[1] else None,
+                      _r(bx[cc][0] / bx[cc][1] * 1000, 4) if cc in bx and bx[cc][1] else None] for cc, v in bn.items()}
+    return out
+
+
+def drivers(app, rows, ida, cty_rows, rev_cty=None):
     days, last = app["days"], app["last"]
     a_now, b_now = last - timedelta(days=13), last
     a_x, b_x = last - timedelta(days=69), last - timedelta(days=14)
@@ -229,6 +293,15 @@ def drivers(app, rows, ida, cty_rows):
                     "rpi7": nx(tr.get("rpi7")), "cpi": nx(tr.get("cpi")), "dec": r.get("dec")})
     cty.sort(key=lambda c: -((c["share"][0] or 0) + (c["share"][1] or 0)))
     out["cty"] = cty[:12]
+    try:
+        sp = split(app, rev_cty, a_now, b_now, a_x, b_x)
+    except Exception:
+        sp = None
+    if sp:
+        by = sp.pop("by")
+        for c in out["cty"]:
+            c["ecpm"] = by.get(c["cc"])
+        out["split"] = sp
     return out
 
 
@@ -245,7 +318,7 @@ def _events(bt):
     return sorted(out, key=lambda e: e["at"])
 
 
-def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows):
+def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None):
     """→ the page's forecast for this app (None: nothing yet). Never raises."""
     try:
         app = inputs(rows, P, ida, life, life_till)
@@ -311,7 +384,7 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows):
         if prev_p != p or not log:
             cause = max(att, key=att.get) if att else None
             log.append({"d": today, "p": p, "sc_old": _r(sc_prev, 4), "sc": _r(F.score(bt), 4),
-                        "changed": sorted(k for k in p if (prev_p or {}).get(k) != p[k]) if prev_p else [],
+                        "changed": sorted(k for k in p if dict(F.DEFAULT, **prev_p).get(k) != p[k]) if prev_p else [],
                         "cause": cause, "bias30": _r((cal.get(30) or {}).get("bias"), 4)})
         log = log[-LOG_KEEP:]
         fc = {"v": V, "made": today, "T": _iso(last), "start": _iso(app["start"]), "start_auto": _iso(auto) if auto else None,
@@ -325,7 +398,7 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows):
               "bt": [[r["T"]] + [(_r(r["h"][hz]["err"], 4) if hz in r["h"] else None) for hz in F.HORIZONS]
                      + [sorted((r.get("ev") or {}).keys())] for r in bt],
               "events": _events(bt), "att": {k: _r(v, 3) for k, v in att.items()} if att else None,
-              "log": log[-15:], "checks": checks[-60:], "drv": drivers(app, rows, ida, cty_rows),
+              "log": log[-15:], "checks": checks[-60:], "drv": drivers(app, rows, ida, cty_rows, rev_cty),
               "parts": {k: _r(v, 6) if isinstance(v, float) else v for k, v in f["parts"].items()}}
         _write(path, {"v": V, "made_at": run.now.isoformat(), "start": _iso(app["start"]), "T": _iso(last), "p": p,
                       "log": log, "live": live, "fc": fc})

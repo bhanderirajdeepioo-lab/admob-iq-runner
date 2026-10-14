@@ -88,3 +88,42 @@ def test_live_check_once_the_days_happened(tmp_path):
     fc = fb.app_step(run, "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(), [])
     chk = [c for c in fc["checks"] if c["made"] == "2025-11-21"]
     assert chk and chk[0]["h"] == 30 and chk[0]["act"] > 0 and chk[0]["err"] < -0.99
+
+
+def test_admob_country_keeps_the_newest_days_only():
+    from admob_iq.build_static import admob_country
+    rows = [{"app_id": "a", "report_date": "2026-10-01", "country": "IN", "estimated_earnings_micros": 5, "impressions": 9},
+            {"app_id": "a", "report_date": "2026-10-01", "country": "IN", "estimated_earnings_micros": 1, "impressions": 1},
+            {"app_id": "a", "report_date": "2026-07-01", "country": "IN", "estimated_earnings_micros": 9, "impressions": 9},
+            {"app_id": "a", "report_date": "2026-10-03", "country": "US", "estimated_earnings_micros": 9, "impressions": 9},
+            {"app_id": "b", "report_date": "2026-10-01", "country": "", "estimated_earnings_micros": 9, "impressions": 9}]
+    assert admob_country(rows, "2026-10-02") == {"a": {"2026-10-01": {"IN": [6, 10]}}}
+
+
+def test_split_multiplies_back_to_the_revenue_change():
+    """Revenue per day, last 14 days vs X = users × ads per user × country mix × each country's eCPM — exactly; a
+    country whose share grew at a higher eCPM is named as the mix mover."""
+    last = date(2026, 9, 30)
+    days, cty = {}, {}
+    for i in range(70):
+        D = last - timedelta(days=i)
+        now = i < 14
+        days[D] = {"dau": 1200.0 if now else 1000.0}
+        hi_imp, lo_imp = (3000, 7000) if now else (2000, 8000)       # more impressions from the better country
+        hi_e, lo_e = (6.0 if now else 5.0), 1.0                       # … and its eCPM rose
+        cty[D.isoformat()] = {"US": [int(hi_imp * hi_e / 1000 * 1e6), hi_imp], "IN": [int(lo_imp * lo_e / 1000 * 1e6), lo_imp]}
+    s = fb.split({"days": days}, cty, last - timedelta(days=13), last, last - timedelta(days=69), last - timedelta(days=14))
+    tot = s["rev"][0] / s["rev"][1]
+    prod = (1 + s["users"]) * (1 + s["ipu"]) * (1 + s["mix"]) * (1 + s["rate"])
+    assert abs(prod - tot) < 1e-3 and abs(s["users"] - 0.2) < 1e-6 and abs(s["ipu"] + 1 / 6) < 1e-3
+    assert s["mix"] > 0 and s["rate"] > 0 and s["mix_top"][0][0] == "US" and s["rate_top"][0][0] == "US"
+    assert fb.split({"days": days}, {}, last, last, last, last) is None
+
+
+def test_inputs_carry_the_country_cells():
+    app = make()
+    rows, life, ida = _rows_life(app)
+    ida["c"] = {"2025-06-02": {"0": {"n": 5, "r": [1] * 8, "u": [1] * 7}}}
+    P = {"S": LAST}
+    got = fb.inputs(rows, P, ida, life, LAST.isoformat())
+    assert got["cty"] == {date(2025, 6, 2): {"0": {"n": 5, "r": [1] * 8, "u": [1] * 7}}}

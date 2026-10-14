@@ -310,6 +310,25 @@ def admob_revenue(rows, tz, currency, today, tz_by_account=None):
             "tz_by_app": dict(sorted(tz_app.items()))}
 
 
+CTY_KEEP = 70      # days of the AdMob country report the forecast's "why" split reads (the last 14 vs the 8 weeks before)
+
+
+def admob_country(rows, till, keep=CTY_KEEP):
+    """The country report's rows → {AdMob app id: {day: {country: [earnings micros, impressions]}}} for the newest
+    `keep` days up to `till` (in memory only — the 🔮 forecast's revenue split: users × ads per user × country mix ×
+    each country's eCPM)."""
+    lo = (date.fromisoformat(till) - timedelta(days=keep - 1)).isoformat()
+    out = {}
+    for r in rows:
+        aid, d, cc = r.get("app_id"), str(r.get("report_date") or "")[:10], r.get("country")
+        if not aid or not cc or not d or d < lo or d > till:
+            continue
+        cur = out.setdefault(aid, {}).setdefault(d, {}).setdefault(cc, [0, 0])
+        cur[0] += int(r.get("estimated_earnings_micros") or 0)
+        cur[1] += int(r.get("impressions") or 0)
+    return out
+
+
 def account_tzs(accounts, s, report_tz, mode, has_creds):
     """{account id: its reporting timezone} — the timezone each account's AdMob report rows are in: the configured
     reporting_tz, else (live) the account's own (account_meta, one small read each), else report_tz (as the rest of the
@@ -567,6 +586,11 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
                 revenue["all_apps"] = every
         except Exception as e:
             print(f"ga4 active mediation skipped: {type(e).__name__}", file=sys.stderr)
+    if revenue is not None:
+        try:                                       # the 🔮 forecast's "why" split (country mix × country eCPM)
+            revenue["country"] = admob_country(repo.fetch_country(), revenue["till"])
+        except Exception as e:
+            print(f"ga4 forecast country skipped: {type(e).__name__}", file=sys.stderr)
     return _uninstall_step(dashboard, data_dir, out_dir, s, revenue=revenue)
 
 

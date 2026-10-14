@@ -814,6 +814,7 @@ def test_the_build_hands_the_network_reports_revenue_to_the_uninstall_step(tmp_p
                                        ("2026-09-18", A2, "u3", 10, 20000)):
         repo.upsert_network(dict(base, report_date=d, app_id=app, ad_unit_id=unit, impressions=imps,
                                  estimated_earnings_micros=micros))
+    repo.upsert_country(dict(base, report_date="2026-09-19", app_id=A1, impressions=80, estimated_earnings_micros=200000))
     got = []
     monkeypatch.setattr(build_static, "_uninstall_step",
                         lambda dash, data_dir, out_dir, s, revenue=None: got.append(revenue) or ["x"])
@@ -822,7 +823,8 @@ def test_the_build_hands_the_network_reports_revenue_to_the_uninstall_step(tmp_p
                                                 date(2026, 9, 20)) == ["x"]
     assert got == [{"tz": "America/Los_Angeles", "currency": "USD", "till": "2026-09-19",   # today (20th) still filling
                     "apps": {A1: {"2026-09-18": [375000, 150], "2026-09-19": [200000, 80]},
-                             A2: {"2026-09-18": [20000, 10]}}, "tz_by_app": {}}]
+                             A2: {"2026-09-18": [20000, 10]}}, "tz_by_app": {},
+                    "country": {A1: {"2026-09-19": {"US": [200000, 80]}}}}]                # the 🔮 forecast's split
     # a second account reporting in its own timezone: its apps are named, never read as Pacific days
     got.clear()
     build_static._uninstall_with_revenue({}, repo, "data", "site", s, "America/Los_Angeles", date(2026, 9, 20),
@@ -1384,3 +1386,17 @@ def test_the_fixtures_portfolio_is_the_sum_of_its_apps():
     assert not any(m["stop"] for m in body["marks"]) and body["missing"] == []
     txt = json.dumps(body, ensure_ascii=False)
     assert "NaN" not in txt and "Infinity" not in txt and re.search("[%s-%s]" % (chr(0x900), chr(0x97F)), txt) is None
+
+
+def test_the_forecasts_country_revenue_rides_app_revenue(isite):
+    """🔮 forecast "why" split: revenue["country"] {AdMob app: {day: {country: [micros, impressions]}}} → app_revenue's
+    cty, summed over the same-package apps — only when they all report in this app's timezone."""
+    data, out, rev = isite
+    day = "2026-09-01"
+    r2 = dict(rev, country={A1: {day: {"IN": [5, 10], "US": [7, 2]}}, A9: {day: {"IN": [1, 1]}}})
+    one = ub.app_revenue(r2, {"app_id": A1, "package": PKG[A1]}, [{"app_id": A9, "same_pkg": PKG[A1]}])
+    assert one["cty"] == {day: {"IN": [6, 11], "US": [7, 2]}}
+    assert "cty" not in ub.app_revenue(rev, {"app_id": A1, "package": PKG[A1]}, [])
+    other = "America/Los_Angeles" if rev["tz"] != "America/Los_Angeles" else "Asia/Kolkata"
+    assert "cty" not in ub.app_revenue(dict(r2, tz_by_app={A9: other}), {"app_id": A1, "package": PKG[A1]},
+                                       [{"app_id": A9, "same_pkg": PKG[A1]}])

@@ -53,6 +53,7 @@ def test_countries_life_all(out):
 
 def test_forecast_view(out):
     assert out["fc_tiles"] and out["fc_ready"] and out["fc_be"] and out["fc_parts"] and out["fc_slider"]
+    assert out["fc_split"] and out["fc_split_off"]
 
 
 def test_wiring():

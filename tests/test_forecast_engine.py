@@ -112,3 +112,99 @@ def test_start_skips_the_trial_days_and_organic_installs():
     assert F.auto_start({D: e for D, e in app["days"].items()}) == D0 + timedelta(days=20)
     days = {date(2025, 1, d): {"n": 100, "na": None, "sp": 0.0} for d in range(1, 15)}   # no Google Ads data, no spend
     assert F.installs_model(days, date(2025, 1, 14), 14) == (100.0, 0.0)
+
+
+def a_hi(L):                      # a high-eCPM country: earns more and keeps earning (flat curve)
+    return 0.10 / (L + 1) ** 0.5
+
+
+def a_lo(L):                      # a low-eCPM country: earns less and fades fast
+    return 0.02 / (L + 1) ** 1.0
+
+
+def u_hi(L):
+    return 1.0 if L == 0 else 0.5 / (L + 1) ** 0.3
+
+
+def u_lo(L):
+    return 1.0 if L == 0 else 0.3 / (L + 1) ** 0.7
+
+
+def make_mix(shift=date(2025, 8, 1), before=0.2, after=0.6):
+    """2,000 installs a day from two countries on their own curves; the high one's share jumps at `shift` (an ad
+    campaign moved to a better country). + the install-week country cells as the GA4 fetch keeps them."""
+    coh, days, cty = {}, {}, {}
+    X = D0
+    while X <= LAST:
+        q = after if X >= shift else before
+        nh, nl = 2000 * q, 2000 * (1 - q)
+        lim = (LAST - X).days
+
+        def rev(L):
+            return nh * a_hi(L) + nl * a_lo(L)
+
+        def usr(L):
+            return nh * u_hi(L) + nl * u_lo(L)
+        cum, d = 0.0, []
+        for L in range(min(31, lim + 1)):
+            cum += rev(L)
+            d.append(cum)
+        t = [sum(rev(L) for L in range(A + 1)) if A <= lim else None for A in F.T_AGES]
+        u = [usr(L) for L in range(min(31, lim + 1))]
+        ul = [usr(L) if L <= lim else None for L in F.ULAGS]
+        coh[X] = {"n": 2000, "d": d, "df": len(d), "u": u, "uf": len(u), "t": t, "ul": ul}
+        days[X] = {"n": 2000, "na": 1000, "sp": 500.0}
+        W = X - timedelta(days=X.weekday())
+        for k, n, af, uf in (("0", nh, a_hi, u_hi), ("1", nl, a_lo, u_lo)):
+            e = cty.setdefault(W, {}).setdefault(k, {"n": 0, "r": [0.0] * len(F.CB), "u": [0.0] * len(F.CL)})
+            e["n"] += n
+            for b, (lo, hi) in enumerate(F.CB):
+                e["r"][b] += sum(n * af(L) for L in range(lo, min(hi, lim) + 1))
+            for j, g in enumerate(F.CL):
+                if g <= lim:
+                    e["u"][j] += n * uf(g)
+        X += timedelta(days=1)
+    D = D0
+    while D <= LAST:
+        r = du = 0.0
+        for X2 in coh:
+            if X2 > D:
+                continue
+            L = (D - X2).days
+            q = after if X2 >= shift else before
+            r += 2000 * (q * a_hi(L) + (1 - q) * a_lo(L))
+            du += 2000 * (q * u_hi(L) + (1 - q) * u_lo(L))
+        days[D]["rev"], days[D]["dau"] = r, du
+        D += timedelta(days=1)
+    return {"coh": coh, "days": days, "start": D0, "last": LAST, "cty": cty}
+
+
+def test_country_mix_each_country_on_its_own_curve():
+    app = make_mix()
+    T = date(2025, 9, 15)                                 # 6 weeks after more installs came from the better country
+    fx, fnew = F.mix(app["cty"], T, 100000, D0)
+    old, new = fx[date(2025, 6, 2)], fx[date(2025, 9, 1)]
+    assert new[0][0] > 1.5 * old[0][0] and fnew[0][7] > old[0][7]      # the newer weeks are worth more, to day 90
+    act = sum(app["days"][T + timedelta(days=i)]["rev"] for i in range(1, 91))
+
+    def err(c):
+        f = F.forecast(app, T, dict(F.DEFAULT, g=0.0, c=c), h=90)
+        return sum(o + g + q for o, g, q in zip(f["rev"]["old"], f["rev"]["org"], f["rev"]["paid"])) / act - 1, f
+    e1, f1 = err(1)
+    e0, _ = err(0)
+    assert abs(e1) < 0.03 and abs(e1) < abs(e0)           # country by country: closer to the truth than one curve
+    assert f1["parts"]["mix_on"] and f1["parts"]["mix"] > 1.1                  # the installs of now: better than average
+    # without cells nothing changes
+    plain = dict(app, cty={})
+    plain.pop("_mix", None)
+    f2 = F.forecast(plain, T, dict(F.DEFAULT, g=0.0, c=1), h=30)
+    f3 = F.forecast(plain, T, dict(F.DEFAULT, g=0.0, c=0), h=30)
+    assert f2["rev"] == f3["rev"] and f2["parts"]["mix"] is None
+
+
+def test_tune_starts_from_an_older_run_without_the_newer_settings():
+    app = make()
+    old = {k: v for k, v in F.DEFAULT.items() if k not in ("r", "c")}
+    old["gone"] = 1                                       # a setting a later version dropped
+    p, bt, steps = F.tune(app, None, start_p=old, passes=1)
+    assert set(p) == set(F.DEFAULT) and bt

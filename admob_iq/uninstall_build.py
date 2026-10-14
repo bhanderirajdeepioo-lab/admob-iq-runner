@@ -184,6 +184,20 @@ def app_revenue(revenue, a, apps, package=None, cover=False):
                 out["cover_days"] = sorted(days_c)
     except Exception:                                # (no print: this step's log is exactly one counts-only line)
         out.pop("all_days", None), out.pop("cover_days", None)
+    try:                                             # 🔮 forecast only: {day: {country: [micros, impressions]}} of the
+        pool = revenue.get("country") or {}          # newest days — summed over the same-package apps, when they all
+        if pool and all((tzs.get(x) or base) == tz for x in ids):   # report in this app's timezone
+            cty = {}
+            for x in ids:
+                for d, by in (pool.get(x) or {}).items():
+                    day = cty.setdefault(d, {})
+                    for cc, v in by.items():
+                        cur = day.setdefault(cc, [0, 0])
+                        cur[0], cur[1] = cur[0] + int(v[0] or 0), cur[1] + int(v[1] or 0)
+            if cty:
+                out["cty"] = dict(sorted(cty.items()))
+    except Exception:
+        out.pop("cty", None)
     return out
 
 

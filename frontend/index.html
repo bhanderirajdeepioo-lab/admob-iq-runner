@@ -2460,6 +2460,8 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-why b{color:#fff}
 .roi-cut{background:var(--bad-b);border:1px solid #6b2a2e;border-radius:10px;padding:9px 12px}
 .roi-ks6{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.roi-spw{display:grid;grid-template-columns:1.15fr repeat(4,minmax(0,1fr));gap:8px;margin:2px 0 4px}.roi-spw .roi-spl{border-color:var(--cyan2)}
+@media (max-width:760px){.roi-spw{grid-template-columns:repeat(2,minmax(0,1fr))}.roi-spw .roi-spl{grid-column:1/-1}}
 .roi-k{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;min-width:0}
 .roi-kl{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .roi-kv{font-size:20px;font-weight:800;color:#fff;margin:4px 0 2px;font-variant-numeric:tabular-nums;line-height:1.25}
@@ -6750,7 +6752,7 @@ function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life
 // next 30 / 90 / 180 days with its measured range, why it moves (now vs the usual), how right it was (back-tests and
 // the live check), what it learnt, and the start of the real run. Spend slider: the paid installs scale with it exactly.
 let FCH='90', FCM=0;
-const FC_P={hl:'Curve: kitne purane installs se seekhe (half-life din)',K:'Naye install-din ki apni kamai pe bharosa (K)',w:'eCPM level: kitne din ka',g:'Season (Dec/Jan) ka asar',W:'Installs/CPI: kitne din ka',m:'Purane users ka tareeka'};
+const FC_P={hl:'Curve: kitne purane installs se seekhe (half-life din)',K:'Naye install-din ki apni kamai pe bharosa (K)',w:'eCPM level: kitne din ka',g:'Season (Dec/Jan) ka asar',W:'Installs/CPI: kitne din ka',m:'Purane users ka tareeka',r:'Naye installs pe abhi ka badlav',c:'Country-wise curves'};
 const FC_C={installs:'installs (naye users)',retention:'retention (users kitne ruke)',arpdau:'ARPDAU / eCPM (har user ki kamai)'};
 function fcTot(f,m){ return f.old.map((v,i)=>(v||0)+(f.org[i]||0)+m*(f.paid[i]||0)); }
 function fcSum(a,h){ let s=0; for(let i=0;i<h&&i<a.length;i++) s+=a[i]; return s; }
@@ -6807,12 +6809,31 @@ function fcWhy(d){ const fc=d.fc, v=fc.drv||{}; if(!v.installs) return '';
   const t=`<table class="roi-t roi-sub"><thead><tr><th>Cheez</th><th>Abhi (14 din)</th><th>Usual (X)</th><th>Badlav</th></tr></thead><tbody>`
     +row('Installs / din',v.installs,num,true)+row('Google Ads spend / din',v.spend,mv,null)+row('Cost / install (CPI)',v.cpi,mpv,false)
     +row('Back next day (D1)',v.d1,pc,true)+row('Day 7 retention',v.d7,pc,true)+row('DAU',v.dau,num,true)+row('ARPDAU (har user ki kamai / din)',v.arpdau,mpv,true)+`</tbody></table>`;
-  const cty=(v.cty||[]).filter(c=>c.share&&(c.share[0]||c.share[1]));
-  const ct=cty.length?`<table class="roi-t roi-sub"><thead><tr><th>Country</th><th>Installs share abhi / X</th><th>D1 abhi / X</th><th>Kamai D7 abhi / X</th><th>CPI abhi / X</th><th>Decision</th></tr></thead><tbody>`
+  const cty=(v.cty||[]).filter(c=>c.share&&(c.share[0]||c.share[1])), hasE=cty.some(c=>c.ecpm);
+  const ct=cty.length?`<table class="roi-t roi-sub"><thead><tr><th>Country</th><th>Installs share abhi / X</th><th>D1 abhi / X</th><th>Kamai D7 abhi / X</th>${hasE?'<th>eCPM abhi / X</th>':''}<th>CPI abhi / X</th><th>Decision</th></tr></thead><tbody>`
     +cty.map(c=>{ const two=(a,f,good)=>{ if(!a||!ok(a[0])) return '—'; const ch=ok(a[1])&&a[1]?a[0]/a[1]-1:null, up=ch!=null&&ch>=0; return `${f(a[0])} <small class="${ch==null||good==null?'':(up===good?'roi-up':'roi-dn')}">/ ${ok(a[1])?f(a[1]):'—'}</small>`; };
-      return `<tr><td class="roi-nm">${valFlag(c.cc)}&nbsp;${E(valCtyName(c.cc))}</td><td>${two(c.share,pc,null)}</td><td>${two(c.d1,x=>Math.round(x)+'%',true)}</td><td>${two(c.rpi7,mpv,true)}</td><td>${two(c.cpi,mpv,false)}</td><td>${c.dec?dchip(c.dec):'—'}</td></tr>`; }).join('')+`</tbody></table>`:'';
+      return `<tr><td class="roi-nm">${valFlag(c.cc)}&nbsp;${E(valCtyName(c.cc))}</td><td>${two(c.share,pc,null)}</td><td>${two(c.d1,x=>Math.round(x)+'%',true)}</td><td>${two(c.rpi7,mpv,true)}</td>${hasE?`<td>${two(c.ecpm,mpv,true)}</td>`:''}<td>${two(c.cpi,mpv,false)}</td><td>${c.dec?dchip(c.dec):'—'}</td></tr>`; }).join('')+`</tbody></table>`:'';
   const att=fc.att?`<p class="roi-note">Pichhle tests me forecast ki galti kahan se aayi: ${Object.entries(fc.att).sort((a,b)=>b[1]-a[1]).map(([k,x])=>`<b>${Math.round(x*100)}%</b> ${E(FC_C[k]||k)}`).join(' · ')}.</p>`:'';
-  return `<div class="roi-card"><div class="roi-ct"><h3>Forecast kyun upar / neeche · abhi vs usual (X)</h3><span class="roi-note">X = usse pehle ke 8 hafte · model in sab ko apne aap use karta hai</span></div><div class="roi-tw">${t}</div>${ct?`<div class="roi-tw" style="margin-top:10px">${ct}</div>`:''}${att}</div>`; }
+  return `<div class="roi-card"><div class="roi-ct"><h3>Forecast kyun upar / neeche · abhi vs usual (X)</h3><span class="roi-note">X = usse pehle ke 8 hafte · model in sab ko apne aap use karta hai</span></div>${fcSplit(v.split,mv,mpv)}${fcMix(fc.parts)}<div class="roi-tw">${t}</div>${ct?`<div class="roi-tw" style="margin-top:10px">${ct}</div>`:''}${att}</div>`; }
+// revenue / day, last 14 days vs X = users × ads per user × country mix × each country's own eCPM (AdMob country report:
+// the four multiply back to the revenue change exactly) — and the countries that moved it most
+function fcSplit(s,mv,mpv){ if(!s||!s.rev||!s.rev[1]) return '';
+  const pc=x=>Math.abs(x)<0.0005?'0%':(x>=0?'▲ +':'▼ −')+(Math.abs(x)<0.1?(Math.abs(x)*100).toFixed(1):Math.round(Math.abs(x)*100))+'%';
+  const box=(lab,x,sub,lead)=>x==null?'':tile(lab,`<span class="${Math.abs(x)<0.0005?'':x>=0?'roi-up':'roi-dn'}">${pc(x)}</span>`,sub,lead?'roi-spl':'');
+  const nm=cc=>`${valFlag(cc)}&nbsp;${E(valCtyName(cc))}`, pp=x=>Math.round(x*1000)/10+'%';
+  const mt=(s.mix_top||[]).slice(0,3).map(c=>`${nm(c[0])} share ${pp(c[3])} → <b>${pp(c[2])}</b> <small>(eCPM ${mpv(c[4])})</small> ${pc(c[1])}`);
+  const rt=(s.rate_top||[]).slice(0,3).map(c=>`${nm(c[0])} eCPM ${mpv(c[3])} → <b>${mpv(c[2])}</b> ${pc(c[1])}`);
+  return `<div class="roi-spw">${box('Revenue / din',s.rev[0]/s.rev[1]-1,`${MC(RV(s.rev[0]))} vs ${MC(RV(s.rev[1]))}`,1)}`
+    +(s.users!=null?box('= Users (DAU)',s.users,'kitne log khel rahe')+box('× Ads per user',s.ipu,'har user ko kitne ads'):box('= Impressions / din',s.imps,'users × ads'))
+    +box('× Country mix',s.mix,'ads kis country se')+box('× eCPM (same country)',s.rate,`sab milake ${mpv(s.ecpm[1])} → ${mpv(s.ecpm[0])}`)+`</div>`
+    +`<p class="roi-note">Revenue = users × har user ko ads × eCPM. eCPM do wajah se badalta hai: ads achhe-eCPM wali countries se zyada aaye (<b>country mix</b>), ya usi country ka eCPM badla. Chaaron ka gunaa = revenue ka badlav (AdMob country report).</p>`
+    +(mt.length?`<p class="roi-note"><b>Country mix</b> kisne badla: ${mt.join(' · ')}</p>`:'')
+    +(rt.length?`<p class="roi-note"><b>eCPM</b> kahan badla: ${rt.join(' · ')}</p>`:''); }
+// the installs of now, by their countries: what they will earn in 90 days vs an average install (each country on its
+// own back-data curve) — and whether the model runs country by country for this app (the back-tests decide)
+function fcMix(p){ if(!p||!ok(p.mix)) return ''; const x=p.mix-1;
+  return `<p class="roi-note">Naye installs ki countries ke hisaab se: average install se <b class="${Math.abs(x)<0.02?'':x>=0?'roi-up':'roi-dn'}">×${p.mix.toFixed(2)}</b> kamai (pehle 90 din, har country apne curve pe). `
+    +(p.mix_on?'Is app me model <b>country-wise curves</b> pe chal raha hai (back-test me zyada sahi nikla).':'Is app me country-wise curves se back-test behtar nahi hua — model ek combined curve pe hai; back-test roz dobara check karta hai.')+`</p>`; }
 function fcAcc(d){ const fc=d.fc, bt=fc.bt||[]; if(!bt.length) return '';
   const cal=fc.cal||{}, hs=['30','90','180'];
   const sum=`<table class="roi-t roi-sub"><thead><tr><th>Kitne din aage</th><th>Normal din me error</th><th>Sab tests (jhatkon samet)</th><th>80% range</th><th>Tests</th></tr></thead><tbody>`
@@ -6825,7 +6846,7 @@ function fcAcc(d){ const fc=d.fc, bt=fc.bt||[]; if(!bt.length) return '';
   const evh=ev.length?`<p class="roi-note">⚡ <b>Achanak jhatke</b> (koi model pehle se nahi dekh sakta — range inke bina, upar alag likha): ${ev.map(e=>`${E(fd(e.at))} ${e.kind==='installs'?'installs':'ARPDAU'} ×${e.x}`).join(' · ')}</p>`:'';
   return `<div class="roi-card"><div class="roi-ct"><h3>Kitna sahi tha · back-test</h3><span class="roi-note">har 2 hafte pe purane din se ${hs[ix]} din aage ka forecast vs asli · bar = error</span></div><div class="roi-tw">${sum}</div>${ch}${live}${evh}</div>`; }
 function fcLearn(d){ const fc=d.fc, log=(fc.log||[]).slice().reverse(); if(!log.length) return '';
-  const pd=p=>Object.entries(p||{}).map(([k,v])=>`${E(FC_P[k]||k)}: <b>${E(k==='hl'&&v>=100000?'sab barabar':k==='m'?(v==='split'?'alag, ghatte hue':'ek ratio'):k==='g'?(v?'on':'off'):String(v))}</b>`).join(' · ');
+  const pd=p=>Object.entries(p||{}).map(([k,v])=>`${E(FC_P[k]||k)}: <b>${E(k==='hl'&&v>=100000?'sab barabar':k==='m'?(v==='split'?'alag, ghatte hue':'ek ratio'):k==='g'||k==='c'?(v?'on':'off'):k==='r'?(v>=1?'poora':v>0?'aadha':'off'):String(v))}</b>`).join(' · ');
   return `<div class="roi-card"><div class="roi-ct"><h3>Model kya seekh raha hai</h3><span class="roi-note">roz naye data pe dobara test → jo setting sabse sahi, wahi</span></div>`
     +log.slice(0,6).map(x=>`<div class="roi-lgr"><b>${E(fd(x.d))}</b> · ${x.changed&&x.changed.length?`badla: ${x.changed.map(k=>E(FC_P[k]||k)).join(', ')}`:'settings wahi'}${x.sc_old!=null?` · error ${P(x.sc_old)} → <b>${P(x.sc)}</b>`:(x.sc!=null?` · error <b>${P(x.sc)}</b>`:'')}${x.cause?` · zyada galti: ${E(FC_C[x.cause]||x.cause)}`:''}${x.bias30?` · bias ${x.bias30>0?'+':'−'}${Math.abs(Math.round(x.bias30*100))}% theek kiya`:''}</div>`).join('')
     +`<p class="roi-note">Abhi ki settings: ${pd(fc.p)}.</p></div>`; }

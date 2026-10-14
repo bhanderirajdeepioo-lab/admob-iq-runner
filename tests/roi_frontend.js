@@ -142,7 +142,10 @@ function appFile() {
       bt: [['2026-08-01', 0.05, 0.1, null, []], ['2026-08-15', -0.2, null, null, [30]]], events: [{ at: '2026-08-20', kind: 'installs', x: 3.1 }],
       att: { installs: 0.2, retention: 0.3, arpdau: 0.5 }, log: [{ d: '2026-10-14', p: { w: 7 }, sc_old: 0.09, sc: 0.06, changed: ['w'], cause: 'arpdau', bias30: 0.02 }],
       checks: [], drv: { installs: [10, 8], spend: [8, 6], cpi: [0.8, 0.75], d1: [0.3, 0.32], d7: [0.1, 0.1], dau: [100, 90], arpdau: [0.09, 0.08],
-                         cty: [{ cc: 'AA', share: [0.5, 0.4], d1: [30, 32], rpi7: [0.1, 0.09], cpi: [1, 0.9], dec: 'Watch' }] } };
+                         cty: [{ cc: 'AA', share: [0.5, 0.4], d1: [30, 32], rpi7: [0.1, 0.09], cpi: [1, 0.9], dec: 'Watch', ecpm: [2.5, 2] }],
+                         split: { rev: [12, 10], imp: [5000, 4500], ecpm: [2.4, 2.2], users: 0.1, ipu: 0.01, mix: 0.05, rate: 0.03,
+                                  mix_top: [['AA', 0.04, 0.5, 0.4, 2]], rate_top: [['AA', 0.02, 2.5, 2]] } },
+      parts: { mix: 1.12, mix_on: true } };
     d.life = [['2026-10-01', 100, 150, 15000]]; d.life_till = '2026-10-01';
     U.set('FCH', '90'); U.set('FCM', 0);
     const fv = U.fcView(d);
@@ -150,6 +153,13 @@ function appFile() {
     out.fc_ready = fv.includes('180 din <small>10 Jan') && fv.includes('±10% normal din');   // 90 days picked: its own accuracy
     out.fc_be = fv.includes('Profit me aayega');                   // −$50 lifetime + $2 a day → crosses in ~25 days
     out.fc_parts = ['Forecast kyun upar', 'Kitna sahi tha', 'Model kya seekh raha hai', 'start date', 'Achanak jhatke'].every(s => fv.includes(s));
+    // why: revenue +20% = users +10% × ads per user +1% × country mix +5% × eCPM +3%; the installs' country value
+    out.fc_split = ['Revenue / din', '▲ +20%', '= Users (DAU)', '▲ +10%', '× Ads per user', '▲ +1.0%', '× Country mix', '▲ +5.0%',
+      '× eCPM (same country)', '▲ +3.0%', 'Country mix</b> kisne badla', '40% → <b>50%</b>', 'eCPM ' + '$2.00 → <b>$2.50</b>', '×1.12', 'country-wise curves</b> pe chal raha',
+      'eCPM abhi / X'].every(s => fv.includes(s));
+    const d2 = JSON.parse(JSON.stringify(d)); delete d2.fc.drv.split; d2.fc.parts = { mix: null }; d2.fc.drv.cty[0].ecpm = undefined;
+    const fv2 = U.fcView(d2);
+    out.fc_split_off = !fv2.includes('× Country mix') && !fv2.includes('average install se') && !fv2.includes('eCPM abhi / X');
     U.set('FCM', 0.5);
     const fo = U.fcOut(d);
     out.fc_slider = (fo.match(/\$1,080/g) || []).length === 2 && fo.includes('$0.00');   // revenue 900 + 0.5 × 360 = spend 720 × 1.5
