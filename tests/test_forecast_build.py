@@ -57,6 +57,11 @@ def test_app_step_once_a_day_budget_start_and_live(tmp_path):
     # the same day again: kept, nothing re-run
     run2 = fb.start(data, now + timedelta(hours=2), clock)
     assert fb.app_step(run2, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), []) == fc and run2.kept == 1
+    # … but its "why" is today's: the AdMob country rows that came since show up without a model run
+    cty = {(LAST - timedelta(days=i)).isoformat(): {"US": [2000000, 1000], "IN": [500000, 4000]} for i in range(70)}
+    k2 = fb.app_step(fb.start(data, now + timedelta(hours=3), clock), "a~1", "k1", rows, P, ida, life, LAST.isoformat(),
+                     [], rev_cty=cty)
+    assert k2["drv"]["split"]["mix"] == 0 and k2["f"] == fc["f"] and "split" not in fc["drv"]
     # out of budget: a new app waits, an old one keeps its run
     clock.t = 10_000
     run3 = fb.start(data, now + timedelta(days=2), Clock())

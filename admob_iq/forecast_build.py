@@ -341,7 +341,12 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
         if fresh or run.left() <= 0:
             if old.get("v") == V and old.get("fc"):
                 run.kept += 1
-                return old["fc"]
+                fc = dict(old["fc"])
+                try:                                     # the "why" is cheap: today's data even between model runs
+                    fc["drv"] = drivers(app, rows, ida, cty_rows, rev_cty)
+                except Exception:
+                    pass
+                return fc
             if run.left() <= 0:
                 run.skipped += 1
                 return None
