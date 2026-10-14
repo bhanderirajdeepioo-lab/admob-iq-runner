@@ -44,9 +44,12 @@ File data/ads_archive/<YYYY-MM>.json.gz (deterministic, only on change):
       "days": {day: {"ok": [kinds answered], "err": {kind: error code}, "drop": {kind: [optional fields not asked]},
                      "ev": [events of that account-local day, deduped, sorted], "trunc": true}}}}}
   The state on day D = for each entity the last version with day ≤ D (state_on). Snapshot days are the build's report
-  days; event days are the account's own (change_date_time).
+  days; event days are the account's own (change_date_time). A field not asked on a day (refused by Google: the day's
+  "drop") keeps its last answered value in that day's version — a slimmer query is never a change; an event day whose
+  events were saved without some optional change_event fields lists them in its "drop" ("ev").
 data/ads_archive/state.json.gz: cursors {"acct": {account: {"day", "ok", "tries", "ev", "evcov"}}, "streak", "skip",
-  "drop"} (no time stamps).
+  "drop", "roster": {"day", "n", "live"} (the day's MCC roster: a later build of the day with nothing due asks
+  nothing)} (no time stamps).
 """
 
 import hashlib
@@ -57,8 +60,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from .gads_geo import _Run, _Stop, _is_quota
-from .gads_store import Months, Session, code_of, d, field, load_state, month_of, not_enabled, robust, save_state, \
-    tail_id, usable
+from .gads_store import Months, Session, code_of, cov_add, d, field, load_state, month_of, not_enabled, robust, \
+    save_state, tail_id, usable
 
 ARCH_V = 1
 ARCH_DIR = "ads_archive"
@@ -135,7 +138,17 @@ EV_CORE = ("change_event.change_date_time", "change_event.change_resource_type",
            "change_event.client_type", "change_event.resource_change_operation", "change_event.changed_fields",
            "change_event.campaign")
 EV_OPT = ("change_event.old_resource", "change_event.new_resource", "change_event.ad_group")
-DEFAULTS = {"acct": {}, "streak": {}, "skip": {}, "drop": {}}
+DEFAULTS = {"acct": {}, "streak": {}, "skip": {}, "drop": {}, "roster": {}}
+# the entity key each optional field fills: the field without its own resource's prefix (OWN), or a count (AGG);
+# loc's optional fields fill none of their own (the ids fall back to the criterion id, status only filters)
+OWN = {"cust": "customer", "camp": "campaign", "conv": "conversion_action", "bill": "billing_setup",
+       "abud": "account_budget", "recsub": "recommendation_subscription"}
+AGG = {"ads": {"ad_group_ad.policy_summary.approval_status": "approval",
+               "ad_group_ad.policy_summary.review_status": "review", "ad_group_ad.primary_status": "primary"},
+       "asset": {"ad_group_ad_asset_view.field_type": "type",
+                 "ad_group_ad_asset_view.policy_summary.approval_status": "approval",
+                 "ad_group_ad_asset_view.policy_summary.review_status": "review",
+                 "ad_group_ad_asset_view.performance_label": "perf"}}
 
 
 # ── rows → entities ───────────────────────────────────────────────────────────────────────────────
@@ -165,9 +178,9 @@ def reduce_rows(kind, rows, used):
     out = {}
     if kind == "cust":
         for row in rows[:1]:
-            out["cust"] = _entity(row, fields, "customer")
+            out["cust"] = _entity(row, fields, OWN[kind])
     elif kind in ("camp", "conv", "bill", "abud"):
-        own = {"camp": "campaign", "conv": "conversion_action", "bill": "billing_setup", "abud": "account_budget"}[kind]
+        own = OWN[kind]
         for row in rows:
             i = field(row, own + ".id")
             if i not in (None, ""):
@@ -176,7 +189,7 @@ def reduce_rows(kind, rows, used):
         for row in rows:
             t = field(row, "recommendation_subscription.type")
             if t:
-                out["recsub/%s" % t] = _entity(row, fields, "recommendation_subscription")
+                out["recsub/%s" % t] = _entity(row, fields, OWN[kind])
     elif kind == "loc":
         for row in rows:
             c = field(row, "campaign.id")
@@ -202,15 +215,19 @@ def reduce_rows(kind, rows, used):
             e["n"] += 1
             if kind == "ads":
                 _count(e, "status", field(row, "ad_group_ad.status"))
-                _count(e, "approval", field(row, "ad_group_ad.policy_summary.approval_status"))
-                _count(e, "review", field(row, "ad_group_ad.policy_summary.review_status"))
-                _count(e, "primary", field(row, "ad_group_ad.primary_status"))
-            else:
-                _count(e, "type", field(row, "ad_group_ad_asset_view.field_type"))
-                _count(e, "approval", field(row, "ad_group_ad_asset_view.policy_summary.approval_status"))
-                _count(e, "review", field(row, "ad_group_ad_asset_view.policy_summary.review_status"))
-                _count(e, "perf", field(row, "ad_group_ad_asset_view.performance_label"))
+            for f, key in AGG[kind].items():
+                _count(e, key, field(row, f))
     return out
+
+
+def _key_of(kind, f):
+    """The entity key optional field `f` of `kind` fills (None: none of its own)."""
+    if kind in AGG:
+        return AGG[kind].get(f)
+    own = OWN.get(kind)
+    if not own:
+        return None
+    return f[len(own) + 1:] if f.startswith(own + ".") else f
 
 
 def _cap(v):
@@ -288,11 +305,12 @@ def state_at(ver, day):
 
 
 def _carried(mf, acct, day):
-    """The account's archived state on `day` (this month's file, else the newest older month holding the account)."""
+    """The account's archived state on `day`: the newest month (≤ day's) holding a version of the account on or before
+    `day` (a month's first archived day can be later than `day` — then the month before holds the state)."""
     for m in sorted((x for x in mf.months() if x <= month_of(day)), reverse=True):
-        rec = mf.peek(m)["acct"].get(acct) or {}
-        if rec.get("ver"):
-            return state_at(rec["ver"], day)
+        ver = (mf.peek(m)["acct"].get(acct) or {}).get("ver") or {}
+        if min((vs[0][0] for vs in ver.values() if vs), default="9999") <= day:
+            return state_at(ver, day)
     return {}
 
 
@@ -341,7 +359,8 @@ def _events(sess, acct, lo, hi, out, depth=0):
              % (lo.isoformat(), hi.isoformat()))
     rows, used = robust(sess, acct, "ev", "change_event", EV_CORE, EV_OPT, where=where,
                         tail=" ORDER BY change_event.change_date_time LIMIT %d" % EV_LIMIT)
-    out["used"]["ev"] = used
+    had = out["used"].get("ev")
+    out["used"]["ev"] = [f for f in used if had is None or f in had]       # a split: the fields every part had
     if len(rows) >= EV_LIMIT and depth < 8:
         if lo < hi:
             mid = lo + timedelta(days=(hi - lo).days // 2)
@@ -426,17 +445,6 @@ def _plan(state, acct, today):
     return kinds, ev, wait
 
 
-def _merge_cov(cov, lo, hi):
-    iv = sorted([list(x) for x in cov or []] + [[lo, hi]])
-    out = []
-    for a, b in iv:
-        if out and a <= (d(out[-1][1]) + timedelta(days=1)).isoformat():
-            out[-1][1] = max(out[-1][1], b)
-        else:
-            out.append([a, b])
-    return out
-
-
 def commit(mf, state, acct, today, got, st):
     """One account's answers → the month files + the state (main thread; deterministic)."""
     ts = today.isoformat()
@@ -459,8 +467,13 @@ def commit(mf, state, acct, today, got, st):
             new.update(got["res"][k])
         for kind in answered:
             keys = {k for k in carried if k.split("/")[0] == kind} | {k for k in new if k.split("/")[0] == kind}
+            spec = next(x for x in KINDS if x[0] == kind)
+            unasked = {_key_of(kind, f) for f in spec[3] if f not in (got["used"].get(kind) or [])} - {None}
             for k in sorted(keys):
-                if _put(arec["ver"], k, ts, new.get(k)):
+                v = new.get(k)
+                if unasked and isinstance(v, dict) and isinstance(carried.get(k), dict):
+                    v = {**v, **{x: carried[k][x] for x in sorted(unasked) if x in carried[k]}}   # last answered
+                if _put(arec["ver"], k, ts, v):
                     st["changes"] += 1
         day = arec["days"].setdefault(ts, {})
         day["ok"] = sorted(set(day.get("ok") or []) | set(answered))
@@ -489,6 +502,7 @@ def commit(mf, state, acct, today, got, st):
     if not state["streak"].get(acct):
         state["streak"].pop(acct, None)
     if got["ev"] is not None:
+        evdrop = sorted(set(EV_OPT) - set(got["used"].get("ev") or []))
         touched = {}
         for ev in got["ev"]:
             dd = ev["t"][:10]
@@ -499,16 +513,30 @@ def commit(mf, state, acct, today, got, st):
             arec = mf.get(month_of(dd))["acct"].setdefault(acct, {"ver": {}, "days": {}})
             day = arec["days"].setdefault(dd, {})
             have = {ev_key(e): e for e in day.get("ev") or []}
+            added = 0
             for e in touched.get(dd, []):
                 if ev_key(e) not in have:
                     st["events"] += 1
-                have[ev_key(e)] = e
+                    added += 1
+                    have[ev_key(e)] = e
+                elif not evdrop:                                # a slimmer answer never replaces a kept event
+                    have[ev_key(e)] = e
             if have:
                 day["ev"] = [have[k] for k in sorted(have)]
+            if added and evdrop:                                # events saved without those fields
+                dr = day.get("drop") or {}
+                dr["ev"] = sorted(set(dr.get("ev") or []) | set(evdrop))
+                day["drop"] = dict(sorted(dr.items()))
             if dd in got["trunc"]:
                 day["trunc"] = True
         rec["ev"] = ts
-        rec["evcov"] = _merge_cov(rec.get("evcov"), got["ev_lo"], min(got["ev_hi"], ts))
+        rec["evcov"] = cov_add(rec.get("evcov"), got["ev_lo"], min(got["ev_hi"], ts))
+
+
+def _complete(state, live, plans, ts):
+    return all((state["acct"].get(a) or {}).get("day") == ts and (state["acct"][a].get("ev") == ts)
+               and set(KIND_NAMES) <= set(state["acct"][a].get("ok") or []) | set(plans[a][2])
+               for a in live if a not in state["skip"])
 
 
 def archive_part(sess, data_dir, today, st):
@@ -518,8 +546,18 @@ def archive_part(sess, data_dir, today, st):
     sess.drop = dict(state["drop"])
     ts = today.isoformat()
     state["skip"] = {k: v for k, v in state["skip"].items() if isinstance(v, str) and v > ts}
+    ros = state["roster"]
+    if ros.get("day") == ts:                                    # a later build of the day: anything due?
+        live = [a for a in ros.get("live") or [] if a not in state["skip"]]
+        plans = {a: _plan(state, a, today) for a in live}
+        if not any(p[0] or p[1] for p in plans.values()):       # no: no token, no roster request
+            st["skipped"] = int(ros.get("n") or 0) - len(live)
+            st["accounts"] = len(live)
+            st["waiting"] = sum(len(p[2]) for p in plans.values())
+            return "done" if _complete(state, live, plans, ts) else "partial"
     if not sess.ready():
         return "partial"
+    state["roster"] = {"day": ts, "n": len(sess.accounts), "live": sess.live()}
     live = [a for a in sess.live() if a not in state["skip"]]
     st["skipped"] = len(sess.accounts) - len(live)
     plans = {a: _plan(state, a, today) for a in live}
@@ -543,10 +581,7 @@ def archive_part(sess, data_dir, today, st):
         state["drop"] = dict(sorted({**state["drop"], **sess.new_drop}.items()))
     if res or sess.new_drop or os.path.exists(os.path.join(dirpath, "state.json.gz")):
         save_state(dirpath, state)
-    complete = all((state["acct"].get(a) or {}).get("day") == ts and (state["acct"][a].get("ev") == ts)
-                   and set(KIND_NAMES) <= set(state["acct"][a].get("ok") or []) | set(plans[a][2])
-                   for a in live if a not in state["skip"])
-    return "done" if complete else "partial"
+    return "done" if _complete(state, live, plans, ts) else "partial"
 
 
 # ── the step ──────────────────────────────────────────────────────────────────────────────────────

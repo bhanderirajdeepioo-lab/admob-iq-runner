@@ -46,6 +46,41 @@ def month_of(day):
     return str(day)[:7]
 
 
+def cov_add(cov, lo, hi):
+    """Covered day ranges [[first, last], ...] (sorted; overlapping or adjacent ranges joined) + [lo, hi]."""
+    iv = sorted([[str(a), str(b)] for a, b in cov or []] + [[str(lo)[:10], str(hi)[:10]]])
+    out = []
+    for a, b in iv:
+        if out and a <= (d(out[-1][1]) + timedelta(days=1)).isoformat():
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return out
+
+
+def cov_next(cov, floor, size):
+    """A backfill's next chunk: the newest days below the newest covered range not covered yet, none before `floor`,
+    at most `size` days → (first, last) dates, or None (nothing left down to `floor`). A range covered out of order
+    (e.g. a capture after a pause) leaves a gap below it: that gap is filled first, then the backfill goes on below."""
+    if not cov:
+        return None
+    b = d(cov[-1][0]) - timedelta(days=1)
+    lo = d(floor)
+    if len(cov) > 1:
+        lo = max(lo, d(cov[-2][1]) + timedelta(days=1))
+    if b < lo:
+        return None
+    return max(b - timedelta(days=size - 1), lo), b
+
+
+def cov_of(state):
+    """The state's covered ranges ("cov"; a state written before it: [bfrom or first, till])."""
+    if isinstance(state.get("cov"), list):
+        return state["cov"]
+    lo, hi = state.get("bfrom") or state.get("first"), state.get("till")
+    return [[lo, hi]] if lo and hi else []
+
+
 # ── settings ──────────────────────────────────────────────────────────────────────────────────────
 
 def usable(s):
@@ -161,6 +196,12 @@ def code_of(e):
 def not_enabled(e):
     """HTTP 403 for the whole account (cancelled / not enabled), not a refused field or resource."""
     return _is403(e) and "CUSTOMER_NOT_ENABLED" in str(e)
+
+
+def odd403(e):
+    """Any other HTTP 403 (e.g. USER_PERMISSION_DENIED): an account the roster calls ENABLED that cannot answer. The
+    metric queries skip it like a not-enabled one (as the geo step skips every 403), but count it as an error."""
+    return _is403(e) and not not_enabled(e)
 
 
 # ── the build's Google Ads session ────────────────────────────────────────────────────────────────

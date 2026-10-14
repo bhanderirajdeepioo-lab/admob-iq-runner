@@ -2,13 +2,13 @@
 against the geo tests' synthetic MCC (tests/test_gads_geo.py): the weekly cache (roas_geo_cache*.json.gz) is
 byte-identical with or without the day capture (and when the capture breaks), every week cell = gads_geo.cell_cost(Σ of
 its days), the day backfill (own budget, newest first, bounded by 400 days / the spend cache's first day, own country
-map — the weekly map is only read), deterministic files, the counts-only line and the build wiring. All data is
-synthetic."""
+map — the weekly map is only read, the gap an out-of-order chunk leaves filled), deterministic files, the counts-only
+line and the build wiring. All data is synthetic."""
 
 import os
 import re
 import shutil
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -107,6 +107,23 @@ def test_day_backfill_newest_first_bounded_own_budget(dirs):
     got = gd.load(d2)["days"]
     assert min(x for v in got.values() for x in v) == "2026-04-27"                   # whole weeks, as the weekly cache
     assert all(x in got[S1] for x in ("2026-04-27", "2026-04-30", "2026-05-01"))
+
+
+def test_day_backfill_fills_the_gap_of_an_out_of_order_chunk(dirs):
+    spend = spend_of(PLAN, "2025-01-01", "2026-09-23")
+    _, data = dirs
+    fake = FakeAds(PLAN)
+    build(data, spend, fake, T0, day=False)                  # GADS_ARCHIVE off: the weekly refresh + backfill chunks
+    assert not gg.load_geo(data)["done"]
+    for i in range(1, 12):                                   # on while the weekly backfill is mid-way, no refresh due:
+        build(data, spend, fake, T0 + i * H)                 # its older chunks land first, above them a gap …
+    for i in range(12, 16):                                  # … the next day's refresh lands above the gap
+        build(data, spend, fake, T0 + 21 * H + i * H)
+    st = gd.load_state(os.path.join(data, "ads_geo_day"), gd.GD_V, gd.DEFAULTS)
+    assert st["done"] and st["cov"] == [["2025-08-18", "2026-09-23"]] and st["bfrom"] == "2025-08-18"
+    got = gd.load(data)["days"]
+    span = [x.isoformat() for x in (date(2025, 8, 18) + timedelta(days=i) for i in range(402))]
+    assert span[-1] == "2026-09-23" and all(sorted(got[sid]) == span for sid in (S1, S2))   # every day, no gap
 
 
 def test_day_backfill_own_country_map_weekly_map_only_read(dirs, monkeypatch):

@@ -8,14 +8,19 @@ into the store × day spend cache (roas_spend_cache.json, unchanged). This keeps
             exactly like merge_spend lays the fresh window over the spend cache: per metric, a store-day present in the
             fresh rows replaces ALL that store-day's campaign cells; store-days not in the fresh rows keep theirs. So
             Σ campaigns of a store-day = the spend cache's number for it (the "ties" of the public line).
-  backfill  once, newest → oldest in CD_CHUNK_DAYS chunks (≤ CD_BACKFILL_CHUNKS a build, inside the archive step's call
-            budget), from the first day captured back to the spend cache's first day: the same three queries per
-            account the roster says is ENABLED (all of them, not only the spend cache's campaign owners — the cache
-            keeps a store's campaigns of its last fetch window, so an older owner can be missing there), for chunks
-            in which some store had spend. A campaign owner (the cache's map) that is not ENABLED cannot answer
-            (Google: 403) and is not asked — its campaigns' older days stay out (state "holes": ["all", account,
-            first, last]); a store without any owner is counted "no account". A chunk is written when every asked
-            account answered the cost query (or 403); a failed installs / day-1 query leaves that metric out for that
+  backfill  newest → oldest in CD_CHUNK_DAYS chunks (≤ CD_BACKFILL_CHUNKS a build, inside the archive step's call
+            budget), down to the spend cache's first day: the days below the newest covered range not covered yet
+            (state "cov": the day ranges captured or backfilled — so a capture after a pause, which leaves a gap below
+            it, has that gap filled first). The same three queries per account the roster says is ENABLED (all of
+            them, not only the spend cache's campaign owners — the cache keeps a store's campaigns of its last fetch
+            window, so an older owner can be missing there), for chunks in which some store had spend. A campaign
+            owner (the cache's map) that is not ENABLED cannot answer (Google: 403) and is not asked — its campaigns'
+            older days stay out (state "holes": ["all", account, first, last]); a store without any owner is counted
+            "no account". An account answering the cost query with ANY 403 is skipped SKIP_DAYS like that (as the
+            geo step does; a 403 other than CUSTOMER_NOT_ENABLED is also counted as an error). A chunk is written
+            when every asked campaign owner answered the cost query; another account's failed cost query fails the
+            chunk too (asked again) until CD_FAIL_BACKOFF chunks failed in a row, then that account is a hole
+            (["all", …]) and the backfill goes on. A failed installs / day-1 query leaves that metric out for that
             account and chunk ([metric, account, first, last] in "holes", never 0).
 
 File data/ads_campaign_day/<YYYY-MM>.json.gz (deterministic, only on change):
@@ -23,8 +28,8 @@ File data/ads_campaign_day/<YYYY-MM>.json.gz (deterministic, only on change):
    "cost": {campaign: {day: micros}}, "inst": {campaign: {day: installs}}, "cv": {campaign: {day: value}},
    "cv1": {campaign: {day: day-1 value}}}
   Money is the ACCOUNT's currency, raw (micros for cost; no FX baked in — "ccy" names it). Days are the account's days
-  (segments.date). Zero cells are left out. data/ads_campaign_day/state.json.gz: {"first", "till", "bfrom", "done",
-  "bfails", "skip", "holes", "ties"}.
+  (segments.date). Zero cells are left out. data/ads_campaign_day/state.json.gz: {"first", "till", "cov", "bfrom" (the
+  newest covered range's first day), "done", "bfails", "bday", "skip", "holes", "ties"}.
 """
 
 import os
@@ -32,8 +37,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from . import google_ads as gads
-from .gads_geo import _Stop, _is_quota, _plan
-from .gads_store import Months, d, days, load_state, month_of, not_enabled, save_state, spend_ok
+from .gads_geo import _Stop, _is403, _is_quota, _plan
+from .gads_store import Months, cov_add, cov_next, cov_of, days, load_state, month_of, odd403, save_state, spend_ok
 
 CD_V = 1
 CD_DIR = "ads_campaign_day"
@@ -43,8 +48,8 @@ CD_CHUNK_DAYS = 180                 # a backfill chunk (one request per query pe
 CD_BACKFILL_CHUNKS = 2              # backfill chunks asked per build
 CD_FAIL_BACKOFF = 3                 # failed chunks in a row before waiting for the next day
 SKIP_DAYS = 7
-DEFAULTS = {"first": None, "till": None, "bfrom": None, "done": False, "bfails": 0, "bday": None, "skip": {},
-            "holes": [], "ties": {}}
+DEFAULTS = {"first": None, "till": None, "cov": None, "bfrom": None, "done": False, "bfails": 0, "bday": None,
+            "skip": {}, "holes": [], "ties": {}}
 
 
 def _empty(m):
@@ -201,16 +206,19 @@ def capture(data_dir, taken, spend, st):
     state = load_state(dirpath, CD_V, DEFAULTS)
     state["first"] = min(state["first"] or lo, lo)
     state["till"] = max(state["till"] or hi, hi)
-    if state["bfrom"] is None or state["first"] < state["bfrom"]:
-        state["bfrom"] = state["first"]
+    state["cov"] = cov_add(cov_of(state), lo, hi)
+    if state["cov"][-1][0] > (state["bfrom"] or ""):             # a range above a gap: the backfill fills the gap
+        state["done"] = False
+    state["bfrom"] = state["cov"][-1][0]
     state["ties"]["live"] = {k: v for k, v in st["ties"].items()}
     save_state(dirpath, state)
 
 
 def _ask(sess, acct, a, b):
     """One account's three queries over [a, b] → {"spend", "inst", "d1": rows | None, "st": None | "gone" | "stop" |
-    "err"}."""
-    out = {"spend": None, "inst": None, "d1": None, "st": None}
+    "err", "odd": a 403 other than CUSTOMER_NOT_ENABLED seen}. Any 403 on the cost query = "gone" (the account
+    cannot answer); on installs / day-1 it leaves that metric out."""
+    out = {"spend": None, "inst": None, "d1": None, "st": None, "odd": False}
     args = (acct, sess.mcc, sess.dev, sess.token, a.isoformat(), b.isoformat())
     for key, fn in (("spend", gads._app_spend_for), ("inst", gads._app_installs_for), ("d1", gads._app_convval_lag_for)):
         try:
@@ -219,9 +227,12 @@ def _ask(sess, acct, a, b):
             out["st"] = "stop"
             return out
         except Exception as e:
-            if not_enabled(e):
-                out["st"] = "gone"
-                return out
+            if _is403(e):
+                out["odd"] = out["odd"] or odd403(e)
+                if key == "spend":
+                    out["st"] = "gone"
+                    return out
+                continue
             if key == "spend" or _is_quota(e):
                 out["st"] = "stop" if _is_quota(e) else "err"
                 return out
@@ -236,28 +247,51 @@ def _ask(sess, acct, a, b):
 def backfill(sess, data_dir, spend, today, st, max_chunks=CD_BACKFILL_CHUNKS):
     """Older chunks, newest first → state word ("done" | "filling" | "waiting")."""
     dirpath = os.path.join(data_dir, CD_DIR)
-    state = load_state(dirpath, CD_V, DEFAULTS)
-    if not os.path.exists(os.path.join(dirpath, "state.json.gz")) or state["done"]:
-        return "done" if state["done"] else "waiting"
-    if not spend_ok(spend) or not state["bfrom"]:
+    if not os.path.exists(os.path.join(dirpath, "state.json.gz")):
         return "waiting"
+    state = load_state(dirpath, CD_V, DEFAULTS)
+    state["cov"] = cov_of(state)
+    if not spend_ok(spend) or not state["cov"]:
+        return "done" if state["done"] else "waiting"
     ts = today.isoformat()
-    if int(state.get("bfails") or 0) >= CD_FAIL_BACKOFF and state.get("bday") == ts:
-        return "filling"                                         # failed chunks today: wait for tomorrow
-    state["skip"] = {k: v for k, v in state["skip"].items() if isinstance(v, str) and v > ts}
     lim = min((dd for x in spend["daily"].values() for dd in (x or {})), default=None)
+
+    def nxt():
+        return cov_next(state["cov"], lim, CD_CHUNK_DAYS) if lim else None
+    if nxt() is None:
+        state["done"] = True
+    elif int(state.get("bfails") or 0) >= CD_FAIL_BACKOFF and state.get("bday") == ts:
+        state["done"] = False                                    # failed chunks today: wait for tomorrow
+    else:
+        state["done"] = False
+        _fill(sess, data_dir, spend, today, st, state, nxt, max_chunks)
+    state["bfrom"] = state["cov"][-1][0]
+    tb = state["ties"].setdefault("backfill", {})
+    _add_ties(tb, st["bties"])
+    state["holes"] = [list(h) for h in sorted({tuple(h) for h in state["holes"]})]
+    save_state(dirpath, state)
+    return "done" if state["done"] else "filling"
+
+
+def _fill(sess, data_dir, spend, today, st, state, nxt, max_chunks):
+    """The backfill's chunks of this build (≤ max_chunks) → the month files and `state` (saved by the caller)."""
+    ts = today.isoformat()
+    state["skip"] = {k: v for k, v in state["skip"].items() if isinstance(v, str) and v > ts}
+    # a failure of an account that owns no campaign in the cache fails the chunk like an owner's (a passing error is
+    # asked again) — until CD_FAIL_BACKOFF chunks failed in a row: then it is a hole and the backfill goes on
+    strict = int(state.get("bfails") or 0) < CD_FAIL_BACKOFF
     mf = months(data_dir)
     asked = 0
     while asked < max_chunks and not sess.run.stop:
-        bfrom = d(state["bfrom"])
-        if lim is None or bfrom <= d(lim):
+        ch = nxt()
+        if ch is None:
             state["done"] = True
             break
-        a, b = max(bfrom - timedelta(days=CD_CHUNK_DAYS), d(lim)), bfrom - timedelta(days=1)
+        a, b = ch
         own, noacct = _plan(spend, a, b)
         st["noacct"] |= noacct
         if not own:                                              # no store had spend in the chunk: nothing to ask
-            state["bfrom"] = a.isoformat()
+            state["cov"] = cov_add(state["cov"], a, b)
             continue
         if not sess.ready():
             break
@@ -275,13 +309,17 @@ def backfill(sess, data_dir, spend, today, st, max_chunks=CD_BACKFILL_CHUNKS):
             with ThreadPoolExecutor(max_workers=min(4, len(ask))) as ex:
                 res = dict(zip(ask, ex.map(lambda x: _ask(sess, x, a, b), ask)))
         until = (today + timedelta(days=SKIP_DAYS)).isoformat()
-        for x, r in res.items():
+        for x, r in sorted(res.items()):
             if r["st"] == "gone":
                 state["skip"][x] = until
                 st["skipped"].add(x)
+            if r["odd"]:
+                with sess.run.lock:
+                    sess.run.errors += 1                         # an ENABLED account refused: not silent
         if any(r["st"] == "stop" for r in res.values()):
             break
-        if any(r["st"] == "err" for r in res.values()):
+        err = {x for x, r in res.items() if r["st"] == "err"}
+        if err & owners or (err and strict):
             state["bfails"] = int(state.get("bfails") or 0) + 1
             state["bday"] = ts
             break
@@ -292,23 +330,18 @@ def backfill(sess, data_dir, spend, today, st, max_chunks=CD_BACKFILL_CHUNKS):
             for x in ok:
                 if res[x][key] is None:
                     state["holes"].append([metric, x, a.isoformat(), b.isoformat()])
-        for x in sorted(owners - set(ok)):                       # a campaign owner that could not answer (not ENABLED
-            state["holes"].append(["all", x, a.isoformat(), b.isoformat()])     # / 403): its campaigns are not here
+        for x in sorted((owners - set(ok)) | err):              # an owner that could not answer (not ENABLED / 403),
+            state["holes"].append(["all", x, a.isoformat(), b.isoformat()])     # or another account that failed
         st["accounts"] |= set(ok)
         _add_ties(st["bties"], ties(mf, spend, a.isoformat(), b.isoformat()))
-        state["bfrom"] = a.isoformat()
+        state["cov"] = cov_add(state["cov"], a, b)
         state["bfails"] = 0
+        strict = True
         st["bdays"] += (b - a).days + 1
         asked += 1
-        if a <= d(lim):
-            state["done"] = True
+    if nxt() is None:
+        state["done"] = True
     mf.save()
-    tb = state["ties"].setdefault("backfill", {})
-    _add_ties(tb, st["bties"])
-    state["holes"] = sorted({tuple(h) for h in state["holes"]})
-    state["holes"] = [list(h) for h in state["holes"]]
-    save_state(dirpath, state)
-    return "done" if state["done"] else "filling"
 
 
 def stats():

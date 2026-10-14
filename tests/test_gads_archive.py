@@ -1,11 +1,14 @@
 """Google Ads ARCHIVE (GADS_ARCHIVE; admob_iq.fetch.gads_archive + gads_campaign_day + gads_hourly + gads_store) —
 offline, against a synthetic MCC (tests/gads_fake.py: only selected fields come back, filtered fields must be
-selected): the daily settings snapshot (versions only on change, the month base, state_on), change_event (window,
-overlap, dedupe, LIMIT split, account-local days), refused fields / kinds / accounts, the call budget and quota stop,
-deterministic files written only on change, the rows per campaign × day (captured from the spend fetch with its
-returned cache unchanged, ties with the spend cache, merge_spend's store-day rule, the backfill to the first spend
-day), spend by hour (90 days first, 30 daily, ties), the counts-only public lines and the build wiring (off = nothing
-at all; a failure costs only its part). All data is synthetic."""
+selected): the daily settings snapshot (versions only on change, the month base, state_on — also before a month's
+first archived day), change_event (window, overlap, dedupe, LIMIT split, account-local days, events saved without
+optional fields flagged), refused fields / kinds / accounts (a slimmer answer keeps the last values: no false change),
+the call budget and quota stop, later builds of a day asking nothing when nothing is due, deterministic files written
+only on change, the rows per campaign × day (captured from the spend fetch with its returned cache unchanged, ties
+with the spend cache, merge_spend's store-day rule, the backfill to the first spend day, the gap a pause leaves, any
+403 skipped and counted, another account's failure retried then a hole), spend by hour (90 days first, 30 daily,
+ties, any 403 skipped and counted), the counts-only public lines and the build wiring (off = nothing at all; a failure
+costs only its part). All data is synthetic."""
 
 import copy
 import gzip
@@ -158,6 +161,30 @@ def test_archive_month_base_repeats_carried_state(data):
     assert ga.state_on(data, A1, "2026-10-01") == {k: v[0][1] for k, v in octo[A1]["ver"].items()}
 
 
+def test_state_on_a_day_before_the_months_first_archived_day(data):
+    fake = FakeAds()
+    step(data, None, fake, today=date(2026, 9, 30))
+    step(data, None, fake, today=date(2026, 10, 2), t=T0 + 48 * H)                 # no build answered on 1 Oct
+    s30 = ga.state_on(data, A1, "2026-09-30")
+    assert len(s30) > 5 and ga.state_on(data, A1, "2026-10-01") == s30 == ga.state_on(data, A1, "2026-10-02")
+    assert ga.state_on(data, A1, "2026-09-29") == {}
+
+
+def test_archive_later_builds_of_the_day_ask_nothing_when_nothing_is_due(data):
+    fake = FakeAds()
+    first = step(data, None, fake)[0]
+    assert first.startswith("gads archive: accounts 2 (skipped 1), snapshots 2,") and fake.n("ROSTER") == 1
+    for i in (1, 2, 3):
+        fake.calls.clear()
+        line = step(data, None, fake, t=T0 + i * H)[0]
+        assert fake.calls == [], fake.calls                                          # no token, no roster request
+        assert line == ("gads archive: accounts 2 (skipped 1), snapshots 0, changes 0, events 0, refused 0, "
+                        "waiting 0, calls 0, errors 0 (done)"), line
+    fake.calls.clear()
+    step(data, None, fake, today=TODAY + timedelta(days=1), t=T0 + 24 * H)
+    assert fake.n("ROSTER") == 1 and fake.n("camp") == 2                            # a new day: asked again
+
+
 def test_archive_once_a_day_failed_kind_retried_then_weekly(data):
     fake = FakeAds()
     fake.fail = lambda acct, k, q: "HTTP 403: authorizationError=USER_PERMISSION_DENIED — SECRET" if k == "bill" else None
@@ -171,8 +198,8 @@ def test_archive_once_a_day_failed_kind_retried_then_weekly(data):
         lines = step(data, None, fake, t=T0 + i * H)
         assert sorted(k for _, k, _ in fake.calls) == ["ROSTER", "bill", "bill"], fake.calls
     fake.calls.clear()
-    step(data, None, fake, t=T0 + 3 * H)                                            # TRIES reached today
-    assert [k for _, k, _ in fake.calls] == ["ROSTER"]
+    lines = step(data, None, fake, t=T0 + 3 * H)                                    # TRIES reached today: nothing
+    assert fake.calls == [] and lines[0].endswith("calls 0, errors 0 (partial)")    # due, not even the roster
     for k in (1, 2):                                                                # refused 3 days in a row …
         step(data, None, fake, today=TODAY + timedelta(days=k), t=T0 + k * 24 * H)
     fake.calls.clear()
@@ -241,6 +268,25 @@ def test_archive_many_refused_fields_core_only_then_learnt_build_by_build(data):
     assert fake.n("camp") == 1                                                     # one request from now on
 
 
+def test_archive_a_slimmer_answer_keeps_the_last_values_and_is_no_change(data):
+    fake = FakeAds()
+    step(data, None, fake)
+    day0 = ga.state_on(data, A1, "2026-09-24")
+    assert day0["camp/11"]["serving_status"] == "SERVING"
+    fake.unknown = {"campaign.start_date", "campaign.end_date", "campaign.serving_status"}   # 3 refusals: core only
+    lines = step(data, None, fake, today=TODAY + timedelta(days=1), t=T0 + 24 * H)
+    assert "changes 0" in lines[0], lines[0]                                        # no fake version …
+    assert ga.state_on(data, A1, "2026-09-25") == day0                              # … the last answered values
+    assert len(arch(data, "2026-09")["acct"][A1]["ver"]["camp/11"]) == 1
+    day = arch(data, "2026-09")["acct"][A1]["days"]["2026-09-25"]
+    assert set(day["drop"]["camp"]) >= set(fake.unknown)                            # what was not asked is listed
+    fake.camps[A1]["11"]["row"]["campaign"]["targetRoas"]["targetRoas"] = 1.5      # a real change, fewer fields
+    lines = step(data, None, fake, today=TODAY + timedelta(days=2), t=T0 + 48 * H)
+    c = ga.state_on(data, A1, "2026-09-26")["camp/11"]
+    assert "changes 1" in lines[0] and c["target_roas.target_roas"] == 1.5, lines[0]
+    assert c["serving_status"] == "SERVING" and c["start_date"] == "2025-01-01" and "end_date" not in c
+
+
 def test_archive_no_campaign_skips_campaign_kinds(data):
     fake = FakeAds()
     fake.camps[A2] = {}
@@ -263,6 +309,22 @@ def test_archive_change_event_limit_split_and_full_day_marked(data, monkeypatch)
     assert len(evs) == 9 + 4                                                         # one full day keeps its 4
     assert arch(data, "2026-09")["acct"][A1]["days"]["2026-09-20"]["trunc"] is True
     assert fake.n("ev", A1) > 1
+
+
+def test_archive_events_saved_without_old_values_are_flagged(data):
+    fake = FakeAds()
+    fake.add_event(A1, "2026-09-20 10:00:00.000000")
+    fake.unknown = {"change_event.old_resource"}
+    step(data, None, fake)
+    d20 = arch(data, "2026-09")["acct"][A1]["days"]["2026-09-20"]
+    assert "old" not in d20["ev"][0] and d20["ev"][0]["new"] and d20["drop"] == {"ev": ["change_event.old_resource"]}
+    fake2 = FakeAds()
+    fake2.add_event(A1, "2026-09-24 10:00:00.000000")
+    step(data + "2", None, fake2)
+    fake2.unknown = {"change_event.old_resource"}
+    step(data + "2", None, fake2, today=TODAY + timedelta(days=1), t=T0 + 24 * H)  # asked again (the overlap) …
+    d24 = arch(data + "2", "2026-09")["acct"][A1]["days"]["2026-09-24"]
+    assert d24["ev"][0]["old"] and "drop" not in d24                               # … the full event is kept
 
 
 def test_archive_account_not_enabled_once_then_skipped(data):
@@ -441,6 +503,85 @@ def test_campaign_backfill_asks_every_live_account_and_marks_owners_that_cannot_
         assert sum(got["cost"][c].get(dd, 0) for c, x in got["camp"].items() if x["s"] == S1) == v, dd
 
 
+def test_campaign_backfill_any_403_is_skipped_and_counted_never_blocks(data, monkeypatch):
+    fake = FakeAds(lo="2026-01-01")
+    fake.accounts[A4] = {"ccy": "INR", "tz": "Asia/Calcutta", "status": "ENABLED"}  # no app campaign at all
+    fake.camps[A4], fake.res[A4] = {}, {}
+    spend, _ = live(monkeypatch, fake, "2026-01-01", "2026-09-24", archive=False)
+    spend, taken = live(monkeypatch, fake, "2026-06-26", "2026-09-24", cached=spend)
+    denied = "HTTP 403: authorizationError=USER_PERMISSION_DENIED — SECRET"
+    fake.fail = lambda acct, k, q: denied if k in ("SPEND", "INST", "D1") and (
+        acct == A4 or (acct == A2 and "2026-06-25" in q)) else None                 # an owner too, in the backfill
+    fake.calls.clear()
+    lines = step(data, spend, fake, taken=taken)
+    cl = next(x for x in lines if x.startswith("gads campaign days:"))
+    assert "backfill days 176 (done)" in cl and "(skipped 2)" in cl and cl.endswith("errors 2"), cl
+    assert fake.n("SPEND", A4) == 1 and fake.n("INST", A4) == 0
+    st = gads_store.read_gz(os.path.join(data, "ads_campaign_day", "state.json.gz"))
+    assert st["done"] and st["bfails"] == 0 and st["skip"] == {A2: "2026-10-01", A4: "2026-10-01"}
+    assert st["holes"] == [["all", A2, "2026-01-01", "2026-06-25"]]                  # the owner's days stay out
+    got = gcd.load(data)
+    assert min(dd for c, x in got["camp"].items() if x["s"] == S1 for dd in got["cost"][c]) == "2026-01-01"
+    assert min(dd for c, x in got["camp"].items() if x["s"] == S2 for dd in got["cost"][c]) == "2026-06-26"
+
+
+def test_campaign_backfill_another_accounts_failure_retried_then_a_hole(data, monkeypatch):
+    fake = FakeAds(lo="2026-01-01")
+    fake.accounts[A4] = {"ccy": "INR", "tz": "Asia/Calcutta", "status": "ENABLED"}
+    fake.camps[A4], fake.res[A4] = {}, {}
+    spend, _ = live(monkeypatch, fake, "2026-01-01", "2026-09-24", archive=False)
+    spend, taken = live(monkeypatch, fake, "2026-06-26", "2026-09-24", cached=spend)
+    fake.fail = lambda acct, k, q: "HTTP 500: SECRET" if acct == A4 and k == "SPEND" else None
+    for i in range(3):                                                                # a passing error? asked again
+        lines = step(data, spend, fake, taken=taken if i == 0 else {}, t=T0 + i * H)
+        cl = next(x for x in lines if x.startswith("gads campaign days:"))
+        assert "backfill days 0 (filling)" in cl and cl.endswith("errors 1"), cl
+    fake.calls.clear()
+    step(data, spend, fake, taken={}, t=T0 + 3 * H)
+    assert fake.n("SPEND") == 0                                                       # 3 failed chunks: waits a day
+    step(data, spend, fake, taken={}, today=TODAY + timedelta(days=1), t=T0 + 24 * H)
+    st = gads_store.read_gz(os.path.join(data, "ads_campaign_day", "state.json.gz"))
+    assert st["done"] and st["bfails"] == 0 and st["holes"] == [["all", A4, "2026-01-01", "2026-06-25"]]
+    got = gcd.load(data)
+    for sid in (S1, S2):
+        for dd, v in spend["daily"][sid].items():
+            assert sum(got["cost"][c].get(dd, 0) for c, x in got["camp"].items() if x["s"] == sid) == v, dd
+
+
+def test_campaign_backfill_fills_the_gap_a_pause_left(data, monkeypatch):
+    fake = FakeAds(lo="2025-06-01")
+    t0, t1 = date(2026, 6, 24), date(2026, 10, 24)
+    spend, _ = live(monkeypatch, fake, "2025-06-01", t0, archive=False)
+    spend, taken = live(monkeypatch, fake, "2026-03-26", t0, cached=spend)
+    step(data, spend, fake, today=t0, taken=taken)
+    st = gads_store.read_gz(os.path.join(data, "ads_campaign_day", "state.json.gz"))
+    assert st["done"] and st["cov"] == [["2025-06-01", "2026-06-24"]]
+    spend, _ = live(monkeypatch, fake, "2026-06-01", t1, archive=False, cached=spend)  # GADS_ARCHIVE off 4 months …
+    spend, taken = live(monkeypatch, fake, "2026-07-26", t1, cached=spend)            # … then on again
+    lines = step(data, spend, fake, today=t1, t=T0 + 200 * H, taken=taken)
+    cl = next(x for x in lines if x.startswith("gads campaign days:"))
+    assert "backfill days 31 (done)" in cl, cl                                        # the gap, and only the gap
+    st = gads_store.read_gz(os.path.join(data, "ads_campaign_day", "state.json.gz"))
+    assert st["done"] and st["cov"] == [["2025-06-01", "2026-10-24"]] and st["bfrom"] == "2025-06-01"
+    got = gcd.load(data)
+    for sid in (S1, S2):
+        for dd, v in spend["daily"][sid].items():
+            assert sum(got["cost"][c].get(dd, 0) for c, x in got["camp"].items() if x["s"] == sid) == v, dd
+
+
+def test_covered_ranges_and_the_next_backfill_chunk():
+    cov = gads_store.cov_add([], "2026-03-01", "2026-03-31")
+    cov = gads_store.cov_add(cov, "2026-04-01", "2026-04-10")                        # adjacent: joined
+    assert cov == [["2026-03-01", "2026-04-10"]]
+    assert gads_store.cov_next(cov, "2026-01-01", 30) == (date(2026, 1, 30), date(2026, 2, 28))
+    assert gads_store.cov_next(cov, "2026-03-01", 30) is None and gads_store.cov_next([], "2026-01-01", 30) is None
+    cov = gads_store.cov_add(cov, "2026-06-01", "2026-06-30")                        # above a gap: the gap first
+    assert gads_store.cov_next(cov, "2026-01-01", 30) == (date(2026, 5, 2), date(2026, 5, 31))
+    assert gads_store.cov_next(cov, "2026-01-01", 90) == (date(2026, 4, 11), date(2026, 5, 31))
+    assert gads_store.cov_of({"bfrom": "2026-03-01", "first": "2026-03-01", "till": "2026-04-10"}) == \
+        [["2026-03-01", "2026-04-10"]]
+
+
 # ── 4. spend by hour ─────────────────────────────────────────────────────────────────────────────
 
 def test_hours_first_90_days_then_30_daily_and_ties(data, monkeypatch):
@@ -482,6 +623,19 @@ def test_hours_failure_retried_then_backs_off(data, monkeypatch):
     step(data, spend, fake, t=T0 + 4 * H)
     assert fake.n("HOURLY") == 0                                                       # waits ~20 h after 3 failures
     assert len(ghr.load(data)["h"][A1]["11"]) > 70 and A2 not in ghr.load(data)["h"]
+
+
+def test_hours_any_403_skipped_and_counted(data, monkeypatch):
+    fake = FakeAds()
+    spend, _ = live(monkeypatch, fake, "2026-06-01", "2026-09-24", archive=False)
+    fake.fail = lambda acct, k, q: ("HTTP 403: authorizationError=USER_PERMISSION_DENIED — SECRET"
+                                    if k == "HOURLY" and acct == A2 else None)
+    lines = step(data, spend, fake)
+    hl = next(x for x in lines if x.startswith("gads hours:"))
+    assert "(skipped 1)" in hl and "(done)" in hl and hl.endswith("errors 1"), hl
+    fake.calls.clear()
+    step(data, spend, fake, today=TODAY + timedelta(days=1), t=T0 + 24 * H)
+    assert fake.n("HOURLY", A2) == 0 and fake.n("HOURLY", A1) == 1
 
 
 # ── public lines and the build wiring ────────────────────────────────────────────────────────────

@@ -7,10 +7,11 @@ lets a later step cut spend into any zone's days. Query: the spend query + segme
 When (inside the archive step's call budget): at most once per HR_EVERY_SEC (~20 h), the window today − HR_REFETCH_DAYS
 .. today − 1 (complete days; hourly cost restates like the daily cost), reaching back to today − HR_BACK_DAYS on the
 first run and over any gap since the last run. Accounts: those owning a store with spend in the window (the spend
-cache's campaign → account map, like the geo step) that the roster says are ENABLED; an account answering 403
-CUSTOMER_NOT_ENABLED is skipped SKIP_DAYS. An account that answered has ALL its cells of the window replaced (a cell
-Google no longer reports goes); one that failed keeps its cells and the run is asked again at the next build
-(HR_FAIL_BACKOFF failed runs in a row → wait for the next ~20 h).
+cache's campaign → account map, like the geo step) that the roster says are ENABLED; an account answering 403 is
+skipped SKIP_DAYS (as the geo step does; a 403 other than CUSTOMER_NOT_ENABLED is also counted as an error). An
+account that answered has ALL its cells of the window replaced (a cell Google no longer reports goes); one that failed
+keeps its cells and the run is asked again at the next build (HR_FAIL_BACKOFF failed runs in a row → wait for the next
+~20 h).
 
 File data/ads_hourly/<YYYY-MM>.json.gz (deterministic, only on change):
   {"v": 1, "month": "YYYY-MM", "ccy": {account: currency}, "tz": {account: time zone | null},
@@ -25,8 +26,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from . import google_ads as gads
-from .gads_geo import _Stop, _is_quota, _plan
-from .gads_store import Months, d, days, load_state, month_of, not_enabled, save_state, spend_ok
+from .gads_geo import _Stop, _is403, _is_quota, _plan
+from .gads_store import Months, d, days, load_state, month_of, odd403, save_state, spend_ok
 
 HR_V = 1
 HR_DIR = "ads_hourly"
@@ -173,7 +174,9 @@ def hourly_part(sess, data_dir, spend, today, st, now=time.time):
         except _Stop:
             return "stop"
         except Exception as e:
-            return "gone" if not_enabled(e) else ("stop" if _is_quota(e) else "err")
+            if _is403(e):
+                return "odd" if odd403(e) else "gone"
+            return "stop" if _is_quota(e) else "err"
     if ask:
         with ThreadPoolExecutor(max_workers=min(HR_WORKERS, len(ask))) as ex:
             res = dict(zip(ask, ex.map(one, ask)))
@@ -182,9 +185,12 @@ def hourly_part(sess, data_dir, spend, today, st, now=time.time):
     answered = set()
     for x in ask:
         r = res[x]
-        if r == "gone":
+        if r in ("gone", "odd"):
             state["skip"][x] = until
             st["skipped"].add(x)
+            if r == "odd":
+                with sess.run.lock:
+                    sess.run.errors += 1                     # an ENABLED account refused: not silent
             continue
         if isinstance(r, str):
             continue
@@ -194,7 +200,7 @@ def hourly_part(sess, data_dir, spend, today, st, now=time.time):
         st["camps"] |= {row["campaign_id"] for row in r}
     st["accounts"] |= answered
     mf.save()
-    complete = all(not isinstance(res.get(x), str) or res.get(x) == "gone" for x in ask)
+    complete = all(not isinstance(res.get(x), str) or res.get(x) in ("gone", "odd") for x in ask)
     if answered:
         st["ties"] = ties(mf, spend, lo.isoformat(), hi.isoformat(), answered, ask)
     if complete:

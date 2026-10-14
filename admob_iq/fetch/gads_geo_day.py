@@ -9,7 +9,9 @@ The geo step (fetch.gads_geo) asks Q-G1 / Q-G2 with segments.date and folds the 
             day as well (0 extra calls). The weekly cache is not touched by it, and a failure here never stops it
             (the hook is in its own try; a broken capture is simply not saved this build).
   backfill  newest → oldest, GD_CHUNK_DAYS chunks, ≤ GD_BACKFILL_CHUNKS a build, with its OWN small budget (GD_MAX_CALLS
-            / GD_MAX_SEC; the same stops: quota error, 403 skip), from the first day captured back to
+            / GD_MAX_SEC; the same stops: quota error, 403 skip): the days below the newest covered range not covered
+            yet (state "cov": the day ranges committed or found empty — a chunk committed out of order, e.g. the weekly
+            backfill's while the refresh is not due, leaves a gap that is filled first), back to
             today − GD_KEEP_DAYS (the weekly cache's depth) or the spend cache's first day, whichever is later — and to
             the data edge (GD_EDGE_CHUNKS chunks in a row with no cost row though their stores had spend). Country ids
             unknown to the weekly map are asked by id (gads_geo._map_ids) and kept in this store's own map — the
@@ -19,8 +21,9 @@ File data/ads_geo_day/<YYYY-MM>.json.gz (deterministic, only on change):
   {"v": 1, "month": "YYYY-MM", "ccy": base, "days": {store: {day: {cc: [cost_micros, dl | null]}}}}
   cost_micros: int base-currency micros (exact — not rounded like the weekly cells); dl: DOWNLOAD conversions,
   2 decimals, null = unknown. "XX" = Other / unmapped. days[store][day] exists (maybe {}) for every committed store-day.
-  data/ads_geo_day/state.json.gz: {"ccy", "first", "till", "bfrom", "done", "edge", "erun", "bfails", "bday", "iso",
-  "skip", "ties"}. Ties: a weekly cell's cost = gads_geo.cell_cost(Σ of its days) (counted per store-week-country).
+  data/ads_geo_day/state.json.gz: {"ccy", "first", "till", "cov", "bfrom" (the newest covered range's first day),
+  "done", "edge", "erun", "bfails", "bday", "iso", "skip", "ties"}. Ties: a weekly cell's cost = gads_geo.cell_cost(Σ
+  of its days) (counted per store-week-country).
 """
 
 import json
@@ -30,7 +33,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from . import gads_geo as gg
-from .gads_store import Months, d, days, load_state, month_of, save_state, spend_ok
+from .gads_store import Months, cov_add, cov_next, cov_of, d, days, load_state, month_of, save_state, spend_ok
 
 GD_V = 1
 GD_DIR = "ads_geo_day"
@@ -41,8 +44,8 @@ GD_MAX_CALLS = 80                   # the day backfill's own budget per build
 GD_MAX_SEC = 90
 GD_EDGE_CHUNKS = 2
 GD_FAIL_BACKOFF = 3
-DEFAULTS = {"ccy": None, "first": None, "till": None, "bfrom": None, "done": False, "edge": None, "erun": 0,
-            "bfails": 0, "bday": None, "iso": {}, "skip": {}, "ties": {}}
+DEFAULTS = {"ccy": None, "first": None, "till": None, "cov": None, "bfrom": None, "done": False, "edge": None,
+            "erun": 0, "bfails": 0, "bday": None, "iso": {}, "skip": {}, "ties": {}}
 
 
 def _mk(ccy):
@@ -98,10 +101,17 @@ class DayStore:
         self.st["days"] |= set(span)
         self.state["first"] = min(self.state["first"] or lo, lo)
         self.state["till"] = max(self.state["till"] or hi, hi)
-        if self.state["bfrom"] is None or self.state["first"] < self.state["bfrom"]:
-            self.state["bfrom"] = self.state["first"]
+        self.cover(lo, hi)
         if weeks is not None:
             self._ties(weeks, replace, a, b)
+
+    def cover(self, lo, hi):
+        """[lo, hi] settled (committed, or nothing to keep) → "cov"; a range above a gap re-opens the backfill."""
+        st = self.state
+        st["cov"] = cov_add(cov_of(st), lo, hi)
+        if st["cov"][-1][0] > (st["bfrom"] or ""):
+            st.update(done=False, erun=0)
+        st["bfrom"] = st["cov"][-1][0]
 
     def _ties(self, weeks, replace, a, b):
         for sid in sorted(replace):
@@ -219,39 +229,42 @@ def day_step(s, data_dir, spend, today, store, *, clock=time.monotonic, search=N
     ts = today.isoformat()
     state["skip"] = {k: v for k, v in state["skip"].items() if isinstance(v, str) and v > ts}
     spend_first = min((x for dd in (spend.get("daily") or {}).values() for x in (dd or {})), default=None)
+    floor = today - timedelta(days=GD_KEEP_DAYS)
+    if spend_first:
+        floor = max(floor, d(spend_first))
+    if state.get("edge"):
+        floor = max(floor, d(state["edge"]))
+    state["cov"] = cov_of(state)
     asked = 0
-    while (not state["done"] and state["bfrom"] and not run.stop and asked < GD_BACKFILL_CHUNKS
+    while (state["cov"] and not run.stop and asked < GD_BACKFILL_CHUNKS
            and not (int(state.get("bfails") or 0) >= GD_FAIL_BACKOFF and state.get("bday") == ts)):
-        lim = today - timedelta(days=GD_KEEP_DAYS)
-        if spend_first:
-            lim = max(lim, d(spend_first))
-        bfrom = d(state["bfrom"])
-        if spend_first is None or bfrom <= lim:
-            state["done"] = True
+        ch = cov_next(state["cov"], floor, GD_CHUNK_DAYS) if spend_first else None
+        if ch is None:
             break
-        a, b = max(bfrom - timedelta(days=GD_CHUNK_DAYS), lim), bfrom - timedelta(days=1)
+        a, b = ch
         r = _chunk(ctx, store, spend, a, b, today, weekly.get("skip") or {})
         if r in ("ok", "none", "empty"):
             if r != "none":
                 asked += 1
-            state["bfrom"] = a.isoformat()
+            if r != "ok":                                       # nothing to keep: settled all the same
+                store.cover(a.isoformat(), b.isoformat())
             state["bfails"] = 0
             if r == "empty":
                 state["erun"] = int(state.get("erun") or 0) + 1
                 if state["erun"] >= GD_EDGE_CHUNKS:
-                    state.update(done=True, edge=a.isoformat())
+                    state["edge"] = a.isoformat()
+                    floor = max(floor, a)
             else:
                 if r == "ok":
                     state["erun"] = 0
                     store.st["bdays"] += (b - a).days + 1
-                if a <= lim:
-                    state["done"] = True
         elif r == "fail":
             state["bfails"] = int(state.get("bfails") or 0) + 1
             state["bday"] = ts
             break
         else:
             break
+    state["done"] = bool(state["cov"]) and (not spend_first or cov_next(state["cov"], floor, GD_CHUNK_DAYS) is None)
     state["iso"] = {k: v for k, v in ctx.iso_map.items() if k not in (weekly.get("iso") or {})}
     if store.st["ties"][1]:
         state["ties"] = {"store_week_countries": list(store.st["ties"])}
