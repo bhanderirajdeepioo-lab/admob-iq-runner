@@ -2,8 +2,10 @@
 frontend/index.html for real (a node vm, stub page helpers) on SYNTHETIC data made up there; checked here: where the block
 goes, the day-by-day columns and their fallback to the checkpoints, Today / Yesterday, week / month rows (complete days
 only), the four cell kinds, breakeven, the KPI tiles, the countries board (order, what cutting saves), lifetime P/L
-(totals to the day both sides are in), All apps (icons, Worse first, hidden apps out), the hub card line, and the wiring
-into the page. Skipped where node is not installed. No real data."""
+(totals to the day both sides are in), All apps (icons, Worse first, hidden apps out), the hub card line, the four forms
+of ROI (hero block, ranges printed from the file, GA4-measured paid split, budget call, mostly-organic flag, All-apps
+table), and the wiring into
+the page. Skipped where node is not installed. No real data."""
 import json
 import os
 import shutil
@@ -51,6 +53,23 @@ def test_countries_life_all(out):
     assert out["card"] == "📈 D7 ROAS <b>40%</b> (usual 50%) · paisa wapas ~12 days"   # ROI's own numbers replace the card's
 
 
+def test_four_forms(out):
+    # the app's hero: the payback-target age when complete, else its longest; every range from the file's own consts
+    assert out["f4_hero"] == [] and out["f4_hero_help_closed"] and out["f4_hero7"] and out["f4_hero90"]
+    assert out["f4_help"] == [] and out["f4_share_bars"] == 30 and out["f4_share_nums"] == 5   # paid share per install day
+    assert out["f4_down"] and out["f4_up"] and out["f4_off"] and out["f4_none"]          # paused spend: no raise / cut
+    assert out["f4_own_beta"] and out["f4_na"]                  # an app's own beta range named; no Ads count: blended only
+    # GA4 measured the paid split: measured paid share + premium, said so; paid-only one number; b / beta stay ranges
+    assert out["f4_measured"] == [] and out["f4_measured_no_p_range"] and out["f4_measured_help"]
+    assert out["f4_measured_elsewhere"]                         # the age switch marks the measured age (✓)
+    # All apps: biggest blended-vs-paid gap first (no complete age last), flagged rows, every app with its icon
+    assert out["f4_all_order"] == ["id-a", "id-b", "id-p", "id-c"] and out["f4_all_flag"] == ["id-a"]
+    assert out["f4_all_icons"] == 4
+    # chips: badhao / pakka nahi / ghatao / spend band / jaldi / zyada organic; the total leaves the paused app out
+    assert out["f4_all"] == [] and out["f4_all_tot"] == [] and out["f4_all_chips"] == [0, 1, 1, 1, 1, 1, 1]
+    assert out["f4_all_sp"] == ["id-b", "id-a", "id-p", "id-c"] and out["f4_all_inr"] and out["f4_hero_all"]
+
+
 def test_forecast_view(out):
     assert out["fc_tiles"] and out["fc_ready"] and out["fc_be"] and out["fc_parts"] and out["fc_slider"]
     assert out["fc_split"] and out["fc_split_off"]
@@ -64,3 +83,6 @@ def test_wiring():
     assert "return roiWrap(vsOn()?vsPortfolio():valPortfolio(), '');" in p
     assert "if(c[0]==='value') try{ roiCardLine(x,name); }catch(e){}" in p
     assert ".roi{position:relative;" in p
+    assert "+`</div>`+f4Hero(d)+`</div>`; }" in p and "+f4All(apps)+(pc?" in p             # ⚖️ hero + All-apps table
+    for a in ("data-roi-f4h", "data-roi-f4x", "data-roi-fsort"):                         # every toggle keeps its place
+        assert "if((b=at('[%s]'))){ " % a in p and "keep(b,()=>{" in p.split("if((b=at('[%s]'))){ " % a)[1].split("\n")[0]
