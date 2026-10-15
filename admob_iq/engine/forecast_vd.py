@@ -25,12 +25,15 @@ newest GA4 day ≤ T − lag (GA4 lands `glag` days after AdMob, measured per ap
       new installs: organic and paid apart (regression on the paid share of the newest 56 install days).
   revenue(T+i) = q^cq · [(1 − bo)·old_A + bo·old_B + (1 − bn)·new_A + bn·new_B]
       q = Σ AdMob ÷ Σ the mixed old model over the days AdMob has but GA4 not yet (clip 1/3–3): the eCPM / fill move
-      since the levels' window, every age at once.  Installs = organic + spend × installs per $ (forecast.installs_model)
-      for the revenue; the installs, users and uninstalls of the paid ones follow each country's own installs per $ and
-      the CPI's rise with a country's spend (cs 1: the Google Ads country weeks, below — the revenue is not moved by it).
+      since the levels' window, every age at once.  Installs = organic + spend × installs per $ (forecast.installs_model).
+      (cs 1 would let the paid installs, users and uninstalls follow each country's own installs per $ and the CPI's
+      rise with a country's spend — HELD OFF: at the country shares the live forecast can know, the training weeks',
+      it did not win out of sample; its earlier win came from reading each future week's real shares.)
   DAU the same mix of users; uninstalls from forecast.uninstall_curve (unchanged).
-  The "Budget by country" planner (cs_plan): today's spend per country, its installs per $, its measured weekly spend
-  range and its share of the paid installs' revenue — each country on its own curves.
+  The "Budget by country" planner (cs_plan): today's spend per country, its installs per $ (the Google Ads country
+  weeks, the CPI rising with a country's spend: the country model, which does win given a known country plan) and its
+  measured weekly spend range; its revenue per $ is the forecast's own, the same for every country (each country's
+  own curve did not win the back-test).
 
 GA4's install-day extension (IDAY_EXT: c2 / cp cells, the d2 ledger; still back-filling, so its coverage grows daily) —
 two switches (a cell is used only when every activity day of it was read, so an origin without one is exactly the model
@@ -64,10 +67,10 @@ from . import forecast as F
 ONE = timedelta(days=1)
 H = F.H
 HORIZONS = F.HORIZONS
-STRUCT_VERSION = "2026-10-15b"
+STRUCT_VERSION = "2026-10-15c"
 STRUCT = {"m": "ratio", "hl": 45, "Kc": 30, "w": 28, "wn": 7, "g": 0.0, "W": 14,          # view A (+ g, W shared)
           "bhl": 100000, "Ku": 3, "bw": 0, "wa": 56, "nv": 1,                             # view B
-          "cs": 1}                                                                        # installs by country
+          "cs": 0}                                                                        # installs by country
 GRID = {"bo": (0.0, 0.5, 1.0), "bn": (0.0, 0.5, 1.0), "cq": (0.0, 0.5, 1.0), "gc": (0,), "pc": (0,)}
 DEFAULT = {"bo": 0.5, "bn": 0.5, "cq": 0.0, "gc": 0, "pc": 0}
 # m  "ratio": what no install day covers (> 427 days) = AdMob − k·Σ GA4 bands; "split": a decaying rest
@@ -76,7 +79,9 @@ DEFAULT = {"bo": 0.5, "bn": 0.5, "cq": 0.0, "gc": 0, "pc": 0}
 # g  month-of-year season strength (0 off); W  installs-model window; nv 1 organic and paid new installs apart
 # bo / bn  B's weight on past install days / new installs; cq  how much of the AdMob-only move q is carried
 # cs 1  the paid installs (users, uninstalls) by country: each country's own installs per $ and its CPI's rise with
-#       its spend (no country weeks: per_usd × spend); the revenue stays on per_usd × spend either way
+#       its spend (no country weeks: per_usd × spend); the revenue stays on per_usd × spend either way — 0 (held off):
+#       with the training weeks' shares (all a forecast knows) it did not win out of sample (lab 8, review 15 Oct);
+#       the planner (cs_plan) uses the country model either way
 # gc 2  each country's own users past day 90 from GA4's late cells (c2); 3: + its revenue 91–427 — 0: lag 90 / 61–90
 #       carried
 # pc 1  new installs' paid vs organic value from GA4's paid cells (cp) — 0: regressed on the Google Ads install share
@@ -1065,8 +1070,8 @@ def _ga(st, D):
 
 def _a_parts(st, spend, h, org, per_usd, up=None):
     """View A per future day: old users' revenue, new installs' revenue (organic, paid), users the same, installs. up:
-    the paid installs per day the users / installs follow (the country model, _cs_paid) — the revenue stays on spend ×
-    per_usd (None: both on it)."""
+    the paid installs per day the users / installs follow (the country model, _cs_paid; STRUCT cs 1 only) — the revenue
+    stays on spend × per_usd (None: both on it)."""
     T, A, LV = st["T"], st["A"], st["LV"]
     lev, ulev = LV["lev"], LV["ulev"]
     rest0, rho = LV["rest"]
@@ -2397,21 +2402,24 @@ def past_model(st, D):
 # ══ the two views together ═════════════════════════════════════════════════════════════════════════════════════════
 # ══ spend → installs by country (ROI_DRIVERS §5 module A; lab 8) ════════════════════════════════════════════════════
 # The paid installs of a future day D (the organic ones stay the engine's own; the REVENUE stays on spend × per_usd ×
-# the engine's value — measured: country revenue per $ did not beat it out of sample, while installs and users did):
+# the engine's value — each country's own value per $ did not beat it out of sample):
 #     paid(D) = per_usd · Σ_k s_k(D) · ρ_k · (lev_k ÷ s̄_k)^(−e)
-#   s_k(D)   country k's spend that day: the day's total × that week's Google Ads country shares (a back-test: the
-#            real ones; a week past the country data: the newest week's), or a plan's own spend per country
+#   s_k(D)   country k's spend that day: the day's total × the training weeks' Google Ads country shares (held — all a
+#            forecast can know; a back-test never reads a future week's real shares), or a plan's own spend per country
 #   ρ_k      k's Google Ads downloads per $ over the newest CS_N complete country weeks ≤ T (shrunk toward the app's by
 #            CS_KD downloads) ÷ that mix's own — 1 at today's mix, so per_usd (the engine's) keeps the level
-#   s̄_k      k's average daily spend in those weeks; lev_k its average daily spend in D's week (inside the horizon)
+#   s̄_k      k's average daily spend in those weeks (the live forecast: scaled to today's spend level, the level its
+#            per_usd was measured at); lev_k its average daily spend in D's week (inside the horizon)
 #   e        CPI ∝ spend^e: ONE e for raises and cuts (raises / cuts apart measured worse), pooled over every Google
 #            Ads store's country 4-week block pairs known at T (weighted, through the origin, clipped 0 – CS_EMAX)
 # An app or origin without its CS_N complete weeks (no spend, a stale cache) keeps per_usd × spend.
+# Measured (lab 8, review 15 Oct): with the held shares the forecast's paid installs / users did NOT win out of sample
+# (STRUCT cs 0); given each future week's REAL country spend (= a known country plan) the installs did — the planner.
 CS_N = 2
 CS_KD = 50.0
 CS_EMIN = (80.0, 120.0)        # a block pair counts with ≥ 80 USD and ≥ 120 downloads in both blocks
 CS_EMAX = 0.5
-CS_TOP = 8                     # the planner's rows: the top countries with their own GA4 slot + "OT" (every other one)
+CS_TOP = 8                     # the planner's rows: the top countries by today's spend + "OT" (every other one)
 CS_MIN = 5.0                   # … only for an app spending ≥ this USD a day (the ROI section's judged-day MIN_SPEND)
 
 
@@ -2505,19 +2513,14 @@ def _cs_state(app, T):
         st = None
         if cm is not None:
             e, n = cs_e(app.get("cs_pairs"), T)
-            st = {"cm": cm, "e": e, "en": n, "geo": geo, "last_w": max(geo), "T": T}
+            st = {"cm": cm, "e": e, "en": n, "geo": geo, "T": T}
         memo[T] = st
     return memo[T]
 
 
-def _cs_shares(cs, W):
-    e = cs["geo"].get(W) or cs["geo"].get(cs["last_w"])
-    tc = sum(x for x, _ in e.values()) if e else 0
-    return {k: x / tc for k, (x, _) in e.items()} if tc > 0 else {}
-
-
 def _cs_paid(cs, T, spend, h, per_usd, plan=None):
-    """Paid installs per future day (the module's formula); plan {cc: USD a day} — the same spend every day."""
+    """Paid installs per future day (the module's formula: each week's spend at the training weeks' country shares);
+    plan {cc: USD a day} — the same spend every day."""
     cm, e = cs["cm"], cs["e"]
     rho, sbar = cm["rho"], cm["sbar"]
 
@@ -2536,9 +2539,9 @@ def _cs_paid(cs, T, spend, h, per_usd, plan=None):
         a[0] += sp[i]
         a[1] += 1
     fac = {}
+    sh = cm["share"]
     for W, (tot, k) in wk.items():
         m = tot / k
-        sh = _cs_shares(cs, W)
         fac[W] = sum(q * rho.get(cc, 1.0) * g(cc, m * q) for cc, q in sh.items() if q > 0) if m > 0 else 0.0
     out = []
     for i in range(h):
@@ -2548,138 +2551,38 @@ def _cs_paid(cs, T, spend, h, per_usd, plan=None):
     return out
 
 
-def _cs_fac_a(comp, slot):
-    """View A's (revenue bands, users lags) factors of a {slot: installs} mix — mix_fixed's own fac()."""
-    mr, mu, nb, nl = slot
-    tot = sum(v for v in comp.values() if v > 0)
-    if tot <= 0:
-        return None
-    rf, uf = [0.0] * nb, [0.0] * nl
-    for k, v in comp.items():
-        if v <= 0:
-            continue
-        q = v / tot
-        r, u = mr.get(k), mu.get(k)
-        for b in range(nb):
-            rf[b] += q * (r[b] if r else 1.0)
-        for j in range(nl):
-            uf[j] += q * (u[j] if u else 1.0)
-    return [max(0.05, x) for x in rf], [max(0.05, x) for x in uf]
-
-
-def _cs_fac_b(comp, slot):
-    """View B's (users, ARPDAU) factors of a {slot: installs} mix — _bmix's own fac()."""
-    mu, ma, lagb, nb, nl = slot
-    tot = sum(v for v in comp.values() if v > 0)
-    if tot <= 0:
-        return None
-    fu = [0.0] * nl
-    fan, fad = [0.0] * nb, [0.0] * nb
-    for k, v in comp.items():
-        q = v / tot
-        if q <= 0:
-            continue
-        uu, aa = mu.get(k), ma.get(k)
-        for j in range(nl):
-            fu[j] += q * (uu[j] if uu else 1.0)
-        for b in range(nb):
-            uw = q * ((uu[lagb[b]] if uu else 1.0) if lagb[b] is not None else 1.0)
-            fan[b] += uw * (aa[b] if aa else 1.0)
-            fad[b] += uw
-    fa = [max(0.05, fan[b] / fad[b]) if fad[b] > 0 else 1.0 for b in range(nb)]
-    return [max(0.05, x) for x in fu], fa
-
-
 CS_H = (30, 90, 180)
 
 
 def cs_plan(app, st, org, per_usd, base, plan):
-    """The "Budget by country" planner's inputs at the live origin (the default plan = today's spend × the training
-    weeks' shares; an app spending < CS_MIN a day: none): per row (the top CS_TOP countries by spend that have their own
-    GA4 slot — a country without one has no curve of its own, so it is planned only inside "OT" = every other country,
-    on the pooled curve) its spend a day s0, the
-    training weeks' s̄, ρ (installs per $ = per_usd × ρ at s̄), whether it has its own GA4 slot, the weekly spend range
-    measured (lo / hi, USD a day) and w = its share of the paid installs' revenue within 30 / 90 / 180 days at the
-    default plan — each country on its OWN curves (view A's revenue factors / view B's users × ARPDAU factors, relative
-    to the training weeks' paid mix, both views mixed by bn); forecast_build turns w into revenue per $. None without
-    the country model."""
+    """The "Budget by country" planner's inputs at the live origin (plan = today's spend × the training weeks' shares;
+    an app spending < CS_MIN a day: none): per row (the top CS_TOP countries by today's spend + "OT" = every other one)
+    its spend a day s0, the training level s̄ (scaled to today's: the CPI moves from today's), ρ (installs per $ =
+    per_usd × ρ at s̄) and the weekly spend range measured (lo / hi, USD a day). Its revenue per $ is the forecast's own
+    paid revenue per $, the same for every row (forecast_build.plan_out): each country's own value per $ (its own GA4
+    curve) did not win out of sample (lab 8: worse on most apps of the older half). fc: the forecast itself follows
+    the country model (STRUCT cs). None without the country model."""
     cs = st.get("cs")
     if not cs or not plan or base < CS_MIN:
         return None
-    T, p, cm = st["T"], st["p"], cs["cm"]
+    T, cm = st["T"], cs["cm"]
     rho, sbar = cm["rho"], cm["sbar"]
-    cset = (app.get("ida") or {}).get("cset") or []
-    ix = {cc: str(i) for i, cc in enumerate(cset)}
-    zz = ix.get("ZZ")
-    slot_of = lambda cc: ix.get(cc, zz)  # noqa: E731
     order = sorted((k for k, v in plan.items() if v > 0), key=lambda k: (-plan[k], k))
-    top = [k for k in order if k not in ("XX", "ZZ") and k in ix][:CS_TOP]
+    top = [k for k in order if k not in ("XX", "ZZ")][:CS_TOP]
     rest = [k for k in order if k not in top]
     groups = [(k, [k]) for k in top] + ([("OT", rest)] if rest else [])
-    v = lag_view(app, T, app.get("glag") or 0)
-    gc = p.get("gc") or 0
-    sA = (v.get("_fva_slot") or {}).get((T, p["hl"], gc))
-    sB = None
-    if st["b"] is not None:
-        sB = st["b"]["pre"]["memo"].get(("slot", T, p["bhl"], gc))
-    comp0 = {}
-    for k, d in cm["dl"].items():
-        sk = slot_of(k)
-        if sk is not None:
-            comp0[sk] = comp0.get(sk, 0.0) + d
-    fA0 = _cs_fac_a(comp0, sA) if sA else None
-    fB0 = _cs_fac_b(comp0, sB) if sB else None
-    sa, sb_ = st["a"], st["b"]
-    unit = sa["unit"]
-    pvr = _newvec(sb_, 1)[1] if sb_ is not None else None
-    bn = p["bn"] if sb_ is not None else 0.0
-    H = max(CS_H)
-
-    def value(comp):
-        """Revenue within 30 / 90 / 180 days of one paid install a day of this mix (days 1 … H), × q."""
-        fa = _cs_fac_a(comp, sA) if (sA and fA0) else None
-        fb = _cs_fac_b(comp, sB) if (sB and fB0) else None
-        ca = cb = 0.0
-        acc_a = acc_b = 0.0
-        out = {}
-        for i in range(1, H + 1):
-            L = i - 1                                  # the newest install day's age on day i; Σ over ages ≤ L
-            if bn < 1 and L < len(unit):
-                ca += unit[L] * (_xfr(fa, L) / _xfr(fA0, L) if fa else 1.0)
-            if bn > 0 and pvr is not None and L < len(pvr):
-                cb += pvr[L] * ((_bfu(fb, L) * _bfa(fb, L)) / (_bfu(fB0, L) * _bfa(fB0, L)) if fb else 1.0)
-            D = T + timedelta(days=i)
-            acc_a += ca * _ga(sa, D)
-            if sb_ is not None:
-                acc_b += cb * _gb(sb_, D)
-            if i in CS_H:
-                out[i] = ((1 - bn) * acc_a + bn * acc_b) * st["q"]
-        return out
-    rows, tot = [], {h: 0.0 for h in CS_H}
+    rows = []
     weeks = sorted(W for W in cs["geo"] if W + timedelta(days=6) <= T)
     for name, ks in groups:
         s0 = sum(plan[k] for k in ks)
-        sb = sum(sbar.get(k, 0.0) for k in ks)
-        r = sum(plan[k] * rho.get(k, 1.0) for k in ks) / s0
-        comp = {}
-        for k in ks:
-            sk = slot_of(k)
-            if sk is not None:
-                comp[sk] = comp.get(sk, 0.0) + plan[k] * rho.get(k, 1.0)
-        val = value(comp) if comp else value(comp0)
         lv = [sum(c for cc, (c, _) in cs["geo"][W].items() if cc in ks) / 7.0 for W in weeks]
         lv = [x for x in lv if x > 0]
-        own = 1 if (name != "OT" and name in ix and name != "ZZ") else 0
-        rows.append({"cc": name, "own": own, "s0": s0, "sb": sb, "rho": r, "lo": min(lv) if lv else None,
-                     "hi": max(lv) if lv else None, "val": val})
-        for h in CS_H:
-            tot[h] += s0 * r * val[h]
-    for x in rows:
-        val = x.pop("val")
-        x["w"] = [(x["s0"] * x["rho"] * val[h] / tot[h]) if tot[h] > 0 else None for h in CS_H]
-    cov = sum(x["s0"] for x in rows if x["own"]) / base
-    return {"v": 1, "T": T.isoformat(), "weeks": [W.isoformat() for W in cm["weeks"]], "e": cs["e"], "en": cs["en"],
-            "pu": per_usd, "org": org, "s": base, "cov": cov, "rows": rows, "n0": _cs_paid(cs, T, {}, 1, per_usd, plan)[0]}
+        rows.append({"cc": name, "s0": s0, "sb": sum(sbar.get(k, 0.0) for k in ks),
+                     "rho": sum(plan[k] * rho.get(k, 1.0) for k in ks) / s0,
+                     "lo": min(lv) if lv else None, "hi": max(lv) if lv else None})
+    return {"v": 2, "T": T.isoformat(), "weeks": [W.isoformat() for W in cm["weeks"]], "e": cs["e"], "en": cs["en"],
+            "pu": per_usd, "org": org, "s": base, "fc": 1 if st["p"].get("cs") else 0, "rows": rows,
+            "n0": _cs_paid(cs, T, {}, 1, per_usd, plan)[0]}
 
 
 def _views(app, T, p, ctx=None, clag=0, need_b=True, tlag=0):
@@ -2727,7 +2630,7 @@ def prepare(app, T, p, ctx=None, clag=0, tlag=0):
     sa, sb, tail = _views(app, T, p, ctx, clag, p["bo"] > 0 or p["bn"] > 0, tlag)
     q, nt = _q(tail, p["bo"])
     return {"T": T, "p": p, "a": sa, "b": sb, "q": q ** p["cq"], "qraw": q, "nt": nt, "spend": {},
-            "org": sa["org"], "per_usd": sa["per_usd"], "cs": _cs_state(app, T) if p.get("cs") else None}
+            "org": sa["org"], "per_usd": sa["per_usd"], "cs": _cs_state(app, T)}    # (the forecast uses it with cs 1)
 
 
 def _mix(x, y, w):
@@ -2740,13 +2643,13 @@ def _mix(x, y, w):
 
 def parts(st, spend, h, org=None, per_usd=None, plan=None):
     """Both views over the next h days, mixed and × q: revenue and users of old users / organic / paid installs, n,
-    and "up" the paid installs per day (the country model; None without it). plan: {cc: USD a day} for the country
-    model (the live forecast's default: spend × the training weeks' country shares)."""
+    and "up" the paid installs per day (the country model, STRUCT cs 1; None without it or with cs 0). plan: {cc: USD a
+    day} for the country model (the live forecast's default: spend × the training weeks' country shares)."""
     p = st["p"]
     org = st["org"] if org is None else org
     per_usd = st["per_usd"] if per_usd is None else per_usd
     st["spend"], st["org_f"], st["per_usd_f"] = spend or {}, org, per_usd
-    up = _cs_paid(st["cs"], st["T"], spend or {}, h, per_usd, plan) if st.get("cs") else None
+    up = _cs_paid(st["cs"], st["T"], spend or {}, h, per_usd, plan) if st.get("cs") and p.get("cs") else None
     A = _a_parts(st["a"], spend or {}, h, org, per_usd, up)
     B = _b_parts(st["b"], spend or {}, h, org, per_usd, up) if st["b"] is not None else {}
     bo, bn, q = p["bo"], p["bn"], st["q"]
@@ -2950,9 +2853,13 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
             D += ONE
         base = tot / k if k else 0.0
         spend = {T + timedelta(days=i): base for i in range(1, h + 1)}
-        if st.get("cs"):                              # the country model: today's spend × the training weeks' shares
-            plan = {cc: base * q for cc, q in st["cs"]["cm"]["share"].items()}
-    x = parts(st, spend, h, org, per_usd, plan)
+        if st.get("cs"):                              # the country model: today's spend × the training weeks' shares,
+            cs, cm = st["cs"], st["cs"]["cm"]         # their level s̄ scaled to today's (per_usd is measured at base:
+            sb = sum(cm["sbar"].values())             # today's spend buys per_usd × base, the CPI moves from there)
+            sc = base / sb if sb > 0 else 1.0
+            st["cs"] = dict(cs, cm=dict(cm, sbar={c: v * sc for c, v in cm["sbar"].items()}))  # (the kept one intact)
+            plan = {cc: base * q for cc, q in cm["share"].items()}
+    x = parts(st, spend, h, org, per_usd, plan if p.get("cs") else None)
     un = _uninstalls(app, T, spend, h, org, per_usd, x["up"])
     sp = [spend.get(T + timedelta(days=i), 0.0) for i in range(1, h + 1)]
     out = {"rev": {"old": x["old"], "org": x["org"], "paid": x["paid"]},

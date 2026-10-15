@@ -1,10 +1,11 @@
-"""🔮 Forecast engine vd — installs by country (forecast_vd cs_*, STRUCT cs 1) and the "Budget by country" planner
-(cs_plan → forecast_build.plan_out) on a made-up app (tests/test_forecast_engine's: 1,000 organic + $500 a day of paid
-installs) whose Google Ads spend goes to two made-up countries AA (cheap) and BB (twice the CPI). Checked: the pooled
-e (the slope a made-up CPI ∝ spend^e gives back, only from pairs known at T), the training weeks' model (stale / partial
-data → none), the paid installs (today's mix and spend = the engine's per_usd × spend exactly; a mix move, a raise),
-the revenue NOT moved by any of it (only installs / users / uninstalls), the back-test fed the real country shares, the
-planner (rows, its revenue = the forecast's own at today's plan) and the build's inputs. No real data."""
+"""🔮 Forecast engine vd — installs by country (forecast_vd cs_*; held off in the forecast: STRUCT cs 0) and the
+"Budget by country" planner (cs_plan → forecast_build.plan_out) on a made-up app (tests/test_forecast_engine's: 1,000
+organic + $500 a day of paid installs) whose Google Ads spend goes to two made-up countries AA (cheap) and BB (twice
+the CPI). Checked: the pooled e (the slope a made-up CPI ∝ spend^e gives back, only from pairs known at T), the training
+weeks' model (stale / partial data → none), the forecast untouched by country data with cs 0, the paid installs with
+cs 1 (the training mix and level = the engine's per_usd × spend exactly; a raise), the revenue NOT moved by any of it,
+the back-test never reading a future week's country shares, the planner (rows by spend, today's spend buying per_usd ×
+spend, one revenue per $ for every country = the forecast's own) and the build's inputs. No real data."""
 import math
 from datetime import date, timedelta
 
@@ -96,27 +97,17 @@ def test_the_training_weeks():
     assert VD.cs_model(bad, T0) is None and VD.cs_model({}, T0) is None
 
 
-def test_todays_mix_is_the_engine_and_revenue_never_moves():
+def test_the_forecast_holds_the_country_model_off_and_revenue_never_moves():
     plain = with_uninstalls(with_ga4(make()))
     app = with_geo(with_uninstalls(with_ga4(make())))
     sp = {T0 + timedelta(days=i): 500.0 for i in range(1, 61)}
     f0, f1 = VD.forecast(plain, T0, {}, h=60, spend=sp), VD.forecast(app, T0, {}, h=60, spend=sp)
-    assert all(abs(a - b) < 1e-9 * max(1.0, a) for a, b in zip(f0["n"], f1["n"]))          # same mix, same spend
-    assert f0["rev"] == f1["rev"] and all(abs(a - b) < 1e-9 * a for a, b in zip(f0["dau"], f1["dau"]))
-    # all spend to the cheap country: more installs, users and uninstalls — the revenue exactly the engine's
-    W = {mon(T0 + timedelta(days=i)) for i in range(1, 61)}
-    app2 = with_geo(with_uninstalls(with_ga4(make())), shares={w: {"AA": 1.0} for w in W})
-    f2 = VD.forecast(app2, T0, {}, h=60, spend=sp)
-    assert f2["rev"] == f0["rev"]
-    paid0, paid2 = f0["n"][10] - 1000, f2["n"][10] - 1000
-    cs = app2["_fv_cs"][T0]
-    want = cs["cm"]["rho"]["AA"] * (500 / 300) ** -cs["e"]                # AA's installs per $ (≈ ×1.25) at 5/3 its spend
-    assert abs(paid2 / paid0 - want) < 1e-9 and 1.24 < cs["cm"]["rho"]["AA"] < 1.25 and abs(cs["e"] - 0.2) < 0.01
-    assert sum(f2["dau_p"]["paid"]) > sum(f0["dau_p"]["paid"]) and sum(f2["un"]["paid"]) > sum(f0["un"]["paid"])
-    assert f2["dau_p"]["old"] == f0["dau_p"]["old"] and f2["dau_p"]["org"] == f0["dau_p"]["org"]
-    # the country model off (cs 0) = no country data at all
-    f3 = VD.forecast(app2, T0, {"cs": 0}, h=60, spend=sp)
-    assert f3["n"] == f0["n"] and f3["rev"] == f0["rev"]
+    assert VD.STRUCT["cs"] == 0                                           # did not win at the shares a forecast knows
+    assert all(f1[k] == f0[k] for k in ("n", "rev", "dau", "dau_p", "un"))   # country data: not a digit moves
+    # cs 1 at the training weeks' mix and level ($300 AA + $200 BB a day): the engine's installs exactly
+    f2 = VD.forecast(app, T0, {"cs": 1}, h=60, spend=sp)
+    assert all(abs(a - b) < 1e-9 * max(1.0, a) for a, b in zip(f0["n"], f2["n"])) and f2["rev"] == f0["rev"]
+    assert all(abs(a - b) < 1e-9 * a for a, b in zip(f0["dau"], f2["dau"]))
 
 
 def test_a_raise_buys_fewer_installs_per_dollar():
@@ -124,56 +115,51 @@ def test_a_raise_buys_fewer_installs_per_dollar():
     e = VD.cs_e(app["cs_pairs"], T0)[0]
     sp1 = {T0 + timedelta(days=i): 500.0 for i in range(1, 31)}
     sp2 = {D: 1000.0 for D in sp1}
-    f1, f2 = VD.forecast(app, T0, {}, h=30, spend=sp1), VD.forecast(app, T0, {}, h=30, spend=sp2)
+    f1, f2 = VD.forecast(app, T0, {"cs": 1}, h=30, spend=sp1), VD.forecast(app, T0, {"cs": 1}, h=30, spend=sp2)
     r = (f2["n"][5] - 1000) / (f1["n"][5] - 1000)
-    assert abs(r - 2 ** (1 - e)) < 1e-9 and r < 2                         # every country × 2: installs × 2^(1−e)
+    assert abs(r - 2 ** (1 - e)) < 1e-9 and r < 2 and abs(e - 0.2) < 0.01   # every country × 2: installs × 2^(1−e)
     assert all(abs(b - 2 * a) < 1e-9 * max(1.0, b) for a, b in zip(f1["rev"]["paid"], f2["rev"]["paid"]))
+    assert sum(f2["dau_p"]["paid"]) > sum(f1["dau_p"]["paid"])
 
 
-def test_the_backtest_reads_the_real_country_shares():
-    # the truth: from T0 on the money goes to the cheap country — the paid installs follow its CPI
+def test_the_backtest_never_reads_a_future_weeks_country_shares():
+    # after T0 the money went to the cheap country: a back-test from T0 must not know it (the live forecast can't)
     app = with_ga4(make())
-    W = sorted({mon(D) for D in app["days"] if D > T0 - timedelta(days=6)})
-    shares = {w: {"AA": 1.0} for w in W if w > T0}
-    for D, e in app["days"].items():
-        if D > T0 and mon(D) in shares:
-            e["na"] = e["sp"] / CPI["AA"]
-            e["n"] = 1000 + e["na"]
-    with_geo(app, shares=shares)
-    bt = VD.backtest(app, {}, ors=[T0])
-    plain = {k: v for k, v in app.items() if k not in ("geo", "cs_pairs") and not k.startswith("_")}
-    bt0 = VD.backtest(plain, {}, ors=[T0])
-    assert abs(bt[0]["h"][30]["n_err"]) < 0.6 * abs(bt0[0]["h"][30]["n_err"])
-    assert bt[0]["h"][30]["pred"] == bt0[0]["h"][30]["pred"]               # the revenue: the engine's own
+    with_geo(app, shares={mon(D): {"AA": 1.0} for D in app["days"] if D > T0})
+    cut = with_geo(with_ga4(make()), upto=T0)                             # the same app, its country weeks cut at T0
+    for p in ({"cs": 1}, {}):
+        assert VD.backtest(app, p, ors=[T0]) == VD.backtest(cut, p, ors=[T0])
+    # held off (cs 0): the back-test = the app without any country data
+    assert VD.backtest(app, {}, ors=[T0]) == VD.backtest(with_ga4(make()), {}, ors=[T0])
 
 
 def test_the_planner_matches_the_forecast():
     app = with_ga4(make())
-    app["ida"] = {"cset": ["AA", "BB", "ZZ"]}                            # both countries have their own GA4 slot
     for i in range(7):
         app["days"][T0 - timedelta(days=i)]["sp"] = 600.0                 # today's run-rate: $600 a day
     with_geo(app)
+    org, pu = F.installs_model(app["days"], T0, F.SPEND_DAYS)
     f = VD.forecast(app, T0, {}, h=F.H)
     pl = f["plan"]
-    assert pl and [x["cc"] for x in pl["rows"]] == ["AA", "BB"] and abs(pl["s"] - 600) < 1e-9
-    assert abs(sum(x["s0"] for x in pl["rows"]) - 600) < 1e-9 and all(abs(sum(x["w"][j] for x in pl["rows"]) - 1) < 1e-9
-                                                                       for j in range(3))
-    assert abs(pl["n0"] - (f["n"][0] - pl["org"])) < 1e-9                 # today's plan = the forecast's paid installs
+    assert pl and [x["cc"] for x in pl["rows"]] == ["AA", "BB"] and abs(pl["s"] - 600) < 1e-9 and pl["fc"] == 0
+    assert abs(sum(x["s0"] for x in pl["rows"]) - 600) < 1e-9
+    # the training weeks spent less ($3,500 + $4,100 in 14 days); today's spend still buys per_usd × spend (the CPI
+    # moves from today's level, not from theirs) — the planner's today = the forecast's paid installs
+    assert abs(sum(app["_fv_cs"][T0]["cm"]["sbar"].values()) - 7600 / 14) < 1e-9          # (the kept model intact)
+    assert abs(pl["n0"] / (pu * 600) - 1) < 1e-12 and abs((f["n"][0] - org) / (pu * 600) - 1) < 1e-12
+    assert all(abs(x["sb"] / x["s0"] - 1) < 1e-12 for x in pl["rows"])
+    f1 = VD.forecast(app, T0, {"cs": 1}, h=30)                            # cs 1: the forecast's own installs the same
+    assert abs((f1["n"][0] - org) / (pu * 600) - 1) < 1e-12 and f1["plan"]["fc"] == 1
     fac = fb.corrected(f["rev"], {30: {"bias": 0.1}})
-    out = fb.plan_out(pl, f, fac, (-0.19, -0.07, -0.03))
+    out = fb.plan_out(pl, f, fac)
     for j, hz in enumerate(out["h"]):
         paid = sum(v * fac[i] for i, v in enumerate(f["rev"]["paid"][:hz]))
         assert abs(sum(x["s0"] * x["r"][j] for x in out["rows"]) / paid - 1) < 1e-5     # rows add up to the forecast
+        assert len({x["r"][j] for x in out["rows"]}) == 1                 # one revenue per $ for every country
     a, b = out["rows"]
-    assert a["ppu"] > b["ppu"] and a["lo"] <= 300 < a["hi"] and out["beta"] == [-0.19, -0.07, -0.03]
-    # past install days / organic stay; every country its own curve: no GA4 slots here → one pooled value each
-    assert out["old"][0] > 0 and abs(a["r"][0] / b["r"][0] - a["ppu"] / b["ppu"]) < 1e-3
+    assert a["ppu"] > b["ppu"] and a["lo"] <= 300 < a["hi"] and out["fc_cs"] == 0 and "beta" not in out
+    assert out["old"][0] > 0 and fb.plan_out(f1["plan"], f1, fac[:30])["fc_cs"] == 1
     assert VD.forecast(with_ga4(make()), T0, {}, h=30).get("plan") is None           # no country data: no planner
-    # a country without its own GA4 slot has no curve of its own: it is planned only inside "Other" (pooled curve)
-    app["ida"] = {"cset": ["AA", "ZZ"]}
-    app.pop("_fv_cs", None)
-    pl2 = VD.forecast(app, T0, {}, h=30)["plan"]
-    assert [(x["cc"], x["own"]) for x in pl2["rows"]] == [("AA", 1), ("OT", 0)] and abs(pl2["cov"] - 0.6) < 1e-9
     # an app spending less than CS_MIN a day: no planner (its run-rate installs per $ say nothing)
     for i in range(7):
         app["days"][T0 - timedelta(days=i)]["sp"] = VD.CS_MIN / 2
@@ -191,10 +177,16 @@ def test_the_rows_beyond_the_top_go_to_other():
         with_geo(app, shares={w: {cc: (12 - i) / 78.0 for i, cc in enumerate(ccs)} for w in W})
         pl = VD.forecast(app, T0, {}, h=30)["plan"]
         names = [x["cc"] for x in pl["rows"]]
-        assert names == ccs[:VD.CS_TOP] + ["OT"] and pl["rows"][-1]["own"] == 0
+        assert names == ccs[:VD.CS_TOP] + ["OT"]
         assert abs(sum(x["s0"] for x in pl["rows"]) - pl["s"]) < 1e-9
+        # rows by spend, a GA4 slot or not (one revenue per $ for all); "XX" (no country) only inside Other
+        app2 = with_ga4(make())
+        CPI["XX"] = 0.6
+        with_geo(app2, shares={w: {"AA": 0.5, "XX": 0.3, "BB": 0.2} for w in W})
+        rows = VD.forecast(app2, T0, {}, h=30)["plan"]["rows"]
+        assert [x["cc"] for x in rows] == ["AA", "BB", "OT"] and abs(rows[-1]["s0"] - 150) < 1e-9
     finally:
-        for cc in ccs:
+        for cc in ccs + ["XX"]:
             CPI.pop(cc, None)
 
 
@@ -221,10 +213,10 @@ def test_the_build_step_carries_the_planner(tmp_path):
     run = fb.start(data, now, Clock())
     geo = geo_of(app)
     pairs = VD.cs_pairs(stores_with_e(0.2), LAST)
-    fc = fb.app_step(run, "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(), [], geo=geo, cs_pairs=pairs,
-                     beta=[-0.19, -0.07, -0.03])
+    fc = fb.app_step(run, "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(), [], geo=geo, cs_pairs=pairs)
     pl = fc["plan"]
-    assert pl and [x["cc"] for x in pl["rows"]] == ["AA", "BB"] and pl["beta"] == [-0.19, -0.07, -0.03]
+    assert pl and [x["cc"] for x in pl["rows"]] == ["AA", "BB"] and pl["fc_cs"] == 0
+    assert pl["rows"][0]["r"] == pl["rows"][1]["r"]
     assert abs(sum(x["s0"] * x["r"][2] for x in pl["rows"]) / pl["paid"][2] - 1) < 1e-3     # rows = the forecast's paid
     assert abs(pl["old"][0] + pl["orgr"][0] + pl["paid"][0] - sum(
         fc["f"][k][i] for k in ("old", "org", "paid") for i in range(30))) < 0.5              # the page's own series

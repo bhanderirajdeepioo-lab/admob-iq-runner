@@ -370,22 +370,39 @@ function appFile() {
     out.fc_vd_switch = (sw.match(/New model \(A \+ B\)/g) || []).length === 1 && sw.includes('badla: New installs · model B share, Old installs')
       && (sw2.match(/New model \(A \+ B\)/g) || []).length === 1 && !sw.includes('Old model</b>');
     U.set('FCM', 0);
-    // 💸 Budget by country: today's plan = the forecast; −/+ keeps the total (Keep total on); a row out of its measured
-    // range warned; hidden in a developer view; the slider on the country model: installs ×m^(1−e), revenue ×m
+    // 💸 Budget by country: today's plan = the forecast; one revenue per $ for every country (the per-country curves
+    // lost the back-test) — a row shows spend / installs / CPI / revenue for the chosen days only (fits 1280 px);
+    // −/+ keeps the total (Keep total on); a row out of its measured range warned; hidden in a developer view; the
+    // slider ×m (installs ×m^(1−e) only when the forecast itself follows the country model, fc_cs 1)
     const dp = JSON.parse(JSON.stringify(d));
     dp.app_id = 'id-plan';
-    dp.fc.plan = { v: 1, weeks: ['2026-09-28', '2026-10-05'], e: 0.1, en: 1234, s: 8, org: 4, n0: 5, cov: 0.75, h: [30, 90, 180],
-      old: [150, 450, 900], orgr: [30, 90, 180], paid: [210, 630, 1050], beta: [-0.19, -0.07, -0.03],
-      rows: [{ cc: 'AA', own: 1, s0: 6, sb: 6, ppu: 0.5, lo: 4, hi: 6.5, r: [30, 90, 150] },
-             { cc: 'OT', own: 0, s0: 2, sb: 2, ppu: 1, lo: 1, hi: 1.5, r: [15, 45, 75] }] };   // OT: today above its weeks
+    dp.fc.plan = { v: 2, weeks: ['2026-09-28', '2026-10-05'], e: 0.1, en: 1234, s: 8, org: 4, n0: 5, fc_cs: 0, h: [30, 90, 180],
+      old: [150, 450, 900], orgr: [30, 90, 180], paid: [210, 630, 1050],
+      rows: [{ cc: 'AA', s0: 6, sb: 6, ppu: 0.5, lo: 4, hi: 6.5, r: [26.25, 78.75, 131.25] },
+             { cc: 'OT', s0: 2, sb: 2, ppu: 1, lo: 1, hi: 1.5, r: [26.25, 78.75, 131.25] }] };   // OT: today above its weeks
     U.set('PLAN', null); U.set('FCH', '90');
     const pv = U.fcView(dp);
-    // revenue 90 = 450 old + 90 organic + 630 paid; AA: ROI 90 = 90 ÷ 90 = 100%, next $ = (1 + β) × 100% = 81–97%
-    out.pl_card = pv.includes('💸 Budget by country') && pv.includes('Revenue · 90 din') && pv.includes('$1,170') && pv.includes('aaj $1,170')
-      && pv.includes('<td>100%</td><td>81–97%</td>') && pv.includes('88%')
-      && pv.includes('Installs / din') && pv.includes('>9<') && pv.includes('pooled curve') && pv.includes('Keep total on')
-      && pv.includes('data-roi-pl="AA|+"') && pv.includes('Revenue 180 din') && pv.includes('Next-$ ROI') && pv.includes('75%')
-      && pv.includes('e 0.10') && pv.includes('1,234') && pv.includes('β -0.19 … -0.07 … -0.03') && !pv.includes('Measured range ke bahar:');
+    // revenue 90 = 450 old + 90 organic + 630 paid; AA: 6 × 78.75 = $473 (Other $158); ROI (paid) 630 ÷ 720 = 88%
+    out.pl_card = pv.includes('💸 Budget by country') && pv.includes('Revenue · 90 days') && pv.includes('$1,170') && pv.includes('today $1,170')
+      && pv.includes('<td>$2.00</td><td>$473</td></tr>') && pv.includes('<td>$158</td>') && pv.includes('88%') && pv.includes('+$450')
+      && pv.includes('Installs / day') && pv.includes('Spend / day') && pv.includes('>9<') && pv.includes('Keep total on')
+      && pv.includes('data-roi-pl="AA|+"') && pv.includes('<th>Revenue 90 days</th></tr>') && !pv.includes('Revenue 180 days')
+      && !pv.includes('Next-$ ROI') && !pv.includes('pooled curve') && !U.fcPlan(dp).includes('aaj $') && !U.fcPlan(dp).includes(' din</th>')
+      && pv.includes('e 0.10') && pv.includes('1,234') && pv.includes('Country-wise kamai per $ back-test me haari') && pv.includes('zyadatar apps pe behtar')
+      && pv.includes('β upar se lagane pe back-test haara')
+      && !pv.includes('Measured range ke bahar:') && (U.fcPlan(dp).match(/<th>/g) || []).length === 5;
+    U.set('FCH', '30');
+    out.pl_h = U.fcPlan(dp).includes('<th>Revenue 30 days</th>') && U.fcPlan(dp).includes('<td>$53</td>')      // Other 2 × 26.25
+      && U.fcPlan(dp).includes('Profit · 30 days');
+    U.set('FCH', '90');
+    // the INR view: spend as billed (₹840 a day at the billing rate, as the forecast card above), revenue at today's rate
+    ctx.curView = () => 'INR'; ctx.cfx = () => 100; ctx.csym = () => '₹';
+    const di = JSON.parse(JSON.stringify(dp)); di.ccy = 'INR'; di.fc.f.spi = 840;
+    const pvi = U.fcView(di);
+    out.pl_inr = pvi.includes('₹840') && pvi.includes('+₹41,400') && pvi.includes('83%') && pvi.includes('₹630') && pvi.includes('₹210.0');
+    ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
+    U.set('PLAN', null);
+    U.fcView(dp);
     const st = U.plState(dp);
     U.plStep(dp, 'AA', '+');                                    // AA 6 → 6.6, Other 2 → 1.4: the total stays 8
     out.pl_keep = Math.abs(st.s.AA - 6.6) < 1e-9 && Math.abs(st.s.OT - 1.4) < 1e-9;
@@ -397,9 +414,11 @@ function appFile() {
     U.set('PLAN', null);
     ctx.window.__DEV_VIEW__ = true; out.pl_dev = U.fcPlan(dp) === '' && !U.fcView(dp).includes('Budget by country'); ctx.window.__DEV_VIEW__ = false;
     out.pl_none = !U.fcView(d).includes('Budget by country');
-    const mu = U.fcMul(dp.fc, 2), m0 = U.fcMul(d.fc, 2);
-    out.pl_slider = Math.abs(mu.i - Math.pow(2, 0.9)) < 1e-12 && mu.r === 2 && m0.i === 2 && m0.r === 2
-      && U.fcMul(dp.fc, 0).i === 0 && U.fcView(dp).includes('sab countries');
+    const mu = U.fcMul(dp.fc, 2), m0 = U.fcMul(d.fc, 2), dc = JSON.parse(JSON.stringify(dp));
+    dc.fc.plan.fc_cs = 1;
+    const mc = U.fcMul(dc.fc, 2);
+    out.pl_slider = mu.i === 2 && mu.r === 2 && m0.i === 2 && m0.r === 2 && !U.fcView(dp).includes('sab countries')
+      && Math.abs(mc.i - Math.pow(2, 0.9)) < 1e-12 && mc.r === 2 && U.fcMul(dc.fc, 0).i === 0 && U.fcView(dc).includes('sab countries');
     U.set('PLAN', null); U.set('FCH', '90');
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };

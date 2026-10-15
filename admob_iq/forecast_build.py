@@ -17,7 +17,9 @@ Kept for good in the private repo (data/forecast/<key>.json): the settings, the 
 newest LOG_KEEP), and every day's own forecast of the next 30 / 90 / 180 days — once those days have happened the page
 shows that live error too (the real check, beyond the back-tests).
 Engine vd with the app's Google Ads country weeks (roi_build hands them over, + every store's country block pairs once
-per build): the paid installs / users / uninstalls by country, and the page's "Budget by country" planner (fc.plan).
+per build): the page's "Budget by country" planner (fc.plan: each country's installs per $ and CPI rise; revenue per $
+the forecast's own) — the forecast's own paid installs stay spend × per_usd (STRUCT cs 0: the country model did not win
+there at the shares a forecast can know).
 data/forecast/state.json, refreshed at the end: the portfolio's month-of-year season and band ratios ("bandr": each GA4
 install-age band's revenue per active user ÷ the band before's, the median over the apps, per Monday — engine vd's prior
 for a band an app has few users in) + the engine's fixed structure ("vd_struct").
@@ -403,33 +405,31 @@ def drivers(app, rows, ida, cty_rows, rev_cty=None):
 
 
 # ── the page's series (a full model run and a kept one alike) ───────────────────────────────────────────────────────
-def plan_out(pl, f, fac, beta):
-    """The engine's planner inputs (forecast_vd.cs_plan) → the page's "Budget by country" card: per row its revenue per $
-    of spend within 30 / 90 / 180 days (r) = the forecast's own paid-install revenue (bias-corrected, at today's spend)
-    × the row's share of it ÷ the row's spend; + the old users' and organic installs' revenue (corrected) the plan does
-    not move, and the ROAS-to-spend range beta (the four ROI forms' own) the page shows the next-$ ROI as a range with
-    (a row's revenue per $ itself stays flat when its spend moves: beta on top did not win the back-test)."""
-    if not pl or not pl.get("rows"):
+def plan_out(pl, f, fac):
+    """The engine's planner inputs (forecast_vd.cs_plan) → the page's "Budget by country" card: per row its spend, its
+    installs per $ (ppu) at the training level sb and its measured spend range; its revenue per $ of spend within
+    30 / 90 / 180 days (r) = the forecast's own paid-install revenue (bias-corrected, at today's spend) ÷ today's spend —
+    the SAME for every row (each country's own value per $ did not win the back-test: lab 8, worse on most apps of the
+    older half) and at any spend (revenue follows the money: the ROI forms' β on top did not win either); + the old users'
+    and organic installs' revenue (corrected) the plan does not move. fc_cs: the forecast's own paid installs follow
+    the country model too (STRUCT cs 1) — the page's spend slider then moves installs × m^(1 − e), else × m."""
+    if not pl or not pl.get("rows") or not pl.get("s"):
         return None
 
     def csum(k, hz):
         return sum(v * fac[i] for i, v in enumerate(f["rev"][k][:hz]))
     hs = VD.CS_H
     paid = [csum("paid", hz) for hz in hs]
-    rows = []
-    for x in pl["rows"]:
-        r = [(_r(paid[j] * x["w"][j] / x["s0"], 6) if x["w"][j] is not None and x["s0"] > 0 else None)
-             for j in range(len(hs))]
-        rows.append({"cc": x["cc"], "own": x["own"], "s0": _r(x["s0"], 4), "sb": _r(x["sb"], 4),
-                     "ppu": _r(pl["pu"] * x["rho"], 6), "lo": _r(x["lo"], 4), "hi": _r(x["hi"], 4), "r": r})
-    return {"v": 1, "weeks": pl["weeks"], "e": _r(pl["e"], 4), "en": pl["en"], "s": _r(pl["s"], 4),
-            "org": _r(pl["org"], 2), "n0": _r(pl["n0"], 2), "cov": _r(pl["cov"], 4),
+    r = [_r(v / pl["s"], 6) for v in paid]
+    rows = [{"cc": x["cc"], "s0": _r(x["s0"], 4), "sb": _r(x["sb"], 4), "ppu": _r(pl["pu"] * x["rho"], 6),
+             "lo": _r(x["lo"], 4), "hi": _r(x["hi"], 4), "r": list(r)} for x in pl["rows"]]
+    return {"v": 2, "weeks": pl["weeks"], "e": _r(pl["e"], 4), "en": pl["en"], "s": _r(pl["s"], 4),
+            "org": _r(pl["org"], 2), "n0": _r(pl["n0"], 2), "fc_cs": 1 if pl.get("fc") else 0,
             "old": [_r(csum("old", hz), 2) for hz in hs], "orgr": [_r(csum("org", hz), 2) for hz in hs],
-            "paid": [_r(v, 2) for v in paid], "h": list(hs), "beta": [_r(b, 4) for b in (beta or ())] or None,
-            "rows": rows}
+            "paid": [_r(v, 2) for v in paid], "h": list(hs), "rows": rows}
 
 
-def series(app, p, cal, seas, E=F, beta=None):
+def series(app, p, cal, seas, E=F):
     """The forecast of engine E from the newest day with settings p (spend = the last F.SPEND_DAYS days' run-rate, the
     bias correction of cal) → the page's f + hist: revenue / active users / uninstalls by who (old users, organic,
     paid), installs, spend; the actual last HIST_DAYS days beside it; + "plan" (engine vd with country data: the
@@ -454,7 +454,7 @@ def series(app, p, cal, seas, E=F, beta=None):
                     "spi": [_r(e.get("spi"), 2) for e in hd], "dau": [e.get("dau") for e in hd],
                     "n": [e.get("n") for e in hd], "un": [e.get("un") for e in hd]}}
     try:                                                 # only the planner would miss it: never the forecast
-        out["plan"] = plan_out(f.get("plan"), f, fac, beta)
+        out["plan"] = plan_out(f.get("plan"), f, fac)
     except Exception:
         out["plan"] = None
     return out, f, ser
@@ -491,11 +491,10 @@ def _tuned_now(E, p):
     return set(E.DEFAULT) <= set(p) and all(p[k] in vals for k, vals in getattr(E, "GRID", {}).items())
 
 
-def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None, unst=None, geo=None, cs_pairs=None,
-             beta=None):
+def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None, unst=None, geo=None, cs_pairs=None):
     """→ the page's forecast for this app (None: nothing yet). Never raises. geo: the app's Google Ads country weeks
-    (geo_weeks), cs_pairs: every store's country block pairs (the run's cs_pairs) — engine vd's installs by country and
-    the "Budget by country" planner; beta: the app's ROAS-to-spend range (the four ROI forms')."""
+    (geo_weeks), cs_pairs: every store's country block pairs (the run's cs_pairs) — engine vd's "Budget by country"
+    planner (and its paid installs by country, with STRUCT cs 1)."""
     try:
         app = inputs(rows, P, ida, life, life_till, unst)
         app["geo"], app["cs_pairs"] = geo or {}, cs_pairs
@@ -546,7 +545,7 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
                         Eo = ENGINES[old["v"]]           # (by the engine that made the file)
                         cal = {int(h): {"bias": b} for h, b in (old.get("bias") or {}).items()} or \
                             {int(h): c for h, c in (fc.get("cal") or {}).items()}
-                        sr, f, _ = series(app, dict(Eo.DEFAULT, **old["p"]), cal, seas, Eo, beta)
+                        sr, f, _ = series(app, dict(Eo.DEFAULT, **old["p"]), cal, seas, Eo)
                         fc.update(sr)
                         fc["T"] = _iso(app["last"])
                         if Eo is VD:
@@ -572,7 +571,7 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
         else:                                            # vd tunes from the stored setting: its score is the first step
             sc_prev = steps[0]["score"] if prev_p and moved and steps else None
         cal = F.calibrate(bt)
-        sr, f, ser = series(app, p, cal, seas, E, beta)
+        sr, f, ser = series(app, p, cal, seas, E)
         last = app["last"]
         # readiness: a horizon shows once enough tests could score it; else the day it will
         ready, ready_from = {}, {}

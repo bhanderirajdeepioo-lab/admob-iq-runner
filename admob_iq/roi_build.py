@@ -724,15 +724,14 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
             decs = {x["cc"]: x["dec"] for x in cty["rows"]}
             eng = [dict(x, dec=decs.get(x.get("cc"))) for x in (((detail or {}).get("countries") or {}).get("rows") or [])]
             fgeo, pairs = None, None
-            try:                                        # Google Ads country weeks → installs by country + the planner
+            try:                                        # Google Ads country weeks → the "Budget by country" planner
                 geo = (pre or {}).get("geo") or {}
                 fgeo = fob.geo_weeks(geo.get("weeks") or {}, sids, fxf) if sids else None
                 pairs = fob.cs_pairs(acc.fc, geo, fxf) if fgeo else None
             except Exception:
                 fgeo, pairs = None, None
             body["fc"] = fob.app_step(acc.fc, aid, key, rows, P, ida, life, body["life_till"], eng,
-                                      rev_cty=(rev or {}).get("cty"), unst=store, geo=fgeo, cs_pairs=pairs,
-                                      beta=f4.get("beta"))
+                                      rev_cty=(rev or {}).get("cty"), unst=store, geo=fgeo, cs_pairs=pairs)
             fcs = fc_summary(body["fc"])
         except Exception:
             body["fc"] = None

@@ -87,7 +87,7 @@ def test_forecast_view(out):
     assert out["fc_gx_held"]                                           # … held off / never checked / users only / on
     # 💸 Budget by country: today's plan = the forecast; Keep total; out-of-range warning; owner-only; the slider
     assert out["pl_card"] and out["pl_keep"] and out["pl_warn"] and out["pl_nokeep"]
-    assert out["pl_dev"] and out["pl_none"] and out["pl_slider"]
+    assert out["pl_dev"] and out["pl_none"] and out["pl_slider"] and out["pl_h"] and out["pl_inr"]
 
 
 def test_wiring():
