@@ -6907,7 +6907,7 @@ function fcUsers(d,rev,spd){ const fc=d.fc, f=fc.f, h=fc.hist||{}, H=+FCH, m=1+F
   const avg=(a,i0,i1)=>{ let s=0,k=0; for(let i=i0;i<i1&&i<a.length;i++){ if(ok(a[i])){ s+=a[i]; k++; } } return k?s/k:null; };
   const last=(a,n)=>avg(a,Math.max(0,a.length-n),a.length);
   const hrev=(h.rev||[]).slice(-30).map(v=>ok(v)?RV(v):null), hsp=(billed()?(h.spi||[]):(h.sp||[]).map(v=>ok(v)?RV(v):null)).slice(-30);
-  const ch=(a,b,good)=>{ if(!ok(a)||!ok(b)||!b) return ''; const x=a/b-1, up=x>=0; return ` <span class="${Math.abs(x)<0.02?'':(up===good?'roi-up':'roi-dn')}">${up?'▲ +':'▼ −'}${Math.abs(Math.round(x*100))}%</span>`; };
+  const ch=(a,b,good)=>{ if(!ok(a)||!ok(b)||!b) return ''; const x=a/b-1, up=x>=0; if(Math.abs(x)<0.005) return ' <span>0%</span>'; return ` <span class="${Math.abs(x)<0.02?'':(up===good?'roi-up':'roi-dn')}">${up?'▲ +':'▼ −'}${Math.abs(Math.round(x*100))}%</span>`; };
   // "abhi" = the last 7 days (the spend run-rate the forecast keeps); the table adds the last 30 days
   const i30=avg(fu.n,0,30), u30=fu.un?avg(fu.un,0,30):null, a7=last(hs.n,7), b7=last(hs.un,7), a0=last(hs.n,30), b0=last(hs.un,30);
   const dEnd=fu.dau[H-1], dNow=last(hs.dau,7), arpF=avg(rev,0,H)/avg(fu.dau,0,H);
