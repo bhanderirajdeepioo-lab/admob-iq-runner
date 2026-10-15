@@ -100,6 +100,10 @@ def settings() -> dict:
         "value_cd": _env("VALUE_CD", "false").lower() == "true",
         "iday_max_calls": _int_env(("IDAY_MAX_CALLS",), 120),           # install-day GA4 calls per app fetch
         "iday_cty_days": _int_env(("IDAY_CTY_DAYS",), 400),             # how far back countries are read
+        # the install-day fetch, extended (fetch.ga4_iday_ext; only with GA4_IDAY): Q-C read in full, late ages 91-427,
+        # paid vs organic, ad units by install age, app_remove by country — new files only, every existing cell as it
+        # was. IDAY_EXT=false: exactly the fetch without it (its files kept as they are)
+        "iday_ext": _env("IDAY_EXT", "true").lower() == "true",
         # 👥 Audience: GA4 active users by install day over the trailing 1, 2, 3 … month windows (fetch.ga4_audience;
         # engine.audience turns them into dead users by months since their last open). Off: nothing of it is read,
         # written or printed. GA4_AUDIENCE_BUDGET_SEC = its own seconds per build (no app is started past it)
