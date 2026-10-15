@@ -2568,6 +2568,9 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 @media (max-width:760px){.roi-f4g{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.roi-f4v{font-size:17px}.roi-f4c{padding:8px 10px}}
 .roi-fc-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;margin:0 0 12px}
 .roi-mini button[disabled]{opacity:.45;cursor:not-allowed}.roi-mini button small{font-size:10.5px;color:var(--faint)}
+.roi-fchs .roi-fch{width:64px;padding:3px 2px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;font-variant-numeric:tabular-nums}
+.roi-fchs .roi-fch b{font-weight:700}.roi-fchs .roi-fch small{font-size:10px;font-weight:600;white-space:nowrap;min-height:12px}
+.roi-fchs .roi-fch[aria-pressed="true"] small{color:#fff;opacity:.85}
 .roi-fc-sl{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink2);min-width:220px;flex:1 1 220px;max-width:420px}
 .roi-fc-sl b{color:#fff}.roi-fc-sl small{color:var(--faint)}.roi-fc-sl input{width:100%;accent-color:var(--cyan)}
 .roi-pl{display:inline-flex;align-items:center;gap:6px}.roi-pl b{min-width:52px;text-align:center;color:#fff;font-variant-numeric:tabular-nums}
@@ -6866,9 +6869,12 @@ function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life
     +f4All(apps)+(pc?`<div class="roi-card"><div class="roi-ct"><h3>Saare apps (jin pe ads) · ROAS by day · har install mahina</h3><span class="roi-note">dashed = 100%</span></div>${pc}</div>`:''); }
 // ---- 🔮 Forecast (owner, 14 Oct: "next 6 month ka prediction … AI back testing … khud learn karega", start date
 // changeable "dashboard me dedo") — the app's own model (forecast_build): revenue / spend / profit / breakeven for the
-// next 30 / 90 / 180 days with its measured range, why it moves (now vs the usual), how right it was (back-tests and
+// next N days (the longest its own back-tests verify — owner, 15 Oct: "verified horizon, khud badhe" — and the
+// standard 30 / 90 / 180 / 365 below it) with each horizon's own measured range, why it moves (now vs the usual), how right it was (back-tests and
 // the live check), what it learnt, and the start of the real run. Spend slider: the paid installs scale with it exactly.
-let FCH='90', FCM=0, FCU='dau', PLAN=null;
+// "Agle N din" (owner, 15 Oct: "verified horizon, khud badhe"): FCH 'max' = each app's own N (the longest horizon its
+// back-tests verify, fc.hz.n — grows ~14 days every 2 weeks), or a standard horizon '30' / '90' / '180' / '365'
+let FCH='max', FCM=0, FCU='dau', PLAN=null;
 // the spend slider: paid revenue and installs / users ×m; only when the forecast's own paid installs follow the
 // country model (fc.plan.fc_cs, engine STRUCT cs 1) every country × the same %, installs / users ∝ m^(1−e) (each
 // country's CPI rises with its spend: e measured) — held off now (it did not win at the shares a forecast can know)
@@ -6879,35 +6885,81 @@ const FC_C={installs:'installs (naye users)',retention:'retention (users kitne r
 function fcTot(f,m){ return f.old.map((v,i)=>(v||0)+(f.org[i]||0)+m*(f.paid[i]||0)); }
 function fcSum(a,h){ let s=0; for(let i=0;i<h&&i<a.length;i++) s+=a[i]; return s; }
 function fcDay(d0,i){ const x=new Date(d0+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+i); return x.toISOString().slice(0,10); }
+// an app's horizons: engine vd's verified horizon (fc.hz: chips = the standard 30 / 90 / 180 / 365 below N, then N;
+// lock = the day each standard one not verified yet shows; next = the next longer horizon and its day; drop = verified
+// but its calibrated total can not be shown, so no chip — neither shown nor "locked") — an older file (no fc.hz): its
+// ready 30 / 90 / 180, as before
+function fcHz(fc){ const rd=(fc&&fc.ready)||{}, rf=(fc&&fc.ready_from)||{}, z=fc&&fc.hz;
+  if(!z) return {n:null, chips:['30','90','180'].filter(h=>rd[h]).map(Number), lock:['30','90','180'].filter(h=>!rd[h]).map(h=>[+h,rf[h]||null]), next:null, drop:[], old:true};
+  const chips=(z.chips||[]).map(Number), n=ok(z.n)?+z.n:null, drop=(z.drop||[]).map(Number);
+  return {n, chips, lock:[30,90,180,365].filter(h=>!chips.includes(h)&&!drop.includes(h)&&(n==null||h>n)).map(h=>[h,(z.lock||{})[String(h)]||rf[String(h)]||null]),
+    next:z.next||null, drop, old:false}; }
+// the horizon on screen: the chip picked if this app has it, else its longest (N)
+function fcHN(fc){ const ch=fcHz(fc).chips; if(!ch.length) return null; const h=+FCH; return FCH!=='max'&&ch.includes(h)?h:ch[ch.length-1]; }
+// where the daily line steps: every horizon's total is corrected by its own back-tests' bias, so the week after a
+// horizon (30 / 90 / 180 / a chip) can step up or down vs the week before — said under the chart when it is more than
+// 10% (7 days each side: the weekday rhythm cancels; no silent jump)
+function fcJumps(fc,rev,H){ const an=[...new Set([30,90,180].concat(fcHz(fc).chips))].filter(a=>a>=7&&a+7<=H&&a+7<=rev.length).sort((a,b)=>a-b);
+  const wk=(i0)=>{ let s=0; for(let i=i0;i<i0+7;i++) s+=ok(rev[i])?rev[i]:0; return s; };
+  const it=an.map(a=>[a,wk(a-7)>0?wk(a)/wk(a-7)-1:0]).filter(x=>Math.abs(x[1])>0.1);
+  return it.length?`<p class="roi-note">📏 Line din ${it.map(x=>`${x[0]+1} pe <b>${x[1]>=0?'+':'−'}${Math.abs(Math.round(x[1]*100))}%</b>`).join(', ')} badalti hai: har horizon (30 / 90 / 180${fcHz(fc).old?'':' / N'} din) ka total uske apne back-tests ki galti (bias) se theek hota hai, aur lambe horizon ke tests purane test-dino se bante hain — unka bias chhote horizon se alag ho sakta hai. Har horizon ka total sahi; beech ka roz ka aakar andaaza.</p>`:''; }
+// one horizon's accuracy from the very tests its 80% range is made of (forecast.cal1: the normal ones once there are
+// ≥ 4, else all of them): normal days' error with its tests (sudden changes apart), every test's beside it; fewer than
+// 4 normal tests: every test's error, the normal days' few beside it
+function fcNm(c){ return !!c&&ok(c.mape_normal)&&c.n_normal>=4; }
+function fcAccTxt(c,H){ if(!c||!ok(c.mape)) return {v:'—',s:''};
+  const nm=fcNm(c), k=nm?c.n_normal:c.n, ev=`${Math.round((c.ev_rate||0)*100)}% me achanak jhatka`;
+  return {v:`±${P(nm?c.mape_normal:c.mape)} <small>(${H} din, ${k} tests)</small>`,
+    s:!ok(c.mape_normal)?`sab ${c.n} tests me achanak jhatka — normal din ka error abhi measure nahi`
+      :!nm?`sab tests (jhatkon samet) · normal din ±${P(c.mape_normal)} (sirf ${c.n_normal} tests — kam se kam 4 chahiye) · ${ev}`
+      :c.n_normal<c.n?`jhatkon samet ±${P(c.mape)} (${c.n} tests) · ${ev}`:'normal din · koi jhatka nahi'}; }
+// the 80% range beside the forecast, not around it: most of the horizon's tests missed the same way, and the bias
+// correction (shrunk by its count, forecast.cal1: the newer half of the range's tests, r ÷ (r + 3)) took back only
+// part of that — said on the tile, never silent
+function fcSide(c,R,lo,hi){ const side=R<lo?'upar':R>hi?'neeche':null; if(!side) return '';
+  const k=c.n_normal>=4?c.n_normal:c.n, r=k-Math.floor(k/2), pc=Math.round(100*r/(r+3));
+  return ` <small>(range forecast se ${side}: ${k} tests me zyadatar asli forecast se ${side==='upar'?'zyada':'kam'} aaya, aur model is galti (bias) ka sirf ${pc}% theek karta hai — naye ${r} tests se; kam tests pe poora sudhaar risky)</small>`; }
+// why longer is not shown yet and when it unlocks (Hinglish; per app — the same whatever chip is picked)
+function fcHzNote(fc){ const z=fcHz(fc); if(z.old) return '';
+  const nd=z.next&&z.next[1]?z.next:null, same=z.lock.filter(x=>nd&&x[1]===nd[1]&&x[0]!==nd[0]).map(x=>x[0]);   // (unlock together)
+  const lk=z.lock.filter(x=>x[1]&&!(nd&&(x[0]===nd[0]||x[1]===nd[1]))).map(x=>`${x[0]} din — ${E(fd(x[1]))} se`);
+  const nx=nd?`<b>${nd[0]} din — ${E(fd(nd[1]))} se</b>${same.length?` (${same.join(' / ')} din bhi)`:''}`:'';
+  const c=z.n!=null?(fc.cal||{})[String(z.n)]||{}:{};
+  if(z.n==null) return '';
+  const dr=z.drop.length?` <b>${z.drop.join(' / ')} din</b> ke bhi 4+ tests hain, par us horizon ki galti (bias) se sudhra total ${z.n} din ke sudhre total se bas thoda hi zyada (ya kam) aata — beech ke dino ki kamai forecast ke 5% se bhi kam maanni padti, jo sahi nahi; isliye woh chip abhi nahi (agle model run pe phir check).`:'';
+  if(z.n>=365) return `<p class="roi-note roi-fc-hz">🔎 <b>Agle ${z.n} din</b> tak ka forecast is app ke apne purane data se check ho chuka hai (${c.n||0} tests). 1 saal se lamba forecast model nahi banata.${dr}</p>`;
+  const up=[nx].concat(lk).filter(Boolean);
+  return `<p class="roi-note roi-fc-hz">🔎 <b>Agle ${z.n} din</b> tak hi kyun: itna aage ka forecast is app ke apne purane data se ${c.n||0} baar check ho chuka hai${up.length?` (har 2 hafte pe ek test, kam se kam 4 chahiye). Lamba forecast tab dikhega jab data utna purana ho jaaye — har 2 hafte ~14 din badhta hai: ${up.join(' · ')}`:''}.${dr}</p>`; }
 function fcView(d){ const fc=d.fc; CCY=d.ccy||null;
   if(!fc) return `<div class="roi-card"><p class="roi-note">🔮 Is app ka forecast abhi bana nahi — robot roz ek baar har app ka model chalata hai (agle run me aayega). Ya app ke paas abhi kaafi din ka data nahi.</p></div>`;
-  const rd=fc.ready||{}, hs=['30','90','180'];
-  if(!rd[FCH]) FCH=hs.filter(h=>rd[h]).pop()||'30';
-  const chips=hs.map(h=>rd[h]?`<button type="button" data-roi-fch="${h}" aria-pressed="${FCH===h}">${h} din</button>`:`<button type="button" disabled title="${E('Data kam — '+fd((fc.ready_from||{})[h]||'')+' se')}">${h} din <small>${E(fd((fc.ready_from||{})[h]||''))} se</small></button>`).join('');
-  const any=hs.some(h=>rd[h]);
+  const z=fcHz(fc), H=fcHN(fc), cal=fc.cal||{};
+  const chips=z.chips.map((h,i)=>{ const mx=!z.old&&i===z.chips.length-1, c=cal[String(h)]||{};
+      return `<button type="button" class="roi-fch" data-roi-fch="${mx?'max':h}" aria-pressed="${H===h}"><b>${h} din</b><small>${mx?'(max)':fcNm(c)?'±'+P(c.mape_normal):ok(c.mape)?'±'+P(c.mape):''}</small></button>`; }).join('')
+    +z.lock.map(x=>`<button type="button" class="roi-fch" disabled title="${E('Data kam — '+(x[1]?fd(x[1])+' se':'abhi nahi'))}"><b>${x[0]} din</b><small>${x[1]?E(fd(x[1]))+' se':'—'}</small></button>`).join('');
+  const any=z.chips.length>0;
   const sv=billed()&&fc.f.spi!=null?fc.f.spi:RV(fc.f.sp[0]||0);
-  const ctl=`<div class="roi-fc-ctl"><span class="roi-mini" role="group" aria-label="Kitne din aage">${chips}</span>`
+  const ctl=`<div class="roi-fc-ctl"><span class="roi-mini roi-fchs" role="group" aria-label="Kitne din aage">${chips}</span>`
     +((fc.f.sp[0]||0)>0?`<label class="roi-fc-sl"><span>Google Ads spend${fc.plan&&fc.plan.fc_cs?' · sab countries':''} <b id="roi-fc-ml">${FCM>=0?'+':'−'}${Math.abs(Math.round(FCM*100))}%</b> <small>(abhi ${MV(sv)}/din = pichhle ${fc.f.spd||30} din${fc.f.spi30!=null||fc.f.sp30!=null?` · 30 din avg ${MV(billed()&&fc.f.spi30!=null?fc.f.spi30:RV(fc.f.sp30||0))}/din`:''})</small></span><input type="range" id="roi-fc-m" min="-100" max="100" step="10" value="${Math.round(FCM*100)}" aria-label="Spend badlo"></label>`:'<span class="roi-note">Is app pe abhi Google Ads spend nahi — forecast sirf organic</span>')+`</div>`;
-  return (any?ctl+`<div id="roi-fc-out">${fcOut(d)}</div><div id="roi-fc-plan">${fcPlan(d)}</div>`:`<div class="roi-card"><p class="roi-note">⏳ Model ko abhi kaafi tests nahi mile — 30 din ka forecast <b>${E(fd((fc.ready_from||{})['30']||''))}</b> se (shuru ke din: ${E(fdy(fc.start))}).</p></div>`)
+  return (any?ctl+fcHzNote(fc)+`<div id="roi-fc-out">${fcOut(d)}</div><div id="roi-fc-plan">${fcPlan(d)}</div>`:`<div class="roi-card"><p class="roi-note">⏳ Model ko abhi kaafi tests nahi mile — 30 din ka forecast <b>${E(fd((fc.ready_from||{})['30']||''))}</b> se (shuru ke din: ${E(fdy(fc.start))}). Har 2 hafte pe ek back-test banta hai; kisi horizon ke 4 tests ho jaayein tab woh dikhta hai.</p></div>`)
     +fcWhy(d)+fcAcc(d)+fcLearn(d)+fcStart(d); }
-function fcOut(d){ const fc=d.fc, f=fc.f, H=+FCH, m=1+FCM, c=(fc.cal||{})[FCH]||{};
+function fcOut(d){ const fc=d.fc, f=fc.f, H=fcHN(fc), m=1+FCM, c=(fc.cal||{})[String(H)]||{};
   const rev=fcTot(f,fcMul(fc,m).r).map(v=>RV(v)), spd=(billed()&&f.spi!=null)?f.sp.map(v=>f.spi*(v>0?1:0)*m):f.sp.map(v=>RV(v)*m);
-  const R=fcSum(rev,H), S=fcSum(spd,H), Pr=R-S, lo=R*(1+(c.lo||0)), hi=R*(1+(c.hi||0));
+  const R=fcSum(rev,H), S=fcSum(spd,H), Pr=R-S, [lo,hi]=fcRange(R,c.lo,c.hi);
   // breakeven: lifetime cash P/L so far + the forecast's daily profit
   let p0=0; const till=d.life_till; for(const x of d.life||[]){ if(till&&x[0]>till) continue; p0+=(RV(+x[1]||0)||0)-(SV(+x[2]||0,x[3]!=null?+x[3]:null)||0); }
   let cum=p0, cross=null; for(let i=0;i<rev.length;i++){ const before=cum; cum+=rev[i]-spd[i]; if(cross==null&&((before<0&&cum>=0)||(before>=0&&cum<0))) cross=[fcDay(f.d0,i),cum>=0]; }
-  const be=p0>=0?(cross&&!cross[1]?`<span class="roi-dn">Loss me jaayega ~${E(fd(cross[0]))}</span>`:`<span class="roi-up">Profit me hai</span>`):(cross&&cross[1]?`<span class="roi-up">Profit me aayega ~${E(fd(cross[0]))}</span>`:`<span class="roi-dn">6 mahine me nahi</span>`);
-  const acc=c.mape_normal!=null?`±${P(c.mape_normal)} normal din · ±${P(c.mape)} sab tests`:(c.mape!=null?`±${P(c.mape)}`:'—');
-  const kp=`<div class="roi-ks6">`+tile(`Revenue · agle ${H} din`,MC(R),`80% chance: ${MC(lo)} – ${MC(hi)}`,'roi-kg')
+  const be=p0>=0?(cross&&!cross[1]?`<span class="roi-dn">Loss me jaayega ~${E(fd(cross[0]))}</span>`:`<span class="roi-up">Profit me hai</span>`):(cross&&cross[1]?`<span class="roi-up">Profit me aayega ~${E(fd(cross[0]))}</span>`:`<span class="roi-dn">${rev.length===180?'6 mahine':'agle '+rev.length+' din'} me nahi</span>`);
+  const acc=fcAccTxt(c,H);
+  const kp=`<div class="roi-ks6">`+tile(`Revenue · agle ${H} din`,MC(R),`80% chance: ${MC(lo)} – ${MC(hi)}${fcSide(c,R,lo,hi)}`,'roi-kg')
     +tile(`Google Ads spend · ${H} din`,MC(S),FCM?`slider: ${FCM>0?'+':'−'}${Math.abs(Math.round(FCM*100))}%`:`pichhle ${f.spd||30} din jaisa`)
     +tile(`Profit / loss · ${H} din`,`<span class="${Pr>=0?'roi-up':'roi-dn'}">${MC(Pr,true)}</span>`,`ROAS ${P(S?R/S:null)}`,Pr>=0?'roi-kg':'roi-kb')
     +tile('Breakeven (lifetime)',be,`abhi lifetime ${MC(p0,true)}`)
-    +tile('Kitna sahi (back-test)',acc,`${c.n||0} tests · ${c.ev_rate?Math.round(c.ev_rate*100)+'% me achanak jhatka':'koi jhatka nahi'}`)+`</div>`;
-  return kp+`<div class="roi-card"><div class="roi-ct"><h3>Roz ka revenue · pichhle 90 din asli + agle ${H} din forecast</h3><span class="roi-note">halka rang = 80% range · line pe tap = us din</span></div>${fcChart(fc,H,rev,spd)}</div>`+fcUsers(d,rev,spd); }
+    +tile('Kitna sahi (back-test)',acc.v,acc.s)+`</div>`;
+  return kp+`<div class="roi-card"><div class="roi-ct"><h3>Roz ka revenue · pichhle 90 din asli + agle ${H} din forecast</h3><span class="roi-note">halka rang = 80% range${fc.hz&&(fc.hz.band||[]).length?' — aage ke din pe chauda (har horizon ke apne back-tests se)':''} · line pe tap = us din</span></div>${fcChart(fc,H,rev,spd)}${fcJumps(fc,rev,H)}</div>`+fcUsers(d,rev,spd); }
 // users, installs and uninstalls the forecast carries (owner: "spending chalu rahega to DAU badhenge, aage ka uninstall
 // bhi hoga"): every day's new installs (organic + spend ÷ CPI) join on their retention curve and leave on their
 // uninstall curve (both learnt per app from its own install days); the spend slider moves only the paid part
-function fcUsers(d,rev,spd){ const fc=d.fc, f=fc.f, h=fc.hist||{}, H=+FCH, m=fcMul(fc,1+FCM).i; if(!f.dau_p) return '';
+function fcUsers(d,rev,spd){ const fc=d.fc, f=fc.f, h=fc.hist||{}, H=fcHN(fc), m=fcMul(fc,1+FCM).i; if(!f.dau_p) return '';
   const mix=(o,i)=>(o.old[i]||0)+(o.org[i]||0)+m*(o.paid[i]||0);
   const org=fc.parts&&ok(fc.parts.org)?+fc.parts.org:0;
   const fu={dau:f.dau.map((_,i)=>mix(f.dau_p,i)), n:f.n.map(v=>org+(v-org)*m), un:f.un?f.un.old.map((_,i)=>mix(f.un,i)):null};
@@ -6930,11 +6982,11 @@ function fcUsers(d,rev,spd){ const fc=d.fc, f=fc.f, h=fc.hist||{}, H=+FCH, m=fcM
   // 30-day blocks: what each part of the next H days looks like, beside the last 30 actual days
   const rows=[[`Pichhle 30 din <small>asli</small>`,a0,b0,last(hs.dau,30),arp(30),avg(hrev,0,30),avg(hsp,0,30)],
     [`Pichhle 7 din <small>asli</small>`,a7,b7,dNow,arpA,avg(hrev,23,30),avg(hsp,23,30)]];
-  for(let b=0;b<H;b+=30){ const r=avg(rev,b,b+30), du=avg(fu.dau,b,b+30); rows.push([`Din ${b+1}–${b+30}`,avg(fu.n,b,b+30),fu.un?avg(fu.un,b,b+30):null,du,r/du,r,avg(spd,b,b+30)]); }
+  for(let b=0;b<H;b+=30){ const e=Math.min(b+30,H), r=avg(rev,b,e), du=avg(fu.dau,b,e); rows.push([`Din ${b+1}–${e}`,avg(fu.n,b,e),fu.un?avg(fu.un,b,e):null,du,r/du,r,avg(spd,b,e)]); }
   const tb=`<table class="roi-t roi-sub"><thead><tr><th>Kab</th><th>Installs / din</th><th>Uninstalls / din</th><th>DAU</th><th>ARPDAU</th><th>Revenue / din</th><th>Spend / din</th><th>Profit / din</th></tr></thead><tbody>`
     +rows.map((r,i)=>{ const pr=ok(r[5])&&ok(r[6])?r[5]-r[6]:null; return `<tr${i>1?'':' class="roi-act"'}><td class="roi-nm">${r[0]}</td><td>${N(r[1])}</td><td>${N(r[2])}</td><td>${N(r[3])}</td><td>${MPV(r[4])}</td><td>${MC(r[5])}</td><td>${MC(r[6])}</td><td class="${pr==null?'':pr>=0?'roi-up':'roi-dn'}">${MC(pr,true)}</td></tr>`; }).join('')+`</tbody></table>`;
-  const ac=(fc.cal||{})[FCH]||{};
-  const note=`<p class="roi-note">Har din ke naye installs (organic + spend ÷ CPI) apne retention curve pe judte hain aur apne uninstall curve pe jaate hain — dono curve isi app ke apne purane install-dino se seekhe (din 0, 1, 2 … 855 tak). Purane users bhi isi tarah ghatte hain. ${fc.plan&&fc.plan.fc_cs?`Paid installs har country ke apne CPI se (country ka spend badhe to uska CPI bhi badhta hai, e ${(+fc.plan.e).toFixed(2)}); slider har country ko same % badhata hai — installs ×m<sup>1−e</sup>, kamai ×m (revenue spend ke saath seedha — back-test).`:'Slider sirf paid installs ka hissa badalta hai.'}${ok(ac.un_mape)?` Uninstall forecast back-test me ±${P(ac.un_mape)} (${FCH} din, ${ac.un_n} tests).`:''}</p>`;
+  const ac=(fc.cal||{})[String(H)]||{};
+  const note=`<p class="roi-note">Har din ke naye installs (organic + spend ÷ CPI) apne retention curve pe judte hain aur apne uninstall curve pe jaate hain — dono curve isi app ke apne purane install-dino se seekhe (din 0, 1, 2 … 855 tak). Purane users bhi isi tarah ghatte hain. ${fc.plan&&fc.plan.fc_cs?`Paid installs har country ke apne CPI se (country ka spend badhe to uska CPI bhi badhta hai, e ${(+fc.plan.e).toFixed(2)}); slider har country ko same % badhata hai — installs ×m<sup>1−e</sup>, kamai ×m (revenue spend ke saath seedha — back-test).`:'Slider sirf paid installs ka hissa badalta hai.'}${ok(ac.un_mape)?` Uninstall forecast back-test me ±${P(ac.un_mape)} (${H} din, ${ac.un_n} tests).`:''}</p>`;
   return `<div class="roi-card" id="roi-fc-users"><div class="roi-ct"><h3>Users, installs &amp; uninstalls · forecast</h3>${chips}</div>${kp}<div id="roi-fc-uc">${fcLine(fc,H,hs[k],fu[k],met.find(x=>x[0]===k)[1])}</div><div class="roi-tw" style="margin-top:10px">${tb}</div>${note}</div>`; }
 // 💸 Budget by country (owner-only: revenue — hidden in a developer view): the country model (fc.plan, engine vd) as a
 // planner. Per country: installs = spend × installs-per-$ × (spend ÷ today's)^−e (back-tested: given the real country
@@ -6960,7 +7012,7 @@ function plStep(d,cc,op){ const st=plState(d), pl=d.fc.plan, x=pl.rows.find(r=>r
   st.s[cc]=nv; }
 function fcPlan(d){ if(typeof window!=='undefined'&&window.__DEV_VIEW__) return '';
   const fc=d.fc, pl=fc&&fc.plan; if(!pl||!pl.rows||!pl.rows.length) return '';
-  const st=plState(d), H=+FCH, hs=pl.h||[30,90,180], j=Math.max(0,hs.indexOf(H));
+  const st=plState(d), H=fcHN(fc), hs=pl.h||[30,90,180], j=Math.max(0,hs.indexOf(H));
   // spend in the view currency as the forecast card above shows it: ₹ as billed (its own rate) in the INR view
   const f=fc.f||{}, SVp=v=>ok(v)?(billed()&&f.spi!=null&&(f.sp||[])[0]>0?v*f.spi/f.sp[0]:RV(v)):null;
   const R=pl.rows.map(x=>({x,now:plRow(pl,x,+x.s0||0),p:plRow(pl,x,st.s[x.cc]||0)}));
@@ -6991,6 +7043,15 @@ function fcPlan(d){ if(typeof window!=='undefined'&&window.__DEV_VIEW__) return 
     +`<p class="roi-note"><b>Seemayein:</b> ⚠️ wali country measured spend range (pichhle hafton ka har hafte ka spend/day + aaj ka) ke bahar — wahan ka andaza data se nahi. Agla $ kitna laayega (marginal ROI) ROI forms me range ke roop me hai; yahan nahi — β upar se lagane pe back-test haara (zyadatar apps pe kharab). Upar wala forecast is planner se nahi badalta (sirf slider se).</p>`
     +(warn.length?`<p class="roi-note roi-wt">⚠️ Measured range ke bahar: ${warn.join(' · ')}</p>`:'');
   return `<div class="roi-card" id="roi-plan"><div class="roi-ct"><h3>💸 Budget by country</h3><span class="roi-note">−/+ = us country ka spend 10% · Keep total on = baaki countries se adjust</span></div>${ctl}${tiles}${tb}${note}</div>`; }
+// the forecast charts' x labels (first day, "aaj", the middle of the forecast, its last day) that never overlap: a
+// phone draws 380 units wide (CHW), where a long horizon leaves little room between the first day and "aaj" and
+// between the middle and the last day — a label without room (its width + 4) is left out. Width: the 11px label
+// measured in the page's own font (a canvas; a "D Mon YY" runs 5.2–5.9 units a character), else 6 a character
+const fcTW=(()=>{ let cx; return s=>{ if(cx===undefined){ try{ cx=document.createElement('canvas').getContext('2d'); cx.font='11px '+getComputedStyle(document.body).fontFamily; }catch(e){ cx=null; } }
+  return cx?cx.measureText(String(s)).width:String(s).length*6; }; })();
+function fcXs(X,n0,n,mid,lab,Hh){ const tw=fcTW, ta=tw('aaj')/2;
+  const room=i=>i===n0-1||i===n-1||(i===0?X(n0-1)-X(0)>=tw(lab(0))+ta+4:X(n-1)-X(i)>=tw(lab(i))/2+tw(lab(n-1))+4&&X(i)-X(n0-1)>=tw(lab(i))/2+ta+4);
+  return [0,n0-1,n-1].concat(mid!=null?[mid]:[]).filter(room).map(i=>`<text class="ax" x="${X(i).toFixed(1)}" y="${Hh-8}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${E(i===n0-1?'aaj':lab(i))}</text>`).join(''); }
 // one count series: the last 90 actual days + the next H forecast days (values printed at today and at the end)
 function fcLine(fc,H,hist,fut,label){ const W=CHW(), Hh=W<720?190:220, m={t:16,r:W<720?54:70,b:26,l:W<720?44:52};
   const hr=hist||[], n0=hr.length, fr=(fut||[]).slice(0,H), n=n0+fr.length; if(!n0&&!fr.length) return '';
@@ -7001,7 +7062,7 @@ function fcLine(fc,H,hist,fut,label){ const W=CHW(), Hh=W<720?190:220, m={t:16,r
   const sh=v=>v>=1e6?(v/1e6).toFixed(v>=1e7?0:1)+'M':v>=1e3?(v/1e3).toFixed(v>=1e4?0:1)+'K':String(Math.round(v));
   const grid=ticks.map(v=>`<line class="g" x1="${m.l}" x2="${W-m.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text class="ax" x="${m.l-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${E(sh(v))}</text>`).join('');
   const d0h=fcDay(fc.f.d0,-n0), lab=i=>fd(fcDay(d0h,i));
-  const xs=[0,n0-1,n-1].map(i=>`<text class="ax" x="${X(i).toFixed(1)}" y="${Hh-8}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${E(i===n0-1?'aaj':lab(i))}</text>`).join('');
+  const xs=fcXs(X,n0,n,null,lab,Hh);
   const path=(arr,off)=>arr.map((v,i)=>ok(v)?`${i&&ok(arr[i-1])?'L':'M'}${X(i+off).toFixed(1)} ${Y(v).toFixed(1)}`:'').join(' ');
   const la=hr[n0-1], lf=fr[fr.length-1];
   const lines=`<path class="ln c4" d="${path(hr,0)}"/><path class="ln c2" d="${path([la].concat(fr),n0-1)}"/>`
@@ -7036,18 +7097,30 @@ function fcCalNote(fc,H){ const evs=fcCalEv(fc,H), hol=fcHol(fc,H), wk=fcWk(fc);
   if(jan.length) it.push(`January slide <small>(${E(fd(jan[0].a))} – ${E(fd(jan[jan.length-1].b))})</small> <b class="roi-dn">${fcPc(jan[0].e)} → ${fcPc(jan[jan.length-1].e)}</b>${fcRg(jan[jan.length-1])?` <small>[${fcRg(jan[jan.length-1])}]</small>`:''}${evs.some(e=>e.k==='hold')?' <small>then it stays there</small>':''}`);
   if(c.use===0) return `<p class="roi-note roi-fcal">📅 <b>eCPM calendar</b> · ${it.join(' · ')}<br>Ye % same ad unit ka eCPM hai jo pichhle ${c.n} season${fcYs(c)} me in hafton me measured badla (Black Friday se pehle ke 3 hafte = 0)${evs.some(e=>fcRg(e))?' — bold = un season ka average, [ ] = sabse kam … sabse zyada season':''}. Forecast me <b>nahi</b> joda: back-test me Nov–Dec me bane forecast isse zyadatar apps pe sudhre, par Jan–Feb me bane forecast zyadatar apps pe bigde — isliye abhi ye sirf jaankari hai. Chart ke upar halke nishaan = woh hafte.${wk}${hol}</p>`;
   return `<p class="roi-note roi-fcal">📅 <b>eCPM calendar</b> · ${it.join(' · ')}<br>Ye % same ad unit ka eCPM hai jo pichhle ${c.n} season${fcYs(c)} me in hafton me measured badla (Black Friday se pehle ke 3 hafte = 0)${evs.some(e=>fcRg(e))?' — bold = un season ka average, [ ] = sabse kam … sabse zyada season':''}. Purane users ki kamai pe pura asar; naye installs pe ~${Math.round(ph[0]*100)}%, kyunki Google ki bidding CPI bhi badal deti hai (eCPM +10% → installs per $ ${(ph[1]*10).toFixed(1).replace('-','−')}%, ROAS ~+1.3%). Chart ke upar chhote nishaan = woh hafte.${wk}${hol}</p>`; }
+// a back-test band (lo / hi = P10 / P90 of forecast ÷ actual − 1, after the bias correction) → where the ACTUAL falls
+// around a forecast v: v ÷ (1 + hi) … v ÷ (1 + lo) — a forecast that ran 20% high means an actual of v ÷ 1.2 (an error
+// beyond −95% read as −95%)
+function fcRange(v,lo,hi){ return [v/(1+Math.max(-0.95,ok(hi)?+hi:0)), v/(1+Math.max(-0.95,ok(lo)?+lo:0))]; }
+// the chart's 80% band on day i: engine vd's band across horizons (fc.hz.band: each horizon's measured P10 / P90 made
+// monotone — never narrower further out), day by day between its horizons; an older file: the horizon's own band flat
+function fcBand(fc,H){ const b=fc.hz&&fc.hz.band, c=(fc.cal||{})[String(H)]||{};
+  if(!b||!b.length) return ()=>[c.lo||0,c.hi||0];
+  return i=>{ const d=i+1; if(d<=b[0][0]) return [b[0][1],b[0][2]];
+    for(let k=1;k<b.length;k++){ if(d<=b[k][0]){ const a=b[k-1], z=b[k], t=(d-a[0])/(z[0]-a[0]); return [a[1]+(z[1]-a[1])*t,a[2]+(z[2]-a[2])*t]; } }
+    const z=b[b.length-1]; return [z[1],z[2]]; }; }
 function fcChart(fc,H,rev,spd){ const evs=fcCalEv(fc,H), W=CHW(), Hh=(W<720?220:250)+(evs.length?14:0), m={t:evs.length?30:16,r:W<720?54:70,b:26,l:W<720?44:52};
-  const hr=(fc.hist.rev||[]).slice(-90).map(v=>RV(v)), n0=hr.length, n=n0+H, c=(fc.cal||{})[String(H)]||{};
-  const fr=rev.slice(0,H), lo=fr.map(v=>v*(1+(c.lo||0))), hi=fr.map(v=>v*(1+(c.hi||0)));
-  const all=[...hr,...hi].filter(ok); if(!all.length) return '<p class="roi-note">Data nahi.</p>';
+  const hr=(fc.hist.rev||[]).slice(-90).map(v=>RV(v)), n0=hr.length, n=n0+H, bd=fcBand(fc,H);
+  const fr=rev.slice(0,H), rg=fr.map((v,i)=>{ const b=bd(i); return fcRange(v,b[0],b[1]); }), lo=rg.map(x=>x[0]), hi=rg.map(x=>x[1]);
+  const ln=[...hr,...fr].filter(ok); if(!ln.length) return '<p class="roi-note">Data nahi.</p>';
+  const cap=Math.max(...ln)*2, all=ln.concat(hi.filter(ok).map(v=>Math.min(v,cap)));   // a very wide range never squashes the lines
   let top=Math.max(...all)*1.08; const raw=top/4, p10=Math.pow(10,Math.floor(Math.log10(raw))), st=[1,2,2.5,5,10].map(k=>k*p10).find(k=>k>=raw)||raw; top=Math.ceil(top/st)*st;
   const X=i=>m.l+(W-m.l-m.r)*i/(n-1), Y=v=>m.t+(Hh-m.t-m.b)*(1-v/top);
   const ticks=[]; for(let v=0;v<=top+st/2;v+=st) ticks.push(v);
   const grid=ticks.map(v=>`<line class="g" x1="${m.l}" x2="${W-m.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text class="ax" x="${m.l-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${E(MC(v))}</text>`).join('');
   const d0h=fcDay(fc.f.d0,-n0), lab=i=>fd(fcDay(d0h,i));
-  const xs=[0,n0-1,n-1].concat(H>60?[n0-1+Math.round(H/2)]:[]).map(i=>`<text class="ax" x="${X(i).toFixed(1)}" y="${Hh-8}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${E(i===n0-1?'aaj':lab(i))}</text>`).join('');
+  const xs=fcXs(X,n0,n,H>60?n0-1+Math.round(H/2):null,lab,Hh);
   const path=(arr,off)=>arr.map((v,i)=>ok(v)?`${i?'L':'M'}${X(i+off).toFixed(1)} ${Y(v).toFixed(1)}`:'').join(' ');
-  const band=`<path class="band" d="${hi.map((v,i)=>`${i?'L':'M'}${X(n0+i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ')} ${lo.slice().reverse().map((v,i)=>`L${X(n0+lo.length-1-i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ')} Z"/>`;
+  const band=`<path class="band" d="${hi.map((v,i)=>`${i?'L':'M'}${X(n0+i).toFixed(1)} ${Y(Math.min(v,top)).toFixed(1)}`).join(' ')} ${lo.slice().reverse().map((v,i)=>`L${X(n0+lo.length-1-i).toFixed(1)} ${Y(Math.min(v,top)).toFixed(1)}`).join(' ')} Z"/>`;
   const today=`<line class="ref" x1="${X(n0-1)}" x2="${X(n0-1)}" y1="${m.t}" y2="${Hh-m.b}"/>`;
   const la=hr[n0-1], lf=fr[H-1];
   const lines=`<path class="ln c4" d="${path(hr,0)}"/><path class="ln c2" d="${path([hr[n0-1]].concat(fr),n0-1)}"/>`+(spd.some(v=>v>0)?`<path class="ln c5 dash" d="${path(spd.slice(0,H),n0)}"/>`:'')
@@ -7059,7 +7132,9 @@ function fcChart(fc,H,rev,spd){ const evs=fcCalEv(fc,H), W=CHW(), Hh=(W<720?220:
   const hits=Array.from({length:n},(_,i)=>{ const isF=i>=n0, j=i-n0, v=isF?fr[j]:hr[i], ev=isF?evs.find(e=>e.k!=='hold'&&j>=e.j0&&j<=e.j1):null;
     const tip=`<b>${E(lab(i))}</b>${isF?' · forecast':' · asli'}<br>Revenue <b>${E(MV(v))}</b>${isF?`<br>range ${E(MV(lo[j]))} – ${E(MV(hi[j]))}${spd[j]?`<br>spend ${E(MV(spd[j]))}`:''}`:''}${ev?`<br>📅 ${E(FCEV[ev.k]||ev.k)}: eCPM ${fcPc(ev.e)} (measured${fcRg(ev)?`, seasons ${fcRg(ev)}`:''}${off?', forecast me nahi':''})`:''}`;
     const x0=i===0?m.l:(X(i-1)+X(i))/2, x1=i===n-1?W-m.r:(X(i)+X(i+1))/2; return `<rect class="hit" x="${x0.toFixed(1)}" y="${m.t}" width="${Math.max(1,x1-x0).toFixed(1)}" height="${Hh-m.t-m.b}" data-tip="${E(tip)}"/>`; }).join('');
-  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Daily revenue: actual and forecast">${grid}${band}${today}${lines}${marks}${xs}${hits}</svg></div><div class="roi-lg"><span class="c4">Asli revenue</span><span class="c2">Forecast</span>${spd.some(v=>v>0)?'<span class="c5">Google Ads spend</span>':''}${evs.length?'<span class="cev">eCPM calendar week (green up, red down)</span>':''}</div>${fcCalNote(fc,H)}`; }
+  const yh=Y(Math.min(hi[H-1],top)), yl=Y(lo[H-1]);
+  const blab=ok(lf)?`<text class="lv c2" x="${X(n-1)+5}" y="${(yh+4).toFixed(1)}">${hi[H-1]>top?'↑ ':''}${E(MC(hi[H-1]))}</text><text class="lv c2" x="${X(n-1)+5}" y="${(yl+12).toFixed(1)}">${E(MC(lo[H-1]))}</text>`:'';
+  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Daily revenue: actual and forecast">${grid}${band}${today}${lines}${Math.abs(yh-Y(lf))>14&&Math.abs(yl-Y(lf))>14?blab:''}${marks}${xs}${hits}</svg></div><div class="roi-lg"><span class="c4">Asli revenue</span><span class="c2">Forecast</span>${spd.some(v=>v>0)?'<span class="c5">Google Ads spend</span>':''}${evs.length?'<span class="cev">eCPM calendar week (green up, red down)</span>':''}</div>${fcCalNote(fc,H)}`; }
 function fcWhy(d){ const fc=d.fc, v=fc.drv||{}; if(!v.installs) return '';
   const row=(lab,a,fmt,good)=>{ if(!a||!ok(a[0])) return ''; const ch=ok(a[1])&&a[1]?a[0]/a[1]-1:null, up=ch!=null&&ch>=0, gd=good==null?null:(up===good);
     return `<tr><td class="roi-nm">${lab}</td><td>${fmt(a[0])}</td><td>${ok(a[1])?fmt(a[1]):'—'}</td><td class="${gd==null?'':gd?'roi-up':'roi-dn'}">${ch==null?'—':(up?'▲ +':'▼ −')+Math.abs(Math.round(ch*100))+'%'}</td></tr>`; };
@@ -7116,16 +7191,33 @@ function fcGx(p,fp){ if(!p||p.engine!=='vd') return ''; const pc=v=>ok(v)?Math.r
           :' — GA4 paid cells abhi day 30 tak poore nahi, ya back-test me behtar nahi')+'.')+`</p>`; }
   return h; }
 function fcAcc(d){ const fc=d.fc, bt=fc.bt||[]; if(!bt.length) return '';
-  const cal=fc.cal||{}, hs=['30','90','180'];
+  const cal=fc.cal||{}, z=fcHz(fc), H=fcHN(fc)||30, std=[30,90,180];
   const sum=`<table class="roi-t roi-sub"><thead><tr><th>Kitne din aage</th><th>Normal din me error</th><th>Sab tests (jhatkon samet)</th><th>80% range</th><th>Tests</th></tr></thead><tbody>`
-    +hs.filter(h=>cal[h]).map(h=>{ const c=cal[h]; return `<tr><td class="roi-nm">${h} din</td><td><b>±${P(c.mape_normal!=null?c.mape_normal:c.mape)}</b></td><td>±${P(c.mape)}</td><td>${Math.round((c.lo||0)*100)}% … +${Math.round((c.hi||0)*100)}%</td><td>${c.n}${c.ev_rate?` <small>(${Math.round(c.ev_rate*100)}% jhatka)</small>`:''}</td></tr>`; }).join('')+`</tbody></table>`;
-  const ix=hs.indexOf(FCH)>=0?hs.indexOf(FCH):0, vals=bt.map(r=>r[1+ix]);
-  const ch=barChart(bt.map(r=>fd(r[0])),vals.map(v=>ok(v)?Math.abs(v):null),{fmt:v=>Math.round(v*100)+'%',show:[],label:'Back-test error by test date',tip:i=>{ const v=vals[i]; const ev=(bt[i][4]||[]).map(String).indexOf(String(hs[ix]))>=0; return ok(v)?`Forecast ${v>=0?'zyada':'kam'} by <b>${Math.abs(Math.round(v*100))}%</b> (${hs[ix]} din)${ev?'<br>⚡ is beech achanak jhatka':''}`:'—'; }});
-  const ck=(fc.checks||[]).filter(x=>String(x.h)===FCH).slice(-6).reverse();
-  const live=ck.length?`<p class="roi-note"><b>Asli check</b> (jo forecast pehle bana, ab ke asli se): ${ck.map(x=>`${E(fd(x.made))}: ${x.err>=0?'+':'−'}${Math.abs(Math.round(x.err*100))}%`).join(' · ')}</p>`:`<p class="roi-note">Asli check: roz ka forecast save ho raha hai — ${FCH} din baad har din ka asli se milan yahan dikhega.</p>`;
+    +z.chips.filter(h=>cal[String(h)]).map((h,i,a)=>{ const c=cal[String(h)]; return `<tr${h===H?' class="roi-act"':''}><td class="roi-nm">${h} din${!z.old&&i===a.length-1?' <small>(max)</small>':''}</td><td><b>±${P(c.mape_normal!=null?c.mape_normal:c.mape)}</b>${c.mape_normal!=null&&!fcNm(c)?` <small>(sirf ${c.n_normal} tests)</small>`:''}</td><td>±${P(c.mape)}</td><td>${Math.round((c.lo||0)*100)}% … +${Math.round((c.hi||0)*100)}%</td><td>${c.n}${c.ev_rate?` <small>(${Math.round(c.ev_rate*100)}% jhatka)</small>`:''}</td></tr>`; }).join('')+`</tbody></table>`;
+  // every grid horizon the app verifies: its own error (normal days) — how the error grows the further out
+  const gh=z.old?[]:Object.keys(cal).map(Number).filter(h=>h>0&&cal[String(h)]).sort((a,b)=>a-b);
+  const gv=gh.map(h=>{ const c=cal[String(h)]; return ok(c.mape_normal)?c.mape_normal:c.mape; });
+  const gcut=gv.some((v,i)=>v>1&&!z.chips.includes(gh[i]))?1:Infinity;     // a few-test horizon past ±100%: its bar cut there
+  const gch=gh.length>2?`<p class="roi-note" style="margin-top:10px"><b>Har horizon ka error</b> (normal din; har bar = us din-sankhya pe apne tests${gcut<Infinity?'; ±100% se upar wale bar wahin kate, tap = asli':''}):</p>`+barChart(gh.map(h=>h+'d'),gv.map(v=>Math.min(v,gcut)),{fmt:v=>'±'+Math.round(v*100)+'%',show:gh.map((h,i)=>z.chips.includes(h)?i:-1).filter(i=>i>=0),label:'Back-test error by horizon',
+      tip:i=>{ const c=cal[String(gh[i])]; return `${gh[i]} din aage: ${ok(c.mape_normal)?'normal din':'sab tests (koi normal nahi)'} <b>±${Math.round(gv[i]*100)}%</b> · sab tests ±${Math.round(c.mape*100)}% · ${c.n} tests (${c.n_normal} normal) · 80% range ${Math.round((c.lo||0)*100)}% … +${Math.round((c.hi||0)*100)}%`; }}):'';
+  // one horizon's tests by test date: 30 / 90 / 180 from fc.bt, any other chip from fc.hz.btx
+  const ix=std.indexOf(H), bx=ix<0?(((fc.hz||{}).btx||{})[String(H)]||[]):null;
+  const rows=bx?bx.map(r=>[r[0],r[1],!!r[2]]):bt.map(r=>[r[0],r[1+Math.max(0,ix)],(r[4]||[]).map(String).indexOf(String(H))>=0]), vals=rows.map(r=>r[1]);
+  const ch=barChart(rows.map(r=>fd(r[0])),vals.map(v=>ok(v)?Math.abs(v):null),{fmt:v=>Math.round(v*100)+'%',show:[],label:'Back-test error by test date',tip:i=>{ const v=vals[i]; return ok(v)?`Forecast ${v>=0?'zyada':'kam'} by <b>${Math.abs(Math.round(v*100))}%</b> (${H} din)${rows[i][2]?'<br>⚡ is beech achanak jhatka':''}`:'—'; }});
+  const ck=(fc.checks||[]).filter(x=>String(x.h)===String(H)).slice(-6).reverse();
+  // no live check yet: the day the first one shows (fc.hz.chk: the oldest kept forecast holding this horizon + its
+  // days); the growing N (not 30 / 90 / 180 / 365) gets ~14 days longer every 2 weeks, so its own day never comes —
+  // said, with the day the longest one (365, where N stops) gets its first
+  const chk=(fc.hz||{}).chk||{}, c1=!z.old&&chk[String(H)], grow=!z.old&&H===z.n&&![30,90,180,365].includes(H);
+  const live=ck.length?`<p class="roi-note"><b>Asli check</b> (jo forecast pehle bana, ab ke asli se): ${ck.map(x=>`${E(fd(x.made))}: ${x.err>=0?'+':'−'}${Math.abs(Math.round(x.err*100))}%`).join(' · ')}</p>`
+    :grow?`<p class="roi-note">Asli check: ${H} din (max) ka asli check is chip pe nahi aayega — ${H} din pehle bana forecast chahiye, par N har 2 hafte ~14 din badhta hai, to tab tak max chip ${H} din se lamba ho chuka hoga. N 365 din pe rukta hai: max ka pehla asli check ${chk['365']?`<b>${E(fd(chk['365']))}</b> ko (365 din ka)`:'365 din pe'}; tab tak chhote chips ke asli check unke apne chip pe.</p>`
+    :c1?`<p class="roi-note">Asli check: roz ka forecast save ho raha hai — ${H} din ka pehla milan (pehle bana forecast vs asli) <b>${E(fd(c1))}</b> ko yahan dikhega.</p>`
+    :`<p class="roi-note">Asli check: roz ka forecast save ho raha hai — ${H} din baad har din ka asli se milan yahan dikhega.</p>`;
   const ev=(fc.events||[]).slice(-8).reverse();
   const evh=ev.length?`<p class="roi-note">⚡ <b>Achanak jhatke</b> (koi model pehle se nahi dekh sakta — range inke bina, upar alag likha): ${ev.map(e=>`${E(fd(e.at))} ${e.kind==='installs'?'installs':'ARPDAU'} ×${e.x}`).join(' · ')}</p>`:'';
-  return `<div class="roi-card"><div class="roi-ct"><h3>Kitna sahi tha · back-test</h3><span class="roi-note">har 2 hafte pe purane din se ${hs[ix]} din aage ka forecast vs asli · bar = error</span></div><div class="roi-tw">${sum}</div>${ch}${live}${evh}</div>`; }
+  const nx=bx?bx.filter(r=>r[3]).length:0;          // tests from origins older than the newest 26 (352 / 365 days only)
+  const xo=nx?`<p class="roi-note">${H} din ke ${rows.length} tests me se ${nx} newest 26 test-dino se pehle ke hain — itna lamba forecast un 26 me se sirf ${rows.length-nx} baar check hota (kam se kam 4 chahiye).</p>`:'';
+  return `<div class="roi-card"><div class="roi-ct"><h3>Kitna sahi tha · back-test</h3><span class="roi-note">har 2 hafte pe purane din se ${H} din aage ka forecast vs asli · bar = error</span></div><div class="roi-tw">${sum}</div>${ch}${xo}${gch}${live}${evh}</div>`; }
 function fcLearn(d){ const fc=d.fc, log=(fc.log||[]).slice().reverse(); if(!log.length) return '';
   const pd=p=>Object.entries(p||{}).map(([k,v])=>`${E(FC_P[k]||k)}: <b>${E(k==='bo'||k==='bn'||k==='cq'?Math.round(v*100)+'%':k==='hl'&&v>=100000?'sab barabar':k==='m'?(v==='split'?'alag, ghatte hue':'ek ratio'):k==='gc'?(v>=3?'on':v?'users on':'off'):k==='g'||k==='c'||k==='pc'?(v?'on':'off'):k==='r'?(v>=1?'poora':v>0?'aadha':'off'):String(v))}</b>`).join(' · ');
   return `<div class="roi-card"><div class="roi-ct"><h3>Model kya seekh raha hai</h3><span class="roi-note">roz naye data pe dobara test → jo setting sabse sahi, wahi</span></div>`
@@ -7146,9 +7238,9 @@ function fcAll(){ const A=ALL, apps=A.apps.filter(x=>uniVis(x.app_id)&&x.fc);
   apps.forEach(x=>{ ['30','90','180'].forEach(k=>{ if(rd(x)(k)){ T['r'+k]+=rv(x.fc['r'+k]||0)||0; T['n'+k]++; if(k==='30') T.a30+=rv(x.fc.a30||0)||0; } }); });
   const body=apps.slice().sort((a,b)=>(b.fc.r90||0)-(a.fc.r90||0)).map(x=>{ const f=x.fc, ch=f.a30?((f.r30||0)/f.a30-1):null;
     const ok30=rd(x)('30');
-    return `<tr class="clk" data-roi-app="${E(x.app_id)}"><td class="roi-nm"><span class="roi-an">${appIconId(x.app_id,x.app,22)}<span>${E(x.app)}</span></span></td><td>${MC(rv(f.a30))}</td><td>${ok30?MC(rv(f.r30)):'⏳'}</td><td class="${ch==null||!ok30?'':ch>=0?'roi-up':'roi-dn'}">${ch==null||!ok30?'—':(ch>=0?'▲ +':'▼ −')+Math.abs(Math.round(ch*100))+'%'}</td><td>${rd(x)('90')?MC(rv(f.r90)):'⏳'}</td><td>${rd(x)('180')?MC(rv(f.r180)):'⏳'}</td><td>${ok(f.e30)?'±'+P(f.e30):'—'}</td></tr>`; }).join('');
+    return `<tr class="clk" data-roi-app="${E(x.app_id)}"><td class="roi-nm"><span class="roi-an">${appIconId(x.app_id,x.app,22)}<span>${E(x.app)}</span></span></td><td>${MC(rv(f.a30))}</td><td>${ok30?MC(rv(f.r30)):'⏳'}</td><td class="${ch==null||!ok30?'':ch>=0?'roi-up':'roi-dn'}">${ch==null||!ok30?'—':(ch>=0?'▲ +':'▼ −')+Math.abs(Math.round(ch*100))+'%'}</td><td>${rd(x)('90')?MC(rv(f.r90)):'⏳'}</td><td>${rd(x)('180')?MC(rv(f.r180)):'⏳'}</td><td>${ok(f.n)&&ok(f.rn)?`${MC(rv(f.rn))} <small>${f.n} din${ok(f.en)?' · ±'+P(f.en):''}</small>`:'—'}</td><td>${ok(f.e30)?'±'+P(f.e30):'—'}</td></tr>`; }).join('');
   return `<div class="roi-ks6">${tile('Pichhle 30 din (asli)',MC(T.a30),`${T.n30} apps (jin ka forecast ready)`)}${tile('Agle 30 din',MC(T.r30),`${T.a30?((T.r30/T.a30-1)>=0?'▲ +':'▼ −')+Math.abs(Math.round((T.r30/T.a30-1)*100))+'% · ':''}${T.n30} apps`)}${tile('Agle 90 din',MC(T.r90),`${T.n90} apps`)}${tile('Agle 180 din',MC(T.r180),`${T.n180} apps`)}</div>`
-    +`<div class="roi-card"><div class="roi-ct"><h3>Har app · forecast</h3><span class="roi-note">app pe tap = us app ka poora forecast · spend = pichhle 30 din jaisa</span></div><div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th><th>Pichhle 30 din</th><th>Agle 30 din</th><th>Badlav</th><th>Agle 90 din</th><th>Agle 180 din</th><th>Kitna sahi (30 din)</th></tr></thead><tbody>${body}</tbody></table></div></div>`; }
+    +`<div class="roi-card"><div class="roi-ct"><h3>Har app · forecast</h3><span class="roi-note">app pe tap = us app ka poora forecast · spend = pichhle 30 din jaisa</span></div><div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th><th>Pichhle 30 din</th><th>Agle 30 din</th><th>Badlav</th><th>Agle 90 din</th><th>Agle 180 din</th><th>Agle N din (max)</th><th>Kitna sahi (30 din)</th></tr></thead><tbody>${body}</tbody></table></div></div>`; }
 // ---- events (one delegated listener on the block; every toggle keeps the tapped control in place) ----
 function hold(r){ r.style.minHeight=Math.max(r.offsetHeight,parseFloat(r.style.minHeight)||0)+'px'; }
 let WIRED=false;
@@ -7194,7 +7286,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcCalEv, fcCalNote, fcHol, fcWk, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)

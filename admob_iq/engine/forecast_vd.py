@@ -71,7 +71,15 @@ never per app: tuned per app it measured worse on unseen origins); only the mix 
 (GRID; the switches gc, pc held at 0), on the same back-tests as before plus each past install day's future revenue
 and each new install's value (objective()).
 Every back-test origin sees GA4 only to T − glag, each install day's final daily data only to T − clag and its
-checkpoints after day 30 only to T − tlag, as the live build does (lag_view; the three lags measured per app)."""
+checkpoints after day 30 only to T − tlag, as the live build does (lag_view; the three lags measured per app).
+
+The verified horizon (owner, 15 Oct: "verified horizon, khud badhe"): every origin forecasts as far as the data
+reaches (≤ HMAX 365 days; the first H days do not depend on how far); the tune scores 30 / 90 / 180 as before (its
+objective and picks unchanged); grid_backtest scores the chosen setting on the grid HG (30 + 14k: the longest horizon
+each extra origin makes testable, + 90 / 180 / 365), grid_cal calibrates each on its own tests (forecast.cal1), N = the
+longest with ≥ MIN_TESTS — a horizon past what the tune's newest MAX_ORIGINS reach (352 / 365) also takes the two
+origins before them (GRID_ORIGINS); chips / unlock / band: the page's horizons, the day each unlocks, the chart's
+monotone 80 % band."""
 import bisect
 import math
 import operator
@@ -83,6 +91,16 @@ from . import forecast as F
 ONE = timedelta(days=1)
 H = F.H
 HORIZONS = F.HORIZONS
+# the verified horizon (owner, 15 Oct: "verified horizon, khud badhe"): every test origin forecasts up to HMAX days
+# (as far as the data reaches), scored on the grid HG — every ORIGIN_STEP days from 30 (the horizons a new origin
+# makes testable: an origin is last − 30 − 14k, so the horizons in (30 + 14(k − 1), 30 + 14k] share one test set and
+# 30 + 14k is the longest of them) + the standard 30 / 90 / 180 / 365. A horizon is verified with ≥ MIN_TESTS tests;
+# the newest MAX_ORIGINS (the tune's) give up to 338 days, the two origins before them (GRID_ORIGINS) 352 / 365.
+HMAX = 365
+STD = HORIZONS + (HMAX,)
+HG = tuple(sorted({HORIZONS[0] + F.ORIGIN_STEP * j for j in range((HMAX - HORIZONS[0]) // F.ORIGIN_STEP + 1)}
+                  | set(STD)))
+GRID_ORIGINS = F.MAX_ORIGINS + 2
 STRUCT_VERSION = "2026-10-15d"
 STRUCT = {"m": "ratio", "hl": 45, "Kc": 30, "w": 28, "wn": 7, "g": 0.0, "W": 14,          # view A (+ g, W shared)
           "bhl": 100000, "Ku": 3, "bw": 0, "wa": 56, "nv": 1,                             # view B
@@ -1069,13 +1087,13 @@ def _levels(app, T, p, A, LAM, LAMn=None):
     return out
 
 
-def _a_prepare(v, T, p, ctx):
+def _a_prepare(v, T, p, ctx, h=H):
     B = _a_base(v, T, p)
     SC = _a_scales(v, T, p, B)
     A0 = _a_accum0(v, T, p, B)
     LAM = _lam(v, T, p, p["w"], A0, B)
     LAMn = _lam(v, T, p, p["wn"], A0, B) if p.get("wn") else None
-    A = _a_accum(v, T, p, B, SC, H)
+    A = _a_accum(v, T, p, B, SC, max(H, h))         # (the future days' accumulators: the first H days alike for any h)
     LV = _levels(v, T, p, A, LAM, LAMn)
     a, u = B["a"], B["u"]
     seas = (ctx or {}).get("seas") or {m: 1.0 for m in range(1, 13)}
@@ -2732,13 +2750,14 @@ def _cal_page(app, T, h, p):
     return {"n": len(ys), "ys": ys, "ev": ev, "phi": [p.get("cnv", 1.0), p.get("cnn", 0.0)], "use": 0} if ev else None
 
 
-def _views(app, T, p, ctx=None, clag=0, need_b=True, tlag=0):
+def _views(app, T, p, ctx=None, clag=0, need_b=True, tlag=0, h=H):
     """Both views fitted with ONLY the data known at T (GA4 to T − app["glag"]; clag: install days' final data to
     T − clag; tlag: their checkpoints after day 30 to T − tlag) + the days AdMob has but GA4 not yet as (AdMob, view
     A's model, view B's model or None) → (A state, B state or None, those days). Nothing here depends on the mix weights
-    bo / bn / cq (a re-tune of them fits once)."""
+    bo / bn / cq (a re-tune of them fits once). h: the days the forecast will reach (> H: view A's accumulators that
+    far)."""
     v = lag_view(app, T, app.get("glag") or 0, clag, tlag)
-    sa = _a_prepare(v, T, p, ctx)
+    sa = _a_prepare(v, T, p, ctx, h)
     sb = None
     if need_b:
         sb = _b_state(v, T, p, ctx)
@@ -2780,12 +2799,12 @@ def _q(tail, bo):
     return q, len(tail)
 
 
-def prepare(app, T, p, ctx=None, clag=0, tlag=0):
+def prepare(app, T, p, ctx=None, clag=0, tlag=0, h=H):
     """Fit both views with ONLY the data known at T (GA4 to T − app["glag"]; clag: install days' final data to
     T − clag; tlag: their checkpoints after day 30 to T − tlag) → the state the functions below use. p: a full setting
-    (params()); ctx: {"seas": the month index}."""
+    (params()); ctx: {"seas": the month index}; h: the days a forecast from it may reach (≤ HMAX)."""
     p = params(p) if any(k not in p for k in STRUCT) or any(k not in p for k in DEFAULT) else p
-    sa, sb, tail = _views(app, T, p, ctx, clag, p["bo"] > 0 or p["bn"] > 0, tlag)
+    sa, sb, tail = _views(app, T, p, ctx, clag, p["bo"] > 0 or p["bn"] > 0, tlag, h)
     q, nt = _q(tail, p["bo"])
     return {"T": T, "p": p, "a": sa, "b": sb, "q": q ** p["cq"], "qraw": q, "nt": nt, "spend": {},
             "org": sa["org"], "per_usd": sa["per_usd"], "cs": _cs_state(app, T)}    # (the forecast uses it with cs 1)
@@ -2990,12 +3009,14 @@ def _why(app, st, org, per_usd):
     return out
 
 
-def forecast(app, T, p, spend=None, h=H, seas=None):
+def forecast(app, T, p, spend=None, h=H, seas=None, hc=None):
     """The forecast from origin T with setting p → the same keys as forecast.forecast: {"rev": {old, org, paid}, "dau",
     "dau_p", "un", "n", "sp", "parts"} lists of h days. spend: {day: USD} for the future days (None = today's run-rate:
-    the mean of the last SPEND_DAYS days, with THEIR organic installs and cost per install)."""
+    the mean of the last SPEND_DAYS days, with THEIR organic installs and cost per install). hc: the days the page
+    shows (≤ h; its "cal" event weeks inside them only — a forecast that reaches further for the live check's
+    snapshot, forecast_build.series reach, gives the page the very same calendar)."""
     p = params(p)
-    st = prepare(app, T, p, {"seas": seas})
+    st = prepare(app, T, p, {"seas": seas}, h=h)
     days = app["days"]
     org, per_usd = st["org"], st["per_usd"]
     plan = None
@@ -3025,7 +3046,8 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
     out = {"rev": {"old": x["old"], "org": x["org"], "paid": x["paid"]},
            "dau": [a + b + c for a, b, c in zip(x["uold"], x["uorg"], x["upaid"])], "n": x["n"], "sp": sp,
            "dau_p": {"old": x["uold"], "org": x["uorg"], "paid": x["upaid"]}, "un": un,
-           "parts": _why(app, st, org, per_usd), "cal": _cal_out(app, st, h, win) or _cal_page(app, T, h, p)}
+           "parts": _why(app, st, org, per_usd),
+           "cal": _cal_out(app, st, hc or h, win) or _cal_page(app, T, hc or h, p)}
     if plan is not None:
         try:                                          # only the planner would miss it: never the forecast
             out["plan"] = cs_plan(app, st, org, per_usd, base, plan)
@@ -3072,11 +3094,13 @@ CLAG = True    # back-tests: each install day's final daily data only to T − a
 
 def _origin(app, T, p, seas, need_b, comps=True):
     """One back-test origin: everything that does NOT depend on the mix weights — both views' parts with the spend that
-    really happened, each past install day's future revenue / users and each new install's value per view, the actuals
-    — or None (no horizon to score). _row() mixes it for any (bo, bn, cq) with the same arithmetic as prepare / parts /
-    cohort_rev / cohort_users / new_value, so a back-test from it is the very same numbers."""
+    really happened (as far as the data reaches, ≤ HMAX days), each past install day's future revenue / users and each
+    new install's value per view, the actuals (HORIZONS: the tune's; "hg": every grid horizon HG) — or None (no horizon
+    to score). _row() / _grow() mix it for any (bo, bn, cq) with the same arithmetic as prepare / parts / cohort_rev /
+    cohort_users / new_value, so a back-test from it is the very same numbers (the first H days of the parts do not
+    depend on how far they reach)."""
     days, last, coh, start = app["days"], app["last"], app["coh"], app["start"]
-    hmax = min(H, (last - T).days)
+    hmax = min(HMAX, (last - T).days)
     if hmax < HORIZONS[0]:
         return None
     jumps = app.get("_jumps")
@@ -3084,7 +3108,7 @@ def _origin(app, T, p, seas, need_b, comps=True):
         jumps = app["_jumps"] = {D: e for D in days for e in [F.event(days, D)] if e}
     sp = {T + timedelta(days=i): (days.get(T + timedelta(days=i)) or {}).get("sp") or 0.0 for i in range(1, hmax + 1)}
     sa, sb, tail = _views(app, T, p, {"seas": seas}, (app.get("clag") or 0) if CLAG else 0, need_b,
-                          (app.get("tlag") or 0) if CLAG else 0)
+                          (app.get("tlag") or 0) if CLAG else 0, hmax)
     org, per_usd = sa["org"], sa["per_usd"]
     sp = _cal_spend(sa.get("cal"), T, sp)                 # the paid installs' response to the calendar (as parts)
     cs = _cs_state(app, T) if p.get("cs") else None       # the paid installs the users / installs follow (country model)
@@ -3118,7 +3142,25 @@ def _origin(app, T, p, seas, need_b, comps=True):
         hz_rows.append((hz, ar, an, au, ev, un_e))
     if not hz_rows:
         return None
-    o = {"T": T, "hz": hz_rows, "tail": tail, "A": _a_parts(sa, sp, hmax, org, per_usd, up),
+    hg_rows, ar, aun, unk, k = [], 0, 0, True, 0
+    for hz in (h for h in HG if h <= hmax):            # every grid horizon: its actual revenue / uninstalls (the
+        while k < hz:                                    # same sums, in the same order, as the rows above)
+            e = days.get(T + timedelta(days=k + 1)) or {}
+            ar += e.get("rev") or 0
+            aun += e.get("un") or 0
+            unk = unk and e.get("un") is not None
+            k += 1
+        if ar <= 0:
+            continue
+        ev = None
+        for j in range(0, hz - 29, 7):
+            ev = jumps.get(T + timedelta(days=j))
+            if ev:
+                ev = dict(ev, at=(T + timedelta(days=j)).isoformat())
+                break
+        pun = sum(sum(un[x][:hz]) for x in ("old", "org", "paid")) if un and aun > 0 and unk else None
+        hg_rows.append((hz, ar, ev, (pun / aun - 1.0) if pun is not None else None))
+    o = {"T": T, "hz": hz_rows, "hg": hg_rows, "tail": tail, "A": _a_parts(sa, sp, hmax, org, per_usd, up),
          "B": _b_parts(sb, sp, hmax, org, per_usd, up) if sb is not None else None, "comps": comps}
     if not comps:
         return o
@@ -3165,8 +3207,8 @@ def _pick(xa, xb, w):
     return b if a is None else _mix(a, b, w)
 
 
-def _row(o, bo, bn, cq):
-    """One origin (_origin) mixed with the weights bo, bn, cq → its back-test row."""
+def _mixed(o, bo, bn, cq):
+    """An origin's two views mixed with the weights bo, bn, cq (parts' arithmetic) → (q, revenue a day, users a day)."""
     A, B = o["A"], o["B"]
     q = _q(o["tail"], bo)[0] ** cq
     x = {}
@@ -3175,6 +3217,13 @@ def _row(o, bo, bn, cq):
         x["u" + k] = _mix(A["u" + k], B["u" + k] if B is not None else None, w)
     rev = [a + b + c for a, b, c in zip(x["old"], x["org"], x["paid"])]
     dau = [a + b + c for a, b, c in zip(x["uold"], x["uorg"], x["upaid"])]
+    return q, rev, dau
+
+
+def _row(o, bo, bn, cq):
+    """One origin (_origin) mixed with the weights bo, bn, cq → its back-test row."""
+    A, B = o["A"], o["B"]
+    q, rev, dau = _mixed(o, bo, bn, cq)
     row = {"T": o["T"].isoformat(), "h": {}, "ev": {}}
     for hz, ar, an, au, ev, un_e in o["hz"]:
         pr = sum(rev[:hz])
@@ -3209,6 +3258,18 @@ def _row(o, bo, bn, cq):
             cell[0] += (v * q) * n
             cell[1] += av
     row.update(coh=coh, usr=usr, new=new)
+    return row
+
+
+def _grow(o, bo, bn, cq):
+    """One origin mixed with bo, bn, cq → its row on the horizon grid: {T, h: {hz: {pred, act, err, un_err}}, ev}."""
+    rev = _mixed(o, bo, bn, cq)[1]
+    row = {"T": o["T"].isoformat(), "h": {}, "ev": {}}
+    for hz, ar, ev, un_e in o.get("hg") or ():
+        pr = sum(rev[:hz])
+        row["h"][hz] = {"pred": pr, "act": ar, "err": pr / ar - 1.0, "un_err": un_e}
+        if ev:
+            row["ev"][hz] = ev
     return row
 
 
@@ -3283,17 +3344,17 @@ def _moves(app, T, gc, pc):
     return False
 
 
-def tune(app, seas=None, start_p=None, passes=2):
+def tune(app, seas=None, start_p=None, passes=2, fits=None):
     """Coordinate descent over GRID (the mix weights and the switches gc / pc; the structure is fixed) from the stored
     setting (a stored value GRID no longer offers starts at its default), on the back-test objective → (best setting,
     its back-test, every step tried). Both views are fitted once per origin and (gc, pc) (_origin; an origin the
     switches can not change reuses the plain fit); each setting tried is then only arithmetic (_row) — the same numbers
-    as backtest() with it."""
+    as backtest() with it. fits: a dict that receives those fits ({(gc, pc): {T: origin}}) for grid_backtest."""
     ors = F.origins(app)
     p = dict(DEFAULT, **{k: v for k, v in (start_p or {}).items() if k in DEFAULT and v in GRID.get(k, (v,))})
     if not ors:
         return p, [], []
-    fitsets = {}
+    fitsets = {} if fits is None else fits
 
     def fits_of(gc, pc):                              # both views per origin, for one (gc, pc); an origin where the
         k = (gc, pc)                                  # switches can change nothing reuses the (0, 0) fit (identical)
@@ -3331,6 +3392,80 @@ def tune(app, seas=None, start_p=None, passes=2):
         if not changed:
             break
     return p, bt, steps
+
+
+# ── the verified horizon: the back-test on the horizon grid, its calibration, the page's chips and unlock days ───────
+def grid_backtest(app, p, seas=None, fits=None):
+    """The chosen setting p's back-test on the horizon grid HG, oldest first: the tune's origins (their fits reused from
+    tune(fits=…), else fitted here) + the older ones up to GRID_ORIGINS (marked "x": only a horizon the newest
+    MAX_ORIGINS score fewer than MIN_TESTS times uses them — grid_cal) → [{T, h: {hz: {pred, act, err, un_err}}, ev}]
+    (totals only: the components are the tune's)."""
+    p = params(p)
+    ors = F.origins(app)
+    seen = set(ors)
+    have = (fits or {}).get((p.get("gc") or 0, p.get("pc") or 0)) or {}
+    need_b = p["bo"] > 0 or p["bn"] > 0
+    out = []
+    for T in sorted(set(ors) | set(F.origins(app, GRID_ORIGINS))):
+        o = have[T] if T in have and T in seen else _origin(app, T, p, seas, need_b, False)
+        if o is None:
+            continue
+        r = _grow(o, p["bo"], p["bn"], p["cq"])
+        if T not in seen:
+            r["x"] = 1
+        if r["h"]:
+            out.append(r)
+    return out
+
+
+def grid_tests(gbt, hz):
+    """The tests a grid horizon is calibrated on: the tune's origins that score it; one they score fewer than MIN_TESTS
+    times (> 338 days; never a standard 30 / 90 / 180) also the older origins (GRID_ORIGINS)."""
+    rows = [r for r in gbt if hz in r["h"] and not r.get("x")]
+    if len(rows) < F.MIN_TESTS and hz not in HORIZONS:
+        rows = [r for r in gbt if hz in r["h"]]
+    return rows
+
+
+def grid_cal(gbt):
+    """{hz: forecast.cal1 of its own tests} for every grid horizon with ≥ MIN_TESTS — each from tests at exactly that
+    horizon (30 / 90 / 180: the very rows, so the very numbers, of forecast.calibrate on the tune's back-test)."""
+    out = {}
+    for hz in HG:
+        c = F.cal1(grid_tests(gbt, hz), hz)
+        if c is not None:
+            out[hz] = c
+    return out
+
+
+def chips(cal):
+    """The page's horizons from the verified ones (cal's keys): the standard 30 / 90 / 180 / 365 below N, then N (the
+    longest the app's own data verifies) — [] when none is."""
+    hs = sorted(int(h) for h in cal)
+    return [h for h in STD if h in hs and h < hs[-1]] + [hs[-1]] if hs else []
+
+
+def band(cal):
+    """The chart's 80 % band across horizons: [[hz, lo, hi]] over the horizons of cal (the page's chips) — each one's
+    measured P10 / P90 of forecast ÷ actual − 1, around the forecast (lo ≤ 0 ≤ hi) and never narrower at a longer
+    horizon (the widest seen so far carried on: a longer horizon is never shown surer than a shorter one); the page
+    interpolates it day by day. The tiles keep each horizon's own measured band."""
+    out, lo, hi = [], 0.0, 0.0
+    for h in sorted(int(x) for x in cal):
+        c = cal[h] if h in cal else cal[str(h)]
+        lo, hi = min(lo, c["lo"]), max(hi, c["hi"])
+        out.append([h, lo, hi])
+    return out
+
+
+def unlock(start, hz):
+    """The newest data day from which horizon hz has MIN_TESTS back-tests (each scoring): origins last − 30 − 14k
+    (k = 0, 1, …) at least MIN_HIST days after the start, so k = ⌈(hz − 30) ÷ 14⌉ … + MIN_TESTS − 1 must exist — None
+    past the origins it may use (grid_tests: MAX_ORIGINS for 30 / 90 / 180, GRID_ORIGINS for the rest): never."""
+    k = max(0, -(-(hz - HORIZONS[0]) // F.ORIGIN_STEP)) + F.MIN_TESTS - 1
+    if k >= (F.MAX_ORIGINS if hz in HORIZONS else GRID_ORIGINS):
+        return None
+    return start + timedelta(days=F.MIN_HIST + HORIZONS[0] + F.ORIGIN_STEP * k)
 
 
 # ── the portfolio's band ratios (state.json "bandr", made at the end of a build from every app) ────────────────────

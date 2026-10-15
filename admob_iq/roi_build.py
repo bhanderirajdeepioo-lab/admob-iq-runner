@@ -783,7 +783,8 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
 
 # ── the end ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 def fc_summary(fc):
-    """The pointer's forecast line: next 30 / 90 / 180 days revenue (corrected), the accuracy, what is ready."""
+    """The pointer's forecast line: next 30 / 90 / 180 days revenue (corrected), the accuracy, what is ready; + the
+    verified horizon n (engine vd) with its revenue rn and accuracy en."""
     if not fc or not fc.get("f"):
         return None
     f = fc["f"]
@@ -794,6 +795,11 @@ def fc_summary(fc):
         out["r%d" % h] = _r(sum(tot[:h]), 2) if len(tot) >= h else None
         c = (fc.get("cal") or {}).get(str(h)) or {}
         out["e%d" % h] = c.get("mape_normal") if c.get("mape_normal") is not None else c.get("mape")
+    n = (fc.get("hz") or {}).get("n")                  # engine vd's verified horizon: the longest the app's data checks
+    if n and len(tot) >= n:
+        c = (fc.get("cal") or {}).get(str(n)) or {}
+        out.update(n=n, rn=_r(sum(tot[:n]), 2),
+                   en=c.get("mape_normal") if c.get("mape_normal") is not None else c.get("mape"))
     return out
 
 

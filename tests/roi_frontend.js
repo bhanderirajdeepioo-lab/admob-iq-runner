@@ -305,7 +305,8 @@ function appFile() {
     U.set('FCH', '90'); U.set('FCM', 0);
     const fv = U.fcView(d);
     out.fc_tiles = fv.includes('Revenue · agle 90 din') && fv.includes('$900') && fv.includes('$720') && fv.includes('+$180');
-    out.fc_ready = fv.includes('180 din <small>10 Jan') && fv.includes('±10% normal din');   // 90 days picked: its own accuracy
+    out.fc_ready = fv.includes('<b>180 din</b><small>10 Jan 27 se</small>') && fv.includes('±10% <small>(90 din, 12 tests)</small>')   // 90 days picked: its own accuracy
+      && fv.includes('normal din · koi jhatka nahi') && !fv.includes('roi-fc-hz') && !fv.includes('(max)')   // an older file: no N, no note
     out.fc_be = fv.includes('Profit me aayega');                   // −$50 lifetime + $2 a day → crosses in ~25 days
     out.fc_parts = ['Forecast kyun upar', 'Kitna sahi tha', 'Model kya seekh raha hai', 'start date', 'Achanak jhatke'].every(s => fv.includes(s));
     // why: revenue +20% = users +10% × ads per user +1% × country mix +5% × eCPM +3%; the installs' country value
@@ -420,6 +421,137 @@ function appFile() {
     out.pl_slider = mu.i === 2 && mu.r === 2 && m0.i === 2 && m0.r === 2 && !U.fcView(dp).includes('sab countries')
       && Math.abs(mc.i - Math.pow(2, 0.9)) < 1e-12 && mc.r === 2 && U.fcMul(dc.fc, 0).i === 0 && U.fcView(dc).includes('sab countries');
     U.set('PLAN', null); U.set('FCH', '90');
+    // 🔎 "Agle N din" (engine vd's verified horizon, fc.hz): chips 30 / 90 / 180 / N (max) in fixed widths, the
+    // standard 365 locked with its day, the Hinglish note (why not longer, when the next unlocks); tiles, chart band,
+    // users card, planner and the accuracy card at the chosen horizon; an app without a chip falls back to its N
+    // (synthetic values throughout)
+    const HN = 198, g = JSON.parse(JSON.stringify(dp)), fill = (n, v) => Array(n).fill(v);
+    g.app_id = 'id-hz';
+    Object.assign(g.fc.f, { old: fill(HN, 5), org: fill(HN, 1), paid: fill(HN, 4), dau: fill(HN, 100), n: fill(HN, 10), sp: fill(HN, 8),
+      dau_p: { old: fill(HN, 60), org: fill(HN, 20), paid: fill(HN, 20) }, un: { old: fill(HN, 3), org: fill(HN, 1), paid: fill(HN, 2) } });
+    const cc = (n, m, mn, lo, hi, nn, ev) => ({ bias: 0, lo, hi, mape: m, mape_normal: mn, n, n_normal: nn == null ? n : nn, ev_rate: ev || 0, un_mape: 0.2, un_n: n });
+    Object.assign(g.fc, { v: 2, ready: { '30': true, '90': true, '180': true, '365': false }, ready_from: { '365': '2027-03-16' },
+      cal: { '30': cc(16, 0.08, 0.06, -0.1, 0.1), '44': cc(15, 0.1, 0.07, -0.12, 0.1), '90': cc(11, 0.12, 0.1, -0.2, 0.15),
+             '180': cc(5, 0.15, 0.15, -0.25, 0.2), '198': cc(4, 0.2, 0.18, -0.3, 0.22, 3, 0.25) },
+      hz: { n: HN, chips: [30, 90, 180, 198], lock: { '365': '2027-03-16' }, next: [212, '2026-10-30'], lag: 2, x: 0,
+            band: [[30, -0.1, 0.1], [44, -0.12, 0.1], [90, -0.2, 0.15], [180, -0.25, 0.2], [198, -0.3, 0.22]],
+            btx: { '198': [['2025-11-02', 0.1, 0, 0], ['2025-11-16', -0.4, 1, 0], ['2025-11-30', 0.05, 0, 0], ['2025-12-14', -0.15, 0, 0]] } },
+      checks: [{ made: '2026-01-01', h: 198, pred: 1, act: 1, err: 0.05 }, { made: '2026-01-02', h: 30, pred: 1, act: 1, err: -0.3 }] });
+    g.fc.plan = Object.assign({}, dp.fc.plan, { h: [30, 90, 180, 198], old: [150, 450, 900, 990], orgr: [30, 90, 180, 198], paid: [210, 630, 1050, 1155],
+      rows: dp.fc.plan.rows.map(x => Object.assign({}, x, { r: x.r.concat([144.375]) })) });
+    U.set('PLAN', null); U.set('FCH', 'max');
+    const gv = U.fcView(g);
+    out.hz_chips = (gv.match(/class="roi-fch"/g) || []).length === 5 && gv.includes('data-roi-fch="max" aria-pressed="true"><b>198 din</b><small>(max)</small>')
+      && gv.includes('data-roi-fch="90" aria-pressed="false"><b>90 din</b><small>±10%</small>') && gv.includes('roi-fchs')
+      && gv.includes('disabled title="Data kam — 16 Mar 27 se"><b>365 din</b><small>16 Mar 27 se</small>') && !gv.includes('data-roi-fch="198"');
+    out.hz_note = gv.includes('🔎 <b>Agle 198 din</b> tak hi kyun') && gv.includes('4 baar check') && gv.includes('kam se kam 4 chahiye')
+      && gv.includes('<b>212 din — 30 Oct 26 se</b> · 365 din — 16 Mar 27 se') && gv.includes('har 2 hafte ~14 din badhta hai');
+    // the range = where the ACTUAL fell around the forecast: 1,980 ÷ 1.22 … 1,980 ÷ 0.70 (tests that ran 22% high / 30% low)
+    out.hz_tiles = gv.includes('Revenue · agle 198 din') && gv.includes('$1,980') && gv.includes('80% chance: $1,623 – $2,829')
+      && gv.includes('Google Ads spend · 198 din') && gv.includes('±20% <small>(198 din, 4 tests)</small>')   // 3 normal: all 4 (as its range)
+      && gv.includes('sab tests (jhatkon samet) · normal din ±18% (sirf 3 tests — kam se kam 4 chahiye) · 25% me achanak jhatka')
+      && !gv.includes('range forecast se');
+    out.hz_users = gv.includes('DAU · din 198') && gv.includes('ARPDAU · agle 198 din') && gv.includes('Din 181–198') && !gv.includes('Din 181–210')
+      && gv.includes('back-test me ±20% (198 din, 4 tests)');
+    out.hz_plan = gv.includes('<th>Revenue 198 days</th>') && gv.includes('Revenue · 198 days') && gv.includes('Profit · 198 days');
+    const bd = U.fcBand(g.fc, HN);
+    out.hz_band = JSON.stringify(bd(0)) === '[-0.1,0.1]' && JSON.stringify(bd(29)) === '[-0.1,0.1]' && Math.abs(bd(36)[1] - 0.1) < 1e-12
+      && Math.abs(bd(66)[0] + 0.16) < 1e-9 && JSON.stringify(bd(197)) === '[-0.3,0.22]' && JSON.stringify(U.fcBand(d.fc, 90)(5)) === '[-0.2,0.1]';
+    const ch = U.fcChart(g.fc, HN, fill(HN, 10), fill(HN, 8));
+    out.hz_chart = ch.includes('range $9.1 – $11&lt;br&gt;') && ch.includes('range $8.2 – $14&lt;br&gt;') && ch.includes('>$14<') && ch.includes('>$8.2<');   // day 1 … day 198, its ends printed
+    // a very wide range (a test 95% low): the band drawn to the chart's top, the lines not squashed, its end marked ↑
+    const gw = JSON.parse(JSON.stringify(g.fc)); gw.hz.band = [[30, -0.1, 0.1], [198, -0.95, 0.2]];
+    const cw2 = U.fcChart(gw, HN, fill(HN, 10), fill(HN, 8));
+    const axes = (cw2.match(/class="ax" x="[0-9.]+" y="[0-9.]+" text-anchor="end">\$[^<]*/g) || []).map(t => t.split('>').pop());   // the y axis
+    out.hz_chart_wide = cw2.includes('range $8.3 – $200&lt;br&gt;') && axes[axes.length - 1] === '$30' && cw2.includes('class="band"');
+    // no normal test at a horizon: said so (never "koi jhatka nahi"); a step in the daily line > 20%: said under the chart
+    const gn = JSON.parse(JSON.stringify(g)); gn.fc.cal['198'] = cc(4, 0.3, null, -0.3, 0.2, 0, 1);
+    const gnv = U.fcView(gn);
+    out.hz_no_normal = gnv.includes('±30% <small>(198 din, 4 tests)</small>') && gnv.includes('sab 4 tests me achanak jhatka — normal din ka error abhi measure nahi');
+    const gj = JSON.parse(JSON.stringify(g)); gj.fc.f.old = gj.fc.f.old.map((v, i) => i < 180 ? 5 : 2);
+    const gjo = U.fcOut(gj);
+    out.hz_jump = gjo.includes('📏 Line din 181 pe <b>−30%</b> badalti hai') && !U.fcOut(g).includes('📏');
+    const ga = U.fcAcc(g);
+    out.hz_acc = ga.includes('198 din <small>(max)</small>') && (ga.match(/<tr class="roi-act">/g) || []).length === 1
+      && ga.includes('Har horizon ka error') && ga.includes('aria-label="Back-test error by horizon"') && ga.includes('>±18%<') && ga.includes('>±10%<')
+      && ga.includes('(198 din)') && ga.includes('⚡ is beech achanak jhatka') && ga.includes('purane din se 198 din aage')
+      && ga.includes('<b>Asli check</b>') && ga.includes('+5%') && !ga.includes('−30%') && !ga.includes('newest 26 test-dino');
+    // a few-test horizon (not a chip) past ±100%: its bar cut at ±100%, said so; its tooltip keeps the real error
+    const gx = JSON.parse(JSON.stringify(g)); gx.fc.cal['44'] = cc(4, 2.5, null, -0.9, 5, 0, 1);
+    const gxa = U.fcAcc(gx);
+    out.hz_acc_cut = gxa.includes('±100% se upar wale bar wahin kate') && gxa.includes('sab tests (koi normal nahi) &lt;b&gt;±250%') && !U.fcAcc(g).includes('wahin kate');
+    // 352 / 365 days rest on two origins older than the newest 26: said so under that chip's tests
+    const g365 = JSON.parse(JSON.stringify(g)); g365.fc.hz.btx = { '198': g.fc.hz.btx['198'].map(r => r.slice(0, 3).concat([r[0] < '2025-11-20' ? 1 : 0])) };
+    out.hz_old_origins = U.fcAcc(g365).includes('198 din ke 4 tests me se 2 newest 26 test-dino se pehle ke hain') && U.fcAcc(g365).includes('sirf 2 baar check');
+    // a standard chip picked: its own numbers; an app without that chip: its own N (max), nothing jumps to another app's
+    U.set('FCH', '90');
+    const g90 = U.fcView(g);
+    out.hz_pick = g90.includes('data-roi-fch="90" aria-pressed="true"') && g90.includes('data-roi-fch="max" aria-pressed="false"')
+      && g90.includes('Revenue · agle 90 din') && g90.includes('±10% <small>(90 din, 11 tests)</small>') && g90.includes('🔎 <b>Agle 198 din</b>');
+    const yg = JSON.parse(JSON.stringify(g));
+    yg.fc.hz = { n: 72, chips: [30, 72], lock: { '90': '2026-11-20', '180': '2027-02-12', '365': '2027-09-03' }, next: [100, '2026-11-20'], band: [[30, -0.1, 0.1], [72, -0.2, 0.2]], btx: { '72': [] }, lag: 2, x: 0 };
+    yg.fc.cal = { '30': g.fc.cal['30'], '72': cc(4, 0.1, 0.1, -0.2, 0.2) }; yg.fc.ready = { '30': true, '90': false, '180': false, '365': false };
+    yg.fc.ready_from = { '90': '2026-11-20', '180': '2027-02-12', '365': '2027-09-03' };
+    const yv = U.fcView(yg);
+    out.hz_young = U.fcHN(yg.fc) === 72 && yv.includes('data-roi-fch="max" aria-pressed="true"><b>72 din</b>') && yv.includes('Revenue · agle 72 din')
+      && (yv.match(/disabled title=/g) || []).length === 3 && yv.includes('<b>100 din — 20 Nov 26 se</b> (90 din bhi) · 180 din — 12 Feb 27 se · 365 din — 3 Sep 27 se')
+      && !yv.includes('90 din — 20 Nov');                                       // (90 unlocks with 100: said once)
+    const ng = JSON.parse(JSON.stringify(yg)); ng.fc.hz = { n: null, chips: [], lock: { '30': '2026-11-01' }, next: [30, '2026-11-01'], band: [], btx: {}, lag: 2, x: 0 };
+    ng.fc.cal = {}; ng.fc.ready = { '30': false, '90': false, '180': false, '365': false }; ng.fc.ready_from = { '30': '2026-11-01' };
+    out.hz_none = U.fcView(ng).includes('30 din ka forecast <b>1 Nov 26</b> se') && !U.fcView(ng).includes('data-roi-fch');
+    const g365b = JSON.parse(JSON.stringify(g)); g365b.fc.hz.n = 365; g365b.fc.hz.chips = [30, 90, 180, 365]; g365b.fc.hz.lock = {}; g365b.fc.hz.next = null;
+    g365b.fc.cal['365'] = cc(4, 0.25, 0.22, -0.3, 0.3);
+    out.hz_365 = U.fcView(g365b).includes('1 saal se lamba forecast model nahi banata') && U.fcView(g365b).includes('<b>365 din</b><small>(max)</small>')
+      && !U.fcView(g365b).includes('disabled');
+    // All apps: each app's own longest verified horizon beside 30 / 90 / 180 (an older file: —)
+    const A0 = U.data().ALL;
+    U.setAll({ v: 1, T: A0 ? A0.T : [], life: [], months: [], rows: [], apps: [
+      { app_id: 'id-n', app: 'Nn', st: 'Normal', life: [1, 1], fc: { ready: { '30': true, '90': true, '180': true }, a30: 300, r30: 330, r90: 990, r180: 1980, e30: 0.06, n: 198, rn: 2178, en: 0.18 } },
+      { app_id: 'id-o', app: 'Oo', st: 'Normal', life: [1, 1], fc: { ready: { '30': true, '90': false, '180': false }, a30: 100, r30: 90, r90: 270, r180: 540, e30: 0.1 } }] });
+    const fz9 = U.fcAll();
+    out.hz_all = fz9.includes('<th>Agle N din (max)</th>') && fz9.includes('$2,178 <small>198 din · ±18%</small>') && (fz9.match(/<td>—<\/td>/g) || []).length >= 1;
+    U.setAll(A0);
+    // the 80% range beside the forecast (every test missed one way, the bias only partly taken back): said on the tile
+    // with its shrink — 4 tests: 2 newer → 2 ÷ 5 = 40%; 5 tests: 3 → 50%
+    U.set('FCH', 'max');
+    const gs = JSON.parse(JSON.stringify(g)); gs.fc.cal['198'] = cc(4, 0.2, 0.18, 0.05, 0.25);
+    const gso = U.fcOut(gs);
+    const gu = JSON.parse(JSON.stringify(g)); gu.fc.cal['198'] = cc(5, 0.2, 0.18, -0.4, -0.1, 5);
+    const guo = U.fcOut(gu);
+    out.hz_side = gso.includes('80% chance: $1,584 – $1,886 <small>(range forecast se neeche: 4 tests me zyadatar asli forecast se kam aaya, aur model is galti (bias) ka sirf 40% theek karta hai — naye 2 tests se')
+      && guo.includes('80% chance: $2,200 – $3,300 <small>(range forecast se upar: 5 tests me zyadatar asli forecast se zyada aaya') && guo.includes('sirf 50% theek')
+      && !U.fcOut(g).includes('range forecast se');
+    // a chip's ± and the accuracy table from the same tests as its range: fewer than 4 normal → every test's error
+    const gq = JSON.parse(JSON.stringify(g)); gq.fc.cal['90'] = cc(11, 0.12, 0.1, -0.2, 0.15, 2, 0.8);
+    const gqv = U.fcView(gq);
+    out.hz_nm = gqv.includes('data-roi-fch="90" aria-pressed="false"><b>90 din</b><small>±12%</small>') && gqv.includes('<b>±10%</b> <small>(sirf 2 tests)</small>')
+      && U.fcView(g).includes('<small>±10%</small>') && !U.fcView(g).includes('<b>±10%</b> <small>(sirf');
+    // no live check yet: the day the first one shows; the growing N: why it never comes on its chip, and 365's day
+    const gc = JSON.parse(JSON.stringify(g)); gc.fc.checks = []; gc.fc.hz.chk = { '30': '2026-11-20', '198': '2027-05-10', '365': '2027-10-22' };
+    const gca = U.fcAcc(gc);
+    U.set('FCH', '30');
+    const gc30 = U.fcAcc(gc);
+    U.set('FCH', 'max');
+    const gc365 = JSON.parse(JSON.stringify(g365b)); gc365.fc.checks = []; gc365.fc.hz.chk = { '365': '2027-10-22' };
+    out.hz_chk = gca.includes('198 din (max) ka asli check is chip pe nahi aayega') && gca.includes('max ka pehla asli check <b>22 Oct 27</b> ko (365 din ka)')
+      && !gca.includes('10 May 27') && gc30.includes('30 din ka pehla milan (pehle bana forecast vs asli) <b>20 Nov 26</b> ko yahan dikhega')
+      && U.fcAcc(gc365).includes('365 din ka pehla milan (pehle bana forecast vs asli) <b>22 Oct 27</b>')
+      && U.fcAcc(d).includes('90 din baad har din ka asli se milan yahan dikhega');     // an older file: as before
+    // a verified chip whose calibrated total can not be shown (series' _fit): no chip, not "locked", said in the note
+    const gd = JSON.parse(JSON.stringify(g365b)); gd.fc.hz.n = 180; gd.fc.hz.chips = [30, 90, 180]; gd.fc.hz.drop = [365];
+    const gdv = U.fcView(gd);
+    out.hz_drop = U.fcHN(gd.fc) === 180 && !gdv.includes('<b>365 din</b><small>') && gdv.includes('<b>365 din</b> ke bhi 4+ tests hain')
+      && gdv.includes('5 baar check ho chuka hai. <b>365 din') && !gdv.includes('badhta hai: .')
+      && gdv.includes('180 din ke sudhre total se bas thoda hi zyada (ya kam) aata') && gdv.includes('data-roi-fch="max" aria-pressed="true"><b>180 din</b>');
+    // x labels never overlap on a phone's 380-unit drawing: no first day at 365 days (it would touch "aaj"), no middle
+    // at 72 / 100 (it would touch the last day); both where there is room
+    const xl = (H, W, s) => { const n0 = 90, n = n0 + H, X = i => 44 + (W - 44 - 54) * i / (n - 1), lab = () => s || '17 Jul 26';
+      return (U.fcXs(X, n0, n, H > 60 ? n0 - 1 + Math.round(H / 2) : null, lab, 220).match(/<text /g) || []).length; };
+    // (node: no canvas — 6 units a character, the widest a "D Mon YY" runs in the page's font)
+    out.hz_axis = xl(365, 380) === 3 && xl(254, 380) === 4 && xl(180, 380) === 4 && xl(72, 380) === 3 && xl(100, 380) === 3
+      && xl(365, 720) === 4 && xl(30, 380) === 3
+      && !U.fcXs(i => 44 + 282 * i / 454, 90, 455, 271, () => '17 Jul 26', 220).includes('text-anchor="start"');
+    U.set('FCH', '90'); U.set('PLAN', null);
     // 📅 the eCPM calendar: a marker per event week with its measured %, the day's tooltip line, the Hinglish note
     // (old users in full, new installs × φv, the bidding link), the moving holidays NOT in the forecast; owner-only
     const fk = JSON.parse(JSON.stringify(d.fc)); fk.f.d0 = '2026-11-01';

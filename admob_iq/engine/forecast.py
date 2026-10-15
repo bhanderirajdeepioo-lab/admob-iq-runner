@@ -22,7 +22,8 @@ The model (everything from the app's own measured data; nothing typed in):
 Forecast = three parts, so a spend change is exact: old users + organic installs + paid installs (× spend multiplier).
 
 Back-testing ("AI back testing"): from every ORIGIN_STEP-th past day (the newest MAX_ORIGINS), the whole model is rebuilt
-with ONLY the data known that day, forecasts the next 30 / 90 / 180 days with the spend that really happened, and is
+with ONLY the data known that day, forecasts the next 30 / 90 / 180 days (engine vd: + its horizon grid to 365 days,
+forecast_vd.grid_backtest) with the spend that really happened, and is
 compared with the real revenue. The parameters (hl, K, w, g, W) are chosen by those tests (coordinate descent, newer
 tests weigh more), then a measured bias correction; the misses are split into installs, retention (DAU) and ARPDAU
 (eCPM) — what changed. The bands (P10–P90) are the tests' own error spread. A horizon is shown only once enough tests
@@ -699,12 +700,13 @@ def _sum(lst, k):
 
 
 # ── back-testing ────────────────────────────────────────────────────────────────────────────────────────────────────
-def origins(app):
-    """Test origins: every ORIGIN_STEP days back from the last actual day − 30, the newest MAX_ORIGINS, ≥ MIN_HIST
-    days after the start."""
+def origins(app, cap=None):
+    """Test origins: every ORIGIN_STEP days back from the last actual day − 30, the newest MAX_ORIGINS (cap: another
+    count — engine vd's horizon grid reaches 365 days with a few older ones), ≥ MIN_HIST days after the start."""
     last, start = app["last"], app["start"]
+    cap = MAX_ORIGINS if cap is None else cap
     out, T = [], last - timedelta(days=30)
-    while T >= start + timedelta(days=MIN_HIST) and len(out) < MAX_ORIGINS:
+    while T >= start + timedelta(days=MIN_HIST) and len(out) < cap:
         out.append(T)
         T -= timedelta(days=ORIGIN_STEP)
     return sorted(out)
@@ -860,36 +862,42 @@ def tune(app, seas=None, start_p=None, passes=2):
     return p, bt, steps
 
 
-def calibrate(bt):
-    """Per horizon, from the tests: the bias correction (median error of the newer half of the NORMAL tests, shrunk by
-    their count), the P10 / P90 band of the corrected normal errors (all tests when too few are normal), the mean
-    |error| of every test and of the normal ones, and how often a sudden change hit → {h: {...}}."""
+def calibrate(bt, hs=None):
+    """Per horizon (HORIZONS, or hs), from the tests: the bias correction (median error of the newer half of the NORMAL
+    tests, shrunk by their count), the P10 / P90 band of the corrected normal errors (all tests when too few are
+    normal), the mean |error| of every test and of the normal ones, and how often a sudden change hit → {h: {...}}."""
     out = {}
-    for hz in HORIZONS:
-        allr = [r for r in bt if hz in r["h"]]
-        if len(allr) < MIN_TESTS:
-            continue
-        errs = [r["h"][hz]["err"] for r in allr]
-        norm = [r["h"][hz]["err"] for r in allr if hz not in (r.get("ev") or {})]
-        base = norm if len(norm) >= MIN_TESTS else errs
-        recent = base[len(base) // 2:]
-        med = sorted(recent)[len(recent) // 2]
-        bias = med * len(recent) / (len(recent) + 3)
-        corr = sorted((1 + e) / (1 + bias) - 1 for e in base)
-
-        def q(p, v=corr):
-            i = p * (len(v) - 1)
-            lo = int(math.floor(i))
-            hi = min(len(v) - 1, lo + 1)
-            return v[lo] + (v[hi] - v[lo]) * (i - lo)
-        ca = [abs((1 + e) / (1 + bias) - 1) for e in errs]
-        cn = [abs((1 + e) / (1 + bias) - 1) for e in norm]
-        ue = [abs(r["h"][hz]["un_err"]) for r in allr if r["h"][hz].get("un_err") is not None]
-        out[hz] = {"bias": bias, "lo": q(0.1), "hi": q(0.9), "mape": sum(ca) / len(ca), "n": len(errs),
-                   "un_mape": (sum(ue) / len(ue)) if ue else None, "un_n": len(ue),
-                   "mape_normal": (sum(cn) / len(cn)) if cn else None, "n_normal": len(cn),
-                   "ev_rate": 1 - len(norm) / len(errs)}
+    for hz in (HORIZONS if hs is None else hs):
+        c = cal1([r for r in bt if hz in r["h"]], hz)
+        if c is not None:
+            out[hz] = c
     return out
+
+
+def cal1(allr, hz):
+    """One horizon's calibration (calibrate) from its tests allr (oldest first; each scores hz) — None below MIN_TESTS."""
+    if len(allr) < MIN_TESTS:
+        return None
+    errs = [r["h"][hz]["err"] for r in allr]
+    norm = [r["h"][hz]["err"] for r in allr if hz not in (r.get("ev") or {})]
+    base = norm if len(norm) >= MIN_TESTS else errs
+    recent = base[len(base) // 2:]
+    med = sorted(recent)[len(recent) // 2]
+    bias = med * len(recent) / (len(recent) + 3)
+    corr = sorted((1 + e) / (1 + bias) - 1 for e in base)
+
+    def q(p, v=corr):
+        i = p * (len(v) - 1)
+        lo = int(math.floor(i))
+        hi = min(len(v) - 1, lo + 1)
+        return v[lo] + (v[hi] - v[lo]) * (i - lo)
+    ca = [abs((1 + e) / (1 + bias) - 1) for e in errs]
+    cn = [abs((1 + e) / (1 + bias) - 1) for e in norm]
+    ue = [abs(r["h"][hz]["un_err"]) for r in allr if r["h"][hz].get("un_err") is not None]
+    return {"bias": bias, "lo": q(0.1), "hi": q(0.9), "mape": sum(ca) / len(ca), "n": len(errs),
+            "un_mape": (sum(ue) / len(ue)) if ue else None, "un_n": len(ue),
+            "mape_normal": (sum(cn) / len(cn)) if cn else None, "n_normal": len(cn),
+            "ev_rate": 1 - len(norm) / len(errs)}
 
 
 def attribution(bt, hz=30):

@@ -13,9 +13,16 @@ three mix weights, and only when the budget left is > TUNE_MARGIN × the app's l
 its stored settings) → calibrate (bias, P10–P90, accuracy of every test and of the normal ones, how often a sudden
 change hit) → the forecast from the last complete day, 180 days, in three parts (old users / organic installs / paid
 installs at the last 7 days' spend) so the page's spend slider is exact; the bias correction folded into the days.
+🔎 The verified horizon (vd; owner, 15 Oct: "verified horizon, khud badhe"): the chosen setting is also back-tested on
+the horizon grid (forecast_vd.HG: every 14 days from 30 to 352, + 90 / 180 / 365; the tune's fits reused, its origins
++ the two before them for 352 / 365 only), each grid horizon calibrated on its own tests; N = the longest with
+≥ MIN_TESTS (grows ~14 days every 2 weeks as the app ages); the page's chips = the standard 30 / 90 / 180 / 365 below N
++ N; the forecast then reaches max(180, N) days and every chip's total is corrected by its own bias (30 / 90 / 180 and
+their numbers exactly as before: the tune and its objective are untouched); fc["hz"] = N, the chips, the day each
+locked horizon unlocks, the chart's monotone band across horizons, each chip's tests (horizon()).
 Kept for good in the private repo (data/forecast/<key>.json): the settings, the learning log (what changed and why, the
-newest LOG_KEEP), and every day's own forecast of the next 30 / 90 / 180 days — once those days have happened the page
-shows that live error too (the real check, beyond the back-tests).
+newest LOG_KEEP), and every day's own forecast of the next 30 / 90 / 180 days (+ its other chips, "px") — once those
+days have happened the page shows that live error too (the real check, beyond the back-tests).
 Engine vd with the app's Google Ads country weeks (roi_build hands them over, + every store's country block pairs once
 per build): the page's "Budget by country" planner (fc.plan: each country's installs per $ and CPI rise; revenue per $
 the forecast's own) — the forecast's own paid installs stay spend × per_usd (STRUCT cs 0: the country model did not win
@@ -48,6 +55,9 @@ TUNE_MARGIN = 1.3                       # vd: a re-tune starts only with > this 
 TUNE_GUESS_SEC = 30.0                   # … (its first tune: this guess)
 LOG_KEEP = 30
 LIVE_KEEP = 400
+CHECK_KEEP = 20                         # the page's live checks: the newest this many per horizon
+FIT_MIN = 0.05                          # a chip outside 30 / 90 / 180: the lowest day factor its correction may use
+FIT_TOL = 1e-6                          # … and how close its shown total must be to its calibration (else dropped)
 HIST_DAYS = 180
 ULAG_INDEX = {L: i for i, L in enumerate(F.ULAGS)}
 
@@ -239,12 +249,20 @@ def cs_pairs(run, geo, fxf):
 
 
 # ── the bias correction folded into the days ────────────────────────────────────────────────────────────────────────
-def corrected(series, cal):
-    """Per-day factors so the corrected cumulative sum at 30 / 90 / 180 days = raw ÷ (1 + that horizon's bias)."""
+def _anchors(hs):
+    """The horizons whose totals the page shows exactly: 30 / 90 / 180 (always, as before) + the app's chips hs."""
+    return sorted(set(F.HORIZONS) | {int(h) for h in (hs or ())})
+
+
+def corrected(series, cal, hs=None):
+    """Per-day factors so the corrected cumulative sum at 30 / 90 / 180 days (+ each horizon in hs: the page's chips)
+    = raw ÷ (1 + that horizon's bias); a horizon without one carries the factor before it on (as it is). 30 / 90 / 180:
+    the factor held in [0.5, 2] as always (their numbers exactly as before); a chip outside them: only ≥ FIT_MIN, so
+    its total is exactly its own calibration (_fit drops a chip whose bias asks for less than that)."""
     tot = [a + b + c for a, b, c in zip(series["old"], series["org"], series["paid"])]
     fac = [1.0] * len(tot)
     prev_h, prev_raw, prev_cor, last_f = 0, 0.0, 0.0, 1.0
-    for hz in F.HORIZONS:
+    for hz in _anchors(hs):
         if hz > len(tot):
             break
         raw = sum(tot[:hz])
@@ -252,13 +270,39 @@ def corrected(series, cal):
         target = raw / (1 + b) if b is not None else prev_cor + (raw - prev_raw) * last_f
         seg = raw - prev_raw
         f = (target - prev_cor) / seg if seg > 0 else last_f
-        f = min(2.0, max(0.5, f))
+        if b is not None:                                # (a carried factor stays as it was: no step where no bias)
+            f = min(2.0, max(0.5, f)) if hz in F.HORIZONS else max(FIT_MIN, f)
         for i in range(prev_h, hz):
             fac[i] = f
         prev_h, prev_raw, prev_cor, last_f = hz, raw, prev_cor + seg * f, f
     for i in range(prev_h, len(tot)):
         fac[i] = last_f
     return fac
+
+
+def _fit(rev, cal, hs):
+    """corrected() with the chips hs it can show exactly → (factors, the chips kept, the chips dropped): a chip outside
+    30 / 90 / 180 whose corrected total still misses raw ÷ (1 + its bias) by more than FIT_TOL (its bias asks for less
+    than the days before it already add up to: the days in between would earn ~nothing) is dropped with every longer
+    one — the page never shows a chip's total that its own back-tests do not give."""
+    hs = [int(h) for h in (hs or ())]
+    tot = [a + b + c for a, b, c in zip(rev["old"], rev["org"], rev["paid"])]
+    drop = []
+    while True:
+        fac = corrected(rev, cal, hs)
+        bad = None
+        for h in hs:
+            if h in F.HORIZONS or h > len(tot) or (cal.get(h) or {}).get("bias") is None:
+                continue
+            want = sum(tot[:h]) / (1 + cal[h]["bias"])
+            got = sum(t * x for t, x in zip(tot[:h], fac[:h]))
+            if abs(got - want) > FIT_TOL * max(abs(want), 1e-12):
+                bad = h
+                break
+        if bad is None:
+            return fac, hs, drop
+        drop += [h for h in hs if h >= bad]
+        hs = [h for h in hs if h < bad]
 
 
 # ── drivers: now vs the app's usual ("X") ───────────────────────────────────────────────────────────────────────────
@@ -413,7 +457,7 @@ def drivers(app, rows, ida, cty_rows, rev_cty=None):
 
 
 # ── the page's series (a full model run and a kept one alike) ───────────────────────────────────────────────────────
-def plan_out(pl, f, fac):
+def plan_out(pl, f, fac, hs=None):
     """The engine's planner inputs (forecast_vd.cs_plan) → the page's "Budget by country" card: per row its spend, its
     installs per $ (ppu) at the training level sb and its measured spend range; its revenue per $ of spend within
     30 / 90 / 180 days (r) = the forecast's own paid-install revenue (bias-corrected, at today's spend) ÷ today's spend —
@@ -426,7 +470,7 @@ def plan_out(pl, f, fac):
 
     def csum(k, hz):
         return sum(v * fac[i] for i, v in enumerate(f["rev"][k][:hz]))
-    hs = VD.CS_H
+    hs = [h for h in _anchors(hs) if h <= len(fac)] if hs else VD.CS_H     # (+ the page's chips: its horizons)
     paid = [csum("paid", hz) for hz in hs]
     r = [_r(v / pl["s"], 6) for v in paid]
     rows = [{"cc": x["cc"], "s0": _r(x["s0"], 4), "sb": _r(x["sb"], 4), "ppu": _r(pl["pu"] * x["rho"], 6),
@@ -437,17 +481,18 @@ def plan_out(pl, f, fac):
             "paid": [_r(v, 2) for v in paid], "h": list(hs), "rows": rows}
 
 
-def weekly(ser, d0, W):
+def weekly(ser, d0, W, hs=None):
     """The after-call weekday rhythm on the page's daily forecast (W: fc_calendar.weekday, Mon..Sun): each part's days
-    × W of their weekday, rescaled inside every horizon block (days 1–30, 31–90, 91–180) so each part's block total —
-    every total the page shows, at any spend slider — stays the forecast's. None: the series as it was."""
+    × W of their weekday, rescaled inside every horizon block (days 1–30, 31–90, 91–180, + the page's chips hs) so each
+    part's block total — every total the page shows, at any spend slider — stays the forecast's. None: the series as
+    it was."""
     if not W:
         return ser
     out = {}
     for k, v in ser.items():
         fac = [W[(d0 + timedelta(days=i)).weekday()] for i in range(len(v))]
         o, prev = list(v), 0
-        for hz in F.HORIZONS + (len(v),):
+        for hz in tuple(_anchors(hs)) + (len(v),):
             hi = min(hz, len(v))
             raw = sum(x or 0.0 for x in v[prev:hi])
             sh = sum((x or 0.0) * f for x, f in zip(v[prev:hi], fac[prev:hi]))
@@ -459,42 +504,51 @@ def weekly(ser, d0, W):
     return out
 
 
-def series(app, p, cal, seas, E=F):
+def series(app, p, cal, seas, E=F, hs=None, reach=None):
     """The forecast of engine E from the newest day with settings p (spend = the last F.SPEND_DAYS days' run-rate, the
     bias correction of cal) → the page's f + hist: revenue / active users / uninstalls by who (old users, organic,
     paid), installs, spend; the actual last HIST_DAYS days beside it; + "plan" (engine vd with country data: the
-    "Budget by country" planner, plan_out)."""
+    "Budget by country" planner, plan_out). hs: the page's chips (engine vd's verified horizons, VD.chips) — the page
+    reaches the longest (≥ F.H days) and each one's total is bias-corrected by its own back-tests (_fit: a chip it can
+    not show exactly is dropped). reach: the days the forecast itself goes (engine vd, the day's snapshot: VD.HMAX, so
+    every grid horizon's total is kept for its live check) — the page's lists stop at max(F.H, the longest chip), the
+    same numbers either way. → (out, f, ser: the corrected days as far as the forecast reaches, the chips shown)."""
     last = app["last"]
-    f = E.forecast(app, last, p, h=F.H, seas=seas)
-    fac = corrected(f["rev"], cal)
+    hs = [int(h) for h in (hs or ())]
+    L = max([F.H] + hs)                                  # the page's days
+    hf = max(L, int(reach or 0))                         # the forecast's
+    f = E.forecast(app, last, p, h=hf, seas=seas, **({"hc": L} if hf > L else {}))
+    fac, hs, _ = _fit(f["rev"], cal, hs)
+    L = max([F.H] + hs)
     ser = {k: [_r(v * fac[i], 4) for i, v in enumerate(f["rev"][k])] for k in ("old", "org", "paid")}
-    ser = weekly(ser, last + timedelta(days=1), app.get("wk"))         # 📅 the after-call weekday rhythm (page only)
+    ser = weekly(ser, last + timedelta(days=1), app.get("wk"), hs)     # 📅 the after-call weekday rhythm (page only)
     hist0 = last - timedelta(days=HIST_DAYS - 1)
     hd = [app["days"].get(hist0 + timedelta(days=i)) or {} for i in range(HIST_DAYS)]
 
     def run_rate(k, n):
         ds = [app["days"].get(last - timedelta(days=i)) or {} for i in range(n)]
         return sum(e.get(k) or 0 for e in ds) / float(n)
-    out = {"f": {"d0": _iso(last + timedelta(days=1)), **ser, "dau": [_r(v, 1) for v in f["dau"]],
-                 "dau_p": {k: [_r(v, 1) for v in f["dau_p"][k]] for k in ("old", "org", "paid")},
-                 "un": {k: [_r(v, 1) for v in f["un"][k]] for k in ("old", "org", "paid")} if f.get("un") else None,
-                 "n": [_r(v, 1) for v in f["n"]], "sp": [_r(v, 4) for v in f["sp"]],
+    out = {"f": {"d0": _iso(last + timedelta(days=1)), **{k: v[:L] for k, v in ser.items()},
+                 "dau": [_r(v, 1) for v in f["dau"][:L]],
+                 "dau_p": {k: [_r(v, 1) for v in f["dau_p"][k][:L]] for k in ("old", "org", "paid")},
+                 "un": {k: [_r(v, 1) for v in f["un"][k][:L]] for k in ("old", "org", "paid")} if f.get("un") else None,
+                 "n": [_r(v, 1) for v in f["n"][:L]], "sp": [_r(v, 4) for v in f["sp"][:L]],
                  "spi": _r(run_rate("spi", F.SPEND_DAYS), 2), "spd": F.SPEND_DAYS,
                  "spi30": _r(run_rate("spi", 30), 2), "sp30": _r(run_rate("sp", 30), 4)},
            "hist": {"d0": _iso(hist0), "rev": [_r(e.get("rev"), 4) for e in hd], "sp": [_r(e.get("sp"), 4) for e in hd],
                     "spi": [_r(e.get("spi"), 2) for e in hd], "dau": [e.get("dau") for e in hd],
                     "n": [e.get("n") for e in hd], "un": [e.get("un") for e in hd]}}
     try:                                                 # only the planner would miss it: never the forecast
-        out["plan"] = plan_out(f.get("plan"), f, fac)
+        out["plan"] = plan_out(f.get("plan"), f, fac, hs)
     except Exception:
         out["plan"] = None
     out["fcal"] = _rx(f.get("cal"), 4) if f.get("cal") else None    # 📅 the coming event weeks (engine vd)
     if app.get("wk"):
         out["fcal"] = dict(out["fcal"] or {"ev": []}, wk=_rx(list(app["wk"]), 4))
-    return out, f, ser
+    return out, f, ser, hs
 
 
-def _holidays(run, sr, last, rev_cty, h=F.H):
+def _holidays(run, sr, last, rev_cty, h=None):
     """+ sr["fcal"]["hol"]: Ramadan / Diwali inside the next h days — measured once each (fc_calendar.holidays), NOT in
     the forecast (no back-test could show they help yet): the measured eCPM gap (those countries minus the others, and
     each part) × the app's own share of revenue in those countries over its newest 28 days (rev_cty: {day: {country:
@@ -503,6 +557,7 @@ def _holidays(run, sr, last, rev_cty, h=F.H):
         hol = (run.cal or {}).get("hol")
         if not hol:
             return
+        h = h or len((sr.get("f") or {}).get("old") or ()) or F.H
         tot, mus, ind = 0.0, 0.0, 0.0
         for d in sorted(rev_cty or {})[-28:]:
             for cc, v in (rev_cty[d] or {}).items():
@@ -540,6 +595,83 @@ def _rx(v, n=6):
     if isinstance(v, dict):
         return {k: _rx(x, n) for k, x in v.items()}
     return v
+
+
+def _unlock(E, start, last, lag, hz):
+    """The day horizon hz shows (its MIN_TESTS-th back-test exists: E.unlock) — on the build calendar (+ lag, the days
+    the newest data day trails the build); a day already past whose tests are not all there (a test without revenue):
+    the next origin's. None: never (past GRID_ORIGINS)."""
+    u = E.unlock(start, hz)
+    if u is None:
+        return None
+    while u <= last:
+        u += timedelta(days=F.ORIGIN_STEP)
+    return _iso(u + timedelta(days=lag))
+
+
+def horizon(E, start, last, lag, cal, gbt, hs, full=None):
+    """Engine vd's verified horizon for the page: n = the longest grid horizon with ≥ MIN_TESTS back-tests (None: not
+    even 30 days yet), chips = the page's horizons (E.chips), lock = the day each standard 30 / 90 / 180 / 365 not yet
+    verified shows, next = [the next longer horizon, its day] (the longest of those that unlock together: one more
+    origin), band = the chart's monotone 80 % band across the chips (E.band), x = tests from the origins before the tune's
+    (352 / 365 days: GRID_ORIGINS), btx = each chip outside 30 / 90 / 180: its tests [T, error, sudden change 0/1, an
+    older origin 0/1]. full: the chips before series()' _fit (hs: the ones it shows) — drop = verified but not shown
+    (its calibrated total can not be shown), n then the longest shown."""
+    full = list(hs or ()) if full is None else list(full)
+    drop = [h for h in full if h not in (hs or ())]
+    top = max(cal) if cal else None
+    n = (hs[-1] if hs else None) if drop else top
+    lock = {str(h): _unlock(E, start, last, lag, h) for h in E.STD if h not in cal}
+    later = {h: _unlock(E, start, last, lag, h) for h in E.HG if top is None or h > top}
+    later = {h: d for h, d in later.items() if d}
+    nxt = None
+    if later:
+        d0 = min(later.values())
+        nxt = [max(h for h, d in later.items() if d == d0), d0]
+    btx = {}
+    for h in full:
+        if h not in F.HORIZONS:
+            btx[str(h)] = [[r["T"], _r(r["h"][h]["err"], 4), 1 if h in (r.get("ev") or {}) else 0,
+                            1 if r.get("x") else 0] for r in E.grid_tests(gbt, h)]
+    used = {r["T"] for h in (hs or ()) for r in E.grid_tests(gbt, h) if r.get("x")}
+    return {"n": n, "chips": list(hs or ()), "drop": drop, "lock": lock, "next": nxt, "x": len(used),
+            "band": _rx(E.band({h: cal[h] for h in (hs or ()) if h in cal}), 4),
+            "btx": btx, "lag": lag}
+
+
+def _rechip(hz, cal, full, hs):
+    """A kept forecast whose chips today (series' _fit on today's data) differ from its file's: the page's chips, n,
+    drop and band follow (cal: the page's calibration, string keys)."""
+    return dict(hz, chips=list(hs), n=hs[-1] if hs else hz.get("n"), drop=[h for h in full if h not in hs],
+                band=_rx(VD.band({h: cal[str(h)] for h in hs if str(h) in cal}), 4))
+
+
+def _first_checks(live, hs, have, lag, today, HMAX):
+    """{horizon: the build day its first live check shows} for each chip without one yet (+ HMAX, where the longest
+    chip stops growing): the oldest kept day's forecast that holds that horizon's total + the horizon + lag (a day
+    already past: none — that check had no revenue)."""
+    out = {}
+    for h in sorted(set(hs or ()) | {HMAX}):
+        if h in have:
+            continue
+        ts = [x["T"] for x in live
+              if (x.get("p%d" % h) is not None if h in F.HORIZONS else str(h) in (x.get("px") or {}))]
+        if ts:
+            d = _d(min(ts)) + timedelta(days=h + lag)
+            if d > today:
+                out[str(h)] = _iso(d)
+    return out
+
+
+def _newest(checks, k=CHECK_KEEP):
+    """The live checks kept for the page: the newest k of each horizon (a long one's are older: never crowded out by
+    the 30-day ones), in their order."""
+    seen, keep = {}, []
+    for c in reversed(checks):
+        if seen.get(c["h"], 0) < k:
+            seen[c["h"]] = seen.get(c["h"], 0) + 1
+            keep.append(c)
+    return keep[::-1]
 
 
 def _tuned_now(E, p):
@@ -591,7 +723,8 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
             can = run.left() > 0
         else:                                            # vd: the forecast is re-made every build below (cheap); the
             fresh = (same and age_h is not None and age_h < EVERY_H    # tune once a day, if its seconds fit the budget,
-                     and _tuned_now(E, old.get("p")))                  # at once for a setting it can't make
+                     and _tuned_now(E, old.get("p"))                   # at once for a setting it can't make or a file
+                     and "hz" in (old.get("fc") or {}))                # made before the verified horizon
             last_sec = old.get("tune_sec") if old.get("v") == Vr else None
             can = run.left() > TUNE_MARGIN * float(last_sec or TUNE_GUESS_SEC)
         seas = run.season or F.season(app["days"])
@@ -608,8 +741,11 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
                         Eo = ENGINES[old["v"]]           # (by the engine that made the file)
                         cal = {int(h): {"bias": b} for h, b in (old.get("bias") or {}).items()} or \
                             {int(h): c for h, c in (fc.get("cal") or {}).items()}
-                        sr, f, _ = series(app, dict(Eo.DEFAULT, **old["p"]), cal, seas, Eo)
+                        hs = Eo.chips(cal) if Eo is VD and "hz" in fc else None     # (a file made before: as it was)
+                        sr, f, _, hs2 = series(app, dict(Eo.DEFAULT, **old["p"]), cal, seas, Eo, hs)
                         _holidays(run, sr, app["last"], rev_cty)
+                        if hs is not None and hs2 != list(fc["hz"].get("chips") or ()):
+                            fc["hz"] = _rechip(fc["hz"], fc.get("cal") or {}, hs, hs2)
                         fc.update(sr)
                         fc["T"] = _iso(app["last"])
                         if Eo is VD:
@@ -623,9 +759,17 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
                 return None
         prev_p = old.get("p") if old.get("v") == Vr else None
         t0 = run.clock()
-        p, bt, steps = E.tune(app, seas, start_p=prev_p)
+        fits = {}
+        p, bt, steps = E.tune(app, seas, start_p=prev_p, fits=fits) if Vr == 2 else E.tune(app, seas, start_p=prev_p)
         moved = (dict(E.DEFAULT, **prev_p) if Vr == 2 and prev_p else prev_p) != p   # vd: a setting stored before a
                                                                                        # switch existed = it at its default
+        cal = F.calibrate(bt)
+        gbt = []
+        if Vr == 2:                                      # the verified horizon: the chosen setting on the horizon grid
+            gbt = E.grid_backtest(app, p, seas, fits)    # (the tune's fits reused; ≤ 2 older origins for 352 / 365)
+            for h, c in E.grid_cal(gbt).items():
+                cal.setdefault(h, c)                     # (30 / 90 / 180: the very rows, so the very numbers)
+        fits = None
         tune_sec = round(max(0.0, run.clock() - t0), 1)
         run.tune_sec.append(tune_sec)
         run.gx[0] += 1 if p.get("gc") else 0
@@ -634,26 +778,36 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
             sc_prev = F.score(F.backtest(app, prev_p, seas)) if prev_p and prev_p != p else None
         else:                                            # vd tunes from the stored setting: its score is the first step
             sc_prev = steps[0]["score"] if prev_p and moved and steps else None
-        cal = F.calibrate(bt)
-        sr, f, ser = series(app, p, cal, seas, E)
+        full = E.chips(cal) if Vr == 2 else None
+        sr, f, ser, hs = series(app, p, cal, seas, E, full, reach=E.HMAX if Vr == 2 else None)
         _holidays(run, sr, app["last"], rev_cty)
         last = app["last"]
         # readiness: a horizon shows once enough tests could score it; else the day it will
-        ready, ready_from = {}, {}
-        for hz in F.HORIZONS:
-            ok = hz in cal
-            ready[str(hz)] = ok                         # string keys: the same after the JSON round trip
-            if not ok:
-                ready_from[str(hz)] = _iso(app["start"] + timedelta(days=F.MIN_HIST + hz + F.ORIGIN_STEP * (F.MIN_TESTS - 1) + 30))
+        ready, ready_from, hz_out = {}, {}, None
+        if Vr == 2:                                      # engine vd: the verified horizon (30 / 90 / 180 / 365 + N)
+            hz_out = horizon(E, app["start"], last, max(0, (run.now.date() - last).days), cal, gbt, hs, full)
+            for hz in E.STD:
+                ready[str(hz)] = hz in cal               # string keys: the same after the JSON round trip
+                if hz not in cal and hz_out["lock"].get(str(hz)):
+                    ready_from[str(hz)] = hz_out["lock"][str(hz)]
+        else:
+            for hz in F.HORIZONS:
+                ok = hz in cal
+                ready[str(hz)] = ok
+                if not ok:
+                    ready_from[str(hz)] = _iso(app["start"] + timedelta(days=F.MIN_HIST + hz + F.ORIGIN_STEP * (F.MIN_TESTS - 1) + 30))
         tot = [a + b + c for a, b, c in zip(ser["old"], ser["org"], ser["paid"])]
         snap = {"made": today, "T": _iso(last), "p30": _r(sum(tot[:30]), 2), "p90": _r(sum(tot[:90]), 2),
                 "p180": _r(sum(tot[:180]), 2)}
+        px = {str(h): _r(sum(tot[:h]), 2) for h in (E.HG if Vr == 2 else ()) if h not in F.HORIZONS and h <= len(tot)}
+        if px:                                           # (every grid horizon outside 30 / 90 / 180 the forecast
+            snap["px"] = px                              # reaches: the chips' live checks, whatever N is by then)
         live = [x for x in (old.get("live") or []) if x.get("made") != today][-LIVE_KEEP + 1:] + [snap]
-        checks = []
+        checks, shown = [], set(F.HORIZONS) | set(hs or ())
         for x in live:                                   # the live check: a forecast whose days have all happened
-            T0 = _d(x["T"])
-            for hz in F.HORIZONS:
-                pv = x.get("p%d" % hz)
+            T0 = _d(x["T"])                              # (the page's horizons: 30 / 90 / 180 + its chips)
+            for hz in F.HORIZONS + tuple(sorted(int(h) for h in (x.get("px") or {}) if int(h) in shown)):
+                pv = x.get("p%d" % hz) if hz in F.HORIZONS else x["px"][str(hz)]
                 if pv is None or T0 + timedelta(days=hz) > last:
                     continue
                 act = sum((app["days"].get(T0 + timedelta(days=i)) or {}).get("rev") or 0 for i in range(1, hz + 1))
@@ -678,8 +832,11 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
               "bt": [[r["T"]] + [(_r(r["h"][hz]["err"], 4) if hz in r["h"] else None) for hz in F.HORIZONS]
                      + [sorted((r.get("ev") or {}).keys())] for r in bt],
               "events": _events(bt), "att": {k: _r(v, 3) for k, v in att.items()} if att else None,
-              "log": log[-15:], "checks": checks[-60:], "drv": drivers(app, rows, ida, cty_rows, rev_cty),
+              "log": log[-15:], "checks": _newest(checks), "drv": drivers(app, rows, ida, cty_rows, rev_cty),
               "parts": _rx(f["parts"])}
+        if hz_out is not None:                           # when each chip's first live check shows (none yet)
+            hz_out["chk"] = _first_checks(live, hs, {c["h"] for c in checks}, hz_out["lag"], run.now.date(), E.HMAX)
+            fc["hz"] = hz_out
         run.plans += 1 if fc.get("plan") else 0
         _write(path, {"v": Vr, "eng": run.eng, "made_at": run.now.isoformat(), "start": _iso(app["start"]),
                       "T": _iso(last), "p": p, "tune_sec": tune_sec,

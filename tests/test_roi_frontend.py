@@ -88,6 +88,18 @@ def test_forecast_view(out):
     # 💸 Budget by country: today's plan = the forecast; Keep total; out-of-range warning; owner-only; the slider
     assert out["pl_card"] and out["pl_keep"] and out["pl_warn"] and out["pl_nokeep"]
     assert out["pl_dev"] and out["pl_none"] and out["pl_slider"] and out["pl_h"] and out["pl_inr"]
+    # 🔎 "Agle N din": the verified horizon's chips (fixed widths, N max, 365 locked with its day), the note, tiles,
+    # band, users card, planner and accuracy at the chosen horizon; a young app / no horizon / a full year
+    assert out["hz_chips"] and out["hz_note"] and out["hz_tiles"] and out["hz_users"] and out["hz_plan"]
+    assert out["hz_band"] and out["hz_chart"] and out["hz_acc"] and out["hz_old_origins"] and out["hz_pick"]
+    assert out["hz_young"] and out["hz_none"] and out["hz_365"] and out["hz_all"]
+    # the range read the right way round (forecast ÷ (1 + error)), a very wide one capped on the chart, no normal test
+    # said so, a step in the daily line said so
+    assert out["hz_chart_wide"] and out["hz_no_normal"] and out["hz_jump"] and out["hz_acc_cut"]
+    # a range beside the forecast said with its shrink; ± from the range's own tests; the first live check's day (and
+    # why the growing N never gets one on its chip); a chip that can not be shown exactly said, not locked; x labels
+    # never overlap
+    assert out["hz_side"] and out["hz_nm"] and out["hz_chk"] and out["hz_drop"] and out["hz_axis"]
     # 📅 the eCPM calendar: markers with the measured %, tooltip, note, holidays not applied, owner-only
     assert out["cal_marks"] and out["cal_tip"] and out["cal_note"] and out["cal_30"] and out["cal_180"]
     assert out["cal_dev"] and out["cal_none"] and out["cal_wk"] and out["cal_off"] and out["cal_small"] and out["cal_zero"]

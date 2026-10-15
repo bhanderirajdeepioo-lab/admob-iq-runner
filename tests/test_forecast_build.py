@@ -64,12 +64,13 @@ def test_app_step_once_a_day_budget_start_and_live(tmp_path):
     run = fb.start(data, now, clock)
     fc = fb.app_step(run, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
     assert fc and fc["start"] == (D0 + timedelta(days=10)).isoformat() and fc["start_set"] is None   # the trial days left out
-    assert fc["ready"]["30"] and len(fc["f"]["old"]) == F.H and fc["f"]["d0"] == (LAST + timedelta(days=1)).isoformat()
+    hn = fc["hz"]["n"]                                   # the verified horizon: the forecast reaches it (≥ 180 days)
+    assert fc["ready"]["30"] and len(fc["f"]["old"]) == max(F.H, hn) and fc["f"]["d0"] == (LAST + timedelta(days=1)).isoformat()
     assert fc["cal"]["30"]["mape"] < 0.05 and fc["log"] and fc["log"][-1]["d"] == "2026-01-02"
     assert abs(fc["f"]["spi"] - 500 * 90) < 1e-6 and len(fc["hist"]["rev"]) == fb.HIST_DAYS
     assert fc["eng"] == "vd" and fc["v"] == 2 and set(fc["p"]) == set(VD.GRID)                       # engine vd: 3 mix weights
     assert fc["parts"]["glag"] == 5 and len(fc["parts"]["arp"]) == 7 and fc["parts"]["org"] > 0       # both views, GA4 lag 5
-    assert all(len(fc["f"][k]) == F.H for k in ("old", "org", "paid", "dau", "n", "sp")) and fc["f"]["dau_p"]
+    assert all(len(fc["f"][k]) == max(F.H, hn) for k in ("old", "org", "paid", "dau", "n", "sp")) and fc["f"]["dau_p"]
     saved = json.load(open(os.path.join(data, "forecast", "k1.json")))
     assert saved["live"][-1]["made"] == "2026-01-02" and saved["p"] == fc["p"] and saved["v"] == 2
     assert saved["tune_sec"] == 0.0
@@ -224,7 +225,9 @@ def test_vd_kept_forecast_follows_a_new_day(tmp_path):
     assert f2["p"] == f1["p"] and f2["log"] == f1["log"] and f2["f"]["old"] != f1["f"]["old"]
     a = dict(fb.inputs(rows, {"S": LAST}, ida, life, LAST.isoformat()), port={"bandr": {}})
     a["start"] = F.auto_start({D: e for D, e in a["days"].items() if e.get("n") is not None})
-    want = VD.forecast(a, LAST, f1["p"], h=F.H, seas=F.season(a["days"]))      # the stored setting on today's data
+    hs = VD.chips({int(h): 1 for h in json.load(open(os.path.join(data, "forecast", "k1.json")))["bias"]})
+    assert hs == f1["hz"]["chips"] and len(f2["f"]["dau"]) == hs[-1] > F.H        # the kept run: the same horizons
+    want = VD.forecast(a, LAST, f1["p"], h=hs[-1], seas=F.season(a["days"]))   # the stored setting on today's data
     assert f2["f"]["dau"] == [round(v, 1) for v in want["dau"]] and f2["parts"]["q"] == round(want["parts"]["q"], 6)
     assert json.load(open(os.path.join(data, "forecast", "k1.json")))["T"] == y.isoformat()   # the file: the tune's
 
@@ -421,3 +424,194 @@ def test_the_weekday_rhythm_reaches_the_page(tmp_path):
     o2 = fb.app_step(run, "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(), [])
     assert o2["fcal"]["wk"] == W and o2["fcal"]["ev"] == [] and (o2["f"] == out[0]["f"] or VD.STRUCT["cal"])
     assert fb.start(data, now, Clock(), cal={"v": 1, "s": {}, "hol": {}, "wk": {}}).cal is None
+
+
+# ── the verified horizon (owner, 15 Oct: "verified horizon, khud badhe") ────────────────────────────────────────────
+def _tot(f, n):
+    return sum(f["old"][i] + f["org"][i] + f["paid"][i] for i in range(n))
+
+
+def test_the_verified_horizon_reaches_the_page(tmp_path):
+    """Engine vd: every grid horizon calibrated on its own tests (fc["cal"]), N = the longest verified, the chips, the
+    forecast to N, each chip's total bias-corrected by its own back-tests exactly, the unlock days on the build's
+    calendar (the newest data day + the lag), the chart's band, each chip's tests by date and its own live check."""
+    data = str(tmp_path / "data")
+    os.makedirs(data)
+    app = make()
+    rows, life, ida = _rows_life(app, ga4=True)
+    now = datetime(2026, 1, 2, 6, tzinfo=timezone.utc)              # 2 days after the newest data day
+    fc = fb.app_step(fb.start(data, now, Clock()), "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(), [])
+    hz, cal = fc["hz"], fc["cal"]
+    assert hz["n"] == 268 and hz["chips"] == [30, 90, 180, 268] and hz["lag"] == 2 and hz["x"] == 0 and hz["drop"] == []
+    assert sorted(int(h) for h in cal) == [h for h in VD.HG if h <= 268] and all(c["n"] >= F.MIN_TESTS for c in cal.values())
+    assert fc["ready"] == {"30": True, "90": True, "180": True, "365": False}
+    d365 = (VD.unlock(D0, 365) + timedelta(days=2)).isoformat()
+    assert fc["ready_from"] == {"365": d365} and hz["lock"] == {"365": d365}
+    assert hz["next"] == [282, (VD.unlock(D0, 282) + timedelta(days=2)).isoformat()] and hz["next"][1] > now.date().isoformat()
+    # the forecast reaches N, and every chip's total = the raw forecast ÷ (1 + its own bias)
+    a = dict(fb.inputs(rows, {"S": LAST}, ida, life, LAST.isoformat()), port={"bandr": {}}, start=D0)
+    raw = VD.forecast(a, LAST, fc["p"], h=268, seas=F.season(a["days"]))
+    assert len(fc["f"]["old"]) == 268 and fc["f"]["dau"] == [round(v, 1) for v in raw["dau"]]
+    bias = json.load(open(os.path.join(data, "forecast", "k1.json")))["bias"]       # (full precision; the page's: 4 d.p.)
+    for h in hz["chips"]:
+        want = _tot(raw["rev"], h) / (1 + bias[str(h)])
+        assert abs(_tot(fc["f"], h) / want - 1) < 1e-7, h
+    # the band: monotone across the verified horizons; each chip's tests by date (outside 30 / 90 / 180)
+    b = hz["band"]
+    assert [x[0] for x in b] == hz["chips"] and all(x[1] <= 0 <= x[2] for x in b)
+    assert all(b[i][2] <= b[i + 1][2] and b[i][1] >= b[i + 1][1] for i in range(len(b) - 1))
+    assert set(hz["btx"]) == {"268"} and len(hz["btx"]["268"]) == cal["268"]["n"] == 4
+    assert all(len(r) == 4 and r[3] == 0 for r in hz["btx"]["268"]) and [r[0] for r in fc["bt"]][-4:] != []
+    # the live check: every grid horizon's total kept every day (the forecast itself reaches 365 days: the chips' live
+    # checks whatever N is by then; the page's lists stop at N), checked once its days have happened
+    saved = json.load(open(os.path.join(data, "forecast", "k1.json")))
+    px = saved["live"][-1]["px"]
+    assert set(px) == {str(h) for h in VD.HG if h not in F.HORIZONS} and px["268"] == round(_tot(fc["f"], 268), 2)
+    assert px["365"] > px["268"] > 0         # no check yet: each chip's first (today's forecast + its days + the lag)
+    assert hz["chk"] == {str(h): (LAST + timedelta(days=h + 2)).isoformat() for h in (30, 90, 180, 268, 365)}
+    assert sorted(saved["bias"], key=int) == sorted(cal, key=int)
+    T0, T1 = LAST - timedelta(days=100), LAST - timedelta(days=280)
+    saved["live"][:0] = [{"made": "2025-03-25", "T": T1.isoformat(), "p30": 1.0, "p90": 2.0, "p180": 3.0,
+                          "px": {"72": 3.0, "268": 4.0}},
+                         {"made": "2025-09-22", "T": T0.isoformat(), "p30": 1.0, "p90": 2.0, "p180": None,
+                          "px": {"72": 3.0, "268": 4.0}}]
+    saved["made_at"] = "2025-01-01T00:00:00+00:00"                  # stale: re-made
+    json.dump(saved, open(os.path.join(data, "forecast", "k1.json"), "w"))
+    f2 = fb.app_step(fb.start(data, now, Clock()), "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(), [])
+    assert {c["h"] for c in f2["checks"] if c["made"] == "2025-09-22"} == {30, 90}   # 268 days not yet; 72 no chip
+    c268 = [c for c in f2["checks"] if c["h"] == 268]
+    assert [c["made"] for c in c268] == ["2025-03-25"] and c268[0]["pred"] == 4.0          # the chip's own live check
+    act = sum(app["days"][T1 + timedelta(days=i)]["rev"] for i in range(1, 269))
+    assert abs(c268[0]["act"] - act) < 0.01 and {c["h"] for c in f2["checks"]} == {30, 90, 180, 268}
+    assert f2["hz"]["chk"] == {"365": (LAST + timedelta(days=367)).isoformat()}   # every chip has one; 365: its day
+    from admob_iq import roi_build as rb
+    sm = rb.fc_summary(fc)
+    assert sm["n"] == 268 and abs(sm["rn"] - _tot(fc["f"], 268)) < 0.01 and sm["en"] == cal["268"]["mape_normal"]
+
+
+def test_a_file_from_before_the_verified_horizon(tmp_path):
+    """A file made before (no fc["hz"], biases at 30 / 90 / 180 only): re-tuned at the next build that has the budget
+    (not a day later); without the budget kept as it was made — 180 days, no chips (the page reads it the old way)."""
+    data = str(tmp_path / "data")
+    os.makedirs(data)
+    app = make()
+    rows, life, ida = _rows_life(app, ga4=True)
+    P, now = {"S": LAST}, datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
+    fc = fb.app_step(fb.start(data, now, Clock()), "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    path = os.path.join(data, "forecast", "k1.json")
+    saved = json.load(open(path))
+    old_fc = {k: v for k, v in fc.items() if k != "hz"}
+    old_fc["cal"] = {h: c for h, c in fc["cal"].items() if h in ("30", "90", "180")}
+    old = dict(saved, fc=old_fc, bias={h: b for h, b in saved["bias"].items() if h in ("30", "90", "180")})
+    json.dump(old, open(path, "w"))
+    broke = fb.start(data, now + timedelta(hours=1), Clock())
+    broke.t0 = -10_000
+    k = fb.app_step(broke, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    assert broke.kept == 1 and "hz" not in k and len(k["f"]["old"]) == F.H and set(k["cal"]) == {"30", "90", "180"}
+    assert k["f"]["old"][:90] == fc["f"]["old"][:90]                 # (to the longest it shows, as the full run)
+    run = fb.start(data, now + timedelta(hours=1), Clock())
+    f = fb.app_step(run, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    assert run.ran == 1 and f["hz"] == fc["hz"] and f["f"] == fc["f"]
+
+
+def test_the_chips_anchor_the_correction_the_rhythm_and_the_planner():
+    """corrected / weekly / plan_out: the chips are horizons whose totals the page shows exactly; 30 / 90 / 180 as
+    before (no chips: the very same factors)."""
+    ser = {"old": [10.0] * 300, "org": [1.0 + 0.01 * i for i in range(300)], "paid": [2.0] * 300}
+    cal = {30: {"bias": 0.25}, 90: {"bias": 0.0}, 142: {"bias": -0.1}}
+    assert fb.corrected(ser, cal) == fb.corrected(ser, cal, ()) == fb.corrected(ser, cal, [30, 90])
+    fac = fb.corrected(ser, cal, [30, 90, 142])
+    tot = [(a + b + c) for a, b, c in zip(ser["old"], ser["org"], ser["paid"])]
+    cum = lambda n: sum(t * f for t, f in zip(tot[:n], fac[:n]))    # noqa: E731
+    assert abs(cum(30) - sum(tot[:30]) / 1.25) < 1e-6 and abs(cum(90) - sum(tot[:90])) < 1e-6
+    assert abs(cum(142) - sum(tot[:142]) / 0.9) < 1e-6 and abs(fac[200] - fac[141]) < 1e-12 and fac[:90] == fb.corrected(ser, cal)[:90]
+    W = [1.02, 1.02, 1.01, 1.01, 1.0, 0.99, 0.95]
+    out = fb.weekly(ser, date(2026, 10, 16), W, [30, 90, 142])
+    for k in ser:
+        for a, b in ((0, 30), (30, 90), (90, 142), (142, 180), (180, 300)):
+            assert abs(sum(out[k][a:b]) - sum(ser[k][a:b])) < 5e-3
+    assert fb.weekly(ser, date(2026, 10, 16), W) == fb.weekly(ser, date(2026, 10, 16), W, ())
+    f = {"rev": ser}
+    pl = {"rows": [{"cc": "AA", "s0": 1.0, "sb": 1.0, "rho": 1.0, "lo": 0.5, "hi": 2.0}], "s": 1.0, "weeks": [], "e": 0.1,
+          "en": 5, "org": 1.0, "n0": 2.0, "pu": 1.0}
+    o0, o1 = fb.plan_out(pl, f, fac), fb.plan_out(pl, f, fac, [30, 90, 142])
+    assert o0["h"] == [30, 90, 180] and o1["h"] == [30, 90, 142, 180]
+    assert [o1["paid"][i] for i in (0, 1, 3)] == o0["paid"] and abs(o1["paid"][2] - sum(2.0 * x for x in fac[:142])) < 0.01
+
+
+def test_a_chip_total_is_its_own_calibration_even_far_from_the_one_before():
+    """A chip outside 30 / 90 / 180 is never held by the [0.5, 2] clamp of 30 / 90 / 180 (that would show a total its
+    own back-tests do not give): 10 a day, biases 180 −20 % / 365 +50 % → the 365 total = 3,650 ÷ 1.5 (the clamp gave
+    3,175); 30 / 90 / 180 exactly as before (their clamp kept)."""
+    ser = {"old": [10.0] * 365, "org": [0.0] * 365, "paid": [0.0] * 365}
+    cal = {30: {"bias": 0.0}, 90: {"bias": 0.0}, 180: {"bias": -0.2}, 365: {"bias": 0.5}}
+    fac = fb.corrected(ser, cal, [30, 90, 180, 365])
+    cum = lambda n: sum(10.0 * f for f in fac[:n])                  # noqa: E731
+    assert abs(cum(365) - 3650 / 1.5) < 1e-6 and abs(cum(180) - 1800 / 0.8) < 1e-6 and abs(cum(90) - 900) < 1e-6
+    assert fac[:180] == fb.corrected(ser, cal)[:180] and fb.FIT_MIN < fac[200] < 0.5
+    big = {**cal, 180: {"bias": -0.6}}                         # 30 / 90 / 180: the factor still held at 2
+    assert fb.corrected(ser, big, [30, 90, 180, 365])[100] == 2.0 == fb.corrected(ser, big)[100]
+    assert fb._fit(ser, cal, [30, 90, 180, 365]) == (fac, [30, 90, 180, 365], [])
+    # a bias asking for less than the days before already add up to (3,650 ÷ 2.5 < 2,250): that chip dropped
+    low = {**cal, 365: {"bias": 1.5}}
+    f2, hs, drop = fb._fit(ser, low, [30, 90, 180, 365])
+    assert hs == [30, 90, 180] and drop == [365] and f2 == fb.corrected(ser, low, [30, 90, 180])
+    f3, hs3, drop3 = fb._fit(ser, {**low, 254: {"bias": 0.0}}, [30, 90, 180, 254])      # (a lower N: kept)
+    assert hs3 == [30, 90, 180, 254] and drop3 == []
+    # a young app's chip past 90 with a factor below 0.5: 180 (no bias yet) carries it on as it is — no step there
+    yc = {30: {"bias": 0.0}, 90: {"bias": 0.0}, 114: {"bias": 0.2}}
+    fy = fb.corrected(ser, yc, [30, 90, 114])
+    assert abs(sum(10.0 * f for f in fy[:114]) - 1140 / 1.2) < 1e-6 and fy[100] < 0.5 and fy[150] == fy[300] == fy[100]
+
+
+class _Eng:
+    """A stand-in engine: flat days, records how far it was asked to forecast (h) and the page's days (hc)."""
+    def __init__(self):
+        self.calls = []
+
+    def forecast(self, app, T, p, h, seas=None, hc=None):
+        self.calls.append((h, hc))
+        z = lambda v: [v] * h                                        # noqa: E731
+        return {"rev": {"old": z(10.0), "org": z(0.0), "paid": z(0.0)}, "dau": z(5.0), "n": z(1.0), "sp": z(0.0),
+                "dau_p": {"old": z(5.0), "org": z(0.0), "paid": z(0.0)}, "un": None, "parts": {}, "cal": None}
+
+
+def test_series_reaches_for_the_snapshot_and_shows_only_what_it_can():
+    """series(): the forecast reaches `reach` (the day's snapshot: every grid horizon's total), the page's lists stop
+    at max(180, the longest chip shown); a chip whose calibrated total can not be shown is dropped (and the page stops
+    at the chips left)."""
+    app = {"last": LAST, "days": {}, "wk": None}
+    cal = {30: {"bias": 0.0}, 90: {"bias": 0.0}, 180: {"bias": -0.2}, 254: {"bias": -0.1}}
+    E = _Eng()
+    sr, f, ser, hs = fb.series(app, {}, cal, None, E, [30, 90, 180, 254], reach=365)
+    assert E.calls == [(365, 254)] and hs == [30, 90, 180, 254] and len(ser["old"]) == 365
+    assert all(len(sr["f"][k]) == 254 for k in ("old", "org", "paid", "dau", "n", "sp"))
+    assert abs(sum(sr["f"]["old"][:254]) - 2540 / 0.9) < 0.05 and sr["f"]["old"] == ser["old"][:254]
+    s2, _, ser2, hs2 = fb.series(app, {}, cal, None, E, [30, 90, 180, 254])                  # (no reach: as before)
+    assert E.calls[-1] == (254, None) and s2["f"] == sr["f"] and len(ser2["old"]) == 254 and hs2 == hs
+    bad = {**cal, 254: {"bias": 2.0}}                         # 2,540 ÷ 3 < 2,250 already by day 180
+    s3, _, ser3, hs3 = fb.series(app, {}, bad, None, E, [30, 90, 180, 254], reach=365)
+    assert hs3 == [30, 90, 180] and len(s3["f"]["old"]) == 180 and len(ser3["old"]) == 365
+    s4, _, _, hs4 = fb.series(app, {}, {30: {"bias": 0.0}}, None, E, [30, 72], reach=365)  # a young app: 180 days
+    assert E.calls[-1] == (365, 180) and hs4 == [30, 72] and len(s4["f"]["dau"]) == 180
+
+
+def test_a_dropped_chip_and_the_first_live_check_day():
+    """horizon(): a verified chip series() could not show → "drop", N the longest shown, the next unlock still past
+    every verified one; _rechip: a kept forecast's chips follow today's; _first_checks: the oldest kept forecast that
+    holds a horizon + its days + the lag (a day already past: none)."""
+    cal = {h: {"bias": 0.0, "lo": -0.1 * i, "hi": 0.1 * i} for i, h in enumerate((30, 90, 180, 268), 1)}
+    gbt = [{"T": "2025-01-0%d" % i, "h": {268: {"err": 0.1}}, "ev": {}} for i in range(1, 5)]
+    a = fb.horizon(VD, D0, LAST, 2, cal, gbt, [30, 90, 180, 268])
+    b = fb.horizon(VD, D0, LAST, 2, cal, gbt, [30, 90, 180], [30, 90, 180, 268])
+    assert a["n"] == 268 and a["drop"] == [] and b["n"] == 180 and b["drop"] == [268] and b["chips"] == [30, 90, 180]
+    assert b["next"] == a["next"] and b["next"][0] > 268 and b["btx"] == a["btx"] and len(b["band"]) == 3
+    pc = {str(h): {"lo": c["lo"], "hi": c["hi"]} for h, c in cal.items()}
+    assert fb._rechip(b, pc, [30, 90, 180, 268], [30, 90, 180, 268])["band"] == a["band"]
+    r = fb._rechip(a, pc, [30, 90, 180, 268], [30, 90, 180])
+    assert r["n"] == 180 and r["drop"] == [268] and r["chips"] == [30, 90, 180] and r["band"] == b["band"]
+    live = [{"T": "2025-06-01", "p30": 1.0, "p90": 2.0, "p180": None},
+            {"T": "2025-07-01", "p30": 1.0, "p90": 2.0, "p180": 3.0, "px": {"268": 4.0, "365": 5.0}}]
+    got = fb._first_checks(live, [30, 90, 180, 268], {30}, 2, date(2025, 7, 20), 365)
+    assert got == {"90": "2025-09-01", "180": "2025-12-30", "268": "2026-03-28", "365": "2026-07-03"}
+    assert fb._first_checks(live, [30, 90], set(), 2, date(2025, 8, 30), 365) == {"90": "2025-09-01", "365": "2026-07-03"}
