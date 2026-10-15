@@ -26,34 +26,45 @@ WHAT IT KEEPS (new keys of the iday data; slots = the legacy country slots, cset
                  countries — so Σ slots + gap = Q-B exactly, week by week and band by band (never spread)
   cp[W][slot] = {n: lag-0 new users, r: ad revenue per LBANDS (0 … 366-427), u: active users at LLAGS} of PAID users
   au[W][unit] = {r, i, k: ad revenue / impressions / clicks per LBANDS} (unit = an index into xs.au.units)
-  rm[D]       = {s: {slot: [app_remove users, events]}, o: "(other)" [users, events], st, at, ev, tie, tu}
+  rm[D]       = {s: {slot: [app_remove users, events]}, o: "(other)" [users, events], st, at, ev, tie, tu} (a failed
+                block: {st: "err", at, n: tries}, asked again as a d2 err)
   d2[D]       = the per-day ledger of c2 / cp / au: c2st, c2tries, c2at, tie_late, c2loss, c2oth, c2smp, c2frac, c2rows,
                 c2tok, c2parts · cpst, cptries, cpat, cpshare, cpn, cpx, cploss, cpoth, cpsmp, cpfrac, cprows, cptok,
-                cpparts · aust, autries, auat, tie_au, auloss, auoth, ausmp, aufrac, aublk
+                cpparts · aust, autries, auat, tie_au, auloss, auoth, ausmp, aufrac, aublk, audim (the dimension its
+                cells came from), aumets (how many of AU_METS3 were asked: 2 = no clicks, k stays 0)
                 (st: ok · smp: sampled, tie inside · gap: "(other)" / loss / sampled with the tie outside / tries used
                 up — the named rows folded, the rest unassigned · retry: tie outside without a flag, not folded, asked
-                again (≤ IDAY_TRIES reads) · err: the call failed, asked again the next day)
-  xs          = state: split {lv, no, at}, au {dim, mets, blk, units, off}, paid {off}, rm {off}, lo (the horizon of
-                the last fetch: what the .old part may hold), since {country: {c2 / cp / rm: [[first, last], …]}}: a
-                slot the legacy fetch added later (a country that grew) — the days that went in before it, into "ZZ"
-                (the legacy cset_since, for the new keys)
+                again (≤ IDAY_TRIES tries) · err: the call failed, asked again the next day — a try, unless that failure
+                stopped the fetch's reads (a quota answer, IDAY_ERR_STOP in a row); after IDAY_TRIES tries, only every
+                ERR_RETRY_DAYS)
+  xs          = state: split {lv, no, at}, au {dim, mets, udim (the dimension of units and au: GA4 later accepting
+                only another one starts both over, never mixing unit names and formats), blk, units, off}, paid {off},
+                rm {off}, lo (the horizon of the last fetch: what the .old part may hold), since {country: {c2 / cp /
+                rm: [[first, last], …]}}: a slot the legacy fetch added later (a country that grew) — the days that
+                went in before it, into "ZZ" (the legacy cset_since, for the new keys)
 
 THE STEPS (in fetch_iday's order; every day at most once a day; newest first):
   on_qc   every legacy Q-C read (a new day, a retry, the legacy backfill) is the full read: its late ages are judged
           and folded right there, tied to the same fetch's Q-B (no call of its own)
   ── every legacy read of the fetch is done here (Q-T included): the extension's reads only use what is left ──
   new     the paid read of the days step 1 read (tied to their full read, kept in memory)
-  reread  the history re-read, inside the country horizon (F − IDAY_CTY_DAYS): days whose c2 / cp is still to do get
-          a fresh full Q-C (+ a fresh Q-B: the late ages' tie, while they are to do; + PAID) — the backfill's budget
-          rules (plain budget, hourly floor); their legacy cells are never touched again
+  reread  ONLY in the extension's own fetches (x_only, below): the history re-read, inside the country horizon (F −
+          IDAY_CTY_DAYS): days whose c2 / cp is still to do get a fresh full Q-C (+ a fresh Q-B: the late ages' tie,
+          while they are to do; + PAID) — the backfill's budget rules (plain budget, hourly floor); their legacy
+          cells are never touched again
   units   the AU blocks (≤ xs.au.blk consecutive days; the newest block waits until it is whole or a week old; a
-          block that comes back sampled or lossy over several days → shorter blocks, 7 → 3 → 1, read again)
+          block that comes back sampled or lossy over several days → shorter blocks, 7 → 3 → 1, read again) — one
+          block in any fetch, the rest only in the extension's own fetches
   finish  (after the legacy finish: the slots) xs.since, the RM blocks (days ≤ F − RM_LATE: app_remove keeps coming in
-          for a week; one block a week), then this fetch's country cells into their slots
-An app whose install-value history is whole gets install-value-only fetches (plan "iday", every 2 h) while this
-still has days to do (iday_meta x2.done False): those are this module's alone (ga4_uninstall.x_only_fetch) — no legacy
-step runs, no legacy key or count changes, so every legacy read keeps the schedule it has without IDAY_EXT. Its stops
-(cap, budget, quota, hourly floor) are its own (stats x.why / qstops): the legacy log line reads as without it.
+          for a week; one block a week — the rest, as for AU, only in its own fetches), then this fetch's country
+          cells into their slots
+So a fetch that has legacy reads (an app due for real, or the legacy install-value backfill) adds only on_qc (no call),
+new and one AU / RM block (≈ 1.3 calls a day): the run time of every LATER app's legacy reads stays what it is without
+IDAY_EXT. An app whose install-value history is whole gets install-value-only fetches (plan "iday", every 2 h, after
+every other fetch of the run) while this still has days to do (iday_meta x2.done False): those are this module's alone
+(ga4_uninstall.x_only_fetch) — no legacy step runs, no legacy key or count changes, so every legacy read keeps the
+schedule it has without IDAY_EXT. Its stops (cap, budget, quota, hourly floor) are its own (stats x.why / qstops): the
+legacy log line reads as without it.
 
 SAMPLING: the full Q-C of the biggest apps can come back sampled, and GA4 was seen to sample a filtered read exactly as
 much as the unfiltered one (the 91-day list, the probe's PAID / ORG reads: the same sampling fraction; the full read's
@@ -61,13 +72,16 @@ ages 0..90 tied to Q-B exactly as the live 91-day read did, sampled days too) �
 A sampled read is split into country halves, then quarters, UNTIL the parts come back unsampled; parts that still
 sample (or sample about as much as the whole: ≤ its fraction × (1 + SPLIT_GAIN), no deeper level is tried) are never
 used: the whole read stays, flagged (smp / gap), and no split is tried for SPLIT_RETRY_DAYS. A level that worked is
-kept (xs.split.lv) and the smallest one looked for again every SPLIT_RETRY_DAYS.
+kept (xs.split.lv) and the smallest one looked for again every SPLIT_RETRY_DAYS. A part GA4 refuses (HTTP 400: the
+country-part filter was never probed) or that fails counts as a split that didn't help (the whole read judged now,
+no split for SPLIT_RETRY_DAYS): a sampled day is never left waiting on its parts.
 
 COST (after the history re-read), per app and day: PAID +1, one AU block and one RM block a week ≈ +1.3 in all; ≈ +1.5
 / +2.1 for an app whose 7-day AU blocks come back sampled (3-day / 1-day blocks). A sampled app: one split try a month
 (2 + 4 calls) — and only if GA4 ever returns its parts unsampled, 2 or 4 parts for both the full and the paid read
 every day (+3 / +7). The re-read: ≈ 3 calls per day of the horizon (Q-B, QC full, PAID) + its AU / RM blocks, on the
-backfill's rules. Nothing here prints; the public log gets iday_x_log_line (counts).
+backfill's rules, in its own fetches only. A failed read is asked again the next day, ≤ IDAY_TRIES tries, then every
+ERR_RETRY_DAYS. Nothing here prints; the public log gets iday_x_log_line (counts).
 """
 
 import copy
@@ -103,6 +117,7 @@ RM_RETRY_DAYS = 28          # a property that refused the app_remove read is ask
 SPLIT_MAX = 2               # a sampled read: country halves, then quarters at most
 SPLIT_GAIN = 0.25           # … kept only while the parts read ≥ 25% more of the data than the whole
 SPLIT_RETRY_DAYS = 30       # a split that didn't help is tried again a month later
+ERR_RETRY_DAYS = 28         # a day / block whose reads failed IDAY_TRIES times is asked again only every 4 weeks
 FOLDED = ("ok", "smp", "gap")
 X_COUNTS = ("apps", "late", "late_ok", "late_smp", "late_gap", "late_retry", "split", "paid", "paid_smp", "paid_gap",
             "unit_days", "unit_blocks", "unit_gap", "rm_days", "rm_blocks", "left", "qstops", "errors")
@@ -421,7 +436,7 @@ class Ext:
         self.snap = copy.deepcopy({k: ida[k] for k in gu.X_KEYS})     # a failure puts these back
         xs = ida["xs"]
         xs.setdefault("split", {"lv": 0, "no": None, "at": None})
-        xs.setdefault("au", {"dim": None, "mets": None, "blk": AU_DAYS, "units": [], "off": None})
+        xs.setdefault("au", {"dim": None, "mets": None, "udim": None, "blk": AU_DAYS, "units": [], "off": None})
         xs.setdefault("paid", {"off": None})
         xs.setdefault("rm", {"off": None})
         self.cset0 = len(ida["cset"])                   # the slots at the fetch's start (xs.since: the ones added now)
@@ -496,12 +511,24 @@ class Ext:
         run.errs = 0
         return rows, meta, tok
 
+    def _retry_ok(self, st, tries, at):
+        """A day / block not done yet: asked at most once a day — once its reads failed IDAY_TRIES times (err), only
+        every ERR_RETRY_DAYS."""
+        if at == self.run.at:
+            return False
+        return st != "err" or tries < gu.IDAY_TRIES or gu._age_days(at, self.run.at) >= ERR_RETRY_DAYS
+
     def _pending(self, r2, kind):
-        """Is day's c2 / cp / au still to do (and not tried yet today)?"""
+        """Is day's c2 / cp / au still to do (and may it be asked now: _retry_ok)?"""
         st = r2.get(kind + "st")
         if st in FOLDED:
             return False
-        return r2.get(kind + "at") != self.run.at
+        return self._retry_ok(st, gu._int(r2.get(kind + "tries")), r2.get(kind + "at"))
+
+    def _tried(self):
+        """A failed read's try: 1, or 0 when that failure stopped the fetch's reads (a quota answer, IDAY_ERR_STOP
+        failures in a row: GA4's state, not the day's)."""
+        return 0 if self.run.halt else 1
 
     def _paid_ok(self):
         off = self.run.ida["xs"]["paid"].get("off")
@@ -512,9 +539,9 @@ class Ext:
         return not off or gu._age_days(off, self.run.at) >= RM_RETRY_DAYS
 
     def _rm_pending(self, k):
-        """Is day k's app_remove by country still to read (never read, or failed on an earlier day)?"""
+        """Is day k's app_remove by country still to read (never read, or failed on an earlier day: _retry_ok)?"""
         r = self.run.ida["rm"].get(k)
-        return r is None or (r.get("st") == "err" and r.get("at") != self.run.at)
+        return r is None or (r.get("st") == "err" and self._retry_ok("err", gu._int(r.get("n")), r.get("at")))
 
     def _foldable(self):
         """Country cells can get their slots this fetch (cset known, or the legacy reads of this fetch make it)."""
@@ -652,17 +679,20 @@ class Ext:
         return True
 
     def _err(self, r2, c2p, cpp):
+        """A failed read of the day: `err`, asked again on a later day (a try: _tried, _retry_ok)."""
+        n = self._tried()
         if c2p:
-            r2.update(c2st="err", c2at=self.run.at)
+            r2.update(c2st="err", c2at=self.run.at, c2tries=gu._int(r2.get("c2tries")) + n)
         if cpp:
-            r2.update(cpst="err", cpat=self.run.at)
+            r2.update(cpst="err", cpat=self.run.at, cptries=gu._int(r2.get("cptries")) + n)
 
     def _split(self, d, ctx, back, cpp):
         """A sampled whole read → its country parts, halves then quarters, until the parts come back UNSAMPLED (module
         docstring: SAMPLING). The level that worked is kept (xs.split.lv) and the smallest one looked for again every
-        SPLIT_RETRY_DAYS; parts that sample as much as the whole stop the search (a deeper split won't help). → the
-        parts' context · None (no split read unsampled: the whole read stays, flagged; not tried again for
-        SPLIT_RETRY_DAYS) · "wait" (budget) · "err"."""
+        SPLIT_RETRY_DAYS; parts that sample as much as the whole stop the search (a deeper split won't help), and so
+        does a part GA4 refuses or that fails. → the parts' context · None (no split read unsampled: the whole read
+        stays, flagged; not tried again for SPLIT_RETRY_DAYS) · "wait" (budget) · "err" (the fetch's reads stopped:
+        a quota answer — nothing learnt about the split, the day is asked again)."""
         sp = self.run.ida["xs"]["split"]
         named, at = self._named(), self.run.at
         old = int(sp.get("lv") or 0)
@@ -676,10 +706,14 @@ class Ext:
             for p in parts:
                 res = self.ask(rep_qc, d, total=True, part=p)
                 if not isinstance(res, tuple):
-                    return "err"
+                    break
                 rows.extend(res[0])
                 metas.append(res[1])
                 tok += res[2]
+            if not isinstance(res, tuple):
+                if res is None and self.run.halt:
+                    return "err"
+                break                                   # refused / failed: no split (never a day waiting on it)
             self.st["split"] += 1
             pc = self._ctx(d, rows, metas, tok, ctx["ql"], parts)
             if not pc["fl"]["smp"]:
@@ -737,14 +771,16 @@ class Ext:
 
     def reread(self):
         """The history re-read: every day of the country horizon whose late ages or paid read are still to do, newest
-        first, on the backfill's budget rules."""
+        first, on the backfill's budget rules — in the extension's own fetches only (x_only): in a fetch with legacy
+        reads it would take the run's time from every later app's legacy reads."""
         run = self.run
-        for k in sorted((k for k in run.days if self._eligible(k)), reverse=True):
-            if run.halt:
-                break
-            if not self.day(k, back=True):
-                break
-            self.mem.pop(k, None)
+        if run.x_only:
+            for k in sorted((k for k in run.days if self._eligible(k)), reverse=True):
+                if run.halt:
+                    break
+                if not self.day(k, back=True):
+                    break
+                self.mem.pop(k, None)
         self.mem = {}
 
     def _au_todo(self):
@@ -773,10 +809,12 @@ class Ext:
 
     def units(self):
         """The AU blocks (_au_todo), the newest first: the first one on the fetch's own budget, the rest on the
-        backfill's (plain budget, hourly floor)."""
+        backfill's (plain budget, hourly floor) — and only in the extension's own fetches (x_only: see reread)."""
         run, xa, d2 = self.run, self.run.ida["xs"]["au"], self.run.ida["d2"]
         first = True
         for ch in self._au_todo():
+            if not first and not run.x_only:
+                break
             if not self.can(1, back=not first, reserve=False):
                 break
             first = False
@@ -784,20 +822,29 @@ class Ext:
             if got == "off":
                 return
             if got is None:
+                n = self._tried()
                 for k in ch:
-                    d2.setdefault(k, {}).update(aust="err", auat=run.at)
+                    r2 = d2.setdefault(k, {})
+                    r2.update(aust="err", auat=run.at, autries=gu._int(r2.get("autries")) + n)
                 if run.halt:
                     return
                 continue
-            rows, meta, tok, dim = got
+            rows, meta, tok, dim, nm = got
+            if xa.get("udim") != dim:
+                if xa.get("udim") is not None:              # GA4 takes only another dimension now: the cells so far
+                    self._au_restart()                      # (unit names / formats) start over, never mixed
+                xa["udim"] = dim
             fl = _flags([meta])
             by, rev = au_parse(rows, dim, run.hs)
             if len(ch) > 1 and (fl["smp"] or fl["loss"] or any(e["oth"] for e in by.values())):
-                xa["blk"] = max(1, len(ch) // 2)            # sampled / lossy over several days: shorter blocks
-                return                                      # (7 → 3 → 1) from now on (these days: the next fetch)
-            self._au_fold(ch, by, rev, fl)
+                xa["blk"] = max(1, int(xa.get("blk") or AU_DAYS) // 2)     # sampled / lossy over several days:
+                return                          # shorter blocks (7 → 3 → 1) from now on (these days: the next fetch)
+            self._au_fold(ch, by, rev, fl, dim, nm)
 
     def _au_read(self, a, b):
+        """One AU block in the kept shape (none yet / refused now: AU_SHAPES in order, the first accepted kept) → (rows,
+        meta, tokens, dimension, number of metrics) · None (failed; or the kept shape refused now: all of them next
+        time) · "off" (every shape refused: AU_RETRY_DAYS)."""
         xa = self.run.ida["xs"]["au"]
         shapes = [(xa["dim"], tuple(xa["mets"]))] if xa.get("dim") and xa.get("mets") else list(AU_SHAPES)
         for dim, mets in shapes:
@@ -807,16 +854,27 @@ class Ext:
             if res is None:
                 return None
             xa.update(dim=dim, mets=list(mets), off=None)
-            return res[0], res[1], res[2], dim
+            return res[0], res[1], res[2], dim, len(mets)
         if xa.get("dim"):                                   # the kept shape is refused now: all of them next time
             xa.update(dim=None, mets=None)
             return None
         xa["off"] = self.run.at
         return "off"
 
-    def _au_fold(self, ch, by, rev, fl):
-        """One AU block's parse (au_parse) → the ledger of its days (tied to the day's Q-B revenue, days[D].rb) and, for
-        the folded ones, au[W][unit slot] (new units get a slot by revenue, ≤ AU_MAX, then "ZZ")."""
+    def _au_restart(self):
+        """The ad-unit cells start over (another dimension): au, xs.au.units and every day's AU ledger — those days
+        are read again, in the new dimension."""
+        run = self.run
+        run.ida["au"].clear()
+        run.ida["xs"]["au"]["units"] = []
+        for r2 in run.ida["d2"].values():
+            for f in [f for f in r2 if f.startswith("au") or f == "tie_au"]:
+                del r2[f]
+
+    def _au_fold(self, ch, by, rev, fl, dim, nm):
+        """One AU block's parse (au_parse) → the ledger of its days (tied to the day's Q-B revenue, days[D].rb; with the
+        shape it was read in: audim, aumets) and, for the folded ones, au[W][unit slot] (new units get a slot by
+        revenue, ≤ AU_MAX, then "ZZ")."""
         run = self.run
         xa, au, d2 = run.ida["xs"]["au"], run.ida["au"], run.ida["d2"]
         units = xa.setdefault("units", [])
@@ -837,7 +895,8 @@ class Ext:
             tries = gu._int(r2.get("autries")) + 1
             st = _status(fl["loss"], e["oth"], fl["smp"], inside, tries)
             r2.update(aust=st, autries=tries, auat=run.at, tie_au=round(e["rev"] / want, 4) if want else None,
-                      auloss=fl["loss"], auoth=e["oth"], ausmp=fl["smp"], aufrac=fl["frac"], aublk=len(ch))
+                      auloss=fl["loss"], auoth=e["oth"], ausmp=fl["smp"], aufrac=fl["frac"], aublk=len(ch), audim=dim,
+                      aumets=nm)
             self.st["unit_days"] += 1
             self.st["unit_gap"] += st == "gap"
             if st not in FOLDED:
@@ -916,12 +975,15 @@ class Ext:
 
     def _rm_blocks(self):
         """The RM blocks (_rm_todo), the newest first — the first one on the fetch's own budget, the rest on the
-        backfill's — each day tied to the store's app_remove events of the day (daily un_ev)."""
+        backfill's and only in the extension's own fetches (x_only: see reread) — each day tied to the store's
+        app_remove events of the day (daily un_ev). A failed block: its days err {st, at, n: tries} (_rm_pending)."""
         run = self.run
         rm, xr = run.ida["rm"], run.ida["xs"]["rm"]
         ix = {cc: str(i) for i, cc in enumerate(run.ida["cset"])}
         first = True
         for ch in self._rm_todo():
+            if not first and not run.x_only:
+                break
             if not self.can(1, back=not first, reserve=False):
                 break
             first = False
@@ -930,8 +992,9 @@ class Ext:
                 xr["off"] = run.at
                 return
             if res is None:
+                n = self._tried()
                 for k in ch:
-                    rm[k] = {"st": "err", "at": run.at}
+                    rm[k] = {"st": "err", "at": run.at, "n": gu._int((rm.get(k) or {}).get("n")) + n}
                 if run.halt:
                     return
                 continue

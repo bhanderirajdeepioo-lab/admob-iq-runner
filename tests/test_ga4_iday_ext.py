@@ -249,6 +249,12 @@ def xfetch(t, ida=None, end=END, at=None, log=None, ext=True, quota=None, store=
     return new, stats, ga
 
 
+def xown(t, ida, **kw):
+    """The extension's own fetch (x_only: the app's install-value history is whole): its history re-read and every
+    AU / RM block — a fetch with legacy reads does only on_qc, the new days' paid read and one AU / RM block."""
+    return xfetch(t, ida=ida, x_only=True, **kw)
+
+
 def xsmall(days=40, **kw):
     return XTruth(END - timedelta(days=days - 1), END, **kw)
 
@@ -435,8 +441,10 @@ def test_late_tie_outside_retries_with_a_fresh_pair_then_folds():
     r = ida["d2"][d.isoformat()]
     assert (r["c2st"], r["c2tries"]) == ("retry", 1) and r["tie_late"] < 0.95 and st["x"]["late_retry"] == 1
     assert ida["days"][d.isoformat()]["cst"] == "ok"                  # the legacy ages tied: folded as always
+    ida, _, _ = xown(t, ida, cty_days=30, max_calls=2000)             # the rest of the history (d: asked today)
+    assert ida["d2"][d.isoformat()]["c2tries"] == 1
     log = []
-    ida, st, _ = xfetch(t, ida=ida, log=log, at=(END + timedelta(days=1)).isoformat(), cty_days=30)
+    ida, st, _ = xown(t, ida, log=log, at=(END + timedelta(days=1)).isoformat(), cty_days=30)
     assert [(e[0], e[1]) for e in log if e[0] in ("qb", "qcf", "paid")] == [("qb", d), ("qcf", d)]   # a fresh pair
     r = ida["d2"][d.isoformat()]
     assert (r["c2st"], r["c2tries"], r["tie_late"]) == ("ok", 2, 1.0)
@@ -465,9 +473,11 @@ def _paid_truth(t, days, hs):
 def test_paid_cells_tie_back_and_organic_is_the_rest():
     t = xsmall(200)
     ida, st, _ = xfetch(t, cty_days=40, max_calls=2000)
+    assert st["x"]["paid"] == 1                                        # the new day; the history: its own fetch
+    ida, st2, _ = xown(t, ida, cty_days=40, max_calls=2000)
     lo = F - timedelta(days=40)
     days = _days(lo, F)
-    assert all(ida["d2"][d.isoformat()]["cpst"] == "ok" for d in days) and st["x"]["paid"] == len(days)
+    assert all(ida["d2"][d.isoformat()]["cpst"] == "ok" for d in days) and st2["x"]["paid"] == len(days) - 1
     code = dict(enumerate(ida["cset"]))
     got_r, got_n = {}, {}
     for w, slots in ida["cp"].items():
@@ -495,9 +505,10 @@ def test_paid_more_than_all_retries_then_gap():
     d = F - timedelta(days=3)
     t.paid_over[d] = 9
     ida, _, _ = xfetch(t, cty_days=30, max_calls=2000)
+    ida, _, _ = xown(t, ida, cty_days=30, max_calls=2000)
     assert (ida["d2"][d.isoformat()]["cpst"], ida["d2"][d.isoformat()]["cpx"]) == ("retry", 0.5)
     for i in (1, 2):
-        ida, _, _ = xfetch(t, ida=ida, at=(END + timedelta(days=i)).isoformat(), cty_days=30, max_calls=2000)
+        ida, _, _ = xown(t, ida, at=(END + timedelta(days=i)).isoformat(), cty_days=30, max_calls=2000)
     r = ida["d2"][d.isoformat()]
     assert (r["cpst"], r["cptries"]) == ("gap", 3)
 
@@ -510,11 +521,11 @@ def test_paid_filter_refused_turns_off_for_four_weeks_and_never_touches_no_total
     assert len([e for e in log if e[0] == "paid"]) == 1 and ida["xs"]["paid"]["off"] == END.isoformat()
     assert ida["flags"]["no_total"] is False and st["x"]["errors"] == 0
     log = []
-    ida, _, _ = xfetch(t, ida=ida, log=log, at=(END + timedelta(days=3)).isoformat())
+    ida, _, _ = xown(t, ida, log=log, at=(END + timedelta(days=3)).isoformat())
     assert not [e for e in log if e[0] == "paid"]
     t.paid_refuse = False
     log = []
-    ida, _, _ = xfetch(t, ida=ida, log=log, at=(END + timedelta(days=28)).isoformat())
+    ida, _, _ = xown(t, ida, log=log, at=(END + timedelta(days=28)).isoformat())
     assert [e for e in log if e[0] == "paid"] and ida["xs"]["paid"]["off"] is None
     # the late ages are done: each day's paid read takes a fresh full read only (no Q-B: the paid tie is the full read)
     assert not [e for e in log if e[0] == "qb"]
@@ -529,7 +540,7 @@ def test_history_reread_newest_first_never_touches_legacy(tmp_path):
     old, _, _ = xfetch(t, ext=False, max_calls=2000)                # a whole legacy history, no extension yet
     gu.save_iday(str(tmp_path / "a"), "app", old)
     log = []
-    ida, st, _ = xfetch(t, ida=old, log=log, max_calls=60, cty_days=100)
+    ida, st, _ = xown(t, old, log=log, max_calls=60, cty_days=100)
     gu.save_iday(str(tmp_path / "b"), "app", ida)
     for f in ("app.json.gz", "app.old.json.gz"):
         p = os.path.join("ga4_uninstall", "iday", f)
@@ -543,7 +554,7 @@ def test_history_reread_newest_first_never_touches_legacy(tmp_path):
     assert [e[0] for e in log[:3]] == ["qb", "qcf", "paid"]
     left = st["x"]["left"]
     for i in range(1, 12):                                                         # (more runs the same day)
-        ida, st, _ = xfetch(t, ida=ida, max_calls=60, cty_days=100)
+        ida, st, _ = xown(t, ida, max_calls=60, cty_days=100)
     lo = F - timedelta(days=100)
     assert st["x"]["left"] == 0 < left
     assert all(ida["d2"][d.isoformat()]["c2st"] == "ok" and ida["d2"][d.isoformat()]["cpst"] == "ok"
@@ -559,12 +570,51 @@ def test_reread_obeys_hour_floor_and_plain_budget_new_days_do_not():
                        max_calls=2000)
     old["born"] = (END - timedelta(days=100)).isoformat()                         # (no late check)
     log = []
-    ida, st, _ = xfetch(t, ida=old, log=log, quota=lambda ga: LOW_HOUR, cty_days=60)
+    ida, st, _ = xfetch(t, ida=old, log=log, quota=lambda ga: LOW_HOUR, plain=lambda: True, cty_days=60)
     assert {(e[0], e[1]) for e in log if e[0] in ("qcf", "paid")} == {("qcf", F), ("paid", F)}   # the new day only
-    assert (st["x"]["why"], st["x"]["qstops"]) == ("hour", 1) and st["why"] is None and st["qstop"] is False
-    ida2, st2, _ = xfetch(t, ida=old, plain=lambda: True, cty_days=60)
-    assert st2["x"]["why"] == "budget" and st2["why"] is None
-    assert ida2["d2"][F.isoformat()]["cpst"] == "ok" and len([k for k, r in ida2["d2"].items() if r.get("c2st")]) == 1
+    assert ida["d2"][F.isoformat()]["cpst"] == "ok" and len([k for k, r in ida["d2"].items() if r.get("c2st")]) == 1
+    assert st["x"].get("why") is None and st["why"] is None                     # (no re-read in this fetch at all)
+    # the re-read (its own fetches): the hourly floor and the plain budget stop it — never the legacy stats
+    log = []
+    ida2, st2, _ = xown(t, ida, log=log, quota=lambda ga: LOW_HOUR, cty_days=60)
+    assert len({e[1] for e in log if e[0] in ("qb", "qcf", "paid")}) <= 1     # (its first read: no quota known yet)
+    assert (st2["x"]["why"], st2["x"]["qstops"]) == ("hour", 1) and st2["why"] is None and st2["qstop"] is False
+    ida3, st3, _ = xown(t, ida, plain=lambda: True, cty_days=60)
+    assert st3["x"]["why"] == "budget" and st3["why"] is None and st3["xcalls"] <= 2   # (≤ its first AU / RM block)
+
+
+def test_a_due_fetch_leaves_the_reread_to_the_extensions_own_fetches(monkeypatch, tmp_path):
+    """Two apps due in one run (GA4 time: 4 s a call). App 1: install-value history whole, the extension never ran
+    (the state right after it is switched on). App 2: its install-value history starts over. App 1's DUE fetch does no
+    history re-read (only the new days' paid read and one AU / RM block): app 2's legacy backfill gets the run's time
+    as with IDAY_EXT off, less only those few calls."""
+    from tests.test_ga4_iday import A1, A2, APPS
+    base = tmp_path / "base"
+    w = XWorld(monkeypatch)
+    for i in range(4):
+        w.run(base, now=NOW + timedelta(hours=21 * i), cfg={"iday": True})
+    st = gu.load_state(str(base))
+    assert all(st["fetch"][a]["iday"]["done"] is True for a in (A1, A2))
+    for p in (gu.iday_path(str(base), A2), gu.iday_path(str(base), A2, old=True)):
+        if os.path.exists(p):
+            os.remove(p)
+    st["fetch"][A2].pop("iday")
+    st["fetch"][A2].pop("last_iday", None)
+    gu.save_state(str(base), st)
+    later = NOW + timedelta(hours=21 * 4)
+    got = {}
+    for mode in ("off", "on"):
+        d = tmp_path / mode
+        shutil.copytree(str(base), str(d))
+        w2 = XWorld(monkeypatch)
+        out = gu.refresh_all(dict(CFG, iday=True, iday_ext=mode == "on"), str(d), APPS, later,
+                             lambda: 4.0 * len(w2.log))
+        s = gu.load_state(str(d))["fetch"]
+        got[mode] = (out["counts"]["fetched"], len(gu.load_iday(str(d), A2)["days"]), s[A1]["iday"].get("x2"))
+    assert got["off"][0] == got["on"][0] == 2 and got["off"][2] is None
+    x2 = got["on"][2]
+    assert 0 < x2["calls"] <= 3 and x2["done"] is False and x2["left"] > 0      # the re-read: its own fetches, later
+    assert got["off"][1] - 2 <= got["on"][1] <= got["off"][1]                   # app 2's legacy days read this run
 
 
 # ── sampling: split only while it helps ─────────────────────────────────────────────────────────
@@ -644,6 +694,64 @@ def test_split_goes_deeper_only_until_unsampled():
                        == ("smp", 1, "smp", 0.1) for k in days)
 
 
+def test_split_part_refused_or_failing_turns_the_split_off():
+    """GA4 refuses the country-part filter (HTTP 400: that shape was never probed) or the part read fails: the split
+    is off for SPLIT_RETRY_DAYS and every sampled day is judged on its whole read at once (smp) — never left `err`
+    and asked again every day. A quota answer on a part says nothing of the split: the day waits, no try counted."""
+    days = [F - timedelta(days=i) for i in range(20)]
+    for err in ("HTTP 400: INVALID_ARGUMENT: part filter", "HTTP 500: INTERNAL", "HTTP 429: RESOURCE_EXHAUSTED"):
+        t = xsmall(60)
+        base, _, _ = xfetch(t, ext=False, cty_days=20, max_calls=2000)          # the legacy history: slots known
+        for d in days:
+            t.qc_smp[d] = 1.0                                                   # sampled, the tie inside
+
+        def fail(kind, a, b, err=err):
+            if kind == "qcp":
+                raise RuntimeError(err)
+        t.fail = fail
+        log = []
+        ida, st, _ = xown(t, base, log=log, cty_days=20, max_calls=2000)
+        assert len([e for e in log if e[0] == "qcp"]) == 1 and st["x"]["split"] == 0
+        r = ida["d2"][F.isoformat()]
+        if "429" in err:
+            assert (r["c2st"], r["c2tries"], ida["xs"]["split"]["no"]) == ("err", 0, None) and st["x"]["qstops"] == 1
+            continue
+        assert ida["xs"]["split"] == {"lv": 0, "no": END.isoformat(), "at": END.isoformat()}
+        assert all((ida["d2"][d.isoformat()]["c2st"], ida["d2"][d.isoformat()]["cpst"],
+                    ida["d2"][d.isoformat()]["c2parts"]) == ("smp", "smp", 1) for d in days)
+        assert c2_sums(ida) == want_c2(t, ida)
+        log = []
+        ida, st, _ = xown(t, ida, log=log, at=(END + timedelta(days=1)).isoformat(), cty_days=20, max_calls=2000)
+        assert not [e for e in log if e[0] in ("qb", "qcf", "qcp", "paid")]     # nothing left to ask again
+
+
+def test_a_failing_day_is_asked_at_most_iday_tries_times_then_every_four_weeks():
+    t = xsmall(60)
+    base, _, _ = xfetch(t, ext=False, cty_days=20, max_calls=2000)
+    bad = F - timedelta(days=5)
+
+    def fail(kind, a, b):
+        if kind == "qcf" and a == bad:
+            raise RuntimeError("HTTP 500: INTERNAL")
+    t.fail = fail
+    ida, asked = base, []
+    for i in range(gu.IDAY_TRIES + 2):
+        e = END + timedelta(days=i)
+        log = []
+        ida, st, _ = xown(t, ida, log=log, at=e.isoformat(), cty_days=20, max_calls=2000)
+        asked.append(len([x for x in log if x[0] == "qcf" and x[1] == bad]))
+    r = ida["d2"][bad.isoformat()]
+    assert asked == [1] * gu.IDAY_TRIES + [0, 0]
+    assert (r["c2st"], r["c2tries"], r["cpst"], r["cptries"]) == ("err", 3, "err", 3) and st["x"]["left"] == 0
+    assert all(ida["d2"][d.isoformat()]["c2st"] == "ok" for d in _days(F - timedelta(days=20), F) if d != bad)
+    t.fail = None
+    e = date.fromisoformat(r["c2at"]) + timedelta(days=gx.ERR_RETRY_DAYS)
+    ida, _, _ = xown(t, ida, at=e.isoformat(), cty_days=20, max_calls=2000)
+    r = ida["d2"][bad.isoformat()]
+    assert (r["c2st"], r["c2tries"], r["cpst"]) == ("ok", 4, "ok")
+    assert c2_sums(ida) == want_c2(t, ida)
+
+
 # ── (4) ad units by install age ─────────────────────────────────────────────────────────────────
 
 def _au_truth(t, days, dim, hs):
@@ -674,6 +782,8 @@ def test_ad_units_by_install_age_in_weekly_blocks():
     t = xsmall(120)
     log = []
     ida, st, _ = xfetch(t, log=log, cty_days=30, max_calls=2000)
+    assert len([e for e in log if e[0] == "au"]) == 1                              # a fetch with legacy reads: one
+    ida, st, _ = xown(t, ida, log=log, cty_days=30, max_calls=2000)                # its own fetch: the rest
     blocks = [(e[1], e[2]) for e in log if e[0] == "au"]
     assert all((b - a).days == 6 for a, b in blocks[:-1]) and blocks == sorted(blocks, reverse=True)
     done = sorted(k for k, r in ida["d2"].items() if r.get("aust") == "ok")
@@ -699,10 +809,12 @@ def test_ad_unit_shape_fallback_and_sampled_blocks_go_daily():
     t.au_refuse = {("adUnitName", 3), ("adUnitName", 2)}
     log = []
     ida, _, _ = xfetch(t, log=log, cty_days=20, max_calls=2000)
+    ida, _, _ = xown(t, ida, log=log, cty_days=20, max_calls=2000)
     asked = [(e[3]["dimensions"][0]["name"], len(e[3]["metrics"])) for e in log if e[0] == "au"]
     assert asked[:3] == [("adUnitName", 3), ("adUnitName", 2), ("adFormat", 3)]
     assert ida["xs"]["au"]["dim"] == "adFormat" and set(asked[3:]) == {("adFormat", 3)}
     assert set(ida["xs"]["au"]["units"]) <= {"Interstitial", "Banner", "Native", "--"}
+    assert {(r["audim"], r["aumets"]) for r in ida["d2"].values() if r.get("aust")} == {("adFormat", 3)}
     t3 = xsmall(60)
     t3.au_refuse = {(d, n) for d in ("adUnitName", "adFormat") for n in (2, 3)}
     ida3, st3, _ = xfetch(t3, cty_days=20, max_calls=2000)
@@ -731,6 +843,61 @@ def test_ad_unit_shape_fallback_and_sampled_blocks_go_daily():
         assert done and {ida5["d2"][k]["aust"] for k in done} == {"ok"}
         assert _au_got(ida5) == {k: v for k, v in _au_truth(t5, [date.fromisoformat(k) for k in done], "adUnitName",
                                                              t5.start).items() if any(v)}
+
+
+def test_a_short_sampled_ad_unit_block_halves_the_block_size_not_its_length():
+    """The first AU block read is a short run (a day whose Q-B is still `retry` breaks it) and comes back sampled:
+    the block size goes 7 → 3 (then 3 → 1), never straight to the short run's half."""
+    t = xsmall(60)
+    q = F - timedelta(days=6)
+    t.qb_short[q] = 10                                  # Q-B of q short: `retry` this fetch → not eligible
+    t.au_smp = 1                                        # every AU read of more than a day comes back sampled
+    log = []
+    ida, _, _ = xfetch(t, log=log, cty_days=22, max_calls=2000)
+    assert ida["days"][q.isoformat()]["st"] == "retry"
+    assert [(e[1], e[2]) for e in log if e[0] == "au"] == [(F - timedelta(days=8), F - timedelta(days=7))]
+    assert ida["xs"]["au"]["blk"] == 3
+    ida, _, _ = xown(t, ida, at=(END + timedelta(days=1)).isoformat(), cty_days=22, max_calls=2000)
+    assert ida["xs"]["au"]["blk"] == 1
+
+
+def test_ad_unit_dimension_change_starts_the_cells_over():
+    """Clicks refused later (the same dimension): the units stay, the days read without clicks say so (aumets 2, k
+    stays 0). Every unit-name shape refused later: GA4 gives formats only — the unit-name cells, units and their days'
+    ledger start over in adFormat; names and formats never share a slot list."""
+    t = xsmall(60)
+    ida, _, _ = xfetch(t, cty_days=20, max_calls=2000)
+    ida, _, _ = xown(t, ida, cty_days=20, max_calls=2000)
+    xa = ida["xs"]["au"]
+    assert (xa["dim"], xa["udim"]) == ("adUnitName", "adUnitName") and "Splash Inter" in xa["units"]
+    done0 = {k for k, r in ida["d2"].items() if r.get("aust") in gx.FOLDED}
+    assert done0 and {(ida["d2"][k]["audim"], ida["d2"][k]["aumets"]) for k in done0} == {("adUnitName", 3)}
+    units0 = list(xa["units"])
+    e1 = END + timedelta(days=7)
+    t1 = XTruth(t.start, e1)
+    t1.au_refuse = {("adUnitName", 3)}
+    ida, _, _ = xfetch(t1, ida=ida, end=e1, at=e1.isoformat(), cty_days=20, max_calls=2000)    # refused: err
+    ida, _, _ = xown(t1, ida, end=e1, at=(e1 + timedelta(days=1)).isoformat(), cty_days=20, max_calls=2000)
+    xa = ida["xs"]["au"]
+    assert (xa["dim"], xa["mets"], xa["udim"], xa["units"]) == ("adUnitName", list(gx.AU_METS3[:2]), "adUnitName",
+                                                                units0)
+    new = {k for k, r in ida["d2"].items() if r.get("aust") in gx.FOLDED} - done0
+    assert new and {ida["d2"][k]["aumets"] for k in new} == {2} and {ida["d2"][k]["aumets"] for k in done0} == {3}
+    e2 = e1 + timedelta(days=7)
+    t2 = XTruth(t.start, e2)
+    t2.au_refuse = {("adUnitName", 3), ("adUnitName", 2)}
+    ida, _, _ = xfetch(t2, ida=ida, end=e2, at=e2.isoformat(), cty_days=20, max_calls=2000)
+    for _ in range(2):                                  # (the days the restart reopened: the next own fetch)
+        ida, st, _ = xown(t2, ida, end=e2, at=(e2 + timedelta(days=1)).isoformat(), cty_days=20, max_calls=2000)
+    xa = ida["xs"]["au"]
+    assert (xa["dim"], xa["udim"]) == ("adFormat", "adFormat")
+    assert set(xa["units"]) <= {"Interstitial", "Banner", "Native", "--"}
+    done = sorted(k for k, r in ida["d2"].items() if r.get("aust") in gx.FOLDED)
+    assert done and {(ida["d2"][k]["audim"], ida["d2"][k]["aumets"]) for k in done} == {("adFormat", 3)}
+    assert not [k for k, r in ida["d2"].items() if r.get("aust") and k not in done]
+    assert _au_got(ida) == {k: v for k, v in _au_truth(t2, [date.fromisoformat(k) for k in done], "adFormat",
+                                                        t2.start).items() if any(v)}
+    assert st["x"]["left"] == 0
 
 
 # ── (3) app_remove by country ───────────────────────────────────────────────────────────────────
@@ -773,13 +940,14 @@ def test_app_remove_refused_turns_off_for_four_weeks():
     t.rm_refuse = True
     log = []
     ida, st, _ = xfetch(t, log=log, cty_days=40, max_calls=2000)
+    ida, st, _ = xown(t, ida, log=log, cty_days=40, max_calls=2000)
     assert len([e for e in log if e[0] == "rm"]) == 1 and ida["xs"]["rm"]["off"] == END.isoformat()
     assert ida["rm"] == {} and st["x"]["errors"] == 0 and st["x"]["left"] == 0     # nothing left that a fetch would do
     log = []
-    ida, _, _ = xfetch(t, ida=ida, log=log, at=(END + timedelta(days=3)).isoformat(), cty_days=40, max_calls=2000)
+    ida, _, _ = xown(t, ida, log=log, at=(END + timedelta(days=3)).isoformat(), cty_days=40, max_calls=2000)
     assert not [e for e in log if e[0] == "rm"]
     t.rm_refuse = False
-    ida, st, _ = xfetch(t, ida=ida, log=log, at=(END + timedelta(days=28)).isoformat(), cty_days=40, max_calls=2000)
+    ida, st, _ = xown(t, ida, log=log, at=(END + timedelta(days=28)).isoformat(), cty_days=40, max_calls=2000)
     assert [e for e in log if e[0] == "rm"] and ida["xs"]["rm"]["off"] is None and ida["rm"] and st["x"]["rm_days"]
 
 
@@ -815,6 +983,8 @@ def test_a_slot_added_later_records_the_extension_days_before_it(monkeypatch):
 def test_steady_state_cost_after_the_reread():
     t = XTruth(END - timedelta(days=99), END + timedelta(days=28))
     ida, _, _ = xfetch(t, end=END - timedelta(days=28), cty_days=60, max_calls=3000)
+    ida, st, _ = xown(t, ida, end=END - timedelta(days=28), cty_days=60, max_calls=3000)    # the re-read
+    assert st["x"]["left"] == 0
     ida["born"] = (END - timedelta(days=200)).isoformat()
     calls = xcalls = 0
     for i in range(-27, 29):
@@ -822,6 +992,7 @@ def test_steady_state_cost_after_the_reread():
         ida, st, _ = xfetch(t, ida=ida, end=e, at=e.isoformat(), cty_days=60)
         calls += st["calls"]
         xcalls += st["xcalls"]
+        assert st["x"]["left"] == 0                                                  # no own fetch needed
     assert calls == 3 * 56                                                           # Q-B, Q-C, Q-T: as before
     assert xcalls <= 56 * (1 + 2 / 7) + 2                                            # + paid, a unit and an RM block a week
 
@@ -904,7 +1075,7 @@ def test_file_sizes_for_a_long_app(tmp_path):
                       "cpst": "ok", "cptries": 1, "cpat": k, "cpshare": 0.4, "cpn": 0.5, "cpx": 0.0, "cploss": False,
                       "cpoth": False, "cpsmp": False, "cpfrac": None, "cprows": 9000, "cptok": 1, "cpparts": 1,
                       "aust": "ok", "autries": 1, "auat": k, "tie_au": 1.0, "auloss": False, "auoth": False,
-                      "ausmp": False, "aufrac": None, "aublk": 7} for k in days},
+                      "ausmp": False, "aufrac": None, "aublk": 7, "audim": "adUnitName", "aumets": 3} for k in days},
            "rm": {k: {"s": {str(s): [rnd.randint(0, 900), rnd.randint(0, 1100)] for s in range(35)}, "o": [0, 0],
                       "st": "ok", "at": k, "ev": 9000, "tie": 1.0, "tu": 0.99} for k in days}}
     gx.save_ext(str(tmp_path), "app", ida)

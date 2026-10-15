@@ -2856,7 +2856,8 @@ class _Iday:
             self.totals()
         for step in ("new", "reread", "units"):         # IDAY_EXT, after every legacy read (each step failure-isolated:
             if self.x is not None:                      # a bug there puts the extension's data back as it was and the
-                self.x.hook(step)                       # fetch goes on without it)
+                self.x.hook(step)                       # fetch goes on without it; its history re-read and all but
+                                                        # one AU / RM block: only in its own fetches, x_only)
         if not self.x_only:
             self.finish()
         if self.x is not None:                          # (needs the slots: after the legacy finish)
