@@ -370,6 +370,37 @@ function appFile() {
     out.fc_vd_switch = (sw.match(/New model \(A \+ B\)/g) || []).length === 1 && sw.includes('badla: New installs · model B share, Old installs')
       && (sw2.match(/New model \(A \+ B\)/g) || []).length === 1 && !sw.includes('Old model</b>');
     U.set('FCM', 0);
+    // 💸 Budget by country: today's plan = the forecast; −/+ keeps the total (Keep total on); a row out of its measured
+    // range warned; hidden in a developer view; the slider on the country model: installs ×m^(1−e), revenue ×m^(1+β)
+    const dp = JSON.parse(JSON.stringify(d));
+    dp.app_id = 'id-plan';
+    dp.fc.plan = { v: 1, weeks: ['2026-09-28', '2026-10-05'], e: 0.1, en: 1234, s: 8, org: 4, n0: 5, cov: 0.75, h: [30, 90, 180],
+      old: [150, 450, 900], orgr: [30, 90, 180], paid: [210, 630, 1050], beta: [-0.19, -0.07, -0.03],
+      rows: [{ cc: 'AA', own: 1, s0: 6, sb: 6, ppu: 0.5, lo: 4, hi: 6.5, r: [30, 90, 150] },
+             { cc: 'OT', own: 0, s0: 2, sb: 2, ppu: 1, lo: 1, hi: 1.5, r: [15, 45, 75] }] };   // OT: today above its weeks
+    U.set('PLAN', null); U.set('FCH', '90');
+    const pv = U.fcView(dp);
+    // revenue 90 = 450 old + 90 organic + 630 paid; AA: ROI 90 = 90 ÷ 90 = 100%, next $ = (1 − 0.07) × 100% = 93%
+    out.pl_card = pv.includes('💸 Budget by country') && pv.includes('Revenue · 90 din') && pv.includes('$1,170') && pv.includes('aaj $1,170')
+      && pv.includes('<td>100%</td><td>93%</td>') && pv.includes('88%')
+      && pv.includes('Installs / din') && pv.includes('>9<') && pv.includes('pooled curve') && pv.includes('Keep total on')
+      && pv.includes('data-roi-pl="AA|+"') && pv.includes('Revenue 180 din') && pv.includes('Next-$ ROI') && pv.includes('75%')
+      && pv.includes('e 0.10') && pv.includes('1,234') && pv.includes('β −0.07'.replace('−', '-')) && !pv.includes('Measured range ke bahar:');
+    const st = U.plState(dp);
+    U.plStep(dp, 'AA', '+');                                    // AA 6 → 6.6, Other 2 → 1.4: the total stays 8
+    out.pl_keep = Math.abs(st.s.AA - 6.6) < 1e-9 && Math.abs(st.s.OT - 1.4) < 1e-9;
+    const pv2 = U.fcPlan(dp);
+    out.pl_warn = pv2.includes('Measured range ke bahar:') && pv2.includes('⚠️') && pv2.includes('$8.0')   // AA above 6.5
+      && pv2.includes('[OT]') === false && !/Other kam/.test(pv2);   // OT 1.4: inside 1 … today's 2 (today's level counts as seen)
+    st.keep = false; U.plStep(dp, 'OT', '-');
+    out.pl_nokeep = Math.abs(st.s.OT - 1.26) < 1e-9 && Math.abs(st.s.AA - 6.6) < 1e-9;
+    U.set('PLAN', null);
+    ctx.window.__DEV_VIEW__ = true; out.pl_dev = U.fcPlan(dp) === '' && !U.fcView(dp).includes('Budget by country'); ctx.window.__DEV_VIEW__ = false;
+    out.pl_none = !U.fcView(d).includes('Budget by country');
+    const mu = U.fcMul(dp.fc, 2), m0 = U.fcMul(d.fc, 2);
+    out.pl_slider = Math.abs(mu.i - Math.pow(2, 0.9)) < 1e-12 && Math.abs(mu.r - Math.pow(2, 0.93)) < 1e-12 && m0.i === 2 && m0.r === 2
+      && U.fcMul(dp.fc, 0).i === 0 && U.fcView(dp).includes('sab countries');
+    U.set('PLAN', null); U.set('FCH', '90');
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };
     ctx.roiCardLine(x, 'Alpha Pick');

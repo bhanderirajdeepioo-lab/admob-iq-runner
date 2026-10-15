@@ -2570,6 +2570,9 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-mini button[disabled]{opacity:.45;cursor:not-allowed}.roi-mini button small{font-size:10.5px;color:var(--faint)}
 .roi-fc-sl{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink2);min-width:220px;flex:1 1 220px;max-width:420px}
 .roi-fc-sl b{color:#fff}.roi-fc-sl small{color:var(--faint)}.roi-fc-sl input{width:100%;accent-color:var(--cyan)}
+.roi-pl{display:inline-flex;align-items:center;gap:6px}.roi-pl b{min-width:58px;text-align:center;color:#fff;font-variant-numeric:tabular-nums}
+.roi-plb{min-width:34px;min-height:34px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:16px;font-weight:800;cursor:pointer;line-height:1}
+.roi-plt{min-width:860px}
 .roi-ch .band{fill:rgba(52,217,154,.16);stroke:none}.roi-ch .ln.dash{stroke-dasharray:5 4;stroke-width:1.6}
 .roi-lgr{font-size:12.5px;color:var(--ink2);padding:7px 0;border-bottom:1px solid var(--line);line-height:1.5}.roi-lgr b{color:#fff}
 .roi-fc-st{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:13px;color:var(--ink2)}
@@ -6865,7 +6868,11 @@ function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life
 // changeable "dashboard me dedo") — the app's own model (forecast_build): revenue / spend / profit / breakeven for the
 // next 30 / 90 / 180 days with its measured range, why it moves (now vs the usual), how right it was (back-tests and
 // the live check), what it learnt, and the start of the real run. Spend slider: the paid installs scale with it exactly.
-let FCH='90', FCM=0, FCU='dau';
+let FCH='90', FCM=0, FCU='dau', PLAN=null;
+// the spend slider on the country model (fc.plan): every country × the same %, installs / users ∝ m^(1−e) (each
+// country's CPI rises with its spend: e measured), paid revenue ∝ m^(1+β) (β the ROI forms' central); without it ×m
+function fcMul(fc,m){ const pl=fc&&fc.plan; if(!pl||!(m>0)) return {r:Math.max(0,m),i:Math.max(0,m)};
+  const b=pl.beta&&ok(pl.beta[1])?+pl.beta[1]:0, e=ok(pl.e)?+pl.e:0; return {r:Math.pow(m,1+b),i:Math.pow(m,1-e)}; }
 const FC_P={bo:'Old installs · model B share',bn:'New installs · model B share',cq:'Newest eCPM move used',gc:'Country curves after day 90 (GA4)',pc:'Paid vs organic (GA4 paid users)',hl:'Curve: kitne purane installs se seekhe (half-life din)',K:'Naye install-din ki apni kamai pe bharosa (K)',w:'eCPM level: kitne din ka',g:'Season (Dec/Jan) ka asar',W:'Installs/CPI: kitne din ka',m:'Purane users ka tareeka',r:'Naye installs pe abhi ka badlav',c:'Country-wise curves'};
 const FC_C={installs:'installs (naye users)',retention:'retention (users kitne ruke)',arpdau:'ARPDAU / eCPM (har user ki kamai)'};
 function fcTot(f,m){ return f.old.map((v,i)=>(v||0)+(f.org[i]||0)+m*(f.paid[i]||0)); }
@@ -6879,11 +6886,11 @@ function fcView(d){ const fc=d.fc; CCY=d.ccy||null;
   const any=hs.some(h=>rd[h]);
   const sv=billed()&&fc.f.spi!=null?fc.f.spi:RV(fc.f.sp[0]||0);
   const ctl=`<div class="roi-fc-ctl"><span class="roi-mini" role="group" aria-label="Kitne din aage">${chips}</span>`
-    +((fc.f.sp[0]||0)>0?`<label class="roi-fc-sl"><span>Google Ads spend <b id="roi-fc-ml">${FCM>=0?'+':'−'}${Math.abs(Math.round(FCM*100))}%</b> <small>(abhi ${MV(sv)}/din = pichhle ${fc.f.spd||30} din${fc.f.spi30!=null||fc.f.sp30!=null?` · 30 din avg ${MV(billed()&&fc.f.spi30!=null?fc.f.spi30:RV(fc.f.sp30||0))}/din`:''})</small></span><input type="range" id="roi-fc-m" min="-100" max="100" step="10" value="${Math.round(FCM*100)}" aria-label="Spend badlo"></label>`:'<span class="roi-note">Is app pe abhi Google Ads spend nahi — forecast sirf organic</span>')+`</div>`;
-  return (any?ctl+`<div id="roi-fc-out">${fcOut(d)}</div>`:`<div class="roi-card"><p class="roi-note">⏳ Model ko abhi kaafi tests nahi mile — 30 din ka forecast <b>${E(fd((fc.ready_from||{})['30']||''))}</b> se (shuru ke din: ${E(fdy(fc.start))}).</p></div>`)
+    +((fc.f.sp[0]||0)>0?`<label class="roi-fc-sl"><span>Google Ads spend${fc.plan?' · sab countries':''} <b id="roi-fc-ml">${FCM>=0?'+':'−'}${Math.abs(Math.round(FCM*100))}%</b> <small>(abhi ${MV(sv)}/din = pichhle ${fc.f.spd||30} din${fc.f.spi30!=null||fc.f.sp30!=null?` · 30 din avg ${MV(billed()&&fc.f.spi30!=null?fc.f.spi30:RV(fc.f.sp30||0))}/din`:''})</small></span><input type="range" id="roi-fc-m" min="-100" max="100" step="10" value="${Math.round(FCM*100)}" aria-label="Spend badlo"></label>`:'<span class="roi-note">Is app pe abhi Google Ads spend nahi — forecast sirf organic</span>')+`</div>`;
+  return (any?ctl+`<div id="roi-fc-out">${fcOut(d)}</div><div id="roi-fc-plan">${fcPlan(d)}</div>`:`<div class="roi-card"><p class="roi-note">⏳ Model ko abhi kaafi tests nahi mile — 30 din ka forecast <b>${E(fd((fc.ready_from||{})['30']||''))}</b> se (shuru ke din: ${E(fdy(fc.start))}).</p></div>`)
     +fcWhy(d)+fcAcc(d)+fcLearn(d)+fcStart(d); }
 function fcOut(d){ const fc=d.fc, f=fc.f, H=+FCH, m=1+FCM, c=(fc.cal||{})[FCH]||{};
-  const rev=fcTot(f,m).map(v=>RV(v)), spd=(billed()&&f.spi!=null)?f.sp.map(v=>f.spi*(v>0?1:0)*m):f.sp.map(v=>RV(v)*m);
+  const rev=fcTot(f,fcMul(fc,m).r).map(v=>RV(v)), spd=(billed()&&f.spi!=null)?f.sp.map(v=>f.spi*(v>0?1:0)*m):f.sp.map(v=>RV(v)*m);
   const R=fcSum(rev,H), S=fcSum(spd,H), Pr=R-S, lo=R*(1+(c.lo||0)), hi=R*(1+(c.hi||0));
   // breakeven: lifetime cash P/L so far + the forecast's daily profit
   let p0=0; const till=d.life_till; for(const x of d.life||[]){ if(till&&x[0]>till) continue; p0+=(RV(+x[1]||0)||0)-(SV(+x[2]||0,x[3]!=null?+x[3]:null)||0); }
@@ -6899,7 +6906,7 @@ function fcOut(d){ const fc=d.fc, f=fc.f, H=+FCH, m=1+FCM, c=(fc.cal||{})[FCH]||
 // users, installs and uninstalls the forecast carries (owner: "spending chalu rahega to DAU badhenge, aage ka uninstall
 // bhi hoga"): every day's new installs (organic + spend ÷ CPI) join on their retention curve and leave on their
 // uninstall curve (both learnt per app from its own install days); the spend slider moves only the paid part
-function fcUsers(d,rev,spd){ const fc=d.fc, f=fc.f, h=fc.hist||{}, H=+FCH, m=1+FCM; if(!f.dau_p) return '';
+function fcUsers(d,rev,spd){ const fc=d.fc, f=fc.f, h=fc.hist||{}, H=+FCH, m=fcMul(fc,1+FCM).i; if(!f.dau_p) return '';
   const mix=(o,i)=>(o.old[i]||0)+(o.org[i]||0)+m*(o.paid[i]||0);
   const org=fc.parts&&ok(fc.parts.org)?+fc.parts.org:0;
   const fu={dau:f.dau.map((_,i)=>mix(f.dau_p,i)), n:f.n.map(v=>org+(v-org)*m), un:f.un?f.un.old.map((_,i)=>mix(f.un,i)):null};
@@ -6926,8 +6933,62 @@ function fcUsers(d,rev,spd){ const fc=d.fc, f=fc.f, h=fc.hist||{}, H=+FCH, m=1+F
   const tb=`<table class="roi-t roi-sub"><thead><tr><th>Kab</th><th>Installs / din</th><th>Uninstalls / din</th><th>DAU</th><th>ARPDAU</th><th>Revenue / din</th><th>Spend / din</th><th>Profit / din</th></tr></thead><tbody>`
     +rows.map((r,i)=>{ const pr=ok(r[5])&&ok(r[6])?r[5]-r[6]:null; return `<tr${i>1?'':' class="roi-act"'}><td class="roi-nm">${r[0]}</td><td>${N(r[1])}</td><td>${N(r[2])}</td><td>${N(r[3])}</td><td>${MPV(r[4])}</td><td>${MC(r[5])}</td><td>${MC(r[6])}</td><td class="${pr==null?'':pr>=0?'roi-up':'roi-dn'}">${MC(pr,true)}</td></tr>`; }).join('')+`</tbody></table>`;
   const ac=(fc.cal||{})[FCH]||{};
-  const note=`<p class="roi-note">Har din ke naye installs (organic + spend ÷ CPI) apne retention curve pe judte hain aur apne uninstall curve pe jaate hain — dono curve isi app ke apne purane install-dino se seekhe (din 0, 1, 2 … 855 tak). Purane users bhi isi tarah ghatte hain. Slider sirf paid installs ka hissa badalta hai.${ok(ac.un_mape)?` Uninstall forecast back-test me ±${P(ac.un_mape)} (${FCH} din, ${ac.un_n} tests).`:''}</p>`;
+  const note=`<p class="roi-note">Har din ke naye installs (organic + spend ÷ CPI) apne retention curve pe judte hain aur apne uninstall curve pe jaate hain — dono curve isi app ke apne purane install-dino se seekhe (din 0, 1, 2 … 855 tak). Purane users bhi isi tarah ghatte hain. ${fc.plan?`Paid installs har country ke apne CPI se (country ka spend badhe to uska CPI bhi badhta hai, e ${(+fc.plan.e).toFixed(2)}); slider har country ko same % badhata hai — installs ×m<sup>1−e</sup>, kamai ×m<sup>1+β</sup>.`:'Slider sirf paid installs ka hissa badalta hai.'}${ok(ac.un_mape)?` Uninstall forecast back-test me ±${P(ac.un_mape)} (${FCH} din, ${ac.un_n} tests).`:''}</p>`;
   return `<div class="roi-card" id="roi-fc-users"><div class="roi-ct"><h3>Users, installs &amp; uninstalls · forecast</h3>${chips}</div>${kp}<div id="roi-fc-uc">${fcLine(fc,H,hs[k],fu[k],met.find(x=>x[0]===k)[1])}</div><div class="roi-tw" style="margin-top:10px">${tb}</div>${note}</div>`; }
+// 💸 Budget by country (owner-only: revenue — hidden in a developer view): the forecast's own country model (fc.plan,
+// engine vd) as a planner. Per country: installs = spend × installs-per-$ × (spend ÷ the training weeks' spend)^−e;
+// revenue within 30 / 90 / 180 days = spend × that country's revenue per $ (its own GA4 curve, matched so today's plan
+// = the forecast exactly) × (spend ÷ today's)^β (the ROI forms' β); next-$ ROI = (1 + β) × revenue per $. −/+ = 10% of
+// the row; "Keep total" (on by default) takes / gives the difference from the other rows in proportion. Rows keep
+// their order; a row outside its measured weekly spend range gets a warning. Today's plan reproduces the forecast.
+function plKey(d){ return d.app_id+'|'+((d.fc||{}).T||''); }
+function plState(d){ const pl=d.fc.plan; if(!PLAN||PLAN.k!==plKey(d)) PLAN={k:plKey(d),keep:true,s:Object.fromEntries(pl.rows.map(x=>[x.cc,+x.s0||0]))}; return PLAN; }
+function plRow(pl,x,s){ const e=ok(pl.e)?+pl.e:0, b=pl.beta&&ok(pl.beta[1])?+pl.beta[1]:0, H=pl.h||[30,90,180];
+  const inst=s>0?s*x.ppu*(x.sb>0?Math.pow(s/x.sb,-e):1):0;
+  const rev=(x.r||[]).map(r=>ok(r)&&s>0?s*r*(x.s0>0?Math.pow(s/x.s0,b):1):0);
+  const nx=(x.r||[]).map((r,j)=>ok(r)?(1+b)*r*(s>0&&x.s0>0?Math.pow(s/x.s0,b):1)/H[j]:null);
+  const lo=ok(x.lo)?Math.min(+x.lo,+x.s0||+x.lo):null, hi=ok(x.hi)?Math.max(+x.hi,+x.s0||0):null;   // today's level counts as seen
+  const out=s>0&&((hi!=null&&s>hi*1.0001)||(lo!=null&&s<lo*0.9999));
+  return {s,inst,rev,nx,roi:rev.map((r,j)=>s>0?r/(s*H[j]):null),out,lo,hi}; }
+function plStep(d,cc,op){ const st=plState(d), pl=d.fc.plan, x=pl.rows.find(r=>r.cc===cc); if(!x) return;
+  const cur=st.s[cc]||0, step=Math.max(cur,0)*0.1||((+x.s0||0)*0.1);
+  let nv=op==='+'?cur+step:Math.max(0,cur-step); if(op==='-'&&cur-step<step*0.05) nv=0;
+  if(st.keep){ const others=pl.rows.filter(r=>r.cc!==cc), ot=others.reduce((a,r)=>a+(st.s[r.cc]||0),0);
+    let dlt=nv-cur; if(dlt>ot) { dlt=ot; nv=cur+ot; }
+    if(ot>0) others.forEach(r=>{ st.s[r.cc]=(st.s[r.cc]||0)*(ot-dlt)/ot; }); else if(dlt>0) return; }
+  st.s[cc]=nv; }
+function fcPlan(d){ if(typeof window!=='undefined'&&window.__DEV_VIEW__) return '';
+  const fc=d.fc, pl=fc&&fc.plan; if(!pl||!pl.rows||!pl.rows.length) return '';
+  const st=plState(d), H=+FCH, hs=pl.h||[30,90,180], j=Math.max(0,hs.indexOf(H)), b=pl.beta&&ok(pl.beta[1])?+pl.beta[1]:0;
+  const R=pl.rows.map(x=>({x,now:plRow(pl,x,+x.s0||0),p:plRow(pl,x,st.s[x.cc]||0)}));
+  const sum=(k,w,i)=>R.reduce((a,o)=>a+(i==null?o[w][k]:o[w][k][i]),0);
+  const sP=sum('s','p'), sN=sum('s','now'), iP=(+pl.org||0)+sum('inst','p'), iN=(+pl.org||0)+sum('inst','now');
+  const base=hs.map((h,i)=>(+pl.old[i]||0)+(+pl.orgr[i]||0));
+  const revP=hs.map((h,i)=>base[i]+sum('rev','p',i)), revN=hs.map((h,i)=>base[i]+sum('rev','now',i));
+  const prP=revP[j]-sP*H, prN=revN[j]-sN*H, roiP=sP>0?sum('rev','p',j)/(sP*H):null, roiN=sN>0?sum('rev','now',j)/(sN*H):null;
+  const ch=(a,c,good)=>{ if(!ok(a)||!ok(c)||!c) return ''; const v=a/c-1; if(Math.abs(v)<0.005) return ' · 0%'; return ` · <span class="${(v>=0)===good?'roi-up':'roi-dn'}">${v>=0?'▲ +':'▼ −'}${Math.abs(Math.round(v*1000)/10)}%</span>`; };
+  const tiles=`<div class="roi-ks6">`+tile('Spend / din',MV(RV(sP)),`aaj ${MV(RV(sN))}${ch(sP,sN,true)}`)
+    +tile('Installs / din',N(iP),`aaj ${N(iN)}${ch(iP,iN,true)}`)
+    +tile(`Revenue · ${H} din`,MC(RV(revP[j])),`aaj ${MC(RV(revN[j]))}${ch(revP[j],revN[j],true)}`)
+    +tile(`Profit · ${H} din`,`<span class="${prP>=0?'roi-up':'roi-dn'}">${MC(RV(prP),true)}</span>`,`aaj ${MC(RV(prN),true)}`,prP>=0?'roi-kg':'roi-kb')
+    +tile(`ROI (paid) · ${H} din`,P(roiP),`aaj ${P(roiN)}`)+`</div>`;
+  const nm=cc=>cc==='OT'?'🌐&nbsp;Other':`${valFlag(cc)}&nbsp;${E(valCtyName(cc))}`;
+  const warn=[];
+  const rows=R.map(o=>{ const x=o.x, q=o.p, cc=x.cc, cpi=q.inst>0?q.s/q.inst:null, pr=q.rev[j]-q.s*H;
+    if(q.out) warn.push(`${nm(cc)} ${q.s>q.hi?'zyada':'kam'} (measured ${MV(RV(q.lo))}–${MV(RV(q.hi))}/din)`);
+    const tag=(cc==='OT'||!x.own)?' <small class="roi-wt">pooled curve</small>':'';
+    return `<tr><td class="roi-nm">${nm(cc)}${tag}${q.out?' <span class="roi-q" title="Measured range ke bahar">⚠️</span>':''}</td>`
+      +`<td><span class="roi-pl"><button type="button" class="roi-plb" data-roi-pl="${E(cc)}|-" aria-label="${E(cc)} spend 10% kam">−</button><b>${MV(RV(q.s))}</b><button type="button" class="roi-plb" data-roi-pl="${E(cc)}|+" aria-label="${E(cc)} spend 10% zyada">+</button></span></td>`
+      +`<td>${N(q.inst)}</td><td>${MPV(RV(cpi))}</td>${hs.map((h,i)=>`<td>${MC(RV(q.rev[i]))}</td>`).join('')}`
+      +`<td class="${pr>=0?'roi-up':'roi-dn'}">${MC(RV(pr),true)}</td><td>${P(q.roi[j])}</td><td>${P(q.nx[j])}</td></tr>`; }).join('');
+  const tot=`<tr class="roi-tot"><td>Total (paid)</td><td>${MV(RV(sP))}</td><td>${N(sum('inst','p'))}</td><td>${MPV(RV(sum('inst','p')>0?sP/sum('inst','p'):null))}</td>${hs.map((h,i)=>`<td>${MC(RV(sum('rev','p',i)))}</td>`).join('')}<td>${MC(RV(sum('rev','p',j)-sP*H),true)}</td><td>${P(roiP)}</td><td>—</td></tr>`;
+  const tb=`<div class="roi-tw"><table class="roi-t roi-plt"><thead><tr><th>Country</th><th>Spend / din</th><th>Installs / din</th><th>CPI</th>${hs.map(h=>`<th>Revenue ${h} din</th>`).join('')}<th>Profit ${H} din</th><th>ROI ${H} din</th><th>Next-$ ROI</th></tr></thead><tbody>${rows}${tot}</tbody></table></div>`;
+  const ctl=`<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Keep total"><button type="button" data-roi-plk="1" aria-pressed="${st.keep}">Keep total ${st.keep?'on':'off'}</button></span><button type="button" class="roi-btn" data-roi-plr="1">Reset</button></div>`;
+  const e=ok(pl.e)?+pl.e:0, wk=(pl.weeks||[]).map(fd).join(' + ');
+  const note=`<p class="roi-note"><b>Ye kaise ginta hai:</b> har country ka apna installs-per-$ (CPI) pichhle ${(pl.weeks||[]).length} complete hafton (${E(wk)}) ke Google Ads country data se. Kisi country ka spend badhe to uska CPI bhi badhta hai: spend 2× → CPI ×${Math.pow(2,e).toFixed(2)} (e ${e.toFixed(2)}, sab apps ke ${N(pl.en)} country-blocks se measured; raise aur cut dono pe ek hi e — alag alag back-test me kharab nikla). Har country ki kamai uske apne GA4 curve pe (us country ka install aaj ke paid mix ke muqable kitna kamata hai); aaj ke plan pe total bilkul upar wale forecast jitna. Spend badalne pe revenue per $ ×(naya ÷ aaj)<sup>β</sup>, β ${b.toFixed(2)} (ROI forms wala, range ${pl.beta?pl.beta.map(v=>(+v).toFixed(2)).join(' … '):'—'}) — next-$ ROI = (1 + β) × ROI.</p>`
+    +`<p class="roi-note"><b>Seemayein:</b> aaj ke spend ka ${P(pl.cov)} un countries me jinka apna GA4 curve hai; baaki (Other / pooled curve) sab ka milaju curve. ⚠️ wali country measured spend range (pichhle hafton ka har hafte ka spend/din + aaj ka) ke bahar — wahan ka andaza data se nahi. Upar wala forecast is planner se nahi badalta (sirf slider se).</p>`
+    +(warn.length?`<p class="roi-note roi-wt">⚠️ Measured range ke bahar: ${warn.join(' · ')}</p>`:'');
+  return `<div class="roi-card" id="roi-plan"><div class="roi-ct"><h3>💸 Budget by country</h3><span class="roi-note">−/+ = us country ka spend 10% · Keep total on = baaki countries se adjust</span></div>${ctl}${tiles}${tb}${note}</div>`; }
 // one count series: the last 90 actual days + the next H forecast days (values printed at today and at the end)
 function fcLine(fc,H,hist,fut,label){ const W=CHW(), Hh=W<720?190:220, m={t:16,r:W<720?54:70,b:26,l:W<720?44:52};
   const hr=hist||[], n0=hr.length, fr=(fut||[]).slice(0,H), n=n0+fr.length; if(!n0&&!fr.length) return '';
@@ -7082,6 +7143,10 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=at('[data-roi-csort]'))){ const k=b.dataset.roiCsort; b.setAttribute('data-roi-sel',`[data-roi-csort="${k}"]`); keep(b,()=>{ CSORT={k,dir:CSORT.k===k?-CSORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-asort]'))){ const k=b.dataset.roiAsort; b.setAttribute('data-roi-sel',`[data-roi-asort="${k}"]`); keep(b,()=>{ ASORT={k,dir:ASORT.k===k?-ASORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-cty]'))){ const cc=b.dataset.roiCty; b.setAttribute('data-roi-sel',`[data-roi-cty="${cc}"]`); keep(b,()=>{ CTYO=CTYO===cc?'':cc; repaint(); }); return; }
+    if((b=at('[data-roi-pl]'))||(b=at('[data-roi-plk]'))||(b=at('[data-roi-plr]'))){ const a=appPtr(r.dataset.aid), dd=a?AF[a.file]:null; if(!dd||!dd.fc||!dd.fc.plan) return;
+      const sel=b.dataset.roiPl!=null?`[data-roi-pl="${b.dataset.roiPl}"]`:b.dataset.roiPlk!=null?'[data-roi-plk]':'[data-roi-plr]'; b.setAttribute('data-roi-sel',sel);
+      keep(b,()=>{ if(b.dataset.roiPl!=null){ const [cc,op]=b.dataset.roiPl.split('|'); plStep(dd,cc,op); } else if(b.dataset.roiPlk!=null){ plState(dd).keep=!plState(dd).keep; } else { PLAN=null; }
+        const o=document.getElementById('roi-fc-plan'); if(o) o.innerHTML=fcPlan(dd); }); return; }
     if((b=at('[data-roi-fcu]'))){ b.setAttribute('data-roi-sel',`[data-roi-fcu="${b.dataset.roiFcu}"]`); keep(b,()=>{ FCU=b.dataset.roiFcu; const o=document.getElementById('roi-fc-out'), a=appPtr(r.dataset.aid), dd=a?AF[a.file]:null; if(o&&dd) o.innerHTML=fcOut(dd); }); return; }
     if((b=at('[data-roi-f4h]'))){ b.setAttribute('data-roi-sel',`[data-roi-f4h="${b.dataset.roiF4h}"]`); keep(b,()=>{ F4H=b.dataset.roiF4h; repaint(); }); return; }
     if((b=at('[data-roi-f4x]'))){ b.setAttribute('data-roi-sel','[data-roi-f4x]'); keep(b,()=>{ F4X=!F4X; repaint(); }); return; }
@@ -7098,7 +7163,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)

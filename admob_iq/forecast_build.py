@@ -16,6 +16,8 @@ installs at the last 7 days' spend) so the page's spend slider is exact; the bia
 Kept for good in the private repo (data/forecast/<key>.json): the settings, the learning log (what changed and why, the
 newest LOG_KEEP), and every day's own forecast of the next 30 / 90 / 180 days — once those days have happened the page
 shows that live error too (the real check, beyond the back-tests).
+Engine vd with the app's Google Ads country weeks (roi_build hands them over, + every store's country block pairs once
+per build): the paid installs / users / uninstalls by country, and the page's "Budget by country" planner (fc.plan).
 data/forecast/state.json, refreshed at the end: the portfolio's month-of-year season and band ratios ("bandr": each GA4
 install-age band's revenue per active user ÷ the band before's, the median over the apps, per Monday — engine vd's prior
 for a band an app has few users in) + the engine's fixed structure ("vd_struct").
@@ -111,6 +113,8 @@ class Run:
         self.ran = self.kept = self.skipped = 0
         self.tune_sec = []                  # seconds of each re-tune this build (counts only in the log line)
         self.gx = [0, 0]                    # vd re-tunes whose back-test chose GA4's late country cells / paid cells
+        self.cs = None                      # every Google Ads store's country block pairs (engine vd's e), once
+        self.plans = 0                      # apps whose page got the "Budget by country" planner
 
     def left(self):
         return BUDGET_SEC - (self.clock() - self.t0)
@@ -184,6 +188,44 @@ def inputs(rows, P, ida, life, life_till, unst=None):
     return {"coh": coh, "days": days, "last": last, "cty": cty, "unc": unc, "g4": g4, "ida": ida or {},
             "glag": max(0, (last - max(g4)).days) if g4 else 0, "clag": max(0, (last - max(fin)).days) if fin else 0,
             "tlag": max(0, (last - max(tfin)).days) if tfin else 0}
+
+
+def geo_weeks(gw, sids, fxf):
+    """The app's Google Ads country weeks for engine vd's country model: gw = the geo cache's weeks {store id: {Monday:
+    {cc: [cost micros (billed currency), downloads or null]}}}, the app's store ids, fxf (day → USD per billed unit) →
+    {Monday: {cc: [USD at the week's rate (Monday + 3, as the ROI section's country months), downloads or None]}}."""
+    out = {}
+    for sid in sorted(sids or ()):
+        for W, cs in ((gw or {}).get(sid) or {}).items():
+            try:
+                Wd = _d(W)
+            except ValueError:
+                continue
+            rate = fxf(Wd + timedelta(days=3)) or 0
+            e = out.setdefault(Wd, {})
+            for cc, v in (cs or {}).items():
+                if not isinstance(v, list) or not v:
+                    continue
+                c = e.setdefault(cc, [0.0, 0.0])
+                c[0] += (v[0] or 0) / 1e6 * rate
+                if len(v) > 1 and v[1] is not None and c[1] is not None:
+                    c[1] += float(v[1])
+                else:
+                    c[1] = None
+    return out
+
+
+def cs_pairs(run, geo, fxf):
+    """Every store's country block pairs (engine vd's pooled e), made once per build from the geo cache; None without."""
+    if run.cs is None:
+        run.cs = False
+        try:
+            if geo and geo.get("weeks") and geo.get("till"):
+                stores = {sid: geo_weeks(geo["weeks"], [sid], fxf) for sid in geo["weeks"]}
+                run.cs = VD.cs_pairs(stores, _d(geo["till"]))
+        except Exception:
+            run.cs = False
+    return run.cs or None
 
 
 # ── the bias correction folded into the days ────────────────────────────────────────────────────────────────────────
@@ -361,10 +403,36 @@ def drivers(app, rows, ida, cty_rows, rev_cty=None):
 
 
 # ── the page's series (a full model run and a kept one alike) ───────────────────────────────────────────────────────
-def series(app, p, cal, seas, E=F):
+def plan_out(pl, f, fac, beta):
+    """The engine's planner inputs (forecast_vd.cs_plan) → the page's "Budget by country" card: per row its revenue per $
+    of spend within 30 / 90 / 180 days (r) = the forecast's own paid-install revenue (bias-corrected, at today's spend)
+    × the row's share of it ÷ the row's spend; + the old users' and organic installs' revenue (corrected) the plan does
+    not move, and the ROAS-to-spend range beta (the four ROI forms' own) for a row's spend moves."""
+    if not pl or not pl.get("rows"):
+        return None
+
+    def csum(k, hz):
+        return sum(v * fac[i] for i, v in enumerate(f["rev"][k][:hz]))
+    hs = VD.CS_H
+    paid = [csum("paid", hz) for hz in hs]
+    rows = []
+    for x in pl["rows"]:
+        r = [(_r(paid[j] * x["w"][j] / x["s0"], 6) if x["w"][j] is not None and x["s0"] > 0 else None)
+             for j in range(len(hs))]
+        rows.append({"cc": x["cc"], "own": x["own"], "s0": _r(x["s0"], 4), "sb": _r(x["sb"], 4),
+                     "ppu": _r(pl["pu"] * x["rho"], 6), "lo": _r(x["lo"], 4), "hi": _r(x["hi"], 4), "r": r})
+    return {"v": 1, "weeks": pl["weeks"], "e": _r(pl["e"], 4), "en": pl["en"], "s": _r(pl["s"], 4),
+            "org": _r(pl["org"], 2), "n0": _r(pl["n0"], 2), "cov": _r(pl["cov"], 4),
+            "old": [_r(csum("old", hz), 2) for hz in hs], "orgr": [_r(csum("org", hz), 2) for hz in hs],
+            "paid": [_r(v, 2) for v in paid], "h": list(hs), "beta": [_r(b, 4) for b in (beta or ())] or None,
+            "rows": rows}
+
+
+def series(app, p, cal, seas, E=F, beta=None):
     """The forecast of engine E from the newest day with settings p (spend = the last F.SPEND_DAYS days' run-rate, the
     bias correction of cal) → the page's f + hist: revenue / active users / uninstalls by who (old users, organic,
-    paid), installs, spend; the actual last HIST_DAYS days beside it."""
+    paid), installs, spend; the actual last HIST_DAYS days beside it; + "plan" (engine vd with country data: the
+    "Budget by country" planner, plan_out)."""
     last = app["last"]
     f = E.forecast(app, last, p, h=F.H, seas=seas)
     fac = corrected(f["rev"], cal)
@@ -384,6 +452,10 @@ def series(app, p, cal, seas, E=F):
            "hist": {"d0": _iso(hist0), "rev": [_r(e.get("rev"), 4) for e in hd], "sp": [_r(e.get("sp"), 4) for e in hd],
                     "spi": [_r(e.get("spi"), 2) for e in hd], "dau": [e.get("dau") for e in hd],
                     "n": [e.get("n") for e in hd], "un": [e.get("un") for e in hd]}}
+    try:                                                 # only the planner would miss it: never the forecast
+        out["plan"] = plan_out(f.get("plan"), f, fac, beta)
+    except Exception:
+        out["plan"] = None
     return out, f, ser
 
 
@@ -418,10 +490,14 @@ def _tuned_now(E, p):
     return set(E.DEFAULT) <= set(p) and all(p[k] in vals for k, vals in getattr(E, "GRID", {}).items())
 
 
-def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None, unst=None):
-    """→ the page's forecast for this app (None: nothing yet). Never raises."""
+def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None, unst=None, geo=None, cs_pairs=None,
+             beta=None):
+    """→ the page's forecast for this app (None: nothing yet). Never raises. geo: the app's Google Ads country weeks
+    (geo_weeks), cs_pairs: every store's country block pairs (the run's cs_pairs) — engine vd's installs by country and
+    the "Budget by country" planner; beta: the app's ROAS-to-spend range (the four ROI forms')."""
     try:
         app = inputs(rows, P, ida, life, life_till, unst)
+        app["geo"], app["cs_pairs"] = geo or {}, cs_pairs
         app["port"] = {"bandr": run.bandr}               # the portfolio's band ratios (state.json, the last build's)
         for D, e in app["days"].items():                 # the portfolio season, pooled from every app
             if e.get("rev") and e.get("dau"):
@@ -469,13 +545,14 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
                         Eo = ENGINES[old["v"]]           # (by the engine that made the file)
                         cal = {int(h): {"bias": b} for h, b in (old.get("bias") or {}).items()} or \
                             {int(h): c for h, c in (fc.get("cal") or {}).items()}
-                        sr, f, _ = series(app, dict(Eo.DEFAULT, **old["p"]), cal, seas, Eo)
+                        sr, f, _ = series(app, dict(Eo.DEFAULT, **old["p"]), cal, seas, Eo, beta)
                         fc.update(sr)
                         fc["T"] = _iso(app["last"])
                         if Eo is VD:
                             fc["parts"] = _rx(f["parts"])
                 except Exception:
                     pass
+                run.plans += 1 if fc.get("plan") else 0
                 return fc
             if not can:
                 run.skipped += 1
@@ -494,7 +571,7 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
         else:                                            # vd tunes from the stored setting: its score is the first step
             sc_prev = steps[0]["score"] if prev_p and moved and steps else None
         cal = F.calibrate(bt)
-        sr, f, ser = series(app, p, cal, seas, E)
+        sr, f, ser = series(app, p, cal, seas, E, beta)
         last = app["last"]
         # readiness: a horizon shows once enough tests could score it; else the day it will
         ready, ready_from = {}, {}
@@ -538,6 +615,7 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
               "events": _events(bt), "att": {k: _r(v, 3) for k, v in att.items()} if att else None,
               "log": log[-15:], "checks": checks[-60:], "drv": drivers(app, rows, ida, cty_rows, rev_cty),
               "parts": _rx(f["parts"])}
+        run.plans += 1 if fc.get("plan") else 0
         _write(path, {"v": Vr, "eng": run.eng, "made_at": run.now.isoformat(), "start": _iso(app["start"]),
                       "T": _iso(last), "p": p, "tune_sec": tune_sec,
                       "bias": {str(h): c.get("bias") for h, c in cal.items()},
@@ -575,6 +653,6 @@ def finish(run):
 def line(run):
     """The build log's line: counts and seconds only."""
     ts = run.tune_sec
-    return ("forecast %s: ran %d, kept %d, skipped %d; tune %.0fs (max %.0fs); %.0fs; GA4 late cells %d, paid cells %d"
-            % (run.eng, run.ran, run.kept, run.skipped, sum(ts), max(ts) if ts else 0.0, run.clock() - run.t0,
-               run.gx[0], run.gx[1]))
+    return ("forecast %s: ran %d, kept %d, skipped %d; tune %.0fs (max %.0fs); %.0fs; GA4 late cells %d, paid cells %d; "
+            "budget planner %d" % (run.eng, run.ran, run.kept, run.skipped, sum(ts), max(ts) if ts else 0.0,
+                                   run.clock() - run.t0, run.gx[0], run.gx[1], run.plans))

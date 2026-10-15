@@ -25,8 +25,12 @@ newest GA4 day ≤ T − lag (GA4 lands `glag` days after AdMob, measured per ap
       new installs: organic and paid apart (regression on the paid share of the newest 56 install days).
   revenue(T+i) = q^cq · [(1 − bo)·old_A + bo·old_B + (1 − bn)·new_A + bn·new_B]
       q = Σ AdMob ÷ Σ the mixed old model over the days AdMob has but GA4 not yet (clip 1/3–3): the eCPM / fill move
-      since the levels' window, every age at once.  Installs = organic + spend × installs per $ (forecast.installs_model).
+      since the levels' window, every age at once.  Installs = organic + spend × installs per $ (forecast.installs_model)
+      for the revenue; the installs, users and uninstalls of the paid ones follow each country's own installs per $ and
+      the CPI's rise with a country's spend (cs 1: the Google Ads country weeks, below — the revenue is not moved by it).
   DAU the same mix of users; uninstalls from forecast.uninstall_curve (unchanged).
+  The "Budget by country" planner (cs_plan): today's spend per country, its installs per $, its measured weekly spend
+  range and its share of the paid installs' revenue — each country on its own curves.
 
 GA4's install-day extension (IDAY_EXT: c2 / cp cells, the d2 ledger; still back-filling, so its coverage grows daily) —
 two switches (a cell is used only when every activity day of it was read, so an origin without one is exactly the model
@@ -44,7 +48,7 @@ after the post-backfill out-of-sample re-run shows a win.
         install share (an upper bound) — the installs still come from spend (paid) and the organic rate, unchanged.
         (Lab: a newer week's paid ÷ organic revenue per install came closer than with the regression.)
 
-Structure (STRUCT, 12 knobs) is fixed portfolio-wide (version STRUCT_VERSION; re-checked offline, never per app: tuned
+Structure (STRUCT, 13 knobs) is fixed portfolio-wide (version STRUCT_VERSION; re-checked offline, never per app: tuned
 per app it measured worse on unseen origins); only the mix weights bo, bn, cq are tuned per app (GRID; the switches
 gc, pc held at 0), on the same back-tests as before plus each past install day's future revenue and each new install's
 value (objective()).
@@ -60,9 +64,10 @@ from . import forecast as F
 ONE = timedelta(days=1)
 H = F.H
 HORIZONS = F.HORIZONS
-STRUCT_VERSION = "2026-10-15"
+STRUCT_VERSION = "2026-10-15b"
 STRUCT = {"m": "ratio", "hl": 45, "Kc": 30, "w": 28, "wn": 7, "g": 0.0, "W": 14,          # view A (+ g, W shared)
-          "bhl": 100000, "Ku": 3, "bw": 0, "wa": 56, "nv": 1}                             # view B
+          "bhl": 100000, "Ku": 3, "bw": 0, "wa": 56, "nv": 1,                             # view B
+          "cs": 1}                                                                        # installs by country
 GRID = {"bo": (0.0, 0.5, 1.0), "bn": (0.0, 0.5, 1.0), "cq": (0.0, 0.5, 1.0), "gc": (0,), "pc": (0,)}
 DEFAULT = {"bo": 0.5, "bn": 0.5, "cq": 0.0, "gc": 0, "pc": 0}
 # m  "ratio": what no install day covers (> 427 days) = AdMob − k·Σ GA4 bands; "split": a decaying rest
@@ -70,6 +75,8 @@ DEFAULT = {"bo": 0.5, "bn": 0.5, "cq": 0.0, "gc": 0, "pc": 0}
 # w / wn  GA4 days of the levels (past install days / new installs); bw / wa  B's calendar index / ARPDAU window
 # g  month-of-year season strength (0 off); W  installs-model window; nv 1 organic and paid new installs apart
 # bo / bn  B's weight on past install days / new installs; cq  how much of the AdMob-only move q is carried
+# cs 1  the paid installs (users, uninstalls) by country: each country's own installs per $ and its CPI's rise with
+#       its spend (no country weeks: per_usd × spend); the revenue stays on per_usd × spend either way
 # gc 2  each country's own users past day 90 from GA4's late cells (c2); 3: + its revenue 91–427 — 0: lag 90 / 61–90
 #       carried
 # pc 1  new installs' paid vs organic value from GA4's paid cells (cp) — 0: regressed on the Google Ads install share
@@ -527,6 +534,7 @@ def mix_fixed(app, T, hl, gc=0, info=None):
                     uv[i] += q * x
             mf[W] = (rv, uv)
         info.update(mf=mf, n=nmeas)
+    app.setdefault("_fva_slot", {})[(T, hl, gc)] = (mr, mu, nb, nl)       # each country's own factors (the planner)
     return fx, (fac([cells_of[W] for W in done]) if done else None)
 
 
@@ -1055,8 +1063,10 @@ def _ga(st, D):
     return (st["seas"].get(D.month, 1.0) / st["s0"]) ** st["p"]["g"] if st["s0"] else 1.0
 
 
-def _a_parts(st, spend, h, org, per_usd):
-    """View A per future day: old users' revenue, new installs' revenue (organic, paid), users the same, installs."""
+def _a_parts(st, spend, h, org, per_usd, up=None):
+    """View A per future day: old users' revenue, new installs' revenue (organic, paid), users the same, installs. up:
+    the paid installs per day the users / installs follow (the country model, _cs_paid) — the revenue stays on spend ×
+    per_usd (None: both on it)."""
     T, A, LV = st["T"], st["A"], st["LV"]
     lev, ulev = LV["lev"], LV["ulev"]
     rest0, rho = LV["rest"]
@@ -1065,15 +1075,17 @@ def _a_parts(st, spend, h, org, per_usd):
     unit, uunit = st["unit"], st["uunit"]
     NA = len(unit)
     fr, fu = A["fr"], A["fu"]
-    ro, rg, rp, uo, ug, up, nn = [], [], [], [], [], [], []
-    fut = []
+    ro, rg, rp, uo, ug, upd, nn = [], [], [], [], [], [], []
+    fut, futu = [], []
     for i in range(1, h + 1):
         D = T + timedelta(days=i)
         g = _ga(st, D)
         o = sum(lev[j] * fr[j][i - 1] for j in range(NLB))
         du = sum(ulev[j] * fu[j][i - 1] for j in range(NLB))
         npd = per_usd * spend.get(D, 0.0)
+        nu = npd if up is None else up[i - 1]
         fut.append(npd)
+        futu.append(nu)
         r_o = r_p = u_o = u_p = 0.0
         for j, npj in enumerate(fut):
             age = i - 1 - j
@@ -1081,15 +1093,15 @@ def _a_parts(st, spend, h, org, per_usd):
                 r_o += org * unit[age]
                 r_p += npj * unit[age]
                 u_o += org * uunit[age]
-                u_p += npj * uunit[age]
+                u_p += futu[j] * uunit[age]
         ro.append((o + flat) * g + rest0 * math.exp(-rho * i) * g)
         rg.append(r_o * g)
         rp.append(r_p * g)
         uo.append(du + uflat + urest0 * math.exp(-urho * i))
         ug.append(u_o)
-        up.append(u_p)
-        nn.append(org + npd)
-    return {"old": ro, "org": rg, "paid": rp, "uold": uo, "uorg": ug, "upaid": up, "n": nn}
+        upd.append(u_p)
+        nn.append(org + nu)
+    return {"old": ro, "org": rg, "paid": rp, "uold": uo, "uorg": ug, "upaid": upd, "n": nn}
 
 
 def _a_cohort_rev(st, X, k_age, ages):
@@ -1461,6 +1473,7 @@ def _bmix(app, T, hl, gc=0):
             fx[W] = newest
     res = (fx, newest)
     pre["memo"][key] = res
+    pre["memo"][("slot",) + key[1:]] = (mu, ma, LAGB, nb, nl)            # each country's own factors (the planner)
     return res
 
 
@@ -2270,7 +2283,8 @@ def _newvec(st, t=None):
     return v
 
 
-def _b_parts(st, spend, h, org, per_usd):
+def _b_parts(st, spend, h, org, per_usd, up=None):
+    """View B per future day (as _a_parts; up: the paid installs per day the users / installs follow)."""
     T = st["T"]
     rows = []
     for X in st["blk"]:
@@ -2282,7 +2296,7 @@ def _b_parts(st, spend, h, org, per_usd):
     ovu, ovr = _newvec(st, 0)
     pvu, pvr = _newvec(st, 1)
     a6 = st["arpT"][6] / st["mb"][6]
-    ro, rg, rp, uo, ug, up, nn, fut = [], [], [], [], [], [], [], []
+    ro, rg, rp, uo, ug, upd, nn, fut, futu = [], [], [], [], [], [], [], [], []
     for i in range(1, h + 1):
         D = T + timedelta(days=i)
         g = _gb(st, D)
@@ -2293,12 +2307,14 @@ def _b_parts(st, spend, h, org, per_usd):
                 u += cu * vu[L]
                 r += cr * vr[L]
         n_p = per_usd * (spend.get(D, 0.0) if spend else 0.0)
+        nu = n_p if up is None else up[i - 1]
         fut.append(n_p)
+        futu.append(nu)
         r_o = r_p = u_o = u_p = 0.0
         for j, npj in enumerate(fut):
             L = i - 1 - j
             u_o += org * ovu[L]
-            u_p += npj * pvu[L]
+            u_p += futu[j] * pvu[L]
             r_o += org * ovr[L]
             r_p += npj * pvr[L]
         q = st["q0"] * math.exp(-st["rho"] * i)
@@ -2307,9 +2323,9 @@ def _b_parts(st, spend, h, org, per_usd):
         rp.append(r_p * g)
         uo.append(u + q)
         ug.append(u_o)
-        up.append(u_p)
-        nn.append(org + n_p)
-    return {"old": ro, "org": rg, "paid": rp, "uold": uo, "uorg": ug, "upaid": up, "n": nn}
+        upd.append(u_p)
+        nn.append(org + nu)
+    return {"old": ro, "org": rg, "paid": rp, "uold": uo, "uorg": ug, "upaid": upd, "n": nn}
 
 
 def _arp_at(st, L, D):
@@ -2379,6 +2395,293 @@ def past_model(st, D):
 
 
 # ══ the two views together ═════════════════════════════════════════════════════════════════════════════════════════
+# ══ spend → installs by country (ROI_DRIVERS §5 module A; lab 8) ════════════════════════════════════════════════════
+# The paid installs of a future day D (the organic ones stay the engine's own; the REVENUE stays on spend × per_usd ×
+# the engine's value — measured: country revenue per $ did not beat it out of sample, while installs and users did):
+#     paid(D) = per_usd · Σ_k s_k(D) · ρ_k · (lev_k ÷ s̄_k)^(−e)
+#   s_k(D)   country k's spend that day: the day's total × that week's Google Ads country shares (a back-test: the
+#            real ones; a week past the country data: the newest week's), or a plan's own spend per country
+#   ρ_k      k's Google Ads downloads per $ over the newest CS_N complete country weeks ≤ T (shrunk toward the app's by
+#            CS_KD downloads) ÷ that mix's own — 1 at today's mix, so per_usd (the engine's) keeps the level
+#   s̄_k      k's average daily spend in those weeks; lev_k its average daily spend in D's week (inside the horizon)
+#   e        CPI ∝ spend^e: ONE e for raises and cuts (raises / cuts apart measured worse), pooled over every Google
+#            Ads store's country 4-week block pairs known at T (weighted, through the origin, clipped 0 – CS_EMAX)
+# An app or origin without its CS_N complete weeks (no spend, a stale cache) keeps per_usd × spend.
+CS_N = 2
+CS_KD = 50.0
+CS_EMIN = (80.0, 120.0)        # a block pair counts with ≥ 80 USD and ≥ 120 downloads in both blocks
+CS_EMAX = 0.5
+CS_TOP = 8                     # the planner's rows: the top countries with their own GA4 slot + "OT" (every other one)
+CS_MIN = 5.0                   # … only for an app spending ≥ this USD a day (the ROI section's judged-day MIN_SPEND)
+
+
+def cs_pairs(stores, till):
+    """Every Google Ads store's country 4-week block pairs, each store on its own: stores {store id: {Monday: {cc:
+    [USD, downloads or None]}}}, weeks ending ≤ till → {"rows": [(known from, dlog spend, dlog CPI, weight)] by date,
+    prefix sums, "memo"}: the input of cs_e (one per build)."""
+    rows = []
+    for sid in sorted(stores):
+        geo = stores[sid] or {}
+        weeks = sorted(W for W in geo if W + timedelta(days=6) <= till)
+        bl = {}
+        for i in range(len(weeks) - 3):
+            blk = weeks[i:i + 4]
+            if (blk[-1] - blk[0]).days != 21:
+                continue
+            b = {}
+            for W in blk:
+                for cc, (c, d) in geo[W].items():
+                    if cc == "XX" or d is None:
+                        continue
+                    v = b.setdefault(cc, [0.0, 0.0])
+                    v[0] += c
+                    v[1] += d
+            bl[blk[0]] = b
+        for W0, prev in bl.items():
+            nxt = bl.get(W0 + timedelta(days=28))
+            if not nxt:
+                continue
+            for cc, (c1, d1) in nxt.items():
+                p = prev.get(cc)
+                if not p or p[0] < CS_EMIN[0] or p[1] < CS_EMIN[1] or c1 < CS_EMIN[0] or d1 < CS_EMIN[1]:
+                    continue
+                rows.append((W0 + timedelta(days=55), math.log(c1 / p[0]), math.log((c1 / d1) / (p[0] / p[1])),
+                             1.0 / (1.0 / d1 + 1.0 / p[1])))
+    rows.sort(key=lambda r: r[0])
+    kn, sxy, sxx = [], [0.0], [0.0]
+    for k, x, y, w in rows:
+        kn.append(k)
+        sxy.append(sxy[-1] + w * x * y)
+        sxx.append(sxx[-1] + w * x * x)
+    return {"known": kn, "sxy": sxy, "sxx": sxx, "memo": {}}
+
+
+def cs_e(pairs, T):
+    """(e, pairs used) known at T: the weighted slope of dlog CPI on dlog spend through the origin over the pairs whose
+    later block ended ≤ T (≥ 8 of them; else 0), clipped 0 – CS_EMAX."""
+    if not pairs:
+        return 0.0, 0
+    memo = pairs["memo"]
+    if T not in memo:
+        n = bisect.bisect_right(pairs["known"], T)
+        e = 0.0
+        if n >= 8 and pairs["sxx"][n] > 0:
+            e = min(CS_EMAX, max(0.0, pairs["sxy"][n] / pairs["sxx"][n]))
+        memo[T] = (e, n)
+    return memo[T]
+
+
+def cs_model(geo, T):
+    """The newest CS_N complete country weeks ≤ T (consecutive, the newest ending ≥ T − 13 days, every downloads count
+    known) → {ppu, rho, sbar, share, dl, pa, weeks} or None."""
+    weeks = [W for W in sorted(geo or {}) if W + timedelta(days=6) <= T][-CS_N:]
+    if len(weeks) < CS_N or (weeks[-1] - weeks[0]).days != 7 * (CS_N - 1) or weeks[-1] + timedelta(days=13) < T:
+        return None
+    C, D = {}, {}
+    for W in weeks:
+        for cc, (c, d) in geo[W].items():
+            if d is None:
+                return None
+            C[cc] = C.get(cc, 0.0) + c
+            D[cc] = D.get(cc, 0.0) + d
+    tc, td = sum(C.values()), sum(D.values())
+    if tc <= 0 or td <= 0:
+        return None
+    pa = td / tc
+    ppu = {k: (D.get(k, 0.0) + CS_KD) / (C[k] + CS_KD / pa) for k in C if C[k] > 0}
+    mix = sum(C[k] / tc * ppu[k] for k in ppu)
+    return {"ppu": ppu, "pa": pa, "rho": {k: v / mix for k, v in ppu.items()},
+            "sbar": {k: C[k] / (7.0 * CS_N) for k in C}, "share": {k: C[k] / tc for k in C}, "dl": D, "weeks": weeks}
+
+
+def _cs_state(app, T):
+    """The app's country model at T (kept per T), or None."""
+    geo = app.get("geo")
+    if not geo:
+        return None
+    memo = app.setdefault("_fv_cs", {})
+    if T not in memo:
+        cm = cs_model(geo, T)
+        st = None
+        if cm is not None:
+            e, n = cs_e(app.get("cs_pairs"), T)
+            st = {"cm": cm, "e": e, "en": n, "geo": geo, "last_w": max(geo), "T": T}
+        memo[T] = st
+    return memo[T]
+
+
+def _cs_shares(cs, W):
+    e = cs["geo"].get(W) or cs["geo"].get(cs["last_w"])
+    tc = sum(x for x, _ in e.values()) if e else 0
+    return {k: x / tc for k, (x, _) in e.items()} if tc > 0 else {}
+
+
+def _cs_paid(cs, T, spend, h, per_usd, plan=None):
+    """Paid installs per future day (the module's formula); plan {cc: USD a day} — the same spend every day."""
+    cm, e = cs["cm"], cs["e"]
+    rho, sbar = cm["rho"], cm["sbar"]
+
+    def g(k, lev):
+        sb = sbar.get(k, 0.0)
+        return (lev / sb) ** (-e) if e and sb > 0 and lev > 0 else 1.0
+    if plan is not None:
+        v = per_usd * sum(s * rho.get(k, 1.0) * g(k, s) for k, s in plan.items() if s > 0)
+        return [v] * h
+    sp = [spend.get(T + timedelta(days=i), 0.0) for i in range(1, h + 1)]
+    wk = {}
+    for i in range(h):
+        W = T + timedelta(days=i + 1)
+        W -= timedelta(days=W.weekday())
+        a = wk.setdefault(W, [0.0, 0])
+        a[0] += sp[i]
+        a[1] += 1
+    fac = {}
+    for W, (tot, k) in wk.items():
+        m = tot / k
+        sh = _cs_shares(cs, W)
+        fac[W] = sum(q * rho.get(cc, 1.0) * g(cc, m * q) for cc, q in sh.items() if q > 0) if m > 0 else 0.0
+    out = []
+    for i in range(h):
+        W = T + timedelta(days=i + 1)
+        W -= timedelta(days=W.weekday())
+        out.append(per_usd * sp[i] * fac[W] if sp[i] > 0 else 0.0)
+    return out
+
+
+def _cs_fac_a(comp, slot):
+    """View A's (revenue bands, users lags) factors of a {slot: installs} mix — mix_fixed's own fac()."""
+    mr, mu, nb, nl = slot
+    tot = sum(v for v in comp.values() if v > 0)
+    if tot <= 0:
+        return None
+    rf, uf = [0.0] * nb, [0.0] * nl
+    for k, v in comp.items():
+        if v <= 0:
+            continue
+        q = v / tot
+        r, u = mr.get(k), mu.get(k)
+        for b in range(nb):
+            rf[b] += q * (r[b] if r else 1.0)
+        for j in range(nl):
+            uf[j] += q * (u[j] if u else 1.0)
+    return [max(0.05, x) for x in rf], [max(0.05, x) for x in uf]
+
+
+def _cs_fac_b(comp, slot):
+    """View B's (users, ARPDAU) factors of a {slot: installs} mix — _bmix's own fac()."""
+    mu, ma, lagb, nb, nl = slot
+    tot = sum(v for v in comp.values() if v > 0)
+    if tot <= 0:
+        return None
+    fu = [0.0] * nl
+    fan, fad = [0.0] * nb, [0.0] * nb
+    for k, v in comp.items():
+        q = v / tot
+        if q <= 0:
+            continue
+        uu, aa = mu.get(k), ma.get(k)
+        for j in range(nl):
+            fu[j] += q * (uu[j] if uu else 1.0)
+        for b in range(nb):
+            uw = q * ((uu[lagb[b]] if uu else 1.0) if lagb[b] is not None else 1.0)
+            fan[b] += uw * (aa[b] if aa else 1.0)
+            fad[b] += uw
+    fa = [max(0.05, fan[b] / fad[b]) if fad[b] > 0 else 1.0 for b in range(nb)]
+    return [max(0.05, x) for x in fu], fa
+
+
+CS_H = (30, 90, 180)
+
+
+def cs_plan(app, st, org, per_usd, base, plan):
+    """The "Budget by country" planner's inputs at the live origin (the default plan = today's spend × the training
+    weeks' shares; an app spending < CS_MIN a day: none): per row (the top CS_TOP countries by spend that have their own
+    GA4 slot — a country without one has no curve of its own, so it is planned only inside "OT" = every other country,
+    on the pooled curve) its spend a day s0, the
+    training weeks' s̄, ρ (installs per $ = per_usd × ρ at s̄), whether it has its own GA4 slot, the weekly spend range
+    measured (lo / hi, USD a day) and w = its share of the paid installs' revenue within 30 / 90 / 180 days at the
+    default plan — each country on its OWN curves (view A's revenue factors / view B's users × ARPDAU factors, relative
+    to the training weeks' paid mix, both views mixed by bn); forecast_build turns w into revenue per $. None without
+    the country model."""
+    cs = st.get("cs")
+    if not cs or not plan or base < CS_MIN:
+        return None
+    T, p, cm = st["T"], st["p"], cs["cm"]
+    rho, sbar = cm["rho"], cm["sbar"]
+    cset = (app.get("ida") or {}).get("cset") or []
+    ix = {cc: str(i) for i, cc in enumerate(cset)}
+    zz = ix.get("ZZ")
+    slot_of = lambda cc: ix.get(cc, zz)  # noqa: E731
+    order = sorted((k for k, v in plan.items() if v > 0), key=lambda k: (-plan[k], k))
+    top = [k for k in order if k not in ("XX", "ZZ") and k in ix][:CS_TOP]
+    rest = [k for k in order if k not in top]
+    groups = [(k, [k]) for k in top] + ([("OT", rest)] if rest else [])
+    v = lag_view(app, T, app.get("glag") or 0)
+    gc = p.get("gc") or 0
+    sA = (v.get("_fva_slot") or {}).get((T, p["hl"], gc))
+    sB = None
+    if st["b"] is not None:
+        sB = st["b"]["pre"]["memo"].get(("slot", T, p["bhl"], gc))
+    comp0 = {}
+    for k, d in cm["dl"].items():
+        sk = slot_of(k)
+        if sk is not None:
+            comp0[sk] = comp0.get(sk, 0.0) + d
+    fA0 = _cs_fac_a(comp0, sA) if sA else None
+    fB0 = _cs_fac_b(comp0, sB) if sB else None
+    sa, sb_ = st["a"], st["b"]
+    unit = sa["unit"]
+    pvr = _newvec(sb_, 1)[1] if sb_ is not None else None
+    bn = p["bn"] if sb_ is not None else 0.0
+    H = max(CS_H)
+
+    def value(comp):
+        """Revenue within 30 / 90 / 180 days of one paid install a day of this mix (days 1 … H), × q."""
+        fa = _cs_fac_a(comp, sA) if (sA and fA0) else None
+        fb = _cs_fac_b(comp, sB) if (sB and fB0) else None
+        ca = cb = 0.0
+        acc_a = acc_b = 0.0
+        out = {}
+        for i in range(1, H + 1):
+            L = i - 1                                  # the newest install day's age on day i; Σ over ages ≤ L
+            if bn < 1 and L < len(unit):
+                ca += unit[L] * (_xfr(fa, L) / _xfr(fA0, L) if fa else 1.0)
+            if bn > 0 and pvr is not None and L < len(pvr):
+                cb += pvr[L] * ((_bfu(fb, L) * _bfa(fb, L)) / (_bfu(fB0, L) * _bfa(fB0, L)) if fb else 1.0)
+            D = T + timedelta(days=i)
+            acc_a += ca * _ga(sa, D)
+            if sb_ is not None:
+                acc_b += cb * _gb(sb_, D)
+            if i in CS_H:
+                out[i] = ((1 - bn) * acc_a + bn * acc_b) * st["q"]
+        return out
+    rows, tot = [], {h: 0.0 for h in CS_H}
+    weeks = sorted(W for W in cs["geo"] if W + timedelta(days=6) <= T)
+    for name, ks in groups:
+        s0 = sum(plan[k] for k in ks)
+        sb = sum(sbar.get(k, 0.0) for k in ks)
+        r = sum(plan[k] * rho.get(k, 1.0) for k in ks) / s0
+        comp = {}
+        for k in ks:
+            sk = slot_of(k)
+            if sk is not None:
+                comp[sk] = comp.get(sk, 0.0) + plan[k] * rho.get(k, 1.0)
+        val = value(comp) if comp else value(comp0)
+        lv = [sum(c for cc, (c, _) in cs["geo"][W].items() if cc in ks) / 7.0 for W in weeks]
+        lv = [x for x in lv if x > 0]
+        own = 1 if (name != "OT" and name in ix and name != "ZZ") else 0
+        rows.append({"cc": name, "own": own, "s0": s0, "sb": sb, "rho": r, "lo": min(lv) if lv else None,
+                     "hi": max(lv) if lv else None, "val": val})
+        for h in CS_H:
+            tot[h] += s0 * r * val[h]
+    for x in rows:
+        val = x.pop("val")
+        x["w"] = [(x["s0"] * x["rho"] * val[h] / tot[h]) if tot[h] > 0 else None for h in CS_H]
+    cov = sum(x["s0"] for x in rows if x["own"]) / base
+    return {"v": 1, "T": T.isoformat(), "weeks": [W.isoformat() for W in cm["weeks"]], "e": cs["e"], "en": cs["en"],
+            "pu": per_usd, "org": org, "s": base, "cov": cov, "rows": rows, "n0": _cs_paid(cs, T, {}, 1, per_usd, plan)[0]}
+
+
 def _views(app, T, p, ctx=None, clag=0, need_b=True, tlag=0):
     """Both views fitted with ONLY the data known at T (GA4 to T − app["glag"]; clag: install days' final data to
     T − clag; tlag: their checkpoints after day 30 to T − tlag) + the days AdMob has but GA4 not yet as (AdMob, view
@@ -2424,7 +2727,7 @@ def prepare(app, T, p, ctx=None, clag=0, tlag=0):
     sa, sb, tail = _views(app, T, p, ctx, clag, p["bo"] > 0 or p["bn"] > 0, tlag)
     q, nt = _q(tail, p["bo"])
     return {"T": T, "p": p, "a": sa, "b": sb, "q": q ** p["cq"], "qraw": q, "nt": nt, "spend": {},
-            "org": sa["org"], "per_usd": sa["per_usd"]}
+            "org": sa["org"], "per_usd": sa["per_usd"], "cs": _cs_state(app, T) if p.get("cs") else None}
 
 
 def _mix(x, y, w):
@@ -2435,16 +2738,19 @@ def _mix(x, y, w):
     return [(1 - w) * a + w * b for a, b in zip(x, y)]
 
 
-def parts(st, spend, h, org=None, per_usd=None):
-    """Both views over the next h days, mixed and × q: revenue and users of old users / organic / paid installs, n."""
+def parts(st, spend, h, org=None, per_usd=None, plan=None):
+    """Both views over the next h days, mixed and × q: revenue and users of old users / organic / paid installs, n,
+    and "up" the paid installs per day (the country model; None without it). plan: {cc: USD a day} for the country
+    model (the live forecast's default: spend × the training weeks' country shares)."""
     p = st["p"]
     org = st["org"] if org is None else org
     per_usd = st["per_usd"] if per_usd is None else per_usd
     st["spend"], st["org_f"], st["per_usd_f"] = spend or {}, org, per_usd
-    A = _a_parts(st["a"], spend or {}, h, org, per_usd)
-    B = _b_parts(st["b"], spend or {}, h, org, per_usd) if st["b"] is not None else {}
+    up = _cs_paid(st["cs"], st["T"], spend or {}, h, per_usd, plan) if st.get("cs") else None
+    A = _a_parts(st["a"], spend or {}, h, org, per_usd, up)
+    B = _b_parts(st["b"], spend or {}, h, org, per_usd, up) if st["b"] is not None else {}
     bo, bn, q = p["bo"], p["bn"], st["q"]
-    out = {"n": A["n"]}
+    out = {"n": A["n"], "up": up}
     for k, w in (("old", bo), ("org", bn), ("paid", bn)):
         out[k] = [x * q for x in _mix(A[k], B.get(k), w)]
         out["u" + k] = _mix(A["u" + k], B.get("u" + k), w)
@@ -2490,9 +2796,9 @@ def new_value(st, X, ages):
 
 
 # ── the live forecast (the same contract as forecast.forecast) ──────────────────────────────────────────────────────
-def _uninstalls(app, T, spend, h, org, per_usd):
-    """Uninstalls a day by who (forecast.uninstall_curve: old install days, organic, paid installs) — None without the
-    Uninstall store's cells."""
+def _uninstalls(app, T, spend, h, org, per_usd, up=None):
+    """Uninstalls a day by who (forecast.uninstall_curve: old install days, organic, paid installs; up: the paid
+    installs per day, else spend × per_usd) — None without the Uninstall store's cells."""
     start, coh = app["start"], app["coh"]
     q = F.uninstall_curve(app, T, start)
     if not q:
@@ -2509,7 +2815,7 @@ def _uninstalls(app, T, spend, h, org, per_usd):
             age = (D - X).days
             if age < NQ:
                 uo += n0 * q[age]
-        fut.append((D, org, per_usd * spend.get(D, 0.0)))
+        fut.append((D, org, per_usd * spend.get(D, 0.0) if up is None else up[i - 1]))
         qo = qp = 0.0
         for Fd, no, npd in fut:
             age = (D - Fd).days
@@ -2630,6 +2936,8 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
     st = prepare(app, T, p, {"seas": seas})
     days = app["days"]
     org, per_usd = st["org"], st["per_usd"]
+    plan = None
+    base = None
     if spend is None:
         org, per_usd = F.installs_model(days, T, F.SPEND_DAYS)
         k, tot = 0, 0.0
@@ -2642,13 +2950,21 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
             D += ONE
         base = tot / k if k else 0.0
         spend = {T + timedelta(days=i): base for i in range(1, h + 1)}
-    x = parts(st, spend, h, org, per_usd)
-    un = _uninstalls(app, T, spend, h, org, per_usd)
+        if st.get("cs"):                              # the country model: today's spend × the training weeks' shares
+            plan = {cc: base * q for cc, q in st["cs"]["cm"]["share"].items()}
+    x = parts(st, spend, h, org, per_usd, plan)
+    un = _uninstalls(app, T, spend, h, org, per_usd, x["up"])
     sp = [spend.get(T + timedelta(days=i), 0.0) for i in range(1, h + 1)]
-    return {"rev": {"old": x["old"], "org": x["org"], "paid": x["paid"]},
-            "dau": [a + b + c for a, b, c in zip(x["uold"], x["uorg"], x["upaid"])], "n": x["n"], "sp": sp,
-            "dau_p": {"old": x["uold"], "org": x["uorg"], "paid": x["upaid"]}, "un": un,
-            "parts": _why(app, st, org, per_usd)}
+    out = {"rev": {"old": x["old"], "org": x["org"], "paid": x["paid"]},
+           "dau": [a + b + c for a, b, c in zip(x["uold"], x["uorg"], x["upaid"])], "n": x["n"], "sp": sp,
+           "dau_p": {"old": x["uold"], "org": x["uorg"], "paid": x["upaid"]}, "un": un,
+           "parts": _why(app, st, org, per_usd)}
+    if plan is not None:
+        try:                                          # only the planner would miss it: never the forecast
+            out["plan"] = cs_plan(app, st, org, per_usd, base, plan)
+        except Exception:
+            out["plan"] = None
+    return out
 
 
 # ── back-testing: totals (as v0) + every past install day's future revenue + new installs' value ────────────────────
@@ -2703,9 +3019,11 @@ def _origin(app, T, p, seas, need_b, comps=True):
     sa, sb, tail = _views(app, T, p, {"seas": seas}, (app.get("clag") or 0) if CLAG else 0, need_b,
                           (app.get("tlag") or 0) if CLAG else 0)
     org, per_usd = sa["org"], sa["per_usd"]
+    cs = _cs_state(app, T) if p.get("cs") else None       # the paid installs the users / installs follow (country model)
+    up = _cs_paid(cs, T, sp, hmax, per_usd) if cs else None
     unm = app.setdefault("_fv_un", {})                    # the uninstalls do not depend on the mix weights either
     if (T, hmax) not in unm:
-        unm[(T, hmax)] = _uninstalls(app, T, sp, hmax, org, per_usd)
+        unm[(T, hmax)] = _uninstalls(app, T, sp, hmax, org, per_usd, up)
     un = unm[(T, hmax)]
     hz_rows = []
     for hz in HORIZONS:
@@ -2732,8 +3050,8 @@ def _origin(app, T, p, seas, need_b, comps=True):
         hz_rows.append((hz, ar, an, au, ev, un_e))
     if not hz_rows:
         return None
-    o = {"T": T, "hz": hz_rows, "tail": tail, "A": _a_parts(sa, sp, hmax, org, per_usd),
-         "B": _b_parts(sb, sp, hmax, org, per_usd) if sb is not None else None, "comps": comps}
+    o = {"T": T, "hz": hz_rows, "tail": tail, "A": _a_parts(sa, sp, hmax, org, per_usd, up),
+         "B": _b_parts(sb, sp, hmax, org, per_usd, up) if sb is not None else None, "comps": comps}
     if not comps:
         return o
     crev, cusr, cnew = [], [], []

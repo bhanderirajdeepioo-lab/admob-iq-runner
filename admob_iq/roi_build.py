@@ -701,6 +701,7 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
         if any(e.get("src") == "ga4" for e in f4["by"].values()):
             acc.f4m += 1
         cty = _countries(detail, H)
+        sids = ()
         try:
             sids = vb.app_sids(pre, a, store, (pre.get("spend") or {}).get("daily") or {}) if pre.get("spend") else ()
             cty["months"] = _cty_months(P, ida, pre, sids, fxf)
@@ -722,8 +723,16 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
                 acc.fc = fob.start(data_dir, now)
             decs = {x["cc"]: x["dec"] for x in cty["rows"]}
             eng = [dict(x, dec=decs.get(x.get("cc"))) for x in (((detail or {}).get("countries") or {}).get("rows") or [])]
+            fgeo, pairs = None, None
+            try:                                        # Google Ads country weeks → installs by country + the planner
+                geo = (pre or {}).get("geo") or {}
+                fgeo = fob.geo_weeks(geo.get("weeks") or {}, sids, fxf) if sids else None
+                pairs = fob.cs_pairs(acc.fc, geo, fxf) if fgeo else None
+            except Exception:
+                fgeo, pairs = None, None
             body["fc"] = fob.app_step(acc.fc, aid, key, rows, P, ida, life, body["life_till"], eng,
-                                      rev_cty=(rev or {}).get("cty"), unst=store)
+                                      rev_cty=(rev or {}).get("cty"), unst=store, geo=fgeo, cs_pairs=pairs,
+                                      beta=f4.get("beta"))
             fcs = fc_summary(body["fc"])
         except Exception:
             body["fc"] = None

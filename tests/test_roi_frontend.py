@@ -85,6 +85,9 @@ def test_forecast_view(out):
     assert out["fc_gx"]                                                # GA4's late / paid cells: measured vs carried
     assert out["fc_gx_nosrc"]                                          # … no paid ÷ organic line without a source
     assert out["fc_gx_held"]                                           # … held off / never checked / users only / on
+    # 💸 Budget by country: today's plan = the forecast; Keep total; out-of-range warning; owner-only; the slider
+    assert out["pl_card"] and out["pl_keep"] and out["pl_warn"] and out["pl_nokeep"]
+    assert out["pl_dev"] and out["pl_none"] and out["pl_slider"]
 
 
 def test_wiring():
@@ -97,3 +100,5 @@ def test_wiring():
     assert "+`</div>`+f4Hero(d)+`</div>`; }" in p and "+f4All(apps)+(pc?" in p             # ⚖️ hero + All-apps table
     for a in ("data-roi-f4h", "data-roi-f4x", "data-roi-fsort"):                         # every toggle keeps its place
         assert "if((b=at('[%s]'))){ " % a in p and "keep(b,()=>{" in p.split("if((b=at('[%s]'))){ " % a)[1].split("\n")[0]
+    seg = p.split("if((b=at('[data-roi-pl]'))||(b=at('[data-roi-plk]'))||(b=at('[data-roi-plr]'))){")[1].split("return; }")[0]
+    assert "keep(b,()=>{" in seg and "fcPlan(dd)" in seg                                  # −/+, Keep total, Reset: in place

@@ -245,7 +245,7 @@ def test_vd_setting_stored_before_the_ga4_switches(tmp_path):
     run = fb.start(data, now + timedelta(days=1), Clock())
     f = fb.app_step(run, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
     assert run.ran == 1 and f["p"] == fc["p"] and f["p"]["gc"] == 0 and f["log"] == fc["log"]
-    assert fb.line(run).endswith("GA4 late cells 0, paid cells 0")
+    assert fb.line(run).endswith("GA4 late cells 0, paid cells 0; budget planner 0")
 
 
 def test_vd_setting_the_engine_cannot_make_is_tuned_at_once(tmp_path):
