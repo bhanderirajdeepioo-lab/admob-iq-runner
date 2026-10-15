@@ -2552,6 +2552,20 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-hc-a{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--ink2);max-width:100%}.roi-hc-a>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:1100px){.roi-hero{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:760px){.roi-hero{padding:14px;gap:12px}.roi-hh{font-size:16px}.roi-hns{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.roi-hv{font-size:18px}.roi-hcs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.roi-f4{grid-column:1/-1;display:flex;flex-direction:column;gap:9px;min-width:0;border-top:1px solid var(--line);padding-top:12px}
+.roi-f4h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px}.roi-f4h small{font-weight:600;letter-spacing:0;text-transform:none;color:var(--faint)}
+.roi-f4g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.roi-f4c{background:rgba(10,17,32,.45);border:1px solid var(--line);border-radius:12px;padding:9px 12px;min-width:0}.roi-f4m{border-color:var(--cyan2)}
+.roi-f4v{display:block;font-size:20px;font-weight:850;color:#fff;margin:2px 0 1px;font-variant-numeric:tabular-nums;line-height:1.2}
+.roi-f4d{font-size:13px;color:var(--ink2);line-height:1.5;padding:8px 12px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2)}.roi-f4d b{color:#fff}
+.roi-f4d.st-behtar{border-color:#1f6b52}.roi-f4d.st-bigda{border-color:#6b2a2e}.roi-f4d.st-dhyan{border-color:#7a6326}
+.roi-f4w{font-size:12.5px;color:#f3d48a;background:rgba(230,184,78,.10);border:1px solid #7a6326;border-radius:10px;padding:8px 12px;line-height:1.5}.roi-f4w b{color:#fff}
+.roi-f4r{align-self:flex-start;font-size:11.5px;font-weight:700;color:#f3d48a;border:1px dashed #7a6326;border-radius:999px;padding:3px 10px;line-height:1.4;max-width:100%}
+.roi-card>.roi-f4r{display:inline-block;margin:0 0 10px}
+.roi-f4n{font-size:11.5px;color:var(--muted);line-height:1.55}.roi-f4n b{color:var(--ink2)}.roi-f4n .roi-lnk{min-height:30px;margin-left:4px;padding:2px 10px;font-size:12px}
+.roi-f4x{border-top:1px dashed var(--line2);padding-top:10px}.roi-f4x p{margin:0 0 8px;font-size:12.5px;color:var(--ink2);line-height:1.55}.roi-f4x b{color:#fff}
+.roi-t tr.roi-flag td{background:color-mix(in srgb,var(--panel) 92%,#e6b84e)}.roi-t tr.roi-flag td:first-child{box-shadow:inset 3px 0 0 var(--watch),1px 0 0 var(--line)}
+@media (max-width:760px){.roi-f4g{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.roi-f4v{font-size:17px}.roi-f4c{padding:8px 10px}}
 .roi-fc-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;margin:0 0 12px}
 .roi-mini button[disabled]{opacity:.45;cursor:not-allowed}.roi-mini button small{font-size:10.5px;color:var(--faint)}
 .roi-fc-sl{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink2);min-width:220px;flex:1 1 220px;max-width:420px}
@@ -6460,6 +6474,7 @@ const ROI=(()=>{
 let ALL=null, ALLV=null, ALLERR=false, ALLBUSY=false;
 const AF={}, AERR={}, ABUSY={};                       // one app's file by key
 let VIEW='day', GRAIN='day', MET='roas', SHOW=60, LSHOW=60, LG='cohort', CTYO='', CSORT={k:'dec',dir:1}, ASORT={k:'st',dir:1};
+let F4H=null, F4X=false, FSORT={k:'gap',dir:1};             // ⚖️ the 4 forms: age picked (null = the payback target), help open, All-apps sort
 const ST_KEY={Worse:'bigda',Watch:'dhyan',Better:'behtar',Normal:'normal','Too early':'jaldi','N/A':'lagu'};
 const ST_RANK={Worse:0,Watch:1,Better:2,Normal:3,'Too early':4,'N/A':5};
 const DEC_CLS={Scale:'behtar',Keep:'normal',Watch:'dhyan',Cut:'bigda','Too little data':'lagu','Too early':'jaldi',Better:'behtar',Worse:'bigda',Normal:'normal'};
@@ -6530,11 +6545,13 @@ function hero(aid){
     +(eng?`<div class="roi-he"><b>Next step:</b> ${eng}</div>`:'')+(al?`<div class="roi-he">🔔 <b>${al}</b> open ${al===1?'alert':'alerts'} — neeche “More details” me</div>`:'')+`</div>`
     +`<div class="roi-hns">${bigN('Lifetime profit / loss',`<span class="${lt.p>=0?'roi-up':'roi-dn'}">${MC(lt.p,true)}</span>`,lt.s?`ROAS ${P(lt.r/lt.s)} · ${MC(lt.s)} spend`:'ads nahi')}`
     +bigN('D7 ROAS',P(s.r7),ok(s.u7)?`<span class="${s.r7>=s.u7?'roi-up':'roi-dn'}">${s.r7>=s.u7?'▲':'▼'} usual ${P(s.u7)}</span>`:'pichhle 7 install-din')
-    +bigN('Money back in',pb,pbs)+bigN('Cost / install',MPV(cpi),'Google Ads · 7 din')+`</div></div>`; }
+    +bigN('Money back in',pb,pbs)+bigN('Cost / install',MPV(cpi),'Google Ads · 7 din')+`</div>`+f4Hero(d)+`</div>`; }
 function heroAll(){ const A=ALL, apps=A.apps.filter(x=>uniVis(x.app_id)&&x.ads!==false), lt=lifeTot(A.life,A.life_till);
   const pl=x=>RV((x.life||[])[0]||0)-SV((x.life||[])[1]||0,(x.life||[])[2]!=null?x.life[2]:null);
   const loss=apps.slice().sort((a,b)=>pl(a)-pl(b))[0], best=apps.filter(x=>ok(x.r30)).sort((a,b)=>b.r30-a.r30)[0];
   const drop=apps.filter(x=>ok(x.r7)&&ok(x.u7)&&x.u7>0).sort((a,b)=>a.r7/a.u7-b.r7/b.u7)[0];
+  const gps=apps.filter(x=>!f4Off(x)).map(x=>{ const by=(x.f4&&x.f4.by)||{}, k=['30','7'].find(a=>f4Big(by[a],f4C(null))); return k?[x,by[k],k]:null; }).filter(Boolean).sort((a,b)=>b[1].gap[1]-a[1].gap[1]), gp=gps[0];   // apps buying now only (a paused app's window can be months old): D30 when flagged, else D7
+  const dn={up:0,mixed:0,down:0,off:0}; apps.forEach(x=>{ const v=x.f4&&f4V(x.f4.dec); if(v in dn) dn[v]++; });
   let cutN=0, save=0; apps.forEach(x=>{ const c=x.cut_save||{}; if(!c.n) return; cutN+=c.n; const wk=c.weeks||4; save+=((SV(c.spend,c.spend_src)||0)-(RV(c.rev90)||0))/wk; });
   const card=(x,lab,val,sub)=>x?`<button type="button" class="roi-hc" data-roi-app="${E(x.app_id)}"><span class="roi-hl">${lab}</span><span class="roi-hc-a">${appIconId(x.app_id,x.app,18)}<span>${E(x.app)}</span></span><span class="roi-hv">${val}</span><span class="roi-hs">${sub}</span></button>`:'';
   return `<div class="roi-hero st-${lt.p>=0?'behtar':'bigda'}"><div class="roi-ht"><div class="roi-hh">${lt.s?`Saare apps: ads ${lt.p>=0?'profit':'loss'} me — lifetime ${MC(lt.p,true)}`:'Saare apps ka ROI'}</div>`
@@ -6542,6 +6559,8 @@ function heroAll(){ const A=ALL, apps=A.apps.filter(x=>uniVis(x.app_id)&&x.ads!=
     +`<div class="roi-hcs">${card(loss,'🔥 Sabse bada loss',`<span class="roi-dn">${MC(pl(loss||{}),true)}</span>`,'lifetime')}`
     +card(best,'💰 Best ROI',P(best&&best.r30),'D30 ROAS · pichhle 7 install-din')
     +card(drop,'📉 Sabse zyada gira',drop?P(drop.r7):'—',drop?`D7 ROAS · usual ${P(drop.u7)}`:'')
+    +(gp?card(gp[0],`⚖️ ${f4Org(gp[1])}`,`${P(gp[1].bl)} → ${P(gp[1].paid[1])}`,`blended → paid-only · D${gp[2]} · paid share ${P(f4S(gp[1]))}${f4M(gp[1])?' (GA4)':''}${gps.length>1?` · ${gps.length} apps aise`:''}`):'')
+    +(dn.up+dn.mixed+dn.down?`<div class="roi-hc roi-hc-s"><span class="roi-hl">🧭 Budget · marginal ROI</span><span class="roi-hv">⬆️ ${dn.up} · ↔️ ${dn.mixed} · ⬇️ ${dn.down}</span><span class="roi-hs">raise · not sure · cut (payback target tak)${dn.off?` · ⏸️ ${dn.off} paused`:''} · neeche ⚖️ table</span></div>`:'')
     +(cutN?`<div class="roi-hc roi-hc-s"><span class="roi-hl">✂️ Countries to cut</span><span class="roi-hv">${cutN}</span><span class="roi-hs">hatane se ~${MC(save)}/hafta bachega · app pe jao → Countries</span></div>`:'')+`</div></div>`; }
 function wait(msg,retry){ return `<div class="roi-card"><p class="roi-note">${retry?`⚠️ ${msg} <button type="button" class="roi-lnk" data-roi-retry="1">Try again</button>`:'⏳ '+msg}</p></div>`; }
 function body(aid){
@@ -6657,7 +6676,7 @@ function dayView(d){ const s=d.sum||{}, pl=s.pools||{}, g=a=>(pl[a]||{}), r=a=>(
   return kp
     +(()=>{ const dc=deltaChart(d); return `<div class="${dc?'roi-g2':''}"><div class="roi-card"><div class="roi-ct"><h3>ROAS by day · har install mahina</h3><span class="roi-note">dashed = 100% (breakeven) · point pe tap = number</span></div>${monthCurves(d)}</div>${dc}</div>`; })()
     +`<div class="roi-card"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D365 tak</h3><span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohortTable(d)}</div>`
-    +`<p class="roi-note">${cov} Spend = Google Ads (₹ me jitna bill hua; $ me us din ke rate se). ROAS % = us din ke rate se. Installs = GA4 ke naye users (ads + organic) — isliye ROAS "blended" hai. Aakhri ${d.consts?d.consts.final_lag:3} din final nahi.${s.tie&&s.tie.off?` ≈ = ${s.tie.off} din ka GA4 read match nahi hua.`:''}</p>`; }
+    +`<p class="roi-note">${cov} Spend = Google Ads (₹ me jitna bill hua; $ me us din ke rate se). ROAS % = us din ke rate se. Installs = GA4 ke naye users (ads + organic) — isliye ROAS "blended" hai (paid-only / incremental / marginal upar ⚖️ 4 kinds of ROI me). Aakhri ${d.consts?d.consts.final_lag:3} din final nahi.${s.tie&&s.tie.off?` ≈ = ${s.tie.off} din ka GA4 read match nahi hua.`:''}</p>`; }
 // ---- 🌍 Countries: keep / cut ----
 function ctyView(d){ const c=d.cty||{}, rows=(c.rows||[]).slice(); if(!rows.length) return `<div class="roi-card"><p class="roi-note">Is app ka country data abhi nahi.</p></div>`;
   const cnt=k=>rows.filter(x=>x.dec===k).length, order=['Scale','Keep','Watch','Cut','Too early','Too little data','Better','Normal','Worse'];
@@ -6731,6 +6750,100 @@ function lifeView(life,till,d,co){ life=life||[]; if(d) CCY=d.ccy||null; if(!lif
     +`<div class="roi-card"><div class="roi-ct"><h3>${LG==='cohort'?'Install month · har mahine ke installs ne ab tak kitna kamaya':LG==='month'?'Calendar month · us mahine kitna aaya, kitna gaya':'Every day'}</h3>${seg('lg',LG,[['cohort','Install month'],['month','Calendar month'],['day','Day']])}</div><div class="roi-tw">${tbl}</div>`
     +(LG==='cohort'?`<p class="roi-note"><b>Install month</b> = us mahine aaye users (ads + organic) ki aaj tak ki kamai (AdMob matched, install se 1 saal tak) vs us mahine ka Google Ads spend — purane mahine samay ke saath profit me aate hain. <b>Calendar month</b> = us mahine saare users se kitna aaya vs us mahine kitna spend gaya (cash).</p>`:'')+`</div>`
     +`<p class="roi-note">Revenue = AdMob (saare ad sources, ${d&&d.app?'is app ke':'saare apps ke'} saare users — ads + organic), spend = Google Ads (₹ me jitna bill hua). Totals ${E(fd(tl))} tak (us din tak dono ka pura data). ${live.length?'Uske baad ke din live — totals me nahi.':''}</p>`; }
+// ---- ⚖️ ROI ke 4 roop (roi_build._forms): blended (what this section shows) / paid-only / incremental / marginal at
+// D7 / D30 / D90 (+ the payback target), over the SAME install days as the section's own ROAS. The inputs not measured
+// yet come as the research's ranges [low, central, high] — printed as ranges, with their source (owner: real data only);
+// an age GA4's own paid cells cover (src 'ga4') uses GA4's MEASURED paid share + premium instead (paid-only = one
+// number, said so); the budget call comes from the MARGINAL form only ("Budget badhana / ghatana marginal ROI se").
+const F4_DEC={up:['⬆️','Raise budget','behtar'],down:['⬇️','Cut budget','bigda'],mixed:['↔️','Not sure yet','dhyan'],early:['⏳','Too early','jaldi'],na:['—','No paid share','lagu']};
+const F4_RANK={up:0,mixed:1,down:2,off:3,early:4,na:5}, F4_OFF=['⏸️','Spend paused','lagu'];
+const f4V=dc=>dc&&dc.live===false&&dc.v!=='na'?'off':(dc&&dc.v)||'early';   // a paused app (also one still too early): no raise / cut call
+function f4C(d){ return (d&&d.consts&&d.consts.f4)||(ALL&&ALL.f4c)||null; }
+function f4Ages(c,hs){ const s=new Set(((c&&c.ages)||[7,30,90]).map(String)); (hs||[]).forEach(h=>{ if(h!=null) s.add(String(h)); }); return [...s].sort((a,b)=>a-b); }
+function f4Pick(f){ const by=(f&&f.by)||{}; if(F4H&&by[F4H]) return F4H; if(f&&by[String(f.h)]) return String(f.h);
+  const ks=Object.keys(by).sort((a,b)=>b-a); return ks.length?ks[0]:null; }
+const f4Rg=v=>Array.isArray(v)?`${Math.round(v[0]*100)}–${P(v[2])}`:'';
+const f4Big=(e,c)=>!!(e&&Array.isArray(e.gap)&&e.gap[1]>=((c&&c.gap!=null)?c.gap:0.2));
+const f4M=e=>!!(e&&e.src==='ga4'&&e.m);                                        // GA4 measured this age's paid split
+const f4S=e=>f4M(e)&&e.m.sw!=null?e.m.sw:(e&&e.s);                             // the paid share the forms used
+const f4Org=e=>Math.round(f4S(e)*100)<50?'Mostly organic':'Organic-heavy';     // (flagged rows: f4Big) — under 50% paid (as printed): mostly organic
+const f4Off=x=>x&&x.f4&&x.f4.dec&&x.f4.dec.live===false?1:0;                   // the app's Google Ads spend is paused now
+const f4X2=v=>'×'+String(+(+v).toFixed(2));
+// the range line: always the source of every range on screen
+const F4_LAB='range until GA4 paid/organic data arrives';
+// f: the app's forms — its own measured beta range (config/roi_beta.json, bsrc 'app') replaces the pooled one; own: in
+// All apps, how many apps use their own
+// hs: the ages on screen whose numbers use the premium RANGE (none: GA4 measured it there — printed with the paid share,
+// not here); the research measured that range at one age only (c.pa, D30): any other age says it assumes the same
+function f4Src(c,f,own,hs){ if(!c) return '';
+  const pa=String(c.pa||30), o=[...new Set((hs||[]).map(String))].filter(a=>a!==pa).sort((a,b)=>a-b);
+  const mine=!!(f&&f.bsrc==='app'&&Array.isArray(f.beta)), p=c.p||[], b=c.b||[], be=mine?f.beta:(c.beta||[]), x=f4X2, n=v=>(v<0?MI:'')+Math.abs(v).toFixed(2);
+  return `Range until GA4 paid/organic data arrives (research): ${!(hs||[]).length?'':`paid install organic se ${x(p[0])}–${x(p[2])} kamata (beech ${x(p[1])})${o.length?` (research ne ye range D${pa} pe measure ki; ${o.map(a=>'D'+a).join(', ')} pe wahi maani hai)`:''} · `}organic jo bina spend ke bhi aate ${(+b[2]).toFixed(2)}–${(+b[0]).toFixed(2)} (beech ${(+b[1]).toFixed(2)}) · spend double → ROAS elasticity β ${n(be[2])} se ${n(be[0])} (beech ${n(be[1])}; ${mine?'is app ka apna measured':`sab apps ka ek${own?`, ${own} ${own===1?'app ka':'apps ka'} apna`:', har app ka alag abhi measure nahi'}`}). Bada number = range ka beech, pakka nahi.`; }
+function f4DecTxt(f,sym,c){ const dc=(f&&f.dec)||{}, m=dc.mar, r=m?`${sym}${Math.round(m[0]*100)}–${sym}${Math.round(m[2]*100)}`:'';
+  if(f4V(dc)==='off') return `abhi Google Ads spend band (pichhle ${(c&&c.live)||14} spend din) — ${m?`pichhli baar agla ${sym}100 D${dc.a} tak ${r} laata tha: ${dc.v==='up'?'dobara chalane layak':dc.v==='down'?'dobara chalane layak nahi (poori range 100 se kam)':'100 range ke andar, pakka nahi'}`:`D${f&&f.h||90} abhi complete nahi, faisla nahi`}`;
+  if(dc.v==='up') return `agla ${sym}100 spend D${dc.a} tak ${r} laata hai — poori range 100 se upar`;
+  if(dc.v==='down') return `agla ${sym}100 spend D${dc.a} tak sirf ${r} laata hai — poori range 100 se kam (payback target ${f.h} din)`;
+  if(dc.v==='mixed') return `agla ${sym}100 → D${dc.a} tak ${r}: 100 range ke andar — GA4 paid/organic data aane pe pakka hoga`;
+  if(dc.v==='na') return 'is app ke Google Ads installs ki ginti nahi — paid share nahi bana';
+  return `D${f&&f.h||90} abhi complete nahi — tab tak faisla nahi`; }
+function f4Chip(v){ const D=v==='off'?F4_OFF:F4_DEC[v]||F4_DEC.early; return `<span class="hub-st st-${D[2]}">${D[0]} ${E(D[1])}</span>`; }
+function f4Share(d){ const rs=(d.rows||[]).filter(r=>r[R.sp]>0&&r[R.na]!=null&&r[R.n]>0).slice(-30); if(rs.length<2) return '';
+  const vals=rs.map(r=>Math.min(1,r[R.na]/r[R.n])), n=vals.length, show=[0,Math.round(n/4),Math.round(n/2),Math.round(3*n/4),n-1];
+  return `<div class="roi-ct"><h3>Paid share · every install day</h3><span class="roi-note">Google Ads installs ÷ GA4 installs · pichhle ${n} spend wale din · bar pe tap = number</span></div>`
+    +barChart(rs.map(r=>fd(r[R.X])),vals,{fmt:P,h:170,show,label:'Paid share of installs by install day',tip:i=>`${E(P(vals[i]))} paid · Ads ${E(N(rs[i][R.na]))} ÷ GA4 ${E(N(rs[i][R.n]))} installs`}); }
+function f4Hero(d){ const f=d.f4, c=f4C(d); if(!f||!f.by||!Object.keys(f.by).length) return '';
+  const h=f4Pick(f), e=h?f.by[h]:null; if(!e) return '';
+  const sym=csym(), has=Array.isArray(e.mar), ms=f4M(e), mA=Object.keys(f.by).filter(a=>f4M(f.by[a])).sort((a,b)=>a-b), wk=v=>{ const t=new Date(v+'T00:00:00Z'); t.setUTCDate(t.getUTCDate()+6); return fd(t.toISOString().slice(0,10)); };   // a week's last day
+  const sw=`<span class="roi-mini" role="group" aria-label="Kitne din tak">${f4Ages(c,[f.h]).map(a=>f.by[a]?`<button type="button" data-roi-f4h="${a}" aria-pressed="${a===h}">D${a}${f4M(f.by[a])?' ✓':''}</button>`:`<button type="button" disabled title="D${a} abhi complete nahi">D${a}</button>`).join('')}</span>`;
+  const cl=(lab,val,sub,cls)=>`<div class="roi-f4c${cls?' '+cls:''}"><span class="roi-hl">${lab}</span><span class="roi-f4v">${val}</span><span class="roi-hs">${sub}</span></div>`;
+  const g=`<div class="roi-f4g">`+cl('Blended',`<span class="${roasCls(e.bl)}">${P(e.bl)}</span>`,'dashboard wala · organic bhi gina')
+    +cl('Paid-only',has?P(e.paid[1]):'—',has?(ms?'✓ measured · GA4':`range ${f4Rg(e.paid)}`):'paid share nahi')
+    +cl('Incremental',has?P(e.inc[1]):'—',has?`range ${f4Rg(e.inc)}`:'')
+    +cl(`Marginal · next ${sym}100`,has?`<span class="${roasCls(e.mar[1])}">${P(e.mar[1])}</span>`:'—',has?`range ${f4Rg(e.mar)} · budget isi se`:'','roi-f4m')+`</div>`;
+  const dc=f.dec||{}, v=f4V(dc), D=v==='off'?F4_OFF:F4_DEC[v]||F4_DEC.early;
+  const dl=`<div class="roi-f4d st-${D[2]}"><b>🧭 ${D[0]} ${E(D[1])}</b> <span>· marginal ROI se: ${f4DecTxt(f,sym,c)}</span></div>`;
+  const wn=f4Big(e,c)?`<div class="roi-f4w">⚠️ <b>${f4Org(e)}:</b> paid share sirf <b>${P(f4S(e))}</b> — paid-only ROI blended se ${ms?'':'~'}<b>${P(e.gap[1])}</b> kam (${ms?'GA4 measured':`range ${f4Rg(e.gap)}`}). Blended dekh ke budget mat badhao.</div>`:'';
+  const money=`Spend ${MS(e.sp,e.spi)} → kamai: blended ${M(e.rev)}${has?(ms?` · paid-only ${M(e.paid[1]*e.sp)}`:` · paid-only ~${M(e.paid[1]*e.sp)} (${M(e.paid[0]*e.sp)}–${M(e.paid[2]*e.sp)})`):''}`;
+  const ads=e.s!=null?`Google Ads installs ${N(e.na)} ÷ GA4 installs ${N(e.nn)}${e.days_na<e.days?` (${e.days_na} of ${e.days} din)`:''}`:'';
+  const sh=ms?`✓ <b>GA4 measured:</b> paid share <b>${P(e.m.sw)}</b> (Google Ads campaign se aaye installs ÷ saare, ${e.m.days} of ${e.days} din)${ads?` · Ads count: ${P(e.s)} = ${ads}`:''} · paid install organic se <b>${f4X2(e.m.p)}</b> kamata (D${E(h)}, install weeks ${E(fd(e.m.from))}–${E(wk(e.m.to))}: ${N(e.m.np)} paid + ${N(e.m.no)} organic)`
+    :has?`Paid share <b>${P(e.s)}</b> = ${ads}`:'Paid share nahi (Google Ads installs ki ginti nahi)';
+  const x=F4X?`<div class="roi-f4x">`
+      +`<p><b>Blended</b> = us din ke <i>saare</i> GA4 installs (ads + organic) ki kamai ÷ Google Ads spend. Baaki ROI section yahi dikhata hai. Organic users bina kharche ke bhi aate hain, isliye ye spend ka return zyada dikhata hai.</p>`
+      +(ms?`<p><b>Paid-only</b> = sirf Google Ads wale installs ki kamai ÷ spend. Is app pe D${E(h)} tak GA4 ne paid aur organic alag measure kiya (jin users ka pehla Google Ads campaign asli hai = paid) — isliye paid share aur "paid install kitna zyada kamata" dono asli, aur paid-only ek number hai, range nahi.</p>`
+          :`<p><b>Paid-only</b> = sirf Google Ads wale installs ki kamai ÷ spend. Paid share = Ads installs ÷ GA4 installs, har install-din ka asli data (exact nahi: Google view-through installs bhi ginta hai, GA4 reinstall bhi — upar ya neeche dono ho sakta hai). Paid install organic se kitna zyada kamata hai, wo abhi measure nahi — isliye range (GA4 ka paid/organic data aate hi asli number).</p>`)
+      +`<p><b>Incremental</b> = jo kamai sirf spend ki wajah se aayi ÷ spend. Organic me se kuch installs spend ki wajah se aate hain (store rank, halo); baaki bina spend ke bhi aate — wo hata ke.</p>`
+      +`<p><b>Marginal</b> = agla extra ${sym} kitna laayega = incremental × (1 + β). Spend badhane pe CPI badhta hai, isliye agla ${sym} thoda kam laata hai.</p>`
+      +`<p>🧭 <b>Budget badhana / ghatana marginal ROI se</b> — blended se nahi. Marginal ROI (payback target D${f.h} tak) ki poori range 100% se upar → budget badhao. Poori range 100% se neeche → budget ghatao (ya tROAS target upar karo). 100% range ke andar → abhi pakka nahi; GA4 paid/organic data aane pe range chhoti hogi.</p>`
+      +f4Share(d)+`</div>`:'';
+  return `<div class="roi-f4"><div class="roi-f4h"><span class="roi-hl">⚖️ 4 kinds of ROI · D${E(h)} · pichhle ${e.days} install-din <small>${E(fd(e.from))}–${E(fd(e.to))}</small></span>${sw}</div>`
+    +g+(has?`<div class="roi-f4r">${ms?`Paid-only = ✓ measured (GA4 paid installs) · Incremental · Marginal = ${F4_LAB}`:`Paid-only · Incremental · Marginal = ${F4_LAB}${mA.length?` · ✓ GA4 measured at ${mA.map(a=>'D'+a).join(', ')}`:''}`}</div>`:'')+dl+wn+`<div class="roi-f4n">${sh} · ${money}. ${E(f4Src(c,f,0,[...(has&&!ms?[h]:[]),...(Array.isArray(dc.mar)&&!f4M(f.by[String(dc.a)])?[dc.a]:[])]))} <button type="button" class="roi-lnk" data-roi-f4x="1" aria-expanded="${F4X}">${F4X?'Close ▾':'What are these 4? ▸'}</button></div>${x}</div>`; }
+// All apps: the forms per app at one age (sorted: the biggest blended-vs-paid gap first) + the portfolio, spend-weighted
+function f4All(apps){ const c=f4C(null); const rows0=apps.filter(x=>x.ads!==false&&x.f4&&x.f4.by&&Object.keys(x.f4.by).length);
+  if(!rows0.length) return '';
+  const h=F4H||'30', hs=f4Ages(c,rows0.map(x=>x.f4.h));
+  const rows=rows0.map(x=>({x,e:x.f4.by[h]||null,dc:x.f4.dec||{},v:f4V(x.f4.dec)}));
+  const has=r=>r.e&&Array.isArray(r.e.mar);
+  const key=r=>{ const e=r.e||{}; switch(FSORT.k){ case 's': return has(r)?f4S(e):9; case 'bl': return -(e.bl??-9); case 'mar': return has(r)?-e.mar[1]:9; case 'sp': return -(e.sp||0); case 'dec': return F4_RANK[r.v]??9; default: return has(r)?-e.gap[1]:9; } };
+  rows.sort((a,b)=>FSORT.dir*(key(a)-key(b))||String(a.x.app).localeCompare(b.x.app));
+  const th=(k,l)=>`<th aria-sort="${FSORT.k===k?(FSORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-roi-fsort="${k}">${l}</button></th>`;
+  const fc=(v,m)=>Array.isArray(v)?(m?`${P(v[1])} <small>✓ GA4</small>`:v[0]===v[2]?P(v[1]):`${P(v[1])} <small>${f4Rg(v)}</small>`):'—';   // ✓ GA4: only a paid-only GA4 measured (an all-paid range collapses to one number too)
+  let S=0, Si=0, Sb=0, Ss=0, Sn=0; const W={paid:[0,0,0],inc:[0,0,0],mar:[0,0,0]};
+  rows.forEach(r=>{ if(!has(r)||r.dc.live===false) return; const e=r.e; S+=e.sp; Si+=e.spi||0; Sb+=e.bl*e.sp; Ss+=f4S(e)*(e.n||0); Sn+=e.n||0; ['paid','inc','mar'].forEach(k=>e[k].forEach((v,i)=>{ W[k][i]+=v*e.sp; })); });
+  const big=rows.filter(r=>has(r)&&f4Big(r.e,c)).length, nm=rows.filter(r=>has(r)&&f4M(r.e)).length, nd=k=>rows.filter(r=>r.v===k).length, dh=rows0[0].f4.h||90;   // the payback target (one per dashboard)
+  const body=rows.map(r=>{ const e=r.e, x=r.x, fl=has(r)&&f4Big(e,c);
+    return `<tr class="clk${fl?' roi-flag':''}" data-roi-app="${E(x.app_id)}"><td class="roi-nm"><span class="roi-an">${appIconId(x.app_id,x.app,22)}<span>${E(x.app)}</span></span></td>`
+      +(e?`<td>${has(r)?`${P(f4S(e))}${f4M(e)?' <small>✓ GA4</small>':''}`:'—'}</td><td class="${roasCls(e.bl)}">${P(e.bl)}</td><td>${fc(e.paid,f4M(e))}</td><td>${fc(e.inc)}</td><td class="${has(r)?roasCls(e.mar[1]):''}">${fc(e.mar)}</td><td class="${fl?'roi-dn':''}">${has(r)?`${fl?'⚠️ ':''}${MI}${P(e.gap[1])}${fl?` <small>${f4Org(e)}</small>`:''}`:'—'}</td><td>${MS(e.sp,e.spi)} <small>${e.days}d</small></td>`
+         :`<td colspan="7" class="roi-na">D${E(h)} abhi complete nahi</td>`)
+      +`<td>${f4Chip(r.v)}${Array.isArray(r.dc.mar)?` <small>D${r.dc.a} ${f4Rg(r.dc.mar)}</small>`:''}</td></tr>`; }).join('');
+  const tot=S?`<tr class="roi-tot"><td class="roi-nm">All apps <small>spend on · spend-weighted</small></td><td>${Sn?P(Math.min(1,Ss/Sn)):'—'}</td><td>${P(Sb/S)}</td>`
+      +['paid','inc','mar'].map(k=>`<td>${fc(W[k].map(v=>v/S))}</td>`).join('')+`<td>${MI}${P(1-W.paid[1]/Sb)}</td><td>${MS(S,Si)}</td><td></td></tr>`:'';
+  const sw=`<span class="roi-mini" role="group" aria-label="Kitne din tak">${hs.map(a=>`<button type="button" data-roi-f4h="${a}" aria-pressed="${a===h}">D${a}</button>`).join('')}</span>`;
+  return `<div class="roi-card" id="roi-f4all"><div class="roi-ct"><h3>⚖️ 4 kinds of ROI · every app · D${E(h)}</h3>${sw}</div>`
+    +`<div class="roi-chips"><span class="roi-cc">${f4Chip('up')} <b>${nd('up')}</b></span><span class="roi-cc">${f4Chip('mixed')} <b>${nd('mixed')}</b></span><span class="roi-cc">${f4Chip('down')} <b>${nd('down')}</b></span>${nd('off')?`<span class="roi-cc">${f4Chip('off')} <b>${nd('off')}</b></span>`:''}${nd('early')?`<span class="roi-cc">${f4Chip('early')} <b>${nd('early')}</b></span>`:''}${big?`<span class="roi-cc">⚠️ Organic-heavy <b>${big}</b></span>`:''}${nm?`<span class="roi-cc">✓ GA4 measured <b>${nm}</b></span>`:''}</div>`
+    +`<div class="roi-f4r">${nm?`Paid-only = ✓ GA4 measured on ${nm} ${nm===1?'app':'apps'} · the rest + Incremental · Marginal = ${F4_LAB}`:`Paid-only · Incremental · Marginal = ${F4_LAB}`}</div>`
+    +`<div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th>${th('s','Paid share')}${th('bl','Blended')}<th>Paid-only</th><th>Incremental</th>${th('mar','Marginal')}${th('gap','Paid vs blended')}${th('sp','Spend')}${th('dec','Budget · D'+dh)}</tr></thead><tbody>${body}${tot}</tbody></table></div>`
+    +`<p class="roi-note">🧭 <b>Budget badhana / ghatana marginal ROI se</b> — blended se nahi. <b>Blended</b> = saare installs (ads + organic) ki kamai ÷ spend (baaki section yahi dikhata hai). <b>Paid-only</b> = sirf Google Ads installs ki kamai. <b>Incremental</b> = sirf spend ki wajah se aayi kamai. <b>Marginal</b> = agla extra ${csym()} kitna laayega. Budget column: payback target (D${dh}) tak marginal ki poori range 100% se upar = raise, poori neeche = cut, beech me = not sure yet; ⏸️ = abhi spend band (sirf pichhli baar ka hisaab, total me nahi). ⚠️ Organic-heavy = paid-only blended se ${P((c&&c.gap!=null)?c.gap:0.2)}+ kam (Mostly organic = paid share 50% se kam) — in apps pe blended dhokha deta hai. Har app ke pichhle 7 install-din jo D${E(h)} tak pure ho chuke (wahi din jo upar ROAS me); paid share = Google Ads installs ÷ GA4 installs (asli); ✓ GA4 = GA4 ne paid / organic khud measure kiya (paid share + paid install kitna zyada kamata) — wahan paid-only ek number, range nahi. Bada number = range ka beech, chhota = range.</p>`
+    +`<p class="roi-note">${E(f4Src(c,null,rows0.filter(r=>r.f4.bsrc==='app').length,[...(rows.some(r=>has(r)&&!f4M(r.e))?[h]:[]),...rows.filter(r=>Array.isArray(r.dc.mar)&&!f4M(r.x.f4.by[String(r.dc.a)])).map(r=>r.dc.a)]))}</p></div>`; }
 // ---- All apps ----
 function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life_till,null,coAll(A)); if(VIEW==='fc') return fcAll();
   if(VIEW==='cty'){ const rows=A.apps.filter(x=>x.cut).sort((a,b)=>b.cut-a.cut);
@@ -6747,7 +6860,7 @@ function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life
   const pm=(A.months||[]).filter(m=>m[2]>0);
   const pc=pm.length?lineChart(A.T.map(a=>'D'+a),pm.slice(-6).map((m,i,arr)=>({name:fmtMon(m[0]),cls:['c1','c2','c3','c4','c5','c6'][6-arr.length+i],pts:A.T.map((a,j)=>[j,m[3][j]!=null?m[3][j]/m[2]:null,m[3][j]!=null?`${E(M(m[3][j]))} of ${E(MS(m[2],m[6]))}`:''])})),{ref:1,refl:'Breakeven 100%',label:'Portfolio ROAS by days since install, per install month'}):'';
   return chips+`<div class="roi-card"><div class="roi-ct"><h3>Har app · ROI</h3><span class="roi-note">app pe tap = us app ka Day-wise ROI · Status = pichhle 7 install-din ka D7 ROAS vs usual</span></div>${tb}</div>`
-    +(pc?`<div class="roi-card"><div class="roi-ct"><h3>Saare apps (jin pe ads) · ROAS by day · har install mahina</h3><span class="roi-note">dashed = 100%</span></div>${pc}</div>`:''); }
+    +f4All(apps)+(pc?`<div class="roi-card"><div class="roi-ct"><h3>Saare apps (jin pe ads) · ROAS by day · har install mahina</h3><span class="roi-note">dashed = 100%</span></div>${pc}</div>`:''); }
 // ---- 🔮 Forecast (owner, 14 Oct: "next 6 month ka prediction … AI back testing … khud learn karega", start date
 // changeable "dashboard me dedo") — the app's own model (forecast_build): revenue / spend / profit / breakeven for the
 // next 30 / 90 / 180 days with its measured range, why it moves (now vs the usual), how right it was (back-tests and
@@ -6947,6 +7060,9 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=at('[data-roi-asort]'))){ const k=b.dataset.roiAsort; b.setAttribute('data-roi-sel',`[data-roi-asort="${k}"]`); keep(b,()=>{ ASORT={k,dir:ASORT.k===k?-ASORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-cty]'))){ const cc=b.dataset.roiCty; b.setAttribute('data-roi-sel',`[data-roi-cty="${cc}"]`); keep(b,()=>{ CTYO=CTYO===cc?'':cc; repaint(); }); return; }
     if((b=at('[data-roi-fcu]'))){ b.setAttribute('data-roi-sel',`[data-roi-fcu="${b.dataset.roiFcu}"]`); keep(b,()=>{ FCU=b.dataset.roiFcu; const o=document.getElementById('roi-fc-out'), a=appPtr(r.dataset.aid), dd=a?AF[a.file]:null; if(o&&dd) o.innerHTML=fcOut(dd); }); return; }
+    if((b=at('[data-roi-f4h]'))){ b.setAttribute('data-roi-sel',`[data-roi-f4h="${b.dataset.roiF4h}"]`); keep(b,()=>{ F4H=b.dataset.roiF4h; repaint(); }); return; }
+    if((b=at('[data-roi-f4x]'))){ b.setAttribute('data-roi-sel','[data-roi-f4x]'); keep(b,()=>{ F4X=!F4X; repaint(); }); return; }
+    if((b=at('[data-roi-fsort]'))){ const k=b.dataset.roiFsort; b.setAttribute('data-roi-sel',`[data-roi-fsort="${k}"]`); keep(b,()=>{ FSORT={k,dir:FSORT.k===k?-FSORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-fch]'))){ b.setAttribute('data-roi-sel',`[data-roi-fch="${b.dataset.roiFch}"]`); keep(b,()=>{ FCH=b.dataset.roiFch; repaint(); }); return; }
     if((b=at('[data-roi-fcsave]'))){ const i=document.getElementById('roi-fc-sd'); const v=i&&i.value; if(v&&/^\d{4}-\d{2}-\d{2}$/.test(v)) fcSaveStart(b.dataset.roiFcsave,v); return; }
     if((b=at('[data-roi-fcauto]'))){ fcSaveStart(b.dataset.roiFcauto,null); return; }
@@ -6959,7 +7075,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)
