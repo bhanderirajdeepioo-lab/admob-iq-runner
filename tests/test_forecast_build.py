@@ -1,17 +1,29 @@
-"""🔮 Forecast — the build step (admob_iq.forecast_build) on a made-up app (tests/test_forecast_engine's): the inputs from
-the ROI rows, the bias folded into the days, once a day (a fresh run kept), the build's budget (an app left over keeps
-yesterday's run, a brand-new one waits), the owner's start date from config/forecast_starts.json, the learning log, the
-live check once a forecast's days have happened, and the portfolio season saved at the end."""
+"""🔮 Forecast — the build step (admob_iq.forecast_build) on a made-up app (tests/test_forecast_engine's, + its GA4 day
+ledger from tests/test_forecast_vd): the inputs from the ROI rows (GA4 bands, the GA4 lag), the bias folded into the
+days, once a day (a fresh run kept, recomputed on today's data), the build's budget (an app left over keeps its last
+run, a brand-new one waits; engine vd re-tunes only when its last tune's seconds fit), the owner's start date from
+config/forecast_starts.json, the learning log, the live check once a forecast's days have happened, the engine switch
+(FORECAST_ENGINE=v0 the rollback; a file of the other engine kept and recomputed by its own engine until re-made), and
+the portfolio season + band ratios saved at the end and read back by the next build."""
 import json
 import os
 from datetime import date, datetime, timedelta, timezone
 
+import pytest
+
 from admob_iq import forecast_build as fb
 from admob_iq.engine import forecast as F
+from admob_iq.engine import forecast_vd as VD
 from tests.test_forecast_engine import make, LAST, D0
+from tests.test_forecast_vd import with_ga4
 
 
-def _rows_life(app):
+@pytest.fixture(autouse=True)
+def _engine_default(monkeypatch):
+    monkeypatch.delenv("FORECAST_ENGINE", raising=False)
+
+
+def _rows_life(app, ga4=False):
     rows, life = [], []
     for X in sorted(app["coh"]):
         c, e = app["coh"][X], app["days"][X]
@@ -19,6 +31,9 @@ def _rows_life(app):
                      "u": c["u"], "t": c["t"], "e": {"u": c["ul"]}, "iu": {}})
         life.append([X.isoformat(), e["rev"], e["sp"], e["sp"] * 90])
     ida = {"days": {D.isoformat(): {"a": e["dau"]} for D, e in app["days"].items()}, "c": {}, "cset": []}
+    if ga4:                                              # + the GA4 day ledger (USD micros by install-age band)
+        for D, g in with_ga4(app)["g4"].items():
+            ida["days"][D.isoformat()].update(rev=g["rev"] * 1e6, rb=[x * 1e6 for x in g["rb"]], ab=g["ab"], cst="ok")
     return rows, life, ida
 
 
@@ -42,7 +57,7 @@ def test_app_step_once_a_day_budget_start_and_live(tmp_path):
     data = str(tmp_path / "data")
     os.makedirs(data)
     app = make(trial=10)
-    rows, life, ida = _rows_life(app)
+    rows, life, ida = _rows_life(app, ga4=True)
     P = {"S": LAST}
     now = datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
     clock = Clock()
@@ -52,8 +67,12 @@ def test_app_step_once_a_day_budget_start_and_live(tmp_path):
     assert fc["ready"]["30"] and len(fc["f"]["old"]) == F.H and fc["f"]["d0"] == (LAST + timedelta(days=1)).isoformat()
     assert fc["cal"]["30"]["mape"] < 0.05 and fc["log"] and fc["log"][-1]["d"] == "2026-01-02"
     assert abs(fc["f"]["spi"] - 500 * 90) < 1e-6 and len(fc["hist"]["rev"]) == fb.HIST_DAYS
+    assert fc["eng"] == "vd" and fc["v"] == 2 and set(fc["p"]) == set(VD.GRID)                       # engine vd: 3 mix weights
+    assert fc["parts"]["glag"] == 5 and len(fc["parts"]["arp"]) == 7 and fc["parts"]["org"] > 0       # both views, GA4 lag 5
+    assert all(len(fc["f"][k]) == F.H for k in ("old", "org", "paid", "dau", "n", "sp")) and fc["f"]["dau_p"]
     saved = json.load(open(os.path.join(data, "forecast", "k1.json")))
-    assert saved["live"][-1]["made"] == "2026-01-02" and saved["p"] == fc["p"]
+    assert saved["live"][-1]["made"] == "2026-01-02" and saved["p"] == fc["p"] and saved["v"] == 2
+    assert saved["tune_sec"] == 0.0
     # the same day again: kept, nothing re-run
     run2 = fb.start(data, now + timedelta(hours=2), clock)
     assert fb.app_step(run2, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), []) == fc and run2.kept == 1
@@ -77,7 +96,9 @@ def test_app_step_once_a_day_budget_start_and_live(tmp_path):
     fb.finish(run4)
     st = json.load(open(os.path.join(data, "forecast", "state.json")))
     assert set(st["season"]) == {str(m) for m in range(1, 13)}
-    assert fb.line(run4) == "forecast: ran 1, kept 0, skipped 0"
+    assert st["vd_struct"] == {"v": VD.STRUCT_VERSION, "p": VD.STRUCT} and st["bandr"]       # one app: ratios 1
+    assert all(v == [1.0] * 7 and date.fromisoformat(k).weekday() == 0 for k, v in st["bandr"].items())
+    assert fb.line(run4).startswith("forecast vd: ran 1, kept 0, skipped 0; tune ")
 
 
 def test_live_check_once_the_days_happened(tmp_path):
@@ -125,10 +146,124 @@ def test_split_multiplies_back_to_the_revenue_change():
     assert fb.split({"days": days}, {}, last, last, last, last) is None
 
 
-def test_inputs_carry_the_country_cells():
+def test_inputs_carry_the_country_cells_and_the_ga4_ledger():
     app = make()
-    rows, life, ida = _rows_life(app)
+    rows, life, ida = _rows_life(app, ga4=True)
     ida["c"] = {"2025-06-02": {"0": {"n": 5, "r": [1] * 8, "u": [1] * 7}}}
     P = {"S": LAST}
     got = fb.inputs(rows, P, ida, life, LAST.isoformat())
     assert got["cty"] == {date(2025, 6, 2): {"0": {"n": 5, "r": [1] * 8, "u": [1] * 7}}}
+    D = LAST - timedelta(days=40)
+    g, want = got["g4"][D], app["g4"][D]                 # GA4 USD by install-age band, active users, AdMob ÷ GA4
+    assert abs(g["rev"] - want["rev"]) < 1e-6 and all(abs(a - b) < 1e-6 for a, b in zip(g["rb"], want["rb"]))
+    assert g["ab"] == want["ab"] and abs(g["k"] - 1.0) < 1e-9 and max(got["g4"]) == LAST - timedelta(days=5)
+    assert got["glag"] == 5 and got["clag"] == 0 and got["ida"] is ida
+    assert fb.inputs(rows, P, {}, life, LAST.isoformat())["glag"] == 0
+
+
+def test_the_engine_switch_and_the_rollback(tmp_path, monkeypatch):
+    """FORECAST_ENGINE=v0 runs the earlier engine (files v 1); back on vd, a v 1 file is kept — recomputed on today's
+    data by v0 itself — until a build has the budget to re-make it with vd (files v 2); and the other way round."""
+    data = str(tmp_path / "data")
+    os.makedirs(data)
+    app = make()
+    rows, life, ida = _rows_life(app, ga4=True)
+    P, now = {"S": LAST}, datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
+    monkeypatch.setenv("FORECAST_ENGINE", "v0")
+    run = fb.start(data, now, Clock())
+    f0 = fb.app_step(run, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    assert run.eng == "v0" and f0["v"] == 1 and "hl" in f0["p"] and "parts" in f0
+    monkeypatch.delenv("FORECAST_ENGINE")
+    broke = fb.start(data, now + timedelta(days=1), Clock())
+    broke.t0 = -10_000                                   # no budget: the v0 run kept, recomputed by v0
+    k = fb.app_step(broke, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    assert broke.eng == "vd" and broke.kept == 1 and k["v"] == 1 and k["p"] == f0["p"] and k["f"] == f0["f"]
+    run2 = fb.start(data, now + timedelta(days=1), Clock())
+    f2 = fb.app_step(run2, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    assert run2.ran == 1 and f2["v"] == 2 and set(f2["p"]) == set(VD.GRID)
+    assert json.load(open(os.path.join(data, "forecast", "k1.json")))["v"] == 2
+    # the learning log goes on across the switch: the first vd entry says which engine and that every setting is new
+    assert f0["log"][-1]["eng"] == "v0" and f0["log"][-1]["changed"] == []
+    assert len(f2["log"]) == 2 and f2["log"][-1]["eng"] == "vd" and f2["log"][-1]["changed"] == sorted(VD.GRID)
+    a = dict(fb.inputs(rows, P, ida, life, LAST.isoformat()), start=D0)
+    assert f2["log"][-1]["sc_old"] is None and f2["start"] == D0.isoformat()
+    assert f2["log"][-1]["sc"] == round(VD.objective(VD.backtest(a, f2["p"], F.season(a["days"]))), 4)
+    monkeypatch.setenv("FORECAST_ENGINE", "v0")          # the rollback, out of budget: the vd run kept (by vd)
+    back = fb.start(data, now + timedelta(days=2), Clock())
+    back.t0 = -10_000
+    k2 = fb.app_step(back, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    assert back.kept == 1 and k2["v"] == 2 and k2["f"] == f2["f"]
+    back2 = fb.start(data, now + timedelta(days=2), Clock())           # … and with the budget: re-made by v0
+    f3 = fb.app_step(back2, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    assert back2.ran == 1 and f3["v"] == 1 and f3["eng"] == "v0" and "hl" in f3["p"] and f3["log"][-1]["eng"] == "v0"
+
+
+def test_vd_kept_forecast_follows_a_new_day(tmp_path):
+    """Engine vd between its daily tunes: a build with a new day of data re-makes the forecast from that day with the
+    stored setting (no tune, the log as it was) — the page never shows the day before's forecast."""
+    data = str(tmp_path / "data")
+    os.makedirs(data)
+    app = make()
+    rows, life, ida = _rows_life(app, ga4=True)
+    y = LAST - timedelta(days=1)
+    rows1, life1 = [r for r in rows if r["X"] <= y], [x for x in life if x[0] <= y.isoformat()]
+    ida1 = dict(ida, days={k: v for k, v in ida["days"].items() if k <= y.isoformat()})
+    now = datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
+    f1 = fb.app_step(fb.start(data, now, Clock()), "a~1", "k1", rows1, {"S": y}, ida1, life1, y.isoformat(), [])
+    assert f1["T"] == y.isoformat()
+    run = fb.start(data, now + timedelta(hours=3), Clock())
+    f2 = fb.app_step(run, "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(), [])
+    assert run.kept == 1 and run.ran == 0 and run.tune_sec == []
+    assert f2["T"] == LAST.isoformat() and f2["f"]["d0"] == (LAST + timedelta(days=1)).isoformat()
+    assert f2["p"] == f1["p"] and f2["log"] == f1["log"] and f2["f"]["old"] != f1["f"]["old"]
+    a = dict(fb.inputs(rows, {"S": LAST}, ida, life, LAST.isoformat()), port={"bandr": {}})
+    a["start"] = F.auto_start({D: e for D, e in a["days"].items() if e.get("n") is not None})
+    want = VD.forecast(a, LAST, f1["p"], h=F.H, seas=F.season(a["days"]))      # the stored setting on today's data
+    assert f2["f"]["dau"] == [round(v, 1) for v in want["dau"]] and f2["parts"]["q"] == round(want["parts"]["q"], 6)
+    assert json.load(open(os.path.join(data, "forecast", "k1.json")))["T"] == y.isoformat()   # the file: the tune's
+
+
+def test_vd_tunes_only_when_its_seconds_fit(tmp_path):
+    """A day later the setting is stale; with less budget left than TUNE_MARGIN × the app's last tune seconds the build
+    keeps the setting (today's forecast with it) and tunes another time."""
+    data = str(tmp_path / "data")
+    os.makedirs(data)
+    app = make()
+    rows, life, ida = _rows_life(app, ga4=True)
+    P, now = {"S": LAST}, datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
+    fc = fb.app_step(fb.start(data, now, Clock()), "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    path = os.path.join(data, "forecast", "k1.json")
+    saved = json.load(open(path))
+    saved["tune_sec"] = 100.0                            # 1.3 × 100 s > the 120 s a build has
+    json.dump(saved, open(path, "w"))
+    run = fb.start(data, now + timedelta(days=1), Clock())
+    k = fb.app_step(run, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    assert run.kept == 1 and run.ran == 0 and k["f"] == fc["f"] and k["p"] == fc["p"]
+    saved["tune_sec"] = 50.0
+    json.dump(saved, open(path, "w"))
+    run2 = fb.start(data, now + timedelta(days=1), Clock())
+    assert fb.app_step(run2, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), []) and run2.ran == 1
+
+
+def test_band_ratios_saved_and_read_back(tmp_path):
+    """finish() keeps the portfolio's band ratios per Monday (3 apps or more); the next build reads them, and the
+    engine's band ARPDAU prior uses them."""
+    data = str(tmp_path / "data")
+    os.makedirs(data)
+    run = fb.start(data, datetime(2026, 1, 2, 6, tzinfo=timezone.utc), Clock())
+    app = make()
+    rows, life, ida = _rows_life(app, ga4=True)
+    for i in range(3):
+        fb.app_step(run, "a~%d" % i, "k%d" % i, rows, {"S": LAST}, ida, life, LAST.isoformat(), [])
+    assert len(run.pool_b) == 3
+    fb.finish(run)
+    st = json.load(open(os.path.join(data, "forecast", "state.json")))
+    br = st["bandr"]
+    M = max(br)
+    assert date.fromisoformat(M).weekday() == 0 and date.fromisoformat(M) <= LAST + timedelta(days=7)
+    assert br[M][0] == 1.0 and br[M][1] != 1.0 and all(0.1 <= x <= 2.0 for x in br[M])
+    run2 = fb.start(data, datetime(2026, 1, 3, 6, tzinfo=timezone.utc), Clock())
+    assert run2.bandr == br
+    one = fb.inputs(rows, {"S": LAST}, ida, life, LAST.isoformat())
+    one.update(start=D0, port={"bandr": run2.bandr})
+    assert VD._port_ratio(VD._pre(one), date.fromisoformat(M)) == br[M]

@@ -176,6 +176,18 @@ function appFile() {
     U.set('FCM', 0.5);
     const fo = U.fcOut(d);
     out.fc_slider = (fo.match(/\$1,080/g) || []).length === 2 && fo.includes('$0.00');   // revenue 900 + 0.5 × 360 = spend 720 × 1.5
+    // engine vd: its three mix weights as simple labels and %, the two models explained, country curves always on
+    const d3 = JSON.parse(JSON.stringify(d)); d3.fc.p = { bo: 0.5, bn: 1, cq: 0 }; d3.fc.parts = { mix: 1.12, mix_on: true, org: 4, engine: 'vd' };
+    const fv3 = U.fcView(d3);
+    out.fc_vd = fv3.includes('Old installs · model B share: <b>50%</b>') && fv3.includes('New installs · model B share: <b>100%</b>')
+      && fv3.includes('Newest eCPM move used: <b>0%</b>') && fv3.includes('Model A = har install-din') && fv3.includes('countries ke apne curves');
+    // the learning log: the first entry of the new engine says so (its error is a different measure); later ones do not
+    d3.fc.log = d.fc.log.concat([{ d: '2026-10-15', eng: 'vd', p: d3.fc.p, sc: 0.1, changed: ['bn', 'bo', 'cq'] }]);
+    const sw = U.fcView(d3);
+    d3.fc.log = d3.fc.log.concat([{ d: '2026-10-16', eng: 'vd', p: d3.fc.p, sc: 0.09, sc_old: 0.1, changed: ['bo'] }]);
+    const sw2 = U.fcView(d3);
+    out.fc_vd_switch = (sw.match(/New model \(A \+ B\)/g) || []).length === 1 && sw.includes('badla: New installs · model B share, Old installs')
+      && (sw2.match(/New model \(A \+ B\)/g) || []).length === 1 && !sw.includes('Old model</b>');
     U.set('FCM', 0);
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };

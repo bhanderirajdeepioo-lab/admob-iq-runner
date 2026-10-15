@@ -3,15 +3,22 @@ Google Ads spend and the install-day file it already has). Owner, 14 Oct 2026: r
 the next months from the app's own past, AI back-testing that learns from its misses, the start of the real run picked
 by itself (the trial / organic first days left out) and changeable from the dashboard (config/forecast_starts.json).
 
-Per app, at most once a day (EVERY_H) and within the build's BUDGET_SEC (an app left over keeps yesterday's run):
-  inputs → engine.forecast: tune (back-tests from the newest year of origins) → calibrate (bias, P10–P90, accuracy of
-  every test and of the normal ones, how often a sudden change hit) → the forecast from the last complete day, 180 days,
-  in three parts (old users / organic installs / paid installs at the last 30 days' spend) so the page's spend slider is
-  exact; the bias correction folded into the days.
-Kept for good in the private repo (data/forecast/<key>.json): the parameters, the tests, the learning log (what changed
-and why, the newest LOG_KEEP), and every day's own forecast of the next 30 / 90 / 180 days — once those days have
-happened the page shows that live error too (the real check, beyond the back-tests).
-The portfolio's month-of-year season (every app pooled) is kept in data/forecast/state.json, refreshed at the end.
+The engine: FORECAST_ENGINE=vd (default; engine/forecast_vd.py, the forecast tournament's winner) or v0 (engine/forecast.py,
+the earlier one) — a rollback is that one variable. Each stored file says which engine made it (v 2 = vd, v 1 = v0); a
+file of the other engine is kept (and recomputed with its own engine) until this one has re-made it.
+
+Per app, every build: the forecast with the stored settings on today's data (cheap). At most once a day (EVERY_H) and
+within the build's BUDGET_SEC, the settings are re-tuned on back-tests from the newest year of origins (vd: only its
+three mix weights, and only when the budget left is > TUNE_MARGIN × the app's last tune seconds; an app left over keeps
+its stored settings) → calibrate (bias, P10–P90, accuracy of every test and of the normal ones, how often a sudden
+change hit) → the forecast from the last complete day, 180 days, in three parts (old users / organic installs / paid
+installs at the last 7 days' spend) so the page's spend slider is exact; the bias correction folded into the days.
+Kept for good in the private repo (data/forecast/<key>.json): the settings, the learning log (what changed and why, the
+newest LOG_KEEP), and every day's own forecast of the next 30 / 90 / 180 days — once those days have happened the page
+shows that live error too (the real check, beyond the back-tests).
+data/forecast/state.json, refreshed at the end: the portfolio's month-of-year season and band ratios ("bandr": each GA4
+install-age band's revenue per active user ÷ the band before's, the median over the apps, per Monday — engine vd's prior
+for a band an app has few users in) + the engine's fixed structure ("vd_struct").
 """
 import json
 import math
@@ -20,11 +27,15 @@ import time
 from datetime import date, datetime, timedelta, timezone
 
 from .engine import forecast as F
+from .engine import forecast_vd as VD
 
 DIR = "forecast"
-V = 1
+V = 2                                   # the stored files' version = the engine that made them: 2 vd, 1 v0
+ENGINES = {1: F, 2: VD}
 BUDGET_SEC = 120
 EVERY_H = 20
+TUNE_MARGIN = 1.3                       # vd: a re-tune starts only with > this × the app's last tune seconds left
+TUNE_GUESS_SEC = 30.0                   # … (its first tune: this guess)
 LOG_KEEP = 30
 LIVE_KEEP = 400
 HIST_DAYS = 180
@@ -80,14 +91,25 @@ def starts(data_dir):
     return out
 
 
+def engine(env=None):
+    """FORECAST_ENGINE: "v0" the earlier engine (the rollback), anything else "vd"."""
+    v = ((os.environ if env is None else env).get("FORECAST_ENGINE") or "").strip().lower()
+    return "v0" if v == "v0" else "vd"
+
+
 class Run:
     def __init__(self, data_dir, now, clock):
         self.data_dir, self.now, self.clock, self.t0 = data_dir, now, clock, clock()
         st = _read(_path(data_dir, "state.json"), {})
         self.season = {int(k): float(v) for k, v in (st.get("season") or {}).items()} or None
+        self.bandr = st.get("bandr") if isinstance(st.get("bandr"), dict) else {}
         self.starts = starts(data_dir)
-        self.pool = {}
+        self.eng = engine()
+        self.V = 1 if self.eng == "v0" else 2
+        self.E = ENGINES[self.V]
+        self.pool, self.pool_b = {}, {}
         self.ran = self.kept = self.skipped = 0
+        self.tune_sec = []                  # seconds of each re-tune this build (counts only in the log line)
 
     def left(self):
         return BUDGET_SEC - (self.clock() - self.t0)
@@ -99,8 +121,11 @@ def start(data_dir, now=None, clock=time.monotonic):
 
 # ── inputs ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 def inputs(rows, P, ida, life, life_till, unst=None):
-    """The engine's app: coh {X: {n, d, df, u, uf, t, ul}}, days {D: {rev, sp, spi, n, na, dau}}, last, cty {week:
-    {slot: {n, r, u}}} (the install-day file's country cells)."""
+    """The engine's app: coh {X: {n, d, df, u, uf, t, ul}}, days {D: {rev, sp, spi, n, na, dau, un}}, last, cty {week:
+    {slot: {n, r, u}}} (the install-day file's country cells), unc (the Uninstall store's cells); for engine vd also
+    g4 {D: {rev: GA4 USD, rb: [USD by GA4 install-age band 0 | 1–6 | 7–29 | 30–89 | 90–364 | 365–427], ab: [active
+    users by the same bands], k: AdMob ÷ GA4 that day}}, ida (the GA4 day ledger: read status, country slots), glag
+    (days GA4 lands after AdMob, measured) and clag (days the newest install day's final data lags AdMob)."""
     S = P["S"]
     till = _d(life_till) if life_till else None
     days, coh = {}, {}
@@ -139,7 +164,21 @@ def inputs(rows, P, ida, life, life_till, unst=None):
             D = _d(k)
             if not till or D <= till:
                 days.setdefault(D, {})["un"] = v["un"]
-    return {"coh": coh, "days": days, "last": till or (max(days) if days else S), "cty": cty, "unc": unc}
+    g4 = {}
+    for k, v in ((ida or {}).get("days") or {}).items():            # the GA4 day ledger: revenue / users by install age
+        if not isinstance(v, dict) or not v.get("rev") or not v.get("rb"):
+            continue
+        D = _d(k)
+        if till and D > till:
+            continue
+        A = (days.get(D) or {}).get("rev")
+        G = v["rev"] / 1e6
+        g4[D] = {"rev": G, "rb": [x / 1e6 for x in v["rb"]], "ab": list(v.get("ab") or []),
+                 "k": (A / G) if A and G > 0 else None}
+    last = till or (max(days) if days else S)
+    fin = [X + timedelta(days=(c.get("df") or 0) - 1) for X, c in coh.items() if c.get("df")]
+    return {"coh": coh, "days": days, "last": last, "cty": cty, "unc": unc, "g4": g4, "ida": ida or {},
+            "glag": max(0, (last - max(g4)).days) if g4 else 0, "clag": max(0, (last - max(fin)).days) if fin else 0}
 
 
 # ── the bias correction folded into the days ────────────────────────────────────────────────────────────────────────
@@ -317,12 +356,12 @@ def drivers(app, rows, ida, cty_rows, rev_cty=None):
 
 
 # ── the page's series (a full model run and a kept one alike) ───────────────────────────────────────────────────────
-def series(app, p, cal, seas):
-    """The forecast from the newest day with settings p (spend = the last F.SPEND_DAYS days' run-rate, the bias
-    correction of cal) → the page's f + hist: revenue / active users / uninstalls by who (old users, organic, paid),
-    installs, spend; the actual last HIST_DAYS days beside it."""
+def series(app, p, cal, seas, E=F):
+    """The forecast of engine E from the newest day with settings p (spend = the last F.SPEND_DAYS days' run-rate, the
+    bias correction of cal) → the page's f + hist: revenue / active users / uninstalls by who (old users, organic,
+    paid), installs, spend; the actual last HIST_DAYS days beside it."""
     last = app["last"]
-    f = F.forecast(app, last, p, h=F.H, seas=seas)
+    f = E.forecast(app, last, p, h=F.H, seas=seas)
     fac = corrected(f["rev"], cal)
     ser = {k: [_r(v * fac[i], 4) for i, v in enumerate(f["rev"][k])] for k in ("old", "org", "paid")}
     hist0 = last - timedelta(days=HIST_DAYS - 1)
@@ -356,15 +395,33 @@ def _events(bt):
     return sorted(out, key=lambda e: e["at"])
 
 
+def _rx(v, n=6):
+    """Floats rounded (inside lists / dicts too) — the parts the page's "why" shows."""
+    if isinstance(v, float):
+        return _r(v, n)
+    if isinstance(v, (list, tuple)):
+        return [_rx(x, n) for x in v]
+    if isinstance(v, dict):
+        return {k: _rx(x, n) for k, x in v.items()}
+    return v
+
+
 def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None, unst=None):
     """→ the page's forecast for this app (None: nothing yet). Never raises."""
     try:
         app = inputs(rows, P, ida, life, life_till, unst)
+        app["port"] = {"bandr": run.bandr}               # the portfolio's band ratios (state.json, the last build's)
         for D, e in app["days"].items():                 # the portfolio season, pooled from every app
             if e.get("rev") and e.get("dau"):
                 p = run.pool.setdefault(D, {"rev": 0.0, "dau": 0.0})
                 p["rev"] += e["rev"]
                 p["dau"] += e["dau"]
+        try:                                             # … and its band ratios (made in finish())
+            pb = VD.port_pre(app)
+            if pb:
+                run.pool_b[aid] = pb
+        except Exception:
+            pass
         with_n = {D: e for D, e in app["days"].items() if e.get("n") is not None}
         if not with_n:
             return None
@@ -374,10 +431,20 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
         path = _path(run.data_dir, key + ".json")
         old = _read(path, {})
         today = _iso(run.now.date())
-        fresh = (old.get("v") == V and old.get("start") == _iso(app["start"]) and old.get("T") == _iso(app["last"])
-                 and old.get("made_at") and (run.now - datetime.fromisoformat(old["made_at"])).total_seconds() < EVERY_H * 3600)
-        if fresh or run.left() <= 0:
-            if old.get("v") == V and old.get("fc"):
+        E, Vr = run.E, run.V
+        made = old.get("made_at")
+        age_h = (run.now - datetime.fromisoformat(made)).total_seconds() / 3600 if made else None
+        same = old.get("v") == Vr and old.get("start") == _iso(app["start"])
+        if Vr == 1:                                      # v0: re-made once a day and with a new day of data
+            fresh = same and old.get("T") == _iso(app["last"]) and age_h is not None and age_h < EVERY_H
+            can = run.left() > 0
+        else:                                            # vd: the forecast is re-made every build below (cheap); the
+            fresh = same and age_h is not None and age_h < EVERY_H     # tune once a day, if its seconds fit the budget
+            last_sec = old.get("tune_sec") if old.get("v") == Vr else None
+            can = run.left() > TUNE_MARGIN * float(last_sec or TUNE_GUESS_SEC)
+        seas = run.season or F.season(app["days"])
+        if fresh or not can:
+            if old.get("fc") and old.get("v") in ENGINES:
                 run.kept += 1
                 fc = dict(old["fc"])
                 try:                                     # the "why" is cheap: today's data even between model runs
@@ -386,23 +453,31 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
                     pass
                 try:                                     # … and so is one forecast with the kept settings: today's data
                     if old.get("p") and app["last"] >= _d(old["T"]):    # and spend run-rate, users and uninstalls
+                        Eo = ENGINES[old["v"]]           # (by the engine that made the file)
                         cal = {int(h): {"bias": b} for h, b in (old.get("bias") or {}).items()} or \
                             {int(h): c for h, c in (fc.get("cal") or {}).items()}
-                        sr, _, _ = series(app, dict(F.DEFAULT, **old["p"]), cal, run.season or F.season(app["days"]))
+                        sr, f, _ = series(app, dict(Eo.DEFAULT, **old["p"]), cal, seas, Eo)
                         fc.update(sr)
                         fc["T"] = _iso(app["last"])
+                        if Eo is VD:
+                            fc["parts"] = _rx(f["parts"])
                 except Exception:
                     pass
                 return fc
-            if run.left() <= 0:
+            if not can:
                 run.skipped += 1
                 return None
-        seas = run.season or F.season(app["days"])
-        prev_p = old.get("p") if old.get("v") == V else None
-        p, bt, steps = F.tune(app, seas, start_p=prev_p)
-        sc_prev = F.score(F.backtest(app, prev_p, seas)) if prev_p and prev_p != p else None
+        prev_p = old.get("p") if old.get("v") == Vr else None
+        t0 = run.clock()
+        p, bt, steps = E.tune(app, seas, start_p=prev_p)
+        tune_sec = round(max(0.0, run.clock() - t0), 1)
+        run.tune_sec.append(tune_sec)
+        if Vr == 1:
+            sc_prev = F.score(F.backtest(app, prev_p, seas)) if prev_p and prev_p != p else None
+        else:                                            # vd tunes from the stored setting: its score is the first step
+            sc_prev = steps[0]["score"] if prev_p and prev_p != p and steps else None
         cal = F.calibrate(bt)
-        sr, f, ser = series(app, p, cal, seas)
+        sr, f, ser = series(app, p, cal, seas, E)
         last = app["last"]
         # readiness: a horizon shows once enough tests could score it; else the day it will
         ready, ready_from = {}, {}
@@ -429,11 +504,15 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
         log = list(old.get("log") or [])
         if prev_p != p or not log:
             cause = max(att, key=att.get) if att else None
-            log.append({"d": today, "p": p, "sc_old": _r(sc_prev, 4), "sc": _r(F.score(bt), 4),
-                        "changed": sorted(k for k in p if dict(F.DEFAULT, **prev_p).get(k) != p[k]) if prev_p else [],
-                        "cause": cause, "bias30": _r((cal.get(30) or {}).get("bias"), 4)})
+            if prev_p:
+                changed = sorted(k for k in p if dict(E.DEFAULT, **prev_p).get(k) != p[k])
+            else:                                        # the first run, or the first of this engine: all its settings
+                changed = sorted(p) if log else []       # are new (never "settings wahi" at an engine switch)
+            log.append({"d": today, "eng": run.eng, "p": p, "sc_old": _r(sc_prev, 4), "sc": _r(E.score(bt), 4),
+                        "changed": changed, "cause": cause, "bias30": _r((cal.get(30) or {}).get("bias"), 4)})
         log = log[-LOG_KEEP:]
-        fc = {"v": V, "made": today, "T": _iso(last), "start": _iso(app["start"]), "start_auto": _iso(auto) if auto else None,
+        fc = {"v": Vr, "eng": run.eng, "made": today, "T": _iso(last), "start": _iso(app["start"]),
+              "start_auto": _iso(auto) if auto else None,
               "start_set": _iso(mine) if mine else None, "p": p, "ready": ready, "ready_from": ready_from,
               "cal": {str(h): {k: (_r(v, 4) if isinstance(v, float) else v) for k, v in c.items()} for h, c in cal.items()},
               **sr,
@@ -441,8 +520,9 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
                      + [sorted((r.get("ev") or {}).keys())] for r in bt],
               "events": _events(bt), "att": {k: _r(v, 3) for k, v in att.items()} if att else None,
               "log": log[-15:], "checks": checks[-60:], "drv": drivers(app, rows, ida, cty_rows, rev_cty),
-              "parts": {k: _r(v, 6) if isinstance(v, float) else v for k, v in f["parts"].items()}}
-        _write(path, {"v": V, "made_at": run.now.isoformat(), "start": _iso(app["start"]), "T": _iso(last), "p": p,
+              "parts": _rx(f["parts"])}
+        _write(path, {"v": Vr, "eng": run.eng, "made_at": run.now.isoformat(), "start": _iso(app["start"]),
+                      "T": _iso(last), "p": p, "tune_sec": tune_sec,
                       "bias": {str(h): c.get("bias") for h, c in cal.items()},
                       "log": log, "live": live, "fc": fc})
         run.ran += 1
@@ -453,14 +533,29 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
 
 
 def finish(run):
-    """The portfolio season for tomorrow's runs (every app's revenue ÷ DAU by month, pooled)."""
+    """state.json for tomorrow's runs: the portfolio season (every app's revenue ÷ DAU by month, pooled), the band
+    ratios of engine vd (every app's GA4 data, per Monday; none this build: the last ones kept) and vd's structure."""
     try:
         seas = F.season(run.pool) if run.pool else None
-        if seas:
-            _write(_path(run.data_dir, "state.json"), {"v": V, "season": {str(k): _r(v, 4) for k, v in seas.items()}})
+        br = None
+        try:
+            br = VD.bandr(list(run.pool_b.values())) if run.pool_b else None
+        except Exception:
+            br = None
+        br = br or run.bandr
+        if seas or br:
+            st = {"v": 1, "vd_struct": {"v": VD.STRUCT_VERSION, "p": VD.STRUCT}}
+            if seas:
+                st["season"] = {str(k): _r(v, 4) for k, v in seas.items()}
+            if br:
+                st["bandr"] = br                        # full precision: the engine reads them back exactly
+            _write(_path(run.data_dir, "state.json"), st)
     except Exception:
         pass
 
 
 def line(run):
-    return "forecast: ran %d, kept %d, skipped %d" % (run.ran, run.kept, run.skipped)
+    """The build log's line: counts and seconds only."""
+    ts = run.tune_sec
+    return "forecast %s: ran %d, kept %d, skipped %d; tune %.0fs (max %.0fs); %.0fs" % (
+        run.eng, run.ran, run.kept, run.skipped, sum(ts), max(ts) if ts else 0.0, run.clock() - run.t0)
