@@ -20,8 +20,14 @@ k the tab uses):
     page);
   * cty — the countries board: the engine's own country rows turned into Scale / Keep / Watch / Cut / Too little data /
     Too early, ROAS at 7 / 30 / 90 days, payback, cost per install, and what cutting the Cut countries saves; and
-    every country by install month (installs, Google Ads cost, ROAS 7 / 30 / 90).
-roi.json.gz — every app's summary row, the portfolio lifetime P/L and the portfolio install days (apps with spend).
+    every country by install month (installs, Google Ads cost, ROAS 7 / 30 / 90);
+  * f4 — ⚖️ the four forms of install-day ROI at D7 / D30 / D90 (+ the payback target): blended, paid-only,
+    incremental and marginal, each unmeasured input as its research range [low, central, high] (beta: the app's own
+    measured range from config/roi_beta.json when there is one), the paid share (Google Ads installs ÷ GA4 installs),
+    and the budget call from the marginal form (see F4_* below). Once GA4's own paid cells (IDAY_EXT cp) cover an
+    age, that age uses GA4's MEASURED paid share and premium instead of the premium range (src "ga4", see _ga4p).
+roi.json.gz — every app's summary row (with its f4), the portfolio lifetime P/L and the portfolio install days (apps
+with spend), and the ranges the forms used (f4c).
 Pointer: dashboard["roi"] = {"file", "v", "apps": {app_id: {"file", "st", "r7", "u7", "pb", "lp"}}}.
 One splat header rule (/roi*). Failure-isolated per app (counted) and as a whole; ONE counts-only line.
 """
@@ -52,6 +58,24 @@ MATURE = 90                                 # … and whose curve reached day 90
 ULAG_IX = {1: 1, 3: 2, 7: 3, 14: 4, 30: 5}  # iday u slots (fetch.ga4_uninstall.ULAGS) of those lags
 WORSE, WATCH, BETTER = 0.75, 0.90, 1.15     # D7 ROAS ÷ usual
 TIE_REL, TIE_ABS = 0.02, 1.0                # an activity day ties when within 2% or $1 of the install-day read
+# ⚖️ The four forms of install-day ROI (owner research, Oct 2026): BLENDED = all GA4 installs' revenue ÷ spend (what
+# this section shows), PAID-ONLY = the Google Ads installs' own revenue ÷ spend, INCREMENTAL = only the revenue the
+# spend caused ÷ spend, MARGINAL = what the NEXT $ brings = incremental × (1 + beta) — the one that decides budget.
+# The paid share s = Google Ads installs ÷ GA4 installs of the same install days (measured, capped at 1). The three
+# inputs not measured yet are the research's RANGES (until GA4 paid / organic data arrives), never one number; each
+# tuple is ordered so the form goes low → central → high:
+F4_P = (1.15, 1.4, 3.2)                     # p: paid ÷ organic revenue per install (methods disagree: not settled)
+F4_B = (0.88, 0.47, 0.15)                   # b: share of "organic" installs that come anyway (after-stop ratios)
+F4_BETA = (-0.19, -0.07, -0.03)             # beta: elasticity of ROAS to spend (pooled over the apps); an app's own
+F4_BETA_FILE = "roi_beta.json"              # measured range, when there is one, in config/roi_beta.json (see _betas)
+F4_AGES = (7, 30, 90)                       # the forms at these ages (+ the payback target H) where complete
+F4_GAP = 0.20                               # paid-only ≥ 20% below blended (central p): flagged (organic-heavy)
+F4_LIVE = 14                                # spend days: an app buys now when any of its last 14 had ≥ MIN_SPEND
+# GA4's own paid / organic split (IDAY_EXT's cp cells: users whose first Google Ads campaign id is a real one): once an
+# age has it, its paid share and premium p are MEASURED and replace the p range (b and beta stay ranges):
+F4_PW = 4                                   # p from the newest 4 install weeks whose paid cells are whole at that age
+F4_PMIN = 100                               # … with ≥ 100 paid AND ≥ 100 organic installs (else no premium: the range)
+F4_SCOV = 0.5                               # the window's GA4 paid share: from ≥ half of its install days
 LINE = None
 
 
@@ -84,6 +108,8 @@ class Acc:
     def __init__(self):
         self.apps, self.life, self.rows, self.fails, self.skipped, self.till, self.ccy = [], {}, {}, 0, 0, [], set()
         self.fc = None                              # 🔮 the forecast step's run (forecast_build), made on the first app
+        self.beta = None                            # ⚖️ per-app beta ranges (config/roi_beta.json), read on the first app
+        self.f4m = 0                                # ⚖️ apps whose forms use GA4's measured paid share + premium
 
 
 def start():
@@ -189,11 +215,15 @@ def _judged(r):
     return r["sp"] is not None and r["sp"] >= MIN_SPEND and r["n"] >= MIN_N
 
 
-def _pool(rows, j, recent=True):
-    """ROAS and LTV at age T[j]: the newest N_RECENT judged install days complete at that age (recent) or the N_USUAL
-    before them (usual) — ratios of sums."""
+def _win(rows, j, recent=True):
+    """The newest N_RECENT judged install days complete at age T[j] (recent) or the N_USUAL before them (usual)."""
     have = [r for r in rows if _judged(r) and r["t"][j] is not None]
-    have = have[-N_RECENT:] if recent else have[-(N_RECENT + N_USUAL):-N_RECENT]
+    return have[-N_RECENT:] if recent else have[-(N_RECENT + N_USUAL):-N_RECENT]
+
+
+def _pool(rows, j, recent=True):
+    """ROAS and LTV at age T[j] over _win — ratios of sums."""
+    have = _win(rows, j, recent)
     if not have:
         return None
     sp, rv, n = sum(r["sp"] for r in have), sum(r["t"][j] for r in have), sum(r["n"] for r in have)
@@ -267,6 +297,164 @@ def _ret(rows, lag, recent=True):
     have = have[-N_RECENT:] if recent else have[-(N_RECENT + N_USUAL):-N_RECENT]
     n = sum(r["n"] for r in have)
     return _r(sum(users(r) for r in have) / n, 4) if n else None
+
+
+def _betas(data_dir):
+    """An app's own measured beta range (config/roi_beta.json next to data/: {app id: [low, central, high]}, e.g. from
+    a clean spend-step study of that app). Only well-formed ranges are kept: three numbers in −1 … +0.5, low ≤ central
+    ≤ high. Missing / unreadable file or app → the pooled F4_BETA."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(data_dir)), "config", F4_BETA_FILE),
+                  encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for k, v in (raw if isinstance(raw, dict) else {}).items():
+        try:
+            t = tuple(float(x) for x in v)
+        except (TypeError, ValueError):
+            continue
+        if len(t) == 3 and all(-1.0 < x <= 0.5 for x in t) and t[0] <= t[1] <= t[2]:
+            out[str(k)] = t
+    return out
+
+
+def _f4(bl, s, beta=F4_BETA, prem=F4_P):
+    """Blended ROAS + paid share → the other three forms (and the blended-over-paid gap), each [low, central, high]:
+    every unmeasured input at its own end of its range, so low / high are the worst / best case over all of them.
+    prem: the premium range, or (p, p, p) once GA4 measured it (paid-only and the gap are then one number)."""
+    paid = [bl * p * s / (p * s + 1 - s) for p in prem]
+    inc = [bl - b * (bl - x) for b, x in zip(F4_B, paid)]          # the organic part times (1 − the part that comes anyway)
+    mar = [v * (1 + be) for v, be in zip(inc, beta)]
+    gap = [(1 - s) / (p * s + 1 - s) for p in reversed(prem)]     # 1 − paid ÷ blended: smallest at the highest p
+    return {"paid": [_r(v) for v in paid], "inc": [_r(v) for v in inc], "mar": [_r(v) for v in mar],
+            "gap": [_r(v) for v in gap]}
+
+
+def _ga4p(ida, ages):
+    """⚖️ GA4's own paid / organic split from IDAY_EXT's paid cells (fetch.ga4_iday_ext: cp = the users whose first
+    Google Ads campaign id is a real one, read from the same full Q-C read as the legacy country cells c) →
+    {"share": {install day: GA4 paid share of its new users (the d2 ledger's cpn)},
+     "prem": {age: {p: paid ÷ organic revenue per install, s, rs (paid share of installs / of revenue), np, no, w,
+                    from, to}}} — p over the newest F4_PW install weeks whose every activity day (the week + the age)
+    has BOTH reads folded (cpst and the legacy cst), Σ every country slot (the gap row left out on both sides); None
+    when the app has no paid cells yet. Ages past 90 (the legacy cells stop there) or off a band edge: no p."""
+    cp, d2 = ida.get("cp") or {}, ida.get("d2") or {}
+    if not isinstance(cp, dict) or not isinstance(d2, dict) or not d2:
+        return None
+    c, days = ida.get("c") or {}, ida.get("days") or {}
+    fold = ("ok", "smp", "gap")                     # ga4_iday_ext.FOLDED / engine.value.CGOOD
+
+    def whole(D):
+        k = _iso(D)
+        return (d2.get(k) or {}).get("cpst") in fold and (days.get(k) or {}).get("cst") in fold
+    share = {}
+    for D, r in d2.items():
+        if isinstance(r, dict) and r.get("cpst") in fold and isinstance(r.get("cpn"), (int, float)):
+            share[D] = min(1.0, max(0.0, float(r["cpn"])))
+
+    def tot(slots, nb):
+        n = rv = 0
+        for k, v in (slots or {}).items():
+            if k != "gap" and isinstance(v, dict):
+                n += int(v.get("n") or 0)
+                rv += sum(int(x or 0) for x in (v.get("r") or [])[:nb])
+        return n, rv
+    prem = {}
+    for a in ages:
+        nb = [i + 1 for i, (lo, hi) in enumerate(val.CBANDS) if hi == a]
+        if not nb:
+            continue
+        weeks = []
+        for W in sorted(set(cp) & set(c), reverse=True):
+            try:
+                w0 = _d(W)
+            except ValueError:
+                continue
+            if all(whole(w0 + timedelta(days=i)) for i in range(7 + a)):
+                weeks.append(W)
+                if len(weeks) >= F4_PW:
+                    break
+        if not weeks:
+            continue
+        np_ = na_ = rp = ra = 0
+        for W in weeks:
+            n1, r1 = tot(cp[W], nb[0])
+            n2, r2 = tot(c[W], nb[0])
+            np_, rp, na_, ra = np_ + n1, rp + r1, na_ + n2, ra + r2
+        no, ro = na_ - np_, ra - rp
+        if np_ < F4_PMIN or no < F4_PMIN or rp <= 0 or ro <= 0:
+            continue
+        prem[str(a)] = {"p": _r((rp / np_) / (ro / no), 3), "s": _r(np_ / na_), "rs": _r(rp / ra), "np": np_,
+                        "no": no, "w": len(weeks), "from": weeks[-1], "to": weeks[0]}
+    return {"share": share, "prem": prem} if (share or prem) else None
+
+
+def _decide(by, H):
+    """Budget from the MARGINAL form at the payback target H: up (even its low end ≥ 100%), down (even its high end
+    < 100%), mixed (100% inside the range); when H is not complete yet a shorter age whose low end is already ≥ 100%
+    still says up (revenue only grows with age), else early. na = no paid share (no Google Ads install count) on any
+    age."""
+    if by and not any(e.get("mar") for e in by.values()):
+        return {"a": H, "v": "na", "mar": None}
+    e = by.get(str(H))
+    if e is not None:
+        m = e.get("mar")
+        if not m:
+            return {"a": H, "v": "na", "mar": None}
+        return {"a": H, "v": "up" if m[0] >= 1 else "down" if m[2] < 1 else "mixed", "mar": m}
+    for a in sorted((int(k) for k in by), reverse=True):
+        m = by[str(a)].get("mar")
+        if a < H and m and m[0] >= 1:
+            return {"a": a, "v": "up", "mar": m}
+    return {"a": H, "v": "early", "mar": None}
+
+
+def _live(rows):
+    """Does the app buy installs now? (a paused app gets no "raise / cut" call, only what its last spend days said)"""
+    return any(v >= MIN_SPEND for v in [r["sp"] for r in rows if r["sp"] is not None][-F4_LIVE:])
+
+
+def _forms(rows, H, beta=None, gp=None):
+    """⚖️ The four forms at F4_AGES (+ H): over the SAME install days as the section's own ROAS (_win: newest
+    N_RECENT judged, complete at that age), so blended equals the D7 / D30 / D90 ROAS shown. The paid share s = Google
+    Ads installs ÷ GA4 installs of the days of them that have a Google Ads install count (always kept, "s"). gp (_ga4p):
+    an age with a GA4-measured premium AND the GA4 paid share of ≥ F4_SCOV of its install days uses those two
+    (src "ga4", "m": what was measured) instead of the premium range and s; else src "range". beta: the app's own range
+    (_betas), else the pooled one."""
+    bt = tuple(beta) if beta else F4_BETA
+    by = {}
+    for a in sorted(set(F4_AGES) | ({H} if H in T else set())):
+        have = _win(rows, T.index(a))
+        sp = sum(r["sp"] for r in have)
+        if not have or sp <= 0:
+            continue
+        rv = sum(r["t"][T.index(a)] for r in have)
+        e = {"bl": _r(rv / sp), "sp": _r(sp), "spi": _r(sum(r.get("spi") or 0 for r in have), 2), "rev": _r(rv),
+             "n": sum(r["n"] for r in have), "days": len(have), "from": _iso(have[0]["X"]), "to": _iso(have[-1]["X"])}
+        wa = [r for r in have if r["na"] is not None]
+        n = sum(r["n"] for r in wa)
+        if wa and n > 0:
+            e.update(s=_r(min(1.0, sum(r["na"] for r in wa) / n)), na=_r(sum(r["na"] for r in wa), 1), nn=n,
+                     days_na=len(wa))
+        mp = ((gp or {}).get("prem") or {}).get(str(a))
+        cov = [r for r in have if _iso(r["X"]) in ((gp or {}).get("share") or {})] if mp else []
+        cn = sum(r["n"] for r in cov)
+        if mp and cn > 0 and len(cov) >= F4_SCOV * len(have):
+            sm = sum(gp["share"][_iso(r["X"])] * r["n"] for r in cov) / cn
+            e.update(src="ga4", m=dict(mp, sw=_r(sm), days=len(cov)), **_f4(rv / sp, sm, bt, (mp["p"],) * 3))
+        elif "s" in e:
+            e.update(src="range", **_f4(rv / sp, e["s"], bt))
+        by[str(a)] = e
+    return {"h": H, "by": by, "dec": dict(_decide(by, H), live=_live(rows)), "beta": list(bt),
+            "bsrc": "app" if beta else "pool"}
+
+
+def f4_consts():
+    """The ranges the forms used (the page prints these, so a number on screen always names its range)."""
+    return {"p": list(F4_P), "b": list(F4_B), "beta": list(F4_BETA), "ages": list(F4_AGES), "gap": F4_GAP,
+            "live": F4_LIVE, "pw": F4_PW, "pmin": F4_PMIN}
 
 
 def _summary(rows, P, co_off, tie_checked, today):
@@ -492,6 +680,15 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
         except (OSError, ValueError):
             detail = None
         H = cfg.get("payback_days") or val.H_DEFAULT
+        if acc.beta is None:
+            acc.beta = _betas(data_dir)
+        try:                                            # ⚖️ GA4's measured paid / organic split (a bad paid
+            gp = _ga4p(ida, sorted(set(F4_AGES) | {H}))   # cell costs only it: the ranges then)
+        except Exception:
+            gp = None
+        f4 = _forms(rows, H, acc.beta.get(aid), gp)
+        if any(e.get("src") == "ga4" for e in f4["by"].values()):
+            acc.f4m += 1
         cty = _countries(detail, H)
         try:
             sids = vb.app_sids(pre, a, store, (pre.get("spend") or {}).get("daily") or {}) if pre.get("spend") else ()
@@ -503,9 +700,10 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
                 "newest": co.get("read_today") if co else None, "spend_till": spend.get("till") if spend else None,
                 "rev_till": (rev or {}).get("till"), "T": list(T), "lags": gco.LAGS,
                 "rows": [_row_out(r) for r in rows], "months": _months(rows), "sum": summ, "life": life,
-                "life_till": _life_till(rev, spend), "cty": cty,
+                "life_till": _life_till(rev, spend), "cty": cty, "f4": f4,
                 "consts": {"n_recent": N_RECENT, "n_usual": N_USUAL, "min_spend": MIN_SPEND, "min_n": MIN_N,
-                           "worse": WORSE, "watch": WATCH, "better": BETTER, "final_lag": gco.FINAL_LAG}}
+                           "worse": WORSE, "watch": WATCH, "better": BETTER, "final_lag": gco.FINAL_LAG,
+                           "f4": f4_consts()}}
         fcs = None
         try:                                            # 🔮 the forecast (its own budget and daily cadence; a failure
             from . import forecast_build as fob         # costs only it)
@@ -534,7 +732,7 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
                          "u30": (summ["pools"]["30"]["u"] or {}).get("roas"),
                          "life": [_r(lt[0], 2), _r(lt[1], 2), _r(lt[2], 2)], "cut": cty["cut"]["n"],
                          "cut_save": cty["cut"], "cpi_src": summ["cpi_src"], "nb": summ["nb"], "fc": fcs,
-                         "first": life[0][0] if life else None, "ads": bool(spend and spend.get("sids"))})
+                         "first": life[0][0] if life else None, "ads": bool(spend and spend.get("sids")), "f4": f4})
         for d, rv, sp, spi in life:
             p = acc.life.setdefault(d, [0.0, 0.0, 0.0])
             p[0] += rv or 0
@@ -617,7 +815,7 @@ def finish(acc, dashboard, out_dir):
                 "life": [[d, _r(v[0]), _r(v[1]), _r(v[2], 2)] for d, v in sorted(acc.life.items())], "rows": rows,
                 "months": [[m, e["n"], _r(e["sp"]), [(_r(e["t"][j]) if e["ok"][j] else None) for j in range(len(T))],
                             e["days"], e["days"], _r(e["spi"], 2)] for m, e in sorted(months.items())],
-                "ccy": next(iter(acc.ccy)) if len(acc.ccy) == 1 else None,
+                "ccy": next(iter(acc.ccy)) if len(acc.ccy) == 1 else None, "f4c": f4_consts(),
                 "life_till": max(set(acc.till), key=lambda d: (acc.till.count(d), d)) if acc.till else None}
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         write_json_gz_stable(os.path.join(out_dir, ALL_FILE), body)
@@ -629,9 +827,10 @@ def finish(acc, dashboard, out_dir):
         sts = {}
         for x in acc.apps:
             sts[x["st"]] = sts.get(x["st"], 0) + 1
-        LINE = ("roi: apps %d, worse %d, watch %d, better %d, normal %d, too early %d, n/a %d, skipped %d, failed %d"
+        LINE = ("roi: apps %d, worse %d, watch %d, better %d, normal %d, too early %d, n/a %d, skipped %d, failed %d, "
+                "forms ga4 %d"
                 % tuple([len(acc.apps)] + [sts.get(k, 0) for k in ("Worse", "Watch", "Better", "Normal", "Too early",
-                                                                     "N/A")] + [acc.skipped, acc.fails]))
+                                                                     "N/A")] + [acc.skipped, acc.fails, acc.f4m]))
         if acc.fc is not None:
             from . import forecast_build as fob
             fob.finish(acc.fc)
