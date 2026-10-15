@@ -395,13 +395,29 @@ def test_iday_old_part_is_folded_back(tmp_path):
     vs.write_iday(data, SPEND_ID, m["ida"])
     hot, old = vb.iday_paths(data, SPEND_ID)
     assert os.path.exists(hot) and os.path.exists(old)
-    assert vb.load_iday(data, SPEND_ID) == m["ida"]
     ida = vb.load_iday(data, SPEND_ID)
+    assert {k: v for k, v in ida.items() if k not in gu.X_KEYS} == m["ida"]       # every legacy key as written
+    assert all(ida[k] == {} for k in gu.X_KEYS)                                     # IDAY_EXT's: none written yet
     det, _, _ = val.evaluate_app(m["store"], ida, m["rev"], m["spend"], m["fx"], [], None, {}, {"payback_days": 90},
                                  "2026-09-21T12:00:00Z", app_id=SPEND_ID, app="x", key="k")
     one, _, _ = val.evaluate_app(m["store"], m["ida"], m["rev"], m["spend"], m["fx"], [], None, {},
                                  {"payback_days": 90}, "2026-09-21T12:00:00Z", app_id=SPEND_ID, app="x", key="k")
     assert det == one
+    # IDAY_EXT's files there (its keys filled): the tab's evaluation is exactly what it is without them
+    from admob_iq.fetch import ga4_iday_ext as gx
+    w = sorted(ida["c"])[-1]
+    fat = dict(ida, c2={w: {"0": {"r2": [7, 0, 0], "u2": [1, 0, 0, 0]}, "gap": {"r2": [1, 0, 0]}}},
+               cp={w: {"0": {"n": 3, "r": [5] * 11, "u": [1] * 11}}}, au={w: {"0": {"r": [9] * 11, "i": [2] * 11,
+                                                                               "k": [0] * 11}}},
+               d2={ida["to"]: {"c2st": "ok", "cpst": "ok", "aust": "ok"}}, rm={ida["to"]: {"s": {"0": [2, 3]},
+                                                                                         "st": "ok"}},
+               xs={"lo": ida["to"], "au": {"units": ["u"]}})
+    assert gx.save_ext(data, SPEND_ID, fat) is True
+    back = vb.load_iday(data, SPEND_ID)
+    assert back["c2"] == fat["c2"] and back["rm"] == fat["rm"]
+    det2, _, _ = val.evaluate_app(m["store"], back, m["rev"], m["spend"], m["fx"], [], None, {}, {"payback_days": 90},
+                                  "2026-09-21T12:00:00Z", app_id=SPEND_ID, app="x", key="k")
+    assert det2 == one
     with open(hot, "wb") as f:
         f.write(b"not gzip")
     assert vb.load_iday(data, SPEND_ID) is None and vb.load_iday(data, ORG_ID) is None

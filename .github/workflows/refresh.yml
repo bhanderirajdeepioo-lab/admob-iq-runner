@@ -112,6 +112,9 @@ jobs:
           # by country (its own cache, data/roas_geo_cache*.json.gz); VALUE_CD=true adds new users by app version
           # and long-term by install month (no new GA4 call). All off / default until set.
           GA4_IDAY:             ${{ vars.GA4_IDAY || 'false' }}
+          # IDAY_EXT=false (repo variable) stops the install-day fetch's extension (full Q-C: ages 91-427, paid vs
+          # organic, ad units by install age, app_remove by country; new files only) without a code push
+          IDAY_EXT:             ${{ vars.IDAY_EXT || 'true' }}
           GA4_VALUE:            ${{ vars.GA4_VALUE || 'false' }}
           GADS_GEO:             ${{ vars.GADS_GEO || 'false' }}
           VALUE_CD:             ${{ vars.VALUE_CD || 'false' }}

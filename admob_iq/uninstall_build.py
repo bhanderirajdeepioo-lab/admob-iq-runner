@@ -67,7 +67,8 @@ def ga4_cfg(s):
             "streams_ttl_hours": s.get("ga4_streams_ttl_hours", 168.0),
             "iday": bool(s.get("ga4_iday", False)),              # the Install value tab's install-day fetch
             "impact_windows": bool(s.get("impact_windows", True)),  # the update card's 14 / 30 / 60-day windows
-            "iday_max_calls": s.get("iday_max_calls", 120), "iday_cty_days": s.get("iday_cty_days", 400)}
+            "iday_max_calls": s.get("iday_max_calls", 120), "iday_cty_days": s.get("iday_cty_days", 400),
+            "iday_ext": bool(s.get("iday_ext", False))}      # its extension (late ages, paid, ad units, by country)
 
 
 def _selected_apps(dashboard, data_dir):
@@ -447,6 +448,11 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
             il = gu.iday_log_line(status)
             if il:
                 print(il, file=sys.stderr)
+            if cfg.get("iday_ext"):                     # … and its extension's ONE counts line
+                from .fetch import ga4_iday_ext
+                xl = ga4_iday_ext.iday_x_log_line(status)
+                if xl:
+                    print(xl, file=sys.stderr)
         except Exception:
             pass
     if act_on:                                          # dashboard["active"] last (its log line: build_static's)

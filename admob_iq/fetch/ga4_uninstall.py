@@ -80,6 +80,13 @@ firstSessionDate inList D−90..D (countries, tied to Q-B: whatever GA4 did not 
 aggregates (install day × lag; install week × country × lag) + a per-day ledger; a newest → oldest cursor backfills
 the history ≤ IDAY_MAX_CALLS calls a fetch. The main store is never touched by it.
 
+INSTALL VALUE, EXTENDED (fetch.ga4_iday_ext; only with GA4_IDAY and IDAY_EXT): Q-C is then read WITHOUT its
+install-day inList (every install age, one call as before). Its lags 0..90 are parsed from exactly the rows the inList
+would have returned (_le91), so every existing cell, tie and ledger field stays what it was; the older ages, a paid
+(Google Ads) read of the same day, ad units by install age and app_remove by country go into NEW keys of the data
+(c2, cp, au, rm + their ledger d2 and state xs), stored in their own files iday/<key>.x[.old].json.gz — the iday
+files themselves are written exactly as without it.
+
 Nothing here prints, and refresh_all never raises: a failing owner / app is recorded in the PRIVATE state
 (state.json, never shipped) and the others carry on. The public build log gets one line of counts from
 admob_iq.uninstall_build (and one more, iday_log_line, when GA4_IDAY is on).
@@ -2012,11 +2019,19 @@ def iday_due(app_st, cfg, now):
     most every IDAY_EVERY_HOURS. It runs after every app that is due for real in the run, on the time left, so a new
     GA4 day is never held back by it: the uninstall / Active fetch of the next settled day keeps its own min_hours
     clock. An app whose install-value history never started (no state.fetch[aid].iday yet — GA4_IDAY just switched
-    on) is due too, so the backfill starts at once instead of waiting for the app's next real fetch. None otherwise."""
+    on) is due too, so the backfill starts at once instead of waiting for the app's next real fetch. IDAY_EXT: an app
+    whose install-value history is whole but whose extension still has days to do (x2.done False) or never ran (no
+    x2) is due too, on its own clock (last_iday_x) — that fetch is the extension's alone (x_only_fetch). None
+    otherwise."""
     ida = app_st.get("iday")
-    if not cfg.get("iday") or (ida is not None and ida.get("done") is not False):
+    if not cfg.get("iday"):
         return None
-    if _hours_since(app_st.get("last_iday"), now) < IDAY_EVERY_HOURS:
+    last = "last_iday"
+    if ida is not None and ida.get("done") is not False:
+        if not cfg.get("iday_ext") or (ida.get("x2") or {}).get("done", False) is not False:
+            return None
+        last = "last_iday_x"
+    if _hours_since(app_st.get(last), now) < IDAY_EVERY_HOURS:
         return None
     return "iday"
 
@@ -2084,6 +2099,16 @@ ABANDS = ((0, 0), (1, 6), (7, 29), (30, 89), (90, 364), (365, 427))        # day
 IDAY_METS = ("activeUsers", "newUsers", "totalAdRevenue", "totalRevenue")
 QB_FOLDED = ("ok", "q", "empty")        # days[D].st that were folded into x (each exactly once)
 QC_FOLDED = ("ok", "smp", "gap")        # days[D].cst that were folded into c
+IDAY_X_RESERVE = 2          # IDAY_EXT: calls its day reads leave for its blocks (ad units, app_remove by country)
+X_KEYS = ("c2", "cp", "au", "d2", "rm", "xs")   # IDAY_EXT's keys of the data: never in the iday files themselves
+
+
+def x_only_fetch(app_st):
+    """IDAY_EXT: is an install-value-only fetch of this app the extension's alone? Yes when its install-value history
+    is whole (state.fetch[aid].iday.done): without the extension that fetch would not happen at all, so none of the
+    install-value reads run in it — every legacy read keeps exactly the schedule it has without IDAY_EXT."""
+    m = (app_st or {}).get("iday")
+    return isinstance(m, dict) and m.get("done") is not False
 
 
 def _bands_ix(bands, top):
@@ -2172,6 +2197,22 @@ def rep_iday_qc(ga, d, no_total=False):
     days = [(d - timedelta(days=i)).strftime("%Y%m%d") for i in range(CTY_LIST)]
     return ga.report_all(_iday_body(d, d, ("countryId", "firstSessionDate"), no_total),
                          extra=[ga4._in_list("firstSessionDate", days)], page_rows=UNI_PAGE_ROWS)
+
+
+def rep_iday_qc_full(ga, d, no_total=False, extra=None):
+    """Q-C WITHOUT the install-day list (IDAY_EXT): ONE activity day d by country × install day, every install age —
+    the probe's T1 shape (one page at UNI_PAGE_ROWS). `extra` = more filter expressions (a country part when a sampled
+    read is split, the paid rule). Its lags 0..90 are exactly rep_iday_qc's rows (_le91)."""
+    return ga.report_all(_iday_body(d, d, ("countryId", "firstSessionDate"), no_total), extra=extra,
+                         page_rows=UNI_PAGE_ROWS)
+
+
+def _le91(rows, d):
+    """The rows of a full Q-C read that rep_iday_qc's inList would have returned: firstSessionDate one of the 91
+    values d−90..d as GA4 matches them (an exact string; "(other)" / "(not set)" never). The legacy parse of a full
+    read sees exactly the old read."""
+    keep = {(d - timedelta(days=i)).strftime("%Y%m%d") for i in range(CTY_LIST)}
+    return [r for r in rows if str(r.get("firstSessionDate") or "") in keep]
 
 
 def rep_iday_tot(ga, a, b, no_total=False):
@@ -2437,7 +2478,8 @@ def _iday_new(src, at):
     return {"v": IDAY_V, "src": list(src), "tz": None, "cur": "USD", "born": at, "from": None, "to": None,
             "cfrom": None, "edge": None, "done": False,
             "flags": {"no_total": False, "iap": False, "smp": False, "qb_win": False},
-            "cset": [], "cset_since": {}, "zzn": {}, "erun": [], "wlast": None, "days": {}, "x": {}, "c": {}}
+            "cset": [], "cset_since": {}, "zzn": {}, "erun": [], "wlast": None, "days": {}, "x": {}, "c": {},
+            "c2": {}, "cp": {}, "au": {}, "d2": {}, "rm": {}, "xs": {}}
 
 
 def _hour_low(q, floor=IDAY_HOUR_FLOOR):
@@ -2461,8 +2503,9 @@ class _Iday:
     """One app-fetch's iday reads (fetch_iday): the call cap, the stops, this fetch's country cells until the slots
     are known, and the counts."""
 
-    def __init__(self, ga, store, ida, end, stop, at, plain, max_calls, cty_days):
+    def __init__(self, ga, store, ida, end, stop, at, plain, max_calls, cty_days, x_only=False):
         self.ga, self.ida, self.days, self.at = ga, ida, ida["days"], at
+        self.x_only = x_only                            # IDAY_EXT's own fetch: no legacy step runs (x_only_fetch)
         self.stop, self.plain, self.max_calls = stop, plain, max_calls
         self.hs, self.daily = _d(store["history_start"]), store.get("daily") or {}
         self.capped = bool(store.get("history_capped"))
@@ -2472,17 +2515,22 @@ class _Iday:
         self.halt = False
         self.pend, self.day_inst = {}, {}
         self.stats = {"days": 0, "cdays": 0, "folded": 0, "flagged": 0, "csmp": 0, "cgap": 0, "retry": 0, "calls": 0,
-                      "tok": 0, "qstop": False, "why": None}
+                      "tok": 0, "qstop": False, "why": None, "xcalls": 0, "xtok": 0}
+        self.x = None                                   # IDAY_EXT's reads (fetch.ga4_iday_ext.Ext) when it is on
+        self.new_keys = []                              # the days step 1 read (IDAY_EXT asks their paid read next)
 
     # budget
 
     def can(self, need=1, back=False, reserve=True):
-        """May the next `need` calls go? The call cap (IDAY_TOT_RESERVE kept for Q-T), stop() (the build's 2× budget), a
-        low quota; the backfill (back) also the plain run budget and the hourly floor."""
+        """May the next `need` calls go? The call cap (IDAY_TOT_RESERVE kept for Q-T; reserve "x": IDAY_EXT's day reads,
+        which keep IDAY_X_RESERVE for its blocks; False: nothing kept), stop() (the build's 2× budget), a low quota; the
+        backfill (back) also the plain run budget and the hourly floor. (IDAY_EXT reads only after every legacy read of
+        the fetch, Q-T included: the legacy reads see exactly the calls they would see without it.)"""
         why = None
         if self.halt:
             return False
-        if self.calls + need + (IDAY_TOT_RESERVE if reserve else 0) > self.max_calls:
+        keep = (IDAY_TOT_RESERVE if reserve is True else IDAY_TOT_RESERVE + IDAY_X_RESERVE if reserve == "x" else 0)
+        if self.calls + need + keep > self.max_calls:
             why = "cap"
         elif self.stop and self.stop():
             why = "budget"
@@ -2531,18 +2579,20 @@ class _Iday:
                 fl["no_total"] = True
             return rows, meta, tok
 
-    def _count(self, q0, c0):
-        """One read's calls and tokens → the fetch's counts and ga.impact_tokens['iday'] → its tokens."""
+    def _count(self, q0, c0, x=False):
+        """One read's calls and tokens → the fetch's counts (x: IDAY_EXT's own, xcalls / xtok — the call cap counts
+        both) and ga.impact_tokens['iday'] (x: 'iday_x') → its tokens."""
         c1 = getattr(self.ga, "calls", None)
         n = c1 - c0 if isinstance(c0, int) and isinstance(c1, int) and c1 > c0 else 1
         tok = _spent(self.ga, q0)
         self.calls += n
-        self.stats["calls"] += n
-        self.stats["tok"] += tok
+        self.stats["xcalls" if x else "calls"] += n
+        self.stats["xtok" if x else "tok"] += tok
         t = getattr(self.ga, "impact_tokens", None)
         if t is None:
             t = self.ga.impact_tokens = {}
-        t["iday"] = t.get("iday", 0) + tok
+        k = "iday_x" if x else "iday"
+        t[k] = t.get(k, 0) + tok
         return tok
 
     # one day
@@ -2582,27 +2632,34 @@ class _Iday:
             rec["cst"] = None                           # asked next (or at a later fetch: step 2)
             rec["qbc"] = {"n": q["n"], "r": list(q["c91"])}
             if self.can(1):
-                self.qc(d, q["t91"], q["n"])
+                self.qc(d, q["t91"], q["n"], rows)
         return q
 
-    def qc(self, d, t91, n0):
+    def qc(self, d, t91, n0, qb_rows=None):
         """Q-C of day d, tied to a Q-B read of the same fetch (t91, n0) → the ledger; folded (gap now, the country cells
-        once the slots are known) unless `retry` / `err`."""
+        once the slots are known) unless `retry` / `err`. IDAY_EXT: the read is the full one (every install age): the
+        ledger and the cells come from its 91-day rows (_le91: what the old read returned), and the whole read goes
+        on to the extension (its late ages, tied to the same Q-B's rows `qb_rows`)."""
         k = d.isoformat()
         rec = self.days[k]
-        res = self.ask(rep_iday_qc, d)
+        res = self.ask(rep_iday_qc if self.x is None else rep_iday_qc_full, d)
         if res is None:
             rec.update(cst="err", at=self.at)
             return
         rows, meta, tok = res
         self.stats["cdays"] += 1
-        c = _qc_parse(rows, d, self.hs)
+        c = _qc_parse(rows if self.x is None else _le91(rows, d), d, self.hs)
         ctries = _int(rec.get("ctries")) + 1
         cst, f = _iday_check_qc(c, meta, t91, n0, ctries)
         rec.update(f, cst=cst, ctries=ctries, crows=c["rows"], ctok=tok, at=self.at)
         if cst == "retry":
             self.stats["retry"] += 1
-            return
+        else:
+            self._qc_fold(k, d, rec, c, cst)
+        if self.x is not None:
+            self.x.hook("on_qc", d, rows, meta, tok, qb_rows)
+
+    def _qc_fold(self, k, d, rec, c, cst):
         qbc = rec.pop("qbc", None)
         if qbc is not None:
             _iday_fold_gap(self.ida, c, qbc, d, self.hs)
@@ -2649,6 +2706,7 @@ class _Iday:
             if not self.can(self._need(d)):
                 break
             self.day(d)
+            self.new_keys.append(d.isoformat())
 
     def retries(self):
         """Step 2: ≤ IDAY_RETRY_DAYS days, newest first, each at most once a day: Q-B `retry` / `err` days, and folded
@@ -2680,7 +2738,7 @@ class _Iday:
             self.stats["days"] += 1
             q = _qb_parse(res[0], d, self.hs)
             if self.can(1):
-                self.qc(d, q["t91"], q["n"])
+                self.qc(d, q["t91"], q["n"], res[0])
 
     def late(self):
         """Step 3 (a file's first IDAY_CHECK_DAYS days): day F − IDAY_CHECK_AGE, read fresh at ~5 days, read again —
@@ -2706,9 +2764,10 @@ class _Iday:
         chk = {"at": self.at, "a": q["a4"], "n": q["n"], "rev": q["rev4"], "closs": None, "tie_rev": None,
                "tie_new": None}
         if cty:
-            res = self.ask(rep_iday_qc, d)
+            res = self.ask(rep_iday_qc if self.x is None else rep_iday_qc_full, d)
             if res is not None:
-                _, f = _iday_check_qc(_qc_parse(res[0], d, self.hs), res[1], q["t91"], q["n"], 1)
+                _, f = _iday_check_qc(_qc_parse(res[0] if self.x is None else _le91(res[0], d), d, self.hs), res[1],
+                                      q["t91"], q["n"], 1)
                 chk.update(closs=f["closs"], tie_rev=f["tie_rev"], tie_new=f["tie_new"])
         r["chk"] = chk
 
@@ -2788,13 +2847,21 @@ class _Iday:
         ida["flags"]["iap"] = bool(rev > 0 and iap >= IAP_MIN * rev)
 
     def run(self):
-        self.prep()
-        self.new_days()
-        self.retries()
-        self.late()
-        self.backfill()
-        self.totals()
-        self.finish()
+        if not self.x_only:
+            self.prep()
+            self.new_days()
+            self.retries()
+            self.late()
+            self.backfill()
+            self.totals()
+        for step in ("new", "reread", "units"):         # IDAY_EXT, after every legacy read (each step failure-isolated:
+            if self.x is not None:                      # a bug there puts the extension's data back as it was and the
+                self.x.hook(step)                       # fetch goes on without it; its history re-read and all but
+                                                        # one AU / RM block: only in its own fetches, x_only)
+        if not self.x_only:
+            self.finish()
+        if self.x is not None:                          # (needs the slots: after the legacy finish)
+            self.x.hook("finish")
 
 
 def _iday_defaults(ida):
@@ -2808,7 +2875,8 @@ def _iday_defaults(ida):
     return ida
 
 
-def fetch_iday(ga, store, ida, end, stop=None, at=None, plain=None, max_calls=IDAY_MAX_CALLS, cty_days=IDAY_CTY_DAYS):
+def fetch_iday(ga, store, ida, end, stop=None, at=None, plain=None, max_calls=IDAY_MAX_CALLS, cty_days=IDAY_CTY_DAYS,
+               ext=False, x_only=False):
     """The app's install-value reads (see the module docstring) → (the new iday data, counts). `ida` = what
     load_iday gave (None: none yet) — NEVER changed in place: a failure anywhere leaves it (and the file) as it was.
     `store` = the app's uninstall store, only read (history_start, daily new / a1 for the self-checks). end = the
@@ -2820,31 +2888,48 @@ def fetch_iday(ga, store, ida, end, stop=None, at=None, plain=None, max_calls=ID
       3. the late check (a file's first 28 days): day F − 7 read again, measured only;
       4. the backfill, newest → oldest (plain budget, hourly floor, the call cap, the data edge);
       5. Q-T for every day read without totals, one call per block.
+    ext (IDAY_EXT): Q-C is read in full and fetch.ga4_iday_ext adds its reads (see there), after every legacy read —
+    the legacy fields above stay what they would be without it; its counts are stats["x"] (+ xcalls / xtok).
+    x_only (x_only_fetch): the extension's reads alone, none of the steps above (no legacy key changes); a file of
+    another stream / format (or none) → (None, stats): nothing to save, its real fetch starts it over as always.
     Counts (never ids / money): days (Q-B reads), cdays (Q-C reads), folded (flagged: ≈), csmp, cgap (country read
     sampled / unassigned), retry, calls, tok, qstop (a quota stop), why (the first stop)."""
     at = at or end.isoformat()
     src = [str(ga.property_id), str(ga.stream_id)]
     if not isinstance(ida, dict) or ida.get("src") != src or _int(ida.get("v")) != IDAY_V:
+        if x_only:
+            return None, {"calls": 0, "tok": 0, "xcalls": 0, "xtok": 0}
         ida = _iday_new(src, at)
     else:
         ida = _iday_defaults(copy.deepcopy(ida))
-    run = _Iday(ga, store, ida, end, stop, at, plain, max_calls, cty_days)
+    run = _Iday(ga, store, ida, end, stop, at, plain, max_calls, cty_days, x_only=bool(ext and x_only))
+    if ext:
+        try:
+            from . import ga4_iday_ext
+            run.x = ga4_iday_ext.Ext(run)
+        except Exception:                               # the extension never costs the legacy fetch
+            run.x = None
+            run.stats["x"] = {"errors": 1, "left": 0}
     run.run()
     return ida, run.stats
 
 
 def _iday_step(ga, store, box, end, stop, at):
     """fetch_iday for fetch_full / fetch_incr, never failing them. box (from refresh_all): {"ida", "plain", "max_calls",
-    "cty_days"} in; "ok", "ida", "stats" out (ok False: nothing to save — the file stays as it was)."""
+    "cty_days", "ext", "x_only"} in; "ok", "ida", "stats" out (ok False: nothing to save — the file stays as it
+    was)."""
     if box is None:
         return
     box["ok"] = False
     try:
         ida, stats = fetch_iday(ga, store, box.get("ida"), end, stop=stop, at=at, plain=box.get("plain"),
                                 max_calls=int(box.get("max_calls") or IDAY_MAX_CALLS),
-                                cty_days=int(box.get("cty_days") or IDAY_CTY_DAYS))
+                                cty_days=int(box.get("cty_days") or IDAY_CTY_DAYS), ext=bool(box.get("ext")),
+                                x_only=bool(box.get("x_only")))
     except Exception as e:
         box["err"] = type(e).__name__
+        return
+    if ida is None:                                     # an x_only fetch without a file of this stream: nothing to save
         return
     box.update(ida=ida, stats=stats, ok=True)
 
@@ -2858,7 +2943,9 @@ def iday_path(data_dir, app_id, old=False):
 def load_iday(data_dir, app_id):
     """The app's iday data — the hot file with its .old part merged in: {v, src, tz, cur, born, from, to, cfrom, edge,
     done, flags, cset, cset_since, zzn, erun, wlast, days, x, c} — or None: none yet, unreadable, or an .old part that
-    can't be read or belongs to another stream / format (the backfill then starts over: never half a history)."""
+    can't be read or belongs to another stream / format (the backfill then starts over: never half a history).
+    + IDAY_EXT's keys c2, cp, au, d2, rm, xs from its own files (ga4_iday_ext.load_ext: always there, {} when it has
+    none yet — a file without them, or an unreadable / other-stream one, only means its re-read starts over)."""
     hot = load_store(iday_path(data_dir, app_id))
     if not isinstance(hot, dict):
         return None
@@ -2873,6 +2960,8 @@ def load_iday(data_dir, app_id):
         for k in ("days", "x", "c"):
             for kk, vv in (old.get(k) or {}).items():
                 ida[k].setdefault(kk, vv)
+    from . import ga4_iday_ext
+    ida.update(ga4_iday_ext.load_ext(data_dir, app_id, ida.get("src"), ida.get("v")))
     return ida
 
 
@@ -2881,7 +2970,7 @@ def _iday_split(ida):
     that end before the first of the month of to − HOT_C_DAYS — whole months, so it is rewritten about once a month
     (and while the backfill folds into it)."""
     parts = {k: ida.get(k) or {} for k in ("days", "x", "c")}
-    hot = {k: v for k, v in ida.items() if k not in parts}
+    hot = {k: v for k, v in ida.items() if k not in parts and k not in X_KEYS}     # (IDAY_EXT's keys: their own files)
     old = {"v": ida.get("v"), "src": ida.get("src"), "days": {}, "x": {}, "c": {}}
     if not ida.get("to"):
         hot.update(parts, cut=None)
@@ -2901,7 +2990,9 @@ def _iday_split(ida):
 
 def save_iday(data_dir, app_id, ida):
     """Both files, deterministic (write_json_gz_stable: only when the content changed); no .old part → no .old file.
-    → True when anything was written or removed."""
+    IDAY_EXT's keys go to their own files (ga4_iday_ext.save_ext; none while they are empty). → True when anything
+    was written or removed."""
+    from . import ga4_iday_ext
     hot, old = _iday_split(ida)
     op = iday_path(data_dir, app_id, old=True)
     wrote = False
@@ -2910,14 +3001,25 @@ def save_iday(data_dir, app_id, ida):
     elif os.path.exists(op):
         os.remove(op)
         wrote = True
-    return write_json_gz_stable(iday_path(data_dir, app_id), hot) or wrote
+    wrote = write_json_gz_stable(iday_path(data_dir, app_id), hot) or wrote
+    return ga4_iday_ext.save_ext(data_dir, app_id, ida) or wrote
 
 
-def iday_meta(ida, stats=None):
-    """state.fetch[aid].iday — what plan() (backfill_due) and the log read."""
+def iday_meta(ida, stats=None, prev=None):
+    """state.fetch[aid].iday — what plan() (backfill_due) and the log read. + x2 {done, left, calls, tok, why} after an
+    IDAY_EXT fetch (left: days its reads still have to do — iday_due keeps the app's install-value-only fetches going
+    until 0; why: its first stop). `prev` (an x_only fetch: no legacy read ran): the legacy calls / tok stay as the
+    last fetch with legacy reads left them."""
     s = stats or {}
-    return {"v": ida.get("v"), "from": ida.get("from"), "to": ida.get("to"), "cfrom": ida.get("cfrom"),
-            "done": bool(ida.get("done")), "calls": int(s.get("calls") or 0), "tok": int(s.get("tok") or 0)}
+    out = {"v": ida.get("v"), "from": ida.get("from"), "to": ida.get("to"), "cfrom": ida.get("cfrom"),
+           "done": bool(ida.get("done")), "calls": int(s.get("calls") or 0), "tok": int(s.get("tok") or 0)}
+    if isinstance(prev, dict):
+        out.update(calls=int(prev.get("calls") or 0), tok=int(prev.get("tok") or 0))
+    x = s.get("x")
+    if isinstance(x, dict):
+        out["x2"] = {"done": not int(x.get("left") or 0), "left": int(x.get("left") or 0),
+                     "calls": int(s.get("xcalls") or 0), "tok": int(s.get("xtok") or 0), "why": x.get("why")}
+    return out
 
 
 IDAY_COUNTS = ("apps", "days", "cdays", "folded", "flagged", "csmp", "cgap", "retry", "whole", "filling", "calls",
@@ -2984,32 +3086,46 @@ def _iday_box(data_dir, aid, cfg, plain):
     except Exception:
         ida = None
     return {"ida": ida, "plain": plain, "max_calls": cfg.get("iday_max_calls") or IDAY_MAX_CALLS,
-            "cty_days": cfg.get("iday_cty_days") or IDAY_CTY_DAYS}
+            "cty_days": cfg.get("iday_cty_days") or IDAY_CTY_DAYS, "ext": bool(cfg.get("iday_ext"))}
 
 
-def _iday_save(data_dir, aid, box, tz, st, ic):
-    """After the app's fetch went through: its iday file (written only on change), state.fetch[aid].iday, the counts.
-    A failure here costs only the file (the next fetch reads on from the one on disk)."""
+def _iday_save(data_dir, aid, box, tz, st, ic, xc=None):
+    """After the app's fetch went through: its iday file (written only on change), state.fetch[aid].iday, the counts
+    (xc: IDAY_EXT's, ga4_iday_ext.X_COUNTS). An x_only fetch (box "x_only") changes no legacy key (not even tz) and
+    adds nothing to the legacy counts: its line reads as without IDAY_EXT. A failure here costs only the file (the
+    next fetch reads on from the one on disk)."""
     try:
         ida, s = box["ida"], box.get("stats") or {}
-        ida["tz"] = tz
+        xo = bool(box.get("x_only"))
+        if not xo:
+            ida["tz"] = tz
         save_iday(data_dir, aid, ida)
-        st["iday"] = iday_meta(ida, s)
-        ic["apps"] += 1
-        for k in ("days", "cdays", "folded", "flagged", "csmp", "cgap", "retry", "calls"):
-            ic[k] += int(s.get(k) or 0)
-        ic["qstops"] += bool(s.get("qstop"))
+        st["iday"] = iday_meta(ida, s, prev=st.get("iday") if xo else None)
+        if not xo:
+            ic["apps"] += 1
+            for k in ("days", "cdays", "folded", "flagged", "csmp", "cgap", "retry", "calls"):
+                ic[k] += int(s.get(k) or 0)
+            ic["qstops"] += bool(s.get("qstop"))
+        x = s.get("x")
+        if xc is not None and isinstance(x, dict):
+            xc["apps"] += 1
+            for k in xc:
+                if k != "apps":
+                    xc[k] += int(x.get(k) or 0)
     except Exception:
         pass
 
 
-def _iday_only(cfg, data_dir, a, st, r, tz, end, now, plain, over, access, owner_rt, ic, held_back):
+def _iday_only(cfg, data_dir, a, st, r, tz, end, now, plain, over, access, owner_rt, ic, held_back, xc=None):
     """plan "iday": the app's install-value reads alone (new days, retries, the backfill — the plain run budget), on
     the store as it is on disk: the store is never fetched or saved, and last_ok / last_try / fail stay as they were
     (this fetch never pushes back the app's next real one, and its failure never marks the app failed). Only
-    st["last_iday"], and st["iday"] with the file after a read that went through. Never raises."""
+    st["last_iday"], and st["iday"] with the file after a read that went through. An app whose history is whole (due
+    only for IDAY_EXT): the extension's reads alone (x_only_fetch) — then st["last_iday_x"] instead, so not even that
+    legacy key moves. Never raises."""
     aid, pid = a["app_id"], r["property_id"]
-    st["last_iday"] = _now_iso(now)
+    xo = bool(cfg.get("iday_ext")) and x_only_fetch(st)    # (due only for its extension)
+    st["last_iday_x" if xo else "last_iday"] = _now_iso(now)
     ga = box = old = None
     try:
         owner = r.get("owner")
@@ -3027,9 +3143,10 @@ def _iday_only(cfg, data_dir, a, st, r, tz, end, now, plain, over, access, owner
             return                                      # no store yet / another stream: its real fetch comes first
         ga = ga4.Ga4App(tok, pid, r["stream_id"])
         box = _iday_box(data_dir, aid, cfg, plain)
+        box["x_only"] = xo
         _iday_step(ga, old, box, end, over, _local_day(now, tz).isoformat())
         if box.get("ok"):
-            _iday_save(data_dir, aid, box, tz, st, ic)
+            _iday_save(data_dir, aid, box, tz, st, ic, xc)
     except Exception:
         pass
     finally:
@@ -3041,7 +3158,8 @@ def _iday_only(cfg, data_dir, a, st, r, tz, end, now, plain, over, access, owner
 def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
     """Fetch what is due for every selected app (`apps` = [{app_id, app_name, package|None}]) → status
     {"counts", "apps": {app_id: fresh|fetched|failed|deferred}, "no_ga4": {app_id: reason}, "discovery"} (+ "iday":
-    the install-value counts, IDAY_COUNTS, when cfg "iday" is on — iday_log_line). Never raises; never prints."""
+    the install-value counts, IDAY_COUNTS, when cfg "iday" is on — iday_log_line; + "iday_x": IDAY_EXT's, with
+    "iday_ext" — ga4_iday_ext.iday_x_log_line). Never raises; never prints."""
     now = now or datetime.now(timezone.utc)
     t0 = clock()
 
@@ -3053,6 +3171,13 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
 
     iday_on = bool(cfg.get("iday"))                     # GA4_IDAY off: nothing of it is read, written or counted
     ic = dict.fromkeys(IDAY_COUNTS, 0)
+    xc = None
+    if iday_on and cfg.get("iday_ext"):                 # IDAY_EXT: its own counts (ga4_iday_ext.iday_x_log_line)
+        try:
+            from . import ga4_iday_ext
+            xc = dict.fromkeys(ga4_iday_ext.X_COUNTS, 0)
+        except Exception:
+            xc = None
 
     counts = dict.fromkeys(("selected", "with_ga4", "fetched", "full", "repair", "fresh", "failed", "deferred",
                             "no_ga4"), 0)
@@ -3098,8 +3223,11 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
             todo.append((kind, a, st, r, tz, end))
         # incremental first (oldest first), then repairs, then full fetches (never fetched first); last run's
         # deferred lead. The install-value-only fetches ("iday") come after every app due for real, on the time left
+        # — and IDAY_EXT's own ones (x_only_fetch) after every other one (with it off: none, the order as before)
         rank = {"incr": 0, "repair": 1}
-        todo.sort(key=lambda t: (t[0] == "iday", not t[2].get("deferred"), rank.get(t[0], 2),
+        xo_on = iday_on and bool(cfg.get("iday_ext"))
+        todo.sort(key=lambda t: (t[0] == "iday", xo_on and t[0] == "iday" and x_only_fetch(t[2]),
+                                 not t[2].get("deferred"), rank.get(t[0], 2),
                                  t[2].get("last_ok") is not None, t[2].get("last_ok") or "", t[1]["app_id"]))
         due_left = [sum(1 for t in todo if t[0] != "iday")]
 
@@ -3118,7 +3246,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
                 if clock() - t0 >= cfg["run_budget_sec"] or pid in held_back:
                     out["apps"][aid] = seen
                     continue
-                _iday_only(cfg, data_dir, a, st, r, tz, end, now, plain, over, access, owner_rt, ic, held_back)
+                _iday_only(cfg, data_dir, a, st, r, tz, end, now, plain, over, access, owner_rt, ic, held_back, xc)
                 out["apps"][aid] = seen
                 continue
             due_left[0] -= 1
@@ -3218,9 +3346,10 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
                           fail_detail=None, meta=store_meta(store))
                 tok = getattr(ga, "impact_tokens", None)
                 if tok:                                 # the impact reads' GA4 tokens (private: never printed)
-                    st["tokens"] = {k: int(tok.get(k, 0)) for k in ("usage", "vuse", "ret") + (("iday",) * iday_on)}
+                    st["tokens"] = {k: int(tok.get(k, 0)) for k in ("usage", "vuse", "ret") + (("iday",) * iday_on)
+                                    + (("iday_x",) * (xc is not None))}
                 if box is not None and box.get("ok"):   # the install-value file: only after a fetch that went through
-                    _iday_save(data_dir, aid, box, tz, st, ic)
+                    _iday_save(data_dir, aid, box, tz, st, ic, xc)
                 if kind == "full":
                     st.pop("repair_failed", None)
                 out["apps"][aid] = "fetched"
@@ -3247,6 +3376,8 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
             if isinstance(s, dict):
                 ic["whole" if s.get("done") else "filling"] += 1
         out["iday"] = ic
+        if xc is not None:
+            out["iday_x"] = xc
     for v in out["apps"].values():
         counts[v] += 1
     counts["no_ga4"] = len(out["no_ga4"])
