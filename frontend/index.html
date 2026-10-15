@@ -6870,9 +6870,10 @@ function allView(){ const A=ALL; if(VIEW==='life') return lifeView(A.life,A.life
 // the live check), what it learnt, and the start of the real run. Spend slider: the paid installs scale with it exactly.
 let FCH='90', FCM=0, FCU='dau', PLAN=null;
 // the spend slider on the country model (fc.plan): every country × the same %, installs / users ∝ m^(1−e) (each
-// country's CPI rises with its spend: e measured), paid revenue ∝ m^(1+β) (β the ROI forms' central); without it ×m
+// country's CPI rises with its spend: e measured), paid revenue ×m (back-tested: revenue follows the money; the ROI
+// forms' β on top did not win); without it both ×m
 function fcMul(fc,m){ const pl=fc&&fc.plan; if(!pl||!(m>0)) return {r:Math.max(0,m),i:Math.max(0,m)};
-  const b=pl.beta&&ok(pl.beta[1])?+pl.beta[1]:0, e=ok(pl.e)?+pl.e:0; return {r:Math.pow(m,1+b),i:Math.pow(m,1-e)}; }
+  const e=ok(pl.e)?+pl.e:0; return {r:m,i:Math.pow(m,1-e)}; }
 const FC_P={bo:'Old installs · model B share',bn:'New installs · model B share',cq:'Newest eCPM move used',gc:'Country curves after day 90 (GA4)',pc:'Paid vs organic (GA4 paid users)',hl:'Curve: kitne purane installs se seekhe (half-life din)',K:'Naye install-din ki apni kamai pe bharosa (K)',w:'eCPM level: kitne din ka',g:'Season (Dec/Jan) ka asar',W:'Installs/CPI: kitne din ka',m:'Purane users ka tareeka',r:'Naye installs pe abhi ka badlav',c:'Country-wise curves'};
 const FC_C={installs:'installs (naye users)',retention:'retention (users kitne ruke)',arpdau:'ARPDAU / eCPM (har user ki kamai)'};
 function fcTot(f,m){ return f.old.map((v,i)=>(v||0)+(f.org[i]||0)+m*(f.paid[i]||0)); }
@@ -6933,20 +6934,21 @@ function fcUsers(d,rev,spd){ const fc=d.fc, f=fc.f, h=fc.hist||{}, H=+FCH, m=fcM
   const tb=`<table class="roi-t roi-sub"><thead><tr><th>Kab</th><th>Installs / din</th><th>Uninstalls / din</th><th>DAU</th><th>ARPDAU</th><th>Revenue / din</th><th>Spend / din</th><th>Profit / din</th></tr></thead><tbody>`
     +rows.map((r,i)=>{ const pr=ok(r[5])&&ok(r[6])?r[5]-r[6]:null; return `<tr${i>1?'':' class="roi-act"'}><td class="roi-nm">${r[0]}</td><td>${N(r[1])}</td><td>${N(r[2])}</td><td>${N(r[3])}</td><td>${MPV(r[4])}</td><td>${MC(r[5])}</td><td>${MC(r[6])}</td><td class="${pr==null?'':pr>=0?'roi-up':'roi-dn'}">${MC(pr,true)}</td></tr>`; }).join('')+`</tbody></table>`;
   const ac=(fc.cal||{})[FCH]||{};
-  const note=`<p class="roi-note">Har din ke naye installs (organic + spend ÷ CPI) apne retention curve pe judte hain aur apne uninstall curve pe jaate hain — dono curve isi app ke apne purane install-dino se seekhe (din 0, 1, 2 … 855 tak). Purane users bhi isi tarah ghatte hain. ${fc.plan?`Paid installs har country ke apne CPI se (country ka spend badhe to uska CPI bhi badhta hai, e ${(+fc.plan.e).toFixed(2)}); slider har country ko same % badhata hai — installs ×m<sup>1−e</sup>, kamai ×m<sup>1+β</sup>.`:'Slider sirf paid installs ka hissa badalta hai.'}${ok(ac.un_mape)?` Uninstall forecast back-test me ±${P(ac.un_mape)} (${FCH} din, ${ac.un_n} tests).`:''}</p>`;
+  const note=`<p class="roi-note">Har din ke naye installs (organic + spend ÷ CPI) apne retention curve pe judte hain aur apne uninstall curve pe jaate hain — dono curve isi app ke apne purane install-dino se seekhe (din 0, 1, 2 … 855 tak). Purane users bhi isi tarah ghatte hain. ${fc.plan?`Paid installs har country ke apne CPI se (country ka spend badhe to uska CPI bhi badhta hai, e ${(+fc.plan.e).toFixed(2)}); slider har country ko same % badhata hai — installs ×m<sup>1−e</sup>, kamai ×m (revenue spend ke saath seedha — back-test).`:'Slider sirf paid installs ka hissa badalta hai.'}${ok(ac.un_mape)?` Uninstall forecast back-test me ±${P(ac.un_mape)} (${FCH} din, ${ac.un_n} tests).`:''}</p>`;
   return `<div class="roi-card" id="roi-fc-users"><div class="roi-ct"><h3>Users, installs &amp; uninstalls · forecast</h3>${chips}</div>${kp}<div id="roi-fc-uc">${fcLine(fc,H,hs[k],fu[k],met.find(x=>x[0]===k)[1])}</div><div class="roi-tw" style="margin-top:10px">${tb}</div>${note}</div>`; }
 // 💸 Budget by country (owner-only: revenue — hidden in a developer view): the forecast's own country model (fc.plan,
 // engine vd) as a planner. Per country: installs = spend × installs-per-$ × (spend ÷ the training weeks' spend)^−e;
 // revenue within 30 / 90 / 180 days = spend × that country's revenue per $ (its own GA4 curve, matched so today's plan
-// = the forecast exactly) × (spend ÷ today's)^β (the ROI forms' β); next-$ ROI = (1 + β) × revenue per $. −/+ = 10% of
+// = the forecast exactly), the same per $ at any spend (back-tested: revenue follows the money; the ROI forms' β on top
+// did not win); next-$ ROI = (1 + β) × ROI as a range over the ROI forms' β (low … high). −/+ = 10% of
 // the row; "Keep total" (on by default) takes / gives the difference from the other rows in proportion. Rows keep
 // their order; a row outside its measured weekly spend range gets a warning. Today's plan reproduces the forecast.
 function plKey(d){ return d.app_id+'|'+((d.fc||{}).T||''); }
 function plState(d){ const pl=d.fc.plan; if(!PLAN||PLAN.k!==plKey(d)) PLAN={k:plKey(d),keep:true,s:Object.fromEntries(pl.rows.map(x=>[x.cc,+x.s0||0]))}; return PLAN; }
-function plRow(pl,x,s){ const e=ok(pl.e)?+pl.e:0, b=pl.beta&&ok(pl.beta[1])?+pl.beta[1]:0, H=pl.h||[30,90,180];
+function plRow(pl,x,s){ const e=ok(pl.e)?+pl.e:0, bt=(pl.beta||[]).filter(ok).map(Number), H=pl.h||[30,90,180];
   const inst=s>0?s*x.ppu*(x.sb>0?Math.pow(s/x.sb,-e):1):0;
-  const rev=(x.r||[]).map(r=>ok(r)&&s>0?s*r*(x.s0>0?Math.pow(s/x.s0,b):1):0);
-  const nx=(x.r||[]).map((r,j)=>ok(r)?(1+b)*r*(s>0&&x.s0>0?Math.pow(s/x.s0,b):1)/H[j]:null);
+  const rev=(x.r||[]).map(r=>ok(r)&&s>0?s*r:0);
+  const nx=(x.r||[]).map((r,j)=>ok(r)&&bt.length?[(1+Math.min(...bt))*r/H[j],(1+Math.max(...bt))*r/H[j]]:null);
   const lo=ok(x.lo)?Math.min(+x.lo,+x.s0||+x.lo):null, hi=ok(x.hi)?Math.max(+x.hi,+x.s0||0):null;   // today's level counts as seen
   const out=s>0&&((hi!=null&&s>hi*1.0001)||(lo!=null&&s<lo*0.9999));
   return {s,inst,rev,nx,roi:rev.map((r,j)=>s>0?r/(s*H[j]):null),out,lo,hi}; }
@@ -6959,7 +6961,7 @@ function plStep(d,cc,op){ const st=plState(d), pl=d.fc.plan, x=pl.rows.find(r=>r
   st.s[cc]=nv; }
 function fcPlan(d){ if(typeof window!=='undefined'&&window.__DEV_VIEW__) return '';
   const fc=d.fc, pl=fc&&fc.plan; if(!pl||!pl.rows||!pl.rows.length) return '';
-  const st=plState(d), H=+FCH, hs=pl.h||[30,90,180], j=Math.max(0,hs.indexOf(H)), b=pl.beta&&ok(pl.beta[1])?+pl.beta[1]:0;
+  const st=plState(d), H=+FCH, hs=pl.h||[30,90,180], j=Math.max(0,hs.indexOf(H));
   const R=pl.rows.map(x=>({x,now:plRow(pl,x,+x.s0||0),p:plRow(pl,x,st.s[x.cc]||0)}));
   const sum=(k,w,i)=>R.reduce((a,o)=>a+(i==null?o[w][k]:o[w][k][i]),0);
   const sP=sum('s','p'), sN=sum('s','now'), iP=(+pl.org||0)+sum('inst','p'), iN=(+pl.org||0)+sum('inst','now');
@@ -6980,12 +6982,12 @@ function fcPlan(d){ if(typeof window!=='undefined'&&window.__DEV_VIEW__) return 
     return `<tr><td class="roi-nm">${nm(cc)}${tag}${q.out?' <span class="roi-q" title="Measured range ke bahar">⚠️</span>':''}</td>`
       +`<td><span class="roi-pl"><button type="button" class="roi-plb" data-roi-pl="${E(cc)}|-" aria-label="${E(cc)} spend 10% kam">−</button><b>${MV(RV(q.s))}</b><button type="button" class="roi-plb" data-roi-pl="${E(cc)}|+" aria-label="${E(cc)} spend 10% zyada">+</button></span></td>`
       +`<td>${N(q.inst)}</td><td>${MPV(RV(cpi))}</td>${hs.map((h,i)=>`<td>${MC(RV(q.rev[i]))}</td>`).join('')}`
-      +`<td class="${pr>=0?'roi-up':'roi-dn'}">${MC(RV(pr),true)}</td><td>${P(q.roi[j])}</td><td>${P(q.nx[j])}</td></tr>`; }).join('');
+      +`<td class="${pr>=0?'roi-up':'roi-dn'}">${MC(RV(pr),true)}</td><td>${P(q.roi[j])}</td><td>${q.nx[j]?P(q.nx[j][0]).replace('%','')+'–'+P(q.nx[j][1]):'—'}</td></tr>`; }).join('');
   const tot=`<tr class="roi-tot"><td>Total (paid)</td><td>${MV(RV(sP))}</td><td>${N(sum('inst','p'))}</td><td>${MPV(RV(sum('inst','p')>0?sP/sum('inst','p'):null))}</td>${hs.map((h,i)=>`<td>${MC(RV(sum('rev','p',i)))}</td>`).join('')}<td>${MC(RV(sum('rev','p',j)-sP*H),true)}</td><td>${P(roiP)}</td><td>—</td></tr>`;
   const tb=`<div class="roi-tw"><table class="roi-t roi-plt"><thead><tr><th>Country</th><th>Spend / din</th><th>Installs / din</th><th>CPI</th>${hs.map(h=>`<th>Revenue ${h} din</th>`).join('')}<th>Profit ${H} din</th><th>ROI ${H} din</th><th>Next-$ ROI</th></tr></thead><tbody>${rows}${tot}</tbody></table></div>`;
   const ctl=`<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Keep total"><button type="button" data-roi-plk="1" aria-pressed="${st.keep}">Keep total ${st.keep?'on':'off'}</button></span><button type="button" class="roi-btn" data-roi-plr="1">Reset</button></div>`;
   const e=ok(pl.e)?+pl.e:0, wk=(pl.weeks||[]).map(fd).join(' + ');
-  const note=`<p class="roi-note"><b>Ye kaise ginta hai:</b> har country ka apna installs-per-$ (CPI) pichhle ${(pl.weeks||[]).length} complete hafton (${E(wk)}) ke Google Ads country data se. Kisi country ka spend badhe to uska CPI bhi badhta hai: spend 2× → CPI ×${Math.pow(2,e).toFixed(2)} (e ${e.toFixed(2)}, sab apps ke ${N(pl.en)} country-blocks se measured; raise aur cut dono pe ek hi e — alag alag back-test me kharab nikla). Har country ki kamai uske apne GA4 curve pe (us country ka install aaj ke paid mix ke muqable kitna kamata hai); aaj ke plan pe total bilkul upar wale forecast jitna. Spend badalne pe revenue per $ ×(naya ÷ aaj)<sup>β</sup>, β ${b.toFixed(2)} (ROI forms wala, range ${pl.beta?pl.beta.map(v=>(+v).toFixed(2)).join(' … '):'—'}) — next-$ ROI = (1 + β) × ROI.</p>`
+  const note=`<p class="roi-note"><b>Ye kaise ginta hai:</b> har country ka apna installs-per-$ (CPI) pichhle ${(pl.weeks||[]).length} complete hafton (${E(wk)}) ke Google Ads country data se. Kisi country ka spend badhe to uska CPI bhi badhta hai: spend 2× → CPI ×${Math.pow(2,e).toFixed(2)} (e ${e.toFixed(2)}, sab apps ke ${N(pl.en)} country-blocks se measured; raise aur cut dono pe ek hi e — alag alag back-test me kharab nikla). Har country ki kamai uske apne GA4 curve pe (us country ka install aaj ke paid mix ke muqable kitna kamata hai); aaj ke plan pe total bilkul upar wale forecast jitna. Spend badalne pe har country ka revenue per $ wahi rehta hai (back-test: revenue spend ke saath seedha chalta hai; ROI forms wala β upar se lagane pe back-test behtar nahi hua) — isliye Next-$ ROI ek range hai: (1 + β) × ROI, β ${pl.beta?pl.beta.map(v=>(+v).toFixed(2)).join(' … '):'—'} (ROI forms wala).</p>`
     +`<p class="roi-note"><b>Seemayein:</b> aaj ke spend ka ${P(pl.cov)} un countries me jinka apna GA4 curve hai; baaki (Other / pooled curve) sab ka milaju curve. ⚠️ wali country measured spend range (pichhle hafton ka har hafte ka spend/din + aaj ka) ke bahar — wahan ka andaza data se nahi. Upar wala forecast is planner se nahi badalta (sirf slider se).</p>`
     +(warn.length?`<p class="roi-note roi-wt">⚠️ Measured range ke bahar: ${warn.join(' · ')}</p>`:'');
   return `<div class="roi-card" id="roi-plan"><div class="roi-ct"><h3>💸 Budget by country</h3><span class="roi-note">−/+ = us country ka spend 10% · Keep total on = baaki countries se adjust</span></div>${ctl}${tiles}${tb}${note}</div>`; }

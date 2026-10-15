@@ -407,7 +407,8 @@ def plan_out(pl, f, fac, beta):
     """The engine's planner inputs (forecast_vd.cs_plan) → the page's "Budget by country" card: per row its revenue per $
     of spend within 30 / 90 / 180 days (r) = the forecast's own paid-install revenue (bias-corrected, at today's spend)
     × the row's share of it ÷ the row's spend; + the old users' and organic installs' revenue (corrected) the plan does
-    not move, and the ROAS-to-spend range beta (the four ROI forms' own) for a row's spend moves."""
+    not move, and the ROAS-to-spend range beta (the four ROI forms' own) the page shows the next-$ ROI as a range with
+    (a row's revenue per $ itself stays flat when its spend moves: beta on top did not win the back-test)."""
     if not pl or not pl.get("rows"):
         return None
 
