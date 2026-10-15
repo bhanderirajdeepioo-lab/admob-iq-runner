@@ -419,13 +419,14 @@ def _late_numbers(app, T, p):
 
 
 def test_late_country_cells_off_or_not_complete_change_nothing():
-    """gc 2 with no complete late cell (no d2, or every band's window only partly read) gives exactly the gc 0 numbers;
-    so does a switch the app's setting leaves off."""
+    """gc 2 / 3 with no complete late cell (no d2, or every band's window only partly read) give exactly the gc 0
+    numbers; so does a switch the app's setting leaves off."""
     T = date(2025, 10, 6)
     for app in (_mixapp(read0=T + timedelta(days=30)),                  # nothing read before T
                 _mixapp(read0=T - timedelta(days=8))):                  # 3 days to T − 5: no late window whole
         base = _late_numbers(app, T, {"gc": 0})
         assert _late_numbers(app, T, {"gc": 2}) == base
+        assert _late_numbers(app, T, {"gc": 3}) == base
     app = _mixapp()
     assert _late_numbers(app, T, {"gc": 0}) == _late_numbers(dict(app, ida=dict(app["ida"], c2={})), T, {"gc": 0})
 
@@ -433,8 +434,8 @@ def test_late_country_cells_off_or_not_complete_change_nothing():
 def test_late_country_cells_each_country_on_its_own_curve_past_90():
     """Two countries, the better one's curve flat and the other's fading fast (their standing keeps moving past day
     90); the better one's share jumps from 20 % to 60 % on Aug 1. With the late cells (gc 2) the install weeks after the
-    jump get their own countries' standing past day 90 — their revenue to day 180 / 365 and their users at 120–365
-    come closer to the truth than with the 61–90 standing carried (gc 0)."""
+    jump get their own countries' standing past day 90 — their users at 120–365 (gc 2) and their revenue to day 180 /
+    365 too (gc 3) come closer to the truth than with the 61–90 standing carried (gc 0)."""
     app = _mixapp()
     T = date(2025, 11, 2)
     truth = {}
@@ -443,7 +444,7 @@ def test_late_country_cells_each_country_on_its_own_curve_past_90():
         truth[X] = (lambda L, q=q: 2000 * (q * a_hi(L) + (1 - q) * a_lo(L)),
                     lambda L, q=q: 2000 * (q * u_hi(L) + (1 - q) * u_lo(L)))
     e = {}
-    for gc in (0, 2):
+    for gc in (0, 2, 3):
         p = VD.params({"gc": gc, "bo": 0.5, "bn": 0.5, "cq": 0.0})
         st = VD.prepare(_fresh(app), T, p, {})
         er = eu = 0.0
@@ -452,12 +453,29 @@ def test_late_country_cells_each_country_on_its_own_curve_past_90():
             er += sum(abs(v / sum(truth[X][0](L) for L in range(91, C + 1)) - 1) for v, C in zip(got, (180, 365)))
             eu += sum(abs(v / truth[X][1](g) - 1) for v, g in zip(VD.cohort_users(st, X, C2L), C2L))
         e[gc] = (er, eu)
-    assert e[2][0] < 0.85 * e[0][0] and e[2][1] < 0.8 * e[0][1], e
+    assert e[3][0] < 0.85 * e[0][0] and e[3][1] < 0.8 * e[0][1], e
+    assert e[2][1] < 0.8 * e[0][1] and e[2][1] == e[3][1], e             # gc 2: the users the same as gc 3
     # what the page shows: the share of the old installs' revenue at ages 91–427 resting on measured cells
-    gx = VD.forecast(_fresh(app), T, {"gc": 2}, h=180)["parts"]["gx"]
-    assert gx["on"] and 0 < gx["old"] < 1 and 0.5 < gx["meas"] <= 1 and gx["weeks"][0] > 0
-    gx0 = VD.forecast(_fresh(app), T, {"gc": 0}, h=180)["parts"]["gx"]
-    assert not gx0["on"] and abs(gx0["meas"] - gx["meas"]) < 0.01   # what is ready, even while gc stays off
+    gx = VD.forecast(_fresh(app), T, {"gc": 3}, h=180)["parts"]["gx"]
+    assert gx["on"] == 3 and 0 < gx["old"] < 1 and 0.5 < gx["meas"] <= 1 and gx["weeks"][0] > 0
+    for gc in (0, 2):                                                     # what is ready, whatever the level in use
+        g = VD.forecast(_fresh(app), T, {"gc": gc}, h=180)["parts"]["gx"]
+        assert g["on"] == gc and abs(g["meas"] - gx["meas"]) < 0.01
+
+
+def test_late_country_cells_gc2_reads_the_users_only():
+    """gc 2 uses the late cells' users (u2) only: scrambling their revenue (r2) moves nothing (the late revenue bands
+    stay the 61–90 standing carried); gc 3 reads both."""
+    app = _mixapp()
+    T = date(2025, 11, 2)
+    odd = _mixapp()
+    for W, cells in odd["ida"]["c2"].items():
+        for k, e in cells.items():
+            e["r2"] = [v * (3.0 if int(k) else 0.2) for v in e["r2"]]
+    p = {"bo": 0.5, "bn": 0.5, "cq": 0.0}
+    assert _late_numbers(app, T, dict(p, gc=2)) == _late_numbers(odd, T, dict(p, gc=2))
+    assert _late_numbers(app, T, dict(p, gc=3)) != _late_numbers(odd, T, dict(p, gc=3))
+    assert _late_numbers(app, T, dict(p, gc=2)) != _late_numbers(app, T, dict(p, gc=0))
 
 
 def test_late_country_cells_no_look_ahead():
@@ -467,20 +485,33 @@ def test_late_country_cells_no_look_ahead():
     full = _mixapp()
     cut = _mixapp(upto=T - timedelta(days=5))
     assert full["ida"]["c2"] != cut["ida"]["c2"]
-    p = {"gc": 2, "bo": 0.5, "bn": 0.5, "cq": 1.0}
-    assert _late_numbers(full, T, p) == _late_numbers(cut, T, p)
-    assert _late_numbers(full, T, p) != _late_numbers(full, T, {"gc": 0, "bo": 0.5, "bn": 0.5, "cq": 1.0})
+    for gc in (2, 3):
+        p = {"gc": gc, "bo": 0.5, "bn": 0.5, "cq": 1.0}
+        assert _late_numbers(full, T, p) == _late_numbers(cut, T, p)
+        assert _late_numbers(full, T, p) != _late_numbers(full, T, {"gc": 0, "bo": 0.5, "bn": 0.5, "cq": 1.0})
 
 
-def test_tune_tries_the_cells_only_where_they_can_change_something():
-    """The switches are tuned like the mix weights; an origin whose cells are not complete reuses the plain fit, and
-    every step's score is still the objective of a back-test from scratch."""
+def test_the_switches_are_held_off():
+    """gc / pc did not win out of sample (lab, 15 Oct): GRID holds both at 0 for every app — a tune never turns them
+    on, and a setting stored with one on starts (and stays) at 0."""
+    assert VD.GRID["gc"] == (0,) and VD.GRID["pc"] == (0,)
+    app = _rough(_mixapp())
+    p, bt, steps = VD.tune(_fresh(app), None, start_p={"bo": 0.5, "bn": 0.5, "cq": 0.0, "gc": 2, "pc": 1})
+    assert p["gc"] == 0 and p["pc"] == 0 and steps[0]["p"]["gc"] == 0 and steps[0]["p"]["pc"] == 0
+
+
+def test_tune_tries_the_cells_only_where_they_can_change_something(monkeypatch):
+    """Once in GRID, the switches are tuned like the mix weights; an origin whose cells are not complete reuses the
+    plain fit, and every step's score is still the objective of a back-test from scratch."""
+    monkeypatch.setitem(VD.GRID, "gc", (0, 2, 3))
+    monkeypatch.setitem(VD.GRID, "pc", (0, 1))
     app = _rough(_mixapp())
     ors = F.origins(app)
     moved = [T for T in ors if VD._moves(_fresh(app), T, 2, 0)]
     assert moved and len(moved) < len(ors)
+    assert set(moved) <= {T for T in ors if VD._moves(_fresh(app), T, 3, 0)}
     p, bt, steps = VD.tune(_fresh(app), None, start_p={"bo": 0.5, "bn": 0.5, "cq": 0.0})
-    assert set(p) == set(VD.GRID) and p["gc"] in (0, 2) and p["pc"] in (0, 1)
+    assert set(p) == set(VD.GRID) and p["gc"] in (0, 2, 3) and p["pc"] in (0, 1)
     for s in steps:
         assert VD.objective(VD.backtest(_fresh(app), s["p"], None, ors)) == s["score"]
     assert bt == VD.backtest(_fresh(app), p, None, ors)
@@ -597,3 +628,30 @@ def test_paid_cells_measure_the_paid_premium():
     f2 = VD.forecast(make_paid(), T, {"pc": 1, "bo": 0.5, "bn": 1.0}, h=60, spend={D: 2 * v for D, v in s1.items()})
     assert f1["rev"]["org"] == f2["rev"]["org"] and f1["rev"]["old"] == f2["rev"]["old"]
     assert all(abs(b - 2 * a) < 1e-9 * max(1.0, b) for a, b in zip(f1["rev"]["paid"], f2["rev"]["paid"]))
+
+
+def test_no_paid_installs_no_paid_vs_organic_source():
+    """An app with no paid installs (no Google Ads rows, no spend): the regression has no paid share to learn from —
+    paid = organic by construction, so the "why" names no source (the page prints no paid ÷ organic line)."""
+    T = date(2025, 11, 2)
+    app = make_paid(cp=False)
+    for e in app["days"].values():
+        e["sp"] = 0.0
+        e.pop("na", None)
+    f = VD.forecast(app, T, {"pc": 0, "bo": 0.5, "bn": 1.0}, h=90)
+    nv = f["parts"]["nv"]
+    assert f["parts"]["nvsrc"] is None and abs(nv["paid"][1] / nv["org"][1] - 1) < 1e-12
+    assert VD.forecast(make_paid(cp=False), T, {"pc": 0, "bo": 0.5, "bn": 1.0}, h=90)["parts"]["nvsrc"] == "ads"
+
+
+def test_paid_split_kept_per_origin():
+    """_paid_split keeps its result per T: with no lags the lag view is the app itself, shared by every origin — a
+    call at an older origin must not stand in for a newer one."""
+    T1, T2 = date(2025, 9, 14), date(2025, 12, 14)
+    app = make_paid()
+    app["glag"] = app["clag"] = app["tlag"] = 0
+    assert VD.lag_view(app, T1, 0, 0, 0) is app
+    old = VD._paid_split(app, T1)
+    new = VD._paid_split(app, T2)
+    fresh = VD._paid_split(make_paid(), T2)
+    assert new == fresh and new != old and sum(1 for x in new if x) > sum(1 for x in old if x)

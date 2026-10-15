@@ -6980,7 +6980,7 @@ function fcWhy(d){ const fc=d.fc, v=fc.drv||{}; if(!v.installs) return '';
     +cty.map(c=>{ const two=(a,f,good)=>{ if(!a||!ok(a[0])) return '—'; const ch=ok(a[1])&&a[1]?a[0]/a[1]-1:null, up=ch!=null&&ch>=0; return `${f(a[0])} <small class="${ch==null||good==null?'':(up===good?'roi-up':'roi-dn')}">/ ${ok(a[1])?f(a[1]):'—'}</small>`; };
       return `<tr><td class="roi-nm">${valFlag(c.cc)}&nbsp;${E(valCtyName(c.cc))}</td><td>${two(c.share,pc,null)}</td><td>${two(c.d1,x=>Math.round(x)+'%',true)}</td><td>${two(c.rpi7,mpv,true)}</td>${hasE?`<td>${two(c.ecpm,mpv,true)}</td>`:''}<td>${two(c.cpi,mpv,false)}</td><td>${c.dec?dchip(c.dec):'—'}</td></tr>`; }).join('')+`</tbody></table>`:'';
   const att=fc.att?`<p class="roi-note">Pichhle tests me forecast ki galti kahan se aayi: ${Object.entries(fc.att).sort((a,b)=>b[1]-a[1]).map(([k,x])=>`<b>${Math.round(x*100)}%</b> ${E(FC_C[k]||k)}`).join(' · ')}.</p>`:'';
-  return `<div class="roi-card"><div class="roi-ct"><h3>Forecast kyun upar / neeche · abhi vs usual (X)</h3><span class="roi-note">X = usse pehle ke 8 hafte · model in sab ko apne aap use karta hai</span></div>${fcSplit(v.split,mv,mpv)}${fcMix(fc.parts)}${fcGx(fc.parts)}<div class="roi-tw">${t}</div>${ct?`<div class="roi-tw" style="margin-top:10px">${ct}</div>`:''}${att}</div>`; }
+  return `<div class="roi-card"><div class="roi-ct"><h3>Forecast kyun upar / neeche · abhi vs usual (X)</h3><span class="roi-note">X = usse pehle ke 8 hafte · model in sab ko apne aap use karta hai</span></div>${fcSplit(v.split,mv,mpv)}${fcMix(fc.parts)}${fcGx(fc.parts,fc.p)}<div class="roi-tw">${t}</div>${ct?`<div class="roi-tw" style="margin-top:10px">${ct}</div>`:''}${att}</div>`; }
 // revenue / day, last 14 days vs X = users × ads per user × country mix × each country's own eCPM (AdMob country report:
 // the four multiply back to the revenue change exactly) — and the countries that moved it most
 function fcSplit(s,mv,mpv){ if(!s||!s.rev||!s.rev[1]) return '';
@@ -7001,15 +7001,27 @@ function fcMix(p){ if(!p||!ok(p.mix)) return ''; const x=p.mix-1;
   return `<p class="roi-note">Naye installs ki countries ke hisaab se: average install se <b class="${Math.abs(x)<0.02?'':x>=0?'roi-up':'roi-dn'}">×${p.mix.toFixed(2)}</b> kamai (pehle 90 din, har country apne curve pe). `
     +(p.mix_on?(p.engine==='vd'?'Model har install-week ko uski <b>countries ke apne curves</b> pe chalata hai.':'Is app me model <b>country-wise curves</b> pe chal raha hai (back-test me zyada sahi nikla).'):'Is app me country-wise curves se back-test behtar nahi hua — model ek combined curve pe hai; back-test roz dobara check karta hai.')+`</p>`; }
 // 🌍 GA4's install-day extension in the model: how much of the old installs' revenue past day 90 rests on measured
-// country cells (vs the 61–90 standing carried), and where the paid vs organic split of new installs comes from
-function fcGx(p){ if(!p||p.engine!=='vd') return ''; const pc=v=>ok(v)?Math.round(v*100)+'%':'—', g=p.gx, nv=p.nv; let h='';
-  if(g&&ok(g.old)){ const m=ok(g.meas)?g.meas:0, um=ok(g.umeas)?g.umeas:0;
+// country cells (vs the 61–90 standing carried), and where the paid vs organic split of new installs comes from.
+// fp = the stored setting: a switch missing from it was never tried by this app's back-test; p.tun[k] false = the
+// engine holds the switch off for every app (not proven out of sample yet). A split with no measured source: no line.
+function fcGx(p,fp){ if(!p||p.engine!=='vd') return ''; const pc=v=>ok(v)?Math.round(v*100)+'%':'—', g=p.gx, nv=p.nv, tu=p.tun||{}; let h='';
+  const held=k=>tu[k]===false, tried=k=>!!(fp&&(k in fp));
+  if(g&&ok(g.old)){ const m=ok(g.meas)?g.meas:0, um=ok(g.umeas)?g.umeas:0, on=g.on===true||g.on>=3, uon=g.on===2;
     h+=`<p class="roi-note" data-fc-gx="1"><b>Old installs after day 90:</b> agle 180 din ki purane users ki kamai ka <b>${pc(g.old)}</b> 91–427 din wali age se aata hai. `
       +`Isme se <b>${pc(m)}</b> kamai aur <b>${pc(um)}</b> users ab GA4 ke late country cells pe <b>measured</b> hain (har country apna curve); baaki <b>carried</b> — 61–90 din wala country standing aage chalaya. `
-      +(g.on?'Model me <b>on</b> — is app ka back-test isse behtar hua.':((m>0||um>0)?'Model me abhi <b>off</b> — is app ka back-test isse abhi behtar nahi hua; roz dobara check hota hai.':'GA4 ka purana data abhi aa raha hai (backfill) — weeks pure hote hi back-test check karega.'))+`</p>`; }
-  if(nv&&nv.org&&nv.paid&&nv.org[1]>0&&nv.paid[1]>0){ const x=nv.paid[1]/nv.org[1];
+      +(on?'Model me <b>on</b> — is app ka back-test isse behtar hua.'
+        :uon?'Model me <b>users ke liye on</b> — is app ka back-test isse behtar hua; kamai (revenue) ka standing abhi carried hi hai.'
+        :held('gc')?'Model me abhi <b>off</b> (sab apps me) — naye, pehle na dekhe back-test me abhi sabit nahi hua ki isse forecast behtar hota hai; GA4 backfill pura hone par dobara test hoga.'
+        :!tried('gc')?'Back-test ne abhi ise check nahi kiya — agle tune me hoga.'
+        :(m>0||um>0)?'Model me abhi <b>off</b> — is app ka back-test isse abhi behtar nahi hua; roz dobara check hota hai.'
+        :'GA4 ka purana data abhi aa raha hai (backfill) — weeks pure hote hi back-test check karega.')+`</p>`; }
+  if(nv&&nv.org&&nv.paid&&nv.org[1]>0&&nv.paid[1]>0&&(p.nvsrc==='cp'||p.nvsrc==='ads')){ const x=nv.paid[1]/nv.org[1];
     h+=`<p class="roi-note" data-fc-pc="1"><b>New installs, paid vs organic:</b> ek paid install pehle 30 din me organic se <b>×${x.toFixed(2)}</b> kamata hai — `
-      +(p.nvsrc==='cp'?'GA4 ke paid users (Google Ads campaign wale, har country alag) se <b>measured</b>.':'Google Ads install count se andaaza (purana tareeka)'+(p.pc?'':' — GA4 paid cells abhi day 30 tak poore nahi, ya back-test me behtar nahi')+'.')+`</p>`; }
+      +(p.nvsrc==='cp'?'GA4 ke paid users (Google Ads campaign wale, har country alag) se <b>measured</b>.'
+        :'Google Ads install count se andaaza (purana tareeka)'+(p.pc?''
+          :held('pc')?' — GA4 paid cells wala tareeka naye, pehle na dekhe back-test me abhi sabit nahi hua, isliye sab apps me off'
+          :!tried('pc')?' — GA4 paid cells: back-test ne abhi check nahi kiya, agle tune me hoga'
+          :' — GA4 paid cells abhi day 30 tak poore nahi, ya back-test me behtar nahi')+'.')+`</p>`; }
   return h; }
 function fcAcc(d){ const fc=d.fc, bt=fc.bt||[]; if(!bt.length) return '';
   const cal=fc.cal||{}, hs=['30','90','180'];
@@ -7023,7 +7035,7 @@ function fcAcc(d){ const fc=d.fc, bt=fc.bt||[]; if(!bt.length) return '';
   const evh=ev.length?`<p class="roi-note">⚡ <b>Achanak jhatke</b> (koi model pehle se nahi dekh sakta — range inke bina, upar alag likha): ${ev.map(e=>`${E(fd(e.at))} ${e.kind==='installs'?'installs':'ARPDAU'} ×${e.x}`).join(' · ')}</p>`:'';
   return `<div class="roi-card"><div class="roi-ct"><h3>Kitna sahi tha · back-test</h3><span class="roi-note">har 2 hafte pe purane din se ${hs[ix]} din aage ka forecast vs asli · bar = error</span></div><div class="roi-tw">${sum}</div>${ch}${live}${evh}</div>`; }
 function fcLearn(d){ const fc=d.fc, log=(fc.log||[]).slice().reverse(); if(!log.length) return '';
-  const pd=p=>Object.entries(p||{}).map(([k,v])=>`${E(FC_P[k]||k)}: <b>${E(k==='bo'||k==='bn'||k==='cq'?Math.round(v*100)+'%':k==='hl'&&v>=100000?'sab barabar':k==='m'?(v==='split'?'alag, ghatte hue':'ek ratio'):k==='g'||k==='c'||k==='gc'||k==='pc'?(v?'on':'off'):k==='r'?(v>=1?'poora':v>0?'aadha':'off'):String(v))}</b>`).join(' · ');
+  const pd=p=>Object.entries(p||{}).map(([k,v])=>`${E(FC_P[k]||k)}: <b>${E(k==='bo'||k==='bn'||k==='cq'?Math.round(v*100)+'%':k==='hl'&&v>=100000?'sab barabar':k==='m'?(v==='split'?'alag, ghatte hue':'ek ratio'):k==='gc'?(v>=3?'on':v?'users on':'off'):k==='g'||k==='c'||k==='pc'?(v?'on':'off'):k==='r'?(v>=1?'poora':v>0?'aadha':'off'):String(v))}</b>`).join(' · ');
   return `<div class="roi-card"><div class="roi-ct"><h3>Model kya seekh raha hai</h3><span class="roi-note">roz naye data pe dobara test → jo setting sabse sahi, wahi</span></div>`
     +log.slice(0,6).map((x,i)=>{ const o=log[i+1], sw=o&&(x.eng||'v0')!==(o.eng||'v0');   // the first entry of another engine
       return `<div class="roi-lgr"><b>${E(fd(x.d))}</b>${sw?` · <b>${x.eng==='vd'?'New model (A + B)':'Old model'}</b> <small>(error ab ${x.eng==='vd'?'total + har install-din + naye installs':'sirf total'} pe — pichhle error se seedha compare nahi)</small>`:''} · ${x.changed&&x.changed.length?`badla: ${x.changed.map(k=>E(FC_P[k]||k)).join(', ')}`:'settings wahi'}${x.sc_old!=null?` · error ${P(x.sc_old)} → <b>${P(x.sc)}</b>`:(x.sc!=null?` · error <b>${P(x.sc)}</b>`:'')}${x.cause?` · zyada galti: ${E(FC_C[x.cause]||x.cause)}`:''}${x.bias30?` · bias ${x.bias30>0?'+':'−'}${Math.abs(Math.round(x.bias30*100))}% theek kiya`:''}</div>`; }).join('')

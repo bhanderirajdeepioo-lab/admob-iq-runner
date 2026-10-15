@@ -83,6 +83,8 @@ def test_forecast_view(out):
     assert out["fc_vd"]                                                # engine vd's settings and note
     assert out["fc_vd_switch"]                                         # … and the engine switch in the learning log
     assert out["fc_gx"]                                                # GA4's late / paid cells: measured vs carried
+    assert out["fc_gx_nosrc"]                                          # … no paid ÷ organic line without a source
+    assert out["fc_gx_held"]                                           # … held off / never checked / users only / on
 
 
 def test_wiring():

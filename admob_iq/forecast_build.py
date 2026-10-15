@@ -411,6 +411,13 @@ def _rx(v, n=6):
     return v
 
 
+def _tuned_now(E, p):
+    """Could the current engine's tune have stored setting p? Every setting it tunes is there (a setting stored before a
+    switch existed has never been tested with it) and on its grid (a switch the engine now holds at one value)."""
+    p = p or {}
+    return set(E.DEFAULT) <= set(p) and all(p[k] in vals for k, vals in getattr(E, "GRID", {}).items())
+
+
 def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None, unst=None):
     """→ the page's forecast for this app (None: nothing yet). Never raises."""
     try:
@@ -444,7 +451,8 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
             fresh = same and old.get("T") == _iso(app["last"]) and age_h is not None and age_h < EVERY_H
             can = run.left() > 0
         else:                                            # vd: the forecast is re-made every build below (cheap); the
-            fresh = same and age_h is not None and age_h < EVERY_H     # tune once a day, if its seconds fit the budget
+            fresh = (same and age_h is not None and age_h < EVERY_H    # tune once a day, if its seconds fit the budget,
+                     and _tuned_now(E, old.get("p")))                  # at once for a setting it can't make
             last_sec = old.get("tune_sec") if old.get("v") == Vr else None
             can = run.left() > TUNE_MARGIN * float(last_sec or TUNE_GUESS_SEC)
         seas = run.season or F.season(app["days"])

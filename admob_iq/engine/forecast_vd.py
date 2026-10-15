@@ -29,21 +29,25 @@ newest GA4 day ≤ T − lag (GA4 lands `glag` days after AdMob, measured per ap
   DAU the same mix of users; uninstalls from forecast.uninstall_curve (unchanged).
 
 GA4's install-day extension (IDAY_EXT: c2 / cp cells, the d2 ledger; still back-filling, so its coverage grows daily) —
-two switches, each on for an app only when its own back-test is better with it (tuned with the mix weights; a cell is
-used only when every activity day of it was read, so an origin without one is exactly the model without them):
-  gc 2  every country's own curve past day 90: revenue 91–180 / 181–365 / 366–427 and users at 120 / 180 / 270 / 365
-        per country from the late cells, each shrunk toward the country's own standing in the band before (its
-        installs n ÷ (n + CKC)) — 0: the 61–90 standing carried. (Lab, 15 Oct: on the cells themselves a newer week's
-        country shares past day 90 came closer with it than carried; the back-tests reach few such ages yet.)
+two switches (a cell is used only when every activity day of it was read, so an origin without one is exactly the model
+without them). Both are HELD OFF for every app (GRID): tuned per app they were chosen in-sample from a handful of
+back-test origins and did not win out of sample (lab, 15 Oct: no better than a tie across apps, and a per-app on / off
+decided on older origins did not hold on the newest). The code, the "why" and _moves stay: they go back into GRID only
+after the post-backfill out-of-sample re-run shows a win.
+  gc 2  every country's own users past day 90 (at 120 / 180 / 270 / 365) from the late cells, each shrunk toward the
+        country's own standing at the lag before (its installs n ÷ (n + CKC)) — 0: the lag-90 standing carried.
+        (Lab: on the cells themselves a newer week's country shares of users past day 90 mostly came closer.)
+  gc 3  gc 2 + each country's own revenue 91–180 / 181–365 / 366–427 the same way — 0 / 2: the 61–90 standing
+        carried. (Lab: the revenue cells are still few and mixed — not shown to win on their own yet.)
   pc 1  new installs' paid vs organic split from GA4's paid users (cp: every country's own paid / organic revenue and
         users per install, at the newest paid / organic country mix) instead of the regression on the Google Ads
         install share (an upper bound) — the installs still come from spend (paid) and the organic rate, unchanged.
         (Lab: a newer week's paid ÷ organic revenue per install came closer than with the regression.)
 
 Structure (STRUCT, 12 knobs) is fixed portfolio-wide (version STRUCT_VERSION; re-checked offline, never per app: tuned
-per app it measured worse on unseen origins); only the mix weights bo, bn, cq and the switches gc, pc are tuned per app
-(GRID), on the same back-tests as before plus each past install day's future revenue and each new install's value
-(objective()).
+per app it measured worse on unseen origins); only the mix weights bo, bn, cq are tuned per app (GRID; the switches
+gc, pc held at 0), on the same back-tests as before plus each past install day's future revenue and each new install's
+value (objective()).
 Every back-test origin sees GA4 only to T − glag, each install day's final daily data only to T − clag and its
 checkpoints after day 30 only to T − tlag, as the live build does (lag_view; the three lags measured per app)."""
 import bisect
@@ -59,16 +63,18 @@ HORIZONS = F.HORIZONS
 STRUCT_VERSION = "2026-10-15"
 STRUCT = {"m": "ratio", "hl": 45, "Kc": 30, "w": 28, "wn": 7, "g": 0.0, "W": 14,          # view A (+ g, W shared)
           "bhl": 100000, "Ku": 3, "bw": 0, "wa": 56, "nv": 1}                             # view B
-GRID = {"bo": (0.0, 0.5, 1.0), "bn": (0.0, 0.5, 1.0), "cq": (0.0, 0.5, 1.0), "gc": (0, 2), "pc": (0, 1)}
+GRID = {"bo": (0.0, 0.5, 1.0), "bn": (0.0, 0.5, 1.0), "cq": (0.0, 0.5, 1.0), "gc": (0,), "pc": (0,)}
 DEFAULT = {"bo": 0.5, "bn": 0.5, "cq": 0.0, "gc": 0, "pc": 0}
 # m  "ratio": what no install day covers (> 427 days) = AdMob − k·Σ GA4 bands; "split": a decaying rest
 # hl / bhl  the curves' half-life (100000 = every install day alike); Kc / Ku  credibility of an install day's own anchor
 # w / wn  GA4 days of the levels (past install days / new installs); bw / wa  B's calendar index / ARPDAU window
 # g  month-of-year season strength (0 off); W  installs-model window; nv 1 organic and paid new installs apart
 # bo / bn  B's weight on past install days / new installs; cq  how much of the AdMob-only move q is carried
-# gc 2  each country's own curve past day 90 from GA4's late cells (c2) — 0: the 61–90 standing carried
+# gc 2  each country's own users past day 90 from GA4's late cells (c2); 3: + its revenue 91–427 — 0: lag 90 / 61–90
+#       carried
 # pc 1  new installs' paid vs organic value from GA4's paid cells (cp) — 0: regressed on the Google Ads install share
-#       (gc / pc: on for an app only when its own back-test is better with them; no complete cell = identical)
+#       (gc / pc: held at 0 for every app — GRID (0,) — until an out-of-sample back-test shows a win; no complete cell
+#       = identical)
 
 
 def params(p=None):
@@ -145,8 +151,8 @@ GA4_LAG = 14                   # the levels' window: the newest w days with a GA
 LOC = 7                        # the install days within ±LOC days pool a cohort's shrink target
 QC_FOLDED = ("ok", "smp", "gap")
 
-# ── GA4's install-day extension (IDAY_EXT: c2 / cp cells, d2 ledger) — switches gc / pc, decided per app by its own
-#    back-test (GRID); with a switch off, or nothing complete yet, every number is exactly the one without them ─────
+# ── GA4's install-day extension (IDAY_EXT: c2 / cp cells, d2 ledger) — switches gc / pc (GRID: held at 0 until an
+#    out-of-sample win); with a switch off, or nothing complete yet, every number is exactly the one without them ────
 C2B = ((91, 180), (181, 365), (366, 427))      # c2 r2: ad revenue at these install ages (per install week × slot)
 C2L = (120, 180, 270, 365)                     # c2 u2: active users at these ages
 NCB, NCL = len(F.CB), len(F.CL)
@@ -380,11 +386,12 @@ def mix_fixed(app, T, hl, gc=0, info=None):
     """forecast.mix, fixed: per (week, band) / (week, lag) only the activity days folded into the cells count (the ledger's
     cst), a week whose install days (to T) are not all folded is left out, the installs to come take the newest two
     COMPLETE read weeks, and a country slot's cells in weeks it was only partly read (cset_since) are put back into ZZ.
-    gc 2: + each country's own standing past day 90 (revenue 91–180 / 181–365 / 366–427, users at 120 / 180 / 270 / 365)
-    from the c2 cells of the weeks whose every activity day of that band was read (d2 c2st), each shrunk toward the
-    country's standing in the band before (its installs n ÷ (n + CKC); a band's weeks weigh relative to its newest
-    complete one) — nothing complete: the band before carried, as without gc. info (a dict): + "mf" {week: (revenue,
-    users) share of the late factors resting on measured cells} and "n" (complete late weeks per band / lag)."""
+    gc 2: + each country's own standing past day 90 (users at 120 / 180 / 270 / 365; gc 3: + revenue 91–180 / 181–365 /
+    366–427) from the c2 cells of the weeks whose every activity day of that band was read (d2 c2st), each shrunk toward
+    the country's standing in the band before (its installs n ÷ (n + CKC); a band's weeks weigh relative to its newest
+    complete one) — nothing complete (or gc 2's revenue bands): the band before carried, as without gc. info (a dict):
+    + "mf" {week: (revenue, users) share of the late factors resting on measured cells} and "n" (complete late weeks per
+    band / lag)."""
     cty, start = app.get("cty") or {}, app["start"]
     fo = _folded(app)
     since, zz = _since(app)
@@ -442,7 +449,7 @@ def mix_fixed(app, T, hl, gc=0, info=None):
     lr = lu = 10 ** 9                             # gc: from these indexes on, shrunk toward the band before
     nmeas = None
     if gc:
-        nmeas = _a_late(app, T, hl, weeks, cells_of, bad_of, zz, rs, us, ra, ua)
+        nmeas = _a_late(app, T, hl, weeks, cells_of, bad_of, zz, rs, us, ra, ua, gc >= 3)
         lr, lu, nb, nl = nb, nl, len(CBX), len(CLX)
 
     def rel(per, tot, nk, late, zs=None):
@@ -523,10 +530,11 @@ def mix_fixed(app, T, hl, gc=0, info=None):
     return fx, (fac([cells_of[W] for W in done]) if done else None)
 
 
-def _a_late(app, T, hl, weeks, cells_of, bad_of, zz, rs, us, ra, ua):
+def _a_late(app, T, hl, weeks, cells_of, bad_of, zz, rs, us, ra, ua, rev=True):
     """gc: the late bands / lags (c2) into view A's accumulators, extended in place to len(CBX) / len(CLX); a (week,
-    band) only when every activity day of it was read; weights relative to the band's newest complete week. → the
-    complete weeks per late band and lag."""
+    band) only when every activity day of it was read; weights relative to the band's newest complete week; rev False
+    (gc 2): the late lags only — the late bands stay empty (the 61–90 standing carried). → the complete weeks per late
+    band (0 without rev) and lag."""
     nb, nl, nbx, nlx = len(F.CB), len(F.CL), len(CBX), len(CLX)
     fo2 = _xfold(app, "c2st")
     for x in rs.values():
@@ -538,7 +546,7 @@ def _a_late(app, T, hl, weeks, cells_of, bad_of, zz, rs, us, ra, ua):
     if fo2 is None:
         return [0] * (len(C2B) + len(C2L))
     lc = {W: _late_cells(app, W, cells_of[W], bad_of[W], zz) for W in weeks}
-    okb = [[W for W in weeks if W + timedelta(days=6 + hi) <= T
+    okb = [[W for W in weeks if rev and W + timedelta(days=6 + hi) <= T
             and _cov(fo2, W + timedelta(days=lo), W + timedelta(days=6 + hi))] for lo, hi in C2B]
     okl = [[W for W in weeks if W + timedelta(days=6 + g) <= T
             and _cov(fo2, W + timedelta(days=g), W + timedelta(days=6 + g))] for g in C2L]
@@ -1279,8 +1287,8 @@ def _arp7(pre, D):
 def _bmix(app, T, hl, gc=0):
     """B's country mix: weeks from the first full country read on (cfrom), a slot added late folded into ZZ while it was
     partial; per country its users at each lag and its revenue per user-day (cells to day 90) ÷ every install's →
-    ({week: (fu, fa)}, the newest two complete weeks' (fu, fa)). gc 2: + the late lags / bands (c2; _b_late), each
-    country shrunk toward its standing in the lag / band before."""
+    ({week: (fu, fa)}, the newest two complete weeks' (fu, fa)). gc 2: + the late lags (c2; _b_late), gc 3: + the late
+    bands too, each country shrunk toward its standing in the lag / band before."""
     pre = _pre(app)
     key = ("mix", T, hl, gc)
     if key in pre["memo"]:
@@ -1370,7 +1378,7 @@ def _bmix(app, T, hl, gc=0):
     if gc:
         bad_of = {W: [k for k in since if zz is not None
                       and any(W + timedelta(days=96) >= a and W <= b for a, b in since[k])] for W in weeks}
-        _b_late(app, T, hl, weeks, cells_of, bad_of, zz, us, ua, rs, ra)
+        _b_late(app, T, hl, weeks, cells_of, bad_of, zz, us, ua, rs, ra, gc >= 3)
         lr, lu, nb, nl = nb, nl, len(CBX), len(CLX)
         LAGB = LAGB + [8, 10, 10]                # 91–180 → users at 180, 181–365 and 366–427 → users at 365
 
@@ -1456,11 +1464,11 @@ def _bmix(app, T, hl, gc=0):
     return res
 
 
-def _b_late(app, T, hl, weeks, cells_of, bad_of, zz, us, ua, rs, ra):
+def _b_late(app, T, hl, weeks, cells_of, bad_of, zz, us, ua, rs, ra, rev=True):
     """gc: view B's late lags (users per install, c2 u2) and late bands (revenue per user-day; user-days linear between
     the lags, 366–427 flat at the 365 users) into its accumulators, extended in place; a (week, lag / band) only when
     every activity day of it (and of the lags its user-days need) was read; weights relative to the newest complete
-    week."""
+    week. rev False (gc 2): the late lags only — the late bands' revenue per user-day stays the 61–90 standing."""
     nb, nl, nbx, nlx = len(CB), len(CL), len(CBX), len(CLX)
     fo2 = _xfold(app, "c2st")
     for x in us.values():
@@ -1478,7 +1486,7 @@ def _b_late(app, T, hl, weeks, cells_of, bad_of, zz, us, ua, rs, ra):
     for W in weeks:
         lc[W] = _late_cells(app, W, {k: {"n": e["n"]} for k, e in cells_of(W).items()}, bad_of[W], zz)
     okl = [[W for W in weeks if ok(W, g, g)] for g in C2L]
-    okb = [[W for W in weeks if ok(W, lo, hi)] for lo, hi in C2B]
+    okb = [[W for W in weeks if rev and ok(W, lo, hi)] for lo, hi in C2B]
 
     def wt(W, ws):
         return 0.5 ** ((max(ws) - W).days / hl) if hl < 99999 else 1.0
@@ -1688,9 +1696,11 @@ def _nvdata(app):
 def _split(app, T, wa):
     """{t: [(users, revenue-per-user ratio ψ vs the band's measured mix) per NVB band]} for organic (0) / paid (1):
     weighted regression of each install day's users / revenue per install in a band on its paid share, over the newest
-    NW install days that completed the band by T (slope shrunk by sd(π)² ÷ (sd(π)² + S0_PI²))."""
+    NW install days that completed the band by T (slope shrunk by sd(π)² ÷ (sd(π)² + S0_PI²)). "src": "ads" when some
+    band's paid shares varied (else None: no slope anywhere, paid = organic by construction — nothing measured)."""
     nv = _nvdata(app)
     res = {0: [None] * len(NVB), 1: [None] * len(NVB)}
+    any_vp = False
     for g, (lo, hi) in enumerate(NVB):
         a0 = T - timedelta(days=hi + NW - 1)
         a1 = T - timedelta(days=hi)
@@ -1711,6 +1721,7 @@ def _split(app, T, wa):
         zm = sum(w * z for w, _, _, z in pts) / sw
         vp = sum(w * (pi - pm) ** 2 for w, pi, _, _ in pts) / sw
         if vp > 1e-9:
+            any_vp = True
             by = sum(w * (pi - pm) * (y - ym) for w, pi, y, _ in pts) / (sw * vp)
             bz = sum(w * (pi - pm) * (z - zm) for w, pi, _, z in pts) / (sw * vp)
             k = vp / (vp + S0_PI ** 2)
@@ -1741,6 +1752,7 @@ def _split(app, T, wa):
             yt, zt = yz(t)
             psi = (zt / yt) / abr if yt > 0 and abr else 1.0
             res[t][g] = (yt, min(10.0, max(0.05, psi)))
+    res["src"] = "ads" if any_vp else None
     return res
 
 
@@ -1831,10 +1843,11 @@ def _paid_split(app, T):
     micros), "np", "no", "w"} at the newest paid / organic country mixes (the newest NMIX complete weeks with paid,
     resp. organic, installs) — each (country, paid / organic) cell over the newest NWK complete weeks, shrunk (CKC
     installs) toward its country's all-install standing × the app's measured paid / organic value; a band needs ≥ PMIN
-    paid and organic installs. Kept in the app (the lag view)."""
-    mk = "_fvx_psplit"
-    if mk in app:
-        return app[mk]
+    paid and organic installs. Kept per T in the app (the lag view; with no lags that is the app itself, shared by every
+    origin)."""
+    memo = app.setdefault("_fvx_psplit", {})
+    if T in memo:
+        return memo[T]
     ida = app.get("ida") or {}
     cset = ida.get("cset") or []
     zz = str(cset.index("ZZ")) if "ZZ" in cset else None
@@ -1864,7 +1877,7 @@ def _paid_split(app, T):
         ko += 1 if ho else 0
     tp, to = sum(sp.values()), sum(so.values())
     if tp <= 0 or to <= 0:
-        app[mk] = out
+        memo[T] = out
         return out
     sp = {k: v / tp for k, v in sp.items()}
     so = {k: v / to for k, v in so.items()}
@@ -1917,7 +1930,7 @@ def _paid_split(app, T):
         if res:
             res.update(np=Np, no=No, w=len(ws))
             out[b] = res
-    app[mk] = out
+    memo[T] = out
     return out
 
 
@@ -2527,14 +2540,14 @@ def _grp(age):
 def _late_share(app, st):
     """How much of the next H days' revenue (users) of the past install days, at ages 91–427, rests on GA4's measured
     late country cells (gc) vs the 61–90 standing carried — on view A's split of that revenue by install day and age:
-    {"on": gc in use, "old": share of the old installs' H-day revenue at ages 91–427, "meas" / "umeas": the share of
-    that revenue / those users resting on measured cells (a country's credibility n ÷ (n + CKC), chained band to
-    band), "weeks": complete install weeks per late band / lag}. The cells are judged as if gc were on (what IS
-    measured), so an app whose back-test keeps gc off still shows what is ready."""
+    {"on": the gc level in use (0 off, 2 users, 3 users + revenue), "old": share of the old installs' H-day revenue at
+    ages 91–427, "meas" / "umeas": the share of that revenue / those users resting on measured cells (a country's
+    credibility n ÷ (n + CKC), chained band to band), "weeks": complete install weeks per late band / lag}. The cells
+    are judged as if gc 3 were on (what IS measured), so an app with gc off (or 2) still shows what is ready."""
     sa, p, T = st["a"], st["p"], st["T"]
     v = lag_view(app, T, app.get("glag") or 0)
     info = {}
-    mix_fixed(v, T, p["hl"], 2, info)
+    mix_fixed(v, T, p["hl"], 3, info)
     mf = info.get("mf") or {}
     a, u = sa["B"]["a"], sa["B"]["u"]
     lev, ulev = sa["LV"]["lev"], sa["LV"]["ulev"]
@@ -2556,7 +2569,8 @@ def _late_share(app, st):
                     meas += r * m[0][BIXX[L] - NCB]
                     if UIXX[L] >= NCL:
                         umeas += us * m[1][UIXX[L] - NCL]
-    return {"on": bool(p.get("gc")), "old": late / tot if tot > 0 else None, "meas": meas / late if late > 0 else None,
+    return {"on": int(p.get("gc") or 0), "old": late / tot if tot > 0 else None,
+            "meas": meas / late if late > 0 else None,
             "umeas": umeas / ulate if ulate > 0 else None, "weeks": info.get("n")}
 
 
@@ -2599,7 +2613,8 @@ def _why(app, st, org, per_usd):
         sp = sb.get("split") or {}
         out.update(arp=list(sb["arpT"]), cal=sb["cal"], zu=list(sb["zu"]), Q0=sb["q0"], rho=sb["rho"], nv=nv,
                    su=[_med(sux.get(g, [])) for g in range(len(AGE_GROUPS))],
-                   nvsrc=sp.get("src") or ("ads" if sp else None), pc=bool(p.get("pc")))
+                   nvsrc=sp.get("src"), pc=bool(p.get("pc")))
+    out["tun"] = {k: len(GRID[k]) > 1 for k in ("gc", "pc")}   # the switches a tune may turn on (else held off)
     try:                                              # only the "why" would miss it: never the forecast
         out["gx"] = _late_share(app, st)
     except Exception:
@@ -2863,14 +2878,15 @@ score = objective
 
 def _moves(app, T, gc, pc):
     """Can the switches change anything at origin T (the back-test's view of the app)? gc: some install week has a
-    late c2 cell (band or lag) complete; pc: the paid cells give the split (_split_cp). Else the fit equals (0, 0)."""
+    late c2 cell complete (gc 2: a lag; gc 3: a lag or a band); pc: the paid cells give the split (_split_cp). Else the
+    fit equals (0, 0)."""
     v = lag_view(app, T, app.get("glag") or 0, (app.get("clag") or 0) if CLAG else 0,
                  (app.get("tlag") or 0) if CLAG else 0)
     if gc:
         fo2 = _xfold(v, "c2st")
         if fo2 is not None and any(
                 _cov(fo2, W + timedelta(days=lo), W + timedelta(days=6 + hi)) and W + timedelta(days=6 + hi) <= T
-                for W in (v.get("cty") or {}) for lo, hi in (C2B + tuple((g, g) for g in C2L))):
+                for W in (v.get("cty") or {}) for lo, hi in ((C2B if gc >= 3 else ()) + tuple((g, g) for g in C2L))):
             return True
     if pc:
         try:
@@ -2883,11 +2899,12 @@ def _moves(app, T, gc, pc):
 
 def tune(app, seas=None, start_p=None, passes=2):
     """Coordinate descent over GRID (the mix weights and the switches gc / pc; the structure is fixed) from the stored
-    setting, on the back-test objective → (best setting, its back-test, every step tried). Both views are fitted once
-    per origin and (gc, pc) (_origin; an origin the switches can not change reuses the plain fit); each setting tried is
-    then only arithmetic (_row) — the same numbers as backtest() with it."""
+    setting (a stored value GRID no longer offers starts at its default), on the back-test objective → (best setting,
+    its back-test, every step tried). Both views are fitted once per origin and (gc, pc) (_origin; an origin the
+    switches can not change reuses the plain fit); each setting tried is then only arithmetic (_row) — the same numbers
+    as backtest() with it."""
     ors = F.origins(app)
-    p = dict(DEFAULT, **{k: v for k, v in (start_p or {}).items() if k in DEFAULT})
+    p = dict(DEFAULT, **{k: v for k, v in (start_p or {}).items() if k in DEFAULT and v in GRID.get(k, (v,))})
     if not ors:
         return p, [], []
     fitsets = {}

@@ -334,7 +334,7 @@ function appFile() {
     // 🌍 GA4's extension cells: the old installs' revenue past day 90 measured vs carried, the switch on / off, and the
     // paid vs organic split's source (measured from GA4's paid users, or the Google Ads count) — numbers printed
     const d4 = JSON.parse(JSON.stringify(d3));
-    d4.fc.p = { bo: 0.5, bn: 1, cq: 0, gc: 2, pc: 0 };
+    d4.fc.p = { bo: 0.5, bn: 1, cq: 0, gc: 3, pc: 0 };
     d4.fc.parts = Object.assign({}, d3.fc.parts, { gx: { on: true, old: 0.32, meas: 0.105, umeas: 0.864, weeks: [2, 0, 0, 14, 14, 9, 7] },
       nv: { org: [5, 0.2], paid: [5, 0.3] }, nvsrc: 'cp', pc: false });
     const g4 = U.fcView(d4);
@@ -344,6 +344,24 @@ function appFile() {
       && g4.includes('<b>86%</b> users') && g4.includes('Model me <b>on</b>') && g4.includes('×1.50') && g4.includes('<b>measured</b>.')
       && g4.includes('Country curves after day 90 (GA4): <b>on</b>') && g4.includes('Paid vs organic (GA4 paid users): <b>off</b>')
       && g5.includes('backfill') && g5.includes('Google Ads install count se andaaza') && !g5.includes('Model me <b>on</b>');
+    // a split nothing measured (no paid installs: paid = organic by construction) or an older payload without a source:
+    // no paid ÷ organic line at all (never a made-up ×1.00)
+    d4.fc.parts.nvsrc = null; const gn1 = U.fcView(d4);
+    delete d4.fc.parts.nvsrc; const gn2 = U.fcView(d4);
+    out.fc_gx_nosrc = !gn1.includes("data-fc-pc") && !gn1.includes("paid vs organic:") && !gn2.includes("data-fc-pc") && gn1.includes("Old installs after day 90");
+    // the switches held off for every app (tun false): said so, never "is app ka back-test isse behtar nahi hua";
+    // a setting stored before the switches existed: never checked yet; gc 2 = users only; gc 3 = on
+    d4.fc.parts.nvsrc = 'ads'; d4.fc.parts.gx = { on: 0, old: 0.4, meas: 0.2, umeas: 0.8, weeks: [1, 0, 0, 3, 3, 1, 0] };
+    d4.fc.parts.tun = { gc: false, pc: false }; const h1 = U.fcView(d4);
+    d4.fc.parts.tun = { gc: true, pc: true }; d4.fc.p = { bo: 0.5, bn: 1, cq: 0 }; const h2 = U.fcView(d4);
+    d4.fc.p = { bo: 0.5, bn: 1, cq: 0, gc: 0, pc: 0 }; const h3 = U.fcView(d4);
+    d4.fc.parts.gx.on = 2; d4.fc.p.gc = 2; const h4 = U.fcView(d4);
+    d4.fc.parts.gx.on = 3; d4.fc.p.gc = 3; const h5 = U.fcView(d4);
+    out.fc_gx_held = h1.includes('Model me abhi <b>off</b> (sab apps me)') && h1.includes('isliye sab apps me off') && !h1.includes('behtar nahi hua;')
+      && h2.includes('Back-test ne abhi ise check nahi kiya') && h2.includes('GA4 paid cells: back-test ne abhi check nahi kiya') && !h2.includes('Model me abhi <b>off</b>')
+      && h3.includes('is app ka back-test isse abhi behtar nahi hua') && h3.includes('ya back-test me behtar nahi')
+      && h4.includes('Model me <b>users ke liye on</b>') && h4.includes('Country curves after day 90 (GA4): <b>users on</b>')
+      && h5.includes('Model me <b>on</b>') && h5.includes('Country curves after day 90 (GA4): <b>on</b>');
     // the learning log: the first entry of the new engine says so (its error is a different measure); later ones do not
     d3.fc.log = d.fc.log.concat([{ d: '2026-10-15', eng: 'vd', p: d3.fc.p, sc: 0.1, changed: ['bn', 'bo', 'cq'] }]);
     const sw = U.fcView(d3);

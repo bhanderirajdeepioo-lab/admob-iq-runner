@@ -248,6 +248,30 @@ def test_vd_setting_stored_before_the_ga4_switches(tmp_path):
     assert fb.line(run).endswith("GA4 late cells 0, paid cells 0")
 
 
+def test_vd_setting_the_engine_cannot_make_is_tuned_at_once(tmp_path):
+    """Within EVERY_H a vd file is kept — unless its setting is one the current engine's tune could not have made: a
+    setting stored before the switches gc / pc existed (never tested with them) or with a switch the engine now holds
+    off. Those are re-tuned in the next build, not a day later; a current one is kept."""
+    data = str(tmp_path / "data")
+    os.makedirs(data)
+    app = make()
+    rows, life, ida = _rows_life(app, ga4=True)
+    P, now = {"S": LAST}, datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
+    fc = fb.app_step(fb.start(data, now, Clock()), "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    path = os.path.join(data, "forecast", "k1.json")
+    saved = json.load(open(path))
+    run = fb.start(data, now + timedelta(hours=3), Clock())
+    fb.app_step(run, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    assert run.kept == 1 and run.ran == 0                                # a current setting: kept
+    for p in ({k: v for k, v in saved["p"].items() if k not in ("gc", "pc")},   # stored before the switches
+              dict(saved["p"], gc=2)):                                          # a switch now held off
+        json.dump(dict(saved, p=p), open(path, "w"))
+        run = fb.start(data, now + timedelta(hours=3), Clock())
+        f = fb.app_step(run, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+        assert run.ran == 1 and run.kept == 0 and f["p"] == fc["p"] and f["p"]["gc"] == 0
+    assert not fb._tuned_now(VD, {"bo": 0.5, "bn": 0.5, "cq": 0.0}) and fb._tuned_now(VD, fc["p"])
+
+
 def test_vd_tunes_only_when_its_seconds_fit(tmp_path):
     """A day later the setting is stale; with less budget left than TUNE_MARGIN × the app's last tune seconds the build
     keeps the setting (today's forecast with it) and tunes another time."""
