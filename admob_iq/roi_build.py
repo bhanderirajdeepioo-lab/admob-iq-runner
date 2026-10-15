@@ -109,12 +109,16 @@ class Acc:
     def __init__(self):
         self.apps, self.life, self.rows, self.fails, self.skipped, self.till, self.ccy = [], {}, {}, 0, 0, [], set()
         self.fc = None                              # 🔮 the forecast step's run (forecast_build), made on the first app
+        self.cal = None                             # 📅 its eCPM calendar (fc_calendar.seasons), if the build made one
         self.beta = None                            # ⚖️ per-app beta ranges (config/roi_beta.json), read on the first app
         self.f4m = 0                                # ⚖️ apps whose forms use GA4's measured paid share + premium
 
 
-def start():
-    return Acc()
+def start(cal=None):
+    """cal: the forecast's eCPM calendar (fc_calendar.seasons, from build_static), handed to the forecast's run."""
+    acc = Acc()
+    acc.cal = cal
+    return acc
 
 
 # ── one app ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -720,7 +724,7 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
         try:                                            # 🔮 the forecast (its own budget and daily cadence; a failure
             from . import forecast_build as fob         # costs only it)
             if acc.fc is None:
-                acc.fc = fob.start(data_dir, now)
+                acc.fc = fob.start(data_dir, now, cal=acc.cal)
             decs = {x["cc"]: x["dec"] for x in cty["rows"]}
             eng = [dict(x, dec=decs.get(x.get("cc"))) for x in (((detail or {}).get("countries") or {}).get("rows") or [])]
             fgeo, pairs = None, None

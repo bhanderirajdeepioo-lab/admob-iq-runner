@@ -51,10 +51,25 @@ after the post-backfill out-of-sample re-run shows a win.
         install share (an upper bound) — the installs still come from spend (paid) and the organic rate, unchanged.
         (Lab: a newer week's paid ÷ organic revenue per install came closer than with the regression.)
 
-Structure (STRUCT, 13 knobs) is fixed portfolio-wide (version STRUCT_VERSION; re-checked offline, never per app: tuned
-per app it measured worse on unseen origins); only the mix weights bo, bn, cq are tuned per app (GRID; the switches
-gc, pc held at 0), on the same back-tests as before plus each past install day's future revenue and each new install's
-value (objective()).
+The eCPM calendar (STRUCT cal; HELD OFF — cal 0, see STRUCT; fc_calendar: measured week / event effects of the ad market's price from a like-for-like
+daily index per ad unit — Black Friday week, Cyber week, December, Christmas – New Year, the January slide in weeks 1–6
+and its level held after; ROI_DRIVERS §5.1 rule 6; the month-of-year season g stays 0): c(d) its log level from the
+seasons complete by T (each effect × n ÷ (n + csh)); each level carries the price of its own window (view A old:
+the newest w GA4 days, A new installs: wn, view B: wa, the installs model: W — log mean e^c over it; once TG's season is
+past its week 6 the slide days count at the held level, ccl 1). On every future day D:
+    old users (past install days + what no install day covers)   × e^(c(D) − ref)          — in full
+    new installs' revenue                                        × e^(cnv·(c(D) − ref))
+    paid installs per $ (their users, revenue, uninstalls)       × e^(cnn·(c(D) − ref_W))  on their install day
+cnv 0.61 / cnn −0.48: the measured bidding link (app eCPM +10 % → installs per $ −4.8 %, D30 ROAS +1.3 %: the value
+per install moves 0.13 + 0.48). q is measured against the calendar-corrected old model (the calendar explains what
+it can of the AdMob-only days' move; q carries the rest). Without a calendar (app["cal"] None) or a complete season:
+the engine exactly as without it. forecast()["cal"]: the coming event weeks for the page (with cal 0: their measured
+effects only, "use" 0 — the forecast without them).
+
+Structure (STRUCT, 13 knobs + the calendar's) is fixed portfolio-wide (version STRUCT_VERSION; re-checked offline,
+never per app: tuned per app it measured worse on unseen origins); only the mix weights bo, bn, cq are tuned per app
+(GRID; the switches gc, pc held at 0), on the same back-tests as before plus each past install day's future revenue
+and each new install's value (objective()).
 Every back-test origin sees GA4 only to T − glag, each install day's final daily data only to T − clag and its
 checkpoints after day 30 only to T − tlag, as the live build does (lag_view; the three lags measured per app)."""
 import bisect
@@ -62,15 +77,18 @@ import math
 import operator
 from datetime import date, timedelta
 
+from . import fc_calendar as FC
 from . import forecast as F
 
 ONE = timedelta(days=1)
 H = F.H
 HORIZONS = F.HORIZONS
-STRUCT_VERSION = "2026-10-15c"
+STRUCT_VERSION = "2026-10-15d"
 STRUCT = {"m": "ratio", "hl": 45, "Kc": 30, "w": 28, "wn": 7, "g": 0.0, "W": 14,          # view A (+ g, W shared)
           "bhl": 100000, "Ku": 3, "bw": 0, "wa": 56, "nv": 1,                             # view B
-          "cs": 0}                                                                        # installs by country
+          "cs": 0,                                                                        # installs by country
+          "cal": 0, "cm": "ecpm", "csh": 1.0, "ccl": 1, "cnv": 0.61, "cnn": -0.48,        # the eCPM calendar (held
+          "canc": 0, "cjan": 0}                                                           # off: lab 9, below)
 GRID = {"bo": (0.0, 0.5, 1.0), "bn": (0.0, 0.5, 1.0), "cq": (0.0, 0.5, 1.0), "gc": (0,), "pc": (0,)}
 DEFAULT = {"bo": 0.5, "bn": 0.5, "cq": 0.0, "gc": 0, "pc": 0}
 # m  "ratio": what no install day covers (> 427 days) = AdMob − k·Σ GA4 bands; "split": a decaying rest
@@ -82,6 +100,15 @@ DEFAULT = {"bo": 0.5, "bn": 0.5, "cq": 0.0, "gc": 0, "pc": 0}
 #       its spend (no country weeks: per_usd × spend); the revenue stays on per_usd × spend either way — 0 (held off):
 #       with the training weeks' shares (all a forecast knows) it did not win out of sample (lab 8, review 15 Oct);
 #       the planner (cs_plan) uses the country model either way
+# cal 1  the eCPM calendar (fc_calendar; app["cal"] = its seasons): cm "ecpm" the eCPM index ("rpc": revenue per click
+#        only, the CTR held), csh the shrink k (each effect × n ÷ (n + k)), ccl 1 the slide closed once over, cnv / cnn
+#        new installs' value / paid installs per $ pass-through (the bidding link), canc 1 the reference days of the
+#        season in progress at its own observed index, cjan 1 off while TG is inside a January slide — 0 (HELD OFF):
+#        on the no-look-ahead back-test (lab 9, 15 Oct) it fixed the forecasts made in Nov–Dec (30-day totals closer on
+#        most apps, their over-forecast roughly halved) but made those made in Jan–Feb worse on most apps (the slide
+#        the two older seasons showed went deeper than 2026's), so across Nov–Feb it did not win; the CTR-held split,
+#        the weeks before Black Friday, the year-over-year drift and the anchored / slide-only / stronger-shrink forms
+#        did not win either. The page shows the coming weeks' measured effects as context (forecast()["cal"], use 0)
 # gc 2  each country's own users past day 90 from GA4's late cells (c2); 3: + its revenue 91–427 — 0: lag 90 / 61–90
 #       carried
 # pc 1  new installs' paid vs organic value from GA4's paid cells (cp) — 0: regressed on the Google Ads install share
@@ -1062,10 +1089,14 @@ def _a_prepare(v, T, p, ctx):
             "org": org, "per_usd": per_usd, "unit": unit, "uunit": uunit}
 
 
-def _ga(st, D):
+def _ga(st, D, w="o"):
+    """The future day D's calendar factor: the month season^g (g 0: 1) × the eCPM calendar's (cf: "o" old users, "n"
+    new installs; none without it)."""
     if D <= st["T"]:
         return 1.0
-    return (st["seas"].get(D.month, 1.0) / st["s0"]) ** st["p"]["g"] if st["s0"] else 1.0
+    g = (st["seas"].get(D.month, 1.0) / st["s0"]) ** st["p"]["g"] if st["s0"] else 1.0
+    cf = st.get("cf")
+    return g * cf[w](D) if cf else g
 
 
 def _a_parts(st, spend, h, org, per_usd, up=None):
@@ -1085,6 +1116,7 @@ def _a_parts(st, spend, h, org, per_usd, up=None):
     for i in range(1, h + 1):
         D = T + timedelta(days=i)
         g = _ga(st, D)
+        gn = _ga(st, D, "n")
         o = sum(lev[j] * fr[j][i - 1] for j in range(NLB))
         du = sum(ulev[j] * fu[j][i - 1] for j in range(NLB))
         npd = per_usd * spend.get(D, 0.0)
@@ -1100,8 +1132,8 @@ def _a_parts(st, spend, h, org, per_usd, up=None):
                 u_o += org * uunit[age]
                 u_p += futu[j] * uunit[age]
         ro.append((o + flat) * g + rest0 * math.exp(-rho * i) * g)
-        rg.append(r_o * g)
-        rp.append(r_p * g)
+        rg.append(r_o * gn)
+        rp.append(r_p * gn)
         uo.append(du + uflat + urest0 * math.exp(-urho * i))
         ug.append(u_o)
         upd.append(u_p)
@@ -1143,7 +1175,7 @@ def _a_new_value(st, X, ages):
         while L < C:
             L += 1
             if L < len(unit):
-                acc += unit[L] * _ga(st, X + timedelta(days=L))
+                acc += unit[L] * _ga(st, X + timedelta(days=L), "n")
         out.append(acc)
     return out
 
@@ -2231,10 +2263,14 @@ def _b_state(v, T, p, ctx):
     return memo[k]
 
 
-def _gb(st, D):
-    if D <= st["T"] or not st["s0"]:
+def _gb(st, D, w="o"):
+    if D <= st["T"]:
         return 1.0
-    return (st["seas"].get(D.month, 1.0) / st["s0"]) ** st["p"]["g"]
+    cf = st.get("cf")
+    if not st["s0"]:
+        return cf[w](D) if cf else 1.0
+    g = (st["seas"].get(D.month, 1.0) / st["s0"]) ** st["p"]["g"]
+    return g * cf[w](D) if cf else g
 
 
 def _vec(st, f, upto):
@@ -2305,6 +2341,7 @@ def _b_parts(st, spend, h, org, per_usd, up=None):
     for i in range(1, h + 1):
         D = T + timedelta(days=i)
         g = _gb(st, D)
+        gn = _gb(st, D, "n")
         r = u = 0.0
         for age, cu, cr, vu, vr, top in rows:
             L = age + i
@@ -2324,8 +2361,8 @@ def _b_parts(st, spend, h, org, per_usd, up=None):
             r_p += npj * pvr[L]
         q = st["q0"] * math.exp(-st["rho"] * i)
         ro.append((r + q * a6) * g)
-        rg.append(r_o * g)
-        rp.append(r_p * g)
+        rg.append(r_o * gn)
+        rp.append(r_p * gn)
         uo.append(u + q)
         ug.append(u_o)
         upd.append(u_p)
@@ -2381,7 +2418,7 @@ def _b_new_value(st, X, ages, spend, org, per_usd):
         while L < C:
             L += 1
             if L < len(nvr):
-                acc += nvr[L] * _gb(st, X + timedelta(days=L))
+                acc += nvr[L] * _gb(st, X + timedelta(days=L), "n")
         out.append(acc)
     return out
 
@@ -2585,6 +2622,116 @@ def cs_plan(app, st, org, per_usd, base, plan):
             "n0": _cs_paid(cs, T, {}, 1, per_usd, plan)[0]}
 
 
+def _calendar(app, v, T, p):
+    """The eCPM calendar at origin T (fc_calendar; STRUCT cal 1 and the app's calendar app["cal"]: the seasons, the
+    same for every app) → {c: the level c(d) from the seasons complete by T, ref: the price level each measured level
+    carries — view A old (newest w GA4 days), A new installs (wn), view B (wa), the installs model (W, to T) —, TG}
+    or None. Once TG's season is past its January week 6 the references count its slide days at the held level."""
+    if not p.get("cal") or not app.get("cal"):
+        return None
+    prof, n = FC.profile(app["cal"], T, p.get("cm") or "ecpm", p.get("csh") or 0.0)
+    if prof is None:
+        return None
+    g4 = v.get("g4") or {}
+    TG = max((D for D in g4 if D <= T), default=T - timedelta(days=app.get("glag") or 0))
+    if p.get("cjan") and FC.sliding(TG):              # off while TG's season is inside its January slide
+        return None
+    c = FC.Level(prof)
+    cr = FC.closed(c, TG) if p.get("ccl") else c
+    if p.get("canc"):
+        cr = FC.anchored(cr, c, app["cal"], T, TG, p.get("cm") or "ecpm")
+    return {"c": c, "cr": cr, "n": n, "TG": TG, "prof": prof,
+            "ref": (FC.ref(cr, TG, p["w"]), FC.ref(cr, TG, p["wn"]), FC.ref(cr, TG, p["wa"]), FC.ref(cr, T, p["W"])),
+            "nv": p.get("cnv", 1.0), "nn": p.get("cnn", 0.0)}
+
+
+def _cf(cal, j, jn):
+    """{"o": old users' factor e^(c(D) − ref), "n": new installs' e^(φv·(c(D) − ref))} for the references j / jn."""
+    c, ro, rn, nv = cal["c"], cal["ref"][j], cal["ref"][jn], cal["nv"]
+    mo, mn = {}, {}                                   # (per day: every past install day asks for the same days)
+
+    def fo(D):
+        v = mo.get(D)
+        if v is None:
+            v = mo[D] = math.exp(c(D) - ro)
+        return v
+
+    def fn(D):
+        v = mn.get(D)
+        if v is None:
+            v = mn[D] = math.exp(nv * (c(D) - rn))
+        return v
+    return {"o": fo, "n": fn}
+
+
+def _cal_spend(cal, T, spend, win=None):
+    """The paid installs' response to the calendar: a day's spend buys installs per $ × e^(φn·(c(D) − ref)) (the CPI
+    follows the price: app eCPM +10 % → installs per $ −4.8 %), ref = the installs model's own window (W in a back-test,
+    the live run-rate's SPEND_DAYS) — as spend × that factor (the revenue, users and uninstalls of paid installs follow
+    it). No calendar / φn 0: the spend itself."""
+    if not cal or not cal["nn"] or not spend:
+        return spend
+    c, nn = cal["c"], cal["nn"]
+    r = cal["ref"][3] if win is None else FC.ref(cal["cr"], T, win)
+    return {D: s * math.exp(nn * (c(D) - r)) for D, s in spend.items()}
+
+
+def _cal_measured(app, T, metric):
+    """{event: {"e": the measured mean over the seasons complete by T (vs the 3 weeks before Black Friday week; NOT
+    shrunk: what was measured), "lo" / "hi": the lowest / highest season}}, [[season, apps]] — ({}, []) without one."""
+    raw, _ = FC.profile(app.get("cal"), T, metric, 0.0)
+    sp, ys = FC.spread(app.get("cal"), T, metric)
+    if raw is None or sp is None:
+        return {}, []
+    return ({k: {"e": math.exp(raw[k]) - 1.0, "lo": math.exp(sp[k][0]) - 1.0, "hi": math.exp(sp[k][1]) - 1.0}
+             for k in raw}, [[y, a] for y, a in ys])
+
+
+def _cal_out(app, st, h, win=None):
+    """The page's calendar (None without it): the event weeks inside the next h days, each with its measured effect
+    (_cal_measured: e the seasons' mean, lo / hi the lowest / highest season) and what the forecast does on its days vs
+    today's level — old users' revenue (o: in full, the bo mix of the views' references; the shrunk profile) and new
+    installs' value per install (nv: × φv, the bn mix) and paid installs per $ (np: × φn) — + the seasons it was learnt
+    from (ys: [season, apps])."""
+    a = st["a"]
+    cal = a.get("cal")
+    if not cal:
+        return None
+    meas, ys = _cal_measured(app, st["T"], st["p"].get("cm") or "ecpm")
+    T, c, (rA, rAn, rB, rI) = st["T"], cal["c"], cal["ref"]
+    if win is not None:
+        rI = FC.ref(cal["cr"], T, win)
+    bo = st["p"]["bo"] if st["b"] is not None else 0.0
+    bn = st["p"]["bn"] if st["b"] is not None else 0.0
+    nv, nn = cal["nv"], cal["nn"]
+    ev = []
+    for k, d0, d1, ds in FC.coming(T, h):
+        if not ds:
+            continue
+        m = float(len(ds))
+        o = sum((1 - bo) * math.exp(c(D) - rA) + bo * math.exp(c(D) - rB) for D in ds) / m - 1.0
+        v = sum((1 - bn) * math.exp(nv * (c(D) - rAn)) + bn * math.exp(nv * (c(D) - rB)) for D in ds) / m - 1.0
+        n = sum(math.exp(nn * (c(D) - rI)) for D in ds) / m - 1.0
+        x = meas["j6" if k == "hold" else k]
+        ev.append({"k": k, "a": d0.isoformat(), "b": d1.isoformat() if d1 else None, "e": x["e"], "lo": x["lo"],
+                   "hi": x["hi"], "o": o, "nv": v, "np": n})
+    return {"n": cal["n"], "ys": ys, "ev": ev, "phi": [nv, nn], "use": 1}
+
+
+def _cal_page(app, T, h, p):
+    """The coming event weeks when the forecast does NOT use the calendar (STRUCT cal 0 with a calendar at hand): only
+    their measured effects (_cal_measured: e, lo, hi), marked use 0 — the page shows them as context, the forecast is
+    without them."""
+    if p.get("cal") or not app.get("cal"):
+        return None
+    meas, ys = _cal_measured(app, T, p.get("cm") or "ecpm")
+    if not meas:
+        return None
+    ev = [dict(meas["j6" if k == "hold" else k], k=k, a=d0.isoformat(), b=d1.isoformat() if d1 else None, o=None,
+               nv=None, np=None) for k, d0, d1, ds in FC.coming(T, h) if ds]
+    return {"n": len(ys), "ys": ys, "ev": ev, "phi": [p.get("cnv", 1.0), p.get("cnn", 0.0)], "use": 0} if ev else None
+
+
 def _views(app, T, p, ctx=None, clag=0, need_b=True, tlag=0):
     """Both views fitted with ONLY the data known at T (GA4 to T − app["glag"]; clag: install days' final data to
     T − clag; tlag: their checkpoints after day 30 to T − tlag) + the days AdMob has but GA4 not yet as (AdMob, view
@@ -2597,6 +2744,11 @@ def _views(app, T, p, ctx=None, clag=0, need_b=True, tlag=0):
         sb = _b_state(v, T, p, ctx)
         if not sb["ok"]:                              # no GA4 ARPDAU measured yet: view A alone
             sb = None
+    cal = _calendar(app, v, T, p)                     # the eCPM calendar: old users in full, new installs × φv
+    sa["cal"] = cal
+    sa["cf"] = _cf(cal, 0, 1) if cal else None
+    if sb is not None:
+        sb["cf"] = _cf(cal, 2, 2) if cal else None
     LV = sa["LV"]
     pmod = LV.get("pmod") or {}
     tail = []
@@ -2604,7 +2756,13 @@ def _views(app, T, p, ctx=None, clag=0, need_b=True, tlag=0):
         m = pmod.get(d)
         if m is None:
             continue
-        tail.append((adm, m, past_model(sb, T - timedelta(days=PAST - 1 - d)) if sb is not None else None))
+        D = T - timedelta(days=PAST - 1 - d)
+        mb = past_model(sb, D) if sb is not None else None
+        if cal:                                       # the calendar explains what it can of these days' move; q the rest
+            m = m * math.exp(cal["cr"](D) - cal["ref"][0])          # (an observed day: at its reference level)
+            if mb is not None:
+                mb = mb * math.exp(cal["cr"](D) - cal["ref"][2])
+        tail.append((adm, m, mb))
     return sa, sb, tail
 
 
@@ -2641,13 +2799,14 @@ def _mix(x, y, w):
     return [(1 - w) * a + w * b for a, b in zip(x, y)]
 
 
-def parts(st, spend, h, org=None, per_usd=None, plan=None):
+def parts(st, spend, h, org=None, per_usd=None, plan=None, win=None):
     """Both views over the next h days, mixed and × q: revenue and users of old users / organic / paid installs, n,
     and "up" the paid installs per day (the country model, STRUCT cs 1; None without it or with cs 0). plan: {cc: USD a
     day} for the country model (the live forecast's default: spend × the training weeks' country shares)."""
     p = st["p"]
     org = st["org"] if org is None else org
     per_usd = st["per_usd"] if per_usd is None else per_usd
+    spend = _cal_spend(st["a"].get("cal"), st["T"], spend, win)     # (win: the window per_usd was measured over)
     st["spend"], st["org_f"], st["per_usd_f"] = spend or {}, org, per_usd
     up = _cs_paid(st["cs"], st["T"], spend or {}, h, per_usd, plan) if st.get("cs") and p.get("cs") else None
     A = _a_parts(st["a"], spend or {}, h, org, per_usd, up)
@@ -2859,13 +3018,14 @@ def forecast(app, T, p, spend=None, h=H, seas=None):
             sc = base / sb if sb > 0 else 1.0
             st["cs"] = dict(cs, cm=dict(cm, sbar={c: v * sc for c, v in cm["sbar"].items()}))  # (the kept one intact)
             plan = {cc: base * q for cc, q in cm["share"].items()}
-    x = parts(st, spend, h, org, per_usd, plan if p.get("cs") else None)
-    un = _uninstalls(app, T, spend, h, org, per_usd, x["up"])
+    win = F.SPEND_DAYS if base is not None else None
+    x = parts(st, spend, h, org, per_usd, plan if p.get("cs") else None, win)
+    un = _uninstalls(app, T, st["spend"], h, org, per_usd, x["up"])
     sp = [spend.get(T + timedelta(days=i), 0.0) for i in range(1, h + 1)]
     out = {"rev": {"old": x["old"], "org": x["org"], "paid": x["paid"]},
            "dau": [a + b + c for a, b, c in zip(x["uold"], x["uorg"], x["upaid"])], "n": x["n"], "sp": sp,
            "dau_p": {"old": x["uold"], "org": x["uorg"], "paid": x["upaid"]}, "un": un,
-           "parts": _why(app, st, org, per_usd)}
+           "parts": _why(app, st, org, per_usd), "cal": _cal_out(app, st, h, win) or _cal_page(app, T, h, p)}
     if plan is not None:
         try:                                          # only the planner would miss it: never the forecast
             out["plan"] = cs_plan(app, st, org, per_usd, base, plan)
@@ -2926,6 +3086,7 @@ def _origin(app, T, p, seas, need_b, comps=True):
     sa, sb, tail = _views(app, T, p, {"seas": seas}, (app.get("clag") or 0) if CLAG else 0, need_b,
                           (app.get("tlag") or 0) if CLAG else 0)
     org, per_usd = sa["org"], sa["per_usd"]
+    sp = _cal_spend(sa.get("cal"), T, sp)                 # the paid installs' response to the calendar (as parts)
     cs = _cs_state(app, T) if p.get("cs") else None       # the paid installs the users / installs follow (country model)
     up = _cs_paid(cs, T, sp, hmax, per_usd) if cs else None
     unm = app.setdefault("_fv_un", {})                    # the uninstalls do not depend on the mix weights either

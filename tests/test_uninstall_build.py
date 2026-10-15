@@ -821,6 +821,8 @@ def test_the_build_hands_the_network_reports_revenue_to_the_uninstall_step(tmp_p
     s = dict(ga4_settings(), report_currency="USD")
     assert build_static._uninstall_with_revenue({}, repo, "data", "site", s, "America/Los_Angeles",
                                                 date(2026, 9, 20)) == ["x"]
+    # 📅 the forecast's eCPM calendar, read to the same day (no ad-unit rows here: no season, no holiday, no rhythm)
+    assert got[0].pop("cal") == {"v": 1, "till": "2026-09-19", "s": {}, "hol": {}, "wk": {}}
     assert got == [{"tz": "America/Los_Angeles", "currency": "USD", "till": "2026-09-19",   # today (20th) still filling
                     "apps": {A1: {"2026-09-18": [375000, 150], "2026-09-19": [200000, 80]},
                              A2: {"2026-09-18": [20000, 10]}}, "tz_by_app": {},

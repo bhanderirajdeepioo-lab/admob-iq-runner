@@ -20,6 +20,11 @@ Engine vd with the app's Google Ads country weeks (roi_build hands them over, + 
 per build): the page's "Budget by country" planner (fc.plan: each country's installs per $ and CPI rise; revenue per $
 the forecast's own) — the forecast's own paid installs stay spend × per_usd (STRUCT cs 0: the country model did not win
 there at the shares a forecast can know).
+📅 The eCPM calendar (build_static hands its seasons over through roi_build.start(cal=…)): engine vd's STRUCT cal decides
+whether the forecast uses it (held off: it did not win the Nov–Feb back-test); the page gets the coming event weeks
+with their measured effects either way (fc["fcal"]), Ramadan / Diwali measured once (shown, never in the forecast), and
+each app's weekday rhythm per ad trigger on its daily line (fcal["wk"]; every 30 / 90 / 180-day total unchanged — the
+daily forecast came closer on most apps with it, lab 9).
 data/forecast/state.json, refreshed at the end: the portfolio's month-of-year season and band ratios ("bandr": each GA4
 install-age band's revenue per active user ÷ the band before's, the median over the apps, per Monday — engine vd's prior
 for a band an app has few users in) + the engine's fixed structure ("vd_struct").
@@ -30,6 +35,7 @@ import os
 import time
 from datetime import date, datetime, timedelta, timezone
 
+from .engine import fc_calendar as FC
 from .engine import forecast as F
 from .engine import forecast_vd as VD
 
@@ -102,7 +108,7 @@ def engine(env=None):
 
 
 class Run:
-    def __init__(self, data_dir, now, clock):
+    def __init__(self, data_dir, now, clock, cal=None):
         self.data_dir, self.now, self.clock, self.t0 = data_dir, now, clock, clock()
         st = _read(_path(data_dir, "state.json"), {})
         self.season = {int(k): float(v) for k, v in (st.get("season") or {}).items()} or None
@@ -117,13 +123,15 @@ class Run:
         self.gx = [0, 0]                    # vd re-tunes whose back-test chose GA4's late country cells / paid cells
         self.cs = None                      # every Google Ads store's country block pairs (engine vd's e), once
         self.plans = 0                      # apps whose page got the "Budget by country" planner
+        self.cal = cal if isinstance(cal, dict) and any(cal.get(k) for k in ("s", "wk", "hol")) else None  # 📅 (+ the
+        # weekday rhythm / holidays even before a first complete season: no season → no event weeks, the engine as without)
 
     def left(self):
         return BUDGET_SEC - (self.clock() - self.t0)
 
 
-def start(data_dir, now=None, clock=time.monotonic):
-    return Run(data_dir, now or datetime.now(timezone.utc), clock)
+def start(data_dir, now=None, clock=time.monotonic, cal=None):
+    return Run(data_dir, now or datetime.now(timezone.utc), clock, cal)
 
 
 # ── inputs ──────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -429,6 +437,28 @@ def plan_out(pl, f, fac):
             "paid": [_r(v, 2) for v in paid], "h": list(hs), "rows": rows}
 
 
+def weekly(ser, d0, W):
+    """The after-call weekday rhythm on the page's daily forecast (W: fc_calendar.weekday, Mon..Sun): each part's days
+    × W of their weekday, rescaled inside every horizon block (days 1–30, 31–90, 91–180) so each part's block total —
+    every total the page shows, at any spend slider — stays the forecast's. None: the series as it was."""
+    if not W:
+        return ser
+    out = {}
+    for k, v in ser.items():
+        fac = [W[(d0 + timedelta(days=i)).weekday()] for i in range(len(v))]
+        o, prev = list(v), 0
+        for hz in F.HORIZONS + (len(v),):
+            hi = min(hz, len(v))
+            raw = sum(x or 0.0 for x in v[prev:hi])
+            sh = sum((x or 0.0) * f for x, f in zip(v[prev:hi], fac[prev:hi]))
+            kk = raw / sh if sh > 0 else 1.0
+            for i in range(prev, hi):
+                o[i] = None if v[i] is None else _r(v[i] * fac[i] * kk, 4)
+            prev = hi
+        out[k] = o
+    return out
+
+
 def series(app, p, cal, seas, E=F):
     """The forecast of engine E from the newest day with settings p (spend = the last F.SPEND_DAYS days' run-rate, the
     bias correction of cal) → the page's f + hist: revenue / active users / uninstalls by who (old users, organic,
@@ -438,6 +468,7 @@ def series(app, p, cal, seas, E=F):
     f = E.forecast(app, last, p, h=F.H, seas=seas)
     fac = corrected(f["rev"], cal)
     ser = {k: [_r(v * fac[i], 4) for i, v in enumerate(f["rev"][k])] for k in ("old", "org", "paid")}
+    ser = weekly(ser, last + timedelta(days=1), app.get("wk"))         # 📅 the after-call weekday rhythm (page only)
     hist0 = last - timedelta(days=HIST_DAYS - 1)
     hd = [app["days"].get(hist0 + timedelta(days=i)) or {} for i in range(HIST_DAYS)]
 
@@ -457,7 +488,34 @@ def series(app, p, cal, seas, E=F):
         out["plan"] = plan_out(f.get("plan"), f, fac)
     except Exception:
         out["plan"] = None
+    out["fcal"] = _rx(f.get("cal"), 4) if f.get("cal") else None    # 📅 the coming event weeks (engine vd)
+    if app.get("wk"):
+        out["fcal"] = dict(out["fcal"] or {"ev": []}, wk=_rx(list(app["wk"]), 4))
     return out, f, ser
+
+
+def _holidays(run, sr, last, rev_cty, h=F.H):
+    """+ sr["fcal"]["hol"]: Ramadan / Diwali inside the next h days — measured once each (fc_calendar.holidays), NOT in
+    the forecast (no back-test could show they help yet): the measured eCPM gap (those countries minus the others, and
+    each part) × the app's own share of revenue in those countries over its newest 28 days (rev_cty: {day: {country:
+    [earnings micros, impressions]}})."""
+    try:
+        hol = (run.cal or {}).get("hol")
+        if not hol:
+            return
+        tot, mus, ind = 0.0, 0.0, 0.0
+        for d in sorted(rev_cty or {})[-28:]:
+            for cc, v in (rev_cty[d] or {}).items():
+                x = float((v or [0])[0] or 0)
+                tot += x
+                mus += x if cc in FC.MUSLIM else 0.0
+                ind += x if cc == "IN" else 0.0
+        sh = {"ramadan": mus / tot, "diwali": ind / tot} if tot > 0 else {}
+        ev = FC.holidays_coming(hol, last, h, sh)
+        if ev:
+            sr["fcal"] = dict(sr.get("fcal") or {"ev": []}, hol=_rx(ev, 4))
+    except Exception:
+        pass
 
 
 # ── one app ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -498,6 +556,11 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
     try:
         app = inputs(rows, P, ida, life, life_till, unst)
         app["geo"], app["cs_pairs"] = geo or {}, cs_pairs
+        app["cal"] = run.cal                             # 📅 the eCPM calendar's seasons (engine vd, STRUCT cal)
+        try:                                             # … and this app's after-call weekday rhythm (page only)
+            app["wk"] = FC.weekday(((run.cal or {}).get("wk") or {}).get(aid), app["last"]) if app.get("last") else None
+        except Exception:
+            app["wk"] = None
         app["port"] = {"bandr": run.bandr}               # the portfolio's band ratios (state.json, the last build's)
         for D, e in app["days"].items():                 # the portfolio season, pooled from every app
             if e.get("rev") and e.get("dau"):
@@ -546,6 +609,7 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
                         cal = {int(h): {"bias": b} for h, b in (old.get("bias") or {}).items()} or \
                             {int(h): c for h, c in (fc.get("cal") or {}).items()}
                         sr, f, _ = series(app, dict(Eo.DEFAULT, **old["p"]), cal, seas, Eo)
+                        _holidays(run, sr, app["last"], rev_cty)
                         fc.update(sr)
                         fc["T"] = _iso(app["last"])
                         if Eo is VD:
@@ -572,6 +636,7 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
             sc_prev = steps[0]["score"] if prev_p and moved and steps else None
         cal = F.calibrate(bt)
         sr, f, ser = series(app, p, cal, seas, E)
+        _holidays(run, sr, app["last"], rev_cty)
         last = app["last"]
         # readiness: a horizon shows once enough tests could score it; else the day it will
         ready, ready_from = {}, {}

@@ -627,6 +627,15 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
             revenue["country"] = admob_country(repo.fetch_country(), revenue["till"])
         except Exception as e:
             print(f"ga4 forecast country skipped: {type(e).__name__}", file=sys.stderr)
+        try:                                       # 📅 the forecast's eCPM calendar: each past season's week / event
+            from .engine import fc_calendar        # effects, like for like per ad unit (the unit report already read)
+            till = date.fromisoformat(str(revenue["till"])[:10])
+            revenue["cal"] = fc_calendar.seasons(getattr(repo, "fetch_mediation_unit", list)(), till)
+            revenue["cal"]["hol"] = fc_calendar.holidays(repo.fetch_country(), till)   # (measured, page only)
+            revenue["cal"]["wk"] = fc_calendar.trigger_days(getattr(repo, "fetch_mediation_unit", list)(),
+                                                            (till - timedelta(days=140)).isoformat(), till.isoformat())
+        except Exception as e:
+            print(f"forecast calendar skipped: {type(e).__name__}", file=sys.stderr)
     return _uninstall_step(dashboard, data_dir, out_dir, s, revenue=revenue)
 
 

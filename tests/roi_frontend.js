@@ -420,6 +420,57 @@ function appFile() {
     out.pl_slider = mu.i === 2 && mu.r === 2 && m0.i === 2 && m0.r === 2 && !U.fcView(dp).includes('sab countries')
       && Math.abs(mc.i - Math.pow(2, 0.9)) < 1e-12 && mc.r === 2 && U.fcMul(dc.fc, 0).i === 0 && U.fcView(dc).includes('sab countries');
     U.set('PLAN', null); U.set('FCH', '90');
+    // 📅 the eCPM calendar: a marker per event week with its measured %, the day's tooltip line, the Hinglish note
+    // (old users in full, new installs × φv, the bidding link), the moving holidays NOT in the forecast; owner-only
+    const fk = JSON.parse(JSON.stringify(d.fc)); fk.f.d0 = '2026-11-01';
+    const ev0 = (k, a, b, e) => ({ k, a, b, e, o: e, nv: 0.61 * e, np: -0.48 * e });
+    // (synthetic values throughout)
+    fk.fcal = { n: 3, ys: [[2023, 2], [2024, 4], [2025, 5]], phi: [0.61, -0.48], ev: [Object.assign(ev0('bf', '2026-11-23', '2026-11-29', 0.05), { lo: -0.02, hi: 0.11 }), ev0('cyber', '2026-11-30', '2026-12-06', 0.03),
+      ev0('xmas', '2026-12-22', '2026-12-31', -0.07), ev0('j1', '2027-01-01', '2027-01-07', -0.15), ev0('j2', '2027-01-08', '2027-01-14', -0.17),
+      ev0('hold', '2027-02-12', null, -0.25)],
+      hol: [{ k: 'diwali', a: '2026-11-01', b: '2026-11-11', x: 0.07, xt: 0.03, xc: -0.04, y: 2025, s: 0.4, app: 0.028, c: [4, 20] },
+            { k: 'ramadan', a: '2027-02-08', b: '2027-03-09', x: -0.05, y: 2026, s: null, app: null }] };
+    const ck = U.fcChart(fk, 90, Array(90).fill(10), Array(90).fill(0));
+    out.cal_marks = (ck.match(/class="ev up"/g) || []).length === 2 && (ck.match(/class="ev dn"/g) || []).length === 3
+      && ck.includes('>BF +5%<') && ck.includes('>Xmas −7%<') && !ck.includes('>Cyber') && !ck.includes('>Jan')   // labels never overlap
+      && ck.includes('eCPM calendar week');
+    const c180 = U.fcChart(fk, 180, Array(180).fill(10), Array(180).fill(0));
+    out.cal_180 = c180.includes('then it stays there') && c180.includes('Ramadan') && c180.includes('Muslim-majority desh me eCPM baaki desh se <b>−5%</b> alag')
+      && !c180.includes('Muslim-majority desh khud')                            // (an older measure without its two parts)
+      && !c180.includes('mukable ~−');                                          // (no share known: no app %)
+    out.cal_tip = ck.includes('Black Friday week: eCPM +5% (measured, seasons −2% … +11%)') && ck.includes('January week 2: eCPM −17% (measured)');
+    out.cal_note = ['📅 <b>eCPM calendar</b>', 'Black Friday week', '+5%', 'January slide', '−15% → −17%',
+      'pichhle 3 season (2023–24: 2 apps, 2024–25: 4 apps, 2025–26: 5 apps) me', '<b class="roi-up">+5%</b> <small>[−2% … +11%]</small>',
+      'bold = un season ka average, [ ] = sabse kam … sabse zyada season', 'Purane users ki kamai pe pura asar', 'naye installs pe ~61%', 'installs per $ −4.8%', 'ROAS ~+1.3%',
+      '(1 Jan 27 – 14 Jan 27)',
+      'Forecast me <b>nahi</b> joda', 'Diwali week', 'India me eCPM baaki desh se <b>+7%</b> alag <small>(India khud +3%, baaki −4%)</small>',
+      '2025 me ek baar measured, 4 app×desh cells vs 20 baaki', 'is app ki 40% kamai wahan → baaki desh ke mukable ~+3%',
+      'eCPM calendar week (green up, red down)']
+      .every(x => ck.includes(x)) && !ck.includes('Ramadan') && !ck.includes('then it stays there');   // (past the 90 days)
+    const fs = JSON.parse(JSON.stringify(fk)); fs.fcal.hol = [{ k: 'ramadan', a: '2026-11-20', b: '2026-12-19', x: -0.05, y: 2026, s: 0.06, app: -0.003, c: [10, 40] }];
+    const hs = U.fcHol(fs, 90);                                                  // a small app effect: one decimal, never "~−0%"
+    out.cal_small = hs.includes('is app ki 6% kamai wahan → baaki desh ke mukable ~−0.3%') && hs.includes('10 app×desh cells vs 40 baaki') && !hs.includes('~−0%');
+    // an app (almost) not earning there: no item at all — never "is app ki 0% kamai wahan → ~+0.0%"
+    const fz = JSON.parse(JSON.stringify(fk)); fz.fcal.hol = [{ k: 'diwali', a: '2026-11-01', b: '2026-11-11', x: 0.07, y: 2025, s: 0.004, app: 0.0003, c: [4, 20] }];
+    const fz2 = JSON.parse(JSON.stringify(fz)); fz2.fcal.hol.push({ k: 'ramadan', a: '2026-11-20', b: '2026-12-19', x: -0.05, y: 2026, s: 0.005, app: -0.00025, c: [10, 40] });
+    const hz2 = U.fcHol(fz2, 90);
+    out.cal_zero = U.fcHol(fz, 90) === '' && !hz2.includes('Diwali') && hz2.includes('Ramadan') && hz2.includes('is app ki 1% kamai wahan')
+      && !hz2.includes('0% kamai');
+    const c30 = U.fcChart(fk, 30, Array(30).fill(10), Array(30).fill(0));
+    out.cal_30 = (c30.match(/class="ev /g) || []).length === 2 && !c30.includes('January slide') && c30.includes('Diwali week');
+    ctx.window.__DEV_VIEW__ = true;
+    const cdev = U.fcChart(fk, 90, Array(90).fill(10), Array(90).fill(0));
+    out.cal_dev = !cdev.includes('eCPM calendar') && !cdev.includes('class="ev ') && !cdev.includes('Diwali');
+    ctx.window.__DEV_VIEW__ = false;
+    out.cal_none = !U.fcView(d).includes('eCPM calendar') && !U.fcView(d).includes('class="ev ');
+    const fu = JSON.parse(JSON.stringify(fk)); fu.fcal.use = 0;                // measured, NOT in the forecast
+    const cu = U.fcChart(fu, 90, Array(90).fill(10), Array(90).fill(0));
+    out.cal_off = cu.includes('class="ev up off"') && cu.includes('Forecast me <b>nahi</b> joda: back-test me Nov–Dec')
+      && cu.includes('(measured, seasons −2% … +11%, forecast me nahi)') && cu.includes('[−2% … +11%]') && !cu.includes('Purane users ki kamai pe pura asar');
+    const fw = JSON.parse(JSON.stringify(d.fc)); fw.fcal = { ev: [], wk: [1.02, 1.03, 1.01, 1.01, 1, 0.99, 0.94] };
+    const cw = U.fcChart(fw, 30, Array(30).fill(10), Array(30).fill(0));
+    out.cal_wk = cw.includes('Hafte ki chaal: is app ke ad triggers') && cw.includes('<b>Sun −6%</b>, Tue +3%') && cw.includes('total wahi rehta hai')
+      && !cw.includes('class="ev ');
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };
     ctx.roiCardLine(x, 'Alpha Pick');

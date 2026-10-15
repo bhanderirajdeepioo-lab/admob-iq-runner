@@ -2573,7 +2573,7 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-pl{display:inline-flex;align-items:center;gap:6px}.roi-pl b{min-width:52px;text-align:center;color:#fff;font-variant-numeric:tabular-nums}
 .roi-plb{min-width:30px;min-height:30px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:16px;font-weight:800;cursor:pointer;line-height:1}
 .roi-plt{min-width:540px}
-.roi-ch .band{fill:rgba(52,217,154,.16);stroke:none}.roi-ch .ln.dash{stroke-dasharray:5 4;stroke-width:1.6}
+.roi-ch .band{fill:rgba(52,217,154,.16);stroke:none}.roi-ch .ev.up{fill:var(--good)}.roi-ch .ev.dn{fill:var(--bad)}.roi-ch .evt{font-size:10px;font-weight:700}.roi-ch .evt.up{fill:var(--good)}.roi-ch .evt.dn{fill:var(--bad)}.roi-ch .ev.off{fill:none;stroke-width:1.2}.roi-ch .ev.off.up{stroke:var(--good)}.roi-ch .ev.off.dn{stroke:var(--bad)}.roi-ch .evt.off{opacity:.75}.roi-lg .cev::before{background:linear-gradient(90deg,var(--good) 50%,var(--bad) 50%)}.roi-fcal{margin-top:8px;line-height:1.5}.roi-ch .ln.dash{stroke-dasharray:5 4;stroke-width:1.6}
 .roi-lgr{font-size:12.5px;color:var(--ink2);padding:7px 0;border-bottom:1px solid var(--line);line-height:1.5}.roi-lgr b{color:#fff}
 .roi-fc-st{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:13px;color:var(--ink2)}
 .roi-fc-st input[type=date]{min-height:34px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font:inherit;color-scheme:dark}
@@ -7011,7 +7011,32 @@ function fcLine(fc,H,hist,fut,label){ const W=CHW(), Hh=W<720?190:220, m={t:16,r
     const tip=`<b>${E(lab(i))}</b>${isF?' · forecast':' · asli'}<br>${E(label)} <b>${E(N(v))}</b>`;
     const x0=i===0?m.l:(X(i-1)+X(i))/2, x1=i===n-1?W-m.r:(X(i)+X(i+1))/2; return `<rect class="hit" x="${x0.toFixed(1)}" y="${m.t}" width="${Math.max(1,x1-x0).toFixed(1)}" height="${Hh-m.t-m.b}" data-tip="${E(tip)}"/>`; }).join('');
   return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="${E(label)}: actual and forecast">${grid}${today}${lines}${xs}${hits}</svg></div><div class="roi-lg"><span class="c4">Asli ${E(label)}</span><span class="c2">Forecast</span></div>`; }
-function fcChart(fc,H,rev,spd){ const W=CHW(), Hh=W<720?220:250, m={t:16,r:W<720?54:70,b:26,l:W<720?44:52};
+// 📅 the eCPM calendar (engine vd: fc.fcal) — the coming event weeks, each with its measured eCPM effect (e, vs the
+// 3 weeks before Black Friday week) and what the forecast does with it (o: old users in full, nv: new installs × φv)
+const FCEV={bf:'Black Friday week',cyber:'Cyber week',dec:'December',xmas:'Christmas – New Year',j1:'January week 1',j2:'January week 2',j3:'January week 3',j4:'January week 4',j5:'January week 5',j6:'January week 6',hold:'After January week 6'};
+const FCEVS={bf:'BF',cyber:'Cyber',dec:'Dec',xmas:'Xmas',j1:'Jan'};
+function fcDd(a,b){ return Math.round((Date.parse(a+'T00:00:00Z')-Date.parse(b+'T00:00:00Z'))/864e5); }
+function fcPc(v){ return (v>=0?'+':'−')+Math.abs(Math.round(v*100))+'%'; }
+function fcPc1(v){ return Math.abs(v)<0.0095?(v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+'%':fcPc(v); }
+function fcRg(e){ return e&&ok(e.lo)&&ok(e.hi)?`${fcPc(e.lo)} … ${fcPc(e.hi)}`:''; }   // the lowest … highest season
+function fcYs(c){ return (c.ys||[]).length?` (${c.ys.map(x=>`${x[0]}–${String(x[0]+1).slice(2)}: ${x[1]} apps`).join(', ')})`:''; }
+function fcCalEv(fc,H){ const c=fc&&fc.fcal; if((typeof window!=='undefined'&&window.__DEV_VIEW__)||!c||!(c.ev||[]).length||!fc.f) return [];
+  return c.ev.map(e=>Object.assign({},e,{j0:Math.max(0,fcDd(e.a,fc.f.d0)),j1:Math.min(H-1,fcDd(e.b||e.a,fc.f.d0))})).filter(e=>ok(e.e)&&e.j0<=H-1&&e.j1>=0&&e.j0<=e.j1); }
+function fcHol(fc,H){ const c=fc&&fc.fcal; if((typeof window!=='undefined'&&window.__DEV_VIEW__)||!c||!(c.hol||[]).length||!fc.f) return '';
+  const nm={ramadan:['Ramadan','Muslim-majority desh'],diwali:['Diwali week','India']};
+  // x = a gap (those countries' eCPM change minus the other countries'), xt / xc = each own change; an app earning
+  // < 0.5% there: no item (nothing in it for this app)
+  const it=c.hol.filter(e=>fcDd(e.a,fc.f.d0)<=H-1&&ok(e.x)&&!(ok(e.s)&&e.s<0.005)).map(e=>{ const n=nm[e.k]||[e.k,'']; return `${E(n[0])} <small>(${E(fd(e.a))} – ${E(fd(e.b))})</small>: ${E(n[1])} me eCPM baaki desh se <b>${fcPc(e.x)}</b> alag${ok(e.xt)&&ok(e.xc)?` <small>(${E(n[1])} khud ${fcPc(e.xt)}, baaki ${fcPc(e.xc)})</small>`:''} <small>(${E(String(e.y))} me ek baar measured${(e.c||[]).length===2?`, ${e.c[0]} app×desh cells vs ${e.c[1]} baaki`:''})</small>${ok(e.s)&&e.s>=0.005?` · is app ki ${Math.round(e.s*100)}% kamai wahan → baaki desh ke mukable ~${fcPc1(e.app)}`:''}`; });
+  return it.length?`<br>Forecast me <b>nahi</b> joda (ek hi baar measure hua, back-test abhi possible nahi): ${it.join(' · ')}`:''; }
+function fcWk(fc){ const c=fc&&fc.fcal, w=c&&c.wk; if((typeof window!=='undefined'&&window.__DEV_VIEW__)||!w||w.length!==7) return '';
+  const nm=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], lo=w.indexOf(Math.min(...w)), hi=w.indexOf(Math.max(...w));
+  return `<br>Hafte ki chaal: is app ke ad triggers (after-call, splash, resume…) ki apni measured chaal se <b>${nm[lo]} ${fcPc(w[lo]-1)}</b>, ${nm[hi]} ${fcPc(w[hi]-1)} (pichhle 16 hafte). Roz ki line isi se upar-neeche hoti hai; 30 / 90 / 180 din ka total wahi rehta hai.`; }
+function fcCalNote(fc,H){ const evs=fcCalEv(fc,H), hol=fcHol(fc,H), wk=fcWk(fc); if(!evs.length) return hol||wk?`<p class="roi-note roi-fcal">📅 <b>eCPM calendar</b>${wk}${hol}</p>`:''; const c=fc.fcal, ph=c.phi||[0,0];
+  const jan=evs.filter(e=>/^j\d$/.test(e.k)), it=evs.filter(e=>!/^j\d$/.test(e.k)&&e.k!=='hold').map(e=>`${E(FCEV[e.k]||e.k)} <small>(${E(fd(e.a))}${e.b&&e.b!==e.a?' – '+E(fd(e.b)):''})</small> <b class="${e.e>=0?'roi-up':'roi-dn'}">${fcPc(e.e)}</b>${fcRg(e)?` <small>[${fcRg(e)}]</small>`:''}`);
+  if(jan.length) it.push(`January slide <small>(${E(fd(jan[0].a))} – ${E(fd(jan[jan.length-1].b))})</small> <b class="roi-dn">${fcPc(jan[0].e)} → ${fcPc(jan[jan.length-1].e)}</b>${fcRg(jan[jan.length-1])?` <small>[${fcRg(jan[jan.length-1])}]</small>`:''}${evs.some(e=>e.k==='hold')?' <small>then it stays there</small>':''}`);
+  if(c.use===0) return `<p class="roi-note roi-fcal">📅 <b>eCPM calendar</b> · ${it.join(' · ')}<br>Ye % same ad unit ka eCPM hai jo pichhle ${c.n} season${fcYs(c)} me in hafton me measured badla (Black Friday se pehle ke 3 hafte = 0)${evs.some(e=>fcRg(e))?' — bold = un season ka average, [ ] = sabse kam … sabse zyada season':''}. Forecast me <b>nahi</b> joda: back-test me Nov–Dec me bane forecast isse zyadatar apps pe sudhre, par Jan–Feb me bane forecast zyadatar apps pe bigde — isliye abhi ye sirf jaankari hai. Chart ke upar halke nishaan = woh hafte.${wk}${hol}</p>`;
+  return `<p class="roi-note roi-fcal">📅 <b>eCPM calendar</b> · ${it.join(' · ')}<br>Ye % same ad unit ka eCPM hai jo pichhle ${c.n} season${fcYs(c)} me in hafton me measured badla (Black Friday se pehle ke 3 hafte = 0)${evs.some(e=>fcRg(e))?' — bold = un season ka average, [ ] = sabse kam … sabse zyada season':''}. Purane users ki kamai pe pura asar; naye installs pe ~${Math.round(ph[0]*100)}%, kyunki Google ki bidding CPI bhi badal deti hai (eCPM +10% → installs per $ ${(ph[1]*10).toFixed(1).replace('-','−')}%, ROAS ~+1.3%). Chart ke upar chhote nishaan = woh hafte.${wk}${hol}</p>`; }
+function fcChart(fc,H,rev,spd){ const evs=fcCalEv(fc,H), W=CHW(), Hh=(W<720?220:250)+(evs.length?14:0), m={t:evs.length?30:16,r:W<720?54:70,b:26,l:W<720?44:52};
   const hr=(fc.hist.rev||[]).slice(-90).map(v=>RV(v)), n0=hr.length, n=n0+H, c=(fc.cal||{})[String(H)]||{};
   const fr=rev.slice(0,H), lo=fr.map(v=>v*(1+(c.lo||0))), hi=fr.map(v=>v*(1+(c.hi||0)));
   const all=[...hr,...hi].filter(ok); if(!all.length) return '<p class="roi-note">Data nahi.</p>';
@@ -7027,10 +7052,14 @@ function fcChart(fc,H,rev,spd){ const W=CHW(), Hh=W<720?220:250, m={t:16,r:W<720
   const la=hr[n0-1], lf=fr[H-1];
   const lines=`<path class="ln c4" d="${path(hr,0)}"/><path class="ln c2" d="${path([hr[n0-1]].concat(fr),n0-1)}"/>`+(spd.some(v=>v>0)?`<path class="ln c5 dash" d="${path(spd.slice(0,H),n0)}"/>`:'')
     +(ok(la)?`<text class="lv c4" x="${X(n0-1)-4}" y="${Y(la)-8}" text-anchor="end">${E(MC(la))}</text>`:'')+(ok(lf)?`<text class="lv c2" x="${X(n-1)+5}" y="${Y(lf)+4}">${E(MC(lf))}</text>`:'');
-  const hits=Array.from({length:n},(_,i)=>{ const isF=i>=n0, j=i-n0, v=isF?fr[j]:hr[i];
-    const tip=`<b>${E(lab(i))}</b>${isF?' · forecast':' · asli'}<br>Revenue <b>${E(MV(v))}</b>${isF?`<br>range ${E(MV(lo[j]))} – ${E(MV(hi[j]))}${spd[j]?`<br>spend ${E(MV(spd[j]))}`:''}`:''}`;
+  let lastR=-1e9, janLab=false; const off=fc.fcal&&fc.fcal.use===0, marks=evs.filter(e=>e.k!=='hold').map(e=>{ const x0=X(n0+e.j0)-1, x1=X(n0+e.j1)+1, cls=(e.e>=0?'up':'dn')+(off?' off':''); let t='';
+    let lb=FCEVS[e.k]; if(!lb&&/^j\d$/.test(e.k)&&!janLab) lb='Jan'; if(lb==='Jan') janLab=true;
+    if(lb){ const s=lb+' '+fcPc(e.e), w=s.length*6, l=Math.max(m.l,Math.min(W-m.r-w,(x0+x1)/2-w/2)); if(l>lastR+4){ t=`<text class="evt ${cls}" x="${l.toFixed(1)}" y="${m.t-16}">${E(s)}</text>`; lastR=l+w; } }
+    return `<rect class="ev ${cls}" x="${x0.toFixed(1)}" y="${m.t-11}" width="${Math.max(2,x1-x0).toFixed(1)}" height="5" rx="1.5"/>`+t; }).join('');
+  const hits=Array.from({length:n},(_,i)=>{ const isF=i>=n0, j=i-n0, v=isF?fr[j]:hr[i], ev=isF?evs.find(e=>e.k!=='hold'&&j>=e.j0&&j<=e.j1):null;
+    const tip=`<b>${E(lab(i))}</b>${isF?' · forecast':' · asli'}<br>Revenue <b>${E(MV(v))}</b>${isF?`<br>range ${E(MV(lo[j]))} – ${E(MV(hi[j]))}${spd[j]?`<br>spend ${E(MV(spd[j]))}`:''}`:''}${ev?`<br>📅 ${E(FCEV[ev.k]||ev.k)}: eCPM ${fcPc(ev.e)} (measured${fcRg(ev)?`, seasons ${fcRg(ev)}`:''}${off?', forecast me nahi':''})`:''}`;
     const x0=i===0?m.l:(X(i-1)+X(i))/2, x1=i===n-1?W-m.r:(X(i)+X(i+1))/2; return `<rect class="hit" x="${x0.toFixed(1)}" y="${m.t}" width="${Math.max(1,x1-x0).toFixed(1)}" height="${Hh-m.t-m.b}" data-tip="${E(tip)}"/>`; }).join('');
-  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Daily revenue: actual and forecast">${grid}${band}${today}${lines}${xs}${hits}</svg></div><div class="roi-lg"><span class="c4">Asli revenue</span><span class="c2">Forecast</span>${spd.some(v=>v>0)?'<span class="c5">Google Ads spend</span>':''}</div>`; }
+  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Daily revenue: actual and forecast">${grid}${band}${today}${lines}${marks}${xs}${hits}</svg></div><div class="roi-lg"><span class="c4">Asli revenue</span><span class="c2">Forecast</span>${spd.some(v=>v>0)?'<span class="c5">Google Ads spend</span>':''}${evs.length?'<span class="cev">eCPM calendar week (green up, red down)</span>':''}</div>${fcCalNote(fc,H)}`; }
 function fcWhy(d){ const fc=d.fc, v=fc.drv||{}; if(!v.installs) return '';
   const row=(lab,a,fmt,good)=>{ if(!a||!ok(a[0])) return ''; const ch=ok(a[1])&&a[1]?a[0]/a[1]-1:null, up=ch!=null&&ch>=0, gd=good==null?null:(up===good);
     return `<tr><td class="roi-nm">${lab}</td><td>${fmt(a[0])}</td><td>${ok(a[1])?fmt(a[1]):'—'}</td><td class="${gd==null?'':gd?'roi-up':'roi-dn'}">${ch==null?'—':(up?'▲ +':'▼ −')+Math.abs(Math.round(ch*100))+'%'}</td></tr>`; };
@@ -7165,7 +7194,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcCalEv, fcCalNote, fcHol, fcWk, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)

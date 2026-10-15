@@ -304,7 +304,7 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
     try:                                            # tab's) — rides the value step; a failure costs only the ROI
         from . import roi_build as rb
         if val_on and rb.enabled(s):
-            roi_acc = rb.start()
+            roi_acc = rb.start(cal=(revenue or {}).get("cal"))
         else:
             rb.off(out_dir)
     except Exception as e:

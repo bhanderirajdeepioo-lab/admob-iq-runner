@@ -336,3 +336,88 @@ def test_a_build_without_the_season_keeps_the_saved_one(tmp_path):
     st = json.load(open(os.path.join(data, "forecast", "state.json")))
     assert st["season"] == seas and st["bandr"] == {"2026-01-05": [1.0] * 7}
     assert fb.start(data, datetime(2026, 1, 7, tzinfo=timezone.utc), Clock()).season == run.season
+
+
+def test_the_ecpm_calendar_reaches_the_page(tmp_path):
+    """📅 build_static's calendar (fc_calendar.seasons + the measured holidays) → roi_build.start → the forecast's run →
+    every app's forecast: fc["fcal"] = the coming event weeks; the holidays measured once (Ramadan, Diwali) shown with
+    the app's own revenue share there but NOT in the forecast; without a calendar no fcal and the plain forecast."""
+    import math
+    from admob_iq import roi_build as rb
+    from tests.test_forecast_cal import calendar
+    app = make()
+    rows, life, ida = _rows_life(app, ga4=True)
+    now = datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
+    cty = {(LAST - timedelta(days=i)).isoformat(): {"ID": [2e6, 1000], "US": [6e6, 1000]} for i in range(40)}
+    out = []
+    for i, cal in enumerate((dict(calendar(), hol={"ramadan": {"y": 2025, "x": math.log(0.95), "cells": [3, 9]}}),
+                             calendar(), None)):
+        data = str(tmp_path / ("data%d" % i))
+        os.makedirs(data)
+        acc = rb.start(cal=cal)
+        assert acc.cal is cal
+        run = fb.start(data, now, Clock(), cal=acc.cal)
+        out.append(fb.app_step(run, "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(), [], rev_cty=cty))
+    fe = out[0]["fcal"]
+    assert fe["n"] == 2 and [x["k"] for x in fe["ev"]] == ["j1", "j2", "j3", "j4", "j5", "j6", "hold"]
+    assert all(x["e"] < 0 for x in fe["ev"])
+    if VD.STRUCT["cal"]:                                                                   # in the forecast
+        assert fe["use"] == 1 and all(x["o"] < 0 for x in fe["ev"]) and out[2]["f"]["old"] != out[0]["f"]["old"]
+    else:                                                                                  # held off: shown only
+        assert fe["use"] == 0 and all(x["o"] is None for x in fe["ev"]) and out[2]["f"]["old"] == out[0]["f"]["old"]
+    hol = fe["hol"]
+    assert [h["k"] for h in hol] == ["ramadan"] and hol[0]["a"] == "2026-02-18" and hol[0]["y"] == 2025
+    assert abs(hol[0]["x"] + 0.05) < 1e-4 and abs(hol[0]["s"] - 0.25) < 1e-9 and abs(hol[0]["app"] + 0.0125) < 1e-4
+    assert hol[0]["c"] == [3, 9]                                                          # (the cells it rests on)
+    assert hol[0]["xt"] is None and hol[0]["xc"] is None                                  # (a measure without its parts)
+    assert out[1]["f"]["old"] == out[0]["f"]["old"] and "hol" not in out[1]["fcal"]      # the holidays: page only
+    assert out[2]["fcal"] is None                                                         # no calendar: nothing shown
+
+
+def test_the_weekday_rhythm_keeps_every_total():
+    """📅 The after-call weekday rhythm on the page's daily forecast: each day × its weekday's factor, every part's
+    30 / 90 / 180-day totals unchanged; no factors: the series as it was."""
+    d0 = date(2026, 10, 16)                                    # a Friday
+    W = [1.02, 1.02, 1.01, 1.01, 1.0, 0.99, 0.95]
+    ser = {"old": [10.0] * 180, "org": [2.0 + 0.01 * i for i in range(180)], "paid": [3.0] * 180}
+    out = fb.weekly(ser, d0, W)
+    for k in ser:
+        for a, b in ((0, 30), (30, 90), (90, 180)):
+            assert abs(sum(out[k][a:b]) - sum(ser[k][a:b])) < 5e-3                  # (4-decimal rounding)
+    sun = 2                                                    # Oct 18, 2026: a Sunday
+    assert out["old"][sun] < out["old"][sun - 1] and abs(out["old"][sun] / out["old"][0] - 0.95 / 1.0) < 1e-3
+    assert fb.weekly(ser, d0, None) is ser
+
+
+def test_the_weekday_rhythm_reaches_the_page(tmp_path):
+    """📅 build_static's per-trigger revenue (fc_calendar.trigger_days) → each app's weekday factors → the page's daily
+    forecast takes them (the fcal["wk"] note), every 30 / 90 / 180-day total as without them."""
+    from tests.test_forecast_cal import calendar
+    app = make()
+    rows, life, ida = _rows_life(app, ga4=True)
+    now = datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
+    ac, inf = {}, {}
+    d = LAST - timedelta(days=139)
+    while d <= LAST:
+        ac[d.isoformat()] = 40.0 * (0.85 if d.weekday() == 6 else 1.0)
+        inf[d.isoformat()] = 60.0
+        d += timedelta(days=1)
+    out = []
+    for i, wk in enumerate(({"a~1": {"after-call": ac, "in-feature": inf}}, None)):
+        data = str(tmp_path / ("w%d" % i))
+        os.makedirs(data)
+        run = fb.start(data, now, Clock(), cal=dict(calendar(), wk=wk) if wk else calendar())
+        out.append(fb.app_step(run, "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(), []))
+    W = out[0]["fcal"]["wk"]
+    assert len(W) == 7 and W[6] < 0.95 and "wk" not in out[1]["fcal"]
+    for k in ("old", "org", "paid"):
+        a, b = out[0]["f"][k], out[1]["f"][k]
+        assert a != b and all(abs(sum(a[x:y]) - sum(b[x:y])) < 5e-3 for x, y in ((0, 30), (30, 90), (90, 180)))
+    # no complete season yet (a new account): the rhythm still reaches the daily line, no event week is shown
+    data = str(tmp_path / "w2")
+    os.makedirs(data)
+    run = fb.start(data, now, Clock(), cal={"v": 1, "till": LAST.isoformat(), "s": {}, "hol": {},
+                                             "wk": {"a~1": {"after-call": ac, "in-feature": inf}}})
+    o2 = fb.app_step(run, "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(), [])
+    assert o2["fcal"]["wk"] == W and o2["fcal"]["ev"] == [] and (o2["f"] == out[0]["f"] or VD.STRUCT["cal"])
+    assert fb.start(data, now, Clock(), cal={"v": 1, "s": {}, "hol": {}, "wk": {}}).cal is None

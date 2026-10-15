@@ -88,6 +88,9 @@ def test_forecast_view(out):
     # 💸 Budget by country: today's plan = the forecast; Keep total; out-of-range warning; owner-only; the slider
     assert out["pl_card"] and out["pl_keep"] and out["pl_warn"] and out["pl_nokeep"]
     assert out["pl_dev"] and out["pl_none"] and out["pl_slider"] and out["pl_h"] and out["pl_inr"]
+    # 📅 the eCPM calendar: markers with the measured %, tooltip, note, holidays not applied, owner-only
+    assert out["cal_marks"] and out["cal_tip"] and out["cal_note"] and out["cal_30"] and out["cal_180"]
+    assert out["cal_dev"] and out["cal_none"] and out["cal_wk"] and out["cal_off"] and out["cal_small"] and out["cal_zero"]
 
 
 def test_wiring():
