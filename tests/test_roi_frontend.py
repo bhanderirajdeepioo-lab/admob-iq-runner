@@ -82,6 +82,7 @@ def test_forecast_view(out):
     assert out["fc_users"] and out["fc_users_slider"]
     assert out["fc_vd"]                                                # engine vd's settings and note
     assert out["fc_vd_switch"]                                         # … and the engine switch in the learning log
+    assert out["fc_gx"]                                                # GA4's late / paid cells: measured vs carried
 
 
 def test_wiring():

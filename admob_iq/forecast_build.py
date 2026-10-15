@@ -110,6 +110,7 @@ class Run:
         self.pool, self.pool_b = {}, {}
         self.ran = self.kept = self.skipped = 0
         self.tune_sec = []                  # seconds of each re-tune this build (counts only in the log line)
+        self.gx = [0, 0]                    # vd re-tunes whose back-test chose GA4's late country cells / paid cells
 
     def left(self):
         return BUDGET_SEC - (self.clock() - self.t0)
@@ -474,12 +475,16 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
         prev_p = old.get("p") if old.get("v") == Vr else None
         t0 = run.clock()
         p, bt, steps = E.tune(app, seas, start_p=prev_p)
+        moved = (dict(E.DEFAULT, **prev_p) if Vr == 2 and prev_p else prev_p) != p   # vd: a setting stored before a
+                                                                                       # switch existed = it at its default
         tune_sec = round(max(0.0, run.clock() - t0), 1)
         run.tune_sec.append(tune_sec)
+        run.gx[0] += 1 if p.get("gc") else 0
+        run.gx[1] += 1 if p.get("pc") else 0
         if Vr == 1:
             sc_prev = F.score(F.backtest(app, prev_p, seas)) if prev_p and prev_p != p else None
         else:                                            # vd tunes from the stored setting: its score is the first step
-            sc_prev = steps[0]["score"] if prev_p and prev_p != p and steps else None
+            sc_prev = steps[0]["score"] if prev_p and moved and steps else None
         cal = F.calibrate(bt)
         sr, f, ser = series(app, p, cal, seas, E)
         last = app["last"]
@@ -506,7 +511,7 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
                     checks.append({"made": x["made"], "h": hz, "pred": pv, "act": _r(act, 2), "err": _r(pv / act - 1, 4)})
         att = F.attribution(bt)
         log = list(old.get("log") or [])
-        if prev_p != p or not log:
+        if moved or not log:
             cause = max(att, key=att.get) if att else None
             if prev_p:
                 changed = sorted(k for k in p if dict(E.DEFAULT, **prev_p).get(k) != p[k])
@@ -562,5 +567,6 @@ def finish(run):
 def line(run):
     """The build log's line: counts and seconds only."""
     ts = run.tune_sec
-    return "forecast %s: ran %d, kept %d, skipped %d; tune %.0fs (max %.0fs); %.0fs" % (
-        run.eng, run.ran, run.kept, run.skipped, sum(ts), max(ts) if ts else 0.0, run.clock() - run.t0)
+    return ("forecast %s: ran %d, kept %d, skipped %d; tune %.0fs (max %.0fs); %.0fs; GA4 late cells %d, paid cells %d"
+            % (run.eng, run.ran, run.kept, run.skipped, sum(ts), max(ts) if ts else 0.0, run.clock() - run.t0,
+               run.gx[0], run.gx[1]))

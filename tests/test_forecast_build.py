@@ -229,6 +229,25 @@ def test_vd_kept_forecast_follows_a_new_day(tmp_path):
     assert json.load(open(os.path.join(data, "forecast", "k1.json")))["T"] == y.isoformat()   # the file: the tune's
 
 
+def test_vd_setting_stored_before_the_ga4_switches(tmp_path):
+    """A vd setting stored before the switches gc / pc existed reads as them at their default (off): a re-tune that
+    keeps everything adds no learning-log entry; one that turns a switch on names only that one."""
+    data = str(tmp_path / "data")
+    os.makedirs(data)
+    app = make()
+    rows, life, ida = _rows_life(app, ga4=True)
+    P, now = {"S": LAST}, datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
+    fc = fb.app_step(fb.start(data, now, Clock()), "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    path = os.path.join(data, "forecast", "k1.json")
+    saved = json.load(open(path))
+    saved["p"] = {k: v for k, v in saved["p"].items() if k not in ("gc", "pc")}      # as stored by the earlier engine
+    json.dump(saved, open(path, "w"))
+    run = fb.start(data, now + timedelta(days=1), Clock())
+    f = fb.app_step(run, "a~1", "k1", rows, P, ida, life, LAST.isoformat(), [])
+    assert run.ran == 1 and f["p"] == fc["p"] and f["p"]["gc"] == 0 and f["log"] == fc["log"]
+    assert fb.line(run).endswith("GA4 late cells 0, paid cells 0")
+
+
 def test_vd_tunes_only_when_its_seconds_fit(tmp_path):
     """A day later the setting is stale; with less budget left than TUNE_MARGIN × the app's last tune seconds the build
     keeps the setting (today's forecast with it) and tunes another time."""

@@ -254,6 +254,28 @@ def test_ga4_paid_cells():
     assert rb._ga4p({"cp": {}, "d2": {}}, [7]) is None
 
 
+def test_ga4_paid_cells_late_ages():
+    """Ages 180 / 365: every install's revenue = the legacy cells to 90 + IDAY_EXT's late cells (c2), the paid cells to
+    the age — only for weeks whose late days are folded in c2 too (c2st); a = 90 never needs c2."""
+    mon = [date(2025, 12, 1) + timedelta(days=7 * i) for i in range(20)]       # Dec 1 … Apr 13
+    last = date(2026, 10, 9)
+    ida = _paid_ida(mon[0], last, mon)
+    hole = date(2026, 9, 25)                                                   # one late (c2) read failed
+    for W in mon:
+        pr, orr = int(800 * 1.5 * 1e6) // 2, int(200 * 1e6) // 2
+        ida.setdefault("c2", {})[W.isoformat()] = {"0": {"r2": [pr + orr] * 3}, "1": {"r2": [pr + orr] * 3},
+                                                   "gap": {"r2": [10 ** 9] * 3}}
+    for k, e in ida["d2"].items():
+        e["c2st"] = "err" if k == hole.isoformat() else "ok"
+    g = rb._ga4p(ida, [90, 180, 365])
+    p180 = g["prem"]["180"]                     # W + 186 ≤ Oct 9 and before the hole: Mar 16 back (Mar 23 + 186 = the hole)
+    assert p180["to"] == "2026-03-16" and p180["w"] == rb.F4_PW and p180["p"] == 1.5 and p180["s"] == 0.8
+    assert "365" not in g["prem"]                                              # W + 371 not whole yet
+    assert g["prem"]["90"]["to"] == "2026-04-13"           # a = 90 needs no late read (the hole is past its days)
+    del ida["c2"]                                          # without the late cells the organic side has no 91–180
+    assert rb._ga4p(ida, [180])["prem"]["180"]["p"] > 1.5
+
+
 def test_forms_ga4_measured():
     hs, S = date(2026, 1, 1), date(2026, 10, 7)
     P = _P(hs, S)

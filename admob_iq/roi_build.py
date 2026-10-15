@@ -340,16 +340,19 @@ def _ga4p(ida, ages):
      "prem": {age: {p: paid ÷ organic revenue per install, s, rs (paid share of installs / of revenue), np, no, w,
                     from, to}}} — p over the newest F4_PW install weeks whose every activity day (the week + the age)
     has BOTH reads folded (cpst and the legacy cst), Σ every country slot (the gap row left out on both sides); None
-    when the app has no paid cells yet. Ages past 90 (the legacy cells stop there) or off a band edge: no p."""
+    when the app has no paid cells yet. Ages 180 / 365 (the legacy cells stop at 90): every install's revenue adds
+    IDAY_EXT's late cells (c2: ages 91–180, 181–365), whose days must be folded too (c2st); off a band edge: no p."""
     cp, d2 = ida.get("cp") or {}, ida.get("d2") or {}
     if not isinstance(cp, dict) or not isinstance(d2, dict) or not d2:
         return None
-    c, days = ida.get("c") or {}, ida.get("days") or {}
+    c, days, c2 = ida.get("c") or {}, ida.get("days") or {}, ida.get("c2") or {}
     fold = ("ok", "smp", "gap")                     # ga4_iday_ext.FOLDED / engine.value.CGOOD
 
-    def whole(D):
-        k = _iso(D)
-        return (d2.get(k) or {}).get("cpst") in fold and (days.get(k) or {}).get("cst") in fold
+    def whole(D, i=0, lt=False):                    # i: the day from the week's start; lt: the late cells are used
+        k = _iso(D)                                 # (their days — ages ≥ 91 — need c2st, the legacy ones cst)
+        e = d2.get(k) or {}
+        return (e.get("cpst") in fold and (i > 96 or (days.get(k) or {}).get("cst") in fold)
+                and (not lt or i < 91 or e.get("c2st") in fold))
     share = {}
     for D, r in d2.items():
         if isinstance(r, dict) and r.get("cpst") in fold and isinstance(r.get("cpn"), (int, float)):
@@ -362,18 +365,24 @@ def _ga4p(ida, ages):
                 n += int(v.get("n") or 0)
                 rv += sum(int(x or 0) for x in (v.get("r") or [])[:nb])
         return n, rv
+
+    def late(slots, k):                             # Σ c2 r2 of the first k late bands (the gap row left out)
+        return sum(int(x or 0) for kk, v in (slots or {}).items() if kk != "gap" and isinstance(v, dict)
+                   for x in (v.get("r2") or [])[:k])
     prem = {}
     for a in ages:
         nb = [i + 1 for i, (lo, hi) in enumerate(val.CBANDS) if hi == a]
-        if not nb:
+        nl = {180: 1, 365: 2}.get(a, 0)            # late bands of every install's revenue (c2), cp: bands to a
+        if not nb and not nl:
             continue
+        nbp = nb[0] if nb else len(val.CBANDS) + nl
         weeks = []
         for W in sorted(set(cp) & set(c), reverse=True):
             try:
                 w0 = _d(W)
             except ValueError:
                 continue
-            if all(whole(w0 + timedelta(days=i)) for i in range(7 + a)):
+            if all(whole(w0 + timedelta(days=i), i, nl > 0) for i in range(7 + a)):
                 weeks.append(W)
                 if len(weeks) >= F4_PW:
                     break
@@ -381,8 +390,9 @@ def _ga4p(ida, ages):
             continue
         np_ = na_ = rp = ra = 0
         for W in weeks:
-            n1, r1 = tot(cp[W], nb[0])
-            n2, r2 = tot(c[W], nb[0])
+            n1, r1 = tot(cp[W], nbp)
+            n2, r2 = tot(c[W], nb[0] if nb else len(val.CBANDS))
+            r2 += late(c2.get(W), nl) if nl else 0
             np_, rp, na_, ra = np_ + n1, rp + r1, na_ + n2, ra + r2
         no, ro = na_ - np_, ra - rp
         if np_ < F4_PMIN or no < F4_PMIN or rp <= 0 or ro <= 0:

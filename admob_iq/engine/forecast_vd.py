@@ -28,9 +28,22 @@ newest GA4 day ≤ T − lag (GA4 lands `glag` days after AdMob, measured per ap
       since the levels' window, every age at once.  Installs = organic + spend × installs per $ (forecast.installs_model).
   DAU the same mix of users; uninstalls from forecast.uninstall_curve (unchanged).
 
+GA4's install-day extension (IDAY_EXT: c2 / cp cells, the d2 ledger; still back-filling, so its coverage grows daily) —
+two switches, each on for an app only when its own back-test is better with it (tuned with the mix weights; a cell is
+used only when every activity day of it was read, so an origin without one is exactly the model without them):
+  gc 2  every country's own curve past day 90: revenue 91–180 / 181–365 / 366–427 and users at 120 / 180 / 270 / 365
+        per country from the late cells, each shrunk toward the country's own standing in the band before (its
+        installs n ÷ (n + CKC)) — 0: the 61–90 standing carried. (Lab, 15 Oct: on the cells themselves a newer week's
+        country shares past day 90 came closer with it than carried; the back-tests reach few such ages yet.)
+  pc 1  new installs' paid vs organic split from GA4's paid users (cp: every country's own paid / organic revenue and
+        users per install, at the newest paid / organic country mix) instead of the regression on the Google Ads
+        install share (an upper bound) — the installs still come from spend (paid) and the organic rate, unchanged.
+        (Lab: a newer week's paid ÷ organic revenue per install came closer than with the regression.)
+
 Structure (STRUCT, 12 knobs) is fixed portfolio-wide (version STRUCT_VERSION; re-checked offline, never per app: tuned
-per app it measured worse on unseen origins); only the mix weights bo, bn, cq are tuned per app (GRID), on the same
-back-tests as before plus each past install day's future revenue and each new install's value (objective()).
+per app it measured worse on unseen origins); only the mix weights bo, bn, cq and the switches gc, pc are tuned per app
+(GRID), on the same back-tests as before plus each past install day's future revenue and each new install's value
+(objective()).
 Every back-test origin sees GA4 only to T − glag, each install day's final daily data only to T − clag and its
 checkpoints after day 30 only to T − tlag, as the live build does (lag_view; the three lags measured per app)."""
 import bisect
@@ -46,13 +59,16 @@ HORIZONS = F.HORIZONS
 STRUCT_VERSION = "2026-10-15"
 STRUCT = {"m": "ratio", "hl": 45, "Kc": 30, "w": 28, "wn": 7, "g": 0.0, "W": 14,          # view A (+ g, W shared)
           "bhl": 100000, "Ku": 3, "bw": 0, "wa": 56, "nv": 1}                             # view B
-GRID = {"bo": (0.0, 0.5, 1.0), "bn": (0.0, 0.5, 1.0), "cq": (0.0, 0.5, 1.0)}
-DEFAULT = {"bo": 0.5, "bn": 0.5, "cq": 0.0}
+GRID = {"bo": (0.0, 0.5, 1.0), "bn": (0.0, 0.5, 1.0), "cq": (0.0, 0.5, 1.0), "gc": (0, 2), "pc": (0, 1)}
+DEFAULT = {"bo": 0.5, "bn": 0.5, "cq": 0.0, "gc": 0, "pc": 0}
 # m  "ratio": what no install day covers (> 427 days) = AdMob − k·Σ GA4 bands; "split": a decaying rest
 # hl / bhl  the curves' half-life (100000 = every install day alike); Kc / Ku  credibility of an install day's own anchor
 # w / wn  GA4 days of the levels (past install days / new installs); bw / wa  B's calendar index / ARPDAU window
 # g  month-of-year season strength (0 off); W  installs-model window; nv 1 organic and paid new installs apart
 # bo / bn  B's weight on past install days / new installs; cq  how much of the AdMob-only move q is carried
+# gc 2  each country's own curve past day 90 from GA4's late cells (c2) — 0: the 61–90 standing carried
+# pc 1  new installs' paid vs organic value from GA4's paid cells (cp) — 0: regressed on the Google Ads install share
+#       (gc / pc: on for an app only when its own back-test is better with them; no complete cell = identical)
 
 
 def params(p=None):
@@ -64,9 +80,9 @@ def params(p=None):
 
 # ── the app as it stood at T: GA4 only to T − lag (it lands later than AdMob) ─────────────────────────────────────────
 def lag_view(app, T, lag, clag=0, tlag=0):
-    """g4, DAU and the GA4 day ledger cut at T − lag; with clag, also each install day's final daily data (and its
-    checkpoints to day 30) cut at T − clag; with tlag, its checkpoints after day 30 (60 / 90 / 180 / 365) cut at
-    T − tlag — the app as the live build has it at T. Kept per (T, lag, clag, tlag) inside the app."""
+    """g4, DAU and the GA4 day ledgers (days, IDAY_EXT's d2) cut at T − lag; with clag, also each install day's final
+    daily data (and its checkpoints to day 30) cut at T − clag; with tlag, its checkpoints after day 30 (60 / 90 / 180 /
+    365) cut at T − tlag — the app as the live build has it at T. Kept per (T, lag, clag, tlag) inside the app."""
     if not lag and not clag and not tlag:
         return app
     vs = app.setdefault("_fv_views", {})
@@ -84,9 +100,11 @@ def lag_view(app, T, lag, clag=0, tlag=0):
             D += ONE
         v["days"] = days
         ida = dict(app.get("ida") or {})
+        cs = cut.isoformat()
         if ida.get("days"):
-            cs = cut.isoformat()
             ida["days"] = {a: b for a, b in ida["days"].items() if a <= cs}
+        if ida.get("d2"):                                 # the extension's day ledger lands with GA4 too
+            ida["d2"] = {a: b for a, b in ida["d2"].items() if a <= cs}
         v["ida"] = ida
         if clag or tlag:
             coh = {}
@@ -126,6 +144,179 @@ LEV_SUP = 0.1                  # a band filled to share s of its ages is trusted
 GA4_LAG = 14                   # the levels' window: the newest w days with a GA4 read, searched back this far
 LOC = 7                        # the install days within ±LOC days pool a cohort's shrink target
 QC_FOLDED = ("ok", "smp", "gap")
+
+# ── GA4's install-day extension (IDAY_EXT: c2 / cp cells, d2 ledger) — switches gc / pc, decided per app by its own
+#    back-test (GRID); with a switch off, or nothing complete yet, every number is exactly the one without them ─────
+C2B = ((91, 180), (181, 365), (366, 427))      # c2 r2: ad revenue at these install ages (per install week × slot)
+C2L = (120, 180, 270, 365)                     # c2 u2: active users at these ages
+NCB, NCL = len(F.CB), len(F.CL)
+CBX = tuple(F.CB) + C2B                        # gc: the factor vectors' revenue bands …
+CLX = tuple(F.CL) + C2L                        # … and users' lags (a late one nobody measured carries the one before)
+BIXX = [next((i for i, (lo, hi) in enumerate(CBX) if lo <= L <= hi), len(CBX) - 1) for L in range(MAXA + 1)]
+UIXX = [-1 if L == 0 else max(i for i, g in enumerate(CLX) if g <= L) for L in range(MAXA + 1)]
+UCUTSX = sorted(set(UCUTS) | {120, 180, 270})
+LB = ((0, 0), (1, 1), (2, 3), (4, 7), (8, 14), (15, 30), (31, 60), (61, 90), (91, 180), (181, 365), (366, 427))  # cp r
+LL = (1, 3, 7, 14, 30, 60, 90, 120, 180, 270, 365)                                                      # cp u
+LBX = [next((i for i, (lo, hi) in enumerate(LB) if lo <= L <= hi), len(LB) - 1) for L in range(MAXA + 1)]
+NWK = 8                        # pc: the newest complete install weeks a band's paid / organic values come from (≈ NW)
+PMIN = 100                     # … a band needs ≥ this many paid AND organic installs (roi_build.F4_PMIN)
+NMIX = 2                       # … the newest complete weeks with paid (organic) installs give their country mix
+PIG_COV = 0.25                 # … GA4's paid share of new users must cover ≥ this share of a window's install days
+
+
+def _bix_of(f):
+    return BIXX if (f and len(f[0]) > NCB) else F.BIX
+
+
+def _uix_of(f):
+    return UIXX if (f and len(f[1]) > NCL) else F.UIX
+
+
+def _xfr(f, L):
+    """forecast._fr for a legacy (8 bands) or an extended (gc: 11) factor vector."""
+    if not f:
+        return 1.0
+    return f[0][(BIXX if len(f[0]) > NCB else F.BIX)[L]]
+
+
+def _xfu(f, L):
+    if not f:
+        return 1.0
+    ix = (UIXX if len(f[1]) > NCL else F.UIX)[L]
+    return f[1][ix] if ix >= 0 else 1.0
+
+
+def _xfold(app, key):
+    """(first day, prefix counts) of the activity days whose IDAY_EXT ledger d2 has `key` (c2st / cpst) folded — kept
+    in the app (the lag view: its d2 is cut at T − lag)."""
+    mk = "_fvx_fold_" + key
+    if mk not in app:
+        d2 = (app.get("ida") or {}).get("d2") or {}
+        ds = sorted(date.fromisoformat(k) for k, v in d2.items() if isinstance(v, dict) and v.get(key) in QC_FOLDED)
+        if not ds:
+            app[mk] = None
+        else:
+            d0 = ds[0]
+            cnt = [0] * ((ds[-1] - d0).days + 2)
+            st = set(ds)
+            for i in range(len(cnt) - 1):
+                cnt[i + 1] = cnt[i] + (1 if d0 + timedelta(days=i) in st else 0)
+            app[mk] = (d0, cnt)
+    return app[mk]
+
+
+def _xsince(app, key):
+    """{slot: [(first, last)]}: a country slot the fetch added later — the days of `key` (c2 / cp) that went into ZZ
+    before it existed (IDAY_EXT xs.since)."""
+    mk = "_fvx_since_" + key
+    if mk not in app:
+        ida = app.get("ida") or {}
+        cset = ida.get("cset") or []
+        out = {}
+        for cc, e in (((ida.get("xs") or {}).get("since")) or {}).items():
+            rr = e.get(key) if isinstance(e, dict) else None
+            if cc in cset and rr:
+                out[str(cset.index(cc))] = [(date.fromisoformat(a), date.fromisoformat(b)) for a, b in rr]
+        app[mk] = out
+    return app[mk]
+
+
+def _late_cells(app, W, cells, bad_legacy, zz):
+    """Install week W's late cells {slot: {n, r2[3], u2[4]}} (+ "gap": {r2}: Q-B − Σ named) — n from the week's legacy
+    cells; a slot the legacy rule put into ZZ, or whose c2 days of the late windows (W+91 … W+433) went into ZZ before
+    it existed (xs.since), is folded into ZZ, n with it (dropped when there is no ZZ)."""
+    c2w = ((app.get("ida") or {}).get("c2") or {}).get(W.isoformat()) or {}
+    since = _xsince(app, "c2")
+    lo, hi = W + timedelta(days=C2B[0][0]), W + timedelta(days=6 + C2B[-1][1])
+    bad = set(bad_legacy) | {k for k, rr in since.items() if any(a <= hi and b >= lo for a, b in rr)}
+    out = {}
+    for k, e in cells.items():
+        if k == "gap":
+            continue
+        kk = zz if k in bad else k
+        if kk is None:
+            continue
+        x = out.setdefault(kk, {"n": 0.0, "r2": [0.0] * 3, "u2": [0.0] * 4})
+        x["n"] += e.get("n") or 0
+    for k, e in c2w.items():
+        if not isinstance(e, dict):
+            continue
+        if k == "gap":
+            out["gap"] = {"n": 0.0, "r2": [float(v or 0) for v in (e.get("r2") or [0] * 3)[:3]], "u2": [0.0] * 4}
+            continue
+        kk = zz if k in bad else k
+        if kk is None:
+            continue
+        x = out.setdefault(kk, {"n": 0.0, "r2": [0.0] * 3, "u2": [0.0] * 4})
+        for b, v in enumerate((e.get("r2") or [0] * 3)[:3]):
+            x["r2"][b] += v or 0
+        for j, v in enumerate((e.get("u2") or [0] * 4)[:4]):
+            x["u2"][j] += v or 0
+    return out
+
+
+def _curve_x(coh, T, start, hl, fx=None):
+    """forecast.curve with each factor vector's own age → index map (gc: the late bands / lags measured)."""
+    num, den = {}, {}
+    bnum, bden = {}, {}
+    unum, uden = {}, {}
+    maxage = 0
+    for X, c in coh.items():
+        if X < start or X > T or not c.get("n"):
+            continue
+        n = c["n"]
+        w = 0.5 ** ((T - X).days / hl) if hl < 99999 else 1.0
+        f = F._wk(fx, X)
+        k = F._known(c, X, T)
+        if not k:
+            continue
+        kd = dict(k)
+        maxage = max(maxage, k[-1][0])
+        for L in range(0, 31):
+            if L in kd and (L == 0 or L - 1 in kd):
+                inc = kd[L] - (kd[L - 1] if L else 0.0)
+                num[L] = num.get(L, 0.0) + w * max(0.0, inc)
+                den[L] = den.get(L, 0.0) + w * n * _xfr(f, L)
+        exact = any(L in kd for L in (2, 4, 5))
+        if not exact:
+            prev = None
+            for a in (0, 1, 3, 7, 14, 30):
+                if a in kd:
+                    lo = 0 if prev is None else prev + 1
+                    inc = kd[a] - (kd[prev] if prev is not None else 0.0)
+                    for L in range(lo, a + 1):
+                        num[L] = num.get(L, 0.0) + w * max(0.0, inc) / (a - lo + 1)
+                        den[L] = den.get(L, 0.0) + w * n * _xfr(f, L)
+                    prev = a
+                else:
+                    break
+        for lo, hi, j in F.BANDS:
+            a0 = F.T_AGES[j - 1]
+            if hi in kd and a0 in kd:
+                inc = max(0.0, kd[hi] - kd[a0])
+                bnum[(lo, hi)] = bnum.get((lo, hi), 0.0) + w * inc
+                bden[(lo, hi)] = bden.get((lo, hi), 0.0) + w * n * (hi - lo + 1) * _xfr(f, lo)
+        uk = F._uknown(c, X, T)
+        for L, v in uk.items():
+            unum[L] = unum.get(L, 0.0) + w * v
+            uden[L] = uden.get(L, 0.0) + w * n * _xfu(f, L)
+    pts = {L: num[L] / den[L] for L in num if den.get(L)}
+    for (lo, hi), v in bnum.items():
+        if bden.get((lo, hi)):
+            pts[(lo + hi) // 2] = v / bden[(lo, hi)]
+    a = F._fill(pts, F.MAX_AGE)
+    for (lo, hi), v in bnum.items():
+        if not bden.get((lo, hi)):
+            continue
+        want = v / bden[(lo, hi)] * (hi - lo + 1)
+        have = sum(a[lo:hi + 1])
+        if have > 0:
+            fq = want / have
+            for L in range(lo, hi + 1):
+                a[L] *= fq
+    upts = {L: unum[L] / uden[L] for L in unum if uden.get(L)}
+    u = F._fill(upts, F.MAX_AGE)
+    return a, u, maxage
 
 
 def _folded(app):
@@ -185,10 +376,15 @@ def _merge(cells, slots, zz):
     return out
 
 
-def mix_fixed(app, T, hl):
+def mix_fixed(app, T, hl, gc=0, info=None):
     """forecast.mix, fixed: per (week, band) / (week, lag) only the activity days folded into the cells count (the ledger's
     cst), a week whose install days (to T) are not all folded is left out, the installs to come take the newest two
-    COMPLETE read weeks, and a country slot's cells in weeks it was only partly read (cset_since) are put back into ZZ."""
+    COMPLETE read weeks, and a country slot's cells in weeks it was only partly read (cset_since) are put back into ZZ.
+    gc 2: + each country's own standing past day 90 (revenue 91–180 / 181–365 / 366–427, users at 120 / 180 / 270 / 365)
+    from the c2 cells of the weeks whose every activity day of that band was read (d2 c2st), each shrunk toward the
+    country's standing in the band before (its installs n ÷ (n + CKC); a band's weeks weigh relative to its newest
+    complete one) — nothing complete: the band before carried, as without gc. info (a dict): + "mf" {week: (revenue,
+    users) share of the late factors resting on measured cells} and "n" (complete late weeks per band / lag)."""
     cty, start = app.get("cty") or {}, app["start"]
     fo = _folded(app)
     since, zz = _since(app)
@@ -202,11 +398,12 @@ def mix_fixed(app, T, hl):
         weeks.append(W)
     if not weeks:
         return {}, None
-    cells_of = {}
+    cells_of, bad_of = {}, {}
     for W in weeks:
         top = min(W + timedelta(days=96), T)
         bad = [s for s, rr in since.items() if any(a <= top and b >= W for a, b in rr)]
         cells_of[W] = _merge(cty[W], bad, zz) if bad else cty[W]
+        bad_of[W] = bad
     rs, us = {}, {}
     ra = [[0.0, 0.0] for _ in range(nb)]
     ua = [[0.0, 0.0] for _ in range(nl)]
@@ -242,7 +439,13 @@ def mix_fixed(app, T, hl):
                 x[j][0] += wt * v
                 x[j][1] += wt * n
 
-    def rel(per, tot, nk):
+    lr = lu = 10 ** 9                             # gc: from these indexes on, shrunk toward the band before
+    nmeas = None
+    if gc:
+        nmeas = _a_late(app, T, hl, weeks, cells_of, bad_of, zz, rs, us, ra, ua)
+        lr, lu, nb, nl = nb, nl, len(CBX), len(CLX)
+
+    def rel(per, tot, nk, late, zs=None):
         out = {k: [1.0] * nk for k in per}
         for b in range(nk):
             R, N = tot[b]
@@ -254,7 +457,12 @@ def mix_fixed(app, T, hl):
             for k, x in per.items():
                 r, n = x[b]
                 m = (r / n) / (R / N) if n > 0 else (out[k][b - 1] if b else 1.0)
-                m = 1.0 + (m - 1.0) * (n / (n + F.CKC)) if n > 0 else m
+                if b >= late:
+                    m = out[k][b - 1] + (m - out[k][b - 1]) * (n / (n + F.CKC)) if n > 0 else m
+                    if zs is not None and n > 0:
+                        zs.setdefault(k, {})[b] = n / (n + F.CKC)
+                else:
+                    m = 1.0 + (m - 1.0) * (n / (n + F.CKC)) if n > 0 else m
                 out[k][b] = min(10.0, max(0.05, m))
                 ref += max(0.0, n) / N * out[k][b]
             ref += max(0.0, 1.0 - sum(max(0.0, x[b][1]) for x in per.values()) / N)
@@ -262,7 +470,8 @@ def mix_fixed(app, T, hl):
                 for k in per:
                     out[k][b] /= ref
         return out
-    mr, mu = rel(rs, ra, nb), rel(us, ua, nl)
+    zr, zu = {}, {}
+    mr, mu = rel(rs, ra, nb, lr, zr), rel(us, ua, nl, lu, zu)
 
     def fac(cells_list):
         tot = sum(e.get("n") or 0 for cells in cells_list for e in cells.values())
@@ -284,16 +493,91 @@ def mix_fixed(app, T, hl):
         if f:
             fx[W] = f
     done = [W for W in weeks if W + timedelta(days=6) <= T][-2:]
+    if info is not None and gc:                   # how much of each week's late factors rests on measured cells
+        def mfs(zs, lo, hi):                      # mf(b) = z(b) + (1 − z(b)) · mf(b − 1), from the first late one
+            out = {}
+            for k in set(zs) | set(mr if lo == lr else mu):
+                v, prev = [], 0.0
+                for b in range(lo, hi):
+                    z = zs.get(k, {}).get(b, 0.0)
+                    prev = z + (1.0 - z) * prev
+                    v.append(prev)
+                out[k] = v
+            return out
+        kr, ku = mfs(zr, lr, nb), mfs(zu, lu, nl)
+        mf = {}
+        for W in weeks:
+            cells = cells_of[W]
+            tot = sum(e.get("n") or 0 for e in cells.values())
+            if tot <= 0:
+                continue
+            rv, uv = [0.0] * (nb - lr), [0.0] * (nl - lu)
+            for k, e in cells.items():
+                q = (e.get("n") or 0) / tot
+                for i, x in enumerate(kr.get(k) or []):
+                    rv[i] += q * x
+                for i, x in enumerate(ku.get(k) or []):
+                    uv[i] += q * x
+            mf[W] = (rv, uv)
+        info.update(mf=mf, n=nmeas)
     return fx, (fac([cells_of[W] for W in done]) if done else None)
 
 
-def _amix(app, T, hl):
+def _a_late(app, T, hl, weeks, cells_of, bad_of, zz, rs, us, ra, ua):
+    """gc: the late bands / lags (c2) into view A's accumulators, extended in place to len(CBX) / len(CLX); a (week,
+    band) only when every activity day of it was read; weights relative to the band's newest complete week. → the
+    complete weeks per late band and lag."""
+    nb, nl, nbx, nlx = len(F.CB), len(F.CL), len(CBX), len(CLX)
+    fo2 = _xfold(app, "c2st")
+    for x in rs.values():
+        x.extend([0.0, 0.0] for _ in range(nbx - nb))
+    for x in us.values():
+        x.extend([0.0, 0.0] for _ in range(nlx - nl))
+    ra.extend([0.0, 0.0] for _ in range(nbx - nb))
+    ua.extend([0.0, 0.0] for _ in range(nlx - nl))
+    if fo2 is None:
+        return [0] * (len(C2B) + len(C2L))
+    lc = {W: _late_cells(app, W, cells_of[W], bad_of[W], zz) for W in weeks}
+    okb = [[W for W in weeks if W + timedelta(days=6 + hi) <= T
+            and _cov(fo2, W + timedelta(days=lo), W + timedelta(days=6 + hi))] for lo, hi in C2B]
+    okl = [[W for W in weeks if W + timedelta(days=6 + g) <= T
+            and _cov(fo2, W + timedelta(days=g), W + timedelta(days=6 + g))] for g in C2L]
+
+    def wt(W, ws):
+        return 0.5 ** ((max(ws) - W).days / hl) if hl < 99999 else 1.0
+    for i, ws in enumerate(okb):
+        for W in ws:
+            w = wt(W, ws)
+            for k, e in lc[W].items():
+                n, r = e["n"], e["r2"][i]
+                ra[nb + i][0] += w * r
+                ra[nb + i][1] += w * n
+                if k != "gap":
+                    x = rs.setdefault(k, [[0.0, 0.0] for _ in range(nbx)])
+                    x[nb + i][0] += w * r
+                    x[nb + i][1] += w * n
+    for i, ws in enumerate(okl):
+        for W in ws:
+            w = wt(W, ws)
+            for k, e in lc[W].items():
+                if k == "gap":
+                    continue
+                n, v = e["n"], e["u2"][i]
+                ua[nl + i][0] += w * v
+                ua[nl + i][1] += w * n
+                x = us.setdefault(k, [[0.0, 0.0] for _ in range(nlx)])
+                x[nl + i][0] += w * v
+                x[nl + i][1] += w * n
+    return [len(ws) for ws in okb] + [len(ws) for ws in okl]
+
+
+def _amix(app, T, hl, gc=0):
     if not app.get("cty"):
         return {}, None
     memo = app.setdefault("_fva_mix", {})
-    k = (T, hl)
+    k = (T, hl, gc)
     if k not in memo:
-        memo[k] = mix_fixed(app, T, hl)
+        memo[k] = mix_fixed(app, T, hl, gc)
     return memo[k]
 
 
@@ -335,7 +619,7 @@ def _cumfr(a, f):
     s = 0.0
     if f:
         r = f[0]
-        bix = F.BIX
+        bix = _bix_of(f)
         for i, v in enumerate(a):
             s += v * r[bix[i]]
             out[i + 1] = s
@@ -351,7 +635,7 @@ def _cumfu(u, f):
     s = 0.0
     if f:
         r = f[1]
-        uix = F.UIX
+        uix = _uix_of(f)
         for i, v in enumerate(u):
             s += v * (r[uix[i]] if uix[i] >= 0 else 1.0)
             out[i + 1] = s
@@ -366,12 +650,13 @@ def _a_base(app, T, p):
     """Mix, curves and each install day's raw anchor (window revenue ÷ the curve's, its user-days; users the same) —
     kept per (T, hl). Install days before the run's start are carried as old users on their own anchor."""
     memo = app.setdefault("_fva_base", {})
-    key = (T, p["hl"])
+    gc = p.get("gc") or 0
+    key = (T, p["hl"], gc)
     if key in memo:
         return memo[key]
     coh, start = app["coh"], app["start"]
-    fx, fnew = _amix(app, T, p["hl"])
-    a, u, maxage = F.curve(coh, T, start, p["hl"], fx)
+    fx, fnew = _amix(app, T, p["hl"], gc)
+    a, u, maxage = (_curve_x if gc else F.curve)(coh, T, start, p["hl"], fx)
     cache_cum = {}
 
     def cums(f):
@@ -408,7 +693,7 @@ def _a_base(app, T, p):
             lags = [L for L in sorted(uk) if 1 <= L <= Ku][-3:] if Ku <= 30 else [Ku]
             if lags:
                 ob = sum(uk[L] for L in lags)
-                ex = sum(n * u[L] * F._fu(f, L) for L in lags if L < len(u))
+                ex = sum(n * u[L] * _xfu(f, L) for L in lags if L < len(u))
                 if ex > 0:
                     row["ru"] = ob / ex
                     row["eu"] = ex
@@ -435,8 +720,9 @@ def _past(SC, T, a, u, NA):
     pr = [[0.0] * PAST for _ in range(NLB)]
     pu = [[0.0] * PAST for _ in range(NLB)]
     add = operator.add
-    bix, uix = F.BIX, F.UIX
     for X, (n, f, sg, ug) in SC.items():
+        bix, uix = _bix_of(f), _uix_of(f)
+        uc = UCUTSX if uix is UIXX else UCUTS
         age_T = (T - X).days
         a0 = max(0, age_T - PAST + 1)
         off = age_T - PAST + 1
@@ -445,7 +731,7 @@ def _past(SC, T, a, u, NA):
             d0, d1 = s0 - off, s1 - off
             arr = pr[LBIX[s0]]
             arr[d0:d1] = map(add, arr[d0:d1], map(co.__mul__, a[s0:s1]))
-        for (s0, s1) in _segs(UCUTS, a0, min(age_T + 1, NA)):
+        for (s0, s1) in _segs(uc, a0, min(age_T + 1, NA)):
             co = n * (f[1][uix[s0]] if (f and uix[s0] >= 0) else 1.0) * ug
             d0, d1 = s0 - off, s1 - off
             arr = pu[LBIX[s0]]
@@ -457,8 +743,9 @@ def _future(SC, T, a, u, NA, h):
     fr = [[0.0] * h for _ in range(NLB)]
     fu = [[0.0] * h for _ in range(NLB)]
     add = operator.add
-    bix, uix = F.BIX, F.UIX
     for X, (n, f, sg, ug) in SC.items():
+        bix, uix = _bix_of(f), _uix_of(f)
+        uc = UCUTSX if uix is UIXX else UCUTS
         age_T = (T - X).days
         b0, b1 = age_T + 1, min(age_T + h + 1, NA)       # future day T + i ↔ age = age_T + i, index i − 1
         for (s0, s1) in _segs(CUTS, b0, b1):
@@ -466,7 +753,7 @@ def _future(SC, T, a, u, NA, h):
             d0, d1 = s0 - age_T - 1, s1 - age_T - 1
             arr = fr[LBIX[s0]]
             arr[d0:d1] = map(add, arr[d0:d1], map(co.__mul__, a[s0:s1]))
-        for (s0, s1) in _segs(UCUTS, b0, b1):
+        for (s0, s1) in _segs(uc, b0, b1):
             co = n * ug * (f[1][uix[s0]] if (f and uix[s0] >= 0) else 1.0)
             d0, d1 = s0 - age_T - 1, s1 - age_T - 1
             arr = fu[LBIX[s0]]
@@ -477,7 +764,7 @@ def _future(SC, T, a, u, NA, h):
 def _a_accum0(app, T, p, B):
     """The past days' model WITHOUT per-install-day anchors (n · a · fr), by band — what Λ is measured on."""
     memo = app.setdefault("_fva_acc0", {})
-    key = (T, p["hl"])
+    key = (T, p["hl"], p.get("gc") or 0)
     if key not in memo:
         SC0 = {row["X"]: (row["n"], row["f"], 1.0, 1.0) for row in B["rows"]}
         memo[key] = _past(SC0, T, B["a"], B["u"], len(B["a"]))
@@ -563,7 +850,7 @@ def _lam(app, T, p, w, A0, B):
     """Λ: how the install days now in each GA4 band earn (and keep users) vs the curve without anchors, the newest w
     GA4 days — None without enough of them."""
     memo = app.setdefault("_fva_lam", {})
-    key = (T, p["hl"], w)
+    key = (T, p["hl"], w, p.get("gc") or 0)
     if key in memo:
         return memo[key]
     act, uact, dk, du = _ga4(app, T, w)
@@ -589,7 +876,7 @@ def _a_scales(app, T, p, B):
     shrunk toward the pooled standing of the install days within ±LOC days, itself trusted the same way; clip 0.2–5),
     U its users' standing (trusted E ÷ (E + KU))."""
     memo = app.setdefault("_fva_sc", {})
-    key = (T, p["hl"], p["Kc"])
+    key = (T, p["hl"], p["Kc"], p.get("gc") or 0)
     if key in memo:
         return memo[key]
     rows = B["rows"]
@@ -635,7 +922,7 @@ def _a_scales(app, T, p, B):
 
 def _a_accum(app, T, p, B, SC, h):
     memo = app.setdefault("_fva_acc", {})
-    key = (T, p["hl"], p["Kc"], h)
+    key = (T, p["hl"], p["Kc"], h, p.get("gc") or 0)
     if key not in memo:
         NA = len(B["a"])
         pr, pu = _past(SC, T, B["a"], B["u"], NA)
@@ -748,8 +1035,8 @@ def _a_prepare(v, T, p, ctx):
     org, per_usd = F.installs_model(v["days"], T, p["W"])
     fnew = B["fnew"]
     nl, unl = LV["new"], LV["unew"]
-    unit = [a[L] * F._fr(fnew, L) * nl[LBIX[L]] for L in range(len(a))]
-    uunit = [u[L] * F._fu(fnew, L) * unl[LBIX[L]] for L in range(len(u))]
+    unit = [a[L] * _xfr(fnew, L) * nl[LBIX[L]] for L in range(len(a))]
+    uunit = [u[L] * _xfu(fnew, L) * unl[LBIX[L]] for L in range(len(u))]
     return {"T": T, "p": p, "B": B, "SC": SC, "A": A, "LV": LV, "LAM": LAM, "LAMn": LAMn, "seas": seas, "s0": s0,
             "org": org, "per_usd": per_usd, "unit": unit, "uunit": uunit}
 
@@ -809,7 +1096,7 @@ def _a_cohort_rev(st, X, k_age, ages):
         while L < C:
             L += 1
             if L < len(a):
-                acc += n * sg * a[L] * F._fr(f, L) * lev[LBIX[L]] * _ga(st, X + timedelta(days=L))
+                acc += n * sg * a[L] * _xfr(f, L) * lev[LBIX[L]] * _ga(st, X + timedelta(days=L))
         out.append(acc)
     return out
 
@@ -821,7 +1108,7 @@ def _a_cohort_users(st, X, lags):
     n, f, _, ug = SC
     u = st["B"]["u"]
     ulev = st["LV"]["ulev"]
-    return [n * ug * u[Lg] * F._fu(f, Lg) * ulev[LBIX[Lg]] if Lg < len(u) else 0.0 for Lg in lags]
+    return [n * ug * u[Lg] * _xfu(f, Lg) * ulev[LBIX[Lg]] if Lg < len(u) else 0.0 for Lg in lags]
 
 
 def _a_new_value(st, X, ages):
@@ -989,12 +1276,13 @@ def _arp7(pre, D):
     return m[D]
 
 
-def _bmix(app, T, hl):
+def _bmix(app, T, hl, gc=0):
     """B's country mix: weeks from the first full country read on (cfrom), a slot added late folded into ZZ while it was
     partial; per country its users at each lag and its revenue per user-day (cells to day 90) ÷ every install's →
-    ({week: (fu, fa)}, the newest two complete weeks' (fu, fa))."""
+    ({week: (fu, fa)}, the newest two complete weeks' (fu, fa)). gc 2: + the late lags / bands (c2; _b_late), each
+    country shrunk toward its standing in the lag / band before."""
     pre = _pre(app)
-    key = ("mix", T, hl)
+    key = ("mix", T, hl, gc)
     if key in pre["memo"]:
         return pre["memo"][key]
     cty, ida = app.get("cty") or {}, app.get("ida") or {}
@@ -1077,6 +1365,15 @@ def _bmix(app, T, hl):
                 x[b][1] += wt * ud
                 x[b][2] += wt * e["n"]
 
+    LAGB = [None, 0, 1, 2, 3, 4, 5, 6]          # the users' lag index weighting each CB band (band 0: installs)
+    lr = lu = 10 ** 9                            # gc: from these on, shrunk toward the country's previous standing
+    if gc:
+        bad_of = {W: [k for k in since if zz is not None
+                      and any(W + timedelta(days=96) >= a and W <= b for a, b in since[k])] for W in weeks}
+        _b_late(app, T, hl, weeks, cells_of, bad_of, zz, us, ua, rs, ra)
+        lr, lu, nb, nl = nb, nl, len(CBX), len(CLX)
+        LAGB = LAGB + [8, 10, 10]                # 91–180 → users at 180, 181–365 and 366–427 → users at 365
+
     def rel_u():
         out = {k: [1.0] * nl for k in us}
         for j in range(nl):
@@ -1089,7 +1386,10 @@ def _bmix(app, T, hl):
             for k, x in us.items():
                 v, n = x[j]
                 m = (v / n) / (V / N) if n > 0 else (out[k][j - 1] if j else 1.0)
-                m = 1.0 + (m - 1.0) * (n / (n + CKC)) if n > 0 else m
+                if j >= lu:
+                    m = out[k][j - 1] + (m - out[k][j - 1]) * (n / (n + CKC)) if n > 0 else m
+                else:
+                    m = 1.0 + (m - 1.0) * (n / (n + CKC)) if n > 0 else m
                 out[k][j] = min(10.0, max(0.05, m))
                 ref += max(0.0, n) / N * out[k][j]
             if ref > 0:
@@ -1109,7 +1409,10 @@ def _bmix(app, T, hl):
             for k, x in rs.items():
                 r, ud, n = x[b]
                 m = (r / ud) / (R / UD) if ud > 0 else (out[k][b - 1] if b else 1.0)
-                m = 1.0 + (m - 1.0) * (n / (n + CKC)) if n > 0 else m
+                if b >= lr:
+                    m = out[k][b - 1] + (m - out[k][b - 1]) * (n / (n + CKC)) if n > 0 else m
+                else:
+                    m = 1.0 + (m - 1.0) * (n / (n + CKC)) if n > 0 else m
                 out[k][b] = min(10.0, max(0.05, m))
                 ref += max(0.0, ud) / UD * out[k][b]
             if ref > 0:
@@ -1117,7 +1420,6 @@ def _bmix(app, T, hl):
                     out[k][b] /= ref
         return out
     mu, ma = rel_u(), rel_a()
-    LAGB = [None, 0, 1, 2, 3, 4, 5, 6]          # the users' lag index weighting each CB band (band 0: installs)
 
     def fac(cl):
         tot = sum(e["n"] for cells in cl for e in cells.values())
@@ -1154,30 +1456,104 @@ def _bmix(app, T, hl):
     return res
 
 
+def _b_late(app, T, hl, weeks, cells_of, bad_of, zz, us, ua, rs, ra):
+    """gc: view B's late lags (users per install, c2 u2) and late bands (revenue per user-day; user-days linear between
+    the lags, 366–427 flat at the 365 users) into its accumulators, extended in place; a (week, lag / band) only when
+    every activity day of it (and of the lags its user-days need) was read; weights relative to the newest complete
+    week."""
+    nb, nl, nbx, nlx = len(CB), len(CL), len(CBX), len(CLX)
+    fo2 = _xfold(app, "c2st")
+    for x in us.values():
+        x.extend([0.0, 0.0] for _ in range(nlx - nl))
+    for x in rs.values():
+        x.extend([0.0, 0.0, 0.0] for _ in range(nbx - nb))
+    ua.extend([0.0, 0.0] for _ in range(nlx - nl))
+    ra.extend([0.0, 0.0, 0.0] for _ in range(nbx - nb))
+    if fo2 is None:
+        return
+
+    def ok(W, a, b):
+        return W + timedelta(days=6 + b) <= T and _cov(fo2, W + timedelta(days=a), W + timedelta(days=6 + b))
+    lc = {}
+    for W in weeks:
+        lc[W] = _late_cells(app, W, {k: {"n": e["n"]} for k, e in cells_of(W).items()}, bad_of[W], zz)
+    okl = [[W for W in weeks if ok(W, g, g)] for g in C2L]
+    okb = [[W for W in weeks if ok(W, lo, hi)] for lo, hi in C2B]
+
+    def wt(W, ws):
+        return 0.5 ** ((max(ws) - W).days / hl) if hl < 99999 else 1.0
+    for i, ws in enumerate(okl):
+        for W in ws:
+            w = wt(W, ws)
+            for k, e in lc[W].items():
+                if k == "gap":
+                    continue
+                ua[nl + i][0] += w * e["u2"][i]
+                ua[nl + i][1] += w * e["n"]
+                x = us.setdefault(k, [[0.0, 0.0] for _ in range(nlx)])
+                x[nl + i][0] += w * e["u2"][i]
+                x[nl + i][1] += w * e["n"]
+    need = ((0, 1), (1, 2, 3), (3,))                  # the late lags each late band's user-days need
+    for i, ws in enumerate(okb):
+        have = [set(okl[j]) for j in need[i]]
+        ws = [W for W in ws if all(W in h_ for h_ in have)]
+        for W in ws:
+            w = wt(W, ws)
+            leg = cells_of(W)
+            for k, e in lc[W].items():
+                if k == "gap" or e["n"] <= 0:
+                    continue
+                u2 = e["u2"]
+                if i == 0:
+                    lg = leg.get(k)
+                    if not lg or not lg.get("hu"):
+                        continue
+                    ud = _useg(90, lg["u"][6], 120, u2[0]) + _useg(120, u2[0], 180, u2[1])
+                elif i == 1:
+                    ud = _useg(180, u2[1], 270, u2[2]) + _useg(270, u2[2], 365, u2[3])
+                else:
+                    ud = 62.0 * u2[3]
+                if ud <= 0:
+                    continue
+                r = e["r2"][i] / 1e6
+                ra[nb + i][0] += w * r
+                ra[nb + i][1] += w * ud
+                ra[nb + i][2] += w * e["n"]
+                x = rs.setdefault(k, [[0.0, 0.0, 0.0] for _ in range(nbx)])
+                x[nb + i][0] += w * r
+                x[nb + i][1] += w * ud
+                x[nb + i][2] += w * e["n"]
+
+
+def _useg(a, va, b, vb):
+    """Σ over ages a+1 … b of the users, linear from (a, va) to (b, vb)."""
+    return (b - a) * va + (vb - va) * (b - a + 1) / 2.0
+
+
 def _bfu(f, L):
     if not f or L == 0:
         return 1.0
-    return f[0][F.UIX[min(L, F.MAX_AGE)]]
+    return f[0][(UIXX if len(f[0]) > NCL else F.UIX)[min(L, F.MAX_AGE)]]
 
 
 def _bfa(f, L):
-    return f[1][F.BIX[min(L, F.MAX_AGE)]] if f else 1.0
+    return f[1][(BIXX if len(f[1]) > NCB else F.BIX)[min(L, F.MAX_AGE)]] if f else 1.0
 
 
 def _bwk(fx, X):
     return fx.get(X - timedelta(days=X.weekday())) if fx else None
 
 
-def _retention(app, T, hl):
+def _retention(app, T, hl, gc=0):
     """R(L): active users per install at age L — day by day to 30 (pooled, half-life hl, mix-free), then the chain
     ladder 30→45→…→365 (each step from the install days that reached BOTH lags), then a power law fitted on the lags
     ≥ 90."""
     pre = _pre(app)
-    key = ("cur", T, hl)
+    key = ("cur", T, hl, gc)
     if key in pre["memo"]:
         return pre["memo"][key]
     coh, start = app["coh"], app["start"]
-    fx = _bmix(app, T, hl)[0]
+    fx = _bmix(app, T, hl, gc)[0]
     num, den = [0.0] * 31, [0.0] * 31
     cn, cd = [0.0] * len(CHAIN), [0.0] * len(CHAIN)
     for X, co in coh.items():
@@ -1248,11 +1624,11 @@ def _port_shape(pre, D):
     return out
 
 
-def _shape(app, T, hl, R, TG):
+def _shape(app, T, hl, R, TG, gc=0):
     """S(L): the portfolio's ARPDAU age shape (its band ratios at TG, the newest GA4 day ≤ T), normalised to a mean of
     1 inside each GA4 band (R weighting)."""
     pre = _pre(app)
-    key = ("S", T, hl)
+    key = ("S", T, hl, gc)
     if key in pre["memo"]:
         return pre["memo"][key]
     S = list(_port_shape(pre, TG))
@@ -1368,6 +1744,284 @@ def _split(app, T, wa):
     return res
 
 
+def _pudays(n, u):
+    """User-days per LB band from the users at the LL lags (linear between them; day 0 = the installs; 366–427 flat at
+    the 365 users)."""
+    pts = [(0, n)] + list(zip(LL, u))
+    ix = {g: i for i, (g, _) in enumerate(pts)}
+    out = []
+    for lo, hi in LB:
+        if hi == 0:
+            out.append(n)
+            continue
+        if hi == 427:
+            out.append(62.0 * u[-1])
+            continue
+        top = ix[hi]
+        bot = next(i for i, (g, _) in enumerate(pts) if g >= lo - 1)
+        out.append(sum(_useg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]) for i in range(bot, top)))
+    return out
+
+
+def _paid_week(app, W, zz):
+    """Install week W's slots {k: [n, n paid, revenue[11], paid revenue[11], user-days[11], paid user-days[11]]} — all
+    installs from the legacy cells (to day 90) and c2 (after), the paid ones from cp (LB bands / LL lags); a slot put
+    into ZZ for any day of the week's windows (cset_since, xs.since c2 / cp) is folded into ZZ, n with it (dropped
+    without a ZZ); the "gap" rows are left out (no installs)."""
+    ida = app.get("ida") or {}
+    ws = W.isoformat()
+    c = (app.get("cty") or {}).get(W) or {}
+    c2w = (ida.get("c2") or {}).get(ws) or {}
+    cpw = (ida.get("cp") or {}).get(ws) or {}
+    cset = ida.get("cset") or []
+    lo, hi = W, W + timedelta(days=6 + 427)
+    bad = set()
+    for cc, rr in (ida.get("cset_since") or {}).items():
+        if cc in cset and any(date.fromisoformat(a) <= W + timedelta(days=96) and date.fromisoformat(b) >= W
+                              for a, b in rr):
+            bad.add(str(cset.index(cc)))
+    for key in ("c2", "cp"):
+        for k, rr in _xsince(app, key).items():
+            if any(a <= hi and b >= lo for a, b in rr):
+                bad.add(k)
+    raw = {}
+    for k in set(c) | set(c2w) | set(cpw):
+        if k == "gap":
+            continue
+        kk = zz if k in bad else k
+        if kk is None:
+            continue
+        x = raw.setdefault(kk, {"n": 0.0, "np": 0.0, "r": [0.0] * 11, "rp": [0.0] * 11, "u": [0.0] * 11,
+                                "up": [0.0] * 11})
+        e, e2, ep = c.get(k) or {}, c2w.get(k) or {}, cpw.get(k) or {}
+        x["n"] += e.get("n") or 0
+        x["np"] += ep.get("n") or 0
+        for b, v in enumerate((e.get("r") or [0] * 8)[:8]):
+            x["r"][b] += v or 0
+        for b, v in enumerate((e2.get("r2") or [0] * 3)[:3]):
+            x["r"][8 + b] += v or 0
+        for j, v in enumerate((e.get("u") or [0] * 7)[:7]):
+            x["u"][j] += v or 0
+        for j, v in enumerate((e2.get("u2") or [0] * 4)[:4]):
+            x["u"][7 + j] += v or 0
+        for b, v in enumerate((ep.get("r") or [0] * 11)[:11]):
+            x["rp"][b] += v or 0
+        for j, v in enumerate((ep.get("u") or [0] * 11)[:11]):
+            x["up"][j] += v or 0
+    return {k: [x["n"], x["np"], x["r"], x["rp"], _pudays(x["n"], x["u"]), _pudays(x["np"], x["up"])]
+            for k, x in raw.items()}
+
+
+def _p_complete(app, W, b, T):
+    """Every activity day of band b's window of week W read for all installs (cst to day 90, c2st after) and for the
+    paid ones (cpst), the window ≤ T (the ledgers are cut at the GA4 view)."""
+    lo, hi = LB[b]
+    end = W + timedelta(days=6 + hi)
+    if end > T:
+        return False
+    if not _cov(_xfold(app, "cpst"), W, end):
+        return False
+    if not _cov(_folded(app), W, min(end, W + timedelta(days=96))):
+        return False
+    return hi <= 90 or _cov(_xfold(app, "c2st"), W + timedelta(days=91), end)
+
+
+def _paid_split(app, T):
+    """Per LB band: None, or {"y": (paid, organic) user-days per install, "z": (paid, organic) revenue per install (GA4
+    micros), "np", "no", "w"} at the newest paid / organic country mixes (the newest NMIX complete weeks with paid,
+    resp. organic, installs) — each (country, paid / organic) cell over the newest NWK complete weeks, shrunk (CKC
+    installs) toward its country's all-install standing × the app's measured paid / organic value; a band needs ≥ PMIN
+    paid and organic installs. Kept in the app (the lag view)."""
+    mk = "_fvx_psplit"
+    if mk in app:
+        return app[mk]
+    ida = app.get("ida") or {}
+    cset = ida.get("cset") or []
+    zz = str(cset.index("ZZ")) if "ZZ" in cset else None
+    weeks = sorted(W for W in (app.get("cty") or {}) if W <= T)
+    out = [None] * len(LB)
+    cache = {}
+
+    def wk(W):
+        if W not in cache:
+            cache[W] = _paid_week(app, W, zz)
+        return cache[W]
+    sp, so, kp, ko = {}, {}, 0, 0
+    for W in reversed(weeks):
+        if kp >= NMIX and ko >= NMIX:
+            break
+        if not _p_complete(app, W, 0, T):
+            continue
+        cells = wk(W)
+        hp = sum(x[1] for x in cells.values()) > 0
+        ho = sum(max(0.0, x[0] - x[1]) for x in cells.values()) > 0
+        for k, x in cells.items():
+            if hp and kp < NMIX:
+                sp[k] = sp.get(k, 0.0) + x[1]
+            if ho and ko < NMIX:
+                so[k] = so.get(k, 0.0) + max(0.0, x[0] - x[1])
+        kp += 1 if hp else 0
+        ko += 1 if ho else 0
+    tp, to = sum(sp.values()), sum(so.values())
+    if tp <= 0 or to <= 0:
+        app[mk] = out
+        return out
+    sp = {k: v / tp for k, v in sp.items()}
+    so = {k: v / to for k, v in so.items()}
+    for b in range(len(LB)):
+        ws = [W for W in reversed(weeks) if _p_complete(app, W, b, T)][:NWK]
+        if not ws:
+            continue
+        cell = {}
+        for W in ws:
+            for k, (n, np_, r, rp, ud, udp) in wk(W).items():
+                x = cell.setdefault(k, [0.0] * 7)
+                x[0] += n
+                x[1] += np_
+                x[2] += max(0.0, n - np_)
+                x[3] += r[b]
+                x[4] += min(rp[b], r[b]) if r[b] > 0 else 0.0
+                x[5] += ud[b]
+                x[6] += min(udp[b], ud[b]) if ud[b] > 0 else 0.0
+        Np = sum(x[1] for x in cell.values())
+        No = sum(x[2] for x in cell.values())
+        if Np < PMIN or No < PMIN:
+            continue
+        res = {}
+        for name, ia, ip in (("z", 3, 4), ("y", 5, 6)):
+            N = sum(x[0] for x in cell.values())
+            V = sum(x[ia] for x in cell.values()) / N if N > 0 else 0.0
+            Vp = sum(x[ip] for x in cell.values()) / Np
+            Vo = sum(x[ia] - x[ip] for x in cell.values()) / No
+            if V <= 0:
+                res = None
+                break
+            ck = {k: (1.0 + ((x[ia] / x[0]) / V - 1.0) * x[0] / (x[0] + CKC) if x[0] > 0 else 1.0)
+                  for k, x in cell.items()}
+            vals = []
+            for t, (Vt, it, sh) in enumerate(((Vp, 1, sp), (Vo, 2, so))):
+                Nt = Np if t == 0 else No
+                Ct = sum(x[it] / Nt * ck[k] for k, x in cell.items())
+                v = 0.0
+                for k, sk in sh.items():
+                    pri = Vt * ck.get(k, 1.0) / Ct if Ct > 0 else Vt
+                    x = cell.get(k)
+                    nt = x[it] if x else 0.0
+                    if nt > 0:
+                        own = (x[ip] if t == 0 else x[ia] - x[ip]) / nt
+                        v += sk * (pri + (own - pri) * nt / (nt + CKC))
+                    else:
+                        v += sk * pri
+                vals.append(v)
+            res[name] = tuple(vals)
+        if res:
+            res.update(np=Np, no=No, w=len(ws))
+            out[b] = res
+    app[mk] = out
+    return out
+
+
+def _pi_ga4(app, X):
+    """Install day X's GA4 paid share of its new users (d2 cpn, the paid read folded) — None when not read."""
+    e = ((app.get("ida") or {}).get("d2") or {}).get(X.isoformat())
+    if isinstance(e, dict) and e.get("cpst") in QC_FOLDED and isinstance(e.get("cpn"), (int, float)):
+        return min(1.0, max(0.0, float(e["cpn"])))
+    return None
+
+
+def _split_cp(app, T, wa):
+    """pc: the organic / paid split of new installs MEASURED from GA4's paid cells (cp) instead of regressed on the
+    Google Ads install share: each NVB band keeps the newest install days' measured level (the same weighted means as
+    _split) and splits it by the cells' paid / organic user-days and revenue per install (_paid_split: every country's
+    own, at the newest paid / organic country mix), at GA4's paid share of those install days. Past 30, each type's
+    standing moves with the bands 31–60 … 366–427 the cells have complete ("ext"; else carried). None (→ _split)
+    unless the cells cover day 30 and GA4's paid share covers ≥ PIG_COV of every window."""
+    ps = _paid_split(app, T)
+    if ps[5] is None:
+        return None
+    nv = _nvdata(app)
+    res = {0: [None] * len(NVB), 1: [None] * len(NVB)}
+
+    def mixed(v, pi):
+        return pi * v[0] + (1.0 - pi) * v[1]
+    pm5 = None
+    for g, (lo, hi) in enumerate(NVB):
+        a0 = T - timedelta(days=hi + NW - 1)
+        a1 = T - timedelta(days=hi)
+        pts = []
+        D = a0
+        while D <= a1:
+            e = nv.get(D)
+            if e and e[2][g] is not None:
+                n, _, row = e
+                y, z = row[g]
+                pts.append((n / (n + NV_N0), _pi_ga4(app, D), y, z))
+            D += ONE
+        sw = sum(w for w, _, _, _ in pts)
+        if len(pts) < 5 or sw <= 0:
+            return None
+        kw = sum(w for w, pi, _, _ in pts if pi is not None)
+        if kw < PIG_COV * sw:
+            return None
+        pm = sum(w * pi for w, pi, _, _ in pts if pi is not None) / kw
+        ym = sum(w * y for w, _, y, _ in pts) / sw
+        zm = sum(w * z for w, _, _, z in pts) / sw
+        c = ps[g]
+        if c is None:
+            return None
+        cy = c["y"] if g else (1.0, 1.0)
+        cz = c["z"]
+
+        def yz(t, pi, cy=cy, cz=cz, ym=ym, zm=zm):
+            yy = ym * cy[1 - t] / mixed(cy, pi) if mixed(cy, pi) > 0 else ym
+            zz = zm * cz[1 - t] / mixed(cz, pi) if mixed(cz, pi) > 0 else zm
+            yy = min(20 * ym, max(0.05 * ym, yy)) if ym > 0 else 0.0
+            zz = min(20 * zm, max(0.05 * zm, zz)) if zm > 0 else 0.0
+            return yy, zz
+        b = NV2AB[g]                                  # the GA4 paid share of the install days that made the band's
+        blo, bhi = AB[b]                              # ARPDAU measurement (last wa days)
+        q0_ = T - timedelta(days=wa + bhi - 1)
+        q1_ = T - timedelta(days=blo)
+        qn = qp = 0.0
+        D = q0_
+        while D <= q1_:
+            e = nv.get(D)
+            pg = _pi_ga4(app, D)
+            if e and pg is not None:
+                qn += e[0]
+                qp += e[0] * pg
+            D += ONE
+        pb = qp / qn if qn > 0 else pm
+        y0, z0 = yz(0, pm)
+        y1, z1 = yz(1, pm)
+        yb, zb = pb * y1 + (1 - pb) * y0, pb * z1 + (1 - pb) * z0   # the ARPDAU of the measurement window's mix
+        abr = zb / yb if yb > 0 else None
+        for t in (0, 1):
+            yt, zt = yz(t, pm)
+            psi = (zt / yt) / abr if yt > 0 and abr else 1.0
+            res[t][g] = (yt, min(10.0, max(0.05, psi)))
+        if g == 5:
+            pm5 = pm
+    ext = {0: [], 1: []}                              # past 30: (users ×, ARPDAU ×) per LB band 6 … 10 vs band 5
+    c5 = ps[5]
+    for t in (0, 1):
+        y5 = c5["y"][1 - t] / mixed(c5["y"], pm5)
+        a5 = (c5["z"][1 - t] / mixed(c5["z"], pm5)) / y5 if y5 > 0 else 1.0
+        last = (1.0, 1.0)
+        for b in range(6, len(LB)):
+            c = ps[b]
+            if c is not None and mixed(c["y"], pm5) > 0 and mixed(c["z"], pm5) > 0 and y5 > 0 and a5 > 0:
+                yb_ = c["y"][1 - t] / mixed(c["y"], pm5)
+                ab_ = (c["z"][1 - t] / mixed(c["z"], pm5)) / yb_ if yb_ > 0 else None
+                if ab_:
+                    last = (min(20.0, max(0.05, yb_ / y5)), min(10.0, max(0.1, ab_ / a5)))
+            ext[t].append(last)
+    res["ext"] = ext
+    res["src"] = "cp"
+    res["prem"] = [(c["z"][0] / c["z"][1]) if c and c["z"][1] > 0 else None for c in ps]
+    return res
+
+
 def _b_prepare(app, T, p, ctx):
     """View B at T (app = the lag view): R, S, the band ARPDAU now, each tracked install day's users anchor (su), GA4's
     users re-anchor (zu), the residual users > 427 (q0, ρ), the mean factors m̄ that keep each band's measured total,
@@ -1375,10 +2029,11 @@ def _b_prepare(app, T, p, ctx):
     pre = _pre(app)
     coh, days = app["coh"], app["days"]
     hl, Ku, bw, wa = p["bhl"], p["Ku"], p["bw"], p["wa"]
-    fx, fnew = _bmix(app, T, hl)
+    gc = p.get("gc") or 0
+    fx, fnew = _bmix(app, T, hl, gc)
     TG = max((D for D in pre["have"] if D <= T), default=T)   # every GA4 window ends at the newest GA4 day ≤ T
-    R = _retention(app, T, hl)
-    S = _shape(app, T, hl, R, TG)
+    R = _retention(app, T, hl, gc)
+    S = _shape(app, T, hl, R, TG, gc)
     awa, swa = _arp_win(pre, TG, wa)                  # band ARPDAU now: the last wa days × the calendar index
     cal = 1.0
     if bw:
@@ -1524,7 +2179,11 @@ def _b_prepare(app, T, p, ctx):
             x["sa"] = min(5.0, max(0.2, sa))
     mb = mbar(True)
     org, per_usd = F.installs_model(days, T, p["W"])
-    split = _split(app, T, wa) if p["nv"] else None
+    split = None
+    if p["nv"] and p.get("pc"):
+        split = _split_cp(app, T, wa)
+    if p["nv"] and split is None:
+        split = _split(app, T, wa)
     seas = (ctx or {}).get("seas") or {m: 1.0 for m in range(1, 13)}
     s0 = seas.get(T.month, 1.0) or 1.0
     return {"TG": TG, "split": split, "T": T, "p": p, "R": R, "S": S, "fx": fx, "fnew": fnew, "arpT": arpT, "mb": mb,
@@ -1535,7 +2194,7 @@ def _b_prepare(app, T, p, ctx):
 def _b_state(v, T, p, ctx):
     """View B's state, kept per (T, its settings) inside the view (tuning the mix weights reuses it)."""
     memo = v.setdefault("_fvb_st", {})
-    k = (T, p["bhl"], p["Ku"], p["bw"], p["wa"], p["nv"], p["g"], p["W"])
+    k = (T, p["bhl"], p["Ku"], p["bw"], p["wa"], p["nv"], p["g"], p["W"], p.get("gc") or 0, p.get("pc") or 0)
     if k not in memo:
         memo[k] = _b_prepare(v, T, p, ctx)
     return memo[k]
@@ -1581,9 +2240,14 @@ def _newvec(st, t=None):
                         psi[L] = sp[g][1]
                     else:
                         vu[L] = R[L]
+            ext = st["split"].get("ext")
             for L in range(31, 400):
                 vu[L] = vu[30] * R[L] / R[30] if R[30] > 0 else R[L]
                 psi[L] = psi[30]
+                if ext:                                   # pc: each type's measured standing past 30
+                    ym_, am_ = ext[t][LBX[L] - 6]
+                    vu[L] *= ym_
+                    psi[L] *= am_
             vr = [vu[L] * S[L] * psi[L] * arpT[BAND[L]] / mb[BAND[L]] for L in range(400)]
         else:
             vu = [R[L] * _bfu(f, L) for L in range(400)]
@@ -1860,6 +2524,42 @@ def _grp(age):
     return None
 
 
+def _late_share(app, st):
+    """How much of the next H days' revenue (users) of the past install days, at ages 91–427, rests on GA4's measured
+    late country cells (gc) vs the 61–90 standing carried — on view A's split of that revenue by install day and age:
+    {"on": gc in use, "old": share of the old installs' H-day revenue at ages 91–427, "meas" / "umeas": the share of
+    that revenue / those users resting on measured cells (a country's credibility n ÷ (n + CKC), chained band to
+    band), "weeks": complete install weeks per late band / lag}. The cells are judged as if gc were on (what IS
+    measured), so an app whose back-test keeps gc off still shows what is ready."""
+    sa, p, T = st["a"], st["p"], st["T"]
+    v = lag_view(app, T, app.get("glag") or 0)
+    info = {}
+    mix_fixed(v, T, p["hl"], 2, info)
+    mf = info.get("mf") or {}
+    a, u = sa["B"]["a"], sa["B"]["u"]
+    lev, ulev = sa["LV"]["lev"], sa["LV"]["ulev"]
+    tot = late = meas = ulate = umeas = 0.0
+    for X, (n, f, sg, ug) in sa["SC"].items():
+        age = (T - X).days
+        m = mf.get(X - timedelta(days=X.weekday()))
+        for i in range(1, H + 1):
+            L = age + i
+            if L >= len(a):
+                break
+            r = n * sg * a[L] * _xfr(f, L) * lev[LBIX[L]]
+            tot += r
+            if 91 <= L <= 427:
+                late += r
+                us = n * ug * u[L] * _xfu(f, L) * ulev[LBIX[L]]
+                ulate += us
+                if m:
+                    meas += r * m[0][BIXX[L] - NCB]
+                    if UIXX[L] >= NCL:
+                        umeas += us * m[1][UIXX[L] - NCL]
+    return {"on": bool(p.get("gc")), "old": late / tot if tot > 0 else None, "meas": meas / late if late > 0 else None,
+            "umeas": umeas / ulate if ulate > 0 else None, "weeks": info.get("n")}
+
+
 def _why(app, st, org, per_usd):
     """The parts the page's "why" shows: v0's (mix, mix_on, org, per_usd, curve sums) + each view's measured levels
     (view B's even when its weights are 0 — what it measures, for the "why")."""
@@ -1896,8 +2596,14 @@ def _why(app, st, org, per_usd):
         for t, name in ((0, "org"), (1, "paid")):
             vu, vr = _newvec(sb, t)
             nv[name] = [sum(vu[:31]), sum(vr[:31])]          # per install: user-days and revenue to day 30 (at T)
+        sp = sb.get("split") or {}
         out.update(arp=list(sb["arpT"]), cal=sb["cal"], zu=list(sb["zu"]), Q0=sb["q0"], rho=sb["rho"], nv=nv,
-                   su=[_med(sux.get(g, [])) for g in range(len(AGE_GROUPS))])
+                   su=[_med(sux.get(g, [])) for g in range(len(AGE_GROUPS))],
+                   nvsrc=sp.get("src") or ("ads" if sp else None), pc=bool(p.get("pc")))
+    try:                                              # only the "why" would miss it: never the forecast
+        out["gx"] = _late_share(app, st)
+    except Exception:
+        out["gx"] = None
     return out
 
 
@@ -2155,24 +2861,57 @@ def objective(bt):
 score = objective
 
 
+def _moves(app, T, gc, pc):
+    """Can the switches change anything at origin T (the back-test's view of the app)? gc: some install week has a
+    late c2 cell (band or lag) complete; pc: the paid cells give the split (_split_cp). Else the fit equals (0, 0)."""
+    v = lag_view(app, T, app.get("glag") or 0, (app.get("clag") or 0) if CLAG else 0,
+                 (app.get("tlag") or 0) if CLAG else 0)
+    if gc:
+        fo2 = _xfold(v, "c2st")
+        if fo2 is not None and any(
+                _cov(fo2, W + timedelta(days=lo), W + timedelta(days=6 + hi)) and W + timedelta(days=6 + hi) <= T
+                for W in (v.get("cty") or {}) for lo, hi in (C2B + tuple((g, g) for g in C2L))):
+            return True
+    if pc:
+        try:
+            if _split_cp(v, T, STRUCT["wa"]) is not None:
+                return True
+        except Exception:
+            return True
+    return False
+
+
 def tune(app, seas=None, start_p=None, passes=2):
-    """Coordinate descent over GRID (the mix weights only; the structure is fixed) from the stored setting, on the
-    back-test objective → (best setting, its back-test, every step tried). Both views are fitted once per origin
-    (_origin); each setting tried is then only arithmetic (_row) — the same numbers as backtest() with it."""
+    """Coordinate descent over GRID (the mix weights and the switches gc / pc; the structure is fixed) from the stored
+    setting, on the back-test objective → (best setting, its back-test, every step tried). Both views are fitted once
+    per origin and (gc, pc) (_origin; an origin the switches can not change reuses the plain fit); each setting tried is
+    then only arithmetic (_row) — the same numbers as backtest() with it."""
     ors = F.origins(app)
     p = dict(DEFAULT, **{k: v for k, v in (start_p or {}).items() if k in DEFAULT})
     if not ors:
         return p, [], []
-    full = params(p)
-    fits = [o for o in (_origin(app, T, full, seas, True) for T in ors) if o is not None]
-    cache = {}
+    fitsets = {}
+
+    def fits_of(gc, pc):                              # both views per origin, for one (gc, pc); an origin where the
+        k = (gc, pc)                                  # switches can change nothing reuses the (0, 0) fit (identical)
+        if k not in fitsets:
+            full = params(dict(p, gc=gc, pc=pc))
+            if k == (0, 0):
+                fitsets[k] = {T: _origin(app, T, full, seas, True) for T in ors}
+            else:
+                fits_of(0, 0)
+                base = fitsets[(0, 0)]
+                fitsets[k] = {T: (_origin(app, T, full, seas, True) if _moves(app, T, gc, pc) else base[T])
+                              for T in ors}
+        return [o for o in fitsets[k].values() if o is not None]
 
     def run(q):
         key = tuple(sorted(q.items()))
         if key not in cache:
-            bt = [_row(o, q["bo"], q["bn"], q["cq"]) for o in fits]
+            bt = [_row(o, q["bo"], q["bn"], q["cq"]) for o in fits_of(q["gc"], q["pc"])]
             cache[key] = (objective(bt), bt)
         return cache[key]
+    cache = {}
     best, bt = run(p)
     steps = [{"p": dict(p), "score": best}]
     for _ in range(passes):

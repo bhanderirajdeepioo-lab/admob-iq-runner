@@ -331,6 +331,19 @@ function appFile() {
     const fv3 = U.fcView(d3);
     out.fc_vd = fv3.includes('Old installs · model B share: <b>50%</b>') && fv3.includes('New installs · model B share: <b>100%</b>')
       && fv3.includes('Newest eCPM move used: <b>0%</b>') && fv3.includes('Model A = har install-din') && fv3.includes('countries ke apne curves');
+    // 🌍 GA4's extension cells: the old installs' revenue past day 90 measured vs carried, the switch on / off, and the
+    // paid vs organic split's source (measured from GA4's paid users, or the Google Ads count) — numbers printed
+    const d4 = JSON.parse(JSON.stringify(d3));
+    d4.fc.p = { bo: 0.5, bn: 1, cq: 0, gc: 2, pc: 0 };
+    d4.fc.parts = Object.assign({}, d3.fc.parts, { gx: { on: true, old: 0.32, meas: 0.105, umeas: 0.864, weeks: [2, 0, 0, 14, 14, 9, 7] },
+      nv: { org: [5, 0.2], paid: [5, 0.3] }, nvsrc: 'cp', pc: false });
+    const g4 = U.fcView(d4);
+    d4.fc.parts.gx = { on: false, old: 0.4, meas: 0, umeas: 0, weeks: [0, 0, 0, 0, 0, 0, 0] }; d4.fc.parts.nvsrc = 'ads';
+    const g5 = U.fcView(d4);
+    out.fc_gx = g4.includes('Old installs after day 90') && g4.includes('<b>32%</b>') && g4.includes('<b>11%</b> kamai')
+      && g4.includes('<b>86%</b> users') && g4.includes('Model me <b>on</b>') && g4.includes('×1.50') && g4.includes('<b>measured</b>.')
+      && g4.includes('Country curves after day 90 (GA4): <b>on</b>') && g4.includes('Paid vs organic (GA4 paid users): <b>off</b>')
+      && g5.includes('backfill') && g5.includes('Google Ads install count se andaaza') && !g5.includes('Model me <b>on</b>');
     // the learning log: the first entry of the new engine says so (its error is a different measure); later ones do not
     d3.fc.log = d.fc.log.concat([{ d: '2026-10-15', eng: 'vd', p: d3.fc.p, sc: 0.1, changed: ['bn', 'bo', 'cq'] }]);
     const sw = U.fcView(d3);
