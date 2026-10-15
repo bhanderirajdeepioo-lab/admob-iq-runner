@@ -215,6 +215,75 @@ def test_the_final_days_cut_as_live():
     assert abs(on[0]["h"][30]["err"]) < 0.05
 
 
+def _numbers(st, app, T, sp):
+    """Everything a forecast at T gives: totals, every past install day's future revenue / users, new installs' value."""
+    return (VD.total(st, dict(sp), 90), [VD.cohort_rev(st, X, max(0, (T - X).days - 40), [90, 365]) for X in
+                                         sorted(app["coh"]) if X <= T],
+            [VD.cohort_users(st, X, [60, 90, 180]) for X in sorted(app["coh"]) if X <= T],
+            [VD.new_value(st, T + timedelta(days=i), [30, 90, 180]) for i in range(1, 31)], st["q"])
+
+
+def test_the_checkpoints_after_day_30_cut_as_live():
+    """CLAG (on): an install day's checkpoints after day 30 (60 / 90 / 180 / 365) land tlag days after AdMob (measured
+    by the build); a back-test origin sees them only to T − tlag, as the live build — so those dated after T − tlag can
+    not move anything (the fit, nor the back-test's forecasts); with tlag 0 they would."""
+    app = with_ga4(make())
+    tl = 5
+    for X, c in app["coh"].items():                      # as the data lands: checkpoints > 30 only to last − tlag
+        c["t"] = [None if A > 30 and X + timedelta(days=A) > app["last"] - timedelta(days=tl) else v
+                  for A, v in zip(F.T_AGES, c["t"])]
+    app.update(clag=2, tlag=tl)
+    v = VD.lag_view(app, F.origins(app)[-1], 5, 2, tl)
+    T = F.origins(app)[-1]
+    X = T - timedelta(days=62)                           # its day-60 checkpoint: 2 days before T (live: not there yet)
+    assert app["coh"][X]["t"][F.T_AGES.index(60)] is not None and v["coh"][X]["t"][F.T_AGES.index(60)] is None
+    X = T - timedelta(days=70)                           # … 10 days before T: there
+    assert v["coh"][X]["t"][F.T_AGES.index(60)] == app["coh"][X]["t"][F.T_AGES.index(60)]
+    p = VD.params({"bo": 0.5, "bn": 0.5, "cq": 1.0})
+    for T in (F.origins(app)[-1], F.origins(app)[-3] + timedelta(days=2)):
+        sp = {T + timedelta(days=i): 500.0 for i in range(1, 91)}
+        late = _fresh(app)                               # the checkpoints > 30 dated in (T − tlag, T] × 3
+        late["coh"] = {X: dict(c, t=[x * 3 if x is not None and A > 30 and
+                                     T - timedelta(days=tl) < X + timedelta(days=A) <= T else x
+                                     for A, x in zip(F.T_AGES, c["t"])]) for X, c in app["coh"].items()}
+        assert late["coh"] != app["coh"]
+        same = [_numbers(VD.prepare(a, T, p, {}, 2, tl), app, T, sp) for a in (_fresh(app), late)]
+        assert same[0] == same[1], T
+        seen = [_numbers(VD.prepare(a, T, p, {}, 2, 0), app, T, sp) for a in (_fresh(app), late)]
+        assert seen[0] != seen[1], T
+        bt = [VD.backtest(a, p, None, [T])[0] for a in (_fresh(app), late)]     # backtest() cuts them too
+        assert [x["pred"] for x in bt[0]["h"].values()] == [x["pred"] for x in bt[1]["h"].values()]
+        assert {k: c[0] for k, c in bt[0]["coh"].items()} == {k: c[0] for k, c in bt[1]["coh"].items()}
+        assert {k: c[0] for k, c in bt[0]["new"].items()} == {k: c[0] for k, c in bt[1]["new"].items()}
+
+
+def _ramped(app, r):
+    """GA4's bands from 30 days on earn r % more each day: the portfolio's band ratios move from week to week."""
+    for D, e in app["g4"].items():
+        f = 1 + r * (D - date(2025, 1, 1)).days / 100
+        e["rb"] = e["rb"][:3] + [x * f for x in e["rb"][3:]]
+        e["rev"] = sum(e["rb"])
+        e["k"] = app["days"][D]["rev"] / e["rev"]
+    return app
+
+
+def test_the_band_ratios_no_look_ahead_on_any_weekday():
+    """A back-test origin on any weekday reads the portfolio's band ratios (made from every app's FULL data) only as
+    the live build had them at T: the same numbers as with the ratios re-made from every app cut at T (each at its own
+    GA4 lag — one app's GA4 lands 2 days later than the others', and its ratio is the median)."""
+    apps = [_ramped(with_ga4(make()), 1.0), _ramped(with_ga4(make()), 0.5), _ramped(with_ga4(make(), lag=7), 0.75)]
+    table = VD.bandr([VD.port_pre(_fresh(a)) for a in apps])
+    assert len({tuple(v) for v in table.values()}) > 10    # the ratios do move
+    p = VD.params({"bo": 1.0, "bn": 1.0, "cq": 1.0})
+    for app in (apps[0], apps[2]):
+        for T in (date(2025, 11, 2) + timedelta(days=i) for i in range(7)):           # Sunday … Saturday
+            sp = {T + timedelta(days=i): 500.0 for i in range(1, 91)}
+            full = dict(_fresh(app), port={"bandr": table})
+            cut = dict(trunc(app, T), port={"bandr": VD.bandr([VD.port_pre(trunc(o, T)) for o in apps])})
+            assert _numbers(VD.prepare(full, T, p, {}), app, T, sp) == _numbers(VD.prepare(cut, T, p, {}), app, T, sp), \
+                (app["glag"], T.strftime("%a"))
+
+
 def _rough(app, seed=7):
     """AdMob revenue ±12 % day to day (GA4 left as it was): the two views and q then differ from each other."""
     import random
@@ -234,7 +303,8 @@ def _by_interface(app, T, p):
     days, last, start = app["days"], app["last"], app["start"]
     hmax = min(VD.H, (last - T).days)
     sp = {T + timedelta(days=i): (days.get(T + timedelta(days=i)) or {}).get("sp") or 0.0 for i in range(1, hmax + 1)}
-    st = VD.prepare(app, T, VD.params(p), {}, (app.get("clag") or 0) if VD.CLAG else 0)
+    st = VD.prepare(app, T, VD.params(p), {}, (app.get("clag") or 0) if VD.CLAG else 0,
+                    (app.get("tlag") or 0) if VD.CLAG else 0)
     f = VD.total(st, dict(sp), hmax)
     pred = {hz: sum(f["rev"][:hz]) for hz in VD.HORIZONS if hz <= hmax}
     coh, usr, new = {}, {}, {}
@@ -272,7 +342,7 @@ def test_the_backtest_is_the_public_interface_exactly():
     for app, sets in ((_rough(with_ga4(make())), ({"bo": 0.0, "bn": 0.0, "cq": 0.0}, {"bo": 0.5, "bn": 0.5, "cq": 1.0},
                                                   {"bo": 1.0, "bn": 0.0, "cq": 0.5}, {"bo": 0.0, "bn": 1.0, "cq": 1.0})),
                       (_rough(make()), ({"bo": 0.5, "bn": 1.0, "cq": 1.0},))):
-        app["clag"] = 2
+        app.update(clag=2, tlag=4)                       # the back-tests' cuts (final days, checkpoints > 30) too
         ors = F.origins(app)[-5:-1]
         for p in sets:
             bt = VD.backtest(_fresh(app), p, None, ors)
@@ -287,7 +357,7 @@ def test_the_tune_shortcut_is_exact():
     """tune() scores every setting from fits shared across settings: each step's score = the objective of a back-test
     run from scratch with that setting, and the back-test it returns = backtest() with its pick."""
     app = _rough(with_ga4(make()))
-    app["clag"] = 2
+    app.update(clag=2, tlag=4)
     ors = F.origins(app)
     p, bt, steps = VD.tune(_fresh(app), None, start_p={"bo": 0.0, "bn": 0.0, "cq": 1.0})
     assert len(steps) >= 2 and steps[-1]["score"] < steps[0]["score"]        # it moved (the rough AdMob days)

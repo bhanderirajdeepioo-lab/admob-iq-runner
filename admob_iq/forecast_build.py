@@ -125,7 +125,8 @@ def inputs(rows, P, ida, life, life_till, unst=None):
     {slot: {n, r, u}}} (the install-day file's country cells), unc (the Uninstall store's cells); for engine vd also
     g4 {D: {rev: GA4 USD, rb: [USD by GA4 install-age band 0 | 1–6 | 7–29 | 30–89 | 90–364 | 365–427], ab: [active
     users by the same bands], k: AdMob ÷ GA4 that day}}, ida (the GA4 day ledger: read status, country slots), glag
-    (days GA4 lands after AdMob, measured) and clag (days the newest install day's final data lags AdMob)."""
+    (days GA4 lands after AdMob, measured), clag (days the newest install day's final data lags AdMob) and tlag (days
+    the newest checkpoint after day 30 — 60 / 90 / 180 / 365 — lags AdMob)."""
     S = P["S"]
     till = _d(life_till) if life_till else None
     days, coh = {}, {}
@@ -177,8 +178,11 @@ def inputs(rows, P, ida, life, life_till, unst=None):
                  "k": (A / G) if A and G > 0 else None}
     last = till or (max(days) if days else S)
     fin = [X + timedelta(days=(c.get("df") or 0) - 1) for X, c in coh.items() if c.get("df")]
+    tfin = [X + timedelta(days=F.T_AGES[j]) for X, c in coh.items() for j, v in enumerate(c.get("t") or [])
+            if v is not None and j < len(F.T_AGES) and F.T_AGES[j] > 30]
     return {"coh": coh, "days": days, "last": last, "cty": cty, "unc": unc, "g4": g4, "ida": ida or {},
-            "glag": max(0, (last - max(g4)).days) if g4 else 0, "clag": max(0, (last - max(fin)).days) if fin else 0}
+            "glag": max(0, (last - max(g4)).days) if g4 else 0, "clag": max(0, (last - max(fin)).days) if fin else 0,
+            "tlag": max(0, (last - max(tfin)).days) if tfin else 0}
 
 
 # ── the bias correction folded into the days ────────────────────────────────────────────────────────────────────────
@@ -534,9 +538,10 @@ def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=Non
 
 def finish(run):
     """state.json for tomorrow's runs: the portfolio season (every app's revenue ÷ DAU by month, pooled), the band
-    ratios of engine vd (every app's GA4 data, per Monday; none this build: the last ones kept) and vd's structure."""
+    ratios of engine vd (every app's GA4 data, per Monday) and vd's structure — a part this build could not make keeps
+    the last one."""
     try:
-        seas = F.season(run.pool) if run.pool else None
+        seas = (F.season(run.pool) if run.pool else None) or run.season
         br = None
         try:
             br = VD.bandr(list(run.pool_b.values())) if run.pool_b else None

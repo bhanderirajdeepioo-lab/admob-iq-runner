@@ -157,8 +157,14 @@ def test_inputs_carry_the_country_cells_and_the_ga4_ledger():
     g, want = got["g4"][D], app["g4"][D]                 # GA4 USD by install-age band, active users, AdMob ÷ GA4
     assert abs(g["rev"] - want["rev"]) < 1e-6 and all(abs(a - b) < 1e-6 for a, b in zip(g["rb"], want["rb"]))
     assert g["ab"] == want["ab"] and abs(g["k"] - 1.0) < 1e-9 and max(got["g4"]) == LAST - timedelta(days=5)
-    assert got["glag"] == 5 and got["clag"] == 0 and got["ida"] is ida
+    assert got["glag"] == 5 and got["clag"] == 0 and got["tlag"] == 0 and got["ida"] is ida
     assert fb.inputs(rows, P, {}, life, LAST.isoformat())["glag"] == 0
+    # the checkpoints after day 30 (60 / 90 / 180 / 365) landing 5 days after AdMob: tlag 5 (the back-tests cut them so)
+    late = [dict(r, t=[None if A > 30 and r["X"] + timedelta(days=A) > LAST - timedelta(days=5) else v
+                       for A, v in zip(F.T_AGES, r["t"])]) for r in rows]
+    assert fb.inputs(late, P, ida, life, LAST.isoformat())["tlag"] == 5
+    none = [dict(r, t=[v if A <= 30 else None for A, v in zip(F.T_AGES, r["t"])]) for r in rows]
+    assert fb.inputs(none, P, ida, life, LAST.isoformat())["tlag"] == 0          # none yet (a young app): nothing to cut
 
 
 def test_the_engine_switch_and_the_rollback(tmp_path, monkeypatch):
@@ -267,3 +273,23 @@ def test_band_ratios_saved_and_read_back(tmp_path):
     one = fb.inputs(rows, {"S": LAST}, ida, life, LAST.isoformat())
     one.update(start=D0, port={"bandr": run2.bandr})
     assert VD._port_ratio(VD._pre(one), date.fromisoformat(M)) == br[M]
+    assert VD.port_pre(one)["lag"] == 5                  # each app's GA4 lag goes with its data
+
+
+def test_a_build_without_the_season_keeps_the_saved_one(tmp_path):
+    """No app gave a day with both revenue and active users this build (e.g. the GA4 ledger missing): state.json keeps
+    the saved portfolio season (and band ratios) — the next build still reads all 12 months."""
+    data = str(tmp_path / "data")
+    os.makedirs(os.path.join(data, "forecast"))
+    seas = {str(m): round(1.0 + m / 100, 4) for m in range(1, 13)}
+    json.dump({"v": 1, "season": seas, "bandr": {"2026-01-05": [1.0] * 7}},
+              open(os.path.join(data, "forecast", "state.json"), "w"))
+    run = fb.start(data, datetime(2026, 1, 6, tzinfo=timezone.utc), Clock())
+    assert run.season and len(run.season) == 12
+    life = [["2026-01-0%d" % i, 10.0, 0.0, 0.0] for i in range(1, 6)]
+    fb.app_step(run, "a~1", "k1", [], {"S": None}, None, life, "2026-01-05", [])
+    assert not run.pool and not run.pool_b
+    fb.finish(run)
+    st = json.load(open(os.path.join(data, "forecast", "state.json")))
+    assert st["season"] == seas and st["bandr"] == {"2026-01-05": [1.0] * 7}
+    assert fb.start(data, datetime(2026, 1, 7, tzinfo=timezone.utc), Clock()).season == run.season

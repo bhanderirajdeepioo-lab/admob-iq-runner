@@ -19,7 +19,8 @@ newest GA4 day ≤ T − lag (GA4 lands `glag` days after AdMob, measured per ap
       su_X        X's own users anchor (last 3 known lags, E/(E + Ku)); zu_j GA4's users ÷ the model's for bands ≥ 30;
       arp_j       AdMob-matched revenue per GA4 active user per band over the newest wa GA4 days (× the calendar index
                   of the newest bw days); a thin band shrunk to its 112-day value, then to the band before × the
-                  portfolio's band ratio (state.json "bandr", other apps' data ≤ that Monday); S the portfolio's age shape;
+                  portfolio's band ratio (state.json "bandr" at the Monday on or before the newest GA4 day: other
+                  apps' data only as the live build had it then); S the portfolio's age shape;
       + users older than 427 days no tracked install day explains, decaying at their own 90-day pace;
       new installs: organic and paid apart (regression on the paid share of the newest 56 install days).
   revenue(T+i) = q^cq · [(1 − bo)·old_A + bo·old_B + (1 − bn)·new_A + bn·new_B]
@@ -30,7 +31,8 @@ newest GA4 day ≤ T − lag (GA4 lands `glag` days after AdMob, measured per ap
 Structure (STRUCT, 12 knobs) is fixed portfolio-wide (version STRUCT_VERSION; re-checked offline, never per app: tuned
 per app it measured worse on unseen origins); only the mix weights bo, bn, cq are tuned per app (GRID), on the same
 back-tests as before plus each past install day's future revenue and each new install's value (objective()).
-Every back-test origin sees GA4 only to T − glag, as the live build does (lag_view)."""
+Every back-test origin sees GA4 only to T − glag, each install day's final daily data only to T − clag and its
+checkpoints after day 30 only to T − tlag, as the live build does (lag_view; the three lags measured per app)."""
 import bisect
 import math
 import operator
@@ -61,14 +63,14 @@ def params(p=None):
 
 
 # ── the app as it stood at T: GA4 only to T − lag (it lands later than AdMob) ─────────────────────────────────────────
-def lag_view(app, T, lag, clag=0):
+def lag_view(app, T, lag, clag=0, tlag=0):
     """g4, DAU and the GA4 day ledger cut at T − lag; with clag, also each install day's final daily data (and its
-    checkpoints to day 30) cut at T − clag — the app as the live build has it at T. Kept per (T, lag, clag) inside the
-    app."""
-    if not lag and not clag:
+    checkpoints to day 30) cut at T − clag; with tlag, its checkpoints after day 30 (60 / 90 / 180 / 365) cut at
+    T − tlag — the app as the live build has it at T. Kept per (T, lag, clag, tlag) inside the app."""
+    if not lag and not clag and not tlag:
         return app
     vs = app.setdefault("_fv_views", {})
-    k = (T, lag, clag)
+    k = (T, lag, clag, tlag)
     if k not in vs:
         cut = T - timedelta(days=lag)
         v = {kk: vv for kk, vv in app.items() if not kk.startswith("_")}
@@ -86,17 +88,25 @@ def lag_view(app, T, lag, clag=0):
             cs = cut.isoformat()
             ida["days"] = {a: b for a, b in ida["days"].items() if a <= cs}
         v["ida"] = ida
-        if clag:
+        if clag or tlag:
             coh = {}
             for X, c in app["coh"].items():
-                lim = (T - X).days - clag                     # the newest age with final data at T
-                if X > T or ((c.get("df") or 0) <= lim + 1 and (c.get("uf") or 0) <= lim + 1):
+                if X > T:
                     coh[X] = c
                     continue
+                lim = (T - X).days - clag                     # the newest age with final data at T
+                if clag and ((c.get("df") or 0) > lim + 1 or (c.get("uf") or 0) > lim + 1):
+                    t = c.get("t") or []
+                    c = dict(c, df=max(0, min(c.get("df") or 0, lim + 1)), uf=max(0, min(c.get("uf") or 0, lim + 1)),
+                             t=[x if j >= len(F.T_AGES) or F.T_AGES[j] > 30 or F.T_AGES[j] <= lim else None
+                                for j, x in enumerate(t)])
+                tl = (T - X).days - tlag                      # the newest age with a checkpoint > 30 at T
                 t = c.get("t") or []
-                coh[X] = dict(c, df=max(0, min(c.get("df") or 0, lim + 1)), uf=max(0, min(c.get("uf") or 0, lim + 1)),
-                              t=[x if j >= len(F.T_AGES) or F.T_AGES[j] > 30 or F.T_AGES[j] <= lim else None
-                                 for j, x in enumerate(t)])
+                if tlag and any(x is not None and j < len(F.T_AGES) and 30 < F.T_AGES[j] and F.T_AGES[j] > tl
+                                for j, x in enumerate(t)):
+                    c = dict(c, t=[None if j < len(F.T_AGES) and 30 < F.T_AGES[j] and F.T_AGES[j] > tl else x
+                                   for j, x in enumerate(t)])
+                coh[X] = c
             v["coh"] = coh
         v["_jumps"] = app.get("_jumps")
         vs[k] = v
@@ -928,9 +938,18 @@ def _monday(D):
     return D - timedelta(days=D.weekday())
 
 
+def _pmon(pre, D):
+    """The band ratios' Monday for day D: the Monday at or before D, and never after the newest GA4 day the app (its
+    lag view) has — so at origin T it is ≤ T − glag, and every app's data behind that Monday (bandr) was there at T."""
+    if pre.get("P"):
+        D = min(D, pre["d0"] + timedelta(days=pre["nd"] - 1))
+    return _monday(D)
+
+
 def _port_ratio(pre, M):
-    """The portfolio's ARPDAU ratio of each band to the band before at Monday M (state.json "bandr", made from every
-    app's data ≤ M at the end of the last build): a Monday not there yet takes the newest one before it; none: 1."""
+    """The portfolio's ARPDAU ratio of each band to the band before at Monday M (state.json "bandr", made at the end of
+    the last build from every app's data ≤ M − (its GA4 lag − the smallest)): a Monday not there yet takes the newest
+    one before it; none: 1. Looked up at _pmon() only."""
     ix = pre.get("bandr")
     if not ix:
         return [1.0] * NB
@@ -943,7 +962,7 @@ def _arp_win(pre, D, w):
     LONG-day value, that one to the band before × the portfolio's band ratio."""
     s = _win(pre, D - timedelta(days=w - 1), D)
     lg = _win(pre, D - timedelta(days=LONG - 1), D)
-    pr = _port_ratio(pre, _monday(D))
+    pr = _port_ratio(pre, _pmon(pre, D))
     out = []
     prev = None
     for b in range(NB):
@@ -1205,10 +1224,10 @@ def _retention(app, T, hl):
     return R
 
 
-def _port_shape(pre, T):
-    """log-ARPDAU by age from the portfolio's band ratios (each band's level at its MIDS age, log-linear in log age
-    between them, flat after the last) — 1 at age 0."""
-    M = _monday(T)
+def _port_shape(pre, D):
+    """log-ARPDAU by age from the portfolio's band ratios at day D (each band's level at its MIDS age, log-linear in log
+    age between them, flat after the last) — 1 at age 0."""
+    M = _pmon(pre, D)
     k = ("shape", M)
     if k in pre["memo"]:
         return pre["memo"][k]
@@ -1229,13 +1248,14 @@ def _port_shape(pre, T):
     return out
 
 
-def _shape(app, T, hl, R):
-    """S(L): the portfolio's ARPDAU age shape, normalised to a mean of 1 inside each GA4 band (R weighting)."""
+def _shape(app, T, hl, R, TG):
+    """S(L): the portfolio's ARPDAU age shape (its band ratios at TG, the newest GA4 day ≤ T), normalised to a mean of
+    1 inside each GA4 band (R weighting)."""
     pre = _pre(app)
     key = ("S", T, hl)
     if key in pre["memo"]:
         return pre["memo"][key]
-    S = list(_port_shape(pre, T))
+    S = list(_port_shape(pre, TG))
     for b, (lo, hi) in enumerate(AB):
         hi = min(hi, MAXR)
         sw = sum(R[L] for L in range(lo, hi + 1))
@@ -1358,7 +1378,7 @@ def _b_prepare(app, T, p, ctx):
     fx, fnew = _bmix(app, T, hl)
     TG = max((D for D in pre["have"] if D <= T), default=T)   # every GA4 window ends at the newest GA4 day ≤ T
     R = _retention(app, T, hl)
-    S = _shape(app, T, hl, R)
+    S = _shape(app, T, hl, R, TG)
     awa, swa = _arp_win(pre, TG, wa)                  # band ARPDAU now: the last wa days × the calendar index
     cal = 1.0
     if bw:
@@ -1369,7 +1389,7 @@ def _b_prepare(app, T, p, ctx):
         if den > 0 and num > 0 and sum(swa["ab"][b] for b in ok) >= K0:
             cal = num / den
     arpT = [a * cal if a is not None else None for a in awa]
-    prr = _port_ratio(pre, _monday(T))
+    prr = _port_ratio(pre, _pmon(pre, TG))
     for b in range(NB):                               # a band nobody reached yet: the one before × the ratio
         if arpT[b] is None and b and arpT[b - 1] is not None:
             arpT[b] = arpT[b - 1] * prr[b]
@@ -1682,11 +1702,12 @@ def past_model(st, D):
 
 
 # ══ the two views together ═════════════════════════════════════════════════════════════════════════════════════════
-def _views(app, T, p, ctx=None, clag=0, need_b=True):
+def _views(app, T, p, ctx=None, clag=0, need_b=True, tlag=0):
     """Both views fitted with ONLY the data known at T (GA4 to T − app["glag"]; clag: install days' final data to
-    T − clag) + the days AdMob has but GA4 not yet as (AdMob, view A's model, view B's model or None) → (A state,
-    B state or None, those days). Nothing here depends on the mix weights bo / bn / cq (a re-tune of them fits once)."""
-    v = lag_view(app, T, app.get("glag") or 0, clag)
+    T − clag; tlag: their checkpoints after day 30 to T − tlag) + the days AdMob has but GA4 not yet as (AdMob, view
+    A's model, view B's model or None) → (A state, B state or None, those days). Nothing here depends on the mix weights
+    bo / bn / cq (a re-tune of them fits once)."""
+    v = lag_view(app, T, app.get("glag") or 0, clag, tlag)
     sa = _a_prepare(v, T, p, ctx)
     sb = None
     if need_b:
@@ -1718,11 +1739,12 @@ def _q(tail, bo):
     return q, len(tail)
 
 
-def prepare(app, T, p, ctx=None, clag=0):
+def prepare(app, T, p, ctx=None, clag=0, tlag=0):
     """Fit both views with ONLY the data known at T (GA4 to T − app["glag"]; clag: install days' final data to
-    T − clag) → the state the functions below use. p: a full setting (params()); ctx: {"seas": the month index}."""
+    T − clag; tlag: their checkpoints after day 30 to T − tlag) → the state the functions below use. p: a full setting
+    (params()); ctx: {"seas": the month index}."""
     p = params(p) if any(k not in p for k in STRUCT) or any(k not in p for k in DEFAULT) else p
-    sa, sb, tail = _views(app, T, p, ctx, clag, p["bo"] > 0 or p["bn"] > 0)
+    sa, sb, tail = _views(app, T, p, ctx, clag, p["bo"] > 0 or p["bn"] > 0, tlag)
     q, nt = _q(tail, p["bo"])
     return {"T": T, "p": p, "a": sa, "b": sb, "q": q ** p["cq"], "qraw": q, "nt": nt, "spend": {},
             "org": sa["org"], "per_usd": sa["per_usd"]}
@@ -1939,8 +1961,9 @@ def _users_at(c, lag):
     return None
 
 
-CLAG = True    # back-tests: each install day's final daily data only to T − app["clag"], as the live build has it
-               # (the tournament let them see to T: a little optimistic) — False = the tournament's view (lab parity)
+CLAG = True    # back-tests: each install day's final daily data only to T − app["clag"] and its checkpoints after day
+               # 30 only to T − app["tlag"], as the live build has them (the tournament let them see to T: a little
+               # optimistic) — False = the tournament's view (lab parity)
 
 
 def _origin(app, T, p, seas, need_b, comps=True):
@@ -1956,7 +1979,8 @@ def _origin(app, T, p, seas, need_b, comps=True):
     if jumps is None:
         jumps = app["_jumps"] = {D: e for D in days for e in [F.event(days, D)] if e}
     sp = {T + timedelta(days=i): (days.get(T + timedelta(days=i)) or {}).get("sp") or 0.0 for i in range(1, hmax + 1)}
-    sa, sb, tail = _views(app, T, p, {"seas": seas}, (app.get("clag") or 0) if CLAG else 0, need_b)
+    sa, sb, tail = _views(app, T, p, {"seas": seas}, (app.get("clag") or 0) if CLAG else 0, need_b,
+                          (app.get("tlag") or 0) if CLAG else 0)
     org, per_usd = sa["org"], sa["per_usd"]
     unm = app.setdefault("_fv_un", {})                    # the uninstalls do not depend on the mix weights either
     if (T, hmax) not in unm:
@@ -2172,29 +2196,35 @@ BANDR_DAYS = 1100              # Mondays kept (back-tests reach ~800 days back)
 
 
 def port_pre(app):
-    """What one app gives the portfolio's band ratios: its GA4 prefix sums ({d0, nd, P}) — None without GA4."""
+    """What one app gives the portfolio's band ratios: its GA4 prefix sums and GA4 lag ({d0, nd, P, lag}) — None
+    without GA4."""
     pre = _pre(app)
     if not pre.get("P"):
         return None
-    return {"d0": pre["d0"], "nd": pre["nd"], "P": pre["P"]}
+    return {"d0": pre["d0"], "nd": pre["nd"], "P": pre["P"], "lag": max(0, int(app.get("glag") or 0))}
 
 
 def bandr(pres):
     """{Monday ISO: [7 ratios]}: for each band b ≥ 1 the median over the apps (≥ PORT_UD user-days in both bands over
-    the LONG days to that Monday) of arp_b ÷ arp_b−1; fewer than 3 apps: 1; clipped 0.1–2."""
+    the LONG days to that Monday) of arp_b ÷ arp_b−1; fewer than 3 apps: 1; clipped 0.1–2. An app whose GA4 lands later
+    than the quickest one's counts its LONG days to Monday − the difference — so a back-test origin T, which looks up
+    at most the Monday of T − its own lag (_pmon), sees every app only as far as the live build had it at T."""
     pres = [x for x in pres if x and x.get("P")]
     if not pres:
         return {}
     d0 = min(x["d0"] for x in pres)
     d1 = max(x["d0"] + timedelta(days=x["nd"] - 1) for x in pres)
+    lmin = min(x.get("lag") or 0 for x in pres)
     M = _monday(max(d0, d1 - timedelta(days=BANDR_DAYS)))
     if M < d0:
         M += timedelta(days=7)
     out = {}
-    while M <= d1 + timedelta(days=7):             # + the Monday after the newest GA4 day (the live origin's week)
+    while M <= d1 + timedelta(days=7):             # + the Monday after the newest GA4 day (the next build's GA4 day
+                                                   # may land on it: its live forecast then reads it, from data ≤ d1)
         rs = [[] for _ in range(NB)]
         for x in pres:
-            s = _win(x, M - timedelta(days=LONG - 1), M)
+            E = M - timedelta(days=(x.get("lag") or 0) - lmin)
+            s = _win(x, E - timedelta(days=LONG - 1), E)
             for b in range(1, NB):
                 if s["ab"][b] >= PORT_UD and s["ab"][b - 1] >= PORT_UD and s["rb"][b - 1] > 0:
                     rs[b].append((s["rb"][b] / s["ab"][b]) / (s["rb"][b - 1] / s["ab"][b - 1]))
