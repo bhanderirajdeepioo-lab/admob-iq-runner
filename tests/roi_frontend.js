@@ -10,7 +10,8 @@
 //   * ⚖️ the four forms of ROI: the hero block (the payback-target age or the longest complete one, ranges from the
 //     file's own consts, an age GA4 measured: its paid share + premium said so, the budget call, the organic-heavy /
 //     mostly-organic warning, the help + paid share per install day), and the All-apps table (biggest blended-vs-paid
-//     gap first, flagged rows, ✓ GA4 rows, spend-weighted total, ₹ as billed, sorting).
+//     gap first, flagged rows, ✓ GA4 rows, spend-weighted total, ₹ as billed, sorting); a paused app (whatever its call)
+//     out of the total and of the ⚖️ hero card, "✓ GA4" only where GA4 measured, the premium range's own age named.
 // Prints ONE JSON report; tests/test_roi_frontend.py asserts on it.   usage: node roi_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -177,7 +178,8 @@ function appFile() {
     out.f4_hero90 = U.hero('id-a').includes('4 kinds of ROI · D30');
     U.set('F4H', null); U.set('F4X', true);
     const fx = U.hero('id-a');
-    out.f4_help = ['Budget badhana / ghatana marginal ROI se', 'Paid share · every install day', 'Close ▾', 'agla extra $ kitna laayega'].filter(t => !fx.includes(t));
+    out.f4_help = ['Budget badhana / ghatana marginal ROI se', 'Paid share · every install day', 'Close ▾', 'agla extra $ kitna laayega',
+      'upar ya neeche dono ho sakta hai'].filter(t => !fx.includes(t)).concat(fx.includes('upper limit') ? ['upper limit'] : []);   // the Ads-count share: no bound
     out.f4_share_bars = (fx.match(/class="bar"/g) || []).length;              // the newest 30 install days with spend
     out.f4_share_nums = (fx.match(/<text class="lv"[^>]*>80%<\/text>/g) || []).length;   // numbers printed on the chart
     U.set('F4X', false);
@@ -233,10 +235,51 @@ function appFile() {
     ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
     const pz = U.data().ALL.apps.find(x => x.app_id === 'id-p').f4;           // a paused app with a bigger gap …
     const pz0 = pz.by['30'].gap; pz.by['30'].gap = [0.5, 0.6, 0.7];
-    const hA4 = U.hero('');                                                     // … the app buying now still leads
+    const hA4 = U.hero('');                                                     // … is never featured, nor counted (Alpha D30 + Gamma D7)
     pz.by['30'].gap = pz0;
     out.f4_hero_all = hA4.includes('⚖️ Organic-heavy') && hA4.includes('80% → 76%') && hA4.includes('paid share 50% (GA4)') && !hA4.includes('spend band')
-      && hA4.includes('⬆️ 0 · ↔️ 1 · ⬇️ 1') && hA4.includes('⏸️ 1 paused') && !hA4.includes('Hidden');
+      && hA4.includes('· 2 apps aise') && hA4.includes('⬆️ 0 · ↔️ 1 · ⬇️ 1') && hA4.includes('⏸️ 1 paused') && !hA4.includes('Hidden');
+    out.f4_all_pa = fA.includes('×1.1–×3 kamata (beech ×1.5) (research ne ye range D30 pe measure ki; D90 pe wahi maani hai)');   // the budget column's age
+    // a paused app still too early (call "early", spend stopped): ⏸️ Spend paused, out of the total and of the ⚖️ card;
+    // an all-paid app (Google Ads installs ≥ GA4 installs: s capped at 1, so paid-only = blended) is one number, never "✓ GA4"
+    const ALL0 = U.data().ALL, ep = o => Object.assign({}, e30, { src: 'range' }, o);
+    U.set('F4H', null);
+    U.setAll({ v: 1, T, f4c: F4C, ccy: 'USD', life: [], months: [], rows: [], apps: [
+      { app_id: 'id-1', app: 'One', st: 'Normal', life: [1, 1], cut: 0, f4: { h: 90, by: { '30': ep({ bl: 0.6, s: 1, sp: 100, spi: 100, paid: [0.6, 0.6, 0.6],
+        inc: [0.6, 0.6, 0.6], mar: [0.49, 0.56, 0.58], gap: [0, 0, 0] }) }, dec: { a: 90, v: 'down', mar: [0.4, 0.5, 0.6], live: true } } },
+      { app_id: 'id-2', app: 'Two', st: 'Normal', life: [1, 1], cut: 0, f4: { h: 90, by: { '30': ep({ sp: 50, spi: 50, gap: [0.5, 0.6, 0.7] }) },
+        dec: { a: 90, v: 'early', mar: null, live: false } } },
+      { app_id: 'id-3', app: 'Three', st: 'Normal', life: [1, 1], cut: 0, f4: { h: 90, by: { '7': ep({ bl: 0.3, s: 0.6, sp: 100, spi: 100,
+        paid: [0.2, 0.21, 0.22], gap: [0.25, 0.3, 0.35] }), '30': ep({ s: 0.6, sp: 100, spi: 100, gap: [0.05, 0.1, 0.15] }) },
+        dec: { a: 90, v: 'mixed', mar: [0.9, 1, 1.1], live: true } } }] });
+    const fP = U.f4All(U.data().ALL.apps), rowOf = id => { const i = fP.indexOf(`data-roi-app="${id}"`); return fP.slice(i, fP.indexOf('</tr>', i)); };
+    const totP = fP.slice(fP.indexOf('All apps <small>')), totR = totP.slice(0, totP.indexOf('</tr>'));
+    out.f4_paused_early = rowOf('id-2').includes('⏸️ Spend paused') && !rowOf('id-2').includes('Too early')
+      && (fP.match(/Spend paused<\/span> <b>(\d+)/) || [])[1] === '1' && !fP.includes('Too early</span> <b>')
+      && totR.includes('<td>$200</td>') && !totR.includes('$250') && !totR.includes('✓ GA4');   // spend on: the two live apps only
+    out.f4_allpaid = rowOf('id-1').includes('<td>60%</td>') && !rowOf('id-1').includes('✓ GA4') && !fP.includes('✓ GA4 measured');
+    const hP = U.hero('');
+    out.f4_paused_hero_all = hP.includes('data-roi-app="id-3"><span class="roi-hl">⚖️ Organic-heavy') && hP.includes('30% → 21%')
+      && hP.includes('blended → paid-only · D7 · paid share 60%') && !hP.includes('apps aise') && hP.includes('⬆️ 0 · ↔️ 1 · ⬇️ 1')
+      && hP.includes('⏸️ 1 paused');
+    const g7 = U.data().ALL.apps[2].f4.by['7'].gap; U.data().ALL.apps[2].f4.by['7'].gap = [0.05, 0.1, 0.15];
+    out.f4_paused_hero_none = !U.hero('').includes('roi-hl">⚖️');               // no live app organic-heavy: no card
+    U.data().ALL.apps[2].f4.by['7'].gap = g7;
+    U.setAll(ALL0);
+    // the app's own hero: a paused app still too early; the premium range's age (research: D30) named at any other age
+    const hp = U.f4Hero({ consts: { f4: F4C }, rows: [], f4: { h: 90, by: { '30': ep({}) }, dec: { a: 90, v: 'early', mar: null, live: false } } });
+    out.f4_paused_early_hero = hp.includes('⏸️ Spend paused') && !hp.includes('Too early')
+      && hp.includes('abhi Google Ads spend band (pichhle 14 spend din) — D90 abhi complete nahi, faisla nahi') && !hp.includes('wahi maani');
+    const m7 = ep({ src: 'ga4', paid: [0.12, 0.12, 0.12], m: { p: 1.6, s: 0.31, rs: 0.42, np: 4000, no: 9000, w: 4, from: '2026-08-17', to: '2026-09-07', sw: 0.3, days: 6 } });
+    const fq = { h: 90, by: { '7': ep({}), '30': ep({}) }, dec: { a: 90, v: 'mixed', mar: [0.9, 1, 1.1], live: true } };
+    U.set('F4H', '7');
+    const hq = U.f4Hero({ consts: { f4: F4C }, rows: [], f4: fq });
+    out.f4_pa_hero = hq.includes('(beech ×1.5) (research ne ye range D30 pe measure ki; D7, D90 pe wahi maani hai)');
+    out.f4_pa_own = U.f4Hero({ consts: { f4: Object.assign({}, F4C, { pa: 7 }) }, rows: [], f4: fq }).includes('(research ne ye range D7 pe measure ki; D90 pe wahi maani hai)');
+    fq.by['7'] = m7;                                                            // GA4 measured D7; the D90 budget call still uses the range
+    const hm = U.f4Hero({ consts: { f4: F4C }, rows: [], f4: fq });
+    out.f4_pa_measured = hm.includes('(beech ×1.5) (research ne ye range D30 pe measure ki; D90 pe wahi maani hai)') && hm.includes('<b>×1.6</b> kamata');
+    U.set('F4H', null);
     // 🔮 forecast: 90 days ready; spend +50% scales only the paid part; breakeven from the lifetime P/L
     const f0 = '2026-10-14', H = 180;
     d.fc = { v: 1, made: '2026-10-14', T: '2026-10-13', start: '2026-02-01', start_auto: '2026-02-01', start_set: null,

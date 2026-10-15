@@ -64,7 +64,8 @@ TIE_REL, TIE_ABS = 0.02, 1.0                # an activity day ties when within 2
 # The paid share s = Google Ads installs ÷ GA4 installs of the same install days (measured, capped at 1). The three
 # inputs not measured yet are the research's RANGES (until GA4 paid / organic data arrives), never one number; each
 # tuple is ordered so the form goes low → central → high:
-F4_P = (1.15, 1.4, 3.2)                     # p: paid ÷ organic revenue per install (methods disagree: not settled)
+F4_P = (1.15, 1.4, 3.2)                     # p: paid ÷ organic revenue per install (methods disagree: not settled);
+F4_PA = 30                                  # … measured at D30 only: D7 / D90 / H assume the same range (page says so)
 F4_B = (0.88, 0.47, 0.15)                   # b: share of "organic" installs that come anyway (after-stop ratios)
 F4_BETA = (-0.19, -0.07, -0.03)             # beta: elasticity of ROAS to spend (pooled over the apps); an app's own
 F4_BETA_FILE = "roi_beta.json"              # measured range, when there is one, in config/roi_beta.json (see _betas)
@@ -454,7 +455,7 @@ def _forms(rows, H, beta=None, gp=None):
 def f4_consts():
     """The ranges the forms used (the page prints these, so a number on screen always names its range)."""
     return {"p": list(F4_P), "b": list(F4_B), "beta": list(F4_BETA), "ages": list(F4_AGES), "gap": F4_GAP,
-            "live": F4_LIVE, "pw": F4_PW, "pmin": F4_PMIN}
+            "live": F4_LIVE, "pw": F4_PW, "pmin": F4_PMIN, "pa": F4_PA}
 
 
 def _summary(rows, P, co_off, tie_checked, today):

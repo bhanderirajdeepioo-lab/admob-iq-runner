@@ -329,7 +329,7 @@ def test_finish_pointer_header_and_isolation(tmp_path):
     assert body["rows"][0][5] == 500.0 and body["rows"][0][6] == 4.0 and body["months"][0][6] == 500.0
     assert body["ccy"] == "INR"
     assert body["apps"][0]["f4"] == f4 and body["f4c"] == rb.f4_consts()
-    assert body["f4c"]["p"][0] < body["f4c"]["p"][1] < body["f4c"]["p"][2]
+    assert body["f4c"]["p"][0] < body["f4c"]["p"][1] < body["f4c"]["p"][2] and body["f4c"]["pa"] in body["f4c"]["ages"]
     assert body["months"][0][0] == "2026-10"
     assert not os.path.exists(os.path.join(out, "roi_0123456789ab.json.gz"))   # stale file removed
     line = rb.pop_line()

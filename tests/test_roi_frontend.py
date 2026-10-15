@@ -68,6 +68,12 @@ def test_four_forms(out):
     # chips: badhao / pakka nahi / ghatao / spend band / jaldi / zyada organic; the total leaves the paused app out
     assert out["f4_all"] == [] and out["f4_all_tot"] == [] and out["f4_all_chips"] == [0, 1, 1, 1, 1, 1, 1]
     assert out["f4_all_sp"] == ["id-b", "id-a", "id-p", "id-c"] and out["f4_all_inr"] and out["f4_hero_all"]
+    # a paused app is paused whatever its call (also "too early"): ⏸️, out of the spend-on total and of the ⚖️ hero card
+    # (a live app's D30, else its D7; no card when none); "✓ GA4" only on what GA4 measured (an all-paid range collapses)
+    assert out["f4_paused_early"] and out["f4_paused_early_hero"] and out["f4_allpaid"]
+    assert out["f4_paused_hero_all"] and out["f4_paused_hero_none"]
+    # the premium range was measured at D30 (consts "pa"): every other age on screen that uses it says so
+    assert out["f4_all_pa"] and out["f4_pa_hero"] and out["f4_pa_own"] and out["f4_pa_measured"]
 
 
 def test_forecast_view(out):
