@@ -132,7 +132,9 @@ def has_iday(data_dir, app_id):
 def load_iday(data_dir, app_id):
     """The app's install-day data exactly as the fetch reads it back (gu.load_iday: the hot file with its frozen .old
     part merged in) → dict, or None (none yet / unreadable / an .old part of another stream or format — the fetch then
-    starts that app over, so this tab never evaluates half a history)."""
+    starts that app over, so this tab never evaluates half a history). It also holds IDAY_EXT's keys c2, cp, au, d2,
+    rm, xs from their own files (fetch.ga4_iday_ext.load_ext): {} each for a file written before them or without
+    them — every legacy key is exactly what the iday files hold, with or without the extension."""
     got = gu.load_iday(data_dir, app_id)
     return got if isinstance(got, dict) else None
 
