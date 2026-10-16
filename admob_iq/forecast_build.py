@@ -34,6 +34,10 @@ whether the forecast uses it (held off: it did not win the Nov–Feb back-test);
 with their measured effects either way (fc["fcal"]), Ramadan / Diwali measured once (shown, never in the forecast), and
 each app's weekday rhythm per ad trigger on its daily line (fcal["wk"]; every 30 / 90 / 180-day total unchanged — the
 daily forecast came closer on most apps with it, lab 9).
+⚙️ The ad setting changes (adcfg_build via roi_build, app_step(acfg=…): adcfg.fc_steps, the confirmed changes that
+moved ≥ 10 % of the app's revenue per user) reach the engine as app["acfg"]; engine vd counts them as sudden changes
+only with forecast_vd.AX (held off: it did not win the no-look-ahead back-test — the numbers, the stored file and the
+page's forecast exactly as without them; roi_build puts the page's labels beside it, fc["acfg"]).
 data/forecast/state.json, refreshed at the end: the portfolio's month-of-year season and band ratios ("bandr": each GA4
 install-age band's revenue per active user ÷ the band before's, the median over the apps, per Monday — engine vd's prior
 for a band an app has few users in) + the engine's fixed structure ("vd_struct").
@@ -708,13 +712,16 @@ def _tuned_now(E, p):
     return set(E.DEFAULT) <= set(p) and all(p[k] in vals for k, vals in getattr(E, "GRID", {}).items())
 
 
-def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None, unst=None, geo=None, cs_pairs=None):
+def app_step(run, aid, key, rows, P, ida, life, life_till, cty_rows, rev_cty=None, unst=None, geo=None, cs_pairs=None,
+             acfg=None):
     """→ the page's forecast for this app (None: nothing yet). Never raises. geo: the app's Google Ads country weeks
     (geo_weeks), cs_pairs: every store's country block pairs (the run's cs_pairs) — engine vd's "Budget by country"
-    planner (and its paid installs by country, with STRUCT cs 1)."""
+    planner (and its paid installs by country, with STRUCT cs 1). acfg: the app's ⚙️ ad setting changes
+    (adcfg.fc_steps) — engine vd counts them as sudden changes only with VD.AX (held off: the numbers unchanged)."""
     try:
         app = inputs(rows, P, ida, life, life_till, unst)
         app["geo"], app["cs_pairs"] = geo or {}, cs_pairs
+        app["acfg"] = list(acfg or ())
         app["cal"] = run.cal                             # 📅 the eCPM calendar's seasons (engine vd, STRUCT cal)
         try:                                             # … and this app's after-call weekday rhythm (page only)
             app["wk"] = FC.weekday(((run.cal or {}).get("wk") or {}).get(aid), app["last"]) if app.get("last") else None

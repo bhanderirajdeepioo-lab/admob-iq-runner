@@ -71,6 +71,9 @@ it can of the AdMob-only days' move; q carries the rest). Without a calendar (ap
 the engine exactly as without it. forecast()["cal"]: the coming event weeks for the page (with cal 0: their measured
 effects only, "use" 0 — the forecast without them).
 
+⚙️ AX (a module switch, HELD OFF — see AX below): the ad setting changes the build found in the AdMob reports
+(adcfg.fc_steps, app["acfg"]) counted as sudden changes too (ev kind "ads"); 0 = the forecast exactly as without them.
+
 Structure (STRUCT, 13 knobs + the calendar's) is fixed portfolio-wide (version STRUCT_VERSION; re-checked offline,
 never per app: tuned per app it measured worse on unseen origins); only the mix weights bo, bn, cq are tuned per app
 (GRID; the switches gc, pc held at 0), on the same back-tests as before plus each past install day's future revenue
@@ -3270,6 +3273,34 @@ def _users_at(c, lag):
     return None
 
 
+AX = 0         # ⚙️ ad setting changes (engine/adcfg.fc_steps → app["acfg"]: the confirmed ones that moved ≥ 10 % of the
+               # app's revenue per user) as sudden changes too: 1 = a test whose 30-day window from T + 7k holds one
+               # counts as a sudden-change test (ev kind "ads": weighted EV_W in the tune, kept out of the normal
+               # calibration) — HELD OFF (0): the forecast's numbers stay as they are; the page labels its back-tests
+               # with them either way (adcfg_build.page). Lab adcfg (16 Oct, the live engine, no look-ahead: tuned and
+               # calibrated on the older half of each app's origins, scored on the newer half): it did not win — at
+               # 30 / 90 days about as many apps came closer as went further, no horizon was significant, and where
+               # the labels moved the calibration the 80 % band held the actual less often. On only once it wins.
+
+
+def _ads_ev(steps, D):
+    """The first ad setting change inside (D, D + 30] (steps: [{"at": iso, "x": rx}]) → {"kind": "ads", "x": 1 + rx,
+    "on": its day} or None."""
+    for s in steps or ():
+        S = date.fromisoformat(s["at"])
+        if D < S <= D + timedelta(days=30):
+            return {"kind": "ads", "x": round(1 + (s.get("x") or 0.0), 2), "on": s["at"]}
+    return None
+
+
+def _jump(app, jumps, D):
+    """The sudden change measured from D (forecast.event) — or, with AX, an ad setting change inside its 30 days."""
+    ev = jumps.get(D)
+    if ev is None and AX:
+        ev = _ads_ev(app.get("acfg"), D)
+    return ev
+
+
 CLAG = True    # back-tests: each install day's final daily data only to T − app["clag"] and its checkpoints after day
                # 30 only to T − app["tlag"], as the live build has them (the tournament let them see to T: a little
                # optimistic) — False = the tournament's view (lab parity)
@@ -3312,7 +3343,7 @@ def _origin(app, T, p, seas, need_b, comps=True):
         au = sum(e.get("dau") or 0 for e in act)
         ev = None
         for k in range(0, hz - 29, 7):
-            ev = jumps.get(T + timedelta(days=k))
+            ev = _jump(app, jumps, T + timedelta(days=k))
             if ev:
                 ev = dict(ev, at=(T + timedelta(days=k)).isoformat())
                 break
@@ -3337,7 +3368,7 @@ def _origin(app, T, p, seas, need_b, comps=True):
             continue
         ev = None
         for j in range(0, hz - 29, 7):
-            ev = jumps.get(T + timedelta(days=j))
+            ev = _jump(app, jumps, T + timedelta(days=j))
             if ev:
                 ev = dict(ev, at=(T + timedelta(days=j)).isoformat())
                 break
