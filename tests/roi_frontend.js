@@ -371,8 +371,9 @@ function appFile() {
     out.fc_vd_switch = (sw.match(/New model \(A \+ B\)/g) || []).length === 1 && sw.includes('badla: New installs · model B share, Old installs')
       && (sw2.match(/New model \(A \+ B\)/g) || []).length === 1 && !sw.includes('Old model</b>');
     U.set('FCM', 0);
-    // 💸 Budget by country: today's plan = the forecast; one revenue per $ for every country (the per-country curves
-    // lost the back-test) — a row shows spend / installs / CPI / revenue for the chosen days only (fits 1280 px);
+    // 💸 Budget by country: today's plan = the forecast; a payload without the rows' own revenue per $ (rs): one
+    // value for every country, "Same for all" — a row shows spend / installs / CPI / revenue / ROI / source for the
+    // chosen days only (fits 1280 px);
     // −/+ keeps the total (Keep total on); a row out of its measured range warned; hidden in a developer view; the
     // slider ×m (installs ×m^(1−e) only when the forecast itself follows the country model, fc_cs 1)
     const dp = JSON.parse(JSON.stringify(d));
@@ -385,14 +386,59 @@ function appFile() {
     const pv = U.fcView(dp);
     // revenue 90 = 450 old + 90 organic + 630 paid; AA: 6 × 78.75 = $473 (Other $158); ROI (paid) 630 ÷ 720 = 88%
     out.pl_card = pv.includes('💸 Budget by country') && pv.includes('Revenue · 90 days') && pv.includes('$1,170') && pv.includes('today $1,170')
-      && pv.includes('<td>$2.00</td><td>$473</td></tr>') && pv.includes('<td>$158</td>') && pv.includes('88%') && pv.includes('+$450')
+      && pv.includes('<td>$2.00</td><td>$473</td><td>88%</td><td class="roi-q">Same for all</td></tr>') && pv.includes('<td>$158</td>') && pv.includes('88%') && pv.includes('+$450')
       && pv.includes('Installs / day') && pv.includes('Spend / day') && pv.includes('>9<') && pv.includes('Keep total on')
-      && pv.includes('data-roi-pl="AA|+"') && pv.includes('<th>Revenue 90 days</th></tr>') && !pv.includes('Revenue 180 days')
+      && pv.includes('data-roi-pl="AA|+"') && pv.includes('<th>Revenue 90 days</th><th>ROI 90 days</th><th>Source</th></tr>') && !pv.includes('Revenue 180 days')
       && !pv.includes('Next-$ ROI') && !pv.includes('pooled curve') && !U.fcPlan(dp).includes('aaj $') && !U.fcPlan(dp).includes(' din</th>')
-      && pv.includes('e 0.10') && pv.includes('1,234') && pv.includes('Country-wise kamai per $ back-test me haari') && pv.includes('zyadatar apps pe behtar')
+      && pv.includes('e 0.10') && pv.includes('1,234') && pv.includes('Revenue per $ (90 din) har country ke liye same') && pv.includes('Is app ke GA4 paid users ka 90 din tak ka data abhi country-wise ke liye kaafi nahi')
+      && pv.includes('30 / 90 din pe har country ka apna dikhega') && pv.includes('zyadatar apps pe behtar')
       && pv.includes('β upar se lagane pe back-test haara')
-      && !pv.includes('Measured range ke bahar:') && (U.fcPlan(dp).match(/<th>/g) || []).length === 5;
-    U.set('FCH', '30');
+      && !pv.includes('Measured range ke bahar:') && (U.fcPlan(dp).match(/<th>/g) || []).length === 7;
+    // each row's own revenue per $ at 30 / 90 days where it won this app's own back-test (rs "cp" its own GA4 slot,
+    // "pool" the rest measured together; rt how much of it is the row's own data), one value past 90 (rs null); today's
+    // plan still = the forecast (6 × 60 + 2 × 135 = 630); moving spend to the row that earns more per $ raises the revenue
+    const dq = JSON.parse(JSON.stringify(dp));
+    dq.app_id = 'id-plan-own';
+    Object.assign(dq.fc.plan.rows[0], { r: [20, 60, 131.25], rs: ['cp', 'cp', null], rt: [0.9, 0.834, null] });
+    Object.assign(dq.fc.plan.rows[1], { r: [45, 135, 131.25], rs: ['pool', 'pool', null], rt: [0.7, 0.62, null] });
+    dq.fc.plan.rw = { '30': { w: ['2026-08-03', '2026-09-27'], n: 8, np: 5000 }, '90': { w: ['2026-06-01', '2026-07-26'], n: 8, np: 4000 } };
+    dq.fc.plan.rbt = { '30': { n: 14, b: 12, w: 2, need: 4 }, '90': { n: 12, b: 10, w: 2, need: 4 } };
+    U.set('PLAN', null);
+    const pq = U.fcPlan(dq);
+    out.pl_own = pq.includes('<td>$360</td><td>67%</td><td class="roi-q">Own GA4 · 83%</td>') && pq.includes('<td>$270</td><td>150%</td><td class="roi-q">Pooled · 62%</td>')
+      && pq.includes('Revenue per $ (90 din) har country ka apna:') && pq.includes('8 complete install hafton (1 Jun 26 – 26 Jul 26)')
+      && pq.includes('Pooled" = jin countries ka GA4 me apna slot nahi') && pq.includes('installs aur revenue dono badalte hain')
+      && pq.includes('is app pe 12 me se 10 test behtar, 2 kharab.') && pq.includes('Source ka % = value me us country ke apne data ka hissa')
+      && pq.includes('today $1,170') && !pq.includes('Same for all') && !pq.includes('roi-q">Mostly app avg');
+    U.plStep(dq, 'AA', '-');                                     // AA 6 → 5.4, Other 2 → 2.6: revenue 450 + 90 + 324 + 351
+    out.pl_own_move = U.fcPlan(dq).includes('$1,215') && U.fcPlan(dq).includes('▲ +3.8%');
+    // own values that are mostly the app's average (each row's own data under half of it): said so, row by row
+    const dw = JSON.parse(JSON.stringify(dq));
+    dw.app_id = 'id-plan-weak';
+    dw.fc.plan.rows[0].rt = [0.02, 0.49, null]; dw.fc.plan.rows[1].rt = [0.3, 0.1, null];
+    U.set('PLAN', null);
+    const pw = U.fcPlan(dw);
+    out.pl_own_weak = (pw.match(/<td class="roi-q">Mostly app avg<\/td>/g) || []).length === 2 && !pw.includes('Own GA4')
+      && pw.includes('har country ka apna nikala, par abhi kisi country ka spend itna nahi') && !pw.includes('Revenue per $ (90 din) har country ka apna:')
+      && pw.includes('(thoda) dono badalte hain');
+    dw.fc.plan.rows[0].rt = [0.02, 0.5, null];                   // one row at half its own data: that row says it
+    U.set('PLAN', null);
+    const pw2 = U.fcPlan(dw);
+    out.pl_own_weak2 = pw2.includes('<td class="roi-q">Own GA4 · 50%</td>') && pw2.includes('<td class="roi-q">Mostly app avg</td>')
+      && pw2.includes('Revenue per $ (90 din) har country ka apna:');
+    // this app's own back-test at the chosen days: too few origins yet (waits), or lost (one value) — said which
+    const dn = JSON.parse(JSON.stringify(dp));
+    dn.app_id = 'id-plan-bt';
+    dn.fc.plan.rbt = { '30': { n: 2, b: 2, w: 0, need: 4 }, '90': { n: 6, b: 1, w: 5, need: 4 } };
+    U.set('PLAN', null);
+    const pn90 = U.fcPlan(dn);
+    U.set('PLAN', null); U.set('FCH', '30');
+    const pn30 = U.fcPlan(dn);
+    out.pl_bt = pn90.includes('Country-wise is app ke apne back-test me haara (6 me se 1 test behtar, 5 kharab)') && pn90.includes('Revenue per $ (90 din) har country ke liye same')
+      && !pn90.includes('kaafi nahi') && (pn90.match(/Same for all/g) || []).length === 2
+      && pn30.includes('Country-wise is app pe abhi test nahi ho saka (2 test, 4 chahiye') && pn30.includes('Revenue per $ (30 din) har country ke liye same')
+      && pn30.includes('is app ka back-test jeetega, 30 / 90 din pe har country ka apna dikhega');
+    U.set('PLAN', null); U.set('FCH', '30');
     out.pl_h = U.fcPlan(dp).includes('<th>Revenue 30 days</th>') && U.fcPlan(dp).includes('<td>$53</td>')      // Other 2 × 26.25
       && U.fcPlan(dp).includes('Profit · 30 days');
     U.set('FCH', '90');
@@ -454,6 +500,27 @@ function appFile() {
     out.hz_users = gv.includes('DAU · din 198') && gv.includes('ARPDAU · agle 198 din') && gv.includes('Din 181–198') && !gv.includes('Din 181–210')
       && gv.includes('back-test me ±20% (198 din, 4 tests)');
     out.hz_plan = gv.includes('<th>Revenue 198 days</th>') && gv.includes('Revenue · 198 days') && gv.includes('Profit · 198 days');
+    // past 90 days one revenue per $ for every row ("Same for all"), said why; the 30 / 90 chips have their own
+    const go = JSON.parse(JSON.stringify(g));
+    go.app_id = 'id-hz-own';
+    go.fc.plan.rows = go.fc.plan.rows.map((x, i) => Object.assign({}, x, { rs: i ? ['pool', 'pool', null, null] : ['cp', 'cp', null, null] }));
+    go.fc.plan.rw = dq.fc.plan.rw;
+    U.set('PLAN', null); U.set('FCH', '180');
+    const p180 = U.fcPlan(go);
+    out.pl_own_180 = (p180.match(/Same for all/g) || []).length === 2 && p180.includes('Revenue per $ (180 din) har country ke liye same')
+      && p180.includes('90 din se aage country-wise abhi test nahi ho saka') && p180.includes('30 / 90 din chip pe har country ka apna dikhta hai')
+      && go.fc.plan.h.length === 4
+      && p180.includes('<th>ROI 180 days</th>');
+    const g72 = JSON.parse(JSON.stringify(go));
+    g72.app_id = 'id-hz-72';
+    g72.fc.plan.h = [30, 72, 90, 180];
+    g72.fc.plan.rows = g72.fc.plan.rows.map((x, i) => Object.assign({}, x, { rs: i ? ['pool', null, 'pool', null] : ['cp', null, 'cp', null] }));
+    g72.fc.hz.chips = [30, 72, 90, 180]; g72.fc.cal['72'] = g72.fc.cal['44'];
+    U.set('PLAN', null); U.set('FCH', '72');
+    const p72 = U.fcPlan(g72);
+    out.pl_own_72 = p72.includes('Country-wise sirf 30 aur 90 din pe test hua, 72 din pe nahi') && p72.includes('30 / 90 din chip pe har country ka apna dikhta hai')
+      && p72.includes('Revenue · 72 days');
+    U.set('PLAN', null); U.set('FCH', 'max');
     const bd = U.fcBand(g.fc, HN);
     out.hz_band = JSON.stringify(bd(0)) === '[-0.1,0.1]' && JSON.stringify(bd(29)) === '[-0.1,0.1]' && Math.abs(bd(36)[1] - 0.1) < 1e-12
       && Math.abs(bd(66)[0] + 0.16) < 1e-9 && JSON.stringify(bd(197)) === '[-0.3,0.22]' && JSON.stringify(U.fcBand(d.fc, 90)(5)) === '[-0.2,0.1]';

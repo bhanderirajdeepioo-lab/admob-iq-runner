@@ -2575,7 +2575,7 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-fc-sl b{color:#fff}.roi-fc-sl small{color:var(--faint)}.roi-fc-sl input{width:100%;accent-color:var(--cyan)}
 .roi-pl{display:inline-flex;align-items:center;gap:6px}.roi-pl b{min-width:52px;text-align:center;color:#fff;font-variant-numeric:tabular-nums}
 .roi-plb{min-width:30px;min-height:30px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:16px;font-weight:800;cursor:pointer;line-height:1}
-.roi-plt{min-width:540px}
+.roi-plt{min-width:640px}
 .roi-ch .band{fill:rgba(52,217,154,.16);stroke:none}.roi-ch .ev.up{fill:var(--good)}.roi-ch .ev.dn{fill:var(--bad)}.roi-ch .evt{font-size:10px;font-weight:700}.roi-ch .evt.up{fill:var(--good)}.roi-ch .evt.dn{fill:var(--bad)}.roi-ch .ev.off{fill:none;stroke-width:1.2}.roi-ch .ev.off.up{stroke:var(--good)}.roi-ch .ev.off.dn{stroke:var(--bad)}.roi-ch .evt.off{opacity:.75}.roi-lg .cev::before{background:linear-gradient(90deg,var(--good) 50%,var(--bad) 50%)}.roi-fcal{margin-top:8px;line-height:1.5}.roi-ch .ln.dash{stroke-dasharray:5 4;stroke-width:1.6}
 .roi-lgr{font-size:12.5px;color:var(--ink2);padding:7px 0;border-bottom:1px solid var(--line);line-height:1.5}.roi-lgr b{color:#fff}
 .roi-fc-st{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:13px;color:var(--ink2)}
@@ -6990,11 +6990,15 @@ function fcUsers(d,rev,spd){ const fc=d.fc, f=fc.f, h=fc.hist||{}, H=fcHN(fc), m
   return `<div class="roi-card" id="roi-fc-users"><div class="roi-ct"><h3>Users, installs &amp; uninstalls · forecast</h3>${chips}</div>${kp}<div id="roi-fc-uc">${fcLine(fc,H,hs[k],fu[k],met.find(x=>x[0]===k)[1])}</div><div class="roi-tw" style="margin-top:10px">${tb}</div>${note}</div>`; }
 // 💸 Budget by country (owner-only: revenue — hidden in a developer view): the country model (fc.plan, engine vd) as a
 // planner. Per country: installs = spend × installs-per-$ × (spend ÷ today's)^−e (back-tested: given the real country
-// spend, better than the engine's one CPI); revenue within H days = spend × the forecast's own paid revenue per $, the
-// SAME for every country and at any spend (each country's own value per $ did not win the back-test, nor did the ROI
-// forms' β on top) — so a row shows spend / installs / CPI / revenue, and profit / ROI only in total. −/+ = 10% of the
-// row; "Keep total" (on by default) takes / gives the difference from the other rows in proportion. Rows keep their
-// order; a row outside its measured weekly spend range gets a warning. Today's plan reproduces the forecast.
+// spend, better than the engine's one CPI); revenue within H days = spend × the row's revenue per $ (x.r[j]): at 30 /
+// 90 days, where it won this app's own back-test (pl.rbt[H]: n origins, b better, w worse), its own, from GA4's paid
+// users of that country ÷ its spend (x.rs[j] "cp"; "pool" = the countries without a GA4 slot, measured together;
+// x.rt[j] the share of it that is the row's own data, the rest the app's average — under 50%: "Mostly app avg"), past
+// 90 days or where the app's own back-test did not win / could not run the forecast's own for every row (x.rs[j]
+// null); at any spend (the ROI forms' β on top did not win) — a row shows spend / installs / CPI / revenue / its ROI
+// and the source. −/+ = 10% of the row; "Keep total" (on by default) takes / gives the difference from the other rows
+// in proportion. Rows keep their order; a row outside its measured weekly spend range gets a warning. Today's plan
+// reproduces the forecast.
 function plKey(d){ return d.app_id+'|'+((d.fc||{}).T||''); }
 function plState(d){ const pl=d.fc.plan; if(!PLAN||PLAN.k!==plKey(d)) PLAN={k:plKey(d),keep:true,s:Object.fromEntries(pl.rows.map(x=>[x.cc,+x.s0||0]))}; return PLAN; }
 function plRow(pl,x,s){ const e=ok(pl.e)?+pl.e:0;
@@ -7029,17 +7033,27 @@ function fcPlan(d){ if(typeof window!=='undefined'&&window.__DEV_VIEW__) return 
     +tile(`Profit · ${H} days`,`<span class="${prP>=0?'roi-up':'roi-dn'}">${MC(prP,true)}</span>`,`today ${MC(prN,true)}`,prP>=0?'roi-kg':'roi-kb')
     +tile(`ROI (paid) · ${H} days`,P(roiP),`today ${P(roiN)}`)+`</div>`;
   const nm=cc=>cc==='OT'?'🌐&nbsp;Other':`${valFlag(cc)}&nbsp;${E(valCtyName(cc))}`;
+  const src=x=>{ const v=(x.rs||[])[j], t=(x.rt||[])[j]; if(!v) return 'Same for all';
+    if(ok(t)&&+t<0.5) return 'Mostly app avg'; return (v==='cp'?'Own GA4':'Pooled')+(ok(t)?` · ${Math.round(t*100)}%`:''); };
+  const own=R.some(o=>((o.x.rs||[])[j])), strong=R.some(o=>((o.x.rs||[])[j])&&ok((o.x.rt||[])[j])&&+o.x.rt[j]>=0.5);
+  const ownH=hs.filter((h,i)=>R.some(o=>((o.x.rs||[])[i])));          // the horizons (chips) with each row's own value
   const warn=[];
   const rows=R.map(o=>{ const x=o.x, q=o.p, cc=x.cc, cpi=q.inst>0?q.s/q.inst:null;
     if(q.out) warn.push(`${nm(cc)} ${q.s>q.hi?'zyada':'kam'} (measured ${MV(SVp(q.lo))}–${MV(SVp(q.hi))}/day)`);
     return `<tr><td class="roi-nm">${nm(cc)}${q.out?' <span class="roi-q" title="Outside the measured range">⚠️</span>':''}</td>`
       +`<td><span class="roi-pl"><button type="button" class="roi-plb" data-roi-pl="${E(cc)}|-" aria-label="${E(cc)} spend −10%">−</button><b>${MV(SVp(q.s))}</b><button type="button" class="roi-plb" data-roi-pl="${E(cc)}|+" aria-label="${E(cc)} spend +10%">+</button></span></td>`
-      +`<td>${N(q.inst)}</td><td>${MPV(SVp(cpi))}</td><td>${MC(RV(q.rev[j]))}</td></tr>`; }).join('');
-  const tot=`<tr class="roi-tot"><td>Total (paid)</td><td>${MV(SVp(sP))}</td><td>${N(sum('inst','p'))}</td><td>${MPV(SVp(sum('inst','p')>0?sP/sum('inst','p'):null))}</td><td>${MC(RV(sum('rev','p',j)))}</td></tr>`;
-  const tb=`<div class="roi-tw"><table class="roi-t roi-plt"><thead><tr><th>Country</th><th>Spend / day</th><th>Installs / day</th><th>CPI</th><th>Revenue ${H} days</th></tr></thead><tbody>${rows}${tot}</tbody></table></div>`;
+      +`<td>${N(q.inst)}</td><td>${MPV(SVp(cpi))}</td><td>${MC(RV(q.rev[j]))}</td><td>${q.s>0?P(RV(q.rev[j])/(SVp(q.s)*H)):'—'}</td><td class="roi-q">${src(x)}</td></tr>`; }).join('');
+  const tot=`<tr class="roi-tot"><td>Total (paid)</td><td>${MV(SVp(sP))}</td><td>${N(sum('inst','p'))}</td><td>${MPV(SVp(sum('inst','p')>0?sP/sum('inst','p'):null))}</td><td>${MC(RV(sum('rev','p',j)))}</td><td>${P(roiP)}</td><td></td></tr>`;
+  const tb=`<div class="roi-tw"><table class="roi-t roi-plt"><thead><tr><th>Country</th><th>Spend / day</th><th>Installs / day</th><th>CPI</th><th>Revenue ${H} days</th><th>ROI ${H} days</th><th>Source</th></tr></thead><tbody>${rows}${tot}</tbody></table></div>`;
   const ctl=`<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Keep total"><button type="button" data-roi-plk="1" aria-pressed="${st.keep}">Keep total ${st.keep?'on':'off'}</button></span><button type="button" class="roi-btn" data-roi-plr="1">Reset</button></div>`;
   const e=ok(pl.e)?+pl.e:0, wk=(pl.weeks||[]).map(fd).join(' + ');
-  const note=`<p class="roi-note"><b>Ye kaise ginta hai:</b> har country ka apna installs-per-$ (CPI) pichhle ${(pl.weeks||[]).length} complete hafton (${E(wk)}) ke Google Ads country data se. Kisi country ka spend badhe to uska CPI bhi badhta hai: spend 2× → CPI ×${Math.pow(2,e).toFixed(2)} (e ${e.toFixed(2)}, sab apps ke ${N(pl.en)} country-blocks se measured; raise aur cut dono pe ek hi e — alag alag back-test me kharab nikla). Back-test: jab har hafte ka asli country-wise spend pata ho, paid installs ka andaza isse behtar aata hai (30 din: older half ke zyadatar apps pe behtar). Revenue per $ har country ke liye same — upar wale forecast ka apna (aaj ke plan pe total bilkul forecast jitna). Country-wise kamai per $ back-test me haari (older half ke zyadatar apps pe kharab) — revenue sirf total spend ke saath. Isliye spend ek country se doosri me le jaane pe installs badalte hain, revenue nahi; aur har country ka ROI same hota — profit / ROI sirf upar total me.</p>`
+  const rw=(pl.rw||{})[String(H)]||{}, rq={n:rw.n||0,w:(rw.w||[]).map(fd).join(' – ')};
+  const bt=(pl.rbt||{})[String(H)], btT=bt?`${N(bt.n)} me se ${N(bt.b)} test behtar${bt.w?`, ${N(bt.w)} kharab`:''}`:'';
+  const why=bt&&bt.n<bt.need?`Country-wise is app pe abhi test nahi ho saka (${N(bt.n)} test, ${N(bt.need)} chahiye — GA4 paid hafte badhne par har build me dobara check hota hai)`
+    :bt?`Country-wise is app ke apne back-test me haara (${btT})`
+    :H===30||H===90?`Is app ke GA4 paid users ka ${H} din tak ka data abhi country-wise ke liye kaafi nahi`:H>90?'90 din se aage country-wise abhi test nahi ho saka (GA4 ke paid users ka itna purana data Google Ads country data ke saath abhi kam hai)':`Country-wise sirf 30 aur 90 din pe test hua, ${H} din pe nahi`;
+  const note=`<p class="roi-note"><b>Ye kaise ginta hai:</b> har country ka apna installs-per-$ (CPI) pichhle ${(pl.weeks||[]).length} complete hafton (${E(wk)}) ke Google Ads country data se. Kisi country ka spend badhe to uska CPI bhi badhta hai: spend 2× → CPI ×${Math.pow(2,e).toFixed(2)} (e ${e.toFixed(2)}, sab apps ke ${N(pl.en)} country-blocks se measured; raise aur cut dono pe ek hi e — alag alag back-test me kharab nikla). Back-test: jab har hafte ka asli country-wise spend pata ho, paid installs ka andaza isse behtar aata hai (30 din: older half ke zyadatar apps pe behtar). ${own?`Revenue per $ (${H} din) ${strong?'har country ka apna':'har country ka apna nikala, par abhi kisi country ka spend itna nahi ki uska apna data aadhe se zyada gine — sab "Mostly app avg", values lagbhag app ke average jitni'}: GA4 ke paid users (Google Ads campaign wale) ki us country ki asli kamai ${H} din tak ÷ us country ka Google Ads spend, ${E(rq.n)} complete install hafton (${E(rq.w)}) se. Kam spend wali country app ke average ki taraf kheechi: Source ka % = value me us country ke apne data ka hissa (zyada spend = zyada), baaki app ka average; 50% se kam = "Mostly app avg". "Pooled" = jin countries ka GA4 me apna slot nahi (ya un hafton me nahi tha), sab milake ek value. Aaj ke plan pe total bilkul upar wale forecast jitna. Back-test (pehle na dekhe hafte, asli country spend ke saath): sab apps me zyadatar pe ek-value se behtar${bt?`; is app pe ${btT}`:''}. Isliye spend ek country se doosri me le jaane pe installs aur revenue ${strong?'dono badalte hain':'(thoda) dono badalte hain'}.`
+      :`Revenue per $ (${H} din) har country ke liye same — upar wale forecast ka apna (aaj ke plan pe total bilkul forecast jitna). ${why}; ${ownH.length?`${ownH.join(' / ')} din chip pe har country ka apna dikhta hai.`:'jab GA4 paid hafte poore honge aur is app ka back-test jeetega, 30 / 90 din pe har country ka apna dikhega.'} Isliye yahan spend ek country se doosri me le jaane pe installs badalte hain, revenue per $ nahi.`}</p>`
     +`<p class="roi-note"><b>Seemayein:</b> ⚠️ wali country measured spend range (pichhle hafton ka har hafte ka spend/day + aaj ka) ke bahar — wahan ka andaza data se nahi. Agla $ kitna laayega (marginal ROI) ROI forms me range ke roop me hai; yahan nahi — β upar se lagane pe back-test haara (zyadatar apps pe kharab). Upar wala forecast is planner se nahi badalta (sirf slider se).</p>`
     +(warn.length?`<p class="roi-note roi-wt">⚠️ Measured range ke bahar: ${warn.join(' · ')}</p>`:'');
   return `<div class="roi-card" id="roi-plan"><div class="roi-ct"><h3>💸 Budget by country</h3><span class="roi-note">−/+ = us country ka spend 10% · Keep total on = baaki countries se adjust</span></div>${ctl}${tiles}${tb}${note}</div>`; }
@@ -7178,7 +7192,7 @@ function fcGx(p,fp){ if(!p||p.engine!=='vd') return ''; const pc=v=>ok(v)?Math.r
       +`Isme se <b>${pc(m)}</b> kamai aur <b>${pc(um)}</b> users ab GA4 ke late country cells pe <b>measured</b> hain (har country apna curve); baaki <b>carried</b> — 61–90 din wala country standing aage chalaya. `
       +(on?'Model me <b>on</b> — is app ka back-test isse behtar hua.'
         :uon?'Model me <b>users ke liye on</b> — is app ka back-test isse behtar hua; kamai (revenue) ka standing abhi carried hi hai.'
-        :held('gc')?'Model me abhi <b>off</b> (sab apps me) — naye, pehle na dekhe back-test me abhi sabit nahi hua ki isse forecast behtar hota hai; GA4 backfill pura hone par dobara test hoga.'
+        :held('gc')?'Model me abhi <b>off</b> (sab apps me) — GA4 backfill ke baad naye, pehle na dekhe back-test me dobara test hua: kuch apps pe behtar, kuch pe kharab — sabit nahi hua ki isse forecast behtar hota hai. Jin apps ka GA4 purana data abhi poora nahi, unke liye data badhne par phir test hoga.'
         :!tried('gc')?'Back-test ne abhi ise check nahi kiya — agle tune me hoga.'
         :(m>0||um>0)?'Model me abhi <b>off</b> — is app ka back-test isse abhi behtar nahi hua; roz dobara check hota hai.'
         :'GA4 ka purana data abhi aa raha hai (backfill) — weeks pure hote hi back-test check karega.')+`</p>`; }
@@ -7186,7 +7200,7 @@ function fcGx(p,fp){ if(!p||p.engine!=='vd') return ''; const pc=v=>ok(v)?Math.r
     h+=`<p class="roi-note" data-fc-pc="1"><b>New installs, paid vs organic:</b> ek paid install pehle 30 din me organic se <b>×${x.toFixed(2)}</b> kamata hai — `
       +(p.nvsrc==='cp'?'GA4 ke paid users (Google Ads campaign wale, har country alag) se <b>measured</b>.'
         :'Google Ads install count se andaaza (purana tareeka)'+(p.pc?''
-          :held('pc')?' — GA4 paid cells wala tareeka naye, pehle na dekhe back-test me abhi sabit nahi hua, isliye sab apps me off'
+          :held('pc')?' — GA4 paid cells wala tareeka backfill ke baad naye, pehle na dekhe back-test me dobara test hua: kuch apps pe behtar, kuch pe kaafi kharab — sabit nahi hua, isliye sab apps me off'
           :!tried('pc')?' — GA4 paid cells: back-test ne abhi check nahi kiya, agle tune me hoga'
           :' — GA4 paid cells abhi day 30 tak poore nahi, ya back-test me behtar nahi')+'.')+`</p>`; }
   return h; }

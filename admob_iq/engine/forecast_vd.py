@@ -32,15 +32,20 @@ newest GA4 day ≤ T − lag (GA4 lands `glag` days after AdMob, measured per ap
   DAU the same mix of users; uninstalls from forecast.uninstall_curve (unchanged).
   The "Budget by country" planner (cs_plan): today's spend per country, its installs per $ (the Google Ads country
   weeks, the CPI rising with a country's spend: the country model, which does win given a known country plan) and its
-  measured weekly spend range; its revenue per $ is the forecast's own, the same for every country (each country's
-  own curve did not win the back-test).
+  measured weekly spend range; its revenue per $ at 30 / 90 days is each country's own, measured from GA4's paid
+  cells (its paid users' revenue ÷ its spend — won the planner's back-test across apps, 16 Oct), scaled so today's
+  plan is the forecast's own total, at a horizon only where it also wins the app's own back-test (cs_bt, every build);
+  else, and past 90 days, one value for every country (not testable yet).
 
 GA4's install-day extension (IDAY_EXT: c2 / cp cells, the d2 ledger; still back-filling, so its coverage grows daily) —
 two switches (a cell is used only when every activity day of it was read, so an origin without one is exactly the model
 without them). Both are HELD OFF for every app (GRID): tuned per app they were chosen in-sample from a handful of
 back-test origins and did not win out of sample (lab, 15 Oct: no better than a tie across apps, and a per-app on / off
-decided on older origins did not hold on the newest). The code, the "why" and _moves stay: they go back into GRID only
-after the post-backfill out-of-sample re-run shows a win.
+decided on older origins did not hold on the newest). Re-tested after the backfill (16 Oct, lab 12, the live engine):
+on for every app neither won (gc worse on most apps, pc better on some and far worse on others), and a per-app gate
+— decided on the older origins only, walked forward origin by origin — did not hold either (gc a coin flip across
+apps, pc worse on most apps it turned on). The code, the "why" and _moves stay for the next re-test as the GA4
+coverage grows: they go back into GRID only when one wins out of sample.
   gc 2  every country's own users past day 90 (at 120 / 180 / 270 / 365) from the late cells, each shrunk toward the
         country's own standing at the lag before (its installs n ÷ (n + CKC)) — 0: the lag-90 standing carried.
         (Lab: on the cells themselves a newer week's country shares of users past day 90 mostly came closer.)
@@ -1843,16 +1848,10 @@ def _pudays(n, u):
     return out
 
 
-def _paid_week(app, W, zz):
-    """Install week W's slots {k: [n, n paid, revenue[11], paid revenue[11], user-days[11], paid user-days[11]]} — all
-    installs from the legacy cells (to day 90) and c2 (after), the paid ones from cp (LB bands / LL lags); a slot put
-    into ZZ for any day of the week's windows (cset_since, xs.since c2 / cp) is folded into ZZ, n with it (dropped
-    without a ZZ); the "gap" rows are left out (no installs)."""
+def _paid_bad(app, W):
+    """The slots (keys) of install week W put into ZZ for some day of the week's windows (cset_since, xs.since c2 /
+    cp): _paid_week folds their cells into ZZ, and the planner's cs_rpd moves their Google Ads spend there with them."""
     ida = app.get("ida") or {}
-    ws = W.isoformat()
-    c = (app.get("cty") or {}).get(W) or {}
-    c2w = (ida.get("c2") or {}).get(ws) or {}
-    cpw = (ida.get("cp") or {}).get(ws) or {}
     cset = ida.get("cset") or []
     lo, hi = W, W + timedelta(days=6 + 427)
     bad = set()
@@ -1864,6 +1863,20 @@ def _paid_week(app, W, zz):
         for k, rr in _xsince(app, key).items():
             if any(a <= hi and b >= lo for a, b in rr):
                 bad.add(k)
+    return bad
+
+
+def _paid_week(app, W, zz):
+    """Install week W's slots {k: [n, n paid, revenue[11], paid revenue[11], user-days[11], paid user-days[11]]} — all
+    installs from the legacy cells (to day 90) and c2 (after), the paid ones from cp (LB bands / LL lags); a slot put
+    into ZZ for any day of the week's windows (_paid_bad) is folded into ZZ, n with it (dropped without a ZZ); the
+    "gap" rows are left out (no installs)."""
+    ida = app.get("ida") or {}
+    ws = W.isoformat()
+    c = (app.get("cty") or {}).get(W) or {}
+    c2w = (ida.get("c2") or {}).get(ws) or {}
+    cpw = (ida.get("cp") or {}).get(ws) or {}
+    bad = _paid_bad(app, W)
     raw = {}
     for k in set(c) | set(c2w) | set(cpw):
         if k == "gap":
@@ -2607,25 +2620,189 @@ def _cs_paid(cs, T, spend, h, per_usd, plan=None):
 
 
 CS_H = (30, 90, 180)
+# each planner row's own revenue per $ (cs_rpd) — measured from GA4's paid cells (cp: the Google Ads campaign users'
+# own ad revenue by install week × country) ÷ the row's Google Ads spend in the same install weeks; won out of sample
+# across apps (16 Oct, the planner's back-test: with each week's real country spend, its revenue split across countries
+# came closer than one revenue per $ for every country, on most apps, at 30 and 90 days) — and an app shows them at a
+# horizon only when they also win ITS OWN back-test there (cs_bt, from data known at T; else one value). Past 90 days
+# not testable yet (too few install weeks with the paid cells complete to 180 days AND Google Ads country weeks): one
+# revenue per $ there.
+CS_RH = {30: 5, 90: 7}         # the horizons with a country's own revenue per $ → the last cp band (LB) inside them
+CS_RK = 1000.0                 # a row's measured revenue per $ trusted S ÷ (S + CS_RK) (S: its USD in those weeks; else
+                               # toward the app's own) — chosen on the older half of the back-test (lab 12)
+CS_NF = 4                      # cs_bt: an origin's test = its next CS_NF install weeks, all complete to H by T − glag
+CS_BTN = 4                     # … an app's own values at H only with ≥ CS_BTN such origins, more of them better than
+                               # worse and a lower mean error (else one revenue per $ there)
+
+
+def cs_groups(share):
+    """The planner's rows from {cc: spend (or share)}: the top CS_TOP countries (XX / ZZ never one of them) + "OT" =
+    every other one → [(row, [cc])]."""
+    order = sorted((k for k, v in share.items() if v > 0), key=lambda k: (-share[k], k))
+    top = [k for k in order if k not in ("XX", "ZZ")][:CS_TOP]
+    rest = [k for k in order if k not in top]
+    return [(k, [k]) for k in top] + ([("OT", rest)] if rest else [])
+
+
+def _cs_week(v, W, zz, own, bend):
+    """Install week W per planner key (an own row's country, or None = the pool): [its paid users' GA4 ad revenue to
+    the cp band bend, its Google Ads USD], + the week's paid installs. A slot folded into ZZ that week (_paid_bad: its
+    cells went into ZZ) has its spend in the pool too, with its revenue (dropped with its cells without a ZZ)."""
+    ida = v.get("ida") or {}
+    cset = ida.get("cset") or []
+    pos = {cc: str(i) for i, cc in enumerate(cset)}
+    memo = v.setdefault("_fv_csw", {})                # (kept in the view: cs_bt reads a week at many origins)
+    if (W, zz) not in memo:
+        memo[(W, zz)] = (_paid_bad(v, W), _paid_week(v, W, zz))
+    bad, pw = memo[(W, zz)]
+    out, npd = {}, 0.0
+    for k, x in pw.items():
+        cc = cset[int(k)] if k.isdigit() and int(k) < len(cset) else None
+        a = out.setdefault(cc if cc in own else None, [0.0, 0.0])
+        a[0] += sum(x[3][:bend + 1])
+        npd += x[1]
+    for cc, (c, _) in ((v.get("geo") or {}).get(W) or {}).items():
+        folded = cc in pos and pos[cc] in bad
+        if folded and zz is None:
+            continue
+        a = out.setdefault(cc if cc in own and not folded else None, [0.0, 0.0])
+        a[1] += c
+    return out, npd
+
+
+def cs_rpd(app, T, groups, v=None, hs=None):
+    """Each planner row's own revenue per $ at the horizons CS_RH (hs: only these), from data known at T (GA4 to
+    T − glag): the newest NWK install weeks with paid cells, read for every activity day to that age, and Google Ads
+    country spend → per row R (its paid users' GA4 ad revenue to that age) ÷ S (its Ads spend in those weeks), shrunk
+    toward the app's ΣR ÷ ΣS by its trust S ÷ (S + CS_RK). groups: [(row, [cc])] (cs_groups); a row of one country
+    with a GA4 slot of its own and Ads spend of its own in those weeks is measured ("cp"); every other country (no
+    slot, ZZ, XX, the Other row, a slot folded into ZZ in a week: its spend there) is measured together and each such
+    row takes that pooled value ("pool"). v: the app as a LATER origin's lag view has it (cs_bt) — the same values:
+    every cell and ledger day read is ≤ T − glag. → {H: {"rho": [per row], "src": [per row], "t": [its trust; a pool
+    row the pool's], "pv": the pooled value, "w": [weeks], "np": paid installs}} (only ratios between rows mean
+    anything: GA4 micros per USD); an H without ≥ 2 such weeks and PMIN paid installs is left out (one value there)."""
+    glag = app.get("glag") or 0
+    v = v if v is not None else lag_view(app, T, glag)
+    TG = T - timedelta(days=glag)
+    ida = v.get("ida") or {}
+    cset = ida.get("cset") or []
+    zz = str(cset.index("ZZ")) if "ZZ" in cset else None
+    geo = v.get("geo") or {}
+    own = {name for name, ks in groups if len(ks) == 1 and ks[0] == name and name in cset and name != "ZZ"}
+    fo = _xfold(v, "cpst")
+    cpw = sorted(date.fromisoformat(w) for w in (ida.get("cp") or {}))
+    out = {}
+    for H, bend in CS_RH.items():
+        if hs is not None and H not in hs:
+            continue
+        weeks = [W for W in cpw if W + timedelta(days=6 + H) <= TG and _cov(fo, W, W + timedelta(days=6 + H))
+                 and sum(c for c, _ in (geo.get(W) or {}).values()) > 0][-NWK:]
+        if len(weeks) < 2:
+            continue
+        R, S, npd = {}, {}, 0.0
+        for W in weeks:
+            acc, n = _cs_week(v, W, zz, own, bend)
+            npd += n
+            for r, (a, b) in acc.items():
+                R[r] = R.get(r, 0.0) + a
+                S[r] = S.get(r, 0.0) + b
+        for r in [r for r in R if r is not None and S.get(r, 0.0) <= 0]:     # no spend of its own left: the pool's
+            R[None] = R.get(None, 0.0) + R.pop(r)
+        tR, tS = sum(R.values()), sum(S.values())
+        if npd < PMIN or tR <= 0 or tS <= 0:
+            continue
+        ra = tR / tS
+
+        def val(r, R=R, S=S, ra=ra):
+            s_ = S.get(r, 0.0)
+            return ra if s_ <= 0 else ra + (R.get(r, 0.0) / s_ - ra) * s_ / (s_ + CS_RK)
+        keys = [name if name in own and S.get(name, 0.0) > 0 else None for name, _ in groups]
+        out[H] = {"rho": [val(r) for r in keys], "src": ["pool" if r is None else "cp" for r in keys],
+                  "t": [S.get(r, 0.0) / (S.get(r, 0.0) + CS_RK) for r in keys], "pv": val(None),
+                  "w": [W.isoformat() for W in weeks], "np": npd}
+    return out
+
+
+def cs_bt(app, T, H, v=None):
+    """The rows' own revenue per $ at H on THIS app's back-test, from data known at T (GA4 to T − glag; v its lag view):
+    at every weekly origin T' = T − 7k whose next CS_NF install weeks (with Google Ads country weeks) have their paid
+    cells complete to H by T − glag, the rows as the planner had them at T' (cs_groups of its training weeks' shares)
+    with their own values (cs_rpd at T') vs one value for every row, on those weeks' REAL spend and REAL paid users'
+    GA4 revenue per row (the same mapping as cs_rpd) — the split only, both anchored to the actual total: error
+    Σ|P − A| ÷ ΣA (the lab-12 scorer). → [origins, own better, own worse, mean error one value, mean error own]."""
+    glag = app.get("glag") or 0
+    v = v if v is not None else lag_view(app, T, glag)
+    TG = T - timedelta(days=glag)
+    ida = v.get("ida") or {}
+    cset = ida.get("cset") or []
+    zz = str(cset.index("ZZ")) if "ZZ" in cset else None
+    geo = v.get("geo") or {}
+    fo = _xfold(v, "cpst")
+    cps = set(ida.get("cp") or {})
+    if not cps or not geo:
+        return [0, 0, 0, None, None]
+    first, gw, bend = date.fromisoformat(min(cps)), sorted(geo), CS_RH[H]
+    res = []
+    k = -(-(glag + 7 * CS_NF + 6 + H) // 7)          # the newest origin whose test weeks can be complete by T − glag
+    while T - timedelta(days=7 * k + glag + 6 + H) >= first:          # (else no training week complete at T')
+        To = T - timedelta(days=7 * k)
+        k += 1
+        cm = cs_model(geo, To)
+        if cm is None:
+            continue
+        g = cs_groups(cm["share"])
+        q = cs_rpd(app, To, g, v, (H,)).get(H)
+        if not q:
+            continue
+        tw = [W for W in gw if To < W <= To + timedelta(days=7 * CS_NF)]
+        if len(tw) < CS_NF or not all(W.isoformat() in cps and W + timedelta(days=6 + H) <= TG
+                                      and _cov(fo, W, W + timedelta(days=6 + H)) for W in tw):
+            continue
+        val = {name: x for (name, _), x, s in zip(g, q["rho"], q["src"]) if s == "cp"}
+        A, nA = {}, 0.0
+        for W in tw:
+            acc, n = _cs_week(v, W, zz, set(val), bend)
+            nA += n
+            for r, (a, b) in acc.items():
+                e = A.setdefault(r, [0.0, 0.0])
+                e[0] += a
+                e[1] += b
+        ta, ts = sum(a for a, _ in A.values()), sum(b for _, b in A.values())
+        if nA < PMIN or ta <= 0 or ts <= 0:
+            continue
+
+        def err(w, A=A, ta=ta):
+            P = {r: b * w(r) for r, (_, b) in A.items()}
+            tp = sum(P.values())
+            return sum(abs(P[r] * ta / tp - a) for r, (a, _) in A.items()) / ta if tp > 0 else None
+        ef, ec = err(lambda r: 1.0), err(lambda r, val=val, pv=q["pv"]: val.get(r, pv))
+        if ef is not None and ec is not None:
+            res.append((ef, ec))
+    n = len(res)
+    return [n, sum(1 for f, c in res if c < f - 1e-12), sum(1 for f, c in res if c > f + 1e-12),
+            sum(f for f, _ in res) / n if n else None, sum(c for _, c in res) / n if n else None]
+
+
+def cs_won(bt):
+    """cs_bt's verdict: ≥ CS_BTN origins, more of them better than worse, and a lower mean error."""
+    return bool(bt) and bt[0] >= CS_BTN and bt[1] > bt[2] and bt[4] < bt[3]
 
 
 def cs_plan(app, st, org, per_usd, base, plan):
     """The "Budget by country" planner's inputs at the live origin (plan = today's spend × the training weeks' shares;
-    an app spending < CS_MIN a day: none): per row (the top CS_TOP countries by today's spend + "OT" = every other one)
-    its spend a day s0, the training level s̄ (scaled to today's: the CPI moves from today's), ρ (installs per $ =
-    per_usd × ρ at s̄) and the weekly spend range measured (lo / hi, USD a day). Its revenue per $ is the forecast's own
-    paid revenue per $, the same for every row (forecast_build.plan_out): each country's own value per $ (its own GA4
-    curve) did not win out of sample (lab 8: worse on most apps of the older half). fc: the forecast itself follows
-    the country model (STRUCT cs). None without the country model."""
+    an app spending < CS_MIN a day: none): per row (cs_groups: the top CS_TOP countries by today's spend + "OT" = every
+    other one) its spend a day s0, the training level s̄ (scaled to today's: the CPI moves from today's), ρ (installs
+    per $ = per_usd × ρ at s̄), the weekly spend range measured (lo / hi, USD a day); "rpd" each row's own revenue per
+    $ at 30 / 90 days (cs_rpd: its paid users' GA4 revenue ÷ its spend) at the horizons where they win this app's own
+    back-test ("rbt" {H: cs_bt} for every horizon cs_rpd measured) — forecast_build.plan_out scales them to the
+    forecast's own paid revenue at today's plan (past 90 days, or without them: one revenue per $ for every row). fc:
+    the forecast itself follows the country model (STRUCT cs). None without the country model."""
     cs = st.get("cs")
     if not cs or not plan or base < CS_MIN:
         return None
     T, cm = st["T"], cs["cm"]
     rho, sbar = cm["rho"], cm["sbar"]
-    order = sorted((k for k, v in plan.items() if v > 0), key=lambda k: (-plan[k], k))
-    top = [k for k in order if k not in ("XX", "ZZ")][:CS_TOP]
-    rest = [k for k in order if k not in top]
-    groups = [(k, [k]) for k in top] + ([("OT", rest)] if rest else [])
+    groups = cs_groups(plan)
     rows = []
     weeks = sorted(W for W in cs["geo"] if W + timedelta(days=6) <= T)
     for name, ks in groups:
@@ -2635,9 +2812,15 @@ def cs_plan(app, st, org, per_usd, base, plan):
         rows.append({"cc": name, "s0": s0, "sb": sum(sbar.get(k, 0.0) for k in ks),
                      "rho": sum(plan[k] * rho.get(k, 1.0) for k in ks) / s0,
                      "lo": min(lv) if lv else None, "hi": max(lv) if lv else None})
+    try:                                              # only the rows' own revenue per $ would miss it (→ one value)
+        rpd = cs_rpd(app, T, groups)
+        bt = {H: cs_bt(app, T, H) for H in rpd}
+    except Exception:
+        rpd, bt = {}, {}
     return {"v": 2, "T": T.isoformat(), "weeks": [W.isoformat() for W in cm["weeks"]], "e": cs["e"], "en": cs["en"],
             "pu": per_usd, "org": org, "s": base, "fc": 1 if st["p"].get("cs") else 0, "rows": rows,
-            "n0": _cs_paid(cs, T, {}, 1, per_usd, plan)[0]}
+            "n0": _cs_paid(cs, T, {}, 1, per_usd, plan)[0],
+            "rpd": {H: q for H, q in rpd.items() if cs_won(bt.get(H))}, "rbt": bt}
 
 
 def _calendar(app, v, T, p):

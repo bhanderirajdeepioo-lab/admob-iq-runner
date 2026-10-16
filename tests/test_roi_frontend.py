@@ -88,6 +88,10 @@ def test_forecast_view(out):
     # 💸 Budget by country: today's plan = the forecast; Keep total; out-of-range warning; owner-only; the slider
     assert out["pl_card"] and out["pl_keep"] and out["pl_warn"] and out["pl_nokeep"]
     assert out["pl_dev"] and out["pl_none"] and out["pl_slider"] and out["pl_h"] and out["pl_inr"]
+    # … each row's own revenue per $ (GA4 paid cells) at 30 / 90 days with its source, one value past 90
+    assert out["pl_own"] and out["pl_own_move"] and out["pl_own_180"] and out["pl_own_72"]
+    # … its trust per row ("Mostly app avg" under half its own data) and this app's own back-test (waiting / lost)
+    assert out["pl_own_weak"] and out["pl_own_weak2"] and out["pl_bt"]
     # 🔎 "Agle N din": the verified horizon's chips (fixed widths, N max, 365 locked with its day), the note, tiles,
     # band, users card, planner and accuracy at the chosen horizon; a young app / no horizon / a full year
     assert out["hz_chips"] and out["hz_note"] and out["hz_tiles"] and out["hz_users"] and out["hz_plan"]

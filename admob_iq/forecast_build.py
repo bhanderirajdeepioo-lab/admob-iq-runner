@@ -25,8 +25,10 @@ newest LOG_KEEP), and every day's own forecast of the next 30 / 90 / 180 days (+
 days have happened the page shows that live error too (the real check, beyond the back-tests).
 Engine vd with the app's Google Ads country weeks (roi_build hands them over, + every store's country block pairs once
 per build): the page's "Budget by country" planner (fc.plan: each country's installs per $ and CPI rise; revenue per $
-the forecast's own) — the forecast's own paid installs stay spend × per_usd (STRUCT cs 0: the country model did not win
-there at the shares a forecast can know).
+at 30 / 90 days each country's own from GA4's paid cells where it won the app's own back-test, scaled to the
+forecast's own total; past 90 one value) — the
+forecast's own paid installs stay spend × per_usd (STRUCT cs 0: the country model did not win there at the shares a
+forecast can know).
 📅 The eCPM calendar (build_static hands its seasons over through roi_build.start(cal=…)): engine vd's STRUCT cal decides
 whether the forecast uses it (held off: it did not win the Nov–Feb back-test); the page gets the coming event weeks
 with their measured effects either way (fc["fcal"]), Ramadan / Diwali measured once (shown, never in the forecast), and
@@ -459,12 +461,17 @@ def drivers(app, rows, ida, cty_rows, rev_cty=None):
 # ── the page's series (a full model run and a kept one alike) ───────────────────────────────────────────────────────
 def plan_out(pl, f, fac, hs=None):
     """The engine's planner inputs (forecast_vd.cs_plan) → the page's "Budget by country" card: per row its spend, its
-    installs per $ (ppu) at the training level sb and its measured spend range; its revenue per $ of spend within
-    30 / 90 / 180 days (r) = the forecast's own paid-install revenue (bias-corrected, at today's spend) ÷ today's spend —
-    the SAME for every row (each country's own value per $ did not win the back-test: lab 8, worse on most apps of the
-    older half) and at any spend (revenue follows the money: the ROI forms' β on top did not win either); + the old users'
-    and organic installs' revenue (corrected) the plan does not move. fc_cs: the forecast's own paid installs follow
-    the country model too (STRUCT cs 1) — the page's spend slider then moves installs × m^(1 − e), else × m."""
+    installs per $ (ppu) at the training level sb and its measured spend range; its revenue per $ of spend within each
+    horizon (r) — at 30 / 90 days, where they won this app's own back-test, each row's own (cs_rpd: its paid users' GA4
+    revenue ÷ its spend, "rs" "cp" its own GA4 slot / "pool" the countries without one, measured together; "rt" how
+    much of it is the row's own data, S ÷ (S + CS_RK), the rest the app's average), scaled so today's plan gives the
+    forecast's own paid-install revenue (bias-corrected, at today's spend) exactly; past 90 days (or without enough
+    paid cells, or where the app's own back-test did not win) the forecast's own ÷ today's spend, the SAME for every
+    row ("rs" / "rt" None); at any spend (revenue follows the money: the ROI forms' β on top did not win the back-test)
+    + the old users' and organic installs' revenue (corrected) the plan does not move; "rw" the install weeks (first
+    Monday … last Sunday) and paid installs each horizon's own values come from; "rbt" {H: n origins, b better, w worse,
+    need} the app's own back-test at every horizon it ran (cs_bt). fc_cs: the forecast's own paid installs follow the
+    country model too (STRUCT cs 1) — the page's spend slider then moves installs × m^(1 − e), else × m."""
     if not pl or not pl.get("rows") or not pl.get("s"):
         return None
 
@@ -472,13 +479,33 @@ def plan_out(pl, f, fac, hs=None):
         return sum(v * fac[i] for i, v in enumerate(f["rev"][k][:hz]))
     hs = [h for h in _anchors(hs) if h <= len(fac)] if hs else VD.CS_H     # (+ the page's chips: its horizons)
     paid = [csum("paid", hz) for hz in hs]
-    r = [_r(v / pl["s"], 6) for v in paid]
+    s0 = [x["s0"] for x in pl["rows"]]
+    rpd = pl.get("rpd") or {}
+    rs, rr, rt = [], [], []                              # per horizon: each row's source, revenue per $ and trust
+    for hz, v in zip(hs, paid):
+        q = rpd.get(hz)
+        mix = sum(a * b for a, b in zip(s0, q["rho"])) / pl["s"] if q and len(q["rho"]) == len(s0) else 0.0
+        if mix > 0:
+            rr.append([_r(v / pl["s"] * x / mix, 6) for x in q["rho"]])
+            rs.append(list(q["src"]))
+            rt.append([_r(x, 3) for x in (q.get("t") or [None] * len(s0))])
+        else:
+            rr.append([_r(v / pl["s"], 6)] * len(s0))
+            rs.append([None] * len(s0))
+            rt.append([None] * len(s0))
     rows = [{"cc": x["cc"], "s0": _r(x["s0"], 4), "sb": _r(x["sb"], 4), "ppu": _r(pl["pu"] * x["rho"], 6),
-             "lo": _r(x["lo"], 4), "hi": _r(x["hi"], 4), "r": list(r)} for x in pl["rows"]]
+             "lo": _r(x["lo"], 4), "hi": _r(x["hi"], 4), "r": [rr[j][i] for j in range(len(hs))],
+             "rs": [rs[j][i] for j in range(len(hs))], "rt": [rt[j][i] for j in range(len(hs))]}
+            for i, x in enumerate(pl["rows"])]
+    rw = {str(hz): {"w": [q["w"][0], (date.fromisoformat(q["w"][-1]) + timedelta(days=6)).isoformat()],
+                    "n": len(q["w"]), "np": int(round(q["np"]))}
+          for hz, q in sorted(rpd.items()) if hz in hs and q.get("w")}
+    rbt = {str(hz): {"n": b[0], "b": b[1], "w": b[2], "need": VD.CS_BTN}
+           for hz, b in sorted((pl.get("rbt") or {}).items()) if hz in hs and b}
     return {"v": 2, "weeks": pl["weeks"], "e": _r(pl["e"], 4), "en": pl["en"], "s": _r(pl["s"], 4),
             "org": _r(pl["org"], 2), "n0": _r(pl["n0"], 2), "fc_cs": 1 if pl.get("fc") else 0,
             "old": [_r(csum("old", hz), 2) for hz in hs], "orgr": [_r(csum("org", hz), 2) for hz in hs],
-            "paid": [_r(v, 2) for v in paid], "h": list(hs), "rows": rows}
+            "paid": [_r(v, 2) for v in paid], "h": list(hs), "rows": rows, "rw": rw, "rbt": rbt}
 
 
 def weekly(ser, d0, W, hs=None):

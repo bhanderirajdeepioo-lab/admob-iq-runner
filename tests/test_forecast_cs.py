@@ -5,7 +5,10 @@ the CPI). Checked: the pooled e (the slope a made-up CPI ∝ spend^e gives back,
 weeks' model (stale / partial data → none), the forecast untouched by country data with cs 0, the paid installs with
 cs 1 (the training mix and level = the engine's per_usd × spend exactly; a raise), the revenue NOT moved by any of it,
 the back-test never reading a future week's country shares, the planner (rows by spend, today's spend buying per_usd ×
-spend, one revenue per $ for every country = the forecast's own) and the build's inputs. No real data."""
+spend, one revenue per $ for every country = the forecast's own without GA4's paid cells; with them each row's own at
+30 / 90 days — its paid users' revenue ÷ its spend with its trust, a slot folded into ZZ taking its spend to the pool,
+scaled to the forecast's total, never reading a cell after T − glag — only where it wins the app's own back-test: won,
+lost, not testable yet) and the build's inputs. No real data."""
 import math
 from datetime import date, timedelta
 
@@ -15,7 +18,7 @@ from datetime import datetime, timezone
 from admob_iq import forecast_build as fb
 from admob_iq.engine import forecast as F
 from admob_iq.engine import forecast_vd as VD
-from tests.test_forecast_engine import LAST, make, with_uninstalls
+from tests.test_forecast_engine import D0, LAST, make, with_uninstalls
 from tests.test_forecast_vd import with_ga4
 
 T0 = date(2025, 9, 1)
@@ -227,3 +230,170 @@ def test_the_build_step_carries_the_planner(tmp_path):
                        cs_pairs=pairs)["plan"] and run2.kept == 1 and run2.plans == 1
     assert fb.app_step(fb.start(data, now, Clock()), "a~1", "k1", rows, {"S": LAST}, ida, life, LAST.isoformat(),
                        [])["plan"] is None
+
+
+VPI = {"AA": (0.2, 0.1), "BB": (1.0, 0.5)}   # a paid install's GA4 revenue to day 30 and on days 31–90 (USD)
+
+
+def with_paid_cells(app, cset=("AA", "BB", "ZZ"), read0=D0, upto=LAST, scale=None):
+    """GA4's paid cells for the made-up Google Ads countries: each install week's paid installs = its Ads downloads,
+    each earning VPI[cc] (to day 30 in bands 0 and 5, days 31–90 in bands 6 / 7, + as much again past 90) in GA4
+    micros; a country without a slot in cset goes into ZZ; the paid ledger (cpst) read for every day read0 … upto.
+    scale {Monday: ×}: a week's revenue × (look-ahead checks)."""
+    ida = app.setdefault("ida", {})
+    ida["cset"] = list(cset)
+    zz = str(cset.index("ZZ"))
+    ida["d2"], ida["cp"] = {}, {}
+    D = read0
+    while D <= upto:
+        ida["d2"][D.isoformat()] = {"cpst": "ok", "cpn": 0.5}
+        D += timedelta(days=1)
+    for W, cs in app["geo"].items():
+        k = (scale or {}).get(W, 1.0)
+        for cc, (usd, dl) in cs.items():
+            v30, v90 = VPI[cc]
+            slot = str(cset.index(cc)) if cc in cset else zz
+            q = ida["cp"].setdefault(W.isoformat(), {}).setdefault(slot, {"n": 0, "r": [0.0] * 11, "u": [0.0] * 11})
+            q["n"] += dl
+            for b, f in ((0, 0.4 * v30), (5, 0.6 * v30), (6, 0.5 * v90), (7, 0.5 * v90), (8, v90)):
+                q["r"][b] += dl * f * 1e6 * k
+    return app
+
+
+def _planner_app(**kw):
+    app = with_ga4(make())
+    for i in range(7):
+        app["days"][T0 - timedelta(days=i)]["sp"] = 600.0
+    return with_paid_cells(with_geo(app), **kw)
+
+
+G2 = [("AA", ["AA"]), ("BB", ["BB"])]
+
+
+def flipped(app, blk=10):
+    """The two countries' paid revenue per install swapped in every other block of blk install weeks (the newer weeks'
+    country values point the other way: their own revenue per $ loses this app's back-test)."""
+    f = VPI["BB"][0] / VPI["AA"][0]
+    for ws, cells in app["ida"]["cp"].items():
+        if ((date.fromisoformat(ws) - mon(D0)).days // (7 * blk)) % 2:
+            for k, m in (("0", f), ("1", 1 / f)):
+                if k in cells:
+                    cells[k]["r"] = [x * m for x in cells[k]["r"]]
+    return app
+
+
+def test_each_row_gets_its_own_revenue_per_dollar_from_the_paid_cells():
+    app = _planner_app()
+    q = VD.cs_rpd(app, T0, G2)
+    assert sorted(q) == [30, 90] and q[30]["src"] == ["cp", "cp"] and len(q[30]["w"]) == VD.NWK
+    # the newest NWK weeks complete to 30 days by T0 − glag: $300 + $200 a day, 750 + 250 paid installs a day
+    assert q[30]["w"][-1] == "2025-07-21" and abs(q[30]["np"] - VD.NWK * 7 * 1000) < 1e-6
+    S = {"AA": 300 * 7 * VD.NWK, "BB": 200 * 7 * VD.NWK}
+    for H, (aa, bb) in ((30, (0.2 * 750 / 300, 1.0 * 250 / 200)), (90, (0.3 * 750 / 300, 1.5 * 250 / 200))):
+        ra = (aa * S["AA"] + bb * S["BB"]) / (S["AA"] + S["BB"])
+        want = [ra + (x - ra) * S[c] / (S[c] + VD.CS_RK) for c, x in (("AA", aa), ("BB", bb))]
+        assert all(abs(g / (w * 1e6) - 1) < 1e-12 for g, w in zip(q[H]["rho"], want))   # (GA4 micros per USD)
+        assert q[H]["t"] == [S[c] / (S[c] + VD.CS_RK) for c in ("AA", "BB")]          # each row's own share of it
+    # the planner: this app's own back-test at 30 days won on every origin (each country's value is steady); at 90
+    # days no origin has its 4 test weeks complete by T0 − glag yet (the app is young) → one value there
+    f = VD.forecast(app, T0, {}, h=F.H)
+    pl = f["plan"]
+    b30, b90 = pl["rbt"][30], pl["rbt"][90]
+    assert b30[0] >= VD.CS_BTN and b30[1] == b30[0] and b30[2] == 0 and b30[4] < b30[3] and b90[0] == 0
+    assert pl["rpd"] == {30: q[30]}
+    fac = fb.corrected(f["rev"], {30: {"bias": 0.1}})
+    out = fb.plan_out(pl, f, fac)
+    for j, hz in enumerate(out["h"]):
+        paid = sum(v * fac[i] for i, v in enumerate(f["rev"]["paid"][:hz]))
+        assert abs(sum(x["s0"] * x["r"][j] for x in out["rows"]) / paid - 1) < 1e-5     # today's plan = the forecast
+        a, b = out["rows"]
+        if hz == 30:                                                      # the country that earns more per $ shows it
+            assert abs((b["r"][j] / a["r"][j]) / (q[hz]["rho"][1] / q[hz]["rho"][0]) - 1) < 1e-5
+            assert b["r"][j] > 2 * a["r"][j] and a["rs"][j] == b["rs"][j] == "cp"
+            assert [a["rt"][j], b["rt"][j]] == [round(x, 3) for x in q[30]["t"]]
+        else:                                          # 90: not testable on this app yet; past 90: not testable at all
+            assert a["r"][j] == b["r"][j] and a["rs"][j] is b["rs"][j] is a["rt"][j] is None
+    # the weeks: first Monday … the last week's Sunday
+    assert out["rw"] == {"30": {"w": [q[30]["w"][0], "2025-07-27"], "n": VD.NWK, "np": VD.NWK * 7 * 1000}}
+    assert out["rbt"] == {"30": {"n": b30[0], "b": b30[0], "w": 0, "need": VD.CS_BTN},
+                          "90": {"n": 0, "b": 0, "w": 0, "need": VD.CS_BTN}}
+    # four months on, 90 days has its own back-test too, and wins it
+    T1 = date(2025, 12, 1)
+    p1 = VD.forecast(_planner_app(), T1, {}, h=F.H)["plan"]
+    assert sorted(p1["rpd"]) == [30, 90] and all(VD.cs_won(p1["rbt"][H]) for H in (30, 90))
+
+
+def test_a_horizon_that_loses_the_apps_own_back_test_keeps_one_value():
+    assert not VD.cs_won(None) and not VD.cs_won([3, 3, 0, 0.5, 0.1])                     # too few origins
+    assert not VD.cs_won([6, 3, 3, 0.5, 0.1]) and not VD.cs_won([6, 4, 2, 0.1, 0.5])     # a tie / a higher error
+    assert VD.cs_won([4, 3, 1, 0.5, 0.1])
+    app = flipped(_planner_app())
+    bt = VD.cs_bt(app, T0, 30)
+    assert bt[0] >= VD.CS_BTN and bt[2] > bt[1] and bt[4] > bt[3]                    # worse on this app's newer weeks
+    pl = VD.forecast(app, T0, {}, h=F.H)["plan"]
+    assert pl["rpd"] == {} and pl["rbt"][30] == bt and VD.cs_rpd(app, T0, G2)[30]["src"] == ["cp", "cp"]
+    out = fb.plan_out(pl, VD.forecast(app, T0, {}, h=F.H), [1.0] * F.H)
+    assert all(x["rs"] == [None] * 3 and len(set(r["r"][0] for r in out["rows"])) == 1 for x in out["rows"])
+    assert out["rbt"]["30"] == {"n": bt[0], "b": bt[1], "w": bt[2], "need": VD.CS_BTN} and out["rw"] == {}
+
+
+def test_a_country_without_a_slot_takes_the_pooled_value_and_short_reads_keep_one_value():
+    q = VD.forecast(_planner_app(), T0, {}, h=30)["plan"]["rpd"]
+    p = VD.forecast(_planner_app(cset=("AA", "ZZ")), T0, {}, h=30)["plan"]["rpd"]
+    assert p[30]["src"] == ["cp", "pool"] and p[30]["rho"] == q[30]["rho"]    # BB alone in ZZ: the same money
+    assert p[30]["t"] == q[30]["t"] and p[30]["pv"] == p[30]["rho"][1]
+    # the paid ledger read only from 50 days before the GA4 day: two weeks complete to 30 days, none to 90 — measured,
+    # but no origin of this app's own back-test is complete yet → one value
+    app = _planner_app(read0=T0 - timedelta(days=55))
+    assert sorted(VD.cs_rpd(app, T0, G2)) == [30] and len(VD.cs_rpd(app, T0, G2)[30]["w"]) == 2
+    r = VD.forecast(app, T0, {}, h=F.H)
+    assert r["plan"]["rpd"] == {} and r["plan"]["rbt"][30][0] == 0
+    out = fb.plan_out(r["plan"], r, [1.0] * F.H)
+    a, b = out["rows"]
+    assert a["rs"] == [None] * 3 and a["r"] == b["r"] and out["rbt"]["30"]["n"] == 0
+    # under PMIN paid installs: none at all (one value everywhere)
+    s = _planner_app(read0=T0 - timedelta(days=55))
+    for W in s["ida"]["cp"].values():
+        for c in W.values():
+            c["n"] = 1
+    assert VD.cs_rpd(s, T0, G2) == {} and VD.forecast(s, T0, {}, h=30)["plan"]["rbt"] == {}
+
+
+def test_a_slot_folded_into_zz_takes_its_spend_to_the_pool_too():
+    # BB's GA4 slot added late: its cells went into ZZ for every week → its spend goes with them (the pool), and the
+    # row is the pool's — exactly as if BB never had a slot
+    app = _planner_app()
+    app["ida"]["cset_since"] = {"BB": [[D0.isoformat(), LAST.isoformat()]]}
+    q, p = VD.cs_rpd(app, T0, G2), VD.cs_rpd(_planner_app(cset=("AA", "ZZ")), T0, G2)
+    assert q[30]["src"] == ["cp", "pool"] and q[30]["rho"] == p[30]["rho"] and q[30]["t"] == p[30]["t"]
+    # folded only in the older training weeks (its range ends 20 Jun): BB keeps its own row, measured on its other weeks
+    # only (its trust from those), the folded weeks' money in the pool — its own value per $ unchanged
+    app = _planner_app()
+    app["ida"]["cset_since"] = {"BB": [["2025-06-01", "2025-06-20"]]}
+    W = [date.fromisoformat(w) for w in VD.cs_rpd(app, T0, G2)[30]["w"]]
+    folded = [x for x in W if x <= date(2025, 6, 20)]
+    assert 0 < len(folded) < len(W) and all("1" in VD._paid_bad(app, x) for x in folded)
+    q = VD.cs_rpd(app, T0, G2)[30]
+    sb = 200 * 7 * (len(W) - len(folded))
+    sa, sp = 300 * 7 * len(W), 200 * 7 * len(folded)
+    aa, bb = 0.2 * 750 / 300, 1.0 * 250 / 200
+    ra = (aa * sa + bb * (sb + sp)) / (sa + sb + sp)
+    assert q["src"] == ["cp", "cp"] and q["t"] == [sa / (sa + VD.CS_RK), sb / (sb + VD.CS_RK)]
+    assert abs(q["rho"][1] / ((ra + (bb - ra) * sb / (sb + VD.CS_RK)) * 1e6) - 1) < 1e-12
+    assert abs(q["pv"] / ((ra + (bb - ra) * sp / (sp + VD.CS_RK)) * 1e6) - 1) < 1e-12
+
+
+def test_the_rows_revenue_per_dollar_never_reads_after_the_ga4_day():
+    # every week whose 30 / 90-day cells end after T0 − glag earns 3× — and the ledger after it is all read: neither the
+    # rows' own values nor this app's own back-test move
+    cut = _planner_app(upto=T0 - timedelta(days=5))
+    base = VD.forecast(cut, T0, {}, h=30)["plan"]
+    late = {W: 3.0 for W in geo_of(make()) if W + timedelta(days=6 + 30) > T0 - timedelta(days=5)}
+    full = _planner_app(scale=late)
+    got = VD.forecast(full, T0, {}, h=30)["plan"]
+    assert got["rpd"] == base["rpd"] and got["rbt"] == base["rbt"] and base["rpd"][30]["src"] == ["cp", "cp"]
+    # cs_bt reads each older origin T' through the newer lag view: the same as T' read on its own
+    v = VD.lag_view(full, T0, full["glag"])
+    for k in (19, 25, 30):
+        To = T0 - timedelta(days=7 * k)
+        assert VD.cs_rpd(full, To, G2, v) == VD.cs_rpd(full, To, G2) == VD.cs_rpd(cut, To, G2)
