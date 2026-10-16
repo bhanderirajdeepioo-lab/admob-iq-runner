@@ -5000,7 +5000,7 @@ function hubRev(name){ const L=hubDay(), T=(DATA&&DATA.today_date)||''; const ax
   let e=0,i=0,ue=0; (DATA.placements||[]).forEach(p=>{ if(p.app!==name) return; (p.daily||[]).forEach(r=>{ if(r[0]===L){ e+=r[1]; i+=r[2]; } else if(ws.has(r[0])) ue+=r[1]; }); });
   return {day:L,rev:e/1e6,impr:i,usual:ax.length?ue/1e6/ax.length:null,n:ax.length}; }
 // the app's Google Ads spend on `day` and its usual (the same 7 days as hubRev, per day) — USD; null when ROAS is off
-function hubSpend(name){ if(!roasOn()) return null; const L=hubDay(), T=(DATA&&DATA.today_date)||'', dd=((DATA.roas.by_app||{})[name]||{}).daily||{};
+function hubSpend(name){ if(!roasOn()) return null; const L=hubDay(), T=(DATA&&DATA.today_date)||'', dd=roasDaily((DATA.roas.by_app||{})[name]);
   const ax=gAxis().filter(d=>d!==T&&d<L).slice(-7); let u=0; ax.forEach(d=>{ u+=+dd[d]||0; });
   return {y:(+dd[L]||0)/1e6,usual:ax.length?u/1e6/ax.length:null}; }
 function hubAct(name){ return ((DATA.active&&DATA.active.apps)||[]).find(x=>x&&x.app===name)||null; }
@@ -5163,7 +5163,7 @@ function dateWiseRows(dates,appName){
   const rev={}, spend={}, inst={}, nrev={}, d1={};
   fp.forEach(p=>(p.daily||[]).forEach(r=>{ if(dset.has(r[0]))rev[r[0]]=(rev[r[0]]||0)+r[1]; }));   // USD micros
   if(on) appsShown.forEach(x=>{ const e=by[x.name]||{};
-    const dd=e.daily||{};          for(const d in dd){ if(dset.has(d))spend[d]=(spend[d]||0)+dd[d]; }   // USD micros
+    const dd=roasDaily(e);         for(const d in dd){ if(dset.has(d))spend[d]=(spend[d]||0)+dd[d]; }   // USD micros
     const idl=e.installs_daily||{};for(const d in idl){if(dset.has(d))inst[d]=(inst[d]||0)+idl[d]; }    // count
     const cd=e.convval_daily||{};  for(const d in cd){ if(dset.has(d))nrev[d]=(nrev[d]||0)+cd[d]; }     // USD
     const c1=e.convval_day1_daily||{};for(const d in c1){if(dset.has(d))d1[d]=(d1[d]||0)+c1[d]; }        // day-1 (frozen)
@@ -5258,7 +5258,7 @@ function renderOverview(){
   const unmatched=SHOWSP?((DATA.roas.unmatched_spend_usd||0)/1e6):0;
   // daily spend over the SAME dates the revenue sparkline uses, so the two bars line up visually
   const spendSeries=SHOWSP?trendDates.map(d=>{ let v=0; const by=DATA.roas.by_app||{};
-    appsShown.forEach(x=>{ const dd=(by[x.name]||{}).daily; if(dd&&dd[d])v+=dd[d]; });
+    appsShown.forEach(x=>{ const dd=roasDaily(by[x.name]); if(dd[d])v+=dd[d]; });
     return Math.round(v/1e6*100)/100; }):[];
   const instTot=appsShown.reduce((t,x)=>t+(INST[x.name]||0),0);           // Google Ads installs, this window
   const plTot=k.revenue-spendTot;                                          // Profit/Loss = revenue − ad spend
@@ -5300,7 +5300,7 @@ function renderOverview(){
         ${kpi('Match rate',pct(k.match_rate||0),dspan,'muted',sparkbars(trendSeries,'g'))}
         ${lastTile}
       </div>
-      <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue. Installs yahan <b>sirf Google Ads</b> wale hain — 💸 Install value tab <b>all installs</b> (ads + organic) ginta hai, isliye wahan number bada.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
+      <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.${roasFxRule()} Installs yahan <b>sirf Google Ads</b> wale hain — 💸 Install value tab <b>all installs</b> (ads + organic) ginta hai, isliye wahan number bada.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'This app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe tap = poori report · ↗ = Play Store</span></div>
         <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Google Ads installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">ads only · not all installs</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>Day-1 rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">frozen</div></th><th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users · live</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Day-1</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
       <div class="ov-datewise card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${dwRows.length} days</span></h3><span class="lnk" onclick="openDateWise('')">View more →</span></div>${dateWiseTable(dwRows)}</div>
@@ -8522,13 +8522,22 @@ function appSelVisible(account_id,app_id){ const a=(APPSEL.accounts||{})[account
   const kn=(typeof DATA!=='undefined'&&DATA&&DATA.known_accounts); if(!kn) return true; return kn.includes(account_id); }
 // ── Marketing spend (Google Ads) per app, in USD, for the CURRENTLY selected period ──────────
 // The ROAS payload carries per-app DAILY spend, so any period the user picks is just a sum over
-// that window. Overview and the Marketing ROAS screen both read spend from here, so the two
-// screens can never disagree. Empty when Google Ads isn't connected (or its fetch failed).
+// that window. Every screen reads an app's spend days through roasDaily() — the Marketing ROAS tab and
+// the app page through spendByApp(), Overview (KPI, sparkline, date-wise table) and the hub too — so they
+// can never disagree on the same app and period. Empty when Google Ads isn't connected (or its fetch failed).
 function roasOn(){ const R=(typeof DATA!=='undefined'&&DATA)?DATA.roas:null; return !!(R&&R.configured&&!R.error); }
+// $ view (owner-approved): each day's rupee spend at THAT day's own INR→USD rate (daily_dated, the ROI section's dated
+// series) — old days are not re-valued at today's rate. ₹ view: "daily" (one rate: today's) = the exact ₹ Google Ads
+// billed. Only for INR spend on a USD AdMob account (the page explains INR; any other spend currency keeps one rate).
+function roasFxDated(){ const R=(typeof DATA!=='undefined'&&DATA)?DATA.roas:null;
+  return !!(R&&R.spend_fx==='dated'&&R.currency_src==='INR'&&baseCur()==='USD'); }
+function roasDaily(e){ return (e&&((roasFxDated()&&curView()==='USD'&&e.daily_dated)||e.daily))||{}; }
+// the rule in words — the SAME text in ₹ and in $ (same height: the ₹ ⇄ $ toggle never moves what is under it)
+function roasFxRule(){ return roasFxDated()?` <b>$ me:</b> har din ka spend <b>us din ke apne</b> INR→USD rate pe (purana din = us din ka rate, aaj ka nahi). <b>₹ me:</b> wahi ₹ jo Google Ads ne bill kiya, AdMob revenue aaj ke rate pe — isliye ₹ aur $ ka ROAS thoda alag ho sakta hai.`:''; }
 function spendByApp(winSet){
   const out={}; if(!roasOn())return out;
   const by=DATA.roas.by_app||{};
-  Object.keys(by).forEach(app=>{ const dd=(by[app]||{}).daily||{}; let s=0;
+  Object.keys(by).forEach(app=>{ const dd=roasDaily(by[app]); let s=0;
     for(const d in dd){ if(winSet.has(d))s+=dd[d]; }
     if(s>0)out[app]=s/1e6; });                       // stored as USD micros
   return out;
@@ -9043,7 +9052,12 @@ function roasCampToggle(idx){ const row=document.getElementById('rcamp-'+idx), c
 function renderRoas(){
   const s=screenDiv('roas');
   const R=DATA.roas||{configured:false,by_app:{}};
-  const ccyNote=(R.currency_src&&R.currency_src!=='USD')?` Spend <b>${R.currency_src}→USD</b> convert kiya (apples-to-apples).`:'';
+  // $ view: each day's spend at THAT day's own INR→USD rate, ₹ view: one rate — roasDaily(), the same days every
+  // other screen reads (Overview, the app page one tap away, the hub)
+  const src=(R.currency_src&&R.currency_src!=='USD')?R.currency_src:'', hasD=roasFxDated();
+  const fxNow=+((DATA&&DATA.usd_inr)||0), fxTxt=v=>'$1 = ₹'+Number(v).toFixed(2);
+  // the rule is said the SAME way in ₹ and in $ (same lines, same height: the ₹ ⇄ $ toggle never moves the table)
+  const ccyNote=!src?'':(hasD?roasFxRule():` Spend <b>${src}→USD</b> convert kiya (apples-to-apples).`);
   const head=`<h2 class="sc">Marketing ROAS${APP?' · '+appIcon(APP,20,'ail')+APP:''}</h2><p class="scd">Google Ads (MCC) ka marketing spend vs AdMob revenue — app-wise <b>ROAS</b> = revenue ÷ spend.${ccyNote}</p>`;
   if(R.error){
     s.innerHTML=head+`<div class="card" style="padding:26px 22px">
@@ -9065,13 +9079,15 @@ function renderRoas(){
   (DATA.placements||[]).forEach(p=>{ if(!appVisibleByName(p.app))return; revByApp[p.app]=(revByApp[p.app]||0)+sumDaily(p.daily,winSet).earn; });
   const byApp=R.by_app||{};
   const apps=new Set([...Object.keys(byApp),...Object.keys(revByApp)]);
-  const rows=[]; let totRev=0,totSpend=0;
+  const SPA=spendByApp(winSet);          // the spend the app page (one tap away) and Overview show: the same number
+  const rows=[]; let totRev=0,totSpend=0,totOne=0,totD=0;      // the shown rows' spend at one rate (today's) / each day's
   apps.forEach(app=>{ if(!appVisibleByName(app)||(APP&&app!==APP))return;
-    let spend=0; const e=byApp[app]; if(e&&e.daily)Object.keys(e.daily).forEach(d=>{ if(winSet.has(d))spend+=e.daily[d]; });
-    const rev=(revByApp[app]||0)/1e6; spend=spend/1e6;
+    let one=0,dt=0; const e=byApp[app], d1=(e&&e.daily)||{}, dd=(hasD&&e&&e.daily_dated)||d1;
+    Object.keys(d1).forEach(d=>{ if(winSet.has(d)){ one+=d1[d]; dt+=dd[d]||0; } });   // the 💱 line's two sums
+    const rev=(revByApp[app]||0)/1e6, spend=SPA[app]||0;
     if(rev<=0&&spend<=0)return;
     rows.push({app,rev,spend,roas:spend>0?rev/spend:null,net:rev-spend,camps:(e&&e.campaigns)||[],storeId:(e&&e.store_id)||''});
-    totRev+=rev; totSpend+=spend;
+    totRev+=rev; totSpend+=spend; totOne+=one/1e6; totD+=dt/1e6;
   });
   rows.sort((a,b)=>b.spend-a.spend);
   const blended=totSpend>0?totRev/totSpend:null, net=totRev-totSpend, unmatched=(R.unmatched_spend_usd||0)/1e6;
@@ -9090,7 +9106,7 @@ function renderRoas(){
     const tot=accs.reduce((t,a)=>t+a.cost,0)||1;
     const lines=accs.map(a=>`<div class="cbrk"><span class="cdot ${a.active?'on':'off'}"></span><span class="cbnm"><b>${a.name}</b> <span class="faint">· ${a.n} camp${a.n>1?'s':''}${a.active<a.n?' · '+a.active+' active':''}</span></span><span class="cbamt">${money(a.cost/1e6)}</span><span class="cbpct faint">${Math.round(a.cost/tot*100)}%</span></div>`).join('');
     const warn=accs.length>1?` <span class="down">⚠️ ${accs.length} alag Google Ads accounts is app pe — normally 1 app = 1 account, matlab koi campaign galat app pe set hai</span>`:'';
-    return `<tr class="rcamp" id="rcamp-${idx}" style="display:none"><td colspan="6" style="background:var(--panel2);padding:2px 17px 12px"><div class="cbhd faint">App id <b>${r.storeId||'—'}</b> · <b>Adwords account</b>-wise spend (ek account ke saare campaigns ka total · data-window)${warn}</div>${lines}</td></tr>`;
+    return `<tr class="rcamp" id="rcamp-${idx}" style="display:none"><td colspan="6" style="background:var(--panel2);padding:2px 17px 12px"><div class="cbhd faint">App id <b>${r.storeId||'—'}</b> · <b>Adwords account</b>-wise spend (ek account ke saare campaigns ka total · data-window${hasD?' · $ me aaj ke rate pe — campaign ka din-wise spend nahi':''})${warn}</div>${lines}</td></tr>`;
   };
   const trows=rows.map((r,idx)=>{ const hasC=(r.camps||[]).length;
     return `<tr class="clk" onclick="openAppDetail('${(r.app||'').replace(/'/g,"\\'")}')">
@@ -9103,7 +9119,7 @@ function renderRoas(){
   }).join('')||`<tr><td colspan="6" class="muted" style="padding:16px">Is period me na spend na revenue.</td></tr>`;
   // Live Play-Store apps that have Google Ads spend but no AdMob revenue linked in THIS account —
   // show each as its OWN app-row (spend-only), windowed to the period, not a black-box "unmatched" sum.
-  const uList=(R.unmatched_apps||[]).map(u=>{ let sp=0; const dd=u.daily||{}; for(const dt in dd){ if(winSet.has(dt))sp+=dd[dt]; }
+  const uList=(R.unmatched_apps||[]).map(u=>{ let sp=0; const dd=roasDaily(u); for(const dt in dd){ if(winSet.has(dt))sp+=dd[dt]; }
       return {store:u.store_id, camps:(u.campaigns||[]), spend:sp/1e6}; })
     .filter(u=>u.spend>0).sort((a,b)=>b.spend-a.spend);
   const uSpend=uList.reduce((t,u)=>t+u.spend,0);
@@ -9118,7 +9134,11 @@ function renderRoas(){
     <td style="font-size:12px"><span class="ccampt">${accCell(u.camps)} <span class="cbchev" id="cbchev-${idx}">▸</span></span></td></tr>${campBreak({camps:u.camps,storeId:u.store},idx)}`;
   }).join('');
   const uDivider=uRows?`<tr><td colspan="6" style="background:var(--panel2);padding:9px 17px;font-size:11.5px" class="muted">📲 <b>Play-Store apps · AdMob revenue not linked</b> — sirf Google Ads spend (${money(uSpend)} is period me). Inki revenue AdMob me match nahi (alag account ya store unlinked), isliye ROAS ke upar wale total me nahi.</td></tr>`:'';
-  s.innerHTML=head+((totSpend<=0&&R.note)?`<div class="note" style="margin:0 0 12px;font-size:12.5px">🔗 Google Ads <b>connected</b> — par is period me koi app-campaign spend nahi mila (apps organic dikhenge).</div>`:'')+
+  // the rule in numbers (the same line in ₹ and $): the period's spend-weighted rate = what Google Ads billed in ₹ ÷ the
+  // same spend at each day's own rate in $
+  const fxAvg=hasD&&totD>0&&fxNow>0?totOne*fxNow/totD:null;
+  const fxLine=fxAvg?`<p class="scd roas-fx" style="margin-top:-10px">💱 Is period ke spend ka average rate <b>${fxTxt(fxAvg)}</b> · aaj ${fxTxt(fxNow)}</p>`:'';
+  s.innerHTML=head+fxLine+((totSpend<=0&&R.note)?`<div class="note" style="margin:0 0 12px;font-size:12.5px">🔗 Google Ads <b>connected</b> — par is period me koi app-campaign spend nahi mila (apps organic dikhenge).</div>`:'')+
     `<div class="row c4" style="margin-bottom:14px">${kpi('AdMob revenue',money(totRev),winLbl,'muted')}${kpi('Ad spend',money(totSpend),winLbl,'muted')}${kpi('Blended ROAS',blended!=null?blended.toFixed(2)+'×':'—',blended!=null?(blended>=1?'profitable':'below 1× — loss'):'no spend',blended!=null?(blended>=1?'up':'down'):'muted')}${kpi('Net profit',(net>=0?'+':'−')+money(Math.abs(net)),'revenue − spend',net>=0?'up':'down')}</div>
     <div class="card pad0"><div class="ct" style="padding:16px 17px 0"><h3>App-wise ROAS — biggest spend first</h3><span class="muted" style="font-size:12px">${winLbl} · ROAS 2× = har $1 spend pe $2 revenue · revenue = total AdMob (organic + paid)</span></div>
       <table style="margin-top:10px"><thead><tr><th>App</th><th>Revenue</th><th>Spend</th><th>ROAS</th><th>Net</th><th>Ad account</th></tr></thead><tbody>${trows}${uDivider}${uRows}</tbody></table></div>`;

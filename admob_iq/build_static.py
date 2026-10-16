@@ -67,6 +67,28 @@ def _spend_to_usd(spend, rate):
     return out
 
 
+def _spend_daily_dated(spend, data_dir):
+    """The dashboard's $ view of Google Ads spend (owner-approved; the Marketing ROAS tab, Overview, the app page and the
+    hub all read it): each day's RAW rupee spend at THAT day's own INR→USD rate, with the ROI section's own dated series
+    and lookup (value_build._load_fx over data/fx_series.json + engine.value._fx_fn: a weekend / holiday takes the
+    previous business day, a day before the series its first rate).
+    → {store id: {day: USD micros}}, or None when there is nothing dated to give: spend not billed in INR (a USD account;
+    any other currency, since the page explains the rule in rupees only) or no dated series yet. Every screen then keeps
+    ONE rate for every day, as before. `spend` is only read; "daily" (one rate) is not touched."""
+    if not isinstance(spend, dict) or spend.get("error"):
+        return None
+    ccy = spend.get("currency_src")
+    if ccy != "INR":                       # the payload's currency_src (build_roas) must say INR for the page to explain it
+        return None
+    from .engine import value as val
+    from .value_build import _load_fx
+    f, mode = val._fx_fn(_load_fx(data_dir, None, ccy), ccy)
+    if mode != "dated":
+        return None
+    return {sid: {d: int(round(v * f(date.fromisoformat(d)))) for d, v in dd.items()}
+            for sid, dd in (spend.get("daily") or {}).items()}
+
+
 def _gads_geo_step(s, data_dir, spend, today):
     """The ROAS step, right after the spend cache is written: Google Ads cost by country for the Install value tab
     (fetch.gads_geo; SPEC_CD_GEO §G.7), only when GADS_GEO is on. Its own try — a failure costs only the geo cache's
@@ -1685,14 +1707,20 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             if base_ccy == "INR":
                 roas_inr_usd = base_usd
             spend_usd = _spend_to_usd(spend, base_usd)
-            if s.get("ga4_value") and base_ccy != "USD":
-                try:                               # the Install value tab: each week's spend at its OWN rate (a
-                    from .value_build import update_fx_series      # dated series, one range call a day at most)
+            if base_ccy != "USD":
+                try:                               # the Install value tab, ROI and this tab's $ view: each day's spend at
+                    from .value_build import update_fx_series      # its OWN rate (a dated series, one range call a day at most)
                     _sd = [d for dd in ((spend or {}).get("daily") or {}).values() for d in dd]
                     update_fx_series(data_dir, base_ccy, min(_sd) if _sd else None, today)
                 except Exception as _fe:
                     print(f"fx series skipped: {type(_fe).__name__}", file=sys.stderr)
-            dashboard["roas"] = build_roas(spend_usd, store_ids, dashboard.get("apps_catalog"), roas_aliases)
+            try:                                   # every screen's $ view: each day at its own rate (None: one rate)
+                spend_dated = _spend_daily_dated(spend, data_dir)
+            except Exception as _de:
+                spend_dated = None
+                print(f"roas dated fx skipped: {type(_de).__name__}", file=sys.stderr)
+            dashboard["roas"] = build_roas(spend_usd, store_ids, dashboard.get("apps_catalog"), roas_aliases,
+                                           daily_dated=spend_dated)
             if s.get("ga4_value"):
                 try:                               # the Install value tab gives each app exactly the Google Ads spend
                     from .engine.roas import store_owner          # this tab does (the same store id → app map)
@@ -1701,7 +1729,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                     print(f"value spend map skipped: {type(_oe).__name__}", file=sys.stderr)
             if spend is not None:
                 print(f"roas: spend for {len(dashboard['roas'].get('by_app', {}))} apps "
-                      f"({base_ccy}→USD @ {base_usd})", file=sys.stderr)
+                      f"({base_ccy}→USD @ {base_usd}; $ view {'dated' if spend_dated else 'one rate'})",
+                      file=sys.stderr)
             # Icon fallback via Google Ads: apps whose AdMob store listing is blank (so the main icon
             # pass found nothing) often DO have a Play package via their Google Ads campaigns (roas
             # by_app store_id). Resolve those icons from that package. Separate cache so it retries

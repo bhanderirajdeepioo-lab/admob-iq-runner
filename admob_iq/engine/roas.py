@@ -5,7 +5,10 @@ carry the same store id (accounts.apps.list). We map store_id → app_name and s
 spend (in USD) + the campaign list, so the frontend can window spend to the selected period and
 compute ROAS = revenue ÷ spend against the revenue it already has per app. Spend on a store id we
 can't match to an AdMob app (or store id we couldn't resolve) is surfaced as 'unmatched' rather
-than silently dropped.
+than silently dropped. "daily" is USD at ONE rate (today's — every screen's ₹ view reads it, so ₹ is the exact rupee
+Google Ads billed, and so do back-end readers); "daily_dated" (INR spend, when the build has a dated rate series) is USD
+at each day's OWN rate — every screen's $ view (the Marketing ROAS tab, Overview, the app page, the hub: one helper,
+roasDaily, so they never disagree; owner-approved: old days are not re-valued at today's rate).
 """
 
 
@@ -44,11 +47,15 @@ def store_owner(app_store_ids, apps_catalog, aliases=None):
     return by_store_app
 
 
-def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
+def build_roas(spend, app_store_ids, apps_catalog, aliases=None, daily_dated=None):
     """spend: fetch_app_spend output (or None). app_store_ids: {app_id: store_id}.
     apps_catalog: [{app_id, app_name, rev, ...}]. aliases: {google_ads_store_id: admob_app_name}
     (or a LIST of candidate names, when the app has been renamed) — manual overrides for apps whose
     AdMob store listing isn't linked (blank store id) so they'd otherwise land in 'unmatched'.
+    daily_dated: {store_id: {date: USD micros at THAT day's own rate}} (build_static._spend_daily_dated) or None —
+    when given, every app / unmatched app also carries "daily_dated" (the same join and sums as "daily") and the
+    payload says spend_fx = "dated": every screen's $ view reads it; "daily" (one rate: today's) is unchanged and stays
+    what the ₹ view and every back-end reader read. None = no key at all (the payload exactly as before).
     Returns the roas.json payload."""
     if spend is None:                                    # Google Ads not configured (secrets missing)
         return {"configured": False, "by_app": {}, "currency_src": "USD", "fx": {},
@@ -75,11 +82,17 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
             unmatched_detail[sid] = {"store_id": sid, "spend_usd_micros": s,
                                      "n_campaigns": len(camps_by_sid.get(sid, [])), "sample": names[:3],
                                      "daily": dict(dd), "campaigns": camps_by_sid.get(sid, [])}
+            if daily_dated is not None:
+                unmatched_detail[sid]["daily_dated"] = dict(daily_dated.get(sid) or {})
             continue
         e = by_app.setdefault(app, {"store_id": sid, "daily": {}, "campaigns": [],
                                     "installs_daily": {}, "convval_daily": {}, "convval_day1_daily": {}})
         for d, v in dd.items():
             e["daily"][d] = e["daily"].get(d, 0) + v
+        if daily_dated is not None:                             # the $ view's spend: each day at its own rate
+            ed = e.setdefault("daily_dated", {})
+            for d, v in (daily_dated.get(sid) or {}).items():
+                ed[d] = ed.get(d, 0) + v
         for d, v in (installs_by_sid.get(sid) or {}).items():   # installs window to the same period in the UI
             e["installs_daily"][d] = e["installs_daily"].get(d, 0) + v
         for d, v in (convval_by_sid.get(sid) or {}).items():    # Google Ads conversion value (USD), same window
@@ -89,7 +102,10 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None):
         e["campaigns"].extend(camps_by_sid.get(sid, []))
     # surface the biggest unmatched store ids so coverage gaps are visible + diagnosable (not a black-box sum)
     top_unmatched = sorted(unmatched_detail.values(), key=lambda x: -x["spend_usd_micros"])[:30]
-    return {"configured": True, "by_app": by_app, "note": spend.get("note"),
-            "currency_src": spend.get("currency_src", "USD"), "fx": spend.get("fx", {}),
-            "unmatched_spend_usd": unmatched, "unmatched_apps": top_unmatched,
-            "unmatched_count": len(unmatched_detail)}
+    out = {"configured": True, "by_app": by_app, "note": spend.get("note"),
+           "currency_src": spend.get("currency_src", "USD"), "fx": spend.get("fx", {}),
+           "unmatched_spend_usd": unmatched, "unmatched_apps": top_unmatched,
+           "unmatched_count": len(unmatched_detail)}
+    if daily_dated is not None:
+        out["spend_fx"] = "dated"
+    return out
