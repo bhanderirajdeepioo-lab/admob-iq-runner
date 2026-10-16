@@ -123,6 +123,13 @@ def _status(details, counts, no_ga4, status, state):
     return "ok"
 
 
+def pkg_ids(a, apps, package=None):
+    """The AdMob apps one fetched app's GA4 stream covers: its own + every selected app sharing its Play package
+    (same_pkg; `package` = the store's when the app list lost it)."""
+    pkg = a.get("package") or package
+    return [a["app_id"]] + ([x["app_id"] for x in apps if x.get("same_pkg") and x["same_pkg"] == pkg] if pkg else [])
+
+
 def app_revenue(revenue, a, apps, package=None, cover=False):
     """The AdMob revenue of one fetched app's GA4 stream → {tz, currency, till, days: {day: [earnings micros,
     impressions]}}: its own AdMob app (always — even when the app list lost its package; `package` = the store's) +
@@ -134,8 +141,7 @@ def app_revenue(revenue, a, apps, package=None, cover=False):
     reads it)."""
     if not revenue:
         return None
-    pkg = a.get("package") or package
-    ids = [a["app_id"]] + ([x["app_id"] for x in apps if x.get("same_pkg") and x["same_pkg"] == pkg] if pkg else [])
+    ids = pkg_ids(a, apps, package)
     tzs, base = revenue.get("tz_by_app") or {}, revenue.get("tz") or "UTC"
     tz = tzs.get(a["app_id"]) or base
 
@@ -304,7 +310,7 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
     try:                                            # tab's) — rides the value step; a failure costs only the ROI
         from . import roi_build as rb
         if val_on and rb.enabled(s):
-            roi_acc = rb.start(cal=(revenue or {}).get("cal"))
+            roi_acc = rb.start(cal=(revenue or {}).get("cal"), adsrc=(revenue or {}).get("adsrc"))
         else:
             rb.off(out_dir)
     except Exception as e:
@@ -368,7 +374,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                     vb.drop_app(val_st, aid)
                 val_rows.append(vb.error_row(a, key))
             if roi_acc is not None:                     # (never raises: a failure costs only this app's ROI file)
-                rb.app_step(roi_acc, store, a, key, rev, val_pre, val_cfg, out_dir, data_dir, now)
+                rb.app_step(roi_acc, store, a, key, rev, val_pre, val_cfg, out_dir, data_dir, now,
+                            ids=pkg_ids(a, apps, store.get("package")))
         if any_acc is not None:                         # (never raises: a failure costs only this app's file)
             iab.app_step(any_acc, out_dir, store, a, key, path, rev, cfg["late_days"])
         eng.revision_sums(store, late_sums)

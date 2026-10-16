@@ -2576,6 +2576,9 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-pl{display:inline-flex;align-items:center;gap:6px}.roi-pl b{min-width:52px;text-align:center;color:#fff;font-variant-numeric:tabular-nums}
 .roi-plb{min-width:30px;min-height:30px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:16px;font-weight:800;cursor:pointer;line-height:1}
 .roi-plt{min-width:640px}
+.roi-ch .acm{stroke:var(--cyan);stroke-dasharray:3 3;stroke-width:1.2;opacity:.85}.roi-ch .acmt{fill:var(--cyan);font-size:10px;font-weight:800}.roi-lg .cacm::before{background:var(--cyan);height:9px;width:2px}
+.roi-act-t td:first-child{white-space:nowrap}.roi-acr .roi-acd{position:sticky;left:10px;max-width:min(880px,calc(100vw - 72px))}
+.roi-acs{font-size:12.5px;color:var(--ink2)}.roi-acs b{color:#fff}.roi-t tr.roi-acr td{white-space:normal;text-align:left;background:var(--panel2);font-size:12px;line-height:1.55;color:var(--ink2)}.roi-acd div{margin:2px 0}.roi-acd b{color:#fff}.roi-acd .faint{color:var(--faint)}.roi-act-t td small{white-space:normal}
 .roi-ch .band{fill:rgba(52,217,154,.16);stroke:none}.roi-ch .ev.up{fill:var(--good)}.roi-ch .ev.dn{fill:var(--bad)}.roi-ch .evt{font-size:10px;font-weight:700}.roi-ch .evt.up{fill:var(--good)}.roi-ch .evt.dn{fill:var(--bad)}.roi-ch .ev.off{fill:none;stroke-width:1.2}.roi-ch .ev.off.up{stroke:var(--good)}.roi-ch .ev.off.dn{stroke:var(--bad)}.roi-ch .evt.off{opacity:.75}.roi-lg .cev::before{background:linear-gradient(90deg,var(--good) 50%,var(--bad) 50%)}.roi-fcal{margin-top:8px;line-height:1.5}.roi-ch .ln.dash{stroke-dasharray:5 4;stroke-width:1.6}
 .roi-lgr{font-size:12.5px;color:var(--ink2);padding:7px 0;border-bottom:1px solid var(--line);line-height:1.5}.roi-lgr b{color:#fff}
 .roi-fc-st{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:13px;color:var(--ink2)}
@@ -6610,8 +6613,10 @@ function barChart(labels,vals,o){ o=o||{}; const W=CHW(),H=o.h||200,m={t:18,r:12
   const v2=vals.filter(ok); if(!v2.length) return '<p class="roi-note">Abhi chart ke liye data nahi.</p>';
   const hi=Math.max(...v2)*1.12||1, bw=(W-m.l-m.r)/n, Y=v=>m.t+(H-m.t-m.b)*(1-v/hi);
   const show=new Set(o.show||(W<720?[0,7,14,30]:[0,1,3,7,14,30]).filter(i=>i<n));
+  const mk=new Set(o.mark||[]);                       // ⚙ above a bar (an ad setting change inside that test)
   const bars=vals.map((v,i)=>ok(v)?`<rect class="bar" x="${(m.l+i*bw+1).toFixed(1)}" y="${Y(Math.max(0,v)).toFixed(1)}" width="${Math.max(1,bw-2).toFixed(1)}" height="${(H-m.b-Y(Math.max(0,v))).toFixed(1)}"/>`
-      +(show.has(i)?`<text class="lv" x="${(m.l+i*bw+bw/2).toFixed(1)}" y="${(Y(Math.max(0,v))-4).toFixed(1)}" text-anchor="middle">${E(f(v))}</text>`:''):'').join('');
+      +(show.has(i)?`<text class="lv" x="${(m.l+i*bw+bw/2).toFixed(1)}" y="${(Y(Math.max(0,v))-4).toFixed(1)}" text-anchor="middle">${E(f(v))}</text>`:'')
+      +(mk.has(i)?`<text class="acmt" x="${(m.l+i*bw+bw/2).toFixed(1)}" y="${(Y(Math.max(0,v))-(show.has(i)?16:4)).toFixed(1)}" text-anchor="middle">⚙</text>`:''):'').join('');
   const xl=labels.map((l,i)=>show.has(i)||i===n-1?`<text class="ax" x="${(m.l+i*bw+bw/2).toFixed(1)}" y="${H-8}" text-anchor="middle">${E(l)}</text>`:'').join('');
   const hits=vals.map((v,i)=>ok(v)?`<rect class="hit" x="${(m.l+i*bw).toFixed(1)}" y="${m.t}" width="${bw.toFixed(1)}" height="${H-m.t-m.b}" data-tip="${E('<b>'+E(labels[i])+'</b><br>'+(o.tip?o.tip(i):E(f(v))))}"/>`:'').join('');
   const gl=[0,0.5,1].map(t=>hi*t/1.12).map(v=>`<line class="g" x1="${m.l}" x2="${W-m.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text class="ax" x="${m.l-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${E(f(v))}</text>`).join('');
@@ -6941,7 +6946,7 @@ function fcView(d){ const fc=d.fc; CCY=d.ccy||null;
   const ctl=`<div class="roi-fc-ctl"><span class="roi-mini roi-fchs" role="group" aria-label="Kitne din aage">${chips}</span>`
     +((fc.f.sp[0]||0)>0?`<label class="roi-fc-sl"><span>Google Ads spend${fc.plan&&fc.plan.fc_cs?' · sab countries':''} <b id="roi-fc-ml">${FCM>=0?'+':'−'}${Math.abs(Math.round(FCM*100))}%</b> <small>(abhi ${MV(sv)}/din = pichhle ${fc.f.spd||30} din${fc.f.spi30!=null||fc.f.sp30!=null?` · 30 din avg ${MV(billed()&&fc.f.spi30!=null?fc.f.spi30:RV(fc.f.sp30||0))}/din`:''})</small></span><input type="range" id="roi-fc-m" min="-100" max="100" step="10" value="${Math.round(FCM*100)}" aria-label="Spend badlo"></label>`:'<span class="roi-note">Is app pe abhi Google Ads spend nahi — forecast sirf organic</span>')+`</div>`;
   return (any?ctl+fcHzNote(fc)+`<div id="roi-fc-out">${fcOut(d)}</div><div id="roi-fc-plan">${fcPlan(d)}</div>`:`<div class="roi-card"><p class="roi-note">⏳ Model ko abhi kaafi tests nahi mile — 30 din ka forecast <b>${E(fd((fc.ready_from||{})['30']||''))}</b> se (shuru ke din: ${E(fdy(fc.start))}). Har 2 hafte pe ek back-test banta hai; kisi horizon ke 4 tests ho jaayein tab woh dikhta hai.</p></div>`)
-    +fcWhy(d)+fcAcc(d)+fcLearn(d)+fcStart(d); }
+    +fcWhy(d)+fcAds(d)+fcAcc(d)+fcLearn(d)+fcStart(d); }
 function fcOut(d){ const fc=d.fc, f=fc.f, H=fcHN(fc), m=1+FCM, c=(fc.cal||{})[String(H)]||{};
   const rev=fcTot(f,fcMul(fc,m).r).map(v=>RV(v)), spd=(billed()&&f.spi!=null)?f.sp.map(v=>f.spi*(v>0?1:0)*m):f.sp.map(v=>RV(v)*m);
   const R=fcSum(rev,H), S=fcSum(spd,H), Pr=R-S, [lo,hi]=fcRange(R,c.lo,c.hi);
@@ -7143,12 +7148,16 @@ function fcChart(fc,H,rev,spd){ const evs=fcCalEv(fc,H), W=CHW(), Hh=(W<720?220:
     let lb=FCEVS[e.k]; if(!lb&&/^j\d$/.test(e.k)&&!janLab) lb='Jan'; if(lb==='Jan') janLab=true;
     if(lb){ const s=lb+' '+fcPc(e.e), w=s.length*6, l=Math.max(m.l,Math.min(W-m.r-w,(x0+x1)/2-w/2)); if(l>lastR+4){ t=`<text class="evt ${cls}" x="${l.toFixed(1)}" y="${m.t-16}">${E(s)}</text>`; lastR=l+w; } }
     return `<rect class="ev ${cls}" x="${x0.toFixed(1)}" y="${m.t-11}" width="${Math.max(2,x1-x0).toFixed(1)}" height="5" rx="1.5"/>`+t; }).join('');
-  const hits=Array.from({length:n},(_,i)=>{ const isF=i>=n0, j=i-n0, v=isF?fr[j]:hr[i], ev=isF?evs.find(e=>e.k!=='hold'&&j>=e.j0&&j<=e.j1):null;
-    const tip=`<b>${E(lab(i))}</b>${isF?' · forecast':' · asli'}<br>Revenue <b>${E(MV(v))}</b>${isF?`<br>range ${E(MV(lo[j]))} – ${E(MV(hi[j]))}${spd[j]?`<br>spend ${E(MV(spd[j]))}`:''}`:''}${ev?`<br>📅 ${E(FCEV[ev.k]||ev.k)}: eCPM ${fcPc(ev.e)} (measured${fcRg(ev)?`, seasons ${fcRg(ev)}`:''}${off?', forecast me nahi':''})`:''}`;
+  const am=fcAdsMarks(fc,d0h,n0).sort((p,q)=>q.i-p.i);   // ⚙ the changes inside the 90 actual days, newest first
+  const amp=acPlace(am.map(({i,e})=>({x:X(i),t:`⚙ ${AC_FS[e.fmt]||''} ${acJ(e)}`})),m.l,W-m.r);   // (its number printed: a row down, never dropped first)
+  const amk=am.map(({i},k)=>{ const x=X(i), p=amp[k];
+    return `<line class="acm" x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${m.t}" y2="${Hh-m.b}"/>`+(p?`<text class="acmt" x="${p.l.toFixed(1)}" y="${(m.t+10+12*p.row).toFixed(1)}">${E(p.t)}</text>`:''); }).join('');
+  const hits=Array.from({length:n},(_,i)=>{ const isF=i>=n0, j=i-n0, v=isF?fr[j]:hr[i], ev=isF?evs.find(e=>e.k!=='hold'&&j>=e.j0&&j<=e.j1):null, ad=isF?[]:am.filter(x=>x.i===i);
+    const tip=`<b>${E(lab(i))}</b>${isF?' · forecast':' · asli'}<br>Revenue <b>${E(MV(v))}</b>${isF?`<br>range ${E(MV(lo[j]))} – ${E(MV(hi[j]))}${spd[j]?`<br>spend ${E(MV(spd[j]))}`:''}`:''}${ev?`<br>📅 ${E(FCEV[ev.k]||ev.k)}: eCPM ${fcPc(ev.e)} (measured${fcRg(ev)?`, seasons ${fcRg(ev)}`:''}${off?', forecast me nahi':''})`:''}${ad.map(({e})=>`<br>⚙️ Ad setting: ${E(AC_FMT[e.fmt]||e.fmt)}${e.trig?' ('+E(e.trig)+')':''} ads per user ${E(acA((e.b||{}).imp))} → ${E(acA((e.a||{}).imp))} (${E(acJ(e))}) · ${E(acSt(e))}`).join('')}`;
     const x0=i===0?m.l:(X(i-1)+X(i))/2, x1=i===n-1?W-m.r:(X(i)+X(i+1))/2; return `<rect class="hit" x="${x0.toFixed(1)}" y="${m.t}" width="${Math.max(1,x1-x0).toFixed(1)}" height="${Hh-m.t-m.b}" data-tip="${E(tip)}"/>`; }).join('');
   const yh=Y(Math.min(hi[H-1],top)), yl=Y(lo[H-1]);
   const blab=ok(lf)?`<text class="lv c2" x="${X(n-1)+5}" y="${(yh+4).toFixed(1)}">${hi[H-1]>top?'↑ ':''}${E(MC(hi[H-1]))}</text><text class="lv c2" x="${X(n-1)+5}" y="${(yl+12).toFixed(1)}">${E(MC(lo[H-1]))}</text>`:'';
-  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Daily revenue: actual and forecast">${grid}${band}${today}${lines}${Math.abs(yh-Y(lf))>14&&Math.abs(yl-Y(lf))>14?blab:''}${marks}${xs}${hits}</svg></div><div class="roi-lg"><span class="c4">Asli revenue</span><span class="c2">Forecast</span>${spd.some(v=>v>0)?'<span class="c5">Google Ads spend</span>':''}${evs.length?'<span class="cev">eCPM calendar week (green up, red down)</span>':''}</div>${fcCalNote(fc,H)}`; }
+  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Daily revenue: actual and forecast">${grid}${band}${today}${lines}${Math.abs(yh-Y(lf))>14&&Math.abs(yl-Y(lf))>14?blab:''}${marks}${amk}${xs}${hits}</svg></div><div class="roi-lg"><span class="c4">Asli revenue</span><span class="c2">Forecast</span>${spd.some(v=>v>0)?'<span class="c5">Google Ads spend</span>':''}${evs.length?'<span class="cev">eCPM calendar week (green up, red down)</span>':''}${am.length?'<span class="cacm">⚙ ad setting badla (neeche list)</span>':''}</div>${fcCalNote(fc,H)}`; }
 function fcWhy(d){ const fc=d.fc, v=fc.drv||{}; if(!v.installs) return '';
   const row=(lab,a,fmt,good)=>{ if(!a||!ok(a[0])) return ''; const ch=ok(a[1])&&a[1]?a[0]/a[1]-1:null, up=ch!=null&&ch>=0, gd=good==null?null:(up===good);
     return `<tr><td class="roi-nm">${lab}</td><td>${fmt(a[0])}</td><td>${ok(a[1])?fmt(a[1]):'—'}</td><td class="${gd==null?'':gd?'roi-up':'roi-dn'}">${ch==null?'—':(up?'▲ +':'▼ −')+Math.abs(Math.round(ch*100))+'%'}</td></tr>`; };
@@ -7204,6 +7213,114 @@ function fcGx(p,fp){ if(!p||p.engine!=='vd') return ''; const pc=v=>ok(v)?Math.r
           :!tried('pc')?' — GA4 paid cells: back-test ne abhi check nahi kiya, agle tune me hoga'
           :' — GA4 paid cells abhi day 30 tak poore nahi, ya back-test me behtar nahi')+'.')+`</p>`; }
   return h; }
+// ---- ⚙️ Ad setting badlav (owner, 16 Oct 2026: "aaj se start karo naapna" — frequency caps, splash / app-open,
+// after-call …; Remote Config is never read): the app's ad setting changes the build found in the AdMob ad-unit report
+// + GA4 DAU (fc.acfg, adcfg_build): Today / Yesterday on top, the FULL history below (newest first) with a status word
+// per row, a tap opens a row's evidence (no page jump: keep()), the weekly ads-per-user chart with every change marked
+// and its numbers printed. The forecast's own numbers are unchanged — its back-tests are only labelled (fc.acfg.ax 0)
+let ACL=false, ACN=12, ACX='', ACMX=3;               // Low rows shown · rows shown · the open row (its day|format) · days missing → Reverted
+const AC_FMT={app_open:'App open',interstitial:'Interstitial',rewarded:'Rewarded',rewarded_interstitial:'Rewarded inter.',banner:'Banner',native:'Native'};
+const AC_FS={app_open:'AO',interstitial:'INT',rewarded:'RW',rewarded_interstitial:'RWI',banner:'BAN',native:'NAT'};
+const AC_KIND={cap:'Cap / rule','new placement':'New placement','removed placement':'Removed placement',SDK:'SDK / fill'};
+const AC_KH={cap:'kitni baar ad maanga / dikhaya gaya wo badla (frequency cap, splash / app-open / after-call rule)','new placement':'naya ad unit chalu hua','removed placement':'ad unit band hua',SDK:'fill (match rate) badla — SDK / mediation / floor'};
+const AC_M={imp:'ads per user',req:'requests per user',match:'fill (match rate)',show:'show rate'};
+const AC_STC={Confirmed:'info',Checking:'dhyan','With update':'normal',Reverted:'lagu'};
+function acSt(e){ return e.st==='reverted'?'Reverted':e.st==='checking'?'Checking':e.rel?'With update':'Confirmed'; }
+function acA(v){ return !ok(v)?'—':v>=10?v.toFixed(1):v>=0.1?v.toFixed(2):v.toFixed(3); }
+function acJ(e){ const b=(e.b||{}).imp, a=(e.a||{}).imp;
+  if(e.m==='imp'&&ok(a)&&a>0&&(!ok(b)||b<=0.05*a)) return 'new'; if(e.m==='imp'&&ok(b)&&b>0&&(!ok(a)||a<=0.05*b)) return 'off';
+  return ok(e.j)?(e.j>=0?'+':MI)+Math.abs(Math.round(e.j*100))+'%':'—'; }
+function acAd(e){ const t=e.trig?` · ${E(e.trig)}`:''; return `<b>${E(AC_FMT[e.fmt]||e.fmt)}</b>${t}${e.unit?`<br><small>${E(e.unit)}</small>`:''}`; }
+function acVis(blk){ return (blk.ev||[]).filter(e=>ACL||e.conf!=='Low'); }   // (Low folded, checking or not)
+function acKey(e){ return e.d+'|'+(e.fmt||'')+'|'+(e.unit||''); }
+function acDet(e){ const b=e.b||{}, a=e.a||{}, pc=v=>ok(v)?Math.round(v*100)+'%':'—', two=(k,f)=>`${f(b[k])} → <b>${f(a[k])}</b>`;
+  const it=(e.items||[]).slice(1).map(x=>`${E(x[0]==='f'?(AC_FMT[x[1]]||x[1]):x[1])} ${E(AC_M[x[2]]||x[2])} ${ok(x[3])?(x[3]>=0?'+':MI)+Math.abs(Math.round(x[3]*100))+'%':''}`);
+  const c=e.cty==='ok'?'Countries: har country me ad requests ka hissa wahi raha — countries ka mix nahi badla (ad setting).':e.cty==='n/a'?'Countries: in dino ka AdMob country data nahi — mix check nahi ho saka.':'';
+  const x2=v=>'×'+(ok(v)?v.toFixed(2):'—'), nu=Array.isArray(e.nu)?e.nu:null, bk=Array.isArray(e.brk)?e.brk:null;
+  // the new-user check as measured: their share the same / the ads per new user moved too (not theirs) / both moved
+  // alike but the ad did not follow each day's new users (one sharp step: kept as a setting — said so)
+  const nw=!nu?'':Math.abs(Math.log(nu[0]||1))<Math.log(1.2)?`Naye users: DAU me unka hissa ${x2(nu[0])} (lagbhag wahi) — install badhne se nahi.`
+    :Math.abs(Math.log(nu[1]||1))>=Math.log(1.15)||(nu[0]-1)*(e.j||0)<=0?`Naye users: DAU me unka hissa ${x2(nu[0])}, par is ad ke ads per naya user ${x2(nu[1])} — badlav naye users ke saath nahi chala (setting).`
+    :`Naye users: DAU me unka hissa ${x2(nu[0])} aur is ad ke ads per naya user ${x2(nu[1])} (lagbhag wahi) — par ad roz ke naye users ke saath upar-neeche nahi chala, ek seedha step hai (isliye setting gina; naye users ka asar bhi ho sakta hai).`;
+  const ub=bk?`GA4 users ${x2(bk[0])} hue, app ke saare ads ${x2(bk[1])} — users ki ginti badli; is ad ki apni ginti phir bhi alag badli, isliye gina (per-user number me users ka badlav bhi shamil).`:'';
+  const ms=e.st==='checking'&&e.miss?`${e.miss} naye data din se scan me nahi dikha — ${ACMX} din lagatar na dikha to <b>Reverted</b>.`:'';
+  const r=e.rel?`📦 Update <b>v${E(String(e.rel.v||'').replace(/^v/i,''))}</b> ke saath — users ke update lene ke saath dheere-dheere badla (update me aaya, remote setting nahi).`
+    :e.near?`📦 Update v${E(String(e.near.v||'').replace(/^v/i,''))} bhi isi time aaya, par badlav update ke users badhne ke saath nahi chala (seedha step zyada fit)${ok(e.ramp)&&e.ramp<=2?', ek-do din me ho gaya':''} — isliye setting.`:'';
+  return `<div class="roi-acd">`
+    +`<div>Ads per user ${two('imp',acA)} · requests per user ${two('req',acA)} · fill ${two('match',pc)} · show rate ${two('show',pc)}</div>`
+    +`<div>Is format ki kamai per user ${two('rev',x=>MPV(RV(x)))} · eCPM ${two('ecpm',x=>MPV(RV(x)))}${ok(e.rx)?` · app ki kamai per user ka <b>${e.rx>=0?'+':MI}${Math.abs(Math.round(e.rx*100))}%</b> (measured, us din ka eCPM bhi shamil)`:''}</div>`
+    +((e.on||[]).length?`<div>Chalu hue: ${e.on.map(E).join(', ')}</div>`:'')+((e.off||[]).length?`<div>Band hue: ${e.off.map(E).join(', ')}</div>`:'')
+    +(it.length?`<div>Saath me: ${it.join(' · ')}</div>`:'')+(c?`<div>${c}</div>`:'')+(nw?`<div>${nw}</div>`:'')+(ub?`<div>${ub}</div>`:'')+(r?`<div>${r}</div>`:'')+(ms?`<div>${ms}</div>`:'')
+    +`<div class="faint">Pehle = badlav se pehle ke 14 din ka median, baad = baad ke ${e.na||14} din ka · ${E(AC_KIND[e.kind]||e.kind)}: ${E(AC_KH[e.kind]||'')} · noise se ${ok(e.z)?e.z.toFixed(1):'—'}× bada${ok(e.ramp)?` · ${e.ramp<=2?'1-2 din me hua':e.ramp+' din me hua'}`:''}${e.wide>=3?` · ${e.wide} aur apps me same hafte (AdMob ki taraf se bhi ho sakta hai)`:''}${e.gone?` · ${E(fd(e.gone))} ko wapas pehle jaisa`:''} · pehli baar dikha ${E(fd(e.seen||''))}</div></div>`; }
+// the ⚙ labels of a chart: items [{x, t}] in order (newest first) → per item {l, row, t} or null — each centred on its
+// mark inside [x0, x1], a row down (≤ 3 rows) when it would sit on one placed before; only a 4th clash drops one (its
+// number stays in the tooltip)
+function acPlace(items,x0,x1){ const rows=[[],[],[]];
+  return items.map(({x,t})=>{ const w=(t.length+1)*6.4+6, l=Math.max(x0,Math.min(x1-w,x-w/2));
+    const r=rows.findIndex(R=>R.every(([a,b])=>l+w+3<a||l>b+3)); if(r<0) return null; rows[r].push([l,l+w]); return {l,row:r,t}; }); }
+function acChart(blk){ const wk=blk&&blk.wk, F=wk&&wk.f?Object.keys(wk.f):[]; if(!F.length) return '';
+  const n=Math.max(...F.map(f=>(wk.f[f]||[]).length)); if(n<2) return '';
+  const W=CHW(), Hh=W<720?200:230, m={t:28,r:W<720?46:56,b:26,l:W<720?40:46};
+  const wi=e=>Math.floor((Date.parse(e.d+'T00:00:00Z')-Date.parse(wk.d0+'T00:00:00Z'))/864e5/7);
+  const evs=acVis(blk).filter(e=>e.st!=='reverted'&&wi(e)>=0&&wi(e)<n);             // newest first: its label placed first
+  const Xp=i=>m.l+(W-m.l-m.r)*i/(n-1), lp=acPlace(evs.map(e=>({x:Xp(wi(e)),t:`⚙ ${AC_FS[e.fmt]||''} ${acJ(e)}`})),m.l,W-m.r);
+  m.t+=12*Math.max(0,...lp.map(p=>p?p.row:0));                                        // (more rows: the plot starts lower)
+  const all=F.flatMap(f=>wk.f[f]).filter(ok); if(!all.length) return '';
+  let top=Math.max(...all)*1.1; const raw=top/4, p10=Math.pow(10,Math.floor(Math.log10(raw))), st=[1,2,2.5,5,10].map(k=>k*p10).find(k=>k>=raw)||raw; top=Math.ceil(top/st)*st;
+  const X=i=>m.l+(W-m.l-m.r)*i/(n-1), Y=v=>m.t+(Hh-m.t-m.b)*(1-v/top), wd=i=>fcDay(wk.d0,7*i);
+  const ticks=[]; for(let v=0;v<=top+st/2;v+=st) ticks.push(v);
+  const grid=ticks.map(v=>`<line class="g" x1="${m.l}" x2="${W-m.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text class="ax" x="${m.l-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${E(acA(v))}</text>`).join('');
+  const cls=['c4','c2','c3','c5'];
+  const ends=F.map((f,k)=>{ const v=wk.f[f]; let li=-1; for(let i=v.length-1;i>=0;i--){ if(ok(v[i])){ li=i; break; } } return li>=0?{k,li,y:Y(v[li])+4,v:v[li]}:null; }).filter(Boolean).sort((p,q)=>p.y-q.y);
+  ends.forEach((e,i)=>{ if(i&&e.y<ends[i-1].y+12) e.y=ends[i-1].y+12; });   // the last values printed, never on each other
+  const lines=F.map((f,k)=>{ const v=wk.f[f]; let d='', pen=false; v.forEach((x,i)=>{ if(ok(x)){ d+=`${pen?'L':'M'}${X(i).toFixed(1)} ${Y(x).toFixed(1)}`; pen=true; } else pen=false; });
+    return `<path class="ln ${cls[k%4]}" d="${d}"/>`; }).join('')
+    +ends.map(e=>`<text class="lv ${cls[e.k%4]}" x="${(X(e.li)+5).toFixed(1)}" y="${e.y.toFixed(1)}">${E(acA(e.v))}</text>`).join('');
+  const marks=evs.map((e,k)=>{ const x=X(wi(e)), p=lp[k];
+    return `<line class="acm" x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${(18+12*(p?p.row:0)+4).toFixed(1)}" y2="${Hh-m.b}"/>`+(p?`<text class="acmt" x="${p.l.toFixed(1)}" y="${18+12*p.row}">${E(p.t)}</text>`:''); }).join('');
+  const xl=[0,Math.round((n-1)/2),n-1].map((i,k)=>`<text class="ax" x="${X(i).toFixed(1)}" y="${Hh-8}" text-anchor="${k===0?'start':k===2?'end':'middle'}">${E(fdy(wd(i)))}</text>`).join('');
+  const hits=Array.from({length:n},(_,i)=>{ const ev=evs.filter(e=>wi(e)===i);
+    const tip=`<b>Hafta ${E(fd(wd(i)))}</b><br>`+F.map(f=>`${E(AC_FMT[f]||f)}: <b>${E(acA(wk.f[f][i]))}</b> ads / user / din`).join('<br>')+ev.map(e=>`<br>⚙️ ${E(fd(e.d))} ${E(AC_FMT[e.fmt]||e.fmt)}${e.trig?' ('+E(e.trig)+')':''}: ${E(acJ(e))} · ${E(acSt(e))}`).join('');
+    const x0=i===0?m.l:(X(i-1)+X(i))/2, x1=i===n-1?W-m.r:(X(i)+X(i+1))/2; return `<rect class="hit" x="${x0.toFixed(1)}" y="${m.t}" width="${Math.max(1,x1-x0).toFixed(1)}" height="${Hh-m.t-m.b}" data-tip="${E(tip)}"/>`; }).join('');
+  return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Ads per user per week, ad setting changes marked">${grid}${lines}${marks}${xl}${hits}</svg></div>`
+    +`<div class="roi-lg">${F.map((f,k)=>`<span class="${cls[k%4]}">${E(AC_FMT[f]||f)}</span>`).join('')}<span class="cacm">⚙ ad setting badla</span></div>`; }
+function fcAds(d){ const fc=d.fc, blk=fc&&fc.acfg; if((typeof window!=='undefined'&&window.__DEV_VIEW__)||!blk||!Array.isArray(blk.ev)) return '';
+  const all=blk.ev, made=blk.made||fc.made, yd=made?fcDay(made,-1):null, live=all.filter(e=>e.st!=='reverted');
+  ACMX=blk.mx||3;
+  const fresh=k=>live.filter(e=>e.seen===k&&!e.bf);
+  const cnt=c=>live.filter(e=>e.conf===c).length, nLow=all.filter(e=>e.conf==='Low').length;
+  const one=e=>`${E(fd(e.d))} ${E(AC_FMT[e.fmt]||e.fmt)}${e.trig?' ('+E(e.trig)+')':''} ${E(acJ(e))} <small>${E(acSt(e))}</small>`;
+  // Today / Yesterday: the High / Medium ones listed with their status word, the Low ones counted ("+N Low")
+  const day=(k,lab,none)=>{ const f=fresh(k), hm=f.filter(e=>e.conf!=='Low'), nl=f.length-hm.length;
+    return `<span>${lab}: ${hm.length?`<b>${hm.length} naya</b> — ${hm.map(one).join(' · ')}${nl?` · +${nl} Low`:''}`:nl?`sirf <b>${nl} Low</b> naya`:none}</span>`; };
+  const top=`<div class="roi-chips roi-acs">${day(made,`Aaj (${E(fd(made||''))})`,'<b>koi naya nahi</b>')}${day(yd,'Kal','koi nahi')}<span>Data <b>${E(fd(blk.till||''))}</b> tak</span></div>`
+    +`<p class="roi-note">Pura history (${E(fdy(((blk.wk||{}).d0)||blk.till||''))} se): <b>${live.length}</b> badlav · High ${cnt('High')} · Medium ${cnt('Medium')} · Low ${cnt('Low')}${(blk.n||{}).chk?` · <b>${blk.n.chk}</b> abhi check ho rahe`:''}${(blk.n||{}).rel?` · ${blk.n.rel} update ke saath`:''}${(blk.n||{}).gone?` · ${blk.n.gone} wapas pehle jaise`:''}.</p>`;
+  const vis=acVis(blk), rows=vis.slice(0,ACN);
+  const tb=vis.length?`<div class="roi-tw"><table class="roi-t roi-sub roi-act-t"><thead><tr><th>Date</th><th>Ad</th><th>Ads per user</th><th>Size</th><th>Kind</th><th>Confidence</th><th>Update</th><th>Status</th></tr></thead><tbody>`
+    +rows.map(e=>{ const k=acKey(e), o=ACX===k, st=acSt(e);
+      return `<tr class="clk${o?' roi-act':''}" data-roi-acx="${E(k)}" aria-expanded="${o}"><td class="roi-nm">${E(fd(e.d))}</td><td style="text-align:left">${acAd(e)}</td><td>${E(acA((e.b||{}).imp))} → <b>${E(acA((e.a||{}).imp))}</b></td><td class="${e.j>=0?'roi-up':'roi-dn'}">${E(acJ(e))}${e.m!=='imp'?`<br><small>${E(AC_M[e.m]||e.m)}</small>`:''}</td><td>${E(AC_KIND[e.kind]||e.kind)}</td><td>${e.conf==='High'?'<b>High</b>':E(e.conf||'—')}</td><td>${e.rel?'📦 v'+E(String(e.rel.v||'').replace(/^v/i,'')):e.near?'<small>v'+E(String(e.near.v||'').replace(/^v/i,''))+' (alag)</small>':'—'}</td><td><span class="hub-st st-${AC_STC[st]}">${E(st)}</span></td></tr>`
+        +(o?`<tr class="roi-acr"><td colspan="8">${acDet(e)}</td></tr>`:''); }).join('')+`</tbody></table></div>`
+    :`<p class="roi-note">${all.length?'Sirf Low confidence wale badlav hain — neeche "Low bhi dikhao".':'Is app ke pure history me koi ad setting badlav nahi mila (ads per user, fill, show rate — sab apni range me).'}</p>`;
+  const more=(vis.length>ACN?`<button type="button" class="roi-btn" data-roi-acn="1">Aur dikhao (${vis.length-ACN})</button>`:'')
+    +(nLow?`<button type="button" class="roi-btn" data-roi-acl="1" aria-pressed="${ACL}">${ACL?'Low chhupao':`Low bhi dikhao (${nLow})`}</button>`:'');
+  const ax=blk.ax?'Forecast in badlavon ko achanak jhatka maanta hai (back-test me jeeta).'
+    :`Forecast ke numbers pe asar nahi — back-test me sirf label lagta hai (⚙️), kyunki inhe jhatka maanne se forecast back-test me behtar nahi hua.`;
+  return `<div class="roi-card" id="roi-ac"><div class="roi-ct"><h3>⚙️ Ad setting badlav · ads per user ke achanak badlav</h3><span class="roi-note">AdMob ad-unit report + GA4 DAU se measured · Remote Config nahi padha</span></div>${top}${acChart(blk)}${tb}${more?`<div class="roi-ctl" style="margin-top:10px">${more}</div>`:''}`
+    +`<p class="roi-note">Har din har format aur bade ad unit ke <b>ads per user</b> (impressions ÷ GA4 DAU), requests per user, fill aur show rate dekhe: pichhle 14 din se agle 14 din ka median <b>30%+</b> badla, agle 2 hafte bhi tika, aur roz ke utaar-chadhaav (noise) se 3× bada — tab badlav. Naya badlav pehle 7 din baad <b>Checking</b> me aata hai, 4 hafte tikne par <b>Confirmed</b>, na tike (${ACMX} naye data din lagatar na dikhe) to <b>Reverted</b>. Nahi gine: sirf eCPM (bazaar) ka badlav; jab countries ka mix badla (requests ka hissa 10+ point idhar-udhar — users kahan se aaye wo badla, setting nahi); jab ad naye users ke saath chala (onboarding / language / permission ad: install badhe to ads per user apne aap badhta hai — ads per naya user wahi raha, roz ke naye users ke saath upar-neeche); aur jab GA4 ki users ginti badli par ads wahi rahe (users ×0.5, ads same — per-user number jhoota uchhlta hai). <b>With update</b> = app update ke users ke saath dheere-dheere badla. Confidence = size ÷ noise, kitna tika, saath me aur kya badla, kitni jaldi hua (synthetic test me High 100% sahi). ${ax}</p></div>`; }
+// the back-tests of horizon H an ad setting change fell inside (fc.acfg.bt: origins; steps: the material ones) →
+// {origin: [the steps inside its H days]}
+function fcAdsBt(fc,H){ const blk=fc&&fc.acfg, out={}; if((typeof window!=='undefined'&&window.__DEV_VIEW__)||!blk||!blk.bt) return out;
+  const ts=blk.bt[String(H)]||[], st=blk.steps||[];
+  ts.forEach(T=>{ const t0=Date.parse(T+'T00:00:00Z'), t1=t0+H*864e5; const x=st.filter(s=>{ const a=Date.parse(s.at+'T00:00:00Z'); return a>t0&&a<=t1; }); if(x.length) out[T]=x; });
+  return out; }
+function fcAdsLine(fc,nb){ const blk=fc&&fc.acfg; if((typeof window!=='undefined'&&window.__DEV_VIEW__)||!blk||!(blk.steps||[]).length) return '';
+  const st=blk.steps.slice(-8).reverse();
+  return `<p class="roi-note">⚙️ <b>Ad setting badlav</b> (jo app ki kamai per user ${Math.round((blk.mat||0.1)*100)}%+ hilaaye)${nb?` — upar ⚙ wale ${nb} ${nb===1?'test':'tests'} ke beech hue`:''}: ${st.map(x=>`${E(fd(x.at))} ${E(AC_FMT[x.fmt]||x.fmt)} ${ok(x.x)?(x.x>=0?'+':MI)+Math.abs(Math.round(x.x*100))+'%':''}`).join(' · ')}. ${blk.ax?'Forecast inhe achanak jhatka maanta hai.':'Sirf label — forecast ke numbers aur range pe asar nahi (jhatka maanne se back-test behtar nahi hua).'}</p>`; }
+// the forecast chart's ⚙ marks: the ad setting changes inside its 90 actual days (High / Medium; Low too when shown) →
+// [{i: the day's index from d0h, e}]
+function fcAdsMarks(fc,d0h,n0){ const blk=fc&&fc.acfg; if((typeof window!=='undefined'&&window.__DEV_VIEW__)||!blk||!Array.isArray(blk.ev)) return [];
+  const t0=Date.parse(d0h+'T00:00:00Z');
+  return blk.ev.filter(e=>e.st!=='reverted'&&(ACL||e.conf!=='Low')).map(e=>({i:Math.round((Date.parse(e.d+'T00:00:00Z')-t0)/864e5),e})).filter(x=>x.i>=0&&x.i<n0); }
 function fcAcc(d){ const fc=d.fc, bt=fc.bt||[]; if(!bt.length) return '';
   const cal=fc.cal||{}, z=fcHz(fc), H=fcHN(fc)||30, std=[30,90,180];
   const sum=`<table class="roi-t roi-sub"><thead><tr><th>Kitne din aage</th><th>Normal din me error</th><th>Sab tests (jhatkon samet)</th><th>80% range</th><th>Tests</th></tr></thead><tbody>`
@@ -7217,7 +7334,8 @@ function fcAcc(d){ const fc=d.fc, bt=fc.bt||[]; if(!bt.length) return '';
   // one horizon's tests by test date: 30 / 90 / 180 from fc.bt, any other chip from fc.hz.btx
   const ix=std.indexOf(H), bx=ix<0?(((fc.hz||{}).btx||{})[String(H)]||[]):null;
   const rows=bx?bx.map(r=>[r[0],r[1],!!r[2]]):bt.map(r=>[r[0],r[1+Math.max(0,ix)],(r[4]||[]).map(String).indexOf(String(H))>=0]), vals=rows.map(r=>r[1]);
-  const ch=barChart(rows.map(r=>fd(r[0])),vals.map(v=>ok(v)?Math.abs(v):null),{fmt:v=>Math.round(v*100)+'%',show:[],label:'Back-test error by test date',tip:i=>{ const v=vals[i]; return ok(v)?`Forecast ${v>=0?'zyada':'kam'} by <b>${Math.abs(Math.round(v*100))}%</b> (${H} din)${rows[i][2]?'<br>⚡ is beech achanak jhatka':''}`:'—'; }});
+  const ab=fcAdsBt(fc,H), am=rows.map((r,i)=>ab[r[0]]&&ok(r[1])?i:-1).filter(i=>i>=0);   // ⚙️ the tests an ad setting change fell inside
+  const ch=barChart(rows.map(r=>fd(r[0])),vals.map(v=>ok(v)?Math.abs(v):null),{fmt:v=>Math.round(v*100)+'%',show:[],mark:am,label:'Back-test error by test date',tip:i=>{ const v=vals[i], a=ab[rows[i][0]]; return ok(v)?`Forecast ${v>=0?'zyada':'kam'} by <b>${Math.abs(Math.round(v*100))}%</b> (${H} din)${rows[i][2]?'<br>⚡ is beech achanak jhatka':''}${a?`<br>⚙️ is test ke ${H} din me ad setting badla: ${a.map(x=>`${E(fd(x.at))} ${E(AC_FMT[x.fmt]||x.fmt)}`).join(', ')}`:''}`:'—'; }});
   const ck=(fc.checks||[]).filter(x=>String(x.h)===String(H)).slice(-6).reverse();
   // no live check yet: the day the first one shows (fc.hz.chk: the oldest kept forecast holding this horizon + its
   // days); the growing N (not 30 / 90 / 180 / 365) gets ~14 days longer every 2 weeks, so its own day never comes —
@@ -7228,7 +7346,7 @@ function fcAcc(d){ const fc=d.fc, bt=fc.bt||[]; if(!bt.length) return '';
     :c1?`<p class="roi-note">Asli check: roz ka forecast save ho raha hai — ${H} din ka pehla milan (pehle bana forecast vs asli) <b>${E(fd(c1))}</b> ko yahan dikhega.</p>`
     :`<p class="roi-note">Asli check: roz ka forecast save ho raha hai — ${H} din baad har din ka asli se milan yahan dikhega.</p>`;
   const ev=(fc.events||[]).slice(-8).reverse();
-  const evh=ev.length?`<p class="roi-note">⚡ <b>Achanak jhatke</b> (koi model pehle se nahi dekh sakta — range inke bina, upar alag likha): ${ev.map(e=>`${E(fd(e.at))} ${e.kind==='installs'?'installs':'ARPDAU'} ×${e.x}`).join(' · ')}</p>`:'';
+  const evh=(ev.length?`<p class="roi-note">⚡ <b>Achanak jhatke</b> (koi model pehle se nahi dekh sakta — range inke bina, upar alag likha): ${ev.map(e=>`${E(fd(e.at))} ${e.kind==='installs'?'installs':e.kind==='ads'?'ad setting':'ARPDAU'} ×${e.x}`).join(' · ')}</p>`:'')+fcAdsLine(fc,am.length);
   const nx=bx?bx.filter(r=>r[3]).length:0;          // tests from origins older than the newest 26 (352 / 365 days only)
   const xo=nx?`<p class="roi-note">${H} din ke ${rows.length} tests me se ${nx} newest 26 test-dino se pehle ke hain — itna lamba forecast un 26 me se sirf ${rows.length-nx} baar check hota (kam se kam 4 chahiye).</p>`:'';
   return `<div class="roi-card"><div class="roi-ct"><h3>Kitna sahi tha · back-test</h3><span class="roi-note">har 2 hafte pe purane din se ${H} din aage ka forecast vs asli · bar = error</span></div><div class="roi-tw">${sum}</div>${ch}${xo}${gch}${live}${evh}</div>`; }
@@ -7289,6 +7407,9 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=at('[data-roi-f4x]'))){ b.setAttribute('data-roi-sel','[data-roi-f4x]'); keep(b,()=>{ F4X=!F4X; repaint(); }); return; }
     if((b=at('[data-roi-fsort]'))){ const k=b.dataset.roiFsort; b.setAttribute('data-roi-sel',`[data-roi-fsort="${k}"]`); keep(b,()=>{ FSORT={k,dir:FSORT.k===k?-FSORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-fch]'))){ b.setAttribute('data-roi-sel',`[data-roi-fch="${b.dataset.roiFch}"]`); keep(b,()=>{ FCH=b.dataset.roiFch; repaint(); }); return; }
+    if((b=at('[data-roi-acx]'))){ const k=b.dataset.roiAcx; b.setAttribute('data-roi-sel',`[data-roi-acx="${k.replace(/"/g,'\\"')}"]`); keep(b,()=>{ ACX=ACX===k?'':k; repaint(); }); return; }
+    if((b=at('[data-roi-acl]'))){ b.setAttribute('data-roi-sel','[data-roi-acl]'); keep(b,()=>{ ACL=!ACL; repaint(); }); return; }
+    if((b=at('[data-roi-acn]'))){ ACN+=24; repaint(); return; }                // (rows join above the button: nothing above it moves)
     if((b=at('[data-roi-fcsave]'))){ const i=document.getElementById('roi-fc-sd'); const v=i&&i.value; if(v&&/^\d{4}-\d{2}-\d{2}$/.test(v)) fcSaveStart(b.dataset.roiFcsave,v); return; }
     if((b=at('[data-roi-fcauto]'))){ fcSaveStart(b.dataset.roiFcauto,null); return; }
     if((b=at('[data-roi-retry]'))){ ALLERR=false; Object.keys(AERR).forEach(k=>AERR[k]=false); repaint(); return; }
@@ -7300,7 +7421,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)

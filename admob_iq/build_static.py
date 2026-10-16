@@ -658,6 +658,12 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
                                                             (till - timedelta(days=140)).isoformat(), till.isoformat())
         except Exception as e:
             print(f"forecast calendar skipped: {type(e).__name__}", file=sys.stderr)
+        try:                                       # ⚙️ the ad setting changes: the unit + country reports already
+            from .engine import adcfg              # read (indexed once, never copied; per app inside the ROI step)
+            revenue["adsrc"] = adcfg.Source(getattr(repo, "fetch_mediation_unit", list)(), repo.fetch_country(),
+                                            revenue["till"])
+        except Exception as e:
+            print(f"ad settings skipped: {type(e).__name__}", file=sys.stderr)
     return _uninstall_step(dashboard, data_dir, out_dir, s, revenue=revenue)
 
 

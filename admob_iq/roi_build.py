@@ -29,6 +29,11 @@ k the tab uses):
 roi.json.gz — every app's summary row (with its f4), the portfolio lifetime P/L and the portfolio install days (apps
 with spend), and the ranges the forms used (f4c).
 Pointer: dashboard["roi"] = {"file", "v", "apps": {app_id: {"file", "st", "r7", "u7", "pb", "lp"}}}.
+⚙️ Ad setting changes (adcfg_build, before the forecast: build_static's adcfg.Source = the unit + country reports it
+already read; ids = the AdMob apps on the app's Play package): the app's events kept in data/adcfg/<key>.json, the
+material ones handed to the forecast (its back-tests label them; forecast_vd.AX decides whether they count, held off),
+and the page block in the forecast's file as fc["acfg"] (the forecast's "why": "Ad setting badlav") — every other field
+of the file exactly as without it.
 One splat header rule (/roi*). Failure-isolated per app (counted) and as a whole; ONE counts-only line.
 """
 import gzip
@@ -112,12 +117,16 @@ class Acc:
         self.cal = None                             # 📅 its eCPM calendar (fc_calendar.seasons), if the build made one
         self.beta = None                            # ⚖️ per-app beta ranges (config/roi_beta.json), read on the first app
         self.f4m = 0                                # ⚖️ apps whose forms use GA4's measured paid share + premium
+        self.adsrc = None                           # ⚙️ the AdMob reports for the ad setting changes (adcfg.Source)
+        self.ac = None                              # … their run (adcfg_build), made on the first app
 
 
-def start(cal=None):
-    """cal: the forecast's eCPM calendar (fc_calendar.seasons, from build_static), handed to the forecast's run."""
+def start(cal=None, adsrc=None):
+    """cal: the forecast's eCPM calendar (fc_calendar.seasons, from build_static), handed to the forecast's run;
+    adsrc: the ⚙️ ad setting changes' reports (engine.adcfg.Source, from build_static)."""
     acc = Acc()
     acc.cal = cal
+    acc.adsrc = adsrc
     return acc
 
 
@@ -657,8 +666,9 @@ def _cty_months(P, ida, pre, sids, fxf):
     return res
 
 
-def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
-    """One app → roi_<key>.json.gz (+ its summary into acc). Never raises."""
+def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids=None):
+    """One app → roi_<key>.json.gz (+ its summary into acc). Never raises. ids: the AdMob apps on its Play package
+    (the ⚙️ ad setting changes read their ad units together, as its revenue)."""
     try:
         from . import value_build as vb
         aid = a["app_id"]
@@ -721,6 +731,15 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
                            "worse": WORSE, "watch": WATCH, "better": BETTER, "final_lag": gco.FINAL_LAG,
                            "f4": f4_consts()}}
         fcs = None
+        ares = None
+        try:                                            # ⚙️ the ad setting changes (before the forecast: its back-tests
+            from . import adcfg_build as acb            # label them) — a failure costs only them
+            if acc.adsrc is not None:
+                if acc.ac is None:
+                    acc.ac = acb.start(acc.adsrc, data_dir, now)
+                ares = acb.app_step(acc.ac, aid, key, store, ids)
+        except Exception:
+            ares = None
         try:                                            # 🔮 the forecast (its own budget and daily cadence; a failure
             from . import forecast_build as fob         # costs only it)
             if acc.fc is None:
@@ -735,10 +754,20 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None):
             except Exception:
                 fgeo, pairs = None, None
             body["fc"] = fob.app_step(acc.fc, aid, key, rows, P, ida, life, body["life_till"], eng,
-                                      rev_cty=(rev or {}).get("cty"), unst=store, geo=fgeo, cs_pairs=pairs)
+                                      rev_cty=(rev or {}).get("cty"), unst=store, geo=fgeo, cs_pairs=pairs,
+                                      acfg=(ares or {}).get("steps"))
             fcs = fc_summary(body["fc"])
         except Exception:
             body["fc"] = None
+        if body["fc"] and ares:                         # ⚙️ → the forecast's "why" (a block of its own: every other
+            try:                                        # number of the file as it was)
+                from . import adcfg_build as acb
+                from .engine import forecast_vd as _vd
+                blk = acb.page(ares, body["fc"], _vd.AX)
+                if blk:
+                    body["fc"] = dict(body["fc"], acfg=blk)
+            except Exception:
+                pass
         name = PREFIX + key + ".json.gz"
         write_json_gz_stable(os.path.join(out_dir, name), body)
         if body["life_till"] and spend and spend.get("sids"):
@@ -864,6 +893,9 @@ def finish(acc, dashboard, out_dir):
             from . import forecast_build as fob
             fob.finish(acc.fc)
             LINE += "; " + fob.line(acc.fc)
+        if acc.ac is not None:
+            from . import adcfg_build as acb
+            LINE += "; " + acb.line(acc.ac)
         return list(HEADER_PATHS)
     except Exception as e:
         dashboard.pop("roi", None)
