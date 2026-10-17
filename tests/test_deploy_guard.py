@@ -636,3 +636,33 @@ def test_workflow_copies_the_report_into_the_private_repo_data_never_the_site():
     assert push.index("rm -rf data site") < push.index("rm -f data/deploy_guard.json") \
         < push.index("cp -f ../deploy_guard.json data/deploy_guard.json") < push.index("git add -A data site")
     assert "site/deploy_guard.json" not in push and "../deploy_guard.json site" not in push
+
+
+def test_workflow_deploys_the_pushed_tree_itself_and_never_blocks_compaction():
+    """Workers Builds can fail to deploy for hours; the run deploys what it just pushed with wrangler."""
+    steps = _steps()
+    names = [str(s.get("name", "")) for s in steps]
+    p = next(i for i, n in enumerate(names) if n.startswith("Push refreshed data"))
+    d = next(i for i, n in enumerate(names) if n.startswith("Deploy the pushed site to Cloudflare"))
+    c = next(i for i, n in enumerate(names) if n.startswith("Compact the private repo"))
+    assert p < d < c                                                          # push → deploy → compaction
+    dep = steps[d]
+    run = dep["run"]
+    assert dep.get("continue-on-error") is True and "if" not in dep           # a failed deploy never stops compaction
+    assert dep.get("timeout-minutes") == 15                                   # a hang never holds the refresh queue
+    assert dep["env"]["CLOUDFLARE_API_TOKEN"] == "${{ secrets.CLOUDFLARE_API_TOKEN }}"
+    assert dep["env"]["CLOUDFLARE_ACCOUNT_ID"] == "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+    m = re.search(r"timeout -k 10 240 npx -y wrangler@4\.\d+\.\d+ deploy", run)  # pinned wrangler, per-attempt timeout
+    assert "cd _private" in run and m                                         # the private repo's own wrangler.toml
+    # workers.dev / preview URLs bypass Access: TOP-LEVEL keys read with tomllib before, the Worker checked after
+    assert run.index("tomllib") < m.start()
+    assert 'c.get("workers_dev") is False' in run and 'c.get("preview_urls") is False' in run
+    assert m.start() < run.index("/subdomain") and "scripts/$worker/subdomain" in run and "--max-time 20" in run
+    assert "::warning::workers.dev / preview URL status could not be read" in run   # unknown is never silent
+    # wrangler leftovers can never be committed by the compaction's `git add -A`
+    assert run.index(".git/info/exclude") < m.start() and ".wrangler/" in run
+    # public log: wrangler output goes to a file and is never printed; failure shows only a class + numeric codes
+    assert "> /tmp/deploy.log 2>&1" in run and "cat /tmp/deploy.log" not in run and "tee" not in run
+    assert "tail -n" not in run and "sed " not in run and "details stay private" in run
+    # missing secrets: a warning, the deploy is left to Workers Builds (never a red run)
+    assert run.index('-z "$CLOUDFLARE_API_TOKEN"') < run.index("cd _private")

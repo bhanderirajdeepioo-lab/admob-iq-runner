@@ -237,6 +237,62 @@ jobs:
           done
           [ "$pushed" = 1 ] || { echo "::error::push to the private repo failed after 5 attempts"; exit 1; }
 
+      - name: Deploy the pushed site to Cloudflare (direct, does not wait for Workers Builds)
+        # WHY: Cloudflare Workers Builds (the push-to-deploy hook on the private repo) has failed to deploy for hours at
+        # a time (a toolchain change in its build image broke every build) while every refresh here succeeded, so the
+        # dashboard kept showing old data. This step
+        # deploys the exact tree just pushed, with the private repo's own wrangler.toml: the same `wrangler deploy`
+        # Workers Builds runs. Builds stays connected as a second path; deploying the same files twice is harmless
+        # (assets are content-hashed and unchanged files are not uploaded again). Worker secrets are kept by deploy.
+        # Runs even when there was nothing new to commit, so a deploy missed earlier is caught up here.
+        # PRIVACY: wrangler output names the account, email, vars, hosts and ids, so it goes to a file and is NEVER
+        # printed; on failure only a fixed class and Cloudflare's numeric error codes are shown.
+        # wrangler is pinned on purpose (an unpinned toolchain is what broke Workers Builds): bump it deliberately.
+        # It never blocks the compaction below: a failed deploy is an ::error:: and the next run deploys again.
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          CLOUDFLARE_API_TOKEN:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::Cloudflare deploy secrets not set: deploy left to Workers Builds"; exit 0
+          fi
+          cd _private
+          # wrangler's scratch files must never be committed by the compaction step's `git add -A` (local exclude, not a commit)
+          mkdir -p .git/info && printf '.wrangler/\nnode_modules/\n' >> .git/info/exclude
+          # workers.dev and preview URLs bypass Cloudflare Access: both must be TOP-LEVEL false (a line under [vars] does not count)
+          worker=$(python3 -c 'import tomllib; c = tomllib.load(open("wrangler.toml", "rb")); print(c.get("name", "") if c.get("workers_dev") is False and c.get("preview_urls") is False else "")' 2>/dev/null) || worker=""
+          [ -n "$worker" ] || { echo "::error::wrangler.toml must keep top-level workers_dev = false and preview_urls = false: deploy skipped"; exit 1; }
+          sha=$(git rev-parse --short=12 HEAD)
+          ok=0; rc=0
+          for i in 1 2 3; do
+            rc=0; timeout -k 10 240 npx -y wrangler@4.151.1 deploy --tag "$sha" --message "runner" > /tmp/deploy.log 2>&1 || rc=$?
+            if [ "$rc" = 0 ]; then ok=1; echo "deployed on attempt $i"; break; fi
+            echo "deploy attempt $i failed (exit $rc)"; [ "$i" = 3 ] || sleep $((i * 20))
+          done
+          if [ "$ok" != 1 ]; then
+            # PUBLIC LOG: never print wrangler's own lines. Only a fixed class + Cloudflare's numeric error codes.
+            codes=$(grep -oE 'code: [0-9]+' /tmp/deploy.log | grep -oE '[0-9]+' | sort -u | head -5 | paste -sd, - || true)
+            cls=other
+            if [ "$rc" = 124 ]; then cls=timeout
+            elif grep -q 'Authentication error' /tmp/deploy.log; then cls=auth
+            elif grep -q 'Build failed' /tmp/deploy.log; then cls=bundle
+            fi
+            echo "::error::Cloudflare deploy failed 3 times (class: $cls, last exit: $rc, Cloudflare codes: ${codes:-none}); details stay private"
+            exit 1
+          fi
+          # belt and braces: the Worker's workers.dev and preview URLs must still be off after the deploy
+          resp=$(curl -fsS --max-time 20 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                 "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/subdomain" 2>/dev/null) || true
+          sub=$(printf '%s' "$resp" | python3 -c 'import json,sys; r=json.load(sys.stdin)["result"]; print("open" if r.get("enabled") or r.get("previews_enabled") else "closed")' 2>/dev/null) || sub=unknown
+          echo "workers.dev / preview URLs: $sub"
+          case "$sub" in
+            closed) ;;
+            open) echo "::error::workers.dev or preview URLs are ON after the deploy: tell the owner"; exit 1 ;;
+            *) echo "::warning::workers.dev / preview URL status could not be read after the deploy: check it from the Mac" ;;
+          esac
+
       - name: Compact the private repo when it grows too big
         if: success()
         env:
