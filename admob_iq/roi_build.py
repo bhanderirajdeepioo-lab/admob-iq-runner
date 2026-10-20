@@ -15,9 +15,8 @@ k the tab uses):
        day: [day, exact?] or null), st (status: Worse / Watch / Better / Normal / Too early / N/A), q (≈: bit 1 = a day
        of it did not tie to the install-day read, bit 2 = a day its m used had revenue GA4 gave no install day),
        spi (spend as billed), and — only on a row that has them — m (cumulative revenue at day 60, 90, 120 … every
-       30 days up to the install day's age: the late read, see below), mf (how many of m are final)]
-       (q bit 4 = a day its m used came from a late block GA4 flagged: dataLossFromOtherRow / thresholding / sampling
-       / a cut read)
+       30 days up to the install day's age: the cohort cube, see below), mf (how many of m are final)]
+       (q bit 4 = a day its m used GA4 flagged with nothing to measure it by: thresholding / sampling / a cut read)
   * sum — Today / Yesterday, CPI, ROAS at each age (last 7 judged install days vs the 28 before), LTV, retention,
     the payback day of the recent install days (pooled), status, data quality (GA4 coverage, the tie check);
   * life — AdMob revenue and Google Ads spend of EVERY day from the app's first day (lifetime P/L, month-wise on the
@@ -30,17 +29,22 @@ k the tab uses):
     measured range from config/roi_beta.json when there is one), the paid share (Google Ads installs ÷ GA4 installs),
     and the budget call from the marginal form (see F4_* below). Once GA4's own paid cells (IDAY_EXT cp) cover an
     age, that age uses GA4's MEASURED paid share and premium instead of the premium range (src "ga4", see _ga4p).
-  * late — only when the app has a late store: {"days" read, "oth" days with revenue GA4 gave no install day
-    ("(other)"), "omax" the largest such share of a day's revenue (6 decimals), "loss" days of a flagged block, "from",
-    "till"} (the page's ≈ note).
-Past day 30 (owner, 20 Oct 2026: "jitna purana app utna date"): fetch.ga4_cohort's LATE read (GA4_COHORT_LATE) keeps
-every install day's GA4 ad revenue at lag ≥ 31 by activity day; per install day X its 30-day buckets B[j] (lags
-30j+1 … 30j+30, j ≥ 1) = Σ micros × the SAME per-activity-day k as the D0 … D30 cells, and m = [base + B[1],
-base + B[1] + B[2], …] with base = d[30] when final through 30, else the D30 checkpoint (as t's D60+); m[j] only while
-EVERY activity day of buckets 1 … j was read (a hole stops it), final through the late read's own final edge (its
-cursor: every day before late.next was read final). Breakeven and so far also look through m. Only with the switch
-on (GA4_COHORT_LATE: start(late=True)) and once the late read reached today the first time (late.done: the columns come
-in one go, never a half-read file's few); without that, or without a late store, every byte of the file is as before.
+  * late — only when the app's cube is used: {"days" of it (folded + hot), "oth" days with revenue GA4 left
+    "(other)" / gave no install day even after the country split (the cube's loss), "omax" the largest such share of a
+    day's revenue (6 decimals, measured), "loss" days GA4 flagged with nothing to measure it by, "from", "till"} (the
+    page's ≈ note); while the cube's first walk is still on its way: {"busy": 1, "from", "next"} only (no column yet, the
+    page says so).
+Past day 30 (owner, 20 Oct 2026: "jitna purana app utna date"): fetch.ga4_cube (GA4_CUBE) keeps every install day's GA4
+ad revenue by activity day × country from the history start (with countryId GA4 answers every install day; the
+[date, firstSessionDate] shape stops at about 15 months). Per install day X its 30-day buckets B[j] (ages 30j+1 …
+30j+30, j ≥ 1) = Σ over the activity months (+ the hot days) of the cube's "b"[X][j][W] micros × kf(W) — the SAME
+weekly AdMob ÷ GA4 scale k as the D0 … D30 cells — and m = [base + B[1], base + B[1] + B[2], …] with base = d[30]
+when final through 30, else the D30 checkpoint (as t's D60+); m[j] only while EVERY activity day of buckets 1 … j is
+folded or hot (a hole stops it), final while every one is folded. q bit 2 / 4 from the cube's ledger of those days
+(loss micros > 0 / flagged). Breakeven and so far also look through m. Only with the switch on (GA4_CUBE:
+start(cube=True)), the cube of the app's stream, and once its walk reached the final edge the first time (done: the
+columns come in one go, never a half-read store's few; until then only the "late" busy note); with the switch off,
+without a cube or with another stream's, every byte of the file is as before.
 roi.json.gz — every app's summary row (with its f4), the portfolio lifetime P/L and the portfolio install days (apps
 with spend), and the ranges the forms used (f4c).
 Pointer: dashboard["roi"] = {"file", "v", "apps": {app_id: {"file", "st", "r7", "u7", "pb", "lp"}}}.
@@ -62,6 +66,7 @@ from datetime import date, datetime, timedelta, timezone
 from .db import write_json_gz_stable
 from .engine import value as val
 from .fetch import ga4_cohort as gco
+from .fetch import ga4_cube as gcu
 from .fetch import ga4_uninstall as gu
 
 ALL_FILE = "roi.json.gz"
@@ -136,17 +141,17 @@ class Acc:
         self.f4m = 0                                # ⚖️ apps whose forms use GA4's measured paid share + premium
         self.adsrc = None                           # ⚙️ the AdMob reports for the ad setting changes (adcfg.Source)
         self.ac = None                              # … their run (adcfg_build), made on the first app
-        self.late = False                           # 📅 GA4_COHORT_LATE: the 30-day columns past D30 (the late store)
+        self.cube = False                           # 🧊 GA4_CUBE: the 30-day columns past D30 (fetch.ga4_cube)
 
 
-def start(cal=None, adsrc=None, late=False):
+def start(cal=None, adsrc=None, cube=False):
     """cal: the forecast's eCPM calendar (fc_calendar.seasons, from build_static), handed to the forecast's run;
-    adsrc: the ⚙️ ad setting changes' reports (engine.adcfg.Source, from build_static); late: GA4_COHORT_LATE (off:
-    the late store is never read, the file as without it)."""
+    adsrc: the ⚙️ ad setting changes' reports (engine.adcfg.Source, from build_static); cube: GA4_CUBE (off: the cube
+    is never read, the file as without it)."""
     acc = Acc()
     acc.cal = cal
     acc.adsrc = adsrc
-    acc.late = bool(late)
+    acc.cube = bool(cube)
     return acc
 
 
@@ -176,57 +181,66 @@ def _tie_off(ida, co_x, pr_days):
     return off, checked
 
 
-def _late(data_dir, aid, co, P):
-    """The app's LATE store (fetch.ga4_cohort, GA4_COHORT_LATE) folded month by month (one month in memory at a time)
-    → {"B": {X: {j: USD}} the 30-day buckets (AdMob-matched with kf of each activity day), "full" (lo, hi): every
-    activity day lo … hi read, "oth" (lo, hi): q bits of them (2: revenue GA4 gave no install day, 4: a flagged
-    block), "C": the late read's final edge, "info" (the file's "late")} — None when nothing of it was read, before
-    the late read first reached today (late.done), or without a main store of the same stream."""
-    if not co or not co.get("stream_id"):
+def _late(data_dir, aid, sid, P):
+    """The app's cohort cube (fetch.ga4_cube, GA4_CUBE) folded month by month (one month in memory at a time) + its hot
+    days → {"B": {X: {j: USD}} the 30-day buckets (AdMob-matched with kf of each activity week), "full" (lo, hi): every
+    activity day lo … hi folded or hot, "fin" (lo, hi): every one folded, "q" (lo, hi): q bits of them (2: revenue GA4
+    left "(other)" / gave no install day, 4: GA4 flagged with nothing to measure it by), "info" (the file's "late")}
+    — None without a cube of the stream `sid` or with no day; before its walk first reached the final edge (done) only
+    {"info": {"busy": 1, "from", "next"}} (the page says the columns are on their way, none shown)."""
+    h = gcu.load_head(data_dir, aid)
+    if not h or str(h.get("stream_id") or "") != str(sid or ""):
         return None
-    lt = co.get("late") if isinstance(co.get("late"), dict) else {}
-    if not lt.get("done"):                          # still on its first read: the file as without it until it is whole
-        return None
+    if not h.get("done"):
+        return {"info": {"busy": 1, "from": h.get("from"), "next": h.get("next")}}
     kf, hs = P["sc"]["kf"], P["hs"]
-    B, read, oth, loss, omax = {}, set(), set(), set(), 0.0
-    for _, mo in gco.late_months(data_dir, aid, co["stream_id"]):
-        ot, tt, ls = mo.get("oth") or {}, mo.get("t") or {}, mo.get("loss") or {}
-        for D, xs in (mo.get("d") or {}).items():
-            try:
-                Dd = _d(D)
-            except (TypeError, ValueError):
-                continue
-            if Dd < hs or not isinstance(xs, dict):
-                continue
-            read.add(Dd)
-            k = kf(Dd)[0]
-            for X, v in xs.items():
-                try:
-                    L = (Dd - _d(X)).days
-                except (TypeError, ValueError):
-                    continue
-                if L < gco.LAGS or not v:
-                    continue
-                e = B.setdefault(X, {})
-                j = (L - 1) // LATE_STEP
-                e[j] = e.get(j, 0.0) + v / 1e6 * k
-            o = int(ot.get(D) or 0)
-            if o > 0:
-                oth.add(Dd)
-                tt_d = int(tt.get(D) or 0)
-                omax = max(omax, min(1.0, o / tt_d) if tt_d > 0 else 1.0)
-            if ls.get(D):
-                loss.add(Dd)
-    if not read:
+    B, fin, hot, oth, flg, omax, ks = {}, set(), set(), set(), set(), 0.0, {}
+
+    def k_of(W):
+        if W not in ks:
+            ks[W] = kf(_d(W))[0]
+        return ks[W]
+
+    def add(b):
+        for X, js in (b or {}).items():
+            e = B.setdefault(X, {})
+            for j, ws in (js or {}).items():
+                jj = int(j)
+                e[jj] = e.get(jj, 0.0) + sum(v / 1e6 * k_of(W) for W, v in (ws or {}).items())
+
+    def note(Dd, led):
+        nonlocal omax
+        lo, t = int(led.get("loss") or 0), int(led.get("t") or 0)
+        if lo > 0:
+            oth.add(Dd)
+            omax = max(omax, min(1.0, lo / t) if t > 0 else 1.0)
+        if led.get("fl"):
+            flg.add(Dd)
+    for _, mo in gcu.months(data_dir, aid, sid):
+        for D, led in mo["days"].items():
+            Dd = _d(D)
+            fin.add(Dd)
+            note(Dd, led if isinstance(led, dict) else {})
+        add(mo["b"])
+    for D, rec in (h.get("d") or {}).items():
+        Dd = _d(D)
+        if Dd in fin or not isinstance(rec, dict):
+            continue
+        hot.add(Dd)
+        note(Dd, rec)
+        add(rec.get("b"))
+    have = {D for D in fin | hot if D >= hs}
+    if not have:
         return None
-    last = max(read)
+    last = max(have)
     n = (last - hs).days + 1
-    pr, po, pl = [0] * (n + 1), [0] * (n + 1), [0] * (n + 1)
+    pr, pf, po, pl = [0] * (n + 1), [0] * (n + 1), [0] * (n + 1), [0] * (n + 1)
     for i in range(n):
         D = hs + timedelta(days=i)
-        pr[i + 1] = pr[i] + (D in read)
+        pr[i + 1] = pr[i] + (D in have)
+        pf[i + 1] = pf[i] + (D in fin)
         po[i + 1] = po[i] + (D in oth)
-        pl[i + 1] = pl[i] + (D in loss)
+        pl[i + 1] = pl[i] + (D in flg)
 
     def span(lo, hi):
         i0, i1 = (lo - hs).days, (hi - hs).days
@@ -236,22 +250,18 @@ def _late(data_dir, aid, co, P):
         s_ = span(lo, hi)
         return bool(s_) and pr[s_[1] + 1] - pr[s_[0]] == s_[1] - s_[0] + 1
 
+    def final(lo, hi):
+        s_ = span(lo, hi)
+        return bool(s_) and pf[s_[1] + 1] - pf[s_[0]] == s_[1] - s_[0] + 1
+
     def q_bits(lo, hi):
         s_ = span(lo, hi)
         if not s_:
             return 0
         return (2 if po[s_[1] + 1] - po[s_[0]] > 0 else 0) | (4 if pl[s_[1] + 1] - pl[s_[0]] > 0 else 0)
-    C = None
-    try:                                            # final: before the cursor (read when ≥ FINAL_LAG days old)
-        if lt.get("next"):
-            C = _d(lt["next"]) - timedelta(days=1)
-        if C is not None and co.get("read_today"):
-            C = min(C, _d(co["read_today"]) - timedelta(days=gco.FINAL_LAG))
-    except (TypeError, ValueError):
-        C = None
-    return {"B": B, "full": full, "oth": q_bits, "C": C,
-            "info": {"days": len(read), "oth": len(oth), "omax": _r(omax, 6), "loss": len(loss),
-                     "from": _iso(min(read)), "till": _iso(last)}}
+    return {"B": B, "full": full, "fin": final, "q": q_bits,
+            "info": {"days": len(have), "oth": len({D for D in oth if D >= hs}), "omax": _r(omax, 6),
+                     "loss": len({D for D in flg if D >= hs}), "from": _iso(min(have)), "till": _iso(last)}}
 
 
 def _cohorts(P, spend, fxf, co, today, late=None):
@@ -297,7 +307,7 @@ def _cohorts(P, spend, fxf, co, today, late=None):
                 else:
                     base = d[30] if (d is not None and df > 30) else e["R"][5]
                     t[j] = _r(base + e["R"][j] - e["R"][5])
-        # past day 30, every 30 days (the late read): from the row's own D30 on, while every activity day was read
+        # past day 30, every 30 days (the cohort cube): from the row's own D30 on, while every activity day is there
         m, mf, qo = None, 0, 0
         if late is not None:
             base = d[30] if (d is not None and df > 30) else (e["R"][J30] if t[J30] is not None else None)
@@ -309,9 +319,10 @@ def _cohorts(P, spend, fxf, co, today, late=None):
                     j += 1
                 if vals:
                     m = vals
-                    mf = sum(1 for i in range(len(m)) if late["C"] is not None
-                             and X + timedelta(days=LATE_STEP * (i + 2)) <= late["C"])
-                    qo = late["oth"](X + timedelta(days=gco.LAGS), X + timedelta(days=LATE_STEP * (len(m) + 1)))
+                    while mf < len(m) and late["fin"](X + timedelta(days=gco.LAGS),
+                                                      X + timedelta(days=LATE_STEP * (mf + 2))):
+                        mf += 1
+                    qo = late["q"](X + timedelta(days=gco.LAGS), X + timedelta(days=LATE_STEP * (len(m) + 1)))
         # so far: the read that reaches furthest (the install-day read through S, this store through `newest`)
         s = sd = None
         if e and X <= S:
@@ -820,11 +831,11 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             co = None
         now = now or datetime.now(timezone.utc)
         today = _d(co["read_today"]) if co and co.get("read_today") else P["S"]
-        try:                                            # the late read (D60, D90 … the app's age; GA4_COHORT_LATE
-            late = _late(data_dir, aid, co, P) if acc.late else None    # only): a bad file costs only those columns
-        except Exception:
+        try:                                            # the cohort cube (D60, D90 … the app's age; GA4_CUBE only):
+            late = _late(data_dir, aid, store.get("stream_id"), P) if acc.cube else None   # a bad file costs only
+        except Exception:                                                                   # those columns
             late = None
-        rows = _cohorts(P, spend, fxf, co, today, late)
+        rows = _cohorts(P, spend, fxf, co, today, late if late and "B" in late else None)
         off, checked = _tie_off(ida, (co or {}).get("x") or {}, ida.get("days"))
         for r in rows:
             if r["d"]:

@@ -6844,8 +6844,9 @@ function cohortTable(d){ const T=d.T, groups=groupRows(d), shown=groups.slice(0,
     +`<div class="roi-tw"><table class="roi-t roi-heat"><thead>${head}</thead><tbody>${body}</tbody></table></div>${more}`
     +`<p class="roi-note">Har cell = us install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ke users ki us din tak ki <b>kul kamai</b> (${MET==='roas'?'spend ka %':MET==='ltv'?'per install':MET==='delta'?'pichhle column se kitni badhi':'paisa'}). Rang: hara = spend wapas (≥100%), peela = 50–100%, laal = 50% se kam. Halka = abhi final nahi. ${GRAIN!=='day'?'Hafte / mahine ka cell tabhi jab uske saare din us umar tak pahunch gaye.':''}${lateNote(d,C)}</p>`; }
 // the 30-day columns' note: how far, when a column fills, and GA4's "(other)" share (measured, from the file)
-function lateNote(d,C){ const mx=mLen(d.rows||[]); if(!mx) return '';
-  const lt=d.late||{}, pc=v=>!ok(v)?'—':v>0&&v<0.001?'<0.1%':(v*100).toFixed(v<0.1?1:0)+'%';
+function lateNote(d,C){ const mx=mLen(d.rows||[]), lt=d.late||{};
+  if(!mx) return lt.busy?` D30 ke baad ke 30-din wale column (D60, D90 … app ki umar tak) abhi GA4 se padhe ja rahe hain — app ke pehle din se, har din har install din aur country; ${lt.next&&lt.from&&lt.next>lt.from?fd(lt.next)+' se pehle ke din padh liye':'abhi shuru hua'}. Poore hone pe sab column ek saath dikhenge; tab tak D60 / D90 / D180 / D365 checkpoint.`:'';
+  const pc=v=>!ok(v)?'—':v>0&&v<0.001?'<0.1%':(v*100).toFixed(v<0.1?1:0)+'%';
   const ls=mx===1?'D60':mx===2?'D60, D90':`D60, D90 … D${30*(mx+1)}`, on=(C||[]).filter(c=>c.mi!=null).length;
   return ` D30 ke baad har 30 din ka column (${ls}), app ki umar tak — jitna purana install din, utne column. Column tabhi bharta hai jab us 30 din ke saare din GA4 se padh liye gaye; beech ka koi din na padha ho to wahin ruk jata hai (·) — us din ka D60 / D90 / D180 checkpoint ho to wo dikhta hai.`
     +(C&&on<mx?` Abhi dikh rahe install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ${on?'D'+30*(on+1)+' tak':'D60 tak nahi'} pahunche — purane (Show all${GRAIN==='day'?' / Week / Month':''}) me D${30*(mx+1)} tak column.`:'')

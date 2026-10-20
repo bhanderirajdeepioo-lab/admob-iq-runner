@@ -274,11 +274,18 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         try:                                            # day's ad revenue — its own reads and store, a failure costs
             from .fetch import ga4_cohort as gco        # that step only
             print(gco.log_line(gco.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
-                                               budget=s.get("ga4_cohort_budget_sec") or gco.BUDGET_SEC,
-                                               late=bool(s.get("ga4_cohort_late")))),
+                                               budget=s.get("ga4_cohort_budget_sec") or gco.BUDGET_SEC)),
                   file=sys.stderr)
         except Exception as e:
             print("ga4 cohort skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_cube"):                               # 🧊 the cohort cube (GA4_CUBE): revenue by activity day ×
+        try:                                            # install day × country, past D30 for the ROI columns — its
+            from .fetch import ga4_cube as gcu          # own reads, store and budget, a failure costs that step only
+            print(gcu.log_line(gcu.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                               budget=s.get("ga4_cube_budget_sec") or gcu.BUDGET_SEC)),
+                  file=sys.stderr)
+        except Exception as e:
+            print("ga4 cube skipped: %s" % type(e).__name__, file=sys.stderr)
     state = gu.load_state(data_dir)
     os.makedirs(out_dir, exist_ok=True)
     details, rows, no_ga4, files = [], [], [], [ASSET]
@@ -320,7 +327,7 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         from . import roi_build as rb
         if val_on and rb.enabled(s):
             roi_acc = rb.start(cal=(revenue or {}).get("cal"), adsrc=(revenue or {}).get("adsrc"),
-                               late=bool(s.get("ga4_cohort_late")))     # GA4_COHORT_LATE off: the file without it
+                               cube=bool(s.get("ga4_cube")))     # GA4_CUBE off: the file as without the cube
         else:
             rb.off(out_dir)
     except Exception as e:

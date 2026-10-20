@@ -1,8 +1,8 @@
 """📈 ROI (a section of 💸 Install value) — the page side. tests/roi_frontend.js runs the ROI module + roiWrap of
 frontend/index.html for real (a node vm, stub page helpers) on SYNTHETIC data made up there; checked here: where the block
-goes, the day-by-day columns and their fallback to the checkpoints, past D30 every 30 days up to the app's age (the late
-read's m: columns, finality, week / month, title + note, breakeven / so far; a file without m: the checkpoints), Today /
-Yesterday, week / month rows (complete days only), the four cell kinds, breakeven, the KPI tiles, the countries board
+goes, the day-by-day columns and their fallback to the checkpoints, past D30 every 30 days up to the app's age (the
+cohort cube's m: columns, finality, week / month, title + note, breakeven / so far; the cube still on its way: only a
+note; a file without m: the checkpoints), Today / Yesterday, week / month rows (complete days only), the four cell kinds, breakeven, the KPI tiles, the countries board
 (order, what cutting saves), lifetime P/L (totals to the day both sides are in), All apps (icons, Worse first, hidden apps out), the hub card line, the four forms
 of ROI (hero block, ranges printed from the file, GA4-measured paid split, budget call, mostly-organic flag, All-apps
 table), and the wiring into
@@ -66,6 +66,8 @@ def test_day_wise_past_d30(out):
     assert out["m_part_cols"] == ["D0", "D1", "D3", "D7", "D14", "D30", "D60", "D90", "D180", "D365"]
     assert out["m_part_cells"] == [[61, True], [91, True], [181, True], [None, False]]
     assert all(out["m_part"]) and all(out["m_list"]) and out["m_q4"]
+    # the cohort cube's first walk still on its way: no column, the Hinglish note says so and how far it read
+    assert all(out["m_busy"])
 
 
 def test_countries_life_all(out):

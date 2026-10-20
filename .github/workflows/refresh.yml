@@ -143,9 +143,12 @@ jobs:
           # ROI_TAB=false takes the ROI section off the Install value tab
           GA4_COHORT:           ${{ vars.GA4_COHORT || 'true' }}
           GA4_COHORT_BUDGET_SEC: ${{ vars.GA4_COHORT_BUDGET_SEC }}
-          # … and past day 30 (the late read: 30-day columns D60, D90 … up to the app's age; data/ga4_cohort/late/):
-          # GA4_COHORT_LATE=false stops only these reads (and the page's 30-day columns: the file as without them)
-          GA4_COHORT_LATE:      ${{ vars.GA4_COHORT_LATE || 'true' }}
+          # 🧊 The cohort cube (admob_iq/fetch/ga4_cube.py; data/ga4_cube/ in the private repo, kept for good): GA4 ad
+          # revenue by activity day × install day × country from the history start — the ROI section's 30-day columns
+          # past D30 (D60, D90 … up to the app's age). GA4_CUBE=false stops the reads and the columns (the page's file
+          # as without them) without a code push; GA4_CUBE_BUDGET_SEC = its seconds per build (empty: 150)
+          GA4_CUBE:             ${{ vars.GA4_CUBE || 'true' }}
+          GA4_CUBE_BUDGET_SEC:  ${{ vars.GA4_CUBE_BUDGET_SEC }}
           ROI_TAB:              ${{ vars.ROI_TAB || 'true' }}
           # 🔮 Forecast engine (inside the ROI section): vd = the forecast tournament's winner (default); FORECAST_ENGINE=v0
           # (repo variable) rolls back to the earlier engine without a code push (each app re-made by it within a day)

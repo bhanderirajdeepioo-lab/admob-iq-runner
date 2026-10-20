@@ -4,11 +4,12 @@ day, the status vs usual, install months (one set of days per curve: never dips)
 lifetime P/L days, the countries board (Scale / Keep / Watch / Cut …) and what cutting saves, the four forms of ROI
 (blended / paid-only / incremental / marginal as ranges, the paid share, the budget call; GA4's measured paid share and
 premium from the paid cells once they cover an age), the portfolio file, the
-pointer, one splat header rule, failure isolation and a counts-only line. Past D30 (the late store): 30-day buckets ×
-each activity day's k, the base (d[30] or the D30 checkpoint), holes stop the columns, finality, breakeven / so far
-through them, ≈ from GA4's "(other)" and from a block GA4 flagged (q bit 4), the final edge from the late cursor, and
-without a late store, with the switch off (GA4_COHORT_LATE) or before the late read first reached today (late.done)
-nothing of the file changes."""
+pointer, one splat header rule, failure isolation and a counts-only line. Past D30 (the cohort cube, fetch.ga4_cube):
+30-day buckets from the cube's "b" × the weekly k of each activity week, the base (d[30] or the D30 checkpoint), holes
+stop the columns (a day neither folded nor hot), finality (folded) vs a hot day, breakeven / so far through them, ≈ from
+the cube's measured loss (q bit 2) and from a day GA4 flagged (q bit 4), before the cube's walk first reached the final
+edge (done) only the page's "on its way" note, and without a cube, with the switch off (GA4_CUBE) or another stream's
+cube every byte of the file as the build made it before the 30-day columns existed (a fixed digest of it)."""
 import gzip
 import json
 import os
@@ -367,47 +368,51 @@ def test_finish_pointer_header_and_isolation(tmp_path):
     assert rb.enabled({}) and not rb.enabled({"roi_tab": False})
 
 
-# ── past D30 every 30 days (the late read, fetch.ga4_cohort's late store) ───────────────────────────────────────────
+# ── past D30 every 30 days (the cohort cube, fetch.ga4_cube) ─────────────────────────────────────────────────────────
 LHS, LS, LTODAY = date(2026, 4, 1), date(2026, 10, 7), date(2026, 10, 13)
-KSW = date(2026, 8, 1)                                  # the scale k: 2 before, 3 from this activity day on
+KSW = date(2026, 8, 3)                                  # the scale k (weekly): 2 before this week, 3 from it on
 
 
-def _late_setup(tmp_path, holes=(), oth=None, stream="222", read_till=LTODAY, loss=(), done=True):
-    """An app from LHS: install-day checkpoints (R[30] = $62), the exact store for the last 100 install days ($0.50 GA4 a
-    day), and the late store: every install day earns $0.01 GA4 on every activity day ≥ 31 days after it, every day
-    read from LHS + 31 to today except `holes`; `oth`: {day: (other micros, day total micros)}; `loss`: days of a
-    block GA4 flagged. The late cursor (next) as fetch.ga4_cohort leaves it after a read on read_till."""
-    from admob_iq.fetch import ga4_cohort as gco
-    P = _P(LHS, LS)
-    P["sc"]["kf"] = lambda d: ((2.0 if d < KSW else 3.0), "ok", False, 2.0)
-    co = {"read_today": LTODAY.isoformat(), "stream_id": "222", "x": {},
-          "late": {"from": (LHS + timedelta(days=31)).isoformat(),
-                   "next": (read_till - timedelta(days=gco.FINAL_LAG - 1)).isoformat(), "done": done,
-                   "read_till": read_till.isoformat()}}
+def _mon(d):
+    return d - timedelta(days=d.weekday())
+
+
+def _kf(d):
+    return (2.0 if _mon(d) < KSW else 3.0), "ok", False, 2.0
+
+
+def _cube_setup(tmp_path, holes=(), loss=None, flags=(), stream="222", hot_from=LTODAY - timedelta(days=2), done=True,
+                hs=LHS, today=LTODAY, earners=None):
+    """An app from hs: install-day checkpoints (R[30] = $62), the exact store for the last 100 install days ($0.50 GA4 a
+    day) and the cube: every install day (or only `earners`) earns $0.01 GA4 on every activity day ≥ 31 days after it,
+    every activity day hs … today folded (before hot_from) or hot (from it), except `holes`; `loss`: {day: (loss
+    micros, day total micros)}; `flags`: days GA4 flagged."""
+    from admob_iq.fetch import ga4_cube as cu
+    P = _P(hs, LS if hs == LHS else today - timedelta(days=6))
+    P["sc"]["kf"] = _kf if hs == LHS else P["sc"]["kf"]
+    co = {"read_today": today.isoformat(), "stream_id": "222", "x": {}}
     for i in range(100):
-        X = LTODAY - timedelta(days=i)
+        X = today - timedelta(days=i)
         co["x"][X.isoformat()] = {"r": [500000] * 31, "u": [100 - L for L in range(31)]}
-    lt = gco.Late(str(tmp_path), "a~1", stream)
-    got, first = {"d": {}, "oth": {}, "t": {}}, LHS + timedelta(days=31)
-    D = first
-    while D <= LTODAY:
-        k = D.isoformat()
-        got["d"][k] = {}
-        X = LHS
-        while X <= D - timedelta(days=31):
-            got["d"][k][X.isoformat()] = 10000
-            X += timedelta(days=1)
-        if oth and D in oth:
-            got["oth"][k], got["t"][k] = oth[D]
+    cube = cu.Cube(str(tmp_path), "a~1", stream)
+    D = hs
+    while D <= today:
+        b = {}
+        for X in (sorted(earners) if earners is not None else (hs + timedelta(days=i) for i in range((D - hs).days + 1))):
+            if (D - X).days >= 31:
+                b[X.isoformat()] = {str(cu.bucket((D - X).days)): {_mon(D).isoformat(): 10000}}
+        lo, tt = (loss or {}).get(D, (0, 10000 * len(b)))
+        rec = {"st": "loss" if lo or D in flags else "ok", "rows": len(b), "loss": lo, "t": tt,
+               "fl": 1 if D in flags else 0, "via": "block", "at": "2026-10-13T06:00:00Z", "b": b, "c": {}, "e": {}}
+        if D not in holes:
+            if D >= hot_from:
+                cube.head["d"][D.isoformat()] = rec
+            else:
+                cube.fold(D, rec)
         D += timedelta(days=1)
-    a = first
-    for h in sorted(holes) + [LTODAY + timedelta(days=1)]:
-        if a <= h - timedelta(days=1):
-            lt.put(got, a, h - timedelta(days=1))
-        a = h + timedelta(days=1)
-    for D in sorted(loss):                              # the same day read again in a block GA4 flagged
-        lt.put(dict(got, loss=True), D, D)
-    lt.save()
+    cube.save()
+    cube.head.update(done=done, stream_id=stream, next=hot_from.isoformat())
+    cube.save_head()
     return P, co
 
 
@@ -416,47 +421,62 @@ def _rows(P, co, late, spend=None):
     return by
 
 
-def test_late_buckets_scale_base_finality(tmp_path):
-    P, co = _late_setup(tmp_path)
-    late = rb._late(str(tmp_path), "a~1", co, P)
-    assert late["info"] == {"days": (LTODAY - LHS).days - 30, "oth": 0, "omax": 0.0, "loss": 0, "from": "2026-05-02",
-                            "till": "2026-10-13"} and late["C"] == date(2026, 10, 10)
+def test_cube_buckets_weekly_k_base_finality(tmp_path):
+    P, co = _cube_setup(tmp_path)
+    late = rb._late(str(tmp_path), "a~1", "222", P)
+    assert late["info"] == {"days": (LTODAY - LHS).days + 1, "oth": 0, "omax": 0.0, "loss": 0, "from": "2026-04-01",
+                            "till": "2026-10-13"}
     by = _rows(P, co, late)
     old = by[LHS]                       # no exact cells: base = its D30 checkpoint ($62); every bucket = 30 days × $0.01 × k
     assert old["d"] is None and old["t"][T.index(30)] == 62.0
-    assert old["m"] == [62.6, 63.2, 63.8, 64.69, 65.59]       # bucket 4 (Jul 31 … Aug 29): 1 day at k 2, 29 at k 3
-    assert old["mf"] == 5 and not old["qo"]                    # day 180 = Sep 28: whole and final; day 210 not read yet
-    mid = by[date(2026, 7, 10)]          # exact store final through day 30: base = d[30] (22 days × k 2 + 9 × k 3)
-    assert mid["df"] == 31 and mid["d"][30] == 35.5 and mid["m"] == [36.4, 37.3] and mid["mf"] == 2
-    edge = by[date(2026, 7, 15)]         # its day 90 = Oct 13: read, not final yet (final edge = read_till − 3)
+    assert old["m"] == [62.6, 63.2, 63.8, 64.67, 65.57]       # bucket 4 (Jul 31 … Aug 29): 3 days in the week at k 2
+    assert old["mf"] == 5 and not old["qo"]                    # day 180 = Sep 28: whole and folded; day 210 not there
+    mid = by[date(2026, 7, 10)]          # exact store final through day 30: base = d[30] (24 days × k 2 + 7 × k 3)
+    assert mid["df"] == 31 and mid["d"][30] == 34.5 and mid["m"] == [35.4, 36.3] and mid["mf"] == 2
+    edge = by[date(2026, 7, 15)]         # its day 90 = Oct 13: a hot day — the column is there, not final yet
     assert edge["m"] == [round(edge["d"][30] + 0.9, 4), round(edge["d"][30] + 1.8, 4)] and edge["mf"] == 1
     assert date(2026, 8, 20) in by and "m" not in by[date(2026, 8, 20)]   # 54 days old: no whole 30-day bucket
-    # the late read's own final edge (its cursor): an older read makes fewer columns final
-    P2, co2 = _late_setup(tmp_path / "b", read_till=date(2026, 10, 1))
-    assert _rows(P2, co2, rb._late(str(tmp_path / "b"), "a~1", co2, P2))[LHS]["mf"] == 5   # Sep 28 ≤ Sep 28
-    assert _rows(P2, co2, rb._late(str(tmp_path / "b"), "a~1", co2, P2))[date(2026, 7, 10)]["mf"] == 1
+    # the k of each activity WEEK (kf at its Monday W, as the cube keys it): a k that moved mid-week (Wed Aug 5) counts
+    # from the next week on — Jul 31 … Aug 9 at k 2, Aug 10 … 29 at k 3 (by the day it would be 64.65)
+    P["sc"]["kf"] = lambda d: ((2.0 if d < date(2026, 8, 5) else 3.0), "ok", False, 2.0)
+    assert _rows(P, co, rb._late(str(tmp_path), "a~1", "222", P))[LHS]["m"][3] == 64.6
 
 
-def test_late_holes_stop_the_columns(tmp_path):
-    P, co = _late_setup(tmp_path, holes={date(2026, 6, 15)})
-    by = _rows(P, co, rb._late(str(tmp_path), "a~1", co, P))
-    assert by[LHS]["m"] == [62.6]                              # bucket 2 (Jun 1 … 30) has a day never read: stops there
+def test_cube_holes_stop_the_columns(tmp_path):
+    P, co = _cube_setup(tmp_path, holes={date(2026, 6, 15)})
+    by = _rows(P, co, rb._late(str(tmp_path), "a~1", "222", P))
+    assert by[LHS]["m"] == [62.6]                              # bucket 2 (Jun 1 … 30) has a day not in the cube
     assert "m" not in by[date(2026, 5, 1)]                     # its bucket 1 (Jun 1 … 30): no column at all
-    assert by[date(2026, 5, 16)]["m"][0] == 62.6 and len(by[date(2026, 5, 16)]["m"]) == 4   # buckets after the hole
+    assert by[date(2026, 5, 16)]["m"] == [62.6, 63.32, 64.22, 65.12]   # buckets after the hole, the last one hot
+    assert by[date(2026, 5, 16)]["mf"] == 3
 
 
-def test_late_so_far_breakeven_and_other(tmp_path):
-    oth = {date(2026, 9, 20): (50000, 2000000)}               # 2.5% of that day's revenue GA4 gave no install day
-    P, co = _late_setup(tmp_path, oth=oth)
+def test_cube_hot_days_and_an_unfolded_gap(tmp_path):
+    """A hot day (read while not final) fills a column but never makes it final; a gap the walk has not folded yet
+    (a pause, a Stop) is a hole until it is."""
+    P, co = _cube_setup(tmp_path / "a", hot_from=date(2026, 10, 1))
+    by = _rows(P, co, rb._late(str(tmp_path / "a"), "a~1", "222", P))
+    assert by[date(2026, 7, 3)]["m"][1] and by[date(2026, 7, 3)]["mf"] == 1   # day 90 = Oct 1: hot
+    assert by[LHS]["mf"] == 5
+    gap = {date(2026, 9, 20) + timedelta(days=i) for i in range(21)}           # Sep 20 … Oct 10 not folded yet
+    P2, co2 = _cube_setup(tmp_path / "b", holes=gap)
+    by2 = _rows(P2, co2, rb._late(str(tmp_path / "b"), "a~1", "222", P2))
+    assert by2[LHS]["m"] == [62.6, 63.2, 63.8, 64.67] and by2[LHS]["mf"] == 4    # day 180 (… Sep 28): a hole
+    assert by2[date(2026, 7, 15)]["m"] == [round(by2[date(2026, 7, 15)]["d"][30] + 0.9, 4)]
+
+
+def test_cube_so_far_breakeven_and_loss(tmp_path):
+    loss = {date(2026, 9, 20): (50000, 2000000)}              # 2.5% of that day's revenue stayed "(other)"
+    P, co = _cube_setup(tmp_path, loss=loss)
     young = date(2026, 8, 4)                                  # exact store, no install-day checkpoint row
     P["xs"].pop(young)
-    late = rb._late(str(tmp_path), "a~1", co, P)
+    late = rb._late(str(tmp_path), "a~1", "222", P)
     assert late["info"]["oth"] == 1 and late["info"]["omax"] == 0.025
     sp = {"ccy": "USD", "daily": {LHS.isoformat(): 63_000_000}, "installs": {}, "first": LHS.isoformat(),
           "till": LTODAY.isoformat()}
     by, base = _rows(P, co, late, sp), _rows(P, co, None, sp)
     # breakeven: $63 spent; D30 $62 → the first 30-day column ≥ $63 is D90 ($63.20), "≤ day 90" — not the
-    # install-day checkpoint D60 ($122) the row without late columns uses
+    # install-day checkpoint D60 ($122) the row without the columns uses
     assert by[LHS]["be"] == [90, False] and base[LHS]["be"] == [60, False]
     # so far: the furthest read — m's D60 (Oct 3) beats the exact store's day 30 (Sep 3)
     y = by[young]
@@ -464,54 +484,31 @@ def test_late_so_far_breakeven_and_other(tmp_path):
     assert (base[young]["s"], base[young]["sd"]) == (46.5, "2026-09-03")
     assert (by[LHS]["s"], by[LHS]["sd"]) == (base[LHS]["s"], base[LHS]["sd"])   # the install-day read reaches further
     # ≈: a row whose columns use Sep 20; a row whose columns end before it (Jul 18: through Sep 16) does not
-    assert by[LHS]["qo"] and by[young]["qo"] and not by[date(2026, 7, 18)]["qo"]
+    assert by[LHS]["qo"] == 2 and by[young]["qo"] == 2 and not by[date(2026, 7, 18)]["qo"]
     assert rb._row_out(by[LHS])[12] == 2 and rb._row_out(dict(by[LHS], q=True))[12] == 3
     assert rb._row_out(by[date(2026, 7, 18)])[12] == 0
 
 
-def test_late_flagged_block_and_small_other_share(tmp_path):
-    """A block GA4 flagged (data loss / thresholding / sampling / cut): q bit 4 on a row whose columns use one of its
-    days, counted in the file's note; a tiny "(other)" share keeps its digits (never printed as 0.0%)."""
-    P, co = _late_setup(tmp_path, loss={date(2026, 9, 20), date(2026, 9, 21)},
-                        oth={date(2026, 9, 25): (30, 1_000_000)})                  # 0.003% of that day
-    late = rb._late(str(tmp_path), "a~1", co, P)
+def test_cube_flagged_days_and_small_loss_share(tmp_path):
+    """Days GA4 flagged with nothing to measure it by: q bit 4 on a row whose columns use one of them, counted in the
+    file's note; a tiny loss share keeps its digits (never printed as 0.0%)."""
+    P, co = _cube_setup(tmp_path, flags={date(2026, 9, 20), date(2026, 9, 21)},
+                        loss={date(2026, 9, 25): (30, 1_000_000)})             # 0.003% of that day
+    late = rb._late(str(tmp_path), "a~1", "222", P)
     assert late["info"]["loss"] == 2 and late["info"]["oth"] == 1 and late["info"]["omax"] == 3e-05
     by = _rows(P, co, late)
     assert by[LHS]["qo"] == 6 and rb._row_out(by[LHS])[12] == 6 and rb._row_out(dict(by[LHS], q=True))[12] == 7
     assert by[date(2026, 7, 18)]["qo"] == 0                    # its columns end Sep 16
-    j = date(2026, 7, 22)                                      # columns through Sep 20 (loss), not Sep 25 (other)
+    j = date(2026, 7, 22)                                      # columns through Sep 20 (flagged), not Sep 25 (loss)
     assert by[j]["qo"] == 4 and rb._row_out(by[j])[12] == 4
 
 
-def test_late_cursor_is_the_final_edge(tmp_path):
-    """Days read while still filling (on or after the cursor) never count final, however late read_till is: after a
-    gap the cursor waits for their re-read."""
-    P, co = _late_setup(tmp_path)
-    co["late"]["next"] = "2026-09-20"                          # e.g. a pause: Sep 20 … read only while filling
-    late = rb._late(str(tmp_path), "a~1", co, P)
-    assert late["C"] == date(2026, 9, 19)
-    by = _rows(P, co, late)
-    assert by[LHS]["mf"] == 4 and len(by[LHS]["m"]) == 5       # day 180 = Sep 28: read, not final
-    assert by[date(2026, 6, 25)]["m"][1] and by[date(2026, 6, 25)]["mf"] == 1   # day 90 = Sep 23: the same
-    co["late"].pop("next")
-    assert rb._late(str(tmp_path), "a~1", co, P)["C"] is None    # no cursor: nothing final
-
-
-def test_late_so_far_past_the_install_day_read(tmp_path):
+def test_cube_so_far_past_the_install_day_read(tmp_path):
     """An install day older than a year: the install-day read stops at day 365, m goes on to the app's age."""
-    from admob_iq.fetch import ga4_cohort as gco
-    hs, S, today = date(2025, 1, 1), date(2026, 10, 7), date(2026, 10, 13)
-    P = _P(hs, S)
-    co = {"read_today": today.isoformat(), "stream_id": "222", "x": {},
-          "late": {"next": "2026-10-11", "done": True, "read_till": today.isoformat()}}
-    lt = gco.Late(str(tmp_path), "a~1", "222")
-    got, D = {"d": {}, "oth": {}, "t": {}}, hs + timedelta(days=31)
-    while D <= today:
-        got["d"][D.isoformat()] = {hs.isoformat(): 10000}     # only the first install day earns past day 30
-        D += timedelta(days=1)
-    lt.put(got, hs + timedelta(days=31), today)
-    lt.save()
-    by = {r["X"]: r for r in rb._cohorts(P, None, lambda d: 1.0, co, today, rb._late(str(tmp_path), "a~1", co, P))}
+    hs, today = date(2025, 1, 1), date(2026, 10, 13)
+    P, co = _cube_setup(tmp_path, hs=hs, today=today, earners={hs})            # only the first install day earns
+    co["x"] = {}
+    by = {r["X"]: r for r in rb._cohorts(P, None, lambda d: 1.0, co, today, rb._late(str(tmp_path), "a~1", "222", P))}
     r = by[hs]
     assert len(r["m"]) == 20 and r["m"][-1] == 62 + 20 * 0.6                # D60 … D630 (650 days old today)
     assert r["sd"] == (hs + timedelta(days=630)).isoformat() and r["s"] == r["m"][-1]   # past the read's day 365
@@ -519,20 +516,22 @@ def test_late_so_far_past_the_install_day_read(tmp_path):
     assert other["m"][-1] == 62.0 and other["sd"] == "2026-09-24"
 
 
-def test_without_a_late_store_nothing_changes(tmp_path):
-    P, co = _late_setup(tmp_path)
-    assert rb._late(str(tmp_path / "none"), "a~1", co, P) is None              # no late files
-    P0, co0 = _late_setup(tmp_path / "half", done=False)                      # its first read not through yet
-    assert rb._late(str(tmp_path / "half"), "a~1", co0, P0) is None
-    assert rb._late(str(tmp_path), "a~1", dict(co, stream_id="999"), P) is None   # another stream's files
-    assert rb._late(str(tmp_path), "a~1", None, P) is None
+def test_without_a_cube_nothing_changes(tmp_path):
+    P, co = _cube_setup(tmp_path)
+    assert rb._late(str(tmp_path / "none"), "a~1", "222", P) is None          # no cube
+    P0, co0 = _cube_setup(tmp_path / "half", done=False)                      # its first walk not through yet: only
+    assert rb._late(str(tmp_path / "half"), "a~1", "222", P0) == {"info": {"busy": 1, "from": None,   # the page's note
+                                                                           "next": "2026-10-11"}}
+    assert rb._late(str(tmp_path), "a~1", "999", P) is None                    # another stream's cube
+    P1, co1 = _cube_setup(tmp_path / "other", stream="999")
+    assert rb._late(str(tmp_path / "other"), "a~1", "222", P1) is None
     sp = {"ccy": "USD", "daily": {LHS.isoformat(): 63_000_000}, "installs": {}, "first": LHS.isoformat(),
           "till": LTODAY.isoformat()}
     plain = rb._cohorts(P, sp, lambda d: 1.0, co, LTODAY)
     assert plain == rb._cohorts(P, sp, lambda d: 1.0, co, LTODAY, None)
     assert not any("m" in r or "qo" in r for r in plain) and {len(rb._row_out(r)) for r in plain} == {14}
-    # with the late store: a row it does not reach is exactly the row without it; a row it reaches only gains fields
-    late = rb._late(str(tmp_path), "a~1", co, P)
+    # with the cube: a row it does not reach is exactly the row without it; a row it reaches only gains fields
+    late = rb._late(str(tmp_path), "a~1", "222", P)
     with_late = rb._cohorts(P, sp, lambda d: 1.0, co, LTODAY, late)
     for a, b in zip(plain, with_late):
         if "m" not in b:
@@ -542,14 +541,14 @@ def test_without_a_late_store_nothing_changes(tmp_path):
             assert rb._row_out(b)[14:] == [b["m"], b["mf"]] and len(rb._row_out(b)) == 16
 
 
-def _stub_app(monkeypatch, P, co):
-    """app_step on made-up inputs: the install-day file, the engine's prep, the exact store; no spend, no forecast."""
+def _stub_app(monkeypatch, P, co, spend=None):
+    """app_step on made-up inputs: the install-day file, the engine's prep, the exact store, `spend`; no forecast."""
     from admob_iq import forecast_build, value_build
     from admob_iq.engine import value as val
     monkeypatch.setattr(value_build, "load_iday", lambda d, aid: {})
     monkeypatch.setattr(val, "settled_day", lambda ida, hs: P["S"])
     monkeypatch.setattr(val, "_prep", lambda store, ida, rev, ded, S: P)
-    monkeypatch.setattr(value_build, "app_spend", lambda pre, a, store: None)
+    monkeypatch.setattr(value_build, "app_spend", lambda pre, a, store: spend)
     monkeypatch.setattr(rb.gco, "load_store", lambda d, aid: co)
 
     def no_fc(*a, **k):
@@ -557,30 +556,52 @@ def _stub_app(monkeypatch, P, co):
     monkeypatch.setattr(forecast_build, "start", no_fc)
 
 
-def test_app_step_late_block(tmp_path, monkeypatch):
-    P, co = _late_setup(tmp_path / "data")
-    _stub_app(monkeypatch, P, co)
-    store, a = {"history_start": LHS.isoformat(), "stream_id": "222"}, {"app_id": "a~1", "app_name": "Alpha"}
+# sha256 of the decompressed roi_<key>.json.gz that the build at 8de0000 (before any 30-day column existed) wrote for
+# _app_step_run's made-up app — worked out once by loading that commit's admob_iq/roi_build.py next to this tree
+GOLDEN_8DE0000 = "2774546b3476f5a8b0b418225040ac4f1014ed531d0d71cafc073f569f8498bf"
 
-    def run(data, out, on=True):
-        os.makedirs(out, exist_ok=True)
-        acc = rb.start(late=on)
-        rb.app_step(acc, store, a, "aaaaaaaaaaaa", None, {}, {}, out, data)
-        assert not acc.fails and len(acc.apps) == 1
-        with gzip.open(os.path.join(out, "roi_aaaaaaaaaaaa.json.gz"), "rt") as f:
-            return json.load(f)
-    plain = run(str(tmp_path / "empty"), str(tmp_path / "o1"))           # no late store: no block, 14 fields a row
+
+def _app_step_run(data, out, cube):
+    from admob_iq.fetch import ga4_cube as cu    # noqa: F401  (the build reads it only with the switch on)
+    os.makedirs(out, exist_ok=True)
+    acc = rb.start(cube=cube)
+    store, a = {"history_start": LHS.isoformat(), "stream_id": "222"}, {"app_id": "a~1", "app_name": "Alpha"}
+    rb.app_step(acc, store, a, "aaaaaaaaaaaa", None, {}, {}, out, data)
+    assert not acc.fails and len(acc.apps) == 1
+    with open(os.path.join(out, "roi_aaaaaaaaaaaa.json.gz"), "rb") as f:
+        return gzip.decompress(f.read())
+
+
+SPEND = {"ccy": "USD", "daily": {(LHS + timedelta(days=i)).isoformat(): (40 + i % 9) * 1_000_000 for i in range(0, 190)},
+         "installs": {(LHS + timedelta(days=i)).isoformat(): 30 + i % 5 for i in range(0, 190)},
+         "first": LHS.isoformat(), "till": LTODAY.isoformat(), "sids": 1}
+
+
+def test_app_step_cube_block_and_byte_identical_without_it(tmp_path, monkeypatch):
+    import hashlib
+    P, co = _cube_setup(tmp_path / "data")
+    _stub_app(monkeypatch, P, co, SPEND)
+    plain = _app_step_run(str(tmp_path / "empty"), str(tmp_path / "o1"), True)      # switch on, no cube
+    off = _app_step_run(str(tmp_path / "data"), str(tmp_path / "o3"), False)        # cube on disk, switch off
+    from admob_iq.fetch import ga4_cube as cu
+    h = cu.load_head(str(tmp_path / "data"), "a~1")
+    cu.write_json_gz_stable(cu.hot_path(str(tmp_path / "data"), "a~1"), dict(h, stream_id="999"))
+    other = _app_step_run(str(tmp_path / "data"), str(tmp_path / "o5"), True)      # another stream's cube
+    # every one byte for byte the file the build wrote before the 30-day columns existed
+    assert plain == off == other and hashlib.sha256(plain).hexdigest() == GOLDEN_8DE0000
+    # the cube's first walk not through yet: no column, only the page's note of it (every other byte as without)
+    cu.write_json_gz_stable(cu.hot_path(str(tmp_path / "data"), "a~1"), dict(h, done=False, **{"from": "2026-04-01"}))
+    early = json.loads(_app_step_run(str(tmp_path / "data"), str(tmp_path / "o4"), True))
+    assert early.pop("late") == {"busy": 1, "from": "2026-04-01", "next": "2026-10-11"} and early == json.loads(plain)
+    cu.write_json_gz_stable(cu.hot_path(str(tmp_path / "data"), "a~1"), h)
+    full = json.loads(_app_step_run(str(tmp_path / "data"), str(tmp_path / "o2"), True))
+    plain = json.loads(plain)
     assert "late" not in plain and {len(r) for r in plain["rows"]} == {14}
-    full = run(str(tmp_path / "data"), str(tmp_path / "o2"))
-    assert full["late"] == {"days": (LTODAY - LHS).days - 30, "oth": 0, "omax": 0.0, "loss": 0, "from": "2026-05-02",
+    assert full["late"] == {"days": (LTODAY - LHS).days + 1, "oth": 0, "omax": 0.0, "loss": 0, "from": "2026-04-01",
                             "till": "2026-10-13"}
-    # GA4_COHORT_LATE off (the late files still on disk): the file byte for byte as without a late store
-    run(str(tmp_path / "data"), str(tmp_path / "o3"), on=False)
-    with open(os.path.join(tmp_path, "o1", "roi_aaaaaaaaaaaa.json.gz"), "rb") as f1, \
-            open(os.path.join(tmp_path, "o3", "roi_aaaaaaaaaaaa.json.gz"), "rb") as f3:
-        assert gzip.decompress(f1.read()) == gzip.decompress(f3.read())
     lens = {len(r) for r in full["rows"]}
-    assert lens == {14, 16} and full["rows"][0][14] == [62.6, 63.2, 63.8, 64.69, 65.59] and full["rows"][0][15] == 5
-    # every other part of the file as without the late store
-    assert {k: v for k, v in full.items() if k not in ("rows", "late")} == {k: v for k, v in plain.items() if k != "rows"}
-    assert [r[:8] + r[10:14] for r in full["rows"]] == [r[:8] + r[10:14] for r in plain["rows"]]   # no spend: no be
+    assert lens == {14, 16} and full["rows"][0][14] == [62.6, 63.2, 63.8, 64.67, 65.57] and full["rows"][0][15] == 5
+    # every other part of the file as without the cube but what the columns feed (so far, breakeven → the forms)
+    assert [r[:8] + r[11:14] for r in full["rows"]] == [r[:8] + r[11:14] for r in plain["rows"]]
+    assert {k for k in full if full[k] != plain.get(k)} <= {"rows", "late", "sum", "f4", "months"}
+    assert full["months"] == plain["months"] and full["cty"] == plain["cty"] and full["life"] == plain["life"]

@@ -743,6 +743,12 @@ function appFile() {
     // the column list as far as the 30-day columns go: one → (D60), two → (D60, D90), more → (D60, D90 … Dn)
     const nt = k => U.lateNote({ rows: [[0, 0, 0, 0, null, 0, null, [], null, null, null, null, 0, 0, Array(k).fill(1), 0]], late: {} });
     out.m_list = [nt(1).includes('(D60), app'), nt(2).includes('(D60, D90), app'), nt(3).includes('(D60, D90 … D120), app'), nt(0) === ''];
+    // the cube's first walk still on its way: no 30-day column, the note says so (and how far it read)
+    const busy = (l, rows) => U.cohortTable({ T, lags: 31, newest: '2026-10-13', rows: rows || [], late: l });
+    out.m_busy = [busy({ busy: 1, from: '2024-01-01', next: '2025-03-02' }).includes('abhi GA4 se padhe ja rahe hain'),
+      busy({ busy: 1, from: '2024-01-01', next: '2025-03-02' }).includes('2 Mar 25 se pehle ke din padh liye'),
+      busy({ busy: 1, from: '2024-01-01', next: '2024-01-01' }).includes('abhi shuru hua'),
+      !busy({}).includes('padhe ja rahe hain'), !busy({ days: 1 }).includes('padhe ja rahe hain')];
     // q bit 4: a flagged late block
     const dmq = JSON.parse(JSON.stringify(dm)); dmq.rows[dmq.rows.length - 1][12] = 4;
     out.m_q4 = U.cohortTable(dmq).includes('D30 ke baad GA4 ke report ne kuch data chhoda (data loss / thresholding / sampling flag)');
