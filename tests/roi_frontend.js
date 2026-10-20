@@ -739,7 +739,8 @@ function appFile() {
     out.m_part_cells = CP.slice(6).map(c => U.cum(r200, c, T));
     out.m_part = [dvp.includes('Every install day · D0 se D365 tak'), tp.includes('<th>D365</th>') && tp.includes('<th>D180</th>'),
       tp.includes('D30 ke baad har 30 din ka column (D60), app ki umar tak'),
-      tp.includes('sabse zyada us din ki kamai ka <0.1%'), tp.includes('≈ = 4 din ke D30-ke-baad wale GA4 report me data chhoda gaya')];
+      tp.includes('sabse zyada us din ki kamai ka <0.1%'), tp.includes('≈ = 4 din ke D30-ke-baad wale GA4 report pe data loss / thresholding / sampling ka flag tha'),
+      tp.includes('asli se thodi alag (kam ya zyada) ho sakti hai'), !tp.includes('thodi kam dikh sakti')];
     // the column list as far as the 30-day columns go: one → (D60), two → (D60, D90), more → (D60, D90 … Dn)
     const nt = k => U.lateNote({ rows: [[0, 0, 0, 0, null, 0, null, [], null, null, null, null, 0, 0, Array(k).fill(1), 0]], late: {} });
     out.m_list = [nt(1).includes('(D60), app'), nt(2).includes('(D60, D90), app'), nt(3).includes('(D60, D90 … D120), app'), nt(0) === ''];
@@ -748,10 +749,22 @@ function appFile() {
     out.m_busy = [busy({ busy: 1, from: '2024-01-01', next: '2025-03-02' }).includes('abhi GA4 se padhe ja rahe hain'),
       busy({ busy: 1, from: '2024-01-01', next: '2025-03-02' }).includes('2 Mar 25 se pehle ke din padh liye'),
       busy({ busy: 1, from: '2024-01-01', next: '2024-01-01' }).includes('abhi shuru hua'),
-      !busy({}).includes('padhe ja rahe hain'), !busy({ days: 1 }).includes('padhe ja rahe hain')];
+      !busy({}).includes('padhe ja rahe hain'), !busy({ days: 1 }).includes('padhe ja rahe hain'),
+      busy({ busy: 1, from: '2024-01-01', next: '2025-03-02', at: '2026-10-11' }).includes('padh liye (aakhri baar 11 Oct 26 ko aage badha).'),
+      !busy({ busy: 1, from: '2024-01-01', next: '2025-03-02' }).includes('aakhri baar')];
+    // a stalled cube (done): the page says how far every day was read — the newest columns wait for it; none when whole
+    const thn = (l, nw) => U.lateNote({ newest: nw, rows: [[0, 0, 0, 0, null, 0, null, [], null, null, null, null, 0, 0, [1], 0]], late: l });
+    out.m_thru = [thn({ thru: '2026-09-28', till: '2026-10-13' }, '2026-10-13').includes('GA4 cube abhi 28 Sep 26 tak hi poora padha gaya hai'),
+      thn({ thru: '2026-10-01', till: '2026-10-01' }, '2026-10-13').includes('abhi 1 Oct 26 tak hi'),
+      thn({ thru: '2026-10-01', till: '2026-10-13' }, null).includes('abhi 1 Oct 26 tak hi'),
+      !thn({ thru: '2026-10-13', till: '2026-10-13' }, '2026-10-13').includes('tak hi poora padha'),
+      !thn({ thru: '2026-10-13', till: '2026-10-13' }, '2026-10-12').includes('tak hi poora padha'),
+      !thn({}, '2026-10-13').includes('tak hi poora padha'),
+      U.lateNote({ newest: '2026-10-13', rows: [], late: { thru: '2026-09-28', till: '2026-10-13' } }).includes('28 Sep 26 tak hi')];
     // q bit 4: a flagged late block
     const dmq = JSON.parse(JSON.stringify(dm)); dmq.rows[dmq.rows.length - 1][12] = 4;
-    out.m_q4 = U.cohortTable(dmq).includes('D30 ke baad GA4 ke report ne kuch data chhoda (data loss / thresholding / sampling flag)');
+    out.m_q4 = U.cohortTable(dmq).includes('D30 ke baad GA4 ke report pe data loss / thresholding / sampling ka flag tha — asli kamai thodi alag (kam ya zyada) ho sakti hai')
+      && !U.cohortTable(dmq).includes('thodi zyada ho sakti');
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };
     ctx.roiCardLine(x, 'Alpha Pick');

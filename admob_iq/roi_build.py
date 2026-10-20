@@ -31,9 +31,10 @@ k the tab uses):
     age, that age uses GA4's MEASURED paid share and premium instead of the premium range (src "ga4", see _ga4p).
   * late — only when the app's cube is used: {"days" of it (folded + hot), "oth" days with revenue GA4 left
     "(other)" / gave no install day even after the country split (the cube's loss), "omax" the largest such share of a
-    day's revenue (6 decimals, measured), "loss" days GA4 flagged with nothing to measure it by, "from", "till"} (the
-    page's ≈ note); while the cube's first walk is still on its way: {"busy": 1, "from", "next"} only (no column yet, the
-    page says so).
+    day's revenue (6 decimals, measured), "loss" days GA4 flagged with nothing to measure it by, "from", "till", "thru"
+    the last day with every activity day from the history start read (a stalled walk: the page says the newest columns
+    wait for it)} (the page's ≈ note); while the cube's first walk is still on its way: {"busy": 1, "from", "next", "at"
+    the walk's last step (UTC day; absent before its first)} only (no column yet, the page says so and since when).
 Past day 30 (owner, 20 Oct 2026: "jitna purana app utna date"): fetch.ga4_cube (GA4_CUBE) keeps every install day's GA4
 ad revenue by activity day × country from the history start (with countryId GA4 answers every install day; the
 [date, firstSessionDate] shape stops at about 15 months). Per install day X its 30-day buckets B[j] (ages 30j+1 …
@@ -41,7 +42,8 @@ ad revenue by activity day × country from the history start (with countryId GA4
 weekly AdMob ÷ GA4 scale k as the D0 … D30 cells — and m = [base + B[1], base + B[1] + B[2], …] with base = d[30]
 when final through 30, else the D30 checkpoint (as t's D60+); m[j] only while EVERY activity day of buckets 1 … j is
 folded or hot (a hole stops it), final while every one is folded. q bit 2 / 4 from the cube's ledger of those days
-(loss micros > 0 / flagged). Breakeven and so far also look through m. Only with the switch on (GA4_CUBE:
+(loss micros > 0 / flagged). Breakeven and so far also look through m (breakeven by age: the exact days, the checkpoints
+through D30 they do not cover, m, the checkpoints past m). Only with the switch on (GA4_CUBE:
 start(cube=True)), the cube of the app's stream, and once its walk reached the final edge the first time (done: the
 columns come in one go, never a half-read store's few; until then only the "late" busy note); with the switch off,
 without a cube or with another stream's, every byte of the file is as before.
@@ -187,12 +189,15 @@ def _late(data_dir, aid, sid, P):
     activity day lo … hi folded or hot, "fin" (lo, hi): every one folded, "q" (lo, hi): q bits of them (2: revenue GA4
     left "(other)" / gave no install day, 4: GA4 flagged with nothing to measure it by), "info" (the file's "late")}
     — None without a cube of the stream `sid` or with no day; before its walk first reached the final edge (done) only
-    {"info": {"busy": 1, "from", "next"}} (the page says the columns are on their way, none shown)."""
+    {"info": {"busy": 1, "from", "next", "at"}} (the page says the columns are on their way, none shown)."""
     h = gcu.load_head(data_dir, aid)
     if not h or str(h.get("stream_id") or "") != str(sid or ""):
         return None
     if not h.get("done"):
-        return {"info": {"busy": 1, "from": h.get("from"), "next": h.get("next")}}
+        info = {"busy": 1, "from": h.get("from"), "next": h.get("next")}
+        if h.get("walk_at"):
+            info["at"] = str(h["walk_at"])[:10]     # the walk's last step (UTC day): a stalled walk shows its age
+        return {"info": info}
     kf, hs = P["sc"]["kf"], P["hs"]
     B, fin, hot, oth, flg, omax, ks = {}, set(), set(), set(), set(), 0.0, {}
 
@@ -234,6 +239,9 @@ def _late(data_dir, aid, sid, P):
         return None
     last = max(have)
     n = (last - hs).days + 1
+    thru = hs - timedelta(days=1)                   # every activity day hs … thru read (folded or hot): the page says
+    while thru + timedelta(days=1) in have:         # how far, when a stalled walk stops the newest columns there
+        thru += timedelta(days=1)
     pr, pf, po, pl = [0] * (n + 1), [0] * (n + 1), [0] * (n + 1), [0] * (n + 1)
     for i in range(n):
         D = hs + timedelta(days=i)
@@ -261,7 +269,8 @@ def _late(data_dir, aid, sid, P):
         return (2 if po[s_[1] + 1] - po[s_[0]] > 0 else 0) | (4 if pl[s_[1] + 1] - pl[s_[0]] > 0 else 0)
     return {"B": B, "full": full, "fin": final, "q": q_bits,
             "info": {"days": len(have), "oth": len({D for D in oth if D >= hs}), "omax": _r(omax, 6),
-                     "loss": len({D for D in flg if D >= hs}), "from": _iso(min(have)), "till": _iso(last)}}
+                     "loss": len({D for D in flg if D >= hs}), "from": _iso(min(have)), "till": _iso(last),
+                     "thru": _iso(thru) if thru >= hs else None}}
 
 
 def _cohorts(P, spend, fxf, co, today, late=None):
@@ -336,22 +345,23 @@ def _cohorts(P, spend, fxf, co, today, late=None):
             if sd is None or mA > min(_d(sd), X + timedelta(days=T[-1])):
                 s, sd = m[-1], _iso(mA)
         be = None
-        if sp and sp > 0:
-            for L, v in enumerate(d or []):
+        if sp and sp > 0:                           # by age: the exact days, the checkpoints through D30 they do not
+            for L, v in enumerate(d or []):         # cover, the 30-day columns, the checkpoints past them
                 if v is not None and v >= sp:
                     be = [L, L < df]
                     break
+            lim = max(LATE_STEP * (len(m) + 1) if m else -1, LATE_STEP)
+            ts = [a for j, a in enumerate(T) if t[j] is not None and t[j] >= sp and not (d is not None and a < len(d))]
+            if be is None and ts and ts[0] <= LATE_STEP:
+                be = [ts[0], False]
             if be is None and m:                    # the first 30-day column ≥ spend: "≤ that day"
                 for i, v in enumerate(m):
                     if v is not None and v >= sp:
                         be = [LATE_STEP * (i + 2), False]
                         break
             if be is None:
-                lim = LATE_STEP * (len(m) + 1) if m else -1
-                for j, a in enumerate(T):
-                    if t[j] is not None and t[j] >= sp and not (d is not None and a < len(d)) and a > lim:
-                        be = [a, False]
-                        break
+                ts = [a for a in ts if a > lim]
+                be = [ts[0], False] if ts else None
         iu = {L: int(e["u"][i]) for L, i in ULAG_IX.items()
               if e and pr.all(pr.g, X, X + timedelta(days=L))} if e else {}
         row = {"X": X, "n": n, "na": n_ads, "sp": sp, "spi": spi, "d": d, "df": df, "u": u, "t": t, "s": s,

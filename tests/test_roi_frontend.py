@@ -66,8 +66,10 @@ def test_day_wise_past_d30(out):
     assert out["m_part_cols"] == ["D0", "D1", "D3", "D7", "D14", "D30", "D60", "D90", "D180", "D365"]
     assert out["m_part_cells"] == [[61, True], [91, True], [181, True], [None, False]]
     assert all(out["m_part"]) and all(out["m_list"]) and out["m_q4"]
-    # the cohort cube's first walk still on its way: no column, the Hinglish note says so and how far it read
-    assert all(out["m_busy"])
+    # the cohort cube's first walk still on its way: no column, the Hinglish note says so, how far it read and when it
+    # last moved on; once through, a walk that stalled says how far every day was read (the newest columns wait for it)
+    assert all(out["m_busy"]) and len(out["m_busy"]) == 7
+    assert out["m_thru"] == [True] * 7
 
 
 def test_countries_life_all(out):

@@ -5,8 +5,10 @@ GA4 rolls rows into "(other)" or flags the answer → a day split by its biggest
 after the activity day → loss, GA4's flags kept per day, the fold shapes (b / c / e / t / loss + the ledger), month
 files that never change once folded, the hot days replaced on each re-read and read once more when final, ONE cursor (a
 Stop, a pause, a new day: no hole, no day folded from a read made while it was still filling), the heavy-range memory,
-the history start moving back, another stream, the run over properties with a counts-only line, and the build hook
-(off: nothing read, written or printed)."""
+the history start moving back (and "done" cleared until the walk is through), another stream, a month file that cannot
+be read (read again from its first day, never written over), at most two months in memory, a hot copy of a day that is
+final now dropped, flagged days kept apart from measured loss, turns on a property (a backfill never starves a light
+app), the run over properties with a counts-only line, and the build hook (off: nothing read, written or printed)."""
 import copy
 import gzip
 import json
@@ -241,10 +243,19 @@ def test_install_day_loss_and_flags():
     assert ga.calls == 1                                                  # no "(other)": the block is kept
     assert got[a]["loss"] == 500000 and got[a]["st"] == "loss" and got[b]["loss"] == 250000
     assert got[date(2026, 9, 3)]["st"] == "ok" and all(r["t"] == _rec_sum(r) for r in got.values())
-    # thresholding: no smaller read avoids it — the block kept, every day of it flagged
+    # thresholding: no smaller read avoids it — the block kept, every day of it flagged (a flag, not a measured loss:
+    # st stays "ok", the ledger and the log keep the two apart)
     ga = FakeGA(today=date(2027, 1, 1), thr_day=date(2026, 9, 3))
     got = dict(cu.read_range(ga, a, b, {}, "t"))
-    assert ga.calls == 1 and all(r["fl"] == 1 and r["st"] == "loss" and r["loss"] == 0 for r in got.values())
+    assert ga.calls == 1 and all(r["fl"] == 1 and r["st"] == "ok" and r["loss"] == 0 for r in got.values())
+    cube = cu.Cube(None, "a~1", "222")
+    for D, r in got.items():
+        cube.fold(D, r)
+    assert (cube.folded, cube.loss, cube.flagged) == (5, 0, 5)
+    cube2 = cu.Cube(None, "a~1", "222")
+    for D, r in cu.read_range(FakeGA(today=date(2027, 1, 1), notset_day=a), a, b, {}, "t"):
+        cube2.fold(D, r)
+    assert (cube2.loss, cube2.flagged) == (1, 0) and cube2.month("2026-09")["days"][a.isoformat()]["st"] == "loss"
     # sampling or a cut answer on the block: read day by day (clean days: no flag)
     for kw in ({"smp_multi": True}, {"cut_multi": True}):
         ga = FakeGA(today=date(2027, 1, 1), **kw)
@@ -253,7 +264,7 @@ def test_install_day_loss_and_flags():
     # GA4 says it rolled rows into "(other)" but no "(other)" row shows: split, and still flagged → fl (≈ on the page)
     ga = FakeGA(today=date(2027, 1, 1), oth_flag_day=a)
     rec = cu.read_day(ga, a, "t")
-    assert ga.calls == 3 and rec["via"] == "split" and rec["fl"] == 1 and rec["st"] == "loss" and rec["loss"] == 0
+    assert ga.calls == 3 and rec["via"] == "split" and rec["fl"] == 1 and rec["st"] == "split" and rec["loss"] == 0
 
 
 # ── the walk, the fold, the files ───────────────────────────────────────────────────────────────────────────────────
@@ -466,6 +477,140 @@ def test_a_head_left_behind_its_months(tmp_path):
     assert cube3.month("2026-10")["t"]["2026-10-11"] == day_total(FakeGA(today=nxt), date(2026, 10, 11))
 
 
+def _save(cube):
+    cube.save()
+    cube.save_head()
+
+
+def _reads(ga):
+    return [(q[0]["dateRanges"][0]["startDate"], q[0]["dateRanges"][0]["endDate"]) for q in ga.asked]
+
+
+def test_a_month_file_that_cannot_be_read_is_read_again_never_written_over(tmp_path):
+    """The month the cursor is in, on disk but unreadable (a cut gzip), not this format or another stream's: never
+    folded into as an empty month (that would write over the days it held, the cursor already past them) — the cursor
+    goes back to the month's first day and the whole month is read again; a Stop on the way keeps the cursor honest."""
+    nxt = TODAY + timedelta(days=1)
+    oct_days = [D.isoformat() for D in _days(date(2026, 10, 1), date(2026, 10, 11))]
+    for name, bad, counted in (("cut", b"\x1f\x8b\x08\x00 a cut copy", 1),
+                               ("format", gzip.compress(b'{"v": 1, "stream_id": "222", "days": []}'), 1),
+                               ("stream", gzip.compress(json.dumps(dict(cu._empty_month("999"), days={
+                                   "2026-10-01": {}})).encode()), 0)):
+        data = str(tmp_path / name)
+        cube = cu.Cube(data, "a~1", "222")
+        cu.step_app(FakeGA(), cube, TODAY, HS, NOW)
+        _save(cube)
+        assert sorted(_month(data, "2026-10")["days"]) == oct_days[:10]
+        with open(cu.month_path(data, "a~1", "2026-10"), "wb") as f:
+            f.write(bad)
+        # a Stop before any read: nothing written over the file, the cursor back at the month's first day, not done
+        cube = cu.Cube(data, "a~1", "222")
+        try:
+            cu.step_app(FakeGA(today=nxt, stop_after=0), cube, nxt, HS, NOW + timedelta(days=1))
+        except gf.Stop:
+            pass
+        _save(cube)
+        assert open(cu.month_path(data, "a~1", "2026-10"), "rb").read() == bad
+        assert cube.head["next"] == "2026-10-01" and "done" not in cube.head and cube.reread == counted
+        # the next run: the whole month again (one block, then the hot days), every day of it final, nothing lost
+        cube, ga = cu.Cube(data, "a~1", "222"), FakeGA(today=nxt)
+        assert cu.step_app(ga, cube, nxt, HS, NOW + timedelta(days=1, hours=1)) == "fetched"
+        _save(cube)
+        assert _reads(ga) == [("2026-10-01", "2026-10-11"), ("2026-10-12", "2026-10-14")], name
+        mo = _month(data, "2026-10")
+        assert sorted(mo["days"]) == oct_days and mo["stream_id"] == "222"
+        assert all(mo["t"][D] == day_total(FakeGA(today=nxt), date.fromisoformat(D)) for D in oct_days)
+        assert cube.head["next"] == "2026-10-12" and cube.head["done"] and cube.reread == counted
+    # heavy (day by day) and a Stop part-way through the month read again: the file holds exactly the days before the
+    # cursor (re-read from the month's first day), the rest follow next run
+    data = str(tmp_path / "heavy")
+    cube = cu.Cube(data, "a~1", "222")
+    cu.step_app(FakeGA(), cube, TODAY, HS, NOW)
+    _save(cube)
+    with open(cu.month_path(data, "a~1", "2026-10"), "wb") as f:
+        f.write(b"\x1f\x8b broken")
+    cube = cu.Cube(data, "a~1", "222")
+    try:
+        cu.step_app(FakeGA(today=nxt, cap=1000, stop_after=3), cube, nxt, HS, NOW + timedelta(days=1))
+    except gf.Stop:
+        pass
+    _save(cube)
+    assert sorted(_month(data, "2026-10")["days"]) == ["2026-10-01", "2026-10-02"] and cube.head["next"] == "2026-10-03"
+    cube = cu.Cube(data, "a~1", "222")
+    cu.step_app(FakeGA(today=nxt), cube, nxt, HS, NOW + timedelta(days=1, hours=1))
+    _save(cube)
+    assert sorted(_month(data, "2026-10")["days"]) == oct_days and cube.head["done"] and cube.reread == 0
+
+
+class _Peak(cu.Cube):
+    """A cube that remembers the most months it held at once."""
+    peak = 0
+
+    def month(self, k):
+        r = super().month(k)
+        self.peak = max(self.peak, len(self.m))
+        return r
+
+
+def test_a_walk_over_folded_days_holds_two_months_at_most(tmp_path):
+    """A history start moved back, or a lost head file: the walk passes every folded month (reads nothing of them) and
+    lets each go — never the app's every month in memory at once."""
+    data = str(tmp_path / "a")
+    cube = cu.Cube(data, "a~1", "222")
+    cu.step_app(FakeGA(), cube, TODAY, date(2026, 6, 21), NOW)
+    _save(cube)
+    cube, ga = _Peak(data, "a~1", "222"), FakeGA()
+    cu.step_app(ga, cube, TODAY, HS, NOW + timedelta(hours=1))           # moved back 20 days
+    assert _reads(ga) == [("2026-06-01", "2026-06-20")] and cube.peak <= 2 and len(cube.m) <= 2
+    _save(cube)
+    os.remove(cu.hot_path(data, "a~1"))                                  # the head lost: the walk from the start again
+    raw = {k: open(cu.month_path(data, "a~1", k), "rb").read() for k in ("2026-06", "2026-07", "2026-08", "2026-09")}
+    cube, ga = _Peak(data, "a~1", "222"), FakeGA()
+    assert cube.head == {"v": cu.V, "stream_id": "222", "d": {}}
+    cu.step_app(ga, cube, TODAY, HS, NOW + timedelta(hours=2))
+    _save(cube)
+    assert _reads(ga) == [("2026-10-11", "2026-10-13")] and cube.peak <= 2 and cube.folded == 0   # only the hot days
+    assert cube.head["next"] == "2026-10-11" and cube.head["done"]
+    assert all(open(cu.month_path(data, "a~1", k), "rb").read() == v for k, v in raw.items())
+
+
+def test_a_hot_copy_of_a_final_day_is_dropped_even_when_the_walk_stops():
+    """Hot copies are read while the day is filling: once the day is final it counts only when folded from a final
+    read — a walk that stops before it leaves a hole (the build's column stops there), never the early copy."""
+    cube = cu.Cube(None, "a~1", "222")
+    _runs(cube, [(TODAY, NOW, None)])
+    assert sorted(cube.head["d"]) == ["2026-10-11", "2026-10-12", "2026-10-13"]
+    later = TODAY + timedelta(days=2)                                    # edge Oct 12: Oct 11 and 12 final now
+    _runs(cube, [(later, NOW + timedelta(days=2), 0)])                   # … and the run stops at its first call
+    assert sorted(cube.head["d"]) == ["2026-10-13"] and cube.pruned and cube.head["next"] == "2026-10-11"
+    _runs(cube, [(later, NOW + timedelta(days=2, hours=1), None)])
+    _assert_whole(cube, later)
+
+
+def test_history_start_moved_back_clears_done_until_the_walk_is_through(tmp_path):
+    from admob_iq import roi_build as rb
+    data = str(tmp_path)
+    cube = cu.Cube(data, "a~1", "222")
+    cu.step_app(FakeGA(), cube, TODAY, date(2026, 6, 21), NOW)
+    _save(cube)
+    assert rb._late(data, "a~1", "222", {"hs": date(2026, 6, 21), "sc": {"kf": lambda d: (1.0,)}})["info"]["thru"] == \
+        "2026-10-13"
+    cube = cu.Cube(data, "a~1", "222")
+    try:
+        cu.step_app(FakeGA(stop_after=0), cube, TODAY, HS, NOW + timedelta(hours=1))
+    except gf.Stop:
+        pass
+    _save(cube)
+    assert "done" not in cube.head and cube.head["next"] == "2026-06-01"
+    assert rb._late(data, "a~1", "222", {"hs": HS}) == {"info": {"busy": 1, "from": "2026-06-01", "next": "2026-06-01",
+                                                                 "at": "2026-10-13"}}
+    cube = cu.Cube(data, "a~1", "222")
+    cu.step_app(FakeGA(), cube, TODAY, HS, NOW + timedelta(hours=2))
+    _save(cube)
+    assert cube.head["done"] and rb._late(data, "a~1", "222", {"hs": HS, "sc": {"kf": lambda d: (1.0,)}})["info"][
+        "from"] == "2026-06-01"
+
+
 # ── the run and the build hook ──────────────────────────────────────────────────────────────────────────────────────
 def _refresh(monkeypatch, tmp_path, stop_after=None, apps=None):
     data = str(tmp_path)
@@ -509,6 +654,47 @@ def test_refresh_all_files_and_counts_only(monkeypatch, tmp_path):
     assert h["next"] == "2026-08-31" and not h.get("done") and len(_month(data2, "2026-08", "x~1")["days"]) == 30
 
 
+def test_a_long_backfill_never_starves_a_light_app(monkeypatch, tmp_path):
+    """Two apps on one property: a heavy one whose backfill (day by day) takes the whole budget each run, and a light
+    one. The light app gets its turn the next run (it waited longest), and on a tie the app the budget cut off last
+    time goes after the others — the heavy backfill goes on, the light app is never left "deferred" run after run."""
+    data = str(tmp_path)
+    routes = {"com.example.heavy": {"property_id": "111", "stream_id": "221", "owner": "o"},
+              "com.example.light": {"property_id": "111", "stream_id": "222", "owner": "o"}}
+    monkeypatch.setattr(cu.gu, "load_state", lambda d: {"routes": {"by_package": routes}, "tz": {"111": "UTC"},
+                                                        "fetch": {}})
+    hs = {"x~1": "2025-01-01", "x~2": "2026-08-01"}
+    monkeypatch.setattr(cu.gaud, "_uni_meta", lambda ust, d, aid, r: {"history_start": hs[aid]})
+    monkeypatch.setattr(cu.ga4, "access_token", lambda c, s, r: "tok")
+    clock = [0.0]
+
+    class A(FakeGA):
+        def __init__(self, token, pid, sid, prop, over=None, max_calls=cu.MAX_CALLS):
+            heavy = sid == "221"
+            super().__init__(start=date(2025, 1, 1) if heavy else date(2026, 8, 1), cap=1000 if heavy else None)
+            self.over = over
+
+        def report_all(self, body, **kw):
+            if self.over and self.over():
+                raise gf.Stop("budget")
+            clock[0] += 1.0                                     # a call takes a second of the run's budget
+            return super().report_all(body, **kw)
+    monkeypatch.setattr(cu.gf, "App", A)
+    cfg = {"client_id": "c", "client_secret": "s", "refresh_tokens": json.dumps({"o": "rt"})}
+    apps = [{"app_id": "x~1", "package": "com.example.heavy"}, {"app_id": "x~2", "package": "com.example.light"}]
+    got = []
+    for i in range(4):
+        out = cu.refresh_all(cfg, data, apps, NOW + timedelta(hours=i), clock=lambda: clock[0], budget=20)
+        got.append(out["apps"])
+    assert got[0] == {"x~1": "deferred", "x~2": "deferred"}            # the heavy app first (by id), the budget gone
+    assert got[1] == {"x~1": "deferred", "x~2": "fetched"}             # the light app waited longest: first now
+    assert got[2] == got[3] == {"x~1": "deferred", "x~2": "fresh"}     # a tie: the one cut off last time goes after
+    h = cu.load_head(data, "x~1")
+    assert not h.get("done") and h["next"] > "2025-02-15"              # the backfill went on every run
+    st = cu.load_state(data)["fetch"]
+    assert st["x~1"]["cut"] is True and "cut" not in st["x~2"] and st["x~2"]["turn"] == st["x~1"]["turn"]
+
+
 def test_build_hook_switch(tmp_path, monkeypatch, capsys):
     """GA4_CUBE off: the step is not run (nothing read, written or printed); on: one counts-only line with its own
     budget; a failure costs this step only."""
@@ -528,7 +714,7 @@ def test_build_hook_switch(tmp_path, monkeypatch, capsys):
     err = capsys.readouterr().err
     assert calls == [60] and [ln for ln in err.splitlines() if ln.startswith("ga4 cube")] == [
         "ga4 cube: apps 2, with GA4 0, fetched 1, fresh 0, failed 0, deferred 0, waiting 0, days folded 0, split 0, "
-        "loss 0, calls 0, tokens 0"]
+        "loss 0, flagged 0, months read again 0, calls 0, tokens 0"]
     monkeypatch.setattr(cu, "refresh_all", lambda *a, **k: 1 / 0)
     dash = tub.dashboard()
     ub.run_uninstall(dash, data, out, tub.ga4_settings(ga4_cube=True), now=tub.NOW)

@@ -24,8 +24,9 @@ adaptive, per range of activity days:
   A range at least as long as one that needed step 2 goes to step 2 straight away for HEAVY_KEEP activity days ("heavy":
   its block call would only be dropped again); then the block is tried once more.
 Per row: countryId "(not set)" / empty → cc "--"; a firstSessionDate that is not a date ("(other)", "(not set)"), a
-countryId "(other)" or an install day after the activity day → the day's loss (micros). GA4's thresholding, or a flag
-still on the final answer with no "(other)" row to measure it by → the day's "fl" (the page marks ≈; nothing guessed).
+countryId "(other)" or an install day after the activity day → the day's loss (micros; st "loss" only then). GA4's
+thresholding, sampling, a cut answer, or a flag still on the final answer with no "(other)" row to measure it by → the
+day's "fl" (st stays ok / split: a flag is not a measured loss; the page marks ≈ with no direction; nothing guessed).
 
 Stored in the private repo, data/ga4_cube/<key>/ — by ACTIVITY month; a month file never changes once its days are all
 folded (a folded day is never read or folded again):
@@ -40,8 +41,10 @@ folded (a folded day is never read or folded again):
       "t": {D: micros}                    every row of the day (the loss share's denominator)
       "loss": {D: micros}}                what stayed "(other)" / had no install day (days with some only)
     hot.json.gz = {"v", "app_id", "package", "property_id", "stream_id", "time_zone", "hs", "from", "next", "done",
-      "hot_at", "hot_today", "heavy", "d": {D: {the ledger's fields + "b", "c", "e" of that one day}}}
-— the head (progress) and the NON-FINAL days (today − 2 … today), each replaced when read again.
+      "walk_at", "hot_at", "hot_today", "heavy", "d": {D: {the ledger's fields + "b", "c", "e" of that one day}}}
+— the head (progress) and the NON-FINAL days (today − 2 … today), each replaced when read again. The ROI build reads only
+a hot day's ledger and "b"; its "c" / "e" are kept in the same shapes as the months for a per-country / D0 … D30 view
+(nothing reads them yet — the biggest app's ≈ 3 hot days of them are most of this file).
 X = install day (firstSessionDate), D = activity day (date), both YYYY-MM-DD in the property's time zone; j, W as text.
 
 Progress — ONE cursor, "next": every activity day before it is folded, from a read made when it was already FINAL
@@ -50,10 +53,18 @@ from the history start; a catch-up after a Stop, a pause, failed runs or a new d
 ONCE (a day already in its month's ledger is skipped, never re-read), the cursor moving after each day; "done" once a
 walk reached the final edge (the build uses the cube only from then on: the columns come in one go). Then, every
 REFRESH_HOURS or on a new property day, today − 2 … today again (hot: never folded; such a day is read once more when
-final and folded then). Month files are written as the walk leaves them and at the end, the head after them (it never
-runs ahead of the months). The property quota gate of ga4_firstopen.App, MAX_CALLS a run per app, its own budget
-(GA4_CUBE_BUDGET_SEC); properties side by side (WORKERS). Switched by GA4_CUBE (off: nothing read, written or printed;
-the ROI build leaves the store unread). Never raises; never prints (log_line: counts only).
+final and folded then; a hot copy of a day that is final now is dropped at the start of every run — a hole until the
+walk folds it, never a read made while it was filling standing in for the final one). A history start that moves back
+restarts the walk from it and clears "done" (the build waits for it again). A month file on disk that cannot be read
+(a damaged gzip, a cut copy), is not this format or is another stream's is never written over with only the days after
+the cursor: the cursor goes back to that month's first day and the whole month is read again ("months read again" in
+the log). The walk holds at most two months in memory (a month it left is written and let go; folded days are passed
+a month at a time). Month files are written as the walk leaves them and at the end, the head after them (it never runs
+ahead of the months). The property quota gate of ga4_firstopen.App, MAX_CALLS a run per app, its own budget
+(GA4_CUBE_BUDGET_SEC); properties side by side (WORKERS); on a property the app that waited longest goes first and an
+app cut off by the budget goes after the others next run (a long backfill never starves a light app). Switched by
+GA4_CUBE (off: nothing read, written or printed; the ROI build leaves the store unread). Never raises; never prints
+(log_line: counts only).
 
 Cost: the backfill ≈ app age / 30 block calls on a light app (rows a call ≈ 30 × a day's (install day, country) rows),
 and on a heavy one about one call per activity day (+ 2 for a day that still needs the country split, + one block try
@@ -244,7 +255,7 @@ def _rec(acc, via, fl, now_iso):
             a = _trim(arr)
             if a:
                 e.setdefault(cc, {})[X] = a
-    st = "loss" if (acc["loss"] or flag) else ("split" if via == "split" else "ok")
+    st = "loss" if acc["loss"] else ("split" if via == "split" else "ok")      # flagged only: "fl", never "loss"
     return {"st": st, "rows": acc["rows"], "loss": acc["loss"], "t": acc["t"], "fl": 1 if flag else 0, "via": via,
             "at": now_iso, "b": acc["b"], "c": acc["c"], "e": e}
 
@@ -360,12 +371,26 @@ class Cube:
             h = {"v": V, "stream_id": self.stream_id, "d": {}}
         self.head = h
         self.m, self.touched = {}, set()
-        self.folded = self.split = self.loss = 0
+        self.bad = set()                # months whose file is on disk but not a month of this stream (read again)
+        self.folded = self.split = self.loss = self.flagged = self.reread = 0
+        self.pruned = False
 
     def month(self, k):
+        """Month k's file (loaded once). Missing: an empty month. On disk but unreadable (a damaged gzip, a cut copy …),
+        not this format or another stream's: an empty month too, but in `bad` — step_app then reads the WHOLE month
+        again before anything is folded into it, so the file is never written over with fewer days than it held."""
         if k not in self.m:
-            s = gu.load_store(month_path(self.data_dir, self.app_id, k)) if self.data_dir else None
-            self.m[k] = s if _month_ok(s, self.stream_id) else _empty_month(self.stream_id)
+            s = None
+            if self.data_dir:
+                p = month_path(self.data_dir, self.app_id, k)
+                if os.path.exists(p) or os.path.exists(p[:-3]):
+                    s = gu.load_store(p)
+                    if not _month_ok(s, self.stream_id):
+                        self.bad.add(k)
+                        if not (isinstance(s, dict) and str(s.get("stream_id") or "") != self.stream_id):
+                            self.reread += 1        # this stream's (or unreadable): counted; another stream's: not
+                        s = None
+            self.m[k] = s if s is not None else _empty_month(self.stream_id)
         return self.m[k]
 
     def has(self, D):
@@ -405,7 +430,8 @@ class Cube:
         self.head.setdefault("d", {}).pop(k, None)
         self.folded += 1
         self.split += rec.get("via") == "split"
-        self.loss += rec.get("st") == "loss"
+        self.loss += bool(rec.get("loss"))          # measured: revenue GA4 left "(other)" / with no install day
+        self.flagged += bool(rec.get("fl"))         # GA4's flag with nothing to measure it by (the page's ≈)
         return True
 
     def save(self, before=None):
@@ -432,14 +458,28 @@ def step_app(ga, cube, today, hs, now):
     stopped; the caller saves the months, then the head)."""
     h, now_iso, did = cube.head, gu._now_iso(now), False
     edge = today - timedelta(days=FINAL_LAG)
+    d = h.setdefault("d", {})
+    for k in [k for k in d if k <= edge.isoformat()]:      # final now: a copy read while it was filling never counts
+        d.pop(k)                                            # (a hole until the walk folds it — even when the walk stops
+        cube.pruned = True                                  # before it)
     if not h.get("from") or not h.get("next") or hs < _d(h["from"]):  # first walk, or the history start moved back:
         h["from"], h["next"] = hs.isoformat(), hs.isoformat()         # from it (folded days are skipped, not re-read)
+        h.pop("done", None)                                 # … and the build waits for the walk again (columns in one go)
     nxt = max(hs, _d(h["next"]))
     h["next"] = nxt.isoformat()
     while nxt <= edge:
-        if cube.has(nxt):                                   # folded already (a walk from a moved history start, or a
-            h.setdefault("d", {}).pop(nxt.isoformat(), None)    # run whose head was not written after its months)
-            nxt += timedelta(days=1)
+        k = nxt.isoformat()[:7]
+        cube.save(before=k)                                 # months the walk left: written and let go (≤ 2 held)
+        mo = cube.month(k)
+        start = max(hs, nxt.replace(day=1))
+        if k in cube.bad and any(D.isoformat() not in mo["days"] for D in _days(start, nxt - timedelta(days=1))):
+            nxt = start                                     # its file unreadable / not this stream's: the whole month
+            h["next"] = nxt.isoformat()                     # again (never written over with only the days after the
+            h.pop("done", None)                             # cursor); the build waits for the walk again
+            continue
+        if nxt.isoformat() in mo["days"]:                   # folded already (a walk from a moved history start, or a
+            while nxt <= edge and nxt.isoformat()[:7] == k and nxt.isoformat() in mo["days"]:   # run whose head was
+                nxt += timedelta(days=1)                    # not written after its months): past them, read nothing
             h["next"] = nxt.isoformat()
             continue
         b = min(edge, nxt + timedelta(days=BLOCK - 1))
@@ -449,14 +489,13 @@ def step_app(ga, cube, today, hs, now):
                 b = x - timedelta(days=1)
                 break
             x += timedelta(days=1)
-        cube.save(before=nxt.isoformat()[:7])               # months the walk left: written and let go
         for D, rec in read_range(ga, nxt, b, h, now_iso):
             cube.fold(D, rec)
             h["next"] = (D + timedelta(days=1)).isoformat()
+            h["walk_at"] = now_iso                          # the walk's last step (the page's "on its way" note)
             did = True
         nxt = b + timedelta(days=1)
     h["done"] = True                                        # the walk reached the final edge
-    d = h.setdefault("d", {})
     for k in [k for k in d if not (hs.isoformat() <= k <= today.isoformat())]:
         d.pop(k)
     a = max(hs, edge + timedelta(days=1))
@@ -497,7 +536,7 @@ def save_state(data_dir, state):
 
 
 COUNTS = ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred", "waiting", "days", "split", "loss",
-          "calls", "tokens")
+          "flagged", "reread", "calls", "tokens")
 
 
 def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, workers=WORKERS):
@@ -546,8 +585,9 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                 except Exception:
                     access[owner] = None
             by_prop.setdefault(r["property_id"], []).append((a, st, r, gu._d(um["history_start"])))
-        for xs in by_prop.values():
-            xs.sort(key=lambda t: (not t[1].get("deferred"), t[1].get("last_ok") or "", t[0]["app_id"]))
+        for xs in by_prop.values():                     # turns: the app that waited longest first; on a tie the one
+            xs.sort(key=lambda t: (t[1].get("turn") or "", bool(t[1].get("cut")),   # cut off last time (a backfill
+                                   t[1].get("last_ok") or "", t[0]["app_id"]))    # using the budget) after the others
 
         def one_prop(pid):
             prop = {"quota": None, "stop": None}
@@ -570,16 +610,16 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                 ga = gf.App(tok, pid, r["stream_id"], prop, over=over, max_calls=MAX_CALLS)
                 try:
                     res = step_app(ga, cube, today, hs, now)
-                    upd = dict(last_try=now_iso, fail=None)
+                    upd = dict(last_try=now_iso, fail=None, turn=now_iso, cut=None)
                     if res == "fetched":
                         upd["last_ok"] = now_iso
                 except Stop:
-                    res, upd = "deferred", {"deferred": True}
+                    res, upd = "deferred", dict(deferred=True, turn=now_iso, cut=True)
                 except Exception as e:
-                    res, upd = "failed", dict(last_try=now_iso, fail=gu._fail_kind(e))
+                    res, upd = "failed", dict(last_try=now_iso, fail=gu._fail_kind(e), turn=now_iso, cut=None)
                 try:                                    # the months first: the head never runs ahead of them
                     cube.save()
-                    if ga.calls or cube.folded:
+                    if ga.calls or cube.folded or cube.pruned:
                         cube.head.update(v=V, app_id=aid, package=a["package"], property_id=pid,
                                          stream_id=str(r["stream_id"]), time_zone=tz, hs=hs.isoformat())
                         cube.save_head()
@@ -589,6 +629,8 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                     if res != "deferred":
                         st.pop("deferred", None)
                     st.update(upd)
+                    if not st.get("cut"):
+                        st.pop("cut", None)
                     st["key"] = gu.file_key(aid)
                     out["apps"][aid] = res
                     counts["calls"] += ga.calls
@@ -596,6 +638,8 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                     counts["days"] += cube.folded
                     counts["split"] += cube.split
                     counts["loss"] += cube.loss
+                    counts["flagged"] += cube.flagged
+                    counts["reread"] += cube.reread
 
         with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
             list(ex.map(one_prop, sorted(by_prop)))
@@ -612,6 +656,6 @@ def log_line(status):
     """The build log's ONE line for this step — counts only."""
     c = (status or {}).get("counts") or {}
     return ("ga4 cube: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, days folded %d, "
-            "split %d, loss %d, calls %d, tokens %d%s"
+            "split %d, loss %d, flagged %d, months read again %d, calls %d, tokens %d%s"
             % tuple([gaud._int(c.get(k)) for k in COUNTS]
                     + [(", error " + status["error"]) if (status or {}).get("error") else ""]))

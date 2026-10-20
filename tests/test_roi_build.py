@@ -425,7 +425,7 @@ def test_cube_buckets_weekly_k_base_finality(tmp_path):
     P, co = _cube_setup(tmp_path)
     late = rb._late(str(tmp_path), "a~1", "222", P)
     assert late["info"] == {"days": (LTODAY - LHS).days + 1, "oth": 0, "omax": 0.0, "loss": 0, "from": "2026-04-01",
-                            "till": "2026-10-13"}
+                            "till": "2026-10-13", "thru": "2026-10-13"}
     by = _rows(P, co, late)
     old = by[LHS]                       # no exact cells: base = its D30 checkpoint ($62); every bucket = 30 days × $0.01 × k
     assert old["d"] is None and old["t"][T.index(30)] == 62.0
@@ -444,7 +444,9 @@ def test_cube_buckets_weekly_k_base_finality(tmp_path):
 
 def test_cube_holes_stop_the_columns(tmp_path):
     P, co = _cube_setup(tmp_path, holes={date(2026, 6, 15)})
-    by = _rows(P, co, rb._late(str(tmp_path), "a~1", "222", P))
+    late = rb._late(str(tmp_path), "a~1", "222", P)
+    assert late["info"]["thru"] == "2026-06-14" and late["info"]["till"] == "2026-10-13"   # the page says how far
+    by = _rows(P, co, late)
     assert by[LHS]["m"] == [62.6]                              # bucket 2 (Jun 1 … 30) has a day not in the cube
     assert "m" not in by[date(2026, 5, 1)]                     # its bucket 1 (Jun 1 … 30): no column at all
     assert by[date(2026, 5, 16)]["m"] == [62.6, 63.32, 64.22, 65.12]   # buckets after the hole, the last one hot
@@ -460,7 +462,9 @@ def test_cube_hot_days_and_an_unfolded_gap(tmp_path):
     assert by[LHS]["mf"] == 5
     gap = {date(2026, 9, 20) + timedelta(days=i) for i in range(21)}           # Sep 20 … Oct 10 not folded yet
     P2, co2 = _cube_setup(tmp_path / "b", holes=gap)
-    by2 = _rows(P2, co2, rb._late(str(tmp_path / "b"), "a~1", "222", P2))
+    late2 = rb._late(str(tmp_path / "b"), "a~1", "222", P2)
+    assert late2["info"]["thru"] == "2026-09-19" and late2["info"]["till"] == "2026-10-13"
+    by2 = _rows(P2, co2, late2)
     assert by2[LHS]["m"] == [62.6, 63.2, 63.8, 64.67] and by2[LHS]["mf"] == 4    # day 180 (… Sep 28): a hole
     assert by2[date(2026, 7, 15)]["m"] == [round(by2[date(2026, 7, 15)]["d"][30] + 0.9, 4)]
 
@@ -487,6 +491,29 @@ def test_cube_so_far_breakeven_and_loss(tmp_path):
     assert by[LHS]["qo"] == 2 and by[young]["qo"] == 2 and not by[date(2026, 7, 18)]["qo"]
     assert rb._row_out(by[LHS])[12] == 2 and rb._row_out(dict(by[LHS], q=True))[12] == 3
     assert rb._row_out(by[date(2026, 7, 18)])[12] == 0
+
+
+def test_cube_breakeven_by_age_checkpoints_through_d30_first(tmp_path):
+    """A row with no exact cells (its D0 … D30 from the install-day checkpoints) that got its spend back by D7 / D14 /
+    D30: breakeven at that checkpoint, as without the columns — never "≤ day 60" from the first 30-day column; past
+    the columns, the checkpoints after them."""
+    P, co = _cube_setup(tmp_path)
+    late = rb._late(str(tmp_path), "a~1", "222", P)
+    for spend, want in ((15.0, 7), (16.0, 7), (30.0, 14), (50.0, 30), (62.0, 30), (62.5, 60), (63.0, 90)):
+        sp = {"ccy": "USD", "daily": {LHS.isoformat(): int(spend * 1e6)}, "installs": {}, "first": LHS.isoformat(),
+              "till": LTODAY.isoformat()}
+        r, r0 = _rows(P, co, late, sp)[LHS], _rows(P, co, None, sp)[LHS]
+        assert r["d"] is None and r["m"][0] == 62.6
+        assert r["be"] == [want, False], spend
+        if want <= 30:
+            assert r0["be"] == r["be"]                     # the same as the build without the columns
+    # a spend past every 30-day column: the checkpoints after the last one (here D60 only — a hole stops the rest —
+    # so the D90 checkpoint, $182; the D60 checkpoint is the column's age, the column wins there)
+    P2, co2 = _cube_setup(tmp_path / "h", holes={date(2026, 6, 15)})
+    sp = {"ccy": "USD", "daily": {LHS.isoformat(): 100_000_000}, "installs": {}, "first": LHS.isoformat(),
+          "till": LTODAY.isoformat()}
+    r = _rows(P2, co2, rb._late(str(tmp_path / "h"), "a~1", "222", P2), sp)[LHS]
+    assert r["m"] == [62.6] and r["t"][T.index(60)] == 122.0 and r["be"] == [90, False]
 
 
 def test_cube_flagged_days_and_small_loss_share(tmp_path):
@@ -598,7 +625,7 @@ def test_app_step_cube_block_and_byte_identical_without_it(tmp_path, monkeypatch
     plain = json.loads(plain)
     assert "late" not in plain and {len(r) for r in plain["rows"]} == {14}
     assert full["late"] == {"days": (LTODAY - LHS).days + 1, "oth": 0, "omax": 0.0, "loss": 0, "from": "2026-04-01",
-                            "till": "2026-10-13"}
+                            "till": "2026-10-13", "thru": "2026-10-13"}
     lens = {len(r) for r in full["rows"]}
     assert lens == {14, 16} and full["rows"][0][14] == [62.6, 63.2, 63.8, 64.67, 65.57] and full["rows"][0][15] == 5
     # every other part of the file as without the cube but what the columns feed (so far, breakeven → the forms)
