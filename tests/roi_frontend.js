@@ -715,6 +715,37 @@ function appFile() {
     U.set('GRAIN', 'week');
     out.m_week_cols = U.cols(dm, dm.rows).map(c => c.lab).slice(5, 8);
     U.set('GRAIN', 'day');
+    // the default Day view (the newest 60 install days, none 60 days old yet): no row on screen has m → the columns as
+    // before the late read (60 / 90 / 180 / 365), and the note says the older rows go on to D210
+    const t60 = U.cohortTable(dm), hd60 = (t60.match(/<th>D\d+<\/th>/g) || []).map(h => h.slice(4, -5));
+    out.m_default = [hd60.length, hd60.slice(31).join(','), t60.includes('Abhi dikh rahe install din D60 tak nahi pahunche — purane (Show all / Week / Month) me D210 tak column.')];
+    // a file whose late read gave the oldest row only D60 (every row's install-day checkpoints through D365 where
+    // complete): no checkpoint column lost, a row without m keeps its own D60 / D90 / D180 / D365
+    const dpm = (() => {
+      const rows = [], newest = '2026-10-13';
+      for (let age = 399; age >= 0; age--) {
+        const X = day(newest, -age), t = T.map(a => (a <= age - 3 ? a + 1 : null));
+        const r = [X, 100, 80, 50, null, 0, null, t, null, X, null, 'Normal', 0, 4000];
+        if (age === 399) r.push([61], 1);
+        rows.push(r);
+      }
+      return { v: 1, app: 'Part File', T, lags: 31, newest, S: '2026-10-07', rows, months: [], sum: { today: rows.slice(-2), pools: {} },
+        late: { days: 30, oth: 1, omax: 0.00003, loss: 4, from: '2025-10-15', till: '2025-11-13' }, consts: { final_lag: 3 } };
+    })();
+    U.set('SHOW', 1e9);
+    const CP = U.cols(dpm, dpm.rows), r200 = dpm.rows.find(r => r[0] === day('2026-10-13', -200)), tp = U.cohortTable(dpm), dvp = U.dayView(dpm);
+    U.set('SHOW', 60);
+    out.m_part_cols = CP.map(c => c.lab);
+    out.m_part_cells = CP.slice(6).map(c => U.cum(r200, c, T));
+    out.m_part = [dvp.includes('Every install day · D0 se D365 tak'), tp.includes('<th>D365</th>') && tp.includes('<th>D180</th>'),
+      tp.includes('D30 ke baad har 30 din ka column (D60), app ki umar tak'),
+      tp.includes('sabse zyada us din ki kamai ka <0.1%'), tp.includes('≈ = 4 din ke D30-ke-baad wale GA4 report me data chhoda gaya')];
+    // the column list as far as the 30-day columns go: one → (D60), two → (D60, D90), more → (D60, D90 … Dn)
+    const nt = k => U.lateNote({ rows: [[0, 0, 0, 0, null, 0, null, [], null, null, null, null, 0, 0, Array(k).fill(1), 0]], late: {} });
+    out.m_list = [nt(1).includes('(D60), app'), nt(2).includes('(D60, D90), app'), nt(3).includes('(D60, D90 … D120), app'), nt(0) === ''];
+    // q bit 4: a flagged late block
+    const dmq = JSON.parse(JSON.stringify(dm)); dmq.rows[dmq.rows.length - 1][12] = 4;
+    out.m_q4 = U.cohortTable(dmq).includes('D30 ke baad GA4 ke report ne kuch data chhoda (data loss / thresholding / sampling flag)');
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };
     ctx.roiCardLine(x, 'Alpha Pick');

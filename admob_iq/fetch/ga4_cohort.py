@@ -32,21 +32,29 @@ file above exactly as without it):
 → only rows with lag L = date − firstSessionDate ≥ LAGS (31) and an install day ≥ the history start are folded; a row
 whose firstSessionDate is not a real date (GA4's "(other)" / "(not set)") is folded into nobody, its revenue summed per
 activity day as "oth" (the build marks ≈ and says how much); "t" = the activity day's revenue over EVERY row of the
-read (the share's denominator). Activity days before history start + 31 hold nothing to fold: never read.
+read (the share's denominator). With no in-list GA4 may also drop rows WITHOUT an "(other)" row: a block whose response
+(any page) says dataLossFromOtherRow, subjectToThresholding or sampling, or whose rows were cut (truncated), marks
+every day of it in "loss" (the build marks ≈ and counts them; the block is not re-read in slices). Activity days
+before history start + 31 hold nothing to fold: never read.
 Stored by ACTIVITY month, so an old month's file never changes:
     data/ga4_cohort/late/<key>/<YYYY-MM>.json.gz = {"v": 1, "stream_id", "d": {D: {X: micros}}, "oth": {D: micros},
-                                                    "t": {D: micros}}
+                                                    "t": {D: micros}, "loss": {D: 1}}
 — a day present in "d" was read (an empty {} = read, nothing past day 30 that day); a re-read of days a … b REPLACES
 them entirely; only the months a read touched are written (write_json_gz_stable; a month the reads moved past is
-written and let go at once). Progress in the main store: "late": {"from", "next", "done", "read_till"} — a one-time
-backfill (history start + 31 … today − RECENT_DAYS, BLOCK_LATE activity days a call) and, with every recent refresh,
-the last RECENT_DAYS activity days again (read_till = the newest day they reached; a refresh the late part could not
-finish is retried on the next run). Same property quota gate, budget and MAX_CALLS as above, after the lag 0 … 30
-reads (a Stop keeps what was read).
-Cost: the backfill ≈ (app age − 66) / 30 calls ONCE per app (an app 900 days old: ~28 calls, over 1–2 runs next to the
-lag 0 … 30 backfill's cap), then 2 calls per recent refresh (35 days in blocks of 30; every 6 hours → ~8 a day per
-app); rows a call ≈ 30 × the install days that earned that day (≤ 30 × app age; one 100,000-row page up to ~3,300
-install days).
+written and let go at once). Progress in the main store: "late": {"from", "next", "done", "read_till"} with ONE
+cursor, next: every activity day before it was read when already final (≥ FINAL_LAG days old). A run reads from
+min(next, today − RECENT_DAYS + 1) to today, BLOCK_LATE activity days a call, the cursor moving after each block (never
+past today − FINAL_LAG + 1, so a day read while still filling is read again) — so the first read (the backfill from
+history start + 31), a catch-up after any pause (the switch off, failed runs, a Stop, a quota-deferred day) and the
+6-hourly recent refresh are the same read and no activity day is ever skipped. It runs when the cursor is older than the
+recent window, when the recent refresh ran, or when the late part of the last one did not reach its day (read_till <
+read_today); "done" once a read reached today (the build shows the 30-day columns only from then on), read_till = the
+newest today a read reached. Same property quota gate, budget and MAX_CALLS as above, after the lag 0 … 30 reads (a
+Stop keeps what was read and the cursor where it stopped).
+Cost: the first read ≈ (app age − 31) / 30 calls ONCE per app (an app 900 days old: ~29 calls, over 1–2 runs next to
+the lag 0 … 30 backfill's cap), then 2 calls per recent refresh (35 days in blocks of 30; every 6 hours → ~8 a day per
+app), a pause of N days ≈ N / 30 + 2 calls once; rows a call ≈ 30 × the install days that earned that day (≤ 30 × app
+age; one 100,000-row page up to ~3,300 install days).
 """
 import json
 import os
@@ -189,9 +197,20 @@ def _real(s):
         return None
 
 
+def _lossy(ga, rows):
+    """The last report_all lost rows WITHOUT an "(other)" row to show it: any page with dataLossFromOtherRow,
+    thresholding or sampling, or the read cut (truncated)."""
+    metas = getattr(ga, "last_metas", None) or [getattr(ga, "last_meta", None) or {}]
+    for m in metas:
+        if isinstance(m, dict) and (m.get("dataLossFromOtherRow") or m.get("subjectToThresholding")
+                                    or m.get("samplingMetadatas")):
+            return True
+    return bool(ga.truncated(rows)) if hasattr(ga, "truncated") else False
+
+
 def read_late(ga, a, b, hs):
     """One late block → {"d": {D: {X: micros}} (lag ≥ LAGS, X ≥ hs, revenue > 0), "oth": {D: micros} (no real install
-    day), "t": {D: micros} (every row of the day)}."""
+    day), "t": {D: micros} (every row of the day), "loss": the block's response said rows were dropped (_lossy)}."""
     rows = ga.report_all(body_late(a, b), page_rows=gu.UNI_PAGE_ROWS)
     d, oth, tot, h = {}, {}, {}, hs.isoformat()
     for r in rows:
@@ -207,7 +226,7 @@ def read_late(ga, a, b, hs):
         if X >= h and v and (_d(D) - _d(X)).days >= LAGS:
             e = d.setdefault(D, {})
             e[X] = e.get(X, 0) + v
-    return {"d": d, "oth": oth, "t": tot}
+    return {"d": d, "oth": oth, "t": tot, "loss": _lossy(ga, rows)}
 
 
 def late_path(data_dir, app_id, month):
@@ -242,14 +261,15 @@ class Late:
             s = gu.load_store(late_path(self.data_dir, self.app_id, k)) if self.data_dir else None
             if not (isinstance(s, dict) and s.get("v") == LATE_V and isinstance(s.get("d"), dict)
                     and str(s.get("stream_id") or "") == str(self.stream_id or "")):
-                s = {"v": LATE_V, "stream_id": self.stream_id, "d": {}, "oth": {}, "t": {}}
-            for f in ("oth", "t"):
+                s = {"v": LATE_V, "stream_id": self.stream_id, "d": {}, "oth": {}, "t": {}, "loss": {}}
+            for f in ("oth", "t", "loss"):
                 s.setdefault(f, {})
             self.m[k] = s
         return self.m[k]
 
     def put(self, got, a, b):
-        """Activity days a … b REPLACED by the read (a day it returned nothing for: read, nothing to fold)."""
+        """Activity days a … b REPLACED by the read (a day it returned nothing for: read, nothing to fold; a lossy
+        block: every day of it in "loss")."""
         D = a
         while D <= b:
             k = D.isoformat()
@@ -261,6 +281,10 @@ class Late:
                     f[fld][k] = v
                 else:
                     f[fld].pop(k, None)
+            if got.get("loss"):
+                f["loss"][k] = 1
+            else:
+                f["loss"].pop(k, None)
             self.touched.add(k[:7])
             self.days += 1
             D += timedelta(days=1)
@@ -281,25 +305,25 @@ class Late:
 
 
 def step_late(ga, store, late, today, hs, ran):
-    """The late reads of one app (after the lag 0 … 30 ones): the one-time backfill, then the last RECENT_DAYS activity
-    days whenever the recent refresh ran (`ran`) or the late part of the last one was not finished. → read anything?"""
-    did = False
+    """The late reads of one app (after the lag 0 … 30 ones), from the cursor late.next (see the module doc): from
+    min(next, the recent window's first day) to today in BLOCK_LATE blocks — whenever the cursor is older than the
+    recent window (the first read, a catch-up after any pause), the recent refresh ran (`ran`), or the late part of the
+    last one did not reach its day. → read anything?"""
     first = hs + timedelta(days=LAGS)               # the first activity day that can hold a lag ≥ 31 row
     recent = today - timedelta(days=RECENT_DAYS - 1)
+    edge = today - timedelta(days=FINAL_LAG)        # the newest activity day a read today gets final
     lt = store.setdefault("late", {})
-    if not lt.get("done"):
-        nxt = _d(lt["next"]) if lt.get("next") else first
-        lt.setdefault("from", nxt.isoformat())
-        for a, b in _blocks(nxt, recent - timedelta(days=1), BLOCK_LATE):
-            late.put(read_late(ga, a, b, hs), a, b)
-            lt["next"] = (b + timedelta(days=1)).isoformat()
-            did = True
-        lt["done"] = True
-    if ran or lt.get("read_till") != store.get("read_today"):
-        for a, b in _blocks(max(first, recent), today, BLOCK_LATE):
-            late.put(read_late(ga, a, b, hs), a, b)
-            did = True
-        lt["read_till"] = today.isoformat()
+    nxt = max(first, _d(lt["next"])) if lt.get("next") else first
+    if not (nxt < recent or ran or (lt.get("read_till") or "") < (store.get("read_today") or "")):
+        return False
+    lt.setdefault("from", first.isoformat())
+    did = False
+    for a, b in _blocks(min(nxt, max(first, recent)), today, BLOCK_LATE):
+        late.put(read_late(ga, a, b, hs), a, b)
+        nxt = max(nxt, min(b, edge) + timedelta(days=1))
+        lt["next"] = nxt.isoformat()
+        did = True
+    lt["done"], lt["read_till"] = True, today.isoformat()
     return did
 
 

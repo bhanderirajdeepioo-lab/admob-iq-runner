@@ -58,6 +58,14 @@ def test_day_wise_past_d30(out):
     # the title says the real last column (a file without m: D365 as before); the Hinglish note + GA4's "(other)" share
     assert out["m_title"] and out["m_note"] and out["m_q"]
     assert out["m_be"]                                                 # breakeven / so far through the 30-day columns
+    # the default Day view (newest 60 install days, none with m yet): the columns as before, the note says how far
+    # the older rows go — never 30-day columns that are all "·"
+    assert out["m_default"] == [35, "D60,D90,D180,D365", True]
+    # a file whose late read reaches only D60 so far: no checkpoint column is lost, and a row without m keeps its own
+    # D60 / D90 / D180 / D365 (final); the note lists only the columns there are; tiny shares print "<0.1%"
+    assert out["m_part_cols"] == ["D0", "D1", "D3", "D7", "D14", "D30", "D60", "D90", "D180", "D365"]
+    assert out["m_part_cells"] == [[61, True], [91, True], [181, True], [None, False]]
+    assert all(out["m_part"]) and all(out["m_list"]) and out["m_q4"]
 
 
 def test_countries_life_all(out):

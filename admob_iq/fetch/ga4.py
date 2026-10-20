@@ -222,6 +222,7 @@ class Ga4App:
         self.calls = 0
         self.last_row_count = None     # rowCount of the last runReport (total rows, ignoring limit)
         self.last_pages = None         # pages report_all() fetched for its last report
+        self.last_metas = []           # … and every page's response metadata (last_meta keeps only the last page's)
         self.last_meta = {}            # response metadata of the last runReport
         self.thresholded = False       # True once ANY report came back subject to GA4 thresholding
 
@@ -255,15 +256,16 @@ class Ga4App:
         order += [{"dimension": {"dimensionName": d["name"]}} for d in body.get("dimensions") or []
                   if d["name"] not in have]
         body = dict(body, orderBys=order) if order else body
-        rows, offset, pages = [], 0, 0
+        rows, offset, pages, metas = [], 0, 0, []
         while pages < MAX_REPORT_PAGES:
             page = self.report(dict(body, limit=limit, offset=offset), event, events, extra)
             pages += 1
+            metas.append(self.last_meta)
             rows.extend(page)
             offset += limit
             if not page or offset >= (self.last_row_count or 0):
                 break
-        self.last_pages = pages
+        self.last_pages, self.last_metas = pages, metas
         return rows
 
     def truncated(self, rows):

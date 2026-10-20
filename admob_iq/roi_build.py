@@ -16,6 +16,8 @@ k the tab uses):
        of it did not tie to the install-day read, bit 2 = a day its m used had revenue GA4 gave no install day),
        spi (spend as billed), and — only on a row that has them — m (cumulative revenue at day 60, 90, 120 … every
        30 days up to the install day's age: the late read, see below), mf (how many of m are final)]
+       (q bit 4 = a day its m used came from a late block GA4 flagged: dataLossFromOtherRow / thresholding / sampling
+       / a cut read)
   * sum — Today / Yesterday, CPI, ROAS at each age (last 7 judged install days vs the 28 before), LTV, retention,
     the payback day of the recent install days (pooled), status, data quality (GA4 coverage, the tie check);
   * life — AdMob revenue and Google Ads spend of EVERY day from the app's first day (lifetime P/L, month-wise on the
@@ -29,13 +31,16 @@ k the tab uses):
     and the budget call from the marginal form (see F4_* below). Once GA4's own paid cells (IDAY_EXT cp) cover an
     age, that age uses GA4's MEASURED paid share and premium instead of the premium range (src "ga4", see _ga4p).
   * late — only when the app has a late store: {"days" read, "oth" days with revenue GA4 gave no install day
-    ("(other)"), "omax" the largest such share of a day's revenue, "from", "till"} (the page's ≈ note).
+    ("(other)"), "omax" the largest such share of a day's revenue (6 decimals), "loss" days of a flagged block, "from",
+    "till"} (the page's ≈ note).
 Past day 30 (owner, 20 Oct 2026: "jitna purana app utna date"): fetch.ga4_cohort's LATE read (GA4_COHORT_LATE) keeps
 every install day's GA4 ad revenue at lag ≥ 31 by activity day; per install day X its 30-day buckets B[j] (lags
 30j+1 … 30j+30, j ≥ 1) = Σ micros × the SAME per-activity-day k as the D0 … D30 cells, and m = [base + B[1],
 base + B[1] + B[2], …] with base = d[30] when final through 30, else the D30 checkpoint (as t's D60+); m[j] only while
-EVERY activity day of buckets 1 … j was read (a hole stops it), final through the late read's own final edge.
-Breakeven and so far also look through m. Without a late store every byte of the file is as before.
+EVERY activity day of buckets 1 … j was read (a hole stops it), final through the late read's own final edge (its
+cursor: every day before late.next was read final). Breakeven and so far also look through m. Only with the switch
+on (GA4_COHORT_LATE: start(late=True)) and once the late read reached today the first time (late.done: the columns come
+in one go, never a half-read file's few); without that, or without a late store, every byte of the file is as before.
 roi.json.gz — every app's summary row (with its f4), the portfolio lifetime P/L and the portfolio install days (apps
 with spend), and the ranges the forms used (f4c).
 Pointer: dashboard["roi"] = {"file", "v", "apps": {app_id: {"file", "st", "r7", "u7", "pb", "lp"}}}.
@@ -131,14 +136,17 @@ class Acc:
         self.f4m = 0                                # ⚖️ apps whose forms use GA4's measured paid share + premium
         self.adsrc = None                           # ⚙️ the AdMob reports for the ad setting changes (adcfg.Source)
         self.ac = None                              # … their run (adcfg_build), made on the first app
+        self.late = False                           # 📅 GA4_COHORT_LATE: the 30-day columns past D30 (the late store)
 
 
-def start(cal=None, adsrc=None):
+def start(cal=None, adsrc=None, late=False):
     """cal: the forecast's eCPM calendar (fc_calendar.seasons, from build_static), handed to the forecast's run;
-    adsrc: the ⚙️ ad setting changes' reports (engine.adcfg.Source, from build_static)."""
+    adsrc: the ⚙️ ad setting changes' reports (engine.adcfg.Source, from build_static); late: GA4_COHORT_LATE (off:
+    the late store is never read, the file as without it)."""
     acc = Acc()
     acc.cal = cal
     acc.adsrc = adsrc
+    acc.late = bool(late)
     return acc
 
 
@@ -171,14 +179,18 @@ def _tie_off(ida, co_x, pr_days):
 def _late(data_dir, aid, co, P):
     """The app's LATE store (fetch.ga4_cohort, GA4_COHORT_LATE) folded month by month (one month in memory at a time)
     → {"B": {X: {j: USD}} the 30-day buckets (AdMob-matched with kf of each activity day), "full" (lo, hi): every
-    activity day lo … hi read, "oth" (lo, hi): any of them had revenue GA4 gave no install day, "C": the late read's
-    final edge, "info" (the file's "late")} — None when nothing of it was read (or no main store of the same stream)."""
+    activity day lo … hi read, "oth" (lo, hi): q bits of them (2: revenue GA4 gave no install day, 4: a flagged
+    block), "C": the late read's final edge, "info" (the file's "late")} — None when nothing of it was read, before
+    the late read first reached today (late.done), or without a main store of the same stream."""
     if not co or not co.get("stream_id"):
         return None
+    lt = co.get("late") if isinstance(co.get("late"), dict) else {}
+    if not lt.get("done"):                          # still on its first read: the file as without it until it is whole
+        return None
     kf, hs = P["sc"]["kf"], P["hs"]
-    B, read, oth, omax = {}, set(), set(), 0.0
+    B, read, oth, loss, omax = {}, set(), set(), set(), 0.0
     for _, mo in gco.late_months(data_dir, aid, co["stream_id"]):
-        ot, tt = mo.get("oth") or {}, mo.get("t") or {}
+        ot, tt, ls = mo.get("oth") or {}, mo.get("t") or {}, mo.get("loss") or {}
         for D, xs in (mo.get("d") or {}).items():
             try:
                 Dd = _d(D)
@@ -203,15 +215,18 @@ def _late(data_dir, aid, co, P):
                 oth.add(Dd)
                 tt_d = int(tt.get(D) or 0)
                 omax = max(omax, min(1.0, o / tt_d) if tt_d > 0 else 1.0)
+            if ls.get(D):
+                loss.add(Dd)
     if not read:
         return None
     last = max(read)
     n = (last - hs).days + 1
-    pr, po = [0] * (n + 1), [0] * (n + 1)
+    pr, po, pl = [0] * (n + 1), [0] * (n + 1), [0] * (n + 1)
     for i in range(n):
         D = hs + timedelta(days=i)
         pr[i + 1] = pr[i] + (D in read)
         po[i + 1] = po[i] + (D in oth)
+        pl[i + 1] = pl[i] + (D in loss)
 
     def span(lo, hi):
         i0, i1 = (lo - hs).days, (hi - hs).days
@@ -221,22 +236,22 @@ def _late(data_dir, aid, co, P):
         s_ = span(lo, hi)
         return bool(s_) and pr[s_[1] + 1] - pr[s_[0]] == s_[1] - s_[0] + 1
 
-    def any_oth(lo, hi):
+    def q_bits(lo, hi):
         s_ = span(lo, hi)
-        return bool(s_) and po[s_[1] + 1] - po[s_[0]] > 0
-    lt = co.get("late") if isinstance(co.get("late"), dict) else {}
+        if not s_:
+            return 0
+        return (2 if po[s_[1] + 1] - po[s_[0]] > 0 else 0) | (4 if pl[s_[1] + 1] - pl[s_[0]] > 0 else 0)
     C = None
-    try:                                            # final: read when ≥ FINAL_LAG days old (the backfill reads only
-        if lt.get("read_till"):                     # days older than the recent window: final when read)
-            C = _d(lt["read_till"]) - timedelta(days=gco.FINAL_LAG)
-        elif lt.get("next"):
+    try:                                            # final: before the cursor (read when ≥ FINAL_LAG days old)
+        if lt.get("next"):
             C = _d(lt["next"]) - timedelta(days=1)
         if C is not None and co.get("read_today"):
             C = min(C, _d(co["read_today"]) - timedelta(days=gco.FINAL_LAG))
     except (TypeError, ValueError):
         C = None
-    return {"B": B, "full": full, "oth": any_oth, "C": C,
-            "info": {"days": len(read), "oth": len(oth), "omax": _r(omax), "from": _iso(min(read)), "till": _iso(last)}}
+    return {"B": B, "full": full, "oth": q_bits, "C": C,
+            "info": {"days": len(read), "oth": len(oth), "omax": _r(omax, 6), "loss": len(loss),
+                     "from": _iso(min(read)), "till": _iso(last)}}
 
 
 def _cohorts(P, spend, fxf, co, today, late=None):
@@ -283,7 +298,7 @@ def _cohorts(P, spend, fxf, co, today, late=None):
                     base = d[30] if (d is not None and df > 30) else e["R"][5]
                     t[j] = _r(base + e["R"][j] - e["R"][5])
         # past day 30, every 30 days (the late read): from the row's own D30 on, while every activity day was read
-        m, mf, qo = None, 0, False
+        m, mf, qo = None, 0, 0
         if late is not None:
             base = d[30] if (d is not None and df > 30) else (e["R"][J30] if t[J30] is not None else None)
             if base is not None:
@@ -644,7 +659,7 @@ def _summary(rows, P, co_off, tie_checked, today):
 
 def _row_out(r):
     out = [_iso(r["X"]), r["n"], _r(r["na"], 2), _r(r["sp"]), r["d"], r["df"], r["u"], r["t"], r["s"], r["sd"],
-           r["be"], r.get("st"), (1 if r.get("q") else 0) | (2 if r.get("qo") else 0), _r(r.get("spi"), 2)]
+           r["be"], r.get("st"), (1 if r.get("q") else 0) | (r.get("qo") or 0), _r(r.get("spi"), 2)]
     if r.get("m"):                                  # the 30-day columns past D30: new trailing fields only
         out += [r["m"], r["mf"]]
     return out
@@ -805,8 +820,8 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             co = None
         now = now or datetime.now(timezone.utc)
         today = _d(co["read_today"]) if co and co.get("read_today") else P["S"]
-        try:                                            # the late read (D60, D90 … the app's age): a bad file costs
-            late = _late(data_dir, aid, co, P)          # only those columns
+        try:                                            # the late read (D60, D90 … the app's age; GA4_COHORT_LATE
+            late = _late(data_dir, aid, co, P) if acc.late else None    # only): a bad file costs only those columns
         except Exception:
             late = None
         rows = _cohorts(P, spend, fxf, co, today, late)

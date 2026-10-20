@@ -6798,16 +6798,19 @@ function barChart(labels,vals,o){ o=o||{}; const W=CHW(),H=o.h||200,m={t:18,r:12
   return `<div class="roi-ch"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${E(o.label||'chart')}">${gl}${bars}${xl}${hits}</svg></div>`; }
 // ---- 📅 Day-wise ROI ----
 const R={X:0,n:1,na:2,sp:3,d:4,df:5,u:6,t:7,s:8,sd:9,be:10,st:11,q:12,spi:13,m:14,mf:15};
-// past D30: every 30 days up to the oldest install day's age (the late read's m) — a file without m: T's 60 … 365
+// past D30: every 30 days up to the oldest install day's age (the late read's m), then any of T's checkpoints past the
+// last 30-day column some row has (never a checkpoint lost) — rows without m: T's 60 … 365 as before
 function mLen(rows){ return rows.reduce((x,r)=>Math.max(x,Array.isArray(r[R.m])?r[R.m].length:0),0); }
-function cols(d,rows){ const T=d.T||[0,1,3,7,14,30,60,90,180,365]; const exact=rows.some(r=>Array.isArray(r[R.d])&&r[R.d].length);
+function cols(d,rows){ const T=d.T||[0,1,3,7,14,30,60,90,180,365]; const exact=(d.rows||rows).some(r=>Array.isArray(r[R.d])&&r[R.d].length);
   const c=[]; if(exact&&GRAIN==='day'){ for(let L=0;L<(d.lags||31);L++) c.push({a:L,lab:'D'+L,ex:true}); }
   else T.filter(a=>a<=30).forEach((a,j)=>c.push({a,lab:'D'+a,j}));
   const mx=mLen(rows);
-  if(mx) for(let k=0;k<mx;k++) c.push({a:30*(k+2),lab:'D'+30*(k+2),mi:k});
+  if(mx){ for(let k=0;k<mx;k++) c.push({a:30*(k+2),lab:'D'+30*(k+2),mi:k});
+    T.forEach((a,j)=>{ if(a>30*(mx+1)&&rows.some(r=>r[R.t]&&r[R.t][j]!=null)) c.push({a,lab:'D'+a,j}); }); }
   else T.forEach((a,j)=>{ if(a>30) c.push({a,lab:'D'+a,j}); }); return c; }
 // a row's cumulative revenue at a column: [value, final?]
-function cum(r,c,T){ const dd=r[R.d]; if(c.mi!=null){ const m=r[R.m]; return Array.isArray(m)&&c.mi<m.length&&ok(m[c.mi])?[m[c.mi],c.mi<(+r[R.mf]||0)]:[null,false]; }
+function cum(r,c,T){ const dd=r[R.d]; if(c.mi!=null){ const m=r[R.m]; if(Array.isArray(m)&&c.mi<m.length&&ok(m[c.mi])) return [m[c.mi],c.mi<(+r[R.mf]||0)];
+    const j=T.indexOf(c.a); return j>=0&&r[R.t]&&r[R.t][j]!=null?[r[R.t][j],true]:[null,false]; }
   if(c.ex){ if(Array.isArray(dd)&&c.a<dd.length) return [dd[c.a], c.a<r[R.df]];
     const j=T.indexOf(c.a); if(!Array.isArray(dd)&&j>=0&&r[R.t]&&r[R.t][j]!=null) return [r[R.t][j],true]; return [null,false]; }
   if(c.a<=30&&Array.isArray(dd)&&c.a<dd.length&&c.a>=r[R.df]) return [dd[c.a],false];      // seen, not final yet
@@ -6824,7 +6827,7 @@ function relLab(d,x){ const nw=d.newest; if(!nw) return ''; if(x===nw) return 'T
 function cell(v,base,met,prev,n){ if(!ok(v)) return null;
   if(met==='roas') return base?v/base:null; if(met==='rev') return v; if(met==='ltv') return n?v/n:null; if(met==='delta') return ok(prev)?v-prev:v; return v; }
 function fmtCell(x,met){ return met==='roas'?P(x):met==='ltv'?MP(x):M(x); }
-function cohortTable(d){ const T=d.T, groups=groupRows(d), C=cols(d,d.rows||[]), shown=groups.slice(0,SHOW);
+function cohortTable(d){ const T=d.T, groups=groupRows(d), shown=groups.slice(0,SHOW), C=cols(d,shown.flatMap(g=>g.rows));
   const head=`<tr><th>Install ${GRAIN==='day'?'date':GRAIN}</th><th>Status</th><th>Installs</th><th>Spend</th><th>CPI</th>${C.map(c=>`<th>${c.lab}</th>`).join('')}<th>So far</th><th>Breakeven</th></tr>`;
   const body=shown.map(gr=>{ const n=sumK(gr,R.n)||0, sp=sumK(gr,R.sp), spv=SV(sp,sumK(gr,R.spi)); let prev=null;
     const st=GRAIN==='day'?gr.rows[0][R.st]:null;
@@ -6834,17 +6837,20 @@ function cohortTable(d){ const T=d.T, groups=groupRows(d), C=cols(d,d.rows||[]),
     if(GRAIN==='day'){ const r=gr.rows[0]; so=r[R.s]; be=r[R.be]; }
     else { so=gr.rows.reduce((a,r)=>a+(+r[R.s]||0),0); }
     const beTxt=be?`${be[1]?'':'≤ '}day ${be[0]}`:(sp&&ok(so)?`<small>${P(so/sp)} back</small>`:'—');
-    const qb=GRAIN==='day'?(+gr.rows[0][R.q]||0):0, q=qb?` <span class="roi-q" title="${E([qb&1?'Is din ka GA4 read install-day read se match nahi hua':'',qb&2?'D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)")':''].filter(Boolean).join(' · ')+' — numbers ≈')}">≈</span>`:'';
+    const qb=GRAIN==='day'?(+gr.rows[0][R.q]||0):0, q=qb?` <span class="roi-q" title="${E([qb&1?'Is din ka GA4 read install-day read se match nahi hua':'',qb&2?'D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)")':'',qb&4?'D30 ke baad GA4 ke report ne kuch data chhoda (data loss / thresholding / sampling flag) — asli kamai thodi zyada ho sakti hai':''].filter(Boolean).join(' · ')+' — numbers ≈')}">≈</span>`:'';
     return `<tr><td class="roi-nm">${E(rowLabel(gr,d))}${q}</td><td>${st?chip(st):''}</td><td>${N(n)}</td><td>${MV(spv)}</td><td>${spv&&n?MPV(spv/n):'—'}</td>${cells}<td>${M(so)}${sp&&ok(so)?` <small>${P(so/sp)}</small>`:''}</td><td>${beTxt}</td></tr>`; }).join('');
   const more=groups.length>shown.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-more="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-more="all">Show all ${groups.length}</button><span class="roi-note">${shown.length} of ${groups.length}</span></div>`:'';
   return `<div class="roi-ctl">${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div>`
     +`<div class="roi-tw"><table class="roi-t roi-heat"><thead>${head}</thead><tbody>${body}</tbody></table></div>${more}`
-    +`<p class="roi-note">Har cell = us install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ke users ki us din tak ki <b>kul kamai</b> (${MET==='roas'?'spend ka %':MET==='ltv'?'per install':MET==='delta'?'pichhle column se kitni badhi':'paisa'}). Rang: hara = spend wapas (≥100%), peela = 50–100%, laal = 50% se kam. Halka = abhi final nahi. ${GRAIN!=='day'?'Hafte / mahine ka cell tabhi jab uske saare din us umar tak pahunch gaye.':''}${lateNote(d)}</p>`; }
+    +`<p class="roi-note">Har cell = us install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ke users ki us din tak ki <b>kul kamai</b> (${MET==='roas'?'spend ka %':MET==='ltv'?'per install':MET==='delta'?'pichhle column se kitni badhi':'paisa'}). Rang: hara = spend wapas (≥100%), peela = 50–100%, laal = 50% se kam. Halka = abhi final nahi. ${GRAIN!=='day'?'Hafte / mahine ka cell tabhi jab uske saare din us umar tak pahunch gaye.':''}${lateNote(d,C)}</p>`; }
 // the 30-day columns' note: how far, when a column fills, and GA4's "(other)" share (measured, from the file)
-function lateNote(d){ const mx=mLen(d.rows||[]); if(!mx) return '';
-  const lt=d.late||{}, pc=v=>ok(v)?(v*100).toFixed(v<0.1?1:0)+'%':'—';
-  return ` D30 ke baad har 30 din ka column (D60, D90 … D${30*(mx+1)}), app ki umar tak — jitna purana install din, utne column. Column tabhi bharta hai jab us 30 din ke saare din GA4 se padh liye gaye; beech ka koi din na padha ho to wahin ruk jata hai (·).`
-    +(lt.oth?` ≈ = D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)") — ${N(lt.oth)} din me, sabse zyada us din ki kamai ka ${pc(lt.omax)}; aise din wale row pe ≈.`:''); }
+function lateNote(d,C){ const mx=mLen(d.rows||[]); if(!mx) return '';
+  const lt=d.late||{}, pc=v=>!ok(v)?'—':v>0&&v<0.001?'<0.1%':(v*100).toFixed(v<0.1?1:0)+'%';
+  const ls=mx===1?'D60':mx===2?'D60, D90':`D60, D90 … D${30*(mx+1)}`, on=(C||[]).filter(c=>c.mi!=null).length;
+  return ` D30 ke baad har 30 din ka column (${ls}), app ki umar tak — jitna purana install din, utne column. Column tabhi bharta hai jab us 30 din ke saare din GA4 se padh liye gaye; beech ka koi din na padha ho to wahin ruk jata hai (·) — us din ka D60 / D90 / D180 checkpoint ho to wo dikhta hai.`
+    +(C&&on<mx?` Abhi dikh rahe install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ${on?'D'+30*(on+1)+' tak':'D60 tak nahi'} pahunche — purane (Show all${GRAIN==='day'?' / Week / Month':''}) me D${30*(mx+1)} tak column.`:'')
+    +(lt.oth?` ≈ = D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)") — ${N(lt.oth)} din me, sabse zyada us din ki kamai ka ${pc(lt.omax)}; aise din wale row pe ≈.`:'')
+    +(lt.loss?` ≈ = ${N(lt.loss)} din ke D30-ke-baad wale GA4 report me data chhoda gaya (data loss / thresholding / sampling flag) — un din wale row ki kamai thodi kam dikh sakti hai.`:''); }
 function monthCurves(d){ const T=d.T, ms=(d.months||[]).filter(m=>m[2]>0).slice(-6);
   if(!ms.length) return '<p class="roi-note">Abhi kisi install mahine pe Google Ads spend nahi.</p>';
   const cls=['c1','c2','c3','c4','c5','c6'];

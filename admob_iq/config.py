@@ -127,7 +127,8 @@ def settings() -> dict:
         "ga4_cohort": _env("GA4_COHORT", "false").lower() == "true",
         "ga4_cohort_budget_sec": _int_env(("GA4_COHORT_BUDGET_SEC",), 150),
         # … and every install day's revenue past day 30 (the LATE read: 30-day columns up to the app's age on the
-        # page), inside the same step and budget. Off: nothing of it is read, written or printed
+        # page), inside the same step and budget. Off: nothing of it is read, written or printed, and the ROI build
+        # leaves its store unread (the page's file exactly as without it)
         "ga4_cohort_late": _env("GA4_COHORT_LATE", "false").lower() == "true",
         # 📈 ROI in the Install value tab (roi_<key>.json.gz + roi.json.gz): day-wise ROI, countries keep / cut,
         # lifetime P/L — off: no file, no pointer (the tab exactly as before)

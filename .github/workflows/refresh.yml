@@ -144,7 +144,7 @@ jobs:
           GA4_COHORT:           ${{ vars.GA4_COHORT || 'true' }}
           GA4_COHORT_BUDGET_SEC: ${{ vars.GA4_COHORT_BUDGET_SEC }}
           # … and past day 30 (the late read: 30-day columns D60, D90 … up to the app's age; data/ga4_cohort/late/):
-          # GA4_COHORT_LATE=false stops only these reads
+          # GA4_COHORT_LATE=false stops only these reads (and the page's 30-day columns: the file as without them)
           GA4_COHORT_LATE:      ${{ vars.GA4_COHORT_LATE || 'true' }}
           ROI_TAB:              ${{ vars.ROI_TAB || 'true' }}
           # 🔮 Forecast engine (inside the ROI section): vd = the forecast tournament's winner (default); FORECAST_ENGINE=v0
