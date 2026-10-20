@@ -34,6 +34,7 @@ BUDGET_SEC = 22 * 60
 DAYS_BACK = (3, 30, 58)               # property-tz days before today: final, a month back, near the retention edge
 MAX_ROUNDS = 40                       # 600 countries: far above the ~250 GA4 knows; a guard, not a cut
 DIM = "countryId"
+RT = "RESERVED_TOTAL"                 # GA4's own total row in a funnel breakdown
 
 
 def country_body(splash, home, day, exclude=(), dim=DIM):
@@ -49,12 +50,15 @@ def country_body(splash, home, day, exclude=(), dim=DIM):
 def by_country(ga, steps, day, clock=time.monotonic):
     """Every country of one day, in rounds → {"countries": {cc: [first_open, splash, home]}, "rounds", "calls", "tokens",
     "sec", "sample"}. A round with no row ends it."""
-    out, seen, rounds, smp, t0, tok0 = {}, set(), 0, None, clock(), ga.tok
+    out, seen, rounds, smp, t0, tok0, rts = {}, set(), 0, None, clock(), ga.tok, []
     while rounds < MAX_ROUNDS:
         j = ga.funnel(country_body(steps["splash"], steps["home"], day, seen))
         rounds += 1
         t = gf.parse_table(j)
         fo, sp, st = t.get("first_open") or {}, t.get("splash") or {}, t.get("step") or {}
+        # GA4 adds a RESERVED_TOTAL row: the whole population of THIS round (every country not yet left out); after the
+        # last named country it is what GA4 counted but named no country for (its privacy thresholds)
+        rts.append([fo.pop(RT, 0), sp.pop(RT, 0), st.pop(RT, 0)])
         got = (set(fo) | set(sp) | set(st)) - seen
         s = gf.sampling(j)
         if s is not None:
@@ -65,13 +69,13 @@ def by_country(ga, steps, day, clock=time.monotonic):
             out[c] = [fo.get(c, 0), sp.get(c, 0), st.get(c, 0)]
         seen |= got
     return {"countries": out, "rounds": rounds, "tokens": ga.tok - tok0, "sec": round(clock() - t0, 1), "sample": smp,
-            "capped": rounds >= MAX_ROUNDS}
+            "capped": rounds >= MAX_ROUNDS, "rt": rts}
 
 
 def total(ga, steps, day):
     j = ga.funnel(gf.funnel_body(steps["splash"], steps["home"], day, day, "date"))
     t = gf.parse_table(j)
-    pick = lambda k: sum((t.get(k) or {}).values())
+    pick = lambda k: sum(v for b, v in (t.get(k) or {}).items() if b != RT)
     return {"first_open": pick("first_open"), "splash": pick("splash"), "home": pick("step"), "sample": gf.sampling(j)}
 
 

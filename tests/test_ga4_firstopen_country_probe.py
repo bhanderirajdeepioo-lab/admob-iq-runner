@@ -30,13 +30,16 @@ class FakeGa:
         if dim == "date":
             t = [sum(v[i] for v in self.data.values()) for i in range(3)]
             return _table([("1. first_open", "20261001", t[0]), ("2. splash", "20261001", t[1]),
-                           ("3. step", "20261001", t[2])], "date")
+                           ("3. step", "20261001", t[2]), ("1. first_open", cp.RT, t[0]), ("2. splash", cp.RT, t[1]),
+                           ("3. step", cp.RT, t[2])], "date")
         f = body["funnel"]["steps"][0]["filterExpression"]
         ex = set()
         if "andGroup" in f:
             ex = set(f["andGroup"]["expressions"][1]["notExpression"]["funnelFieldFilter"]["inListFilter"]["values"])
-        left = sorted((c for c in self.data if c not in ex), key=lambda c: -self.data[c][0])[:gf.CHUNK]
-        rows = []
+        rest = [c for c in self.data if c not in ex]
+        left = sorted(rest, key=lambda c: -self.data[c][0])[:gf.CHUNK]
+        rows = [("%d. %s" % (i + 1, s), cp.RT, sum(self.data[c][i] for c in rest)) for i, s in
+                enumerate(("first_open", "splash", "step"))]
         for c in left:
             a, b, h = self.data[c]
             rows += [("1. first_open", c, a), ("2. splash", c, b), ("3. step", c, h)]
@@ -47,7 +50,9 @@ def test_rounds_read_every_country_and_stop_on_an_empty_round():
     ga = FakeGa()
     r = cp.by_country(ga, STEPS, date(2026, 10, 1))
     assert len(r["countries"]) == 40 and r["rounds"] == 4 and not r["capped"]       # 15 + 15 + 10, then an empty round
-    assert r["countries"]["C39"] == [61, 51, 11] and r["tokens"] == 28
+    assert r["countries"]["C39"] == [61, 51, 11] and r["tokens"] == 28 and cp.RT not in r["countries"]
+    assert r["rt"][0] == [sum(100 - i for i in range(40)), sum(90 - i for i in range(40)), sum(50 - i for i in range(40))]
+    assert r["rt"][-1] == [0, 0, 0]                                    # nothing left after the last named country
     # round n leaves out exactly the countries of rounds 1 … n-1, on step 1 only
     second = ga.bodies[1]["funnel"]["steps"]
     vals = second[0]["filterExpression"]["andGroup"]["expressions"][1]["notExpression"]["funnelFieldFilter"]
