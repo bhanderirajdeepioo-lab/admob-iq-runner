@@ -4,7 +4,9 @@ day, the status vs usual, install months (one set of days per curve: never dips)
 lifetime P/L days, the countries board (Scale / Keep / Watch / Cut …) and what cutting saves, the four forms of ROI
 (blended / paid-only / incremental / marginal as ranges, the paid share, the budget call; GA4's measured paid share and
 premium from the paid cells once they cover an age), the portfolio file, the
-pointer, one splat header rule, failure isolation and a counts-only line."""
+pointer, one splat header rule, failure isolation and a counts-only line. Past D30 (the late store): 30-day buckets ×
+each activity day's k, the base (d[30] or the D30 checkpoint), holes stop the columns, finality, breakeven / so far
+through them, ≈ from GA4's "(other)", and without a late store nothing of the file changes."""
 import gzip
 import json
 import os
@@ -361,3 +363,183 @@ def test_finish_pointer_header_and_isolation(tmp_path):
     assert rb.finish(acc2, dash2, out) == [] and "roi" not in dash2
     assert not any(f.startswith("roi") for f in os.listdir(out))
     assert rb.enabled({}) and not rb.enabled({"roi_tab": False})
+
+
+# ── past D30 every 30 days (the late read, fetch.ga4_cohort's late store) ───────────────────────────────────────────
+LHS, LS, LTODAY = date(2026, 4, 1), date(2026, 10, 7), date(2026, 10, 13)
+KSW = date(2026, 8, 1)                                  # the scale k: 2 before, 3 from this activity day on
+
+
+def _late_setup(tmp_path, holes=(), oth=None, stream="222", read_till=LTODAY):
+    """An app from LHS: install-day checkpoints (R[30] = $62), the exact store for the last 100 install days ($0.50 GA4 a
+    day), and the late store: every install day earns $0.01 GA4 on every activity day ≥ 31 days after it, every day
+    read from LHS + 31 to today except `holes`; `oth`: {day: (other micros, day total micros)}."""
+    from admob_iq.fetch import ga4_cohort as gco
+    P = _P(LHS, LS)
+    P["sc"]["kf"] = lambda d: ((2.0 if d < KSW else 3.0), "ok", False, 2.0)
+    co = {"read_today": LTODAY.isoformat(), "stream_id": "222", "x": {},
+          "late": {"from": (LHS + timedelta(days=31)).isoformat(), "next": "2026-09-09", "done": True,
+                   "read_till": read_till.isoformat()}}
+    for i in range(100):
+        X = LTODAY - timedelta(days=i)
+        co["x"][X.isoformat()] = {"r": [500000] * 31, "u": [100 - L for L in range(31)]}
+    lt = gco.Late(str(tmp_path), "a~1", stream)
+    got, first = {"d": {}, "oth": {}, "t": {}}, LHS + timedelta(days=31)
+    D = first
+    while D <= LTODAY:
+        k = D.isoformat()
+        got["d"][k] = {}
+        X = LHS
+        while X <= D - timedelta(days=31):
+            got["d"][k][X.isoformat()] = 10000
+            X += timedelta(days=1)
+        if oth and D in oth:
+            got["oth"][k], got["t"][k] = oth[D]
+        D += timedelta(days=1)
+    a = first
+    for h in sorted(holes) + [LTODAY + timedelta(days=1)]:
+        if a <= h - timedelta(days=1):
+            lt.put(got, a, h - timedelta(days=1))
+        a = h + timedelta(days=1)
+    lt.save()
+    return P, co
+
+
+def _rows(P, co, late, spend=None):
+    by = {r["X"]: r for r in rb._cohorts(P, spend, lambda d: 1.0, co, LTODAY, late)}
+    return by
+
+
+def test_late_buckets_scale_base_finality(tmp_path):
+    P, co = _late_setup(tmp_path)
+    late = rb._late(str(tmp_path), "a~1", co, P)
+    assert late["info"] == {"days": (LTODAY - LHS).days - 30, "oth": 0, "omax": 0.0, "from": "2026-05-02",
+                            "till": "2026-10-13"} and late["C"] == date(2026, 10, 10)
+    by = _rows(P, co, late)
+    old = by[LHS]                       # no exact cells: base = its D30 checkpoint ($62); every bucket = 30 days × $0.01 × k
+    assert old["d"] is None and old["t"][T.index(30)] == 62.0
+    assert old["m"] == [62.6, 63.2, 63.8, 64.69, 65.59]       # bucket 4 (Jul 31 … Aug 29): 1 day at k 2, 29 at k 3
+    assert old["mf"] == 5 and not old["qo"]                    # day 180 = Sep 28: whole and final; day 210 not read yet
+    mid = by[date(2026, 7, 10)]          # exact store final through day 30: base = d[30] (22 days × k 2 + 9 × k 3)
+    assert mid["df"] == 31 and mid["d"][30] == 35.5 and mid["m"] == [36.4, 37.3] and mid["mf"] == 2
+    edge = by[date(2026, 7, 15)]         # its day 90 = Oct 13: read, not final yet (final edge = read_till − 3)
+    assert edge["m"] == [round(edge["d"][30] + 0.9, 4), round(edge["d"][30] + 1.8, 4)] and edge["mf"] == 1
+    assert date(2026, 8, 20) in by and "m" not in by[date(2026, 8, 20)]   # 54 days old: no whole 30-day bucket
+    # the late read's own final edge: an older read_till makes fewer columns final
+    P2, co2 = _late_setup(tmp_path / "b", read_till=date(2026, 10, 1))
+    assert _rows(P2, co2, rb._late(str(tmp_path / "b"), "a~1", co2, P2))[LHS]["mf"] == 5   # Sep 28 ≤ Sep 28
+    assert _rows(P2, co2, rb._late(str(tmp_path / "b"), "a~1", co2, P2))[date(2026, 7, 10)]["mf"] == 1
+
+
+def test_late_holes_stop_the_columns(tmp_path):
+    P, co = _late_setup(tmp_path, holes={date(2026, 6, 15)})
+    by = _rows(P, co, rb._late(str(tmp_path), "a~1", co, P))
+    assert by[LHS]["m"] == [62.6]                              # bucket 2 (Jun 1 … 30) has a day never read: stops there
+    assert "m" not in by[date(2026, 5, 1)]                     # its bucket 1 (Jun 1 … 30): no column at all
+    assert by[date(2026, 5, 16)]["m"][0] == 62.6 and len(by[date(2026, 5, 16)]["m"]) == 4   # buckets after the hole
+
+
+def test_late_so_far_breakeven_and_other(tmp_path):
+    oth = {date(2026, 9, 20): (50000, 2000000)}               # 2.5% of that day's revenue GA4 gave no install day
+    P, co = _late_setup(tmp_path, oth=oth)
+    young = date(2026, 8, 4)                                  # exact store, no install-day checkpoint row
+    P["xs"].pop(young)
+    late = rb._late(str(tmp_path), "a~1", co, P)
+    assert late["info"]["oth"] == 1 and late["info"]["omax"] == 0.025
+    sp = {"ccy": "USD", "daily": {LHS.isoformat(): 63_000_000}, "installs": {}, "first": LHS.isoformat(),
+          "till": LTODAY.isoformat()}
+    by, base = _rows(P, co, late, sp), _rows(P, co, None, sp)
+    # breakeven: $63 spent; D30 $62 → the first 30-day column ≥ $63 is D90 ($63.20), "≤ day 90" — not the
+    # install-day checkpoint D60 ($122) the row without late columns uses
+    assert by[LHS]["be"] == [90, False] and base[LHS]["be"] == [60, False]
+    # so far: the furthest read — m's D60 (Oct 3) beats the exact store's day 30 (Sep 3)
+    y = by[young]
+    assert y["d"][30] == 46.5 and y["m"] == [47.4] and (y["s"], y["sd"]) == (47.4, "2026-10-03")
+    assert (base[young]["s"], base[young]["sd"]) == (46.5, "2026-09-03")
+    assert (by[LHS]["s"], by[LHS]["sd"]) == (base[LHS]["s"], base[LHS]["sd"])   # the install-day read reaches further
+    # ≈: a row whose columns use Sep 20; a row whose columns end before it (Jul 18: through Sep 16) does not
+    assert by[LHS]["qo"] and by[young]["qo"] and not by[date(2026, 7, 18)]["qo"]
+    assert rb._row_out(by[LHS])[12] == 2 and rb._row_out(dict(by[LHS], q=True))[12] == 3
+    assert rb._row_out(by[date(2026, 7, 18)])[12] == 0
+
+
+def test_late_so_far_past_the_install_day_read(tmp_path):
+    """An install day older than a year: the install-day read stops at day 365, m goes on to the app's age."""
+    from admob_iq.fetch import ga4_cohort as gco
+    hs, S, today = date(2025, 1, 1), date(2026, 10, 7), date(2026, 10, 13)
+    P = _P(hs, S)
+    co = {"read_today": today.isoformat(), "stream_id": "222", "x": {},
+          "late": {"next": "2026-09-09", "done": True, "read_till": today.isoformat()}}
+    lt = gco.Late(str(tmp_path), "a~1", "222")
+    got, D = {"d": {}, "oth": {}, "t": {}}, hs + timedelta(days=31)
+    while D <= today:
+        got["d"][D.isoformat()] = {hs.isoformat(): 10000}     # only the first install day earns past day 30
+        D += timedelta(days=1)
+    lt.put(got, hs + timedelta(days=31), today)
+    lt.save()
+    by = {r["X"]: r for r in rb._cohorts(P, None, lambda d: 1.0, co, today, rb._late(str(tmp_path), "a~1", co, P))}
+    r = by[hs]
+    assert len(r["m"]) == 20 and r["m"][-1] == 62 + 20 * 0.6                # D60 … D630 (650 days old today)
+    assert r["sd"] == (hs + timedelta(days=630)).isoformat() and r["s"] == r["m"][-1]   # past the read's day 365
+    other = by[date(2025, 6, 1)]                               # m to D480 (Sep 24 2026) beats its read's day 365
+    assert other["m"][-1] == 62.0 and other["sd"] == "2026-09-24"
+
+
+def test_without_a_late_store_nothing_changes(tmp_path):
+    P, co = _late_setup(tmp_path)
+    assert rb._late(str(tmp_path / "none"), "a~1", co, P) is None              # no late files
+    assert rb._late(str(tmp_path), "a~1", dict(co, stream_id="999"), P) is None   # another stream's files
+    assert rb._late(str(tmp_path), "a~1", None, P) is None
+    sp = {"ccy": "USD", "daily": {LHS.isoformat(): 63_000_000}, "installs": {}, "first": LHS.isoformat(),
+          "till": LTODAY.isoformat()}
+    plain = rb._cohorts(P, sp, lambda d: 1.0, co, LTODAY)
+    assert plain == rb._cohorts(P, sp, lambda d: 1.0, co, LTODAY, None)
+    assert not any("m" in r or "qo" in r for r in plain) and {len(rb._row_out(r)) for r in plain} == {14}
+    # with the late store: a row it does not reach is exactly the row without it; a row it reaches only gains fields
+    late = rb._late(str(tmp_path), "a~1", co, P)
+    with_late = rb._cohorts(P, sp, lambda d: 1.0, co, LTODAY, late)
+    for a, b in zip(plain, with_late):
+        if "m" not in b:
+            assert json.dumps(rb._row_out(a), default=str) == json.dumps(rb._row_out(b), default=str)
+        else:
+            assert rb._row_out(b)[:8] == rb._row_out(a)[:8]            # X … t as before; so far / breakeven via m
+            assert rb._row_out(b)[14:] == [b["m"], b["mf"]] and len(rb._row_out(b)) == 16
+
+
+def _stub_app(monkeypatch, P, co):
+    """app_step on made-up inputs: the install-day file, the engine's prep, the exact store; no spend, no forecast."""
+    from admob_iq import forecast_build, value_build
+    from admob_iq.engine import value as val
+    monkeypatch.setattr(value_build, "load_iday", lambda d, aid: {})
+    monkeypatch.setattr(val, "settled_day", lambda ida, hs: P["S"])
+    monkeypatch.setattr(val, "_prep", lambda store, ida, rev, ded, S: P)
+    monkeypatch.setattr(value_build, "app_spend", lambda pre, a, store: None)
+    monkeypatch.setattr(rb.gco, "load_store", lambda d, aid: co)
+
+    def no_fc(*a, **k):
+        raise RuntimeError("no forecast in this test")
+    monkeypatch.setattr(forecast_build, "start", no_fc)
+
+
+def test_app_step_late_block(tmp_path, monkeypatch):
+    P, co = _late_setup(tmp_path / "data")
+    _stub_app(monkeypatch, P, co)
+    store, a = {"history_start": LHS.isoformat(), "stream_id": "222"}, {"app_id": "a~1", "app_name": "Alpha"}
+
+    def run(data, out):
+        os.makedirs(out, exist_ok=True)
+        acc = rb.start()
+        rb.app_step(acc, store, a, "aaaaaaaaaaaa", None, {}, {}, out, data)
+        assert not acc.fails and len(acc.apps) == 1
+        with gzip.open(os.path.join(out, "roi_aaaaaaaaaaaa.json.gz"), "rt") as f:
+            return json.load(f)
+    plain = run(str(tmp_path / "empty"), str(tmp_path / "o1"))           # no late store: no block, 14 fields a row
+    assert "late" not in plain and {len(r) for r in plain["rows"]} == {14}
+    full = run(str(tmp_path / "data"), str(tmp_path / "o2"))
+    assert full["late"] == {"days": (LTODAY - LHS).days - 30, "oth": 0, "omax": 0.0, "from": "2026-05-02",
+                            "till": "2026-10-13"}
+    lens = {len(r) for r in full["rows"]}
+    assert lens == {14, 16} and full["rows"][0][14] == [62.6, 63.2, 63.8, 64.69, 65.59] and full["rows"][0][15] == 5
+    # every other part of the file as without the late store
+    assert {k: v for k, v in full.items() if k not in ("rows", "late")} == {k: v for k, v in plain.items() if k != "rows"}
+    assert [r[:8] + r[10:14] for r in full["rows"]] == [r[:8] + r[10:14] for r in plain["rows"]]   # no spend: no be

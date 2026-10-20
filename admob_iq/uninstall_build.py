@@ -274,7 +274,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         try:                                            # day's ad revenue — its own reads and store, a failure costs
             from .fetch import ga4_cohort as gco        # that step only
             print(gco.log_line(gco.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
-                                               budget=s.get("ga4_cohort_budget_sec") or gco.BUDGET_SEC)),
+                                               budget=s.get("ga4_cohort_budget_sec") or gco.BUDGET_SEC,
+                                               late=bool(s.get("ga4_cohort_late")))),
                   file=sys.stderr)
         except Exception as e:
             print("ga4 cohort skipped: %s" % type(e).__name__, file=sys.stderr)

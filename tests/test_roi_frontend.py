@@ -1,8 +1,9 @@
 """📈 ROI (a section of 💸 Install value) — the page side. tests/roi_frontend.js runs the ROI module + roiWrap of
 frontend/index.html for real (a node vm, stub page helpers) on SYNTHETIC data made up there; checked here: where the block
-goes, the day-by-day columns and their fallback to the checkpoints, Today / Yesterday, week / month rows (complete days
-only), the four cell kinds, breakeven, the KPI tiles, the countries board (order, what cutting saves), lifetime P/L
-(totals to the day both sides are in), All apps (icons, Worse first, hidden apps out), the hub card line, the four forms
+goes, the day-by-day columns and their fallback to the checkpoints, past D30 every 30 days up to the app's age (the late
+read's m: columns, finality, week / month, title + note, breakeven / so far; a file without m: the checkpoints), Today /
+Yesterday, week / month rows (complete days only), the four cell kinds, breakeven, the KPI tiles, the countries board
+(order, what cutting saves), lifetime P/L (totals to the day both sides are in), All apps (icons, Worse first, hidden apps out), the hub card line, the four forms
 of ROI (hero block, ranges printed from the file, GA4-measured paid split, budget call, mostly-organic flag, All-apps
 table), and the wiring into
 the page. Skipped where node is not installed. No real data."""
@@ -42,6 +43,21 @@ def test_day_wise(out):
     assert out["month_cols"] == ["D0", "D1", "D3", "D7", "D14", "D30"] and out["month_d0"] == 30
     assert out["month_d30"] is None                                    # a month waits for its youngest day
     assert out["cells"] == [2, 20, 0.2, 5]                             # ROAS, revenue, per install, delta
+
+
+def test_day_wise_past_d30(out):
+    # the late read's m: D0 … D30 day by day, then every 30 days up to the oldest install day's age (229 days → D210)
+    assert out["m_cols"] == [37, "D0", "D30", "D60", "D90", "D210", 6] and out["m_head"]
+    # a cell = m[j] (final while j < mf); a row whose m does not reach the column: nothing (·), never a checkpoint
+    assert out["m_cells"] == [[41, True], [91, True], [51, False], [None, False], [41, True], [None, False]]
+    assert out["m_nf"]                                                 # not final: the same light style as D0 … D30
+    # week / month: the T ≤ 30 checkpoints, then the same 30-day columns; a group's cell only when every day has it
+    assert out["m_month_cols"] == ["D0", "D1", "D3", "D7", "D14", "D30", "D60", "D90", "D120", "D150", "D180", "D210"]
+    assert out["m_month"] == [[1230, True], [1530, True], [None, False], [None, False]]
+    assert out["m_week_cols"] == ["D30", "D60", "D90"]
+    # the title says the real last column (a file without m: D365 as before); the Hinglish note + GA4's "(other)" share
+    assert out["m_title"] and out["m_note"] and out["m_q"]
+    assert out["m_be"]                                                 # breakeven / so far through the 30-day columns
 
 
 def test_countries_life_all(out):

@@ -1,7 +1,8 @@
 // 📈 ROI (a section of 💸 Install value) — the page side, run for real: the ROI module + roiWrap of frontend/index.html (cut
 // out by their markers) in a node vm with stub page helpers, on SYNTHETIC data made up here (no real names, ids or money):
 //   * where the block goes (between the Value Studio and "🗂 Old views"; nothing without the pointer);
-//   * Day-wise ROI: day-by-day columns when the exact store has them, the checkpoints for older days, Today / Yesterday
+//   * Day-wise ROI: day-by-day columns when the exact store has them, the checkpoints for older days, past D30 every 30
+//     days up to the oldest install day's age when the file has m (the late read; else 60 / 90 / 180 / 365), Today / Yesterday
 //     only from the store's own today, week / month rows only when every day is complete, ROAS / revenue / per install /
 //     delta cells, breakeven, the KPI tiles;
 //   * Countries: decision chips, what cutting saves, sorting, a country's months;
@@ -670,6 +671,50 @@ function appFile() {
     const cw = U.fcChart(fw, 30, Array(30).fill(10), Array(30).fill(0));
     out.cal_wk = cw.includes('Hafte ki chaal: is app ke ad triggers') && cw.includes('<b>Sun −6%</b>, Tue +3%') && cw.includes('total wahi rehta hai')
       && !cw.includes('class="ev ');
+    // 📅 past D30 every 30 days (the late read's m, mf): 230 install days to 13 Oct, the newest 40 day by day; a row
+    // ≥ 60 days old has m = its revenue at D60, D90 … (one more each 30 days of age), final while ≥ 3 days old
+    const dm = (() => {
+      const rows = [], newest = '2026-10-13';
+      for (let age = 229; age >= 0; age--) {
+        const X = day(newest, -age), exact = age < 40, obs = Math.min(30, age), df = Math.max(0, Math.min(obs, age - 3) + 1);
+        const dd = exact ? Array.from({ length: obs + 1 }, (_, L) => L + 1) : null;
+        const t = T.map(a => (a <= age - 3 ? a + 1 : null));
+        const r = [X, 100, 80, 50, dd, exact ? df : 0, exact ? dd.map(() => 50) : null, t, null, X, null, 'Normal', age === 100 ? 2 : 0, 4000];
+        const nm = Math.floor(age / 30) - 1;
+        if (nm > 0) { r.push(Array.from({ length: nm }, (_, k) => 31 + 10 * (k + 1)), Array.from({ length: nm }, (_, k) => k).filter(k => 30 * (k + 2) <= age - 3).length); r[8] = r[14][nm - 1]; }
+        if (age === 150) r[10] = [120, false];                                     // breakeven in a 30-day column
+        rows.push(r);
+      }
+      return { v: 1, app: 'Late File', T, lags: 31, newest, S: '2026-10-07', rows, months: [], sum: { today: rows.slice(-2), pools: {} },
+        late: { days: 200, oth: 3, omax: 0.025, from: '2026-03-28', till: newest }, consts: { final_lag: 3 } };
+    })();
+    U.set('GRAIN', 'day');
+    const CM = U.cols(dm, dm.rows);
+    out.m_cols = [CM.length, CM[0].lab, CM[30].lab, CM[31].lab, CM[32].lab, CM[CM.length - 1].lab, CM.filter(c => c.mi != null).length];
+    const rOld = dm.rows[0], rTwo = dm.rows.find(r => r[0] === day('2026-10-13', -91)), rYoung = dm.rows.find(r => r[0] === day('2026-10-13', -70));
+    out.m_cells = [U.cum(rOld, CM[31], T), U.cum(rOld, CM[CM.length - 1], T), U.cum(rTwo, CM[32], T), U.cum(rYoung, CM[32], T),
+      U.cum(rYoung, CM[31], T), U.cum(dm.rows[dm.rows.length - 1], CM[31], T)];   // D60 / D210 / D90 not final / none
+    const fd150 = (() => { const k = day('2026-10-13', -150), p = k.split('-'); return (+p[2]) + ' ' + MON[+p[1] - 1] + ' ' + k.slice(2, 4); })();
+    U.set('SHOW', 1e9);                                                         // every install day on screen
+    const tm = U.cohortTable(dm), dv = U.dayView(dm);
+    U.set('SHOW', 60);
+    out.m_title = dv.includes('Every install day · D0 se D210 tak') && U.dayView(d).includes('Every install day · D0 se D365 tak');
+    out.m_note = dv.includes('D30 ke baad har 30 din ka column (D60, D90 … D210), app ki umar tak') && dv.includes('wahin ruk jata hai (·)')
+      && dv.includes('≈ = D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)") — 3 din me, sabse zyada us din ki kamai ka 2.5%')
+      && !U.cohortTable(d).includes('D30 ke baad har 30 din');
+    out.m_q = tm.includes('D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka &quot;(other)&quot;) — numbers ≈');
+    out.m_head = (tm.match(/<th>D\d+<\/th>/g) || []).length === CM.length && tm.includes('<th>D210</th>') && !tm.includes('<th>D365</th>');
+    out.m_nf = tm.includes('<td class="roi-g roi-nf" title="D90: $51 · ROAS 102% · not final">') && tm.includes('<td class="roi-w" title="D60: $41 · ROAS 82%">');
+    const r150 = tm.slice(tm.indexOf(fd150 + '</td>')), r150e = r150.slice(0, r150.indexOf('</tr>'));
+    out.m_be = r150e.includes('<td>≤ day 120</td>') && r150e.includes('<td>$71 <small>142%</small></td>');   // breakeven + so far via m (D150)
+    U.set('GRAIN', 'month');
+    const CMm = U.cols(dm, dm.rows), gmm = U.groupRows(dm);
+    out.m_month_cols = CMm.map(c => c.lab);
+    const jun = gmm.find(g => g.k === '2026-06'), mar = gmm.find(g => g.k === '2026-03');   // Jun: 104 … 134 days old
+    out.m_month = [U.agg(jun, CMm[6], T), U.agg(jun, CMm[7], T), U.agg(jun, CMm[8], T), U.agg(mar, CMm[CMm.length - 1], T)];
+    U.set('GRAIN', 'week');
+    out.m_week_cols = U.cols(dm, dm.rows).map(c => c.lab).slice(5, 8);
+    U.set('GRAIN', 'day');
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };
     ctx.roiCardLine(x, 'Alpha Pick');

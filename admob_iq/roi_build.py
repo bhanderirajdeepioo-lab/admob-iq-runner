@@ -12,8 +12,10 @@ k the tab uses):
        d (cumulative revenue on day 0, 1, … of the install day — fetch.ga4_cohort, as far as observed),
        df (how many of d are final), u (users active on day 0, 1, …), t (cumulative revenue at day 0, 1, 3, 7, 14, 30,
        60, 90, 180, 365 — only when complete), s (revenue so far), sd (so far = through this day), be (the breakeven
-       day: [day, exact?] or null), st (status: Worse / Watch / Better / Normal / Too early / N/A), q (≈: a day of it
-       did not tie to the install-day read)]
+       day: [day, exact?] or null), st (status: Worse / Watch / Better / Normal / Too early / N/A), q (≈: bit 1 = a day
+       of it did not tie to the install-day read, bit 2 = a day its m used had revenue GA4 gave no install day),
+       spi (spend as billed), and — only on a row that has them — m (cumulative revenue at day 60, 90, 120 … every
+       30 days up to the install day's age: the late read, see below), mf (how many of m are final)]
   * sum — Today / Yesterday, CPI, ROAS at each age (last 7 judged install days vs the 28 before), LTV, retention,
     the payback day of the recent install days (pooled), status, data quality (GA4 coverage, the tie check);
   * life — AdMob revenue and Google Ads spend of EVERY day from the app's first day (lifetime P/L, month-wise on the
@@ -26,6 +28,14 @@ k the tab uses):
     measured range from config/roi_beta.json when there is one), the paid share (Google Ads installs ÷ GA4 installs),
     and the budget call from the marginal form (see F4_* below). Once GA4's own paid cells (IDAY_EXT cp) cover an
     age, that age uses GA4's MEASURED paid share and premium instead of the premium range (src "ga4", see _ga4p).
+  * late — only when the app has a late store: {"days" read, "oth" days with revenue GA4 gave no install day
+    ("(other)"), "omax" the largest such share of a day's revenue, "from", "till"} (the page's ≈ note).
+Past day 30 (owner, 20 Oct 2026: "jitna purana app utna date"): fetch.ga4_cohort's LATE read (GA4_COHORT_LATE) keeps
+every install day's GA4 ad revenue at lag ≥ 31 by activity day; per install day X its 30-day buckets B[j] (lags
+30j+1 … 30j+30, j ≥ 1) = Σ micros × the SAME per-activity-day k as the D0 … D30 cells, and m = [base + B[1],
+base + B[1] + B[2], …] with base = d[30] when final through 30, else the D30 checkpoint (as t's D60+); m[j] only while
+EVERY activity day of buckets 1 … j was read (a hole stops it), final through the late read's own final edge.
+Breakeven and so far also look through m. Without a late store every byte of the file is as before.
 roi.json.gz — every app's summary row (with its f4), the portfolio lifetime P/L and the portfolio install days (apps
 with spend), and the ranges the forms used (f4c).
 Pointer: dashboard["roi"] = {"file", "v", "apps": {app_id: {"file", "st", "r7", "u7", "pb", "lp"}}}.
@@ -56,6 +66,8 @@ HEADER_PATHS = ["/roi*"]
 V = 1
 T = val.T                                   # 0, 1, 3, 7, 14, 30, 60, 90, 180, 365
 J7 = T.index(7)
+J30 = T.index(30)
+LATE_STEP = 30                              # past D30 the install-day table goes on every 30 days (D60, D90 …)
 N_RECENT, N_USUAL = 7, 28                   # install days: the last 7 judged vs the 28 before
 MIN_SPEND, MIN_N = 5.0, 30                  # a judged install day: ≥ $5 Google Ads and ≥ 30 installs
 MIN_MONTH_SPEND = 100.0                     # an install month whose curve tells the payback: ≥ $100 Google Ads
@@ -156,8 +168,79 @@ def _tie_off(ida, co_x, pr_days):
     return off, checked
 
 
-def _cohorts(P, spend, fxf, co, today):
-    """Every install day → its row (see the module doc) — oldest first."""
+def _late(data_dir, aid, co, P):
+    """The app's LATE store (fetch.ga4_cohort, GA4_COHORT_LATE) folded month by month (one month in memory at a time)
+    → {"B": {X: {j: USD}} the 30-day buckets (AdMob-matched with kf of each activity day), "full" (lo, hi): every
+    activity day lo … hi read, "oth" (lo, hi): any of them had revenue GA4 gave no install day, "C": the late read's
+    final edge, "info" (the file's "late")} — None when nothing of it was read (or no main store of the same stream)."""
+    if not co or not co.get("stream_id"):
+        return None
+    kf, hs = P["sc"]["kf"], P["hs"]
+    B, read, oth, omax = {}, set(), set(), 0.0
+    for _, mo in gco.late_months(data_dir, aid, co["stream_id"]):
+        ot, tt = mo.get("oth") or {}, mo.get("t") or {}
+        for D, xs in (mo.get("d") or {}).items():
+            try:
+                Dd = _d(D)
+            except (TypeError, ValueError):
+                continue
+            if Dd < hs or not isinstance(xs, dict):
+                continue
+            read.add(Dd)
+            k = kf(Dd)[0]
+            for X, v in xs.items():
+                try:
+                    L = (Dd - _d(X)).days
+                except (TypeError, ValueError):
+                    continue
+                if L < gco.LAGS or not v:
+                    continue
+                e = B.setdefault(X, {})
+                j = (L - 1) // LATE_STEP
+                e[j] = e.get(j, 0.0) + v / 1e6 * k
+            o = int(ot.get(D) or 0)
+            if o > 0:
+                oth.add(Dd)
+                tt_d = int(tt.get(D) or 0)
+                omax = max(omax, min(1.0, o / tt_d) if tt_d > 0 else 1.0)
+    if not read:
+        return None
+    last = max(read)
+    n = (last - hs).days + 1
+    pr, po = [0] * (n + 1), [0] * (n + 1)
+    for i in range(n):
+        D = hs + timedelta(days=i)
+        pr[i + 1] = pr[i] + (D in read)
+        po[i + 1] = po[i] + (D in oth)
+
+    def span(lo, hi):
+        i0, i1 = (lo - hs).days, (hi - hs).days
+        return (i0, i1) if 0 <= i0 <= i1 < n else None
+
+    def full(lo, hi):
+        s_ = span(lo, hi)
+        return bool(s_) and pr[s_[1] + 1] - pr[s_[0]] == s_[1] - s_[0] + 1
+
+    def any_oth(lo, hi):
+        s_ = span(lo, hi)
+        return bool(s_) and po[s_[1] + 1] - po[s_[0]] > 0
+    lt = co.get("late") if isinstance(co.get("late"), dict) else {}
+    C = None
+    try:                                            # final: read when ≥ FINAL_LAG days old (the backfill reads only
+        if lt.get("read_till"):                     # days older than the recent window: final when read)
+            C = _d(lt["read_till"]) - timedelta(days=gco.FINAL_LAG)
+        elif lt.get("next"):
+            C = _d(lt["next"]) - timedelta(days=1)
+        if C is not None and co.get("read_today"):
+            C = min(C, _d(co["read_today"]) - timedelta(days=gco.FINAL_LAG))
+    except (TypeError, ValueError):
+        C = None
+    return {"B": B, "full": full, "oth": any_oth, "C": C,
+            "info": {"days": len(read), "oth": len(oth), "omax": _r(omax), "from": _iso(min(read)), "till": _iso(last)}}
+
+
+def _cohorts(P, spend, fxf, co, today, late=None):
+    """Every install day → its row (see the module doc) — oldest first. late: _late's buckets (None: no m)."""
     pr, kf, xs, S, hs = P["pre"], P["sc"]["kf"], P["xs"], P["S"], P["hs"]
     co_x = (co or {}).get("x") or {}
     newest = _d(co["read_today"]) if co and co.get("read_today") else None
@@ -199,6 +282,21 @@ def _cohorts(P, spend, fxf, co, today):
                 else:
                     base = d[30] if (d is not None and df > 30) else e["R"][5]
                     t[j] = _r(base + e["R"][j] - e["R"][5])
+        # past day 30, every 30 days (the late read): from the row's own D30 on, while every activity day was read
+        m, mf, qo = None, 0, False
+        if late is not None:
+            base = d[30] if (d is not None and df > 30) else (e["R"][J30] if t[J30] is not None else None)
+            if base is not None:
+                B, vals, cum, j = late["B"].get(_iso(X)) or {}, [], base, 1
+                while late["full"](X + timedelta(days=LATE_STEP * j + 1), X + timedelta(days=LATE_STEP * (j + 1))):
+                    cum += B.get(j, 0.0)
+                    vals.append(_r(cum))
+                    j += 1
+                if vals:
+                    m = vals
+                    mf = sum(1 for i in range(len(m)) if late["C"] is not None
+                             and X + timedelta(days=LATE_STEP * (i + 2)) <= late["C"])
+                    qo = late["oth"](X + timedelta(days=gco.LAGS), X + timedelta(days=LATE_STEP * (len(m) + 1)))
         # so far: the read that reaches furthest (the install-day read through S, this store through `newest`)
         s = sd = None
         if e and X <= S:
@@ -207,21 +305,34 @@ def _cohorts(P, spend, fxf, co, today):
             sd = _iso(S)
         if d is not None and (sd is None or X + timedelta(days=len(d) - 1) > _d(sd)):
             s, sd = d[-1], _iso(X + timedelta(days=len(d) - 1))
+        if m:                                       # … or m's last column (the install-day read stops at day 365)
+            mA = X + timedelta(days=LATE_STEP * (len(m) + 1))
+            if sd is None or mA > min(_d(sd), X + timedelta(days=T[-1])):
+                s, sd = m[-1], _iso(mA)
         be = None
         if sp and sp > 0:
             for L, v in enumerate(d or []):
                 if v is not None and v >= sp:
                     be = [L, L < df]
                     break
+            if be is None and m:                    # the first 30-day column ≥ spend: "≤ that day"
+                for i, v in enumerate(m):
+                    if v is not None and v >= sp:
+                        be = [LATE_STEP * (i + 2), False]
+                        break
             if be is None:
+                lim = LATE_STEP * (len(m) + 1) if m else -1
                 for j, a in enumerate(T):
-                    if t[j] is not None and t[j] >= sp and not (d is not None and a < len(d)):
+                    if t[j] is not None and t[j] >= sp and not (d is not None and a < len(d)) and a > lim:
                         be = [a, False]
                         break
         iu = {L: int(e["u"][i]) for L, i in ULAG_IX.items()
               if e and pr.all(pr.g, X, X + timedelta(days=L))} if e else {}
-        rows.append({"X": X, "n": n, "na": n_ads, "sp": sp, "spi": spi, "d": d, "df": df, "u": u, "t": t, "s": s,
-                     "sd": sd, "be": be, "e": e, "iu": iu})
+        row = {"X": X, "n": n, "na": n_ads, "sp": sp, "spi": spi, "d": d, "df": df, "u": u, "t": t, "s": s,
+               "sd": sd, "be": be, "e": e, "iu": iu}
+        if m:
+            row.update(m=m, mf=mf, qo=qo)
+        rows.append(row)
     return rows
 
 
@@ -532,8 +643,11 @@ def _summary(rows, P, co_off, tie_checked, today):
 
 
 def _row_out(r):
-    return [_iso(r["X"]), r["n"], _r(r["na"], 2), _r(r["sp"]), r["d"], r["df"], r["u"], r["t"], r["s"], r["sd"],
-            r["be"], r.get("st"), 1 if r.get("q") else 0, _r(r.get("spi"), 2)]
+    out = [_iso(r["X"]), r["n"], _r(r["na"], 2), _r(r["sp"]), r["d"], r["df"], r["u"], r["t"], r["s"], r["sd"],
+           r["be"], r.get("st"), (1 if r.get("q") else 0) | (2 if r.get("qo") else 0), _r(r.get("spi"), 2)]
+    if r.get("m"):                                  # the 30-day columns past D30: new trailing fields only
+        out += [r["m"], r["mf"]]
+    return out
 
 
 def _life(rev, spend, fxf, ded_rate):
@@ -691,7 +805,11 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             co = None
         now = now or datetime.now(timezone.utc)
         today = _d(co["read_today"]) if co and co.get("read_today") else P["S"]
-        rows = _cohorts(P, spend, fxf, co, today)
+        try:                                            # the late read (D60, D90 … the app's age): a bad file costs
+            late = _late(data_dir, aid, co, P)          # only those columns
+        except Exception:
+            late = None
+        rows = _cohorts(P, spend, fxf, co, today, late)
         off, checked = _tie_off(ida, (co or {}).get("x") or {}, ida.get("days"))
         for r in rows:
             if r["d"]:
@@ -730,6 +848,8 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
                 "consts": {"n_recent": N_RECENT, "n_usual": N_USUAL, "min_spend": MIN_SPEND, "min_n": MIN_N,
                            "worse": WORSE, "watch": WATCH, "better": BETTER, "final_lag": gco.FINAL_LAG,
                            "f4": f4_consts()}}
+        if late is not None:
+            body["late"] = late["info"]
         fcs = None
         ares = None
         try:                                            # ⚙️ the ad setting changes (before the forecast: its back-tests
