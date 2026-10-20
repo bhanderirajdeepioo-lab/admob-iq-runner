@@ -143,8 +143,9 @@ def open_store(data_dir, spend):
     return DayStore(data_dir, spend.get("currency_src") or "USD")
 
 
-def load(data_dir):
-    """Every month merged → {"ccy", "days": {store: {day: {cc: [cost, dl]}}}} — the read API (None: no file)."""
+def load(data_dir, keep=None):
+    """Every month merged → {"ccy", "days": {store: {day: {cc: [cost, dl]}}}} — the read API (None: no file). keep: only
+    these store ids, one month file in memory at a time (a reader of one app's stores never holds the archive)."""
     st = load_state(os.path.join(data_dir, GD_DIR), GD_V, DEFAULTS)
     if not st.get("ccy"):
         return None
@@ -153,7 +154,10 @@ def load(data_dir):
     out = {"ccy": st["ccy"], "days": {}}
     for m in mf.months():
         for sid, dd in mf.peek(m)["days"].items():
-            out["days"].setdefault(sid, {}).update(dd)
+            if keep is None or sid in keep:
+                out["days"].setdefault(sid, {}).update(dd)
+        if keep is not None:
+            mf.got.pop(m, None)
     return out
 
 

@@ -15,6 +15,10 @@ activity month (own / pooled ±2 / clamped / ≈ / the app's k + its share), Goo
 null, "XX" → "Not split"), zero days written [X] exactly as the page expands them, holes, loss / flag bits, the packs
 (deterministic, every country in one, a big one alone), the file without the cube / with the switch off byte for byte,
 failure isolation, stale packs removed, the counts-only line; and build_static's AdMob country months (every month).
+Review fixes: a spend-only row's ≈ bits, a borrowed k_c month (bit 32 + its revenue share), GA4 revenue without a country
+per month (bit 64 past UNP_LIM, measured), the Ads split tied to the spend cache (else unknown, counted), the Ads split
+read per app (shared store, a failed read counted), the Ads account's time zone, the packs' build stamp, and the
+country part's time never in the forecast's budget.
 """
 import gzip
 import json
@@ -697,9 +701,25 @@ def _ga4_month(cc, M, rate=None, only=None):
     return tot
 
 
-def _cc_world(tmp_path, kmul=None, mask_off=(), geo_holes=(date(2026, 9, 15),), **kw):
+def _geo_files(data, days, ccy="USD"):
+    """Google Ads by store × day × country on disk, as fetch.gads_geo_day writes it (one file a month + its state)."""
+    from admob_iq.db import write_json_gz_stable
+    from admob_iq.fetch import gads_geo_day as gdd
+    d = os.path.join(str(data), gdd.GD_DIR)
+    os.makedirs(d, exist_ok=True)
+    by = {}
+    for sid, dd in days.items():
+        for k, ent in dd.items():
+            by.setdefault(k[:7], {}).setdefault(sid, {})[k] = ent
+    for M, st in by.items():
+        write_json_gz_stable(os.path.join(d, M + ".json.gz"), {"v": gdd.GD_V, "month": M, "ccy": ccy, "days": st})
+    write_json_gz_stable(os.path.join(d, "state.json.gz"), dict(gdd.DEFAULTS, v=gdd.GD_V, ccy=ccy))
+
+
+def _cc_world(tmp_path, kmul=None, mask_off=(), geo_holes=(date(2026, 9, 15),), geo_more=None, **kw):
     """The cube + AdMob by country × month (kmul[cc][month] × the country's GA4; whole months by default, the newest
-    through Oct 12) + Google Ads by store × day × country (from Sep 1; a store-day in geo_holes has spend but no split)."""
+    through Oct 12) + Google Ads by store × day × country on disk (from Sep 1; a store-day in geo_holes has spend but no
+    split; geo_more: more stores' days)."""
     data = tmp_path / "data"
     _cc_cube(data, **kw)
     kmul = kmul if kmul is not None else {"AA": {"2026-08": 1.5, "2026-09": 1.0, "2026-10": 1.0},
@@ -728,8 +748,8 @@ def _cc_world(tmp_path, kmul=None, mask_off=(), geo_holes=(date(2026, 9, 15),), 
            "owner": {"s1": "Alpha"}, "fx": None}
     spend = {"ccy": "USD", "daily": dict(sdaily), "installs": {}, "first": CHS.isoformat(),
              "till": (CTODAY - timedelta(days=1)).isoformat(), "sids": 1}
+    _geo_files(data, dict({"s1": geo}, **(geo_more or {})))
     acc = rb.start(cube=True, cmon=cmon)
-    acc.geo = {"ccy": "USD", "days": {"s1": geo}}
     return data, P, pre, spend, acc
 
 
@@ -795,8 +815,8 @@ def test_country_rows_kc_per_month_and_spend(tmp_path):
     r = AA["2026-08-10"]                    # ages 0 … 21 in Aug (k_c 1.5), 22 … 30 in Sep (k_c 1.0): $0.10 a day GA4
     assert r[1] == 40 and r[4][21] == pytest.approx(22 * 0.15) and r[4][30] == pytest.approx(22 * 0.15 + 9 * 0.1)
     assert r[5] == 31 and r[7][T.index(7)] == pytest.approx(8 * 0.15) and r[7][T.index(30)] == r[4][30]
-    # D60 from the cube's buckets × k_c of each activity month (Oct: no whole month of its own → pooled, Sep's 1.0)
-    assert r[14] == [pytest.approx(4.2 + 3.0)] and r[15] == 1 and r[7][T.index(60)] == r[14][0]
+    # D60 from the cube's buckets × k_c of each activity month (Oct: not whole yet → borrowed from Sep, 1.0, ≈ bit 32)
+    assert r[14] == [pytest.approx(4.2 + 3.0)] and r[15] == 1 and r[7][T.index(60)] == r[14][0] and r[12] & 32
     assert r[3] is None and r[13] is None                                   # Aug: Google Ads by country unknown → '—'
     s = AA["2026-09-10"]
     assert s[3] == 6.0 and s[13] == 6.0 and s[2] == 3.0                     # USD (rate 1), as billed, Ads downloads
@@ -816,6 +836,10 @@ def test_country_rows_kc_per_month_and_spend(tmp_path):
     assert NC["2026-09-05"][4][0] == pytest.approx(0.01 * 1.2) and NC["2026-09-05"][12] & 16
     assert NC["2026-09-05"][3] is None and c["--"][2] is None               # GA4's "(not set)": no Ads country
     assert c["--"][6] == 1.0 and c["BB"][6] == 1.0 and c["AA"][6] == 0.0
+    # the revenue share on a borrowed k_c (Oct, not whole yet): measured per country; none on the app's k / "--"
+    oct_ = _ga4_month("AA", "2026-10") / sum(_ga4_month("AA", M) for M in ("2026-08", "2026-09", "2026-10"))
+    assert c["AA"][7] == round(oct_, 4) and c["--"][7] == 0.0 and c["BB"][7] == 0.0 and c["XX"][7] is None
+    assert AA["2026-09-05"][12] & 32 and not AA["2026-08-01"][12] & 32   # its ages in Oct / none in Oct (D0 … D60)
     assert BB["2026-09-05"][3] == 2.0 and BB["2026-09-05"][2] is None       # downloads unknown: null
     # an Ads-only country: its spend per day, no installs, no revenue
     DD = {x[0]: x for x in _expand(got["DD"], cd, "DD")}
@@ -825,17 +849,24 @@ def test_country_rows_kc_per_month_and_spend(tmp_path):
     assert XX["2026-09-05"][3] == 1.0 and XX["2026-09-05"][1] is None and XX["2026-09-05"][4] is None
     assert XX["2026-08-05"][3] is None and len(XX) == days
     # the index: k_c months, Google Ads coverage, the measured gap to the All row
-    # own: AA Aug + Sep, CC Sep; pooled: Oct of AA / CC (partial), CC Aug ($9.92 GA4); the app's k: BB, "--" every month;
-    # ≈ (measured, outside 0.8 – 1.25): AA Aug (1.5) and CC's three (3.0 → 2.0)
-    assert {k: v for k, v in cd["kc"].items() if k != "tzh"} == {"own_months": 3, "pool_months": 3, "app_months": 6,
-                                                                  "est_months": 4}
+    # own: AA Aug + Sep, CC Sep; pooled: CC Aug ($9.92 GA4, a whole month); borrowed: Oct of AA / CC (not whole yet);
+    # the app's k: BB, "--" every month; ≈ (measured, outside 0.8 – 1.25): AA Aug (1.5) and CC's three (3.0 → 2.0)
+    assert {k: cd["kc"][k] for k in ("own_months", "pool_months", "near_months", "app_months", "est_months")} == {
+        "own_months": 3, "pool_months": 1, "near_months": 2, "app_months": 6, "est_months": 4}
     assert cd["kc"]["tzh"] is not None                                    # AdMob's day vs GA4's (UTC here): measured
+    # GA4 revenue without a country per month ("--" here; no loss): measured of the ledger's every row
+    tot = {M: sum(_ga4_month(cc, M) for cc in CRATE) for M in ("2026-08", "2026-09", "2026-10")}
+    assert cd["kc"]["unp"] == {M: round(_ga4_month("--", M) / tot[M], 4) for M in tot} and cd["kc"]["unp_lim"] == 0.02
+    assert cd["kc"]["unp_all"] == round(sum(_ga4_month("--", M) for M in tot) / sum(tot.values()), 4)
+    assert all(AA[x][12] & 64 for x in ("2026-08-10", "2026-10-05")) and not NC["2026-09-05"][12] & 64
     g = cd["geo"]
     assert g["from"] == "2026-09-01" and g["till"] == "2026-10-12" and g["unknown_days"] == 31 + 1 + 1
+    assert g["untied_days"] == 0 and g["tzs"] == 0 and g["tzh"] is None    # every split ties; no Ads hourly store
     assert g["unk"] == [["2026-08-01", "2026-08-31"], ["2026-09-15", "2026-09-15"], ["2026-10-13", "2026-10-13"]]
     assert g["xx_share"] == round(1 / 10, 4) and g["cov"] == 1.0
     assert c["AA"][2] == pytest.approx(6.0 * (g["known_days"] - 0)) and c["XX"][2] == pytest.approx(1.0 * g["known_days"])
     assert cd["diff"]["age"] == 30 and cd["diff"]["days"] >= 1 and cd["diff"]["n_cty"] == cd["diff"]["days"] * 50
+    assert cd["diff"]["unk"] == pytest.approx(cd["diff"]["days"] * 31 * 0.01 * 1.2, abs=0.02)   # "--": in the sum too
 
 
 def test_country_kc_rules(tmp_path):
@@ -853,7 +884,7 @@ def test_country_kc_rules(tmp_path):
     assert a["2026-02"] == (1.3, "own", True)                           # outside: ≈
     assert a["2026-03"] == (lo[1], "own", True)                         # 3.0 clamped to 2.0, ≈
     assert a["2026-04"] == (pytest.approx(410 / 300), "pool", True)     # AdMob $10 < $20: Mar … May pooled, ≈
-    assert a["2026-06"] == (pytest.approx(1.0), "pool", False)          # not whole: the whole months ≤ ±1 (May)
+    assert a["2026-06"] == (pytest.approx(1.0), "near", False)          # not whole: borrowed from May (≤ ±1)
     b = kc["BB"]                                                        # $5 a side: ±2 around Mar → $25 a side
     assert b["2026-03"] == (pytest.approx(1.0), "pool", False)
     assert b["2026-01"] == (1.1, "app", True)                           # Jan … Mar only $15 a side: the app's k
@@ -933,7 +964,6 @@ def test_country_loss_flags_and_not_split(tmp_path):
 
 def test_country_packs_deterministic_and_split(tmp_path, monkeypatch):
     data, P, pre, spend, acc = _cc_world(tmp_path)
-    geo0 = json.loads(json.dumps(acc.geo))                               # (a build lets each app's stores go after it)
     monkeypatch.setattr(rb, "PACK_MAX", 30_000)                          # small packs: several, a big country alone
     cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
     got = _pack_rows(od, cd)
@@ -953,10 +983,14 @@ def test_country_packs_deterministic_and_split(tmp_path, monkeypatch):
     assert all(rb.PACK_RE.match(n) for n in names) and len(names) == len(cd["packs"])
     before = {n: open(os.path.join(str(od), n), "rb").read() for n in names}
     acc2 = rb.start(cube=True, cmon=acc.cmon)
-    assert acc.geo["days"] == {}                                          # the app's store read once, then let go
-    acc2.geo = geo0
     cd2, od2, _ = _cc_run(tmp_path, data, P, pre, spend, acc2)           # a second build: the same bytes
     assert cd2 == cd and {n: open(os.path.join(str(od2), n), "rb").read() for n in names} == before
+    # every pack says the build it belongs to (the index's "b"): the page never reads a pack of another build
+    for name, _ in cd["packs"]:
+        with gzip.open(os.path.join(str(od), name), "rb") as f:
+            assert json.loads(f.read())["b"] == cd["b"] and len(cd["b"]) == 12
+    cd3, _, _ = _cc_run(tmp_path, data, P, pre, spend, rb.start(cube=True, cmon=acc.cmon), ded=0.2, out="o3")
+    assert cd3["b"] != cd["b"] and all(a[1] != b[1] for a, b in zip(cd3["packs"], cd["packs"]))   # rows moved → new b
 
 
 def test_country_zrow_matches_cohorts(tmp_path):
@@ -1005,7 +1039,8 @@ def _cc_app_step(tmp_path, monkeypatch, name, cube=True, strip=False, geo_calls=
     co = {"read_today": CTODAY.isoformat(), "stream_id": "222", "x": {}}
     _stub_app(monkeypatch, P, co, spend)
     calls = geo_calls if geo_calls is not None else []
-    monkeypatch.setattr(gdd, "load", lambda d_: calls.append(d_) or acc0.geo)
+    real = gdd.load
+    monkeypatch.setattr(gdd, "load", lambda d_, keep=None: calls.append(sorted(keep or ())) or real(d_, keep=keep))
     out = tmp_path / name / "out"
     out.mkdir()
     acc = rb.start(cube=cube, cmon=acc0.cmon)
@@ -1020,7 +1055,8 @@ def test_country_app_step_file_and_isolation(tmp_path, monkeypatch):
     calls = []
     full, acc, out = _cc_app_step(tmp_path, monkeypatch, "on", geo_calls=calls)
     body = json.loads(full)
-    assert body["cd"]["v"] == 1 and len(calls) == 1 and acc.cdn == {"apps": 1, "countries": 6, "packs": 1, "failed": 0}
+    assert body["cd"]["v"] == 1 and calls == [["s1"]] and acc.cdn == {"apps": 1, "countries": 6, "packs": 1, "failed": 0,
+                                                                     "geo_failed": 0}   # only the app's own store read
     assert sorted(os.listdir(str(out))) == ["roi_aaaaaaaaaaaa.json.gz", "roi_aaaaaaaaaaaa_c00.json.gz"]
     # every other byte of the file = the same cube without its country parts (no "cd")
     bare, acc_b, _ = _cc_app_step(tmp_path, monkeypatch, "bare", strip=True)
@@ -1033,7 +1069,7 @@ def test_country_app_step_file_and_isolation(tmp_path, monkeypatch):
     assert "cd" not in json.loads(off) and "late" not in json.loads(off) and os.listdir(str(out_o)) == [
         "roi_aaaaaaaaaaaa.json.gz"]
     none, acc_n, _ = _cc_app_step(tmp_path, monkeypatch, "none", nocube=True)   # the switch on, no cube on disk
-    assert none == off and acc_n.cdn == {"apps": 0, "countries": 0, "packs": 0, "failed": 0}
+    assert none == off and acc_n.cdn == {"apps": 0, "countries": 0, "packs": 0, "failed": 0, "geo_failed": 0}
     # any failure in the country part: no "cd", every other byte as without it, counted
     monkeypatch.setattr(rb, "_cty", lambda *a_, **k_: 1 / 0)
     bad, acc_x, out_x = _cc_app_step(tmp_path, monkeypatch, "bad")
@@ -1058,7 +1094,7 @@ def test_country_stale_packs_and_line(tmp_path, monkeypatch):
     assert rb.finish(acc, {}, str(out)) == ["/roi*"]
     assert sorted(os.listdir(str(out))) == ["roi.json.gz", "roi_aaaaaaaaaaaa.json.gz", "roi_aaaaaaaaaaaa_c00.json.gz"]
     line = rb.pop_line()
-    assert line.startswith("roi: apps 1,") and "; countries: apps 1, countries 6, packs 1, failed 0" in line
+    assert line.startswith("roi: apps 1,") and "; countries: apps 1, countries 6, packs 1, failed 0, ads split unread 0" in line
     assert "Alpha" not in line and "AA" not in line
     rb.off(str(out))                                                         # the section off: every file of it
     assert os.listdir(str(out)) == []
@@ -1080,3 +1116,132 @@ def test_admob_country_months_every_month():
     assert got == {"m": {"a": {"2026-10": {"IN": 6, "US": 4}, "2024-07": {"IN": 9}}},       # every month, never cut
                    "d": {"a": {"2026-10": 0b11, "2024-07": 1 << 30}}}
     assert admob_country(rows, "2026-10-02") == {"a": {"2026-10-01": {"IN": [6, 10]}, "2026-10-02": {"US": [4, 9]}}}
+
+
+# ── 🌍 review fixes ─────────────────────────────────────────────────────────────────────────────────────────────────
+def test_country_spend_only_row_carries_the_loss_bit(tmp_path):
+    # DD: Google Ads spend, no GA4 installs / revenue (its users went to "(other)" that day, say): the cube's loss day in
+    # its span still marks it ≈ (bit 2) — a row with spend is never short, so the bit costs no [X]
+    data, P, pre, spend, acc = _cc_world(tmp_path, loss={date(2026, 9, 20): 500000}, flags={date(2026, 9, 25)})
+    cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
+    got = _pack_rows(od, cd)
+    DD = {r[0]: r for r in _expand(got["DD"], cd, "DD")}
+    assert DD["2026-09-20"][3] == 1.0 and DD["2026-09-20"][1] == 0 and DD["2026-09-20"][12] & 2
+    assert DD["2026-09-24"][12] & 4 and not DD["2026-09-26"][12] & 6 and not DD["2026-09-26"][12]
+    assert all(len(r) > 1 for r in got["DD"] if "2026-09-01" <= r[0] <= "2026-10-12" and r[0] != "2026-09-15")
+    assert all(len(r) == 1 for r in got["DD"] if r[0] < "2026-09-01" or r[0] == "2026-09-15")   # nothing of its own: [X]
+
+
+def test_country_unplaced_share_per_month(tmp_path):
+    # "--" tiny; Sep has a measured "(other)" loss of 3% of its GA4 revenue: only Sep is past UNP_LIM (2%) → bit 64 on
+    # the rows whose revenue uses Sep, never on "--" (its own k is the app's), never on an Oct-only row
+    rate = dict(CRATE, **{"--": 10})
+    sep = sum(_ga4_month(cc, "2026-09", rate) for cc in CRATE)
+    data, P, pre, spend, acc = _cc_world(tmp_path, rate=rate, loss={date(2026, 9, 20): int(sep * 0.03)})
+    cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
+    u = cd["kc"]["unp"]
+    assert u["2026-09"] == round((_ga4_month("--", "2026-09", rate) + int(sep * 0.03)) / (sep + int(sep * 0.03)), 4)
+    assert u["2026-09"] > rb.UNP_LIM > u["2026-08"] and u["2026-10"] < rb.UNP_LIM
+    AA = {r[0]: r for r in _expand(_pack_rows(od, cd)["AA"], cd, "AA")}
+    NC = {r[0]: r for r in _expand(_pack_rows(od, cd)["--"], cd, "--")}
+    assert AA["2026-09-05"][12] & 64 and AA["2026-08-25"][12] & 64 and not AA["2026-10-05"][12] & 64
+    assert AA["2026-08-01"][12] & 64 and AA["2026-08-01"][14]                  # Aug 1: D0 … D30 in Aug, its D60 in Sep
+    assert not any(r[12] & 64 for r in NC.values() if len(r) > 1)
+
+
+def test_country_geo_day_ties_to_the_spend_cache():
+    days = [date(2026, 9, 1) + timedelta(days=i) for i in range(5)]
+    k = [d.isoformat() for d in days]
+    sdaily = {"s1": {x: 10_000_000 for x in k}, "s2": {k[0]: 4_000_000}}   # (tolerance: 1% or one unit, 1e6 micros)
+    geo = {"days": {"s1": {k[0]: {"AA": [6_000_000, 1.0], "XX": [4_000_000, None]},       # ties
+                           k[1]: {"AA": [9_950_000, 1.0]},                                 # 0.5% off: ties
+                           k[2]: {},                                                       # committed {}, it spent
+                           k[3]: {"AA": [8_000_000, 1.0]},                                 # 20% off
+                           k[4]: {"AA": [10_000_000, 1.0], "BB": [1_500_000, None]}},      # 1.5 units more
+                    "s2": {k[0]: {"BB": [4_000_000, 2.0]}}}}
+    spend = {"first": k[0], "till": k[-1]}
+    cost, unk, st = rb._geo_app(geo, ["s1", "s2"], sdaily, spend, days)
+    assert unk == {days[2], days[3], days[4]} and st["untied_days"] == 3 and st["unknown_days"] == 3
+    assert cost["AA"] == {days[0]: (6_000_000, 1.0), days[1]: (9_950_000, 1.0)} and cost["BB"] == {days[0]: (4_000_000, 2.0)}
+    # a store with no committed day while it spent: unknown, not "untied"; a store that did not spend: never asked
+    cost, unk, st = rb._geo_app({"days": {"s1": {k[0]: {"AA": [10_000_000, 1.0]}}}}, ["s1", "s2"], sdaily, spend, days[:1])
+    assert unk == {days[0]} and st["untied_days"] == 0
+    cost, unk, st = rb._geo_app({"days": {"s1": {k[1]: {"AA": [10_000_000, 1.0]}}}}, ["s1", "s2"], sdaily, spend, days[1:2])
+    assert unk == set() and cost["AA"] == {days[1]: (10_000_000, 1.0)}
+
+
+def test_country_geo_read_per_app_shared_store_and_failure(tmp_path, monkeypatch):
+    # only the app's own stores are read (each app its own read: nothing held for the build, no order effect — two apps
+    # on one store both get its split); a read that fails: every day it spent unknown, counted
+    from admob_iq.fetch import gads_geo_day as gdd
+    other = {"s9": {(date(2026, 9, 1) + timedelta(days=i)).isoformat(): {"ZZ": [1, None]} for i in range(30)}}
+    data, P, pre, spend, acc = _cc_world(tmp_path, geo_more=other)
+    calls, real = [], gdd.load
+    monkeypatch.setattr(gdd, "load", lambda d_, keep=None: calls.append(sorted(keep or ())) or real(d_, keep=keep))
+    cd1, _, _ = _cc_run(tmp_path, data, P, pre, spend, acc, out="o1")
+    cd2, _, _ = _cc_run(tmp_path, data, P, pre, spend, acc, out="o2")              # a second app on the same store
+    assert calls == [["s1"], ["s1"]] and cd1["geo"] == cd2["geo"] and cd1["c"] == cd2["c"]
+    assert acc.cdn["geo_failed"] == 0 and not hasattr(acc, "geo")
+
+    def boom(d_, keep=None):
+        raise OSError("damaged")
+    monkeypatch.setattr(gdd, "load", boom)
+    cd3, _, _ = _cc_run(tmp_path, data, P, pre, spend, acc, out="o3")
+    span = (CTODAY - timedelta(days=1) - CHS).days + 1
+    assert acc.cdn["geo_failed"] == 1 and cd3["geo"]["known_days"] == 0 and cd3["geo"]["unknown_days"] == span + 1
+    assert all(x[2] is None for x in cd3["c"] if x[0] != "XX")
+
+
+def test_country_ads_time_zone(tmp_path):
+    # the Ads day is the Ads account's: its zone from the hourly store's accounts of the app's stores → hours GA4's day
+    # (UTC here) starts before it; two zones among the app's stores: none (said on the page), the count kept
+    from admob_iq.db import write_json_gz_stable
+    from admob_iq.fetch import gads_hourly as gh
+
+    def hourly(data, tz):
+        d = os.path.join(str(data), gh.HR_DIR)
+        os.makedirs(d, exist_ok=True)
+        write_json_gz_stable(os.path.join(d, "2026-10.json.gz"), {
+            "v": gh.HR_V, "month": "2026-10", "ccy": {a: "USD" for a in tz}, "tz": tz,
+            "camp": {"c%d" % i: "s1" for i, _ in enumerate(tz)},
+            "h": {a: {"c%d" % i: {"2026-10-01": [0] * 24}} for i, a in enumerate(tz)}})
+    data, P, pre, spend, acc = _cc_world(tmp_path)
+    hourly(data, {"a1": "America/New_York"})
+    cd, _, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
+    assert cd["geo"]["tzh"] == 4.0 and cd["geo"]["tzs"] == 1                # GA4 (UTC) starts 4 h before New York's
+    data2, P2, pre2, spend2, acc2 = _cc_world(tmp_path / "m")
+    hourly(data2, {"a1": "America/New_York", "a2": "Asia/Kolkata"})
+    cd2, _, _ = _cc_run(tmp_path / "m", data2, P2, pre2, spend2, acc2)
+    assert cd2["geo"]["tzh"] is None and cd2["geo"]["tzs"] == 2
+
+
+def test_country_time_never_counts_in_the_forecast_budget(tmp_path, monkeypatch):
+    # the forecast's clock runs from the first app; the country part (its cube visits + _cty) of a later app moves the
+    # clock's start by exactly what it took — the forecast's budget, re-tunes and numbers as without it
+    from types import SimpleNamespace
+    now = [100.0]
+    fc = SimpleNamespace(clock=lambda: now[0], t0=50.0)
+    real_cty, real_e = rb._cty, rb._Cty._e
+    visits = []
+
+    def slow_cty(*a, **k):
+        now[0] += 5.0
+        return real_cty(*a, **k)
+
+    def slow_e(self, *a):                                           # inside each visit (a month / a hot day)
+        now[0] += 0.25
+        visits.append(1)
+        return real_e(self, *a)
+    monkeypatch.setattr(rb, "_cty", slow_cty)
+    monkeypatch.setattr(rb._Cty, "_e", slow_e)
+    data, P, pre, spend, acc0 = _cc_world(tmp_path / "w")
+    co = {"read_today": CTODAY.isoformat(), "stream_id": "222", "x": {}}
+    _stub_app(monkeypatch, P, co, spend)
+    out = tmp_path / "w" / "out"
+    out.mkdir()
+    acc = rb.start(cube=True, cmon=acc0.cmon)
+    acc.fc = fc                                                     # (the forecast step itself then fails: caught)
+    store, a = {"history_start": CHS.isoformat(), "stream_id": "222"}, {"app_id": "a~1", "app_name": "Alpha"}
+    rb.app_step(acc, store, a, "aaaaaaaaaaaa", {"tz": "UTC"}, pre, {}, str(out), str(data), ids=["a~1"])
+    assert not acc.fails and acc.cdn["apps"] == 1 and visits
+    assert fc.t0 == pytest.approx(50.0 + 5.0 + 0.25 * len(visits))

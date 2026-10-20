@@ -7,8 +7,9 @@ note; a file without m: the checkpoints), Today / Yesterday, week / month rows (
 of ROI (hero block, ranges printed from the file, GA4-measured paid split, budget call, mostly-organic flag, All-apps
 table), 🌍 the install-day table by country (the picker, a pack read once, the same table for one country, the default
 view byte for byte as before, the pick kept, the missing-country / error / retry / busy states, the notes, a short row
-expanded exactly as the build's _zrow, no page jump at 375 and 1280 px), and the wiring into
-the page. Skipped where node is not installed. No real data."""
+expanded exactly as the build's _zrow, no page jump at 375 and 1280 px; a pack of another build / gone from the site:
+the app file read again once; a late pack never repaints; only 3 packs kept; Not split's columns; the notes' measured
+limits), and the wiring into the page. Skipped where node is not installed. No real data."""
 import json
 import os
 import shutil
@@ -195,6 +196,17 @@ def test_country_filter(out):
         nj = out["cc_nojump"][w]
         assert nj["moves"] == [0] * 13 and nj["keptWeek"] and nj["backAll"] and nj["picked"], (w, nj)
         assert nj["errShown"] and nj["retried"], (w, nj)                # error → "Try again" → read again, loaded
+    # review fixes: a pack landing after the reader moved on never repaints the table on screen
+    assert out["cc_late"] == [True, 0, True]
+    assert out["cc_q_new"] and out["cc_pick_sel"]                  # bits 32 / 64 said; one option selected
+    # 🧩 Not split: D0 … D30 day by day like every country, its cells '—' (as the note says)
+    assert out["cc_xx_cols"] == [35, "D1", "D2", "D30", False, True, True, True]
+    assert all(out["cc_noq"]) and out["cc_to"] and all(out["cc_nocd"]) and all(out["cc_tz"])
+    assert out["cc_zx_guard"]                                       # a row past the index's last day: never expanded
+    # a pack of another build than the index (its "b"): the app file read again once, then its own pack; a pack gone
+    # from the site (404): the same; the site still on the other build after it: said, "Try again"
+    assert all(out["cc_stale"]) and all(out["cc_gone"]) and all(out["cc_stale_again"])
+    assert out["cc_lru"] == [3, True, 3, True, True]                # only the newest 3 packs kept (the one in use too)
 
 
 def test_wiring():
@@ -212,5 +224,6 @@ def test_wiring():
     for a in ("data-roi-cc", "data-roi-ccx", "data-roi-pick"):                          # 🌍 every country control too
         assert "keepAt(r," in p.split("if((b=at('[%s]'))){ " % a)[1].split("\n")[0]
     assert "keepAt(r,t,'[data-roi-ccs]'," in p                                          # … and the full list's change
+    assert "if(PK[k].err||PK[k].stale) delete PK[k]; }); Object.keys(RLD).forEach(k=>{ delete RLD[k]; }); repaint();" in p   # Try again
     assert "/^roi_[0-9a-f]{12}_c\\d{2,3}\\.json\\.gz$/" in p                           # a pack name the build writes only
     assert "@media (max-width:760px){.roi-ccs{font-size:16px}}" in p                     # iOS: no zoom on the list

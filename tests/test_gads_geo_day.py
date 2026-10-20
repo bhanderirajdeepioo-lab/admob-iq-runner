@@ -82,6 +82,10 @@ def test_every_week_cell_is_the_sum_of_its_days(dirs):
     one = day["days"][S1]["2026-09-01"]
     assert one == {"US": [3 * 1_000_000, 0.3], "IN": [2 * 1_000_000, 0.2], "XX": [1_000_000, 0.1]}
     assert day["days"][S2]["2026-09-01"]["BR"] == [int(round(1.5 * 1_000_000 * FX["USD"] / FX["INR"])), 0.15]
+    # keep: one app's stores only (the ROI country filter's read) — the same days, nothing of another store
+    only = gd.load(data, keep={S1})
+    assert only == {"ccy": day["ccy"], "days": {S1: day["days"][S1]}} and gd.load(data, keep=set())["days"] == {}
+    assert gd.load(data) == day                                    # without keep: every store, as before
 
 
 def test_day_backfill_newest_first_bounded_own_budget(dirs):

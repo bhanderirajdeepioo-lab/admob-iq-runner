@@ -6832,25 +6832,26 @@ function cell(v,base,met,prev,n){ if(!ok(v)) return null;
   if(met==='roas') return base?v/base:null; if(met==='rev') return v; if(met==='ltv') return n?v/n:null; if(met==='delta') return ok(prev)?v-prev:v; return v; }
 function fmtCell(x,met){ return met==='roas'?P(x):met==='ltv'?MP(x):M(x); }
 function cohortTable(d,src){ if(src&&src.msg) return `<div class="roi-ctl">${src.ctl||''}${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div><div class="roi-tw roi-ccm">${src.msg}</div>`;
+  const d0=d, xx=!!(src&&src.cc==='XX');                         // 🧩 Not split: the columns of the app's own rows, '—' cells
   if(src&&src.rows) d=Object.assign({},d,{rows:src.rows});      // 🌍 one country's rows: the same table, the same code
-  const T=d.T, groups=groupRows(d), shown=groups.slice(0,SHOW), C=cols(d,shown.flatMap(g=>g.rows));
+  const T=d.T, groups=groupRows(d), shown=groups.slice(0,SHOW), C=cols(xx?d0:d,shown.flatMap(g=>g.rows));
   const head=`<tr><th>Install ${GRAIN==='day'?'date':GRAIN}</th><th>Status</th><th>Installs</th><th>Spend</th><th>CPI</th>${C.map(c=>`<th>${c.lab}</th>`).join('')}<th>So far</th><th>Breakeven</th></tr>`;
   const body=shown.map(gr=>{ const n=sumK(gr,R.n)||0, sp=sumK(gr,R.sp), spv=SV(sp,sumK(gr,R.spi)); let prev=null;
     const st=GRAIN==='day'?gr.rows[0][R.st]:null;
-    const cells=C.map(c=>{ const [v,fin]=agg(gr,c,T); const x=cell(v,sp,MET,prev,n); prev=ok(v)?v:prev; if(!ok(x)) return '<td class="roi-na">·</td>';
+    const cells=C.map(c=>{ const [v,fin]=agg(gr,c,T); const x=cell(v,sp,MET,prev,n); prev=ok(v)?v:prev; if(!ok(x)) return xx?'<td class="roi-na">—</td>':'<td class="roi-na">·</td>';
       const ro=sp?v/sp:null; return `<td class="${roasCls(ro)}${fin?'':' roi-nf'}" title="${E(c.lab+': '+M(v)+(sp?' · ROAS '+P(ro):'')+(fin?'':' · not final'))}">${fmtCell(x,MET)}</td>`; }).join('');
     let so=null, be=null;
     if(GRAIN==='day'){ const r=gr.rows[0]; so=r[R.s]; be=r[R.be]; }
-    else { so=src&&src.cc==='XX'?null:gr.rows.reduce((a,r)=>a+(+r[R.s]||0),0); }   // (🧩 Not split: no revenue to add)
+    else { so=xx?null:gr.rows.reduce((a,r)=>a+(+r[R.s]||0),0); }   // (🧩 Not split: no revenue to add)
     const beTxt=be?`${be[1]?'':'≤ '}day ${be[0]}`:(sp&&ok(so)?`<small>${P(so/sp)} back</small>`:'—');
     const qb=GRAIN==='day'?(+gr.rows[0][R.q]||0):0, q=qb?` <span class="roi-q" title="${E((src&&src.qt?src.qt(qb):[qb&1?'Is din ka GA4 read install-day read se match nahi hua':'',qb&2?'D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)")':'',qb&4?'D30 ke baad GA4 ke report pe data loss / thresholding / sampling ka flag tha — asli kamai thodi alag (kam ya zyada) ho sakti hai':'']).filter(Boolean).join(' · ')+' — numbers ≈')}">≈</span>`:'';
-    return `<tr><td class="roi-nm">${E(rowLabel(gr,d))}${q}</td><td>${st?chip(st):''}</td><td>${src&&src.cc==='XX'?'—':N(n)}</td><td>${MV(spv)}</td><td>${spv&&n?MPV(spv/n):'—'}</td>${cells}<td>${M(so)}${sp&&ok(so)?` <small>${P(so/sp)}</small>`:''}</td><td>${beTxt}</td></tr>`; }).join('');
+    return `<tr><td class="roi-nm">${E(rowLabel(gr,d))}${q}</td><td>${st?chip(st):''}</td><td>${xx?'—':N(n)}</td><td>${MV(spv)}</td><td>${spv&&n?MPV(spv/n):'—'}</td>${cells}<td>${M(so)}${sp&&ok(so)?` <small>${P(so/sp)}</small>`:''}</td><td>${beTxt}</td></tr>`; }).join('');
   const more=groups.length>shown.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-more="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-more="all">Show all ${groups.length}</button><span class="roi-note">${shown.length} of ${groups.length}</span></div>`:'';
-  return `<div class="roi-ctl">${src&&src.ctl||''}${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div>`
+  return `${src&&src.top||''}<div class="roi-ctl">${src&&src.ctl||''}${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div>`
     +`<div class="roi-tw"><table class="roi-t roi-heat"><thead>${head}</thead><tbody>${body}</tbody></table></div>${more}`
-    +`<p class="roi-note">Har cell = us install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ke users ki us din tak ki <b>kul kamai</b> (${MET==='roas'?'spend ka %':MET==='ltv'?'per install':MET==='delta'?'pichhle column se kitni badhi':'paisa'}). Rang: hara = spend wapas (≥100%), peela = 50–100%, laal = 50% se kam. Halka = abhi final nahi. ${GRAIN!=='day'?'Hafte / mahine ka cell tabhi jab uske saare din us umar tak pahunch gaye.':''}${lateNote(d,C)}</p>${src&&src.note||''}`; }
+    +`<p class="roi-note">Har cell = us install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ke users ki us din tak ki <b>kul kamai</b> (${MET==='roas'?'spend ka %':MET==='ltv'?'per install':MET==='delta'?'pichhle column se kitni badhi':'paisa'}). Rang: hara = spend wapas (≥100%), peela = 50–100%, laal = 50% se kam. Halka = abhi final nahi. ${GRAIN!=='day'?'Hafte / mahine ka cell tabhi jab uske saare din us umar tak pahunch gaye.':''}${lateNote(d,C,src&&src.rows?{cc:1}:null)}</p>${src&&src.note||''}`; }
 // the 30-day columns' note: how far, when a column fills, and GA4's "(other)" share (measured, from the file)
-function lateNote(d,C){ const mx=mLen(d.rows||[]), lt=d.late||{}, eg=[d.newest,lt.till].filter(Boolean).sort().pop(),
+function lateNote(d,C,o){ const mx=mLen(d.rows||[]), lt=o&&o.cc?{}:(d.late||{}), eg=[d.newest,lt.till].filter(Boolean).sort().pop(),
     th=lt.thru&&eg&&lt.thru<eg?` GA4 cube abhi ${fd(lt.thru)} tak hi poora padha gaya hai — uske baad ke din padhe jaane tak naye 30-din wale column nahi bharenge.`:'';
   if(!mx) return lt.busy?` D30 ke baad ke 30-din wale column (D60, D90 … app ki umar tak) abhi GA4 se padhe ja rahe hain — app ke pehle din se, har din har install din aur country; ${lt.next&&lt.from&&lt.next>lt.from?fd(lt.next)+' se pehle ke din padh liye':'abhi shuru hua'}${lt.at?' (aakhri baar '+fd(lt.at)+' ko aage badha)':''}. Poore hone pe sab column ek saath dikhenge; tab tak D60 / D90 / D180 / D365 checkpoint.`:th;
   const pc=v=>!ok(v)?'—':v>0&&v<0.001?'<0.1%':(v*100).toFixed(v<0.1?1:0)+'%';
@@ -6862,7 +6863,9 @@ function lateNote(d,C){ const mx=mLen(d.rows||[]), lt=d.late||{}, eg=[d.newest,l
 // ---- 🌍 the install-day table by country (owner: "USA select kru to date wise country ka aa jayega konsa din kaha pahocha"):
 // the file's cd = the index, roi_<key>_cNN.json.gz = the rows of its countries, loaded only when one is picked (once)
 let CTY='';                                           // the picked country ('' = All countries): kept across grain / mode / apps
-const PK={}, CR={};                                   // packs by file?sha ({j} | {busy} | {err}), expanded rows by file?sha|cc
+const PK={}, CR={};                                   // packs by file?sha ({j} | {busy} | {err, gone} | {stale}), expanded rows by file?sha|cc
+const PKL=[], PK_KEEP=3, RLD={};                      // the loaded packs, newest last (only PK_KEEP kept: a phone's memory); the app files read
+                                                      // again once for a pack of another build (by file|cd.b)
 const PACK_RE=/^roi_[0-9a-f]{12}_c\d{2,3}\.json\.gz$/;
 const CC_SP={'--':'Unknown country','XX':'Not split'};
 function cdOf(d){ const c=d&&d.cd; return c&&c.v===1&&Array.isArray(c.c)&&Array.isArray(c.packs)?c:null; }
@@ -6872,7 +6875,7 @@ const dAdd=(s,n)=>{ const t=new Date(s+'T00:00:00Z'); t.setUTCDate(t.getUTCDate(
 const dDiff=(a,b)=>Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/864e5);
 function inUnk(x,cd){ return (((cd.geo||{}).unk)||[]).some(u=>Array.isArray(u)&&x>=u[0]&&x<=u[1]); }
 // a short [X] (a day of the country with nothing of its own) → the row the build would have written (roi_build._zrow)
-function zx(x,cd,cc,T){ const unk=inUnk(x,cd), bl=!!(cd.geo||{}).billed;
+function zx(x,cd,cc,T){ const unk=inUnk(x,cd), bl=!!(cd.geo||{}).billed; if(!(dDiff(x,cd.thru)>=0)) return null;   // past the index's last day: another build's row
   if(cc==='XX'){ const sp=unk?null:0; return [x,null,null,sp,null,0,null,T.map(()=>null),null,null,null,'N/A',0,bl?sp:null]; }
   const obs=Math.min(30,dDiff(x,cd.thru)), df=Math.max(0,Math.min(obs,dDiff(x,cd.fthru))+1), t=T.map(a=>a<=30&&a<df?0:null), m=[];
   if(df>30) while(dDiff(x,cd.thru)>=30*(m.length+2)) m.push(0);
@@ -6881,59 +6884,87 @@ function zx(x,cd,cc,T){ const unk=inUnk(x,cd), bl=!!(cd.geo||{}).billed;
   let sd=dAdd(x,obs); if(m.length&&30*(m.length+1)>Math.min(obs,T[T.length-1])) sd=dAdd(x,30*(m.length+1));
   const sp=(unk||cc==='--')?null:0, r=[x,0,null,sp,new Array(obs+1).fill(0),df,null,t,0,sd,null,'N/A',0,bl?sp:null];
   if(m.length) r.push(m,mf); return r; }
-function ensurePack(f,sha,cb){ const k=f+'?'+sha; if(PK[k]&&(PK[k].busy||PK[k].j)) return; PK[k]={busy:true};
-  fetchGzJson(f+'?v='+encodeURIComponent(sha)).then(j=>{ if(!j||j.v!==1||!j.c||typeof j.c!=='object') throw new Error('format'); PK[k]={j}; })
-    .catch(()=>{ PK[k]={err:true}; }).then(()=>{ cb&&cb(); }); }
+// the pack the page needs right now ('' = none): a pack that lands for an earlier pick never repaints the view on screen
+function ccWant(){ const r=root(), a=r&&appPtr(r.dataset.aid), dd=a&&AF[a.file], c=dd&&cdOf(dd), x=c&&CTY&&c.c.find(z=>z[0]===CTY), p=x&&c.packs[x[4]];
+  return VIEW==='day'&&Array.isArray(p)?p[0]+'?'+p[1]:''; }
+// a pack file is served as its newest copy whatever ?v= says: one of another build than the index in hand (its "b") is never read
+function ensurePack(f,sha,b,cb){ const k=f+'?'+sha; if(PK[k]&&(PK[k].busy||PK[k].j||PK[k].stale)) return; PK[k]={busy:true};
+  fetchGzJson(f+'?v='+encodeURIComponent(sha)).then(j=>{ if(!j||j.v!==1||!j.c||typeof j.c!=='object') throw new Error('format');
+      if(j.b!==b){ PK[k]={stale:true}; return; }
+      PK[k]={j}; PKL.push(k); const w=ccWant();
+      for(let i=0;PKL.length>PK_KEEP&&i<PKL.length;){ const o=PKL[i]; if(o===k||o===w){ i++; continue; } PKL.splice(i,1); delete PK[o];
+        Object.keys(CR).forEach(z=>{ if(z.startsWith(o+'|')) delete CR[z]; }); } })
+    .catch(e=>{ PK[k]={err:true,gone:/^http 404$/.test(String(e&&e.message))}; }).then(()=>{ cb&&cb(k); }); }
+// a country's rows (null: not in its pack; false: a short row the index cannot expand — another build's)
 function ccRows(cd,pk,cc,T){ const k=pk[0]+'?'+pk[1], kk=k+'|'+cc; if(CR[kk]) return CR[kk]; const P=PK[k], rs=P&&P.j&&P.j.c[cc];
-  if(!Array.isArray(rs)) return null; return (CR[kk]=rs.map(r=>Array.isArray(r)&&r.length===1?zx(r[0],cd,cc,T):r)); }
+  if(!Array.isArray(rs)) return null; const out=rs.map(r=>Array.isArray(r)&&r.length===1?zx(r[0],cd,cc,T):r);
+  return out.every(Array.isArray)?(CR[kk]=out):false; }
+// the app file read again once (its index is older than the packs on the site): true = on its way
+function ccReload(d,cd){ const r=root(), aid=d.app_id||(r&&r.dataset.aid), a=aid&&appPtr(aid), f=a&&a.file, rk=f+'|'+cd.b;
+  if(!f) return false; if(RLD[rk]) return !!ABUSY[f];             // read again already: waiting for it, or done (said)
+  RLD[rk]=1; if(AF[f]) AF[f]._v=''; ensureApp(aid,repaint); return true; }
 // the picker: All countries + the 6 with the most installs (chips) + a native list of EVERY country GA4 names, then the two
-// that are not one ("Unknown country" = GA4's "(not set)", "Not split" = Google Ads' unmapped cost / GA4's "(other)")
+// that are not one ("Unknown country" = GA4's "(not set)", "Not split" = Google Ads' unmapped cost)
 function ccPick(cd){ const named=cd.c.filter(x=>!CC_SP[x[0]]), top=named.slice(0,6), sp=cd.c.filter(x=>CC_SP[x[0]]);
   const b=(cc,l,t)=>`<button type="button" data-roi-cc="${E(cc)}" aria-pressed="${CTY===cc}"${t?` title="${E(t)}"`:''}>${l}</button>`;
-  const o=(x,l)=>`<option value="${E(x[0])}"${CTY===x[0]?' selected':''}>${l}</option>`;
   const inTop=!CTY||top.some(x=>x[0]===CTY);
+  const o=(x,l)=>`<option value="${E(x[0])}"${!inTop&&CTY===x[0]?' selected':''}>${l}</option>`;
   return `<span class="roi-mini roi-ccp" role="group" aria-label="Country">${b('','🌍 All countries')}${top.map(x=>b(x[0],`${valFlag(x[0])} ${E(x[0])}`,valCtyName(x[0]))).join('')}</span>`
     +`<select class="roi-ccs" data-roi-ccs="1" aria-label="Every country"><option value=""${inTop?' selected':''}>More countries ▾</option>`
     +`<optgroup label="Every country (${named.length})">${named.map(x=>o(x,`${valFlag(x[0])} ${E(valCtyName(x[0]))} · ${N(x[1])} installs`)).join('')}</optgroup>`
     +(sp.length?`<optgroup label="Not a country">${sp.map(x=>o(x,`${ccFlag(x[0])} ${CC_SP[x[0]]}${x[0]==='--'?' · '+N(x[1])+' installs':''}`)).join('')}</optgroup>`:'')+`</select>`; }
-function ccQ(qb){ return [qb&2?'Is row ke kuch din GA4 ne kuch revenue "(other)" me daala (country / install din nahi diya)':'',
+function ccQ(qb,cd){ const lim=((cd&&cd.kc)||{}).unp_lim;
+  return [qb&2?'Is row ke kuch din GA4 ne kuch revenue "(other)" me daala (country / install din nahi diya)':'',
   qb&4?'Is row ke kuch din GA4 report pe thresholding / sampling flag — asli kamai thodi alag (kam ya zyada) ho sakti hai':'',
-  qb&8?'Is country ka AdMob milan kisi mahine 0.8–1.25 se bahar tha (0.5–2 pe roka)':'',qb&16?'Kisi mahine is country ka AdMob milan nahi mila — app ka k laga':'']; }
+  qb&8?'Is country ka AdMob milan kisi mahine 0.8–1.25 se bahar tha (0.5–2 pe roka)':'',qb&16?'Kisi mahine is country ka AdMob milan nahi mila — app ka k laga':'',
+  qb&32?'Kisi mahine ka k_c us mahine ka apna nahi — mahina abhi adhoora (AdMob / GA4 poora nahi), padosi poore mahino se liya':'',
+  qb&64?`Kisi mahine GA4 ka ${ok(lim)?Math.round(lim*100)+'%':'kaafi'} se zyada revenue bina country ka tha — AdMob use asli country me ginta hai, isliye k_c thoda zyada ho sakta hai`:'']; }
 // what the country view is and is not — every limitation with its measured size (from the file)
 function ccNote(d,cd,x){ const cc=x[0], g=cd.geo||{}, k=cd.kc||{}, lo=cd.loss||{}, df=cd.diff||{}, p=[];
   const pc=v=>!ok(v)?'—':v>0&&v<0.001?'<0.1%':(v*100).toFixed(v<0.1?1:0)+'%';
-  if(cc==='XX') p.push(`<b>🧩 Not split</b> = Google Ads ka wo kharcha jiska country Ads ko nahi pata ("XX")${ok(g.xx_share)?` — country-wise spend ka ${pc(g.xx_share)}`:''}. Iska koi install din / country nahi, isliye installs '—', revenue '·' aur ROAS '—'.`
-      +(lo.days?` GA4 ne bhi ${N(lo.days)} din ka kuch revenue kisi country / install din ko nahi diya ("(other)", ~${M(lo.usd)} app ke k se; sabse zyada us din ki kamai ka ${pc(lo.max_share)}) — wo bhi kisi row me nahi.`:''));
+  const up=k.unp||{}, um=Object.keys(up).filter(M=>ok(up[M])&&up[M]>0), lim=ok(k.unp_lim)?k.unp_lim:0.02, ubig=um.filter(M=>up[M]>lim), umax=um.reduce((a,M)=>Math.max(a,up[M]),0);
+  if(cd.to&&d.newest&&cd.to<d.newest) p.push(`Country table ${E(fd(cd.to))} tak — GA4 cube ne uske baad ke ${N(dDiff(cd.to,d.newest))} din abhi poore nahi padhe (All countries ${E(fd(d.newest))} tak); naye 30-din wale column bhi tabhi bharenge.`);
+  if(cc==='XX') p.push(`<b>🧩 Not split</b> = Google Ads ka wo kharcha jiska country Ads ko nahi pata ("XX")${ok(g.xx_share)?` — country-wise spend ka ${pc(g.xx_share)}`:''}. Iska koi install din / country nahi, isliye installs aur har din wala column '—' (koi revenue nahi, ROAS nahi).`
+      +(lo.days?` GA4 ne bhi ${N(lo.days)} din ka kuch revenue kisi country / install din ko nahi diya ("(other)", ~${M(lo.usd)} app ke k se; sabse zyada us din ki kamai ka ${pc(lo.max_share)}) — GA4 ki taraf wo kisi row me nahi, par AdMob un users ko asli country me ginta hai, isliye wo kamai countries ke k_c me aa jaati hai.`:''));
   else {
     p.push(`<b>${ccLab(cc)}</b>: installs = GA4 ke ${cc==='--'?'bina country wale':'is country ke'} naye users (ads + organic) — isliye ROAS blended.`);
-    p.push(cc==='--'?'Revenue = GA4 × app ka apna AdMob milan (k) — AdMob me aisa koi country nahi, isliye sab ≈.'
-      :`Revenue = GA4 × is country ka apna AdMob milan (k_c = us country ka AdMob ÷ GA4, mahine ke hisaab se; kisi taraf $20 se kam ho to ±2 mahine milake; 0.5–2 tak; 0.8–1.25 se bahar ≈)${x[6]>0?` — ${pc(x[6])} revenue pe milan nahi mila, wahan app ka k laga (≈)`:''}.`);
+    p.push(cc==='--'?'Revenue = GA4 × app ka apna AdMob milan (k) — AdMob me aisa koi country nahi, isliye sab ≈. AdMob in users ko kisi asli country me ginta hai, isliye yahi kamai un countries ke k_c me bhi hai — sab countries jodte waqt ise dobara na jodein.'
+      :`Revenue = GA4 × is country ka apna AdMob milan (k_c = us country ka AdMob ÷ GA4, mahine ke hisaab se; kisi taraf $20 se kam ho to ±2 mahine milake; 0.5–2 tak; 0.8–1.25 se bahar ≈)${x[6]>0?` — ${pc(x[6])} revenue pe milan nahi mila, wahan app ka k laga (≈)`:''}${x[7]>0?`; ${pc(x[7])} revenue ke mahine abhi adhoore (AdMob ya GA4 ka poora mahina nahi) — unka k_c padosi poore mahino se liya (≈)`:''}.`);
+    if(cc!=='--'&&um.length) p.push(`GA4 ka kuch revenue bina country ka hai ("(not set)" + "(other)": kul ${pc(k.unp_all)}, kisi mahine sabse zyada ${pc(umax)}) — AdMob un users ko asli country me ginta hai, isliye k_c utna tak zyada ho sakta hai${ubig.length?`; ${N(ubig.length)} mahine ${pc(lim)} se zyada — un mahino wale row pe ≈`:''}.`);
+    const tz=ok(g.tzh)?(g.tzh?`; Ads ka din GA4 ke din se ${Math.abs(g.tzh)} ghante ${g.tzh>0?'baad':'pehle'} shuru hota hai (Ads account ka time zone) — ek install din ka spend aur installs utne ghante khiske hue`:'; Ads aur GA4 ka din ek hi time zone me')
+      :g.tzs>1?`; app ke Ads accounts ${N(g.tzs)} alag time zone me — Ads ka din GA4 ke din se kuch ghante alag`:'; Ads ka din Ads account ke time zone ka hai (yahan pata nahi) — GA4 ke din se kuch ghante alag ho sakta hai';
     p.push(cc==='--'?"Spend: Google Ads me aisa koi country nahi — '—'."
-      :`Spend = Google Ads country-wise (Ads ka country ≠ GA4 ka country — dono apne tareeke se location lete hain)${g.from?`, ${E(fd(g.from))} se ${E(fd(g.till))} tak`:''}${g.unknown_days?`; ${N(g.unknown_days)} install din pe country-wise spend nahi pata ('—', ROAS '·')`:''}${ok(g.cov)?`; country split = kul Ads spend ka ${pc(g.cov)}`:''}${ok(g.xx_share)&&g.xx_share>0?`, usme ${pc(g.xx_share)} "Not split"`:''}.`); }
+      :`Spend = Google Ads country-wise (Ads ka country ≠ GA4 ka country — dono apne tareeke se location lete hain)${g.from?`, ${E(fd(g.from))} se ${E(fd(g.till))} tak`:''}${g.unknown_days?`; ${N(g.unknown_days)} install din pe country-wise spend nahi pata ('—', ROAS '·')${g.untied_days?` — inme ${N(g.untied_days)} din Ads ka country-wise jod Ads ke kul kharche se nahi mila`:''}`:''}${ok(g.cov)?`; country split = kul Ads spend ka ${pc(g.cov)}`:''}${ok(g.xx_share)&&g.xx_share>0?`, usme ${pc(g.xx_share)} "Not split"`:''}${tz}.`); }
   if(ok(k.tzh)&&k.tzh) p.push(`AdMob ka din GA4 ke din se ${Math.abs(k.tzh)} ghante ${k.tzh>0?'baad':'pehle'} shuru hota hai (time zone) — mahine ke milan me kinaare ke itne ghante idhar-udhar.`);
   if(cc!=='XX'&&lo.days) p.push(`≈ = row ke kuch din GA4 ne revenue "(other)" me daala (${N(lo.days)} din, sabse zyada us din ki kamai ka ${pc(lo.max_share)}).`);
   if(cc!=='XX'&&lo.flag_days) p.push(`≈ = ${N(lo.flag_days)} din GA4 report pe thresholding / sampling flag (naapne layak kuch nahi).`);
   if(cc!=='XX'&&x[5]) p.push(`Status sirf ≥ $5 spend aur ≥ 30 installs wale din: ${N(x[5])} din N/A.`);
-  if(ok(df.rel)&&df.days) p.push(`Sab countries ka jod "All countries" se ${df.rel>=0?'+':MI}${pc(Math.abs(df.rel))} alag (D30, ${N(df.days)} install din: ${M(df.cty)} vs ${M(df.all)}) — All me app ka hafte wala k aur GA4 ka doosra read, countries me apna k_c.`);
+  if(ok(df.rel)&&df.days) p.push(`Sab countries ka jod "All countries" se ${df.rel>=0?'+':MI}${pc(Math.abs(df.rel))} alag (D30, ${N(df.days)} install din: ${M(df.cty)} vs ${M(df.all)}). Wajah: All me app ka hafte wala k aur GA4 ka install-day read, countries me har country ka mahine wala k_c aur GA4 cube ka read${ok(k.unp_all)&&k.unp_all>0?`; bina country wala GA4 revenue (kul ${pc(k.unp_all)}) AdMob ke hisaab se countries ke k_c me hai`:''}${df.unk>0?`, aur "Unknown country" ka ${M(df.unk)} is jod me dobara gina gaya`:''}.`);
   p.push('Upar ke tiles / charts = poora app (sab countries).');
   return `<p class="roi-note roi-ccn">${p.join(' ')}</p>`; }
-// the table's source: null = the app's own rows exactly as before (no cd); else the picker + the picked country's rows
+// the table's source: null = the app's own rows exactly as before (no cd, nothing picked); else the picker + the picked
+// country's rows (or, an app without the country part while a country is picked: the app's own rows + one line saying so)
+const CC_BUSY='<span class="roi-mini" role="group" aria-label="Country"><button type="button" disabled title="GA4 cube poora padhne ke baad country-wise table">🌍 Country · after GA4 cube read</button></span>';
 function ccSrc(d){ const cd=cdOf(d);
-  if(!cd) return d.late&&d.late.busy?{ctl:'<span class="roi-mini" role="group" aria-label="Country"><button type="button" disabled title="GA4 cube poora padhne ke baad country-wise table">🌍 Country · GA4 cube padhne ke baad</button></span>'}:null;
+  if(!cd){ const busy=!!(d.late&&d.late.busy); if(!CTY) return busy?{ctl:CC_BUSY}:null;
+    return {ctl:busy?CC_BUSY:'',cc:CTY,miss:1,top:`<p class="roi-note roi-ccm0">Is app me ${ccLab(CTY)} ki country-wise table ${busy?'abhi nahi — GA4 cube poora padhne ke baad banegi':'nahi (GA4 cube se banti hai; is app ke liye abhi nahi bani)'} — neeche All countries. <button type="button" class="roi-lnk roi-ccgo" data-roi-ccx="1">✕ All countries</button></p>`}; }
   const ctl=ccPick(cd); if(!CTY) return {ctl};
   const x=cd.c.find(z=>z[0]===CTY), lab=ccLab(CTY);
   if(!x) return {ctl,cc:CTY,miss:1,msg:`<p class="roi-note">Is app me ${lab} ka data nahi — upar se doosra country chuniye, ya 🌍 All countries.</p>`};
   const pk=cd.packs[x[4]];
   if(!Array.isArray(pk)||!PACK_RE.test(String(pk[0]))) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} ka data file nahi mila.</p>`};
-  const P=PK[pk[0]+'?'+pk[1]];
-  if(P&&P.err) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} ka data load nahi hua. <button type="button" class="roi-lnk" data-roi-ccr="1">Try again</button></p>`};
-  if(!P||!P.j){ ensurePack(pk[0],pk[1],repaint); return {ctl,cc:CTY,msg:`<p class="roi-note">⏳ ${lab} ka data load ho raha hai…</p>`}; }
+  const key=pk[0]+'?'+pk[1], P=PK[key], wait={ctl,cc:CTY,msg:`<p class="roi-note">⏳ ${lab} ka data load ho raha hai…</p>`};
+  const again=`<button type="button" class="roi-lnk" data-roi-ccr="1">Try again</button>`;
+  if(P&&(P.stale||P.gone)) return ccReload(d,cd)?wait:{ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} ka data abhi badal raha hai (site pe naya build aa raha hai). ${again}</p>`};
+  if(P&&P.err) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} ka data load nahi hua. ${again}</p>`};
+  if(!P||!P.j){ ensurePack(pk[0],pk[1],cd.b,k=>{ if(ccWant()===k) repaint(); }); return wait; }
   const rows=ccRows(cd,pk,CTY,d.T||[0,1,3,7,14,30,60,90,180,365]);
+  if(rows===false){ PK[key]={stale:true}; return ccSrc(d); }
   if(!rows) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} is file me nahi mila.</p>`};
-  return {ctl,cc:CTY,x,rows,qt:ccQ,note:ccNote(d,cd,x)}; }
+  return {ctl,cc:CTY,x,rows,qt:qb=>ccQ(qb,cd),note:ccNote(d,cd,x)}; }
 function cohCard(d){ const cs=ccSrc(d);
   if(!cs) return `<div class="roi-card"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${(()=>{ const C=cols(d,d.rows||[]); return C.length?C[C.length-1].a:365; })()} tak</h3><span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohortTable(d)}</div>`;
-  const rs=cs.rows||d.rows||[], C=cols(cs.rows?Object.assign({},d,{rows:rs}):d,rs), on=!!cs.cc&&!cs.miss;
+  const rs=cs.rows||d.rows||[], C=cols(cs.rows&&cs.cc!=='XX'?Object.assign({},d,{rows:rs}):d,rs), on=!!cs.cc&&!cs.miss;
   return `<div class="roi-card" id="roi-coh"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${C.length?C[C.length-1].a:365} tak${on?` · ${ccLab(cs.cc)}`:''}</h3>${on?'<button type="button" class="roi-lnk roi-ccx" data-roi-ccx="1">✕ All countries</button>':''}<span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohortTable(d,cs)}</div>`; }
 function monthCurves(d){ const T=d.T, ms=(d.months||[]).filter(m=>m[2]>0).slice(-6);
   if(!ms.length) return '<p class="roi-note">Abhi kisi install mahine pe Google Ads spend nahi.</p>';
@@ -7680,7 +7711,7 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=at('[data-roi-asort]'))){ const k=b.dataset.roiAsort; b.setAttribute('data-roi-sel',`[data-roi-asort="${k}"]`); keep(b,()=>{ ASORT={k,dir:ASORT.k===k?-ASORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-cc]'))){ const cc=b.dataset.roiCc; keepAt(r,b,`[data-roi-cc="${cc}"]`,()=>{ CTY=cc; SHOW=60; repaint(); }); return; }
     if((b=at('[data-roi-ccx]'))){ const h=r.querySelector('#roi-coh h3')||b; keepAt(r,h,'#roi-coh h3',()=>{ CTY=''; SHOW=60; repaint(); }); return; }
-    if((b=at('[data-roi-ccr]'))){ Object.keys(PK).forEach(k=>{ if(PK[k].err) delete PK[k]; }); repaint(); return; }
+    if((b=at('[data-roi-ccr]'))){ Object.keys(PK).forEach(k=>{ if(PK[k].err||PK[k].stale) delete PK[k]; }); Object.keys(RLD).forEach(k=>{ delete RLD[k]; }); repaint(); return; }
     if((b=at('[data-roi-pick]'))){ const cc=b.dataset.roiPick; keepAt(r,b,'#roi-coh',()=>{ VIEW='day'; CTY=cc; SHOW=60;   // 🌍 Countries → that country's day-wise table
         r.querySelectorAll('[data-roi-view]').forEach(x=>x.setAttribute('aria-selected',String(x.dataset.roiView===VIEW))); repaint(); }); return; }
     if((b=at('[data-roi-cty]'))){ const cc=b.dataset.roiCty; b.setAttribute('data-roi-sel',`[data-roi-cty="${cc}"]`); keep(b,()=>{ CTYO=CTYO===cc?'':cc; repaint(); }); return; }
@@ -7707,7 +7738,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, cohortTable, lateNote, zx, ccSrc, ccPick, cohCard, ccNote, cdOf, keepAt, PK, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, cohortTable, lateNote, zx, ccSrc, ccPick, cohCard, ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)

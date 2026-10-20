@@ -103,7 +103,7 @@ function defaultDigest() {
 // line factor (a narrow phone: taller), the window scrolls over it. A tap / a list change / "✕ All countries" / the
 // Countries board's "📅 Day-wise" goes through the real listeners; the tapped control (or what it opens) must stay where
 // it was on screen, before and after its pack arrives. → [moves in px …] (0 = stayed).
-async function noJump(width, file, packs, failOnce) {
+async function noJump(width, file, packs, failOnce, mode) {
   const failed = new Set();
   const k = 0.05 * 1280 / width, W = { scrollY: 0, innerWidth: width, scrollBy(x, y) { this.scrollY = Math.max(0, this.scrollY + y); } };
   const L = {};
@@ -134,7 +134,8 @@ async function noJump(width, file, packs, failOnce) {
       return false; };
     return e;
   };
-  const box = key => ({ set innerHTML(v) { P[key] = v; }, get innerHTML() { return P[key]; } });
+  const SETS = { body: 0, hero: 0 };                                       // how often the block was painted
+  const box = key => ({ set innerHTML(v) { P[key] = v; SETS[key]++; }, get innerHTML() { return P[key]; } });
   const ROOT = { dataset: { aid: 'id-c' }, style: {}, get offsetHeight() { return full().length * k; },
     getBoundingClientRect: () => ({ top: -W.scrollY, left: 0, width: width, height: full().length * k }),
     querySelector: sel => sel === '#roi-body' ? box('body') : sel === '#roi-hero' ? box('hero') : sel === '.roi-tip' ? null : find(sel),
@@ -156,6 +157,14 @@ async function noJump(width, file, packs, failOnce) {
   const flush = () => new Promise(r => setTimeout(r, 5));
   const fire = (t, e) => (L[t] || []).forEach(f => f(Object.assign({ clientX: 0, clientY: 0 }, e)));
   const moves = [];
+  if (mode === 'late') {                                                    // a pack that lands after the reader moved on:
+    fire('click', { target: find('[data-roi-cc="AA"]') }); await flush();   // AA's pack in hand
+    const sel = find('[data-roi-ccs]'); sel.value = 'GG'; fire('change', { target: sel });   // GG: its pack on its way…
+    fire('click', { target: find('[data-roi-cc="AA"]') });                  // … AA again at once (its table from memory)
+    const n0 = SETS.body, aaNow = P.body.includes('[AA] Country AA</h3>');
+    await flush();                                                          // GG's pack lands: the AA table is not painted again
+    return { late: [aaNow, SETS.body - n0, P.body.includes('[AA] Country AA</h3>')] };
+  }
   const tap = async (sel, after, ev) => {                                  // a control mid-screen; where it is after
     let b = find(sel); W.scrollY = Math.max(0, b._i * k - 300); b = find(sel); const y0 = b.getBoundingClientRect().top;
     if (ev) { b.value = ev; fire('change', { target: b }); } else fire('click', { target: b });
@@ -893,17 +902,18 @@ async function noJump(width, file, packs, failOnce) {
       return rows;
     };
     const CCS = ['AA', 'BB', 'CC', 'DD', 'EE', 'FF', 'GG', 'HH'];
-    const cdx = () => ({ v: 1, packs: [['roi_aaaaaaaaaaaa_c00.json.gz', '0123456789ab'], ['roi_aaaaaaaaaaaa_c01.json.gz', 'ba9876543210']],
-      c: CCS.map((cc, i) => [cc, 1000 - i * 100, 50 - i * 5, null, i < 4 ? 0 : 1, 3, i === 1 ? 0.25 : 0])
-        .concat([['--', 40, null, null, 1, 70, 1], ['XX', null, 12, null, 1, null, null]]),
+    const cdx = () => ({ v: 1, b: 'b0b0b0b0b0b0', packs: [['roi_aaaaaaaaaaaa_c00.json.gz', '0123456789ab'], ['roi_aaaaaaaaaaaa_c01.json.gz', 'ba9876543210']],
+      c: CCS.map((cc, i) => [cc, 1000 - i * 100, 50 - i * 5, null, i < 4 ? 0 : 1, 3, i === 1 ? 0.25 : 0, i === 1 ? 0.125 : 0])
+        .concat([['--', 40, null, null, 1, 70, 1, 0], ['XX', null, 12, null, 1, null, null, null]]),
       from: '2026-08-05', to: '2026-10-13', thru: '2026-10-13', fthru: '2026-10-10', newest: '2026-10-13',
-      kc: { own_months: 5, pool_months: 2, app_months: 3, est_months: 1, tzh: 12.5 },
-      geo: { from: '2026-09-01', till: '2026-10-12', known_days: 42, unknown_days: 28, unk: [['2026-08-05', '2026-08-31'], ['2026-10-13', '2026-10-13']],
-        xx_share: 0.08, cov: 0.97, billed: 1 },
-      loss: { days: 2, max_share: 0.012, flag_days: 1, usd: 3.5 }, diff: { age: 30, days: 12, all: 100, cty: 96.4, rel: -0.036, n_all: 1200, n_cty: 1190 } });
+      kc: { own_months: 5, pool_months: 1, near_months: 2, app_months: 3, est_months: 1, tzh: 12.5,
+        unp: { '2026-08': 0.004, '2026-09': 0.031, '2026-10': 0.012 }, unp_all: 0.018, unp_lim: 0.02 },
+      geo: { from: '2026-09-01', till: '2026-10-12', known_days: 42, unknown_days: 28, untied_days: 2, unk: [['2026-08-05', '2026-08-31'], ['2026-10-13', '2026-10-13']],
+        xx_share: 0.08, cov: 0.97, billed: 1, tzh: -9.5, tzs: 1 },
+      loss: { days: 2, max_share: 0.012, flag_days: 1, usd: 3.5 }, diff: { age: 30, days: 12, all: 100, cty: 96.4, rel: -0.036, n_all: 1200, n_cty: 1190, unk: 1.5 } });
     const PACKS = {
-      'roi_aaaaaaaaaaaa_c00.json.gz': { v: 1, key: 'aaaaaaaaaaaa', ix: 0, c: { AA: ccRowsOf('AA', 10, a => a % 10 === 3), BB: ccRowsOf('BB', 5), CC: ccRowsOf('CC', 4), DD: ccRowsOf('DD', 3) } },
-      'roi_aaaaaaaaaaaa_c01.json.gz': { v: 1, key: 'aaaaaaaaaaaa', ix: 1, c: { EE: ccRowsOf('EE', 2, a => a !== 5), FF: ccRowsOf('FF', 2), GG: ccRowsOf('GG', 1),
+      'roi_aaaaaaaaaaaa_c00.json.gz': { v: 1, b: 'b0b0b0b0b0b0', key: 'aaaaaaaaaaaa', ix: 0, c: { AA: ccRowsOf('AA', 10, a => a % 10 === 3), BB: ccRowsOf('BB', 5), CC: ccRowsOf('CC', 4), DD: ccRowsOf('DD', 3) } },
+      'roi_aaaaaaaaaaaa_c01.json.gz': { v: 1, b: 'b0b0b0b0b0b0', key: 'aaaaaaaaaaaa', ix: 1, c: { EE: ccRowsOf('EE', 2, a => a !== 5), FF: ccRowsOf('FF', 2), GG: ccRowsOf('GG', 1),
         HH: ccRowsOf('HH', 1), '--': ccRowsOf('--', null), XX: ccRowsOf('XX', 1).map((r, i) => i % 3 ? [r[0], null, null, r[3], null, 0, null, T.map(() => null), null, null, null, 'N/A', 0, r[3]] : [r[0]]) } } };
     const fetched = [];
     let failPack = null;
@@ -962,7 +972,20 @@ async function noJump(width, file, packs, failOnce) {
       'country split = kul Ads spend ka 97%', 'usme 8.0% "Not split"', 'AdMob ka din GA4 ke din se 12.5 ghante baad shuru hota hai',
       'GA4 ne revenue "(other)" me daala (2 din, sabse zyada us din ki kamai ka 1.2%)', '1 din GA4 report pe thresholding / sampling flag',
       'Status sirf ≥ $5 spend aur ≥ 30 installs wale din: 3 din N/A', 'Sab countries ka jod "All countries" se −3.6% alag (D30, 12 install din: $96 vs $100)',
-      'Upar ke tiles / charts = poora app (sab countries).'].filter(t => !nb.includes(t));
+      'Upar ke tiles / charts = poora app (sab countries).',
+      // the k_c of a month not whole yet: borrowed, its revenue share said; GA4 revenue without a country: measured
+      '13% revenue ke mahine abhi adhoore (AdMob ya GA4 ka poora mahina nahi) — unka k_c padosi poore mahino se liya (≈)',
+      'GA4 ka kuch revenue bina country ka hai ("(not set)" + "(other)": kul 1.8%, kisi mahine sabse zyada 3.1%) — AdMob un users ko asli country me ginta hai, isliye k_c utna tak zyada ho sakta hai; 1 mahine 2.0% se zyada — un mahino wale row pe ≈.',
+      // the days whose Ads split did not tie, the Ads day's time zone
+      "28 install din pe country-wise spend nahi pata ('—', ROAS '·') — inme 2 din Ads ka country-wise jod Ads ke kul kharche se nahi mila",
+      'Ads ka din GA4 ke din se 9.5 ghante pehle shuru hota hai (Ads account ka time zone) — ek install din ka spend aur installs utne ghante khiske hue',
+      // Σ countries vs All: every cause named, with its measured size
+      'Wajah: All me app ka hafte wala k aur GA4 ka install-day read, countries me har country ka mahine wala k_c aur GA4 cube ka read; bina country wala GA4 revenue (kul 1.8%) AdMob ke hisaab se countries ke k_c me hai, aur "Unknown country" ka $1.5 is jod me dobara gina gaya.'
+    ].filter(t => !nb.includes(t));
+    // the Ads time zone unknown / mixed: said too; the Unknown country row: its money is also inside the named countries' k_c
+    const tzs = g => U.ccNote(appFile(), Object.assign(cdx(), { geo: Object.assign(cdx().geo, g) }), dc.cd.c[0]);
+    out.cc_tz = [tzs({ tzh: null, tzs: 2 }).includes('app ke Ads accounts 2 alag time zone me'), tzs({ tzh: null, tzs: 0 }).includes('Ads ka din Ads account ke time zone ka hai (yahan pata nahi)'),
+      tzs({ tzh: 0 }).includes('Ads aur GA4 ka din ek hi time zone me')];
     // the full list: a country past the 6 chips (another pack: one more read), then the two that are not a country
     U.setCTY('GG'); U.cohCard(dc); await flush();
     const tg = U.cohCard(dc);
@@ -971,11 +994,12 @@ async function noJump(width, file, packs, failOnce) {
     U.setCTY('--');
     const tn = U.cohCard(dc);
     out.cc_unknown = [tn.includes('[--] Unknown country</h3>'), tn.includes('bina country wale'), tn.includes("Spend: Google Ads me aisa koi country nahi — '—'."),
-      !tn.includes('ROAS 4'), tn.includes('AdMob me aisa koi country nahi, isliye sab ≈')];
+      !tn.includes('ROAS 4'), tn.includes('AdMob me aisa koi country nahi, isliye sab ≈'),
+      tn.includes('yahi kamai un countries ke k_c me bhi hai — sab countries jodte waqt ise dobara na jodein'), !tn.includes('GA4 ka kuch revenue bina country ka hai')];
     U.setCTY('XX');
     const tx = U.cohCard(dc), txr = U.ccSrc(dc).rows;
     out.cc_notsplit = [tx.includes('🧩 Not split</h3>'), tx.includes('<b>🧩 Not split</b> = Google Ads ka wo kharcha'),
-      tx.includes('GA4 ne bhi 2 din ka kuch revenue'), txr.every(r => r[1] == null && r[4] == null), txr.filter(r => r[3] === 0).length > 0,
+      tx.includes('GA4 ne bhi 2 din ka kuch revenue') && tx.includes('GA4 ki taraf wo kisi row me nahi, par AdMob un users ko asli country me ginta hai') && !tx.includes('wo bhi kisi row me nahi'), txr.every(r => r[1] == null && r[4] == null), txr.filter(r => r[3] === 0).length > 0,
       !/<td class="roi-[gwb]/.test(tx), tx.includes('<td>—</td><td>$1.0</td><td>—</td>')];   // installs '—', its spend, no CPI
     // the pick stays across grain / mode and across apps; an app without that country says so, the picker stays
     U.setCTY('AA'); U.set('GRAIN', 'month'); U.set('MET', 'rev');
@@ -1000,7 +1024,7 @@ async function noJump(width, file, packs, failOnce) {
     // the cube still on its way (no country part yet): a disabled chip says when
     U.setCTY('');
     out.cc_busy = U.cohCard(Object.assign(appFile(), { late: { busy: 1, from: '2024-01-01', next: '2025-01-01' } }))
-      .includes('<button type="button" disabled title="GA4 cube poora padhne ke baad country-wise table">🌍 Country · GA4 cube padhne ke baad</button>');
+      .includes('<button type="button" disabled title="GA4 cube poora padhne ke baad country-wise table">🌍 Country · after GA4 cube read</button>');
     // the 🌍 Countries board: "📅 Day-wise" on each country the cube has (none without the country part)
     const cv = U.ctyView(dc);
     out.cc_board = [[...cv.matchAll(/data-roi-pick="([A-Z-]+)"/g)].map(m => m[1]), U.ctyView(appFile()).includes('data-roi-pick')];
@@ -1010,9 +1034,101 @@ async function noJump(width, file, packs, failOnce) {
       const one = (cd, c) => JSON.stringify(U.zx(c.x, cd, c.cc, T)) === JSON.stringify(c.row) ? 1 : [c.x, c.cc, U.zx(c.x, cd, c.cc, T), c.row];
       out.cc_zx = zc.cases.map(c => one(zc.cd, c)).concat(zc.cases0.map(c => one(zc.cd0, c)));
     }
+    // the ≈ bits of a borrowed k_c month / a month with GA4 revenue without a country say what they are
+    const qn = U.ccQ(32 | 64, dc.cd).filter(Boolean);
+    out.cc_q_new = qn.length === 2 && qn[0].includes('mahina abhi adhoora (AdMob / GA4 poora nahi), padosi poore mahino se liya')
+      && qn[1].includes('GA4 ka 2% se zyada revenue bina country ka tha');
+    // the picker: a chip's country picked → the list shows "More countries ▾" (one option selected, never the chip's)
+    U.setCTY('AA');
+    const pa = U.ccPick(dc.cd);
+    out.cc_pick_sel = (pa.match(/ selected>/g) || []).length === 1 && pa.includes('<option value="" selected>More countries ▾')
+      && !pa.includes('<option value="AA" selected>');
+    // 🧩 Not split: the same columns as every country (D0 … D30 day by day, then the 30-day / checkpoint ones), cells '—'
+    U.setCTY('XX');
+    const txc = U.cohCard(dc), hx = (txc.match(/<th>D\d+<\/th>/g) || []).map(x => x.slice(4, -5));
+    out.cc_xx_cols = [hx.length, hx[1], hx[2], hx[30], txc.includes('<td class="roi-na">·</td>'), txc.includes('<td class="roi-na">—</td>'),
+      txc.includes("installs aur har din wala column '—'"), txc.includes('Every install day · D0 se D365 tak · 🧩 Not split</h3>')];
+    // the country view: the app-wide "(other)" / flag sentences of the 30-day columns are left to the country's own note
+    const dlt = Object.assign(lateFile(), { cd: cdx() });
+    U.setCTY('');
+    const tl0 = U.cohCard(dlt);
+    U.setCTY('AA');
+    const tl1 = U.cohCard(dlt);
+    out.cc_noq = [tl0.includes('≈ = D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya'), !tl1.includes('≈ = D30 ke baad GA4 ne'),
+      tl1.includes('≈ = row ke kuch din GA4 ne revenue "(other)" me daala (2 din'), tl1.includes('D30 ke baad har 30 din ka column (D60)')];
+    // the country rows end before the All table's newest day: said, with how many days
+    const dto = Object.assign(appFile(), { cd: Object.assign(cdx(), { to: '2026-10-11' }) });
+    out.cc_to = U.cohCard(dto).includes('Country table 11 Oct 26 tak — GA4 cube ne uske baad ke 2 din abhi poore nahi padhe (All countries 13 Oct 26 tak)')
+      && !U.cohCard(dc).includes('Country table ');
+    // an app without the country part while a country is picked: the All table + one line (never a silent drop)
+    const nocd = U.cohCard(appFile()), nbusy = U.cohCard(Object.assign(appFile(), { late: { busy: 1, from: '2024-01-01', next: '2025-01-01' } }));
+    out.cc_nocd = [nocd.includes('Is app me [AA] Country AA ki country-wise table nahi (GA4 cube se banti hai; is app ke liye abhi nahi bani) — neeche All countries.'),
+      nocd.includes('data-roi-ccx="1">✕ All countries'), nocd.includes('<th>D30</th>'), !nocd.includes('data-roi-cc='), !nocd.includes('· [AA]'),
+      nbusy.includes('abhi nahi — GA4 cube poora padhne ke baad banegi') && nbusy.includes('🌍 Country · after GA4 cube read')];
+    // a row past the index's last day (another build's pack) is never expanded (no negative array length)
+    out.cc_zx_guard = U.zx('2026-10-15', dc.cd, 'AA', T) === null && U.zx('2026-10-15', dc.cd, 'XX', T) === null && Array.isArray(U.zx('2026-10-13', dc.cd, 'AA', T));
+    // a pack of another build than the index in hand (its "b"; the site serves a pack's newest copy whatever ?v= says):
+    // never shown — the app file is read again once, then that build's pack; still another build after it: said + Try again
+    {
+      const DATA0 = ctx.DATA;
+      ctx.DATA = { roi: { file: 'roi.json.gz', v: 'v2', apps: { 'id-s': { file: 'roi_dddddddddddd.json.gz', st: 'Watch' } } } };
+      const mk = (b, shas) => Object.assign(appFile(), { app_id: 'id-s', cd: Object.assign(cdx(), { b,
+        packs: shas.map((h, i) => ['roi_dddddddddddd_c0' + i + '.json.gz', h]) }) });
+      const oldF = Object.assign(mk('old0old0old0', ['111111111111', '222222222222', '555555555555']), { _v: 'v1' });
+      oldF.cd.c = oldF.cd.c.map(x => x[0] === 'EE' ? Object.assign(x.slice(), { 4: 2 }) : x);   // EE's pack: gone from the site
+      const newF = mk('new0new0new0', ['333333333333', '444444444444']);
+      const pk = (f, b) => Object.assign(JSON.parse(JSON.stringify(PACKS[f])), { b });
+      let SITE = { 'roi_dddddddddddd_c00.json.gz': pk('roi_aaaaaaaaaaaa_c00.json.gz', 'new0new0new0'),
+                   'roi_dddddddddddd_c01.json.gz': pk('roi_aaaaaaaaaaaa_c01.json.gz', 'new0new0new0'), 'roi_dddddddddddd.json.gz': newF };
+      const got = [];
+      ctx.fetchGzJson = u => { got.push(u); const f = u.split('?')[0];
+        return new Promise((ok_, no) => setTimeout(() => SITE[f] ? ok_(JSON.parse(JSON.stringify(SITE[f]))) : no(new Error('http 404')), 0)); };
+      const AFs = U.data().AF, F = 'roi_dddddddddddd.json.gz';
+      AFs[F] = oldF;
+      U.setCTY('AA');
+      const s1 = U.cohCard(AFs[F]); await flush();
+      const s2 = U.cohCard(AFs[F]), s2b = U.cohCard(AFs[F]); await flush(); // another build's pack → the app file again
+      const s3 = U.cohCard(AFs[F]); await flush();                          // the new index → its own pack
+      const s4 = U.cohCard(AFs[F]);
+      out.cc_stale = [s1.includes('ka data load ho raha hai'), s2.includes('ka data load ho raha hai') && !s2.includes('<td class="roi-') && s2b === s2,
+        AFs[F].cd.b === 'new0new0new0' && AFs[F]._v === 'v2', s4.includes('· [AA] Country AA</h3>') && /<td class="roi-[gwb]/.test(s4),
+        got.join(' ') === 'roi_dddddddddddd_c00.json.gz?v=111111111111 roi_dddddddddddd.json.gz?v=v2 roi_dddddddddddd_c00.json.gz?v=333333333333'];
+      // a pack the old index names that the new build no longer has (404): the app file again, then EE in its new pack
+      AFs[F] = Object.assign(JSON.parse(JSON.stringify(oldF)), { _v: 'v1' });
+      AFs[F].cd.b = 'old1old1old1';                                         // (one read again per file and build)
+      U.setCTY('EE'); got.length = 0;
+      U.cohCard(AFs[F]); await flush(); U.cohCard(AFs[F]); await flush(); U.cohCard(AFs[F]); await flush();
+      const g4 = U.cohCard(AFs[F]);
+      out.cc_gone = [g4.includes('· [EE] Country EE</h3>') && /<td class="roi-[gwb]/.test(g4), got.join(' ') === 'roi_dddddddddddd_c02.json.gz?v=555555555555 roi_dddddddddddd.json.gz?v=v2 roi_dddddddddddd_c01.json.gz?v=444444444444'];
+      // the site still on the other build after the read again (the app file did not move): said, "Try again" reads anew
+      SITE = Object.assign({}, SITE, { 'roi_dddddddddddd.json.gz': Object.assign(JSON.parse(JSON.stringify(oldF)), { cd: Object.assign(JSON.parse(JSON.stringify(oldF.cd)),
+        { b: 'old2old2old2', packs: [['roi_dddddddddddd_c00.json.gz', '666666666666'], oldF.cd.packs[1], oldF.cd.packs[2]] }) }) });
+      AFs[F] = Object.assign(JSON.parse(JSON.stringify(SITE[F])), { _v: 'v1' });
+      U.setCTY('AA'); got.length = 0;
+      U.cohCard(AFs[F]); await flush(); U.cohCard(AFs[F]); await flush(); U.cohCard(AFs[F]); await flush();
+      const h4 = U.cohCard(AFs[F]);
+      out.cc_stale_again = [h4.includes('⚠️ [AA] Country AA ka data abhi badal raha hai (site pe naya build aa raha hai). <button type="button" class="roi-lnk" data-roi-ccr="1">Try again</button>'),
+        got.filter(u => u.startsWith('roi_dddddddddddd.json.gz')).length === 1];
+      U.setCTY('');
+      ctx.DATA = DATA0;
+    }
+    // only the newest PK_KEEP packs are kept in memory (their expanded rows go with them); the one in use stays
+    {
+      const LP = {};
+      for (let i = 0; i < 5; i++) LP['roi_eeeeeeeeeeee_c0' + i + '.json.gz'] = { v: 1, b: 'lru0lru0lru0', key: 'eeeeeeeeeeee', ix: i, c: { ['L' + i]: ccRowsOf('AA', 1) } };
+      const lf = Object.assign(appFile(), { cd: Object.assign(cdx(), { b: 'lru0lru0lru0', packs: Object.keys(LP).map((f, i) => [f, String(i).repeat(12)]),
+        c: [0, 1, 2, 3, 4].map(i => ['L' + i, 100 - i, 1, null, i, 0, 0, 0]) }) });
+      ctx.fetchGzJson = u => new Promise((ok_, no) => setTimeout(() => { const f = u.split('?')[0]; return LP[f] ? ok_(JSON.parse(JSON.stringify(LP[f]))) : no(new Error('x')); }, 0));
+      for (let i = 0; i < 5; i++) { U.setCTY('L' + i); U.cohCard(lf); await flush(); U.cohCard(lf); }
+      const keys = Object.keys(U.PK).filter(k => U.PK[k].j);
+      out.cc_lru = [keys.length, keys.every(k => /_c0[234]\.json\.gz/.test(k)), U.PKL.length,
+        Object.keys(U.CR).every(k => !/_c0[01]\.json\.gz/.test(k)), U.cohCard(lf).includes('· [L4] Country L4</h3>')];
+      U.setCTY('');
+    }
     U.setCTY('');
     const F1 = ['roi_aaaaaaaaaaaa_c01.json.gz'];
     out.cc_nojump = { w375: await noJump(375, dc, PACKS, F1), w1280: await noJump(1280, dc, PACKS, F1) };
+    out.cc_late = (await noJump(375, dc, PACKS, [], 'late')).late;
     }
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };
