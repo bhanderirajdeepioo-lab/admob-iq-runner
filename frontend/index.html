@@ -2637,6 +2637,20 @@ body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecust
 .fo-lg .a::before{background:var(--good)}.fo-lg .b::before{background:var(--blue)}.fo-lg .c::before{background:none;border-top:2px dashed var(--muted);height:0}
 .fo-chart path.nf{stroke-dasharray:4 4;opacity:.55}
 .fo-smp{color:var(--watch);font-weight:800;margin-right:3px;cursor:help}
+/* 🆕 First open by country: the Country control under the crumb, the board "By country", the picked row */
+.screen[data-screen="firstopen"]{overflow-anchor:none}   /* the module keeps the reader's place itself (a late country file, a pick) */
+.fo-cc{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px;min-height:36px}
+.fo-ccl{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.fo-ccc{display:inline-flex;align-items:center;gap:5px;min-height:36px;padding:4px 12px;border-radius:999px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.fo-ccc[aria-pressed="true"],.fo-ccs.on{outline:2px solid var(--cyan);outline-offset:1px;color:#fff}
+.fo-ccs{min-height:36px;max-width:100%;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.fo-ccw{font-size:12px;color:var(--muted)}
+.fo-lnkb{background:none;border:0;padding:0 2px;min-height:32px;color:var(--cyan);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}
+.fo-cct{font-size:14px;font-weight:800;color:#fff}
+.fo-fl{font-size:16px;line-height:1}
+.fo-t tbody tr.on td{background:var(--raise)}.fo-t tbody tr.on td:first-child{box-shadow:inset 3px 0 0 var(--cyan),1px 0 0 var(--line)}
+.fo-t tr.fo-un td{color:var(--faint)}.fo-t tr.fo-un td.fo-nm{color:var(--muted);font-weight:600}
+.fo-ccm{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}.fo-ccm .fo-note{margin:0}
 @media (max-width:760px){.fo-grid{grid-template-columns:minmax(0,1fr)}
   .fo-t th:first-child,.fo-t td:first-child{min-width:128px;max-width:150px}.fo-t td{padding:9px 10px}.fo-t th button{padding:6px 10px}
   .fo-bar{grid-template-columns:74px minmax(0,1fr) auto;gap:8px}.fo-tip{min-width:0;font-size:11.5px}
@@ -6351,6 +6365,18 @@ const PT=v=>{ if(v==null) return '—'; const r=Math.round(Math.abs(v)*100); ret
 const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const vis=id=>{ try{ return uniVis(id); }catch(e){ return true; } };   // the apps hidden in Settings stay hidden here too
 let FILT='';   // the status chip tapped ('' = every app)
+// ---- by country (owner, 20 Oct: "country wise bhi dekh saku esa kara do"): one more lazy file per app,
+// firstopen_cc_<key>.json.gz (its pointer: the app's "cc" in the main file), loaded only when the app's view opens (after
+// the main file): every country GA4 named, per day only first_open → Splash → Home (no Language / Permission / Intro /
+// late open per country), from the day the country fetch began (GA4 keeps ~2 months). CC = the picked country ('' = All
+// countries) — kept when the owner switches app. The board: every country, the app's own status rule, + the users GA4
+// named no country for (so it adds up to the app).
+let CC='', CSORT={k:'fo_day',dir:-1}, CFILT='', CHART=null;
+const CCS={};   // country file → {raw, v, busy, err}
+const FL=cc=>{ try{ return valFlag(cc); }catch(e){ return ''; } };
+const CN=cc=>{ try{ return valCtyName(cc); }catch(e){ return String(cc||''); } };
+const FD=v=>v==null||!isFinite(v)?'—':(Math.abs(v)<10&&Math.round(v)!==v?(Math.round(v*10)/10).toLocaleString('en-US'):N(v));   // first opens / day (a small country: 0.4)
+const PS=v=>v==null||!isFinite(v)?'—':(v>0&&v<0.001?'&lt;0.1%':Math.abs(v)<0.1?(Math.round(v*1000)/10).toFixed(1)+'%':Math.round(v*100)+'%');   // share
 // the top bar's name for an app id (the App picker's), else the file's own name
 function nameOf(a){ const c=((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalog)||[]).find(z=>z.app_id===a.app_id); return (c&&c.app_name)||a.app; }
 function appOf(name){ if(!RAW||!name) return null; const id=appIdOf(name), xs=(RAW.apps||[]).filter(a=>vis(a.app_id));
@@ -6361,6 +6387,25 @@ function ensure(cb){ const p=ptr(); if(!p||LOADING||(RAW&&VER===p.v)||(ERR&&VER=
       RAW=j; VER=p.v; ERR=false; LOADING=false; cb&&cb(); })
     .catch(()=>{ ERR=!RAW; VER=p.v; LOADING=false; cb&&cb(); }); }
 function onScreen(){ const on=document.querySelector('.screen.on'); return !!(on&&on.dataset&&on.dataset.screen==='firstopen'); }
+function ccPtr(a){ const c=a&&a.cc; return (c&&typeof c.file==='string'&&/^firstopen_cc_[0-9a-f]{12}\.json\.gz$/.test(c.file))?c:null; }
+function ccData(a){ const c=ccPtr(a), st=c&&CCS[c.file]; return st&&st.raw&&st.raw.key===a.key?st.raw:null; }
+function ensureCC(a,cb){ const c=ccPtr(a); if(!c) return; const k=c.file, st=CCS[k]||(CCS[k]={});
+  if(st.busy||(st.raw&&st.v===c.v)||(st.err&&st.v===c.v)) return; st.busy=true;
+  fetchGzJson(k+'?v='+encodeURIComponent(c.v||'')).then(j=>{ if(!j||j.v!==1||j.key!==a.key||!Array.isArray(j.days)||!Array.isArray(j.summary)) throw new Error('format');
+      st.raw=j; st.err=false; })
+    .catch(()=>{ st.err=!st.raw; }).then(()=>{ st.v=c.v; st.busy=false; cb&&cb(); }); }
+// a country's rows in the app's row layout (first_open / splash / home; a day it had nobody = 0), so every helper below reads them
+function ccRows(d,cc){ return (d.days||[]).map(r=>{ const v=(r[5]&&r[5][cc])||[0,0,0]; return [r[0],+v[0]||0,+v[1]||0,+v[2]||0,null,null,null,null,null,r[4]==null?null:r[4]]; }); }
+// the reader's place kept while a part of the view is filled in late (iOS Safari has no scroll anchoring; the screen opts out of Chrome's)
+function hold(fn){ const s=EL; let an=null, y0=0;
+  try{ for(const c of Array.from((s&&s.children)||[])){ const r=c.getBoundingClientRect(); if(r.bottom>0){ an=c; y0=r.top; break; } } }catch(e){}
+  fn();
+  try{ if(an&&an.isConnected!==false){ const d=an.getBoundingClientRect().top-y0; if(Math.abs(d)>1){ if(typeof SP!=='undefined'&&SP&&SP.quietly) SP.quietly(()=>window.scrollBy(0,d)); else window.scrollBy(0,d); } } }catch(e){} }
+// the country file arrived (or failed): All countries → only the Country control and the board slot; a picked country → the view
+function ccArrive(a){ if(!onScreen()) return; const cur=APP&&RAW?appOf(APP):null; if(!cur||cur.key!==a.key) return;
+  const top=document.getElementById('fo-cc'), slot=document.getElementById('fo-ccbx');
+  if(!CC&&top&&slot){ const d=ccData(a); hold(()=>{ top.innerHTML=ccCtl(a,d); slot.innerHTML=d?ccBoard(a,d):''; }); return; }
+  paint(); }
 function render(){ const s=screenDiv('firstopen'); EL=s; return s; }
 function sum(rows,f){ let t=0; for(const r of rows) t+=+r[IX[f]]||0; return t; }
 function rate(a,b){ return b>0?a/b:null; }
@@ -6397,7 +6442,7 @@ function stepBars(a,x){ const out=[]; for(const k of ['intro','language','permis
     const v=k==='home'?[x.s2h,x.usual]:((x.steps||{})[k]||[null,null]);
     out.push(`<div class="fo-bar"><span class="fo-bl">${STEP_NAME[k]}</span><span class="fo-bt"><i style="width:${Math.max(0,Math.min(100,(v[0]||0)*100))}%"${k==='home'?' class="h"':''}></i><u style="width:${Math.max(0,Math.min(100,(v[1]||0)*100))}%"></u></span><span class="fo-bv"><b>${P(v[0])}</b> <small>usual ${P(v[1])}</small></span></div>`); }
   return out.join(''); }
-function appHtml(a,x){ const rows=a.days||[], fin=rows.filter(r=>r[0]<=a.final_till), t=rows[rows.length-1], y=rows[rows.length-2];
+function appHtml(a,x,top,board){ const rows=a.days||[], fin=rows.filter(r=>r[0]<=a.final_till), t=rows[rows.length-1], y=rows[rows.length-2];
   const cell=(r,f)=>r?f(r):'—', op=r=>P(rate(+r[IX.splash],+r[IX.first_open])), sh=r=>P(rate(+r[IX.home],+r[IX.splash])), sa=r=>P(rate(+r[IX.home_any],+r[IX.splash_any]));
   const scr=Object.entries(a.steps||{}).map(([k,c])=>`<b>${STEP_NAME[k]||k}</b> = ${E(c)}`).join(' · ');
   const mini=`<div class="fo-tw"><table class="fo-t fo-mini"><thead><tr><th></th><th>Today</th><th>Yesterday</th><th>Last 7 days</th><th>Usual<span class="fo-wide"> (4 weeks before)</span></th></tr></thead><tbody>`
@@ -6414,12 +6459,92 @@ function appHtml(a,x){ const rows=a.days||[], fin=rows.filter(r=>r[0]<=a.final_t
     +rows.slice().reverse().map(r=>`<tr><td class="fo-nm${r[0]>a.final_till?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(r[0])} ${r[0].slice(0,4)}${r[0]>a.final_till?' · not final':''}</td><td>${N(r[IX.first_open])}</td><td>${N(r[IX.splash])}</td>${has.map(k=>`<td>${r[IX[k]]==null?'—':N(r[IX[k]])}</td>`).join('')}<td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${sa(r)}</td></tr>`).join('')
     +`</tbody></table></div>`;
   return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''} · history ${fmtD(a.first_day)} ${a.first_day.slice(0,4)} se${(a.steps_changed||[]).length?' · screens badle '+(a.steps_changed||[]).map(c=>fmtD(c.at)).join(', '):''}</span></div>`
-    +`<div class="card fo-card"><div class="ct"><h3>Today · Yesterday · last 7 days · usual</h3></div>${mini}</div>`
+    +(top||'')+`<div class="card fo-card"><div class="ct"><h3>Today · Yesterday · last 7 days · usual</h3></div>${mini}</div>`
     +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${stepBars(a,x)}</div>`
     +`<div class="card fo-card"><div class="ct"><h3>Every day · full history</h3><span class="faint" style="font-size:11.5px">hover / tap = us din ke numbers</span></div><div class="fo-chart" id="fo-chart"></div>`
     +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last 2 days)</span></div></div></div>`
+    +(board||'')+`<div class="card fo-card"><div class="ct"><h3>Every month</h3><span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${mt}</div>`
+    +`<div class="card fo-card"><div class="ct"><h3>Every day</h3><span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${dt}</div>`; }
+// ---- one app, by country ----
+// the Country control (inside #fo-cc): "All countries" + the top 6 (flag + code) + a native <select> of EVERY country
+function ccCtl(a,d){ const lab='<span class="fo-ccl">Country</span>';
+  if(!d){ const c=ccPtr(a), st=c&&CCS[c.file];
+    return lab+(st&&st.err?'<span class="fo-ccw">⚠️ Country data load nahi hua. <button type="button" class="fo-lnkb" data-fo-ccretry="1">Try again</button></span>':'<span class="fo-ccw">⏳ Country data loading…</span>'); }
+  const S=d.summary||[], top=S.slice(0,6), inSel=!!CC&&!top.some(x=>x.cc===CC)&&S.some(x=>x.cc===CC);
+  const b=(cc,txt,ti)=>`<button type="button" class="fo-ccc" data-fo-cc="${E(cc)}" aria-pressed="${CC===cc}"${ti?` title="${E(ti)}"`:''}>${txt}</button>`;
+  return lab+b('','🌍 All countries','')+top.map(x=>b(x.cc,`<span class="fo-fl">${FL(x.cc)}</span> ${E(x.cc)}`,CN(x.cc))).join('')
+    +`<select class="fo-ccs${inSel?' on':''}" data-fo-ccsel="1" aria-label="More countries"><option value="" disabled${inSel?'':' selected'}>More countries ▾</option>`
+    +S.map(x=>`<option value="${E(x.cc)}"${inSel&&CC===x.cc?' selected':''}>${E(FL(x.cc)+' '+CN(x.cc)+' · '+FD(x.fo_day)+' / day')}</option>`).join('')+'</select>'; }
+function ccTop(a){ return `<div class="fo-cc" id="fo-cc" role="group" aria-label="Country">${ccCtl(a,ccData(a))}</div>`; }
+function ccSlot(a){ const d=ccData(a); return `<div id="fo-ccbx">${d?ccBoard(a,d):''}</div>`; }
+function ccSort(rows){ const k=CSORT.k, v=x=>k==='rank'?RANK[x.status]:k==='cc'?CN(x.cc):x[k];
+  return rows.slice().sort((a,b)=>{ const va=v(a), vb=v(b);
+    if(va==null&&vb==null) return (b.fo_day||0)-(a.fo_day||0); if(va==null) return 1; if(vb==null) return -1;
+    if(typeof va==='string') return CSORT.dir*va.localeCompare(vb)||(b.fo_day||0)-(a.fo_day||0);
+    return CSORT.dir*(va-vb)||(b.fo_day||0)-(a.fo_day||0); }); }
+function ccTable(d){ const cols=[['cc','Country'],['rank','Status'],['s2h','Splash → Home'],['usual','Usual'],['change','Change'],['opened','Opened app'],['fo_day','First opens / day'],['share','Share']];
+  const head=cols.map(([k,l])=>`<th aria-sort="${CSORT.k===k?(CSORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-fo-ccsort="${k}">${l}</button></th>`).join('');
+  const rows=ccSort((d.summary||[]).filter(x=>!CFILT||x.status===CFILT));
+  let body=rows.map(x=>`<tr class="clk${x.cc===CC?' on':''}" data-fo-ccr="${E(x.cc)}"${x.cc===CC?' aria-current="true"':''}><td class="fo-nm"><span class="fo-an"><span class="fo-fl">${FL(x.cc)}</span><span>${E(CN(x.cc))}</span></span></td><td class="fo-stc">${chip(x.status)}${x.why?`<small>${E(x.why)}</small>`:''}</td>`
+    +`<td>${SMP(x.sample)}<b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td><td class="${x.change!=null&&x.change<=-0.02?'down':x.change!=null&&x.change>=0.05?'up':''}">${PT(x.change)}</td>`
+    +`<td>${P(x.opened)}</td><td>${FD(x.fo_day)}</td><td>${PS(x.share)}</td></tr>`).join('')||`<tr><td colspan="8" class="faint">Is status me koi country nahi</td></tr>`;
+  const u=(d.unnamed||{}).summary;
+  if(u&&!CFILT) body+=`<tr class="fo-un"><td class="fo-nm"><span class="fo-an"><span class="fo-fl">❔</span><span>Not named by GA4</span></span></td><td class="fo-stc"><small>no status</small></td>`
+    +`<td>${P(u.s2h)}</td><td>—</td><td>—</td><td>${P(u.opened)}</td><td>${FD(u.fo_day)}</td><td>${PS(u.share)}</td></tr>`;
+  return `<table class="fo-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`; }
+function ccWhen(d){ return `${fmtD(d.first_day)} ${String(d.first_day).slice(0,4)}`; }
+function ccBoard(a,d){ const S=d.summary||[], c=k=>S.filter(x=>x.status===k).length;
+  return `<div class="card fo-card" id="fo-ccb"><div class="ct"><h3>By country · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">country pe tap = us country ka funnel · column pe tap = sort · status chip pe tap = sirf wo countries</span></div>`
+    +`<div class="fo-chips" role="group" aria-label="Filter countries by status">${['Worse','Watch','Better','Normal','Too early','N/A'].map(k=>`<button type="button" class="fo-chip st-${ST_KEY[k]}" data-fo-ccfilt="${k}" aria-pressed="${CFILT===k}"><span>${WD.sti[ST_KEY[k]]}</span> <b>${c(k)}</b></button>`).join('')}</div>`
+    +`<div class="fo-tw fo-tall" id="fo-ccbw">${ccTable(d)}</div>`
+    +`<p class="fo-note" style="margin-top:10px">${S.length} countries. Har country ka status app wala hi rule hai (pichhle 7 final din vs pehle ke 28 din); chhoti countries me 200 se kam Splash users = N/A. <b>Share</b> = app ke first opens (pichhle 7 final din) me us country ka hissa. <b>Not named by GA4</b> = jin users ki country GA4 ne nahi batayi (din ka total − sab countries; sampling wale din thoda minus bhi aa sakta hai, jaisa mila waisa dikhaya) — isse board app ke total tak judta hai. Country data <b>${ccWhen(d)}</b> se hai (GA4 sirf ~2 mahine rakhta hai) aur sirf First open → Splash → Home (Language / Permission / late open country-wise nahi padhe).</p></div>`; }
+function ccCrumb(a,x,d){ return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span class="fo-cct">${FL(CC)} ${E(CN(CC))}</span>`
+    +(x?`<span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''}${d?` · country data ${ccWhen(d)} se`:''}</span>`:'')
+    +`<button type="button" class="fo-back" data-fo-ccx="1">✕ All countries</button></div>`; }
+// the app's view: All countries = today's view + the Country control + the board; a country = its own rows
+function appView(a,x){ CHART=null; const c=ccPtr(a);
+  if(!CC){ CHART=a; return c?appHtml(a,x,ccTop(a),ccSlot(a)):appHtml(a,x); }
+  const miss=t=>`<div class="card fo-card"><div class="fo-ccm"><p class="fo-note">Is app me <b>${FL(CC)} ${E(CN(CC))}</b> ka First open data nahi${t}.</p><button type="button" class="fo-back" data-fo-ccx="1">✕ All countries</button></div></div>`;
+  if(!c) return appCrumb(a,x)+miss(' (is app ka country-wise data abhi nahi bana)');
+  const d=ccData(a);
+  if(!d) return ccCrumb(a,null,null)+ccTop(a);
+  const cx=(d.summary||[]).find(z=>z.cc===CC);
+  if(!cx) return appCrumb(a,x)+ccTop(a)+miss('');
+  CHART={days:ccRows(d,CC),final_till:d.final_till||a.final_till};
+  return ccAppHtml(a,cx,d,CHART); }
+function appCrumb(a,x){ return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''} · history ${fmtD(a.first_day)} ${a.first_day.slice(0,4)} se</span></div>`; }
+function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t=new Date(ft+'T00:00:00Z'); t.setUTCDate(t.getUTCDate()+k); return t.toISOString().slice(0,10); };
+  const by={}; for(const r of rows) by[r[0]]=r; const t=by[at(2)], y=by[at(1)];   // final till = the property's today − 2
+  const cell=(r,f)=>r?f(r):'—', op=r=>P(rate(+r[IX.splash],+r[IX.first_open])), sh=r=>P(rate(+r[IX.home],+r[IX.splash]));
+  const low=rs=>{ const v=rs.map(r=>r[IX.sample]).filter(s=>s!=null); return v.length?Math.min(...v):null; };
+  const mini=`<div class="fo-tw"><table class="fo-t fo-mini"><thead><tr><th></th><th>Today</th><th>Yesterday</th><th>Last 7 days</th><th>Usual<span class="fo-wide"> (4 weeks before)</span></th></tr></thead><tbody>`
+    +`<tr><td>First opens <small class="faint">/ day</small></td><td>${cell(t,r=>N(r[IX.first_open]))}</td><td>${cell(y,r=>N(r[IX.first_open]))}</td><td>${FD(x.fo_day)}</td><td>${FD(x.fo_day_usual)}</td></tr>`
+    +`<tr><td>Opened app</td><td>${cell(t,op)}</td><td>${cell(y,op)}</td><td>${P(x.opened)}</td><td>${P(x.opened_usual)}</td></tr>`
+    +`<tr><td>Splash → Home</td><td>${cell(t,sh)}</td><td>${cell(y,sh)}</td><td><b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td></tr></tbody></table></div>`
+    +`<p class="fo-note">Today aur Yesterday abhi final nahi.${x.sample!=null?` <span class="fo-smp">≈</span> = GA4 ne is country ke funnel me sirf ~${Math.max(1,Math.round(x.sample*100))}% data padha (sampling): users ki ginti lagbhag hai, % ka direction sahi.`:''}</p>`;
+  const home=`<div class="fo-bar"><span class="fo-bl">Home</span><span class="fo-bt"><i style="width:${Math.max(0,Math.min(100,(x.s2h||0)*100))}%" class="h"></i><u style="width:${Math.max(0,Math.min(100,(x.usual||0)*100))}%"></u></span><span class="fo-bv"><b>${P(x.s2h)}</b> <small>usual ${P(x.usual)}</small></span></div>`;
+  const mt=`<div class="fo-tw"><table class="fo-t"><thead><tr><th>Month</th><th>First opens</th><th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
+    +months(rows).map(([m,rs])=>`<tr><td class="fo-nm">${SMP(low(rs))}${fmtMon(m)} <small>· ${rs.length}d</small></td><td>${N(sum(rs,'first_open'))}</td><td>${N(sum(rs,'splash'))}</td><td>${N(sum(rs,'home'))}</td><td><b>${P(rate(sum(rs,'home'),sum(rs,'splash')))}</b></td><td>${P(rate(sum(rs,'splash'),sum(rs,'first_open')))}</td></tr>`).join('')
+    +`</tbody></table></div>`;
+  const dt=`<div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day</th><th>First opens</th><th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
+    +rows.slice().reverse().map(r=>`<tr><td class="fo-nm${r[0]>ft?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(r[0])} ${r[0].slice(0,4)}${r[0]>ft?' · not final':''}</td><td>${N(r[IX.first_open])}</td><td>${N(r[IX.splash])}</td><td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${op(r)}</td></tr>`).join('')
+    +`</tbody></table></div>`;
+  return ccCrumb(a,x,d)+ccTop(a)
+    +`<p class="fo-note">🌍 Country view me sirf <b>First open → Splash → Home</b> hai (Language / Permission / Intro aur "incl. late open" country-wise nahi padhe), aur country data <b>${ccWhen(d)}</b> se hai (GA4 sirf ~2 mahine ka data rakhta hai, usse purana country-wise nahi milta).</p>`
+    +`<div class="card fo-card"><div class="ct"><h3>Today · Yesterday · last 7 days · usual</h3></div>${mini}</div>`
+    +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${home}`
+    +`<p class="fo-note">Country-wise sirf Home tak padha jata hai — Language / Permission / Intro country-wise nahi padhe.</p></div>`
+    +`<div class="card fo-card"><div class="ct"><h3>Every day · full history</h3><span class="faint" style="font-size:11.5px">hover / tap = us din ke numbers</span></div><div class="fo-chart" id="fo-chart"></div>`
+    +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last 2 days)</span></div></div></div>`
+    +`<div id="fo-ccbx">${ccBoard(a,d)}</div>`
     +`<div class="card fo-card"><div class="ct"><h3>Every month</h3><span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${mt}</div>`
     +`<div class="card fo-card"><div class="ct"><h3>Every day</h3><span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${dt}</div>`; }
+// a pick (chip / select / board row): the page keeps its height and the board its scroll, so the tapped control stays put
+function pick(cc){ cc=String(cc||''); if(cc===CC) return; const s=EL;
+  const h=s?Math.max(s.offsetHeight||0,parseFloat(s.style.minHeight)||0):0, bw=document.getElementById('fo-ccbw'), sc=bw?[bw.scrollTop||0,bw.scrollLeft||0]:null;
+  CC=cc; paint();
+  if(s&&h) s.style.minHeight=h+'px';
+  const b2=document.getElementById('fo-ccbw'); if(sc&&b2){ b2.scrollTop=sc[0]; b2.scrollLeft=sc[1]; } }
 // the daily chart: Splash → Home and Opened app for every day kept, the last value printed; hover / tap = that day
 function drawChart(a){ const box=document.getElementById('fo-chart'); if(!box) return; const rows=a.days||[]; if(rows.length<2){ box.innerHTML='<div class="faint" style="padding:20px 0">Abhi ek hi din ka data</div>'; return; }
   const W=Math.max(280,box.clientWidth||600), H=210, m={t:12,r:46,b:24,l:38}, n=rows.length;
@@ -6453,8 +6578,20 @@ function wire(){ const s=EL; if(!s||s.dataset.foWired) return; s.dataset.foWired
       s.querySelectorAll('[data-fo-filt]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.foFilt===FILT)));
       const tb=document.getElementById('fo-tb'); if(tb) tb.innerHTML=tableHtml(); return; }
     if(t.closest('[data-fo-retry]')){ ERR=false; VER=null; ensure(()=>{ if(onScreen()) paint(); }); paint(); return; }
+    const cb=t.closest('[data-fo-cc]'); if(cb){ pick(cb.dataset.foCc); return; }
+    const cr=t.closest('tr[data-fo-ccr]'); if(cr){ pick(cr.dataset.foCcr); return; }
+    if(t.closest('[data-fo-ccx]')){ pick(''); return; }
+    const cs=t.closest('[data-fo-ccsort]'); if(cs){ const k=cs.dataset.foCcsort; CSORT={k,dir:CSORT.k===k?-CSORT.dir:(k==='cc'||k==='rank'?1:-1)};
+      const a=APP&&RAW?appOf(APP):null, d=a&&ccData(a), bw=document.getElementById('fo-ccbw'); if(d&&bw) bw.innerHTML=ccTable(d); return; }
+    const cf=t.closest('[data-fo-ccfilt]'); if(cf){ CFILT=CFILT===cf.dataset.foCcfilt?'':cf.dataset.foCcfilt;
+      s.style.minHeight=Math.max(s.offsetHeight,parseFloat(s.style.minHeight)||0)+'px';   // a shorter board never pulls the page (and the chip) up
+      s.querySelectorAll('[data-fo-ccfilt]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.foCcfilt===CFILT)));
+      const a=APP&&RAW?appOf(APP):null, d=a&&ccData(a), bw=document.getElementById('fo-ccbw'); if(d&&bw) bw.innerHTML=ccTable(d); return; }
+    if(t.closest('[data-fo-ccretry]')){ const a=APP&&RAW?appOf(APP):null, c=ccPtr(a); if(!c) return; const st=CCS[c.file]||(CCS[c.file]={}); st.err=false; st.v=null;
+      ensureCC(a,()=>ccArrive(a)); const top=document.getElementById('fo-cc'); if(top) top.innerHTML=ccCtl(a,ccData(a)); else paint(); return; }
     if(t.closest('[data-fo-all]')){ setApp(''); return; }
-    const row=t.closest('tr[data-fo-app]'); if(row){ setApp(row.dataset.foApp); } }); }
+    const row=t.closest('tr[data-fo-app]'); if(row){ setApp(row.dataset.foApp); } });
+  s.addEventListener('change',e=>{ const t=e.target, se=t&&t.closest&&t.closest('[data-fo-ccsel]'); if(se&&se.value) pick(se.value); }); }
 function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector('.screen[data-screen=firstopen]'); if(!s||typeof DATA==='undefined'||!DATA) return;
   EL=s; wire(); s.style.minHeight='';
   const p=ptr();
@@ -6464,11 +6601,12 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   const a=APP?appOf(APP):null, x=a?(RAW.summary||[]).find(z=>z.key===a.key):null;
   const head=`<p class="fo-note fo-lead"><b>First open funnel</b> (GA4, sirf sahi kram me): pehli baar app khola → 10 min me <b>Splash</b> → 1 ghante me <b>Home</b>. Isliye Home kabhi Splash se zyada nahi. <b>Opened app</b> = pehli baar chalne walon me se kitno ne turant Splash dekha; <b>incl. late open</b> = baad me pehli baar khola tab bhi.</p>`;
   if(APP&&!a){ s.innerHTML=head+`<div class="card fo-card"><p class="fo-note">Is app ka GA4 funnel data nahi.</p><button type="button" class="fo-back" data-fo-all="1">← All apps</button></div>`; return; }
-  s.innerHTML=head+(a?appHtml(a,x||{}):allHtml());
-  if(a) drawChart(a); }
+  if(a&&ccPtr(a)) ensureCC(a,()=>ccArrive(a));   // the country file: only for the open app, after the main file
+  s.innerHTML=head+(a?appView(a,x||{}):allHtml());
+  if(a&&CHART) drawChart(CHART); }
 function show(){ paint(); }
 function left(){ }
-return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate}};
+return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccRows, ccData, cc:()=>CC}};
 })();
 function renderFirstOpen(){ return FO.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from

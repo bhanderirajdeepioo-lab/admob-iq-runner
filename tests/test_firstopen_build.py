@@ -1,6 +1,9 @@
 """🆕 First open tab — the build step (admob_iq.firstopen_build), on made-up stores: every day of every store in one lazy
 file (nothing trimmed), the status rule (last 7 final days vs the 28 before: Worse / Watch / Better / Normal, Too early,
-N/A), the pointer the hub reads, one splat header rule, the switch, failure isolation and a counts-only line."""
+N/A), the pointer the hub reads, one splat header rule, the switch, failure isolation and a counts-only line; BY COUNTRY
+(synthetic country stores, 40 made-up countries): the lazy file's shape (every real day, every country), the app's own
+status rule per country, the share, the GA4-unnamed users (measured, never clamped), the "cc" pointer only when the file
+was written, stale files removed, and the app's own data byte for byte the same with a broken / too big / missing store."""
 import gzip
 import json
 import os
@@ -68,3 +71,178 @@ def test_no_store_and_switch_off_leave_no_file(tmp_path):
     open(os.path.join(out, fb.FILE), "w").close()
     fb.off(out)
     assert not os.path.exists(os.path.join(out, fb.FILE)) and fb.enabled({}) and not fb.enabled({"firstopen_tab": False})
+
+
+# ── by country (firstopen_cc_<key>.json.gz) ──────────────────────────────────────────────────────────────────────────
+from admob_iq.fetch import ga4_firstopen_cc as fc   # noqa: E402
+from admob_iq.fetch import ga4_uninstall as gu      # noqa: E402
+
+UNNAMED = (7, 6, 5)
+NEG_DAY = "2026-08-20"                               # GA4 named a little more than its own total (sampling): kept as is
+
+
+def _cc_rows(i, d):
+    """Synthetic country C<i> on day d → [first_open, splash, home] (C00 … C03 big enough to judge, the rest N/A)."""
+    last7 = date(2026, 10, 5) <= d
+    if i < 4:
+        fo, sp = (1100, 900, 700, 500)[i], (1000, 800, 600, 400)[i]
+        return [fo, sp, round(sp * ((0.50, 0.57, 0.70, 0.61)[i] if last7 else 0.60))]
+    if i in (37, 38):
+        return [0, 0, 0] if (i == 38 and d < date(2026, 9, 1)) else [20, 10, 5]
+    if i == 39:
+        return [20, 10, 5] if last7 else [30, 20, 10]
+    fo = 40 - i // 2
+    return [fo, fo - 12, (fo - 12) // 2]
+
+
+def _cc_store(data, aid, days=60, n=40, smp_day=None, broken=False):
+    d0 = date(2026, 10, 13) - timedelta(days=days - 1)
+    recs = {(d0 - timedelta(days=1)).isoformat(): {"none": True, "at": "x"}}
+    for k in range(days):
+        d = d0 + timedelta(days=k)
+        c = {"C%02d" % i: _cc_rows(i, d) for i in range(n)}
+        c = {cc: v for cc, v in c.items() if any(v)}   # the fetch leaves out a country nobody of reached
+        t = [sum(v[j] for v in c.values()) + UNNAMED[j] for j in range(3)]
+        if d.isoformat() == NEG_DAY:
+            t[0] = sum(v[0] for v in c.values()) - 3
+        recs[d.isoformat()] = {"c": c, "t": t, "smp": 0.5 if d.isoformat() == smp_day else None, "fin": True,
+                               "sg": "s", "at": "x"}
+    if broken:
+        recs[(d0 + timedelta(days=3)).isoformat()]["c"]["C00"] = "x"
+    s = {"v": fc.STORE_V, "app_id": aid, "package": "com.example.x", "time_zone": "Asia/Kolkata", "days": recs}
+    write_json_gz_stable(fc.store_path(data, aid), s)
+    return recs
+
+
+def _read(path):
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _dirs(tmp_path):
+    data, out = str(tmp_path / "data"), str(tmp_path / "site")
+    os.makedirs(os.path.join(data, gf.DIR)); os.makedirs(out)
+    return data, out
+
+
+def test_country_file_every_country_status_share_unnamed_and_pointer(tmp_path):
+    data, out = _dirs(tmp_path)
+    _store(data, "a~1", 60, 0.50, 0.60)
+    _store(data, "a~2", 60, 0.57, 0.60)
+    _store(data, "a~3", 60, 0.61, 0.60)
+    recs = _cc_store(data, "a~1", smp_day="2026-10-06")
+    _cc_store(data, "a~2", days=20)                   # 20 days → every country Too early
+    dash = {}
+    assert fb.run(dash, data, out, {}, now=NOW) == ["/firstopen*"]   # no new header rule
+    k1, k2, k3 = (gu.file_key("a~%d" % i) for i in (1, 2, 3))
+    assert sorted(f for f in os.listdir(out) if f.startswith("firstopen")) == sorted(
+        [fb.FILE, "firstopen_cc_%s.json.gz" % k1, "firstopen_cc_%s.json.gz" % k2])
+    body = _read(os.path.join(out, "firstopen_cc_%s.json.gz" % k1))
+    assert body["v"] == 1 and body["key"] == k1 and body["app_id"] == "a~1"
+    assert body["final_till"] == "2026-10-11" and body["first_day"] == "2026-08-15"
+    days = body["days"]
+    assert len(days) == 60 and [d[0] for d in days] == sorted(d[0] for d in days)     # every real day, the none day out
+    assert all(len(d) == 6 for d in days) and len(days[-1][5]) == 40 and "C38" not in days[0][5]   # as stored
+    neg = next(d for d in days if d[0] == NEG_DAY)
+    assert neg[1] == sum(v[0] for v in neg[5].values()) - 3                           # measured, never clamped
+    assert next(d for d in days if d[0] == "2026-10-06")[4] == 0.5
+    S = body["summary"]
+    assert len(S) == 40 and {x["cc"] for x in S} == {"C%02d" % i for i in range(40)}   # every country kept
+    assert [x["cc"] for x in S[:4]] == ["C00", "C01", "C02", "C03"]
+    assert [x["cc"] for x in S[-4:]] == ["C36", "C39", "C37", "C38"]   # 7-day first opens, then all-time, then the code
+    st = {x["cc"]: x["status"] for x in S}
+    assert [st["C%02d" % i] for i in range(4)] == ["Worse", "Watch", "Better", "Normal"]
+    assert {st["C%02d" % i] for i in range(4, 40)} == {"N/A"}
+    c0 = S[0]
+    assert set(c0) == {"cc", "status", "why", "s2h", "usual", "change", "opened", "opened_usual", "fo_day", "fo_day_usual",
+                       "final_days", "sample", "share"}
+    assert abs(c0["s2h"] - 0.5) < 1e-6 and abs(c0["usual"] - 0.6) < 1e-6 and abs(c0["fo_day"] - 1100) < 1e-6
+    assert c0["final_days"] == 58 and c0["sample"] == 0.5 and abs(c0["opened"] - 1000 / 1100) < 1e-6
+    w7 = [d for d in days if "2026-10-05" <= d[0] <= "2026-10-11"]
+    t7 = sum(d[1] for d in w7)
+    assert abs(c0["share"] - 7 * 1100 / t7) < 1e-6
+    assert abs(sum(x["share"] for x in S) + body["unnamed"]["summary"]["share"] - 1) < 1e-5   # the board adds up
+    u = body["unnamed"]["summary"]
+    assert u == {"fo_day": 7.0, "opened": round(6 / 7, 6), "s2h": round(5 / 6, 6), "share": round(49 / t7, 6)}
+    b2 = _read(os.path.join(out, "firstopen_cc_%s.json.gz" % k2))
+    assert {x["status"] for x in b2["summary"]} == {"Too early"} and len(b2["days"]) == 20
+    # the pointer on the app's entry (only where the file was written)
+    main = _read(os.path.join(out, fb.FILE))
+    apps = {a["key"]: a for a in main["apps"]}
+    raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    import hashlib
+    assert apps[k1]["cc"] == {"file": "firstopen_cc_%s.json.gz" % k1, "v": hashlib.sha1(raw).hexdigest()[:12],
+                              "from": "2026-08-15", "n": 40, "days": 60}
+    assert apps[k2]["cc"]["n"] == 40 and apps[k2]["cc"]["days"] == 20 and "cc" not in apps[k3]
+    assert set(dash["firstopen"]) == {"file", "v", "apps"}                         # the dashboard pointer as before
+    line = fb.pop_line()
+    assert ", by country: apps 2, countries 40, kb " in line and "failed" not in line
+    assert "C00" not in line and "example" not in line
+
+
+def test_country_part_never_changes_the_app_data(tmp_path, monkeypatch):
+    """A broken country store, a store with no real day, a file over the guard: the app's own First open data and file are
+    byte for byte what they are with no country store at all."""
+    base, out0 = _dirs(tmp_path / "base")
+    for i in (1, 2, 3):
+        _store(base, "a~%d" % i, 60, 0.50 + i / 100, 0.60)
+    fb.run({}, base, out0, {}, now=NOW)
+    ref = open(os.path.join(out0, fb.FILE), "rb").read()
+    refm = _read(os.path.join(out0, fb.FILE))
+    assert "firstopen_cc_" not in json.dumps(refm) and not any(f.startswith("firstopen_cc_") for f in os.listdir(out0))
+    line0 = fb.pop_line()
+    assert line0.endswith(", by country: apps 0, countries 0, kb 0")
+    # an empty country folder and a store with only "none" days change nothing
+    os.makedirs(os.path.join(base, fc.DIR))
+    write_json_gz_stable(fc.store_path(base, "a~3"), {"v": fc.STORE_V, "app_id": "a~3", "days": {"2026-10-01": {"none": True}}})
+    fb.run({}, base, out0, {}, now=NOW)
+    assert open(os.path.join(out0, fb.FILE), "rb").read() == ref
+    # a.1 good, a.2 broken (+ its old file in the site), a stale file of an app gone
+    k1, k2 = gu.file_key("a~1"), gu.file_key("a~2")
+    _cc_store(base, "a~1")
+    _cc_store(base, "a~2", broken=True)
+    for k in (k2, "0123456789ab"):
+        open(os.path.join(out0, "firstopen_cc_%s.json.gz" % k), "w").close()
+    dash = {}
+    assert fb.run(dash, base, out0, {}, now=NOW) == ["/firstopen*"]
+    got = _read(os.path.join(out0, fb.FILE))
+    assert sorted(f for f in os.listdir(out0) if f.startswith("firstopen_cc_")) == ["firstopen_cc_%s.json.gz" % k1]
+    a1 = next(a for a in got["apps"] if a["key"] == k1)
+    assert a1.pop("cc")["file"] == "firstopen_cc_%s.json.gz" % k1
+    assert got == refm                                                   # everything else exactly as without it
+    assert "failed 1, too big 0" in fb.pop_line()
+    # a country file over its guard: not written, no pointer, the app file as without it
+    monkeypatch.setattr(fb, "CC_MAX_GZ", 10)
+    fb.run({}, base, out0, {}, now=NOW)
+    monkeypatch.undo()
+    assert open(os.path.join(out0, fb.FILE), "rb").read() == ref
+    assert not any(f.startswith("firstopen_cc_") for f in os.listdir(out0))
+    assert "failed 1, too big 1" in fb.pop_line()
+    # the country module itself failing costs only the country files
+    monkeypatch.setattr(fb, "build_cc", lambda *a, **k: 1 / 0)
+    fb.run({}, base, out0, {}, now=NOW)
+    monkeypatch.undo()
+    assert open(os.path.join(out0, fb.FILE), "rb").read() == ref
+    # switched off / no store: every country file goes with the main file
+    fb.run({}, base, out0, {}, now=NOW)
+    assert any(f.startswith("firstopen_cc_") for f in os.listdir(out0))
+    fb.off(out0)
+    assert not [f for f in os.listdir(out0) if f.startswith("firstopen")]
+    open(os.path.join(out0, "firstopen_cc_%s.json.gz" % k1), "w").close()
+    assert fb.run({}, str(tmp_path / "nothing"), out0, {}, now=NOW) == []
+    assert not [f for f in os.listdir(out0) if f.startswith("firstopen")]
+
+
+def test_country_rows_feed_the_app_rule_unchanged():
+    """summarize() is the one rule: a country's entry is what summarize() says on its rows in the app's layout."""
+    recs = {}
+    for k in range(40):
+        d = (date(2026, 9, 1) + timedelta(days=k)).isoformat()
+        recs[d] = {"c": {"AA": [50, 40, 20 if k < 33 else 10], "BB": [5, 4, 2]}, "t": [60, 48, 24], "smp": None}
+    body = fb.build_cc({"days": recs}, "k", "a", "2026-10-08")
+    rows = [[d, 50, 40, 20 if i < 33 else 10] + [None] * 5 + [None] for i, d in enumerate(sorted(recs))]
+    want = fb.summarize("AA", "AA", rows, "2026-10-08")
+    got = body["summary"][0]
+    assert got["cc"] == "AA" and all(got[k] == want[k] for k in fb.CC_KEEP)
+    assert body["summary"][1]["cc"] == "BB"
+    assert fb.build_cc({"days": {"2026-09-01": {"none": True}}}, "k", "a", "2026-10-08") is None

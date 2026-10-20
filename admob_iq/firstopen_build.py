@@ -13,6 +13,19 @@ ONE lazy file, site/firstopen.json.gz:
 and the pointer dashboard["firstopen"] = {"file", "v", "apps": {app: {status, s2h, usual, change, fo_day, id}}} (the hub's
 card and the tab's nav item read it). Every day of every store, nothing trimmed.
 
+BY COUNTRY (owner, 20 Oct 2026: "country wise bhi dekh saku esa kara do"): per app with a country store (fetch.
+ga4_firstopen_cc, ≥ 1 real day) ONE more lazy file next to it, site/firstopen_cc_<key>.json.gz (key = the app's own):
+  {"v", "key", "app_id", "final_till" (the app's), "first_day",
+   "days": [[YYYY-MM-DD, first_open, splash, home (the day's total), sample | null, {cc: [first_open, splash, home]}], …]
+           (every real day of the store, ascending, nothing trimmed; only these three steps exist per country),
+   "summary": [{cc, status, why, s2h, usual, change, opened, opened_usual, fo_day, fo_day_usual, final_days, sample,
+                share (the country's first opens ÷ the day totals', last 7 final days)}]   (EVERY country GA4 named; the
+                app's own status rule, summarize() on rows in the app's row layout; first opens of the 7 days first),
+   "unnamed": {"summary": {fo_day, opened, s2h, share}}}   (the day's total − every named country: users GA4 named no
+                country for; measured as is, slightly negative on sampled days, never clamped)
+and the app's entry in firstopen.json.gz gets "cc": {file, v, from, n, days} — only when that file was written. A failure
+or a too big file costs only that app's country file; stale country files are removed; the splat rule covers them.
+
 Status, per app: Splash → Home (Home ÷ Splash of the strict funnel) over the last 7 FINAL days (≤ the property's today − 2)
 vs the 28 final days before: down ≥ 5 points Worse, ≥ 2 Watch, up ≥ 5 Better, else Normal; fewer than 35 final days Too
 early; fewer than 200 Splash users in the 7 days (or 400 in the 28) N/A (too little data to judge).
@@ -24,6 +37,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import sys
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -39,6 +53,11 @@ MAX_GZ = 8 * 1024 * 1024
 FIELDS = gf.FIELDS
 WORSE, WATCH, BETTER = -0.05, -0.02, 0.05
 MIN_DAYS, MIN_SPLASH7, MIN_SPLASH28 = 35, 200, 400
+CC_PREFIX = "firstopen_cc_"
+CC_MAX_GZ = MAX_GZ                  # the same guard, per country file
+CC_RE = re.compile(r"^firstopen_cc_[0-9a-f]{12}\.json\.gz$")
+CC_KEEP = ("status", "why", "s2h", "usual", "change", "opened", "opened_usual", "fo_day", "fo_day_usual", "final_days",
+           "sample")
 LINE = None
 
 
@@ -139,11 +158,130 @@ def build_data(dashboard, data_dir, now, counts):
     return {"apps": apps, "summary": summary}
 
 
+# ── by country ─────────────────────────────────────────────────────────────────────────────────────────────────────
+def _r6(v):
+    return None if v is None else round(v, 6)
+
+
+def cc_file(key):
+    return "%s%s.json.gz" % (CC_PREFIX, key)
+
+
+def cc_days(store):
+    """The country store's real days, ascending → [[D, first_open, splash, home, sample | null, {cc: [three]}], …]. A day
+    that is neither {"none": true} nor a whole record raises (that app's country part fails, nothing else)."""
+    out = []
+    days = store.get("days") or {}
+    for d in sorted(days):
+        rec = days[d]
+        if not isinstance(rec, dict):
+            raise ValueError("day")
+        if rec.get("none"):
+            continue
+        date.fromisoformat(d)
+        t, c, smp = rec.get("t"), rec.get("c"), rec.get("smp")
+        if not (isinstance(t, list) and len(t) == 3 and isinstance(c, dict)):
+            raise ValueError("day")
+        cs = {}
+        for k, v in c.items():
+            if not (isinstance(k, str) and k and isinstance(v, list) and len(v) == 3):
+                raise ValueError("country")
+            cs[k] = [int(x) for x in v]
+        out.append([d, int(t[0]), int(t[1]), int(t[2]), None if smp is None else float(smp), cs])
+    return out
+
+
+def build_cc(store, key, aid, final_till):
+    """One app's country store → its country file's body, or None (no real day). Every country GA4 named is kept; its
+    status is the app's own rule (summarize() on rows in the app's row layout: first_open / splash / home filled, the
+    other steps None); what GA4 named no country for = the day's total − the named countries, as measured."""
+    days = cc_days(store)
+    if not days:
+        return None
+    ccs = sorted(set().union(*(set(d[5]) for d in days)))
+    fin = [i for i, d in enumerate(days) if d[0] <= final_till]
+    w7 = fin[-7:]
+    t7 = sum(days[i][1] for i in w7)
+    rest = [None] * (len(FIELDS) - 3)
+    order = []
+    for cc in ccs:
+        rows = [[d[0]] + list(d[5].get(cc) or (0, 0, 0)) + rest + [d[4]] for d in days]
+        x = summarize(cc, cc, rows, final_till)
+        f7, fall = sum(rows[i][1] for i in w7), sum(r[1] for r in rows)
+        e = {"cc": cc}
+        e.update((k, x[k]) for k in CC_KEEP)
+        e["share"] = _r6(f7 / t7) if t7 > 0 else None
+        order.append((-f7, -fall, cc, e))
+    order.sort(key=lambda z: z[:3])
+    un = [[d[j] - sum(v[j - 1] for v in d[5].values()) for j in (1, 2, 3)] for d in days]
+    fu, su, hu = (sum(un[i][j] for i in w7) for j in range(3))
+    unnamed = {"fo_day": _r6(fu / len(w7)) if w7 else 0, "opened": _r6(su / fu) if fu > 0 and su >= 0 else None,
+               "s2h": _r6(hu / su) if su > 0 and hu >= 0 else None, "share": _r6(fu / t7) if t7 > 0 else None}
+    return {"v": V, "key": key, "app_id": aid, "final_till": final_till, "first_day": days[0][0], "days": days,
+            "summary": [z[3] for z in order], "unnamed": {"summary": unnamed}}
+
+
+def _cc_clean(out_dir, keep):
+    try:
+        names = os.listdir(out_dir)
+    except OSError:
+        return
+    for f in names:
+        if CC_RE.match(f) and f not in keep:
+            try:
+                os.remove(os.path.join(out_dir, f))
+            except OSError:
+                pass
+
+
+def attach_cc(apps, data_dir, out_dir, counts):
+    """Every app with a country store: its country file written, then (only then) its "cc" pointer on the app's entry.
+    One app's failure (or a file over CC_MAX_GZ) costs only that app's country file; stale country files are removed.
+    Never raises."""
+    keep, seen = set(), set()
+    counts.update(cc_apps=0, cc_kb=0, cc_failed=0, cc_big=0)
+    try:
+        from .fetch import ga4_firstopen_cc as fc
+        for a in apps:
+            try:
+                store = fc.load_store(fc.store_path(data_dir, a["app_id"]))
+                if not store:
+                    continue
+                body = build_cc(store, a["key"], a["app_id"], a["final_till"])
+                if body is None:
+                    continue
+                raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+                gz = len(gzip.compress(raw, 9, mtime=0))
+                if gz > CC_MAX_GZ:
+                    counts["cc_big"] += 1
+                    continue
+                fn, names = cc_file(a["key"]), [x["cc"] for x in body["summary"]]
+                ptr = {"file": fn, "v": hashlib.sha1(raw).hexdigest()[:12], "from": body["first_day"],
+                       "n": len(names), "days": len(body["days"])}
+                write_json_gz_stable(os.path.join(out_dir, fn), body)
+                keep.add(fn)
+                a["cc"] = ptr
+                seen.update(names)
+                counts["cc_apps"] += 1
+                counts["cc_kb"] += gz
+            except Exception:
+                a.pop("cc", None)
+                counts["cc_failed"] += 1
+    except Exception:
+        for a in apps:
+            a.pop("cc", None)
+        keep = set()
+        counts["cc_failed"] += 1
+    counts["cc_countries"] = len(seen) if keep else 0
+    _cc_clean(out_dir, keep)
+
+
 def _remove(out_dir):
     try:
         os.remove(os.path.join(out_dir, FILE))
     except OSError:
         pass
+    _cc_clean(out_dir, set())
 
 
 def run(dashboard, data_dir, out_dir, s=None, now=None):
@@ -161,6 +299,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             _remove(out_dir)
             LINE = "first open: apps 0, skipped %d" % counts.get("skipped", 0)
             return []
+        attach_cc(data["apps"], data_dir, out_dir, counts)
         body = dict(data, v=V)
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         gz = len(gzip.compress(raw, 9, mtime=0))
@@ -176,6 +315,10 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         LINE = ("first open: apps %d, days %d, worse %d, watch %d, better %d, normal %d, too early %d, n/a %d, skipped %d, kb %d"
                 % tuple([counts.get(k, 0) for k in ("apps", "days", "Worse", "Watch", "Better", "Normal", "Too early",
                                                     "N/A", "skipped")] + [gz // 1024]))
+        LINE += ", by country: apps %d, countries %d, kb %d" % (counts["cc_apps"], counts["cc_countries"],
+                                                                counts["cc_kb"] // 1024)
+        if counts["cc_failed"] or counts["cc_big"]:
+            LINE += ", failed %d, too big %d" % (counts["cc_failed"], counts["cc_big"])
         return list(HEADER_PATHS)
     except Exception as e:
         dashboard.pop("firstopen", None)
