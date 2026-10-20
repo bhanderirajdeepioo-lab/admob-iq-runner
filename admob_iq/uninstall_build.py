@@ -262,6 +262,14 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                   file=sys.stderr)
         except Exception as e:
             print("ga4 first open skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_firstopen") and s.get("ga4_firstopen_cc"):   # 🆕 … by country (GA4_FIRSTOPEN_CC): after the First
+        try:                                            # open fetch (its screens), own store, a failure costs it only
+            from .fetch import ga4_firstopen_cc as gfc
+            print(gfc.log_line(gfc.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                               budget=s.get("ga4_firstopen_cc_budget_sec") or gfc.BUDGET_SEC)),
+                  file=sys.stderr)
+        except Exception as e:
+            print("ga4 first open by country skipped: %s" % type(e).__name__, file=sys.stderr)
     if s.get("ga4_cohort"):                             # 📈 Day-wise ROI (GA4_COHORT): every day 0 … 30 of each install
         try:                                            # day's ad revenue — its own reads and store, a failure costs
             from .fetch import ga4_cohort as gco        # that step only

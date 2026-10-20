@@ -134,6 +134,10 @@ jobs:
           # GA4_FIRSTOPEN=false (repo variable) stops the reads without a code push
           GA4_FIRSTOPEN:        ${{ vars.GA4_FIRSTOPEN || 'true' }}
           GA4_FIRSTOPEN_BUDGET_SEC: ${{ vars.GA4_FIRSTOPEN_BUDGET_SEC }}
+          # 🆕 First open by country (admob_iq/fetch/ga4_firstopen_cc.py; data/ga4_firstopen_cc/ in the private repo,
+          # kept for good): GA4_FIRSTOPEN_CC=false (repo variable) stops the reads without a code push
+          GA4_FIRSTOPEN_CC:     ${{ vars.GA4_FIRSTOPEN_CC || 'true' }}
+          GA4_FIRSTOPEN_CC_BUDGET_SEC: ${{ vars.GA4_FIRSTOPEN_CC_BUDGET_SEC }}
           # 📈 Day-wise ROI: every day 0 … 30 of each install day's GA4 ad revenue (admob_iq/fetch/ga4_cohort.py;
           # data/ga4_cohort/ in the private repo, kept for good): GA4_COHORT=false stops the reads without a code push;
           # ROI_TAB=false takes the ROI section off the Install value tab
