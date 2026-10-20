@@ -10,7 +10,10 @@ rows with the page height and the board's scroll kept, the pick kept across apps
 All countries view = today's view + the two country blocks; a country file with a HOLE (the date range, one warning on
 the board and in the country view, a "gap" row in Every day, the chart's rows on the calendar); the Country control's one
 height (one row, two on a phone; the top 6 in a sideways strip); hold() keeping the reader's place when the country file
-arrives late (a layout model at 375 and 1280 px). Skipped where node is not installed. No real data."""
+arrives late (a layout model at 375 and 1280 px); the SAME Country control inside the Every month / Every day cards (one
+shared pick, the card titles with the country + ✕, the loading / Try again states, nothing new without a country file, no
+jump on an in-card pick on a layout model built from the page's own html). Skipped where node is not installed. No real
+data."""
 import json
 import os
 import re
@@ -111,7 +114,7 @@ def test_country_board(out):
 
 def test_all_countries_view_is_todays_plus_the_country_blocks(out):
     c = out["cc"]
-    assert c["all_plus_two"] and c["nocc_plain"] and c["top_under_crumb"] and c["board_after_grid"]
+    assert c["all_plus_four"] and c["nocc_plain"] and c["top_under_crumb"] and c["board_after_grid"]
 
 
 def test_country_pick(out):
@@ -119,6 +122,7 @@ def test_country_pick(out):
     assert c["pick_cc"] == "XB" and c["pick_loads"] == 1 and c["pick_minh"] == "900px"   # no reload, no jump
     assert c["pick_crumb"] and c["pick_chip_on"] and c["pick_mini"] and c["pick_no_late"] and c["pick_steps"]
     assert c["pick_note"] and c["pick_no_gap"]                    # the date range first – last; no hole, no warning
+    assert c["pick_in_on"] and c["pick_titles"] and c["pick_day_cols"] and c["pick_cols_once"]   # the in-card controls follow
     assert c["pick_months"] == [["Sep 2026", "29", "8,700", "7,250", "5,800", "80%", "83%"],
                                 ["Aug 2026", "31", "9,300", "7,750", "6,200", "80%", "83%"]]
     assert c["pick_month_smp"] and c["pick_days"] == 60 and c["pick_nf"] and c["pick_smp_day"] and c["pick_board_on"]
@@ -165,3 +169,60 @@ def test_country_wiring():
     assert ".fo-cc{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin:0 0 12px;height:36px;min-width:0}" in p
     assert ".fo-cc{display:grid;grid-template-columns:auto auto minmax(0,1fr);grid-template-rows:36px 36px;height:80px}" in p
     assert ".fo-ccr{display:flex;flex:0 1 auto;gap:8px;min-width:0;height:36px;overflow-x:auto;" in p
+
+
+# ── the Country control inside Every month / Every day (owner, 20 Oct: "isme hi country ka filter add karo jese ss2 me kiya
+# he" — ss2 = the ROI install-day card: the picker in the card, the title " · 🇧🇷 Brazil" + "✕ All countries") ────────────
+def test_in_card_controls_all_countries(out):
+    """All countries: the same control right under each card's title (the titles as today, no ✕), the tables at once while
+    the country file loads (the in-card controls show the same "loading" as the top one), filled in place when it comes;
+    the view = today's + the three controls + the board — and NOTHING new for an app without a country file."""
+    c = out["cc"]
+    assert c["in_loading"] and c["loading_plus"]
+    assert c["in_arrived"] and c["in_all"] and c["all_plus_four"]
+    assert c["nocc_plain"]                                        # no country file: byte-identical to before (no control, no ✕)
+
+
+def test_in_card_controls_one_state(out):
+    """ONE picked country for the three controls: a chip in Every month, the select in Every day, the ✕ in a card — each
+    redraws all three, the crumb and both card titles; the tap's own control is found (the chip / select inside it, or the ✕'s
+    card), the crumb's ✕ and the board are not a control."""
+    c = out["cc"]
+    assert c["in_m_cc"] == "XC" and c["in_m_all3"]
+    assert c["in_d_cc"] == "XI" and c["in_d_all3"]
+    assert c["in_x_cc"] == "" and c["in_x_all"]
+    assert c["from"] == ["fo-cc-d", "", "", ""]
+
+
+def test_in_card_controls_failed_load(out):
+    """A failed country file: "Try again" in each of the three controls (and nowhere else); the tap loads it once more, all
+    three show loading, then the chips."""
+    c = out["cc"]
+    assert c["f_retry_in_area"] and c["f_rest"] and c["f_loading"] and c["f_loads"] == 2 and c["f_ok"]
+
+
+def test_in_card_pick_keeps_the_control_in_place(out):
+    """No page jump (a layout model built from the page's own html at 375 and 1280 px, the browser clamping the scroll the
+    moment the new html is laid out): a pick in the Every day card's control (All → a country, a country → another, the
+    select, the card's ✕) and in the Every month card's: the view above it is redrawn with other heights, the control's top
+    moves ≤ 1 px; the top control too (on a phone the crumb grows by the country's name + ✕)."""
+    for w in ("375", "1280"):
+        p = out["pick"][w]
+        for k in ("day_chip", "day_chip2", "day_sel", "day_x", "month_chip", "top_chip"):
+            assert abs(p[k]["dy"]) <= 1 and p[k]["scrolled"] == p[k]["moved"], (w, k, p[k])
+        assert p["day_cc"] == "XB" and p["sel_cc"] == "XH" and p["x_cc"] == "", (w, p)
+        # the model is not flat: the redraw really moved the control (without the fix it would jump)
+        assert all(abs(p[k]["moved"]) > 1 for k in ("day_chip", "day_chip2", "day_sel", "day_x", "month_chip")), (w, p)
+    assert out["pick"]["375"]["top_chip"]["moved"] > 1
+
+
+def test_in_card_control_css():
+    """The in-card control IS a .fo-cc (one height; on a phone the same two rows: label · All · select, then the top 6 in a
+    strip that scrolls sideways; min-width 0 — no page-level sideways scroll): no rule of its own changes that. The card
+    title's ✕ is sized as the ROI card's; no new colours."""
+    p = _page()
+    css = re.sub(r"/\*.*?\*/", "", p[p.index("<style>"):p.index("</style>")], flags=re.S)
+    assert not re.search(r"\.fo-cci\b", css)
+    assert ".fo-card .ct .fo-ccx{min-height:30px;padding:2px 10px;font-size:12px}" in css
+    assert ".fo-cc .fo-ccw{grid-column:2/-1;grid-row:1}.fo-cc .fo-ccr{grid-column:1/-1;grid-row:2}.fo-cc .fo-ccs{grid-column:3;grid-row:1;width:100%;min-width:0;max-width:none}" in css
+    assert "class=\"fo-cc fo-cci\" id=\"fo-cc-${k}\"" in p

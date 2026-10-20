@@ -7,7 +7,9 @@
 //     localStorage, a throwing localStorage), the old layout untouched when off;
 //   * Back / Forward through tab and app changes (one step per tap), refresh / bookmark survival (#home/<key>/<tab>);
 //   * the App Overview cards: status word + key line per feature, from a made-up Review card file, the eCPM tab's own
-//     status, Audience (stub), Baseline, Alerts, Movers.
+//     status, Audience (stub), Baseline, Alerts, Movers;
+//   * 🆕 First open as an app's tab: the page's own FO module (its loader stubbed) — the Country controls under the crumb
+//     and in the Every month / Every day cards, one pick, the same screen byte for byte as the classic layout.
 // Prints ONE JSON report; tests/test_hub_frontend.py asserts on it.   usage: node hub_frontend.js <script.js>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -47,7 +49,7 @@ const idEl = id => { const e = mk('div'); e.setAttribute('id', id); return e; };
 const BAR = idEl('hub-bar'); BAR.hidden = true;
 const BODY = mk('body');
 const SCREEN_IDS = ['overview', 'placements', 'reportcard', 'appdetail', 'movers', 'alerts', 'deductions', 'countries', 'baseline', 'mediation', 'roas',
-  'active', 'uninstall', 'datewise', 'reco', 'health', 'settings', 'value', 'ecpm', 'audience', 'hubrv', 'review'];
+  'active', 'uninstall', 'datewise', 'reco', 'health', 'settings', 'value', 'ecpm', 'audience', 'firstopen', 'hubrv', 'review'];
 const SCREENS = SCREEN_IDS.map(id => { const s = mk('section'); s.className = 'screen'; s.dataset.screen = id; return s; });
 SCREENS[0].classList.add('on');
 const scr = id => SCREENS.find(s => s.dataset.screen === id) || null;
@@ -299,4 +301,34 @@ const fresh = async (opt) => { opt = opt || {};   // a new page load: history, U
     const ov = run(`(()=>{ const s=document.createElement('section'); const r=hubOv(s); return {same:r===s, kids:s.children.length, id:s.children[0]&&s.children[0].id}; })()`);
     run(`APP=''`); const ovAll = run(`(()=>{ const s=document.createElement('section'); hubOv(s); return s.children.length; })()`);
     return { usd, inr, small, none, head, headSp, rowSp, ov, ovAll, day: LAST }; });
+
+  // ── 🆕 First open in the hub (an app's tab): the page's own FO module on the same screen as the classic layout — the
+  // Country control under the crumb AND inside the Every month / Every day cards, one pick for all three, the card titles
+  // with the country + ✕ — byte for byte what the classic layout draws (synthetic files, the loader stubbed) ──
+  await step('firstopen', async () => {
+    const day = i => new Date(Date.UTC(2026, 7, 1 + i)).toISOString().slice(0, 10), N = 40;
+    ctx.__FOF = { v: 1, apps: [{ key: 'kd', app: 'Demo Gallery', app_id: IDS.big, steps: { splash: 'S', home: 'H' }, steps_changed: [], first_day: day(0), final_till: day(N - 3),
+        days: Array.from({ length: N }, (_, i) => [day(i), 100, 90, 60, 91, 61, null, null, null, null]), cc: { file: 'firstopen_cc_0123456789ab.json.gz', v: 'c1' } }],
+      summary: [{ key: 'kd', app: 'Demo Gallery', status: 'Normal', why: '', s2h: 0.67, usual: 0.67, change: 0, s2h_any: 0.67, opened: 0.9, opened_usual: 0.9, fo_day: 100, fo_day_usual: 100, steps: {}, final_days: N - 2, sample: null }] };
+    ctx.__FOCC = { v: 1, key: 'kd', app_id: IDS.big, final_till: day(N - 3), first_day: day(0), last_day: day(N - 1), missing: 0,
+      days: Array.from({ length: N }, (_, i) => [day(i), 100, 90, 60, null, { XA: [70, 63, 42], XB: [30, 27, 18] }]),
+      summary: ['XA', 'XB'].map((cc, k) => ({ cc, status: 'Normal', why: '', s2h: 0.67, usual: 0.67, change: 0, opened: 0.9, opened_usual: 0.9, fo_day: [70, 30][k], fo_day_usual: [70, 30][k], final_days: N - 2, sample: null, share: [0.7, 0.3][k] })) };
+    run(`DATA.firstopen={file:'firstopen.json.gz',v:'h1',apps:{}};
+      fetchGzJson=function(u){ const f=String(u).split('?')[0]; __fol.push(f); return Promise.resolve(JSON.parse(JSON.stringify(f==='firstopen.json.gz'?__FOF:__FOCC))); }; var __fol=[];`);
+    const html = () => scr('firstopen').innerHTML, r = {};
+    await fresh({ search: '?layout=hub' }); run(`hubGo('Demo Gallery','firstopen')`); await settle(); await settle();
+    const h1 = html();
+    r.st = S(); r.tabs = run(`hubTabs('Demo Gallery').indexOf('firstopen')>=0`); r.loads = run('__fol.slice()');
+    r.ctl = ['fo-cc', 'fo-cc-m', 'fo-cc-d'].map(id => (h1.match(new RegExp('<div class="fo-cc(?: fo-cci)?" id="' + id + '" role="group" aria-label="Country"><span class="fo-ccl">Country</span><button type="button" class="fo-ccc" data-fo-cc="" aria-pressed="true">', 'g')) || []).length);
+    r.titles = h1.includes('<h3>Every month</h3>') && h1.includes('<h3>Every day</h3>') && h1.includes('<th>Incl. late open</th>');
+    run(`FO._.pick('XB')`); const h2 = html();
+    r.pick = { cc: run('FO._.cc()'), on: (h2.match(/data-fo-cc="XB" aria-pressed="true"/g) || []).length,
+      titles: (h2.match(/<h3>Every (?:month|day) · [^<]+<\/h3><button type="button" class="fo-back fo-ccx" data-fo-ccx="1">✕ All countries<\/button>/g) || []).length,
+      cols: h2.includes('<th>Day</th><th>First opens</th><th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th>') && !h2.includes('<th>Incl. late open</th>') };
+    // the classic layout, the same app, the same pick: the same screen, byte for byte
+    await fresh(); run(`setApp('Demo Gallery'); show('firstopen')`); await settle();
+    const c2 = html(); run(`FO._.pick('')`); const c1 = html();
+    r.classic = { on: S().on, scr: S().scr, same_pick: c2 === h2, same_all: c1 === h1 };
+    run(`FO._.pick(''); delete DATA.firstopen;`);
+    return r; });
 })().then(() => { process.stdout.write(JSON.stringify({ errors, out })); }, e => { errors.push('MAIN ' + (e.stack || e.message)); process.stdout.write(JSON.stringify({ errors, out })); });

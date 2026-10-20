@@ -2662,6 +2662,8 @@ body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecust
 .fo-t tbody tr.on td{background:var(--raise)}.fo-t tbody tr.on td:first-child{box-shadow:inset 3px 0 0 var(--cyan),1px 0 0 var(--line)}
 .fo-t tr.fo-un td{color:var(--faint)}.fo-t tr.fo-un td.fo-nm{color:var(--muted);font-weight:600}
 .fo-ccm{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}.fo-ccm .fo-note{margin:0}
+/* the same control inside Every month / Every day (.fo-cci: the .fo-cc look and one height); the card title's ✕ as the ROI card's */
+.fo-card .ct .fo-ccx{min-height:30px;padding:2px 10px;font-size:12px}
 @media (max-width:760px){.fo-grid{grid-template-columns:minmax(0,1fr)}
   .fo-cc{display:grid;grid-template-columns:auto auto minmax(0,1fr);grid-template-rows:36px 36px;height:80px}
   .fo-cc .fo-ccw{grid-column:2/-1;grid-row:1}.fo-cc .fo-ccr{grid-column:1/-1;grid-row:2}.fo-cc .fo-ccs{grid-column:3;grid-row:1;width:100%;min-width:0;max-width:none}
@@ -6426,7 +6428,7 @@ function hold(fn,slot){ const s=EL; let an=null, y0=0;
 // the country file arrived (or failed): All countries → only the Country control and the board slot; a picked country → the view
 function ccArrive(a){ if(!onScreen()) return; const cur=APP&&RAW?appOf(APP):null; if(!cur||cur.key!==a.key) return;
   const top=document.getElementById('fo-cc'), slot=document.getElementById('fo-ccbx');
-  if(!CC&&top&&slot){ const d=ccData(a); hold(()=>{ top.innerHTML=ccCtl(a,d); slot.innerHTML=d?ccBoard(a,d):''; },slot); return; }
+  if(!CC&&top&&slot){ const d=ccData(a); hold(()=>{ CCW.forEach(id=>{ const w=document.getElementById(id); if(w) w.innerHTML=ccCtl(a,d); }); slot.innerHTML=d?ccBoard(a,d):''; },slot); return; }
   paint(); }
 function render(){ const s=screenDiv('firstopen'); EL=s; return s; }
 function sum(rows,f){ let t=0; for(const r of rows) t+=+r[IX[f]]||0; return t; }
@@ -6464,7 +6466,7 @@ function stepBars(a,x){ const out=[]; for(const k of ['intro','language','permis
     const v=k==='home'?[x.s2h,x.usual]:((x.steps||{})[k]||[null,null]);
     out.push(`<div class="fo-bar"><span class="fo-bl">${STEP_NAME[k]}</span><span class="fo-bt"><i style="width:${Math.max(0,Math.min(100,(v[0]||0)*100))}%"${k==='home'?' class="h"':''}></i><u style="width:${Math.max(0,Math.min(100,(v[1]||0)*100))}%"></u></span><span class="fo-bv"><b>${P(v[0])}</b> <small>usual ${P(v[1])}</small></span></div>`); }
   return out.join(''); }
-function appHtml(a,x,top,board){ const rows=a.days||[], fin=rows.filter(r=>r[0]<=a.final_till), t=rows[rows.length-1], y=rows[rows.length-2];
+function appHtml(a,x,top,board,inM,inD){ const rows=a.days||[], fin=rows.filter(r=>r[0]<=a.final_till), t=rows[rows.length-1], y=rows[rows.length-2];
   const cell=(r,f)=>r?f(r):'—', op=r=>P(rate(+r[IX.splash],+r[IX.first_open])), sh=r=>P(rate(+r[IX.home],+r[IX.splash])), sa=r=>P(rate(+r[IX.home_any],+r[IX.splash_any]));
   const scr=Object.entries(a.steps||{}).map(([k,c])=>`<b>${STEP_NAME[k]||k}</b> = ${E(c)}`).join(' · ');
   const mini=`<div class="fo-tw"><table class="fo-t fo-mini"><thead><tr><th></th><th>Today</th><th>Yesterday</th><th>Last 7 days</th><th>Usual<span class="fo-wide"> (4 weeks before)</span></th></tr></thead><tbody>`
@@ -6485,8 +6487,8 @@ function appHtml(a,x,top,board){ const rows=a.days||[], fin=rows.filter(r=>r[0]<
     +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${stepBars(a,x)}</div>`
     +`<div class="card fo-card"><div class="ct"><h3>Every day · full history</h3><span class="faint" style="font-size:11.5px">hover / tap = us din ke numbers</span></div><div class="fo-chart" id="fo-chart"></div>`
     +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last 2 days)</span></div></div></div>`
-    +(board||'')+`<div class="card fo-card"><div class="ct"><h3>Every month</h3><span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${mt}</div>`
-    +`<div class="card fo-card"><div class="ct"><h3>Every day</h3><span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${dt}</div>`; }
+    +(board||'')+`<div class="card fo-card"><div class="ct"><h3>Every month</h3><span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${inM||''}${mt}</div>`
+    +`<div class="card fo-card"><div class="ct"><h3>Every day</h3><span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${inD||''}${dt}</div>`; }
 // ---- one app, by country ----
 // the Country control (inside #fo-cc): "All countries" + the top 6 (flag + code) + a native <select> of EVERY country
 function ccCtl(a,d){ const lab='<span class="fo-ccl">Country</span>';
@@ -6499,6 +6501,19 @@ function ccCtl(a,d){ const lab='<span class="fo-ccl">Country</span>';
     +S.map(x=>`<option value="${E(x.cc)}"${inSel&&CC===x.cc?' selected':''}>${E(FL(x.cc)+' '+CN(x.cc)+' · '+FD(x.fo_day)+' / day')}</option>`).join('')+'</select>'; }
 function ccTop(a){ return `<div class="fo-cc" id="fo-cc" role="group" aria-label="Country">${ccCtl(a,ccData(a))}</div>`; }
 function ccSlot(a){ const d=ccData(a); return `<div id="fo-ccbx">${d?ccBoard(a,d):''}</div>`; }
+// the SAME Country control inside the Every month / Every day cards (owner, 20 Oct: "isme hi country ka filter add karo jese
+// ss2 me kiya he" — like the ROI install-day card): one picked country (CC) for all three controls; only for an app that has
+// a country file; the same loading / Try again states and the same one height as the top one
+const CCW=['fo-cc','fo-cc-m','fo-cc-d'];   // the Country controls by id: under the crumb, Every month, Every day
+function ccIn(a,k){ return `<div class="fo-cc fo-cci" id="fo-cc-${k}" role="group" aria-label="Country">${ccCtl(a,ccData(a))}</div>`; }
+// a card's title with the picked country + its "✕ All countries" (as the ROI card: title · flag name, then the button)
+function ccTitle(t){ return `<h3>${t} · ${FL(CC)} ${E(CN(CC))}</h3><button type="button" class="fo-back fo-ccx" data-fo-ccx="1">✕ All countries</button>`; }
+// why a country's tables have fewer columns: said ONCE on screen, in the Every day card (its table is where they go missing)
+const CC_COLS='🌍 Country view me sirf <b>First open → Splash → Home</b> hai — Language / Permission / Intro aur "incl. late open" country-wise nahi padhe, isliye wo columns yahan nahi.';
+// the Country control a tap came from (its id; '' = the crumb's ✕, the board): a chip / the select inside one, or the ✕ in a
+// card (= that card's control)
+function ccFrom(t){ try{ const w=t&&t.closest?t.closest('.fo-cc'):null; if(w&&w.id) return w.id;
+    const c=t&&t.closest?t.closest('.fo-card'):null, q=c&&c.querySelector?c.querySelector('.fo-cci'):null; return (q&&q.id)||''; }catch(e){ return ''; } }
 function ccSort(rows){ const k=CSORT.k, v=x=>k==='rank'?RANK[x.status]:k==='cc'?CN(x.cc):x[k];
   return rows.slice().sort((a,b)=>{ const va=v(a), vb=v(b);
     if(va==null&&vb==null) return (b.fo_day||0)-(a.fo_day||0); if(va==null) return 1; if(vb==null) return -1;
@@ -6531,9 +6546,10 @@ function ccBoard(a,d){ const S=d.summary||[], c=k=>S.filter(x=>x.status===k).len
 function ccCrumb(a,x,d){ return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span class="fo-cct">${FL(CC)} ${E(CN(CC))}</span>`
     +(x?`<span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''}${d?` · country data ${ccWhen(d)}`:''}</span>`:'')
     +`<button type="button" class="fo-back" data-fo-ccx="1">✕ All countries</button></div>`; }
-// the app's view: All countries = today's view + the Country control + the board; a country = its own rows
+// the app's view: All countries = today's view + the Country control (under the crumb, and again in Every month / Every
+// day) + the board; a country = its own rows
 function appView(a,x){ CHART=null; const c=ccPtr(a);
-  if(!CC){ CHART=a; return c?appHtml(a,x,ccTop(a),ccSlot(a)):appHtml(a,x); }
+  if(!CC){ CHART=a; return c?appHtml(a,x,ccTop(a),ccSlot(a),ccIn(a,'m'),ccIn(a,'d')):appHtml(a,x); }
   const miss=t=>`<div class="card fo-card"><div class="fo-ccm"><p class="fo-note">Is app me <b>${FL(CC)} ${E(CN(CC))}</b> ka First open data nahi${t}.</p><button type="button" class="fo-back" data-fo-ccx="1">✕ All countries</button></div></div>`;
   if(!c) return appCrumb(a,x)+miss(' (is app ka country-wise data abhi nahi bana)');
   const d=ccData(a);
@@ -6568,7 +6584,7 @@ function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t
         +`<tr><td class="fo-nm${r[0]>ft?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(r[0])} ${r[0].slice(0,4)}${r[0]>ft?' · not final':''}</td><td>${N(r[IX.first_open])}</td><td>${N(r[IX.splash])}</td><td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${op(r)}</td></tr>`; }).join('')
     +`</tbody></table></div>`;
   return ccCrumb(a,x,d)+ccTop(a)
-    +`<p class="fo-note">🌍 Country view me sirf <b>First open → Splash → Home</b> hai (Language / Permission / Intro aur "incl. late open" country-wise nahi padhe), aur country data <b>${ccWhen(d)}</b> ka hai (GA4 sirf ~2 mahine ka data rakhta hai, usse purana country-wise nahi milta).</p>`
+    +`<p class="fo-note">🌍 Country data <b>${ccWhen(d)}</b> ka hai (GA4 sirf ~2 mahine ka data rakhta hai, usse purana country-wise nahi milta).</p>`
     +ccGapNote(d)
     +`<div class="card fo-card"><div class="ct"><h3>Today · Yesterday · last 7 days · usual</h3></div>${mini}</div>`
     +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${home}`
@@ -6576,16 +6592,23 @@ function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t
     +`<div class="card fo-card"><div class="ct"><h3>Every day · full history</h3><span class="faint" style="font-size:11.5px">hover / tap = us din ke numbers</span></div><div class="fo-chart" id="fo-chart"></div>`
     +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last 2 days)</span></div></div></div>`
     +`<div id="fo-ccbx">${ccBoard(a,d)}</div>`
-    +`<div class="card fo-card"><div class="ct"><h3>Every month</h3><span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${mt}</div>`
-    +`<div class="card fo-card"><div class="ct"><h3>Every day</h3><span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${dt}</div>`; }
-// a pick (chip / select / board row): the page keeps its height and the board its scroll, so the tapped control stays put
-function pick(cc){ cc=String(cc||''); if(cc===CC) return; const s=EL;
+    +`<div class="card fo-card"><div class="ct">${ccTitle('Every month')}<span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${ccIn(a,'m')}${mt}</div>`
+    +`<div class="card fo-card"><div class="ct">${ccTitle('Every day')}<span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${ccIn(a,'d')}<p class="fo-note">${CC_COLS}</p>${dt}</div>`; }
+// a pick (chip / select / board row / ✕): the page keeps its height, the board its scroll and every chip strip its sideways
+// scroll, so the tapped control stays put. A pick from a Country control (`from` = its id: under the crumb, Every month,
+// Every day): everything above it is redrawn (the crumb, mini table, steps, chart, board, month card — other heights for a
+// country), so that control goes back to the same place on screen (the page scrolls by what it moved; quietly, so the
+// stay-put layer still checks late)
+function pick(cc,from){ cc=String(cc||''); if(cc===CC) return; const s=EL;
   const h=s?Math.max(s.offsetHeight||0,parseFloat(s.style.minHeight)||0):0, bw=document.getElementById('fo-ccbw'), sc=bw?[bw.scrollTop||0,bw.scrollLeft||0]:null;
-  const strip=()=>{ try{ return document.querySelector('#fo-cc .fo-ccr'); }catch(e){ return null; } }, s0=strip(), sl=s0?s0.scrollLeft||0:0;   // the chip strip's sideways scroll
+  const strip=id=>{ try{ const w=document.getElementById(id); return w&&w.querySelector?w.querySelector('.fo-ccr'):null; }catch(e){ return null; } }, sl=CCW.map(id=>{ const r=strip(id); return r?r.scrollLeft||0:0; });
+  const at=()=>{ try{ const w=from?document.getElementById(from):null; return w&&w.getBoundingClientRect?w.getBoundingClientRect().top:null; }catch(e){ return null; } }, y0=at();
   CC=cc; paint();
   if(s&&h) s.style.minHeight=h+'px';
   const b2=document.getElementById('fo-ccbw'); if(sc&&b2){ b2.scrollTop=sc[0]; b2.scrollLeft=sc[1]; }
-  const s1=strip(); if(s1&&sl) s1.scrollLeft=sl; }
+  CCW.forEach((id,i)=>{ const r=strip(id); if(r&&sl[i]) r.scrollLeft=sl[i]; });
+  const y1=y0==null?null:at(), d=y1==null?0:y1-y0;
+  if(Math.abs(d)>1){ try{ if(typeof SP!=='undefined'&&SP&&SP.quietly) SP.quietly(()=>window.scrollBy(0,d)); else window.scrollBy(0,d); }catch(e){} } }
 // the daily chart: Splash → Home and Opened app for every day kept, the last value printed; hover / tap = that day
 function drawChart(a){ const box=document.getElementById('fo-chart'); if(!box) return; const rows=a.days||[]; if(rows.length<2){ box.innerHTML='<div class="faint" style="padding:20px 0">Abhi ek hi din ka data</div>'; return; }
   const W=Math.max(280,box.clientWidth||600), H=210, m={t:12,r:46,b:24,l:38}, n=rows.length;
@@ -6619,9 +6642,9 @@ function wire(){ const s=EL; if(!s||s.dataset.foWired) return; s.dataset.foWired
       s.querySelectorAll('[data-fo-filt]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.foFilt===FILT)));
       const tb=document.getElementById('fo-tb'); if(tb) tb.innerHTML=tableHtml(); return; }
     if(t.closest('[data-fo-retry]')){ ERR=false; VER=null; ensure(()=>{ if(onScreen()) paint(); }); paint(); return; }
-    const cb=t.closest('[data-fo-cc]'); if(cb){ pick(cb.dataset.foCc); return; }
+    const cb=t.closest('[data-fo-cc]'); if(cb){ pick(cb.dataset.foCc,ccFrom(t)); return; }
     const cr=t.closest('tr[data-fo-ccr]'); if(cr){ pick(cr.dataset.foCcr); return; }
-    if(t.closest('[data-fo-ccx]')){ pick(''); return; }
+    if(t.closest('[data-fo-ccx]')){ pick('',ccFrom(t)); return; }
     const cs=t.closest('[data-fo-ccsort]'); if(cs){ const k=cs.dataset.foCcsort; CSORT={k,dir:CSORT.k===k?-CSORT.dir:(k==='cc'||k==='rank'?1:-1)};
       const a=APP&&RAW?appOf(APP):null, d=a&&ccData(a), bw=document.getElementById('fo-ccbw'); if(d&&bw) bw.innerHTML=ccTable(d); return; }
     const cf=t.closest('[data-fo-ccfilt]'); if(cf){ CFILT=CFILT===cf.dataset.foCcfilt?'':cf.dataset.foCcfilt;
@@ -6629,10 +6652,10 @@ function wire(){ const s=EL; if(!s||s.dataset.foWired) return; s.dataset.foWired
       s.querySelectorAll('[data-fo-ccfilt]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.foCcfilt===CFILT)));
       const a=APP&&RAW?appOf(APP):null, d=a&&ccData(a), bw=document.getElementById('fo-ccbw'); if(d&&bw) bw.innerHTML=ccTable(d); return; }
     if(t.closest('[data-fo-ccretry]')){ const a=APP&&RAW?appOf(APP):null, c=ccPtr(a); if(!c) return; const st=CCS[c.file]||(CCS[c.file]={}); st.err=false; st.v=null;
-      ensureCC(a,()=>ccArrive(a)); const top=document.getElementById('fo-cc'); if(top) top.innerHTML=ccCtl(a,ccData(a)); else paint(); return; }
+      ensureCC(a,()=>ccArrive(a)); let n=0; CCW.forEach(id=>{ const w=document.getElementById(id); if(w){ w.innerHTML=ccCtl(a,ccData(a)); n++; } }); if(!n) paint(); return; }
     if(t.closest('[data-fo-all]')){ setApp(''); return; }
     const row=t.closest('tr[data-fo-app]'); if(row){ setApp(row.dataset.foApp); } });
-  s.addEventListener('change',e=>{ const t=e.target, se=t&&t.closest&&t.closest('[data-fo-ccsel]'); if(se&&se.value) pick(se.value); }); }
+  s.addEventListener('change',e=>{ const t=e.target, se=t&&t.closest&&t.closest('[data-fo-ccsel]'); if(se&&se.value) pick(se.value,ccFrom(t)); }); }
 function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector('.screen[data-screen=firstopen]'); if(!s||typeof DATA==='undefined'||!DATA) return;
   EL=s; wire(); s.style.minHeight='';
   const p=ptr();
@@ -6647,7 +6670,7 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   if(a&&CHART) drawChart(CHART); }
 function show(){ paint(); }
 function left(){ }
-return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccRows, ccData, ccFill, hold, cc:()=>CC}};
+return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccIn, ccFrom, CC_COLS, pick, ccRows, ccData, ccFill, hold, cc:()=>CC}};
 })();
 function renderFirstOpen(){ return FO.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from

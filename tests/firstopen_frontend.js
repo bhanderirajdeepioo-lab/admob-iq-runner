@@ -18,7 +18,12 @@
 //     chart's rows on the calendar (a day not read = no point, the line breaks there);
 //   * hold() — the reader's place when the country file arrives late — on a small layout model at 375 and 1280 px: the card
 //     being read stays (Every month just under the top bar, or mid-screen), nothing scrolls at the top of the page, the
-//     chart stays when the board's slot is in the lower half.
+//     chart stays when the board's slot is in the lower half;
+//   * the SAME Country control inside the Every month / Every day cards (owner, 20 Oct): loading / failed / filled like the
+//     top one, ONE picked country for all three, the card titles "Every day · <flag> <name>" + "✕ All countries", a
+//     country's Every day columns + one line why the others are missing (once on screen), nothing new for an app without a
+//     country file; pick() from an in-card control on a layout model built from the page's own html at 375 and 1280 px:
+//     that control's top moves ≤ 1 px although everything above it is redrawn.
 // Prints ONE JSON report; tests/test_firstopen_frontend.py asserts on it.   usage: node firstopen_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -193,6 +198,12 @@ async function byCountry() {
   const rowsOf = h => [...h.matchAll(/<tr class="clk[^"]*" data-fo-ccr="([^"]+)"/g)].map(m => m[1]);
   FO.render(); FO.paint(); await tick(); await tick();          // the main file → the app view, then its country file
   R.loading_ctl = /<div class="fo-cc" id="fo-cc"[^>]*><span class="fo-ccl">Country<\/span><span class="fo-ccw">⏳ Country data loading…<\/span><\/div>/.test(html2) || null;
+  // the in-card controls (Every month / Every day): the same loading state, the All-countries tables drawn at once
+  const LOADING_CTL = '<span class="fo-ccl">Country</span><span class="fo-ccw">⏳ Country data loading…</span>';
+  R.in_loading = ['m', 'd'].every(k => html2.includes(`<div class="fo-cc fo-cci" id="fo-cc-${k}" role="group" aria-label="Country">${LOADING_CTL}</div>`))
+    && /<h3>Every month<\/h3><span[^>]*>[^<]*<\/span><\/div><div class="fo-cc fo-cci" id="fo-cc-m"[^>]*>.*?<\/div><div class="fo-tw"><table class="fo-t"><thead><tr><th>Month<\/th>/.test(html2)
+    && /<h3>Every day<\/h3><span[^>]*>[^<]*<\/span><\/div><div class="fo-cc fo-cci" id="fo-cc-d"[^>]*>.*?<\/div><div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day<\/th>.*?<th>Incl\. late open<\/th>/.test(html2);
+  const loadingHtml = html2;
   await tick(); await tick();
   R.view_at_once = html2.includes('<td>First opens <small class="faint">/ day</small></td>') && html2.includes('<th>Incl. late open</th>');
   R.loads_main = LD['firstopen.json.gz'];
@@ -203,6 +214,8 @@ async function byCountry() {
   R.chip_xa = ctl.includes('data-fo-cc="XA" aria-pressed="false" title="Name XA"><span class="fo-fl">[XA]</span> XA</button>');
   R.select = [...ctl.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].map(m => [m[1], m[2]]);
   R.select_placeholder = ctl.includes('<option value="" disabled selected>More countries ▾</option>');
+  // the file arrived: the in-card controls are the top one (same chips, same select), filled in place
+  R.in_arrived = !!ctl && ['fo-cc-m', 'fo-cc-d'].every(id => IDS[id] && IDS[id]._html === ctl);
   const board = IDS['fo-ccbx'] ? IDS['fo-ccbx']._html : '';
   R.board_rows = rowsOf(board);
   R.board_unnamed_last = /data-fo-ccr="XI"[\s\S]*<tr class="fo-un"><td class="fo-nm"><span class="fo-an"><span class="fo-fl">❔<\/span><span>Not named by GA4<\/span><\/span><\/td><td class="fo-stc"><small>no status<\/small><\/td><td>88%<\/td><td>—<\/td><td>—<\/td><td>89%<\/td><td>9<\/td><td>0.7%<\/td><\/tr><\/tbody>/.test(board);
@@ -228,10 +241,20 @@ async function byCountry() {
   // the All countries view = today's view + the Country control + the board, nothing else
   FO.paint();
   const a = FO._.appOf('Beta Pick'), x = F2.summary.find(z => z.key === 'kb');
-  const withCc = html2, top = FO._.ccTop(a), slot = FO._.ccSlot(a);
+  const withCc = html2, top = FO._.ccTop(a), slot = FO._.ccSlot(a), inM = FO._.ccIn(a, 'm'), inD = FO._.ccIn(a, 'd');
   const cc0 = a.cc; delete a.cc; FO.paint(); const noCc = html2; a.cc = cc0;
-  R.all_plus_two = withCc.includes(top) && withCc.includes(slot) && withCc.replace(top, '').replace(slot, '') === noCc;
-  R.nocc_plain = !noCc.includes('fo-cc') && !noCc.includes('By country');
+  R.all_plus_four = [top, slot, inM, inD].every(x => withCc.includes(x)) && withCc.replace(top, '').replace(slot, '').replace(inM, '').replace(inD, '') === noCc;
+  R.nocc_plain = !noCc.includes('fo-cc') && !noCc.includes('By country') && !noCc.includes('fo-ccx');
+  // while the country file loads: today's view + the three controls (loading) + the empty board slot, nothing else
+  R.loading_plus = loadingHtml.split(LOADING_CTL).length === 4
+    && loadingHtml.replace(/<div class="fo-cc(?: fo-cci)?" id="fo-cc(?:-[md])?" role="group" aria-label="Country"><span class="fo-ccl">Country<\/span><span class="fo-ccw">⏳ Country data loading…<\/span><\/div>/g, '').replace('<div id="fo-ccbx"></div>', '') === noCc;
+  // All countries: the in-card controls sit right under each card's title (titles as today, no ✕ in the cards), the same
+  // control as the top one
+  R.in_all = inM.includes('data-fo-cc="" aria-pressed="true"') && inM.replace('fo-cc fo-cci" id="fo-cc-m"', '') === inD.replace('fo-cc fo-cci" id="fo-cc-d"', '')
+    && inM.replace('<div class="fo-cc fo-cci" id="fo-cc-m"', '<div class="fo-cc" id="fo-cc"') === top
+    && withCc.includes('<h3>Every month</h3><span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>' + inM + '<div class="fo-tw">')
+    && withCc.includes('<h3>Every day</h3><span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>' + inD + '<div class="fo-tw fo-tall">')
+    && !withCc.includes('fo-ccx');
   R.top_under_crumb = /<\/div><div class="fo-cc" id="fo-cc"/.test(withCc) && withCc.indexOf('id="fo-cc"') < withCc.indexOf('Today · Yesterday');
   R.board_after_grid = withCc.indexOf('id="fo-ccbx"') > withCc.indexOf('id="fo-chart"') && withCc.indexOf('id="fo-ccbx"') < withCc.indexOf('<h3>Every month</h3>');
   // a chip: the country's view from its own rows (no file load), the page keeps its height
@@ -246,7 +269,18 @@ async function byCountry() {
   R.pick_mini = /<td>First opens <small class="faint">\/ day<\/small><\/td><td>300<\/td><td>300<\/td><td>300<\/td><td>310<\/td><\/tr><tr><td>Opened app<\/td><td>83%<\/td><td>83%<\/td><td>80%<\/td><td>80%<\/td><\/tr><tr><td>Splash → Home<\/td><td>80%<\/td><td>80%<\/td><td><b>80%<\/b><\/td><td>80%<\/td><\/tr><\/tbody>/.test(h);
   R.pick_no_late = !h.includes('Incl. late open') && !h.includes('<th>Language</th>');
   R.pick_steps = (h.match(/class="fo-bl"/g) || []).length === 1 && h.includes('<span class="fo-bl">Home</span>') && h.includes('Country-wise sirf Home tak padha jata hai');
-  R.pick_note = h.includes('Country view me sirf <b>First open → Splash → Home</b> hai') && h.includes('country data <b>1 Aug 2026 – 29 Sep 2026</b> ka hai');
+  R.pick_note = h.includes('<p class="fo-note">🌍 Country data <b>1 Aug 2026 – 29 Sep 2026</b> ka hai (GA4 sirf ~2 mahine ka data rakhta hai');
+  // the in-card controls follow the one pick; the card titles say the country + ✕ All countries (as the ROI card)
+  R.pick_in_on = (h.match(/data-fo-cc="XB" aria-pressed="true"/g) || []).length === 3 && (h.match(/data-fo-cc="" aria-pressed="true"/g) || []).length === 0
+    && h.includes('id="fo-cc-m"') && h.includes('id="fo-cc-d"');
+  const X = '<button type="button" class="fo-back fo-ccx" data-fo-ccx="1">✕ All countries</button>';
+  R.pick_titles = h.includes(`<div class="ct"><h3>Every month · [XB] Name XB</h3>${X}<span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div><div class="fo-cc fo-cci" id="fo-cc-m"`)
+    && h.includes(`<div class="ct"><h3>Every day · [XB] Name XB</h3>${X}<span class="faint" style="font-size:11.5px">sabse naya din upar</span></div><div class="fo-cc fo-cci" id="fo-cc-d"`);
+  // Every day for a country: the columns it can fill, and ONE line (in that card, under its control) saying why the others
+  // are not there — the text on screen once
+  const dayCard = h.slice(h.indexOf('<h3>Every day · '));
+  R.pick_day_cols = /<\/select><\/div><p class="fo-note">🌍 Country view me sirf <b>First open → Splash → Home<\/b> hai — Language \/ Permission \/ Intro aur "incl\. late open" country-wise nahi padhe, isliye wo columns yahan nahi\.<\/p><div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day<\/th><th>First opens<\/th><th>Splash<\/th><th>Home<\/th><th>Splash → Home<\/th><th>Opened app<\/th><\/tr><\/thead>/.test(dayCard);
+  R.pick_cols_once = h.split(FO._.CC_COLS).length === 2 && (h.match(/Country view me sirf/g) || []).length === 1 && !h.includes('Intro aur "incl. late open" country-wise nahi padhe), aur');
   R.pick_no_gap = !h.includes('fo-gap') && !h.includes('fo-ccgap');
   R.pick_months = [...h.matchAll(/<td class="fo-nm">(?:<span class="fo-smp"[^>]*>≈<\/span>)?([A-Z][a-z]{2} 2026) <small>· (\d+)d<\/small><\/td><td>([\d,]+)<\/td><td>([\d,]+)<\/td><td>([\d,]+)<\/td><td><b>(\d+%)<\/b><\/td><td>(\d+%)<\/td>/g)].map(m => m.slice(1));
   R.pick_month_smp = /<td class="fo-nm"><span class="fo-smp"[^>]*>≈<\/span>Sep 2026/.test(h);
@@ -280,17 +314,33 @@ async function byCountry() {
   click('[data-fo-ccx]', {});
   R.x_cc = FO._.cc();
   R.x_all = html2.includes('data-fo-cc="" aria-pressed="true"') && html2.includes('<th>Incl. late open</th>') && html2.includes('By country · last 7 days vs usual');
+  // ONE state for the three controls: a chip in the Every month card, the select in the Every day card, the ✕ in a card
+  const tgt = (sel, ds, from) => ({ closest: s => s === sel ? { dataset: ds, value: ds.value } : s === '.fo-cc' && from ? { id: from } : null });
+  S2.onclick({ target: tgt('[data-fo-cc]', { foCc: 'XC' }, 'fo-cc-m') });
+  R.in_m_cc = FO._.cc();
+  R.in_m_all3 = (html2.match(/data-fo-cc="XC" aria-pressed="true"/g) || []).length === 3 && html2.includes('<h3>Every day · [XC] Name XC</h3>');
+  S2.onchange({ target: tgt('[data-fo-ccsel]', { value: 'XI' }, 'fo-cc-d') });
+  R.in_d_cc = FO._.cc();
+  R.in_d_all3 = (html2.match(/<option value="XI" selected>/g) || []).length === 3 && (html2.match(/<select class="fo-ccs on"/g) || []).length === 3
+    && html2.includes('<span class="fo-cct">[XI] Name XI</span>') && html2.includes('<h3>Every month · [XI] Name XI</h3>');
+  S2.onclick({ target: { closest: s => s === '[data-fo-ccx]' ? { dataset: {} } : s === '.fo-card' ? { querySelector: q => q === '.fo-cci' ? { id: 'fo-cc-d' } : null } : null } });
+  R.in_x_cc = FO._.cc();
+  R.in_x_all = (html2.match(/data-fo-cc="" aria-pressed="true"/g) || []).length === 3 && html2.includes('<h3>Every day</h3>') && !html2.includes('fo-ccx');
+  R.from = [FO._.ccFrom(tgt('[data-fo-cc]', { foCc: 'XA' }, 'fo-cc-d')), FO._.ccFrom(tgt('[data-fo-cc]', { foCc: 'XA' }, '')),
+    FO._.ccFrom({ closest: s => s === '.fo-card' ? { querySelector: () => null } : null }), FO._.ccFrom(null)];
   // a failed country load: Try again in the country area only; the rest drawn from the main file; the tap loads it again
   FAILCC.add('firstopen_cc_dddddddddddd.json.gz');
   c2.APP = 'Delta'; FO.paint(); await tick(); await tick();
   const all = live();
-  R.f_retry_in_area = IDS['fo-cc'] && IDS['fo-cc']._html.includes('data-fo-ccretry="1">Try again</button>') && (all.match(/data-fo-ccretry/g) || []).length === 1;
-  R.f_rest = html2.includes('<td>First opens <small class="faint">/ day</small></td>') && !all.includes('data-fo-retry') && IDS['fo-ccbx']._html === '';
+  const CCW = ['fo-cc', 'fo-cc-m', 'fo-cc-d'];
+  R.f_retry_in_area = CCW.every(id => IDS[id] && IDS[id]._html === '<span class="fo-ccl">Country</span><span class="fo-ccw">⚠️ Country data load nahi hua. <button type="button" class="fo-lnkb" data-fo-ccretry="1">Try again</button></span>')
+    && (all.match(/data-fo-ccretry/g) || []).length === 3;              // the top control + the two in-card ones, nowhere else
+  R.f_rest = html2.includes('<td>First opens <small class="faint">/ day</small></td>') && html2.includes('<th>Incl. late open</th>') && !all.includes('data-fo-retry') && IDS['fo-ccbx']._html === '';
   click('[data-fo-ccretry]', {});
-  R.f_loading = IDS['fo-cc']._html.includes('⏳ Country data loading…');
+  R.f_loading = CCW.every(id => IDS[id]._html.includes('⏳ Country data loading…'));
   await tick(); await tick();
   R.f_loads = LD['firstopen_cc_dddddddddddd.json.gz'];
-  R.f_ok = rowsOf(IDS['fo-ccbx']._html).join(',') === 'XA,XB,XC';
+  R.f_ok = rowsOf(IDS['fo-ccbx']._html).join(',') === 'XA,XB,XC' && CCW.every(id => IDS[id]._html.includes('data-fo-cc="XC" aria-pressed="false"'));
   R.f_range_fallback = IDS['fo-ccbx']._html.includes('Country data <b>1 Aug 2026 – 29 Sep 2026</b> ka hai');   // no last_day: its last day
   // the strip: the top 6 chips in ONE sideways-scrolling row (the control keeps one height whatever it holds)
   R.strip = /<span class="fo-ccl">Country<\/span><button type="button" class="fo-ccc" data-fo-cc=""[^>]*>🌍 All countries<\/button><span class="fo-ccr">(<button type="button" class="fo-ccc"[^>]*>.*?<\/button>){3}<\/span><select /.test(IDS['fo-cc']._html);
@@ -312,6 +362,8 @@ async function byCountry() {
   click('[data-fo-ccx]', {});
   out.cc = R;
   out.hold = holdModel(FO, c2, S2);
+  c2.APP = 'Beta Pick'; FO.paint();
+  out.pick = pickModel(FO, c2, S2, () => html2);
 }
 
 // hold(): a layout model (block heights, a sticky top bar, scrollY): the board's slot grows from 0 to the board's height
@@ -346,5 +398,97 @@ function holdModel(FO, c2, S2) {
     };
   }
   c2.document.querySelector = QS; delete c2.window; S2.children = undefined;
+  return R;
+}
+
+// pick() from a control INSIDE a card, on a layout model built from the page's OWN html (every block's height from what it
+// holds: table rows, step bars, notes by their length, the chart, the controls, a card title that wraps; the steps and the
+// chart side by side from 1180 px; the Country control 36 px, 80 px on a phone). The reader has the Every day (or Every
+// month) card's control on screen and picks there; the whole view above it is redrawn with other heights (mini table, steps,
+// a note, the chart, the board, the month card, the card's own title with ✕) — that control's top must not move (≤ 1 px).
+// Worst case on purpose: the browser clamps the scroll the moment the new html is laid out (the screen's min-height is
+// dropped by paint()), before pick() puts the page height back.
+function pickModel(FO, c2, S2, html) {
+  const blocksOf = (h, tags) => { const re = new RegExp('<(\\/?)(' + tags + ')\\b[^>]*>', 'g'), out = []; let d = 0, st = 0, open = '', m;
+    while ((m = re.exec(h))) { if (!m[1]) { if (d === 0) { st = re.lastIndex; open = m[0]; } d++; } else { d--; if (d === 0) out.push({ open, inner: h.slice(st, m.index) }); } }
+    return out; };
+  const text = h => h.replace(/<[^>]+>/g, '').replace(/&[a-z#0-9]+;/g, 'x');
+  const has = (o, c) => new RegExp('class="[^"]*\\b' + c + '\\b').test(o);
+  const lines = (h, w, cw) => Math.max(1, Math.ceil(text(h).length * cw / w));
+  const wrap = (items, w, gap, rgap) => { const rows = []; let cur = null;   // flex-wrap: [width, height] items in rows
+    for (const [iw, ih] of items) { if (cur && cur.w + gap + iw <= w) { cur.w += gap + iw; cur.h = Math.max(cur.h, ih); } else { cur = { w: Math.min(iw, w), h: ih }; rows.push(cur); } }
+    return rows.reduce((t, r) => t + r.h, 0) + Math.max(0, rows.length - 1) * rgap; };
+  function model(vw) {
+    const phone = vw <= 760, W = phone ? vw - 24 : vw - 240 - 48, CTL = (phone ? 80 : 36);
+    const rowsH = inner => { const n = (inner.match(/<tr\b/g) || []).length; return n ? 41 + (n - 1) * 37 : 0; };
+    const head = (inner, w) => { const it = [], h3 = /<h3>([\s\S]*?)<\/h3>/.exec(inner), sp = /<span class="faint"[^>]*>([\s\S]*?)<\/span>/.exec(inner);
+      if (h3) it.push([text(h3[1]).length * 8, 20]); if (/<button/.test(inner)) it.push([130, 30]); if (sp) it.push([text(sp[1]).length * 5.6, 16]);
+      return wrap(it, w, 12, 4) + 12; };
+    const inBlock = (b, w) => { const o = b.open;
+      if (has(o, 'ct')) return head(b.inner, w);
+      if (has(o, 'fo-cc')) return CTL + 12;
+      if (has(o, 'fo-tw')) return 1 + Math.min(has(o, 'fo-tall') ? 560 : 1e9, rowsH(b.inner));
+      if (o.startsWith('<p')) return lines(b.inner, Math.min(w, 820), 6.3) * 18 + 12;
+      if (has(o, 'fo-bar')) return 31;
+      if (has(o, 'fo-chart')) return 210;
+      if (has(o, 'fo-lg')) return 24;
+      if (has(o, 'fo-chips')) { const n = (b.inner.match(/<button/g) || []).length, per = Math.max(1, Math.floor((w + 8) / 118)); return Math.ceil(n / per) * 44 - 8 + 14; }
+      return 40; };
+    const cardH = (inner, w) => 2 + 32 + blocksOf(inner, 'div|p').reduce((t, b) => t + inBlock(b, w - 36), 0) + 14;
+    const crumb = inner => wrap(blocksOf(inner, 'button|span').map((b, i) => [Math.min(W, text(b.inner).length * 7 + 26), 36 + (i && text(b.inner).length * 6.3 > W ? 18 : 0)]), W, 12, 8) + 12;
+    const blockH = b => { const o = b.open;
+      if (o.startsWith('<p')) return lines(b.inner, Math.min(W, 820), 6.4) * 18 + 12;
+      if (has(o, 'fo-crumb')) return crumb(b.inner);
+      if (has(o, 'fo-cc')) return CTL + 12;
+      if (has(o, 'card')) return cardH(b.inner, W);
+      if (has(o, 'fo-grid')) { const cs = blocksOf(b.inner, 'div|p'); if (vw >= 1180) { const w1 = Math.max(300, (W - 14) / 3); return Math.max(cardH(cs[0].inner, w1), cardH(cs[1].inner, W - 14 - w1)); }
+        return cs.reduce((t, c) => t + cardH(c.inner, W), 0); }
+      if (/id="fo-ccbx"/.test(o)) return blocksOf(b.inner, 'div|p').reduce((t, c) => t + cardH(c.inner, W), 0);
+      return 20; };
+    // the top of the element with this id within the screen: a block of the screen, or a block inside one of its cards
+    const docTop = (h, id) => { let y = 0; const k = 'id="' + id + '"';
+      for (const b of blocksOf(h, 'div|p')) { if (b.open.includes(k)) return y;
+        if (b.inner.includes(k)) { let yy = y + 1 + 16; for (const c of blocksOf(b.inner, 'div|p')) { if (c.open.includes(k)) return yy; yy += inBlock(c, W - 36); } return null; }
+        y += blockH(b); }
+      return null; };
+    return { docTop, total: h => blocksOf(h, 'div|p').reduce((t, b) => t + blockH(b), 0), CTL };
+  }
+  const R = {}, QS = c2.document.querySelector, GE = c2.document.getElementById, IH = Object.getOwnPropertyDescriptor(S2, 'innerHTML'), OH = Object.getOwnPropertyDescriptor(S2, 'offsetHeight');
+  for (const [vw, vh, tb] of [[375, 812, 73], [1280, 900, 68]]) {
+    const M = model(vw), top0 = tb + 15;   // the screen starts under the sticky top bar + the content's padding
+    const W = { scrollY: 0, innerHeight: vh, scrollBy(x, y) { W.scrollY = Math.max(0, Math.min(W.scrollY + y, maxY())); } };
+    const pageH = () => Math.max(M.total(html()), parseFloat(S2.style.minHeight) || 0);
+    const maxY = () => Math.max(0, top0 + pageH() + 32 - vh);
+    c2.window = W;
+    Object.defineProperty(S2, 'offsetHeight', { configurable: true, get: () => M.total(html()) });
+    Object.defineProperty(S2, 'innerHTML', { configurable: true, get: IH.get, set: v => { IH.set(v); W.scrollY = Math.min(W.scrollY, maxY()); } });
+    c2.document.getElementById = id => { const e = GE(id); if (e && /^fo-cc(-[md])?$/.test(id)) e.getBoundingClientRect = () => { const t = top0 + M.docTop(html(), id) - W.scrollY; return { top: t, bottom: t + M.CTL, height: M.CTL }; }; return e; };
+    c2.document.querySelector = s => s === '.topbar' ? { getBoundingClientRect: () => ({ bottom: tb }) } : QS(s);
+    const vt = id => top0 + M.docTop(html(), id) - W.scrollY;           // where the control is on screen now
+    const place = (id, y) => { W.scrollY = Math.max(0, Math.min(top0 + M.docTop(html(), id) - y, maxY())); };
+    const reset = () => { if (FO._.cc()) FO._.pick(''); S2.style.minHeight = ''; };
+    const tap = (sel, ds, from) => ({ closest: s => s === sel ? { dataset: ds, value: ds.value } : s === '.fo-cc' && from ? { id: from } : null });
+    const run = (id, y, act) => { place(id, y); const y0 = vt(id), d0 = M.docTop(html(), id), s0 = W.scrollY; act();
+      return { dy: Math.round((vt(id) - y0) * 10) / 10, moved: M.docTop(html(), id) - d0, scrolled: W.scrollY - s0, at: Math.round(y0) }; };
+    const r = {};
+    reset();
+    r.day_chip = run('fo-cc-d', 300, () => S2.onclick({ target: tap('[data-fo-cc]', { foCc: 'XB' }, 'fo-cc-d') }));   // All → a country
+    r.day_cc = FO._.cc();
+    r.day_chip2 = run('fo-cc-d', 300, () => S2.onclick({ target: tap('[data-fo-cc]', { foCc: 'XA' }, 'fo-cc-d') }));  // a country → another
+    reset();
+    r.day_sel = run('fo-cc-d', 420, () => S2.onchange({ target: tap('[data-fo-ccsel]', { value: 'XH' }, 'fo-cc-d') }));   // All → the select's country
+    r.sel_cc = FO._.cc();
+    r.day_x = run('fo-cc-d', 300, () => S2.onclick({ target: { closest: s => s === '[data-fo-ccx]' ? { dataset: {} } : s === '.fo-card' ? { querySelector: q => q === '.fo-cci' ? { id: 'fo-cc-d' } : null } : null } }));
+    r.x_cc = FO._.cc();
+    reset();
+    r.month_chip = run('fo-cc-m', 200, () => S2.onclick({ target: tap('[data-fo-cc]', { foCc: 'XC' }, 'fo-cc-m') }));
+    // the top control (under the crumb): the crumb above it grows for a country (its name, the ✕) — it stays too
+    reset();
+    r.top_chip = run('fo-cc', 200, () => S2.onclick({ target: tap('[data-fo-cc]', { foCc: 'XB' }, 'fo-cc') }));
+    reset();
+    R[vw] = r;
+  }
+  Object.defineProperty(S2, 'innerHTML', IH); Object.defineProperty(S2, 'offsetHeight', OH);
+  c2.document.getElementById = GE; c2.document.querySelector = QS; delete c2.window;
   return R;
 }

@@ -323,3 +323,16 @@ def test_today_yesterday_labels(report):
     assert L["today"] == {"lbl": "Today · " + T + " · live", "dates": T + " · live", "name": "Today"}
     assert L["yesterday"] == {"lbl": "Yesterday · " + Y, "dates": Y, "name": "Yesterday"}
     assert L["7d"]["name"] == "Last 7 days" and L["7d"]["lbl"].endswith(" · 7d") and "Today" not in L["7d"]["lbl"] and L["7d"]["dates"] == L["7d"]["lbl"]
+
+
+@needs_node
+def test_first_open_tab_in_the_hub(report):
+    """🆕 First open as an app's hub tab (owner uses "Try new layout: On"): the page's own FO module on the same screen as the
+    classic layout — the Country control under the crumb AND in the Every month / Every day cards, one pick for all three,
+    the card titles with the country + ✕, a country's own columns — byte for byte the classic layout's screen."""
+    r = O(report, "firstopen")
+    assert r["st"]["scr"] == "firstopen" and r["st"]["tab"] == "firstopen" and r["st"]["inHub"] and r["tabs"]
+    assert r["loads"] == ["firstopen.json.gz", "firstopen_cc_0123456789ab.json.gz"]
+    assert r["ctl"] == [1, 1, 1] and r["titles"]
+    assert r["pick"] == {"cc": "XB", "on": 3, "titles": 2, "cols": True}
+    assert r["classic"] == {"on": False, "scr": "firstopen", "same_pick": True, "same_all": True}
