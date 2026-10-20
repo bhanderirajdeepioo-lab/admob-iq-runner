@@ -15,16 +15,21 @@ card and the tab's nav item read it). Every day of every store, nothing trimmed.
 
 BY COUNTRY (owner, 20 Oct 2026: "country wise bhi dekh saku esa kara do"): per app with a country store (fetch.
 ga4_firstopen_cc, ≥ 1 real day) ONE more lazy file next to it, site/firstopen_cc_<key>.json.gz (key = the app's own):
-  {"v", "key", "app_id", "final_till" (the app's), "first_day",
+  {"v", "key", "app_id", "final_till" (the app's), "first_day", "last_day" (the newest real day),
+   "missing" (days of the status window final_till − 34 … final_till the store has no real day for; 0 = whole),
    "days": [[YYYY-MM-DD, first_open, splash, home (the day's total), sample | null, {cc: [first_open, splash, home]}], …]
-           (every real day of the store, ascending, nothing trimmed; only these three steps exist per country),
+           (every real day of the store, ascending, nothing trimmed — it can have holes; only these three steps exist
+           per country),
    "summary": [{cc, status, why, s2h, usual, change, opened, opened_usual, fo_day, fo_day_usual, final_days, sample,
-                share (the country's first opens ÷ the day totals', last 7 final days)}]   (EVERY country GA4 named; the
-                app's own status rule, summarize() on rows in the app's row layout; first opens of the 7 days first),
+                share (the country's first opens ÷ the day totals', the same 7 days)}]   (EVERY country GA4 named; the
+                app's own status rule, summarize() on rows in the app's row layout, fed only the UNBROKEN run of
+                calendar days that ends at final_till: a hole (the backfill reads oldest / newest in turn) or a lag (a
+                deferred / switched-off fetch) inside the 35 days = Too early with the why, never a window across a hole
+                or weeks old; first opens of the 7 days first),
    "unnamed": {"summary": {fo_day, opened, s2h, share}}}   (the day's total − every named country: users GA4 named no
                 country for; measured as is, slightly negative on sampled days, never clamped)
-and the app's entry in firstopen.json.gz gets "cc": {file, v, from, n, days} — only when that file was written. A failure
-or a too big file costs only that app's country file; stale country files are removed; the splat rule covers them.
+and the app's entry in firstopen.json.gz gets "cc": {file, v, from, last, n, days} — only when that file was written. A
+failure or a too big file costs only that app's country file; stale country files are removed; the splat rule covers them.
 
 Status, per app: Splash → Home (Home ÷ Splash of the strict funnel) over the last 7 FINAL days (≤ the property's today − 2)
 vs the 28 final days before: down ≥ 5 points Worse, ≥ 2 Watch, up ≥ 5 Better, else Normal; fewer than 35 final days Too
@@ -191,33 +196,64 @@ def cc_days(store):
     return out
 
 
+def cc_window(days, final_till):
+    """The country file's status window → (run, missing). run = the indices (oldest first) of the UNBROKEN run of calendar
+    days that ends exactly at final_till (empty when the store has no real day for final_till); missing = the calendar days
+    of final_till − (MIN_DAYS − 1) … final_till, from the store's first real day on, the store has no real day for.
+    The country store is not contiguous the way the app's is (its backfill reads the oldest and the newest day in turn;
+    a deferred or switched-off fetch falls behind; a {"none": true} day): a window counted over the stored days would
+    straddle a hole or be weeks old while the page says "last 7 days"."""
+    have = {d[0]: i for i, d in enumerate(days)}
+    end = date.fromisoformat(final_till)
+    run, k = [], end
+    while k.isoformat() in have:
+        run.append(have[k.isoformat()])
+        k -= timedelta(days=1)
+    run.reverse()
+    lo = max(date.fromisoformat(days[0][0]), end - timedelta(days=MIN_DAYS - 1)) if days else end + timedelta(days=1)
+    missing = sum(1 for i in range((end - lo).days + 1) if (lo + timedelta(days=i)).isoformat() not in have)
+    return run, missing
+
+
 def build_cc(store, key, aid, final_till):
     """One app's country store → its country file's body, or None (no real day). Every country GA4 named is kept; its
     status is the app's own rule (summarize() on rows in the app's row layout: first_open / splash / home filled, the
-    other steps None); what GA4 named no country for = the day's total − the named countries, as measured."""
+    other steps None) fed ONLY the unbroken calendar run ending at final_till (cc_window) — a hole or a lag inside the
+    rule's 35 days leaves fewer than MIN_DAYS days, so the rule itself says Too early (why: the hole or the last day);
+    the share and the unnamed users over the same 7 calendar days. What GA4 named no country for = the day's total − the
+    named countries, as measured. "days" keeps every real day (nothing trimmed); "last_day" = the newest one; "missing" =
+    the days the status window lacks (0 = whole)."""
     days = cc_days(store)
     if not days:
         return None
     ccs = sorted(set().union(*(set(d[5]) for d in days)))
-    fin = [i for i, d in enumerate(days) if d[0] <= final_till]
-    w7 = fin[-7:]
+    run, missing = cc_window(days, final_till)
+    fin_all = [d[0] for d in days if d[0] <= final_till]
+    w7 = run[-7:]
     t7 = sum(days[i][1] for i in w7)
     rest = [None] * (len(FIELDS) - 3)
     order = []
     for cc in ccs:
-        rows = [[d[0]] + list(d[5].get(cc) or (0, 0, 0)) + rest + [d[4]] for d in days]
+        rows = [[days[i][0]] + list(days[i][5].get(cc) or (0, 0, 0)) + rest + [days[i][4]] for i in run]
         x = summarize(cc, cc, rows, final_till)
-        f7, fall = sum(rows[i][1] for i in w7), sum(r[1] for r in rows)
+        if x["status"] == "Too early" and len(fin_all) > len(run):    # the store has final days the run can not reach
+            x["why"] = ("country data %s tak" % fin_all[-1] if fin_all[-1] < final_till
+                        else "country data incomplete: %d din missing" % missing)
+        f7 = sum(r[1] for r in rows[-7:])
+        fall = sum(int((d[5].get(cc) or (0,))[0]) for d in days)
         e = {"cc": cc}
         e.update((k, x[k]) for k in CC_KEEP)
+        if not w7:
+            e["fo_day"] = None                                       # no day in the window: not known (never "0 / day")
         e["share"] = _r6(f7 / t7) if t7 > 0 else None
         order.append((-f7, -fall, cc, e))
     order.sort(key=lambda z: z[:3])
     un = [[d[j] - sum(v[j - 1] for v in d[5].values()) for j in (1, 2, 3)] for d in days]
     fu, su, hu = (sum(un[i][j] for i in w7) for j in range(3))
-    unnamed = {"fo_day": _r6(fu / len(w7)) if w7 else 0, "opened": _r6(su / fu) if fu > 0 and su >= 0 else None,
+    unnamed = {"fo_day": _r6(fu / len(w7)) if w7 else None, "opened": _r6(su / fu) if fu > 0 and su >= 0 else None,
                "s2h": _r6(hu / su) if su > 0 and hu >= 0 else None, "share": _r6(fu / t7) if t7 > 0 else None}
-    return {"v": V, "key": key, "app_id": aid, "final_till": final_till, "first_day": days[0][0], "days": days,
+    return {"v": V, "key": key, "app_id": aid, "final_till": final_till, "first_day": days[0][0],
+            "last_day": days[-1][0], "missing": missing, "days": days,
             "summary": [z[3] for z in order], "unnamed": {"summary": unnamed}}
 
 
@@ -257,7 +293,7 @@ def attach_cc(apps, data_dir, out_dir, counts):
                     continue
                 fn, names = cc_file(a["key"]), [x["cc"] for x in body["summary"]]
                 ptr = {"file": fn, "v": hashlib.sha1(raw).hexdigest()[:12], "from": body["first_day"],
-                       "n": len(names), "days": len(body["days"])}
+                       "last": body["last_day"], "n": len(names), "days": len(body["days"])}
                 write_json_gz_stable(os.path.join(out_dir, fn), body)
                 keep.add(fn)
                 a["cc"] = ptr

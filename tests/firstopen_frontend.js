@@ -12,7 +12,13 @@
 //     at once; a failed load = Try again in the country area only), the board (sorted, status filter, the GA4-unnamed row
 //     last), a pick from a chip / the board / the select redraws the mini table, months and every day from that country's
 //     rows, the pick kept across apps (+ the "no such country" message), the page height and the board's scroll kept on a
-//     pick (no jump), and the All countries view = today's view + the two country blocks, nothing else.
+//     pick (no jump), and the All countries view = today's view + the two country blocks, nothing else;
+//   * a country file with a HOLE (the backfill reads oldest / newest in turn) and a status window that is not whole: the
+//     date range first – last, ONE warning on the board and in the country view, a "gap: N din" row in Every day, the
+//     chart's rows on the calendar (a day not read = no point, the line breaks there);
+//   * hold() — the reader's place when the country file arrives late — on a small layout model at 375 and 1280 px: the card
+//     being read stays (Every month just under the top bar, or mid-screen), nothing scrolls at the top of the page, the
+//     chart stays when the board's slot is in the lower half.
 // Prints ONE JSON report; tests/test_firstopen_frontend.py asserts on it.   usage: node firstopen_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -149,21 +155,28 @@ async function byCountry() {
   const ST = { XA: 'Worse', XB: 'Better', XC: 'Normal', XD: 'Watch' };
   const S2H = { XA: 0.5, XB: 0.8, XC: 0.66, XD: 0.5, XE: 0.5, XF: 0.5, XG: 0.5, XH: 0.5, XI: 0 };
   const FOD = { XA: 500, XB: 300, XC: 200, XD: 100, XE: 50, XF: 20, XG: 10, XH: 5, XI: 0.4 };
-  const ccFile = (key, codes) => ({ v: 1, key, app_id: 'id-' + key, final_till: day(57), first_day: day(0),
+  const ccFile = (key, codes, more) => ({ v: 1, key, app_id: 'id-' + key, final_till: day(57), first_day: day(0), ...(more || {}),
     days: Array.from({ length: 60 }, (_, i) => { const c = {}; for (const k of codes) if (k !== 'XI' || i % 3 === 0) c[k] = VAL[k].slice();
       const t = [0, 1, 2].map(j => Object.values(c).reduce((s, v) => s + v[j], 0) + [9, 8, 7][j]); return [day(i), t[0], t[1], t[2], i === 40 ? 0.25 : null, c]; }),
     summary: codes.map(k => ({ cc: k, status: ST[k] || 'N/A', why: ST[k] ? '' : 'low data', s2h: S2H[k], usual: k === 'XA' ? 0.6 : S2H[k], change: k === 'XA' ? -0.1 : 0,
       opened: 0.8, opened_usual: 0.8, fo_day: FOD[k], fo_day_usual: FOD[k] + 10, final_days: 58, sample: k === 'XB' ? 0.25 : null, share: FOD[k] / 1300 })),
     unnamed: { summary: { fo_day: 9, opened: 0.89, s2h: 0.875, share: 9 / 1300 } } });
-  const CCF = { 'firstopen_cc_0123456789ab.json.gz': ccFile('kb', CODES), 'firstopen_cc_abcdef012345.json.gz': ccFile('kc', ['XA', 'XB']),
+  const CCF = { 'firstopen_cc_0123456789ab.json.gz': ccFile('kb', CODES, { last_day: day(59), missing: 0 }),
+    'firstopen_cc_abcdef012345.json.gz': ccFile('kc', ['XA', 'XB'], { last_day: day(59), missing: 0 }),
     'firstopen_cc_dddddddddddd.json.gz': ccFile('kd', ['XA', 'XB', 'XC']) };
+  // Epsilon: its country store has a hole (days 20 … 39 not read yet), so the status window lacks 18 days → Too early
+  const GAP = ccFile('ke', ['XA', 'XB'], { last_day: day(59), missing: 18 });
+  GAP.days = GAP.days.filter((d, i) => i < 20 || i >= 40);
+  GAP.summary.forEach(x => { x.status = 'Too early'; x.why = 'country data incomplete: 18 din missing'; });
+  CCF['firstopen_cc_eeeeeeeeeeee.json.gz'] = GAP;
   const ptrOf = (f, n) => ({ file: f, v: 'c-' + f.slice(13, 17), from: day(0), n, days: 60 });
   const F2 = JSON.parse(JSON.stringify(FILE));
   F2.apps = F2.apps.filter(a => a.key !== 'kh');
   F2.apps[1].cc = ptrOf('firstopen_cc_0123456789ab.json.gz', 9);
   F2.apps[2].cc = ptrOf('firstopen_cc_abcdef012345.json.gz', 2);
   F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'kd', app: 'Delta', app_id: 'id-d', cc: ptrOf('firstopen_cc_dddddddddddd.json.gz', 3) });
-  F2.summary = F2.summary.filter(x => x.key !== 'kh').concat([{ ...F2.summary[0], key: 'kd', app: 'Delta' }]);
+  F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'ke', app: 'Epsilon', app_id: 'id-e', cc: ptrOf('firstopen_cc_eeeeeeeeeeee.json.gz', 2) });
+  F2.summary = F2.summary.filter(x => x.key !== 'kh').concat([{ ...F2.summary[0], key: 'kd', app: 'Delta' }, { ...F2.summary[0], key: 'ke', app: 'Epsilon' }]);
   const c2 = { ...ctx, DATA: { firstopen: { file: 'firstopen.json.gz', v: 'v2', apps: {} }, apps_catalog: [{ app_id: 'id-a', app_name: 'Alpha Pick' }, { app_id: 'id-b', app_name: 'Beta Pick' }] },
     APP: 'Beta Pick',
     document: { querySelector: s => s === '.screen.on' ? { dataset: { screen: 'firstopen' } } : (s === '.screen[data-screen=firstopen]' ? S2 : null),
@@ -196,7 +209,8 @@ async function byCountry() {
   R.board_chips = [...board.matchAll(/data-fo-ccfilt="([^"]+)"[^>]*><span>[^<]*<\/span> <b>(\d+)<\/b>/g)].map(m => [m[1], +m[2]]);
   R.board_cells_xa = board.includes('<td class="down">−10 pts</td><td>80%</td><td>500</td><td>38%</td></tr>');
   R.board_cells_xi = board.includes('<td>0.4</td><td>&lt;0.1%</td></tr>') && board.includes('<td>5</td><td>0.4%</td></tr>');
-  R.board_note = board.includes('Country data <b>1 Aug 2026</b> se hai (GA4 sirf ~2 mahine rakhta hai) aur sirf First open → Splash → Home');
+  R.board_note = board.includes('Country data <b>1 Aug 2026 – 29 Sep 2026</b> ka hai (GA4 sirf ~2 mahine rakhta hai) aur sirf First open → Splash → Home');
+  R.board_no_gap_note = !board.includes('fo-ccgap');
   // the board: a column sort, the status filter (no jump), back
   click('[data-fo-ccsort]', { foCcsort: 's2h' });
   R.sort_s2h = rowsOf(IDS['fo-ccbw']._html);
@@ -232,7 +246,8 @@ async function byCountry() {
   R.pick_mini = /<td>First opens <small class="faint">\/ day<\/small><\/td><td>300<\/td><td>300<\/td><td>300<\/td><td>310<\/td><\/tr><tr><td>Opened app<\/td><td>83%<\/td><td>83%<\/td><td>80%<\/td><td>80%<\/td><\/tr><tr><td>Splash → Home<\/td><td>80%<\/td><td>80%<\/td><td><b>80%<\/b><\/td><td>80%<\/td><\/tr><\/tbody>/.test(h);
   R.pick_no_late = !h.includes('Incl. late open') && !h.includes('<th>Language</th>');
   R.pick_steps = (h.match(/class="fo-bl"/g) || []).length === 1 && h.includes('<span class="fo-bl">Home</span>') && h.includes('Country-wise sirf Home tak padha jata hai');
-  R.pick_note = h.includes('Country view me sirf <b>First open → Splash → Home</b> hai') && h.includes('country data <b>1 Aug 2026</b> se hai');
+  R.pick_note = h.includes('Country view me sirf <b>First open → Splash → Home</b> hai') && h.includes('country data <b>1 Aug 2026 – 29 Sep 2026</b> ka hai');
+  R.pick_no_gap = !h.includes('fo-gap') && !h.includes('fo-ccgap');
   R.pick_months = [...h.matchAll(/<td class="fo-nm">(?:<span class="fo-smp"[^>]*>≈<\/span>)?([A-Z][a-z]{2} 2026) <small>· (\d+)d<\/small><\/td><td>([\d,]+)<\/td><td>([\d,]+)<\/td><td>([\d,]+)<\/td><td><b>(\d+%)<\/b><\/td><td>(\d+%)<\/td>/g)].map(m => m.slice(1));
   R.pick_month_smp = /<td class="fo-nm"><span class="fo-smp"[^>]*>≈<\/span>Sep 2026/.test(h);
   R.pick_days = (h.match(/<tr><td class="fo-nm[^"]*">(<span class="fo-smp"[^>]*>≈<\/span>)?\d+ [A-Z][a-z]{2} 2026/g) || []).length;
@@ -276,5 +291,60 @@ async function byCountry() {
   await tick(); await tick();
   R.f_loads = LD['firstopen_cc_dddddddddddd.json.gz'];
   R.f_ok = rowsOf(IDS['fo-ccbx']._html).join(',') === 'XA,XB,XC';
+  R.f_range_fallback = IDS['fo-ccbx']._html.includes('Country data <b>1 Aug 2026 – 29 Sep 2026</b> ka hai');   // no last_day: its last day
+  // the strip: the top 6 chips in ONE sideways-scrolling row (the control keeps one height whatever it holds)
+  R.strip = /<span class="fo-ccl">Country<\/span><button type="button" class="fo-ccc" data-fo-cc=""[^>]*>🌍 All countries<\/button><span class="fo-ccr">(<button type="button" class="fo-ccc"[^>]*>.*?<\/button>){3}<\/span><select /.test(IDS['fo-cc']._html);
+  // a hole in the country store: the range, ONE warning, the gap row, the chart on the calendar
+  c2.APP = 'Epsilon'; FO.paint(); await tick(); await tick();
+  const gb = IDS['fo-ccbx'] ? IDS['fo-ccbx']._html : '';
+  R.g_warn = (gb.match(/class="fo-note fo-ccgap"/g) || []).length === 1 && gb.includes('⚠️ Status ke liye 24 Aug – 27 Sep ke saare din ka country data chahiye — inme se <b>18 din</b> abhi nahi padhe (country data 1 Aug 2026 – 29 Sep 2026;')
+    && gb.includes('Isliye abhi status <b>Too early</b>');
+  R.g_why = gb.includes('<small>country data incomplete: 18 din missing</small>');
+  click('[data-fo-cc]', { foCc: 'XA' });
+  const gh = html2;
+  R.g_view_warn = (gh.match(/class="fo-note fo-ccgap"/g) || []).length === 2;      // the view's note + the board's
+  R.g_gap_rows = [...gh.matchAll(/<tr class="fo-gap"><td colspan="6">([^<]*)<\/td><\/tr>/g)].map(m => m[1]);
+  R.g_gap_between = /10 Sep 2026<\/td>(?:(?!<tr>).)*<\/tr><tr class="fo-gap">.*?<\/tr><tr><td class="fo-nm">20 Aug 2026<\/td>/.test(gh);
+  R.g_days = (gh.match(/<tr><td class="fo-nm[^"]*">(<span class="fo-smp"[^>]*>≈<\/span>)?\d+ [A-Z][a-z]{2} 2026/g) || []).length;
+  R.g_months = [...gh.matchAll(/<td class="fo-nm">(?:<span class="fo-smp"[^>]*>≈<\/span>)?([A-Z][a-z]{2} 2026) <small>· (\d+)d<\/small>/g)].map(m => [m[1], +m[2]]);
+  const filled = FO._.ccFill(FO._.ccRows(GAP, 'XA'));
+  R.g_fill = [filled.length, filled.filter(r => r[1] == null).length, filled[20][0], filled[20][1], filled[40][0], filled[40][1]];
+  click('[data-fo-ccx]', {});
   out.cc = R;
+  out.hold = holdModel(FO, c2, S2);
+}
+
+// hold(): a layout model (block heights, a sticky top bar, scrollY): the board's slot grows from 0 to the board's height
+// while the reader is somewhere; what the reader looks at must not move (|Δ| ≤ 1 px), and nothing scrolls at the top
+function holdModel(FO, c2, S2) {
+  const R = {};
+  const sizes = {
+    375: { vh: 812, tb: 73, blocks: [['', 180], ['', 60], ['fo-cc', 92], ['mini', 400], ['grid', 900], ['fo-ccbx', 0], ['month', 300], ['day', 700]], board: 1037 },
+    1280: { vh: 900, tb: 68, blocks: [['', 60], ['', 50], ['fo-cc', 48], ['mini', 300], ['grid', 330], ['fo-ccbx', 0], ['month', 300], ['day', 700]], board: 803 } };
+  const QS = c2.document.querySelector;
+  for (const w of [375, 1280]) {
+    const S = sizes[w];
+    const run = (place) => {
+      const W = { scrollY: 0, innerHeight: S.vh, scrollBy(x, y) { W.scrollY += y; } };
+      const els = S.blocks.map(([id, h]) => ({ id, h, isConnected: true }));
+      const topOf = i => S.tb + els.slice(0, i).reduce((t, e) => t + e.h, 0) - W.scrollY;
+      els.forEach((e, i) => { e.getBoundingClientRect = () => ({ top: topOf(i), bottom: topOf(i) + e.h, height: e.h }); e.nextElementSibling = els[i + 1] || null; });
+      const at = id => topOf(els.findIndex(e => e.id === id));
+      c2.window = W; S2.children = els;
+      c2.document.querySelector = s => s === '.topbar' ? { getBoundingClientRect: () => ({ bottom: S.tb }) } : QS(s);
+      const [id, y] = place; W.scrollY = id ? Math.max(0, at(id) - y) : 0;
+      const before = { y: W.scrollY, mini: at('mini'), grid: at('grid'), month: at('month'), day: at('day') };
+      FO._.hold(() => { els.find(e => e.id === 'fo-ccbx').h = S.board; }, els.find(e => e.id === 'fo-ccbx'));
+      return { y: W.scrollY - before.y, mini: at('mini') - before.mini, grid: at('grid') - before.grid, month: at('month') - before.month, day: at('day') - before.day };
+    };
+    R[w] = {
+      month_under_bar: run(['month', 120]).month,        // the old bug: a strip of the chart on screen kept the chart
+      month_mid: run(['month', 300]).month,
+      day_far: run(['day', 150]).day,
+      top: run(['', 0]),                                 // at the top of the page: nothing scrolls
+      slot_low: run(['month', S.vh - 120]),              // the slot in the lower half: the chart stays, the board below it
+    };
+  }
+  c2.document.querySelector = QS; delete c2.window; S2.children = undefined;
+  return R;
 }

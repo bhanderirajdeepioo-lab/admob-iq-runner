@@ -7,7 +7,10 @@ card, show(), the Period picker hidden); BY COUNTRY: the Country control (All + 
 country file loaded once and only for the open app (a failed load = Try again in the country area only), the board
 (sort, status filter, the GA4-unnamed row last), a pick (chip / board row / select) redrawing the view from the country's
 rows with the page height and the board's scroll kept, the pick kept across apps (+ the "no such country" message), and the
-All countries view = today's view + the two country blocks. Skipped where node is not installed. No real data."""
+All countries view = today's view + the two country blocks; a country file with a HOLE (the date range, one warning on
+the board and in the country view, a "gap" row in Every day, the chart's rows on the calendar); the Country control's one
+height (one row, two on a phone; the top 6 in a sideways strip); hold() keeping the reader's place when the country file
+arrives late (a layout model at 375 and 1280 px). Skipped where node is not installed. No real data."""
 import json
 import os
 import re
@@ -100,7 +103,7 @@ def test_country_board(out):
     c = out["cc"]
     assert c["board_rows"] == ["XA", "XB", "XC", "XD", "XE", "XF", "XG", "XH", "XI"] and c["board_unnamed_last"]
     assert c["board_chips"] == [["Worse", 1], ["Watch", 1], ["Better", 1], ["Normal", 1], ["Too early", 0], ["N/A", 5]]
-    assert c["board_cells_xa"] and c["board_cells_xi"] and c["board_note"]
+    assert c["board_cells_xa"] and c["board_cells_xi"] and c["board_note"] and c["board_no_gap_note"]
     assert c["sort_s2h"][:3] == ["XB", "XC", "XA"] and c["sort_unnamed_last"]
     assert c["filt_rows"] == ["XE", "XF", "XG", "XH", "XI"] and c["filt_no_unnamed"] and c["filt_minh"] == "900px"
     assert c["filt_empty"] and c["filt_off"] == 9
@@ -115,7 +118,7 @@ def test_country_pick(out):
     c = out["cc"]
     assert c["pick_cc"] == "XB" and c["pick_loads"] == 1 and c["pick_minh"] == "900px"   # no reload, no jump
     assert c["pick_crumb"] and c["pick_chip_on"] and c["pick_mini"] and c["pick_no_late"] and c["pick_steps"]
-    assert c["pick_note"]
+    assert c["pick_note"] and c["pick_no_gap"]                    # the date range first – last; no hole, no warning
     assert c["pick_months"] == [["Sep 2026", "29", "8,700", "7,250", "5,800", "80%", "83%"],
                                 ["Aug 2026", "31", "9,300", "7,750", "6,200", "80%", "83%"]]
     assert c["pick_month_smp"] and c["pick_days"] == 60 and c["pick_nf"] and c["pick_smp_day"] and c["pick_board_on"]
@@ -129,9 +132,36 @@ def test_country_kept_across_apps_and_failed_load(out):
     assert c["a_missing"] and c["back_b"]
     assert c["x_cc"] == "" and c["x_all"]
     assert c["f_retry_in_area"] and c["f_rest"] and c["f_loading"] and c["f_loads"] == 2 and c["f_ok"]
+    assert c["f_range_fallback"] and c["strip"]
+
+
+def test_country_file_with_a_hole(out):
+    """The backfill reads oldest / newest in turn and a fetch can fall behind: the page says so (never a silent "last 7
+    days"), shows the hole between the days, and the chart breaks there."""
+    c = out["cc"]
+    assert c["g_warn"] and c["g_why"] and c["g_view_warn"]
+    assert c["g_gap_rows"] == ["↕ gap: 20 din nahi padhe (21 Aug – 9 Sep) — upar aur neeche ke din lagatar nahi"]
+    assert c["g_gap_between"] and c["g_days"] == 40 and c["g_months"] == [["Sep 2026", 20], ["Aug 2026", 20]]
+    assert c["g_fill"] == [60, 20, "2026-08-21", None, "2026-09-10", 500]   # the chart on the calendar: 20 empty days
+
+
+def test_late_country_file_keeps_the_readers_place(out):
+    """hold() on a layout model (sticky top bar, block heights, scrollY) at 375 and 1280 px: the board's slot grows by the
+    board while the owner reads — Every month just under the top bar (the old rule kept a strip of the chart and pushed the
+    card down by the whole board) or mid-screen, Every day far below: none moves; at the top of the page nothing scrolls;
+    the slot in the lower half: the chart stays and the board comes below it."""
+    for w in ("375", "1280"):
+        h = out["hold"][w]
+        assert abs(h["month_under_bar"]) <= 1 and abs(h["month_mid"]) <= 1 and abs(h["day_far"]) <= 1, (w, h)
+        assert h["top"]["y"] == 0 and h["top"]["mini"] == 0, (w, h)
+        assert h["slot_low"]["y"] == 0 and h["slot_low"]["grid"] == 0, (w, h)
 
 
 def test_country_wiring():
     p = _page()
     assert r"/^firstopen_cc_[0-9a-f]{12}\.json\.gz$/" in p      # the build's file name (key = sha1-12 of the app id)
     assert ".screen[data-screen=\"firstopen\"]{overflow-anchor:none}" in p
+    # the Country control has ONE height in every state (loading, failed, loaded): 36px, 80px (two rows) on a phone
+    assert ".fo-cc{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin:0 0 12px;height:36px;min-width:0}" in p
+    assert ".fo-cc{display:grid;grid-template-columns:auto auto minmax(0,1fr);grid-template-rows:36px 36px;height:80px}" in p
+    assert ".fo-ccr{display:flex;flex:0 1 auto;gap:8px;min-width:0;height:36px;overflow-x:auto;" in p

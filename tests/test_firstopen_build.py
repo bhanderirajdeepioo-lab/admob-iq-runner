@@ -3,7 +3,10 @@ file (nothing trimmed), the status rule (last 7 final days vs the 28 before: Wor
 N/A), the pointer the hub reads, one splat header rule, the switch, failure isolation and a counts-only line; BY COUNTRY
 (synthetic country stores, 40 made-up countries): the lazy file's shape (every real day, every country), the app's own
 status rule per country, the share, the GA4-unnamed users (measured, never clamped), the "cc" pointer only when the file
-was written, stale files removed, and the app's own data byte for byte the same with a broken / too big / missing store."""
+was written, stale files removed, and the app's own data byte for byte the same with a broken / too big / missing store;
+the status window on the CALENDAR (the unbroken run of days ending at final till): a hole (the backfill reads oldest /
+newest in turn), a lag (a fetch behind / switched off) or a "none" day inside the 35 days = Too early with the why, never a
+window across a hole or weeks old; "last_day" / "missing" in the file, "last" in the pointer."""
 import gzip
 import json
 import os
@@ -166,13 +169,15 @@ def test_country_file_every_country_status_share_unnamed_and_pointer(tmp_path):
     assert u == {"fo_day": 7.0, "opened": round(6 / 7, 6), "s2h": round(5 / 6, 6), "share": round(49 / t7, 6)}
     b2 = _read(os.path.join(out, "firstopen_cc_%s.json.gz" % k2))
     assert {x["status"] for x in b2["summary"]} == {"Too early"} and len(b2["days"]) == 20
+    assert {x["why"] for x in b2["summary"]} == {"history 18 final days"} and b2["missing"] == 0   # young, not a hole
     # the pointer on the app's entry (only where the file was written)
     main = _read(os.path.join(out, fb.FILE))
     apps = {a["key"]: a for a in main["apps"]}
     raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
     import hashlib
     assert apps[k1]["cc"] == {"file": "firstopen_cc_%s.json.gz" % k1, "v": hashlib.sha1(raw).hexdigest()[:12],
-                              "from": "2026-08-15", "n": 40, "days": 60}
+                              "from": "2026-08-15", "last": "2026-10-13", "n": 40, "days": 60}
+    assert body["last_day"] == "2026-10-13" and body["missing"] == 0                  # the status window is whole
     assert apps[k2]["cc"]["n"] == 40 and apps[k2]["cc"]["days"] == 20 and "cc" not in apps[k3]
     assert set(dash["firstopen"]) == {"file", "v", "apps"}                         # the dashboard pointer as before
     line = fb.pop_line()
@@ -246,3 +251,66 @@ def test_country_rows_feed_the_app_rule_unchanged():
     assert got["cc"] == "AA" and all(got[k] == want[k] for k in fb.CC_KEEP)
     assert body["summary"][1]["cc"] == "BB"
     assert fb.build_cc({"days": {"2026-09-01": {"none": True}}}, "k", "a", "2026-10-08") is None
+
+
+def _gap_store(skip, k_none=()):
+    """AA (judged) and BB (small): S2H 50 % the last 24 days, 60 % before; 63 days back from final till 18 Oct 2026, the
+    days `skip(k)` (k days before final till) not read, the days in k_none read as {"none": true}; 2 not-final days."""
+    ft, recs = date(2026, 10, 18), {}
+    for k in range(-2, 63):
+        d = (ft - timedelta(days=k)).isoformat()
+        if skip(k):
+            continue
+        if k in k_none:
+            recs[d] = {"none": True}
+            continue
+        s2h = 0.5 if k < 24 else 0.6
+        c = {"AA": [1200, 1000, round(1000 * s2h)], "BB": [12, 10, 5]}
+        recs[d] = {"c": c, "t": [1212 + 8, 1010 + 6, c["AA"][2] + 5 + 4], "smp": None}
+    return {"days": recs}
+
+
+def test_country_status_window_is_the_calendar_run_ending_at_final_till():
+    """The country store has holes (its backfill reads oldest / newest in turn) or lags (a deferred / switched-off fetch):
+    the status, the 7-day values, the share and the unnamed users come only from the unbroken calendar run that ends at
+    final till — a hole or a lag inside the 35 days = Too early (why says which), never a window across a hole or weeks
+    old; every real day stays in "days"."""
+    ft = "2026-10-18"
+    whole = fb.build_cc(_gap_store(lambda k: False), "k", "a", ft)
+    aa = whole["summary"][0]
+    assert aa["cc"] == "AA" and aa["status"] == "Watch" and abs(aa["change"] - (0.5 - (17 * 0.5 + 11 * 0.6) / 28)) < 1e-6
+    assert whole["missing"] == 0 and whole["last_day"] == "2026-10-20" and len(whole["days"]) == 65
+    # backfill half done: days 23 … 42 before final till not read yet → Too early, no Worse from a window across the hole
+    half = fb.build_cc(_gap_store(lambda k: 23 <= k <= 42), "k", "a", ft)
+    assert {x["status"] for x in half["summary"]} == {"Too early"}
+    assert {x["why"] for x in half["summary"]} == {"country data incomplete: 12 din missing"} and half["missing"] == 12
+    assert len(half["days"]) == 45 and half["first_day"] == "2026-08-17"                # every real day kept
+    a2 = half["summary"][0]
+    assert a2["final_days"] == 23 and abs(a2["s2h"] - 0.5) < 1e-6 and abs(a2["fo_day"] - 1200) < 1e-6
+    assert abs(a2["usual"] - 0.5) < 1e-6 and a2["change"] == 0                         # only days of the unbroken run
+    assert abs(a2["share"] - 1200 / 1220) < 1e-6 and half["unnamed"]["summary"]["fo_day"] == 8.0
+    # the fetch stopped: the newest day 12 days before final till → Too early "country data <day> tak", nothing judged,
+    # no 7-day value from old days (not "0 / day")
+    old = fb.build_cc(_gap_store(lambda k: k < 12), "k", "a", ft)
+    assert {x["status"] for x in old["summary"]} == {"Too early"}
+    assert {x["why"] for x in old["summary"]} == {"country data 2026-10-06 tak"} and old["missing"] == 12
+    assert old["last_day"] == "2026-10-06" and len(old["days"]) == 51
+    for x in old["summary"]:
+        assert x["s2h"] is None and x["usual"] is None and x["change"] is None and x["fo_day"] is None
+        assert x["share"] is None and x["final_days"] == 0
+    assert [x["cc"] for x in old["summary"]] == ["AA", "BB"]                            # all-time first opens order
+    assert old["unnamed"]["summary"] == {"fo_day": None, "opened": None, "s2h": None, "share": None}
+    # final till itself not read (a later not-final day is): a lag too
+    lag = fb.build_cc(_gap_store(lambda k: k == 0), "k", "a", ft)
+    assert {x["why"] for x in lag["summary"]} == {"country data 2026-10-17 tak"} and lag["missing"] == 1
+    # a {"none": true} day inside the window is a hole; one older than the 35 days changes nothing
+    nn = fb.build_cc(_gap_store(lambda k: False, k_none=(3,)), "k", "a", ft)
+    assert {x["status"] for x in nn["summary"]} == {"Too early"} and nn["missing"] == 1
+    assert nn["summary"][0]["why"] == "country data incomplete: 1 din missing"
+    far = fb.build_cc(_gap_store(lambda k: 40 <= k <= 45), "k", "a", ft)
+    assert far["missing"] == 0 and far["summary"][0]["status"] == "Watch" and far["summary"][0]["final_days"] == 40
+    assert far["summary"][0] == dict(aa, final_days=40)
+    # the rule is still summarize(): the run's rows give exactly its answer
+    rows = [[d[0], *d[5]["AA"], None, None, None, None, None, None] for d in half["days"] if "2026-09-26" <= d[0] <= ft]
+    want = fb.summarize("AA", "AA", rows, ft)
+    assert all(a2[k] == want[k] for k in fb.CC_KEEP if k != "why") and want["why"] == "history 23 final days"
