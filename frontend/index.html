@@ -6538,13 +6538,16 @@ function ccWhen(d){ return `${yd(d.first_day)} – ${yd(ccLast(d))}`; }
 function ccGapNote(d){ const m=+d.missing||0, ft=d.final_till; if(!(m>0)||!ft) return '';
   const lo=d.first_day>addD(ft,-34)?d.first_day:addD(ft,-34);
   return `<p class="fo-note fo-ccgap">⚠️ Status ke liye ${fmtD(lo)} – ${fmtD(ft)} ke saare din ka country data chahiye — inme se <b>${m} din</b> abhi nahi padhe (country data ${ccWhen(d)}; backfill chal raha hai ya country fetch peeche hai). Isliye abhi status <b>Too early</b>, aur "last 7 days" / usual sirf ${fmtD(ft)} tak ke lagatar dino ka (beech ka gap kabhi joda nahi).</p>`; }
+// (a picked country's view says the dates once — the note under its Country control — and the missing steps once — the
+// Every day card: the board's note leaves both out there)
 function ccBoard(a,d){ const S=d.summary||[], c=k=>S.filter(x=>x.status===k).length;
   return `<div class="card fo-card" id="fo-ccb"><div class="ct"><h3>By country · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">country pe tap = us country ka funnel · column pe tap = sort · status chip pe tap = sirf wo countries</span></div>`
     +ccGapNote(d)+`<div class="fo-chips" role="group" aria-label="Filter countries by status">${['Worse','Watch','Better','Normal','Too early','N/A'].map(k=>`<button type="button" class="fo-chip st-${ST_KEY[k]}" data-fo-ccfilt="${k}" aria-pressed="${CFILT===k}"><span>${WD.sti[ST_KEY[k]]}</span> <b>${c(k)}</b></button>`).join('')}</div>`
     +`<div class="fo-tw fo-tall" id="fo-ccbw">${ccTable(d)}</div>`
-    +`<p class="fo-note" style="margin-top:10px">${S.length} countries. Har country ka status app wala hi rule hai (pichhle 7 final din vs pehle ke 28 din); chhoti countries me 200 se kam Splash users = N/A. <b>Share</b> = app ke first opens (pichhle 7 final din) me us country ka hissa. <b>Not named by GA4</b> = jin users ki country GA4 ne nahi batayi (din ka total − sab countries; sampling wale din thoda minus bhi aa sakta hai, jaisa mila waisa dikhaya) — isse board app ke total tak judta hai. Country data <b>${ccWhen(d)}</b> ka hai (GA4 sirf ~2 mahine rakhta hai) aur sirf First open → Splash → Home (Language / Permission / late open country-wise nahi padhe).</p></div>`; }
-function ccCrumb(a,x,d){ return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span class="fo-cct">${FL(CC)} ${E(CN(CC))}</span>`
-    +(x?`<span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''}${d?` · country data ${ccWhen(d)}`:''}</span>`:'')
+    +`<p class="fo-note" style="margin-top:10px">${S.length} countries. Har country ka status app wala hi rule hai (pichhle 7 final din vs pehle ke 28 din); chhoti countries me 200 se kam Splash users = N/A. <b>Share</b> = app ke first opens (pichhle 7 final din) me us country ka hissa. <b>Not named by GA4</b> = jin users ki country GA4 ne nahi batayi (din ka total − sab countries; sampling wale din thoda minus bhi aa sakta hai, jaisa mila waisa dikhaya) — isse board app ke total tak judta hai.${CC?'':` Country data <b>${ccWhen(d)}</b> ka hai (GA4 sirf ~2 mahine rakhta hai) aur sirf First open → Splash → Home (Language / Permission / late open country-wise nahi padhe).`}</p></div>`; }
+function ccWait(){ return `<div class="card fo-card"><div class="fo-ccm"><p class="fo-note">🌍 <b>${FL(CC)} ${E(CN(CC))}</b> chuna hai — is app ka country data aate hi uska view khulega; tab tak neeche <b>All countries</b> ke numbers.</p><button type="button" class="fo-back" data-fo-ccx="1">✕ All countries</button></div></div>`; }
+function ccCrumb(a,x){ return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span class="fo-cct">${FL(CC)} ${E(CN(CC))}</span>`
+    +(x?`<span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''}</span>`:'')
     +`<button type="button" class="fo-back" data-fo-ccx="1">✕ All countries</button></div>`; }
 // the app's view: All countries = today's view + the Country control (under the crumb, and again in Every month / Every
 // day) + the board; a country = its own rows
@@ -6553,7 +6556,10 @@ function appView(a,x){ CHART=null; const c=ccPtr(a);
   const miss=t=>`<div class="card fo-card"><div class="fo-ccm"><p class="fo-note">Is app me <b>${FL(CC)} ${E(CN(CC))}</b> ka First open data nahi${t}.</p><button type="button" class="fo-back" data-fo-ccx="1">✕ All countries</button></div></div>`;
   if(!c) return appCrumb(a,x)+miss(' (is app ka country-wise data abhi nahi bana)');
   const d=ccData(a);
-  if(!d) return ccCrumb(a,null,null)+ccTop(a);
+  // its country file still loading / failed (an app opened with a country already picked — the pick is kept across apps):
+  // All countries at once, the three controls with the same loading / Try again, one line (+ ✕) for the picked country;
+  // ccArrive → paint() opens that country's view when the file comes
+  if(!d){ CHART=a; return appHtml(a,x,ccTop(a)+ccWait(),ccSlot(a),ccIn(a,'m'),ccIn(a,'d')); }
   const cx=(d.summary||[]).find(z=>z.cc===CC);
   if(!cx) return appCrumb(a,x)+ccTop(a)+miss('');
   const c2={days:ccRows(d,CC),final_till:d.final_till||a.final_till};
@@ -6583,12 +6589,12 @@ function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t
       return (g>0?`<tr class="fo-gap"><td colspan="6">↕ gap: ${g} din nahi padhe (${fmtD(addD(r[0],1))} – ${fmtD(addD(rv[i-1][0],-1))}) — upar aur neeche ke din lagatar nahi</td></tr>`:'')
         +`<tr><td class="fo-nm${r[0]>ft?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(r[0])} ${r[0].slice(0,4)}${r[0]>ft?' · not final':''}</td><td>${N(r[IX.first_open])}</td><td>${N(r[IX.splash])}</td><td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${op(r)}</td></tr>`; }).join('')
     +`</tbody></table></div>`;
-  return ccCrumb(a,x,d)+ccTop(a)
+  return ccCrumb(a,x)+ccTop(a)
     +`<p class="fo-note">🌍 Country data <b>${ccWhen(d)}</b> ka hai (GA4 sirf ~2 mahine ka data rakhta hai, usse purana country-wise nahi milta).</p>`
     +ccGapNote(d)
     +`<div class="card fo-card"><div class="ct"><h3>Today · Yesterday · last 7 days · usual</h3></div>${mini}</div>`
     +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${home}`
-    +`<p class="fo-note">Country-wise sirf Home tak padha jata hai — Language / Permission / Intro country-wise nahi padhe.</p></div>`
+    +`<p class="fo-note">Country ke liye sirf <b>Home</b> ka step — baaki steps kyun nahi, wo neeche <b>Every day</b> card me likha hai.</p></div>`
     +`<div class="card fo-card"><div class="ct"><h3>Every day · full history</h3><span class="faint" style="font-size:11.5px">hover / tap = us din ke numbers</span></div><div class="fo-chart" id="fo-chart"></div>`
     +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last 2 days)</span></div></div></div>`
     +`<div id="fo-ccbx">${ccBoard(a,d)}</div>`
@@ -6670,7 +6676,7 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   if(a&&CHART) drawChart(CHART); }
 function show(){ paint(); }
 function left(){ }
-return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccIn, ccFrom, CC_COLS, pick, ccRows, ccData, ccFill, hold, cc:()=>CC}};
+return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccIn, ccWait, ccFrom, CC_COLS, pick, ccRows, ccData, ccFill, hold, cc:()=>CC}};
 })();
 function renderFirstOpen(){ return FO.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from

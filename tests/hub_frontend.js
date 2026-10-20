@@ -329,6 +329,21 @@ const fresh = async (opt) => { opt = opt || {};   // a new page load: history, U
     await fresh(); run(`setApp('Demo Gallery'); show('firstopen')`); await settle();
     const c2 = html(); run(`FO._.pick('')`); const c1 = html();
     r.classic = { on: S().on, scr: S().scr, same_pick: c2 === h2, same_all: c1 === h1 };
-    run(`FO._.pick(''); delete DATA.firstopen;`);
+    // a country picked, then the app's country file FAILS (the pick is kept across apps; here a new build's file): the hub
+    // draws All countries at once — one line for the pick + ✕, the three controls with Try again, every table — never the
+    // crumb and a control alone; the classic layout the same bytes
+    run(`FO._.pick('XA')`);
+    ctx.__FOF.apps[0].cc = { file: 'firstopen_cc_fffffffffff0.json.gz', v: 'c2' };
+    run(`DATA.firstopen={file:'firstopen.json.gz',v:'h2',apps:{}}; __fol=[]; var __fgj=fetchGzJson;
+      fetchGzJson=function(u){ const f=String(u).split('?')[0]; if(f==='firstopen_cc_fffffffffff0.json.gz'){ __fol.push(f); return Promise.reject(new Error('net')); } return __fgj(u); };`);
+    await fresh({ search: '?layout=hub' }); run(`hubGo('Demo Gallery','firstopen')`); await settle(); await settle();
+    const w1 = html(), TRY = '<span class="fo-ccl">Country</span><span class="fo-ccw">⚠️ Country data load nahi hua. <button type="button" class="fo-lnkb" data-fo-ccretry="1">Try again</button></span>';
+    r.wait = { cc: run('FO._.cc()'), loads: run('__fol.slice()'), st: S().inHub && S().tab === 'firstopen',
+      tries: ['fo-cc', 'fo-cc-m', 'fo-cc-d'].map(id => w1.includes('id="' + id + '" role="group" aria-label="Country">' + TRY + '</div>')),
+      line: w1.includes('chuna hai — is app ka country data aate hi uska view khulega') && w1.includes('data-fo-ccx="1">✕ All countries</button>'),
+      tables: w1.includes('<h3>Every month</h3>') && w1.includes('<h3>Every day</h3>') && w1.includes('<th>Incl. late open</th>') && !w1.includes('fo-cct') };
+    await fresh(); run(`setApp('Demo Gallery'); show('firstopen')`); await settle();
+    r.wait.same = html() === w1;
+    run(`fetchGzJson=__fgj; FO._.pick(''); delete DATA.firstopen;`);
     return r; });
 })().then(() => { process.stdout.write(JSON.stringify({ errors, out })); }, e => { errors.push('MAIN ' + (e.stack || e.message)); process.stdout.write(JSON.stringify({ errors, out })); });

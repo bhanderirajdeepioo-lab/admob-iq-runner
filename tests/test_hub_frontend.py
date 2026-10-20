@@ -336,3 +336,7 @@ def test_first_open_tab_in_the_hub(report):
     assert r["ctl"] == [1, 1, 1] and r["titles"]
     assert r["pick"] == {"cc": "XB", "on": 3, "titles": 2, "cols": True}
     assert r["classic"] == {"on": False, "scr": "firstopen", "same_pick": True, "same_all": True}
+    # a country picked while the app's country file fails: All countries at once (+ one line for the pick, the three
+    # controls with Try again) in the hub, the classic layout the same bytes; each file fetched once (no retry loop)
+    assert r["wait"] == {"cc": "XA", "loads": ["firstopen.json.gz", "firstopen_cc_fffffffffff0.json.gz"], "st": True, "tries": [True, True, True],
+                         "line": True, "tables": True, "same": True}

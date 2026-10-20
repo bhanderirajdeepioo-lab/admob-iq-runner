@@ -21,9 +21,11 @@
 //     chart stays when the board's slot is in the lower half;
 //   * the SAME Country control inside the Every month / Every day cards (owner, 20 Oct): loading / failed / filled like the
 //     top one, ONE picked country for all three, the card titles "Every day · <flag> <name>" + "✕ All countries", a
-//     country's Every day columns + one line why the others are missing (once on screen), nothing new for an app without a
-//     country file; pick() from an in-card control on a layout model built from the page's own html at 375 and 1280 px:
-//     that control's top moves ≤ 1 px although everything above it is redrawn.
+//     country's Every day columns + one line why the others are missing (once on the WHOLE screen: not again in the Steps
+//     card or the board; the country data's dates once too), nothing new for an app without a country file; an app opened
+//     with a country picked whose country file loads / fails: All countries at once + one line for the pick, the three
+//     controls with loading / Try again (never a crumb alone); pick() from an in-card control on a layout model built from
+//     the page's own html at 375 and 1280 px: that control's top moves ≤ 1 px although everything above it is redrawn.
 // Prints ONE JSON report; tests/test_firstopen_frontend.py asserts on it.   usage: node firstopen_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -174,6 +176,7 @@ async function byCountry() {
   GAP.days = GAP.days.filter((d, i) => i < 20 || i >= 40);
   GAP.summary.forEach(x => { x.status = 'Too early'; x.why = 'country data incomplete: 18 din missing'; });
   CCF['firstopen_cc_eeeeeeeeeeee.json.gz'] = GAP;
+  CCF['firstopen_cc_ffffffffffff.json.gz'] = ccFile('kf', ['XA', 'XB', 'XC'], { last_day: day(59), missing: 0 });
   const ptrOf = (f, n) => ({ file: f, v: 'c-' + f.slice(13, 17), from: day(0), n, days: 60 });
   const F2 = JSON.parse(JSON.stringify(FILE));
   F2.apps = F2.apps.filter(a => a.key !== 'kh');
@@ -181,7 +184,9 @@ async function byCountry() {
   F2.apps[2].cc = ptrOf('firstopen_cc_abcdef012345.json.gz', 2);
   F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'kd', app: 'Delta', app_id: 'id-d', cc: ptrOf('firstopen_cc_dddddddddddd.json.gz', 3) });
   F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'ke', app: 'Epsilon', app_id: 'id-e', cc: ptrOf('firstopen_cc_eeeeeeeeeeee.json.gz', 2) });
-  F2.summary = F2.summary.filter(x => x.key !== 'kh').concat([{ ...F2.summary[0], key: 'kd', app: 'Delta' }, { ...F2.summary[0], key: 'ke', app: 'Epsilon' }]);
+  F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'kf', app: 'Zeta', app_id: 'id-f', cc: ptrOf('firstopen_cc_ffffffffffff.json.gz', 3) });
+  F2.summary = F2.summary.filter(x => x.key !== 'kh').concat([{ ...F2.summary[0], key: 'kd', app: 'Delta' }, { ...F2.summary[0], key: 'ke', app: 'Epsilon' },
+    { ...F2.summary[0], key: 'kf', app: 'Zeta' }]);
   const c2 = { ...ctx, DATA: { firstopen: { file: 'firstopen.json.gz', v: 'v2', apps: {} }, apps_catalog: [{ app_id: 'id-a', app_name: 'Alpha Pick' }, { app_id: 'id-b', app_name: 'Beta Pick' }] },
     APP: 'Beta Pick',
     document: { querySelector: s => s === '.screen.on' ? { dataset: { screen: 'firstopen' } } : (s === '.screen[data-screen=firstopen]' ? S2 : null),
@@ -268,7 +273,8 @@ async function byCountry() {
   R.pick_chip_on = h.includes('data-fo-cc="XB" aria-pressed="true"') && h.includes('data-fo-cc="" aria-pressed="false"');
   R.pick_mini = /<td>First opens <small class="faint">\/ day<\/small><\/td><td>300<\/td><td>300<\/td><td>300<\/td><td>310<\/td><\/tr><tr><td>Opened app<\/td><td>83%<\/td><td>83%<\/td><td>80%<\/td><td>80%<\/td><\/tr><tr><td>Splash → Home<\/td><td>80%<\/td><td>80%<\/td><td><b>80%<\/b><\/td><td>80%<\/td><\/tr><\/tbody>/.test(h);
   R.pick_no_late = !h.includes('Incl. late open') && !h.includes('<th>Language</th>');
-  R.pick_steps = (h.match(/class="fo-bl"/g) || []).length === 1 && h.includes('<span class="fo-bl">Home</span>') && h.includes('Country-wise sirf Home tak padha jata hai');
+  R.pick_steps = (h.match(/class="fo-bl"/g) || []).length === 1 && h.includes('<span class="fo-bl">Home</span>')
+    && h.includes('<p class="fo-note">Country ke liye sirf <b>Home</b> ka step — baaki steps kyun nahi, wo neeche <b>Every day</b> card me likha hai.</p>');
   R.pick_note = h.includes('<p class="fo-note">🌍 Country data <b>1 Aug 2026 – 29 Sep 2026</b> ka hai (GA4 sirf ~2 mahine ka data rakhta hai');
   // the in-card controls follow the one pick; the card titles say the country + ✕ All countries (as the ROI card)
   R.pick_in_on = (h.match(/data-fo-cc="XB" aria-pressed="true"/g) || []).length === 3 && (h.match(/data-fo-cc="" aria-pressed="true"/g) || []).length === 0
@@ -280,7 +286,14 @@ async function byCountry() {
   // are not there — the text on screen once
   const dayCard = h.slice(h.indexOf('<h3>Every day · '));
   R.pick_day_cols = /<\/select><\/div><p class="fo-note">🌍 Country view me sirf <b>First open → Splash → Home<\/b> hai — Language \/ Permission \/ Intro aur "incl\. late open" country-wise nahi padhe, isliye wo columns yahan nahi\.<\/p><div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day<\/th><th>First opens<\/th><th>Splash<\/th><th>Home<\/th><th>Splash → Home<\/th><th>Opened app<\/th><\/tr><\/thead>/.test(dayCard);
-  R.pick_cols_once = h.split(FO._.CC_COLS).length === 2 && (h.match(/Country view me sirf/g) || []).length === 1 && !h.includes('Intro aur "incl. late open" country-wise nahi padhe), aur');
+  // ... across the WHOLE country view (crumb, notes, Steps card, board, cards): the reason once, the dates once (the note
+  // under the Country control), the board's note without either (the tab's lead line, on every view, only DEFINES "incl.
+  // late open" — not counted)
+  const cnt = (s, re) => (s.match(re) || []).length, hv = h.replace(/^<p class="fo-note fo-lead">.*?<\/p>/, '');
+  R.pick_cols_once = hv.length < h.length && h.split(FO._.CC_COLS).length === 2 && cnt(h, /country-wise nahi padhe/g) === 1
+    && cnt(h, /Language \/ Permission/g) === 1 && cnt(hv, /late open/g) === 1 && cnt(h, /Country view me sirf/g) === 1;
+  R.pick_dates_once = cnt(h, /1 Aug 2026 – 29 Sep 2026/g) === 1 && cnt(h, /GA4 sirf ~2 mahine/g) === 1
+    && /isse board app ke total tak judta hai\.<\/p><\/div><\/div><div class="card fo-card"><div class="ct"><h3>Every month · /.test(h);
   R.pick_no_gap = !h.includes('fo-gap') && !h.includes('fo-ccgap');
   R.pick_months = [...h.matchAll(/<td class="fo-nm">(?:<span class="fo-smp"[^>]*>≈<\/span>)?([A-Z][a-z]{2} 2026) <small>· (\d+)d<\/small><\/td><td>([\d,]+)<\/td><td>([\d,]+)<\/td><td>([\d,]+)<\/td><td><b>(\d+%)<\/b><\/td><td>(\d+%)<\/td>/g)].map(m => m.slice(1));
   R.pick_month_smp = /<td class="fo-nm"><span class="fo-smp"[^>]*>≈<\/span>Sep 2026/.test(h);
@@ -301,7 +314,11 @@ async function byCountry() {
   R.sel_view = html2.includes('<span class="fo-cct">[XG] Name XG</span>') && html2.includes('<option value="XG" selected>');
   // another app: the pick stays; that app's file loads once; it has no XG → the message with the picker, never an empty table
   c2.APP = 'Gamma'; FO.paint();
-  R.g_loading = html2.includes('<span class="fo-cct">[XG] Name XG</span>') && html2.includes('⏳ Country data loading…') && !html2.includes('<table');
+  const ga = FO._.appOf('Gamma'), gx = F2.summary.find(z => z.key === 'kc'), gw = FO._.ccWait();
+  R.g_loading = gw === '<div class="card fo-card"><div class="fo-ccm"><p class="fo-note">🌍 <b>[XG] Name XG</b> chuna hai — is app ka country data aate hi uska view khulega; tab tak neeche <b>All countries</b> ke numbers.</p><button type="button" class="fo-back" data-fo-ccx="1">✕ All countries</button></div></div>'
+    && html2.split(LOADING_CTL).length === 4 && html2.includes(FO._.ccTop(ga) + gw)
+    && html2.replace(gw, '').endsWith(FO._.appHtml(ga, gx, FO._.ccTop(ga), FO._.ccSlot(ga), FO._.ccIn(ga, 'm'), FO._.ccIn(ga, 'd')))
+    && !html2.includes('fo-cct') && !html2.includes('class="fo-back fo-ccx"');
   await tick(); await tick();
   R.g_loads = LD['firstopen_cc_abcdef012345.json.gz'];
   R.g_missing = html2.includes('Is app me <b>[XG] Name XG</b> ka First open data nahi.') && !html2.includes('<table') && rowsOf(html2).length === 0;
@@ -310,6 +327,25 @@ async function byCountry() {
   R.a_missing = html2.includes('Is app me <b>[XG] Name XG</b> ka First open data nahi (is app ka country-wise data abhi nahi bana).') && !html2.includes('<table') && !html2.includes('id="fo-cc"');
   c2.APP = 'Beta Pick'; FO.paint();
   R.back_b = html2.includes('<span class="fo-cct">[XG] Name XG</span>') && LD['firstopen_cc_0123456789ab.json.gz'] === 1;
+  // a country picked (in the Every day card), then another app whose country file FAILS (hub "Change app" / the App picker):
+  // All countries at once — the line for the pick + ✕, the three controls with Try again, every table — never the crumb and
+  // a control alone; Try again → that country's view
+  S2.onclick({ target: { closest: s => s === '[data-fo-cc]' ? { dataset: { foCc: 'XB' } } : s === '.fo-cc' ? { id: 'fo-cc-d' } : null } });
+  FAILCC.add('firstopen_cc_ffffffffffff.json.gz');
+  c2.APP = 'Zeta'; FO.paint();
+  const za = FO._.appOf('Zeta'), zx = F2.summary.find(z => z.key === 'kf'), zw = FO._.ccWait(), TRY = '<span class="fo-ccl">Country</span><span class="fo-ccw">⚠️ Country data load nahi hua. <button type="button" class="fo-lnkb" data-fo-ccretry="1">Try again</button></span>';
+  const allOf = () => FO._.appHtml(za, zx, FO._.ccTop(za), FO._.ccSlot(za), FO._.ccIn(za, 'm'), FO._.ccIn(za, 'd'));
+  R.w_loading = FO._.cc() === 'XB' && html2.split(LOADING_CTL).length === 4 && html2.includes(FO._.ccTop(za) + zw) && html2.replace(zw, '').endsWith(allOf());
+  await tick(); await tick();
+  R.w_failed = html2.split(TRY).length === 4 && (html2.match(/data-fo-ccretry/g) || []).length === 3 && html2.includes(FO._.ccTop(za) + zw)
+    && html2.replace(zw, '').endsWith(allOf()) && /<h3>Every day<\/h3>.*<th>Incl\. late open<\/th>/.test(html2) && html2.includes('<h3>Every month</h3>')
+    && html2.includes('<td>First opens <small class="faint">/ day</small></td>') && !html2.includes('fo-cct') && !html2.includes('class="fo-back fo-ccx"') && FO._.cc() === 'XB';
+  click('[data-fo-ccretry]', {});
+  R.w_retry_loading = ['fo-cc', 'fo-cc-m', 'fo-cc-d'].every(id => IDS[id] && IDS[id]._html === LOADING_CTL);
+  await tick(); await tick();
+  R.w_view = LD['firstopen_cc_ffffffffffff.json.gz'] === 2 && html2.includes('<span class="fo-cct">[XB] Name XB</span>') && html2.includes('<h3>Every day · [XB] Name XB</h3>')
+    && !html2.includes('chuna hai — is app ka country data aate hi');
+  c2.APP = 'Beta Pick'; FO.paint();
   // ✕ All countries
   click('[data-fo-ccx]', {});
   R.x_cc = FO._.cc();

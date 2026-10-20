@@ -122,7 +122,10 @@ def test_country_pick(out):
     assert c["pick_cc"] == "XB" and c["pick_loads"] == 1 and c["pick_minh"] == "900px"   # no reload, no jump
     assert c["pick_crumb"] and c["pick_chip_on"] and c["pick_mini"] and c["pick_no_late"] and c["pick_steps"]
     assert c["pick_note"] and c["pick_no_gap"]                    # the date range first – last; no hole, no warning
-    assert c["pick_in_on"] and c["pick_titles"] and c["pick_day_cols"] and c["pick_cols_once"]   # the in-card controls follow
+    assert c["pick_in_on"] and c["pick_titles"] and c["pick_day_cols"]   # the in-card controls follow
+    # said ONCE on the whole country view: why Language / Permission / late open are missing (the Every day card; the Steps
+    # card points there, the board's note leaves it out) and the country data's dates (the note under the Country control)
+    assert c["pick_cols_once"] and c["pick_dates_once"]
     assert c["pick_months"] == [["Sep 2026", "29", "8,700", "7,250", "5,800", "80%", "83%"],
                                 ["Aug 2026", "31", "9,300", "7,750", "6,200", "80%", "83%"]]
     assert c["pick_month_smp"] and c["pick_days"] == 60 and c["pick_nf"] and c["pick_smp_day"] and c["pick_board_on"]
@@ -134,6 +137,9 @@ def test_country_kept_across_apps_and_failed_load(out):
     c = out["cc"]
     assert c["g_loading"] and c["g_loads"] == 1 and c["g_missing"] and c["g_picker"] == ["", "XA", "XB"]
     assert c["a_missing"] and c["back_b"]
+    # a country picked, then an app whose country file fails: All countries at once (+ one line for the pick, the three
+    # controls with Try again) — never the crumb and a control alone; Try again → that country's view
+    assert c["w_loading"] and c["w_failed"] and c["w_retry_loading"] and c["w_view"]
     assert c["x_cc"] == "" and c["x_all"]
     assert c["f_retry_in_area"] and c["f_rest"] and c["f_loading"] and c["f_loads"] == 2 and c["f_ok"]
     assert c["f_range_fallback"] and c["strip"]
@@ -205,7 +211,7 @@ def test_in_card_pick_keeps_the_control_in_place(out):
     """No page jump (a layout model built from the page's own html at 375 and 1280 px, the browser clamping the scroll the
     moment the new html is laid out): a pick in the Every day card's control (All → a country, a country → another, the
     select, the card's ✕) and in the Every month card's: the view above it is redrawn with other heights, the control's top
-    moves ≤ 1 px; the top control too (on a phone the crumb grows by the country's name + ✕)."""
+    moves ≤ 1 px; the top control too (the same code path; only the crumb is above it, which may or may not change height)."""
     for w in ("375", "1280"):
         p = out["pick"][w]
         for k in ("day_chip", "day_chip2", "day_sel", "day_x", "month_chip", "top_chip"):
@@ -213,7 +219,6 @@ def test_in_card_pick_keeps_the_control_in_place(out):
         assert p["day_cc"] == "XB" and p["sel_cc"] == "XH" and p["x_cc"] == "", (w, p)
         # the model is not flat: the redraw really moved the control (without the fix it would jump)
         assert all(abs(p[k]["moved"]) > 1 for k in ("day_chip", "day_chip2", "day_sel", "day_x", "month_chip")), (w, p)
-    assert out["pick"]["375"]["top_chip"]["moved"] > 1
 
 
 def test_in_card_control_css():
