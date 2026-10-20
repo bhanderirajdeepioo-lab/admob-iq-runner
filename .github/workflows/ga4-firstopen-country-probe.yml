@@ -12,6 +12,10 @@ on:
         description: "probe only the N biggest apps (0 = all)"
         required: false
         default: "0"
+      attrib:
+        description: "also read this many single-country funnels per app (the attribution check; 0 = off)"
+        required: false
+        default: "0"
 
 permissions:
   contents: read                 # this repo is never written to
@@ -57,5 +61,6 @@ jobs:
           DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
           FIRSTOPEN_DATA_DIR: _private
           FIRSTOPEN_MAX_APPS: ${{ github.event.inputs.max_apps }}
+          FIRSTOPEN_ATTRIB: ${{ github.event.inputs.attrib }}
           PYTHONUNBUFFERED: "1"
         run: python -m admob_iq.fetch.ga4_firstopen_country_probe 2>/tmp/firstopen.err || { echo "::error::first-open country probe failed (details kept off the public log)"; exit 1; }

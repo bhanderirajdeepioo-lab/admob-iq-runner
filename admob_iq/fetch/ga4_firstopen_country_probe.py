@@ -32,6 +32,7 @@ OUT_PATH = "ga4/firstopen_country_probe.json"
 DATA_DIR = "_private"
 BUDGET_SEC = 22 * 60
 DAYS_BACK = (3, 30, 58)               # property-tz days before today: final, a month back, near the retention edge
+ATTRIB = int(os.environ.get("FIRSTOPEN_ATTRIB") or 0)   # > 0: also N single-country funnels + a first_open report
 MAX_ROUNDS = 40                       # 600 countries: far above the ~250 GA4 knows; a guard, not a cut
 DIM = "countryId"
 RT = "RESERVED_TOTAL"                 # GA4's own total row in a funnel breakdown
@@ -50,7 +51,7 @@ def country_body(splash, home, day, exclude=(), dim=DIM):
 def by_country(ga, steps, day, clock=time.monotonic):
     """Every country of one day, in rounds → {"countries": {cc: [first_open, splash, home]}, "rounds", "calls", "tokens",
     "sec", "sample"}. A round with no row ends it."""
-    out, seen, rounds, smp, t0, tok0, rts = {}, set(), 0, None, clock(), ga.tok, []
+    out, seen, rounds, smp, t0, tok0, rts, reap = {}, set(), 0, None, clock(), ga.tok, [], []
     while rounds < MAX_ROUNDS:
         j = ga.funnel(country_body(steps["splash"], steps["home"], day, seen))
         rounds += 1
@@ -59,6 +60,9 @@ def by_country(ga, steps, day, clock=time.monotonic):
         # GA4 adds a RESERVED_TOTAL row: the whole population of THIS round (every country not yet left out); after the
         # last named country it is what GA4 counted but named no country for (its privacy thresholds)
         rts.append([fo.pop(RT, 0), sp.pop(RT, 0), st.pop(RT, 0)])
+        again = {c: [fo.get(c, 0), sp.get(c, 0), st.get(c, 0)] for c in (set(fo) | set(sp) | set(st)) & seen}
+        if again:                                       # a country already left out of step 1 that GA4 still names
+            reap.append({"round": rounds, "rows": again})
         got = (set(fo) | set(sp) | set(st)) - seen
         s = gf.sampling(j)
         if s is not None:
@@ -69,7 +73,25 @@ def by_country(ga, steps, day, clock=time.monotonic):
             out[c] = [fo.get(c, 0), sp.get(c, 0), st.get(c, 0)]
         seen |= got
     return {"countries": out, "rounds": rounds, "tokens": ga.tok - tok0, "sec": round(clock() - t0, 1), "sample": smp,
-            "capped": rounds >= MAX_ROUNDS, "rt": rts}
+            "capped": rounds >= MAX_ROUNDS, "rt": rts, "reappear": reap}
+
+
+def one_country(ga, steps, day, cc, dim=DIM):
+    """The strict Home funnel for ONE country (step 1 = first_open in cc), broken down by date → [fo, splash, home]."""
+    b = gf.funnel_body(steps["splash"], steps["home"], day, day, "date")
+    b["funnel"]["steps"][0]["filterExpression"] = {"andGroup": {"expressions": [
+        {"funnelEventFilter": {"eventName": "first_open"}},
+        {"funnelFieldFilter": {"fieldName": dim, "stringFilter": {"matchType": "EXACT", "value": cc}}}]}}
+    t = gf.parse_table(ga.funnel(b))
+    pick = lambda k: sum(v for x, v in (t.get(k) or {}).items() if x != RT)
+    return [pick("first_open"), pick("splash"), pick("step")]
+
+
+def fo_by_country(ga, day, dim=DIM):
+    """runReport: first_open users by country that day (every country, no 15 limit) → {cc: users}."""
+    rows = ga.report_all({"dateRanges": [{"startDate": day.isoformat(), "endDate": day.isoformat()}],
+                          "dimensions": [{"name": dim}], "metrics": [{"name": "activeUsers"}]}, event="first_open")
+    return {r.get(dim): int(r.get("activeUsers") or 0) for r in rows}
 
 
 def total(ga, steps, day):
@@ -96,6 +118,12 @@ def probe_app(store, token, prop, over, today_of=None, clock=time.monotonic):
             sums = [sum(v[i] for v in bc["countries"].values()) for i in range(3)]
             cov = {k: (round(sums[i] / tot[k], 4) if tot[k] else None) for i, k in enumerate(("first_open", "splash", "home"))}
             sizes = sorted((v[0] for v in bc["countries"].values()), reverse=True)
+            if ATTRIB and back == DAYS_BACK[0]:          # the attribution check on the final day only
+                top = sorted(bc["countries"], key=lambda c: -bc["countries"][c][0])[:ATTRIB]
+                tok1 = ga.tok
+                bc["single"] = {c: one_country(ga, steps, day, c) for c in top}
+                bc["single_tokens"] = ga.tok - tok1
+                bc["fo_report"] = fo_by_country(ga, day)
             res["days"][day.isoformat()] = dict(bc, back=back, total=tot, coverage=cov, n=len(bc["countries"]),
                                                 top15_share=(round(sum(sizes[:15]) / sum(sizes), 4) if sum(sizes) else None),
                                                 under10=sum(1 for x in sizes if x < 10))
