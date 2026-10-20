@@ -89,6 +89,38 @@ def read(ga, a, b, dims, early, clock=time.monotonic):
     return m
 
 
+def _other(rows):
+    return round(sum(float(r.get("totalAdRevenue") or 0) for r in rows
+                     if "(other)" in (str(r.get("firstSessionDate")), str(r.get(DIM)))), 2)
+
+
+def day_split(ga, day, clock=time.monotonic):
+    """One activity day, every age, by country: is GA4's "(other)" gone when the query is one day? And when the countries
+    are read in two halves (the biggest by revenue alone first)?"""
+    out = {"day": day.isoformat()}
+    b = body(day, day, ("date", "firstSessionDate", DIM), rev_only=True)
+    t0, tok0 = clock(), ga.tok
+    rows = ga.report_all(b, page_rows=gu.UNI_PAGE_ROWS)
+    out["one_day"] = {"rows": len(rows), "rev": round(sum(float(r.get("totalAdRevenue") or 0) for r in rows), 2),
+                      "other": _other(rows), "sec": round(clock() - t0, 1), "tokens": ga.tok - tok0}
+    by = {}
+    for r in rows:
+        c = str(r.get(DIM) or "")
+        if c and c != "(other)":
+            by[c] = by.get(c, 0) + float(r.get("totalAdRevenue") or 0)
+    order = sorted(by, key=lambda c: -by[c])
+    if out["one_day"]["other"] > 0 and order:
+        half = order[:max(1, len(order) // 8)]                 # the few biggest countries, then the rest
+        parts = []
+        for flt in (ga4._in_list(DIM, half), {"notExpression": ga4._in_list(DIM, half)}):
+            t0, tok0 = clock(), ga.tok
+            rr = ga.report_all(b, extra=[flt], page_rows=gu.UNI_PAGE_ROWS)
+            parts.append({"rows": len(rr), "rev": round(sum(float(r.get("totalAdRevenue") or 0) for r in rr), 2),
+                          "other": _other(rr), "sec": round(clock() - t0, 1), "tokens": ga.tok - tok0})
+        out["split"] = {"n_big": len(half), "parts": parts}
+    return out
+
+
 def blocks(hs, today):
     newest = (today - timedelta(days=4 + BLOCK - 1), today - timedelta(days=4))
     out = {"newest": newest}
@@ -120,6 +152,9 @@ def probe_app(store, token, prop, over, today_of=None, clock=time.monotonic):
             r["late_all"] = read(ga, a, b, ("date", "firstSessionDate"), early=False)
             r["late_cc"] = read(ga, a, b, ("date", "firstSessionDate", DIM), early=False)
             res["blocks"][name] = r
+            late = r["late_cc"]
+            if name == "newest" and (late.get("unnamed_x") or 0) > 0:      # "(other)" in the 30-day read: try smaller
+                res["day_split"] = [day_split(ga, b - timedelta(days=i), clock) for i in (0, 10)]
         res["complete"] = True
     except gf.Stop as e:
         res["stopped"] = str(e)
