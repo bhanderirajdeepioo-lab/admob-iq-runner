@@ -54,10 +54,17 @@ def read(ga, a, b, dims, early, clock=time.monotonic):
     m = {"rows": len(rows), "calls": ga.calls - c0, "sec": round(clock() - t0, 1), "tokens": ga.tok - tok0,
          "truncated": bool(ga.truncated(rows)), "rev": 0.0, "named": 0.0, "unnamed_x": 0.0, "unnamed_cc": 0.0}
     cc_set, pairs, fold = set(), set(), set()
+    m["all_rows_rev"] = round(sum(float(r.get("totalAdRevenue") or 0) for r in rows), 2)   # every row, as GA4 sent it
+    m["top"] = sorted(([r.get(k) for k in dims] + [float(r.get("totalAdRevenue") or 0)] for r in rows),
+                      key=lambda x: -x[-1])[:8]
+    m["odd"] = [[r.get(k) for k in dims] + [float(r.get("totalAdRevenue") or 0)] for r in rows
+                if _iso8(r.get("date")) is None or ("firstSessionDate" in dims and _iso8(r.get("firstSessionDate")) is None)][:20]
+    m["x_min"] = min((r.get("firstSessionDate") for r in rows if _iso8(r.get("firstSessionDate"))), default=None)
     for r in rows:
         v = float(r.get("totalAdRevenue") or 0)
         D, X = _iso8(r.get("date")), _iso8(r.get("firstSessionDate"))
         if D is None:
+            m["no_date"] = round(m.get("no_date", 0) + v, 2)
             continue
         if X is None:
             m["unnamed_x"] += v                        # GA4 "(other)" / "(not set)" install day
