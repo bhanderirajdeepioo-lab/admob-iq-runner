@@ -327,7 +327,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         from . import roi_build as rb
         if val_on and rb.enabled(s):
             roi_acc = rb.start(cal=(revenue or {}).get("cal"), adsrc=(revenue or {}).get("adsrc"),
-                               cube=bool(s.get("ga4_cube")))     # GA4_CUBE off: the file as without the cube
+                               cube=bool(s.get("ga4_cube")),     # GA4_CUBE off: the file as without the cube
+                               cmon=(revenue or {}).get("country_m"))   # AdMob by country × month (country filter)
         else:
             rb.off(out_dir)
     except Exception as e:

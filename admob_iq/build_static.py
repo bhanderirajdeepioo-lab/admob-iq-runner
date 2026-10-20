@@ -387,6 +387,28 @@ def admob_country(rows, till, keep=CTY_KEEP):
     return out
 
 
+def admob_country_months(rows, till):
+    """The country report's rows (every ad source: the mediation report) → every month up to `till`, never trimmed —
+    {"m": {AdMob app id: {YYYY-MM: {country: earnings micros}}}, "d": {AdMob app id: {YYYY-MM: day mask}}} (bit i = day
+    i + 1 of the month had a row of the app). The 📈 ROI country filter's AdMob side of each country's AdMob ÷ GA4 match
+    per activity month (roi_build: × (1 − deduction) there, as the app's own k); "d" tells a month the report covers
+    whole from one it does not (its start, a stalled account). In memory only; admob_country (70 days) is unchanged."""
+    out, cov = {}, {}
+    for r in rows:
+        aid, d, cc = r.get("app_id"), str(r.get("report_date") or "")[:10], r.get("country")
+        if not aid or not cc or len(d) != 10 or d > till:
+            continue
+        m = out.setdefault(aid, {}).setdefault(d[:7], {})
+        m[cc] = m.get(cc, 0) + int(r.get("estimated_earnings_micros") or 0)
+        try:
+            bit = 1 << (int(d[8:10]) - 1)
+        except ValueError:
+            continue
+        c = cov.setdefault(aid, {})
+        c[d[:7]] = c.get(d[:7], 0) | bit
+    return {"m": out, "d": cov}
+
+
 def account_tzs(accounts, s, report_tz, mode, has_creds):
     """{account id: its reporting timezone} — the timezone each account's AdMob report rows are in: the configured
     reporting_tz, else (live) the account's own (account_meta, one small read each), else report_tz (as the rest of the
@@ -649,6 +671,10 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
             revenue["country"] = admob_country(repo.fetch_country(), revenue["till"])
         except Exception as e:
             print(f"ga4 forecast country skipped: {type(e).__name__}", file=sys.stderr)
+        try:                                       # 📈 ROI's country filter: every month (each country's AdMob ÷ GA4)
+            revenue["country_m"] = admob_country_months(repo.fetch_country(), revenue["till"])
+        except Exception as e:
+            print(f"roi country months skipped: {type(e).__name__}", file=sys.stderr)
         try:                                       # 📅 the forecast's eCPM calendar: each past season's week / event
             from .engine import fc_calendar        # effects, like for like per ad unit (the unit report already read)
             till = date.fromisoformat(str(revenue["till"])[:10])

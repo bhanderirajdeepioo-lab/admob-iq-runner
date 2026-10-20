@@ -9,7 +9,13 @@ pointer, one splat header rule, failure isolation and a counts-only line. Past D
 stop the columns (a day neither folded nor hot), finality (folded) vs a hot day, breakeven / so far through them, ≈ from
 the cube's measured loss (q bit 2) and from a day GA4 flagged (q bit 4), before the cube's walk first reached the final
 edge (done) only the page's "on its way" note, and without a cube, with the switch off (GA4_CUBE) or another stream's
-cube every byte of the file as the build made it before the 30-day columns existed (a fixed digest of it)."""
+cube every byte of the file as the build made it before the 30-day columns existed (a fixed digest of it). 🌍 By country
+(the cube's "e" / "c" through _late's one pass): every install day of every country, each country's AdMob ÷ GA4 per
+activity month (own / pooled ±2 / clamped / ≈ / the app's k + its share), Google Ads by country × day (unknown days
+null, "XX" → "Not split"), zero days written [X] exactly as the page expands them, holes, loss / flag bits, the packs
+(deterministic, every country in one, a big one alone), the file without the cube / with the switch off byte for byte,
+failure isolation, stale packs removed, the counts-only line; and build_static's AdMob country months (every month).
+"""
 import gzip
 import json
 import os
@@ -632,3 +638,445 @@ def test_app_step_cube_block_and_byte_identical_without_it(tmp_path, monkeypatch
     assert [r[:8] + r[11:14] for r in full["rows"]] == [r[:8] + r[11:14] for r in plain["rows"]]
     assert {k for k in full if full[k] != plain.get(k)} <= {"rows", "late", "sum", "f4", "months"}
     assert full["months"] == plain["months"] and full["cty"] == plain["cty"] and full["life"] == plain["life"]
+
+
+# ── 🌍 the install-day table by country (the cube's "e" / "c" × each country's own AdMob match) ──────────────────────
+CHS, CTODAY = date(2026, 8, 1), date(2026, 10, 13)
+CHOT = CTODAY - timedelta(days=2)                       # Oct 11 … 13 hot (read while not final), Oct 10 and before folded
+CINST = {"AA": 40, "BB": 5, "CC": 3, "--": 2}          # installs a day by country (made-up codes)
+CRATE = {"AA": 100000, "BB": 1000, "CC": 20000, "--": 10000}   # GA4 micros a day per install day, at every age
+
+
+def _cc_cube(root, holes=(), loss=None, flags=(), inst=None, rate=None, only=None, done=True):
+    """A cube from CHS to CTODAY where every install day X of a country earns rate[cc] on every activity day D ≥ X
+    (ages 0 … 30 in "e", later in "c" and "b"); inst[cc] installs on each install day (only: {cc: the install days
+    it has}); every day folded before CHOT, hot from it, except `holes`."""
+    from admob_iq.fetch import ga4_cube as cu
+    inst, rate, only = inst or CINST, rate or CRATE, only or {}
+    cube = cu.Cube(str(root), "a~1", "222")
+    D = CHS
+    while D <= CTODAY:
+        e, c, b, t = {}, {}, {}, 0
+        for cc in inst:
+            X = CHS
+            while X <= D:
+                if cc in only and X not in only[cc]:
+                    X += timedelta(days=1)
+                    continue
+                L, v, k = (D - X).days, rate[cc], X.isoformat()
+                if L <= 30:
+                    e.setdefault(cc, {})[k] = [inst[cc] if L == 0 else 0] + [0] * L + [v]
+                else:
+                    j = str(cu.bucket(L))
+                    c.setdefault(cc, {}).setdefault(k, {})[j] = v
+                    w = b.setdefault(k, {}).setdefault(j, {})
+                    w[_mon(D).isoformat()] = w.get(_mon(D).isoformat(), 0) + v
+                t += v
+                X += timedelta(days=1)
+        lo = (loss or {}).get(D, 0)
+        rec = {"st": "loss" if lo else "ok", "rows": 1, "loss": lo, "t": t + lo, "fl": 1 if D in flags else 0,
+               "via": "block", "at": "2026-10-13T06:00:00Z", "b": b, "c": c, "e": e}
+        if D not in holes:
+            if D >= CHOT:
+                cube.head["d"][D.isoformat()] = rec
+            else:
+                cube.fold(D, rec)
+        D += timedelta(days=1)
+    cube.save()
+    cube.head.update(done=done, stream_id="222", next=CHOT.isoformat())
+    cube.save_head()
+
+
+def _ga4_month(cc, M, rate=None, only=None):
+    """The made-up cube's GA4 micros of a country in an activity month (every install day ≥ CHS, every age)."""
+    rate, tot, D = rate or CRATE, 0, max(CHS, date(int(M[:4]), int(M[5:]), 1))
+    while D.isoformat()[:7] == M and D <= CTODAY:
+        tot += rate[cc] * sum(1 for i in range((D - CHS).days + 1)
+                              if not (only and cc in only) or CHS + timedelta(days=i) in only[cc])
+        D += timedelta(days=1)
+    return tot
+
+
+def _cc_world(tmp_path, kmul=None, mask_off=(), geo_holes=(date(2026, 9, 15),), **kw):
+    """The cube + AdMob by country × month (kmul[cc][month] × the country's GA4; whole months by default, the newest
+    through Oct 12) + Google Ads by store × day × country (from Sep 1; a store-day in geo_holes has spend but no split)."""
+    data = tmp_path / "data"
+    _cc_cube(data, **kw)
+    kmul = kmul if kmul is not None else {"AA": {"2026-08": 1.5, "2026-09": 1.0, "2026-10": 1.0},
+                                          "CC": {"2026-08": 3.0, "2026-09": 3.0, "2026-10": 3.0}}
+    m = {}
+    for cc, ks in kmul.items():
+        for M, k in ks.items():
+            m.setdefault(M, {})[cc] = int(_ga4_month(cc, M, kw.get("rate"), kw.get("only")) * k)
+    d = {"2026-08": (1 << 31) - 1, "2026-09": (1 << 30) - 1, "2026-10": (1 << 12) - 1}
+    for M in mask_off:
+        d[M] &= ~(1 << 9)                                    # day 10 has no row (and day 11 has one: a real hole)
+        d[M] &= ~(1 << 10)
+    cmon = {"m": {"a~1": m}, "d": {"a~1": d}}
+    P = _P(CHS, CTODAY - timedelta(days=6))
+    P["sc"]["kf"] = lambda d_: (1.2, "ok", False, 1.2)
+    sdaily, geo = {}, {}
+    X = CHS
+    while X <= CTODAY - timedelta(days=1):
+        k = X.isoformat()
+        sdaily[k] = 10_000_000
+        if X >= date(2026, 9, 1) and X not in geo_holes:
+            geo[k] = {"AA": [6_000_000, 3.0], "BB": [2_000_000, None], "XX": [1_000_000, None], "DD": [1_000_000, 1.0]}
+        X += timedelta(days=1)
+    pre = {"spend": {"ccy": "USD", "daily": {"s1": sdaily}, "installs": {}, "first": CHS.isoformat(),
+                     "till": (CTODAY - timedelta(days=1)).isoformat()},
+           "owner": {"s1": "Alpha"}, "fx": None}
+    spend = {"ccy": "USD", "daily": dict(sdaily), "installs": {}, "first": CHS.isoformat(),
+             "till": (CTODAY - timedelta(days=1)).isoformat(), "sids": 1}
+    acc = rb.start(cube=True, cmon=cmon)
+    acc.geo = {"ccy": "USD", "days": {"s1": geo}}
+    return data, P, pre, spend, acc
+
+
+def _cc_run(tmp_path, data, P, pre, spend, acc, ded=None, out="out"):
+    cv = rb._Cty(P["hs"])
+    late = rb._late(str(data), "a~1", "222", P, visit=cv.visit)
+    co = {"read_today": CTODAY.isoformat(), "stream_id": "222", "x": {}}
+    rows = rb._cohorts(P, spend, lambda d_: 1.0, co, CTODAY, late)
+    od = tmp_path / out
+    od.mkdir(exist_ok=True)
+    cd = rb._cty(acc, cv, late, P, rows, spend, pre, {"app_id": "a~1", "app_name": "Alpha"}, {"package": "p.q"},
+                 {"tz": "America/Los_Angeles"}, ded, ["a~1"], "aaaaaaaaaaaa", str(od), str(data))
+    return cd, od, rows
+
+
+def _pack_rows(od, cd):
+    out = {}
+    for name, sha in cd["packs"]:
+        import hashlib
+        with gzip.open(os.path.join(str(od), name), "rb") as f:
+            raw = f.read()
+        body = json.loads(raw)
+        assert hashlib.sha1(raw).hexdigest()[:12] == sha                       # the page's ?v= is its content
+        assert raw == json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+        assert body["v"] == 1 and body["key"] == "aaaaaaaaaaaa" and body["ix"] == cd["packs"].index([name, sha])
+        for cc, rows in body["c"].items():
+            assert cc not in out                                                # every country in exactly one pack
+            out[cc] = rows
+    return out
+
+
+def _expand(rows, cd, cc):
+    """The page's zx: a short [X] → the row (the same rule as rb._zrow)."""
+    unk = set()
+    for a, b in cd["geo"]["unk"]:
+        d = date.fromisoformat(a)
+        while d <= date.fromisoformat(b):
+            unk.add(d)
+            d += timedelta(days=1)
+    out = []
+    for r in rows:
+        if len(r) == 1:
+            X = date.fromisoformat(r[0])
+            r = rb._row_out(rb._zrow(X, date.fromisoformat(cd["thru"]), date.fromisoformat(cd["fthru"]), X in unk, cc,
+                                     bool(cd["geo"]["billed"])))
+        out.append(r)
+    return out
+
+
+def test_country_rows_kc_per_month_and_spend(tmp_path):
+    data, P, pre, spend, acc = _cc_world(tmp_path)
+    cd, od, rows = _cc_run(tmp_path, data, P, pre, spend, acc)
+    assert cd["v"] == 1 and cd["from"] == "2026-08-01" and cd["thru"] == "2026-10-13" and cd["fthru"] == "2026-10-10"
+    got = _pack_rows(od, cd)
+    assert set(got) == {"AA", "BB", "CC", "--", "DD", "XX"} == {x[0] for x in cd["c"]}
+    # the index: installs desc, then spend, then code; every country its pack
+    assert [x[0] for x in cd["c"]] == ["AA", "BB", "CC", "--", "DD", "XX"]
+    c = {x[0]: x for x in cd["c"]}
+    days = (CTODAY - CHS).days + 1
+    assert c["AA"][1] == 40 * days and c["--"][1] == 2 * days and c["DD"][1] == 0 and c["XX"][1] is None
+    AA = {r[0]: r for r in _expand(got["AA"], cd, "AA")}
+    assert len(AA) == days and min(AA) == "2026-08-01" and max(AA) == "2026-10-13"        # every install day
+    r = AA["2026-08-10"]                    # ages 0 … 21 in Aug (k_c 1.5), 22 … 30 in Sep (k_c 1.0): $0.10 a day GA4
+    assert r[1] == 40 and r[4][21] == pytest.approx(22 * 0.15) and r[4][30] == pytest.approx(22 * 0.15 + 9 * 0.1)
+    assert r[5] == 31 and r[7][T.index(7)] == pytest.approx(8 * 0.15) and r[7][T.index(30)] == r[4][30]
+    # D60 from the cube's buckets × k_c of each activity month (Oct: no whole month of its own → pooled, Sep's 1.0)
+    assert r[14] == [pytest.approx(4.2 + 3.0)] and r[15] == 1 and r[7][T.index(60)] == r[14][0]
+    assert r[3] is None and r[13] is None                                   # Aug: Google Ads by country unknown → '—'
+    s = AA["2026-09-10"]
+    assert s[3] == 6.0 and s[13] == 6.0 and s[2] == 3.0                     # USD (rate 1), as billed, Ads downloads
+    assert AA["2026-09-15"][3] is None                                      # a store spent, no committed split: '—'
+    assert AA["2026-10-13"][3] is None                                      # after the spend cache: unknown
+    # statuses on the country's own rows (≥ $5 and ≥ 30 installs judged), the same _statuses
+    assert AA["2026-08-10"][11] == "N/A" and AA["2026-09-25"][11] in ("Normal", "Watch", "Better", "Worse")
+    assert AA["2026-10-12"][11] == "Too early"
+    # q: k_c 1.5 is outside 0.8 – 1.25 (bit 8); the Sep / Oct rows on a measured k inside it: none
+    assert r[12] & 8 and not AA["2026-09-20"][12] & 8 and not AA["2026-09-20"][12] & 16
+    # CC: AdMob 3× → clamped to 2.0 (≈); BB: too thin even pooled → the app's k (1.2, ≈, bit 16); "--": always the app's
+    CC = {x[0]: x for x in _expand(got["CC"], cd, "CC")}
+    assert CC["2026-09-05"][4][0] == pytest.approx(0.02 * 2.0) and CC["2026-09-05"][12] & 8
+    BB = {x[0]: x for x in _expand(got["BB"], cd, "BB")}
+    assert BB["2026-09-05"][4][0] == pytest.approx(0.001 * 1.2) and BB["2026-09-05"][12] & 16
+    NC = {x[0]: x for x in _expand(got["--"], cd, "--")}
+    assert NC["2026-09-05"][4][0] == pytest.approx(0.01 * 1.2) and NC["2026-09-05"][12] & 16
+    assert NC["2026-09-05"][3] is None and c["--"][2] is None               # GA4's "(not set)": no Ads country
+    assert c["--"][6] == 1.0 and c["BB"][6] == 1.0 and c["AA"][6] == 0.0
+    assert BB["2026-09-05"][3] == 2.0 and BB["2026-09-05"][2] is None       # downloads unknown: null
+    # an Ads-only country: its spend per day, no installs, no revenue
+    DD = {x[0]: x for x in _expand(got["DD"], cd, "DD")}
+    assert DD["2026-09-05"][1] == 0 and DD["2026-09-05"][3] == 1.0 and DD["2026-09-05"][8] == 0.0
+    # "Not split": Google Ads' unmapped cost by install day, no revenue
+    XX = {x[0]: x for x in _expand(got["XX"], cd, "XX")}
+    assert XX["2026-09-05"][3] == 1.0 and XX["2026-09-05"][1] is None and XX["2026-09-05"][4] is None
+    assert XX["2026-08-05"][3] is None and len(XX) == days
+    # the index: k_c months, Google Ads coverage, the measured gap to the All row
+    # own: AA Aug + Sep, CC Sep; pooled: Oct of AA / CC (partial), CC Aug ($9.92 GA4); the app's k: BB, "--" every month;
+    # ≈ (measured, outside 0.8 – 1.25): AA Aug (1.5) and CC's three (3.0 → 2.0)
+    assert {k: v for k, v in cd["kc"].items() if k != "tzh"} == {"own_months": 3, "pool_months": 3, "app_months": 6,
+                                                                  "est_months": 4}
+    assert cd["kc"]["tzh"] is not None                                    # AdMob's day vs GA4's (UTC here): measured
+    g = cd["geo"]
+    assert g["from"] == "2026-09-01" and g["till"] == "2026-10-12" and g["unknown_days"] == 31 + 1 + 1
+    assert g["unk"] == [["2026-08-01", "2026-08-31"], ["2026-09-15", "2026-09-15"], ["2026-10-13", "2026-10-13"]]
+    assert g["xx_share"] == round(1 / 10, 4) and g["cov"] == 1.0
+    assert c["AA"][2] == pytest.approx(6.0 * (g["known_days"] - 0)) and c["XX"][2] == pytest.approx(1.0 * g["known_days"])
+    assert cd["diff"]["age"] == 30 and cd["diff"]["days"] >= 1 and cd["diff"]["n_cty"] == cd["diff"]["days"] * 50
+
+
+def test_country_kc_rules(tmp_path):
+    lo, ok = rb.val.K_CLAMP, rb.val.K_OK
+    months = ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"]
+    appk = {M: 1.1 for M in months}
+    G = {"AA": {M: 100e6 for M in months}, "BB": {M: 5e6 for M in months}, "--": {M: 100e6 for M in months},
+         "CC": {M: 100e6 for M in months}}
+    A = {"AA": {"2026-01": 90.0, "2026-02": 130.0, "2026-03": 300.0, "2026-04": 10.0, "2026-05": 100.0},
+         "BB": {M: 5.0 for M in months}, "--": {M: 100.0 for M in months}, "CC": {M: 20.0 for M in months}}
+    whole = set(months) - {"2026-06"}
+    kc = rb._kc(G, A, whole, months, appk)
+    a = kc["AA"]
+    assert a["2026-01"] == (0.9, "own", False)                          # inside 0.8 – 1.25
+    assert a["2026-02"] == (1.3, "own", True)                           # outside: ≈
+    assert a["2026-03"] == (lo[1], "own", True)                         # 3.0 clamped to 2.0, ≈
+    assert a["2026-04"] == (pytest.approx(410 / 300), "pool", True)     # AdMob $10 < $20: Mar … May pooled, ≈
+    assert a["2026-06"] == (pytest.approx(1.0), "pool", False)          # not whole: the whole months ≤ ±1 (May)
+    b = kc["BB"]                                                        # $5 a side: ±2 around Mar → $25 a side
+    assert b["2026-03"] == (pytest.approx(1.0), "pool", False)
+    assert b["2026-01"] == (1.1, "app", True)                           # Jan … Mar only $15 a side: the app's k
+    assert kc["--"]["2026-02"] == (1.1, "app", True)                    # GA4's "(not set)": always the app's k
+    assert kc["CC"]["2026-02"] == (lo[0], "own", True)                  # $20 a side: own month, 0.2 → 0.5
+    thin = rb._kc({"EE": {M: 1e6 for M in months}}, {"EE": {M: 1.0 for M in months}}, whole, months, appk)
+    assert all(v == (1.1, "app", True) for v in thin["EE"].values())   # never measurable: the app's k, ≈
+    assert ok == (0.8, 1.25) and rb.KC_POOL == 2
+    # the AdMob side: a month counts only when every day has a row (a one-day hole between rows: a real 0)
+    full = (1 << 31) - 1
+    assert rb._admob_whole({"2026-01": full}, "2026-01")
+    assert rb._admob_whole({"2026-01": full & ~(1 << 4)}, "2026-01")        # day 5 alone: between two rows
+    assert not rb._admob_whole({"2026-01": full & ~(3 << 4)}, "2026-01")    # days 5 – 6: not known
+    assert not rb._admob_whole({"2026-01": full & ~(1 << 30)}, "2026-01")   # the last day, no next month's row
+    assert rb._admob_whole({"2026-01": full & ~(1 << 30), "2026-02": 1}, "2026-01")
+    A2, m2 = rb._admob_side({"m": {"x": {"2026-01": {"AA": 2_000_000}}, "y": {"2026-01": {"AA": 1_000_000}}},
+                             "d": {"x": {"2026-01": 1}, "y": {"2026-01": 2}}}, ["x", "y"], 0.9)
+    assert A2 == {"AA": {"2026-01": pytest.approx(2.7)}} and m2 == {"2026-01": 3}   # × (1 − deduction), ids summed
+
+
+def test_country_month_cover_and_deduction(tmp_path):
+    # Sep's AdMob report misses two days in a row: Sep is not whole → its k_c is pooled from Aug (1.5) and Oct
+    # (partial: never); an Aug install day's ages in Sep then use 1.5 too
+    data, P, pre, spend, acc = _cc_world(tmp_path, mask_off=("2026-09",))
+    cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
+    AA = {r[0]: r for r in _expand(_pack_rows(od, cd)["AA"], cd, "AA")}
+    assert AA["2026-08-10"][4][30] == pytest.approx(31 * 0.15)
+    # the deduction scales AdMob (as the app's k): 1.5 × 0.8 = 1.2 in Aug (inside 0.8 – 1.25: no ≈ on Aug's days)
+    data2, P2, pre2, spend2, acc2 = _cc_world(tmp_path / "d")
+    cd2, od2, _ = _cc_run(tmp_path / "d", data2, P2, pre2, spend2, acc2, ded=0.2)
+    AA2 = {r[0]: r for r in _expand(_pack_rows(od2, cd2)["AA"], cd2, "AA")}
+    assert AA2["2026-08-10"][4][21] == pytest.approx(22 * 0.12) and not AA2["2026-08-10"][12] & 8
+
+
+def test_country_zero_rows_short_and_holes(tmp_path):
+    # EE: installs on two days only; every other day of it has nothing → [X], and the page's expansion is the row
+    inst = dict(CINST, EE=3)
+    rate = dict(CRATE, EE=50000)
+    only = {"EE": {date(2026, 9, 5), date(2026, 9, 6)}}
+    data, P, pre, spend, acc = _cc_world(tmp_path, inst=inst, rate=rate, only=only)
+    cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
+    got = _pack_rows(od, cd)
+    ee = got["EE"]
+    days = (CTODAY - CHS).days + 1
+    assert len(ee) == days and sum(len(r) == 1 for r in ee) == days - 2   # every day, the zero ones short
+    full = {r[0]: r for r in _expand(ee, cd, "EE")}
+    z = full["2026-08-10"]                                                # D60 = Oct 9: read and folded
+    assert z[1] == 0 and z[4] == [0.0] * 31 and z[5] == 31 and z[14] == [0.0] and z[15] == 1 and z[3] is None
+    assert full["2026-08-12"][14] == [0.0] and full["2026-08-12"][15] == 0  # D60 = Oct 11: hot, not final
+    assert len(full["2026-08-20"]) == 14 and full["2026-10-12"][4] == [0.0, 0.0] and full["2026-10-12"][5] == 0
+    assert full["2026-09-20"][3] == 0.0 and full["2026-09-20"][11] == "N/A"   # a known day: spend 0
+    assert full["2026-09-05"][1] == 3 and full["2026-09-05"][4][0] == pytest.approx(0.05 * 1.2)   # thin: app's k
+    # the expansion equals what the build would write in full (every short row checked)
+    for r in ee:
+        if len(r) == 1:
+            X = date.fromisoformat(r[0])
+            assert rb._zrow(X, CTODAY, date(2026, 10, 10), full[r[0]][3] is None, "EE")["n"] == 0
+    # a hole (a hot copy dropped before the walk folded it): the rows stop the day before it, the same as the
+    # 30-day columns
+    data2, P2, pre2, spend2, acc2 = _cc_world(tmp_path / "h", holes={date(2026, 10, 1)})
+    cd2, od2, _ = _cc_run(tmp_path / "h", data2, P2, pre2, spend2, acc2)
+    assert cd2["thru"] == "2026-09-30" and cd2["fthru"] == "2026-09-30"
+    AA = {r[0]: r for r in _expand(_pack_rows(od2, cd2)["AA"], cd2, "AA")}
+    assert max(AA) == "2026-09-30" and len(AA["2026-09-25"][4]) == 6 and AA["2026-09-25"][5] == 6
+
+
+def test_country_loss_flags_and_not_split(tmp_path):
+    loss = {date(2026, 9, 20): 500000}
+    data, P, pre, spend, acc = _cc_world(tmp_path, loss=loss, flags={date(2026, 9, 25)})
+    cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
+    assert cd["loss"]["days"] == 1 and cd["loss"]["flag_days"] == 1 and cd["loss"]["usd"] == pytest.approx(0.6)
+    assert 0 < cd["loss"]["max_share"] < 1
+    AA = {r[0]: r for r in _expand(_pack_rows(od, cd)["AA"], cd, "AA")}
+    assert AA["2026-09-18"][12] & 2 and AA["2026-09-23"][12] & 4 and not AA["2026-09-26"][12] & 6
+    assert AA["2026-08-10"][12] & 2                                       # its D60 column's days span Sep 20 too
+
+
+def test_country_packs_deterministic_and_split(tmp_path, monkeypatch):
+    data, P, pre, spend, acc = _cc_world(tmp_path)
+    geo0 = json.loads(json.dumps(acc.geo))                               # (a build lets each app's stores go after it)
+    monkeypatch.setattr(rb, "PACK_MAX", 30_000)                          # small packs: several, a big country alone
+    cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
+    got = _pack_rows(od, cd)
+    assert len(cd["packs"]) >= 3 and set(got) == {x[0] for x in cd["c"]}
+    sizes = {}
+    for name, _ in cd["packs"]:
+        with gzip.open(os.path.join(str(od), name), "rb") as f:
+            sizes[name] = len(f.read())
+    big = [x for x in cd["c"] if x[0] == "AA"][0]
+    assert sum(1 for x in cd["c"] if x[4] == big[4]) == 1                # AA (over 30 kB) has its pack alone
+    for name, sz in sizes.items():
+        ix = int(name.split("_c")[1][:2])
+        if sum(1 for x in cd["c"] if x[4] == ix) > 1:
+            assert sz <= 30_000 + 200
+    assert [x[4] for x in cd["c"]] == sorted(x[4] for x in cd["c"])     # filled in the index's order
+    names = sorted(os.listdir(str(od)))
+    assert all(rb.PACK_RE.match(n) for n in names) and len(names) == len(cd["packs"])
+    before = {n: open(os.path.join(str(od), n), "rb").read() for n in names}
+    acc2 = rb.start(cube=True, cmon=acc.cmon)
+    assert acc.geo["days"] == {}                                          # the app's store read once, then let go
+    acc2.geo = geo0
+    cd2, od2, _ = _cc_run(tmp_path, data, P, pre, spend, acc2)           # a second build: the same bytes
+    assert cd2 == cd and {n: open(os.path.join(str(od2), n), "rb").read() for n in names} == before
+
+
+def test_country_zrow_matches_cohorts(tmp_path):
+    """A country day with nothing of its own: _cohorts (the build's own row) == _zrow (what the page expands [X] to),
+    on every age the cube read / folded through (no m yet, m not final, final)."""
+    from admob_iq.fetch import ga4_cube as cu    # noqa: F401
+    data, P, pre, spend, acc = _cc_world(tmp_path)
+    cv = rb._Cty(P["hs"])
+    late = rb._late(str(data), "a~1", "222", P, visit=cv.visit)
+    thru, fthru = CTODAY, date(2026, 10, 10)
+    Pc = {"pre": P["pre"], "sc": {"kf": lambda d_: (1.0, "ok", False, 1.0)}, "xs": {}, "S": P["S"], "hs": CHS}
+    days = [CHS + timedelta(days=i) for i in range((thru - CHS).days + 1)]
+    sp = {"first": CHS.isoformat(), "till": "2026-10-12", "daily": {}, "installs": {}}
+    got = rb._cohorts(Pc, sp, lambda d_: 1.0, {"read_today": thru.isoformat(), "x": {X.isoformat(): {"r": [], "u": [0]}
+                                                                                     for X in days}},
+                      thru, {"B": {}, "full": late["full"], "fin": late["fin"], "q": late["q"]}, edge=fthru)
+    assert len(got) == len(days)
+    rb._statuses(got)
+    for r in got:
+        r["u"], r["q"], r["qo"] = None, False, 0
+        unk = r["X"] > date(2026, 10, 12)
+        if unk:
+            r["sp"] = r["spi"] = None
+        if r.get("m"):
+            for a_ in (60, 90, 180):
+                if a_ // 30 - 2 < r["mf"]:
+                    r["t"][T.index(a_)] = r["m"][a_ // 30 - 2]
+        assert rb._row_out(r) == rb._row_out(rb._zrow(r["X"], thru, fthru, unk, "AA")), r["X"]
+
+
+def _cc_app_step(tmp_path, monkeypatch, name, cube=True, strip=False, geo_calls=None, nocube=False):
+    """app_step on the country world (the build's own path: _late's visit, the Ads split loaded once a build)."""
+    import shutil
+    from admob_iq.fetch import ga4_cube as cu
+    from admob_iq.fetch import gads_geo_day as gdd
+    data, P, pre, spend, acc0 = _cc_world(tmp_path / name)
+    if nocube:
+        shutil.rmtree(str(data / cu.DIR))
+    if strip:                                           # the same cube without its country parts
+        for M, mo in cu.months(str(data), "a~1", "222"):
+            cu.write_json_gz_stable(cu.month_path(str(data), "a~1", M), dict(mo, c={}, e={}))
+        h = cu.load_head(str(data), "a~1")
+        for rec in h["d"].values():
+            rec["c"], rec["e"] = {}, {}
+        cu.write_json_gz_stable(cu.hot_path(str(data), "a~1"), h)
+    co = {"read_today": CTODAY.isoformat(), "stream_id": "222", "x": {}}
+    _stub_app(monkeypatch, P, co, spend)
+    calls = geo_calls if geo_calls is not None else []
+    monkeypatch.setattr(gdd, "load", lambda d_: calls.append(d_) or acc0.geo)
+    out = tmp_path / name / "out"
+    out.mkdir()
+    acc = rb.start(cube=cube, cmon=acc0.cmon)
+    store, a = {"history_start": CHS.isoformat(), "stream_id": "222"}, {"app_id": "a~1", "app_name": "Alpha"}
+    rb.app_step(acc, store, a, "aaaaaaaaaaaa", {"tz": "UTC"}, pre, {}, str(out), str(data), ids=["a~1"])
+    assert not acc.fails and len(acc.apps) == 1
+    with open(os.path.join(str(out), "roi_aaaaaaaaaaaa.json.gz"), "rb") as f:
+        return gzip.decompress(f.read()), acc, out
+
+
+def test_country_app_step_file_and_isolation(tmp_path, monkeypatch):
+    calls = []
+    full, acc, out = _cc_app_step(tmp_path, monkeypatch, "on", geo_calls=calls)
+    body = json.loads(full)
+    assert body["cd"]["v"] == 1 and len(calls) == 1 and acc.cdn == {"apps": 1, "countries": 6, "packs": 1, "failed": 0}
+    assert sorted(os.listdir(str(out))) == ["roi_aaaaaaaaaaaa.json.gz", "roi_aaaaaaaaaaaa_c00.json.gz"]
+    # every other byte of the file = the same cube without its country parts (no "cd")
+    bare, acc_b, _ = _cc_app_step(tmp_path, monkeypatch, "bare", strip=True)
+    assert "cd" not in json.loads(bare) and acc_b.cdn["apps"] == 0
+    rest = dict(body)
+    rest.pop("cd")
+    assert json.dumps(rest, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode() == bare
+    # the switch off: no "late", no "cd", no pack — byte for byte the file without any cube
+    off, acc_o, out_o = _cc_app_step(tmp_path, monkeypatch, "off", cube=False)
+    assert "cd" not in json.loads(off) and "late" not in json.loads(off) and os.listdir(str(out_o)) == [
+        "roi_aaaaaaaaaaaa.json.gz"]
+    none, acc_n, _ = _cc_app_step(tmp_path, monkeypatch, "none", nocube=True)   # the switch on, no cube on disk
+    assert none == off and acc_n.cdn == {"apps": 0, "countries": 0, "packs": 0, "failed": 0}
+    # any failure in the country part: no "cd", every other byte as without it, counted
+    monkeypatch.setattr(rb, "_cty", lambda *a_, **k_: 1 / 0)
+    bad, acc_x, out_x = _cc_app_step(tmp_path, monkeypatch, "bad")
+    assert bad == bare and acc_x.cdn["failed"] == 1 and os.listdir(str(out_x)) == ["roi_aaaaaaaaaaaa.json.gz"]
+
+
+def test_country_visit_failure_keeps_the_columns(tmp_path, monkeypatch):
+    def boom(self, M, e):
+        raise ValueError("bad cell")
+    monkeypatch.setattr(rb._Cty, "_e", boom)
+    bad, acc, _ = _cc_app_step(tmp_path, monkeypatch, "v")
+    bare, _, _ = _cc_app_step(tmp_path, monkeypatch, "b", strip=True)
+    body = json.loads(bad)
+    assert "cd" not in body and acc.cdn["failed"] == 1 and any(len(r) == 16 for r in body["rows"])   # m kept
+    assert json.loads(bare)["late"] == body["late"]
+
+
+def test_country_stale_packs_and_line(tmp_path, monkeypatch):
+    full, acc, out = _cc_app_step(tmp_path, monkeypatch, "s")
+    for f in ("roi_aaaaaaaaaaaa_c07.json.gz", "roi_bbbbbbbbbbbb_c00.json.gz"):   # an older build's: one too many /
+        open(os.path.join(str(out), f), "w").close()                         # another app's (gone now)
+    assert rb.finish(acc, {}, str(out)) == ["/roi*"]
+    assert sorted(os.listdir(str(out))) == ["roi.json.gz", "roi_aaaaaaaaaaaa.json.gz", "roi_aaaaaaaaaaaa_c00.json.gz"]
+    line = rb.pop_line()
+    assert line.startswith("roi: apps 1,") and "; countries: apps 1, countries 6, packs 1, failed 0" in line
+    assert "Alpha" not in line and "AA" not in line
+    rb.off(str(out))                                                         # the section off: every file of it
+    assert os.listdir(str(out)) == []
+    acc2 = rb.start()                                                        # the switch off: the line as before
+    acc2.apps = [dict(acc.apps[0])]
+    rb.finish(acc2, {}, str(out))
+    assert "countries" not in rb.pop_line()
+
+
+def test_admob_country_months_every_month():
+    from admob_iq.build_static import admob_country, admob_country_months
+    rows = [{"app_id": "a", "report_date": "2026-10-01", "country": "IN", "estimated_earnings_micros": 5, "impressions": 9},
+            {"app_id": "a", "report_date": "2026-10-01", "country": "IN", "estimated_earnings_micros": 1, "impressions": 1},
+            {"app_id": "a", "report_date": "2024-07-31", "country": "IN", "estimated_earnings_micros": 9, "impressions": 9},
+            {"app_id": "a", "report_date": "2026-10-03", "country": "US", "estimated_earnings_micros": 9, "impressions": 9},
+            {"app_id": "a", "report_date": "2026-10-02", "country": "US", "estimated_earnings_micros": 4, "impressions": 9},
+            {"app_id": "b", "report_date": "2026-10-01", "country": "", "estimated_earnings_micros": 9, "impressions": 9}]
+    got = admob_country_months(rows, "2026-10-02")
+    assert got == {"m": {"a": {"2026-10": {"IN": 6, "US": 4}, "2024-07": {"IN": 9}}},       # every month, never cut
+                   "d": {"a": {"2026-10": 0b11, "2024-07": 1 << 30}}}
+    assert admob_country(rows, "2026-10-02") == {"a": {"2026-10-01": {"IN": [6, 10]}, "2026-10-02": {"US": [4, 9]}}}

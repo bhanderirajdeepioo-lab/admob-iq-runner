@@ -34,6 +34,7 @@ const ctx = {
   csym: () => '$', cfx: () => 1, curView: () => 'USD', setApp: () => {}, hubAppId: n => ({ 'Alpha Pick': 'id-a' })[n] || '',
   fetchGzJson: () => Promise.reject(new Error('no file in this test')),
 };
+const CTX0 = Object.assign({}, ctx);                     // the stubs as made (a fresh module: the default digest)
 vm.createContext(ctx);
 const T = [0, 1, 3, 7, 14, 30, 60, 90, 180, 365];
 const iso = d => d.toISOString().slice(0, 10);
@@ -64,6 +65,123 @@ function appFile() {
              { cc: 'CC', dec: 'Scale', n: 200, share: 0.2, spend: 300, cpi: 1.5, back: { '7': 80, '30': 140, '90': 200 }, pay: { p: 20, obs: true }, ret: {} }],
       months: { AA: [['2026-08', 100, 50, 90, 0.4, 0.8, null, 4, 4, 4, 0], ['2026-09', 200, 100, 180, 0.5, null, null, 5, 5, 2, 0]] } },
     consts: { n_recent: 7, n_usual: 28, final_lag: 3 } };
+}
+// the late read's file: 230 install days to 13 Oct, the newest 40 day by day; a row ≥ 60 days old has m = its revenue at
+// D60, D90 … (one more each 30 days of age), final while ≥ 3 days old
+function lateFile() {
+    const rows = [], newest = '2026-10-13';
+    for (let age = 229; age >= 0; age--) {
+      const X = day(newest, -age), exact = age < 40, obs = Math.min(30, age), df = Math.max(0, Math.min(obs, age - 3) + 1);
+      const dd = exact ? Array.from({ length: obs + 1 }, (_, L) => L + 1) : null;
+      const t = T.map(a => (a <= age - 3 ? a + 1 : null));
+      const r = [X, 100, 80, 50, dd, exact ? df : 0, exact ? dd.map(() => 50) : null, t, null, X, null, 'Normal', age === 100 ? 2 : 0, 4000];
+      const nm = Math.floor(age / 30) - 1;
+      if (nm > 0) { r.push(Array.from({ length: nm }, (_, k) => 31 + 10 * (k + 1)), Array.from({ length: nm }, (_, k) => k).filter(k => 30 * (k + 2) <= age - 3).length); r[8] = r[14][nm - 1]; }
+      if (age === 150) r[10] = [120, false];                                     // breakeven in a 30-day column
+      rows.push(r);
+    }
+    return { v: 1, app: 'Late File', T, lags: 31, newest, S: '2026-10-07', rows, months: [], sum: { today: rows.slice(-2), pools: {} },
+      late: { days: 200, oth: 3, omax: 0.025, from: '2026-03-28', till: newest }, consts: { final_lag: 3 } };
+}
+// the default view's digest: a FRESH module (nothing picked, nothing toggled), both made-up files, every grain × mode, the
+// Day view and the Countries board — the same code ran on the page before the country filter gave GOLDEN_DEFAULT
+function defaultDigest() {
+  const c3 = Object.assign({}, CTX0, { DATA: null, window: {} });
+  vm.createContext(c3);
+  vm.runInContext(src, c3);
+  const U = c3.ROI._, crypto = require('crypto'), h = x => crypto.createHash('sha256').update(x).digest('hex');
+  const d0 = appFile(), dm = lateFile(), parts = [];
+  for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) {
+    U.set('GRAIN', g); U.set('MET', m); parts.push(U.cohortTable(d0), U.cohortTable(dm)); }
+  U.set('GRAIN', 'day'); U.set('MET', 'roas');
+  parts.push(U.dayView(d0), U.dayView(dm), U.ctyView(d0));
+  U.set('SHOW', 1e9); parts.push(U.cohortTable(dm));
+  return h(parts.join('\u0001'));
+}
+// No page jump (owner: "kuchh change karte he to upar chala jata he page"): the ROI block in a FRESH module on a small
+// made-up DOM whose layout is the page's own markup — an element's document top = its offset in the block's HTML × a
+// line factor (a narrow phone: taller), the window scrolls over it. A tap / a list change / "✕ All countries" / the
+// Countries board's "📅 Day-wise" goes through the real listeners; the tapped control (or what it opens) must stay where
+// it was on screen, before and after its pack arrives. → [moves in px …] (0 = stayed).
+async function noJump(width, file, packs, failOnce) {
+  const failed = new Set();
+  const k = 0.05 * 1280 / width, W = { scrollY: 0, innerWidth: width, scrollBy(x, y) { this.scrollY = Math.max(0, this.scrollY + y); } };
+  const L = {};
+  const P = { hero: '', body: '' };
+  let HD = '';                                                              // the view tabs (the block's own header)
+  const full = () => '<section id="roi-root"><div id="roi-hero">' + P.hero + '</div>' + HD + '<div id="roi-body">' + P.body + '</div></section>';
+  const attrs = tag => { const a = {}; for (const m of tag.matchAll(/([a-zA-Z0-9:-]+)="([^"]*)"/g)) a[m[1]] = m[2]; return a; };
+  const find = sel => {
+    const H = full(); let i = -1, m;
+    if ((m = /^#([\w-]+) (\w+)$/.exec(sel))) { const j = H.indexOf(`id="${m[1]}"`); i = j < 0 ? -1 : H.indexOf('<' + m[2], j); }
+    else if ((m = /^#([\w-]+)$/.exec(sel))) { const j = H.indexOf(`id="${m[1]}"`); i = j < 0 ? -1 : H.lastIndexOf('<', j); }
+    else if ((m = /^\[([\w-]+)="([^"]*)"\]$/.exec(sel))) { const j = H.indexOf(` ${m[1]}="${m[2]}"`); i = j < 0 ? -1 : H.lastIndexOf('<', j); }
+    else if ((m = /^\[([\w-]+)\]$/.exec(sel))) { const j = H.search(new RegExp(` ${m[1]}(=|>| )`)); i = j < 0 ? -1 : H.lastIndexOf('<', j); }
+    else return null;
+    if (i < 0) return null;
+    return el(i, H.slice(i, H.indexOf('>', i) + 1));
+  };
+  const el = (i, tag) => {
+    const a = attrs(tag), ds = {};
+    for (const [n, v] of Object.entries(a)) if (n.startsWith('data-')) ds[n.slice(5).replace(/-([a-z])/g, (x, c) => c.toUpperCase())] = v;
+    const e = { _i: i, dataset: ds, value: a.value || '', style: {},
+      getAttribute: n => a[n] == null ? null : a[n], setAttribute: (n, v) => { a[n] = String(v); },
+      getBoundingClientRect: () => ({ top: e._i * k - W.scrollY, left: 0, width: 10, height: 10 }),
+      closest: sel => sel === '#roi-root' ? ROOT : matches(sel) ? e : null };
+    const matches = sel => { let m;
+      if ((m = /^\[([\w-]+)\]$/.exec(sel))) return a[m[1]] != null;
+      if ((m = /^\[([\w-]+)="([^"]*)"\]$/.exec(sel))) return a[m[1]] === m[2];
+      return false; };
+    return e;
+  };
+  const box = key => ({ set innerHTML(v) { P[key] = v; }, get innerHTML() { return P[key]; } });
+  const ROOT = { dataset: { aid: 'id-c' }, style: {}, get offsetHeight() { return full().length * k; },
+    getBoundingClientRect: () => ({ top: -W.scrollY, left: 0, width: width, height: full().length * k }),
+    querySelector: sel => sel === '#roi-body' ? box('body') : sel === '#roi-hero' ? box('hero') : sel === '.roi-tip' ? null : find(sel),
+    querySelectorAll: sel => { const H = full(), out_ = []; if (sel !== '[data-roi-view]') return out_;
+      for (const m of H.matchAll(/<button[^>]* data-roi-view="[^"]*"[^>]*>/g)) out_.push(el(m.index, m[0])); return out_; } };
+  const doc = { addEventListener: (t, f) => { (L[t] = L[t] || []).push(f); }, getElementById: id => id === 'roi-root' ? ROOT : null };
+  const c = Object.assign({}, CTX0, { document: doc, window: W, setTimeout, DATA: { roi: { file: 'roi.json.gz', v: 'v1', apps: { 'id-c': { file: 'roi_cccccccccccc.json.gz', st: 'Watch' } } } },
+    fetchGzJson: u => new Promise((ok_, no) => setTimeout(() => { const f = u.split('?')[0];
+      if ((failOnce || []).includes(f) && !failed.has(f)) { failed.add(f); return no(new Error('x')); }
+      return packs[f] ? ok_(JSON.parse(JSON.stringify(packs[f]))) : no(new Error('x')); }, 0)) });
+  vm.createContext(c);
+  vm.runInContext(src, c);
+  const R = c.ROI, U = R._;
+  U.data().AF['roi_cccccccccccc.json.gz'] = Object.assign(JSON.parse(JSON.stringify(file)), { _v: 'v1' });
+  R.block('id-c');                                                          // wires the listeners
+  const I = U.inner('id-c');
+  HD = I.slice(I.indexOf('<div class="roi-hd">'), I.indexOf('<div id="roi-body">'));
+  R.repaint();
+  const flush = () => new Promise(r => setTimeout(r, 5));
+  const fire = (t, e) => (L[t] || []).forEach(f => f(Object.assign({ clientX: 0, clientY: 0 }, e)));
+  const moves = [];
+  const tap = async (sel, after, ev) => {                                  // a control mid-screen; where it is after
+    let b = find(sel); W.scrollY = Math.max(0, b._i * k - 300); b = find(sel); const y0 = b.getBoundingClientRect().top;
+    if (ev) { b.value = ev; fire('change', { target: b }); } else fire('click', { target: b });
+    let a = find(after || sel); moves.push(a ? Math.round(a.getBoundingClientRect().top - y0) : 'gone');
+    await flush();                                                         // its pack arrives: nothing above moves
+    a = find(after || sel); moves.push(a ? Math.round(a.getBoundingClientRect().top - y0) : 'gone');
+  };
+  await tap('[data-roi-cc="AA"]');                                          // a chip: the title grows above it
+  await tap('[data-roi-grain="week"]');                                     // the grain keeps the country
+  const keptWeek = P.body.includes('[AA] Country AA</h3>');
+  await tap('[data-roi-grain="day"]');
+  await tap('[data-roi-ccs]', null, 'GG');                                  // the full list (another pack)
+  const h3 = find('#roi-coh h3'), y3 = h3.getBoundingClientRect().top;
+  fire('click', { target: find('[data-roi-ccx]') });                        // ✕ All countries: the title row stays
+  moves.push(Math.round(find('#roi-coh h3').getBoundingClientRect().top - y3));
+  const backAll = !P.body.includes('✕ All countries') && U.getCTY() === '';
+  fire('click', { target: find('[data-roi-view="cty"]') });                 // 🌍 Countries → "📅 Day-wise" of BB
+  await tap('[data-roi-pick="BB"]', '#roi-coh');
+  const picked = U.getCTY() === 'BB' && P.body.includes('[BB] Country BB</h3>');
+  // a pack that does not load: "Try again" in the table area reads it again (and only then)
+  await tap('[data-roi-cc="EE"]');
+  const errShown = P.body.includes('data-roi-ccr="1">Try again') && P.body.includes('[EE] Country EE ka data load nahi hua');
+  fire('click', { target: find('[data-roi-ccr]') });
+  await flush();
+  const retried = P.body.includes('[EE] Country EE</h3>') && !P.body.includes('Try again') && /<td class="roi-[gwb]/.test(P.body);
+  return { moves, keptWeek, backAll, picked, errShown, retried };
 }
 (async () => {
   try {
@@ -673,21 +791,7 @@ function appFile() {
       && !cw.includes('class="ev ');
     // 📅 past D30 every 30 days (the late read's m, mf): 230 install days to 13 Oct, the newest 40 day by day; a row
     // ≥ 60 days old has m = its revenue at D60, D90 … (one more each 30 days of age), final while ≥ 3 days old
-    const dm = (() => {
-      const rows = [], newest = '2026-10-13';
-      for (let age = 229; age >= 0; age--) {
-        const X = day(newest, -age), exact = age < 40, obs = Math.min(30, age), df = Math.max(0, Math.min(obs, age - 3) + 1);
-        const dd = exact ? Array.from({ length: obs + 1 }, (_, L) => L + 1) : null;
-        const t = T.map(a => (a <= age - 3 ? a + 1 : null));
-        const r = [X, 100, 80, 50, dd, exact ? df : 0, exact ? dd.map(() => 50) : null, t, null, X, null, 'Normal', age === 100 ? 2 : 0, 4000];
-        const nm = Math.floor(age / 30) - 1;
-        if (nm > 0) { r.push(Array.from({ length: nm }, (_, k) => 31 + 10 * (k + 1)), Array.from({ length: nm }, (_, k) => k).filter(k => 30 * (k + 2) <= age - 3).length); r[8] = r[14][nm - 1]; }
-        if (age === 150) r[10] = [120, false];                                     // breakeven in a 30-day column
-        rows.push(r);
-      }
-      return { v: 1, app: 'Late File', T, lags: 31, newest, S: '2026-10-07', rows, months: [], sum: { today: rows.slice(-2), pools: {} },
-        late: { days: 200, oth: 3, omax: 0.025, from: '2026-03-28', till: newest }, consts: { final_lag: 3 } };
-    })();
+    const dm = lateFile();
     U.set('GRAIN', 'day');
     const CM = U.cols(dm, dm.rows);
     out.m_cols = [CM.length, CM[0].lab, CM[30].lab, CM[31].lab, CM[32].lab, CM[CM.length - 1].lab, CM.filter(c => c.mi != null).length];
@@ -765,6 +869,151 @@ function appFile() {
     const dmq = JSON.parse(JSON.stringify(dm)); dmq.rows[dmq.rows.length - 1][12] = 4;
     out.m_q4 = U.cohortTable(dmq).includes('D30 ke baad GA4 ke report pe data loss / thresholding / sampling ka flag tha — asli kamai thodi alag (kam ya zyada) ho sakti hai')
       && !U.cohortTable(dmq).includes('thodi zyada ho sakti');
+    // ── 🌍 the install-day table by country ─────────────────────────────────────────────────────────────────────
+    // the default view (no country part in the file) byte for byte as the page made it before the country filter: one
+    // digest over every grain × mode of both made-up files, the Day view and the Countries board (worked out on the
+    // page before this change)
+    out.cc_default_digest = defaultDigest();
+    out.cc_src_null = U.cohortTable(appFile(), null) === U.cohortTable(appFile()) && U.cohortTable(appFile(), undefined) === U.cohortTable(appFile());
+    {
+    // a made-up app with the country part: 8 named countries (6 chips + the rest in the list), GA4's "(not set)" and
+    // Google Ads' "Not split"; two packs
+    const ccRowsOf = (cc, sp0, short) => {
+      const rows = [], newest = '2026-10-13';
+      for (let age = 69; age >= 0; age--) {
+        const X = day(newest, -age), obs = Math.min(30, age), df = Math.max(0, Math.min(obs, age - 3) + 1);
+        if (short && short(age)) { rows.push([X]); continue; }
+        const dd = Array.from({ length: obs + 1 }, (_, L) => (L + 1) * 0.5), t = T.map(a => (a <= 30 && a < df ? dd[a] : null));
+        const sp = X < '2026-09-01' || X > '2026-10-12' ? null : sp0;
+        const r = [X, 20, null, sp, dd, df, null, t, dd[dd.length - 1], X, null, age >= 10 && sp != null ? 'Normal' : 'N/A',
+          age === 20 ? 16 : age === 21 ? 8 : 0, sp];
+        if (age >= 63) { r.push([dd[30] + 5], 1); t[T.indexOf(60)] = dd[30] + 5; r[8] = dd[30] + 5; }
+        rows.push(r);
+      }
+      return rows;
+    };
+    const CCS = ['AA', 'BB', 'CC', 'DD', 'EE', 'FF', 'GG', 'HH'];
+    const cdx = () => ({ v: 1, packs: [['roi_aaaaaaaaaaaa_c00.json.gz', '0123456789ab'], ['roi_aaaaaaaaaaaa_c01.json.gz', 'ba9876543210']],
+      c: CCS.map((cc, i) => [cc, 1000 - i * 100, 50 - i * 5, null, i < 4 ? 0 : 1, 3, i === 1 ? 0.25 : 0])
+        .concat([['--', 40, null, null, 1, 70, 1], ['XX', null, 12, null, 1, null, null]]),
+      from: '2026-08-05', to: '2026-10-13', thru: '2026-10-13', fthru: '2026-10-10', newest: '2026-10-13',
+      kc: { own_months: 5, pool_months: 2, app_months: 3, est_months: 1, tzh: 12.5 },
+      geo: { from: '2026-09-01', till: '2026-10-12', known_days: 42, unknown_days: 28, unk: [['2026-08-05', '2026-08-31'], ['2026-10-13', '2026-10-13']],
+        xx_share: 0.08, cov: 0.97, billed: 1 },
+      loss: { days: 2, max_share: 0.012, flag_days: 1, usd: 3.5 }, diff: { age: 30, days: 12, all: 100, cty: 96.4, rel: -0.036, n_all: 1200, n_cty: 1190 } });
+    const PACKS = {
+      'roi_aaaaaaaaaaaa_c00.json.gz': { v: 1, key: 'aaaaaaaaaaaa', ix: 0, c: { AA: ccRowsOf('AA', 10, a => a % 10 === 3), BB: ccRowsOf('BB', 5), CC: ccRowsOf('CC', 4), DD: ccRowsOf('DD', 3) } },
+      'roi_aaaaaaaaaaaa_c01.json.gz': { v: 1, key: 'aaaaaaaaaaaa', ix: 1, c: { EE: ccRowsOf('EE', 2, a => a !== 5), FF: ccRowsOf('FF', 2), GG: ccRowsOf('GG', 1),
+        HH: ccRowsOf('HH', 1), '--': ccRowsOf('--', null), XX: ccRowsOf('XX', 1).map((r, i) => i % 3 ? [r[0], null, null, r[3], null, 0, null, T.map(() => null), null, null, null, 'N/A', 0, r[3]] : [r[0]]) } } };
+    const fetched = [];
+    let failPack = null;
+    ctx.fetchGzJson = u => { fetched.push(u); const f = u.split('?')[0];
+      return new Promise((ok_, no) => setTimeout(() => (f === failPack || !PACKS[f] ? no(new Error('x')) : ok_(JSON.parse(JSON.stringify(PACKS[f])))), 0)); };
+    const flush = () => new Promise(r => setTimeout(r, 5));
+    const dc = Object.assign(appFile(), { cd: cdx() });
+    U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60); U.setCTY('');
+    // the picker: All countries + the 6 with the most installs as chips; EVERY country in the list (flag, name,
+    // installs), then "Unknown country" / "Not split"
+    const pick = U.ccPick(dc.cd);
+    out.cc_chips = [...pick.matchAll(/<button type="button" data-roi-cc="([^"]*)"/g)].map(m => m[1]);
+    out.cc_list = [...pick.matchAll(/<option value="([^"]*)"/g)].map(m => m[1]);
+    out.cc_list_txt = pick.includes('[GG] Country GG · 400 installs') && pick.includes('[--] Unknown country · 40 installs')
+      && pick.includes('🧩 Not split') && pick.includes('<optgroup label="Every country (8)">') && pick.includes('More countries ▾')
+      && pick.includes('aria-pressed="true">🌍 All countries');
+    // All countries (the default): the same table — only the picker joins the control row, first
+    const ccAll = U.cohCard(dc), tAll = U.cohortTable(dc);
+    out.cc_all_same = ccAll.includes(tAll.replace('<div class="roi-ctl">', '<div class="roi-ctl">' + pick))
+      && U.cohortTable(dc, { ctl: pick }) === tAll.replace('<div class="roi-ctl">', '<div class="roi-ctl">' + pick)
+      && ccAll.indexOf('data-roi-cc=""') < ccAll.indexOf('data-roi-grain="day"') && !fetched.length
+      && U.dayView(dc).replace(pick, '').replace(' id="roi-coh"', '') === U.dayView(appFile());
+    // picking a country: its pack is fetched once (?v=its sha), "loading" only inside the table area
+    U.setCTY('AA');
+    const ld = U.cohCard(dc);
+    out.cc_loading = ld.includes('<div class="roi-tw roi-ccm"><p class="roi-note">⏳ [AA] Country AA ka data load ho raha hai…</p></div>')
+      && ld.includes('data-roi-grain="week"') && ld.includes('data-roi-cc="AA" aria-pressed="true"');
+    await flush();
+    const ta = U.cohCard(dc);
+    U.cohCard(dc); U.setCTY('BB'); U.cohCard(dc); U.setCTY('AA');                // same pack: no new read
+    out.cc_fetch = fetched.slice();
+    const C0 = U.cols(dc, dc.rows), rA = PACKS['roi_aaaaaaaaaaaa_c00.json.gz'].c.AA;
+    const hdA = (ta.match(/<th>D\d+<\/th>/g) || []).map(x => x.slice(4, -5));
+    out.cc_table = [ta.includes('Every install day · D0 se D60 tak · [AA] Country AA</h3>'), ta.includes('data-roi-ccx="1">✕ All countries'),
+      hdA.length, hdA[0], hdA[30], hdA[31], (ta.match(/<tr><td class="roi-nm">/g) || []).length, ta.includes('Show all 70'),
+      ta.includes('id="roi-coh"'), C0.length];
+    // a short [X] expanded: the row the build would have written (zero installs, cells 0 as far as read)
+    const zrow = U.ccSrc(dc).rows.find(r => r[0] === day('2026-10-13', -63));
+    out.cc_zero = [zrow.length, zrow[1], zrow[4].length, zrow[5], zrow[14], zrow[15], zrow[3], zrow[11]];
+    // ROAS from the country's own spend; unknown spend → '—' and '·'; the ≈ texts of a country row
+    out.cc_cells = [ta.includes('title="D7: $4.0 · ROAS 40%"'), ta.includes('<td>—</td><td>—</td>'),
+      ta.includes('app ka k laga — numbers ≈'), ta.includes('0.8–1.25 se bahar tha (0.5–2 pe roka) — numbers ≈')];
+    // the same grains and modes, the same code: week / month rows of the country, each mode's cells
+    const gm = {};
+    for (const g of ['week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) {
+      U.set('GRAIN', g); U.set('MET', m); const x = U.cohCard(dc);
+      gm[g + m] = x.includes(`Every install ${g} · D0`) && x.includes('[AA] Country AA') && /<td class="roi-[gwb]/.test(x); }
+    U.set('GRAIN', 'day'); U.set('MET', 'roas');
+    out.cc_grains = Object.values(gm).every(Boolean) && Object.keys(gm).length === 8;
+    // the note: every limitation with its measured size, in Hinglish
+    U.setCTY('BB');
+    const nb = U.cohCard(dc);
+    out.cc_note = ['installs = GA4 ke is country ke naye users (ads + organic) — isliye ROAS blended',
+      'k_c = us country ka AdMob ÷ GA4, mahine ke hisaab se', '25% revenue pe milan nahi mila, wahan app ka k laga (≈)',
+      'Ads ka country ≠ GA4 ka country', '1 Sep 26 se 12 Oct 26 tak', "28 install din pe country-wise spend nahi pata ('—', ROAS '·')",
+      'country split = kul Ads spend ka 97%', 'usme 8.0% "Not split"', 'AdMob ka din GA4 ke din se 12.5 ghante baad shuru hota hai',
+      'GA4 ne revenue "(other)" me daala (2 din, sabse zyada us din ki kamai ka 1.2%)', '1 din GA4 report pe thresholding / sampling flag',
+      'Status sirf ≥ $5 spend aur ≥ 30 installs wale din: 3 din N/A', 'Sab countries ka jod "All countries" se −3.6% alag (D30, 12 install din: $96 vs $100)',
+      'Upar ke tiles / charts = poora app (sab countries).'].filter(t => !nb.includes(t));
+    // the full list: a country past the 6 chips (another pack: one more read), then the two that are not a country
+    U.setCTY('GG'); U.cohCard(dc); await flush();
+    const tg = U.cohCard(dc);
+    out.cc_more = [tg.includes('<option value="GG" selected>'), tg.includes('<option value="" >') || !tg.includes('<option value="" selected>'),
+      tg.includes('· [GG] Country GG</h3>'), fetched.length];
+    U.setCTY('--');
+    const tn = U.cohCard(dc);
+    out.cc_unknown = [tn.includes('[--] Unknown country</h3>'), tn.includes('bina country wale'), tn.includes("Spend: Google Ads me aisa koi country nahi — '—'."),
+      !tn.includes('ROAS 4'), tn.includes('AdMob me aisa koi country nahi, isliye sab ≈')];
+    U.setCTY('XX');
+    const tx = U.cohCard(dc), txr = U.ccSrc(dc).rows;
+    out.cc_notsplit = [tx.includes('🧩 Not split</h3>'), tx.includes('<b>🧩 Not split</b> = Google Ads ka wo kharcha'),
+      tx.includes('GA4 ne bhi 2 din ka kuch revenue'), txr.every(r => r[1] == null && r[4] == null), txr.filter(r => r[3] === 0).length > 0,
+      !/<td class="roi-[gwb]/.test(tx), tx.includes('<td>—</td><td>$1.0</td><td>—</td>')];   // installs '—', its spend, no CPI
+    // the pick stays across grain / mode and across apps; an app without that country says so, the picker stays
+    U.setCTY('AA'); U.set('GRAIN', 'month'); U.set('MET', 'rev');
+    const keep1 = U.cohCard(dc).includes('[AA] Country AA</h3>');
+    U.set('GRAIN', 'day'); U.set('MET', 'roas');
+    const other = Object.assign(appFile(), { cd: Object.assign(cdx(), { c: [['QQ', 10, 1, null, 0, 0, 0]], packs: [['roi_bbbbbbbbbbbb_c00.json.gz', 'aaaaaaaaaaaa']] }) });
+    const n0 = fetched.length, to = U.cohCard(other);
+    out.cc_persist = [keep1, U.getCTY() === 'AA', to.includes('Is app me [AA] Country AA ka data nahi'), to.includes('data-roi-cc="QQ"'),
+      fetched.length === n0, !to.includes('✕ All countries'), U.cohCard(dc).includes('[AA] Country AA</h3>')];
+    // a pack that does not load: the error and "Try again" only in the table area; the next try reads it again
+    failPack = 'roi_aaaaaaaaaaaa_c01.json.gz';
+    const de = Object.assign(appFile(), { cd: Object.assign(cdx(), { packs: [['roi_aaaaaaaaaaaa_c00.json.gz', '0123456789ab'], ['roi_aaaaaaaaaaaa_c01.json.gz', 'cccccccccccc']] }) });
+    U.setCTY('EE'); U.cohCard(de); await flush();
+    const te = U.cohCard(de);
+    out.cc_err = [te.includes('<div class="roi-tw roi-ccm"><p class="roi-note">⚠️ [EE] Country EE ka data load nahi hua. <button type="button" class="roi-lnk" data-roi-ccr="1">Try again</button>'),
+      te.includes('data-roi-grain="day"'), te.includes('Every install day')];
+    failPack = null;
+    // a bad file name never fetched
+    const dbad = Object.assign(appFile(), { cd: Object.assign(cdx(), { packs: [['../x.json.gz', 'a'], ['roi_aaaaaaaaaaaa_c01.json.gz', 'b']] }) });
+    U.setCTY('AA'); const nb0 = fetched.length;
+    out.cc_badname = U.cohCard(dbad).includes('ka data file nahi mila') && fetched.length === nb0;
+    // the cube still on its way (no country part yet): a disabled chip says when
+    U.setCTY('');
+    out.cc_busy = U.cohCard(Object.assign(appFile(), { late: { busy: 1, from: '2024-01-01', next: '2025-01-01' } }))
+      .includes('<button type="button" disabled title="GA4 cube poora padhne ke baad country-wise table">🌍 Country · GA4 cube padhne ke baad</button>');
+    // the 🌍 Countries board: "📅 Day-wise" on each country the cube has (none without the country part)
+    const cv = U.ctyView(dc);
+    out.cc_board = [[...cv.matchAll(/data-roi-pick="([A-Z-]+)"/g)].map(m => m[1]), U.ctyView(appFile()).includes('data-roi-pick')];
+    // the build's _zrow (tests/test_roi_frontend.py hands its rows over) == the page's zx
+    if (process.argv[3]) {
+      const zc = JSON.parse(require('fs').readFileSync(process.argv[3], 'utf8'));
+      const one = (cd, c) => JSON.stringify(U.zx(c.x, cd, c.cc, T)) === JSON.stringify(c.row) ? 1 : [c.x, c.cc, U.zx(c.x, cd, c.cc, T), c.row];
+      out.cc_zx = zc.cases.map(c => one(zc.cd, c)).concat(zc.cases0.map(c => one(zc.cd0, c)));
+    }
+    U.setCTY('');
+    const F1 = ['roi_aaaaaaaaaaaa_c01.json.gz'];
+    out.cc_nojump = { w375: await noJump(375, dc, PACKS, F1), w1280: await noJump(1280, dc, PACKS, F1) };
+    }
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };
     ctx.roiCardLine(x, 'Alpha Pick');

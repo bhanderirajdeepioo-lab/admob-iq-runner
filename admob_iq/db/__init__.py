@@ -329,8 +329,14 @@ def write_json_gz_stable(path, obj):
     timestamp or file name in the gzip header — and only when the content changed. Returns True when
     the file was (re)written. The hourly build then leaves an unchanged file's bytes alone, so the
     private repo's git history doesn't grow by a fresh copy of every file on every run."""
-    import io
     raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return write_gz_stable(path, raw)
+
+
+def write_gz_stable(path, raw):
+    """write_json_gz_stable's writer for bytes already serialized the same way (a big file built from its parts):
+    deterministic gzip, written only when the content changed. Returns True when the file was (re)written."""
+    import io
     try:
         with open(path, "rb") as f:
             if gzip.decompress(f.read()) == raw:      # inflating is far cheaper than compressing again

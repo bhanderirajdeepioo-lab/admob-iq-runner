@@ -47,6 +47,36 @@ through D30 they do not cover, m, the checkpoints past m). Only with the switch 
 start(cube=True)), the cube of the app's stream, and once its walk reached the final edge the first time (done: the
 columns come in one go, never a half-read store's few; until then only the "late" busy note); with the switch off,
 without a cube or with another stream's, every byte of the file is as before.
+🌍 The install-day table by COUNTRY (owner, 20 Oct 2026: "manlo me USA select kru to date wise country ka aa jayega konsa
+din kaha pahocha"): the same rows for ONE country, from the same cube pass (_late's visit: no extra read of the month
+files) — only with the switch on, the app's cube walked through (done) and any country in it; otherwise not a byte of
+the file changes. Per country (every one GA4 names, "--" = GA4's "(not set)" = "Unknown country", nothing pooled or cut):
+  * n = Σ the cube's "e" u0 (that country's installs, ads + organic); d / df / m / mf / s / sd / be through _cohorts
+    itself (the same code as the All row): d[L] = Σ "e" r_L × k_c(cc, month of the activity day), m from "c" buckets
+    × k_c the same way as _late's "b"; completeness / finality = _late's own (every day read / folded; d stops at the
+    last day every activity day from the history start was read, df at the last one folded); t at D0 … D30 from d,
+    D60 / D90 / D180 from m once final; st by _statuses on the country's own rows (≥ $5 Ads and ≥ 30 installs, else N/A);
+    q bits: 2 / 4 = a day of the row the cube measured loss on / GA4 flagged, 8 = a k_c outside 0.8 – 1.25, 16 = a month
+    on the app's k (a row with no installs and no revenue: none — nothing of it to be off).
+  * k_c (each country's AdMob ÷ GA4 per ACTIVITY month, like engine.value.scale): AdMob = the country report (every ad
+    source) of the app's AdMob ids × (1 − deduction); GA4 = Σ that month's "e" r + "c" of the country (every install
+    age); a month counts only when both sides cover it whole (every day folded / every day with an AdMob row, a one-day
+    hole between rows read as a real 0); both ≥ K_MIN_USD else pooled with the whole months ≤ ±KC_POOL around it;
+    clamped to K_CLAMP; raw outside K_OK → ≈; none → the app's own k of that month (its weekly kf weighted by GA4
+    revenue), "app k", ≈. "--" always on the app's k. That is why Σ countries ≠ the All row exactly (All: the weekly k
+    and another GA4 read) — "diff" says by how much (D30, measured).
+  * spend = Google Ads by country × day (fetch.gads_geo_day) of the app's own spend store ids (value_build.app_sids),
+    USD at that day's rate (the same FX series); a day any of those stores spent on without a committed geo day — or
+    outside the spend cache's span — is unknown (null: '—', never a weekly cell spread over days). Ads "XX" (unmapped)
+    → "Not split" (its spend per install day; revenue none: GA4's "(other)" has no install day — "loss" says how much).
+  * rows: EVERY install day from the history start to the last day read through; a day with no installs, no revenue
+    and nothing else of its own is written [X] (the page makes the same row of it: _zrow).
+Files: roi_<key>_c<NN>.json.gz = {"v", "key", "ix", "c": {cc: rows}} (countries by installs, then spend, then code;
+filled in turn up to PACK_MAX raw bytes; a bigger country alone) and in roi_<key>.json.gz "cd" = {"v", "packs":
+[[file, sha1-12 of its JSON]], "c": [[cc, installs, spend USD, spend as billed, pack, N/A days, revenue share on the
+app's k]], "from", "to", "thru", "fthru", "newest", "kc": {own / pool / app / est months, "tzh" hours AdMob's day is
+off GA4's}, "geo": {"from", "till", "known_days", "unknown_days", "unk" ranges, "xx_share", "cov"}, "loss": {"days",
+"max_share", "flag_days", "usd"}, "diff"}. Any failure of it: no "cd", every other byte as without it (counted).
 roi.json.gz — every app's summary row (with its f4), the portfolio lifetime P/L and the portfolio install days (apps
 with spend), and the ranges the forms used (f4c).
 Pointer: dashboard["roi"] = {"file", "v", "apps": {app_id: {"file", "st", "r7", "u7", "pb", "lp"}}}.
@@ -55,7 +85,8 @@ already read; ids = the AdMob apps on the app's Play package): the app's events 
 material ones handed to the forecast (its back-tests label them; forecast_vd.AX decides whether they count, held off),
 and the page block in the forecast's file as fc["acfg"] (the forecast's "why": "Ad setting badlav") — every other field
 of the file exactly as without it.
-One splat header rule (/roi*). Failure-isolated per app (counted) and as a whole; ONE counts-only line.
+One splat header rule (/roi*: the country packs too). Failure-isolated per app (counted) and as a whole; ONE
+counts-only line.
 """
 import gzip
 import hashlib
@@ -63,9 +94,10 @@ import json
 import os
 import re
 import sys
+from array import array
 from datetime import date, datetime, timedelta, timezone
 
-from .db import write_json_gz_stable
+from .db import write_gz_stable, write_json_gz_stable
 from .engine import value as val
 from .fetch import ga4_cohort as gco
 from .fetch import ga4_cube as gcu
@@ -74,7 +106,12 @@ from .fetch import ga4_uninstall as gu
 ALL_FILE = "roi.json.gz"
 PREFIX = "roi_"
 FILE_RE = re.compile(r"^roi_[0-9a-f]{12}\.json\.gz$")
+PACK_RE = re.compile(r"^roi_[0-9a-f]{12}_c\d{2,3}\.json\.gz$")     # 🌍 the country packs (the page checks the same)
 HEADER_PATHS = ["/roi*"]
+CD_V = 1
+PACK_MAX = 1_500_000                        # raw JSON bytes a country pack (a bigger country gets one of its own)
+KC_POOL = 2                                 # a thin / partly covered month: pooled with the whole months ≤ ±2 around it
+NO_CC, NOT_SPLIT = "--", "XX"               # GA4's "(not set)"; Google Ads' unmapped ("Not split")
 V = 1
 T = val.T                                   # 0, 1, 3, 7, 14, 30, 60, 90, 180, 365
 J7 = T.index(7)
@@ -144,16 +181,21 @@ class Acc:
         self.adsrc = None                           # ⚙️ the AdMob reports for the ad setting changes (adcfg.Source)
         self.ac = None                              # … their run (adcfg_build), made on the first app
         self.cube = False                           # 🧊 GA4_CUBE: the 30-day columns past D30 (fetch.ga4_cube)
+        self.cmon = None                            # 🌍 AdMob by country × month (build_static.admob_country_months)
+        self.geo = None                             # … Google Ads by country × day (gads_geo_day.load), read once
+        self.packs = set()                          # … the country packs written this build (kept by _clean)
+        self.cdn = {"apps": 0, "countries": 0, "packs": 0, "failed": 0}
 
 
-def start(cal=None, adsrc=None, cube=False):
+def start(cal=None, adsrc=None, cube=False, cmon=None):
     """cal: the forecast's eCPM calendar (fc_calendar.seasons, from build_static), handed to the forecast's run;
     adsrc: the ⚙️ ad setting changes' reports (engine.adcfg.Source, from build_static); cube: GA4_CUBE (off: the cube
-    is never read, the file as without it)."""
+    is never read, the file as without it); cmon: AdMob by country × month (the country filter's AdMob ÷ GA4 match)."""
     acc = Acc()
     acc.cal = cal
     acc.adsrc = adsrc
     acc.cube = bool(cube)
+    acc.cmon = cmon if isinstance(cmon, dict) else None
     return acc
 
 
@@ -183,13 +225,27 @@ def _tie_off(ida, co_x, pr_days):
     return off, checked
 
 
-def _late(data_dir, aid, sid, P):
+def _late(data_dir, aid, sid, P, visit=None):
     """The app's cohort cube (fetch.ga4_cube, GA4_CUBE) folded month by month (one month in memory at a time) + its hot
     days → {"B": {X: {j: USD}} the 30-day buckets (AdMob-matched with kf of each activity week), "full" (lo, hi): every
     activity day lo … hi folded or hot, "fin" (lo, hi): every one folded, "q" (lo, hi): q bits of them (2: revenue GA4
     left "(other)" / gave no install day, 4: GA4 flagged with nothing to measure it by), "info" (the file's "late")}
     — None without a cube of the stream `sid` or with no day; before its walk first reached the final edge (done) only
-    {"info": {"busy": 1, "from", "next", "at"}} (the page says the columns are on their way, none shown)."""
+    {"info": {"busy": 1, "from", "next", "at"}} (the page says the columns are on their way, none shown).
+    visit("m", YYYY-MM, month file) / visit("h", D, hot record): the 🌍 country filter's read riding this one pass over
+    the files (each month and each hot day this uses, as it uses them); a visit that raises is dropped — never these
+    columns."""
+    def seen(*args):
+        nonlocal visit
+        if visit is not None:
+            try:
+                visit(*args)
+            except Exception:
+                try:                                # its reader knows it missed a part (never half a country)
+                    visit.__self__.failed = True
+                except Exception:
+                    pass
+                visit = None
     h = gcu.load_head(data_dir, aid)
     if not h or str(h.get("stream_id") or "") != str(sid or ""):
         return None
@@ -221,12 +277,13 @@ def _late(data_dir, aid, sid, P):
             omax = max(omax, min(1.0, lo / t) if t > 0 else 1.0)
         if led.get("fl"):
             flg.add(Dd)
-    for _, mo in gcu.months(data_dir, aid, sid):
+    for mk, mo in gcu.months(data_dir, aid, sid):
         for D, led in mo["days"].items():
             Dd = _d(D)
             fin.add(Dd)
             note(Dd, led if isinstance(led, dict) else {})
         add(mo["b"])
+        seen("m", mk, mo)
     for D, rec in (h.get("d") or {}).items():
         Dd = _d(D)
         if Dd in fin or not isinstance(rec, dict):
@@ -234,6 +291,7 @@ def _late(data_dir, aid, sid, P):
         hot.add(Dd)
         note(Dd, rec)
         add(rec.get("b"))
+        seen("h", D, rec)
     have = {D for D in fin | hot if D >= hs}
     if not have:
         return None
@@ -273,12 +331,16 @@ def _late(data_dir, aid, sid, P):
                      "thru": _iso(thru) if thru >= hs else None}}
 
 
-def _cohorts(P, spend, fxf, co, today, late=None):
-    """Every install day → its row (see the module doc) — oldest first. late: _late's buckets (None: no m)."""
+def _cohorts(P, spend, fxf, co, today, late=None, edge=None):
+    """Every install day → its row (see the module doc) — oldest first. late: _late's buckets (None: no m). edge: the
+    last day every exact cell is final through (None: read_today − FINAL_LAG — the exact store's own rule; the 🌍
+    country rows: the cube's last day folded through, read_today being the last day read through)."""
     pr, kf, xs, S, hs = P["pre"], P["sc"]["kf"], P["xs"], P["S"], P["hs"]
     co_x = (co or {}).get("x") or {}
     newest = _d(co["read_today"]) if co and co.get("read_today") else None
     C = newest - timedelta(days=gco.FINAL_LAG) if newest else None
+    if edge is not None:
+        C = edge
     keys = {X for X in xs} | {_d(k) for k in co_x if k >= _iso(hs)}
     if newest:
         keys = {X for X in keys if X <= newest}
@@ -816,6 +878,500 @@ def _cty_months(P, ida, pre, sids, fxf):
     return res
 
 
+# ── 🌍 the install-day table by country (the cohort cube's "e" / "c", each country's own AdMob match) ───────────────
+ONE = timedelta(days=1)
+
+
+class _Cty:
+    """The country filter's read of the cohort cube, riding _late's one pass (its visit): per country the raw GA4
+    micros of every install day X ≥ hs by age 0 … 30 ("e" r of every activity month added up — an age is in exactly
+    one), its installs (u0), its 30-day buckets by (j, activity month) ("c": a month's k_c is known only once every
+    month is read), the GA4 total per activity month (each country's AdMob ÷ GA4 match: every install day, every age),
+    the folded days of each month and the measured loss (GA4 "(other)") per month. Never raises: a part it could not
+    read → failed (the country filter stays off for the app, counted)."""
+
+    def __init__(self, hs):
+        self.hs = _iso(hs)
+        self.E, self.N, self.C, self.G = {}, {}, {}, {}
+        self.mdays, self.loss = {}, {}
+        self.mi, self.ms = {}, []                   # activity month ↔ its number in C's keys
+        self.failed = False
+
+    def visit(self, kind, k, rec):
+        if self.failed:
+            return
+        try:
+            M = str(k)[:7]
+            if kind == "m":
+                days = rec.get("days") or {}
+                self.mdays[M] = len(days)
+                lo = sum(int(v.get("loss") or 0) for D, v in days.items() if D >= self.hs and isinstance(v, dict))
+            else:
+                lo = int(rec.get("loss") or 0) if str(k) >= self.hs else 0
+            if lo:
+                self.loss[M] = self.loss.get(M, 0) + lo
+            self._e(M, rec.get("e") or {})
+            self._c(M, rec.get("c") or {})
+        except Exception:
+            self.failed = True
+            self.E = self.N = self.C = self.G = None
+
+    def _g(self, cc, M, g):
+        if g:
+            gm = self.G.setdefault(cc, {})
+            gm[M] = gm.get(M, 0) + g
+
+    def _e(self, M, e):
+        hs = self.hs
+        for cc, xs in e.items():
+            g = 0
+            Ec, Nc = self.E.setdefault(cc, {}), self.N.setdefault(cc, {})
+            for X, arr in (xs or {}).items():
+                if not arr:
+                    continue
+                r = [int(v or 0) for v in arr[1:]]
+                g += sum(r)
+                if X < hs:
+                    continue
+                if arr[0]:
+                    Nc[X] = Nc.get(X, 0) + int(arr[0])
+                cur = Ec.get(X)
+                if cur is None:
+                    Ec[X] = array("q", r)
+                    continue
+                if len(cur) < len(r):
+                    cur.extend([0] * (len(r) - len(cur)))
+                for i, v in enumerate(r):
+                    if v:
+                        cur[i] += v
+            self._g(cc, M, g)
+
+    def _c(self, M, c):
+        """C[cc][X] = a flat array of (month number × 4096 + j, micros) pairs (a big app has millions of them)."""
+        hs = self.hs
+        if M not in self.mi:
+            self.mi[M] = len(self.ms)
+            self.ms.append(M)
+        mk = self.mi[M] * 4096
+        for cc, xs in c.items():
+            g = 0
+            Cc = self.C.setdefault(cc, {})
+            for X, js in (xs or {}).items():
+                for j, v in (js or {}).items():
+                    v = int(v or 0)
+                    if not v:
+                        continue
+                    g += v
+                    if X >= hs:
+                        cx = Cc.get(X)
+                        if cx is None:
+                            cx = Cc[X] = array("q")
+                        cx.append(mk + int(j))
+                        cx.append(v)
+            self._g(cc, M, g)
+
+    def pairs(self, cx):
+        """C's pairs → (j, activity month, micros)."""
+        for i in range(0, len(cx or ()), 2):
+            yield cx[i] % 4096, self.ms[cx[i] // 4096], cx[i + 1]
+
+
+def _mkey(d):
+    return "%04d-%02d" % (d.year, d.month)
+
+
+def _month_days(M):
+    y, m = int(M[:4]), int(M[5:7])
+    return date(y, m, 1), date(y + (m == 12), m % 12 + 1, 1) - ONE
+
+
+def _month_list(a, b):
+    out, M = [], _mkey(a)
+    while M <= _mkey(b):
+        out.append(M)
+        M = _mkey(_month_days(M)[1] + ONE)
+    return out
+
+
+def _ranges(ds):
+    """Sorted days → [[from, to]] runs (ISO)."""
+    out = []
+    for d in ds:
+        if out and _d(out[-1][1]) + ONE == d:
+            out[-1][1] = _iso(d)
+        else:
+            out.append([_iso(d), _iso(d)])
+    return out
+
+
+def _admob_side(cmon, ids, mult):
+    """The app's AdMob ids (its own + the same-package ones) → ({cc: {month: USD × (1 − deduction)}}, {month: the
+    days with a row, as one mask})."""
+    A, mask = {}, {}
+    m, dm = (cmon or {}).get("m") or {}, (cmon or {}).get("d") or {}
+    for aid in ids:
+        for M, by in (m.get(aid) or {}).items():
+            for cc, v in (by or {}).items():
+                e = A.setdefault(cc, {})
+                e[M] = e.get(M, 0.0) + int(v or 0) / 1e6 * mult
+        for M, b in (dm.get(aid) or {}).items():
+            mask[M] = mask.get(M, 0) | int(b or 0)
+    return A, mask
+
+
+def _admob_whole(mask, M):
+    """Every day of month M known on the AdMob side: a row, or a one-day hole between two rows (a real 0 — the known-day
+    rule of active._rev_series; a day after the report's last row is never known)."""
+    first, last = _month_days(M)
+
+    def has(d):
+        return bool(mask.get(_mkey(d), 0) >> (d.day - 1) & 1)
+    d = first
+    while d <= last:
+        if not has(d) and not (has(d - ONE) and has(d + ONE)):
+            return False
+        d += ONE
+    return True
+
+
+def _appk(P, months):
+    """The app's own AdMob ÷ GA4 scale per month: its weekly kf weighted by the GA4 revenue of each day (no GA4 day in
+    the month: kf at its middle)."""
+    kf = P["sc"]["kf"]
+    num, den = {}, {}
+    for d, g in (P["sc"].get("G") or {}).items():
+        M = _mkey(d)
+        if g:
+            num[M] = num.get(M, 0.0) + g * kf(d)[0]
+            den[M] = den.get(M, 0.0) + g
+    out = {}
+    for M in months:
+        if den.get(M, 0) > 0:
+            out[M] = num[M] / den[M]
+        else:
+            a, b = _month_days(M)
+            out[M] = kf(a + (b - a) / 2)[0]
+    return out
+
+
+def _kc(G, A, whole, months, appk):
+    """{cc: {month: (k_c, src, ≈)}} — each country's AdMob ÷ GA4 per activity month (see the module doc): its own month
+    ("own"), else pooled with the whole months ≤ ±KC_POOL ("pool"), else the app's k ("app", ≈); GA4's "(not set)"
+    always the app's."""
+    lo, hi = val.K_CLAMP
+    okl, okh = val.K_OK
+    out = {}
+    for cc, g0 in G.items():
+        g, a, tab = {M: v / 1e6 for M, v in g0.items()}, A.get(cc) or {}, {}
+        for i, M in enumerate(months):
+            raw = src = None
+            if cc != NO_CC:
+                for r in range(KC_POOL + 1):
+                    ms = [x for x in months[max(0, i - r):i + r + 1] if x in whole]
+                    sa, sg = sum(a.get(x, 0.0) for x in ms), sum(g.get(x, 0.0) for x in ms)
+                    if ms and sa >= val.K_MIN_USD and sg >= val.K_MIN_USD:
+                        raw, src = sa / sg, ("own" if r == 0 else "pool")
+                        break
+            tab[M] = (appk[M], "app", True) if raw is None else (min(max(raw, lo), hi), src, not okl <= raw <= okh)
+        out[cc] = tab
+    return out
+
+
+def _geo_app(geo, sids, sdaily, spend, days, has_spend=True):
+    """Google Ads cost by country × install day of the app's own spend stores → ({cc: {X: (base micros, downloads |
+    None)}}, the days whose split is unknown (outside the spend cache's span, or a store spent that day with no
+    committed geo day), the "geo" stats)."""
+    gd = (geo or {}).get("days") or {}
+    first = _d(spend["first"]) if has_spend and spend and spend.get("first") else None
+    till = _d(spend["till"]) if has_spend and spend and spend.get("till") else None
+    cost, unk, seen = {}, [], []
+    tot = xx = sp = 0
+    for X in days:
+        k = _iso(X)
+        if not (first and till and first <= X <= till) or any(
+                (sdaily.get(s) or {}).get(k) and k not in (gd.get(s) or {}) for s in sids):
+            unk.append(X)
+            continue
+        agg = {}
+        for s in sids:
+            sp += int((sdaily.get(s) or {}).get(k) or 0)
+            ent = (gd.get(s) or {}).get(k)
+            if ent is None:
+                continue
+            seen.append(X)
+            for cc, v in ent.items():
+                if not isinstance(v, list) or not v:
+                    continue
+                e = agg.setdefault(cc, [0, 0.0, False])
+                e[0] += int(v[0] or 0)
+                if len(v) > 1 and v[1] is not None:
+                    e[1] += float(v[1])
+                else:
+                    e[2] = True
+        for cc, (c, dl, dln) in agg.items():
+            tot += c
+            xx += c if cc == NOT_SPLIT else 0
+            cost.setdefault(cc, {})[X] = (c, None if dln else round(dl, 2))
+    st = {"from": _iso(min(seen)) if seen else None, "till": _iso(max(seen)) if seen else None,
+          "known_days": len(days) - len(unk), "unknown_days": len(unk), "unk": _ranges(unk),
+          "xx_share": _r(xx / tot) if tot else None, "cov": _r(tot / sp) if sp else None}
+    return cost, set(unk), st
+
+
+def _zrow(X, thru, fthru, unk, cc, billed=True):
+    """The row the page makes of a short [X] (roi_frontend's zx — the same rule): a day of a country with no installs,
+    no revenue and no Ads cost (spend 0 on a known day, null on an unknown one / "Unknown country"), its cells 0 as far
+    as the cube read through (final as far as it folded through); "Not split": spend only. The build writes [X] only
+    when the row it made is exactly this one."""
+    t = [None] * len(T)
+    if cc == NOT_SPLIT:
+        sp = None if unk else 0.0
+        return {"X": X, "n": None, "na": None, "sp": sp, "spi": sp if billed else None, "d": None, "df": 0, "u": None,
+                "t": t, "s": None, "sd": None, "be": None, "st": "N/A", "q": False, "qo": 0}
+    obs = min(gco.LAGS - 1, (thru - X).days)
+    df = max(0, min(obs, (fthru - X).days) + 1)
+    for j, a in enumerate(T):
+        if a <= 30 and a < df:
+            t[j] = 0.0
+    m = []
+    if df > 30:
+        while X + timedelta(days=LATE_STEP * (len(m) + 2)) <= thru:
+            m.append(0.0)
+    mf = 0
+    while mf < len(m) and X + timedelta(days=LATE_STEP * (mf + 2)) <= fthru:
+        mf += 1
+    for a in (60, 90, 180):
+        if a // LATE_STEP - 2 < mf:
+            t[T.index(a)] = 0.0
+    sd = X + timedelta(days=obs)
+    if m and X + timedelta(days=LATE_STEP * (len(m) + 1)) > min(sd, X + timedelta(days=T[-1])):
+        sd = X + timedelta(days=LATE_STEP * (len(m) + 1))
+    sp = None if (unk or cc == NO_CC) else 0.0
+    r = {"X": X, "n": 0, "na": None, "sp": sp, "spi": sp if billed else None, "d": [0.0] * (obs + 1), "df": df,
+         "u": None, "t": t, "s": 0.0, "sd": _iso(sd), "be": None, "st": "N/A", "q": False, "qo": 0}
+    if m:
+        r.update(m=m, mf=mf)
+    return r
+
+
+def _tzh(tz_a, tz_g, M):
+    """Hours GA4's day starts before AdMob's (the month's middle; None: a time zone unknown)."""
+    try:
+        from zoneinfo import ZoneInfo
+        mid = datetime(int(M[:4]), int(M[5:7]), 15, 12, tzinfo=timezone.utc)
+        oa, og = mid.astimezone(ZoneInfo(tz_a)).utcoffset(), mid.astimezone(ZoneInfo(tz_g)).utcoffset()
+        return round((og - oa).total_seconds() / 3600, 2)
+    except Exception:
+        return None
+
+
+def _json(x):
+    return json.dumps(x, ensure_ascii=False, separators=(",", ":"))
+
+
+def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, out_dir, data_dir):
+    """🌍 Every country's install-day rows (see the module doc) → the packs written + the file's "cd" (None: no country
+    in the cube). Raises on a failure (the caller: no "cd", counted)."""
+    from . import value_build as vb
+    if cv.failed:
+        raise RuntimeError("the cube's country cells were not all read")
+    if not late.get("info", {}).get("thru") or not any(cv.E.values()) and not any(cv.N.values()) \
+            and not any(cv.C.values()):
+        return None                                 # no country GA4 named: no filter (Ads alone never makes one)
+    hs, info = P["hs"], late["info"]
+    thru = _d(info["thru"])
+    fthru = hs - ONE
+    while fthru < thru and late["fin"](hs, fthru + ONE):
+        fthru += ONE
+    days = [hs + timedelta(days=i) for i in range((thru - hs).days + 1)]
+    months = _month_list(hs, max(thru, _d(info.get("till") or info["thru"])))
+    # Google Ads by country × day: the app's own spend stores, the spend cache's span
+    if acc.geo is None:
+        try:
+            from .fetch import gads_geo_day as gdd
+            acc.geo = gdd.load(data_dir) or {}
+        except Exception:
+            acc.geo = {}                            # unreadable: every day a store spent on is unknown ('—')
+    sp_all = (pre or {}).get("spend") or {}
+    sdaily = sp_all.get("daily") or {}
+    sids = sorted(vb.app_sids(pre, a, store, sdaily)) if sp_all else []
+    gccy = acc.geo.get("ccy") or (spend or {}).get("ccy") or "USD"
+    fxg = val._fx_fn((pre or {}).get("fx"), gccy)[0]
+    billed = bool(spend) and gccy == spend.get("ccy")
+    cost, unk, gst = _geo_app(acc.geo, sids, sdaily, spend, days)
+    gst["billed"] = 1 if billed else 0
+    for sid in sids:                                # a store's days are this app's only: let them go (memory)
+        (acc.geo.get("days") or {}).pop(sid, None)
+    # each country's AdMob ÷ GA4 per activity month
+    mult = (1.0 - ded_rate) if ded_rate else 1.0
+    A, mask = _admob_side(acc.cmon, list(ids or [a["app_id"]]), mult)
+    whole = set()
+    for M in months:
+        f0, f1 = _month_days(M)
+        if f0 >= hs and cv.mdays.get(M, 0) == f1.day and _admob_whole(mask, M):
+            whole.add(M)
+    appk = _appk(P, months)
+    kc = _kc(cv.G, A, whole, months, appk)
+    kst = {"own_months": 0, "pool_months": 0, "app_months": 0, "est_months": 0,
+           "tzh": _tzh((rev or {}).get("tz"), P.get("tz"), months[-1]) if (rev or {}).get("tz") and P.get("tz") else None}
+    ccs = {cc for cc in set(cv.E) | set(cv.N) | set(cv.C)
+           if (cv.E.get(cc) or cv.N.get(cc) or cv.C.get(cc))}
+    ccs |= {cc for cc, xs in cost.items() if cc != NOT_SPLIT and any(c for c, _ in xs.values())}
+    allr = {r["X"]: r for r in rows}
+    s30, n30 = {}, {}
+    out, meta = [], {}
+    for cc in sorted(ccs):
+        tab = kc.get(cc) or {}
+        kM = {M: tab.get(M) or (appk[M], "app", True) for M in months}
+        for M, g in (cv.G.get(cc) or {}).items():
+            if g and M in kM:
+                k = kM[M]
+                kst["own_months" if k[1] == "own" else "pool_months" if k[1] == "pool" else "app_months"] += 1
+                kst["est_months"] += bool(k[2] and k[1] != "app")
+        kfm = {(int(M[:4]), int(M[5:7])): (k[0], "ok", False, k[0]) for M, k in kM.items()}
+        kl = kfm[(int(months[-1][:4]), int(months[-1][5:7]))]
+
+        def kf_c(day, kfm=kfm, kl=kl):
+            return kfm.get((day.year, day.month), kl)
+        Ec, Nc, Cc = cv.E.get(cc) or {}, cv.N.get(cc) or {}, cv.C.get(cc) or {}
+        co_x = {X: {"r": list(arr), "u": [Nc.get(X, 0)]} for X, arr in Ec.items()}
+        for X, n in Nc.items():
+            co_x.setdefault(X, {"r": [], "u": [n]})
+        B = {}
+        for X, cx in Cc.items():
+            b = B.setdefault(X, {})
+            co_x.setdefault(X, {"r": [], "u": [0]})
+            for j, M, v in cv.pairs(cx):
+                b[j] = b.get(j, 0.0) + v / 1e6 * (kM.get(M) or (kl[0],))[0]
+        sc = (cost.get(cc) or {}) if cc != NO_CC else {}
+        for X in sc:
+            co_x.setdefault(_iso(X), {"r": [], "u": [0]})
+        sp_c = None
+        if cc != NO_CC and spend and spend.get("first") and spend.get("till"):
+            sp_c = {"first": spend["first"], "till": spend["till"], "daily": {_iso(X): c for X, (c, _) in sc.items()},
+                    "installs": {_iso(X): dl for X, (_, dl) in sc.items() if dl is not None}}
+        Pc = {"pre": P["pre"], "sc": {"kf": kf_c}, "xs": {}, "S": P["S"], "hs": hs}
+        got = _cohorts(Pc, sp_c, fxg, {"read_today": _iso(thru), "x": co_x}, thru,
+                       {"B": B, "full": late["full"], "fin": late["fin"], "q": late["q"]}, edge=fthru)
+        by = {}
+        for r in got:
+            X = r["X"]
+            r["u"], r["q"] = None, False
+            if X in unk or cc == NO_CC:
+                r["sp"] = r["spi"] = r["na"] = r["be"] = None
+            elif not billed:
+                r["spi"] = None
+            if r.get("m"):
+                for a_ in (60, 90, 180):
+                    if a_ // LATE_STEP - 2 < r["mf"]:
+                        r["t"][T.index(a_)] = r["m"][a_ // LATE_STEP - 2]
+            bits = 0
+            if r["n"] or (r["s"] or 0) > 0:            # ≈ only on a row with something of its own to be off
+                nd = len(r["d"] or [])
+                end = X + timedelta(days=max(nd - 1, LATE_STEP * (len(r["m"]) + 1) if r.get("m") else -1))
+                bits = late["q"](X, end) if end >= X else 0
+                used = {_mkey(X + timedelta(days=L)) for L, v in enumerate((Ec.get(_iso(X)) or [])[:nd]) if v}
+                used |= {M for j, M, v in cv.pairs(Cc.get(_iso(X))) if v and j <= len(r.get("m") or [])}
+                for M in used:
+                    k = kM.get(M)
+                    if k and k[1] == "app":
+                        bits |= 16
+                    elif k and k[2]:
+                        bits |= 8
+            r["qo"] = bits
+            by[X] = r
+        full = [by.get(X) or dict(_zrow(X, thru, fthru, X in unk, cc, billed), z=1) for X in days]
+        _statuses(full)
+        rows_out, n_tot, sp_tot, spi_tot, known, na_days = [], 0, 0.0, 0.0, False, 0
+        for r in full:
+            X = r["X"]
+            if r.get("z"):                          # a day the cube and Google Ads have nothing of: the page's row
+                rows_out.append([_iso(X)])
+            else:
+                ro = _row_out(r)
+                rows_out.append([ro[0]] if r["n"] == 0 and ro == _row_out(_zrow(X, thru, fthru, X in unk, cc, billed))
+                                else ro)
+            n_tot += r["n"] or 0
+            na_days += r["st"] == "N/A"
+            if r["sp"] is not None:
+                known = True
+                sp_tot += r["sp"]
+                spi_tot += r["spi"] or 0
+            if r["df"] > 30 and r["d"]:
+                s30[X] = s30.get(X, 0.0) + r["d"][30]
+                n30[X] = n30.get(X, 0) + (r["n"] or 0)
+        g = cv.G.get(cc) or {}
+        gt = sum(g.values())
+        share = _r(sum(v for M, v in g.items() if (kM.get(M) or ("", "app"))[1] == "app") / gt) if gt else None
+        out.append((cc, _json(rows_out)))
+        meta[cc] = [cc, n_tot, _r(sp_tot) if known else None, _r(spi_tot, 2) if known and billed else None, None,
+                    na_days, share]
+        del full, by, got, rows_out, co_x, B
+        cv.E.pop(cc, None), cv.N.pop(cc, None), cv.C.pop(cc, None)     # its cells are in its JSON now: let them go
+    # "Not split": Google Ads' unmapped cost by install day (GA4's "(other)" has no install day: the loss note)
+    ns = cost.get(NOT_SPLIT) or {}
+    if ns or cv.loss:
+        rows_out, sp_tot, spi_tot, known = [], 0.0, 0.0, False
+        for X in days:
+            u = X in unk
+            c, dl = ns.get(X, (0, None))
+            spi = None if u else c / 1e6
+            sp = None if u else spi * (fxg(X) or 0)
+            r = {"X": X, "n": None, "na": None if u else dl, "sp": sp, "spi": spi if billed else None, "d": None,
+                 "df": 0, "u": None, "t": [None] * len(T), "s": None, "sd": None, "be": None, "st": "N/A", "q": False,
+                 "qo": 0}
+            ro = _row_out(r)
+            rows_out.append([ro[0]] if ro == _row_out(_zrow(X, thru, fthru, u, NOT_SPLIT, billed)) else ro)
+            if sp is not None:
+                known = True
+                sp_tot += sp
+                spi_tot += spi or 0
+        out.append((NOT_SPLIT, _json(rows_out)))
+        meta[NOT_SPLIT] = [NOT_SPLIT, None, _r(sp_tot) if known else None, _r(spi_tot, 2) if known and billed else None,
+                           None, None, None]
+    if not out:
+        return None
+    # packs: by installs, then spend, then code; filled in turn up to PACK_MAX (a bigger country alone)
+    order = sorted(out, key=lambda x: (-(meta[x[0]][1] or 0), -(meta[x[0]][2] or 0), x[0]))
+    groups, cur, size = [], [], 0
+    for cc, js in order:
+        s = len(js.encode("utf-8")) + len(cc) + 4
+        if cur and size + s > PACK_MAX:
+            groups.append(cur)
+            cur, size = [], 0
+        cur.append((cc, js))
+        size += s
+    if cur:
+        groups.append(cur)
+    packs, names = [], []
+    for i, grp in enumerate(groups):
+        name = "%s%s_c%02d.json.gz" % (PREFIX, key, i)
+        raw = ('{"c":{' + ",".join(_json(cc) + ":" + js for cc, js in sorted(grp)) + '},"ix":%d,"key":%s,"v":%d}'
+               % (i, _json(key), CD_V)).encode("utf-8")
+        write_gz_stable(os.path.join(out_dir, name), raw)
+        packs.append([name, hashlib.sha1(raw).hexdigest()[:12]])
+        names.append(name)
+        for cc, _ in grp:
+            meta[cc][4] = i
+    # Σ countries vs the All row (D30, the install days both have final): the measured gap of the two k's / reads
+    dd = [X for X in days if X in s30 and X + timedelta(days=30) <= fthru and X in allr
+          and allr[X]["t"][J30] is not None]
+    sa, sc_ = sum(allr[X]["t"][J30] for X in dd), sum(s30[X] for X in dd)
+    lusd = sum(v / 1e6 * appk.get(M, 1.0) for M, v in cv.loss.items())
+    cd = {"v": CD_V, "packs": packs, "c": [meta[cc] for cc, _ in order], "from": _iso(hs), "to": _iso(thru),
+          "thru": _iso(thru), "fthru": _iso(fthru), "newest": info.get("till"), "kc": kst, "geo": gst,
+          "loss": {"days": info.get("oth") or 0, "max_share": info.get("omax"), "flag_days": info.get("loss") or 0,
+                   "usd": _r(lusd, 2)},
+          "diff": {"age": 30, "days": len(dd), "all": _r(sa, 2), "cty": _r(sc_, 2),
+                   "rel": _r(sc_ / sa - 1) if sa else None, "n_all": sum(allr[X]["n"] for X in dd),
+                   "n_cty": sum(n30.get(X, 0) for X in dd)}}
+    acc.packs.update(names)
+    acc.cdn["apps"] += 1
+    acc.cdn["countries"] += len(order)
+    acc.cdn["packs"] += len(packs)
+    return cd
+
+
 def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids=None):
     """One app → roi_<key>.json.gz (+ its summary into acc). Never raises. ids: the AdMob apps on its Play package
     (the ⚙️ ad setting changes read their ad units together, as its revenue)."""
@@ -841,9 +1397,11 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             co = None
         now = now or datetime.now(timezone.utc)
         today = _d(co["read_today"]) if co and co.get("read_today") else P["S"]
+        cv = _Cty(P["hs"]) if acc.cube else None       # 🌍 the country filter: its read rides the cube's one pass
         try:                                            # the cohort cube (D60, D90 … the app's age; GA4_CUBE only):
-            late = _late(data_dir, aid, store.get("stream_id"), P) if acc.cube else None   # a bad file costs only
-        except Exception:                                                                   # those columns
+            late = (_late(data_dir, aid, store.get("stream_id"), P, visit=cv.visit)   # a bad file costs only
+                    if acc.cube else None)                                           # those columns
+        except Exception:
             late = None
         rows = _cohorts(P, spend, fxf, co, today, late if late and "B" in late else None)
         off, checked = _tie_off(ida, (co or {}).get("x") or {}, ida.get("days"))
@@ -886,6 +1444,14 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
                            "f4": f4_consts()}}
         if late is not None:
             body["late"] = late["info"]
+        if cv is not None and late is not None and "B" in late:   # 🌍 one country's install-day table (own try:
+            try:                                                   # a failure costs only it — no "cd", counted)
+                cd = _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, out_dir, data_dir)
+                if cd:
+                    body["cd"] = cd
+            except Exception:
+                acc.cdn["failed"] += 1
+        cv = None
         fcs = None
         ares = None
         try:                                            # ⚙️ the ad setting changes (before the forecast: its back-tests
@@ -994,7 +1560,7 @@ def _clean(out_dir, keep):
     except OSError:
         return
     for f in names:
-        if (FILE_RE.match(f) and f not in keep) or (f == ALL_FILE and ALL_FILE not in keep):
+        if ((FILE_RE.match(f) or PACK_RE.match(f)) and f not in keep) or (f == ALL_FILE and ALL_FILE not in keep):
             try:
                 os.remove(os.path.join(out_dir, f))
             except OSError:
@@ -1037,7 +1603,8 @@ def finish(acc, dashboard, out_dir):
                             "starts": {k: v.isoformat() for k, v in (acc.fc.starts if acc.fc is not None else {}).items()},
                             "apps": {x["app_id"]: {k: x.get(k) for k in ("file", "st", "r7", "u7", "pb", "nb", "life", "cut", "fc")}
                                      for x in acc.apps}}
-        _clean(out_dir, {x["file"] for x in acc.apps} | {ALL_FILE})
+        keys = {PREFIX + x["key"] + "_c" for x in acc.apps}     # 🌍 an app's packs live while its file does
+        _clean(out_dir, {x["file"] for x in acc.apps} | {ALL_FILE} | {p for p in acc.packs if p[:len(PREFIX) + 14] in keys})
         sts = {}
         for x in acc.apps:
             sts[x["st"]] = sts.get(x["st"], 0) + 1
@@ -1045,6 +1612,10 @@ def finish(acc, dashboard, out_dir):
                 "forms ga4 %d"
                 % tuple([len(acc.apps)] + [sts.get(k, 0) for k in ("Worse", "Watch", "Better", "Normal", "Too early",
                                                                      "N/A")] + [acc.skipped, acc.fails, acc.f4m]))
+        if acc.cube:                                    # 🌍 the country filter (counts only)
+            c = acc.cdn
+            LINE += "; countries: apps %d, countries %d, packs %d, failed %d" % (c["apps"], c["countries"], c["packs"],
+                                                                              c["failed"])
         if acc.fc is not None:
             from . import forecast_build as fob
             fob.finish(acc.fc)

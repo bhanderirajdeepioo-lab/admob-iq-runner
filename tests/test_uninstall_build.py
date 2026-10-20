@@ -828,7 +828,9 @@ def test_the_build_hands_the_network_reports_revenue_to_the_uninstall_step(tmp_p
     assert got == [{"tz": "America/Los_Angeles", "currency": "USD", "till": "2026-09-19",   # today (20th) still filling
                     "apps": {A1: {"2026-09-18": [375000, 150], "2026-09-19": [200000, 80]},
                              A2: {"2026-09-18": [20000, 10]}}, "tz_by_app": {},
-                    "country": {A1: {"2026-09-19": {"US": [200000, 80]}}}}]                # the 🔮 forecast's split
+                    "country": {A1: {"2026-09-19": {"US": [200000, 80]}}},                 # the 🔮 forecast's split
+                    "country_m": {"m": {A1: {"2026-09": {"US": 200000}}},                   # 📈 ROI's country filter:
+                                  "d": {A1: {"2026-09": 1 << 18}}}}]                        # every month + its days
     # a second account reporting in its own timezone: its apps are named, never read as Pacific days
     got.clear()
     build_static._uninstall_with_revenue({}, repo, "data", "site", s, "America/Los_Angeles", date(2026, 9, 20),
