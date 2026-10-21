@@ -34,7 +34,10 @@ asked again; older, it is kept as {"none": true, "why": "ga4"} with the first op
 ("fo": the report is not cut by the retention; the page shows them, the funnel steps "—"), asked once more on a later
 run (GONE_CONFIRM answers) before it is final. Nothing is stored as zeros.
 Properties run side by side (each has its own quota), the property whose apps waited longest first (each app's
-"turn"), so a big property never keeps the others waiting run after run. Switched by GA4_FIRSTOPEN_CC (on by default in the workflow).
+"turn"), so a big property never keeps the others waiting run after run. Within a day, the group calls go up to BATCH
+side by side — only when the property's last quota snapshot and the run's clock show the one-at-a-time calls would all
+have gone (App.batch_ok, with room); their answers are read in group order, so the day's record is the same.
+Switched by GA4_FIRSTOPEN_CC (on by default in the workflow).
 Never raises; never prints (log_line: counts only).
 """
 import hashlib
@@ -68,7 +71,10 @@ REFRESH_HOURS = 6.0
 MAX_CALLS = 150                     # per app per run, passed to the App (the backfill goes on next run)
 BUDGET_SEC = 240
 RETRY_HOURS = 3.0
-WORKERS = 6                         # properties read side by side
+WORKERS = 10                        # properties read side by side (each its own quota; one call at a time each …)
+BATCH = 5                           # … but a day's group calls up to this many side by side when the one-at-a-time
+                                    # calls would all go (App.funnel_many; GA4 allows 10 concurrent per property).
+                                    # GA4_FIRSTOPEN_CC_BATCH (env) 1: one at a time, as before
 
 
 def sig(steps):
@@ -124,9 +130,8 @@ def read_day(ga, steps, day, ccs, today, now_iso, prev=None):
         return {"none": True, "why": "ga4", "n": n, "fo": {k: int(v) for k, v in ccs.items()}, "at": now_iso}
     c = {}
     order = sorted(ccs, key=lambda k: (-ccs[k], k))
-    for i in range(0, len(order), GROUP):
-        grp = order[i:i + GROUP]
-        j = ga.funnel(group_body(steps["splash"], steps["home"], day, grp))
+    groups = [order[i:i + GROUP] for i in range(0, len(order), GROUP)]
+    for grp, j in _answers(ga, [(g, group_body(steps["splash"], steps["home"], day, g)) for g in groups]):
         t, s = gf.parse_table(j), gf.sampling(j)
         if s is not None:
             smp = s if smp is None else min(smp, s)
@@ -135,6 +140,33 @@ def read_day(ga, steps, day, ccs, today, now_iso, prev=None):
             if any(v):
                 c[cc] = v
     return {"c": c, "t": tot, "smp": smp, "fin": (today - day).days >= FINAL_LAG, "sg": sig(steps), "at": now_iso}
+
+
+def _batch():
+    try:
+        return max(1, int(os.getenv("GA4_FIRSTOPEN_CC_BATCH") or BATCH))
+    except ValueError:
+        return BATCH
+
+
+def _answers(ga, groups):
+    """[(group, funnel body)] → (group, GA4's answer) in group order: as many as BATCH side by side as the App can tell
+    the one-at-a-time calls would all go (funnel_many; else None — fewer tried, down to 2), one at a time otherwise —
+    the same answers, in the same order, so the day's record is the same."""
+    many, n, i = getattr(ga, "funnel_many", None), _batch(), 0
+    while i < len(groups):
+        chunk, got = groups[i:i + n], None
+        for m in range(len(chunk) if many else 1, 1, -1):
+            got = many([b for _, b in chunk[:m]])
+            if got is not None:
+                chunk = chunk[:m]
+                break
+        if got is None:
+            chunk = chunk[:1]
+            got = [ga.funnel(chunk[0][1])]
+        for (g, _), j in zip(chunk, got):
+            yield g, j
+        i += len(chunk)
 
 
 def due(store, today, now, first=None):
@@ -261,6 +293,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
 
         def over():
             return "budget" if clock() - t0 >= budget else None
+        over.left = lambda: budget - (clock() - t0)    # (App.batch_ok: the run's seconds left)
         by_prop = {}
         for a in apps:
             if a.get("same_as") or not a.get("package"):
