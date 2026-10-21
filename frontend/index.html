@@ -2655,6 +2655,7 @@ body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecust
 .fo-ccs{flex:0 1 auto;min-width:150px;max-width:260px;height:36px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-overflow:ellipsis}
 .fo-ccw{min-width:0;font-size:12px;line-height:1.3;color:var(--muted);overflow:hidden}
 .fo-t tr.fo-gap td{color:var(--watch);background:var(--panel2);font-size:11.5px;font-weight:600;text-align:left;white-space:normal}
+.fo-t tr.fo-old td{color:var(--muted)}.fo-t tr.fo-old td.fo-nm{color:var(--ink2)}.fo-t tr.fo-old small,.fo-t small.fo-mx{color:var(--muted);font-weight:600}
 .fo-ccgap{color:var(--watch)}.fo-ccgap b{color:#f3d48a}
 .fo-lnkb{background:none;border:0;padding:0 2px;min-height:32px;color:var(--cyan);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}
 .fo-cct{font-size:14px;font-weight:800;color:#fff}
@@ -6563,12 +6564,23 @@ function appView(a,x){ CHART=null; const c=ccPtr(a);
   const cx=(d.summary||[]).find(z=>z.cc===CC);
   if(!cx) return appCrumb(a,x)+ccTop(a)+miss('');
   const c2={days:ccRows(d,CC),final_till:d.final_till||a.final_till};
-  CHART={days:ccFill(c2.days),final_till:c2.final_till};   // the chart on the calendar: a day not read = a break in the line
+  // the chart on the calendar from the app's day 1 (as the All countries chart): a day with no country row = a break in
+  // the line, its tooltip says why (ccNone)
+  CHART={days:ccFill(c2.days,a.first_day),final_till:c2.final_till,none:ccNone(d),cc:CC};
   return ccAppHtml(a,cx,d,c2); }
-// rows with every calendar day between the first and the last: a day the store has not = [D, null …] (no point drawn)
-function ccFill(rows){ const out=[]; for(const r of rows){ const p=out.length?out[out.length-1][0]:null;
-    if(p) for(let k=addD(p,1);k<r[0];k=addD(k,1)) out.push([k,null,null,null,null,null,null,null,null,null]);
+// rows with every calendar day from `start` (the app's day 1; else the first row) to the last: a day the store has not =
+// [D, null …] (no point drawn)
+const nullRow=k=>[k,null,null,null,null,null,null,null,null,null];
+function ccFill(rows,start){ const out=[]; if(rows.length&&start&&start<rows[0][0]) for(let k=start;k<rows[0][0];k=addD(k,1)) out.push(nullRow(k));
+  for(const r of rows){ const p=out.length?out[out.length-1][0]:null;
+    if(p) for(let k=addD(p,1);k<r[0];k=addD(k,1)) out.push(nullRow(k));
     out.push(r); } return out; }
+// a day with no country row → why: 'gone' (GA4's funnel has nothing left for it; its report still gave the first opens
+// by country: fo(day, cc), null when the file has no count for that day), 'nobody' (GA4 named no country that day) or ''
+// (not read yet: the backfill goes on)
+function ccNone(d){ const g=new Set(Array.isArray(d&&d.gone)?d.gone:[]), n=new Set(Array.isArray(d&&d.nobody)?d.nobody:[]);
+  const fo=(d&&d.gone_fo&&typeof d.gone_fo==='object')?d.gone_fo:{};
+  return {kind:k=>g.has(k)?'gone':n.has(k)?'nobody':'', fo:(k,cc)=>fo[k]&&typeof fo[k]==='object'?(+fo[k][cc]||0):null, any:g.size>0}; }
 const dd=(a,b)=>Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/864e5);   // days from a to b
 function appCrumb(a,x){ return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''} · history ${fmtD(a.first_day)} ${a.first_day.slice(0,4)} se</span></div>`; }
 function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t=new Date(ft+'T00:00:00Z'); t.setUTCDate(t.getUTCDate()+k); return t.toISOString().slice(0,10); };
@@ -6581,24 +6593,35 @@ function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t
     +`<tr><td>Splash → Home</td><td>${cell(t,sh)}</td><td>${cell(y,sh)}</td><td><b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td></tr></tbody></table></div>`
     +`<p class="fo-note">Today aur Yesterday abhi final nahi.${x.sample!=null?` <span class="fo-smp">≈</span> = GA4 ne is country ke funnel me sirf ~${Math.max(1,Math.round(x.sample*100))}% data padha (sampling): users ki ginti lagbhag hai, % ka direction sahi.`:''}</p>`;
   const home=`<div class="fo-bar"><span class="fo-bl">Home</span><span class="fo-bt"><i style="width:${Math.max(0,Math.min(100,(x.s2h||0)*100))}%" class="h"></i><u style="width:${Math.max(0,Math.min(100,(x.usual||0)*100))}%"></u></span><span class="fo-bv"><b>${P(x.s2h)}</b> <small>usual ${P(x.usual)}</small></span></div>`;
+  // EVERY calendar day from the app's day 1 (the All countries table's first day) to the newest country day, each told
+  // apart (ccNone): a country row; a day GA4's funnel no longer has (its report's first opens only, the funnel "—"); a
+  // day GA4 named no country; a run of days not read yet (one row: the backfill goes on)
+  const NO=ccNone(d), start=rows.length&&a.first_day&&a.first_day<rows[0][0]?a.first_day:(rows.length?rows[0][0]:null);
+  const cal=[]; if(start) for(let k=start;k<=rows[rows.length-1][0];k=addD(k,1)) cal.push(k);
+  const by2={}; for(const r of rows) by2[r[0]]=r;
+  const MO=new Map(); for(const k of cal){ const m=k.slice(0,7); if(!MO.has(m)) MO.set(m,{rs:[],gone:0,fo:0,nofo:0,nob:0,wait:0}); const o=MO.get(m);
+    if(by2[k]) o.rs.push(by2[k]); else { const w=NO.kind(k); if(w==='gone'){ o.gone++; const f=NO.fo(k,CC); if(f==null) o.nofo++; else o.fo+=f; } else if(w==='nobody') o.nob++; else o.wait++; } }
+  const mx=o=>[o.gone&&o.rs.length?`${o.gone}d First opens only`:'',o.nob?`${o.nob}d no country`:'',o.wait?`${o.wait}d not read yet`:''].filter(Boolean).join(' · ');
   const mt=`<div class="fo-tw"><table class="fo-t"><thead><tr><th>Month</th><th>First opens</th><th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
-    +months(rows).map(([m,rs])=>`<tr><td class="fo-nm">${SMP(low(rs))}${fmtMon(m)} <small>· ${rs.length}d</small></td><td>${N(sum(rs,'first_open'))}</td><td>${N(sum(rs,'splash'))}</td><td>${N(sum(rs,'home'))}</td><td><b>${P(rate(sum(rs,'home'),sum(rs,'splash')))}</b></td><td>${P(rate(sum(rs,'splash'),sum(rs,'first_open')))}</td></tr>`).join('')
+    +[...MO.entries()].reverse().map(([m,o])=>{ const rs=o.rs, x=mx(o);
+      if(!rs.length) return `<tr class="fo-old"><td class="fo-nm">${fmtMon(m)}${o.gone?` <small class="fo-mx">· ${o.gone}d First opens only</small>`:''}${x?` <small class="fo-mx">· ${x}</small>`:''}</td><td>${o.gone&&!o.nofo?N(o.fo):'—'}</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
+      return `<tr><td class="fo-nm">${SMP(low(rs))}${fmtMon(m)} <small>· ${rs.length}d</small>${x?` <small class="fo-mx">· ${x}</small>`:''}</td><td>${N(sum(rs,'first_open'))}</td><td>${N(sum(rs,'splash'))}</td><td>${N(sum(rs,'home'))}</td><td><b>${P(rate(sum(rs,'home'),sum(rs,'splash')))}</b></td><td>${P(rate(sum(rs,'splash'),sum(rs,'first_open')))}</td></tr>`; }).join('')
     +`</tbody></table></div>`;
-  // a run of days with no country row: the ones GA4 no longer has (its event data is gone: d.gone) vs the ones not read yet
-  const GONE=new Set(Array.isArray(d.gone)?d.gone:[]);
-  const gapRow=(lo,hi)=>{ const g=dd(lo,hi)+1; if(g<=0) return ''; let ng=0; for(let k=0;k<g;k++) if(GONE.has(addD(lo,k))) ng++;
-    const rg=`${fmtD(lo)} – ${fmtD(hi)}`;
-    const why=ng===g?`GA4 me ab nahi — GA4 sirf ~2 mahine ka event data rakhta hai, ye din country-wise ab nahi mil sakte`
-      :ng?`${ng} din GA4 me ab nahi (event data hata diya), ${g-ng} din abhi padhe ja rahe hain`:`abhi padhe ja rahe hain (backfill chal raha hai)`;
-    return `<tr class="fo-gap"><td colspan="6">↕ ${g} din (${rg}): ${why}</td></tr>`; };
-  const tail=rows.length&&a.first_day&&a.first_day<rows[0][0]?gapRow(a.first_day,addD(rows[0][0],-1)):'';   // All countries' day 1 … the oldest country day
-  const dt=`<div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day</th><th>First opens</th><th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
-    +rows.slice().reverse().map((r,i,rv)=>{ const g=i?dd(r[0],rv[i-1][0])-1:0;   // days between this one and the newer row before it
-      return (g>0?gapRow(addD(r[0],1),addD(rv[i-1][0],-1)):'')
-        +`<tr><td class="fo-nm${r[0]>ft?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(r[0])} ${r[0].slice(0,4)}${r[0]>ft?' · not final':''}</td><td>${N(r[IX.first_open])}</td><td>${N(r[IX.splash])}</td><td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${op(r)}</td></tr>`; }).join('')
-    +tail+`</tbody></table></div>`;
+  const gapRow=(lo,hi)=>`<tr class="fo-gap"><td colspan="6">↕ ${dd(lo,hi)+1} din (${fmtD(lo)} – ${fmtD(hi)}): abhi padhe ja rahe hain (backfill chal raha hai)</td></tr>`;
+  const dayCell=(k,t)=>`<td class="fo-nm">${fmtD(k)} ${k.slice(0,4)} <small>· ${t}</small></td>`;
+  let body='', run=null, nGone=0;   // run = [oldest, newest] of the days not read yet being walked (newest first)
+  for(let i=cal.length-1;i>=0;i--){ const k=cal[i], r=by2[k], w=r?null:NO.kind(k);
+    if(!r&&!w){ run=run?[k,run[1]]:[k,k]; continue; }
+    if(run){ body+=gapRow(run[0],run[1]); run=null; }
+    if(r) body+=`<tr><td class="fo-nm${k>ft?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(k)} ${k.slice(0,4)}${k>ft?' · not final':''}</td><td>${N(r[IX.first_open])}</td><td>${N(r[IX.splash])}</td><td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${op(r)}</td></tr>`;
+    else if(w==='gone'){ nGone++; body+=`<tr class="fo-old">${dayCell(k,'First opens only')}<td>${N(NO.fo(k,CC))}</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`; }
+    else body+=`<tr class="fo-old">${dayCell(k,'GA4 named no country')}<td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`; }
+  if(run) body+=gapRow(run[0],run[1]);
+  const goneNote=nGone?`<p class="fo-note">⌛ <b>First opens only</b> wale ${nGone} din: GA4 ne un dino ka event data hata diya (wo sirf ~2 mahine rakhta hai), isliye Splash → Home ka funnel country-wise ab nahi padh sakte. First opens GA4 ke normal report se hain (funnel ke First opens se thoda alag ho sakte hain).</p>`:'';
+  const dt=goneNote+`<div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day</th><th>First opens</th><th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
+    +body+`</tbody></table></div>`;
   return ccCrumb(a,x)+ccTop(a)
-    +`<p class="fo-note">🌍 Country data <b>${ccWhen(d)}</b> ka hai (GA4 sirf ~2 mahine ka data rakhta hai, usse purana country-wise nahi milta).</p>`
+    +`<p class="fo-note">🌍 Country data <b>${ccWhen(d)}</b> ka hai (GA4 sirf ~2 mahine ka data rakhta hai, ${NO.any?'usse purane dino ke country-wise sirf First opens milte hain':'usse purana country-wise nahi milta'}).</p>`
     +ccGapNote(d)
     +`<div class="card fo-card"><div class="ct"><h3>Today · Yesterday · last 7 days · usual</h3></div>${mini}</div>`
     +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${home}`
@@ -6623,6 +6646,10 @@ function pick(cc,from){ cc=String(cc||''); if(cc===CC) return; const s=EL;
   CCW.forEach((id,i)=>{ const r=strip(id); if(r&&sl[i]) r.scrollLeft=sl[i]; });
   const y1=y0==null?null:at(), d=y1==null?0:y1-y0;
   if(Math.abs(d)>1){ try{ if(typeof SP!=='undefined'&&SP&&SP.quietly) SP.quietly(()=>window.scrollBy(0,d)); else window.scrollBy(0,d); }catch(e){} } }
+// a chart day with no row → why (a country's chart: ccNone; else a plain gap)
+function noneTip(a,k){ const w=a&&a.none?a.none.kind(k):null;
+  if(w==='gone'){ const f=a.none.fo(k,a.cc); return `GA4 me ab nahi (event data hata diya)${f!=null?` · first opens ${N(f)} (GA4 report)`:''}`; }
+  return w==='nobody'?'GA4 ne is din koi country nahi batayi':w===''?'Abhi padha ja raha hai (backfill)':'Is din ka country data nahi padha (gap)'; }
 // the daily chart: Splash → Home and Opened app for every day kept, the last value printed; hover / tap = that day
 function drawChart(a){ const box=document.getElementById('fo-chart'); if(!box) return; const rows=a.days||[]; if(rows.length<2){ box.innerHTML='<div class="faint" style="padding:20px 0">Abhi ek hi din ka data</div>'; return; }
   const W=Math.max(280,box.clientWidth||600), H=210, m={t:12,r:46,b:24,l:38}, n=rows.length;
@@ -6643,7 +6670,7 @@ function drawChart(a){ const box=document.getElementById('fo-chart'); if(!box) r
   const svg=box.querySelector('svg'), tip=box.querySelector('.fo-tip'), rule=svg.querySelector('.rule');
   const at=ev=>{ const r=svg.getBoundingClientRect(); if(!r.width) return; const x=(ev.clientX-r.left)*W/r.width, i=Math.max(0,Math.min(n-1,Math.round((x-m.l)/(W-m.l-m.r)*(n-1)))), d=rows[i];
     rule.setAttribute('x1',X(i)); rule.setAttribute('x2',X(i)); rule.setAttribute('visibility','visible');
-    tip.innerHTML=d[IX.first_open]==null?`<b>${fmtD(d[0])} ${d[0].slice(0,4)}</b><br>Is din ka country data nahi padha (gap)`:`<b>${fmtD(d[0])} ${d[0].slice(0,4)}</b>${d[0]>a.final_till?' · not final':''}<br>Splash → Home <b>${P(rate(+d[IX.home],+d[IX.splash]))}</b> (${N(d[IX.home])} of ${N(d[IX.splash])})<br>Opened app ${P(rate(+d[IX.splash],+d[IX.first_open]))} · first opens ${N(d[IX.first_open])}${d[IX.sample]!=null&&d[IX.sample]<1?`<br>≈ GA4 sampling: ~${Math.max(1,Math.round(d[IX.sample]*100))}% data padha`:''}`;
+    tip.innerHTML=d[IX.first_open]==null?`<b>${fmtD(d[0])} ${d[0].slice(0,4)}</b><br>${noneTip(a,d[0])}`:`<b>${fmtD(d[0])} ${d[0].slice(0,4)}</b>${d[0]>a.final_till?' · not final':''}<br>Splash → Home <b>${P(rate(+d[IX.home],+d[IX.splash]))}</b> (${N(d[IX.home])} of ${N(d[IX.splash])})<br>Opened app ${P(rate(+d[IX.splash],+d[IX.first_open]))} · first opens ${N(d[IX.first_open])}${d[IX.sample]!=null&&d[IX.sample]<1?`<br>≈ GA4 sampling: ~${Math.max(1,Math.round(d[IX.sample]*100))}% data padha`:''}`;
     tip.hidden=false; const px=X(i)*r.width/W; tip.style.left=Math.max(0,Math.min(r.width-tip.offsetWidth,px-tip.offsetWidth/2))+'px'; };
   svg.addEventListener('pointermove',at); svg.addEventListener('click',at);
   svg.addEventListener('pointerleave',()=>{ tip.hidden=true; rule.setAttribute('visibility','hidden'); }); }
@@ -6684,7 +6711,7 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   if(a&&CHART) drawChart(CHART); }
 function show(){ paint(); }
 function left(){ }
-return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccIn, ccWait, ccFrom, CC_COLS, pick, ccRows, ccData, ccFill, hold, cc:()=>CC}};
+return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccIn, ccWait, ccFrom, CC_COLS, pick, ccRows, ccData, ccFill, ccNone, noneTip, hold, cc:()=>CC}};
 })();
 function renderFirstOpen(){ return FO.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from

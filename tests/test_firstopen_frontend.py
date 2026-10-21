@@ -8,7 +8,8 @@ country file loaded once and only for the open app (a failed load = Try again in
 (sort, status filter, the GA4-unnamed row last), a pick (chip / board row / select) redrawing the view from the country's
 rows with the page height and the board's scroll kept, the pick kept across apps (+ the "no such country" message), and the
 All countries view = today's view + the two country blocks; a country file with a HOLE (the date range, one warning on
-the board and in the country view, a "gap" row in Every day, the chart's rows on the calendar); the Country control's one
+the board and in the country view, every day from the app's day 1 in Every day / Every month / the chart — not read yet,
+gone from GA4's funnel with the report's first opens, no country named — each told apart); the Country control's one
 height (one row, two on a phone; the top 6 in a sideways strip); hold() keeping the reader's place when the country file
 arrives late (a layout model at 375 and 1280 px); the SAME Country control inside the Every month / Every day cards (one
 shared pick, the card titles with the country + ✕, the loading / Try again states, nothing new without a country file, no
@@ -146,16 +147,43 @@ def test_country_kept_across_apps_and_failed_load(out):
 
 
 def test_country_file_with_a_hole(out):
-    """The backfill reads oldest / newest in turn and a fetch can fall behind: the page says so (never a silent "last 7
-    days"), shows the hole between the days, and the chart breaks there."""
+    """The backfill can fall behind: the page says so (never a silent "last 7 days"), shows every day from the app's day 1
+    (the All countries table's first day) in its place — a country row, a day GA4's funnel no longer has (one row each:
+    the first opens GA4's report still gives, the funnel "—"), a day GA4 named no country, a run not read yet (one row) —
+    and the chart, on the same calendar, breaks there with the reason on hover."""
     c = out["cc"]
     assert c["g_warn"] and c["g_why"] and c["g_view_warn"]
-    # a hole: the days GA4 no longer has vs the days not read yet; then the run from the All table's day 1 to the
-    # oldest country day (all gone from GA4 here)
-    assert c["g_gap_rows"] == ["↕ 20 din (21 Aug – 9 Sep): 5 din GA4 me ab nahi (event data hata diya), 15 din abhi padhe ja rahe hain",
-                               "↕ 3 din (29 Jul – 31 Jul): GA4 me ab nahi — GA4 sirf ~2 mahine ka event data rakhta hai, ye din country-wise ab nahi mil sakte"]
-    assert c["g_gap_between"] and c["g_days"] == 40 and c["g_months"] == [["Sep 2026", 20], ["Aug 2026", 20]]
-    assert c["g_fill"] == [60, 20, "2026-08-21", None, "2026-09-10", 500]   # the chart on the calendar: 20 empty days
+    # only the days not read yet are a run; the gone ones are rows of their own, in place, and the app's day 1 … 31 Jul
+    # (gone) are the LAST rows of Every day
+    assert c["g_gap_rows"] == ["↕ 15 din (26 Aug – 9 Sep): abhi padhe ja rahe hain (backfill chal raha hai)"]
+    assert c["g_gap_between"] and c["g_tail_last"] and c["g_days"] == 40
+    assert c["g_old"] == [["25 Aug", "First opens only", "25"], ["24 Aug", "First opens only", "24"],
+                          ["23 Aug", "First opens only", "—"],      # an older record without the report's counts
+                          ["22 Aug", "First opens only", "22"], ["21 Aug", "First opens only", "21"],
+                          ["31 Jul", "First opens only", "0"],      # the report named other countries only that day
+                          ["30 Jul", "First opens only", "12"], ["29 Jul", "First opens only", "11"]]
+    assert c["g_old_note"] == 1 and c["g_view_note"]
+    # Every month from the app's day 1: July (gone days only: the report's first opens, the funnel "—"); the partial months
+    # sum their country rows only and say what the other days are
+    assert c["g_months"] == [["Sep 2026", 20, "· 9d not read yet", "10,000", "8,000"],
+                             ["Aug 2026", 20, "· 5d First opens only · 6d not read yet", "10,000", "8,000"],
+                             ["Jul 2026", None, "· 3d First opens only", "23", "—"]]
+    # the chart on the calendar from the app's day 1: 3 + 20 empty days; the reason on hover
+    assert c["g_fill"] == [63, 23, "2026-07-29", None, "2026-08-21", None, "2026-09-10", 500] and c["g_fill_plain"] == 60
+    assert c["g_tips"] == ["GA4 me ab nahi (event data hata diya) · first opens 11 (GA4 report)",
+                           "GA4 me ab nahi (event data hata diya) · first opens 0 (GA4 report)",
+                           "GA4 me ab nahi (event data hata diya)", "Abhi padha ja raha hai (backfill)",
+                           "Is din ka country data nahi padha (gap)"]
+
+
+def test_country_view_tail_from_the_apps_day_1(out):
+    """Before the country store's first day: a mixed tail (not read / GA4 named no country / gone / not read) and a tail
+    not read at all — each in date order, the oldest LAST, right before the table's end; July in Every month."""
+    c = out["cc"]
+    assert c["e_tail"] and c["e_note"] == 1 and c["e_tip_nobody"] == "GA4 ne is din koi country nahi batayi"
+    assert c["e_months"][-1] == ["Jul 2026", None, "· 1d First opens only · 1d no country · 4d not read yet", "7", "—"]
+    assert c["t_tail"] and c["t_no_old"]
+    assert c["t_months"][-1] == ["Jul 2026", None, "· 2d not read yet", "—", "—"]
 
 
 def test_late_country_file_keeps_the_readers_place(out):

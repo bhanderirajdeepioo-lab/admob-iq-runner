@@ -222,7 +222,9 @@ def build_cc(store, key, aid, final_till):
     rule's 35 days leaves fewer than MIN_DAYS days, so the rule itself says Too early (why: the hole or the last day);
     the share and the unnamed users over the same 7 calendar days. What GA4 named no country for = the day's total − the
     named countries, as measured. "days" keeps every real day (nothing trimmed); "last_day" = the newest one; "missing" =
-    the days the status window lacks (0 = whole)."""
+    the days the status window lacks (0 = whole); "gone" = the days GA4's funnel no longer has, "gone_fo" = their first
+    opens by country from GA4's report (no funnel step: the page shows "—" there), "nobody" = the days GA4 named no
+    country — so the page tells every day from the app's day 1 apart from a day still to be read."""
     days = cc_days(store)
     if not days:
         return None
@@ -252,11 +254,14 @@ def build_cc(store, key, aid, final_till):
     fu, su, hu = (sum(un[i][j] for i in w7) for j in range(3))
     unnamed = {"fo_day": _r6(fu / len(w7)) if w7 else None, "opened": _r6(su / fu) if fu > 0 and su >= 0 else None,
                "s2h": _r6(hu / su) if su > 0 and hu >= 0 else None, "share": _r6(fu / t7) if t7 > 0 else None}
-    gone = sorted(k for k, v in (store.get("days") or {}).items()     # days GA4's funnel no longer has (event data gone)
-                  if isinstance(v, dict) and v.get("none") and v.get("why") == "ga4")
+    nones = {k: v for k, v in (store.get("days") or {}).items() if isinstance(v, dict) and v.get("none")}
+    gone = sorted(k for k, v in nones.items() if v.get("why") == "ga4")   # GA4's funnel has nothing left for the day
+    gone_fo = {k: {str(c): int(n) for c, n in nones[k]["fo"].items()}  # … its report's first opens by country
+               for k in gone if isinstance(nones[k].get("fo"), dict)}
+    nobody = sorted(k for k, v in nones.items() if v.get("why") != "ga4")  # GA4 named no country that day
     return {"v": V, "key": key, "app_id": aid, "final_till": final_till, "first_day": days[0][0],
-            "last_day": days[-1][0], "missing": missing, "days": days, "gone": gone,
-            "summary": [z[3] for z in order], "unnamed": {"summary": unnamed}}
+            "last_day": days[-1][0], "missing": missing, "days": days, "gone": gone, "gone_fo": gone_fo,
+            "nobody": nobody, "summary": [z[3] for z in order], "unnamed": {"summary": unnamed}}
 
 
 def _cc_clean(out_dir, keep):

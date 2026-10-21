@@ -119,9 +119,9 @@ def settings() -> dict:
         "ga4_firstopen_budget_sec": _int_env(("GA4_FIRSTOPEN_BUDGET_SEC",), 150),
         # 🆕 First open BY COUNTRY: the same strict funnel per country per day, every country (fetch.ga4_firstopen_cc:
         # the backfill of what GA4 still has, the last 3 days every 6 hours). Off: nothing of it is read, written or
-        # printed; GA4_FIRSTOPEN_CC_BUDGET_SEC = its own seconds per build
+        # printed; GA4_FIRSTOPEN_CC_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_firstopen_cc": _env("GA4_FIRSTOPEN_CC", "false").lower() == "true",
-        "ga4_firstopen_cc_budget_sec": _int_env(("GA4_FIRSTOPEN_CC_BUDGET_SEC",), 150),
+        "ga4_firstopen_cc_budget_sec": _int_env(("GA4_FIRSTOPEN_CC_BUDGET_SEC",), 0),
         # 📈 Day-wise ROI: every day 0 … 30 of each install day's GA4 ad revenue (fetch.ga4_cohort: a one-time backfill
         # from the GA4 history start, the last 35 days every 6 hours). Off: nothing of it is read, written or printed
         "ga4_cohort": _env("GA4_COHORT", "false").lower() == "true",

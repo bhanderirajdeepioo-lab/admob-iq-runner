@@ -13,9 +13,11 @@
 //     last), a pick from a chip / the board / the select redraws the mini table, months and every day from that country's
 //     rows, the pick kept across apps (+ the "no such country" message), the page height and the board's scroll kept on a
 //     pick (no jump), and the All countries view = today's view + the two country blocks, nothing else;
-//   * a country file with a HOLE (the backfill reads oldest / newest in turn) and a status window that is not whole: the
-//     date range first – last, ONE warning on the board and in the country view, a "gap: N din" row in Every day, the
-//     chart's rows on the calendar (a day not read = no point, the line breaks there);
+//   * a country file with a HOLE and a status window that is not whole: the date range first – last, ONE warning on the
+//     board and in the country view; EVERY day from the app's day 1 in Every day (a run not read yet = one row, a day
+//     GA4's funnel no longer has = its own row with the report's first opens, a day GA4 named no country = its own row;
+//     the oldest LAST), Every month from day 1 too, the chart's rows on the same calendar (no point there, the reason on
+//     hover); tails before the country store's first day: mixed, and not read at all;
 //   * hold() — the reader's place when the country file arrives late — on a small layout model at 375 and 1280 px: the card
 //     being read stays (Every month just under the top bar, or mid-screen), nothing scrolls at the top of the page, the
 //     chart stays when the board's slot is in the lower half;
@@ -175,9 +177,18 @@ async function byCountry() {
   const GAP = ccFile('ke', ['XA', 'XB'], { last_day: day(59), missing: 18 });
   GAP.days = GAP.days.filter((d, i) => i < 20 || i >= 40);
   GAP.summary.forEach(x => { x.status = 'Too early'; x.why = 'country data incomplete: 18 din missing'; });
-  // GA4 no longer has 5 days of the hole and the 3 days before the country store's first day (the app's day 1 is 3 earlier)
+  // GA4's funnel no longer has 5 days of the hole and the 3 days before the country store's first day (the app's day 1 is
+  // 3 earlier): its report's first opens by country kept for them (31 Jul: XB only → XA 0; 23 Aug: an older record, no counts)
   GAP.gone = [day(-3), day(-2), day(-1), day(20), day(21), day(22), day(23), day(24)];
+  GAP.gone_fo = { [day(-3)]: { XA: 11, XB: 3 }, [day(-2)]: { XA: 12 }, [day(-1)]: { XB: 2 }, [day(20)]: { XA: 21 }, [day(21)]: { XA: 22 },
+    [day(23)]: { XA: 24 }, [day(24)]: { XA: 25 } };
+  GAP.nobody = [];
   CCF['firstopen_cc_eeeeeeeeeeee.json.gz'] = GAP;
+  // Eta: the app's day 1 six days before its country store's: 31 Jul not read, 30 Jul GA4 named no country, 29 Jul not
+  // read, 28 Jul gone (first opens 7), 26 – 27 Jul not read; Theta: two days before, neither read yet
+  CCF['firstopen_cc_cccccccccccc.json.gz'] = ccFile('kg', ['XA', 'XB'], { last_day: day(59), missing: 0, gone: [day(-4)],
+    gone_fo: { [day(-4)]: { XA: 7 } }, nobody: [day(-2)] });
+  CCF['firstopen_cc_bbbbbbbbbbbb.json.gz'] = ccFile('kt', ['XA', 'XB'], { last_day: day(59), missing: 0 });
   CCF['firstopen_cc_ffffffffffff.json.gz'] = ccFile('kf', ['XA', 'XB', 'XC'], { last_day: day(59), missing: 0 });
   const ptrOf = (f, n) => ({ file: f, v: 'c-' + f.slice(13, 17), from: day(0), n, days: 60 });
   const F2 = JSON.parse(JSON.stringify(FILE));
@@ -185,10 +196,14 @@ async function byCountry() {
   F2.apps[1].cc = ptrOf('firstopen_cc_0123456789ab.json.gz', 9);
   F2.apps[2].cc = ptrOf('firstopen_cc_abcdef012345.json.gz', 2);
   F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'kd', app: 'Delta', app_id: 'id-d', cc: ptrOf('firstopen_cc_dddddddddddd.json.gz', 3) });
-  F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'ke', app: 'Epsilon', app_id: 'id-e', cc: ptrOf('firstopen_cc_eeeeeeeeeeee.json.gz', 2), first_day: day(-3) });
+  // the All countries table of an app whose day 1 is k days before the country store's (its rows really start there)
+  const from = k => ({ first_day: day(-k), days: rows(60 + k, 0.7, null).map((r, i) => [day(i - k), ...r.slice(1)]) });
+  F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'ke', app: 'Epsilon', app_id: 'id-e', cc: ptrOf('firstopen_cc_eeeeeeeeeeee.json.gz', 2), ...from(3) });
   F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'kf', app: 'Zeta', app_id: 'id-f', cc: ptrOf('firstopen_cc_ffffffffffff.json.gz', 3) });
+  F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'kg', app: 'Eta', app_id: 'id-g', cc: ptrOf('firstopen_cc_cccccccccccc.json.gz', 2), ...from(6) });
+  F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'kt', app: 'Theta', app_id: 'id-t', cc: ptrOf('firstopen_cc_bbbbbbbbbbbb.json.gz', 2), ...from(2) });
   F2.summary = F2.summary.filter(x => x.key !== 'kh').concat([{ ...F2.summary[0], key: 'kd', app: 'Delta' }, { ...F2.summary[0], key: 'ke', app: 'Epsilon' },
-    { ...F2.summary[0], key: 'kf', app: 'Zeta' }]);
+    { ...F2.summary[0], key: 'kf', app: 'Zeta' }, { ...F2.summary[0], key: 'kg', app: 'Eta' }, { ...F2.summary[0], key: 'kt', app: 'Theta' }]);
   const c2 = { ...ctx, DATA: { firstopen: { file: 'firstopen.json.gz', v: 'v2', apps: {} }, apps_catalog: [{ app_id: 'id-a', app_name: 'Alpha Pick' }, { app_id: 'id-b', app_name: 'Beta Pick' }] },
     APP: 'Beta Pick',
     document: { querySelector: s => s === '.screen.on' ? { dataset: { screen: 'firstopen' } } : (s === '.screen[data-screen=firstopen]' ? S2 : null),
@@ -392,11 +407,36 @@ async function byCountry() {
   const gh = html2;
   R.g_view_warn = (gh.match(/class="fo-note fo-ccgap"/g) || []).length === 2;      // the view's note + the board's
   R.g_gap_rows = [...gh.matchAll(/<tr class="fo-gap"><td colspan="6">([^<]*)<\/td><\/tr>/g)].map(m => m[1]);
-  R.g_gap_between = /10 Sep 2026<\/td>(?:(?!<tr>).)*<\/tr><tr class="fo-gap">.*?<\/tr><tr><td class="fo-nm">20 Aug 2026<\/td>/.test(gh);
+  // every day in its place, newest first: 10 Sep, the 15 days not read yet (one row), the 5 gone days (one row each, the
+  // report's first opens, the funnel "—"), 20 Aug … 1 Aug, then the app's day 1 … 31 Jul (gone) LAST, right before </tbody>
+  R.g_gap_between = /10 Sep 2026<\/td>(?:(?!<tr).)*<\/tr><tr class="fo-gap"><td colspan="6">↕ 15 din \(26 Aug – 9 Sep\)[^<]*<\/td><\/tr><tr class="fo-old"><td class="fo-nm">25 Aug 2026 <small>· First opens only<\/small><\/td><td>25<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><\/tr>(?:<tr class="fo-old">(?:(?!<tr).)*<\/tr>){4}<tr><td class="fo-nm">20 Aug 2026<\/td>/.test(gh);
+  R.g_tail_last = /<tr><td class="fo-nm">1 Aug 2026<\/td>(?:(?!<tr).)*<\/tr><tr class="fo-old"><td class="fo-nm">31 Jul 2026 <small>· First opens only<\/small><\/td><td>0<\/td>(?:(?!<tr).)*<\/tr><tr class="fo-old">(?:(?!<tr).)*<\/tr><tr class="fo-old"><td class="fo-nm">29 Jul 2026 <small>· First opens only<\/small><\/td><td>11<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><\/tr><\/tbody>/.test(gh);
+  R.g_old = [...gh.matchAll(/<tr class="fo-old"><td class="fo-nm">(\d+ [A-Z][a-z]{2}) 2026 <small>· ([^<]*)<\/small><\/td><td>([^<]*)<\/td>/g)].map(m => m.slice(1));
+  R.g_old_note = (gh.match(/<b>First opens only<\/b> wale 8 din: GA4 ne un dino ka event data hata diya/g) || []).length;
+  R.g_view_note = gh.includes('(GA4 sirf ~2 mahine ka data rakhta hai, usse purane dino ke country-wise sirf First opens milte hain).');
   R.g_days = (gh.match(/<tr><td class="fo-nm[^"]*">(<span class="fo-smp"[^>]*>≈<\/span>)?\d+ [A-Z][a-z]{2} 2026/g) || []).length;
-  R.g_months = [...gh.matchAll(/<td class="fo-nm">(?:<span class="fo-smp"[^>]*>≈<\/span>)?([A-Z][a-z]{2} 2026) <small>· (\d+)d<\/small>/g)].map(m => [m[1], +m[2]]);
-  const filled = FO._.ccFill(FO._.ccRows(GAP, 'XA'));
-  R.g_fill = [filled.length, filled.filter(r => r[1] == null).length, filled[20][0], filled[20][1], filled[40][0], filled[40][1]];
+  const MONTH_RE = /<tr(?: class="fo-old")?><td class="fo-nm">(?:<span class="fo-smp"[^>]*>≈<\/span>)?([A-Z][a-z]{2} 2026)(?: <small>· (\d+)d<\/small>)?((?: <small class="fo-mx">[^<]*<\/small>)*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td>/g;
+  const monthsOf = h => [...h.matchAll(MONTH_RE)].map(m => [m[1], m[2] == null ? null : +m[2], m[3].replace(/<[^>]*>/g, '').trim(), m[4], m[5]]);
+  R.g_months = monthsOf(gh);
+  const filled = FO._.ccFill(FO._.ccRows(GAP, 'XA'), day(-3));
+  R.g_fill = [filled.length, filled.filter(r => r[1] == null).length, filled[0][0], filled[0][1], filled[23][0], filled[23][1], filled[43][0], filled[43][1]];
+  R.g_fill_plain = FO._.ccFill(FO._.ccRows(GAP, 'XA')).length;          // no day 1 given: from the first row, as before
+  const ch = { none: FO._.ccNone(GAP), cc: 'XA' };
+  R.g_tips = [day(-3), day(-1), day(22), day(30)].map(k => FO._.noneTip(ch, k)).concat([FO._.noneTip({}, day(30))]);
+  // Eta: a tail of not read / no country / gone / not read; Theta: a tail not read at all — each the last rows of Every day
+  c2.APP = 'Eta'; FO.paint(); await tick(); await tick();
+  click('[data-fo-cc]', { foCc: 'XA' });
+  const eh = html2;
+  R.e_tail = /<tr><td class="fo-nm">1 Aug 2026<\/td>(?:(?!<tr).)*<\/tr><tr class="fo-gap"><td colspan="6">↕ 1 din \(31 Jul – 31 Jul\): abhi padhe ja rahe hain \(backfill chal raha hai\)<\/td><\/tr><tr class="fo-old"><td class="fo-nm">30 Jul 2026 <small>· GA4 named no country<\/small><\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><\/tr><tr class="fo-gap"><td colspan="6">↕ 1 din \(29 Jul – 29 Jul\)[^<]*<\/td><\/tr><tr class="fo-old"><td class="fo-nm">28 Jul 2026 <small>· First opens only<\/small><\/td><td>7<\/td>(?:(?!<tr).)*<\/tr><tr class="fo-gap"><td colspan="6">↕ 2 din \(26 Jul – 27 Jul\): abhi padhe ja rahe hain \(backfill chal raha hai\)<\/td><\/tr><\/tbody>/.test(eh);
+  R.e_months = monthsOf(eh);
+  R.e_note = (eh.match(/<b>First opens only<\/b> wale 1 din/g) || []).length;
+  R.e_tip_nobody = FO._.noneTip({ none: FO._.ccNone(CCF['firstopen_cc_cccccccccccc.json.gz']), cc: 'XA' }, day(-2));
+  c2.APP = 'Theta'; FO.paint(); await tick(); await tick();
+  const th = html2;
+  R.t_tail = /<tr><td class="fo-nm">1 Aug 2026<\/td>(?:(?!<tr).)*<\/tr><tr class="fo-gap"><td colspan="6">↕ 2 din \(30 Jul – 31 Jul\): abhi padhe ja rahe hain \(backfill chal raha hai\)<\/td><\/tr><\/tbody>/.test(th);
+  R.t_no_old = !th.includes('fo-old"><td class="fo-nm">3') && !th.includes('First opens only') && th.includes('(GA4 sirf ~2 mahine ka data rakhta hai, usse purana country-wise nahi milta).');
+  R.t_months = monthsOf(th);
+  c2.APP = 'Epsilon'; FO.paint(); await tick();
   click('[data-fo-ccx]', {});
   out.cc = R;
   out.hold = holdModel(FO, c2, S2);

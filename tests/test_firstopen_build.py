@@ -317,10 +317,14 @@ def test_country_status_window_is_the_calendar_run_ending_at_final_till():
 
 
 def test_country_file_lists_the_days_ga4_no_longer_has():
-    """A day the country fetch found gone from GA4 ({"none": true, "why": "ga4"}) is listed in "gone" — the page says
-    "GA4 me ab nahi" there instead of "abhi padhe ja rahe hain"; a plain none day (no first opens) is not listed."""
+    """A day the country fetch found gone from GA4's funnel ({"none": true, "why": "ga4"}) is listed in "gone" with the
+    first opens GA4's report still gave per country ("gone_fo"; an older record without them: listed, no counts); a
+    plain none day (GA4 named no country) in "nobody" — the page tells both from a day not read yet."""
     rec = {"c": {"AA": [5, 4, 2]}, "t": [6, 5, 2], "smp": None, "fin": True, "sg": "x", "at": "t"}
-    store = {"days": {"2026-08-10": dict(rec), "2026-08-01": {"none": True, "why": "ga4", "at": "t"},
+    store = {"days": {"2026-08-10": dict(rec),
+                      "2026-08-01": {"none": True, "why": "ga4", "n": 2, "fo": {"AA": 7, "BB": 1}, "at": "t"},
                       "2026-08-02": {"none": True, "why": "ga4", "at": "t"}, "2026-08-05": {"none": True, "at": "t"}}}
     body = fb.build_cc(store, "k", "a~1", "2026-08-10")
     assert body["gone"] == ["2026-08-01", "2026-08-02"] and body["first_day"] == "2026-08-10"
+    assert body["gone_fo"] == {"2026-08-01": {"AA": 7, "BB": 1}} and body["nobody"] == ["2026-08-05"]
+    assert [d[0] for d in body["days"]] == ["2026-08-10"]               # never a row of zeros for them
