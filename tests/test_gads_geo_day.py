@@ -4,8 +4,10 @@ byte-identical with or without the day capture (and when the capture breaks), ev
 its days), the day backfill (own budget, newest first, down to the spend cache's first day — the whole history, not the
 weekly cache's 400 days; an archive done at a shallower floor resumes below its oldest day; more chunks a build while
 behind, never more requests or time than its budget; own country map — the weekly map is only read; the gap an
-out-of-order chunk leaves filled; the data edge counted only on stores that spent with every account asked; no rate
-for an account's currency → nothing committed), what roi_build reads of it (old days known once covered, a day that
+out-of-order chunk leaves filled; the data edge counted only on stores that spent with every account asked; a store
+that cannot answer now — a 403, an account that keeps failing, a cost row with no real rate — is a hole asked again,
+given up after GD_HOLE_DAYS; an account gone from the MCC is unknown for good; a chunk cut by the budget is asked
+again whole), what roi_build reads of it (old days known once covered, a day that
 does not tie stays unknown), deterministic files, the counts-only line and the build wiring. All data is synthetic."""
 
 import os
@@ -363,37 +365,171 @@ def test_the_edge_counts_only_stores_that_spent_with_every_account_asked(dirs):
     lines = [day_only(d3, spend, fake) for _ in range(6)]
     st = gstate(d3)
     assert st["done"] and st["edge"] is None and st["cov"][0][0] == "2025-01-01", st
+    assert not st["holes"] and {x[2] for x in st["lost"]} == {S3, s4}          # gone: unknown for good, no hole
     assert not fake.ranges("G1", A3) and S3 not in gd.load(d3)["days"] and s4 not in gd.load(d3)["days"]
     assert "(done)" in lines[-1] and st["first"] >= "2025-12-01"            # nothing committed below S1's spend …
     bdays = sum(int(re.search(r"backfill days (\d+)", ln).group(1)) for ln in lines)
     assert bdays <= (date.fromisoformat(top) - date(2025, 12, 1)).days     # … and no settled-empty day counted
 
 
-def test_no_rate_for_an_old_account_currency_nothing_committed(dirs, monkeypatch):
-    # an account billed in a currency the rate source has no rate for, spending only long ago (the weekly cache never
-    # reaches it): its chunks are not asked and nothing is committed (errors counted, asked again; the fail back-off
-    # holds it to GD_FAIL_BACKOFF tries a day) — once the rate is there, the cost goes ccy → USD → base
-    old = {A1: {S1: {"2840": 3}}, A2: {S2: {"2076": lambda d: 1.5 if d < "2025-03-01" else 0}}}
-    spend = spend_of(old, "2025-01-01", "2026-09-23")
+def every(a, b):
+    return [x.isoformat() for x in (date.fromisoformat(a) + timedelta(days=i)
+                                    for i in range((date.fromisoformat(b) - date.fromisoformat(a)).days + 1))]
+
+
+def test_no_rate_for_an_account_holds_only_its_stores(dirs, monkeypatch):
+    # an account billed in a currency the rate source has no rate for, its store spending only in May 2025: the cost
+    # rows it returns are never written at a guessed rate (that store-range is a hole, errors counted); every other
+    # store goes on to the spend cache's first day; a hole is not asked while there is still no rate (0 calls); once the
+    # rate is there, only the hole is asked and its cost goes ccy → USD → base
+    old = {A1: {S1: {"2840": 3}}, A2: {S2: {"2076": lambda d: 1.5 if "2025-05-01" <= d < "2025-06-01" else 0}}}
+    spend = spend_of(old, "2024-01-01", "2026-09-23")
     _, data = dirs
     fake = FakeAds(old, ccy={A2: "EUR"})
     build(data, spend, fake, T0)
-    lines = [day_only(data, spend, fake) for _ in range(6)]
+    lines = [day_only(data, spend, fake) for _ in range(8)]
     st = gstate(data)
-    assert not st["done"] and st["cov"][-1][0] > "2025-03-01" and st["bfails"] == gd.GD_FAIL_BACKOFF
-    assert not fake.ranges("G1", A2) and S2 not in (gd.load(data)["days"])
-    assert any(re.search(r"\(filling\), ties \d+/\d+, calls \d+, errors [1-9]", ln) for ln in lines)
-    assert lines[-1].endswith("calls 0, errors 0")                         # backed off for the day: nothing asked
+    assert st["cov"] == [["2024-01-01", "2026-09-23"]] and not st["done"] and st["bfails"] == 0
+    got = gd.load(data)["days"]
+    assert sorted(got[S1]) == every("2024-01-01", "2026-09-23") and S2 not in got   # base store: whole history
+    assert {h[2] for h in st["holes"]} == {S2} and st["holes"][0][0] <= "2025-05-01" <= "2025-05-31" <= st["holes"][-1][1]
+    assert fake.ranges("G1", A2) and all(b >= "2025-05-01" and a <= "2025-05-31" for a, b in fake.ranges("G1", A2))
+    assert sum(int(re.search(r"errors (\d+)$", ln).group(1)) for ln in lines) == len(fake.ranges("G1", A2))
+    assert "(filling)" in lines[-1] and lines[-1].endswith("calls 0, errors 0")    # still no rate: the hole waits
+    n0 = len(fake.calls)
+    assert "(filling)" in day_only(data, spend, fake, today=TODAY + timedelta(days=1)) and len(fake.calls) - n0 <= 1
     fx = dict(FX, EUR=1.08)
-    for i in range(4):
-        day_only(data, spend, fake, today=TODAY + timedelta(days=1), fx_fn=fx.get)
+    n0 = len(fake.calls)
+    lines = [day_only(data, spend, fake, today=TODAY + timedelta(days=2), fx_fn=fx.get) for i in range(2)]
     st = gstate(data)
-    assert st["done"] and st["cov"] == [["2025-01-01", "2026-09-23"]]
-    cell = gd.load(data)["days"][S2]["2025-02-03"]["BR"]
+    assert st["done"] and not st["holes"] and "(done)" in lines[-1]
+    assert {c for c, k, _ in fake.calls[n0:] if k in ("G1", "G2")} == {A2}             # only the hole's account
+    cell = gd.load(data)["days"][S2]["2025-05-05"]["BR"]
     assert cell[0] == int(round(1.5 * M * fx["EUR"] / fx["INR"])) and cell[1] == 0.15
     # the default rate source: google_ads._fx_to_usd's blind 1.0 for a currency it knows nothing of is no rate
     monkeypatch.setattr(google_ads, "_fx_to_usd", lambda c: {"EUR": 1.08, "INR": 0.012}.get(c, 1.0))
     assert (gd._fx_real("XYZ"), gd._fx_real("EUR"), gd._fx_real("USD"), gd._fx_real("INR")) == (None, 1.08, 1.0, 0.012)
+
+
+def test_a_403_blip_is_a_hole_asked_again_once_the_skip_ends(dirs):
+    # one HTTP 403 of an account in the deep backfill: its store's days are not written (the 7-day skip holds it in the
+    # chunks after too) — holes, not settled for good; the 7 days pass: only those store-ranges are asked again
+    spend = spend_of(PLAN, "2024-06-03", "2026-09-23")
+    _, data = dirs
+    fake = FakeAds(PLAN)
+    build(data, spend, fake, T0)
+    top = gstate(data)["cov"][-1][0]
+    blip = []
+
+    def fail(acct, kind, q):
+        if acct == A2 and kind == "G1" and not blip:
+            blip.append(q)
+            return "HTTP 403 PERMISSION_DENIED"
+    fake.fail = fail
+    lines = [day_only(data, spend, fake) for _ in range(8)]
+    st = gstate(data)
+    assert blip and st["cov"] == [["2024-06-03", "2026-09-23"]] and not st["done"] and "(filling)" in lines[-1]
+    assert {h[2] for h in st["holes"]} == {S2} and st["skip"][A2] == (TODAY + timedelta(days=7)).isoformat()
+    got = gd.load(data)["days"]
+    gone = [x for x in every("2024-06-03", top) if x not in got[S2]]
+    assert gone == every("2024-06-03", (date.fromisoformat(top) - timedelta(days=1)).isoformat())
+    assert sorted(x for h in st["holes"] for x in every(h[0], h[1])) == gone          # every unwritten day a hole
+    assert sorted(got[S1]) == every("2024-06-03", "2026-09-23")
+    hr = sorted({(h[0], h[1]) for h in st["holes"]})
+    n0 = len(fake.calls)
+    assert day_only(data, spend, fake, today=TODAY + timedelta(days=6)).endswith("calls 0, errors 0")  # skip holds
+    later = TODAY + timedelta(days=7)
+    lines = [day_only(data, spend, fake, today=later) for _ in range(8)]
+    st = gstate(data)
+    assert st["done"] and not st["holes"] and "(done)" in lines[-1]
+    asked = [(c, k) for c, k, _ in fake.calls[n0:] if k in ("G1", "G2")]
+    assert {c for c, _ in asked} == {A2} and sorted(g1_ranges(fake, n0)) == hr       # each hole once, nothing else
+    assert all("backfill days 0 " in ln for ln in lines)                     # holes filled: no new days counted
+    got = gd.load(data)["days"]
+    assert sorted(got[S2]) == sorted(got[S1]) == every("2024-06-03", "2026-09-23")
+    assert got[S2]["2024-06-03"] == {"BR": [int(round(1.5 * M)), 0.15]}
+
+
+def test_a_hole_that_never_answers_is_given_up_unknown(dirs):
+    # an account that answers 403 for good (cancelled, still listed): asked again once a skip (one request, not one a
+    # hole); after GD_HOLE_DAYS its holes are given up — those store-days stay unknown ("lost"), the archive is done
+    spend = spend_of(PLAN, "2025-01-01", "2026-09-23")
+    _, data = dirs
+    fake = FakeAds(PLAN)
+    build(data, spend, fake, T0)
+    fake.fail = lambda acct, kind, q: "HTTP 403 CUSTOMER_NOT_ENABLED" if acct == A2 and kind == "G1" else None
+    for _ in range(5):
+        day_only(data, spend, fake)
+    st = gstate(data)
+    n_holes, n0 = len(st["holes"]), fake.n("G1", A2)
+    assert n_holes > 10 and not st["done"] and st["cov"] == [["2025-01-01", "2026-09-23"]]
+    lines = [day_only(data, spend, fake, today=TODAY + timedelta(days=k)) for k in range(1, gd.GD_HOLE_DAYS + 3)]
+    st = gstate(data)
+    assert st["done"] and not st["holes"] and len(st["lost"]) == n_holes and "(done)" in lines[-1]
+    assert all("(filling)" in ln for ln in lines[:gd.GD_HOLE_DAYS - 1])
+    assert fake.n("G1", A2) - n0 == len(range(7, gd.GD_HOLE_DAYS, 7))      # once a skip: days 7, 14, 21, 28
+    assert min(gd.load(data)["days"][S2]) >= st["lost"][-1][1]
+
+
+def test_an_account_that_keeps_failing_holds_only_its_stores_after_the_back_off(dirs):
+    # a non-403 error of one account on old dates: the chunk fails (asked again, GD_FAIL_BACKOFF tries a day); the next
+    # day that account's stores are a hole and every other store goes on below; the error gone, the hole is filled
+    spend = spend_of(PLAN, "2025-01-01", "2026-09-23")
+    _, data = dirs
+    fake = FakeAds(PLAN)
+    build(data, spend, fake, T0)
+    bad = {"on": True}
+    fake.fail = lambda acct, kind, q: ("HTTP 500 INTERNAL" if bad["on"] and acct == A2 and kind == "G1"
+                                       and re.search(r"BETWEEN '([\d-]+)'", q).group(1) < "2025-06-01" else None)
+    for _ in range(6):
+        day_only(data, spend, fake)
+    st = gstate(data)
+    assert st["bfails"] == gd.GD_FAIL_BACKOFF and st["cov"][-1][0] >= "2025-05-01" and not st["holes"]
+    lines = [day_only(data, spend, fake, today=TODAY + timedelta(days=1)) for _ in range(4)]
+    st = gstate(data)
+    assert st["cov"] == [["2025-01-01", "2026-09-23"]] and {h[2] for h in st["holes"]} == {S2} and not st["done"]
+    assert sorted(gd.load(data)["days"][S1]) == every("2025-01-01", "2026-09-23") and "(filling)" in lines[-1]
+    bad["on"] = False
+    lines = [day_only(data, spend, fake, today=TODAY + timedelta(days=2)) for _ in range(3)]
+    st = gstate(data)
+    assert st["done"] and not st["holes"] and sorted(gd.load(data)["days"][S2]) == every("2025-01-01", "2026-09-23")
+
+
+def test_a_chunk_cut_by_the_budget_is_asked_again_never_settled(dirs, monkeypatch):
+    # the time stop (or a quota error) between an account's Q-G1 and its Q-G2: the chunk is dropped, not settled with
+    # downloads unknown — asked again next build, whole
+    spend = spend_of(PLAN, "2025-01-01", "2026-09-23")
+    _, data = dirs
+    fake = FakeAds(PLAN)
+    build(data, spend, fake, T0)
+    cov0 = gstate(data)["cov"]
+    monkeypatch.setattr(gg, "GEO_WORKERS", 1)                     # one request at a time: the order is fixed
+    clk = Clock(step=1.0)
+    fake.clock = clk
+    n0 = len(fake.calls)
+    line = day_only(data, spend, fake, clock=clk, max_sec=3.5)
+    assert [k for _, k, _ in fake.calls[n0:]] == ["ROSTER", "G1", "G2", "G1"]          # Q-G2 of the 2nd refused
+    assert gstate(data)["cov"] == cov0 and "backfill days 0 (filling)" in line
+    dl_null = [(s, x) for s, v in gd.load(data)["days"].items() for x, c in v.items() for w in c.values() if w[1] is None]
+    assert not dl_null
+    fake.clock = None
+    hit = []
+    fake.fail = lambda acct, kind, q: ("HTTP 429 RESOURCE_EXHAUSTED" if acct == A1 and kind == "G2" and not hit
+                                       and not hit.append(1) else None)
+    day_only(data, spend, fake)
+    assert hit and gstate(data)["cov"] == cov0                                           # a quota stop: the same
+    day_only(data, spend, fake)
+    st = gstate(data)
+    a = date.fromisoformat(cov0[-1][0]) - timedelta(days=gd.GD_CHUNK_DAYS)
+    assert st["cov"][-1][0] < a.isoformat()
+    got = gd.load(data)["days"]
+    assert got[S2][a.isoformat()] == {"BR": [int(round(1.5 * M)), 0.15]} and got[S1][a.isoformat()]["US"] == [3 * M, 0.3]
+    # the first chunk of a build is not started past half the time budget (no chunk's time measured yet)
+    clk = Clock(step=1.0)
+    fake.clock = clk
+    n0 = len(fake.calls)
+    day_only(data, spend, fake, clock=clk, max_sec=1.5)
+    assert [k for _, k, _ in fake.calls[n0:]] == ["ROSTER"] and gstate(data)["cov"] == st["cov"]
 
 
 def test_roi_reads_old_days_known_once_covered_and_untied_days_unknown(dirs):

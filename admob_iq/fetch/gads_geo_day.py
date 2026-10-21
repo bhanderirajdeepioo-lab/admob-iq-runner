@@ -23,20 +23,28 @@ The geo step (fetch.gads_geo) asks Q-G1 / Q-G2 with segments.date and folds the 
             again). Country ids unknown to the weekly map are asked by id (gads_geo._map_ids) and kept in this store's
             own map — the weekly cache's map is only read. A chunk whose country map failed is asked again (never parked
             as "XX"). An account billed in another currency goes ccy → USD → base at the build's rate, as the weekly
-            cache and the spend cache convert (fx_fn has no date; roi_build then takes base → USD at each day's rate); a
-            chunk with an account whose rate is not a real one (fx_fn gave none / 0 / not finite, raised, or
-            google_ads._fx_to_usd fell to its blind 1.0 for a currency it has no rate of) is not asked and nothing of it
-            is committed ("fail": asked again, the fail back-off holds it to GD_FAIL_BACKOFF tries a day; counted in
-            errors). A chunk whose stores with spend all have an account skipped (403 / gone from the MCC: the weekly
-            skip rule) is settled with nothing written ("skip": those store-days stay unknown, no backfill days counted,
-            the edge run neither grows nor breaks).
+            cache and the spend cache convert (fx_fn has no date; roi_build then takes base → USD at each day's rate).
+            A chunk is settled ("cov") store by store: a store with an account that cannot answer now is not written —
+              lost   an account gone from the MCC roster: those store-days stay unknown for good (state "lost");
+              hole   an account under a 403 skip (the day store's or the weekly cache's — it expires), an account
+                     that kept failing past the fail back-off (then not asked again that day), or a cost row of an
+                     account whose rate is not a real one (fx_fn gave none / 0 / not finite, raised, or
+                     google_ads._fx_to_usd fell to its blind 1.0 for a currency it has no rate of — never written at a
+                     guessed rate; counted in errors; its downloads and other stores are written): state "holes"
+                     [first, last, store, made, last asked]. Holes come first in a build, inside the same chunk cap
+                     and budget: only their stores' accounts, once a day at most, not while an account of them is
+                     skipped, not while a rate is still missing (nothing asked); given up after GD_HOLE_DAYS ("lost").
+            The archive is "done" only with no hole left. A chunk whose stores with spend all cannot answer is settled
+            with nothing written ("skip": no backfill days counted, the edge run neither grows nor breaks). A chunk cut
+            by the budget (time / quota) between an account's Q-G1 and Q-G2 is dropped and asked again whole — never
+            settled with downloads unknown.
 
 File data/ads_geo_day/<YYYY-MM>.json.gz (deterministic, only on change):
   {"v": 1, "month": "YYYY-MM", "ccy": base, "days": {store: {day: {cc: [cost_micros, dl | null]}}}}
   cost_micros: int base-currency micros (exact — not rounded like the weekly cells); dl: DOWNLOAD conversions,
   2 decimals, null = unknown. "XX" = Other / unmapped. days[store][day] exists (maybe {}) for every committed store-day.
   data/ads_geo_day/state.json.gz: {"ccy", "first", "till", "cov", "bfrom" (the newest covered range's first day),
-  "done", "edge", "erun", "bfails", "bday", "iso", "skip", "ties"}. Ties: a weekly cell's cost = gads_geo.cell_cost(Σ
+  "done", "edge", "erun", "bfails", "bday", "iso", "skip", "ties", "holes", "lost"}. Ties: a weekly cell's cost = gads_geo.cell_cost(Σ
   of its days) (counted per store-week-country).
 """
 
@@ -60,8 +68,9 @@ GD_MAX_CALLS = 80                   # the day backfill's own budget per build �
 GD_MAX_SEC = 90
 GD_EDGE_CHUNKS = 2
 GD_FAIL_BACKOFF = 3
+GD_HOLE_DAYS = 30                   # a hole not filled this many days after it was made is given up ("lost": unknown)
 DEFAULTS = {"ccy": None, "first": None, "till": None, "cov": None, "bfrom": None, "done": False, "edge": None,
-            "erun": 0, "bfails": 0, "bday": None, "iso": {}, "skip": {}, "ties": {}}
+            "erun": 0, "bfails": 0, "bday": None, "iso": {}, "skip": {}, "ties": {}, "holes": [], "lost": []}
 
 
 def _mk(ccy):
@@ -204,56 +213,86 @@ def _rate(ctx, x):
     return u / b if u and b else None
 
 
-def _chunk(ctx, store, spend, a, b, today, wskip):
-    """One backfill chunk → "ok" | "empty" | "none" | "skip" | "fail" | "stop" (the weekly _chunk's rules, days only;
-    "skip": no store to write — every store that spent has an account skipped (403 / gone) — nothing written; "fail"
-    also: an asked account's currency has no real rate — nothing asked)."""
+def _chunk(ctx, store, spend, a, b, today, wskip, only=None, strict=True):
+    """One chunk [a, b] → (result, held stores, lost stores). result: "ok" | "empty" | "none" | "skip" | "wait" |
+    "fail" | "stop" (the weekly _chunk's rules, days only). "skip": nothing to write — every store that spent has an
+    account that cannot answer now. Held (a hole: asked again): a store with an account under a 403 skip (expires), an
+    account that kept failing (strict off: past the fail back-off), or a cost row of an account with no real rate.
+    Lost (unknown for good): a store with an account gone from the MCC roster. only: a hole's re-ask — just these
+    stores ("wait": an account of them still has no real rate, nothing asked)."""
     run = ctx.run
+    state = store.state
     own, _noacct = gg._plan(spend, a, b)
+    if only is not None:
+        own = {sid: ac for sid, ac in own.items() if sid in only}
     wanted = set().union(*own.values()) if own else set()
     if not wanted:
-        return "none"
+        return "none", set(), set()
     if run.stop:
-        return "stop"
+        return "stop", set(), set()
     if not ctx.ready():
-        return "fail"
+        return "fail", set(), set()
     ts = today.isoformat()
-    skip = {x for x in wanted if max(wskip.get(x) or "", store.state["skip"].get(x) or "") > ts or x not in ctx.ccy}
-    ask = sorted(wanted - skip)
+    gone = {x for x in wanted if x not in ctx.ccy}
+    held = {x for x in wanted - gone if max(wskip.get(x) or "", state["skip"].get(x) or "") > ts}
+    ask = sorted(wanted - gone - held)
     rates = {x: _rate(ctx, x) for x in ask}
-    if any(r_ is None for r_ in rates.values()):            # no real rate: nothing asked, nothing committed
-        run.errors += sum(1 for r_ in rates.values() if r_ is None)
-        return "fail"
+    if only is not None and any(r_ is None for r_ in rates.values()):
+        return "wait", set(), set()
     if ask and run.left() < 2 * len(ask) + gg.ISO_RESERVE:
         run.stop = run.stop or "calls"
-        return "stop"
-    if ask and run.elapsed() + run.chunk_sec > run.max_sec:  # not started without the longest chunk's time left
+        return "stop", set(), set()
+    # not started without the longest chunk's time left; the build's first chunk (no time measured yet) not past half
+    if ask and (run.elapsed() + run.chunk_sec > run.max_sec or (not run.chunk_sec and run.elapsed() > run.max_sec / 2)):
         run.stop = run.stop or "time"
-        return "stop"
+        return "stop", set(), set()
     res = {}
+    t0 = run.clock()
     if ask:
-        t0 = run.clock()
         with ThreadPoolExecutor(max_workers=min(gg.GEO_WORKERS, len(ask))) as ex:
             res = dict(zip(ask, ex.map(lambda x: gg._ask(ctx, x, a, b), ask)))
         run.chunk_sec = max(run.chunk_sec, run.clock() - t0)
     until = (today + timedelta(days=gg.GEO_SKIP_DAYS)).isoformat()
     for x, r in res.items():
         if r["st"] == "403":
-            store.state["skip"][x] = until
-            skip.add(x)
-    if any(r["st"] in ("stop", "err") for r in res.values()):
-        return "stop" if all(r["st"] != "err" for r in res.values()) and run.stop else "fail"
+            state["skip"][x] = until
+            held.add(x)
+    err = {x for x, r in res.items() if r["st"] == "err"}
+    if any(r["st"] == "stop" for r in res.values()) or (err and (strict or run.stop)):
+        return ("stop" if not err and run.stop else "fail"), set(), set()
+    if err:                                         # past the back-off: an account that keeps failing holds only its
+        tmr = (today + timedelta(days=1)).isoformat()   # stores (a hole) and is not asked again today (this store's
+        for x in err:                                   # own skip; the weekly cache's skip is never written here)
+            state["skip"][x] = max(state["skip"].get(x) or "", tmr)
+        held |= err
+    if run.stop and any(r["st"] is None and r["g2"] is None for r in res.values()):
+        # a Q-G2 refused by the budget (time / quota) after its Q-G1 answered: dropped, asked again whole next build —
+        # never settled with those stores' downloads unknown for good
+        return "stop", set(), set()
     answered = [x for x in ask if res[x]["g1"] is not None]
+    lo, hi = a.isoformat(), b.isoformat()
+    lost = {sid for sid, ac in own.items() if ac & gone}
+    hold = {sid for sid, ac in own.items() if ac & held}
+    for x in answered:                              # no real rate: the stores its cost rows are of are held (no
+        if rates[x] is None:                        # guessed rate written); its downloads and other stores are fine
+            hit = {r["store_id"] for r in res[x]["g1"] if r["store_id"] and lo <= r["date"] <= hi and r["cost_micros"]}
+            run.errors += bool(hit)
+            hold |= hit
+    if only is not None:
+        hold &= only
+    hold -= lost
     if answered and not sum(len(res[x]["g1"]) for x in answered):
         # the data edge's evidence: a store that spent in the chunk, every account of it asked, no cost row. Stores
-        # with an account skipped (403 / gone: their spend may be that account's) say nothing about the edge
-        return "empty" if any(ac and not ac & skip for ac in own.values()) else "skip"
+        # with an account that could not answer (their spend may be that account's) say nothing about the edge
+        ev = only is None and any(ac and not ac & (gone | held) for ac in own.values())
+        return ("empty" if ev else "skip"), hold, lost
     ids = {r["ccid"] for x in answered for k in ("g1", "g2") for r in (res[x][k] or []) if r.get("ccid")}
     iso = ctx.iso_map
     if not gg._map_ids(ctx, {"iso": iso}, ids, today):
-        return "stop" if run.stop else "fail"
+        return ("stop" if run.stop else "fail"), set(), set()
+    if ask:
+        run.chunk_sec = max(run.chunk_sec, run.clock() - t0)   # the map's calls are the chunk's time too
     seen, dlnull = set(), set()
-    lo, hi = a.isoformat(), b.isoformat()
     for x in answered:                                          # the weekly _chunk's store sets, exactly
         mine = {sid for sid, ac in own.items() if x in ac}
         mine |= {r["store_id"] for r in res[x]["g1"] if r["store_id"] and lo <= r["date"] <= hi}
@@ -261,12 +300,31 @@ def _chunk(ctx, store, spend, a, b, today, wskip):
             dlnull |= mine
         mine |= {r["store_id"] for r in res[x]["g2"] or [] if r["store_id"] and lo <= r["date"] <= hi}
         seen |= mine
-    blocked = {sid for sid, ac in own.items() if ac & skip}
-    replace = (({sid for sid, ac in own.items() if ac} | seen) - blocked)
+    replace = ({sid for sid, ac in own.items() if ac} | seen) - lost - hold
+    if only is not None:
+        replace &= only
     if not replace:
-        return "skip"
-    store.commit(res, answered, replace, dlnull, a, b, iso, rates.__getitem__)
-    return "ok"
+        return "skip", hold, lost
+    store.commit(res, answered, replace, dlnull, a, b, iso, lambda x: rates[x] or 0.0)  # (no rate: only 0-cost rows)
+    return "ok", hold, lost
+
+
+def _due(spend, holes, wskip, skip, ts):
+    """The newest hole range due again (not asked today, no account of its stores under a 403 skip) → (lo, hi, its due
+    stores), or None."""
+    camps = spend.get("campaigns") or {}
+
+    def free(sid):
+        return all(max(wskip.get(x) or "", skip.get(x) or "") <= ts
+                   for x in {str(c.get("account")) for c in (camps.get(sid) or []) if c.get("account")})
+    due = {}
+    for (lo, hi, sid), (_since, tried) in holes.items():
+        if tried < ts and free(sid):
+            due.setdefault((lo, hi), set()).add(sid)
+    if not due:
+        return None
+    lo, hi = max(due, key=lambda k: (k[1], k[0]))
+    return lo, hi, due[(lo, hi)]
 
 
 def day_line(st, state, calls, errors):
@@ -296,19 +354,49 @@ def day_step(s, data_dir, spend, today, store, *, clock=time.monotonic, search=N
     if state.get("edge"):
         floor = max(floor, d(state["edge"]))
     state["cov"] = cov_of(state)
+    holes = {(h[0], h[1], h[2]): [h[3], h[4]] for h in state.get("holes") or [] if isinstance(h, list) and len(h) == 5}
+    lost = {tuple(x) for x in state.get("lost") or [] if isinstance(x, list) and len(x) == 3}
+    old = (today - timedelta(days=GD_HOLE_DAYS)).isoformat()
+    for k in [k for k, (since, _t) in holes.items() if since <= old]:     # given up: those store-days stay unknown
+        lost.add(k)
+        del holes[k]
+    wskip = weekly.get("skip") or {}
     asked = 0
-    while (state["cov"] and not run.stop and asked < GD_BACKFILL_CHUNKS
+    while (not run.stop and asked < GD_BACKFILL_CHUNKS
            and not (int(state.get("bfails") or 0) >= GD_FAIL_BACKOFF and state.get("bday") == ts)):
-        ch = cov_next(state["cov"], floor, GD_CHUNK_DAYS) if spend_first else None
+        strict = int(state.get("bfails") or 0) < GD_FAIL_BACKOFF
+        h = _due(spend, holes, wskip, state["skip"], ts) if holes else None
+        if h:                                                   # holes first: only their stores, the same budget
+            lo, hi, only = h
+            r, hold, gone = _chunk(ctx, store, spend, d(lo), d(hi), today, wskip, only=only, strict=False)
+            if r == "stop":
+                break
+            for sid in only:
+                holes[(lo, hi, sid)][1] = ts                    # asked today (or still no rate): not again today
+            if r == "fail":
+                state["bfails"] = int(state.get("bfails") or 0) + 1
+                state["bday"] = ts
+                break
+            if r != "wait":                                     # settled: still held stores stay holes (same age;
+                since = {sid: holes.pop((lo, hi, sid))[0] for sid in only}     # the main back-off count untouched)
+                for sid in hold:
+                    holes[(lo, hi, sid)] = [since.get(sid, ts), ts]
+                lost |= {(lo, hi, sid) for sid in gone}
+                asked += r != "none"
+            continue
+        ch = cov_next(state["cov"], floor, GD_CHUNK_DAYS) if spend_first and state["cov"] else None
         if ch is None:
             break
         a, b = ch
-        r = _chunk(ctx, store, spend, a, b, today, weekly.get("skip") or {})
+        r, hold, gone = _chunk(ctx, store, spend, a, b, today, wskip, strict=strict)
         if r in ("ok", "none", "empty", "skip"):
             if r != "none":
                 asked += 1
             if r != "ok":                                       # nothing to keep: settled all the same
                 store.cover(a.isoformat(), b.isoformat())
+            for sid in hold:
+                holes[(a.isoformat(), b.isoformat(), sid)] = [ts, ts]
+            lost |= {(a.isoformat(), b.isoformat(), sid) for sid in gone}
             state["bfails"] = 0
             if r == "empty":
                 state["erun"] = int(state.get("erun") or 0) + 1
@@ -324,7 +412,10 @@ def day_step(s, data_dir, spend, today, store, *, clock=time.monotonic, search=N
             break
         else:
             break
-    state["done"] = bool(state["cov"]) and (not spend_first or cov_next(state["cov"], floor, GD_CHUNK_DAYS) is None)
+    state["holes"] = [[lo, hi, sid, v[0], v[1]] for (lo, hi, sid), v in sorted(holes.items())]
+    state["lost"] = [list(k) for k in sorted(lost)]
+    state["done"] = (bool(state["cov"]) and not holes
+                     and (not spend_first or cov_next(state["cov"], floor, GD_CHUNK_DAYS) is None))
     state["iso"] = {k: v for k, v in ctx.iso_map.items() if k not in (weekly.get("iso") or {})}
     if store.st["ties"][1]:
         state["ties"] = {"store_week_countries": list(store.st["ties"])}
