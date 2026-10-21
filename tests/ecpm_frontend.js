@@ -318,7 +318,7 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
   await step('cmp_math', () => J(`(()=>{ const W=ecWin(), A=ecAgg().apps, out={};
     const sels={b7:{m:'y',b:'7'},b14:{m:'y',b:'14'},b30:{m:'y',b:'30'},b60:{m:'y',b:'60'},mon:{m:'y',b:'mon'},monJan:{m:'y',b:'mon',bm:'2026-01'},
       monDec:{m:'y',b:'mon',bm:'2025-12'},monMar:{m:'y',b:'mon',bm:'2026-03'},mm:{m:'m'},mmFeb:{m:'m',cm:'2026-02'},mmJan:{m:'m',cm:'2026-01'},
-      mmVsJan:{m:'m',vm:'2026-01'},mmVsDec:{m:'m',vm:'2025-12'},mmFebDec:{m:'m',cm:'2026-02',vm:'2025-12'}};
+      mmVsJan:{m:'m',vg:2},mmVsDec:{m:'m',vg:3},mmFebDec:{m:'m',cm:'2026-02',vm:'2025-12'}};
     for(const k in sels){ const C=ecCmpC(W,sels[k]), rows={}; Object.keys(A).forEach(n=>{ const r=ecRow(A[n],W,C); delete r.spark; rows[n]=r; });
       out[k]={def:!!C.def,m:C.m,g:C.g,cur:C.cur,base:C.base,ncur:C.ncur,curL:C.curL,baseL:C.baseL,title:C.title,colCur:C.colCur,colBase:C.colBase,colImp:C.colImp,
         S:C.S,swm:(C.swm||[]).map(o=>o.k),rows,units:ecUnits('Demo Gallery').map(u=>{ const r=ecRow(u.dm,W,C); return {id:u.id,y:r.y,w7:r.w7,chg:r.chg,imp:r.imp,yi:r.yi,st:r.st}; })}; }
@@ -371,7 +371,7 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
       order: J(`ecSortRows(Object.keys(ecAgg().apps).map(n=>Object.assign(ecRow(ecAgg().apps[n],EC.W,EC.C),{key:n,label:ecAppLbl(n).label})).filter(r=>r.act||r.key==='Demo Gallery'),EC.sort).map(r=>r.key)`) };
     run(`ecAllApps()`); await settle(); R.back = { app: run('EC.app'), title: run(`EC.C.title`) };
     // the app view under a compared month 2 back (Mar vs Jan): Ad units + Countries follow both picks
-    run(`EC.cmp={m:'m',vm:'2026-01'}; EC.app='Demo Gallery'; ecPaint();`);
+    run(`EC.cmp={m:'m',vg:2}; EC.app='Demo Gallery'; ecPaint();`);
     { const c2 = cards(), rw = t => J(`EC.rows.${t}.map(r=>({key:r.key,y:r.y,w7:r.w7,chg:r.chg,pct:r.pct,imp:r.imp,yi:r.yi,swing:r.swing,st:r.st}))`);
       R.appVs = { units: c2[0], countries: c2[1] || '', ct: J(`({u:EC.Ct.u.title,c:EC.Ct.c.title})`), u: rw('u'), c: rw('c') }; }
     run(`EC.app=''; ecPaint();`);
@@ -407,11 +407,18 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
     // the new shape
     R.mFeb = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '' }));
     R.mFebDec = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '2025-12' }));
-    R.mVsJan = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '2026-01' }));
+    R.mVsJan = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '', vg: 2 }));             // this month vs 2 back
+    R.vgDec = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '', vg: 3 }));              // 3 back = the first month
+    R.vmNoGap = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '2026-01' }));            // a month next to cm '': not read
+    R.vgFixed = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '', vg: 2 }));     // a gap next to a fixed month: not read
+    R.vgOld = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '', vg: 9 }));              // before the history
+    R.vgJunk = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '', vg: '2' }));
+    R.vgOne = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '', vg: 1 }));
+    R.vgHalf = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '', vg: 2.5 }));
     R.vmSame = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '2026-02' }));     // not older than the current
     R.vmAfter = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '2026-03' }));
-    R.vmBefore = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '2025-06' }));        // before the history
-    R.vmJunk = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: 202601 }));
+    R.vmBefore = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '2025-06' }));  // before the history
+    R.vmJunk = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: 202601 }));
     R.vmDefault = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '2026-01' }));  // = the default: kept as ''
     R.future = paint(JSON.stringify({ v: 3, m: 'm', b: '14', bm: '', cm: '2026-02', vm: '2025-12' }));   // an unknown shape: months reset
     R.before = paint(JSON.stringify({ v: 2, m: 'y', b: 'mon', bm: '2024-05', cm: '', vm: '' }));
@@ -496,6 +503,20 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
       // to the oldest month and back to the default pair: the current month never moved
       run(`for(let i=0;i<40;i++) ecCmpVs(-1);`); o.oldest = J(`({title:EC.C.title,pm:EC.C.pm,ctl:ecCmpCtl(EC.W,EC.C)})`);
       run(`for(let i=0;i<40;i++) ecCmpVs(1);`); o.back = J(`({title:EC.C.title,cmp:EC.cmp})`); }
+    unFx(); return R; });
+  // the pick across a month end (SYNTHETIC noise history): tapped on 21 Oct 2026, read back from this viewer's storage on
+  // 9 Nov (a reload) — a current month that follows the date keeps the gap, a current month picked by hand keeps both months
+  await step('cmp_roll', () => { const R = {};
+    const at = T => run(`(()=>{ const D=__FX.noise, L=new Date(Date.parse('${T}T00:00:00Z')-864e5).toISOString().slice(0,10);
+        DATA=Object.assign({},D,{today_date:'${T}',latest_complete:L,placements:D.placements.map(p=>Object.assign({},p,{daily:p.daily.filter(r=>r[0]<='${T}')}))}); })();
+        window.__ax=null; EC.cache=null; EC.ucache={}; EC.cValid=null;`);
+    const look = () => J(`({title:EC.C.title,cm:EC.C.cm,pm:EC.C.pm,g:EC.C.g,swm:EC.C.swm.map(x=>x.k),cmp:EC.cmp,ls:localStorage.getItem('ecpmcmp'),note:ecStatusNote(EC.C)})`);
+    const picks = { def: [], aug: ['ecCmpVs(-1)'], jul: ['ecCmpVs(-1)', 'ecCmpVs(-1)'], sepAug: ['ecCmpCur(-1)'], sepJul: ['ecCmpCur(-1)', 'ecCmpVs(-1)'],
+      octJul: ['ecCmpCur(-1)', 'ecCmpVs(-1)', 'ecCmpCur(1)'] };   // Sep vs Jul, then the current month › back to October: vs Jul stays
+    for (const k in picks) {
+      at('2026-10-21'); run(CMP0 + `EC.cmp={m:'m'}; EC.app=''; ecPaint();`); picks[k].forEach(c => run(c));
+      const oct = look(); at('2026-11-09'); run(`EC.cmp=null; EC.app=''; ecPaint();`);
+      R[k] = { oct, nov: look() }; }
     unFx(); return R; });
 
   out.errors = errors;

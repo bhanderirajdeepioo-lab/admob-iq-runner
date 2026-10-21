@@ -5432,10 +5432,13 @@ function ecRow(dm,W,C){ if(C&&!C.def) return ecRowC(dm,W,C);   // another compar
 // month of the history older than the current one). Moving the current month leaves the compared one where it is, unless it
 // reaches it — then the compared month becomes the month just before it. A period the history only partly covers is
 // labelled with its days, "Oct 2026 (1–20)". Status: mode "y" = the row's own day-to-day swing (whatever the baseline); mode
-// "m" = the same rule with its own swing over the SAME gap as the pick (Oct vs Aug: each whole month vs the month 2 before
-// it, up to the compared month — the last 12 such pairs), never whole month vs the next one when the two are not adjacent.
-const EC_CMP_V=2;   // the stored shape: 2 = Month vs month's two months picked one by one (cm, vm); before it, cm moved both
-const EC_CMP_DEF={v:EC_CMP_V,m:'y',b:'7',bm:'',cm:'',vm:''}, EC_CMP_N=['7','14','30','60'];
+// "m" = the same rule with its own swing over the SAME gap as the pick (Oct vs Aug: each whole month before the current one
+// vs the month 2 before it — Jul → Sep counts too — the last 12 such pairs), never whole month vs the next one when the two
+// are not adjacent. Stored: a current month that follows the date (cm '') keeps the compared month as a GAP (vg months
+// back; 0 = the month just before), so "Oct vs Aug" is "Nov vs Sep" next month — the same pair of months apart, the same
+// Status rule; a current month picked by hand (cm 'YYYY-MM') keeps a fixed compared month (vm; '' = the month before it).
+const EC_CMP_V=2;   // the stored shape: 2 = Month vs month's two months picked one by one (cm + vm / vg); before it, cm moved both
+const EC_CMP_DEF={v:EC_CMP_V,m:'y',b:'7',bm:'',cm:'',vm:'',vg:0}, EC_CMP_N=['7','14','30','60'];
 function ecMGap(a,b){ return (+b.slice(0,4)-(+a.slice(0,4)))*12+(+b.slice(5,7))-(+a.slice(5,7)); }   // months from a to b
 function ecMAdd(m,k){ const t=+m.slice(0,4)*12+(+m.slice(5,7)-1)+k; return Math.floor(t/12)+'-'+String(t%12+1).padStart(2,'0'); }
 function ecMFull(m,days){ return !!(days&&days.length&&days[0]===m+'-01'&&ecMonthEnd(days[days.length-1])); }
@@ -5452,15 +5455,22 @@ function ecMon(W){ if(W.mon) return W.mon; const by={}, ks=[]; W.comp.forEach(d=
   W.mon={by,ks,Lm,bMin,bMax,bOk,bDef,cMin,cMax:Lm,cOk,vMin:bMin}; return W.mon; }
 // a stored / tapped choice made safe for this data: an unknown value, a month outside the history, a range longer than the
 // history, a compared month not older than the current one → the default; a default month is kept as '' (it moves on with
-// time: the current month = the month of yesterday, the compared month = the one just before the current)
+// time: the current month = the month of yesterday, the compared month = the one just before the current). The compared
+// month is read one way per current month: a gap (vg ≥ 2) while the current month follows the date, a month (vm) when it
+// is picked by hand — a vm next to a current month that follows the date is not read (the month just before it)
 function ecCmpFix(W,s){ const M=ecMon(W), o=Object.assign({},EC_CMP_DEF), ym=v=>typeof v==='string'&&/^\d{4}-\d{2}$/.test(v);
   if(s&&typeof s==='object'){
     if(s.m==='m'&&M.cOk) o.m='m';
     if(EC_CMP_N.includes(s.b)&&W.comp.length>=+s.b) o.b=s.b; else if(s.b==='mon'&&M.bOk) o.b='mon';
     if(ym(s.bm)&&M.bOk&&s.bm>=M.bMin&&s.bm<=M.bMax&&s.bm!==M.bDef) o.bm=s.bm;
     if(ym(s.cm)&&M.cOk&&s.cm>=M.cMin&&s.cm<M.cMax) o.cm=s.cm;
-    const cm=o.cm||M.cMax; if(ym(s.vm)&&M.cOk&&s.vm>=M.vMin&&s.vm<ecMAdd(cm,-1)) o.vm=s.vm; }
+    const cm=o.cm||M.cMax, older=v=>M.cOk&&v>=M.vMin&&v<ecMAdd(cm,-1);   // inside the history, older than the month just before
+    if(o.cm){ if(ym(s.vm)&&older(s.vm)) o.vm=s.vm; }
+    else if(Number.isInteger(s.vg)&&s.vg>1&&older(ecMAdd(cm,-s.vg))) o.vg=s.vg; }
   return o; }
+// the compared month of a fixed choice, and a pair of months stored the way ecCmpFix reads it back
+function ecCmpPm(M,S){ const cm=S.cm||M.cMax; return S.cm?(S.vm||ecMAdd(cm,-1)):ecMAdd(cm,-(S.vg||1)); }
+function ecCmpEnc(M,cm,vm){ const g=ecMGap(vm,cm); return cm===M.cMax?{cm:'',vm:'',vg:g>1?g:0}:{cm,vm:g>1?vm:'',vg:0}; }
 // the comparison: the days on each side, their names, the column titles (def = the default, the table as it always was)
 function ecCmpC(W,s){ const M=ecMon(W), S=ecCmpFix(W,s);
   if(S.m==='y'){ const C={m:'y',b:S.b,S,cur:W.y,ncur:1,curL:'Yesterday',colCur:'Yesterday<br>eCPM',colImp:'Yesterday<br>impr'};
@@ -5469,12 +5479,13 @@ function ecCmpC(W,s){ const M=ecMon(W), S=ecCmpFix(W,s);
     const bm=S.bm||M.bDef, base=M.by[bm]||[], bl=ecPerL(bm,base);
     return Object.assign(C,{bm,base,baseL:bl,colBase:bl+'<br>avg',title:'yesterday vs '+bl}); }
   // Month vs month: the current month (cm) and the compared one (pm = vm, older), g months apart (1 = adjacent)
-  const cm=S.cm||M.cMax, pm=S.vm||ecMAdd(cm,-1), g=ecMGap(pm,cm), cur=M.by[cm]||[], base=M.by[pm]||[], cl=ecPerL(cm,cur), bl=ecPerL(pm,base);
-  const swm=M.ks.filter(k=>k<=pm&&ecMFull(k,M.by[k])).slice(-(12+g)).map(k=>({k,days:M.by[k]}));   // the whole months up to the older one (12 pairs g apart at most)
+  const cm=S.cm||M.cMax, pm=ecCmpPm(M,S), g=ecMGap(pm,cm), cur=M.by[cm]||[], base=M.by[pm]||[], cl=ecPerL(cm,cur), bl=ecPerL(pm,base);
+  const swm=M.ks.filter(k=>k<cm&&ecMFull(k,M.by[k])).slice(-(12+g)).map(k=>({k,days:M.by[k]}));   // the whole months before the current one (12 pairs g apart at most)
   const dn=ecMFull(cm,cur)?0:cur.length;   // a partial newest month: its complete days 1 … dn (0 = a whole month)
   return {m:'m',S,cm,pm,g,cur,base,ncur:cur.length||1,dn,curL:cl,baseL:bl,colCur:cl+'<br>eCPM',colBase:bl+'<br>eCPM',colImp:cl+'<br>impr',title:cl+' vs '+bl,swm}; }
-// the usual month-to-month swing, measured the way the comparison it judges is made: each earlier month's first dn days (the
-// whole month when dn = 0) vs the whole month g months before it (g = the pick's gap: Oct vs Sep → 1, Oct vs Aug → 2) — so
+// the usual month-to-month swing, measured the way the comparison it judges is made: each month before the current one, its
+// first dn days (the whole month when dn = 0) vs the whole month g months before it (g = the pick's gap: Oct vs Sep → 1,
+// Oct vs Aug → 2, its pairs up to Jul → Sep; swm = those months, ecCmpC) — so
 // "Nov (1–2) vs Oct" is judged against how much 2 days usually differ from a whole month, and "Oct vs Aug" against how much a
 // month usually differs from the one 2 before it, never against whole month vs the next one. Only whole months the row had
 // from their 1st day, both sides ≥ EC_MIN_IMPR impressions; the median |change| of those pairs; null under EC_SWING_MIN
@@ -5510,7 +5521,7 @@ function ecRanges(days){ const o=[]; let a='',b='';   // "1 Sep–20 Sep, 25 Sep
 function ecCmpLoad(){ let sv=null; try{ sv=JSON.parse(localStorage.getItem('ecpmcmp')||'null'); }catch(e){}
   if(!sv||typeof sv!=='object'||Array.isArray(sv)) return Object.assign({},EC_CMP_DEF);
   if(sv.v===EC_CMP_V) return sv;
-  const o=Object.assign({},sv,{cm:'',vm:''}); delete o.v; return o; }   // no v yet: ecPaint's fix (v = EC_CMP_V) differs → saved back
+  const o=Object.assign({},sv,{cm:'',vm:'',vg:0}); delete o.v; return o; }   // no v yet: ecPaint's fix (v = EC_CMP_V) differs → saved back
 function ecCmpSave(){ try{ localStorage.setItem('ecpmcmp',JSON.stringify(EC.cmp)); }catch(e){} }
 function ecCmpSet(p){ EC.cmp=Object.assign({},EC.cmp||EC_CMP_DEF,p); ecCmpSave(); ecPaint(); }   // the view repaints; the tapped control stays put (SP)
 function ecCmpM(m){ ecCmpSet({m}); }
@@ -5520,13 +5531,13 @@ function ecCmpMon(k){ const W=EC.W||ecWin(), M=ecMon(W), S=ecCmpFix(W,EC.cmp);  
   const nx=ecMAdd(S.bm||M.bDef,k); if(!M.bOk||nx<M.bMin||nx>M.bMax) return; ecCmpSet({bm:nx===M.bDef?'':nx}); }
 // Month vs month, the current month's ‹ ›: only it moves; a compared month it reaches (or passes) becomes the month just before it
 function ecCmpCur(k){ const W=EC.W||ecWin(), M=ecMon(W), S=ecCmpFix(W,EC.cmp); if(S.m!=='m'||!M.cOk) return;
-  const cm=S.cm||M.cMax, nx=ecMAdd(cm,k); if(nx<M.cMin||nx>M.cMax) return;
-  let vm=S.vm||ecMAdd(cm,-1); if(vm>=nx) vm=ecMAdd(nx,-1);
-  ecCmpSet({cm:nx===M.cMax?'':nx,vm:vm===ecMAdd(nx,-1)?'':vm}); }
+  const nx=ecMAdd(S.cm||M.cMax,k); if(nx<M.cMin||nx>M.cMax) return;
+  let vm=ecCmpPm(M,S); if(vm>=nx) vm=ecMAdd(nx,-1);
+  ecCmpSet(ecCmpEnc(M,nx,vm)); }
 // Month vs month, the compared month's ‹ ›: only it moves, over the history's months older than the current one
 function ecCmpVs(k){ const W=EC.W||ecWin(), M=ecMon(W), S=ecCmpFix(W,EC.cmp); if(S.m!=='m'||!M.cOk) return;
-  const cm=S.cm||M.cMax, pv=ecMAdd(cm,-1), nx=ecMAdd(S.vm||pv,k); if(nx<M.vMin||nx>pv) return;
-  ecCmpSet({vm:nx===pv?'':nx}); }
+  const cm=S.cm||M.cMax, nx=ecMAdd(ecCmpPm(M,S),k); if(nx<M.vMin||nx>ecMAdd(cm,-1)) return;
+  ecCmpSet(ecCmpEnc(M,cm,nx)); }
 // the control row (the same one on every table card): Yesterday vs [7 · 14 · 30 · 60 days · Month ‹ Sep 2026 ›] · Month vs
 // month ‹ Oct 2026 (1–20) › vs ‹ Sep 2026 ›. ‹ › sit either side of a label of fixed width, so a tap never moves them; each
 // picker's arrows have their own onclick + name (the stay-put layer finds the tapped one again); "vs ‹ … ›" wraps as one piece
@@ -5918,7 +5929,7 @@ function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.qu
 function ecStatusNote(C){ const own=C&&!C.def?` · <b>"… only"</b> kisi number ke neeche = us row ka data period ke beech se shuru hua — uska avg sirf un dino ka hai.`:'';
   const nab=C&&(C.m==='m'||C.bm)?` · ya <b>${hAttr(C.baseL)}</b> (baseline) me ${EC_MIN_IMPR.toLocaleString()} se kam impressions ("low data (baseline)" — judge nahi kiya, sabse neeche)`:'';
   if(C&&C.m==='m'){ const g=C.g||1, gp=g>1, cv=`${hAttr(C.curL)} vs ${hAttr(C.baseL)}`;   // gp: the two months are not adjacent → the swing over the same gap
-    return `<b>Status</b> — har row apne <b>${gp?`${g} mahine ke farq par`:'mahine-dar-mahine ke'} normal utaar-chadhaav</b> se judge hoti hai (${hAttr(C.baseL)} tak ke poore mahine, max ${12+g} — `
+    return `<b>Status</b> — har row apne <b>${gp?`${g} mahine ke farq par`:'mahine-dar-mahine ke'} normal utaar-chadhaav</b> se judge hoti hai (${hAttr(gp?ecML(ecMAdd(C.cm,-1)):C.baseL)} tak ke poore mahine, max ${12+g} — `
     +(C.dn?`har mahine ke <b>pehle ${C.dn} din</b> vs ${gp?`usse <b>${g} mahine pehle</b> ka`:'uska pichhla'} poora mahina, bilkul ${cv} ki tarah; unka median badlav — taaki thode dino ka aam utaar-chadhaav alarm na bane)`
       :(gp?`har mahina vs usse <b>${g} mahine pehle</b> ka mahina, bilkul ${cv} ki tarah; unka median badlav)`:'unka median month-to-month badlav)'))
     +`: <b>Worse</b> = 2× se zyada gira · <b>Watch</b> = gira, par 2× se kam · <b>Better</b> = 2× se zyada badha · <b>Normal</b> = apni range me · <b>Too early</b> = abhi ${EC_SWING_MIN+g} poore mahine ka data nahi`

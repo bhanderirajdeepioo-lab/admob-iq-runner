@@ -758,14 +758,15 @@ def _dn(cur, pm):
 
 
 def _mswing(dm, by, pm, dn=0, g=1):
-    """the usual month-to-month swing, measured like the comparison it judges: over the whole months up to pm (the last
-    12 + g), each one's first dn days (the whole month when dn = 0) vs the whole month g months before it (g = the pick's
-    gap: Oct vs Aug → 2); only months the row had from the 1st, both sides ≥ MIN_IMPR impressions and some earnings; the
-    median |change|, None under 7 pairs."""
+    """the usual month-to-month swing, measured like the comparison it judges: over the whole months before the current
+    one (pm + g; the last 12 + g), each one's first dn days (the whole month when dn = 0) vs the whole month g months before
+    it (g = the pick's gap: Oct vs Aug → 2, its pairs up to Jul → Sep); only months the row had from the 1st, both sides
+    ≥ MIN_IMPR impressions and some earnings; the median |change|, None under 7 pairs."""
     if dn and dn < MDAYS_MIN:                     # a newest month of 1–6 complete days is not judged (Too early)
         return None
     f = _first(dm)
-    ks = [k for k in sorted(by) if k <= pm and _full(k, by[k])][-(12 + g):]
+    cm = _add_months(pm, g)
+    ks = [k for k in sorted(by) if k < cm and _full(k, by[k])][-(12 + g):]
     ch = []
     for b in ks:
         a = _add_months(b, -g)
@@ -859,7 +860,9 @@ def test_cmp_every_pick_matches_an_independent_recount(report, dash):
     # here only Jan + Feb are whole months → 1 pair < 7 → Too early (the long history below judges for real)
     assert m["mm"]["swm"] == ["2026-01", "2026-02"] and m["mmJan"]["swm"] == []
     assert {r["st"] for r in m["mm"]["rows"].values()} == {"jaldi", "lagu"}
-    assert (m["mmVsJan"]["g"], m["mmVsDec"]["g"], m["mmFebDec"]["g"]) == (2, 3, 2) and m["mmVsJan"]["swm"] == ["2026-01"]
+    assert (m["mmVsJan"]["g"], m["mmVsDec"]["g"], m["mmFebDec"]["g"]) == (2, 3, 2)
+    # the swing's whole months: every one before the current month (Feb too for Mar vs Jan), never the current one
+    assert m["mmVsJan"]["swm"] == m["mmVsDec"]["swm"] == ["2026-01", "2026-02"] and m["mmFebDec"]["swm"] == ["2026-01"]
     # by hand: March (1–10) vs the whole of January — the same impressions every day, so a month's eCPM = the plain mean of
     # its daily eCPMs; impact/day = 100k impressions a day × the change ÷ 1000
     pq, dm = m["mmVsJan"]["rows"]["Puzzle Quest"], apps["Puzzle Quest"]
@@ -932,13 +935,16 @@ def test_cmp_taps_navigate_within_the_history_and_stay_put(report):
     v = n["vJan"]["card"]                                  # two months apart: the title, the days, impact per day of March
     assert "<h3>All apps · Mar 2026 (1–10) vs Jan 2026</h3>" in v and "<b>1 Mar–10 Mar</b> vs <b>1 Jan–31 Jan</b>" in v
     assert "<b>Mar 2026 (1–10)</b> ka eCPM − <b>Jan 2026</b> ka eCPM" in v and "(impressions ÷ 10 din)" in v
-    # each tap is saved for this viewer: the current month and the compared one on their own ('' = the default, moves on)
+    # each tap is saved for this viewer: the current month and the compared one on their own ('' = the default, moves on);
+    # next to a current month that follows the date the compared month is a gap (vg), next to a picked one a month (vm)
     ls = lambda k: json.loads(n[k]["ls"])
+    pair = lambda k: (ls(k)["cm"], ls(k)["vm"], ls(k)["vg"])
     assert n["def"]["ls"] is None
-    assert ls("vDec") == {"v": 2, "m": "m", "b": "mon", "bm": "2026-03", "cm": "", "vm": "2025-12"}
-    assert (ls("cFeb")["cm"], ls("cFeb")["vm"]) == ("2026-02", "") and (ls("cJan")["cm"], ls("cJan")["vm"]) == ("2026-01", "")
-    assert (ls("cFeb2")["cm"], ls("cFeb2")["vm"]) == ("2026-02", "2025-12") and (ls("cMar")["cm"], ls("cMar")["vm"]) == ("", "2025-12")
-    assert (ls("vFeb")["cm"], ls("vFeb")["vm"]) == ("", "")
+    assert ls("vDec") == {"v": 2, "m": "m", "b": "mon", "bm": "2026-03", "cm": "", "vm": "", "vg": 3}
+    assert pair("vJan") == ("", "", 2) and pair("vJan2") == ("", "", 2) and pair("m") == ("", "", 0)
+    assert pair("cFeb") == ("2026-02", "", 0) and pair("cJan") == ("2026-01", "", 0)
+    assert pair("cFeb2") == ("2026-02", "2025-12", 0) and pair("cMar") == ("", "", 3)
+    assert pair("vFeb") == ("", "", 0)
     assert ls("b7")["b"] == "7" and ls("b7")["m"] == "y"
     # back on 7 days: the card is the default one again, word for word
     assert ("<h3>All apps · yesterday vs last 7 days</h3>" in n["b7html"] and
@@ -1030,21 +1036,26 @@ def test_cmp_countries_follow_or_say_why_not(report, dash):
 @needs_node
 def test_cmp_pick_restored_and_reset_safely(report):
     r = report["cmp_restore"]
-    D = {"v": 2, "m": "y", "b": "7", "bm": "", "cm": "", "vm": ""}
+    D = {"v": 2, "m": "y", "b": "7", "bm": "", "cm": "", "vm": "", "vg": 0}
     M3 = "Mar 2026 (1–10)"
     # the shape stored before the two pickers (its cm moved BOTH months): the month pair → this month vs the month before,
     # the rest kept, saved back in the new shape
     for k, want, cmp in (("oldMm", f"{M3} vs Feb 2026", dict(D, m="m")), ("oldMmMon", f"{M3} vs Feb 2026", dict(D, m="m", b="mon", bm="2026-01")),
                          ("monJan", "yesterday vs Jan 2026", dict(D, b="mon", bm="2026-01")), ("b30", "yesterday vs last 30 days", dict(D, b="30"))):
         assert r[k]["title"] == want and r[k]["cmp"] == cmp and json.loads(r[k]["ls"]) == cmp, k
-    # the new shape: each month as stored; a compared month that is not older than the current one / outside the history /
-    # junk → the month just before the current one; the default kept as ''
-    for k, want, cm, vm in (("mFeb", "Feb 2026 vs Jan 2026", "2026-02", ""), ("mFebDec", "Feb 2026 vs Dec 2025 (20–31)", "2026-02", "2025-12"),
-                            ("mVsJan", f"{M3} vs Jan 2026", "", "2026-01"), ("vmSame", "Feb 2026 vs Jan 2026", "2026-02", ""),
-                            ("vmAfter", "Feb 2026 vs Jan 2026", "2026-02", ""), ("vmBefore", f"{M3} vs Feb 2026", "", ""),
-                            ("vmJunk", f"{M3} vs Feb 2026", "", ""), ("vmDefault", "Feb 2026 vs Jan 2026", "2026-02", ""),
-                            ("future", f"{M3} vs Feb 2026", "", "")):
-        assert r[k]["title"] == want and (r[k]["cmp"]["cm"], r[k]["cmp"]["vm"]) == (cm, vm) and json.loads(r[k]["ls"]) == r[k]["cmp"], k
+    # the new shape: each month as stored (a gap next to a current month that follows the date, a month next to a picked
+    # one); a compared month that is not older than the current one / outside the history / junk / stored the other way →
+    # the month just before the current one; the default kept as ''
+    for k, want, cm, vm, vg in (("mFeb", "Feb 2026 vs Jan 2026", "2026-02", "", 0), ("mFebDec", "Feb 2026 vs Dec 2025 (20–31)", "2026-02", "2025-12", 0),
+                                ("mVsJan", f"{M3} vs Jan 2026", "", "", 2), ("vgDec", f"{M3} vs Dec 2025 (20–31)", "", "", 3),
+                                ("vmNoGap", f"{M3} vs Feb 2026", "", "", 0), ("vgFixed", "Feb 2026 vs Jan 2026", "2026-02", "", 0),
+                                ("vgOld", f"{M3} vs Feb 2026", "", "", 0), ("vgJunk", f"{M3} vs Feb 2026", "", "", 0),
+                                ("vgOne", f"{M3} vs Feb 2026", "", "", 0), ("vgHalf", f"{M3} vs Feb 2026", "", "", 0),
+                                ("vmSame", "Feb 2026 vs Jan 2026", "2026-02", "", 0), ("vmAfter", "Feb 2026 vs Jan 2026", "2026-02", "", 0),
+                                ("vmBefore", "Feb 2026 vs Jan 2026", "2026-02", "", 0), ("vmJunk", "Feb 2026 vs Jan 2026", "2026-02", "", 0),
+                                ("vmDefault", "Feb 2026 vs Jan 2026", "2026-02", "", 0), ("future", f"{M3} vs Feb 2026", "", "", 0)):
+        assert r[k]["title"] == want and (r[k]["cmp"]["cm"], r[k]["cmp"]["vm"], r[k]["cmp"]["vg"]) == (cm, vm, vg), k
+        assert json.loads(r[k]["ls"]) == r[k]["cmp"], k
     assert r["future"]["cmp"]["b"] == "14" and r["future"]["cmp"]["v"] == 2
     assert r["before"]["title"] == "yesterday vs Feb 2026" and r["before"]["cmp"]["bm"] == ""            # a month before the history → the default month
     assert r["after"]["title"] == f"{M3} vs Feb 2026" and r["after"]["cmp"]["cm"] == ""                   # after it → the newest
@@ -1250,21 +1261,22 @@ def test_cmp_oct_vs_sep_aug_jul_recounted(report, fx):
                                                                         f"{lbl}<br>eCPM", "Oct 2026 (1–20)<br>impr"), (fx, k)
         assert f"<h3>All apps · Oct 2026 (1–20) vs {lbl}</h3>" in g["card"] and f"<b>1 Oct–20 Oct</b> vs <b>{_span(by[pm])}</b>" in g["card"]
         assert "(impressions ÷ 20 din)" in g["card"]
-        # the swing's months: the whole months up to the compared one, 12 pairs `gap` apart at most
-        assert g["swm"] == [m for m in sorted(by) if m <= pm and _full(m, by[m])][-(12 + gap):], (fx, k)
+        # the swing's months: the whole months before October (Sep too, whatever the compared month), 12 pairs `gap` apart at most
+        assert g["swm"] == [m for m in sorted(by) if m < "2026-10" and _full(m, by[m])][-(12 + gap):] and g["swm"][-1] == "2026-09", (fx, k)
         for name, dm in apps.items():
             exp = _row_cmp(dm, comp, oct_, by[pm], pm, 20)
             _same_rows(g["rows"][name], exp, (fx, k, name))
             if exp["chg"] is not None:   # impact/day = October's impressions per complete day × the eCPM change ÷ 1000
                 assert _close(g["rows"][name]["imp"], exp["yi"] / exp["nc"] * exp["chg"] / 1000), (fx, k, name)
         _sorted_ok(g["order"], [dict(v, key=n, label=n) for n, v in g["rows"].items() if v["act"]], "imp", "asc")
-        # the current month never moved: only the compared month is stored ('' = the month just before October)
-        assert g["cmp"]["cm"] == "" and g["cmp"]["vm"] == ("" if k == "sep" else pm) and json.loads(g["ls"]) == g["cmp"], (fx, k)
+        # the current month never moved (it follows the date): the compared month is stored as its gap (0 = the month just before)
+        assert (g["cmp"]["cm"], g["cmp"]["vm"], g["cmp"]["vg"]) == ("", "", 0 if gap == 1 else gap) and json.loads(g["ls"]) == g["cmp"], (fx, k)
         assert '<span class="ec-ml" aria-live="polite"><b>Oct 2026 (1–20)</b></span>' in g["ctl"]
         assert f'<span class="ec-ml" aria-live="polite">{lbl}</span>' in g["ctl"]
         if fx in OCT_ST:
             assert {n: v["st"] for n, v in g["rows"].items()} == OCT_ST[fx][k], (fx, k)
-        # the status note says which gap the swing was measured over
+        # the status note says which gap the swing was measured over, on the whole months up to the one before October
+        assert "se judge hoti hai (Sep 2026 tak ke poore mahine, max " in g["note"], (fx, k)
         if gap == 1:
             assert "<b>mahine-dar-mahine ke normal utaar-chadhaav</b>" in g["note"] and "max 13" in g["note"]
             assert "har mahine ke <b>pehle 20 din</b> vs uska pichhla poora mahina" in g["note"] and "abhi 8 poore mahine ka data nahi" in g["note"]
@@ -1276,7 +1288,7 @@ def test_cmp_oct_vs_sep_aug_jul_recounted(report, fx):
     first = MON[int(comp[0][5:7]) - 1] + " " + comp[0][:4]
     assert r["oldest"]["title"] == f"Oct 2026 (1–20) vs {first}" and r["oldest"]["pm"] == comp[0][:7]
     assert 'aria-label="Compared month: previous" disabled>' in r["oldest"]["ctl"] and 'aria-label="Current month: next" disabled>' in r["oldest"]["ctl"]
-    assert r["back"]["title"] == "Oct 2026 (1–20) vs Sep 2026" and (r["back"]["cmp"]["cm"], r["back"]["cmp"]["vm"]) == ("", "")
+    assert r["back"]["title"] == "Oct 2026 (1–20) vs Sep 2026" and (r["back"]["cmp"]["cm"], r["back"]["cmp"]["vm"], r["back"]["cmp"]["vg"]) == ("", "", 0)
 
 
 @needs_node
@@ -1293,13 +1305,64 @@ def test_cmp_two_months_apart_status_uses_the_same_gap(report):
     assert one > 0.18 and _status(ts["pct"], one, ts["yi"]) == "normal"                    # would have hidden the drop
     sc = aug["Steady Cam"]
     assert _close(sc["w7"], 2.0 * 1.03) and _close(sc["y"], 2.0 * 0.97 * 0.8) and sc["st"] == "bigda"
-    # the ramp fixture (history from 1 Jan 2026): 8 adjacent pairs → judged; 6 pairs 2 apart, 4 pairs 3 apart → Too early
+    # the ramp fixture (history from 1 Jan 2026, whole months Jan–Sep): every whole month before October counts, whichever
+    # month is compared — Oct vs Sep 8 adjacent pairs, Oct vs Aug 7 pairs 2 apart (Jul → Sep among them) → judged; Oct vs Jul
+    # 6 pairs 3 apart → Too early
+    _, ramp = _maps(_ramp_fixture())
+    rby = _by_month(_comp(_ramp_fixture()))
     rp = report["cmp_pickers"]["ramp"]
+    whole = [f"2026-{m:02d}" for m in range(1, 10)]
+    for k, gap, n in (("sep", 1, 8), ("aug", 2, 7), ("jul", 3, 6)):
+        assert rp[k]["swm"] == whole, k
+        pairs = [(_add_months(b, -gap), b) for b in whole if _add_months(b, -gap) in whole]
+        assert len(pairs) == n, k
+    # by hand, Oct vs Aug: each month's first 20 days vs the whole month 2 before it, the median of the 7 changes
+    pairs = [(_add_months(b, -2), b) for b in whole[2:]]
+    assert ("2026-07", "2026-09") in pairs                    # a pair newer than the compared month (Aug): counted
+    dm = ramp["Steady Mail"]
+    ch = [abs(_sum(dm, rby[b][:20])["ec"] / _sum(dm, rby[a])["ec"] - 1) for a, b in pairs]
+    sm = rp["aug"]["rows"]["Steady Mail"]
+    assert sm["swing"] is not None and abs(sm["swing"] - statistics.median(ch)) < 1e-12 and sm["st"] == "normal"
+    assert _status(sm["pct"], sm["swing"], sm["yi"]) == "normal"
+    # the pairs up to the compared month only (the old window) were 6 → it would have said Too early
+    assert len([p for p in pairs if p[1] <= "2026-08"]) == 6
     assert rp["sep"]["rows"]["Steady Mail"]["swing"] is not None and rp["sep"]["rows"]["Steady Mail"]["st"] == "normal"
-    for k in ("aug", "jul"):
-        sm = rp[k]["rows"]["Steady Mail"]
-        assert sm["swing"] is None and sm["st"] == "jaldi" and sm["chg"] is not None, k   # the change is real, the status waits
+    sm = rp["jul"]["rows"]["Steady Mail"]
+    assert sm["swing"] is None and sm["st"] == "jaldi" and sm["chg"] is not None   # the change is real, the status waits
     assert "Too early</b> = abhi 9 poore mahine ka data nahi" in rp["aug"]["note"] and "abhi 10 poore mahine" in rp["jul"]["note"]
+
+
+# a pick across a month end: tapped on 21 Oct, read back from this viewer's storage on 9 Nov (a reload)
+ROLL = {  # pick → (on 21 Oct, on 9 Nov, the gap on both days, stored cm / vm / vg)
+    "def": ("Oct 2026 (1–20) vs Sep 2026", "Nov 2026 (1–8) vs Oct 2026", 1, ("", "", 0)),
+    "aug": ("Oct 2026 (1–20) vs Aug 2026", "Nov 2026 (1–8) vs Sep 2026", 2, ("", "", 2)),
+    "jul": ("Oct 2026 (1–20) vs Jul 2026", "Nov 2026 (1–8) vs Aug 2026", 3, ("", "", 3)),
+    "sepAug": ("Sep 2026 vs Aug 2026", "Sep 2026 vs Aug 2026", 1, ("2026-09", "", 0)),
+    "sepJul": ("Sep 2026 vs Jul 2026", "Sep 2026 vs Jul 2026", 2, ("2026-09", "2026-07", 0)),
+    "octJul": ("Oct 2026 (1–20) vs Jul 2026", "Nov 2026 (1–8) vs Aug 2026", 3, ("", "", 3)),
+}
+
+
+@needs_node
+def test_cmp_pick_kept_the_same_way_across_a_month_end(report):
+    """a current month that follows the date keeps its compared month the same number of months back (Oct vs Aug → Nov vs
+    Sep: the same gap, the same Status rule), however it was reached; a current month picked by hand keeps both months."""
+    dash = _noise_fixture()
+    r = report["cmp_roll"]
+    for k, (oct_t, nov_t, gap, stored) in ROLL.items():
+        o, n = r[k]["oct"], r[k]["nov"]
+        assert (o["title"], n["title"]) == (oct_t, nov_t) and o["g"] == n["g"] == gap, k
+        assert (o["cmp"]["cm"], o["cmp"]["vm"], o["cmp"]["vg"]) == stored and o["ls"] == n["ls"], k     # nothing re-saved on 9 Nov
+        assert json.loads(n["ls"]) == n["cmp"] == o["cmp"], k
+        for x, T in ((o, "2026-10-21"), (n, "2026-11-09")):             # the swing: the whole months before the current one
+            by = _by_month(_comp(dash, T))
+            assert x["swm"] == [m for m in sorted(by) if m < x["cm"] and _full(m, by[m])][-(12 + gap):], (k, T)
+            if gap > 1:
+                assert f"<b>{gap} mahine ke farq par normal utaar-chadhaav</b>" in x["note"], (k, T)
+            else:
+                assert "<b>mahine-dar-mahine ke normal utaar-chadhaav</b>" in x["note"], (k, T)
+    assert r["aug"]["nov"]["pm"] == "2026-09" and r["sepJul"]["nov"]["pm"] == "2026-07"
+    assert "(Oct 2026 tak ke poore mahine, max 14" in r["aug"]["nov"]["note"]
 
 
 # the default view, byte for byte: the page before the picker and this one (comparison row taken out), $ and ₹, every sort
