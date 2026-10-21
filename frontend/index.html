@@ -7276,7 +7276,10 @@ function ccSrc(d){ const cd=cdOf(d);
 // changes): a pick never moves the chips under it.
 function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[]), cc=cs&&cs.rows?cs.cc:'', xx=cc==='XX', ld=!rows&&!!(cs&&cs.ld);
   const bl=billed(), inr=curView()==='INR', who=cc?'country':'app', dr=new Map(), sq=[];
-  if(bl&&cc) for(const r of d.rows||[]) if(r[R.sp]>0&&r[R.spi]!=null) dr.set(r[R.X],r[R.spi]/r[R.sp]);      // the day's billed rate
+  // the day's billed rate (₹ ÷ $) — only from a row whose ₹ spend is big enough (≥ ₹5) for the build's rounding (₹ 2 dp,
+  // $ 4 dp) not to matter: the All countries row of that day; else (a country, no such All row) its own big-enough row;
+  // else today's rate, counted (nt) and said on the Revenue tile
+  if(bl) for(const r of d.rows||[]) if(r[R.sp]>0&&r[R.spi]!=null&&r[R.spi]>=5) dr.set(r[R.X],r[R.spi]/r[R.sp]);
   let sA=0, rA=0, nA=0, nz=0, nt=0, kx=0, nK=0, loA='', hiA='', rv=0, nrv=0, mr=0, n=0, nn=0, lo='', hi='';
   for(const r of rows||[]){ const x=r[R.X], u=r[R.sp], s=r[R.s], m=ok(s);
     if(!lo||x<lo) lo=x; if(!hi||x>hi) hi=x;
@@ -7286,26 +7289,26 @@ function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[
     if(u==null){ if(m) mr++; continue; }
     nK++; if(!m&&!xx){ kx++; continue; }
     let v, w=0;
-    if(bl&&r[R.spi]!=null){ v=+r[R.spi]; if(m){ const q=u>0?v/u:dr.get(x); if(q==null&&s) nt++; w=s*(q!=null?q:cfx()); } }
-    else { v=RV(u); if(m) w=RV(s); }
+    if(bl&&r[R.spi]!=null){ v=+r[R.spi]; if(m){ const q=dr.has(x)?dr.get(x):(u>0&&v>=5?v/u:null); if(q==null&&s) nt++; w=s*(q!=null?q:cfx()); } }
+    else { v=RV(u); if(m){ w=RV(s); if(bl&&s) nt++; } }    // ₹-billed file but this row has no ₹ spend: both sides at today's rate
     sA+=v; rA+=w; nA++; if(!(u>0)) nz++;
     if(!loA||x<loA) loA=x; if(!hiA||x>hiA) hiA=x; }
   sq.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
   const rn=[]; let pv=false; for(const [x,q] of sq){ if(q){ if(pv) rn[rn.length-1][1]=x; else rn.push([x,x]); } pv=q; }
   const D=rows?rows.length:0, K=D-nrv, M=sq.filter(y=>y[1]).length, no=ld?'…':'—';
   const mx=Math.max(Math.abs(sA),Math.abs(rA)), dp=mx>=10?0:mx>=1?1:2, f=10**dp, iS=Math.round(sA*f), iR=Math.round(rA*f);
-  const S=iS/f, Rv=iR/f, net=(iR-iS)/f, ro=S>0?Rv/S:null, has=nA>0&&!xx, same=!!rows&&!xx&&nrv>0&&!mr;
+  const S=iS/f, Rv=iR/f, net=(iR-iS)/f, ro=S>0?Rv/S:null, has=nA>0&&sA>0&&!xx, same=has&&!!rows&&nrv>0&&!mr;
   const MD=(x,sg)=>(x<0?MI:(sg&&x>0?'+':''))+csym()+(dp?Math.abs(x).toFixed(dp):Math.abs(x).toLocaleString(inr?'en-IN':'en-US'));
   const t=(l,v,s,c)=>tile(l,String(v).replace(/<[^>]+>/g,'').length>=14?`<span class="roi-ckw">${v}</span>`:v,s,'roi-ck'+(c?' '+c:''));
   const ns=cc==='--'?'Google Ads me ye country nahi':'', d1=z=>z[0]===z[1]?E(fd(z[0])):`${E(fd(z[0]))} – ${E(fd(z[1]))}`;
   const rg=!rn.length?'':rn.length===1?d1(rn[0]):`${N(rn.length)} hisson me, ${d1([rn[0][0],rn[rn.length-1][1]])}`;
-  const hA=ld?'…':!rows?'—':nA?`${E(fdy(loA))} – ${E(fdy(hiA))} (${N(nA)} din)`:ns||(nK?'Spend wale dino ki kamai abhi nahi padhi':`Is ${who} me spend wala koi din nahi`);
+  const hA=ld?'…':!rows?'—':has||(xx&&nA)?`${E(fdy(loA))} – ${E(fdy(hiA))} (${N(nA)} din)`:ns||(nA?`Is ${who} me koi ads din nahi (spend 0)`:nK?'Spend wale dino ki kamai abhi nahi padhi':`Is ${who} me spend wala koi din nahi`);
   const hB=ld?'…':!rows||!D?'—':`${E(fdy(lo))} – ${E(fdy(hi))}`;
   const ln=ld?'…':!rows||!D?'—':xx?`Not split: sirf spend${M?` · ${N(M)} din ka spend data nahi (${rg})`:' — kamai, installs nahi'}.`
     :M?`${N(M)} din ka spend data nahi (${rg})${mr?' — unka revenue sirf Poori history me':''}.`:'Har install din ka spend pata.';
   const rb=inr?'so far · ₹ aaj ke rate se':'so far · AdMob-matched';
   return `<div class="roi-cks" role="group" aria-label="Totals"${ld?' aria-busy="true"':''}><div class="roi-ckq"><div class="roi-ckx"><div class="roi-ckh"><b>Spend pata wale din</b><span>${hA}</span></div><div class="roi-ckg">`
-    +t('Spend',nA?MD(S):no,ns||(xx?'Not split · Google Ads':rows&&!nK?'spend data nahi':kx?`${N(kx)} din bahar: kamai nahi padhi`:has&&!(sA>0)?`Is ${who} me koi ads din nahi`:nz?`Google Ads · ${N(nz)} din spend 0`:'Google Ads'))
+    +t('Spend',has||(xx&&nA)?MD(S):no,ns||(xx?'Not split · Google Ads':rows&&!nK?'spend data nahi':kx?`${N(kx)} din bahar: kamai nahi padhi`:nA&&!(sA>0)?`Is ${who} me koi ads din nahi`:nz?`Google Ads · ${N(nz)} din spend 0`:'Google Ads'))
     +t('Revenue',has?MD(Rv):no,xx?'Not split: koi kamai nahi':bl?(nt?`so far · ${N(nt)} din aaj ke rate se`:'so far · har din uske rate se'):rb)
     +t('Profit / loss',has?`<span class="${net>=0?'roi-up':'roi-dn'}">${MD(net,true)}</span>`:no,xx?'Not split: sirf spend':'revenue − spend',has?(net>=0?'roi-kg':'roi-kb'):'')
     +t('ROAS',has&&ro!=null?`<span class="${roasCls(ro)}">${P(ro)}</span>`:no,xx?'Not split: sirf spend':has&&ro==null?'spend 0 — ROAS nahi':'revenue ÷ spend')

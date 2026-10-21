@@ -401,9 +401,18 @@ def test_totals_strip_states(out):
     k, cls = out["k_loss"]
     assert k == [["Spend", "$60", "Google Ads"], ["Revenue", "$12", "so far · AdMob-matched"], ["Profit / loss", "−$48", "revenue − spend"],
                  ["ROAS", "20%", "revenue ÷ spend"]] and cls == [["roi-kb", "roi-dn"], ["", "roi-b"]]
+    # review (21 Oct): no ads at all (every known day spend 0) — nothing to judge in "Spend pata wale din": '—' throughout,
+    # never organic revenue shown as a green ads profit; its revenue stays in Poori history
     k, heads = out["k_org"]
-    assert k == [["Spend", "$0.0", "Is app me koi ads din nahi"], ["Revenue", "$6.0", "so far · AdMob-matched"],
-                 ["Profit / loss", "+$6.0", "revenue − spend"], ["ROAS", "—", "spend 0 — ROAS nahi"]]
+    assert k == [["Spend", "—", "Is app me koi ads din nahi"], ["Revenue", "—", "so far · AdMob-matched"],
+                 ["Profit / loss", "—", "revenue − spend"], ["ROAS", "—", "revenue ÷ spend"]]
+    assert heads[0] == ["Spend pata wale din", "Is app me koi ads din nahi (spend 0)"]
+    # a few paise of ₹-billed spend: that day's so far at today's rate (counted), the arithmetic still holds
+    k, a = out["k_tiny"]
+    assert k[:2] == [["Spend", "₹1,760", "Google Ads"], ["Revenue", "₹3,520", "so far · 1 din aaj ke rate se"]] and a[2] == 1760 and a[4]
+    # ₹-billed file, rows with no ₹ spend: both at today's rate, and the tile says how many days
+    k, a = out["k_nobill"]
+    assert k[:2] == [["Spend", "₹880", "Google Ads"], ["Revenue", "₹1,056", "so far · 2 din aaj ke rate se"]] and a[4]
     k, heads, line = out["k_none"]
     assert [x[1] for x in k] == ["—"] * 6 + ["0"] and heads == [["Spend pata wale din", "Is app me spend wala koi din nahi"], ["Poori history", "—"]]
     # All countries (the made-up app: spend known on all 70 days): both groups, the same days — the group = an independent
@@ -442,10 +451,10 @@ def test_totals_strip_states(out):
     k, not_busy, msg, heads, line = out["k_err"]
     assert k == ["—"] * 7 and not_busy and msg and heads == [["Spend pata wale din", "—"], ["Poori history", "—"]] and line == "—"
     assert out["k_miss"] == [["—"] * 7, True] and out["k_nocd"] == [True, True]
-    # ONE height in every state (29 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, crore,
+    # ONE height in every state (31 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, crore,
     # the owner's case …): the same box — groups, tiles, labels, note; heads + coverage line fixed (the CSS pins are in
     # test_wiring; the strip measured in headless Chrome: one height per width over every state, 360 – 1920 px)
-    assert out["k_skel"] == [1, 29]
+    assert out["k_skel"] == [1, 31]                                   # + the two review states (tiny spend, not billed)
     # crore-size ₹ printed in full — 14+ characters a size smaller (roi-ckw), shorter ones not; the arithmetic still exact
     big7, big8, small, n7, n8 = out["k_big"]
     assert big7 == ["₹23,45,76,190", "₹13,40,46,928", "−₹10,05,29,262", "57%", "Same days", "1,234,577", "2"]
@@ -456,7 +465,7 @@ def test_totals_strip_states(out):
     # own size (17 / 15.5 px, a 14+ character one 14 / 13 px), in its own group's box; reasons ≤ 35 characters (two lines of
     # the narrowest tile, 131 px at 360, checked in Chrome); labels one short line
     pr = out["k_print"]
-    assert len(pr) == 29 * 7 and any(v == "−₹1,00,52,91,123" for _, v, _, _, _ in pr)
+    assert len(pr) == 31 * 7 and any(v == "−₹1,00,52,91,123" for _, v, _, _, _ in pr)
     assert all(w == (len(v) >= 14) for _, v, w, _, _ in pr)
     assert [g for _, _, _, _, g in pr[:7]] == ["A"] * 4 + ["B"] * 3
     tight = {}

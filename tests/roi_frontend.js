@@ -1642,6 +1642,14 @@ async function moreKeepAll(dc, packs) {
       out.k_org = [kT(hg).slice(0, 4), kH(hg)];
       const hn = seen(U.cohCard({ v: 1, T, lags: 31, newest: '2026-01-02', rows: [] }));
       out.k_none = [kT(hn), kH(hn), kL(hn)];
+      // review (21 Oct): a ₹-billed day with a few paise of spend: its own ₹ ÷ $ is rounding noise (₹ 2 dp, $ 4 dp), so its
+      // so far goes at today's rate (counted), never × 50 or × 0; a ₹-billed file whose row has no ₹ spend: both at today's
+      ctx.curView = () => 'INR'; ctx.cfx = () => 88; ctx.csym = () => '₹'; U.lifeView([], null, { ccy: 'INR' });
+      const htn = seen(U.cohCard({ v: 1, T, lags: 31, newest: '2026-01-02', rows: [kr('2026-01-01', 10, 0.0002, 0.01, 20), kr('2026-01-02', 10, 20, 1760, 20)] }));
+      out.k_tiny = [kT(htn).slice(0, 4), aNum(htn)];
+      const hnb = seen(U.cohCard({ v: 1, T, lags: 31, newest: '2026-01-02', rows: [kr('2026-01-01', 10, 5, null, 6), kr('2026-01-02', 10, 5, null, 6)] }));
+      out.k_nobill = [kT(hnb).slice(0, 4), aNum(hnb)];
+      U.lifeView([], null, {}); ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
       // the grain, the mode and "Show more" never change it (every install day, not the rows on screen)
       const kb = kOf(U.cohCard(appFile()));
       out.k_inv = [];
