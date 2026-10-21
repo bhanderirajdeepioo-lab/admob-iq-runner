@@ -14,8 +14,9 @@ limits), 🧮 the cohort card's totals strip (spend / revenue / profit-loss / RO
 install day of All or the picked country: a hand recount, ₹ as billed, days left out counted, the same for every grain /
 mode, '…' while loading, one height in every state, the page otherwise byte for byte as before), "Show 60 more" / "Show
 all" keeping the reader's row and the table box's scroll (every grain × mode, every country, the lifetime table, 375 and
-1280 px, with the stay-put layer: no second scroll), and the wiring into the page. Skipped where node is not installed.
-No real data."""
+1280 px, with the stay-put layer: no second scroll) — sideways by column (the Day table's columns change with the rows
+shown), Mode switches keeping the box's row and column too — and the wiring into the page. Skipped where node is not
+installed. No real data."""
 import json
 import os
 import shutil
@@ -437,6 +438,80 @@ def test_show_more_keeps_the_row(out):
             assert abs(t["move"]) <= 1 and t["dy"] > 0 and t["calls"] == 1 and t["intent"] and t["sl"] == [260, 260], (r["name"], t)
 
 
+def _side_kept(t):
+    """The box's sideways place after a repaint, as the reader sees it: at the left start → still 0; at the right end
+    ("So far" in sight) → still at the right end; else the column under the box's visible right edge (gone → the next one
+    to its left) at the same x, ≤ 1 px."""
+    c = t["col"]
+    if t["sl"][0] <= 1:
+        return t["sl"][1] == 0
+    if c["end"][0]:
+        return c["end"][1] is True
+    return c["x"] is not None and abs(c["x"][1] - c["x"][0]) <= 1 and (c["gone"] or c["lab"] == c["edge"])
+
+
+def test_show_more_keeps_the_column(out):
+    """Review (21 Oct 2026): the Day table's columns past D30 come and go with the rows shown (a month column per 30 days
+    of the oldest shown day; T's late checkpoints only while no shown day has the late read) and every column is as wide
+    as its widest cell — the old pixel scrollLeft put another column under the reader. Now the column at the box's right
+    edge stays at its x (≤ 1 px; gone → the next one left), the right end stays the right end, the start the start: every
+    grain at the right end, a file whose 60 → 120 step changes the columns (41 → 49 headers, D365 gone), the lifetime
+    table; 375 and 1280 px. The row stays put too, no page scroll. (On the page before: "So far" 96–384 px off to the
+    right, the reader's column 96 px away — this test fails there.)"""
+    mk = out["more_keep"]
+    side = [(r["name"], t) for r in mk["side"] for t in r["taps"] if not t.get("gone")]
+    assert len(mk["side"]) == 34 and len(side) == 60
+    for name, t in side:
+        assert abs(t["move"]) <= 1 and t["inView"], (name, t)
+        assert t["dy"] == 0 and t["calls"] == 0 and not t["intent"], (name, t)
+        assert t["rows"][1] > t["rows"][0], (name, t)
+        assert _side_kept(t), (name, t)
+    by = {}
+    for r in mk["side"]:
+        by[r["name"]] = [t for t in r["taps"] if not t.get("gone")]
+    for w in ("375", "1280"):
+        # at the right end ("So far" in sight, the box really scrolled): still the right end, "So far" still the edge column
+        for g in ("day", "week", "month"):
+            for t in by[f"{w} {g} max 60+60+all"] + by[f"{w} {g} max all"]:
+                assert t["col"]["end"] == [True, True] and t["col"]["edge"] == "So far" and t["sl"][0] > 300, (w, g, t)
+        # the columns really changed with the rows shown (D365 among the first 60's columns only)
+        for nm in ("max", "D90", "D20", "0"):
+            assert by[f"{w} m400 {nm} all"][0]["col"]["n"] == [41, 49], (w, nm)
+            assert by[f"{w} m400 {nm} 60+60+all"][0]["col"]["n"] == [41, 49], (w, nm)
+        for t in by[f"{w} m400 D365 60"] + by[f"{w} m400 D365 all"]:
+            assert t["col"]["edge"] == "D365" and t["col"]["gone"] and t["col"]["lab"] == "D180", (w, t)   # → the next one left
+        for nm in ("D90", "D20"):
+            for t in by[f"{w} m400 {nm} 60+60+all"] + by[f"{w} m400 {nm} all"]:
+                assert t["col"]["edge"] == nm and t["col"]["lab"] == nm and t["sl"][0] > 300, (w, nm, t)
+        for t in by[f"{w} m400 max all"] + by[f"{w} m400 max 60+60+all"]:
+            assert t["col"]["end"] == [True, True], (w, t)
+        for t in by[f"{w} m400 0 all"] + by[f"{w} m400 0 60+60+all"]:
+            assert t["sl"] == [0, 0], (w, t)
+    assert [t["col"]["end"] for t in by["375 life max"]] == [[True, True]] * 2      # the lifetime table (wider than a phone)
+
+
+def test_mode_switch_keeps_the_box(out):
+    """Review (21 Oct 2026): Mode (ROAS % / Revenue / Per install / Delta) repainted the table into a new box — back at row
+    1, column 1 ("table pehle se scroll hoke uppar se start hota he" again, after "Show all" too), while the page stayed.
+    Now the same rows keep their place: the reader's row ≤ 1 px, the right-edge column at its x (the columns get wider /
+    narrower with the mode), the right end the right end; every grain after "Show all", 60 shown, a country's table and
+    Not split; 375 and 1280 px; no page scroll (ours or the stay-put layer's). (On the page before: the row 631–4878 px
+    away, out of sight, and scrollLeft back to 0 — this test fails there.)"""
+    mk = out["more_keep"]
+    met = [(r["name"], t) for r in mk["met"] for t in r["taps"] if not t.get("gone")]
+    assert len(mk["met"]) == 24 and len(met) == 92
+    for name, t in met:
+        assert t["rows"][1] == t["rows"][0] and t["idx"][1] == t["idx"][0], (name, t)   # the same rows
+        assert abs(t["move"]) <= 1 and t["inView"] and t["key"], (name, t)
+        assert t["dy"] == 0 and t["calls"] == 0 and not t["intent"], (name, t)
+        assert _side_kept(t), (name, t)
+    rows = {r["name"]: r["taps"][0]["rows"][0] for r in mk["met"]}
+    assert rows["375 day max met"] == 334 and rows["1280 week D270 met"] == 287 and rows["375 day 60 met"] == 60
+    assert rows["375 AA met"] == 70 and rows["1280 XX met"] == 70
+    # the box was really scrolled sideways (not at its start) in all but the 1280 px week / month D30 runs (D30 in sight at 0)
+    assert all(t["sl"][0] > 100 for n, t in met if not n.startswith(("1280 week D30", "1280 month D30")))
+
+
 def test_wiring():
     with open(PAGE, encoding="utf-8") as f:
         p = f.read()
@@ -486,5 +561,7 @@ def test_wiring():
     # "Show 60 more" / "Show all": both tables' buttons keep the reader's row (keepRows), the rows keyed
     assert "if((b=at('[data-roi-more]'))){ const v=b.dataset.roiMore; keepRows(r,b,()=>{ SHOW=v==='all'?1e9:SHOW+60; repaint(); }); return; }" in p
     assert "if((b=at('[data-roi-lmore]'))){ const v=b.dataset.roiLmore; keepRows(r,b,()=>{ LSHOW=v==='all'?1e9:LSHOW+60; repaint(); }); return; }" in p
+    # Mode: the page keeps the tapped button (keep), the box its row + column (boxAt / boxBack)
+    assert "const w=metBox(b), p=w?boxAt(w):null;\n      keep(b,()=>{ MET=b.dataset.roiMet; repaint(); if(p) boxBack(r,p); }); return; }" in p
     assert '<tr data-roi-k="${E(gr.k)}"><td class="roi-nm">' in p and '<tr data-roi-k="${E(x[0])}"><td class="roi-nm">' in p
     assert p.count("SHOW+60; repaint(); return;") == 0                     # never a bare repaint (the box back at the top)

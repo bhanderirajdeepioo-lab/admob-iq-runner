@@ -16,7 +16,8 @@
 //   * 🧮 the cohort card's totals strip: All / a country (Unknown, Not split), loading / error / missing, ₹ / $, its skeleton
 //     the same in every state;
 //   * "Show 60 more" / "Show all" (the install-day tables and the lifetime "Every day" table): on a parsed DOM with a layout
-//     model + the page's own stay-put layer, the reader's row stays put, the box keeps its scroll, no second scroll.
+//     model + the page's own stay-put layer, the reader's row stays put, the box keeps its scroll, no second scroll;
+//     sideways by column (the Day table's columns change with the rows shown), and a Mode switch keeps the box's place too.
 // Prints ONE JSON report; tests/test_roi_frontend.py asserts on it.   usage: node roi_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -224,12 +225,15 @@ async function noJump(width, file, packs, failOnce, mode) {
 // The ROI block (a FRESH module) + the page's own stay-put layer (SP, cut out of the page as tests/stayput_frontend.js does)
 // in one vm, on a small DOM PARSED from the block's own markup and laid out by a model: blocks stack, text wraps at the
 // width, a body row is 31px (on a phone taller when its first cell wraps: max-width 150px), a .roi-tw box is at most 640px
-// high and scrolls on its own, down and sideways (a new box starts at 0, 0, as in a browser); the page scrolls over it all.
+// high and scrolls on its own, down and sideways (a new box starts at 0, 0, as in a browser); the page scrolls over it all;
+// a table's columns are as wide as their widest cell, side by side, the first one sticky at the box's left.
 // The reader scrolls the page to the table, the box down near its end and sideways, then taps "Show 60 more" / "Show all":
 // pointerdown, then click through window capture (SP) → the block's listener → window bubble (SP), then SP's microtask,
 // frames and 0 / 150 / 400 ms checks. Per tap: how far the reader's row (the last one in sight, found by its own label —
 // never by the page's key, so the page before this fix is measured the same way) moved on screen, the box's scrollLeft
-// before / after, how far the page scrolled and how many scroll calls ran, the rows before / after.
+// before / after, how far the page scrolled and how many scroll calls ran, the rows before / after; sideways: the column
+// under the box's visible right edge (by its header) and its x before / after, the right end before / after. A Mode
+// button (ROAS % / Revenue / …) the same way: the page at its row, the box half way down.
 const SPSRC = (() => { const a = html.indexOf('const SP=(function(){'), b = html.indexOf('\n  return api;\n})();', a);
   return a < 0 || b < 0 ? null : html.slice(a, b + '\n  return api;\n})();'.length); })();
 function miniDom(VW, VH) {
@@ -282,13 +286,18 @@ function miniDom(VW, VH) {
     querySelectorAll(sel) { const f = compile(sel), out = []; walk(this, e => { if (f(e)) out.push(e); }); return out; }
     querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
     getElementsByTagName(t) { const T = String(t).toUpperCase(), out = []; walk(this, e => { if (T === '*' || e.tagName === T) out.push(e); }); return out; }
+    get nextElementSibling() { const p = this.parentElement; if (!p) return null; const c = p.children, i = c.indexOf(this); return i >= 0 && i < c.length - 1 ? c[i + 1] : null; }
     getBoundingClientRect() { lay(); const L = this._L;
       if (!L || !this.isConnected) return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
-      let top = L.top - W.y, left = 0; if (L.bx) { top -= L.bx.scrollTop; left -= L.bx.scrollLeft; }   // inside a box that scrolls on its own
-      return { top, bottom: top + L.h, left, right: left + 100, width: 100, height: L.h }; }
+      // inside a box that scrolls on its own: down always; sideways unless a table's first column (sticky left:0)
+      let top = L.top - W.y, left = L.x || 0; const w = L.box ? L.cw : L.w != null ? L.w : 100;
+      if (L.bx) { top -= L.bx.scrollTop; if (!L.stk) left -= L.bx.scrollLeft; }
+      return { top, bottom: top + L.h, left, right: left + w, width: w, height: L.h }; }
     get offsetHeight() { lay(); return this._L ? this._L.h : 0; }
     get scrollHeight() { lay(); const L = this._L; return L ? (L.box ? L.ch : L.h) : 0; }
     get clientHeight() { lay(); return this._L ? this._L.h : 0; }
+    get scrollWidth() { lay(); const L = this._L; return L ? (L.box ? L.sw : L.w || 0) : 0; }
+    get clientWidth() { lay(); const L = this._L; return L ? (L.box ? L.cw : L.w || 0) : 0; }
     get scrollTop() { lay(); const L = this._L; return L && L.box ? Math.max(0, Math.min(this._st, L.ch - L.h)) : 0; }
     set scrollTop(v) { lay(); const L = this._L; this._st = L && L.box ? Math.max(0, Math.min(+v || 0, L.ch - L.h)) : 0; }
     get scrollLeft() { lay(); const L = this._L; return L && L.box ? Math.max(0, Math.min(this._sl, L.sw - L.cw)) : 0; }
@@ -316,16 +325,23 @@ function miniDom(VW, VH) {
   const tlen = e => e.textContent.replace(/\s+/g, ' ').trim().length;
   function inl(e, y, bx) { e._L = { top: y, h: 18, bx }; let n = e.tagName === 'BUTTON' ? 4 : 0;
     for (const c of e.childNodes) n += c.nodeType === 3 ? c.data.replace(/\s+/g, ' ').length : inl(c, y, bx); return n; }
+  // a table: every column as wide as its widest cell (a cell: 7px a character + 20; the first column at most 150px on a
+  // phone, the others at least 48px), cells side by side from x 0; the first column sticks at the box's left (left:0)
+  const cellW = (c, i) => { const n = tlen(c); return i === 0 ? (phone ? Math.min(150, n * 7 + 20) : n * 7 + 20) : Math.max(48, n * 7 + 20); };
   function tbl(t, y, aw, bx) {
-    const L = t._L = { top: y, h: 0, bx }; let cy = y, tw = 0;
+    const L = t._L = { top: y, h: 0, bx }; let cy = y;
+    const trsOf = s => (s.tagName === 'TR' ? [s] : s.children.filter(r => r.tagName === 'TR'));
+    const span = cs => cs.length === 1 && cs[0].getAttribute('colspan');
+    const cw = []; for (const s of t.children) for (const tr of trsOf(s)) { const cs = tr.children; if (!span(cs)) cs.forEach((c, i) => { cw[i] = Math.max(cw[i] || 0, cellW(c, i)); }); }
+    const cx = []; let tw = 0; cw.forEach((w, i) => { cx[i] = tw; tw += w; });
     for (const s of t.children) { s._L = { top: cy, h: 0, bx };
-      for (const tr of (s.tagName === 'TR' ? [s] : s.children.filter(r => r.tagName === 'TR'))) {
+      for (const tr of trsOf(s)) {
         const cs = tr.children, head = s.tagName === 'THEAD'; let rh = head ? 36 : 31;
-        if (cs.length === 1 && cs[0].getAttribute('colspan')) rh = 16 + Math.ceil(tlen(cs[0]) * 7 / Math.max(120, aw - 20)) * 18;
+        if (span(cs)) rh = 16 + Math.ceil(tlen(cs[0]) * 7 / Math.max(120, aw - 20)) * 18;
         else if (phone && cs[0]) rh += (Math.max(1, Math.ceil(tlen(cs[0]) * 7 / 130)) - 1) * 16;   // the first column wraps at 150px
-        tr._L = { top: cy, h: rh, bx }; let x = 0;
-        cs.forEach((c, i) => { const n = tlen(c); flat(c, cy, rh, bx); x += i === 0 ? (phone ? Math.min(150, n * 7 + 20) : n * 7 + 20) : Math.max(48, n * 7 + 20); });
-        tw = Math.max(tw, x); cy += rh; }
+        tr._L = { top: cy, h: rh, bx, w: tw };
+        cs.forEach((c, i) => { flat(c, cy, rh, bx); Object.assign(c._L, span(cs) ? { x: 0, w: tw } : { x: cx[i], w: cw[i], stk: i === 0 }); });
+        cy += rh; }
       s._L.h = cy - s._L.top; }
     L.w = Math.max(t.classList.contains('roi-sub') ? 560 : 640, tw); return (L.h = cy - y);
   }
@@ -369,14 +385,17 @@ function miniDom(VW, VH) {
     (WL.cap[type] || []).forEach(f => f(e)); (DL[type] || []).forEach(f => f(e)); (WL.bub[type] || []).forEach(f => f(e)); };
   return { El, win, doc, gcs, fire, W, lay, hooks, setDoc: h => { DOC = new El('#DOC'); parse(h).forEach(n => DOC.append(n)); dirty = true; }, q: s => DOC.querySelector(s) };
 }
-function longFile() {   // ~5½ years of install days, one every 6 days: Day 334 rows, Week ~286, Month 66 — each past 60
+// ~5½ years of install days, one every 6 days: Day 334 rows, Week ~286, Month 66 — each past 60. mFrom: the late read
+// (month columns past D30) only on install days at least that old — the newest 60 then have none, so the Day table's
+// columns past D30 change with the rows shown (60: T's D60 D90 D180 D365; 120 on: D60 … D390 — D365 gone)
+function longFile(mFrom) {
   const rows = [], newest = '2026-10-13';
   for (let age = 1998; age >= 0; age -= 6) {
     const X = day(newest, -age), exact = age < 40, obs = Math.min(30, age), df = Math.max(0, Math.min(obs, age - 3) + 1);
     const dd = exact ? Array.from({ length: obs + 1 }, (_, L) => L + 1) : null;
     const t = T.map(a => (a <= age - 3 ? a + 1 : null));
     const r = [X, 100, 80, 50, dd, exact ? df : 0, exact ? dd.map(() => 50) : null, t, null, X, null, 'Normal', age === 120 ? 2 : 0, 4000];
-    const nm = Math.min(12, Math.floor(age / 30) - 1);
+    const nm = age >= (mFrom || 0) ? Math.min(12, Math.floor(age / 30) - 1) : 0;
     if (nm > 0) { r.push(Array.from({ length: nm }, (_, k) => 31 + 10 * (k + 1)), Array.from({ length: nm }, (_, k) => k).filter(k => 30 * (k + 2) <= age - 3).length); r[8] = r[14][nm - 1]; }
     rows.push(r);
   }
@@ -405,40 +424,60 @@ async function keepHarness(VW, file, packs) {
       for (let i = 0; i < 4 && Q.raf.length; i++) { Q.raf.splice(0).forEach(f => f()); await micro(); } }
     Q.now = end; }
   const lab = tr => { const c0 = tr.children[0]; return c0 ? c0.textContent.replace(/\s+/g, ' ').trim() : ''; };
-  // the tapped table's box: the lifetime one holds its buttons, the install days' sits right above them
-  const boxOf = b => b.closest('.roi-tw') || b.closest('.roi-more').previousElementSibling;
+  // the tapped table's box: the lifetime one holds its buttons, the install days' sits right above them; a Mode button's
+  // row (.roi-ctl) sits right above its box
+  const boxOf = (b, kind) => kind === 'met' ? b.closest('.roi-ctl').nextElementSibling : b.closest('.roi-tw') || b.closest('.roi-more').previousElementSibling;
+  // the box's columns as the reader sees them: each header (not the sticky first) → [label, x in the box, width]
+  const colsOf = bx => { const x0 = bx.getBoundingClientRect().left;
+    return bx.querySelectorAll('thead th').slice(1).map(th => { const q = th.getBoundingClientRect(); return [th.textContent.replace(/\s+/g, ' ').trim(), q.left - x0, q.width]; }); };
+  const r1 = v => Math.round(v * 10) / 10;
+  // st: the view; kind: 'more' / 'lmore' / 'met'; seq: the buttons tapped in turn; o.pre: "Show …" taps first (unmeasured);
+  // o.sx: the box's sideways scroll before each tap — 260 px (default), 0, 'max' (the right end: "So far" in sight) or
+  // { edge: label } (that column under the box's visible right edge)
   async function run(st, kind, seq, name, o) {
     o = o || {};
     U.set('VIEW', st.VIEW); if (st.GRAIN) U.set('GRAIN', st.GRAIN); if (st.MET) U.set('MET', st.MET); if (st.LG) U.set('LG', st.LG);
     U.set('SHOW', 60); if (st.CTY != null) U.setCTY(st.CTY);
     R.repaint(); await drain(0); R.repaint(); await drain(0);                       // a country's pack in hand
+    for (const w of o.pre || []) { const b = D.q(`[data-roi-more="${w}"]`); if (b) { D.fire('pointerdown', b); D.fire('click', b); await drain(500); } }
     const taps = [];
     for (const w of seq) {
       const b = D.q(`[data-roi-${kind}="${w}"]`); if (!b) { taps.push({ w, gone: true }); break; }
-      const box = boxOf(b); D.lay();
-      // the reader: the page so the box ends ~140px above the window's bottom (the buttons in sight), the box scrolled down
-      // (near its end; "Show all" at once: half way) and sideways
-      D.W.y = Math.max(0, box._L.top + box._L.h - (VH - 140)); D.lay();
-      const mx = box.scrollHeight - box.clientHeight;
-      box.scrollTop = kind === 'lmore' ? mx : seq.length === 1 ? Math.floor(mx / 2) : mx - 45; box.scrollLeft = 260;
+      const box = boxOf(b, kind); D.lay();
+      // the reader: the page so the box ends ~140px above the window's bottom (the buttons in sight; a Mode button: its row
+      // ~60px from the top), the box scrolled down (near its end; "Show all" at once or a Mode switch: half way) and sideways
+      D.W.y = Math.max(0, kind === 'met' ? b.closest('.roi-ctl')._L.top - 60 : box._L.top + box._L.h - (VH - 140)); D.lay();
+      const mx = box.scrollHeight - box.clientHeight, smx = box.scrollWidth - box.clientWidth;
+      box.scrollTop = kind === 'lmore' ? mx : seq.length === 1 || kind === 'met' ? Math.floor(mx / 2) : mx - 45;
+      box.scrollLeft = 0;
+      const ec = o.sx && o.sx.edge ? colsOf(box).find(c => c[0] === o.sx.edge) : null;
+      if (o.sx && o.sx.edge && !ec) throw new Error(`${name}: no ${o.sx.edge} column`);
+      box.scrollLeft = o.sx === 'max' ? smx : ec ? ec[1] + ec[2] / 2 - box.clientWidth : o.sx != null ? o.sx : 260;
       const br = box.getBoundingClientRect(), lo = Math.max(0, br.top), hi = Math.min(VH, br.bottom);
       const trs = box.querySelectorAll('tbody tr'), seen = trs.filter(tr => { const q = tr.getBoundingClientRect(); return q.bottom > lo && q.top < hi; });
       const a = seen[seen.length - 1], L0 = lab(a), y0 = a.getBoundingClientRect().top, sl0 = box.scrollLeft, sy0 = D.W.y, n0 = trs.length, i0 = trs.indexOf(a), c0 = D.W.calls, in0 = SP.st.intent;
+      // sideways: the columns whose left edge is in sight, right to left — [0] = the one under the box's visible right edge
+      const vis = colsOf(box).filter(c => c[1] < box.clientWidth).reverse(), nc0 = colsOf(box).length, end0 = smx > 0 && sl0 >= smx - 1;
       const gn = o.grow ? o.grow * (taps.length + 1) : 0;                        // (more each tap: it grows every time)
       if (gn) D.hooks.set = (el, h) => el.id === 'roi-hero' ? h + '<div class="grown">' + 'grown above '.repeat(gn) + '</div>' : h;
       D.fire('pointerdown', b); D.fire('click', b); await drain(500);
       D.hooks.set = null;
       const trs2 = D.q('#roi-body').querySelectorAll('tbody tr'), a2 = trs2.find(tr => lab(tr) === L0), box2 = a2 && a2.closest('.roi-tw');
-      taps.push({ w, label: L0, move: a2 ? Math.round((a2.getBoundingClientRect().top - y0) * 10) / 10 : 'gone', sl: [sl0, box2 ? box2.scrollLeft : null],
+      const h1 = new Map(box2 ? colsOf(box2).map(c => [c[0], c[1]]) : []), kc = vis.find(c => h1.has(c[0]));
+      taps.push({ w, label: L0, move: a2 ? r1(a2.getBoundingClientRect().top - y0) : 'gone', sl: [sl0, box2 ? box2.scrollLeft : null],
         dy: D.W.y - sy0, calls: D.W.calls - c0, rows: [n0, trs2.length], idx: [i0, a2 ? trs2.indexOf(a2) : -1], key: a2 ? a2.getAttribute('data-roi-k') : null,
-        intent: SP.st.intent > in0, inView: a2 ? (r => r.bottom > 0 && r.top < VH)(a2.getBoundingClientRect()) : false });
+        intent: SP.st.intent > in0, inView: a2 ? (r => r.bottom > 0 && r.top < VH)(a2.getBoundingClientRect()) : false,
+        // the column the reader was on (the right-edge one; gone → the next one to its left): its x before / after
+        col: { edge: vis[0] ? vis[0][0] : null, gone: vis[0] ? !h1.has(vis[0][0]) : null, lab: kc ? kc[0] : null, x: kc ? [r1(kc[1]), r1(h1.get(kc[0]))] : null,
+          soFar: [r1((vis.find(c => c[0] === 'So far') || [0, NaN])[1]), r1(h1.has('So far') ? h1.get('So far') : NaN)],
+          end: [end0, box2 ? box2.scrollLeft >= box2.scrollWidth - box2.clientWidth - 1 : null], n: [nc0, h1.size] } });
     }
     return { name, taps };
   }
   return { run, D, U, SP };
 }
 async function moreKeepAll(dc, packs) {
-  const res = { coh: [], cty: [], life: [], grow: [] };
+  const res = { coh: [], cty: [], life: [], grow: [], side: [], met: [] };
   for (const VW of [375, 1280]) {
     const H = await keepHarness(VW, longFile(), null);         // All countries: every grain × mode, 60 more … then all; all at once
     for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) for (const seq of [['60', '60', 'all'], ['all']])
@@ -450,6 +489,22 @@ async function moreKeepAll(dc, packs) {
       res.life.push(await (await keepHarness(VW, longFile(), null)).run({ VIEW: 'life', LG: 'day' }, 'lmore', seq, `${VW} life ${seq.join('+')}`));
     // something above the table grows in the same repaint: the page takes it back once, the layer adds no second scroll
     res.grow.push(await (await keepHarness(VW, longFile(), null)).run({ VIEW: 'day', GRAIN: 'day', MET: 'roas', CTY: '' }, 'more', ['60', 'all'], `${VW} grow`, { grow: 40 }));
+    // sideways (review, 21 Oct 2026): the Day table's columns past D30 change with the rows shown — the reader's column
+    // stays at its x: at the right end ("So far"), with the right-edge column kept, gone (D365 → the next one left), at 0
+    const S = await keepHarness(VW, longFile(), null), S4 = await keepHarness(VW, longFile(400), null);
+    for (const g of ['day', 'week', 'month']) for (const seq of [['60', '60', 'all'], ['all']])
+      res.side.push(await S.run({ VIEW: 'day', GRAIN: g, MET: 'roas', CTY: '' }, 'more', seq, `${VW} ${g} max ${seq.join('+')}`, { sx: 'max' }));
+    for (const [sx, nm] of [['max', 'max'], [{ edge: 'D365' }, 'D365'], [{ edge: 'D90' }, 'D90'], [{ edge: 'D20' }, 'D20'], [0, '0']])
+      for (const seq of nm === 'D365' ? [['60'], ['all']] : [['60', '60', 'all'], ['all']])   // (D365: only in the first 60)
+        res.side.push(await S4.run({ VIEW: 'day', GRAIN: 'day', MET: 'rev', CTY: '' }, 'more', seq, `${VW} m400 ${nm} ${seq.join('+')}`, { sx }));
+    res.side.push(await (await keepHarness(VW, longFile(), null)).run({ VIEW: 'life', LG: 'day' }, 'lmore', ['60', 'all'], `${VW} life max`, { sx: 'max' }));
+    // Mode switches (ROAS % / Revenue / Per install / Delta) after "Show all": the box keeps its row and its column
+    const M = await keepHarness(VW, longFile(), null), MC = await keepHarness(VW, dc, packs);
+    for (const g of ['day', 'week', 'month']) for (const [sx, nm] of [['max', 'max'], [{ edge: 'D30' }, 'D30'], [{ edge: 'D270' }, 'D270']])
+      res.met.push(await M.run({ VIEW: 'day', GRAIN: g, MET: 'roas', CTY: '' }, 'met', ['rev', 'ltv', 'delta', 'roas'], `${VW} ${g} ${nm} met`, { pre: ['all'], sx }));
+    res.met.push(await M.run({ VIEW: 'day', GRAIN: 'day', MET: 'roas', CTY: '' }, 'met', ['rev', 'roas'], `${VW} day 60 met`, { sx: 'max' }));   // 60 shown
+    for (const cc of ['AA', 'XX'])
+      res.met.push(await MC.run({ VIEW: 'day', GRAIN: 'day', MET: 'roas', CTY: cc }, 'met', ['rev', 'ltv', 'delta', 'roas'], `${VW} ${cc} met`, { pre: ['all'], sx: { edge: 'D14' } }));
   }
   return res;
 }

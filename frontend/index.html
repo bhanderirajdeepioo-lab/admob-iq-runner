@@ -8013,22 +8013,40 @@ function keepAt(r,anchor,sel,fn){ const y0=anchor.getBoundingClientRect().top; h
 // goes back on the box and the rest on the page, so the anchor sits where it was (≤ 1 px) and the new rows appear below it.
 // A page scroll here is the code's own (the stay-put layer then leaves this tap alone — never a second scroll); none needed
 // → the layer's anchor (the button below the box, or the box) did not move either.
-function moreBox(b){ const w=b.closest('.roi-tw'); if(w) return w;                  // the lifetime table: its buttons inside the box
-  const m=b.closest('.roi-more'), p=m&&m.previousElementSibling; return p&&p.classList&&p.classList.contains('roi-tw')?p:null; }   // install days: right below it
-function keepRows(r,b,fn){ const w=moreBox(b), rows=w?w.querySelectorAll('tr[data-roi-k]'):[];
-  if(!rows.length){ hold(r); fn(); return; }
+// Sideways the place is a COLUMN, not a pixel: the Day table's columns past D30 come and go with the rows shown (a month
+// column per 30 days of the oldest shown day, T's late checkpoints), and every column is as wide as its widest cell — so
+// the column at the box's visible right edge (by its header's label; the next ones to its left if it is gone) goes back
+// to the same x; at the right end ("So far" in sight) the box stays at the right end; at the left start it stays there.
+const thLab=x=>String(x.textContent||'').replace(/\s+/g,' ').trim();
+function boxAt(w){ const rows=w.querySelectorAll('tr[data-roi-k]'); if(!rows.length) return null;
   const wr=w.getBoundingClientRect(), vh=+window.innerHeight||0, lo=Math.max(wr.top,0), hi=vh>0?Math.min(wr.bottom,vh):wr.bottom;
   let a=null; for(let i=0;i<rows.length;i++){ const q=rows[i].getBoundingClientRect(); if(q.top>=hi) break; if(q.bottom>lo) a=rows[i]; }
   a=a||rows[rows.length-1];
-  const k=a.getAttribute('data-roi-k'), y0=a.getBoundingClientRect().top, sl=w.scrollLeft||0, st=w.scrollTop||0;
-  hold(r); fn();
-  const rs=r.querySelectorAll('tr[data-roi-k]'); let a2=null; for(let i=0;i<rs.length&&!a2;i++) if(rs[i].getAttribute('data-roi-k')===k) a2=rs[i];
-  if(!a2) return;
-  const w2=a2.closest('.roi-tw');
-  if(w2){ w2.scrollLeft=sl; w2.scrollTop=st;
-    const din=(a2.getBoundingClientRect().top-y0)-(w2.getBoundingClientRect().top-wr.top);   // moved inside the box, not with it
-    if(Math.abs(din)>1) w2.scrollTop=st+din; }
-  const dy=a2.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); }
+  const sl=w.scrollLeft||0, cw=w.clientWidth||0, mx=(w.scrollWidth||0)-cw, ths=w.querySelectorAll('thead th'), cs=[];
+  for(let i=ths.length-1;i>0;i--){ const x=ths[i].getBoundingClientRect().left-wr.left; if(x<cw) cs.push([thLab(ths[i]),x]); }   // (not the sticky first one)
+  return {k:a.getAttribute('data-roi-k'), y0:a.getBoundingClientRect().top, top:wr.top, st:w.scrollTop||0, sl, end:sl>1&&sl>=mx-1, cs}; }
+// after the repaint: the same row (by its key) and its new box; the box's scroll back (down + sideways, as above), what the
+// row still moved inside the box goes back on the box → the row (or null)
+function boxBack(r,p){ const rs=r.querySelectorAll('tr[data-roi-k]'); let a=null; for(let i=0;i<rs.length&&!a;i++) if(rs[i].getAttribute('data-roi-k')===p.k) a=rs[i];
+  const w=a&&a.closest('.roi-tw'); if(!w) return a;
+  w.scrollTop=p.st;
+  if(p.end) w.scrollLeft=(w.scrollWidth||0)-(w.clientWidth||0);
+  else { w.scrollLeft=p.sl;
+    if(p.sl>1){ const x0=w.getBoundingClientRect().left, s0=w.scrollLeft, ths=w.querySelectorAll('thead th');   // (s0: a narrower table clamps it)
+      for(const [lb,x] of p.cs){ let th=null; for(let i=1;i<ths.length&&!th;i++) if(thLab(ths[i])===lb) th=ths[i];
+        if(th){ const dx=th.getBoundingClientRect().left-x0-x; if(Math.abs(dx)>=1) w.scrollLeft=s0+dx; break; } } } }
+  const din=(a.getBoundingClientRect().top-p.y0)-(w.getBoundingClientRect().top-p.top);   // moved inside the box, not with it
+  if(Math.abs(din)>1) w.scrollTop=p.st+din;
+  return a; }
+function moreBox(b){ const w=b.closest('.roi-tw'); if(w) return w;                  // the lifetime table: its buttons inside the box
+  const m=b.closest('.roi-more'), p=m&&m.previousElementSibling; return p&&p.classList&&p.classList.contains('roi-tw')?p:null; }   // install days: right below it
+function keepRows(r,b,fn){ const w=moreBox(b), p=w?boxAt(w):null;
+  hold(r); fn(); if(!p) return;
+  const a=boxBack(r,p); if(!a) return;
+  const dy=a.getBoundingClientRect().top-p.y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); }
+// Mode (ROAS % / Revenue / Per install / Delta): the same rows, the same columns — the page keeps the tapped button (keep),
+// the table's own box keeps the reader's row and column (it used to come back at row 1, column 1 — after "Show all" too)
+function metBox(b){ const c=b.closest('.roi-ctl'), w=c&&c.nextElementSibling; return w&&w.classList&&w.classList.contains('roi-tw')?w:null; }
 let WIRED=false;
 function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventListener) return; WIRED=true;
   const tip=()=>{ const r=root(); return r&&r.querySelector('.roi-tip'); };
@@ -8047,7 +8065,8 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     let b;
     if((b=at('[data-roi-view]'))){ b.setAttribute('data-roi-sel',`[data-roi-view="${b.dataset.roiView}"]`); keep(b,()=>{ VIEW=b.dataset.roiView; r.querySelectorAll('[data-roi-view]').forEach(x=>x.setAttribute('aria-selected',String(x.dataset.roiView===VIEW))); repaint(); }); return; }
     if((b=at('[data-roi-grain]'))){ b.setAttribute('data-roi-sel',`[data-roi-grain="${b.dataset.roiGrain}"]`); keep(b,()=>{ GRAIN=b.dataset.roiGrain; SHOW=60; repaint(); }); return; }
-    if((b=at('[data-roi-met]'))){ b.setAttribute('data-roi-sel',`[data-roi-met="${b.dataset.roiMet}"]`); keep(b,()=>{ MET=b.dataset.roiMet; repaint(); }); return; }
+    if((b=at('[data-roi-met]'))){ b.setAttribute('data-roi-sel',`[data-roi-met="${b.dataset.roiMet}"]`); const w=metBox(b), p=w?boxAt(w):null;
+      keep(b,()=>{ MET=b.dataset.roiMet; repaint(); if(p) boxBack(r,p); }); return; }   // the box keeps its row + column too
     if((b=at('[data-roi-lg]'))){ b.setAttribute('data-roi-sel',`[data-roi-lg="${b.dataset.roiLg}"]`); keep(b,()=>{ LG=b.dataset.roiLg; LSHOW=60; repaint(); }); return; }
     if((b=at('[data-roi-more]'))){ const v=b.dataset.roiMore; keepRows(r,b,()=>{ SHOW=v==='all'?1e9:SHOW+60; repaint(); }); return; }       // the reader's row stays put
     if((b=at('[data-roi-lmore]'))){ const v=b.dataset.roiLmore; keepRows(r,b,()=>{ LSHOW=v==='all'?1e9:LSHOW+60; repaint(); }); return; }
