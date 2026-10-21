@@ -195,9 +195,11 @@ jobs:
           # ⏱ Speed only (the same files either way; empty: the code's defaults) — each a rollback without a code push:
           # GADS_SPEND_WORKERS=1 asks the Google Ads accounts one after another, IMPACT_ANY_WORKERS=0 builds "compare
           # any date" in the build's own process, GA4_FIRSTOPEN_CC_BATCH=1 reads First open by country one call at a time
+          # a property and GA4_FIRSTOPEN_CC_WORKERS=6 reads 6 properties side by side (both set: as before this change)
           GADS_SPEND_WORKERS:   ${{ vars.GADS_SPEND_WORKERS }}
           IMPACT_ANY_WORKERS:   ${{ vars.IMPACT_ANY_WORKERS }}
           GA4_FIRSTOPEN_CC_BATCH: ${{ vars.GA4_FIRSTOPEN_CC_BATCH }}
+          GA4_FIRSTOPEN_CC_WORKERS: ${{ vars.GA4_FIRSTOPEN_CC_WORKERS }}
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On

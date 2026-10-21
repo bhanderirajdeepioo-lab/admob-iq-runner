@@ -1,12 +1,15 @@
 """📦 Compare any date built side by side (impact_any_build, IMPACT_ANY_WORKERS): every file, the index, the counts
 line and every other output of the Uninstall step byte-identical to the in-process build — with a real process pool
-(spawn), its time budget replayed in app order, a crash, a pool that breaks, inputs that cannot be pickled. Synthetic
-stores only (tests.uninstall_synth)."""
+(spawn), its time budget replayed in app order, a crash, a pool that breaks, inputs that cannot be pickled, the split
+switched off (SPLIT=false) and split failures counted, the step raising after apps were queued (their files written as
+in-process, no pool process left). Synthetic stores only (tests.uninstall_synth)."""
 
 import copy
 import gzip
+import multiprocessing as mp
 import os
 import pickle
+import re
 import shutil
 from concurrent.futures import Future
 
@@ -156,15 +159,15 @@ def test_the_job_serializes_as_the_writer_and_never_changes_its_inputs(tmp_path)
         s0, r0 = copy.deepcopy(st), copy.deepcopy(rv)
         body, failed = ia.build_app(st, rv, "a", "0" * 12, "sig", 7)
         assert st == s0 and rv == r0                                     # build_app reads its inputs only
-        res = iab._job(pickle.dumps((st, rv, "a", "0" * 12, "sig", 7, "impact_any_%s.json.gz" % ("0" * 12))))
+        res = iab._job(iab._payload(st, rv, "a", "0" * 12, "sig", 7, "impact_any_%s.json.gz" % ("0" * 12)))
         p = str(tmp_path / ("w%d.json.gz" % i))
         iab.write_json_gz_stable(p, body)
         with gzip.open(p, "rb") as f:
             assert f.read() == res["raw"] == iab._raw(body)
         assert res["failed"] == failed and res["entry"] == ia.index_entry(body, "impact_any_%s.json.gz" % ("0" * 12))
-        assert res["sec"] >= 0
+        assert res["sec"] >= 0 and res["fails"] == 0
     bad = iab._job(b"not a pickle")
-    assert set(bad) == {"err", "sec"}
+    assert set(bad) == {"err", "sec", "fails"} and bad["fails"] == 0
 
 
 def test_workers_setting():
@@ -172,3 +175,101 @@ def test_workers_setting():
     assert iab.start("/nonexistent", {"impact_any_workers": -3})["workers"] == 0
     assert iab.start("/nonexistent", {"impact_any_workers": 2})["workers"] == 2
     assert iab.start("/nonexistent", {})["workers"] == iab.WORKERS
+
+
+def test_split_off_reaches_the_pool_processes(tmp_path, isite):
+    """SPLIT=false (attrib.ON, set by the build at run time): a spawned pool process imports the engine fresh (ON:
+    True) — the job carries the switch, so its files are the in-process ones (no split in them)."""
+    data, out = isite
+    d1, o1 = str(tmp_path / "data_on"), str(tmp_path / "site_on")
+    shutil.copytree(data, d1)
+    run(d1, o1, ga4_settings(impact_any_workers=0))                     # (on: the split is in these files)
+    iab.pop_line()
+    a, b = _twice(tmp_path, data, out, 2, split=False)
+    _same(a, b)
+    assert _twice.runs == {"pool": 3, "here": 0}
+    for split, root in ((True, o1), (False, out + "_b")):
+        files = [n for n in os.listdir(root) if iab.FILE_RE.match(n)]
+        assert len(files) == 3
+        assert all((b'"sp"' in gzip.decompress(open(os.path.join(root, n), "rb").read())) == split for n in files)
+
+
+def test_split_failures_in_the_pool_are_counted_as_in_process(tmp_path, isite, monkeypatch, capsys):
+    """A split builder that raises (attrib.safe: counted in attrib.FAILS, "split failed: N"): the pool processes' count
+    comes back with each job — the same N either way, and more than the Uninstall evaluation's own."""
+    from admob_iq.engine import attrib
+    from tests.uninstall_synth import split_fails
+    data, out = isite
+    monkeypatch.setattr(attrib, "rate", split_fails)                     # here (A, and B's own evaluation) …
+    monkeypatch.setattr(iab, "SWITCHES", iab.SWITCHES + ((attrib, "rate"),))   # … and in each pool process (B)
+    d0, o0 = str(tmp_path / "data_0"), str(tmp_path / "site_0")
+    shutil.copytree(data, d0)
+    run(d0, o0, ga4_settings(impact_any=False))
+    base = int(re.findall(r"^split failed: (\d+)$", capsys.readouterr().err, re.M)[-1])
+    a, b = _twice(tmp_path, data, out, 2)
+    _same(a, b)
+    assert _twice.runs == {"pool": 3, "here": 0}
+    n = [int(x) for x in re.findall(r"^split failed: (\d+)$", capsys.readouterr().err, re.M)]
+    assert len(n) == 2 and n[0] == n[1] > base > 0
+    assert attrib.rate is split_fails and attrib.ON is True              # (a job built here restores this process's)
+
+
+def test_a_step_that_raises_after_apps_were_queued_writes_their_files_and_leaves_no_pool(tmp_path, isite,
+                                                                                         monkeypatch):
+    """The Uninstall loop raises on the 2nd app (after apps 1 and 2 were handed to the pool): the files the in-process
+    build had written by then are written (in app order) before the error goes on, and no pool process is left running
+    on the build's CPUs or for the interpreter's exit to wait on."""
+    from admob_iq.engine import uninstall as eng
+    data, out = isite
+    real, seen = eng.cohort_file, {}
+    for w in (0, 2):
+        d, o, n = str(tmp_path / ("data%d" % w)), str(tmp_path / ("site%d" % w)), []
+        shutil.copytree(data, d)
+
+        def cf(store, n=n):
+            n.append(1)
+            if len(n) == 2:
+                raise RuntimeError("synthetic")
+            return real(store)
+        monkeypatch.setattr(eng, "cohort_file", cf)
+        iab.RUNS.update(pool=0, here=0)
+        with pytest.raises(RuntimeError):
+            run(d, o, ga4_settings(impact_any_workers=w))
+        seen[w] = _all(o, d)
+        assert not mp.active_children()
+        assert iab.RUNS == ({"pool": 2, "here": 0} if w else {"pool": 0, "here": 0})
+    assert seen[0].keys() == seen[2].keys() and seen[0] == seen[2]
+    assert sum(1 for k in seen[2] if k.startswith("site/impact_any_")) == 2
+
+
+class _Rec:
+    """A stand-in pool that records its shutdown (futures never done: drain must not wait on them when interrupted)."""
+
+    def __init__(self):
+        self.down = None
+
+    def submit(self, fn, *a):
+        return Future()
+
+    def shutdown(self, **k):
+        self.down = k
+
+
+def test_drain_interrupted_drops_the_queued_jobs_and_shuts_the_pool_down(tmp_path):
+    from tests.test_impact_windows import _stores
+    acc = iab.start(str(tmp_path), {"impact_any_workers": 2})
+    pool = acc["pool"] = _Rec()
+    st, rv = next(iter(_stores()))
+    st = dict(st, window_end=END.isoformat())
+    p = str(tmp_path / "s.json.gz")
+    iab.write_json_gz_stable(p, st)
+    iab.app_step(acc, str(tmp_path), st, {"app_id": "a"}, "0" * 12, p, rv, 7)
+    assert len(acc["jobs"]) == 1
+    iab.drain(acc, wait=False)                                           # (a KeyboardInterrupt: nothing waited on)
+    assert pool.down == {"wait": False, "cancel_futures": True} and acc["pool"] is False
+    assert not [f for f in os.listdir(str(tmp_path)) if f.startswith("impact_any_")]
+    acc = iab.start(str(tmp_path), {"impact_any_workers": 2})
+    pool = acc["pool"] = _Pool()
+    iab.app_step(acc, str(tmp_path), st, {"app_id": "a"}, "0" * 12, p, rv, 7)
+    iab.drain(acc)                                                       # (an error: settled as finish() would)
+    assert os.listdir(str(tmp_path)).count("impact_any_%s.json.gz" % ("0" * 12)) == 1 and acc["built"] == 1

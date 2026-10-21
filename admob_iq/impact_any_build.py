@@ -14,11 +14,14 @@
   * off(out_dir): the switch (repo variable IMPACT_ANY=false): every file of it removed, nothing printed — the site as
     without the feature.
   * side by side (IMPACT_ANY_WORKERS, default WORKERS; 0 = in the build's own process, as before): an app to rebuild is
-    handed — a pickled copy of its store and revenue as app_step got them — to a small process pool and built there
-    while the build goes on with the next apps; its file is written, and the budget rule above applied, in APP ORDER
-    (an app is built only if the earlier apps' computing seconds are under BUDGET_SEC), as the jobs finish and at the
-    latest in finish(). The file bytes are the same (the same engine on the same inputs, serialized as
-    write_json_gz_stable does); a job the pool can not run is built here from its copy.
+    handed — a pickled copy of its store and revenue as app_step got them, with the engine switches the build set at
+    run time (SWITCHES: a spawned process imports the engine fresh) — to a small process pool and built there while the
+    build goes on with the next apps; its file is written, and the budget rule above applied, in APP ORDER (an app is
+    built only if the earlier apps' computing seconds are under BUDGET_SEC), as the jobs finish and at the latest in
+    finish() — or in drain(), when the Uninstall step raises before finish (the files the in-process build had written
+    by then; the pool shut down). The file bytes are the same (the same engine on the same inputs, serialized as
+    write_json_gz_stable does), and a job's split failures are counted here (attrib.FAILS: "split failed: N"); a job
+    the pool can not run is built here from its copy.
 
 Failure-isolated: an app that raises costs only its own file (left out of the index, its file removed), never the
 Uninstall step. No alert or notification ever comes from here. PRIVACY: the log line has counts only.
@@ -26,6 +29,7 @@ Uninstall step. No alert or notification ever comes from here. PRIVACY: the log 
 
 import gzip
 import hashlib
+import importlib
 import json
 import os
 import pickle
@@ -34,6 +38,7 @@ import sys
 import time
 
 from .db import write_gz_stable, write_json_gz_stable
+from .engine import attrib
 from .engine import impact_any as ia
 
 PREFIX = "impact_any_"
@@ -45,6 +50,8 @@ BUDGET_SEC = 150              # this step's computing per build at most (+ the a
 LINE = None                   # this build's counts line (build_static.build prints it: pop_line)
 WORKERS = 2                   # apps rebuilt side by side in their own processes (IMPACT_ANY_WORKERS; 0 = inline)
 RUNS = {"pool": 0, "here": 0}  # this build's side-by-side jobs: built in the pool / here from their copy (tests read it)
+SWITCHES = ((attrib, "ON"),)  # the engine globals the build sets at run time (uninstall_build: attrib.ON from SPLIT) —
+                              # each job carries them (a pool process imports the engine fresh): add any new one here
 
 
 def enabled(s):
@@ -100,8 +107,7 @@ def app_step(acc, out_dir, store, a, key, path, rev, late):
             if acc.get("workers"):
                 _settle(acc, wait=False)                # the earlier apps' jobs that are done, in order
                 try:
-                    payload = pickle.dumps((store, rev, a["app_id"], key, sig, late, name),
-                                           protocol=pickle.HIGHEST_PROTOCOL)
+                    payload = _payload(store, rev, a["app_id"], key, sig, late, name)
                 except Exception:                       # (not picklable: built here, after the earlier apps)
                     _settle(acc, wait=True)
             if acc["spent"] >= acc["budget"]:          # this build's computing is spent: the next build goes on
@@ -158,16 +164,38 @@ def _raw(body):
     return json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
 
+def _payload(store, rev, app_id, key, sig, late, name):
+    """One app's job: its inputs and the engine switches as they are now (SWITCHES: module, name, value), pickled."""
+    sw = [(m.__name__, n, getattr(m, n)) for m, n in SWITCHES]
+    return pickle.dumps((store, rev, app_id, key, sig, late, name, sw), protocol=pickle.HIGHEST_PROTOCOL)
+
+
 def _job(payload):
-    """One app's build from its pickled inputs (in a pool process, or here when the pool can not run it) → {"raw",
-    "failed", "entry", "sec"} or {"err", "sec"}; never raises."""
-    t0 = time.monotonic()
+    """One app's build from its pickled inputs (in a pool process, or here when the pool can not run it), under the
+    engine switches it carries → {"raw", "failed", "entry", "sec", "fails"} or {"err", "sec", "fails"} (fails: its
+    split failures, attrib.FAILS — counted by _settle; this process's own switches and count left as they were); never
+    raises."""
+    t0, fails, saved = time.monotonic(), 0, None
     try:
-        store, rev, app_id, key, sig, late, name = pickle.loads(payload)
-        body, failed = ia.build_app(store, rev, app_id, key, sig, late)
-        return {"raw": _raw(body), "failed": failed, "entry": ia.index_entry(body, name), "sec": time.monotonic() - t0}
+        store, rev, app_id, key, sig, late, name, sw = pickle.loads(payload)
+        sw = [(importlib.import_module(m), n, v) for m, n, v in sw]
+        saved = [(m, n, getattr(m, n)) for m, n, _ in sw], attrib.FAILS
+        for m, n, v in sw:
+            setattr(m, n, v)
+        attrib.FAILS = 0
+        try:
+            body, failed = ia.build_app(store, rev, app_id, key, sig, late)
+        finally:
+            fails = attrib.FAILS
+        return {"raw": _raw(body), "failed": failed, "entry": ia.index_entry(body, name), "sec": time.monotonic() - t0,
+                "fails": fails}
     except Exception as e:
-        return {"err": type(e).__name__, "sec": time.monotonic() - t0}
+        return {"err": type(e).__name__, "sec": time.monotonic() - t0, "fails": fails}
+    finally:
+        if saved is not None:
+            for m, n, v in saved[0]:
+                setattr(m, n, v)
+            attrib.FAILS = saved[1]
 
 
 def _pool(acc):
@@ -219,6 +247,7 @@ def _settle(acc, wait):
         else:
             RUNS["pool"] += 1
         acc["spent"] += res["sec"]
+        attrib.FAILS += int(res.get("fails") or 0)      # (the in-process build counts them as it goes)
         line = None
         if "err" not in res:
             t0 = acc["clock"]()
@@ -238,13 +267,28 @@ def _settle(acc, wait):
         _add(acc, line, job.name, at)
 
 
-def _close(acc):
+def _close(acc, wait=True):
     pool, acc["pool"] = acc.get("pool"), False
     if pool:
         try:
-            pool.shutdown(wait=True, cancel_futures=True)
+            pool.shutdown(wait=wait, cancel_futures=True)
         except Exception:
             pass
+
+
+def drain(acc, wait=True):
+    """The Uninstall step raised before finish(): the queued apps settled as finish() would — each file written in app
+    order under the budget rule, i.e. the files the in-process build had written by then (wait False: an interrupt —
+    the jobs not yet started dropped, nothing written) — and the pool shut down: no job left running on the build's
+    CPUs, nothing for the interpreter's exit to wait on. No index, no log line (as the in-process build). Never
+    raises."""
+    try:
+        if wait:
+            _settle(acc, wait=True)
+    except Exception:
+        pass
+    finally:
+        _close(acc, wait=wait)
 
 
 def finish(acc, out_dir):

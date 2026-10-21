@@ -352,77 +352,82 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
             iab.off(out_dir)
     except Exception as e:
         print("impact any skipped: %s" % type(e).__name__, file=sys.stderr)
-    for a in sorted(apps, key=lambda x: (x["app_name"].casefold(), x["app_id"])):
-        aid, path = a["app_id"], gu.store_path(data_dir, a["app_id"])
-        with _sc.stage("uninstall_store_load"):  # (the per-app steps below: one row each, summed over the apps)
-            store = gu.load_store(path) if os.path.exists(path) and not a.get("same_as") else None
-        if not store or not store.get("history_start") or not store.get("window_end"):
-            r = _reason(a, status, state)
-            no_ga4.append({"app_id": aid, "app": a["app_name"], "package": a.get("package"), "reason": r,
-                           "text": NO_GA4_TEXT[r] % ((a["same_as"],) * 2 if r == "same_package" else ())})
-            continue
-        key = gu.file_key(aid)
-        st = state["fetch"].setdefault(aid, {})
-        st["meta"] = gu.store_meta(store)               # planning always follows the store actually on disk
-        stale = gu._hours_since(store.get("fetched_at"), now) > eng.STALE_HOURS
-        with _sc.stage("uninstall_eval"):
-            store = eng.fill_days(store)                    # near-complete days filled (≈) — the detail and the cohort
+    try:                                            # (a raise here unwinds the step: compare any date's queued
+        for a in sorted(apps, key=lambda x: (x["app_name"].casefold(), x["app_id"])):
+            aid, path = a["app_id"], gu.store_path(data_dir, a["app_id"])
+            with _sc.stage("uninstall_store_load"):  # (the per-app steps below: one row each, summed over the apps)
+                store = gu.load_store(path) if os.path.exists(path) and not a.get("same_as") else None
+            if not store or not store.get("history_start") or not store.get("window_end"):
+                r = _reason(a, status, state)
+                no_ga4.append({"app_id": aid, "app": a["app_name"], "package": a.get("package"), "reason": r,
+                               "text": NO_GA4_TEXT[r] % ((a["same_as"],) * 2 if r == "same_package" else ())})
+                continue
+            key = gu.file_key(aid)
+            st = state["fetch"].setdefault(aid, {})
+            st["meta"] = gu.store_meta(store)               # planning always follows the store actually on disk
+            stale = gu._hours_since(store.get("fetched_at"), now) > eng.STALE_HOURS
+            with _sc.stage("uninstall_eval"):
+                store = eng.fill_days(store)                # near-complete days filled (≈) — the detail and the cohort
                                                             # file read the same cells; the store on disk stays raw
-            # an unchecked store format (v1: its clean re-pull still pending — quota, a failure) is shown and flagged,
-            # but whatever it opens is seeded, never sent: no alert from unchecked data ever goes out. A v2 store
-            # waiting for its repair is checked data: evaluated as ever (its incomplete days still left out)
-            outdated = gu._store_v(store) < gu.CHECKED_V
-            rev = app_revenue(revenue, a, apps, store.get("package"), cover=act_on)
-            detail, row = eng.evaluate_app(store, aid, a["app_name"], state, now_iso, stale=stale, key=key,
-                                           package=a.get("package") or store.get("package"), late=cfg["late_days"],
-                                           outdated=outdated, revenue=rev, windows=cfg["impact_windows"])
-        if act_on:                                      # Active users: the uninstall detail read, never changed; a
-            snap = None                                 # failure costs only this app's Active row (its state kept)
-            try:
-                snap = ab.snapshot(act_st, aid)
-                with _sc.stage("active_apps"):
-                    act_rows.append(ab.app_step(store, a, detail, key, act_st, now_iso, rev, market, stale, outdated,
-                                                act_cfg, out_dir))
-            except Exception:
+                # an unchecked store format (v1: its clean re-pull still pending — quota, a failure) is shown and
+                # flagged, but whatever it opens is seeded, never sent: no alert from unchecked data ever goes out. A v2
+                # store waiting for its repair is checked data: evaluated as ever (its incomplete days still left out)
+                outdated = gu._store_v(store) < gu.CHECKED_V
+                rev = app_revenue(revenue, a, apps, store.get("package"), cover=act_on)
+                detail, row = eng.evaluate_app(store, aid, a["app_name"], state, now_iso, stale=stale, key=key,
+                                               package=a.get("package") or store.get("package"), late=cfg["late_days"],
+                                               outdated=outdated, revenue=rev, windows=cfg["impact_windows"])
+            if act_on:                                      # Active users: the uninstall detail read, never changed; a
+                snap = None                                 # failure costs only this app's Active row (its state kept)
                 try:
-                    ab.restore_app(act_st, aid, snap)
-                except Exception:                       # its state can't be put back: this app starts over (seeded)
-                    ab.drop_app(act_st, aid)
-                act_rows.append(ab.error_row(a, key))
-        if val_on:                                      # Install value: after Active (an open Active return alert
-            vsnap = None                                # tags the money-back ones); a failure costs only this app's
-            try:                                        # value row (its value state kept)
-                vsnap = vb.snapshot(val_st, aid)
-                aal = (act_rows[-1].get("_alerts") if act_on and act_rows and act_rows[-1].get("app_id") == aid
-                       else None)
-                with _sc.stage("value_apps"):
-                    val_rows.append(vb.app_step(store, a, detail, key, val_st, now_iso, rev, val_pre, val_cfg, out_dir,
-                                                act_alerts=aal, market=val_mkt))
-            except Exception:
-                try:
-                    vb.restore_app(val_st, aid, vsnap)
+                    snap = ab.snapshot(act_st, aid)
+                    with _sc.stage("active_apps"):
+                        act_rows.append(ab.app_step(store, a, detail, key, act_st, now_iso, rev, market, stale,
+                                                    outdated, act_cfg, out_dir))
                 except Exception:
-                    vb.drop_app(val_st, aid)
-                val_rows.append(vb.error_row(a, key))
-            if roi_acc is not None:                     # (never raises: a failure costs only this app's ROI file)
-                with _sc.stage("roi_apps"):
-                    rb.app_step(roi_acc, store, a, key, rev, val_pre, val_cfg, out_dir, data_dir, now,
-                                ids=pkg_ids(a, apps, store.get("package")))
-        if any_acc is not None:                         # (never raises: a failure costs only this app's file)
-            with _sc.stage("impact_any"):
-                iab.app_step(any_acc, out_dir, store, a, key, path, rev, cfg["late_days"])
-        with _sc.stage("cohort_files"):
-            eng.revision_sums(store, late_sums)
-            name = COHORT_PREFIX + key + ".json.gz"
-            sig = _sig(path)
-            if st.get("c_sig") != sig or not os.path.exists(os.path.join(out_dir, name)):
-                write_json_gz_stable(os.path.join(out_dir, name), eng.cohort_file(store))
-                st["c_sig"] = sig
-        files.append(name)
-        details.append(detail)
-        rows.append(row)
-        store = None                                    # one big store in memory at a time
-    gu.save_state(data_dir, state)
+                    try:
+                        ab.restore_app(act_st, aid, snap)
+                    except Exception:                       # its state can't be put back: this app starts over (seeded)
+                        ab.drop_app(act_st, aid)
+                    act_rows.append(ab.error_row(a, key))
+            if val_on:                                      # Install value: after Active (an open Active return alert
+                vsnap = None                                # tags the money-back ones); a failure costs only this app's
+                try:                                        # value row (its value state kept)
+                    vsnap = vb.snapshot(val_st, aid)
+                    aal = (act_rows[-1].get("_alerts") if act_on and act_rows and act_rows[-1].get("app_id") == aid
+                           else None)
+                    with _sc.stage("value_apps"):
+                        val_rows.append(vb.app_step(store, a, detail, key, val_st, now_iso, rev, val_pre, val_cfg,
+                                                    out_dir, act_alerts=aal, market=val_mkt))
+                except Exception:
+                    try:
+                        vb.restore_app(val_st, aid, vsnap)
+                    except Exception:
+                        vb.drop_app(val_st, aid)
+                    val_rows.append(vb.error_row(a, key))
+                if roi_acc is not None:                     # (never raises: a failure costs only this app's ROI file)
+                    with _sc.stage("roi_apps"):
+                        rb.app_step(roi_acc, store, a, key, rev, val_pre, val_cfg, out_dir, data_dir, now,
+                                    ids=pkg_ids(a, apps, store.get("package")))
+            if any_acc is not None:                         # (never raises: a failure costs only this app's file)
+                with _sc.stage("impact_any"):
+                    iab.app_step(any_acc, out_dir, store, a, key, path, rev, cfg["late_days"])
+            with _sc.stage("cohort_files"):
+                eng.revision_sums(store, late_sums)
+                name = COHORT_PREFIX + key + ".json.gz"
+                sig = _sig(path)
+                if st.get("c_sig") != sig or not os.path.exists(os.path.join(out_dir, name)):
+                    write_json_gz_stable(os.path.join(out_dir, name), eng.cohort_file(store))
+                    st["c_sig"] = sig
+            files.append(name)
+            details.append(detail)
+            rows.append(row)
+            store = None                                    # one big store in memory at a time
+        gu.save_state(data_dir, state)
+    except BaseException as e:                      # apps settled first — the files the in-process build had
+        if any_acc is not None:                     # written by then — and its pool shut down)
+            iab.drain(any_acc, wait=isinstance(e, Exception))
+        raise
     if any_acc is not None:                         # (its files: build_static's headers, by pattern — the list
         with _sc.stage("impact_any_finish"):        # returned here stays the tab's own)
             iab.finish(any_acc, out_dir)

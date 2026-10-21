@@ -153,9 +153,11 @@ class App(ga4.Ga4App):
     def __init__(self, token, property_id, stream_id, prop, over=None, max_calls=MAX_CALLS):
         super().__init__(token, property_id, stream_id)
         self.prop, self.over, self.max_calls, self.tok = prop, over, max_calls, 0
-        self.f_sec = self.f_tok = None              # the slowest / costliest funnel call this App made (funnel_many)
+        self.f_sec = self.f_tok = None              # the slowest / costliest GROUP call this App made (funnel(…,
+                                                    # measure=True), funnel_many) — batch_ok's margin: only calls of
+                                                    # the shape a batch asks (a day's total is another query)
 
-    def _post(self, method, body):
+    def _post(self, method, body, measure=False):
         why = self.prop.get("stop") or (self.over() if self.over else None) or gaud.quota_stop(self.prop.get("quota"))
         if why:
             self.prop["stop"] = self.prop.get("stop") or (why if why != "budget" else None)
@@ -170,15 +172,17 @@ class App(ga4.Ga4App):
             self.calls += 1
             t0 = time.monotonic()
             j = ga4._call("POST", "%s/properties/%s:%s" % (ALPHA, self.property_id, method), self.token, body=body)
-            self._measured(time.monotonic() - t0, j.get("propertyQuota"))
+            if measure:
+                self._measured(time.monotonic() - t0, j.get("propertyQuota"))
         q = j.get("propertyQuota")
         if q:
             self.prop["quota"] = q
             self.tok += gaud._int((q.get("tokensPerDay") or {}).get("consumed"))
         return j
 
-    def funnel(self, body):
-        return self._post("runFunnelReport", self._funnel_body(body))
+    def funnel(self, body, measure=False):
+        """measure: a call of the shape funnel_many asks (its seconds and tokens size batch_ok's margin)."""
+        return self._post("runFunnelReport", self._funnel_body(body), measure)
 
     def _funnel_body(self, body):
         return dict(body, dimensionFilter=ga4.stream_filter(self.stream_id), returnPropertyQuota=True)
@@ -191,9 +195,11 @@ class App(ga4.Ga4App):
     def batch_ok(self, n):
         """Would funnel() one at a time make n calls in a row from here — never Stop before the last of them? Only on what
         is known now, with room: no stop yet, the call cap; the run's clock (over.left: seconds left) past n calls of
-        twice the slowest funnel call this App made; and the property's last quota snapshot after n − 1 calls of twice
+        twice the slowest group call this App made; and the property's last quota snapshot after n − 1 calls of twice
         the costliest one (every token bucket's remaining down by that, its size up by it; a server error and two
-        thresholded requests each) still clear of every floor (gaud.quota_stop). Nothing measured yet: False."""
+        thresholded requests each) still clear of every floor (gaud.quota_stop). No group call measured yet (only
+        funnel(…, measure=True) and funnel_many answers count — never a call of another shape): False, so an App's
+        first group call always goes alone."""
         if n < 2 or self.prop.get("stop") or self.calls + n > self.max_calls or self.f_sec is None or self.f_tok is None:
             return False
         left = getattr(self.over, "left", None) if self.over else None
@@ -217,10 +223,11 @@ class App(ga4.Ga4App):
         return gaud.quota_stop(worst) is None
 
     def funnel_many(self, bodies):
-        """len(bodies) funnel calls side by side → their answers in order, or None (batch_ok says no: the caller asks one
-        at a time). Counted as one at a time: calls, tokens (each answer's), the property's quota snapshot (each bucket
-        as the answer with the least left says it — the one GA4 counted last). A failed call raises, in order, after
-        every call ended (the one-at-a-time read stops at the same call: the day is not kept either way)."""
+        """len(bodies) funnel calls of one shape (the group calls funnel(…, measure=True) asks) side by side → their
+        answers in order, or None (batch_ok says no: the caller asks one at a time). Counted as one at a time: calls,
+        tokens (each answer's), the property's quota snapshot (each bucket as the answer with the least left says it —
+        the one GA4 counted last). A failed call raises, in order, after every call ended (the one-at-a-time read stops
+        at the same call: the day is not kept either way)."""
         n = len(bodies)
         if not self.batch_ok(n):
             return None

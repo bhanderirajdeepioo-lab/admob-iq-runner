@@ -1432,3 +1432,9 @@ def legacy_alert_policy():
     from admob_iq.engine import active, uninstall, value
     for mod in (active, uninstall, value):
         mod.ALERT_POLICY = False
+
+
+def split_fails(*a, **k):
+    """A split builder that always raises (engine.attrib.safe counts it in FAILS) — a module-level function, so a test
+    can hand it to a spawned pool process by reference (tests/test_impact_any_pool.py)."""
+    raise ValueError("synthetic split failure")

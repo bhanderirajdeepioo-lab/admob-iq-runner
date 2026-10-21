@@ -72,6 +72,7 @@ MAX_CALLS = 150                     # per app per run, passed to the App (the ba
 BUDGET_SEC = 240
 RETRY_HOURS = 3.0
 WORKERS = 10                        # properties read side by side (each its own quota; one call at a time each …)
+                                    # GA4_FIRSTOPEN_CC_WORKERS (env) 6: as before
 BATCH = 5                           # … but a day's group calls up to this many side by side when the one-at-a-time
                                     # calls would all go (App.funnel_many; GA4 allows 10 concurrent per property).
                                     # GA4_FIRSTOPEN_CC_BATCH (env) 1: one at a time, as before
@@ -149,6 +150,14 @@ def _batch():
         return BATCH
 
 
+def _workers():
+    """Properties read side by side: GA4_FIRSTOPEN_CC_WORKERS (env; empty or not a number: WORKERS)."""
+    try:
+        return max(1, int(os.getenv("GA4_FIRSTOPEN_CC_WORKERS") or WORKERS))
+    except ValueError:
+        return WORKERS
+
+
 def _answers(ga, groups):
     """[(group, funnel body)] → (group, GA4's answer) in group order: as many as BATCH side by side as the App can tell
     the one-at-a-time calls would all go (funnel_many; else None — fewer tried, down to 2), one at a time otherwise —
@@ -161,9 +170,9 @@ def _answers(ga, groups):
             if got is not None:
                 chunk = chunk[:m]
                 break
-        if got is None:
+        if got is None:                                 # (alone: measured, the margin of a later batch)
             chunk = chunk[:1]
-            got = [ga.funnel(chunk[0][1])]
+            got = [ga.funnel(chunk[0][1], measure=True) if many else ga.funnel(chunk[0][1])]
         for (g, _), j in zip(chunk, got):
             yield g, j
         i += len(chunk)
@@ -274,9 +283,9 @@ def save_state(data_dir, state):
 COUNTS = ("selected", "with_store", "fetched", "fresh", "no_steps", "failed", "deferred", "days", "calls", "tokens")
 
 
-def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDGET_SEC, workers=WORKERS):
+def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDGET_SEC, workers=None):
     """Every selected app with a First open store → {"counts", "apps": {app id: fetched|fresh|no_steps|failed|
-    deferred}}. Never raises; never prints."""
+    deferred}}; workers: properties side by side (None: _workers()). Never raises; never prints."""
     now = now or datetime.now(timezone.utc)
     t0 = clock()
     counts = dict.fromkeys(COUNTS, 0)
@@ -373,7 +382,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                     counts["tokens"] += ga.tok
                     counts["days"] += max(0, len(store.get("days") or {}) - n0)
 
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        with ThreadPoolExecutor(max_workers=max(1, workers or _workers())) as ex:
             list(ex.map(one_prop, order))
         save_state(data_dir, state)
     except Exception as e:                              # a bug here must never cost the build

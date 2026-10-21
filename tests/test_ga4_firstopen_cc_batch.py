@@ -32,18 +32,18 @@ def _h(*p):
 class GA4:
     """A synthetic GA4 Data API for ga4._call: per property a quota (day / hour / project-hour tokens, thresholded
     requests, server errors) used up atomically by every request — a funnel call's cost from its content (60 … 119
-    tokens), a report's 40 — each answer saying what is left after it; answers after a seeded random pause (shuffled
-    when side by side). n_cc countries a day; the funnel empty for a day before `gone_before` or in `empty`; `fail`: a
-    (day, first country of the group) whose call answers HTTP 500."""
+    tokens; costs=(a day's total, a group call): fixed per shape), a report's 40 — each answer saying what is left after
+    it; answers after a seeded random pause (shuffled when side by side). n_cc countries a day; the funnel empty for a
+    day before `gone_before` or in `empty`; `fail`: a (day, first country of the group) whose call answers HTTP 500."""
 
     def __init__(self, n_cc=70, hour=40000, day=200000, thr=120, gone_before=None, empty=(), fail=None, seed=1,
-                 proj=None):
+                 proj=None, costs=None):
         self.ccs = ["Q%03d" % i for i in range(n_cc)]
         self.start = {"tokensPerDay": day, "tokensPerHour": hour, "tokensPerProjectPerHour": proj or int(hour * 0.35),
                       "potentiallyThresholdedRequestsPerHour": thr, "serverErrorsPerProjectPerHour": 10}
         self.left, self.lock, self.rnd = {}, threading.Lock(), random.Random(seed)
         self.gone_before, self.empty, self.fail = gone_before, set(empty), fail
-        self.calls, self.live, self.peak = [], {}, {}
+        self.calls, self.live, self.peak, self.costs = [], {}, {}, costs
 
     def quota(self, pid, cost, thr):
         with self.lock:
@@ -92,7 +92,7 @@ class GA4:
             self.calls.append((pid, "funnel", a.isoformat(), vals[0]))
         if self.fail == (a.isoformat(), vals[0]):
             raise RuntimeError("HTTP 500: INTERNAL synthetic")
-        q = self.quota(pid, 60 + _h(pid, a, vals[0]) % 60, 1)
+        q = self.quota(pid, (self.costs[dim != "date"] if self.costs else 60 + _h(pid, a, vals[0]) % 60), 1)
         if (self.gone_before and a < self.gone_before) or a in self.empty:
             return {"funnelTable": {"rows": []}, "propertyQuota": q}
         rows = []
@@ -250,6 +250,44 @@ def test_a_failing_call_fails_the_app_the_same(tmp_path, monkeypatch, pressure):
         da, db = _days(str(tmp_path / "a"), aid), _days(str(tmp_path / "b"), aid)
         assert {k: v for k, v in da.items() if k in db} == {k: v for k, v in db.items() if k in da}
         assert len(db) >= len(da) - 2
+
+
+@pytest.mark.parametrize("floor", ["proj", "hour"])
+def test_a_cheap_days_total_never_sizes_the_margin_of_costlier_group_calls(tmp_path, monkeypatch, floor):
+    """The day's total funnel (a date breakdown) is another query than its group calls (a country list + breakdown): a
+    total of 30 tokens, every group call 150 (more than twice the total). The margin comes from group calls only — each
+    App's first group call goes alone and is measured — so near the project-hour or the hour floor side by side stops at
+    the very call one at a time stops at: the same stores, state, counts and calls."""
+    edges = range(7100, 8600, 50) if floor == "proj" else range(20000, 21700, 50)
+    batched = False
+    for v in edges:
+        kw = dict(proj=v, hour=10 ** 6) if floor == "proj" else dict(hour=v, proj=10 ** 6)
+        res, a, b = _both(tmp_path / str(v), monkeypatch, lambda kw=kw: GA4(day=10 ** 7, costs=(30, 150), **kw))
+        _same(res, a, b, batched=False)
+        batched = batched or max(b.peak.values()) > 1
+    assert batched                                                      # (side by side where there was room)
+    ga = gf.App("t", "P", "s", {"quota": None, "stop": None}, over=lambda: None, max_calls=100)
+    ga.over.left = lambda: 1000.0
+    monkeypatch.setattr(fc.ga4, "_call", GA4(costs=(30, 150)))
+    monkeypatch.setattr(fc.ga4, "_sleep", lambda s: None)
+    ga.funnel(gf.funnel_body("S", "H", TODAY, TODAY, "date"))
+    assert ga.f_tok is None and not ga.batch_ok(2)                      # a total call measures nothing
+    ga.funnel(fc.group_body("S", "H", TODAY, ["Q000", "Q001"]), measure=True)
+    assert ga.f_tok == 150 and ga.batch_ok(2)
+
+
+def test_properties_side_by_side_from_the_env(tmp_path, monkeypatch):
+    """GA4_FIRSTOPEN_CC_WORKERS (a repo variable): 6 reads 6 properties side by side, as before this change — with
+    GA4_FIRSTOPEN_CC_BATCH=1 the old call pattern without a code push; empty or not a number: WORKERS."""
+    for v, want in (("", fc.WORKERS), ("6", 6), ("x", fc.WORKERS), ("0", 1)):
+        monkeypatch.setenv("GA4_FIRSTOPEN_CC_WORKERS", v)
+        assert fc._workers() == want
+    seen, real = [], fc.ThreadPoolExecutor
+    monkeypatch.setattr(fc, "ThreadPoolExecutor", lambda max_workers: seen.append(max_workers) or real(max_workers))
+    for v in ("6", ""):
+        monkeypatch.setenv("GA4_FIRSTOPEN_CC_WORKERS", v)
+        assert "error" not in _run(monkeypatch, _world(tmp_path / ("w" + v)), GA4(), 1)
+    assert seen == [6, fc.WORKERS]
 
 
 def test_tight_budget_never_batches_past_it(monkeypatch):
