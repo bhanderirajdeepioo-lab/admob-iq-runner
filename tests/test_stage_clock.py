@@ -2,8 +2,11 @@
 
   * nesting and totals: top-level stages (step) cover the run, children (stage / timed) sum into their parent, a
     repeated child is one row with its count;
-  * a crashed build still writes its profile (main's finally), the stage it died in marked ok: false;
+  * a crashed build still writes its profile (main's finally), the stage it died in marked ok: false (on the runner
+    only a good build's push carries the file: each history row's Actions run number shows a failed run as a gap);
   * the rolling history keeps the last 48 builds;
+  * local disk / JSON time is its own child row: FileRepo's first read of each file, the install-day file read and
+    write next to its GA4 reads (ga4_iday);
   * the PUBLIC lines: "stage <name> <sec>s" only, allow-listed names, no digit but the seconds;
   * the helper never fails the build, and the build's outputs are byte-identical with it on;
   * every stage name the code uses is on the allow-list; the workflow prints the lines and keeps the build's redaction.
@@ -36,7 +39,8 @@ class Clock:
 
 
 @pytest.fixture(autouse=True)
-def _no_run_left():
+def _no_run_left(monkeypatch):
+    monkeypatch.delenv("GITHUB_RUN_NUMBER", raising=False)     # (off the runner unless a test sets it)
     sc.finish(None)
     yield
     sc.finish(None)
@@ -201,6 +205,22 @@ def test_history_keeps_the_last_48_builds(tmp_path):
     assert raw[4:8] == b"\x00\x00\x00\x00" and len(raw) < 4096      # deterministic gzip (no mtime), small
 
 
+def test_each_row_carries_the_actions_run_number_so_a_failed_run_shows_as_a_gap(tmp_path, monkeypatch):
+    d = str(tmp_path)
+    for run in ("101", "103"):                           # run 102 failed: its file never reached the private repo
+        monkeypatch.setenv("GITHUB_RUN_NUMBER", run)
+        sc.begin(clock=Clock())
+        sc.step("setup")
+        sc.finish(d)
+    prof = sc.read(os.path.join(d, sc.FILE))
+    assert prof["run"] == 103 and [h["run"] for h in prof["history"]] == [101, 103]
+    monkeypatch.setenv("GITHUB_RUN_NUMBER", "\u00b2")            # not a plain number: no "run", still timed
+    sc.begin(clock=Clock())
+    sc.step("setup")
+    prof = sc.finish(d)
+    assert "run" not in prof and "run" not in prof["history"][-1] and len(prof["history"]) == 3
+
+
 def test_a_damaged_profile_starts_a_fresh_history(tmp_path):
     d = str(tmp_path)
     with open(os.path.join(d, sc.FILE), "wb") as f:
@@ -261,6 +281,95 @@ def test_another_thread_is_never_timed():
     t.join()
     prof = sc.finish(None)
     assert [e["name"] for e in prof["stages"]] == ["ga4"]
+
+
+# ── local disk / JSON time: its own rows ───────────────────────────────────────────────────────────────────────────
+_NET = {"account_id": "acct-x", "app_id": "app-x", "ad_unit_id": "unit-x", "country": "ZZ", "format": "f",
+        "platform": "p", "estimated_earnings_micros": 1}
+
+
+def _repo_ops(repo, day):
+    row = dict(_NET, report_date=day)
+    repo.upsert_network(dict(row))
+    repo.append_snapshot(dict(row, snapshot_date=day))
+    repo.upsert_mediation(dict(row, ad_source="src-x"))
+
+
+def test_a_history_files_first_read_is_its_own_row_under_the_stage_that_touched_it(tmp_path, monkeypatch):
+    """FileRepo reads a file when it is first used (gunzip + parse + key map). That is booked as repo_load_<file>
+    under the stage that touched it (not as the AdMob report's own time), once per file, and changes nothing."""
+    from admob_iq import db
+    a, b = tmp_path / "a", tmp_path / "b"
+    for d in (a, b):                                     # the same history on disk in both
+        r0 = db.FileRepo(str(d))
+        for day in ("2026-01-01", "2026-01-02"):
+            _repo_ops(r0, day)
+        r0.flush()
+
+    def run(d):
+        r = db.FileRepo(str(d))
+        sc.step("admob_fetch")
+        with sc.stage("admob_network"):
+            for day in ("2026-01-02", "2026-01-03", "2026-01-04"):
+                r.upsert_network(dict(_NET, report_date=day))
+                r.append_snapshot(dict(_NET, report_date=day, snapshot_date="2026-01-05"))
+        with sc.stage("admob_rollup"):
+            r.fetch_adunit_country_monthly()
+        sc.step("dashboard_build")
+        n = len(r.fetch_network())                       # loaded already: no second read
+        r.fetch_country()                                # first touched here
+        r.flush()
+        return n
+
+    assert run(a) == 4                                   # (the clock off: no run)
+    c = Clock()
+    orig = db._read_json_any
+
+    def slow_read(path):                                 # a read that takes 2 s on the fake clock
+        c.tick(2)
+        return orig(path)
+
+    monkeypatch.setattr(db, "_read_json_any", slow_read)
+    sc.begin(clock=c)
+    assert run(b) == 4
+    prof = sc.finish(None)
+    monkeypatch.undo()
+
+    by = _by(prof)
+    for parent, name in (("admob_network", "repo_load_network"), ("admob_network", "repo_load_snapshots"),
+                         ("admob_rollup", "repo_load_adunit_country_monthly"),
+                         ("dashboard_build", "repo_load_country")):
+        e = by[(parent, name)]
+        assert e["sec"] == 2.0 and "n" not in e and e["ok"], name           # once per file, never per row
+    assert by[("admob_fetch", "admob_network")]["sec"] == 4.0                # = its two first reads, nothing more
+    assert by[(None, "dashboard_build")]["sec"] == 2.0
+    assert not [k for k in by if k[1] == "repo_load_mediation"]             # never touched: never read
+    assert _tree(str(a)) == _tree(str(b))                                   # the same files
+
+
+def test_the_install_day_reads_are_their_own_rows_and_change_nothing(tmp_path, monkeypatch):
+    """The install-day (install value) reads inside each due app's GA4 fetch: ga4_iday (with its file read
+    ga4_iday_load and write ga4_iday_save) under ga4_uninstall_fetch, one row each summed over the apps; every file
+    the fetch writes byte-identical with the clock on."""
+    from tests.test_ga4_iday import World, _files
+    off, on = tmp_path / "off", tmp_path / "on"
+    World(monkeypatch).run(off, cfg={"iday": True})
+    w = World(monkeypatch)
+    sc.begin()
+    sc.step("ga4")
+    with sc.stage("ga4_uninstall_fetch"):
+        out = w.run(on, cfg={"iday": True})
+    prof = sc.finish(None)
+    fa, fb = _files(off), _files(on)
+    assert len(fa) > 3 and fa == fb
+    assert out["iday"]["apps"] == 2
+    by = _by(prof)
+    for name in ("ga4_iday_load", "ga4_iday", "ga4_iday_save"):
+        e = by[("ga4_uninstall_fetch", name)]
+        assert e["ok"] and e.get("n") == 2, name
+    kids = sum(e["sec"] for (p, _n), e in by.items() if p == "ga4_uninstall_fetch")
+    assert by[("ga4", "ga4_uninstall_fetch")]["sec"] + 1e-9 >= kids
+    _check_public(sc.public_lines(prof, min_sec=0))
 
 
 # ── the public lines ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -357,13 +466,16 @@ USE = re.compile(r"_sc\.(?:step|stage|timed)\(\"([^\"]+)\"\)")
 
 
 def test_every_stage_name_the_code_uses_is_on_the_allow_list():
-    used = set()
+    from admob_iq.db import FileRepo
+    used = set(FileRepo.LOAD_STAGES.values())            # (FileRepo's first reads: named per file, below)
     for base, _dirs, names in os.walk(os.path.join(ROOT, "admob_iq")):
         for n in names:
             if n.endswith(".py"):
                 with open(os.path.join(base, n), encoding="utf-8") as f:
                     used |= set(USE.findall(f.read()))
     assert used <= set(sc.STAGES), used - set(sc.STAGES)
+    repo = FileRepo("unused")
+    assert set(FileRepo.LOAD_STAGES) == set(repo._path) | set(repo._ac_path)    # every history file has its name
     assert set(sc.STAGES) - used == {"python_start", "imports"}     # (begin adds those two) — no stale names
 
 
@@ -397,6 +509,13 @@ def test_the_workflow_prints_the_stage_lines_after_the_build_and_keeps_its_redac
     assert t["run"].strip() == ("python -m admob_iq.stage_clock public data/build_profile.json.gz /tmp/build_wall "
                                 "2>/dev/null || true")
     assert "env" not in t and "secrets." not in json.dumps(t)
+    # a failed build's profile is never pushed on its own: no step that runs after a failure pushes anything
+    for s in steps:
+        cond = str(s.get("if") or "")
+        if "always()" in cond or "failure()" in cond:
+            assert "git push" not in str(s.get("run") or ""), s.get("name")
+    assert "failed run could look like a fresh refresh" in open(
+        os.path.join(ROOT, ".github", "workflows", "refresh.yml"), encoding="utf-8").read()
 
 
 # ── outputs unchanged ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -433,6 +552,8 @@ def test_a_build_makes_the_same_outputs_with_the_clock_on(tmp_path):
     top = [e["name"] for e in prof["stages"] if "parent" not in e]
     assert top[:3] == ["setup", "admob_fetch", "repo_flush"] and top[-3:] == ["alerts", "deploy_guard", "teardown"]
     assert ("setup", "site_snapshot") in by and ("admob_fetch", "admob_network") in by
+    assert by[("admob_network", "repo_load_network")].get("n", 1) == 1      # each file's first read: its own row, once
+    assert ("admob_network", "repo_load_snapshots") in by and ("admob_mediation", "repo_load_mediation") in by
     assert ("tabs", "uninstall_studio") in by and ("tabs", "firstopen_tab") in by
     assert all(e["ok"] for e in prof["stages"]) and prof["ok"] is True
     assert prof["unmeasured_sec"] <= 0.1 + 0.01 * prof["total_sec"]
@@ -445,9 +566,14 @@ def _bytes(root):
         for n in names:
             p = os.path.join(base, n)
             raw = open(p, "rb").read()
+            rel = os.path.relpath(p, root)
             if n == "dashboard.json.gz":                 # (the synthetic builder's own gzip.open: its header has a time)
                 raw = gzip.decompress(raw)
-            out[os.path.relpath(p, root)] = raw
+            if rel.startswith(os.path.join("data", "forecast") + os.sep) and n.endswith(".json"):
+                d = json.loads(raw)                      # a forecast tune's measured seconds: the wall clock, never
+                d.pop("tune_sec", None)                  # the data (as tests/test_adcfg_build.py) — it jitters run to
+                raw = json.dumps(d, sort_keys=True).encode()    # run with or without the stage clock
+            out[rel] = raw
     return out
 
 

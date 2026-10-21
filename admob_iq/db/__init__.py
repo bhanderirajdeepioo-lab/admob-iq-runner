@@ -18,6 +18,8 @@ import gzip
 import zlib
 import datetime as _dt
 
+from .. import stage_clock as _sc
+
 
 def _jsonable(row: dict) -> dict:
     """Flat-copy a row, turning date/datetime into ISO strings so it is JSON-safe.
@@ -374,6 +376,13 @@ class FileRepo:
     COUNTRY_PK = ["report_date", "account_id", "app_id", "country"]
     PC_PK = ["account_id", "app_id", "ad_unit_id", "country"]
     MU_PK = ["report_date", "account_id", "app_id", "ad_unit_id", "format", "platform"]
+    # ⏱ measure only (stage_clock): each history file's FIRST read (gunzip + JSON parse + key map) is its own child
+    # stage of whichever stage touches the file first (e.g. admob_network), so local disk / JSON time is never booked
+    # as the report call's time. Later reads of the loaded rows are not timed.
+    LOAD_STAGES = {"net": "repo_load_network", "med": "repo_load_mediation", "snap": "repo_load_snapshots",
+                   "country": "repo_load_country", "pc": "repo_load_placement_country",
+                   "mu": "repo_load_mediation_unit", "acm": "repo_load_adunit_country_monthly",
+                   "acd": "repo_load_adunit_country_daily"}
 
     def __init__(self, data_dir: str = "data"):
         self.dir = data_dir
@@ -403,10 +412,11 @@ class FileRepo:
 
     def _load(self, name):
         if name not in self._rows:
-            data = _read_json_any(self._path[name])
-            self._rows[name] = data if data is not None else []
-            self._pos[name] = {self._key(r, self._pk[name]): i
-                               for i, r in enumerate(self._rows[name])}
+            with _sc.stage(self.LOAD_STAGES.get(name, "repo_load")):
+                data = _read_json_any(self._path[name])
+                self._rows[name] = data if data is not None else []
+                self._pos[name] = {self._key(r, self._pk[name]): i
+                                   for i, r in enumerate(self._rows[name])}
         return self._rows[name]
 
     def _upsert(self, name, row):
@@ -448,8 +458,9 @@ class FileRepo:
 
     def _load_ac(self, name, default):
         if name not in self._ac:
-            data = _read_json_any(self._ac_path[name])
-            self._ac[name] = data if data is not None else default
+            with _sc.stage(self.LOAD_STAGES.get(name, "repo_load")):
+                data = _read_json_any(self._ac_path[name])
+                self._ac[name] = data if data is not None else default
         return self._ac[name]
 
     def merge_adunit_country_monthly(self, rows):

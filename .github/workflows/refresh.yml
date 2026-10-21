@@ -211,6 +211,9 @@ jobs:
         # or more, this step's wall clock (step_wall) and what fell outside the build (outside_build). Names come from
         # a fixed allow-list of code identifiers (stage_clock.STAGES), whole seconds only: never an app, account, file
         # name or amount. It also runs after a failed build (that build's stages), and it never fails the run.
+        # A failed build's profile is NOT pushed (the push step below runs only after a good build; a push from a
+        # failed run could look like a fresh refresh to the watchers), so these lines are its only record; the private
+        # history's run numbers show that run as a gap.
         if: always()
         continue-on-error: true
         run: python -m admob_iq.stage_clock public data/build_profile.json.gz /tmp/build_wall 2>/dev/null || true

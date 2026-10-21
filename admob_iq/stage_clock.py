@@ -2,7 +2,11 @@
 
 How it is used:
   * build_static.main() starts a run (`begin`) and ends it in a finally (`finish`), so a crashed build still writes
-    what it measured.
+    what it measured. On the Actions runner that file reaches the private repo only with a GOOD build's push: the push
+    step does not run after a failed build (a push from a failed run could look like a fresh refresh to the watchers
+    that read the private repo's commits). So the private history holds the pushed builds; each row carries the
+    Actions run number (`run`), and a failed run shows as a gap in those numbers. A failed build's stage seconds still
+    reach the public log (that step always runs).
   * build_static.build() marks its top-level stages in order with `step(name)`. Each one runs until the next starts,
     so together they cover the whole build.
   * Inside them, the steps that have their own budget (GA4 reads, Google Ads geo / archive, the forecast, …) are
@@ -12,8 +16,8 @@ How it is used:
   * Never raises: every entry point has its own try, so a failure here never fails the build.
 
 Output: data/build_profile.json.gz in the build's PRIVATE data dir (FILE): this build's stages plus a rolling
-history of the last HISTORY_KEEP builds (one compact row each, so trends show). It is deterministic gzip with sorted
-keys, and only a few KB.
+history of the last HISTORY_KEEP builds written to this file (one compact row each, so trends show). It is
+deterministic gzip with sorted keys, and only a few KB.
 
 The Actions log of the public runner is world-readable. `python -m admob_iq.stage_clock public <profile> [<wall
 file>]` prints only "stage <name> <sec>s" lines: the total, one line per stage of PUBLIC_MIN_SEC or more, and
@@ -52,12 +56,17 @@ STAGES = (
     "setup", "site_snapshot",
     "admob_fetch", "admob_network", "admob_mediation", "admob_mediation_unit", "admob_country",
     "admob_placement_country", "admob_adunit_country", "admob_rollup",
+    # FileRepo's first read of each history file (db.FileRepo.LOAD_STAGES): a child of the stage that touches it first
+    "repo_load_network", "repo_load_mediation", "repo_load_snapshots", "repo_load_country",
+    "repo_load_placement_country", "repo_load_mediation_unit", "repo_load_adunit_country_monthly",
+    "repo_load_adunit_country_daily",
     "admob_backfill_accounts", "admob_backfill_apps", "admob_backfill_mu", "repo_flush",
     "dashboard_build", "baseline_report", "data_quality", "apps_catalog", "app_icons",
     "google_ads", "gads_spend", "gads_campaign_accounts", "gads_geo", "gads_geo_weekly", "gads_geo_day",
     "gads_archive", "gads_store_ids", "fx_series", "roas_build",
     "usd_inr",
-    "ga4", "account_tzs", "ga4_revenue_prep", "ga4_uninstall_fetch", "ga4_discovery", "ga4_iday_only",
+    "ga4", "account_tzs", "ga4_revenue_prep", "ga4_uninstall_fetch", "ga4_discovery",
+    "ga4_iday_load", "ga4_iday", "ga4_iday_save", "ga4_iday_only",
     "ga4_audience", "ga4_firstopen", "ga4_firstopen_cc", "ga4_cohort", "ga4_cube",
     "active_prepass", "value_prepass", "uninstall_store_load", "uninstall_eval", "active_apps", "value_apps",
     "roi_apps", "roi_cube", "roi_country", "adcfg", "forecast", "impact_any", "cohort_files",
@@ -105,9 +114,17 @@ class _Frame:
         self.key, self.t, self.lap = key, t, lap
 
 
+def _run_no():
+    """The Actions run number (GITHUB_RUN_NUMBER), or None off the runner. Consecutive history rows then show a run
+    whose build never reached the private repo (a failed one) as a gap."""
+    v = os.environ.get("GITHUB_RUN_NUMBER", "")
+    return int(v) if v.isascii() and v.isdigit() else None
+
+
 class _Run:
     def __init__(self, clock, t0, pre):
         self.clock, self.t0, self.pre = clock, t0, pre
+        self.run_no = _run_no()
         back = max(0.0, clock() - t0) + pre
         self.at = (datetime.now(timezone.utc) - timedelta(seconds=back)).strftime("%Y-%m-%dT%H:%M:%SZ")
         self.rows, self.order, self.stack = {}, [], []
@@ -154,8 +171,11 @@ class _Run:
                 e["n"] = r["n"]
             stages.append(e)
         top = sum(r["sec"] for (p, _n), r in self.rows.items() if p is None)
-        return {"v": V, "at": self.at, "ok": bool(ok), "total_sec": round(total, 1),
+        prof = {"v": V, "at": self.at, "ok": bool(ok), "total_sec": round(total, 1),
                 "unmeasured_sec": round(max(0.0, total - top), 1), "stages": stages}
+        if self.run_no is not None:
+            prof["run"] = self.run_no
+        return prof
 
 
 _RUN = None
@@ -263,12 +283,16 @@ def finish(data_dir, ok=True):
 
 
 def history_row(prof):
-    """One compact history row: when, ok, total and every stage of HISTORY_MIN_SEC or more ({name: sec})."""
+    """One compact history row: when, ok, total, the Actions run number (on the runner) and every stage of
+    HISTORY_MIN_SEC or more ({name: sec})."""
     s = {}
     for e in prof.get("stages") or []:
         if e.get("sec", 0) >= HISTORY_MIN_SEC:
             s[e["name"]] = round(s.get(e["name"], 0.0) + e["sec"], 1)
-    return {"at": prof.get("at"), "ok": prof.get("ok"), "total": prof.get("total_sec"), "s": s}
+    row = {"at": prof.get("at"), "ok": prof.get("ok"), "total": prof.get("total_sec"), "s": s}
+    if isinstance(prof.get("run"), int):
+        row["run"] = prof["run"]
+    return row
 
 
 def read(path):

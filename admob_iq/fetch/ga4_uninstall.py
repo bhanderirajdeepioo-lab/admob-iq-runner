@@ -2915,6 +2915,7 @@ def fetch_iday(ga, store, ida, end, stop=None, at=None, plain=None, max_calls=ID
     return ida, run.stats
 
 
+@_sc.timed("ga4_iday")       # ⏱ measure only (stage_clock): the install-day reads inside each app's fetch
 def _iday_step(ga, store, box, end, stop, at):
     """fetch_iday for fetch_full / fetch_incr, never failing them. box (from refresh_all): {"ida", "plain", "max_calls",
     "cty_days", "ext", "x_only"} in; "ok", "ida", "stats" out (ok False: nothing to save — the file stays as it
@@ -3079,6 +3080,7 @@ def _discover(cfg, tokens, state, apps, access, now):
     return True
 
 
+@_sc.timed("ga4_iday_load")  # ⏱ measure only: the app's install-day file read
 def _iday_box(data_dir, aid, cfg, plain):
     """refresh_all → fetch_full / fetch_incr: the app's iday file (None: a new one) and its limits (cfg "iday_max_calls",
     "iday_cty_days"; the defaults IDAY_MAX_CALLS / IDAY_CTY_DAYS)."""
@@ -3090,6 +3092,7 @@ def _iday_box(data_dir, aid, cfg, plain):
             "cty_days": cfg.get("iday_cty_days") or IDAY_CTY_DAYS, "ext": bool(cfg.get("iday_ext"))}
 
 
+@_sc.timed("ga4_iday_save")  # ⏱ measure only: its write
 def _iday_save(data_dir, aid, box, tz, st, ic, xc=None):
     """After the app's fetch went through: its iday file (written only on change), state.fetch[aid].iday, the counts
     (xc: IDAY_EXT's, ga4_iday_ext.X_COUNTS). An x_only fetch (box "x_only") changes no legacy key (not even tz) and
