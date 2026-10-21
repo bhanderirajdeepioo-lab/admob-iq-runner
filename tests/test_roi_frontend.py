@@ -171,8 +171,10 @@ def test_forecast_view(out):
 # column moved from the far right to right after CPI (and its note joined): the page before that gave
 # afd5bf6e3a67b59154525ddec5b34724b11a6a0a158388d09ad8bada10b88982. GOLDEN_NO_BE = the same parts with the Breakeven
 # column and its note cut out, worked out on the page BEFORE the move (its far-right cell cut) — the new page gives it
-# too: nothing else in any table, the Day view or the Countries board moved by a byte
-GOLDEN_DEFAULT = "e565ee0b05b0e517aa13b7b6b3fe9d0a455639496f9afbaef326f117aca6b22e"
+# too: nothing else in any table, the Day view or the Countries board moved by a byte. (Review round: a "≤" on a column
+# not final yet is faded + "not final", the note says so, and a week / month with a day's so far not read shows — instead
+# of a too-low "% back": only the Breakeven cells + note changed, GOLDEN_NO_BE the same)
+GOLDEN_DEFAULT = "fb638f026d2a902459c3287cb620536bbb6474fecb17809c9799ba6264ac0a86"
 GOLDEN_NO_BE = "acabb725b05aa314e38c4f97b7880196122d333a0bdd823a0db9c1bc7d1d23b6"
 
 
@@ -183,18 +185,32 @@ def test_breakeven_column(out):
     assert out["be_order"] == [True] * 48                         # … Spend, CPI, Breakeven, D0 …, So far (last)
     assert out["cc_default_nobe"] == GOLDEN_NO_BE                  # the rest byte for byte as before the move
     # Day: the row's own breakeven from the build; not yet: so far ÷ spend (muted; green once ≥ 100%); no spend: —
+    # a "≤" whose day's cell is seen but not final (D1 after a final D0, or D0 itself): faded + "not final" like that cell
+    nfd = '<td class="roi-g roi-nf" title="not final">≤ day %d</td>'
     assert out["be_day"] == ['<td class="roi-g">day 9</td>', '<td class="roi-g">≤ day 120</td>', '<td class="roi-na">63% back</td>',
                              '<td class="roi-g">104% back</td>', '<td class="roi-na">—</td>', '<td class="roi-na">—</td>',
-                             '<td class="roi-na">—</td>']
+                             '<td class="roi-na">—</td>', nfd % 1, nfd % 0, '<td class="roi-g">day 1</td>']
+    assert [[c.split('"')[1] for c in r] for r in out["be_day_cells"]] == [                    # their D0, D1 cells
+        ["roi-w", "roi-g roi-nf"], ["roi-g roi-nf", "roi-na"], ["roi-w", "roi-g"]]
     assert out["m_be"]                                             # … through the 30-day columns (≤ day 120), in place
     # week / month: the group's own, from agg (the cells' numbers): exact only where the cells pin the day
     assert out["be_month"] == [["Jan 2026", '<td class="roi-g">day 0</td>'], ["Feb 2026", '<td class="roi-g">day 1</td>'],
-                               ["Mar 2026", '<td class="roi-g">≤ day 3</td>'], ["Apr 2026", '<td class="roi-g">≤ day 1</td>'],
+                               ["Mar 2026", '<td class="roi-g">≤ day 3</td>'], ["Apr 2026", nfd % 1],
                                ["May 2026", '<td class="roi-g">≤ day 3</td>'], ["Jun 2026", '<td class="roi-g">≤ day 60</td>'],
-                               ["Jul 2026", '<td class="roi-na">63% back</td>'], ["Aug 2026", '<td class="roi-na">—</td>']]
+                               ["Jul 2026", '<td class="roi-na">63% back</td>'], ["Aug 2026", '<td class="roi-na">—</td>'],
+                               ["Sep 2026", '<td class="roi-na">—</td>']]     # a day's so far not read: —, not "30% back"
     assert out["be_week"] == ['<td class="roi-g">day 1</td>'] and out["be_month_cells"]
-    assert out["be_grp"] == [[1, True], None, None, None]          # spend 0 / unknown / never reached: no day
-    # both made-up files, week + month: every group's breakeven = its first green (ROAS ≥ 100%) cell, or none at all
+    # [day, exact?, that column final?]: spend 0 / unknown / never reached: no day; Apr: D1 not final; Mar: final, a gap
+    assert out["be_grp"] == [[1, True, True], None, None, None, [1, False, False], [3, False, True]]
+    # "% back" only from a measured so far: days not read yet → — on Day, and on their week / month (never "0% back" or a
+    # too-low share of the whole spend)
+    assert out["be_nos"] == [[["Today · 14 Oct 26", '<td class="roi-na">—</td>'], ["Yesterday · 13 Oct 26", '<td class="roi-na">—</td>'],
+                              ["12 Oct 26", '<td class="roi-na">—</td>'], ["6 Oct 26", '<td class="roi-na">80% back</td>'],
+                              ["5 Oct 26", '<td class="roi-na">80% back</td>']],
+                             [["12 Oct–18 Oct 26", '<td class="roi-na">—</td>'], ["5 Oct–11 Oct 26", '<td class="roi-na">80% back</td>']],
+                             [["Oct 2026", '<td class="roi-na">—</td>']]]
+    # both made-up files, week + month: every group's breakeven = its first green (ROAS ≥ 100%) cell (faded exactly when
+    # that cell is), or none at all
     assert [c[1] for c in out["be_cells"]] == [True] * 4 and all(c[2] for c in out["be_cells"])
     # a country's table: the same column, every grain; its groups = their first green cell; Not split: — on every row
     assert [c[:2] for c in out["be_cty"]] == [[cc, g] for cc in ("AA", "BB", "XX") for g in ("day", "week", "month")]
@@ -260,7 +276,13 @@ def test_wiring():
     assert "if(PK[k].err||PK[k].stale) delete PK[k]; }); Object.keys(RLD).forEach(k=>{ delete RLD[k]; }); repaint();" in p   # Try again
     assert "/^roi_[0-9a-f]{12}_c\\d{2,3}\\.json\\.gz$/" in p                           # a pack name the build writes only
     assert "@media (max-width:760px){.roi-ccs{font-size:16px}}" in p                     # iOS: no zoom on the list
-    # 🎯 the cohort table (Breakeven next to CPI) still scrolls only inside its own box; first column stays on screen
+    # 🎯 Breakeven: its head right after CPI, none after "So far" (both fail on the page before the move)
+    assert "<th>CPI</th><th>Breakeven</th>${C.map(c=>`<th>${c.lab}</th>`).join('')}<th>So far</th></tr>`" in p
+    assert "<th>So far</th><th>Breakeven</th>" not in p and p.count("<th>Breakeven</th>") == 1
+    # its cell styled only by the heat table's own classes (the harness pins every cell's exact markup: BE_TD) — each
+    # defined, no new colour, no breakeven-only rule
+    assert all(c in p for c in (".roi-heat td.roi-g{", ".roi-heat td.roi-nf{", ".roi-t td.roi-na{color:var(--faint)}"))
+    assert "roi-be" not in p
+    # unchanged layout pins (the same before this change): the table scrolls only inside its own box, its first column sticks
     assert ".roi-tw{overflow:auto;" in p and '<div class="roi-tw"><table class="roi-t roi-heat">' in p
     assert ".roi-t th:first-child,.roi-t td:first-child{position:sticky;left:0;" in p
-    assert ".roi-heat td.roi-g{" in p and ".roi-t td.roi-na{color:var(--faint)}" in p   # its colours: the cells' own
