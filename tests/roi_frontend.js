@@ -84,7 +84,15 @@ function lateFile() {
       late: { days: 200, oth: 3, omax: 0.025, from: '2026-03-28', till: newest }, consts: { final_lag: 3 } };
 }
 // the default view's digest: a FRESH module (nothing picked, nothing toggled), both made-up files, every grain × mode, the
-// Day view and the Countries board — the same code ran on the page before the country filter gave GOLDEN_DEFAULT
+// Day view and the Countries board — GOLDEN_DEFAULT. 🎯 The Breakeven column moved next to CPI (21 Oct 2026): the
+// digest changed on purpose; [1] = the same parts with the Breakeven column (its <th>, each row's breakeven cell) and its
+// note cut out — GOLDEN_NO_BE, worked out on the page BEFORE the move (its far-right cell cut): nothing else changed
+function beStrip(s) {
+  return s.replace(/<p class="roi-note"><b>Breakeven<\/b>[^]*?<\/p>/g, '')
+    .replace(/<table class="roi-t roi-heat">[^]*?<\/table>/g, t => t.replace('<th>Breakeven</th>', '')
+      .replace(/<tr><td class="roi-nm">[^]*?<\/tr>/g, tr => { const tds = tr.slice(4, -5).split('</td>').slice(0, -1);
+        tds.splice(5, 1); return '<tr>' + tds.map(x => x + '</td>').join('') + '</tr>'; }));
+}
 function defaultDigest() {
   const c3 = Object.assign({}, CTX0, { DATA: null, window: {} });
   vm.createContext(c3);
@@ -96,7 +104,7 @@ function defaultDigest() {
   U.set('GRAIN', 'day'); U.set('MET', 'roas');
   parts.push(U.dayView(d0), U.dayView(dm), U.ctyView(d0));
   U.set('SHOW', 1e9); parts.push(U.cohortTable(dm));
-  return h(parts.join('\u0001'));
+  return [h(parts.join('\u0001')), h(parts.map(beStrip).join('\u0001'))];
 }
 // No page jump (owner: "kuchh change karte he to upar chala jata he page"): the ROI block in a FRESH module on a small
 // made-up DOM whose layout is the page's own markup — an element's document top = its offset in the block's HTML × a
@@ -819,7 +827,8 @@ async function noJump(width, file, packs, failOnce, mode) {
     out.m_head = (tm.match(/<th>D\d+<\/th>/g) || []).length === CM.length && tm.includes('<th>D210</th>') && !tm.includes('<th>D365</th>');
     out.m_nf = tm.includes('<td class="roi-g roi-nf" title="D90: $51 · ROAS 102% · not final">') && tm.includes('<td class="roi-w" title="D60: $41 · ROAS 82%">');
     const r150 = tm.slice(tm.indexOf(fd150 + '</td>')), r150e = r150.slice(0, r150.indexOf('</tr>'));
-    out.m_be = r150e.includes('<td>≤ day 120</td>') && r150e.includes('<td>$71 <small>142%</small></td>');   // breakeven + so far via m (D150)
+    out.m_be = r150e.includes('<td class="roi-g">≤ day 120</td>') && r150e.includes('<td>$71 <small>142%</small></td>')   // breakeven + so far via m (D150)
+      && r150e.includes('<td>$50</td><td>$0.500</td><td class="roi-g">≤ day 120</td><td class="roi-b" title="D0: $1.0');   // … right after CPI, before D0
     U.set('GRAIN', 'month');
     const CMm = U.cols(dm, dm.rows), gmm = U.groupRows(dm);
     out.m_month_cols = CMm.map(c => c.lab);
@@ -878,11 +887,74 @@ async function noJump(width, file, packs, failOnce, mode) {
     const dmq = JSON.parse(JSON.stringify(dm)); dmq.rows[dmq.rows.length - 1][12] = 4;
     out.m_q4 = U.cohortTable(dmq).includes('D30 ke baad GA4 ke report pe data loss / thresholding / sampling ka flag tha — asli kamai thodi alag (kam ya zyada) ho sakti hai')
       && !U.cohortTable(dmq).includes('thodi zyada ho sakti');
+    // ── 🎯 Breakeven right after CPI, before D0 (owner, 21 Oct 2026: "D0 ke pehle ak column add kar do — konse day pe
+    // breakeven milta he") ──────────────────────────────────────────────────────────────────────────────────────
+    const ths = t => [...t.matchAll(/<th>([^<]*)<\/th>/g)].map(m => m[1]);
+    const trs = t => [...t.matchAll(/<tr><td class="roi-nm">[^]*?<\/tr>/g)].map(m => m[0].slice(4, -5).split('</td>').slice(0, -1).map(x => x + '</td>'));
+    const BE_TD = /^(<td class="roi-g">(≤ )?day \d+<\/td>|<td class="roi-(g|na)">\d+% back<\/td>|<td class="roi-na">—<\/td>)$/;
+    // a ROAS table's week / month rows: "(≤) day N" = the row's FIRST green (ROAS ≥ 100%) cell is DN; "% back" / "—" =
+    // no green cell at all — the breakeven never names a day the cells do not show
+    const beByCells = t => { const H = ths(t), hs = H.slice(6, H.length - 1); return trs(t).map(r => {
+      const k = r.slice(6, H.length - 1).findIndex(x => /^<td class="roi-g[ "]/.test(x)), m = /^<td class="roi-g">(?:≤ )?day (\d+)<\/td>$/.exec(r[5]);
+      return m ? k >= 0 && hs[k] === 'D' + m[1] : k < 0 && /(% back|—)<\/td>$/.test(r[5]); }); };
+    // every grain × mode × both files × 60 rows / all: … Spend, CPI, Breakeven, D0 …, "So far" last (no far-right
+    // Breakeven any more); every row's 6th cell its breakeven, as many cells as heads
+    out.be_order = [];
+    for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) for (const f of [appFile, lateFile]) for (const sh of [60, 1e9]) {
+      U.set('GRAIN', g); U.set('MET', m); U.set('SHOW', sh);
+      const t = U.cohortTable(f()), H = ths(t), rows = trs(t);
+      out.be_order.push(H.slice(3, 7).join(',') === 'Spend,CPI,Breakeven,D0' && H.filter(x => x === 'Breakeven').length === 1
+        && H[H.length - 1] === 'So far' && !t.includes('<th>So far</th><th>Breakeven</th>') && rows.length > 0
+        && rows.every(r => r.length === H.length && BE_TD.test(r[5]))); }
+    // week / month (ROAS): the group's breakeven is the first green cell, both files
+    out.be_cells = [];
+    for (const g of ['week', 'month']) for (const f of [appFile, lateFile]) { U.set('GRAIN', g); U.set('MET', 'roas'); U.set('SHOW', 1e9);
+      const t = U.cohortTable(f()), ok_ = beByCells(t); out.be_cells.push([ok_.length, ok_.every(Boolean), (t.match(/<td class="roi-g">≤ day \d+<\/td>/g) || []).length > 0]); }
+    U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60);
+    // Day: the row's own breakeven from the build — exact "day N", "≤ day N"; not yet: so far ÷ spend "back" (muted,
+    // green once ≥ 100%); no spend / spend 0 / nothing measured: —
+    const beRow = (X, sp, s, be) => [X, 100, 80, sp, null, 0, null, T.map(() => null), s, X, be, 'Normal', 0, sp];
+    const dbe = { v: 1, T, lags: 31, newest: '2026-10-13', rows: [beRow('2026-01-01', 10, 30, [9, true]), beRow('2026-01-02', 10, 30, [120, false]),
+      beRow('2026-01-03', 10, 6.3, null), beRow('2026-01-04', 10, 10.4, null), beRow('2026-01-05', null, 5, null), beRow('2026-01-06', 0, 5, null),
+      beRow('2026-01-07', 10, null, null)] };
+    out.be_day = trs(U.cohortTable(dbe)).map(r => r[5]).reverse();
+    // week / month: the group's own, from agg over its rows (the cells' numbers) — two rows a month, spend 5 each:
+    // D0 reached → "day 0"; D0 below + D1 reached (both final) → "day 1"; D3 after D1 → "≤ day 3" (between two
+    // columns); D1 reached, not final → "≤ day 1"; a row without D1 → "≤ day 3"; D60 after D30 → "≤ day 60"; none →
+    // "% back"; no spend → —
+    const tOf = (v0, v1, v3, v30, v60) => T.map(a => ({ 0: v0, 1: v1, 3: v3, 7: v3 == null ? null : v3 + 1, 14: v3 == null ? null : v3 + 2,
+      30: v30 != null ? v30 : v3 == null ? null : v3 + 3, 60: v60 })[a] ?? null);
+    const mRow = (X, sp, t, s, dd, df) => [X, 100, 80, sp, dd || null, df || 0, null, t, s, X, null, 'Normal', 0, sp];
+    const nf = [4, 5.5, 6, 6, 6, 6, 6, 6];                                         // seen day by day, only day 0 final
+    const dgm = { v: 1, T, lags: 31, newest: '2026-10-13', rows: [
+      mRow('2026-01-01', 5, tOf(6, 7, 8), 9), mRow('2026-01-02', 5, tOf(6, 7, 8), 9),                         // Jan: D0
+      mRow('2026-02-01', 5, tOf(4, 5, 6), 9), mRow('2026-02-02', 5, tOf(4, 5, 6), 9),                         // Feb: D1 exact
+      mRow('2026-03-01', 5, tOf(4, 4.5, 6), 9), mRow('2026-03-02', 5, tOf(4, 4.5, 6), 9),                     // Mar: ≤ D3
+      mRow('2026-04-01', 5, tOf(4, null, null, 9), 9, nf, 1), mRow('2026-04-02', 5, tOf(4, null, null, 9), 9, nf, 1),   // Apr: D1 not final
+      mRow('2026-05-01', 5, tOf(4, 7, 8), 9), mRow('2026-05-02', 5, tOf(4, null, 8), 9),                      // May: a row lacks D1
+      mRow('2026-06-01', 5, tOf(1, 1, 1, 4, 6), 6), mRow('2026-06-02', 5, tOf(1, 1, 1, 4, 6), 6),             // Jun: ≤ D60
+      mRow('2026-07-01', 5, tOf(1, 1, 1, 3, 3), 3), mRow('2026-07-02', 5, tOf(1, 1, 1, 3, 3), 3.3),           // Jul: 63% back
+      mRow('2026-08-01', null, tOf(6, 7, 8), 9), mRow('2026-08-02', 5, tOf(6, 7, 8), 9)] };                   // Aug: spend unknown
+    U.set('GRAIN', 'month');
+    const tgm = U.cohortTable(dgm), Cg = U.cols(dgm, dgm.rows), gg = U.groupRows(dgm);
+    out.be_month = trs(tgm).map(r => [r[0].replace(/<[^>]+>/g, ''), r[5]]).reverse();
+    out.be_month_cells = beByCells(tgm).every(Boolean);
+    out.be_grp = [U.beGrp(gg.find(g => g.k === '2026-02'), Cg, T, 10), U.beGrp(gg.find(g => g.k === '2026-02'), Cg, T, 0),
+      U.beGrp(gg.find(g => g.k === '2026-02'), Cg, T, null), U.beGrp(gg.find(g => g.k === '2026-07'), Cg, T, 10)];
+    U.set('GRAIN', 'week');
+    out.be_week = trs(U.cohortTable({ v: 1, T, lags: 31, newest: '2026-10-13', rows: [mRow('2026-02-02', 5, tOf(4, 5, 6), 9), mRow('2026-02-03', 5, tOf(4, 5, 6), 9)] })).map(r => r[5]);
+    // the Hinglish note under the table, per grain; none while the table waits (loading / error)
+    const bn = {};
+    for (const g of ['day', 'week', 'month']) { U.set('GRAIN', g); bn[g] = U.cohortTable(appFile()); }
+    out.be_note = [bn.day.includes('<p class="roi-note"><b>Breakeven</b> = jis din tak us install din ki kamai ne spend wapas kar diya (ROAS 100%); ≤ = do column ke beech kisi din; "% back" = abhi tak spend ka itna wapas.</p>'),
+      bn.week.includes('us install hafte ki kamai ne spend wapas'), bn.month.includes('us install mahine ki kamai ne spend wapas'),
+      bn.day.indexOf('<b>Breakeven</b>') > bn.day.indexOf('</table>'), !U.cohortTable(appFile(), { msg: '<p>x</p>' }).includes('Breakeven')];
+    U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60);
     // ── 🌍 the install-day table by country ─────────────────────────────────────────────────────────────────────
     // the default view (no country part in the file) byte for byte as the page made it before the country filter: one
     // digest over every grain × mode of both made-up files, the Day view and the Countries board (worked out on the
     // page before this change)
-    out.cc_default_digest = defaultDigest();
+    [out.cc_default_digest, out.cc_default_nobe] = defaultDigest();
     out.cc_src_null = U.cohortTable(appFile(), null) === U.cohortTable(appFile()) && U.cohortTable(appFile(), undefined) === U.cohortTable(appFile());
     {
     // a made-up app with the country part: 8 named countries (6 chips + the rest in the list), GA4's "(not set)" and
@@ -1048,6 +1120,19 @@ async function noJump(width, file, packs, failOnce, mode) {
     const txc = U.cohCard(dc), hx = (txc.match(/<th>D\d+<\/th>/g) || []).map(x => x.slice(4, -5));
     out.cc_xx_cols = [hx.length, hx[1], hx[2], hx[30], txc.includes('<td class="roi-na">·</td>'), txc.includes('<td class="roi-na">—</td>'),
       txc.includes("installs aur har din wala column '—'"), txc.includes('Every install day · D0 se D365 tak · 🧩 Not split</h3>')];
+    // 🎯 a country's table: the same Breakeven column right after CPI, every grain (Day: the row's own; week / month:
+    // the group's, = its first green cell); Not split: no revenue → — on every row
+    out.be_cty = [];
+    for (const cc of ['AA', 'BB', 'XX']) for (const g of ['day', 'week', 'month']) {
+      U.setCTY(cc); U.set('GRAIN', g); U.set('MET', 'roas'); U.set('SHOW', 1e9);
+      const t = U.cohCard(dc), H = ths(t), rows = trs(t), bes = rows.map(r => r[5]);
+      out.be_cty.push([cc, g, H.slice(3, 7).join(','), H[H.length - 1], rows.length > 0 && rows.every(r => r.length === H.length && BE_TD.test(r[5])),
+        g === 'day' || beByCells(t).every(Boolean), cc === 'XX' ? bes.every(x => x === '<td class="roi-na">—</td>') : cc !== 'BB' || g !== 'week' || bes.some(x => /day \d+</.test(x)),
+        t.includes('<b>Breakeven</b> = jis din tak')]); }
+    U.set('GRAIN', 'day'); U.set('SHOW', 60); U.setCTY('BB');
+    const fdOf = k => { const p = k.split('-'); return '<td class="roi-nm">' + (+p[2]) + ' ' + MON[+p[1] - 1] + ' ' + k.slice(2, 4); }, tbb = trs(U.cohCard(dc));
+    out.be_cty_day = [12, 2].map(a => tbb.find(r => r[0].startsWith(fdOf(day('2026-10-13', -a))))[5]);
+    U.setCTY('XX');
     // the country view: the app-wide "(other)" / flag sentences of the 30-day columns are left to the country's own note
     const dlt = Object.assign(lateFile(), { cd: cdx() });
     U.setCTY('');

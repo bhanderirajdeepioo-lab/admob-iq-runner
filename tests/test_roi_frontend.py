@@ -2,7 +2,8 @@
 frontend/index.html for real (a node vm, stub page helpers) on SYNTHETIC data made up there; checked here: where the block
 goes, the day-by-day columns and their fallback to the checkpoints, past D30 every 30 days up to the app's age (the
 cohort cube's m: columns, finality, week / month, title + note, breakeven / so far; the cube still on its way: only a
-note; a file without m: the checkpoints), Today / Yesterday, week / month rows (complete days only), the four cell kinds, breakeven, the KPI tiles, the countries board
+note; a file without m: the checkpoints), Today / Yesterday, week / month rows (complete days only), the four cell kinds, breakeven
+(right after CPI: the row's own on Day, the group's first green cell on Week / Month), the KPI tiles, the countries board
 (order, what cutting saves), lifetime P/L (totals to the day both sides are in), All apps (icons, Worse first, hidden apps out), the hub card line, the four forms
 of ROI (hero block, ranges printed from the file, GA4-measured paid split, budget call, mostly-organic flag, All-apps
 table), 🌍 the install-day table by country (the picker, a pack read once, the same table for one country, the default
@@ -166,12 +167,44 @@ def test_forecast_view(out):
     assert out["cal_dev"] and out["cal_none"] and out["cal_wk"] and out["cal_off"] and out["cal_small"] and out["cal_zero"]
 
 
-# the default view's digest on the page before the country filter (tests/roi_frontend.js defaultDigest, worked out there)
-GOLDEN_DEFAULT = "afd5bf6e3a67b59154525ddec5b34724b11a6a0a158388d09ad8bada10b88982"
+# the default view's digest (tests/roi_frontend.js defaultDigest). Changed ON PURPOSE on 21 Oct 2026 when the Breakeven
+# column moved from the far right to right after CPI (and its note joined): the page before that gave
+# afd5bf6e3a67b59154525ddec5b34724b11a6a0a158388d09ad8bada10b88982. GOLDEN_NO_BE = the same parts with the Breakeven
+# column and its note cut out, worked out on the page BEFORE the move (its far-right cell cut) — the new page gives it
+# too: nothing else in any table, the Day view or the Countries board moved by a byte
+GOLDEN_DEFAULT = "e565ee0b05b0e517aa13b7b6b3fe9d0a455639496f9afbaef326f117aca6b22e"
+GOLDEN_NO_BE = "acabb725b05aa314e38c4f97b7880196122d333a0bdd823a0db9c1bc7d1d23b6"
+
+
+def test_breakeven_column(out):
+    """🎯 Breakeven right after CPI, before D0 (owner, 21 Oct 2026: "D0 ke pehle ak column add kar do — konse day pe
+    breakeven milta he"): every grain × mode, the All table and every country's, no far-right copy, never a day the
+    cells do not show."""
+    assert out["be_order"] == [True] * 48                         # … Spend, CPI, Breakeven, D0 …, So far (last)
+    assert out["cc_default_nobe"] == GOLDEN_NO_BE                  # the rest byte for byte as before the move
+    # Day: the row's own breakeven from the build; not yet: so far ÷ spend (muted; green once ≥ 100%); no spend: —
+    assert out["be_day"] == ['<td class="roi-g">day 9</td>', '<td class="roi-g">≤ day 120</td>', '<td class="roi-na">63% back</td>',
+                             '<td class="roi-g">104% back</td>', '<td class="roi-na">—</td>', '<td class="roi-na">—</td>',
+                             '<td class="roi-na">—</td>']
+    assert out["m_be"]                                             # … through the 30-day columns (≤ day 120), in place
+    # week / month: the group's own, from agg (the cells' numbers): exact only where the cells pin the day
+    assert out["be_month"] == [["Jan 2026", '<td class="roi-g">day 0</td>'], ["Feb 2026", '<td class="roi-g">day 1</td>'],
+                               ["Mar 2026", '<td class="roi-g">≤ day 3</td>'], ["Apr 2026", '<td class="roi-g">≤ day 1</td>'],
+                               ["May 2026", '<td class="roi-g">≤ day 3</td>'], ["Jun 2026", '<td class="roi-g">≤ day 60</td>'],
+                               ["Jul 2026", '<td class="roi-na">63% back</td>'], ["Aug 2026", '<td class="roi-na">—</td>']]
+    assert out["be_week"] == ['<td class="roi-g">day 1</td>'] and out["be_month_cells"]
+    assert out["be_grp"] == [[1, True], None, None, None]          # spend 0 / unknown / never reached: no day
+    # both made-up files, week + month: every group's breakeven = its first green (ROAS ≥ 100%) cell, or none at all
+    assert [c[1] for c in out["be_cells"]] == [True] * 4 and all(c[2] for c in out["be_cells"])
+    # a country's table: the same column, every grain; its groups = their first green cell; Not split: — on every row
+    assert [c[:2] for c in out["be_cty"]] == [[cc, g] for cc in ("AA", "BB", "XX") for g in ("day", "week", "month")]
+    assert all(c[2:] == ["Spend,CPI,Breakeven,D0", "So far", True, True, True, True] for c in out["be_cty"]), out["be_cty"]
+    assert out["be_cty_day"] == ['<td class="roi-g">130% back</td>', '<td class="roi-na">30% back</td>']
+    assert all(out["be_note"])                                      # the Hinglish line under the table, per grain
 
 
 def test_country_filter(out):
-    # "All countries" (the default) byte for byte as before: every grain × mode, the Day view, the Countries board
+    # "All countries" (the default): every grain × mode, the Day view, the Countries board as pinned above
     assert out["cc_default_digest"] == GOLDEN_DEFAULT and out["cc_src_null"]
     # the picker: All countries + the top 6 as chips, EVERY country in the native list, then the two that are not one
     assert out["cc_chips"] == ["", "AA", "BB", "CC", "DD", "EE", "FF"]
@@ -227,3 +260,7 @@ def test_wiring():
     assert "if(PK[k].err||PK[k].stale) delete PK[k]; }); Object.keys(RLD).forEach(k=>{ delete RLD[k]; }); repaint();" in p   # Try again
     assert "/^roi_[0-9a-f]{12}_c\\d{2,3}\\.json\\.gz$/" in p                           # a pack name the build writes only
     assert "@media (max-width:760px){.roi-ccs{font-size:16px}}" in p                     # iOS: no zoom on the list
+    # 🎯 the cohort table (Breakeven next to CPI) still scrolls only inside its own box; first column stays on screen
+    assert ".roi-tw{overflow:auto;" in p and '<div class="roi-tw"><table class="roi-t roi-heat">' in p
+    assert ".roi-t th:first-child,.roi-t td:first-child{position:sticky;left:0;" in p
+    assert ".roi-heat td.roi-g{" in p and ".roi-t td.roi-na{color:var(--faint)}" in p   # its colours: the cells' own

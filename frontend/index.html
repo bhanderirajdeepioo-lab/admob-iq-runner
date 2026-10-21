@@ -6895,24 +6895,37 @@ function relLab(d,x){ const nw=d.newest; if(!nw) return ''; if(x===nw) return 'T
 function cell(v,base,met,prev,n){ if(!ok(v)) return null;
   if(met==='roas') return base?v/base:null; if(met==='rev') return v; if(met==='ltv') return n?v/n:null; if(met==='delta') return ok(prev)?v-prev:v; return v; }
 function fmtCell(x,met){ return met==='roas'?P(x):met==='ltv'?MP(x):M(x); }
+// 🎯 Breakeven, right after CPI (owner, 21 Oct 2026: "D0 ke pehle ak column add kar do — konse day pe breakeven milta
+// he"). Week / month: the FIRST column whose summed cumulative revenue (agg — the very numbers its cells show, green at
+// ROAS ≥ 100%) reaches the group's spend → [age, exact?]; exact only when the cells pin that day: every row final there
+// and it is D0, or the column just before is the day before, measured below spend and final; else "≤" (the day falls
+// between two columns). None reached (or a column a row lacks): null. Never a day the cells do not show.
+function beGrp(gr,C,T,sp){ if(!(sp>0)) return null; let pa=-2, pv=null, pf=false;
+  for(const c of C){ const [v,f]=agg(gr,c,T); if(ok(v)&&v/sp>=1) return [c.a, f&&(c.a===0||(pa===c.a-1&&ok(pv)&&pf))];
+    pa=c.a; pv=v; pf=f; }
+  return null; }
+// the cell: "day N" / "≤ day N" (green, the cells' own ROAS ≥ 100% colour); not yet: so far ÷ spend "back" (muted —
+// green only once so far itself is ≥ 100%, the day still unpinned); no spend (or nothing measured): —
+function beTd(be,sp,so){ if(be) return `<td class="roi-g">${be[1]?'':'≤ '}day ${be[0]}</td>`;
+  return sp&&ok(so)?`<td class="${so/sp>=1?'roi-g':'roi-na'}">${P(so/sp)} back</td>`:'<td class="roi-na">—</td>'; }
 function cohortTable(d,src){ if(src&&src.msg) return `<div class="roi-ctl">${src.ctl||''}${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div><div class="roi-tw roi-ccm">${src.msg}</div>`;
   const d0=d, xx=!!(src&&src.cc==='XX');                         // 🧩 Not split: the columns of the app's own rows, '—' cells
   if(src&&src.rows) d=Object.assign({},d,{rows:src.rows});      // 🌍 one country's rows: the same table, the same code
   const T=d.T, groups=groupRows(d), shown=groups.slice(0,SHOW), C=cols(xx?d0:d,shown.flatMap(g=>g.rows));
-  const head=`<tr><th>Install ${GRAIN==='day'?'date':GRAIN}</th><th>Status</th><th>Installs</th><th>Spend</th><th>CPI</th>${C.map(c=>`<th>${c.lab}</th>`).join('')}<th>So far</th><th>Breakeven</th></tr>`;
+  const head=`<tr><th>Install ${GRAIN==='day'?'date':GRAIN}</th><th>Status</th><th>Installs</th><th>Spend</th><th>CPI</th><th>Breakeven</th>${C.map(c=>`<th>${c.lab}</th>`).join('')}<th>So far</th></tr>`;
   const body=shown.map(gr=>{ const n=sumK(gr,R.n)||0, sp=sumK(gr,R.sp), spv=SV(sp,sumK(gr,R.spi)); let prev=null;
     const st=GRAIN==='day'?gr.rows[0][R.st]:null;
     const cells=C.map(c=>{ const [v,fin]=agg(gr,c,T); const x=cell(v,sp,MET,prev,n); prev=ok(v)?v:prev; if(!ok(x)) return xx?'<td class="roi-na">—</td>':'<td class="roi-na">·</td>';
       const ro=sp?v/sp:null; return `<td class="${roasCls(ro)}${fin?'':' roi-nf'}" title="${E(c.lab+': '+M(v)+(sp?' · ROAS '+P(ro):'')+(fin?'':' · not final'))}">${fmtCell(x,MET)}</td>`; }).join('');
     let so=null, be=null;
     if(GRAIN==='day'){ const r=gr.rows[0]; so=r[R.s]; be=r[R.be]; }
-    else { so=xx?null:gr.rows.reduce((a,r)=>a+(+r[R.s]||0),0); }   // (🧩 Not split: no revenue to add)
-    const beTxt=be?`${be[1]?'':'≤ '}day ${be[0]}`:(sp&&ok(so)?`<small>${P(so/sp)} back</small>`:'—');
+    else { so=xx?null:gr.rows.reduce((a,r)=>a+(+r[R.s]||0),0); be=xx?null:beGrp(gr,C,T,sp); }   // (🧩 Not split: no revenue to add)
     const qb=GRAIN==='day'?(+gr.rows[0][R.q]||0):0, q=qb?` <span class="roi-q" title="${E((src&&src.qt?src.qt(qb):[qb&1?'Is din ka GA4 read install-day read se match nahi hua':'',qb&2?'D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)")':'',qb&4?'D30 ke baad GA4 ke report pe data loss / thresholding / sampling ka flag tha — asli kamai thodi alag (kam ya zyada) ho sakti hai':'']).filter(Boolean).join(' · ')+' — numbers ≈')}">≈</span>`:'';
-    return `<tr><td class="roi-nm">${E(rowLabel(gr,d))}${q}</td><td>${st?chip(st):''}</td><td>${xx?'—':N(n)}</td><td>${MV(spv)}</td><td>${spv&&n?MPV(spv/n):'—'}</td>${cells}<td>${M(so)}${sp&&ok(so)?` <small>${P(so/sp)}</small>`:''}</td><td>${beTxt}</td></tr>`; }).join('');
+    return `<tr><td class="roi-nm">${E(rowLabel(gr,d))}${q}</td><td>${st?chip(st):''}</td><td>${xx?'—':N(n)}</td><td>${MV(spv)}</td><td>${spv&&n?MPV(spv/n):'—'}</td>${beTd(be,sp,so)}${cells}<td>${M(so)}${sp&&ok(so)?` <small>${P(so/sp)}</small>`:''}</td></tr>`; }).join('');
   const more=groups.length>shown.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-more="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-more="all">Show all ${groups.length}</button><span class="roi-note">${shown.length} of ${groups.length}</span></div>`:'';
   return `${src&&src.top||''}<div class="roi-ctl">${src&&src.ctl||''}${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div>`
     +`<div class="roi-tw"><table class="roi-t roi-heat"><thead>${head}</thead><tbody>${body}</tbody></table></div>${more}`
+    +`<p class="roi-note"><b>Breakeven</b> = jis din tak us install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ki kamai ne spend wapas kar diya (ROAS 100%); ≤ = do column ke beech kisi din; "% back" = abhi tak spend ka itna wapas.</p>`
     +`<p class="roi-note">Har cell = us install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ke users ki us din tak ki <b>kul kamai</b> (${MET==='roas'?'spend ka %':MET==='ltv'?'per install':MET==='delta'?'pichhle column se kitni badhi':'paisa'}). Rang: hara = spend wapas (≥100%), peela = 50–100%, laal = 50% se kam. Halka = abhi final nahi. ${GRAIN!=='day'?'Hafte / mahine ka cell tabhi jab uske saare din us umar tak pahunch gaye.':''}${lateNote(d,C,src&&src.rows?{cc:1}:null)}</p>${src&&src.note||''}`; }
 // the 30-day columns' note: how far, when a column fills, and GA4's "(other)" share (measured, from the file)
 function lateNote(d,C,o){ const mx=mLen(d.rows||[]), lt=o&&o.cc?{}:(d.late||{}), eg=[d.newest,lt.till].filter(Boolean).sort().pop(),
@@ -7802,7 +7815,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, cohortTable, lateNote, zx, ccSrc, ccPick, cohCard, ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, beGrp, beTd, cohortTable, lateNote, zx, ccSrc, ccPick, cohCard, ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)
