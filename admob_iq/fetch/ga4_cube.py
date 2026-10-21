@@ -142,6 +142,33 @@ has left (at most REPAIR_CALLS calls started a run, MAX_CALLS and the budget as 
   "cut" (the cut memory of its reads), "s" (the app's seconds a GA4 call, last measured), "log": [[month, "(other)"
   micros before, after, the month's revenue, when]] (the last LOG_KEEP)}.
 
+q — the WHOLE read of ages 31 … 420 (owner, 21 Oct 2026: real data only, nothing GA4 dropped left out). GA4 folds the
+country "(other)" BEFORE any filter, so no split above gets it back (measured: the repair read nothing back). But one
+activity day with dimension firstSessionDate ONLY, no filter, every page (q_read: the install-day fetch's own per-day
+read, ga4_uninstall.rep_iday_qb) comes back whole up to install age 427 on that day (measured on several apps: no
+"(other)", data loss, sampling or thresholding in any such read). Its ages 31 … QL (420) in the cube's buckets 1 … QJ
+(13) are the All rows' cells there (the ROI build: roi_build._late); bucket 14 (ages 421 … 450) crosses the 427-day
+horizon and stays on the cube. Per day: "q" {X: {j: micros}}, "qt" (ages 0 … 420, micros), "qs" "ok" — or "fl" (an
+empty q) on any install day that is not a date or after the day, GA4's dataLossFromOtherRow, sampling, thresholding or
+a cut answer — and "qr" (rows). Stored:
+    <YYYY-MM>.q.json.gz = {"v", "stream_id", "days": {D: {"qs", "qt", "qr", "at"}}, "q": {X: {j: {W: micros}}}} — the
+      same shape as the month's "b" (j ≤ QJ only); never read by months() (its name is not YYYY-MM.json.gz) and never
+      touched by the repair; a day in it is never read again;
+    a hot day's record in hot.json.gz gets "q" ({X: {j: {W: micros}}}), "qt", "qs", "qr" — read in the SAME run as its
+      cube read (the same moment: GA4 still adds to a hot day), else none (the build uses its cube cells);
+    head "qh" = {"p": [days folded without a q yet, oldest first], "todo": [[YYYY-MM, its measured "(other)" share,
+      days without q, loss micros]] (the history fill's queue), "scan" (when it was made)}.
+Reads (GA4_CUBE_Q_CALLS, Q_CALLS; 0 = no q read at all — the build then uses the cube's own cells, as before):
+  * in step_app, after the hot days (q_fwd): the hot days this run read, then up to Q_FWD days of "p" (the new final
+    day is there from its fold) — the app's call cap ends it (the rest stays in "p"), a budget / quota Stop goes on up
+    (what was read is kept);
+  * after EVERY app's run (refresh_all's second round, with what the run's budget left — never a property's walk or
+    hot days later): the history fill (q_fill), at most Q_CALLS calls a run over all apps, the app's call cap and the
+    budget as always — the apps with "p" first, then the apps whose queue holds the most measured loss, so the lossy
+    apps fill first; per app "p", then the queue's months (made once by q_scan from the month files — no GA4 call —,
+    again every RESCAN_DAYS while it is empty): the months with loss first (the biggest share first), then every other
+    month newest first, each month's days without q oldest first. A Stop keeps every q day read.
+
 Cost: the backfill ≈ app age / 30 block calls on a light app (rows a call ≈ 30 × a day's (install day, country) rows),
 and on a heavy one about one call per activity day (+ 2 per part split, + one block try every HEAVY_KEEP days) —
 measured on the biggest app ≈ 70 GA4 tokens and 4–6 s a day call, so ≈ 25 calls a run in the 150 s budget (the walk
@@ -155,8 +182,11 @@ the new final day + the hot window (≤ 3 × (HOT_CAP + 1) calls, a round a Stop
 120–300 on the biggest app): ≤ REPAIR_CALLS (env GA4_CUBE_REPAIR_CALLS; 0 = off, the default) started a run, and only with a day's room (calls and time) left →
 about 4–10 runs a month, the biggest loss first. A run never makes more than MAX_CALLS (60) calls an app: the final
 day (≤ 25, on a new day) and the hot days (≤ 39, every 6 h) go first, the repair only with what they left (most
-hourly runs: they read nothing, the repair gets its 30); what does not fit is read next run. GA4 tokens stay under
-the property's quota floors (the App's gate stops every read of the property before them).
+hourly runs: they read nothing, the repair gets its 30); what does not fit is read next run. q: one light call a day
+(≤ 428 rows) — going forward the new final day + the hot days of a round (≤ 1 + 3 a run, inside MAX_CALLS), the
+history once (≤ Q_CALLS a run over every app, only from what the budget left after every app's walk and hot days;
+none once filled). GA4 tokens stay under the property's quota floors (the App's gate stops every read of the property
+before them).
 """
 import heapq
 import json
@@ -192,7 +222,18 @@ REPAIR_CALLS = int(os.environ.get("GA4_CUBE_REPAIR_CALLS") or 0)    # calls a ru
                                     # day finishes or is cut); 0 = the repair is off. Off by default: on real GA4 the
                                     # country "(other)" is folded BEFORE filters (a split names no row its root had
                                     # not), so a repair read gets nothing back — measured on its first real run
-RESCAN_DAYS = 7                     # the repair's queue made again (while empty) after this many days
+RESCAN_DAYS = 7                     # the repair's (and q's) queue made again (while empty) after this many days
+QJ = 13                             # q: buckets 1 … 13 = ages 31 … 420 from the whole no-country day read
+QL = LAGS - 1 + STEP * QJ           # 420: the oldest age q keeps (the read is whole to 427; bucket 14 = 421 … 450)
+QDIMS = ("firstSessionDate",)
+Q_V = 1
+QSUF = ".q.json.gz"
+Q_CALLS = int(os.environ.get("GA4_CUBE_Q_CALLS") or 120)    # the history fill's GA4 calls a run, over every app (0 =
+                                    # no q read at all). A light read (≤ 428 rows, ~1 token): ≈ 120 × ~0.8 s ÷ WORKERS
+                                    # properties side by side ≈ 30–40 s, inside the cube's own budget (never longer:
+                                    # only what the walk and the hot days left) and only while the history is not filled
+                                    # (about one read per folded day once; the lossy apps first); nothing after that
+Q_FWD = 7                           # days folded without a q read in the run that folded them (step_app), at most
 LOG_KEEP = 24                       # repaired months kept in the head's "rep" "log"
 REP = ".rep.json.gz"                # a month's copy while the repair builds it
 HEAVY_KEEP = 90                     # activity days a range goes day by day after a block of its length needed it
@@ -633,6 +674,39 @@ def read_range(ga, a, b, head, now_iso, cap=DAY_CAP, key="cut", hot=False):
         yield D, _read_day(ga, D, now_iso, head, cap, key, hot)
 
 
+# ── q: the whole no-country read of one activity day (module doc) ──────────────────────────────────────────────────
+def q_read(ga, D):
+    """Activity day D, dimension firstSessionDate only, no filter, every page → {"q": {X: {j: micros}} (ages 31 … QL in
+    buckets 1 … QJ), "qt" (micros of ages 0 … QL), "qs" "ok" | "fl", "qr" (rows)}. "fl", with an empty q: a row whose
+    install day is not a date ("(other)", "(not set)") or is after D, or GA4's dataLossFromOtherRow / sampling /
+    thresholding / a cut answer — the day is not whole (its weeks stay on the cube's cells). Ages past QL (421 … 427)
+    are left to the cube's bucket 14. Raises Stop."""
+    rows = ga.report_all(body(D, D, QDIMS), page_rows=gu.UNI_PAGE_ROWS)
+    bad = bool(_flags(ga, rows) & (RETRY | F_THR))
+    q, qt = {}, 0
+    for r in rows:
+        X = _real(r.get("firstSessionDate"))
+        L = (D - _d(X)).days if X else -1
+        if L < 0:
+            bad = True
+            continue
+        if L > QL:
+            continue
+        v = int(round(float(r.get("totalAdRevenue") or 0) * 1e6))
+        qt += v
+        if L >= LAGS and v:
+            j = str(bucket(L))
+            e = q.setdefault(X, {})
+            e[j] = e.get(j, 0) + v
+    return {"q": {} if bad else q, "qt": qt, "qs": "fl" if bad else "ok", "qr": len(rows)}
+
+
+def _qw(q, D):
+    """A day's q {X: {j: micros}} → {X: {j: {W: micros}}} (W: the day's Monday — the shape of the cube's "b")."""
+    W = _mon(_d(D)).isoformat()
+    return {X: {j: {W: v} for j, v in js.items()} for X, js in q.items()}
+
+
 # ── the store ───────────────────────────────────────────────────────────────────────────────────────────────────────
 def app_dir(data_dir, app_id):
     return os.path.join(data_dir, DIR, gu.file_key(app_id))
@@ -674,6 +748,25 @@ def months(data_dir, app_id, stream_id):
 
 def _empty_month(stream_id):
     return {"v": V, "stream_id": stream_id, "days": {}, "b": {}, "c": {}, "e": {}, "t": {}, "loss": {}}
+
+
+def q_path(data_dir, app_id, k):
+    return os.path.join(app_dir(data_dir, app_id), k + QSUF)
+
+
+def _q_ok(s, stream_id):
+    return (isinstance(s, dict) and s.get("v") == Q_V and str(s.get("stream_id") or "") == str(stream_id or "")
+            and isinstance(s.get("days"), dict) and isinstance(s.get("q"), dict))
+
+
+def load_q(data_dir, app_id, stream_id, k):
+    """Month k's q file of THIS stream (None: none, unreadable, or another stream's)."""
+    s = gu.load_store(q_path(data_dir, app_id, k))
+    return s if _q_ok(s, stream_id) else None
+
+
+def _empty_q(stream_id):
+    return {"v": Q_V, "stream_id": stream_id, "days": {}, "q": {}}
 
 
 def _merge(mo, k, rec):
@@ -759,8 +852,10 @@ class Cube:
         self.bad = set()                # months whose file is on disk but not a month of this stream (read again)
         self.folded = self.split = self.loss = self.flagged = self.reread = 0
         self.deeper = self.capped = self.rep_days = self.repaired = self.hidden = self.futile = 0
-        self.pruned = self.dirty = False    # dirty: the head changed with no read (the repair's queue)
+        self.pruned = self.dirty = False    # dirty: the head changed with no read (the repair's / q's queue)
         self.rp = None                  # the repair's copy of a month: {"k", "mo", "dirty", "done"}
+        self.qm, self.qtouched = {}, set()  # q month files loaded / changed in the run
+        self.q_days = self.q_fl = self.q_calls = 0
 
     def month(self, k):
         """Month k's file (loaded once). Missing: an empty month. On disk but unreadable (a damaged gzip, a cut copy …),
@@ -793,9 +888,54 @@ class Cube:
         _merge(mo, k, rec)
         self.touched.add(k[:7])
         self.head.setdefault("d", {}).pop(k, None)
+        if Q_CALLS > 0:                             # its q read: in this run (q_fwd) or first in the history fill
+            self.head.setdefault("qh", {}).setdefault("p", []).append(k)
         self.folded += 1
         self.count(rec)
         return True
+
+    def qmonth(self, k):
+        """Month k's q file (loaded once; none, unreadable or another stream's: empty — written over when a day is
+        read into it: q is a read of its own, never derived from the month)."""
+        if k not in self.qm:
+            s = load_q(self.data_dir, self.app_id, self.stream_id, k) if self.data_dir else None
+            self.qm[k] = s if s is not None else _empty_q(self.stream_id)
+        return self.qm[k]
+
+    def q_has(self, D):
+        return D in self.qmonth(D[:7])["days"]
+
+    def q_get(self, ga, D):
+        """q_read of day D (YYYY-MM-DD), its calls counted. Raises Stop."""
+        c0 = ga.calls
+        try:
+            got = q_read(ga, _d(D))
+        finally:
+            self.q_calls += ga.calls - c0
+        self.q_days += 1
+        self.q_fl += got["qs"] != "ok"
+        return got
+
+    def q_put(self, D, got, now_iso):
+        """Day D's q into its month's q file — once (a day already there stays as it was read)."""
+        mo = self.qmonth(D[:7])
+        if D in mo["days"]:
+            return False
+        for X, js in _qw(got["q"], D).items():
+            qx = mo["q"].setdefault(X, {})
+            for j, ws in js.items():
+                w = qx.setdefault(j, {})
+                for W, v in ws.items():
+                    w[W] = w.get(W, 0) + v
+        mo["days"][D] = {"qs": got["qs"], "qt": got["qt"], "qr": got["qr"], "at": now_iso}
+        self.qtouched.add(D[:7])
+        return True
+
+    def q_left(self):
+        """Folded days still without q: the pending ones + the queue's (as it was counted)."""
+        qh = self.head.get("qh") or {}
+        return len(qh.get("p") or []) + sum(int(e[2] or 0) for e in qh.get("todo") or [] if isinstance(e, list)
+                                            and len(e) > 2)
 
     def count(self, rec):
         """The log's per-day counts, over every day read final in the run (folded by the walk, or read by the
@@ -859,6 +999,9 @@ class Cube:
                 continue
             write_json_gz_stable(month_path(self.data_dir, self.app_id, k), self.m[k])
             self.touched.discard(k)
+        for k in sorted(self.qtouched):             # q files (a read of their own: never ahead of anything)
+            write_json_gz_stable(q_path(self.data_dir, self.app_id, k), self.qm[k])
+        self.qtouched.clear()
         if before:
             for k in [k for k in self.m if k < before and k not in self.touched]:
                 self.m.pop(k, None)
@@ -876,8 +1019,9 @@ class Cube:
 
 
 def step_app(ga, cube, today, hs, now):
-    """One app's run on its cube → "fetched" or "fresh". Raises Stop (what was folded is kept, the cursor where it
-    stopped; the caller saves the months, then the head)."""
+    """One app's run on its cube → "fetched" or "fresh": the walk, the hot days, their q (q_fwd: the hot days this run
+    read, the days folded without q — the new final day), the repair (when on). Raises Stop (what was folded / read is
+    kept, the cursor where it stopped; the caller saves the months and q files, then the head)."""
     h, now_iso, did = cube.head, gu._now_iso(now), False
     edge = today - timedelta(days=FINAL_LAG)
     d = h.setdefault("d", {})
@@ -926,6 +1070,7 @@ def step_app(ga, cube, today, hs, now):
         d.pop(k)
     a = max(hs, edge + timedelta(days=1))
     due = gu._hours_since(h.get("hot_at"), now) >= REFRESH_HOURS or h.get("hot_today") != today.isoformat()
+    hot_now = []                                            # the hot days this run read (their q: q_fwd)
     if a <= today and due:
         cyc = h.get("hot_cyc")                              # this round of the hot days: one a Stop cut goes on with
         if not (isinstance(cyc, list) and len(cyc) == 2 and cyc[1] == today.isoformat()):  # the days it has not read
@@ -934,9 +1079,12 @@ def step_app(ga, cube, today, hs, now):
         for x, y in _runs(todo):
             for D, rec in read_range(ga, x, y, h, now_iso, cap=HOT_CAP, key="hcut", hot=True):
                 d[D.isoformat()] = rec                      # replaced (never folded: read while not final)
+                hot_now.append(D.isoformat())
                 did = True
         h["hot_at"], h["hot_today"] = now_iso, today.isoformat()
         h.pop("hot_cyc", None)
+    if Q_CALLS > 0:
+        did = q_fwd(ga, cube, now, hot_now) or did         # q of the days this run read (the same moment)
     if REPAIR_CALLS > 0:
         did = repair(ga, cube, now) or did                  # with what the run has left
     return "fetched" if did else "fresh"
@@ -1071,6 +1219,108 @@ def repair(ga, cube, now):
     return did
 
 
+# ── q: the reads (module doc) ───────────────────────────────────────────────────────────────────────────────────────
+def q_fwd(ga, cube, now, hot_now):
+    """q in step_app: the hot days this run read (`hot_now`: their q now, the same moment as their cube read — a hot
+    copy of an earlier round never gets one), then up to Q_FWD days of "p" (folded without q, oldest first) → True when
+    a day was read. The app's call cap ends it (the rest stays in "p"); a budget / quota Stop goes on up (what was read
+    is kept)."""
+    h, now_iso, did = cube.head, gu._now_iso(now), False
+    d = h.get("d") or {}
+    try:
+        for k in hot_now:
+            rec = d.get(k)
+            if isinstance(rec, dict) and "qs" not in rec:
+                got = cube.q_get(ga, k)
+                rec.update(q=_qw(got["q"], k), qt=got["qt"], qs=got["qs"], qr=got["qr"])
+                did = True
+        p, n = (h.get("qh") or {}).get("p") or [], 0
+        while p and n < Q_FWD:
+            if not cube.q_has(p[0]):
+                cube.q_put(p[0], cube.q_get(ga, p[0]), now_iso)
+                n += 1
+                did = True
+            p.pop(0)
+    except Stop as e:
+        if str(e) != "calls":
+            raise
+    return did
+
+
+def q_scan(cube, now):
+    """The history fill's queue (head "qh" "todo"), from the month files (no GA4 call): every month with folded days
+    that have no q yet → [YYYY-MM, its measured "(other)" share, days without q, loss micros] — the months with loss
+    first (the biggest share first, the newer month on a tie), then every other month, newest first. Made when there
+    is none and again every RESCAN_DAYS while it is empty (a day folded and never put in "p": a run killed between its
+    months and its head) → True when made."""
+    qh = cube.head.setdefault("qh", {})
+    if qh.get("todo") or gu._hours_since(qh.get("scan"), now) < RESCAN_DAYS * 24:
+        return False
+    todo, pend = [], set(qh.get("p") or [])
+    for k, mo in cube.each_month():
+        qd = cube.qmonth(k)["days"]
+        days = {D: v for D, v in (mo.get("days") or {}).items() if isinstance(v, dict)}
+        miss = sum(1 for D in days if D not in qd and D not in pend)     # (the pending ones: read first, counted there)
+        if cube.data_dir and k not in cube.qtouched:
+            cube.qm.pop(k, None)                            # one month at a time
+        if miss:
+            lo = sum(int(v.get("loss") or 0) for v in days.values())
+            t = sum(int(v.get("t") or 0) for v in days.values())
+            todo.append([k, round(lo / t, 6) if t > 0 else (1.0 if lo else 0.0), miss, lo])
+    todo.sort(key=lambda e: e[0], reverse=True)
+    todo.sort(key=lambda e: (e[3] <= 0, -e[1] if e[3] > 0 else 0))
+    qh["todo"], qh["scan"] = todo, gu._now_iso(now)
+    cube.dirty = True
+    return True
+
+
+def q_fill(ga, cube, now, take):
+    """The history fill of one app (refresh_all's second round): "p" first, then the queue's months, each month's days
+    without q oldest first — while take() gives a call (the run's Q_CALLS over every app), under the app's call cap and
+    the run's budget → days read. Never raises Stop (a Stop ends it: every q day read is kept, the rest next run)."""
+    qh, now_iso, n = cube.head.setdefault("qh", {}), gu._now_iso(now), 0
+    try:
+        p = qh.setdefault("p", [])
+        while p:
+            if not cube.q_has(p[0]):
+                if not take():
+                    return n
+                cube.q_put(p[0], cube.q_get(ga, p[0]), now_iso)
+                n += 1
+            p.pop(0)
+        todo = qh.get("todo") or []
+        while todo:
+            k = str(todo[0][0])
+            mo = cube.month(k)                              # its ledger (a month the walk re-reads: in "p" then)
+            qd = cube.qmonth(k)["days"]
+            miss = [] if k in cube.bad else sorted(D for D, v in mo["days"].items()
+                                                    if isinstance(v, dict) and D not in qd)
+            for i, D in enumerate(miss):
+                todo[0][2] = len(miss) - i
+                if not take():
+                    return n
+                cube.q_put(D, cube.q_get(ga, D), now_iso)
+                n += 1
+            todo.pop(0)
+            cube.dirty = True
+            if cube.data_dir:                               # the month done: its q written, both let go
+                cube.save()
+                if k not in cube.touched:
+                    cube.m.pop(k, None)
+                cube.qm.pop(k, None)
+    except Stop:
+        pass
+    return n
+
+
+def _q_rank(cube):
+    """The fill's order of the apps: those with days in "p" first, then the most measured loss still without q (the
+    lossy apps fill first), then the most days left."""
+    qh = cube.head.get("qh") or {}
+    lo = sum(int(e[3] or 0) for e in qh.get("todo") or [] if isinstance(e, list) and len(e) > 3)
+    return (not qh.get("p"), -lo, -cube.q_left(), cube.app_id)
+
+
 # ── state and the run ───────────────────────────────────────────────────────────────────────────────────────────────
 def load_state(data_dir):
     try:
@@ -1099,8 +1349,55 @@ def save_state(data_dir, state):
 
 
 COUNTS = ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred", "waiting", "days", "split", "deeper",
-          "capped", "hidden", "futile", "loss", "flagged", "reread", "repair_days", "repaired", "calls", "tokens")
-# "days" = the days the walk folded; "split" … "flagged" = over every day read final (folded + "repair_days")
+          "capped", "hidden", "futile", "loss", "flagged", "reread", "repair_days", "repaired", "q_days", "q_flagged",
+          "q_calls", "q_left", "calls", "tokens")
+# "days" = the days the walk folded; "split" … "flagged" = over every day read final (folded + "repair_days"); "q_days"
+# the q days read (hot ones too), "q_flagged" those "fl", "q_left" folded days still without q (as far as counted)
+
+
+def q_round(fill, now, over, lock, counts, workers=WORKERS):
+    """refresh_all's second round, after every app's walk and hot days (never a property's reads later): each app's q
+    queue made where due (q_scan: the month files, no GA4 call), then the history fill (q_fill), the apps in _q_rank's
+    order (WORKERS side by side), at most Q_CALLS calls over all of them; each app's q files and head written. Never
+    raises."""
+    left = [Q_CALLS]
+
+    def take():
+        with lock:
+            if left[0] <= 0 or over():
+                return False
+            left[0] -= 1
+            return True
+
+    def scan(t):
+        try:
+            if not over():
+                q_scan(t[2], now)
+        except Exception:
+            pass
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        list(ex.map(scan, fill))
+    fill.sort(key=lambda t: _q_rank(t[2]))
+
+    def one(t):
+        aid, st, cube, ga = t
+        c0, k0, d0 = ga.calls, ga.tok, cube.q_days
+        try:
+            if not over() and left[0] > 0:
+                q_fill(ga, cube, now, take)
+        except Exception:
+            pass
+        try:                                            # the q files first, then the head (its queue)
+            cube.save()
+            if cube.q_days > d0 or cube.dirty:
+                cube.save_head()
+        except Exception:
+            pass
+        with lock:
+            counts["calls"] += ga.calls - c0
+            counts["tokens"] += ga.tok - k0
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        list(ex.map(one, fill))
 
 
 def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, workers=WORKERS):
@@ -1188,12 +1485,18 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                                               late=None)
                 try:                                    # the months first: the head never runs ahead of them
                     cube.save()
+                    cube.head.update(v=V, app_id=aid, package=a["package"], property_id=pid,
+                                     stream_id=str(r["stream_id"]), time_zone=tz, hs=hs.isoformat())
                     if ga.calls or cube.folded or cube.pruned or cube.dirty:
-                        cube.head.update(v=V, app_id=aid, package=a["package"], property_id=pid,
-                                         stream_id=str(r["stream_id"]), time_zone=tz, hs=hs.isoformat())
                         cube.save_head()
+                        cube.dirty = False
                 except Exception as e:
                     res, upd = "failed", dict(last_try=now_iso, fail=gu._fail_kind(e))
+                if res in ("fetched", "fresh") and Q_CALLS > 0:
+                    cube.m.clear()                      # written: the fill reads what it needs again
+                    cube.qm.clear()
+                    with lock:
+                        fill.append((aid, st, cube, ga))
                 with lock:
                     if res != "deferred":
                         st.pop("deferred", None)
@@ -1216,9 +1519,22 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                     counts["loss"] += cube.loss
                     counts["flagged"] += cube.flagged
                     counts["reread"] += cube.reread
+                    ran.append((st, cube))
 
+        fill, ran = [], []
         with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:   # a property with such an app starts first
             list(ex.map(one_prop, sorted(by_prop, key=lambda p: (not any(t[1].get("late") for t in by_prop[p]), p))))
+        if fill and not over():                         # q's history fill: what every app's run left of the budget
+            q_round(fill, now, over, lock, counts, workers)
+        for st, cube in ran:                            # q's counts (the log: summed; the private state: per app)
+            counts["q_days"] += cube.q_days
+            counts["q_flagged"] += cube.q_fl
+            counts["q_calls"] += cube.q_calls
+            if Q_CALLS > 0:
+                counts["q_left"] += cube.q_left()
+                st["q"] = {"d": cube.q_days, "c": cube.q_calls, "fl": cube.q_fl, "left": cube.q_left()}
+            else:
+                st.pop("q", None)
         save_state(data_dir, state)
     except Exception as e:                              # a bug here must never cost the build
         out["error"] = type(e).__name__
@@ -1233,6 +1549,6 @@ def log_line(status):
     c = (status or {}).get("counts") or {}
     return ("ga4 cube: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, days folded %d, "
             "split %d, deeper %d, capped %d, hidden %d, futile %d, loss %d, flagged %d, months read again %d, "
-            "repair days %d, months repaired %d, calls %d, tokens %d%s"
+            "repair days %d, months repaired %d, q days %d, q flagged %d, q calls %d, q left %d, calls %d, tokens %d%s"
             % tuple([gaud._int(c.get(k)) for k in COUNTS]
                     + [(", error " + status["error"]) if (status or {}).get("error") else ""]))

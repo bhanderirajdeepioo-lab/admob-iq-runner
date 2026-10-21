@@ -18,7 +18,11 @@ month whose file is gone let go),
 the history start moving back (and "done" cleared until the walk is through), another stream, a month file that cannot
 be read (read again from its first day, never written over), at most two months in memory, a hot copy of a day that is
 final now dropped, flagged days kept apart from measured loss, turns on a property (a backfill never starves a light
-app), the run over properties with a counts-only line, and the build hook (off: nothing read, written or printed)."""
+app), the run over properties with a counts-only line, and the build hook (off: nothing read, written or printed).
+q (the whole no-country read of a day, ages 31 … 420): its request and age edges, "fl" (an empty q) on anything not
+whole, a new final day and the hot days read in the same run, a Stop keeping the fold and the q days read, the app's
+call cap ending it quietly, the history queue (lossy months first) and the run's Q_CALLS cap, the second round (lossy
+apps first), q files never taken for months and never touched by the repair, the counts in the log and the state."""
 import copy
 import gzip
 import json
@@ -42,6 +46,13 @@ import pytest
 def _repair_on(monkeypatch):
     """The repair is off by default (GA4_CUBE_REPAIR_CALLS unset → 0); these tests check it as it runs when on."""
     monkeypatch.setattr(cu, "REPAIR_CALLS", 30)
+
+
+@pytest.fixture(autouse=True)
+def _q_off(monkeypatch):
+    """q (the whole no-country day reads) off for the tests of the cube's own reads (their call counts are the cube's);
+    the q tests below turn it on (Q_CALLS > 0) themselves."""
+    monkeypatch.setattr(cu, "Q_CALLS", 0)
 
 
 def ymd(d):
@@ -1381,7 +1392,7 @@ def test_refresh_all_files_and_counts_only(monkeypatch, tmp_path):
     line = cu.log_line(out)
     assert line.startswith("ga4 cube: apps 3, with GA4 2, fetched 2, fresh 0, failed 0, deferred 0, waiting 0, days "
                            "folded ") and "example" not in line and "x~" not in line
-    assert ", deeper 0, capped 0, " in line and ", repair days 0, months repaired 0, calls " in line
+    assert ", deeper 0, capped 0, " in line and ", repair days 0, months repaired 0, q days 0, q flagged 0, " in line
     assert all(cu.load_head(data, aid)["rep"] == {"sv": cu.SPLIT_V, "scan": "2026-10-13T06:00:00Z", "q": []}
                for aid in ("x~1", "x~2"))                       # nothing to repair: the queue made once, empty
     # a Stop part-way: what was folded is on disk (months before the head), the app deferred, the walk goes on next run
@@ -1453,7 +1464,7 @@ def test_build_hook_switch(tmp_path, monkeypatch, capsys):
     assert calls == [60] and [ln for ln in err.splitlines() if ln.startswith("ga4 cube")] == [
         "ga4 cube: apps 2, with GA4 0, fetched 1, fresh 0, failed 0, deferred 0, waiting 0, days folded 0, split 0, "
         "deeper 0, capped 0, hidden 0, futile 0, loss 0, flagged 0, months read again 0, repair days 0, "
-        "months repaired 0, calls 0, tokens 0"]
+        "months repaired 0, q days 0, q flagged 0, q calls 0, q left 0, calls 0, tokens 0"]
     monkeypatch.setattr(cu, "refresh_all", lambda *a, **k: 1 / 0)
     dash = tub.dashboard()
     ub.run_uninstall(dash, data, out, tub.ga4_settings(ga4_cube=True), now=tub.NOW)
@@ -1490,3 +1501,230 @@ def test_sampled_day_not_chased():
     cu._merge(mo, D.isoformat(), rec)
     assert mo["days"][D.isoformat()]["fu"] == 1 and "hd" not in mo["days"][D.isoformat()]
 
+
+
+# ── q: the whole no-country read of a day (ages 31 … 420 of the All rows) ───────────────────────────────────────────
+class QGA:
+    """GA4 answering one fixed set of rows (dimension firstSessionDate) with the given flags."""
+
+    def __init__(self, rows, meta=None, cut=False):
+        self.rows, self.meta, self.cut, self.calls, self.asked = rows, meta or {}, cut, 0, []
+
+    def report_all(self, body, extra=None, page_rows=None, **kw):
+        self.calls += 1
+        self.asked.append((body, extra, page_rows))
+        self.last_metas = [{}, self.meta]
+        return [dict(r) for r in self.rows]
+
+    def truncated(self, rows):
+        return self.cut
+
+
+def _qrow(D, L, usd, X=None):
+    return {"firstSessionDate": X if X is not None else ymd(D - timedelta(days=L)), "activeUsers": 1,
+            "totalAdRevenue": usd}
+
+
+def test_q_read_ages_and_shape():
+    D = date(2026, 9, 30)
+    ages = (0, 30, 31, 60, 61, 420, 421, 427)
+    ga = QGA([_qrow(D, L, (L + 1) / 1e6) for L in ages])
+    got = cu.q_read(ga, D)
+    body, extra, page_rows = ga.asked[0]
+    assert [d["name"] for d in body["dimensions"]] == ["firstSessionDate"] and not extra   # no filter, every page
+    assert body["dateRanges"] == [{"startDate": "2026-09-30", "endDate": "2026-09-30"}] and page_rows == cu.gu.UNI_PAGE_ROWS
+    X = lambda L: (D - timedelta(days=L)).isoformat()                       # noqa: E731
+    assert got["q"] == {X(31): {"1": 32}, X(60): {"1": 61}, X(61): {"2": 62}, X(420): {"13": 421}}
+    assert got["qt"] == sum(L + 1 for L in ages if L <= 420) and got["qs"] == "ok" and got["qr"] == len(ages)
+    assert cu.QJ == 13 and cu.QL == 420 and cu.bucket(cu.QL) == cu.QJ and cu.bucket(cu.QL + 1) == cu.QJ + 1
+
+
+def test_q_read_not_whole_is_flagged_empty():
+    D = date(2026, 9, 30)
+    base = [_qrow(D, 40, 0.5), _qrow(D, 3, 0.25)]
+    for rows, meta, cut in (([_qrow(D, 0, 0.1, "(other)")], {}, False), ([_qrow(D, 0, 0.1, "(not set)")], {}, False),
+                            ([_qrow(D, -1, 0.1)], {}, False), ([], {"dataLossFromOtherRow": True}, False),
+                            ([], {"samplingMetadatas": [{"samplesReadCount": "1"}]}, False),
+                            ([], {"subjectToThresholding": True}, False), ([], {}, True)):
+        got = cu.q_read(QGA(base + rows, meta, cut), D)
+        assert got["qs"] == "fl" and got["q"] == {} and got["qr"] == len(base + rows), (rows, meta, cut)
+    assert cu.q_read(QGA(base), D)["qs"] == "ok"
+
+
+def _qday_want(D, max_lag=120, start=HS, fill=1.0):
+    """The fake's whole q of activity day D: {X: {j: micros}} of ages 31 … 420 and qt (ages 0 … 420)."""
+    q, qt = {}, 0
+    for L in range(max_lag + 1):
+        if D - timedelta(days=L) < start or L > cu.QL:
+            continue
+        v = micros(L, WSUM, fill)
+        qt += v
+        if L >= 31:
+            q.setdefault((D - timedelta(days=L)).isoformat(), {})[str(cu.bucket(L))] = v
+    return q, qt
+
+
+def test_q_a_new_day_and_the_hot_days_get_q_in_the_same_run(tmp_path, monkeypatch):
+    data = str(tmp_path)
+    cube = cu.Cube(data, "a~1", "222")
+    cu.step_app(FakeGA(), cube, TODAY, HS, NOW)                 # the cube before q (q off): nothing pending
+    _save(cube)
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    nxt = TODAY + timedelta(days=1)
+    on = FakeGA(today=nxt)
+    cube = cu.Cube(data, "a~1", "222")
+    assert cu.step_app(on, cube, nxt, HS, NOW + timedelta(days=1)) == "fetched"
+    _save(cube)
+    # the new final day (Oct 11) folded (1 call) + the hot round (Oct 12 … 14, 1 block call) + their q: 3 + 1
+    assert on.calls == 2 + 3 + 1 and cube.q_days == 4 and cube.q_calls == 4 and cube.q_fl == 0
+    qf = cu.load_q(data, "a~1", "222", "2026-10")
+    assert set(qf["days"]) == {"2026-10-11"} and qf["days"]["2026-10-11"]["qs"] == "ok"
+    want, wqt = _qday_want(date(2026, 10, 11))
+    W = "2026-10-05"
+    assert qf["q"] == {X: {j: {W: v} for j, v in js.items()} for X, js in want.items()}
+    led = _month(data, "2026-10")["days"]["2026-10-11"]
+    assert qf["days"]["2026-10-11"]["qt"] == wqt == led["t"]        # nothing lost: the whole read = the cube's every row
+    h = cu.load_head(data, "a~1")
+    assert h["qh"]["p"] == []
+    for k in ("2026-10-12", "2026-10-13", "2026-10-14"):           # read while filling: the same moment as the cube's
+        rec = h["d"][k]
+        assert rec["qs"] == "ok" and rec["qt"] == rec["t"] and rec["qr"] > 0
+        assert all(len(ws) == 1 for js in rec["q"].values() for ws in js.values())
+    # within 6 hours: nothing due, nothing read (a hot copy of an earlier round never gets a q)
+    ga = FakeGA(today=nxt)
+    assert cu.step_app(ga, cu.Cube(data, "a~1", "222"), nxt, HS, NOW + timedelta(days=1, hours=2)) == "fresh"
+    assert ga.calls == 0
+
+
+def test_q_a_stop_keeps_the_fold_and_the_q_days_read(tmp_path, monkeypatch):
+    data = str(tmp_path)
+    cube = cu.Cube(data, "a~1", "222")
+    cu.step_app(FakeGA(), cube, TODAY, HS, NOW)
+    _save(cube)
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    nxt = TODAY + timedelta(days=1)
+    cube = cu.Cube(data, "a~1", "222")
+    ga = FakeGA(today=nxt, stop_after=4, stop_why="budget")        # fold 1 + hot 1 + 2 hot q, then the budget
+    try:
+        cu.step_app(ga, cube, nxt, HS, NOW + timedelta(days=1))
+        raise AssertionError("no Stop")
+    except gf.Stop:
+        pass
+    _save(cube)                                                     # as refresh_all does
+    assert "2026-10-11" in _month(data, "2026-10")["days"]          # the fold kept
+    h = cu.load_head(data, "a~1")
+    assert [h["d"][k].get("qs") for k in ("2026-10-12", "2026-10-13", "2026-10-14")] == ["ok", "ok", None]
+    assert h["qh"]["p"] == ["2026-10-11"] and cu.load_q(data, "a~1", "222", "2026-10") is None
+    ga = FakeGA(today=nxt)                                          # the next run: the pending day read (1 call); the
+    cube = cu.Cube(data, "a~1", "222")                              # hot day of the cut round stays without q
+    assert cu.step_app(ga, cube, nxt, HS, NOW + timedelta(days=1, hours=1)) == "fetched" and ga.calls == 1
+    _save(cube)
+    assert set(cu.load_q(data, "a~1", "222", "2026-10")["days"]) == {"2026-10-11"}
+    assert "qs" not in cu.load_head(data, "a~1")["d"]["2026-10-14"] and cu.load_head(data, "a~1")["qh"]["p"] == []
+    # the app's call cap ends q quietly (the rest stays pending); never a day read twice
+    cube = cu.Cube(None, "a~1", "222")
+    cube.head["qh"] = {"p": ["2026-09-01", "2026-09-02", "2026-09-03"]}
+    ga = FakeGA(max_calls=2)
+    assert cu.q_fwd(ga, cube, NOW, []) is True and ga.calls == 2
+    assert cube.head["qh"]["p"] == ["2026-09-03"] and cube.q_has("2026-09-01") and cube.q_has("2026-09-02")
+    cube.head["qh"]["p"] = ["2026-09-02", "2026-09-03"]
+    ga = FakeGA()
+    cu.q_fwd(ga, cube, NOW, [])
+    assert ga.calls == 1 and cube.head["qh"]["p"] == []
+
+
+def _lossy_cube(monkeypatch, loss):
+    """Jun 1 … Oct 10 folded (q off: nothing pending), hot days read; `loss` {YYYY-MM: share} put on each day's ledger
+    of those months (measured "(other)" loss)."""
+    monkeypatch.setattr(cu, "Q_CALLS", 0)
+    cube = cu.Cube(None, "a~1", "222")
+    cu.step_app(FakeGA(), cube, TODAY, HS, NOW)
+    for k, sh in loss.items():
+        for led in cube.month(k)["days"].values():
+            led["loss"] = int(led["t"] * sh)
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    return cube
+
+
+def test_q_history_lossy_months_first_and_the_cap(monkeypatch):
+    cube = _lossy_cube(monkeypatch, {"2026-07": 0.1, "2026-09": 0.3})
+    assert cu.q_scan(cube, NOW) is True and cu.q_scan(cube, NOW) is False          # once (not again while queued)
+    todo = cube.head["qh"]["todo"]
+    assert [e[0] for e in todo] == ["2026-09", "2026-07", "2026-10", "2026-08", "2026-06"]  # loss (biggest share)
+    assert [e[2] for e in todo] == [30, 31, 10, 31, 30] and cube.q_left() == 132           # first, then newest first
+    assert todo[0][1] == pytest.approx(0.3, abs=1e-4) and todo[0][3] > 0 and todo[2][3] == 0
+    left = [40]
+
+    def take():
+        left[0] -= 1
+        return left[0] >= 0
+    ga = FakeGA()
+    assert cu.q_fill(ga, cube, NOW, take) == 40 and ga.calls == 40                         # the run's cap holds
+    assert all(cube.q_has("2026-09-%02d" % d) for d in range(1, 31)) and cube.q_has("2026-07-10")
+    assert not cube.q_has("2026-07-11") and not cube.q_has("2026-10-01")
+    assert [e[0] for e in cube.head["qh"]["todo"]][0] == "2026-07" and cube.q_left() == 132 - 40
+    for k in ("2026-09-15", "2026-07-03"):                                                 # each the fake's whole read
+        assert cube.qmonth(k[:7])["days"][k]["qt"] == _qday_want(date.fromisoformat(k))[1]
+    ga = FakeGA()                                                                          # the rest: the queue empties
+    assert cu.q_fill(ga, cube, NOW, lambda: True) == 92 and cube.head["qh"]["todo"] == [] and cube.q_left() == 0
+    # a Stop (the app's call cap) ends it quietly: what was read is kept
+    cube2 = _lossy_cube(monkeypatch, {})
+    cu.q_scan(cube2, NOW)
+    assert cu.q_fill(FakeGA(max_calls=5), cube2, NOW, lambda: True) == 5 and cube2.q_days == 5
+
+
+def test_q_round_lossy_apps_first_within_the_runs_calls(monkeypatch):
+    import threading
+    plain, lossy = _lossy_cube(monkeypatch, {}), _lossy_cube(monkeypatch, {"2026-08": 0.2})
+    plain.app_id, lossy.app_id = "a~1", "z~9"                       # by id the plain app would go first
+    monkeypatch.setattr(cu, "Q_CALLS", 50)
+    fill = [("a~1", {}, plain, FakeGA()), ("z~9", {}, lossy, FakeGA())]
+    counts = dict.fromkeys(cu.COUNTS, 0)
+    cu.q_round(fill, NOW, lambda: None, threading.Lock(), counts, workers=1)
+    assert lossy.q_days == 50 and plain.q_days == 0 and counts["calls"] == 50   # the lossy app first, 50 in all
+    assert all(lossy.q_has("2026-08-%02d" % d) for d in range(1, 32))          # its lossy month first
+
+
+def test_q_files_are_never_months_and_the_repair_leaves_them(tmp_path, monkeypatch):
+    data, T0 = str(tmp_path), date(2026, 10, 13)
+    cube = _old_cube(data, T0)
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    cube.q_put("2026-09-05", cu.q_read(FakeGA(today=T0, start=RS), date(2026, 9, 5)), "t")
+    _save(cube)
+    qp = cu.q_path(data, "a~1", "2026-09")
+    raw = open(qp, "rb").read()
+    assert os.path.exists(qp) and [k for k, _ in cu.months(data, "a~1", "222")] == ["2026-09", "2026-10"]
+    monkeypatch.setattr(cu, "Q_CALLS", 0)
+    for i in range(40):                                             # the repair reads and replaces 2026-10, then 09
+        c = cu.Cube(data, "a~1", "222")
+        cu.repair(FakeGA(today=T0, cap=40, start=RS, max_calls=cu.MAX_CALLS), c, datetime(2026, 10, 13, 2, i,
+                                                                                         tzinfo=timezone.utc))
+        _save(c)
+        if "rep" in _month(data, "2026-09"):
+            break
+    assert "rep" in _month(data, "2026-09") and open(qp, "rb").read() == raw
+    assert cu.load_q(data, "a~1", "999", "2026-09") is None         # another stream's: never read
+
+
+def test_q_in_the_run_two_rounds_counts_and_files(monkeypatch, tmp_path):
+    """refresh_all with q on: each app's walk / hot days, their q in the same run, then the history fill (second
+    round) within the run's Q_CALLS; q files next to the months, the per-app counts in the private state, the log line
+    counts only."""
+    monkeypatch.setattr(cu, "Q_CALLS", 20)
+    data, out = _refresh(monkeypatch, tmp_path)
+    c = out["counts"]
+    # per app: 71 days folded (Aug 1 … Oct 10, all pending), hot 3 + Q_FWD 7 in its run; then 20 more in all
+    assert out["apps"] == {"x~1": "fetched", "x~2": "fetched"}
+    assert c["q_days"] == 2 * (3 + cu.Q_FWD) + 20 and c["q_flagged"] == 0 and c["q_calls"] == c["q_days"]
+    assert c["q_left"] == 2 * 71 - 2 * cu.Q_FWD - 20
+    st = cu.load_state(data)["fetch"]
+    assert sum(st[a]["q"]["d"] for a in ("x~1", "x~2")) == c["q_days"]
+    assert all(set(st[a]["q"]) == {"d", "c", "fl", "left"} for a in ("x~1", "x~2"))
+    names = sorted(os.listdir(cu.app_dir(data, "x~1")))
+    assert "2026-08.q.json.gz" in names and [k for k, _ in cu.months(data, "x~1", "222")] == ["2026-08", "2026-09",
+                                                                                                "2026-10"]
+    h = cu.load_head(data, "x~1")
+    assert all(h["d"][k]["qs"] == "ok" for k in h["d"]) and h["qh"]["p"][0] > "2026-08-07"
+    line = cu.log_line(out)
+    assert ", q days %d, q flagged 0, q calls %d, q left %d, calls " % (c["q_days"], c["q_calls"], c["q_left"]) in line
+    assert "example" not in line and "x~" not in line
