@@ -116,6 +116,7 @@ import sys
 from array import array
 from datetime import date, datetime, timedelta, timezone
 
+from . import stage_clock as _sc
 from .db import write_gz_stable, write_json_gz_stable
 from .engine import value as val
 from .fetch import ga4_cohort as gco
@@ -1487,8 +1488,9 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
         fclk = getattr(acc.fc, "clock", None)          # 🌍 the country filter: its read rides the cube's one pass;
         cv = _Cty(P["hs"], clock=fclk) if acc.cube else None   # its time never counts in the forecast's budget
         try:                                            # the cohort cube (D60, D90 … the app's age; GA4_CUBE only):
-            late = (_late(data_dir, aid, store.get("stream_id"), P, visit=cv.visit)   # a bad file costs only
-                    if acc.cube else None)                                           # those columns
+            with _sc.stage("roi_cube"):                 # (⏱ measure only, stage_clock: summed over the apps)
+                late = (_late(data_dir, aid, store.get("stream_id"), P, visit=cv.visit)   # a bad file costs only
+                        if acc.cube else None)                                           # those columns
         except Exception:
             late = None
         rows = _cohorts(P, spend, fxf, co, today, late if late and "B" in late else None)
@@ -1537,7 +1539,8 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
         if cv is not None and late is not None and "B" in late:   # 🌍 one country's install-day table (own try:
             t0 = fclk() if fclk else None                          # a failure costs only it — no "cd", counted)
             try:
-                cd = _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, out_dir, data_dir)
+                with _sc.stage("roi_country"):
+                    cd = _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, out_dir, data_dir)
                 if cd:
                     body["cd"] = cd
             except Exception:
@@ -1554,7 +1557,8 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             if acc.adsrc is not None:
                 if acc.ac is None:
                     acc.ac = acb.start(acc.adsrc, data_dir, now)
-                ares = acb.app_step(acc.ac, aid, key, store, ids)
+                with _sc.stage("adcfg"):
+                    ares = acb.app_step(acc.ac, aid, key, store, ids)
         except Exception:
             ares = None
         try:                                            # 🔮 the forecast (its own budget and daily cadence; a failure
@@ -1570,9 +1574,10 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
                 pairs = fob.cs_pairs(acc.fc, geo, fxf) if fgeo else None
             except Exception:
                 fgeo, pairs = None, None
-            body["fc"] = fob.app_step(acc.fc, aid, key, rows, P, ida, life, body["life_till"], eng,
-                                      rev_cty=(rev or {}).get("cty"), unst=store, geo=fgeo, cs_pairs=pairs,
-                                      acfg=(ares or {}).get("steps"))
+            with _sc.stage("forecast"):
+                body["fc"] = fob.app_step(acc.fc, aid, key, rows, P, ida, life, body["life_till"], eng,
+                                          rev_cty=(rev or {}).get("cty"), unst=store, geo=fgeo, cs_pairs=pairs,
+                                          acfg=(ares or {}).get("steps"))
             fcs = fc_summary(body["fc"])
         except Exception:
             body["fc"] = None

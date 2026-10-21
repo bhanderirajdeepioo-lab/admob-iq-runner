@@ -103,6 +103,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from . import ga4
 from .. import ga4_probe
+from .. import stage_clock as _sc
 from ..db import _read_json_any, write_json_gz_stable
 
 FULL_CHUNK_DAYS = 90        # the LONGEST cells slice (~H×90 rows — a page or two); an app's own verified size may be less
@@ -3195,7 +3196,8 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
         due = (age >= cfg["streams_ttl_hours"] or (routes.get("stale") and age >= cfg["retry_hours"])
                or (missing and age >= cfg["min_hours"]))
         if tokens and due and tried >= cfg["retry_hours"]:
-            out["discovery"] = "ok" if _discover(cfg, tokens, state, apps, access, now) else "failed"
+            with _sc.stage("ga4_discovery"):            # ⏱ measure only (stage_clock)
+                out["discovery"] = "ok" if _discover(cfg, tokens, state, apps, access, now) else "failed"
 
         todo = []
         for a in apps:
@@ -3246,7 +3248,8 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic):
                 if clock() - t0 >= cfg["run_budget_sec"] or pid in held_back:
                     out["apps"][aid] = seen
                     continue
-                _iday_only(cfg, data_dir, a, st, r, tz, end, now, plain, over, access, owner_rt, ic, held_back, xc)
+                with _sc.stage("ga4_iday_only"):        # (⏱ summed over the apps)
+                    _iday_only(cfg, data_dir, a, st, r, tz, end, now, plain, over, access, owner_rt, ic, held_back, xc)
                 out["apps"][aid] = seen
                 continue
             due_left[0] -= 1

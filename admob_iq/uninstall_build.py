@@ -30,6 +30,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from . import ga4_probe
+from . import stage_clock as _sc
 from .db import write_json_gz_stable
 from .engine import attrib
 from .engine import impact as imp
@@ -243,47 +244,53 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
     now_iso = gu._now_iso(now)
     apps = _selected_apps(dashboard, data_dir)
     try:
-        status = gu.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic)
+        with _sc.stage("ga4_uninstall_fetch"):  # ⏱ measure only (stage_clock): each GA4 step's own seconds
+            status = gu.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic)
     except Exception:
         status = None                                   # carry on from what is stored
     aud_line = None
     if s.get("ga4_audience"):                           # 👥 Audience (GA4_AUDIENCE, off by default): its own GA4 reads,
         try:                                            # store and state, after the Uninstall fetch — imported only here:
             from .fetch import ga4_audience as gaud     # a failure costs that step only, never this tab
-            aud_line = gaud.log_line(gaud.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
-                                                      budget=s.get("ga4_audience_budget_sec") or gaud.BUDGET_SEC))
+            with _sc.stage("ga4_audience"):
+                aud_line = gaud.log_line(gaud.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                          budget=s.get("ga4_audience_budget_sec") or gaud.BUDGET_SEC))
         except Exception as e:
             aud_line = "ga4 audience skipped: %s" % type(e).__name__
     if s.get("ga4_firstopen"):                          # 🆕 First open (GA4_FIRSTOPEN, off by default): its own funnel
         try:                                            # reads and store, a failure costs that step only
             from .fetch import ga4_firstopen as gfo
-            print(gfo.log_line(gfo.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
-                                               budget=s.get("ga4_firstopen_budget_sec") or gfo.BUDGET_SEC)),
-                  file=sys.stderr)
+            with _sc.stage("ga4_firstopen"):
+                print(gfo.log_line(gfo.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                   budget=s.get("ga4_firstopen_budget_sec") or gfo.BUDGET_SEC)),
+                      file=sys.stderr)
         except Exception as e:
             print("ga4 first open skipped: %s" % type(e).__name__, file=sys.stderr)
     if s.get("ga4_firstopen") and s.get("ga4_firstopen_cc"):   # 🆕 … by country (GA4_FIRSTOPEN_CC): after the First
         try:                                            # open fetch (its screens), own store, a failure costs it only
             from .fetch import ga4_firstopen_cc as gfc
-            print(gfc.log_line(gfc.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
-                                               budget=s.get("ga4_firstopen_cc_budget_sec") or gfc.BUDGET_SEC)),
-                  file=sys.stderr)
+            with _sc.stage("ga4_firstopen_cc"):
+                print(gfc.log_line(gfc.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                   budget=s.get("ga4_firstopen_cc_budget_sec") or gfc.BUDGET_SEC)),
+                      file=sys.stderr)
         except Exception as e:
             print("ga4 first open by country skipped: %s" % type(e).__name__, file=sys.stderr)
     if s.get("ga4_cohort"):                             # 📈 Day-wise ROI (GA4_COHORT): every day 0 … 30 of each install
         try:                                            # day's ad revenue — its own reads and store, a failure costs
             from .fetch import ga4_cohort as gco        # that step only
-            print(gco.log_line(gco.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
-                                               budget=s.get("ga4_cohort_budget_sec") or gco.BUDGET_SEC)),
-                  file=sys.stderr)
+            with _sc.stage("ga4_cohort"):
+                print(gco.log_line(gco.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                   budget=s.get("ga4_cohort_budget_sec") or gco.BUDGET_SEC)),
+                      file=sys.stderr)
         except Exception as e:
             print("ga4 cohort skipped: %s" % type(e).__name__, file=sys.stderr)
     if s.get("ga4_cube"):                               # 🧊 the cohort cube (GA4_CUBE): revenue by activity day ×
         try:                                            # install day × country, past D30 for the ROI columns — its
             from .fetch import ga4_cube as gcu          # own reads, store and budget, a failure costs that step only
-            print(gcu.log_line(gcu.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
-                                               budget=s.get("ga4_cube_budget_sec") or gcu.BUDGET_SEC)),
-                  file=sys.stderr)
+            with _sc.stage("ga4_cube"):
+                print(gcu.log_line(gcu.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                   budget=s.get("ga4_cube_budget_sec") or gcu.BUDGET_SEC)),
+                      file=sys.stderr)
         except Exception as e:
             print("ga4 cube skipped: %s" % type(e).__name__, file=sys.stderr)
     state = gu.load_state(data_dir)
@@ -295,9 +302,10 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         try:                                        # the Active tab only, never the Uninstall step
             from . import active_build as ab
             act_st, act_rows, act_cfg = ab.load_state(data_dir), [], ab.cfg_from(s, cfg)
-            market = ab.market_prepass(revenue, [a for a in apps if not a.get("same_as")
-                                                 and os.path.exists(gu.store_path(data_dir, a["app_id"]))],
-                                       app_revenue)
+            with _sc.stage("active_prepass"):
+                market = ab.market_prepass(revenue, [a for a in apps if not a.get("same_as")
+                                                     and os.path.exists(gu.store_path(data_dir, a["app_id"]))],
+                                           app_revenue)
         except Exception as e:
             act_on = False
             print("ga4 active skipped: %s" % type(e).__name__, file=sys.stderr)
@@ -307,7 +315,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
             from . import value_build as vb
             val_cfg = vb.cfg_from(s)
             val_st, val_rows = vb.load_state(data_dir), []
-            val_pre = vb.prepass(data_dir, apps, revenue, dashboard, val_cfg, val_st)
+            with _sc.stage("value_prepass"):
+                val_pre = vb.prepass(data_dir, apps, revenue, dashboard, val_cfg, val_st)
             if val_pre is None:
                 raise RuntimeError("prepass")
             val_mkt = market                        # the weeks most apps' ad rate moved together (Active's prepass;
@@ -345,7 +354,8 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         print("impact any skipped: %s" % type(e).__name__, file=sys.stderr)
     for a in sorted(apps, key=lambda x: (x["app_name"].casefold(), x["app_id"])):
         aid, path = a["app_id"], gu.store_path(data_dir, a["app_id"])
-        store = gu.load_store(path) if os.path.exists(path) and not a.get("same_as") else None
+        with _sc.stage("uninstall_store_load"):  # (the per-app steps below: one row each, summed over the apps)
+            store = gu.load_store(path) if os.path.exists(path) and not a.get("same_as") else None
         if not store or not store.get("history_start") or not store.get("window_end"):
             r = _reason(a, status, state)
             no_ga4.append({"app_id": aid, "app": a["app_name"], "package": a.get("package"), "reason": r,
@@ -355,22 +365,24 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         st = state["fetch"].setdefault(aid, {})
         st["meta"] = gu.store_meta(store)               # planning always follows the store actually on disk
         stale = gu._hours_since(store.get("fetched_at"), now) > eng.STALE_HOURS
-        store = eng.fill_days(store)                    # near-complete days filled (≈) — the detail and the cohort
-                                                        # file read the same cells; the store on disk stays raw
-        # an unchecked store format (v1: its clean re-pull still pending — quota, a failure) is shown and flagged,
-        # but whatever it opens is seeded, never sent: no alert from unchecked data ever goes out. A v2 store
-        # waiting for its repair is checked data: evaluated as ever (its incomplete days still left out)
-        outdated = gu._store_v(store) < gu.CHECKED_V
-        rev = app_revenue(revenue, a, apps, store.get("package"), cover=act_on)
-        detail, row = eng.evaluate_app(store, aid, a["app_name"], state, now_iso, stale=stale, key=key,
-                                       package=a.get("package") or store.get("package"), late=cfg["late_days"],
-                                       outdated=outdated, revenue=rev, windows=cfg["impact_windows"])
+        with _sc.stage("uninstall_eval"):
+            store = eng.fill_days(store)                    # near-complete days filled (≈) — the detail and the cohort
+                                                            # file read the same cells; the store on disk stays raw
+            # an unchecked store format (v1: its clean re-pull still pending — quota, a failure) is shown and flagged,
+            # but whatever it opens is seeded, never sent: no alert from unchecked data ever goes out. A v2 store
+            # waiting for its repair is checked data: evaluated as ever (its incomplete days still left out)
+            outdated = gu._store_v(store) < gu.CHECKED_V
+            rev = app_revenue(revenue, a, apps, store.get("package"), cover=act_on)
+            detail, row = eng.evaluate_app(store, aid, a["app_name"], state, now_iso, stale=stale, key=key,
+                                           package=a.get("package") or store.get("package"), late=cfg["late_days"],
+                                           outdated=outdated, revenue=rev, windows=cfg["impact_windows"])
         if act_on:                                      # Active users: the uninstall detail read, never changed; a
             snap = None                                 # failure costs only this app's Active row (its state kept)
             try:
                 snap = ab.snapshot(act_st, aid)
-                act_rows.append(ab.app_step(store, a, detail, key, act_st, now_iso, rev, market, stale, outdated,
-                                            act_cfg, out_dir))
+                with _sc.stage("active_apps"):
+                    act_rows.append(ab.app_step(store, a, detail, key, act_st, now_iso, rev, market, stale, outdated,
+                                                act_cfg, out_dir))
             except Exception:
                 try:
                     ab.restore_app(act_st, aid, snap)
@@ -383,8 +395,9 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                 vsnap = vb.snapshot(val_st, aid)
                 aal = (act_rows[-1].get("_alerts") if act_on and act_rows and act_rows[-1].get("app_id") == aid
                        else None)
-                val_rows.append(vb.app_step(store, a, detail, key, val_st, now_iso, rev, val_pre, val_cfg, out_dir,
-                                            act_alerts=aal, market=val_mkt))
+                with _sc.stage("value_apps"):
+                    val_rows.append(vb.app_step(store, a, detail, key, val_st, now_iso, rev, val_pre, val_cfg, out_dir,
+                                                act_alerts=aal, market=val_mkt))
             except Exception:
                 try:
                     vb.restore_app(val_st, aid, vsnap)
@@ -392,23 +405,27 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                     vb.drop_app(val_st, aid)
                 val_rows.append(vb.error_row(a, key))
             if roi_acc is not None:                     # (never raises: a failure costs only this app's ROI file)
-                rb.app_step(roi_acc, store, a, key, rev, val_pre, val_cfg, out_dir, data_dir, now,
-                            ids=pkg_ids(a, apps, store.get("package")))
+                with _sc.stage("roi_apps"):
+                    rb.app_step(roi_acc, store, a, key, rev, val_pre, val_cfg, out_dir, data_dir, now,
+                                ids=pkg_ids(a, apps, store.get("package")))
         if any_acc is not None:                         # (never raises: a failure costs only this app's file)
-            iab.app_step(any_acc, out_dir, store, a, key, path, rev, cfg["late_days"])
-        eng.revision_sums(store, late_sums)
-        name = COHORT_PREFIX + key + ".json.gz"
-        sig = _sig(path)
-        if st.get("c_sig") != sig or not os.path.exists(os.path.join(out_dir, name)):
-            write_json_gz_stable(os.path.join(out_dir, name), eng.cohort_file(store))
-            st["c_sig"] = sig
+            with _sc.stage("impact_any"):
+                iab.app_step(any_acc, out_dir, store, a, key, path, rev, cfg["late_days"])
+        with _sc.stage("cohort_files"):
+            eng.revision_sums(store, late_sums)
+            name = COHORT_PREFIX + key + ".json.gz"
+            sig = _sig(path)
+            if st.get("c_sig") != sig or not os.path.exists(os.path.join(out_dir, name)):
+                write_json_gz_stable(os.path.join(out_dir, name), eng.cohort_file(store))
+                st["c_sig"] = sig
         files.append(name)
         details.append(detail)
         rows.append(row)
         store = None                                    # one big store in memory at a time
     gu.save_state(data_dir, state)
     if any_acc is not None:                         # (its files: build_static's headers, by pattern — the list
-        iab.finish(any_acc, out_dir)                # returned here stays the tab's own)
+        with _sc.stage("impact_any_finish"):        # returned here stays the tab's own)
+            iab.finish(any_acc, out_dir)
 
     alerts = eng.sort_alerts([al for d in details for al in d["alerts"]])
     sel = {a["app_id"] for a in apps}
@@ -430,9 +447,10 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                         "impute_min_coverage": eng.IMPUTE_MIN_COVERAGE, "est_mark_pp": eng.EST_MARK_PP,
                         "impact": dict(imp.CONSTS)},
              "lateness": eng.lateness(late_sums), "apps": details, "no_ga4": no_ga4}
-    write_json_gz_stable(os.path.join(out_dir, ASSET), asset)
-    asset_v = hashlib.sha1(json.dumps(asset, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-                           .encode("utf-8")).hexdigest()[:12]
+    with _sc.stage("uninstall_asset"):
+        write_json_gz_stable(os.path.join(out_dir, ASSET), asset)
+        asset_v = hashlib.sha1(json.dumps(asset, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+                               .encode("utf-8")).hexdigest()[:12]
     keep = set(files)
     for f in os.listdir(out_dir):                       # an app no longer shown takes its cohort file with it
         if f.startswith(COHORT_PREFIX) and f.endswith(".json.gz") and f not in keep:
@@ -481,14 +499,17 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         except Exception:
             pass
     if act_on:                                          # dashboard["active"] last (its log line: build_static's)
-        ab.finish(dashboard, out_dir, act_rows, market, act_st, data_dir, no_ga4, act_cfg,
-                  dashboard["uninstall"]["status"])
+        with _sc.stage("active_finish"):
+            ab.finish(dashboard, out_dir, act_rows, market, act_st, data_dir, no_ga4, act_cfg,
+                      dashboard["uninstall"]["status"])
     if val_on:                                          # dashboard["value"] after that (its log line: build_static's)
-        vb.finish(dashboard, out_dir, val_rows, val_pre, val_st, data_dir, no_ga4, val_cfg,
-                  dashboard["uninstall"]["status"])
+        with _sc.stage("value_finish"):
+            vb.finish(dashboard, out_dir, val_rows, val_pre, val_st, data_dir, no_ga4, val_cfg,
+                      dashboard["uninstall"]["status"])
     if roi_acc is not None:                             # dashboard["roi"] (its log line: build_static's)
         try:
-            rb.finish(roi_acc, dashboard, out_dir)
+            with _sc.stage("roi_finish"):
+                rb.finish(roi_acc, dashboard, out_dir)
         except Exception as e:
             print("roi skipped: %s" % type(e).__name__, file=sys.stderr)
     if attrib.FAILS:                                    # a split that could not be worked out (never a verdict): counted

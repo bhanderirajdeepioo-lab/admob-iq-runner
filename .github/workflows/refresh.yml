@@ -191,15 +191,29 @@ jobs:
           # app ids and revenue totals. So its output goes to a file, never to the log. On
           # failure we show only the tail with long digit runs masked, which keeps the error
           # text readable ("OAuth fail", "PERMISSION_DENIED") while hiding ids and figures.
+          # /tmp/build_wall: this step's own wall clock around the build (the stage-time step below compares it)
+          date +%s.%N > /tmp/build_wall
           if python -m admob_iq.build_static > /tmp/build.log 2>&1; then
+            date +%s.%N >> /tmp/build_wall
             echo "build complete"
           else
+            date +%s.%N >> /tmp/build_wall
             echo "::error::build failed — tail below, digits masked for privacy"
             # mask decimals FIRST (a revenue figure like 89.43 has no 4-digit run),
             # then any long digit run (publisher ids, app ids, counts).
             tail -n 30 /tmp/build.log | sed -E 's/[0-9]+\.[0-9]+/#.##/g; s/[0-9]{4,}/####/g'
             exit 1
           fi
+
+      - name: Build time per stage (stage names + seconds only)
+        # admob_iq/stage_clock.py timed every stage of the build into the PRIVATE data/build_profile.json.gz (this
+        # build + the last 48). PUBLIC LOG: it prints only "stage <name> <sec>s" lines: the total, every stage of 20 s
+        # or more, this step's wall clock (step_wall) and what fell outside the build (outside_build). Names come from
+        # a fixed allow-list of code identifiers (stage_clock.STAGES), whole seconds only: never an app, account, file
+        # name or amount. It also runs after a failed build (that build's stages), and it never fails the run.
+        if: always()
+        continue-on-error: true
+        run: python -m admob_iq.stage_clock public data/build_profile.json.gz /tmp/build_wall 2>/dev/null || true
 
       - name: Deploy guard report (Cloudflare limits, counts only)
         # admob_iq/deploy_guard.py ran at the end of the build. It keeps the site inside Cloudflare's deploy limits

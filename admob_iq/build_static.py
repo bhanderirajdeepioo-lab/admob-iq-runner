@@ -21,6 +21,7 @@ import shutil
 import sys
 from datetime import date, datetime, timezone, timedelta
 
+from . import stage_clock as _sc          # first package import: its clock times the imports below (measure only)
 from .config import settings, load_accounts
 from .db import FileRepo
 from .fetch import fetcher
@@ -89,6 +90,7 @@ def _spend_daily_dated(spend, data_dir):
             for sid, dd in (spend.get("daily") or {}).items()}
 
 
+@_sc.timed("gads_geo")
 def _gads_geo_step(s, data_dir, spend, today):
     """The ROAS step, right after the spend cache is written: Google Ads cost by country for the Install value tab
     (fetch.gads_geo; SPEC_CD_GEO §G.7), only when GADS_GEO is on. Its own try — a failure costs only the geo cache's
@@ -98,12 +100,14 @@ def _gads_geo_step(s, data_dir, spend, today):
     try:
         from .fetch.gads_geo import geo_step
         _days = _gads_geo_days(s, data_dir, spend)              # GADS_ARCHIVE: the same chunks by day (or None)
-        print(geo_step(s, data_dir, spend, today, days=_days) if _days is not None
-              else geo_step(s, data_dir, spend, today), file=sys.stderr)
+        with _sc.stage("gads_geo_weekly"):
+            print(geo_step(s, data_dir, spend, today, days=_days) if _days is not None
+                  else geo_step(s, data_dir, spend, today), file=sys.stderr)
         if _days is not None:
             try:
                 from .fetch.gads_geo_day import day_step
-                print(day_step(s, data_dir, spend, today, _days), file=sys.stderr)
+                with _sc.stage("gads_geo_day"):
+                    print(day_step(s, data_dir, spend, today, _days), file=sys.stderr)
             except Exception as _de:
                 print(f"gads geo days skipped: {type(_de).__name__}", file=sys.stderr)
     except Exception as _ge:
@@ -123,6 +127,7 @@ def _gads_geo_days(s, data_dir, spend):
         return None
 
 
+@_sc.timed("gads_archive")
 def _gads_archive_step(s, data_dir, spend, today):
     """The ROAS step, after the geo step: the Google Ads archive (fetch.gads_archive — settings + change history, rows per
     campaign × day, spend by hour; private data/ only, nothing shown), only when GADS_ARCHIVE is on. Its own try — a
@@ -409,6 +414,7 @@ def admob_country_months(rows, till):
     return {"m": out, "d": cov}
 
 
+@_sc.timed("account_tzs")
 def account_tzs(accounts, s, report_tz, mode, has_creds):
     """{account id: its reporting timezone} — the timezone each account's AdMob report rows are in: the configured
     reporting_tz, else (live) the account's own (account_meta, one small read each), else report_tz (as the rest of the
@@ -471,6 +477,7 @@ def _impact_any_tail(out_dir):
         return []
 
 
+@_sc.timed("uninstall_studio")
 def _studio_step(dashboard, data_dir, out_dir, s):
     """🧭 Uninstall Studio (admob_iq.uninstall_studio_build): the Uninstall tab's All-apps view — ONE lazy file from the
     files the Uninstall step wrote this build, its pointer dashboard["uninstall"]["studio"] and ONE counts-only line →
@@ -495,6 +502,7 @@ def _studio_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+@_sc.timed("value_studio")
 def _value_studio_step(dashboard, data_dir, out_dir, s):
     """💸 Install value Studio (admob_iq.value_studio_build): the Install value tab's All-apps view — ONE lazy file from
     the files the value step wrote this build, its pointer dashboard["value"]["studio"] and ONE counts-only line → its
@@ -519,6 +527,7 @@ def _value_studio_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+@_sc.timed("active_studio")
 def _active_studio_step(dashboard, data_dir, out_dir, s):
     """🧭 Active users Studio (admob_iq.active_studio_build): the Active users tab's All-apps view — ONE lazy file from
     the files the Uninstall step (Active users inside it) wrote this build, its pointer dashboard["active"]["studio"] and
@@ -543,6 +552,7 @@ def _active_studio_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+@_sc.timed("audience_tab")
 def _audience_step(dashboard, data_dir, out_dir, s):
     """👥 Audience tab (admob_iq.audience_build): who still has each app, who opens it, who went quiet and for how many
     months — ONE lazy file from what the Uninstall step (Active users inside it) wrote this build + the GA4 Audience
@@ -568,6 +578,7 @@ def _audience_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+@_sc.timed("firstopen_tab")
 def _firstopen_step(dashboard, data_dir, out_dir, s):
     """🆕 First open tab (admob_iq.firstopen_build): one lazy file from the private funnel stores, its pointer and ONE
     counts-only line → its _headers path (one splat rule). Switched off (FIRSTOPEN_TAB=false) or failing: the file
@@ -652,44 +663,45 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
     """The uninstall step with the exact AdMob revenue per app per day (the update-impact card's ARPDAU) from the
     network report already in `repo` — no extra report call (tz_by_account: account_tzs). A revenue failure only costs
     that one row."""
-    try:
-        revenue = admob_revenue(repo.fetch_network(), report_tz, s["report_currency"], today, tz_by_account)
-    except Exception as e:
-        revenue = None
-        print(f"ga4 uninstall revenue skipped: {type(e).__name__}", file=sys.stderr)
-    if revenue is not None and s.get("ga4_active", True):
-        try:                                       # every mediation source (Active users' other-network share; the
-                                                   # Install value tab's money truth — with Active off it falls back
-                                                   # to the network report and says so: scale.src "network")
-            every = mediation_revenue(repo.fetch_mediation(), revenue["till"])
-            if every:
-                revenue["all_apps"] = every
+    with _sc.stage("ga4_revenue_prep"):                 # the AdMob revenue inputs (no report call)
+        try:
+            revenue = admob_revenue(repo.fetch_network(), report_tz, s["report_currency"], today, tz_by_account)
         except Exception as e:
-            print(f"ga4 active mediation skipped: {type(e).__name__}", file=sys.stderr)
-    if revenue is not None:
-        try:                                       # the 🔮 forecast's "why" split (country mix × country eCPM)
-            revenue["country"] = admob_country(repo.fetch_country(), revenue["till"])
-        except Exception as e:
-            print(f"ga4 forecast country skipped: {type(e).__name__}", file=sys.stderr)
-        try:                                       # 📈 ROI's country filter: every month (each country's AdMob ÷ GA4)
-            revenue["country_m"] = admob_country_months(repo.fetch_country(), revenue["till"])
-        except Exception as e:
-            print(f"roi country months skipped: {type(e).__name__}", file=sys.stderr)
-        try:                                       # 📅 the forecast's eCPM calendar: each past season's week / event
-            from .engine import fc_calendar        # effects, like for like per ad unit (the unit report already read)
-            till = date.fromisoformat(str(revenue["till"])[:10])
-            revenue["cal"] = fc_calendar.seasons(getattr(repo, "fetch_mediation_unit", list)(), till)
-            revenue["cal"]["hol"] = fc_calendar.holidays(repo.fetch_country(), till)   # (measured, page only)
-            revenue["cal"]["wk"] = fc_calendar.trigger_days(getattr(repo, "fetch_mediation_unit", list)(),
-                                                            (till - timedelta(days=140)).isoformat(), till.isoformat())
-        except Exception as e:
-            print(f"forecast calendar skipped: {type(e).__name__}", file=sys.stderr)
-        try:                                       # ⚙️ the ad setting changes: the unit + country reports already
-            from .engine import adcfg              # read (indexed once, never copied; per app inside the ROI step)
-            revenue["adsrc"] = adcfg.Source(getattr(repo, "fetch_mediation_unit", list)(), repo.fetch_country(),
-                                            revenue["till"])
-        except Exception as e:
-            print(f"ad settings skipped: {type(e).__name__}", file=sys.stderr)
+            revenue = None
+            print(f"ga4 uninstall revenue skipped: {type(e).__name__}", file=sys.stderr)
+        if revenue is not None and s.get("ga4_active", True):
+            try:                                       # every mediation source (Active users' other-network share; the
+                                                       # Install value tab's money truth — with Active off it falls back
+                                                       # to the network report and says so: scale.src "network")
+                every = mediation_revenue(repo.fetch_mediation(), revenue["till"])
+                if every:
+                    revenue["all_apps"] = every
+            except Exception as e:
+                print(f"ga4 active mediation skipped: {type(e).__name__}", file=sys.stderr)
+        if revenue is not None:
+            try:                                       # the 🔮 forecast's "why" split (country mix × country eCPM)
+                revenue["country"] = admob_country(repo.fetch_country(), revenue["till"])
+            except Exception as e:
+                print(f"ga4 forecast country skipped: {type(e).__name__}", file=sys.stderr)
+            try:                                       # 📈 ROI's country filter: every month (each country's AdMob ÷ GA4)
+                revenue["country_m"] = admob_country_months(repo.fetch_country(), revenue["till"])
+            except Exception as e:
+                print(f"roi country months skipped: {type(e).__name__}", file=sys.stderr)
+            try:                                       # 📅 the forecast's eCPM calendar: each past season's week / event
+                from .engine import fc_calendar        # effects, like for like per ad unit (the unit report already read)
+                till = date.fromisoformat(str(revenue["till"])[:10])
+                revenue["cal"] = fc_calendar.seasons(getattr(repo, "fetch_mediation_unit", list)(), till)
+                revenue["cal"]["hol"] = fc_calendar.holidays(repo.fetch_country(), till)   # (measured, page only)
+                revenue["cal"]["wk"] = fc_calendar.trigger_days(getattr(repo, "fetch_mediation_unit", list)(),
+                                                                (till - timedelta(days=140)).isoformat(), till.isoformat())
+            except Exception as e:
+                print(f"forecast calendar skipped: {type(e).__name__}", file=sys.stderr)
+            try:                                       # ⚙️ the ad setting changes: the unit + country reports already
+                from .engine import adcfg              # read (indexed once, never copied; per app inside the ROI step)
+                revenue["adsrc"] = adcfg.Source(getattr(repo, "fetch_mediation_unit", list)(), repo.fetch_country(),
+                                                revenue["till"])
+            except Exception as e:
+                print(f"ad settings skipped: {type(e).__name__}", file=sys.stderr)
     return _uninstall_step(dashboard, data_dir, out_dir, s, revenue=revenue)
 
 
@@ -1357,6 +1369,7 @@ def _save_mu_backfill(data_dir, state, done):
             f.write("mediation ad-unit report backfilled over the whole stored history\n")
 
 
+@_sc.timed("site_snapshot")
 def _guard_snapshot(out_dir):
     """The site this build STARTS from (the workflow pulls the live site into site/ first) → a copy beside it, so a file
     that comes out over Cloudflare's 25 MiB cap can fall back to its previous good copy. Never raises."""
@@ -1386,6 +1399,7 @@ def _deploy_guard_step(out_dir, prev_dir):
 
 
 def build(out_dir="site", data_dir="data", today=None, mode=None):
+    _sc.step("setup")  # ⏱ the top-level stages, each up to the next (measure only: stage_clock)
     guard_prev = _guard_snapshot(out_dir)
     s = settings()
     accounts = resolve_accounts()
@@ -1460,6 +1474,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     adunit_country_days = ac_max_lookback if do_ac_backfill else max(45, base_rolling)
     if do_ac_backfill:
         print(f"ad-unit×country FULL-HISTORY backfill (auto-detect start, ≤{ac_max_lookback}d)", file=sys.stderr)
+    _sc.step("admob_fetch")
     totals = fetcher.run_once(accounts, repo, today=today, mode=mode,
                               rolling_days=rolling, country_days=country_days,
                               adunit_country_days=adunit_country_days,
@@ -1471,6 +1486,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # Any account still missing its monthly baseline history (e.g. added after the global backfill)
     # gets a one-time per-account full-history pull so it appears in the Baseline. Idempotent.
     if mode == "live" and has_creds:
+        _sc.step("admob_backfill_accounts")
         try:
             _backfill_missing_accounts_ac(accounts, repo, today, mode=mode,
                                           client_id=s["google_client_id"], client_secret=s["google_client_secret"],
@@ -1480,6 +1496,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             print(f"new-account baseline backfill skipped: {e}", file=sys.stderr)
         # Deep REVENUE (network) history for each SELECTED app that doesn't have it yet — so a ticked
         # app's all-time total matches AdMob, and ticking a new app later auto-pulls its full history.
+        _sc.step("admob_backfill_apps")
         try:
             _backfill_network_selected_apps(accounts, repo, today, mode=mode,
                                             client_id=s["google_client_id"], client_secret=s["google_client_secret"],
@@ -1491,6 +1508,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # matched requests. Progress is saved only after the flush below; a failure costs only this step.
     mu_bf = None
     if mode == "live" and has_creds:
+        _sc.step("admob_backfill_mu")
         try:
             mu_bf = _backfill_mediation_unit_history(
                 accounts, repo, today, mode=mode, client_id=s["google_client_id"],
@@ -1499,6 +1517,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             mu_bf = None
             print(f"mediation ad-unit history backfill skipped: {type(e).__name__}: {e}", file=sys.stderr)
+    _sc.step("repo_flush")
     repo.flush()          # persist the refreshed history to disk (committed by CI)
     if mu_bf is not None:
         try:
@@ -1518,6 +1537,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         with open(ac_marker, "w", encoding="utf-8") as f:
             f.write(f"adunit_country backfilled {adunit_country_days} days\n")
 
+    _sc.step("dashboard_build")
     baseline_payload = None
     if repo.has_data():
         # Hide the user's UNSELECTED apps from EVERY built view (one choke point) — the real repo
@@ -1532,6 +1552,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         # it as a SEPARATE baseline.json the UI lazy-loads only when the Baseline tab opens — so it
         # never weighs down the always-fetched dashboard.json. Focus on placements active in the
         # last ~4 months; full history stays in storage for drill-down.
+        _sc.step("baseline_report")
         try:
             acm = frepo.fetch_adunit_country_monthly()
             if acm.get("data"):
@@ -1562,10 +1583,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     dashboard["notify"] = notify_status(s)              # Alerts screen: Telegram / Email On or Off (read-only)
     # Freshness stamp (UTC) so the UI can show "last updated X min ago".
     dashboard["generated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _sc.step("data_quality")
     # Data-integrity summary: proves the pull has no truncation holes (or names any it found).
     if repo.has_data():
         dashboard["data_quality"] = data_quality(repo, totals)
 
+    _sc.step("apps_catalog")
     # Apps catalog for the picker: every app each account has (from the network report already in
     # hand — no extra fetch), with revenue, plus its current selected state. The dashboard renders
     # this as per-account checkboxes; unselected apps are hidden client-side (Phase A).
@@ -1605,6 +1628,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         print(f"app_store_ids map skipped: {e}", file=sys.stderr)
         dashboard["app_store_ids"] = {}
 
+    _sc.step("app_icons")
     # Real store icons per app (Play / App Store), resolved once & cached in data/app_icons.json —
     # a metadata lookup, SEPARATE from the reporting quota and zero ongoing load. Best-effort: any
     # app we can't resolve just keeps its letter-avatar in the UI.
@@ -1632,6 +1656,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             print(f"app icons from store ids skipped: {type(e).__name__}", file=sys.stderr)
 
+    _sc.step("google_ads")
     # ROAS: Google Ads (MCC) marketing spend vs AdMob revenue, per app. OPTIONAL — only runs if the
     # GOOGLE_ADS_* secrets are set; otherwise the ROAS screen shows a setup hint. Separate API, so it
     # never touches the AdMob pull. Spend is fetched over a rolling window and converted to USD.
@@ -1687,7 +1712,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             else:
                 # First-run backfill: from the earliest revenue date (dynamic). Falls back to ROAS_BACKFILL_DAYS.
                 refetch_start = _earliest or (today - timedelta(days=int(os.getenv("ROAS_BACKFILL_DAYS", "550")))).isoformat()
-            fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
+            with _sc.stage("gads_spend"):
+                fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
             spend = merge_spend(cached_spend, fresh_spend, refetch_start)
             if s.get("ga4_value") and isinstance(fresh_spend, dict) and not fresh_spend.get("error"):
                 try:                               # the Install value tab: the last day a spend fetch went through
@@ -1698,7 +1724,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             # Backfill the adwords account onto OLD/paused campaigns the windowed spend fetch didn't
             # re-tag (they showed a '?' account). A cheap roster query maps campaign→account for all.
             try:
-                _cmap = fetch_campaign_accounts(s, mode="live")
+                with _sc.stage("gads_campaign_accounts"):
+                    _cmap = fetch_campaign_accounts(s, mode="live")
                 apply_campaign_accounts(spend, _cmap)
             except Exception as _ce2:
                 print(f"campaign account backfill skipped: {_ce2}", file=sys.stderr)
@@ -1713,9 +1740,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                     print(f"roas cache write skipped: {_ce}", file=sys.stderr)
             _gads_geo_step(s, data_dir, spend, today)          # GADS_GEO only; its own try, reads `spend` only
             _gads_archive_step(s, data_dir, spend, today)      # GADS_ARCHIVE only; its own try, reads `spend` only
-            store_ids = resolve_store_ids(accounts, data_dir, dashboard.get("apps_catalog"),
-                                          client_id=s["google_client_id"], client_secret=s["google_client_secret"],
-                                          currency=s["report_currency"], make_client=make_client, mode="live")
+            with _sc.stage("gads_store_ids"):
+                store_ids = resolve_store_ids(accounts, data_dir, dashboard.get("apps_catalog"),
+                                              client_id=s["google_client_id"], client_secret=s["google_client_secret"],
+                                              currency=s["report_currency"], make_client=make_client, mode="live")
             # manual store-id -> app-name aliases for apps whose AdMob store listing isn't linked
             roas_aliases = {}
             for _ap in ("config/roas_app_aliases.json",):
@@ -1743,7 +1771,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 try:                               # the Install value tab, ROI and this tab's $ view: each day's spend at
                     from .value_build import update_fx_series      # its OWN rate (a dated series, one range call a day at most)
                     _sd = [d for dd in ((spend or {}).get("daily") or {}).values() for d in dd]
-                    update_fx_series(data_dir, base_ccy, min(_sd) if _sd else None, today)
+                    with _sc.stage("fx_series"):
+                        update_fx_series(data_dir, base_ccy, min(_sd) if _sd else None, today)
                 except Exception as _fe:
                     print(f"fx series skipped: {type(_fe).__name__}", file=sys.stderr)
             try:                                   # every screen's $ view: each day at its own rate (None: one rate)
@@ -1751,8 +1780,9 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             except Exception as _de:
                 spend_dated = None
                 print(f"roas dated fx skipped: {type(_de).__name__}", file=sys.stderr)
-            dashboard["roas"] = build_roas(spend_usd, store_ids, dashboard.get("apps_catalog"), roas_aliases,
-                                           daily_dated=spend_dated)
+            with _sc.stage("roas_build"):
+                dashboard["roas"] = build_roas(spend_usd, store_ids, dashboard.get("apps_catalog"), roas_aliases,
+                                               daily_dated=spend_dated)
             if s.get("ga4_value"):
                 try:                               # the Install value tab gives each app exactly the Google Ads spend
                     from .engine.roas import store_owner          # this tab does (the same store id → app map)
@@ -1805,6 +1835,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             print(f"roas build skipped: {e}", file=sys.stderr)
 
+    _sc.step("usd_inr")
     # USD→INR rate for the dashboard's currency toggle. Use the EXACT rate the spend was converted
     # with (roas_inr_usd) when available, so INR spend round-trips to the precise rupee Google Ads
     # shows. Fall back to a fresh lookup only when ROAS didn't run (no creds / no data).
@@ -1816,6 +1847,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         print(f"usd_inr derive skipped: {_e}", file=sys.stderr)
         dashboard["usd_inr"] = None
 
+    _sc.step("ga4")
     # GA4 Uninstall tab: fetch what is due (≤ once/~20h per app), evaluate, write its lazy assets and only
     # then add the small dashboard["uninstall"] summary. OPTIONAL — without GA4 secrets (or on any failure)
     # the AdMob dashboard builds exactly as before.
@@ -1824,6 +1856,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         uni_files = _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today,
                                             account_tzs(accounts, s, report_tz, mode, has_creds))
         any_paths = _impact_any_tail(out_dir)
+    _sc.step("tabs")
     # 🧭 Uninstall Studio (the Uninstall tab's All-apps view): one lazy file from what the Uninstall step just wrote —
     # OPTIONAL (UNINSTALL_STUDIO) and failure-isolated; without this build's Uninstall data it leaves no file behind
     studio_paths = _studio_step(dashboard, data_dir, out_dir, s)
@@ -1839,10 +1872,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     aud_paths = _audience_step(dashboard, data_dir, out_dir, s)
     aud_paths = aud_paths + _firstopen_step(dashboard, data_dir, out_dir, s) + _roi_paths(dashboard)
 
+    _sc.step("intraday")
     # 📈 eCPM "same time yesterday": this build's point of today's totals so far (data/ecpm_intraday.json) — never for
     # the sample data, failure-isolated, counts-only line
     _intraday_step(dashboard, data_dir, report_tz)
 
+    _sc.step("dashboard_write")
     os.makedirs(out_dir, exist_ok=True)
     # dashboard.json is the primary payload and GROWS with history depth (placements + countries_daily),
     # so it can cross Cloudflare's 25MB/file cap after a deep backfill. Ship it GZIPPED (lossless, full
@@ -1852,6 +1887,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # Two tiers: baseline.json (summaries + app-level country view) loads when the tab opens;
     # baseline_geo.json (per-ad-unit ALL countries) loads only on the first ad-unit drill.
     if baseline_payload is not None:
+        _sc.step("baseline_write")
         from .engine.baseline_report import compact_geo, build_daily_series, split_daily_series
         # Per-placement DAILY series for the placement-page chart, from the already-fetched reports (no
         # extra AdMob calls): the same unit-day rows as the ad-unit table — revenue from the mediation
@@ -1899,6 +1935,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # (upsert_mediation), so NO extra AdMob call. Shipped as its own lazy file (hidden apps
     # excluded via frepo) so the Mediation screen can window to the SELECTED period.
     if mode == "live" and repo.has_data():
+        _sc.step("mediation_daily")
         try:
             from .api.dataservice import build_mediation_daily
             med_daily = build_mediation_daily(frepo)
@@ -1908,6 +1945,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             print(f"mediation daily ship skipped: {e}", file=sys.stderr)
 
+        _sc.step("deductions_daily")
         # Per-unit estimate DECAY (deductions) — 'pehle itna, ab itna' — from the already-stored
         # snapshots (zero new fetch). Lazy file; the Deductions screen windows it to any period.
         try:
@@ -1919,6 +1957,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             print(f"deductions daily ship skipped: {e}", file=sys.stderr)
 
+    _sc.step("static_files")
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ui = os.path.join(root, "frontend", "index.html")
     if os.path.exists(ui):
@@ -1954,13 +1993,16 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     with open(os.path.join(out_dir, "app_names.json"), "w", encoding="utf-8") as f:
         f.write(open(apn_src, encoding="utf-8").read() if os.path.exists(apn_src) else "{}")
 
+    _sc.step("review")
     # Daily App Review (Review tab): today's cards frozen once + every day's snapshot published under site/review/.
     # OPTIONAL (REVIEW_ENABLED) and failure-isolated: nothing above or below changes when it is off or fails.
     review_paths = _review_step(dashboard, data_dir, out_dir) if (mode == "live" and repo.has_data()) else []
+    _sc.step("review_studio")
     # 🗂 Review Studio (the Review tab's Studio): one lazy file for the open review day, frozen with its cards — OPTIONAL
     # (REVIEW_STUDIO) and failure-isolated; it runs only after this build's review step wrote site/review/index.json
     rstudio_paths = _review_studio_step(dashboard, data_dir, out_dir, s, ran=bool(review_paths))
 
+    _sc.step("headers")
     # Keep the dashboard out of every search index. It is served from a public static host, so the
     # ONLY thing standing between the URL and the open internet is that nobody knows it — a crawler
     # that finds it once would put revenue figures into search results permanently. Both belt and
@@ -1976,16 +2018,28 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         f.write(headers_text(uni_files, dashboard, extra=list(review_paths) + [p for p in rstudio_paths if p not in review_paths]
                              + aud_paths + any_paths + vstudio_paths + as_paths + studio_paths))
 
+    _sc.step("alerts")
     alerts = send_alerts(dashboard, s)
     _uninstall_mark_sent(dashboard, data_dir, s, alerts)
     # the site is final: Cloudflare must never be able to reject it (limits checked, _headers / oversize files fixed)
+    _sc.step("deploy_guard")
     _deploy_guard_step(out_dir, guard_prev)
+    _sc.step("teardown")  # the build's own objects are freed as it returns
     return {"mode": mode, "fetch": totals, "alerts_sent": len(alerts),
             "out": out_dir, "revenue": dashboard["kpis"]["revenue"]}
 
 
 def main():
-    print("build complete:", build())
+    # ⏱ The stage clock (admob_iq/stage_clock.py) only measures: data/build_profile.json.gz in the PRIVATE data dir,
+    # written in the finally, so a build that crashes still leaves what it measured. It never fails the build.
+    _sc.begin(imports=True)
+    data_dir, ok = "data", False
+    try:
+        result = build(data_dir=data_dir)
+        ok = True
+    finally:
+        _sc.finish(data_dir, ok=ok)
+    print("build complete:", result)
 
 
 if __name__ == "__main__":

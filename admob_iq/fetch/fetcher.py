@@ -7,6 +7,7 @@ the mock client and an in-memory repo (no creds, no DB)."""
 from datetime import date, timedelta
 from typing import Dict, List
 
+from .. import stage_clock as _sc
 from ..engine import metrics
 from .admob_client import MockAdMobClient, AdMobClient
 
@@ -154,14 +155,16 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
         # on its first API call) must NOT crash the whole run and freeze every other account's data.
         # Log it and move on — that account simply gets no fresh data this run; its old data stays.
         try:
-            for raw in client.network_report(n_start, end):
-                repo.upsert_network(build_network_row(raw))
-                repo.append_snapshot(build_snapshot(raw, today))
-                totals["network"] += 1
-                totals["snapshots"] += 1
-            for raw in client.mediation_report(start, end):
-                repo.upsert_mediation(build_mediation_row(raw))
-                totals["mediation"] += 1
+            with _sc.stage("admob_network"):  # ⏱ measure only (stage_clock): each report summed over the accounts
+                for raw in client.network_report(n_start, end):
+                    repo.upsert_network(build_network_row(raw))
+                    repo.append_snapshot(build_snapshot(raw, today))
+                    totals["network"] += 1
+                    totals["snapshots"] += 1
+            with _sc.stage("admob_mediation"):
+                for raw in client.mediation_report(start, end):
+                    repo.upsert_mediation(build_mediation_row(raw))
+                    totals["mediation"] += 1
         except Exception as e:
             import sys
             print(f"account {acct.get('account_id')} skipped this run (auth/report error): {e}", file=sys.stderr)
@@ -172,8 +175,9 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
         # (the readers then fall back to the network numbers for the days it has no row), never the
         # account's revenue pull. The older history is filled once by build_static's marked backfill.
         try:
-            totals["mediation_unit"] = totals.get("mediation_unit", 0) + pull_mediation_unit(
-                client, repo, n_start, end)
+            with _sc.stage("admob_mediation_unit"):
+                totals["mediation_unit"] = totals.get("mediation_unit", 0) + pull_mediation_unit(
+                    client, repo, n_start, end)
         except Exception as e:
             import sys
             print(f"mediation ad-unit report skipped for {acct.get('account_id')}: {type(e).__name__}: {e}",
@@ -187,9 +191,10 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
         while cs <= c_end:
             ce = min(cs + timedelta(days=59), c_end)     # 60-day chunks: ~countries×apps×60 rows, safely < 100k cap
             try:
-                for raw in client.country_report(cs, ce):
-                    repo.upsert_country(build_country_row(raw))
-                    totals["country"] += 1
+                with _sc.stage("admob_country"):
+                    for raw in client.country_report(cs, ce):
+                        repo.upsert_country(build_country_row(raw))
+                        totals["country"] += 1
             except Exception as e:
                 import sys
                 print(f"country report chunk {cs}..{ce} skipped for {acct.get('account_id')}: {e}",
@@ -198,9 +203,10 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
         # per-placement × country over a SHORT 7-day window (aggregate) — geo mix per placement
         try:
             pc_start = max(start, end - timedelta(days=7))
-            for raw in client.placement_country_report(pc_start, end):
-                repo.upsert_placement_country(build_pc_row(raw))
-                totals["pc"] = totals.get("pc", 0) + 1
+            with _sc.stage("admob_placement_country"):
+                for raw in client.placement_country_report(pc_start, end):
+                    repo.upsert_placement_country(build_pc_row(raw))
+                    totals["pc"] = totals.get("pc", 0) + 1
         except Exception as e:
             import sys
             print(f"placement-country report skipped for {acct.get('account_id')}: {e}", file=sys.stderr)
@@ -223,9 +229,10 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
             while cs <= ac_end:
                 ce = min(cs + timedelta(days=29), ac_end)
                 try:
-                    for raw in client.adunit_country_report(cs, ce):
-                        ac_acc.add(build_ac_row(raw))
-                        totals["adunit_country"] = totals.get("adunit_country", 0) + 1
+                    with _sc.stage("admob_adunit_country"):
+                        for raw in client.adunit_country_report(cs, ce):
+                            ac_acc.add(build_ac_row(raw))
+                            totals["adunit_country"] = totals.get("adunit_country", 0) + 1
                 except Exception as e:
                     import sys
                     print(f"adunit-country chunk {cs}..{ce} skipped for {acct.get('account_id')}: {e}", file=sys.stderr)
@@ -237,9 +244,10 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
         # full-history backfill: NO coverage guard (window_start=None) so EVERY month present rolls
         # up, including the account's genuinely-partial FIRST month. Ongoing runs guard on the
         # window start so a clipped past month isn't half-rolled over its complete rollup.
-        rollups, current_daily = ac_acc.finish(window_start=None if ac_full_history else ac_start)
-        repo.merge_adunit_country_monthly(rollups)      # completed months → compact monthly rollup
-        repo.replace_adunit_country_daily(current_daily)  # current month → compact daily
+        with _sc.stage("admob_rollup"):
+            rollups, current_daily = ac_acc.finish(window_start=None if ac_full_history else ac_start)
+            repo.merge_adunit_country_monthly(rollups)      # completed months → compact monthly rollup
+            repo.replace_adunit_country_daily(current_daily)  # current month → compact daily
         totals["acm"] = len(rollups)
         totals["acd"] = len(current_daily)
     totals["truncations"] = truncations
