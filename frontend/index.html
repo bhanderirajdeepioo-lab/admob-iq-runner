@@ -2488,11 +2488,14 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-ks b{color:var(--ink2)}
 .roi-kg{border-color:#1f6b52}.roi-kb{border-color:#6b2a2e}
 /* 🧮 the cohort card's totals strip: one height in every state (a country pick / its rows landing never moves the chips under it) */
-.roi-cks{margin:0 0 12px}.roi-ckg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.roi-ck{padding:9px 11px}.roi-ck .roi-kl,.roi-ck .roi-kv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.roi-ck .roi-kv{font-size:17px}
+/* tiles a row by width so a value box is never under ~150 px beside the sidebar (2 / 3 / 6; a phone 2 at 15.5 px); a value of
+   14+ characters (₹ crore with a sign) a size smaller in the same line box: printed in full, the height unchanged */
+.roi-cks{margin:0 0 12px}.roi-ckg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.roi-ck{padding:9px 11px}.roi-ck .roi-kl,.roi-ck .roi-kv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.roi-ck .roi-kv{font-size:17px}.roi-ck .roi-ckw{font-size:14px}
 .roi-ck .roi-ks{height:2.8em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
-@media (min-width:1240px){.roi-ckg{grid-template-columns:repeat(6,minmax(0,1fr))}}
-@media (max-width:760px){.roi-ckg{grid-template-columns:repeat(2,minmax(0,1fr))}.roi-ck .roi-kv{font-size:15.5px}}
+@media (min-width:900px){.roi-ckg{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (min-width:1400px){.roi-ckg{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media (max-width:760px){.roi-ck .roi-kv{font-size:15.5px}.roi-ck .roi-ckw{font-size:13px}}
 .roi-up{color:var(--good)}.roi-dn{color:var(--bad)}
 .roi-g2{display:grid;grid-template-columns:minmax(0,1fr);gap:0 14px}
 @media (min-width:1180px){.roi-g2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
@@ -7224,7 +7227,7 @@ function ccNote(d,cd,x){ const cc=x[0], g=cd.geo||{}, k=cd.kc||{}, lo=cd.loss||{
   if(cc!=='XX'&&lo.flag_days) p.push(`≈ = ${N(lo.flag_days)} din GA4 report pe thresholding / sampling flag (naapne layak kuch nahi).`);
   if(cc!=='XX'&&x[5]) p.push(`Status sirf ≥ $5 spend aur ≥ 30 installs wale din: ${N(x[5])} din N/A.`);
   if(ok(df.rel)&&df.days) p.push(`Sab countries ka jod "All countries" se ${df.rel>=0?'+':MI}${pc(Math.abs(df.rel))} alag (D30, ${N(df.days)} install din: ${M(df.cty)} vs ${M(df.all)}). Wajah: All me app ka hafte wala k aur GA4 ka install-day read, countries me har country ka mahine wala k_c aur GA4 cube ka read${ok(k.unp_all)&&k.unp_all>0?`; bina country wala GA4 revenue (kul ${pc(k.unp_all)}) AdMob ke hisaab se countries ke k_c me hai`:''}${df.unk>0?`, aur "Unknown country" ka ${M(df.unk)} is jod me dobara gina gaya`:''}.`);
-  p.push('Upar ke tiles / charts = poora app (sab countries).');
+  p.push('Is card ke Total tiles = sirf is country ke; upar ke baaki tiles / charts = poora app (sab countries).');
   return `<p class="roi-note roi-ccn">${p.join(' ')}</p>`; }
 // the table's source: null = the app's own rows exactly as before (no cd, nothing picked); else the picker + the picked
 // country's rows (or, an app without the country part while a country is picked: the app's own rows + one line saying so)
@@ -7250,27 +7253,35 @@ function ccSrc(d){ const cd=cdOf(d);
 // all country and jo country select kru uska kpi change ho jayega — total hi aayega"): EVERY install day of the table's
 // source (All countries, or the picked country's rows), summed from what its rows show — spend = the Spend column (SV: ₹
 // as billed, else $ at each day's rate), revenue = "So far" (AdMob-matched), installs = Installs. A day whose spend is not
-// known is left out of spend, a day whose so far is not read yet out of revenue (each counted on its tile), and Profit /
-// loss + ROAS are over the days with both only. Grain / mode never change it; '…' while a country's rows load, '—' when
-// there are none. One height in every state (one-line values, two-line subs, a note that never changes): a pick never
-// moves the chips under it.
+// known is left out of spend, a day whose so far is not read yet out of revenue (each counted on its tile). Profit / loss +
+// ROAS: only the ads days (spend > 0, as the table's own ROAS cells / "% back" / Breakeven and the install-month P/L) whose
+// so far is read — a no-ads day's revenue is never "returned" by a spend of 0 (its count is said); ROAS = Σ so far $ ÷ Σ
+// spend $ (each day at its own rate: the table's % and the note under the card, the same in ₹ and $), profit / loss = each
+// day's so far at that day's own rate (the Spend column ÷ its $) − the Spend column, so a day's sign is its row's % ≥ 100%
+// (in $, and in ₹ of a file not billed in ₹, the total's sign is ROAS ≥ 100% exactly; in ₹ as billed, with the days' rates).
+// Grain / mode never change it; '…' while a country's rows load, '—' when there are none. One height in every state (one-
+// line values — 14+ characters a size smaller, never cut —, two-line subs, a note that never changes): a pick never moves
+// the chips under it.
 function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[]), cc=cs&&cs.rows?cs.cc:'', xx=cc==='XX';
-  let sp=0, nsp=0, rv=0, nrv=0, ps=0, pr=0, np=0, n=0, nn=0, lo='', hi='';
-  for(const r of rows||[]){ const x=r[R.X], k=r[R.sp]!=null, m=ok(r[R.s]);
+  let sp=0, nsp=0, nz=0, rv=0, nrv=0, ps=0, pr=0, us=0, usp=0, np=0, n=0, nn=0, lo='', hi='';
+  for(const r of rows||[]){ const x=r[R.X], u=r[R.sp], k=u!=null, m=ok(r[R.s]);
     if(!lo||x<lo) lo=x; if(!hi||x>hi) hi=x;
-    if(k){ const v=SV(r[R.sp],r[R.spi])||0; sp+=v; nsp++; if(m){ ps+=v; pr+=RV(r[R.s]); np++; } }
+    if(k){ const v=SV(u,r[R.spi])||0; sp+=v; nsp++;
+      if(!(u>0)) nz++; else if(m){ ps+=v; pr+=r[R.s]*v/u; us+=r[R.s]; usp+=+u; np++; } }
     if(m){ rv+=r[R.s]; nrv++; }
     if(r[R.n]!=null){ n+=+r[R.n]; nn++; } }
-  const D=rows?rows.length:0, no=!rows&&cs&&cs.ld?'…':'—', net=pr-ps, t=(l,v,s,c)=>tile(l,v,s,'roi-ck'+(c?' '+c:''));
-  const both=v=>!rows||np===D?v:np?`sirf ${N(np)} din, jinka dono pata`:xx?'Not split: sirf spend':cc==='--'?'is country ka spend nahi':'spend + kamai dono chahiye';
+  const D=rows?rows.length:0, no=!rows&&cs&&cs.ld?'…':'—', net=pr-ps, ro=np?us/usp:null;
+  const t=(l,v,s,c)=>tile(l,String(v).replace(/<[^>]+>/g,'').length>=14?`<span class="roi-ckw">${v}</span>`:v,s,'roi-ck'+(c?' '+c:''));
+  const none=xx?'Not split: sirf spend':cc==='--'?'is country ka spend nahi':nsp&&nsp===nz?'koi ads din nahi (spend 0)':'spend + kamai dono chahiye';
+  const both=v=>!rows||np===D?v:np?`sirf ${N(np)} ads din, jinka dono pata`:none;
   return `<div class="roi-cks" role="group" aria-label="Totals"${!rows&&cs&&cs.ld?' aria-busy="true"':''}><div class="roi-ckg">`
     +t('Total spend',nsp?MV(sp):no,cc==='--'?'Google Ads me ye country nahi':D>nsp?`${N(D-nsp)} din ka spend pata nahi`:'Google Ads')
     +t('Total revenue',nrv?MV(RV(rv)):no,xx?'Not split: koi kamai nahi':D>nrv?`${N(D-nrv)} din ki kamai abhi nahi padhi`:'so far · AdMob-matched')
     +t('Profit / loss',np?`<span class="${net>=0?'roi-up':'roi-dn'}">${MV(net,true)}</span>`:no,both('revenue − spend'),np?(net>=0?'roi-kg':'roi-kb'):'')
-    +t('ROAS',ps>0?`<span class="${roasCls(pr/ps)}">${P(pr/ps)}</span>`:no,np&&!(ps>0)?'koi spend nahi':both('revenue ÷ spend'))
+    +t('ROAS',np?`<span class="${roasCls(ro)}">${P(ro)}</span>`:no,np&&nz?`${N(nz)} din bina ads — isme nahi`:both('revenue ÷ spend'))
     +t('Installs',nn?N(n):no,xx?'Not split: installs nahi':'GA4 · ads + organic')
     +t('Install days',rows?N(D):no,lo?`${E(fdy(lo))} – ${E(fdy(hi))}`:no)
-    +`</div><p class="roi-note roi-ckn">Poori history ka jod — har install din ki ab tak ki kamai (so far, AdMob-matched) aur uska spend; country chuno to sirf us country ka.</p></div>`; }
+    +`</div><p class="roi-note roi-ckn">Poori history ka jod — har install din ki ab tak ki kamai (so far, AdMob-matched) aur uska spend; country chuno to sirf us country ka. Profit / loss + ROAS sirf ads wale din (spend &gt; 0) jinki kamai padhi gayi — har din us din ke rate se, table ke % jaisa.</p></div>`; }
 function cohCard(d){ const cs=ccSrc(d);
   if(!cs) return `<div class="roi-card"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${(()=>{ const C=cols(d,d.rows||[]); return C.length?C[C.length-1].a:365; })()} tak</h3><span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohKpi(d,null)}${cohortTable(d)}</div>`;
   const rs=cs.rows||d.rows||[], C=cols(cs.rows&&cs.cc!=='XX'?Object.assign({},d,{rows:rs}):d,rs), on=!!cs.cc&&!cs.miss;

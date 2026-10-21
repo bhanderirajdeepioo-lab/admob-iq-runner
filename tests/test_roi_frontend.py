@@ -181,7 +181,7 @@ def test_forecast_view(out):
 # control row): GOLDEN_PRE_KPI = the digest the page gave before it (the GOLDEN_DEFAULT above it), and the new page gives it
 # again with the strip cut out (tests/roi_frontend.js kpiCut) — every table, the Day view and the Countries board otherwise
 # byte for byte the same; GOLDEN_NO_BE is worked out with the strip cut out too.
-GOLDEN_DEFAULT = "a60256b30a4606e709f461842a504d33ef073931fe26b0e86dff6675c2d5a3bf"
+GOLDEN_DEFAULT = "65b3d7ad62d5c151e9d12391231199db6be372b859c43e0ebd44f8b1b420cc9c"
 GOLDEN_PRE_KPI = "fb638f026d2a902459c3287cb620536bbb6474fecb17809c9799ba6264ac0a86"
 GOLDEN_NO_BE = "acabb725b05aa314e38c4f97b7880196122d333a0bdd823a0db9c1bc7d1d23b6"
 
@@ -227,6 +227,28 @@ def test_breakeven_column(out):
     assert all(out["be_note"])                                      # the Hinglish line under the table, per grain
 
 
+# 🧮 the strip's value boxes, worked out from the page's own CSS (pinned in test_wiring) and checked in headless Chrome
+# (21 Oct 2026: 360 → 131 px, 375 → 139, 761 → 202, 900 → 170, 1240 → 283, 1400 → 152): tiles a row by width, the card's
+# and the tile's padding + border; beside the sidebar a classic 15 px scrollbar is taken off too
+def _kpi_boxes():
+    for w in range(360, 761):                                    # the phone / tablet layout: no sidebar, 2 a row
+        pad = 10 if w <= 430 else 12                             # .content (≤430 px: 10, ≤760 px: 12) · .roi-card 12 + 1
+        yield w, 0, ((w - 2 * pad - 26) - 8) / 2 - 22, True      # tile: 9px 10px + 1 px border
+    for w in range(761, 2561):
+        cols = 6 if w >= 1400 else 3 if w >= 900 else 2
+        for sb in (0, 15):                                       # aside 220 · .content 24 · .roi-card 16 + 1 · tile 11 + 1
+            yield w, sb, ((w - 220 - 48 - sb - 34) - 8 * (cols - 1)) / cols - 24, False
+
+
+# advance widths (em) of the value font (weight 800, tabular figures) measured in headless Chrome; the largest of 13 /
+# 14 / 15.5 / 17 px for every size (the system font is a little wider at small sizes)
+_EM = dict({c: 0.68 for c in "0123456789+−₹$"}, **{",": 0.36, ".": 0.36, "%": 1.07, "—": 0.92, "…": 1.0})
+
+
+def _px(text, size):
+    return sum(_EM[c] for c in text) * size
+
+
 def test_totals_strip(out):
     """🧮 Total spend / revenue / profit-loss / ROAS / installs / install days in the cohort card (owner, 21 Oct 2026: "kpi
     add karo yaha pe ki kitna total spend gaya he kitna total revenue aaya he — all country and jo country select kru uska
@@ -237,41 +259,57 @@ def test_totals_strip(out):
     # Countries board none); its Hinglish note
     assert out["k_place"] == [True, 1, True, 1, False, True]
     # a hand recount (5 install days): spend $10 + $4 + $0 + $6 (2 Jan not known: out, said); so far $30 + $5 + $0 + $3
-    # (3 Jan not read yet: out, said); profit / loss + ROAS over the 3 days with both: $33 − $16 = +$17, 206%
+    # (3 Jan not read yet: out, said); profit / loss + ROAS over the 2 ads days with both (1 + 5 Jan; 4 Jan had no ads,
+    # said): $33 − $16 = +$17, 206%
     assert out["k_usd"] == [["Total spend", "$20", "1 din ka spend pata nahi"],
                             ["Total revenue", "$38", "1 din ki kamai abhi nahi padhi"],
-                            ["Profit / loss", "+$17", "sirf 3 din, jinka dono pata"],
-                            ["ROAS", "206%", "sirf 3 din, jinka dono pata"],
+                            ["Profit / loss", "+$17", "sirf 2 ads din, jinka dono pata"],
+                            ["ROAS", "206%", "1 din bina ads — isme nahi"],
                             ["Installs", "200", "GA4 · ads + organic"],
                             ["Install days", "5", "1 Jan 2026 – 5 Jan 2026"]]
     assert out["k_usd_cls"][2:4] == [["roi-kg", "roi-up"], ["", "roi-g"]]          # profit green, ROAS ≥ 100% green
     assert out["k_usd_table"] == [20, 38, 200]          # = Σ the table's own Spend / So far / Installs columns
-    # ₹ billed: spend ₹900 + ₹360 + ₹0 + ₹540 as billed (= Σ the Spend column in ₹), revenue $38 × 100; profit over the
-    # 3 days with both: ₹3,300 − ₹1,440; a ₹ view of a file not billed in ₹: $20 × 100
+    # ₹ billed (₹90 a $ on every day, today ₹100): spend ₹900 + ₹360 + ₹0 + ₹540 as billed (= Σ the Spend column in ₹),
+    # revenue $38 × 100 (= Σ the So far column); profit / loss = each ads day's so far at its own billed rate − its bill:
+    # $30 × 90 − ₹900 + $3 × 90 − ₹540 = +₹1,530; ROAS the $ one (206%). A ₹ view of a file not billed in ₹: $ × 100 throughout
     assert out["k_inr"] == [["Total spend", "₹1,800", "1 din ka spend pata nahi"],
                             ["Total revenue", "₹3,800", "1 din ki kamai abhi nahi padhi"],
-                            ["Profit / loss", "+₹1,860", "sirf 3 din, jinka dono pata"],
-                            ["ROAS", "229%", "sirf 3 din, jinka dono pata"]] and out["k_inr_table"] == 1800
+                            ["Profit / loss", "+₹1,530", "sirf 2 ads din, jinka dono pata"],
+                            ["ROAS", "206%", "1 din bina ads — isme nahi"]] and out["k_inr_table"] == 1800
     assert out["k_inr_usd"] == [["Total spend", "₹2,000", "1 din ka spend pata nahi"],
                                 ["Total revenue", "₹3,800", "1 din ki kamai abhi nahi padhi"],
-                                ["Profit / loss", "+₹1,700", "sirf 3 din, jinka dono pata"],
-                                ["ROAS", "206%", "sirf 3 din, jinka dono pata"]]
-    # a loss: red (the existing classes); spend 0 everywhere: no ROAS (never ∞ / 0%); no rows: '—', never 0
+                                ["Profit / loss", "+₹1,700", "sirf 2 ads din, jinka dono pata"],
+                                ["ROAS", "206%", "1 din bina ads — isme nahi"]]
+    # review: no-ads days (spend 0) keep their revenue in Total revenue only — 3 × ($0, $100) + 3 × ($100, $80): profit
+    # −$60 (red), ROAS 80% = every ads row's own "So far" %, the 3 days said (it read +$240 / 180% before)
+    assert out["k_zero"] == [[["Total spend", "$300", "Google Ads"], ["Total revenue", "$540", "so far · AdMob-matched"],
+                              ["Profit / loss", "−$60", "sirf 3 ads din, jinka dono pata"], ["ROAS", "80%", "3 din bina ads — isme nahi"]],
+                             [["roi-kb", "roi-dn"], ["", "roi-w"]], ["$80 80%"] * 3]
+    # review: ₹ billed at ₹83, today ₹88, 2 days of $100 spend / $98 so far: ROAS 98% in $ and in ₹ (= the rows' own %),
+    # a loss in both (−$4.0; ₹: $98 × 83 − ₹8,300 twice = −₹332) — it read +₹648 / 104% (green) in ₹ before
+    kd, ki, rows = out["k_rate"]
+    assert kd == [[["Total spend", "$200", "Google Ads"], ["Total revenue", "$196", "so far · AdMob-matched"],
+                   ["Profit / loss", "−$4.0", "revenue − spend"], ["ROAS", "98%", "revenue ÷ spend"]], [["roi-kb", "roi-dn"], ["", "roi-w"]]]
+    assert ki == [[["Total spend", "₹16,600", "Google Ads"], ["Total revenue", "₹17,248", "so far · AdMob-matched"],
+                   ["Profit / loss", "−₹332", "revenue − spend"], ["ROAS", "98%", "revenue ÷ spend"]], [["roi-kb", "roi-dn"], ["", "roi-w"]]]
+    assert rows == [["₹8,300", "₹8,624 98%"]] * 2 and kd[0][3][1] == ki[0][3][1]
+    # a loss: red (the existing classes); spend 0 everywhere (organic): no profit / ROAS (never ∞ / 0%), said; no rows: '—'
     assert out["k_loss"] == [[["Profit / loss", "−$48", "revenue − spend"], ["ROAS", "20%", "revenue ÷ spend"]],
                              [["roi-kb", "roi-dn"], ["", "roi-b"]]]
     assert out["k_org"] == [["Total spend", "$0.00", "Google Ads"], ["Total revenue", "$6.0", "so far · AdMob-matched"],
-                            ["Profit / loss", "+$6.0", "revenue − spend"], ["ROAS", "—", "koi spend nahi"]]
+                            ["Profit / loss", "—", "koi ads din nahi (spend 0)"], ["ROAS", "—", "koi ads din nahi (spend 0)"]]
     assert [x[1] for x in out["k_none"]] == ["—", "—", "—", "—", "—", "0"]
     # every install day (70, not the 60 on screen), whatever the grain / mode / "Show more"
     assert out["k_inv"] == [True] * 24 and out["k_all70"] == ["Install days", "70", "5 Aug 2026 – 13 Oct 2026"]
     # 🌍 All with the country part = All without it; a pick: '…' while its rows load (aria-busy), then its own totals =
-    # a recount of the rows its table shows (unknown spend out of spend + profit / ROAS, counted); the same every grain /
-    # mode; another country of the same pack at once
+    # a recount of the rows its table shows (unknown spend out of spend + profit / ROAS, no-ads days out of profit / ROAS,
+    # each counted); the same every grain / mode; another country of the same pack at once
     assert out["k_allcd"] == [True]
     assert out["k_load"] == [["…"] * 6, True, True, True]
-    k, want, D, unk, nboth = out["k_aa"]
-    assert k == want and (D, unk, nboth) == (70, 28, 28)
-    assert k[0] == ["Total spend", "$380", "28 din ka spend pata nahi"] and k[3] == ["ROAS", "104%", "sirf 42 din, jinka dono pata"]
+    k, want, D, unk, nboth, nz = out["k_aa"]
+    assert k == want and (D, unk, nboth, nz) == (70, 28, 32, 4)
+    assert k[0] == ["Total spend", "$380", "28 din ka spend pata nahi"] and k[2][2] == "sirf 38 ads din, jinka dono pata"
+    assert k[3] == ["ROAS", "104%", "4 din bina ads — isme nahi"]
     assert out["k_aa_inv"] == [True] * 12
     assert out["k_bb"][0] == out["k_bb"][1] and out["k_bb"][2]
     # "Unknown country": Google Ads has no such country → spend '—' (not 0), no profit / ROAS; its revenue + installs
@@ -283,9 +321,28 @@ def test_totals_strip(out):
     assert [x[1] for x in k[1:5]] == ["—"] * 4 and k[1][2] == "Not split: koi kamai nahi"
     # a pack that failed / a country the app does not have: '—' (no busy flag); an app without the country part: All's own
     assert out["k_err"] == [["—"] * 6, True, True] and out["k_miss"] == [["—"] * 6, True] and out["k_nocd"] == [True, True]
-    # ONE height in every state (16 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, empty …): the
-    # same box, one-line values, reasons that fit two lines of a 375 px tile (the CSS pins are in test_wiring)
-    assert out["k_skel"] == [1, 16] and out["k_fit"] == []
+    # ONE height in every state (21 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, crore …):
+    # the same box, one-line values, two-line reasons (the CSS pins are in test_wiring)
+    assert out["k_skel"] == [1, 21]
+    # review: crore-size ₹ printed in full — 14+ characters a size smaller (roi-ckw), shorter ones not
+    assert out["k_big"] == [["₹23,45,76,190", "₹14,08,08,624", "−₹10,05,29,262", "57%", "1,234,577", "2"],
+                            ["₹2,34,56,87,200", "₹1,40,80,08,624", "−₹1,00,52,91,123", "57%", "1,234,577", "2"],
+                            [[False, False, True, False, False, False], [True, True, True, False, False, False]]]
+    # every value printed in those states fits its box at EVERY width 360–2560 px (₹ crore, a classic scrollbar too), at its
+    # own size (17 / 15.5 px, a 14+ character one 14 / 13 px); reasons ≤ 35 characters (two lines of the narrowest tile,
+    # 131 px at 360, checked in Chrome); labels one short line
+    pr = out["k_print"]
+    assert len(pr) == 21 * 6 and any(v == "−₹1,00,52,91,123" for _, v, _, _ in pr)
+    assert all(w == (len(v) >= 14) for _, v, w, _ in pr)
+    tight = {}
+    for w, sb, box, phone in _kpi_boxes():
+        for lab, v, small, sub in pr:
+            size = (13 if small else 15.5) if phone else (14 if small else 17)
+            room = box - _px(v, size)
+            if room < tight.get("room", 1e9):
+                tight = {"room": room, "w": w, "sb": sb, "v": v}
+    assert tight["room"] >= 2, tight
+    assert all(len(sub) <= 35 and "<" not in sub and len(lab) <= 13 for lab, _, _, sub in pr)
 
 
 def test_country_filter(out):
@@ -359,8 +416,17 @@ def test_wiring():
     # box), 6 / 3 / 2 tiles a row by width only; called once per card path, right before the table's own HTML
     assert ".roi-ck .roi-kl,.roi-ck .roi-kv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" in p
     assert ".roi-ck .roi-ks{height:2.8em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" in p
-    assert ".roi-ckg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}" in p
-    assert "@media (min-width:1240px){.roi-ckg{grid-template-columns:repeat(6,minmax(0,1fr))}}" in p
-    assert "@media (max-width:760px){.roi-ckg{grid-template-columns:repeat(2,minmax(0,1fr))}.roi-ck .roi-kv{font-size:15.5px}}" in p
+    # review (21 Oct): 2 a row up to 899 px, 3 from 900, 6 from 1400 — the value box never under ~150 px beside the sidebar
+    # (it was 124 px at 761 and 126 at 1240: ₹ crore cut with '…'); the sizes test_totals_strip's width model uses
+    assert ".roi-ckg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}" in p
+    assert ".roi-ck{padding:9px 11px}" in p and ".roi-ck .roi-kv{font-size:17px}.roi-ck .roi-ckw{font-size:14px}" in p
+    assert "@media (min-width:900px){.roi-ckg{grid-template-columns:repeat(3,minmax(0,1fr))}}" in p
+    assert "@media (min-width:1400px){.roi-ckg{grid-template-columns:repeat(6,minmax(0,1fr))}}" in p
+    assert "@media (max-width:760px){.roi-ck .roi-kv{font-size:15.5px}.roi-ck .roi-ckw{font-size:13px}}" in p
+    assert p.count(".roi-ckg{") == 3 and "@media (min-width:1240px){.roi-ckg" not in p
+    # the layout numbers the model takes from the rest of the page (unchanged by this work)
+    assert "aside{width:220px;" in p and ".content{padding:15px 24px 32px;" in p and ".content{padding:15px 12px 40px;" in p
+    assert ".content{padding:13px 10px 36px}" in p and ".roi-card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:14px 16px;" in p
+    assert ".roi-k{padding:9px 10px}" in p and "padding:12px}}" in p
     assert p.count("${cohKpi(d,null)}${cohortTable(d)}</div>`;") == 1 and p.count("${cohKpi(d,cs)}${cohortTable(d,cs)}</div>`; }") == 1
     assert p.count("cohKpi(") == 3                                                    # defined once, called by cohCard only
