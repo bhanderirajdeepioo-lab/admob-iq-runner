@@ -21,8 +21,10 @@ adaptive, per range of activity days:
   3. that day is split (split_read), again and again while a part of it still has "(other)" (owner, 21 Oct 2026:
      "revenue cross check kro country wise, admob ke sath verify kro" — on the biggest apps one split left a large
      share of some months' revenue in "(other)"). A part is a filter on countries (an in-list, or "not in" a list) and
-     on install days (an in-list, or "not in" a list); a part whose answer still has "(other)" is dropped and read
-     again as two parts that PARTITION it (every row of it in exactly one of them, never in both):
+     on install days (an in-list, or "not in" a list); a part whose answer still has "(other)" — a row, or only GA4's
+     dataLossFromOtherRow (an in-list filter DROPS the "(other)" row: its revenue is gone from the answer, the flag
+     alone says so — ga4_uninstall's Q-C note) — or was sampled / cut is read again as two parts that PARTITION it
+     (every row of it in exactly one of them, never in both; the part's own answer kept until both are in):
        * by countries while it holds more than one: an in-list → its two halves; "every country but E" → the biggest
          named countries of its answer up to half its rows (the most rows — the cardinality GA4 folds into "(other)" —
          then revenue, then code) in an in-list H, and "every country but E + H" (countries GA4 hid in "(other)",
@@ -31,13 +33,24 @@ adaptive, per range of activity days:
          each half about half the rows); no list → the oldest named install days of its answer up to half its rows in
          an in-list H, and "every install day but H" (a "(not set)" install day, one GA4 hid: in that one);
        * one country and one install day: it cannot be split — what stays "(other)" in it is measured loss.
-     The part with the most "(other)" revenue goes first; at the day's call cap (DAY_CAP calls, HOT_CAP for a hot day)
-     no more parts are read: whatever is STILL "(other)" is the day's measured loss ("ol", in "loss"): kept as such,
-     never spread ("cap" 1 on the day: a deeper split could have read more). A Stop (the run's budget, the property's
-     quota, MAX_CALLS) in the middle of a day keeps nothing of it: the day is not folded and is read again, whole, next
-     run. A day cut that way again and again (CUT_TRIES runs, each after ≥ MIN_CAP calls of it) gets a smaller cap —
-     the calls a run gave it, then half that … never below MIN_CAP (the old one-level split) — so a day too costly for
-     one run can never stall the walk (its loss stays measured, "cap" 1).
+     The part with the most "(other)" revenue goes first (a flagged one with no row: the most rows first); at the day's
+     call cap (DAY_CAP calls, HOT_CAP for a hot day) no more parts are read: whatever is STILL "(other)" is the day's
+     measured loss ("ol", in "loss"): kept as such, never spread ("cap" 1 on the day: a deeper split could have read
+     more). A split whose two halves name no row their part had not (GA4 rolled the rows into "(other)" before the
+     filters — then no filter ever names them) ends the day's split at once ("fu": 3 calls, not the cap; the part as it
+     was, its "(other)" the measured loss). A final part still flagged dataLossFromOtherRow with no "(other)" row →
+     ONE more call, the day's own total (dimension date only, no filter: one row — nothing to roll up or drop): what
+     it holds beyond every part's rows (past ½ micro a row + 1 ppm of rounding) is "(other)" GA4 hid — added to the
+     day's t, loss and ol ("hd" on the record; the log's "hidden"), never missing unrecorded; that total sampled / cut
+     (nothing to measure by) → "fl". A Stop (the run's budget, the property's quota, MAX_CALLS) in the middle of a day
+     keeps nothing of it: the day is not folded and is read again, whole, next run (first in it). A Stop counts as the
+     day's cut only when the day was the run's FIRST read (it had the run's whole allowance — never one that started
+     with what the walk, the hot days or the other days left), after ≥ MIN_CAP calls of it and not the app's own call
+     cap: a day cut that way CUT_TRIES times gets a smaller cap — the calls a run gave it less one, then half that …
+     never below MIN_CAP (the old one-level split) — so a day too costly for one run can never stall the walk (its loss
+     stays measured, "cap" 2: under its full cap a read again could take more — the repair's queue counts it). The walk
+     ("cut") and the hot days ("hcut") keep their own cut memory: a hot day's smaller cap never follows it into its
+     final read (its memory goes once the day is final).
   A range at least as long as one that needed step 2 goes to step 2 straight away for HEAVY_KEEP activity days ("heavy":
   its block call would only be dropped again); then the block is tried once more.
 Per row: countryId "(not set)" / empty → cc "--"; a firstSessionDate that is not a date ("(other)", "(not set)"), a
@@ -52,7 +65,8 @@ split version):
       "days": {D: {"st": ok|split|loss, "rows", "loss", "t", "fl", "via": block|day|split, "at",     the ledger
                    "sv" (the split's version: SPLIT_V; absent = 1, the one-level split before 21 Oct 2026), "ol" (the
                    part of "loss" that is "(other)": what a deeper split could still read), "n" (GA4 calls the day
-                   took; 0 = a share of one block call), "cap" (1: the cap left "(other)" a deeper split could read)}}
+                   took, its total included; 0 = a share of one block call), "cap" (1: the day's cap left "(other)" a
+                   deeper split could read; 2: a smaller cap did — a day cut run after run)}}
       "b": {X: {j: {W: micros}}}          ALL countries summed, ages L ≥ 31 in 30-day buckets j = (L − 31) // 30 + 1
                                           (bucket j = ages 30j+1 … 30j+30: the step into D(30 + 30j)); W = the Monday of
                                           the activity day (engine.value._mon: the week of the AdMob ÷ GA4 scale k)
@@ -65,8 +79,10 @@ split version):
     <YYYY-MM>.rep.json.gz — the repair's copy of that month while it is being built (the same format; never read by
       the build: months() takes YYYY-MM.json.gz only)
     hot.json.gz = {"v", "app_id", "package", "property_id", "stream_id", "time_zone", "hs", "from", "next", "done",
-      "walk_at", "hot_at", "hot_today", "heavy", "cut" (the day a Stop cut: {"D", "n" calls it had, "k" times}),
-      "rep" (the repair's state, below), "d": {D: {the ledger's fields + "b", "c", "e" of that one day}}}
+      "walk_at", "hot_at", "hot_today", "hot_cyc" ([when, property day] of a round of the hot days a Stop cut: the next
+      run reads only its days not read since), "heavy", "cut" / "hcut" (the final / hot day a Stop cut as the run's first
+      read: {"D", "n" calls it had, "k" times}), "rep" (the repair's state, below), "d": {D: {the ledger's fields + "b",
+      "c", "e" of that one day (+ "hd" / "fu")}}}
 — the head (progress) and the NON-FINAL days (today − 2 … today), each replaced when read again. The ROI build reads only
 a hot day's ledger and "b"; its "c" / "e" are kept in the same shapes as the months for a per-country / D0 … D30 view
 (nothing reads them yet — the biggest app's ≈ 3 hot days of them are most of this file).
@@ -96,31 +112,41 @@ and REPLACED whole. Only once the walk reached the final edge in the run and the
 has left (at most REPAIR_CALLS calls started a run, MAX_CALLS and the budget as always). One month at a time:
   * the queue: every month file of the app (one at a time) with recoverable loss — the days whose ledger "sv" is older
     than SPLIT_V and whose "ol" > 0 (an older ledger without "ol": a "split" day's loss; a "block" / "day" day had no
-    "(other)" row, its loss is install days that are not dates — no split reads those) — biggest share of the month's
-    revenue first, the more recent month first on a tie; made once per SPLIT_V and again every RESCAN_DAYS while it is
-    empty (a month folded by an older copy of this code elsewhere);
-  * the month's every day is read again (read_range: a block, else day by day with the deeper split) into its copy
-    <YYYY-MM>.rep.json.gz, kept across runs (a Stop keeps the days read; a day the Stop cut is read again, whole); the
-    month file itself is never touched meanwhile (the build reads it as it was);
+    "(other)" row, its loss is install days that are not dates — no split reads those), and the days of this split
+    with "cap" 2 folded after the month's last repair of this split (a day the repair itself read so is never queued
+    again: no month is repaired again and again) — biggest share of the month's revenue first, the more recent month
+    first on a tie; then the months whose only reason is a one-level "split" day GA4 flagged with no "(other)" row (its
+    in-list part may have hidden some, by how much unknown: share 0, after every measured one); made once per SPLIT_V
+    and again every RESCAN_DAYS while it is empty (a month folded by an older copy of this code elsewhere);
+  * the month's every day is read again, day by day (never a block: a month with "(other)" only comes back with it
+    again) with the deeper split, into its copy <YYYY-MM>.rep.json.gz, kept across runs (a Stop keeps the days read; a
+    day the Stop cut is read again, whole); a day is started only when the run's calls left fit what a day needs (its
+    calls a day so far, DAY_CAP + 1 before the first) — checked before every day; the month file itself is never touched
+    meanwhile (the build reads it as it was);
   * once the copy holds every day the month file holds (a day the walk folds into the current month meanwhile is read
-    into the copy too), the copy becomes the month file ("rep": what the old one held) and the copy is removed — after
-    the month is written (a run killed in between finds the copy whole and does the same again). Its days now carry
-    "sv" = SPLIT_V: never queued again unless SPLIT_V goes up (a still deeper split) and their "ol" is still > 0.
+    into the copy too), the copy becomes the month file ("rep": what the old one held), the head is written (even in a
+    run that made no call) and only then the copy is removed (a run killed before the head finds the copy whole and
+    does the same again; a head left naming a month with nothing left to read reads nothing of it again). Its days now
+    carry "sv" = SPLIT_V: never queued again unless SPLIT_V goes up (a still deeper split) and their "ol" is still > 0.
   head "rep" = {"sv", "scan" (when the queue was made), "q": [[YYYY-MM, share]], "k" (the month being rebuilt), "old"
-  {"ol", "loss", "t"} (what it held), "at", "c" / "n" (calls / days of this repair: a day is not started when the run's
-  calls left are fewer than its average), "heavy", "cut" (read_range's memories for the repair's reads), "log": [[month,
-  "(other)" micros before, after, the month's revenue, when]] (the last LOG_KEEP)}.
+  {"ol", "loss", "t"} (what it held), "at", "c" / "n" (calls / days of this repair), "cut" (the cut memory of its
+  reads), "log": [[month, "(other)" micros before, after, the month's revenue, when]] (the last LOG_KEEP)}.
 
 Cost: the backfill ≈ app age / 30 block calls on a light app (rows a call ≈ 30 × a day's (install day, country) rows),
 and on a heavy one about one call per activity day (+ 2 per part split, + one block try every HEAVY_KEEP days) —
-measured on the biggest app ≈ 70 GA4 tokens and 4–6 s a day call, so ≈ 25 days a run in the 150 s budget (the backfill
-goes on next run). A day that still has "(other)": 1 + 2 × (parts split) calls — a day whose answer is r times over
-GA4's limit needs about 2r − 1 (the halves stop as soon as a part comes back whole), never more than DAY_CAP (48) — so
-on the biggest app about 5–15 calls a day expected (not measured yet) where the one-level split took 3 (each part a
-smaller, cheaper read than the whole day). After the walk, a day: the new final day + the hot window (≤ 3 × HOT_CAP
-calls) every 6 hours and at the property's midnight. The repair of a month ≈ its days × the calls a day takes
-(≈ 30 × 10 = 300 expected on the biggest app): REPAIR_CALLS (30) a run → about 10 runs a month, the biggest loss
-first; GA4 tokens stay under the property's quota floors (the App's gate stops every read of the property before them).
+measured on the biggest app ≈ 70 GA4 tokens and 4–6 s a day call, so ≈ 25 calls a run in the 150 s budget (the walk
+goes on next run). A day that still has "(other)": 1 + 2 × (parts split) calls (+ 1, its total, only when a part
+hides "(other)") — when GA4 rolls rows up per answer, a day r times over its limit needs about 2r − 1 or more (the
+halves stop as soon as a part comes back whole; synthetic: 5 calls at 1.5×, 9 at 3×, 25 at 8×); when GA4 rolls them
+up before the filters, 3 (the first split names nothing more) + 1; never more than DAY_CAP (24, one run's budget) + 1
+— which of the two GA4 does the log's "futile" / "hidden" counts will show (not measured yet). After the walk, a day:
+the new final day + the hot window (≤ 3 × (HOT_CAP + 1) calls, a round a Stop cut going on with its unread days) every
+6 hours and at the property's midnight. The repair of a month ≈ 30 day reads × the calls a day takes (≈ 30 × 4–10 =
+120–300 on the biggest app): ≤ REPAIR_CALLS (30) started a run, and only with a day's room left → about 4–10 runs a
+month, the biggest loss first. A run never makes more than MAX_CALLS (60) calls an app: the final day (≤ 25, on a new
+day) and the hot days (≤ 39, every 6 h) go first, the repair only with what they left (most hourly runs: they read
+nothing, the repair gets its 30); what does not fit is read next run. GA4 tokens stay under the property's quota
+floors (the App's gate stops every read of the property before them).
 """
 import heapq
 import json
@@ -145,7 +171,8 @@ LAGS = 31                           # ages 0 … 30 day by day ("e"); from 31 on
 STEP = 30                           # bucket j = ages 30j+1 … 30j+30
 BLOCK = 30                          # activity days a block call
 SPLIT_V = 2                         # the split's version (ledger "sv"): 1 one country level, 2 recursive (21 Oct 2026)
-DAY_CAP = 48                        # GA4 calls a final day's split may take (then what is still "(other)" is its loss)
+DAY_CAP = 24                        # GA4 calls a final day's split may take (then what is still "(other)" is its loss):
+                                    # one run's budget (≈ 25 calls of 4–6 s in 150 s) — a day fits the run it starts
 HOT_CAP = 12                        # … a hot day's (read again every 6 hours, never folded: its final read is kept)
 MIN_CAP = 3                         # the smallest cap a day cut again and again gets (the one-level split's 3 calls)
 CUT_TRIES = 2                       # runs a day may be cut by a Stop (after ≥ MIN_CAP calls of it) before its cap
@@ -405,15 +432,44 @@ def _orev(rows):
                if OTHER in (r.get("firstSessionDate"), r.get("countryId")) or not _real(r.get("date")))
 
 
-def split_read(ga, D, cap=DAY_CAP, xs=None, dims=DIMS, root_why=RETRY):
+def _named(rows):
+    """Rows GA4 kept by name (not "(other)", a real activity day)."""
+    return sum(1 for r in rows if OTHER not in (r.get("firstSessionDate"), r.get("countryId")) and _real(r.get("date")))
+
+
+def _micros(rows):
+    return sum(int(round(float(r.get("totalAdRevenue") or 0) * 1e6)) for r in rows)
+
+
+def _hidden(rows, fl):
+    """GA4 says it rolled rows into "(other)" but no "(other)" row shows (an in-list filter drops that row)."""
+    return bool(fl & F_OTHER) and not _other(rows)
+
+
+def day_total(ga, D):
+    """Activity day D's whole ad revenue (micros): dimension date only and no filter — one row, nothing GA4 could roll
+    into "(other)" or a filter could drop. None: GA4 sampled or cut that answer (nothing to measure by)."""
+    rows = ga.report_all(body(D, D, ("date",)), page_rows=gu.UNI_PAGE_ROWS)
+    if _flags(ga, rows) & (F_SMP | F_CUT):
+        return None
+    return _micros(rows)
+
+
+def split_read(ga, D, cap=DAY_CAP, xs=None, dims=DIMS, root_why=RETRY, total=None):
     """Activity day D through the recursive split (module doc, step 3) → (rows of every final part, info {"calls",
     "parts", "depth", "cap" (1: the cap left "(other)" a deeper split could read), "fl" (every part's GA4 flags), "flag"
-    (a flag with nothing to measure it by: sampling / thresholding / a cut answer, or dataLossFromOtherRow on a part
-    with no "(other)" row)}). xs: the install days (YYYY-MM-DD) the read is held to (an in-list; None: every one);
-    dims: without countryId only install days split; root_why: the flags that split the whole day's answer (a part's
-    own: "(other)" rows, sampling, a cut answer). Raises Stop: nothing of the day kept."""
+    (a flag with nothing to measure it by: sampling / thresholding / a cut answer, dataLossFromOtherRow on a part with
+    no "(other)" row when the day's total could not be read, or parts holding more than that total), "hid" (micros the
+    day's total holds beyond every part's rows: "(other)" GA4 hid under an in-list — 0: none, or not measured), "tot"
+    (that total, when read), "futile" (1: a split named no row its part had not — filters read no more of this day)}).
+    xs: the install days (YYYY-MM-DD) the read is held to (an in-list; None: every one); dims: without countryId only
+    install days split; root_why: the flags that split the whole day's answer (a part's own: "(other)" rows, sampling,
+    a cut answer, dataLossFromOtherRow); total(ga, D): the day's true total in micros, or None (read once, only when a
+    final part is flagged "(other)" with no "(other)" row — a call past the cap). Raises Stop: nothing of the day
+    kept."""
     c0, seq, leaves, heap = ga.calls, 0, [], []
-    info = {"calls": 0, "parts": 0, "depth": 0, "cap": 0, "fl": 0, "flag": False}
+    info = {"calls": 0, "parts": 0, "depth": 0, "cap": 0, "fl": 0, "flag": False, "hid": 0, "tot": None, "futile": 0}
+    held = False                                                # a hidden-"(other)" part the cap kept from a split
 
     def read(p):
         ex = _filters(p)
@@ -423,65 +479,101 @@ def split_read(ga, D, cap=DAY_CAP, xs=None, dims=DIMS, root_why=RETRY):
     def put(p, rows, fl, depth, why):
         nonlocal seq
         if _other(rows) or fl & why:
-            seq += 1
-            heapq.heappush(heap, (-_orev(rows), seq, depth, p, rows, fl))
+            seq += 1                                            # the most "(other)" revenue first; a hidden one (no
+            heapq.heappush(heap, (-_orev(rows), -len(rows), seq, depth, p, rows, fl))   # row): the most rows first
         else:
             leaves.append((rows, fl))
     root = (None, frozenset(), frozenset(xs) if xs is not None else None, frozenset())
     rows, fl = read(root)
     put(root, rows, fl, 0, root_why)
     while heap:
-        _, _, depth, p, rows, fl = heapq.heappop(heap)          # the most "(other)" revenue first
+        _, _, _, depth, p, rows, fl = heapq.heappop(heap)
         kids = _kids(p, rows, dims)
         if kids and ga.calls - c0 + len(kids) > cap:            # the cap: no more parts read
             info["cap"] |= int(_other(rows))
+            held = held or _hidden(rows, fl)
             kids = None
         if not kids:
             leaves.append((rows, fl))                           # what is still "(other)" in it: the day's loss
             continue
+        got = [read(k) for k in kids]                           # the part's rows kept until both halves are in
+        if not fl & (F_SMP | F_CUT) and sum(_named(r) for r, _ in got) <= _named(rows):
+            info["futile"] = 1                                  # the halves named no row the part had not (GA4 rolls
+            leaves.append((rows, fl))                           # rows into "(other)" before a filter): no part read
+            leaves.extend((e[5], e[6]) for e in heap)           # by a filter will — the part as it was, the others as
+            heap.clear()                                        # they are; what is "(other)" in them: measured loss
+            break
         del rows
-        for k in kids:
-            r, f = read(k)
-            put(k, r, f, depth + 1, F_SMP | F_CUT)
+        for k, (r, f) in zip(kids, got):
+            put(k, r, f, depth + 1, RETRY)
         info["depth"] = max(info["depth"], depth + 1)
+    measured = False
+    if total is not None and any(_hidden(r, f) for r, f in leaves):
+        T = total(ga, D)                                        # GA4 hid "(other)" somewhere: the day's own total
+        if T is not None:
+            measured, info["tot"] = True, T
+            s, n = sum(_micros(r) for r, _ in leaves), sum(len(r) for r, _ in leaves)
+            tol = n // 2 + 1 + T // 1000000                     # rounding: ½ micro a row, 1 ppm of the total
+            if T - s > tol:
+                info["hid"] = T - s
+                info["cap"] |= int(held)
+            elif s - T > tol:
+                info["flag"] = True                             # the parts hold more than the day: no measure
     out = []
     for rows, f in leaves:
         out.extend(rows)
         info["fl"] |= f
-        info["flag"] = info["flag"] or bool(f & (F_SMP | F_CUT | F_THR)) or bool(f & F_OTHER and not _other(rows))
+        info["flag"] = info["flag"] or bool(f & (F_SMP | F_CUT | F_THR)) or (_hidden(rows, f) and not measured)
     info.update(calls=ga.calls - c0, parts=len(leaves))
     return out, info
 
 
-def read_day(ga, D, now_iso, cap=DAY_CAP):
-    """One activity day alone (steps 2 and 3 of the module doc) → its record. Raises Stop (nothing of the day kept)."""
-    rows, info = split_read(ga, D, cap)
-    return _rec(_group(rows, D).get(D.isoformat()), "split" if info["depth"] else "day", info["fl"], now_iso, info)
+def read_day(ga, D, now_iso, cap=DAY_CAP, full=None):
+    """One activity day alone (steps 2 and 3 of the module doc) → its record ("(other)" GA4 hid, measured by the day's
+    total, in its t / loss / ol; "hd" / "fu" on the record only when there is one: the hidden micros / a futile split).
+    full: the cap a day of its kind gets — read with less (a day cut run after run), "cap" 2 when the cap left
+    "(other)" (a full read could take more of it). Raises Stop (nothing of the day kept)."""
+    rows, info = split_read(ga, D, cap, total=day_total)
+    acc = _group(rows, D).get(D.isoformat()) or _new()
+    del rows
+    if info["hid"]:
+        for f in ("t", "loss", "ol"):
+            acc[f] += info["hid"]
+    if info["cap"] and full is not None and cap < full:
+        info["cap"] = 2
+    rec = _rec(acc, "split" if info["depth"] else "day", info["fl"], now_iso, info)
+    if info["hid"]:
+        rec["hd"] = info["hid"]
+    if info["futile"]:
+        rec["fu"] = 1
+    return rec
 
 
-def _cap_of(mem, k, cap):
+def _cap_of(cut, cap):
     """A day's cap: `cap`, or — cut by a Stop in CUT_TRIES runs or more — what a run gave it less one, halved for every
     further cut, never below MIN_CAP."""
-    cut = mem.get("cut")
-    if isinstance(cut, dict) and cut.get("D") == k and int(cut.get("k") or 0) >= CUT_TRIES:
+    if isinstance(cut, dict) and int(cut.get("k") or 0) >= CUT_TRIES:
         return max(MIN_CAP, min(cap, (int(cut.get("n") or 0) - 1) >> (int(cut["k"]) - CUT_TRIES)))
     return cap
 
 
-def _read_day(ga, D, now_iso, mem, cap):
-    """read_day with the cut memory (mem["cut"]: the day a Stop cut after ≥ MIN_CAP calls of it — the most calls a run
-    gave it and how many times; a day stopped before that never counts: the run had nothing left for it)."""
+def _read_day(ga, D, now_iso, mem, cap, key="cut"):
+    """read_day with the cut memory mem[key] ("cut": a final day of the walk, "hcut": a hot day — never one for the
+    other: a hot day's smaller cap never follows it into its final read; the repair: its own state's "cut"). A Stop
+    counts as the day's cut only when the day was the run's FIRST read (it had the run's whole allowance — never one
+    started with what the walk, the hot days or other days left), after ≥ MIN_CAP calls of it, and not the app's call
+    cap: {"D", "n" the most calls a run gave it, "k" how many times}."""
     k, c0 = D.isoformat(), ga.calls
-    cut = mem.get("cut") if isinstance(mem.get("cut"), dict) and mem["cut"].get("D") == k else None
+    cut = mem.get(key) if isinstance(mem.get(key), dict) and mem[key].get("D") == k else None
     try:
-        rec = read_day(ga, D, now_iso, _cap_of(mem, k, cap))
-    except Stop:
+        rec = read_day(ga, D, now_iso, _cap_of(cut, cap), full=cap)
+    except Stop as e:
         n = ga.calls - c0
-        if n >= MIN_CAP:
-            mem["cut"] = {"D": k, "n": max(n, int((cut or {}).get("n") or 0)), "k": int((cut or {}).get("k") or 0) + 1}
+        if c0 == 0 and n >= MIN_CAP and str(e) != "calls":
+            mem[key] = {"D": k, "n": max(n, int((cut or {}).get("n") or 0)), "k": int((cut or {}).get("k") or 0) + 1}
         raise
     if cut is not None:
-        mem.pop("cut", None)
+        mem.pop(key, None)
     return rec
 
 
@@ -493,9 +585,10 @@ def _skip_block(head, a, n):
         return False
 
 
-def read_range(ga, a, b, head, now_iso, cap=DAY_CAP):
+def read_range(ga, a, b, head, now_iso, cap=DAY_CAP, key="cut"):
     """Activity days a … b → (D, record) in day order, adaptive (see the module doc). A generator: a Stop between its
-    calls keeps every day it yielded. head: where the heavy and cut memories live (the head; the repair's state)."""
+    calls keeps every day it yielded. head: where the heavy and cut memories live; key: the cut memory's (the walk's
+    "cut", the hot days' "hcut")."""
     n = (b - a).days + 1
     if n > 1 and not _skip_block(head, a, n):
         rows = ga.report_all(body(a, b), page_rows=gu.UNI_PAGE_ROWS)
@@ -512,7 +605,7 @@ def read_range(ga, a, b, head, now_iso, cap=DAY_CAP):
         del rows
         head["heavy"] = {"at": a.isoformat(), "n": n}
     for D in _days(a, b):
-        yield D, _read_day(ga, D, now_iso, head, cap)
+        yield D, _read_day(ga, D, now_iso, head, cap, key)
 
 
 # ── the store ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -586,26 +679,44 @@ def _merge(mo, k, rec):
     mo["days"][k] = {f: rec.get(f) for f in LEDGER}
 
 
-def _oloss(led):
-    """A folded day's "(other)" micros a deeper split than the one it was read with could still read (0: none) — "ol"
-    when the ledger has it; an older ledger: a "split" day's loss (a "block" / "day" day had no "(other)" row: its loss
-    is install days that are not dates, which no split reads)."""
-    if not isinstance(led, dict) or int(led.get("sv") or 1) >= SPLIT_V:
+def _oloss(led, rep_at=None):
+    """A folded day's "(other)" micros a read again could still take (0: none):
+      * read with an older split (sv < SPLIT_V): "ol" when the ledger has it; an older ledger: a "split" day's loss (a
+        "block" / "day" day had no "(other)" row: its loss is install days that are not dates, which no split reads);
+      * read with this split but under a smaller cap than a day's (cap 2: a day cut run after run) — only when folded
+        after the month's last repair of this split (rep_at; a day the repair itself read so stays as it is: a month is
+        repaired once for what the walk folded, never again and again)."""
+    if not isinstance(led, dict):
+        return 0
+    if int(led.get("sv") or 1) >= SPLIT_V:
+        if int(led.get("cap") or 0) == 2 and (rep_at is None or str(led.get("at") or "") > rep_at):
+            return int(led.get("ol") or 0)
         return 0
     if led.get("ol") is not None:
         return int(led.get("ol") or 0)
     return int(led.get("loss") or 0) if led.get("via") == "split" else 0
 
 
+def _ofl(led):
+    """A day the one-level split read (sv 1, "split") that GA4 flagged with no "(other)" row to measure it by: its
+    country in-list part may have hidden "(other)" — worth a read again, by how much unknown."""
+    return int(isinstance(led, dict) and int(led.get("sv") or 1) < SPLIT_V and led.get("via") == "split"
+               and bool(led.get("fl")))
+
+
 def _month_oloss(mo):
-    """A month → (recoverable "(other)" micros, loss micros, revenue micros) over its folded days."""
-    ol = lo = t = 0
+    """A month → (recoverable "(other)" micros, loss micros, revenue micros, flagged one-level split days) over its
+    folded days."""
+    ol = lo = t = nf = 0
+    rep = mo.get("rep") if isinstance(mo.get("rep"), dict) else {}
+    rep_at = str(rep["at"]) if rep.get("sv") == SPLIT_V and rep.get("at") else None
     for led in (mo.get("days") or {}).values():
         if isinstance(led, dict):
-            ol += _oloss(led)
+            ol += _oloss(led, rep_at)
+            nf += _ofl(led)
             lo += int(led.get("loss") or 0)
             t += int(led.get("t") or 0)
-    return ol, lo, t
+    return ol, lo, t, nf
 
 
 class Cube:
@@ -621,7 +732,7 @@ class Cube:
         self.m, self.touched = {}, set()
         self.bad = set()                # months whose file is on disk but not a month of this stream (read again)
         self.folded = self.split = self.loss = self.flagged = self.reread = 0
-        self.deeper = self.capped = self.rep_days = self.repaired = 0
+        self.deeper = self.capped = self.rep_days = self.repaired = self.hidden = self.futile = 0
         self.pruned = self.dirty = False    # dirty: the head changed with no read (the repair's queue)
         self.rp = None                  # the repair's copy of a month: {"k", "mo", "dirty", "done"}
 
@@ -660,6 +771,8 @@ class Cube:
         self.split += rec.get("via") == "split"
         self.deeper += (rec.get("n") or 0) > 3      # past the first split (one level is 3 calls)
         self.capped += bool(rec.get("cap"))         # the cap left "(other)" a deeper split could read
+        self.hidden += bool(rec.get("hd"))          # "(other)" GA4 hid under an in-list, measured by the day's total
+        self.futile += bool(rec.get("fu"))          # a split that named nothing new (filters read no more)
         self.loss += bool(rec.get("loss"))          # measured: revenue GA4 left "(other)" / with no install day
         self.flagged += bool(rec.get("fl"))         # GA4's flag with nothing to measure it by (the page's ≈)
         return True
@@ -706,7 +819,8 @@ class Cube:
     def save(self, before=None):
         """The touched months (before: only those older than that month — written and let go: the walk moved on).
         In memory only (no data_dir): nothing to write, every month kept. Without `before`, the repair's copy after
-        the months: written while it is being built; removed once it became its month (written just above)."""
+        the months: written while it is being built (once it became its month, save_head removes it — after the
+        head that no longer names it)."""
         if not self.data_dir:
             return
         for k in sorted(self.touched):
@@ -717,16 +831,17 @@ class Cube:
         if before:
             for k in [k for k in self.m if k < before and k not in self.touched]:
                 self.m.pop(k, None)
-        elif self.rp is not None:
-            if self.rp["done"]:
-                self.drop_rep(self.rp["k"])
-            elif self.rp["dirty"]:
-                write_json_gz_stable(self.rep_path(self.rp["k"]), self.rp["mo"])
-                self.rp["dirty"] = False
+        elif self.rp is not None and not self.rp["done"] and self.rp["dirty"]:
+            write_json_gz_stable(self.rep_path(self.rp["k"]), self.rp["mo"])
+            self.rp["dirty"] = False
 
     def save_head(self):
+        """The head (after the months: it never runs ahead of them); then a repair's copy that became its month goes
+        (a run killed before that leaves a copy no head names: the next repair of that month starts without it)."""
         if self.data_dir:
             write_json_gz_stable(hot_path(self.data_dir, self.app_id), self.head)
+        if self.rp is not None and self.rp["done"]:
+            self.drop_rep(self.rp["k"])
 
 
 def step_app(ga, cube, today, hs, now):
@@ -738,6 +853,10 @@ def step_app(ga, cube, today, hs, now):
     for k in [k for k in d if k <= edge.isoformat()]:      # final now: a copy read while it was filling never counts
         d.pop(k)                                            # (a hole until the walk folds it — even when the walk stops
         cube.pruned = True                                  # before it)
+    hc = h.get("hcut")
+    if hc is not None and not (isinstance(hc, dict) and str(hc.get("D") or "") > edge.isoformat()):
+        h.pop("hcut")                                       # a hot day's cut memory goes with it (its final read: the
+        cube.pruned = True                                  # walk's own cap and memory)
     if not h.get("from") or not h.get("next") or hs < _d(h["from"]):  # first walk, or the history start moved back:
         h["from"], h["next"] = hs.isoformat(), hs.isoformat()         # from it (folded days are skipped, not re-read)
         h.pop("done", None)                                 # … and the build waits for the walk again (columns in one go)
@@ -777,22 +896,29 @@ def step_app(ga, cube, today, hs, now):
     a = max(hs, edge + timedelta(days=1))
     due = gu._hours_since(h.get("hot_at"), now) >= REFRESH_HOURS or h.get("hot_today") != today.isoformat()
     if a <= today and due:
-        for D, rec in read_range(ga, a, today, h, now_iso, cap=HOT_CAP):
-            d[D.isoformat()] = rec                          # replaced (never folded: read while not final)
-            did = True
+        cyc = h.get("hot_cyc")                              # this round of the hot days: one a Stop cut goes on with
+        if not (isinstance(cyc, list) and len(cyc) == 2 and cyc[1] == today.isoformat()):  # the days it has not read
+            cyc = h["hot_cyc"] = [now_iso, today.isoformat()]     # (the same property day); else a new round
+        todo = [D.isoformat() for D in _days(a, today) if str((d.get(D.isoformat()) or {}).get("at") or "") < cyc[0]]
+        for x, y in _runs(todo):
+            for D, rec in read_range(ga, x, y, h, now_iso, cap=HOT_CAP, key="hcut"):
+                d[D.isoformat()] = rec                      # replaced (never folded: read while not final)
+                did = True
         h["hot_at"], h["hot_today"] = now_iso, today.isoformat()
+        h.pop("hot_cyc", None)
     did = repair(ga, cube, now) or did                      # with what the run has left
     return "fetched" if did else "fresh"
 
 
 def _scan(cube):
-    """The repair's queue: every month of the app with recoverable "(other)" loss → [[YYYY-MM, its share of the
-    month's revenue]], the biggest share first, the more recent month first on a tie."""
+    """The repair's queue: every month of the app with recoverable "(other)" loss (or one-level split days GA4 flagged
+    with no "(other)" row) → [[YYYY-MM, its measured share of the month's revenue]], the biggest share first, the more
+    recent month first on a tie (a month with flagged days only: share 0, after every measured one)."""
     q = []
     for k, mo in cube.each_month():
-        ol, _, t = _month_oloss(mo)
-        if ol > 0:
-            q.append([k, round(ol / t, 6) if t > 0 else 1.0])
+        ol, _, t, nf = _month_oloss(mo)
+        if ol > 0 or nf > 0:
+            q.append([k, round(ol / t, 6) if t > 0 else (1.0 if ol else 0.0)])
     q.sort(key=lambda e: e[0], reverse=True)
     q.sort(key=lambda e: -e[1])
     return q
@@ -811,12 +937,18 @@ def _runs(days):
 
 
 def _room(ga, rp):
-    """Calls the run has left ≥ the repair's calls a day so far (unknown cap or no day yet: yes)."""
+    """Calls the run has left ≥ what a repair day needs: the repair's calls a day so far (rounded up; at least
+    MIN_CAP), DAY_CAP + 1 before its first day (a day's cap and its total) — checked before every day (unknown cap:
+    yes)."""
     mx = getattr(ga, "max_calls", None)
-    n = int(rp.get("n") or 0)
-    if mx is None or not n:
+    if mx is None:
         return True
-    return mx - ga.calls >= -(-int(rp.get("c") or 0) // n)
+    n = int(rp.get("n") or 0)
+    need = max(MIN_CAP, -(-int(rp.get("c") or 0) // n)) if n else DAY_CAP + 1
+    return mx - ga.calls >= need
+
+
+REP_FIELDS = ("k", "old", "at", "c", "n", "heavy", "cut")
 
 
 def repair(ga, cube, now):
@@ -836,9 +968,10 @@ def repair(ga, cube, now):
         while rp.get("q") and not rp.get("k"):
             k = str(rp["q"].pop(0)[0])
             cube.dirty = True
-            ol, lo, t = _month_oloss(cube.month(k))
-            if ol > 0 and k not in cube.bad:
-                rp.update(k=k, old={"ol": ol, "loss": lo, "t": t}, at=now_iso, c=0, n=0)
+            ol, lo, t, nf = _month_oloss(cube.month(k))
+            if (ol > 0 or nf > 0) and k not in cube.bad:
+                cube.drop_rep(k)                            # a copy no head names (a run killed after its month was
+                rp.update(k=k, old={"ol": ol, "loss": lo, "t": t}, at=now_iso, c=0, n=0)   # written): never used
             elif cube.data_dir and k not in cube.touched:   # nothing to repair in it (any more): let go
                 cube.m.pop(k, None)
     k = rp.get("k")
@@ -846,25 +979,26 @@ def repair(ga, cube, now):
         return False
     cube.let_go(keep=k)
     live = cube.month(k)
-    if k in cube.bad:                                       # its file unreadable now: no repair of it (never a copy
-        cube.drop_rep(k)                                    # made the month with nothing to hold it against); the
-        for f in ("k", "old", "at", "c", "n", "heavy", "cut"):     # next month of the queue next run
-            rp.pop(f, None)
-        cube.dirty = True
+    acc = None if k in cube.bad else cube.rep(k)
+    if acc is None or not acc["days"] and not any(_month_oloss(live)[i] for i in (0, 3)):
+        cube.drop_rep(k)                                    # its file unreadable now (never a copy made the month with
+        for f in REP_FIELDS:                                # nothing to hold it against), or nothing left to read in
+            rp.pop(f, None)                                 # it (a run that wrote the repaired month but not its head):
+        cube.dirty = True                                   # the next month of the queue next run
         return False
-    acc, did, c0 = cube.rep(k), False, ga.calls
+    did, c0 = False, ga.calls
     try:
-        for a, b in _runs(sorted(D for D in live["days"] if D not in acc["days"])):
-            if ga.calls - c0 >= REPAIR_CALLS or not _room(ga, rp):
+        for D in sorted(D for D in live["days"] if D not in acc["days"]):   # day by day: a block of a month with
+            if ga.calls - c0 >= REPAIR_CALLS or not _room(ga, rp):         # "(other)" only comes back with it again
                 break
             last = ga.calls
-            for D, rec in read_range(ga, a, b, rp, now_iso):
-                _merge(acc, D.isoformat(), rec)
-                cube.rp["dirty"] = did = True
-                cube.rep_days += 1
-                rp["c"], rp["n"], last = int(rp.get("c") or 0) + ga.calls - last, int(rp.get("n") or 0) + 1, ga.calls
-                if ga.calls - c0 >= REPAIR_CALLS:
-                    break
+            rec = _read_day(ga, _d(D), now_iso, rp, DAY_CAP)
+            _merge(acc, D, rec)
+            cube.rp["dirty"] = did = True
+            cube.rep_days += 1
+            cube.hidden += bool(rec.get("hd"))
+            cube.futile += bool(rec.get("fu"))
+            rp["c"], rp["n"] = int(rp.get("c") or 0) + ga.calls - last, int(rp.get("n") or 0) + 1
     except Stop as e:
         if str(e) != "calls":                               # the budget, the property's quota: the app stops here
             raise
@@ -877,8 +1011,9 @@ def repair(ga, cube, now):
         cube.touched.add(k)
         cube.rp["done"] = True
         cube.repaired += 1
+        cube.dirty = True                                   # the head written (k cleared) even in a run with no call
         rp["log"] = (list(rp.get("log") or []) + [[k, old.get("ol"), nol, t, now_iso]])[-LOG_KEEP:]
-        for f in ("k", "old", "at", "c", "n", "heavy", "cut"):
+        for f in REP_FIELDS:
             rp.pop(f, None)
     return did
 
@@ -911,7 +1046,7 @@ def save_state(data_dir, state):
 
 
 COUNTS = ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred", "waiting", "days", "split", "deeper",
-          "capped", "loss", "flagged", "reread", "repair_days", "repaired", "calls", "tokens")
+          "capped", "hidden", "futile", "loss", "flagged", "reread", "repair_days", "repaired", "calls", "tokens")
 
 
 def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, workers=WORKERS):
@@ -1014,6 +1149,8 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                     counts["split"] += cube.split
                     counts["deeper"] += cube.deeper
                     counts["capped"] += cube.capped
+                    counts["hidden"] += cube.hidden
+                    counts["futile"] += cube.futile
                     counts["repair_days"] += cube.rep_days
                     counts["repaired"] += cube.repaired
                     counts["loss"] += cube.loss
@@ -1035,7 +1172,7 @@ def log_line(status):
     """The build log's ONE line for this step — counts only."""
     c = (status or {}).get("counts") or {}
     return ("ga4 cube: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, days folded %d, "
-            "split %d, deeper %d, capped %d, loss %d, flagged %d, months read again %d, repair days %d, "
-            "months repaired %d, calls %d, tokens %d%s"
+            "split %d, deeper %d, capped %d, hidden %d, futile %d, loss %d, flagged %d, months read again %d, "
+            "repair days %d, months repaired %d, calls %d, tokens %d%s"
             % tuple([gaud._int(c.get(k)) for k in COUNTS]
                     + [(", error " + status["error"]) if (status or {}).get("error") else ""]))

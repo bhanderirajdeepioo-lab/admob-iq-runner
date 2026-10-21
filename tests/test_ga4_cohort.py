@@ -1,9 +1,11 @@
 """📈 Day-wise ROI — the hourly fetch (admob_iq.fetch.ga4_cohort), offline with a fake GA4 and made-up numbers: the block
 query (dimensions, in-list of install days), the cells kept (lag 0 … 30 only; a cell GA4 leaves out = 0), the one-time
 backfill from the history start (resumed after a stop), the recent refresh every 6 hours (today included), the hot /
-older split of the store, a block with "(other)" rows read again day by day (split by install-day halves; the day's
-cap leaves measured loss in "lo"; a flagged block's days in "lf"; a refresh cut by a Stop goes on from its next day),
-and counts-only lines."""
+older split of the store, a block with "(other)" rows — or only GA4's flag (the in-list drops the row) — read again
+day by day (split by install-day halves; a day still flagged read with every install day, its cells taken from that
+whole answer; the day's cap leaves measured loss in "lo"; a thresholded block's days in "lf"; a refresh cut by a Stop
+goes on from its next day; a heavy refresh reads only its days not yet read alone when final), the one-time check of
+the history an older version read, and counts-only lines."""
 import gzip
 import json
 import os
@@ -150,7 +152,8 @@ def test_a_block_with_other_rows_is_read_day_by_day():
     assert bi["oth"] == 30 and bi["om"] > 0 and bi["fl"] & gc.gcu.F_OTHER        # counted: one "(other)" row a day
     store, ga = {}, _cga(cap=1000)
     info, last = _run(ga, store, a, b)
-    assert ga.calls == 1 + 30 and last == b and info == {"oth_blocks": 1, "alone": 30, "loss_days": 0, "flagged": 0}
+    assert ga.calls == 1 + 30 and last == b and info == {"oth_blocks": 1, "alone": 30, "loss_days": 0, "flagged": 0,
+                                                         "hidden": 0, "checked": 0}
     for _, ex, _, _ in ga.asked[1:]:                # each day alone: install days D − 30 … D (31)
         assert len(ex[0]["filter"]["inListFilter"]["values"]) == gc.LAGS
     assert store["x"] == truth and "lo" not in store and "lf" not in store
@@ -179,17 +182,24 @@ def test_a_block_with_other_rows_is_read_day_by_day():
     assert "lo" not in store and store["x"] == truth
 
 
-def test_a_flagged_block_marks_its_days_and_a_clean_read_clears_them():
+def test_a_flagged_block_is_read_day_by_day_and_thresholding_marks_its_days():
+    """dataLossFromOtherRow on a block (the in-list hides the "(other)" row: oth 0): its days are read alone — the
+    flagged day split and measured by its every install day (nothing missing here: no loss, no flag); thresholding (no
+    smaller read avoids it): the block kept, its days in "lf", a clean read clears them."""
     a, b = date(2026, 9, 1), date(2026, 9, 30)
+    store, ga = {}, _cga(oth_flag_day=date(2026, 9, 5))
+    info, _ = _run(ga, store, a, b)
+    assert info["oth_blocks"] == 1 and info["alone"] == 30 and info["flagged"] == 0 and info["loss_days"] == 0
+    assert ga.calls == 1 + 29 + 4 and "lf" not in store and "lo" not in store and store["x"] == _truth(a, b)
     store = {}
-    info, _ = _run(_cga(oth_flag_day=date(2026, 9, 5)), store, a, b)      # the flag with no "(other)" row to measure
+    info, _ = _run(_cga(thr_day=date(2026, 9, 5)), store, a, b)
     assert info["oth_blocks"] == 0 and info["flagged"] == 30 and len(store["lf"]) == 30 and store["x"] == _truth(a, b)
     _run(_cga(), store, a, b)
     assert "lf" not in store
 
 
 def test_a_refresh_read_day_by_day_goes_on_after_a_stop():
-    store = {"v": gc.STORE_V, "backfill": {"done": True}}
+    store = {"v": gc.STORE_V, "backfill": {"done": True}, "chk": {"v": gc.CHK_V, "done": True}}
     hs = date(2026, 6, 1)
     try:
         gc.step_app(_cga(today=TODAY, cap=1000, stop_after=11), store, TODAY, hs, NOW)
@@ -212,7 +222,119 @@ def test_a_refresh_read_day_by_day_goes_on_after_a_stop():
 
 
 def test_the_line_counts_only():
-    out = {"counts": dict(dict.fromkeys(gc.COUNTS, 0), selected=2, oth_blocks=1, alone=30, loss_days=2, flagged=3)}
+    out = {"counts": dict(dict.fromkeys(gc.COUNTS, 0), selected=2, oth_blocks=1, alone=30, loss_days=2, flagged=3,
+                          hidden=4, checked=60)}
     assert gc.log_line(out) == ("ga4 cohort: apps 2, with GA4 0, fetched 0, fresh 0, failed 0, deferred 0, waiting 0, "
-                                "blocks with (other) 1, days read alone 30, days with loss 2, flagged days 3, calls 0, "
-                                "tokens 0")
+                                "blocks with (other) 1, days read alone 30, days with loss 2, flagged days 3, days with "
+                                "hidden (other) 4, days checked again 60, calls 0, tokens 0")
+
+
+# ── GA4's "(other)" hidden by the in-list, the refresh's memory, the history an older version read ─────────────────
+def _hga(**kw):
+    """The cube's fake, and on an answer with a firstSessionDate in-list the 5 oldest install days of the list are
+    gone (GA4 rolled them into "(other)" and the in-list dropped that row: dataLossFromOtherRow only) — the same day
+    with no in-list is whole (smp_whole: that answer is sampled)."""
+    from tests.test_ga4_cube import FakeGA as CubeGA
+    smp = kw.pop("smp_whole", False)
+
+    class H(CubeGA):
+        def report_all(self, body, event=None, events=None, extra=None, page_rows=None):
+            rows = super().report_all(body, event, events, extra, page_rows)
+            xs = [ex["filter"]["inListFilter"]["values"] for ex in extra or []
+                  if "filter" in ex and ex["filter"]["fieldName"] == "firstSessionDate"]
+            if xs:
+                drop = set(sorted(xs[0])[:5])
+                kept = [r for r in rows if r.get("firstSessionDate") not in drop]
+                if len(kept) < len(rows):
+                    self.last_metas = [{"dataLossFromOtherRow": True}]
+                rows = kept
+            elif smp:
+                self.last_metas = [{"samplingMetadatas": [{"samplesReadCount": "1", "samplingSpaceSize": "2"}]}]
+            return rows
+    return H(**dict({"today": date(2027, 1, 1), "start": date(2026, 6, 1)}, **kw))
+
+
+def test_other_hidden_by_the_in_list_is_read_from_the_whole_day():
+    """A block whose in-list hid "(other)" (no row, only the flag): its days alone; a day still flagged is split (the
+    halves name nothing more: no more), then read with every install day (no in-list: whole) — its cells of D − 30 …
+    D taken from that answer: nothing lost, nothing flagged. When that answer is sampled: nothing to measure by — the
+    day in "lf" (≈ on the page), never silently low."""
+    a, b = date(2026, 9, 1), date(2026, 9, 30)
+    truth = _truth(a, b)
+    store, ga = {}, _hga()
+    info, _ = _run(ga, store, a, b)
+    assert info == {"oth_blocks": 1, "alone": 30, "loss_days": 0, "flagged": 0, "hidden": 30, "checked": 0}
+    assert ga.calls == 1 + 30 * 4 and store["x"] == truth and "lo" not in store and "lf" not in store
+    assert all(not ex for _, ex, _, _ in ga.asked[4::4])           # each day's 4th call: no in-list (the whole day)
+    store, ga = {}, _hga(smp_whole=True)
+    info, _ = _run(ga, store, a, b)
+    assert info["flagged"] == 30 and len(store["lf"]) == 30 and "lo" not in store
+    got = sum(v for e in store["x"].values() for v in e["r"])
+    assert 0 < got < sum(v for e in truth.values() for v in e["r"])
+
+
+def test_a_heavy_refresh_reads_only_its_newest_days_again():
+    """A refresh whose block came back with "(other)": its days alone, the final ones noted ("fa") — the next refreshes
+    read only the days after them (no final day twice), day by day straight away for RH_DAYS ("rh"), then the block is
+    tried again (whole: blocks again)."""
+    hs = date(2026, 6, 1)
+    store = {"v": gc.STORE_V, "backfill": {"done": True}, "chk": {"v": gc.CHK_V, "done": True}}
+    ga, info = _cga(today=TODAY, cap=1000), {}
+    gc.step_app(ga, store, TODAY, hs, NOW, info)
+    fin = TODAY - timedelta(days=gc.FINAL_LAG)
+    recent = TODAY - timedelta(days=gc.RECENT_DAYS - 1)
+    assert ga.calls == 1 + gc.RECENT_DAYS and info["oth_blocks"] == 1 and store["rh"] == TODAY.isoformat()
+    assert sorted(store["fa"]) == [D.isoformat() for D in gc._days(recent, fin)]
+    ga = _cga(today=TODAY, cap=1000)                              # 6 hours on: the 3 days not final, alone
+    gc.step_app(ga, store, TODAY, hs, NOW + timedelta(hours=7))
+    assert [q[0]["dateRanges"][0]["startDate"] for q in ga.asked] == ["2026-10-11", "2026-10-12", "2026-10-13"]
+    nxt = TODAY + timedelta(days=1)                                # a new day: Oct 11 final now (read while not)
+    ga = _cga(today=nxt, cap=1000)
+    gc.step_app(ga, store, nxt, hs, NOW + timedelta(days=1))
+    assert ga.calls == 4 and ga.asked[0][0]["dateRanges"][0]["startDate"] == "2026-10-11"
+    assert "2026-10-11" in store["fa"] and min(store["fa"]) == (nxt - timedelta(days=gc.RECENT_DAYS - 1)).isoformat()
+    later = TODAY + timedelta(days=gc.RH_DAYS + 1)                 # RH_DAYS on: the block again — whole now
+    ga = _cga(today=later, cap=1000)
+    gc.step_app(ga, store, later, hs, NOW + timedelta(days=gc.RH_DAYS + 1))
+    assert ga.calls == 1 and ga.asked[0][0]["dateRanges"][0] == {"startDate": "2026-10-12",
+                                                                 "endDate": later.isoformat()}
+    assert "rh" not in store
+
+
+def test_history_an_older_version_read_is_checked_again():
+    """A store whose backfill an older version made (blocks only: what the in-list hid is missing, nothing says so):
+    read again once (CHK_V) — block by block, a block with "(other)" day by day — at most CHK_CALLS calls started a
+    run, after the refresh; a Stop goes on from the day it cut (no block call first); then done for good."""
+    hs = date(2026, 6, 1)
+    recent = TODAY - timedelta(days=gc.RECENT_DAYS - 1)
+    store = {"v": gc.STORE_V}
+    for a, b in gc._blocks(hs, recent - timedelta(days=1)):       # the older version: blocks, merged as they came
+        gc.merge(store, gc.read_block(_hga(today=TODAY), a, b), a, b)
+    store.update(backfill={"from": hs.isoformat(), "next": recent.isoformat(), "done": True},
+                 recent_at=gc.gu._now_iso(NOW), read_today=TODAY.isoformat())
+    want = {}
+    for a, b in gc._blocks(hs, recent - timedelta(days=1)):
+        gc.merge(want, gc.read_block(_cga(today=TODAY), a, b), a, b)
+    old = {X: v for X, v in want["x"].items() if X <= "2026-08-09"}            # every cell from those days
+    assert {X: v for X, v in store["x"].items() if X <= "2026-08-09"} != old
+    try:                                                           # the first run: June whole (nothing hidden: its
+        gc.step_app(_hga(today=TODAY, stop_after=3), store, TODAY, hs, NOW + timedelta(hours=1))   # list's oldest days
+        raise AssertionError("no stop")                            # are before the app), July's block dropped, cut
+    except gc.Stop:                                                # in its first day alone
+        pass
+    assert store["chk"] == {"v": gc.CHK_V, "next": "2026-07-01", "end": "2026-09-08", "al": "2026-07-30"}
+    ga, info = _hga(today=TODAY), {}
+    gc.step_app(ga, store, TODAY, hs, NOW + timedelta(hours=2), info)
+    assert ga.asked[0][0]["dateRanges"][0] == {"startDate": "2026-07-01", "endDate": "2026-07-01"}
+    assert gc.CHK_CALLS <= ga.calls <= gc.CHK_CALLS + 4 and info["checked"] == ga.calls // 4
+    for i in range(40):
+        if store["chk"].get("done"):
+            break
+        ga = _hga(today=TODAY)
+        gc.step_app(ga, store, TODAY, hs, NOW + timedelta(hours=2, minutes=i + 1), info)     # the refresh not due
+        assert ga.calls <= gc.CHK_CALLS + 4
+    assert store["chk"] == {"v": gc.CHK_V, "done": True} and info["checked"] == (recent - date(2026, 7, 1)).days
+    assert {X: v for X, v in store["x"].items() if X <= "2026-08-09"} == old
+    assert "lo" not in store and "lf" not in store
+    ga = _hga(today=TODAY)                                          # done: never again
+    assert gc.step_app(ga, store, TODAY, hs, NOW + timedelta(hours=3)) == "fresh" and ga.calls == 0

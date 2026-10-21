@@ -13,25 +13,43 @@ A block holds at most BLOCK × (BLOCK + 30) rows — one page. Like the iday Q-C
 rather than avoiding it; the build ties every activity day back to the iday Q-B read (roi_build) and marks a day that
 does not tie.
 "(other)" (owner, 21 Oct 2026: "revenue cross check kro country wise"): a block answer with rows whose install day (or
-activity day) is not a date — GA4's "(other)" — or a cut / sampled answer is dropped (counted: "blocks with (other)")
-and each of its days is read alone (read_day: install days D − 30 … D, the cube's recursive split — fetch.ga4_cube
-split_read — by install-day halves, no country here; at most DAY_CAP calls a day), each merged as it is read (a Stop
-keeps the days read: the backfill's cursor, or the refresh's "rn", goes on from the next day — no block call first).
-What is still "(other)" after the split is that day's measured loss ("lo"); a day whose answer GA4 flagged with
-nothing to measure it by (dataLossFromOtherRow with no "(other)" row, thresholding, sampling) is in "lf"; a day read
-again replaces both. roi_build marks a row using such a day ≈ (q bit 1, like a day that does not tie).
+activity day) is not a date — GA4's "(other)" —, flagged dataLossFromOtherRow (the in-list drops the "(other)" row:
+the flag alone says revenue is gone), or a cut / sampled answer is dropped (counted: "blocks with (other)") and each of
+its days is read alone (read_day: install days D − 30 … D, the cube's recursive split — fetch.ga4_cube split_read — by
+install-day halves, no country here, a part flagged with no row split like one with it; at most DAY_CAP calls a day),
+each merged as it is read (a Stop keeps the days read: the backfill's cursor, the refresh's "rn" or the history
+check's "next" goes on from the next day — no block call first). A day still flagged with no "(other)" row after the
+split → one call with every install day (date × firstSessionDate, no in-list: the row shows, ≈ one row an install day
+— the iday Q-B shape): when that answer is whole (no "(other)", not cut or sampled) its rows of D − 30 … D are the
+day's cells (nothing lost; "days with hidden (other)" in the log); else nothing measures the gap: the day in "lf".
+What is still "(other)" (a row) after the split is that day's measured loss ("lo"); a day GA4 flagged with nothing to
+measure it by (thresholding — no smaller read avoids it: the block kept —, sampling, the flag above unmeasured) is in
+"lf"; a day read again replaces both. roi_build marks a row using such a day ≈ (q bit 1, like a day that does not tie).
 
 Per app and run (at most MAX_CALLS calls; the property's quota floors, the run's budget):
   * a one-time backfill from the GA4 history start, BLOCK activity days a call, resumable (backfill.next);
-  * every REFRESH_HOURS the last RECENT_DAYS activity days again (today included: not final, the page marks it).
+  * every REFRESH_HOURS the last RECENT_DAYS activity days again (today included: not final, the page marks it) — from
+    the first day not yet read alone when final ("fa": such a day's answer never changes; on a heavy app the refresh is
+    its newest ≈ 4 days, not 35); a refresh whose block was dropped reads its days alone straight away for RH_DAYS
+    ("rh"), then tries the block again (whole: blocks again);
+  * once per CHK_V, the history an older version read (blocks only: what an in-list hid is missing, nothing said so)
+    read again (_recheck: "chk" {"v", "next", "end", "al"} → {"v", "done"}; a store with nothing read yet: done at
+    once) — a block (whole: merged, the same final cells), else its days alone; at most CHK_CALLS calls started a run,
+    after the backfill and the refresh.
+Cost: a light app as before (a block a refresh); a heavy one ≈ 1 call a day alone (+ 2 for a split, + 1 for a hidden
+"(other)"): its first refresh after this version ≤ 35 days alone (≤ MAX_CALLS a run, resumed), then ≈ 4 days a
+refresh; the history check ≈ app age / 30 blocks + the days of the blocks with "(other)" — ≤ 20 calls a run (≈ 700
+day reads on a 2-year heavy app: about 35 runs, once).
 Stored for good in the private repo, two files so the hourly commits stay small:
     data/ga4_cohort/<key>.json.gz      the hot part: install days from the month of (today − HOT_DAYS) on
     data/ga4_cohort/<key>.old.json.gz  the older install days (rewritten only when the split moves a month, or by the
                                        backfill)
     {"v", "app_id", "package", "property_id", "stream_id", "time_zone", "hs", "read_today", "recent_at",
      "backfill": {"from", "next", "done"}, "cut", "x": {X: {"r": [31 USD micros], "u": [31 users]}},
-     "lo": {D: micros still "(other)"}, "lf": {D: 1 flagged}, "rn": the next day of a refresh read day by day}
-     ("lo", "lf", "rn" only when there is something in them)
+     "lo": {D: micros still "(other)"}, "lf": {D: 1 flagged}, "rn": the next day of a refresh read day by day,
+     "fa": {D: 1 final day of the refresh window read alone}, "rh": the day a refresh's block was dropped,
+     "chk": the history check}
+     ("lo", "lf", "rn", "fa", "rh" only when there is something in them)
 Switched by GA4_COHORT (on by default in the workflow). Never raises; never prints (log_line: counts only).
 """
 import json
@@ -57,6 +75,9 @@ FINAL_LAG = 3                       # an activity day is final once ≤ the prop
 HOT_DAYS = 45                       # the hot file: install days from the month of (today − 45) on
 MAX_CALLS = 60                      # per app per run (the backfill goes on next run)
 DAY_CAP = 16                        # GA4 calls a day read alone may take (the split by install-day halves)
+CHK_V = 1                           # the check of the history an older version read (store "chk")
+CHK_CALLS = 20                      # calls a run may start that check with (after the backfill and the refresh)
+RH_DAYS = 7                         # a refresh whose block was dropped goes day by day this many days, then tries again
 BUDGET_SEC = 150
 RETRY_HOURS = 3.0
 METS = ("activeUsers", "totalAdRevenue")
@@ -117,14 +138,29 @@ def read_block(ga, a, b, info=None):
 
 def read_day(ga, D, info=None):
     """Activity day D alone, install days D − 30 … D, through the cube's split (install-day halves) → its cells; info:
-    "loss" (micros still "(other)"), "fl" (1: GA4 flagged a part with nothing to measure it by), "calls". Raises Stop
-    (nothing of the day kept)."""
+    "loss" (micros still "(other)": shown, or hidden by the in-list and measured), "fl" (1: GA4 flagged a part with
+    nothing to measure it by), "calls", "hid" (1: the in-list hid "(other)"). The in-list hides GA4's "(other)" row:
+    a part flagged dataLossFromOtherRow is split again like one that shows it, and one still hidden at the end is
+    measured by the day's every install day (dimensions date × firstSessionDate, no in-list: the row shows, about one
+    row an install day) — when that answer is whole (no "(other)", not cut or sampled) its rows of D − 30 … D ARE the
+    day's cells (nothing lost); else the gap is the day's loss. Raises Stop (nothing of the day kept)."""
     xs = [(D - timedelta(days=i)).isoformat() for i in range(LAGS)]
-    rows, si = gcu.split_read(ga, D, DAY_CAP, xs=xs, dims=("date", "firstSessionDate"),
-                              root_why=gcu.F_SMP | gcu.F_CUT)
+    keep, whole = {_ymd(_d(x)) for x in xs}, {}
+
+    def total(ga, D):
+        rows = ga.report_all(body(D, D), page_rows=gu.UNI_PAGE_ROWS)
+        if gcu._flags(ga, rows) & (gcu.F_SMP | gcu.F_CUT) or gcu._other(rows):
+            return None
+        whole["rows"] = [r for r in rows if str(r.get("firstSessionDate") or "") in keep]
+        return gcu._micros(whole["rows"])
+    rows, si = gcu.split_read(ga, D, DAY_CAP, xs=xs, dims=("date", "firstSessionDate"), root_why=gcu.RETRY,
+                              total=total)
+    hid = si["hid"]
+    if hid and whole.get("rows") is not None:
+        rows, hid = whole["rows"], 0                        # the whole day's answer: every cell, nothing lost
     out, _, om = _cells(rows)
     if info is not None:
-        info.update(loss=om, fl=1 if si["flag"] else 0, calls=si["calls"])
+        info.update(loss=om + hid, fl=1 if si["flag"] else 0, calls=si["calls"], hid=1 if si["hid"] else 0)
     return out
 
 
@@ -149,15 +185,17 @@ def _days(a, b):
         a += timedelta(days=1)
 
 
-def _read(ga, store, a, b, info, alone=False):
-    """Activity days a … b into the store → yields the last day merged (a generator: a Stop keeps every day merged).
-    One block call; an answer with "(other)" rows, cut or sampled → each day alone (alone: straight away)."""
+def _read(ga, store, a, b, info, alone=False, skip=(), fin=None, mark=None):
+    """Activity days a … b into the store → yields each day merged (a generator: a Stop keeps every day merged; a
+    block: its last day). One block call; an answer with "(other)" rows, flagged dataLossFromOtherRow (the in-list
+    hides the row), cut or sampled → each day alone (alone: straight away). skip: days not read alone (final days read
+    alone already); fin: a day ≤ it read alone goes in "fa"; mark(b): called when a block's answer is dropped."""
     if not alone:
         bi = {}
         got = read_block(ga, a, b, bi)
-        if not (bi["oth"] or bi["fl"] & (gcu.F_CUT | gcu.F_SMP)):
+        if not (bi["oth"] or bi["fl"] & gcu.RETRY):
             merge(store, got, a, b)
-            fl = bool(bi["fl"] & (gcu.F_OTHER | gcu.F_THR))        # a flag on the block: every day of it
+            fl = bool(bi["fl"] & gcu.F_THR)                     # thresholding: no smaller read avoids it
             for D in _days(a, b):
                 _note(store, D, 0, fl)
             info["flagged"] += fl * ((b - a).days + 1)
@@ -165,14 +203,21 @@ def _read(ga, store, a, b, info, alone=False):
             return
         info["oth_blocks"] += 1
         del got
+        if mark is not None:
+            mark(b)
     for D in _days(a, b):
+        if D.isoformat() in skip:
+            continue
         di = {}
         g = read_day(ga, D, di)
         merge(store, g, D, D)
         _note(store, D, di["loss"], di["fl"])
+        if fin is not None and D <= fin:
+            store.setdefault("fa", {})[D.isoformat()] = 1
         info["alone"] += 1
         info["loss_days"] += bool(di["loss"])
         info["flagged"] += di["fl"]
+        info["hidden"] += di["hid"]
         yield D
 
 
@@ -206,7 +251,74 @@ def _blocks(start, end, n=BLOCK):
     return out
 
 
-INFO = ("oth_blocks", "alone", "loss_days", "flagged")
+INFO = ("oth_blocks", "alone", "loss_days", "flagged", "hidden", "checked")
+
+
+def _chk(store, hs, recent):
+    """The check of the history an older version read (blocks whose in-list could hide "(other)" with nothing to say
+    so) → store "chk": {"v", "next", "end"} (read again from "next" through "end", "al": the last day of a block being
+    read day by day), {"v", "done"} once through — made once per CHK_V, before the backfill moves (a store with nothing
+    read yet: done at once)."""
+    c = store.get("chk")
+    if isinstance(c, dict) and c.get("v") == CHK_V:
+        return c
+    bf = store.get("backfill") or {}
+    if not bf.get("next") and not bf.get("done"):
+        c = {"v": CHK_V, "done": True}
+    else:
+        try:
+            a = max(hs, _d(bf.get("from") or hs.isoformat()))
+            e = (recent if bf.get("done") or not bf.get("next") else _d(bf["next"])) - timedelta(days=1)
+        except ValueError:
+            a, e = hs, recent - timedelta(days=1)
+        c = {"v": CHK_V, "next": a.isoformat(), "end": e.isoformat()}
+    store["chk"] = c
+    return c
+
+
+def _recheck(ga, store, recent, info):
+    """The history check (store "chk"): blocks again from its "next" (a block that comes back whole: merged — the same
+    final cells; else its days alone, split and measured), at most CHK_CALLS calls started a run → True when a day was
+    read."""
+    c = store.get("chk") or {}
+    if c.get("done"):
+        return False
+    c0, did = ga.calls, False
+
+    def mark(b):
+        c["al"] = b.isoformat()
+    try:
+        end = min(_d(c["end"]), recent - timedelta(days=1))
+        nxt = _d(c["next"])
+        while nxt <= end and ga.calls - c0 < CHK_CALLS:
+            al = _d(c["al"]) if c.get("al") else None
+            if al is not None and nxt <= al:
+                b, alone = min(al, end), True               # a block dropped earlier: on with its days alone
+            else:
+                c.pop("al", None)
+                b, alone = min(end, nxt + timedelta(days=BLOCK - 1)), False
+            for D in _read(ga, store, nxt, b, info, alone, mark=mark):
+                info["checked"] += (D - _d(c["next"])).days + 1
+                c["next"] = (D + timedelta(days=1)).isoformat()
+                did = True
+                if ga.calls - c0 >= CHK_CALLS:
+                    break
+            if _d(c["next"]) <= nxt:                        # nothing read (never expected): no loop
+                break
+            nxt = _d(c["next"])
+    except (KeyError, ValueError):
+        nxt, end = None, None
+    if nxt is None or nxt > end:
+        store["chk"] = {"v": CHK_V, "done": True}
+    return did
+
+
+def _rh(store, today):
+    """The refresh's block was dropped within RH_DAYS: its days go alone straight away."""
+    try:
+        return 0 <= (today - _d(store["rh"])).days < RH_DAYS
+    except (KeyError, TypeError, ValueError):
+        return False
 
 
 def step_app(ga, store, today, hs, now, info=None):
@@ -217,6 +329,8 @@ def step_app(ga, store, today, hs, now, info=None):
     for k in INFO:
         info.setdefault(k, 0)
     recent = today - timedelta(days=RECENT_DAYS - 1)
+    fin = today - timedelta(days=FINAL_LAG)
+    _chk(store, hs, recent)                                 # before the backfill moves: what an older version read
     bf = store.setdefault("backfill", {})
     if not bf.get("done"):
         nxt = _d(bf["next"]) if bf.get("next") else hs
@@ -228,19 +342,34 @@ def step_app(ga, store, today, hs, now, info=None):
         bf["done"] = True
     if gu._hours_since(store.get("recent_at"), now) >= REFRESH_HOURS:
         a, alone = max(hs, recent), False
+        fa = {k: 1 for k in (store.get("fa") or {}) if a.isoformat() <= k <= fin.isoformat()}
+        if fa:
+            store["fa"] = fa
+        else:
+            store.pop("fa", None)
         try:
             rn = _d(store["rn"]) if store.get("rn") else None
         except ValueError:
             rn = None
         if rn and a <= rn <= today:                         # a refresh read day by day that a Stop cut: on from there
             a, alone = rn, True
-        for D in _read(ga, store, a, today, info, alone):
+        else:
+            while a <= today and a.isoformat() in fa:       # final days read alone already: not again (the same final
+                a += timedelta(days=1)                      # answer) — on a heavy app the refresh is its newest days
+            alone = _rh(store, today)
+        ob = info["oth_blocks"]
+
+        def mark(b):
+            store["rh"] = today.isoformat()
+        for D in _read(ga, store, a, today, info, alone, skip=set(fa), fin=fin, mark=mark):
             store["rn"] = (D + timedelta(days=1)).isoformat()
             did = True
+        if not alone and info["oth_blocks"] == ob:
+            store.pop("rh", None)                           # the block came back whole: blocks again
         store.pop("rn", None)
         store["recent_at"], store["read_today"] = now_iso, today.isoformat()
         did = True
-    return "fetched" if did else "fresh"
+    return "fetched" if _recheck(ga, store, recent, info) or did else "fresh"
 
 
 # ── store and state ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -405,6 +534,7 @@ def log_line(status):
     """The build log's ONE line for this step — counts only."""
     c = (status or {}).get("counts") or {}
     return ("ga4 cohort: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, blocks with "
-            "(other) %d, days read alone %d, days with loss %d, flagged days %d, calls %d, tokens %d%s"
+            "(other) %d, days read alone %d, days with loss %d, flagged days %d, days with hidden (other) %d, "
+            "days checked again %d, calls %d, tokens %d%s"
             % tuple([gaud._int(c.get(k)) for k in COUNTS]
                                   + [(", error " + status["error"]) if (status or {}).get("error") else ""]))
