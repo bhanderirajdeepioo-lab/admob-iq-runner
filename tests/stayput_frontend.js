@@ -278,8 +278,9 @@ const rebuildJump = (shift) => () => { SCR.replaceChildren(...screenKids(shift =
   });
   // 📈 the same, from the page's REAL control rows (tests/ecpm_frontend.js "ctl" mode: each table card's head before / after a
   // tap — title, chips, ‹ label ›), laid out by a small flex-wrap model at 375 px and 1280 px: the title can wrap to another
-  // line, the row can wrap differently (Month adds ‹ ›, Month vs month drops the baseline chips), the twin Countries card
-  // moves with the one above it. The tapped control (found by its onclick, the n-th of its twins) must come back where it was.
+  // line, the row can wrap differently (Month adds ‹ ›, Month vs month drops the baseline chips for its two pickers
+  // "‹ current › vs ‹ compared ›", the second wrapping as one piece), the twin Countries card moves with the one above it.
+  // The tapped control (found by its onclick, the n-th of its twins) must come back where it was.
   if (ctlPath) {
     const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
     const dec = t => String(t).replace(/&(amp|lt|gt|quot|#39);/g, (m, k) => ENT[k]);
@@ -294,7 +295,9 @@ const rebuildJump = (shift) => () => { SCR.replaceChildren(...screenKids(shift =
         const e = el(tag, at); st[st.length - 1].append(e); if (tag !== 'BR' && tag !== 'IMG' && tag !== 'INPUT') st.push(e); }
       return root.children.slice(); }
     const cls = (x, c) => x.classList.contains(c), kids = x => x.children, setTop = (x, t) => { x.top = t; kids(x).forEach(k => setTop(k, t)); };
-    // the page's CSS, as numbers: ≤ 430 px chips 12px / 9px padding, ≤ 760 px 40px-high row items, ‹ › 40 / 36 px, label 11.2em
+    // the page's CSS, as numbers: ≤ 430 px chips 12px / 9px padding, ≤ 760 px 40px-high row items, ‹ › 40 / 36 px, label 11.2em.
+    // Each control row laid out is noted in ROWS: its lines, and whether an item that cannot shrink is wider than the card
+    let ROWS = [];
     function layoutHead(nodes, top, VW) {
       const phone = VW <= 760, IW = (phone ? VW - 24 : Math.min(VW - 300, 1200)) - 32, H = phone ? 40 : 36;
       const cw = VW <= 430 ? 6.6 : 6.9, pad = VW <= 430 ? 9 : (phone ? 11 : 12), bw = t => 2 * pad + String(t).length * cw + 1;
@@ -307,11 +310,14 @@ const rebuildJump = (shift) => () => { SCR.replaceChildren(...screenKids(shift =
           setTop(n, y + 14); if (h3) setTop(h3, y + 14);
           y += 14 + (tw + 12 + hw <= IW ? 22 : l3 * 22 + 4 + lh * 16) + 6; if (hint) setTop(hint, y - 22);
         } else if (cls(n, 'ec-cmp')) {   // flex-wrap: an item goes to the next line when it does not fit; a chip group shrinks (scrolls) to the line
-          let x = 0, line = 0; y += 2; setTop(n, y);
+          let x = 0, line = 0, over = false; y += 2; setTop(n, y);
+          const navW = 2 * (phone ? 40 : 36) + 11.2 * 12.5 + 10;
           for (const it of kids(n)) {
-            const w = cls(it, 'ec-mnav') ? 2 * (phone ? 40 : 36) + 11.2 * 12.5 + 10 : Math.min(IW, kids(it).reduce((s, b) => s + bw(b.textContent), 2));
+            const w = cls(it, 'ec-mnav') ? navW : (cls(it, 'ec-mvs') ? 2 * cw + 6 + navW : Math.min(IW, kids(it).reduce((s, b) => s + bw(b.textContent), 2)));
             if (x > 0 && x + 10 + w > IW) { line++; x = 0; }
+            if (w > IW) over = true;
             setTop(it, y + line * (H + 8)); x += (x ? 10 : 0) + w; }
+          ROWS.push({ lines: line + 1, over, pickers: kids(n).filter(it => cls(it, 'ec-mnav') || cls(it, 'ec-mvs')).length, IW });
           y += (line + 1) * H + line * 8 + 10;
         } else { setTop(n, y); y += 30; } }
       return y; }
@@ -329,8 +335,9 @@ const rebuildJump = (shift) => () => { SCR.replaceChildren(...screenKids(shift =
         W.scrollY = Math.max(0, b0.top - 420); const before = onScreen(b0), docBefore = b0.top;
         await tap(b0, () => { SCR.replaceChildren(...viewOf(t.after, VW)); W.scrollY = 0; });   // ecPaint: the whole view rebuilt; iOS → top
         const b1 = pick(SCR, t.code, i);
+        ROWS = []; viewOf(t.after, VW); const rows = ROWS; ROWS = [];   // the rows after the tap, as laid out
         return { before, after: b1 ? onScreen(b1) : null, moved: b1 ? b1.top - docBefore : null, twins, y: W.scrollY,
-          disabled: b1 ? b1.getAttribute('disabled') === '' : null }; });
+          disabled: b1 ? b1.getAttribute('disabled') === '' : null, rows }; });
     }
     W.innerWidth = 400;
   }

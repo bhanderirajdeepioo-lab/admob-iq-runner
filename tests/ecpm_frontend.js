@@ -8,13 +8,16 @@
 //     button steps, leaving the view, the 5-min auto-refresh with a new build (the view back as it was, no jump), sorting
 //     (default biggest loss first, low data last, every column toggles);
 //   * the chart's tap rule: a tap (under 10px) pins the tooltip, a swipe / a cancelled pointer never does, a mouse hovers.
-//   * 🔀 the tables' comparison picker (Yesterday vs 7 / 14 / 30 / 60 days / a month ‹ ›, Month vs month ‹ ›): every pick's
-//     rows, the month bounds, the labels, Ad units / Countries following it (or saying why not), the viewer's pick restored,
-//     a long SYNTHETIC history (fixture "long") for the month-to-month status.
+//   * 🔀 the tables' comparison picker (Yesterday vs 7 / 14 / 30 / 60 days / a month ‹ ›, Month vs month: ‹ current month ›
+//     vs ‹ compared month ›, each moved on its own): every pick's rows, the month bounds, the labels, Ad units / Countries
+//     following it (or saying why not), the viewer's pick restored (an old stored shape migrated), a long SYNTHETIC history
+//     (fixture "long") for the month-to-month status, Oct vs Sep / Aug / Jul on SYNTHETIC October histories ("octs", "ramp").
 // Prints ONE JSON report; tests/test_ecpm_frontend.py asserts on it (and recomputes the maths independently in Python).
-//   usage: node ecpm_frontend.js <script.js> <fixture.json> [snap]
+//   usage: node ecpm_frontend.js <script.js> <fixture.json> [snap|ysnap|ctl]
 //   snap: only the default view (All apps + one app, ₹ and $, every sort) with the comparison row taken out — run on the
 //   page before the picker and on this one, the two must be byte-identical.
+//   ysnap: every "Yesterday vs" pick and its taps (All apps + two apps, ₹ and $), comparison row included — run on the page
+//   before the two Month vs month pickers and on this one, the two must be byte-identical.
 'use strict';
 const fs = require('fs'), vm = require('vm');
 const [scriptPath, fxPath, mode] = process.argv.slice(2);
@@ -114,17 +117,44 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
       return { S, hasCtl: run(`typeof ecCmpCtl`) === 'function' }; });
     out.errors = errors; process.stdout.write(JSON.stringify(out)); return;
   }
+  if (mode === 'ysnap') {   // "Yesterday vs": every pick, then its taps, as HTML + rows (the stored pick itself is not compared)
+    const rowsOf = t => J(`(EC.rows.${t}||[]).map(r=>{ const o=Object.assign({},r); delete o.lbl; return o; })`);
+    const R0 = `localStorage.removeItem('ecpmcmp'); APP=''; EC.hdr=''; EC.booted=true; EC.cValid=null; EC.sort={k:'imp',d:'asc'}; EC.usort={k:'imp',d:'asc'}; EC.csort={k:'imp',d:'asc'}; EC.idle={a:false,u:false,c:false};`;
+    await step('ysnap', () => { const S = {};
+      const picks = [{ b: '7' }, { b: '14' }, { b: '30' }, { b: '60' }, { b: 'mon' }, { b: 'mon', bm: '2026-01' }, { b: 'mon', bm: '2025-12' }, { b: 'mon', bm: '2026-03' }];
+      const look = k => { run(`EC.app=''; ecPaint();`); S['all_' + k] = run(`EC.el.innerHTML`); S['rows_a_' + k] = rowsOf('a');
+        for (const app of ['Demo Gallery', 'New Timer']) { run(`EC.app=${JSON.stringify(app)}; ecPaint();`);
+          S[`app_${app}_${k}`] = run(`EC.el.innerHTML`); S[`rows_u_${app}_${k}`] = rowsOf('u'); S[`rows_c_${app}_${k}`] = rowsOf('c'); }
+        run(`EC.app='';`); };
+      for (const cur of ['USD', 'INR']) {
+        run(`CURVIEW=${cur === 'INR' ? "'INR'" : 'null'}; renderEcpm(); ` + R0);
+        for (const p of picks) { run(`EC.cmp=${JSON.stringify(Object.assign({ m: 'y', b: '7', bm: '', cm: '' }, p))};`); look(cur + JSON.stringify(p)); }
+        run(R0 + `EC.cmp=null; EC.app=''; ecPaint();`);
+        ["ecCmpB('mon')", 'ecCmpMon(-1)', 'ecCmpMon(-1)', 'ecCmpMon(-1)', 'ecCmpMon(1)', 'ecCmpMon(1)', 'ecCmpMon(1)', 'ecCmpMon(1)', "ecCmpB('30')", "ecCmpB('mon')", "ecCmpB('7')"]
+          .forEach((code, i) => { run(code); S[`tap_${cur}_${i}_${code}`] = run(`EC.el.innerHTML`); });
+        run(`EC.app='Demo Gallery'; ecPaint();`);
+        ["ecCmpB('14')", "ecCmpB('mon')", 'ecCmpMon(-1)', "ecCmpB('60')", "ecCmpB('7')"].forEach((code, i) => { run(code); S[`tapu_${cur}_${i}_${code}`] = run(`EC.el.innerHTML`); });
+        run(`EC.app='';`);
+      }
+      run(`CURVIEW=null;`); return { S }; });
+    out.errors = errors; process.stdout.write(JSON.stringify(out)); return;
+  }
   if (mode === 'ctl') {   // the REAL comparison rows, before / after each tap (for tests/stayput_frontend.js): each table card's head
     const heads = () => run(`EC.el.innerHTML`).split('<div class="card ec-tc">').slice(1).map(c => c.split('<div class="ec-note')[0]);
     const T = [], go = (name, code, card) => { const before = heads(); run(code); T.push({ name, code, card, before, after: heads() }); };
     await step('ctl', () => {
       run(`localStorage.removeItem('ecpmcmp'); EC.cmp=null; EC.cValid=null; APP=''; EC.hdr=''; EC.booted=true; renderEcpm(); EC.app=''; ecPaint();`);
       go('y7_to_month', `ecCmpB('mon')`, 0); go('month_prev', `ecCmpMon(-1)`, 0);           // Feb → Jan (kept for later)
-      go('y_to_m', `ecCmpM('m')`, 0); go('m_prev', `ecCmpMon(-1)`, 0); go('m_next', `ecCmpMon(1)`, 0);
+      go('y_to_m', `ecCmpM('m')`, 0);                                                      // Mar (1–10) vs Feb
+      go('vs_prev', `ecCmpVs(-1)`, 0); go('vs_prev_first', `ecCmpVs(-1)`, 0);               // vs Jan, vs Dec (20–31): ‹ greys out
+      go('vs_next', `ecCmpVs(1)`, 0);                                                      // vs Jan
+      go('cur_prev', `ecCmpCur(-1)`, 0); go('cur_prev_push', `ecCmpCur(-1)`, 0);            // Feb vs Jan, Jan vs Dec (pushed)
+      go('cur_next', `ecCmpCur(1)`, 0); go('cur_next_last', `ecCmpCur(1)`, 0);              // Feb vs Dec, Mar (1–10) vs Dec: › greys out
       go('m_to_y_stored_month', `ecCmpM('y')`, 0); go('month_next', `ecCmpMon(1)`, 0);       // back to Yesterday vs Jan 2026, then Feb
       go('month_to_14', `ecCmpB('14')`, 0); go('b14_to_7', `ecCmpB('7')`, 0);
       run(`EC.app='Demo Gallery'; ecPaint();`);                                   // one app: the Ad units + Countries twins
-      go('app_y_to_m_countries', `ecCmpM('m')`, 1); go('app_m_prev_countries', `ecCmpMon(-1)`, 1); go('app_m_to_y_units', `ecCmpM('y')`, 0);
+      go('app_y_to_m_countries', `ecCmpM('m')`, 1); go('app_vs_next_countries', `ecCmpVs(1)`, 1); go('app_cur_prev_countries', `ecCmpCur(-1)`, 1);
+      go('app_cur_next_units', `ecCmpCur(1)`, 0); go('app_m_to_y_units', `ecCmpM('y')`, 0);
       go('app_7_to_month_countries', `ecCmpB('mon')`, 1);
       return T; });
     out.errors = errors; process.stdout.write(JSON.stringify(out)); return;
@@ -287,11 +317,13 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
   // every pick's rows (all apps + one app's ad units), the days on each side, the labels
   await step('cmp_math', () => J(`(()=>{ const W=ecWin(), A=ecAgg().apps, out={};
     const sels={b7:{m:'y',b:'7'},b14:{m:'y',b:'14'},b30:{m:'y',b:'30'},b60:{m:'y',b:'60'},mon:{m:'y',b:'mon'},monJan:{m:'y',b:'mon',bm:'2026-01'},
-      monDec:{m:'y',b:'mon',bm:'2025-12'},monMar:{m:'y',b:'mon',bm:'2026-03'},mm:{m:'m'},mmFeb:{m:'m',cm:'2026-02'},mmJan:{m:'m',cm:'2026-01'}};
+      monDec:{m:'y',b:'mon',bm:'2025-12'},monMar:{m:'y',b:'mon',bm:'2026-03'},mm:{m:'m'},mmFeb:{m:'m',cm:'2026-02'},mmJan:{m:'m',cm:'2026-01'},
+      mmVsJan:{m:'m',vm:'2026-01'},mmVsDec:{m:'m',vm:'2025-12'},mmFebDec:{m:'m',cm:'2026-02',vm:'2025-12'}};
     for(const k in sels){ const C=ecCmpC(W,sels[k]), rows={}; Object.keys(A).forEach(n=>{ const r=ecRow(A[n],W,C); delete r.spark; rows[n]=r; });
-      out[k]={def:!!C.def,m:C.m,cur:C.cur,base:C.base,ncur:C.ncur,curL:C.curL,baseL:C.baseL,title:C.title,colCur:C.colCur,colBase:C.colBase,colImp:C.colImp,
+      out[k]={def:!!C.def,m:C.m,g:C.g,cur:C.cur,base:C.base,ncur:C.ncur,curL:C.curL,baseL:C.baseL,title:C.title,colCur:C.colCur,colBase:C.colBase,colImp:C.colImp,
         S:C.S,swm:(C.swm||[]).map(o=>o.k),rows,units:ecUnits('Demo Gallery').map(u=>{ const r=ecRow(u.dm,W,C); return {id:u.id,y:r.y,w7:r.w7,chg:r.chg,imp:r.imp,yi:r.yi,st:r.st}; })}; }
-    const M=ecMon(W); out.bounds={bMin:M.bMin,bMax:M.bMax,bDef:M.bDef,bOk:M.bOk,cMin:M.cMin,cMax:M.cMax,cOk:M.cOk,ks:M.ks};
+    const M=ecMon(W); out.bounds={bMin:M.bMin,bMax:M.bMax,bDef:M.bDef,bOk:M.bOk,cMin:M.cMin,cMax:M.cMax,cOk:M.cOk,vMin:M.vMin,ks:M.ks};
+    out.gap=[ecMGap('2026-09','2026-10'),ecMGap('2026-07','2026-10'),ecMGap('2025-11','2026-02'),ecMGap('2025-12','2025-12')];
     out.madd=[ecMAdd('2026-01',-1),ecMAdd('2025-12',1),ecMAdd('2026-03',-14),ecMAdd('2026-11',2)];
     out.perL=[ecPerL('2026-02',M.by['2026-02']),ecPerL('2025-12',M.by['2025-12']),ecPerL('2026-03',M.by['2026-03']),ecPerL('2026-03',['2026-03-01'])];
     return out; })()`));
@@ -308,8 +340,15 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
     R.jan = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`); R.dec = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`); R.decStay = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`);
     tap(`ecCmpMon(1)`, `ecCmpMon(1)Next month`); R.feb2 = tap(`ecCmpMon(1)`, `ecCmpMon(1)Next month`);
     R.mar = tap(`ecCmpMon(1)`, `ecCmpMon(1)Next month`); R.marStay = tap(`ecCmpMon(1)`, `ecCmpMon(1)Next month`);
-    R.m = tap(`ecCmpM('m')`, `ecCmpM('m')`); R.mStay = tap(`ecCmpMon(1)`, `ecCmpMon(1)Next month`);
-    R.mFeb = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`); R.mJan = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`); R.mJanStay = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`);
+    // Month vs month: two pickers — ‹ current month › vs ‹ compared month ›, each moved on its own
+    const CP = 'ecCmpCur(-1)Current month: previous', CN = 'ecCmpCur(1)Current month: next', VP = 'ecCmpVs(-1)Compared month: previous', VN = 'ecCmpVs(1)Compared month: next';
+    R.m = tap(`ecCmpM('m')`, `ecCmpM('m')`); R.mCurStay = tap(`ecCmpCur(1)`, CN); R.mVsStay = tap(`ecCmpVs(1)`, VN);   // both at their newest: stay
+    R.vJan = tap(`ecCmpVs(-1)`, VP); R.vDec = tap(`ecCmpVs(-1)`, VP); R.vDecStay = tap(`ecCmpVs(-1)`, VP);            // the compared month alone
+    R.vJan2 = tap(`ecCmpVs(1)`, VN);
+    R.cFeb = tap(`ecCmpCur(-1)`, CP); R.cJan = tap(`ecCmpCur(-1)`, CP); R.cJanStay = tap(`ecCmpCur(-1)`, CP);        // Jan reaches Jan: pushed to Dec
+    R.cFeb2 = tap(`ecCmpCur(1)`, CN); R.cMar = tap(`ecCmpCur(1)`, CN);                                               // the compared month stays (Dec)
+    tap(`ecCmpVs(1)`, VN); R.vFeb = tap(`ecCmpVs(1)`, VN);                                                           // Dec → Jan → Feb: the default pair again
+    run(`ecCmpMon(-1)`); R.monInM = st(); run(`ecCmpVs(1)`);                                                         // the Yesterday-vs ‹ (never shown here) = the compared month's
     R.backY = tap(`ecCmpM('y')`, `ecCmpM('y')`);   // back to Yesterday: its month (Mar, navigated) is still picked
     R.b7 = tap(`ecCmpB('7')`, `ecCmpB('7')`);
     R.b7html = run(`EC.el.innerHTML`);
@@ -331,6 +370,11 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
       c: J(`EC.rows.c.map(r=>({key:r.key,y:r.y,w7:r.w7,imp:r.imp,yi:r.yi,st:r.st}))`), nav: run(`EC.el.innerHTML.split('<div class="ec-hd">')[0]`),
       order: J(`ecSortRows(Object.keys(ecAgg().apps).map(n=>Object.assign(ecRow(ecAgg().apps[n],EC.W,EC.C),{key:n,label:ecAppLbl(n).label})).filter(r=>r.act||r.key==='Demo Gallery'),EC.sort).map(r=>r.key)`) };
     run(`ecAllApps()`); await settle(); R.back = { app: run('EC.app'), title: run(`EC.C.title`) };
+    // the app view under a compared month 2 back (Mar vs Jan): Ad units + Countries follow both picks
+    run(`EC.cmp={m:'m',vm:'2026-01'}; EC.app='Demo Gallery'; ecPaint();`);
+    { const c2 = cards(), rw = t => J(`EC.rows.${t}.map(r=>({key:r.key,y:r.y,w7:r.w7,chg:r.chg,pct:r.pct,imp:r.imp,yi:r.yi,swing:r.swing,st:r.st}))`);
+      R.appVs = { units: c2[0], countries: c2[1] || '', ct: J(`({u:EC.Ct.u.title,c:EC.Ct.c.title})`), u: rw('u'), c: rw('c') }; }
+    run(`EC.app=''; ecPaint();`);
     // an app younger than the baseline: its card says from when it has data (its rows are its own days, never padded)
     run(`EC.cmp={m:'y',b:'14',bm:'',cm:''}; EC.app='New Timer'; ecPaint();`); R.young = cards()[0].split('<div id="ec-tb-u">')[0];
     run(`EC.cmp={m:'y',b:'7',bm:'',cm:''}; ecPaint();`); R.youngDef = cards()[0].split('<div id="ec-tb-u">')[0];
@@ -354,15 +398,29 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
   await step('cmp_restore', () => { const R = {};
     const paint = ls => { if (ls === undefined) run(`localStorage.removeItem('ecpmcmp')`); else run(`localStorage.setItem('ecpmcmp', ${JSON.stringify(ls)})`);
       run(`EC.cmp=null; EC.app=''; ecPaint();`); return J(`({cmp:EC.cmp,title:EC.C.title,ls:localStorage.getItem('ecpmcmp')})`); };
-    R.mFeb = paint(JSON.stringify({ m: 'm', b: '7', bm: '', cm: '2026-02' }));
+    // the shape stored before the two Month vs month pickers (no v; its cm moved BOTH months): the Yesterday-vs pick kept,
+    // the month pair → this month vs the month before; saved back in the new shape
+    R.oldMm = paint(JSON.stringify({ m: 'm', b: '7', bm: '', cm: '2026-02' }));
+    R.oldMmMon = paint(JSON.stringify({ m: 'm', b: 'mon', bm: '2026-01', cm: '' }));
     R.monJan = paint(JSON.stringify({ m: 'y', b: 'mon', bm: '2026-01', cm: '' }));
     R.b30 = paint(JSON.stringify({ m: 'y', b: '30', bm: '', cm: '' }));
-    R.before = paint(JSON.stringify({ m: 'y', b: 'mon', bm: '2024-05', cm: '' }));
-    R.after = paint(JSON.stringify({ m: 'm', b: '7', bm: '', cm: '2026-09' }));
+    // the new shape
+    R.mFeb = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '' }));
+    R.mFebDec = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '2025-12' }));
+    R.mVsJan = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '2026-01' }));
+    R.vmSame = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '2026-02' }));     // not older than the current
+    R.vmAfter = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '2026-03' }));
+    R.vmBefore = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: '2025-06' }));        // before the history
+    R.vmJunk = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '', vm: 202601 }));
+    R.vmDefault = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-02', vm: '2026-01' }));  // = the default: kept as ''
+    R.future = paint(JSON.stringify({ v: 3, m: 'm', b: '14', bm: '', cm: '2026-02', vm: '2025-12' }));   // an unknown shape: months reset
+    R.before = paint(JSON.stringify({ v: 2, m: 'y', b: 'mon', bm: '2024-05', cm: '', vm: '' }));
+    R.after = paint(JSON.stringify({ v: 2, m: 'm', b: '7', bm: '', cm: '2026-09', vm: '' }));
     R.junk = paint(JSON.stringify({ m: 'x', b: '99', bm: 5, cm: '2026-13' }));
+    R.arr = paint(JSON.stringify([1, 2]));
     R.bad = paint('not json'); R.none = paint(undefined);
     // a new build with less history: the stored 60 days / month no longer fit → the default, saved back
-    R.b60 = paint(JSON.stringify({ m: 'y', b: '60', bm: '2025-12', cm: '' }));
+    R.b60 = paint(JSON.stringify({ v: 2, m: 'y', b: '60', bm: '2025-12', cm: '', vm: '2025-12' }));
     run(`var __D1=DATA; DATA=JSON.parse(JSON.stringify(DATA)); DATA.placements.forEach(p=>{ p.daily=p.daily.filter(r=>r[0]>='2026-02-01'); }); window.__ax=null;`);
     run(`EC.cmp=null; ecPaint();`); R.shorter = J(`({cmp:EC.cmp,title:EC.C.title,ls:localStorage.getItem('ecpmcmp'),bounds:(()=>{ const M=ecMon(EC.W); return [M.bMin,M.bMax,M.cMin,M.cMax,M.cOk]; })(),ctl:ecCmpCtl(EC.W,EC.C)})`);
     run(`DATA=__D1; window.__ax=null;`);
@@ -423,6 +481,21 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
     run(CMP0 + `EC.cmp={m:'y',b:'14',bm:'',cm:''}; EC.app='New Timer'; ecPaint();`); R.young14 = look();
     run(`delete DATA.countries_daily['New Timer'];`);
     R.ranges = J(`[ecRanges(['2026-02-01','2026-02-02','2026-02-03']),ecRanges(['2026-02-28','2026-03-01','2026-03-05']),ecRanges(['2026-01-01','2026-01-03','2026-01-05','2026-01-07','2026-01-09','2026-01-11']),ecRanges([])]`);
+    unFx(); return R; });
+  // 🔀 Month vs month's two pickers on SYNTHETIC October histories (today 21 Oct 2026): the default "Oct 2026 (1–20) vs Sep
+  // 2026", then the compared month's ‹ alone → vs Aug → vs Jul (the current month stays October), tapped as on the page
+  await step('cmp_pickers', () => { const R = {};
+    for (const fx of ['octs', 'ramp']) { useFx(fx); const o = R[fx] = {};
+      run(CMP0 + `EC.cmp={m:'m'}; EC.app=''; ecPaint();`);
+      for (const k of ['sep', 'aug', 'jul']) {
+        if (k !== 'sep') run(`ecCmpVs(-1)`);
+        o[k] = Object.assign(J(`({title:EC.C.title,cm:EC.C.cm,pm:EC.C.pm,g:EC.C.g,dn:EC.C.dn,cur:EC.C.cur,base:EC.C.base,swm:EC.C.swm.map(x=>x.k),
+            colCur:EC.C.colCur,colBase:EC.C.colBase,colImp:EC.C.colImp,cmp:EC.cmp,ls:localStorage.getItem('ecpmcmp'),ctl:ecCmpCtl(EC.W,EC.C),note:ecStatusNote(EC.C),
+            rows:(()=>{ const A=ecAgg().apps, o={}; Object.keys(A).forEach(n=>{ const r=ecRow(A[n],EC.W,EC.C); delete r.spark; o[n]=r; }); return o; })()})`),
+          { card: cards()[0], order: J(`ecSortRows(EC.rows.a.filter(r=>r.act),EC.sort).map(r=>r.key)`) }); }
+      // to the oldest month and back to the default pair: the current month never moved
+      run(`for(let i=0;i<40;i++) ecCmpVs(-1);`); o.oldest = J(`({title:EC.C.title,pm:EC.C.pm,ctl:ecCmpCtl(EC.W,EC.C)})`);
+      run(`for(let i=0;i<40;i++) ecCmpVs(1);`); o.back = J(`({title:EC.C.title,cmp:EC.cmp})`); }
     unFx(); return R; });
 
   out.errors = errors;

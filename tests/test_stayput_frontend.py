@@ -18,7 +18,8 @@ hand) and checks:
     scrollIntoView are wrapped;
   * 📈 the eCPM tables' REAL comparison rows (the page script's own ecCmpCtl output, tap by tap, from tests/ecpm_frontend.js
     "ctl" on its synthetic dashboard), laid out by a flex-wrap model at 375 px and 1280 px: the tapped chip / ‹ › comes back
-    where it was, also when the title or the row wraps differently and in the twin Countries card.
+    where it was, also when the title or the row wraps differently and in the twin Countries card; Month vs month's two
+    pickers (‹ current › vs ‹ compared ›, each tapped on its own) wrap inside the card at 375 px, one line at 1280 px.
 Plus the wiring in the page: rerender() / show() / the Audience levers (see also test_refresh_frontend.py and
 test_audience_frontend.py for those run for real). Skipped where node is not installed. No real data."""
 
@@ -97,14 +98,17 @@ def test_the_ecpm_comparison_row_stays_put(report):
     assert r["y"] == 1500 + 19
 
 
-REAL_TAPS = ["y7_to_month", "month_prev", "y_to_m", "m_prev", "m_next", "m_to_y_stored_month", "month_next", "month_to_14", "b14_to_7",
-             "app_y_to_m_countries", "app_m_prev_countries", "app_m_to_y_units", "app_7_to_month_countries"]
+REAL_TAPS = ["y7_to_month", "month_prev", "y_to_m", "vs_prev", "vs_prev_first", "vs_next", "cur_prev", "cur_prev_push", "cur_next",
+             "cur_next_last", "m_to_y_stored_month", "month_next", "month_to_14", "b14_to_7",
+             "app_y_to_m_countries", "app_vs_next_countries", "app_cur_prev_countries", "app_cur_next_units", "app_m_to_y_units",
+             "app_7_to_month_countries"]
 
 
 @needs_node
 def test_the_real_ecpm_comparison_row_stays_put_at_375_and_1280(report):
     # the page's own control rows (not hand-made markup): Yesterday 7 days → Month, Month ‹, Yesterday → Month vs month, its
-    # ‹ ›, back to Yesterday with the stored month, 14 / 7 days, and in one app's view the Countries card's twin controls
+    # two pickers' ‹ › (the compared month alone, the current month alone and pushing the compared one), back to Yesterday
+    # with the stored month, 14 / 7 days, and in one app's view the Countries card's twin controls
     moved = {}
     for vw in (375, 1280):
         for name in REAL_TAPS:
@@ -114,7 +118,20 @@ def test_the_real_ecpm_comparison_row_stays_put_at_375_and_1280(report):
             moved[(vw, name)] = r["moved"]
     # the model is not trivial: at 375 px the tapped control's place on the PAGE changes (title / row wrap) and is still kept
     assert sum(1 for (vw, _), m in moved.items() if vw == 375 and m) >= 3, moved
-    assert report["ecpm_real_375_m_next"]["disabled"] is True                   # › at the newest month: greyed, still in place
+    # Month vs month's two pickers fit the card: "‹ current ›" and "vs ‹ compared ›" wrap onto their own lines at 375 px,
+    # one line at 1280 px; no row item that cannot shrink is wider than the card at either width
+    for vw in (375, 1280):
+        for name in REAL_TAPS:
+            rows = report[f"ecpm_real_{vw}_{name}"]["rows"]
+            assert rows and not any(r["over"] for r in rows), (vw, name, rows)
+            for r in rows:
+                if r["pickers"] == 2:
+                    assert r["lines"] == (3 if vw == 375 else 1), (vw, name, r)
+    assert sum(r["pickers"] == 2 for r in report["ecpm_real_375_vs_prev"]["rows"]) == 1
+    assert sum(r["pickers"] == 2 for r in report["ecpm_real_375_app_y_to_m_countries"]["rows"]) == 2   # both twin cards
+    for vw in (375, 1280):                                                      # an arrow at its limit: greyed, still in place
+        assert report[f"ecpm_real_{vw}_cur_next_last"]["disabled"] is True and report[f"ecpm_real_{vw}_vs_prev_first"]["disabled"] is True
+        assert report[f"ecpm_real_{vw}_cur_prev"]["disabled"] is False
 
 
 @needs_node

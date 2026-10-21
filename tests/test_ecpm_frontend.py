@@ -25,7 +25,12 @@ straight from the fixture's raw daily rows (never reusing the page's arithmetic)
     inside a labelled period prints its own days; the 1st of a month (the month of yesterday is whole, never "adhura");
     a short history keeps its picked chip lit; a partial month's status measured like the comparison (its first N days vs
     the whole month before, on earlier months) and Too early under 7 complete days — checked on noise only; the Countries
-    card checked day by day (a failed chunk = a hole, its days named).
+    card checked day by day (a failed chunk = a hole, its days named);
+  * Month vs month's two pickers (owner, 21 Oct: "month vs month me sept vs aug nahi — oct vs sept, oct vs aug, ese oct vs
+    month wise"): the current month stays (Oct 2026 (1–20)) and the compared month moves on its own — Oct vs Sep / Aug / Jul
+    recounted here; the current month's ‹ › pushing a compared month it reaches; the limits; the status of two months that
+    are not adjacent judged on the row's own swing over the SAME gap (Too early when that has under 7 pairs); the stored
+    pick's old shape migrated; "Yesterday vs" byte-identical to the page before the two pickers (git: PREV_REV).
 Skipped where node is not installed."""
 
 import json
@@ -236,6 +241,34 @@ def _noise_fixture():
     return _with(NOISE_END.isoformat(), units)
 
 
+OCT_TODAY = "2026-10-21"
+OCT_START = date(2024, 10, 1)
+
+
+def _octs_fixture():
+    """two years to 20 Oct 2026, eCPM flat inside a month: month-to-month alternating apps (every other month alike), a
+    steady one, a young one, a thin October."""
+    days = _days(OCT_START, date.fromisoformat(OCT_TODAY))
+
+    def alt(base, amp, oct_of):
+        m = lambda d: base * (1 + amp if _midx(d) % 2 else 1 - amp)
+        return lambda d, k: oct_of(m) if d[:7] == "2026-10" else m(d)
+
+    return _with(OCT_TODAY, [
+        # ±3% month to month; October = September × 0.8
+        ("Steady Cam", "cam_banner", _rows(days, 50000, alt(2.0, 0.03, lambda m: m("2026-09-01") * 0.8))),
+        # ±10% month to month (every other month alike); October = August × 0.9: −10% vs Aug — a real drop against how much a
+        # month differs from the one 2 before it (nothing), lost in the ±20% month-to-month swing
+        ("Two Step", "step_inter", _rows(days, 40000, alt(3.0, 0.10, lambda m: m("2026-08-01") * 0.9))),
+        # flat; October −1%
+        ("Calm Notes", "notes_native", _rows(days, 30000, alt(3.0, 0.0, lambda m: 2.97))),
+        # from 1 Jun 2026 only: 4 whole months of its own → Too early
+        ("Late Start", "late_banner", _rows([d for d in days if d >= "2026-06-01"], 20000, lambda d, k: 4.0 if d[:7] == "2026-10" else 5.0)),
+        # October: 40 impressions a day (800 so far) → N/A
+        ("Quiet Clock", "clock_banner", _rows(days, lambda d, k: 40 if d[:7] == "2026-10" else 2000, alt(1.5, 0.03, lambda m: 1.4))),
+    ])
+
+
 # ── the independent maths (Python, straight from the raw rows) ──────────────────────────────────────────────────────────
 def _maps(dash, upto=None):
     """day → [earn, impr] per app (and the portfolio): today's partial day (and anything after `upto`) left out."""
@@ -314,7 +347,7 @@ def report(tmp_path_factory, dash):
         f.write(js)
     with open(fx, "w", encoding="utf-8") as f:
         json.dump({"dashboard": dash, "long": _long_fixture(), "ramp": _ramp_fixture(), "first": _first_fixture(),
-                   "short": _short_fixture(), "noise": _noise_fixture()}, f)
+                   "short": _short_fixture(), "noise": _noise_fixture(), "octs": _octs_fixture()}, f)
     subprocess.run([NODE, "--check", sp], check=True, capture_output=True)
     out = subprocess.run([NODE, os.path.join(ROOT, "tests", "ecpm_frontend.js"), sp, fx], check=True, capture_output=True,
                          text=True, timeout=180)
@@ -705,6 +738,16 @@ def _next_month(k):
     return f"{y + (m == 12)}-{(m % 12) + 1:02d}"
 
 
+def _add_months(k, n):
+    t = int(k[:4]) * 12 + int(k[5:7]) - 1 + n
+    return f"{t // 12}-{t % 12 + 1:02d}"
+
+
+def _gap(a, b):
+    """months from a to b ("2026-08" → "2026-10" = 2)"""
+    return (int(b[:4]) - int(a[:4])) * 12 + int(b[5:7]) - int(a[5:7])
+
+
 def _first(dm):
     return min((d for d, x in dm.items() if x[1] > 0 or x[0] > 0), default="")
 
@@ -714,17 +757,19 @@ def _dn(cur, pm):
     return 0 if not pm or _full(cur[0][:7], cur) else len(cur)
 
 
-def _mswing(dm, by, pm, dn=0):
-    """the usual month-to-month swing, measured like the comparison it judges: over the whole months up to pm (the last 13),
-    each one's first dn days (the whole month when dn = 0) vs the whole month before it; only months the row had from the
-    1st, both sides ≥ MIN_IMPR impressions and some earnings; the median |change|, None under 7 pairs."""
+def _mswing(dm, by, pm, dn=0, g=1):
+    """the usual month-to-month swing, measured like the comparison it judges: over the whole months up to pm (the last
+    12 + g), each one's first dn days (the whole month when dn = 0) vs the whole month g months before it (g = the pick's
+    gap: Oct vs Aug → 2); only months the row had from the 1st, both sides ≥ MIN_IMPR impressions and some earnings; the
+    median |change|, None under 7 pairs."""
     if dn and dn < MDAYS_MIN:                     # a newest month of 1–6 complete days is not judged (Too early)
         return None
     f = _first(dm)
-    ks = [k for k in sorted(by) if k <= pm and _full(k, by[k])][-13:]
+    ks = [k for k in sorted(by) if k <= pm and _full(k, by[k])][-(12 + g):]
     ch = []
-    for a, b in zip(ks, ks[1:]):
-        if not f or by[a][0] < f or _next_month(a) != b:
+    for b in ks:
+        a = _add_months(b, -g)
+        if a not in ks or not f or by[a][0] < f:
             continue
         sa, sb = _sum(dm, by[a]), _sum(dm, by[b][:dn] if dn else by[b])
         if sa["i"] >= MIN_IMPR and sa["e"] > 0 and sb["i"] >= MIN_IMPR and sb["e"] > 0:
@@ -733,8 +778,9 @@ def _mswing(dm, by, pm, dn=0):
 
 
 def _row_cmp(dm, comp, cur, base, pm=None, dn=0):
-    """one row for a pick: pm = the older month in Month mode (its swing is month-to-month over the first dn days), else the
-    day swing. A row that starts inside a period carries its own days (ob / oc), a baseline under MIN_IMPR = N/A."""
+    """one row for a pick: pm = the compared (older) month in Month mode (its swing is over the same gap as the pick, on the
+    first dn days), else the day swing. A row that starts inside a period carries its own days (ob / oc), a baseline under
+    MIN_IMPR = N/A."""
     f = _first(dm)
     own = (lambda days: [d for d in days if d >= f] if f and days and f > days[0] else None)
     ob, oc = own(base), (own(cur) if pm else None)
@@ -742,7 +788,7 @@ def _row_cmp(dm, comp, cur, base, pm=None, dn=0):
     chg = (y["ec"] - w["ec"]) if y["ec"] is not None and w["ec"] is not None else None
     pct = chg / w["ec"] if chg is not None and w["ec"] else None
     ncur = (len(oc) if oc is not None else len(cur)) if pm else 1
-    sw = _mswing(dm, _by_month(comp), pm, dn) if pm else _swing(dm, comp[-31:-1])
+    sw = _mswing(dm, _by_month(comp), pm, dn, _gap(pm, cur[0][:7])) if pm else _swing(dm, comp[-31:-1])
     act = (y["i"] > 0 or w["i"] > 0) if pm else _sum(dm, comp[-30:])["i"] > 0
     low_b = y["i"] >= MIN_IMPR and 0 < w["i"] < MIN_IMPR
     return {"y": y["ec"], "yi": y["i"], "w7": w["ec"], "chg": chg, "pct": pct,
@@ -773,6 +819,10 @@ PICKS = {
     "mm": (MAR, FEB, "2026-02", "Mar 2026 (1–10) vs Feb 2026", "Mar 2026 (1–10)<br>eCPM", "Feb 2026<br>eCPM"),
     "mmFeb": (FEB, JAN, "2026-01", "Feb 2026 vs Jan 2026", "Feb 2026<br>eCPM", "Jan 2026<br>eCPM"),
     "mmJan": (JAN, DEC, "2025-12", "Jan 2026 vs Dec 2025 (20–31)", "Jan 2026<br>eCPM", "Dec 2025 (20–31)<br>eCPM"),
+    # the compared month picked on its own (the current one stays)
+    "mmVsJan": (MAR, JAN, "2026-01", "Mar 2026 (1–10) vs Jan 2026", "Mar 2026 (1–10)<br>eCPM", "Jan 2026<br>eCPM"),
+    "mmVsDec": (MAR, DEC, "2025-12", "Mar 2026 (1–10) vs Dec 2025 (20–31)", "Mar 2026 (1–10)<br>eCPM", "Dec 2025 (20–31)<br>eCPM"),
+    "mmFebDec": (FEB, DEC, "2025-12", "Feb 2026 vs Dec 2025 (20–31)", "Feb 2026<br>eCPM", "Dec 2025 (20–31)<br>eCPM"),
 }
 
 
@@ -786,6 +836,7 @@ def test_cmp_every_pick_matches_an_independent_recount(report, dash):
         base = comp[int(base):] if isinstance(base, str) else base
         g = m[k]
         assert g["def"] is False and g["cur"] == cur and g["base"] == base and g["ncur"] == (len(cur) if pm else 1), k
+        assert g.get("g") == (_gap(pm, cur[0][:7]) if pm else None), k
         assert (g["title"], g["colCur"], g["colBase"]) == (title, cc, cb), k
         assert g["colImp"] == cc.replace("eCPM", "impr"), k
         for name, dm in apps.items():
@@ -808,13 +859,21 @@ def test_cmp_every_pick_matches_an_independent_recount(report, dash):
     # here only Jan + Feb are whole months → 1 pair < 7 → Too early (the long history below judges for real)
     assert m["mm"]["swm"] == ["2026-01", "2026-02"] and m["mmJan"]["swm"] == []
     assert {r["st"] for r in m["mm"]["rows"].values()} == {"jaldi", "lagu"}
+    assert (m["mmVsJan"]["g"], m["mmVsDec"]["g"], m["mmFebDec"]["g"]) == (2, 3, 2) and m["mmVsJan"]["swm"] == ["2026-01"]
+    # by hand: March (1–10) vs the whole of January — the same impressions every day, so a month's eCPM = the plain mean of
+    # its daily eCPMs; impact/day = 100k impressions a day × the change ÷ 1000
+    pq, dm = m["mmVsJan"]["rows"]["Puzzle Quest"], apps["Puzzle Quest"]
+    assert _close(pq["w7"], statistics.mean(dm[d][0] / (dm[d][1] * 1000) for d in JAN), 1e-12)
+    assert _close(pq["y"], statistics.mean(dm[d][0] / (dm[d][1] * 1000) for d in MAR), 1e-12)
+    assert pq["yi"] == 100000 * 10 and _close(pq["imp"], 100000 * pq["chg"] / 1000)
 
 
 @needs_node
 def test_cmp_month_bounds_and_labels(report):
     m = report["cmp_math"]
     assert m["bounds"] == {"bMin": "2025-12", "bMax": "2026-03", "bDef": "2026-02", "bOk": True, "cMin": "2026-01", "cMax": "2026-03",
-                           "cOk": True, "ks": ["2025-12", "2026-01", "2026-02", "2026-03"]}
+                           "cOk": True, "vMin": "2025-12", "ks": ["2025-12", "2026-01", "2026-02", "2026-03"]}
+    assert m["gap"] == [1, 3, 3, 0]
     assert m["madd"] == ["2025-12", "2026-01", "2025-01", "2027-01"]
     assert m["perL"] == ["Feb 2026", "Dec 2025 (20–31)", "Mar 2026 (1–10)", "Mar 2026 (1)"]
 
@@ -823,34 +882,64 @@ def test_cmp_month_bounds_and_labels(report):
 def test_cmp_taps_navigate_within_the_history_and_stay_put(report):
     n = report["cmp_nav"]
     # every tapped control is still there after the repaint (same signature, same count) — the stay-put layer finds it again
-    assert len(n["taps"]) == 17 and all(t["before"] == t["after"] == 1 for t in n["taps"]), n["taps"]
+    assert len(n["taps"]) == 26 and all(t["before"] == t["after"] == 1 for t in n["taps"]), n["taps"]
     titles = {k: n[k]["title"] for k in n if k not in ("taps", "b7html")}
+    M3, F, J, D = "Mar 2026 (1–10)", "Feb 2026", "Jan 2026", "Dec 2025 (20–31)"
     assert titles == {"def": "yesterday vs last 7 days", "b14": "yesterday vs last 14 days", "b60": "yesterday vs last 60 days",
                       "feb": "yesterday vs Feb 2026", "jan": "yesterday vs Jan 2026", "dec": "yesterday vs Dec 2025 (20–31)",
                       "decStay": "yesterday vs Dec 2025 (20–31)", "feb2": "yesterday vs Feb 2026", "mar": "yesterday vs Mar 2026 (1–10)",
-                      "marStay": "yesterday vs Mar 2026 (1–10)", "m": "Mar 2026 (1–10) vs Feb 2026", "mStay": "Mar 2026 (1–10) vs Feb 2026",
-                      "mFeb": "Feb 2026 vs Jan 2026", "mJan": "Jan 2026 vs Dec 2025 (20–31)", "mJanStay": "Jan 2026 vs Dec 2025 (20–31)",
+                      "marStay": "yesterday vs Mar 2026 (1–10)",
+                      # Month vs month: the compared month alone (‹ ›), then the current month alone, pushing it when it reaches it
+                      "m": f"{M3} vs {F}", "mCurStay": f"{M3} vs {F}", "mVsStay": f"{M3} vs {F}",
+                      "vJan": f"{M3} vs {J}", "vDec": f"{M3} vs {D}", "vDecStay": f"{M3} vs {D}", "vJan2": f"{M3} vs {J}",
+                      "cFeb": f"{F} vs {J}", "cJan": f"{J} vs {D}", "cJanStay": f"{J} vs {D}",
+                      "cFeb2": f"{F} vs {D}", "cMar": f"{M3} vs {D}", "vFeb": f"{M3} vs {F}", "monInM": f"{M3} vs {J}",
                       "backY": "yesterday vs Mar 2026 (1–10)", "b7": "yesterday vs last 7 days"}
     prev, nxt = 'aria-label="Previous month"', 'aria-label="Next month"'
     assert prev + " disabled>" in n["decStay"]["ctl"] and nxt + ">" in n["decStay"]["ctl"]          # the first month: ‹ off
     assert nxt + " disabled>" in n["marStay"]["ctl"] and prev + ">" in n["marStay"]["ctl"]          # the month of yesterday: › off
-    assert nxt + " disabled>" in n["m"]["ctl"] and prev + " disabled>" in n["mJanStay"]["ctl"]
-    assert prev + ">" in n["mFeb"]["ctl"] and nxt + ">" in n["mFeb"]["ctl"]
-    assert n["feb2"]["cmp"]["bm"] == "" and n["mar"]["cmp"]["bm"] == "2026-03"                    # the default month kept as '' (it moves on)
-    assert '<span class="ec-ml" aria-live="polite"><b>Mar 2026 (1–10)</b><span>vs Feb 2026</span></span>' in n["m"]["ctl"]
-    assert '<span class="ec-ml" aria-live="polite">Dec 2025 (20–31)</span>' in n["dec"]["ctl"]
-    assert "ecCmpB(" not in n["m"]["ctl"] and "ecCmpMon(" not in n["def"]["ctl"]                    # the arrows only with a month
+    # the two pickers' arrows: on / off at their limits (cp / cn = the current month's ‹ ›, vp / vn = the compared month's)
+    lab = {"cp": 'aria-label="Current month: previous"', "cn": 'aria-label="Current month: next"',
+           "vp": 'aria-label="Compared month: previous"', "vn": 'aria-label="Compared month: next"'}
+
+    def off(k):
+        c = n[k]["ctl"]
+        assert all(c.count(v) == 1 for v in lab.values()), k
+        return {a for a, v in lab.items() if v + " disabled>" in c}
+    assert off("m") == {"cn", "vn"}                       # this month (newest) vs the month just before it
+    assert off("vJan") == {"cn"} and off("vDecStay") == {"cn", "vp"}          # the first month of the history: the compared ‹ off
+    assert off("cFeb") == {"vn"} and off("cJanStay") == {"cp", "vp", "vn"}    # the second month: no older current month
+    assert off("cFeb2") == {"vp"} and off("cMar") == {"cn", "vp"}             # the compared month stayed on the first month
+    m = n["m"]["ctl"]
+    assert ('<div class="ec-mnav" role="group" aria-label="Current month"><button type="button" class="ec-ma" onclick="ecCmpCur(-1)" '
+            'aria-label="Current month: previous">‹</button><span class="ec-ml" aria-live="polite"><b>Mar 2026 (1–10)</b></span>'
+            '<button type="button" class="ec-ma" onclick="ecCmpCur(1)" aria-label="Current month: next" disabled>›</button></div>') in m
+    assert ('<div class="ec-mvs"><span class="ec-vs">vs</span><div class="ec-mnav" role="group" aria-label="Compared month">'
+            '<button type="button" class="ec-ma" onclick="ecCmpVs(-1)" aria-label="Compared month: previous">‹</button>'
+            '<span class="ec-ml" aria-live="polite">Feb 2026</span><button type="button" class="ec-ma" onclick="ecCmpVs(1)" '
+            'aria-label="Compared month: next" disabled>›</button></div></div></div>') in m
+    assert '<span class="ec-ml" aria-live="polite">Dec 2025 (20–31)</span>' in n["dec"]["ctl"] and "Dec 2025 (20–31)</span>" in n["vDec"]["ctl"]
+    assert "ecCmpB(" not in m and "ecCmpMon(" not in m and "ecCmpMon(" not in n["def"]["ctl"]        # the Yesterday-vs arrows only with a month
+    assert "ecCmpCur(" not in n["mar"]["ctl"] and "ecCmpVs(" not in n["mar"]["ctl"]                  # and the two pickers only in Month vs month
     # what the card says: the exact days compared, partial months by their days
     assert "last 14 days avg (kal samet 14 poore din: <b>25 Feb–10 Mar</b>)" in n["b14"]["card"]
     assert "kal (<b>10 Mar</b>) ka eCPM − <b>Feb 2026</b> ka avg eCPM (<b>1 Feb–28 Feb</b> ki kamai" in n["feb"]["card"]
     assert "adhura mahina: sirf poore din, kal samet" in n["mar"]["card"] and "data 20 Dec se hai, isliye sirf 12 din" in n["dec"]["card"]
-    j = n["mJan"]["card"]
+    j = n["cJan"]["card"]
     assert "<h3>All apps · Jan 2026 vs Dec 2025 (20–31)</h3>" in j and "<b>1 Jan–31 Jan</b> vs <b>20 Dec–31 Dec</b>" in j
-    assert "(impressions ÷ 31 din)" in j and "adhura mahina hai" not in j
+    assert "(impressions ÷ 31 din)" in j and "adhura mahina hai" not in j and "<b>Dec 2025 (20–31)</b> = data 20 Dec se hai, isliye sirf 12 din." in j
     assert "<b>Mar 2026 (1–10)</b> adhura mahina hai — sirf poore din (aaj ka adhura din nahi)." in n["m"]["card"]
-    # each tap is saved for this viewer
-    assert n["def"]["ls"] is None and json.loads(n["mJan"]["ls"]) == {"m": "m", "b": "mon", "bm": "2026-03", "cm": "2026-01"}
-    assert json.loads(n["b7"]["ls"])["b"] == "7"
+    v = n["vJan"]["card"]                                  # two months apart: the title, the days, impact per day of March
+    assert "<h3>All apps · Mar 2026 (1–10) vs Jan 2026</h3>" in v and "<b>1 Mar–10 Mar</b> vs <b>1 Jan–31 Jan</b>" in v
+    assert "<b>Mar 2026 (1–10)</b> ka eCPM − <b>Jan 2026</b> ka eCPM" in v and "(impressions ÷ 10 din)" in v
+    # each tap is saved for this viewer: the current month and the compared one on their own ('' = the default, moves on)
+    ls = lambda k: json.loads(n[k]["ls"])
+    assert n["def"]["ls"] is None
+    assert ls("vDec") == {"v": 2, "m": "m", "b": "mon", "bm": "2026-03", "cm": "", "vm": "2025-12"}
+    assert (ls("cFeb")["cm"], ls("cFeb")["vm"]) == ("2026-02", "") and (ls("cJan")["cm"], ls("cJan")["vm"]) == ("2026-01", "")
+    assert (ls("cFeb2")["cm"], ls("cFeb2")["vm"]) == ("2026-02", "2025-12") and (ls("cMar")["cm"], ls("cMar")["vm"]) == ("", "2025-12")
+    assert (ls("vFeb")["cm"], ls("vFeb")["vm"]) == ("", "")
+    assert ls("b7")["b"] == "7" and ls("b7")["m"] == "y"
     # back on 7 days: the card is the default one again, word for word
     assert ("<h3>All apps · yesterday vs last 7 days</h3>" in n["b7html"] and
             "<b>Change</b> = kal ka eCPM − last 7 days avg (kal samet 7 poore din). <b>$ impact/day</b> = kal ke impressions × "
@@ -899,6 +988,19 @@ def test_cmp_table_keeps_icons_row_tap_na_and_sorting(report):
     assert a["order"] == t["mm"]["order"] and 'title="Photo Frames">Next app ›' in a["nav"]
     assert a["units"].count('<div class="ec-cmp">') == 1 and a["countries"].count('<div class="ec-cmp">') == 1
     assert t["back"] == {"app": "", "title": "Mar 2026 (1–10) vs Feb 2026"}
+    v = t["appVs"]                                            # Mar vs Jan (2 months apart) in one app: both cards follow, recounted
+    assert v["ct"] == {"u": "Mar 2026 (1–10) vs Jan 2026", "c": "Mar 2026 (1–10) vs Jan 2026"} and "ec-cw" not in v["countries"]
+    assert "<h3>Ad units · Mar 2026 (1–10) vs Jan 2026</h3>" in v["units"] and "<h3>Countries · Mar 2026 (1–10) vs Jan 2026</h3>" in v["countries"]
+    assert "Jan 2026<br>eCPM" in v["units"] and "Yahan: <b>Mar 2026 (1–10)</b> (1 Mar–10 Mar) vs <b>Jan 2026</b> (1 Jan–31 Jan)" in v["units"]
+    comp = _comp(_fixture())
+    dms = {p["id"]: {r[0]: [r[1], r[2]] for r in p["daily"] if r[0] != TODAY} for p in _fixture()["placements"] if p["app"] == "Demo Gallery"}
+    dms.update({cn: {r[0]: [r[1], r[2]] for r in rows if r[0] != TODAY} for cn, rows in _fixture()["countries_daily"]["Demo Gallery"].items()})
+    for r in v["u"] + v["c"]:
+        exp = _row_cmp(dms[r["key"]], comp, MAR, JAN, "2026-01", 10)
+        for k in ("y", "w7", "chg", "pct", "imp", "swing"):
+            assert _close(r[k], exp[k]), (r["key"], k)
+        assert r["yi"] == exp["yi"] and r["st"] == exp["st"], r["key"]
+    assert len(v["u"]) == 2 and len(v["c"]) == 2
     assert "Yahan: kal (<b>10 Mar</b>) vs <b>Last 14 days</b> (25 Feb–10 Mar). Is app ka data <b>6 Mar 2026</b> se hai — usse pehle ke din khaali hain." in t["young"]
     assert "Is app ka data" not in t["youngDef"] and "Yahan:" not in t["youngDef"]                  # the default card: its words as before
 
@@ -928,15 +1030,30 @@ def test_cmp_countries_follow_or_say_why_not(report, dash):
 @needs_node
 def test_cmp_pick_restored_and_reset_safely(report):
     r = report["cmp_restore"]
-    assert (r["mFeb"]["title"], r["monJan"]["title"], r["b30"]["title"]) == ("Feb 2026 vs Jan 2026", "yesterday vs Jan 2026", "yesterday vs last 30 days")
+    D = {"v": 2, "m": "y", "b": "7", "bm": "", "cm": "", "vm": ""}
+    M3 = "Mar 2026 (1–10)"
+    # the shape stored before the two pickers (its cm moved BOTH months): the month pair → this month vs the month before,
+    # the rest kept, saved back in the new shape
+    for k, want, cmp in (("oldMm", f"{M3} vs Feb 2026", dict(D, m="m")), ("oldMmMon", f"{M3} vs Feb 2026", dict(D, m="m", b="mon", bm="2026-01")),
+                         ("monJan", "yesterday vs Jan 2026", dict(D, b="mon", bm="2026-01")), ("b30", "yesterday vs last 30 days", dict(D, b="30"))):
+        assert r[k]["title"] == want and r[k]["cmp"] == cmp and json.loads(r[k]["ls"]) == cmp, k
+    # the new shape: each month as stored; a compared month that is not older than the current one / outside the history /
+    # junk → the month just before the current one; the default kept as ''
+    for k, want, cm, vm in (("mFeb", "Feb 2026 vs Jan 2026", "2026-02", ""), ("mFebDec", "Feb 2026 vs Dec 2025 (20–31)", "2026-02", "2025-12"),
+                            ("mVsJan", f"{M3} vs Jan 2026", "", "2026-01"), ("vmSame", "Feb 2026 vs Jan 2026", "2026-02", ""),
+                            ("vmAfter", "Feb 2026 vs Jan 2026", "2026-02", ""), ("vmBefore", f"{M3} vs Feb 2026", "", ""),
+                            ("vmJunk", f"{M3} vs Feb 2026", "", ""), ("vmDefault", "Feb 2026 vs Jan 2026", "2026-02", ""),
+                            ("future", f"{M3} vs Feb 2026", "", "")):
+        assert r[k]["title"] == want and (r[k]["cmp"]["cm"], r[k]["cmp"]["vm"]) == (cm, vm) and json.loads(r[k]["ls"]) == r[k]["cmp"], k
+    assert r["future"]["cmp"]["b"] == "14" and r["future"]["cmp"]["v"] == 2
     assert r["before"]["title"] == "yesterday vs Feb 2026" and r["before"]["cmp"]["bm"] == ""            # a month before the history → the default month
-    assert r["after"]["title"] == "Mar 2026 (1–10) vs Feb 2026" and r["after"]["cmp"]["cm"] == ""        # after it → the newest
+    assert r["after"]["title"] == f"{M3} vs Feb 2026" and r["after"]["cmp"]["cm"] == ""                   # after it → the newest
     assert json.loads(r["before"]["ls"])["bm"] == "" and json.loads(r["after"]["ls"])["cm"] == ""        # the fixed pick saved back
-    for k in ("junk", "bad", "none"):
-        assert r[k]["cmp"] == {"m": "y", "b": "7", "bm": "", "cm": ""} and r[k]["title"] == "yesterday vs last 7 days", k
+    for k in ("junk", "arr", "bad", "none"):
+        assert r[k]["cmp"] == D and r[k]["title"] == "yesterday vs last 7 days", k
     # a build with less history (from 1 Feb): the stored 60 days / Dec no longer fit → the default; 60 days greyed out
     s = r["shorter"]
-    assert s["cmp"] == {"m": "y", "b": "7", "bm": "", "cm": ""} and json.loads(s["ls"]) == s["cmp"]
+    assert s["cmp"] == D and json.loads(s["ls"]) == s["cmp"]
     assert s["bounds"] == ["2026-02", "2026-03", "2026-03", "2026-03", True]
     assert "onclick=\"ecCmpB('60')\" disabled title=\"Sirf 38 din ka data\">60 days</button>" in s["ctl"]
     assert r["blocked0"]["title"] == "yesterday vs last 7 days" and r["blocked"]["title"] == "yesterday vs last 30 days"   # storage blocked: still works
@@ -1105,18 +1222,98 @@ def test_cmp_countries_checked_day_by_day(report, dash):
     assert h["ranges"] == ["1 Feb–3 Feb", "28 Feb–1 Mar, 5 Mar", "1 Jan, 3 Jan, 5 Jan, 7 Jan +2 more", ""]
 
 
+# ── 🔀 Month vs month's two pickers (owner, 21 Oct: "month vs month me sept vs aug nahi — oct vs sept, oct vs aug, ese oct
+# vs month wise"): October stays, the compared month moves ─────────────────────────────────────────────────────────────────
+OCT_PICKS = {"sep": ("2026-09", 1), "aug": ("2026-08", 2), "jul": ("2026-07", 3)}
+OCT_ST = {  # the statuses the SYNTHETIC October fixtures were built for (each also recounted row by row)
+    "octs": {"sep": {"Steady Cam": "bigda", "Two Step": "normal", "Calm Notes": "normal", "Late Start": "jaldi", "Quiet Clock": "lagu"},
+             "aug": {"Steady Cam": "bigda", "Two Step": "bigda", "Calm Notes": "normal", "Late Start": "jaldi", "Quiet Clock": "lagu"},
+             "jul": {"Steady Cam": "bigda", "Two Step": "normal", "Calm Notes": "normal", "Late Start": "jaldi", "Quiet Clock": "lagu"}},
+}
+
+
+@needs_node
+@pytest.mark.parametrize("fx", ["octs", "ramp"])
+def test_cmp_oct_vs_sep_aug_jul_recounted(report, fx):
+    dash = {"octs": _octs_fixture, "ramp": _ramp_fixture}[fx]()
+    _, apps = _maps(dash)
+    comp = _comp(dash)
+    by = _by_month(comp)
+    r = report["cmp_pickers"][fx]
+    oct_ = by["2026-10"]
+    assert oct_ == _days(date(2026, 10, 1), date(2026, 10, 20))                  # complete days only: 1 … yesterday (20 Oct)
+    for k, (pm, gap) in OCT_PICKS.items():
+        g, lbl = r[k], MON[int(pm[5:7]) - 1] + " " + pm[:4]
+        assert (g["cm"], g["pm"], g["g"], g["dn"]) == ("2026-10", pm, gap, 20), (fx, k)
+        assert g["cur"] == oct_ and g["base"] == by[pm], (fx, k)
+        assert (g["title"], g["colCur"], g["colBase"], g["colImp"]) == (f"Oct 2026 (1–20) vs {lbl}", "Oct 2026 (1–20)<br>eCPM",
+                                                                        f"{lbl}<br>eCPM", "Oct 2026 (1–20)<br>impr"), (fx, k)
+        assert f"<h3>All apps · Oct 2026 (1–20) vs {lbl}</h3>" in g["card"] and f"<b>1 Oct–20 Oct</b> vs <b>{_span(by[pm])}</b>" in g["card"]
+        assert "(impressions ÷ 20 din)" in g["card"]
+        # the swing's months: the whole months up to the compared one, 12 pairs `gap` apart at most
+        assert g["swm"] == [m for m in sorted(by) if m <= pm and _full(m, by[m])][-(12 + gap):], (fx, k)
+        for name, dm in apps.items():
+            exp = _row_cmp(dm, comp, oct_, by[pm], pm, 20)
+            _same_rows(g["rows"][name], exp, (fx, k, name))
+            if exp["chg"] is not None:   # impact/day = October's impressions per complete day × the eCPM change ÷ 1000
+                assert _close(g["rows"][name]["imp"], exp["yi"] / exp["nc"] * exp["chg"] / 1000), (fx, k, name)
+        _sorted_ok(g["order"], [dict(v, key=n, label=n) for n, v in g["rows"].items() if v["act"]], "imp", "asc")
+        # the current month never moved: only the compared month is stored ('' = the month just before October)
+        assert g["cmp"]["cm"] == "" and g["cmp"]["vm"] == ("" if k == "sep" else pm) and json.loads(g["ls"]) == g["cmp"], (fx, k)
+        assert '<span class="ec-ml" aria-live="polite"><b>Oct 2026 (1–20)</b></span>' in g["ctl"]
+        assert f'<span class="ec-ml" aria-live="polite">{lbl}</span>' in g["ctl"]
+        if fx in OCT_ST:
+            assert {n: v["st"] for n, v in g["rows"].items()} == OCT_ST[fx][k], (fx, k)
+        # the status note says which gap the swing was measured over
+        if gap == 1:
+            assert "<b>mahine-dar-mahine ke normal utaar-chadhaav</b>" in g["note"] and "max 13" in g["note"]
+            assert "har mahine ke <b>pehle 20 din</b> vs uska pichhla poora mahina" in g["note"] and "abhi 8 poore mahine ka data nahi" in g["note"]
+        else:
+            assert f"<b>{gap} mahine ke farq par normal utaar-chadhaav</b>" in g["note"] and f"max {12 + gap}" in g["note"]
+            assert f"har mahine ke <b>pehle 20 din</b> vs usse <b>{gap} mahine pehle</b> ka poora mahina, bilkul Oct 2026 (1–20) vs {lbl} ki tarah" in g["note"]
+            assert f"abhi {7 + gap} poore mahine ka data nahi" in g["note"]
+    # the compared month's ‹ to the oldest month of the history (its ‹ greys out), › back to the default pair
+    first = MON[int(comp[0][5:7]) - 1] + " " + comp[0][:4]
+    assert r["oldest"]["title"] == f"Oct 2026 (1–20) vs {first}" and r["oldest"]["pm"] == comp[0][:7]
+    assert 'aria-label="Compared month: previous" disabled>' in r["oldest"]["ctl"] and 'aria-label="Current month: next" disabled>' in r["oldest"]["ctl"]
+    assert r["back"]["title"] == "Oct 2026 (1–20) vs Sep 2026" and (r["back"]["cmp"]["cm"], r["back"]["cmp"]["vm"]) == ("", "")
+
+
+@needs_node
+def test_cmp_two_months_apart_status_uses_the_same_gap(report):
+    """Oct vs Aug is judged on how much a month usually differs from the one 2 before it — not from the next one."""
+    dash = _octs_fixture()
+    _, apps = _maps(dash)
+    comp = _comp(dash)
+    by = _by_month(comp)
+    aug = report["cmp_pickers"]["octs"]["aug"]["rows"]
+    ts = aug["Two Step"]   # ±10% month to month, every other month alike; October = August × 0.9
+    assert _close(ts["pct"], -0.1) and ts["swing"] == 0 and ts["st"] == "bigda"            # 2 apart: no usual swing → −10% = Worse
+    one = _mswing(apps["Two Step"], by, "2026-08", 20, 1)                                  # the adjacent months' swing: ~20%
+    assert one > 0.18 and _status(ts["pct"], one, ts["yi"]) == "normal"                    # would have hidden the drop
+    sc = aug["Steady Cam"]
+    assert _close(sc["w7"], 2.0 * 1.03) and _close(sc["y"], 2.0 * 0.97 * 0.8) and sc["st"] == "bigda"
+    # the ramp fixture (history from 1 Jan 2026): 8 adjacent pairs → judged; 6 pairs 2 apart, 4 pairs 3 apart → Too early
+    rp = report["cmp_pickers"]["ramp"]
+    assert rp["sep"]["rows"]["Steady Mail"]["swing"] is not None and rp["sep"]["rows"]["Steady Mail"]["st"] == "normal"
+    for k in ("aug", "jul"):
+        sm = rp[k]["rows"]["Steady Mail"]
+        assert sm["swing"] is None and sm["st"] == "jaldi" and sm["chg"] is not None, k   # the change is real, the status waits
+    assert "Too early</b> = abhi 9 poore mahine ka data nahi" in rp["aug"]["note"] and "abhi 10 poore mahine" in rp["jul"]["note"]
+
+
 # the default view, byte for byte: the page before the picker and this one (comparison row taken out), $ and ₹, every sort
-def _snap(tmp, page, dash):
+def _snap(tmp, page, dash, mode="snap"):
     js = max(re.findall(r"<script>(.*?)</script>", page, re.S), key=len)
     sp, fx = os.path.join(tmp, "p.js"), os.path.join(tmp, "f.json")
     with open(sp, "w", encoding="utf-8") as f:
         f.write(js)
     with open(fx, "w", encoding="utf-8") as f:
         json.dump({"dashboard": dash}, f)
-    out = subprocess.run([NODE, os.path.join(ROOT, "tests", "ecpm_frontend.js"), sp, fx, "snap"], check=True, capture_output=True, text=True, timeout=180)
+    out = subprocess.run([NODE, os.path.join(ROOT, "tests", "ecpm_frontend.js"), sp, fx, mode], check=True, capture_output=True, text=True, timeout=180)
     rep = json.loads(out.stdout)
     assert rep["errors"] == [], rep["errors"]
-    return rep["snap"]
+    return rep[mode]
 
 
 @needs_node
@@ -1137,6 +1334,31 @@ def test_cmp_default_view_is_byte_identical_to_before(tmp_path, dash):
     assert "All apps · yesterday vs last 7 days" in b["S"]["all_USD"] and "Countries · yesterday vs last 7 days" in b["S"]["app_INR_Demo Gallery"]
 
 
+PREV_REV = "a9f7cdc"          # the page before Month vs month's two pickers: every "Yesterday vs" view must come out byte-identical
+
+
+@needs_node
+def test_cmp_yesterday_mode_is_byte_identical_to_before_the_two_pickers(tmp_path, dash):
+    try:
+        old = subprocess.run(["git", "-C", ROOT, "show", PREV_REV + ":frontend/index.html"], check=True, capture_output=True,
+                             text=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        pytest.skip("the page before the two pickers is not in this checkout's history")
+    (tmp_path / "old").mkdir()
+    (tmp_path / "new").mkdir()
+    a = _snap(str(tmp_path / "old"), old, dash, "ysnap")
+    b = _snap(str(tmp_path / "new"), _page(), dash, "ysnap")
+    assert len(a["S"]) > 150 and a["S"].keys() == b["S"].keys()
+    for k in a["S"]:
+        assert a["S"][k] == b["S"][k], k
+    # it saw the real thing: every pick's card with its control row, the Month ‹ › to the first month, Ad units + Countries
+    S = b["S"]
+    assert 'aria-label="Previous month" disabled>' in S["tap_USD_3_ecCmpMon(-1)"] and "All apps · yesterday vs Dec 2025 (20–31)" in S["tap_INR_3_ecCmpMon(-1)"]
+    assert "All apps · yesterday vs Mar 2026 (1–10)" in S["tap_USD_7_ecCmpMon(1)"] and "All apps · yesterday vs last 30 days" in S["tap_USD_8_ecCmpB('30')"]
+    assert "Countries · yesterday vs last 60 days" in S["tapu_USD_3_ecCmpB('60')"] and '<div class="ec-cmp">' in S['all_USD{"b":"14"}']
+    assert "ecCmpCur(" not in "".join(v for v in S.values() if isinstance(v, str))
+
+
 def test_cmp_control_css_phone_and_tap_targets():
     css = _page()
     css = css[css.index("/* ===== 📈 eCPM trend"):css.index("/* \"Stay after N days\"")]
@@ -1149,3 +1371,4 @@ def test_cmp_control_css_phone_and_tap_targets():
     assert ".ec-cmp .ec-seg button{flex:none;min-height:36px}" in css
     assert re.search(r"\.ec-ml\{[^}]*min-width:11\.2em", css)                                            # a fixed label: ‹ › never move
     assert re.search(r"\.ec-mnav\{[^}]*flex:none", css)
+    assert re.search(r"\.ec-mvs\{display:inline-flex;[^}]*flex:none", css)                               # "vs ‹ month ›" wraps as one piece
