@@ -157,6 +157,7 @@ FILE_RE = re.compile(r"^roi_[0-9a-f]{12}\.json\.gz$")
 PACK_RE = re.compile(r"^roi_[0-9a-f]{12}_c\d{2,3}\.json\.gz$")     # 🌍 the country packs (the page checks the same)
 HEADER_PATHS = ["/roi*"]
 CD_V = 1
+PACK_THREADS = min(8, os.cpu_count() or 1)  # the packs of one app compressed side by side (the same bytes)
 PACK_MAX = 1_500_000                        # raw JSON bytes a country pack (a bigger country gets one of its own)
 KC_POOL = 2                                 # a thin / partly covered month: pooled with the whole months ≤ ±2 around it
 UNP_LIM = 0.02                              # a month whose GA4 revenue without a country ("(not set)" + "(other)") is
@@ -558,11 +559,40 @@ def _late(data_dir, aid, sid, P, visit=None):
     return {"B": B, "full": full, "fin": final, "q": q_bits, "info": info}
 
 
+def _walk(late, X):
+    """Install day X's 30-day columns past D30: (how many — while every activity day of buckets 1 … j is read —, how
+    many of them final, their q bits). Only X and the cube's days decide it, never a row's cells."""
+    j = 1
+    while late["full"](X + timedelta(days=LATE_STEP * j + 1), X + timedelta(days=LATE_STEP * (j + 1))):
+        j += 1
+    n, mf = j - 1, 0
+    if not n:
+        return 0, 0, 0
+    while mf < n and late["fin"](X + timedelta(days=gco.LAGS), X + timedelta(days=LATE_STEP * (mf + 2))):
+        mf += 1
+    return n, mf, late["q"](X + timedelta(days=gco.LAGS), X + timedelta(days=LATE_STEP * (n + 1)), n)
+
+
+def _walk_memo():
+    """_walk once per install day for every country of one app (its cube's days are the same for all of them)."""
+    memo = {}
+
+    def walk(late, X):
+        w = memo.get(X)
+        if w is None:
+            w = memo[X] = _walk(late, X)
+        return w
+    return walk
+
+
 def _cohorts(P, spend, fxf, co, today, late=None, edge=None):
     """Every install day → its row (see the module doc) — oldest first. late: _late's buckets (None: no m). edge: the
     last day every exact cell is final through (None: read_today − FINAL_LAG — the exact store's own rule; the 🌍
     country rows: the cube's last day folded through, read_today being the last day read through)."""
     pr, kf, xs, S, hs = P["pre"], P["sc"]["kf"], P["xs"], P["S"], P["hs"]
+    kd = P["sc"].get("kd")                      # 🌍 a country's rows: kf's k of each day from hs, looked up (the same
+    nkd = len(kd) if kd is not None else 0      # numbers, read once per day instead of once per cell)
+    walk = (late or {}).get("walk") or _walk    # … and the 30-day walk of an install day (the same for every country)
     co_x = (co or {}).get("x") or {}
     newest = _d(co["read_today"]) if co and co.get("read_today") else None
     C = newest - timedelta(days=gco.FINAL_LAG) if newest else None
@@ -575,14 +605,15 @@ def _cohorts(P, spend, fxf, co, today, late=None, edge=None):
     sp_till = _d(spend["till"]) if spend and spend.get("till") else None
     rows = []
     for X in sorted(keys):
-        e, c = xs.get(X), co_x.get(_iso(X))
+        Xi = _iso(X)
+        e, c = xs.get(X), co_x.get(Xi)
         n = e["n"] if e else (int((c.get("u") or [0])[0] or 0) if c else 0)
         sp = spi = None
         n_ads = None
         if spend and sp_first and sp_till and sp_first <= X <= sp_till:
-            spi = (spend["daily"].get(_iso(X)) or 0) / 1e6           # as billed (the spend cache's own currency)
+            spi = (spend["daily"].get(Xi) or 0) / 1e6               # as billed (the spend cache's own currency)
             sp = spi * (fxf(X) or 0)                                 # USD at that day's rate
-            n_ads = spend["installs"].get(_iso(X))
+            n_ads = spend["installs"].get(Xi)
         d = u = None
         df = 0
         if c and newest:
@@ -590,10 +621,16 @@ def _cohorts(P, spend, fxf, co, today, late=None, edge=None):
             if obs >= 0:
                 d, u, cum = [], [], 0.0
                 r, uu = c.get("r") or [], c.get("u") or []
-                for L in range(obs + 1):
-                    cum += (r[L] if L < len(r) else 0) / 1e6 * kf(X + timedelta(days=L))[0]
-                    d.append(_r(cum))
-                    u.append(int(uu[L] if L < len(uu) else 0))
+                i0 = (X - hs).days
+                if kd is not None and 0 <= i0 and i0 + obs < nkd:
+                    ks = kd[i0:i0 + obs + 1]
+                else:
+                    ks = [kf(X + timedelta(days=L))[0] for L in range(obs + 1)]
+                nr, nu = len(r), len(uu)
+                for L in range(obs + 1):                # (cum is a float: round() is _r's own rounding)
+                    cum += (r[L] if L < nr else 0) / 1e6 * ks[L]
+                    d.append(round(cum, 4))
+                    u.append(int(uu[L] if L < nu else 0))
                 df = max(0, min(obs, (C - X).days) + 1)
         t = [None] * len(T)
         for j, a in enumerate(T):
@@ -610,18 +647,13 @@ def _cohorts(P, spend, fxf, co, today, late=None, edge=None):
         if late is not None:
             base = d[30] if (d is not None and df > 30) else (e["R"][J30] if t[J30] is not None else None)
             if base is not None:
-                B, vals, cum, j = late["B"].get(_iso(X)) or {}, [], base, 1
-                while late["full"](X + timedelta(days=LATE_STEP * j + 1), X + timedelta(days=LATE_STEP * (j + 1))):
+                nj, wf, wq = walk(late, X)
+                B, vals, cum = late["B"].get(Xi) or {}, [], base
+                for j in range(1, nj + 1):
                     cum += B.get(j, 0.0)
                     vals.append(_r(cum))
-                    j += 1
                 if vals:
-                    m = vals
-                    while mf < len(m) and late["fin"](X + timedelta(days=gco.LAGS),
-                                                      X + timedelta(days=LATE_STEP * (mf + 2))):
-                        mf += 1
-                    qo = late["q"](X + timedelta(days=gco.LAGS), X + timedelta(days=LATE_STEP * (len(m) + 1)),
-                                   len(m))
+                    m, mf, qo = vals, wf, wq
         # so far: the read that reaches furthest (the install-day read through S, this store through `newest`)
         s = sd = None
         if e and X <= S:
@@ -1453,6 +1485,36 @@ def _json(x):
     return json.dumps(x, ensure_ascii=False, separators=(",", ":"))
 
 
+def _zrows(thru, fthru, billed):
+    """→ zrow(X, unk, cc): (_zrow's row of a day with nothing + z=1, its _row_out) — made once per (day, unknown, "--"
+    / "XX" / any other country: _zrow reads cc only as those two) for every country of one app and never changed after:
+    each use takes its own dict() copy (its lists are only read)."""
+    zc = {}
+
+    def zrow(X, u, cc):
+        k = (X, u, cc == NO_CC, cc == NOT_SPLIT)
+        z = zc.get(k)
+        if z is None:
+            r = dict(_zrow(X, thru, fthru, u, cc, billed), z=1)
+            z = zc[k] = (r, _row_out(r))
+        return z
+    return zrow
+
+
+def _write_packs(jobs):
+    """[(path, raw bytes)] → each written by write_gz_stable, side by side (zlib lets go of the GIL while it compresses:
+    every file's bytes are exactly a one-by-one write's). Raises the first failure, after every write ended."""
+    if len(jobs) <= 1 or PACK_THREADS <= 1:
+        for p, raw in jobs:
+            write_gz_stable(p, raw)
+        return
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=min(len(jobs), PACK_THREADS)) as ex:
+        futs = [ex.submit(write_gz_stable, p, raw) for p, raw in jobs]
+    for f in futs:
+        f.result()
+
+
 def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, out_dir, data_dir):
     """🌍 Every country's install-day rows (see the module doc) → the packs written + the file's "cd" (None: no country
     in the cube). Raises on a failure (the caller: no "cd", counted)."""
@@ -1543,6 +1605,10 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
     allr = {r["X"]: r for r in rows}
     s30, n30, u30 = {}, {}, {}
     out, meta = [], {}
+    ym = [(D.year, D.month) for D in days]          # each day's month (kf_c's key) and month key, once per app
+    mkd = [_mkey(D) for D in days]
+    walk = _walk_memo()                             # the 30-day walk of an install day: once, for every country
+    zrow = _zrows(thru, fthru, billed)              # a day with nothing: once a day, for every country
     for cc in sorted(ccs):
         tab = kc.get(cc) or {}
         kM = {M: tab.get(M) or (appk[M], "app", True) for M in months}
@@ -1573,9 +1639,10 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
         if cc != NO_CC and spend and spend.get("first") and spend.get("till"):
             sp_c = {"first": spend["first"], "till": spend["till"], "daily": {_iso(X): c for X, (c, _) in sc.items()},
                     "installs": {_iso(X): dl for X, (_, dl) in sc.items() if dl is not None}}
-        Pc = {"pre": P["pre"], "sc": {"kf": kf_c}, "xs": {}, "S": P["S"], "hs": hs}
+        Pc = {"pre": P["pre"], "sc": {"kf": kf_c, "kd": [kfm.get(t, kl)[0] for t in ym]}, "xs": {}, "S": P["S"],
+              "hs": hs}
         got = _cohorts(Pc, sp_c, fxg, {"read_today": _iso(thru), "x": co_x}, thru,
-                       {"B": B, "full": late["full"], "fin": late["fin"], "q": late["q"]}, edge=fthru)
+                       {"B": B, "full": late["full"], "fin": late["fin"], "q": late["q"], "walk": walk}, edge=fthru)
         by = {}
         for r in got:
             X = r["X"]
@@ -1593,8 +1660,9 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
                 nd = len(r["d"] or [])                                          # its own to be off (never a short one)
                 end = X + timedelta(days=max(nd - 1, LATE_STEP * (len(r["m"]) + 1) if r.get("m") else -1))
                 bits = late["q"](X, end) if end >= X else 0
-                used = {_mkey(X + timedelta(days=L)) for L, v in enumerate((Ec.get(_iso(X)) or [])[:nd]) if v}
-                used |= {M for j, M, v in cv.pairs(Cc.get(_iso(X))) if v and j <= len(r.get("m") or [])}
+                i0, Xi, nm = (X - hs).days, _iso(X), len(r.get("m") or [])
+                used = {mkd[i0 + L] for L, v in enumerate((Ec.get(Xi) or [])[:nd]) if v}
+                used |= {M for j, M, v in cv.pairs(Cc.get(Xi)) if v and j <= nm}
                 for M in used:
                     k = kM.get(M)
                     if k and k[1] == "app":
@@ -1605,7 +1673,7 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
                         bits |= 64
             r["qo"] = bits
             by[X] = r
-        full = [by.get(X) or dict(_zrow(X, thru, fthru, X in unk, cc, billed), z=1) for X in days]
+        full = [by.get(X) or dict(zrow(X, X in unk, cc)[0]) for X in days]
         _statuses(full)
         rows_out, n_tot, sp_tot, spi_tot, known, na_days = [], 0, 0.0, 0.0, False, 0
         for r in full:
@@ -1614,8 +1682,7 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
                 rows_out.append([_iso(X)])
             else:
                 ro = _row_out(r)
-                rows_out.append([ro[0]] if r["n"] == 0 and ro == _row_out(_zrow(X, thru, fthru, X in unk, cc, billed))
-                                else ro)
+                rows_out.append([ro[0]] if r["n"] == 0 and ro == zrow(X, X in unk, cc)[1] else ro)
             n_tot += r["n"] or 0
             na_days += r["st"] == "N/A"
             if r["sp"] is not None:
@@ -1676,16 +1743,18 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
     for cc, js in order:
         bh.update((_json(cc) + ":" + js + "\n").encode("utf-8"))
     bid = bh.hexdigest()[:12]
-    packs, names = [], []
+    packs, names, jobs = [], [], []
     for i, grp in enumerate(groups):
         name = "%s%s_c%02d.json.gz" % (PREFIX, key, i)
         raw = (('{"b":%s,"c":{' % _json(bid)) + ",".join(_json(cc) + ":" + js for cc, js in sorted(grp))
                + '},"ix":%d,"key":%s,"v":%d}' % (i, _json(key), CD_V)).encode("utf-8")
-        write_gz_stable(os.path.join(out_dir, name), raw)
+        jobs.append((os.path.join(out_dir, name), raw))
         packs.append([name, hashlib.sha1(raw).hexdigest()[:12]])
         names.append(name)
         for cc, _ in grp:
             meta[cc][4] = i
+    _write_packs(jobs)
+    jobs = None
     # Σ countries vs the All row (D30, the install days both have final): the measured gap of the two k's / reads
     dd = [X for X in days if X in s30 and X + timedelta(days=30) <= fthru and X in allr
           and allr[X]["t"][J30] is not None]
