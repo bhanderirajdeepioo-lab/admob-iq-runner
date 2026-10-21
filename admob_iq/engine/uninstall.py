@@ -91,6 +91,9 @@ day × lag); output is what the tab shows and which alerts are open.
   * UPDATE IMPACT — every app update's before / after card (returning DAU vs expected, new users back D1 / D7, sessions
     and time per returning user, ad revenue per user, uninstall on install day, new vs old version on the same days) and
     its HOLD / HALT / WIN alerts: engine.impact (evaluate_app calls it; its episodes join the app's alerts).
+  * SMALL ROLLOUTS — a new version that never reached RELEASE_SHARE (a staged / halted rollout) is no release, so it
+    has no card, verdict or alert; small_rollouts() lists it anyway (detail["small_rollouts"], only when there is one)
+    so the Updates lists can show it as a "Staged rollout" row — once it reaches RELEASE_SHARE it is a release.
 
 Dates are datetime.date inside, ISO strings in and out; a date in a message says its year when it isn't
 obvious (outside E's year or older than YEAR_CLEAR_DAYS: "16–22 Mar 2026"). Fractions 0–1 (5 dp), rates per
@@ -202,6 +205,10 @@ ZOOM_DAYS = 21; ZOOM_DENSE = 14           # 3 weeks of day-by-day detail after a
 RELEASE_SHARE = 0.05      # a version is "out" once ≥5% of that day's active users run it
 UPDATE_SURGE_X = 3.0; UPDATE_MIN_USERS = 100   # app_update users ≥3× their 4-week median (and ≥100)
 RELEASE_GAP_DAYS = 3      # an update surge this close to a release is that same release
+ROLLOUT_MIN_USERS = 50    # a small (staged) rollout: a new version on ≥50 active users …
+ROLLOUT_MIN_DAYS = 3      # … on ≥3 days — fewer is a test build / a few testers (noise): not listed
+ROLLOUT_SKIP_WORDS = ("test", "debug", "qa", "internal")   # … and a name with one of these is a test build: not listed
+ROLLOUT_SKIP = re.compile(r"(?<![a-z])(%s)" % "|".join(ROLLOUT_SKIP_WORDS), re.I)
 
 # ── recent-change alerts ──
 RECENT_K = 7; PREV_K = 28; RECENT_MIN = 5; PREV_MIN = 21; ALL_MIN_COHORTS = 56  # all-time only when ≥8 weeks, else it equals "pehle"
@@ -1477,6 +1484,87 @@ def releases(store, ds):
     return sorted(out, key=lambda r: (r["date"], r["kind"], r["version"] or ""))
 
 
+def _share5(u, tot):
+    """u ÷ tot as a share, rounded DOWN to 5 decimals (so a share just under RELEASE_SHARE never shows as it);
+    None without a total."""
+    return math.floor(u * 100000 / tot) / 100000 if tot else None
+
+
+def small_rollouts(store, ds, rels=None):
+    """Small (staged / halted) rollouts, oldest first: every appVersion that releases() does NOT list — it never
+    reached RELEASE_SHARE of a day's active users — but was really out to users:
+      * not on the store's first versions day at all (a version already there on it, even on a few devices, started
+        before our data — its start is unknown, and an old version's tail of users would look like a rollout: not
+        listed), and
+      * on ≥ ROLLOUT_MIN_USERS active users on ≥ ROLLOUT_MIN_DAYS days (fewer: a test build or a few testers — noise,
+        not listed), and
+      * its name does not mark a test build (ROLLOUT_SKIP_WORDS — "test", "debug", "qa", "internal", any case: an
+        internal / QA track, not a rollout; not listed).
+    → [{date, version, kind: "rollout", max_share, last_share, days_seen, till, live, surge, newer}], measured only:
+      date        the first day it ran on ≥ ROLLOUT_MIN_USERS users (a few tester devices days before are not the rollout)
+      max_share   its highest share of a day's active users (releases()' own share: the version's users ÷ the day's
+                  a1, else ÷ the day's versions summed), 5 decimals rounded DOWN (never shown as RELEASE_SHARE)
+      last_share  its share on `till`, the newest versions day (0.0 when it is not there any more), likewise
+      days_seen   the days it ran on ≥ ROLLOUT_MIN_USERS users
+      newer       the first day after `date` a newer version came: a release of releases() ("version"), another small
+                  rollout, or an update surge after this rollout's life (below) — None when nothing came after it
+      live        it still ran on ≥ ROLLOUT_MIN_USERS users on `till` and nothing newer came (a newer version leaves a
+                  tail of users who never updated: that tail is not "still rolling out")
+      surge       the update surges releases() lists ("update" rows) within RELEASE_GAP_DAYS of this rollout's life —
+                  from `date` to its last day on ≥ ROLLOUT_MIN_USERS users (or the day before `newer` came, if sooner):
+                  a staged rollout's ramp can make one, and that row (with its own card and verdict) measured the
+                  update while it ran — the page says so instead of "nothing measurable" ([] when none)
+    Shown only (the Updates lists' "Staged rollout" rows): no impact card, no verdict, no alert, no zoom — releases()
+    and everything it feeds are untouched. The day it reaches RELEASE_SHARE it is a release and leaves this list.
+    rels: releases(store, ds) when the caller has it."""
+    vers, daily = store.get("versions") or {}, store.get("daily") or {}
+    days = sorted(d for d in vers if _d(d) <= ds["end"])
+    if not days:
+        return []
+    rels = releases(store, ds) if rels is None else rels
+    out_v = {r["version"] for r in rels if r.get("version")}
+    start, till = days[0], days[-1]
+    seen, info = set(), {}
+    for d in days:
+        tot = (daily.get(d) or {}).get("a1") or sum(vers[d].values())
+        for v, u in vers[d].items():
+            if v in NOT_SET or not u:
+                continue
+            if d == start:
+                seen.add(v)                           # there on the first day we have: started before our data
+                continue
+            if v in seen or v in out_v:
+                continue
+            x = info.setdefault(v, {"date": None, "last": None, "max": 0.0, "n": 0, "out": False})
+            if tot and u / tot >= RELEASE_SHARE:
+                x["out"] = True                       # (a release: releases() lists it — never here too)
+            if u >= ROLLOUT_MIN_USERS:
+                x["n"] += 1
+                x["date"] = x["date"] or d
+                x["last"] = d
+            if tot:
+                x["max"] = max(x["max"], _share5(u, tot))
+    keep = {v: x for v, x in info.items()
+            if not x["out"] and x["n"] >= ROLLOUT_MIN_DAYS and not ROLLOUT_SKIP.search(str(v))}
+    starts = [_d(r["date"]) for r in rels if r.get("kind") == "version"] + [_d(x["date"]) for x in keep.values()]
+    surges = sorted(_d(r["date"]) for r in rels if r.get("kind") == "update")
+    gap = timedelta(days=RELEASE_GAP_DAYS)
+    tot = (daily.get(till) or {}).get("a1") or sum(vers[till].values())
+    out = []
+    for v, x in keep.items():
+        d0 = _d(x["date"])
+        nv = min((s for s in starts if s > d0), default=None)                 # a newer version came that day
+        end = min(_d(x["last"]), nv - timedelta(days=1)) if nv else _d(x["last"])
+        link = [s for s in surges if d0 - gap <= s <= end + gap]
+        newer = min([s for s in surges if s > end + gap][:1] + ([nv] if nv else []), default=None)
+        u = vers[till].get(v) or 0
+        out.append({"date": x["date"], "version": v, "kind": "rollout", "max_share": x["max"],
+                    "last_share": _share5(u, tot) or 0.0, "days_seen": x["n"], "till": till,
+                    "live": u >= ROLLOUT_MIN_USERS and newer is None, "surge": [_iso(s) for s in link],
+                    "newer": _iso(newer) if newer else None})
+    return sorted(out, key=lambda r: (r["date"], r["version"]))
+
+
 # ── adaptive checkpoints ────────────────────────────────────────────────────────────────────────
 
 def checkpoints(cd, curve, H, rels, open_eps, prev_eval, advanced):
@@ -2127,6 +2215,7 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
     H = cd["H"]
     curve = headline_curve(cd, late)
     rels = releases(store, ds)
+    srl = small_rollouts(store, ds, rels)            # shown only: the Updates lists' "Staged rollout" rows
     eps_before = state.get("episodes") or {}
     open_before = [e for e in eps_before.values() if e["app_id"] == app_id and not (   # an old-installs one closes now
         e["family"] == "cohort" and e["last"].get("installs_to") and _d(e["last"]["installs_to"]) < recent_from)]
@@ -2303,6 +2392,8 @@ def evaluate_app(store, app_id, app, state, now, stale=False, key=None, package=
               "old_changes": old_changes(settled, recent_from, {dr: c["ns"] for dr, c in conds.items()}, E, cd),
               "lateness": lateness(revision_sums(store)), "alerts": alerts, "alerts_closed": closed,
               "impact": impact}
+    if srl:                                          # (only when there is one: a detail without is byte-identical)
+        detail["small_rollouts"] = srl
     summary = {"app_id": app_id, "app": app, "data_till": _iso(E), "stale": bool(stale), "ready": cp["nmax"] >= 0,
                "stage": cp["stage"], "rate7": rn["last7"], "rate_med": rn["med"], "rate_dir": rn["dir"],
                "head4": head4, "alerts": counts, "updates": updates}

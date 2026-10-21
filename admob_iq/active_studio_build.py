@@ -392,8 +392,34 @@ def build_data(dash, PF, load, accn, appn, lag=2, counts=None):
             'settled': SET, 'apps': len(apps), 'LG': LG, 'bandDays': BAND_DAYS, 'triCols': TRI_COLS,
             'pfSettled': (AC.get('portfolio') or {}).get('settled_till'), 'mk': ((AC.get('market') or {}).get('latest')),
             'H0': H0, 'hist': HFILE if diff(H0, S) > 0 else None}
+    if any(ap.get('srl') for ap in apps):                 # the staged-rollout rule, printed by the rows (only with them)
+        meta['srl'] = srl_rule()
     hist = ({'v': V, 'S': H0, 'n': diff(H0, S), 'gen': gen, 'apps': old} if diff(H0, S) > 0 else None)
     return {'meta': meta, 'apps': apps, 'alerts': alerts, 'noga': noga, '_hist': hist}
+
+
+def _srl(rows, E):
+    """The engine's small (staged) rollouts up to the span's end (engine.uninstall.small_rollouts: a new version that
+    never reached the release share — shown only, never a release, so no verdict and no before / after numbers) →
+    [[first day on the rule's users, "v" + version, max share, share on its newest day, days on the rule's users, that
+    newest day, 1 = still rolling out / 0, [the update surges during its life — their update rows measured it], the
+    day a newer version came or None]], oldest first; [] when there is none (then the app has no "srl")."""
+    out = []
+    for x in rows or []:
+        if isinstance(x, dict) and x.get('date') and x.get('version') and x['date'] <= E:
+            v, nw = str(x['version']), x.get('newer')
+            out.append([x['date'], v if v[:1] in ('v', 'V') else 'v' + v, x.get('max_share'), x.get('last_share'),
+                        x.get('days_seen'), x.get('till'), 1 if x.get('live') else 0,
+                        [s for s in x.get('surge') or [] if s <= E], nw if nw and nw <= E else None])
+    return sorted(out)
+
+
+def srl_rule():
+    """The small-rollout rule the page prints next to the rows (the engine's own constants: the release share, the
+    users a day on the days, the words that mark a test build's name)."""
+    from .engine import uninstall as eng
+    return {'share': eng.RELEASE_SHARE, 'users': eng.ROLLOUT_MIN_USERS, 'days': eng.ROLLOUT_MIN_DAYS,
+            'skip': list(eng.ROLLOUT_SKIP_WORDS)}
 
 
 def _app(r, names, size_of, paisa, pf_by, load, E, S, SET):
@@ -568,7 +594,7 @@ def _app(r, names, size_of, paisa, pf_by, load, E, S, SET):
         if t0 >= S:
             st_rng.append([max(f0, S), t0])
     fl = af.get('flags') or {}
-    return {
+    out = {
         'id': aid, 'k': r['key'], 'nm': nmo['name'], 'store': nmo.get('stag') or nmo['store'], 'acc': nmo['acct'],
         'sz': size_of(aid), 'paisa': round(paisa.get(aid, 0), 2),
         'first': add(g0, first), 'settled': r.get('settled_till') or SET, 'dt': r.get('data_till') or E,
@@ -581,6 +607,10 @@ def _app(r, names, size_of, paisa, pf_by, load, E, S, SET):
         'tri': {'w': tw, 'ref': enc(tref)},
         'al': (r.get('alerts') or {}),
     }
+    srl = _srl(af.get('small_rollouts'), E)         # 📦 staged rollouts (only when the app has one: else byte-identical)
+    if srl:
+        out['srl'] = srl
+    return out
 
 
 # ---- the build step -----------------------------------------------------------------------------------------------

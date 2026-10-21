@@ -1,10 +1,10 @@
 """Active users — pure math behind the GA4 "👥 Active users" tab (no I/O, no prints).
 
 Input is one app's GA4 store (the same fill_days-ed store the uninstall engine read), the uninstall detail of that app
-(read only — launch, stage, zoom, releases and the Update impact card are reused, never recomputed; everything kept is a
-deep copy), its AdMob revenue and this tab's own private state. Output is the app's detail file (daily arrays, normal
-bands, tiles, what changed, the return grid, the version table, a copy of the Update impact card) and its small summary
-row.
+(read only — launch, stage, zoom, releases, small rollouts and the Update impact card are reused, never recomputed;
+everything kept is a deep copy), its AdMob revenue and this tab's own private state. Output is the app's detail file
+(daily arrays, normal bands, tiles, what changed, the return grid, the version table, a copy of the Update impact card)
+and its small summary row.
 
   * RETURNING USERS R(d) = active users − that day's new installs, over the whole history. A day with a1 ≤ new is null
     (listed in rneg), never negative; a1 = 0 or a missing day is null too — unknown is never 0.
@@ -3009,6 +3009,8 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
               "changes": {"open": alerts, "closed": closed, "info": info, "older": older},
               "tri": grid, "versions": vers, "versions_more": vers_more,
               "impact": copy.deepcopy(udet.get("impact") or {})}
+    if udet.get("small_rollouts"):                   # the uninstall detail's staged rollouts (shown only), as they are —
+        detail["small_rollouts"] = copy.deepcopy(udet["small_rollouts"])   # only when there is one (byte-identical)
     counts = {"warning": 0, "watch": 0, "good": 0}
     for a in alerts:
         counts[a["severity"]] = counts.get(a["severity"], 0) + 1

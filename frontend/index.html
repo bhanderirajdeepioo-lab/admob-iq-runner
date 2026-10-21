@@ -2309,6 +2309,8 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 :is(#as-root,#as-layer) .as-upd{display:flex;flex-direction:column;gap:6px;padding:0 18px 14px}
 :is(#as-root,#as-layer) .as-upd .as-u{display:flex;gap:10px;align-items:center;font-size:12.5px;flex-wrap:wrap}
 :is(#as-root,#as-layer) .as-upd .as-u .as-dt{font:600 12px var(--as-num);color:var(--muted);width:56px}
+:is(#as-root,#as-layer) .as-roll{color:var(--ink2);background:transparent;border-color:var(--line2)}
+:is(#as-root,#as-layer) .as-srn{font-size:11.5px;line-height:1.45}
 /* ---------- tooltip ---------- */
 :is(#as-root,#as-layer) #as-tip{position:fixed;z-index:1100;pointer-events:none;background:#0b1424;border:1px solid var(--line2);border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.45;color:var(--ink2);box-shadow:0 12px 30px rgba(0,0,0,.45);max-width:min(340px,calc(100vw - 20px));opacity:0;transition:opacity .12s;left:0;top:0}
 :is(#as-root,#as-layer) #as-tip.as-on{opacity:1}
@@ -3866,6 +3868,8 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
 :is(#us-root,#us-layer) .us-upd{display:flex;flex-direction:column;gap:6px;padding:0 18px 14px}
 :is(#us-root,#us-layer) .us-upd .us-u{display:flex;gap:10px;align-items:center;font-size:12.5px;flex-wrap:wrap}
 :is(#us-root,#us-layer) .us-upd .us-u .us-dt{font:600 12px var(--us-num);color:var(--muted);width:56px}
+:is(#us-root,#us-layer) .us-roll{color:var(--ink2);background:transparent;border-color:var(--line2)}
+:is(#us-root,#us-layer) .us-srn{font-size:11.5px;line-height:1.45}
 /* ---------- tooltip ---------- */
 :is(#us-root,#us-layer) #us-tip{position:fixed;z-index:1100;pointer-events:none;background:#0b1424;border:1px solid var(--line2);border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.45;color:var(--ink2);box-shadow:0 12px 30px rgba(0,0,0,.45);max-width:min(330px,calc(100vw - 20px));opacity:0;transition:opacity .12s}
 :is(#us-root,#us-layer) #us-tip.us-on{opacity:1}
@@ -11749,6 +11753,26 @@ function lock(on){ try{ document.body.classList.toggle('us-lock',!!on); }catch(e
 function openDrawer(i){ layer(); i=+i; if(!A[i]) return; ST.drawer=i; ST.did=A[i].id; ST.dScroll=0; hideTip(); renderDrawer(); const d=$('us-drawer'); d.classList.add('us-on'); d.setAttribute('aria-hidden','false'); $('us-scrim').classList.add('us-on'); lock(true); d.scrollTop=0; setTimeout(()=>{ const b=d.querySelector('.us-icb'); if(b&&b.focus) b.focus({preventScroll:true}); },60); }
 function closeDrawer(){ ST.drawer=-1; ST.did=null; const d=$('us-drawer'); if(d){ d.classList.remove('us-on'); d.setAttribute('aria-hidden','true'); } const sc=$('us-scrim'); if(sc) sc.classList.remove('us-on'); lock(false); hideTip(); }
 function navOrder(){ return R.slice().sort((x,y)=>lossCmp(x,y)).map(o=>o.a.i); }
+// 📦 a staged rollout (the engine's small_rollouts: a new version that never reached the release share — no verdict, no
+// before / after numbers): r = [first day, label, max share, share on its newest day, days, that day, 1 = still rolling
+// out, [the update surges during it — their update rows measured it], the day a newer version came | null]
+// a share as a % ROUNDED DOWN (just under the release share never reads as it): 2 decimals under 1% and in the last 0.1
+// point under the share, else 1; above 0 but under 0.01% → '<0.01%' (as HTML)
+const srP=p=>{ if(p==null) return '—'; const v=p*100, th=((M.srl&&M.srl.share)||0.05)*100; if(!(v>0)) return '0%'; if(v<0.01) return '&lt;0.01%';
+  const k=(v<1||(v<th&&v>=th-0.1))?2:1, m=Math.pow(10,k); return String(parseFloat((Math.floor(v*m+1e-6)/m).toFixed(k)))+'%'; };
+function srRow(r){ const R=M.srl||{}, sh=R.share!=null?srP(R.share):'5%', sg=Array.isArray(r[7])?r[7]:[], nw=r[8];
+  const t=(r[6]?`abhi sirf ${srP(r[3])} users tak (max ${srP(r[2])})`:`max ${srP(r[2])} users tak pahuncha, ${sh} tak nahi`)
+    +(sg.length?` — is rollout ke dauran ${sg.map(x=>fd(x)).join(', ')} ko app update spike aaya: uska asar us din ki update row me napa gaya`
+      :(r[6]?` — asar napne layak users nahi, ${sh} par pahunchte hi asar dikhega`:' — asar napne layak users nahi the'))
+    +(!r[6]&&nw?` · ${fd(nw)} ko naya update aa gaya`:'');
+  return `<div class="us-u us-sr"><span class="us-dt">${fd(r[0])}</span><b>${esc(r[1])}</b><span class="us-chip us-roll"><i></i>Staged rollout</span><span class="us-faint">${t}</span></div>`; }
+// the rule, once under the rows: what is listed and what is not (the engine's constants, from the Studio file's meta)
+const srNote=()=>{ const R=M.srl; return R?`<div class="us-faint us-srn">Staged rollout = naya version jo ${srP(R.share)} users tak nahi pahuncha, par kam se kam ${R.days} din ${R.users}+ users pe chala. Nahi dikhate: isse kam users ya din wale (test build / testers)${R.skip&&R.skip.length?', naam me '+R.skip.map(esc).join(' / ')+' wale (test build)':''} aur data ke pehle din se maujood version (unki shuruaat data se pehle ki). Asar tab napte hain jab ye ${srP(R.share)} tak pahunche — tab ye normal update ban jata hai.</div>`:''; };
+// the updates (rows already made, newest first) and the staged rollouts in one date order, newest first (none: as before)
+const srMix=(ups,rows,srl)=>srl.length?ups.map((r,k)=>[r[0],0,k,rows[k]]).concat(srl.map((r,k)=>[r[0],1,k,srRow(r)]))
+  .sort((x,y)=>x[0]<y[0]?1:(x[0]>y[0]?-1:(x[1]-y[1]||x[2]-y[2]))).map(x=>x[3]).join('')+srNote():rows.join('');
+const srSince=(ups,srl)=>[ups.length?ups[ups.length-1][0]:null,srl.length?srl[0][0]:null].filter(Boolean).sort()[0]||'';
+const srHead=(ups,srl)=>{ const m=srl.length+' staged rollout'+(srl.length>1?'s':''); return !srl.length?'all '+ups.length:(ups.length?'all '+ups.length+' (+'+m+')':m); };
 // the app view's body — the same in the drawer (mode 'd') and on the full app page (mode 'p', laid out wide)
 function bodyHtml(o,mode){ const a=o.a, s=o.s, c=o.c;
   const k=(lab,hint,v,f,unit,dl,sub)=>`<div class="us-kpi"><div class="us-kl"><span>${lab}</span><span class="us-kh">${hint}</span></div><div class="us-kv"><span class="us-num">${v==null?'—':FMT[f](v)}</span>${unit?`<span class="us-ku">${unit}</span>`:''}</div><div class="us-kd ${dl.cls||''}">${dl.h||dl}</div><div class="us-ks">${sub||''}</div></div>`;
@@ -11773,12 +11797,13 @@ function bodyHtml(o,mode){ const a=o.a, s=o.s, c=o.c;
   const nW=a.coh.w.length, w0=nW?a.coh.w[0]:null;
   const coh=`<div class="us-panel"${mode==='p'?' id="us-pg-coh"':''}><div class="us-ph"><div><div class="us-eyebrow">Install week × day${nW?' · all '+nW+(nW===1?' week':' weeks'):''}</div><${hd}>How many still in app</${he}><div class="us-hint">Har row = ek hafte ke installs${w0?' · saare hafte, '+fd(w0.f)+' se aaj tak (naya upar)':''} · cell = us din ke baad kitne % ne app rakha</div></div><div class="us-right"><div class="us-seg" id="us-cohM-${mode}" data-cohm="1"><button data-m="abs" aria-pressed="${ST.cohMode==='abs'}">% bache</button><button data-m="dev" aria-pressed="${ST.cohMode==='dev'}">Vs normal</button></div></div></div><div class="us-cohw" data-cohbox="${mode}">${cohFull(a,cr)}</div><div class="us-clg">${ST.cohMode==='abs'?'<span class="us-k"><i style="background:linear-gradient(90deg,#13213a,#22d3ee);width:40px;height:9px"></i>fewer → more still in app</span>':'<span class="us-k"><i style="background:var(--us-h2);height:9px"></i>below normal</span><span class="us-k"><i style="background:var(--us-g2);height:9px"></i>above normal</span>'}<span class="us-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="us-k">· = abhi us din tak nahi pahunche</span></div>${cohRelLg(cr)}</div>`;
   const alH=`<div${mode==='p'?' id="us-pg-chg"':''}><div class="us-chg-h"><div><div class="us-eyebrow">This app’s alerts</div><${hd}>What changed?</${he}></div></div>${als.length?`<div class="us-cards">${als.map(cardH).join('')}</div>`:'<div class="us-ok">✅ Is app pe koi khula alert nahi</div>'}${histHtml(hist(a.id),mode==='p'?'pgh':'dh',false)}</div>`;
-  const upL=ups.map(r=>{ const kk=ix(r[0]), b=avgAt(a,kk-7,kk-1), f=avgAt(a,kk,Math.min(kk+6,N-1));
-      return `<div class="us-u"><span class="us-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="us-faint">${r[2]==='halt'?'Rollout roko, hotfix bhejo':(r[2]==='win'?'Good impact':(r[2]==='continue'?'Koi loss nahi dikha':(r[2]==='hold'?'Wait and check':'Measuring impact')))}</span>${b.rate!=null&&f.rate!=null?`<span class="us-num" style="font-size:12px;color:var(--ink2)">uninstalls ${fN(b.outs)}→${fN(f.outs)}/day (${rp(b.rate)}→${rp(f.rate)})</span>`:''}</div>`; }).join('');
-  const upH=ups.length?`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · all ${ups.length}${ups.length?' · since '+fd(ups[ups.length-1][0]):''}</div><${hd}>Update impact</${he}><div class="us-hint">${mode==='p'?'Poora Update impact card (kisi bhi date se tulna) neeche "Old views" me':'Poora Update impact card (kisi bhi date se tulna) app page pe'}</div></div></div><div class="us-upd">${upL}</div></div>`:'';
+  const srl=a.srl||[];                                   // 📦 staged rollouts: their own rows, in date order with the updates
+  const upL=srMix(ups,ups.map(r=>{ const kk=ix(r[0]), b=avgAt(a,kk-7,kk-1), f=avgAt(a,kk,Math.min(kk+6,N-1));
+      return `<div class="us-u"><span class="us-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="us-faint">${r[2]==='halt'?'Rollout roko, hotfix bhejo':(r[2]==='win'?'Good impact':(r[2]==='continue'?'Koi loss nahi dikha':(r[2]==='hold'?'Wait and check':'Measuring impact')))}</span>${b.rate!=null&&f.rate!=null?`<span class="us-num" style="font-size:12px;color:var(--ink2)">uninstalls ${fN(b.outs)}→${fN(f.outs)}/day (${rp(b.rate)}→${rp(f.rate)})</span>`:''}</div>`; }),srl);
+  const s0=srSince(ups,srl), upH=(ups.length||srl.length)?`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · ${srHead(ups,srl)}${s0?' · since '+fd(s0):''}</div><${hd}>Update impact</${he}><div class="us-hint">${mode==='p'?'Poora Update impact card (kisi bhi date se tulna) neeche "Old views" me':'Poora Update impact card (kisi bhi date se tulna) app page pe'}</div></div></div><div class="us-upd">${upL}</div></div>`:'';
   // the full app page: the WHOLE 📦 Update impact card (the dashboard's own — every update's before vs after at 7 / 14 /
   // 30 / 60 days, 📅 any date, 📌 saved dates) as its own section, the uninstall lines above it; '' → the short list
-  const imp=mode==='p'?impSec(a,upL):'';
+  const imp=mode==='p'?impSec(a,upL,ups.length):'';
   const dtH=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Day by day</div><${hd}>Day by day · ${span(W.f,W.t)}</${he}></div></div><div class="us-tw" style="max-height:${mode==='p'?520:360}px">${dt}</div></div>`;
   const ch1=`<div class="us-panel"${mode==='p'?' id="us-pg-rate"':''}><div class="us-ph"><div><div class="us-eyebrow">Uninstall rate</div><${hd}>Uninstall rate % with normal band</${he}></div></div>${bigChart(a,o,mode)}</div>`;
   const ch2=`<div class="us-panel"><div class="us-ph"><div><div class="us-eyebrow">Installs vs uninstalls</div><${hd}>Installs vs uninstalls</${he}></div></div>${ioChart(a,mode)}</div>`;
@@ -11787,10 +11812,11 @@ function bodyHtml(o,mode){ const a=o.a, s=o.s, c=o.c;
   return `<div class="us-dk">${kp}</div>${ch1}${ch2}${gdApp(o,mode)}${cv}${coh}${alH}${upH}${dtH}`; }
 // the app page's "📦 Update impact" section: the card comes from the dashboard (usImpHtml — '' when the app has no GA4
 // detail: then no section, the short list stays); upL = this page's own uninstall lines per update (7 days before → after)
-function impSec(a,upL){ let c=''; try{ c=typeof usImpHtml==='function'?usImpHtml(a.id):''; }catch(e){ c=''; } if(!c) return '';
+// and its staged rollouts (no numbers); nUp = its updates (none: only rollouts — no "7 din pehle → baad" line over them)
+function impSec(a,upL,nUp){ let c=''; try{ c=typeof usImpHtml==='function'?usImpHtml(a.id):''; }catch(e){ c=''; } if(!c) return '';
   return `<section class="us-panel us-imp" id="us-imp" aria-label="Update impact"><div class="us-ph"><div><div class="us-eyebrow">📦 Updates · before vs after</div><h2>📦 Update impact</h2>`
     +`<div class="us-hint">Har update ka asar: update se pehle vs baad (7 / 14 / 30 / 60 din) · naya update sabse upar · 📅 Any date: koi bhi date ya koi bhi do samay, naam ke saath save</div></div></div>`
-    +(upL?`<div class="us-upd"><div class="us-faint us-updl">Uninstalls per day — 7 din pehle → 7 din baad</div>${upL}</div>`:'')+`<div class="us-impb">${c}</div></section>`; }
+    +(upL?`<div class="us-upd">${nUp?'<div class="us-faint us-updl">Uninstalls per day — 7 din pehle → 7 din baad</div>':''}${upL}</div>`:'')+`<div class="us-impb">${c}</div></section>`; }
 function drawerHtml(){ const o=R[ST.drawer], a=o.a, ord=navOrder(), pos=ord.indexOf(a.i);
   return `<div class="us-dh"><div class="us-t"><div class="us-eyebrow">App view · ${pos+1} / ${ord.length} (loss ke kram me) · ${span(W.f,W.t)}</div><h3 class="us-ainb">${ic(a,28)}<span class="us-aint">${esc(bnm(a))} <span class="us-acn">· ${esc(a.acc)}</span></span></h3><div class="us-l2">${chip(o.pill)}${alBadge(a)}${szH(a)}<span class="us-pkg">${esc(a.pkg)}</span><span>Data till ${fd(M.E)}${W.t>a.settled?' · ⏳ '+fd(dAdd(a.settled,1))+'+ pakka nahi':''}</span></div>`
     +`<div class="us-full-r"><button class="us-btn us-full" id="us-full" data-full="${esc(a.id)}" title="Is app ka poora page: bade charts, saare tables, Update impact card aur kisi bhi date se tulna">Full app page →</button></div></div>`
@@ -15099,6 +15125,26 @@ TIPS.ar=i=>{ const o=R[+i], a=o.a, x=o.ar, c=o.arc, d=detOf(a), T=d&&d.tiles&&d.
     +`<div class="as-sep"></div><div class="as-tsm">Ad rate = AdMob kamai ÷ dikhaye gaye ads (AdMob jaisa rate, sirf AdMob Network). Ads per user wahi aur ad rate badla = bazaar ka asar, app ka nahi.</div>`; };
 TIPS.oth=i=>{ const a=A[+i], d=detOf(a), F=(d&&d.flags)||{}, x=actOther(F);
   return `<div class="as-tt">${ic(a,14,'ail')}${esc(a.nm)} · Other ad networks</div>${trow('Other networks’ share of ad revenue',actOk(F.other_share)?uniPct(+F.other_share):'—')}${trow('More on top of AdMob Network','~'+x+'%')}<div class="as-tsm">Yahan ki revenue sirf AdMob Network ki hai — dusre ad networks ki kamai isme nahi. Asli kamai ~${x}% zyada.</div>`; };
+// 📦 a staged rollout (the engine's small_rollouts: a new version that never reached the release share — no verdict, no
+// before / after numbers): r = [first day, label, max share, share on its newest day, days, that day, 1 = still rolling
+// out, [the update surges during it — their update rows measured it], the day a newer version came | null]
+// a share as a % ROUNDED DOWN (just under the release share never reads as it): 2 decimals under 1% and in the last 0.1
+// point under the share, else 1; above 0 but under 0.01% → '<0.01%' (as HTML)
+const srP=p=>{ if(p==null) return '—'; const v=p*100, th=((M.srl&&M.srl.share)||0.05)*100; if(!(v>0)) return '0%'; if(v<0.01) return '&lt;0.01%';
+  const k=(v<1||(v<th&&v>=th-0.1))?2:1, m=Math.pow(10,k); return String(parseFloat((Math.floor(v*m+1e-6)/m).toFixed(k)))+'%'; };
+function srRow(r){ const R=M.srl||{}, sh=R.share!=null?srP(R.share):'5%', sg=Array.isArray(r[7])?r[7]:[], nw=r[8];
+  const t=(r[6]?`abhi sirf ${srP(r[3])} users tak (max ${srP(r[2])})`:`max ${srP(r[2])} users tak pahuncha, ${sh} tak nahi`)
+    +(sg.length?` — is rollout ke dauran ${sg.map(x=>fd(x)).join(', ')} ko app update spike aaya: uska asar us din ki update row me napa gaya`
+      :(r[6]?` — asar napne layak users nahi, ${sh} par pahunchte hi asar dikhega`:' — asar napne layak users nahi the'))
+    +(!r[6]&&nw?` · ${fd(nw)} ko naya update aa gaya`:'');
+  return `<div class="as-u as-sr"><span class="as-dt">${fd(r[0])}</span><b>${esc(r[1])}</b><span class="as-chip as-roll"><i></i>Staged rollout</span><span class="as-faint">${t}</span></div>`; }
+// the rule, once under the rows: what is listed and what is not (the engine's constants, from the Studio file's meta)
+const srNote=()=>{ const R=M.srl; return R?`<div class="as-faint as-srn">Staged rollout = naya version jo ${srP(R.share)} users tak nahi pahuncha, par kam se kam ${R.days} din ${R.users}+ users pe chala. Nahi dikhate: isse kam users ya din wale (test build / testers)${R.skip&&R.skip.length?', naam me '+R.skip.map(esc).join(' / ')+' wale (test build)':''} aur data ke pehle din se maujood version (unki shuruaat data se pehle ki). Asar tab napte hain jab ye ${srP(R.share)} tak pahunche — tab ye normal update ban jata hai.</div>`:''; };
+// the updates (rows already made, newest first) and the staged rollouts in one date order, newest first (none: as before)
+const srMix=(ups,rows,srl)=>srl.length?ups.map((r,k)=>[r[0],0,k,rows[k]]).concat(srl.map((r,k)=>[r[0],1,k,srRow(r)]))
+  .sort((x,y)=>x[0]<y[0]?1:(x[0]>y[0]?-1:(x[1]-y[1]||x[2]-y[2]))).map(x=>x[3]).join('')+srNote():rows.join('');
+const srSince=(ups,srl)=>[ups.length?ups[ups.length-1][0]:null,srl.length?srl[0][0]:null].filter(Boolean).sort()[0]||'';
+const srHead=(ups,srl)=>{ const m=srl.length+' staged rollout'+(srl.length>1?'s':''); return !srl.length?'all '+ups.length:(ups.length?'all '+ups.length+' (+'+m+')':m); };
 function appParts(o,wBig,wIo,pg){ const a=o.a, L=o.L, det=detOf(a), oth=det?actOther(det.flags):0, arR=o.ar&&o.arc?relp(o.ar.v,o.arc.v):null, seR=o.pu&&o.pc?relp(o.pu.se,o.pc.se):null;
   const k=(lab,hint,v,f,unit,extra,dl,sub,tk)=>`<div class="as-kpi"${tk?` data-tk="${tk}"`:''}><div class="as-kl"><span>${lab}</span><span class="as-kh">${hint}</span></div><div class="as-kv"><span class="as-num">${v==null?'—':FMT[f](v)}</span>${unit?`<span class="as-ku">${unit}</span>`:''}${extra||''}</div><div class="as-kd ${dl.cls||''}">${dl.h||dl}</div><div class="as-ks">${sub||''}</div></div>`;
   const rd=(c,cc)=>retDl(c.p!=null?c.cd:null,c.p,cc.p!=null?cc.cd:null,cc.p);
@@ -15116,6 +15162,7 @@ function appParts(o,wBig,wIo,pg){ const a=o.a, L=o.L, det=detOf(a), oth=det?actO
     const ev=a.rel.filter(x=>x[0]===d).map(x=>'📦 '+esc(x[1])).concat(a.al.filter(x=>isOpen(x)&&startedOf(x)===d).map(x=>'🔔 '+SW[x.sev])).join(' · ');
     return `<tr class="${i>a.si?'as-prow':''}"><td class="as-l">${fd(d)}${i>a.si?' ⏳':''}</td><td>${fN(a.rt[i])}</td><td class="${f==null?'as-faint':(f<0?'as-bad':'as-good')}">${f==null?(i>a.si?'⏳':'—'):fX(f)}</td><td>${fN(a.nw[i])}</td><td>${a.d1[i-1]!=null&&a.nw[i-1]&&i<=a.si?fN(a.d1[i-1])+' · '+pc(a.d1[i-1]/a.nw[i-1],1):'—'}</td><td>${dur(a.tu[i])}</td><td>${money(a.rv[i])}</td><td>${a.rv[i]!=null&&a.a1[i]?moneyU(a.rv[i]/a.a1[i]):'—'}</td><td class="as-l" style="font-family:var(--as-font);font-size:12px">${ev}</td></tr>`; }).join('')+'</tbody></table>';
   const als=sortAl(a.al.filter(x=>x.kind!=='closed')), ups=a.rel.slice().reverse();
+  const srl=a.srl||[], s0=srSince(ups,srl);             // 📦 staged rollouts: their own rows, in date order with the updates
   const verdict=`<div class="as-verdict">${chip(o.pill)}<span>${L&&L.far!=null?`Old users <b class="${farCls(L)}">${fX(L.far)}/day</b> vs normal (${fR(L.relT)}) = <span class="as-insc">installs</span> <b>${L.fi==null?'?':fX(L.fi)}</b> + real <b class="${asliCls(L)}">${L.asli==null?'?':fX(L.asli)}</b>${L.usd!=null?' · ≈ <b>'+moneyL(L.usd,true)+'/day</b>':''} <span class="as-faint">· final days ${span(L.f,L.t)}</span>`:esc((L&&L.why)||whyJaldi(o)||'')}</span><span class="as-todo"><b>Next step:</b> ${esc(appTodo(o))}</span></div>`;
   return {
     verdict, kp:`<div class="as-dk">${kp}</div>`,
@@ -15124,7 +15171,7 @@ function appParts(o,wBig,wIo,pg){ const a=o.a, L=o.L, det=detOf(a), oth=det?actO
     tri:`<div class="as-panel"${pg?' id="as-pg-tri"':''}><div class="as-ph"><div><div class="as-eyebrow">Install week × day${a.tri.w.length?' · all '+a.tri.w.length+(a.tri.w.length===1?' week':' weeks'):''}</div><h2 style="font-size:15px">How many new users came back</h2><div class="as-hint">Har row = ek hafte ke installs${a.tri.w.length?' · saare hafte, '+fd(a.tri.w[a.tri.w.length-1].f)+' se aaj tak (naya upar)':''} · cell = us din kitne % wapas aaye (engine ka grid)</div></div></div><div class="as-cohw">${triGrid(a)}</div><div class="as-clg"><span class="as-k"><i style="background:linear-gradient(90deg,#13213a,#a78bfa);width:40px;height:9px"></i>fewer → more back</span><span class="as-k"><i style="background:var(--watch);width:6px;height:6px;border-radius:50%"></i>⏳ not final</span><span class="as-k">· = abhi us din tak nahi pahunche</span>${a.tri.w.some(r=>r.part)?'<span class="as-k">½ = adhoora data (kuch din ka data nahi)</span>':''}${a.tri.w.some(r=>r.nd)?'<span class="as-k">No data = GA4 ne us hafte ka wapsi data nahi diya</span>':''}</div>${Object.keys(triRels(a)).length?'<div class="as-clg" style="padding-top:0;color:var(--purple)">📦 = new update. Line ke upar = naye version ke installs, neeche = purane version ke.</div>':''}</div>`,
     als:`<div${pg?' id="as-pg-chg"':''}><div class="as-chg-h"><div><div class="as-eyebrow">This app's alerts</div><h2 style="font-size:15px">What changed?</h2></div></div>${als.length?`<div class="as-cards">${als.map(cardH).join('')}</div>`:'<div class="as-ok">✅ Is app pe koi khula alert nahi</div>'}${histHtml(a,pg?'pgh':'dh',false)}</div>`,
     ver:verHtml(o),
-    ups:ups.length?`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">📦 Updates · all ${ups.length}${ups.length?' · since '+fd(ups[ups.length-1][0]):''}</div><h2 style="font-size:15px">Updates and their effect</h2></div></div><div class="as-upd">${ups.map(r=>{ const ba=befAft(a,r[0]); return `<div class="as-u"><span class="as-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="as-faint">${UPDW(r[2]).replace(/^[^—]+— /,'')}</span>${ba?`<span class="as-ba">Old users/day ${ba}</span>`:''}</div>`; }).join('')}</div></div>`:'',
+    ups:(ups.length||srl.length)?`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">📦 Updates · ${srHead(ups,srl)}${s0?' · since '+fd(s0):''}</div><h2 style="font-size:15px">Updates and their effect</h2></div></div><div class="as-upd">${srMix(ups,ups.map(r=>{ const ba=befAft(a,r[0]); return `<div class="as-u"><span class="as-dt">${fd(r[0])}</span><b>${esc(r[1])}</b>${r[2]==='halt'?chip('bigda'):(r[2]==='hold'?chip('dhyan'):(r[2]==='win'?chip('behtar'):(r[2]==='continue'?chip('normal'):chip('jaldi'))))}<span class="as-faint">${UPDW(r[2]).replace(/^[^—]+— /,'')}</span>${ba?`<span class="as-ba">Old users/day ${ba}</span>`:''}</div>`; }),srl)}</div></div>`:'',
     dt:`<div class="as-panel"><div class="as-ph"><div><div class="as-eyebrow">Day by day</div><h2 style="font-size:15px">Daily numbers · ${span(W.f,W.t)}</h2></div></div><div class="as-tw" style="max-height:360px">${dt}</div></div>` }; }
 const appHead=(o,sz)=>{ const a=o.a; return `<h3 class="as-ainb">${ic(a,sz||28)}<span class="as-aint">${esc(a.store)} <span class="as-acn">· ${esc(a.acc)}</span></span></h3><div class="as-l2">${chip(o.pill)}${alBadge(a)}${szH(a)}${insTag(o)}<span>Data till ${fd(M.E)}${W.t>a.settled?' · ⏳ '+fd(dAdd(a.settled,1))+'+ not final':''}</span></div>`; };
 function drawerHtml(){ const o=R[ST.drawer], a=o.a, ord=navOrder(), pos=ord.indexOf(a.i), w=chartW(), P0=appParts(o,w,w);
@@ -15472,12 +15519,22 @@ function actUpdLine(d){ const id=d.app_id, U=DATA&&DATA.uninstall, r=U&&(U.apps|
   const wrap=h=>`<div class="card" id="act-impact" style="margin-bottom:14px;padding:12px 16px;line-height:1.7">${h}</div>`;
   if(!r||!Array.isArray(r.updates)) return wrap(`<span class="faint">📦 Is app ka Update impact →</span> <span class="lnk" onclick="uniGo('${uniQ(id)}')">Uninstall tab ›</span>`);
   const L=r.updates.filter(u=>u&&typeof u==='object'&&u.key&&u.date).sort((p,q)=>p.date<q.date?1:(p.date>q.date?-1:0));
-  if(!L.length) return wrap(`<span class="faint">📦 Pichhle ${uniIC('impact_list_days',60,'act')} din me koi update nahi</span>`);
+  const nD=uniIC('impact_list_days',60,'act');
+  if(!L.length) return wrap(`<span class="faint">📦 Pichhle ${nD} din me koi update nahi</span>${actSrlNote(d,null,nD)}`);
   const u=L[0], lt=u.late&&(u.late.level==='hold'||u.late.level==='halt')&&UNI_VERD[u.late.level];
   const vd=uniNever({level:u.level,final:u.final})?UNI_NEVER_PILL(null):uniVerdChip({level:u.level});
   return wrap(`📦 Is app ka aakhri update: <b style="color:var(--ink2)">${hAttr(u.label||'App update')}</b> (${uniD(u.date)}) · ${vd}`
     +(lt?` · <span class="pill ${lt[1]}">After 30 days: ${lt[0]}</span>`:'')
-    +` → <span class="lnk" onclick="uniImpGo('${uniQ(id)}','${uniQ(u.key)}')">Full card in Uninstall ›</span>`); }
+    +` → <span class="lnk" onclick="uniImpGo('${uniQ(id)}','${uniQ(u.key)}')">Full card in Uninstall ›</span>`+actSrlNote(d,u.date,null)); }
+// 📦 the newest staged rollout (engine small_rollouts, carried by the Active users detail: a new version that never
+// reached the release share — no verdict, no numbers but its measured share), said after the line above when it came
+// after the update the line names (with no update in the list's days: when it is within them) — so "the latest update"
+// never hides a newer version that is out. '' when there is none. Shares are rounded DOWN (never shown as the share).
+const actSrlPct=p=>{ const v=(+p||0)*100; if(!(v>0)) return '0%'; if(v<0.01) return '&lt;0.01%'; const k=v<1?2:1, m=Math.pow(10,k); return String(parseFloat((Math.floor(v*m+1e-6)/m).toFixed(k)))+'%'; };
+function actSrlNote(d,after,within){ const s=(Array.isArray(d.small_rollouts)?d.small_rollouts:[]).filter(x=>x&&x.date&&x.version).sort((p,q)=>p.date<q.date?1:(p.date>q.date?-1:0))[0];
+  if(!s||(after&&s.date<=after)||(within!=null&&!(d.data_till&&uniDiff(s.date,d.data_till)<=within))) return '';
+  const v=String(s.version), lab=/^v/i.test(v)?v:'v'+v;
+  return ` · <span class="faint">${after?'baad me ':''}staged rollout <b style="color:var(--ink2)">${hAttr(lab)}</b> (${uniD(s.date)}, ${s.live?'abhi '+actSrlPct(s.last_share):'max '+actSrlPct(s.max_share)} users tak) — normal update nahi bana${Array.isArray(s.surge)&&s.surge.length?'':', iska asar nahi napa'}</span>`; }
 // "📌 At a glance": the engine's one line, six tiles (last 7 settled days vs the 4 weeks before), context, latest day,
 // the data-edge sentences, the Uninstall tab's line for this app and the provisional footnote
 const ACT_TILES=[['ret_dau','Old users/day','Roz ke active users me se us din ke naye installs hata ke — old users.'],['d1','Back next day','Kisi din ke naye users (GA4 \'New users\', Firebase jaisa base) me se kitne % agle din phir aaye.'],
