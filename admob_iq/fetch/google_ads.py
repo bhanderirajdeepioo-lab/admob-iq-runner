@@ -496,6 +496,14 @@ def fetch_campaign_accounts(s, *, mode="live"):
     return cmap
 
 
+def needs_campaign_accounts(spend):
+    """Does any cached campaign of `spend` lack its account? Only those are what apply_campaign_accounts fills: with
+    none, the roster queries (fetch_campaign_accounts) could change nothing, so the build does not ask them."""
+    if not spend:
+        return False
+    return any(not c.get("account") for camps in (spend.get("campaigns") or {}).values() for c in camps)
+
+
 def apply_campaign_accounts(spend, cmap):
     """Fill missing account/account_name on a spend dict's cached campaigns from the roster map (in place)."""
     if not spend or not cmap:
@@ -522,6 +530,40 @@ def take_rows():
     global _TAKEN
     out, _TAKEN = _TAKEN, {}
     return out
+
+
+SPEND_WORKERS = 4      # accounts asked side by side per query (GADS_SPEND_WORKERS; 1 = one after another, as before)
+
+
+def _spend_workers():
+    import os
+    try:
+        n = int(os.getenv("GADS_SPEND_WORKERS") or SPEND_WORKERS)
+    except ValueError:
+        n = SPEND_WORKERS
+    return max(1, n)
+
+
+def _per_account(accounts, ask, workers):
+    """ask(account) for every account → [(account, rows, None) | (account, None, exception)] in ACCOUNT order. With
+    workers > 1 the requests go side by side (one per account at a time, like the geo / archive steps); the caller
+    reads the list in order, so its rows, error list and log lines come out exactly as asked one after another."""
+    def one(a):
+        try:
+            return a, ask(a), None
+        except Exception as e:
+            return a, None, e
+    if workers <= 1 or len(accounts) <= 1:
+        return [one(a) for a in accounts]
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=min(workers, len(accounts))) as ex:
+        return list(ex.map(one, accounts))
+
+
+def _not_enabled(e):
+    """HTTP 403 CUSTOMER_NOT_ENABLED: the whole account cannot answer (cancelled / not enabled) — any query to it."""
+    s = str(e)
+    return s.startswith("HTTP 403") and "CUSTOMER_NOT_ENABLED" in s
 
 
 def fetch_app_spend(s, start, end, *, mode="live"):
@@ -564,14 +606,20 @@ def fetch_app_spend(s, start, end, *, mode="live"):
         else:
             hint = ""
         return {"error": "MCC accounts nahi mile (dev token approval / MCC id / access): %s%s" % (em, hint)}
-    rows, errs = [], []
-    for a in accounts:
-        try:
-            for r in _app_spend_for(a["id"], mcc, dev, token, start, end):
-                r["currency"] = a["currency"]; r["account"] = a["id"]; r["account_name"] = a.get("name") or ""
-                rows.append(r)
-        except Exception as e:
+    # Each of the three queries goes to the accounts side by side (_per_account); the answers are taken in account
+    # order, so every row, error and log line is in the same order as when asked one account after another.
+    workers = _spend_workers()
+    rows, errs, gone = [], [], set()
+    for i, (a, got, e) in enumerate(_per_account(
+            accounts, lambda a: _app_spend_for(a["id"], mcc, dev, token, start, end), workers)):
+        if e is not None:
             errs.append(str(e)[:220])
+            if _not_enabled(e):
+                gone.add(i)                  # a not-enabled account answers 403 to installs / day-1 too: not asked
+            continue
+        for r in got:
+            r["currency"] = a["currency"]; r["account"] = a["id"]; r["account_name"] = a.get("name") or ""
+            rows.append(r)
     if not rows and errs:
         return {"error": "Spend query fail (%d/%d accounts): %s" % (len(errs), len(accounts), errs[0])}
     if not rows:
@@ -580,24 +628,30 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     agg = _aggregate(rows)
     # Installs + conversion value: best-effort + SEPARATE from spend, so a problem here can never
     # break the spend/ROAS numbers above.
+    # The accounts that answered the spend query 403 CUSTOMER_NOT_ENABLED are not asked again (the whole account
+    # cannot answer: no rows either way — as gads_campaign_day._ask does).
+    asked = [a for i, a in enumerate(accounts) if i not in gone]
+    if gone:
+        print("roas: installs + day-1 not asked for %d not-enabled accounts" % len(gone), file=sys.stderr)
     inst_rows = []
-    for a in accounts:
-        try:
-            for r in _app_installs_for(a["id"], mcc, dev, token, start, end):
-                r["currency"] = a["currency"]; r["account"] = a["id"]; inst_rows.append(r)
-        except Exception as e:
+    for a, got, e in _per_account(asked, lambda a: _app_installs_for(a["id"], mcc, dev, token, start, end), workers):
+        if e is not None:
             print("roas: installs/convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
+            continue
+        for r in got:
+            r["currency"] = a["currency"]; r["account"] = a["id"]; inst_rows.append(r)
     agg["installs"] = _aggregate_installs(inst_rows)
     agg["convval"] = _aggregate_convval(inst_rows, base=agg["currency_src"])   # same base as spend
     # Day-1 conversion value (retroactive, via conversion-lag bucket) — best-effort + separate, so a
     # field/version problem here can never break spend/installs/convval above.
     d1_rows = []
-    for a in accounts:
-        try:
-            for r in _app_convval_lag_for(a["id"], mcc, dev, token, start, end):
-                r["currency"] = a["currency"]; r["account"] = a["id"]; d1_rows.append(r)
-        except Exception as e:
+    for a, got, e in _per_account(asked, lambda a: _app_convval_lag_for(a["id"], mcc, dev, token, start, end),
+                                  workers):
+        if e is not None:
             print("roas: day-1 convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
+            continue
+        for r in got:
+            r["currency"] = a["currency"]; r["account"] = a["id"]; d1_rows.append(r)
     agg["convval_day1"] = _aggregate_convval(d1_rows, base=agg["currency_src"])
     if s.get("gads_archive"):                    # the per-campaign store's input (never part of the returned cache)
         _TAKEN = {"start": str(start), "end": str(end), "accounts": [dict(a) for a in accounts],

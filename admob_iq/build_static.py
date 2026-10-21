@@ -1665,7 +1665,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         try:
             from .fetch.google_ads import (fetch_app_spend, resolve_store_ids, merge_spend,
                                            fetch_campaign_accounts, apply_campaign_accounts,
-                                           _fx_to_usd, SPEND_CACHE_V)
+                                           needs_campaign_accounts, _fx_to_usd, SPEND_CACHE_V)
             from .fetch.fetcher import make_client
             from .engine.roas import build_roas
             # Incremental spend cache: Google Ads restates spend for ~60 days, so re-pull only a recent
@@ -1722,10 +1722,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 except Exception as _se:
                     print(f"value spend date skipped: {type(_se).__name__}", file=sys.stderr)
             # Backfill the adwords account onto OLD/paused campaigns the windowed spend fetch didn't
-            # re-tag (they showed a '?' account). A cheap roster query maps campaign→account for all.
+            # re-tag (they showed a '?' account). A cheap roster query maps campaign→account for all —
+            # asked only when a cached campaign has no account (else it could fill nothing: every fresh
+            # row is tagged by fetch_app_spend, so the roster's ~1 call per account is skipped).
             try:
                 with _sc.stage("gads_campaign_accounts"):
-                    _cmap = fetch_campaign_accounts(s, mode="live")
+                    _cmap = fetch_campaign_accounts(s, mode="live") if needs_campaign_accounts(spend) else {}
                 apply_campaign_accounts(spend, _cmap)
             except Exception as _ce2:
                 print(f"campaign account backfill skipped: {_ce2}", file=sys.stderr)
