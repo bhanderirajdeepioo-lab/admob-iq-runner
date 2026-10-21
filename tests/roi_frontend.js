@@ -1314,7 +1314,7 @@ async function moreKeepAll(dc, packs) {
       c: CCS.map((cc, i) => [cc, 1000 - i * 100, 50 - i * 5, null, i < 4 ? 0 : 1, 3, i === 1 ? 0.25 : 0, i === 1 ? 0.125 : 0])
         .concat([['--', 40, null, null, 1, 70, 1, 0], ['XX', null, 12, null, 1, null, null, null]]),
       from: '2026-08-05', to: '2026-10-13', thru: '2026-10-13', fthru: '2026-10-10', newest: '2026-10-13',
-      kc: { own_months: 5, pool_months: 1, near_months: 2, app_months: 3, est_months: 1, tzh: 12.5,
+      kc: { own_months: 5, pool_months: 1, app_months: 3, est_months: 1, tzh: 12.5,
         unp: { '2026-08': 0.004, '2026-09': 0.031, '2026-10': 0.012 }, unp_all: 0.018, unp_lim: 0.02 },
       geo: { from: '2026-09-01', till: '2026-10-12', known_days: 42, unknown_days: 28, untied_days: 2, unk: [['2026-08-05', '2026-08-31'], ['2026-10-13', '2026-10-13']],
         xx_share: 0.08, cov: 0.97, billed: 1, tzh: -9.5, tzs: 1 },
