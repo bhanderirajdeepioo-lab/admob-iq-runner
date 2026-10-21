@@ -1597,9 +1597,19 @@ def test_country_geo_day_short_rest_is_not_split():
     geo = {"days": {"s1": {k[0]: {"AA": [60_000_000, 1.0], "BB": [38_000_000, 2.0]},       # 2% has no country
                            k[1]: {"AA": [60_000_000, 1.0], "BB": [34_000_000, 2.0]},       # 6%: too much
                            k[2]: {"AA": [60_000_000, 1.0], "BB": [42_000_000, 2.0]}}}}     # 2% more than spent
-    spend = {"first": k[0], "till": k[-1]}
+    spend = {"first": k[0], "till": (days[-1] + timedelta(days=rb.GEO_SHORT_SETTLE)).isoformat()}
     cost, unk, st = rb._geo_app(geo, ["s1"], sdaily, spend, days)
     assert unk == {days[1], days[2]} and st["untied_days"] == 2 and st["short_days"] == 1
     assert cost["AA"] == {days[0]: (60_000_000, 1.0)} and cost["BB"] == {days[0]: (38_000_000, 2.0)}
     assert cost[rb.NOT_SPLIT] == {days[0]: (2_000_000, None)} and st["xx_share"] == 0.02
     assert st["short_share"] == 0.02
+
+    # a day still settling (within GEO_SHORT_SETTLE days of the spend cache's last day): its split may be short only
+    # because its cost was still being booked when the geo step read it — unknown until it ties
+    cost, unk, st = rb._geo_app(geo, ["s1"], sdaily, {"first": k[0], "till": k[0]}, days[:1])
+    assert unk == {days[0]} and st["untied_days"] == 1 and st["short_days"] == 0 and not cost
+    # two short stores on one install day: one short day, both rests in Not split
+    sd2 = {"s1": {k[0]: 100_000_000}, "s2": {k[0]: 50_000_000}}
+    g2 = {"days": {"s1": {k[0]: {"AA": [98_000_000, 1.0]}}, "s2": {k[0]: {"BB": [48_000_000, 1.0]}}}}
+    cost, unk, st = rb._geo_app(g2, ["s1", "s2"], sd2, spend, days[:1])
+    assert not unk and st["short_days"] == 1 and cost[rb.NOT_SPLIT] == {days[0]: (4_000_000, None)}

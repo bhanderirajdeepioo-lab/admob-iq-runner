@@ -103,8 +103,11 @@ the file changes. Per country (every one GA4 names, "--" = GA4's "(not set)" = "
   * spend = Google Ads by country × day (fetch.gads_geo_day, read per app: only its own stores) of the app's own spend
     store ids (value_build.app_sids), USD at that day's rate (the same FX series); a day is known only when every one
     of those stores either did not spend (spend cache) or has a committed geo day whose Σ over countries (+ "XX") ties
-    to the spend cache's cost within GEO_TIE_REL / GEO_TIE_ABS — else unknown (null: '—', never a weekly cell spread
-    over days; "untied_days" counts the ones with a split that did not tie). Ads "XX" (unmapped) → "Not split" (its
+    to the spend cache's cost within GEO_TIE_REL / GEO_TIE_ABS, or (a day ≥ GEO_SHORT_SETTLE days before the spend
+    cache's last day) falls short of it by ≤ GEO_SHORT_MAX — Google Ads' geographic report leaves some cost with no
+    country: that rest is "Not split", each country its own cost ("short_days" / "short_share") — else unknown (null:
+    '—', never a weekly cell spread over days; "untied_days" counts the ones with a split that did not tie, or short
+    on a day still settling). Ads "XX" (unmapped) → "Not split" (its
     spend per install day; revenue none). The Ads day is the Ads ACCOUNT's day (its time zone, from the hourly store's
     accounts of the app's stores): "geo" "tzh" = hours GA4's day starts before it (null: unknown / zones mixed).
   * rows: EVERY install day from the history start to the last day read through; a day with no installs, no revenue
@@ -117,7 +120,7 @@ another build from the one its index names: a pack file is served as its newest 
 app's k]], "from", "to", "thru", "fthru", "newest", "kc": {own / pool / app / est months, "tzh" hours AdMob's day is
 off GA4's, "unp" {month: GA4 revenue share without a country}, "unp_all" (all
 months), "unp_lim"}, "geo": {"from", "till", "known_days", "unknown_days", "untied_days", "unk" ranges, "xx_share",
-"cov", "billed", "tzh", "tzs" (Ads time zones of the app's stores)}, "loss": {"days", "max_share", "flag_days",
+"cov", "short_days", "short_share", "billed", "tzh", "tzs" (Ads time zones of the app's stores)}, "loss": {"days", "max_share", "flag_days",
 "usd"}, "diff" (+ "unk": the "--" row's part of "cty"), "ng": {"m": {month: [USD (6 decimals), its "unp", "own" |
 "app"]}, "usd" (Σ, 6 decimals), "all" (Σ All), "rel"}}. Any failure of it: no "cd", every other byte as without it
 (counted; the Ads split's read failing: every day unknown, counted too).
@@ -160,7 +163,10 @@ UNP_LIM = 0.02                              # a month whose GA4 revenue without 
                                             # > 2% of it: its k_c carries that share (AdMob places those users) → ≈
 GEO_TIE_REL, GEO_TIE_ABS = 0.01, 1_000_000  # a store-day's country split ties to the spend cache: within 1% or 1 unit
 GEO_SHORT_MAX = 0.05                        # … or Google Ads names a country for all but ≤ 5% of it (its geographic
-                                            # report leaves some cost with no country): that rest is "Not split"
+                                            # report leaves some cost with no country): that rest is "Not split" —
+GEO_SHORT_SETTLE = 3                        # only on a day ≥ this many days before the spend cache's last day (a newer
+                                            # day's split can be short only because its cost was still being booked
+                                            # when the geo step read it: it ties once read again)
 NO_CC, NOT_SPLIT = "--", "XX"               # GA4's "(not set)"; Google Ads' unmapped ("Not split")
 V = 1
 T = val.T                                   # 0, 1, 3, 7, 14, 30, 60, 90, 180, 365
@@ -1312,7 +1318,8 @@ def _kc(G, A, whole, months, appk):
 def _geo_app(geo, sids, sdaily, spend, days, has_spend=True):
     """Google Ads cost by country × install day of the app's own spend stores → ({cc: {X: (base micros, downloads |
     None)}}, the days whose split is unknown (outside the spend cache's span, a store spent that day with no committed
-    geo day, or a store whose committed split does not tie to the spend cache's cost of that day), the "geo" stats)."""
+    geo day, or a store whose committed split does not tie to the spend cache's cost of that day — short by ≤
+    GEO_SHORT_MAX on a settled day is known, the rest "Not split"), the "geo" stats)."""
     gd = (geo or {}).get("days") or {}
     first = _d(spend["first"]) if has_spend and spend and spend.get("first") else None
     till = _d(spend["till"]) if has_spend and spend and spend.get("till") else None
@@ -1334,7 +1341,8 @@ def _geo_app(geo, sids, sdaily, spend, days, has_spend=True):
         g = gsum(ent)
         if abs(g - c) <= max(GEO_TIE_REL * abs(c), GEO_TIE_ABS):
             return None
-        return "short" if 0 < g < c and c - g <= GEO_SHORT_MAX * c else "off"
+        settled = till is not None and _d(k) <= till - timedelta(days=GEO_SHORT_SETTLE)
+        return "short" if settled and 0 < g < c and c - g <= GEO_SHORT_MAX * c else "off"
     for X in days:
         k = _iso(X)
         why = {tie(s, k) for s in sids} if first and till and first <= X <= till else {"span"}
@@ -1342,7 +1350,7 @@ def _geo_app(geo, sids, sdaily, spend, days, has_spend=True):
             unk.append(X)
             untied += "off" in why
             continue
-        agg = {}
+        agg, was_short = {}, False
         for s in sids:
             sp += int((sdaily.get(s) or {}).get(k) or 0)
             ent = (gd.get(s) or {}).get(k)
@@ -1354,7 +1362,7 @@ def _geo_app(geo, sids, sdaily, spend, days, has_spend=True):
                 e = agg.setdefault(NOT_SPLIT, [0, 0.0, False])
                 e[0] += c_s - g_s
                 e[2] = True
-                short += 1
+                was_short = True
                 shortc += c_s - g_s
             for cc, v in ent.items():
                 if not isinstance(v, list) or not v:
@@ -1365,6 +1373,7 @@ def _geo_app(geo, sids, sdaily, spend, days, has_spend=True):
                     e[1] += float(v[1])
                 else:
                     e[2] = True
+        short += was_short                                      # install days (a day with two short stores: one)
         for cc, (c, dl, dln) in agg.items():
             tot += c
             xx += c if cc == NOT_SPLIT else 0
