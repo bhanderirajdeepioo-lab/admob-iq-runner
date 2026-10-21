@@ -152,7 +152,7 @@ up before the filters, 3 (the first split names nothing more) + 1; never more th
 — which of the two GA4 does the log's "futile" / "hidden" counts will show (not measured yet). After the walk, a day:
 the new final day + the hot window (≤ 3 × (HOT_CAP + 1) calls, a round a Stop cut going on with its unread days) every
 6 hours and at the property's midnight. The repair of a month ≈ 30 day reads × the calls a day takes (≈ 30 × 4–10 =
-120–300 on the biggest app): ≤ REPAIR_CALLS (30) started a run, and only with a day's room (calls and time) left →
+120–300 on the biggest app): ≤ REPAIR_CALLS (env GA4_CUBE_REPAIR_CALLS; 0 = off, the default) started a run, and only with a day's room (calls and time) left →
 about 4–10 runs a month, the biggest loss first. A run never makes more than MAX_CALLS (60) calls an app: the final
 day (≤ 25, on a new day) and the hot days (≤ 39, every 6 h) go first, the repair only with what they left (most
 hourly runs: they read nothing, the repair gets its 30); what does not fit is read next run. GA4 tokens stay under
@@ -188,7 +188,10 @@ MIN_CAP = 3                         # the smallest cap a day cut again and again
 CUT_TRIES = 2                       # runs a day may be cut by a Stop (after ≥ MIN_CAP calls of it) before its cap
                                     # shrinks
 FULL_SHARE = 0.9                    # … a Stop counts only in an app that started with ≥ this share of the run's budget
-REPAIR_CALLS = 30                   # calls a run may start repair days with (a started day finishes or is cut)
+REPAIR_CALLS = int(os.environ.get("GA4_CUBE_REPAIR_CALLS") or 0)    # calls a run may start repair days with (a started
+                                    # day finishes or is cut); 0 = the repair is off. Off by default: on real GA4 the
+                                    # country "(other)" is folded BEFORE filters (a split names no row its root had
+                                    # not), so a repair read gets nothing back — measured on its first real run
 RESCAN_DAYS = 7                     # the repair's queue made again (while empty) after this many days
 LOG_KEEP = 24                       # repaired months kept in the head's "rep" "log"
 REP = ".rep.json.gz"                # a month's copy while the repair builds it
@@ -205,6 +208,7 @@ OTHER = "(other)"
 NO_CC = "--"                        # countryId "(not set)" / empty
 HOT = "hot.json.gz"
 LEDGER = ("st", "rows", "loss", "t", "fl", "via", "at", "sv", "ol", "n", "cap")
+LEDGER_OPT = ("fu", "hd", "dp")       # kept on a day only when the read set them (why a split stopped, hidden micros, depth)
 F_OTHER, F_SMP, F_CUT, F_THR = 1, 2, 4, 8       # GA4's flags on an answer
 RETRY = F_OTHER | F_SMP | F_CUT                 # … that a smaller read can avoid
 
@@ -506,7 +510,9 @@ def split_read(ga, D, cap=DAY_CAP, xs=None, dims=DIMS, total=None):
             leaves.append((rows, fl))                           # what is still "(other)" in it: the day's loss
             continue
         got = [read(k) for k in kids]                           # the part's rows kept until both halves are in
-        if not fl & (F_SMP | F_CUT) and sum(_named(r) for r, _ in got) <= _named(rows):
+        still = fl & F_SMP and all(f & F_SMP for _, f in got)   # sampled, and both halves sampled again: a
+        if still or not fl & (F_SMP | F_CUT) and sum(_named(r) for r, _ in got) <= _named(rows):   # split never
+            #                                                     gets past GA4's sampling (a cut part still splits)
             info["futile"] = 1                                  # the halves named no row the part had not (GA4 rolls
             leaves.append((rows, fl))                           # rows into "(other)" before a filter): no part read
             leaves.extend((e[5], e[6]) for e in heap)           # by a filter will — the part as it was, the others as
@@ -696,6 +702,7 @@ def _merge(mo, k, rec):
     if rec.get("loss"):
         mo["loss"][k] = rec["loss"]
     mo["days"][k] = {f: rec.get(f) for f in LEDGER}
+    mo["days"][k].update({f: rec[f] for f in LEDGER_OPT if rec.get(f)})
 
 
 def _oloss(led, rep_at=None):
@@ -930,7 +937,8 @@ def step_app(ga, cube, today, hs, now):
                 did = True
         h["hot_at"], h["hot_today"] = now_iso, today.isoformat()
         h.pop("hot_cyc", None)
-    did = repair(ga, cube, now) or did                      # with what the run has left
+    if REPAIR_CALLS > 0:
+        did = repair(ga, cube, now) or did                  # with what the run has left
     return "fetched" if did else "fresh"
 
 

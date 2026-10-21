@@ -35,6 +35,15 @@ W = {"AA": 8, "BB": 6, "CC": 4, "DD": 2, "(not set)": 2}          # every countr
 WSUM = sum(W.values())
 
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _repair_on(monkeypatch):
+    """The repair is off by default (GA4_CUBE_REPAIR_CALLS unset → 0); these tests check it as it runs when on."""
+    monkeypatch.setattr(cu, "REPAIR_CALLS", 30)
+
+
 def ymd(d):
     return d.strftime("%Y%m%d")
 
@@ -63,13 +72,13 @@ class FakeGA:
     "(other)" row on that day's answers — not on a day's total read (no filter, no countryId: the cube's date-only
     total, the cohort's every-install-day read) unless oth_flag_total. smp_total / cut_total: such a total read
     sampled / cut. grow: every call, the revenue of a day not final yet grows by that share (GA4 still adding to it
-    during the read)."""
+    during the read). smp_day: every answer with countryId holding that day says sampling (each part of a split too)."""
 
     def __init__(self, today=TODAY, cap=None, stop_after=None, fill=0.5, start=HS, max_lag=120, extra_day=None,
                  notset_day=None, neg_day=None, thr_day=None, smp_multi=False, cut_multi=False, oth_flag_day=None,
                  max_calls=None, keep=False, stop_why="calls", hide=False, prefold=False, oth_flag_total=False,
-                 smp_total=False, cut_total=False, grow=0.0):
-        self.hide, self.prefold = hide, prefold
+                 smp_total=False, cut_total=False, grow=0.0, smp_day=None):
+        self.hide, self.prefold, self.smp_day = hide, prefold, smp_day
         self.oth_flag_total, self.smp_total, self.cut_total, self.grow = oth_flag_total, smp_total, cut_total, grow
         self.today, self.cap, self.stop_after, self.fill, self.start, self.max_lag = (today, cap, stop_after, fill,
                                                                                       start, max_lag)
@@ -146,6 +155,8 @@ class FakeGA:
             meta["subjectToThresholding"] = True
         if self.smp_multi and a < b:
             meta["samplingMetadatas"] = [{"samplesReadCount": "1", "samplingSpaceSize": "2"}]
+        if self.smp_day and a <= self.smp_day <= b and "countryId" in dims:
+            meta["samplingMetadatas"] = [{"samplesReadCount": "1", "samplingSpaceSize": "2"}]   # every part of it
         self._cut = (self.cut_multi and a < b) or (self.cut_total and total)
         self.last_metas = [{}, meta]                            # the flag on any page counts
         return rows
@@ -1447,3 +1458,35 @@ def test_build_hook_switch(tmp_path, monkeypatch, capsys):
     dash = tub.dashboard()
     ub.run_uninstall(dash, data, out, tub.ga4_settings(ga4_cube=True), now=tub.NOW)
     assert "ga4 cube skipped: ZeroDivisionError" in capsys.readouterr().err and dash["uninstall"]["apps"]
+
+
+def test_repair_off_by_default(monkeypatch):
+    """GA4_CUBE_REPAIR_CALLS unset → REPAIR_CALLS 0 and step_app never calls the repair (no call, no copy, head kept)."""
+    import importlib
+    monkeypatch.delenv("GA4_CUBE_REPAIR_CALLS", raising=False)
+    fresh = importlib.reload(cu)
+    try:
+        assert fresh.REPAIR_CALLS == 0
+        monkeypatch.setattr(fresh, "repair", lambda *a, **k: (_ for _ in ()).throw(AssertionError("repair called")))
+        ga = FakeGA(today=LATER)
+        cube = fresh.Cube(None, "x~1", "s1")
+        fresh.step_app(ga, cube, LATER, HS, datetime(LATER.year, LATER.month, LATER.day, 12, tzinfo=timezone.utc))
+    finally:
+        monkeypatch.setenv("GA4_CUBE_REPAIR_CALLS", "30")
+        importlib.reload(cu)
+    assert cu.REPAIR_CALLS == 30
+
+
+def test_sampled_day_not_chased():
+    """A day whose every part GA4 samples: one split (3 calls) shows the halves sampled too → stop there (no 23-call
+    walk to the cap); the day kept as read, flagged, "fu" kept on its ledger."""
+    D = TODAY - timedelta(days=10)
+    ga = FakeGA(today=TODAY, smp_day=D)
+    rows, info = cu.split_read(ga, D, cap=cu.DAY_CAP, total=cu.day_total)
+    assert ga.calls <= 3 and info["futile"] == 1 and info["flag"]
+    rec = cu.read_day(FakeGA(today=TODAY, smp_day=D), D, "2026-10-21T00:00:00Z")
+    assert rec.get("fu") == 1 and rec["n"] <= 3
+    mo = cu._empty_month("s1")
+    cu._merge(mo, D.isoformat(), rec)
+    assert mo["days"][D.isoformat()]["fu"] == 1 and "hd" not in mo["days"][D.isoformat()]
+
