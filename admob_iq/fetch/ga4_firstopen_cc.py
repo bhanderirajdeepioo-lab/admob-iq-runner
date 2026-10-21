@@ -20,9 +20,11 @@ data/ga4_firstopen_cc/<key>.json.gz (private repo):
 Per app and run (its screens come from the First open store; at most MAX_CALLS calls; the property's quota floors):
   * every REFRESH_HOURS the last RECENT_DAYS days again (not final: GA4 still adds to them);
   * a day read while not final is read once more when it is (≥ FINAL_LAG days old);
-  * the backfill of what GA4 still has (BACKFILL_DAYS back), the oldest day first (it is the next to leave GA4), then
-    the newest, in turn.
-Properties run side by side (each has its own quota). Switched by GA4_FIRSTOPEN_CC (on by default in the workflow).
+  * the backfill from the First open store's own first day (the All countries table's day 1) — at most BACKFILL_DAYS
+    back — OLDEST day first: it is the next one GA4 deletes. A day GA4's funnel no longer has (its event data is gone)
+    is kept as {"none": true, "why": "ga4"} and never read again; nothing is stored as zeros.
+Properties run side by side (each has its own quota), the property whose apps waited longest first (each app's
+"turn"), so a big property never keeps the others waiting run after run. Switched by GA4_FIRSTOPEN_CC (on by default in the workflow).
 Never raises; never prints (log_line: counts only).
 """
 import hashlib
@@ -48,12 +50,12 @@ DIM = "countryId"
 RT = "RESERVED_TOTAL"               # GA4's own total row in a funnel breakdown
 RECENT_DAYS = 3                     # today … 2 days back: refreshed every REFRESH_HOURS
 FINAL_LAG = 3                       # a day is final from 3 days old on (as the First open status reads it)
-BACKFILL_DAYS = 62                  # asked once, back from today (GA4 answers what its retention kept)
+BACKFILL_DAYS = 120                 # the furthest back ever asked (GA4 answers what its retention kept)
 REFRESH_HOURS = 6.0
-MAX_CALLS = 60                      # per app per run (the backfill goes on next run)
-BUDGET_SEC = 150
+MAX_CALLS = 150                     # per app per run (the backfill goes on next run)
+BUDGET_SEC = 240
 RETRY_HOURS = 3.0
-WORKERS = 3                         # properties read side by side
+WORKERS = 6                         # properties read side by side
 
 
 def sig(steps):
@@ -93,6 +95,8 @@ def read_day(ga, steps, day, ccs, today, now_iso):
     """One day → its record (every group read, or Stop: a day is kept only whole)."""
     j = ga.funnel(gf.funnel_body(steps["splash"], steps["home"], day, day, "date"))
     tot, smp = _three(gf.parse_table(j)), gf.sampling(j)
+    if not any(tot) and (today - day).days >= FINAL_LAG:
+        return {"none": True, "why": "ga4", "at": now_iso}    # first opens that day, but no event data left in GA4
     c = {}
     order = sorted(ccs, key=lambda k: (-ccs[k], k))
     for i in range(0, len(order), GROUP):
@@ -108,23 +112,22 @@ def read_day(ga, steps, day, ccs, today, now_iso):
     return {"c": c, "t": tot, "smp": smp, "fin": (today - day).days >= FINAL_LAG, "sg": sig(steps), "at": now_iso}
 
 
-def due(store, today, now):
+def due(store, today, now, first=None):
     """The days to read this run, in order: the recent ones (when due), the not-final ones now final, then the backfill
-    (oldest, newest, next oldest …)."""
+    from `first` (the First open store's first day; else BACKFILL_DAYS back, never further), oldest first."""
     days = store.get("days") or {}
     out = []
     if gu._hours_since(store.get("recent_at"), now) >= REFRESH_HOURS:
         out += [today - timedelta(days=i) for i in range(RECENT_DAYS)]
     fin_edge = today - timedelta(days=FINAL_LAG)
-    out += sorted(gu._d(k) for k, v in days.items()
-                  if not v.get("none") and not v.get("fin") and gu._d(k) <= fin_edge)
-    todo = [today - timedelta(days=i) for i in range(FINAL_LAG, BACKFILL_DAYS + 1)
-            if (today - timedelta(days=i)).isoformat() not in days]
-    todo.sort()
-    while todo:
-        out.append(todo.pop(0))
-        if todo:
-            out.append(todo.pop())
+    out += sorted(gu._d(k) for k, v in days.items()             # read while not final, or stored as all zeros
+                  if not v.get("none") and (not v.get("fin") or not any(v.get("t") or [])) and gu._d(k) <= fin_edge)
+    lo = max(first or (today - timedelta(days=BACKFILL_DAYS)), today - timedelta(days=BACKFILL_DAYS))
+    d = lo
+    while d <= fin_edge:
+        if d.isoformat() not in days:
+            out.append(d)
+        d += timedelta(days=1)
     seen, uniq = set(), []
     for d in out:
         if d not in seen:
@@ -133,10 +136,10 @@ def due(store, today, now):
     return uniq
 
 
-def step_app(ga, store, steps, today, now):
+def step_app(ga, store, steps, today, now, first=None):
     """One app's run on its store → "fetched" / "fresh". Raises Stop (the days read so far are kept)."""
     now_iso = gu._now_iso(now)
-    todo = due(store, today, now)
+    todo = due(store, today, now, first)
     if not todo:
         return "fresh"
     days = store.setdefault("days", {})
@@ -242,8 +245,9 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                 except Exception:
                     access[owner] = None
             by_prop.setdefault(r["property_id"], []).append((a, st, r, steps, main))
-        for xs in by_prop.values():
-            xs.sort(key=lambda t: (not t[1].get("deferred"), t[1].get("last_ok") or "", t[0]["app_id"]))
+        for xs in by_prop.values():                     # the app that waited longest goes first (no turn yet = first)
+            xs.sort(key=lambda t: (t[1].get("turn") or "", t[0]["app_id"]))
+        order = sorted(by_prop, key=lambda p: (min(t[1].get("turn") or "" for t in by_prop[p]), p))
 
         def one_prop(pid):
             prop = {"quota": None, "stop": None}
@@ -262,12 +266,14 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                     continue
                 tz = main.get("time_zone") or (ust["tz"].get(pid) or "UTC")
                 today = now.astimezone(ZoneInfo(tz)).date()
+                mdays = sorted(k for k, v in (main.get("days") or {}).items() if v)
+                first = gu._d(mdays[0]) if mdays else None
                 path = store_path(data_dir, aid)
                 store = load_store(path) or {"v": STORE_V}
                 n0 = len(store.get("days") or {})
                 ga = gf.App(tok, pid, r["stream_id"], prop, over=over)
                 try:
-                    res = step_app(ga, store, steps, today, now)
+                    res = step_app(ga, store, steps, today, now, first)
                     upd = dict(last_try=now_iso, fail=None)
                     if res == "fetched":
                         upd["last_ok"] = now_iso
@@ -284,6 +290,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                     if res != "deferred":
                         st.pop("deferred", None)
                     st.update(upd)
+                    st["turn"] = now_iso                # it had its turn (a cut-off app goes last next time too)
                     st["key"] = gu.file_key(aid)
                     out["apps"][aid] = res
                     counts["calls"] += ga.calls
@@ -291,7 +298,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                     counts["days"] += max(0, len(store.get("days") or {}) - n0)
 
         with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-            list(ex.map(one_prop, sorted(by_prop)))
+            list(ex.map(one_prop, order))
         save_state(data_dir, state)
     except Exception as e:                              # a bug here must never cost the build
         out["error"] = type(e).__name__

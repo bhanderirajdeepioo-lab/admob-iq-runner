@@ -175,6 +175,8 @@ async function byCountry() {
   const GAP = ccFile('ke', ['XA', 'XB'], { last_day: day(59), missing: 18 });
   GAP.days = GAP.days.filter((d, i) => i < 20 || i >= 40);
   GAP.summary.forEach(x => { x.status = 'Too early'; x.why = 'country data incomplete: 18 din missing'; });
+  // GA4 no longer has 5 days of the hole and the 3 days before the country store's first day (the app's day 1 is 3 earlier)
+  GAP.gone = [day(-3), day(-2), day(-1), day(20), day(21), day(22), day(23), day(24)];
   CCF['firstopen_cc_eeeeeeeeeeee.json.gz'] = GAP;
   CCF['firstopen_cc_ffffffffffff.json.gz'] = ccFile('kf', ['XA', 'XB', 'XC'], { last_day: day(59), missing: 0 });
   const ptrOf = (f, n) => ({ file: f, v: 'c-' + f.slice(13, 17), from: day(0), n, days: 60 });
@@ -183,7 +185,7 @@ async function byCountry() {
   F2.apps[1].cc = ptrOf('firstopen_cc_0123456789ab.json.gz', 9);
   F2.apps[2].cc = ptrOf('firstopen_cc_abcdef012345.json.gz', 2);
   F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'kd', app: 'Delta', app_id: 'id-d', cc: ptrOf('firstopen_cc_dddddddddddd.json.gz', 3) });
-  F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'ke', app: 'Epsilon', app_id: 'id-e', cc: ptrOf('firstopen_cc_eeeeeeeeeeee.json.gz', 2) });
+  F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'ke', app: 'Epsilon', app_id: 'id-e', cc: ptrOf('firstopen_cc_eeeeeeeeeeee.json.gz', 2), first_day: day(-3) });
   F2.apps.push({ ...JSON.parse(JSON.stringify(F2.apps[2])), key: 'kf', app: 'Zeta', app_id: 'id-f', cc: ptrOf('firstopen_cc_ffffffffffff.json.gz', 3) });
   F2.summary = F2.summary.filter(x => x.key !== 'kh').concat([{ ...F2.summary[0], key: 'kd', app: 'Delta' }, { ...F2.summary[0], key: 'ke', app: 'Epsilon' },
     { ...F2.summary[0], key: 'kf', app: 'Zeta' }]);

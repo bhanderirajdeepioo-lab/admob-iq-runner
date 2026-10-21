@@ -6584,11 +6584,19 @@ function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t
   const mt=`<div class="fo-tw"><table class="fo-t"><thead><tr><th>Month</th><th>First opens</th><th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
     +months(rows).map(([m,rs])=>`<tr><td class="fo-nm">${SMP(low(rs))}${fmtMon(m)} <small>· ${rs.length}d</small></td><td>${N(sum(rs,'first_open'))}</td><td>${N(sum(rs,'splash'))}</td><td>${N(sum(rs,'home'))}</td><td><b>${P(rate(sum(rs,'home'),sum(rs,'splash')))}</b></td><td>${P(rate(sum(rs,'splash'),sum(rs,'first_open')))}</td></tr>`).join('')
     +`</tbody></table></div>`;
+  // a run of days with no country row: the ones GA4 no longer has (its event data is gone: d.gone) vs the ones not read yet
+  const GONE=new Set(Array.isArray(d.gone)?d.gone:[]);
+  const gapRow=(lo,hi)=>{ const g=dd(lo,hi)+1; if(g<=0) return ''; let ng=0; for(let k=0;k<g;k++) if(GONE.has(addD(lo,k))) ng++;
+    const rg=`${fmtD(lo)} – ${fmtD(hi)}`;
+    const why=ng===g?`GA4 me ab nahi — GA4 sirf ~2 mahine ka event data rakhta hai, ye din country-wise ab nahi mil sakte`
+      :ng?`${ng} din GA4 me ab nahi (event data hata diya), ${g-ng} din abhi padhe ja rahe hain`:`abhi padhe ja rahe hain (backfill chal raha hai)`;
+    return `<tr class="fo-gap"><td colspan="6">↕ ${g} din (${rg}): ${why}</td></tr>`; };
+  const tail=rows.length&&a.first_day&&a.first_day<rows[0][0]?gapRow(a.first_day,addD(rows[0][0],-1)):'';   // All countries' day 1 … the oldest country day
   const dt=`<div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day</th><th>First opens</th><th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
     +rows.slice().reverse().map((r,i,rv)=>{ const g=i?dd(r[0],rv[i-1][0])-1:0;   // days between this one and the newer row before it
-      return (g>0?`<tr class="fo-gap"><td colspan="6">↕ gap: ${g} din nahi padhe (${fmtD(addD(r[0],1))} – ${fmtD(addD(rv[i-1][0],-1))}) — upar aur neeche ke din lagatar nahi</td></tr>`:'')
+      return (g>0?gapRow(addD(r[0],1),addD(rv[i-1][0],-1)):'')
         +`<tr><td class="fo-nm${r[0]>ft?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(r[0])} ${r[0].slice(0,4)}${r[0]>ft?' · not final':''}</td><td>${N(r[IX.first_open])}</td><td>${N(r[IX.splash])}</td><td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${op(r)}</td></tr>`; }).join('')
-    +`</tbody></table></div>`;
+    +tail+`</tbody></table></div>`;
   return ccCrumb(a,x)+ccTop(a)
     +`<p class="fo-note">🌍 Country data <b>${ccWhen(d)}</b> ka hai (GA4 sirf ~2 mahine ka data rakhta hai, usse purana country-wise nahi milta).</p>`
     +ccGapNote(d)

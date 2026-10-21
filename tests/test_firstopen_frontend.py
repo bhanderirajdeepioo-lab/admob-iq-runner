@@ -150,7 +150,10 @@ def test_country_file_with_a_hole(out):
     days"), shows the hole between the days, and the chart breaks there."""
     c = out["cc"]
     assert c["g_warn"] and c["g_why"] and c["g_view_warn"]
-    assert c["g_gap_rows"] == ["↕ gap: 20 din nahi padhe (21 Aug – 9 Sep) — upar aur neeche ke din lagatar nahi"]
+    # a hole: the days GA4 no longer has vs the days not read yet; then the run from the All table's day 1 to the
+    # oldest country day (all gone from GA4 here)
+    assert c["g_gap_rows"] == ["↕ 20 din (21 Aug – 9 Sep): 5 din GA4 me ab nahi (event data hata diya), 15 din abhi padhe ja rahe hain",
+                               "↕ 3 din (29 Jul – 31 Jul): GA4 me ab nahi — GA4 sirf ~2 mahine ka event data rakhta hai, ye din country-wise ab nahi mil sakte"]
     assert c["g_gap_between"] and c["g_days"] == 40 and c["g_months"] == [["Sep 2026", 20], ["Aug 2026", 20]]
     assert c["g_fill"] == [60, 20, "2026-08-21", None, "2026-09-10", 500]   # the chart on the calendar: 20 empty days
 

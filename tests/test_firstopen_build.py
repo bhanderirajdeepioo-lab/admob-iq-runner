@@ -314,3 +314,13 @@ def test_country_status_window_is_the_calendar_run_ending_at_final_till():
     rows = [[d[0], *d[5]["AA"], None, None, None, None, None, None] for d in half["days"] if "2026-09-26" <= d[0] <= ft]
     want = fb.summarize("AA", "AA", rows, ft)
     assert all(a2[k] == want[k] for k in fb.CC_KEEP if k != "why") and want["why"] == "history 23 final days"
+
+
+def test_country_file_lists_the_days_ga4_no_longer_has():
+    """A day the country fetch found gone from GA4 ({"none": true, "why": "ga4"}) is listed in "gone" — the page says
+    "GA4 me ab nahi" there instead of "abhi padhe ja rahe hain"; a plain none day (no first opens) is not listed."""
+    rec = {"c": {"AA": [5, 4, 2]}, "t": [6, 5, 2], "smp": None, "fin": True, "sg": "x", "at": "t"}
+    store = {"days": {"2026-08-10": dict(rec), "2026-08-01": {"none": True, "why": "ga4", "at": "t"},
+                      "2026-08-02": {"none": True, "why": "ga4", "at": "t"}, "2026-08-05": {"none": True, "at": "t"}}}
+    body = fb.build_cc(store, "k", "a~1", "2026-08-10")
+    assert body["gone"] == ["2026-08-01", "2026-08-02"] and body["first_day"] == "2026-08-10"

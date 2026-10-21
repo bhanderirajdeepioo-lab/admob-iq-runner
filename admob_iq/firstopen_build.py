@@ -252,8 +252,10 @@ def build_cc(store, key, aid, final_till):
     fu, su, hu = (sum(un[i][j] for i in w7) for j in range(3))
     unnamed = {"fo_day": _r6(fu / len(w7)) if w7 else None, "opened": _r6(su / fu) if fu > 0 and su >= 0 else None,
                "s2h": _r6(hu / su) if su > 0 and hu >= 0 else None, "share": _r6(fu / t7) if t7 > 0 else None}
+    gone = sorted(k for k, v in (store.get("days") or {}).items()     # days GA4's funnel no longer has (event data gone)
+                  if isinstance(v, dict) and v.get("none") and v.get("why") == "ga4")
     return {"v": V, "key": key, "app_id": aid, "final_till": final_till, "first_day": days[0][0],
-            "last_day": days[-1][0], "missing": missing, "days": days,
+            "last_day": days[-1][0], "missing": missing, "days": days, "gone": gone,
             "summary": [z[3] for z in order], "unnamed": {"summary": unnamed}}
 
 
