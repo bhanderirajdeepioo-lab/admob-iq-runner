@@ -1210,7 +1210,11 @@ async function moreKeepAll(dc, packs) {
       qnl({ oth: 40, omax: 0.3 }).includes('≈ = D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)") — 40 din me'),
       !qnl({ oth: 40, omax: 0.3, ql: 0, qd: 0, qwait: 40, qneg: 0 }).includes('D31–D420 whole') && qnl({ oth: 40, omax: 0.3, ql: 0, qd: 0, qwait: 40, qneg: 0 }).includes('≈ = 40 din abhi'),
       qnl({ qd: 3, qwait: 2, qwu: 0, qn: 0 }).includes('(GA4 ne kuch revenue "(other)" me daala)') && !qnl({ qd: 3, qn: 0 }).includes('(not set)'),
-      qnl({ qd: 3, qneg: 1, qdr: 0 }).includes(' 1 hafte me poore read aur cube ke read ka jod alag aaya — wajah abhi pata nahi') && !qnl({ qd: 3, qneg: 1 }).includes('isliye uske D420+')];
+      qnl({ qd: 3, qneg: 1, qdr: 0 }).includes(' 1 hafte me poore read aur cube ke read ka jod alag aaya — wajah abhi pata nahi') && !qnl({ qd: 3, qneg: 1 }).includes('isliye uske D420+'),
+      // a whole read made weeks after its cube read: the past-D420 gap is a bound ("zyada se zyada"), never "kuch nahi chhoota"
+      qnl({ oth: 40, omax: 0.3, ql: 0, qlb: 12.5, qd: 812, qwait: 0, qneg: 0 }).includes(' in poore padhe hafton me D420 ke baad jin hafton ka poora read baad me aaya, unme zyada se zyada $13 (dono read alag samay ke — isme GA4 ka beech ka badlav bhi ho sakta hai; us hafte ke D420+ column wale row pe ≈).')
+        && !qnl({ oth: 40, omax: 0.3, ql: 0, qlb: 12.5, qd: 812, qwait: 0, qneg: 0 }).includes('kuch nahi chhoota'),
+      qnl({ oth: 40, omax: 0.3, ql: 57.6, qlb: 12.5, qd: 812, qwait: 0, qneg: 0 }).includes('$58 ka install din GA4 ne nahi diya — ye kisi row me nahi (us hafte ke D420+ column wale row pe ≈); jin hafton ka poora read baad me aaya, unme zyada se zyada $13')];
     // the build's own late info (tests/test_roi_frontend.py: roi_build._late on a made-up cube with a loss past D420
     // below a cent): the page says "<$0.01", never "kuch nahi chhoota"
     const qz = process.argv[3] ? JSON.parse(require('fs').readFileSync(process.argv[3], 'utf8')).qlate : null;

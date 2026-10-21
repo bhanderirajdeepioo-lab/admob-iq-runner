@@ -273,6 +273,20 @@ def _tie_off(ida, co_x, pr_days):
     return off, checked
 
 
+
+SAME_SEC = 2 * 3600                         # a q read and its cube read this close: one moment (the same run)
+
+
+def _same(qrec, led):
+    """A day's whole read (q) and its cube read made in the same run → True; weeks apart (the history fill), or a
+    time missing → False (their difference may be GA4's own change between the two reads)."""
+    try:
+        a = datetime.fromisoformat(str(qrec.get("at")).replace("Z", "+00:00"))
+        b = datetime.fromisoformat(str(led.get("at")).replace("Z", "+00:00"))
+        return abs((a - b).total_seconds()) <= SAME_SEC
+    except (TypeError, ValueError, AttributeError):
+        return False
+
 def _late(data_dir, aid, sid, P, visit=None):
     """The app's cohort cube (fetch.ga4_cube, GA4_CUBE) folded month by month (one month in memory at a time, with its q
     file) + its hot days → {"B": {X: {j: USD}} the 30-day buckets (AdMob-matched with kf of each activity week; j ≤ QJ
@@ -308,8 +322,8 @@ def _late(data_dir, aid, sid, P, visit=None):
     lb, zq, onqd = set(), set(), set()  # q: days whose loss is still on the cube's cells / days whose loss past age QL
     #                                     (or of an age the week cannot tell: drift) the rows past D420 still carry /
     #                                     days whose cells ≤ QL come from q
-    qi = {"ql": 0.0, "qn": 0.0, "qd": 0, "qwait": 0, "qwu": 0.0, "qfl": 0, "qfu": 0.0, "qshort": 0, "qneg": 0,
-          "qpos": 0, "qdr": 0.0, "on": False}
+    qi = {"ql": 0.0, "qlb": 0.0, "qn": 0.0, "qd": 0, "qwait": 0, "qwu": 0.0, "qfl": 0, "qfu": 0.0, "qshort": 0,
+          "qneg": 0, "qpos": 0, "qdr": 0.0, "on": False}
     quse = gcu.Q_CALLS > 0 and gcu.Q_USE   # q off (GA4_CUBE_Q_CALLS=0) or not used (GA4_CUBE_Q_USE=false): every q file
     #                                       ignored — the cube's own cells, every byte as without them
 
@@ -374,13 +388,15 @@ def _late(data_dir, aid, sid, P, visit=None):
                 "lo": sum(int(v.get("loss") or 0) for v in leds), "qt": sum(int(v.get("qt") or 0) for v in qs),
                 "qn": sum(int(v.get("qn") or 0) for v in qs), "qr": sum(int(v.get("qr") or 0) for v in qs)}
 
-    def gap(W, s, b14, ds, hot=False):
+    def gap(W, s, b14, ds, hot=False, same=True):
         """A week (or a hot day) read whole, its sums s. qn (q's rows GA4 gave no install day at all, any age) is in no
         row: its size (qi "qn"). g = t − qt − qn − b (j > QJ) = the cube's "(other)" loss past age QL (exact) beyond
         rounding — never more than that loss (lo − qn): past it the two reads differ (the cube's read held more:
         "qpos"; less, g < 0: "qneg") — drift, counted with its size ("qdr"), never loss; where such a week lost anything
         its days are ≈ past QL (where that loss sits the week cannot tell). A hot day: no drift counted (GA4 still adds
-        to it between its two reads)."""
+        to it between its two reads). same False (a week whose whole read came weeks after its cube read — the history
+        fill): the two reads are not of one moment, so g may hold drift too — its size is a bound ("qlb": at most),
+        never the exact "ql"."""
         k, qn, tl = k_of(W), s["qn"], tol(s)
         g, lo = s["t"] - s["qt"] - qn - b14, max(0, s["lo"] - qn)
         if qn > 0:
@@ -392,7 +408,7 @@ def _late(data_dir, aid, sid, P, visit=None):
                 qi["qpos"] += 1
                 qi["qdr"] += (g - lo) / 1e6 * k
         elif g > tl:
-            qi["ql"] += g / 1e6 * k
+            qi["ql" if same else "qlb"] += g / 1e6 * k
             zq.update(ds)
         elif g < -tl and not hot:
             qi["qneg"] += 1
@@ -446,7 +462,8 @@ def _late(data_dir, aid, sid, P, visit=None):
                         onq.add(W)
             b14 = past(mo["b"]) if onq else {}
             for W in sorted(onq):
-                gap(W, cand[W], b14.get(W, 0), {_d(D) for D in by[W]})
+                gap(W, cand[W], b14.get(W, 0), {_d(D) for D in by[W]},
+                    same=all(_same(qd[D], mo["days"][D]) for D in qw.get(W, ()) if D in mo["days"]))
         for D, led in mo["days"].items():
             Dd = _d(D)
             fin.add(Dd)

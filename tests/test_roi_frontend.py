@@ -116,7 +116,7 @@ def test_day_wise_past_d30(out):
     # q (the whole no-country read past D30): D31–D420 whole, GA4's no-install-day share past D420 and with no install
     # day at all as measured sizes (never $0 when it is not), the days still on the cube's cells (waiting / for good,
     # their "(other)" size), drift with its size and no cause claimed; no q fields: the note as before
-    assert out["m_qnote"] == [True] * 12, out["m_qnote"]
+    assert out["m_qnote"] == [True] * 14, out["m_qnote"]
     # the build's own sub-cent loss past D420 (roi_build._late on a made-up cube) → the page's "<$0.01", never "nothing"
     assert out["m_qbuild"] == [True] * 3, out["m_qbuild"]
 

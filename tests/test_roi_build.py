@@ -1287,7 +1287,7 @@ QR = [2.0, 4.0, 8.0, 16.0, 30.0, 62.0, 62.6, 63.2, 65.0, 68.7]   # checkpoints =
 
 
 def _q_world(root, b=8000, w=10000, q=True, skip=(), fl=(), hot_q=True, more=None, nset=None, drop=None, cfl=(),
-             nothing=()):
+             nothing=(), q_at="2026-10-13T06:00:00Z"):
     """Two install days (QHS, QX1) earning `w` GA4 micros a day at every age ≥ 31 (whole: $0.01, × k 2 = $0.02); the
     cube's cells keep `b` of it, the rest is the day's "(other)" loss (the cube's t holds it); every day QHS … today − 3
     folded, the last 3 hot (days before QHS + 31: nothing at all). q (whole: `w` an install day at ages ≤ 420, +
@@ -1326,7 +1326,7 @@ def _q_world(root, b=8000, w=10000, q=True, skip=(), fl=(), hot_q=True, more=Non
         else:
             cube.fold(D, rec)
             if q and D not in skip:
-                cube.q_put(k, got, "2026-10-13T06:00:00Z")
+                cube.q_put(k, got, q_at)
         D += timedelta(days=1)
     cube.save()
     cube.head.update(done=True, stream_id="222", next=hot_from.isoformat())
@@ -1566,3 +1566,22 @@ def test_country_not_given_per_month(tmp_path):
     assert ng["m"]["2026-08"][0] < 0                                           # signed (AA's k_c 1.5 > the app's 1.2)
     assert ng["usd"] == pytest.approx(sum(v[0] for v in ng["m"].values()), abs=0.01)
     assert ng["all"] == pytest.approx(all_, abs=0.01) and ng["rel"] == round(ng["usd"] / ng["all"], 4)
+
+
+def test_q_read_weeks_after_the_cube_is_a_bound(tmp_path):
+    """The history fill: a week's whole read made weeks after its cube read is not of one moment — the gap past D420
+    may hold GA4's own change between the two reads, so it is "qlb" (at most), never the exact "ql"; the columns the
+    rows show are the same either way."""
+    P, co = _q_world(tmp_path / "s")
+    same, by_s = _qrows(tmp_path / "s", P, co)
+    P2, co2 = _q_world(tmp_path / "l", q_at="2026-11-03T06:00:00Z")
+    late, by_l = _qrows(tmp_path / "l", P2, co2)
+    old = (QTODAY - (QHS + timedelta(days=rb.gcu.QL + 1))).days + 1
+    assert same["info"]["ql"] == pytest.approx(old * 0.004, abs=1e-8) and same["info"]["qlb"] == 0
+    # the folded weeks read later → a bound; the hot days (their whole read in the same run as their cube read) stay exact
+    assert late["info"]["qlb"] + late["info"]["ql"] == pytest.approx(old * 0.004, abs=1e-8)
+    assert late["info"]["qlb"] > 0.9 * old * 0.004 and 0 < late["info"]["ql"] < 0.1 * same["info"]["ql"]
+    assert by_l[QHS]["m"] == by_s[QHS]["m"] and by_l[QHS]["qo"] == by_s[QHS]["qo"]
+    assert rb._same({"at": "2026-10-13T06:00:00Z"}, {"at": "2026-10-13T07:59:00Z"})
+    assert not rb._same({"at": "2026-10-13T06:00:00Z"}, {"at": "2026-10-13T08:01:00Z"})
+    assert not rb._same({}, {"at": "2026-10-13T06:00:00Z"}) and not rb._same({"at": "x"}, {"at": None})
