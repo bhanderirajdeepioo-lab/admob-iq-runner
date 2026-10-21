@@ -12,8 +12,10 @@ expanded exactly as the build's _zrow, no page jump at 375 and 1280 px; a pack o
 the app file read again once; a late pack never repaints; only 3 packs kept; Not split's columns; the notes' measured
 limits), 🧮 the cohort card's totals strip (spend / revenue / profit-loss / ROAS / installs / install days over every
 install day of All or the picked country: a hand recount, ₹ as billed, days left out counted, the same for every grain /
-mode, '…' while loading, one height in every state, the page otherwise byte for byte as before), and the wiring into the
-page. Skipped where node is not installed. No real data."""
+mode, '…' while loading, one height in every state, the page otherwise byte for byte as before), "Show 60 more" / "Show
+all" keeping the reader's row and the table box's scroll (every grain × mode, every country, the lifetime table, 375 and
+1280 px, with the stay-put layer: no second scroll), and the wiring into the page. Skipped where node is not installed.
+No real data."""
 import json
 import os
 import shutil
@@ -178,10 +180,18 @@ def test_forecast_view(out):
 # not final yet is faded + "not final", the note says so, and a week / month with a day's so far not read shows — instead
 # of a too-low "% back": only the Breakeven cells + note changed, GOLDEN_NO_BE the same)
 # 🧮 Changed ON PURPOSE again on 21 Oct 2026 when the totals strip joined the cohort card (between its title row and its
-# control row): GOLDEN_PRE_KPI = the digest the page gave before it (the GOLDEN_DEFAULT above it), and the new page gives it
-# again with the strip cut out (tests/roi_frontend.js kpiCut) — every table, the Day view and the Countries board otherwise
-# byte for byte the same; GOLDEN_NO_BE is worked out with the strip cut out too.
-GOLDEN_DEFAULT = "65b3d7ad62d5c151e9d12391231199db6be372b859c43e0ebd44f8b1b420cc9c"
+# control row): GOLDEN_PRE_KPI = the digest the page gave before it (the GOLDEN_DEFAULT above it), and the strip page gave
+# it again with the strip cut out (tests/roi_frontend.js kpiCut) — every table, the Day view and the Countries board
+# otherwise byte for byte the same.
+# Changed ON PURPOSE again on 21 Oct 2026: every install-day / week / month row got its key (<tr data-roi-k="…">) so
+# "Show 60 more" / "Show all" keep the reader's row in place. The page now has both changes, so each cut sees the other:
+# GOLDEN_DEFAULT_NOK = the key cut out, the strip kept = the strip page's own GOLDEN_DEFAULT (the page before the key);
+# GOLDEN_DEFAULT_NOKPI = the strip cut out, the key kept (= what the key alone gave on the page before the strip); both
+# cut out = GOLDEN_PRE_KPI, the page before both byte for byte: the strip and the key are the only changes.
+# GOLDEN_NO_BE is worked out with the strip and the key cut out too (kpiCut, then beStrip's noK).
+GOLDEN_DEFAULT = "16bb214bf4da82bd17f7e6e1b317c25fef607b17b619f0fb846f0603edc28baf"
+GOLDEN_DEFAULT_NOK = "65b3d7ad62d5c151e9d12391231199db6be372b859c43e0ebd44f8b1b420cc9c"
+GOLDEN_DEFAULT_NOKPI = "98ae0afdcb42a1e9d258ef5fe660fba126dad93f9b7b6c83e4f801eca78514eb"
 GOLDEN_PRE_KPI = "fb638f026d2a902459c3287cb620536bbb6474fecb17809c9799ba6264ac0a86"
 GOLDEN_NO_BE = "acabb725b05aa314e38c4f97b7880196122d333a0bdd823a0db9c1bc7d1d23b6"
 
@@ -253,8 +263,11 @@ def test_totals_strip(out):
     """🧮 Total spend / revenue / profit-loss / ROAS / installs / install days in the cohort card (owner, 21 Oct 2026: "kpi
     add karo yaha pe ki kitna total spend gaya he kitna total revenue aaya he — all country and jo country select kru uska
     kpi change ho jayega — total hi aayega"), on made-up rows."""
-    # the default page: only the strip added — with it cut out, the digest is the one before it (2 parts carry it: the Day views)
-    assert out["cc_default_nokpi"] == GOLDEN_PRE_KPI and out["cc_default_kpis"] == 2
+    # the default page: only the strip added — with it cut out, the digest is the one before it (2 parts carry it: the Day
+    # views); the rows' key (Show 60 more) is on the page too: the strip cut, the key kept = GOLDEN_DEFAULT_NOKPI; both
+    # cut = the page before both
+    assert out["cc_default_nokpi"] == GOLDEN_DEFAULT_NOKPI and out["cc_default_kpis"] == 2
+    assert out["cc_default_nokpi_nok"] == GOLDEN_PRE_KPI
     # under the title row, right above the control row (one per card, above the table; the Day view has one, the
     # Countries board none); its Hinglish note
     assert out["k_place"] == [True, 1, True, 1, False, True]
@@ -348,6 +361,8 @@ def test_totals_strip(out):
 def test_country_filter(out):
     # "All countries" (the default): every grain × mode, the Day view, the Countries board as pinned above
     assert out["cc_default_digest"] == GOLDEN_DEFAULT and out["cc_src_null"]
+    assert out["cc_default_nok"] == GOLDEN_DEFAULT_NOK              # … the rows' key the only change (Show 60 more)
+    assert out["cc_default_nokpi_nok"] == GOLDEN_PRE_KPI            # … the key + the strip cut: the page before both
     # the picker: All countries + the top 6 as chips, EVERY country in the native list, then the two that are not one
     assert out["cc_chips"] == ["", "AA", "BB", "CC", "DD", "EE", "FF"]
     assert out["cc_list"] == ["", "AA", "BB", "CC", "DD", "EE", "FF", "GG", "HH", "--", "XX"] and out["cc_list_txt"]
@@ -382,6 +397,44 @@ def test_country_filter(out):
     # from the site (404): the same; the site still on the other build after it: said, "Try again"
     assert all(out["cc_stale"]) and all(out["cc_gone"]) and all(out["cc_stale_again"])
     assert out["cc_lru"] == [3, True, 3, True, True]                # only the newest 3 packs kept (the one in use too)
+
+
+def test_show_more_keeps_the_row(out):
+    """"Show 60 more" / "Show all" (owner, 21 Oct 2026: "show 60 more krte he to table pehle se scroll hoke uppar se start
+    hota he"): the table's own box (at most 640px, scrolls down and sideways) came back at the top and the left after the
+    repaint — the reader's row 600–5000 px away inside it, out of sight. Now the last row in sight stays where it was
+    (≤ 1 px) and the box keeps its sideways scroll, at 375 and 1280 px: every grain × mode of the All countries table, every
+    country's table (Not split too), the lifetime "Every day" table; the page itself does not move and the stay-put layer
+    adds no scroll; when something above the table grows in the same repaint, the page takes it back — one scroll in all.
+    (On the page before this fix: moves of 631–5008 px and scrollLeft 260 → 0 — this test fails there.)"""
+    mk = out["more_keep"]
+    assert [len(mk[k]) for k in ("coh", "cty", "life", "grow")] == [48, 64, 4, 2]
+    taps = [(r["name"], t) for k in ("coh", "cty", "life") for r in mk[k] for t in r["taps"] if not t.get("gone")]
+    assert len(taps) == 152                                                    # 80 + 64 + 8 taps
+    for name, t in taps:
+        assert abs(t["move"]) <= 1 and t["inView"], (name, t)                 # the reader's row: where it was
+        assert t["sl"][1] == t["sl"][0], (name, t)                             # the box's sideways scroll kept
+        assert t["dy"] == 0 and t["calls"] == 0 and not t["intent"], (name, t)   # no page scroll at all (ours or the layer's)
+        assert t["rows"][1] > t["rows"][0] and t["idx"][1] == t["idx"][0], (name, t)   # the new rows below it, none above
+        assert t["key"], (name, t)                                             # found by the page's own key too
+    # the install-day tables are wider than their box at both widths: the reader had really scrolled them sideways
+    assert all(t["sl"] == [260, 260] for k in ("coh", "cty") for r in mk[k] for t in r["taps"] if not t.get("gone"))
+    # every step ran: Day / Week 60 → 120 → 180 → all, Month (67 months) 60 → all (then no button); "Show all" at once
+    full = {"day": 334, "week": 287, "month": 67}
+    for r in mk["coh"]:
+        g, steps = r["name"].split()[1], [t.get("rows") for t in r["taps"]]
+        if r["name"].endswith("60+60+all"):
+            assert steps == ([[60, 120], [120, 180], [180, full[g]]] if g != "month" else [[60, 67], None]), r["name"]
+        else:
+            assert steps == [[60, full[g]]], r["name"]
+    assert all([t["rows"] for t in r["taps"]] == [[60, 70]] for r in mk["cty"])   # a country's 70 install days
+    assert [[t["rows"] for t in r["taps"]] for r in mk["life"]] == [[[60, 120], [120, 180], [180, 199]], [[60, 199]]] * 2
+    # something above the table grew in the same repaint: the row still in place, the page scrolled by it once — the
+    # page's own code (intentional for the stay-put layer, which then adds nothing)
+    for r in mk["grow"]:
+        assert len(r["taps"]) == 2, r
+        for t in r["taps"]:
+            assert abs(t["move"]) <= 1 and t["dy"] > 0 and t["calls"] == 1 and t["intent"] and t["sl"] == [260, 260], (r["name"], t)
 
 
 def test_wiring():
@@ -430,3 +483,8 @@ def test_wiring():
     assert ".roi-k{padding:9px 10px}" in p and "padding:12px}}" in p
     assert p.count("${cohKpi(d,null)}${cohortTable(d)}</div>`;") == 1 and p.count("${cohKpi(d,cs)}${cohortTable(d,cs)}</div>`; }") == 1
     assert p.count("cohKpi(") == 3                                                    # defined once, called by cohCard only
+    # "Show 60 more" / "Show all": both tables' buttons keep the reader's row (keepRows), the rows keyed
+    assert "if((b=at('[data-roi-more]'))){ const v=b.dataset.roiMore; keepRows(r,b,()=>{ SHOW=v==='all'?1e9:SHOW+60; repaint(); }); return; }" in p
+    assert "if((b=at('[data-roi-lmore]'))){ const v=b.dataset.roiLmore; keepRows(r,b,()=>{ LSHOW=v==='all'?1e9:LSHOW+60; repaint(); }); return; }" in p
+    assert '<tr data-roi-k="${E(gr.k)}"><td class="roi-nm">' in p and '<tr data-roi-k="${E(x[0])}"><td class="roi-nm">' in p
+    assert p.count("SHOW+60; repaint(); return;") == 0                     # never a bare repaint (the box back at the top)

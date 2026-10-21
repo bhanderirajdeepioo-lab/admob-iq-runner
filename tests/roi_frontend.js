@@ -12,9 +12,11 @@
 //     file's own consts, an age GA4 measured: its paid share + premium said so, the budget call, the organic-heavy /
 //     mostly-organic warning, the help + paid share per install day), and the All-apps table (biggest blended-vs-paid
 //     gap first, flagged rows, ✓ GA4 rows, spend-weighted total, ₹ as billed, sorting); a paused app (whatever its call)
-//     out of the total and of the ⚖️ hero card, "✓ GA4" only where GA4 measured, the premium range's own age named.
+//     out of the total and of the ⚖️ hero card, "✓ GA4" only where GA4 measured, the premium range's own age named;
 //   * 🧮 the cohort card's totals strip: All / a country (Unknown, Not split), loading / error / missing, ₹ / $, its skeleton
-//     the same in every state.
+//     the same in every state;
+//   * "Show 60 more" / "Show all" (the install-day tables and the lifetime "Every day" table): on a parsed DOM with a layout
+//     model + the page's own stay-put layer, the reader's row stays put, the box keeps its scroll, no second scroll.
 // Prints ONE JSON report; tests/test_roi_frontend.py asserts on it.   usage: node roi_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -89,15 +91,20 @@ function lateFile() {
 // Day view and the Countries board — GOLDEN_DEFAULT. 🎯 The Breakeven column moved next to CPI (21 Oct 2026): the
 // digest changed on purpose; [1] = the same parts with the Breakeven column (its <th>, each row's breakeven cell) and its
 // note cut out — GOLDEN_NO_BE, worked out on the page BEFORE the move (its far-right cell cut): nothing else changed
+// (the two later changes below are cut out of [1] too: the strip by kpiCut, the rows' key by noK inside beStrip).
+// The rows' key (data-roi-k, added 21 Oct 2026 so "Show 60 more" / "Show all" keep the reader's row): noK cuts it out;
+// [4] = every part with the key cut (the strip stays) = GOLDEN_DEFAULT_NOK, the page before the key byte for byte
+const noK = s => s.replace(/<tr data-roi-k="[^"]*">/g, '<tr>');
 function beStrip(s) {
-  return s.replace(/<p class="roi-note"><b>Breakeven<\/b>[^]*?<\/p>/g, '')
+  return noK(s).replace(/<p class="roi-note"><b>Breakeven<\/b>[^]*?<\/p>/g, '')
     .replace(/<table class="roi-t roi-heat">[^]*?<\/table>/g, t => t.replace('<th>Breakeven</th>', '')
       .replace(/<tr><td class="roi-nm">[^]*?<\/tr>/g, tr => { const tds = tr.slice(4, -5).split('</td>').slice(0, -1);
         tds.splice(5, 1); return '<tr>' + tds.map(x => x + '</td>').join('') + '</tr>'; }));
 }
 // 🧮 the cohort card's totals strip (21 Oct 2026): it sits between the card's title row and its control row, i.e. right
 // before what cohortTable returns (its "top" line or its control row). kpiCut = the page without it; [2] of the digest =
-// every part with the strip cut out = GOLDEN_DEFAULT as it was before the strip (nothing else moved by a byte)
+// every part with the strip cut out (the key stays) = GOLDEN_DEFAULT_NOKPI; [3] = how many parts carry the strip;
+// [5] = both cut (strip + key) = GOLDEN_PRE_KPI, the page before both byte for byte (nothing else moved by a byte)
 const KPI_RE = /<div class="roi-cks"[^]*?(?=<p class="roi-note roi-ccm0">|<div class="roi-ctl">)/g;
 const kpiCut = s => s.replace(KPI_RE, '');
 function defaultDigest() {
@@ -112,7 +119,8 @@ function defaultDigest() {
   parts.push(U.dayView(d0), U.dayView(dm), U.ctyView(d0));
   U.set('SHOW', 1e9); parts.push(U.cohortTable(dm));
   return [h(parts.join('\u0001')), h(parts.map(x => beStrip(kpiCut(x))).join('\u0001')), h(parts.map(kpiCut).join('\u0001')),
-    parts.filter(x => x.includes('<div class="roi-cks"')).length];
+    parts.filter(x => x.includes('<div class="roi-cks"')).length, h(parts.map(noK).join('\u0001')),
+    h(parts.map(x => noK(kpiCut(x))).join('\u0001'))];
 }
 // No page jump (owner: "kuchh change karte he to upar chala jata he page"): the ROI block in a FRESH module on a small
 // made-up DOM whose layout is the page's own markup — an element's document top = its offset in the block's HTML × a
@@ -211,6 +219,240 @@ async function noJump(width, file, packs, failOnce, mode) {
   const retried = P.body.includes('[EE] Country EE</h3>') && !P.body.includes('Try again') && /<td class="roi-[gwb]/.test(P.body);
   return { moves, keptWeek, backAll, picked, errShown, retried };
 }
+// ── "Show 60 more" / "Show all" keep the reader's row (owner, 21 Oct 2026: "show 60 more krte he to table pehle se scroll
+// hoke uppar se start hota he") ───────────────────────────────────────────────────────────────────────────────────────
+// The ROI block (a FRESH module) + the page's own stay-put layer (SP, cut out of the page as tests/stayput_frontend.js does)
+// in one vm, on a small DOM PARSED from the block's own markup and laid out by a model: blocks stack, text wraps at the
+// width, a body row is 31px (on a phone taller when its first cell wraps: max-width 150px), a .roi-tw box is at most 640px
+// high and scrolls on its own, down and sideways (a new box starts at 0, 0, as in a browser); the page scrolls over it all.
+// The reader scrolls the page to the table, the box down near its end and sideways, then taps "Show 60 more" / "Show all":
+// pointerdown, then click through window capture (SP) → the block's listener → window bubble (SP), then SP's microtask,
+// frames and 0 / 150 / 400 ms checks. Per tap: how far the reader's row (the last one in sight, found by its own label —
+// never by the page's key, so the page before this fix is measured the same way) moved on screen, the box's scrollLeft
+// before / after, how far the page scrolled and how many scroll calls ran, the rows before / after.
+const SPSRC = (() => { const a = html.indexOf('const SP=(function(){'), b = html.indexOf('\n  return api;\n})();', a);
+  return a < 0 || b < 0 ? null : html.slice(a, b + '\n  return api;\n})();'.length); })();
+function miniDom(VW, VH) {
+  const phone = VW <= 760, W = { y: 0, docH: 0, calls: 0 }, WL = { cap: {}, bub: {} }, DL = {};
+  const INL = new Set(['SPAN', 'B', 'I', 'SMALL', 'A', 'BUTTON', 'EM', 'STRONG', 'LABEL', 'SELECT', 'OPTION', 'OPTGROUP', 'INPUT', 'BR', 'IMG', 'CODE', 'SUP', 'SUB', 'U', 'S', 'MARK', 'TIME', 'ABBR', 'WBR']);
+  const VOID = new Set(['BR', 'IMG', 'INPUT', 'HR', 'META', 'LINK', 'WBR', 'COL', 'SOURCE', 'AREA', 'BASE', 'EMBED', 'PARAM', 'TRACK']);
+  let dirty = true, DOC = null;
+  const hooks = { set: null };                                         // a test hook on innerHTML (content above grows)
+  class Txt { constructor(t) { this.nodeType = 3; this.data = t; this.parentElement = null; } get textContent() { return this.data; } }
+  const SELC = new Map();
+  function compound(s) {
+    const re = /([a-zA-Z][a-zA-Z0-9]*)|(\*)|#([\w-]+)|\.([\w-]+)|\[([\w-]+)(?:="([^"]*)")?\]/y, ps = []; let pos = 0;
+    while (pos < s.length) { re.lastIndex = pos; const m = re.exec(s); if (!m) throw new Error('selector not modelled: ' + s); ps.push(m); pos = re.lastIndex; }
+    return e => ps.every(m => m[2] ? true : m[1] ? e.tagName === m[1].toUpperCase() : m[3] ? e.getAttribute('id') === m[3] : m[4] ? e.classList.contains(m[4])
+      : (v => v != null && (m[6] === undefined || v === m[6]))(e.getAttribute(m[5])));
+  }
+  function compile(sel) {
+    let f = SELC.get(sel); if (f) return f;
+    const alts = sel.split(',').map(s => s.trim().split(/\s+/).map(compound));
+    f = e => alts.some(ch => { let i = ch.length - 1; if (!ch[i](e)) return false; i--;
+      for (let x = e.parentElement; i >= 0 && x; x = x.parentElement) if (ch[i](x)) i--; return i < 0; });
+    SELC.set(sel, f); return f;
+  }
+  const walk = (e, fn) => { for (const c of e.childNodes) if (c.nodeType === 1) { fn(c); walk(c, fn); } };
+  class El {
+    constructor(tag, at) { this.tagName = tag; this.nodeType = 1; this._a = at || []; this.childNodes = []; this.parentElement = null; this.style = {}; this._st = 0; this._sl = 0; this._L = null; }
+    get children() { return this.childNodes.filter(n => n.nodeType === 1); }
+    get attributes() { return this._a.map(([name, value]) => ({ name, value })); }
+    getAttribute(k) { const x = this._a.find(p => p[0] === k); return x ? x[1] : null; }
+    hasAttribute(k) { return this.getAttribute(k) != null; }
+    setAttribute(k, v) { const x = this._a.find(p => p[0] === k); if (x) x[1] = String(v); else this._a.push([k, String(v)]); dirty = true; }
+    removeAttribute(k) { this._a = this._a.filter(p => p[0] !== k); dirty = true; }
+    get id() { return this.getAttribute('id') || ''; }
+    get classList() { const c = String(this.getAttribute('class') || '').split(/\s+/).filter(Boolean); return { contains: x => c.includes(x) }; }
+    get dataset() { const d = {}; for (const [k, v] of this._a) if (k.startsWith('data-')) d[k.slice(5).replace(/-([a-z])/g, (m, ch) => ch.toUpperCase())] = v; return d; }
+    get hidden() { return this.hasAttribute('hidden'); }
+    set hidden(v) { if (v) this.setAttribute('hidden', ''); else this.removeAttribute('hidden'); }
+    get type() { return this.getAttribute('type') || ''; }
+    get value() { return this.getAttribute('value') || ''; }
+    get isContentEditable() { return false; }
+    get textContent() { return this.childNodes.map(n => n.textContent).join(''); }
+    get previousElementSibling() { const p = this.parentElement; if (!p) return null; const c = p.children, i = c.indexOf(this); return i > 0 ? c[i - 1] : null; }
+    append(n) { n.parentElement = this; this.childNodes.push(n); dirty = true; return n; }
+    get innerHTML() { return ''; }
+    set innerHTML(h) { if (hooks.set) h = hooks.set(this, h); this.childNodes.forEach(n => { n.parentElement = null; }); this.childNodes = []; parse(h).forEach(n => this.append(n)); dirty = true; }
+    contains(x) { for (; x; x = x.parentElement) if (x === this) return true; return false; }
+    get isConnected() { let x = this; while (x.parentElement) x = x.parentElement; return x === DOC; }
+    matches(sel) { return compile(sel)(this); }
+    closest(sel) { const f = compile(sel); for (let x = this; x; x = x.parentElement) if (f(x)) return x; return null; }
+    querySelectorAll(sel) { const f = compile(sel), out = []; walk(this, e => { if (f(e)) out.push(e); }); return out; }
+    querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
+    getElementsByTagName(t) { const T = String(t).toUpperCase(), out = []; walk(this, e => { if (T === '*' || e.tagName === T) out.push(e); }); return out; }
+    getBoundingClientRect() { lay(); const L = this._L;
+      if (!L || !this.isConnected) return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
+      let top = L.top - W.y, left = 0; if (L.bx) { top -= L.bx.scrollTop; left -= L.bx.scrollLeft; }   // inside a box that scrolls on its own
+      return { top, bottom: top + L.h, left, right: left + 100, width: 100, height: L.h }; }
+    get offsetHeight() { lay(); return this._L ? this._L.h : 0; }
+    get scrollHeight() { lay(); const L = this._L; return L ? (L.box ? L.ch : L.h) : 0; }
+    get clientHeight() { lay(); return this._L ? this._L.h : 0; }
+    get scrollTop() { lay(); const L = this._L; return L && L.box ? Math.max(0, Math.min(this._st, L.ch - L.h)) : 0; }
+    set scrollTop(v) { lay(); const L = this._L; this._st = L && L.box ? Math.max(0, Math.min(+v || 0, L.ch - L.h)) : 0; }
+    get scrollLeft() { lay(); const L = this._L; return L && L.box ? Math.max(0, Math.min(this._sl, L.sw - L.cw)) : 0; }
+    set scrollLeft(v) { lay(); const L = this._L; this._sl = L && L.box ? Math.max(0, Math.min(+v || 0, L.sw - L.cw)) : 0; }
+    scrollIntoView() {}
+    focus() {}
+  }
+  function parse(h) {
+    const root = new El('#F'), st = [root];
+    const re = /<!--[^]*?-->|<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:[^>"']|"[^"]*"|'[^']*')*)>|([^<]+)/g; let m;
+    while ((m = re.exec(h))) {
+      if (m[4] !== undefined) { st[st.length - 1].append(new Txt(m[4])); continue; }
+      if (!m[2]) continue;
+      const tag = m[2].toUpperCase();
+      if (m[1]) { for (let i = st.length - 1; i > 0; i--) if (st[i].tagName === tag) { st.length = i; break; } continue; }
+      const at = [], ar = /([^\s="'\/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g, self = /\/\s*$/.test(m[3]); let a;
+      while ((a = ar.exec(m[3].replace(/\/\s*$/, '')))) at.push([a[1], a[2] ?? a[3] ?? a[4] ?? '']);
+      const e = new El(tag, at); st[st.length - 1].append(e);
+      if (!VOID.has(tag) && !self) st.push(e);
+    }
+    return root.childNodes.slice();
+  }
+  // ── the layout model ──
+  const flat = (e, y, h, bx) => { e._L = { top: y, h, bx }; walk(e, k => { k._L = { top: y, h: 0, bx }; }); };
+  const tlen = e => e.textContent.replace(/\s+/g, ' ').trim().length;
+  function inl(e, y, bx) { e._L = { top: y, h: 18, bx }; let n = e.tagName === 'BUTTON' ? 4 : 0;
+    for (const c of e.childNodes) n += c.nodeType === 3 ? c.data.replace(/\s+/g, ' ').length : inl(c, y, bx); return n; }
+  function tbl(t, y, aw, bx) {
+    const L = t._L = { top: y, h: 0, bx }; let cy = y, tw = 0;
+    for (const s of t.children) { s._L = { top: cy, h: 0, bx };
+      for (const tr of (s.tagName === 'TR' ? [s] : s.children.filter(r => r.tagName === 'TR'))) {
+        const cs = tr.children, head = s.tagName === 'THEAD'; let rh = head ? 36 : 31;
+        if (cs.length === 1 && cs[0].getAttribute('colspan')) rh = 16 + Math.ceil(tlen(cs[0]) * 7 / Math.max(120, aw - 20)) * 18;
+        else if (phone && cs[0]) rh += (Math.max(1, Math.ceil(tlen(cs[0]) * 7 / 130)) - 1) * 16;   // the first column wraps at 150px
+        tr._L = { top: cy, h: rh, bx }; let x = 0;
+        cs.forEach((c, i) => { const n = tlen(c); flat(c, cy, rh, bx); x += i === 0 ? (phone ? Math.min(150, n * 7 + 20) : n * 7 + 20) : Math.max(48, n * 7 + 20); });
+        tw = Math.max(tw, x); cy += rh; }
+      s._L.h = cy - s._L.top; }
+    L.w = Math.max(t.classList.contains('roi-sub') ? 560 : 640, tw); return (L.h = cy - y);
+  }
+  function blk(e, y, aw, bx) {
+    const L = e._L = { top: y, h: 0, bx };
+    if (e.hasAttribute('hidden')) { flat(e, y, 0, bx); return 0; }
+    if (e.tagName === 'SVG') { flat(e, y, 240, bx); return 240; }
+    if (e.tagName === 'TABLE') return tbl(e, y, aw, bx);
+    const box = e.tagName === 'DIV' && e.classList.contains('roi-tw'), kb = box ? e : bx;
+    const pad = e.classList.contains('roi-card') ? (phone ? 12 : 16) : 0, iw = Math.max(60, aw - 2 * pad);
+    let cy = y + pad, run = 0;
+    const flush = () => { if (run) cy += Math.ceil(run * 7 / iw) * 20; run = 0; };
+    for (const c of e.childNodes) {
+      if (c.nodeType === 3) { const t = c.data.replace(/\s+/g, ' '); if (t.trim()) run += t.length; continue; }
+      if (INL.has(c.tagName)) { run += inl(c, cy + Math.floor(run * 7 / iw) * 20, kb); continue; }
+      flush(); cy += blk(c, cy, iw, kb) + 6; }
+    flush(); cy += pad;
+    let h = cy - y; const mh = parseFloat(e.style.minHeight) || 0; if (mh > h) h = mh;
+    if (box) { L.box = true; L.ch = h; L.h = Math.min(640, h); L.cw = iw; L.sw = e.getElementsByTagName('TABLE').reduce((s, t) => Math.max(s, t._L.w), iw); return L.h; }
+    return (L.h = h);
+  }
+  const clampY = y => Math.max(0, Math.min(y, Math.max(0, W.docH - VH)));
+  function lay() { if (!dirty || !DOC) return; dirty = false;
+    W.docH = blk(DOC.getElementsByTagName('BODY')[0], 0, phone ? VW - 32 : Math.min(VW - 260, 1180), null); W.y = clampY(W.y); }
+  const win = {
+    get scrollY() { return W.y; }, get pageYOffset() { return W.y; }, innerWidth: VW, innerHeight: VH,
+    scrollTo(x, y) { lay(); W.calls++; W.y = clampY(+((x && typeof x === 'object') ? x.top : y) || 0); },
+    scrollBy(x, y) { lay(); W.calls++; W.y = clampY(W.y + (+((x && typeof x === 'object') ? x.top : y) || 0)); },
+    scroll(x, y) { win.scrollTo(x, y); },
+    addEventListener(t, f, o) { const s = (o === true || !!(o && o.capture)) ? WL.cap : WL.bub; (s[t] = s[t] || []).push(f); },
+  };
+  const doc = {
+    get body() { return DOC.getElementsByTagName('BODY')[0]; },
+    get documentElement() { lay(); return { scrollHeight: W.docH, clientHeight: VH }; },
+    getElementById: id => DOC.querySelector('#' + id), querySelector: s => DOC.querySelector(s), querySelectorAll: s => DOC.querySelectorAll(s),
+    addEventListener: (t, f) => { (DL[t] = DL[t] || []).push(f); },
+  };
+  const gcs = e => ({ position: 'static', top: 'auto', overflowY: e.classList && e.classList.contains('roi-tw') ? 'auto' : 'visible' });
+  // an event the way a browser runs it: window capture → the document's listeners (the ROI block) → window bubble
+  const fire = (type, target) => { const e = { type, target, clientX: 0, clientY: 0, isTrusted: true, key: '', preventDefault() {}, stopPropagation() {} };
+    (WL.cap[type] || []).forEach(f => f(e)); (DL[type] || []).forEach(f => f(e)); (WL.bub[type] || []).forEach(f => f(e)); };
+  return { El, win, doc, gcs, fire, W, lay, hooks, setDoc: h => { DOC = new El('#DOC'); parse(h).forEach(n => DOC.append(n)); dirty = true; }, q: s => DOC.querySelector(s) };
+}
+function longFile() {   // ~5½ years of install days, one every 6 days: Day 334 rows, Week ~286, Month 66 — each past 60
+  const rows = [], newest = '2026-10-13';
+  for (let age = 1998; age >= 0; age -= 6) {
+    const X = day(newest, -age), exact = age < 40, obs = Math.min(30, age), df = Math.max(0, Math.min(obs, age - 3) + 1);
+    const dd = exact ? Array.from({ length: obs + 1 }, (_, L) => L + 1) : null;
+    const t = T.map(a => (a <= age - 3 ? a + 1 : null));
+    const r = [X, 100, 80, 50, dd, exact ? df : 0, exact ? dd.map(() => 50) : null, t, null, X, null, 'Normal', age === 120 ? 2 : 0, 4000];
+    const nm = Math.min(12, Math.floor(age / 30) - 1);
+    if (nm > 0) { r.push(Array.from({ length: nm }, (_, k) => 31 + 10 * (k + 1)), Array.from({ length: nm }, (_, k) => k).filter(k => 30 * (k + 2) <= age - 3).length); r[8] = r[14][nm - 1]; }
+    rows.push(r);
+  }
+  const life = []; for (let i = 199; i >= 0; i--) life.push([day(newest, -i), 5 + (i % 7), 4 + (i % 5)]);
+  return { v: 1, app: 'Long File', T, lags: 31, newest, S: '2026-10-07', rows, months: [], sum: { today: rows.slice(-2), pools: {} },
+    life, life_till: day(newest, -1), late: { days: 200, from: '2021-04-23', till: newest }, consts: { final_lag: 3 } };
+}
+// one vm per (width, file): the block painted inside a screen (made-up text above and below it), the reader's taps
+async function keepHarness(VW, file, packs) {
+  const VH = VW <= 760 ? 740 : 900, D = miniDom(VW, VH), Q = { t: [], raf: [], now: 0, n: 0 };
+  const c = Object.assign({}, CTX0, { document: D.doc, window: D.win, Element: D.El, HTMLElement: D.El, getComputedStyle: D.gcs,
+    setTimeout: (f, ms) => { Q.t.push({ at: Q.now + (ms || 0), f, n: Q.n++ }); return Q.n; }, requestAnimationFrame: f => { Q.raf.push(f); return Q.raf.length; },
+    DATA: { roi: { file: 'roi.json.gz', v: 'v1', apps: { 'id-c': { file: 'roi_cccccccccccc.json.gz', st: 'Watch' } } } },
+    fetchGzJson: u => { const f = u.split('?')[0]; return packs && packs[f] ? Promise.resolve(JSON.parse(JSON.stringify(packs[f]))) : Promise.reject(new Error('x')); } });
+  vm.createContext(c);
+  vm.runInContext(SPSRC + '\n' + src + '\nthis.__SP=SP;', c);
+  const R = c.ROI, U = R._, SP = c.__SP;
+  U.data().AF['roi_cccccccccccc.json.gz'] = Object.assign(JSON.parse(JSON.stringify(file)), { _v: 'v1' });
+  D.setDoc('<html><head></head><body><main><section class="screen on" data-screen="value"><div class="above">' + 'Install value overview. '.repeat(60)
+    + '</div>' + R.block('id-c') + '<div class="below">' + 'More details below. '.repeat(400) + '</div></section></main></body></html>');
+  const micro = () => new Promise(r => setImmediate(r));
+  async function drain(ms) {   // microtasks, frames, then the timers in order (SP's 0 / 150 / 400 ms checks)
+    await micro(); for (let i = 0; i < 4 && Q.raf.length; i++) { Q.raf.splice(0).forEach(f => f()); await micro(); }
+    const end = Q.now + ms;
+    for (;;) { Q.t.sort((p, q) => p.at - q.at || p.n - q.n); const n = Q.t[0]; if (!n || n.at > end) break; Q.t.shift(); Q.now = n.at; n.f(); await micro();
+      for (let i = 0; i < 4 && Q.raf.length; i++) { Q.raf.splice(0).forEach(f => f()); await micro(); } }
+    Q.now = end; }
+  const lab = tr => { const c0 = tr.children[0]; return c0 ? c0.textContent.replace(/\s+/g, ' ').trim() : ''; };
+  // the tapped table's box: the lifetime one holds its buttons, the install days' sits right above them
+  const boxOf = b => b.closest('.roi-tw') || b.closest('.roi-more').previousElementSibling;
+  async function run(st, kind, seq, name, o) {
+    o = o || {};
+    U.set('VIEW', st.VIEW); if (st.GRAIN) U.set('GRAIN', st.GRAIN); if (st.MET) U.set('MET', st.MET); if (st.LG) U.set('LG', st.LG);
+    U.set('SHOW', 60); if (st.CTY != null) U.setCTY(st.CTY);
+    R.repaint(); await drain(0); R.repaint(); await drain(0);                       // a country's pack in hand
+    const taps = [];
+    for (const w of seq) {
+      const b = D.q(`[data-roi-${kind}="${w}"]`); if (!b) { taps.push({ w, gone: true }); break; }
+      const box = boxOf(b); D.lay();
+      // the reader: the page so the box ends ~140px above the window's bottom (the buttons in sight), the box scrolled down
+      // (near its end; "Show all" at once: half way) and sideways
+      D.W.y = Math.max(0, box._L.top + box._L.h - (VH - 140)); D.lay();
+      const mx = box.scrollHeight - box.clientHeight;
+      box.scrollTop = kind === 'lmore' ? mx : seq.length === 1 ? Math.floor(mx / 2) : mx - 45; box.scrollLeft = 260;
+      const br = box.getBoundingClientRect(), lo = Math.max(0, br.top), hi = Math.min(VH, br.bottom);
+      const trs = box.querySelectorAll('tbody tr'), seen = trs.filter(tr => { const q = tr.getBoundingClientRect(); return q.bottom > lo && q.top < hi; });
+      const a = seen[seen.length - 1], L0 = lab(a), y0 = a.getBoundingClientRect().top, sl0 = box.scrollLeft, sy0 = D.W.y, n0 = trs.length, i0 = trs.indexOf(a), c0 = D.W.calls, in0 = SP.st.intent;
+      const gn = o.grow ? o.grow * (taps.length + 1) : 0;                        // (more each tap: it grows every time)
+      if (gn) D.hooks.set = (el, h) => el.id === 'roi-hero' ? h + '<div class="grown">' + 'grown above '.repeat(gn) + '</div>' : h;
+      D.fire('pointerdown', b); D.fire('click', b); await drain(500);
+      D.hooks.set = null;
+      const trs2 = D.q('#roi-body').querySelectorAll('tbody tr'), a2 = trs2.find(tr => lab(tr) === L0), box2 = a2 && a2.closest('.roi-tw');
+      taps.push({ w, label: L0, move: a2 ? Math.round((a2.getBoundingClientRect().top - y0) * 10) / 10 : 'gone', sl: [sl0, box2 ? box2.scrollLeft : null],
+        dy: D.W.y - sy0, calls: D.W.calls - c0, rows: [n0, trs2.length], idx: [i0, a2 ? trs2.indexOf(a2) : -1], key: a2 ? a2.getAttribute('data-roi-k') : null,
+        intent: SP.st.intent > in0, inView: a2 ? (r => r.bottom > 0 && r.top < VH)(a2.getBoundingClientRect()) : false });
+    }
+    return { name, taps };
+  }
+  return { run, D, U, SP };
+}
+async function moreKeepAll(dc, packs) {
+  const res = { coh: [], cty: [], life: [], grow: [] };
+  for (const VW of [375, 1280]) {
+    const H = await keepHarness(VW, longFile(), null);         // All countries: every grain × mode, 60 more … then all; all at once
+    for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) for (const seq of [['60', '60', 'all'], ['all']])
+      res.coh.push(await H.run({ VIEW: 'day', GRAIN: g, MET: m, CTY: '' }, 'more', seq, `${VW} ${g} ${m} ${seq.join('+')}`));
+    const C = await keepHarness(VW, dc, packs);                // every country's table (its 70 install days: Day has the buttons)
+    for (const cc of ['AA', 'BB', 'XX', '']) for (const m of ['roas', 'rev', 'ltv', 'delta']) for (const seq of [['60'], ['all']])
+      res.cty.push(await C.run({ VIEW: 'day', GRAIN: 'day', MET: m, CTY: cc }, 'more', seq, `${VW} ${cc || 'All'} ${m} ${seq.join('+')}`));
+    for (const seq of [['60', '60', 'all'], ['all']])          // 💰 Lifetime P/L → Every day (its own buttons, inside its box)
+      res.life.push(await (await keepHarness(VW, longFile(), null)).run({ VIEW: 'life', LG: 'day' }, 'lmore', seq, `${VW} life ${seq.join('+')}`));
+    // something above the table grows in the same repaint: the page takes it back once, the layer adds no second scroll
+    res.grow.push(await (await keepHarness(VW, longFile(), null)).run({ VIEW: 'day', GRAIN: 'day', MET: 'roas', CTY: '' }, 'more', ['60', 'all'], `${VW} grow`, { grow: 40 }));
+  }
+  return res;
+}
 (async () => {
   try {
     vm.runInContext(src, ctx);
@@ -236,7 +478,7 @@ async function noJump(width, file, packs, failOnce, mode) {
     out.day_tiles = ['D0 ROAS', 'D30 ROAS', 'LTV D30', 'Back next day'].every(s => html1.includes(s));
     const hh = U.hero('id-a');
     out.hero = ['Money back in', '~12 days', 'D7 ROAS', 'Cost / install', 'Lifetime profit / loss', 'Ads profit me'].every(s => hh.includes(s));
-    out.day_rows = (html1.match(/<tr><td class="roi-nm">/g) || []).length;          // the first 60 install days
+    out.day_rows = (html1.match(/<tr data-roi-k="\d{4}-\d{2}-\d{2}"><td class="roi-nm">/g) || []).length;   // the first 60 install days, each keyed
     out.day_more = html1.includes('Show all 70');
     out.day_be = html1.includes('day 9');
     out.day_tie = html1.includes('1 din ka GA4 read match nahi hua');
@@ -901,7 +1143,7 @@ async function noJump(width, file, packs, failOnce, mode) {
     // ── 🎯 Breakeven right after CPI, before D0 (owner, 21 Oct 2026: "D0 ke pehle ak column add kar do — konse day pe
     // breakeven milta he") ──────────────────────────────────────────────────────────────────────────────────────
     const ths = t => [...t.matchAll(/<th>([^<]*)<\/th>/g)].map(m => m[1]);
-    const trs = t => [...t.matchAll(/<tr><td class="roi-nm">[^]*?<\/tr>/g)].map(m => m[0].slice(4, -5).split('</td>').slice(0, -1).map(x => x + '</td>'));
+    const trs = t => [...noK(t).matchAll(/<tr><td class="roi-nm">[^]*?<\/tr>/g)].map(m => m[0].slice(4, -5).split('</td>').slice(0, -1).map(x => x + '</td>'));
     // the breakeven cell: only the cells' own classes (green / muted; faded + "not final" only on a "≤"), no inline style
     const BE_TD = /^(<td class="roi-g">(≤ )?day \d+<\/td>|<td class="roi-g roi-nf" title="not final">≤ day \d+<\/td>|<td class="roi-(g|na)">\d+% back<\/td>|<td class="roi-na">—<\/td>)$/;
     // a ROAS table's week / month rows: "(≤) day N" = the row's FIRST green (ROAS ≥ 100%) cell is DN, faded exactly when
@@ -978,7 +1220,8 @@ async function noJump(width, file, packs, failOnce, mode) {
     // the default view (no country part in the file) byte for byte as the page made it before the country filter: one
     // digest over every grain × mode of both made-up files, the Day view and the Countries board (worked out on the
     // page before this change)
-    [out.cc_default_digest, out.cc_default_nobe, out.cc_default_nokpi, out.cc_default_kpis] = defaultDigest();
+    [out.cc_default_digest, out.cc_default_nobe, out.cc_default_nokpi, out.cc_default_kpis, out.cc_default_nok,
+      out.cc_default_nokpi_nok] = defaultDigest();
     out.cc_src_null = U.cohortTable(appFile(), null) === U.cohortTable(appFile()) && U.cohortTable(appFile(), undefined) === U.cohortTable(appFile());
     {
     // a made-up app with the country part: 8 named countries (6 chips + the rest in the list), GA4's "(not set)" and
@@ -1044,7 +1287,7 @@ async function noJump(width, file, packs, failOnce, mode) {
     const C0 = U.cols(dc, dc.rows), rA = PACKS['roi_aaaaaaaaaaaa_c00.json.gz'].c.AA;
     const hdA = (ta.match(/<th>D\d+<\/th>/g) || []).map(x => x.slice(4, -5));
     out.cc_table = [ta.includes('Every install day · D0 se D60 tak · [AA] Country AA</h3>'), ta.includes('data-roi-ccx="1">✕ All countries'),
-      hdA.length, hdA[0], hdA[30], hdA[31], (ta.match(/<tr><td class="roi-nm">/g) || []).length, ta.includes('Show all 70'),
+      hdA.length, hdA[0], hdA[30], hdA[31], (noK(ta).match(/<tr><td class="roi-nm">/g) || []).length, ta.includes('Show all 70'),
       ta.includes('id="roi-coh"'), C0.length];
     // a short [X] expanded: the row the build would have written (zero installs, cells 0 as far as read)
     const zrow = U.ccSrc(dc).rows.find(r => r[0] === day('2026-10-13', -63));
@@ -1365,6 +1608,7 @@ async function noJump(width, file, packs, failOnce, mode) {
     const F1 = ['roi_aaaaaaaaaaaa_c01.json.gz'];
     out.cc_nojump = { w375: await noJump(375, dc, PACKS, F1), w1280: await noJump(1280, dc, PACKS, F1) };
     out.cc_late = (await noJump(375, dc, PACKS, [], 'late')).late;
+    out.more_keep = await moreKeepAll(dc, PACKS);
     }
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };

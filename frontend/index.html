@@ -7131,7 +7131,7 @@ function cohortTable(d,src){ if(src&&src.msg) return `<div class="roi-ctl">${src
     else { so=xx?null:gr.rows.reduce((a,r)=>a+(+r[R.s]||0),0); be=xx?null:beGrp(gr,C,T,sp);   // (🧩 Not split: no revenue to add)
       sob=gr.rows.every(r=>ok(r[R.s]))?so:null; }   // "% back" only when every day's so far is measured (else —, never a $0 as read)
     const qb=GRAIN==='day'?(+gr.rows[0][R.q]||0):0, q=qb?` <span class="roi-q" title="${E((src&&src.qt?src.qt(qb):[qb&1?'Is din ka GA4 read install-day read se match nahi hua':'',qb&2?'D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)")':'',qb&4?'D30 ke baad GA4 ke report pe data loss / thresholding / sampling ka flag tha — asli kamai thodi alag (kam ya zyada) ho sakti hai':'']).filter(Boolean).join(' · ')+' — numbers ≈')}">≈</span>`:'';
-    return `<tr><td class="roi-nm">${E(rowLabel(gr,d))}${q}</td><td>${st?chip(st):''}</td><td>${xx?'—':N(n)}</td><td>${MV(spv)}</td><td>${spv&&n?MPV(spv/n):'—'}</td>${beTd(be,sp,sob)}${cells}<td>${M(so)}${sp&&ok(so)?` <small>${P(so/sp)}</small>`:''}</td></tr>`; }).join('');
+    return `<tr data-roi-k="${E(gr.k)}"><td class="roi-nm">${E(rowLabel(gr,d))}${q}</td><td>${st?chip(st):''}</td><td>${xx?'—':N(n)}</td><td>${MV(spv)}</td><td>${spv&&n?MPV(spv/n):'—'}</td>${beTd(be,sp,sob)}${cells}<td>${M(so)}${sp&&ok(so)?` <small>${P(so/sp)}</small>`:''}</td></tr>`; }).join('');
   const more=groups.length>shown.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-more="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-more="all">Show all ${groups.length}</button><span class="roi-note">${shown.length} of ${groups.length}</span></div>`:'';
   return `${src&&src.top||''}<div class="roi-ctl">${src&&src.ctl||''}${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div>`
     +`<div class="roi-tw"><table class="roi-t roi-heat"><thead>${head}</thead><tbody>${body}</tbody></table></div>${more}`
@@ -7382,7 +7382,7 @@ function lifeView(life,till,d,co){ life=life||[]; if(d) CCY=d.ccy||null; if(!lif
       +mrows.map(m=>`<tr><td class="roi-nm">${E(fmtMon(m[0]))}${m[4]<new Date(+m[0].slice(0,4),+m[0].slice(5,7),0).getDate()?` <small>${m[4]}d</small>`:''}</td><td>${MV(m[1])}</td><td>${MV(m[2])}</td><td class="${m[1]>=m[2]?'roi-up':'roi-dn'}">${MV(m[1]-m[2],true)}</td><td class="${roasCls(m[2]?m[1]/m[2]:null)}">${m[2]?P(m[1]/m[2]):'—'}</td><td class="${m[3]>=0?'roi-up':'roi-dn'}">${MV(m[3],true)}</td></tr>`).join('')+`</tbody></table>`
     :(()=>{ const rs=cum.slice().reverse(), sh=rs.slice(0,LSHOW);
         return `<table class="roi-t"><thead><tr><th>Day</th><th>Revenue</th><th>Ads spend</th><th>Profit / loss</th><th>Total profit till then</th></tr></thead><tbody>`
-          +sh.map((x,i)=>{ const o=dv[dv.length-1-i]; const p=o[1]-o[2]; return `<tr><td class="roi-nm">${E(fdy(x[0]))}</td><td>${MV(o[1])}</td><td>${MV(o[2])}</td><td class="${p>=0?'roi-up':'roi-dn'}">${MV(p,true)}</td><td class="${x[1]>=x[2]?'roi-up':'roi-dn'}">${MV(x[1]-x[2],true)}</td></tr>`; }).join('')
+          +sh.map((x,i)=>{ const o=dv[dv.length-1-i]; const p=o[1]-o[2]; return `<tr data-roi-k="${E(x[0])}"><td class="roi-nm">${E(fdy(x[0]))}</td><td>${MV(o[1])}</td><td>${MV(o[2])}</td><td class="${p>=0?'roi-up':'roi-dn'}">${MV(p,true)}</td><td class="${x[1]>=x[2]?'roi-up':'roi-dn'}">${MV(x[1]-x[2],true)}</td></tr>`; }).join('')
           +`</tbody></table>`+(rs.length>sh.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-lmore="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-lmore="all">Show all ${rs.length}</button></div>`:''); })();
   return kp+`<div class="roi-card"><div class="roi-ct"><h3>Revenue vs ads spend · pehle din se</h3><span class="roi-note">line pe tap = us din tak ka total</span></div>${ch}</div>`
     +`<div class="roi-card"><div class="roi-ct"><h3>${LG==='cohort'?'Install month · har mahine ke installs ne ab tak kitna kamaya':LG==='month'?'Calendar month · us mahine kitna aaya, kitna gaya':'Every day'}</h3>${seg('lg',LG,[['cohort','Install month'],['month','Calendar month'],['day','Day']])}</div><div class="roi-tw">${tbl}</div>`
@@ -8005,6 +8005,30 @@ function hold(r){ r.style.minHeight=Math.max(r.offsetHeight,parseFloat(r.style.m
 // keep `anchor` where it is on screen across fn() (a repaint): the element `sel` finds afterwards goes back to its top
 function keepAt(r,anchor,sel,fn){ const y0=anchor.getBoundingClientRect().top; hold(r); fn(); const b=sel?r.querySelector(sel):null;
   if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } }
+// "Show 60 more" / "Show all" (owner, 21 Oct 2026: "show 60 more krte he to table pehle se scroll hoke uppar se start hota
+// he"): the table scrolls inside its own box (.roi-tw: at most 640px high, sideways too) and a repaint draws a new box — at
+// the top and the left again. Before it: the anchor = the last row of the tapped table (its key: data-roi-k) at least partly
+// in sight (inside the box's visible part and the window), else the last row shown; after it: the new box gets the old one's
+// sideways and down scroll back (the rows above the anchor are the same rows), what the anchor still moved inside the box
+// goes back on the box and the rest on the page, so the anchor sits where it was (≤ 1 px) and the new rows appear below it.
+// A page scroll here is the code's own (the stay-put layer then leaves this tap alone — never a second scroll); none needed
+// → the layer's anchor (the button below the box, or the box) did not move either.
+function moreBox(b){ const w=b.closest('.roi-tw'); if(w) return w;                  // the lifetime table: its buttons inside the box
+  const m=b.closest('.roi-more'), p=m&&m.previousElementSibling; return p&&p.classList&&p.classList.contains('roi-tw')?p:null; }   // install days: right below it
+function keepRows(r,b,fn){ const w=moreBox(b), rows=w?w.querySelectorAll('tr[data-roi-k]'):[];
+  if(!rows.length){ hold(r); fn(); return; }
+  const wr=w.getBoundingClientRect(), vh=+window.innerHeight||0, lo=Math.max(wr.top,0), hi=vh>0?Math.min(wr.bottom,vh):wr.bottom;
+  let a=null; for(let i=0;i<rows.length;i++){ const q=rows[i].getBoundingClientRect(); if(q.top>=hi) break; if(q.bottom>lo) a=rows[i]; }
+  a=a||rows[rows.length-1];
+  const k=a.getAttribute('data-roi-k'), y0=a.getBoundingClientRect().top, sl=w.scrollLeft||0, st=w.scrollTop||0;
+  hold(r); fn();
+  const rs=r.querySelectorAll('tr[data-roi-k]'); let a2=null; for(let i=0;i<rs.length&&!a2;i++) if(rs[i].getAttribute('data-roi-k')===k) a2=rs[i];
+  if(!a2) return;
+  const w2=a2.closest('.roi-tw');
+  if(w2){ w2.scrollLeft=sl; w2.scrollTop=st;
+    const din=(a2.getBoundingClientRect().top-y0)-(w2.getBoundingClientRect().top-wr.top);   // moved inside the box, not with it
+    if(Math.abs(din)>1) w2.scrollTop=st+din; }
+  const dy=a2.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); }
 let WIRED=false;
 function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventListener) return; WIRED=true;
   const tip=()=>{ const r=root(); return r&&r.querySelector('.roi-tip'); };
@@ -8025,8 +8049,8 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=at('[data-roi-grain]'))){ b.setAttribute('data-roi-sel',`[data-roi-grain="${b.dataset.roiGrain}"]`); keep(b,()=>{ GRAIN=b.dataset.roiGrain; SHOW=60; repaint(); }); return; }
     if((b=at('[data-roi-met]'))){ b.setAttribute('data-roi-sel',`[data-roi-met="${b.dataset.roiMet}"]`); keep(b,()=>{ MET=b.dataset.roiMet; repaint(); }); return; }
     if((b=at('[data-roi-lg]'))){ b.setAttribute('data-roi-sel',`[data-roi-lg="${b.dataset.roiLg}"]`); keep(b,()=>{ LG=b.dataset.roiLg; LSHOW=60; repaint(); }); return; }
-    if((b=at('[data-roi-more]'))){ SHOW=b.dataset.roiMore==='all'?1e9:SHOW+60; repaint(); return; }
-    if((b=at('[data-roi-lmore]'))){ LSHOW=b.dataset.roiLmore==='all'?1e9:LSHOW+60; repaint(); return; }
+    if((b=at('[data-roi-more]'))){ const v=b.dataset.roiMore; keepRows(r,b,()=>{ SHOW=v==='all'?1e9:SHOW+60; repaint(); }); return; }       // the reader's row stays put
+    if((b=at('[data-roi-lmore]'))){ const v=b.dataset.roiLmore; keepRows(r,b,()=>{ LSHOW=v==='all'?1e9:LSHOW+60; repaint(); }); return; }
     if((b=at('[data-roi-csort]'))){ const k=b.dataset.roiCsort; b.setAttribute('data-roi-sel',`[data-roi-csort="${k}"]`); keep(b,()=>{ CSORT={k,dir:CSORT.k===k?-CSORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-asort]'))){ const k=b.dataset.roiAsort; b.setAttribute('data-roi-sel',`[data-roi-asort="${k}"]`); keep(b,()=>{ ASORT={k,dir:ASORT.k===k?-ASORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-cc]'))){ const cc=b.dataset.roiCc; keepAt(r,b,`[data-roi-cc="${cc}"]`,()=>{ CTY=cc; SHOW=60; repaint(); }); return; }
