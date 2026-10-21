@@ -9,13 +9,27 @@ The geo step (fetch.gads_geo) asks Q-G1 / Q-G2 with segments.date and folds the 
             day as well (0 extra calls). The weekly cache is not touched by it, and a failure here never stops it
             (the hook is in its own try; a broken capture is simply not saved this build).
   backfill  newest → oldest, GD_CHUNK_DAYS chunks, ≤ GD_BACKFILL_CHUNKS a build, with its OWN small budget (GD_MAX_CALLS
-            / GD_MAX_SEC; the same stops: quota error, 403 skip): the days below the newest covered range not covered
-            yet (state "cov": the day ranges committed or found empty — a chunk committed out of order, e.g. the weekly
-            backfill's while the refresh is not due, leaves a gap that is filled first), back to
-            today − GD_KEEP_DAYS (the weekly cache's depth) or the spend cache's first day, whichever is later — and to
-            the data edge (GD_EDGE_CHUNKS chunks in a row with no cost row though their stores had spend). Country ids
-            unknown to the weekly map are asked by id (gads_geo._map_ids) and kept in this store's own map — the
-            weekly cache's map is only read. A chunk whose country map failed is asked again (never parked as "XX").
+            / GD_MAX_SEC — the real limit: more chunks a build while far behind, never more requests or time; a chunk is
+            not started without the calls of its accounts + the country map's reserve, or without the time of the
+            longest chunk so far, so no chunk is cut half-way; the same stops: quota error, 403 skip): the days below
+            the newest covered range not covered yet (state "cov": the day ranges committed or found empty — a chunk
+            committed out of order, e.g. the weekly backfill's while the refresh is not due, leaves a gap that is filled
+            first), back to the spend cache's first day (the oldest day any store spent: the whole Google Ads history,
+            NOT the weekly cache's GEO_KEEP_DAYS — that cache and its replay keep their own depth) — and to the data
+            edge (GD_EDGE_CHUNKS chunks in a row with no cost row although a store spent in the chunk with every account
+            of it asked — a store that did not spend yet, or one with an account skipped, is no evidence; a chunk no
+            store spent in ("none") neither counts nor breaks the run; the days before the edge stay unknown). The floor
+            only moves deeper: an archive "done" at a shallower floor goes on below its oldest day (no covered day asked
+            again). Country ids unknown to the weekly map are asked by id (gads_geo._map_ids) and kept in this store's
+            own map — the weekly cache's map is only read. A chunk whose country map failed is asked again (never parked
+            as "XX"). An account billed in another currency goes ccy → USD → base at the build's rate, as the weekly
+            cache and the spend cache convert (fx_fn has no date; roi_build then takes base → USD at each day's rate); a
+            chunk with an account whose rate is not a real one (fx_fn gave none / 0 / not finite, raised, or
+            google_ads._fx_to_usd fell to its blind 1.0 for a currency it has no rate of) is not asked and nothing of it
+            is committed ("fail": asked again, the fail back-off holds it to GD_FAIL_BACKOFF tries a day; counted in
+            errors). A chunk whose stores with spend all have an account skipped (403 / gone from the MCC: the weekly
+            skip rule) is settled with nothing written ("skip": those store-days stay unknown, no backfill days counted,
+            the edge run neither grows nor breaks).
 
 File data/ads_geo_day/<YYYY-MM>.json.gz (deterministic, only on change):
   {"v": 1, "month": "YYYY-MM", "ccy": base, "days": {store: {day: {cc: [cost_micros, dl | null]}}}}
@@ -27,20 +41,22 @@ File data/ads_geo_day/<YYYY-MM>.json.gz (deterministic, only on change):
 """
 
 import json
+import math
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from . import gads_geo as gg
+from . import google_ads as gads
 from .gads_store import Months, cov_add, cov_next, cov_of, d, days, load_state, month_of, save_state, spend_ok
 
 GD_V = 1
 GD_DIR = "ads_geo_day"
-GD_KEEP_DAYS = gg.GEO_KEEP_DAYS     # the backfill's depth = the weekly cache's
 GD_CHUNK_DAYS = 28
-GD_BACKFILL_CHUNKS = 2
-GD_MAX_CALLS = 80                   # the day backfill's own budget per build
+GD_BACKFILL_CHUNKS = 6              # chunks a build at most (while far behind; caught up, a gap is a chunk or two)
+GD_MAX_CALLS = 80                   # the day backfill's own budget per build — the limit that binds first while an
+                                    # old chunk's accounts are many (2 requests each + the map's reserve)
 GD_MAX_SEC = 90
 GD_EDGE_CHUNKS = 2
 GD_FAIL_BACKOFF = 3
@@ -161,8 +177,37 @@ def load(data_dir, keep=None):
     return out
 
 
+def _fx_real(ccy):
+    """google_ads._fx_to_usd (live, else the last good rate saved, else its near-live table), but None where it can
+    only guess: a currency outside its table with no live / saved rate gets a blind 1.0 there — never used here."""
+    v = gads._fx_to_usd(ccy)
+    if ccy != "USD" and ccy not in gads._FX_FALLBACK and v == 1.0:
+        return None
+    return v
+
+
+def _rate(ctx, x):
+    """Account x's currency → base (ccy → USD → base, the weekly cache's ctx.rate and the spend cache's _aggregate
+    rule; 1.0 in the base currency), or None: no real rate (fx_fn gave none / 0 / not finite for either currency, or
+    raised). Each currency asked once a build."""
+    ccy = ctx.ccy.get(x) or ctx.base
+    if ccy == ctx.base:
+        return 1.0
+    for c in (ccy, ctx.base):
+        if c not in ctx.fxr:
+            try:
+                v = float(ctx.fx_fn(c) or 0)
+            except Exception:
+                v = 0.0
+            ctx.fxr[c] = v if math.isfinite(v) and v > 0 else None
+    u, b = ctx.fxr[ccy], ctx.fxr[ctx.base]
+    return u / b if u and b else None
+
+
 def _chunk(ctx, store, spend, a, b, today, wskip):
-    """One backfill chunk → "ok" | "empty" | "none" | "fail" | "stop" (the weekly _chunk's rules, days only)."""
+    """One backfill chunk → "ok" | "empty" | "none" | "skip" | "fail" | "stop" (the weekly _chunk's rules, days only;
+    "skip": no store to write — every store that spent has an account skipped (403 / gone) — nothing written; "fail"
+    also: an asked account's currency has no real rate — nothing asked)."""
     run = ctx.run
     own, _noacct = gg._plan(spend, a, b)
     wanted = set().union(*own.values()) if own else set()
@@ -175,13 +220,22 @@ def _chunk(ctx, store, spend, a, b, today, wskip):
     ts = today.isoformat()
     skip = {x for x in wanted if max(wskip.get(x) or "", store.state["skip"].get(x) or "") > ts or x not in ctx.ccy}
     ask = sorted(wanted - skip)
+    rates = {x: _rate(ctx, x) for x in ask}
+    if any(r_ is None for r_ in rates.values()):            # no real rate: nothing asked, nothing committed
+        run.errors += sum(1 for r_ in rates.values() if r_ is None)
+        return "fail"
     if ask and run.left() < 2 * len(ask) + gg.ISO_RESERVE:
         run.stop = run.stop or "calls"
         return "stop"
+    if ask and run.elapsed() + run.chunk_sec > run.max_sec:  # not started without the longest chunk's time left
+        run.stop = run.stop or "time"
+        return "stop"
     res = {}
     if ask:
+        t0 = run.clock()
         with ThreadPoolExecutor(max_workers=min(gg.GEO_WORKERS, len(ask))) as ex:
             res = dict(zip(ask, ex.map(lambda x: gg._ask(ctx, x, a, b), ask)))
+        run.chunk_sec = max(run.chunk_sec, run.clock() - t0)
     until = (today + timedelta(days=gg.GEO_SKIP_DAYS)).isoformat()
     for x, r in res.items():
         if r["st"] == "403":
@@ -191,7 +245,9 @@ def _chunk(ctx, store, spend, a, b, today, wskip):
         return "stop" if all(r["st"] != "err" for r in res.values()) and run.stop else "fail"
     answered = [x for x in ask if res[x]["g1"] is not None]
     if answered and not sum(len(res[x]["g1"]) for x in answered):
-        return "empty"
+        # the data edge's evidence: a store that spent in the chunk, every account of it asked, no cost row. Stores
+        # with an account skipped (403 / gone: their spend may be that account's) say nothing about the edge
+        return "empty" if any(ac and not ac & skip for ac in own.values()) else "skip"
     ids = {r["ccid"] for x in answered for k in ("g1", "g2") for r in (res[x][k] or []) if r.get("ccid")}
     iso = ctx.iso_map
     if not gg._map_ids(ctx, {"iso": iso}, ids, today):
@@ -207,7 +263,9 @@ def _chunk(ctx, store, spend, a, b, today, wskip):
         seen |= mine
     blocked = {sid for sid, ac in own.items() if ac & skip}
     replace = (({sid for sid, ac in own.items() if ac} | seen) - blocked)
-    store.commit(res, answered, replace, dlnull, a, b, iso, ctx.rate)
+    if not replace:
+        return "skip"
+    store.commit(res, answered, replace, dlnull, a, b, iso, rates.__getitem__)
     return "ok"
 
 
@@ -226,16 +284,15 @@ def day_step(s, data_dir, spend, today, store, *, clock=time.monotonic, search=N
         store.save()
         return day_line(store.st, "off" if not store.broken else "skipped", 0, 0)
     weekly = gg.load_geo(data_dir) or {}
-    ctx = gg._Ctx(s, run, search, token, fx_fn, store.state["ccy"])
+    ctx = gg._Ctx(s, run, search, token, fx_fn or _fx_real, store.state["ccy"])
+    ctx.fxr = {}
     ctx.iso_map = dict(weekly.get("iso") or {})
     own_iso = {k: v for k, v in (state.get("iso") or {}).items() if k not in ctx.iso_map}
     ctx.iso_map.update(own_iso)
     ts = today.isoformat()
     state["skip"] = {k: v for k, v in state["skip"].items() if isinstance(v, str) and v > ts}
     spend_first = min((x for dd in (spend.get("daily") or {}).values() for x in (dd or {})), default=None)
-    floor = today - timedelta(days=GD_KEEP_DAYS)
-    if spend_first:
-        floor = max(floor, d(spend_first))
+    floor = d(spend_first) if spend_first else today        # the whole Google Ads history (not the weekly depth)
     if state.get("edge"):
         floor = max(floor, d(state["edge"]))
     state["cov"] = cov_of(state)
@@ -247,7 +304,7 @@ def day_step(s, data_dir, spend, today, store, *, clock=time.monotonic, search=N
             break
         a, b = ch
         r = _chunk(ctx, store, spend, a, b, today, weekly.get("skip") or {})
-        if r in ("ok", "none", "empty"):
+        if r in ("ok", "none", "empty", "skip"):
             if r != "none":
                 asked += 1
             if r != "ok":                                       # nothing to keep: settled all the same
@@ -258,10 +315,9 @@ def day_step(s, data_dir, spend, today, store, *, clock=time.monotonic, search=N
                 if state["erun"] >= GD_EDGE_CHUNKS:
                     state["edge"] = a.isoformat()
                     floor = max(floor, a)
-            else:
-                if r == "ok":
-                    state["erun"] = 0
-                    store.st["bdays"] += (b - a).days + 1
+            elif r == "ok":
+                state["erun"] = 0
+                store.st["bdays"] += (b - a).days + 1
         elif r == "fail":
             state["bfails"] = int(state.get("bfails") or 0) + 1
             state["bday"] = ts
