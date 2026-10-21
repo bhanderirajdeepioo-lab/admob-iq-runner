@@ -7261,7 +7261,8 @@ function ccSrc(d){ const cd=cdOf(d);
 //  * Total revenue = Σ the "So far" column (AdMob-matched; the ₹ view at today's rate, as the column); a day whose so far
 //    is not read yet is left out and counted.
 //  * Profit / loss = the printed Total revenue − the printed Total spend (both rounded to one printed precision first:
-//    exact to the last digit), ROAS = Total revenue ÷ Total spend (blended); both '—' unless Total spend > 0.
+//    exact to the last digit; a spend > 0 never printed as 0), ROAS = Total revenue ÷ Total spend (blended, from the sums,
+//    not the rounded tiles); both '—' unless Total spend > 0 (no ads: spend 0; under a cent: ≈ 0).
 //  * Installs (GA4, ads + organic), Install days (first – last).
 // Not split: spend only; Unknown country: no Google Ads spend ('—'), its revenue; '…' while a country's rows load, '—' when
 // there are none. One height in every state (6 tiles, one-line values — 14+ characters a size smaller, never cut —, two-
@@ -7278,19 +7279,28 @@ function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[
   sq.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
   const rn=[]; let pv=false; for(const [x,q] of sq){ if(q){ if(pv) rn[rn.length-1][1]=x; else rn.push([x,x]); } pv=q; }
   const D=rows?rows.length:0, K=D-nrv, M=sq.filter(y=>y[1]).length, no=ld?'…':'—';
-  const hs=nsp>0&&!un, hr=nrv>0&&!xx, mx=Math.max(hs?Math.abs(sp):0,hr?Math.abs(RV(rv)):0), dp=mx>=10?0:mx>=1?1:2, f=10**dp;
-  const iS=hs?Math.round(sp*f):0, iR=hr?Math.round(RV(rv)*f):0, S=iS/f, Rv=iR/f, has=hs&&hr&&iS>0, net=(iR-iS)/f, ro=has?Rv/S:null;
-  const MD=(x,sg)=>(x<0?MI:(sg&&x>0?'+':''))+csym()+(dp?Math.abs(x).toFixed(dp):Math.abs(x).toLocaleString(inr?'en-IN':'en-US'));
+  // one printed precision for the money tiles (whole units from 10 up); a spend > 0 that would print as 0 gets more digits
+  // (up to 2: the Spend column's own cents) — never "$0" / "no ads" over a column that shows spend; under a cent: the
+  // precision as it was, the spend ≈ 0 said
+  const hs=nsp>0&&!un, hr=nrv>0&&!xx, mx=Math.max(hs?Math.abs(sp):0,hr?Math.abs(RV(rv)):0);
+  let dp=mx>=10?0:mx>=1?1:2; if(hs&&sp>0) for(let q=dp;q<=2;q++) if(Math.round(sp*10**q)>0){ dp=q; break; }
+  // profit = the printed revenue − the printed spend (exact to the last digit); ROAS from the sums themselves (= the So far
+  // column's so far ÷ spend on the same rows), not from the rounded tiles
+  const f=10**dp, iS=hs?Math.round(sp*f):0, iR=hr?Math.round(RV(rv)*f):0, S=iS/f, Rv=iR/f, tn=hs&&sp>0&&!(iS>0), has=hs&&hr&&iS>0, net=(iR-iS)/f, ro=has?RV(rv)/sp:null;
+  const MD=(x,sg)=>(x<0?MI:(sg&&x>0?'+':''))+csym()+Math.abs(x).toLocaleString(inr?'en-IN':'en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp});
   const t=(l,v,s,c)=>tile(l,String(v).replace(/<[^>]+>/g,'').length>=14?`<span class="roi-ckw">${v}</span>`:v,s,'roi-ck'+(c?' '+c:''));
   const d1=z=>z[0]===z[1]?E(fd(z[0])):`${E(fd(z[0]))} – ${E(fd(z[1]))}`;
   const rg=!rn.length?'':rn.length===1?d1(rn[0]):`${N(rn.length)} hisson me, ${d1([rn[0][0],rn[rn.length-1][1]])}`;
   // why Profit / loss (k 0) or ROAS (k 1) is '—'; else what it is
   const why=k=>xx?'Not split: sirf spend':!rows||has?(k?'revenue ÷ spend · blended':'revenue − spend'):!hs?`spend nahi — ${k?'ROAS':'profit / loss'} nahi`
-    :!(iS>0)?`spend 0 — ${k?'ROAS':'profit / loss'} nahi`:'kamai abhi nahi padhi';
+    :!(sp>0)?`spend 0 — ${k?'ROAS':'profit / loss'} nahi`:tn?`spend ≈ 0 — ${k?'ROAS':'profit / loss'} nahi`:'kamai abhi nahi padhi';
   const ln=rows&&M?`${N(M)} din ka spend data nahi (${rg}) — unka spend jod me nahi${xx?'':', revenue hai'}.`:'';
   return `<div class="roi-cks" role="group" aria-label="Totals"${ld?' aria-busy="true"':''}><div class="roi-ckg">`
-    +t('Total spend',hs?MD(S):no,un?'Google Ads me ye country nahi':rows&&M?`${N(M)} din ka spend data nahi`:xx?'Not split · Google Ads':hs&&!(iS>0)?`Is ${who} me koi ads din nahi`:'Google Ads')
-    +t('Total revenue',hr?MD(Rv):no,xx?'Not split: koi kamai nahi':rows&&K?`${N(K)} din ki kamai abhi nahi padhi`:inr?'so far · ₹ aaj ke rate se':'so far · AdMob-matched')
+    +t('Total spend',hs?MD(S):no,un?'Google Ads me ye country nahi':rows&&M?`${N(M)} din ka spend data nahi`:xx?'Not split · Google Ads':hs&&!(sp>0)?`Is ${who} me koi ads din nahi`:'Google Ads')
+    // the ₹ view: revenue at today's rate (the spend as billed) said whether or not some days are unread (≤ 35 characters
+    // up to 9,999 days: two lines of the narrowest tile)
+    +t('Total revenue',hr?MD(Rv):no,xx?'Not split: koi kamai nahi':inr?(rows&&K?`₹ aaj ka rate; ${N(K)} din nahi padhe`:'so far · ₹ aaj ke rate se')
+      :rows&&K?`${N(K)} din ki kamai abhi nahi padhi`:'so far · AdMob-matched')
     +t('Profit / loss',has?`<span class="${net>=0?'roi-up':'roi-dn'}">${MD(net,true)}</span>`:no,why(0),has?(net>=0?'roi-kg':'roi-kb'):'')
     +t('ROAS',has?`<span class="${roasCls(ro)}">${P(ro)}</span>`:no,why(1))
     +t('Installs',nn&&!xx?N(n):no,xx?'Not split: installs nahi':'GA4 · ads + organic')

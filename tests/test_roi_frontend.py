@@ -279,11 +279,14 @@ def _money(v):
     return (-1 if v.startswith("−") else 1) * float("".join(c for c in v if c.isdigit() or c == "."))
 
 
-def _holds(k):
+def _holds(k, rc=None):
     """The printed tiles: Profit / loss = Total revenue − Total spend to the last printed digit, ROAS = Total revenue ÷ Total
-    spend (blended) — over the same strip, every install day (the owner: "profit loss total puri history pe hi hona chaiye")."""
+    spend (blended) — over the same strip, every install day (the owner: "profit loss total puri history pe hi hona chaiye").
+    ROAS from the sums themselves (rc: the recount's unrounded s / r — the So far column's so far ÷ spend), not from the
+    rounded tiles; without rc the printed tiles are the exact sums."""
     s, r, p = (_money(k[i][1]) for i in range(3))
-    return round((r - s) * 100) == round(p * 100) and k[3][1] == f"{int(r / s * 100 + 0.5)}%"
+    rs, rr = (rc["s"], rc["r"]) if rc else (s, r)
+    return round((r - s) * 100) == round(p * 100) and k[3][1] == f"{int(rr / rs * 100 + 0.5)}%"
 
 
 def _tiles(spend, rev, profit, roas, installs, days, sub_s="Google Ads", sub_r="so far · AdMob-matched"):
@@ -318,13 +321,15 @@ def test_totals_strip(out):
     assert out["k_usd_table"] == [20, 38, 200] == [s, r, 200]
     # ₹ billed (₹90 a $ on every day, today ₹100): the bill ₹900 + ₹360 + ₹0 + ₹540 = ₹1,800 (= Σ the Spend column), the so
     # far at today's rate $38 × 100 = ₹3,800 (= Σ the So far column) → +₹2,000 exactly, ROAS 211%
+    # (the ₹ view says "₹ aaj ka rate" on Total revenue with the unread count too: spend as billed, revenue at today's rate)
     k, line, (s, r, p, roas, exact), table, rc = out["k_inr"]
     assert k == _tiles("₹1,800", "₹3,800", "+₹2,000", "211%", "200", ["5", "1 Jan 2026 – 5 Jan 2026"],
-                       "1 din ka spend data nahi", "1 din ki kamai abhi nahi padhi") and _holds(k) and exact
+                       "1 din ka spend data nahi", "₹ aaj ka rate; 1 din nahi padhe") and _holds(k, rc) and exact
     assert table == [s, r] == [rc["S"], rc["R"]] and p == rc["P"] and line == out["k_usd"][1]
     # a ₹ view of a file not billed in ₹: $ × 100 on both sides — ₹2,000 / ₹3,800 → +₹1,800, the $ view's 190%
     k, (s, r, p, roas, exact), table, rc = out["k_inr_usd"]
-    assert [x[1] for x in k[:4]] == ["₹2,000", "₹3,800", "+₹1,800", "190%"] and _holds(k) and exact
+    assert [x[1] for x in k[:4]] == ["₹2,000", "₹3,800", "+₹1,800", "190%"] and _holds(k, rc) and exact
+    assert k[1][2] == "₹ aaj ka rate; 1 din nahi padhe"
     assert table == [s, r] == [rc["S"], rc["R"]] and p == rc["P"]
 
 
@@ -338,30 +343,31 @@ def test_totals_strip_owner_case(out):
     k, cls, line, (s, r, p, roas, exact), rc, table = out["k_own_usd"]
     assert k == _tiles("$500", "$770", "+$270", "154%", "600", ["60", "1 Mar 2025 – 29 Apr 2025"],
                        "30 din ka spend data nahi", "2 din ki kamai abhi nahi padhi")
-    assert exact and r - s == p and _holds(k) and cls[2:4] == [["roi-kg", "roi-up"], ["", "roi-g"]]
+    assert exact and r - s == p and _holds(k, rc) and cls[2:4] == [["roi-kg", "roi-up"], ["", "roi-g"]]
     assert line == "30 din ka spend data nahi (1 Mar 25 – 30 Mar 25) — unka spend jod me nahi, revenue hai."
     assert [rc[x] for x in ("S", "R", "P", "M", "K", "nsp", "nrv")] == [500, 770, 270, 30, 2, 30, 58] and table == [500, 770]
     # ₹ as billed: 20 × 5 × (1,640 + 1,650 + 1,660 + 1,670) + 1,670 + 1,640 + 1,650 + 1,660 + 1,670 = ₹41,390 (= Σ the Spend
     # column); Total revenue $770 × 88 = ₹67,760 (= Σ the So far column) → +₹26,370 to the rupee, ROAS 164%
     k, cls, line, (s, r, p, roas, exact), rc, table = out["k_own_inr"]
     assert k == _tiles("₹41,390", "₹67,760", "+₹26,370", "164%", "600", ["60", "1 Mar 2025 – 29 Apr 2025"],
-                       "30 din ka spend data nahi", "2 din ki kamai abhi nahi padhi")
-    assert exact and r - s == p == 26370 and _holds(k) and [rc[x] for x in ("S", "R", "P")] == [41390, 67760, 26370]
+                       "30 din ka spend data nahi", "₹ aaj ka rate; 2 din nahi padhe")
+    assert exact and r - s == p == 26370 and _holds(k, rc) and [rc[x] for x in ("S", "R", "P")] == [41390, 67760, 26370]
     assert table == [41390, 67760] and line == out["k_own_usd"][2]
     # a ₹ view of a file not billed in ₹: $ × 88 on both sides — +₹23,760, the $ view's 154%
     k, (s, r, p, roas, exact), rc = out["k_own_inr_usd"]
-    assert [x[1] for x in k] == ["₹44,000", "₹67,760", "+₹23,760", "154%"] and exact and _holds(k)
+    assert [x[1] for x in k] == ["₹44,000", "₹67,760", "+₹23,760", "154%"] and exact and _holds(k, rc)
     assert [rc[x] for x in ("S", "R", "P")] == [44000, 67760, 23760]
     # a country in ₹ as billed with odd paise everywhere (15 old days with no spend data, 5 ads-paused, the 2 newest not
     # read): the printed tiles = an independent recount, Total revenue − Total spend = Profit / loss to the rupee; the
     # columns' sums agree up to each printed row's rounding
     k, line, (s, r, p, roas, exact), rc, (ts, tr) = out["k_cty_inr"]
-    assert exact and _holds(k) and [s, r, p] == [rc["S"], rc["R"], rc["P"]] and (rc["M"], rc["K"], rc["nsp"]) == (15, 2, 25)
-    assert k[0][2] == "15 din ka spend data nahi" and k[1][2] == "2 din ki kamai abhi nahi padhi" and k[5] == ["Install days", "40", "1 Jun 2025 – 10 Jul 2025"]
+    assert exact and _holds(k, rc) and [s, r, p] == [rc["S"], rc["R"], rc["P"]] and (rc["M"], rc["K"], rc["nsp"]) == (15, 2, 25)
+    assert k[0][2] == "15 din ka spend data nahi" and k[1][2] == "₹ aaj ka rate; 2 din nahi padhe" and k[5] == ["Install days", "40", "1 Jun 2025 – 10 Jul 2025"]
     assert abs(ts - s) <= 0.5 * 25 and abs(tr - r) <= 0.5 * 38
     assert line == "15 din ka spend data nahi (1 Jun 25 – 15 Jun 25) — unka spend jod me nahi, revenue hai."
     k, (s, r, p, roas, exact), rc, want = out["k_cty_usd"]
-    assert k == want and exact and _holds(k) and [s, r, p] == [rc["S"], rc["R"], rc["P"]] and k[1][1] == "$201"
+    assert k == want and exact and _holds(k, rc) and [s, r, p] == [rc["S"], rc["R"], rc["P"]] and k[1][1] == "$201"
+    assert k[1][2] == "2 din ki kamai abhi nahi padhi"
 
 
 def test_totals_strip_states(out):
@@ -405,7 +411,7 @@ def test_totals_strip_states(out):
     # All countries (the made-up app: spend known on all 70 days) = an independent recount; whatever the grain / mode /
     # "Show more"
     k, line, rc, (s, r, p, roas, exact) = out["k_all"]
-    assert k == _tiles("$700", "$1,915", "+$1,215", "274%", "7,000", ["70", "5 Aug 2026 – 13 Oct 2026"]) and _holds(k) and exact
+    assert k == _tiles("$700", "$1,915", "+$1,215", "274%", "7,000", ["70", "5 Aug 2026 – 13 Oct 2026"]) and _holds(k, rc) and exact
     assert [rc[x] for x in ("S", "R", "P", "M", "K")] == [700, 1915, 1215, 0, 0] and line == ""
     assert out["k_inv"] == [True] * 24 and out["k_allcd"] == [True]
     # 🌍 a pick: '…' while its rows load (aria-busy), then its own totals = a recount of the rows its table shows (28 days
@@ -413,9 +419,10 @@ def test_totals_strip_states(out):
     # the same pack at once
     k, busy, done, msg, line = out["k_load"]
     assert [x[1] for x in k] == ["…"] * 6 and busy and done and msg and line == ""
-    k, want, line, cnt, (s, r, p, roas, exact), table, same = out["k_aa"]
-    assert k == want and cnt == [70, 28, 0, 42, "2026-08-05", "2026-10-13"] and exact and _holds(k)
-    assert [x[1] for x in k] == ["$380", "$800", "+$420", "211%", "1,260", "70"] and k[0][2] == "28 din ka spend data nahi"
+    k, want, line, cnt, (s, r, p, roas, exact), table, same, rc = out["k_aa"]
+    assert k == want and cnt == [70, 28, 0, 42, "2026-08-05", "2026-10-13"] and exact and _holds(k, rc)
+    # (ROAS from the sums: Σ so far $799.50 ÷ $380 = 210% — the rounded $800 ÷ $380 would say 211%)
+    assert [x[1] for x in k] == ["$380", "$800", "+$420", "210%", "1,260", "70"] and k[0][2] == "28 din ka spend data nahi"
     # = Σ its Spend / So far columns over every row (each so far printed whole: ≤ $0.50 a row off)
     assert table[0] == 380 and abs(table[1] - 800) <= 0.5 * 70 and same
     assert line == "28 din ka spend data nahi (2 hisson me, 5 Aug 26 – 13 Oct 26) — unka spend jod me nahi, revenue hai."
@@ -435,10 +442,10 @@ def test_totals_strip_states(out):
     k, not_busy, msg, line = out["k_err"]
     assert [x[1] for x in k] == ["—"] * 6 and not_busy and msg and line == ""
     assert out["k_miss"] == [["—"] * 6, True, ""] and out["k_nocd"] == [True, True]
-    # ONE height in every state (32 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, no
-    # spend data, crore, the owner's case …): the same box — one grid, six tiles, labels, the line's box, the note (the CSS
+    # ONE height in every state (39 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, no
+    # spend data, crore, the owner's case, a few cents of spend, 1,234 days …): the same box — one grid, six tiles, labels, the line's box, the note (the CSS
     # pins are in test_wiring; measured in headless Chrome: one height per width over every state, 360 – 2560 px)
-    assert out["k_skel"] == [1, 32]
+    assert out["k_skel"] == [1, 39]
     # crore-size ₹ printed in full — 14+ characters a size smaller (roi-ckw), shorter ones not; the arithmetic still exact
     big7, big8, small, n7, n8 = out["k_big"]
     assert big7 == ["₹23,45,76,190", "₹14,08,08,624", "−₹9,37,67,566", "60%", "1,234,577", "2"]
@@ -449,7 +456,7 @@ def test_totals_strip_states(out):
     # own size (17 / 15.5 px, a 14+ character one 14 / 13 px); reasons ≤ 35 characters (two lines of the narrowest tile,
     # 131 px at 360, checked in Chrome); labels one short line
     pr = out["k_print"]
-    assert len(pr) == 32 * 6 and any(v == "−₹93,76,78,576" for _, v, _, _ in pr)
+    assert len(pr) == 39 * 6 and any(v == "−₹93,76,78,576" for _, v, _, _ in pr)
     assert all(w == (len(v) >= 14) for _, v, w, _ in pr)
     tight = {}
     for w, sb, box, phone in _kpi_boxes():
@@ -464,6 +471,38 @@ def test_totals_strip_states(out):
     # runs — in two lines at 360 px and every width up to 2560)
     assert all(len(x) <= 103 for x in out["k_lines"]) and max(map(len, out["k_lines"])) > 90
 
+
+
+def test_totals_strip_small_spend(out):
+    """🧮 Review round (21 Oct 2026): a few cents of Google Ads spend under whole-unit revenue (a small country: stray clicks
+    + organic revenue) — the spend printed with the Spend column's own cents (one precision for the three money tiles, so
+    Profit / loss stays printed revenue − printed spend), never "$0" with "no ads days"; ROAS from the sums (= the So far
+    column's so far ÷ spend on the same rows), not from the rounded tiles; the ₹ view says today's rate whatever the
+    unread count."""
+    (k1, c1, a1, col1, w1, r1), (k2, c2, a2, col2, w2, r2), (k3, c3, a3, col3, w3, r3) = out["k_cents"]
+    # $0.12 + $0.18 + $0.10 (the Spend column prints each), so far $30 + $25 + $20: $0.4 · $75.0 → +$74.6, 18750%
+    assert k1 == _tiles("$0.4", "$75.0", "+$74.6", "18750%", "30", ["3", "1 Jan 2026 – 3 Jan 2026"]) == w1
+    assert sorted(col1) == ["$0.10", "$0.12", "$0.18"] and a1[4] and _holds(k1, r1) and r1["dp"] == 1
+    assert c1 == [["roi-kg", "roi-up"], ["", "roi-g"]]
+    # 2 × $0.02, so far 2 × $2.50: two digits — $0.04 · $5.00 → +$4.96, 12500%
+    assert k2 == _tiles("$0.04", "$5.00", "+$4.96", "12500%", "20", ["2", "1 Jan 2026 – 2 Jan 2026"]) == w2
+    assert col2 == ["$0.02"] * 2 and a2[4] and _holds(k2, r2) and r2["dp"] == 2
+    # under a cent ($0.003 + $0, the column "$0.00"): the precision as it was, ≈ 0 said — not "no ads", no profit / ROAS
+    assert k3 == w3 and [x[1] for x in k3[:4]] == ["$0", "$60", "—", "—"] and k3[0][2] == "Google Ads" and col3 == ["$0.00"] * 2
+    assert k3[2][2] == "spend ≈ 0 — profit / loss nahi" and k3[3][2] == "spend ≈ 0 — ROAS nahi" and c3 == [["", ""], ["", ""]]
+    # ROAS from the sums: [tiles, the So far cells, the printed numbers, what the strip must print, the recount]
+    (v1, t1, b1, e1, q1), (v2, t2, b2, e2, q2), (v3, t3, b3, e3, q3) = out["k_roas"]
+    # one day, $10.60 spend / $10.40 so far: $11 · $10 → −$1 (printed − printed), ROAS 98% = the So far cell's own 98%
+    assert v1 == ["$11", "$10", "−$1", "98%"] and t1 == ["$10 98%"] and b1[4] and q1["ro"] == 98
+    # 2 × $1.70 / 2 × $75: $3 · $150 → +$147, 4412% (= each row's 4412%; the rounded $3 would say 5000%)
+    assert v2 == ["$3", "$150", "+$147", "4412%"] and t2 == ["$75 4412%"] * 2 and b2[4] and q2["ro"] == 4412
+    # $0.90 + $0.50 / 2 × $100: $1 · $200 → +$199, 14286% (the rounded $1 would say 20000%)
+    assert v3 == ["$1", "$200", "+$199", "14286%"] and b3[4] and q3["ro"] == 14286
+    assert [[x[1] for x in e[:4]] for e in (e1, e2, e3)] == [v1, v2, v3]
+    # the ₹ view, 1,234 install days, the newest 1,200 not read: "₹ aaj ka rate" with the 4-digit count, in 35 characters
+    k, line = out["k_k4"]
+    assert k[1] == ["Total revenue", "₹5,984", "₹ aaj ka rate; 1,200 din nahi padhe"] and len(k[1][2]) == 35
+    assert [x[1] for x in k] == ["₹1,08,592", "₹5,984", "−₹1,02,608", "6%", "12,340", "1,234"] and line == ""
 
 def test_country_filter(out):
     # "All countries" (the default): every grain × mode, the Day view, the Countries board as pinned above

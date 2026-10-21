@@ -13,9 +13,9 @@
 //     mostly-organic warning, the help + paid share per install day), and the All-apps table (biggest blended-vs-paid
 //     gap first, flagged rows, ✓ GA4 rows, spend-weighted total, ₹ as billed, sorting); a paused app (whatever its call)
 //     out of the total and of the ⚖️ hero card, "✓ GA4" only where GA4 measured, the premium range's own age named;
-//   * 🧮 the cohort card's totals strip, two groups ("Spend pata wale din": Revenue − Spend = Profit over ONE set of days;
-//     "Poori history"): All / a country (Unknown, Not split), the owner's case in its shape, loading / error / missing, ₹ /
-//     $, its skeleton the same in every state;
+//   * 🧮 the cohort card's totals strip, one group over every install day (Total spend, Total revenue, Profit / loss =
+//     revenue − spend, ROAS, Installs, Install days): All / a country (Unknown, Not split), the owner's case in its shape,
+//     a few cents of spend, loading / error / missing, ₹ / $, its skeleton the same in every state;
 //   * "Show 60 more" / "Show all" (the install-day tables and the lifetime "Every day" table): on a parsed DOM with a layout
 //     model + the page's own stay-put layer, the reader's row stays put, the box keeps its scroll, no second scroll;
 //     sideways by column (the Day table's columns change with the rows shown), and a Mode switch keeps the box's place too.
@@ -1552,21 +1552,23 @@ async function moreKeepAll(dc, packs) {
       const kSk = h => kOf(h).replace(/<div class="roi-kv">[^]*?<\/div>/g, '<div class="roi-kv"></div>').replace(/<div class="roi-ks">[^<]*<\/div>/g, '<div class="roi-ks"></div>')
         .replace(/(<p class="roi-note roi-ckm">)[^<]*/, '$1').replace(/ roi-k[gb]"/g, '"').replace(' aria-busy="true"', '');
       const KS = [], seen = h => { KS.push(h); return h; };
-      const fm = (x, sg, dp, sym) => { const a = Math.abs(x); return (x < 0 ? '−' : sg && x > 0 ? '+' : '') + (sym || '$') + (dp ? a.toFixed(dp) : Math.round(a).toLocaleString(sym === '₹' ? 'en-IN' : 'en-US')); };
+      const fm = (x, sg, dp, sym) => { const a = Math.abs(x); return (x < 0 ? '−' : sg && x > 0 ? '+' : '') + (sym || '$') + a.toLocaleString(sym === '₹' ? 'en-IN' : 'en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }); };
       const pm = v => (v.startsWith('−') ? -1 : 1) * +v.replace(/[^0-9.]/g, '');          // a printed money value → its number
       const num = td => { const t = td.replace(/<small>[^]*?<\/small>/g, '').replace(/<[^>]+>/g, '').trim(); return t === '—' ? null : +t.replace(/[^0-9.]/g, ''); };
       const colSum = (h, i) => trs(h).reduce((a, r) => a + (num(r[i < 0 ? r.length + i : i]) || 0), 0);
       // an independent recount over EVERY row: mode 'usd' (the $ view: $ as the rows hold them), 'inr' (a ₹ view of a file
       // not billed in ₹: $ × today on both sides), 'bill' (₹ as billed: the row's ₹ spend — a row without one at today's
-      // rate —, the so far at today's rate); rounded as printed (one precision for both), profit = printed − printed
+      // rate —, the so far at today's rate); rounded as printed (one precision for both — a spend > 0 one more digit, up to
+      // 2, the first that prints it > 0; none: as it was), profit = printed − printed; ROAS from the sums (ro, %)
+      const dpOf = (mx, s) => { const d0 = mx >= 10 ? 0 : mx >= 1 ? 1 : 2; if (s > 0) for (let q = d0; q <= 2; q++) if (Math.round(s * 10 ** q) > 0) return q; return d0; };
       const rc = (rows, mode, today) => { const o = { s: 0, r: 0, nsp: 0, nrv: 0, n: 0, nn: 0, D: rows.length, unk: [] };
         for (const q of rows) { const u = q[3], so = q[8];
           if (u != null) { o.s += mode === 'bill' ? (q[13] != null ? q[13] : u * today) : mode === 'inr' ? u * today : u; o.nsp++; } else o.unk.push(q[0]);
           if (so != null) { o.r += mode === 'usd' ? so : so * today; o.nrv++; }
           if (q[1] != null) { o.n += q[1]; o.nn++; } }
-        const mx = Math.max(o.s, o.r), dp = mx >= 10 ? 0 : mx >= 1 ? 1 : 2, f = 10 ** dp;
+        const dp = dpOf(Math.max(o.s, o.r), o.s), f = 10 ** dp;
         return Object.assign(o, { M: o.unk.length, K: o.D - o.nrv, S: Math.round(o.s * f) / f, R: Math.round(o.r * f) / f,
-          P: (Math.round(o.r * f) - Math.round(o.s * f)) / f, dp }); };
+          P: (Math.round(o.r * f) - Math.round(o.s * f)) / f, dp, ro: Math.round(o.s * f) > 0 && o.nrv ? Math.round(o.r / o.s * 100) : null }); };
       // the printed money tiles: [Total spend, Total revenue, Profit / loss, ROAS] as numbers + whether Revenue − Spend = Profit
       const aNum = h => { const k = kT(h); const v = k.slice(0, 4).map(x => x[1]); const [S, R, P_] = v.slice(0, 3).map(pm);
         return [S, R, P_, v[3], Math.round((R - S) * 100) === Math.round(P_ * 100)]; };
@@ -1635,6 +1637,11 @@ async function moreKeepAll(dc, packs) {
       out.k_tiny = [kT(htn).slice(0, 4), aNum(htn)];
       const hnb = seen(U.cohCard({ v: 1, T, lags: 31, newest: '2026-01-02', rows: [kr('2026-01-01', 10, 5, null, 6), kr('2026-01-02', 10, 5, null, 6)] }));
       out.k_nobill = [kT(hnb).slice(0, 4), aNum(hnb), colSum(hnb, 3)];
+      // ₹ view, 1,234 install days, the newest 1,200 not read: today's rate said on Total revenue with the 4-digit count
+      // (35 characters: the reason's two-line budget)
+      const k4 = []; for (let i = 0; i < 1234; i++) k4.push(kr(day('2023-01-01', i), 10, 1, 88, i < 34 ? 2 : null));
+      const hk4 = seen(U.cohCard({ v: 1, T, lags: 31, newest: k4[1233][0], rows: k4 }));
+      out.k_k4 = [kT(hk4), kL(hk4)];
       U.lifeView([], null, {}); ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
       // a loss (red); no ads at all (spend 0 everywhere: profit / ROAS '—', never organic revenue as an ads profit); spend
       // not known on any day (organic app, no Ads data); nothing at all
@@ -1664,21 +1671,37 @@ async function moreKeepAll(dc, packs) {
       const fd4 = x => { const p_ = x.split('-'); return (+p_[2]) + ' ' + MON[+p_[1] - 1] + ' ' + p_[0]; };
       // what the strip must print for a country's rows ($ view), worked out here from the rows: the recount + every reason
       const exp = (rows, cc) => { const o = rc(rows, 'usd'), xx = cc === 'XX', un = cc === '--', D = rows.length;
-        const hs = o.nsp > 0 && !un, hr = o.nrv > 0 && !xx, mx = Math.max(hs ? o.s : 0, hr ? o.r : 0), dp = mx >= 10 ? 0 : mx >= 1 ? 1 : 2, f = 10 ** dp;
+        const hs = o.nsp > 0 && !un, hr = o.nrv > 0 && !xx, dp = dpOf(Math.max(hs ? o.s : 0, hr ? o.r : 0), hs ? o.s : 0), f = 10 ** dp;
         const S = hs ? Math.round(o.s * f) / f : 0, R = hr ? Math.round(o.r * f) / f : 0, has = hs && hr && S > 0;
-        return [['Total spend', hs ? fm(S, false, dp) : '—', un ? 'Google Ads me ye country nahi' : o.M ? `${o.M} din ka spend data nahi` : xx ? 'Not split · Google Ads' : 'Google Ads'],
+        const why = k => xx ? 'Not split: sirf spend' : has ? (k ? 'revenue ÷ spend · blended' : 'revenue − spend') : !hs ? `spend nahi — ${k ? 'ROAS' : 'profit / loss'} nahi`
+          : !(o.s > 0) ? `spend 0 — ${k ? 'ROAS' : 'profit / loss'} nahi` : !(S > 0) ? `spend ≈ 0 — ${k ? 'ROAS' : 'profit / loss'} nahi` : 'kamai abhi nahi padhi';
+        return [['Total spend', hs ? fm(S, false, dp) : '—', un ? 'Google Ads me ye country nahi' : o.M ? `${o.M} din ka spend data nahi` : xx ? 'Not split · Google Ads'
+            : hs && !(o.s > 0) ? 'Is country me koi ads din nahi' : 'Google Ads'],
           ['Total revenue', hr ? fm(R, false, dp) : '—', xx ? 'Not split: koi kamai nahi' : o.K ? `${o.K} din ki kamai abhi nahi padhi` : 'so far · AdMob-matched'],
-          ['Profit / loss', has ? fm((Math.round(R * f) - Math.round(S * f)) / f, true, dp) : '—', xx ? 'Not split: sirf spend' : has ? 'revenue − spend' : !hs ? 'spend nahi — profit / loss nahi' : 'spend 0 — profit / loss nahi'],
-          ['ROAS', has ? Math.round(R / S * 100) + '%' : '—', xx ? 'Not split: sirf spend' : has ? 'revenue ÷ spend · blended' : !hs ? 'spend nahi — ROAS nahi' : 'spend 0 — ROAS nahi'],
+          ['Profit / loss', has ? fm((Math.round(R * f) - Math.round(S * f)) / f, true, dp) : '—', why(0)],
+          ['ROAS', has ? Math.round(o.r / o.s * 100) + '%' : '—', why(1)],
           ['Installs', o.nn && !xx ? o.n.toLocaleString('en-US') : '—', xx ? 'Not split: installs nahi' : 'GA4 · ads + organic'],
           ['Install days', xx ? '—' : String(D), xx ? 'Not split: install din nahi' : `${fd4(rows[0][0])} – ${fd4(rows[D - 1][0])}`]]; };
+      // a few cents of spend under whole-unit revenue (stray Google Ads clicks + organic revenue): the spend printed with
+      // the Spend column's own cents (one precision for all three money tiles), never "$0" / "no ads"; under a cent ≈ 0
+      const kf = rows => ({ v: 1, T, lags: 31, newest: rows[rows.length - 1][0], rows });
+      const KC = [[kr('2026-01-01', 10, 0.12, null, 30), kr('2026-01-02', 10, 0.18, null, 25), kr('2026-01-03', 10, 0.10, null, 20)],
+        [kr('2026-01-01', 10, 0.02, null, 2.5), kr('2026-01-02', 10, 0.02, null, 2.5)],
+        [kr('2026-01-01', 10, 0.003, null, 40), kr('2026-01-02', 10, 0, null, 20)]];
+      out.k_cents = KC.map(rows => { const h = seen(U.cohCard(kf(rows)));
+        return [kT(h), kCls(h).slice(2, 4), aNum(h), trs(h).map(r => r[3].replace(/<[^>]+>/g, '')), exp(rows, 'AA'), rc(rows, 'usd')]; });
+      // ROAS from the sums (= the So far column's so far ÷ spend), not from the rounded tiles; profit = printed − printed
+      const KR = [[kr('2026-01-01', 10, 10.6, null, 10.4)], [kr('2026-01-01', 10, 1.7, null, 75), kr('2026-01-02', 10, 1.7, null, 75)],
+        [kr('2026-01-01', 10, 0.9, null, 100), kr('2026-01-02', 10, 0.5, null, 100)]];
+      out.k_roas = KR.map(rows => { const h = seen(U.cohCard(kf(rows)));
+        return [kT(h).slice(0, 4).map(x => x[1]), trs(h).map(r => r[r.length - 1].replace(/<[^>]+>/g, '')), aNum(h), exp(rows, 'AA'), rc(rows, 'usd')]; });
       out.k_allcd = [kOf(seen(U.cohCard(dkc))) === kb];
       U.setCTY('AA');
       const kl = seen(U.cohCard(dkc)); await flush(); const ka = seen(U.cohCard(dkc)), ra = U.ccSrc(dkc).rows;
       out.k_load = [kT(kl), kOf(kl).includes('aria-busy="true"'), !kOf(ka).includes('aria-busy'), kl.includes('ka data load ho raha hai'), kL(kl)];
       // (the table's columns summed over every row: "Show all")
       const oa = rc(ra, 'usd'); U.set('SHOW', 1e9); const kaa = U.cohCard(dkc); U.set('SHOW', 60);
-      out.k_aa = [kT(ka), exp(ra, 'AA'), kL(ka), [oa.D, oa.M, oa.K, oa.nsp, oa.unk[0], oa.unk[oa.M - 1]], aNum(ka), [colSum(kaa, 3), colSum(kaa, -1)], kOf(kaa) === kOf(ka)];
+      out.k_aa = [kT(ka), exp(ra, 'AA'), kL(ka), [oa.D, oa.M, oa.K, oa.nsp, oa.unk[0], oa.unk[oa.M - 1]], aNum(ka), [colSum(kaa, 3), colSum(kaa, -1)], kOf(kaa) === kOf(ka), oa];
       out.k_aa_inv = [];
       for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) {
         U.set('GRAIN', g); U.set('MET', m); out.k_aa_inv.push(kOf(U.cohCard(dkc)) === kOf(ka)); }
