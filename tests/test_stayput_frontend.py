@@ -70,6 +70,18 @@ def test_the_control_is_found_again(report):
 
 
 @needs_node
+def test_the_ecpm_comparison_row_stays_put(report):
+    # 📈 eCPM tables' "Yesterday vs … / Month vs month ‹ ›" (owner, 21 Oct): a tap repaints the view; the tapped ‹ › (the
+    # Countries card's twin, now disabled) and the mode chip come back exactly where they were
+    r = report["ecpm_cmp_twin_arrow"]
+    same_place(r)
+    assert r["n"] == 2 and r["disabled"] is True
+    r = report["ecpm_cmp_mode_chip"]
+    same_place(r)
+    assert r["y"] == 1500 + 19
+
+
+@needs_node
 def test_intentional_scrolls_are_not_undone(report):
     r = report["intentional_scrollTo_kept"]
     assert r["y"] == 0 and r["intent"] is True                                  # a drill-down / Back to the top stays there

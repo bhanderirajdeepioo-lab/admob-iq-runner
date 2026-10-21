@@ -249,6 +249,32 @@ const rebuildJump = (shift) => () => { SCR.replaceChildren(...screenKids(shift =
     win.scrollTo(0, 10); const i1 = SP.st.intent;
     return { a1, a2, quiet, intentAfterCodeScroll: i1 > i0 };
   });
+  // 📈 the eCPM tables' comparison row (the page's own attributes): a tap repaints the whole view (ecPaint) — the title above
+  // the row can grow a line, the ‹ › / chip can turn disabled, the twin rows (Ad units + Countries cards) are both rebuilt
+  const all = (root, pred) => { const hit = []; const walk = e => e.children.forEach(c => { if (pred(c)) hit.push(c); walk(c); }); walk(root); return hit; };
+  const ecCtl = (top, mode, hiOff) => el('div', { class: 'ec-cmp', top }, [
+    el('div', { class: 'ec-seg', role: 'group', 'aria-label': 'Compare', top }, [
+      el('button', { type: 'button', class: mode === 'y' ? 'on' : '', 'aria-pressed': String(mode === 'y'), onclick: "ecCmpM('y')", top, text: 'Yesterday vs' }),
+      el('button', { type: 'button', class: mode === 'm' ? 'on' : '', 'aria-pressed': String(mode === 'm'), onclick: "ecCmpM('m')", top, text: 'Month vs month' })]),
+    el('div', { class: 'ec-mnav', top }, [
+      el('button', { type: 'button', class: 'ec-ma', onclick: 'ecCmpMon(-1)', 'aria-label': 'Previous month', top, text: '‹' }),
+      el('span', { class: 'ec-ml', top, text: mode === 'm' ? 'Mar 2026 (1–10) vs Feb 2026' : 'Feb 2026' }),
+      el('button', Object.assign({ type: 'button', class: 'ec-ma', onclick: 'ecCmpMon(1)', 'aria-label': 'Next month', top, text: '›' }, hiOff ? { disabled: '' } : {}))])]);
+  const ecView = (grow, mode, hiOff) => [el('div', { top: 100, text: 'chart' }),
+    el('div', { class: 'card ec-tc', top: 1800 }, [el('h3', { top: 1800, text: 'Ad units' }), ecCtl(1840 + grow, mode, hiOff)]),
+    el('div', { class: 'card ec-tc', top: 2600 + grow }, [el('h3', { top: 2600 + grow, text: 'Countries' }), ecCtl(2640 + 2 * grow, mode, hiOff)])];
+  await step('ecpm_cmp_twin_arrow', async () => {   // the Countries card's › (the 2nd of two), now the newest month: disabled
+    SCR.replaceChildren(...ecView(0, 'y', false)); W.scrollY = 2400;
+    const nx = () => all(SCR, x => x.getAttribute('onclick') === 'ecCmpMon(1)'); const before = onScreen(nx()[1]);
+    await tap(nx()[1], () => { SCR.replaceChildren(...ecView(22, 'y', true)); W.scrollY = 0; });
+    return { before, after: onScreen(nx()[1]), n: nx().length, disabled: nx()[1].getAttribute('disabled') === '' };
+  });
+  await step('ecpm_cmp_mode_chip', async () => {   // "Month vs month" in the Ad units card: the row's content changes, the chip stays
+    SCR.replaceChildren(...ecView(0, 'y', false)); W.scrollY = 1500;
+    const ch = () => all(SCR, x => x.getAttribute('onclick') === "ecCmpM('m')"); const before = onScreen(ch()[0]);
+    await tap(ch()[0], () => { SCR.replaceChildren(...ecView(19, 'm', true)); W.scrollY = 0; });
+    return { before, after: onScreen(ch()[0]), y: W.scrollY };
+  });
   await step('wrapped', () => ({ to: !!win.scrollTo.__sp, by: !!win.scrollBy.__sp, sc: !!win.scroll.__sp, siv: !!El.prototype.scrollIntoView.__sp }));
   process.stdout.write(JSON.stringify({ errors, out }));
 })().catch(e => { errors.push('MAIN ' + (e.stack || e.message)); process.stdout.write(JSON.stringify({ errors, out })); });

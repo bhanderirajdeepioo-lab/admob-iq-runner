@@ -8,11 +8,16 @@
 //     button steps, leaving the view, the 5-min auto-refresh with a new build (the view back as it was, no jump), sorting
 //     (default biggest loss first, low data last, every column toggles);
 //   * the chart's tap rule: a tap (under 10px) pins the tooltip, a swipe / a cancelled pointer never does, a mouse hovers.
+//   * 🔀 the tables' comparison picker (Yesterday vs 7 / 14 / 30 / 60 days / a month ‹ ›, Month vs month ‹ ›): every pick's
+//     rows, the month bounds, the labels, Ad units / Countries following it (or saying why not), the viewer's pick restored,
+//     a long SYNTHETIC history (fixture "long") for the month-to-month status.
 // Prints ONE JSON report; tests/test_ecpm_frontend.py asserts on it (and recomputes the maths independently in Python).
-//   usage: node ecpm_frontend.js <script.js> <fixture.json>
+//   usage: node ecpm_frontend.js <script.js> <fixture.json> [snap]
+//   snap: only the default view (All apps + one app, ₹ and $, every sort) with the comparison row taken out — run on the
+//   page before the picker and on this one, the two must be byte-identical.
 'use strict';
 const fs = require('fs'), vm = require('vm');
-const [scriptPath, fxPath] = process.argv.slice(2);
+const [scriptPath, fxPath, mode] = process.argv.slice(2);
 const errors = [];
 const any = new Proxy(function () {}, {
   get: (t, k) => k === Symbol.toPrimitive ? (() => '') : (k === 'then' ? undefined : (k === 'length' ? 0 : any)),
@@ -87,6 +92,28 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
   run(`DATA=__FX.dashboard; APP=''; CURVIEW=null; RANGE='today'; window.__ax=null;`);
   // show(): the real one, plus the screen bookkeeping this small DOM cannot do (which screen is "on")
   run(`var __show0=show; show=function(id){ __setScreen(id); return __show0(id); };`);
+
+  if (mode === 'snap') {   // the default view, the comparison row (if this page has one) taken out
+    const strip = h => (run(`typeof ecCmpCtl`) === 'function' ? h.split(run(`ecCmpCtl(EC.W,EC.C)`)).join('') : h);
+    const rowsOf = t => J(`(EC.rows.${t}||[]).map(r=>{ const o=Object.assign({},r); delete o.lbl; return o; })`);
+    await step('snap', () => { const S = {};
+      for (const cur of ['USD', 'INR']) {
+        run(`CURVIEW=${cur === 'INR' ? "'INR'" : 'null'}; renderEcpm(); APP=''; EC.app=''; EC.hdr=''; EC.booted=true; EC.sort={k:'imp',d:'asc'}; EC.usort={k:'imp',d:'asc'}; EC.csort={k:'imp',d:'asc'}; ecPaint();`);
+        S['all_' + cur] = strip(run(`EC.el.innerHTML`)); S['rows_a_' + cur] = rowsOf('a');
+        for (const k of ['imp', 'imp', 'name', 'y', 'w7', 'pct', 'yi', 'st']) { run(`ecSort('a','${k}')`); S[`sort_a_${cur}_${k}_${run('EC.sort.d')}`] = run(`ecTableHtml('a')`); }
+        run(`ecIdle('a')`); S['idle_a_' + cur] = run(`ecTableHtml('a')`); run(`ecIdle('a'); EC.sort={k:'imp',d:'asc'};`);
+        for (const app of ['Demo Gallery', 'Puzzle Quest']) {
+          run(`EC.app=${JSON.stringify(app)}; ecPaint();`);
+          S[`app_${cur}_${app}`] = strip(run(`EC.el.innerHTML`)); S[`rows_u_${cur}_${app}`] = rowsOf('u'); S[`rows_c_${cur}_${app}`] = rowsOf('c');
+          for (const k of ['name', 'pct', 'yi']) { run(`ecSort('u','${k}'); ecSort('c','${k}')`); S[`sort_uc_${cur}_${app}_${k}`] = run(`ecTableHtml('u')+ecTableHtml('c')`); }
+          run(`EC.usort={k:'imp',d:'asc'}; EC.csort={k:'imp',d:'asc'}; ecCAll();`); S[`call_${cur}_${app}`] = run(`ecTableHtml('c')`); run(`ecCAll()`);
+        }
+        run(`EC.app='';`);
+      }
+      run(`CURVIEW=null;`);
+      return { S, hasCtl: run(`typeof ecCmpCtl`) === 'function' }; });
+    out.errors = errors; process.stdout.write(JSON.stringify(out)); return;
+  }
 
   // ── the maths ────────────────────────────────────────────────────────────────────────────────────────────────────────
   await step('win', () => J(`(()=>{ const W=ecWin(); return {L:W.L,T:W.T,y:W.y,d7:W.d7,d30:W.d30,mtd:W.mtd,lm:W.lm,p7:W.p7,p30:W.p30,sw:W.sw,s30:W.s30,ncomp:W.comp.length,first:W.comp[0],last:W.comp[W.comp.length-1]}; })()`));
@@ -237,6 +264,105 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
     fire('pointerdown', { pointerType: 'touch', clientX: 200, clientY: 80 }); fire('pointercancel', {}); fire('pointerup', { pointerType: 'touch', clientX: 200, clientY: 80 }); R.cancel = J('__tips.splice(0)');
     fire('pointerdown', { pointerType: 'pen', clientX: 300, clientY: 80 }); fire('pointerup', { pointerType: 'pen', clientX: 309, clientY: 80 }); R.pen = J('__tips.splice(0)');
     run(`ecTip=__ecTip0;`); delete ELS["ec-chw"]; return R; });
+
+  // ── 🔀 the tables' comparison picker ──────────────────────────────────────────────────────────────────────────────────
+  const CMP0 = `localStorage.removeItem('ecpmcmp'); EC.cmp=null; EC.cValid=null; APP=''; EC.hdr=''; EC.booted=true; EC.sort={k:'imp',d:'asc'}; EC.usort={k:'imp',d:'asc'}; EC.csort={k:'imp',d:'asc'}; EC.idle={a:false,u:false,c:false};`;
+  const cards = () => run(`EC.el.innerHTML`).split('<div class="card ec-tc">').slice(1);
+  const ctlSigs = h => [...h.matchAll(/<button type="button"[^>]*onclick="(ecCmp[A-Za-z]+\([^)]*\))"[^>]*>/g)].map(m => m[1] + (/aria-label="([^"]*)"/.exec(m[0]) || ['', ''])[1]);
+  // every pick's rows (all apps + one app's ad units), the days on each side, the labels
+  await step('cmp_math', () => J(`(()=>{ const W=ecWin(), A=ecAgg().apps, out={};
+    const sels={b7:{m:'y',b:'7'},b14:{m:'y',b:'14'},b30:{m:'y',b:'30'},b60:{m:'y',b:'60'},mon:{m:'y',b:'mon'},monJan:{m:'y',b:'mon',bm:'2026-01'},
+      monDec:{m:'y',b:'mon',bm:'2025-12'},monMar:{m:'y',b:'mon',bm:'2026-03'},mm:{m:'m'},mmFeb:{m:'m',cm:'2026-02'},mmJan:{m:'m',cm:'2026-01'}};
+    for(const k in sels){ const C=ecCmpC(W,sels[k]), rows={}; Object.keys(A).forEach(n=>{ const r=ecRow(A[n],W,C); delete r.spark; rows[n]=r; });
+      out[k]={def:!!C.def,m:C.m,cur:C.cur,base:C.base,ncur:C.ncur,curL:C.curL,baseL:C.baseL,title:C.title,colCur:C.colCur,colBase:C.colBase,colImp:C.colImp,
+        S:C.S,swm:(C.swm||[]).map(o=>o.k),rows,units:ecUnits('Demo Gallery').map(u=>{ const r=ecRow(u.dm,W,C); return {id:u.id,y:r.y,w7:r.w7,chg:r.chg,imp:r.imp,yi:r.yi,st:r.st}; })}; }
+    const M=ecMon(W); out.bounds={bMin:M.bMin,bMax:M.bMax,bDef:M.bDef,bOk:M.bOk,cMin:M.cMin,cMax:M.cMax,cOk:M.cOk,ks:M.ks};
+    out.madd=[ecMAdd('2026-01',-1),ecMAdd('2025-12',1),ecMAdd('2026-03',-14),ecMAdd('2026-11',2)];
+    out.perL=[ecPerL('2026-02',M.by['2026-02']),ecPerL('2025-12',M.by['2025-12']),ecPerL('2026-03',M.by['2026-03']),ecPerL('2026-03',['2026-03-01'])];
+    return out; })()`));
+  // the control row, tap by tap: chips, ‹ › to the bounds and back, what the card says; the tapped control is still there
+  // (same signature, same count — the stay-put layer finds it again) and the pick is saved for this viewer
+  await step('cmp_nav', () => { run(CMP0 + `EC.app=''; renderEcpm(); ecPaint();`); const R = { taps: [] };
+    const st = () => Object.assign(J(`({cmp:EC.cmp,title:EC.C.title,curL:EC.C.curL,baseL:EC.C.baseL,ls:localStorage.getItem('ecpmcmp'),ctl:ecCmpCtl(EC.W,EC.C)})`),
+      { card: cards()[0].split('<div id="ec-tb-a">')[0] });
+    const tap = (code, sig) => { const b = ctlSigs(run(`EC.el.innerHTML`)); run(code); const a = ctlSigs(run(`EC.el.innerHTML`));
+      R.taps.push({ code, sig, before: b.filter(x => x === sig).length, after: a.filter(x => x === sig).length }); return st(); };
+    R.def = st();
+    R.b14 = tap(`ecCmpB('14')`, `ecCmpB('14')`); R.b60 = tap(`ecCmpB('60')`, `ecCmpB('60')`);
+    R.feb = tap(`ecCmpB('mon')`, `ecCmpB('mon')`);
+    R.jan = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`); R.dec = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`); R.decStay = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`);
+    tap(`ecCmpMon(1)`, `ecCmpMon(1)Next month`); R.feb2 = tap(`ecCmpMon(1)`, `ecCmpMon(1)Next month`);
+    R.mar = tap(`ecCmpMon(1)`, `ecCmpMon(1)Next month`); R.marStay = tap(`ecCmpMon(1)`, `ecCmpMon(1)Next month`);
+    R.m = tap(`ecCmpM('m')`, `ecCmpM('m')`); R.mStay = tap(`ecCmpMon(1)`, `ecCmpMon(1)Next month`);
+    R.mFeb = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`); R.mJan = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`); R.mJanStay = tap(`ecCmpMon(-1)`, `ecCmpMon(-1)Previous month`);
+    R.backY = tap(`ecCmpM('y')`, `ecCmpM('y')`);   // back to Yesterday: its month (Mar, navigated) is still picked
+    R.b7 = tap(`ecCmpB('7')`, `ecCmpB('7')`);
+    R.b7html = run(`EC.el.innerHTML`);
+    run(CMP0 + `ecPaint();`); return R; });
+  // the table under each pick: icons, row tap, N/A last, sorting, the notes; the app view (Ad units / Countries) follows
+  await step('cmp_table', async () => { const R = {};
+    run(CMP0 + `EC.app=''; ecPaint();`);
+    for (const [k, sel] of [['b14', { m: 'y', b: '14' }], ['mon', { m: 'y', b: 'mon' }], ['monDec', { m: 'y', b: 'mon', bm: '2025-12' }], ['monMar', { m: 'y', b: 'mon', bm: '2026-03' }], ['mm', { m: 'm' }], ['mmJan', { m: 'm', cm: '2026-01' }]]) {
+      run(`EC.cmp=${JSON.stringify(Object.assign({ m: 'y', b: '7', bm: '', cm: '' }, sel))}; EC.sort={k:'imp',d:'asc'}; ecPaint();`);
+      const o = { card: cards()[0], order: J(`ecSortRows(EC.rows.a.filter(r=>r.act),EC.sort).map(r=>r.key)`),
+        rows: J(`EC.rows.a.map(r=>({key:r.key,imp:r.imp,st:r.st,act:r.act,yi:r.yi,y:r.y,w7:r.w7,pct:r.pct,label:r.label}))`), toggles: [] };
+      for (const s of ['pct', 'name', 'yi', 'w7', 'y', 'st']) { run(`ecSort('a','${s}')`); o.toggles.push(J(`({k:EC.sort.k,d:EC.sort.d,order:ecSortRows(EC.rows.a.filter(r=>r.act),EC.sort).map(r=>r.key)})`)); }
+      run(`ecIdle('a')`); o.idle = run(`ecTableHtml('a')`); run(`ecIdle('a')`);
+      R[k] = o; }
+    // a row tap opens that app's view under the same pick: Ad units + Countries follow it
+    run(`HB.st.length=0; HB.busy=false; HB.mute=0; EC.cmp={m:'m',b:'7',bm:'',cm:''}; EC.sort={k:'imp',d:'asc'}; ecPaint();`); await settle();
+    run(`ecApp('Demo Gallery')`); await settle();
+    const c = cards(); R.app = { app: run('EC.app'), units: c[0], countries: c[1] || '', u: J(`EC.rows.u.map(r=>({key:r.key,y:r.y,w7:r.w7,imp:r.imp,yi:r.yi,st:r.st}))`),
+      c: J(`EC.rows.c.map(r=>({key:r.key,y:r.y,w7:r.w7,imp:r.imp,yi:r.yi,st:r.st}))`), nav: run(`EC.el.innerHTML.split('<div class="ec-hd">')[0]`),
+      order: J(`ecSortRows(Object.keys(ecAgg().apps).map(n=>Object.assign(ecRow(ecAgg().apps[n],EC.W,EC.C),{key:n,label:ecAppLbl(n).label})).filter(r=>r.act||r.key==='Demo Gallery'),EC.sort).map(r=>r.key)`) };
+    run(`ecAllApps()`); await settle(); R.back = { app: run('EC.app'), title: run(`EC.C.title`) };
+    // an app younger than the baseline: its card says from when it has data (its rows are its own days, never padded)
+    run(`EC.cmp={m:'y',b:'14',bm:'',cm:''}; EC.app='New Timer'; ecPaint();`); R.young = cards()[0].split('<div id="ec-tb-u">')[0];
+    run(`EC.cmp={m:'y',b:'7',bm:'',cm:''}; ecPaint();`); R.youngDef = cards()[0].split('<div id="ec-tb-u">')[0];
+    run(CMP0 + `EC.app=''; ecPaint();`); return R; });
+  // Countries: its own report and history — a pick it does not cover keeps its last covered view and says so in one line
+  await step('cmp_cards', () => { run(CMP0 + `EC.app='Demo Gallery'; ecPaint();`); const R = {};
+    const look = () => { const c = cards(); return { units: c[0].split('<div id="ec-tb-u">')[0], countries: (c[1] || '').split('<div id="ec-tb-c">')[0], cmp: J('EC.cmp'),
+      ct: J(`({u:EC.Ct.u.title,c:EC.Ct.c.title,cb:EC.Ct.c.base.length})`), u: J(`EC.rows.u.map(r=>({key:r.key,w7:r.w7,imp:r.imp}))`), c: J(`EC.rows.c.map(r=>({key:r.key,w7:r.w7,imp:r.imp,y:r.y}))`),
+      ctlN: (run(`EC.el.innerHTML`).match(/<div class="ec-cmp">/g) || []).length }; };
+    R.def = look();
+    run(`ecCmpB('14')`); R.full14 = look();
+    run(`var __cd0=DATA.countries_daily['Demo Gallery']; DATA.countries_daily['Demo Gallery']=Object.fromEntries(Object.entries(__cd0).map(([c,rows])=>[c,rows.filter(r=>r[0]>='2026-02-15')]));`);
+    run(`ecPaint()`); R.short14 = look();
+    run(`ecCmpB('mon')`); R.shortMon = look();
+    run(`ecCmpB('60')`); R.short60 = look();
+    run(`ecCmpM('m')`); R.shortMm = look();
+    run(`EC.cValid=null; ecPaint()`); R.fresh = look();
+    run(`ecCmpM('y'); ecCmpB('7')`); R.shortDef = look();
+    run(`DATA.countries_daily['Demo Gallery']=__cd0;`); run(CMP0 + `EC.app=''; ecPaint();`); return R; });
+  // this viewer's pick comes back (a reload, a new day); a stored month outside the history / junk / blocked storage → safe
+  await step('cmp_restore', () => { const R = {};
+    const paint = ls => { if (ls === undefined) run(`localStorage.removeItem('ecpmcmp')`); else run(`localStorage.setItem('ecpmcmp', ${JSON.stringify(ls)})`);
+      run(`EC.cmp=null; EC.app=''; ecPaint();`); return J(`({cmp:EC.cmp,title:EC.C.title,ls:localStorage.getItem('ecpmcmp')})`); };
+    R.mFeb = paint(JSON.stringify({ m: 'm', b: '7', bm: '', cm: '2026-02' }));
+    R.monJan = paint(JSON.stringify({ m: 'y', b: 'mon', bm: '2026-01', cm: '' }));
+    R.b30 = paint(JSON.stringify({ m: 'y', b: '30', bm: '', cm: '' }));
+    R.before = paint(JSON.stringify({ m: 'y', b: 'mon', bm: '2024-05', cm: '' }));
+    R.after = paint(JSON.stringify({ m: 'm', b: '7', bm: '', cm: '2026-09' }));
+    R.junk = paint(JSON.stringify({ m: 'x', b: '99', bm: 5, cm: '2026-13' }));
+    R.bad = paint('not json'); R.none = paint(undefined);
+    // a new build with less history: the stored 60 days / month no longer fit → the default, saved back
+    R.b60 = paint(JSON.stringify({ m: 'y', b: '60', bm: '2025-12', cm: '' }));
+    run(`var __D1=DATA; DATA=JSON.parse(JSON.stringify(DATA)); DATA.placements.forEach(p=>{ p.daily=p.daily.filter(r=>r[0]>='2026-02-01'); }); window.__ax=null;`);
+    run(`EC.cmp=null; ecPaint();`); R.shorter = J(`({cmp:EC.cmp,title:EC.C.title,ls:localStorage.getItem('ecpmcmp'),bounds:(()=>{ const M=ecMon(EC.W); return [M.bMin,M.bMax,M.cMin,M.cMax,M.cOk]; })(),ctl:ecCmpCtl(EC.W,EC.C)})`);
+    run(`DATA=__D1; window.__ax=null;`);
+    // storage that throws (a private window): the default, then a tap still works, no error
+    run(`var __ls0=localStorage; localStorage={getItem(){ throw new Error('blocked'); },setItem(){ throw new Error('blocked'); },removeItem(){}};`);
+    run(`EC.cmp=null; ecPaint();`); R.blocked0 = J(`({cmp:EC.cmp,title:EC.C.title})`);
+    run(`ecCmpB('30')`); R.blocked = J(`({cmp:EC.cmp,title:EC.C.title})`);
+    run(`localStorage=__ls0;`); run(CMP0 + `EC.app=''; ecPaint();`); return R; });
+  // a long SYNTHETIC history (14 months): the month-to-month swing and status, the month-mode table
+  await step('cmp_long', () => { run(`var __D0=DATA; DATA=__FX.long; window.__ax=null; EC.cache=null; EC.ucache={};`); const R = {};
+    R.sel = J(`(()=>{ const W=ecWin(), A=ecAgg().apps, o={}; for(const s of [{m:'m'},{m:'m',cm:'2026-02'},{m:'m',cm:'2025-09'},{m:'m',cm:'2025-08'},{m:'y',b:'mon'},{m:'y',b:'60'}]){ const C=ecCmpC(W,s), rows={};
+      Object.keys(A).forEach(n=>{ const r=ecRow(A[n],W,C); delete r.spark; rows[n]=r; }); o[JSON.stringify(s)]={swm:(C.swm||[]).map(x=>x.k),title:C.title,cur:C.cur,base:C.base,ncur:C.ncur,rows}; } return o; })()`);
+    run(CMP0 + `EC.cmp={m:'m',b:'7',bm:'',cm:''}; EC.app=''; ecPaint();`);
+    R.card = cards()[0]; R.order = J(`ecSortRows(EC.rows.a.filter(r=>r.act),EC.sort).map(r=>r.key)`);
+    run(`DATA=__D0; window.__ax=null; EC.cache=null; EC.ucache={};`); run(CMP0 + `EC.app=''; ecPaint();`); return R; });
 
   out.errors = errors;
   process.stdout.write(JSON.stringify(out));

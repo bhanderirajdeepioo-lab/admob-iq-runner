@@ -368,6 +368,18 @@
   .ec-seg button{min-height:34px;background:none;border:none;border-right:1px solid var(--line);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:600;padding:5px 12px;cursor:pointer;white-space:nowrap}
   .ec-seg button:last-child{border-right:none}.ec-seg button:hover:not(.on){background:var(--raise)}
   .ec-seg button.on{background:linear-gradient(90deg,var(--blue2),var(--cyan2));color:#fff}
+  .ec-seg button:disabled{color:var(--faint);opacity:.5;cursor:default;background:none}
+  /* the tables' comparison row: wraps; a chip group too wide for a phone scrolls sideways inside it (never the page) */
+  .ec-cmp{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:2px 16px 10px;min-width:0}
+  .ec-cmp .ec-seg{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;flex:0 1 auto;min-width:0}
+  .ec-cmp .ec-seg::-webkit-scrollbar{display:none}
+  .ec-cmp .ec-seg button{flex:none;min-height:36px}   /* = the ‹ › height: the row never changes height */
+  .ec-mnav{display:inline-flex;align-items:center;flex:none;border:1px solid var(--line2);border-radius:9px;background:var(--panel)}
+  .ec-ma{flex:none;min-width:36px;min-height:36px;padding:0 6px;background:none;border:none;color:var(--cyan);font:inherit;font-size:20px;font-weight:700;line-height:1;cursor:pointer}
+  .ec-ma:hover:not(:disabled){background:var(--raise)}.ec-ma:disabled{color:var(--faint);opacity:.4;cursor:default}
+  .ec-ml{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:11.2em;padding:2px 4px;font-size:12.5px;font-weight:650;color:var(--ink2);white-space:nowrap;line-height:1.25;text-align:center}   /* fixed width: ‹ › never move */
+  .ec-ml b{color:#fff;font-weight:700}.ec-ml span{font-size:11.5px;font-weight:600;color:var(--muted)}
+  .ec-cw{padding:0 16px;margin-top:4px;color:var(--watch)}.ec-cw b{color:var(--watch)}
   .ec-chw{position:relative;min-height:200px}
   .ec-chw svg{display:block;width:100%;height:auto;overflow:visible}
   .ec-chw svg text{font-family:inherit}
@@ -418,6 +430,7 @@
     .ec-t td{padding:9px 10px}.ec-t th button{padding:6px 10px}
     .ec-an{gap:7px}
     .ec-seg button{min-height:36px;padding:5px 11px}
+    .ec-ma{min-width:40px;min-height:40px}.ec-cmp .ec-seg button{min-height:40px}
     .ec-kpi .l{padding-right:52px}
     .ov-kpi .ec-kpi .ec-hint{top:15px;right:13px}
     .ec-kpis.row.c4,.ec-kpis.row.c5{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -5361,7 +5374,8 @@ const EC_MIN_IMPR=1000;       // fewer impressions than this on "yesterday" → 
 const EC_SWING_FLOOR=0.02;    // the smallest "usual day-to-day swing" a status is judged against (2%)
 const EC_SWING_MIN=7;         // day-to-day pairs needed before a status is judged (else "Too early")
 const EC={app:'',hdr:null,r:'30',g:'day',sort:{k:'imp',d:'asc'},usort:{k:'imp',d:'asc'},csort:{k:'imp',d:'asc'},
-  idle:{a:false,u:false,c:false},cmax:false,rows:{},el:null,cache:null,cacheD:null,ucache:{},ch:null,pin:false,booted:false,wired:false};
+  idle:{a:false,u:false,c:false},cmax:false,rows:{},el:null,cache:null,cacheD:null,ucache:{},ch:null,pin:false,booted:false,wired:false,
+  cmp:null,C:null,Ct:null,cValid:null};   // cmp = the tables' comparison (ecCmpC), C / Ct = it resolved (per table), cValid = the Countries card's last one its data covers
 const EC_STO={bigda:0,dhyan:1,normal:2,behtar:3,jaldi:4,lagu:5};
 const EC_DEF={name:'asc',y:'desc',w7:'desc',pct:'asc',imp:'asc',yi:'desc',st:'asc'};
 // ---- the maths (pure: no DOM) ----
@@ -5399,10 +5413,97 @@ function ecStatus(pct,swing,yi){ if(!(yi>=EC_MIN_IMPR)) return 'lagu'; if(swing=
   const s=Math.max(swing,EC_SWING_FLOOR); if(pct<=-2*s) return 'bigda'; if(pct<=-s) return 'dhyan'; if(pct>=2*s) return 'behtar'; return 'normal'; }
 // one table row: yesterday vs the last 7 days (incl. yesterday — the dashboard's "Last 7 days"); impact/day = yesterday's
 // impressions × (yesterday's eCPM − the 7-day avg) ÷ 1000 (report currency)
-function ecRow(dm,W){ const y=ecSum(dm,W.y), w=ecSum(dm,W.d7), chg=(y.ec!=null&&w.ec!=null)?y.ec-w.ec:null;
+function ecRow(dm,W,C){ if(C&&!C.def) return ecRowC(dm,W,C);   // another comparison picked (ecCmpC); the default is this, as it always was
+  const y=ecSum(dm,W.y), w=ecSum(dm,W.d7), chg=(y.ec!=null&&w.ec!=null)?y.ec-w.ec:null;
   const pct=(chg!=null&&w.ec)?chg/w.ec:null, imp=chg!=null?y.i*chg/1000:null, swing=ecSwing(dm,W.sw), m30=ecSum(dm,W.s30);
   return {y:y.ec,yi:y.i,ye:y.e,w7:w.ec,wi:w.i,chg,pct,imp,swing,st:ecStatus(pct,swing,y.i),act:m30.i>0,
     spark:W.s30.map(d=>{ const x=dm[d]; return (x&&x[1])?x[0]/(x[1]*1000):null; })}; }
+// ---- 🔀 what the tables compare (owner, 21 Oct: "yesterday vs 7 days — option add karo: 7 days / 14 days / 30 days / 60 days /
+// last month - change month by ‹ ›" · "this month vs last month - change month by ‹ ›"). Mode "y": yesterday vs the last 7
+// (the default — exactly the table as it always was) / 14 / 30 / 60 complete days (yesterday included, as the dashboard's
+// "Last N days"), or one calendar month (default: the month before today's; ‹ › within the history; the month of yesterday =
+// its complete days, yesterday included). Mode "m": a month vs the month before it (the newest = the month of yesterday,
+// complete days 1 … yesterday; the older month whole). A period the history only partly covers is labelled with its days,
+// "Oct 2026 (1–20)". Status: mode "y" = the row's own day-to-day swing (whatever the baseline); mode "m" = the same rule with
+// its own month-to-month swing (median |m/m change| of its whole months up to the older month, at most 13 → 12 pairs).
+const EC_CMP_DEF={m:'y',b:'7',bm:'',cm:''}, EC_CMP_N=['7','14','30','60'];
+function ecMAdd(m,k){ const t=+m.slice(0,4)*12+(+m.slice(5,7)-1)+k; return Math.floor(t/12)+'-'+String(t%12+1).padStart(2,'0'); }
+function ecMFull(m,days){ return !!(days&&days.length&&days[0]===m+'-01'&&ecMonthEnd(days[days.length-1])); }
+function ecPerL(m,days){ const l=ecML(m); if(!days||!days.length||ecMFull(m,days)) return l;
+  const a=+days[0].slice(8,10), b=+days[days.length-1].slice(8,10); return l+' ('+(a===b?a:a+'–'+b)+')'; }
+// the history's months (complete days only) and how far ‹ › go: a baseline month from the first month to the month of
+// yesterday (if it has a day before yesterday); a compared month from the second month to the month of yesterday
+function ecMon(W){ if(W.mon) return W.mon; const by={}, ks=[]; W.comp.forEach(d=>{ const m=d.slice(0,7); if(!by[m]){ by[m]=[]; ks.push(m); } by[m].push(d); });
+  const Lm=String(W.L||'').slice(0,7), anc=String(W.T||W.L||'').slice(0,7), bMin=ks[0]||'';
+  const bMax=!Lm?'':((by[Lm]||[])[0]<W.L?Lm:ecMAdd(Lm,-1)), bOk=!!(bMin&&bMax&&bMin<=bMax);
+  let bDef=anc?ecMAdd(anc,-1):''; if(bOk) bDef=bDef<bMin?bMin:(bDef>bMax?bMax:bDef); else bDef='';   // "last month" = the dashboard's (before today's month)
+  const cMin=bMin?ecMAdd(bMin,1):'', cOk=!!(cMin&&Lm&&cMin<=Lm);
+  W.mon={by,ks,Lm,bMin,bMax,bOk,bDef,cMin,cMax:Lm,cOk}; return W.mon; }
+// a stored / tapped choice made safe for this data: an unknown value, a month outside the history, a range longer than the
+// history → the default; the default month is kept as '' (it moves on with time)
+function ecCmpFix(W,s){ const M=ecMon(W), o=Object.assign({},EC_CMP_DEF), ym=v=>typeof v==='string'&&/^\d{4}-\d{2}$/.test(v);
+  if(s&&typeof s==='object'){
+    if(s.m==='m'&&M.cOk) o.m='m';
+    if(EC_CMP_N.includes(s.b)&&W.comp.length>=+s.b) o.b=s.b; else if(s.b==='mon'&&M.bOk) o.b='mon';
+    if(ym(s.bm)&&M.bOk&&s.bm>=M.bMin&&s.bm<=M.bMax&&s.bm!==M.bDef) o.bm=s.bm;
+    if(ym(s.cm)&&M.cOk&&s.cm>=M.cMin&&s.cm<M.cMax) o.cm=s.cm; }
+  return o; }
+// the comparison: the days on each side, their names, the column titles (def = the default, the table as it always was)
+function ecCmpC(W,s){ const M=ecMon(W), S=ecCmpFix(W,s);
+  if(S.m==='y'){ const C={m:'y',b:S.b,S,cur:W.y,ncur:1,curL:'Yesterday',colCur:'Yesterday<br>eCPM',colImp:'Yesterday<br>impr'};
+    if(S.b==='7') return Object.assign(C,{def:true,base:W.d7,baseL:'Last 7 days',colBase:'Last 7 days<br>avg',title:'yesterday vs last 7 days'});
+    if(S.b!=='mon'){ const n=+S.b; return Object.assign(C,{n,base:W.comp.slice(-n),baseL:'Last '+n+' days',colBase:'Last '+n+' days<br>avg',title:'yesterday vs last '+n+' days'}); }
+    const bm=S.bm||M.bDef, base=M.by[bm]||[], bl=ecPerL(bm,base);
+    return Object.assign(C,{bm,base,baseL:bl,colBase:bl+'<br>avg',title:'yesterday vs '+bl}); }
+  const cm=S.cm||M.cMax, pm=ecMAdd(cm,-1), cur=M.by[cm]||[], base=M.by[pm]||[], cl=ecPerL(cm,cur), bl=ecPerL(pm,base);
+  const swm=M.ks.filter(k=>k<=pm&&ecMFull(k,M.by[k])).slice(-13).map(k=>({k,days:M.by[k]}));   // the whole months up to the older one
+  return {m:'m',S,cm,pm,cur,base,ncur:cur.length||1,curL:cl,baseL:bl,colCur:cl+'<br>eCPM',colBase:bl+'<br>eCPM',colImp:cl+'<br>impr',title:cl+' vs '+bl,swm}; }
+// the usual month-to-month swing (ecSwing over whole-month sums), only months the row had from their 1st day
+function ecMSwing(dm,swm){ const f=ecFirst(dm), mdm={}, ks=[];
+  (swm||[]).forEach(o=>{ if(!f||o.days[0]<f) return; const s=ecSum(dm,o.days); mdm[o.k]=[s.e,s.i]; ks.push(o.k); }); return ecSwing(mdm,ks); }
+// one row for a picked comparison: the current period vs the baseline; impact/day = the current period's impressions per
+// day × (its eCPM − the baseline's) ÷ 1000 (yesterday: its impressions; a month: ÷ its complete days)
+function ecRowC(dm,W,C){ const y=ecSum(dm,C.cur), w=ecSum(dm,C.base), chg=(y.ec!=null&&w.ec!=null)?y.ec-w.ec:null;
+  const pct=(chg!=null&&w.ec)?chg/w.ec:null, imp=chg!=null?(y.i/C.ncur)*chg/1000:null;
+  const swing=C.m==='m'?ecMSwing(dm,C.swm):ecSwing(dm,W.sw), m30=ecSum(dm,W.s30);
+  return {y:y.ec,yi:y.i,ye:y.e,w7:w.ec,wi:w.i,chg,pct,imp,swing,st:ecStatus(pct,swing,y.i),act:C.m==='m'?(y.i>0||w.i>0):m30.i>0,
+    spark:W.s30.map(d=>{ const x=dm[d]; return (x&&x[1])?x[0]/(x[1]*1000):null; })}; }
+function ecCmpFrom(C){ return [C.cur[0],C.base[0]].filter(Boolean).sort()[0]||''; }   // the earliest day it reads
+function ecCmpLoad(){ let sv=null; try{ sv=JSON.parse(localStorage.getItem('ecpmcmp')||'null'); }catch(e){} return sv&&typeof sv==='object'?sv:Object.assign({},EC_CMP_DEF); }
+function ecCmpSave(){ try{ localStorage.setItem('ecpmcmp',JSON.stringify(EC.cmp)); }catch(e){} }
+function ecCmpSet(p){ EC.cmp=Object.assign({},EC.cmp||EC_CMP_DEF,p); ecCmpSave(); ecPaint(); }   // the view repaints; the tapped control stays put (SP)
+function ecCmpM(m){ ecCmpSet({m}); }
+function ecCmpB(b){ ecCmpSet({b}); }
+function ecCmpMon(k){ const W=EC.W||ecWin(), M=ecMon(W), S=ecCmpFix(W,EC.cmp);
+  if(S.m==='m'){ const nx=ecMAdd(S.cm||M.cMax,k); if(!M.cOk||nx<M.cMin||nx>M.cMax) return; ecCmpSet({cm:nx===M.cMax?'':nx}); }
+  else { const nx=ecMAdd(S.bm||M.bDef,k); if(!M.bOk||nx<M.bMin||nx>M.bMax) return; ecCmpSet({bm:nx===M.bDef?'':nx}); } }
+// the control row (the same one on every table card): Yesterday vs [7 · 14 · 30 · 60 days · Month ‹ Sep 2026 ›] · Month vs month ‹ … ›.
+// ‹ › sit either side of a label of fixed width, so a tap never moves them
+function ecCmpCtl(W,C){ const M=ecMon(W), S=C.S, n=W.comp.length;
+  const b=(on,fn,arg,l,dis,tt)=>`<button type="button" class="${on?'on':''}" aria-pressed="${on}" onclick="${fn}('${arg}')"${dis?' disabled':''}${tt?` title="${hAttr(tt)}"`:''}>${l}</button>`;
+  const mode=`<div class="ec-seg" role="group" aria-label="Compare">${b(S.m==='y','ecCmpM','y','Yesterday vs')}${b(S.m==='m','ecCmpM','m','Month vs month',!M.cOk,M.cOk?'':'Abhi ek hi mahine ka data')}</div>`;
+  const nav=(lbl,lo,hi)=>`<div class="ec-mnav"><button type="button" class="ec-ma" onclick="ecCmpMon(-1)" aria-label="Previous month"${lo?' disabled':''}>‹</button>`
+    +`<span class="ec-ml" aria-live="polite">${lbl}</span><button type="button" class="ec-ma" onclick="ecCmpMon(1)" aria-label="Next month"${hi?' disabled':''}>›</button></div>`;
+  if(S.m==='y') return `<div class="ec-cmp">${mode}<div class="ec-seg" role="group" aria-label="Compare yesterday with">`
+    +EC_CMP_N.map(k=>b(S.b===k,'ecCmpB',k,k+' days',n<+k,n<+k?`Sirf ${n} din ka data`:'')).join('')+b(S.b==='mon','ecCmpB','mon','Month',!M.bOk,M.bOk?'':'Abhi kisi mahine ka data nahi')+'</div>'
+    +(S.b==='mon'?nav(C.baseL,C.bm<=M.bMin,C.bm>=M.bMax):'')+'</div>';
+  return `<div class="ec-cmp">${mode}${nav(`<b>${C.curL}</b><span>vs ${C.baseL}</span>`,C.cm<=M.cMin,C.cm>=M.cMax)}</div>`; }
+// the All apps note: what is compared with what, on which days (the default keeps its words)
+function ecCmpNote(C,W){ const s=csym(), lead=`Sabse zyada <b>${s} nuksan</b> wali app sabse upar. `, tail=` ÷ 1,000 — sirf eCPM badalne se ${C.m==='m'?'roz':'kal'} kitna kam / zyada kamaya.`;
+  if(C.def) return `${lead}<b>Change</b> = kal ka eCPM − last 7 days avg (kal samet 7 poore din). <b>${s} impact/day</b> = kal ke impressions × (kal ka eCPM − 7-day avg)${tail}`;
+  const kal=`kal (<b>${fmtD(W.L)}</b>) ka eCPM`, M=ecMon(W);
+  if(C.m==='y'&&C.n) return `${lead}<b>Change</b> = ${kal} − last ${C.n} days avg (kal samet ${C.n} poore din: <b>${ecSpan(C.base)}</b>). <b>${s} impact/day</b> = kal ke impressions × (kal ka eCPM − ${C.n}-day avg)${tail}`;
+  if(C.m==='y') return `${lead}<b>Change</b> = ${kal} − <b>${C.baseL}</b> ka avg eCPM (<b>${ecSpan(C.base)}</b> ki kamai ÷ impressions × 1000`
+    +(C.bm===M.Lm?' — adhura mahina: sirf poore din, kal samet':(ecMFull(C.bm,C.base)?'':` — data ${fmtD(C.base[0])} se hai, isliye sirf ${C.base.length} din`))
+    +`). <b>${s} impact/day</b> = kal ke impressions × (kal ka eCPM − ${C.baseL} avg)${tail}`;
+  return `${lead}<b>Change</b> = <b>${C.curL}</b> ka eCPM − <b>${C.baseL}</b> ka eCPM (har mahina = us mahine ki kamai ÷ impressions × 1000 · <b>${ecSpan(C.cur)}</b> vs <b>${ecSpan(C.base)}</b>).`
+    +(ecMFull(C.cm,C.cur)?'':` <b>${C.curL}</b> adhura mahina hai — sirf poore din (aaj ka adhura din nahi).`)
+    +(ecMFull(C.pm,C.base)||!C.base.length?'':` <b>${C.baseL}</b> = data ${fmtD(C.base[0])} se hai, isliye sirf ${C.base.length} din.`)
+    +` <b>${s} impact/day</b> = ${C.curL} ke roz ke avg impressions (impressions ÷ ${C.cur.length} din) × (eCPM ka farq)${tail}`; }
+// the Ad units / Countries cards: one line with the exact days (nothing for the default)
+function ecCmpWhat(C,W){ if(C.def) return '';
+  return C.m==='y'?` Yahan: kal (<b>${fmtD(W.L)}</b>) vs <b>${C.baseL}</b> (${ecSpan(C.base)}).`
+    :` Yahan: <b>${C.curL}</b> (${ecSpan(C.cur)}) vs <b>${C.baseL}</b> (${ecSpan(C.base)}) — ${csym()} impact/day = ${C.curL} ke roz ke avg impressions par.`; }
 function ecSortRows(rows,S){ const k=S.k, dir=S.d==='desc'?-1:1, lowLast=k!=='name'&&k!=='yi';
   const val=r=>k==='name'?String(r.label||'').toLowerCase():(k==='st'?EC_STO[r.st]:r[k]);
   return rows.slice().sort((a,b)=>{ const la=a.st==='lagu', lb=b.st==='lagu'; if(lowLast&&la!==lb) return la?1:-1;
@@ -5528,15 +5629,15 @@ function ecIdle(t){ EC.idle[t]=!EC.idle[t]; const el=document.getElementById('ec
 function ecAppLbl(name){ const id=appIdOf(name); let a={}; try{ a=smpApp(id,name)||{}; }catch(e){} const store=a.store||name, acct=a.acct||((DATA.apps||[]).find(x=>x.name===name)||{}).account||'';
   return {id,store,tag:a.tag||'',acct,label:store+(a.tag||'')}; }
 // the rows of one table (a: All apps · u: the open app's ad units · c: its countries)
-function ecRowsFor(t,W){ if(t==='a'){ const A=ecAgg().apps; return Object.keys(A).map(n=>{ const L=ecAppLbl(n); return Object.assign(ecRow(A[n],W),{key:n,label:L.label,lbl:L}); }); }
-  if(t==='u') return ecUnits(EC.app).map(u=>Object.assign(ecRow(u.dm,W),{key:u.id,label:u.name,fmt:u.format}));
-  const cd=(DATA.countries_daily||{})[EC.app]||{}; return Object.keys(cd).map(c=>Object.assign(ecRow(ecDm(cd[c]),W),{key:c,label:cName(c)+' '+c,cc:c})); }
+function ecRowsFor(t,W,C){ if(t==='a'){ const A=ecAgg().apps; return Object.keys(A).map(n=>{ const L=ecAppLbl(n); return Object.assign(ecRow(A[n],W,C),{key:n,label:L.label,lbl:L}); }); }
+  if(t==='u') return ecUnits(EC.app).map(u=>Object.assign(ecRow(u.dm,W,C),{key:u.id,label:u.name,fmt:u.format}));
+  const cd=(DATA.countries_daily||{})[EC.app]||{}; return Object.keys(cd).map(c=>Object.assign(ecRow(ecDm(cd[c]),W,C),{key:c,label:cName(c)+' '+c,cc:c})); }
 const EC_CTOP=15;   // the countries table opens on its first 15 rows (in the chosen sort); "Show all" lists the rest
 function ecCAll(){ EC.cmax=!EC.cmax; const el=document.getElementById('ec-tb-c'); if(el) el.innerHTML=ecTableHtml('c'); }
 function ecTableHtml(t){ const all=EC.rows[t]||[], S=EC[{a:'sort',u:'usort',c:'csort'}[t]], idle=all.filter(r=>!r.act), srt=ecSortRows(EC.idle[t]?all:all.filter(r=>r.act),S);
   const cut=t==='c'&&!EC.cmax&&srt.length>EC_CTOP+3, rows=cut?srt.slice(0,EC_CTOP):srt;
-  const first={a:'App',u:'Ad unit',c:'Country'}[t];
-  const COLS=[['name',first],['y','Yesterday<br>eCPM'],['w7','Last 7 days<br>avg'],['pct','Change'],['imp',csym()+' impact<br>/day'],['yi','Yesterday<br>impr'],['','30 days'],['st','Status']];
+  const first={a:'App',u:'Ad unit',c:'Country'}[t], C=EC.Ct&&EC.Ct[t], cd=!C||C.def, mo=!cd&&C.m==='m';   // the comparison this table shows
+  const COLS=[['name',first],['y',cd?'Yesterday<br>eCPM':C.colCur],['w7',cd?'Last 7 days<br>avg':C.colBase],['pct','Change'],['imp',csym()+' impact<br>/day'],['yi',cd?'Yesterday<br>impr':C.colImp],['','30 days'],['st','Status']];
   const th=COLS.map(([k,l])=>{ if(!k) return `<th class="ec-nos">${l}</th>`; const on=S.k===k;
     return `<th class="${on?'ec-on':''}" aria-sort="${on?(S.d==='asc'?'ascending':'descending'):'none'}"><button type="button" onclick="ecSort('${t}','${k}')">${l}${on?`<span class="ec-ar" aria-hidden="true">${S.d==='asc'?'▲':'▼'}</span>`:''}</button></th>`; }).join('');
   const nameCell=r=>{ if(t==='a'){ const L=r.lbl; return `<span class="ec-an">${appIconId(L.id,L.store,22)}<span><b>${hAttr(L.store)}${hAttr(L.tag)}</b>${L.acct?`<small>${hAttr(L.acct)}</small>`:''}</span></span>`; }
@@ -5546,12 +5647,12 @@ function ecTableHtml(t){ const all=EC.rows[t]||[], S=EC[{a:'sort',u:'usort',c:'c
     const clk=t==='a'?` class="clk${low?' ec-low':''}" tabindex="0" data-n="${hAttr(r.key)}" onclick="ecApp(this.dataset.n)" onkeydown="if(event.key==='Enter'){ecApp(this.dataset.n)}"`:(low?' class="ec-low"':'');
     return `<tr${clk}><td>${nameCell(r)}</td><td style="font-weight:700;color:${low?'':'#fff'}">${ecCm(r.y)}</td><td>${ecCm(r.w7)}</td>`
       +`<td class="${c}">${r.chg==null?'—':`<b>${ecCmS(r.chg)}</b> (${ecPct(r.pct)})`}</td><td class="${c}">${r.imp==null?'—':`<b>${ecMoneyS(r.imp)}</b>/day`}</td>`
-      +`<td title="${Math.round(r.yi).toLocaleString()} impressions">${r.yi?fmtN(r.yi):'0'}</td><td>${ecSpark(r.spark,r.st)}</td>`
+      +`<td title="${Math.round(r.yi).toLocaleString()} impressions${mo?' · '+Math.round(r.yi/C.ncur).toLocaleString()+'/day':''}">${r.yi?fmtN(r.yi):'0'}</td><td>${ecSpark(r.spark,r.st)}</td>`
       +`<td><span class="ec-st ${r.st}">${WD.st[r.st]}${low?`<small>${r.yi?'low data':'no data'}</small>`:''}</span></td></tr>`; }).join('');
   const what={a:'apps',u:'ad units',c:'countries'}[t];
   const more=(t==='c'&&(cut||EC.cmax)&&srt.length>EC_CTOP+3?`<div class="ec-more"><button type="button" onclick="ecCAll()">${cut?`Show all ${srt.length} countries`:`Show top ${EC_CTOP} only`}</button></div>`:'')
-    +(idle.length?`<div class="ec-more"><button type="button" onclick="ecIdle('${t}')">${EC.idle[t]?`Hide ${idle.length} ${what} with no data in 30 days`:`Show ${idle.length} more ${what} (no data in 30 days)`}</button></div>`:'');
-  if(!rows.length) return `<div class="ec-note" style="padding:12px 16px">Pichhle 30 din me koi data nahi.</div>${more}`;
+    +(idle.length?`<div class="ec-more"><button type="button" onclick="ecIdle('${t}')">${EC.idle[t]?`Hide ${idle.length} ${what} with no data in ${mo?'these 2 months':'30 days'}`:`Show ${idle.length} more ${what} (no data in ${mo?'these 2 months':'30 days'})`}</button></div>`:'');
+  if(!rows.length) return `<div class="ec-note" style="padding:12px 16px">${mo?`${C.curL} aur ${C.baseL} — dono me koi data nahi.`:'Pichhle 30 din me koi data nahi.'}</div>${more}`;
   return `<div class="ec-tw"><table class="ec-t"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>${more}`; }
 // today so far (owner: "where is today's eCPM?"): the portfolio or one app, from today's partial AdMob day — live, not final
 function ecToday(app){ const T=(DATA&&DATA.today_date)||''; let e=0,i=0;
@@ -5705,36 +5806,45 @@ function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.qu
   if(EC.hdr!==APP){ EC.hdr=APP; EC.app=APP||''; }       // the header App picker drives the view
   if(!EC.app) hbDrop('ecpm-app');                       // back on All apps: no "app" Back step stays behind
   const W=ecWin(); EC.W=W; EC.pin=false;
+  if(!EC.cmp) EC.cmp=ecCmpLoad();                       // the tables' comparison: this viewer's last pick, made safe for this data
+  { const fx=ecCmpFix(W,EC.cmp); if(JSON.stringify(fx)!==JSON.stringify(EC.cmp)){ EC.cmp=fx; ecCmpSave(); } }
+  const C=ecCmpC(W,EC.cmp), ctl=ecCmpCtl(W,C); EC.C=C;
   const A=ecAgg(), first=W.comp[0]||'', T=W.T?` · aaj (${fmtD(W.T)}) ka adhura din sirf <b>Today</b> tile me (chart / table me nahi)`:'';
   const hint=`<b>eCPM = har 1,000 ads (impressions) pe kamai</b> = kamai ÷ impressions × 1000 · data till <b>${ecYear(W.L)}</b>${T}`;
   let h;
   if(!EC.app){
-    EC.rows={a:ecRowsFor('a',W)};
+    EC.rows={a:ecRowsFor('a',W,C)}; EC.Ct={a:C};
     h=`<div class="ec-nav"><button type="button" class="ec-lnk" onclick="ecClose()">← Overview</button></div>
       <div class="ec-hd"><div style="font-size:26px">📈</div><div><div class="big">eCPM trend · All apps</div><div class="sub">${hint} · history <b>${ecYear(first)}</b> se (${W.comp.length.toLocaleString()} din)</div></div></div>
       ${ecKpis(A.pf,W,ecToday(''))}<div class="card ec-cc" id="ec-cc">${ecChartCard()}</div>
-      <div class="card ec-tc"><div class="ct"><h3>All apps · yesterday vs last 7 days</h3><span class="faint" style="font-size:11.5px">row pe tap = us app ka eCPM trend · column pe tap = sort</span></div>
-        <div class="ec-note">Sabse zyada <b>${csym()} nuksan</b> wali app sabse upar. <b>Change</b> = kal ka eCPM − last 7 days avg (kal samet 7 poore din). <b>${csym()} impact/day</b> = kal ke impressions × (kal ka eCPM − 7-day avg) ÷ 1,000 — sirf eCPM badalne se kal kitna kam / zyada kamaya.</div>
+      <div class="card ec-tc"><div class="ct"><h3>All apps · ${C.title}</h3><span class="faint" style="font-size:11.5px">row pe tap = us app ka eCPM trend · column pe tap = sort</span></div>${ctl}
+        <div class="ec-note">${ecCmpNote(C,W)}</div>
         <div id="ec-tb-a">${ecTableHtml('a')}</div>
-        <div class="ec-note" style="padding:0 16px 14px">${ecStatusNote()}</div></div>`;
+        <div class="ec-note" style="padding:0 16px 14px">${ecStatusNote(C)}</div></div>`;
   } else {
     const name=EC.app, L=ecAppLbl(name), dm=A.apps[name], ap=(DATA.apps||[]).find(x=>x.name===name)||{};
     if(!dm){ h=`<div class="ec-nav"><button type="button" class="ec-lnk" onclick="ecAllApps()">← All apps (eCPM)</button><button type="button" class="ec-lnk" onclick="ecClose()">← Overview</button></div>
       <div class="ec-hd"><div>${appIconId(L.id,L.store,34)}</div><div><div class="big">${hAttr(L.label)}</div><div class="sub">Is app ka AdMob (kamai) data nahi — eCPM nahi ban sakta.</div></div></div>`; }
     else {
-      if(EC.rows.app!==name) EC.cmax=false; EC.rows={app:name,u:ecRowsFor('u',W),c:ecRowsFor('c',W)};
-      const order=ecSortRows(Object.keys(A.apps).map(n=>Object.assign(ecRow(A.apps[n],W),{key:n,label:ecAppLbl(n).label})).filter(r=>r.act||r.key===name),EC.sort).map(r=>r.key);
+      const cfirst=Object.values((DATA.countries_daily||{})[name]||{}).reduce((m,rows)=>{ const d=rows&&rows[0]&&rows[0][0]; return d&&(!m||d<m)?d:m; },'');
+      // Countries: its own report, its own (often shorter) history — a pick it does not cover keeps its last covered one, and says so
+      let Cc=C, cw='';
+      if(cfirst&&!C.def&&ecCmpFrom(C)<cfirst){ const K=EC.cValid?ecCmpC(W,EC.cValid):null; Cc=K&&(K.def||ecCmpFrom(K)>=cfirst)?K:ecCmpC(W,EC_CMP_DEF);
+        cw=`⚠ Country report ka data <b>${ecYear(cfirst)}</b> se hai — <b>${hAttr(C.title)}</b> ke liye poora nahi, isliye yeh table abhi bhi <b>${hAttr(Cc.title)}</b> dikha rahi hai.`; }
+      else if(cfirst) EC.cValid=Object.assign({},C.S);
+      if(EC.rows.app!==name) EC.cmax=false; EC.rows={app:name,u:ecRowsFor('u',W,C),c:ecRowsFor('c',W,Cc)}; EC.Ct={u:C,c:Cc};
+      const order=ecSortRows(Object.keys(A.apps).map(n=>Object.assign(ecRow(A.apps[n],W,C),{key:n,label:ecAppLbl(n).label})).filter(r=>r.act||r.key===name),EC.sort).map(r=>r.key);
+      const af=ecFirst(dm), anote=!C.def&&af>ecCmpFrom(C)?` Is app ka data <b>${ecYear(af)}</b> se hai — usse pehle ke din khaali hain.`:'';
       const ix=order.indexOf(name), pv=ix>0?order[ix-1]:'', nx=ix>=0&&ix<order.length-1?order[ix+1]:'';
       const nb=(n,t)=>`<button type="button" class="ec-lnk" ${n?`data-n="${hAttr(n)}" onclick="ecApp(this.dataset.n)" title="${hAttr(ecAppLbl(n).label)}"`:'disabled'}>${t}</button>`;
-      const cfirst=Object.values((DATA.countries_daily||{})[name]||{}).reduce((m,rows)=>{ const d=rows&&rows[0]&&rows[0][0]; return d&&(!m||d<m)?d:m; },'');
       h=`<div class="ec-nav"><button type="button" class="ec-lnk" onclick="ecAllApps()">← All apps (eCPM)</button><button type="button" class="ec-lnk" onclick="ecClose()">← Overview</button><span class="spacer"></span>${nb(pv,'‹ Prev app')}${nb(nx,'Next app ›')}</div>
         <div class="ec-hd"><div>${appIconId(L.id,L.store,38)}</div><div><div class="big">${hAttr(L.label)}</div><div class="sub">${L.acct?hAttr(L.acct)+' · ':''}${ap.platform?hAttr(ap.platform)+' · ':''}${EC.rows.u.length} ad units · ${hint} · history <b>${ecYear(ecFirst(dm))}</b> se</div></div></div>
         ${ecKpis(dm,W,ecToday(name))}<div class="card ec-cc" id="ec-cc">${ecChartCard()}</div>
-        <div class="card ec-tc"><div class="ct"><h3>Ad units · yesterday vs last 7 days</h3><span class="faint" style="font-size:11.5px">kis ad unit ka eCPM gira · column pe tap = sort</span></div>
-          <div class="ec-note">Har ad unit ka apna eCPM (format ke saath). Sabse zyada <b>${csym()} nuksan</b> wali unit sabse upar.</div>
-          <div id="ec-tb-u">${ecTableHtml('u')}</div><div class="ec-note" style="padding:0 16px 14px">${ecStatusNote()}</div></div>
-        ${EC.rows.c.length?`<div class="card ec-tc"><div class="ct"><h3>Countries · yesterday vs last 7 days</h3><span class="faint" style="font-size:11.5px">kis desh me eCPM gira</span></div>
-          <div class="ec-note">AdMob country report se (top 50 desh, history ${cfirst?ecYear(cfirst):'—'} se) — totals upar wale app number se thode alag ho sakte hain.</div>
+        <div class="card ec-tc"><div class="ct"><h3>Ad units · ${C.title}</h3><span class="faint" style="font-size:11.5px">kis ad unit ka eCPM gira · column pe tap = sort</span></div>${ctl}
+          <div class="ec-note">Har ad unit ka apna eCPM (format ke saath). Sabse zyada <b>${csym()} nuksan</b> wali unit sabse upar.${ecCmpWhat(C,W)}${anote}</div>
+          <div id="ec-tb-u">${ecTableHtml('u')}</div><div class="ec-note" style="padding:0 16px 14px">${ecStatusNote(C)}</div></div>
+        ${EC.rows.c.length?`<div class="card ec-tc"><div class="ct"><h3>Countries · ${Cc.title}</h3><span class="faint" style="font-size:11.5px">kis desh me eCPM gira</span></div>${ctl}
+          <div class="ec-note">AdMob country report se (top 50 desh, history ${cfirst?ecYear(cfirst):'—'} se) — totals upar wale app number se thode alag ho sakte hain.${ecCmpWhat(Cc,W)}</div>${cw?`<div class="ec-note ec-cw">${cw}</div>`:''}
           <div id="ec-tb-c">${ecTableHtml('c')}</div></div>`:''}`;
     }
   }
@@ -5744,7 +5854,8 @@ function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.qu
   else { if(tt) tt.textContent=TITLES.ecpm[0]; if(ts) ts.textContent=TITLES.ecpm[1]; }
   ecSave(); ecDraw();
   try{ requestAnimationFrame(()=>{ const w=document.getElementById('ec-chw'); if(w&&EC.ch&&Math.abs((w.clientWidth||0)-(EC.ch.cw||0))>2) ecDraw(); }); }catch(e){} }
-function ecStatusNote(){ return `<b>Status</b> — har row apne <b>roz ke normal utaar-chadhaav</b> se judge hoti hai (pichhle 30 din ka median day-to-day badlav): <b>Worse</b> = 2× se zyada gira · <b>Watch</b> = gira, par 2× se kam · <b>Better</b> = 2× se zyada badha · <b>Normal</b> = apni range me · <b>Too early</b> = abhi kaafi din ka data nahi · <b>N/A</b> = kal ${EC_MIN_IMPR.toLocaleString()} se kam impressions (low data — judge nahi kiya).`; }
+function ecStatusNote(C){ if(C&&C.m==='m') return `<b>Status</b> — har row apne <b>mahine-dar-mahine ke normal utaar-chadhaav</b> se judge hoti hai (${hAttr(C.baseL)} tak ke poore mahine, max 13 — unka median month-to-month badlav): <b>Worse</b> = 2× se zyada gira · <b>Watch</b> = gira, par 2× se kam · <b>Better</b> = 2× se zyada badha · <b>Normal</b> = apni range me · <b>Too early</b> = abhi ${EC_SWING_MIN+1} poore mahine ka data nahi · <b>N/A</b> = ${hAttr(C.curL)} me ${EC_MIN_IMPR.toLocaleString()} se kam impressions (low data — judge nahi kiya).`;
+  return `<b>Status</b> — har row apne <b>roz ke normal utaar-chadhaav</b> se judge hoti hai (pichhle 30 din ka median day-to-day badlav): <b>Worse</b> = 2× se zyada gira · <b>Watch</b> = gira, par 2× se kam · <b>Better</b> = 2× se zyada badha · <b>Normal</b> = apni range me · <b>Too early</b> = abhi kaafi din ka data nahi · <b>N/A</b> = kal ${EC_MIN_IMPR.toLocaleString()} se kam impressions (low data — judge nahi kiya).`; }
 // ---------- 👥 AUDIENCE (the owner-approved Audience demo, ported) ----------
 // One lazy file (DATA.audience.file = audience.json.gz, admob_iq/audience_build.py): who still has each app, who opens
 // it, who went quiet and for how many months, and what waking them could earn. Every number is printed (the number

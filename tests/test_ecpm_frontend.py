@@ -16,7 +16,11 @@ straight from the fixture's raw daily rows (never reusing the page's arithmetic)
   * the Overview "Avg eCPM" tile equals the view for the same period (Yesterday / 7 / 30 days / This month), USD and INR;
   * the entry from the tile (and straight into an app's view when one is picked in the header), the phone's Back steps,
     leaving the view, the 5-min auto-refresh bringing it back as it was, sorting, the tap-only tooltip pin;
-  * the payload carries the FULL daily history (no trim) — the view's "Full" range reads it.
+  * the payload carries the FULL daily history (no trim) — the view's "Full" range reads it;
+  * 🔀 the tables' comparison picker (owner, 21 Oct): Yesterday vs last 7 (default) / 14 / 30 / 60 days / a month ‹ ›, and
+    Month vs month ‹ ›: every pick's rows recounted here, the month bounds, partial months labelled by their days, the
+    month-to-month status on a long synthetic history, Ad units / Countries following the pick (or saying why not), the
+    pick restored per viewer, and the default view byte-identical to the page before the picker (git: BASE_REV).
 Skipped where node is not installed."""
 
 import json
@@ -121,6 +125,46 @@ def _fixture():
     return dash
 
 
+LONG_START = date(2025, 1, 1)   # the long SYNTHETIC history (14 whole months + March so far) for the month-to-month status
+
+
+def _midx(d):
+    return (int(d[:4]) - 2025) * 12 + int(d[5:7]) - 1
+
+
+def _monthly(base, amp, mar):
+    """eCPM flat inside a month, base·(1±amp) alternating month to month; March 2026 (so far) = February × mar."""
+    feb = base * (1 + amp if _midx("2026-02-01") % 2 else 1 - amp)
+    return lambda d, k: feb * mar if d[:7] == "2026-03" else base * (1 + amp if _midx(d) % 2 else 1 - amp)
+
+
+def _long_fixture():
+    days = _days(LONG_START, date(2026, 3, 11))
+    pl = [
+        # month-to-month swing ~6%, March −20% → Worse
+        _unit("ca-app-pub-0000000000000011/1100000001", "cam_banner", "banner", "Steady Cam", _series(days, 50000, _monthly(2.0, 0.03, 0.8))),
+        # swing ~6%, March −2% → Normal
+        _unit("ca-app-pub-0000000000000012/1200000001", "notes_inter", "interstitial", "Calm Notes", _series(days, 40000, _monthly(3.0, 0.03, 0.98))),
+        # swing ~2% (the floor), March +10% → Better
+        _unit("ca-app-pub-0000000000000013/1300000001", "tiles_native", "native", "Bright Tiles", _series(days, 30000, _monthly(1.0, 0.01, 1.10))),
+        # swing ~5%, March −7% → Watch
+        _unit("ca-app-pub-0000000000000014/1400000001", "watch_reward", "rewarded", "Mid Watch", _series(days, 30000, _monthly(4.0, 0.025, 0.93))),
+        # from 15 Nov only: 3 whole months of its own → Too early
+        _unit("ca-app-pub-0000000000000015/1500000001", "cards_banner", "banner", "Fresh Cards",
+              _series([d for d in days if d >= "2025-11-15"], 20000, lambda d, k: 4.0 if d[:7] == "2026-03" else 5.0)),
+        # March: 40 impressions a day (400 so far) → N/A
+        _unit("ca-app-pub-0000000000000016/1600000001", "clock_banner", "banner", "Quiet Clock",
+              _series(days, lambda d, k: 40 if d[:7] == "2026-03" else 2000, _monthly(1.5, 0.03, 0.9))),
+    ]
+    apps = sorted({p["app"] for p in pl})
+    d = _fixture()
+    d.update({"placements": pl, "countries_daily": {},
+              "apps": [dict(d["apps"][0], name=a) for a in apps],
+              "apps_catalog": [{"account_id": "pub-0000000000000000", "app_id": f"ca-app-pub-0000000000000000~{k + 20:010d}", "app_name": a,
+                                "rev": 1.0, "selected": True, "account_decided": True} for k, a in enumerate(apps)]})
+    return d
+
+
 # ── the independent maths (Python, straight from the raw rows) ──────────────────────────────────────────────────────────
 def _maps(dash):
     pf, apps = {}, {}
@@ -194,7 +238,7 @@ def report(tmp_path_factory, dash):
     with open(sp, "w", encoding="utf-8") as f:
         f.write(js)
     with open(fx, "w", encoding="utf-8") as f:
-        json.dump({"dashboard": dash}, f)
+        json.dump({"dashboard": dash, "long": _long_fixture()}, f)
     subprocess.run([NODE, "--check", sp], check=True, capture_output=True)
     out = subprocess.run([NODE, os.path.join(ROOT, "tests", "ecpm_frontend.js"), sp, fx], check=True, capture_output=True,
                          text=True, timeout=180)
@@ -551,3 +595,309 @@ def test_datewise_month_rows(report):
     assert '<div class="ec-seg" role="group" aria-label="Rows by">' in b and \
         '<button type="button" class="on" aria-pressed="true" onclick="dwSetMode(\'month\')">Month</button>' in b
     assert (r["ls"], r["mode"]) == ("day", "day")                   # the choice is remembered on this device
+
+
+# ── 🔀 the tables' comparison picker (owner, 21 Oct: "yesterday vs 7 days — option add karo: 7 days / 14 days / 30 days /
+# 60 days / last month - change month by ‹ ›" · "this month vs last month - change month by ‹ ›") ─────────────────────────
+BASE_REV = "9b17756"          # the page before the picker: its default view must come out byte-identical
+
+
+def _by_month(comp):
+    by = {}
+    for d in comp:
+        by.setdefault(d[:7], []).append(d)
+    return by
+
+
+def _full(m, days):
+    return bool(days) and days[0] == m + "-01" and (date.fromisoformat(days[-1]) + timedelta(days=1)).day == 1
+
+
+def _mswing(dm, by, pm):
+    """median |month-to-month change| over the whole months up to pm (the last 13), only months the row had from the 1st."""
+    f = min((d for d, x in dm.items() if x[1] > 0 or x[0] > 0), default="")
+    ks = [k for k in sorted(by) if k <= pm and _full(k, by[k])][-13:]
+    ks = [k for k in ks if f and by[k][0] >= f]
+    mdm = {k: [sum(dm[d][0] for d in by[k] if d in dm), sum(dm[d][1] for d in by[k] if d in dm)] for k in ks}
+    return _swing(mdm, ks)
+
+
+def _row_cmp(dm, comp, cur, base, pm=None):
+    """one row for a pick: pm = the older month in Month mode (its swing is month-to-month), else the day swing."""
+    y, w = _sum(dm, cur), _sum(dm, base)
+    chg = (y["ec"] - w["ec"]) if y["ec"] is not None and w["ec"] is not None else None
+    pct = chg / w["ec"] if chg is not None and w["ec"] else None
+    ncur = len(cur) if pm else 1
+    sw = _mswing(dm, _by_month(comp), pm) if pm else _swing(dm, comp[-31:-1])
+    act = (y["i"] > 0 or w["i"] > 0) if pm else _sum(dm, comp[-30:])["i"] > 0
+    return {"y": y["ec"], "yi": y["i"], "w7": w["ec"], "chg": chg, "pct": pct,
+            "imp": (y["i"] / ncur) * chg / 1000 if chg is not None else None, "swing": sw, "st": _status(pct, sw, y["i"]), "act": act}
+
+
+def _same_rows(got, exp, name):
+    for k in ("y", "w7", "chg", "pct", "imp", "swing"):
+        assert _close(got[k], exp[k]), (name, k, got[k], exp[k])
+    assert got["yi"] == exp["yi"] and got["st"] == exp["st"] and got["act"] == exp["act"], (name, got, exp)
+
+
+FEB, JAN, MAR = _days(date(2026, 2, 1), date(2026, 2, 28)), _days(date(2026, 1, 1), date(2026, 1, 31)), _days(date(2026, 3, 1), date(2026, 3, 10))
+DEC = _days(date(2025, 12, 20), date(2025, 12, 31))
+# pick → (current days, baseline days, the older month in Month mode, title, current / baseline column)
+PICKS = {
+    "b14": ([LATEST], "-14", None, "yesterday vs last 14 days", "Yesterday<br>eCPM", "Last 14 days<br>avg"),
+    "b30": ([LATEST], "-30", None, "yesterday vs last 30 days", "Yesterday<br>eCPM", "Last 30 days<br>avg"),
+    "b60": ([LATEST], "-60", None, "yesterday vs last 60 days", "Yesterday<br>eCPM", "Last 60 days<br>avg"),
+    "mon": ([LATEST], FEB, None, "yesterday vs Feb 2026", "Yesterday<br>eCPM", "Feb 2026<br>avg"),          # default month: the one before today's
+    "monJan": ([LATEST], JAN, None, "yesterday vs Jan 2026", "Yesterday<br>eCPM", "Jan 2026<br>avg"),
+    "monDec": ([LATEST], DEC, None, "yesterday vs Dec 2025 (20–31)", "Yesterday<br>eCPM", "Dec 2025 (20–31)<br>avg"),   # history starts 20 Dec
+    "monMar": ([LATEST], MAR, None, "yesterday vs Mar 2026 (1–10)", "Yesterday<br>eCPM", "Mar 2026 (1–10)<br>avg"),     # complete days only
+    "mm": (MAR, FEB, "2026-02", "Mar 2026 (1–10) vs Feb 2026", "Mar 2026 (1–10)<br>eCPM", "Feb 2026<br>eCPM"),
+    "mmFeb": (FEB, JAN, "2026-01", "Feb 2026 vs Jan 2026", "Feb 2026<br>eCPM", "Jan 2026<br>eCPM"),
+    "mmJan": (JAN, DEC, "2025-12", "Jan 2026 vs Dec 2025 (20–31)", "Jan 2026<br>eCPM", "Dec 2025 (20–31)<br>eCPM"),
+}
+
+
+@needs_node
+def test_cmp_every_pick_matches_an_independent_recount(report, dash):
+    _, apps = _maps(dash)
+    comp = _comp(dash)
+    m = report["cmp_math"]
+    assert m["b7"]["def"] is True and m["b7"]["rows"] == report["rows"]          # the default: the very rows it always had
+    for k, (cur, base, pm, title, cc, cb) in PICKS.items():
+        base = comp[int(base):] if isinstance(base, str) else base
+        g = m[k]
+        assert g["def"] is False and g["cur"] == cur and g["base"] == base and g["ncur"] == (len(cur) if pm else 1), k
+        assert (g["title"], g["colCur"], g["colBase"]) == (title, cc, cb), k
+        assert g["colImp"] == cc.replace("eCPM", "impr"), k
+        for name, dm in apps.items():
+            _same_rows(g["rows"][name], _row_cmp(dm, comp, cur, base, pm), (k, name))
+        for p in dash["placements"]:                                              # one app's ad units, the same maths
+            if p["app"] != "Demo Gallery":
+                continue
+            dm = {r[0]: [r[1], r[2]] for r in p["daily"] if r[0] != TODAY}
+            u, exp = next(x for x in g["units"] if x["id"] == p["id"]), _row_cmp(dm, comp, cur, base, pm)
+            assert _close(u["y"], exp["y"]) and _close(u["w7"], exp["w7"]) and _close(u["imp"], exp["imp"]) and u["st"] == exp["st"], (k, p["id"])
+    # by hand (flat-alternating eCPMs, whole numbers of micros): Puzzle Quest's February averages $3.00 exactly, Word Hunt's $1.00
+    pq, wh = m["mon"]["rows"]["Puzzle Quest"], m["mon"]["rows"]["Word Hunt"]
+    assert _close(pq["y"], 2.94) and _close(pq["w7"], 3.0) and _close(pq["pct"], -0.02) and _close(pq["imp"], 100000 * -0.06 / 1000)
+    assert _close(wh["w7"], 1.0) and _close(wh["pct"], 0.3) and _close(wh["imp"], 80000 * 0.3 / 1000)
+    # Month mode: impact/day = the month's impressions per complete day × the eCPM change ÷ 1000
+    for name, r in m["mm"]["rows"].items():
+        if r["chg"] is not None:
+            assert _close(r["imp"], r["yi"] / 10 * r["chg"] / 1000), name
+    assert m["mm"]["rows"]["New Timer"]["chg"] is None                           # no February: no change, never a made-up one
+    # here only Jan + Feb are whole months → 1 pair < 7 → Too early (the long history below judges for real)
+    assert m["mm"]["swm"] == ["2026-01", "2026-02"] and m["mmJan"]["swm"] == []
+    assert {r["st"] for r in m["mm"]["rows"].values()} == {"jaldi", "lagu"}
+
+
+@needs_node
+def test_cmp_month_bounds_and_labels(report):
+    m = report["cmp_math"]
+    assert m["bounds"] == {"bMin": "2025-12", "bMax": "2026-03", "bDef": "2026-02", "bOk": True, "cMin": "2026-01", "cMax": "2026-03",
+                           "cOk": True, "ks": ["2025-12", "2026-01", "2026-02", "2026-03"]}
+    assert m["madd"] == ["2025-12", "2026-01", "2025-01", "2027-01"]
+    assert m["perL"] == ["Feb 2026", "Dec 2025 (20–31)", "Mar 2026 (1–10)", "Mar 2026 (1)"]
+
+
+@needs_node
+def test_cmp_taps_navigate_within_the_history_and_stay_put(report):
+    n = report["cmp_nav"]
+    # every tapped control is still there after the repaint (same signature, same count) — the stay-put layer finds it again
+    assert len(n["taps"]) == 17 and all(t["before"] == t["after"] == 1 for t in n["taps"]), n["taps"]
+    titles = {k: n[k]["title"] for k in n if k not in ("taps", "b7html")}
+    assert titles == {"def": "yesterday vs last 7 days", "b14": "yesterday vs last 14 days", "b60": "yesterday vs last 60 days",
+                      "feb": "yesterday vs Feb 2026", "jan": "yesterday vs Jan 2026", "dec": "yesterday vs Dec 2025 (20–31)",
+                      "decStay": "yesterday vs Dec 2025 (20–31)", "feb2": "yesterday vs Feb 2026", "mar": "yesterday vs Mar 2026 (1–10)",
+                      "marStay": "yesterday vs Mar 2026 (1–10)", "m": "Mar 2026 (1–10) vs Feb 2026", "mStay": "Mar 2026 (1–10) vs Feb 2026",
+                      "mFeb": "Feb 2026 vs Jan 2026", "mJan": "Jan 2026 vs Dec 2025 (20–31)", "mJanStay": "Jan 2026 vs Dec 2025 (20–31)",
+                      "backY": "yesterday vs Mar 2026 (1–10)", "b7": "yesterday vs last 7 days"}
+    prev, nxt = 'aria-label="Previous month"', 'aria-label="Next month"'
+    assert prev + " disabled>" in n["decStay"]["ctl"] and nxt + ">" in n["decStay"]["ctl"]          # the first month: ‹ off
+    assert nxt + " disabled>" in n["marStay"]["ctl"] and prev + ">" in n["marStay"]["ctl"]          # the month of yesterday: › off
+    assert nxt + " disabled>" in n["m"]["ctl"] and prev + " disabled>" in n["mJanStay"]["ctl"]
+    assert prev + ">" in n["mFeb"]["ctl"] and nxt + ">" in n["mFeb"]["ctl"]
+    assert n["feb2"]["cmp"]["bm"] == "" and n["mar"]["cmp"]["bm"] == "2026-03"                    # the default month kept as '' (it moves on)
+    assert '<span class="ec-ml" aria-live="polite"><b>Mar 2026 (1–10)</b><span>vs Feb 2026</span></span>' in n["m"]["ctl"]
+    assert '<span class="ec-ml" aria-live="polite">Dec 2025 (20–31)</span>' in n["dec"]["ctl"]
+    assert "ecCmpB(" not in n["m"]["ctl"] and "ecCmpMon(" not in n["def"]["ctl"]                    # the arrows only with a month
+    # what the card says: the exact days compared, partial months by their days
+    assert "last 14 days avg (kal samet 14 poore din: <b>25 Feb–10 Mar</b>)" in n["b14"]["card"]
+    assert "kal (<b>10 Mar</b>) ka eCPM − <b>Feb 2026</b> ka avg eCPM (<b>1 Feb–28 Feb</b> ki kamai" in n["feb"]["card"]
+    assert "adhura mahina: sirf poore din, kal samet" in n["mar"]["card"] and "data 20 Dec se hai, isliye sirf 12 din" in n["dec"]["card"]
+    j = n["mJan"]["card"]
+    assert "<h3>All apps · Jan 2026 vs Dec 2025 (20–31)</h3>" in j and "<b>1 Jan–31 Jan</b> vs <b>20 Dec–31 Dec</b>" in j
+    assert "(impressions ÷ 31 din)" in j and "adhura mahina hai" not in j
+    assert "<b>Mar 2026 (1–10)</b> adhura mahina hai — sirf poore din (aaj ka adhura din nahi)." in n["m"]["card"]
+    # each tap is saved for this viewer
+    assert n["def"]["ls"] is None and json.loads(n["mJan"]["ls"]) == {"m": "m", "b": "mon", "bm": "2026-03", "cm": "2026-01"}
+    assert json.loads(n["b7"]["ls"])["b"] == "7"
+    # back on 7 days: the card is the default one again, word for word
+    assert ("<h3>All apps · yesterday vs last 7 days</h3>" in n["b7html"] and
+            "<b>Change</b> = kal ka eCPM − last 7 days avg (kal samet 7 poore din). <b>$ impact/day</b> = kal ke impressions × "
+            "(kal ka eCPM − 7-day avg) ÷ 1,000 — sirf eCPM badalne se kal kitna kam / zyada kamaya.</div>" in n["b7html"])
+
+
+STO = {"bigda": 0, "dhyan": 1, "normal": 2, "behtar": 3, "jaldi": 4, "lagu": 5}
+
+
+def _sorted_ok(order, rows, key, d):
+    by = {r["key"]: r for r in rows}
+    if key == "name":
+        vals = [by[k]["label"].lower() for k in order]
+    else:
+        judged = [k for k in order if by[k]["st"] != "lagu"]
+        if key != "yi":
+            assert order[:len(judged)] == judged, (key, order)               # low data (N/A) after every judged row
+        val = (lambda k: STO[by[k]["st"]]) if key == "st" else (lambda k: by[k][key])
+        vals = [val(k) for k in (order if key == "yi" else judged) if val(k) is not None]
+    assert vals == sorted(vals, reverse=(d == "desc")), (key, d, vals)
+
+
+@needs_node
+def test_cmp_table_keeps_icons_row_tap_na_and_sorting(report):
+    t = report["cmp_table"]
+    for k in ("b14", "mon", "monDec", "monMar", "mm", "mmJan"):
+        o = t[k]
+        shown = [r for r in o["rows"] if r["act"]]
+        tb = o["card"].split('<div id="ec-tb-a">')[1]
+        assert tb.count('onclick="ecApp(this.dataset.n)"') == len(shown) == len(o["order"]), k   # every row opens its app
+        assert tb.count('class="aicon') == len(shown), k                                            # every app name with its icon
+        assert len(re.findall(r"<th[\s>]", tb)) == 8 and tb.count('aria-sort="none"') == 6 and tb.count('<th class="ec-on"') == 1, k
+        _sorted_ok(o["order"], o["rows"], "imp", "asc")                                             # biggest loss first
+        for tg in o["toggles"]:
+            _sorted_ok(tg["order"], o["rows"], tg["k"], tg["d"])
+    assert t["mon"]["order"][-1] == "Tiny Notes" and "N/A<small>low data</small>" in t["mon"]["card"]   # low data last, said so
+    assert "Show 1 more apps (no data in these 2 months)" in t["mm"]["card"]                          # Old Radio: nothing in Feb / Mar
+    assert "Hide 1 apps with no data in these 2 months" in t["mmJan"]["idle"]
+    assert "Show 1 more apps (no data in 30 days)" in t["mon"]["card"]
+    assert re.search(r'<td title="2,500,000 impressions · 250,000/day">2\.5M</td>', t["mm"]["card"])     # the month's impressions, per day on hover
+    # a row tap opens that app under the same pick: Ad units + Countries follow it, Prev / Next in the table's order
+    a = t["app"]
+    assert a["app"] == "Demo Gallery" and "<h3>Ad units · Mar 2026 (1–10) vs Feb 2026</h3>" in a["units"]
+    assert "<h3>Countries · Mar 2026 (1–10) vs Feb 2026</h3>" in a["countries"] and "ec-cw" not in a["countries"]
+    assert "Mar 2026 (1–10)<br>eCPM" in a["units"] and "Mar 2026 (1–10)<br>impr" in a["countries"]
+    assert a["order"] == t["mm"]["order"] and 'title="Photo Frames">Next app ›' in a["nav"]
+    assert a["units"].count('<div class="ec-cmp">') == 1 and a["countries"].count('<div class="ec-cmp">') == 1
+    assert t["back"] == {"app": "", "title": "Mar 2026 (1–10) vs Feb 2026"}
+    assert "Yahan: kal (<b>10 Mar</b>) vs <b>Last 14 days</b> (25 Feb–10 Mar). Is app ka data <b>6 Mar 2026</b> se hai — usse pehle ke din khaali hain." in t["young"]
+    assert "Is app ka data" not in t["youngDef"] and "Yahan:" not in t["youngDef"]                  # the default card: its words as before
+
+
+@needs_node
+def test_cmp_countries_follow_or_say_why_not(report, dash):
+    c = report["cmp_cards"]
+    comp = _comp(dash)
+    assert c["def"]["ct"] == {"u": "yesterday vs last 7 days", "c": "yesterday vs last 7 days", "cb": 7} and c["def"]["ctlN"] == 2
+    assert c["full14"]["ct"]["c"] == "yesterday vs last 14 days" and "ec-cw" not in c["full14"]["countries"]
+    assert c["short14"]["ct"]["c"] == "yesterday vs last 14 days" and "ec-cw" not in c["short14"]["countries"]   # 25 Feb on: covered
+    # the country report from 15 Feb only: February, 60 days, Mar vs Feb are not covered → the last covered view (14 days), said in one line
+    for k, want in (("shortMon", "yesterday vs Feb 2026"), ("short60", "yesterday vs last 60 days"), ("shortMm", "Mar 2026 (1–10) vs Feb 2026")):
+        x = c[k]
+        assert x["ct"] == {"u": want, "c": "yesterday vs last 14 days", "cb": 14}, k
+        assert "<h3>Countries · yesterday vs last 14 days</h3>" in x["countries"] and f"<h3>Ad units · {want}</h3>" in x["units"]
+        assert x["countries"].count('class="ec-note ec-cw"') == 1
+        assert f"⚠ Country report ka data <b>15 Feb 2026</b> se hai — <b>{want}</b> ke liye poora nahi, isliye yeh table abhi bhi <b>yesterday vs last 14 days</b> dikha rahi hai." in x["countries"]
+    # its numbers are the 14-day ones; the ad units' are the pick's
+    cd = {cn: {r[0]: [r[1], r[2]] for r in rows if r[0] != TODAY and r[0] >= "2026-02-15"} for cn, rows in dash["countries_daily"]["Demo Gallery"].items()}
+    for r in c["shortMon"]["c"]:
+        assert _close(r["w7"], _sum(cd[r["key"]], comp[-14:])["ec"]), r
+    assert c["fresh"]["ct"]["c"] == "yesterday vs last 7 days"            # nothing covered before: the default
+    assert c["shortDef"]["ct"]["c"] == "yesterday vs last 7 days" and "ec-cw" not in c["shortDef"]["countries"]
+
+
+@needs_node
+def test_cmp_pick_restored_and_reset_safely(report):
+    r = report["cmp_restore"]
+    assert (r["mFeb"]["title"], r["monJan"]["title"], r["b30"]["title"]) == ("Feb 2026 vs Jan 2026", "yesterday vs Jan 2026", "yesterday vs last 30 days")
+    assert r["before"]["title"] == "yesterday vs Feb 2026" and r["before"]["cmp"]["bm"] == ""            # a month before the history → the default month
+    assert r["after"]["title"] == "Mar 2026 (1–10) vs Feb 2026" and r["after"]["cmp"]["cm"] == ""        # after it → the newest
+    assert json.loads(r["before"]["ls"])["bm"] == "" and json.loads(r["after"]["ls"])["cm"] == ""        # the fixed pick saved back
+    for k in ("junk", "bad", "none"):
+        assert r[k]["cmp"] == {"m": "y", "b": "7", "bm": "", "cm": ""} and r[k]["title"] == "yesterday vs last 7 days", k
+    # a build with less history (from 1 Feb): the stored 60 days / Dec no longer fit → the default; 60 days greyed out
+    s = r["shorter"]
+    assert s["cmp"] == {"m": "y", "b": "7", "bm": "", "cm": ""} and json.loads(s["ls"]) == s["cmp"]
+    assert s["bounds"] == ["2026-02", "2026-03", "2026-03", "2026-03", True]
+    assert "onclick=\"ecCmpB('60')\" disabled title=\"Sirf 38 din ka data\">60 days</button>" in s["ctl"]
+    assert r["blocked0"]["title"] == "yesterday vs last 7 days" and r["blocked"]["title"] == "yesterday vs last 30 days"   # storage blocked: still works
+
+
+LONG_PICKS = {'{"m":"m"}': ("2026-03", "2026-02"), '{"m":"m","cm":"2026-02"}': ("2026-02", "2026-01"),
+              '{"m":"m","cm":"2025-09"}': ("2025-09", "2025-08"), '{"m":"m","cm":"2025-08"}': ("2025-08", "2025-07")}
+
+
+@needs_node
+def test_cmp_month_to_month_status_on_a_long_history(report):
+    lg = _long_fixture()
+    _, apps = _maps(lg)
+    comp = _comp(lg)
+    by = _by_month(comp)
+    sel = report["cmp_long"]["sel"]
+    for k, (cm, pm) in LONG_PICKS.items():
+        g = sel[k]
+        assert g["cur"] == by[cm] and g["base"] == by[pm] and g["ncur"] == len(by[cm]), k
+        for name, dm in apps.items():
+            _same_rows(g["rows"][name], _row_cmp(dm, comp, by[cm], by[pm], pm), (k, name))
+    now = sel['{"m":"m"}']
+    assert now["swm"] == [f"2025-{m:02d}" for m in range(2, 13)] + ["2026-01", "2026-02"]                # 13 whole months → 12 pairs
+    assert {n: r["st"] for n, r in now["rows"].items()} == {"Steady Cam": "bigda", "Calm Notes": "normal", "Bright Tiles": "behtar",
+                                                             "Mid Watch": "dhyan", "Fresh Cards": "jaldi", "Quiet Clock": "lagu"}
+    sc = now["rows"]["Steady Cam"]   # by hand: Feb $2.06 → Mar $1.648 (−20%); swing = (|0.97/1.03 − 1| + |1.03/0.97 − 1|) ÷ 2
+    assert _close(sc["w7"], 2.06) and _close(sc["y"], 1.648) and _close(sc["pct"], -0.2) and _close(sc["imp"], 50000 * (1.648 - 2.06) / 1000)
+    assert abs(sc["swing"] - (abs(0.97 / 1.03 - 1) + abs(1.03 / 0.97 - 1)) / 2) < 1e-12
+    assert now["rows"]["Fresh Cards"]["swing"] is None                                                   # its own whole months: Dec, Jan, Feb
+    assert all(r["st"] == "normal" for n, r in sel['{"m":"m","cm":"2025-09"}']["rows"].items() if n not in ("Fresh Cards",))   # 7 pairs: judged
+    assert all(r["st"] == "jaldi" for n, r in sel['{"m":"m","cm":"2025-08"}']["rows"].items() if n != "Fresh Cards")         # 6 pairs: Too early
+    # Yesterday mode keeps the day-to-day rule, whatever the baseline (flat days here → the 2% floor)
+    assert sel['{"m":"y","b":"mon"}']["rows"]["Mid Watch"]["st"] == "bigda" and sel['{"m":"y","b":"mon"}']["swm"] == []
+    lc = report["cmp_long"]
+    assert lc["order"] == ["Steady Cam", "Fresh Cards", "Mid Watch", "Calm Notes", "Bright Tiles", "Quiet Clock"]
+    assert "mahine-dar-mahine ke normal utaar-chadhaav" in lc["card"] and "<b>Too early</b> = abhi 8 poore mahine ka data nahi" in lc["card"]
+    assert "<b>N/A</b> = Mar 2026 (1–10) me 1,000 se kam impressions" in lc["card"]
+
+
+# the default view, byte for byte: the page before the picker and this one (comparison row taken out), $ and ₹, every sort
+def _snap(tmp, page, dash):
+    js = max(re.findall(r"<script>(.*?)</script>", page, re.S), key=len)
+    sp, fx = os.path.join(tmp, "p.js"), os.path.join(tmp, "f.json")
+    with open(sp, "w", encoding="utf-8") as f:
+        f.write(js)
+    with open(fx, "w", encoding="utf-8") as f:
+        json.dump({"dashboard": dash}, f)
+    out = subprocess.run([NODE, os.path.join(ROOT, "tests", "ecpm_frontend.js"), sp, fx, "snap"], check=True, capture_output=True, text=True, timeout=180)
+    rep = json.loads(out.stdout)
+    assert rep["errors"] == [], rep["errors"]
+    return rep["snap"]
+
+
+@needs_node
+def test_cmp_default_view_is_byte_identical_to_before(tmp_path, dash):
+    try:
+        old = subprocess.run(["git", "-C", ROOT, "show", BASE_REV + ":frontend/index.html"], check=True, capture_output=True,
+                             text=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        pytest.skip("the page before the picker is not in this checkout's history")
+    (tmp_path / "old").mkdir()
+    (tmp_path / "new").mkdir()
+    a = _snap(str(tmp_path / "old"), old, dash)
+    b = _snap(str(tmp_path / "new"), _page(), dash)
+    assert a["hasCtl"] is False and b["hasCtl"] is True
+    assert len(a["S"]) > 40 and a["S"].keys() == b["S"].keys()
+    for k in a["S"]:
+        assert a["S"][k] == b["S"][k], k
+    assert "All apps · yesterday vs last 7 days" in b["S"]["all_USD"] and "Countries · yesterday vs last 7 days" in b["S"]["app_INR_Demo Gallery"]
+
+
+def test_cmp_control_css_phone_and_tap_targets():
+    css = _page()
+    css = css[css.index("/* ===== 📈 eCPM trend"):css.index("/* \"Stay after N days\"")]
+    assert re.search(r"\.ec-cmp\{display:flex;flex-wrap:wrap", css)                                     # the row wraps
+    assert ".ec-cmp .ec-seg{overflow-x:auto" in css                                                    # a chip group scrolls inside it
+    assert ".ec-tc{padding:0;margin-bottom:14px;min-width:0;overflow:hidden}" in css                    # never the page
+    assert re.search(r"\.ec-ma\{[^}]*min-width:36px;min-height:36px", css)                              # ‹ › ≥ 36px
+    phone = css[css.index("@media(max-width:760px)"):]
+    assert ".ec-ma{min-width:40px;min-height:40px}.ec-cmp .ec-seg button{min-height:40px}" in phone      # chips = ‹ › height
+    assert ".ec-cmp .ec-seg button{flex:none;min-height:36px}" in css
+    assert re.search(r"\.ec-ml\{[^}]*min-width:11\.2em", css)                                            # a fixed label: ‹ › never move
+    assert re.search(r"\.ec-mnav\{[^}]*flex:none", css)
