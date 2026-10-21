@@ -10,11 +10,11 @@ table), 🌍 the install-day table by country (the picker, a pack read once, the
 view byte for byte as before, the pick kept, the missing-country / error / retry / busy states, the notes, a short row
 expanded exactly as the build's _zrow, no page jump at 375 and 1280 px; a pack of another build / gone from the site:
 the app file read again once; a late pack never repaints; only 3 packs kept; Not split's columns; the notes' measured
-limits), 🧮 the cohort card's totals strip for All or the picked country, in two groups — "Spend pata wale din" (spend /
-revenue / profit-loss / ROAS over exactly the days whose spend is known and whose so far is read: Revenue − Spend =
-Profit to the last digit, ₹ as billed at each day's rate) and "Poori history" (every day's revenue, installs, install
-days, the days with no spend data): hand recounts, the owner's case in its shape, days left out counted, the same for
-every grain / mode, '…' while loading, one height in every state, the page otherwise byte for byte as before), "Show 60 more" / "Show
+limits), 🧮 the cohort card's totals strip for All or the picked country — one group over every install day (Total
+spend = Σ the Spend column, Total revenue = Σ the So far column, Profit / loss = printed revenue − printed spend to the
+last digit, ROAS blended, installs, install days; days with no spend data / so far not read counted, never 0): hand
+recounts, the owner's case in its shape, the same for every grain / mode, '…' while loading, one height in every state,
+no value cut at any width, the page otherwise byte for byte as before), "Show 60 more" / "Show
 all" keeping the reader's row and the table box's scroll (every grain × mode, every country, the lifetime table, 375 and
 1280 px, with the stay-put layer: no second scroll) — sideways by column (the Day table's columns change with the rows
 shown), Mode switches keeping the box's row and column too — and the wiring into the page. Skipped where node is not
@@ -197,8 +197,13 @@ def test_forecast_view(out):
 # GOLDEN_NO_BE (the strip cut out) are the same as before; the strip page before the two groups gave GOLDEN_DEFAULT
 # 16bb214bf4da82bd17f7e6e1b317c25fef607b17b619f0fb846f0603edc28baf and GOLDEN_DEFAULT_NOK
 # 65b3d7ad62d5c151e9d12391231199db6be372b859c43e0ebd44f8b1b420cc9c.
-GOLDEN_DEFAULT = "fe4ef94df5f6792ed2169db0dfe081c003a5995ef4ccdc6fa1e5cffd10e9e717"
-GOLDEN_DEFAULT_NOK = "a79cb926cc8aa51d985029ae477fda8cf617f7423ed918e2534fa948fbafcfdb"
+# Changed ON PURPOSE again on 21 Oct 2026 when the two groups became ONE group over every install day (the owner: "poori
+# history vala hi sahi he — spend pata wale din nikal do — profit loss total puri history pe hi hona chaiye"): again only
+# the strip — GOLDEN_DEFAULT_NOKPI, GOLDEN_PRE_KPI and GOLDEN_NO_BE the same; the two-group page gave GOLDEN_DEFAULT
+# fe4ef94df5f6792ed2169db0dfe081c003a5995ef4ccdc6fa1e5cffd10e9e717 and GOLDEN_DEFAULT_NOK
+# a79cb926cc8aa51d985029ae477fda8cf617f7423ed918e2534fa948fbafcfdb.
+GOLDEN_DEFAULT = "a58589ba371a9cfb3b64cafbb2f169cf2ca28182c5ade16f343d486a51b7cfbe"
+GOLDEN_DEFAULT_NOK = "3072f1658c636ddad28ba3b475175a25e9e8438973ce08bcde75d2d5bdca12d7"
 GOLDEN_DEFAULT_NOKPI = "98ae0afdcb42a1e9d258ef5fe660fba126dad93f9b7b6c83e4f801eca78514eb"
 GOLDEN_PRE_KPI = "fb638f026d2a902459c3287cb620536bbb6474fecb17809c9799ba6264ac0a86"
 GOLDEN_NO_BE = "acabb725b05aa314e38c4f97b7880196122d333a0bdd823a0db9c1bc7d1d23b6"
@@ -246,30 +251,23 @@ def test_breakeven_column(out):
 
 
 # 🧮 the strip's value boxes, worked out from the page's own CSS (pinned in test_wiring) and checked in headless Chrome
-# (21 Oct 2026, two groups: 360 → 131 px, 375 → 139, 761 → 194–202, 1100 → 166–170, 1600 → 151–153, 1920 → 197–199):
-# 2 tiles a row up to 1099 px, 4 from 1100, from 1600 the two groups side by side (4fr / 3fr, 16 px apart; "Poori
-# history" 3 a row); the card's and the tile's padding + border; beside the sidebar a classic 15 px scrollbar is taken off
-# too. → (width, scrollbar, box of "Spend pata wale din", box of "Poori history", phone?)
+# (21 Oct 2026, one group: 360 → 131 px, 375 → 139, 761 → 194–202, 900 → 165–170, 1400 → 150–152, 2560 → 343–346; every
+# state one height per width, no value / label / reason / line cut, 360–2560 px): 6 tiles, 2 a row up to 899 px, 3 from
+# 900, 6 from 1400; the card's and the tile's padding + border; beside the sidebar a classic 15 px scrollbar is taken off
+# too. → (width, scrollbar, value box, phone?)
 def _kpi_boxes():
     for w in range(360, 761):                                    # the phone / tablet layout: no sidebar, 2 a row
         pad = 10 if w <= 430 else 12                             # .content (≤430 px: 10, ≤760 px: 12) · .roi-card 12 + 1
-        box = ((w - 2 * pad - 26) - 8) / 2 - 22                  # tile: 9px 10px + 1 px border
-        yield w, 0, box, box, True
+        yield w, 0, ((w - 2 * pad - 26) - 8) / 2 - 22, True      # tile: 9px 10px + 1 px border
     for w in range(761, 2561):
+        cols = 6 if w >= 1400 else 3 if w >= 900 else 2
         for sb in (0, 15):                                       # aside 220 · .content 24 · .roi-card 16 + 1 · tile 11 + 1
-            cw = w - 220 - 48 - sb - 34
-            if w < 1100:
-                yield w, sb, (cw - 8) / 2 - 24, (cw - 8) / 2 - 24, False
-            elif w < 1600:
-                yield w, sb, (cw - 24) / 4 - 24, (cw - 24) / 4 - 24, False
-            else:
-                yield w, sb, ((cw - 16) * 4 / 7 - 24) / 4 - 24, ((cw - 16) * 3 / 7 - 16) / 3 - 24, False
+            yield w, sb, ((w - 220 - 48 - sb - 34) - 8 * (cols - 1)) / cols - 24, False
 
 
 # advance widths (em) of the value font (weight 800, tabular figures) measured in headless Chrome; the largest of 13 /
-# 14 / 15.5 / 17 px for every size (the system font is a little wider at small sizes) — letters for "Same days"
-_EM = dict({c: 0.68 for c in "0123456789+−₹$"}, **{",": 0.36, ".": 0.36, "%": 1.07, "—": 0.92, "…": 1.0},
-           **{"S": 0.69, "a": 0.6, "m": 0.95, "e": 0.61, " ": 0.25, "d": 0.66, "y": 0.61, "s": 0.58})
+# 14 / 15.5 / 17 px for every size (the system font is a little wider at small sizes)
+_EM = dict({c: 0.68 for c in "0123456789+−₹$"}, **{",": 0.36, ".": 0.36, "%": 1.07, "—": 0.92, "…": 1.0})
 
 
 def _px(text, size):
@@ -281,207 +279,190 @@ def _money(v):
     return (-1 if v.startswith("−") else 1) * float("".join(c for c in v if c.isdigit() or c == "."))
 
 
-def _group_a_holds(k):
-    """The printed "Spend pata wale din" tiles: Profit / loss = Revenue − Spend to the last printed digit, ROAS = Revenue ÷
-    Spend (blended) — the owner's "profit loss me wrong lag raha he" can never come back."""
+def _holds(k):
+    """The printed tiles: Profit / loss = Total revenue − Total spend to the last printed digit, ROAS = Total revenue ÷ Total
+    spend (blended) — over the same strip, every install day (the owner: "profit loss total puri history pe hi hona chaiye")."""
     s, r, p = (_money(k[i][1]) for i in range(3))
     return round((r - s) * 100) == round(p * 100) and k[3][1] == f"{int(r / s * 100 + 0.5)}%"
 
 
+def _tiles(spend, rev, profit, roas, installs, days, sub_s="Google Ads", sub_r="so far · AdMob-matched"):
+    return [["Total spend", spend, sub_s], ["Total revenue", rev, sub_r], ["Profit / loss", profit, "revenue − spend"],
+            ["ROAS", roas, "revenue ÷ spend · blended"], ["Installs", installs, "GA4 · ads + organic"], ["Install days", *days]]
+
+
 def test_totals_strip(out):
     """🧮 The cohort card's totals strip (owner, 21 Oct 2026: "kpi add karo yaha pe ki kitna total spend gaya he kitna total
-    revenue aaya he — all country and jo country select kru uska kpi change ho jayega — total hi aayega"), in TWO groups
-    since the owner's report the same day ("profit loss me wrong lag raha he": revenue over every day, spend over the days
-    it is known, profit / ROAS over the ads days — three day sets): "Spend pata wale din" (Spend, Revenue, Profit / loss,
-    ROAS over EXACTLY the days whose spend is known and whose so far is read, spend-0 days in) and "Poori history" (Total
-    revenue of every day, Installs, Install days + the days with no spend data), on made-up rows."""
+    revenue aaya he — all country and jo country select kru uska kpi change ho jayega — total hi aayega"), ONE group over
+    every install day since the owner saw the two groups ("poori history vala hi sahi he — spend pata wale din nikal do —
+    profit loss total puri history pe hi hona chaiye"): Total spend = Σ the Spend column (days with no spend data left out,
+    counted), Total revenue = Σ the So far column (days not read yet left out, counted), Profit / loss = printed revenue −
+    printed spend, ROAS = revenue ÷ spend, Installs, Install days — on made-up rows."""
     # the default page: only the strip changed — with it cut out, the digest is the one before it (2 parts carry it: the
     # Day views); the rows' key (Show 60 more) is on the page too: the strip cut, the key kept = GOLDEN_DEFAULT_NOKPI; both
     # cut = the page before both
     assert out["cc_default_nokpi"] == GOLDEN_DEFAULT_NOKPI and out["cc_default_kpis"] == 2
     assert out["cc_default_nokpi_nok"] == GOLDEN_PRE_KPI
     # under the title row, right above the control row (one per card, above the table; the Day view has one, the
-    # Countries board none); its Hinglish note (why two groups)
-    assert out["k_place"] == [True, 1, True, 1, False, True]
-    # a hand recount (5 install days): 2 Jan has no spend data (its $5 only in Poori history, said), 3 Jan's so far is not
-    # read yet (its $4 spend out of the group, said), 4 Jan ads paused (spend $0, so far $0 — in). The group = 1, 4, 5 Jan:
-    # spend $10 + $0 + $6 = $16, revenue $30 + $0 + $3 = $33 → +$17 (= $33 − $16), ROAS 206%; Poori history: $30 + $5 + $0
-    # + $3 = $38 (= Σ the table's So far column), 200 installs, 5 days (1 not read)
-    k, heads, line = out["k_usd"]
-    assert k == [["Spend", "$16", "1 din bahar: kamai nahi padhi"], ["Revenue", "$33", "so far · AdMob-matched"],
-                 ["Profit / loss", "+$17", "revenue − spend"], ["ROAS", "206%", "revenue ÷ spend"],
-                 ["Total revenue", "$38", "so far · AdMob-matched"], ["Installs", "200", "GA4 · ads + organic"],
-                 ["Install days", "5", "1 din ki kamai abhi nahi padhi"]] and _group_a_holds(k)
-    assert heads == [["Spend pata wale din", "1 Jan 2026 – 5 Jan 2026 (3 din)"], ["Poori history", "1 Jan 2026 – 5 Jan 2026"]]
-    assert line == "1 din ka spend data nahi (2 Jan 26) — unka revenue sirf Poori history me."
-    assert out["k_usd_cls"][2:4] == [["roi-kg", "roi-up"], ["", "roi-g"]]          # profit green, ROAS ≥ 100% green
-    # the table's own columns: Σ Spend = the group's $16 + 3 Jan's $4 (not read yet), Σ So far = Poori history's $38
-    assert out["k_usd_table"] == [20, 38, 200]
-    # ₹ billed (₹90 a $ on every day, today ₹100): the bill ₹900 + ₹0 + ₹540 = ₹1,440 (= the Spend column's own ₹), each day's
-    # so far at its billed rate $33 × 90 = ₹2,970 → +₹1,530 exactly; Poori history at today's rate $38 × 100 = ₹3,800 (said).
-    # A ₹ view of a file not billed in ₹: $ × 100 throughout
-    k, line = out["k_inr"]
-    assert k == [["Spend", "₹1,440", "1 din bahar: kamai nahi padhi"], ["Revenue", "₹2,970", "so far · har din uske rate se"],
-                 ["Profit / loss", "+₹1,530", "revenue − spend"], ["ROAS", "206%", "revenue ÷ spend"],
-                 ["Total revenue", "₹3,800", "so far · ₹ aaj ke rate se"], ["Installs", "200", "GA4 · ads + organic"],
-                 ["Install days", "5", "1 din ki kamai abhi nahi padhi"]] and _group_a_holds(k)
-    assert out["k_inr_table"] == 1800 and line == out["k_usd"][2]
-    assert out["k_inr_usd"][:5] == [["Spend", "₹1,600", "1 din bahar: kamai nahi padhi"], ["Revenue", "₹3,300", "so far · ₹ aaj ke rate se"],
-                                    ["Profit / loss", "+₹1,700", "revenue − spend"], ["ROAS", "206%", "revenue ÷ spend"],
-                                    ["Total revenue", "₹3,800", "so far · ₹ aaj ke rate se"]] and _group_a_holds(out["k_inr_usd"])
+    # Countries board none); its fixed Hinglish note; ONE grid, no group heads / two-group wrapper left
+    assert out["k_place"] == [True, 1, True, 1, False, True, 1, False]
+    # a hand recount (5 install days): 2 Jan has no spend data (out of Total spend, said — its $5 revenue in), 3 Jan's so
+    # far is not read yet (out of Total revenue, said — its $4 spend in), 4 Jan ads paused ($0, $0). Total spend $10 + $4 +
+    # $0 + $6 = $20, Total revenue $30 + $5 + $0 + $3 = $38 → +$18 (= $38 − $20), ROAS 190%; 200 installs, 5 days
+    k, line, (s, r, p, roas, exact) = out["k_usd"]
+    assert k == _tiles("$20", "$38", "+$18", "190%", "200", ["5", "1 Jan 2026 – 5 Jan 2026"],
+                       "1 din ka spend data nahi", "1 din ki kamai abhi nahi padhi") and _holds(k) and exact
+    assert line == "1 din ka spend data nahi (2 Jan 26) — unka spend jod me nahi, revenue hai."
+    assert out["k_usd_cls"] == [["", ""], ["", ""], ["roi-kg", "roi-up"], ["", "roi-g"], ["", ""], ["", ""]]   # profit green, ROAS ≥ 100% green
+    # = the table's own columns: Σ Spend, Σ So far, Σ Installs
+    assert out["k_usd_table"] == [20, 38, 200] == [s, r, 200]
+    # ₹ billed (₹90 a $ on every day, today ₹100): the bill ₹900 + ₹360 + ₹0 + ₹540 = ₹1,800 (= Σ the Spend column), the so
+    # far at today's rate $38 × 100 = ₹3,800 (= Σ the So far column) → +₹2,000 exactly, ROAS 211%
+    k, line, (s, r, p, roas, exact), table, rc = out["k_inr"]
+    assert k == _tiles("₹1,800", "₹3,800", "+₹2,000", "211%", "200", ["5", "1 Jan 2026 – 5 Jan 2026"],
+                       "1 din ka spend data nahi", "1 din ki kamai abhi nahi padhi") and _holds(k) and exact
+    assert table == [s, r] == [rc["S"], rc["R"]] and p == rc["P"] and line == out["k_usd"][1]
+    # a ₹ view of a file not billed in ₹: $ × 100 on both sides — ₹2,000 / ₹3,800 → +₹1,800, the $ view's 190%
+    k, (s, r, p, roas, exact), table, rc = out["k_inr_usd"]
+    assert [x[1] for x in k[:4]] == ["₹2,000", "₹3,800", "+₹1,800", "190%"] and _holds(k) and exact
+    assert table == [s, r] == [rc["S"], rc["R"]] and p == rc["P"]
 
 
 def test_totals_strip_owner_case(out):
-    """🧾 The owner's report (21 Oct 2026, a country in ₹: "profit loss me wrong lag raha he" — total spend over the days
-    its spend is known, total revenue over every day, profit / loss over the ads days only: each right, but revenue − spend
-    ≠ profit), in its shape on made-up rows: 30 old days with revenue and no spend data, 20 ads days at a loss, 5
-    ads-paused days (spend 0 + revenue), 3 ads days at a gain, the 2 newest days' so far not read yet; billed at ₹82 / 82.5 /
-    83 / 83.5 a $ by day."""
-    # $: the group = the 28 days with spend known and so far read: spend 23 × $20 = $460, revenue 20 × $18 + 5 × $4 +
-    # 3 × $30 = $470 → +$10, ROAS 102%; Poori history: + 30 × $10 = $770; the 30 days and the 2 not read said
-    k, cls, heads, line, (s, r, p, roas, exact), rc = out["k_own_usd"]
-    assert k == [["Spend", "$460", "2 din bahar: kamai nahi padhi"], ["Revenue", "$470", "so far · AdMob-matched"],
-                 ["Profit / loss", "+$10", "revenue − spend"], ["ROAS", "102%", "revenue ÷ spend"],
-                 ["Total revenue", "$770", "so far · AdMob-matched"], ["Installs", "600", "GA4 · ads + organic"],
-                 ["Install days", "60", "2 din ki kamai abhi nahi padhi"]]
-    assert exact and r - s == p and _group_a_holds(k) and cls[2:4] == [["roi-kg", "roi-up"], ["", "roi-g"]]
-    assert heads == [["Spend pata wale din", "31 Mar 2025 – 27 Apr 2025 (28 din)"], ["Poori history", "1 Mar 2025 – 29 Apr 2025"]]
-    assert line == "30 din ka spend data nahi (1 Mar 25 – 30 Mar 25) — unka revenue sirf Poori history me."
-    assert [rc[x] for x in ("S", "R", "P", "n", "nz", "kx", "rv", "nrv")] == [460, 470, 10, 28, 5, 2, 770, 58]
-    # ₹ as billed (today ₹88): the bill 5 × (1,640 + 1,650 + 1,660 + 1,670) + 1,670 + 1,640 + 1,650 = ₹38,060; each day's
-    # so far at its own billed rate: 18 × 5 × 331 + 30 × 248 = ₹37,230, the 5 paused days (no bill that day: today's rate,
-    # counted) 5 × 4 × 88 = ₹1,760 → ₹38,990; profit = ₹38,990 − ₹38,060 = +₹930 to the rupee, ROAS 102%; Poori history
-    # $770 × 88 = ₹67,760 (today's rate, said)
-    k, cls, heads, line, (s, r, p, roas, exact), rc = out["k_own_inr"]
-    assert k == [["Spend", "₹38,060", "2 din bahar: kamai nahi padhi"], ["Revenue", "₹38,990", "so far · 5 din aaj ke rate se"],
-                 ["Profit / loss", "+₹930", "revenue − spend"], ["ROAS", "102%", "revenue ÷ spend"],
-                 ["Total revenue", "₹67,760", "so far · ₹ aaj ke rate se"], ["Installs", "600", "GA4 · ads + organic"],
-                 ["Install days", "60", "2 din ki kamai abhi nahi padhi"]]
-    assert exact and r - s == p == 930 and _group_a_holds(k) and [rc[x] for x in ("S", "R", "P", "nt")] == [38060, 38990, 930, 5]
-    assert heads == out["k_own_usd"][2] and line == out["k_own_usd"][3]
-    # a ₹ view of a file not billed in ₹: $ × 88 on both sides — +₹880, the same 102%
+    """🧾 The owner's case in its shape (a country in ₹, Google Ads country spend for about a year), on made-up rows: 30 old
+    days with revenue and no spend data, 20 ads days at a loss, 5 ads-paused days (spend 0 + revenue), 3 ads days at a
+    gain, the 2 newest days' so far not read yet; billed at ₹82 / 82.5 / 83 / 83.5 a $ by day, today ₹88. Profit / loss over
+    the whole history = Total revenue − Total spend, exactly."""
+    # $: Total spend 25 × $20 + 5 × $0 = $500 (the 30 old days left out, said); Total revenue 30 × $10 + 20 × $18 + 5 × $4 +
+    # 3 × $30 = $770 (the 2 newest left out, said) → +$270, ROAS 154%
+    k, cls, line, (s, r, p, roas, exact), rc, table = out["k_own_usd"]
+    assert k == _tiles("$500", "$770", "+$270", "154%", "600", ["60", "1 Mar 2025 – 29 Apr 2025"],
+                       "30 din ka spend data nahi", "2 din ki kamai abhi nahi padhi")
+    assert exact and r - s == p and _holds(k) and cls[2:4] == [["roi-kg", "roi-up"], ["", "roi-g"]]
+    assert line == "30 din ka spend data nahi (1 Mar 25 – 30 Mar 25) — unka spend jod me nahi, revenue hai."
+    assert [rc[x] for x in ("S", "R", "P", "M", "K", "nsp", "nrv")] == [500, 770, 270, 30, 2, 30, 58] and table == [500, 770]
+    # ₹ as billed: 20 × 5 × (1,640 + 1,650 + 1,660 + 1,670) + 1,670 + 1,640 + 1,650 + 1,660 + 1,670 = ₹41,390 (= Σ the Spend
+    # column); Total revenue $770 × 88 = ₹67,760 (= Σ the So far column) → +₹26,370 to the rupee, ROAS 164%
+    k, cls, line, (s, r, p, roas, exact), rc, table = out["k_own_inr"]
+    assert k == _tiles("₹41,390", "₹67,760", "+₹26,370", "164%", "600", ["60", "1 Mar 2025 – 29 Apr 2025"],
+                       "30 din ka spend data nahi", "2 din ki kamai abhi nahi padhi")
+    assert exact and r - s == p == 26370 and _holds(k) and [rc[x] for x in ("S", "R", "P")] == [41390, 67760, 26370]
+    assert table == [41390, 67760] and line == out["k_own_usd"][2]
+    # a ₹ view of a file not billed in ₹: $ × 88 on both sides — +₹23,760, the $ view's 154%
     k, (s, r, p, roas, exact), rc = out["k_own_inr_usd"]
-    assert k == [["Spend", "₹40,480", "2 din bahar: kamai nahi padhi"], ["Revenue", "₹41,360", "so far · ₹ aaj ke rate se"],
-                 ["Profit / loss", "+₹880", "revenue − spend"], ["ROAS", "102%", "revenue ÷ spend"]]
-    assert exact and _group_a_holds(k) and [rc[x] for x in ("S", "R", "P")] == [40480, 41360, 880]
-    # a country in ₹ as billed with odd paise everywhere: its ads-paused days take THAT day's rate from the All rows (the app
-    # was billed that day) — the printed tiles = an independent recount with those rates (not today's: that recount differs),
-    # Revenue − Spend = Profit to the rupee; the same rows in $ too
-    k, heads, line, (s, r, p, roas, exact), rc, rc_today = out["k_cty_inr"]
-    assert exact and _group_a_holds(k) and [s, r, p] == [rc["S"], rc["R"], rc["P"]] and rc["nt"] == 0 and rc_today["R"] != rc["R"]
-    assert k[1][2] == "so far · har din uske rate se" and k[0][2] == "2 din bahar: kamai nahi padhi" and k[6][2] == "2 din ki kamai abhi nahi padhi"
-    assert heads == [["Spend pata wale din", "16 Jun 2025 – 8 Jul 2025 (23 din)"], ["Poori history", "1 Jun 2025 – 10 Jul 2025"]]
-    assert line == "15 din ka spend data nahi (1 Jun 25 – 15 Jun 25) — unka revenue sirf Poori history me."
-    k, (s, r, p, roas, exact), rc = out["k_cty_usd"]
-    assert exact and _group_a_holds(k) and [s, r, p] == [rc["S"], rc["R"], rc["P"]] and k[4][1] == "$201"
+    assert [x[1] for x in k] == ["₹44,000", "₹67,760", "+₹23,760", "154%"] and exact and _holds(k)
+    assert [rc[x] for x in ("S", "R", "P")] == [44000, 67760, 23760]
+    # a country in ₹ as billed with odd paise everywhere (15 old days with no spend data, 5 ads-paused, the 2 newest not
+    # read): the printed tiles = an independent recount, Total revenue − Total spend = Profit / loss to the rupee; the
+    # columns' sums agree up to each printed row's rounding
+    k, line, (s, r, p, roas, exact), rc, (ts, tr) = out["k_cty_inr"]
+    assert exact and _holds(k) and [s, r, p] == [rc["S"], rc["R"], rc["P"]] and (rc["M"], rc["K"], rc["nsp"]) == (15, 2, 25)
+    assert k[0][2] == "15 din ka spend data nahi" and k[1][2] == "2 din ki kamai abhi nahi padhi" and k[5] == ["Install days", "40", "1 Jun 2025 – 10 Jul 2025"]
+    assert abs(ts - s) <= 0.5 * 25 and abs(tr - r) <= 0.5 * 38
+    assert line == "15 din ka spend data nahi (1 Jun 25 – 15 Jun 25) — unka spend jod me nahi, revenue hai."
+    k, (s, r, p, roas, exact), rc, want = out["k_cty_usd"]
+    assert k == want and exact and _holds(k) and [s, r, p] == [rc["S"], rc["R"], rc["P"]] and k[1][1] == "$201"
 
 
 def test_totals_strip_states(out):
-    """🧮 Every other state of the strip: All countries (both groups, no second revenue), spend-0 days, a moved rupee,
-    crore-size ₹, a loss, organic only, nothing; a country (its own recount), Unknown country, Not split; loading / error /
-    missing; one height in every state; every value fits its box at every width."""
-    # days with no ads (spend 0) are in the group with their revenue — 3 × ($0, $100) + 3 × ($100, $80): spend $300,
-    # revenue $540 → +$240, ROAS 180% (said: 3 days spend 0); every ads row of the table still reads its own 80%
-    k, cls, rows = out["k_zero"]
-    assert k[:4] == [["Spend", "$300", "Google Ads · 3 din spend 0"], ["Revenue", "$540", "so far · AdMob-matched"],
-                     ["Profit / loss", "+$240", "revenue − spend"], ["ROAS", "180%", "revenue ÷ spend"]] and _group_a_holds(k)
-    assert cls == [["roi-kg", "roi-up"], ["", "roi-g"]] and rows == ["$80 80%"] * 3
-    # every day in the group (spend known everywhere): Poori history says "Same days", never the same revenue twice
-    assert k[4] == ["Total revenue", "Same days", "upar wala Revenue — wahi din"]
-    # ₹ billed at ₹83, today ₹88, 2 days of $100 spend / $98 so far: a loss in both (−$4; ₹: $98 × 83 − ₹8,300 twice = −₹332),
-    # 98% in both (= the rows' own %)
+    """🧮 Every other state of the strip: All countries, spend-0 days, a moved rupee, crore-size ₹, a loss, no ads, no
+    spend data at all, nothing; a country (its own recount), Unknown country, Not split; loading / error / missing; one
+    height in every state; every value fits its box at every width."""
+    # spend-0 days are in Total spend with their 0, their revenue in Total revenue — 3 × ($0, $100) + 3 × ($100, $80): $300,
+    # $540 → +$240, ROAS 180%
+    k, cls, line = out["k_zero"]
+    assert [x[1] for x in k[:4]] == ["$300", "$540", "+$240", "180%"] and _holds(k) and k[0][2] == "Google Ads"
+    assert cls == [["roi-kg", "roi-up"], ["", "roi-g"]] and line == ""
+    # a ₹-billed file, the rupee moved (billed at ₹83, today ₹88), 2 days of $100 spend / $98 so far: $ −$4, 98%; ₹ = the
+    # columns as printed — the bill 2 × ₹8,300, the so far at today's rate 2 × ₹8,624 → +₹648, 104% (the rupee's move)
     (kd, cd_), (ki, ci), rows = out["k_rate"]
-    assert kd[:4] == [["Spend", "$200", "Google Ads"], ["Revenue", "$196", "so far · AdMob-matched"],
-                      ["Profit / loss", "−$4", "revenue − spend"], ["ROAS", "98%", "revenue ÷ spend"]]
-    assert ki[:4] == [["Spend", "₹16,600", "Google Ads"], ["Revenue", "₹16,268", "so far · har din uske rate se"],
-                      ["Profit / loss", "−₹332", "revenue − spend"], ["ROAS", "98%", "revenue ÷ spend"]]
-    assert cd_ == ci == [["roi-kb", "roi-dn"], ["", "roi-w"]] and rows == [["₹8,300", "₹8,624 98%"]] * 2
-    assert _group_a_holds(kd) and _group_a_holds(ki) and kd[4][1] == ki[4][1] == "Same days"
-    # a loss: red; spend 0 everywhere (organic): spend $0, profit = the revenue, no ROAS (never ∞ / 0%), said; nothing: '—'
+    assert [x[1] for x in kd[:4]] == ["$200", "$196", "−$4", "98%"] and cd_ == [["roi-kb", "roi-dn"], ["", "roi-w"]]
+    assert ki[:2] == [["Total spend", "₹16,600", "Google Ads"], ["Total revenue", "₹17,248", "so far · ₹ aaj ke rate se"]]
+    assert [x[1] for x in ki[2:4]] == ["+₹648", "104%"] and ci == [["roi-kg", "roi-up"], ["", "roi-g"]]
+    assert rows == [["₹8,300", "₹8,624 98%"]] * 2 and _holds(kd) and _holds(ki)
+    # a loss: red
     k, cls = out["k_loss"]
-    assert k == [["Spend", "$60", "Google Ads"], ["Revenue", "$12", "so far · AdMob-matched"], ["Profit / loss", "−$48", "revenue − spend"],
-                 ["ROAS", "20%", "revenue ÷ spend"]] and cls == [["roi-kb", "roi-dn"], ["", "roi-b"]]
-    # review (21 Oct): no ads at all (every known day spend 0) — nothing to judge in "Spend pata wale din": '—' throughout,
-    # never organic revenue shown as a green ads profit; its revenue stays in Poori history
-    k, heads = out["k_org"]
-    assert k == [["Spend", "—", "Is app me koi ads din nahi"], ["Revenue", "—", "so far · AdMob-matched"],
-                 ["Profit / loss", "—", "revenue − spend"], ["ROAS", "—", "revenue ÷ spend"]]
-    assert heads[0] == ["Spend pata wale din", "Is app me koi ads din nahi (spend 0)"]
-    # a few paise of ₹-billed spend: that day's so far at today's rate (counted), the arithmetic still holds
+    assert [x[1] for x in k] == ["$60", "$12", "−$48", "20%"] and cls == [["roi-kb", "roi-dn"], ["", "roi-b"]] and _holds(k)
+    # no ads at all (spend 0 on every day): Total spend $0, its revenue — no profit / ROAS (never organic revenue as an ads
+    # profit, never ∞ / 0%), said
+    k, cls, line = out["k_org"]
+    assert k == [["Total spend", "$0", "Is app me koi ads din nahi"], ["Total revenue", "$60", "so far · AdMob-matched"],
+                 ["Profit / loss", "—", "spend 0 — profit / loss nahi"], ["ROAS", "—", "spend 0 — ROAS nahi"],
+                 ["Installs", "20", "GA4 · ads + organic"], ["Install days", "2", "1 Jan 2026 – 2 Jan 2026"]]
+    assert cls == [["", ""], ["", ""]] and line == ""
+    # no spend data on any day: '—' (never $0), its revenue, no profit / ROAS, the days said
+    k, line = out["k_nosp"]
+    assert [x[1] for x in k] == ["—", "$60", "—", "—", "20", "2"] and k[0][2] == "2 din ka spend data nahi"
+    assert k[2][2] == "spend nahi — profit / loss nahi" and k[3][2] == "spend nahi — ROAS nahi"
+    assert line == "2 din ka spend data nahi (1 Jan 26 – 2 Jan 26) — unka spend jod me nahi, revenue hai."
+    k, line = out["k_none"]
+    assert [x[1] for x in k] == ["—"] * 5 + ["0"] and line == ""
+    # a few paise of ₹-billed spend (its own ₹); a ₹-billed file whose rows have no ₹ spend (= the Spend column: today's rate)
     k, a = out["k_tiny"]
-    assert k[:2] == [["Spend", "₹1,760", "Google Ads"], ["Revenue", "₹3,520", "so far · 1 din aaj ke rate se"]] and a[2] == 1760 and a[4]
-    # ₹-billed file, rows with no ₹ spend: both at today's rate, and the tile says how many days
-    k, a = out["k_nobill"]
-    assert k[:2] == [["Spend", "₹880", "Google Ads"], ["Revenue", "₹1,056", "so far · 2 din aaj ke rate se"]] and a[4]
-    k, heads, line = out["k_none"]
-    assert [x[1] for x in k] == ["—"] * 6 + ["0"] and heads == [["Spend pata wale din", "Is app me spend wala koi din nahi"], ["Poori history", "—"]]
-    # All countries (the made-up app: spend known on all 70 days): both groups, the same days — the group = an independent
-    # recount, Poori history without a second revenue; whatever the grain / mode / "Show more"
-    k, heads, line, rc = out["k_all"]
-    assert k == [["Spend", "$700", "Google Ads"], ["Revenue", "$1,915", "so far · AdMob-matched"], ["Profit / loss", "+$1,215", "revenue − spend"],
-                 ["ROAS", "274%", "revenue ÷ spend"], ["Total revenue", "Same days", "upar wala Revenue — wahi din"],
-                 ["Installs", "7,000", "GA4 · ads + organic"], ["Install days", "70", "har din ki kamai padhi"]] and _group_a_holds(k)
-    assert [rc[x] for x in ("S", "R", "P", "n")] == [700, 1915, 1215, 70] and line == "Har install din ka spend pata."
-    assert heads == [["Spend pata wale din", "5 Aug 2026 – 13 Oct 2026 (70 din)"], ["Poori history", "5 Aug 2026 – 13 Oct 2026"]]
+    assert k[:2] == [["Total spend", "₹1,760", "Google Ads"], ["Total revenue", "₹3,520", "so far · ₹ aaj ke rate se"]] and a[2] == 1760 and a[4]
+    k, a, table = out["k_nobill"]
+    assert [x[1] for x in k] == ["₹880", "₹1,056", "+₹176", "120%"] and a[4] and table == 880
+    # All countries (the made-up app: spend known on all 70 days) = an independent recount; whatever the grain / mode /
+    # "Show more"
+    k, line, rc, (s, r, p, roas, exact) = out["k_all"]
+    assert k == _tiles("$700", "$1,915", "+$1,215", "274%", "7,000", ["70", "5 Aug 2026 – 13 Oct 2026"]) and _holds(k) and exact
+    assert [rc[x] for x in ("S", "R", "P", "M", "K")] == [700, 1915, 1215, 0, 0] and line == ""
     assert out["k_inv"] == [True] * 24 and out["k_allcd"] == [True]
-    # 🌍 a pick: '…' while its rows load (aria-busy, heads + line too), then its own totals = a recount of the rows its table
-    # shows (28 days with no spend data: their revenue only in Poori history, in 2 runs; the 4 ads-paused days in the
-    # group); the same every grain / mode; another country of the same pack at once
-    k, busy, done, msg, heads, line = out["k_load"]
-    assert k == ["…"] * 7 and busy and done and msg and heads == [["Spend pata wale din", "…"], ["Poori history", "…"]] and line == "…"
-    k, want, line, D, unk, n_a, nz, (s, r, p, roas, exact) = out["k_aa"]
-    assert k == want and (D, unk, n_a, nz) == (70, 28, 42, 4) and exact and _group_a_holds(k)
-    assert k[:4] == [["Spend", "$380", "Google Ads · 4 din spend 0"], ["Revenue", "$397", "so far · AdMob-matched"],
-                     ["Profit / loss", "+$17", "revenue − spend"], ["ROAS", "104%", "revenue ÷ spend"]]
-    assert k[4] == ["Total revenue", "$800", "so far · AdMob-matched"]
-    assert line == "28 din ka spend data nahi (2 hisson me, 5 Aug 26 – 13 Oct 26) — unka revenue sirf Poori history me."
+    # 🌍 a pick: '…' while its rows load (aria-busy), then its own totals = a recount of the rows its table shows (28 days
+    # with no spend data in 2 runs: out of Total spend, their revenue in); the same every grain / mode; another country of
+    # the same pack at once
+    k, busy, done, msg, line = out["k_load"]
+    assert [x[1] for x in k] == ["…"] * 6 and busy and done and msg and line == ""
+    k, want, line, cnt, (s, r, p, roas, exact), table, same = out["k_aa"]
+    assert k == want and cnt == [70, 28, 0, 42, "2026-08-05", "2026-10-13"] and exact and _holds(k)
+    assert [x[1] for x in k] == ["$380", "$800", "+$420", "211%", "1,260", "70"] and k[0][2] == "28 din ka spend data nahi"
+    # = Σ its Spend / So far columns over every row (each so far printed whole: ≤ $0.50 a row off)
+    assert table[0] == 380 and abs(table[1] - 800) <= 0.5 * 70 and same
+    assert line == "28 din ka spend data nahi (2 hisson me, 5 Aug 26 – 13 Oct 26) — unka spend jod me nahi, revenue hai."
     assert out["k_aa_inv"] == [True] * 12
     assert out["k_bb"][0] == out["k_bb"][1] and out["k_bb"][2]
-    # "Unknown country": Google Ads has no such country → the group '—' (not 0), said in its head; its revenue in Poori history
+    # "Unknown country": Google Ads has no such country → Total spend '—' (not 0), its revenue; profit / ROAS '—'
     k, want, line = out["k_unk"]
-    assert k == want and k[0] == ["Spend", "—", "Google Ads me ye country nahi"] and [x[1] for x in k[1:4]] == ["—"] * 3
-    assert k[7][0] == ["Spend pata wale din", "Google Ads me ye country nahi"] and k[4][1] == "$888"
-    assert line == "70 din ka spend data nahi (5 Aug 26 – 13 Oct 26) — unka revenue sirf Poori history me."
-    # "Not split": its known-spend days, spend only (its unknown days said); revenue / profit / ROAS / installs '—'
+    assert k == want and k[0] == ["Total spend", "—", "Google Ads me ye country nahi"] and k[1][1] == "$888"
+    assert [x[1] for x in k[2:4]] == ["—"] * 2 and k[2][2] == "spend nahi — profit / loss nahi"
+    assert line == "70 din ka spend data nahi (5 Aug 26 – 13 Oct 26) — unka spend jod me nahi, revenue hai."
+    # "Not split": spend only (its days with no spend data said); the rest '—'
     k, want, line, unk, n_rev = out["k_xx"]
-    assert k == want and unk == 28 and n_rev == 0 and k[0] == ["Spend", "$28", "Not split · Google Ads"]
-    assert [x[1] for x in k[1:6]] == ["—"] * 5 and k[1][2] == "Not split: koi kamai nahi"
-    assert line == "Not split: sirf spend · 28 din ka spend data nahi (2 hisson me, 5 Aug 26 – 13 Oct 26)."
+    assert k == want and unk == 28 and n_rev == 0 and k[0] == ["Total spend", "$28", "28 din ka spend data nahi"]
+    assert [x[1] for x in k[1:]] == ["—"] * 5 and k[1][2] == "Not split: koi kamai nahi"
+    assert line == "28 din ka spend data nahi (2 hisson me, 5 Aug 26 – 13 Oct 26) — unka spend jod me nahi."
     # a pack that failed / a country the app does not have: '—' (no busy flag); an app without the country part: All's own
-    k, not_busy, msg, heads, line = out["k_err"]
-    assert k == ["—"] * 7 and not_busy and msg and heads == [["Spend pata wale din", "—"], ["Poori history", "—"]] and line == "—"
-    assert out["k_miss"] == [["—"] * 7, True] and out["k_nocd"] == [True, True]
-    # ONE height in every state (31 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, crore,
-    # the owner's case …): the same box — groups, tiles, labels, note; heads + coverage line fixed (the CSS pins are in
-    # test_wiring; the strip measured in headless Chrome: one height per width over every state, 360 – 1920 px)
-    assert out["k_skel"] == [1, 31]                                   # + the two review states (tiny spend, not billed)
+    k, not_busy, msg, line = out["k_err"]
+    assert [x[1] for x in k] == ["—"] * 6 and not_busy and msg and line == ""
+    assert out["k_miss"] == [["—"] * 6, True, ""] and out["k_nocd"] == [True, True]
+    # ONE height in every state (32 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, no
+    # spend data, crore, the owner's case …): the same box — one grid, six tiles, labels, the line's box, the note (the CSS
+    # pins are in test_wiring; measured in headless Chrome: one height per width over every state, 360 – 2560 px)
+    assert out["k_skel"] == [1, 32]
     # crore-size ₹ printed in full — 14+ characters a size smaller (roi-ckw), shorter ones not; the arithmetic still exact
     big7, big8, small, n7, n8 = out["k_big"]
-    assert big7 == ["₹23,45,76,190", "₹13,40,46,928", "−₹10,05,29,262", "57%", "Same days", "1,234,577", "2"]
-    assert big8 == ["₹2,34,56,87,200", "₹1,34,03,96,077", "−₹1,00,52,91,123", "57%", "Same days", "1,234,577", "2"]
-    assert small == [[False, False, True, False, False, False, False], [True, True, True, False, False, False, False]]
+    assert big7 == ["₹23,45,76,190", "₹14,08,08,624", "−₹9,37,67,566", "60%", "1,234,577", "2"]
+    assert big8 == ["₹2,34,56,87,200", "₹1,40,80,08,624", "−₹93,76,78,576", "60%", "1,234,577", "2"]
+    assert small == [[False] * 6, [True, True, True, False, False, False]]
     assert n7[4] and n8[4] and n8[1] - n8[0] == n8[2]
     # every value printed in those states fits its box at EVERY width 360–2560 px (₹ crore, a classic scrollbar too), at its
-    # own size (17 / 15.5 px, a 14+ character one 14 / 13 px), in its own group's box; reasons ≤ 35 characters (two lines of
-    # the narrowest tile, 131 px at 360, checked in Chrome); labels one short line
+    # own size (17 / 15.5 px, a 14+ character one 14 / 13 px); reasons ≤ 35 characters (two lines of the narrowest tile,
+    # 131 px at 360, checked in Chrome); labels one short line
     pr = out["k_print"]
-    assert len(pr) == 31 * 7 and any(v == "−₹1,00,52,91,123" for _, v, _, _, _ in pr)
-    assert all(w == (len(v) >= 14) for _, v, w, _, _ in pr)
-    assert [g for _, _, _, _, g in pr[:7]] == ["A"] * 4 + ["B"] * 3
+    assert len(pr) == 32 * 6 and any(v == "−₹93,76,78,576" for _, v, _, _ in pr)
+    assert all(w == (len(v) >= 14) for _, v, w, _ in pr)
     tight = {}
-    for w, sb, box_a, box_b, phone in _kpi_boxes():
-        for lab, v, small, sub, g in pr:
+    for w, sb, box, phone in _kpi_boxes():
+        for lab, v, small, sub in pr:
             size = (13 if small else 15.5) if phone else (14 if small else 17)
-            room = (box_a if g == "A" else box_b) - _px(v, size)
+            room = box - _px(v, size)
             if room < tight.get("room", 1e9):
                 tight = {"room": room, "w": w, "sb": sb, "v": v}
     assert tight["room"] >= 2, tight
-    assert all(len(sub) <= 35 and "<" not in sub and len(lab) <= 13 for lab, _, _, sub, _ in pr)
-    # the heads' days and the coverage line in every state: within what Chrome showed fits (a 37-character range on one
-    # line of a 360 px phone; a 103-character coverage line in its two fixed lines at 360 and 761 px)
-    texts = out["k_texts"]
-    assert all(len(h[1]) <= 40 for heads, _ in texts for h in heads) and all(len(line) <= 103 for _, line in texts)
-    assert all([h[0] for h in heads] == ["Spend pata wale din", "Poori history"] for heads, _ in texts)
+    assert all(len(sub) <= 35 and "<" not in sub and len(lab) <= 13 for lab, _, _, sub in pr)
+    # the line under the tiles in every state: within its two fixed lines (Chrome: a 103-character line — 365 days, 12
+    # runs — in two lines at 360 px and every width up to 2560)
+    assert all(len(x) <= 103 for x in out["k_lines"]) and max(map(len, out["k_lines"])) > 90
 
 
 def test_country_filter(out):
@@ -669,22 +650,18 @@ def test_wiring():
     # box), tiles a row by width only; called once per card path, right before the table's own HTML
     assert ".roi-ck .roi-kl,.roi-ck .roi-kv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" in p
     assert ".roi-ck .roi-ks{height:2.8em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" in p
-    # two groups (21 Oct): 2 a row up to 1099 px, 4 from 1100, the groups side by side from 1600 (4fr / 3fr) — the value
-    # box never under ~150 px beside the sidebar; the sizes test_totals_strip_states' width model uses
+    # one group (21 Oct, the owner: "spend pata wale din nikal do"): 6 tiles, 2 a row up to 899 px, 3 from 900, 6 from 1400 —
+    # the value box never under ~150 px beside the sidebar; the sizes test_totals_strip_states' width model uses
     assert ".roi-ckg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}" in p
     assert ".roi-ck{padding:9px 11px}" in p and ".roi-ck .roi-kv{font-size:17px}.roi-ck .roi-ckw{font-size:14px}" in p
-    assert "@media (min-width:1100px){.roi-ckg{grid-template-columns:repeat(4,minmax(0,1fr))}}" in p
-    assert ("@media (min-width:1600px){.roi-ckq{display:grid;grid-template-columns:4fr 3fr;gap:16px}.roi-ckx+.roi-ckx{margin-top:0}"
-            ".roi-ckx3 .roi-ckg{grid-template-columns:repeat(3,minmax(0,1fr))}}") in p
+    assert "@media (min-width:900px){.roi-ckg{grid-template-columns:repeat(3,minmax(0,1fr))}}" in p
+    assert "@media (min-width:1400px){.roi-ckg{grid-template-columns:repeat(6,minmax(0,1fr))}}" in p
     assert "@media (max-width:760px){.roi-ck .roi-kv{font-size:15.5px}.roi-ck .roi-ckw{font-size:13px}}" in p
-    assert p.count(".roi-ckg{") == 3 and "@media (min-width:900px){.roi-ckg" not in p and "@media (min-width:1400px){.roi-ckg" not in p
-    # the group heads: two fixed one-line rows on a phone (title, its days), one row from 761 px — never wrapped; the coverage
-    # line: two fixed lines (its texts ≤ 103 characters: measured in Chrome to fit at 360 and 761 px)
-    assert (".roi-ckh{display:flex;flex-direction:column;margin:0 0 6px;font-size:12px;line-height:1.5;color:var(--muted)}"
-            ".roi-ckx+.roi-ckx{margin-top:10px}") in p
-    assert ".roi-ckh>*{display:block;height:1.5em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.roi-ckh b{flex:none;color:#fff;font-weight:700}" in p
+    assert p.count(".roi-ckg{") == 3 and "@media (min-width:1100px){.roi-ckg" not in p and "@media (min-width:1600px){.roi-ck" not in p
+    # the line under the tiles: two fixed lines, empty or not (its texts ≤ 103 characters: measured in Chrome to fit at 360 px)
     assert ".roi-ckm{height:3em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" in p
-    assert "@media (min-width:761px){.roi-ckh{flex-direction:row;gap:10px}}" in p
+    # the two-group code and CSS are gone: no group heads / wrapper class, no group titles
+    assert not any(c in p for c in ("roi-ckh", "roi-ckq", "roi-ckx", "Spend pata wale din", "<b>Poori history</b>", "Do group kyun"))
     # the layout numbers the model takes from the rest of the page (unchanged by this work)
     assert "aside{width:220px;" in p and ".content{padding:15px 24px 32px;" in p and ".content{padding:15px 12px 40px;" in p
     assert ".content{padding:13px 10px 36px}" in p and ".roi-card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:14px 16px;" in p
