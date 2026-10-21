@@ -1193,6 +1193,18 @@ async function moreKeepAll(dc, packs) {
       !thn({ thru: '2026-10-13', till: '2026-10-13' }, '2026-10-12').includes('tak hi poora padha'),
       !thn({}, '2026-10-13').includes('tak hi poora padha'),
       U.lateNote({ newest: '2026-10-13', rows: [], late: { thru: '2026-09-28', till: '2026-10-13' } }).includes('28 Sep 26 tak hi')];
+    // the whole read past D30 (q): D31–D420 whole, what GA4 gave no install day past D420 (measured), the days still
+    // waiting, drift; without q fields the note as before
+    const qnl = l => U.lateNote({ newest: '2026-10-13', rows: [[0, 0, 0, 0, null, 0, null, [], null, null, null, null, 0, 0, [1], 0]], late: l });
+    const qa = qnl({ oth: 40, omax: 0.3, ql: 57.6, qd: 812, qwait: 9, qneg: 2, qpos: 1, till: '2026-10-13', thru: '2026-10-13' });
+    out.m_qnote = [qa.includes(' D31–D420 whole: GA4 ka bina-country read, har din alag (isme "(other)" nahi aata) — 812 din; D420 ke baad $58 ka install din GA4 ne nahi diya — ye kisi row me nahi'),
+      qa.includes('≈ = 9 din abhi GA4 cube ke purane read pe'), qa.includes('3 hafte me poore read aur cube ke read ka jod alag aaya (dono read ke beech GA4 ne data badla; 1 me cube zyada) — use loss nahi gina.'),
+      !qa.includes('40 din me, sabse zyada'),
+      qnl({ oth: 40, omax: 0.3, ql: 0, qd: 812, qwait: 0, qneg: 0 }).includes('D420 ke baad kuch nahi chhoota.'),
+      !qnl({ oth: 40, omax: 0.3, ql: 0, qd: 812, qwait: 0, qneg: 0, qpos: 0 }).includes('≈ =') && !qnl({ ql: 0, qd: 812, qwait: 0, qneg: 0, qpos: 0 }).includes('hafte me'),
+      qnl({ oth: 1, omax: 0.3, ql: 0.003, qd: 5, qwait: 0, qneg: 0 }).includes('D420 ke baad <$0.01 ka install din'),
+      qnl({ oth: 40, omax: 0.3 }).includes('≈ = D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)") — 40 din me'),
+      !qnl({ oth: 40, omax: 0.3, ql: 0, qd: 0, qwait: 40, qneg: 0 }).includes('D31–D420 whole') && qnl({ oth: 40, omax: 0.3, ql: 0, qd: 0, qwait: 40, qneg: 0 }).includes('≈ = 40 din abhi')];
     // q bit 4: a flagged late block
     const dmq = JSON.parse(JSON.stringify(dm)); dmq.rows[dmq.rows.length - 1][12] = 4;
     out.m_q4 = U.cohortTable(dmq).includes('D30 ke baad GA4 ke report pe data loss / thresholding / sampling ka flag tha — asli kamai thodi alag (kam ya zyada) ho sakti hai')
@@ -1363,21 +1375,20 @@ async function moreKeepAll(dc, packs) {
     U.setCTY('BB');
     const nb = U.cohCard(dc);
     out.cc_note = ['installs = GA4 ke is country ke naye users (ads + organic) — isliye ROAS blended',
-      'k_c = us country ka AdMob ÷ GA4, mahine ke hisaab se', '25% revenue pe milan nahi mila, wahan app ka k laga (≈)',
+      'k_c = us country ka AdMob ÷ GA4, mahine ke hisaab se', '25% revenue pe milan nahi mila (ya mahina abhi adhoora: AdMob / GA4 poora nahi), wahan app ka k laga (≈)',
       'Ads ka country ≠ GA4 ka country', '1 Sep 26 se 12 Oct 26 tak', "28 install din pe country-wise spend nahi pata ('—', ROAS '·')",
       'country split = kul Ads spend ka 97%', 'usme 8.0% "Not split"', 'AdMob ka din GA4 ke din se 12.5 ghante baad shuru hota hai',
       'GA4 ne revenue "(other)" me daala (2 din, sabse zyada us din ki kamai ka 1.2%)', '1 din GA4 report pe thresholding / sampling flag',
       'Status sirf ≥ $5 spend aur ≥ 30 installs wale din: 3 din N/A', 'Sab countries ka jod "All countries" se −3.6% alag (D30, 12 install din: $96 vs $100)',
       'Is card ke Total tiles = sirf is country ke; upar ke baaki tiles / charts = poora app (sab countries).',
-      // the k_c of a month not whole yet: borrowed, its revenue share said; GA4 revenue without a country: measured
-      '13% revenue ke mahine abhi adhoore (AdMob ya GA4 ka poora mahina nahi) — unka k_c padosi poore mahino se liya (≈)',
+      // GA4 revenue without a country: measured
       'GA4 ka kuch revenue bina country ka hai ("(not set)" + "(other)": kul 1.8%, kisi mahine sabse zyada 3.1%) — AdMob un users ko asli country me ginta hai, isliye k_c utna tak zyada ho sakta hai; 1 mahine 2.0% se zyada — un mahino wale row pe ≈.',
       // the days whose Ads split did not tie, the Ads day's time zone
       "28 install din pe country-wise spend nahi pata ('—', ROAS '·') — inme 2 din Ads ka country-wise jod Ads ke kul kharche se nahi mila",
       'Ads ka din GA4 ke din se 9.5 ghante pehle shuru hota hai (Ads account ka time zone) — ek install din ka spend aur installs utne ghante khiske hue',
       // Σ countries vs All: every cause named, with its measured size
       'Wajah: All me app ka hafte wala k aur GA4 ka install-day read, countries me har country ka mahine wala k_c aur GA4 cube ka read; bina country wala GA4 revenue (kul 1.8%) AdMob ke hisaab se countries ke k_c me hai, aur "Unknown country" ka $1.5 is jod me dobara gina gaya.'
-    ].filter(t => !nb.includes(t));
+    ].filter(t => !nb.includes(t)).concat(nb.includes('padosi') ? ['a borrowed k_c said'] : []);
     // the Ads time zone unknown / mixed: said too; the Unknown country row: its money is also inside the named countries' k_c
     const tzs = g => U.ccNote(appFile(), Object.assign(cdx(), { geo: Object.assign(cdx().geo, g) }), dc.cd.c[0]);
     out.cc_tz = [tzs({ tzh: null, tzs: 2 }).includes('app ke Ads accounts 2 alag time zone me'), tzs({ tzh: null, tzs: 0 }).includes('Ads ka din Ads account ke time zone ka hai (yahan pata nahi)'),
@@ -1430,10 +1441,22 @@ async function moreKeepAll(dc, packs) {
       const one = (cd, c) => JSON.stringify(U.zx(c.x, cd, c.cc, T)) === JSON.stringify(c.row) ? 1 : [c.x, c.cc, U.zx(c.x, cd, c.cc, T), c.row];
       out.cc_zx = zc.cases.map(c => one(zc.cd, c)).concat(zc.cases0.map(c => one(zc.cd0, c)));
     }
-    // the ≈ bits of a borrowed k_c month / a month with GA4 revenue without a country say what they are
+    // the ≈ bit of a month with GA4 revenue without a country says what it is; bit 32 (a borrowed k_c) is gone
     const qn = U.ccQ(32 | 64, dc.cd).filter(Boolean);
-    out.cc_q_new = qn.length === 2 && qn[0].includes('mahina abhi adhoora (AdMob / GA4 poora nahi), padosi poore mahino se liya')
-      && qn[1].includes('GA4 ka 2% se zyada revenue bina country ka tha');
+    out.cc_q_new = qn.length === 1 && qn[0].includes('GA4 ka 2% se zyada revenue bina country ka tha')
+      && !U.ccQ(32, dc.cd).some(Boolean);
+    // GA4: country not given (cd.ng, per activity month, signed): the matched months and the app-k months, with sums
+    const ngd = { m: { '2026-07': [-12.5, 0.004, 'own'], '2026-08': [3.25, 0.031, 'own'], '2026-09': [0.5, 0.02, 'own'],
+      '2025-12': [40, 0.2, 'app'], '2026-01': [20, 0.18, 'app'], '2026-10': [9.75, 0.3, 'app'] }, usd: 61, all: 1220, rel: 0.05 };
+    const ngn = c => U.ccNote(appFile(), Object.assign(cdx(), { ng: c }), dc.cd.c[0]);
+    const ng1 = ngn(ngd);
+    out.cc_ng = [ng1.includes('<b>GA4 ne country nahi di</b>: +$61 (+5.0%) = All countries − sab country rows, mahine wise —'),
+      ng1.includes(' Jul 2026 – Sep 2026: AdMob country report se matched (−$8.8)'),
+      ng1.includes('; Dec 2025 – Jan 2026, Oct 2026: GA4 × app ka k — ye hissa (+$70) kisi country row me nahi.'),
+      !ngn(undefined).includes('GA4 ne country nahi di'), !ngn({ m: {}, usd: 0 }).includes('GA4 ne country nahi di'),
+      ngn({ m: { '2026-10': [-2, 0.3, 'app'] }, usd: -2, all: 100, rel: -0.02 }).includes(': −$2.0 (−2.0%) = All countries'),
+      !ngn(ngd).includes('kisi country row me nahi.;'),
+      !U.ccNote(appFile(), Object.assign(cdx(), { ng: ngd }), ['XX', null, 12, null, 1, null, null]).includes('GA4 ne country nahi di')];
     // the picker: a chip's country picked → the list shows "More countries ▾" (one option selected, never the chip's)
     U.setCTY('AA');
     const pa = U.ccPick(dc.cd);

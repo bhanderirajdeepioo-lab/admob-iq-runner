@@ -7147,8 +7147,17 @@ function lateNote(d,C,o){ const mx=mLen(d.rows||[]), lt=o&&o.cc?{}:(d.late||{}),
   const ls=mx===1?'D60':mx===2?'D60, D90':`D60, D90 … D${30*(mx+1)}`, on=(C||[]).filter(c=>c.mi!=null).length;
   return ` D30 ke baad har 30 din ka column (${ls}), app ki umar tak — jitna purana install din, utne column. Column tabhi bharta hai jab us 30 din ke saare din GA4 se padh liye gaye; beech ka koi din na padha ho to wahin ruk jata hai (·) — us din ka D60 / D90 / D180 checkpoint ho to wo dikhta hai.`
     +(C&&on<mx?` Abhi dikh rahe install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ${on?'D'+30*(on+1)+' tak':'D60 tak nahi'} pahunche — purane (Show all${GRAIN==='day'?' / Week / Month':''}) me D${30*(mx+1)} tak column.`:'')
-    +(lt.oth?` ≈ = D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)") — ${N(lt.oth)} din me, sabse zyada us din ki kamai ka ${pc(lt.omax)}; aise din wale row pe ≈.`:'')
+    +(ok(lt.qd)?qNote(lt):lt.oth?` ≈ = D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)") — ${N(lt.oth)} din me, sabse zyada us din ki kamai ka ${pc(lt.omax)}; aise din wale row pe ≈.`:'')
     +(lt.loss?` ≈ = ${N(lt.loss)} din ke D30-ke-baad wale GA4 report pe data loss / thresholding / sampling ka flag tha (naapne layak kuch nahi bacha) — un din wale row ki kamai asli se thodi alag (kam ya zyada) ho sakti hai.`:'')+th; }
+// the whole read past D30 (the cube's q: GA4's no-country read of each day, ages ≤ 420 — owner: real data only): how many
+// days it covers, what GA4 gave no install day past D420 (measured, in no row: never spread, never 0 when it is not), the
+// days still on the cube's own cells (≈ until read), weeks where the two reads' sums differ past the cube's own loss
+// (drift either way: never counted as loss)
+const Mq=v=>ok(v)&&v>0&&Math.abs(v*cfx())<0.005?'<'+csym()+'0.01':M(v);
+function qNote(lt){
+  return (lt.qd?` D31–D420 whole: GA4 ka bina-country read, har din alag (isme "(other)" nahi aata) — ${N(lt.qd)} din; D420 ke baad ${lt.ql>0?`${Mq(lt.ql)} ka install din GA4 ne nahi diya — ye kisi row me nahi (us hafte ke D420+ column wale row pe ≈)`:'kuch nahi chhoota'}.`:'')
+    +(lt.qwait?` ≈ = ${N(lt.qwait)} din abhi GA4 cube ke purane read pe (GA4 ne kuch revenue "(other)" me daala) — poora read aane tak un din wale row pe ≈.`:'')
+    +((lt.qneg||0)+(lt.qpos||0)?` ${N((lt.qneg||0)+(lt.qpos||0))} hafte me poore read aur cube ke read ka jod alag aaya (dono read ke beech GA4 ne data badla${lt.qpos?`; ${N(lt.qpos)} me cube zyada`:''}) — use loss nahi gina.`:''); }
 // ---- 🌍 the install-day table by country (owner: "USA select kru to date wise country ka aa jayega konsa din kaha pahocha"):
 // the file's cd = the index, roi_<key>_cNN.json.gz = the rows of its countries, loaded only when one is picked (once)
 let CTY='';                                           // the picked country ('' = All countries): kept across grain / mode / apps
@@ -7206,11 +7215,23 @@ function ccQ(qb,cd){ const lim=((cd&&cd.kc)||{}).unp_lim;
   return [qb&2?'Is row ke kuch din GA4 ne kuch revenue "(other)" me daala (country / install din nahi diya)':'',
   qb&4?'Is row ke kuch din GA4 report pe thresholding / sampling flag — asli kamai thodi alag (kam ya zyada) ho sakti hai':'',
   qb&8?'Is country ka AdMob milan kisi mahine 0.8–1.25 se bahar tha (0.5–2 pe roka)':'',qb&16?'Kisi mahine is country ka AdMob milan nahi mila — app ka k laga':'',
-  qb&32?'Kisi mahine ka k_c us mahine ka apna nahi — mahina abhi adhoora (AdMob / GA4 poora nahi), padosi poore mahino se liya':'',
   qb&64?`Kisi mahine GA4 ka ${ok(lim)?Math.round(lim*100)+'%':'kaafi'} se zyada revenue bina country ka tha — AdMob use asli country me ginta hai, isliye k_c thoda zyada ho sakta hai`:'']; }
+// GA4: country not given (the file's cd.ng, per activity month: All − Σ every country row, signed) — the months the
+// countries' own AdMob match carries (AdMob's country report already placed it) and the months on the app's k (there
+// it is in no country row); measured, never spread to a country
+const mNext=k=>{ const y=+k.slice(0,4), m=+k.slice(5,7); return m===12?`${y+1}-01`:`${y}-${String(m+1).padStart(2,'0')}`; };
+function mRng(ms){ const o=[]; for(const k of ms){ const l=o[o.length-1]; if(l&&mNext(l[1])===k) l[1]=k; else o.push([k,k]); }
+  return o.map(([a,b])=>a===b?fmtMon(a):`${fmtMon(a)} – ${fmtMon(b)}`).join(', '); }
+function ngLine(ng,pc){ const nm=(ng&&ng.m)||{}, ks=Object.keys(nm).filter(M_=>Array.isArray(nm[M_])&&ok(nm[M_][0])).sort();
+  if(!ks.length||!ok(ng.usd)) return '';
+  const A=ks.filter(M_=>nm[M_][2]==='own'), B=ks.filter(M_=>nm[M_][2]!=='own'), sm=xs=>xs.reduce((a,M_)=>a+nm[M_][0],0);
+  const sp=v=>!ok(v)?'—':(v<0?MI:v>0?'+':'')+pc(Math.abs(v));
+  return `<b>GA4 ne country nahi di</b>: ${M(ng.usd,true)}${ok(ng.rel)?` (${sp(ng.rel)})`:''} = All countries − sab country rows, mahine wise —`
+    +(A.length?` ${E(mRng(A))}: AdMob country report se matched (${M(sm(A),true)})`:'')
+    +(B.length?`${A.length?';':''} ${E(mRng(B))}: GA4 × app ka k — ye hissa (${M(sm(B),true)}) kisi country row me nahi`:'')+'.'; }
 // what the country view is and is not — every limitation with its measured size (from the file)
 function ccNote(d,cd,x){ const cc=x[0], g=cd.geo||{}, k=cd.kc||{}, lo=cd.loss||{}, df=cd.diff||{}, p=[];
-  const pc=v=>!ok(v)?'—':v>0&&v<0.001?'<0.1%':(v*100).toFixed(v<0.1?1:0)+'%';
+  const pc=v=>!ok(v)?'—':v>0&&v<0.001?'<0.1%':(v*100).toFixed(v<0.1?1:0)+'%', ng=ngLine(cd.ng,pc);
   const up=k.unp||{}, um=Object.keys(up).filter(M=>ok(up[M])&&up[M]>0), lim=ok(k.unp_lim)?k.unp_lim:0.02, ubig=um.filter(M=>up[M]>lim), umax=um.reduce((a,M)=>Math.max(a,up[M]),0);
   if(cd.to&&d.newest&&cd.to<d.newest) p.push(`Country table ${E(fd(cd.to))} tak — GA4 cube ne uske baad ke ${N(dDiff(cd.to,d.newest))} din abhi poore nahi padhe (All countries ${E(fd(d.newest))} tak); naye 30-din wale column bhi tabhi bharenge.`);
   if(cc==='XX') p.push(`<b>🧩 Not split</b> = Google Ads ka wo kharcha jiska country Ads ko nahi pata ("XX")${ok(g.xx_share)?` — country-wise spend ka ${pc(g.xx_share)}`:''}. Iska koi install din / country nahi, isliye installs aur har din wala column '—' (koi revenue nahi, ROAS nahi).`
@@ -7218,7 +7239,8 @@ function ccNote(d,cd,x){ const cc=x[0], g=cd.geo||{}, k=cd.kc||{}, lo=cd.loss||{
   else {
     p.push(`<b>${ccLab(cc)}</b>: installs = GA4 ke ${cc==='--'?'bina country wale':'is country ke'} naye users (ads + organic) — isliye ROAS blended.`);
     p.push(cc==='--'?'Revenue = GA4 × app ka apna AdMob milan (k) — AdMob me aisa koi country nahi, isliye sab ≈. AdMob in users ko kisi asli country me ginta hai, isliye yahi kamai un countries ke k_c me bhi hai — sab countries jodte waqt ise dobara na jodein.'
-      :`Revenue = GA4 × is country ka apna AdMob milan (k_c = us country ka AdMob ÷ GA4, mahine ke hisaab se; kisi taraf $20 se kam ho to ±2 mahine milake; 0.5–2 tak; 0.8–1.25 se bahar ≈)${x[6]>0?` — ${pc(x[6])} revenue pe milan nahi mila, wahan app ka k laga (≈)`:''}${x[7]>0?`; ${pc(x[7])} revenue ke mahine abhi adhoore (AdMob ya GA4 ka poora mahina nahi) — unka k_c padosi poore mahino se liya (≈)`:''}.`);
+      :`Revenue = GA4 × is country ka apna AdMob milan (k_c = us country ka AdMob ÷ GA4, mahine ke hisaab se; kisi taraf $20 se kam ho to ±2 mahine milake; 0.5–2 tak; 0.8–1.25 se bahar ≈)${x[6]>0?` — ${pc(x[6])} revenue pe milan nahi mila (ya mahina abhi adhoora: AdMob / GA4 poora nahi), wahan app ka k laga (≈)`:''}.`);
+    if(ng) p.push(ng);
     if(cc!=='--'&&um.length) p.push(`GA4 ka kuch revenue bina country ka hai ("(not set)" + "(other)": kul ${pc(k.unp_all)}, kisi mahine sabse zyada ${pc(umax)}) — AdMob un users ko asli country me ginta hai, isliye k_c utna tak zyada ho sakta hai${ubig.length?`; ${N(ubig.length)} mahine ${pc(lim)} se zyada — un mahino wale row pe ≈`:''}.`);
     const tz=ok(g.tzh)?(g.tzh?`; Ads ka din GA4 ke din se ${Math.abs(g.tzh)} ghante ${g.tzh>0?'baad':'pehle'} shuru hota hai (Ads account ka time zone) — ek install din ka spend aur installs utne ghante khiske hue`:'; Ads aur GA4 ka din ek hi time zone me')
       :g.tzs>1?`; app ke Ads accounts ${N(g.tzs)} alag time zone me — Ads ka din GA4 ke din se kuch ghante alag`:'; Ads ka din Ads account ke time zone ka hai (yahan pata nahi) — GA4 ke din se kuch ghante alag ho sakta hai';

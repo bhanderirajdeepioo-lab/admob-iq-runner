@@ -108,6 +108,9 @@ def test_day_wise_past_d30(out):
     # last moved on; once through, a walk that stalled says how far every day was read (the newest columns wait for it)
     assert all(out["m_busy"]) and len(out["m_busy"]) == 7
     assert out["m_thru"] == [True] * 7
+    # q (the whole no-country read past D30): D31–D420 whole, GA4's no-install-day share past D420 as its measured size
+    # (never $0 when it is not), the days still on the cube's cells, drift; no q fields: the note as before
+    assert out["m_qnote"] == [True] * 9, out["m_qnote"]
 
 
 def test_countries_life_all(out):
@@ -534,7 +537,9 @@ def test_country_filter(out):
         assert nj["errShown"] and nj["retried"], (w, nj)                # error → "Try again" → read again, loaded
     # review fixes: a pack landing after the reader moved on never repaints the table on screen
     assert out["cc_late"] == [True, 0, True]
-    assert out["cc_q_new"] and out["cc_pick_sel"]                  # bits 32 / 64 said; one option selected
+    assert out["cc_q_new"] and out["cc_pick_sel"]                  # bit 64 said (32 gone); one option selected
+    # GA4: country not given (cd.ng): its total (signed), the matched months and the app-k months with their sums
+    assert out["cc_ng"] == [True] * 8, out["cc_ng"]
     # 🧩 Not split: D0 … D30 day by day like every country, its cells '—' (as the note says)
     assert out["cc_xx_cols"] == [35, "D1", "D2", "D30", False, True, True, True]
     assert all(out["cc_noq"]) and out["cc_to"] and all(out["cc_nocd"]) and all(out["cc_tz"])
