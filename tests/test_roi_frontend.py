@@ -49,10 +49,15 @@ def _zrow_cases(path):
     by = {}
     for c in cases:
         by.setdefault(c.pop("billed"), []).append(c)
+    # the build's own late info on a made-up cube whose loss past D420 is below a cent (the page must say "<$0.01")
+    from tests import test_roi_build as trb
+    root = os.path.join(os.path.dirname(path), "qcube")
+    P, co = trb._q_world(root, b=9995)
+    qlate = rb._late(root, "a~1", "222", P)["info"]
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"cd": {"thru": thru.isoformat(), "fthru": fthru.isoformat(), "geo": {"unk": unk, "billed": 1}},
                    "cases": by[1], "cd0": {"thru": thru.isoformat(), "fthru": fthru.isoformat(),
-                                           "geo": {"unk": unk, "billed": 0}}, "cases0": by[0]}, f)
+                                           "geo": {"unk": unk, "billed": 0}}, "cases0": by[0], "qlate": qlate}, f)
 
 
 @pytest.fixture(scope="module")
@@ -108,9 +113,12 @@ def test_day_wise_past_d30(out):
     # last moved on; once through, a walk that stalled says how far every day was read (the newest columns wait for it)
     assert all(out["m_busy"]) and len(out["m_busy"]) == 7
     assert out["m_thru"] == [True] * 7
-    # q (the whole no-country read past D30): D31–D420 whole, GA4's no-install-day share past D420 as its measured size
-    # (never $0 when it is not), the days still on the cube's cells, drift; no q fields: the note as before
-    assert out["m_qnote"] == [True] * 9, out["m_qnote"]
+    # q (the whole no-country read past D30): D31–D420 whole, GA4's no-install-day share past D420 and with no install
+    # day at all as measured sizes (never $0 when it is not), the days still on the cube's cells (waiting / for good,
+    # their "(other)" size), drift with its size and no cause claimed; no q fields: the note as before
+    assert out["m_qnote"] == [True] * 12, out["m_qnote"]
+    # the build's own sub-cent loss past D420 (roi_build._late on a made-up cube) → the page's "<$0.01", never "nothing"
+    assert out["m_qbuild"] == [True] * 3, out["m_qbuild"]
 
 
 def test_countries_life_all(out):
@@ -539,7 +547,7 @@ def test_country_filter(out):
     assert out["cc_late"] == [True, 0, True]
     assert out["cc_q_new"] and out["cc_pick_sel"]                  # bit 64 said (32 gone); one option selected
     # GA4: country not given (cd.ng): its total (signed), the matched months and the app-k months with their sums
-    assert out["cc_ng"] == [True] * 8, out["cc_ng"]
+    assert out["cc_ng"] == [True] * 9, out["cc_ng"]
     # 🧩 Not split: D0 … D30 day by day like every country, its cells '—' (as the note says)
     assert out["cc_xx_cols"] == [35, "D1", "D2", "D30", False, True, True, True]
     assert all(out["cc_noq"]) and out["cc_to"] and all(out["cc_nocd"]) and all(out["cc_tz"])

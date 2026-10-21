@@ -1193,18 +1193,28 @@ async function moreKeepAll(dc, packs) {
       !thn({ thru: '2026-10-13', till: '2026-10-13' }, '2026-10-12').includes('tak hi poora padha'),
       !thn({}, '2026-10-13').includes('tak hi poora padha'),
       U.lateNote({ newest: '2026-10-13', rows: [], late: { thru: '2026-09-28', till: '2026-10-13' } }).includes('28 Sep 26 tak hi')];
-    // the whole read past D30 (q): D31–D420 whole, what GA4 gave no install day past D420 (measured), the days still
-    // waiting, drift; without q fields the note as before
+    // the whole read past D30 (q): D31–D420 whole; on its whole weeks what GA4 gave no install day past D420 and none at
+    // all (measured, made-up sizes); the days still waiting and those on the cube for good, each with its "(other)" size;
+    // drift with its size and no cause claimed; without q fields the note as before
     const qnl = l => U.lateNote({ newest: '2026-10-13', rows: [[0, 0, 0, 0, null, 0, null, [], null, null, null, null, 0, 0, [1], 0]], late: l });
-    const qa = qnl({ oth: 40, omax: 0.3, ql: 57.6, qd: 812, qwait: 9, qneg: 2, qpos: 1, till: '2026-10-13', thru: '2026-10-13' });
-    out.m_qnote = [qa.includes(' D31–D420 whole: GA4 ka bina-country read, har din alag (isme "(other)" nahi aata) — 812 din; D420 ke baad $58 ka install din GA4 ne nahi diya — ye kisi row me nahi'),
-      qa.includes('≈ = 9 din abhi GA4 cube ke purane read pe'), qa.includes('3 hafte me poore read aur cube ke read ka jod alag aaya (dono read ke beech GA4 ne data badla; 1 me cube zyada) — use loss nahi gina.'),
-      !qa.includes('40 din me, sabse zyada'),
-      qnl({ oth: 40, omax: 0.3, ql: 0, qd: 812, qwait: 0, qneg: 0 }).includes('D420 ke baad kuch nahi chhoota.'),
+    const qa = qnl({ oth: 40, omax: 0.3, ql: 57.6, qn: 0.42, qd: 812, qwait: 9, qwu: 3.5, qfl: 4, qfu: 0.002, qshort: 1, qneg: 2, qpos: 1,
+      qdr: 12.4, till: '2026-10-13', thru: '2026-10-13' });
+    out.m_qnote = [qa.includes(' D31–D420 whole: GA4 ka bina-country read, har din alag — 812 din; in poore padhe hafton me D420 ke baad $58 ka install din GA4 ne nahi diya — ye kisi row me nahi (us hafte ke D420+ column wale row pe ≈); $0.42 ka install din GA4 ne kabhi diya hi nahi ("(not set)", kisi bhi umar) — ye bhi kisi row me nahi.'),
+      qa.includes(' ≈ = 9 din abhi GA4 cube ke purane read pe (GA4 ne $3.5 revenue "(other)" me daala) — poora read aane tak un din wale row pe ≈.'),
+      qa.includes(' ≈ = 4 din ka poora read bhi poora nahi aaya (GA4 ka flag / "(other)", ya 1 hafte me cube se kam install din) — ye din cube ke read pe hi rahenge (GA4 ne <$0.01 revenue "(other)" me daala); un din wale row pe ≈.'),
+      qa.includes(' 3 hafte me poore read aur cube ke read ka jod alag aaya (kul $12); 1 me cube zyada — wajah abhi pata nahi (dono read ke beech GA4 ka badlav, ya country wala read) — ise loss nahi gina; aise hafte me cube ka "(other)" kis umar ka hai pata nahi, isliye uske D420+ column wale row pe ≈.'),
+      !qa.includes('40 din me, sabse zyada') && !qa.includes('nahi aata') && !qa.includes('GA4 ne data badla') && !qa.includes('$0.00'),
+      qnl({ oth: 40, omax: 0.3, ql: 0, qd: 812, qwait: 0, qneg: 0 }).includes(' in poore padhe hafton me D420 ke baad kuch nahi chhoota.'),
       !qnl({ oth: 40, omax: 0.3, ql: 0, qd: 812, qwait: 0, qneg: 0, qpos: 0 }).includes('≈ =') && !qnl({ ql: 0, qd: 812, qwait: 0, qneg: 0, qpos: 0 }).includes('hafte me'),
-      qnl({ oth: 1, omax: 0.3, ql: 0.003, qd: 5, qwait: 0, qneg: 0 }).includes('D420 ke baad <$0.01 ka install din'),
+      qnl({ oth: 1, omax: 0.3, ql: 0.0023, qd: 5, qwait: 0, qneg: 0 }).includes('D420 ke baad <$0.01 ka install din'),
       qnl({ oth: 40, omax: 0.3 }).includes('≈ = D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)") — 40 din me'),
-      !qnl({ oth: 40, omax: 0.3, ql: 0, qd: 0, qwait: 40, qneg: 0 }).includes('D31–D420 whole') && qnl({ oth: 40, omax: 0.3, ql: 0, qd: 0, qwait: 40, qneg: 0 }).includes('≈ = 40 din abhi')];
+      !qnl({ oth: 40, omax: 0.3, ql: 0, qd: 0, qwait: 40, qneg: 0 }).includes('D31–D420 whole') && qnl({ oth: 40, omax: 0.3, ql: 0, qd: 0, qwait: 40, qneg: 0 }).includes('≈ = 40 din abhi'),
+      qnl({ qd: 3, qwait: 2, qwu: 0, qn: 0 }).includes('(GA4 ne kuch revenue "(other)" me daala)') && !qnl({ qd: 3, qn: 0 }).includes('(not set)'),
+      qnl({ qd: 3, qneg: 1, qdr: 0 }).includes(' 1 hafte me poore read aur cube ke read ka jod alag aaya — wajah abhi pata nahi') && !qnl({ qd: 3, qneg: 1 }).includes('isliye uske D420+')];
+    // the build's own late info (tests/test_roi_frontend.py: roi_build._late on a made-up cube with a loss past D420
+    // below a cent): the page says "<$0.01", never "kuch nahi chhoota"
+    const qz = process.argv[3] ? JSON.parse(require('fs').readFileSync(process.argv[3], 'utf8')).qlate : null;
+    out.m_qbuild = qz ? [qz.ql > 0 && qz.ql < 0.005, qnl(qz).includes('D420 ke baad <$0.01 ka install din GA4 ne nahi diya'), !qnl(qz).includes('kuch nahi chhoota')] : null;
     // q bit 4: a flagged late block
     const dmq = JSON.parse(JSON.stringify(dm)); dmq.rows[dmq.rows.length - 1][12] = 4;
     out.m_q4 = U.cohortTable(dmq).includes('D30 ke baad GA4 ke report pe data loss / thresholding / sampling ka flag tha — asli kamai thodi alag (kam ya zyada) ho sakti hai')
@@ -1450,13 +1460,17 @@ async function moreKeepAll(dc, packs) {
       '2025-12': [40, 0.2, 'app'], '2026-01': [20, 0.18, 'app'], '2026-10': [9.75, 0.3, 'app'] }, usd: 61, all: 1220, rel: 0.05 };
     const ngn = c => U.ccNote(appFile(), Object.assign(cdx(), { ng: c }), dc.cd.c[0]);
     const ng1 = ngn(ngd);
-    out.cc_ng = [ng1.includes('<b>GA4 ne country nahi di</b>: +$61 (+5.0%) = All countries − sab country rows, mahine wise —'),
+    out.cc_ng = [ng1.includes('<b>Country not given (GA4)</b>: +$61 (+5.0%) = All countries − sab country rows, mahine wise —'),
       ng1.includes(' Jul 2026 – Sep 2026: AdMob country report se matched (−$8.8)'),
       ng1.includes('; Dec 2025 – Jan 2026, Oct 2026: GA4 × app ka k — ye hissa (+$70) kisi country row me nahi.'),
-      !ngn(undefined).includes('GA4 ne country nahi di'), !ngn({ m: {}, usd: 0 }).includes('GA4 ne country nahi di'),
+      !ngn(undefined).includes('Country not given'), !ngn({ m: {}, usd: 0 }).includes('Country not given'),
       ngn({ m: { '2026-10': [-2, 0.3, 'app'] }, usd: -2, all: 100, rel: -0.02 }).includes(': −$2.0 (−2.0%) = All countries'),
       !ngn(ngd).includes('kisi country row me nahi.;'),
-      !U.ccNote(appFile(), Object.assign(cdx(), { ng: ngd }), ['XX', null, 12, null, 1, null, null]).includes('GA4 ne country nahi di')];
+      !U.ccNote(appFile(), Object.assign(cdx(), { ng: ngd }), ['XX', null, 12, null, 1, null, null]).includes('Country not given'),
+      // a measured gap below a cent (the build keeps it to the micro): '<$0.01' with its sign, never '$0.00'
+      ((t) => t.includes('<b>Country not given (GA4)</b>: +<$0.01 (+<0.1%)') && t.includes('Sep 2026: AdMob country report se matched (−<$0.01)')
+        && t.includes('Oct 2026: GA4 × app ka k — ye hissa (+<$0.01) kisi country row me nahi.') && !t.includes('$0.00'))(
+        ngn({ m: { '2026-09': [-0.002, 0.01, 'own'], '2026-10': [0.003, 0.3, 'app'] }, usd: 0.001, all: 100, rel: 0.00001 }))];
     // the picker: a chip's country picked → the list shows "More countries ▾" (one option selected, never the chip's)
     U.setCTY('AA');
     const pa = U.ccPick(dc.cd);

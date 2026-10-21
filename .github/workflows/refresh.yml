@@ -149,6 +149,12 @@ jobs:
           # as without them) without a code push; GA4_CUBE_BUDGET_SEC = its seconds per build (empty: 150)
           GA4_CUBE:             ${{ vars.GA4_CUBE || 'true' }}
           GA4_CUBE_BUDGET_SEC:  ${{ vars.GA4_CUBE_BUDGET_SEC }}
+          # Its whole no-country day read (q, ages 31-420): GA4_CUBE_Q_CALLS = the history fill's calls a build (empty:
+          # 120; 0 = q off: no read, the columns from the cube's own cells as before), GA4_CUBE_Q_SEC = its seconds a
+          # build (empty: 20, inside the budget above), GA4_CUBE_Q_USE=false = reads go on, the page ignores them
+          GA4_CUBE_Q_CALLS:     ${{ vars.GA4_CUBE_Q_CALLS }}
+          GA4_CUBE_Q_SEC:       ${{ vars.GA4_CUBE_Q_SEC }}
+          GA4_CUBE_Q_USE:       ${{ vars.GA4_CUBE_Q_USE || 'true' }}
           ROI_TAB:              ${{ vars.ROI_TAB || 'true' }}
           # 🔮 Forecast engine (inside the ROI section): vd = the forecast tournament's winner (default); FORECAST_ENGINE=v0
           # (repo variable) rolls back to the earlier engine without a code push (each app re-made by it within a day)

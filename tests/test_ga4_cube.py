@@ -20,9 +20,12 @@ be read (read again from its first day, never written over), at most two months 
 final now dropped, flagged days kept apart from measured loss, turns on a property (a backfill never starves a light
 app), the run over properties with a counts-only line, and the build hook (off: nothing read, written or printed).
 q (the whole no-country read of a day, ages 31 … 420): its request and age edges, "fl" (an empty q) on anything not
-whole, a new final day and the hot days read in the same run, a Stop keeping the fold and the q days read, the app's
-call cap ending it quietly, the history queue (lossy months first) and the run's Q_CALLS cap, the second round (lossy
-apps first), q files never taken for months and never touched by the repair, the counts in the log and the state."""
+whole ("(other)", GA4's flags) while rows GA4 gave no install day ("(not set)", after the day) are their size ("qn", the
+day "ok"), a new final day and the hot days read in the same run, a Stop keeping the fold and the q days read, the
+app's call cap ending it quietly, any other error ending q for the app (counted, never the app's run), days of nothing
+never read, the history queue (lossy months first), the run's Q_CALLS and Q_SEC caps, the second round (lossy apps
+first), an app not scanned yet counted apart, q files never taken for months and never touched by the repair, the
+counts in the log and the state."""
 import copy
 import gzip
 import json
@@ -1358,8 +1361,9 @@ def test_repair_of_a_month_whose_file_is_gone_moves_on(tmp_path):
 
 
 # ── the run and the build hook ──────────────────────────────────────────────────────────────────────────────────────
-def _refresh(monkeypatch, tmp_path, stop_after=None, apps=None):
-    data = str(tmp_path)
+def _refresh(monkeypatch, tmp_path, stop_after=None, apps=None, tick=None, workers=cu.WORKERS):
+    """refresh_all over two made-up properties; tick: seconds each GA4 call takes on a fake clock (None: the real one)."""
+    data, clk = str(tmp_path), [0.0]
     route = {"property_id": "111", "stream_id": "222", "owner": "o"}
     monkeypatch.setattr(cu.gu, "load_state", lambda d: {"routes": {"by_package": {"com.example.alpha": route,
                                                                                   "com.example.beta": dict(route, property_id="112")}},
@@ -1370,11 +1374,16 @@ def _refresh(monkeypatch, tmp_path, stop_after=None, apps=None):
     class A(FakeGA):
         def __init__(self, token, pid, sid, prop, over=None, max_calls=cu.MAX_CALLS):
             super().__init__(start=date(2026, 8, 1), stop_after=stop_after)
+
+        def report_all(self, *a, **k):
+            clk[0] += tick or 0
+            return super().report_all(*a, **k)
     monkeypatch.setattr(cu.gf, "App", A)
     cfg = {"client_id": "c", "client_secret": "s", "refresh_tokens": json.dumps({"o": "rt"})}
     apps = apps or [{"app_id": "x~1", "package": "com.example.alpha"}, {"app_id": "x~2", "package": "com.example.beta"},
                     {"app_id": "x~3", "package": "com.example.none"}]
-    return data, cu.refresh_all(cfg, data, apps, NOW)
+    return data, cu.refresh_all(cfg, data, apps, NOW, clock=(lambda: clk[0]) if tick is not None else None,
+                                workers=workers)
 
 
 def test_refresh_all_files_and_counts_only(monkeypatch, tmp_path):
@@ -1464,7 +1473,7 @@ def test_build_hook_switch(tmp_path, monkeypatch, capsys):
     assert calls == [60] and [ln for ln in err.splitlines() if ln.startswith("ga4 cube")] == [
         "ga4 cube: apps 2, with GA4 0, fetched 1, fresh 0, failed 0, deferred 0, waiting 0, days folded 0, split 0, "
         "deeper 0, capped 0, hidden 0, futile 0, loss 0, flagged 0, months read again 0, repair days 0, "
-        "months repaired 0, q days 0, q flagged 0, q calls 0, q left 0, calls 0, tokens 0"]
+        "months repaired 0, q days 0, q flagged 0, q calls 0, q left 0, q unscanned 0, q errors 0, calls 0, tokens 0"]
     monkeypatch.setattr(cu, "refresh_all", lambda *a, **k: 1 / 0)
     dash = tub.dashboard()
     ub.run_uninstall(dash, data, out, tub.ga4_settings(ga4_cube=True), now=tub.NOW)
@@ -1536,19 +1545,35 @@ def test_q_read_ages_and_shape():
     X = lambda L: (D - timedelta(days=L)).isoformat()                       # noqa: E731
     assert got["q"] == {X(31): {"1": 32}, X(60): {"1": 61}, X(61): {"2": 62}, X(420): {"13": 421}}
     assert got["qt"] == sum(L + 1 for L in ages if L <= 420) and got["qs"] == "ok" and got["qr"] == len(ages)
+    assert got["qn"] == 0 and got["qx"] == 427                              # the oldest age GA4 returned: kept
     assert cu.QJ == 13 and cu.QL == 420 and cu.bucket(cu.QL) == cu.QJ and cu.bucket(cu.QL + 1) == cu.QJ + 1
 
 
 def test_q_read_not_whole_is_flagged_empty():
     D = date(2026, 9, 30)
     base = [_qrow(D, 40, 0.5), _qrow(D, 3, 0.25)]
-    for rows, meta, cut in (([_qrow(D, 0, 0.1, "(other)")], {}, False), ([_qrow(D, 0, 0.1, "(not set)")], {}, False),
-                            ([_qrow(D, -1, 0.1)], {}, False), ([], {"dataLossFromOtherRow": True}, False),
+    for rows, meta, cut in (([_qrow(D, 0, 0.1, "(other)")], {}, False), ([], {"dataLossFromOtherRow": True}, False),
                             ([], {"samplingMetadatas": [{"samplesReadCount": "1"}]}, False),
                             ([], {"subjectToThresholding": True}, False), ([], {}, True)):
         got = cu.q_read(QGA(base + rows, meta, cut), D)
         assert got["qs"] == "fl" and got["q"] == {} and got["qr"] == len(base + rows), (rows, meta, cut)
     assert cu.q_read(QGA(base), D)["qs"] == "ok"
+
+
+def test_q_read_rows_without_an_install_day_are_their_size_never_fl():
+    """GA4's "(not set)" install day (or one not a date, or after the day) is a real row of a whole read — not a fold:
+    kept out of q and qt as "qn" (its micros), the day still "ok" (a 1-micro one too: it never costs a week its q)."""
+    D, X40 = date(2026, 9, 30), (date(2026, 9, 30) - timedelta(days=40)).isoformat()
+    base = [_qrow(D, 40, 0.5), _qrow(D, 3, 0.25)]
+    for extra, qn in (([_qrow(D, 0, 0.000001, "(not set)")], 1),
+                      ([_qrow(D, 0, 0.1, "(not set)"), _qrow(D, 0, 0.2, "junk"), _qrow(D, -1, 0.05)], 350000)):
+        got = cu.q_read(QGA(base + extra), D)
+        assert got["qs"] == "ok" and got["qn"] == qn and got["qt"] == 750000 and got["q"] == {X40: {"1": 500000}}
+        assert got["qx"] == 40 and got["qr"] == len(base + extra)
+    # the cube's own read of such a day books the same row as its loss (no install day): q's qn is that row
+    ga = FakeGA(notset_day=D)
+    got = cu.q_read(ga, D)
+    assert got["qs"] == "ok" and got["qn"] == 500000 and got["qt"] == day_total(FakeGA(), D)
 
 
 def _qday_want(D, max_lag=120, start=HS, fill=1.0):
@@ -1719,12 +1744,102 @@ def test_q_in_the_run_two_rounds_counts_and_files(monkeypatch, tmp_path):
     assert c["q_left"] == 2 * 71 - 2 * cu.Q_FWD - 20
     st = cu.load_state(data)["fetch"]
     assert sum(st[a]["q"]["d"] for a in ("x~1", "x~2")) == c["q_days"]
-    assert all(set(st[a]["q"]) == {"d", "c", "fl", "left"} for a in ("x~1", "x~2"))
+    assert all(set(st[a]["q"]) == {"d", "c", "fl", "err", "left"} for a in ("x~1", "x~2"))
     names = sorted(os.listdir(cu.app_dir(data, "x~1")))
     assert "2026-08.q.json.gz" in names and [k for k, _ in cu.months(data, "x~1", "222")] == ["2026-08", "2026-09",
                                                                                                 "2026-10"]
     h = cu.load_head(data, "x~1")
     assert all(h["d"][k]["qs"] == "ok" for k in h["d"]) and h["qh"]["p"][0] > "2026-08-07"
     line = cu.log_line(out)
-    assert ", q days %d, q flagged 0, q calls %d, q left %d, calls " % (c["q_days"], c["q_calls"], c["q_left"]) in line
+    assert ", q days %d, q flagged 0, q calls %d, q left %d, q unscanned 0, q errors 0, calls " % (
+        c["q_days"], c["q_calls"], c["q_left"]) in line
     assert "example" not in line and "x~" not in line
+
+
+def test_q_days_of_nothing_are_never_read(monkeypatch):
+    """A folded day with no revenue, no loss and no GA4 flag (before the app's first user): never pending, never queued,
+    never read — its whole read would be empty too (the build takes such a day as whole). A flagged empty day is read."""
+    monkeypatch.setattr(cu, "Q_CALLS", 0)
+    cube = cu.Cube(None, "a~1", "222")
+    cu.step_app(FakeGA(start=date(2026, 8, 1)), cube, TODAY, HS, NOW)      # June, July: no row at all
+    assert cube.month("2026-07")["days"]["2026-07-15"]["t"] == 0 and not cu.q_need(cube.month("2026-07")["days"]["2026-07-15"])
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    assert cu.q_scan(cube, NOW) is True
+    assert [e[0] for e in cube.head["qh"]["todo"]] == ["2026-10", "2026-09", "2026-08"] and cube.q_left() == 71
+    ga = FakeGA(start=date(2026, 8, 1))
+    assert cu.q_fill(ga, cube, NOW, lambda: True) == ga.calls == 71
+    assert cube.q_has("2026-08-01") and not cube.q_has("2026-07-31") and not cube.q_has("2026-06-01")
+    c2 = cu.Cube(None, "a~1", "222")                                         # the fold: only a day that needs one
+    empty = cu._rec(cu._new(), "block", 0, "t")
+    c2.fold(date(2026, 7, 5), empty)
+    c2.fold(date(2026, 7, 6), dict(empty, fl=1))
+    c2.fold(date(2026, 7, 7), dict(empty, t=1))
+    assert c2.head["qh"]["p"] == ["2026-07-06", "2026-07-07"]
+    hot = {"2026-10-12": dict(empty), "2026-10-13": dict(empty, t=5)}       # a hot day of nothing: no q read either
+    c2.head["d"], c2.head["qh"]["p"] = hot, []
+    ga = FakeGA()
+    assert cu.q_fwd(ga, c2, NOW, sorted(hot)) is True and ga.calls == 1
+    assert "qs" not in hot["2026-10-12"] and hot["2026-10-13"]["qs"] == "ok"
+
+
+def test_q_an_error_never_fails_the_app_and_is_counted(tmp_path, monkeypatch):
+    """A q read failing with anything but a Stop (a GA4 5xx past its retry): q ends for that app this run (counted, the
+    day it was on stays pending), never the app's run; the history fill the same (counted, nothing lost)."""
+    data = str(tmp_path)
+    cube = cu.Cube(data, "a~1", "222")
+    cu.step_app(FakeGA(), cube, TODAY, HS, NOW)
+    _save(cube)
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+
+    def boom(ga, D):
+        raise RuntimeError("a GA4 error")
+    monkeypatch.setattr(cu, "q_read", boom)
+    nxt = TODAY + timedelta(days=1)
+    cube = cu.Cube(data, "a~1", "222")
+    assert cu.step_app(FakeGA(today=nxt), cube, nxt, HS, NOW + timedelta(days=1)) == "fetched"
+    assert cube.q_err == 1 and cube.q_halt and cube.head["qh"]["p"] == ["2026-10-11"]
+    assert all("qs" not in cube.head["d"][k] for k in ("2026-10-12", "2026-10-13", "2026-10-14"))
+    assert cu.q_fill(FakeGA(), cube, NOW, lambda: True) == 0 and cube.q_err == 1     # ended for this run
+    c2 = cu.Cube(None, "a~1", "222")
+    c2.head["qh"] = {"p": ["2026-09-01", "2026-09-02"]}
+    assert cu.q_fill(FakeGA(), c2, NOW, lambda: True) == 0 and c2.q_err == 1 and c2.head["qh"]["p"] == ["2026-09-01",
+                                                                                                         "2026-09-02"]
+
+
+def test_q_errors_in_the_run_counted_never_a_failed_app(monkeypatch, tmp_path):
+    monkeypatch.setattr(cu, "Q_CALLS", 20)
+
+    def boom(ga, D):
+        raise RuntimeError("a GA4 error")
+    monkeypatch.setattr(cu, "q_read", boom)
+    data, out = _refresh(monkeypatch, tmp_path)
+    c = out["counts"]
+    assert out["apps"] == {"x~1": "fetched", "x~2": "fetched"}
+    assert c["failed"] == 0 and c["q_errors"] == 2 and c["q_days"] == 0
+    st = cu.load_state(data)["fetch"]
+    assert all(st[a]["q"]["err"] == 1 and not st[a].get("fail") for a in ("x~1", "x~2"))
+    assert ", q errors 2, calls " in cu.log_line(out)
+
+
+def test_q_round_ends_at_its_seconds(monkeypatch, tmp_path):
+    """The history fill gets at most Q_SEC seconds a run (from the end of every app's walk and hot days): a run never
+    much longer for it, whatever Q_CALLS allows."""
+    monkeypatch.setattr(cu, "Q_CALLS", 500)
+    monkeypatch.setattr(cu, "Q_SEC", 10.0)
+    data, out = _refresh(monkeypatch, tmp_path, tick=0.5, workers=1)        # every GA4 call half a second
+    c = out["counts"]
+    assert c["q_days"] == 2 * (3 + cu.Q_FWD) + 20                            # the fill: 10 s ÷ 0.5 s
+    assert c["q_left"] == 2 * 71 - 2 * cu.Q_FWD - 20 and c["q_unscanned"] == 0
+
+
+def test_q_an_app_not_scanned_is_counted_apart(monkeypatch, tmp_path):
+    """No time left for the second round: no app's queue made — "q unscanned" says so, "q left" never counts them as 0
+    days left (the private state: left None)."""
+    monkeypatch.setattr(cu, "Q_CALLS", 20)
+    monkeypatch.setattr(cu, "Q_SEC", 0.0)
+    data, out = _refresh(monkeypatch, tmp_path)
+    c = out["counts"]
+    assert c["q_unscanned"] == 2 and c["q_left"] == 0 and c["q_days"] == 2 * (3 + cu.Q_FWD)
+    st = cu.load_state(data)["fetch"]
+    assert all(st[a]["q"]["left"] is None for a in ("x~1", "x~2"))
+    assert ", q left 0, q unscanned 2, q errors 0, " in cu.log_line(out)

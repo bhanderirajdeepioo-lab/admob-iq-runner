@@ -22,8 +22,12 @@ country part's time never in the forecast's budget.
 The whole read past D30 (fetch.ga4_cube q): a week inside a month on q only when every day of it is (j ≤ 13 from q, j ≥
 14 from the cube's cells; one day missing or "fl": the whole week on the cube), the D60 / D90 / D180 columns equal to
 the install-day checkpoints when the cube kept 0.8 of it, a hot day with / without its q, ql (loss past age 420, exact)
-and qneg (drift), ≈ bit 2 only where a row still carries loss, without q files the build as before; no borrowed k_c
-(a month not whole: the app's k); GA4: country not given per month (cd.ng = All − Σ countries).
+and qneg / qpos (drift: its size, never loss — never young loss turned into loss past 420), a loss below a cent kept
+to the micro, rows GA4 gave no install day as their own size (qn: never costing a week its q), a read naming fewer
+install days than the cube kept staying on the cube (qshort), the days waiting (qwait) apart from those on the cube for
+good (qfl), each with its "(other)" size, ≈ bits 2 / 4 only where a row still takes the cube's cells, days of nothing
+needing no read, without q files — or q off / not used — the build as before; no borrowed k_c (a month not whole: the
+app's k); GA4: country not given per month (cd.ng = All − Σ countries).
 """
 import gzip
 import json
@@ -1282,11 +1286,15 @@ QX1 = QTODAY - timedelta(days=90)                       # a young install day: i
 QR = [2.0, 4.0, 8.0, 16.0, 30.0, 62.0, 62.6, 63.2, 65.0, 68.7]   # checkpoints = the WHOLE revenue: +$0.6 every 30 days
 
 
-def _q_world(root, b=8000, w=10000, q=True, skip=(), fl=(), hot_q=True, more=None):
+def _q_world(root, b=8000, w=10000, q=True, skip=(), fl=(), hot_q=True, more=None, nset=None, drop=None, cfl=(),
+             nothing=()):
     """Two install days (QHS, QX1) earning `w` GA4 micros a day at every age ≥ 31 (whole: $0.01, × k 2 = $0.02); the
     cube's cells keep `b` of it, the rest is the day's "(other)" loss (the cube's t holds it); every day QHS … today − 3
-    folded, the last 3 hot. q (whole: `w` an install day at ages ≤ 420, + more[day] on its qt) on every folded day but
-    `skip` (`fl`: read, flagged — an empty q), on the hot days when hot_q."""
+    folded, the last 3 hot (days before QHS + 31: nothing at all). q (whole: `w` an install day at ages ≤ 420, +
+    more[day] on its qt) on every folded day but `skip` (`fl`: read, flagged — an empty q), on the hot days when hot_q.
+    nset {day: micros}: a row GA4 gave no install day ("(not set)") — the cube's loss, q's "qn"; drop {day: {X}}: install
+    days q's read does not name (a window that shrank); cfl: days the cube's read was flagged (thresholding …);
+    nothing: days GA4 had no row at all (no revenue, no loss)."""
     from admob_iq.fetch import ga4_cube as cu
     P = _P(QHS, QTODAY - timedelta(days=6))
     P["xs"] = {X: dict(P["xs"][X], R=list(QR), Rr=list(QR)) for X in (QHS, QX1)}
@@ -1298,17 +1306,19 @@ def _q_world(root, b=8000, w=10000, q=True, skip=(), fl=(), hot_q=True, more=Non
         k, W, bb, qq, t, qt = D.isoformat(), _mon(D).isoformat(), {}, {}, 0, (more or {}).get(D, 0)
         for X in (QHS, QX1):
             L = (D - X).days
-            if L < 31:
+            if L < 31 or D in nothing:
                 continue
             j = str(cu.bucket(L))
             bb[X.isoformat()] = {j: {W: b}}
             t += w
-            if L <= cu.QL:
+            if L <= cu.QL and X not in (drop or {}).get(D, ()):
                 qq[X.isoformat()] = {j: w}
                 qt += w
-        rec = {"st": "loss" if t > b * len(bb) else "ok", "rows": len(bb), "loss": t - b * len(bb), "t": t, "fl": 0,
-               "via": "block", "at": "2026-10-13T06:00:00Z", "b": bb, "c": {}, "e": {}}
-        got = {"q": {} if D in fl else qq, "qt": qt, "qs": "fl" if D in fl else "ok", "qr": len(bb)}
+        ns = (nset or {}).get(D, 0)
+        t += ns
+        rec = {"st": "loss" if t > b * len(bb) else "ok", "rows": len(bb) + bool(ns), "loss": t - b * len(bb), "t": t,
+               "fl": int(D in cfl), "via": "block", "at": "2026-10-13T06:00:00Z", "b": bb, "c": {}, "e": {}}
+        got = {"q": {} if D in fl else qq, "qt": qt, "qn": ns, "qs": "fl" if D in fl else "ok", "qr": len(bb) + bool(ns)}
         if D >= hot_from:
             if hot_q:
                 rec.update(q=cu._qw(got["q"], k), qt=got["qt"], qs=got["qs"], qr=got["qr"])
@@ -1343,20 +1353,22 @@ def test_q_whole_weeks_give_the_checkpoints(tmp_path):
     y = by[QX1]                                          # its D90 column ends on the hot days: their q (same run)
     assert y["m"] == pytest.approx([62.6, 63.2], abs=1e-4) and y["mf"] == 1 and not y["qo"]
     old = (QTODAY - (QHS + timedelta(days=rb.gcu.QL + 1))).days + 1       # days of QHS past age 420 (each 0.2 × $0.02)
-    assert late["info"]["ql"] == round(old * 0.004, 2) and late["info"]["qd"] == (QTODAY - QHS).days + 1
-    assert late["info"]["qwait"] == 0 and late["info"]["qneg"] == late["info"]["qpos"] == 0 and late["info"]["oth"] > 0
+    assert late["info"]["ql"] == pytest.approx(old * 0.004, abs=1e-8) and late["info"]["qd"] == (QTODAY - QHS).days + 1
+    assert late["info"]["qwait"] == late["info"]["qfl"] == late["info"]["qshort"] == 0 and late["info"]["oth"] > 0
+    assert late["info"]["qneg"] == late["info"]["qpos"] == 0 and late["info"]["qdr"] == late["info"]["qn"] == 0
     assert r["qo"] == 2                                  # its columns past D420 still carry loss (ql > 0 there)
     # the same cube without any q: every column from the cube's cells (0.8 of it), as before
     P0, co0 = _q_world(tmp_path / "b", q=False, hot_q=False)
     late0, by0 = _qrows(tmp_path / "b", P0, co0)
     assert by0[QHS]["m"] == pytest.approx([62 + 0.48 * j for j in range(1, 21)], abs=1e-4)
     assert by0[QX1]["m"] == pytest.approx([62.48, 62.96], abs=1e-4) and by0[QX1]["qo"] == 2
-    assert not any(f in late0["info"] for f in ("ql", "qd", "qwait", "qneg", "qpos"))
+    assert not any(f.startswith("q") for f in late0["info"])
 
 
 def test_q_one_day_missing_puts_its_whole_week_on_the_cube(tmp_path):
     """A week inside a month is on q only when every day of it is (read and "ok"): one day not read (or "fl") — the
-    whole week from the cube's cells, its loss still marked; a hot day with / without its q."""
+    whole week from the cube's cells, its loss still marked: waiting for its read ("qwait", its size "qwu"), or — an
+    "fl" read, never read again — on the cube for good ("qfl", "qfu"); a hot day with / without its q."""
     miss = date(2025, 6, 11)                             # a Wednesday: Jun 9 … 15, QHS ages 159 … 165 (bucket 5)
     for kind in ("skip", "fl"):
         root = tmp_path / kind
@@ -1365,7 +1377,9 @@ def test_q_one_day_missing_puts_its_whole_week_on_the_cube(tmp_path):
         r = by[QHS]
         assert r["m"][:4] == pytest.approx([62.6, 63.2, 63.8, 64.4], abs=1e-4)
         assert r["m"][4] == pytest.approx(65.0 - 7 * 0.004, abs=1e-4)       # 7 days of bucket 5 at 0.8
-        assert late["info"]["qwait"] == 7 and late["info"]["qd"] == (QTODAY - QHS).days + 1 - 7
+        wait, held = ("qwait", "qfl") if kind == "skip" else ("qfl", "qwait")
+        assert late["info"][wait] == 7 and late["info"][held] == 0 and late["info"]["qd"] == (QTODAY - QHS).days + 1 - 7
+        assert late["info"]["qwu" if kind == "skip" else "qfu"] == pytest.approx(7 * 2000 * 2 / 1e6)
         # ≈ (bit 2) only where the row still carries loss: through D420 the skipped week; past it, ql's weeks
         lo = QHS + timedelta(days=31)
         assert late["q"](lo, QHS + timedelta(days=180), 5) == 2 and late["q"](lo, QHS + timedelta(days=150), 4) == 0
@@ -1390,25 +1404,27 @@ def test_q_loss_past_420_and_drift(tmp_path):
     up = {D: 5000 for D in wk}                                                # q read later: more than the cube
     P, co = _q_world(tmp_path / "a", more=up)
     late, by = _qrows(tmp_path / "a", P, co)
-    assert late["info"]["qneg"] == 1 and late["info"]["ql"] == round(old * 0.004, 2)
+    assert late["info"]["qneg"] == 1 and late["info"]["ql"] == pytest.approx(old * 0.004, abs=1e-8)
+    assert late["info"]["qdr"] == pytest.approx(7 * 5000 * 2 / 1e6)          # its size: said, never loss
     assert by[QHS]["m"][1] == pytest.approx(63.2, abs=1e-4)                  # the cells: q's (its qt is a total only)
     down = {wk[2]: -3000}                                                     # 3000 micros nobody's install day
     P, co = _q_world(tmp_path / "b", more=down)
     late, _ = _qrows(tmp_path / "b", P, co)
-    assert late["info"]["ql"] == round(old * 0.004 + 3000 * 2 / 1e6, 2) and late["info"]["qneg"] == 0
+    assert late["info"]["ql"] == pytest.approx(old * 0.004 + 3000 * 2 / 1e6, abs=1e-8) and late["info"]["qneg"] == 0
     tiny = {wk[2]: -1}                                                        # a micro: rounding, never loss
     P, co = _q_world(tmp_path / "c", more=tiny)
     late, _ = _qrows(tmp_path / "c", P, co)
-    assert late["info"]["ql"] == round(old * 0.004, 2) and late["info"]["qneg"] == 0
+    assert late["info"]["ql"] == pytest.approx(old * 0.004, abs=1e-8) and late["info"]["qneg"] == 0
     # a cube that lost nothing (b = whole) but read more than q on one week: never "no install day" (ql 0) — drift
     P, co = _q_world(tmp_path / "d", b=10000, more=down)
     late, _ = _qrows(tmp_path / "d", P, co)
     assert late["info"]["ql"] == 0 and late["info"]["qpos"] == 1 and late["info"]["qneg"] == 0
+    assert late["info"]["qdr"] == pytest.approx(3000 * 2 / 1e6)
     assert late["info"]["oth"] == 0 and late["info"]["qwait"] == 0
     # a hot day's q read a moment after its cube read holds more (GA4 still adds to it): neither loss nor drift
     P, co = _q_world(tmp_path / "e", more={QTODAY: 5000})
     late, _ = _qrows(tmp_path / "e", P, co)
-    assert late["info"]["qneg"] == late["info"]["qpos"] == 0 and late["info"]["ql"] <= round(old * 0.004, 2)
+    assert late["info"]["qneg"] == late["info"]["qpos"] == 0 and late["info"]["ql"] <= old * 0.004 + 1e-8
 
 
 def test_q_files_never_change_a_build_without_them(tmp_path):
@@ -1420,6 +1436,113 @@ def test_q_files_never_change_a_build_without_them(tmp_path):
             lo, hi = X + timedelta(days=31), X + timedelta(days=30 * (len(r["m"]) + 1))
             assert late["q"](lo, hi, len(r["m"])) == late["q"](lo, hi) == r["qo"]
     assert set(late["info"]) == {"days", "oth", "omax", "loss", "from", "till", "thru"}
+
+
+def test_q_off_or_not_used_is_the_build_without_q(tmp_path, monkeypatch):
+    """GA4_CUBE_Q_CALLS=0 (q off) or GA4_CUBE_Q_USE=false (reads go on, the page ignores them): q files and hot q on
+    disk change nothing — B, every bit and the info exactly as without any q (a rollback that deletes no data)."""
+    P0, co0 = _q_world(tmp_path / "b", q=False, hot_q=False)
+    late0, by0 = _qrows(tmp_path / "b", P0, co0)
+    P, co = _q_world(tmp_path / "q")
+    for name, val in (("Q_CALLS", 0), ("Q_USE", False)):
+        with monkeypatch.context() as m:
+            m.setattr(rb.gcu, name, val)
+            late, by = _qrows(tmp_path / "q", P, co)
+        assert late["B"] == late0["B"] and late["info"] == late0["info"], name
+        assert {X: (r.get("m"), r.get("qo")) for X, r in by.items()} == {X: (r.get("m"), r.get("qo")) for X, r in
+                                                                          by0.items()}, name
+    late, _ = _qrows(tmp_path / "q", P, co)                                   # on (the default): q used
+    assert late["B"] != late0["B"] and "qd" in late["info"]
+
+
+def test_q_rows_without_an_install_day_are_their_size(tmp_path):
+    """q's "(not set)" rows (no install day at all, any age — the cube books them as loss) never cost a week its q (a
+    1-micro one either): their size is "qn" (in no row, × k), ql (past age 420) stays the cube's "(other)" there, and no
+    row gets ≈ for them."""
+    old = (QTODAY - (QHS + timedelta(days=rb.gcu.QL + 1))).days + 1
+    wk = [date(2025, 3, 10) + timedelta(days=i) for i in range(7)]           # QHS ages 68 … 74 only
+    D = QHS + timedelta(days=31)
+    ns = {d: 700 for d in wk}
+    ns.update({D + timedelta(days=i): 1 for i in range(400)})                 # 1 micro on 400 days
+    P, co = _q_world(tmp_path / "n", b=10000, nset=ns)
+    late, by = _qrows(tmp_path / "n", P, co)
+    assert late["info"]["qd"] == (QTODAY - QHS).days + 1 and late["info"]["qwait"] == late["info"]["qfl"] == 0
+    assert late["info"]["qn"] == pytest.approx(sum(ns.values()) * 2 / 1e6) and late["info"]["ql"] == 0
+    assert late["info"]["qpos"] == late["info"]["qneg"] == 0
+    assert by[QHS]["m"][:13] == pytest.approx([62 + 0.6 * j for j in range(1, 14)], abs=1e-4) and not by[QHS]["qo"]
+    P, co = _q_world(tmp_path / "m", nset={d: 700 for d in wk})             # with the cube's own loss too
+    late, _ = _qrows(tmp_path / "m", P, co)
+    assert late["info"]["ql"] == pytest.approx(old * 0.004, abs=1e-8) and late["info"]["qn"] == pytest.approx(
+        7 * 700 * 2 / 1e6)
+
+
+def test_q_a_read_naming_fewer_install_days_stays_on_the_cube(tmp_path):
+    """A whole read whose window shrank (q names fewer install days than the cube kept, j ≤ 13): never on q — the
+    week from the cube's cells ("qshort"; its loss days "qfl", on the cube for good), never a 0 for the install days q
+    missed; a hot day the same (until its next read)."""
+    wk = [date(2025, 6, 9) + timedelta(days=i) for i in range(7)]            # QHS ages 159 … 165 (bucket 5)
+    P, co = _q_world(tmp_path / "s", drop={d: {QHS} for d in wk} | {QTODAY: {QX1}})
+    late, by = _qrows(tmp_path / "s", P, co)
+    assert by[QHS]["m"][4] == pytest.approx(65.0 - 7 * 0.004, abs=1e-4)      # the cube's 0.8, not q's 0
+    assert late["info"]["qshort"] == 1 and late["info"]["qfl"] == 7 and late["info"]["qpos"] == 0
+    assert late["info"]["qwait"] == 1                                         # the hot day: read again next round
+    assert by[QX1]["m"] == pytest.approx([62.6, 63.2 - 0.004], abs=1e-4) and by[QX1]["qo"] == 2
+    lo = QHS + timedelta(days=31)
+    assert late["q"](lo, QHS + timedelta(days=180), 5) == 2 and late["q"](lo, QHS + timedelta(days=150), 4) == 0
+
+
+def test_q_drift_never_turns_young_loss_into_loss_past_420(tmp_path):
+    """A week whose whole read holds LESS than the cube kept (drift, "qpos"): where the cube's loss sits that week is
+    not known — nothing added to ql (its size said as drift, "qdr"), its days ≈ past 420 (it lost something)."""
+    old = (QTODAY - (QHS + timedelta(days=rb.gcu.QL + 1))).days + 1
+    wk = [date(2026, 8, 24) + timedelta(days=i) for i in range(7)]           # QHS ~600 days old, QX1 ~40
+    P, co = _q_world(tmp_path / "a", b=9000)
+    base, _ = _qrows(tmp_path / "a", P, co)
+    assert base["info"]["ql"] == pytest.approx(old * 0.002, abs=1e-8)        # 1000 a day past 420 (QHS), × k 2
+    P, co = _q_world(tmp_path / "b", b=9000, more={d: -15000 for d in wk})
+    late, by = _qrows(tmp_path / "b", P, co)
+    assert late["info"]["ql"] == pytest.approx((old - 7) * 0.002, abs=1e-8) and late["info"]["qpos"] == 1
+    assert late["info"]["qdr"] == pytest.approx((7 * (1000 + 15000) - 7 * 2000) * 2 / 1e6)
+    assert late["q"](wk[0], wk[-1], 20) == 2                                  # a row whose ages there are all past 420
+
+
+def test_q_loss_below_a_cent_is_never_zero(tmp_path):
+    """A measured loss past D420 below $0.005 is written to the micro (never 0 while rows carry ≈ for it)."""
+    old = (QTODAY - (QHS + timedelta(days=rb.gcu.QL + 1))).days + 1
+    P, co = _q_world(tmp_path / "t", b=9995)
+    late, by = _qrows(tmp_path / "t", P, co)
+    assert 0 < late["info"]["ql"] < 0.005 and late["info"]["ql"] == pytest.approx(old * 5 * 2 / 1e6, abs=1e-8)
+    assert by[QHS]["qo"] == 2
+
+
+def test_q_flag_bit_only_where_the_row_uses_the_cubes_cells(tmp_path):
+    """≈ bit 4 (GA4 flagged the cube's read) on an All row only for a day whose cells the row takes from the cube: a
+    flagged day on a week read whole counts only for the row's ages past 420; on a week still on the cube, every age."""
+    young = date(2025, 3, 12)                                                 # QHS age 70: its D90 from q
+    P, co = _q_world(tmp_path / "a", b=10000, cfl={young})
+    late, by = _qrows(tmp_path / "a", P, co)
+    assert late["info"]["loss"] == 1 and not by[QHS]["qo"]
+    assert late["q"](QHS + timedelta(days=31), QHS + timedelta(days=90)) == 4  # the country rows: the cube's cells
+    P, co = _q_world(tmp_path / "b", b=10000, cfl={young}, skip={young})     # its week not on q: the cube's cells
+    late, by = _qrows(tmp_path / "b", P, co)
+    assert by[QHS]["qo"] == 4
+    past = QHS + timedelta(days=500)                                          # QHS age 500: always the cube's cells
+    P, co = _q_world(tmp_path / "c", b=10000, cfl={past})
+    late, by = _qrows(tmp_path / "c", P, co)
+    assert by[QHS]["qo"] == 4 and late["q"](QHS + timedelta(days=31), QHS + timedelta(days=420), 13) == 0
+
+
+def test_q_days_of_nothing_need_no_read(tmp_path):
+    """Days with no revenue, loss or flag (fetch.ga4_cube never reads them): their weeks still on q, exactly as when
+    each was read (an empty whole read)."""
+    zero = {date(2025, 2, 10), date(2025, 2, 11), date(2025, 2, 12)}         # inside the week Feb 10 … 16
+    P, co = _q_world(tmp_path / "z", nothing=zero, skip=zero)
+    late, by = _qrows(tmp_path / "z", P, co)
+    assert late["info"]["qd"] == (QTODAY - QHS).days + 1 and late["info"]["qwait"] == late["info"]["qfl"] == 0
+    P1, co1 = _q_world(tmp_path / "w", nothing=zero)
+    late1, by1 = _qrows(tmp_path / "w", P1, co1)
+    assert late["B"] == late1["B"] and late["info"] == late1["info"]
+    assert by[QHS]["m"][0] == pytest.approx(62.6 - 3 * 0.02, abs=1e-4)
 
 
 def test_country_not_given_per_month(tmp_path):

@@ -18,7 +18,8 @@ k the tab uses):
        GA4 gave no install day: ages ≤ 420 on a week not read whole yet, past 420 on a week with loss there),
        spi (spend as billed), and — only on a row that has them — m (cumulative revenue at day 60, 90, 120 … every
        30 days up to the install day's age: the cohort cube, see below), mf (how many of m are final)]
-       (q bit 4 = a day its m used GA4 flagged with nothing to measure it by: thresholding / sampling / a cut read)
+       (q bit 4 = a day its m used GA4 flagged with nothing to measure it by: thresholding / sampling / a cut read —
+       a day whose ages ≤ 420 come from a whole read only for its ages past 420)
   * sum — Today / Yesterday, CPI, ROAS at each age (last 7 judged install days vs the 28 before), LTV, retention,
     the payback day of the recent install days (pooled), status, data quality (GA4 coverage, the tie check);
   * life — AdMob revenue and Google Ads spend of EVERY day from the app's first day (lifetime P/L, month-wise on the
@@ -35,12 +36,16 @@ k the tab uses):
     "(other)" / gave no install day even after the country split (the cube's loss), "omax" the largest such share of a
     day's revenue (6 decimals, measured), "loss" days GA4 flagged with nothing to measure it by, "from", "till", "thru"
     the last day with every activity day from the history start read (a stalled walk: the page says the newest columns
-    wait for it); only once q files exist (fetch.ga4_cube q, below): "ql" USD × k GA4 gave no install day past age 420
-    on the weeks read whole (exact, no install day: never spread), "qd" days on q, "qwait" days with loss still on the
-    cube's cells (q not read yet / "fl"), "qneg" / "qpos" weeks whose whole read held more / less than the cube
-    (beyond the cube's own measured loss): read-time drift, counted, never loss} (the page's ≈ note); while the cube's first walk is still on its way: {"busy": 1, "from",
-    "next", "at" the walk's last step (UTC day; absent before its first)} only (no column yet, the page says so and
-    since when).
+    wait for it); only once q files exist and are used (fetch.ga4_cube q, Q_CALLS > 0 and Q_USE; below), USD × k to
+    8 decimals (a measured size never written as 0 when it is not): "ql" the cube's "(other)" past age 420 on the weeks
+    read whole (exact, no install day: never spread), "qn" what the whole read itself gave no install day at all
+    ("(not set)", any age: in no row), "qd" days on q, "qwait" / "qwu" days with loss on the cube's cells until their
+    q is read / that loss, "qfl" / "qfu" days with loss on a week whose whole read came back not whole ("fl", or
+    "qshort" weeks: q named fewer install days than the cube kept) — never read again, on the cube's cells for good /
+    that loss, "qneg" / "qpos" weeks whose whole read held more / less than the cube (beyond the cube's own measured
+    loss): read-time drift, counted with its size "qdr", never loss} (the page's ≈ note); while the cube's first walk
+    is still on its way: {"busy": 1, "from", "next", "at" the walk's last step (UTC day; absent before its first)}
+    only (no column yet, the page says so and since when).
 Past day 30 (owner, 20 Oct 2026: "jitna purana app utna date"): fetch.ga4_cube (GA4_CUBE) keeps every install day's GA4
 ad revenue by activity day × country from the history start (with countryId GA4 answers every install day; the
 [date, firstSessionDate] shape stops at about 15 months). Per install day X its 30-day buckets B[j] (ages 30j+1 …
@@ -50,12 +55,15 @@ when final through 30, else the D30 checkpoint (as t's D60+); m[j] only while EV
 folded or hot (a hole stops it), final while every one is folded. WHOLE past D30 (21 Oct 2026, owner: real data only —
 GA4 folds the country "(other)" before any filter, so the cube's own cells lose it): fetch.ga4_cube's q is a whole
 no-country read of each activity day (ages to 427); a week inside an activity month is "on q" only when every day of it
-has a q with qs "ok" (and q holds no other day of it) — there buckets j ≤ QJ (13: ages ≤ 420) come from q, j > 13 from
-"b"; a hot day uses its q (read in the same run) when it has one; else everything from "b" (no q file: every byte as
-before). The loss still left on a week on q is ql = Σ t − Σ qt − Σ b[j > 13] (exact, no install day: said as its size;
-never more than the cube's own measured loss of the week — past it, drift).
-q bit 4 from the cube's ledger (flagged); bit 2 only on a day whose loss the row still carries (_late's q_bits with the
-row's m length). Breakeven and so far also look through m (breakeven by age: the exact days, the checkpoints
+that needs one (fetch.ga4_cube.q_need: a day of nothing does not) has a q with qs "ok", q holds no other day of it, and
+q names every install day the cube kept of it (j ≤ QJ, past rounding: else "qshort", on the cube's cells) — there
+buckets j ≤ QJ (13: ages ≤ 420) come from q, j > 13 from "b"; a hot day uses its q (read in the same run) when it has
+one and it is whole; else everything from "b" (no q file, or q off / not used: every byte as before). On a week on q
+the whole read's rows with no install day are "qn" (in no row: their size), and the cube's loss past age 420 is
+ql = Σ t − Σ qt − Σ qn − Σ b[j > 13] (exact, no install day: said as its size; never more than the cube's own
+measured "(other)" of the week — past it, drift: no loss counted, its size said, the week's days ≈ past 420 when it
+lost anything). q bit 4 from the cube's ledger (flagged) and bit 2, both only on a day the row still takes from the
+cube's cells (_late's q_bits with the row's m length). Breakeven and so far also look through m (breakeven by age: the exact days, the checkpoints
 through D30 they do not cover, m, the checkpoints past m). Only with the switch on (GA4_CUBE:
 start(cube=True)), the cube of the app's stream, and once its walk reached the final edge the first time (done: the
 columns come in one go, never a half-read store's few; until then only the "late" busy note); with the switch off,
@@ -110,8 +118,8 @@ app's k]], "from", "to", "thru", "fthru", "newest", "kc": {own / pool / app / es
 off GA4's, "unp" {month: GA4 revenue share without a country}, "unp_all" (all
 months), "unp_lim"}, "geo": {"from", "till", "known_days", "unknown_days", "untied_days", "unk" ranges, "xx_share",
 "cov", "billed", "tzh", "tzs" (Ads time zones of the app's stores)}, "loss": {"days", "max_share", "flag_days",
-"usd"}, "diff" (+ "unk": the "--" row's part of "cty"), "ng": {"m": {month: [USD, its "unp", "own" | "app"]}, "usd"
-(Σ), "all" (Σ All), "rel"}}. Any failure of it: no "cd", every other byte as without it
+"usd"}, "diff" (+ "unk": the "--" row's part of "cty"), "ng": {"m": {month: [USD (6 decimals), its "unp", "own" |
+"app"]}, "usd" (Σ, 6 decimals), "all" (Σ All), "rel"}}. Any failure of it: no "cd", every other byte as without it
 (counted; the Ads split's read failing: every day unknown, counted too).
 roi.json.gz — every app's summary row (with its f4), the portfolio lifetime P/L and the portfolio install days (apps
 with spend), and the ranges the forms used (f4c).
@@ -297,13 +305,21 @@ def _late(data_dir, aid, sid, P, visit=None):
         return {"info": info}
     kf, hs = P["sc"]["kf"], P["hs"]
     B, fin, hot, oth, flg, omax, ks = {}, set(), set(), set(), set(), 0.0, {}
-    lb, zq = set(), set()       # q: days whose loss is still in the cube's cells / loss past age QL on a whole week
-    qi = {"ql": 0.0, "qd": 0, "qwait": 0, "qneg": 0, "qpos": 0, "on": False}
+    lb, zq, onqd = set(), set(), set()  # q: days whose loss is still on the cube's cells / days whose loss past age QL
+    #                                     (or of an age the week cannot tell: drift) the rows past D420 still carry /
+    #                                     days whose cells ≤ QL come from q
+    qi = {"ql": 0.0, "qn": 0.0, "qd": 0, "qwait": 0, "qwu": 0.0, "qfl": 0, "qfu": 0.0, "qshort": 0, "qneg": 0,
+          "qpos": 0, "qdr": 0.0, "on": False}
+    quse = gcu.Q_CALLS > 0 and gcu.Q_USE   # q off (GA4_CUBE_Q_CALLS=0) or not used (GA4_CUBE_Q_USE=false): every q file
+    #                                       ignored — the cube's own cells, every byte as without them
 
     def k_of(W):
         if W not in ks:
             ks[W] = kf(_d(W))[0]
         return ks[W]
+
+    def wk(Dd):
+        return _iso(gcu._mon(Dd))
 
     def add(b, onq=()):
         """The cube's cells, but a bucket j ≤ QJ of a week read whole (onq: q's cells instead)."""
@@ -333,58 +349,109 @@ def _late(data_dir, aid, sid, P, visit=None):
                         out[W] = out.get(W, 0) + int(v or 0)
         return out
 
-    def gap(W, t, rows, qt, qr, b14, lo, ds, hot=False):
-        """ql of a week read whole: Σ t − Σ qt − Σ b (j > QJ) = the loss with no install day past age QL (exact),
-        beyond rounding (½ micro a row + 1 ppm) — never more than the cube's own measured loss of those days (lo): what
-        is past it is read-time drift the other way (the cube's read held more: "qpos"); below 0: drift ("qneg").
-        Drift is counted, never loss (a hot day: not counted — GA4 still adds to it between its two reads)."""
-        g, tol = t - qt - b14, (rows + qr) // 2 + 1 + t // 1_000_000
-        if g > tol:
-            lq = min(g, lo)
-            if lq > tol:
-                qi["ql"] += lq / 1e6 * k_of(W)
-                zq.update(ds)
-            if g - lo > tol and not hot:
-                qi["qpos"] += 1
-        elif g < -tol and not hot:
-            qi["qneg"] += 1
+    def named(src, ws):
+        """{W: {X: micros}} of buckets j ≤ QJ in the weeks ws (the cube's "b" or q's "q")."""
+        out = {}
+        for X, js in (src or {}).items():
+            for j, wv in (js or {}).items():
+                if int(j) <= gcu.QJ:
+                    for W, v in (wv or {}).items():
+                        if v and W in ws:
+                            e = out.setdefault(W, {})
+                            e[X] = e.get(X, 0) + int(v)
+        return out
 
-    def note(Dd, led, onq=False):
+    def tol(s):
+        return (s["rows"] + s["qr"]) // 2 + 1 + s["t"] // 1_000_000     # ½ micro a row + 1 ppm: rounding
+
+    def short(s, nb, nq):
+        """q names fewer install days than the cube kept (j ≤ QJ) — a read whose window shrank, not whole: what the
+        cube kept of install days q does not name, past rounding."""
+        return sum(v for X, v in (nb or {}).items() if X not in (nq or {})) > tol(s)
+
+    def sums(leds, qs):
+        return {"t": sum(int(v.get("t") or 0) for v in leds), "rows": sum(int(v.get("rows") or 0) for v in leds),
+                "lo": sum(int(v.get("loss") or 0) for v in leds), "qt": sum(int(v.get("qt") or 0) for v in qs),
+                "qn": sum(int(v.get("qn") or 0) for v in qs), "qr": sum(int(v.get("qr") or 0) for v in qs)}
+
+    def gap(W, s, b14, ds, hot=False):
+        """A week (or a hot day) read whole, its sums s. qn (q's rows GA4 gave no install day at all, any age) is in no
+        row: its size (qi "qn"). g = t − qt − qn − b (j > QJ) = the cube's "(other)" loss past age QL (exact) beyond
+        rounding — never more than that loss (lo − qn): past it the two reads differ (the cube's read held more:
+        "qpos"; less, g < 0: "qneg") — drift, counted with its size ("qdr"), never loss; where such a week lost anything
+        its days are ≈ past QL (where that loss sits the week cannot tell). A hot day: no drift counted (GA4 still adds
+        to it between its two reads)."""
+        k, qn, tl = k_of(W), s["qn"], tol(s)
+        g, lo = s["t"] - s["qt"] - qn - b14, max(0, s["lo"] - qn)
+        if qn > 0:
+            qi["qn"] += qn / 1e6 * k
+        if g - lo > tl:
+            if lo > tl:
+                zq.update(ds)
+            if not hot:
+                qi["qpos"] += 1
+                qi["qdr"] += (g - lo) / 1e6 * k
+        elif g > tl:
+            qi["ql"] += g / 1e6 * k
+            zq.update(ds)
+        elif g < -tl and not hot:
+            qi["qneg"] += 1
+            qi["qdr"] += -g / 1e6 * k
+
+    def note(Dd, led, how=None):
+        """how: "q" (its week read whole: cells ≤ QL from q), "fl" (its week's whole read came back not whole — never
+        read again: on the cube's cells for good), None (no q yet: on the cube's cells until it is read)."""
         nonlocal omax
         lo, t = int(led.get("loss") or 0), int(led.get("t") or 0)
         if lo > 0:
             oth.add(Dd)
             omax = max(omax, min(1.0, lo / t) if t > 0 else 1.0)
-            if not onq:
+            if how != "q":
                 lb.add(Dd)
-                qi["qwait"] += Dd >= hs
-        if onq:
+                if Dd >= hs:
+                    f = "qfl" if how == "fl" else "qwait"
+                    qi[f] += 1
+                    qi["qfu" if how == "fl" else "qwu"] += lo / 1e6 * k_of(wk(Dd))
+        if how == "q":
+            onqd.add(Dd)
             qi["qd"] += Dd >= hs
         if led.get("fl"):
             flg.add(Dd)
     for mk, mo in gcu.months(data_dir, aid, sid):
-        qm = gcu.load_q(data_dir, aid, sid, mk)     # q: the month's whole reads (a week on q only when every day is)
-        onq, by = set(), {}
+        qm = gcu.load_q(data_dir, aid, sid, mk) if quse else None   # q: the month's whole reads
+        onq, held = set(), set()
         if qm is not None:
             qi["on"] = True
-            qd, qw = qm["days"], {}
+            qd, by, qw, cand = qm["days"], {}, {}, {}
             for D in mo["days"]:
-                by.setdefault(_iso(gcu._mon(_d(D))), []).append(D)
+                by.setdefault(wk(_d(D)), []).append(D)
             for D in qd:
-                qw.setdefault(_iso(gcu._mon(_d(D))), set()).add(D)
-            for W, ds in by.items():
-                if qw.get(W) == set(ds) and all(isinstance(qd[D], dict) and qd[D].get("qs") == "ok" for D in ds):
-                    onq.add(W)
+                qw.setdefault(wk(_d(D)), set()).add(D)
+            for W, ds in by.items():                # a week on q: every day of it that needs one has its q (a day of
+                got = qw.get(W, set())              # nothing needs none), q holds no other day, every q "ok"
+                leds = [mo["days"][D] if isinstance(mo["days"][D], dict) else {} for D in ds]
+                if not got <= set(ds) or any(D not in got and gcu.q_need(v) for D, v in zip(ds, leds)):
+                    continue
+                if not all(isinstance(qd[D], dict) and qd[D].get("qs") == "ok" for D in got):
+                    held.add(W)                     # its whole read flagged: never read again
+                    continue
+                cand[W] = sums(leds, [qd[D] for D in got])
+            if cand:
+                nb, nq = named(mo["b"], cand), named(qm["q"], cand)
+                for W, s_ in cand.items():
+                    if short(s_, nb.get(W), nq.get(W)):
+                        held.add(W)
+                        qi["qshort"] += 1
+                    else:
+                        onq.add(W)
             b14 = past(mo["b"]) if onq else {}
             for W in sorted(onq):
-                ds, leds = by[W], [mo["days"][D] if isinstance(mo["days"][D], dict) else {} for D in by[W]]
-                gap(W, sum(int(v.get("t") or 0) for v in leds), sum(int(v.get("rows") or 0) for v in leds),
-                    sum(int(qd[D].get("qt") or 0) for D in ds), sum(int(qd[D].get("qr") or 0) for D in ds),
-                    b14.get(W, 0), sum(int(v.get("loss") or 0) for v in leds), {_d(D) for D in ds})
+                gap(W, cand[W], b14.get(W, 0), {_d(D) for D in by[W]})
         for D, led in mo["days"].items():
             Dd = _d(D)
             fin.add(Dd)
-            note(Dd, led if isinstance(led, dict) else {}, _iso(gcu._mon(Dd)) in onq)
+            W = wk(Dd)
+            note(Dd, led if isinstance(led, dict) else {}, "q" if W in onq else "fl" if W in held else None)
         add(mo["b"], onq)
         if onq:
             add_q(qm["q"], onq)
@@ -394,13 +461,15 @@ def _late(data_dir, aid, sid, P, visit=None):
         if Dd in fin or not isinstance(rec, dict):
             continue
         hot.add(Dd)
-        qi["on"] = qi["on"] or "qs" in rec
-        onq = {_iso(gcu._mon(Dd))} if rec.get("qs") == "ok" and isinstance(rec.get("q"), dict) else set()
-        if onq:                                     # a hot day's q (read in the same run as its cube cells)
-            W = next(iter(onq))
-            gap(W, int(rec.get("t") or 0), int(rec.get("rows") or 0), int(rec.get("qt") or 0),
-                int(rec.get("qr") or 0), past(rec.get("b")).get(W, 0), int(rec.get("loss") or 0), {Dd}, True)
-        note(Dd, rec, bool(onq))
+        W, onq = wk(Dd), set()
+        if quse and "qs" in rec:                    # a hot day's q (read in the same run as its cube cells): read
+            qi["on"] = True                         # again with the next hot round when it is not whole
+            if rec.get("qs") == "ok" and isinstance(rec.get("q"), dict):
+                s_ = sums([rec], [rec])
+                if not short(s_, named(rec.get("b"), {W}).get(W), named(rec["q"], {W}).get(W)):
+                    onq = {W}
+                    gap(W, s_, past(rec.get("b")).get(W, 0), {Dd}, True)
+        note(Dd, rec, "q" if onq else None)
         add(rec.get("b"), onq)
         if onq:
             add_q(rec["q"], onq)
@@ -414,7 +483,7 @@ def _late(data_dir, aid, sid, P, visit=None):
     while thru + timedelta(days=1) in have:         # how far, when a stalled walk stops the newest columns there
         thru += timedelta(days=1)
     pr, pf, po, pl = [0] * (n + 1), [0] * (n + 1), [0] * (n + 1), [0] * (n + 1)
-    pb, pz = [0] * (n + 1), [0] * (n + 1)
+    pb, pz, pfb = [0] * (n + 1), [0] * (n + 1), [0] * (n + 1)
     for i in range(n):
         D = hs + timedelta(days=i)
         pr[i + 1] = pr[i] + (D in have)
@@ -423,6 +492,7 @@ def _late(data_dir, aid, sid, P, visit=None):
         pl[i + 1] = pl[i] + (D in flg)
         pb[i + 1] = pb[i] + (D in lb)
         pz[i + 1] = pz[i] + (D in lb or D in zq)
+        pfb[i + 1] = pfb[i] + (D in flg and D not in onqd)
 
     def span(lo, hi):
         i0, i1 = (lo - hs).days, (hi - hs).days
@@ -439,24 +509,27 @@ def _late(data_dir, aid, sid, P, visit=None):
     def q_bits(lo, hi, jmax=None):
         """The ≈ bits of the activity days lo … hi: 4 = a day GA4 flagged; 2 = a day with measured loss (jmax None:
         the cube's cells — the 🌍 country rows); with jmax (an All row's m: install day X = hi − 30 (jmax + 1)) only a
-        day whose loss the row still carries: ages ≤ QL on a week still on the cube's cells, past QL on any week with
-        loss there (on the cube's cells, or ql > 0 on a week read whole)."""
+        day the row still takes from the cube's cells with it: ages ≤ QL on a week still on the cube's cells (a
+        flagged / lossy day there), past QL on any week (a flagged day; loss there — on the cube's cells, or ql > 0 /
+        drift with loss on a week read whole)."""
         s_ = span(lo, hi)
         if not s_:
             return 0
         i0, i1 = s_
-        bits = 4 if pl[i1 + 1] - pl[i0] > 0 else 0
         if jmax is None:
-            return bits | (2 if po[i1 + 1] - po[i0] > 0 else 0)
+            return (4 if pl[i1 + 1] - pl[i0] > 0 else 0) | (2 if po[i1 + 1] - po[i0] > 0 else 0)
         ic = min(i1, (hi - timedelta(days=LATE_STEP * (jmax + 1) - gcu.QL) - hs).days)   # X + QL: q's last age
-        if (ic >= i0 and pb[ic + 1] - pb[i0] > 0) or (ic < i1 and pz[i1 + 1] - pz[max(i0, ic + 1)] > 0):
+        a, b, j0 = ic >= i0, ic < i1, max(i0, ic + 1)
+        bits = 4 if (a and pfb[ic + 1] - pfb[i0] > 0) or (b and pl[i1 + 1] - pl[j0] > 0) else 0
+        if (a and pb[ic + 1] - pb[i0] > 0) or (b and pz[i1 + 1] - pz[j0] > 0):
             bits |= 2
         return bits
     info = {"days": len(have), "oth": len({D for D in oth if D >= hs}), "omax": _r(omax, 6),
             "loss": len({D for D in flg if D >= hs}), "from": _iso(min(have)), "till": _iso(last),
             "thru": _iso(thru) if thru >= hs else None}
     if qi["on"]:                                    # only with q files (without them: the file as before, byte by byte)
-        info.update(ql=_r(qi["ql"], 2), qd=qi["qd"], qwait=qi["qwait"], qneg=qi["qneg"], qpos=qi["qpos"])
+        info.update({f: (_r(qi[f], 8) if isinstance(qi[f], float) else qi[f]) for f in qi if f != "on"})   # USD to
+        #                                   the micro (× k): a measured size never written as 0 when it is not
     return {"B": B, "full": full, "fin": final, "q": q_bits, "info": info}
 
 
@@ -1413,7 +1486,8 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
             if cc != NO_CC:
                 named += g
                 mine += g if k[1] in ("own", "pool") else 0
-        ng[M] = [_r(allm - s, 2), _r(unp.get(M)), "own" if named and 2 * mine >= named else "app"]
+        ng[M] = [_r(allm - s, 6), _r(unp.get(M)), "own" if named and 2 * mine >= named else "app"]   # (to the
+        #                                   micro: a small gap never written as 0)
         nga += allm
     ngs = sum(v[0] for v in ng.values())
     kst = {"own_months": 0, "pool_months": 0, "app_months": 0, "est_months": 0,
@@ -1581,7 +1655,7 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
           "diff": {"age": 30, "days": len(dd), "all": _r(sa, 2), "cty": _r(sc_, 2),
                    "rel": _r(sc_ / sa - 1) if sa else None, "n_all": sum(allr[X]["n"] for X in dd),
                    "n_cty": sum(n30.get(X, 0) for X in dd), "unk": _r(sum(u30.get(X, 0.0) for X in dd), 2)},
-          "ng": {"m": ng, "usd": _r(ngs, 2), "all": _r(nga, 2), "rel": _r(ngs / nga) if nga else None}}
+          "ng": {"m": ng, "usd": _r(ngs, 6), "all": _r(nga, 2), "rel": _r(ngs / nga) if nga else None}}
     acc.packs.update(names)
     acc.cdn["apps"] += 1
     acc.cdn["countries"] += len(order)

@@ -7150,14 +7150,16 @@ function lateNote(d,C,o){ const mx=mLen(d.rows||[]), lt=o&&o.cc?{}:(d.late||{}),
     +(ok(lt.qd)?qNote(lt):lt.oth?` ≈ = D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)") — ${N(lt.oth)} din me, sabse zyada us din ki kamai ka ${pc(lt.omax)}; aise din wale row pe ≈.`:'')
     +(lt.loss?` ≈ = ${N(lt.loss)} din ke D30-ke-baad wale GA4 report pe data loss / thresholding / sampling ka flag tha (naapne layak kuch nahi bacha) — un din wale row ki kamai asli se thodi alag (kam ya zyada) ho sakti hai.`:'')+th; }
 // the whole read past D30 (the cube's q: GA4's no-country read of each day, ages ≤ 420 — owner: real data only): how many
-// days it covers, what GA4 gave no install day past D420 (measured, in no row: never spread, never 0 when it is not), the
-// days still on the cube's own cells (≈ until read), weeks where the two reads' sums differ past the cube's own loss
-// (drift either way: never counted as loss)
-const Mq=v=>ok(v)&&v>0&&Math.abs(v*cfx())<0.005?'<'+csym()+'0.01':M(v);
-function qNote(lt){
-  return (lt.qd?` D31–D420 whole: GA4 ka bina-country read, har din alag (isme "(other)" nahi aata) — ${N(lt.qd)} din; D420 ke baad ${lt.ql>0?`${Mq(lt.ql)} ka install din GA4 ne nahi diya — ye kisi row me nahi (us hafte ke D420+ column wale row pe ≈)`:'kuch nahi chhoota'}.`:'')
-    +(lt.qwait?` ≈ = ${N(lt.qwait)} din abhi GA4 cube ke purane read pe (GA4 ne kuch revenue "(other)" me daala) — poora read aane tak un din wale row pe ≈.`:'')
-    +((lt.qneg||0)+(lt.qpos||0)?` ${N((lt.qneg||0)+(lt.qpos||0))} hafte me poore read aur cube ke read ka jod alag aaya (dono read ke beech GA4 ne data badla${lt.qpos?`; ${N(lt.qpos)} me cube zyada`:''}) — use loss nahi gina.`:''); }
+// days it covers; on its whole weeks what GA4 gave no install day past D420 and what it gave none at all (measured, in no
+// row: never spread, never 0 when it is not); the days still on the cube's own cells until read, and those whose whole
+// read itself came back not whole (on the cube for good), each with its "(other)" size; weeks where the two reads' sums
+// differ past the cube's own loss (drift either way, its size: never counted as loss, its cause not known)
+const Mq=(v,sign)=>ok(v)&&v!==0&&Math.abs(v*cfx())<0.005?(v<0?MI:sign?'+':'')+'<'+csym()+'0.01':M(v,sign);
+function qNote(lt){ const z=v=>ok(v)&&v>0, dr=(lt.qneg||0)+(lt.qpos||0), ot=v=>`GA4 ne ${z(v)?Mq(v)+' ':'kuch '}revenue "(other)" me daala`;
+  return (lt.qd?` D31–D420 whole: GA4 ka bina-country read, har din alag — ${N(lt.qd)} din; in poore padhe hafton me D420 ke baad ${z(lt.ql)?`${Mq(lt.ql)} ka install din GA4 ne nahi diya — ye kisi row me nahi (us hafte ke D420+ column wale row pe ≈)`:'kuch nahi chhoota'}${z(lt.qn)?`; ${Mq(lt.qn)} ka install din GA4 ne kabhi diya hi nahi ("(not set)", kisi bhi umar) — ye bhi kisi row me nahi`:''}.`:'')
+    +(lt.qwait?` ≈ = ${N(lt.qwait)} din abhi GA4 cube ke purane read pe (${ot(lt.qwu)}) — poora read aane tak un din wale row pe ≈.`:'')
+    +(lt.qfl?` ≈ = ${N(lt.qfl)} din ka poora read bhi poora nahi aaya (GA4 ka flag / "(other)"${lt.qshort?`, ya ${N(lt.qshort)} hafte me cube se kam install din`:''}) — ye din cube ke read pe hi rahenge (${ot(lt.qfu)}); un din wale row pe ≈.`:'')
+    +(dr?` ${N(dr)} hafte me poore read aur cube ke read ka jod alag aaya${z(lt.qdr)?` (kul ${Mq(lt.qdr)})`:''}${lt.qpos?`; ${N(lt.qpos)} me cube zyada`:''} — wajah abhi pata nahi (dono read ke beech GA4 ka badlav, ya country wala read) — ise loss nahi gina${lt.qpos?'; aise hafte me cube ka "(other)" kis umar ka hai pata nahi, isliye uske D420+ column wale row pe ≈':''}.`:''); }
 // ---- 🌍 the install-day table by country (owner: "USA select kru to date wise country ka aa jayega konsa din kaha pahocha"):
 // the file's cd = the index, roi_<key>_cNN.json.gz = the rows of its countries, loaded only when one is picked (once)
 let CTY='';                                           // the picked country ('' = All countries): kept across grain / mode / apps
@@ -7226,9 +7228,9 @@ function ngLine(ng,pc){ const nm=(ng&&ng.m)||{}, ks=Object.keys(nm).filter(M_=>A
   if(!ks.length||!ok(ng.usd)) return '';
   const A=ks.filter(M_=>nm[M_][2]==='own'), B=ks.filter(M_=>nm[M_][2]!=='own'), sm=xs=>xs.reduce((a,M_)=>a+nm[M_][0],0);
   const sp=v=>!ok(v)?'—':(v<0?MI:v>0?'+':'')+pc(Math.abs(v));
-  return `<b>GA4 ne country nahi di</b>: ${M(ng.usd,true)}${ok(ng.rel)?` (${sp(ng.rel)})`:''} = All countries − sab country rows, mahine wise —`
-    +(A.length?` ${E(mRng(A))}: AdMob country report se matched (${M(sm(A),true)})`:'')
-    +(B.length?`${A.length?';':''} ${E(mRng(B))}: GA4 × app ka k — ye hissa (${M(sm(B),true)}) kisi country row me nahi`:'')+'.'; }
+  return `<b>Country not given (GA4)</b>: ${Mq(ng.usd,true)}${ok(ng.rel)?` (${sp(ng.rel)})`:''} = All countries − sab country rows, mahine wise —`
+    +(A.length?` ${E(mRng(A))}: AdMob country report se matched (${Mq(sm(A),true)})`:'')
+    +(B.length?`${A.length?';':''} ${E(mRng(B))}: GA4 × app ka k — ye hissa (${Mq(sm(B),true)}) kisi country row me nahi`:'')+'.'; }
 // what the country view is and is not — every limitation with its measured size (from the file)
 function ccNote(d,cd,x){ const cc=x[0], g=cd.geo||{}, k=cd.kc||{}, lo=cd.loss||{}, df=cd.diff||{}, p=[];
   const pc=v=>!ok(v)?'—':v>0&&v<0.001?'<0.1%':(v*100).toFixed(v<0.1?1:0)+'%', ng=ngLine(cd.ng,pc);
