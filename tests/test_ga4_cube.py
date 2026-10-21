@@ -8,11 +8,13 @@ Stop, a pause, a new day: no hole, no day folded from a read made while it was s
 the deeper split (21 Oct 2026: parts halved by countries, then by install days, while "(other)" is left — shown, or
 hidden under an in-list with only GA4's flag, then measured by the day's own total; a split that names nothing new
 stops; the parts partition the day in every one of those GA4 behaviours; the cap leaves measured loss; a Stop keeps
-nothing of the day; a day cut as the run's first read, run after run, gets a smaller cap — recoverable, "cap" 2; the
-walk and the hot days keep their own cut memory; a hot round a Stop cut goes on with its unread days), the repair
-(months folded with the one-level split read again day by day into a copy — a day started only with room for it —
-and replaced whole once every day is in it; biggest loss share first; never twice for one split version; its head
-written even in a run with no call, the copy removed after it),
+nothing of the day; a day cut as the run's first read, run after run, gets a smaller cap — recoverable, "cap" 2 —
+only in an app that had the run's whole budget (one that started late goes first next run); the walk and the hot
+days keep their own cut memory; a hot round a Stop cut goes on with its unread days; the day's total measures only
+when whole, a hot day never), the repair (months folded with the one-level split read again day by day into a copy —
+a day started only with room for it, calls and time — and replaced whole once every day is in it; biggest loss share
+first; never twice for one split version; its head written even in a run with no call, the copy removed after it; a
+month whose file is gone let go),
 the history start moving back (and "done" cleared until the walk is through), another stream, a month file that cannot
 be read (read again from its first day, never written over), at most two months in memory, a hot copy of a day that is
 final now dropped, flagged days kept apart from measured loss, turns on a property (a backfill never starves a light
@@ -57,12 +59,18 @@ class FakeGA:
     hide: an answer with an in-list filter (not its notExpression) drops its "(other)" row, keeping
     dataLossFromOtherRow (as GA4 does under an in-list: the row gone, its revenue too). prefold: GA4 rolls rows into
     "(other)" BEFORE the filters (the whole day's answer cut to `cap` rows, then filtered: an in-list drops the
-    "(other)" row, a notExpression keeps it) — no split by a filter names a row more."""
+    "(other)" row, a notExpression keeps it) — no split by a filter names a row more. oth_flag_day: the flag with no
+    "(other)" row on that day's answers — not on a day's total read (no filter, no countryId: the cube's date-only
+    total, the cohort's every-install-day read) unless oth_flag_total. smp_total / cut_total: such a total read
+    sampled / cut. grow: every call, the revenue of a day not final yet grows by that share (GA4 still adding to it
+    during the read)."""
 
     def __init__(self, today=TODAY, cap=None, stop_after=None, fill=0.5, start=HS, max_lag=120, extra_day=None,
                  notset_day=None, neg_day=None, thr_day=None, smp_multi=False, cut_multi=False, oth_flag_day=None,
-                 max_calls=None, keep=False, stop_why="calls", hide=False, prefold=False):
+                 max_calls=None, keep=False, stop_why="calls", hide=False, prefold=False, oth_flag_total=False,
+                 smp_total=False, cut_total=False, grow=0.0):
         self.hide, self.prefold = hide, prefold
+        self.oth_flag_total, self.smp_total, self.cut_total, self.grow = oth_flag_total, smp_total, cut_total, grow
         self.today, self.cap, self.stop_after, self.fill, self.start, self.max_lag = (today, cap, stop_after, fill,
                                                                                       start, max_lag)
         self.extra_day, self.notset_day, self.neg_day, self.thr_day = extra_day, notset_day, neg_day, thr_day
@@ -74,7 +82,7 @@ class FakeGA:
             self.max_calls, self.stop_after = max_calls, max_calls
 
     def rows_of(self, D):
-        f = self.fill if (self.today - D).days < cu.FINAL_LAG else 1.0
+        f = self.fill * (1 + self.grow) ** self.calls if (self.today - D).days < cu.FINAL_LAG else 1.0
         rows = []
         for L in range(self.max_lag + 1):
             X = D - timedelta(days=L)
@@ -129,13 +137,16 @@ class FakeGA:
             rows = [r for r in rows if "(other)" not in (r.get("firstSessionDate"), r.get("countryId"))]
         if self.answers is not None:
             self.answers.append(rows)
-        if self.oth_flag_day and a <= self.oth_flag_day <= b:
+        total = not extra and "countryId" not in dims           # a day's total read (no filter, no country)
+        if self.oth_flag_day and a <= self.oth_flag_day <= b and (self.oth_flag_total or not total):
             meta["dataLossFromOtherRow"] = True                 # the flag with no "(other)" row to measure it by
+        if self.smp_total and total:
+            meta["samplingMetadatas"] = [{"samplesReadCount": "1", "samplingSpaceSize": "2"}]
         if self.thr_day and a <= self.thr_day <= b:
             meta["subjectToThresholding"] = True
         if self.smp_multi and a < b:
             meta["samplingMetadatas"] = [{"samplesReadCount": "1", "samplingSpaceSize": "2"}]
-        self._cut = self.cut_multi and a < b
+        self._cut = (self.cut_multi and a < b) or (self.cut_total and total)
         self.last_metas = [{}, meta]                            # the flag on any page counts
         return rows
 
@@ -435,15 +446,58 @@ def test_install_day_loss_and_flags():
     rec = cu.read_day(ga, a, "t")
     assert ga.calls == 4 and [q[0]["dimensions"] for q in ga.asked][-1] == [{"name": "date"}] and not ga.asked[-1][1]
     assert rec["fl"] == 0 and rec["st"] == "ok" and rec["loss"] == 0 and rec["t"] == day_total(ga, a)
-    # … and when its total cannot be read (sampled), the flag stays: nothing to measure it by
-    ga = FakeGA(today=date(2027, 1, 1), oth_flag_day=a)
-    real = cu.day_total
-    try:
-        cu.day_total = lambda g, D: None
+    cube = cu.Cube(None, "a~1", "222")
+    cube.fold(a, rec)                                   # one level, futile: never "deeper" (its n counts the total)
+    assert rec["via"] == "day" and rec["fu"] == 1 and "dp" not in rec
+    assert (cube.deeper, cube.split, cube.futile) == (0, 0, 1)
+    # … and when its total cannot be read whole — sampled, cut, flagged dataLossFromOtherRow itself, or with a row
+    # whose day is not a date —, the flag stays: nothing to measure it by (no "hd", never booked as loss)
+    class OthTotal(FakeGA):
+        def report_all(self, body, **kw):
+            rows = super().report_all(body, **kw)
+            if [d["name"] for d in body["dimensions"]] == ["date"]:
+                rows = rows + [{"date": "(other)", "activeUsers": 1, "totalAdRevenue": 0.5}]
+            return rows
+    for ga in (FakeGA(today=LATER, oth_flag_day=a, smp_total=True), FakeGA(today=LATER, oth_flag_day=a, cut_total=True),
+               FakeGA(today=LATER, oth_flag_day=a, oth_flag_total=True), OthTotal(today=LATER, oth_flag_day=a)):
         rec = cu.read_day(ga, a, "t")
-    finally:
-        cu.day_total = real
-    assert rec["fl"] == 1 and rec["loss"] == 0
+        assert ga.calls == 4 and ga.asked[-1][0]["dimensions"] == [{"name": "date"}] and cu.day_total(ga, a) is None
+        assert rec["fl"] == 1 and rec["loss"] == 0 and "hd" not in rec and rec["st"] == "ok"
+    assert cu.day_total(FakeGA(today=LATER), a) == day_total(FakeGA(today=LATER), a)
+
+
+def test_the_days_total_against_the_parts():
+    """What the day's total holds beyond the parts is hidden "(other)" (measured: in loss, "cap" only when the cap kept
+    a hidden part from a split — here the split was futile, not capped); parts holding MORE than the total: nothing
+    to measure by — a flag, nothing booked."""
+    a = date(2026, 9, 1)
+    rows, info = cu.split_read(FakeGA(today=LATER, oth_flag_day=a), a, total=lambda g, D: cu.day_total(g, D) + 5000)
+    assert info["hid"] == 5000 and info["cap"] == 0 and info["futile"] == 1 and not info["flag"]
+    rows, info = cu.split_read(FakeGA(today=LATER, oth_flag_day=a), a, total=lambda g, D: cu.day_total(g, D) - 5000)
+    assert info["hid"] == 0 and info["flag"] and info["cap"] == 0
+    rec = cu.read_day(FakeGA(today=LATER, oth_flag_day=a, hide=True, cap=200), a, "t", cap=3)
+    assert rec["cap"] == 1                                      # the cap kept a hidden part: "cap" 1 (test above)
+
+
+def test_a_hot_day_is_never_measured_by_its_total():
+    """A day still filling: GA4 adds to it between the calls — a gap to a total read after the parts would be revenue
+    that came in during the read, not "(other)": a hot day's hidden part is a flag (≈), no total call, nothing booked
+    as loss; the same day final is measured."""
+    D = TODAY
+    ga = FakeGA(oth_flag_day=D, grow=0.002)
+    rows, info = cu.split_read(ga, D, cu.HOT_CAP, total=cu.day_total)
+    assert info["hid"] > 0                                      # what a total read after the parts would book
+    ga = FakeGA(oth_flag_day=D, grow=0.002)
+    (_, rec), = cu.read_range(ga, D, D, {}, "t", cap=cu.HOT_CAP, key="hcut", hot=True)
+    assert "hd" not in rec and rec["loss"] == rec["ol"] == 0 and rec["fl"] == 1 and rec["st"] == "ok"
+    assert all(q[0]["dimensions"] != [{"name": "date"}] for q in ga.asked)
+    cube = cu.Cube(None, "a~1", "222")                         # the run's hot round: the same
+    cu.step_app(FakeGA(oth_flag_day=D, grow=0.002), cube, TODAY, HS, NOW)
+    hot = cube.head["d"][D.isoformat()]
+    assert hot["fl"] == 1 and hot["loss"] == 0 and "hd" not in hot
+    nxt = TODAY + timedelta(days=cu.FINAL_LAG)                  # final: measured (nothing hidden here: no flag)
+    rec = cu.read_day(FakeGA(today=nxt, oth_flag_day=D, grow=0.002), D, "t")
+    assert rec["fl"] == 0 and rec["loss"] == 0 and rec["t"] == day_total(FakeGA(today=nxt), D)
 
 
 # ── the walk, the fold, the files ───────────────────────────────────────────────────────────────────────────────────
@@ -868,6 +922,70 @@ def test_a_day_cut_run_after_run_gets_a_smaller_cap():
     assert rec["cap"] == 1 and ga.calls <= cu.DAY_CAP and cu._oloss(rec) == 0
 
 
+def test_a_cut_counts_only_when_the_app_had_the_runs_whole_budget(monkeypatch, tmp_path):
+    """Apps of one property run one after another on one budget: a day the budget cut as the first read of an app
+    that started late (after another app) never had the run's whole allowance — not its cut (its cap never shrinks
+    to fit a part of a run); that app goes first next run instead ("late"), so its day gets the whole allowance."""
+    X = date(2026, 8, 1)
+    for full, counted in ((True, True), (False, False)):
+        h, ga = {}, FakeGA(today=LATER, cap=500, extra_day=X, stop_after=cu.MIN_CAP, stop_why="budget")
+        ga.full = full
+        try:
+            list(cu.read_range(ga, X, X, h, "t"))
+        except gf.Stop:
+            pass
+        assert ("cut" in h) is counted
+    data = str(tmp_path)
+    routes = {"com.example.first": {"property_id": "111", "stream_id": "221", "owner": "o"},
+              "com.example.second": {"property_id": "111", "stream_id": "222", "owner": "o"}}
+    monkeypatch.setattr(cu.gu, "load_state", lambda d: {"routes": {"by_package": routes}, "tz": {"111": "UTC"},
+                                                        "fetch": {}})
+    monkeypatch.setattr(cu.gaud, "_uni_meta", lambda ust, d, aid, r: {"history_start": "2026-08-01"})
+    monkeypatch.setattr(cu.ga4, "access_token", lambda c, s, r: "tok")
+    clock, phase, D, made, full = [0.0], [1], date(2026, 10, 11), {}, {}
+
+    class A(FakeGA):
+        def __init__(self, token, pid, sid, prop, over=None, max_calls=cu.MAX_CALLS):
+            heavy = sid == "222" and phase[0] == 2              # the second app's new final day: a heavy one
+            super().__init__(today=TODAY + timedelta(days=phase[0] - 1), start=date(2026, 8, 1),
+                             cap=500 if heavy else None, extra_day=D if heavy else None)
+            self.over, self.max_calls, self.sid = over, max_calls, sid
+            self.cost = 14.0 if sid == "221" else 3.0           # seconds a call
+
+        def report_all(self, body, **kw):
+            full[self.sid] = self.full
+            if self.over and self.over():
+                raise gf.Stop("budget")
+            clock[0] += self.cost
+            made[self.sid] = made.get(self.sid, 0) + 1
+            return super().report_all(body, **kw)
+    monkeypatch.setattr(cu.gf, "App", A)
+    cfg = {"client_id": "c", "client_secret": "s", "refresh_tokens": json.dumps({"o": "rt"})}
+    apps = [{"app_id": "x~1", "package": "com.example.first"}, {"app_id": "x~2", "package": "com.example.second"}]
+    out = cu.refresh_all(cfg, data, apps, NOW, clock=lambda: clock[0], budget=1000)
+    assert out["apps"] == {"x~1": "fetched", "x~2": "fetched"} and full == {"221": True, "222": True}
+    phase[0], made = 2, {}
+    out = cu.refresh_all(cfg, data, apps, NOW + timedelta(days=1), clock=lambda: clock[0], budget=40)
+    assert out["apps"] == {"x~1": "fetched", "x~2": "deferred"} and made["221"] == 2 and made["222"] >= cu.MIN_CAP
+    assert full == {"221": True, "222": False}                  # x~2 started with 12 s of 40 left
+    h = cu.load_head(data, "x~2")
+    assert "cut" not in h and h["next"] == D.isoformat()       # cut, not counted; read again whole next run
+    assert cu.load_state(data)["fetch"]["x~2"]["late"] is True
+    made, order = {}, []
+    real = A.report_all
+
+    def first(self, body, **kw):
+        if not order or order[-1] != self.sid:
+            order.append(self.sid)
+        return real(self, body, **kw)
+    monkeypatch.setattr(A, "report_all", first)
+    out = cu.refresh_all(cfg, data, apps, NOW + timedelta(days=1, hours=7), clock=lambda: clock[0], budget=40)
+    assert order[0] == "222" and full["222"] is True                   # first now (x~1's hot round is due too: it
+                                                                       # would have gone first), the whole budget
+    assert D.isoformat() in cu.Cube(data, "x~2", "222").month("2026-10")["days"]   # its day read and folded
+    assert "late" not in cu.load_state(data)["fetch"]["x~2"]
+
+
 def test_hot_and_final_reads_keep_their_own_cut_memory():
     """A hot day cut run after run (the hot cap) never passes its smaller cap to its final read: the walk reads it
     with the day's full cap; the hot day's memory goes once the day is final."""
@@ -1136,6 +1254,9 @@ def test_repair_reads_day_by_day_and_starts_a_day_only_with_room(tmp_path):
     need = max(cu.MIN_CAP, -(-rp["c"] // rp["n"]))
     assert rp["c"] == ga.calls and (ga.calls >= cu.REPAIR_CALLS or cu.MAX_CALLS - ga.calls < need)
     assert "cut" not in rp
+    acc = cube.rep("2026-09")["days"]                          # the log's per-day counts take the repair days too
+    assert cube.folded == 0 and cube.rep_days == len(acc) and 0 < cube.split == sum(v["via"] == "split"
+                                                                                    for v in acc.values())
     # a day cut by the app's call cap (its calls a day so far fitted, this one needed more): not kept, not its cut
     seen = False
     for _ in range(3):
@@ -1146,6 +1267,72 @@ def test_repair_reads_day_by_day_and_starts_a_day_only_with_room(tmp_path):
         assert "cut" not in rp and len(cube.rep("2026-09")["days"]) >= got
         seen = seen or (ga.calls == need and len(cube.rep("2026-09")["days"]) == got)
     assert seen                                                          # a day was cut (and not kept) at least once
+
+
+def test_repair_starts_a_day_only_with_time_for_it(tmp_path):
+    """The run's budget, not only its calls: a repair day is started only when the time left fits the most calls a
+    repair day took at the app's seconds a call (this run's, else the last measured) — a budget Stop would throw the
+    started day's calls (and the property's shared tokens) away. Runs the budget ends make no more calls in all than
+    runs with no budget."""
+    ga = FakeGA(max_calls=cu.MAX_CALLS)
+    t = [50.0]
+    ga.clock, ga.t_end, ga.t_app = (lambda: t[0]), 100.0, 0.0
+    rp = {"c": 20, "n": 4, "m": 9, "s": 5.0}                     # 5 calls a day, 9 the most, 5 s a call
+    assert cu._room(ga, rp)                                     # 50 s left ≥ 9 × 5 s
+    t[0] = 60.0
+    assert not cu._room(ga, rp)                                 # 40 s left
+    assert cu._room(ga, dict(rp, s=None)) and cu._room(FakeGA(), rp)   # nothing measured / no clock: yes
+
+    def runs(budget_calls):
+        data, T = str(tmp_path / str(budget_calls)), date(2026, 10, 3)
+        _old_cube(data, T)
+        calls = stops = 0
+        for i in range(30):
+            clock = [0.0]
+
+            class G(FakeGA):
+                def report_all(self, body, **kw):
+                    if budget_calls and clock[0] >= budget_calls * 5:
+                        raise gf.Stop("budget")
+                    clock[0] += 5.0
+                    return super().report_all(body, **kw)
+            ga = G(today=T, cap=40, start=RS, max_calls=cu.MAX_CALLS)
+            ga.clock, ga.t_end, ga.t_app = (lambda: clock[0]), (budget_calls or 10 ** 6) * 5.0, 0.0
+            cube = cu.Cube(data, "a~1", "222")
+            try:
+                cu.step_app(ga, cube, T, RS, datetime(2026, 10, 3, 2, i, tzinfo=timezone.utc))
+            except gf.Stop:
+                stops += 1
+            _save(cube)
+            calls += ga.calls
+            if not cube.head["rep"].get("k") and not cube.head["rep"].get("q"):
+                return calls, stops, cube.head["rep"]
+        raise AssertionError("repair never done")
+    free, _, rep = runs(None)
+    assert rep["s"] == 5.0 and [e[0] for e in rep["log"]] == ["2026-09"]
+    for b in (28, 25):
+        assert runs(b)[:2] == (free, 0), b                      # no day thrown away
+
+
+def test_repair_of_a_month_whose_file_is_gone_moves_on(tmp_path):
+    """The head names a month being repaired, its copy holds days, but the month file is gone: nothing to read in it
+    — the copy dropped and the entry cleared (never a repair stuck on it, every other month blocked)."""
+    data, T = str(tmp_path), date(2026, 10, 3)
+    _old_cube(data, T)
+    now = datetime(2026, 10, 3, 2, tzinfo=timezone.utc)
+    cube = cu.Cube(data, "a~1", "222")
+    try:
+        cu.step_app(FakeGA(today=T, cap=40, start=RS, stop_after=14, stop_why="budget"), cube, T, RS, now)
+        raise AssertionError("no stop")
+    except gf.Stop:
+        pass
+    _save(cube)
+    assert cube.head["rep"]["k"] == "2026-09" and os.path.exists(cube.rep_path("2026-09"))
+    os.remove(cu.month_path(data, "a~1", "2026-09"))
+    cube, ga = cu.Cube(data, "a~1", "222"), FakeGA(today=T, cap=40, start=RS, max_calls=cu.MAX_CALLS)
+    assert cu.step_app(ga, cube, T, RS, now + timedelta(hours=1)) == "fresh" and ga.calls == 0 and cube.dirty
+    _save(cube)
+    assert "k" not in cu.load_head(data, "a~1")["rep"] and not os.path.exists(cube.rep_path("2026-09"))
 
 
 # ── the run and the build hook ──────────────────────────────────────────────────────────────────────────────────────
