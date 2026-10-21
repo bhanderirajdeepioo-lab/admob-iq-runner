@@ -1585,3 +1585,21 @@ def test_q_read_weeks_after_the_cube_is_a_bound(tmp_path):
     assert rb._same({"at": "2026-10-13T06:00:00Z"}, {"at": "2026-10-13T07:59:00Z"})
     assert not rb._same({"at": "2026-10-13T06:00:00Z"}, {"at": "2026-10-13T08:01:00Z"})
     assert not rb._same({}, {"at": "2026-10-13T06:00:00Z"}) and not rb._same({"at": "x"}, {"at": None})
+
+
+def test_country_geo_day_short_rest_is_not_split():
+    """Google Ads' geographic report names a country for all but a small part of a day's cost (≤ GEO_SHORT_MAX): the
+    day is known — each country its own cost, the rest "Not split" (never given to a country); more than that short,
+    or more than the spend cache: unknown as before."""
+    days = [date(2026, 9, 1) + timedelta(days=i) for i in range(3)]
+    k = [d.isoformat() for d in days]
+    sdaily = {"s1": {x: 100_000_000 for x in k}}
+    geo = {"days": {"s1": {k[0]: {"AA": [60_000_000, 1.0], "BB": [38_000_000, 2.0]},       # 2% has no country
+                           k[1]: {"AA": [60_000_000, 1.0], "BB": [34_000_000, 2.0]},       # 6%: too much
+                           k[2]: {"AA": [60_000_000, 1.0], "BB": [42_000_000, 2.0]}}}}     # 2% more than spent
+    spend = {"first": k[0], "till": k[-1]}
+    cost, unk, st = rb._geo_app(geo, ["s1"], sdaily, spend, days)
+    assert unk == {days[1], days[2]} and st["untied_days"] == 2 and st["short_days"] == 1
+    assert cost["AA"] == {days[0]: (60_000_000, 1.0)} and cost["BB"] == {days[0]: (38_000_000, 2.0)}
+    assert cost[rb.NOT_SPLIT] == {days[0]: (2_000_000, None)} and st["xx_share"] == 0.02
+    assert st["short_share"] == 0.02

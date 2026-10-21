@@ -159,6 +159,8 @@ KC_POOL = 2                                 # a thin / partly covered month: poo
 UNP_LIM = 0.02                              # a month whose GA4 revenue without a country ("(not set)" + "(other)") is
                                             # > 2% of it: its k_c carries that share (AdMob places those users) → ≈
 GEO_TIE_REL, GEO_TIE_ABS = 0.01, 1_000_000  # a store-day's country split ties to the spend cache: within 1% or 1 unit
+GEO_SHORT_MAX = 0.05                        # … or Google Ads names a country for all but ≤ 5% of it (its geographic
+                                            # report leaves some cost with no country): that rest is "Not split"
 NO_CC, NOT_SPLIT = "--", "XX"               # GA4's "(not set)"; Google Ads' unmapped ("Not split")
 V = 1
 T = val.T                                   # 0, 1, 3, 7, 14, 30, 60, 90, 180, 365
@@ -1315,21 +1317,28 @@ def _geo_app(geo, sids, sdaily, spend, days, has_spend=True):
     first = _d(spend["first"]) if has_spend and spend and spend.get("first") else None
     till = _d(spend["till"]) if has_spend and spend and spend.get("till") else None
     cost, unk, seen = {}, [], []
-    tot = xx = sp = untied = 0
+    tot = xx = sp = untied = short = shortc = 0
+
+    def gsum(ent):
+        return sum(int(v[0] or 0) for v in ent.values() if isinstance(v, list) and v)
 
     def tie(s, k):
-        """None: the store's day is known (no spend, or a split that ties); "none": spent, no split; "off": a split
-        that does not tie (a store-day committed {} while it spent, an account not asked, the cost restated since)."""
+        """None: the store's day is known (no spend, or a split that ties); "short": known — Google Ads named a country
+        for all but ≤ GEO_SHORT_MAX of the cost (its geographic report leaves some cost with no country; that rest is
+        "Not split", never given to a country); "none": spent, no split; "off": a split that does not tie (a store-day
+        committed {} while it spent, an account not asked, more than the spend cache, the cost restated since)."""
         c = int((sdaily.get(s) or {}).get(k) or 0)
         ent = (gd.get(s) or {}).get(k)
         if ent is None:
             return "none" if c else None
-        g = sum(int(v[0] or 0) for v in ent.values() if isinstance(v, list) and v)
-        return "off" if abs(g - c) > max(GEO_TIE_REL * abs(c), GEO_TIE_ABS) else None
+        g = gsum(ent)
+        if abs(g - c) <= max(GEO_TIE_REL * abs(c), GEO_TIE_ABS):
+            return None
+        return "short" if 0 < g < c and c - g <= GEO_SHORT_MAX * c else "off"
     for X in days:
         k = _iso(X)
         why = {tie(s, k) for s in sids} if first and till and first <= X <= till else {"span"}
-        if why - {None}:
+        if why - {None, "short"}:
             unk.append(X)
             untied += "off" in why
             continue
@@ -1340,6 +1349,13 @@ def _geo_app(geo, sids, sdaily, spend, days, has_spend=True):
             if ent is None:
                 continue
             seen.append(X)
+            c_s, g_s = int((sdaily.get(s) or {}).get(k) or 0), gsum(ent)
+            if c_s - g_s > max(GEO_TIE_REL * abs(c_s), GEO_TIE_ABS):     # "short": the rest has no country — Not split
+                e = agg.setdefault(NOT_SPLIT, [0, 0.0, False])
+                e[0] += c_s - g_s
+                e[2] = True
+                short += 1
+                shortc += c_s - g_s
             for cc, v in ent.items():
                 if not isinstance(v, list) or not v:
                     continue
@@ -1355,6 +1371,7 @@ def _geo_app(geo, sids, sdaily, spend, days, has_spend=True):
             cost.setdefault(cc, {})[X] = (c, None if dln else round(dl, 2))
     st = {"from": _iso(min(seen)) if seen else None, "till": _iso(max(seen)) if seen else None,
           "known_days": len(days) - len(unk), "unknown_days": len(unk), "untied_days": untied, "unk": _ranges(unk),
+          "short_days": short, "short_share": _r(shortc / sp) if sp and short else None,
           "xx_share": _r(xx / tot) if tot else None, "cov": _r(tot / sp) if sp else None}
     return cost, set(unk), st
 
