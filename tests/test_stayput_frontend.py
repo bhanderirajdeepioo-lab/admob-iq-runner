@@ -15,7 +15,10 @@ hand) and checks:
   * a <select> keeps its place on its change; a text field is never anchored (the phone keyboard scrolls on purpose);
     a control in a fixed layer (drawer) is left alone; a finger that scrolled after touching down is not a tap;
   * SP.keepY (rerender's restore) clamps to the new page and is not "intentional"; scrollTo / scroll / scrollBy /
-    scrollIntoView are wrapped.
+    scrollIntoView are wrapped;
+  * 📈 the eCPM tables' REAL comparison rows (the page script's own ecCmpCtl output, tap by tap, from tests/ecpm_frontend.js
+    "ctl" on its synthetic dashboard), laid out by a flex-wrap model at 375 px and 1280 px: the tapped chip / ‹ › comes back
+    where it was, also when the title or the row wraps differently and in the twin Countries card.
 Plus the wiring in the page: rerender() / show() / the Audience levers (see also test_refresh_frontend.py and
 test_audience_frontend.py for those run for real). Skipped where node is not installed. No real data."""
 
@@ -39,10 +42,23 @@ def _script():
 
 
 @pytest.fixture(scope="module")
-def report():
+def report(tmp_path_factory):
     if NODE is None:
         pytest.skip("node is not installed")
-    out = subprocess.run([NODE, os.path.join(ROOT, "tests", "stayput_frontend.js"), PAGE],
+    # the eCPM tables' REAL control rows, tap by tap (the page script on the SYNTHETIC eCPM dashboard), replayed by the layer
+    from tests import test_ecpm_frontend as E
+    d = tmp_path_factory.mktemp("stayput")
+    sp, fx, ctl = str(d / "app.js"), str(d / "fx.json"), str(d / "ctl.json")
+    with open(sp, "w", encoding="utf-8") as f:
+        f.write(_script())
+    with open(fx, "w", encoding="utf-8") as f:
+        json.dump({"dashboard": E._fixture()}, f)
+    out = subprocess.run([NODE, os.path.join(ROOT, "tests", "ecpm_frontend.js"), sp, fx, "ctl"], check=True, capture_output=True,
+                         text=True, timeout=120)
+    assert json.loads(out.stdout)["errors"] == []
+    with open(ctl, "w", encoding="utf-8") as f:
+        f.write(out.stdout)
+    out = subprocess.run([NODE, os.path.join(ROOT, "tests", "stayput_frontend.js"), PAGE, ctl],
                          check=True, capture_output=True, text=True, timeout=120)
     rep = json.loads(out.stdout)
     assert rep["errors"] == [], rep["errors"]
@@ -79,6 +95,26 @@ def test_the_ecpm_comparison_row_stays_put(report):
     r = report["ecpm_cmp_mode_chip"]
     same_place(r)
     assert r["y"] == 1500 + 19
+
+
+REAL_TAPS = ["y7_to_month", "month_prev", "y_to_m", "m_prev", "m_next", "m_to_y_stored_month", "month_next", "month_to_14", "b14_to_7",
+             "app_y_to_m_countries", "app_m_prev_countries", "app_m_to_y_units", "app_7_to_month_countries"]
+
+
+@needs_node
+def test_the_real_ecpm_comparison_row_stays_put_at_375_and_1280(report):
+    # the page's own control rows (not hand-made markup): Yesterday 7 days → Month, Month ‹, Yesterday → Month vs month, its
+    # ‹ ›, back to Yesterday with the stored month, 14 / 7 days, and in one app's view the Countries card's twin controls
+    moved = {}
+    for vw in (375, 1280):
+        for name in REAL_TAPS:
+            r = report[f"ecpm_real_{vw}_{name}"]
+            same_place(r)
+            assert r["after"] is not None and r["twins"] == (2 if name.startswith("app_") else 1), (vw, name, r)
+            moved[(vw, name)] = r["moved"]
+    # the model is not trivial: at 375 px the tapped control's place on the PAGE changes (title / row wrap) and is still kept
+    assert sum(1 for (vw, _), m in moved.items() if vw == 375 and m) >= 3, moved
+    assert report["ecpm_real_375_m_next"]["disabled"] is True                   # › at the newest month: greyed, still in place
 
 
 @needs_node

@@ -4,11 +4,12 @@
 // capture / bubble listeners on window, timers and animation frames run by hand. Each scenario taps (pointerdown + click,
 // or a change) a control whose "handler" rebuilds the screen the way the dashboard does (new nodes, content above grown,
 // the page thrown to the top as iOS Safari does) and reports where the control ended up on screen.
-//   usage: node stayput_frontend.js <index.html>
+//   usage: node stayput_frontend.js <index.html> [ecpm_ctl.json]
+//   ecpm_ctl.json: the eCPM tables' REAL control rows before / after each tap (tests/ecpm_frontend.js … ctl), replayed here.
 // Prints ONE JSON report; tests/test_stayput_frontend.py asserts on it. No real data: every label is made up.
 'use strict';
 const fs = require('fs'), vm = require('vm');
-const [htmlPath] = process.argv.slice(2);
+const [htmlPath, ctlPath] = process.argv.slice(2);
 const errors = [];
 const page = fs.readFileSync(htmlPath, 'utf8');
 const a = page.indexOf('const SP=(function(){'), b = page.indexOf('\n  return api;\n})();', a);
@@ -275,6 +276,64 @@ const rebuildJump = (shift) => () => { SCR.replaceChildren(...screenKids(shift =
     await tap(ch()[0], () => { SCR.replaceChildren(...ecView(19, 'm', true)); W.scrollY = 0; });
     return { before, after: onScreen(ch()[0]), y: W.scrollY };
   });
+  // 📈 the same, from the page's REAL control rows (tests/ecpm_frontend.js "ctl" mode: each table card's head before / after a
+  // tap — title, chips, ‹ label ›), laid out by a small flex-wrap model at 375 px and 1280 px: the title can wrap to another
+  // line, the row can wrap differently (Month adds ‹ ›, Month vs month drops the baseline chips), the twin Countries card
+  // moves with the one above it. The tapped control (found by its onclick, the n-th of its twins) must come back where it was.
+  if (ctlPath) {
+    const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
+    const dec = t => String(t).replace(/&(amp|lt|gt|quot|#39);/g, (m, k) => ENT[k]);
+    function parse(h) {   // the subset the cards use: div / span / b / h3 / button, attributes in double quotes or bare
+      const root = el('div', {}), st = [root], re = /<(\/?)([a-zA-Z0-9]+)([^>]*)>|([^<]+)/g; let m;
+      while ((m = re.exec(h))) {
+        if (m[4] !== undefined) { const t = dec(m[4]).replace(/\s+/g, ' '); if (t.trim()) st[st.length - 1].text += t; continue; }
+        const tag = m[2].toUpperCase();
+        if (m[1]) { for (let i = st.length - 1; i > 0; i--) if (st[i].tagName === tag) { st.length = i; break; } continue; }
+        const at = {}, ar = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)(?:="([^"]*)")?/g; let a;
+        while ((a = ar.exec(m[3]))) if (a[1] !== 'style') at[a[1]] = a[2] === undefined ? '' : dec(a[2]);
+        const e = el(tag, at); st[st.length - 1].append(e); if (tag !== 'BR' && tag !== 'IMG' && tag !== 'INPUT') st.push(e); }
+      return root.children.slice(); }
+    const cls = (x, c) => x.classList.contains(c), kids = x => x.children, setTop = (x, t) => { x.top = t; kids(x).forEach(k => setTop(k, t)); };
+    // the page's CSS, as numbers: ≤ 430 px chips 12px / 9px padding, ≤ 760 px 40px-high row items, ‹ › 40 / 36 px, label 11.2em
+    function layoutHead(nodes, top, VW) {
+      const phone = VW <= 760, IW = (phone ? VW - 24 : Math.min(VW - 300, 1200)) - 32, H = phone ? 40 : 36;
+      const cw = VW <= 430 ? 6.6 : 6.9, pad = VW <= 430 ? 9 : (phone ? 11 : 12), bw = t => 2 * pad + String(t).length * cw + 1;
+      let y = top;
+      for (const n of nodes) {
+        if (cls(n, 'ct')) {   // title + hint: one line if both fit, else wrapped
+          const h3 = n.children.find(k => k.tagName === 'H3'), hint = n.children.find(k => k.tagName === 'SPAN');
+          const tw = h3 ? h3.textContent.length * 8.4 : 0, hw = hint ? hint.textContent.length * 6 : 0;
+          const l3 = Math.max(1, Math.ceil(tw / IW)), lh = Math.max(1, Math.ceil(hw / IW));
+          setTop(n, y + 14); if (h3) setTop(h3, y + 14);
+          y += 14 + (tw + 12 + hw <= IW ? 22 : l3 * 22 + 4 + lh * 16) + 6; if (hint) setTop(hint, y - 22);
+        } else if (cls(n, 'ec-cmp')) {   // flex-wrap: an item goes to the next line when it does not fit; a chip group shrinks (scrolls) to the line
+          let x = 0, line = 0; y += 2; setTop(n, y);
+          for (const it of kids(n)) {
+            const w = cls(it, 'ec-mnav') ? 2 * (phone ? 40 : 36) + 11.2 * 12.5 + 10 : Math.min(IW, kids(it).reduce((s, b) => s + bw(b.textContent), 2));
+            if (x > 0 && x + 10 + w > IW) { line++; x = 0; }
+            setTop(it, y + line * (H + 8)); x += (x ? 10 : 0) + w; }
+          y += (line + 1) * H + line * 8 + 10;
+        } else { setTop(n, y); y += 30; } }
+      return y; }
+    function viewOf(heads, VW) {   // the view: the chart above, then each table card (its head, then its note + table)
+      const cards = [], gap = 900; let y = 1800;
+      heads.forEach(h => { const nodes = parse(h), card = el('div', { class: 'card ec-tc', top: y }, nodes); y = layoutHead(nodes, y, VW) + gap; cards.push(card); });
+      return [el('div', { top: 100, text: 'chart' })].concat(cards); }
+    const pick = (root, code, i) => all(root, x => x.getAttribute('onclick') === code)[i];
+    const T = JSON.parse(fs.readFileSync(ctlPath, 'utf8')).ctl || [];
+    for (const VW of [375, 1280]) for (const t of T) {
+      await step(`ecpm_real_${VW}_${t.name}`, async () => {
+        W.innerWidth = VW; SCR.replaceChildren(...viewOf(t.before, VW)); W.docH = 9000;
+        const i = t.card, b0 = pick(SCR, t.code, i); if (!b0) throw new Error('tapped control not in the card: ' + t.code);
+        const twins = all(SCR, x => x.getAttribute('onclick') === t.code).length;
+        W.scrollY = Math.max(0, b0.top - 420); const before = onScreen(b0), docBefore = b0.top;
+        await tap(b0, () => { SCR.replaceChildren(...viewOf(t.after, VW)); W.scrollY = 0; });   // ecPaint: the whole view rebuilt; iOS → top
+        const b1 = pick(SCR, t.code, i);
+        return { before, after: b1 ? onScreen(b1) : null, moved: b1 ? b1.top - docBefore : null, twins, y: W.scrollY,
+          disabled: b1 ? b1.getAttribute('disabled') === '' : null }; });
+    }
+    W.innerWidth = 400;
+  }
   await step('wrapped', () => ({ to: !!win.scrollTo.__sp, by: !!win.scrollBy.__sp, sc: !!win.scroll.__sp, siv: !!El.prototype.scrollIntoView.__sp }));
   process.stdout.write(JSON.stringify({ errors, out }));
 })().catch(e => { errors.push('MAIN ' + (e.stack || e.message)); process.stdout.write(JSON.stringify({ errors, out })); });

@@ -114,6 +114,21 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
       return { S, hasCtl: run(`typeof ecCmpCtl`) === 'function' }; });
     out.errors = errors; process.stdout.write(JSON.stringify(out)); return;
   }
+  if (mode === 'ctl') {   // the REAL comparison rows, before / after each tap (for tests/stayput_frontend.js): each table card's head
+    const heads = () => run(`EC.el.innerHTML`).split('<div class="card ec-tc">').slice(1).map(c => c.split('<div class="ec-note')[0]);
+    const T = [], go = (name, code, card) => { const before = heads(); run(code); T.push({ name, code, card, before, after: heads() }); };
+    await step('ctl', () => {
+      run(`localStorage.removeItem('ecpmcmp'); EC.cmp=null; EC.cValid=null; APP=''; EC.hdr=''; EC.booted=true; renderEcpm(); EC.app=''; ecPaint();`);
+      go('y7_to_month', `ecCmpB('mon')`, 0); go('month_prev', `ecCmpMon(-1)`, 0);           // Feb → Jan (kept for later)
+      go('y_to_m', `ecCmpM('m')`, 0); go('m_prev', `ecCmpMon(-1)`, 0); go('m_next', `ecCmpMon(1)`, 0);
+      go('m_to_y_stored_month', `ecCmpM('y')`, 0); go('month_next', `ecCmpMon(1)`, 0);       // back to Yesterday vs Jan 2026, then Feb
+      go('month_to_14', `ecCmpB('14')`, 0); go('b14_to_7', `ecCmpB('7')`, 0);
+      run(`EC.app='Demo Gallery'; ecPaint();`);                                   // one app: the Ad units + Countries twins
+      go('app_y_to_m_countries', `ecCmpM('m')`, 1); go('app_m_prev_countries', `ecCmpMon(-1)`, 1); go('app_m_to_y_units', `ecCmpM('y')`, 0);
+      go('app_7_to_month_countries', `ecCmpB('mon')`, 1);
+      return T; });
+    out.errors = errors; process.stdout.write(JSON.stringify(out)); return;
+  }
 
   // ── the maths ────────────────────────────────────────────────────────────────────────────────────────────────────────
   await step('win', () => J(`(()=>{ const W=ecWin(); return {L:W.L,T:W.T,y:W.y,d7:W.d7,d30:W.d30,mtd:W.mtd,lm:W.lm,p7:W.p7,p30:W.p30,sw:W.sw,s30:W.s30,ncomp:W.comp.length,first:W.comp[0],last:W.comp[W.comp.length-1]}; })()`));
@@ -363,6 +378,52 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
     run(CMP0 + `EC.cmp={m:'m',b:'7',bm:'',cm:''}; EC.app=''; ecPaint();`);
     R.card = cards()[0]; R.order = J(`ecSortRows(EC.rows.a.filter(r=>r.act),EC.sort).map(r=>r.key)`);
     run(`DATA=__D0; window.__ax=null; EC.cache=null; EC.ucache={};`); run(CMP0 + `EC.app=''; ecPaint();`); return R; });
+  // edges (SYNTHETIC fixtures): a launch ramp just before a month ends (a baseline of a few hundred impressions), a row
+  // that starts inside the period, the 1st of a month (the month of yesterday is whole), a history shorter than 7 days
+  const useFx = k => run(`var __Dk=DATA; DATA=__FX.${k}; window.__ax=null; EC.cache=null; EC.ucache={}; EC.cValid=null;`);
+  const unFx = () => { run(`DATA=__FX.dashboard; window.__ax=null; EC.cache=null; EC.ucache={};`); run(CMP0 + `EC.app=''; ecPaint();`); };
+  const rowsUnder = sel => J(`(()=>{ const W=ecWin(), A=ecAgg().apps, C=ecCmpC(W,${JSON.stringify(sel)}), o={}; Object.keys(A).forEach(n=>{ const r=ecRow(A[n],W,C); delete r.spark; o[n]=r; });
+    return {title:C.title,dn:C.dn,cur:C.cur,base:C.base,rows:o}; })()`);
+  await step('cmp_edge', () => { const R = {};
+    useFx('ramp');
+    for (const [k, sel] of [['mon', { m: 'y', b: 'mon' }], ['mm', { m: 'm' }], ['b30', { m: 'y', b: '30' }], ['b7', { m: 'y', b: '7' }]]) {
+      run(CMP0 + `EC.cmp=${JSON.stringify(Object.assign({ m: 'y', b: '7', bm: '', cm: '' }, sel))}; EC.app=''; ecPaint();`);
+      R[k] = Object.assign(rowsUnder(sel), { card: cards()[0], order: J(`ecSortRows(EC.rows.a.filter(r=>r.act),EC.sort).map(r=>r.key)`) }); }
+    useFx('first');
+    for (const [k, sel] of [['first_mon', { m: 'y', b: 'mon' }], ['first_mm', { m: 'm' }]]) {
+      run(CMP0 + `EC.cmp=${JSON.stringify(Object.assign({ m: 'y', b: '7', bm: '', cm: '' }, sel))}; EC.app=''; ecPaint();`);
+      R[k] = Object.assign(rowsUnder(sel), { card: cards()[0] }); }
+    useFx('short');
+    run(CMP0 + `EC.app=''; ecPaint();`); R.short = { ctl: run(`ecCmpCtl(EC.W,EC.C)`), title: run(`EC.C.title`) };
+    unFx(); return R; });
+  // a month-to-month status on noise only (SYNTHETIC: steady eCPM, ±8% random day to day, 15 months): the first days of a
+  // month (Nov (1) … Nov (1–5), Nov (1–8)) vs the whole October — measured like the comparison, not whole month vs whole month
+  await step('cmp_noise', () => { const R = {};
+    for (const T of ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-09', '2026-12-01']) {
+      run(`(()=>{ const D=__FX.noise, L=new Date(Date.parse('${T}T00:00:00Z')-864e5).toISOString().slice(0,10);
+        DATA=Object.assign({},D,{today_date:'${T}',latest_complete:L,placements:D.placements.map(p=>Object.assign({},p,{daily:p.daily.filter(r=>r[0]<='${T}')}))}); })();
+        window.__ax=null; EC.cache=null; EC.ucache={};`);
+      const r = rowsUnder({ m: 'm' }); Object.values(r.rows).forEach(x => { delete x.ye; delete x.wi; });
+      R[T] = { title: r.title, dn: r.dn, rows: r.rows, swm: J(`ecCmpC(ecWin(),{m:'m'}).swm.map(o=>o.k)`), note: run(`ecStatusNote(ecCmpC(ecWin(),{m:'m'}))`) }; }
+    unFx(); return R; });
+  // Countries, day by day: a hole (a failed chunk) inside the pick, a hole in the last 7 days, a young app's report
+  await step('cmp_holes', () => { const R = {};
+    run(CMP0 + `EC.app='Demo Gallery'; ecPaint();`);
+    const look = () => { const c = cards(); return { countries: (c[1] || '').split('<div id="ec-tb-c">')[0], ct: J(`({u:EC.Ct.u.title,c:EC.Ct.c.title})`),
+      c: J(`EC.rows.c.map(r=>({key:r.key,y:r.y,w7:r.w7,imp:r.imp,yi:r.yi,nc:r.nc}))`) }; };
+    run(`var __cd0=DATA.countries_daily['Demo Gallery']; DATA.countries_daily['Demo Gallery']=Object.fromEntries(Object.entries(__cd0).map(([c,rows])=>[c,rows.filter(r=>!(r[0]>='2026-02-01'&&r[0]<='2026-02-20'))]));`);
+    run(`ecPaint()`); R.febDef = look();
+    run(`ecCmpB('mon')`); R.febMon = look();
+    run(`ecCmpM('m')`); R.febMm = look();
+    run(`ecCmpM('y'); ecCmpB('14')`); R.feb14 = look();
+    run(`DATA.countries_daily['Demo Gallery']=Object.fromEntries(Object.entries(__cd0).map(([c,rows])=>[c,rows.filter(r=>!(r[0]>='2026-03-03'&&r[0]<='2026-03-05'))]));`);
+    run(`ecPaint()`); R.mar14 = look();
+    run(`ecCmpB('7')`); R.marDef = look();
+    run(`DATA.countries_daily['Demo Gallery']=__cd0; DATA.countries_daily['New Timer']={US:DATA.placements.find(p=>p.app==='New Timer').daily.map(r=>[r[0],Math.round(r[1]/2),Math.round(r[2]/2),0,0,0])};`);
+    run(CMP0 + `EC.cmp={m:'y',b:'14',bm:'',cm:''}; EC.app='New Timer'; ecPaint();`); R.young14 = look();
+    run(`delete DATA.countries_daily['New Timer'];`);
+    R.ranges = J(`[ecRanges(['2026-02-01','2026-02-02','2026-02-03']),ecRanges(['2026-02-28','2026-03-01','2026-03-05']),ecRanges(['2026-01-01','2026-01-03','2026-01-05','2026-01-07','2026-01-09','2026-01-11']),ecRanges([])]`);
+    unFx(); return R; });
 
   out.errors = errors;
   process.stdout.write(JSON.stringify(out));

@@ -421,6 +421,7 @@
   .ec-st.bigda{background:var(--bad-b);color:var(--bad)}.ec-st.dhyan{background:var(--watch-b);color:var(--watch)}.ec-st.behtar{background:var(--good-b);color:var(--good)}
   .ec-st.normal{background:var(--raise);color:var(--ink2)}.ec-st.jaldi,.ec-st.lagu{background:transparent;color:var(--faint);border:1px solid var(--line2)}
   .ec-st small{display:block;font-size:10px;font-weight:600}
+  .ec-t td small.ec-own{display:block;font-size:10px;font-weight:600;color:var(--watch);line-height:1.3}
   .ec-sp{display:block;width:96px;height:26px;margin-left:auto}
   .ec-more{display:flex;justify-content:center;padding:6px 10px 10px}
   .ec-more button{min-height:34px;background:var(--raise);border:1px solid var(--line2);border-radius:8px;color:var(--ink2);font:inherit;font-size:12.5px;font-weight:600;padding:5px 14px;cursor:pointer}
@@ -5373,6 +5374,7 @@ function renderOverview(){
 const EC_MIN_IMPR=1000;       // fewer impressions than this on "yesterday" → "low data": shown, never judged (N/A)
 const EC_SWING_FLOOR=0.02;    // the smallest "usual day-to-day swing" a status is judged against (2%)
 const EC_SWING_MIN=7;         // day-to-day pairs needed before a status is judged (else "Too early")
+const EC_MDAYS_MIN=7;         // Month vs month: complete days the newest (partial) month needs before its status is judged (else "Too early")
 const EC={app:'',hdr:null,r:'30',g:'day',sort:{k:'imp',d:'asc'},usort:{k:'imp',d:'asc'},csort:{k:'imp',d:'asc'},
   idle:{a:false,u:false,c:false},cmax:false,rows:{},el:null,cache:null,cacheD:null,ucache:{},ch:null,pin:false,booted:false,wired:false,
   cmp:null,C:null,Ct:null,cValid:null};   // cmp = the tables' comparison (ecCmpC), C / Ct = it resolved (per table), cValid = the Countries card's last one its data covers
@@ -5457,18 +5459,37 @@ function ecCmpC(W,s){ const M=ecMon(W), S=ecCmpFix(W,s);
     return Object.assign(C,{bm,base,baseL:bl,colBase:bl+'<br>avg',title:'yesterday vs '+bl}); }
   const cm=S.cm||M.cMax, pm=ecMAdd(cm,-1), cur=M.by[cm]||[], base=M.by[pm]||[], cl=ecPerL(cm,cur), bl=ecPerL(pm,base);
   const swm=M.ks.filter(k=>k<=pm&&ecMFull(k,M.by[k])).slice(-13).map(k=>({k,days:M.by[k]}));   // the whole months up to the older one
-  return {m:'m',S,cm,pm,cur,base,ncur:cur.length||1,curL:cl,baseL:bl,colCur:cl+'<br>eCPM',colBase:bl+'<br>eCPM',colImp:cl+'<br>impr',title:cl+' vs '+bl,swm}; }
-// the usual month-to-month swing (ecSwing over whole-month sums), only months the row had from their 1st day
-function ecMSwing(dm,swm){ const f=ecFirst(dm), mdm={}, ks=[];
-  (swm||[]).forEach(o=>{ if(!f||o.days[0]<f) return; const s=ecSum(dm,o.days); mdm[o.k]=[s.e,s.i]; ks.push(o.k); }); return ecSwing(mdm,ks); }
+  const dn=ecMFull(cm,cur)?0:cur.length;   // a partial newest month: its complete days 1 … dn (0 = a whole month)
+  return {m:'m',S,cm,pm,cur,base,ncur:cur.length||1,dn,curL:cl,baseL:bl,colCur:cl+'<br>eCPM',colBase:bl+'<br>eCPM',colImp:cl+'<br>impr',title:cl+' vs '+bl,swm}; }
+// the usual month-to-month swing, measured the way the comparison it judges is made: each earlier month's first dn days (the
+// whole month when dn = 0) vs the whole month before it — so "Nov (1–2) vs Oct" is judged against how much 2 days usually
+// differ from a whole month, never against whole month vs whole month. Only whole months the row had from their 1st day,
+// both sides ≥ EC_MIN_IMPR impressions; the median |change| of those pairs; null under EC_SWING_MIN pairs (→ Too early).
+// A month of fewer than EC_MDAYS_MIN complete days is not judged at all (1–6 days of eCPM swing on noise alone → Too early)
+function ecMSwing(dm,swm,dn){ const f=ecFirst(dm), ch=[], ok=s=>s.i>=EC_MIN_IMPR&&s.e>0, L=swm||[]; if(dn&&dn<EC_MDAYS_MIN) return null;
+  for(let j=1;j<L.length;j++){ const a=L[j-1], b=L[j]; if(!f||a.days[0]<f||ecMAdd(a.k,1)!==b.k) continue;
+    const sa=ecSum(dm,a.days), sb=ecSum(dm,dn?b.days.slice(0,dn):b.days); if(ok(sa)&&ok(sb)) ch.push(Math.abs(sb.ec/sa.ec-1)); }
+  if(ch.length<EC_SWING_MIN) return null; ch.sort((a,b)=>a-b); const m=ch.length>>1; return ch.length%2?ch[m]:(ch[m-1]+ch[m])/2; }
 // one row for a picked comparison: the current period vs the baseline; impact/day = the current period's impressions per
-// day × (its eCPM − the baseline's) ÷ 1000 (yesterday: its impressions; a month: ÷ its complete days)
-function ecRowC(dm,W,C){ const y=ecSum(dm,C.cur), w=ecSum(dm,C.base), chg=(y.ec!=null&&w.ec!=null)?y.ec-w.ec:null;
-  const pct=(chg!=null&&w.ec)?chg/w.ec:null, imp=chg!=null?(y.i/C.ncur)*chg/1000:null;
-  const swing=C.m==='m'?ecMSwing(dm,C.swm):ecSwing(dm,W.sw), m30=ecSum(dm,W.s30);
-  return {y:y.ec,yi:y.i,ye:y.e,w7:w.ec,wi:w.i,chg,pct,imp,swing,st:ecStatus(pct,swing,y.i),act:C.m==='m'?(y.i>0||w.i>0):m30.i>0,
-    spark:W.s30.map(d=>{ const x=dm[d]; return (x&&x[1])?x[0]/(x[1]*1000):null; })}; }
+// day × (its eCPM − the baseline's) ÷ 1000 (yesterday: its impressions; a month: ÷ the complete days the row had in it).
+// A row whose data starts inside a labelled period carries its own days (ob / oc: printed under that number), and a
+// baseline under EC_MIN_IMPR impressions (a launch ramp of a few hundred) is low data: N/A, never judged, sorted last
+function ecRowC(dm,W,C){ const f=ecFirst(dm), own=days=>(f&&days.length&&f>days[0])?days.filter(d=>d>=f):null;
+  const ob=own(C.base), oc=C.m==='m'?own(C.cur):null, nc=oc?oc.length:C.ncur;
+  const y=ecSum(dm,C.cur), w=ecSum(dm,C.base), chg=(y.ec!=null&&w.ec!=null)?y.ec-w.ec:null;
+  const pct=(chg!=null&&w.ec)?chg/w.ec:null, imp=chg!=null&&nc?(y.i/nc)*chg/1000:null;
+  const swing=C.m==='m'?ecMSwing(dm,C.swm,C.dn):ecSwing(dm,W.sw), m30=ecSum(dm,W.s30), lowB=y.i>=EC_MIN_IMPR&&w.i>0&&w.i<EC_MIN_IMPR;
+  return {y:y.ec,yi:y.i,ye:y.e,w7:w.ec,wi:w.i,chg,pct,imp,swing,st:lowB?'lagu':ecStatus(pct,swing,y.i),act:C.m==='m'?(y.i>0||w.i>0):m30.i>0,
+    spark:W.s30.map(d=>{ const x=dm[d]; return (x&&x[1])?x[0]/(x[1]*1000):null; }),nc,lowB,ob:ob&&ob.length?ecSpan(ob):'',oc:oc&&oc.length?ecSpan(oc):''}; }
 function ecCmpFrom(C){ return [C.cur[0],C.base[0]].filter(Boolean).sort()[0]||''; }   // the earliest day it reads
+// the Countries card's coverage: the days the app's country report has (any country), and the days a comparison reads on
+// which the app served (≥ EC_MIN_IMPR impressions in its own placements) but no country has a row
+function ecCDays(app,T){ const o=new Set(); Object.values((DATA.countries_daily||{})[app]||{}).forEach(rows=>(rows||[]).forEach(r=>{ if(r&&r[0]&&r[0]!==T) o.add(r[0]); })); return o; }
+function ecCMiss(K,dm,cd){ return [...new Set([...K.base,...K.cur])].filter(d=>{ const x=dm[d]; return x&&x[1]>=EC_MIN_IMPR&&!cd.has(d); }).sort(); }
+function ecRanges(days){ const o=[]; let a='',b='';   // "1 Sep–20 Sep, 25 Sep" (the first 4 runs, then how many more)
+  const put=()=>{ if(a) o.push(a===b?fmtD(a):fmtD(a)+'–'+fmtD(b)); };
+  (days||[]).forEach(d=>{ if(b&&ecNextDay(b)===d){ b=d; return; } put(); a=b=d; }); put();
+  return o.length>4?o.slice(0,4).join(', ')+` +${o.length-4} more`:o.join(', '); }
 function ecCmpLoad(){ let sv=null; try{ sv=JSON.parse(localStorage.getItem('ecpmcmp')||'null'); }catch(e){} return sv&&typeof sv==='object'?sv:Object.assign({},EC_CMP_DEF); }
 function ecCmpSave(){ try{ localStorage.setItem('ecpmcmp',JSON.stringify(EC.cmp)); }catch(e){} }
 function ecCmpSet(p){ EC.cmp=Object.assign({},EC.cmp||EC_CMP_DEF,p); ecCmpSave(); ecPaint(); }   // the view repaints; the tapped control stays put (SP)
@@ -5485,7 +5506,7 @@ function ecCmpCtl(W,C){ const M=ecMon(W), S=C.S, n=W.comp.length;
   const nav=(lbl,lo,hi)=>`<div class="ec-mnav"><button type="button" class="ec-ma" onclick="ecCmpMon(-1)" aria-label="Previous month"${lo?' disabled':''}>‹</button>`
     +`<span class="ec-ml" aria-live="polite">${lbl}</span><button type="button" class="ec-ma" onclick="ecCmpMon(1)" aria-label="Next month"${hi?' disabled':''}>›</button></div>`;
   if(S.m==='y') return `<div class="ec-cmp">${mode}<div class="ec-seg" role="group" aria-label="Compare yesterday with">`
-    +EC_CMP_N.map(k=>b(S.b===k,'ecCmpB',k,k+' days',n<+k,n<+k?`Sirf ${n} din ka data`:'')).join('')+b(S.b==='mon','ecCmpB','mon','Month',!M.bOk,M.bOk?'':'Abhi kisi mahine ka data nahi')+'</div>'
+    +EC_CMP_N.map(k=>b(S.b===k,'ecCmpB',k,k+' days',n<+k&&S.b!==k,n<+k?`Sirf ${n} din ka data`:'')).join('')+b(S.b==='mon','ecCmpB','mon','Month',!M.bOk,M.bOk?'':'Abhi kisi mahine ka data nahi')+'</div>'   // the picked chip is never greyed out (7 days on a short history)
     +(S.b==='mon'?nav(C.baseL,C.bm<=M.bMin,C.bm>=M.bMax):'')+'</div>';
   return `<div class="ec-cmp">${mode}${nav(`<b>${C.curL}</b><span>vs ${C.baseL}</span>`,C.cm<=M.cMin,C.cm>=M.cMax)}</div>`; }
 // the All apps note: what is compared with what, on which days (the default keeps its words)
@@ -5494,7 +5515,7 @@ function ecCmpNote(C,W){ const s=csym(), lead=`Sabse zyada <b>${s} nuksan</b> wa
   const kal=`kal (<b>${fmtD(W.L)}</b>) ka eCPM`, M=ecMon(W);
   if(C.m==='y'&&C.n) return `${lead}<b>Change</b> = ${kal} − last ${C.n} days avg (kal samet ${C.n} poore din: <b>${ecSpan(C.base)}</b>). <b>${s} impact/day</b> = kal ke impressions × (kal ka eCPM − ${C.n}-day avg)${tail}`;
   if(C.m==='y') return `${lead}<b>Change</b> = ${kal} − <b>${C.baseL}</b> ka avg eCPM (<b>${ecSpan(C.base)}</b> ki kamai ÷ impressions × 1000`
-    +(C.bm===M.Lm?' — adhura mahina: sirf poore din, kal samet':(ecMFull(C.bm,C.base)?'':` — data ${fmtD(C.base[0])} se hai, isliye sirf ${C.base.length} din`))
+    +(C.bm===M.Lm&&!ecMFull(C.bm,C.base)?' — adhura mahina: sirf poore din, kal samet':(ecMFull(C.bm,C.base)?(C.bm===M.Lm?' — poora mahina, kal samet':''):` — data ${fmtD(C.base[0])} se hai, isliye sirf ${C.base.length} din`))
     +`). <b>${s} impact/day</b> = kal ke impressions × (kal ka eCPM − ${C.baseL} avg)${tail}`;
   return `${lead}<b>Change</b> = <b>${C.curL}</b> ka eCPM − <b>${C.baseL}</b> ka eCPM (har mahina = us mahine ki kamai ÷ impressions × 1000 · <b>${ecSpan(C.cur)}</b> vs <b>${ecSpan(C.base)}</b>).`
     +(ecMFull(C.cm,C.cur)?'':` <b>${C.curL}</b> adhura mahina hai — sirf poore din (aaj ka adhura din nahi).`)
@@ -5645,10 +5666,11 @@ function ecTableHtml(t){ const all=EC.rows[t]||[], S=EC[{a:'sort',u:'usort',c:'c
     return `<span class="ec-an"><span><b>${hAttr(cName(r.cc))}</b><small>${hAttr(r.cc)}</small></span></span>`; };
   const body=rows.map(r=>{ const c=ecCls(r.pct), low=r.st==='lagu';
     const clk=t==='a'?` class="clk${low?' ec-low':''}" tabindex="0" data-n="${hAttr(r.key)}" onclick="ecApp(this.dataset.n)" onkeydown="if(event.key==='Enter'){ecApp(this.dataset.n)}"`:(low?' class="ec-low"':'');
-    return `<tr${clk}><td>${nameCell(r)}</td><td style="font-weight:700;color:${low?'':'#fff'}">${ecCm(r.y)}</td><td>${ecCm(r.w7)}</td>`
+    const own=v=>v?`<small class="ec-own">${v} only</small>`:'';   // the row's own days, when its data starts inside the period (never on the default)
+    return `<tr${clk}><td>${nameCell(r)}</td><td style="font-weight:700;color:${low?'':'#fff'}">${ecCm(r.y)}${own(r.oc)}</td><td>${ecCm(r.w7)}${own(r.ob)}</td>`
       +`<td class="${c}">${r.chg==null?'—':`<b>${ecCmS(r.chg)}</b> (${ecPct(r.pct)})`}</td><td class="${c}">${r.imp==null?'—':`<b>${ecMoneyS(r.imp)}</b>/day`}</td>`
-      +`<td title="${Math.round(r.yi).toLocaleString()} impressions${mo?' · '+Math.round(r.yi/C.ncur).toLocaleString()+'/day':''}">${r.yi?fmtN(r.yi):'0'}</td><td>${ecSpark(r.spark,r.st)}</td>`
-      +`<td><span class="ec-st ${r.st}">${WD.st[r.st]}${low?`<small>${r.yi?'low data':'no data'}</small>`:''}</span></td></tr>`; }).join('');
+      +`<td title="${Math.round(r.yi).toLocaleString()} impressions${mo?' · '+(r.nc?Math.round(r.yi/r.nc):0).toLocaleString()+'/day'+(r.oc?' ('+r.nc+' din)':''):''}">${r.yi?fmtN(r.yi):'0'}</td><td>${ecSpark(r.spark,r.st)}</td>`
+      +`<td><span class="ec-st ${r.st}">${WD.st[r.st]}${low?`<small>${r.lowB?'low data (baseline)':(r.yi?'low data':'no data')}</small>`:''}</span></td></tr>`; }).join('');
   const what={a:'apps',u:'ad units',c:'countries'}[t];
   const more=(t==='c'&&(cut||EC.cmax)&&srt.length>EC_CTOP+3?`<div class="ec-more"><button type="button" onclick="ecCAll()">${cut?`Show all ${srt.length} countries`:`Show top ${EC_CTOP} only`}</button></div>`:'')
     +(idle.length?`<div class="ec-more"><button type="button" onclick="ecIdle('${t}')">${EC.idle[t]?`Hide ${idle.length} ${what} with no data in ${mo?'these 2 months':'30 days'}`:`Show ${idle.length} more ${what} (no data in ${mo?'these 2 months':'30 days'})`}</button></div>`:'');
@@ -5827,11 +5849,17 @@ function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.qu
       <div class="ec-hd"><div>${appIconId(L.id,L.store,34)}</div><div><div class="big">${hAttr(L.label)}</div><div class="sub">Is app ka AdMob (kamai) data nahi — eCPM nahi ban sakta.</div></div></div>`; }
     else {
       const cfirst=Object.values((DATA.countries_daily||{})[name]||{}).reduce((m,rows)=>{ const d=rows&&rows[0]&&rows[0][0]; return d&&(!m||d<m)?d:m; },'');
-      // Countries: its own report, its own (often shorter) history — a pick it does not cover keeps its last covered one, and says so
+      // Countries: its own report, its own (often shorter) history, pulled in best-effort chunks (a failed chunk = a hole).
+      // Checked day by day: every day the pick reads on which the app served (≥ EC_MIN_IMPR impressions in its placements)
+      // needs a country row. A pick it does not cover keeps its last covered one (else the default) and says which days are
+      // missing; with nothing covered (or on the default) the table stays and the missing days are said
       let Cc=C, cw='';
-      if(cfirst&&!C.def&&ecCmpFrom(C)<cfirst){ const K=EC.cValid?ecCmpC(W,EC.cValid):null; Cc=K&&(K.def||ecCmpFrom(K)>=cfirst)?K:ecCmpC(W,EC_CMP_DEF);
-        cw=`⚠ Country report ka data <b>${ecYear(cfirst)}</b> se hai — <b>${hAttr(C.title)}</b> ke liye poora nahi, isliye yeh table abhi bhi <b>${hAttr(Cc.title)}</b> dikha rahi hai.`; }
-      else if(cfirst) EC.cValid=Object.assign({},C.S);
+      if(cfirst){ const cdays=ecCDays(name,W.T), m0=ecCMiss(C,dm,cdays);
+        if(!m0.length) EC.cValid=Object.assign({},C.S);
+        else { const K=C.def?null:[EC.cValid?ecCmpC(W,EC.cValid):null,ecCmpC(W,EC_CMP_DEF)].find(K=>K&&!ecCMiss(K,dm,cdays).length);
+          const why=m0.every(d=>d<cfirst)?`Country report ka data <b>${ecYear(cfirst)}</b> se hai`:`Country report me <b>${ecRanges(m0)}</b> ka data nahi hai`;
+          if(K){ Cc=K; cw=`⚠ ${why} — <b>${hAttr(C.title)}</b> ke liye poora nahi, isliye yeh table abhi bhi <b>${hAttr(K.title)}</b> dikha rahi hai.`; }
+          else cw=`⚠ ${why} — un din ke desh-wise number is table me nahi hain (baaki din ke hain), isliye yeh table adhuri hai.`; } }
       if(EC.rows.app!==name) EC.cmax=false; EC.rows={app:name,u:ecRowsFor('u',W,C),c:ecRowsFor('c',W,Cc)}; EC.Ct={u:C,c:Cc};
       const order=ecSortRows(Object.keys(A.apps).map(n=>Object.assign(ecRow(A.apps[n],W,C),{key:n,label:ecAppLbl(n).label})).filter(r=>r.act||r.key===name),EC.sort).map(r=>r.key);
       const af=ecFirst(dm), anote=!C.def&&af>ecCmpFrom(C)?` Is app ka data <b>${ecYear(af)}</b> se hai — usse pehle ke din khaali hain.`:'';
@@ -5854,8 +5882,14 @@ function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.qu
   else { if(tt) tt.textContent=TITLES.ecpm[0]; if(ts) ts.textContent=TITLES.ecpm[1]; }
   ecSave(); ecDraw();
   try{ requestAnimationFrame(()=>{ const w=document.getElementById('ec-chw'); if(w&&EC.ch&&Math.abs((w.clientWidth||0)-(EC.ch.cw||0))>2) ecDraw(); }); }catch(e){} }
-function ecStatusNote(C){ if(C&&C.m==='m') return `<b>Status</b> — har row apne <b>mahine-dar-mahine ke normal utaar-chadhaav</b> se judge hoti hai (${hAttr(C.baseL)} tak ke poore mahine, max 13 — unka median month-to-month badlav): <b>Worse</b> = 2× se zyada gira · <b>Watch</b> = gira, par 2× se kam · <b>Better</b> = 2× se zyada badha · <b>Normal</b> = apni range me · <b>Too early</b> = abhi ${EC_SWING_MIN+1} poore mahine ka data nahi · <b>N/A</b> = ${hAttr(C.curL)} me ${EC_MIN_IMPR.toLocaleString()} se kam impressions (low data — judge nahi kiya).`;
-  return `<b>Status</b> — har row apne <b>roz ke normal utaar-chadhaav</b> se judge hoti hai (pichhle 30 din ka median day-to-day badlav): <b>Worse</b> = 2× se zyada gira · <b>Watch</b> = gira, par 2× se kam · <b>Better</b> = 2× se zyada badha · <b>Normal</b> = apni range me · <b>Too early</b> = abhi kaafi din ka data nahi · <b>N/A</b> = kal ${EC_MIN_IMPR.toLocaleString()} se kam impressions (low data — judge nahi kiya).`; }
+function ecStatusNote(C){ const own=C&&!C.def?` · <b>"… only"</b> kisi number ke neeche = us row ka data period ke beech se shuru hua — uska avg sirf un dino ka hai.`:'';
+  const nab=C&&(C.m==='m'||C.bm)?` · ya <b>${hAttr(C.baseL)}</b> (baseline) me ${EC_MIN_IMPR.toLocaleString()} se kam impressions ("low data (baseline)" — judge nahi kiya, sabse neeche)`:'';
+  if(C&&C.m==='m') return `<b>Status</b> — har row apne <b>mahine-dar-mahine ke normal utaar-chadhaav</b> se judge hoti hai (${hAttr(C.baseL)} tak ke poore mahine, max 13 — `
+    +(C.dn?`har mahine ke <b>pehle ${C.dn} din</b> vs uska pichhla poora mahina, bilkul ${hAttr(C.curL)} vs ${hAttr(C.baseL)} ki tarah; unka median badlav — taaki thode dino ka aam utaar-chadhaav alarm na bane)`:'unka median month-to-month badlav)')
+    +`: <b>Worse</b> = 2× se zyada gira · <b>Watch</b> = gira, par 2× se kam · <b>Better</b> = 2× se zyada badha · <b>Normal</b> = apni range me · <b>Too early</b> = abhi ${EC_SWING_MIN+1} poore mahine ka data nahi`
+    +(C.dn&&C.dn<EC_MDAYS_MIN?`, ya <b>${hAttr(C.curL)}</b> me abhi sirf ${C.dn} poore din — itne kam din ka eCPM aam utaar-chadhaav se hi upar-neeche hota hai, isliye Status ${EC_MDAYS_MIN} poore din ke baad (tab tak Too early; Change aur ${csym()} impact abhi bhi asli hain)`:'')
+    +` · <b>N/A</b> = ${hAttr(C.curL)} me ${EC_MIN_IMPR.toLocaleString()} se kam impressions (low data — judge nahi kiya)${nab}.${own}`;
+  return `<b>Status</b> — har row apne <b>roz ke normal utaar-chadhaav</b> se judge hoti hai (pichhle 30 din ka median day-to-day badlav): <b>Worse</b> = 2× se zyada gira · <b>Watch</b> = gira, par 2× se kam · <b>Better</b> = 2× se zyada badha · <b>Normal</b> = apni range me · <b>Too early</b> = abhi kaafi din ka data nahi · <b>N/A</b> = kal ${EC_MIN_IMPR.toLocaleString()} se kam impressions (low data — judge nahi kiya)${nab}.${own}`; }
 // ---------- 👥 AUDIENCE (the owner-approved Audience demo, ported) ----------
 // One lazy file (DATA.audience.file = audience.json.gz, admob_iq/audience_build.py): who still has each app, who opens
 // it, who went quiet and for how many months, and what waking them could earn. Every number is printed (the number

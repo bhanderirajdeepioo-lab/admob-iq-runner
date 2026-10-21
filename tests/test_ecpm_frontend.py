@@ -20,7 +20,12 @@ straight from the fixture's raw daily rows (never reusing the page's arithmetic)
   * 🔀 the tables' comparison picker (owner, 21 Oct): Yesterday vs last 7 (default) / 14 / 30 / 60 days / a month ‹ ›, and
     Month vs month ‹ ›: every pick's rows recounted here, the month bounds, partial months labelled by their days, the
     month-to-month status on a long synthetic history, Ad units / Countries following the pick (or saying why not), the
-    pick restored per viewer, and the default view byte-identical to the page before the picker (git: BASE_REV).
+    pick restored per viewer, and the default view byte-identical to the page before the picker (git: BASE_REV);
+    a baseline of a few hundred impressions (a launch ramp) = N/A "low data (baseline)", sorted last; a row that starts
+    inside a labelled period prints its own days; the 1st of a month (the month of yesterday is whole, never "adhura");
+    a short history keeps its picked chip lit; a partial month's status measured like the comparison (its first N days vs
+    the whole month before, on earlier months) and Too early under 7 complete days — checked on noise only; the Countries
+    card checked day by day (a failed chunk = a hole, its days named).
 Skipped where node is not installed."""
 
 import json
@@ -41,6 +46,7 @@ TODAY = "2026-03-11"          # the live, partial day (its rows are absurd on pu
 LATEST = "2026-03-10"         # yesterday = the newest complete day
 START = date(2025, 12, 20)
 MIN_IMPR = 1000
+MDAYS_MIN = 7                 # Month vs month: complete days a partial newest month needs before its status is judged
 
 
 def _days(a, b):
@@ -165,13 +171,80 @@ def _long_fixture():
     return d
 
 
+def _with(today, units, countries=None):
+    """a SYNTHETIC dashboard for another day: `units` = [(app, unit name, rows)], today's row made absurd (never counted)."""
+    pl = []
+    for k, (app, name, rows) in enumerate(units):
+        rows = [([r[0], 10 ** 12, 1, 5, 4, 0] if r[0] == today else r) for r in rows if r[0] <= today]
+        pl.append(_unit(f"ca-app-pub-0000000000000031/31000000{k:02d}", name, "banner", app, rows))
+    apps = sorted({p["app"] for p in pl})
+    d = _fixture()
+    d.update({"today_date": today, "latest_complete": (date.fromisoformat(today) - timedelta(days=1)).isoformat(),
+              "placements": pl, "countries_daily": countries or {}, "apps": [dict(d["apps"][0], name=a) for a in apps],
+              "apps_catalog": [{"account_id": "pub-0000000000000000", "app_id": f"ca-app-pub-0000000000000000~{k + 40:010d}", "app_name": a,
+                                "rev": 1.0, "selected": True, "account_decided": True} for k, a in enumerate(apps)]})
+    return d
+
+
+def _rows(days, impr, ecpm_of):
+    """[date, earn_micros, impr, …] rows, impressions and eCPM per day (no "today" handling: _with does that)."""
+    out = []
+    for k, d in enumerate(days):
+        i = impr(d, k) if callable(impr) else impr
+        out.append([d, int(round(ecpm_of(d, k) * i * 1000)), i, int(i * 1.3), int(i * 1.1), i // 100])
+    return out
+
+
+RAMP_TODAY = "2026-10-21"
+
+
+def _ramp_fixture():
+    """an app launched 2 days before September ended (a ramp of 150 impressions a day at $9, then 50k a day at $3), one
+    launched the same day at full volume, one started inside October, a steady one."""
+    days = _days(date(2026, 1, 1), date.fromisoformat(RAMP_TODAY))
+    launch = [d for d in days if d >= "2026-09-29"]
+    ramp9 = lambda d, k: 9.0 if d < "2026-10-01" else 3.0
+    return _with(RAMP_TODAY, [
+        ("Steady Mail", "mail_banner", _rows(days, 50000, _alt(3.0, 0.01))),
+        ("Ramp Cards", "cards_banner", _rows(launch, lambda d, k: 150 if d < "2026-10-01" else 50000, ramp9)),
+        ("Big Launch", "launch_inter", _rows(launch, 50000, ramp9)),
+        ("Mid Month", "mid_native", _rows([d for d in days if d >= "2026-10-10"], 30000, _alt(2.0, 0.01))),
+    ])
+
+
+def _first_fixture():
+    """today = the 1st of a month: the month of yesterday (October) is whole."""
+    days = _days(date(2026, 1, 1), date(2026, 11, 1))
+    return _with("2026-11-01", [("Steady Mail", "mail_banner", _rows(days, 50000, _alt(3.0, 0.01)))])
+
+
+def _short_fixture():
+    """5 complete days of history (6–10 Mar): the 7-day default is picked, longer ranges are greyed out."""
+    return _with(TODAY, [("Steady Mail", "mail_banner", _rows(_days(date(2026, 3, 6), date(2026, 3, 11)), 50000, _alt(3.0, 0.01)))])
+
+
+NOISE_START, NOISE_END, NOISE_APPS = date(2025, 8, 1), date(2026, 12, 1), 40
+
+
+def _noise_fixture():
+    """steady eCPM with ±8% random day-to-day noise only (a fixed seed) — nothing really changes, month after month."""
+    import random
+    rnd = random.Random(20261021)
+    days = _days(NOISE_START, NOISE_END)
+    units = [(f"Noise App {a:02d}", f"noise_{a:02d}", _rows(days, 50000, lambda d, k: 4.0 * (1 + rnd.uniform(-0.08, 0.08))))
+             for a in range(NOISE_APPS)]
+    return _with(NOISE_END.isoformat(), units)
+
+
 # ── the independent maths (Python, straight from the raw rows) ──────────────────────────────────────────────────────────
-def _maps(dash):
+def _maps(dash, upto=None):
+    """day → [earn, impr] per app (and the portfolio): today's partial day (and anything after `upto`) left out."""
     pf, apps = {}, {}
+    today = upto or dash.get("today_date", TODAY)
     for p in dash["placements"]:
         a = apps.setdefault(p["app"], {})
         for d, e, i, *_ in p["daily"]:
-            if d == TODAY:
+            if (d >= today) if upto else (d == today):
                 continue
             for m in (pf, a):
                 x = m.setdefault(d, [0, 0])
@@ -180,8 +253,10 @@ def _maps(dash):
     return pf, apps
 
 
-def _comp(dash):
-    return sorted({r[0] for p in dash["placements"] for r in p["daily"]} - {TODAY})
+def _comp(dash, upto=None):
+    if upto:
+        return sorted({r[0] for p in dash["placements"] for r in p["daily"] if r[0] < upto})
+    return sorted({r[0] for p in dash["placements"] for r in p["daily"]} - {dash.get("today_date", TODAY)})
 
 
 def _sum(dm, days):
@@ -238,7 +313,8 @@ def report(tmp_path_factory, dash):
     with open(sp, "w", encoding="utf-8") as f:
         f.write(js)
     with open(fx, "w", encoding="utf-8") as f:
-        json.dump({"dashboard": dash, "long": _long_fixture()}, f)
+        json.dump({"dashboard": dash, "long": _long_fixture(), "ramp": _ramp_fixture(), "first": _first_fixture(),
+                   "short": _short_fixture(), "noise": _noise_fixture()}, f)
     subprocess.run([NODE, "--check", sp], check=True, capture_output=True)
     out = subprocess.run([NODE, os.path.join(ROOT, "tests", "ecpm_frontend.js"), sp, fx], check=True, capture_output=True,
                          text=True, timeout=180)
@@ -613,31 +689,74 @@ def _full(m, days):
     return bool(days) and days[0] == m + "-01" and (date.fromisoformat(days[-1]) + timedelta(days=1)).day == 1
 
 
-def _mswing(dm, by, pm):
-    """median |month-to-month change| over the whole months up to pm (the last 13), only months the row had from the 1st."""
-    f = min((d for d, x in dm.items() if x[1] > 0 or x[0] > 0), default="")
+MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _fmt(d):
+    return f"{int(d[8:10])} {MON[int(d[5:7]) - 1]}"
+
+
+def _span(days):
+    return "" if not days else (_fmt(days[0]) if days[0] == days[-1] else f"{_fmt(days[0])}–{_fmt(days[-1])}")
+
+
+def _next_month(k):
+    y, m = int(k[:4]), int(k[5:7])
+    return f"{y + (m == 12)}-{(m % 12) + 1:02d}"
+
+
+def _first(dm):
+    return min((d for d, x in dm.items() if x[1] > 0 or x[0] > 0), default="")
+
+
+def _dn(cur, pm):
+    """Month mode: the compared month's complete days when it is partial (0 = whole); Yesterday mode: 0."""
+    return 0 if not pm or _full(cur[0][:7], cur) else len(cur)
+
+
+def _mswing(dm, by, pm, dn=0):
+    """the usual month-to-month swing, measured like the comparison it judges: over the whole months up to pm (the last 13),
+    each one's first dn days (the whole month when dn = 0) vs the whole month before it; only months the row had from the
+    1st, both sides ≥ MIN_IMPR impressions and some earnings; the median |change|, None under 7 pairs."""
+    if dn and dn < MDAYS_MIN:                     # a newest month of 1–6 complete days is not judged (Too early)
+        return None
+    f = _first(dm)
     ks = [k for k in sorted(by) if k <= pm and _full(k, by[k])][-13:]
-    ks = [k for k in ks if f and by[k][0] >= f]
-    mdm = {k: [sum(dm[d][0] for d in by[k] if d in dm), sum(dm[d][1] for d in by[k] if d in dm)] for k in ks}
-    return _swing(mdm, ks)
+    ch = []
+    for a, b in zip(ks, ks[1:]):
+        if not f or by[a][0] < f or _next_month(a) != b:
+            continue
+        sa, sb = _sum(dm, by[a]), _sum(dm, by[b][:dn] if dn else by[b])
+        if sa["i"] >= MIN_IMPR and sa["e"] > 0 and sb["i"] >= MIN_IMPR and sb["e"] > 0:
+            ch.append(abs(sb["ec"] / sa["ec"] - 1))
+    return statistics.median(ch) if len(ch) >= 7 else None
 
 
-def _row_cmp(dm, comp, cur, base, pm=None):
-    """one row for a pick: pm = the older month in Month mode (its swing is month-to-month), else the day swing."""
+def _row_cmp(dm, comp, cur, base, pm=None, dn=0):
+    """one row for a pick: pm = the older month in Month mode (its swing is month-to-month over the first dn days), else the
+    day swing. A row that starts inside a period carries its own days (ob / oc), a baseline under MIN_IMPR = N/A."""
+    f = _first(dm)
+    own = (lambda days: [d for d in days if d >= f] if f and days and f > days[0] else None)
+    ob, oc = own(base), (own(cur) if pm else None)
     y, w = _sum(dm, cur), _sum(dm, base)
     chg = (y["ec"] - w["ec"]) if y["ec"] is not None and w["ec"] is not None else None
     pct = chg / w["ec"] if chg is not None and w["ec"] else None
-    ncur = len(cur) if pm else 1
-    sw = _mswing(dm, _by_month(comp), pm) if pm else _swing(dm, comp[-31:-1])
+    ncur = (len(oc) if oc is not None else len(cur)) if pm else 1
+    sw = _mswing(dm, _by_month(comp), pm, dn) if pm else _swing(dm, comp[-31:-1])
     act = (y["i"] > 0 or w["i"] > 0) if pm else _sum(dm, comp[-30:])["i"] > 0
+    low_b = y["i"] >= MIN_IMPR and 0 < w["i"] < MIN_IMPR
     return {"y": y["ec"], "yi": y["i"], "w7": w["ec"], "chg": chg, "pct": pct,
-            "imp": (y["i"] / ncur) * chg / 1000 if chg is not None else None, "swing": sw, "st": _status(pct, sw, y["i"]), "act": act}
+            "imp": (y["i"] / ncur) * chg / 1000 if chg is not None and ncur else None, "swing": sw,
+            "st": "lagu" if low_b else _status(pct, sw, y["i"]), "act": act, "nc": ncur, "lowB": low_b,
+            "ob": _span(ob or []), "oc": _span(oc or [])}
 
 
 def _same_rows(got, exp, name):
     for k in ("y", "w7", "chg", "pct", "imp", "swing"):
         assert _close(got[k], exp[k]), (name, k, got[k], exp[k])
     assert got["yi"] == exp["yi"] and got["st"] == exp["st"] and got["act"] == exp["act"], (name, got, exp)
+    for k in ("nc", "lowB", "ob", "oc"):
+        assert got[k] == exp[k], (name, k, got[k], exp[k])
 
 
 FEB, JAN, MAR = _days(date(2026, 2, 1), date(2026, 2, 28)), _days(date(2026, 1, 1), date(2026, 1, 31)), _days(date(2026, 3, 1), date(2026, 3, 10))
@@ -670,12 +789,12 @@ def test_cmp_every_pick_matches_an_independent_recount(report, dash):
         assert (g["title"], g["colCur"], g["colBase"]) == (title, cc, cb), k
         assert g["colImp"] == cc.replace("eCPM", "impr"), k
         for name, dm in apps.items():
-            _same_rows(g["rows"][name], _row_cmp(dm, comp, cur, base, pm), (k, name))
+            _same_rows(g["rows"][name], _row_cmp(dm, comp, cur, base, pm, _dn(cur, pm)), (k, name))
         for p in dash["placements"]:                                              # one app's ad units, the same maths
             if p["app"] != "Demo Gallery":
                 continue
             dm = {r[0]: [r[1], r[2]] for r in p["daily"] if r[0] != TODAY}
-            u, exp = next(x for x in g["units"] if x["id"] == p["id"]), _row_cmp(dm, comp, cur, base, pm)
+            u, exp = next(x for x in g["units"] if x["id"] == p["id"]), _row_cmp(dm, comp, cur, base, pm, _dn(cur, pm))
             assert _close(u["y"], exp["y"]) and _close(u["w7"], exp["w7"]) and _close(u["imp"], exp["imp"]) and u["st"] == exp["st"], (k, p["id"])
     # by hand (flat-alternating eCPMs, whole numbers of micros): Puzzle Quest's February averages $3.00 exactly, Word Hunt's $1.00
     pq, wh = m["mon"]["rows"]["Puzzle Quest"], m["mon"]["rows"]["Word Hunt"]
@@ -838,7 +957,7 @@ def test_cmp_month_to_month_status_on_a_long_history(report):
         g = sel[k]
         assert g["cur"] == by[cm] and g["base"] == by[pm] and g["ncur"] == len(by[cm]), k
         for name, dm in apps.items():
-            _same_rows(g["rows"][name], _row_cmp(dm, comp, by[cm], by[pm], pm), (k, name))
+            _same_rows(g["rows"][name], _row_cmp(dm, comp, by[cm], by[pm], pm, _dn(by[cm], pm)), (k, name))
     now = sel['{"m":"m"}']
     assert now["swm"] == [f"2025-{m:02d}" for m in range(2, 13)] + ["2026-01", "2026-02"]                # 13 whole months → 12 pairs
     assert {n: r["st"] for n, r in now["rows"].items()} == {"Steady Cam": "bigda", "Calm Notes": "normal", "Bright Tiles": "behtar",
@@ -855,6 +974,135 @@ def test_cmp_month_to_month_status_on_a_long_history(report):
     assert lc["order"] == ["Steady Cam", "Fresh Cards", "Mid Watch", "Calm Notes", "Bright Tiles", "Quiet Clock"]
     assert "mahine-dar-mahine ke normal utaar-chadhaav" in lc["card"] and "<b>Too early</b> = abhi 8 poore mahine ka data nahi" in lc["card"]
     assert "<b>N/A</b> = Mar 2026 (1–10) me 1,000 se kam impressions" in lc["card"]
+
+
+# ── review fixes: a thin baseline, rows that start inside a period, the 1st of a month, a short history, a partial month's
+# status on noise, the Countries card checked day by day ──────────────────────────────────────────────────────────────────
+@needs_node
+def test_cmp_thin_baseline_is_low_data_and_own_days_are_printed(report):
+    """an app launched 2 days before September ended: its "Sep 2026" is 300 impressions of a launch ramp — never a loss."""
+    dash = _ramp_fixture()
+    _, apps = _maps(dash)
+    comp = _comp(dash)
+    by = _by_month(comp)
+    e = report["cmp_edge"]
+    picks = {"mon": ([comp[-1]], by["2026-09"], None), "mm": (by["2026-10"], by["2026-09"], "2026-09"), "b30": ([comp[-1]], comp[-30:], None)}
+    for k, (cur, base, pm) in picks.items():
+        g = e[k]
+        assert g["cur"] == cur and g["base"] == base, k
+        for name, dm in apps.items():
+            _same_rows(g["rows"][name], _row_cmp(dm, comp, cur, base, pm, _dn(cur, pm)), (k, name))
+    for k in ("mon", "mm"):
+        rc, bl = e[k]["rows"]["Ramp Cards"], e[k]["rows"]["Big Launch"]
+        # the ramp: $9 from 300 impressions → N/A "low data (baseline)", sorted after every judged row (it was Worse, on top)
+        assert rc["wi"] == 300 and _close(rc["w7"], 9.0) and rc["lowB"] is True and rc["st"] == "lagu" and rc["ob"] == "29 Sep–30 Sep"
+        assert e[k]["order"][-1] == "Ramp Cards" and e[k]["order"][0] == "Big Launch"
+        # the same launch at full volume (100k impressions at $9): a real drop, its own days printed under "Sep 2026"
+        assert bl["wi"] == 100000 and bl["ob"] == "29 Sep–30 Sep" and _close(bl["imp"], -300.0)          # 50k/day × ($3 − $9) ÷ 1000
+        card = e[k]["card"]
+        assert '<small class="ec-own">29 Sep–30 Sep only</small>' in card and "N/A<small>low data (baseline)</small>" in card
+        assert "(baseline) me 1,000 se kam impressions" in card and '<b>"… only"</b> kisi number ke neeche' in card
+    assert e["mon"]["rows"]["Big Launch"]["st"] == "bigda" and e["mm"]["rows"]["Big Launch"]["st"] == "jaldi"   # no whole months yet
+    # a row that starts inside the compared month: its own days, its impressions per day over those days
+    mm = e["mm"]["rows"]["Mid Month"]
+    assert mm["oc"] == "10 Oct–20 Oct" and mm["nc"] == 11 and mm["yi"] == 330000
+    assert '<td title="330,000 impressions · 30,000/day (11 din)">330.0k</td>' in e["mm"]["card"]
+    assert '<small class="ec-own">10 Oct–20 Oct only</small>' in e["mm"]["card"]
+    assert e["b30"]["rows"]["Ramp Cards"]["ob"] == "29 Sep–20 Oct" and e["b30"]["rows"]["Ramp Cards"]["st"] == "normal"
+    # the default (yesterday vs last 7 days) keeps its rows and words: no own-days tag, no baseline low data
+    assert "ec-own" not in e["b7"]["card"] and "low data (baseline)" not in e["b7"]["card"] and "only" not in e["b7"]["card"]
+    assert all(r.get("ob") is None for r in e["b7"]["rows"].values())
+
+
+@needs_node
+def test_cmp_first_of_the_month_a_whole_month_is_not_called_partial(report):
+    e = report["cmp_edge"]
+    m = e["first_mon"]                                         # today 1 Nov: "yesterday vs Oct 2026" = 1–31 Oct, whole
+    assert m["title"] == "yesterday vs Oct 2026" and m["base"][0] == "2026-10-01" and m["base"][-1] == "2026-10-31"
+    assert "(<b>1 Oct–31 Oct</b> ki kamai ÷ impressions × 1000 — poora mahina, kal samet)" in m["card"] and "adhura" not in m["card"]
+    mm = e["first_mm"]
+    assert mm["title"] == "Oct 2026 vs Sep 2026" and mm["dn"] == 0 and "adhura mahina hai" not in mm["card"]
+    # the regular mid-month pick still says it is partial (see test_cmp_taps_navigate_within_the_history_and_stay_put)
+
+
+@needs_node
+def test_cmp_short_history_keeps_the_picked_chip_lit(report):
+    c = report["cmp_edge"]["short"]["ctl"]                     # 5 complete days: 7 days is still the pick (never greyed out)
+    assert """<button type="button" class="on" aria-pressed="true" onclick="ecCmpB('7')" title="Sirf 5 din ka data">7 days</button>""" in c
+    for k in ("14", "30", "60"):
+        assert f"""onclick="ecCmpB('{k}')" disabled title="Sirf 5 din ka data">{k} days</button>""" in c
+    assert report["cmp_edge"]["short"]["title"] == "yesterday vs last 7 days"
+
+
+NOISE_DAYS = {"2026-11-02": 1, "2026-11-03": 2, "2026-11-04": 3, "2026-11-05": 4, "2026-11-06": 5, "2026-11-09": 8, "2026-12-01": 0}
+
+
+@needs_node
+def test_cmp_partial_month_status_on_noise_only(report):
+    """nothing changes (±8% day-to-day noise only): the first days of a month must not light up Worse / Better."""
+    dash = _noise_fixture()
+    r = report["cmp_noise"]
+    flagged_before = {}
+    for T, dn in NOISE_DAYS.items():
+        _, apps = _maps(dash, T)
+        comp = _comp(dash, T)
+        by = _by_month(comp)
+        cm, pm = comp[-1][:7], sorted(by)[-2]
+        cur, base = by[cm], by[pm]
+        g = r[T]
+        assert g["dn"] == dn == _dn(cur, pm) and len(g["rows"]) == NOISE_APPS, T
+        assert len(g["swm"]) == 13 and g["swm"][-1] == pm, T
+        for name, dm in apps.items():
+            _same_rows(g["rows"][name], _row_cmp(dm, comp, cur, base, pm, dn), (T, name))
+        st = [x["st"] for x in g["rows"].values()]
+        if dn and dn < MDAYS_MIN:
+            assert set(st) == {"jaldi"}, (T, st)                   # 1–6 complete days: Too early, said in the status note
+        else:
+            assert st.count("bigda") + st.count("behtar") <= NOISE_APPS // 10, (T, st)
+        # the old rule (whole month vs whole month swing) on the same rows: what this fix stops
+        flagged_before[T] = sum(_status(g["rows"][n]["pct"], _mswing(dm, by, pm, 0), g["rows"][n]["yi"]) in ("bigda", "behtar")
+                                for n, dm in apps.items())
+    assert flagged_before["2026-11-02"] >= 10 and flagged_before["2026-11-03"] >= 10
+    # measured like the comparison: 8 days vs a whole month swings more than whole months do (same rows, the 7-day rule aside)
+    _, apps = _maps(dash, "2026-11-09")
+    comp = _comp(dash, "2026-11-09")
+    by = _by_month(comp)
+    wider = sum(_mswing(dm, by, "2026-10", 8) > _mswing(dm, by, "2026-10", 0) for dm in apps.values())
+    assert wider >= NOISE_APPS * 3 // 4
+
+
+@needs_node
+def test_cmp_month_status_note_says_why_a_short_month_waits(report):
+    lc = report["cmp_long"]["card"]                             # Mar (1–10): judged, the swing measured on first-10-days pairs
+    assert "har mahine ke <b>pehle 10 din</b> vs uska pichhla poora mahina" in lc and "poore din ke baad" not in lc
+    n1 = report["cmp_noise"]["2026-11-02"]["note"]              # Nov (1): Too early, and why
+    assert "<b>Nov 2026 (1)</b> me abhi sirf 1 poore din" in n1 and "isliye Status 7 poore din ke baad (tab tak Too early" in n1
+    assert "poore din ke baad" not in report["cmp_noise"]["2026-11-09"]["note"]
+
+
+@needs_node
+def test_cmp_countries_checked_day_by_day(report, dash):
+    h = report["cmp_holes"]
+    comp = _comp(dash)
+    assert h["febDef"]["ct"]["c"] == "yesterday vs last 7 days" and "ec-cw" not in h["febDef"]["countries"]
+    # a failed chunk (1–20 Feb) inside the pick: the last covered view, the missing days said
+    for k, want in (("febMon", "yesterday vs Feb 2026"), ("febMm", "Mar 2026 (1–10) vs Feb 2026")):
+        x = h[k]
+        assert x["ct"] == {"u": want, "c": "yesterday vs last 7 days"}, k
+        assert (f"⚠ Country report me <b>1 Feb–20 Feb</b> ka data nahi hai — <b>{want}</b> ke liye poora nahi, isliye yeh table "
+                "abhi bhi <b>yesterday vs last 7 days</b> dikha rahi hai.") in x["countries"], k
+    assert h["feb14"]["ct"]["c"] == "yesterday vs last 14 days" and "ec-cw" not in h["feb14"]["countries"]   # 25 Feb on: covered
+    # a hole (3–5 Mar) that every view reads: the pick stays, the missing days said; the default says it too
+    assert h["mar14"]["ct"]["c"] == "yesterday vs last 14 days"
+    assert "⚠ Country report me <b>3 Mar–5 Mar</b> ka data nahi hai — un din ke desh-wise number is table me nahi hain" in h["mar14"]["countries"]
+    assert "⚠ Country report me <b>4 Mar–5 Mar</b> ka data nahi hai" in h["marDef"]["countries"]
+    holed = {cn: {r[0]: [r[1], r[2]] for r in rows if r[0] != TODAY and not "2026-03-03" <= r[0] <= "2026-03-05"}
+             for cn, rows in dash["countries_daily"]["Demo Gallery"].items()}
+    for r in h["mar14"]["c"]:
+        assert _close(r["w7"], _sum(holed[r["key"]], comp[-14:])["ec"]), r            # what is there, never padded
+    # a young app whose country report starts with the app: covered (no app data before 6 Mar), no fallback
+    assert h["young14"]["ct"]["c"] == "yesterday vs last 14 days" and "ec-cw" not in h["young14"]["countries"]
+    assert h["ranges"] == ["1 Feb–3 Feb", "28 Feb–1 Mar, 5 Mar", "1 Jan, 3 Jan, 5 Jan, 7 Jan +2 more", ""]
 
 
 # the default view, byte for byte: the page before the picker and this one (comparison row taken out), $ and ₹, every sort
