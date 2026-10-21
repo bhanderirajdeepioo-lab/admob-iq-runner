@@ -10,7 +10,10 @@ table), 🌍 the install-day table by country (the picker, a pack read once, the
 view byte for byte as before, the pick kept, the missing-country / error / retry / busy states, the notes, a short row
 expanded exactly as the build's _zrow, no page jump at 375 and 1280 px; a pack of another build / gone from the site:
 the app file read again once; a late pack never repaints; only 3 packs kept; Not split's columns; the notes' measured
-limits), and the wiring into the page. Skipped where node is not installed. No real data."""
+limits), 🧮 the cohort card's totals strip (spend / revenue / profit-loss / ROAS / installs / install days over every
+install day of All or the picked country: a hand recount, ₹ as billed, days left out counted, the same for every grain /
+mode, '…' while loading, one height in every state, the page otherwise byte for byte as before), and the wiring into the
+page. Skipped where node is not installed. No real data."""
 import json
 import os
 import shutil
@@ -174,7 +177,12 @@ def test_forecast_view(out):
 # too: nothing else in any table, the Day view or the Countries board moved by a byte. (Review round: a "≤" on a column
 # not final yet is faded + "not final", the note says so, and a week / month with a day's so far not read shows — instead
 # of a too-low "% back": only the Breakeven cells + note changed, GOLDEN_NO_BE the same)
-GOLDEN_DEFAULT = "fb638f026d2a902459c3287cb620536bbb6474fecb17809c9799ba6264ac0a86"
+# 🧮 Changed ON PURPOSE again on 21 Oct 2026 when the totals strip joined the cohort card (between its title row and its
+# control row): GOLDEN_PRE_KPI = the digest the page gave before it (the GOLDEN_DEFAULT above it), and the new page gives it
+# again with the strip cut out (tests/roi_frontend.js kpiCut) — every table, the Day view and the Countries board otherwise
+# byte for byte the same; GOLDEN_NO_BE is worked out with the strip cut out too.
+GOLDEN_DEFAULT = "a60256b30a4606e709f461842a504d33ef073931fe26b0e86dff6675c2d5a3bf"
+GOLDEN_PRE_KPI = "fb638f026d2a902459c3287cb620536bbb6474fecb17809c9799ba6264ac0a86"
 GOLDEN_NO_BE = "acabb725b05aa314e38c4f97b7880196122d333a0bdd823a0db9c1bc7d1d23b6"
 
 
@@ -217,6 +225,67 @@ def test_breakeven_column(out):
     assert all(c[2:] == ["Spend,CPI,Breakeven,D0", "So far", True, True, True, True] for c in out["be_cty"]), out["be_cty"]
     assert out["be_cty_day"] == ['<td class="roi-g">130% back</td>', '<td class="roi-na">30% back</td>']
     assert all(out["be_note"])                                      # the Hinglish line under the table, per grain
+
+
+def test_totals_strip(out):
+    """🧮 Total spend / revenue / profit-loss / ROAS / installs / install days in the cohort card (owner, 21 Oct 2026: "kpi
+    add karo yaha pe ki kitna total spend gaya he kitna total revenue aaya he — all country and jo country select kru uska
+    kpi change ho jayega — total hi aayega"), on made-up rows."""
+    # the default page: only the strip added — with it cut out, the digest is the one before it (2 parts carry it: the Day views)
+    assert out["cc_default_nokpi"] == GOLDEN_PRE_KPI and out["cc_default_kpis"] == 2
+    # under the title row, right above the control row (one per card, above the table; the Day view has one, the
+    # Countries board none); its Hinglish note
+    assert out["k_place"] == [True, 1, True, 1, False, True]
+    # a hand recount (5 install days): spend $10 + $4 + $0 + $6 (2 Jan not known: out, said); so far $30 + $5 + $0 + $3
+    # (3 Jan not read yet: out, said); profit / loss + ROAS over the 3 days with both: $33 − $16 = +$17, 206%
+    assert out["k_usd"] == [["Total spend", "$20", "1 din ka spend pata nahi"],
+                            ["Total revenue", "$38", "1 din ki kamai abhi nahi padhi"],
+                            ["Profit / loss", "+$17", "sirf 3 din, jinka dono pata"],
+                            ["ROAS", "206%", "sirf 3 din, jinka dono pata"],
+                            ["Installs", "200", "GA4 · ads + organic"],
+                            ["Install days", "5", "1 Jan 2026 – 5 Jan 2026"]]
+    assert out["k_usd_cls"][2:4] == [["roi-kg", "roi-up"], ["", "roi-g"]]          # profit green, ROAS ≥ 100% green
+    assert out["k_usd_table"] == [20, 38, 200]          # = Σ the table's own Spend / So far / Installs columns
+    # ₹ billed: spend ₹900 + ₹360 + ₹0 + ₹540 as billed (= Σ the Spend column in ₹), revenue $38 × 100; profit over the
+    # 3 days with both: ₹3,300 − ₹1,440; a ₹ view of a file not billed in ₹: $20 × 100
+    assert out["k_inr"] == [["Total spend", "₹1,800", "1 din ka spend pata nahi"],
+                            ["Total revenue", "₹3,800", "1 din ki kamai abhi nahi padhi"],
+                            ["Profit / loss", "+₹1,860", "sirf 3 din, jinka dono pata"],
+                            ["ROAS", "229%", "sirf 3 din, jinka dono pata"]] and out["k_inr_table"] == 1800
+    assert out["k_inr_usd"] == [["Total spend", "₹2,000", "1 din ka spend pata nahi"],
+                                ["Total revenue", "₹3,800", "1 din ki kamai abhi nahi padhi"],
+                                ["Profit / loss", "+₹1,700", "sirf 3 din, jinka dono pata"],
+                                ["ROAS", "206%", "sirf 3 din, jinka dono pata"]]
+    # a loss: red (the existing classes); spend 0 everywhere: no ROAS (never ∞ / 0%); no rows: '—', never 0
+    assert out["k_loss"] == [[["Profit / loss", "−$48", "revenue − spend"], ["ROAS", "20%", "revenue ÷ spend"]],
+                             [["roi-kb", "roi-dn"], ["", "roi-b"]]]
+    assert out["k_org"] == [["Total spend", "$0.00", "Google Ads"], ["Total revenue", "$6.0", "so far · AdMob-matched"],
+                            ["Profit / loss", "+$6.0", "revenue − spend"], ["ROAS", "—", "koi spend nahi"]]
+    assert [x[1] for x in out["k_none"]] == ["—", "—", "—", "—", "—", "0"]
+    # every install day (70, not the 60 on screen), whatever the grain / mode / "Show more"
+    assert out["k_inv"] == [True] * 24 and out["k_all70"] == ["Install days", "70", "5 Aug 2026 – 13 Oct 2026"]
+    # 🌍 All with the country part = All without it; a pick: '…' while its rows load (aria-busy), then its own totals =
+    # a recount of the rows its table shows (unknown spend out of spend + profit / ROAS, counted); the same every grain /
+    # mode; another country of the same pack at once
+    assert out["k_allcd"] == [True]
+    assert out["k_load"] == [["…"] * 6, True, True, True]
+    k, want, D, unk, nboth = out["k_aa"]
+    assert k == want and (D, unk, nboth) == (70, 28, 28)
+    assert k[0] == ["Total spend", "$380", "28 din ka spend pata nahi"] and k[3] == ["ROAS", "104%", "sirf 42 din, jinka dono pata"]
+    assert out["k_aa_inv"] == [True] * 12
+    assert out["k_bb"][0] == out["k_bb"][1] and out["k_bb"][2]
+    # "Unknown country": Google Ads has no such country → spend '—' (not 0), no profit / ROAS; its revenue + installs
+    k, want = out["k_unk"]
+    assert k == want and k[0] == ["Total spend", "—", "Google Ads me ye country nahi"] and k[2][1] == k[3][1] == "—"
+    # "Not split": spend only (its unknown days counted); revenue / profit / ROAS / installs '—'
+    k, want, has_unk, n_rev = out["k_xx"]
+    assert k == want and has_unk and n_rev == 0
+    assert [x[1] for x in k[1:5]] == ["—"] * 4 and k[1][2] == "Not split: koi kamai nahi"
+    # a pack that failed / a country the app does not have: '—' (no busy flag); an app without the country part: All's own
+    assert out["k_err"] == [["—"] * 6, True, True] and out["k_miss"] == [["—"] * 6, True] and out["k_nocd"] == [True, True]
+    # ONE height in every state (16 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, empty …): the
+    # same box, one-line values, reasons that fit two lines of a 375 px tile (the CSS pins are in test_wiring)
+    assert out["k_skel"] == [1, 16] and out["k_fit"] == []
 
 
 def test_country_filter(out):
@@ -286,3 +355,12 @@ def test_wiring():
     # unchanged layout pins (the same before this change): the table scrolls only inside its own box, its first column sticks
     assert ".roi-tw{overflow:auto;" in p and '<div class="roi-tw"><table class="roi-t roi-heat">' in p
     assert ".roi-t th:first-child,.roi-t td:first-child{position:sticky;left:0;" in p
+    # 🧮 the totals strip: one height in every state — one-line labels / values (never wrapped), two-line reasons (a fixed
+    # box), 6 / 3 / 2 tiles a row by width only; called once per card path, right before the table's own HTML
+    assert ".roi-ck .roi-kl,.roi-ck .roi-kv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" in p
+    assert ".roi-ck .roi-ks{height:2.8em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" in p
+    assert ".roi-ckg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}" in p
+    assert "@media (min-width:1240px){.roi-ckg{grid-template-columns:repeat(6,minmax(0,1fr))}}" in p
+    assert "@media (max-width:760px){.roi-ckg{grid-template-columns:repeat(2,minmax(0,1fr))}.roi-ck .roi-kv{font-size:15.5px}}" in p
+    assert p.count("${cohKpi(d,null)}${cohortTable(d)}</div>`;") == 1 and p.count("${cohKpi(d,cs)}${cohortTable(d,cs)}</div>`; }") == 1
+    assert p.count("cohKpi(") == 3                                                    # defined once, called by cohCard only

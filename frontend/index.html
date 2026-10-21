@@ -2487,6 +2487,12 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-ks{font-size:11.5px;color:var(--muted);line-height:1.4}
 .roi-ks b{color:var(--ink2)}
 .roi-kg{border-color:#1f6b52}.roi-kb{border-color:#6b2a2e}
+/* 🧮 the cohort card's totals strip: one height in every state (a country pick / its rows landing never moves the chips under it) */
+.roi-cks{margin:0 0 12px}.roi-ckg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.roi-ck{padding:9px 11px}.roi-ck .roi-kl,.roi-ck .roi-kv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.roi-ck .roi-kv{font-size:17px}
+.roi-ck .roi-ks{height:2.8em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+@media (min-width:1240px){.roi-ckg{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media (max-width:760px){.roi-ckg{grid-template-columns:repeat(2,minmax(0,1fr))}.roi-ck .roi-kv{font-size:15.5px}}
 .roi-up{color:var(--good)}.roi-dn{color:var(--bad)}
 .roi-g2{display:grid;grid-template-columns:minmax(0,1fr);gap:0 14px}
 @media (min-width:1180px){.roi-g2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
@@ -7231,7 +7237,7 @@ function ccSrc(d){ const cd=cdOf(d);
   if(!x) return {ctl,cc:CTY,miss:1,msg:`<p class="roi-note">Is app me ${lab} ka data nahi — upar se doosra country chuniye, ya 🌍 All countries.</p>`};
   const pk=cd.packs[x[4]];
   if(!Array.isArray(pk)||!PACK_RE.test(String(pk[0]))) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} ka data file nahi mila.</p>`};
-  const key=pk[0]+'?'+pk[1], P=PK[key], wait={ctl,cc:CTY,msg:`<p class="roi-note">⏳ ${lab} ka data load ho raha hai…</p>`};
+  const key=pk[0]+'?'+pk[1], P=PK[key], wait={ctl,cc:CTY,ld:1,msg:`<p class="roi-note">⏳ ${lab} ka data load ho raha hai…</p>`};
   const again=`<button type="button" class="roi-lnk" data-roi-ccr="1">Try again</button>`;
   if(P&&(P.stale||P.gone)) return ccReload(d,cd)?wait:{ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} ka data abhi badal raha hai (site pe naya build aa raha hai). ${again}</p>`};
   if(P&&P.err) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} ka data load nahi hua. ${again}</p>`};
@@ -7240,10 +7246,35 @@ function ccSrc(d){ const cd=cdOf(d);
   if(rows===false){ PK[key]={stale:true}; return ccSrc(d); }
   if(!rows) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} is file me nahi mila.</p>`};
   return {ctl,cc:CTY,x,rows,qt:qb=>ccQ(qb,cd),note:ccNote(d,cd,x)}; }
+// 🧮 the totals strip (owner, 21 Oct 2026: "kpi add karo yaha pe ki kitna total spend gaya he kitna total revenue aaya he —
+// all country and jo country select kru uska kpi change ho jayega — total hi aayega"): EVERY install day of the table's
+// source (All countries, or the picked country's rows), summed from what its rows show — spend = the Spend column (SV: ₹
+// as billed, else $ at each day's rate), revenue = "So far" (AdMob-matched), installs = Installs. A day whose spend is not
+// known is left out of spend, a day whose so far is not read yet out of revenue (each counted on its tile), and Profit /
+// loss + ROAS are over the days with both only. Grain / mode never change it; '…' while a country's rows load, '—' when
+// there are none. One height in every state (one-line values, two-line subs, a note that never changes): a pick never
+// moves the chips under it.
+function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[]), cc=cs&&cs.rows?cs.cc:'', xx=cc==='XX';
+  let sp=0, nsp=0, rv=0, nrv=0, ps=0, pr=0, np=0, n=0, nn=0, lo='', hi='';
+  for(const r of rows||[]){ const x=r[R.X], k=r[R.sp]!=null, m=ok(r[R.s]);
+    if(!lo||x<lo) lo=x; if(!hi||x>hi) hi=x;
+    if(k){ const v=SV(r[R.sp],r[R.spi])||0; sp+=v; nsp++; if(m){ ps+=v; pr+=RV(r[R.s]); np++; } }
+    if(m){ rv+=r[R.s]; nrv++; }
+    if(r[R.n]!=null){ n+=+r[R.n]; nn++; } }
+  const D=rows?rows.length:0, no=!rows&&cs&&cs.ld?'…':'—', net=pr-ps, t=(l,v,s,c)=>tile(l,v,s,'roi-ck'+(c?' '+c:''));
+  const both=v=>!rows||np===D?v:np?`sirf ${N(np)} din, jinka dono pata`:xx?'Not split: sirf spend':cc==='--'?'is country ka spend nahi':'spend + kamai dono chahiye';
+  return `<div class="roi-cks" role="group" aria-label="Totals"${!rows&&cs&&cs.ld?' aria-busy="true"':''}><div class="roi-ckg">`
+    +t('Total spend',nsp?MV(sp):no,cc==='--'?'Google Ads me ye country nahi':D>nsp?`${N(D-nsp)} din ka spend pata nahi`:'Google Ads')
+    +t('Total revenue',nrv?MV(RV(rv)):no,xx?'Not split: koi kamai nahi':D>nrv?`${N(D-nrv)} din ki kamai abhi nahi padhi`:'so far · AdMob-matched')
+    +t('Profit / loss',np?`<span class="${net>=0?'roi-up':'roi-dn'}">${MV(net,true)}</span>`:no,both('revenue − spend'),np?(net>=0?'roi-kg':'roi-kb'):'')
+    +t('ROAS',ps>0?`<span class="${roasCls(pr/ps)}">${P(pr/ps)}</span>`:no,np&&!(ps>0)?'koi spend nahi':both('revenue ÷ spend'))
+    +t('Installs',nn?N(n):no,xx?'Not split: installs nahi':'GA4 · ads + organic')
+    +t('Install days',rows?N(D):no,lo?`${E(fdy(lo))} – ${E(fdy(hi))}`:no)
+    +`</div><p class="roi-note roi-ckn">Poori history ka jod — har install din ki ab tak ki kamai (so far, AdMob-matched) aur uska spend; country chuno to sirf us country ka.</p></div>`; }
 function cohCard(d){ const cs=ccSrc(d);
-  if(!cs) return `<div class="roi-card"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${(()=>{ const C=cols(d,d.rows||[]); return C.length?C[C.length-1].a:365; })()} tak</h3><span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohortTable(d)}</div>`;
+  if(!cs) return `<div class="roi-card"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${(()=>{ const C=cols(d,d.rows||[]); return C.length?C[C.length-1].a:365; })()} tak</h3><span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohKpi(d,null)}${cohortTable(d)}</div>`;
   const rs=cs.rows||d.rows||[], C=cols(cs.rows&&cs.cc!=='XX'?Object.assign({},d,{rows:rs}):d,rs), on=!!cs.cc&&!cs.miss;
-  return `<div class="roi-card" id="roi-coh"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${C.length?C[C.length-1].a:365} tak${on?` · ${ccLab(cs.cc)}`:''}</h3>${on?'<button type="button" class="roi-lnk roi-ccx" data-roi-ccx="1">✕ All countries</button>':''}<span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohortTable(d,cs)}</div>`; }
+  return `<div class="roi-card" id="roi-coh"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${C.length?C[C.length-1].a:365} tak${on?` · ${ccLab(cs.cc)}`:''}</h3>${on?'<button type="button" class="roi-lnk roi-ccx" data-roi-ccx="1">✕ All countries</button>':''}<span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohKpi(d,cs)}${cohortTable(d,cs)}</div>`; }
 function monthCurves(d){ const T=d.T, ms=(d.months||[]).filter(m=>m[2]>0).slice(-6);
   if(!ms.length) return '<p class="roi-note">Abhi kisi install mahine pe Google Ads spend nahi.</p>';
   const cls=['c1','c2','c3','c4','c5','c6'];
