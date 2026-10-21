@@ -644,6 +644,26 @@ def test_app_step_cube_block_and_byte_identical_without_it(tmp_path, monkeypatch
     assert full["months"] == plain["months"] and full["cty"] == plain["cty"] and full["life"] == plain["life"]
 
 
+def test_cohort_other_loss_days_mark_their_rows(tmp_path, monkeypatch):
+    """A day whose D0 … D30 read kept revenue in GA4's "(other)" (fetch.ga4_cohort "lo") or that GA4 flagged ("lf"):
+    every row whose d uses it is ≈ (q bit 1, as a day that does not tie); nothing else of the file changes."""
+    P, co = _cube_setup(tmp_path / "data")
+    _stub_app(monkeypatch, P, co, SPEND)
+    plain = json.loads(_app_step_run(str(tmp_path / "data"), str(tmp_path / "o1"), False))
+    lo, lf = LTODAY - timedelta(days=40), LTODAY - timedelta(days=5)
+    _stub_app(monkeypatch, P, dict(co, lo={lo.isoformat(): 1234}, lf={lf.isoformat(): 1}), SPEND)
+    got = json.loads(_app_step_run(str(tmp_path / "data"), str(tmp_path / "o2"), False))
+    marked = 0
+    assert len(got["rows"]) == len(plain["rows"])
+    for r0, r1 in zip(plain["rows"], got["rows"]):
+        X = date.fromisoformat(r0[0])
+        uses = bool(r0[4]) and any(X + timedelta(days=L) in (lo, lf) for L in range(len(r0[4])))
+        marked += uses and not r0[12] & 1
+        assert r1[12] == (r0[12] | 1 if uses else r0[12]) and r1[:12] == r0[:12] and r1[13:] == r0[13:], r0[0]
+    assert marked >= 30
+    assert {k for k in got if got[k] != plain[k]} <= {"rows", "sum"}
+
+
 # ── 🌍 the install-day table by country (the cube's "e" / "c" × each country's own AdMob match) ──────────────────────
 CHS, CTODAY = date(2026, 8, 1), date(2026, 10, 13)
 CHOT = CTODAY - timedelta(days=2)                       # Oct 11 … 13 hot (read while not final), Oct 10 and before folded

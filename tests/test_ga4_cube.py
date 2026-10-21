@@ -5,6 +5,10 @@ GA4 rolls rows into "(other)" or flags the answer → a day split by its biggest
 after the activity day → loss, GA4's flags kept per day, the fold shapes (b / c / e / t / loss + the ledger), month
 files that never change once folded, the hot days replaced on each re-read and read once more when final, ONE cursor (a
 Stop, a pause, a new day: no hole, no day folded from a read made while it was still filling), the heavy-range memory,
+the deeper split (21 Oct 2026: parts halved by countries, then by install days, while "(other)" is left — the parts
+partition the day; the cap leaves measured loss; a Stop keeps nothing of the day; a day cut run after run gets a
+smaller cap), the repair (months folded with the one-level split read again into a copy and replaced whole once every
+day is in it; biggest loss share first; never twice for one split version),
 the history start moving back (and "done" cleared until the walk is through), another stream, a month file that cannot
 be read (read again from its first day, never written over), at most two months in memory, a hot copy of a day that is
 final now dropped, flagged days kept apart from measured loss, turns on a property (a backfill never starves a light
@@ -40,18 +44,25 @@ def _days(a, b):
 class FakeGA:
     """GA4 for the cube. Activity day D, install day X (start … D, lag ≤ max_lag), country cc: revenue
     (lag + 1) × W[cc] × 100 micros, users 10 × W[cc] at lag 0. A day still filling (today − D < FINAL_LAG) reads
-    `fill` of that. cap: an answer with more rows keeps its `cap` biggest and rolls the rest into a per-day "(other)"
-    row (dataLossFromOtherRow). extra_day: 40 more countries "Q00" … that day (lags 0 … 30, weight 1). notset_day /
-    neg_day: one row with install day "(not set)" / after the activity day. thr_day: any answer holding it says
-    thresholding. smp_multi / cut_multi: a multi-day answer says sampling / was cut. stop_after: Stop at that call."""
+    `fill` of that. Filters: every expression ANDed (an in-list on any field, or its notExpression); rows grouped by
+    the dimensions asked for. cap: an answer with more rows keeps its `cap` biggest and rolls the rest into a per-day
+    "(other)" row (dataLossFromOtherRow). extra_day: 40 more countries "Q00" … that day (lags 0 … 30, weight 1).
+    notset_day / neg_day: one row with install day "(not set)" / after the activity day. thr_day: any answer holding it
+    says thresholding. smp_multi / cut_multi: a multi-day answer says sampling / was cut. stop_after: Stop(stop_why) at
+    that call; max_calls: the App's call cap (Stop("calls") once used up). keep: every answer kept (answers)."""
 
     def __init__(self, today=TODAY, cap=None, stop_after=None, fill=0.5, start=HS, max_lag=120, extra_day=None,
-                 notset_day=None, neg_day=None, thr_day=None, smp_multi=False, cut_multi=False, oth_flag_day=None):
+                 notset_day=None, neg_day=None, thr_day=None, smp_multi=False, cut_multi=False, oth_flag_day=None,
+                 max_calls=None, keep=False, stop_why="calls"):
         self.today, self.cap, self.stop_after, self.fill, self.start, self.max_lag = (today, cap, stop_after, fill,
                                                                                       start, max_lag)
         self.extra_day, self.notset_day, self.neg_day, self.thr_day = extra_day, notset_day, neg_day, thr_day
         self.smp_multi, self.cut_multi, self.oth_flag_day = smp_multi, cut_multi, oth_flag_day
         self.calls, self.asked, self.tok, self.last_metas, self._cut = 0, [], 0, [], False
+        self.stop_why = stop_why
+        self.answers = [] if keep else None                     # keep: every answer (the partition checks)
+        if max_calls is not None:                               # the App's call cap: Stop("calls") once it is used up
+            self.max_calls, self.stop_after = max_calls, max_calls
 
     def rows_of(self, D):
         f = self.fill if (self.today - D).days < cu.FINAL_LAG else 1.0
@@ -78,30 +89,33 @@ class FakeGA:
 
     def report_all(self, body, event=None, events=None, extra=None, page_rows=None):
         if self.stop_after is not None and self.calls >= self.stop_after:
-            raise gf.Stop("calls")
+            raise gf.Stop(self.stop_why)
         self.calls += 1
         self.asked.append((body, extra, page_rows, self.today))
         a, b = (date.fromisoformat(body["dateRanges"][0][k]) for k in ("startDate", "endDate"))
-        keep = None
-        for ex in extra or []:
-            if "notExpression" in ex:
-                vals = set(ex["notExpression"]["filter"]["inListFilter"]["values"])
-                keep = (lambda cc, v=vals: cc not in v)
-            else:
-                vals = set(ex["filter"]["inListFilter"]["values"])
-                keep = (lambda cc, v=vals: cc in v)
-        rows = [r for D in _days(a, b) for r in self.rows_of(D) if keep is None or keep(r["countryId"])]
+        preds = [_pred(ex) for ex in extra or []]                # every filter expression ANDed (as stream_filter)
+        dims = [d["name"] for d in body["dimensions"]]
+        agg = {}                                                 # grouped by the dimensions asked for
+        for D in _days(a, b):
+            for r in self.rows_of(D):
+                if all(p(r) for p in preds):
+                    g = agg.setdefault(tuple(r[d] for d in dims), [0, 0.0])
+                    g[0] += r["activeUsers"]
+                    g[1] += r["totalAdRevenue"]
+        rows = [dict(zip(dims, k), activeUsers=u, totalAdRevenue=v) for k, (u, v) in agg.items()]
         meta = {}
         if self.cap is not None and len(rows) > self.cap:
-            rows.sort(key=lambda r: (-r["totalAdRevenue"], r["date"], r["firstSessionDate"], r["countryId"]))
+            rows.sort(key=lambda r: (-r["totalAdRevenue"],) + tuple(r[d] for d in dims))
             oth = {}
             for r in rows[self.cap:]:
                 o = oth.setdefault(r["date"], [0, 0.0])
                 o[0] += r["activeUsers"]
                 o[1] += r["totalAdRevenue"]
-            rows = rows[:self.cap] + [{"date": D, "firstSessionDate": "(other)", "countryId": "(other)",
-                                       "activeUsers": u, "totalAdRevenue": v} for D, (u, v) in sorted(oth.items())]
+            rows = rows[:self.cap] + [dict({d: "(other)" for d in dims}, date=D, activeUsers=u, totalAdRevenue=v)
+                                      for D, (u, v) in sorted(oth.items())]
             meta["dataLossFromOtherRow"] = True
+        if self.answers is not None:
+            self.answers.append(rows)
         if self.oth_flag_day and a <= self.oth_flag_day <= b:
             meta["dataLossFromOtherRow"] = True                 # the flag with no "(other)" row to measure it by
         if self.thr_day and a <= self.thr_day <= b:
@@ -114,6 +128,16 @@ class FakeGA:
 
     def truncated(self, rows):
         return self._cut
+
+
+def _pred(ex):
+    """A filter expression (an in-list on any field, or its notExpression) → a test on a fake row."""
+    if "notExpression" in ex:
+        p = _pred(ex["notExpression"])
+        return lambda r: not p(r)
+    f = ex["filter"]
+    vals = set(f["inListFilter"]["values"])
+    return lambda r, k=f["fieldName"]: r[k] in vals
 
 
 def micros(L, w=1, f=1.0):
@@ -211,29 +235,120 @@ def test_heavy_block_is_read_day_by_day():
         assert {k: rec[k] for k in ("b", "c", "e", "t")} == {k: light[D][k] for k in ("b", "c", "e", "t")}
 
 
+CELLS = ("b", "c", "e", "t")
+LATER = date(2027, 1, 1)                                       # every day of 2026 final
+
+
+def _cells_le(rec, truth):
+    """Every one-row cell of rec that came back ("e", "c") is exactly the true one, and "b" (all countries summed) is
+    never over it — what GA4 kept "(other)" is missing (the measured loss), never wrong, never counted twice."""
+    for cc, xs in rec["e"].items():
+        for X, arr in xs.items():
+            assert all(v == 0 or v == t for v, t in zip(arr, truth["e"][cc][X])), (cc, X)
+    for cc, xs in rec["c"].items():
+        for X, js in xs.items():
+            assert all(v == truth["c"][cc][X][j] for j, v in js.items()), (cc, X)
+    for X, js in rec["b"].items():
+        for j, ws in js.items():
+            assert all(v <= truth["b"][X][j][W] for W, v in ws.items()), X
+
+
 def test_a_day_still_heavy_is_split_by_countries():
     D = date(2026, 9, 10)
-    truth = day_total(FakeGA(today=date(2027, 1, 1), extra_day=D), D)
-    # the split answers whole: the day's every cell, nothing lost
-    ga = FakeGA(today=date(2027, 1, 1), cap=1500, extra_day=D)
+    tga = FakeGA(today=LATER, extra_day=D)
+    truth = cu.read_day(tga, D, "t")                           # GA4 with no limit: one call, every cell
+    assert tga.calls == 1 and truth["via"] == "day" and truth["loss"] == 0 and truth["t"] == day_total(tga, D)
+    # one level: the biggest named countries up to half the named rows in an in-list, the rest (every other country,
+    # those GA4 hid in "(other)", "(not set)") in its notExpression — the split answers whole, nothing lost
+    ga = FakeGA(today=LATER, cap=1500, extra_day=D, keep=True)
     rec = cu.read_day(ga, D, "t")
-    assert ga.calls == 3 and rec["via"] == "split" and rec["st"] == "split" and rec["loss"] == 0
+    assert ga.calls == 3 and rec["via"] == "split" and rec["st"] == "split" and rec["loss"] == 0 and rec["n"] == 3
     first, top, rest = ga.asked[0][1], ga.asked[1][1][0], ga.asked[2][1][0]
     vals = top["filter"]["inListFilter"]["values"]
     assert first is None and rest == {"notExpression": top} and top["filter"]["fieldName"] == "countryId"
     assert "(other)" not in vals and "(not set)" not in vals
-    assert len(vals) == -(-44 // cu.SPLIT) and set(vals) >= {"AA", "BB", "CC", "DD"}  # the biggest ~1/8 (most rows)
-    assert rec["t"] == truth == _rec_sum(rec) and len(rec["e"]) == 45                # AA … DD, "--", Q00 … Q39
-    # the rest still over GA4's limit: what stays "(other)" is the day's measured loss — never spread
-    ga2 = FakeGA(today=date(2027, 1, 1), cap=1000, extra_day=D)
-    rec2 = cu.read_day(ga2, D, "t")
-    assert ga2.calls == 3 and rec2["via"] == "split" and rec2["st"] == "loss" and rec2["fl"] == 0
-    assert 0 < rec2["loss"] < rec2["t"] == truth == _rec_sum(rec2)
-    kept = sum(v for xs in rec2["e"].values() for a in xs.values() for v in a[1:])
-    assert kept + sum(v for js in rec2["b"].values() for ws in js.values() for v in ws.values()) == truth - rec2["loss"]
-    for cc, xs in rec["e"].items():                                       # every cell that came back is exact
-        for X, arr in rec2["e"].get(cc, {}).items():
-            assert all(v == 0 or v == arr0 for v, arr0 in zip(arr[1:], xs[X][1:]))
+    n = {}                                                      # the named rows of the day's (folded) answer
+    for r in ga.answers[0]:
+        if r["countryId"] not in ("(other)", "(not set)"):
+            n[r["countryId"]] = n.get(r["countryId"], 0) + 1
+    order = sorted(n, key=lambda c: (-n[c], -W.get(c, 1), c))   # most rows, then revenue, then code
+    k = len(vals)
+    assert set(vals) == set(order[:k]) and {"AA", "BB", "CC", "DD"} <= set(vals) and 4 < k < len(order)
+    assert 2 * sum(n[c] for c in order[:k - 1]) < sum(n.values()) <= 2 * sum(n[c] for c in order[:k])   # ≈ half
+    assert {k: rec[k] for k in CELLS} == {k: truth[k] for k in CELLS} and len(rec["e"]) == 45
+    assert rec["sv"] == cu.SPLIT_V and rec["ol"] == 0 and rec["cap"] == 0
+    # a part still over GA4's limit is split again (and again): where one level kept "(other)", every cell comes
+    # back — more calls, each a smaller read
+    for cap, at_least in ((1000, 3), (500, 5), (200, 9), (110, 15)):
+        ga = FakeGA(today=LATER, cap=cap, extra_day=D)
+        rec = cu.read_day(ga, D, "t")
+        assert rec["loss"] == rec["ol"] == rec["cap"] == 0 and rec["st"] == "split", cap
+        assert {k: rec[k] for k in CELLS} == {k: truth[k] for k in CELLS}, cap
+        assert rec["n"] == ga.calls >= at_least and ga.calls <= cu.DAY_CAP, cap
+
+
+def test_one_country_over_the_limit_is_split_by_install_days():
+    """A country whose own rows are over GA4's limit: split by install days (firstSessionDate in-list halves and
+    "every install day but those"), recursively — every cell comes back."""
+    D = date(2026, 10, 1)                                      # 121 install days a country (lags 0 … 120)
+    truth = cu.read_day(FakeGA(today=LATER), D, "t")
+    ga = FakeGA(today=LATER, cap=50)
+    rec = cu.read_day(ga, D, "t")
+    assert rec["loss"] == 0 and rec["cap"] == 0 and {k: rec[k] for k in CELLS} == {k: truth[k] for k in CELLS}
+    one = [ex for _, ex, _, _ in ga.asked if ex and len(ex) == 2 and ex[0].get("filter", {}).get("fieldName") ==
+           "countryId" and len(ex[0]["filter"]["inListFilter"]["values"]) == 1]
+    assert one                                                  # a one-country part split by install days
+    for ex in one:
+        x = ex[1].get("filter") or ex[1]["notExpression"]["filter"]
+        assert x["fieldName"] == "firstSessionDate" and all(len(v) == 8 and v.isdigit()
+                                                            for v in x["inListFilter"]["values"])
+    ins = [ex[1]["filter"]["inListFilter"]["values"] for ex in one if "filter" in ex[1]]
+    assert any(len(v) > 1 and v == sorted(v) for v in ins)      # in-list halves of install days (by date)
+    # one country and one install day still over the limit: it cannot be split — measured loss, not a cap
+    ga = FakeGA(today=LATER, cap=0)
+    rec = cu.read_day(ga, D, "t")
+    assert rec["loss"] > 0 and rec["t"] == truth["t"] == _rec_sum(rec) and ga.calls <= cu.DAY_CAP
+
+
+def test_the_cap_leaves_measured_loss():
+    D = date(2026, 9, 10)
+    truth = cu.read_day(FakeGA(today=LATER, extra_day=D), D, "t")
+    for cap in (3, 5, 9):
+        ga = FakeGA(today=LATER, cap=200, extra_day=D)
+        rec = cu.read_day(ga, D, "t", cap=cap)
+        assert ga.calls <= cap and rec["n"] == ga.calls and rec["cap"] == 1 and rec["st"] == "loss"
+        assert 0 < rec["loss"] == rec["ol"] < rec["t"] == truth["t"] == _rec_sum(rec)     # kept as loss, never spread
+        _cells_le(rec, truth)
+    # the hot days' own (smaller) cap; the final read later uses the day's full one
+    ga = FakeGA(cap=200, extra_day=date(2026, 10, 12))
+    got = dict(cu.read_range(ga, date(2026, 10, 12), date(2026, 10, 12), {}, "t", cap=cu.HOT_CAP))
+    assert ga.calls <= cu.HOT_CAP and got[date(2026, 10, 12)]["n"] == ga.calls
+
+
+def test_the_parts_partition_the_day():
+    """Over many GA4 limits (and days with 40 more countries, a "(not set)" install day, an install day after the
+    activity day): the final parts never share a row and add up to the day's own total — nothing dropped, nothing
+    counted twice — and every cell that came back is the true one."""
+    cases = ((date(2026, 9, 10), {"extra_day": date(2026, 9, 10)}),
+             (date(2026, 10, 1), {"notset_day": date(2026, 10, 1), "neg_day": date(2026, 10, 1)}))
+    for D, kw in cases:
+        truth = cu.read_day(FakeGA(today=LATER, **kw), D, "t")
+        for cap in (0, 2, 7, 30, 60, 150, 400, 1000, None):
+            ga = FakeGA(today=LATER, cap=cap, **kw)
+            rows, info = cu.split_read(ga, D)
+            named = [(r["firstSessionDate"], r["countryId"]) for r in rows
+                     if "(other)" not in (r["firstSessionDate"], r["countryId"])]
+            assert len(named) == len(set(named)), (D, cap)                       # no row in two parts
+            rec = cu.read_day(FakeGA(today=LATER, cap=cap, **kw), D, "t")
+            assert rec["t"] == truth["t"] == _rec_sum(rec), (D, cap)            # every row in one part
+            assert info["calls"] == ga.calls <= cu.DAY_CAP + 1 and info["parts"] >= 1
+            _cells_le(rec, truth)
+            assert rec["loss"] >= truth["loss"] >= rec["loss"] - rec["ol"]      # "(not set)" install day: loss
+    # the parts of one split, checked one by one: the answers of the two halves of a part add up to the part
+    ga = FakeGA(today=LATER, cap=150, extra_day=date(2026, 9, 10), keep=True)
+    cu.split_read(ga, date(2026, 9, 10))
+    tot = [round(sum(r["totalAdRevenue"] for r in a) * 1e6) for a in ga.answers]
+    assert len(tot) >= 5 and abs(tot[0] - tot[1] - tot[2]) <= 2         # the day = its first two parts
 
 
 def test_install_day_loss_and_flags():
@@ -611,6 +726,221 @@ def test_history_start_moved_back_clears_done_until_the_walk_is_through(tmp_path
         "from"] == "2026-06-01"
 
 
+# ── the deeper split in the walk: a Stop, the cut memory ────────────────────────────────────────────────────────────
+def _day_calls(ga, D):
+    """(index of the first call of activity day D alone, how many calls it took) in a fake's log."""
+    k = {"startDate": D.isoformat(), "endDate": D.isoformat()}
+    i = [n for n, q in enumerate(ga.asked) if q[0]["dateRanges"][0] == k]
+    return i[0], len(i)
+
+
+def test_a_stop_in_the_middle_of_a_split_keeps_nothing_of_the_day():
+    """A Stop (the run's budget, the quota, the call cap) between the calls of a day's split: the day is NOT folded —
+    the cursor stays on it, no part of it anywhere — and the next run reads it again whole and folds it once."""
+    X = date(2026, 8, 1)                                        # 1,550 rows that day: a split of several levels
+    dry = FakeGA(cap=500, extra_day=X)
+    cu.step_app(dry, cu.Cube(None, "a~1", "222"), TODAY, HS, NOW)
+    i0, n = _day_calls(dry, X)
+    assert n >= 5
+    cube = cu.Cube(None, "a~1", "222")
+    try:
+        cu.step_app(FakeGA(cap=500, extra_day=X, stop_after=i0 + n - 1), cube, TODAY, HS, NOW)
+        raise AssertionError("no stop")
+    except gf.Stop:
+        pass
+    assert cube.head["next"] == "2026-08-01" and "2026-08-01" not in cube.month("2026-08")["days"]
+    assert "2026-07-31" in cube.month("2026-07")["days"] and cube.month("2026-08")["t"] == {}
+    assert cube.head["cut"] == {"D": "2026-08-01", "n": n - 1, "k": 1}    # remembered (one cut: the full cap again)
+    ga = FakeGA(cap=500, extra_day=X)
+    cu.step_app(ga, cube, TODAY, HS, NOW + timedelta(hours=1))
+    assert _day_calls(ga, X) == (0, n) and "cut" not in cube.head        # read whole again, from its first call
+    led = cube.month("2026-08")["days"]["2026-08-01"]
+    truth = cu.read_day(FakeGA(today=LATER, extra_day=X), X, "t")
+    assert led["t"] == truth["t"] and led["loss"] == led["cap"] == 0 and led["n"] == n and led["sv"] == cu.SPLIT_V
+    assert cube.head["next"] == "2026-10-11" and cube.deeper >= 1 and cube.capped == 0
+    # a Stop before the day had MIN_CAP calls: the run had nothing left for it — never counted as the day's cut
+    h = {}
+    try:
+        list(cu.read_range(FakeGA(today=LATER, cap=500, extra_day=X, stop_after=cu.MIN_CAP - 1), X, X, h, "t"))
+    except gf.Stop:
+        pass
+    assert "cut" not in h
+
+
+def test_a_day_cut_run_after_run_gets_a_smaller_cap():
+    """A day too costly for what a run can give it never stalls the walk: cut CUT_TRIES times (each after ≥ MIN_CAP of
+    its calls), it is read with the calls a run gave it less one (then half that …, never below MIN_CAP): folded
+    with what is still "(other)" as measured loss, "cap" 1."""
+    D = date(2026, 9, 10)
+    full = cu.read_day(FakeGA(today=LATER, cap=110, extra_day=D), D, "t")
+    N, h = full["n"], {}
+    assert N >= 10 and full["loss"] == 0
+    for stop in (N - 2, N - 4):
+        try:
+            list(cu.read_range(FakeGA(today=LATER, cap=110, extra_day=D, stop_after=stop), D, D, h, "t"))
+            raise AssertionError("no stop")
+        except gf.Stop:
+            pass
+    assert h["cut"] == {"D": "2026-09-10", "n": N - 2, "k": 2}
+    assert cu._cap_of(h, "2026-09-10", cu.DAY_CAP) == N - 3 and cu._cap_of(h, "2026-09-11", cu.DAY_CAP) == cu.DAY_CAP
+    assert cu._cap_of({"cut": {"D": "x", "n": N - 2, "k": 3}}, "x", cu.DAY_CAP) == max(cu.MIN_CAP, (N - 3) // 2)
+    assert cu._cap_of({"cut": {"D": "x", "n": 3, "k": 9}}, "x", cu.DAY_CAP) == cu.MIN_CAP
+    ga = FakeGA(today=LATER, cap=110, extra_day=D)
+    (_, rec), = cu.read_range(ga, D, D, h, "t")
+    assert ga.calls <= N - 3 and rec["n"] == ga.calls and rec["cap"] == 1 and rec["loss"] == rec["ol"] > 0
+    assert rec["t"] == full["t"] == _rec_sum(rec) and "cut" not in h
+    _cells_le(rec, full)
+
+
+# ── the repair: months folded with the one-level split, read again and replaced whole ──────────────────────────────
+RS = date(2026, 9, 1)                                           # the repaired app's history start
+
+
+def _old(D, today, cap=40):
+    """Day D as the one-level split read it before 21 Oct 2026: ≤ 3 calls, the ledger without sv / ol / n / cap."""
+    rec = cu.read_day(FakeGA(today=today, cap=cap, start=RS), D, "t", cap=3)
+    for f in ("sv", "ol", "n", "cap"):
+        rec.pop(f)
+    return rec
+
+
+def _old_cube(data, today):
+    """Sep 1 … today − FINAL_LAG folded by the one-level split (GA4's limit 40 rows: most days kept "(other)"), the
+    walk through and the hot days just read — a run then has only the repair to do."""
+    cube = cu.Cube(data, "a~1", "222")
+    edge = today - timedelta(days=cu.FINAL_LAG)
+    for D in _days(RS, edge):
+        cube.fold(D, _old(D, today))
+    now = datetime(today.year, today.month, today.day, 1, 0, tzinfo=timezone.utc)
+    cube.head.update(stream_id="222", **{"from": RS.isoformat(), "next": (edge + timedelta(days=1)).isoformat(),
+                                         "done": True, "hot_at": cu.gu._now_iso(now), "hot_today": today.isoformat()})
+    _save(cube)
+    return cube
+
+
+def _raw(data, k):
+    with open(cu.month_path(data, "a~1", k), "rb") as f:
+        return f.read()
+
+
+def test_repair_reads_lossy_months_again_and_replaces_them_whole(tmp_path):
+    data, T0 = str(tmp_path), date(2026, 10, 13)
+    _old_cube(data, T0)
+    old = {k: _raw(data, k) for k in ("2026-09", "2026-10")}
+    sep, octo = _month(data, "2026-09"), _month(data, "2026-10")
+    assert all(v["sv"] is None for v in sep["days"].values()) and sum(sep["loss"].values()) > 0
+    share = {k: cu._month_oloss(m)[0] / cu._month_oloss(m)[2] for k, m in (("2026-09", sep), ("2026-10", octo))}
+    assert share["2026-10"] > share["2026-09"] > 0.05                    # October lost more: it goes first
+    runs, seen_copy, T = 0, False, T0
+    while runs < 40:
+        runs += 1
+        T = T0 + timedelta(days=1) if runs >= 2 else T0                  # run 2 on: a new day, the walk folds Oct 11
+        cube = cu.Cube(data, "a~1", "222")
+        ga = FakeGA(today=T, cap=40, start=RS, max_calls=cu.MAX_CALLS)
+        cu.step_app(ga, cube, T, RS, datetime(T.year, T.month, T.day, 2, runs % 24, tzinfo=timezone.utc))
+        _save(cube)
+        rp = cube.head["rep"]
+        assert ga.calls <= cu.MAX_CALLS
+        for k in ("2026-09", "2026-10"):
+            if rp.get("k") == k:                                        # being built: the month file as it was (the
+                assert os.path.exists(cube.rep_path(k))                 # walk's new days only)
+                live = _month(data, k)
+                assert {D: v for D, v in live["days"].items() if D <= "2026-10-10"} == \
+                    (octo if k == "2026-10" else sep)["days"]
+                assert k == "2026-10" or _raw(data, k) == old[k]
+                seen_copy = True
+            else:
+                assert not os.path.exists(cube.rep_path(k))
+        if not rp.get("k") and not rp.get("q"):
+            break
+    assert seen_copy and 3 <= runs < 40 and [e[0] for e in rp["log"]] == ["2026-10", "2026-09"]    # biggest share 1st
+    full = cu.Cube(None, "a~1", "222")
+    for D in _days(RS, date(2026, 10, 11)):
+        full.fold(D, cu.read_day(FakeGA(today=LATER, start=RS), D, "t"))
+    for k in ("2026-09", "2026-10"):
+        mo = _month(data, k)
+        assert mo["rep"]["sv"] == cu.SPLIT_V and mo["rep"]["ol0"] > 0 and mo["loss"] == {}
+        assert all(v["sv"] == cu.SPLIT_V and v["loss"] == 0 and v["ol"] == 0 for v in mo["days"].values())
+        assert {f: mo[f] for f in ("b", "c", "e", "t")} == {f: full.month(k)[f] for f in ("b", "c", "e", "t")}, k
+    assert sorted(_month(data, "2026-10")["days"])[-1] == "2026-10-11"  # the day the walk folded meanwhile: in it
+    assert [e[2] for e in rp["log"]] == [0, 0] and all(e[1] > 0 for e in rp["log"])
+    # never repaired twice: the queue made again finds nothing (every day read with this split)
+    cube = cu.Cube(data, "a~1", "222")
+    cube.head["rep"]["scan"] = "2026-01-01T00:00:00Z"
+    ga = FakeGA(today=T, cap=40, start=RS)
+    assert cu.repair(ga, cube, datetime(2026, 10, 15, tzinfo=timezone.utc)) is False and ga.calls == 0
+    assert cube.head["rep"]["q"] == [] and cube.repaired == 0
+
+
+def test_repair_keeps_the_old_month_until_every_day_is_read(tmp_path, monkeypatch):
+    """A Stop in the repair (the budget): the days read are kept in the copy, the month file is untouched; the app's
+    own call cap only ends the repair for the run (no deferral). The copy becomes the month only when it holds every
+    day of it."""
+    data, T = str(tmp_path), date(2026, 10, 3)
+    _old_cube(data, T)
+    old = _raw(data, "2026-09")
+    now = datetime(2026, 10, 3, 2, tzinfo=timezone.utc)
+    cube = cu.Cube(data, "a~1", "222")
+    try:
+        cu.step_app(FakeGA(today=T, cap=40, start=RS, stop_after=14, stop_why="budget"), cube, T, RS, now)
+        raise AssertionError("no stop")
+    except gf.Stop:
+        pass
+    _save(cube)                                                     # what refresh_all does after a Stop
+    rep = cu.gu.load_store(cube.rep_path("2026-09"))
+    assert _raw(data, "2026-09") == old and cube.head["rep"]["k"] == "2026-09"
+    assert 1 <= len(rep["days"]) < 30 and all(v["sv"] == cu.SPLIT_V for v in rep["days"].values())
+    got = set(rep["days"])
+    cube = cu.Cube(data, "a~1", "222")                              # the call cap: the repair just ends, "fetched"
+    ga = FakeGA(today=T, cap=40, start=RS, max_calls=12)
+    assert cu.step_app(ga, cube, T, RS, now + timedelta(hours=1)) == "fetched"
+    _save(cube)
+    rep = cu.gu.load_store(cube.rep_path("2026-09"))
+    assert got < set(rep["days"]) and _raw(data, "2026-09") == old and ga.calls <= 12
+    for i in range(20):                                             # on to the end
+        cube = cu.Cube(data, "a~1", "222")
+        cu.step_app(FakeGA(today=T, cap=40, start=RS, max_calls=cu.MAX_CALLS), cube, T, RS,
+                    now + timedelta(hours=2 + i))
+        _save(cube)
+        if not cube.head["rep"].get("k"):
+            break
+    mo = _month(data, "2026-09")
+    assert sorted(mo["days"]) == [D.isoformat() for D in _days(RS, date(2026, 9, 30))] and mo["loss"] == {}
+    assert not os.path.exists(cube.rep_path("2026-09")) and _raw(data, "2026-09") != old
+    # a copy of an older split version (or another stream's) is never taken as this one's
+    cube = cu.Cube(data, "a~1", "222")
+    cu.write_json_gz_stable(cube.rep_path("2026-08"), dict(cu._empty_month("222"), rep={"sv": 1},
+                                                            days={"2026-08-01": {}}))
+    assert cube.rep("2026-08")["days"] == {}
+
+
+def test_repair_queue_order_and_versions():
+    """The queue: months with "(other)" a deeper split could read — the biggest share of the month's revenue first,
+    the more recent month first on a tie; a "block" / "day" day's loss (install days that are not dates) and a day
+    read with this split never count; a newer split version queues a month again only where "(other)" is left."""
+    cube = cu.Cube(None, "a~1", "222")
+
+    def day(D, via, loss, t, **kw):
+        cube.fold(D, dict({"st": "loss" if loss else "ok", "rows": 1, "loss": loss, "t": t, "fl": 0, "via": via,
+                           "at": "x", "b": {}, "c": {}, "e": {}}, **kw))
+    day(date(2026, 5, 1), "split", 500, 1000, sv=2, ol=500)       # read with this split: never again
+    day(date(2026, 6, 1), "block", 300, 1000)                     # no "(other)" row: its loss no split reads
+    day(date(2026, 6, 2), "day", 300, 1000)
+    day(date(2026, 7, 1), "split", 100, 1000)                     # 10 %
+    day(date(2026, 8, 1), "split", 200, 1000)                     # 20 %
+    day(date(2026, 9, 1), "split", 100, 500)                      # 10 % (with a clean day)
+    day(date(2026, 9, 2), "day", 0, 500)
+    day(date(2026, 10, 1), "split", 0, 1000)                      # a split day that kept nothing "(other)"
+    assert cu._scan(cube) == [["2026-08", 0.2], ["2026-09", 0.1], ["2026-07", 0.1]]
+    assert cu._oloss({"via": "split", "loss": 9, "ol": 4}) == 4 and cu._oloss({"via": "split", "loss": 9, "sv": 2}) == 0
+    old_v = cu.SPLIT_V
+    try:
+        cu.SPLIT_V = 3                                            # a still deeper split one day: "ol" > 0 again
+        assert cu._scan(cube) == [["2026-05", 0.5], ["2026-08", 0.2], ["2026-09", 0.1], ["2026-07", 0.1]]
+    finally:
+        cu.SPLIT_V = old_v
+
+
 # ── the run and the build hook ──────────────────────────────────────────────────────────────────────────────────────
 def _refresh(monkeypatch, tmp_path, stop_after=None, apps=None):
     data = str(tmp_path)
@@ -646,6 +976,9 @@ def test_refresh_all_files_and_counts_only(monkeypatch, tmp_path):
     line = cu.log_line(out)
     assert line.startswith("ga4 cube: apps 3, with GA4 2, fetched 2, fresh 0, failed 0, deferred 0, waiting 0, days "
                            "folded ") and "example" not in line and "x~" not in line
+    assert ", deeper 0, capped 0, " in line and ", repair days 0, months repaired 0, calls " in line
+    assert all(cu.load_head(data, aid)["rep"] == {"sv": cu.SPLIT_V, "scan": "2026-10-13T06:00:00Z", "q": []}
+               for aid in ("x~1", "x~2"))                       # nothing to repair: the queue made once, empty
     # a Stop part-way: what was folded is on disk (months before the head), the app deferred, the walk goes on next run
     data2, out2 = _refresh(monkeypatch, tmp_path / "b", stop_after=1, apps=[{"app_id": "x~1",
                                                                             "package": "com.example.alpha"}])
@@ -714,7 +1047,8 @@ def test_build_hook_switch(tmp_path, monkeypatch, capsys):
     err = capsys.readouterr().err
     assert calls == [60] and [ln for ln in err.splitlines() if ln.startswith("ga4 cube")] == [
         "ga4 cube: apps 2, with GA4 0, fetched 1, fresh 0, failed 0, deferred 0, waiting 0, days folded 0, split 0, "
-        "loss 0, flagged 0, months read again 0, calls 0, tokens 0"]
+        "deeper 0, capped 0, loss 0, flagged 0, months read again 0, repair days 0, months repaired 0, calls 0, "
+        "tokens 0"]
     monkeypatch.setattr(cu, "refresh_all", lambda *a, **k: 1 / 0)
     dash = tub.dashboard()
     ub.run_uninstall(dash, data, out, tub.ga4_settings(ga4_cube=True), now=tub.NOW)

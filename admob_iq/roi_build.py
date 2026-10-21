@@ -13,7 +13,9 @@ k the tab uses):
        df (how many of d are final), u (users active on day 0, 1, …), t (cumulative revenue at day 0, 1, 3, 7, 14, 30,
        60, 90, 180, 365 — only when complete), s (revenue so far), sd (so far = through this day), be (the breakeven
        day: [day, exact?] or null), st (status: Worse / Watch / Better / Normal / Too early / N/A), q (≈: bit 1 = a day
-       of it did not tie to the install-day read, bit 2 = a day its m used had revenue GA4 gave no install day),
+       of it did not tie to the install-day read, or its D0 … D30 read kept revenue in GA4's "(other)" / was flagged
+       with nothing to measure it by — fetch.ga4_cohort "lo" / "lf" —, bit 2 = a day its m used had revenue GA4 gave no
+       install day),
        spi (spend as billed), and — only on a row that has them — m (cumulative revenue at day 60, 90, 120 … every
        30 days up to the install day's age: the cohort cube, see below), mf (how many of m are final)]
        (q bit 4 = a day its m used GA4 flagged with nothing to measure it by: thresholding / sampling / a cut read)
@@ -1491,9 +1493,11 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             late = None
         rows = _cohorts(P, spend, fxf, co, today, late if late and "B" in late else None)
         off, checked = _tie_off(ida, (co or {}).get("x") or {}, ida.get("days"))
+        olo = {str(k) for f in ("lo", "lf") for k in ((co or {}).get(f) or {})}   # the D0 … D30 read's "(other)"
         for r in rows:
             if r["d"]:
-                r["q"] = any(_iso(r["X"] + timedelta(days=L)) in off for L in range(len(r["d"])))
+                r["q"] = any(_iso(r["X"] + timedelta(days=L)) in off or _iso(r["X"] + timedelta(days=L)) in olo
+                             for L in range(len(r["d"])))
         _statuses(rows)
         summ = _summary(rows, P, off, checked, today)
         life = _life(rev, spend, fxf, ded_rate)

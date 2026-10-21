@@ -1,7 +1,9 @@
 """📈 Day-wise ROI — the hourly fetch (admob_iq.fetch.ga4_cohort), offline with a fake GA4 and made-up numbers: the block
 query (dimensions, in-list of install days), the cells kept (lag 0 … 30 only; a cell GA4 leaves out = 0), the one-time
 backfill from the history start (resumed after a stop), the recent refresh every 6 hours (today included), the hot /
-older split of the store, and a counts-only line."""
+older split of the store, a block with "(other)" rows read again day by day (split by install-day halves; the day's
+cap leaves measured loss in "lo"; a flagged block's days in "lf"; a refresh cut by a Stop goes on from its next day),
+and counts-only lines."""
 import gzip
 import json
 import os
@@ -116,3 +118,101 @@ def test_refresh_all_counts_only(monkeypatch, tmp_path):
     assert st["hs"] == "2026-09-20" and st["stream_id"] == "222" and min(st["x"]) >= "2026-08-21"
     line = gc.log_line(out)
     assert line.startswith("ga4 cohort: apps 2, with GA4 1, fetched 1") and "example" not in line
+
+
+# ── "(other)" in a block: the block read again day by day, split like the cube (owner, 21 Oct 2026) ────────────────
+def _cga(**kw):
+    """The cube's fake (countries, GA4's row limit `cap`, filters on any field), grouped by the dimensions asked for —
+    here date × firstSessionDate."""
+    from tests.test_ga4_cube import FakeGA as CubeGA
+    return CubeGA(**dict({"today": date(2027, 1, 1), "start": date(2026, 6, 1)}, **kw))
+
+
+def _truth(a, b):
+    store = {}
+    gc.merge(store, gc.read_block(_cga(), a, b), a, b)
+    return store["x"]
+
+
+def _run(ga, store, a, b, alone=False):
+    info = dict.fromkeys(gc.INFO, 0)
+    last = None
+    for D in gc._read(ga, store, a, b, info, alone):
+        last = D
+    return info, last
+
+
+def test_a_block_with_other_rows_is_read_day_by_day():
+    a, b = date(2026, 9, 1), date(2026, 9, 30)
+    truth = _truth(a, b)
+    bi, ga = {}, _cga(cap=1000)                     # the block: 30 days × up to 60 install days → over the limit
+    gc.read_block(ga, a, b, bi)
+    assert bi["oth"] == 30 and bi["om"] > 0 and bi["fl"] & gc.gcu.F_OTHER        # counted: one "(other)" row a day
+    store, ga = {}, _cga(cap=1000)
+    info, last = _run(ga, store, a, b)
+    assert ga.calls == 1 + 30 and last == b and info == {"oth_blocks": 1, "alone": 30, "loss_days": 0, "flagged": 0}
+    for _, ex, _, _ in ga.asked[1:]:                # each day alone: install days D − 30 … D (31)
+        assert len(ex[0]["filter"]["inListFilter"]["values"]) == gc.LAGS
+    assert store["x"] == truth and "lo" not in store and "lf" not in store
+    # a day still over the limit: split by install-day halves (no country here) — every cell back
+    store, ga = {}, _cga(cap=20)
+    info, _ = _run(ga, store, a, b)
+    assert store["x"] == truth and info["alone"] == 30 and info["loss_days"] == 0 and ga.calls == 1 + 30 * 3
+    # the day's cap reached: what is still "(other)" is that day's measured loss ("lo"), never spread
+    old = gc.DAY_CAP
+    try:
+        gc.DAY_CAP = 1
+        store, ga = {}, _cga(cap=20)
+        info, _ = _run(ga, store, a, b)
+    finally:
+        gc.DAY_CAP = old
+    assert info["loss_days"] == 30 and sorted(store["lo"]) == [D.isoformat() for D in gc._days(a, b)]
+    for D in gc._days(a, b):                        # kept + loss = the day's own total (install days D − 30 … D)
+        k = D.isoformat()
+        tot = sum(truth[X]["r"][L] for X in truth for L in range(gc.LAGS)
+                  if (date.fromisoformat(X) + timedelta(days=L)).isoformat() == k)
+        got = sum(store["x"][X]["r"][L] for X in store["x"] for L in range(gc.LAGS)
+                  if (date.fromisoformat(X) + timedelta(days=L)).isoformat() == k)
+        assert abs(got + store["lo"][k] - tot) <= 2 and got < tot
+    # read again whole: the day's loss goes
+    info, _ = _run(_cga(), store, a, b)
+    assert "lo" not in store and store["x"] == truth
+
+
+def test_a_flagged_block_marks_its_days_and_a_clean_read_clears_them():
+    a, b = date(2026, 9, 1), date(2026, 9, 30)
+    store = {}
+    info, _ = _run(_cga(oth_flag_day=date(2026, 9, 5)), store, a, b)      # the flag with no "(other)" row to measure
+    assert info["oth_blocks"] == 0 and info["flagged"] == 30 and len(store["lf"]) == 30 and store["x"] == _truth(a, b)
+    _run(_cga(), store, a, b)
+    assert "lf" not in store
+
+
+def test_a_refresh_read_day_by_day_goes_on_after_a_stop():
+    store = {"v": gc.STORE_V, "backfill": {"done": True}}
+    hs = date(2026, 6, 1)
+    try:
+        gc.step_app(_cga(today=TODAY, cap=1000, stop_after=11), store, TODAY, hs, NOW)
+        raise AssertionError("no stop")
+    except gc.Stop:
+        pass
+    recent = TODAY - timedelta(days=gc.RECENT_DAYS - 1)
+    assert store["rn"] == (recent + timedelta(days=10)).isoformat() and "recent_at" not in store   # 10 days kept
+    ga = _cga(today=TODAY, cap=1000)
+    info = {}
+    assert gc.step_app(ga, store, TODAY, hs, NOW + timedelta(hours=1), info) == "fetched"
+    k = (recent + timedelta(days=10)).isoformat()                         # no block call first: on from that day
+    assert ga.asked[0][0]["dateRanges"][0] == {"startDate": k, "endDate": k}
+    assert ga.calls == gc.RECENT_DAYS - 10 and info["oth_blocks"] == 0 and info["alone"] == gc.RECENT_DAYS - 10
+    assert "rn" not in store and store["recent_at"] and store["read_today"] == TODAY.isoformat()
+    want = {}
+    gc.merge(want, gc.read_block(_cga(today=TODAY), recent, TODAY), recent, TODAY)
+    assert {X: v for X, v in store["x"].items() if X >= "2026-08-10"} == \
+        {X: v for X, v in want["x"].items() if X >= "2026-08-10"}
+
+
+def test_the_line_counts_only():
+    out = {"counts": dict(dict.fromkeys(gc.COUNTS, 0), selected=2, oth_blocks=1, alone=30, loss_days=2, flagged=3)}
+    assert gc.log_line(out) == ("ga4 cohort: apps 2, with GA4 0, fetched 0, fresh 0, failed 0, deferred 0, waiting 0, "
+                                "blocks with (other) 1, days read alone 30, days with loss 2, flagged days 3, calls 0, "
+                                "tokens 0")
