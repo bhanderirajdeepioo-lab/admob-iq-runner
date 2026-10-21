@@ -5,6 +5,8 @@ evaluates every date of every app on each build, and the other tabs' tests run d
 import os
 
 os.environ.setdefault("IMPACT_ANY", "false")
+os.environ.setdefault("IMPACT_ANY_WORKERS", "0")   # its builds in the test's own process (tests patch the engine);
+#                                                    tests/test_impact_any_pool.py runs them side by side
 
 import pytest  # noqa: E402
 
