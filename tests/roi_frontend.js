@@ -13,8 +13,9 @@
 //     mostly-organic warning, the help + paid share per install day), and the All-apps table (biggest blended-vs-paid
 //     gap first, flagged rows, ✓ GA4 rows, spend-weighted total, ₹ as billed, sorting); a paused app (whatever its call)
 //     out of the total and of the ⚖️ hero card, "✓ GA4" only where GA4 measured, the premium range's own age named;
-//   * 🧮 the cohort card's totals strip: All / a country (Unknown, Not split), loading / error / missing, ₹ / $, its skeleton
-//     the same in every state;
+//   * 🧮 the cohort card's totals strip, two groups ("Spend pata wale din": Revenue − Spend = Profit over ONE set of days;
+//     "Poori history"): All / a country (Unknown, Not split), the owner's case in its shape, loading / error / missing, ₹ /
+//     $, its skeleton the same in every state;
 //   * "Show 60 more" / "Show all" (the install-day tables and the lifetime "Every day" table): on a parsed DOM with a layout
 //     model + the page's own stay-put layer, the reader's row stays put, the box keeps its scroll, no second scroll;
 //     sideways by column (the Day table's columns change with the rows shown), and a Mode switch keeps the box's place too.
@@ -134,8 +135,9 @@ async function noJump(width, file, packs, failOnce, mode) {
   const L = {};
   const P = { hero: '', body: '' };
   let HD = '';                                                              // the view tabs (the block's own header)
-  // 🧮 the totals strip above the chips is ONE height in every state (CSS: one-line values, two-line subs, a note that
-  // never changes — pinned in test_roi_frontend.py, its skeleton the same in every state below): one fixed-size block here
+  // 🧮 the totals strip above the chips is ONE height in every state (CSS: one-line values, two-line subs, fixed group heads
+  // + coverage line, a note that never changes — pinned in test_roi_frontend.py, its skeleton the same in every state
+  // below): one fixed-size block here
   const full = () => '<section id="roi-root"><div id="roi-hero">' + P.hero + '</div>' + HD + '<div id="roi-body">'
     + P.body.replace(KPI_RE, '<div class="roi-cks">' + '.'.repeat(400) + '</div>') + '</div></section>';
   const attrs = tag => { const a = {}; for (const m of tag.matchAll(/([a-zA-Z0-9:-]+)="([^"]*)"/g)) a[m[1]] = m[2]; return a; };
@@ -1534,118 +1536,187 @@ async function moreKeepAll(dc, packs) {
     }
     U.setCTY('');
     // ── 🧮 the totals strip (owner, 21 Oct 2026: "kpi add karo yaha pe ki kitna total spend gaya he kitna total revenue aaya
-    // he — all country and jo country select kru uska kpi change ho jayega — total hi aayega") ─────────────────────────────
+    // he — all country and jo country select kru uska kpi change ho jayega — total hi aayega"; then "profit loss me wrong lag
+    // raha he": two groups, each over ONE set of days — "Spend pata wale din" (Spend, Revenue, Profit / loss, ROAS) and
+    // "Poori history" (Total revenue, Installs, Install days) + the days with no spend data) ─────────────────────────────────
     {
       const kOf = h => { const i = h.indexOf('<div class="roi-cks"'); if (i < 0) return null;
         return h.slice(i, h.indexOf('</p></div>', h.indexOf('<p class="roi-note roi-ckn">', i)) + 10); };
       const kT = h => [...kOf(h).matchAll(/<div class="roi-k roi-ck( roi-k[gb])?"><div class="roi-kl">([^<]*)<\/div><div class="roi-kv">([^]*?)<\/div><div class="roi-ks">([^<]*)<\/div><\/div>/g)]
         .map(m => [m[2], m[3].replace(/<[^>]+>/g, ''), m[4]]);
       const kCls = h => [...kOf(h).matchAll(/<div class="roi-k roi-ck( roi-k[gb])?"><div class="roi-kl">[^<]*<\/div><div class="roi-kv">(?:<span class="([^"]*)">)?/g)].map(m => [(m[1] || '').trim(), m[2] || '']);
-      // the box without its numbers / reasons: the same in every state (tiles, labels, the note) — with the CSS pins, one height
+      // the two group heads [title, its days] and the coverage line under them
+      const kH = h => [...kOf(h).matchAll(/<div class="roi-ckh"><b>([^<]*)<\/b><span>([^<]*)<\/span><\/div>/g)].map(m => [m[1], m[2]]);
+      const kL = h => (/<p class="roi-note roi-ckm">([^<]*)<\/p>/.exec(kOf(h)) || [])[1];
+      // the box without its numbers / reasons / days / coverage text: the same in every state (groups, tiles, labels, the
+      // note) — with the CSS pins (fixed heads, fixed coverage line, one-line values, two-line reasons), one height
       const kSk = h => kOf(h).replace(/<div class="roi-kv">[^]*?<\/div>/g, '<div class="roi-kv"></div>').replace(/<div class="roi-ks">[^<]*<\/div>/g, '<div class="roi-ks"></div>')
+        .replace(/(<div class="roi-ckh"><b>[^<]*<\/b><span>)[^<]*(<\/span>)/g, '$1$2').replace(/(<p class="roi-note roi-ckm">)[^<]*/, '$1')
         .replace(/ roi-k[gb]"/g, '"').replace(' aria-busy="true"', '');
       const KS = [], seen = h => { KS.push(h); return h; };
-      const fm = (x, sg) => { const a = Math.abs(x); return (x < 0 ? '−' : sg && x > 0 ? '+' : '') + '$' + (a >= 100 ? Math.round(a).toLocaleString('en-US') : a >= 10 ? a.toFixed(0) : a.toFixed(a >= 1 ? 1 : 2)); };
+      const fm = (x, sg, dp) => { const a = Math.abs(x); return (x < 0 ? '−' : sg && x > 0 ? '+' : '') + '$' + (dp ? a.toFixed(dp) : Math.round(a).toLocaleString('en-US')); };
+      const pm = v => (v.startsWith('−') ? -1 : 1) * +v.replace(/[^0-9.]/g, '');          // a printed money value → its number
       const num = td => { const t = td.replace(/<small>[^]*?<\/small>/g, '').replace(/<[^>]+>/g, '').trim(); return t === '—' ? null : +t.replace(/[^0-9.]/g, ''); };
       const colSum = (h, i) => trs(h).reduce((a, r) => a + (num(r[i < 0 ? r.length + i : i]) || 0), 0);
+      // an independent recount of the group "Spend pata wale din" (+ Poori history's revenue): mode 'usd' (the $ view: $ as
+      // the rows hold them), 'inr' (a ₹ view of a file not billed in ₹: $ × today), 'bill' (₹ as billed: the bill + the so far
+      // at the day's billed rate — the row's ₹ ÷ $, a spend-0 day: rate[X] of the All rows, else today); rounded as printed
+      const rcA = (rows, mode, today, rate) => { const o = { s: 0, r: 0, n: 0, lo: '', hi: '', rv: 0, nrv: 0, kx: 0, nz: 0, nt: 0 };
+        for (const q of rows) { const u = q[3], so = q[8];
+          if (so != null) { o.rv += so; o.nrv++; }
+          if (u == null) continue; if (so == null) { o.kx++; continue; }
+          const d1 = u > 0 ? q[13] / u : rate && rate[q[0]];
+          if (mode === 'bill' && !(u > 0) && d1 == null && so) o.nt++;
+          o.s += mode === 'bill' ? q[13] : mode === 'inr' ? u * today : u;
+          o.r += mode === 'bill' ? so * (d1 != null ? d1 : today) : mode === 'inr' ? so * today : so;
+          o.n++; if (!(u > 0)) o.nz++; if (!o.lo) o.lo = q[0]; o.hi = q[0]; }
+        const mx = Math.max(o.s, o.r), dp = mx >= 10 ? 0 : mx >= 1 ? 1 : 2, f = 10 ** dp;
+        return Object.assign(o, { S: Math.round(o.s * f) / f, R: Math.round(o.r * f) / f, P: (Math.round(o.r * f) - Math.round(o.s * f)) / f, dp }); };
+      // the printed group "Spend pata wale din": [Spend, Revenue, Profit, ROAS] as numbers + whether Revenue − Spend = Profit exactly
+      const aNum = h => { const k = kT(h); const v = k.slice(0, 4).map(x => x[1]); const [S, R, P_] = v.slice(0, 3).map(pm);
+        return [S, R, P_, v[3], Math.round((R - S) * 100) === Math.round(P_ * 100)]; };
       ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$'; U.lifeView([], null, {});
       U.setCTY(''); U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60);
-      // made up by hand: 5 install days — 2 Jan: spend not known; 3 Jan: so far not read yet; 4 Jan: nothing (spend 0, 0)
+      // made up by hand: 5 install days — 2 Jan: spend not known; 3 Jan: so far not read yet; 4 Jan: ads paused (spend 0, 0)
       const kr = (X, n, sp, spi, s_) => [X, n, null, sp, null, 0, null, T.map(() => null), s_, X, null, 'N/A', 0, spi];
       const dk = { v: 1, T, lags: 31, newest: '2026-01-05', rows: [kr('2026-01-01', 100, 10, 900, 30), kr('2026-01-02', 50, null, null, 5),
         kr('2026-01-03', 20, 4, 360, null), kr('2026-01-04', 0, 0, 0, 0), kr('2026-01-05', 30, 6, 540, 3)] };
       const hk = seen(U.cohCard(dk));
-      out.k_usd = kT(hk);
+      out.k_usd = [kT(hk), kH(hk), kL(hk)];
       out.k_usd_cls = kCls(hk);
       // the same numbers the table prints: Σ its Spend column, Σ its "So far" column, Σ its Installs column
       out.k_usd_table = [colSum(hk, 3), colSum(hk, -1), colSum(hk, 2)];
       // where it sits: under the title row, right above the control row (country chips · grain · mode), above the table
       out.k_place = [hk.includes('cell pe ruko = detail</span></div>' + kOf(hk) + '<div class="roi-ctl">'), (hk.match(/class="roi-cks"/g) || []).length,
         hk.indexOf('roi-cks') < hk.indexOf('<table'), (U.dayView(dk).match(/class="roi-cks"/g) || []).length, U.ctyView(appFile()).includes('roi-cks'),
-        kOf(hk).includes('<p class="roi-note roi-ckn">Poori history ka jod — har install din ki ab tak ki kamai (so far, AdMob-matched) aur uska spend; country chuno to sirf us country ka. Profit / loss + ROAS sirf ads wale din (spend &gt; 0) jinki kamai padhi gayi — har din us din ke rate se, table ke % jaisa.</p>')];
-      // ₹: spend as billed (the Spend column's own SV) — revenue $ × the rate; a ₹ view of a file not billed in ₹: $ × the rate
+        kOf(hk).includes('<p class="roi-note roi-ckn">Do group kyun: country ka spend data ~1 saal ka hi hai — Profit / loss + ROAS sirf un dino ka jinka spend pata hai (upar: Revenue − Spend = Profit); har din ki kamai Poori history me.</p>')];
+      // ₹ billed (₹90 a $ on every day, today ₹100): the bill + each day's so far at its own billed rate; a ₹ view of a file
+      // not billed in ₹: $ × 100 throughout
       ctx.curView = () => 'INR'; ctx.cfx = () => 100; ctx.csym = () => '₹';
       U.lifeView([], null, { ccy: 'INR' });
       const hki = seen(U.cohCard(dk));
-      out.k_inr = kT(hki).slice(0, 4);
+      out.k_inr = [kT(hki), kL(hki)];
       out.k_inr_table = colSum(hki, 3);
       U.lifeView([], null, {});
-      out.k_inr_usd = kT(U.cohCard(dk)).slice(0, 4);
+      out.k_inr_usd = kT(seen(U.cohCard(dk)));
       ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
-      // review (21 Oct): days with no ads (spend 0) keep their revenue in Total revenue, never in profit / loss or ROAS —
-      // 3 days $0 spend / $100 so far, then 3 days $100 / $80: the table's ads rows all read 80%, so must the strip
+      // 🧾 the owner's case, made up (21 Oct 2026, a country in ₹: "profit loss me wrong lag raha he"): 30 old days with
+      // revenue but no spend data, 20 ads days at a loss, 5 ads-paused days (spend 0 + revenue), 3 ads days at a gain, the 2
+      // newest days' so far not read yet; each day billed at its own rate (₹82 / 82.5 / 83 / 83.5 a $), today ₹88
+      const ow = [];
+      for (let i = 0; i < 60; i++) { const rt = 82 + (i % 4) * 0.5, u = i < 30 ? null : i >= 50 && i < 55 ? 0 : 20;
+        ow.push(kr(day('2025-03-01', i), 10, u, u == null ? null : u * rt, i >= 58 ? null : i < 30 ? 10 : i < 50 ? 18 : i < 55 ? 4 : 30)); }
+      const dow = { v: 1, T, lags: 31, newest: ow[59][0], rows: ow };
+      const how = seen(U.cohCard(dow));
+      out.k_own_usd = [kT(how), kCls(how), kH(how), kL(how), aNum(how), rcA(ow, 'usd')];
+      ctx.curView = () => 'INR'; ctx.cfx = () => 88; ctx.csym = () => '₹'; U.lifeView([], null, { ccy: 'INR' });
+      const hob = seen(U.cohCard(dow));
+      out.k_own_inr = [kT(hob), kCls(hob), kH(hob), kL(hob), aNum(hob), rcA(ow, 'bill', 88)];
+      U.lifeView([], null, {});
+      const hon = seen(U.cohCard(dow));
+      out.k_own_inr_usd = [kT(hon).slice(0, 4), aNum(hon), rcA(ow, 'inr', 88)];
+      ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
+      // days with no ads (spend 0) are IN the group with their revenue: 3 × ($0, $100) + 3 × ($100, $80)
       const dz = { v: 1, T, lags: 31, newest: '2026-01-06', rows: [1, 2, 3].map(i => kr('2026-01-0' + i, 10, 0, 0, 100))
         .concat([4, 5, 6].map(i => kr('2026-01-0' + i, 10, 100, 8300, 80))) };
       const hz = seen(U.cohCard(dz));
-      out.k_zero = [kT(hz).slice(0, 4), kCls(hz).slice(2, 4), trs(hz).filter(r => r[3].replace(/<[^>]+>/g, '') !== '$0.00').map(r => r[r.length - 1].replace(/<[^>]+>/g, ''))];
-      // review (21 Oct): a ₹-billed file, the rupee moved (billed at ₹83, today ₹88): ROAS the same in ₹ and $ (each day at
-      // its own rate, as the table's %), and profit / loss in ₹ = each day's so far at its billed rate − the bill: same sign
+      out.k_zero = [kT(hz), kCls(hz).slice(2, 4), trs(hz).filter(r => r[3].replace(/<[^>]+>/g, '') !== '$0.00').map(r => r[r.length - 1].replace(/<[^>]+>/g, ''))];
+      // a ₹-billed file, the rupee moved (billed at ₹83, today ₹88): the same days in ₹ and $, the same sign
       const dr = { v: 1, T, lags: 31, newest: '2026-01-02', rows: [kr('2026-01-01', 10, 100, 8300, 98), kr('2026-01-02', 10, 100, 8300, 98)] };
-      const kr$ = [kT(seen(U.cohCard(dr))).slice(0, 4), kCls(U.cohCard(dr)).slice(2, 4)];
+      const kr$ = [kT(seen(U.cohCard(dr))), kCls(U.cohCard(dr)).slice(2, 4)];
       ctx.curView = () => 'INR'; ctx.cfx = () => 88; ctx.csym = () => '₹'; U.lifeView([], null, { ccy: 'INR' });
       const hr = seen(U.cohCard(dr));
-      out.k_rate = [kr$, [kT(hr).slice(0, 4), kCls(hr).slice(2, 4)], trs(hr).map(r => [r[3], r[r.length - 1]].map(x => x.replace(/<[^>]+>/g, '')))];
+      out.k_rate = [kr$, [kT(hr), kCls(hr).slice(2, 4)], trs(hr).map(r => [r[3], r[r.length - 1]].map(x => x.replace(/<[^>]+>/g, '')))];
       // crore-size ₹ (billed) totals: printed in full — 14+ characters a size smaller (roi-ckw), the tile one height
       const dc7 = { v: 1, T, lags: 31, newest: '2026-01-02', rows: [kr('2026-01-01', 1234567, 2800000, 234567890, 1600000), kr('2026-01-02', 10, 100, 8300, 98)] };
       const dc8 = { v: 1, T, lags: 31, newest: '2026-01-02', rows: [kr('2026-01-01', 1234567, 28000000, 2345678900, 16000000), kr('2026-01-02', 10, 100, 8300, 98)] };
       const hc7 = seen(U.cohCard(dc7)), hc8 = seen(U.cohCard(dc8));
       out.k_big = [kT(hc7).map(x => x[1]), kT(hc8).map(x => x[1]),
-        [hc7, hc8].map(h => [...kOf(h).matchAll(/<div class="roi-kv">([^]*?)<\/div>/g)].map(m => m[1].startsWith('<span class="roi-ckw">')))];
+        [hc7, hc8].map(h => [...kOf(h).matchAll(/<div class="roi-kv">([^]*?)<\/div>/g)].map(m => m[1].startsWith('<span class="roi-ckw">'))), aNum(hc7), aNum(hc8)];
       U.lifeView([], null, {});
       ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
       // a loss (red), no spend at all (organic: no ROAS), nothing at all
       const hl = seen(U.cohCard({ v: 1, T, lags: 31, newest: '2026-01-02', rows: [kr('2026-01-01', 10, 50, null, 10), kr('2026-01-02', 10, 10, null, 2)] }));
-      out.k_loss = [kT(hl).slice(2, 4), kCls(hl).slice(2, 4)];
-      out.k_org = kT(seen(U.cohCard({ v: 1, T, lags: 31, newest: '2026-01-02', rows: [kr('2026-01-01', 10, 0, null, 4), kr('2026-01-02', 10, 0, null, 2)] }))).slice(0, 4);
-      out.k_none = kT(seen(U.cohCard({ v: 1, T, lags: 31, newest: '2026-01-02', rows: [] })));
+      out.k_loss = [kT(hl).slice(0, 4), kCls(hl).slice(2, 4)];
+      const hg = seen(U.cohCard({ v: 1, T, lags: 31, newest: '2026-01-02', rows: [kr('2026-01-01', 10, 0, null, 4), kr('2026-01-02', 10, 0, null, 2)] }));
+      out.k_org = [kT(hg).slice(0, 4), kH(hg)];
+      const hn = seen(U.cohCard({ v: 1, T, lags: 31, newest: '2026-01-02', rows: [] }));
+      out.k_none = [kT(hn), kH(hn), kL(hn)];
       // the grain, the mode and "Show more" never change it (every install day, not the rows on screen)
       const kb = kOf(U.cohCard(appFile()));
       out.k_inv = [];
       for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) for (const sh of [60, 1e9]) {
         U.set('GRAIN', g); U.set('MET', m); U.set('SHOW', sh); out.k_inv.push(kOf(U.cohCard(appFile())) === kb); }
       U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60);
-      out.k_all70 = kT(U.cohCard(appFile()))[5];
+      // All countries (spend known on every day): both groups shown, "Poori history" without a second revenue
+      const hall = seen(U.cohCard(appFile()));
+      out.k_all = [kT(hall), kH(hall), kL(hall), rcA(appFile().rows, 'usd')];
       // 🌍 countries: a pick loads (… , aria-busy) then its own totals; All with the country part = All without it
       const KF = new Set();
       ctx.fetchGzJson = u => new Promise((ok_, no) => setTimeout(() => { const f = u.split('?')[0];
         return !KF.has(f) && PACKS[f] ? ok_(JSON.parse(JSON.stringify(PACKS[f]))) : no(new Error('x')); }, 0));
       const P0 = 'roi_aaaaaaaaaaaa_c00.json.gz', P1 = 'roi_aaaaaaaaaaaa_c01.json.gz';
       const dkc = Object.assign(appFile(), { cd: Object.assign(cdx(), { packs: [[P0, 'k0k0k0k0k0k0'], [P1, 'k1k1k1k1k1k1']] }) });
-      const rec = rows => { const o = { sp: 0, k: 0, z: 0, rv: 0, m: 0, ps: 0, pr: 0, b: 0, n: 0, nn: 0, D: rows.length, lo: rows[0][0], hi: rows[rows.length - 1][0] };
-        for (const r of rows) { if (r[3] != null) { o.sp += r[3]; o.k++; if (!(r[3] > 0)) o.z++; } if (r[8] != null) { o.rv += r[8]; o.m++; }
-          if (r[3] > 0 && r[8] != null) { o.ps += r[3]; o.pr += r[8]; o.b++; } if (r[1] != null) { o.n += r[1]; o.nn++; } } return o; };
+      const fd4 = x => { const p_ = x.split('-'); return (+p_[2]) + ' ' + MON[+p_[1] - 1] + ' ' + p_[0]; };
+      // what the strip must print for a country's rows ($ view): the recount + every reason
+      // "Not split": the group is its known-spend days (spend only — no revenue to pair)
+      const rcK = rows => { const k = rows.filter(r => r[3] != null), s = k.reduce((a, r) => a + r[3], 0), dp = s >= 10 ? 0 : s >= 1 ? 1 : 2;
+        return { s, S: Math.round(s * 10 ** dp) / 10 ** dp, dp, n: k.length, lo: k.length ? k[0][0] : '', hi: k.length ? k[k.length - 1][0] : '', kx: 0, nz: 0, nrv: 0, rv: 0 }; };
+      const exp = (rows, cc) => { const o = cc === 'XX' ? rcK(rows) : rcA(rows, 'usd'), D = rows.length, has = o.n > 0 && cc !== 'XX', nn = rows.filter(r => r[1] != null);
+        const K = D - o.nrv, unk = rows.filter(r => r[3] == null).length, mr = rows.filter(r => r[3] == null && r[8] != null).length, same = cc !== 'XX' && o.nrv > 0 && !mr;
+        return [['Spend', o.n ? fm(o.S, false, o.dp) : '—', cc === '--' ? 'Google Ads me ye country nahi' : cc === 'XX' ? 'Not split · Google Ads' : !(D - unk) ? 'spend data nahi' : o.kx ? `${o.kx} din bahar: kamai nahi padhi` : has && !(o.s > 0) ? 'Is country me koi ads din nahi' : o.nz ? `Google Ads · ${o.nz} din spend 0` : 'Google Ads'],
+          ['Revenue', has ? fm(o.R, false, o.dp) : '—', cc === 'XX' ? 'Not split: koi kamai nahi' : 'so far · AdMob-matched'],
+          ['Profit / loss', has ? fm(o.P, true, o.dp) : '—', cc === 'XX' ? 'Not split: sirf spend' : 'revenue − spend'],
+          ['ROAS', has && o.S > 0 ? Math.round(o.R / o.S * 100) + '%' : '—', cc === 'XX' ? 'Not split: sirf spend' : has && !(o.S > 0) ? 'spend 0 — ROAS nahi' : 'revenue ÷ spend'],
+          ['Total revenue', same ? 'Same days' : o.nrv ? fm(o.rv, false, o.rv >= 10 ? 0 : 1) : '—', cc === 'XX' ? 'Not split: koi kamai nahi' : same ? 'upar wala Revenue — wahi din' : 'so far · AdMob-matched'],
+          ['Installs', nn.length ? nn.reduce((a, r) => a + r[1], 0).toLocaleString('en-US') : '—', cc === 'XX' ? 'Not split: installs nahi' : 'GA4 · ads + organic'],
+          ['Install days', String(D), cc === 'XX' ? 'Not split: kamai nahi' : K ? `${K} din ki kamai abhi nahi padhi` : 'har din ki kamai padhi'],
+          [['Spend pata wale din', o.n ? `${fd4(o.lo)} – ${fd4(o.hi)} (${o.n} din)` : cc === '--' ? 'Google Ads me ye country nahi' : 'Is country me spend wala koi din nahi'],
+            ['Poori history', `${fd4(rows[0][0])} – ${fd4(rows[D - 1][0])}`]]]; };
+      const kAll = h => kT(h).concat([kH(h)]);
       out.k_allcd = [kOf(seen(U.cohCard(dkc))) === kb];
       U.setCTY('AA');
-      const kl = seen(U.cohCard(dkc)); await flush(); const ka = seen(U.cohCard(dkc)), ra = rec(U.ccSrc(dkc).rows);
-      out.k_load = [kT(kl).map(x => x[1]), kOf(kl).includes('aria-busy="true"'), !kOf(ka).includes('aria-busy'), kl.includes('ka data load ho raha hai')];
-      const fd4 = x => { const p_ = x.split('-'); return (+p_[2]) + ' ' + MON[+p_[1] - 1] + ' ' + p_[0]; };
-      const exp = (o, cc) => [['Total spend', cc === '--' ? '—' : fm(o.sp), cc === '--' ? 'Google Ads me ye country nahi' : o.D > o.k ? `${o.D - o.k} din ka spend pata nahi` : 'Google Ads'],
-        ['Total revenue', o.m ? fm(o.rv) : '—', cc === 'XX' ? 'Not split: koi kamai nahi' : o.D > o.m ? `${o.D - o.m} din ki kamai abhi nahi padhi` : 'so far · AdMob-matched'],
-        ['Profit / loss', o.b ? fm(o.pr - o.ps, true) : '—', o.b === o.D ? 'revenue − spend' : o.b ? `sirf ${o.b} ads din, jinka dono pata` : cc === 'XX' ? 'Not split: sirf spend' : 'is country ka spend nahi'],
-        ['ROAS', o.b ? Math.round(o.pr / o.ps * 100) + '%' : '—', o.b === o.D ? 'revenue ÷ spend' : o.b && o.z ? `${o.z} din bina ads — isme nahi` : o.b ? `sirf ${o.b} ads din, jinka dono pata` : cc === 'XX' ? 'Not split: sirf spend' : 'is country ka spend nahi'],
-        ['Installs', o.nn ? o.n.toLocaleString('en-US') : '—', cc === 'XX' ? 'Not split: installs nahi' : 'GA4 · ads + organic'],
-        ['Install days', String(o.D), `${fd4(o.lo)} – ${fd4(o.hi)}`]];
-      out.k_aa = [kT(ka), exp(ra, 'AA'), ra.D, ra.D - ra.k, ra.D - ra.b, ra.z];
+      const kl = seen(U.cohCard(dkc)); await flush(); const ka = seen(U.cohCard(dkc)), ra = U.ccSrc(dkc).rows;
+      out.k_load = [kT(kl).map(x => x[1]), kOf(kl).includes('aria-busy="true"'), !kOf(ka).includes('aria-busy'), kl.includes('ka data load ho raha hai'), kH(kl), kL(kl)];
+      const oa = rcA(ra, 'usd');
+      out.k_aa = [kAll(ka), exp(ra, 'AA'), kL(ka), ra.length, ra.filter(r => r[3] == null).length, oa.n, oa.nz, aNum(ka)];
       out.k_aa_inv = [];
       for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) {
         U.set('GRAIN', g); U.set('MET', m); out.k_aa_inv.push(kOf(U.cohCard(dkc)) === kOf(ka)); }
       U.set('GRAIN', 'day'); U.set('MET', 'roas');
       U.setCTY('BB'); const kbb = seen(U.cohCard(dkc));                          // the same pack: at once, its own totals
-      out.k_bb = [kT(kbb), exp(rec(U.ccSrc(dkc).rows), 'BB'), kOf(kbb) !== kOf(ka)];
-      // "Unknown country": no Google Ads spend → '—' (never 0), its revenue; "Not split": spend only
+      out.k_bb = [kAll(kbb), exp(U.ccSrc(dkc).rows, 'BB'), kOf(kbb) !== kOf(ka)];
+      // "Unknown country": no Google Ads spend → '—' (never 0), its revenue only in Poori history; "Not split": spend only
       U.setCTY('--'); seen(U.cohCard(dkc)); await flush();
       const kn = seen(U.cohCard(dkc));
-      out.k_unk = [kT(kn), exp(rec(U.ccSrc(dkc).rows), '--')];
+      out.k_unk = [kAll(kn), exp(U.ccSrc(dkc).rows, '--'), kL(kn)];
       U.setCTY('XX');
-      const kx = seen(U.cohCard(dkc)), rx = rec(U.ccSrc(dkc).rows);
-      out.k_xx = [kT(kx), exp(rx, 'XX'), rx.D - rx.k > 0, rx.m];
+      const kx = seen(U.cohCard(dkc)), rx = U.ccSrc(dkc).rows;
+      out.k_xx = [kAll(kx), exp(rx, 'XX'), kL(kx), rx.filter(r => r[3] == null).length, rx.filter(r => r[8] != null).length];
+      // a country in ₹ as billed whose ads-paused days take that day's rate from the All rows (the app billed that day):
+      // odd paise everywhere — Revenue − Spend = Profit to the rupee, = an independent recount
+      const ca = [], cr = [], rate = {};
+      for (let i = 0; i < 40; i++) { const X = day('2025-06-01', i), rt = 82.11 + (i % 5) * 0.23, uA = 50.17 + i, sA = Math.round(uA * rt * 100) / 100;
+        ca.push([X, 100, 80, uA, null, 0, null, T.map(() => null), 60.5, X, null, 'Normal', 0, sA]); rate[X] = sA / uA;
+        const u = i < 15 ? null : i >= 30 && i < 35 ? 0 : i < 30 ? 7.31 + (i % 3) * 0.13 : 9.07;
+        cr.push([X, 20, null, u, null, 0, null, T.map(() => null), i >= 38 ? null : i < 15 ? 3.17 : i < 30 ? 6.83 : i < 35 ? 2.41 : 12.9, X, null, 'N/A', 0,
+          u == null ? null : u ? Math.round(u * rt * 100) / 100 : 0]); }
+      PACKS['roi_cccccccccccc_c00.json.gz'] = { v: 1, b: 'b0b0b0b0b0b0', key: 'cccccccccccc', ix: 0, c: { AA: cr } };
+      const dcr = Object.assign(appFile(), { rows: ca, newest: ca[39][0], cd: Object.assign(cdx(), { packs: [['roi_cccccccccccc_c00.json.gz', 'c0c0c0c0c0c0'], [P1, 'k1k1k1k1k1k1']] }) });
+      U.setCTY('AA'); ctx.curView = () => 'INR'; ctx.cfx = () => 88; ctx.csym = () => '₹'; U.lifeView([], null, { ccy: 'INR' });
+      seen(U.cohCard(dcr)); await flush();
+      const hcr = seen(U.cohCard(dcr)), rcr = U.ccSrc(dcr).rows;
+      out.k_cty_inr = [kT(hcr), kH(hcr), kL(hcr), aNum(hcr), rcA(rcr, 'bill', 88, rate), rcA(rcr, 'bill', 88)];
+      U.lifeView([], null, {}); ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
+      const hcu = seen(U.cohCard(dcr));
+      out.k_cty_usd = [kT(hcu), aNum(hcu), rcA(rcr, 'usd')];
       // a pack that does not load / a country the app does not have / an app without the country part: '—' or All's own
       KF.add(P1);
       const dke = Object.assign(appFile(), { cd: Object.assign(cdx(), { packs: [[P0, 'k0k0k0k0k0k0'], [P1, 'k2k2k2k2k2k2']] }) });
       U.setCTY('EE'); seen(U.cohCard(dke)); await flush();
       const ke = seen(U.cohCard(dke));
       KF.clear();
-      out.k_err = [kT(ke).map(x => x[1]), !kOf(ke).includes('aria-busy'), ke.includes('ka data load nahi hua')];
+      out.k_err = [kT(ke).map(x => x[1]), !kOf(ke).includes('aria-busy'), ke.includes('ka data load nahi hua'), kH(ke), kL(ke)];
       U.setCTY('AA');
       const dko = Object.assign(appFile(), { cd: Object.assign(cdx(), { c: [['QQ', 10, 1, null, 0, 0, 0]], packs: [['roi_bbbbbbbbbbbb_c00.json.gz', 'aaaaaaaaaaaa']] }) });
       const kq = seen(U.cohCard(dko));
@@ -1653,12 +1724,15 @@ async function moreKeepAll(dc, packs) {
       const kno = seen(U.cohCard(appFile()));
       out.k_nocd = [kOf(kno) === kb, kno.includes('ki country-wise table nahi')];
       U.setCTY('');
-      // one height in every state: the same box (tiles, labels, note), one-line values / two-line reasons that fit a 375 px phone
+      // one height in every state: the same box (groups, tiles, labels, the note), fixed heads + coverage line, one-line
+      // values / two-line reasons that fit a 360 px phone
       out.k_skel = [new Set(KS.map(kSk)).size, KS.length];
-      // every label / value / reason printed in those states (crore-size ₹ included), each value with its size (roi-ckw or
-      // not): test_roi_frontend.py measures them against each width's value box (the page's own CSS numbers)
-      out.k_print = KS.flatMap(h => [...kOf(h).matchAll(/<div class="roi-kl">([^<]*)<\/div><div class="roi-kv">([^]*?)<\/div><div class="roi-ks">([^<]*)<\/div>/g)]
-        .map(m => [m[1], m[2].replace(/<[^>]+>/g, ''), m[2].startsWith('<span class="roi-ckw">'), m[3]]));
+      // every label / value / reason printed in those states (crore-size ₹ included), each value with its group and size
+      // (roi-ckw or not): test_roi_frontend.py measures them against each width's value box (the page's own CSS numbers)
+      out.k_print = KS.flatMap(h => { const g = kOf(h).indexOf('<b>Poori history</b>');
+        return [...kOf(h).matchAll(/<div class="roi-kl">([^<]*)<\/div><div class="roi-kv">([^]*?)<\/div><div class="roi-ks">([^<]*)<\/div>/g)]
+          .map(m => [m[1], m[2].replace(/<[^>]+>/g, ''), m[2].startsWith('<span class="roi-ckw">'), m[3], m.index > g ? 'B' : 'A']); });
+      out.k_texts = KS.map(h => [kH(h), kL(h)]);
     }
     const F1 = ['roi_aaaaaaaaaaaa_c01.json.gz'];
     out.cc_nojump = { w375: await noJump(375, dc, PACKS, F1), w1280: await noJump(1280, dc, PACKS, F1) };
