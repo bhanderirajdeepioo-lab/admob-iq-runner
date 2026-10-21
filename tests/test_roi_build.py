@@ -19,6 +19,11 @@ Review fixes: a spend-only row's ≈ bits, a borrowed k_c month (bit 32 + its re
 per month (bit 64 past UNP_LIM, measured), the Ads split tied to the spend cache (else unknown, counted), the Ads split
 read per app (shared store, a failed read counted), the Ads account's time zone, the packs' build stamp, and the
 country part's time never in the forecast's budget.
+The whole read past D30 (fetch.ga4_cube q): a week inside a month on q only when every day of it is (j ≤ 13 from q, j ≥
+14 from the cube's cells; one day missing or "fl": the whole week on the cube), the D60 / D90 / D180 columns equal to
+the install-day checkpoints when the cube kept 0.8 of it, a hot day with / without its q, ql (loss past age 420, exact)
+and qneg (drift), ≈ bit 2 only where a row still carries loss, without q files the build as before; no borrowed k_c
+(a month not whole: the app's k); GA4: country not given per month (cd.ng = All − Σ countries).
 """
 import gzip
 import json
@@ -835,8 +840,10 @@ def test_country_rows_kc_per_month_and_spend(tmp_path):
     r = AA["2026-08-10"]                    # ages 0 … 21 in Aug (k_c 1.5), 22 … 30 in Sep (k_c 1.0): $0.10 a day GA4
     assert r[1] == 40 and r[4][21] == pytest.approx(22 * 0.15) and r[4][30] == pytest.approx(22 * 0.15 + 9 * 0.1)
     assert r[5] == 31 and r[7][T.index(7)] == pytest.approx(8 * 0.15) and r[7][T.index(30)] == r[4][30]
-    # D60 from the cube's buckets × k_c of each activity month (Oct: not whole yet → borrowed from Sep, 1.0, ≈ bit 32)
-    assert r[14] == [pytest.approx(4.2 + 3.0)] and r[15] == 1 and r[7][T.index(60)] == r[14][0] and r[12] & 32
+    # D60 from the cube's buckets × k_c of each activity month (Sep 10 … 30 at Sep's own 1.0; Oct 1 … 9: Oct is not whole
+    # yet → the app's k 1.2, never a k_c borrowed from Sep — ≈ bit 16)
+    assert r[14] == [pytest.approx(4.2 + 2.1 + 9 * 0.12)] and r[15] == 1 and r[7][T.index(60)] == r[14][0] and r[12] & 16
+    assert not r[12] & 32
     assert r[3] is None and r[13] is None                                   # Aug: Google Ads by country unknown → '—'
     s = AA["2026-09-10"]
     assert s[3] == 6.0 and s[13] == 6.0 and s[2] == 3.0                     # USD (rate 1), as billed, Ads downloads
@@ -845,8 +852,9 @@ def test_country_rows_kc_per_month_and_spend(tmp_path):
     # statuses on the country's own rows (≥ $5 and ≥ 30 installs judged), the same _statuses
     assert AA["2026-08-10"][11] == "N/A" and AA["2026-09-25"][11] in ("Normal", "Watch", "Better", "Worse")
     assert AA["2026-10-12"][11] == "Too early"
-    # q: k_c 1.5 is outside 0.8 – 1.25 (bit 8); the Sep / Oct rows on a measured k inside it: none
-    assert r[12] & 8 and not AA["2026-09-20"][12] & 8 and not AA["2026-09-20"][12] & 16
+    # q: k_c 1.5 is outside 0.8 – 1.25 (bit 8); a Sep / Oct row: Sep's measured k inside it (no 8), Oct on the app's
+    # k (16)
+    assert r[12] & 8 and not AA["2026-09-20"][12] & 8 and AA["2026-09-20"][12] & 16
     # CC: AdMob 3× → clamped to 2.0 (≈); BB: too thin even pooled → the app's k (1.2, ≈, bit 16); "--": always the app's
     CC = {x[0]: x for x in _expand(got["CC"], cd, "CC")}
     assert CC["2026-09-05"][4][0] == pytest.approx(0.02 * 2.0) and CC["2026-09-05"][12] & 8
@@ -855,11 +863,12 @@ def test_country_rows_kc_per_month_and_spend(tmp_path):
     NC = {x[0]: x for x in _expand(got["--"], cd, "--")}
     assert NC["2026-09-05"][4][0] == pytest.approx(0.01 * 1.2) and NC["2026-09-05"][12] & 16
     assert NC["2026-09-05"][3] is None and c["--"][2] is None               # GA4's "(not set)": no Ads country
-    assert c["--"][6] == 1.0 and c["BB"][6] == 1.0 and c["AA"][6] == 0.0
-    # the revenue share on a borrowed k_c (Oct, not whole yet): measured per country; none on the app's k / "--"
+    # the revenue share on the app's k: "--" / BB every month; AA its Oct (not whole yet: never a borrowed k_c)
     oct_ = _ga4_month("AA", "2026-10") / sum(_ga4_month("AA", M) for M in ("2026-08", "2026-09", "2026-10"))
-    assert c["AA"][7] == round(oct_, 4) and c["--"][7] == 0.0 and c["BB"][7] == 0.0 and c["XX"][7] is None
-    assert AA["2026-09-05"][12] & 32 and not AA["2026-08-01"][12] & 32   # its ages in Oct / none in Oct (D0 … D60)
+    assert c["--"][6] == 1.0 and c["BB"][6] == 1.0 and c["AA"][6] == round(oct_, 4) and c["XX"][6] is None
+    assert all(len(x) == 7 for x in cd["c"])                                 # no borrowed-k_c share any more
+    assert AA["2026-09-05"][12] & 16 and not AA["2026-08-01"][12] & 16   # its ages in Oct / none in Oct (D0 … D60)
+    assert not any(x[12] & 32 for x in AA.values() if len(x) > 12)
     assert BB["2026-09-05"][3] == 2.0 and BB["2026-09-05"][2] is None       # downloads unknown: null
     # an Ads-only country: its spend per day, no installs, no revenue
     DD = {x[0]: x for x in _expand(got["DD"], cd, "DD")}
@@ -869,10 +878,10 @@ def test_country_rows_kc_per_month_and_spend(tmp_path):
     assert XX["2026-09-05"][3] == 1.0 and XX["2026-09-05"][1] is None and XX["2026-09-05"][4] is None
     assert XX["2026-08-05"][3] is None and len(XX) == days
     # the index: k_c months, Google Ads coverage, the measured gap to the All row
-    # own: AA Aug + Sep, CC Sep; pooled: CC Aug ($9.92 GA4, a whole month); borrowed: Oct of AA / CC (not whole yet);
-    # the app's k: BB, "--" every month; ≈ (measured, outside 0.8 – 1.25): AA Aug (1.5) and CC's three (3.0 → 2.0)
-    assert {k: cd["kc"][k] for k in ("own_months", "pool_months", "near_months", "app_months", "est_months")} == {
-        "own_months": 3, "pool_months": 1, "near_months": 2, "app_months": 6, "est_months": 4}
+    # own: AA Aug + Sep, CC Sep; pooled: CC Aug ($9.92 GA4, a whole month); the app's k: Oct of AA / CC (not whole yet:
+    # never borrowed), BB, "--" every month; ≈ (measured, outside 0.8 – 1.25): AA Aug (1.5), CC Aug + Sep (3.0 → 2.0)
+    assert {k: cd["kc"][k] for k in ("own_months", "pool_months", "app_months", "est_months")} == {
+        "own_months": 3, "pool_months": 1, "app_months": 8, "est_months": 3} and "near_months" not in cd["kc"]
     assert cd["kc"]["tzh"] is not None                                    # AdMob's day vs GA4's (UTC here): measured
     # GA4 revenue without a country per month ("--" here; no loss): measured of the ledger's every row
     tot = {M: sum(_ga4_month(cc, M) for cc in CRATE) for M in ("2026-08", "2026-09", "2026-10")}
@@ -904,7 +913,7 @@ def test_country_kc_rules(tmp_path):
     assert a["2026-02"] == (1.3, "own", True)                           # outside: ≈
     assert a["2026-03"] == (lo[1], "own", True)                         # 3.0 clamped to 2.0, ≈
     assert a["2026-04"] == (pytest.approx(410 / 300), "pool", True)     # AdMob $10 < $20: Mar … May pooled, ≈
-    assert a["2026-06"] == (pytest.approx(1.0), "near", False)          # not whole: borrowed from May (≤ ±1)
+    assert a["2026-06"] == (1.1, "app", True)                           # not whole: the app's k, never borrowed
     b = kc["BB"]                                                        # $5 a side: ±2 around Mar → $25 a side
     assert b["2026-03"] == (pytest.approx(1.0), "pool", False)
     assert b["2026-01"] == (1.1, "app", True)                           # Jan … Mar only $15 a side: the app's k
@@ -926,12 +935,12 @@ def test_country_kc_rules(tmp_path):
 
 
 def test_country_month_cover_and_deduction(tmp_path):
-    # Sep's AdMob report misses two days in a row: Sep is not whole → its k_c is pooled from Aug (1.5) and Oct
-    # (partial: never); an Aug install day's ages in Sep then use 1.5 too
+    # Sep's AdMob report misses two days in a row: Sep is not whole → the app's k (1.2), never a k_c borrowed from
+    # Aug (1.5); an Aug install day's ages in Sep use 1.2 (≈, bit 16)
     data, P, pre, spend, acc = _cc_world(tmp_path, mask_off=("2026-09",))
     cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
     AA = {r[0]: r for r in _expand(_pack_rows(od, cd)["AA"], cd, "AA")}
-    assert AA["2026-08-10"][4][30] == pytest.approx(31 * 0.15)
+    assert AA["2026-08-10"][4][30] == pytest.approx(22 * 0.15 + 9 * 0.12) and AA["2026-08-10"][12] & 16
     # the deduction scales AdMob (as the app's k): 1.5 × 0.8 = 1.2 in Aug (inside 0.8 – 1.25: no ≈ on Aug's days)
     data2, P2, pre2, spend2, acc2 = _cc_world(tmp_path / "d")
     cd2, od2, _ = _cc_run(tmp_path / "d", data2, P2, pre2, spend2, acc2, ded=0.2)
@@ -1265,3 +1274,172 @@ def test_country_time_never_counts_in_the_forecast_budget(tmp_path, monkeypatch)
     rb.app_step(acc, store, a, "aaaaaaaaaaaa", {"tz": "UTC"}, pre, {}, str(out), str(data), ids=["a~1"])
     assert not acc.fails and acc.cdn["apps"] == 1 and visits
     assert fc.t0 == pytest.approx(50.0 + 5.0 + 0.25 * len(visits))
+
+
+# ── q: the whole no-country read past D30 (fetch.ga4_cube q; made-up numbers) ──────────────────────────────────────
+QHS, QTODAY = date(2025, 1, 1), date(2026, 10, 13)
+QX1 = QTODAY - timedelta(days=90)                       # a young install day: its D90 column ends today (hot days)
+QR = [2.0, 4.0, 8.0, 16.0, 30.0, 62.0, 62.6, 63.2, 65.0, 68.7]   # checkpoints = the WHOLE revenue: +$0.6 every 30 days
+
+
+def _q_world(root, b=8000, w=10000, q=True, skip=(), fl=(), hot_q=True, more=None):
+    """Two install days (QHS, QX1) earning `w` GA4 micros a day at every age ≥ 31 (whole: $0.01, × k 2 = $0.02); the
+    cube's cells keep `b` of it, the rest is the day's "(other)" loss (the cube's t holds it); every day QHS … today − 3
+    folded, the last 3 hot. q (whole: `w` an install day at ages ≤ 420, + more[day] on its qt) on every folded day but
+    `skip` (`fl`: read, flagged — an empty q), on the hot days when hot_q."""
+    from admob_iq.fetch import ga4_cube as cu
+    P = _P(QHS, QTODAY - timedelta(days=6))
+    P["xs"] = {X: dict(P["xs"][X], R=list(QR), Rr=list(QR)) for X in (QHS, QX1)}
+    co = {"read_today": QTODAY.isoformat(), "stream_id": "222", "x": {}}
+    cube = cu.Cube(str(root), "a~1", "222")
+    hot_from = QTODAY - timedelta(days=2)
+    D = QHS
+    while D <= QTODAY:
+        k, W, bb, qq, t, qt = D.isoformat(), _mon(D).isoformat(), {}, {}, 0, (more or {}).get(D, 0)
+        for X in (QHS, QX1):
+            L = (D - X).days
+            if L < 31:
+                continue
+            j = str(cu.bucket(L))
+            bb[X.isoformat()] = {j: {W: b}}
+            t += w
+            if L <= cu.QL:
+                qq[X.isoformat()] = {j: w}
+                qt += w
+        rec = {"st": "loss" if t > b * len(bb) else "ok", "rows": len(bb), "loss": t - b * len(bb), "t": t, "fl": 0,
+               "via": "block", "at": "2026-10-13T06:00:00Z", "b": bb, "c": {}, "e": {}}
+        got = {"q": {} if D in fl else qq, "qt": qt, "qs": "fl" if D in fl else "ok", "qr": len(bb)}
+        if D >= hot_from:
+            if hot_q:
+                rec.update(q=cu._qw(got["q"], k), qt=got["qt"], qs=got["qs"], qr=got["qr"])
+            cube.head["d"][k] = rec
+        else:
+            cube.fold(D, rec)
+            if q and D not in skip:
+                cube.q_put(k, got, "2026-10-13T06:00:00Z")
+        D += timedelta(days=1)
+    cube.save()
+    cube.head.update(done=True, stream_id="222", next=hot_from.isoformat())
+    cube.save_head()
+    return P, co
+
+
+def _qrows(root, P, co):
+    late = rb._late(str(root), "a~1", "222", P)
+    return late, {r["X"]: r for r in rb._cohorts(P, None, lambda d: 1.0, co, QTODAY, late)}
+
+
+def test_q_whole_weeks_give_the_checkpoints(tmp_path):
+    """b = 0.8 × whole on the cube, q = whole: every 30-day column up to D420 equals the install-day read's
+    checkpoint (D60 / D90 / D180 exactly); past 420 the cube's cells (bucket 14 on: never q)."""
+    P, co = _q_world(tmp_path / "q")
+    late, by = _qrows(tmp_path / "q", P, co)
+    r = by[QHS]
+    assert len(r["m"]) == 20 and r["mf"] == 20
+    assert r["m"][:13] == pytest.approx([62 + 0.6 * j for j in range(1, 14)], abs=1e-4)
+    assert (r["m"][0], r["m"][1], r["m"][4]) == (r["t"][T.index(60)], r["t"][T.index(90)], r["t"][T.index(180)]) \
+        == (62.6, 63.2, 65.0)
+    assert r["m"][13:] == pytest.approx([62 + 7.8 + 0.48 * i for i in range(1, 8)], abs=1e-4)   # j ≥ 14: b (0.8)
+    y = by[QX1]                                          # its D90 column ends on the hot days: their q (same run)
+    assert y["m"] == pytest.approx([62.6, 63.2], abs=1e-4) and y["mf"] == 1 and not y["qo"]
+    old = (QTODAY - (QHS + timedelta(days=rb.gcu.QL + 1))).days + 1       # days of QHS past age 420 (each 0.2 × $0.02)
+    assert late["info"]["ql"] == round(old * 0.004, 2) and late["info"]["qd"] == (QTODAY - QHS).days + 1
+    assert late["info"]["qwait"] == 0 and late["info"]["qneg"] == late["info"]["qpos"] == 0 and late["info"]["oth"] > 0
+    assert r["qo"] == 2                                  # its columns past D420 still carry loss (ql > 0 there)
+    # the same cube without any q: every column from the cube's cells (0.8 of it), as before
+    P0, co0 = _q_world(tmp_path / "b", q=False, hot_q=False)
+    late0, by0 = _qrows(tmp_path / "b", P0, co0)
+    assert by0[QHS]["m"] == pytest.approx([62 + 0.48 * j for j in range(1, 21)], abs=1e-4)
+    assert by0[QX1]["m"] == pytest.approx([62.48, 62.96], abs=1e-4) and by0[QX1]["qo"] == 2
+    assert not any(f in late0["info"] for f in ("ql", "qd", "qwait", "qneg", "qpos"))
+
+
+def test_q_one_day_missing_puts_its_whole_week_on_the_cube(tmp_path):
+    """A week inside a month is on q only when every day of it is (read and "ok"): one day not read (or "fl") — the
+    whole week from the cube's cells, its loss still marked; a hot day with / without its q."""
+    miss = date(2025, 6, 11)                             # a Wednesday: Jun 9 … 15, QHS ages 159 … 165 (bucket 5)
+    for kind in ("skip", "fl"):
+        root = tmp_path / kind
+        P, co = _q_world(root, **{kind: {miss}})
+        late, by = _qrows(root, P, co)
+        r = by[QHS]
+        assert r["m"][:4] == pytest.approx([62.6, 63.2, 63.8, 64.4], abs=1e-4)
+        assert r["m"][4] == pytest.approx(65.0 - 7 * 0.004, abs=1e-4)       # 7 days of bucket 5 at 0.8
+        assert late["info"]["qwait"] == 7 and late["info"]["qd"] == (QTODAY - QHS).days + 1 - 7
+        # ≈ (bit 2) only where the row still carries loss: through D420 the skipped week; past it, ql's weeks
+        lo = QHS + timedelta(days=31)
+        assert late["q"](lo, QHS + timedelta(days=180), 5) == 2 and late["q"](lo, QHS + timedelta(days=150), 4) == 0
+    P, co = _q_world(tmp_path / "w")
+    late, _ = _qrows(tmp_path / "w", P, co)
+    lo = QHS + timedelta(days=31)
+    assert late["q"](lo, QHS + timedelta(days=420), 13) == 0                  # through D420: all whole
+    assert late["q"](lo, QHS + timedelta(days=450), 14) == 2                  # D450: ages 421 … 450 lost some
+    assert late["q"](lo, QHS + timedelta(days=450)) == 2                      # (no jmax: any loss day — the countries)
+    # hot days read without q (a Stop between the cube's read and q, or an older round): on the cube, ≈
+    P2, co2 = _q_world(tmp_path / "h", hot_q=False)
+    late2, by2 = _qrows(tmp_path / "h", P2, co2)
+    assert by2[QX1]["m"] == pytest.approx([62.6, 62.6 + 27 * 0.02 + 3 * 0.016], abs=1e-4) and by2[QX1]["qo"] == 2
+    assert late2["info"]["qwait"] == 3
+
+
+def test_q_loss_past_420_and_drift(tmp_path):
+    """ql per week on q = Σ t − Σ qt − Σ b(j > 13): exact, no install day (AdMob-matched by the week's k); a week whose
+    whole read holds MORE than the cube's t (read-time drift) is counted in qneg, never as loss; rounding is not loss."""
+    old = (QTODAY - (QHS + timedelta(days=rb.gcu.QL + 1))).days + 1
+    wk = [date(2025, 3, 10) + timedelta(days=i) for i in range(7)]           # Mar 10 … 16: one week, one month
+    up = {D: 5000 for D in wk}                                                # q read later: more than the cube
+    P, co = _q_world(tmp_path / "a", more=up)
+    late, by = _qrows(tmp_path / "a", P, co)
+    assert late["info"]["qneg"] == 1 and late["info"]["ql"] == round(old * 0.004, 2)
+    assert by[QHS]["m"][1] == pytest.approx(63.2, abs=1e-4)                  # the cells: q's (its qt is a total only)
+    down = {wk[2]: -3000}                                                     # 3000 micros nobody's install day
+    P, co = _q_world(tmp_path / "b", more=down)
+    late, _ = _qrows(tmp_path / "b", P, co)
+    assert late["info"]["ql"] == round(old * 0.004 + 3000 * 2 / 1e6, 2) and late["info"]["qneg"] == 0
+    tiny = {wk[2]: -1}                                                        # a micro: rounding, never loss
+    P, co = _q_world(tmp_path / "c", more=tiny)
+    late, _ = _qrows(tmp_path / "c", P, co)
+    assert late["info"]["ql"] == round(old * 0.004, 2) and late["info"]["qneg"] == 0
+    # a cube that lost nothing (b = whole) but read more than q on one week: never "no install day" (ql 0) — drift
+    P, co = _q_world(tmp_path / "d", b=10000, more=down)
+    late, _ = _qrows(tmp_path / "d", P, co)
+    assert late["info"]["ql"] == 0 and late["info"]["qpos"] == 1 and late["info"]["qneg"] == 0
+    assert late["info"]["oth"] == 0 and late["info"]["qwait"] == 0
+    # a hot day's q read a moment after its cube read holds more (GA4 still adds to it): neither loss nor drift
+    P, co = _q_world(tmp_path / "e", more={QTODAY: 5000})
+    late, _ = _qrows(tmp_path / "e", P, co)
+    assert late["info"]["qneg"] == late["info"]["qpos"] == 0 and late["info"]["ql"] <= round(old * 0.004, 2)
+
+
+def test_q_files_never_change_a_build_without_them(tmp_path):
+    """No q file: B, the bits and the info exactly as the cube alone gives them (the jmax bits = every loss day)."""
+    P, co = _q_world(tmp_path / "n", q=False, hot_q=False)
+    late, by = _qrows(tmp_path / "n", P, co)
+    for X, r in by.items():
+        if r.get("m"):
+            lo, hi = X + timedelta(days=31), X + timedelta(days=30 * (len(r["m"]) + 1))
+            assert late["q"](lo, hi, len(r["m"])) == late["q"](lo, hi) == r["qo"]
+    assert set(late["info"]) == {"days", "oth", "omax", "loss", "from", "till", "thru"}
+
+
+def test_country_not_given_per_month(tmp_path):
+    """cd.ng = All − Σ countries per activity month: the app's k × the ledger's every row − Σ k_c × each country's GA4
+    (the "--" row on the app's k), signed; "own" where the countries' own AdMob match carries the month, else "app" —
+    there it is the measured "(other)" × k (in no country row)."""
+    loss = {date(2026, 9, 20): 500000, date(2026, 10, 5): 300000}
+    data, P, pre, spend, acc = _cc_world(tmp_path, loss=loss)
+    cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
+    kc = {"AA": {"2026-08": 1.5, "2026-09": 1.0, "2026-10": 1.2}, "CC": {"2026-08": 2.0, "2026-09": 2.0, "2026-10": 1.2}}
+    ng, all_ = cd["ng"], 0.0
+    for M in ("2026-08", "2026-09", "2026-10"):
+        lo = sum(v for D, v in loss.items() if D.isoformat()[:7] == M)
+        tot = sum(_ga4_month(cc, M) for cc in CRATE) + lo
+        s = sum((kc.get(cc) or {}).get(M, 1.2) * _ga4_month(cc, M) for cc in CRATE) / 1e6
+        assert ng["m"][M][0] == pytest.approx(1.2 * tot / 1e6 - s, abs=0.01), M
+        assert ng["m"][M][1] == cd["kc"]["unp"][M]
+        all_ += 1.2 * tot / 1e6
+    assert [ng["m"][M][2] for M in ("2026-08", "2026-09", "2026-10")] == ["own", "own", "app"]
+    assert ng["m"]["2026-10"][0] == pytest.approx(1.2 * 0.3, abs=0.01)        # the app's k: exactly k × "(other)"
+    assert ng["m"]["2026-08"][0] < 0                                           # signed (AA's k_c 1.5 > the app's 1.2)
+    assert ng["usd"] == pytest.approx(sum(v[0] for v in ng["m"].values()), abs=0.01)
+    assert ng["all"] == pytest.approx(all_, abs=0.01) and ng["rel"] == round(ng["usd"] / ng["all"], 4)

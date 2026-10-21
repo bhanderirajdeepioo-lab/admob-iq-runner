@@ -14,8 +14,8 @@ k the tab uses):
        60, 90, 180, 365 — only when complete), s (revenue so far), sd (so far = through this day), be (the breakeven
        day: [day, exact?] or null), st (status: Worse / Watch / Better / Normal / Too early / N/A), q (≈: bit 1 = a day
        of it did not tie to the install-day read, or its D0 … D30 read kept revenue in GA4's "(other)" / was flagged
-       with nothing to measure it by — fetch.ga4_cohort "lo" / "lf" —, bit 2 = a day its m used had revenue GA4 gave no
-       install day),
+       with nothing to measure it by — fetch.ga4_cohort "lo" / "lf" —, bit 2 = a day its m used still carries revenue
+       GA4 gave no install day: ages ≤ 420 on a week not read whole yet, past 420 on a week with loss there),
        spi (spend as billed), and — only on a row that has them — m (cumulative revenue at day 60, 90, 120 … every
        30 days up to the install day's age: the cohort cube, see below), mf (how many of m are final)]
        (q bit 4 = a day its m used GA4 flagged with nothing to measure it by: thresholding / sampling / a cut read)
@@ -35,16 +35,27 @@ k the tab uses):
     "(other)" / gave no install day even after the country split (the cube's loss), "omax" the largest such share of a
     day's revenue (6 decimals, measured), "loss" days GA4 flagged with nothing to measure it by, "from", "till", "thru"
     the last day with every activity day from the history start read (a stalled walk: the page says the newest columns
-    wait for it)} (the page's ≈ note); while the cube's first walk is still on its way: {"busy": 1, "from", "next", "at"
-    the walk's last step (UTC day; absent before its first)} only (no column yet, the page says so and since when).
+    wait for it); only once q files exist (fetch.ga4_cube q, below): "ql" USD × k GA4 gave no install day past age 420
+    on the weeks read whole (exact, no install day: never spread), "qd" days on q, "qwait" days with loss still on the
+    cube's cells (q not read yet / "fl"), "qneg" / "qpos" weeks whose whole read held more / less than the cube
+    (beyond the cube's own measured loss): read-time drift, counted, never loss} (the page's ≈ note); while the cube's first walk is still on its way: {"busy": 1, "from",
+    "next", "at" the walk's last step (UTC day; absent before its first)} only (no column yet, the page says so and
+    since when).
 Past day 30 (owner, 20 Oct 2026: "jitna purana app utna date"): fetch.ga4_cube (GA4_CUBE) keeps every install day's GA4
 ad revenue by activity day × country from the history start (with countryId GA4 answers every install day; the
 [date, firstSessionDate] shape stops at about 15 months). Per install day X its 30-day buckets B[j] (ages 30j+1 …
 30j+30, j ≥ 1) = Σ over the activity months (+ the hot days) of the cube's "b"[X][j][W] micros × kf(W) — the SAME
 weekly AdMob ÷ GA4 scale k as the D0 … D30 cells — and m = [base + B[1], base + B[1] + B[2], …] with base = d[30]
 when final through 30, else the D30 checkpoint (as t's D60+); m[j] only while EVERY activity day of buckets 1 … j is
-folded or hot (a hole stops it), final while every one is folded. q bit 2 / 4 from the cube's ledger of those days
-(loss micros > 0 / flagged). Breakeven and so far also look through m (breakeven by age: the exact days, the checkpoints
+folded or hot (a hole stops it), final while every one is folded. WHOLE past D30 (21 Oct 2026, owner: real data only —
+GA4 folds the country "(other)" before any filter, so the cube's own cells lose it): fetch.ga4_cube's q is a whole
+no-country read of each activity day (ages to 427); a week inside an activity month is "on q" only when every day of it
+has a q with qs "ok" (and q holds no other day of it) — there buckets j ≤ QJ (13: ages ≤ 420) come from q, j > 13 from
+"b"; a hot day uses its q (read in the same run) when it has one; else everything from "b" (no q file: every byte as
+before). The loss still left on a week on q is ql = Σ t − Σ qt − Σ b[j > 13] (exact, no install day: said as its size;
+never more than the cube's own measured loss of the week — past it, drift).
+q bit 4 from the cube's ledger (flagged); bit 2 only on a day whose loss the row still carries (_late's q_bits with the
+row's m length). Breakeven and so far also look through m (breakeven by age: the exact days, the checkpoints
 through D30 they do not cover, m, the checkpoints past m). Only with the switch on (GA4_CUBE:
 start(cube=True)), the cube of the app's stream, and once its walk reached the final edge the first time (done: the
 columns come in one go, never a half-read store's few; until then only the "late" busy note); with the switch off,
@@ -58,24 +69,29 @@ the file changes. Per country (every one GA4 names, "--" = GA4's "(not set)" = "
     × k_c the same way as _late's "b"; completeness / finality = _late's own (every day read / folded; d stops at the
     last day every activity day from the history start was read, df at the last one folded); t at D0 … D30 from d,
     D60 / D90 / D180 from m once final; st by _statuses on the country's own rows (≥ $5 Ads and ≥ 30 installs, else N/A);
-    q bits: 2 / 4 = a day of the row the cube measured loss on / GA4 flagged, 8 = a k_c outside 0.8 – 1.25, 16 = a month
-    on the app's k, 32 = a month whose k_c was borrowed from the whole months around it (the month itself not whole on
-    both sides yet: the current one, the history start's, a hole), 64 = a month whose GA4 revenue without a country is
+    q bits: 2 / 4 = a day of the row the cube measured loss on / GA4 flagged (the country cells are the cube's own: no
+    q), 8 = a k_c outside 0.8 – 1.25, 16 = a month on the app's k, 64 = a month whose GA4 revenue without a country is
     > UNP_LIM of it (see k_c) — on a row with installs, revenue, Ads spend or Ads downloads (a row with none of them:
-    no bit, nothing of it to be off).
+    no bit, nothing of it to be off). (32, a borrowed k_c, is gone with the borrowing.)
   * k_c (each country's AdMob ÷ GA4 per ACTIVITY month, like engine.value.scale): AdMob = the country report (every ad
     source) of the app's AdMob ids × (1 − deduction); GA4 = Σ that month's "e" r + "c" of the country (every install
     age); a month is measured on its own only when both sides cover it whole (every day folded / every day with an
     AdMob row, a one-day hole between rows read as a real 0) and both ≥ K_MIN_USD ("own"); a whole month below that is
-    pooled with the whole months ≤ ±KC_POOL around it ("pool"); a month not whole takes the whole months ≤ ±KC_POOL
-    around it ("near": borrowed, ≈ always, its revenue share said per country); clamped to K_CLAMP; raw outside K_OK →
-    ≈; none → the app's own k of that month (its weekly kf weighted by GA4 revenue), "app k", ≈. "--" always on the
-    app's k. GA4's revenue without a country — "(not set)" ("--") and the cube's measured "(other)" loss — is in no
-    country's GA4 side, while AdMob's country report counts those users under a real country: each month's share of it
-    (u, of the ledger's t) is measured and written ("kc" "unp"); a month above UNP_LIM marks its cells ≈ (bit 64), and
-    the "--" row's revenue is ALSO inside the named countries' k_c (never added to them: "diff" says how much). Σ
-    countries ≠ the All row exactly (All: the weekly k and another GA4 read; that u; the "--" row) — "diff" says by
-    how much (D30, measured).
+    pooled with the whole months ≤ ±KC_POOL around it ("pool"); clamped to K_CLAMP; raw outside K_OK → ≈; none — a
+    thin month, or a month not whole on both sides (the current one, the history start's, a hole, every month before
+    the AdMob country report starts): never another month's k_c borrowed (owner: real data only — a borrowed one
+    carries other months' loss) → the app's own k of that month (its weekly kf weighted by GA4 revenue), "app k", ≈.
+    "--" always on the app's k. GA4's revenue without a country — "(not set)" ("--") and the cube's measured "(other)"
+    loss — is in no country's GA4 side, while AdMob's country report counts those users under a real country: each
+    month's share of it (u, of the ledger's t) is measured and written ("kc" "unp"); a month above UNP_LIM marks its
+    cells ≈ (bit 64), and the "--" row's revenue is ALSO inside the named countries' k_c (never added to them: "diff"
+    says how much). Σ countries ≠ the All row exactly (All: the weekly k and another GA4 read; that u; the "--" row)
+    — "diff" says by how much (D30, measured).
+  * GA4: country not given ("ng"), per ACTIVITY month: All − Σ countries at the cells' source = the app's k × GA4's
+    every row of the month (the ledger's t, "(other)" included) − Σ every country (k_c × its GA4 cells, "--" on the
+    app's k), USD, signed — "own" when most of the month's named GA4 revenue is on an own / pooled k_c (AdMob's country
+    report already placed it in the countries: ≈ 0 left), else "app" (GA4 × the app's k: that part is in no country
+    row). Measured, never spread to a country.
   * spend = Google Ads by country × day (fetch.gads_geo_day, read per app: only its own stores) of the app's own spend
     store ids (value_build.app_sids), USD at that day's rate (the same FX series); a day is known only when every one
     of those stores either did not spend (spend cache) or has a committed geo day whose Σ over countries (+ "XX") ties
@@ -90,11 +106,12 @@ code; filled in turn up to PACK_MAX raw bytes; a bigger country alone) and in ro
 build of the packs: sha1-12 of every country's rows — each pack carries the same "b", so the page knows a pack of
 another build from the one its index names: a pack file is served as its newest copy whatever ?v= says), "packs":
 [[file, sha1-12 of its JSON]], "c": [[cc, installs, spend USD, spend as billed, pack, N/A days, revenue share on the
-app's k, revenue share on a borrowed k_c]], "from", "to", "thru", "fthru", "newest", "kc": {own / pool / near / app /
-est months, "tzh" hours AdMob's day is off GA4's, "unp" {month: GA4 revenue share without a country}, "unp_all" (all
+app's k]], "from", "to", "thru", "fthru", "newest", "kc": {own / pool / app / est months, "tzh" hours AdMob's day is
+off GA4's, "unp" {month: GA4 revenue share without a country}, "unp_all" (all
 months), "unp_lim"}, "geo": {"from", "till", "known_days", "unknown_days", "untied_days", "unk" ranges, "xx_share",
 "cov", "billed", "tzh", "tzs" (Ads time zones of the app's stores)}, "loss": {"days", "max_share", "flag_days",
-"usd"}, "diff" (+ "unk": the "--" row's part of "cty")}. Any failure of it: no "cd", every other byte as without it
+"usd"}, "diff" (+ "unk": the "--" row's part of "cty"), "ng": {"m": {month: [USD, its "unp", "own" | "app"]}, "usd"
+(Σ), "all" (Σ All), "rel"}}. Any failure of it: no "cd", every other byte as without it
 (counted; the Ads split's read failing: every day unknown, counted too).
 roi.json.gz — every app's summary row (with its f4), the portfolio lifetime P/L and the portfolio install days (apps
 with spend), and the ranges the forms used (f4c).
@@ -249,10 +266,11 @@ def _tie_off(ida, co_x, pr_days):
 
 
 def _late(data_dir, aid, sid, P, visit=None):
-    """The app's cohort cube (fetch.ga4_cube, GA4_CUBE) folded month by month (one month in memory at a time) + its hot
-    days → {"B": {X: {j: USD}} the 30-day buckets (AdMob-matched with kf of each activity week), "full" (lo, hi): every
-    activity day lo … hi folded or hot, "fin" (lo, hi): every one folded, "q" (lo, hi): q bits of them (2: revenue GA4
-    left "(other)" / gave no install day, 4: GA4 flagged with nothing to measure it by), "info" (the file's "late")}
+    """The app's cohort cube (fetch.ga4_cube, GA4_CUBE) folded month by month (one month in memory at a time, with its q
+    file) + its hot days → {"B": {X: {j: USD}} the 30-day buckets (AdMob-matched with kf of each activity week; j ≤ QJ
+    from q on a week read whole), "full" (lo, hi): every activity day lo … hi folded or hot, "fin" (lo, hi): every one
+    folded, "q" (lo, hi, jmax=None): q bits of them (2: revenue GA4 left "(other)" / gave no install day — with jmax,
+    only what the row still carries; 4: GA4 flagged with nothing to measure it by), "info" (the file's "late")}
     — None without a cube of the stream `sid` or with no day; before its walk first reached the final edge (done) only
     {"info": {"busy": 1, "from", "next", "at"}} (the page says the columns are on their way, none shown).
     visit("m", YYYY-MM, month file) / visit("h", D, hot record): the 🌍 country filter's read riding this one pass over
@@ -279,41 +297,113 @@ def _late(data_dir, aid, sid, P, visit=None):
         return {"info": info}
     kf, hs = P["sc"]["kf"], P["hs"]
     B, fin, hot, oth, flg, omax, ks = {}, set(), set(), set(), set(), 0.0, {}
+    lb, zq = set(), set()       # q: days whose loss is still in the cube's cells / loss past age QL on a whole week
+    qi = {"ql": 0.0, "qd": 0, "qwait": 0, "qneg": 0, "qpos": 0, "on": False}
 
     def k_of(W):
         if W not in ks:
             ks[W] = kf(_d(W))[0]
         return ks[W]
 
-    def add(b):
+    def add(b, onq=()):
+        """The cube's cells, but a bucket j ≤ QJ of a week read whole (onq: q's cells instead)."""
         for X, js in (b or {}).items():
             e = B.setdefault(X, {})
             for j, ws in (js or {}).items():
                 jj = int(j)
-                e[jj] = e.get(jj, 0.0) + sum(v / 1e6 * k_of(W) for W, v in (ws or {}).items())
+                e[jj] = e.get(jj, 0.0) + sum(v / 1e6 * k_of(W) for W, v in (ws or {}).items()
+                                             if not (jj <= gcu.QJ and W in onq))
 
-    def note(Dd, led):
+    def add_q(q, onq):
+        for X, js in (q or {}).items():
+            for j, ws in (js or {}).items():
+                jj = int(j)
+                s = sum(v / 1e6 * k_of(W) for W, v in (ws or {}).items() if W in onq) if jj <= gcu.QJ else 0.0
+                if s:
+                    e = B.setdefault(X, {})
+                    e[jj] = e.get(jj, 0.0) + s
+
+    def past(b):
+        """{W: micros of the cube's buckets past QJ} (ages 421 + — never on q)."""
+        out = {}
+        for js in (b or {}).values():
+            for j, ws in (js or {}).items():
+                if int(j) > gcu.QJ:
+                    for W, v in (ws or {}).items():
+                        out[W] = out.get(W, 0) + int(v or 0)
+        return out
+
+    def gap(W, t, rows, qt, qr, b14, lo, ds, hot=False):
+        """ql of a week read whole: Σ t − Σ qt − Σ b (j > QJ) = the loss with no install day past age QL (exact),
+        beyond rounding (½ micro a row + 1 ppm) — never more than the cube's own measured loss of those days (lo): what
+        is past it is read-time drift the other way (the cube's read held more: "qpos"); below 0: drift ("qneg").
+        Drift is counted, never loss (a hot day: not counted — GA4 still adds to it between its two reads)."""
+        g, tol = t - qt - b14, (rows + qr) // 2 + 1 + t // 1_000_000
+        if g > tol:
+            lq = min(g, lo)
+            if lq > tol:
+                qi["ql"] += lq / 1e6 * k_of(W)
+                zq.update(ds)
+            if g - lo > tol and not hot:
+                qi["qpos"] += 1
+        elif g < -tol and not hot:
+            qi["qneg"] += 1
+
+    def note(Dd, led, onq=False):
         nonlocal omax
         lo, t = int(led.get("loss") or 0), int(led.get("t") or 0)
         if lo > 0:
             oth.add(Dd)
             omax = max(omax, min(1.0, lo / t) if t > 0 else 1.0)
+            if not onq:
+                lb.add(Dd)
+                qi["qwait"] += Dd >= hs
+        if onq:
+            qi["qd"] += Dd >= hs
         if led.get("fl"):
             flg.add(Dd)
     for mk, mo in gcu.months(data_dir, aid, sid):
+        qm = gcu.load_q(data_dir, aid, sid, mk)     # q: the month's whole reads (a week on q only when every day is)
+        onq, by = set(), {}
+        if qm is not None:
+            qi["on"] = True
+            qd, qw = qm["days"], {}
+            for D in mo["days"]:
+                by.setdefault(_iso(gcu._mon(_d(D))), []).append(D)
+            for D in qd:
+                qw.setdefault(_iso(gcu._mon(_d(D))), set()).add(D)
+            for W, ds in by.items():
+                if qw.get(W) == set(ds) and all(isinstance(qd[D], dict) and qd[D].get("qs") == "ok" for D in ds):
+                    onq.add(W)
+            b14 = past(mo["b"]) if onq else {}
+            for W in sorted(onq):
+                ds, leds = by[W], [mo["days"][D] if isinstance(mo["days"][D], dict) else {} for D in by[W]]
+                gap(W, sum(int(v.get("t") or 0) for v in leds), sum(int(v.get("rows") or 0) for v in leds),
+                    sum(int(qd[D].get("qt") or 0) for D in ds), sum(int(qd[D].get("qr") or 0) for D in ds),
+                    b14.get(W, 0), sum(int(v.get("loss") or 0) for v in leds), {_d(D) for D in ds})
         for D, led in mo["days"].items():
             Dd = _d(D)
             fin.add(Dd)
-            note(Dd, led if isinstance(led, dict) else {})
-        add(mo["b"])
+            note(Dd, led if isinstance(led, dict) else {}, _iso(gcu._mon(Dd)) in onq)
+        add(mo["b"], onq)
+        if onq:
+            add_q(qm["q"], onq)
         seen("m", mk, mo)
     for D, rec in (h.get("d") or {}).items():
         Dd = _d(D)
         if Dd in fin or not isinstance(rec, dict):
             continue
         hot.add(Dd)
-        note(Dd, rec)
-        add(rec.get("b"))
+        qi["on"] = qi["on"] or "qs" in rec
+        onq = {_iso(gcu._mon(Dd))} if rec.get("qs") == "ok" and isinstance(rec.get("q"), dict) else set()
+        if onq:                                     # a hot day's q (read in the same run as its cube cells)
+            W = next(iter(onq))
+            gap(W, int(rec.get("t") or 0), int(rec.get("rows") or 0), int(rec.get("qt") or 0),
+                int(rec.get("qr") or 0), past(rec.get("b")).get(W, 0), int(rec.get("loss") or 0), {Dd}, True)
+        note(Dd, rec, bool(onq))
+        add(rec.get("b"), onq)
+        if onq:
+            add_q(rec["q"], onq)
         seen("h", D, rec)
     have = {D for D in fin | hot if D >= hs}
     if not have:
@@ -324,12 +414,15 @@ def _late(data_dir, aid, sid, P, visit=None):
     while thru + timedelta(days=1) in have:         # how far, when a stalled walk stops the newest columns there
         thru += timedelta(days=1)
     pr, pf, po, pl = [0] * (n + 1), [0] * (n + 1), [0] * (n + 1), [0] * (n + 1)
+    pb, pz = [0] * (n + 1), [0] * (n + 1)
     for i in range(n):
         D = hs + timedelta(days=i)
         pr[i + 1] = pr[i] + (D in have)
         pf[i + 1] = pf[i] + (D in fin)
         po[i + 1] = po[i] + (D in oth)
         pl[i + 1] = pl[i] + (D in flg)
+        pb[i + 1] = pb[i] + (D in lb)
+        pz[i + 1] = pz[i] + (D in lb or D in zq)
 
     def span(lo, hi):
         i0, i1 = (lo - hs).days, (hi - hs).days
@@ -343,15 +436,28 @@ def _late(data_dir, aid, sid, P, visit=None):
         s_ = span(lo, hi)
         return bool(s_) and pf[s_[1] + 1] - pf[s_[0]] == s_[1] - s_[0] + 1
 
-    def q_bits(lo, hi):
+    def q_bits(lo, hi, jmax=None):
+        """The ≈ bits of the activity days lo … hi: 4 = a day GA4 flagged; 2 = a day with measured loss (jmax None:
+        the cube's cells — the 🌍 country rows); with jmax (an All row's m: install day X = hi − 30 (jmax + 1)) only a
+        day whose loss the row still carries: ages ≤ QL on a week still on the cube's cells, past QL on any week with
+        loss there (on the cube's cells, or ql > 0 on a week read whole)."""
         s_ = span(lo, hi)
         if not s_:
             return 0
-        return (2 if po[s_[1] + 1] - po[s_[0]] > 0 else 0) | (4 if pl[s_[1] + 1] - pl[s_[0]] > 0 else 0)
-    return {"B": B, "full": full, "fin": final, "q": q_bits,
-            "info": {"days": len(have), "oth": len({D for D in oth if D >= hs}), "omax": _r(omax, 6),
-                     "loss": len({D for D in flg if D >= hs}), "from": _iso(min(have)), "till": _iso(last),
-                     "thru": _iso(thru) if thru >= hs else None}}
+        i0, i1 = s_
+        bits = 4 if pl[i1 + 1] - pl[i0] > 0 else 0
+        if jmax is None:
+            return bits | (2 if po[i1 + 1] - po[i0] > 0 else 0)
+        ic = min(i1, (hi - timedelta(days=LATE_STEP * (jmax + 1) - gcu.QL) - hs).days)   # X + QL: q's last age
+        if (ic >= i0 and pb[ic + 1] - pb[i0] > 0) or (ic < i1 and pz[i1 + 1] - pz[max(i0, ic + 1)] > 0):
+            bits |= 2
+        return bits
+    info = {"days": len(have), "oth": len({D for D in oth if D >= hs}), "omax": _r(omax, 6),
+            "loss": len({D for D in flg if D >= hs}), "from": _iso(min(have)), "till": _iso(last),
+            "thru": _iso(thru) if thru >= hs else None}
+    if qi["on"]:                                    # only with q files (without them: the file as before, byte by byte)
+        info.update(ql=_r(qi["ql"], 2), qd=qi["qd"], qwait=qi["qwait"], qneg=qi["qneg"], qpos=qi["qpos"])
+    return {"B": B, "full": full, "fin": final, "q": q_bits, "info": info}
 
 
 def _cohorts(P, spend, fxf, co, today, late=None, edge=None):
@@ -416,7 +522,8 @@ def _cohorts(P, spend, fxf, co, today, late=None, edge=None):
                     while mf < len(m) and late["fin"](X + timedelta(days=gco.LAGS),
                                                       X + timedelta(days=LATE_STEP * (mf + 2))):
                         mf += 1
-                    qo = late["q"](X + timedelta(days=gco.LAGS), X + timedelta(days=LATE_STEP * (len(m) + 1)))
+                    qo = late["q"](X + timedelta(days=gco.LAGS), X + timedelta(days=LATE_STEP * (len(m) + 1)),
+                                   len(m))
         # so far: the read that reaches furthest (the install-day read through S, this store through `newest`)
         s = sd = None
         if e and X <= S:
@@ -1088,9 +1195,9 @@ def _appk(P, months):
 
 def _kc(G, A, whole, months, appk):
     """{cc: {month: (k_c, src, ≈ of the raw ratio)}} — each country's AdMob ÷ GA4 per activity month (see the module
-    doc): its own whole month ("own"), else a whole month pooled with the whole months ≤ ±KC_POOL ("pool"), a month not
-    whole on both sides: the whole months ≤ ±KC_POOL around it ("near" — borrowed, never its own data; the rows say ≈),
-    else the app's k ("app", ≈); GA4's "(not set)" always the app's."""
+    doc): its own whole month ("own"), else a whole month pooled with the whole months ≤ ±KC_POOL ("pool"), else — a
+    thin month, or one not whole on both sides (never another month's k_c borrowed: owner, 21 Oct 2026, real data only)
+    — the app's k ("app", ≈); GA4's "(not set)" always the app's."""
     lo, hi = val.K_CLAMP
     okl, okh = val.K_OK
     out = {}
@@ -1098,12 +1205,12 @@ def _kc(G, A, whole, months, appk):
         g, a, tab = {M: v / 1e6 for M, v in g0.items()}, A.get(cc) or {}, {}
         for i, M in enumerate(months):
             raw = src = None
-            if cc != NO_CC:
+            if cc != NO_CC and M in whole:
                 for r in range(KC_POOL + 1):
                     ms = [x for x in months[max(0, i - r):i + r + 1] if x in whole]
                     sa, sg = sum(a.get(x, 0.0) for x in ms), sum(g.get(x, 0.0) for x in ms)
                     if ms and sa >= val.K_MIN_USD and sg >= val.K_MIN_USD:
-                        raw, src = sa / sg, ("own" if r == 0 else "pool" if M in whole else "near")
+                        raw, src = sa / sg, ("own" if r == 0 else "pool")
                         break
             tab[M] = (appk[M], "app", True) if raw is None else (min(max(raw, lo), hi), src, not okl <= raw <= okh)
         out[cc] = tab
@@ -1288,7 +1395,28 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
         if cv.tot.get(M, 0) > 0:
             unp[M] = min(1.0, ((cv.G.get(NO_CC) or {}).get(M, 0) + cv.loss.get(M, 0)) / cv.tot[M])
     ut = sum(cv.tot.get(M, 0) for M in unp)
-    kst = {"own_months": 0, "pool_months": 0, "near_months": 0, "app_months": 0, "est_months": 0,
+    # GA4: country not given — per activity month, All (the app's k × GA4's every row of the month: the ledger's t)
+    # − Σ every country row's revenue (k_c × that country's GA4 cells, "Unknown country" too), signed: in a month on
+    # the countries' own AdMob match (most of its named GA4 revenue on an own / pooled k_c) AdMob's country report
+    # already placed it (≈ 0 left); on the app's k it is GA4's measured "(other)" — in no country row
+    ng, nga = {}, 0.0
+    for M in months:
+        if cv.tot.get(M, 0) <= 0:
+            continue
+        allm, s, named, mine = appk[M] * cv.tot[M] / 1e6, 0.0, 0, 0
+        for cc in sorted(cv.G):
+            g = (cv.G.get(cc) or {}).get(M, 0)
+            if not g:
+                continue
+            k = (kc.get(cc) or {}).get(M) or (appk[M], "app", True)
+            s += k[0] * g / 1e6
+            if cc != NO_CC:
+                named += g
+                mine += g if k[1] in ("own", "pool") else 0
+        ng[M] = [_r(allm - s, 2), _r(unp.get(M)), "own" if named and 2 * mine >= named else "app"]
+        nga += allm
+    ngs = sum(v[0] for v in ng.values())
+    kst = {"own_months": 0, "pool_months": 0, "app_months": 0, "est_months": 0,
            "tzh": _tzh((rev or {}).get("tz"), P.get("tz"), months[-1]) if (rev or {}).get("tz") and P.get("tz") else None,
            "unp": {M: _r(v) for M, v in sorted(unp.items())}, "unp_lim": UNP_LIM,
            "unp_all": _r(sum(unp[M] * cv.tot[M] for M in unp) / ut) if ut else None}
@@ -1355,7 +1483,7 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
                     if k and k[1] == "app":
                         bits |= 16
                     else:
-                        bits |= (8 if k and k[2] else 0) | (32 if k and k[1] == "near" else 0)
+                        bits |= 8 if k and k[2] else 0
                     if cc != NO_CC and unp.get(M, 0) > UNP_LIM:
                         bits |= 64
             r["qo"] = bits
@@ -1389,7 +1517,7 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
             return _r(sum(v for M, v in g.items() if (kM.get(M) or ("", "app"))[1] == src) / gt) if gt else None
         out.append((cc, _json(rows_out)))
         meta[cc] = [cc, n_tot, _r(sp_tot) if known else None, _r(spi_tot, 2) if known and billed else None, None,
-                    na_days, share("app"), share("near")]
+                    na_days, share("app")]
         del full, by, got, rows_out, co_x, B
         cv.E.pop(cc, None), cv.N.pop(cc, None), cv.C.pop(cc, None)     # its cells are in its JSON now: let them go
     # "Not split": Google Ads' unmapped cost by install day (GA4's "(other)" has no install day: the loss note)
@@ -1412,7 +1540,7 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
                 spi_tot += spi or 0
         out.append((NOT_SPLIT, _json(rows_out)))
         meta[NOT_SPLIT] = [NOT_SPLIT, None, _r(sp_tot) if known else None, _r(spi_tot, 2) if known and billed else None,
-                           None, None, None, None]
+                           None, None, None]
     if not out:
         return None
     # packs: by installs, then spend, then code; filled in turn up to PACK_MAX (a bigger country alone)
@@ -1452,7 +1580,8 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
                    "usd": _r(lusd, 2)},
           "diff": {"age": 30, "days": len(dd), "all": _r(sa, 2), "cty": _r(sc_, 2),
                    "rel": _r(sc_ / sa - 1) if sa else None, "n_all": sum(allr[X]["n"] for X in dd),
-                   "n_cty": sum(n30.get(X, 0) for X in dd), "unk": _r(sum(u30.get(X, 0.0) for X in dd), 2)}}
+                   "n_cty": sum(n30.get(X, 0) for X in dd), "unk": _r(sum(u30.get(X, 0.0) for X in dd), 2)},
+          "ng": {"m": ng, "usd": _r(ngs, 2), "all": _r(nga, 2), "rel": _r(ngs / nga) if nga else None}}
     acc.packs.update(names)
     acc.cdn["apps"] += 1
     acc.cdn["countries"] += len(order)
