@@ -16,7 +16,9 @@
 //   * 🧮 the cohort card's totals strip, one group over every install day (Total spend, Total revenue, Profit / loss =
 //     revenue − spend, ROAS, 🎯 Avg breakeven, Installs, Install days): All / a country (Unknown, Not split), the owner's
 //     case in its shape, a few cents of spend, loading / error / missing, ₹ / $, its skeleton the same in every state;
-//     Avg breakeven = the Breakeven column's own days, a fast lucky day left out (before 50% of the median), counted;
+//     Avg breakeven = the Breakeven column's own days of the $5+ ads days: its median (Kaplan–Meier — a day not even yet
+//     is "later than its age"; none when less than half are known to have broken even), a fast lucky day left out (before
+//     50% of it), only days 2 × it old averaged, "≤" kept; every day left out counted by why (an independent recount);
 //   * "Show 60 more" / "Show all" (the install-day tables and the lifetime "Every day" table): on a parsed DOM with a layout
 //     model + the page's own stay-put layer, the reader's row stays put, the box keeps its scroll, no second scroll;
 //     sideways by column (the Day table's columns change with the rows shown), and a Mode switch keeps the box's place too.
@@ -54,7 +56,9 @@ function appFile() {
     const obs = Math.min(30, age), df = Math.max(0, Math.min(obs, age - 3) + 1);
     const d = exact ? Array.from({ length: obs + 1 }, (_, L) => L + 1) : null;
     const t = T.map(a => (a <= age - 3 ? (exact && a <= 30 ? a + 1 : a + 1) : null));
-    rows.push([X, 100, 80, 10, d, exact ? df : 0, exact ? d.map(() => 50) : null, t, d ? d[d.length - 1] : t.filter(v => v != null).pop(), X,
+    // (its so far's own date: the day its so far was read to — the exact days' last, else the last checkpoint)
+    const soAge = exact ? obs : T.filter((a, j) => t[j] != null).pop();
+    rows.push([X, 100, 80, 10, d, exact ? df : 0, exact ? d.map(() => 50) : null, t, d ? d[d.length - 1] : t.filter(v => v != null).pop(), day(X, soAge),
       (exact && df > 9) ? [9, true] : null, age >= 10 ? 'Normal' : 'Too early', 0]);
   }
   return { v: 1, app: 'Alpha File', T, lags: 31, newest, S: '2026-10-07', rows,
@@ -1448,9 +1452,9 @@ async function moreKeepAll(dc, packs) {
         if (short && short(age)) { rows.push([X]); continue; }
         const dd = Array.from({ length: obs + 1 }, (_, L) => (L + 1) * 0.5), t = T.map(a => (a <= 30 && a < df ? dd[a] : null));
         const sp = X < '2026-09-01' || X > '2026-10-12' ? null : sp0;
-        const r = [X, 20, null, sp, dd, df, null, t, dd[dd.length - 1], X, null, age >= 10 && sp != null ? 'Normal' : 'N/A',
+        const r = [X, 20, null, sp, dd, df, null, t, dd[dd.length - 1], day(X, obs), null, age >= 10 && sp != null ? 'Normal' : 'N/A',
           age === 20 ? 16 : age === 21 ? 8 : 0, sp];
-        if (age >= 63) { r.push([dd[30] + 5], 1); t[T.indexOf(60)] = dd[30] + 5; r[8] = dd[30] + 5; }
+        if (age >= 63) { r.push([dd[30] + 5], 1); t[T.indexOf(60)] = dd[30] + 5; r[8] = dd[30] + 5; r[9] = day(X, 60); }
         rows.push(r);
       }
       return rows;
@@ -1802,7 +1806,7 @@ async function moreKeepAll(dc, packs) {
       // its one group (no group heads), its fixed note
       out.k_place = [hk.includes('cell pe ruko = detail</span></div>' + kOf(hk) + '<div class="roi-ctl">'), (hk.match(/class="roi-cks"/g) || []).length,
         hk.indexOf('roi-cks') < hk.indexOf('<table'), (U.dayView(dk).match(/class="roi-cks"/g) || []).length, U.ctyView(appFile()).includes('roi-cks'),
-        kOf(hk).includes('<p class="roi-note roi-ckn">Poori history ka jod — Profit / loss = Total revenue − Total spend, ROAS = Total revenue ÷ Total spend; country chuno to sirf us country ka. Avg breakeven = ads wale har install din ka Breakeven din (≤ = us column ka din) ka avg — median ke 50% se pehle BE wale din (achanak jaldi) avg me nahi.</p>'),
+        kOf(hk).includes('<p class="roi-note roi-ckn">Poori history ka jod — Profit / loss = Total revenue − Total spend, ROAS = Total revenue ÷ Total spend; country chuno to sirf us country ka. Avg breakeven = $5+ spend wale install din ke Breakeven din ka avg (≤ day = us din ya pehle; koi ≤ ho to avg bhi ≤). Median = jis din tak aadhe din BE hue (naya din apni umar tak gina); median ke 50% se pehle BE wale (achanak jaldi) aur median ke 2 guna se naye din avg me nahi.</p>'),
         (kOf(hk).match(/<div class="roi-ckg">/g) || []).length, /roi-ck[hqx]/.test(kOf(hk)),
         // 🎯 the two fixed lines under the tiles: Avg breakeven's first, then the days with no spend data, then the note
         kOf(hk).includes('</div><p class="roi-note roi-ckb">'), kOf(hk).indexOf('roi-ckb') < kOf(hk).indexOf('roi-ckm') && kOf(hk).indexOf('roi-ckm') < kOf(hk).indexOf('roi-ckn'),
@@ -1888,17 +1892,53 @@ async function moreKeepAll(dc, packs) {
       const P0 = 'roi_aaaaaaaaaaaa_c00.json.gz', P1 = 'roi_aaaaaaaaaaaa_c01.json.gz';
       const dkc = Object.assign(appFile(), { cd: Object.assign(cdx(), { packs: [[P0, 'k0k0k0k0k0k0'], [P1, 'k1k1k1k1k1k1']] }) });
       const fd4 = x => { const p_ = x.split('-'); return (+p_[2]) + ' ' + MON[+p_[1] - 1] + ' ' + p_[0]; };
-      // 🎯 Avg breakeven worked out here from the rows' own breakeven (r[10]): the ads days (spend > 0), the median of the
-      // reached ones, out = before half of it, the mean of the rest; '—' + its reason otherwise
-      const expBE = (rows, cc) => { const L = 'Avg breakeven'; if (cc === 'XX') return [L, '—', 'Not split: koi kamai nahi'];
+      // 🎯 Avg breakeven worked out here, on its own, from the rows (r[3] spend, r[8] so far, r[9] its date, r[10] the build's
+      // breakeven): the ads days (spend ≥ the file's min_spend, else counted), each one reached / 100%+ back (no day) / not
+      // even / not read; the Kaplan–Meier median by brute force over the breakeven days (a not-even day at risk up to its
+      // age, a 100%+ back day up to its last age measured below spend); fast = before half of it; only days ≥ 2 × the median
+      // old in the avg; → the tile [label, value, reason], its line and the counts
+      const beRef = (rows, newest, ms = 5) => {
+        const isD = x => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x), dAge = (x, y) => Math.round((Date.parse(y) - Date.parse(x)) / 864e5);
+        const below = (q, sp) => Math.max(-1, ...(q[4] || []).map((v, L) => (v != null && v < sp ? L : -1)), ...T.map((x, j) => (q[7] && q[7][j] != null && q[7][j] < sp ? x : -1)),
+          ...(q[14] || []).map((v, k) => (v != null && v < sp ? 30 * (k + 2) : -1)));
+        const o = { ads: 0, lo: 0, nr: 0, fast: 0, young: 0, mat: 0, kept: 0, inexact: 0, wait: 0, pend: 0, unread: 0, sum: 0, med: null, mq: '', oldest: null }, it = [];
+        for (const q of rows) { const sp = q[3]; if (sp == null || !(sp > 0)) continue; if (sp < ms) { o.lo++; continue; } o.ads++;
+          const sd = isD(q[9]) && q[9] >= q[0] ? q[9] : isD(newest) ? newest : null, age = sd ? dAge(q[0], sd) : null;
+          if (q[10]) { o.nr++; it.push({ k: 'r', t: q[10][0], ex: q[10][1], age }); }
+          else if (q[8] != null && age != null) it.push(q[8] >= sp ? { k: 'p', t: below(q, sp), age } : { k: 'w', t: age, age });
+          else it.push({ k: 'u', age }); }
+        const pop = it.filter(x => x.k !== 'u'), ts = [...new Set(pop.filter(x => x.k === 'r').map(x => x.t))].sort((x, y) => x - y);
+        let S = 1, t1 = null, t2 = null;
+        for (let i = 0; i < ts.length && t1 == null; i++) { const at = pop.filter(x => x.t >= ts[i]).length, ev = pop.filter(x => x.k === 'r' && x.t === ts[i]).length;
+          S *= 1 - ev / at; if (S <= 0.5 + 1e-9) { t1 = ts[i]; t2 = Math.abs(S - 0.5) < 1e-9 && i + 1 < ts.length ? ts[i + 1] : ts[i]; } }
+        const n = v => Math.round(v).toLocaleString('en-US'), L = 'Avg breakeven';
+        if (t1 == null) { for (const x of it) { if (x.k === 'w') { o.wait++; o.oldest = Math.max(o.oldest == null ? -1 : o.oldest, x.age); } else if (x.k === 'p') o.pend++; else if (x.k === 'u') o.unread++; }
+          o.seen = pop.length; return o; }
+        o.med = (t1 + t2) / 2; o.mq = it.some(x => x.k === 'r' && !x.ex && (x.t === t1 || x.t === t2)) ? '≤' : ''; o.H = Math.ceil(2 * o.med); o.cut = o.med / 2; o.seen = pop.length;
+        for (const x of it) {
+          if (x.k === 'r' && x.t < o.cut) o.fast++;
+          else if (x.age == null) o.unread++;
+          else if (x.age < o.H) o.young++;
+          else { o.mat++; if (x.k === 'r') { o.kept++; o.sum += x.t; if (!x.ex) o.inexact++; } else o[{ p: 'pend', w: 'wait', u: 'unread' }[x.k]]++; } }
+        o.avg = o.kept ? o.sum / o.kept : null; return o; };
+      // the tile and the line the strip must print for those counts (the page's wording, in its order)
+      const beText = (o, ms = 5) => { const n = v => Math.round(v).toLocaleString('en-US'), L = 'Avg breakeven', m$ = '$' + ms, up = (v, q) => (q ? Math.ceil(v - 1e-9) : Math.round(v));
+        if (!o.ads) return [[L, '—', o.lo ? `${n(o.lo)} din, sab spend &lt;${m$}` : 'koi ads din nahi — BE nahi'], o.lo ? `Avg BE sirf ${m$}+ spend wale din ka (Status ki tarah) — yahan ${n(o.lo)} din, sab ${m$} se kam.` : ''];
+        const bi = [o.fast ? `${n(o.fast)} jaldi BE (&lt;D${Math.ceil(o.cut - 1e-9)})` : '', o.young ? `${n(o.young)} naye (&lt;${n(o.H)} din)` : '',
+          o.wait ? `${n(o.wait)} BE nahi${o.med == null ? ` (sabse purana ${n(o.oldest)} din)` : ''}` : '', o.pend ? `${n(o.pend)} 100%+ back` : '',
+          o.unread ? `${n(o.unread)} kamai nahi padhi` : '', o.lo ? `${n(o.lo)} spend &lt;${m$}` : ''].filter(Boolean).join(' · ');
+        if (o.med == null) return [[L, '—', o.seen ? `BE din pata: ${n(o.nr)} / ${n(o.seen)}` : 'kamai abhi nahi padhi'], `Median nahi — aadhe se kam din ka BE din pata: ${bi}.`];
+        const bm = `median ${o.mq}D${up(o.med, o.mq)}`;
+        if (o.kept < 5) return [[L, '—', `${o.mat < 5 ? 'Too early' : 'Kam din'} · ${bm}`], `Avg ke liye ${n(o.H)}+ din purane 5 BE din chahiye, abhi ${n(o.kept)}.${bi ? ` Avg me nahi: ${bi}.` : ''}`];
+        return [[L, `${o.inexact ? '≤ ' : ''}D${up(o.avg, o.inexact)}`, `${bm} · ${n(o.kept)} din ka avg`],
+          [o.inexact ? `${n(o.inexact)} din "≤ day" wale` : '', bi ? `Avg me nahi: ${bi}` : `Sab ${n(o.kept)} din gine`].filter(Boolean).join('. ') + '.']; };
+      const expBE = (rows, cc, newest) => { const L = 'Avg breakeven'; if (cc === 'XX') return [L, '—', 'Not split: koi kamai nahi'];
         if (cc === '--') return [L, '—', 'Google Ads me ye country nahi'];
-        const ads = rows.filter(q => q[3] != null && q[3] > 0), dd = ads.filter(q => q[10]).map(q => q[10][0]).sort((a, b) => a - b), n = dd.length;
-        if (!ads.length) return [L, '—', rows.some(q => q[3] != null) ? 'koi ads din nahi — BE nahi' : 'spend nahi — BE nahi'];
-        if (n < 5) return [L, '—', n ? `Too early · ${n} din hi BE hue` : 'Too early · koi din BE nahi hua'];
-        const med = n % 2 ? dd[(n - 1) / 2] : (dd[n / 2 - 1] + dd[n / 2]) / 2, keep = dd.filter(x => x >= med / 2);
-        return [L, 'D' + Math.round(keep.reduce((a, b) => a + b, 0) / keep.length), `median D${Math.round(med)} · ${keep.length.toLocaleString('en-US')} din ka avg`]; };
+        if (!rows.length) return [L, '—', 'ads din ke Breakeven ka avg'];
+        const o = beRef(rows, newest); if (!o.ads && !o.lo) return [L, '—', rows.some(q => q[3] != null) ? 'koi ads din nahi — BE nahi' : 'spend nahi — BE nahi'];
+        return beText(o)[0]; };
       // what the strip must print for a country's rows ($ view), worked out here from the rows: the recount + every reason
-      const exp = (rows, cc) => { const o = rc(rows, 'usd'), xx = cc === 'XX', un = cc === '--', D = rows.length;
+      const exp = (rows, cc, newest = '2026-10-13') => { const o = rc(rows, 'usd'), xx = cc === 'XX', un = cc === '--', D = rows.length;
         const hs = o.nsp > 0 && !un, hr = o.nrv > 0 && !xx, dp = dpOf(Math.max(hs ? o.s : 0, hr ? o.r : 0), hs ? o.s : 0), f = 10 ** dp;
         const S = hs ? Math.round(o.s * f) / f : 0, R = hr ? Math.round(o.r * f) / f : 0, has = hs && hr && S > 0;
         const why = k => xx ? 'Not split: sirf spend' : has ? (k ? 'revenue ÷ spend · blended' : 'revenue − spend') : !hs ? `spend nahi — ${k ? 'ROAS' : 'profit / loss'} nahi`
@@ -1907,7 +1947,7 @@ async function moreKeepAll(dc, packs) {
             : hs && !(o.s > 0) ? 'Is country me koi ads din nahi' : 'Google Ads'],
           ['Total revenue', hr ? fm(R, false, dp) : '—', xx ? 'Not split: koi kamai nahi' : o.K ? `${o.K} din ki kamai abhi nahi padhi` : 'so far · AdMob-matched'],
           ['Profit / loss', has ? fm((Math.round(R * f) - Math.round(S * f)) / f, true, dp) : '—', why(0)],
-          ['ROAS', has ? Math.round(o.r / o.s * 100) + '%' : '—', why(1)], expBE(rows, cc),
+          ['ROAS', has ? Math.round(o.r / o.s * 100) + '%' : '—', why(1)], expBE(rows, cc, newest),
           ['Installs', o.nn && !xx ? o.n.toLocaleString('en-US') : '—', xx ? 'Not split: installs nahi' : 'GA4 · ads + organic'],
           ['Install days', xx ? '—' : String(D), xx ? 'Not split: install din nahi' : `${fd4(rows[0][0])} – ${fd4(rows[D - 1][0])}`]]; };
       // a few cents of spend under whole-unit revenue (stray Google Ads clicks + organic revenue): the spend printed with
@@ -1978,23 +2018,30 @@ async function moreKeepAll(dc, packs) {
       // country ka milega … koi koi din ese ho jate he jo us din ka BE 2–5–10 din hota he — usko avg BE me exclude karna
       // he … manlo 100 BE day he to 50% se kam din vale date ko count hi nahi karna") ──────────────────────────────────
       {
-        // a made-up install day: spend (USD, billed at ₹83), its build breakeven, its so far
-        const br = (X, sp, be, s_) => [X, 10, null, sp, null, 0, null, T.map(() => null), s_, X, be, 'Normal', 0, sp == null ? null : sp * 83];
-        const beSet = (days, from) => days.map((b, i) => br(day(from || '2025-01-01', i), 10, Array.isArray(b) ? b : [b, true], 20));
-        const bf = rows => ({ v: 1, T, lags: 31, newest: rows[rows.length - 1][0], rows });
+        // a made-up install day: spend (USD, billed at ₹83), its build breakeven, its so far and the day that so far was
+        // read to (default: 1 Jan 2026 — an install day of early 2025 is ~360 days old there); extra: d / t / m
+        const SD = '2026-01-01';
+        const br = (X, sp, be, s_, sd, x) => { const r = [X, 10, null, sp, null, 0, null, T.map(() => null), s_, s_ == null ? null : (sd || SD), be, 'Normal', 0, sp == null ? null : sp * 83];
+          if (x && x.t) r[7] = x.t; if (x && x.m) r.push(x.m, x.m.length); return r; };
+        const beSet = (days, from, sd) => days.map((b, i) => br(day(from || '2025-01-01', i), 10, Array.isArray(b) ? b : [b, true], 20, sd));
+        const bf = (rows, consts) => ({ v: 1, T, lags: 31, newest: SD, rows, consts: consts || { final_lag: 3 } });
         const bTile = h => kT(h).find(x => x[0] === 'Avg breakeven');
-        // an independent recount: median of the reached days, out = before half of it, mean of the rest
-        const rcBE = days => { const a = days.slice().sort((x, y) => x - y), n = a.length, med = n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2,
-          keep = a.filter(x => x >= med / 2); return [med, a.length - keep.length, keep.reduce((x, y) => x + y, 0) / keep.length]; };
+        const both = (rows, ms) => beText(beRef(rows, SD, ms), ms);
         // the hand case: 8 install days broke even on day 3, 5, 40, 50, 60, ≤ 90, 100, ≤ 120 (a "≤": that column's day);
-        // 2 ads days not even yet (one not read yet); an ads-paused day (spend 0) and a day with no spend data: no ads day
-        const hr8 = beSet([3, 5, 40, 50, 60, [90, false], 100, [120, false]]).concat([br('2025-01-09', 10, null, 4), br('2025-01-10', 10, null, null),
-          br('2025-01-11', 0, null, 5), br('2025-01-12', null, null, 5)]);
+        // one not even (so far $4 of $10), one 100%+ back with no day pinned ($12 of $10: below spend up to its D90 column),
+        // one old day whose so far is not read, one new day not read yet; a $2 day (under the $5 floor, broke even on D0);
+        // an ads-paused day (spend 0) and a day with no spend data: no ads day
+        const tB = T.map(a => (a <= 30 ? 1 + a / 10 : null));
+        const hr8 = beSet([3, 5, 40, 50, 60, [90, false], 100, [120, false]]).concat([br('2025-01-09', 10, null, 4), br('2025-01-10', 10, null, 12, null, { t: tB, m: [8, 9] }),
+          br('2025-01-11', 10, null, null), br('2025-12-30', 10, null, null), br('2025-01-13', 2, [0, true], 5), br('2025-01-14', 0, null, 5), br('2025-01-12', null, null, 5)]);
         const fh = bf(hr8), hb = seen(U.cohCard(fh));
         U.set('SHOW', 1e9); const tb = U.cohCard(fh); U.set('SHOW', 60);
-        // the Breakeven column as the Day table prints it (its own cells): the 8 days, nothing else
+        // the Breakeven column as the Day table prints it (its own cells): the 9 days, nothing else; the other ads days' cells
         const colDays = trs(tb).map(r => /(?:≤ )?day (\d+)<\/td>$/.exec(r[5])).filter(Boolean).map(m => +m[1]);
-        out.abe_hand = [bTile(hb), kB(hb), U.beAvg(hr8, T), colDays.sort((a, b) => a - b), rcBE(colDays), kL(hb)];
+        const lab2 = X => { const p_ = X.split('-'); return (+p_[2]) + ' ' + MON[+p_[1] - 1] + ' ' + p_[0].slice(2); };
+        const cellOf = X => (trs(tb).find(r => r[0].replace(/<[^>]+>/g, '').replace(/^(Today|Yesterday) · /, '').split(' ≈')[0].trim() === lab2(X)) || [])[5];
+        out.abe_hand = [bTile(hb), kB(hb), U.beAvg(hr8, T, { newest: SD }), colDays.sort((a, b) => a - b), both(hr8), kL(hb),
+          ['2025-01-09', '2025-01-10', '2025-01-11', '2025-12-30'].map(cellOf)];
         // the same day in every grain × mode, "Show all", and in the ₹ views (₹ as billed, ₹ at today's rate)
         const b0 = [bTile(hb), kB(hb)], inv = [];
         for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) for (const sh of [60, 1e9]) {
@@ -2004,17 +2051,58 @@ async function moreKeepAll(dc, packs) {
         const hbi = seen(U.cohCard(fh)); U.lifeView([], null, {}); const hbu = U.cohCard(fh);
         ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
         out.abe_inv = [inv, [bTile(hbi), kB(hbi)], [bTile(hbu), kB(hbu)], kT(hbi)[0][1]];
-        // too few reached (4: '—', said), exactly 5 (shown), exactly half the median (kept: "before" half only), an odd
-        // count's median, nothing reached, nothing left out
-        const cases = [beSet([10, 20, 30, 40]).concat([1, 2, 3].map(i => br(day('2025-02-01', i), 10, null, 4))), beSet([10, 20, 30, 40, 50]),
-          beSet([20, 20, 20, 20, 10]), beSet([1, 2, 30, 40, 50]), [1, 2].map(i => br(day('2025-02-01', i), 10, null, 4)), beSet([60, 61, 62, 63, 64, 65])];
-        out.abe_cases = cases.map(rs => { const h = seen(U.cohCard(bf(rs))); return [bTile(h), kB(h), U.beAvg(rs, T)]; });
-        // a big app: 9,999 ads days (4-digit counts, a 3-digit median) — the line in its two lines, the reason in its two
-        const big = []; for (let i = 0; i < 9999; i++) big.push(br(day('2000-01-01', i), 10, i < 4000 ? null : i < 4300 ? [2, true] : [100 + (i % 50), false], 20));
-        const hg9 = seen(U.cohCard(bf(big)));
-        out.abe_big = [bTile(hg9), kB(hg9), kB(hg9).length];
+        // the cases, each [tile, line, beAvg, the independent recount]:
+        const L6 = [2, 3, 4, 5, 8, 10];
+        const cases = {
+          // too few kept (3 after the fast one; 6 old days in all): '—' "Kam din"; exactly 5 kept: shown; a day at exactly half
+          // the median stays (only "before" half is out); an odd count's median; nothing left out (62.5 → D63)
+          few: beSet([10, 20, 30, 40]).concat([1, 2, 3].map(i => br(day('2025-02-01', i), 10, null, 4))),
+          five: beSet([10, 20, 30, 40, 50, 60]), half: beSet([20, 20, 20, 20, 10]), odd: beSet([1, 2, 30, 40, 50, 60, 70]), all: beSet([60, 61, 62, 63, 64, 65]),
+          // nothing broke even: no median ('—', how many known, the oldest's age — never "Too early" for old days)
+          none: [1, 2].map(i => br(day('2025-02-01', i), 10, null, 4)),
+          // reviewer: lucky fast days only — 6 of 40 / 6 of 365 broke even (day 2 … 10), the rest at 40% back: '—'
+          lucky40: Array.from({ length: 40 }, (_, i) => br(day('2025-11-22', i), 10, i < 6 ? [L6[i], true] : null, i < 6 ? 20 : 4)),
+          lucky365: Array.from({ length: 365 }, (_, i) => br(day('2025-01-01', i), 10, i < 6 ? [L6[i], true] : null, i < 6 ? 20 : 4)),
+          // 365 old days, 4 broke even: '—' with the counts (not "Too early")
+          four365: Array.from({ length: 365 }, (_, i) => br(day('2024-01-01', i), 10, i < 4 ? [L6[i], true] : null, i < 4 ? 20 : 4)),
+          // every day "≤ day 90": "≤ D90", said
+          le90: Array.from({ length: 30 }, (_, i) => br(day('2025-01-01', i), 10, [90, false], 20)),
+          // 10 real ads days ($50, ≤ day 60) + 12 days of a few cents (organic revenue, day 0): the cents days out, counted
+          stray: Array.from({ length: 10 }, (_, i) => br(day('2025-01-01', i), 50, [60, false], 60)).concat(Array.from({ length: 12 }, (_, i) => br(day('2025-03-01', i), 0.05, [0, true], 1))),
+          // young days: 10 old days broke even on day 100; 10 days 70 days old — 5 broke even on day 60, 5 not yet. Only the
+          // old ones in the avg (D100; the young: counted) — the reached young ones alone would pull it to D87
+          young: Array.from({ length: 10 }, (_, i) => br(day('2025-01-01', i), 10, [100, true], 20)).concat(Array.from({ length: 10 }, (_, i) => br(day('2025-10-14', i), 10, i < 5 ? [60, true] : null, i < 5 ? 20 : 4))),
+          // every day younger than 2 × the median: too early
+          early: Array.from({ length: 10 }, (_, i) => br(day('2025-12-05', i), 10, [15, true], 20)),
+          // a file whose min_spend is $20: its own floor
+          floor20: [10, 20, 30, 40, 50, 60].map((b, i) => br(day('2025-01-01', i), 25, [b, true], 50)).concat([br('2025-02-01', 15, [1, true], 20)]),
+        };
+        out.abe_cases = {};
+        // (floor20 is another file — its own $20 in the fixed note: not one of this file's states, so not in the one-height set)
+        for (const [k, rs] of Object.entries(cases)) { const ms = k === 'floor20' ? 20 : 5, h0 = U.cohCard(bf(rs, { min_spend: ms })), h = ms === 5 ? seen(h0) : h0;
+          out.abe_cases[k] = [bTile(h), kB(h), U.beAvg(rs, T, { newest: SD, minsp: ms }), both(rs, ms)]; }
+        // a big app: 9,999 install days — every count with 4 digits where it can have them (the median's 2 × makes the young
+        // ones 3 digits): the line in its fixed lines, the reason in its two
+        const big = [], NB = '2027-05-17';
+        for (let i = 0; i < 9999; i++) { const X = day('2000-01-01', i), age = Math.round((Date.parse(NB) - Date.parse(X)) / 864e5);
+          big.push(i < 1500 ? br(X, 1, null, 4, NB) : i < 2700 ? br(X, 10, [2, true], 20, NB) : i < 4700 ? br(X, 10, null, 4, NB) : i < 4799 ? br(X, 10, null, 12, NB)
+            : i < 4808 ? br(X, 10, null, null) : age < 200 ? br(X, 10, null, 4, NB) : br(X, 10, [100 + (i % 50), false], 20, NB)); }
+        const hg9 = seen(U.cohCard(Object.assign(bf(big), { newest: NB })));
+        out.abe_big = [bTile(hg9), kB(hg9), beText(beRef(big, NB))];
+        // the two '—' lines at their longest: too few old days that broke even (every other count 3–4 digits), and no median
+        // (less than half known to have broken even; the oldest not-even day 4 digits old)
+        const few = [], nom = [];
+        for (let i = 0; i < 4262; i++) { const X = day('2010-01-01', i);
+          few.push(i < 1500 ? br(X, 1, null, 4, NB) : i < 2850 ? br(X, 10, [2, true], 20, NB) : i < 4150 ? br(X, 10, null, 4, NB) : i < 4249 ? br(X, 10, null, 12, NB)
+            : i < 4258 ? br(X, 10, null, null) : br(X, 10, [100, true], 20, NB)); }
+        for (let a = 199; a >= 0; a--) few.push(br(day(NB, -a), 10, a >= 100 ? [100, true] : null, a >= 100 ? 20 : 4, NB));
+        for (let i = 0; i < 5099; i++) { const X = day('2010-01-01', i);
+          nom.push(i < 1500 ? br(X, 1, null, 4, NB) : i < 3500 ? br(X, 10, null, 4, NB) : i < 4500 ? br(X, 10, null, 12, NB) : i < 4599 ? br(X, 10, null, null)
+            : br(X, 10, [60, true], 20, NB)); }
+        const hfw = seen(U.cohCard(Object.assign(bf(few), { newest: NB }))), hnm = seen(U.cohCard(Object.assign(bf(nom), { newest: NB })));
+        out.abe_long = [[bTile(hfw), kB(hfw), beText(beRef(few, NB))], [bTile(hnm), kB(hnm), beText(beRef(nom, NB))]];
         // the states with no avg: no ads (spend 0 everywhere), no spend data at all, nothing — and the strip's own cases
-        out.abe_none = [bTile(hg), kB(hg), bTile(hq), kB(hq), bTile(hn), kB(hn), bTile(hall), kB(hall)];
+        out.abe_none = [bTile(hg), kB(hg), bTile(hq), kB(hq), bTile(hn), kB(hn), bTile(hall), kB(hall), beText(beRef(appFile().rows, '2026-10-13'))];
         // 🌍 a country: the picked country's own days ('…' while its rows load), All again its own; Unknown / Not split '—'
         const PBE = 'roi_ffffffffffff_c00.json.gz';
         PACKS[PBE] = { v: 1, b: 'b0b0b0b0b0b0', key: 'ffffffffffff', ix: 0, c: { AA: beSet([10, 12, 14, 16, 18, 2]).concat([br('2025-01-07', 3, null, 1)]) } };
@@ -2022,10 +2110,10 @@ async function moreKeepAll(dc, packs) {
         U.setCTY('AA'); const hcl = seen(U.cohCard(fcb)); await flush(); const hca = seen(U.cohCard(fcb));
         ctx.curView = () => 'INR'; ctx.cfx = () => 88; ctx.csym = () => '₹'; U.lifeView([], null, { ccy: 'INR' });
         const hci = seen(U.cohCard(fcb)); U.lifeView([], null, {}); ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
-        const civ = []; for (const g of ['week', 'month']) for (const m of ['rev', 'delta']) { U.set('GRAIN', g); U.set('MET', m); civ.push(JSON.stringify(bTile(U.cohCard(fcb))) === JSON.stringify(bTile(hca))); }
+        const civ = []; for (const g of ['week', 'month']) for (const m of ['rev', 'delta']) { U.set('GRAIN', g); U.set('MET', m); civ.push(JSON.stringify([bTile(U.cohCard(fcb)), kB(U.cohCard(fcb))]) === JSON.stringify([bTile(hca), kB(hca)])); }
         U.set('GRAIN', 'day'); U.set('MET', 'roas');
         U.setCTY(''); const hcA = seen(U.cohCard(fcb));
-        out.abe_cty = [bTile(hcl), kOf(hcl).includes('aria-busy="true"'), bTile(hca), kB(hca), [bTile(hci), kB(hci)], civ, bTile(hcA), kB(hcA), rcBE([10, 12, 14, 16, 18, 2])];
+        out.abe_cty = [bTile(hcl), kOf(hcl).includes('aria-busy="true"'), bTile(hca), kB(hca), [bTile(hci), kB(hci)], civ, bTile(hcA), kB(hcA), both(PACKS[PBE].c.AA)];
         out.abe_cty_sp = [bTile(kn), kB(kn), bTile(kx), kB(kx), bTile(ke), kB(ke), bTile(kq), bTile(kl), kB(kl)];
       }
       // one height in every state: the same box (one grid, seven tiles, labels, the two lines' boxes, the note)

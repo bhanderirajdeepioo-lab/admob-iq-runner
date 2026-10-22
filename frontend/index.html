@@ -2493,10 +2493,11 @@ body.as-lock[data-screen="active"]{overflow:hidden}
    the three money tiles a row (each 4 of 12), then ROAS · Avg breakeven · Installs · Install days (each 3 of 12); from
    1600 px all 7 in one row. A value of 14+ characters (₹ crore with a sign) a size smaller in the same line box: printed
    in full, the height unchanged; the two lines under the tiles (Avg breakeven's left-out days, then the days with no
-   spend data): two fixed lines each, empty or not */
+   spend data): a fixed number of lines each, empty or not — Avg breakeven's 4 up to 430 px, 3 to 899, 2 from 900 (its
+   longest, 4-digit counts, measured in Chrome), the spend line 2 */
 .roi-cks{margin:0 0 12px}.roi-ckg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.roi-cka{grid-column:span 2}
 .roi-ckm{height:3em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
-.roi-ckb{height:3em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.roi-ckb{height:6em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4}@media (min-width:431px){.roi-ckb{height:4.5em;-webkit-line-clamp:3}}@media (min-width:900px){.roi-ckb{height:3em;-webkit-line-clamp:2}}
 .roi-ck{padding:9px 11px}.roi-ck .roi-kl,.roi-ck .roi-kv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.roi-ck .roi-kv{font-size:17px}.roi-ck .roi-ckw{font-size:14px}
 .roi-ck .roi-ks{height:2.8em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 @media (min-width:900px){.roi-ckg{grid-template-columns:repeat(12,minmax(0,1fr))}.roi-ckg>.roi-ck{grid-column:span 3}.roi-ckg>.roi-ck:nth-child(-n+3){grid-column:span 4}}
@@ -7355,20 +7356,61 @@ function ccSrc(d){ const cd=cdOf(d);
 // 🎯 Avg breakeven (owner, 22 Oct 2026: "average breakeven day ka KPI add kar do — jo country wise filter pe vo country ka
 // milega … koi koi din ese ho jate he jo us din ka BE 2–5–10 din hota he — usko avg BE me exclude karna he taki muje actual
 // BE mile … manlo 100 BE day he to 50% se kam din vale date ko count hi nahi karna"): over EVERY install day of the table's
-// source (All countries or the picked country's rows; grain / mode / "Show more" never change it) with ads — spend > 0 and
-// known —, each day's own breakeven exactly as the Day table's Breakeven column prints it (beDay: the build's [day, exact?],
-// "≤" = that column's day; only the day is read here — its faded flag needs the columns on screen). Spend and revenue are
-// both USD there, so the ₹ / $ view never moves a day. reached = the days that broke even; typical = their median; a day
-// that broke even before BE_FAST_SHARE × typical (one lucky day: "day 1 achanak achha ROI") is left out and counted; Avg
-// breakeven = the mean of the rest. Fewer than BE_MIN_N reached: too early ('—'). Days not even yet: counted, never a day.
-// → {ads, nr, med, fast, kept, avg, wait} (med / avg null when nothing reached)
-const BE_FAST_SHARE=0.5, BE_MIN_N=5;
-function beAvg(rows,T){ const be=[]; let ads=0;
-  for(const r of rows||[]){ const sp=r[R.sp]; if(!(ok(sp)&&sp>0)) continue; ads++;
-    const b=beDay(r,[],T); if(b&&ok(b[0])) be.push(+b[0]); }
-  be.sort((a,b)=>a-b); const nr=be.length, h=nr>>1, med=nr?(nr&1?be[h]:(be[h-1]+be[h])/2):null;
-  const keep=nr?be.filter(x=>!(x<BE_FAST_SHARE*med)):[], avg=keep.length?keep.reduce((a,x)=>a+x,0)/keep.length:null;
-  return {ads,nr,med,fast:nr-keep.length,kept:keep.length,avg,wait:ads-nr}; }
+// source (All countries or the picked country's rows; grain / mode / "Show more" never change it) with ads — spend known and
+// ≥ the file's min_spend (the Status rule's $5: a day of a few cents of stray clicks + organic revenue breaks even on D0;
+// such days are counted, never averaged) —, each day's own breakeven exactly as the Day table's Breakeven column prints it
+// (beDay: the build's [day, exact?]; "≤" = that column's day, the true day on it or before; only the day is read here — its
+// faded flag needs the columns on screen). Spend and revenue are both USD there, so the ₹ / $ view never moves a day.
+//  * A day with no breakeven day is one of three, each counted on its own (never "not even" when it is not): its so far not
+//    read (unknown), its so far ≥ spend with no day pinned (the column's green "120% back": even, its day unknown), or its
+//    so far < spend (not even yet, at the age its so far was read to).
+//  * typical = the median breakeven day over ALL these days (Kaplan–Meier: a day not even yet counts as "later than its age"
+//    — never as a day, never dropped —, a "100%+ back" day as later than its last measured age below spend; an unread day
+//    is out): the day by which half the ads days broke even. None (less than half known to have broken even at any age):
+//    '—' — a few lucky fast days can never set it.
+//  * fast = broke even before BE_FAST_SHARE × typical (one lucky day: "day 1 achanak achha ROI") → left out, counted.
+//  * the average = only the days at least BE_AGE_X × typical old (its so far read that far): a younger day is in only if it
+//    was fast, its slower siblings not yet — counted as young instead. Avg breakeven = the mean of the old days that broke
+//    even (fast out); "≤ D<n>" when any of them is a "≤" day (a mean of upper bounds is one). Fewer than BE_MIN_N: '—'.
+// → {ads, lo, ms, seen, nr, med, mq ('≤' when the median sits on a "≤" day), H, cut, fast, young, mat, kept, inexact, avg,
+//    wait, pend, unread, oldest}; med / avg null when there is none (then wait / pend / unread are over every age)
+const BE_FAST_SHARE=0.5, BE_MIN_N=5, BE_AGE_X=2;
+const isoD=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s);
+// the last age a row's revenue was measured below its spend (its breakeven is after it): the exact days, the checkpoints, the
+// 30-day columns; -1 = none
+function beBelow(r,T,sp){ let a=-1; const dd=r[R.d], t=r[R.t], m=r[R.m];
+  if(Array.isArray(dd)) dd.forEach((v,L)=>{ if(ok(v)&&v<sp&&L>a) a=L; });
+  if(Array.isArray(t)) T.forEach((x,j)=>{ if(ok(t[j])&&t[j]<sp&&x>a) a=x; });
+  if(Array.isArray(m)) m.forEach((v,k)=>{ if(ok(v)&&v<sp&&30*(k+2)>a) a=30*(k+2); });
+  return a; }
+// Kaplan–Meier median of [age, broke even?] (a day not even yet is "later than its age"): [t1, t2] (t2 ≠ t1 only where the
+// curve sits exactly on half: the midpoint to the next breakeven, the ordinary median when nothing is censored) or null
+function beKM(ev){ ev.sort((a,b)=>a[0]-b[0]||b[1]-a[1]); const n=ev.length; let S=1, i=0;
+  while(i<n){ const t=ev[i][0]; let e=0, j=i; while(j<n&&ev[j][0]===t){ if(ev[j][1]) e++; j++; }
+    if(e){ S*=1-e/(n-i); if(S<0.5+1e-9){ if(S>0.5-1e-9) for(let k=j;k<n;k++) if(ev[k][1]) return [t,ev[k][0]]; return [t,t]; } }
+    i=j; }
+  return null; }
+function beAvg(rows,T,o){ o=o||{}; const ms=ok(o.minsp)&&o.minsp>0?+o.minsp:5, nw=isoD(o.newest)?o.newest:null;
+  const z={ads:0,lo:0,ms,seen:0,nr:0,med:null,mq:'',H:null,cut:null,fast:0,young:0,mat:0,kept:0,inexact:0,avg:null,wait:0,pend:0,unread:0,oldest:null};
+  const ev=[], rs=[];
+  for(const r of rows||[]){ const sp=r[R.sp]; if(!(ok(sp)&&sp>0)) continue; if(sp<ms){ z.lo++; continue; } z.ads++;
+    const sd=isoD(r[R.sd])&&r[R.sd]>=r[R.X]?r[R.sd]:nw, age=sd&&isoD(r[R.X])?dDiff(r[R.X],sd):null, b=beDay(r,[],T), so=r[R.s];
+    let k='u';
+    if(b&&ok(b[0])){ k='r'; z.nr++; ev.push([+b[0],1,!b[1]]); }
+    else if(ok(so)&&age!=null){ if(so>=sp){ k='p'; ev.push([beBelow(r,T,sp),0]); } else { k='w'; ev.push([age,0]); } }
+    rs.push([k,b,age]); }
+  z.seen=ev.length; const km=beKM(ev);
+  if(!km){ for(const [k,,age] of rs){ if(k==='w'){ z.wait++; if(z.oldest==null||age>z.oldest) z.oldest=age; } else if(k==='p') z.pend++; else if(k==='u') z.unread++; }
+    return z; }
+  const med=(km[0]+km[1])/2; z.med=med; z.mq=ev.some(x=>x[1]&&x[2]&&(x[0]===km[0]||x[0]===km[1]))?'≤':'';
+  z.H=Math.ceil(BE_AGE_X*med); z.cut=BE_FAST_SHARE*med; let sum=0;
+  for(const [k,b,age] of rs){
+    if(k==='r'&&b[0]<z.cut){ z.fast++; continue; }
+    if(age==null){ z.unread++; continue; }                // no date its so far was read to: not known
+    if(age<z.H){ z.young++; continue; }
+    z.mat++;
+    if(k==='r'){ z.kept++; sum+=+b[0]; if(!b[1]) z.inexact++; } else if(k==='p') z.pend++; else if(k==='w') z.wait++; else z.unread++; }
+  z.avg=z.kept?sum/z.kept:null; return z; }
 // 🧮 the totals strip (owner, 21 Oct 2026: "kpi add karo yaha pe ki kitna total spend gaya he kitna total revenue aaya he —
 // all country and jo country select kru uska kpi change ho jayega — total hi aayega"; then, shown two groups: "poori history
 // vala hi sahi he — spend pata wale din nikal do — profit loss total puri history pe hi hona chaiye"): ONE group over EVERY
@@ -7382,12 +7424,13 @@ function beAvg(rows,T){ const be=[]; let ads=0;
 //    exact to the last digit; a spend > 0 never printed as 0), ROAS = Total revenue ÷ Total spend (blended, from the sums,
 //    not the rounded tiles); both '—' unless Total spend > 0 (no ads: spend 0; under a cent: ≈ 0).
 //  * Installs (GA4, ads + organic), Install days (first – last).
-//  * 🎯 Avg breakeven (22 Oct 2026, beAvg above): "D<n>", its median + how many days it averages; the days left out (a
-//    lucky fast day, not even yet) said in their own line under the tiles.
+//  * 🎯 Avg breakeven (22 Oct 2026, beAvg above): "D<n>" ("≤ D<n>" over any "≤" day), its median + how many days it
+//    averages; the days left out — lucky fast ones, young ones, not even, 100%+ back with no day, not read, under the
+//    spend floor — each with its count in their own line under the tiles.
 // Not split: spend only; Unknown country: no Google Ads spend ('—'), its revenue; '…' while a country's rows load, '—' when
 // there are none. One height in every state (7 tiles, one-line values — 14+ characters a size smaller, never cut —, two-
-// line subs, the two lines under the tiles two fixed lines each, a note that never changes): a pick never moves the chips
-// under it.
+// line subs, the two lines under the tiles a fixed number of lines each, a note that never changes): a pick never moves
+// the chips under it.
 function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[]), cc=cs&&cs.rows?cs.cc:'', xx=cc==='XX', un=cc==='--', ld=!rows&&!!(cs&&cs.ld);
   const inr=curView()==='INR', who=cc?'country':'app', sq=[];
   let sp=0, nsp=0, rv=0, nrv=0, n=0, nn=0, lo='', hi='';
@@ -7416,14 +7459,22 @@ function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[
   const why=k=>xx?'Not split: sirf spend':!rows||has?(k?'revenue ÷ spend · blended':'revenue − spend'):!hs?`spend nahi — ${k?'ROAS':'profit / loss'} nahi`
     :!(sp>0)?`spend 0 — ${k?'ROAS':'profit / loss'} nahi`:tn?`spend ≈ 0 — ${k?'ROAS':'profit / loss'} nahi`:'kamai abhi nahi padhi';
   const ln=rows&&M?`${N(M)} din ka spend data nahi (${rg}) — unka spend jod me nahi${xx?'':', revenue hai'}.`:'';
-  // 🎯 Avg breakeven: '—' with its reason (Not split / Unknown country / no ads day / too early), else D<n> + its median;
-  // its line: what it leaves out, each with its count (≤ 97 characters up to 9,999 days: two lines at 360 px)
-  const ba=rows&&rows.length&&!xx&&!un?beAvg(rows,d.T):null, bok=!!ba&&ba.nr>=BE_MIN_N, bm=bok?Math.round(ba.med):0, fs=Math.round(BE_FAST_SHARE*100);
-  const bs=xx?'Not split: koi kamai nahi':un?'Google Ads me ye country nahi':!ba?'ads din ke Breakeven ka avg':!ba.ads?(nsp?'koi ads din nahi — BE nahi':'spend nahi — BE nahi')
-    :!bok?(ba.nr?`Too early · ${N(ba.nr)} din hi BE hue`:'Too early · koi din BE nahi hua'):`median D${bm} · ${N(ba.kept)} din ka avg`;
-  const bl=!ba||!ba.ads?'':!bok?`Avg BE: ${N(ba.nr)} din BE hue, ${N(ba.wait)} abhi nahi — avg ke liye kam se kam ${BE_MIN_N} chahiye.`
-    :ba.fast||ba.wait?`Avg BE me nahi: ${[ba.fast?`${N(ba.fast)} din median D${bm} ke ${fs}% se pehle BE (bahut jaldi)`:'',ba.wait?`${N(ba.wait)} din abhi BE nahi hue`:''].filter(Boolean).join('; ')}.`
-    :`Avg BE me sab ${N(ba.nr)} BE wale ads din — koi median ke ${fs}% se pehle nahi.`;
+  // 🎯 Avg breakeven: '—' with its reason (Not split / Unknown country / no ads day / no median / too few old days), else
+  // "D<n>" ("≤ D<n>" over any "≤" day) + its median; its line: what it leaves out, each with its count (≤ 182 characters
+  // with 4-digit counts: 4 lines up to 430 px, 3 to 899, 2 from 900 — its fixed box, measured in Chrome)
+  const ms=d&&d.consts&&ok(d.consts.min_spend)&&d.consts.min_spend>0?+d.consts.min_spend:5, m$='$'+ms;
+  const ba=rows&&rows.length&&!xx&&!un?beAvg(rows,d.T,{newest:d.newest,minsp:ms}):null, bmd=!!ba&&ba.med!=null, bok=bmd&&ba.kept>=BE_MIN_N;
+  const up=(v,q)=>q?Math.ceil(v-1e-9):Math.round(v), bm=bmd?`median ${ba.mq}D${up(ba.med,ba.mq)}`:'';
+  const bs=xx?'Not split: koi kamai nahi':un?'Google Ads me ye country nahi':!ba?'ads din ke Breakeven ka avg'
+    :!ba.ads?(ba.lo?`${N(ba.lo)} din, sab spend &lt;${m$}`:nsp?'koi ads din nahi — BE nahi':'spend nahi — BE nahi')
+    :!bmd?(ba.seen?`BE din pata: ${N(ba.nr)} / ${N(ba.seen)}`:'kamai abhi nahi padhi'):!bok?`${ba.mat<BE_MIN_N?'Too early':'Kam din'} · ${bm}`:`${bm} · ${N(ba.kept)} din ka avg`;
+  const bi=!ba?'':[ba.fast?`${N(ba.fast)} jaldi BE (&lt;D${Math.ceil(ba.cut-1e-9)})`:'',ba.young?`${N(ba.young)} naye (&lt;${N(ba.H)} din)`:'',
+    ba.wait?`${N(ba.wait)} BE nahi${bmd?'':` (sabse purana ${N(ba.oldest)} din)`}`:'',ba.pend?`${N(ba.pend)} 100%+ back`:'',
+    ba.unread?`${N(ba.unread)} kamai nahi padhi`:'',ba.lo?`${N(ba.lo)} spend &lt;${m$}`:''].filter(Boolean).join(' · ');
+  const bl=!ba?'':!ba.ads?(ba.lo?`Avg BE sirf ${m$}+ spend wale din ka (Status ki tarah) — yahan ${N(ba.lo)} din, sab ${m$} se kam.`:'')
+    :!bmd?`Median nahi — aadhe se kam din ka BE din pata: ${bi}.`
+    :!bok?`Avg ke liye ${N(ba.H)}+ din purane ${BE_MIN_N} BE din chahiye, abhi ${N(ba.kept)}.${bi?` Avg me nahi: ${bi}.`:''}`
+    :[ba.inexact?`${N(ba.inexact)} din "≤ day" wale`:'',bi?`Avg me nahi: ${bi}`:`Sab ${N(ba.kept)} din gine`].filter(Boolean).join('. ')+'.';
   return `<div class="roi-cks" role="group" aria-label="Totals"${ld?' aria-busy="true"':''}><div class="roi-ckg">`
     +t('Total spend',hs?MD(S):no,un?'Google Ads me ye country nahi':rows&&M?`${N(M)} din ka spend data nahi`:xx?'Not split · Google Ads':hs&&!(sp>0)?`Is ${who} me koi ads din nahi`:'Google Ads')
     // the ₹ view: revenue at today's rate (the spend as billed) said whether or not some days are unread (≤ 35 characters
@@ -7432,10 +7483,10 @@ function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[
       :rows&&K?`${N(K)} din ki kamai abhi nahi padhi`:'so far · AdMob-matched')
     +t('Profit / loss',has?`<span class="${net>=0?'roi-up':'roi-dn'}">${MD(net,true)}</span>`:no,why(0),has?(net>=0?'roi-kg':'roi-kb'):'')
     +t('ROAS',has?`<span class="${roasCls(ro)}">${P(ro)}</span>`:no,why(1))
-    +t('Avg breakeven',bok?`D${Math.round(ba.avg)}`:no,bs,'roi-cka')
+    +t('Avg breakeven',bok?`${ba.inexact?'≤ ':''}D${up(ba.avg,ba.inexact)}`:no,bs,'roi-cka')
     +t('Installs',nn&&!xx?N(n):no,xx?'Not split: installs nahi':'GA4 · ads + organic')
     +t('Install days',rows&&!xx?N(D):no,xx?'Not split: install din nahi':rows&&D?`${E(fdy(lo))} – ${E(fdy(hi))}`:'')
-    +`</div><p class="roi-note roi-ckb">${bl}</p><p class="roi-note roi-ckm">${ln}</p><p class="roi-note roi-ckn">Poori history ka jod — Profit / loss = Total revenue − Total spend, ROAS = Total revenue ÷ Total spend; country chuno to sirf us country ka. Avg breakeven = ads wale har install din ka Breakeven din (≤ = us column ka din) ka avg — median ke ${Math.round(BE_FAST_SHARE*100)}% se pehle BE wale din (achanak jaldi) avg me nahi.</p></div>`; }
+    +`</div><p class="roi-note roi-ckb">${bl}</p><p class="roi-note roi-ckm">${ln}</p><p class="roi-note roi-ckn">Poori history ka jod — Profit / loss = Total revenue − Total spend, ROAS = Total revenue ÷ Total spend; country chuno to sirf us country ka. Avg breakeven = ${m$}+ spend wale install din ke Breakeven din ka avg (≤ day = us din ya pehle; koi ≤ ho to avg bhi ≤). Median = jis din tak aadhe din BE hue (naya din apni umar tak gina); median ke ${Math.round(BE_FAST_SHARE*100)}% se pehle BE wale (achanak jaldi) aur median ke ${BE_AGE_X} guna se naye din avg me nahi.</p></div>`; }
 function cohCard(d){ const cs=ccSrc(d);
   if(!cs) return `<div class="roi-card"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${(()=>{ const C=cols(d,d.rows||[]); return C.length?C[C.length-1].a:365; })()} tak</h3><span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohKpi(d,null)}${cohortTable(d)}</div>`;
   const rs=cs.rows||d.rows||[], C=cols(cs.rows&&cs.cc!=='XX'?Object.assign({},d,{rows:rs}):d,rs), on=!!cs.cc&&!cs.miss;
