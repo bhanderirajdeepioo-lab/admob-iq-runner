@@ -7124,9 +7124,12 @@ function fmtCell(x,met){ return met==='roas'?P(x):met==='ltv'?MP(x):M(x); }
 // ~100% by definition) and a column past D30 that is not a 30-day column (T's checkpoints: no users source exists).
 function RP(v){ if(!ok(v)) return '—'; const p=v*100; return (p===0?'0':p<0.1?'<0.1':p<9.95?p.toFixed(1):String(Math.round(p)))+'%'; }
 const retNo=c=>c.a===0||(c.a>30&&c.mi==null);                     // a column that never has a retention line
+let RET_NEW='';                                                   // the file's newest day (today): a day this new is still being counted
+// (its users read part-way or not yet: 0 then is "not read", never 0 %) — no retention for it ('—')
+const retLate=(r,c)=>{ try{ if(!RET_NEW) return false; const L=c.mi!=null?(c.a||0):c.a, x=new Date(r[R.X]+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+L); return x.toISOString().slice(0,10)>=RET_NEW; }catch(e){ return false; } };
 // one install day at a column: [users or null (not measured), installs, final?] — null: nothing to read there (no
 // installs, no u / mu array); final? = that day final AND read (an index past the array is still to come)
-function retAt(r,c){ const n=+r[R.n]; if(!(n>0)||retNo(c)) return null; let a, i, f;
+function retAt(r,c){ const n=+r[R.n]; if(!(n>0)||retNo(c)||retLate(r,c)) return null; let a, i, f;
   if(c.mi!=null){ a=r[R.mu]; i=c.mi; f=c.mi<(+r[R.mf]||0); }
   else { a=r[R.u]; i=c.a; f=c.a<(+r[R.df]||0); }
   if(!Array.isArray(a)) return null;
@@ -7164,6 +7167,7 @@ function beTd(be,sp,so){ if(be){ const nf=be[2]===false; return `<td class="roi-
   return sp&&ok(so)?`<td class="${so/sp>=1?'roi-g':'roi-na'}">${P(so/sp)} back</td>`:'<td class="roi-na">—</td>'; }
 function cohortTable(d,src){ if(src&&src.msg) return `<div class="roi-ctl">${src.ctl||''}${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div><div class="roi-tw roi-ccm">${src.msg}</div>`;
   const d0=d, xx=!!(src&&src.cc==='XX');                         // 🧩 Not split: the columns of the app's own rows, '—' cells
+  RET_NEW=String(d0.newest||'');
   if(src&&src.rows) d=Object.assign({},d,{rows:src.rows});      // 🌍 one country's rows: the same table, the same code
   const T=d.T, groups=groupRows(d), shown=groups.slice(0,SHOW), C=cols(xx?d0:d,shown.flatMap(g=>g.rows));
   const head=`<tr><th>Install ${GRAIN==='day'?'date':GRAIN}</th><th>Status</th><th>Installs</th><th>Spend</th><th>CPI</th><th>Breakeven</th>${C.map(c=>`<th>${c.lab}</th>`).join('')}<th>So far</th></tr>`;

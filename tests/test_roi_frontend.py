@@ -221,7 +221,7 @@ def test_forecast_view(out):
 # same day (review fixes): a "·" cell keeps its line ("—" when not measured) like every other mode, T's checkpoint columns
 # past D30 have no line (no users source), the week / month line is final only once every day with users is, and the
 # legend says so — GOLDEN_RET_CUT unchanged (nothing outside the lines and the legend moved).
-GOLDEN_DEFAULT = "82ef322f5c87ec9020306fafeb790f5e13a7a268e0cbd78bcb3502451fc669e5"
+GOLDEN_DEFAULT = "ccdfb0c09129b3f94c3ccbd51c736db73ae099662cac105189f3ded81687225e"
 GOLDEN_RET_CUT = "a58589ba371a9cfb3b64cafbb2f169cf2ca28182c5ade16f343d486a51b7cfbe"
 GOLDEN_DEFAULT_NOK = "3072f1658c636ddad28ba3b475175a25e9e8438973ce08bcde75d2d5bdca12d7"
 GOLDEN_DEFAULT_NOKPI = "98ae0afdcb42a1e9d258ef5fe660fba126dad93f9b7b6c83e4f801eca78514eb"
@@ -799,7 +799,7 @@ def test_retention_cells(out):
     assert out["rt_day"] == ["", _rt("40%", "D1 retention: 80 of 200 users"), _rt("4.5%", "D2 retention: 9 of 200 users"),
                              _rt("0%", "D3 retention: 0 of 200 users"), _rt(None), _rt("20%", "D5 retention: 40 of 200 users"),
                              _rt("20%", "D10 retention: 40 of 200 users · not final"),
-                             _rt("20%", "D12 retention: 40 of 200 users · not final")]
+                             _rt(None)]                 # D12 lands on the file's newest day (today, still counted): —
     assert out["rt_day_td"] == ["roi-g roi-nf", '<td class="roi-na">·</td>', False]   # past what was read: · alone
     # no u at all → —; no installs (n 0) → —, never 0%; under 0.1% said so (escaped), 30,000 of 100,000 → 30%
     assert out["rt_day_none"] == [_rt(None), _rt(None), _rt("&lt;0.1%", "D1 retention: 50 of 100,000 users"),
@@ -807,6 +807,8 @@ def test_retention_cells(out):
     assert out["rt_day_zero"]
     # users read only up to D1 (null past the read edge, every day final): "—" there, never 0%
     assert out["rt_day_pad"] == [_rt("25%", "D1 retention: 50 of 200 users"), _rt(None), _rt(None)]
+    # the file's newest day (today) is still being counted: a column landing on it shows —, never 0 % (its users not read yet)
+    assert out["rt_today"] == [_rt(None), _rt("20%", "D1 retention: 20 of 100 users"), _rt(None)]
     # every mode (ROAS % / Revenue / Per install / Delta): the same lines; the main values never depend on u
     assert out["rt_modes"] == [[True, True, True]] * 4
     # … also where the mode has no number ("·": ROAS % with no spend, Per install with no installs): "—" when not measured,
@@ -821,7 +823,8 @@ def test_retention_cells(out):
     # third still to come; the cell faded too, the line with it); none final yet → over those seen, faded on a "·" cell;
     # nothing: · alone
     nf = "D3 retention: 60 of 200 users · 2 of 3 install days (the final ones) · not final"
-    d7 = _rt("15%", "D7 retention: 30 of 200 users · 2 of 3 install days · not final", " roi-rtnf")
+    # (the third day's D7 lands on the file's newest day — still counted, left out: 1 of 3)
+    d7 = _rt("10%", "D7 retention: 10 of 100 users · 1 of 3 install days · not final", " roi-rtnf")
     assert out["rt_week"] == [_rt("25%", "D1 retention: 100 of 400 users · 2 of 3 install days"),
                               _rt("15%", "D3 retention: 60 of 400 users · 2 of 3 install days"),
                               _rt("33%", "D1 retention: 100 of 300 users · 3 of 3 install days"), _rt("30%", nf),

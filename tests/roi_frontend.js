@@ -1342,6 +1342,11 @@ async function moreKeepAll(dc, packs) {
       const dpad = { v: 1, T, lags: 31, newest: '2026-10-13', rows: [rr('2026-09-01', 200, seq(31, L => L + 1), 31, [200, 50].concat(seq(29, () => null)))] };
       const tpad = U.cohortTable(dpad);
       out.rt_day_pad = ['D1', 'D2', 'D30'].map(c => rtOf(cellOf(tpad, '1 Sep 26', c)));
+      // the file's newest day (today) is still being counted: a column landing on it has no retention ('—'), never 0 %
+      const dnew = { v: 1, T, lags: 31, newest: '2026-10-13', rows: [rr('2026-10-12', 100, seq(2, L => L + 1), 1, [100, 0]),
+        rr('2026-10-11', 100, seq(3, L => L + 1), 2, [100, 20, 0])] };
+      const tnew = U.cohortTable(dnew);
+      out.rt_today = [rtOf(cellOf(tnew, '12 Oct 26', 'D1')), rtOf(cellOf(tnew, '11 Oct 26', 'D1')), rtOf(cellOf(tnew, '11 Oct 26', 'D2'))];
       // every mode: the same lines in the same cells; the main values never depend on u (u gone → only the lines change)
       const dday2 = { v: 1, T, lags: 31, newest: '2026-10-13', rows: dday.rows.filter(r => r[1] > 0) };
       const noU = { v: 1, T, lags: 31, newest: '2026-10-13', rows: dday2.rows.map(r => r.map((x, i) => (i === 6 ? null : x))) };
