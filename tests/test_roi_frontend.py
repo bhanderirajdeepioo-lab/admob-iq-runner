@@ -21,6 +21,7 @@ shown), Mode switches keeping the box's row and column too — and the wiring in
 installed. No real data."""
 import json
 import os
+import re
 import shutil
 import subprocess
 
@@ -556,6 +557,79 @@ def test_country_filter(out):
     # from the site (404): the same; the site still on the other build after it: said, "Try again"
     assert all(out["cc_stale"]) and all(out["cc_gone"]) and all(out["cc_stale_again"])
     assert out["cc_lru"] == [3, True, 3, True, True]                # only the newest 3 packs kept (the one in use too)
+
+
+def test_country_order_by_spend(out):
+    # 💸 the owner, 22 Oct 2026: "country list he vo spending wise kar do" — chips + the list by the whole history's
+    # Google Ads spend (USD) high → low; equal spend by installs, then code; no spend (0 or not known alike) after every
+    # spender, by installs, then code; under a cent still a spender; Unknown country / Not split last, never chips
+    chips = ["", "JJ", "BB", "AA", "CC", "GG", "FF"]
+    order = ["", "JJ", "BB", "AA", "CC", "GG", "FF", "DD", "II", "EE", "HH", "--", "XX"]
+    sp = out["cc_spend"]
+    lab = {   # the label: spend in the view's currency (₹ as billed / $ / ₹ at the view rate), whole numbers, installs
+        "usd": {"JJ": "$1,235 spend", "BB": "$80 spend", "AA": "$50 spend", "CC": "$50 spend", "GG": "$50 spend",
+                "FF": "&lt;$0.01 spend"},
+        "inr_billed": {"JJ": "₹1,23,457 spend", "BB": "₹6,500 spend", "AA": "₹4,100 spend", "CC": "₹4,300 spend",
+                       "GG": "₹4,400 spend", "FF": "₹0.35 spend"},
+        "inr_usd_billed": {"JJ": "₹1,08,642 spend", "BB": "₹7,040 spend", "AA": "₹4,400 spend", "CC": "₹4,400 spend",
+                           "GG": "₹4,400 spend", "FF": "₹0.35 spend"}}
+    inst = {"JJ": "30", "BB": "900", "AA": "1,000", "CC": "800", "GG": "400", "FF": "500", "DD": "700", "II": "700",
+            "EE": "600", "HH": "400"}
+    for v, picks in sp.items():
+        for k, p in picks.items():
+            # the same order in $ and in both ₹ views (₹ as billed puts GG ₹4,400 > CC > AA: never reordered), whatever
+            # is picked
+            assert p["chips"] == chips and p["list"] == order and p["grp"] == "Every country (10) · most spend first", (v, k)
+            for cc, s in lab[v].items():
+                assert p["opt"][cc] == "[%s] Country %s · %s · %s installs" % (cc, cc, s, inst[cc]), (v, k, cc)
+            for cc in ("DD", "HH"):
+                assert p["opt"][cc] == "[%s] Country %s · no ads · %s installs" % (cc, cc, inst[cc]), (v, k, cc)
+            for cc in ("II", "EE"):                                   # not known: never "no ads"
+                assert p["opt"][cc] == "[%s] Country %s · spend not known · %s installs" % (cc, cc, inst[cc]), (v, k, cc)
+            assert p["opt"]["--"] == "[--] Unknown country · 40 installs" and p["opt"]["XX"] == "🧩 Not split"
+            assert p["title"] == "Country JJ · %s · 30 installs" % lab[v]["JJ"].replace("&lt;", "<")
+        # what is picked stays picked: All / a chip → "More countries ▾" in the box, the list on "More countries"; a
+        # list country → its option selected, its full label in the box (on); Unknown / Not split the same; a country
+        # this app does not have → "More countries ▾"
+        assert [picks["none"]["sel"], picks["none"]["shown"], picks["none"]["on"], picks["none"]["pressed"]] == [[""], "More countries&nbsp;▾", False, ""]
+        assert [picks["chip"]["sel"], picks["chip"]["shown"], picks["chip"]["on"], picks["chip"]["pressed"]] == [[""], "More countries&nbsp;▾", False, "JJ"]
+        assert [picks["list"]["sel"], picks["list"]["shown"], picks["list"]["on"], picks["list"].get("pressed")] == [
+            ["DD"], "[DD] Country DD · no ads · 700 installs&nbsp;▾", True, None]
+        assert [picks["unk"]["sel"], picks["unk"]["shown"], picks["unk"]["on"]] == [["--"], "[--] Unknown country · 40 installs&nbsp;▾", True]
+        assert [picks["ns"]["sel"], picks["ns"]["shown"], picks["ns"]["on"]] == [["XX"], "🧩 Not split&nbsp;▾", True]
+        assert [picks["gone"]["sel"], picks["gone"]["shown"], picks["gone"]["on"]] == [[""], "More countries&nbsp;▾", False]
+    # the order is the page's own: the index's rows in any order give the same chips and list (the two that are not a
+    # country keep the index's order)
+    assert out["cc_spend_rev"] == [chips, order[:-2] + ["XX", "--"]]
+    # spend order on a tapped page: HH (the fewest installs, the most spend) first; the full tap run (AA / EE chips,
+    # GG from the list, the board) and the new order's own taps (HH chip, DD from the list, HH, back to All) — the
+    # tapped control stays put at 375 and 1280 px, and the pick shows where it should
+    nj = out["cc_spend_nojump"]
+    assert nj["chips"] == ["", "HH", "EE", "AA", "BB", "CC", "FF"]
+    for w in ("w375", "w1280"):
+        assert nj[w]["moves"] == [0] * 13 and nj[w]["keptWeek"] and nj[w]["backAll"] and nj[w]["picked"], (w, nj[w])
+        assert nj[w]["errShown"] and nj[w]["retried"], (w, nj[w])
+    for w in ("t375", "t1280"):
+        assert nj[w]["moves"] == [0] * 8, (w, nj[w])
+        assert nj[w]["seen"] == [["HH", "HH", "", "More countries&nbsp;▾"], ["DD", None, "DD", "[DD] Country DD · no ads · 700 installs&nbsp;▾"],
+                                 ["HH", "HH", "", "More countries&nbsp;▾"], ["", "", "", "More countries&nbsp;▾"]], (w, nj[w])
+
+
+def test_country_list_label_never_cut():
+    # the native list sits invisible over its own label: the picked country's spend / installs wrap there (between
+    # words, never inside a number), never clipped or ellipsed at 375 px; the box as wide as that label; iOS: the list
+    # itself still 16px on a phone (no zoom)
+    with open(PAGE, encoding="utf-8") as f:
+        p = f.read()
+    css = p[p.index("<style>"):p.index("</style>")]
+    assert ".roi-ccv{min-width:0;overflow-wrap:break-word}" in css
+    assert ".roi-ccs{position:absolute;inset:-1px;width:calc(100% + 2px);height:calc(100% + 2px);margin:0;padding:0;border:0;opacity:0;" in css
+    assert ".roi-ccw{position:relative;display:inline-flex;align-items:center;align-self:flex-start;min-height:34px;max-width:100%;" in css
+    for rule in re.findall(r"\.roi-cc[wv][^{]*\{[^}]*\}", css):
+        assert "nowrap" not in rule and "ellipsis" not in rule and "overflow:hidden" not in rule, rule
+    assert "@media (max-width:760px){.roi-ccs{font-size:16px}}" in css
+    assert '<span class="roi-ccw${pk?\' on\':\'\'}"><span class="roi-ccv" aria-hidden="true">${pk?lab(pk):\'More countries\'}&nbsp;▾</span>' in p
+    assert "`<select class=\"roi-ccs\" data-roi-ccs=\"1\" aria-label=\"Every country\">" in p
 
 
 def test_show_more_keeps_the_row(out):

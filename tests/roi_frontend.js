@@ -197,11 +197,18 @@ async function noJump(width, file, packs, failOnce, mode) {
   }
   const tap = async (sel, after, ev) => {                                  // a control mid-screen; where it is after
     let b = find(sel); W.scrollY = Math.max(0, b._i * k - 300); b = find(sel); const y0 = b.getBoundingClientRect().top;
-    if (ev) { b.value = ev; fire('change', { target: b }); } else fire('click', { target: b });
+    if (ev != null) { b.value = ev; fire('change', { target: b }); } else fire('click', { target: b });
     let a = find(after || sel); moves.push(a ? Math.round(a.getBoundingClientRect().top - y0) : 'gone');
     await flush();                                                         // its pack arrives: nothing above moves
     a = find(after || sel); moves.push(a ? Math.round(a.getBoundingClientRect().top - y0) : 'gone');
   };
+  if (mode && mode.taps) {                                                  // just these taps ([selector, list value]): moves + where it ended
+    const seen = [];
+    for (const [s, v] of mode.taps) { await tap(s, null, v);
+      seen.push([U.getCTY(), (P.body.match(/data-roi-cc="([^"]*)" aria-pressed="true"/) || [])[1], (P.body.match(/<option value="([^"]*)" ?selected>/) || [])[1],
+        (P.body.match(/<span class="roi-ccv" aria-hidden="true">([^<]*)<\/span>/) || [])[1]]); }
+    return { moves, seen };
+  }
   await tap('[data-roi-cc="AA"]');                                          // a chip: the title grows above it
   await tap('[data-roi-grain="week"]');                                     // the grain keeps the country
   const keptWeek = P.body.includes('[AA] Country AA</h3>');
@@ -1344,13 +1351,13 @@ async function moreKeepAll(dc, packs) {
     const flush = () => new Promise(r => setTimeout(r, 5));
     const dc = Object.assign(appFile(), { cd: cdx() });
     U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60); U.setCTY('');
-    // the picker: All countries + the 6 with the most installs as chips; EVERY country in the list (flag, name,
-    // installs), then "Unknown country" / "Not split"
+    // the picker: All countries + the 6 with the most Google Ads spend as chips (here spend falls with installs: the same
+    // 6); EVERY country in the list (flag, name, spend, installs), then "Unknown country" / "Not split"
     const pick = U.ccPick(dc.cd);
     out.cc_chips = [...pick.matchAll(/<button type="button" data-roi-cc="([^"]*)"/g)].map(m => m[1]);
     out.cc_list = [...pick.matchAll(/<option value="([^"]*)"/g)].map(m => m[1]);
-    out.cc_list_txt = pick.includes('[GG] Country GG · 400 installs') && pick.includes('[--] Unknown country · 40 installs')
-      && pick.includes('🧩 Not split') && pick.includes('<optgroup label="Every country (8)">') && pick.includes('More countries ▾')
+    out.cc_list_txt = pick.includes('[GG] Country GG · $20 spend · 400 installs') && pick.includes('[--] Unknown country · 40 installs')
+      && pick.includes('🧩 Not split · $12 spend') && pick.includes('<optgroup label="Every country (8) · most spend first">') && pick.includes('More countries ▾')
       && pick.includes('aria-pressed="true">🌍 All countries');
     // All countries (the default): the same table — only the picker joins the control row, first
     const ccAll = U.cohCard(dc), tAll = U.cohortTable(dc);
@@ -1480,6 +1487,34 @@ async function moreKeepAll(dc, packs) {
     const pa = U.ccPick(dc.cd);
     out.cc_pick_sel = (pa.match(/ selected>/g) || []).length === 1 && pa.includes('<option value="" selected>More countries ▾')
       && !pa.includes('<option value="AA" selected>');
+    // 💸 by spend (owner, 22 Oct 2026: "country list he vo spending wise kar do"): the whole history's Google Ads spend in
+    // USD, high → low, in every view; equal spend by installs, then code; no spend (0 or not known: the same) after every
+    // spender, by installs, then code; a fraction of a cent still a spender; "Unknown country" / "Not split" last (the
+    // index's order), never chips. cd.c as the build writes it: by installs (the two that are not a country among them)
+    {
+      const cS = Object.assign(cdx(), { c: [['AA', 1000, 50, 4100, 0, 0, 0], ['BB', 900, 80, 6500, 0, 0, 0], ['CC', 800, 50, 4300, 0, 0, 0],
+        ['DD', 700, 0, 0, 0, 0, 0], ['II', 700, null, null, 1, 0, 0], ['EE', 600, null, null, 1, 0, 0], ['FF', 500, 0.004, 0.35, 1, 0, 0],
+        ['GG', 400, 50, 4400, 1, 0, 0], ['HH', 400, 0, 0, 1, 0, 0], ['--', 40, null, null, 1, 0, 0], ['JJ', 30, 1234.567, 123456.78, 1, 0, 0],
+        ['XX', null, 0, 0, 1, null, null]] });
+      const chipsOf = h => [...h.matchAll(/<button type="button" data-roi-cc="([^"]*)"/g)].map(m => m[1]);
+      const listOf = h => [...h.matchAll(/<option value="([^"]*)"/g)].map(m => m[1]);
+      const optOf = (h, cc) => ((h.match(new RegExp(`<option value="${cc}"[^>]*>([^<]*)</option>`)) || [])[1]) || null;
+      const shown = h => ((h.match(/<span class="roi-ccv" aria-hidden="true">([^<]*)<\/span>/) || [])[1]) || null;
+      const sel = h => (h.match(/<option value="([^"]*)" ?selected>/g) || []).map(x => x.slice(15).split('"')[0]);
+      const VIEWS = { usd: ['USD', 1, '$', 'INR'], inr_billed: ['INR', 88, '₹', 'INR'], inr_usd_billed: ['INR', 88, '₹', 'USD'] };
+      const inView = (v, f) => { const [cv, fx, sy, ccy] = VIEWS[v]; ctx.curView = () => cv; ctx.cfx = () => fx; ctx.csym = () => sy;
+        U.lifeView([], null, { ccy }); try { return f(); } finally { ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$'; U.lifeView([], null, {}); } };
+      const cut = (cc) => { U.setCTY(cc); const h = U.ccPick(cS); return { chips: chipsOf(h), list: listOf(h), sel: sel(h), shown: shown(h),
+        on: h.includes('<span class="roi-ccw on">'), pressed: (h.match(/data-roi-cc="([^"]*)" aria-pressed="true"/) || [])[1],
+        opt: Object.fromEntries(['JJ', 'BB', 'AA', 'CC', 'GG', 'FF', 'DD', 'II', 'EE', 'HH', '--', 'XX'].map(c => [c, optOf(h, c === '--' ? '--' : c)])),
+        title: (h.match(/data-roi-cc="JJ" aria-pressed="[a-z]+" title="([^"]*)"/) || [])[1], grp: (h.match(/<optgroup label="(Every country[^"]*)">/) || [])[1] }; };
+      out.cc_spend = {};
+      for (const v of Object.keys(VIEWS)) out.cc_spend[v] = inView(v, () => ({ none: cut(''), chip: cut('JJ'), list: cut('DD'), unk: cut('--'), ns: cut('XX'), gone: cut('QQ') }));
+      U.setCTY('');
+      // the same index in its own order (by installs, as built): the page's order does not depend on the rows' order in cd.c
+      const rev = Object.assign({}, cS, { c: cS.c.slice().reverse() });
+      U.setCTY(''); out.cc_spend_rev = [chipsOf(U.ccPick(rev)), listOf(U.ccPick(rev))];
+    }
     // 🧩 Not split: the same columns as every country (D0 … D30 day by day, then the 30-day / checkpoint ones), cells '—'
     U.setCTY('XX');
     const txc = U.cohCard(dc), hx = (txc.match(/<th>D\d+<\/th>/g) || []).map(x => x.slice(4, -5));
@@ -1798,6 +1833,16 @@ async function moreKeepAll(dc, packs) {
     const F1 = ['roi_aaaaaaaaaaaa_c01.json.gz'];
     out.cc_nojump = { w375: await noJump(375, dc, PACKS, F1), w1280: await noJump(1280, dc, PACKS, F1) };
     out.cc_late = (await noJump(375, dc, PACKS, [], 'late')).late;
+    // 💸 spend order, not installs: HH (fewest installs) the top spender → the first chip; GG / DD (no ads) in the list.
+    // The whole tap run as above (AA / EE chips, GG from the list, the board's BB) and a chip / list pick of the new order
+    // only (HH, then DD from the list, then HH again): the tapped control stays put, the pick shown where it should be
+    const SPS = { HH: 90, EE: 70, AA: 50, BB: 45, CC: 40, FF: 30, GG: 10, DD: 0 };
+    const dS = Object.assign(appFile(), { cd: Object.assign(cdx(), { c: cdx().c.map(x => x[0] in SPS ? [x[0], x[1], SPS[x[0]]].concat(x.slice(3)) : x) }) });
+    U.setCTY(''); const pS = U.ccPick(dS.cd);
+    const nT = { taps: [['[data-roi-cc="HH"]'], ['[data-roi-ccs]', 'DD'], ['[data-roi-cc="HH"]'], ['[data-roi-ccs]', '']] };
+    out.cc_spend_nojump = { chips: [...pS.matchAll(/<button type="button" data-roi-cc="([^"]*)"/g)].map(m => m[1]),
+      w375: await noJump(375, dS, PACKS, F1), w1280: await noJump(1280, dS, PACKS, F1),
+      t375: await noJump(375, dS, PACKS, [], nT), t1280: await noJump(1280, dS, PACKS, [], nT) };
     out.more_keep = await moreKeepAll(dc, PACKS);
     }
     // the hub card line
