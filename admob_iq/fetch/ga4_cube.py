@@ -206,37 +206,51 @@ every answer above (METS) — the cube kept only age 0 ("e" u0), q none. Now kep
 (no call of their own), in files of their own next to the cube's (GA4_CUBE_U, U_ON; off: nothing kept, read or written
 — the cube as without it); the revenue files (months, q files, hot.json.gz, the head) are never touched by them:
   * the cube's reads (walk, hot days, repair): per activity day D and country, users at install ages 0 … 30 and every
-    30th day from 60 (u_age: the days of the 30-day columns) — rows GA4 gave no install day or country ("(other)",
-    "(not set)" install day, one after the day) are the day's "ou" (measured, never spread to any cell); a day GA4
-    flagged (sampling, thresholding, a cut answer) or that hid "(other)" under an in-list ("hd": its revenue measured by
-    the day's total, users have none) is "fl" (how many are missing: unknown);
+    30th day from 60 (u_age: the days of the 30-day columns) — users of rows GA4 gave no install day or no country
+    (a country or install day "(other)", a "(not set)" install day, one after the day) are the day's "ou" (users with
+    no install day or country: measured, never spread to any cell); a day GA4 flagged (sampling, thresholding, a cut
+    answer) or that hid "(other)" under an in-list ("hd": its revenue measured by the day's total, users have none) is
+    "fl" (how many are missing: unknown);
   * q's whole no-country reads (q_fwd, the history fill, its re-reads): users of every install day at ages 60, 90 …
-    420 (UQ_AGES; the read is whole to 427) — a read that is not whole ("fl"): no users (unknown).
+    420 (UQ_AGES; the read is whole to 427), the oldest install age the read named ("x": ages past it unknown — a
+    read whose window shrank is never read as zeros) and the users of its rows with no install day ("o": "(not set)",
+    after the day — measured, in no install day) — a read that is not whole ("fl"): no users (unknown).
 Stored (data/ga4_cube/<key>/, never read as a month or q file — the names differ):
     <YYYY-MM>.u.json.gz = {"v": U_V, "stream_id",
       "c": {D: {"u": {cc: [users at ages 0 … 30]}, "w": {cc: {age: users}}, "ou", "fl", "at", "by": fold|fill|rep}},
-      "q": {D: {"s": ok|fl, "at", "u": [users at ages 60, 90 … 420] (only when "ok")}}}
+      "q": {D: {"s": ok|fl, "at", "u": [users at ages 60, 90 … 420], "x", "o" (these three only when "ok"), "rt"}}}
       install day X = D − age; a country / age not named on a day kept = 0 users (the read had no row of it); a day
       not kept = unknown. "c" from the walk's fold (the final read) — the fill or the repair only add a day without one;
-      "q" from a settled whole read: an "ok" is never replaced, an "fl" by the next whole read of the day;
+      "q" from a settled whole read: an "ok" is never replaced, an "fl" by the next whole read of the day — q's own rule
+      (u_due = q_due): a settled "fl" read again at most Q_RETRY times ("rt"), Q_GAP_HOURS apart, then final;
     u.json.gz (the users' head) = {"v", "stream_id", "d": {D: {"c": …, "q": …}} the hot days' users, each part with the
       "at" of the cube read it came with (the build takes it only beside that very read; dropped with the head's hot
       day), "qs" / "cs": the fills' queues {"todo": [[YYYY-MM, days to read]], "scan", "hk" (cs: days left read alone
       after a block came back with "(other)")}}.
 The history (refresh_all, after q's fill; each its own calls and seconds a run over every app, the run's budget and the
-app's call cap as always; the app whose fill read longest ago first; a Stop keeps every day read; an error ends that
+app's call cap as always — GA4_CUBE_U_APP_CALLS, U_APP_CALLS, lifts that cap by one allowance the two users fills share
+in a run, counted from the app's calls when its first users round starts; 0 = the app's MAX_CALLS bounds them, as q's
+before its own setting —; the app whose fill read longest ago first; a Stop keeps every day read; an error ends that
 app's fill, counted; queues made from the files — no call — and again every RESCAN_DAYS while empty):
   * All users (u_fill_q, GA4_CUBE_U_CALLS / GA4_CUBE_U_SEC, U_CALLS 120 / U_SEC 20): one whole no-country read (q_read,
-    ~1 token) per folded activity day ≥ history start + U_FROM (150: younger days hold only ages the install-day file
-    already has — 60 / 90 / 120), with a row, settled, no whole read's users kept — and not a day q itself will read
-    (q on, the day needs one, no final q record: that read keeps them); newest first. Only its users are kept.
-  * country users (u_fill_c, GA4_CUBE_U_C_CALLS / GA4_CUBE_U_C_SEC / GA4_CUBE_U_C_CAP, 120 / 20 / 3): the cube's own
-    read again (read_range: a block of up to BLOCK days, else each day alone and its split under UC_CAP, no day total)
-    of every folded day after the history start with a row and no users kept; newest first; only its users kept (what
-    stays "(other)" is the day's "ou", flagged).
-Fill time (one run an hour): All users ≈ (app age − 150) days per app at ≈ 60–120 light calls a run over every app;
-country users ≈ app age / 30 block calls on a light app (a run or two), a day alone + 2 split calls on a heavy one
-(≈ 4–6 s a call: ≈ 1–2 days a run in UC_SEC 20 s — raise GA4_CUBE_U_C_SEC to go faster, inside the budget).
+    ~1 token) per folded activity day ≥ history start + U_FROM (60: an earlier day holds no 30-day column's age of an
+    install day from the history start; days the install-day file holds ages 60 / 90 / 120 / 180 / 270 of are read
+    too — the build takes that file only where its day is clean), with a row, settled, no whole read's users kept or
+    a stored "fl" due again (u_due) — and not a day q itself will read (q on, the day needs one, no final q record:
+    that read keeps them); newest first. Only its users are kept. One call a day: an allowance that ends never cuts a
+    day.
+  * country users (u_fill_c, GA4_CUBE_U_C_CALLS / GA4_CUBE_U_C_SEC / GA4_CUBE_U_C_CAP, 120 / 20 / 1): the cube's own
+    read again (read_range: a block of up to BLOCK days, else each day alone under UC_CAP, no day total) of every
+    folded day after the history start with a row and no users kept; newest first; only its users kept (what stays
+    "(other)" is the day's "ou", flagged). UC_CAP 1: each day one call (GA4 folds the country "(other)" before any
+    filter — a split names no row its root had not, measured: its calls would buy nothing). A block or a day is started
+    only while the allowance, the app's cap and the round's time (its seconds and the run's budget) hold the calls it
+    may take at the fill's own seconds a call (this run's, else the last measured, "cs" "s") — never cut halfway.
+Fill time (one run an hour, U_CALLS / UC_CALLS 120 and U_SEC / UC_SEC 20 s a run over every app): All users ≈ (app
+age − 60) light calls per app once (~1 token, ≈ 0.5–1 s each with WORKERS properties side by side: ≈ 60–120 days a run
+over every app — ≈ 1–2 weeks of hourly runs for ≈ 10 apps of 400–600 days); country users: a light app ≈ app age / 30
+block calls (one or two runs), a heavy app one call a day (≈ 4–6 s, ≈ 70 tokens: ≈ 3–5 days a run in UC_SEC 20 s with
+its property alone — ≈ 5–8 days of hourly runs for 600 days; raise GA4_CUBE_U_C_SEC to go faster, inside the budget).
 Cost: the backfill ≈ app age / 30 block calls on a light app (rows a call ≈ 30 × a day's (install day, country) rows),
 and on a heavy one about one call per activity day (+ 2 per part split, + one block try every HEAVY_KEEP days) —
 measured on the biggest app ≈ 70 GA4 tokens and 4–6 s a day call, so ≈ 25 calls a run in the 150 s budget (the walk
@@ -329,9 +343,10 @@ U_V = 1
 USUF = ".u.json.gz"                 # <YYYY-MM>.u.json.gz: an activity month's users (never a month or a q file)
 UHEAD = "u.json.gz"                 # the users' head: the hot days' users + the two fills' queues
 UQ_AGES = tuple(range(2 * STEP, QL + 1, STEP))      # 60, 90 … 420: All users of the whole no-country read ("q" "u")
-U_FROM = min(a for a in UQ_AGES if a not in gu.ULAGS)   # 150: the first 30-day column's age the install-day file
-                                    # (fetch.ga4_uninstall ULAGS: 60 / 90 / 120 / 180 / 270) does not hold — the All
-                                    # users fill reads activity days from history start + this on
+U_FROM = 2 * STEP                   # 60: the All users fill reads activity days from history start + this on (an
+                                    # earlier day holds no 30-day column's age of an install day from the history
+                                    # start); the install-day file's ages (ULAGS 60 / 90 / 120 / 180 / 270) are read
+                                    # too: the build takes that file only on a clean day, else this read's
 U_CALLS = int(os.environ.get("GA4_CUBE_U_CALLS") or 120)    # the All users fill's GA4 calls a run over every app (0 =
                                     # off): q's light whole read (~1 token, ≤ 428 rows), one per activity day
 U_SEC = float(os.environ.get("GA4_CUBE_U_SEC") or 20)      # … its seconds a run (from its own start, inside the budget)
@@ -339,9 +354,13 @@ UC_CALLS = int(os.environ.get("GA4_CUBE_U_C_CALLS") or 120)    # the country use
                                     # app (0 = off): the cube's own read again (a block of BLOCK days, else a day alone
                                     # and its split under UC_CAP)
 UC_SEC = float(os.environ.get("GA4_CUBE_U_C_SEC") or 20)   # … its seconds a run
-UC_CAP = max(1, int(os.environ.get("GA4_CUBE_U_C_CAP") or MIN_CAP))   # GA4 calls a day the country users fill may take
-                                    # (the cube's split, one level at 3: on real GA4 a split names nothing more — the
-                                    # futile rule ends it there anyway); what stays "(other)" is the day's "ou"
+UC_CAP = max(1, int(os.environ.get("GA4_CUBE_U_C_CAP") or 1))   # GA4 calls a day the country users fill may take: 1
+                                    # = the day's own read, no split (on real GA4 the country "(other)" is folded
+                                    # before any filter: a split names no row its root had not — measured, REPAIR_CALLS
+                                    # — so its calls buy nothing); what stays "(other)" is the day's "ou"
+U_APP_CALLS = int(os.environ.get("GA4_CUBE_U_APP_CALLS") or 0)   # the users fills' own GA4 calls an app a run, ONE
+                                    # allowance for both (on top of the app's calls when its first users round starts;
+                                    # 0 = the app's MAX_CALLS bounds them, as q's before GA4_CUBE_Q_APP_CALLS)
 LOG_KEEP = 24                       # repaired months kept in the head's "rep" "log"
 REP = ".rep.json.gz"                # a month's copy while the repair builds it
 HEAVY_KEEP = 90                     # activity days a range goes day by day after a block of its length needed it
@@ -831,13 +850,14 @@ def q_read(ga, D):
     """Activity day D, dimension firstSessionDate only, no filter, every page → {"q": {X: {j: micros}} (ages 31 … QL in
     buckets 1 … QJ), "qt" (micros of ages 0 … QL), "qn" (micros GA4 gave no install day: "(not set)", not a date, after
     D — real rows of a whole read, in no install day: their size, never a reason to drop the day), "qx" (the oldest
-    install age returned; None: no dated row), "qs" "ok" | "fl", "qr" (rows)}. "fl", with an empty q: an "(other)"
+    install age returned; None: no dated row), "qs" "ok" | "fl", "qr" (rows); with U_ON also "qu" (users at UQ_AGES;
+    None when "fl") and "qou" (users of the rows with no install day, as "qn")}. "fl", with an empty q: an "(other)"
     install day (GA4 folded rows into it) or GA4's dataLossFromOtherRow / sampling / thresholding / a cut answer — the
     day is not whole (its weeks stay on the cube's cells). Ages past QL (421 … 427) are left to the cube's bucket 14.
     Raises Stop."""
     rows = ga.report_all(body(D, D, QDIMS), page_rows=gu.UNI_PAGE_ROWS)
     bad = bool(_flags(ga, rows) & (RETRY | F_THR))
-    q, qt, qn, qx = {}, 0, 0, None
+    q, qt, qn, qx, qo = {}, 0, 0, None, 0
     qu = [0] * len(UQ_AGES) if U_ON else None   # the same answer's users at ages 60, 90 … 420 (u: the All rows' mu)
     for r in rows:
         v = int(round(float(r.get("totalAdRevenue") or 0) * 1e6))
@@ -848,6 +868,8 @@ def q_read(ga, D):
         L = (D - _d(X)).days if X else -1
         if L < 0:
             qn += v
+            if qu is not None:                  # their users: in no install day (measured, as qn)
+                qo += int(r.get("activeUsers") or 0)
             continue
         qx = L if qx is None else max(qx, L)
         if L > QL:
@@ -862,6 +884,7 @@ def q_read(ga, D):
     out = {"q": {} if bad else q, "qt": qt, "qn": qn, "qx": qx, "qs": "fl" if bad else "ok", "qr": len(rows)}
     if qu is not None:
         out["qu"] = None if bad else qu         # not whole: its users unknown too
+        out["qou"] = qo
     return out
 
 
@@ -1032,11 +1055,22 @@ def _empty_uhead(stream_id):
 
 
 def _uq(got, at):
-    """A whole no-country read's users record: {"s": its qs, "at", "u": users at UQ_AGES (only when "ok")}."""
+    """A whole no-country read's users record: {"s": its qs, "at", and only when "ok": "u" users at UQ_AGES, "x" the
+    oldest install age the read named (None: none — ages past it are unknown, never 0: a window that shrank), "o" users
+    of its rows with no install day}."""
     r = {"s": got["qs"], "at": at}
     if got["qs"] == "ok" and isinstance(got.get("qu"), list):
-        r["u"] = list(got["qu"])
+        r.update(u=list(got["qu"]), x=got.get("qx"), o=int(got.get("qou") or 0))
     return r
+
+
+def u_due(rec, D, tz=None):
+    """A stored All users record ("q") of day D → when it is to be read again (UTC "…Z"), None: never — q's own rule
+    (q_due) on its "s" / "at" / "rt": an "ok" never; an "fl" read before D settled once it has; a settled "fl" Q_GAP_HOURS
+    after its read while read again fewer than Q_RETRY times, then final."""
+    if not isinstance(rec, dict):
+        return None
+    return q_due({"qs": rec.get("s"), "at": rec.get("at"), "rt": rec.get("rt")}, D, tz)
 
 
 def _merge(mo, k, rec):
@@ -1143,6 +1177,7 @@ class Cube:
         self.um, self.utouched = {}, set()  # users: u month files loaded / changed in the run
         self.uh, self.u_dirty = None, False  # … the users' head (loaded on first use) / changed
         self.u_kept = self.u_days = self.u_calls = self.uc_days = self.uc_calls = self.u_err = self.u_oth = 0
+        self.u_c0 = None                    # the app's calls when its first users round of the run started
 
     def month(self, k):
         """Month k's file (loaded once). Missing: an empty month. On disk but unreadable (a damaged gzip, a cut copy …),
@@ -1216,14 +1251,17 @@ class Cube:
 
     def u_q(self, D, got, at):
         """A whole no-country read of FOLDED day D (a settled q read, or the All users fill's) → its users ("q"): kept
-        unless an "ok" is there (an "fl" is replaced; nothing of q's own file changes)."""
+        unless an "ok" is there (an "fl" is replaced — "rt" + 1 when both it and this read were settled and this one is
+        "fl" too, q_put's rule; nothing of q's own file changes)."""
         if not U_ON or "qu" not in got:
             return False
         mo = self.umonth(D[:7])
         old = mo["q"].get(D)
         if isinstance(old, dict) and old.get("s") == "ok":
             return False
-        mo["q"][D] = _uq(got, at)
+        rec = mo["q"][D] = _uq(got, at)
+        if isinstance(old, dict) and rec["s"] != "ok" and q_settled(D, old.get("at"), self.tz()):
+            rec["rt"] = int(old.get("rt") or 0) + 1
         self.utouched.add(D[:7])
         return True
 
@@ -1900,18 +1938,23 @@ def _hs(cube):
         return None
 
 
-def _uq_miss(cube, k, mo, hs, today):
-    """Month k's folded days (mo: its file) the All users fill reads, newest first: ≥ hs + U_FROM (before it every
-    30-day column's age is one the install-day file holds), with a row (a day with none has no user), SETTLED (q's
-    rule: a read before is not final), no whole read's users kept yet — and not a day q itself still reads (q on, the
-    day needs one, no final q record: that read keeps its users)."""
+def _uq_miss(cube, k, mo, hs, today, now_iso=None):
+    """Month k's folded days (mo: its file) the All users fill reads, newest first: ≥ hs + U_FROM (before it no 30-day
+    column's age of an install day from hs), with a row (a day with none has no user), SETTLED (q's rule: a read before
+    is not final), no whole read's users kept yet — or a stored "fl" due again by now_iso (u_due: settled, read again
+    fewer than Q_RETRY times, Q_GAP_HOURS after its last read) — and not a day q itself still reads (q on, the day
+    needs one, no final q record: that read keeps its users)."""
     if k in cube.bad:
         return []
     qd = cube.qmonth(k)["days"] if Q_CALLS > 0 else {}
     ud, tz, out = cube.umonth(k)["q"], cube.tz(), []
     for D, led in (mo.get("days") or {}).items():
-        if not isinstance(led, dict) or D in ud or not int(led.get("rows") or 0):
+        if not isinstance(led, dict) or not int(led.get("rows") or 0):
             continue
+        if D in ud:
+            due = u_due(ud[D], D, tz)
+            if due is None or now_iso is None or str(due) > now_iso:
+                continue
         if (_d(D) - hs).days < U_FROM or not q_ripe(D, today):
             continue
         if Q_CALLS > 0 and q_need(led) and not (D in qd and q_final(qd[D], D, tz)):
@@ -1944,14 +1987,14 @@ def u_scan(cube, now, kind):
     """A users fill's queue (users' head kind "qs" — All users — or "cs" — country users —: {"todo": [[YYYY-MM, days to
     read]], "scan"}) from the files (no GA4 call): every month with days to read, newest first. Made when there is none
     and again every RESCAN_DAYS while it is empty (days folded since that the reads did not keep, a run killed between
-    its months and its users' files) → True when made."""
+    its months and its users' files; an All users "fl" due a read again) → True when made."""
     hs = _hs(cube)
     st = cube.uhead().setdefault(kind, {})
     if hs is None or st.get("todo") or gu._hours_since(st.get("scan"), now) < RESCAN_DAYS * 24:
         return False
     today, todo = _pday(now, cube.tz()), []
     for k, mo in cube.each_month():
-        miss = _uq_miss(cube, k, mo, hs, today) if kind == "qs" else _uc_miss(cube, k, mo, hs)
+        miss = _uq_miss(cube, k, mo, hs, today, gu._now_iso(now)) if kind == "qs" else _uc_miss(cube, k, mo, hs)
         if miss:
             todo.append([k, len(miss)])
         if cube.data_dir:
@@ -1974,7 +2017,8 @@ def u_fill_q(ga, cube, now, take):
     now_iso, today = gu._now_iso(now), _pday(now, cube.tz())
     while todo and hs is not None:
         k = str(todo[0][0])
-        miss = _uq_miss(cube, k, cube.month(k), hs, today)      # from the files now (a day q read meanwhile: out)
+        miss = _uq_miss(cube, k, cube.month(k), hs, today, now_iso)     # from the files now (a day q read
+        #                                                                    meanwhile: out)
         for i, D in enumerate(miss):
             todo[0][1] = len(miss) - i
             cube.u_dirty = True
@@ -1995,59 +2039,107 @@ def u_fill_q(ga, cube, now, take):
 
 class _Meter:
     """An app's GA4 whose every call is taken from a fill's own allowance first (take() False → Stop("u") before the
-    call: nothing of a day it cut is kept, as with any Stop); everything else is the app's (its calls, flags, cap)."""
+    call: nothing of a day it cut is kept, as with any Stop); everything else is the app's (its calls, flags, cap).
+    room(need): the first call of a block or a day ("fresh", set by the fill after each day it kept) is made only when
+    the calls it may take ("need") fit — else Stop("u") before it: a day is never started to be cut halfway. Its own
+    calls' seconds measured (the app's clock, ga.clock: "t" / "n") — never the app's whole run (its walk, then the wait
+    for the other apps and rounds)."""
 
-    def __init__(self, ga, take):
-        self._ga, self._take = ga, take
+    def __init__(self, ga, take, room=None):
+        self._ga, self._take, self._room = ga, take, room
+        self.fresh, self.need, self.t, self.n = True, 1, 0.0, 0
 
     def report_all(self, *a, **k):
+        if self.fresh and self._room is not None and not self._room(self.need):
+            raise Stop("u")
         if not self._take():
             raise Stop("u")
-        return self._ga.report_all(*a, **k)
+        self.fresh = False
+        clk = getattr(self._ga, "clock", None)
+        t0 = clk() if clk is not None else None
+        try:
+            return self._ga.report_all(*a, **k)
+        finally:
+            if t0 is not None:
+                self.t += max(0.0, clk() - t0)
+                self.n += 1
+
+    def spc(self):
+        """Seconds a call of this fill so far (None: none measured)."""
+        return self.t / self.n if self.n else None
 
     def __getattr__(self, name):
         return getattr(self._ga, name)
 
 
-def u_fill_c(ga, cube, now, take, left):
+def _u_room(ga, need, left, tleft=None, spc=None):
+    """The country users fill has room for `need` more calls: its allowance (left()), the app's call cap, and — with
+    tleft (the round's seconds left: its own and the run's budget) — the time for them at spc seconds a call (the
+    fill's own calls: this run's, else the last measured). Unknown (no cap, no clock, nothing measured): yes."""
+    if left() < need:
+        return False
+    mx = getattr(ga, "max_calls", None)
+    if isinstance(mx, int) and mx - ga.calls < need:
+        return False
+    if tleft is None or not spc:
+        return True
+    t = tleft()
+    return t is None or t >= need * float(spc)
+
+
+def u_fill_c(ga, cube, now, take, left, tleft=None):
     """The country users fill of one app: its queue's months newest first, each month's days to read in runs of
     consecutive days (≤ BLOCK) newest first, each run read again as the cube reads (read_range: a block of the run;
-    "(other)", GA4's flags or a cut answer → each day alone and its split under UC_CAP; no day total: users have none —
-    what stays "(other)" is the day's "ou", a hidden one its "fl"), only the users kept (Cube.u_put "fill": a day
-    without them; the cube's files never touched). A block that had to go day by day: the next HEAVY_KEEP days read
-    alone straight away (head "cs" "hk"), then a block is tried again. A run starts only while the allowance holds a
-    day's calls (left() ≥ UC_CAP) → days read. Raises _Out, Stop (the days read kept)."""
+    "(other)", GA4's flags or a cut answer → each day alone under UC_CAP; no day total: users have none — what stays
+    "(other)" is the day's "ou", a hidden one its "fl"), only the users kept (Cube.u_put "fill": a day without them;
+    the cube's files never touched). A block that had to go day by day: the next HEAVY_KEEP days read alone straight
+    away (head "cs" "hk"), then a block is tried again. A block starts only with room (_u_room) for itself and its
+    first day alone (1 + UC_CAP: a block that comes back with "(other)" reads that day straight on), a day alone for
+    UC_CAP — else it stops before the call (a started day is never cut by the allowance, the cap or the round's time:
+    tleft) → days read. Its seconds a call kept in "cs" "s" (the next run's first measure). Raises _Out, Stop (the
+    days read kept)."""
     st = cube.uhead().setdefault("cs", {})
     todo, hs, n0 = st.get("todo") or [], _hs(cube), cube.uc_days
-    now_iso, meter = gu._now_iso(now), _Meter(ga, take)
-    while todo and hs is not None:
-        k = str(todo[0][0])
-        miss = _uc_miss(cube, k, cube.month(k), hs)
-        rest = len(miss)
-        for a, b in reversed(_runs(sorted(miss))):
-            todo[0][1] = rest
+    now_iso, meter = gu._now_iso(now), None
+
+    def room(need):
+        return _u_room(ga, need, left, tleft, meter.spc() or st.get("s"))
+    meter = _Meter(ga, take, room)
+    try:
+        while todo and hs is not None:
+            k = str(todo[0][0])
+            miss = _uc_miss(cube, k, cube.month(k), hs)
+            rest = len(miss)
+            for a, b in reversed(_runs(sorted(miss))):
+                todo[0][1] = rest
+                cube.u_dirty = True
+                mem, n = {}, (b - a).days + 1
+                skip = int(st.get("hk") or 0) > 0
+                if skip:                                    # read_range's heavy memory: these days alone
+                    mem["heavy"] = {"at": a.isoformat(), "n": 1}
+                meter.fresh, meter.need = True, UC_CAP + (1 if n > 1 and not skip else 0)
+                if not room(meter.need):
+                    raise _Out
+                c0, r0 = ga.calls, rest
+                try:
+                    for D, rec in read_range(meter, a, b, mem, now_iso, cap=UC_CAP, hot=True):
+                        cube.u_put(D.isoformat(), rec.pop("u", None), rec, "fill")
+                        cube.uc_days += 1
+                        rest -= 1
+                        meter.fresh, meter.need = True, UC_CAP     # the next day alone: its own room
+                finally:                                    # (a Stop too: what the run learnt is kept)
+                    cube.uc_calls += ga.calls - c0
+                    if skip:
+                        st["hk"] = max(0, int(st["hk"]) - (r0 - rest))
+                    elif n > 1 and mem.get("heavy"):        # the block came back with "(other)" / flagged / cut
+                        st["hk"] = HEAVY_KEEP
+            todo.pop(0)
             cube.u_dirty = True
-            if left() < UC_CAP:
-                raise _Out
-            mem, n = {}, (b - a).days + 1
-            skip = int(st.get("hk") or 0) > 0
-            if skip:                                        # read_range's heavy memory: these days alone
-                mem["heavy"] = {"at": a.isoformat(), "n": 1}
-            c0, r0 = ga.calls, rest
-            try:
-                for D, rec in read_range(meter, a, b, mem, now_iso, cap=UC_CAP, hot=True):
-                    cube.u_put(D.isoformat(), rec.pop("u", None), rec, "fill")
-                    cube.uc_days += 1
-                    rest -= 1
-            finally:                                        # (a Stop too: what the run learnt is kept)
-                cube.uc_calls += ga.calls - c0
-                if skip:
-                    st["hk"] = max(0, int(st["hk"]) - (r0 - rest))
-                elif n > 1 and mem.get("heavy"):            # the block came back with "(other)" / flagged / cut
-                    st["hk"] = HEAVY_KEEP
-        todo.pop(0)
-        cube.u_dirty = True
-        _u_let_go(cube, k)
+            _u_let_go(cube, k)
+    finally:
+        if meter.n:
+            st["s"] = round(meter.spc(), 2)
+            cube.u_dirty = True
     return cube.uc_days - n0
 
 
@@ -2056,11 +2148,13 @@ def _u_fills():
     return U_ON and (U_CALLS > 0 or UC_CALLS > 0)
 
 
-def u_round(fill, now, over, lock, counts, kind, workers=WORKERS):
+def u_round(fill, now, over, lock, counts, kind, workers=WORKERS, until=None, clock=None):
     """refresh_all's users rounds, after q's: kind "qs" — the All users fill, U_CALLS calls — or "cs" — the country
     users fill, UC_CALLS calls — over every app: each app's queue made where due (u_scan: the files, no GA4 call), then
     its fill, the app whose fill read longest ago first (state "ut" / "uct"; then by id), WORKERS side by side, while
     over() (the run's budget and the round's seconds) lets it; each app's users' files written (never a revenue file).
+    The app's call cap: lifted by U_APP_CALLS once for both rounds (from its calls when its first users round started;
+    0: its own cap). until / clock: the round's end (the country fill starts a block or a day only in time for it).
     Never raises (an error counted in the app's u_err)."""
     left = [U_CALLS if kind == "qs" else UC_CALLS]
     turn = "ut" if kind == "qs" else "uct"
@@ -2086,14 +2180,21 @@ def u_round(fill, now, over, lock, counts, kind, workers=WORKERS):
         aid, st, cube, ga = t
         c0, k0, d0 = ga.calls, ga.tok, cube.u_days + cube.uc_days
         cap0 = getattr(ga, "max_calls", None)
-        if Q_APP_CALLS > 0 and isinstance(cap0, int):
-            ga.max_calls = max(cap0, ga.calls + Q_APP_CALLS)     # the fills' own calls an app a run (as q's)
+        if U_APP_CALLS > 0 and isinstance(cap0, int):
+            if cube.u_c0 is None:                       # one allowance for both users rounds of the run
+                cube.u_c0 = ga.calls
+            ga.max_calls = max(cap0, cube.u_c0 + U_APP_CALLS)
+
+        def tleft():
+            c, te = clock(), getattr(ga, "t_end", None)
+            return min(until - c, te - c) if isinstance(te, (int, float)) else until - c
         try:
             if not over() and left[0] > 0:
                 if kind == "qs":
                     u_fill_q(ga, cube, now, take)
                 else:
-                    u_fill_c(ga, cube, now, take, lambda: left[0])
+                    u_fill_c(ga, cube, now, take, lambda: left[0],
+                             tleft if until is not None and clock is not None else None)
         except (_Out, Stop):
             pass
         except Exception:
@@ -2356,7 +2457,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
 
                 def uover(tu=tu, sec=sec):
                     return over() or ("u" if clock() - tu >= sec else None)
-                u_round(fill, now, uover, lock, counts, kind, workers)
+                u_round(fill, now, uover, lock, counts, kind, workers, until=tu + sec, clock=clock)
         for st, cube in ran:                            # the users' counts (the log: summed; the state: per app)
             if U_ON:
                 counts["u_kept"] += cube.u_kept

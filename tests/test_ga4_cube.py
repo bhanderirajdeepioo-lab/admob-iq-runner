@@ -31,9 +31,11 @@ the hot days' "fl" blocking nothing, the fill's order (re-reads on lossy weeks f
 version (a GA4 fake whose whole read is "fl" while the day is fewer than 5 days old).
 u (GA4's own users of the same reads): kept by country and age from the cube's reads and at each column's age from
 the whole read, with no extra call and every revenue file byte for byte as without them; "(other)" users their size
-("ou"), never in a cell; the All users fill and the country users fill (their own calls, newest first, resume, a heavy
-memory across a Stop, the cube's files untouched); the run's users rounds, the line's last part and the state; the
-settings and the workflow's repo variables."""
+("ou"), never in a cell; the whole read's oldest age ("x": a window that shrank never read as 0) and its users with no
+install day ("o"); the All users fill and the country users fill (their own calls, newest first, resume, a stored "fl"
+read again by q's rule, a heavy memory across a Stop, a block or day started only with room for its calls — never cut
+halfway —, the cube's files untouched); the run's users rounds (one per-app allowance for both), the line's last part
+and the state; the settings and the workflow's repo variables."""
 import copy
 import gzip
 import json
@@ -2367,16 +2369,28 @@ def test_u_a_cube_read_keeps_users_by_country_and_age(monkeypatch):
 
 
 def test_u_the_whole_read_keeps_users_at_each_column_age(monkeypatch):
+    """The whole read's users at UQ_AGES, the oldest age it named ("qx" — kept in the users' record as "x": a read
+    whose window shrank is never read as zeros past it) and its rows' users with no install day ("qou", as "qn")."""
     D = date(2026, 9, 30)
     rows = [{"firstSessionDate": ymd(D - timedelta(days=L)), "activeUsers": L, "totalAdRevenue": 0.000001}
             for L in (0, 30, 59, 60, 61, 90, 150, 420, 421, 427)]
+    rows += [{"firstSessionDate": "(not set)", "activeUsers": 6, "totalAdRevenue": 0.000002},
+             {"firstSessionDate": ymd(D + timedelta(days=1)), "activeUsers": 2, "totalAdRevenue": 0}]
     off = cu.q_read(QGA(rows), D)
     monkeypatch.setattr(cu, "U_ON", True)
     got = cu.q_read(QGA(rows), D)
-    assert got.pop("qu") == [60, 90, 0, 150, 0, 0, 0, 0, 0, 0, 0, 0, 420] and got == off and "qu" not in off
-    assert cu.UQ_AGES == tuple(range(60, 421, 30)) and cu.U_FROM == 150 and 150 not in cu.gu.ULAGS
+    assert got.pop("qu") == [60, 90, 0, 150, 0, 0, 0, 0, 0, 0, 0, 0, 420] and got.pop("qou") == 8
+    assert got == off and "qu" not in off and "qou" not in off and off["qx"] == 427 and off["qn"] == 2
+    assert cu._uq(dict(got, qu=[1] * 13, qou=8), "t") == {"s": "ok", "at": "t", "u": [1] * 13, "x": 427, "o": 8}
+    assert cu.UQ_AGES == tuple(range(60, 421, 30)) and cu.U_FROM == 60
     bad = cu.q_read(QGA(rows + [{"firstSessionDate": "(other)", "activeUsers": 5, "totalAdRevenue": 0.1}]), D)
     assert bad["qs"] == "fl" and bad["qu"] is None                          # not whole: its users unknown too
+    assert cu._uq(bad, "t") == {"s": "fl", "at": "t"}
+    # a window that shrank ("ok", no flag): rows to age 300 only — "x" 300 keeps ages 330 … 420 unknown, never 0
+    short = cu.q_read(QGA([{"firstSessionDate": ymd(D - timedelta(days=L)), "activeUsers": 10, "totalAdRevenue": 0}
+                           for L in range(0, 301)]), D)
+    assert short["qs"] == "ok" and short["qx"] == 300 and short["qu"] == [10] * 9 + [0] * 4
+    assert cu._uq(short, "t")["x"] == 300
 
 
 def test_u_kept_from_the_reads_with_no_extra_call_revenue_files_byte_for_byte(tmp_path, monkeypatch):
@@ -2415,20 +2429,22 @@ def test_u_kept_from_the_reads_with_no_extra_call_revenue_files_byte_for_byte(tm
     # q's reads (q_fwd: the oldest settled days of "p", Q_FWD a run): users at ages 60, 90, 120 (the fake's last)
     jun = cu.load_u(data, "a~1", "222", "2026-06")["q"]
     assert sorted(jun) == ["2026-06-%02d" % i for i in range(1, 2 * cu.Q_FWD + 1)]
-    assert jun["2026-06-03"] == {"s": "ok", "at": "2026-10-13T06:00:00Z", "u": [WSUM] * 3 + [0] * 10}
+    assert jun["2026-06-03"] == {"s": "ok", "at": "2026-10-13T06:00:00Z", "u": [WSUM] * 3 + [0] * 10, "x": 120,
+                                 "o": 0}                                    # the fake's oldest age: 120
     assert set(cu.load_q(data, "a~1", "222", "2026-06")["days"]) == set(jun)   # the very reads q kept
     # the hot days' users: beside their very read (its "at"), only while hot (today − 2 … today)
     h, uh = cu.load_head(data, "a~1"), cu.load_uhead(data, "a~1", "222")
     assert sorted(uh["d"]) == sorted(h["d"]) == ["2026-10-17", "2026-10-18", "2026-10-19"]
     for D, e in uh["d"].items():
         assert e["c"]["at"] == e["q"]["at"] == h["d"][D]["at"] and e["q"]["s"] == "ok" and "u" not in h["d"][D]
-        assert e["c"]["u"]["AA"][0] == 80 and e["q"]["u"][0] == WSUM
+        assert e["c"]["u"]["AA"][0] == 80 and e["q"]["u"][0] == WSUM and e["q"]["x"] == 120
 
 
 def test_u_all_users_fill_once_newest_first_its_calls_and_resume(tmp_path, monkeypatch):
     """Days read before users were kept: the All users fill reads each once — one whole no-country read a day, from
-    history start + 150 (younger days hold only ages the install-day file has), settled days only, newest first —
-    within the calls it is given, then goes on where it stopped; the cube's own files never change."""
+    history start + 60 (an earlier day holds no column's age of an install day from it; the install-day file's ages
+    are read too: the build takes that file only on a clean day), settled days only, newest first — within the calls
+    it is given, then goes on where it stopped; the cube's own files never change."""
     data, hs = str(tmp_path), date(2026, 1, 1)
     cube = cu.Cube(data, "a~1", "222")
     cube.head["time_zone"] = "UTC"
@@ -2439,10 +2455,11 @@ def test_u_all_users_fill_once_newest_first_its_calls_and_resume(tmp_path, monke
     monkeypatch.setattr(cu, "U_ON", True)
     cube = cu.Cube(data, "a~1", "222")
     assert cu.u_scan(cube, NOW, "qs") is True and cu.u_scan(cube, NOW, "qs") is False    # once (while queued)
-    first, last = hs + timedelta(days=cu.U_FROM), TODAY - timedelta(days=cu.Q_SETTLE)   # May 31 … Oct 8
+    first, last = hs + timedelta(days=cu.U_FROM), TODAY - timedelta(days=cu.Q_SETTLE)   # Mar 2 … Oct 8
     want = [(last - timedelta(days=i)).isoformat() for i in range((last - first).days + 1)]
     todo = cube.uhead()["qs"]["todo"]
-    assert [k for k, _ in todo] == ["2026-10", "2026-09", "2026-08", "2026-07", "2026-06", "2026-05"]
+    assert first == date(2026, 3, 2) and [k for k, _ in todo] == ["2026-10", "2026-09", "2026-08", "2026-07",
+                                                                  "2026-06", "2026-05", "2026-04", "2026-03"]
     assert sum(n for _, n in todo) == len(want)
     left = [10]
 
@@ -2456,7 +2473,7 @@ def test_u_all_users_fill_once_newest_first_its_calls_and_resume(tmp_path, monke
     assert ga.calls == 10 and got == want[:10] and cube.u_days == 10 == cube.u_calls
     assert all([d["name"] for d in q[0]["dimensions"]] == ["firstSessionDate"] for q in ga.asked)
     assert cube.umonth("2026-10")["q"]["2026-10-08"] == {"s": "ok", "at": "2026-10-13T06:00:00Z",
-                                                          "u": [WSUM] * 3 + [0] * 10}
+                                                          "u": [WSUM] * 3 + [0] * 10, "x": 120, "o": 0}
     cube.save()
     cube.save_u()
     cube = cu.Cube(data, "a~1", "222")
@@ -2468,8 +2485,8 @@ def test_u_all_users_fill_once_newest_first_its_calls_and_resume(tmp_path, monke
     cube.save_u()
     after = _files(tmp_path)
     assert {k: v for k, v in after.items() if not _is_u(k)} == before          # the cube's files untouched
-    assert sum(len(cu.load_u(data, "a~1", "222", k)["q"]) for k in ("2026-05", "2026-06", "2026-07", "2026-08",
-                                                                    "2026-09", "2026-10")) == len(want)
+    assert sum(len(cu.load_u(data, "a~1", "222", k)["q"]) for k in ("2026-03", "2026-04", "2026-05", "2026-06",
+                                                                    "2026-07", "2026-08", "2026-09", "2026-10")) == len(want)
     # with q on: a day q still reads itself (it needs one, no final q record) is q's — its read keeps the users; a
     # day q read before users were kept ("ok": final) is the fill's
     monkeypatch.setattr(cu, "Q_CALLS", 120)
@@ -2479,7 +2496,20 @@ def test_u_all_users_fill_once_newest_first_its_calls_and_resume(tmp_path, monke
                                 "2026-09-12": {"t": 0, "rows": 2}, "2026-09-13": {"t": 0, "rows": 0}}}
     c2.qm["2026-09"] = {"days": {"2026-09-11": {"qs": "ok", "at": "2026-09-20T00:00:00Z"}}, "q": {}}
     assert cu._uq_miss(c2, "2026-09", c2.m["2026-09"], hs, TODAY) == ["2026-09-12", "2026-09-11"]
-    assert cu._uq_miss(c2, "2026-09", c2.m["2026-09"], date(2026, 6, 1), TODAY) == []   # younger than hs + 150
+    assert cu._uq_miss(c2, "2026-09", c2.m["2026-09"], date(2026, 7, 20), TODAY) == []  # younger than hs + 60
+    # a stored users "fl" is read again by q's own rule (u_due): settled, fewer than Q_RETRY re-reads, a day after it
+    c2.um["2026-09"] = {"q": {"2026-09-12": {"s": "fl", "at": "2026-09-20T00:00:00Z"},
+                              "2026-09-11": {"s": "fl", "at": "2026-09-20T00:00:00Z", "rt": cu.Q_RETRY}}, "c": {}}
+    assert cu._uq_miss(c2, "2026-09", c2.m["2026-09"], hs, TODAY, "2026-10-13T06:00:00Z") == ["2026-09-12"]
+    assert cu._uq_miss(c2, "2026-09", c2.m["2026-09"], hs, TODAY, "2026-09-20T12:00:00Z") == []   # not due yet
+    assert cu._uq_miss(c2, "2026-09", c2.m["2026-09"], hs, TODAY) == []     # (no moment: none due)
+    # … and its next read replaces it ("rt" + 1 while "fl" again; an "ok" then stays for good)
+    D, fl = "2026-09-12", {"qs": "fl", "qu": None, "qou": 0, "qx": 400}
+    assert c2.u_q(D, fl, "2026-10-13T06:00:00Z") and c2.um["2026-09"]["q"][D] == {"s": "fl",
+                                                                                  "at": "2026-10-13T06:00:00Z", "rt": 1}
+    ok = {"qs": "ok", "qu": [3] * 13, "qou": 1, "qx": 400}
+    assert c2.u_q(D, ok, "2026-10-14T06:00:00Z") and c2.um["2026-09"]["q"][D]["s"] == "ok"
+    assert not c2.u_q(D, fl, "2026-10-15T06:00:00Z") and c2.um["2026-09"]["q"][D]["u"] == [3] * 13
 
 
 def test_u_country_users_fill_blocks_days_other_never_spread_resume(tmp_path, monkeypatch):
@@ -2552,16 +2582,20 @@ def test_u_rounds_in_the_run_counts_line_and_state(monkeypatch, tmp_path):
     assert "u kept" not in cu.log_line(out) and not any(_is_u(k) for k in _files(tmp_path))
     cube_files = {k: v for k, v in _files(tmp_path).items() if not k.endswith("state.json")}
     monkeypatch.setattr(cu, "U_ON", True)
-    monkeypatch.setattr(cu, "UC_CALLS", 5)                                  # 3 blocks, then 2 left < a day's 3
+    monkeypatch.setattr(cu, "UC_CALLS", 4)                                  # 3 blocks, then 1 left < a block's 2
+    #                                                                         (itself + its first day alone)
     data, out = _refresh(monkeypatch, tmp_path, workers=1)                  # the same moment: nothing of the cube due
     c = out["counts"]
-    assert c["uc_calls"] == 3 and c["uc_days"] == 70 and c["uc_left"] == 70 and c["u_days"] == c["u_calls"] == 0
-    assert c["u_left"] == 0 and c["u_unscanned"] == 0 and c["u_errors"] == 0 and c["calls"] == 3
+    # the All users fill: every settled day from history start (Aug 1) + 60 — Sep 30 … Oct 8 — one read each, each app
+    assert c["uc_calls"] == 3 and c["uc_days"] == 70 and c["uc_left"] == 70 and c["u_days"] == c["u_calls"] == 18
+    assert c["u_left"] == 0 and c["u_unscanned"] == 0 and c["u_errors"] == 0 and c["calls"] == 21
     line = cu.log_line(out)
-    assert line.endswith(", calls 3, tokens 0, u kept 0, u days 0, u calls 0, u left 0, uc days 70, uc calls 3, "
+    assert line.endswith(", calls 21, tokens 0, u kept 0, u days 18, u calls 18, u left 0, uc days 70, uc calls 3, "
                          "uc left 70, u unscanned 0, u other 0, u errors 0") and "x~" not in line
     st = cu.load_state(data)["fetch"]
     assert st["x~1"]["uct"] and "uct" not in st["x~2"] and st["x~1"]["u"]["cd"] == 70 and st["x~2"]["u"]["cleft"] == 70
+    assert st["x~1"]["ut"] and st["x~2"]["ut"] and st["x~1"]["u"]["d"] == st["x~2"]["u"]["d"] == 9
+    assert sorted(cu.load_u(data, "x~2", "222", "2026-10")["q"]) == ["2026-10-0%d" % i for i in range(1, 9)]
     now = {k: v for k, v in _files(tmp_path).items() if not k.endswith("state.json") and not _is_u(k)}
     assert now == cube_files
     assert len(cu.load_u(data, "x~1", "222", "2026-08")["c"]) == 30 and cu.load_u(data, "x~2", "222", "2026-08") is None
@@ -2570,17 +2604,99 @@ def test_u_rounds_in_the_run_counts_line_and_state(monkeypatch, tmp_path):
     assert len(cu.load_u(data, "x~2", "222", "2026-10")["c"]) == 10
 
 
+def test_u_country_fill_never_starts_a_day_it_cannot_finish(tmp_path, monkeypatch):
+    """The country users fill starts a block (with its first day alone: 1 + UC_CAP calls) or a day (UC_CAP) only while
+    the round's time holds its calls at the fill's own seconds a call — a day is never cut halfway (its calls thrown
+    away); those seconds kept for the next run ("cs" "s"); the allowance and the app's cap the same way."""
+    data, ex = str(tmp_path), date(2026, 10, 1)
+    cube = cu.Cube(data, "a~1", "222")
+    cube.head["time_zone"] = "UTC"
+    cu.step_app(FakeGA(cap=1000, extra_day=ex), cube, TODAY, HS, NOW)      # users off: nothing kept
+    cube.head["hs"] = HS.isoformat()
+    _save(cube)
+    monkeypatch.setattr(cu, "U_ON", True)
+    monkeypatch.setattr(cu, "UC_CAP", 3)                                    # Oct 1 ("(other)"): its split, 3 calls
+    clk = [0.0]
+
+    class TGA(FakeGA):                                                      # every call 5 s on a fake clock
+        clock = staticmethod(lambda: clk[0])
+
+        def report_all(self, *a, **k):
+            r = super().report_all(*a, **k)
+            clk[0] += 5
+            return r
+
+    def run(limit, s=None):
+        c = cu.Cube(data, "a~1", "222")
+        cu.u_scan(c, NOW, "cs")
+        if s is not None:
+            c.uhead()["cs"]["s"] = s
+        clk[0], ga = 0.0, TGA(cap=1000, extra_day=ex)
+        took = []
+
+        def take():                                                         # the round's own seconds (over())
+            took.append(clk[0])
+            return clk[0] < limit
+        with pytest.raises((cu._Out, gf.Stop)):
+            cu.u_fill_c(ga, c, NOW, take, lambda: 10 ** 6, lambda: limit - clk[0])
+        return c, ga
+    # 12 s left, 5 s a call measured before: the block and Oct 1 alone need 4 calls (20 s) — not started at all (the
+    # old way: the block, Oct 1's root and one half read, the other half refused — 3 calls thrown away)
+    c, ga = run(12, s=5.0)
+    assert ga.calls == 0 and c.uc_days == 0 and not c.umonth("2026-10")["c"]
+    # 22 s: the block (5 s, "(other)") and Oct 1 alone (3 calls) kept; Oct 2 (3 more: 15 s > 2 s left) not started
+    c, ga = run(22, s=5.0)
+    assert ga.calls == 4 and _reads(ga)[0] == ("2026-10-01", "2026-10-10") and c.uc_days == 1
+    assert sorted(c.umonth("2026-10")["c"]) == ["2026-10-01"] and c.uhead()["cs"]["s"] == 5.0
+    # nothing measured yet (no "s"): the first block starts; from then on the fill's own 5 s a call decide
+    c, ga = run(22)
+    assert ga.calls == 4 and c.uc_days == 1 and c.uhead()["cs"]["s"] == 5.0
+    # the room itself: the allowance, the app's cap, the time (unknown: yes)
+    g = FakeGA()
+    g.max_calls, g.calls = 10, 8
+    assert not cu._u_room(g, 3, lambda: 10) and cu._u_room(g, 2, lambda: 10) and not cu._u_room(g, 2, lambda: 1)
+    assert cu._u_room(g, 2, lambda: 10, lambda: 9.0, 4.5) and not cu._u_room(g, 2, lambda: 10, lambda: 8.9, 4.5)
+    assert cu._u_room(g, 2, lambda: 10, lambda: 0.0, None) and cu._u_room(g, 2, lambda: 10, None, 4.5)
+
+
+def test_u_rounds_share_one_per_app_allowance(monkeypatch):
+    """GA4_CUBE_U_APP_CALLS lifts an app's call cap ONCE for both users rounds of a run (from its calls when the first
+    started) — never q's GA4_CUBE_Q_APP_CALLS, never again per round; the cap restored after each; 0: the app's own."""
+    import threading
+    seen = []
+
+    def fq(ga, cube, now, take):
+        seen.append(("qs", ga.max_calls))
+        ga.calls += 30
+
+    def fc(ga, cube, now, take, left, tleft=None):
+        seen.append(("cs", ga.max_calls))
+        ga.calls += 5
+    monkeypatch.setattr(cu, "u_fill_q", fq)
+    monkeypatch.setattr(cu, "u_fill_c", fc)
+    monkeypatch.setattr(cu, "Q_APP_CALLS", 100)
+    for allow, want in ((40, [("qs", 90), ("cs", 90)]), (0, [("qs", 60), ("cs", 60)])):
+        monkeypatch.setattr(cu, "U_APP_CALLS", allow)
+        seen.clear()
+        ga, cube = FakeGA(), cu.Cube(None, "a~1", "222")
+        ga.max_calls, ga.calls = 60, 50
+        fill, counts = [("a~1", {}, cube, ga)], {"calls": 0, "tokens": 0}
+        for kind in ("qs", "cs"):
+            cu.u_round(fill, NOW, lambda: None, threading.Lock(), counts, kind, 1)
+        assert seen == want and ga.max_calls == 60 and counts["calls"] == 35
+
+
 def test_u_settings_and_the_workflow(monkeypatch):
-    """Defaults with nothing set (users kept and used; each fill 120 calls / 20 s a run; country days under 3 calls)
-    and the workflow handing every setting over as a repo variable."""
+    """Defaults with nothing set (users kept and used; each fill 120 calls / 20 s a run; a country day one call, no
+    split; no per-app allowance of their own) and the workflow handing every setting over as a repo variable."""
     import importlib
     names = ("GA4_CUBE_U", "GA4_CUBE_U_USE", "GA4_CUBE_U_CALLS", "GA4_CUBE_U_SEC", "GA4_CUBE_U_C_CALLS",
-             "GA4_CUBE_U_C_SEC", "GA4_CUBE_U_C_CAP")
+             "GA4_CUBE_U_C_SEC", "GA4_CUBE_U_C_CAP", "GA4_CUBE_U_APP_CALLS")
     for k in names:
         monkeypatch.delenv(k, raising=False)
     fresh = importlib.reload(cu)
-    assert (fresh.U_ON, fresh.U_USE, fresh.U_CALLS, fresh.U_SEC, fresh.UC_CALLS, fresh.UC_SEC, fresh.UC_CAP) == (
-        True, True, 120, 20.0, 120, 20.0, cu.MIN_CAP)
+    assert (fresh.U_ON, fresh.U_USE, fresh.U_CALLS, fresh.U_SEC, fresh.UC_CALLS, fresh.UC_SEC, fresh.UC_CAP,
+            fresh.U_APP_CALLS) == (True, True, 120, 20.0, 120, 20.0, 1, 0)
     monkeypatch.setenv("GA4_CUBE_U", "false")
     monkeypatch.setenv("GA4_CUBE_U_C_CALLS", "0")
     fresh = importlib.reload(cu)

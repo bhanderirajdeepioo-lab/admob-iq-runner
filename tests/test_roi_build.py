@@ -28,10 +28,11 @@ install days than the cube kept staying on the cube (qshort), the days waiting (
 good (qfl), each with its "(other)" size, ≈ bits 2 / 4 only where a row still takes the cube's cells, days of nothing
 needing no read, without q files — or q off / not used — the build as before; no borrowed k_c (a month not whole: the
 app's k); GA4: country not given per month (cd.ng = All − Σ countries).
-👥 Users: the All rows' mu (users on each 30-day column's day) from an install-day fixture first, then a whole read's
-users (≤ 420), null otherwise; through the build's files (a hot day's only beside its own read) and the switch
-(GA4_CUBE_U_USE=false: every byte as without); the country rows' u / mu (null where a day's users are not kept), ≈ bits
-from "(other)" / flagged days, users-only countries, zero rows still [X], the packs' build stamp and PACK_MAX.
+👥 Users: the All rows' mu (users on each 30-day column's day) from an install-day fixture first (its clean days only),
+then a whole read's users (≤ 420 and ≤ the oldest age it named), null otherwise; through the build's files (a hot
+day's only beside its own read; users with no install day noted) and the switch (GA4_CUBE_U_USE=false: every byte as
+without); the country rows' u / mu (null where a day's users are not kept), their "(other)" / flagged days in cd "uu"
+— never a revenue ≈ bit —, users-only countries, zero rows still [X], the packs' build stamp and PACK_MAX.
 """
 import gzip
 import json
@@ -47,7 +48,7 @@ T = rb.T
 
 class Pre:
     """Every activity day up to S is folded (complete)."""
-    g = c = None
+    g = c = ok = None
 
     def __init__(self, S):
         self.S = S
@@ -1727,36 +1728,47 @@ def _uhw(data, d, sid="222"):
 
 def test_mu_from_an_iday_fixture_then_a_whole_reads_users():
     """All rows' mu (users active on exactly each 30-day column's day, aligned with m): the install-day file's users
-    (fetch.ga4_uninstall ULAGS 60 / 90 / 120 / 180 / 270 — 365 is no column's day) where that activity day is folded
-    there and its Q-B window reached the age; else a whole no-country read's (u "q", ages ≤ 420: its horizon); else
-    null. A row with nothing known gets no mu."""
+    (fetch.ga4_uninstall ULAGS 60 / 90 / 120 / 180 / 270 — 365 is no column's day) where that activity day is CLEAN
+    there (Q-B "ok" / "empty": not "q" — "(other)", loss, sampling —, no thresholding flag, its window reached the age);
+    else a whole no-country read's (u "q" "ok", ages ≤ 420: its horizon, and ≤ the oldest age it named: a window that
+    shrank is null, never 0); else null. A row with nothing known gets no mu."""
     from admob_iq.engine import value as val
     from admob_iq.fetch import ga4_cube as cu
     hs, S = date(2026, 1, 1), date(2026, 10, 7)
-    X = hs
+    X, X2 = hs, hs + timedelta(days=1)
     days, D = {}, hs
     while D <= S:
         days[D.isoformat()] = {"st": "ok", "win": (D - hs).days}
         D += timedelta(days=1)
     days[(X + timedelta(days=90)).isoformat()]["st"] = "retry"            # not folded: none of its users known there
     days[(X + timedelta(days=120)).isoformat()]["win"] = 100               # its Q-B window stopped short of age 120
-    ida = {"x": {X.isoformat(): {"n": 1000, "u": [1000, 500, 400, 300, 200, 150, 120, 100, 80, 60, 40, 30, 20],
-                                 "r": [0] * 10}},
+    days[(X + timedelta(days=180)).isoformat()]["st"] = "q"                # folded with "(other)" / loss / sampling
+    days[(X + timedelta(days=270)).isoformat()]["thr"] = True              # GA4's thresholding flag
+    xu = {"n": 1000, "u": [1000, 500, 400, 300, 200, 150, 120, 100, 80, 60, 40, 30, 20], "r": [0] * 10}
+    ida = {"x": {X.isoformat(): xu, X2.isoformat(): xu},
            "days": days, "flags": {"qb_win": True}, "to": S.isoformat(), "from": hs.isoformat()}
     P = val._prep({"history_start": hs.isoformat(), "time_zone": "UTC"}, ida, None, None, S)
-    rows = [{"X": X, "m": [0.0] * 14}]                                      # columns D60 … D450
-    rb._mu_all(rows, P, {"uq": {}})
-    assert rows[0]["mu"] == [100, None, None, None, 40, None, None, 30, None, None, None, None, None, None]
+    rows = [{"X": X, "m": [0.0] * 14}, {"X": X2, "m": [0.0] * 14}]          # columns D60 … D450
+    rb._mu_all(rows, P, {"uq": {}}, days)
+    assert rows[0]["mu"] == [100] + [None] * 13                             # only day 60's is clean
+    assert rows[1]["mu"] == [100, 80, 60, None, 40, None, None, 30] + [None] * 6   # every day clean: the file's
+    rows = [{"X": X, "m": [0.0] * 14}]
+    rb._mu_all(rows, P, {"uq": {}})                                         # (no ledger given: no thresholding seen)
+    assert rows[0]["mu"] == [100, None, None, None, None, None, None, 30] + [None] * 6
     assert rb.gu.ULAGS[-1] == 365 and 365 % rb.LATE_STEP                  # 365: no column's day
-    uq = {X + timedelta(days=A): [7000 + A] * len(cu.UQ_AGES) for A in (60, 90, 120, 150, 360, 450)}
-    uq[date(2026, 10, 31)] = [55] * len(cu.UQ_AGES)
+    uq = {X + timedelta(days=A): ([7000 + A] * len(cu.UQ_AGES), 427, 0) for A in (60, 90, 120, 150, 180, 270, 360, 450)}
+    uq[X + timedelta(days=300)] = ([7300] * len(cu.UQ_AGES), 290, 0)       # an "ok" read whose window shrank to 290
+    uq[date(2026, 10, 31)] = ([55] * len(cu.UQ_AGES), 427, 0)
+    uq[date(2026, 10, 20)] = ([9] * len(cu.UQ_AGES), -1, 0)                # an "ok" read that named no install day
     rows = [{"X": X, "m": [0.0] * 14}, {"X": date(2026, 9, 1), "m": [0.0]}, {"X": date(2026, 8, 20), "m": [0.0]},
-            {"X": date(2026, 9, 2)}]
-    rb._mu_all(rows, P, {"uq": uq})
-    # 60: the install-day file first; 90 / 120: a whole read's (the file's day not folded / window short); 150 / 360:
-    # only a whole read has them; 450: past its horizon (420) — null even with a read of that day
-    assert rows[0]["mu"] == [100, 7090, 7120, 7150, 40, None, None, 30, None, None, 7360, None, None, None]
+            {"X": date(2026, 9, 2)}, {"X": date(2026, 8, 21), "m": [0.0]}]
+    rb._mu_all(rows, P, {"uq": uq}, days)
+    # 60: the install-day file first (clean); 90 / 120 / 180 / 270: a whole read's (the file's day not folded / window
+    # short / "q" / thresholded); 150 / 360: only a whole read has them; 300: past that read's oldest age (290) — null,
+    # never its 0; 450: past the horizon (420) — null even with a read of that day
+    assert rows[0]["mu"] == [100, 7090, 7120, 7150, 7180, None, None, 7270, None, None, 7360, None, None, None]
     assert rows[1]["mu"] == [55] and "mu" not in rows[2] and "mu" not in rows[3]   # past the file: a read's / none
+    assert "mu" not in rows[4]                                              # a read with no dated row: unknown
     r = dict(X=X, n=1, na=None, sp=None, d=None, df=0, u=None, t=[None] * 10, s=None, sd=None, be=None, spi=None,
              m=[1.0, 2.0], mf=2)
     assert rb._row_out(dict(r, mu=[5, None]))[14:] == [[1.0, 2.0], 2, [5, None]] and len(rb._row_out(r)) == 16
@@ -1768,14 +1780,18 @@ def test_mu_from_the_users_files_through_the_build(tmp_path, monkeypatch):
     from admob_iq.fetch import ga4_cube as cu
     P, co = _cube_setup(tmp_path)                       # the install-day file: 100 users at every age, through LS
     X = LHS
-    _uw(tmp_path, "2026-08", q={"2026-08-29": {"s": "ok", "at": "x", "u": [0, 0, 0, 33] + [0] * 9}})   # X + 150
+    _uw(tmp_path, "2026-08", q={"2026-08-29": {"s": "ok", "at": "x", "u": [0, 0, 0, 33] + [0] * 9, "x": 427,
+                                               "o": 4}})                                             # X + 150
     _uw(tmp_path, "2026-09", q={"2026-09-28": {"s": "fl", "at": "x"}, "2026-09-12": {"s": "ok", "at": "x",
-                                                                                      "u": [11] * 13}})
+                                                                                      "u": [11] * 13, "x": 427},
+                                "2026-09-13": {"s": "ok", "at": "x", "u": [12] * 13, "x": 140, "o": 0},
+                                "2026-09-14": {"s": "ok", "at": "x", "u": [13] * 13}})   # (no "x": not this format)
     hot_at = "2026-10-13T06:00:00Z"                     # the hot days' read in _cube_setup
-    _uhw(tmp_path, {"2026-10-12": {"q": {"s": "ok", "at": hot_at, "u": [44] + [0] * 12}},
-                    "2026-10-13": {"q": {"s": "ok", "at": "2026-10-12T00:00:00Z", "u": [45] + [0] * 12}}})
+    _uhw(tmp_path, {"2026-10-12": {"q": {"s": "ok", "at": hot_at, "u": [44] + [0] * 12, "x": 427, "o": 9}},
+                    "2026-10-13": {"q": {"s": "ok", "at": "2026-10-12T00:00:00Z", "u": [45] + [0] * 12, "x": 427}}})
     late = rb._late(str(tmp_path), "a~1", "222", P)
-    assert late["info"]["u"] == {"q": 2, "qfl": 1, "c": 0}
+    # folded days: 4 whole reads kept (one with users GA4 gave no install day: 4), 1 not whole; a hot day not counted
+    assert late["info"]["u"] == {"q": 4, "qfl": 1, "c": 0, "qou": 4, "qou_days": 1}
     by = _rows(P, co, late)
     rb._mu_all(list(by.values()), P, late)
     assert by[X]["mu"] == [100, 100, 100, 33, 100]                          # 150 from the users' file
@@ -1783,6 +1799,10 @@ def test_mu_from_the_users_files_through_the_build(tmp_path, monkeypatch):
     assert by[date(2026, 7, 14)]["mu"] == [100, 0]                          # hot, its own read (0 at that age)
     assert by[date(2026, 8, 13)]["mu"] == [44]                              # day 60 = Oct 12
     assert "mu" not in by[date(2026, 8, 14)]                                # Oct 13: another read's — unknown
+    # Sep 13's read named install ages to 140 only (a window that shrank): its day-150 users unknown, never 0; its
+    # day-60 users (Jul 15) the install-day file's (clean there); Sep 14's record without "x": unknown at every age
+    assert by[date(2026, 4, 16)]["mu"] == [100, 100, 100, None, None]
+    assert by[date(2026, 4, 17)]["mu"] == [100, 100, 100, None]
     monkeypatch.setattr(cu, "U_USE", False)
     off = rb._late(str(tmp_path), "a~1", "222", P)
     assert "u" not in off["info"] and off["uq"] == {} and off["info"] == {k: v for k, v in late["info"].items()
@@ -1795,9 +1815,11 @@ def test_app_step_mu_and_the_users_switch(tmp_path, monkeypatch):
     from admob_iq.fetch import ga4_cube as cu
     P, co = _cube_setup(tmp_path / "data")
     _stub_app(monkeypatch, P, co, SPEND)
-    _uw(tmp_path / "data", "2026-08", q={"2026-08-29": {"s": "ok", "at": "x", "u": [0, 0, 0, 33] + [0] * 9}})
+    _uw(tmp_path / "data", "2026-08", q={"2026-08-29": {"s": "ok", "at": "x", "u": [0, 0, 0, 33] + [0] * 9,
+                                                        "x": 427, "o": 0}})
     full = json.loads(_app_step_run(str(tmp_path / "data"), str(tmp_path / "o1"), True))
-    assert full["rows"][0][16] == [100, 100, 100, 33, 100] and full["late"]["u"] == {"q": 1, "qfl": 0, "c": 0}
+    assert full["rows"][0][16] == [100, 100, 100, 33, 100]
+    assert full["late"]["u"] == {"q": 1, "qfl": 0, "c": 0, "qou": 0, "qou_days": 0}
     monkeypatch.setattr(cu, "U_USE", False)
     off = json.loads(_app_step_run(str(tmp_path / "data"), str(tmp_path / "o2"), True))
     assert {len(r) for r in off["rows"]} == {14, 16} and "u" not in off["late"]
@@ -1836,9 +1858,11 @@ def _cc_users(data, skip=(), ou=None, fl=(), hot_at=None, extra=None):
 
 def test_country_users_day_by_day_columns_bits_and_zero_rows(tmp_path):
     """🌍 + 👥 Every country row gets u (day 0 = its installs, then each day's users kept, null where a day's are not)
-    and mu (each 30-day column's day); a day with users GA4 left "(other)" → ≈ bit 2, flagged → 4 (their size in cd
-    "uu", never spread); a hot day's users only beside its own read; a country with users only gets its rows; a row
-    with no user and nothing else stays [X]; without users' files every byte as before (the other tests)."""
+    and mu (each 30-day column's day); a day with users GA4 gave no install day / country, or flagged: in cd "uu"
+    (their size, the days as runs "ou_r" / "fl_r" for the page's users cells; never spread) — the revenue cells' ≈ bits
+    exactly as without users, also on a row whose users past day 0 are all 0; a hot day's users only beside its own
+    read; a country with users only gets its rows; a row with no user and nothing else stays [X]; without users' files
+    every byte as before (the other tests)."""
     kw = dict(inst=dict(CINST, EE=3), rate=dict(CRATE, EE=50000), only={"EE": {date(2026, 9, 5), date(2026, 9, 6)}})
     data, P, pre, spend, acc = _cc_world(tmp_path, **kw)
     cd0, od0, _ = _cc_run(tmp_path, data, P, pre, spend, acc, out="o0")      # no users' file
@@ -1850,24 +1874,29 @@ def test_country_users_day_by_day_columns_bits_and_zero_rows(tmp_path):
               extra={("FF", date(2026, 9, 1), 5): 3})
     cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, rb.start(cube=True, cmon=acc.cmon), out="o1")
     days = (CTODAY - CHS).days + 1
-    assert cd["uu"] == {"days": days - 2, "zero": 0, "ou_days": 1, "ou": 7, "fl_days": 1}   # the hole, Oct 13's other read
+    assert cd["uu"] == {"days": days - 2, "zero": 0, "ou_days": 1, "ou": 7, "fl_days": 1,  # the hole, Oct 13's other
+                        "ou_r": [["2026-09-20", "2026-09-20"]], "fl_r": [["2026-09-25", "2026-09-25"]]}   # read
     got = _pack_rows(od, cd)
     assert set(got) == set(base) | {"FF"}
     AA = {r[0]: r for r in _expand(got["AA"], cd, "AA")}
     r = AA["2026-09-01"]
     assert r[6] == [40] + [None if L == 9 else 40 for L in range(1, 31)] and len(r[6]) == len(r[4])
-    assert r[12] & 6 == 6 and not base["AA"]["2026-09-01"][12] & 6         # Sep 20 ("(other)") and Sep 25 (flag)
+    assert r[12] == base["AA"]["2026-09-01"][12]                            # Sep 20 / Sep 25: no revenue ≈ bit
     assert AA["2026-08-05"][16] == [20] and AA["2026-08-12"][16] == [20]    # day 60: Oct 4 / Oct 11 (hot, its read)
     assert len(AA["2026-08-14"]) == 16                                      # day 60 = Oct 13: another read's — none
     assert AA["2026-10-10"][6] == [40, 40, 40, None] and AA["2026-10-13"][6] == [40]
-    assert AA["2026-10-01"][12] & 6 == 0                                    # its days after Sep 25
+    assert AA["2026-10-01"][12] == base["AA"]["2026-10-01"][12]
     NC = {r[0]: r for r in _expand(got["--"], cd, "--")}
     assert NC["2026-09-02"][6][1] == 2 and NC["2026-09-02"][6][8] is None   # "Unknown country" too
+    # installs but no user kept past day 0 (EE: none in the users' files) — Sep 20's users GA4 gave no install day or
+    # country may hold some: that day is in cd "uu" "ou_r" for the page's users cells; the revenue bits stay as they are
+    e5 = {r[0]: r for r in _expand(got["EE"], cd, "EE")}["2026-09-05"]
+    assert e5[1] == 3 and e5[6][0] == 3 and e5[6][15] == 0 and not any(e5[6][1:]) and e5[12] == base["EE"]["2026-09-05"][12]
     for cc, rs in base.items():                                             # every other cell as without users
         for X, r0 in rs.items():
             r1 = {r[0]: r for r in _expand(got[cc], cd, cc)}[X]
-            assert r1[:6] + r1[7:12] + r1[13:16] == r0[:6] + r0[7:12] + r0[13:16], (cc, X)
-            assert r1[12] & ~6 == r0[12] & ~6 and (cc not in ("XX",) or r1[6] is None)
+            assert r1[:6] + r1[7:16] == r0[:6] + r0[7:16], (cc, X)        # the q bits (12) too: users never in them
+            assert cc not in ("XX",) or r1[6] is None
     # a country with users only (no installs, no revenue): its row with them; its other days [X]
     FF = _expand(got["FF"], cd, "FF")
     full_ff = [x for x in got["FF"] if len(x) > 1]

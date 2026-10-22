@@ -51,10 +51,13 @@ k the tab uses):
 👥 Users on the 30-day columns' days (owner, 22 Oct 2026: "retention data already ham track nahi kar rahe he?" — GA4's
 own users, never estimated; GA4_CUBE_U_USE=false: none of it, every byte as before): an All row's mu[i] (day A =
 30 (i + 2)) = the install-day file's users at A (fetch.ga4_uninstall x[X].u at ULAGS: 60 / 90 / 120 / 180 / 270 — 365
-is no column's day) when activity day X + A is folded there and its window reached A, else the whole no-country read's
-of that day (fetch.ga4_cube u "q", A ≤ 420: the read's horizon; a hot day's only beside its own read), else null —
-past 420 no read is whole (null); the file's "late" "u" = {"q" days with a whole read's users, "qfl" not whole, "c"
-days with country users}.
+is no column's day) when activity day X + A is CLEAN there (Q-B st "ok" / "empty", no thresholding flag, its window
+reached A — a "q" day with "(other)" / data loss / sampling is not), else the whole no-country read's of that day
+(fetch.ga4_cube u "q" "ok", A ≤ 420: the read's horizon, and A ≤ the oldest install age that read named — past it a
+window that shrank: null, never 0; a hot day's only beside its own read), else null — past 420 no read is whole
+(null); the file's "late" "u" = {"q" folded days with a whole read's users, "qfl" not whole, "c" days with country
+users, "qou" / "qou_days" the users the whole reads ("ok") gave no install day ("(not set)", after the day: in no row,
+measured — the page's note) and the days with any}.
 Past day 30 (owner, 20 Oct 2026: "jitna purana app utna date"): fetch.ga4_cube (GA4_CUBE) keeps every install day's GA4
 ad revenue by activity day × country from the history start (with countryId GA4 answers every install day; the
 [date, firstSessionDate] shape stops at about 15 months). Per install day X its 30-day buckets B[j] (ages 30j+1 …
@@ -83,10 +86,13 @@ files) — only with the switch on, the app's cube walked through (done) and any
 the file changes. Per country (every one GA4 names, "--" = GA4's "(not set)" = "Unknown country", nothing pooled or cut):
   * 👥 u (only with the cube's users' files, fetch.ga4_cube u "c"): users active on day 0 … len(d) − 1 — day 0 = n,
     each later day GA4's own users of that country and install day where the activity day's users are kept (a day read
-    with no row: 0), null where not; mu: users on each m column's day (null where not kept); a day whose users GA4
-    left "(other)" (their size in cd "uu", never spread) → q bit 2, one GA4 flagged → 4 (on a row with users); a
-    country with users only gets its rows; a row with no user and nothing else stays [X]; cd "uu" = {"days" kept,
-    "zero" days read with no row, "ou_days", "ou" (user-days in "(other)"), "fl_days"};
+    with no row: 0), null where not; mu: users on each m column's day (null where not kept); a country with users
+    only gets its rows; a row with no user and nothing else stays [X]; the revenue cells' q bits never change with
+    users; cd "uu" = {"days" kept, "zero" days read with no row, "ou_days" / "ou" (days with users GA4 gave no install
+    day or no country — "(other)", a "(not set)" install day, after the day — and those user-days: measured, never
+    spread), "fl_days" (days GA4 flagged: sampling / thresholding / a cut answer / "(other)" hidden under a filter —
+    how many users are missing unknown), "ou_r" / "fl_r" those days as runs [[first, last]]: the page marks a users
+    cell whose activity day (install day + age) is in one};
   * n = Σ the cube's "e" u0 (that country's installs, ads + organic); d / df / m / mf / s / sd / be through _cohorts
     itself (the same code as the All row): d[L] = Σ "e" r_L × k_c(cc, month of the activity day), m from "c" buckets
     × k_c the same way as _late's "b"; completeness / finality = _late's own (every day read / folded; d stops at the
@@ -351,8 +357,28 @@ def _late(data_dir, aid, sid, P, visit=None):
     quse = gcu.Q_CALLS > 0 and gcu.Q_USE   # q off (GA4_CUBE_Q_CALLS=0) or not used (GA4_CUBE_Q_USE=false): every q file
     #                                       ignored — the cube's own cells, every byte as without them
     uuse = gcu.U_USE                       # 👥 users (fetch.ga4_cube u): GA4_CUBE_U_USE=false → every u file ignored
-    UQ, ui = {}, {"q": 0, "qfl": 0, "c": 0, "on": False}   # All users at UQ_AGES by activity day (a whole read "ok")
-    uh = gcu.load_uhead(data_dir, aid, sid) if uuse else None
+    UQ, ui = {}, {"q": 0, "qfl": 0, "c": 0, "qou": 0, "qou_days": 0, "on": False}   # All users by activity day (a whole
+    uh = gcu.load_uhead(data_dir, aid, sid) if uuse else None                          # read "ok"): (u, x, o)
+
+    def uq_of(r):
+        """A whole read's users record → (users at UQ_AGES, the oldest install age it named — −1: none, every age
+        unknown —, users of its rows with no install day); None: not "ok" (not whole) or not this format."""
+        if not isinstance(r, dict) or r.get("s") != "ok":
+            return None
+        u, x = r.get("u"), r.get("x")
+        if not isinstance(u, list) or len(u) != len(gcu.UQ_AGES):
+            return None
+        return u, (x if isinstance(x, int) and not isinstance(x, bool) else -1), int(r.get("o") or 0)
+
+    def uq_put(Dd, r, fold=True):
+        w = uq_of(r)
+        if w is not None:
+            UQ[Dd] = w
+        if fold and Dd >= hs:                       # the note counts the folded days (as before)
+            ui["q" if w is not None else "qfl"] += 1
+            if w is not None and w[2] > 0:
+                ui["qou"] += w[2]
+                ui["qou_days"] += 1
 
     def k_of(W):
         if W not in ks:
@@ -508,13 +534,8 @@ def _late(data_dir, aid, sid, P, visit=None):
             ui["on"] = True
             h0 = _iso(hs)
             for D, r in um["q"].items():
-                if D not in mo["days"] or not isinstance(r, dict):
-                    continue
-                ok = r.get("s") == "ok" and isinstance(r.get("u"), list) and len(r["u"]) == len(gcu.UQ_AGES)
-                if ok:
-                    UQ[_d(D)] = r["u"]
-                if D >= h0:
-                    ui["q" if ok else "qfl"] += 1
+                if D in mo["days"] and isinstance(r, dict):
+                    uq_put(_d(D), r)
             cr = {D: r for D, r in um["c"].items() if D in mo["days"] and isinstance(r, dict)}
             ui["c"] += sum(1 for D in cr if D >= h0)
             seen("u", mk, cr)
@@ -541,9 +562,8 @@ def _late(data_dir, aid, sid, P, visit=None):
         if isinstance(ue, dict):
             ui["on"] = True
             uq, uc = ue.get("q"), ue.get("c")
-            if (isinstance(uq, dict) and uq.get("at") == rec.get("at") and uq.get("s") == "ok"
-                    and isinstance(uq.get("u"), list) and len(uq["u"]) == len(gcu.UQ_AGES)):
-                UQ[Dd] = uq["u"]
+            if isinstance(uq, dict) and uq.get("at") == rec.get("at"):
+                uq_put(Dd, uq, False)
             if isinstance(uc, dict) and uc.get("at") == rec.get("at"):
                 seen("uh", D, uc)
     have = {D for D in fin | hot if D >= hs}
@@ -602,8 +622,9 @@ def _late(data_dir, aid, sid, P, visit=None):
     if qi["on"]:                                    # only with q files (without them: the file as before, byte by byte)
         info.update({f: (_r(qi[f], 8) if isinstance(qi[f], float) else qi[f]) for f in qi if f != "on"})   # USD to
         #                                   the micro (× k): a measured size never written as 0 when it is not
-    if ui["on"]:                                    # 👥 only with users' files: folded days with All users kept (a whole
-        info["u"] = {"q": ui["q"], "qfl": ui["qfl"], "c": ui["c"]}     # read "ok" / not whole) and country users
+    if ui["on"]:                                    # 👥 only with users' files: days with All users kept (a whole read
+        info["u"] = {f: ui[f] for f in ("q", "qfl", "c", "qou", "qou_days")}   # "ok" / not whole), country users, the
+        #                                             "ok" reads' users with no install day (their sum / days)
     return {"B": B, "full": full, "fin": final, "q": q_bits, "info": info, "uq": UQ}
 
 
@@ -1058,13 +1079,19 @@ def _row_out(r):
     return out
 
 
-def _mu_all(rows, P, late):
+def _mu_all(rows, P, late, days=None):
     """👥 Every All row with 30-day columns → its "mu": users active on exactly each column's day (age 60, 90 …,
     aligned with m), GA4's own users, never estimated: the install-day file's (fetch.ga4_uninstall x[X].u at ULAGS —
-    60 / 90 / 120 / 180 / 270; 365 is no column's day) when that activity day is folded there (and its Q-B window
-    reached the age), else a whole no-country read's (fetch.ga4_cube u "q", ages ≤ 420: the read's horizon), else
-    null (unknown — past 420 no read is whole). A row with no known value gets none (its file as before)."""
-    pr, UQ, a0 = P["pre"], (late or {}).get("uq") or {}, 2 * LATE_STEP
+    60 / 90 / 120 / 180 / 270; 365 is no column's day) when that activity day's Q-B read is CLEAN there (st "ok" /
+    "empty" — not "q": "(other)", data loss, sampling or low coverage —, no thresholding flag in `days`, the install-day
+    ledger, and its window reached the age), else a whole no-country read's (fetch.ga4_cube u "q" "ok": ages ≤ 420,
+    the read's horizon, and ≤ the oldest install age it named — past it a window that shrank, never 0), else null
+    (unknown — past 420 no read is whole). A row with no known value gets none (its file as before)."""
+    pr, UQ, a0, dd = P["pre"], (late or {}).get("uq") or {}, 2 * LATE_STEP, days or {}
+
+    def thr(D):
+        v = dd.get(_iso(D))
+        return isinstance(v, dict) and bool(v.get("thr"))
     for r in rows:
         m = r.get("m")
         if not m:
@@ -1074,12 +1101,11 @@ def _mu_all(rows, P, late):
             A = LATE_STEP * (i + 2)
             D = X + timedelta(days=A)
             k = gu.UL_IX.get(A)
-            if k is not None and e is not None and pr.all(pr.g, D, D) and pr.win_ok(X, D, D):
+            if k is not None and e is not None and pr.all(pr.ok, D, D) and not thr(D) and pr.win_ok(X, D, D):
                 mu.append(int(e["u"][k]))
-            elif A <= gcu.QL and D in UQ:
-                mu.append(int(UQ[D][(A - a0) // LATE_STEP]))
-            else:
-                mu.append(None)
+                continue
+            w = UQ.get(D) if A <= gcu.QL else None
+            mu.append(int(w[0][(A - a0) // LATE_STEP]) if w is not None and A <= w[1] else None)
         if any(v is not None for v in mu):
             r["mu"] = mu
 
@@ -1639,36 +1665,47 @@ def _write_packs(jobs):
         f.result()
 
 
+def _runs_of(days):
+    """Sorted ISO days → [[first, last]] of each run of consecutive days."""
+    out = []
+    for D in days:
+        if out and _d(out[-1][1]) + timedelta(days=1) == _d(D):
+            out[-1][1] = D
+        else:
+            out.append([D, D])
+    return out
+
+
 def _cty_users(cv, hs, last):
     """👥 The country users' days hs … last (fetch.ga4_cube u "c", through _Cty): "known" (a day whose users are kept,
-    or read with no row at all: no user), prefix sums of the kept days with users GA4 left "(other)" ("pou") and of
-    those flagged ("pfl"), and the file's note ("info": days kept, days with no row, days / user-days in "(other)",
-    days flagged)."""
+    or read with no row at all: no user) and the file's note ("info", cd "uu": days kept, days with no row, days /
+    user-days with users GA4 gave no install day or no country — "(other)", a "(not set)" install day —, days flagged,
+    and those days themselves as runs "ou_r" / "fl_r" [[first, last]]: the page marks a users cell whose activity day is
+    in one; the ≈ bits of the revenue cells never change with users)."""
     n = (last - hs).days + 1
-    known, pou, pfl = bytearray(max(0, n)), [0] * (max(0, n) + 1), [0] * (max(0, n) + 1)
+    known = bytearray(max(0, n))
     for i in range(max(0, n)):
         D = _iso(hs + timedelta(days=i))
-        k = D in cv.KD
-        known[i] = 1 if k or D in cv.Z else 0
-        pou[i + 1] = pou[i] + (k and D in cv.OU)
-        pfl[i + 1] = pfl[i] + (k and D in cv.UF)
+        known[i] = 1 if D in cv.KD or D in cv.Z else 0
     h0 = _iso(hs)
     info = {"days": len(cv.KD), "zero": sum(1 for D in cv.Z if D >= h0 and D not in cv.KD), "ou_days": len(cv.OU),
-            "ou": sum(cv.OU.values()), "fl_days": len(cv.UF)}
-    return {"n": max(0, n), "known": known, "pou": pou, "pfl": pfl, "info": info}
+            "ou": sum(cv.OU.values()), "fl_days": len(cv.UF), "ou_r": _runs_of(sorted(cv.OU)),
+            "fl_r": _runs_of(sorted(cv.UF))}
+    return {"n": max(0, n), "known": known, "info": info}
 
 
 def _row_users(r, ux, Uc, Wc, hs):
     """👥 One country row → r["u"]: users active on day 0 … len(d) − 1 of its install day (day 0 = its own installs n,
     the cube's "e"; then each day whose users are kept, null where not), r["mu"]: users on each 30-day column's day
-    (aligned with m; only when one is known), r["uz"]: no user past day 0 → its ≈ bits (2: a day it used kept users
-    GA4 left "(other)" — their size in cd "uu", never spread; 4: a day GA4 flagged)."""
+    (aligned with m; only when one is known), r["uz"]: no user past day 0 (a row with nothing else stays [X]). Never a
+    revenue ≈ bit: a day whose users GA4 left with no install day / country, or flagged, is in cd "uu" ("ou_r" /
+    "fl_r") — their size there, never spread."""
     d = r.get("d")
     if d is None:
-        return 0
+        return
     i0, Xi, n = (r["X"] - hs).days, _iso(r["X"]), ux["n"]
-    known, pou, pfl = ux["known"], ux["pou"], ux["pfl"]
-    ua, u, nz, bits = Uc.get(Xi), [int(r["n"] or 0)], False, 0
+    known = ux["known"]
+    ua, u, nz = Uc.get(Xi), [int(r["n"] or 0)], False
     for L in range(1, len(d)):
         i = i0 + L
         if 0 <= i < n and known[i]:
@@ -1677,9 +1714,6 @@ def _row_users(r, ux, Uc, Wc, hs):
             u.append(v)
         else:
             u.append(None)
-    a, b = max(0, i0 + 1), min(n, i0 + len(d))
-    if b > a:
-        bits |= (2 if pou[b] - pou[a] else 0) | (4 if pfl[b] - pfl[a] else 0)
     r["u"] = u
     if r.get("m"):
         wd, wa = {}, Wc.get(Xi) or ()
@@ -1692,13 +1726,11 @@ def _row_users(r, ux, Uc, Wc, hs):
                 v = int(wd.get(LATE_STEP * (jx + 2), 0))
                 nz = nz or v > 0
                 mu.append(v)
-                bits |= (2 if pou[i + 1] - pou[i] else 0) | (4 if pfl[i + 1] - pfl[i] else 0)
             else:
                 mu.append(None)
         if any(v is not None for v in mu):
             r["mu"] = mu
     r["uz"] = not nz
-    return bits
 
 
 def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, out_dir, data_dir):
@@ -1839,7 +1871,8 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
         for r in got:
             X = r["X"]
             r["u"], r["q"] = None, False
-            ub = _row_users(r, ux, Uc, Wc, hs) if ux is not None else 0     # 👥 u (0 … 30) and mu (each column)
+            if ux is not None:                      # 👥 u (0 … 30) and mu (each column): never a revenue bit
+                _row_users(r, ux, Uc, Wc, hs)
             if X in unk or cc == NO_CC:
                 r["sp"] = r["spi"] = r["na"] = r["be"] = None
             elif not billed:
@@ -1864,8 +1897,6 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
                         bits |= 8 if k and k[2] else 0
                     if cc != NO_CC and unp.get(M, 0) > UNP_LIM:
                         bits |= 64
-            if ub and not r.get("uz"):              # 👥 a day its users came from: "(other)" users (2) / flagged (4)
-                bits |= ub
             r["qo"] = bits
             by[X] = r
         full = [by.get(X) or dict(zrow(X, X in unk, cc)[0]) for X in days]
@@ -2011,7 +2042,7 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             late = None
         rows = _cohorts(P, spend, fxf, co, today, late if late and "B" in late else None)
         if late and "B" in late and gcu.U_USE:         # 👥 users on each 30-day column's day (GA4_CUBE_U_USE)
-            _mu_all(rows, P, late)
+            _mu_all(rows, P, late, ida.get("days"))
         off, checked = _tie_off(ida, (co or {}).get("x") or {}, ida.get("days"))
         olo = {str(k) for f in ("lo", "lf") for k in ((co or {}).get(f) or {})}   # the D0 … D30 read's "(other)"
         for r in rows:
