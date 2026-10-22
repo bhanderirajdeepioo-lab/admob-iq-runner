@@ -571,9 +571,7 @@ def _text_sha(obj, kw, fast=True):
 
 # ── Snapshot history in parts (GitHub refuses a pushed file over 100 MB) ────────────────────────────────────────────
 # The append-only earnings snapshots grow every day, so the single data/snapshots.json.gz would cross GitHub's
-# 100 MB per-file limit (pushes then fail and the dashboard stops updating). The parts layout below holds the same
-# history; FileRepo READS either layout (this reader lands before the parts writer, so a build without the writer
-# still loads a history the writer stored):
+# 100 MB per-file limit (pushes then fail and the dashboard stops updating). It is now stored as
 #
 #   data/snapshots/index.json                   {"v": 1, "rows": N, "part_rows": R, "parts": [{"file", "rows",
 #                                                 "sha256", "bytes", "from", "to"}, …]}  — the parts IN ORDER
@@ -582,15 +580,19 @@ def _text_sha(obj, kw, fast=True):
 #
 # Parts are POSITIONAL slices of the one in-memory list (part i = rows[i*R:(i+1)*R]), so reading the parts in index
 # order and concatenating them gives back exactly the same rows in exactly the same order — whatever order the rows
-# are in. The history is append-only, so every part but the last never changes again.
+# are in. The history is append-only, so every part but the last never changes again: it is verified (its rows
+# encoded and hashed, no file read) and left untouched, and only the last part is rewritten.
 # "sha256" = the hash of the part's decompressed bytes, checked on every load; "from"/"to" = its snapshot_date span
 # (for a reader that wants only some days); "bytes" = its decompressed size. Joining the parts' texts, each without
 # its outer [ ], with ", " and wrapping the result in [ ] gives the old single file's text byte for byte.
 #
-# FileRepo.flush writes the single file; a parts layout on disk is removed only after the single file was written
-# and read back equal to every row, and a part file is removed only when its rows cannot be lost (the history was
-# read from it, or every row's key is in the history). index.json lost → rebuilt from the part names, never an empty
-# history.
+# Crash-safe: changed parts get NEW file names (the hash is in the name), index.json is replaced atomically as the
+# last step, and only then are the single file and the replaced parts removed — at every moment the index on disk
+# names complete files. A part file is removed only when its rows cannot be lost (the history was read from it, or
+# every row's key is in the history); index.json lost → rebuilt from the part names, never an empty history. The
+# first run migrates the single file (removed only after every part was written, read back and found equal);
+# SNAPSHOT_PARTS=false (repo variable) goes back to the single file the same way. That switch is THE rollback for this
+# layout — never a git revert of the code: a build without the parts reader sees no snapshots.json.gz.
 SNAP_DIR = "snapshots"
 SNAP_INDEX = "index.json"
 SNAP_PART_ROWS = 1_000_000            # rows per part: far under GitHub's 50 MB warning once gzipped
@@ -817,6 +819,54 @@ def _snap_span(rows):
     return None, None
 
 
+def _snap_write_parts(snap_dir, legacy, rows, prev, *, fast=True, compare=True, known=(), has_key=None):
+    """Store `rows` as parts (see SNAP_DIR) and return (written, kept, entries). `prev` = the entries of the parts the rows were
+    loaded from (None: nothing to reuse). A part whose slice still encodes to the same text is kept untouched; a
+    changed or new part is written under a new name, read back and checked; then the index is replaced; then the
+    single file and the part files the index no longer names are removed — only those whose rows cannot be lost
+    (`known`: the files the history was read from; see _snap_drop_stale). fast=False: json.dump's own encoder
+    for the text, its hash and the unchanged-part check (no C encoder anywhere)."""
+    os.makedirs(snap_dir, exist_ok=True)
+    n = SNAP_PART_ROWS
+    entries, fresh = [], []
+    for i, lo in enumerate(range(0, len(rows), n)):
+        part = rows[lo:lo + n]
+        old = prev[i] if (compare and prev and i < len(prev)) else None
+        if (old is not None and old.get("rows") == len(part)
+                and os.path.exists(os.path.join(snap_dir, old["file"]))
+                and _text_sha(part, _SNAP_KW, fast) == old.get("sha256")):
+            entries.append(old)                     # same text as the file on disk (verified at load): untouched
+            continue
+        tmp = os.path.join(snap_dir, ".part-%04d.tmp" % i)
+        sha, size = _gz_write(tmp, _encoded(part, _SNAP_KW, fast))      # the hash of exactly the bytes written
+        name = "part-%04d-%s.json.gz" % (i, sha[:12])
+        os.replace(tmp, os.path.join(snap_dir, name))
+        lo_d, hi_d = _snap_span(part)
+        ent = {"file": name, "rows": len(part), "sha256": sha, "bytes": size, "from": lo_d, "to": hi_d}
+        entries.append(ent)
+        fresh.append(ent)
+    for ent in fresh:                               # read back every new part before anything points at it
+        if _gz_sha(os.path.join(snap_dir, ent["file"])) != ent["sha256"]:
+            raise RuntimeError("snapshot part read back different from what was written: %s" % ent["file"])
+    idx = {"v": 1, "rows": len(rows), "part_rows": n, "parts": entries}
+    text = json.dumps(idx, indent=1, sort_keys=True) + "\n"
+    ip = _snap_index_path(snap_dir)
+    try:
+        with open(ip, encoding="utf-8") as f:
+            same = f.read() == text
+    except OSError:
+        same = False
+    if not same:
+        with open(ip + ".tmp", "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(ip + ".tmp", ip)                 # ← the switch: from here on readers load these parts
+    for p in (legacy + ".gz", legacy):              # every row is now in parts that were read back equal
+        _rm(p)
+    _snap_drop_stale(snap_dir, {e["file"] for e in entries} | {SNAP_INDEX},
+                     set(known) | {e["file"] for e in (prev or ())}, has_key)
+    return len(fresh), len(entries) - len(fresh), entries
+
+
 def write_json_gz_stable(path, obj):
     """Write obj to `path` (the full .gz name) as DETERMINISTIC gzip — sorted keys, compact JSON, no
     timestamp or file name in the gzip header — and only when the content changed. Returns True when
@@ -900,7 +950,7 @@ class FileRepo:
                          "acd": os.path.join(data_dir, "adunit_country_daily.json")}
         self._ac = {}     # name -> nested dict (lazy-loaded)
         # snapshot history in parts (see SNAP_DIR): the entries of the parts the rows were read from (None: not from
-        # parts)
+        # parts) — a part whose rows still encode to its hash is left untouched by flush()
         self._snap_dir = os.path.join(data_dir, SNAP_DIR)
         self._snap_parts = None
         self._snap_known = set()  # the part files whose rows are in the loaded history (flush may remove them)
@@ -1060,9 +1110,17 @@ class FileRepo:
         return self._key(row, self.SNAP_PK) in self._pos.get("snap", ())
 
     def _flush_snapshots(self, rows, compare, fast):
-        """Write the snapshot history as the single file. A parts layout on disk is removed only after the single
-        file was written and read back equal to every row. Returns True when a file was written."""
+        """Write the snapshot history: as parts (SNAPSHOT_PARTS, default on), else as the single file. Either way
+        the other layout is removed only after the new one was written and read back equal. Returns True when a
+        file was written."""
         legacy = self._path["snap"]
+        if _switch("SNAPSHOT_PARTS"):
+            wrote, _kept, self._snap_parts = _snap_write_parts(self._snap_dir, legacy, rows, self._snap_parts,
+                                                               fast=fast, compare=compare, known=self._snap_known,
+                                                               has_key=self._snap_has_key)
+            self._snap_known = {e["file"] for e in self._snap_parts}
+            self._disk_rows["snap"] = None
+            return wrote > 0
         disk = self._disk_rows.get("snap")
         wrote = _write_json_gz(legacy, rows, compare=compare, fast=fast,
                                changed=disk is not None and disk != len(rows), **_SNAP_KW)

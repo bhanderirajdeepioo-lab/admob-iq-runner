@@ -204,9 +204,13 @@ jobs:
           GA4_FIRSTOPEN_CC_WORKERS: ${{ vars.GA4_FIRSTOPEN_CC_WORKERS }}
           # ⏱ History files (the same data either way; empty: the new path) — each a rollback without a code push:
           # REPO_FAST_WRITE=false writes the history files with json.dump, REPO_SKIP_UNCHANGED=false rewrites every one
-          # each run.
+          # each run, SNAPSHOT_PARTS=false keeps the snapshot history as ONE data/snapshots.json.gz again (that file grows
+          # past GitHub's 100 MB push limit, so only briefly).
+          # The snapshot layout's rollback is SNAPSHOT_PARTS=false, NEVER a git revert of the code: once the history is
+          # in data/snapshots/, a build without the parts reader finds no snapshots.json.gz and shows an empty history.
           REPO_FAST_WRITE:      ${{ vars.REPO_FAST_WRITE }}
           REPO_SKIP_UNCHANGED:  ${{ vars.REPO_SKIP_UNCHANGED }}
+          SNAPSHOT_PARTS:       ${{ vars.SNAPSHOT_PARTS }}
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On
@@ -359,7 +363,8 @@ jobs:
           MAX_REPO_MB: "2500"          # compact past this; GitHub warns around 5 GB
         run: |
           # Every run rewrites the .gz history files whose content changed (an unchanged one is left
-          # byte for byte), so the private repo's git history still grows every run. The HISTORY
+          # byte for byte; the snapshot history's full parts under data/snapshots/ never change, only
+          # its last part does), so the private repo's git history still grows every run. The HISTORY
           # of those files carries no information: each file already holds the full time
           # series. So once the repo passes MAX_REPO_MB we replace the history with a single
           # commit containing the exact same working tree. Every tracked file survives

@@ -245,7 +245,9 @@ def _filled_repo(d):
     return repo
 
 
-def test_filerepo_flush_same_files_both_ways_and_second_flush_writes_nothing(tmp_path, monkeypatch):
+@pytest.mark.parametrize("snap_parts", ["true", "false"])
+def test_filerepo_flush_same_files_both_ways_and_second_flush_writes_nothing(tmp_path, monkeypatch, snap_parts):
+    monkeypatch.setenv("SNAPSHOT_PARTS", snap_parts)
     old, new = str(tmp_path / "old"), str(tmp_path / "new")
     monkeypatch.setenv("REPO_FAST_WRITE", "false")
     monkeypatch.setenv("REPO_SKIP_UNCHANGED", "false")
@@ -272,7 +274,7 @@ def test_every_speed_switch_is_a_repo_variable_of_the_build_step():
     with open(os.path.join(root, ".github", "workflows", "refresh.yml"), encoding="utf-8") as f:
         wf = yaml.safe_load(f)
     step = [s for s in wf["jobs"]["refresh"]["steps"] if s.get("name", "").startswith("Build dashboard")][0]
-    for name in ("REPO_FAST_WRITE", "REPO_SKIP_UNCHANGED"):
+    for name in ("REPO_FAST_WRITE", "REPO_SKIP_UNCHANGED", "SNAPSHOT_PARTS"):
         assert step["env"][name] == "${{ vars.%s }}" % name             # empty → the code's default
     for v, want in (("", True), ("false", False), ("0", False), ("off", False), ("true", True), ("typo", True)):
         os.environ["REPO_X_TEST"] = v
