@@ -202,6 +202,11 @@ jobs:
           IMPACT_ANY_WORKERS:   ${{ vars.IMPACT_ANY_WORKERS }}
           GA4_FIRSTOPEN_CC_BATCH: ${{ vars.GA4_FIRSTOPEN_CC_BATCH }}
           GA4_FIRSTOPEN_CC_WORKERS: ${{ vars.GA4_FIRSTOPEN_CC_WORKERS }}
+          # ⏱ History files (the same data either way; empty: the new path) — each a rollback without a code push:
+          # REPO_FAST_WRITE=false writes the history files with json.dump, REPO_SKIP_UNCHANGED=false rewrites every one
+          # each run.
+          REPO_FAST_WRITE:      ${{ vars.REPO_FAST_WRITE }}
+          REPO_SKIP_UNCHANGED:  ${{ vars.REPO_SKIP_UNCHANGED }}
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On
@@ -241,6 +246,16 @@ jobs:
         # below: the data is pushed either way, so a deploy can only stay stuck for a reason outside our content.
         continue-on-error: true
         run: python -m admob_iq.deploy_guard annotate deploy_guard.json
+
+      - name: Data files under GitHub's file size limit (counts only)
+        # GitHub refuses a push that carries a file over 100 MB (and warns from 50 MB): the push below would then fail
+        # every run and the dashboard would stop updating. PUBLIC LOG: counts only, never a file name or size.
+        continue-on-error: true
+        run: |
+          over90=$(find data -type f -size +90M 2>/dev/null | wc -l | tr -d ' ')
+          over50=$(find data -type f -size +50M 2>/dev/null | wc -l | tr -d ' ')
+          echo "data files over 50 MB: ${over50:-0}, over 90 MB: ${over90:-0}"
+          if [ "${over90:-0}" != 0 ]; then echo "::warning::${over90} data file(s) over 90 MB: GitHub refuses a pushed file over 100 MB"; fi
 
       - name: Push refreshed data + site back to the PRIVATE repo
         run: |
@@ -343,12 +358,12 @@ jobs:
           DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
           MAX_REPO_MB: "2500"          # compact past this; GitHub warns around 5 GB
         run: |
-          # Every run rewrites ~57 MB of .gz data files, so the private repo's git history
-          # grows ~3 MB per run — at a 30-minute cadence that is ~4.7 GB/month. The HISTORY
+          # Every run rewrites the .gz history files whose content changed (an unchanged one is left
+          # byte for byte), so the private repo's git history still grows every run. The HISTORY
           # of those files carries no information: each file already holds the full time
           # series. So once the repo passes MAX_REPO_MB we replace the history with a single
           # commit containing the exact same working tree. Every tracked file survives
-          # (data, site, config, code, workflows) — only old git revisions are dropped.
+          # (data incl. its sub-folders, site, config, code, workflows) — only old git revisions are dropped.
           size_kb=$(curl -fsS -H "Authorization: Bearer $DATA_REPO_TOKEN" \
                          -H "Accept: application/vnd.github+json" \
                          "https://api.github.com/repos/$DATA_REPO" 2>/dev/null \

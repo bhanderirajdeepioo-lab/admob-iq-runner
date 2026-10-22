@@ -330,6 +330,13 @@ def test_a_history_files_first_read_is_its_own_row_under_the_stage_that_touched_
         return orig(path)
 
     monkeypatch.setattr(db, "_read_json_any", slow_read)
+    orig_parts = db._snap_load_parts
+
+    def slow_parts(*a, **k):                             # the snapshot history is stored in parts: same 2 s read
+        c.tick(2)
+        return orig_parts(*a, **k)
+
+    monkeypatch.setattr(db, "_snap_load_parts", slow_parts)
     sc.begin(clock=c)
     assert run(b) == 4
     prof = sc.finish(None)
@@ -468,6 +475,7 @@ USE = re.compile(r"_sc\.(?:step|stage|timed)\(\"([^\"]+)\"\)")
 def test_every_stage_name_the_code_uses_is_on_the_allow_list():
     from admob_iq.db import FileRepo
     used = set(FileRepo.LOAD_STAGES.values())            # (FileRepo's first reads: named per file, below)
+    used |= set(FileRepo.WRITE_STAGES.values())          # (and its flush: one write stage per file)
     for base, _dirs, names in os.walk(os.path.join(ROOT, "admob_iq")):
         for n in names:
             if n.endswith(".py"):
@@ -476,6 +484,7 @@ def test_every_stage_name_the_code_uses_is_on_the_allow_list():
     assert used <= set(sc.STAGES), used - set(sc.STAGES)
     repo = FileRepo("unused")
     assert set(FileRepo.LOAD_STAGES) == set(repo._path) | set(repo._ac_path)    # every history file has its name
+    assert set(FileRepo.WRITE_STAGES) == set(repo._path) | set(repo._ac_path)
     assert set(sc.STAGES) - used == {"python_start", "imports"}     # (begin adds those two) — no stale names
 
 

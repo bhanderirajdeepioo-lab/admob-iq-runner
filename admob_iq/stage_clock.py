@@ -61,6 +61,10 @@ STAGES = (
     "repo_load_placement_country", "repo_load_mediation_unit", "repo_load_adunit_country_monthly",
     "repo_load_adunit_country_daily",
     "admob_backfill_accounts", "admob_backfill_apps", "admob_backfill_mu", "repo_flush",
+    # FileRepo.flush: each history file's write (db.FileRepo.WRITE_STAGES), children of repo_flush
+    "repo_write_network", "repo_write_mediation", "repo_write_snapshots", "repo_write_country",
+    "repo_write_placement_country", "repo_write_mediation_unit", "repo_write_adunit_country_monthly",
+    "repo_write_adunit_country_daily",
     "dashboard_build", "baseline_report", "data_quality", "apps_catalog", "app_icons",
     "google_ads", "gads_spend", "gads_campaign_accounts", "gads_geo", "gads_geo_weekly", "gads_geo_day",
     "gads_archive", "gads_store_ids", "fx_series", "roas_build",

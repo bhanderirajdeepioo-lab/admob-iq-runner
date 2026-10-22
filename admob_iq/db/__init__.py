@@ -13,12 +13,27 @@
 """
 
 import os
+import sys
 import json
 import gzip
 import zlib
+import hashlib
+import itertools
+import re
 import datetime as _dt
 
 from .. import stage_clock as _sc
+
+
+def _switch(name, default=True):
+    """A speed switch from the environment (a repo variable in refresh.yml): false/0/no/off → False, true/1/yes/on →
+    True, anything else (unset, empty, a typo) → `default`. Read at call time, so a rollback needs no code push."""
+    v = (os.getenv(name) or "").strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return False
+    if v in ("1", "true", "yes", "on"):
+        return True
+    return default
 
 
 def _jsonable(row: dict) -> dict:
@@ -311,19 +326,495 @@ def _read_json_any(path):
     return None
 
 
-def _write_json_gz(path, obj, **dump_kw):
-    """Atomically write obj to <path>.gz, and delete any stale plain <path> so the huge
-    uncompressed file stops being committed (git picks up the deletion)."""
-    gz = path + ".gz"
+# ── Fast history writer (⏱ speed only: the decompressed bytes are exactly what json.dump wrote) ─────────────────────
+# json.dump runs Python's pure-Python encoder (it streams, so the C encoder is never used); json.dumps runs the C
+# encoder and returns the SAME text (same separators, same float / int / string rules, same `default` calls). A whole
+# file through json.dumps would hold its full text in memory (GBs for the snapshot history), so the text is built in
+# slices: a long list in runs of _SLICE_ROWS items, a big dict in runs of _SLICE_KEYS entries, joined with the item
+# separator — the concatenation is json.dumps(obj) character for character. Switches (repo variables, refresh.yml):
+#   REPO_FAST_WRITE=false      write with json.dump, as before
+#   REPO_SKIP_UNCHANGED=false  rewrite every history file on every flush, as before
+_SLICE_ROWS = 20_000          # list items per json.dumps call (a history row is well under 1 KB of text)
+_SLICE_KEYS = 1_000           # dict entries per call at the deepest sliced level (an ad unit's whole country block)
+_SLICE_KW = frozenset(("ensure_ascii", "default", "separators", "allow_nan", "check_circular"))
+_READ_BLOCK = 1 << 24         # 16 MB: the block size for reading back an existing file
+
+
+def _key_text(k, kw):
+    """The exact text json.dumps writes for one dict key plus the key separator ('"k": ' / '"k":')."""
+    return json.dumps({k: 0}, **kw)[1:-2]
+
+
+def _json_pieces(obj, kw, depth=2):
+    """Yield str pieces whose concatenation is exactly json.dumps(obj, **kw) — the text json.dump(obj, f, **kw)
+    writes — in bounded memory. Only plain lists / dicts (exact types) are sliced, `depth` levels down; anything else,
+    and any keyword that changes the layout (indent, sort_keys, cls, …), goes through one json.dumps call."""
+    if depth <= 0 or set(kw) - _SLICE_KW or type(obj) not in (list, dict) or not obj:
+        yield json.dumps(obj, **kw)
+        return
+    item_sep = (kw.get("separators") or (", ", ": "))[0]
+    if type(obj) is list:
+        if len(obj) <= _SLICE_ROWS:
+            yield json.dumps(obj, **kw)
+            return
+        yield "["
+        for i in range(0, len(obj), _SLICE_ROWS):
+            s = json.dumps(obj[i:i + _SLICE_ROWS], **kw)[1:-1]
+            yield s if i == 0 else item_sep + s
+        yield "]"
+        return
+    if depth == 1:                                  # deepest level: runs of _SLICE_KEYS entries
+        if len(obj) <= _SLICE_KEYS:
+            yield json.dumps(obj, **kw)
+            return
+        it, first = iter(obj.items()), True
+        yield "{"
+        while True:
+            batch = dict(itertools.islice(it, _SLICE_KEYS))
+            if not batch:
+                break
+            s = json.dumps(batch, **kw)[1:-1]
+            yield s if first else item_sep + s
+            first = False
+        yield "}"
+        return
+    # an outer dict (e.g. {"units": {...}, "data": {...}}): each list / dict value is sliced one level down, the
+    # other values go in runs, all in the dict's own order
+    yield "{"
+    first, run = True, {}
+    for k, v in obj.items():
+        if type(v) in (list, dict):
+            if run:
+                s = json.dumps(run, **kw)[1:-1]
+                yield s if first else item_sep + s
+                first, run = False, {}
+            yield _key_text(k, kw) if first else item_sep + _key_text(k, kw)
+            first = False
+            yield from _json_pieces(v, kw, depth - 1)
+        else:
+            run[k] = v
+    if run:
+        s = json.dumps(run, **kw)[1:-1]
+        yield s if first else item_sep + s
+    yield "}"
+
+
+def _text_chunks(obj, kw):
+    """The UTF-8 bytes of json.dumps(obj, **kw), piece by piece (see _json_pieces)."""
+    for s in _json_pieces(obj, kw):
+        if s:
+            yield s.encode("utf-8")
+
+
+def _dump_chunks(obj, kw):
+    """json.dump's own text, as UTF-8 bytes in ~1 MB pieces: json.dump(obj, f, **kw) writes exactly the pieces of
+    JSONEncoder(**kw).iterencode(obj) — the pure-Python encoder, never the C one. The REPO_FAST_WRITE=false rollback
+    compares and hashes with this, so it never depends on the C encoder it exists to step around."""
+    kw = dict(kw)
+    cls = kw.pop("cls", None) or json.JSONEncoder
+    buf, size = [], 0
+    for s in cls(**kw).iterencode(obj):
+        buf.append(s)
+        size += len(s)
+        if size >= 1 << 20:
+            yield "".join(buf).encode("utf-8")
+            buf, size = [], 0
+    if buf:
+        yield "".join(buf).encode("utf-8")
+
+
+class _PrefixLost(Exception):
+    """The existing file could not be read back while its unchanged start was being copied."""
+
+
+def _old_prefix(gz, n):
+    """The first `n` decompressed bytes of the existing file `gz`, in blocks (raises _PrefixLost if it cannot)."""
+    try:
+        with gzip.open(gz, "rb") as old:
+            while n > 0:
+                b = old.read(min(n, _READ_BLOCK))
+                if not b:
+                    raise _PrefixLost(gz)
+                n -= len(b)
+                yield b
+    except (OSError, EOFError, zlib.error) as e:
+        raise _PrefixLost(gz) from e
+
+
+def _gz_write(tmp, chunks):
+    """Gzip `chunks` (bytes) into `tmp` — level 9 and the same header gzip.open(tmp, "wt") writes — and return
+    (sha256 hex of the decompressed bytes, their length). A failure removes the half-written `tmp`."""
+    h, n = hashlib.sha256(), 0
+    try:
+        with gzip.open(tmp, "wb") as g:
+            for b in chunks:
+                if b:
+                    h.update(b)
+                    n += len(b)
+                    g.write(b)
+    except BaseException:
+        _rm(tmp)
+        raise
+    return h.hexdigest(), n
+
+
+def _rm(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def _same_as_file(gz, chunks):
+    """Stream-compare the new text (`chunks`) with the existing file's decompressed bytes, stopping at the first
+    difference. Returns (same, matched, pending): `matched` bytes of the new text are known to equal the file's start
+    and `pending` is the first new piece not (fully) matched (b"" when the new text ended first). The file is read
+    once, block by block alongside the new text (bounded memory). An unreadable file → (False, 0, None)."""
+    matched = 0
+    try:
+        with gzip.open(gz, "rb") as old:
+            for b in chunks:
+                if old.read(len(b)) != b:
+                    return False, matched, b
+                matched += len(b)
+            if not old.read(1):
+                return True, matched, None
+            return False, matched, b""
+    except (OSError, EOFError, zlib.error):
+        return False, 0, None
+
+
+def _store_json_gz(gz, obj, dump_kw, *, compare=True, fast=True, changed=False):
+    """Write obj's JSON (json.dump's exact text) to the gzip file `gz`, atomically. Returns True when `gz` was
+    (re)written, False when it was left byte for byte as it was because its decompressed bytes already equal the new
+    text (compare=True, and `changed` — the caller KNOWS the text differs, e.g. the row count moved — is False).
+
+    fast=False writes with json.dump exactly as before. fast=True: the C encoder in slices; when the file differs only
+    after some point, the matched start is re-read from the old file (gunzip is far cheaper than encoding) instead of
+    being encoded again. Level 9 either way, so the files are the same size as before."""
     tmp = gz + ".tmp"
-    with gzip.open(tmp, "wt", encoding="utf-8") as f:
-        json.dump(obj, f, **dump_kw)
+    have = compare and not changed and os.path.exists(gz)
+    if not fast:
+        if have and _same_as_file(gz, _dump_chunks(obj, dump_kw))[0]:       # (json.dump's text: no C encoder)
+            return False
+        try:
+            with gzip.open(tmp, "wt", encoding="utf-8") as f:
+                json.dump(obj, f, **dump_kw)
+        except BaseException:
+            _rm(tmp)
+            raise
+        os.replace(tmp, gz)
+        return True
+    chunks = _text_chunks(obj, dump_kw)
+    matched, pending = 0, None
+    if have:
+        same, matched, pending = _same_as_file(gz, chunks)
+        if same:
+            return False
+        if pending is None:                          # the old file was unreadable: encode everything afresh
+            chunks, matched = _text_chunks(obj, dump_kw), 0
+
+    def stream():
+        if matched:
+            yield from _old_prefix(gz, matched)
+        if pending:
+            yield pending
+        yield from chunks
+    try:
+        _gz_write(tmp, stream())
+    except _PrefixLost:                              # the old file vanished / broke meanwhile: encode it all again
+        _gz_write(tmp, _text_chunks(obj, dump_kw))
     os.replace(tmp, gz)
+    return True
+
+
+def _write_json_gz(path, obj, *, compare=None, fast=None, changed=False, **dump_kw):
+    """Atomically write obj to <path>.gz, and delete any stale plain <path> so the huge
+    uncompressed file stops being committed (git picks up the deletion). Returns True when <path>.gz was
+    written, False when it already held exactly this text (left untouched: git sees no change).
+    compare / fast default to the REPO_SKIP_UNCHANGED / REPO_FAST_WRITE switches (both on)."""
+    compare = _switch("REPO_SKIP_UNCHANGED") if compare is None else compare
+    fast = _switch("REPO_FAST_WRITE") if fast is None else fast
+    wrote = _store_json_gz(path + ".gz", obj, dump_kw, compare=compare, fast=fast, changed=changed)
     if os.path.exists(path):
         try:
             os.remove(path)
         except OSError:
             pass
+    return wrote
+
+
+def _gz_sha(path):
+    """sha256 hex of a gzip file's decompressed bytes, read block by block."""
+    h = hashlib.sha256()
+    with gzip.open(path, "rb") as g:
+        while True:
+            b = g.read(_READ_BLOCK)
+            if not b:
+                return h.hexdigest()
+            h.update(b)
+
+
+def _encoded(obj, kw, fast):
+    """obj's JSON text (json.dump's text either way) as UTF-8 pieces: the C encoder in slices (fast), else json.dump's
+    own pure-Python encoder (the REPO_FAST_WRITE=false rollback never touches the C encoder)."""
+    return _text_chunks(obj, kw) if fast else _dump_chunks(obj, kw)
+
+
+def _text_sha(obj, kw, fast=True):
+    """sha256 hex of obj's JSON text (see _encoded; bounded memory)."""
+    h = hashlib.sha256()
+    for b in _encoded(obj, kw, fast):
+        h.update(b)
+    return h.hexdigest()
+
+
+# ── Snapshot history in parts (GitHub refuses a pushed file over 100 MB) ────────────────────────────────────────────
+# The append-only earnings snapshots grow every day, so the single data/snapshots.json.gz would cross GitHub's
+# 100 MB per-file limit (pushes then fail and the dashboard stops updating). The parts layout below holds the same
+# history; FileRepo READS either layout (this reader lands before the parts writer, so a build without the writer
+# still loads a history the writer stored):
+#
+#   data/snapshots/index.json                   {"v": 1, "rows": N, "part_rows": R, "parts": [{"file", "rows",
+#                                                 "sha256", "bytes", "from", "to"}, …]}  — the parts IN ORDER
+#   data/snapshots/part-0000-<sha12>.json.gz    rows[0:R]      (each one a JSON list written exactly like the old
+#   data/snapshots/part-0001-<sha12>.json.gz    rows[R:2R] …    single file: same separators, same row text)
+#
+# Parts are POSITIONAL slices of the one in-memory list (part i = rows[i*R:(i+1)*R]), so reading the parts in index
+# order and concatenating them gives back exactly the same rows in exactly the same order — whatever order the rows
+# are in. The history is append-only, so every part but the last never changes again.
+# "sha256" = the hash of the part's decompressed bytes, checked on every load; "from"/"to" = its snapshot_date span
+# (for a reader that wants only some days); "bytes" = its decompressed size. Joining the parts' texts, each without
+# its outer [ ], with ", " and wrapping the result in [ ] gives the old single file's text byte for byte.
+#
+# FileRepo.flush writes the single file; a parts layout on disk is removed only after the single file was written
+# and read back equal to every row, and a part file is removed only when its rows cannot be lost (the history was
+# read from it, or every row's key is in the history). index.json lost → rebuilt from the part names, never an empty
+# history.
+SNAP_DIR = "snapshots"
+SNAP_INDEX = "index.json"
+SNAP_PART_ROWS = 1_000_000            # rows per part: far under GitHub's 50 MB warning once gzipped
+_SNAP_KW = {"ensure_ascii": False, "default": str}     # the history files' json.dump keywords (FileRepo.flush)
+
+
+def _snap_index_path(snap_dir):
+    return os.path.join(snap_dir, SNAP_INDEX)
+
+
+def _snap_read_index(snap_dir):
+    """The parts index, or None when there is none (single-file layout)."""
+    p = _snap_index_path(snap_dir)
+    if not os.path.exists(p):
+        return None
+    with open(p, encoding="utf-8") as f:
+        idx = json.load(f)
+    if not isinstance(idx, dict) or not isinstance(idx.get("parts"), list):
+        raise ValueError("snapshot index is not a parts index: %s" % p)
+    return idx
+
+
+_PART_NAME = re.compile(r"part-(\d{4,})-([0-9a-f]{12})\.json\.gz")
+
+
+def _snap_part_files(snap_dir):
+    """The part files on disk (not the half-written .part-*.tmp ones), by name."""
+    if not os.path.isdir(snap_dir):
+        return []
+    return sorted(f for f in os.listdir(snap_dir) if f.startswith("part-"))
+
+
+def _snap_rebuild_index(names):
+    """index.json is missing but part files are on disk (a copy or merge that lost it): the index rebuilt from the
+    part names — only when they form ONE unbroken list (part-0000 … part-k, one file per number). Raises ValueError
+    otherwise: the history is never guessed at. _snap_load_parts(rebuilt=True) then checks each part against the hash
+    in its name and the positional row counts."""
+    by_no = {}
+    for f in names:
+        m = _PART_NAME.fullmatch(f)
+        if m is None:
+            raise ValueError("a part file name that is not part-NNNN-<hash>.json.gz")
+        by_no.setdefault(int(m.group(1)), []).append(f)
+    if sorted(by_no) != list(range(len(by_no))):
+        raise ValueError("the part numbers are not 0..%d without a gap" % (len(by_no) - 1))
+    if any(len(v) > 1 for v in by_no.values()):
+        raise ValueError("%d part number(s) with more than one file" % sum(len(v) > 1 for v in by_no.values()))
+    return {"v": 1, "parts": [{"file": by_no[i][0]} for i in range(len(by_no))]}
+
+
+def _snap_part_text(snap_dir, entry):
+    """A part's decompressed bytes (raises with a clear message when a listed part is missing)."""
+    p = os.path.join(snap_dir, entry["file"])
+    if not os.path.exists(p):
+        raise FileNotFoundError("snapshot part listed in %s is missing: %s — refusing to go on with a partial "
+                                "snapshot history" % (_snap_index_path(snap_dir), entry["file"]))
+    with open(p, "rb") as f:
+        return gzip.decompress(f.read())
+
+
+def _snap_load_parts(snap_dir, idx, rebuilt=False):
+    """(rows, entries): every part in index order, concatenated — the history exactly as it was written. Each entry
+    carries what is REALLY on disk (rows, sha256 of the decompressed bytes); a part that differs from its index entry
+    is still loaded as it is (it is then simply rewritten at the next flush). rebuilt (an index rebuilt from the part
+    names): every part must match the hash in its name and every part but the last hold SNAP_PART_ROWS rows (the
+    positional layout the writer makes), else ValueError."""
+    rows, entries, odd = [], [], 0
+    parts = idx["parts"]
+    for i, e in enumerate(parts):
+        raw = _snap_part_text(snap_dir, e)
+        sha, size = hashlib.sha256(raw).hexdigest(), len(raw)
+        part = json.loads(raw.decode("utf-8"))
+        del raw
+        if not isinstance(part, list):
+            raise ValueError("snapshot part is not a JSON list: %s" % e["file"])
+        if rebuilt:
+            if _PART_NAME.fullmatch(e["file"]).group(2) != sha[:12]:
+                raise ValueError("snapshot part %d does not match the hash in its name" % i)
+            if i < len(parts) - 1 and len(part) != SNAP_PART_ROWS:
+                raise ValueError("snapshot part %d is not a full part" % i)
+        else:
+            odd += sha != e.get("sha256") or len(part) != e.get("rows")
+        lo_d, hi_d = _snap_span(part)
+        entries.append(dict(e, sha256=sha, rows=len(part), bytes=size, **{"from": lo_d, "to": hi_d}))
+        rows.extend(part)
+    if odd:
+        print(f"snapshot parts: {odd} part(s) differ from the index (kept as on disk, rewritten at the next flush)",
+              file=sys.stderr)
+    return rows, entries
+
+
+def _snap_parts_text(snap_dir, idx):
+    """The parts' rows as ONE JSON list text (bytes, piece by piece): what the single file would hold."""
+    yield b"["
+    first = True
+    for e in idx["parts"]:
+        inner = memoryview(_snap_part_text(snap_dir, e))[1:-1]
+        if len(inner):
+            if not first:
+                yield b", "
+            yield inner
+            first = False
+    yield b"]"
+
+
+def _legacy_text(legacy):
+    """The single file's decompressed bytes, block by block (<legacy>.gz, else the plain <legacy>)."""
+    gz = legacy + ".gz"
+    f = gzip.open(gz, "rb") if os.path.exists(gz) else open(legacy, "rb")
+    with f:
+        while True:
+            b = f.read(_READ_BLOCK)
+            if not b:
+                return
+            yield b
+
+
+class _Bytes:
+    """read(n) over a generator of bytes-like blocks (a block is sliced, never copied whole)."""
+
+    def __init__(self, gen):
+        self.gen, self.buf, self.pos = gen, b"", 0
+
+    def read(self, n):
+        out = []
+        while n > 0:
+            if self.pos >= len(self.buf):
+                b = next(self.gen, None)
+                if b is None:
+                    break
+                self.buf, self.pos = b, 0
+                continue
+            take = self.buf[self.pos:self.pos + n]
+            self.pos += len(take)
+            n -= len(take)
+            out.append(take)
+        return b"".join(out)
+
+
+def _snap_relation(snap_dir, idx, legacy):
+    """How the parts and the single file relate when BOTH are on disk (bounded memory, compared as text):
+      "same"   — the same rows;
+      "legacy" — the parts' rows are the first rows of the single file (it was written later: a switch back to the
+                 single file that stopped before removing the parts);
+      "parts"  — the single file's rows are the first rows of the parts (a migration that stopped before removing
+                 the single file);
+      "other"  — neither (e.g. a build without parts support started a new single file next to them)."""
+    a, b = _Bytes(_legacy_text(legacy)), _Bytes(_snap_parts_text(snap_dir, idx))
+    off = 0
+    while True:
+        x, y = a.read(1 << 20), b.read(1 << 20)
+        if x == y:
+            if not x:
+                return "same"
+            off += len(x)
+            continue
+        n = min(len(x), len(y))
+        i = next((k for k in range(n) if x[k] != y[k]), n)
+        at = off + i
+        xa, yb = x[i:] + a.read(3), y[i:] + b.read(3)
+        if yb == b"]" and (xa[:2] == b", " or at == 1):
+            return "legacy"
+        if xa == b"]" and (yb[:2] == b", " or at == 1):
+            return "parts"
+        return "other"
+
+
+def _snap_rows_known(path, has_key):
+    """True when every row of the part file `path` is a row whose key the history being written already holds."""
+    try:
+        with open(path, "rb") as f:
+            part = json.loads(gzip.decompress(f.read()).decode("utf-8"))
+        return isinstance(part, list) and all(isinstance(r, dict) and has_key(r) for r in part)
+    except Exception:
+        return False
+
+
+def _snap_drop_stale(snap_dir, keep, known, has_key=None):
+    """Remove the part files the new layout does not use — but only those whose rows cannot be lost: half-written
+    .part-*.tmp files, files in `known` (the history was read from them, or from the single file that holds their
+    rows), and files whose every row's key the history holds (`has_key`; e.g. a part a crashed flush left behind).
+    Any other part file (say, the parts of an index a bad copy lost) stays where it is, with a counts-only warning.
+    Returns how many stayed."""
+    left = 0
+    if not os.path.isdir(snap_dir):
+        return 0
+    for f in sorted(os.listdir(snap_dir)):
+        if f in keep:
+            continue
+        p = os.path.join(snap_dir, f)
+        if f.startswith(".part-") or f == SNAP_INDEX + ".tmp":
+            _rm(p)
+        elif f.startswith("part-"):
+            if f in known or (has_key is not None and _snap_rows_known(p, has_key)):
+                _rm(p)
+            else:
+                left += 1
+    if left:
+        print(f"snapshot parts: {left} part file(s) not read into the history left in place (not deleted)",
+              file=sys.stderr)
+    return left
+
+
+def _snap_remove_parts(snap_dir, known=(), has_key=None):
+    """Drop the parts layout: index first (from then on the single file is what every reader loads), then the parts
+    the history was read from (see _snap_drop_stale: a part file whose rows were never read is not deleted)."""
+    _rm(_snap_index_path(snap_dir))
+    if os.path.isdir(snap_dir):
+        _snap_drop_stale(snap_dir, set(), set(known), has_key)
+        try:
+            os.rmdir(snap_dir)
+        except OSError:
+            pass
+
+
+def _snap_span(rows):
+    """(min, max) snapshot_date of a part, or (None, None) when they are not all strings."""
+    try:
+        ds = [r["snapshot_date"] for r in rows]
+        if ds and all(type(d) is str for d in ds):
+            return min(ds), max(ds)
+    except Exception:
+        pass
+    return None, None
 
 
 def write_json_gz_stable(path, obj):
@@ -383,6 +874,12 @@ class FileRepo:
                    "country": "repo_load_country", "pc": "repo_load_placement_country",
                    "mu": "repo_load_mediation_unit", "acm": "repo_load_adunit_country_monthly",
                    "acd": "repo_load_adunit_country_daily"}
+    # ⏱ measure only: each history file's write in flush() (a child of repo_flush; an unchanged file costs only the
+    # encode + compare, a snapshot part that did not change costs only its encode + hash)
+    WRITE_STAGES = {"net": "repo_write_network", "med": "repo_write_mediation", "snap": "repo_write_snapshots",
+                    "country": "repo_write_country", "pc": "repo_write_placement_country",
+                    "mu": "repo_write_mediation_unit", "acm": "repo_write_adunit_country_monthly",
+                    "acd": "repo_write_adunit_country_daily"}
 
     def __init__(self, data_dir: str = "data"):
         self.dir = data_dir
@@ -402,6 +899,12 @@ class FileRepo:
         self._ac_path = {"acm": os.path.join(data_dir, "adunit_country_monthly.json"),
                          "acd": os.path.join(data_dir, "adunit_country_daily.json")}
         self._ac = {}     # name -> nested dict (lazy-loaded)
+        # snapshot history in parts (see SNAP_DIR): the entries of the parts the rows were read from (None: not from
+        # parts)
+        self._snap_dir = os.path.join(data_dir, SNAP_DIR)
+        self._snap_parts = None
+        self._snap_known = set()  # the part files whose rows are in the loaded history (flush may remove them)
+        self._disk_rows = {}  # name -> rows in its file as last read / written (a different count = the text changed)
 
     def init_schema(self):
         os.makedirs(self.dir, exist_ok=True)   # files are written on flush()
@@ -413,7 +916,11 @@ class FileRepo:
     def _load(self, name):
         if name not in self._rows:
             with _sc.stage(self.LOAD_STAGES.get(name, "repo_load")):
-                data = _read_json_any(self._path[name])
+                if name == "snap":
+                    data = self._load_snapshots()
+                else:
+                    data = _read_json_any(self._path[name])
+                    self._disk_rows[name] = len(data) if isinstance(data, list) else None
                 self._rows[name] = data if data is not None else []
                 self._pos[name] = {self._key(r, self._pk[name]): i
                                    for i, r in enumerate(self._rows[name])}
@@ -485,14 +992,112 @@ class FileRepo:
         if k not in pos:                # append-only; never overwrite a snapshot
             pos[k] = len(rows); rows.append(row)
 
+    def _load_snapshots(self):
+        """The snapshot history as ONE list in its stored order, from whichever layout is on disk: the parts (index
+        present), else the single file (the first run after the switch to parts migrates it at flush). Both on disk
+        means a switch between layouts stopped half way (or a build without parts support wrote a single file next
+        to them): the one holding the other's rows as its first rows wins; if neither does, the parts' rows come first
+        and then the single file's rows the parts lack. Nothing on disk is ever dropped.
+        Part files WITHOUT index.json (a copy or merge that lost it, or a write that stopped before it): the index is
+        rebuilt from the part names (_snap_rebuild_index, checked part by part), then the same rules apply. If it
+        cannot be, the single file is the history and the part files are left in place (never deleted); with no
+        single file either, the load stops rather than start an empty history."""
+        legacy = self._path["snap"]
+        idx = _snap_read_index(self._snap_dir)
+        self._snap_parts = None
+        self._snap_known = set()
+        self._disk_rows["snap"] = None
+        has_legacy = os.path.exists(legacy + ".gz") or os.path.exists(legacy)
+        rebuilt = False
+        if idx is None:
+            orphans = _snap_part_files(self._snap_dir)
+            if orphans:
+                try:
+                    idx, rebuilt = _snap_rebuild_index(orphans), True
+                except ValueError as err:
+                    self._snap_orphans_unusable(len(orphans), err, has_legacy)
+            if idx is None:
+                data = _read_json_any(legacy)
+                self._disk_rows["snap"] = len(data) if isinstance(data, list) else None
+                return data
+            print(f"snapshot history: index.json missing — rebuilt from {len(orphans)} part file name(s)",
+                  file=sys.stderr)
+        rel = _snap_relation(self._snap_dir, idx, legacy) if has_legacy else "parts"
+        if rel == "legacy":
+            print("snapshot history: the single file holds every part row (a switch back to it did not finish) "
+                  "— read from the single file", file=sys.stderr)
+            self._snap_known = {e["file"] for e in idx["parts"]}
+            return _read_json_any(legacy)
+        try:
+            rows, parts = _snap_load_parts(self._snap_dir, idx, rebuilt=rebuilt)
+        except ValueError as err:
+            if not rebuilt:
+                raise
+            self._snap_orphans_unusable(len(idx["parts"]), err, has_legacy)
+            data = _read_json_any(legacy)
+            self._disk_rows["snap"] = len(data) if isinstance(data, list) else None
+            return data
+        self._snap_parts, self._snap_known = parts, {e["file"] for e in idx["parts"]}
+        if rel == "other":
+            seen = {self._key(r, self.SNAP_PK) for r in rows}
+            extra = [r for r in (_read_json_any(legacy) or []) if self._key(r, self.SNAP_PK) not in seen]
+            print(f"snapshot history: a separate single file next to the parts — {len(extra)} row(s) of it the "
+                  f"parts lack added after the parts' rows", file=sys.stderr)
+            rows.extend(extra)
+        return rows
+
+    @staticmethod
+    def _snap_orphans_unusable(n, err, has_legacy):
+        """Part files without an index that cannot be read back as one history: stop (no single file to fall back on),
+        else say so — the single file is read and the part files stay where they are (never deleted)."""
+        if not has_legacy:
+            raise RuntimeError("snapshot index.json is missing and the %d part file(s) on disk cannot be read back as "
+                               "one history (%s) — refusing to go on with a partial snapshot history" % (n, err))
+        print(f"snapshot history: {n} part file(s) without an index do not form one history ({err}) — read from the "
+              f"single file, the part files left in place", file=sys.stderr)
+
+    def _snap_has_key(self, row):
+        return self._key(row, self.SNAP_PK) in self._pos.get("snap", ())
+
+    def _flush_snapshots(self, rows, compare, fast):
+        """Write the snapshot history as the single file. A parts layout on disk is removed only after the single
+        file was written and read back equal to every row. Returns True when a file was written."""
+        legacy = self._path["snap"]
+        disk = self._disk_rows.get("snap")
+        wrote = _write_json_gz(legacy, rows, compare=compare, fast=fast,
+                               changed=disk is not None and disk != len(rows), **_SNAP_KW)
+        self._disk_rows["snap"] = len(rows)
+        if os.path.exists(_snap_index_path(self._snap_dir)) or os.path.isdir(self._snap_dir):
+            if _gz_sha(legacy + ".gz") != _text_sha(rows, _SNAP_KW, fast):   # the single file must hold every row
+                raise RuntimeError("snapshot single file read back different from the rows; the parts are kept")
+            _snap_remove_parts(self._snap_dir, self._snap_known, self._snap_has_key)
+        self._snap_parts = None
+        self._snap_known = set()
+        return wrote
+
     def flush(self):
-        """Persist everything touched this session to disk (atomic, GZIPPED per file)."""
+        """Persist everything touched this session to disk (atomic, GZIPPED per file). A file whose decompressed
+        bytes would not change is left untouched (REPO_SKIP_UNCHANGED); the text is json.dump's either way."""
         os.makedirs(self.dir, exist_ok=True)
+        compare, fast = _switch("REPO_SKIP_UNCHANGED"), _switch("REPO_FAST_WRITE")
+        wrote = kept = 0
         for name, rows in self._rows.items():
-            _write_json_gz(self._path[name], rows, ensure_ascii=False, default=str)
+            with _sc.stage(self.WRITE_STAGES[name]):
+                if name == "snap":
+                    w = self._flush_snapshots(rows, compare, fast)
+                else:
+                    disk = self._disk_rows.get(name)
+                    w = _write_json_gz(self._path[name], rows, compare=compare, fast=fast,
+                                       changed=disk is not None and disk != len(rows),
+                                       ensure_ascii=False, default=str)
+                    self._disk_rows[name] = len(rows)
+            wrote, kept = wrote + bool(w), kept + (not w)
         for name, nested in self._ac.items():          # compact ad-unit×country structures
-            _write_json_gz(self._ac_path[name], nested, ensure_ascii=False, default=str,
-                           separators=(",", ":"))
+            with _sc.stage(self.WRITE_STAGES[name]):
+                w = _write_json_gz(self._ac_path[name], nested, compare=compare, fast=fast,
+                                   ensure_ascii=False, default=str, separators=(",", ":"))
+            wrote, kept = wrote + bool(w), kept + (not w)
+        print(f"repo flush: {wrote} file(s) written, {kept} unchanged", file=sys.stderr)
 
     def fetch_network(self):
         return self._load("net")
