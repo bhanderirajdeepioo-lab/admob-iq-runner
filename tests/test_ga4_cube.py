@@ -1843,3 +1843,30 @@ def test_q_an_app_not_scanned_is_counted_apart(monkeypatch, tmp_path):
     st = cu.load_state(data)["fetch"]
     assert all(st[a]["q"]["left"] is None for a in ("x~1", "x~2"))
     assert ", q left 0, q unscanned 2, q errors 0, " in cu.log_line(out)
+
+
+def test_q_round_app_calls_lift_the_apps_cap_for_the_fill_only(monkeypatch):
+    """GA4_CUBE_Q_APP_CALLS > 0: the fill gets that many calls an app this run on top of what its walk / hot days used
+    (the app's MAX_CALLS no longer ends it), the cap restored after; 0 (default): the app's cap bounds the fill as
+    before."""
+    import threading
+
+    class Capped(FakeGA):                                           # the real App's rule: Stop("calls") at max_calls
+        def report_all(self, body, **kw):
+            if self.calls >= self.max_calls:
+                raise gf.Stop("calls")
+            return super().report_all(body, **kw)
+
+    def run(app_calls):
+        monkeypatch.setattr(cu, "Q_CALLS", 1000)
+        monkeypatch.setattr(cu, "Q_APP_CALLS", app_calls)
+        cube = _lossy_cube(monkeypatch, {"2026-08": 0.2})
+        ga = Capped()
+        ga.max_calls, ga.calls = 60, 50                             # its walk / hot days used 50 of its 60
+        counts = dict.fromkeys(cu.COUNTS, 0)
+        cu.q_round([("a~1", {}, cube, ga)], NOW, lambda: None, threading.Lock(), counts, workers=1)
+        return cube, ga, counts
+    cube, ga, counts = run(0)
+    assert cube.q_days == 10 and counts["calls"] == 10 and ga.max_calls == 60
+    cube, ga, counts = run(40)
+    assert cube.q_days == 40 and counts["calls"] == 40 and ga.max_calls == 60   # 40 of its own, cap restored

@@ -154,6 +154,8 @@ jobs:
           # build (empty: 20, inside the budget above), GA4_CUBE_Q_USE=false = reads go on, the page ignores them
           GA4_CUBE_Q_CALLS:     ${{ vars.GA4_CUBE_Q_CALLS }}
           GA4_CUBE_Q_SEC:       ${{ vars.GA4_CUBE_Q_SEC }}
+          # GA4_CUBE_Q_APP_CALLS: the fill's own calls an app a run (empty / 0: the app's per-run cap bounds it too)
+          GA4_CUBE_Q_APP_CALLS: ${{ vars.GA4_CUBE_Q_APP_CALLS }}
           GA4_CUBE_Q_USE:       ${{ vars.GA4_CUBE_Q_USE || 'true' }}
           ROI_TAB:              ${{ vars.ROI_TAB || 'true' }}
           # 🔮 Forecast engine (inside the ROI section): vd = the forecast tournament's winner (default); FORECAST_ENGINE=v0

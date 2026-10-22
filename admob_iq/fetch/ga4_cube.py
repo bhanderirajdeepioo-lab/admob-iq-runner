@@ -243,6 +243,9 @@ Q_CALLS = int(os.environ.get("GA4_CUBE_Q_CALLS") or 120)    # the history fill's
 Q_SEC = float(os.environ.get("GA4_CUBE_Q_SEC") or 20)      # the history fill's seconds a run (from the end of every
                                     # app's walk and hot days, never past the cube's budget): a run gets at most this
                                     # much longer, and only while the history is not filled
+Q_APP_CALLS = int(os.environ.get("GA4_CUBE_Q_APP_CALLS") or 0)   # the history fill's own GA4 calls an app a run
+                                    # (on top of what its walk / hot days used; 0 = the app's MAX_CALLS bounds the
+                                    # fill too, as before) — the fill's day reads are ~1 token each
 Q_USE = (os.environ.get("GA4_CUBE_Q_USE") or "true").strip().lower() != "false"   # false: the build ignores q files
                                     # (reads go on): q rolled back on the page without deleting a byte
 Q_FWD = 7                           # days folded without a q read in the run that folded them (step_app), at most
@@ -1421,11 +1424,17 @@ def q_round(fill, now, over, lock, counts, workers=WORKERS):
     def one(t):
         aid, st, cube, ga = t
         c0, k0, d0 = ga.calls, ga.tok, cube.q_days
+        cap0 = getattr(ga, "max_calls", None)
+        if Q_APP_CALLS > 0 and isinstance(cap0, int):
+            ga.max_calls = max(cap0, ga.calls + Q_APP_CALLS)     # the fill's own calls this app this run
         try:
             if not over() and left[0] > 0:
                 q_fill(ga, cube, now, take)
         except Exception:
             cube.q_err += 1
+        finally:
+            if isinstance(cap0, int):
+                ga.max_calls = cap0
         try:                                            # the q files first, then the head (its queue)
             cube.save()
             if cube.q_days > d0 or cube.dirty:
