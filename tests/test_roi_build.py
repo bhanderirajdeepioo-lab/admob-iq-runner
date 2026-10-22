@@ -1421,7 +1421,8 @@ def test_q_a_fresh_fl_read_again_once_settled_puts_its_week_on_q(tmp_path, monke
     from datetime import datetime, timezone
     from admob_iq.fetch import ga4_cube as cu
     miss, gots, root = date(2025, 6, 11), {}, tmp_path / "w"
-    P, co = _q_world(root, fl={miss}, fl_at=lambda D: (D + timedelta(days=2)).isoformat() + "T19:52:00Z", gots=gots)
+    P, co = _q_world(root, fl={miss}, fl_at=lambda D: (D + timedelta(days=2)).isoformat() + "T19:52:00Z", gots=gots,
+                     q_at="2026-10-15T06:00:00Z")              # every "ok" read once its day settled (Oct 10: Oct 15)
     late, by = _qrows(root, P, co)
     assert late["info"]["qwait"] == 7 and late["info"]["qfl"] == 0
     assert by[QHS]["m"][4] == pytest.approx(65.0 - 7 * 0.004, abs=1e-4)      # the week on the cube's 0.8
@@ -1432,7 +1433,7 @@ def test_q_a_fresh_fl_read_again_once_settled_puts_its_week_on_q(tmp_path, monke
         calls = tok = 0
     cube = cu.Cube(str(root), "a~1", "222")
     now = datetime(2026, 10, 14, 6, tzinfo=timezone.utc)
-    assert cu.q_rescan(cube, now) and [e[0] for e in cube.head["qh"]["r"]] == [miss.isoformat()]
+    assert cu.q_rescan(cube, now) and [e[0] for e in cube.head["qh"]["r"]] == [miss.isoformat()] and cube.q_out == 0
     assert cube.head["qh"]["r"][0][2] > 0                                  # its week has measured loss: first
     assert cu.q_fill(G(), cube, now, lambda: True) == 1 and cube.q_rr == cube.q_rok == 1
     cube.save()
@@ -1444,6 +1445,42 @@ def test_q_a_fresh_fl_read_again_once_settled_puts_its_week_on_q(tmp_path, monke
     P3, co3 = _q_world(tmp_path / "h", fl={QTODAY})
     late3, _ = _qrows(tmp_path / "h", P3, co3)
     assert late3["info"]["qwait"] == 1 and late3["info"]["qfl"] == 0
+
+
+def test_q_an_ok_read_before_its_day_settled_waits_then_its_week_goes_on_q(tmp_path, monkeypatch):
+    """q files of before: every folded day read at one moment (Oct 13), so Oct 9 / Oct 10 were read 4 / 3 days after
+    them — "ok" but not settled. q_rescan takes their week (Oct 5 … 10) out of the q file: on the cube's cells, its loss
+    days waiting ("qwait", never "qfl"); the fill reads them again once settled (Oct 10 a day later) and the week goes
+    on q: the whole revenue, nothing waiting. The build's rule is the same (a week on q only when every day is "ok")."""
+    from datetime import datetime, timezone
+    from admob_iq.fetch import ga4_cube as cu
+    gots, root = {}, tmp_path / "e"
+    P, co = _q_world(root, gots=gots)
+    late0, by0 = _qrows(root, P, co)
+    assert late0["info"]["qwait"] == late0["info"]["qfl"] == 0 and late0["info"]["qd"] == (QTODAY - QHS).days + 1
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    monkeypatch.setattr(cu, "q_read", lambda ga, D: gots[D.isoformat()])
+
+    class G:
+        calls = tok = 0
+    cube = cu.Cube(str(root), "a~1", "222")
+    cube.head["qh"]["p"] = []                                   # every folded day read (the world's fold left them)
+    t1 = datetime(2026, 10, 14, 6, tzinfo=timezone.utc)
+    assert cu.q_rescan(cube, t1) and cube.q_out == 6
+    assert cube.head["qh"]["p"] == ["2026-10-%02d" % d for d in range(5, 11)]
+    cube.save()
+    cube.save_head()
+    late, by = _qrows(root, P, co)
+    assert late["info"]["qwait"] == 6 and late["info"]["qfl"] == 0 and late["info"]["qd"] == late0["info"]["qd"] - 6
+    assert cu.q_fill(G(), cube, t1, lambda: True) == 5 and cube.head["qh"]["p"] == ["2026-10-10"]   # Oct 10: 4 days
+    t2 = t1 + timedelta(days=1)
+    assert cu.q_fill(G(), cube, t2, lambda: True) == 1 and cube.head["qh"]["p"] == []
+    cube.save()
+    cube.save_head()
+    late2, by2 = _qrows(root, P, co)
+    assert late2["info"]["qwait"] == late2["info"]["qfl"] == 0 and late2["info"]["qd"] == late0["info"]["qd"]
+    assert by2[QHS]["m"][:13] == pytest.approx(by0[QHS]["m"][:13], abs=1e-9)
+    assert by2[QHS]["m"][:13] == pytest.approx([62 + 0.6 * j for j in range(1, 14)], abs=1e-4)
 
 
 def test_q_loss_past_420_and_drift(tmp_path):

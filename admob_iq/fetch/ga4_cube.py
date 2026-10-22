@@ -157,22 +157,28 @@ cube's ledger: q_need) is never read (its q would be empty; the build needs none
 SETTLED (22 Oct 2026, measured on the real properties: every read of a day ≥ 5 days old came back "ok", reads of days
 2–4 days old "fl" on several apps — install ages far past 427 in the answer —, while older days in the same hour were
 "ok"): a q read of activity day D is final only when made ≥ Q_SETTLE (5) property days after D (q_ripe / q_settled).
-A folded day is read only once it has settled (it waits in "p": no read before). A stored "fl" is not final while
-(q_due) its read was made before D settled — read again once it has, the new answer REPLACING it (an "fl" holds no
-cell: nothing to take out) — or it is a settled "fl" read again fewer than Q_RETRY (2) times ("rt"), each ≥
-Q_GAP_HOURS (24) after the last; then it is final (its week on the cube's cells for good). An "ok" is final whenever it
-was read (whole: GA4 flagged nothing; it is never replaced — its cells are in the month's sums). The build takes the
-same rule from q_due: a week held by a not-final "fl" is waiting ("qwait"), by a final one on the cube ("qfl"). Stored:
+A folded day is read only once it has settled (it waits in "p": no read before — nor by the history fill's queue: a
+day not settled yet there goes to "p"). A stored "fl" is not final while (q_due) its read was made before D settled —
+read again once it has, the new answer REPLACING it (an "fl" holds no cell: nothing to take out) — or it is a settled
+"fl" read again fewer than Q_RETRY (2) times ("rt"), each ≥ Q_GAP_HOURS (24) after the last; then it is final (its
+week on the cube's cells for good). An "ok" made once D settled is final (whole: GA4 flagged nothing; never replaced —
+its cells are in the month's sums). An "ok" made before D settled (q_early: only q files of before 22 Oct 2026 —
+measured: such reads too named install ages past 427) is not: its cells are summed per week, so q_rescan takes its
+WEEK out of the q file (the week's cells and "ok" days; its "fl" days hold none and stay), those days back in "p" —
+read again once settled (no Q_V change: the file keeps its format, only that week is read again; counted "q early").
+The build takes the same rule from q_due: a week held by a not-final "fl" is waiting ("qwait"), by a final one on the
+cube ("qfl"); a week taken out is waiting (a day without q). Stored:
     <YYYY-MM>.q.json.gz = {"v", "stream_id", "days": {D: {"qs", "qt", "qn", "qx", "qr", "at", "rt" (a settled "fl"
       read again this many times; absent = 0 — q files of before 22 Oct are the same format: no Q_V change)}}, "q": {X:
       {j: {W: micros}}}} — the same shape as the month's "b" (j ≤ QJ only); never read by months() (its name is not
       YYYY-MM.json.gz) and never touched by the repair; a day in it is never read again unless it is an "fl" not final;
     a hot day's record in hot.json.gz gets "q" ({X: {j: {W: micros}}}), "qt", "qn", "qx", "qs", "qr" — read in the SAME
       run as its cube read (the same moment: GA4 still adds to a hot day), else none (the build uses its cube cells);
-    head "qh" = {"p": [days folded without a q yet, oldest first], "todo": [[YYYY-MM, its measured "(other)" share,
-      days without q, loss micros]] (the history fill's queue), "scan" (when it was made), "r": [[D, when it is due
-      ("…Z"), its week's measured loss micros]] (the stored "fl" days not final: kept by every q_put, made from the q
-      files by q_rescan when there is none and every RESCAN_DAYS), "rs" (when that was made)}.
+    head "qh" = {"p": [days folded without a q yet (or whose week q_rescan took out), oldest first — read once
+      settled], "todo": [[YYYY-MM, its measured "(other)" share, days without q, loss micros]] (the history fill's
+      queue), "scan" (when it was made), "r": [[D, when it is due ("…Z"), its week's measured loss micros]] (the
+      stored "fl" days not final: kept by every q_put, made from the q files by q_rescan when there is none and every
+      RESCAN_DAYS), "rs" (when that was made)}.
 Reads (GA4_CUBE_Q_CALLS, Q_CALLS; 0 = q off: no q read at all, and the build uses the cube's own cells as before;
 GA4_CUBE_Q_USE=false, Q_USE: the reads go on, the build ignores every q file — a rollback that keeps the data):
   * in step_app, after the hot days (q_fwd): the hot days this run read (each hot round: their rows need it; an "fl"
@@ -182,15 +188,18 @@ GA4_CUBE_Q_USE=false, Q_USE: the reads go on, the build ignores every q file —
     (counted: "q errors"), never the app's run;
   * after EVERY app's run (refresh_all's second round, with what the run's budget left — never a property's walk or
     hot days later): the history fill (q_fill), at most Q_CALLS calls and Q_SEC seconds a run over all apps (never past
-    the budget), the app's call cap as always — the apps with "p" (or re-reads due on lossy weeks) first, then the
-    apps whose queue (+ lossy re-reads due) holds the most measured loss, so the lossy apps fill first; per app first
+    the budget), the app's call cap as always — the apps with re-reads due on lossy weeks first, then those with
+    settled days in "p" (a day not settled yet is no work: every app has a few), then the apps whose queue (+ lossy
+    weeks due a re-read, each week once) holds the most measured loss, so the lossy apps fill first; per app first
     the stored "fl" days due a read again on weeks with measured loss (the biggest week loss first: a whole read there
     takes it back), then the settled days of "p", then the other re-reads due, then the queue's months (made once by
     q_scan from the month files — no GA4 call —, again every RESCAN_DAYS while it is empty; an app not scanned yet is
     counted apart, "q unscanned", never in "q left"): the months with loss first (the biggest share first), then every
-    other month newest first, each month's days without q oldest first. A Stop keeps every q day read; an error ends
+    other month newest first, each month's days without q oldest first (only those that have settled: a newer one
+    goes to "p" — the current month's newest days are always there). A Stop keeps every q day read; an error ends
     that app's fill (counted). The log: "q settling" (days in "p" not settled yet), "q reread" / "q recovered" (stored
-    "fl" days read again in the run / of them "ok" now), "q fl waiting" (stored "fl" days still to be read again).
+    "fl" days read again in the run / of them "ok" now), "q fl waiting" (stored "fl" days still to be read again),
+    "q early" ("ok" days taken out with a week read before it settled: read again).
 
 Cost: the backfill ≈ app age / 30 block calls on a light app (rows a call ≈ 30 × a day's (install day, country) rows),
 and on a heavy one about one call per activity day (+ 2 per part split, + one block try every HEAVY_KEEP days) —
@@ -787,11 +796,22 @@ def q_settled(D, at, tz=None):
     return q_ripe(D, _pday(at, tz))
 
 
+def q_early(rec, D, tz=None):
+    """A stored "ok" of day D from a read made before D settled (an unknown read time: not settled) — not final
+    (Q_SETTLE: measured, such a read can name install ages GA4 has not settled yet, past 427, with no flag). No read is
+    made before a day settles now: only q files of before 22 Oct 2026 hold one. Its cells are summed into its week's
+    (no day's own), so q_rescan takes the WEEK out of the month's q file (every cell of it and its "ok" days; its "fl"
+    days hold no cell and stay) and puts those days back in "p": read again once settled, the week whole again."""
+    return isinstance(rec, dict) and rec.get("qs") == "ok" and not q_settled(D, rec.get("at"), tz)
+
+
 def q_due(rec, D, tz=None):
     """A stored q record of day D → when it is to be read again (UTC "…Z"), None: never (final). "ok" (or not a
-    record): final. "fl" from a read made before D settled: the start of the property's day D + Q_SETTLE (its read was
-    not final yet). A settled "fl": its read + Q_GAP_HOURS while it was read again fewer than Q_RETRY times ("rt"),
-    then final. The same rule for the fill (what to read) and the build (waiting vs on the cube's cells for good)."""
+    record): never read again here (an "ok" read before D settled: q_early — its week taken out by q_rescan, never
+    replaced in place). "fl" from a read made before D settled: the start of the property's day D + Q_SETTLE (its read
+    was not final yet). A settled "fl": its read + Q_GAP_HOURS while it was read again fewer than Q_RETRY times
+    ("rt"), then final. The same rule for the fill (what to read) and the build (waiting vs on the cube's cells for
+    good)."""
     if not isinstance(rec, dict) or rec.get("qs") == "ok":
         return None
     if not q_settled(D, rec.get("at"), tz):
@@ -968,6 +988,7 @@ class Cube:
         self.qm, self.qtouched = {}, set()  # q month files loaded / changed in the run
         self.q_days = self.q_fl = self.q_calls = self.q_err = 0
         self.q_rr = self.q_rok = 0      # stored "fl" days read again in the run / of them "ok" now
+        self.q_out = 0                  # "ok" days taken out of the q files with a week read before it settled
         self.wl = {}                    # {YYYY-MM: {W: loss micros}} of month files not loaded (week_loss)
         self.q_halt = False             # q ended for this app this run (an error of a q read: never the app's run)
 
@@ -1070,6 +1091,28 @@ class Cube:
             r.append([D, due, self.week_loss(D)])
         qh["r"] = r
         self.dirty = True
+
+    def q_drop(self, k, ws):
+        """Month k's q of the weeks ws (Mondays) taken out: every cell of those weeks and their "ok" days (a week's
+        cells hold no day apart: q_early); their "fl" days stay (they hold no cell) → the days taken out."""
+        mo = self.qmonth(k)
+        for X in list(mo["q"]):
+            js = mo["q"][X]
+            for j in list(js):
+                for W in ws:
+                    js[j].pop(W, None)
+                if not js[j]:
+                    del js[j]
+            if not js:
+                del mo["q"][X]
+        out = sorted(D for D, rec in mo["days"].items()
+                     if isinstance(rec, dict) and rec.get("qs") == "ok" and _mon(_d(D)).isoformat() in ws)
+        for D in out:
+            del mo["days"][D]
+        self.qtouched.add(k)
+        self.q_out += len(out)
+        self.dirty = True
+        return out
 
     def week_loss(self, D):
         """The cube's measured loss micros of day D's week inside its activity month (the build's week: what a read
@@ -1416,27 +1459,49 @@ def q_scan(cube, now):
     that have no q yet → [YYYY-MM, its measured "(other)" share, days without q, loss micros] — the months with loss
     first (the biggest share first, the newer month on a tie), then every other month, newest first. Made when there
     is none and again every RESCAN_DAYS while it is empty (a day folded and never put in "p": a run killed between its
-    months and its head) → True when made."""
+    months and its head — one that has not SETTLED yet goes to "p" instead: read once it has, never before) → True
+    when made."""
     qh = cube.head.setdefault("qh", {})
     if qh.get("todo") or gu._hours_since(qh.get("scan"), now) < RESCAN_DAYS * 24:
         return False
-    todo, pend = [], set(qh.get("p") or [])
+    todo, pend, wait, today = [], set(qh.get("p") or []), [], _pday(now, cube.tz())
     for k, mo in cube.each_month():
         qd = cube.qmonth(k)["days"]
         days = {D: v for D, v in (mo.get("days") or {}).items() if isinstance(v, dict)}
-        miss = sum(1 for D, v in days.items() if D not in qd and D not in pend and q_need(v))   # (the pending ones:
-                                                            # read first, counted there; a day of nothing: never read)
+        miss, w = _q_miss(days, qd, pend, today)            # (the pending ones: read first, counted there; a day of
+        wait += w                                           # nothing: never read)
         if cube.data_dir and k not in cube.qtouched:
             cube.qm.pop(k, None)                            # one month at a time
         if miss:
             lo = sum(int(v.get("loss") or 0) for v in days.values())
             t = sum(int(v.get("t") or 0) for v in days.values())
-            todo.append([k, round(lo / t, 6) if t > 0 else (1.0 if lo else 0.0), miss, lo])
+            todo.append([k, round(lo / t, 6) if t > 0 else (1.0 if lo else 0.0), len(miss), lo])
     todo.sort(key=lambda e: e[0], reverse=True)
     todo.sort(key=lambda e: (e[3] <= 0, -e[1] if e[3] > 0 else 0))
     qh["todo"], qh["scan"] = todo, gu._now_iso(now)
+    _q_pend(cube, wait)
     cube.dirty = True
     return True
+
+
+def _q_miss(days, qd, pend, today):
+    """A month's folded days ({D: ledger}) that need a q read and have none (q days qd), not in "p" (pend: read from
+    there) → (those that have SETTLED by the property's `today`, oldest first — the queue's; those not settled yet:
+    "p"'s, never read before they have)."""
+    miss, wait = [], []
+    for D, v in sorted(days.items()):
+        if q_need(v) and D not in qd and D not in pend:
+            (miss if q_ripe(D, today) else wait).append(D)
+    return miss, wait
+
+
+def _q_pend(cube, days):
+    """Days folded without a q (or whose q was taken out: q_early) → "p", each once, in date order among the days
+    there (_q_p reads each once it has settled)."""
+    p = cube.head.setdefault("qh", {}).setdefault("p", [])
+    for D in sorted(set(days) - set(p)):
+        p.insert(next((i for i, x in enumerate(p) if str(x) > D), len(p)), D)
+        cube.dirty = True
 
 
 def q_rescan(cube, now):
@@ -1444,7 +1509,9 @@ def q_rescan(cube, now):
     (q_due: read before it settled, or settled and read again fewer than Q_RETRY times) → [D, when due, its week's
     loss]. Every q_put keeps the list as it goes; this makes it from the files when there is none (q files of an
     older copy of this code: their "fl" days of reads made before the day settled) and again every RESCAN_DAYS (a run
-    killed between its q files and its head) → True when made."""
+    killed between its q files and its head) → True when made. An "ok" read before its day settled (q_early: q files
+    of an older copy of this code) takes its week out of the q file here (Cube.q_drop: the week's cells and "ok" days,
+    counted in q_out), those days back in "p" — read again, once settled, like any day folded without q."""
     qh = cube.head.setdefault("qh", {})
     if gu._hours_since(qh.get("rs"), now) < RESCAN_DAYS * 24:
         return False
@@ -1455,16 +1522,21 @@ def q_rescan(cube, now):
                         if len(f) == 7 + len(QSUF) and f.endswith(QSUF) and f[4] == "-" and f[:4].isdigit())
         except OSError:
             pass
-    r, tz = [], cube.tz()
+    r, tz, back = [], cube.tz(), []
     for k in sorted(keys):
         held = k in cube.qm
-        for D, rec in sorted(cube.qmonth(k)["days"].items()):
+        qd = cube.qmonth(k)["days"]
+        ws = {_mon(_d(D)).isoformat() for D, rec in qd.items() if q_early(rec, D, tz)}
+        if ws:                                              # an "ok" read before its day settled: its week out
+            back += cube.q_drop(k, ws)
+        for D, rec in sorted(qd.items()):
             due = q_due(rec, D, tz)
             if due is not None:
                 r.append([D, due, cube.week_loss(D)])
         if cube.data_dir and not held and k not in cube.qtouched:
             cube.qm.pop(k, None)                            # one q file at a time
     qh["r"], qh["rs"] = r, gu._now_iso(now)
+    _q_pend(cube, back)
     cube.dirty = True
     return True
 
@@ -1538,8 +1610,9 @@ def q_fill(ga, cube, now, take):
             k = str(todo[0][0])
             mo = cube.month(k)                              # its ledger (a month the walk re-reads: in "p" then)
             qd = cube.qmonth(k)["days"]
-            miss = [] if k in cube.bad else sorted(D for D, v in mo["days"].items() if q_need(v) and D not in qd)
-            for i, D in enumerate(miss):
+            miss, wait = ([], []) if k in cube.bad else _q_miss(mo["days"], qd, set(qh.get("p") or []), today)
+            _q_pend(cube, wait)                             # "p"'s days (read there once settled) and a day not
+            for i, D in enumerate(miss):                    # settled yet (to "p"): never read here
                 todo[0][2] = len(miss) - i
                 if not take():
                     raise _Out
@@ -1560,14 +1633,18 @@ def q_fill(ga, cube, now, take):
 
 
 def _q_rank(cube, now_iso=None):
-    """The fill's order of the apps: those with days in "p" or re-reads due on lossy weeks first, then the most
-    measured loss a read could take back (the queue's months without q + the lossy weeks due a re-read: the lossy
-    apps fill first), then the most days left."""
+    """The fill's order of the apps: those with re-reads due (now_iso; None: every one) on weeks with measured loss
+    first (a whole read there takes it back), then those with days of "p" that have SETTLED (by the property's day
+    then; None: every day of "p" — a day not settled yet is no work: every app has some), then the most measured loss
+    a read could take back (the queue's months without q + the lossy weeks due a re-read, each week once — a week's
+    "fl" days carry its loss each), then the most days left."""
     qh = cube.head.get("qh") or {}
     lo = sum(int(e[3] or 0) for e in qh.get("todo") or [] if isinstance(e, list) and len(e) > 3)
-    rl = sum(int(e[2] or 0) for e in qh.get("r") or []
-             if isinstance(e, list) and len(e) == 3 and (now_iso is None or str(e[1]) <= now_iso))
-    return (not (qh.get("p") or rl), -(lo + rl), -cube.q_left(), cube.app_id)
+    rl = sum({(str(e[0])[:7], _mon(_d(e[0])).isoformat()): int(e[2] or 0) for e in qh.get("r") or []
+              if isinstance(e, list) and len(e) == 3 and (now_iso is None or str(e[1]) <= now_iso)}.values())
+    today = _pday(now_iso, cube.tz()) if now_iso is not None else None
+    ready = any(today is None or q_ripe(D, today) for D in qh.get("p") or [])
+    return (not rl, not ready, -(lo + rl), -cube.q_left(), cube.app_id)
 
 
 # ── state and the run ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -1599,15 +1676,16 @@ def save_state(data_dir, state):
 
 COUNTS = ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred", "waiting", "days", "split", "deeper",
           "capped", "hidden", "futile", "loss", "flagged", "reread", "repair_days", "repaired", "q_days", "q_flagged",
-          "q_calls", "q_left", "q_unscanned", "q_errors", "q_settling", "q_reread", "q_recovered", "q_fl_wait", "calls",
-          "tokens")
+          "q_calls", "q_left", "q_unscanned", "q_errors", "q_settling", "q_reread", "q_recovered", "q_fl_wait",
+          "q_early", "calls", "tokens")
 # "days" = the days the walk folded; "split" … "flagged" = over every day read final (folded + "repair_days"); "q_days"
 # the q days read (hot ones too), "q_flagged" those "fl", "q_left" folded days still without q of the apps whose queue
 # is made ("q_unscanned": the apps whose queue is not made yet — their days left unknown, never counted as 0),
 # "q_errors" q reads (or an app's fill) that ended on an error other than a Stop (q ended for that app this run);
 # "q_settling" days folded without q that have not settled yet (Q_SETTLE: no read before), "q_reread" stored "fl" days
 # read again in the run, "q_recovered" those that came back "ok", "q_fl_wait" stored "fl" days still to be read again
-# (not final: q_due) after the run
+# (not final: q_due) after the run, "q_early" "ok" days taken out of the q files in the run with their week (an "ok"
+# read before its day settled there: q_early — back in "p", read again once settled)
 
 
 def q_round(fill, now, over, lock, counts, workers=WORKERS):
@@ -1801,6 +1879,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
             counts["q_errors"] += cube.q_err
             counts["q_reread"] += cube.q_rr
             counts["q_recovered"] += cube.q_rok
+            counts["q_early"] += cube.q_out
             if Q_CALLS > 0:
                 sw, fw = cube.q_waits(now)
                 counts["q_settling"] += sw
@@ -1812,7 +1891,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                     counts["q_unscanned"] += 1
                 st["q"] = {"d": cube.q_days, "c": cube.q_calls, "fl": cube.q_fl, "err": cube.q_err,
                            "left": cube.q_left() if made else None, "set": sw, "rr": cube.q_rr, "rok": cube.q_rok,
-                           "rw": fw}
+                           "rw": fw, "out": cube.q_out}
             else:
                 st.pop("q", None)
         save_state(data_dir, state)
@@ -1830,6 +1909,7 @@ def log_line(status):
     return ("ga4 cube: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, days folded %d, "
             "split %d, deeper %d, capped %d, hidden %d, futile %d, loss %d, flagged %d, months read again %d, "
             "repair days %d, months repaired %d, q days %d, q flagged %d, q calls %d, q left %d, q unscanned %d, "
-            "q errors %d, q settling %d, q reread %d, q recovered %d, q fl waiting %d, calls %d, tokens %d%s"
+            "q errors %d, q settling %d, q reread %d, q recovered %d, q fl waiting %d, q early %d, calls %d, "
+            "tokens %d%s"
             % tuple([gaud._int(c.get(k)) for k in COUNTS]
                     + [(", error " + status["error"]) if (status or {}).get("error") else ""]))
