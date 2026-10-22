@@ -7180,17 +7180,19 @@ function retLn(rt,c,gr,nf,tdNf){ if(retNo(c)) return ''; if(!rt) return '<span c
 // the line under the table: what the small number is; checkpoint columns past D30 shown (no line there) are named; a
 // country whose users are not read yet says so (from its rows: a measured users entry past day 0); then retQL's line
 function retNote(rows,cc,C){ const any=(rows||[]).some(r=>Array.isArray(r[R.u])&&r[R.u].slice(1).some(ok)), nl=(C||[]).filter(c=>c.a>30&&c.mi==null).map(c=>c.lab);
-  return `<p class="roi-note roi-rtl"><b>Chhota number</b> = retention: us din wapas aaye users ÷ us din ke naye users (install din ke). D0 pe nahi (wahi install din)${nl.length?`; ${nl.join(' / ')} pe bhi nahi (in checkpoint column ka users data nahi aata)`:''}.${GRAIN!=='day'?` ${GRAIN==='week'?'Hafte':'Mahine'} me: Σ users ÷ Σ naye users — jin din ka wo din final hai unka (koi final nahi to jo abhi tak dikha); jab tak saare din final nahi, halka.`:''} Halka = abhi final nahi; — = data nahi (abhi nahi aaya, ya is purane din ka nahi).${cc&&!any?' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.':''}${retQL(C)}</p>`; }
-// the ≈ line (one, only when it says something on screen): a country — only when the table marked a small number, the
-// days of each kind it marked (counted from the runs: every such day, not just the ones on screen) and the "(other)"
-// users' size; All countries — the users GA4's whole reads gave no install day (in no row: the D60+ numbers can be that
-// much low), only with a 30-day column on screen; '' otherwise (every byte as before)
-function retQL(C){ const U_=RET_UU, nd=rs=>rs.reduce((a,x)=>a+dDiff(x[0],x[1])+1,0), p=[];
+  return `<p class="roi-note roi-rtl"><b>Chhota number</b> = retention: us din wapas aaye users ÷ us din ke naye users (install din ke). D0 pe nahi (wahi install din)${nl.length?`; ${nl.join(' / ')} pe bhi nahi (in checkpoint column ka users data nahi aata)`:''}.${GRAIN!=='day'?` ${GRAIN==='week'?'Hafte':'Mahine'} me: Σ users ÷ Σ naye users — jin din ka wo din final hai unka (koi final nahi to jo abhi tak dikha); jab tak saare din final nahi, halka.`:''} Halka = abhi final nahi; — = data nahi (abhi nahi aaya, ya is purane din ka nahi).${cc&&!any?' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.':''}${retQL()}</p>`; }
+// the ≈ line: a country — only when the table marked a small number, the days of each kind it marked (counted from the
+// runs: every such day, not just the ones on screen) and the "(other)" users' size; All countries — whenever late "u"
+// has qou > 0 (never hidden, whatever the grain / columns): its size as it is, a day-wise sum (each day's users with no
+// install day, added: a user on two days counts twice) over qou_days days, in no row and spread over install days GA4
+// did not name — so the D60+ numbers can be somewhat low, never "that much" on one number; '' otherwise (every byte as
+// before)
+function retQL(){ const U_=RET_UU, nd=rs=>rs.reduce((a,x)=>a+dDiff(x[0],x[1])+1,0), p=[];
   if(U_&&RET_AX&1) p.push(`${N(nd(U_.o))} din GA4 ne kuch users${ok(U_.ou)&&U_.ou>0?` (din-wise jod ${N(U_.ou)})`:''} kisi country / install din ko nahi diye ("(other)") — un din ka % kam ho sakta hai`);
   if(U_&&RET_AX&2) p.push(`${N(nd(U_.f))} din GA4 ka read sampled / thresholded tha (kitne users chhoote, pata nahi)`);
   if(p.length) return `<br>≈ (chhota number) = ${p.join('; ')}.`;
   const q=RET_QU;
-  return q&&ok(q.qou)&&q.qou>0&&(C||[]).some(c=>c.mi!=null)?`<br>${N(q.qou)} users ka install din GA4 ne nahi diya (D60+ me)${ok(q.qou_days)&&q.qou_days>0?` — ${N(q.qou_days)} din ka jod`:''}; ye kisi row me nahi, isliye D60+ ka chhota number utna kam ho sakta hai.`:''; }
+  return q&&ok(q.qou)&&q.qou>0?`<br>${N(q.qou)} users ka install din GA4 ne nahi diya (D60+ me) — ${ok(q.qou_days)&&q.qou_days>0?`${N(q.qou_days)} din ka `:''}din-wise jod; ye kisi row me nahi (kis install din ke the, GA4 ne nahi bataya), isliye D60+ ke chhote number thode kam ho sakte hain — kisi ek number me ye sab nahi.`:''; }
 // 🎯 Breakeven, right after CPI (owner, 21 Oct 2026: "D0 ke pehle ak column add kar do — konse day pe breakeven milta
 // he"). Week / month: the FIRST column whose summed cumulative revenue (agg — the very numbers its cells show, green at
 // ROAS ≥ 100%) reaches the group's spend → [age, exact?]; exact only when the cells pin that day: every row final there

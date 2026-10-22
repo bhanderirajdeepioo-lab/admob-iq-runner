@@ -1489,17 +1489,23 @@ async function moreKeepAll(dc, packs) {
         same.push(U.cohortTable(dday, { ctl: '', cc: 'XX', rows: xr, uu }) === U.cohortTable(dday, { ctl: '', cc: 'XX', rows: xr })); }
       out.rt_uu_absent = same;
       // All countries: no ≈ from users; GA4's whole reads' users with no install day (late "u" "qou" > 0) → one line with
-      // its size, only with a 30-day column on screen; qou 0 / no "u" / no late: every byte as before; a country: never
+      // its size as a day-wise sum, whatever the columns (never hidden — the default Day view without a 30-day column
+      // too); no claim that one number is short by all of it; qou 0 / no "u" / no late: every byte as before; a country:
+      // never
       U.set('GRAIN', 'day');
       const lq = (dd, u) => Object.assign({}, dd, { late: Object.assign({}, dd.late || {}, u === undefined ? {} : { u }) });
       const qu = { q: 4, qfl: 1, c: 2, qou: 12, qou_days: 3 }, tq = U.cohortTable(lq(dmu, qu)), tq0 = U.cohortTable(dmu);
-      const lqs = '<br>12 users ka install din GA4 ne nahi diya (D60+ me) — 3 din ka jod; ye kisi row me nahi, isliye D60+ ka chhota number utna kam ho sakta hai.</p>';
+      const lqs = '<br>12 users ka install din GA4 ne nahi diya (D60+ me) — 3 din ka din-wise jod; ye kisi row me nahi (kis install din ke the, GA4 ne nahi bataya), isliye D60+ ke chhote number thode kam ho sakte hain — kisi ek number me ye sab nahi.</p>';
+      const tqd = U.cohortTable(lq(dday, qu)), tqd0 = U.cohortTable(dday);
       out.rt_uu_all = [tq.includes(lqs), tq.replace(lqs, '</p>') === tq0, !(tq.match(RT_RE) || []).some(s => s.includes('≈')),
         U.cohortTable(lq(dmu, Object.assign({}, qu, { qou: 0, qou_days: 0 }))) === tq0, U.cohortTable(lq(dmu)) === tq0,
         U.cohortTable(lq(dmu, { q: 4, qfl: 0, c: 0 })) === tq0,
-        U.cohortTable(lq(dday, qu)) === U.cohortTable(dday),                                                  // no 30-day column
+        // the default Day view's shape (D60 / D90 / D180 / D365 checkpoint columns, no 30-day column, so no D60+ small
+        // number on screen): the line is still there (never hidden), the rest byte for byte
+        tqd0.includes('<th>D60</th>') && tqd0.includes('D60 / D90 / D180 / D365 pe bhi nahi') && tqd.includes(lqs) && tqd.replace(lqs, '</p>') === tqd0,
         U.cohortTable(lq(dday, qu), { ctl: '', cc: 'AA', rows: cU }) === U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cU }),
-        U.cohortTable(lq(dmu, Object.assign({}, qu, { qou_days: null }))).includes('<br>12 users ka install din GA4 ne nahi diya (D60+ me); ye kisi row me nahi')];
+        U.cohortTable(lq(dmu, Object.assign({}, qu, { qou_days: null }))).includes('<br>12 users ka install din GA4 ne nahi diya (D60+ me) — din-wise jod; ye kisi row me nahi'),
+        !/utna|that much/.test(tq)];
       U.set('GRAIN', 'week');
       out.rt_uu_all_week = U.cohortTable(lq(dmu, qu)).includes(lqs);
       // the default view's files (defaultDigest: appFile, lateFile) carry neither cd "uu" nor late "u": the goldens stay

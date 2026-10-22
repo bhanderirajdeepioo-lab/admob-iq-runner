@@ -1061,9 +1061,11 @@ def test_retention_users_marks(out):
     # absent / old files: no "uu", "uu" without runs, empty / malformed runs, All countries (whatever src carries), Not
     # split — byte for byte as before, every grain
     assert out["rt_uu_absent"] == [True] * 24
-    # All countries: late "u" "qou" > 0 → one line with its size (with a 30-day column on screen), no cell ≈; qou 0 / no
-    # "u" / no late / no 30-day column / a country: byte for byte as before; days unknown → the line without them
-    assert out["rt_uu_all"] == [True] * 9 and out["rt_uu_all_week"]
+    # All countries: late "u" "qou" > 0 → one line with its size, said as what it is (a day-wise sum over qou_days days,
+    # in no row, spread over install days GA4 did not name — never "one number is short by all of it"), whatever the
+    # columns: the default Day view (D60+ checkpoints only, no 30-day column) too — never hidden; no cell ≈; qou 0 / no
+    # "u" / no late / a country: byte for byte as before; days unknown → the line without them
+    assert out["rt_uu_all"] == [True] * 10 and out["rt_uu_all_week"]
     # the picked country's source carries cd "uu"; without it, none
     assert out["rt_uu_src"] == [True, True]
     # the goldens: the default view's files carry neither field (so GOLDEN_DEFAULT & co. are unchanged — asserted in
