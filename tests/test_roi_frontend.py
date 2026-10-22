@@ -234,11 +234,19 @@ def test_forecast_view(out):
 # f16df0114ed2af8f00027ec2854f76367faf228b7d78d00a98ef05bf8ab0759b and GOLDEN_DEFAULT_NOK
 # f927fa5ebcb05d6d2459ca8eb8402c0e9eab65466d745bda0243f784bff7e53b.
 # Merged with the retention lines (also 22 Oct): GOLDEN_RET_CUT (retention lines cut) = this branch's own default page.
+# 🎯 And again ON PURPOSE on 22 Oct 2026 when Avg breakeven became the plain median rule (the owner: "200 din me se 100 din
+# me agar breakeven mila he to … vo 100 din ka kya avg he BE vo dikhana chaiye aur dikhao ki 100 din abhi breakeven tak
+# nahi pahoche": the mean over the days that reached breakeven, whatever their age, the fast ones out; its tile reason, its
+# line and the note's sentence): only the strip — GOLDEN_DEFAULT_NOKPI, GOLDEN_PRE_KPI and GOLDEN_NO_BE (the strip cut
+# out) the same; GOLDEN_DEFAULT, GOLDEN_DEFAULT_NOK and GOLDEN_RET_CUT (each with the strip in) moved — the Kaplan–Meier
+# page gave b2f6e83b9b63ec3731afe05b1238102818f77b15aee95e4ad3fa293378e5cb1b,
+# 0850be88d98457b5d50c85d3ae76ff8babf68628e1039fec509d3da09497ce61 and
+# fa39df20e85ec92db68880a4c4ed1b1aac09f0a0d68bd4f2e869f83b769bac14.
 # 👥 Not changed on 22 Oct 2026 by the small numbers' ≈ (cd "uu" runs for a country, late "u" "qou" for All): the default
 # view's files (appFile, lateFile) carry neither field (rt_uu_golden_fx) — every golden as before.
-GOLDEN_DEFAULT = "b2f6e83b9b63ec3731afe05b1238102818f77b15aee95e4ad3fa293378e5cb1b"
-GOLDEN_RET_CUT = "fa39df20e85ec92db68880a4c4ed1b1aac09f0a0d68bd4f2e869f83b769bac14"
-GOLDEN_DEFAULT_NOK = "0850be88d98457b5d50c85d3ae76ff8babf68628e1039fec509d3da09497ce61"
+GOLDEN_DEFAULT = "9ef76c49a61c84d77011d7fbe1339efbdb0c8f0b122173bcfd417828cf4dabff"
+GOLDEN_RET_CUT = "7d5fed94def3685a4ae814cfffb302da846cbc23db35abe196b45ffa5be4a9ad"
+GOLDEN_DEFAULT_NOK = "8ea8ca3eb5c377e83fec7ce75a4ad64e74429daec4c1a87690161261e7fccd13"
 GOLDEN_DEFAULT_NOKPI = "98ae0afdcb42a1e9d258ef5fe660fba126dad93f9b7b6c83e4f801eca78514eb"
 GOLDEN_PRE_KPI = "fb638f026d2a902459c3287cb620536bbb6474fecb17809c9799ba6264ac0a86"
 GOLDEN_NO_BE = "acabb725b05aa314e38c4f97b7880196122d333a0bdd823a0db9c1bc7d1d23b6"
@@ -368,7 +376,7 @@ def test_totals_strip(out):
     # $0 + $6 = $20, Total revenue $30 + $5 + $0 + $3 = $38 → +$18 (= $38 − $20), ROAS 190%; 200 installs, 5 days
     k, line, (s, r, p, roas, exact) = out["k_usd"]
     assert k == _tiles("$20", "$38", "+$18", "190%", "200", ["5", "1 Jan 2026 – 5 Jan 2026"],
-                       "1 din ka spend data nahi", "1 din ki kamai abhi nahi padhi", ("—", "BE din pata: 0 / 2")) and _holds(k) and exact
+                       "1 din ka spend data nahi", "1 din ki kamai abhi nahi padhi", ("—", "BE din pakka nahi (2 ads din)")) and _holds(k) and exact
     assert line == "1 din ka spend data nahi (2 Jan 26) — unka spend jod me nahi, revenue hai."
     assert out["k_usd_cls"] == [["", ""], ["", ""], ["roi-kg", "roi-up"], ["", "roi-g"], ["roi-cka", ""], ["", ""], ["", ""]]   # profit green, ROAS ≥ 100% green
     # = the table's own columns: Σ Spend, Σ So far, Σ Installs
@@ -378,7 +386,7 @@ def test_totals_strip(out):
     # (the ₹ view says "₹ aaj ka rate" on Total revenue with the unread count too: spend as billed, revenue at today's rate)
     k, line, (s, r, p, roas, exact), table, rc = out["k_inr"]
     assert k == _tiles("₹1,800", "₹3,800", "+₹2,000", "211%", "200", ["5", "1 Jan 2026 – 5 Jan 2026"],
-                       "1 din ka spend data nahi", "₹ aaj ka rate; 1 din nahi padhe", ("—", "BE din pata: 0 / 2")) and _holds(k, rc) and exact
+                       "1 din ka spend data nahi", "₹ aaj ka rate; 1 din nahi padhe", ("—", "BE din pakka nahi (2 ads din)")) and _holds(k, rc) and exact
     assert table == [s, r] == [rc["S"], rc["R"]] and p == rc["P"] and line == out["k_usd"][1]
     # a ₹ view of a file not billed in ₹: $ × 100 on both sides — ₹2,000 / ₹3,800 → +₹1,800, the $ view's 190%
     k, (s, r, p, roas, exact), table, rc = out["k_inr_usd"]
@@ -396,7 +404,7 @@ def test_totals_strip_owner_case(out):
     # 3 × $30 = $770 (the 2 newest left out, said) → +$270, ROAS 154%
     k, cls, line, (s, r, p, roas, exact), rc, table = out["k_own_usd"]
     assert k == _tiles("$500", "$770", "+$270", "154%", "600", ["60", "1 Mar 2025 – 29 Apr 2025"],
-                       "30 din ka spend data nahi", "2 din ki kamai abhi nahi padhi", ("—", "BE din pata: 0 / 23"))
+                       "30 din ka spend data nahi", "2 din ki kamai abhi nahi padhi", ("—", "BE din pakka nahi (25 ads din)"))
     assert exact and r - s == p and _holds(k, rc) and cls[2:4] == [["roi-kg", "roi-up"], ["", "roi-g"]]
     assert line == "30 din ka spend data nahi (1 Mar 25 – 30 Mar 25) — unka spend jod me nahi, revenue hai."
     assert [rc[x] for x in ("S", "R", "P", "M", "K", "nsp", "nrv")] == [500, 770, 270, 30, 2, 30, 58] and table == [500, 770]
@@ -404,7 +412,7 @@ def test_totals_strip_owner_case(out):
     # column); Total revenue $770 × 88 = ₹67,760 (= Σ the So far column) → +₹26,370 to the rupee, ROAS 164%
     k, cls, line, (s, r, p, roas, exact), rc, table = out["k_own_inr"]
     assert k == _tiles("₹41,390", "₹67,760", "+₹26,370", "164%", "600", ["60", "1 Mar 2025 – 29 Apr 2025"],
-                       "30 din ka spend data nahi", "₹ aaj ka rate; 2 din nahi padhe", ("—", "BE din pata: 0 / 23"))
+                       "30 din ka spend data nahi", "₹ aaj ka rate; 2 din nahi padhe", ("—", "BE din pakka nahi (25 ads din)"))
     assert exact and r - s == p == 26370 and _holds(k, rc) and [rc[x] for x in ("S", "R", "P")] == [41390, 67760, 26370]
     assert table == [41390, 67760] and line == out["k_own_usd"][2]
     # a ₹ view of a file not billed in ₹: $ × 88 on both sides — +₹23,760, the $ view's 154%
@@ -467,7 +475,7 @@ def test_totals_strip_states(out):
     # "Show more"
     k, line, rc, (s, r, p, roas, exact) = out["k_all"]
     assert k == _tiles("$700", "$1,915", "+$1,215", "274%", "7,000", ["70", "5 Aug 2026 – 13 Oct 2026"],
-                       be=["D9", "median D9 · 22 din ka avg"]) and _holds(k, rc) and exact
+                       be=["D9", "28 install din ka avg · median D9"]) and _holds(k, rc) and exact
     assert [rc[x] for x in ("S", "R", "P", "M", "K")] == [700, 1915, 1215, 0, 0] and line == ""
     assert out["k_inv"] == [True] * 24 and out["k_allcd"] == [True]
     # 🌍 a pick: '…' while its rows load (aria-busy), then its own totals = a recount of the rows its table shows (28 days
@@ -479,7 +487,7 @@ def test_totals_strip_states(out):
     assert k == want and cnt == [70, 28, 0, 42, "2026-08-05", "2026-10-13"] and exact and _holds(k, rc)
     # (ROAS from the sums: Σ so far $799.50 ÷ $380 = 210% — the rounded $800 ÷ $380 would say 211%)
     assert [x[1] for x in k] == ["$380", "$800", "+$420", "210%", "—", "1,260", "70"] and k[0][2] == "28 din ka spend data nahi"
-    assert k[4] == ["Avg breakeven", "—", "BE din pata: 0 / 38"]          # (its rows: no breakeven day; = the recount)
+    assert k[4] == ["Avg breakeven", "—", "BE din pakka nahi (38 ads din)"]   # (its rows: no breakeven day; = the recount)
     # = Σ its Spend / So far columns over every row (each so far printed whole: ≤ $0.50 a row off)
     assert table[0] == 380 and abs(table[1] - 800) <= 0.5 * 70 and same
     assert line == "28 din ka spend data nahi (2 hisson me, 5 Aug 26 – 13 Oct 26) — unka spend jod me nahi, revenue hai."
@@ -499,11 +507,12 @@ def test_totals_strip_states(out):
     k, not_busy, msg, line = out["k_err"]
     assert [x[1] for x in k] == ["—"] * 7 and not_busy and msg and line == ""
     assert out["k_miss"] == [["—"] * 7, True, ""] and out["k_nocd"] == [True, True]
-    # ONE height in every state (61 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, no
+    # ONE height in every state (67 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, no
     # spend data, crore, the owner's case, a few cents of spend, 1,234 days, 🎯 every Avg breakeven case — its longest
-    # lines too …): the same box — one grid, seven tiles, labels, the two lines' boxes, the note (the CSS pins are in
-    # test_wiring; measured in headless Chrome: one height per width over every state, 360 – 2560 px, 22 Oct 2026)
-    assert out["k_skel"] == [1, 61]
+    # reason and line too …): the same box — one grid, seven tiles, labels, the two lines' boxes, the note (the CSS pins
+    # are in test_wiring; measured in headless Chrome: one height per width over every state, 360 – 2560 px, classic
+    # scrollbar too, 22 Oct 2026 after the plain-median rule — no value / reason / line cut)
+    assert out["k_skel"] == [1, 67]
     # crore-size ₹ printed in full — 14+ characters a size smaller (roi-ckw), shorter ones not; the arithmetic still exact
     big7, big8, small, n7, n8 = out["k_big"]
     assert big7 == ["₹23,45,76,190", "₹14,08,08,624", "−₹9,37,67,566", "60%", "—", "1,234,577", "2"]
@@ -515,7 +524,7 @@ def test_totals_strip_states(out):
     # 131 px at 360, checked in Chrome) — ≤ 31 on the four tiles 3 columns wide from 900 px (116 px at 900 beside the
     # sidebar: the 31-character ones measured in two lines there); labels one short line
     pr = out["k_print"]
-    assert len(pr) == 61 * 7 and any(v == "−₹93,76,78,576" for _, v, _, _ in pr) and any(v == "≤ D125" for _, v, _, _ in pr)
+    assert len(pr) == 67 * 7 and any(v == "−₹93,76,78,576" for _, v, _, _ in pr) and any(v == "≤ D2025" for _, v, _, _ in pr)
     assert all(w == (len(v) >= 14) for _, v, w, _ in pr)
     tight = {}
     for w, sb, phone, box in _kpi_boxes():
@@ -525,18 +534,22 @@ def test_totals_strip_states(out):
             if room < tight.get("room", 1e9):
                 tight = {"room": room, "w": w, "sb": sb, "v": v, "lab": lab}
     assert tight["room"] >= 2, tight
-    # (a reason's "<" is "&lt;" in the HTML: measured as the one character it shows)
-    assert all(len(unescape(sub)) <= 35 and "<" not in sub and len(lab) <= 13 for lab, _, _, sub in pr)
-    assert all(len(unescape(sub)) <= 31 for lab, _, _, sub in pr if lab not in _MONEY)
-    assert max(len(unescape(sub)) for lab, _, _, sub in pr if lab not in _MONEY) == 31
+    # (a reason's "<" is "&lt;" in the HTML: measured as the one character it shows). 🎯 Avg breakeven's reason up to 40
+    # characters — "1,300 install din ka avg · median ≤D2001", "abhi koi din BE nahi hua (9,999 ads din)": measured in Chrome
+    # in two lines of its narrowest box (116 px at 900 beside the sidebar; its count first, so a 4-digit count never
+    # pushes a third line), every other width more room
+    assert all(len(unescape(sub)) <= 35 and "<" not in sub and len(lab) <= 13 for lab, _, _, sub in pr if lab != "Avg breakeven")
+    assert all(len(unescape(sub)) <= 31 for lab, _, _, sub in pr if lab not in _MONEY and lab != "Avg breakeven")
+    be_subs = [sub for lab, _, _, sub in pr if lab == "Avg breakeven"]
+    assert all(len(unescape(x)) <= 40 and "<" not in x for x in be_subs) and max(len(unescape(x)) for x in be_subs) == 40
     # the line under the tiles in every state: within its two fixed lines (Chrome: a 103-character line — 365 days, 12
     # runs — in two lines at 360 px and every width up to 2560); 🎯 Avg breakeven's line above it within ITS fixed lines
-    # (4 up to 430 px, 3 to 899, 2 from 900): its longest, 182 characters (too few old days, every count 3–4 digits), measured
+    # (4 up to 430 px, 3 to 899, 2 from 900): its longest, 191 characters (every count 4 digits, its fast cut too), measured
     # in Chrome in 4 lines at 360 / 375, 3 at 431 and 761 beside the sidebar (classic scrollbar), 2 at 900 — every state
     # every width 360–2560 px, none cut; no raw "<" in it
     assert all(len(x) <= 103 for x in out["k_lines"]) and max(map(len, out["k_lines"])) > 90
     bl = [unescape(x) for x in out["k_blines"]]
-    assert all(len(x) <= 182 for x in bl) and max(map(len, bl)) == 182 and not any("<" in x for x in out["k_blines"])
+    assert all(len(x) <= 191 for x in bl) and max(map(len, bl)) == 191 and not any("<" in x for x in out["k_blines"])
 
 
 
@@ -575,33 +588,32 @@ def test_totals_strip_small_spend(out):
 def test_avg_breakeven(out):
     """🎯 Avg breakeven (owner, 22 Oct 2026: "average breakeven day ka KPI add kar do — jo country wise filter pe vo country
     ka milega … koi koi din ese ho jate he jo us din ka BE 2–5–10 din hota he — usko avg BE me exclude karna he taki muje
-    actual BE mile … manlo 100 BE day he to 50% se kam din vale date ko count hi nahi karna"), after the review: over every
-    install day of the table's source with ads — spend ≥ the file's min_spend (the Status rule's $5; a few cents of stray
-    clicks are counted, never averaged) —, each day's breakeven exactly as the Breakeven column prints it; the typical day =
-    the Kaplan–Meier median over ALL those days (a day not even yet = later than its age; none when less than half are known
-    to have broken even — a few lucky days never set it); a day that broke even before half of it is left out; only days at
-    least 2 × it old are averaged ("≤ D<n>" over any "≤ day"); every day left out counted by why — not even, 100%+ back with
-    no day, not read, young, under the floor —, never one called another. The same in $ / ₹, every grain / mode; a
-    country's own; on made-up rows, each = an independent recount (the harness's beRef / beText)."""
+    actual BE mile … manlo 100 BE day he to 50% se kam din vale date ko count hi nahi karna"; then, over a young country's
+    '—': "200 din me se 100 din me agar breakeven mila he to … vo 100 din ka kya avg he BE vo dikhana chaiye aur dikhao ki
+    100 din abhi breakeven tak nahi pahoche"): over every install day of the table's source with ads — spend ≥ the file's
+    min_spend (the Status rule's $5; a few cents of stray clicks are counted, never averaged) —, each day's breakeven
+    exactly as the Breakeven column prints it; reached = the days with a breakeven day, whatever their age; median = the
+    plain median of those days; a day that broke even before half of it is left out; Avg breakeven = the mean of the rest
+    ("≤ D<n>" over any "≤ day"); '—' only under 3 reached. Its line: how many reached of how many ads days, the fast ones,
+    the ones not even yet ("abhi BE tak nahi pahunche"), 100%+ back with no day, not read, under the floor — never one
+    called another. The same in $ / ₹, every grain / mode; a country's own; on made-up rows, each = an independent recount
+    (the harness's beRef / beText)."""
     # the hand case: 8 days broke even on 3, 5, 40, 50, 60, ≤ 90, 100, ≤ 120 (the Breakeven column's own cells, read back
     # from the table — with the $2 day's day 0); one not even ($4 of $10: "40% back"), one 100%+ back with no day ("120%
-    # back", green — below spend up to its D90 column), one old day not read ("—"), one new day not read; a $2 day (under
-    # $5), an ads-paused day, a day with no spend data. Median over the 10 known: S = 0.9 · 0.8 · 0.7 · 0.6 · 0.5 by day 60,
-    # exactly half → the midpoint to the next breakeven (≤ 90) = ≤ D75; 3 and 5 before 37.5: out; days ≥ 150 old averaged:
-    # (40 + 50 + 60 + 90 + 100 + 120) / 6 = 76.7 → ≤ D77 (2 "≤ day")
+    # back", green), one old day not read ("—"), one new day not read; a $2 day (under $5), an ads-paused day, a day with no
+    # spend data. Median of the 8: (50 + 60) / 2 = 55 — "≤" (the ≤ 90 and ≤ 120 days sit above it: the true median can only
+    # be lower); 3 and 5 before 27.5: out; (40 + 50 + 60 + 90 + 100 + 120) / 6 = 76.7 → ≤ D77 (two "≤ day" in it)
     tile, line, ba, col, ref, sline, cells = out["abe_hand"]
     assert col == [0, 3, 5, 40, 50, 60, 90, 100, 120]
     assert cells == ['<td class="roi-na">40% back</td>', '<td class="roi-g">120% back</td>', '<td class="roi-na">—</td>', '<td class="roi-na">—</td>']
-    assert {k: ba[k] for k in ("ads", "lo", "seen", "nr", "med", "mq", "H", "cut", "fast", "young", "mat", "kept", "inexact",
-                               "wait", "pend", "unread")} == {"ads": 12, "lo": 1, "seen": 10, "nr": 8, "med": 75, "mq": "≤", "H": 150,
-                                                              "cut": 37.5, "fast": 2, "young": 1, "mat": 9, "kept": 6, "inexact": 2,
-                                                              "wait": 1, "pend": 1, "unread": 1}
-    assert round(ba["avg"], 6) == round(460 / 6, 6)
-    assert tile == ["Avg breakeven", "≤ D77", "median ≤D75 · 6 din ka avg"] and [tile, line] == ref
-    # each left-out day by its own why: the not-even day is the only "BE nahi"; the green 120% one "100%+ back"; the unread
-    # old one "kamai nahi padhi"; the new one "naye" — never "abhi BE nahi" for an unknown or an even day
-    assert line == ('2 din "≤ day" wale. Avg me nahi: 2 jaldi BE (&lt;D38) · 1 naye (&lt;150 din) · 1 BE nahi · 1 100%+ back · '
-                    "1 kamai nahi padhi · 1 spend &lt;$5.")
+    assert {k: ba[k] for k in ("ads", "lo", "nr", "med", "mq", "cut", "fast", "kept", "inexact", "wait", "pend", "unread")} == {
+        "ads": 12, "lo": 1, "nr": 8, "med": 55, "mq": "≤", "cut": 27.5, "fast": 2, "kept": 6, "inexact": 2, "wait": 1, "pend": 1, "unread": 2}
+    assert round(ba["avg"], 6) == round(460 / 6, 6) and not any(k in ba for k in ("young", "mat", "H", "seen", "oldest"))
+    assert tile == ["Avg breakeven", "≤ D77", "6 install din ka avg · median ≤D55"] and [tile, line] == ref
+    # each day by its own why: the not-even day is the only "abhi BE tak nahi pahunche"; the green 120% one "100%+ back, din
+    # pakka nahi"; both unread days (old and new alike) "kamai nahi padhi" — never "not even" for an unknown or an even day
+    assert line == ("8 din BE hue (12 ads din me) · 2 jaldi BE (&lt;D28) avg se bahar · 1 din abhi BE tak nahi pahunche · "
+                    "1 100%+ back, din pakka nahi · 2 kamai nahi padhi · 1 spend &lt;$5.")
     assert sline == "1 din ka spend data nahi (12 Jan 25) — unka spend jod me nahi, revenue hai."    # its own line, below
     # the same day in every grain × mode × "Show more" (24), in ₹ as billed and ₹ at today's rate (the ₹ view really on)
     inv, inr, inr_usd, spend_inr = out["abe_inv"]
@@ -609,61 +621,83 @@ def test_avg_breakeven(out):
     c = out["abe_cases"]
     for k, (t, ln, b, (rt, rl)) in c.items():                      # the page = the independent recount, every case
         assert [t, ln] == [rt, rl], k
+        assert t[0] == "Avg breakeven" and (t[1] == "—") == (b["nr"] < 3), k   # '—' only under 3 reached
     T = {k: v[0][1:] for k, v in c.items()}
     L = {k: v[1] for k, v in c.items()}
     B = {k: v[2] for k, v in c.items()}
-    # too few kept: 10 / 20 / 30 / 40 + 3 not even (median D40, 10 fast) → 3 kept of the 6 old: '—' "Kam din", why said
-    assert T["few"] == ["—", "Kam din · median D40"] and (B["few"]["kept"], B["few"]["mat"]) == (3, 6)
-    assert L["few"] == "Avg ke liye 80+ din purane 5 BE din chahiye, abhi 3. Avg me nahi: 1 jaldi BE (&lt;D20) · 3 BE nahi."
-    # exactly 5 kept (10 … 60: median 35, 10 before 17.5 out → (20 + … + 60) / 5 = D40); a day at exactly half the median
-    # stays (only "before" half is out: D18); an odd count's median (40: 1 and 2 out → D50); nothing left out (62.5 → D63)
-    assert T["five"] == ["D40", "median D35 · 5 din ka avg"] and L["five"] == "Avg me nahi: 1 jaldi BE (&lt;D18)."
-    assert T["half"] == ["D18", "median D20 · 5 din ka avg"] and B["half"]["fast"] == 0 and L["half"] == "Sab 5 din gine."
-    assert T["odd"] == ["D50", "median D40 · 5 din ka avg"] and (B["odd"]["med"], B["odd"]["fast"], B["odd"]["avg"]) == (40, 2, 50)
-    assert T["all"] == ["D63", "median D63 · 6 din ka avg"] and B["all"]["med"] == B["all"]["avg"] == 62.5
-    # nothing broke even: no median — how many known, the oldest's age
-    assert T["none"] == ["—", "BE din pata: 0 / 2"] and B["none"]["med"] is None and B["none"]["avg"] is None
-    assert L["none"] == "Median nahi — aadhe se kam din ka BE din pata: 2 BE nahi (sabse purana 333 din)."
-    # reviewer (high): only lucky fast days broke even — 6 of 40, 6 of 365 (day 2 … 10), the rest at 40% back: '—', never
-    # their D5 / D6; and 4 of 365 old days: the counts + the oldest's age, not "Too early"
-    assert T["lucky40"] == ["—", "BE din pata: 6 / 40"] and T["lucky365"] == ["—", "BE din pata: 6 / 365"]
-    assert L["lucky365"] == "Median nahi — aadhe se kam din ka BE din pata: 359 BE nahi (sabse purana 359 din)."
-    assert T["four365"] == ["—", "BE din pata: 4 / 365"] and "Too early" not in L["four365"] + T["four365"][1]
-    assert L["four365"] == "Median nahi — aadhe se kam din ka BE din pata: 361 BE nahi (sabse purana 727 din)."
-    # reviewer: every day "≤ day 90" — "≤ D90", its median ≤, the 30 "≤ day" said (never a bare D90 as if measured)
-    assert T["le90"] == ["≤ D90", "median ≤D90 · 30 din ka avg"] and L["le90"] == '30 din "≤ day" wale. Sab 30 din gine.'
-    # reviewer: 10 real ads days ($50, ≤ day 60) + 12 days of a few cents (day 0): the cents days out, counted — ≤ D60, not D27
-    assert T["stray"] == ["≤ D60", "median ≤D60 · 10 din ka avg"] and L["stray"] == '10 din "≤ day" wale. Avg me nahi: 12 spend &lt;$5.'
-    # reviewer: young days — 10 old (day 100) + 10 days 70-79 days old (5 on day 60, 5 not yet): the median D100 (the young
-    # not-yet ones only up to their age), only days ≥ 200 old averaged: D100 (the reached young ones would make it D87)
-    assert T["young"] == ["D100", "median D100 · 10 din ka avg"] and L["young"] == "Avg me nahi: 10 naye (&lt;200 din)."
-    # every day younger than 2 × the median: too early, said with the median
-    assert T["early"] == ["—", "Too early · median D15"]
-    assert L["early"] == "Avg ke liye 30+ din purane 5 BE din chahiye, abhi 0. Avg me nahi: 10 naye (&lt;30 din)."
+    # 🧑‍💼 the owner's example: 200 ads days, 100 reached (10 lucky on day 5, 45 on day 100, 45 on day 140), 100 not even.
+    # Median D100 → the 10 before D50 out → (45 × 100 + 45 × 140) / 90 = D120; "100 din abhi BE tak nahi pahunche"
+    assert T["owner"] == ["D120", "90 install din ka avg · median D100"]
+    assert L["owner"] == "100 din BE hue (200 ads din me) · 10 jaldi BE (&lt;D50) avg se bahar · 100 din abhi BE tak nahi pahunche."
+    assert (B["owner"]["ads"], B["owner"]["nr"], B["owner"]["fast"], B["owner"]["kept"], B["owner"]["wait"]) == (200, 100, 10, 90, 100)
+    assert out["abe_owner_inv"] == [True] * 13                     # every grain × mode and ₹: the same tile and line
+    # a young country (made up: every ads day in its last 300 days — the old 2 × median age rule gave '—'): 120 reached —
+    # 20 on day 7, 30 on day 120, 70 on ≤ day 180 —, 180 not even, 15 days under $5. Median ≤ D180 → the 20 before D90
+    # out → (30 × 120 + 70 × 180) / 100 = ≤ D162 — shown, never '—'
+    assert T["young300"] == ["≤ D162", "100 install din ka avg · median ≤D180"]
+    assert L["young300"] == ("120 din BE hue (300 ads din me) · 20 jaldi BE (&lt;D90) avg se bahar · 180 din abhi BE tak nahi "
+                             "pahunche · 15 spend &lt;$5.")
+    # the floor: exactly 3 reached — shown (10 before 20 out → D45); 2 reached — '—', said; none — '—' by why: not even
+    # yet / 100%+ back with no day pinned / not read
+    assert T["three"] == ["D45", "2 install din ka avg · median D40"] and L["three"] == "3 din BE hue (3 ads din me) · 1 jaldi BE (&lt;D20) avg se bahar."
+    assert T["two"] == ["—", "sirf 2 din BE hue (7 ads din)"] and L["two"] == "2 din BE hue (7 ads din me) · 5 din abhi BE tak nahi pahunche."
+    assert B["two"]["med"] is None and B["two"]["avg"] is None
+    assert T["none"] == ["—", "abhi koi din BE nahi hua (2 ads din)"] and L["none"] == "0 din BE hue (2 ads din me) · 2 din abhi BE tak nahi pahunche."
+    assert T["pend"] == ["—", "BE din pakka nahi (5 ads din)"]
+    assert L["pend"] == "0 din BE hue (5 ads din me) · 2 din abhi BE tak nahi pahunche · 3 100%+ back, din pakka nahi."
+    assert T["unread"] == ["—", "kamai abhi nahi padhi"] and L["unread"] == "0 din BE hue (3 ads din me) · 3 kamai nahi padhi."
+    # an even count's median (10 … 60: 35, 10 before 17.5 out → D40); a day at exactly half the median stays (only
+    # "before" half is out: D18); an odd count's median (40: 1 and 2 out → D50); nothing left out (62.5 → D63)
+    assert T["five"] == ["D40", "5 install din ka avg · median D35"] and L["five"] == "6 din BE hue (6 ads din me) · 1 jaldi BE (&lt;D18) avg se bahar."
+    assert T["half"] == ["D18", "5 install din ka avg · median D20"] and B["half"]["fast"] == 0 and L["half"] == "5 din BE hue (5 ads din me)."
+    assert T["odd"] == ["D50", "5 install din ka avg · median D40"] and (B["odd"]["med"], B["odd"]["fast"], B["odd"]["avg"]) == (40, 2, 50)
+    assert T["all"] == ["D63", "6 install din ka avg · median D63"] and B["all"]["med"] == B["all"]["avg"] == 62.5
+    # only lucky fast days reached (6 of 40, day 2 … 10): their avg (median 4.5: day 2 out → D6), the 34 not even beside it
+    assert T["lucky40"] == ["D6", "5 install din ka avg · median D5"]
+    assert L["lucky40"] == "6 din BE hue (40 ads din me) · 1 jaldi BE (&lt;D3) avg se bahar · 34 din abhi BE tak nahi pahunche."
+    # "≤": every day ≤ day 90 → ≤ D90, median ≤D90; a ≤ 120 above the median of 40 / 50 / 60 / ≤ 120 → median ≤D55, avg
+    # 67.5 → ≤ D68; a ≤ 50 below the median (40, ≤ 50, 60, 70, 80) → median D60 exact, the avg ≤ D60; a ≤ 30 that is fast
+    # (≤ 30, 60 … 90: median 70, cut 35) → out, neither "≤": D75
+    assert T["le90"] == ["≤ D90", "30 install din ka avg · median ≤D90"] and L["le90"] == "30 din BE hue (30 ads din me)."
+    assert T["leAbove"] == ["≤ D68", "4 install din ka avg · median ≤D55"]
+    assert T["leKept"] == ["≤ D60", "5 install din ka avg · median D60"] and B["leKept"]["inexact"] == 1
+    assert T["leFast"] == ["D75", "4 install din ka avg · median D70"] and (B["leFast"]["fast"], B["leFast"]["inexact"]) == (1, 0)
+    # 10 real ads days ($50, ≤ day 60) + 12 days of a few cents (day 0): the cents days out, counted — ≤ D60, not D27
+    assert T["stray"] == ["≤ D60", "10 install din ka avg · median ≤D60"] and L["stray"] == "10 din BE hue (10 ads din me) · 12 spend &lt;$5."
+    # age never matters: 10 old days on day 100 + 5 days 70 days old on day 60 → median D100, (1,000 + 300) / 15 = D87,
+    # their 5 not-even siblings said; 10 days only 20 days old, all on day 15 → D15
+    assert T["young"] == ["D87", "15 install din ka avg · median D100"] and L["young"] == "15 din BE hue (20 ads din me) · 5 din abhi BE tak nahi pahunche."
+    assert T["early"] == ["D15", "10 install din ka avg · median D15"]
     # a file whose min_spend is $20: its own floor (every day of $15 out, counted)
-    assert T["floor20"] == ["D40", "median D35 · 5 din ka avg"] and L["floor20"] == "Avg me nahi: 1 jaldi BE (&lt;D18) · 1 spend &lt;$20."
-    # 9,999 install days — every count in full (4 digits where it can be): the line in its fixed lines (182 max, below)
+    assert T["floor20"] == ["D40", "5 install din ka avg · median D35"]
+    assert L["floor20"] == "6 din BE hue (6 ads din me) · 1 jaldi BE (&lt;D18) avg se bahar · 1 spend &lt;$20."
+    # 9,999 install days, every count with 4 digits (1,500 under $5, 1,200 lucky on day 2, 1,300 on ≤ day 100 … 149, 2,000
+    # not even, 1,999 100%+ back, 2,000 not read): median ≤D101, the 1,200 before 50.5 out, mean 124.5 → ≤ D125
     tile, line, (rt, rl) = out["abe_big"]
-    assert [tile, line] == [rt, rl] and tile == ["Avg breakeven", "≤ D125", "median ≤D129 · 4,933 din ka avg"]
-    assert line == ('4,933 din "≤ day" wale. Avg me nahi: 1,200 jaldi BE (&lt;D65) · 258 naye (&lt;258 din) · 2,000 BE nahi · '
-                    "99 100%+ back · 9 kamai nahi padhi · 1,500 spend &lt;$5.")
-    (ft, fl, fr), (nt, nl, nr) = out["abe_long"]
-    assert [ft, fl] == fr and ft == ["Avg breakeven", "—", "Kam din · median D100"] and len(unescape(fl)) == 182
-    assert [nt, nl] == nr and nt == ["Avg breakeven", "—", "BE din pata: 500 / 3,500"] and "sabse purana 4,845 din" in nl
+    assert [tile, line] == [rt, rl] and tile == ["Avg breakeven", "≤ D125", "1,300 install din ka avg · median ≤D101"]
+    assert line == ("2,500 din BE hue (8,499 ads din me) · 1,200 jaldi BE (&lt;D51) avg se bahar · 2,000 din abhi BE tak nahi "
+                    "pahunche · 1,999 100%+ back, din pakka nahi · 2,000 kamai nahi padhi · 1,500 spend &lt;$5.")
+    # the longest reason and line: the 1,300 on ≤ day 2,000 … 2,049 (its half 4 digits too) — 40 and 191 characters, each
+    # measured in Chrome in its fixed lines; 9,999 ads days none of which broke even — 40 characters
+    (gt, gl, gr), (nt, nl, nr) = out["abe_long"]
+    assert [gt, gl] == gr and gt == ["Avg breakeven", "≤ D2025", "1,300 install din ka avg · median ≤D2001"]
+    assert len(unescape(gl)) == 191 and "1,200 jaldi BE (&lt;D1001) avg se bahar" in gl
+    assert [nt, nl] == nr and nt == ["Avg breakeven", "—", "abhi koi din BE nahi hua (9,999 ads din)"]
+    assert nl == "0 din BE hue (9,999 ads din me) · 9,999 din abhi BE tak nahi pahunche."
     # no avg: no ads (spend 0 every day), no spend data, nothing at all — '—' with its reason, no line. All countries of the
-    # made-up app (28 days broke even on day 9; the 18 newest days young; 30 old ones 100%+ back with no day pinned — named
-    # so, never "not even")
+    # made-up app: 28 days broke even on day 9 (6 of them younger than the old 2 × median age rule let in: age never
+    # matters now), 9 not even, 33 100%+ back with no day pinned — named so, never "not even"
     g, gl, q, ql, z, zl, a, al, ref = out["abe_none"]
     assert g == ["Avg breakeven", "—", "koi ads din nahi — BE nahi"] and q == ["Avg breakeven", "—", "spend nahi — BE nahi"]
     assert z == ["Avg breakeven", "—", "ads din ke Breakeven ka avg"] and gl == ql == zl == ""
-    assert a == ["Avg breakeven", "D9", "median D9 · 22 din ka avg"] and [a, al] == ref
-    assert al == "Avg me nahi: 18 naye (&lt;18 din) · 30 100%+ back."
+    assert a == ["Avg breakeven", "D9", "28 install din ka avg · median D9"] and [a, al] == ref
+    assert al == "28 din BE hue (70 ads din me) · 9 din abhi BE tak nahi pahunche · 33 100%+ back, din pakka nahi."
     # 🌍 a country: '…' while its rows load, then ITS days (2, 10, 12, 14, 16, 18: median 13 → 2 out → D14; its $3 day
     # under the floor), the same in ₹ and every grain / mode; All again: All's own ≤ D77
     ld, busy, c_, cl, ci, civ, A, Al, cref = out["abe_cty"]
     assert ld == ["Avg breakeven", "…", "ads din ke Breakeven ka avg"] and busy
-    assert c_ == ["Avg breakeven", "D14", "median D13 · 5 din ka avg"] and [c_, cl] == cref
-    assert cl == "Avg me nahi: 1 jaldi BE (&lt;D7) · 1 spend &lt;$5."
+    assert c_ == ["Avg breakeven", "D14", "5 install din ka avg · median D13"] and [c_, cl] == cref
+    assert cl == "6 din BE hue (6 ads din me) · 1 jaldi BE (&lt;D7) avg se bahar · 1 spend &lt;$5."
     assert ci == [c_, cl] and civ == [True] * 4
     assert A == tile_hand(out) and Al == out["abe_hand"][1]
     # Unknown country / Not split: '—' with why; a pack that failed / a country the app does not have: '—'; loading: '…'
@@ -1120,14 +1154,16 @@ def test_wiring():
     assert "@media (min-width:1600px){.roi-ckg{grid-template-columns:repeat(7,minmax(0,1fr))}.roi-ckg>.roi-ck:nth-child(n){grid-column:auto}}" in p
     assert "@media (max-width:760px){.roi-ck .roi-kv{font-size:15.5px}.roi-ck .roi-ckw{font-size:13px}}" in p
     assert p.count(".roi-ckg{") == 3 and "@media (min-width:1400px){.roi-ckg" not in p and p.count("roi-cka") == 2
-    # the two lines under the tiles: two fixed lines each, empty or not (the spend line ≤ 103 characters, Avg breakeven's
-    # ≤ 97: measured in Chrome to fit at 360 px)
+    # the two lines under the tiles: a fixed number of lines each, empty or not (the spend line ≤ 103 characters in 2,
+    # Avg breakeven's ≤ 191 in 4 / 3 / 2 by width: measured in Chrome)
     assert ".roi-ckm{height:3em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" in p
     assert (".roi-ckb{height:6em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4}"
             "@media (min-width:431px){.roi-ckb{height:4.5em;-webkit-line-clamp:3}}@media (min-width:900px){.roi-ckb{height:3em;-webkit-line-clamp:2}}") in p
-    # Avg breakeven: the owner's 50% rule and the too-early floor are named constants; each day read through beDay (the
-    # Breakeven column's own), never a second breakeven
-    assert "const BE_FAST_SHARE=0.5, BE_MIN_N=5, BE_AGE_X=2;" in p and "b=beDay(r,[],T)" in p and p.count("beAvg(") == 2
+    # Avg breakeven: the owner's 50% rule and the 3-day floor are named constants; each day read through beDay (the
+    # Breakeven column's own), never a second breakeven; the plain median of the days that reached breakeven (22 Oct 2026,
+    # the owner: "vo 100 din ka kya avg he BE vo dikhana chaiye") — the Kaplan–Meier median and the 2 × median age rule gone
+    assert "const BE_FAST_SHARE=0.5, BE_MIN_N=3;" in p and "b=beDay(r,[],T)" in p and p.count("beAvg(") == 2
+    assert not any(x in p for x in ("beKM(", "BE_AGE_X", "beBelow(", "Too early · median", "Kam din · ", "BE din pata:"))
     # the spend floor is the file's own min_spend (the Status rule), $5 when a file has none
     assert "d.consts.min_spend>0?+d.consts.min_spend:5" in p
     # the two-group code and CSS are gone: no group heads / wrapper class, no group titles
