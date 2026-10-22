@@ -454,7 +454,8 @@ async function keepHarness(VW, file, packs, asked) {
   const c = Object.assign({}, CTX0, { document: D.doc, window: D.win, Element: D.El, HTMLElement: D.El, getComputedStyle: D.gcs,
     setTimeout: (f, ms) => { Q.t.push({ at: Q.now + (ms || 0), f, n: Q.n++ }); return Q.n; }, requestAnimationFrame: f => { Q.raf.push(f); return Q.raf.length; },
     DATA: { roi: { file: 'roi.json.gz', v: 'v1', apps: { 'id-c': { file: 'roi_cccccccccccc.json.gz', st: 'Watch' } } } },
-    fetchGzJson: u => { const f = u.split('?')[0]; if (asked) asked.push(f); return packs && packs[f] ? Promise.resolve(JSON.parse(JSON.stringify(packs[f]))) : Promise.reject(new Error('x')); } });
+    fetchGzJson: u => { const f = u.split('?')[0]; if (asked) asked.push(f); if (packs && packs[f] === 404) return Promise.reject(new Error('http 404'));   // 404: gone from the site
+      return packs && packs[f] ? Promise.resolve(JSON.parse(JSON.stringify(packs[f]))) : Promise.reject(new Error('x')); } });
   vm.createContext(c);
   vm.runInContext(SPSRC + '\n' + src + '\nthis.__SP=SP;', c);
   const R = c.ROI, U = R._, SP = c.__SP;
@@ -732,6 +733,58 @@ async function benchPacks(VW, file, packs) {
   const a = D.q('#roi-bmk [data-roi-cc="AA"]'); D.fire('pointerdown', a); D.fire('click', a);
   const b2 = bm(), h2 = b2.outerHTML; await drain(500);
   res.late = [h2.includes('[AA] Country AA</h3>'), bm() === b2 && bm().outerHTML === h2, U.BN.cty, U.getCTY()];
+  return res;
+}
+// the app file read again once for a pack that is gone (404) / of another build: each card's own "read once" mark. A Try
+// again in one card clears only its own — never an app file read on the other card's behalf, now or at its next repaint —
+// and the card's own Try again still reads the app file again once for its own pack. (c01 gone from the site all along;
+// c00 off the site at first: a network error.)
+async function benchReload(VW, file, packs) {
+  const APP = 'roi_cccccccccccc.json.gz', C0 = 'roi_aaaaaaaaaaaa_c00.json.gz', C1 = 'roi_aaaaaaaaaaaa_c01.json.gz';
+  const P2 = { [C1]: 404, [APP]: file }, asked = [], H = await keepHarness(VW, file, P2, asked), { D, U, R, drain } = H;
+  U.set('VIEW', 'day'); U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60); U.setCTY(''); R.repaint(); await drain(0);
+  const coh = () => D.q('#roi-coh'), bm = () => D.q('#roi-bmk'), click = async b => { D.fire('pointerdown', b); D.fire('click', b); await drain(500); };
+  const note = e => { const m = e.outerHTML.match(/<p class="roi-note">(?:⚠️|⏳)[^<]*/); return m ? m[0].replace('<p class="roi-note">', '').trim() : ''; };
+  const GONE = 'ka data abhi badal raha hai (site pe naya build aa raha hai).', ERR = 'ka data load nahi hua.';
+  const since = n => asked.slice(n), res = {};
+  let n = asked.length;
+  // the Benchmark: EE (c01 gone) → the app file read again once for it → "badal raha hai" + its Try again
+  await click(D.q('#roi-bmk [data-roi-cc="EE"]'));
+  res.bGone = [since(n), note(bm()), bm().outerHTML.includes('data-roi-ccr="b">Try again')];
+  // the cohort card: AA (c00 off the site) → its error + its Try again; the Benchmark's box kept
+  let b0 = bm(), bh = b0.outerHTML; n = asked.length;
+  await click(D.q('#roi-coh [data-roi-cc="AA"]'));
+  res.cErr = [since(n), note(coh()), coh().outerHTML.includes('data-roi-ccr="1">Try again'), bm() === b0 && bm().outerHTML === bh];
+  // c00 on the site now: the cohort card's Try again reads c00 only — never the app file for the Benchmark's gone pack;
+  // the Benchmark the same node, the same HTML, right after the tap and once all is in
+  P2[C0] = packs[C0]; b0 = bm(); bh = b0.outerHTML; n = asked.length;
+  { const t = D.q('#roi-coh [data-roi-ccr]'); D.fire('pointerdown', t); D.fire('click', t); }
+  const mid = bm() === b0 && bm().outerHTML === bh; await drain(500);
+  res.cRetry = [since(n), mid, bm() === b0 && bm().outerHTML === bh, coh().outerHTML.includes('[AA] Country AA</h3>') && !coh().outerHTML.includes('Try again')];
+  // the other way: the cohort card on EE (c01 gone: the app file read again once for it), the Benchmark on BB (c00 off
+  // the site again: its error); the Benchmark's Try again reads c00 only, and the cohort card's next repaint (a grain
+  // tap) reads nothing again — its own mark still there — and still says so
+  n = asked.length; await click(D.q('#roi-coh [data-roi-cc="EE"]'));
+  res.cGone = [since(n), note(coh())];
+  delete P2[C0]; for (const k of Object.keys(U.PK)) if (k.startsWith(C0)) { delete U.PK[k]; U.PKL.splice(U.PKL.indexOf(k), 1); }
+  n = asked.length; await click(D.q('#roi-bmk [data-roi-cc="BB"]'));
+  res.bErr = [since(n), note(bm())];
+  P2[C0] = packs[C0]; let c0 = coh(), ch = c0.outerHTML; n = asked.length;
+  await click(D.q('#roi-bmk [data-roi-ccr]'));
+  res.bRetry = [since(n), coh() === c0 && coh().outerHTML === ch, bm().outerHTML.includes('[BB] Country BB</h3>') && !bm().outerHTML.includes('Try again')];
+  n = asked.length; await click(D.q('#roi-coh [data-roi-grain="week"]'));
+  res.cNext = [since(n), note(coh())];
+  // a card's OWN Try again still reads the app file again once for its own gone pack: the cohort card's (EE) …
+  n = asked.length; await click(D.q('#roi-coh [data-roi-ccr]'));
+  res.cOwn = [since(n), note(coh())];
+  // … and the Benchmark's (EE too, now: c01 gone — its marks cleared by its own Try again above (BB), so the pick reads the
+  // app file again once for it, then its Try again once more; the cohort card, on EE too, its mark kept: nothing for it)
+  n = asked.length; await click(D.q('#roi-bmk [data-roi-cc="EE"]'));
+  res.bPick = [since(n), note(bm())];
+  n = asked.length; await click(D.q('#roi-bmk [data-roi-ccr]'));
+  res.bOwn = [since(n), note(bm())];
+  res.st = [U.BN.cty, U.BN.grain, U.getCTY(), U.st().GRAIN];
+  res.gone = GONE; res.err = ERR;
   return res;
 }
 (async () => {
@@ -2434,6 +2487,7 @@ async function benchPacks(VW, file, packs) {
     out.bn_dom = { w375: await benchDom(375, dc, PACKS, { cc: 1 }), w1280: await benchDom(1280, dc, PACKS, { cc: 1 }),
       long375: await benchDom(375, longFile(), null), long1280: await benchDom(1280, longFile(), null) };
     out.bn_packs = { w375: await benchPacks(375, dc, PACKS), w1280: await benchPacks(1280, dc, PACKS) };
+    out.bn_reload = { w375: await benchReload(375, dc, PACKS), w1280: await benchReload(1280, dc, PACKS) };
     }
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };

@@ -7270,7 +7270,7 @@ function qNote(lt){ const z=v=>ok(v)&&v>0, dr=(lt.qneg||0)+(lt.qpos||0), ot=v=>`
 let CTY='';                                           // the picked country ('' = All countries): kept across grain / mode / apps
 const PK={}, CR={};                                   // packs by file?sha ({j} | {busy} | {err, gone} | {stale}), expanded rows by file?sha|cc
 const PKL=[], PK_KEEP=3, RLD={};                      // the loaded packs, newest last (only PK_KEEP kept: a phone's memory); the app files read
-                                                      // again once for a pack of another build (by file|cd.b)
+                                                      // again once for a pack of another build (by file|cd.b; the cohort card's — the Benchmark's: BN.rld)
 const PACK_RE=/^roi_[0-9a-f]{12}_c\d{2,3}\.json\.gz$/;
 const CC_SP={'--':'Unknown country','XX':'Not split'};
 function cdOf(d){ const c=d&&d.cd; return c&&c.v===1&&Array.isArray(c.c)&&Array.isArray(c.packs)?c:null; }
@@ -7308,10 +7308,11 @@ function ensurePack(f,sha,b,cb){ const k=f+'?'+sha; if(PK[k]&&(PK[k].busy||PK[k]
 function ccRows(cd,pk,cc,T){ const k=pk[0]+'?'+pk[1], kk=k+'|'+cc; if(CR[kk]) return CR[kk]; const P=PK[k], rs=P&&P.j&&P.j.c[cc];
   if(!Array.isArray(rs)) return null; const out=rs.map(r=>Array.isArray(r)&&r.length===1?zx(r[0],cd,cc,T):r);
   return out.every(Array.isArray)?(CR[kk]=out):false; }
-// the app file read again once (its index is older than the packs on the site): true = on its way
-function ccReload(d,cd){ const r=root(), aid=d.app_id||(r&&r.dataset.aid), a=aid&&appPtr(aid), f=a&&a.file, rk=f+'|'+cd.b;
-  if(!f) return false; if(RLD[rk]) return !!ABUSY[f];             // read again already: waiting for it, or done (said)
-  RLD[rk]=1; if(AF[f]) AF[f]._v=''; ensureApp(aid,repaint); return true; }
+// the app file read again once (its index is older than the packs on the site): true = on its way. Each card keeps its
+// own marks (🧪 the Benchmark's on BN.rld): a Try again in one card clears only its own — the other card's "read once" stays
+function ccReload(d,cd){ const r=root(), aid=d.app_id||(r&&r.dataset.aid), a=aid&&appPtr(aid), f=a&&a.file, rk=f+'|'+cd.b, L=CARD?CARD.rld:RLD;
+  if(!f) return false; if(L[rk]) return !!ABUSY[f];               // read again already: waiting for it, or done (said)
+  L[rk]=1; if(AF[f]) AF[f]._v=''; ensureApp(aid,repaint); return true; }
 // the picker (owner, 22 Oct 2026: "country list he vo spending wise kar do"): All countries + the 6 with the most Google
 // Ads spend (chips) + a native list of EVERY country GA4 names in the same order, then the two that are not one ("Unknown
 // country" = GA4's "(not set)", "Not split" = Google Ads' unmapped cost): always last, in the index's order, never a chip.
@@ -7536,7 +7537,7 @@ function cohCard(d){ const cs=ccSrc(d), o=CARD, hd=o?o.pre:'', nt=o?o.note:'sabs
 // table grows), a cohort-card tap with all 1,000 rows in ~65 ms (~240 ms); a Mode switch redraws the rows down to the
 // reader's row (+60) to keep it in place — at the very end ~1.3 s (~4.9 s at 4×), as the cohort card's after "Show all".
 // A later Benchmark-only change = a flag on BN, read through CARD (null while the cohort card draws).
-const BN={grain:'month',met:'roas',show:60,cty:'',all:true,id:'roi-bmk',x:'b',pre:'Benchmark · ',
+const BN={grain:'month',met:'roas',show:60,cty:'',rld:{},all:true,id:'roi-bmk',x:'b',pre:'Benchmark · ',
   note:'Abhi ye upar wale table ki copy hai — aap jo badlav bolenge woh sirf yahan honge · sabse naya upar · cell pe ruko = detail',lz:null,last:null};
 const LZ_STEP=60, LZ_NEAR=900;
 let CARD=null;
@@ -8373,9 +8374,10 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=at('[data-roi-asort]'))){ const k=b.dataset.roiAsort; b.setAttribute('data-roi-sel',`[data-roi-asort="${k}"]`); keep(b,()=>{ ASORT={k,dir:ASORT.k===k?-ASORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-cc]'))){ const cc=b.dataset.roiCc; keepAt(r,b,`${sc}[data-roi-cc="${cc}"]`,()=>{ setK(K,{cty:cc,show:60}); paint(K); }); return; }
     if((b=at('[data-roi-ccx]'))){ const hs=K?'#'+K.id+' h3':'#roi-coh h3', h=r.querySelector(hs)||b; keepAt(r,h,hs,()=>{ setK(K,{cty:'',show:60}); paint(K); }); return; }
-    // Try again: the packs this card waits for read again — never the other card's (🧪 the Benchmark's when only it waits for it)
-    if((b=at('[data-roi-ccr]'))){ const w=ccWants(), mine=k=>K?k===w[1]:k!==w[1]||k===w[0];
-      Object.keys(PK).forEach(k=>{ if((PK[k].err||PK[k].stale)&&mine(k)) delete PK[k]; }); Object.keys(RLD).forEach(k=>{ delete RLD[k]; }); paint(K); return; }
+    // Try again: the packs this card waits for read again — never the other card's (🧪 the Benchmark's when only it waits for it);
+    // only this card's "app file read once" marks cleared (the other card's stay: no app file read on its behalf)
+    if((b=at('[data-roi-ccr]'))){ const w=ccWants(), mine=k=>K?k===w[1]:k!==w[1]||k===w[0], L=K?K.rld:RLD;
+      Object.keys(PK).forEach(k=>{ if((PK[k].err||PK[k].stale)&&mine(k)) delete PK[k]; }); Object.keys(L).forEach(k=>{ delete L[k]; }); paint(K); return; }
     if((b=at('[data-roi-pick]'))){ const cc=b.dataset.roiPick; keepAt(r,b,'#roi-coh',()=>{ VIEW='day'; CTY=cc; SHOW=60;   // 🌍 Countries → that country's day-wise table
         r.querySelectorAll('[data-roi-view]').forEach(x=>x.setAttribute('aria-selected',String(x.dataset.roiView===VIEW))); repaint(); }); return; }
     if((b=at('[data-roi-cty]'))){ const cc=b.dataset.roiCty; b.setAttribute('data-roi-sel',`[data-roi-cty="${cc}"]`); keep(b,()=>{ CTYO=CTYO===cc?'':cc; repaint(); }); return; }

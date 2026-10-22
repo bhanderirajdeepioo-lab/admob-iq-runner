@@ -1211,6 +1211,26 @@ def test_benchmark_packs(out):
         assert p["late"] == [True, True, "AA", "AA"], w
 
 
+def test_benchmark_reload(out):
+    """🧪 The app file read again once for a pack that is gone (404): each card's own "read once" mark. A Try again in one
+    card never reads the app file on the other card's behalf (right then, or at the other card's next repaint) and never
+    changes the other card's box; a card's own Try again still reads it again once for its own gone pack."""
+    APP, C0, C1 = "roi_cccccccccccc.json.gz", "roi_aaaaaaaaaaaa_c00.json.gz", "roi_aaaaaaaaaaaa_c01.json.gz"
+    for w in ("w375", "w1280"):
+        r = out["bn_reload"][w]
+        gone = lambda cc: "⚠️ [%s] Country %s %s" % (cc, cc, r["gone"])
+        assert r["bGone"] == [[C1, APP], gone("EE"), True], (w, r["bGone"])            # the Benchmark's own read, once
+        assert r["cErr"] == [[C0], "⚠️ [AA] Country AA " + r["err"], True, True], (w, r["cErr"])
+        assert r["cRetry"] == [[C0], True, True, True], (w, r["cRetry"])              # no app file for the Benchmark
+        assert r["cGone"] == [[APP], gone("EE")], (w, r["cGone"])                       # the cohort card's own, once
+        assert r["bErr"] == [[C0], "⚠️ [BB] Country BB " + r["err"]], (w, r["bErr"])
+        assert r["bRetry"] == [[C0], True, True], (w, r["bRetry"])                      # no app file for the cohort card …
+        assert r["cNext"] == [[], gone("EE")], (w, r["cNext"])                          # … nor at its next repaint
+        assert r["cOwn"] == [[C1, APP], gone("EE")], (w, r["cOwn"])                     # its own Try again: once
+        assert r["bPick"] == [[APP], gone("EE")] and r["bOwn"] == [[C1, APP], gone("EE")], (w, r["bPick"], r["bOwn"])
+        assert r["st"] == ["EE", "month", "EE", "week"], (w, r["st"])
+
+
 def test_wiring():
     with open(PAGE, encoding="utf-8") as f:
         p = f.read()
@@ -1226,7 +1246,10 @@ def test_wiring():
     for a in ("data-roi-cc", "data-roi-ccx", "data-roi-pick"):                          # 🌍 every country control too
         assert "keepAt(r," in p.split("if((b=at('[%s]'))){ " % a)[1].split("\n")[0]
     assert "keepAt(r,t,sc+'[data-roi-ccs]'," in p                                       # … and the full list's change
-    assert "if((PK[k].err||PK[k].stale)&&mine(k)) delete PK[k]; }); Object.keys(RLD).forEach(k=>{ delete RLD[k]; }); paint(K);" in p   # Try again
+    assert ("const w=ccWants(), mine=k=>K?k===w[1]:k!==w[1]||k===w[0], L=K?K.rld:RLD;\n"            # Try again: this card's
+            "      Object.keys(PK).forEach(k=>{ if((PK[k].err||PK[k].stale)&&mine(k)) delete PK[k]; }); Object.keys(L).forEach(k=>{ delete L[k]; }); paint(K);") in p
+    assert "rk=f+'|'+cd.b, L=CARD?CARD.rld:RLD;" in p and "if(L[rk]) return !!ABUSY[f];" in p and "L[rk]=1; if(AF[f]) AF[f]._v='';" in p
+    assert p.count("delete RLD[") == 0 and p.count("RLD[") == 0                       # its "read once" marks: each card's own
     assert "/^roi_[0-9a-f]{12}_c\\d{2,3}\\.json\\.gz$/" in p                           # a pack name the build writes only
     assert "@media (max-width:760px){.roi-ccs{font-size:16px}}" in p                     # iOS: no zoom on the list
     # 🎯 Breakeven: its head right after CPI, none after "So far" (both fail on the page before the move)
@@ -1284,7 +1307,7 @@ def test_wiring():
     # 🧪 the Benchmark: right under the cohort card in the Day view, its own state (Month, ROAS %, All countries, 60 rows
     # first, every row, its own ✕ / Try again mark), drawn by cohCard under asCard — no second copy of the card's code
     assert "+cohCard(d)+benchCard(d)" in p and p.count("benchCard(d)") == 3        # defined; dayView; benchPaint
-    assert ("const BN={grain:'month',met:'roas',show:60,cty:'',all:true,id:'roi-bmk',x:'b',pre:'Benchmark · ',\n"
+    assert ("const BN={grain:'month',met:'roas',show:60,cty:'',rld:{},all:true,id:'roi-bmk',x:'b',pre:'Benchmark · ',\n"
             "  note:'Abhi ye upar wale table ki copy hai — aap jo badlav bolenge woh sirf yahan honge · sabse naya upar · cell pe ruko = detail'") in p
     assert "function benchCard(d){ BN.lz=null; const s=asCard(BN,()=>cohCard(d));" in p
     assert p.count("function cohortTable(") == 1 and p.count("function cohCard(") == 1 and p.count("function cohKpi(") == 1
