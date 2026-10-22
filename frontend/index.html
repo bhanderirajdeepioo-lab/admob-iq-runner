@@ -2548,9 +2548,9 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-btn,.roi-lnk{min-height:34px;padding:4px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
 .roi-q{color:var(--watch);font-weight:800;cursor:help}
 .roi-ccp{align-self:flex-start}
-.roi-ccw{position:relative;display:inline-flex;align-items:center;align-self:flex-start;min-height:34px;max-width:100%;padding:4px 10px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font-size:12.5px;font-weight:700;line-height:1.35;cursor:pointer}
+.roi-ccw{position:relative;display:inline-flex;align-items:center;justify-content:space-between;gap:8px;align-self:flex-start;width:min(100%,30em);min-height:34px;padding:4px 10px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font-size:12.5px;font-weight:700;line-height:1.35;cursor:pointer}
 .roi-ccw.on{border-color:var(--cyan);color:#fff}.roi-ccw:focus-within{outline:2px solid var(--cyan);outline-offset:1px}
-.roi-ccv{min-width:0;overflow-wrap:break-word}
+.roi-ccv{min-width:0;overflow-wrap:break-word}.roi-cca{flex:none}.roi-ccw~.roi-mini{align-self:flex-start}
 .roi-ccs{position:absolute;inset:-1px;width:calc(100% + 2px);height:calc(100% + 2px);margin:0;padding:0;border:0;opacity:0;background:var(--panel2);color:var(--ink);font:inherit;cursor:pointer}
 @media (max-width:760px){.roi-ccw{min-height:36px;font-size:13.5px}}
 @media (max-width:760px){.roi-ccs{font-size:16px}}
@@ -7211,11 +7211,15 @@ function ccReload(d,cd){ const r=root(), aid=d.app_id||(r&&r.dataset.aid), a=aid
 // the picker (owner, 22 Oct 2026: "country list he vo spending wise kar do"): All countries + the 6 with the most Google
 // Ads spend (chips) + a native list of EVERY country GA4 names in the same order, then the two that are not one ("Unknown
 // country" = GA4's "(not set)", "Not split" = Google Ads' unmapped cost): always last, in the index's order, never a chip.
-// The order = the whole history's spend in USD (cd.c[2]) in EVERY view, so a ₹ / $ switch never reorders; a country with
-// no spend (0, or not known) after every spender; ties by installs, then code. The build writes cd.c by installs (its
-// packs' fill order) — the page orders by itself.
+// The order = the whole history's spend, the same in EVERY view (a ₹ / $ switch never reorders): for an app billed in ₹
+// the ₹ it really paid (cd.c[3], what its ₹ view prints — USD at each day's rate could put ₹4,100 above ₹4,300 there),
+// else USD (cd.c[2]: what its $ view prints, its ₹ view at one rate); a country with no spend (0, or not known) after
+// every spender; ties by installs, then code. The build writes cd.c by installs (its packs' fill order) — the page
+// orders by itself.
 const ccSpU=x=>ok(x[2])&&x[2]>0?x[2]:0;
-const ccOrd=cs=>cs.slice().sort((a,b)=>ccSpU(b)-ccSpU(a)||(b[1]||0)-(a[1]||0)||(a[0]<b[0]?-1:a[0]>b[0]?1:0));
+const ccKey=cs=>CCY==='INR'&&cs.every(x=>!ccSpU(x)||ok(x[3]))?3:2;   // ₹ as billed only when every spender has it
+const ccOrd=cs=>{ const k=ccKey(cs), v=x=>ccSpU(x)?(ok(x[k])?+x[k]:0):-1;
+  return cs.slice().sort((a,b)=>v(b)-v(a)||(b[1]||0)-(a[1]||0)||(a[0]<b[0]?-1:a[0]>b[0]?1:0)); };
 // its spend in the view's currency as the Spend column / totals strip print it (SV: ₹ as billed in the ₹-billed view,
 // else USD in the view currency), whole (never 12k), a spend > 0 never "0"; 0 → no ads; null → not known (never "no ads")
 function ccSpT(x){ if(!ok(x[2])) return 'spend not known'; if(!(x[2]>0)) return 'no ads';
@@ -7226,12 +7230,15 @@ function ccPick(cd){ const named=ccOrd(cd.c.filter(x=>!CC_SP[x[0]])), top=named.
   const lab=x=>CC_SP[x[0]]?`${ccFlag(x[0])} ${CC_SP[x[0]]}${x[0]==='--'?' · '+N(x[1])+' installs':ccSpU(x)?' · '+E(ccSpT(x)):''}`
     :`${valFlag(x[0])} ${E(valCtyName(x[0]))} · ${E(ccSpT(x))} · ${N(x[1])} installs`;
   const o=x=>`<option value="${E(x[0])}"${pk&&CTY===x[0]?' selected':''}>${lab(x)}</option>`;
+  // the list's header says the order its numbers show: by installs when no country spent; "(₹ as billed)" in the $ view
+  // of a ₹-billed app (its $ amounts, each day at its own rate, may not fall in step)
+  const by=!named.some(ccSpU)?'most installs first':ccKey(named)===3&&!billed()?'most spend first (₹ as billed)':'most spend first';
   // the native list sits invisible over its own label (roi-ccv): the picked country's numbers wrap there, never cut at
-  // 375 px, and the box is as wide as that label (not as the list's longest line)
+  // 375 px; the box one fixed width whatever is picked (its row and left edge never move with a pick: only its height)
   return `<span class="roi-mini roi-ccp" role="group" aria-label="Country">${b('','🌍 All countries')}${top.map(x=>b(x[0],`${valFlag(x[0])} ${E(x[0])}`,`${valCtyName(x[0])} · ${ccSpT(x)} · ${N(x[1])} installs`)).join('')}</span>`
-    +`<span class="roi-ccw${pk?' on':''}"><span class="roi-ccv" aria-hidden="true">${pk?lab(pk):'More countries'}&nbsp;▾</span>`
+    +`<span class="roi-ccw${pk?' on':''}"><span class="roi-ccv" aria-hidden="true">${pk?lab(pk):'More countries'}</span><span class="roi-cca" aria-hidden="true">▾</span>`
     +`<select class="roi-ccs" data-roi-ccs="1" aria-label="Every country"><option value=""${pk?'':' selected'}>More countries ▾</option>`
-    +`<optgroup label="Every country (${named.length}) · most spend first">${named.map(o).join('')}</optgroup>`
+    +`<optgroup label="Every country (${named.length}) · ${by}">${named.map(o).join('')}</optgroup>`
     +(sp.length?`<optgroup label="Not a country">${sp.map(o).join('')}</optgroup>`:'')+`</select></span>`; }
 function ccQ(qb,cd){ const lim=((cd&&cd.kc)||{}).unp_lim;
   return [qb&2?'Is row ke kuch din GA4 ne kuch revenue "(other)" me daala (country / install din nahi diya)':'',

@@ -1487,12 +1487,14 @@ async function moreKeepAll(dc, packs) {
     const pa = U.ccPick(dc.cd);
     out.cc_pick_sel = (pa.match(/ selected>/g) || []).length === 1 && pa.includes('<option value="" selected>More countries ▾')
       && !pa.includes('<option value="AA" selected>');
-    // 💸 by spend (owner, 22 Oct 2026: "country list he vo spending wise kar do"): the whole history's Google Ads spend in
-    // USD, high → low, in every view; equal spend by installs, then code; no spend (0 or not known: the same) after every
-    // spender, by installs, then code; a fraction of a cent still a spender; "Unknown country" / "Not split" last (the
-    // index's order), never chips. cd.c as the build writes it: by installs (the two that are not a country among them)
+    // 💸 by spend (owner, 22 Oct 2026: "country list he vo spending wise kar do"): the whole history's Google Ads spend,
+    // high → low, the same in every view of an app — ₹ as billed for an app billed in ₹ (CC $52 / ₹4,300 below GG $50 /
+    // ₹4,400: each day at its own rate), else USD; equal spend by installs, then code; no spend (0 or not known: the same)
+    // after every spender, by installs, then code; a fraction of a cent still a spender; "Unknown country" / "Not split"
+    // last (the index's order), never chips. cd.c as the build writes it: by installs (the two that are not a country
+    // among them)
     {
-      const cS = Object.assign(cdx(), { c: [['AA', 1000, 50, 4100, 0, 0, 0], ['BB', 900, 80, 6500, 0, 0, 0], ['CC', 800, 50, 4300, 0, 0, 0],
+      const cS = Object.assign(cdx(), { c: [['AA', 1000, 50, 4100, 0, 0, 0], ['BB', 900, 80, 6500, 0, 0, 0], ['CC', 800, 52, 4300, 0, 0, 0],
         ['DD', 700, 0, 0, 0, 0, 0], ['II', 700, null, null, 1, 0, 0], ['EE', 600, null, null, 1, 0, 0], ['FF', 500, 0.004, 0.35, 1, 0, 0],
         ['GG', 400, 50, 4400, 1, 0, 0], ['HH', 400, 0, 0, 1, 0, 0], ['--', 40, null, null, 1, 0, 0], ['JJ', 30, 1234.567, 123456.78, 1, 0, 0],
         ['XX', null, 0, 0, 1, null, null]] });
@@ -1514,6 +1516,17 @@ async function moreKeepAll(dc, packs) {
       // the same index in its own order (by installs, as built): the page's order does not depend on the rows' order in cd.c
       const rev = Object.assign({}, cS, { c: cS.c.slice().reverse() });
       U.setCTY(''); out.cc_spend_rev = [chipsOf(U.ccPick(rev)), listOf(U.ccPick(rev))];
+      // a ₹-billed app whose index lacks ₹ for one spender (AA): USD for every row (never ₹ against $ in one order)
+      const cM = Object.assign({}, cS, { c: cS.c.map(x => x[0] === 'AA' ? [x[0], x[1], x[2], null].concat(x.slice(4)) : x) });
+      out.cc_spend_mixed = {};
+      for (const v of ['usd', 'inr_billed']) out.cc_spend_mixed[v] = inView(v, () => { const h = U.ccPick(cM); return { list: listOf(h), grp: (h.match(/<optgroup label="(Every country[^"]*)">/) || [])[1] }; });
+      // no country spent (an app without Google Ads, or spend not known): by installs, then code — and the header says so
+      const cN = Object.assign(cdx(), { c: [['PP', 50, 0, 0, 0, 0, 0], ['QQ', 90, null, null, 0, 0, 0], ['RR', 90, 0, 0, 0, 0, 0], ['SS', 10, 0, 0, 0, 0, 0],
+        ['--', 5, null, null, 0, 0, 0]] });
+      out.cc_spend_none = {};
+      for (const v of Object.keys(VIEWS)) out.cc_spend_none[v] = inView(v, () => { const h = U.ccPick(cN); return { chips: chipsOf(h), list: listOf(h),
+        grp: (h.match(/<optgroup label="(Every country[^"]*)">/) || [])[1], opt: optOf(h, 'QQ') }; });
+      U.setCTY('');
     }
     // 🧩 Not split: the same columns as every country (D0 … D30 day by day, then the 30-day / checkpoint ones), cells '—'
     U.setCTY('XX');
