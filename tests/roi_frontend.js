@@ -109,6 +109,12 @@ function beStrip(s) {
 // [5] = both cut (strip + key) = GOLDEN_PRE_KPI, the page before both byte for byte (nothing else moved by a byte)
 const KPI_RE = /<div class="roi-cks"[^]*?(?=<p class="roi-note roi-ccm0">|<div class="roi-ctl">)/g;
 const kpiCut = s => s.replace(KPI_RE, '');
+// 🔁 retention in every D cell (22 Oct 2026, owner: "yahi box me small text me retention add karna he"): a small line
+// inside each D cell (<span class="roi-rt…">) + its legend line under the table (<p class="roi-note roi-rtl">). retCut =
+// the page without them; every cut above is now taken with it too ([1], [2], [4], [5] as before), and [6] = only it cut =
+// the page before it byte for byte (the GOLDEN_DEFAULT before: nothing else moved — every grain × mode's own values).
+const RT_RE = /<span class="roi-rt[^"]*"(?: title="[^"]*")?>[^<]*<\/span>/g, RTL_RE = /<p class="roi-note roi-rtl">[^]*?<\/p>/g;
+const retCut = s => s.replace(RT_RE, '').replace(RTL_RE, '');
 function defaultDigest() {
   const c3 = Object.assign({}, CTX0, { DATA: null, window: {} });
   vm.createContext(c3);
@@ -120,9 +126,10 @@ function defaultDigest() {
   U.set('GRAIN', 'day'); U.set('MET', 'roas');
   parts.push(U.dayView(d0), U.dayView(dm), U.ctyView(d0));
   U.set('SHOW', 1e9); parts.push(U.cohortTable(dm));
-  return [h(parts.join('\u0001')), h(parts.map(x => beStrip(kpiCut(x))).join('\u0001')), h(parts.map(kpiCut).join('\u0001')),
-    parts.filter(x => x.includes('<div class="roi-cks"')).length, h(parts.map(noK).join('\u0001')),
-    h(parts.map(x => noK(kpiCut(x))).join('\u0001'))];
+  const pr = parts.map(retCut);
+  return [h(parts.join('\u0001')), h(pr.map(x => beStrip(kpiCut(x))).join('\u0001')), h(pr.map(kpiCut).join('\u0001')),
+    pr.filter(x => x.includes('<div class="roi-cks"')).length, h(pr.map(noK).join('\u0001')),
+    h(pr.map(x => noK(kpiCut(x))).join('\u0001')), h(pr.join('\u0001'))];
 }
 // No page jump (owner: "kuchh change karte he to upar chala jata he page"): the ROI block in a FRESH module on a small
 // made-up DOM whose layout is the page's own markup — an element's document top = its offset in the block's HTML × a
@@ -1306,12 +1313,90 @@ async function moreKeepAll(dc, packs) {
       bn.week.includes('us install hafte ki kamai ne spend wapas'), bn.month.includes('us install mahine ki kamai ne spend wapas'),
       bn.day.indexOf('<b>Breakeven</b>') > bn.day.indexOf('</table>'), !U.cohortTable(appFile(), { msg: '<p>x</p>' }).includes('Breakeven')];
     U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60);
+    // ── 🔁 retention in every D cell (owner, 22 Oct 2026: "isme jo day 0,1,2… cohort table he usme yahi box me small
+    // text me retention add karna he") — made-up install days: n GA4 new users, u users active on day 0 … (final below
+    // df), past D30 mu (users active on the day of each 30-day column, aligned with m) ──────────────────────────────
+    {
+      const seq = (k, f) => Array.from({ length: k }, (_, L) => f(L));
+      const rr = (X, n, dd, df, u, t, more) => { const r = [X, n, null, 10, dd, df, u, t || T.map(() => null), dd ? dd[dd.length - 1] : null, X, null, 'Normal', 0, 10];
+        if (more) r.push(...more); return r; };
+      const tOfD = (dd, df) => T.map(a => (a <= 30 && dd && a < dd.length && a < df ? dd[a] : null));
+      const labOf = X => { const p = X.split('-'); return (+p[2]) + ' ' + MON[+p[1] - 1] + ' ' + X.slice(2, 4); };
+      const rowOf = (t, lab) => trs(t).find(x => x[0].replace(/<[^>]+>/g, '').endsWith(lab));
+      const cellOf = (t, lab, col) => { const r = rowOf(t, lab); return r ? r[ths(t).indexOf(col)] : undefined; };
+      const rtOf = c => (c && c.match(RT_RE) || [''])[0];
+      const spans = t => t.match(RT_RE) || [];
+      // Day: the row's own u[L] ÷ n — 40%, a share under 10% with one decimal, a real 0, not measured (—), not final
+      // (faded with its cell, never twice), past what was read (· alone); no u at all / no installs: —; under 0.1%
+      const u1 = [200, 80, 9, 0, null].concat(seq(8, () => 40));
+      const dday = { v: 1, T, lags: 31, newest: '2026-10-13', rows: [
+        rr('2026-10-01', 200, seq(13, L => L + 1), 10, u1), rr('2026-10-02', 300, seq(12, L => L + 1), 9, null),
+        rr('2026-10-03', 0, seq(11, L => L + 1), 8, seq(11, () => 0)), rr('2026-10-04', 100000, seq(10, L => L + 1), 7, seq(10, L => (L === 1 ? 50 : 30000)))] };
+      U.set('GRAIN', 'day'); U.set('MET', 'roas');
+      const td = U.cohortTable(dday);
+      out.rt_day = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D10', 'D12'].map(c => rtOf(cellOf(td, '1 Oct 26', c)));
+      out.rt_day_td = [cellOf(td, '1 Oct 26', 'D10').split('"')[1], cellOf(td, '1 Oct 26', 'D13'), cellOf(td, '1 Oct 26', 'D0').includes('roi-rt')];
+      out.rt_day_none = [rtOf(cellOf(td, '2 Oct 26', 'D1')), rtOf(cellOf(td, '3 Oct 26', 'D1')), rtOf(cellOf(td, '4 Oct 26', 'D1')), rtOf(cellOf(td, '4 Oct 26', 'D2'))];
+      out.rt_day_zero = !spans(td).some(s => />0(\.0)?%</.test(s) && !s.includes('of 200 users">0%'));   // the only 0% is the real 0 of 200
+      // every mode: the same lines in the same cells; the main values never depend on u (u gone → only the lines change)
+      const dday2 = { v: 1, T, lags: 31, newest: '2026-10-13', rows: dday.rows.filter(r => r[1] > 0) };
+      const noU = { v: 1, T, lags: 31, newest: '2026-10-13', rows: dday2.rows.map(r => r.map((x, i) => (i === 6 ? null : x))) };
+      const per = ['roas', 'rev', 'ltv', 'delta'].map(m => { U.set('MET', m); return [U.cohortTable(dday2), U.cohortTable(noU)]; });
+      const sp0 = JSON.stringify(spans(per[0][0]));
+      out.rt_modes = per.map(([a, b]) => [JSON.stringify(spans(a)) === sp0, retCut(a) === retCut(b), spans(a).length > 0]);
+      U.set('MET', 'roas');
+      // week / month: pooled Σu ÷ Σn over the group's install days whose day is final; none final → over those seen, faded
+      const wk = [
+        rr('2026-09-07', 100, seq(31, L => L + 1), 31, seq(31, L => (L === 0 ? 100 : L === 1 ? 40 : L === 3 ? 30 : 20))),
+        rr('2026-09-08', 300, seq(31, L => L + 1), 31, seq(31, L => (L === 0 ? 300 : L === 1 ? 60 : L === 3 ? 30 : 50))),
+        rr('2026-09-09', 100, seq(31, L => L + 1), 31, null),
+        rr('2026-10-05', 100, seq(9, L => L + 1), 6, [100, 50, 40, 35, 30, 25, 20, 10, 5]),
+        rr('2026-10-06', 100, seq(8, L => L + 1), 5, [100, 30, 25, 25, 22, 21, 20, 20]),
+        rr('2026-10-07', 100, seq(7, L => L + 1), 3, [100, 20, 15, 10, 10, 10, 10])].map(r => { r[7] = tOfD(r[4], r[5]); return r; });
+      const dwk = { v: 1, T, lags: 31, newest: '2026-10-13', rows: wk };
+      U.set('GRAIN', 'week');
+      const tw = U.cohortTable(dwk);
+      out.rt_week = [rtOf(cellOf(tw, '7 Sep–13 Sep 26', 'D1')), rtOf(cellOf(tw, '7 Sep–13 Sep 26', 'D3')),
+        rtOf(cellOf(tw, '5 Oct–11 Oct 26', 'D1')), rtOf(cellOf(tw, '5 Oct–11 Oct 26', 'D3')), cellOf(tw, '5 Oct–11 Oct 26', 'D3').split('"')[1],
+        cellOf(tw, '5 Oct–11 Oct 26', 'D7'), cellOf(tw, '5 Oct–11 Oct 26', 'D14'), rtOf(cellOf(tw, '5 Oct–11 Oct 26', 'D0'))];
+      U.set('GRAIN', 'month');
+      const tmo = U.cohortTable(dwk);
+      out.rt_month = [rtOf(cellOf(tmo, 'Sep 2026', 'D1')), rtOf(cellOf(tmo, 'Oct 2026', 'D1')), rtOf(cellOf(tmo, 'Oct 2026', 'D7'))];
+      // the legend under the table (after the box and its "Show more", before the Breakeven line), per grain
+      const leg = 'Halka = abhi final nahi; — = data abhi nahi.';
+      const lday = '<p class="roi-note roi-rtl"><b>Chhota number</b> = retention: us din wapas aaye users ÷ us din ke naye users (install din ke). D0 pe nahi (wahi install din). ' + leg + '</p>';
+      U.set('GRAIN', 'day'); U.set('SHOW', 60);
+      const t70 = U.cohortTable(appFile());
+      out.rt_legend = [td.includes(lday), tw.includes(' Hafte me: sirf jin din ka wo din final hai unka jod (Σ users ÷ Σ naye users). ' + leg + '</p>'),
+        tmo.includes(' Mahine me: sirf jin din ka wo din final hai unka jod (Σ users ÷ Σ naye users). ' + leg + '</p>'),
+        t70.includes('</table></div><div class="roi-more">') && t70.indexOf('roi-rtl') > t70.indexOf('<div class="roi-more">')
+        && t70.indexOf('roi-rtl') < t70.indexOf('<b>Breakeven</b>'), (t70.match(/roi-rtl/g) || []).length === 1];
+      // past D30: mu[j] ÷ n in the 30-day column j (final while j < mf, as m); no mu / null → —
+      const nw = '2026-10-13', tOld = T.map(a => (a <= 90 ? a + 1 : null));
+      const dmu = { v: 1, T, lags: 31, newest: nw, rows: [
+        rr(day(nw, -100), 100, null, 0, null, tOld, [[41, 51], 1, [30, 20]]), rr(day(nw, -95), 200, null, 0, null, tOld, [[41, 51], 2]),
+        rr(day(nw, -94), 50, null, 0, null, tOld, [[41, 51], 2, [null, 5]]), rr(day(nw, -5), 10, seq(6, L => L + 1), 3, seq(6, L => 10 - L))] };
+      const tmu = U.cohortTable(dmu), la = labOf(day(nw, -100)), lb = labOf(day(nw, -95)), lc = labOf(day(nw, -94));
+      out.rt_m = [ths(tmu).slice(-3).join(','), rtOf(cellOf(tmu, la, 'D60')), rtOf(cellOf(tmu, la, 'D90')), cellOf(tmu, la, 'D90').split('"')[1],
+        rtOf(cellOf(tmu, lb, 'D60')), rtOf(cellOf(tmu, lb, 'D90')), rtOf(cellOf(tmu, lc, 'D60')), rtOf(cellOf(tmu, lc, 'D90')), rtOf(cellOf(tmu, la, 'D30'))];
+      // a country's rows: no u (or only u0) yet → — and one line saying so; with u → its own; Not split: no line at all
+      const cdz = { thru: '2026-10-13', fthru: '2026-10-10', geo: { unk: [], billed: 1 } };
+      const zr = U.zx('2026-10-03', cdz, 'AA', T);
+      const cA = [rr('2026-10-01', 20, seq(13, L => L + 1), 10, null), rr('2026-10-02', 20, seq(12, L => L + 1), 9, [20]), zr];
+      const tcA = U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cA });
+      const tcB = U.cohortTable(dday, { ctl: '', cc: 'BB', rows: [rr('2026-10-01', 20, seq(13, L => L + 1), 10, seq(13, L => (L ? 5 : 20)))] });
+      const tcX = U.cohortTable(dday, { ctl: '', cc: 'XX', rows: [['2026-10-01', null, null, 5, null, 0, null, T.map(() => null), null, null, null, 'N/A', 0, 5]] });
+      out.rt_cty = [Array.isArray(zr) && zr[6] === null, ['1 Oct 26', '2 Oct 26', '3 Oct 26'].map(l => rtOf(cellOf(tcA, l, 'D1'))),
+        tcA.includes(' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.</p>'), rtOf(cellOf(tcB, '1 Oct 26', 'D1')),
+        !tcB.includes('Is country ke users ka din-wise data'), !tcX.includes('roi-rt'), tcX.includes('<td class="roi-na">—</td>')];
+      U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60);
+    }
     // ── 🌍 the install-day table by country ─────────────────────────────────────────────────────────────────────
     // the default view (no country part in the file) byte for byte as the page made it before the country filter: one
     // digest over every grain × mode of both made-up files, the Day view and the Countries board (worked out on the
     // page before this change)
     [out.cc_default_digest, out.cc_default_nobe, out.cc_default_nokpi, out.cc_default_kpis, out.cc_default_nok,
-      out.cc_default_nokpi_nok] = defaultDigest();
+      out.cc_default_nokpi_nok, out.cc_default_nort] = defaultDigest();
     out.cc_src_null = U.cohortTable(appFile(), null) === U.cohortTable(appFile()) && U.cohortTable(appFile(), undefined) === U.cohortTable(appFile());
     {
     // a made-up app with the country part: 8 named countries (6 chips + the rest in the list), GA4's "(not set)" and

@@ -214,7 +214,12 @@ def test_forecast_view(out):
 # the strip — GOLDEN_DEFAULT_NOKPI, GOLDEN_PRE_KPI and GOLDEN_NO_BE the same; the two-group page gave GOLDEN_DEFAULT
 # fe4ef94df5f6792ed2169db0dfe081c003a5995ef4ccdc6fa1e5cffd10e9e717 and GOLDEN_DEFAULT_NOK
 # a79cb926cc8aa51d985029ae477fda8cf617f7423ed918e2534fa948fbafcfdb.
-GOLDEN_DEFAULT = "a58589ba371a9cfb3b64cafbb2f169cf2ca28182c5ade16f343d486a51b7cfbe"
+# 🔁 Changed ON PURPOSE again on 22 Oct 2026 when every D cell got its retention line (a small second line inside the
+# cell) and the legend line under the table: GOLDEN_RET_CUT = the page with only those cut out (tests/roi_frontend.js
+# retCut) = the GOLDEN_DEFAULT before them byte for byte; every other golden is taken with them cut out too (the same
+# values as before): no cell value, column, row, note or tile moved in any grain × mode.
+GOLDEN_DEFAULT = "398b2e67ebf72b4c47196444abc27e5fcf1d178d4d1c01dda17ab3f16f38da5e"
+GOLDEN_RET_CUT = "a58589ba371a9cfb3b64cafbb2f169cf2ca28182c5ade16f343d486a51b7cfbe"
 GOLDEN_DEFAULT_NOK = "3072f1658c636ddad28ba3b475175a25e9e8438973ce08bcde75d2d5bdca12d7"
 GOLDEN_DEFAULT_NOKPI = "98ae0afdcb42a1e9d258ef5fe660fba126dad93f9b7b6c83e4f801eca78514eb"
 GOLDEN_PRE_KPI = "fb638f026d2a902459c3287cb620536bbb6474fecb17809c9799ba6264ac0a86"
@@ -519,6 +524,7 @@ def test_totals_strip_small_spend(out):
 def test_country_filter(out):
     # "All countries" (the default): every grain × mode, the Day view, the Countries board as pinned above
     assert out["cc_default_digest"] == GOLDEN_DEFAULT and out["cc_src_null"]
+    assert out["cc_default_nort"] == GOLDEN_RET_CUT                 # 🔁 the retention lines cut: the page before them
     assert out["cc_default_nok"] == GOLDEN_DEFAULT_NOK              # … the rows' key the only change (Show 60 more)
     assert out["cc_default_nokpi_nok"] == GOLDEN_PRE_KPI            # … the key + the strip cut: the page before both
     # the picker: All countries + the top 6 as chips, EVERY country in the native list, then the two that are not one
@@ -770,6 +776,65 @@ def test_mode_switch_keeps_the_box(out):
     assert rows["375 AA met"] == 70 and rows["1280 XX met"] == 70
     # the box was really scrolled sideways (not at its start) in all but the 1280 px week / month D30 runs (D30 in sight at 0)
     assert all(t["sl"][0] > 100 for n, t in met if not n.startswith(("1280 week D30", "1280 month D30")))
+
+
+def _rt(v, title=None, cls=""):
+    """One retention line as the page writes it (title None: "—", not measured)."""
+    if title is None:
+        return '<span class="roi-rt roi-rtna">—</span>'
+    return '<span class="roi-rt%s" title="%s">%s</span>' % (cls, title, v)
+
+
+def test_retention_cells(out):
+    """🔁 Retention in every D cell (owner, 22 Oct 2026: "isme jo day 0,1,2… cohort table he usme yahi box me small text
+    me retention add karna he"; All countries D1–D30 now, countries and D60+ once their data is in the file): a small second
+    line = the install day's users active on that day ÷ its GA4 new users (u[L] ÷ n; past D30 mu[j] ÷ n) — the site's own
+    definition (roi_build._ret: pooled, final days). Real data only: not measured → "—", never 0; D0 no line."""
+    # Day: the row's own; D0 nothing (the install day itself); 4.5% (one decimal under 10%); a real 0 of 200 users is 0%;
+    # u[4] not measured → —; D10 / D12 not final (L ≥ df = 10): the cell is faded, the line fades with it (never twice)
+    assert out["rt_day"] == ["", _rt("40%", "D1 retention: 80 of 200 users"), _rt("4.5%", "D2 retention: 9 of 200 users"),
+                             _rt("0%", "D3 retention: 0 of 200 users"), _rt(None), _rt("20%", "D5 retention: 40 of 200 users"),
+                             _rt("20%", "D10 retention: 40 of 200 users · not final"),
+                             _rt("20%", "D12 retention: 40 of 200 users · not final")]
+    assert out["rt_day_td"] == ["roi-g roi-nf", '<td class="roi-na">·</td>', False]   # past what was read: · alone
+    # no u at all → —; no installs (n 0) → —, never 0%; under 0.1% said so (escaped), 30,000 of 100,000 → 30%
+    assert out["rt_day_none"] == [_rt(None), _rt(None), _rt("&lt;0.1%", "D1 retention: 50 of 100,000 users"),
+                                  _rt("30%", "D2 retention: 30,000 of 100,000 users")]
+    assert out["rt_day_zero"]
+    # every mode (ROAS % / Revenue / Per install / Delta): the same lines; the main values never depend on u
+    assert out["rt_modes"] == [[True, True, True]] * 4
+    # week: pooled Σu ÷ Σn over the install days whose day is final (7–13 Sep: a day without u left out; 5–11 Oct D3:
+    # 2 of 3 final — the cell faded, the line final); none final yet → over those seen, faded on a "·" cell; nothing: · alone
+    fin = " · %d of 3 install days (final)"
+    assert out["rt_week"] == [_rt("25%", "D1 retention: 100 of 400 users" + fin % 2), _rt("15%", "D3 retention: 60 of 400 users" + fin % 2),
+                              _rt("33%", "D1 retention: 100 of 300 users" + fin % 3), _rt("30%", "D3 retention: 60 of 200 users" + fin % 2),
+                              "roi-b roi-nf",
+                              '<td class="roi-na">·' + _rt("15%", "D7 retention: 30 of 200 users · 2 of 3 install days · not final", " roi-rtnf") + "</td>",
+                              '<td class="roi-na">·</td>', ""]
+    assert out["rt_month"] == [_rt("25%", "D1 retention: 100 of 400 users" + fin % 2), _rt("33%", "D1 retention: 100 of 300 users" + fin % 3),
+                               _rt("15%", "D7 retention: 30 of 200 users · 2 of 3 install days · not final", " roi-rtnf")]
+    # the Hinglish legend per grain, once, after the box and its "Show more" (keepRows / metBox: the box's neighbours as
+    # before), before the Breakeven line
+    assert out["rt_legend"] == [True] * 5
+    # past D30: mu[j] ÷ n (final while j < mf, as m — D90 faded with its cell); a row without mu / a null entry → —;
+    # D30 of a row without u → —
+    assert out["rt_m"] == ["D60,D90,So far", _rt("30%", "D60 retention: 30 of 100 users"),
+                           _rt("20%", "D90 retention: 20 of 100 users · not final"), "roi-g roi-nf", _rt(None), _rt(None), _rt(None),
+                           _rt("10%", "D90 retention: 5 of 50 users"), _rt(None)]
+    # a country: no u / only u0 / a short row (zx: u null) → — and one line saying its users are not in yet; with u →
+    # its own; Not split: no line, no legend
+    assert out["rt_cty"] == [True, [_rt(None), _rt(None), ""], True, _rt("25%", "D1 retention: 5 of 20 users"), True, True, True]
+    # the page's own pieces: the line inside the cell after its value (all four modes), "·" cells only with a measured
+    # line; the legend after the box + "Show more"; CSS: a block line, small, faded only when the cell is not
+    with open(PAGE, encoding="utf-8") as f:
+        p = f.read()
+    assert "${fmtCell(x,MET)}${xx?'':retLn(rt,c,gr,!fin)}</td>`; }).join('');" in p
+    assert "`<td class=\"roi-na\">·${rt?retLn(rt,c,gr,false):''}</td>`" in p
+    assert "</table></div>${more}`\n    +(xx?'':retNote(d.rows,src&&src.rows?src.cc:''))" in p
+    assert ".roi-t td .roi-rt{display:block;margin-top:1px;font-size:10.5px;line-height:1.2;font-weight:500;color:var(--ink2)}" in p
+    assert ".roi-t td .roi-rtnf{opacity:.62;font-style:italic}.roi-t td .roi-rtna{color:var(--faint)}" in p
+    assert ".roi-heat td{padding-top:5px;padding-bottom:5px;line-height:1.3}" in p
+    assert "const R={X:0,n:1,na:2,sp:3,d:4,df:5,u:6,t:7,s:8,sd:9,be:10,st:11,q:12,spi:13,m:14,mf:15,mu:16};" in p
 
 
 def test_wiring():
