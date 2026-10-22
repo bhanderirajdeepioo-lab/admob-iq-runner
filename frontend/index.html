@@ -2539,8 +2539,9 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-heat td.roi-b{background:rgba(255,107,107,.10);color:#ffc2c2}
 .roi-heat td.roi-nf{opacity:.62;font-style:italic}
 .roi-t td.roi-na{color:var(--faint)}
-/* 🔁 retention: a small second line in each D cell (the cell grows a little; padding / line height trimmed to keep rows short) */
-.roi-heat td{padding-top:5px;padding-bottom:5px;line-height:1.3}
+/* 🔁 retention: a small second line in each D cell (the cell grows a little; padding / line height trimmed to keep rows short);
+   baseline: every cell's FIRST line on one level across the row (two-line D cells beside one-line ones never zig-zag) */
+.roi-heat td{padding-top:5px;padding-bottom:5px;line-height:1.3;vertical-align:baseline}
 .roi-t td .roi-rt{display:block;margin-top:1px;font-size:10.5px;line-height:1.2;font-weight:500;color:var(--ink2)}
 .roi-t td .roi-rtnf{opacity:.62;font-style:italic}.roi-t td .roi-rtna{color:var(--faint)}
 .roi span.roi-g{color:var(--good)}.roi span.roi-w{color:var(--watch)}.roi span.roi-b{color:var(--bad)}
@@ -7113,27 +7114,36 @@ function fmtCell(x,met){ return met==='roas'?P(x):met==='ltv'?MP(x):M(x); }
 // 🔁 Retention in every D cell (owner, 22 Oct 2026: "isme jo day 0,1,2… cohort table he usme yahi box me small text me
 // retention add karna he"): a small second line under the cell's value, the same in every mode — the install day's users
 // active on that day ÷ its GA4 new users: u[L] ÷ n (D1 … D30), past D30 mu[j] ÷ n (mu: users active on exactly the day of
-// m's column j, aligned with m). The site's own definition (roi_build._ret: pooled Σu ÷ Σn, a day counted once final).
+// m's column j, aligned with m). The same ratio as roi_build._ret (pooled Σu ÷ Σn) — without _ret's fallback to the
+// install-day file's users (iu: lags 1 / 3 / 7 / 14 / 30, not in the row) and without its final-only filter on Day.
 // Day: the row's own, faded with its cell while that day is not final (L ≥ df; a 30-day column: j ≥ mf). Week / month:
-// pooled over the group's install days whose day is final; none final yet → over the ones seen, faded. Not measured (no
-// u / mu, a country whose users are not read yet, no installs): "—", never 0. D0 (the install day itself — every new user
-// is active on it, ~100% by definition): no line. A column past D30 without mu (T's late checkpoints): "—".
+// pooled over the group's install days whose day is final (none final yet → over the ones seen); final only once NO
+// install day of the group with users data still has that day to come (not reached / not read / not final) and the
+// cell's own value is final — else faded, like the value. Not measured (no u / mu, a country whose users are not read
+// yet, no installs, a null entry): "—", never 0. No line: D0 (the install day itself — every new user is active on it,
+// ~100% by definition) and a column past D30 that is not a 30-day column (T's checkpoints: no users source exists).
 function RP(v){ if(!ok(v)) return '—'; const p=v*100; return (p===0?'0':p<0.1?'<0.1':p<9.95?p.toFixed(1):String(Math.round(p)))+'%'; }
-function retAt(r,c){ const n=+r[R.n]; if(!(n>0)) return null; let a, i, f;     // [users, installs, final?] or null
+const retNo=c=>c.a===0||(c.a>30&&c.mi==null);                     // a column that never has a retention line
+// one install day at a column: [users or null (not measured), installs, final?] — null: nothing to read there (no
+// installs, no u / mu array); final? = that day final AND read (an index past the array is still to come)
+function retAt(r,c){ const n=+r[R.n]; if(!(n>0)||retNo(c)) return null; let a, i, f;
   if(c.mi!=null){ a=r[R.mu]; i=c.mi; f=c.mi<(+r[R.mf]||0); }
-  else if(c.a<=30){ a=r[R.u]; i=c.a; f=c.a<(+r[R.df]||0); }
-  else return null;
-  return Array.isArray(a)&&i<a.length&&ok(a[i])?[+a[i],n,f]:null; }
-function retOf(gr,c){ let su=0, sn=0, k=0, fu=0, fn=0, fk=0;
-  for(const r of gr.rows){ const x=retAt(r,c); if(!x) continue; su+=x[0]; sn+=x[1]; k++; if(x[2]){ fu+=x[0]; fn+=x[1]; fk++; } }
-  return fk?{v:fu/fn,u:fu,n:fn,k:fk,fin:true}:k?{v:su/sn,u:su,n:sn,k,fin:false}:null; }
-// the line itself ('' on D0); tdNf: the cell is already faded (its value not final) — the line fades with it, never twice
-function retLn(rt,c,gr,tdNf){ if(c.a===0) return ''; if(!rt) return '<span class="roi-rt roi-rtna">—</span>';
-  const L=gr.rows.length, t=`${c.lab} retention: ${N(rt.u)} of ${N(rt.n)} users${GRAIN!=='day'?` · ${rt.k} of ${L} install ${L===1?'day':'days'}${rt.fin?' (final)':''}`:''}${rt.fin?'':' · not final'}`;
-  return `<span class="roi-rt${!rt.fin&&!tdNf?' roi-rtnf':''}" title="${E(t)}">${E(RP(rt.v))}</span>`; }
-// the line under the table: what the small number is; a country whose users are not read yet says so (from its rows)
-function retNote(rows,cc){ const any=(rows||[]).some(r=>Array.isArray(r[R.u])&&r[R.u].length>1);
-  return `<p class="roi-note roi-rtl"><b>Chhota number</b> = retention: us din wapas aaye users ÷ us din ke naye users (install din ke). D0 pe nahi (wahi install din).${GRAIN!=='day'?` ${GRAIN==='week'?'Hafte':'Mahine'} me: sirf jin din ka wo din final hai unka jod (Σ users ÷ Σ naye users).`:''} Halka = abhi final nahi; — = data abhi nahi.${cc&&!any?' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.':''}</p>`; }
+  else { a=r[R.u]; i=c.a; f=c.a<(+r[R.df]||0); }
+  if(!Array.isArray(a)) return null;
+  return [i<a.length&&ok(a[i])?+a[i]:null, n, f&&i<a.length]; }
+function retOf(gr,c){ let su=0, sn=0, k=0, fu=0, fn=0, fk=0, pend=false;
+  for(const r of gr.rows){ const x=retAt(r,c); if(!x) continue; if(!x[2]) pend=true; if(x[0]==null) continue;
+    su+=x[0]; sn+=x[1]; k++; if(x[2]){ fu+=x[0]; fn+=x[1]; fk++; } }
+  return fk?{v:fu/fn,u:fu,n:fn,k:fk,fo:pend,fin:!pend}:k?{v:su/sn,u:su,n:sn,k,fin:false}:null; }
+// the line itself ('' where retNo); nf: the cell's own value is not final (or not there yet) → the line is not final
+// either; tdNf: the cell is already faded (roi-nf) — the line fades with it, never twice
+function retLn(rt,c,gr,nf,tdNf){ if(retNo(c)) return ''; if(!rt) return '<span class="roi-rt roi-rtna">—</span>';
+  const fin=rt.fin&&!nf, L=gr.rows.length, t=`${c.lab} retention: ${N(rt.u)} of ${N(rt.n)} users${GRAIN!=='day'?` · ${rt.k} of ${L} install ${L===1?'day':'days'}${rt.fo?' (the final ones)':''}`:''}${fin?'':' · not final'}`;
+  return `<span class="roi-rt${!fin&&!tdNf?' roi-rtnf':''}" title="${E(t)}">${E(RP(rt.v))}</span>`; }
+// the line under the table: what the small number is; checkpoint columns past D30 shown (no line there) are named; a
+// country whose users are not read yet says so (from its rows: a measured users entry past day 0)
+function retNote(rows,cc,C){ const any=(rows||[]).some(r=>Array.isArray(r[R.u])&&r[R.u].slice(1).some(ok)), nl=(C||[]).filter(c=>c.a>30&&c.mi==null).map(c=>c.lab);
+  return `<p class="roi-note roi-rtl"><b>Chhota number</b> = retention: us din wapas aaye users ÷ us din ke naye users (install din ke). D0 pe nahi (wahi install din)${nl.length?`; ${nl.join(' / ')} pe bhi nahi (in checkpoint column ka users data nahi aata)`:''}.${GRAIN!=='day'?` ${GRAIN==='week'?'Hafte':'Mahine'} me: Σ users ÷ Σ naye users — jin din ka wo din final hai unka (koi final nahi to jo abhi tak dikha); jab tak saare din final nahi, halka.`:''} Halka = abhi final nahi; — = data nahi (abhi nahi aaya, ya is purane din ka nahi).${cc&&!any?' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.':''}</p>`; }
 // 🎯 Breakeven, right after CPI (owner, 21 Oct 2026: "D0 ke pehle ak column add kar do — konse day pe breakeven milta
 // he"). Week / month: the FIRST column whose summed cumulative revenue (agg — the very numbers its cells show, green at
 // ROAS ≥ 100%) reaches the group's spend → [age, exact?]; exact only when the cells pin that day: every row final there
@@ -7160,8 +7170,10 @@ function cohortTable(d,src){ if(src&&src.msg) return `<div class="roi-ctl">${src
   const body=shown.map(gr=>{ const n=sumK(gr,R.n)||0, sp=sumK(gr,R.sp), spv=SV(sp,sumK(gr,R.spi)); let prev=null;
     const st=GRAIN==='day'?gr.rows[0][R.st]:null;
     const cells=C.map(c=>{ const [v,fin]=agg(gr,c,T); const x=cell(v,sp,MET,prev,n); prev=ok(v)?v:prev; const rt=xx?null:retOf(gr,c);   // 🔁 retention (Not split: no users)
-      if(!ok(x)) return xx?'<td class="roi-na">—</td>':`<td class="roi-na">·${rt?retLn(rt,c,gr,false):''}</td>`;
-      const ro=sp?v/sp:null; return `<td class="${roasCls(ro)}${fin?'':' roi-nf'}" title="${E(c.lab+': '+M(v)+(sp?' · ROAS '+P(ro):'')+(fin?'':' · not final'))}">${fmtCell(x,MET)}${xx?'':retLn(rt,c,gr,!fin)}</td>`; }).join('');
+      // "·": the mode has no number (ROAS % without spend, Per install without installs) though the day's value is
+      // there → the line as in every other mode ("—" when not measured); the day not reached → a line only if seen
+      if(!ok(x)) return xx?'<td class="roi-na">—</td>':`<td class="roi-na">·${ok(v)||rt?retLn(rt,c,gr,!fin,false):''}</td>`;
+      const ro=sp?v/sp:null; return `<td class="${roasCls(ro)}${fin?'':' roi-nf'}" title="${E(c.lab+': '+M(v)+(sp?' · ROAS '+P(ro):'')+(fin?'':' · not final'))}">${fmtCell(x,MET)}${xx?'':retLn(rt,c,gr,!fin,!fin)}</td>`; }).join('');
     let so=null, be=null, sob=null;
     if(GRAIN==='day'){ const r=gr.rows[0]; so=sob=r[R.s]; be=beDay(r,C,T); }
     else { so=xx?null:gr.rows.reduce((a,r)=>a+(+r[R.s]||0),0); be=xx?null:beGrp(gr,C,T,sp);   // (🧩 Not split: no revenue to add)
@@ -7171,7 +7183,7 @@ function cohortTable(d,src){ if(src&&src.msg) return `<div class="roi-ctl">${src
   const more=groups.length>shown.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-more="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-more="all">Show all ${groups.length}</button><span class="roi-note">${shown.length} of ${groups.length}</span></div>`:'';
   return `${src&&src.top||''}<div class="roi-ctl">${src&&src.ctl||''}${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div>`
     +`<div class="roi-tw"><table class="roi-t roi-heat"><thead>${head}</thead><tbody>${body}</tbody></table></div>${more}`
-    +(xx?'':retNote(d.rows,src&&src.rows?src.cc:''))
+    +(xx?'':retNote(d.rows,src&&src.rows?src.cc:'',C))
     +`<p class="roi-note"><b>Breakeven</b> = jis din tak us install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ki kamai ne spend wapas kar diya (ROAS 100%); ≤ = us din ya usse pehle (do column ke beech kisi din, ya halka = us column ka number abhi final nahi); "% back" = abhi tak spend ka itna wapas.</p>`
     +`<p class="roi-note">Har cell = us install ${GRAIN==='day'?'din':GRAIN==='week'?'hafte':'mahine'} ke users ki us din tak ki <b>kul kamai</b> (${MET==='roas'?'spend ka %':MET==='ltv'?'per install':MET==='delta'?'pichhle column se kitni badhi':'paisa'}). Rang: hara = spend wapas (≥100%), peela = 50–100%, laal = 50% se kam. Halka = abhi final nahi. ${GRAIN!=='day'?'Hafte / mahine ka cell tabhi jab uske saare din us umar tak pahunch gaye.':''}${lateNote(d,C,src&&src.rows?{cc:1}:null)}</p>${src&&src.note||''}`; }
 // the 30-day columns' note: how far, when a column fills, and GA4's "(other)" share (measured, from the file)

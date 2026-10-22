@@ -217,8 +217,11 @@ def test_forecast_view(out):
 # 🔁 Changed ON PURPOSE again on 22 Oct 2026 when every D cell got its retention line (a small second line inside the
 # cell) and the legend line under the table: GOLDEN_RET_CUT = the page with only those cut out (tests/roi_frontend.js
 # retCut) = the GOLDEN_DEFAULT before them byte for byte; every other golden is taken with them cut out too (the same
-# values as before): no cell value, column, row, note or tile moved in any grain × mode.
-GOLDEN_DEFAULT = "398b2e67ebf72b4c47196444abc27e5fcf1d178d4d1c01dda17ab3f16f38da5e"
+# values as before): no cell value, column, row, note or tile moved in any grain × mode. Changed on purpose once more the
+# same day (review fixes): a "·" cell keeps its line ("—" when not measured) like every other mode, T's checkpoint columns
+# past D30 have no line (no users source), the week / month line is final only once every day with users is, and the
+# legend says so — GOLDEN_RET_CUT unchanged (nothing outside the lines and the legend moved).
+GOLDEN_DEFAULT = "82ef322f5c87ec9020306fafeb790f5e13a7a268e0cbd78bcb3502451fc669e5"
 GOLDEN_RET_CUT = "a58589ba371a9cfb3b64cafbb2f169cf2ca28182c5ade16f343d486a51b7cfbe"
 GOLDEN_DEFAULT_NOK = "3072f1658c636ddad28ba3b475175a25e9e8438973ce08bcde75d2d5bdca12d7"
 GOLDEN_DEFAULT_NOKPI = "98ae0afdcb42a1e9d258ef5fe660fba126dad93f9b7b6c83e4f801eca78514eb"
@@ -788,8 +791,9 @@ def _rt(v, title=None, cls=""):
 def test_retention_cells(out):
     """🔁 Retention in every D cell (owner, 22 Oct 2026: "isme jo day 0,1,2… cohort table he usme yahi box me small text
     me retention add karna he"; All countries D1–D30 now, countries and D60+ once their data is in the file): a small second
-    line = the install day's users active on that day ÷ its GA4 new users (u[L] ÷ n; past D30 mu[j] ÷ n) — the site's own
-    definition (roi_build._ret: pooled, final days). Real data only: not measured → "—", never 0; D0 no line."""
+    line = the install day's users active on that day ÷ its GA4 new users (u[L] ÷ n; past D30 mu[j] ÷ n) — the same ratio
+    as roi_build._ret (pooled Σu ÷ Σn), without its fallback to the install-day file's iu. Real data only: not measured →
+    "—", never 0; no line on D0 and on T's checkpoint columns past D30 (no users source there)."""
     # Day: the row's own; D0 nothing (the install day itself); 4.5% (one decimal under 10%); a real 0 of 200 users is 0%;
     # u[4] not measured → —; D10 / D12 not final (L ≥ df = 10): the cell is faded, the line fades with it (never twice)
     assert out["rt_day"] == ["", _rt("40%", "D1 retention: 80 of 200 users"), _rt("4.5%", "D2 retention: 9 of 200 users"),
@@ -801,39 +805,60 @@ def test_retention_cells(out):
     assert out["rt_day_none"] == [_rt(None), _rt(None), _rt("&lt;0.1%", "D1 retention: 50 of 100,000 users"),
                                   _rt("30%", "D2 retention: 30,000 of 100,000 users")]
     assert out["rt_day_zero"]
+    # users read only up to D1 (null past the read edge, every day final): "—" there, never 0%
+    assert out["rt_day_pad"] == [_rt("25%", "D1 retention: 50 of 200 users"), _rt(None), _rt(None)]
     # every mode (ROAS % / Revenue / Per install / Delta): the same lines; the main values never depend on u
     assert out["rt_modes"] == [[True, True, True]] * 4
-    # week: pooled Σu ÷ Σn over the install days whose day is final (7–13 Sep: a day without u left out; 5–11 Oct D3:
-    # 2 of 3 final — the cell faded, the line final); none final yet → over those seen, faded on a "·" cell; nothing: · alone
-    fin = " · %d of 3 install days (final)"
-    assert out["rt_week"] == [_rt("25%", "D1 retention: 100 of 400 users" + fin % 2), _rt("15%", "D3 retention: 60 of 400 users" + fin % 2),
-                              _rt("33%", "D1 retention: 100 of 300 users" + fin % 3), _rt("30%", "D3 retention: 60 of 200 users" + fin % 2),
-                              "roi-b roi-nf",
-                              '<td class="roi-na">·' + _rt("15%", "D7 retention: 30 of 200 users · 2 of 3 install days · not final", " roi-rtnf") + "</td>",
-                              '<td class="roi-na">·</td>', ""]
-    assert out["rt_month"] == [_rt("25%", "D1 retention: 100 of 400 users" + fin % 2), _rt("33%", "D1 retention: 100 of 300 users" + fin % 3),
-                               _rt("15%", "D7 retention: 30 of 200 users · 2 of 3 install days · not final", " roi-rtnf")]
+    # … also where the mode has no number ("·": ROAS % with no spend, Per install with no installs): "—" when not measured,
+    # the value when it is, in every mode alike; a day not reached: "·" alone; D0: no line
+    assert out["rt_modes_na"] == [True, [[_rt(None), ""], [_rt(None), ""], [_rt("40%", "D1 retention: 40 of 100 users"), ""],
+                                         '<td class="roi-na">·</td>']]
+    assert out["rt_modes_na_td"] == ['<td class="roi-na">·' + _rt(None) + "</td>",
+                                     '<td class="roi-na">·' + _rt("40%", "D1 retention: 40 of 100 users") + "</td>",
+                                     '<td class="roi-na">·' + _rt(None) + "</td>", '<td class="roi-na">·</td>']
+    # week: pooled Σu ÷ Σn over the install days whose day is final (7–13 Sep: a day without u left out — final); final
+    # only once no day with users still has that day to come: 5–11 Oct D3 = 2 of 3 final → their 30%, NOT final (the
+    # third still to come; the cell faded too, the line with it); none final yet → over those seen, faded on a "·" cell;
+    # nothing: · alone
+    nf = "D3 retention: 60 of 200 users · 2 of 3 install days (the final ones) · not final"
+    d7 = _rt("15%", "D7 retention: 30 of 200 users · 2 of 3 install days · not final", " roi-rtnf")
+    assert out["rt_week"] == [_rt("25%", "D1 retention: 100 of 400 users · 2 of 3 install days"),
+                              _rt("15%", "D3 retention: 60 of 400 users · 2 of 3 install days"),
+                              _rt("33%", "D1 retention: 100 of 300 users · 3 of 3 install days"), _rt("30%", nf),
+                              "roi-b roi-nf", '<td class="roi-na">·' + d7 + "</td>", '<td class="roi-na">·</td>', ""]
+    assert out["rt_month"] == [_rt("25%", "D1 retention: 100 of 400 users · 2 of 3 install days"),
+                               _rt("33%", "D1 retention: 100 of 300 users · 3 of 3 install days"), _rt("30%", nf), d7]
+    # the cell faded by a day WITHOUT users (its revenue not final): the line says not final (faded with the cell, never
+    # "final" under a faded value); a day with users still to read (u only [u0]) → the final one's value, not final, faded
+    assert out["rt_week_nf"] == ["roi-b roi-nf", _rt("30%", "D1 retention: 30 of 100 users · 1 of 2 install days · not final"),
+                                 "roi-b", _rt("30%", "D1 retention: 30 of 100 users · 1 of 2 install days (the final ones) · not final",
+                                              " roi-rtnf")]
     # the Hinglish legend per grain, once, after the box and its "Show more" (keepRows / metBox: the box's neighbours as
     # before), before the Breakeven line
     assert out["rt_legend"] == [True] * 5
     # past D30: mu[j] ÷ n (final while j < mf, as m — D90 faded with its cell); a row without mu / a null entry → —;
-    # D30 of a row without u → —
+    # D30 of a row without u → —; no checkpoint column past D30 → the legend names none
     assert out["rt_m"] == ["D60,D90,So far", _rt("30%", "D60 retention: 30 of 100 users"),
                            _rt("20%", "D90 retention: 20 of 100 users · not final"), "roi-g roi-nf", _rt(None), _rt(None), _rt(None),
-                           _rt("10%", "D90 retention: 5 of 50 users"), _rt(None)]
-    # a country: no u / only u0 / a short row (zx: u null) → — and one line saying its users are not in yet; with u →
-    # its own; Not split: no line, no legend
-    assert out["rt_cty"] == [True, [_rt(None), _rt(None), ""], True, _rt("25%", "D1 retention: 5 of 20 users"), True, True, True]
-    # the page's own pieces: the line inside the cell after its value (all four modes), "·" cells only with a measured
-    # line; the legend after the box + "Show more"; CSS: a block line, small, faded only when the cell is not
+                           _rt("10%", "D90 retention: 5 of 50 users"), _rt(None), True]
+    # a file without m: T's checkpoints past D30 have no users source → no line (never a "—" waiting for nothing), named
+    # in the legend; D1 … D30 as before
+    assert out["rt_tcol"] == ["D60,D90,D180,D365,So far", ["", "", "", "", _rt(None), _rt(None)], False, True]
+    # a country: no u / only u0 / a short row (zx: no installs) → — and one line saying its users are not in yet; with u
+    # → its own; Not split: no line, no legend; users past day 0 all null (not read) → still "not in yet", —
+    assert out["rt_cty"] == [True, [_rt(None), _rt(None), _rt(None)], True, _rt("25%", "D1 retention: 5 of 20 users"), True, True,
+                             True, True, _rt(None)]
+    # the page's own pieces: the line inside the cell after its value (all four modes); a "·" cell keeps the line when
+    # the day's value is there (only the mode has no number) or when retention was seen; the legend after the box +
+    # "Show more"; CSS: a block line, small, faded only when the cell is not; every cell's first line on the baseline
     with open(PAGE, encoding="utf-8") as f:
         p = f.read()
-    assert "${fmtCell(x,MET)}${xx?'':retLn(rt,c,gr,!fin)}</td>`; }).join('');" in p
-    assert "`<td class=\"roi-na\">·${rt?retLn(rt,c,gr,false):''}</td>`" in p
-    assert "</table></div>${more}`\n    +(xx?'':retNote(d.rows,src&&src.rows?src.cc:''))" in p
+    assert "${fmtCell(x,MET)}${xx?'':retLn(rt,c,gr,!fin,!fin)}</td>`; }).join('');" in p
+    assert "`<td class=\"roi-na\">·${ok(v)||rt?retLn(rt,c,gr,!fin,false):''}</td>`" in p
+    assert "</table></div>${more}`\n    +(xx?'':retNote(d.rows,src&&src.rows?src.cc:'',C))" in p
     assert ".roi-t td .roi-rt{display:block;margin-top:1px;font-size:10.5px;line-height:1.2;font-weight:500;color:var(--ink2)}" in p
     assert ".roi-t td .roi-rtnf{opacity:.62;font-style:italic}.roi-t td .roi-rtna{color:var(--faint)}" in p
-    assert ".roi-heat td{padding-top:5px;padding-bottom:5px;line-height:1.3}" in p
+    assert ".roi-heat td{padding-top:5px;padding-bottom:5px;line-height:1.3;vertical-align:baseline}" in p
     assert "const R={X:0,n:1,na:2,sp:3,d:4,df:5,u:6,t:7,s:8,sd:9,be:10,st:11,q:12,spi:13,m:14,mf:15,mu:16};" in p
 
 

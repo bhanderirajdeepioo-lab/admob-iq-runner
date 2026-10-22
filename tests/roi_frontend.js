@@ -1338,12 +1338,26 @@ async function moreKeepAll(dc, packs) {
       out.rt_day_td = [cellOf(td, '1 Oct 26', 'D10').split('"')[1], cellOf(td, '1 Oct 26', 'D13'), cellOf(td, '1 Oct 26', 'D0').includes('roi-rt')];
       out.rt_day_none = [rtOf(cellOf(td, '2 Oct 26', 'D1')), rtOf(cellOf(td, '3 Oct 26', 'D1')), rtOf(cellOf(td, '4 Oct 26', 'D1')), rtOf(cellOf(td, '4 Oct 26', 'D2'))];
       out.rt_day_zero = !spans(td).some(s => />0(\.0)?%</.test(s) && !s.includes('of 200 users">0%'));   // the only 0% is the real 0 of 200
+      // users read only up to some lag (null past the read edge, all days final): "—" there, never 0%
+      const dpad = { v: 1, T, lags: 31, newest: '2026-10-13', rows: [rr('2026-09-01', 200, seq(31, L => L + 1), 31, [200, 50].concat(seq(29, () => null)))] };
+      const tpad = U.cohortTable(dpad);
+      out.rt_day_pad = ['D1', 'D2', 'D30'].map(c => rtOf(cellOf(tpad, '1 Sep 26', c)));
       // every mode: the same lines in the same cells; the main values never depend on u (u gone → only the lines change)
       const dday2 = { v: 1, T, lags: 31, newest: '2026-10-13', rows: dday.rows.filter(r => r[1] > 0) };
       const noU = { v: 1, T, lags: 31, newest: '2026-10-13', rows: dday2.rows.map(r => r.map((x, i) => (i === 6 ? null : x))) };
       const per = ['roas', 'rev', 'ltv', 'delta'].map(m => { U.set('MET', m); return [U.cohortTable(dday2), U.cohortTable(noU)]; });
       const sp0 = JSON.stringify(spans(per[0][0]));
       out.rt_modes = per.map(([a, b]) => [JSON.stringify(spans(a)) === sp0, retCut(a) === retCut(b), spans(a).length > 0]);
+      // a mode with no number of its own ("·": ROAS % without spend, Per install without installs) keeps the line of
+      // every other mode — "—" when not measured, the value when it is; a day not reached: "·" alone
+      const nosp = r => { r[3] = null; r[13] = null; return r; };
+      const dna = { v: 1, T, lags: 31, newest: '2026-10-13', rows: [nosp(rr('2026-10-01', 200, seq(13, L => L + 1), 10, null)),
+        rr('2026-10-02', 0, seq(12, L => L + 1), 9, null), nosp(rr('2026-10-03', 100, seq(11, L => L + 1), 8, seq(11, L => (L ? 40 : 100))))] };
+      const pna = ['roas', 'rev', 'ltv', 'delta'].map(m => { U.set('MET', m); const t = U.cohortTable(dna);
+        return ['1 Oct 26', '2 Oct 26', '3 Oct 26'].map(l => [rtOf(cellOf(t, l, 'D1')), rtOf(cellOf(t, l, 'D0'))]).concat([cellOf(t, '3 Oct 26', 'D11')]); });
+      out.rt_modes_na = [pna.every(x => JSON.stringify(x) === JSON.stringify(pna[0])), pna[0]];
+      U.set('MET', 'roas'); const tna = U.cohortTable(dna); U.set('MET', 'ltv'); const tnl = U.cohortTable(dna);
+      out.rt_modes_na_td = [cellOf(tna, '1 Oct 26', 'D1'), cellOf(tna, '3 Oct 26', 'D1'), cellOf(tnl, '2 Oct 26', 'D1'), cellOf(tna, '1 Oct 26', 'D0')];
       U.set('MET', 'roas');
       // week / month: pooled Σu ÷ Σn over the group's install days whose day is final; none final → over those seen, faded
       const wk = [
@@ -1361,14 +1375,24 @@ async function moreKeepAll(dc, packs) {
         cellOf(tw, '5 Oct–11 Oct 26', 'D7'), cellOf(tw, '5 Oct–11 Oct 26', 'D14'), rtOf(cellOf(tw, '5 Oct–11 Oct 26', 'D0'))];
       U.set('GRAIN', 'month');
       const tmo = U.cohortTable(dwk);
-      out.rt_month = [rtOf(cellOf(tmo, 'Sep 2026', 'D1')), rtOf(cellOf(tmo, 'Oct 2026', 'D1')), rtOf(cellOf(tmo, 'Oct 2026', 'D7'))];
+      out.rt_month = [rtOf(cellOf(tmo, 'Sep 2026', 'D1')), rtOf(cellOf(tmo, 'Oct 2026', 'D1')), rtOf(cellOf(tmo, 'Oct 2026', 'D3')),
+        rtOf(cellOf(tmo, 'Oct 2026', 'D7'))];
+      // the cell faded by a day WITHOUT users data (its revenue not final): the line is not final either (faded with
+      // its cell, never "final" under a faded value); every day with users final but one still to come → not final
+      U.set('GRAIN', 'week');
+      const dpw = { v: 1, T, lags: 31, newest: '2026-10-13', rows: [rr('2026-09-14', 100, seq(31, L => L + 1), 31, seq(31, L => (L ? 30 : 100))),
+        rr('2026-09-15', 100, seq(31, L => L + 1), 1, null), rr('2026-09-21', 100, seq(31, L => L + 1), 31, seq(31, L => (L ? 30 : 100))),
+        rr('2026-09-22', 100, seq(31, L => L + 1), 31, [100])].map(r => { r[7] = tOfD(r[4], r[5]); return r; }) };
+      const tpw = U.cohortTable(dpw);
+      out.rt_week_nf = [cellOf(tpw, '14 Sep–20 Sep 26', 'D1').split('"')[1], rtOf(cellOf(tpw, '14 Sep–20 Sep 26', 'D1')),
+        cellOf(tpw, '21 Sep–27 Sep 26', 'D1').split('"')[1], rtOf(cellOf(tpw, '21 Sep–27 Sep 26', 'D1'))];
       // the legend under the table (after the box and its "Show more", before the Breakeven line), per grain
-      const leg = 'Halka = abhi final nahi; — = data abhi nahi.';
-      const lday = '<p class="roi-note roi-rtl"><b>Chhota number</b> = retention: us din wapas aaye users ÷ us din ke naye users (install din ke). D0 pe nahi (wahi install din). ' + leg + '</p>';
+      const leg = 'Halka = abhi final nahi; — = data nahi (abhi nahi aaya, ya is purane din ka nahi).';
+      const lday = '<p class="roi-note roi-rtl"><b>Chhota number</b> = retention: us din wapas aaye users ÷ us din ke naye users (install din ke). D0 pe nahi (wahi install din); D60 / D90 / D180 / D365 pe bhi nahi (in checkpoint column ka users data nahi aata). ' + leg + '</p>';   // (no m: T's checkpoints)
+      const lgrp = ' me: Σ users ÷ Σ naye users — jin din ka wo din final hai unka (koi final nahi to jo abhi tak dikha); jab tak saare din final nahi, halka. ' + leg + '</p>';
       U.set('GRAIN', 'day'); U.set('SHOW', 60);
       const t70 = U.cohortTable(appFile());
-      out.rt_legend = [td.includes(lday), tw.includes(' Hafte me: sirf jin din ka wo din final hai unka jod (Σ users ÷ Σ naye users). ' + leg + '</p>'),
-        tmo.includes(' Mahine me: sirf jin din ka wo din final hai unka jod (Σ users ÷ Σ naye users). ' + leg + '</p>'),
+      out.rt_legend = [td.includes(lday), tw.includes(' Hafte' + lgrp), tmo.includes(' Mahine' + lgrp),
         t70.includes('</table></div><div class="roi-more">') && t70.indexOf('roi-rtl') > t70.indexOf('<div class="roi-more">')
         && t70.indexOf('roi-rtl') < t70.indexOf('<b>Breakeven</b>'), (t70.match(/roi-rtl/g) || []).length === 1];
       // past D30: mu[j] ÷ n in the 30-day column j (final while j < mf, as m); no mu / null → —
@@ -1378,7 +1402,14 @@ async function moreKeepAll(dc, packs) {
         rr(day(nw, -94), 50, null, 0, null, tOld, [[41, 51], 2, [null, 5]]), rr(day(nw, -5), 10, seq(6, L => L + 1), 3, seq(6, L => 10 - L))] };
       const tmu = U.cohortTable(dmu), la = labOf(day(nw, -100)), lb = labOf(day(nw, -95)), lc = labOf(day(nw, -94));
       out.rt_m = [ths(tmu).slice(-3).join(','), rtOf(cellOf(tmu, la, 'D60')), rtOf(cellOf(tmu, la, 'D90')), cellOf(tmu, la, 'D90').split('"')[1],
-        rtOf(cellOf(tmu, lb, 'D60')), rtOf(cellOf(tmu, lb, 'D90')), rtOf(cellOf(tmu, lc, 'D60')), rtOf(cellOf(tmu, lc, 'D90')), rtOf(cellOf(tmu, la, 'D30'))];
+        rtOf(cellOf(tmu, lb, 'D60')), rtOf(cellOf(tmu, lb, 'D90')), rtOf(cellOf(tmu, lc, 'D60')), rtOf(cellOf(tmu, lc, 'D90')), rtOf(cellOf(tmu, la, 'D30')),
+        tmu.includes('D0 pe nahi (wahi install din). ')];
+      // a file without m (T's checkpoints past D30: no users source exists) → no line there (never a "—" that waits
+      // for nothing), the legend names those columns; D1 … D30 as before
+      const dnm = { v: 1, T, lags: 31, newest: nw, rows: [rr(day(nw, -100), 100, null, 0, null, tOld), rr(day(nw, -95), 200, null, 0, null, tOld)] };
+      const tnm = U.cohortTable(dnm);
+      out.rt_tcol = [ths(tnm).slice(-5).join(','), ['D60', 'D90', 'D180', 'D365', 'D30', 'D1'].map(c => rtOf(cellOf(tnm, la, c))),
+        cellOf(tnm, la, 'D60').includes('roi-rt'), tnm.includes('D0 pe nahi (wahi install din); D60 / D90 / D180 / D365 pe bhi nahi (in checkpoint column ka users data nahi aata). ')];
       // a country's rows: no u (or only u0) yet → — and one line saying so; with u → its own; Not split: no line at all
       const cdz = { thru: '2026-10-13', fthru: '2026-10-10', geo: { unk: [], billed: 1 } };
       const zr = U.zx('2026-10-03', cdz, 'AA', T);
@@ -1386,9 +1417,12 @@ async function moreKeepAll(dc, packs) {
       const tcA = U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cA });
       const tcB = U.cohortTable(dday, { ctl: '', cc: 'BB', rows: [rr('2026-10-01', 20, seq(13, L => L + 1), 10, seq(13, L => (L ? 5 : 20)))] });
       const tcX = U.cohortTable(dday, { ctl: '', cc: 'XX', rows: [['2026-10-01', null, null, 5, null, 0, null, T.map(() => null), null, null, null, 'N/A', 0, 5]] });
+      // users entries past day 0 that are all null (not read) still say "not in yet"
+      const tcC = U.cohortTable(dday, { ctl: '', cc: 'CC', rows: [rr('2026-10-01', 20, seq(13, L => L + 1), 10, [20].concat(seq(12, () => null)))] });
       out.rt_cty = [Array.isArray(zr) && zr[6] === null, ['1 Oct 26', '2 Oct 26', '3 Oct 26'].map(l => rtOf(cellOf(tcA, l, 'D1'))),
         tcA.includes(' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.</p>'), rtOf(cellOf(tcB, '1 Oct 26', 'D1')),
-        !tcB.includes('Is country ke users ka din-wise data'), !tcX.includes('roi-rt'), tcX.includes('<td class="roi-na">—</td>')];
+        !tcB.includes('Is country ke users ka din-wise data'), !tcX.includes('roi-rt'), tcX.includes('<td class="roi-na">—</td>'),
+        tcC.includes(' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.</p>'), rtOf(cellOf(tcC, '1 Oct 26', 'D1'))];
       U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60);
     }
     // ── 🌍 the install-day table by country ─────────────────────────────────────────────────────────────────────
