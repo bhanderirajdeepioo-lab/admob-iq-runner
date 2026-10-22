@@ -2670,11 +2670,11 @@ def test_u_rounds_share_one_per_app_allowance(monkeypatch):
     import threading
     seen = []
 
-    def fq(ga, cube, now, take):
+    def fq(ga, cube, now, take, gate=None):
         seen.append(("qs", ga.max_calls))
         ga.calls += 30
 
-    def fc(ga, cube, now, take, left, tleft=None):
+    def fc(ga, cube, now, take, left, tleft=None, gate=None):
         seen.append(("cs", ga.max_calls))
         ga.calls += 5
     monkeypatch.setattr(cu, "u_fill_q", fq)
@@ -2753,6 +2753,28 @@ def test_u_round_newest_month_first_in_turns_never_the_first_ids_alone(tmp_path,
     assert counts["calls"] == 12 and clk[0] == 60.0
     assert [e[0] for e in cu.load_uhead(data, "a~2", "222")["cs"]["todo"]] == ["2026-07", "2026-06"]   # written
 
+
+def test_u_round_recent_turn_stops_at_old_history(tmp_path, monkeypatch):
+    """A turn given for an app's recent months ends where its old history starts (it goes back in line, in the old
+    tier): a light app (a block a month) never spends the round on July while a heavy app's October waits. Here a~1
+    reads Oct, Sep, Aug (a block each) and stops before July; z~9 (every block "(other)": day by day) gets the next
+    turn with its October — July of a~1 is not read in the round."""
+    import threading
+    data = str(tmp_path)
+    for aid in ("a~1", "z~9"):
+        _u_walked(data, aid)
+    monkeypatch.setattr(cu, "U_ON", True)
+    monkeypatch.setattr(cu, "U_SLICE", 30.0)
+    clk = [0.0]
+    fill = [("a~1", {}, cu.Cube(data, "a~1", "222"), _ClockGA(clk, 5.0)),
+            ("z~9", {}, cu.Cube(data, "z~9", "222"), _ClockGA(clk, 5.0, cap=1000))]
+    floor = (NOW - timedelta(days=cu.U_RECENT)).strftime("%Y-%m")
+    assert "2026-07" < floor <= "2026-08"
+    cu.u_round(fill, NOW, lambda: "u" if clk[0] >= 40 else None, threading.Lock(), {"calls": 0, "tokens": 0}, "cs",
+               workers=1, until=40.0, clock=lambda: clk[0])
+    a, z = fill[0][2], fill[1][2]
+    assert not a.umonth("2026-07")["c"] and a.umonth("2026-08")["c"] and a.umonth("2026-10")["c"]
+    assert z.umonth("2026-10")["c"] and fill[1][3].calls > 0
 
 def test_u_round_old_history_shares_the_round_by_time_read(tmp_path, monkeypatch):
     """Apps with old history only (no month of the last U_RECENT days left): the turn goes to the one that read least
@@ -2841,7 +2863,7 @@ def test_u_round_keeps_the_kind_of_a_fill_error(monkeypatch, tmp_path):
     http / other — a word, never the error's text); a run without one has no "ek"."""
     import threading
 
-    def boom(ga, cube, now, take, left, tleft=None):
+    def boom(ga, cube, now, take, left, tleft=None, gate=None):
         raise RuntimeError("HTTP 503 made-up")
     monkeypatch.setattr(cu, "u_fill_c", boom)
     cube = cu.Cube(None, "a~1", "222")

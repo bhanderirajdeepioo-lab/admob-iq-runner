@@ -2034,7 +2034,7 @@ def u_scan(cube, now, kind):
     return True
 
 
-def u_fill_q(ga, cube, now, take):
+def u_fill_q(ga, cube, now, take, gate=None):
     """The All users fill of one app: its queue's months newest first, each month's days newest first — one whole
     no-country read a day (q_read: every install day's users that day, ~1 token), only its users kept (Cube.u_q: q's
     own file never touched) — while take() gives a call → days read. Raises _Out (no call left), Stop (the run's
@@ -2044,6 +2044,8 @@ def u_fill_q(ga, cube, now, take):
     now_iso, today = gu._now_iso(now), _pday(now, cube.tz())
     while todo and hs is not None:
         k = str(todo[0][0])
+        if gate is not None and gate(k):                # a recent turn reached old history: back in line
+            raise _Out
         miss = _uq_miss(cube, k, cube.month(k), hs, today, now_iso)     # from the files now (a day q read
         #                                                                    meanwhile: out)
         for i, D in enumerate(miss):
@@ -2114,7 +2116,7 @@ def _u_room(ga, need, left, tleft=None, spc=None):
     return t is None or t >= need * float(spc)
 
 
-def u_fill_c(ga, cube, now, take, left, tleft=None):
+def u_fill_c(ga, cube, now, take, left, tleft=None, gate=None):
     """The country users fill of one app: its queue's months newest first, each month's days to read in runs of
     consecutive days (≤ BLOCK) newest first, each run read again as the cube reads (read_range: a block of the run;
     "(other)", GA4's flags or a cut answer → each day alone under UC_CAP, NEWEST FIRST — a round that ends part-way
@@ -2138,6 +2140,8 @@ def u_fill_c(ga, cube, now, take, left, tleft=None):
     try:
         while todo and hs is not None:
             k = str(todo[0][0])
+            if gate is not None and gate(k):            # a recent turn reached old history: back in line
+                raise _Out
             mo = cube.month(k)
             miss = _uc_miss(cube, k, mo, hs)
             rest = len(miss)
@@ -2264,12 +2268,14 @@ def u_round(fill, now, over, lock, counts, kind, workers=WORKERS, until=None, cl
                 return False
             return take()
         why = None
-        try:
+        recent = (_u_next(cube, kind) or "0000-00") >= floor    # a turn given for recent days ends where the app's
+        gate = (lambda k: k < floor and ga.calls > c0) if recent else None   # old history starts (it goes back in
+        try:                                                    # line, in the old tier: every app's recent days first)
             if not over() and left[0] > 0:
                 if kind == "qs":
-                    u_fill_q(ga, cube, now, ttake)
+                    u_fill_q(ga, cube, now, ttake, gate)
                 else:
-                    u_fill_c(ga, cube, now, take, lambda: left[0], tleft if clock is not None else None)
+                    u_fill_c(ga, cube, now, take, lambda: left[0], tleft if clock is not None else None, gate)
         except _Out:
             why = "out"
         except Stop as e:
