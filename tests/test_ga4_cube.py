@@ -34,8 +34,10 @@ the whole read, with no extra call and every revenue file byte for byte as witho
 ("ou"), never in a cell; the whole read's oldest age ("x": a window that shrank never read as 0) and its users with no
 install day ("o"); the All users fill and the country users fill (their own calls, newest first, resume, a stored "fl"
 read again by q's rule, a heavy memory across a Stop, a block or day started only with room for its calls — never cut
-halfway —, the cube's files untouched); the run's users rounds (one per-app allowance for both), the line's last part
-and the state; the settings and the workflow's repo variables."""
+halfway —, a run's days alone newest first, no block try on a run the walk's ledger shows lossy alone, the cube's files
+untouched); the run's users rounds (one per-app allowance for both; turns: the newest month first over every app, then
+the app that read least, a turn ending U_SLICE past its first call — never the first ids' whole queues alone; an
+error's kind kept), the line's last part and the state; the settings and the workflow's repo variables."""
 import copy
 import gzip
 import json
@@ -2538,10 +2540,11 @@ def test_u_country_users_fill_blocks_days_other_never_spread_resume(tmp_path, mo
     ga = FakeGA(cap=1000, extra_day=ex)
     with pytest.raises((cu._Out, gf.Stop)):
         cu.u_fill_c(ga, cube, NOW, take, lambda: left[0])
-    # Oct 1 … 10 first (the newest run): its block came back with "(other)" (1 call), then days alone — the
-    # allowance ended at Oct 4: Oct 1 … 4 kept, the heavy memory too
-    assert _reads(ga) == [("2026-10-01", "2026-10-10")] + [("2026-10-0%d" % i,) * 2 for i in range(1, 5)]
-    assert sorted(cube.umonth("2026-10")["c"]) == ["2026-10-0%d" % i for i in range(1, 5)]
+    # Oct 1 … 10 first (the newest run): its block came back with "(other)" (1 call), then days alone, newest first —
+    # the allowance ended after Oct 7: Oct 10 … 7 kept (the newest: the page's), the heavy memory too
+    new4 = ["2026-10-10", "2026-10-09", "2026-10-08", "2026-10-07"]
+    assert _reads(ga) == [("2026-10-01", "2026-10-10")] + [(D, D) for D in new4]
+    assert sorted(cube.umonth("2026-10")["c"]) == sorted(new4)
     assert cube.uhead()["cs"]["hk"] == cu.HEAVY_KEEP and cube.uc_days == 4 and cube.uc_calls == 5
     cube.save()
     cube.save_u()
@@ -2549,7 +2552,7 @@ def test_u_country_users_fill_blocks_days_other_never_spread_resume(tmp_path, mo
     ga = FakeGA(cap=1000, extra_day=ex)
     cu.u_fill_c(ga, cube, NOW, lambda: True, lambda: 10 ** 6)
     singles = [a for a, b in _reads(ga) if a == b]
-    assert len(singles) == len(set(singles)) and set(singles) | {"2026-10-0%d" % i for i in range(1, 5)} == set(days)
+    assert len(singles) == len(set(singles)) and set(singles) | set(new4) == set(days)
     assert cube.uhead()["cs"]["todo"] == []
     cube.save()
     cube.save_u()
@@ -2607,15 +2610,16 @@ def test_u_rounds_in_the_run_counts_line_and_state(monkeypatch, tmp_path):
 def test_u_country_fill_never_starts_a_day_it_cannot_finish(tmp_path, monkeypatch):
     """The country users fill starts a block (with its first day alone: 1 + UC_CAP calls) or a day (UC_CAP) only while
     the round's time holds its calls at the fill's own seconds a call — a day is never cut halfway (its calls thrown
-    away); those seconds kept for the next run ("cs" "s"); the allowance and the app's cap the same way."""
-    data, ex = str(tmp_path), date(2026, 10, 1)
+    away); those seconds kept for the next run ("cs" "s"); the allowance and the app's cap the same way. (The walk read
+    every day of it clean alone — no day of the run in its ledger as lossy —, so the fill tries the run's block.)"""
+    data, ex = str(tmp_path), date(2026, 10, 10)
     cube = cu.Cube(data, "a~1", "222")
     cube.head["time_zone"] = "UTC"
-    cu.step_app(FakeGA(cap=1000, extra_day=ex), cube, TODAY, HS, NOW)      # users off: nothing kept
-    cube.head["hs"] = HS.isoformat()
+    cu.step_app(FakeGA(cap=1000), cube, TODAY, HS, NOW)                    # users off: nothing kept; every day alone
+    cube.head["hs"] = HS.isoformat()                                        # clean in the ledger
     _save(cube)
     monkeypatch.setattr(cu, "U_ON", True)
-    monkeypatch.setattr(cu, "UC_CAP", 3)                                    # Oct 1 ("(other)"): its split, 3 calls
+    monkeypatch.setattr(cu, "UC_CAP", 3)                                    # Oct 10 ("(other)"): its split, 3 calls
     clk = [0.0]
 
     class TGA(FakeGA):                                                      # every call 5 s on a fake clock
@@ -2640,14 +2644,15 @@ def test_u_country_fill_never_starts_a_day_it_cannot_finish(tmp_path, monkeypatc
         with pytest.raises((cu._Out, gf.Stop)):
             cu.u_fill_c(ga, c, NOW, take, lambda: 10 ** 6, lambda: limit - clk[0])
         return c, ga
-    # 12 s left, 5 s a call measured before: the block and Oct 1 alone need 4 calls (20 s) — not started at all (the
-    # old way: the block, Oct 1's root and one half read, the other half refused — 3 calls thrown away)
+    # 12 s left, 5 s a call measured before: the block and Oct 10 alone (the run's newest: first) need 4 calls (20 s)
+    # — not started at all (the old way: the block, Oct 10's root and one half read, the other half refused — 3 calls
+    # thrown away)
     c, ga = run(12, s=5.0)
     assert ga.calls == 0 and c.uc_days == 0 and not c.umonth("2026-10")["c"]
-    # 22 s: the block (5 s, "(other)") and Oct 1 alone (3 calls) kept; Oct 2 (3 more: 15 s > 2 s left) not started
+    # 22 s: the block (5 s, "(other)") and Oct 10 alone (3 calls) kept; Oct 9 (3 more: 15 s > 2 s left) not started
     c, ga = run(22, s=5.0)
     assert ga.calls == 4 and _reads(ga)[0] == ("2026-10-01", "2026-10-10") and c.uc_days == 1
-    assert sorted(c.umonth("2026-10")["c"]) == ["2026-10-01"] and c.uhead()["cs"]["s"] == 5.0
+    assert sorted(c.umonth("2026-10")["c"]) == ["2026-10-10"] and c.uhead()["cs"]["s"] == 5.0
     # nothing measured yet (no "s"): the first block starts; from then on the fill's own 5 s a call decide
     c, ga = run(22)
     assert ga.calls == 4 and c.uc_days == 1 and c.uhead()["cs"]["s"] == 5.0
@@ -2680,10 +2685,177 @@ def test_u_rounds_share_one_per_app_allowance(monkeypatch):
         seen.clear()
         ga, cube = FakeGA(), cu.Cube(None, "a~1", "222")
         ga.max_calls, ga.calls = 60, 50
+        for kind in ("qs", "cs"):                                           # a queue each (an app with none: no turn)
+            cube.uhead()[kind] = {"todo": [["2026-09", 3]], "scan": "2026-10-13T06:00:00Z"}
         fill, counts = [("a~1", {}, cube, ga)], {"calls": 0, "tokens": 0}
         for kind in ("qs", "cs"):
             cu.u_round(fill, NOW, lambda: None, threading.Lock(), counts, kind, 1)
         assert seen == want and ga.max_calls == 60 and counts["calls"] == 35
+
+
+def _u_walked(data, aid, ga=None):
+    """App aid's cube walked from HS to TODAY with users off (nothing of them kept: the fills' work), files on disk."""
+    cube = cu.Cube(data, aid, "222")
+    cube.head["time_zone"] = "UTC"
+    cu.step_app(ga or FakeGA(), cube, TODAY, HS, NOW)
+    cube.head["hs"] = HS.isoformat()
+    _save(cube)
+
+
+class _ClockGA(FakeGA):
+    """FakeGA whose every call takes `sec` seconds on a shared fake clock (also its own: the fill's seconds a call)."""
+
+    def __init__(self, clk, sec, **kw):
+        super().__init__(**kw)
+        self.clk, self.sec = clk, sec
+        self.clock = lambda: clk[0]
+
+    def report_all(self, *a, **k):
+        r = super().report_all(*a, **k)
+        self.clk[0] += self.sec
+        return r
+
+
+def _u_fill_list(data, ids, clk, sec, **kw):
+    return [(aid, {}, cu.Cube(data, aid, "222"), _ClockGA(clk, sec, **kw)) for aid in ids]
+
+
+def test_u_round_newest_month_first_in_turns_never_the_first_ids_alone(tmp_path, monkeypatch):
+    """22 Oct 2026: the country users round gave the apps, in id order, their WHOLE queue
+    one after the other — the apps whose id sorted last got no turn at all and their newest days stayed "—" on the
+    page. Now the next turn goes to the app with the NEWEST month still to read (every app's recent days before any
+    app's old history), then the one that read least in the round; a turn ends U_SLICE seconds past its first call —
+    between two days, never inside one — and the app goes back in line. Here (one worker, 5 s a call, a 60 s round):
+    a~1 and z~9 each read their newest days in a 30 s turn (their block, "(other)", then Oct 10 … 6 alone, newest
+    first); a~2, whose newest months are read already, waits with its old history; its queue is still written."""
+    import threading
+    data = str(tmp_path)
+    for aid in ("a~1", "a~2", "z~9"):
+        _u_walked(data, aid)
+    monkeypatch.setattr(cu, "U_ON", True)
+    monkeypatch.setattr(cu, "U_SLICE", 30.0)
+    clk = [0.0]
+    fill = _u_fill_list(data, ("a~1", "a~2", "z~9"), clk, 5.0, cap=1000)  # cap: a block comes back with "(other)"
+    old = fill[1][2]
+    cu.u_scan(old, NOW, "cs")                                               # a~2: Aug … Oct read before — its queue
+    old.uhead()["cs"]["todo"] = [e for e in old.uhead()["cs"]["todo"] if e[0] <= "2026-07"]    # July, June left
+    counts = {"calls": 0, "tokens": 0}
+    cu.u_round(fill, NOW, lambda: "u" if clk[0] >= 60 else None, threading.Lock(), counts, "cs", workers=1,
+               until=60.0, clock=lambda: clk[0])
+    newest = ["2026-10-%02d" % i for i in range(6, 11)]
+    for aid, st, cube, ga in fill:
+        kept = sorted(D for k in ("2026-10", "2026-07") for D in cube.umonth(k)["c"])
+        if aid == "a~2":
+            assert kept == [] and ga.calls == 0 and "uct" not in st
+        else:
+            assert kept == newest and ga.calls == 6 and st["uct"] == "2026-10-13T06:00:00Z", aid
+            assert _reads(ga) == [("2026-10-01", "2026-10-10")] + [(D, D) for D in reversed(newest)]
+    assert counts["calls"] == 12 and clk[0] == 60.0
+    assert [e[0] for e in cu.load_uhead(data, "a~2", "222")["cs"]["todo"]] == ["2026-07", "2026-06"]   # written
+
+
+def test_u_round_old_history_shares_the_round_by_time_read(tmp_path, monkeypatch):
+    """Apps with old history only (no month of the last U_RECENT days left): the turn goes to the one that read least
+    in the round — the app with the newer old month gets the first turn, never every turn (a light app's whole
+    history, a call a month, never waits behind a heavy app's day-by-day one)."""
+    import threading
+    data = str(tmp_path)
+    for aid in ("a~2", "m~5"):
+        _u_walked(data, aid)
+    monkeypatch.setattr(cu, "U_ON", True)
+    monkeypatch.setattr(cu, "U_SLICE", 30.0)
+    clk = [0.0]
+    fill = _u_fill_list(data, ("a~2", "m~5"), clk, 5.0, cap=1000)
+    for (_, _, cube, _), todo in zip(fill, ([["2026-07", 31], ["2026-06", 29]], [["2026-06", 29]])):
+        cube.uhead()["cs"] = {"todo": todo, "scan": "2026-10-13T06:00:00Z"}
+    assert (NOW - timedelta(days=cu.U_RECENT)).strftime("%Y-%m") > "2026-07"        # both: old history only
+    cu.u_round(fill, NOW, lambda: "u" if clk[0] >= 60 else None, threading.Lock(), {"calls": 0, "tokens": 0}, "cs",
+               workers=1, until=60.0, clock=lambda: clk[0])
+    got = {aid: sorted(D for k in ("2026-07", "2026-06") for D in cube.umonth(k)["c"]) for aid, _, cube, _ in fill}
+    # a~2 first (the newer month): July's runs (a block each, "(other)") then July 31 … alone; m~5 the second turn
+    assert got["a~2"] and all(D.startswith("2026-07") for D in got["a~2"])
+    assert got["m~5"] == ["2026-06-%02d" % i for i in range(26, 31)] and fill[1][3].calls == 6
+
+
+def test_u_round_all_users_turns_share_the_round(tmp_path, monkeypatch):
+    """The All users round the same way (one call a day: a turn ends between two days once U_SLICE is past): three
+    apps of the same newest month each read their newest days in turn — before, the first app in id order read its
+    whole queue and the others none (22 Oct 2026: 0 days on the apps sorted last, run after run)."""
+    import threading
+    data = str(tmp_path)
+    for aid in ("a~1", "a~2", "z~9"):
+        _u_walked(data, aid)
+    monkeypatch.setattr(cu, "U_ON", True)
+    monkeypatch.setattr(cu, "U_SLICE", 5.0)
+    clk = [0.0]
+    fill = _u_fill_list(data, ("a~1", "a~2", "z~9"), clk, 1.0)
+    counts = {"calls": 0, "tokens": 0}
+    cu.u_round(fill, NOW, lambda: "u" if clk[0] >= 20 else None, threading.Lock(), counts, "qs", workers=1,
+               until=20.0, clock=lambda: clk[0])
+    last = TODAY - timedelta(days=cu.Q_SETTLE)                              # Oct 8: the newest settled day
+    top5 = {(last - timedelta(days=i)).isoformat() for i in range(5)}      # Oct 8 … 4
+    for aid, st, cube, ga in fill:
+        kept = {D for k in ("2026-10", "2026-09") for D in cube.umonth(k)["q"]}
+        assert top5 <= kept and st["ut"], aid                               # every app its newest days, newest first
+        assert [q[0]["dateRanges"][0]["startDate"] for q in ga.asked][:5] == sorted(top5, reverse=True)
+    assert counts["calls"] == 20 and sum(c.u_days for _, _, c, _ in fill) == 20
+
+
+def test_u_country_fill_skips_a_block_the_walk_measured_lossy(tmp_path, monkeypatch):
+    """A run holding a day whose own read ALONE came back with "(other)" (the walk split it — its ledger) goes day by
+    day straight away, newest first: its block would only come back with "(other)" again (a heavy app's first call
+    would otherwise be a multi-page block, thrown away). A run whose days the walk read clean
+    alone still tries its block (light apps: a month a call); the ledger rule never sets the heavy memory ("hk")."""
+    data, ex = str(tmp_path), date(2026, 9, 20)
+    _u_walked(data, "a~1", FakeGA(cap=1000, extra_day=ex))                 # Sep 20: "(other)" alone → split
+    led = cu.Cube(data, "a~1", "222").month("2026-09")["days"]
+    assert led["2026-09-20"]["via"] == "split" and led["2026-09-19"]["via"] == "day"
+    monkeypatch.setattr(cu, "U_ON", True)
+    cube = cu.Cube(data, "a~1", "222")
+    cu.u_scan(cube, NOW, "cs")
+    cube.uhead()["cs"]["todo"] = [["2026-09", 30]]
+    left = [3]
+
+    def take():
+        left[0] -= 1
+        return left[0] >= 0
+    ga = FakeGA(cap=1000, extra_day=ex)
+    with pytest.raises((cu._Out, gf.Stop)):
+        cu.u_fill_c(ga, cube, NOW, take, lambda: left[0])
+    assert _reads(ga) == [("2026-09-30",) * 2, ("2026-09-29",) * 2, ("2026-09-28",) * 2]   # no block call
+    assert sorted(cube.umonth("2026-09")["c"]) == ["2026-09-28", "2026-09-29", "2026-09-30"]
+    assert "hk" not in cube.uhead()["cs"]
+    # Oct 1 … 10: every day clean alone in the ledger — the block is tried (one call for the run)
+    cube.uhead()["cs"]["todo"] = [["2026-10", 10]]
+    ga = FakeGA()
+    assert cu.u_fill_c(ga, cube, NOW, lambda: True, lambda: 10 ** 6) == 10 and _reads(ga) == [("2026-10-01",
+                                                                                                "2026-10-10")]
+    # the ledger's kinds: split, a futile split, "(other)" kept, "(other)" hidden — lossy; clean alone or a block — not
+    assert all(cu._lossy_alone(x) for x in ({"via": "split"}, {"via": "day", "fu": 1}, {"via": "day", "ol": 5},
+                                            {"via": "day", "hd": 7}))
+    assert not any(cu._lossy_alone(x) for x in ({"via": "day", "ol": 0}, {"via": "block"}, None, "x"))
+
+
+def test_u_round_keeps_the_kind_of_a_fill_error(monkeypatch, tmp_path):
+    """A fill that ends on an error (not a Stop) is counted and its kind kept ("u" "ek" in the state: quota / auth /
+    http / other — a word, never the error's text); a run without one has no "ek"."""
+    import threading
+
+    def boom(ga, cube, now, take, left, tleft=None):
+        raise RuntimeError("HTTP 503 made-up")
+    monkeypatch.setattr(cu, "u_fill_c", boom)
+    cube = cu.Cube(None, "a~1", "222")
+    cube.uhead()["cs"] = {"todo": [["2026-09", 3]], "scan": "2026-10-13T06:00:00Z"}
+    cu.u_round([("a~1", {}, cube, FakeGA())], NOW, lambda: None, threading.Lock(), {"calls": 0, "tokens": 0}, "cs", 1)
+    assert cube.u_err == 1 and cube.u_ek == "http"
+    data, _ = _refresh(monkeypatch, tmp_path / "off")                       # the cube walked, users off
+    monkeypatch.setattr(cu, "U_ON", True)
+    data, out = _refresh(monkeypatch, tmp_path / "off", workers=1)
+    st = cu.load_state(data)["fetch"]
+    assert out["counts"]["u_errors"] == 2 and st["x~1"]["u"]["err"] == 1 and st["x~1"]["u"]["ek"] == "http"
+    monkeypatch.setattr(cu, "UC_CALLS", 0)
+    data, out = _refresh(monkeypatch, tmp_path / "off", workers=1)
+    assert out["counts"]["u_errors"] == 0 and "ek" not in cu.load_state(data)["fetch"]["x~1"]["u"]
 
 
 def test_u_settings_and_the_workflow(monkeypatch):
