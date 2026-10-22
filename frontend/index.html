@@ -7131,27 +7131,66 @@ function RP(v){ if(!ok(v)) return '—'; const p=v*100; return (p===0?'0':p<0.1?
 const retNo=c=>c.a===0||(c.a>30&&c.mi==null);                     // a column that never has a retention line
 let RET_NEW='';                                                   // the file's newest day (today): a day this new is still being counted
 // (its users read part-way or not yet: 0 then is "not read", never 0 %) — no retention for it ('—')
-const retLate=(r,c)=>{ try{ if(!RET_NEW) return false; const L=c.mi!=null?(c.a||0):c.a, x=new Date(r[R.X]+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+L); return x.toISOString().slice(0,10)>=RET_NEW; }catch(e){ return false; } };
-// one install day at a column: [users or null (not measured), installs, final?] — null: nothing to read there (no
-// installs, no u / mu array); final? = that day final AND read (an index past the array is still to come)
+// the activity day of an install day's column (install day + its age; a 30-day column: the column's day) — '' when not one
+const retDay=(r,c)=>{ try{ const L=c.mi!=null?(c.a||0):c.a, x=new Date(r[R.X]+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+L); return x.toISOString().slice(0,10); }catch(e){ return ''; } };
+const retLate=(r,c)=>{ if(!RET_NEW) return false; const D=retDay(r,c); return !!D&&D>=RET_NEW; };
+// 👥 ≈ on a country's small number (owner, 22 Oct 2026: real data only — what GA4 did not attribute is said, never hidden):
+// the file's cd "uu" "ou_r" / "fl_r" = the activity days [[first, last]] on which GA4 put users into "(other)" (no install
+// day / no country: users of that day may be missing from a country's cells) / flagged the read (sampled / thresholded).
+// A line whose activity day is in a run gets "≈" and says why in its title; a week / month line when any day it pooled
+// is in one (the final ones it pooled, else the ones seen). RET_UU = the picked country's runs (null: All countries, Not
+// split, a file without them — every byte as before); RET_AX = the kinds the table on screen marked (bit 1 "(other)",
+// bit 2 flagged), for the legend's one line; RET_QU = All countries' late "u" (the whole reads' users with no install
+// day, "qou": in no row, said once under the table with its size — never a cell mark).
+let RET_UU=null, RET_AX=0, RET_QU=null;
+const RET_QO="GA4 ne us din kuch users kisi country ko nahi diye ('(other)') — ye % kam ho sakta hai", RET_QF='GA4 ka read sampled / thresholded tha';
+const RET_DRE=/^\d{4}-\d{2}-\d{2}$/;
+// a file's runs → {o, f: sorted, overlaps merged; ou: its "(other)" users (Σ over the days)} — null: none at all
+function retRuns(uu){ if(!uu||typeof uu!=='object') return null;
+  const rs=k=>(Array.isArray(uu[k])?uu[k]:[]).filter(x=>Array.isArray(x)&&RET_DRE.test(x[0])&&RET_DRE.test(x[1])&&x[0]<=x[1])
+    .map(x=>[x[0],x[1]]).sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0)
+    .reduce((o,x)=>{ const l=o[o.length-1]; if(l&&x[0]<=l[1]){ if(x[1]>l[1]) l[1]=x[1]; } else o.push(x); return o; },[]);
+  const o=rs('ou_r'), f=rs('fl_r'); return o.length||f.length?{o,f,ou:uu.ou}:null; }
+const inRun=(rs,D)=>{ let lo=0, hi=rs.length-1, k=-1; while(lo<=hi){ const m=(lo+hi)>>1; if(rs[m][0]<=D){ k=m; lo=m+1; } else hi=m-1; }
+  return k>=0&&D<=rs[k][1]; };
+const retMk=(r,c)=>{ const D=retDay(r,c); return D?(inRun(RET_UU.o,D)?1:0)|(inRun(RET_UU.f,D)?2:0):0; };
+// one install day at a column: [users or null (not measured), installs, final?, ≈ bits (RET_UU: its activity day in a
+// run; 0 without)] — null: nothing to read there (no installs, no u / mu array); final? = that day final AND read (an
+// index past the array is still to come)
 function retAt(r,c){ const n=+r[R.n]; if(!(n>0)||retNo(c)||retLate(r,c)) return null; let a, i, f;
   if(c.mi!=null){ a=r[R.mu]; i=c.mi; f=c.mi<(+r[R.mf]||0); }
   else { a=r[R.u]; i=c.a; f=c.a<(+r[R.df]||0); }
   if(!Array.isArray(a)) return null;
-  return [i<a.length&&ok(a[i])?+a[i]:null, n, f&&i<a.length]; }
-function retOf(gr,c){ let su=0, sn=0, k=0, fu=0, fn=0, fk=0, pend=false;
+  const v=i<a.length&&ok(a[i])?+a[i]:null;
+  return [v, n, f&&i<a.length, RET_UU&&v!=null?retMk(r,c):0]; }
+// qo / ql: how many of the install days it pooled are on a "(other)" / flagged activity day
+function retOf(gr,c){ let su=0, sn=0, k=0, fu=0, fn=0, fk=0, pend=false, ao=0, al=0, fo=0, fl=0;
   for(const r of gr.rows){ const x=retAt(r,c); if(!x) continue; if(!x[2]) pend=true; if(x[0]==null) continue;
-    su+=x[0]; sn+=x[1]; k++; if(x[2]){ fu+=x[0]; fn+=x[1]; fk++; } }
-  return fk?{v:fu/fn,u:fu,n:fn,k:fk,fo:pend,fin:!pend}:k?{v:su/sn,u:su,n:sn,k,fin:false}:null; }
+    su+=x[0]; sn+=x[1]; k++; ao+=x[3]&1; al+=x[3]>>1&1; if(x[2]){ fu+=x[0]; fn+=x[1]; fk++; fo+=x[3]&1; fl+=x[3]>>1&1; } }
+  return fk?{v:fu/fn,u:fu,n:fn,k:fk,fo:pend,fin:!pend,qo:fo,ql:fl}:k?{v:su/sn,u:su,n:sn,k,fin:false,qo:ao,ql:al}:null; }
+// the ≈ reasons of a line's title (week / month: how many of the install days it pooled)
+const retQT=rt=>{ const n=x=>GRAIN!=='day'?` (${x} install ${x===1?'day':'days'})`:'';
+  return ' · ≈ '+[rt.qo?RET_QO+n(rt.qo):'',rt.ql?RET_QF+n(rt.ql):''].filter(Boolean).join(' · '); };
 // the line itself ('' where retNo); nf: the cell's own value is not final (or not there yet) → the line is not final
 // either; tdNf: the cell is already faded (roi-nf) — the line fades with it, never twice
 function retLn(rt,c,gr,nf,tdNf){ if(retNo(c)) return ''; if(!rt) return '<span class="roi-rt roi-rtna">—</span>';
-  const fin=rt.fin&&!nf, L=gr.rows.length, t=`${c.lab} retention: ${N(rt.u)} of ${N(rt.n)} users${GRAIN!=='day'?` · ${rt.k} of ${L} install ${L===1?'day':'days'}${rt.fo?' (the final ones)':''}`:''}${fin?'':' · not final'}`;
-  return `<span class="roi-rt${!fin&&!tdNf?' roi-rtnf':''}" title="${E(t)}">${E(RP(rt.v))}</span>`; }
+  const fin=rt.fin&&!nf, L=gr.rows.length, qm=(rt.qo?1:0)|(rt.ql?2:0), t=`${c.lab} retention: ${N(rt.u)} of ${N(rt.n)} users${GRAIN!=='day'?` · ${rt.k} of ${L} install ${L===1?'day':'days'}${rt.fo?' (the final ones)':''}`:''}${fin?'':' · not final'}${qm?retQT(rt):''}`;
+  RET_AX|=qm;
+  return `<span class="roi-rt${!fin&&!tdNf?' roi-rtnf':''}" title="${E(t)}">${E((qm?'≈ ':'')+RP(rt.v))}</span>`; }
 // the line under the table: what the small number is; checkpoint columns past D30 shown (no line there) are named; a
-// country whose users are not read yet says so (from its rows: a measured users entry past day 0)
+// country whose users are not read yet says so (from its rows: a measured users entry past day 0); then retQL's line
 function retNote(rows,cc,C){ const any=(rows||[]).some(r=>Array.isArray(r[R.u])&&r[R.u].slice(1).some(ok)), nl=(C||[]).filter(c=>c.a>30&&c.mi==null).map(c=>c.lab);
-  return `<p class="roi-note roi-rtl"><b>Chhota number</b> = retention: us din wapas aaye users ÷ us din ke naye users (install din ke). D0 pe nahi (wahi install din)${nl.length?`; ${nl.join(' / ')} pe bhi nahi (in checkpoint column ka users data nahi aata)`:''}.${GRAIN!=='day'?` ${GRAIN==='week'?'Hafte':'Mahine'} me: Σ users ÷ Σ naye users — jin din ka wo din final hai unka (koi final nahi to jo abhi tak dikha); jab tak saare din final nahi, halka.`:''} Halka = abhi final nahi; — = data nahi (abhi nahi aaya, ya is purane din ka nahi).${cc&&!any?' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.':''}</p>`; }
+  return `<p class="roi-note roi-rtl"><b>Chhota number</b> = retention: us din wapas aaye users ÷ us din ke naye users (install din ke). D0 pe nahi (wahi install din)${nl.length?`; ${nl.join(' / ')} pe bhi nahi (in checkpoint column ka users data nahi aata)`:''}.${GRAIN!=='day'?` ${GRAIN==='week'?'Hafte':'Mahine'} me: Σ users ÷ Σ naye users — jin din ka wo din final hai unka (koi final nahi to jo abhi tak dikha); jab tak saare din final nahi, halka.`:''} Halka = abhi final nahi; — = data nahi (abhi nahi aaya, ya is purane din ka nahi).${cc&&!any?' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.':''}${retQL(C)}</p>`; }
+// the ≈ line (one, only when it says something on screen): a country — only when the table marked a small number, the
+// days of each kind it marked (counted from the runs: every such day, not just the ones on screen) and the "(other)"
+// users' size; All countries — the users GA4's whole reads gave no install day (in no row: the D60+ numbers can be that
+// much low), only with a 30-day column on screen; '' otherwise (every byte as before)
+function retQL(C){ const U_=RET_UU, nd=rs=>rs.reduce((a,x)=>a+dDiff(x[0],x[1])+1,0), p=[];
+  if(U_&&RET_AX&1) p.push(`${N(nd(U_.o))} din GA4 ne kuch users${ok(U_.ou)&&U_.ou>0?` (din-wise jod ${N(U_.ou)})`:''} kisi country / install din ko nahi diye ("(other)") — un din ka % kam ho sakta hai`);
+  if(U_&&RET_AX&2) p.push(`${N(nd(U_.f))} din GA4 ka read sampled / thresholded tha (kitne users chhoote, pata nahi)`);
+  if(p.length) return `<br>≈ (chhota number) = ${p.join('; ')}.`;
+  const q=RET_QU;
+  return q&&ok(q.qou)&&q.qou>0&&(C||[]).some(c=>c.mi!=null)?`<br>${N(q.qou)} users ka install din GA4 ne nahi diya (D60+ me)${ok(q.qou_days)&&q.qou_days>0?` — ${N(q.qou_days)} din ka jod`:''}; ye kisi row me nahi, isliye D60+ ka chhota number utna kam ho sakta hai.`:''; }
 // 🎯 Breakeven, right after CPI (owner, 21 Oct 2026: "D0 ke pehle ak column add kar do — konse day pe breakeven milta
 // he"). Week / month: the FIRST column whose summed cumulative revenue (agg — the very numbers its cells show, green at
 // ROAS ≥ 100%) reaches the group's spend → [age, exact?]; exact only when the cells pin that day: every row final there
@@ -7173,6 +7212,7 @@ function beTd(be,sp,so){ if(be){ const nf=be[2]===false; return `<td class="roi-
 function cohortTable(d,src){ if(src&&src.msg) return `<div class="roi-ctl">${src.ctl||''}${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div><div class="roi-tw roi-ccm">${src.msg}</div>`;
   const d0=d, xx=!!(src&&src.cc==='XX');                         // 🧩 Not split: the columns of the app's own rows, '—' cells
   RET_NEW=String(d0.newest||'');
+  RET_UU=!xx&&src&&src.rows?retRuns(src.uu):null; RET_QU=src&&src.rows?null:((d0.late||{}).u||null); RET_AX=0;   // 👥 the ≈ of the small numbers
   if(src&&src.rows) d=Object.assign({},d,{rows:src.rows});      // 🌍 one country's rows: the same table, the same code
   const T=d.T, groups=groupRows(d), shown=groups.slice(0,SHOW), C=cols(xx?d0:d,shown.flatMap(g=>g.rows));
   const head=`<tr><th>Install ${GRAIN==='day'?'date':GRAIN}</th><th>Status</th><th>Installs</th><th>Spend</th><th>CPI</th><th>Breakeven</th>${C.map(c=>`<th>${c.lab}</th>`).join('')}<th>So far</th></tr>`;
@@ -7352,7 +7392,7 @@ function ccSrc(d){ const cd=cdOf(d);
   const rows=ccRows(cd,pk,CTY,d.T||[0,1,3,7,14,30,60,90,180,365]);
   if(rows===false){ PK[key]={stale:true}; return ccSrc(d); }
   if(!rows) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} is file me nahi mila.</p>`};
-  return {ctl,cc:CTY,x,rows,qt:qb=>ccQ(qb,cd),note:ccNote(d,cd,x)}; }
+  return {ctl,cc:CTY,x,rows,qt:qb=>ccQ(qb,cd),note:ccNote(d,cd,x),uu:cd.uu}; }   // uu: its users' "(other)" / flagged days (the small numbers' ≈)
 // 🎯 Avg breakeven (owner, 22 Oct 2026: "average breakeven day ka KPI add kar do — jo country wise filter pe vo country ka
 // milega … koi koi din ese ho jate he jo us din ka BE 2–5–10 din hota he — usko avg BE me exclude karna he taki muje actual
 // BE mile … manlo 100 BE day he to 50% se kam din vale date ko count hi nahi karna"): over EVERY install day of the table's

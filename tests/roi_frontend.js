@@ -1433,6 +1433,78 @@ async function moreKeepAll(dc, packs) {
         tcA.includes(' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.</p>'), rtOf(cellOf(tcB, '1 Oct 26', 'D1')),
         !tcB.includes('Is country ke users ka din-wise data'), !tcX.includes('roi-rt'), tcX.includes('<td class="roi-na">—</td>'),
         tcC.includes(' Is country ke users ka din-wise data abhi nahi aaya — tab tak —.</p>'), rtOf(cellOf(tcC, '1 Oct 26', 'D1'))];
+      // 👥 ≈ on a country's small number: the file's cd "uu" runs of activity days GA4 put users into "(other)" (ou_r) /
+      // flagged (fl_r) — made-up runs (given out of order, one twice: sorted and merged): "(other)" 3 Oct + 8–9 Oct
+      // (3 days), flagged 5 Oct + 9 Oct (2 days). Install day 1 Oct: D2 = 3 Oct, D4 = 5 Oct, D7 = 8 Oct, D8 = 9 Oct (both);
+      // a 30-day column: install day 5 Jul's D90 = 3 Oct (its D60 = 3 Sep: none)
+      const uu = { days: 60, zero: 0, ou_days: 3, ou: 7, fl_days: 2,
+        ou_r: [['2026-10-08', '2026-10-09'], ['2026-10-03', '2026-10-03'], ['2026-10-09', '2026-10-09']], fl_r: [['2026-10-05', '2026-10-05'], ['2026-10-09', '2026-10-09']] };
+      const uR = [20, 10, 8, 6, 5, 4, 4, 4, 4, 4, 4, 4, 4];
+      const cU = [rr('2026-10-01', 20, seq(13, L => L + 1), 10, uR), rr('2026-10-02', 20, seq(12, L => L + 1), 9, null),
+        rr(day(nw, -100), 100, null, 0, null, tOld, [[41, 51], 2, [30, 20]])];
+      U.set('GRAIN', 'day');
+      const tU = U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cU, uu }), t0 = U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cU });
+      out.rt_uu_day = ['D1', 'D2', 'D3', 'D4', 'D6', 'D7', 'D8', 'D9'].map(c => rtOf(cellOf(tU, '1 Oct 26', c)))
+        .concat([rtOf(cellOf(tU, la, 'D60')), rtOf(cellOf(tU, la, 'D90')), rtOf(cellOf(tU, '2 Oct 26', 'D1'))]);
+      // the legend's one line: each kind the table marked, its days counted from the runs, the "(other)" users' size
+      const lu = '<br>≈ (chhota number) = 3 din GA4 ne kuch users (din-wise jod 7) kisi country / install din ko nahi diye ("(other)") — un din ka % kam ho sakta hai; 2 din GA4 ka read sampled / thresholded tha (kitne users chhoote, pata nahi).</p>';
+      // only the "(other)" kind on screen (the flagged runs hit no measured number): only its part; nothing hit: no line
+      const tUo = U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cU, uu: Object.assign({}, uu, { fl_r: [['2026-10-13', '2026-10-13']] }) });
+      const tUn = U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cU.slice(0, 1), uu: { ou_r: [['2026-10-14', '2026-10-20']], fl_r: [['2026-10-13', '2026-10-13']] } });
+      out.rt_uu_legend = [tU.includes(lu), (tU.match(/roi-rtl/g) || []).length, (tU.match(/≈ \(chhota number\)/g) || []).length,
+        tUo.includes('<br>≈ (chhota number) = 3 din GA4 ne kuch users (din-wise jod 7) kisi country / install din ko nahi diye ("(other)") — un din ka % kam ho sakta hai.</p>'),
+        tUn === U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cU.slice(0, 1) }) && !tUn.includes('≈')];
+      // the revenue cells, the row's own ≈ and every other byte: unchanged (only the small numbers + the legend's line)
+      out.rt_uu_only = [retCut(tU) === retCut(t0), tU.replace(lu, '</p>').replace(RT_RE, x => x.replace(/ · ≈ [^"]*/, '').replace('>≈ ', '>')) === t0,
+        !/roi-q/.test(tU) && !/roi-q/.test(t0)];
+      // week / month: ≈ when any install day it pooled is on a run — the final ones it pooled (a day not final yet is
+      // not in the number: no ≈ from it), else the ones seen. "(other)" 30 Sep = 29 Sep's D1; flagged 23–24 Sep = 22 Sep's
+      // D1 (not final: not pooled) and 21 Sep's D3 (final: pooled)
+      const wkU = [rr('2026-09-21', 100, seq(31, L => L + 1), 31, seq(31, L => (L ? 30 : 100))),
+        rr('2026-09-22', 100, seq(31, L => L + 1), 1, seq(31, L => (L ? 10 : 100))),
+        rr('2026-09-28', 100, seq(31, L => L + 1), 31, seq(31, L => (L ? 20 : 100))),
+        rr('2026-09-29', 100, seq(31, L => L + 1), 31, seq(31, L => (L ? 40 : 100)))].map(r => { r[7] = tOfD(r[4], r[5]); return r; });
+      const uw = { ou_r: [['2026-09-30', '2026-09-30']], fl_r: [['2026-09-23', '2026-09-24']] };
+      const dwu = { v: 1, T, lags: 31, newest: '2026-10-13', rows: wkU };
+      U.set('GRAIN', 'week');
+      const tw2 = U.cohortTable(dwu, { ctl: '', cc: 'AA', rows: wkU, uu: uw });
+      out.rt_uu_week = [rtOf(cellOf(tw2, '28 Sep–4 Oct 26', 'D1')), rtOf(cellOf(tw2, '28 Sep–4 Oct 26', 'D3')),
+        rtOf(cellOf(tw2, '21 Sep–27 Sep 26', 'D1')), rtOf(cellOf(tw2, '21 Sep–27 Sep 26', 'D3'))];
+      U.set('GRAIN', 'month');
+      const tm2 = U.cohortTable(dwu, { ctl: '', cc: 'AA', rows: wkU, uu: uw });
+      out.rt_uu_month = [rtOf(cellOf(tm2, 'Sep 2026', 'D1')), rtOf(cellOf(tm2, 'Sep 2026', 'D3')),
+        tm2.includes('<br>≈ (chhota number) = 1 din GA4 ne kuch users kisi country / install din ko nahi diye ("(other)") — un din ka % kam ho sakta hai; 2 din GA4 ka read sampled / thresholded tha (kitne users chhoote, pata nahi).</p>')];
+      U.set('GRAIN', 'day');
+      const td2 = U.cohortTable(dwu, { ctl: '', cc: 'AA', rows: wkU, uu: uw });
+      out.rt_uu_day_nf = rtOf(cellOf(td2, '22 Sep 26', 'D1'));          // the day itself (not final yet): its own ≈
+      // absent / old: no "uu", a "uu" without runs (an older build), empty or malformed runs, All countries (no rows: the
+      // app's own, whatever src carries), Not split → every byte as without it, in every grain
+      const same = [];
+      for (const g of ['day', 'week', 'month']) { U.set('GRAIN', g);
+        const b0 = U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cU });
+        same.push(...[{ days: 3, zero: 1, ou_days: 0, ou: 0, fl_days: 0 }, { ou_r: [], fl_r: [] }, { ou_r: [['x', 'y'], ['2026-10-09'], null, ['2026-10-09', '2026-10-03']], fl_r: 'no' }, null, 5]
+          .map(z => U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cU, uu: z }) === b0));
+        same.push(U.cohortTable(dmu, { ctl: '', uu }) === U.cohortTable(dmu, { ctl: '' }), U.cohortTable(dmu, { ctl: '', uu }) === U.cohortTable(dmu));
+        const xr = [['2026-10-01', null, null, 5, null, 0, null, T.map(() => null), null, null, null, 'N/A', 0, 5]];
+        same.push(U.cohortTable(dday, { ctl: '', cc: 'XX', rows: xr, uu }) === U.cohortTable(dday, { ctl: '', cc: 'XX', rows: xr })); }
+      out.rt_uu_absent = same;
+      // All countries: no ≈ from users; GA4's whole reads' users with no install day (late "u" "qou" > 0) → one line with
+      // its size, only with a 30-day column on screen; qou 0 / no "u" / no late: every byte as before; a country: never
+      U.set('GRAIN', 'day');
+      const lq = (dd, u) => Object.assign({}, dd, { late: Object.assign({}, dd.late || {}, u === undefined ? {} : { u }) });
+      const qu = { q: 4, qfl: 1, c: 2, qou: 12, qou_days: 3 }, tq = U.cohortTable(lq(dmu, qu)), tq0 = U.cohortTable(dmu);
+      const lqs = '<br>12 users ka install din GA4 ne nahi diya (D60+ me) — 3 din ka jod; ye kisi row me nahi, isliye D60+ ka chhota number utna kam ho sakta hai.</p>';
+      out.rt_uu_all = [tq.includes(lqs), tq.replace(lqs, '</p>') === tq0, !(tq.match(RT_RE) || []).some(s => s.includes('≈')),
+        U.cohortTable(lq(dmu, Object.assign({}, qu, { qou: 0, qou_days: 0 }))) === tq0, U.cohortTable(lq(dmu)) === tq0,
+        U.cohortTable(lq(dmu, { q: 4, qfl: 0, c: 0 })) === tq0,
+        U.cohortTable(lq(dday, qu)) === U.cohortTable(dday),                                                  // no 30-day column
+        U.cohortTable(lq(dday, qu), { ctl: '', cc: 'AA', rows: cU }) === U.cohortTable(dday, { ctl: '', cc: 'AA', rows: cU }),
+        U.cohortTable(lq(dmu, Object.assign({}, qu, { qou_days: null }))).includes('<br>12 users ka install din GA4 ne nahi diya (D60+ me); ye kisi row me nahi')];
+      U.set('GRAIN', 'week');
+      out.rt_uu_all_week = U.cohortTable(lq(dmu, qu)).includes(lqs);
+      // the default view's files (defaultDigest: appFile, lateFile) carry neither cd "uu" nor late "u": the goldens stay
+      const fA = appFile(), fL = lateFile();
+      out.rt_uu_golden_fx = [fA.cd === undefined, fA.late === undefined, fL.cd === undefined, !!fL.late && !('u' in fL.late)];
       U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60);
     }
     // ── 🌍 the install-day table by country ─────────────────────────────────────────────────────────────────────
@@ -1511,6 +1583,9 @@ async function moreKeepAll(dc, packs) {
     // a short [X] expanded: the row the build would have written (zero installs, cells 0 as far as read)
     const zrow = U.ccSrc(dc).rows.find(r => r[0] === day('2026-10-13', -63));
     out.cc_zero = [zrow.length, zrow[1], zrow[4].length, zrow[5], zrow[14], zrow[15], zrow[3], zrow[11]];
+    // 👥 the picked country's source carries the file's cd "uu" (its users' "(other)" / flagged runs: the small numbers' ≈)
+    const uuc = { days: 60, ou_days: 1, ou: 2, fl_days: 0, ou_r: [['2026-10-01', '2026-10-01']], fl_r: [] };
+    out.rt_uu_src = [U.ccSrc(Object.assign(appFile(), { cd: Object.assign(cdx(), { uu: uuc }) })).uu === uuc, U.ccSrc(dc).uu === undefined];
     // ROAS from the country's own spend; unknown spend → '—' and '·'; the ≈ texts of a country row
     out.cc_cells = [ta.includes('title="D7: $4.0 · ROAS 40%"'), ta.includes('<td>—</td><td>—</td>'),
       ta.includes('app ka k laga — numbers ≈'), ta.includes('0.8–1.25 se bahar tha (0.5–2 pe roka) — numbers ≈')];

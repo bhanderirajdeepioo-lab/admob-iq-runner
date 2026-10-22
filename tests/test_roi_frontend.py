@@ -234,6 +234,8 @@ def test_forecast_view(out):
 # f16df0114ed2af8f00027ec2854f76367faf228b7d78d00a98ef05bf8ab0759b and GOLDEN_DEFAULT_NOK
 # f927fa5ebcb05d6d2459ca8eb8402c0e9eab65466d745bda0243f784bff7e53b.
 # Merged with the retention lines (also 22 Oct): GOLDEN_RET_CUT (retention lines cut) = this branch's own default page.
+# 👥 Not changed on 22 Oct 2026 by the small numbers' ≈ (cd "uu" runs for a country, late "u" "qou" for All): the default
+# view's files (appFile, lateFile) carry neither field (rt_uu_golden_fx) — every golden as before.
 GOLDEN_DEFAULT = "b2f6e83b9b63ec3731afe05b1238102818f77b15aee95e4ad3fa293378e5cb1b"
 GOLDEN_RET_CUT = "fa39df20e85ec92db68880a4c4ed1b1aac09f0a0d68bd4f2e869f83b769bac14"
 GOLDEN_DEFAULT_NOK = "0850be88d98457b5d50c85d3ae76ff8babf68628e1039fec509d3da09497ce61"
@@ -1014,6 +1016,64 @@ def test_retention_cells(out):
     assert ".roi-t td .roi-rtnf{opacity:.62;font-style:italic}.roi-t td .roi-rtna{color:var(--faint)}" in p
     assert ".roi-heat td{padding-top:5px;padding-bottom:5px;line-height:1.3;vertical-align:baseline}" in p
     assert "const R={X:0,n:1,na:2,sp:3,d:4,df:5,u:6,t:7,s:8,sd:9,be:10,st:11,q:12,spi:13,m:14,mf:15,mu:16};" in p
+
+
+_QO = "GA4 ne us din kuch users kisi country ko nahi diye (&#39;(other)&#39;) — ye % kam ho sakta hai"
+_QF = "GA4 ka read sampled / thresholded tha"
+
+
+def test_retention_users_marks(out):
+    """👥 ≈ on a country's small number (owner, 22 Oct 2026: real data only — what GA4 did not attribute is said with its
+    size, never hidden): the file's cd "uu" "ou_r" / "fl_r" = runs of activity days on which GA4 put users into "(other)"
+    (no install day / no country) / flagged the read (sampled / thresholded). A line whose activity day (install day + its
+    age; a 30-day column: the column's day) is in a run gets "≈" and says why in its title; a week / month line when any
+    install day it POOLED is on one; the legend's one line (only when a number on screen got ≈) counts the days of each
+    kind from the runs, with the "(other)" users' size. All countries: no ≈ from users — GA4's whole reads' users with no
+    install day (late "u" "qou" > 0) said once with their size. Without these fields: every byte as before."""
+    # Day: runs "(other)" 3 Oct + 8–9 Oct, flagged 5 Oct + 9 Oct (given out of order, one twice); install day 1 Oct:
+    # D2 = 3 Oct, D4 = 5 Oct, D7 = 8 Oct, D8 = 9 Oct (both reasons); 5 Jul's D60 = 3 Sep (none), D90 = 3 Oct; a row
+    # without users: — (no ≈ on a number that is not there)
+    assert out["rt_uu_day"] == [
+        _rt("50%", "D1 retention: 10 of 20 users"), _rt("≈ 40%", "D2 retention: 8 of 20 users · ≈ " + _QO),
+        _rt("30%", "D3 retention: 6 of 20 users"), _rt("≈ 25%", "D4 retention: 5 of 20 users · ≈ " + _QF),
+        _rt("20%", "D6 retention: 4 of 20 users"), _rt("≈ 20%", "D7 retention: 4 of 20 users · ≈ " + _QO),
+        _rt("≈ 20%", "D8 retention: 4 of 20 users · ≈ " + _QO + " · " + _QF), _rt("20%", "D9 retention: 4 of 20 users"),
+        _rt("30%", "D60 retention: 30 of 100 users"), _rt("≈ 20%", "D90 retention: 20 of 100 users · ≈ " + _QO), _rt(None)]
+    # a day not final yet: its own line still gets its ≈ (Day: the row's own number)
+    assert out["rt_uu_day_nf"] == _rt("≈ 10%", "D1 retention: 10 of 100 users · not final · ≈ " + _QF)
+    # the legend: one line inside the legend paragraph (3 "(other)" days after merging, 7 users; 2 flagged days); only
+    # the kind on screen; no number marked → no line, the table byte for byte as without "uu"
+    assert out["rt_uu_legend"] == [True, 1, 1, True, True]
+    # the revenue cells, the rows' own ≈ and every other byte unchanged: only the small numbers and the legend's line
+    assert out["rt_uu_only"] == [True, True, True]
+    # week: 28 Sep–4 Oct D1 pools 29 Sep's D1 = 30 Sep ("(other)") → ≈ (1 install day); D3 none; 21–27 Sep D1: 22 Sep's
+    # D1 (23 Sep, flagged) is not final → not pooled → no ≈; D3: 21 Sep's D3 (24 Sep, flagged, final, pooled) → ≈
+    wk = " · 2 of 2 install days"
+    one = " · 1 of 2 install days (the final ones) · not final"
+    assert out["rt_uu_week"] == [_rt("≈ 30%", "D1 retention: 60 of 200 users" + wk + " · ≈ " + _QO + " (1 install day)"),
+                                 _rt("30%", "D3 retention: 60 of 200 users" + wk),
+                                 _rt("30%", "D1 retention: 30 of 100 users" + one),
+                                 _rt("≈ 30%", "D3 retention: 30 of 100 users" + one + " · ≈ " + _QF + " (1 install day)")]
+    # month: the same pooled days (22 Sep's flagged D1 not pooled: only the "(other)" reason on D1); its legend
+    mo = " · 3 of 4 install days (the final ones) · not final"
+    assert out["rt_uu_month"] == [_rt("≈ 30%", "D1 retention: 90 of 300 users" + mo + " · ≈ " + _QO + " (1 install day)"),
+                                  _rt("≈ 30%", "D3 retention: 90 of 300 users" + mo + " · ≈ " + _QF + " (1 install day)"), True]
+    # absent / old files: no "uu", "uu" without runs, empty / malformed runs, All countries (whatever src carries), Not
+    # split — byte for byte as before, every grain
+    assert out["rt_uu_absent"] == [True] * 24
+    # All countries: late "u" "qou" > 0 → one line with its size (with a 30-day column on screen), no cell ≈; qou 0 / no
+    # "u" / no late / no 30-day column / a country: byte for byte as before; days unknown → the line without them
+    assert out["rt_uu_all"] == [True] * 9 and out["rt_uu_all_week"]
+    # the picked country's source carries cd "uu"; without it, none
+    assert out["rt_uu_src"] == [True, True]
+    # the goldens: the default view's files carry neither field (so GOLDEN_DEFAULT & co. are unchanged — asserted in
+    # test_country_filter too)
+    assert out["rt_uu_golden_fx"] == [True, True, True, True]
+    assert out["cc_default_digest"] == GOLDEN_DEFAULT and out["cc_default_nort"] == GOLDEN_RET_CUT
+    with open(PAGE, encoding="utf-8") as f:
+        p = f.read()
+    assert "return {ctl,cc:CTY,x,rows,qt:qb=>ccQ(qb,cd),note:ccNote(d,cd,x),uu:cd.uu}; }" in p
+    assert "RET_UU=!xx&&src&&src.rows?retRuns(src.uu):null; RET_QU=src&&src.rows?null:((d0.late||{}).u||null); RET_AX=0;" in p
 
 
 def test_wiring():
