@@ -161,6 +161,19 @@ jobs:
           GA4_CUBE_Q_SETTLE:    ${{ vars.GA4_CUBE_Q_SETTLE }}
           GA4_CUBE_Q_RETRY:     ${{ vars.GA4_CUBE_Q_RETRY }}
           GA4_CUBE_Q_USE:       ${{ vars.GA4_CUBE_Q_USE || 'true' }}
+          # Its users (GA4's own activeUsers of the same reads, files of their own next to the cube): GA4_CUBE_U=false
+          # stops keeping them (no file written, no users fill), GA4_CUBE_U_USE=false = the page ignores them. The
+          # history fills, each its own calls / seconds a build inside the budget above: All users (one whole
+          # no-country day read) GA4_CUBE_U_CALLS / GA4_CUBE_U_SEC (empty: 120 / 20; 0 calls = off); country users
+          # (the cube's own read again) GA4_CUBE_U_C_CALLS / GA4_CUBE_U_C_SEC / GA4_CUBE_U_C_CAP (empty: 120 / 20 / 3
+          # calls a day)
+          GA4_CUBE_U:           ${{ vars.GA4_CUBE_U || 'true' }}
+          GA4_CUBE_U_USE:       ${{ vars.GA4_CUBE_U_USE || 'true' }}
+          GA4_CUBE_U_CALLS:     ${{ vars.GA4_CUBE_U_CALLS }}
+          GA4_CUBE_U_SEC:       ${{ vars.GA4_CUBE_U_SEC }}
+          GA4_CUBE_U_C_CALLS:   ${{ vars.GA4_CUBE_U_C_CALLS }}
+          GA4_CUBE_U_C_SEC:     ${{ vars.GA4_CUBE_U_C_SEC }}
+          GA4_CUBE_U_C_CAP:     ${{ vars.GA4_CUBE_U_C_CAP }}
           ROI_TAB:              ${{ vars.ROI_TAB || 'true' }}
           # 🔮 Forecast engine (inside the ROI section): vd = the forecast tournament's winner (default); FORECAST_ENGINE=v0
           # (repo variable) rolls back to the earlier engine without a code push (each app re-made by it within a day)
