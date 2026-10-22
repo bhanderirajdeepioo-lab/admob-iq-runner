@@ -156,6 +156,10 @@ jobs:
           GA4_CUBE_Q_SEC:       ${{ vars.GA4_CUBE_Q_SEC }}
           # GA4_CUBE_Q_APP_CALLS: the fill's own calls an app a run (empty / 0: the app's per-run cap bounds it too)
           GA4_CUBE_Q_APP_CALLS: ${{ vars.GA4_CUBE_Q_APP_CALLS }}
+          # GA4_CUBE_Q_SETTLE: days after an activity day before its q read counts as final (empty: 5); GA4_CUBE_Q_RETRY:
+          # reads again of a settled "fl" day, a day apart, before it is final (empty: 2)
+          GA4_CUBE_Q_SETTLE:    ${{ vars.GA4_CUBE_Q_SETTLE }}
+          GA4_CUBE_Q_RETRY:     ${{ vars.GA4_CUBE_Q_RETRY }}
           GA4_CUBE_Q_USE:       ${{ vars.GA4_CUBE_Q_USE || 'true' }}
           ROI_TAB:              ${{ vars.ROI_TAB || 'true' }}
           # 🔮 Forecast engine (inside the ROI section): vd = the forecast tournament's winner (default); FORECAST_ENGINE=v0

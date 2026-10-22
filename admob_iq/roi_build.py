@@ -40,9 +40,10 @@ k the tab uses):
     8 decimals (a measured size never written as 0 when it is not): "ql" the cube's "(other)" past age 420 on the weeks
     read whole (exact, no install day: never spread), "qn" what the whole read itself gave no install day at all
     ("(not set)", any age: in no row), "qd" days on q, "qwait" / "qwu" days with loss on the cube's cells until their
-    q is read / that loss, "qfl" / "qfu" days with loss on a week whose whole read came back not whole ("fl", or
-    "qshort" weeks: q named fewer install days than the cube kept) — never read again, on the cube's cells for good /
-    that loss, "qneg" / "qpos" weeks whose whole read held more / less than the cube (beyond the cube's own measured
+    q is read / that loss (an "fl" read not final yet — made before the day settled, or retried fewer than Q_RETRY
+    times: fetch.ga4_cube.q_due — is waiting too), "qfl" / "qfu" days with loss on a week whose whole read came back
+    not whole and is final ("fl" settled and retried, or "qshort" weeks: q named fewer install days than the cube
+    kept) — never read again, on the cube's cells for good / that loss, "qneg" / "qpos" weeks whose whole read held more / less than the cube (beyond the cube's own measured
     loss): read-time drift, counted with its size "qdr", never loss} (the page's ≈ note); while the cube's first walk
     is still on its way: {"busy": 1, "from", "next", "at" the walk's last step (UTC day; absent before its first)}
     only (no column yet, the page says so and since when).
@@ -326,7 +327,7 @@ def _late(data_dir, aid, sid, P, visit=None):
         if h.get("walk_at"):
             info["at"] = str(h["walk_at"])[:10]     # the walk's last step (UTC day): a stalled walk shows its age
         return {"info": info}
-    kf, hs = P["sc"]["kf"], P["hs"]
+    kf, hs, tz = P["sc"]["kf"], P["hs"], h.get("time_zone")
     B, fin, hot, oth, flg, omax, ks = {}, set(), set(), set(), set(), 0.0, {}
     lb, zq, onqd = set(), set(), set()  # q: days whose loss is still on the cube's cells / days whose loss past age QL
     #                                     (or of an age the week cannot tell: drift) the rows past D420 still carry /
@@ -424,8 +425,9 @@ def _late(data_dir, aid, sid, P, visit=None):
             qi["qdr"] += -g / 1e6 * k
 
     def note(Dd, led, how=None):
-        """how: "q" (its week read whole: cells ≤ QL from q), "fl" (its week's whole read came back not whole — never
-        read again: on the cube's cells for good), None (no q yet: on the cube's cells until it is read)."""
+        """how: "q" (its week read whole: cells ≤ QL from q), "fl" (its week's whole read came back not whole and is
+        final — never read again: on the cube's cells for good), None (no q yet, or an "fl" read again once settled /
+        its retry is due: on the cube's cells until it is read)."""
         nonlocal omax
         lo, t = int(led.get("loss") or 0), int(led.get("t") or 0)
         if lo > 0:
@@ -457,9 +459,11 @@ def _late(data_dir, aid, sid, P, visit=None):
                 leds = [mo["days"][D] if isinstance(mo["days"][D], dict) else {} for D in ds]
                 if not got <= set(ds) or any(D not in got and gcu.q_need(v) for D, v in zip(ds, leds)):
                     continue
-                if not all(isinstance(qd[D], dict) and qd[D].get("qs") == "ok" for D in got):
-                    held.add(W)                     # its whole read flagged: never read again
-                    continue
+                nok = [D for D in got if not (isinstance(qd[D], dict) and qd[D].get("qs") == "ok")]
+                if nok:                             # a whole read flagged: on the cube's cells for good only when
+                    if all(gcu.q_final(qd[D], D, tz) for D in nok):     # every such read is final (settled, read
+                        held.add(W)                 # again Q_RETRY times); else read again once settled / due:
+                    continue                        # waiting, as a day not read yet
                 cand[W] = sums(leds, [qd[D] for D in got])
             if cand:
                 nb, nq = named(mo["b"], cand), named(qm["q"], cand)

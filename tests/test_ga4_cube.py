@@ -25,7 +25,10 @@ day "ok"), a new final day and the hot days read in the same run, a Stop keeping
 app's call cap ending it quietly, any other error ending q for the app (counted, never the app's run), days of nothing
 never read, the history queue (lossy months first), the run's Q_CALLS and Q_SEC caps, the second round (lossy apps
 first), an app not scanned yet counted apart, q files never taken for months and never touched by the repair, the
-counts in the log and the state."""
+counts in the log and the state; a read final only once its day settled (Q_SETTLE: a folded day waits in "p", the
+property's day decides), a stored "fl" read again once settled and replaced (Q_RETRY more a day apart, then final),
+the hot days' "fl" blocking nothing, the fill's order (re-reads on lossy weeks first), q files of before needing no new
+version (a GA4 fake whose whole read is "fl" while the day is fewer than 5 days old)."""
 import copy
 import gzip
 import json
@@ -1361,8 +1364,9 @@ def test_repair_of_a_month_whose_file_is_gone_moves_on(tmp_path):
 
 
 # ── the run and the build hook ──────────────────────────────────────────────────────────────────────────────────────
-def _refresh(monkeypatch, tmp_path, stop_after=None, apps=None, tick=None, workers=cu.WORKERS):
-    """refresh_all over two made-up properties; tick: seconds each GA4 call takes on a fake clock (None: the real one)."""
+def _refresh(monkeypatch, tmp_path, stop_after=None, apps=None, tick=None, workers=cu.WORKERS, base=None, ga_kw=None):
+    """refresh_all over two made-up properties; tick: seconds each GA4 call takes on a fake clock (None: the real one);
+    base / ga_kw: the fake GA4's class (FakeGA) and its own arguments."""
     data, clk = str(tmp_path), [0.0]
     route = {"property_id": "111", "stream_id": "222", "owner": "o"}
     monkeypatch.setattr(cu.gu, "load_state", lambda d: {"routes": {"by_package": {"com.example.alpha": route,
@@ -1371,9 +1375,9 @@ def _refresh(monkeypatch, tmp_path, stop_after=None, apps=None, tick=None, worke
     monkeypatch.setattr(cu.gaud, "_uni_meta", lambda ust, d, aid, r: {"history_start": "2026-08-01"})
     monkeypatch.setattr(cu.ga4, "access_token", lambda c, s, r: "tok")
 
-    class A(FakeGA):
+    class A(base or FakeGA):
         def __init__(self, token, pid, sid, prop, over=None, max_calls=cu.MAX_CALLS):
-            super().__init__(start=date(2026, 8, 1), stop_after=stop_after)
+            super().__init__(start=date(2026, 8, 1), stop_after=stop_after, **(ga_kw or {}))
 
         def report_all(self, *a, **k):
             clk[0] += tick or 0
@@ -1473,7 +1477,8 @@ def test_build_hook_switch(tmp_path, monkeypatch, capsys):
     assert calls == [60] and [ln for ln in err.splitlines() if ln.startswith("ga4 cube")] == [
         "ga4 cube: apps 2, with GA4 0, fetched 1, fresh 0, failed 0, deferred 0, waiting 0, days folded 0, split 0, "
         "deeper 0, capped 0, hidden 0, futile 0, loss 0, flagged 0, months read again 0, repair days 0, "
-        "months repaired 0, q days 0, q flagged 0, q calls 0, q left 0, q unscanned 0, q errors 0, calls 0, tokens 0"]
+        "months repaired 0, q days 0, q flagged 0, q calls 0, q left 0, q unscanned 0, q errors 0, q settling 0, "
+        "q reread 0, q recovered 0, q fl waiting 0, calls 0, tokens 0"]
     monkeypatch.setattr(cu, "refresh_all", lambda *a, **k: 1 / 0)
     dash = tub.dashboard()
     ub.run_uninstall(dash, data, out, tub.ga4_settings(ga4_cube=True), now=tub.NOW)
@@ -1589,36 +1594,50 @@ def _qday_want(D, max_lag=120, start=HS, fill=1.0):
     return q, qt
 
 
-def test_q_a_new_day_and_the_hot_days_get_q_in_the_same_run(tmp_path, monkeypatch):
+def test_q_the_hot_days_in_the_same_run_a_new_day_once_it_settled(tmp_path, monkeypatch):
+    """The hot days get their q in the run that read them; the new final day waits in "p" until it has settled
+    (Q_SETTLE days after it: a read before that is not final), then the app's own run reads it (q_fwd)."""
     data = str(tmp_path)
     cube = cu.Cube(data, "a~1", "222")
     cu.step_app(FakeGA(), cube, TODAY, HS, NOW)                 # the cube before q (q off): nothing pending
     _save(cube)
     monkeypatch.setattr(cu, "Q_CALLS", 120)
+    assert cu.Q_SETTLE == 5 and cu.Q_RETRY == 2
     nxt = TODAY + timedelta(days=1)
     on = FakeGA(today=nxt)
     cube = cu.Cube(data, "a~1", "222")
     assert cu.step_app(on, cube, nxt, HS, NOW + timedelta(days=1)) == "fetched"
     _save(cube)
-    # the new final day (Oct 11) folded (1 call) + the hot round (Oct 12 … 14, 1 block call) + their q: 3 + 1
-    assert on.calls == 2 + 3 + 1 and cube.q_days == 4 and cube.q_calls == 4 and cube.q_fl == 0
+    # the new final day (Oct 11) folded (1 call) + the hot round (Oct 12 … 14, 1 block call) + their q (3); Oct 11 is
+    # 3 days old: not settled, no read
+    assert on.calls == 2 + 3 and cube.q_days == 3 and cube.q_calls == 3 and cube.q_fl == 0
+    assert cu.load_q(data, "a~1", "222", "2026-10") is None
+    h = cu.load_head(data, "a~1")
+    assert h["qh"]["p"] == ["2026-10-11"] and cube.q_waits(NOW + timedelta(days=1)) == (1, 0)
+    for k in ("2026-10-12", "2026-10-13", "2026-10-14"):           # read while filling: the same moment as the cube's
+        rec = h["d"][k]
+        assert rec["qs"] == "ok" and rec["qt"] == rec["t"] and rec["qr"] > 0
+        assert all(len(ws) == 1 for js in rec["q"].values() for ws in js.values())
+    # within 6 hours: nothing due, nothing read (a hot copy of an earlier round never gets a q; Oct 11 still waits)
+    ga = FakeGA(today=nxt)
+    assert cu.step_app(ga, cu.Cube(data, "a~1", "222"), nxt, HS, NOW + timedelta(days=1, hours=2)) == "fresh"
+    assert ga.calls == 0
+    # Oct 16: Oct 11 has settled — read in the app's run; Oct 12 / 13 (folded now, 4 and 3 days old) wait
+    t16 = TODAY + timedelta(days=3)
+    ga = FakeGA(today=t16)
+    cube = cu.Cube(data, "a~1", "222")
+    assert cu.step_app(ga, cube, t16, HS, NOW + timedelta(days=3)) == "fetched"
+    _save(cube)
+    assert ga.calls == 1 + 1 + 3 + 1 and cube.q_days == 4                  # walk, hot round, its q, Oct 11
     qf = cu.load_q(data, "a~1", "222", "2026-10")
     assert set(qf["days"]) == {"2026-10-11"} and qf["days"]["2026-10-11"]["qs"] == "ok"
+    assert qf["days"]["2026-10-11"]["at"] == "2026-10-16T06:00:00Z" and "rt" not in qf["days"]["2026-10-11"]
     want, wqt = _qday_want(date(2026, 10, 11))
     W = "2026-10-05"
     assert qf["q"] == {X: {j: {W: v} for j, v in js.items()} for X, js in want.items()}
     led = _month(data, "2026-10")["days"]["2026-10-11"]
     assert qf["days"]["2026-10-11"]["qt"] == wqt == led["t"]        # nothing lost: the whole read = the cube's every row
-    h = cu.load_head(data, "a~1")
-    assert h["qh"]["p"] == []
-    for k in ("2026-10-12", "2026-10-13", "2026-10-14"):           # read while filling: the same moment as the cube's
-        rec = h["d"][k]
-        assert rec["qs"] == "ok" and rec["qt"] == rec["t"] and rec["qr"] > 0
-        assert all(len(ws) == 1 for js in rec["q"].values() for ws in js.values())
-    # within 6 hours: nothing due, nothing read (a hot copy of an earlier round never gets a q)
-    ga = FakeGA(today=nxt)
-    assert cu.step_app(ga, cu.Cube(data, "a~1", "222"), nxt, HS, NOW + timedelta(days=1, hours=2)) == "fresh"
-    assert ga.calls == 0
+    assert cu.load_head(data, "a~1")["qh"]["p"] == ["2026-10-12", "2026-10-13"]
 
 
 def test_q_a_stop_keeps_the_fold_and_the_q_days_read(tmp_path, monkeypatch):
@@ -1640,12 +1659,17 @@ def test_q_a_stop_keeps_the_fold_and_the_q_days_read(tmp_path, monkeypatch):
     h = cu.load_head(data, "a~1")
     assert [h["d"][k].get("qs") for k in ("2026-10-12", "2026-10-13", "2026-10-14")] == ["ok", "ok", None]
     assert h["qh"]["p"] == ["2026-10-11"] and cu.load_q(data, "a~1", "222", "2026-10") is None
-    ga = FakeGA(today=nxt)                                          # the next run: the pending day read (1 call); the
-    cube = cu.Cube(data, "a~1", "222")                              # hot day of the cut round stays without q
-    assert cu.step_app(ga, cube, nxt, HS, NOW + timedelta(days=1, hours=1)) == "fetched" and ga.calls == 1
+    ga = FakeGA(today=nxt)                                          # the next run: the pending day not settled yet (no
+    cube = cu.Cube(data, "a~1", "222")                              # call); the hot day of the cut round stays without q
+    assert cu.step_app(ga, cube, nxt, HS, NOW + timedelta(days=1, hours=1)) == "fresh" and ga.calls == 0
+    assert "qs" not in cu.load_head(data, "a~1")["d"]["2026-10-14"] and cu.load_head(data, "a~1")["qh"]["p"] == [
+        "2026-10-11"]
+    ga = FakeGA(today=nxt + timedelta(days=2))                      # once settled: read (1 call)
+    cube = cu.Cube(data, "a~1", "222")
+    assert cu.q_fwd(ga, cube, NOW + timedelta(days=3), []) is True and ga.calls == 1
     _save(cube)
     assert set(cu.load_q(data, "a~1", "222", "2026-10")["days"]) == {"2026-10-11"}
-    assert "qs" not in cu.load_head(data, "a~1")["d"]["2026-10-14"] and cu.load_head(data, "a~1")["qh"]["p"] == []
+    assert cu.load_head(data, "a~1")["qh"]["p"] == []
     # the app's call cap ends q quietly (the rest stays pending); never a day read twice
     cube = cu.Cube(None, "a~1", "222")
     cube.head["qh"] = {"p": ["2026-09-01", "2026-09-02", "2026-09-03"]}
@@ -1744,15 +1768,16 @@ def test_q_in_the_run_two_rounds_counts_and_files(monkeypatch, tmp_path):
     assert c["q_left"] == 2 * 71 - 2 * cu.Q_FWD - 20
     st = cu.load_state(data)["fetch"]
     assert sum(st[a]["q"]["d"] for a in ("x~1", "x~2")) == c["q_days"]
-    assert all(set(st[a]["q"]) == {"d", "c", "fl", "err", "left"} for a in ("x~1", "x~2"))
+    assert all(set(st[a]["q"]) == {"d", "c", "fl", "err", "left", "set", "rr", "rok", "rw"} for a in ("x~1", "x~2"))
+    assert c["q_settling"] == 2 * 2 and all(st[a]["q"]["set"] == 2 for a in ("x~1", "x~2"))  # Oct 9, 10: not settled
     names = sorted(os.listdir(cu.app_dir(data, "x~1")))
     assert "2026-08.q.json.gz" in names and [k for k, _ in cu.months(data, "x~1", "222")] == ["2026-08", "2026-09",
                                                                                                 "2026-10"]
     h = cu.load_head(data, "x~1")
     assert all(h["d"][k]["qs"] == "ok" for k in h["d"]) and h["qh"]["p"][0] > "2026-08-07"
     line = cu.log_line(out)
-    assert ", q days %d, q flagged 0, q calls %d, q left %d, q unscanned 0, q errors 0, calls " % (
-        c["q_days"], c["q_calls"], c["q_left"]) in line
+    assert (", q days %d, q flagged 0, q calls %d, q left %d, q unscanned 0, q errors 0, q settling 4, q reread 0, "
+            "q recovered 0, q fl waiting 0, calls " % (c["q_days"], c["q_calls"], c["q_left"])) in line
     assert "example" not in line and "x~" not in line
 
 
@@ -1818,7 +1843,7 @@ def test_q_errors_in_the_run_counted_never_a_failed_app(monkeypatch, tmp_path):
     assert c["failed"] == 0 and c["q_errors"] == 2 and c["q_days"] == 0
     st = cu.load_state(data)["fetch"]
     assert all(st[a]["q"]["err"] == 1 and not st[a].get("fail") for a in ("x~1", "x~2"))
-    assert ", q errors 2, calls " in cu.log_line(out)
+    assert ", q errors 2, q settling 4, " in cu.log_line(out)
 
 
 def test_q_round_ends_at_its_seconds(monkeypatch, tmp_path):
@@ -1870,3 +1895,292 @@ def test_q_round_app_calls_lift_the_apps_cap_for_the_fill_only(monkeypatch):
     assert cube.q_days == 10 and counts["calls"] == 10 and ga.max_calls == 60
     cube, ga, counts = run(40)
     assert cube.q_days == 40 and counts["calls"] == 40 and ga.max_calls == 60   # 40 of its own, cap restored
+
+
+# ── q: a read is final only once its day settled; a stored "fl" read again (22 Oct 2026) ──────────────────────────
+class SettleGA(FakeGA):
+    """FakeGA whose whole no-country read of a day (q) is NOT whole while the day is fewer than `settle` days old at
+    the read (its `today`): install ages far past 427 and an "(other)" install day with GA4's dataLossFromOtherRow —
+    "fl"; whole ("ok") once the day has settled. `bad`: days whose read is never whole."""
+
+    def __init__(self, settle=5, bad=(), **kw):
+        super().__init__(**kw)
+        self.settle, self.bad = settle, set(bad)
+
+    def report_all(self, body, **kw):
+        rows = super().report_all(body, **kw)
+        D = date.fromisoformat(body["dateRanges"][0]["startDate"])
+        if [d["name"] for d in body["dimensions"]] == ["firstSessionDate"] and (
+                (self.today - D).days < self.settle or D in self.bad):
+            rows = rows + [{"firstSessionDate": ymd(D - timedelta(days=2000)), "activeUsers": 1, "totalAdRevenue": 0.01},
+                           {"firstSessionDate": "(other)", "activeUsers": 1, "totalAdRevenue": 0.02}]
+            self.last_metas = [{}, {"dataLossFromOtherRow": True}]
+        return rows
+
+
+def _qdays(ga):
+    """The days the q reads (dimension firstSessionDate only) asked for, in order."""
+    return [q[0]["dateRanges"][0]["startDate"] for q in ga.asked
+            if [d["name"] for d in q[0]["dimensions"]] == ["firstSessionDate"]]
+
+
+def _at(D, days, hours=0):
+    """A moment `days` (+ `hours`) after the start of day D (UTC)."""
+    return datetime.combine(date.fromisoformat(D), datetime.min.time(), timezone.utc) + timedelta(days=days, hours=hours)
+
+
+def _wcells(*days):
+    """The month's q cells {X: {j: {W: micros}}} of the fake's whole reads of these days (summed)."""
+    out = {}
+    for D in days:
+        W = cu._mon(date.fromisoformat(D)).isoformat()
+        for X, js in _qday_want(date.fromisoformat(D))[0].items():
+            for j, v in js.items():
+                w = out.setdefault(X, {}).setdefault(j, {})
+                w[W] = w.get(W, 0) + v
+    return out
+
+
+def test_q_the_settle_rule():
+    """q_ripe / q_settled by the property's day (Q_SETTLE = 5); q_due: an "ok" never; an "fl" read before its day
+    settled → the start of the property's day D + 5; a settled "fl" → its read + 24 h while "rt" < Q_RETRY, then never."""
+    assert (cu.Q_SETTLE, cu.Q_RETRY, cu.Q_GAP_HOURS) == (5, 2, 24.0)
+    D = "2026-10-08"
+    assert not cu.q_ripe(D, date(2026, 10, 12)) and cu.q_ripe(D, date(2026, 10, 13)) and not cu.q_ripe(D, None)
+    assert not cu.q_settled(D, "2026-10-12T20:00:00Z") and cu.q_settled(D, "2026-10-12T20:00:00Z", "Asia/Kolkata")
+    assert not cu.q_settled(D, None) and not cu.q_settled(D, "junk") and cu.q_settled(D, _at(D, 5))
+    ok, fl = {"qs": "ok", "at": "2026-10-09T00:00:00Z"}, {"qs": "fl", "at": "2026-10-10T19:52:00Z"}
+    assert cu.q_due(ok, D) is None and cu.q_final(ok, D) and cu.q_final(None, D) and cu.q_final("x", D)
+    assert cu.q_due(fl, D) == "2026-10-13T00:00:00Z" and cu.q_due(fl, D, "Asia/Kolkata") == "2026-10-12T18:30:00Z"
+    late = {"qs": "fl", "at": "2026-10-20T06:00:00Z"}
+    assert cu.q_due(late, D) == "2026-10-21T06:00:00Z" and cu.q_due(dict(late, rt=1), D) == "2026-10-21T06:00:00Z"
+    assert cu.q_due(dict(late, rt=2), D) is None and cu.q_final(dict(late, rt=2), D)
+    assert cu.q_due({"qs": "fl", "at": "junk"}, D) == "2026-10-13T00:00:00Z"      # an unknown read time: not settled
+
+
+def test_q_forward_read_only_settled_days(monkeypatch):
+    """q_fwd reads only the days of "p" that have settled by the property's day (oldest first, at most Q_FWD reads); a
+    newer one stays in "p", in its order, for a later run or the fill."""
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    cube = cu.Cube(None, "a~1", "222")
+    cube.head["qh"] = {"p": ["2026-10-%02d" % d for d in (1, 7, 8, 9, 10)]}
+    now = datetime(2026, 10, 13, 20, 0, tzinfo=timezone.utc)          # UTC Oct 13; Asia/Kolkata Oct 14 01:30
+    ga = SettleGA(today=date(2026, 10, 13))
+    assert cu.q_fwd(ga, cube, now, []) is True
+    assert _qdays(ga) == ["2026-10-01", "2026-10-07", "2026-10-08"] and cube.q_fl == 0
+    assert cube.head["qh"]["p"] == ["2026-10-09", "2026-10-10"] and cube.q_waits(now) == (2, 0)
+    assert all(cube.qmonth("2026-10")["days"][D]["qs"] == "ok" for D in ("2026-10-01", "2026-10-07", "2026-10-08"))
+    cube.head["time_zone"] = "Asia/Kolkata"                            # the property's day: Oct 14 there
+    ga = SettleGA(today=date(2026, 10, 14))
+    assert cu.q_fwd(ga, cube, now, []) is True and _qdays(ga) == ["2026-10-09"] and cube.head["qh"]["p"] == ["2026-10-10"]
+    ga = SettleGA(today=date(2026, 10, 14))
+    assert cu.q_fwd(ga, cube, now, []) is False and ga.calls == 0
+    ga = SettleGA(today=date(2026, 10, 15))                            # step_app passes the property's day itself
+    assert cu.q_fwd(ga, cube, now, [], today=date(2026, 10, 15)) is True and _qdays(ga) == ["2026-10-10"]
+    assert cube.head["qh"]["p"] == [] and not cube.head["qh"].get("r")
+    monkeypatch.setattr(cu, "Q_FWD", 2)                                # Q_FWD counts reads; a newer day is skipped
+    c2 = cu.Cube(None, "a~1", "222")
+    c2.head["qh"] = {"p": ["2026-10-10", "2026-09-01", "2026-09-02", "2026-09-03"]}
+    ga = SettleGA(today=TODAY)
+    cu.q_fwd(ga, c2, NOW, [])
+    assert _qdays(ga) == ["2026-09-01", "2026-09-02"] and c2.head["qh"]["p"] == ["2026-10-10", "2026-09-03"]
+
+
+def test_q_a_fresh_fl_of_before_is_read_again_once_settled_and_replaced(tmp_path, monkeypatch):
+    """q files the code before wrote (no "rt"; a head with no re-read list): a day read 3 days after it came back "fl"
+    — q_rescan finds it (no GA4 call), the fill waits until the day has settled, then reads it again FIRST (its week has
+    measured loss) and the whole answer REPLACES it (its cells added once: an "fl" held none). An "ok" day of the same
+    file (read 3 days after its day too) is never read again; q_put never replaces an "ok"."""
+    data = str(tmp_path)
+    cube = cu.Cube(data, "a~1", "222")
+    cu.step_app(FakeGA(), cube, TODAY, HS, NOW)                        # q off: Jun 1 … Oct 10 folded, nothing pending
+    for D in ("2026-09-23", "2026-09-25"):
+        cube.month("2026-09")["days"][D]["loss"] = 1500                # measured loss on the week Sep 21 … 27
+    cube.touched.add("2026-09")
+    _save(cube)
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    cube = cu.Cube(data, "a~1", "222")
+    for D, ga in (("2026-09-21", FakeGA()), ("2026-09-24", SettleGA(today=date(2026, 9, 27)))):
+        cube.q_put(D, cu.q_read(ga, date.fromisoformat(D)), cu.gu._now_iso(_at(D, 3, 19)))
+    cube.head["qh"].pop("r")                                           # the head as the code before left it
+    _save(cube)
+    q0 = cu.load_q(data, "a~1", "222", "2026-09")
+    assert q0["v"] == cu.Q_V == 1 and {D: v["qs"] for D, v in q0["days"].items()} == {"2026-09-21": "ok",
+                                                                                      "2026-09-24": "fl"}
+    assert "rt" not in q0["days"]["2026-09-24"] and q0["q"] == _wcells("2026-09-21")
+    t0 = datetime(2026, 9, 28, 12, tzinfo=timezone.utc)                # Sep 24 only 4 days old: not settled yet
+    cube = cu.Cube(data, "a~1", "222")
+    assert cu.q_rescan(cube, t0) is True and cu.q_rescan(cube, t0) is False
+    assert cube.head["qh"]["r"] == [["2026-09-24", "2026-09-29T00:00:00Z", 3000]]
+    ga = SettleGA(today=t0.date())
+    assert cu.q_fill(ga, cube, t0, lambda: True) == 0 and ga.calls == 0 and cube.q_waits(t0) == (0, 1)
+    t1 = datetime(2026, 9, 29, 1, tzinfo=timezone.utc)                 # settled: read again, whole now
+    ga = SettleGA(today=t1.date())
+    assert cu.q_fill(ga, cube, t1, lambda: True) == 1 and _qdays(ga) == ["2026-09-24"]
+    assert cube.q_rr == cube.q_rok == 1 and cube.head["qh"]["r"] == [] and cube.q_waits(t1) == (0, 0)
+    _save(cube)
+    qf = cu.load_q(data, "a~1", "222", "2026-09")
+    rec = qf["days"]["2026-09-24"]
+    assert rec["qs"] == "ok" and rec["at"] == "2026-09-29T01:00:00Z" and "rt" not in rec
+    assert rec["qt"] == _qday_want(date(2026, 9, 24))[1] == _month(data, "2026-09")["days"]["2026-09-24"]["t"]
+    assert qf["q"] == _wcells("2026-09-21", "2026-09-24")             # each day's cells once
+    assert qf["days"]["2026-09-21"] == q0["days"]["2026-09-21"]        # the "ok" untouched
+    c = cu.Cube(data, "a~1", "222")
+    assert c.q_put("2026-09-21", cu.q_read(FakeGA(), date(2026, 9, 21)), "x", again=True) is False
+    assert c.q_put("2026-09-24", cu.q_read(FakeGA(), date(2026, 9, 24)), "x", again=True) is False
+    assert cu.q_rescan(c, t1 + timedelta(days=cu.RESCAN_DAYS)) is True and c.head["qh"]["r"] == []
+
+
+def test_q_a_settled_fl_is_read_again_q_retry_times_a_day_apart_then_final(monkeypatch):
+    """A day whose read never comes back whole: read again once settled, then Q_RETRY (2) more times, each ≥ 24 h after
+    the last ("rt" counts them) — then final: never read again (out of the re-read list; the build: on the cube's cells
+    for good). One whole on a retry: replaced, final "ok"."""
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    D, Dd = "2026-09-24", date(2026, 9, 24)
+    for heal in (None, 1):                                             # never whole / whole on the 2nd read again
+        cube = cu.Cube(None, "a~1", "222")
+        cube.q_put(D, cu.q_read(SettleGA(today=date(2026, 9, 26)), Dd), "2026-09-26T10:00:00Z")   # 2 days after it
+        assert cube.head["qh"]["r"] == [[D, "2026-09-29T00:00:00Z", 0]] and cube.q_rr == 0
+        t, calls, rts = datetime(2026, 9, 29, 6, tzinfo=timezone.utc), [], []
+        for h in (0, 12, 24, 47, 48, 72, 24 * 30):
+            now = t + timedelta(hours=h)
+            ga = SettleGA(today=now.date(), bad=() if heal is not None and cube.q_rr >= heal else {Dd})
+            cu.q_fill(ga, cube, now, lambda: True)
+            calls.append(ga.calls)
+            rts.append(cube.qmonth("2026-09")["days"][D].get("rt", 0))
+        rec = cube.qmonth("2026-09")["days"][D]
+        if heal is None:
+            assert calls == [1, 0, 1, 0, 1, 0, 0] and rts == [0, 0, 1, 1, 2, 2, 2]
+            assert rec["qs"] == "fl" and rec["rt"] == cu.Q_RETRY and cu.q_final(rec, D) and cube.q_rr == 3
+            assert rec["at"] == "2026-10-01T06:00:00Z" and cube.q_rok == 0
+        else:
+            assert calls == [1, 0, 1, 0, 0, 0, 0] and rts == [0, 0, 0, 0, 0, 0, 0]
+            assert rec["qs"] == "ok" and "rt" not in rec and cube.q_rr == 2 and cube.q_rok == 1
+            assert cube.qmonth("2026-09")["q"] == _wcells(D)
+        assert cube.head["qh"]["r"] == [] and cube.q_waits(t) == (0, 0)
+
+
+def test_q_hot_fl_reads_block_nothing(tmp_path, monkeypatch):
+    """The hot days' q each hot round (their rows need it): read 0 … 2 days after the day it comes back "fl" — kept on
+    the hot copy only (never a q file, never the re-read list); the day, folded once final, waits in "p" and gets its
+    settled read like any other ("ok"): the hot "fl" blocked nothing."""
+    data = str(tmp_path)
+    cube = cu.Cube(data, "a~1", "222")
+    cu.step_app(FakeGA(), cube, TODAY, HS, NOW)                        # q off
+    _save(cube)
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    for i in (1, 2):                                                   # Oct 14, Oct 15: a new hot round each, its q
+        T = TODAY + timedelta(days=i)
+        c = cu.Cube(data, "a~1", "222")
+        assert cu.step_app(SettleGA(today=T), c, T, HS, NOW + timedelta(days=i)) == "fetched"
+        _save(c)
+        h = cu.load_head(data, "a~1")
+        assert sorted(h["d"]) == [(T - timedelta(days=k)).isoformat() for k in (2, 1, 0)]
+        assert all(v["qs"] == "fl" and v["q"] == {} for v in h["d"].values()) and c.q_fl == c.q_days == 3
+        assert not h["qh"].get("r") and cu.load_q(data, "a~1", "222", "2026-10") is None
+    assert h["qh"]["p"] == ["2026-10-11", "2026-10-12"]                # folded, 4 and 3 days old: waiting
+    T = TODAY + timedelta(days=4)                                      # Oct 17: Oct 11 and 12 have settled
+    c = cu.Cube(data, "a~1", "222")
+    ga = SettleGA(today=T)
+    cu.step_app(ga, c, T, HS, NOW + timedelta(days=4))
+    _save(c)
+    assert _qdays(ga)[-2:] == ["2026-10-11", "2026-10-12"] and c.q_fl == 3      # the new hot round "fl" again
+    qf = cu.load_q(data, "a~1", "222", "2026-10")["days"]
+    assert {k: v["qs"] for k, v in qf.items()} == {"2026-10-11": "ok", "2026-10-12": "ok"}
+    h = cu.load_head(data, "a~1")
+    assert h["qh"]["p"] == ["2026-10-13", "2026-10-14"] and not h["qh"].get("r")
+
+
+def test_q_history_order_lossy_rereads_first(monkeypatch):
+    """The fill's order: the stored "fl" days due a read again on weeks with measured loss (the biggest week loss
+    first), then the settled days of "p" (a newer one stays), then the other re-reads due, then the queue's months
+    (lossy first, each month's days oldest first)."""
+    cube = _lossy_cube(monkeypatch, {})
+    for D, lo in (("2026-08-05", 5000), ("2026-09-24", 1000), ("2026-07-15", 300)):
+        cube.month(D[:7])["days"][D]["loss"] = lo                     # Jul 15: a lossy month, another week
+    for D in ("2026-07-08", "2026-08-05", "2026-09-24"):              # read 2 days after: "fl", not settled
+        Dd = date.fromisoformat(D)
+        cube.q_put(D, cu.q_read(SettleGA(today=Dd + timedelta(days=2)), Dd), cu.gu._now_iso(_at(D, 2, 12)))
+    cube.head["qh"]["p"] = ["2026-10-01", "2026-10-02", "2026-10-10"]
+    assert cu.q_rescan(cube, NOW) is True and cu.q_scan(cube, NOW) is True
+    assert [(e[0], e[2]) for e in cube.head["qh"]["r"]] == [("2026-07-08", 0), ("2026-08-05", 5000),
+                                                            ("2026-09-24", 1000)]
+    assert [e[0] for e in cube.head["qh"]["todo"][:3]] == ["2026-08", "2026-07", "2026-09"]  # lossy (share) first
+    assert cube.head["qh"]["todo"][0][2] == 30                                                 # Aug 5 has its q
+    left = [8]
+
+    def take():
+        left[0] -= 1
+        return left[0] >= 0
+    ga = FakeGA()
+    assert cu.q_fill(ga, cube, NOW, take) == 8
+    assert _qdays(ga) == ["2026-08-05", "2026-09-24", "2026-10-01", "2026-10-02", "2026-07-08", "2026-08-01",
+                          "2026-08-02", "2026-08-03"]
+    assert cube.head["qh"]["p"] == ["2026-10-10"] and cube.head["qh"]["r"] == [] and cube.q_rr == cube.q_rok == 3
+    # the apps' order: one with lossy re-reads due goes before one with none (and no "p")
+    plain = _lossy_cube(monkeypatch, {})
+    lossy = _lossy_cube(monkeypatch, {})
+    plain.app_id, lossy.app_id = "a~1", "z~9"
+    lossy.month("2026-08")["days"]["2026-08-05"]["loss"] = 10
+    lossy.q_put("2026-08-05", cu.q_read(SettleGA(today=date(2026, 8, 6)), date(2026, 8, 5)), "2026-08-06T00:00:00Z")
+    now_iso = cu.gu._now_iso(NOW)
+    assert sorted([plain, lossy], key=lambda c: cu._q_rank(c, now_iso))[0] is lossy
+    assert cu._q_rank(lossy, "2026-08-07T00:00:00Z")[0] is True       # not due yet: no head start
+
+
+def test_q_files_of_before_need_no_new_version(tmp_path, monkeypatch):
+    """A q file as the code before wrote it (Q_V 1, no "rt") and a head with no re-read list: read as they are and never
+    rewritten for the new rule — "ok" days final whenever read, an "fl" read before its day settled due at the settle
+    moment, a settled "fl" due a day after its read (read again up to Q_RETRY times); the list made from the files
+    (q_rescan, no GA4 call) once, again every RESCAN_DAYS."""
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    data = str(tmp_path)
+    raw = {"v": 1, "stream_id": "222", "days": {
+        "2026-09-01": {"qs": "ok", "qt": 5, "qn": 0, "qx": 40, "qr": 2, "at": "2026-09-03T00:00:00Z"},
+        "2026-09-02": {"qs": "fl", "qt": 5, "qn": 0, "qx": 900, "qr": 3, "at": "2026-09-05T19:52:00Z"},
+        "2026-09-03": {"qs": "fl", "qt": 5, "qn": 0, "qx": 40, "qr": 3, "at": "2026-10-01T00:00:00Z"}},
+        "q": {"2026-07-01": {"2": {"2026-08-31": 5}}}}
+    os.makedirs(cu.app_dir(data, "a~1"))
+    cu.write_json_gz_stable(cu.q_path(data, "a~1", "2026-09"), raw)
+    cu.write_json_gz_stable(cu.hot_path(data, "a~1"), {"v": cu.V, "stream_id": "222", "d": {},
+                                                       "qh": {"p": [], "todo": [], "scan": "2026-10-12T00:00:00Z"}})
+    before = open(cu.q_path(data, "a~1", "2026-09"), "rb").read()
+    assert cu.Q_V == 1 and cu.load_q(data, "a~1", "222", "2026-09") == raw
+    cube = cu.Cube(data, "a~1", "222")
+    assert cube.q_waits(NOW) == (0, 0) and cu._q_rank(cube) == (True, 0, 0, "a~1")
+    assert cu.q_rescan(cube, NOW) is True and cu.q_rescan(cube, NOW + timedelta(hours=1)) is False
+    assert cube.head["qh"]["r"] == [["2026-09-02", "2026-09-07T00:00:00Z", 0],
+                                    ["2026-09-03", "2026-10-02T00:00:00Z", 0]]
+    assert cube.q_waits(NOW) == (0, 2) and cu.q_rescan(cube, NOW + timedelta(days=cu.RESCAN_DAYS)) is True
+    _save(cube)
+    assert open(cu.q_path(data, "a~1", "2026-09"), "rb").read() == before    # the file itself untouched
+    assert [cu.q_final(raw["days"][k], k) for k in sorted(raw["days"])] == [True, False, False]
+
+
+def test_q_settle_counts_in_the_run(monkeypatch, tmp_path):
+    """refresh_all: the hot days' q "fl" (0 … 2 days old) counted as flagged, never waiting; folded days not settled
+    yet "q settling"; stored "fl" days of before read again in the fill — "q reread", the whole ones "q recovered", one
+    never whole left "q fl waiting"; the per-app state the same; the line counts only."""
+    monkeypatch.setattr(cu, "Q_CALLS", 300)
+    data = str(tmp_path)
+    os.makedirs(cu.app_dir(data, "x~1"))
+    rec = {"qs": "fl", "qt": 0, "qn": 0, "qx": 2000, "qr": 9}
+    cu.write_json_gz_stable(cu.q_path(data, "x~1", "2026-08"), {"v": 1, "stream_id": "222", "q": {}, "days": {
+        "2026-08-05": dict(rec, at="2026-08-08T19:52:00Z"), "2026-08-06": dict(rec, at="2026-08-09T19:52:00Z")}})
+    # x~1: Aug 5 / Aug 6 read 3 days after them by the code before ("fl"); Aug 6 is never whole (on x~2 too: its
+    # first read, settled, "fl" → read again a day later)
+    data, out = _refresh(monkeypatch, tmp_path, base=SettleGA, ga_kw={"bad": {date(2026, 8, 6)}})
+    c = out["counts"]
+    assert out["apps"] == {"x~1": "fetched", "x~2": "fetched"} and c["q_errors"] == 0
+    assert c["q_settling"] == 4 and c["q_reread"] == 2 and c["q_recovered"] == 1 and c["q_fl_wait"] == 2
+    assert c["q_flagged"] == 2 * 3 + 2                                 # the hot days' + Aug 6 on each app
+    st = cu.load_state(data)["fetch"]
+    assert {k: st["x~1"]["q"][k] for k in ("set", "rr", "rok", "rw")} == {"set": 2, "rr": 2, "rok": 1, "rw": 1}
+    assert {k: st["x~2"]["q"][k] for k in ("set", "rr", "rok", "rw")} == {"set": 2, "rr": 0, "rok": 0, "rw": 1}
+    qd = cu.load_q(data, "x~1", "222", "2026-08")["days"]
+    assert qd["2026-08-05"]["qs"] == "ok" and qd["2026-08-06"]["qs"] == "fl" and "rt" not in qd["2026-08-06"]
+    h = cu.load_head(data, "x~1")
+    assert h["qh"]["r"] == [["2026-08-06", "2026-10-14T06:00:00Z", 0]] and h["qh"]["p"] == ["2026-10-09", "2026-10-10"]
+    line = cu.log_line(out)
+    assert ", q flagged 8, " in line and ", q errors 0, q settling 4, q reread 2, q recovered 1, q fl waiting 2, calls " \
+        in line and "x~" not in line and "example" not in line

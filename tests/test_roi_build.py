@@ -1287,14 +1287,16 @@ QR = [2.0, 4.0, 8.0, 16.0, 30.0, 62.0, 62.6, 63.2, 65.0, 68.7]   # checkpoints =
 
 
 def _q_world(root, b=8000, w=10000, q=True, skip=(), fl=(), hot_q=True, more=None, nset=None, drop=None, cfl=(),
-             nothing=(), q_at="2026-10-13T06:00:00Z"):
+             nothing=(), q_at="2026-10-13T06:00:00Z", fl_at=None, fl_rt=0, tz=None, gots=None):
     """Two install days (QHS, QX1) earning `w` GA4 micros a day at every age ≥ 31 (whole: $0.01, × k 2 = $0.02); the
     cube's cells keep `b` of it, the rest is the day's "(other)" loss (the cube's t holds it); every day QHS … today − 3
     folded, the last 3 hot (days before QHS + 31: nothing at all). q (whole: `w` an install day at ages ≤ 420, +
     more[day] on its qt) on every folded day but `skip` (`fl`: read, flagged — an empty q), on the hot days when hot_q.
     nset {day: micros}: a row GA4 gave no install day ("(not set)") — the cube's loss, q's "qn"; drop {day: {X}}: install
     days q's read does not name (a window that shrank); cfl: days the cube's read was flagged (thresholding …);
-    nothing: days GA4 had no row at all (no revenue, no loss)."""
+    nothing: days GA4 had no row at all (no revenue, no loss). fl_at / fl_rt: the `fl` days' read time (a callable of
+    the day) / times read again after a settled "fl" ("rt"); tz: the head's time zone; gots: {day: its whole read}
+    filled (each folded day's "ok" answer: what a read again once settled gives)."""
     from admob_iq.fetch import ga4_cube as cu
     P = _P(QHS, QTODAY - timedelta(days=6))
     P["xs"] = {X: dict(P["xs"][X], R=list(QR), Rr=list(QR)) for X in (QHS, QX1)}
@@ -1319,6 +1321,8 @@ def _q_world(root, b=8000, w=10000, q=True, skip=(), fl=(), hot_q=True, more=Non
         rec = {"st": "loss" if t > b * len(bb) else "ok", "rows": len(bb) + bool(ns), "loss": t - b * len(bb), "t": t,
                "fl": int(D in cfl), "via": "block", "at": "2026-10-13T06:00:00Z", "b": bb, "c": {}, "e": {}}
         got = {"q": {} if D in fl else qq, "qt": qt, "qn": ns, "qs": "fl" if D in fl else "ok", "qr": len(bb) + bool(ns)}
+        if gots is not None:
+            gots[k] = dict(got, q=qq, qs="ok")
         if D >= hot_from:
             if hot_q:
                 rec.update(q=cu._qw(got["q"], k), qt=got["qt"], qs=got["qs"], qr=got["qr"])
@@ -1326,10 +1330,12 @@ def _q_world(root, b=8000, w=10000, q=True, skip=(), fl=(), hot_q=True, more=Non
         else:
             cube.fold(D, rec)
             if q and D not in skip:
-                cube.q_put(k, got, q_at)
+                cube.q_put(k, got, fl_at(D) if fl_at and D in fl else q_at)
+                if fl_rt and D in fl:
+                    cube.qmonth(k[:7])["days"][k]["rt"] = fl_rt
         D += timedelta(days=1)
     cube.save()
-    cube.head.update(done=True, stream_id="222", next=hot_from.isoformat())
+    cube.head.update(done=True, stream_id="222", next=hot_from.isoformat(), **({"time_zone": tz} if tz else {}))
     cube.save_head()
     return P, co
 
@@ -1367,19 +1373,30 @@ def test_q_whole_weeks_give_the_checkpoints(tmp_path):
 
 def test_q_one_day_missing_puts_its_whole_week_on_the_cube(tmp_path):
     """A week inside a month is on q only when every day of it is (read and "ok"): one day not read (or "fl") — the
-    whole week from the cube's cells, its loss still marked: waiting for its read ("qwait", its size "qwu"), or — an
-    "fl" read, never read again — on the cube for good ("qfl", "qfu"); a hot day with / without its q."""
+    whole week from the cube's cells, its loss still marked: waiting for its read ("qwait", its size "qwu") — a day not
+    read yet, an "fl" read made before the day settled, or a settled "fl" read again fewer than Q_RETRY times (each
+    read again by the fill) —, or — a final "fl" (settled, read again Q_RETRY times), never read again — on the cube for
+    good ("qfl", "qfu"); a hot day with / without its q."""
+    from admob_iq.fetch import ga4_cube as cu
     miss = date(2025, 6, 11)                             # a Wednesday: Jun 9 … 15, QHS ages 159 … 165 (bucket 5)
-    for kind in ("skip", "fl"):
+    early = lambda D: (D + timedelta(days=2)).isoformat() + "T19:52:00Z"    # noqa: E731  (2 days old: not settled)
+    late4 = lambda D: (D + timedelta(days=4)).isoformat() + "T18:31:00Z"    # noqa: E731  (the property's day decides)
+    for kind, kw, held_ in (("skip", {"skip": {miss}}, False), ("fl", {"fl": {miss}}, False),
+                            ("early", {"fl": {miss}, "fl_at": early}, False),
+                            ("final", {"fl": {miss}, "fl_rt": cu.Q_RETRY}, True),
+                            ("final_tz", {"fl": {miss}, "fl_rt": cu.Q_RETRY, "tz": "Asia/Kolkata",  # 00:01 of day 5
+                                          "fl_at": late4}, True),                                  # there: settled
+                            ("utc_wait", {"fl": {miss}, "fl_rt": cu.Q_RETRY, "fl_at": late4}, False),  # UTC: day 4
+                            ("retry", {"fl": {miss}, "fl_rt": cu.Q_RETRY - 1}, False)):
         root = tmp_path / kind
-        P, co = _q_world(root, **{kind: {miss}})
+        P, co = _q_world(root, **kw)
         late, by = _qrows(root, P, co)
         r = by[QHS]
         assert r["m"][:4] == pytest.approx([62.6, 63.2, 63.8, 64.4], abs=1e-4)
         assert r["m"][4] == pytest.approx(65.0 - 7 * 0.004, abs=1e-4)       # 7 days of bucket 5 at 0.8
-        wait, held = ("qwait", "qfl") if kind == "skip" else ("qfl", "qwait")
+        wait, held = ("qfl", "qwait") if held_ else ("qwait", "qfl")
         assert late["info"][wait] == 7 and late["info"][held] == 0 and late["info"]["qd"] == (QTODAY - QHS).days + 1 - 7
-        assert late["info"]["qwu" if kind == "skip" else "qfu"] == pytest.approx(7 * 2000 * 2 / 1e6)
+        assert late["info"]["qfu" if held_ else "qwu"] == pytest.approx(7 * 2000 * 2 / 1e6), kind
         # ≈ (bit 2) only where the row still carries loss: through D420 the skipped week; past it, ql's weeks
         lo = QHS + timedelta(days=31)
         assert late["q"](lo, QHS + timedelta(days=180), 5) == 2 and late["q"](lo, QHS + timedelta(days=150), 4) == 0
@@ -1394,6 +1411,39 @@ def test_q_one_day_missing_puts_its_whole_week_on_the_cube(tmp_path):
     late2, by2 = _qrows(tmp_path / "h", P2, co2)
     assert by2[QX1]["m"] == pytest.approx([62.6, 62.6 + 27 * 0.02 + 3 * 0.016], abs=1e-4) and by2[QX1]["qo"] == 2
     assert late2["info"]["qwait"] == 3
+
+
+def test_q_a_fresh_fl_read_again_once_settled_puts_its_week_on_q(tmp_path, monkeypatch):
+    """A day whose whole read came back "fl" only because it was made before the day settled (2 days after it, as the
+    code before read the new final day): its week waits on the cube's cells ("qwait", never "qfl"); the fill reads it
+    again once settled — whole now —, the answer replaces the "fl" and the week goes on q: its column the whole
+    revenue, nothing waiting. A hot day's "fl" (read while filling) waits too: never "qfl"."""
+    from datetime import datetime, timezone
+    from admob_iq.fetch import ga4_cube as cu
+    miss, gots, root = date(2025, 6, 11), {}, tmp_path / "w"
+    P, co = _q_world(root, fl={miss}, fl_at=lambda D: (D + timedelta(days=2)).isoformat() + "T19:52:00Z", gots=gots)
+    late, by = _qrows(root, P, co)
+    assert late["info"]["qwait"] == 7 and late["info"]["qfl"] == 0
+    assert by[QHS]["m"][4] == pytest.approx(65.0 - 7 * 0.004, abs=1e-4)      # the week on the cube's 0.8
+    monkeypatch.setattr(cu, "Q_CALLS", 120)
+    monkeypatch.setattr(cu, "q_read", lambda ga, D: gots[D.isoformat()])   # GA4's answer once the day settled
+
+    class G:
+        calls = tok = 0
+    cube = cu.Cube(str(root), "a~1", "222")
+    now = datetime(2026, 10, 14, 6, tzinfo=timezone.utc)
+    assert cu.q_rescan(cube, now) and [e[0] for e in cube.head["qh"]["r"]] == [miss.isoformat()]
+    assert cube.head["qh"]["r"][0][2] > 0                                  # its week has measured loss: first
+    assert cu.q_fill(G(), cube, now, lambda: True) == 1 and cube.q_rr == cube.q_rok == 1
+    cube.save()
+    cube.save_head()
+    late2, by2 = _qrows(root, P, co)
+    assert late2["info"]["qwait"] == late2["info"]["qfl"] == 0 and late2["info"]["qd"] == (QTODAY - QHS).days + 1
+    assert by2[QHS]["m"][:13] == pytest.approx([62 + 0.6 * j for j in range(1, 14)], abs=1e-4)   # the whole revenue
+    # a hot day whose q came back "fl": waiting for its next round / its settled read, never on the cube for good
+    P3, co3 = _q_world(tmp_path / "h", fl={QTODAY})
+    late3, _ = _qrows(tmp_path / "h", P3, co3)
+    assert late3["info"]["qwait"] == 1 and late3["info"]["qfl"] == 0
 
 
 def test_q_loss_past_420_and_drift(tmp_path):
