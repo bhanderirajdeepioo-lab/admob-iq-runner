@@ -7045,7 +7045,9 @@ function body(aid){
 function coOf(d){ return {T:d.T, rows:(d.rows||[]).map(r=>[r[R.X],r[R.n],r[R.sp],r[R.spi],r[R.s]]), months:(d.months||[]).map(m=>[m[0],m[2],m[3],m[6]])}; }
 function coAll(A){ return {T:A.T, rows:(A.rows||[]).map(r=>[r[0],r[1],r[2],r[5],r[6]]), months:(A.months||[]).map(m=>[m[0],m[2],m[3],m[6]])}; }
 function root(){ return (typeof document!=='undefined'&&document.getElementById)?document.getElementById('roi-root'):null; }
-function repaint(){ const r=root(); if(!r) return; const b=r.querySelector('#roi-body'); if(b){ b.innerHTML=body(r.dataset.aid); }
+function repaint(){ const r=root(); if(!r) return; const b=r.querySelector('#roi-body');
+  if(b){ const ob=b.querySelector?benchOwn(b.querySelector('#'+BN.id)):null; BN.last=null; const h=body(r.dataset.aid);   // 🧪 the Benchmark's box kept when unchanged
+    if(!benchKeep(b,ob,h)){ b.innerHTML=h; const nb=b.querySelector?b.querySelector('#'+BN.id):null; if(nb) nb._b=BN.last; } }
   const h=r.querySelector('#roi-hero'); if(h){ h.innerHTML=hero(r.dataset.aid); } }
 // ---- shared pieces ----
 function tile(lab,big,sub,cls){ return `<div class="roi-k${cls?' '+cls:''}"><div class="roi-kl">${lab}</div><div class="roi-kv">${big}</div><div class="roi-ks">${sub||''}</div></div>`; }
@@ -7216,9 +7218,11 @@ function cohortTable(d,src){ if(src&&src.msg) return `<div class="roi-ctl">${src
   RET_NEW=String(d0.newest||'');
   RET_UU=!xx&&src&&src.rows?retRuns(src.uu):null; RET_QU=src&&src.rows?null:((d0.late||{}).u||null); RET_AX=0;   // 👥 the ≈ of the small numbers
   if(src&&src.rows) d=Object.assign({},d,{rows:src.rows});      // 🌍 one country's rows: the same table, the same code
-  const T=d.T, groups=groupRows(d), shown=groups.slice(0,SHOW), C=cols(xx?d0:d,shown.flatMap(g=>g.rows));
+  // 🧪 a card with "all" (the Benchmark): every row is the table's ("no skip": its columns from every row, no "Show more"),
+  // the first SHOW drawn now, the rest by lzNext as the reader scrolls (CARD.lz)
+  const all=!!(CARD&&CARD.all), T=d.T, groups=groupRows(d), shown=all?groups:groups.slice(0,SHOW), C=cols(xx?d0:d,shown.flatMap(g=>g.rows));
   const head=`<tr><th>Install ${GRAIN==='day'?'date':GRAIN}</th><th>Status</th><th>Installs</th><th>Spend</th><th>CPI</th><th>Breakeven</th>${C.map(c=>`<th>${c.lab}</th>`).join('')}<th>So far</th></tr>`;
-  const body=shown.map(gr=>{ const n=sumK(gr,R.n)||0, sp=sumK(gr,R.sp), spv=SV(sp,sumK(gr,R.spi)); let prev=null;
+  const row=gr=>{ const n=sumK(gr,R.n)||0, sp=sumK(gr,R.sp), spv=SV(sp,sumK(gr,R.spi)); let prev=null;
     const st=GRAIN==='day'?gr.rows[0][R.st]:null;
     const cells=C.map(c=>{ const [v,fin]=agg(gr,c,T); const x=cell(v,sp,MET,prev,n); prev=ok(v)?v:prev; const rt=xx?null:retOf(gr,c);   // 🔁 retention (Not split: no users)
       // "·": the mode has no number (ROAS % without spend, Per install without installs) though the day's value is
@@ -7230,8 +7234,11 @@ function cohortTable(d,src){ if(src&&src.msg) return `<div class="roi-ctl">${src
     else { so=xx?null:gr.rows.reduce((a,r)=>a+(+r[R.s]||0),0); be=xx?null:beGrp(gr,C,T,sp);   // (🧩 Not split: no revenue to add)
       sob=gr.rows.every(r=>ok(r[R.s]))?so:null; }   // "% back" only when every day's so far is measured (else —, never a $0 as read)
     const qb=GRAIN==='day'?(+gr.rows[0][R.q]||0):0, q=qb?` <span class="roi-q" title="${E((src&&src.qt?src.qt(qb):[qb&1?'Is din ka GA4 read install-day read se match nahi hua':'',qb&2?'D30 ke baad GA4 ne kuch revenue kisi install din ko nahi diya (GA4 ka "(other)")':'',qb&4?'D30 ke baad GA4 ke report pe data loss / thresholding / sampling ka flag tha — asli kamai thodi alag (kam ya zyada) ho sakti hai':'']).filter(Boolean).join(' · ')+' — numbers ≈')}">≈</span>`:'';
-    return `<tr data-roi-k="${E(gr.k)}"><td class="roi-nm">${E(rowLabel(gr,d))}${q}</td><td>${st?chip(st):''}</td><td>${xx?'—':N(n)}</td><td>${MV(spv)}</td><td>${spv&&n?MPV(spv/n):'—'}</td>${beTd(be,sp,sob)}${cells}<td>${M(so)}${sp&&ok(so)?` <small>${P(so/sp)}</small>`:''}</td></tr>`; }).join('');
-  const more=groups.length>shown.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-more="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-more="all">Show all ${groups.length}</button><span class="roi-note">${shown.length} of ${groups.length}</span></div>`:'';
+    return `<tr data-roi-k="${E(gr.k)}"><td class="roi-nm">${E(rowLabel(gr,d))}${q}</td><td>${st?chip(st):''}</td><td>${xx?'—':N(n)}</td><td>${MV(spv)}</td><td>${spv&&n?MPV(spv/n):'—'}</td>${beTd(be,sp,sob)}${cells}<td>${M(so)}${sp&&ok(so)?` <small>${P(so/sp)}</small>`:''}</td></tr>`; };
+  const body=(all?shown.slice(0,SHOW):shown).map(row).join('');
+  if(all) CARD.lz=shown.length>SHOW?{g:shown,row,n:SHOW,K:Object.assign({},CARD,{lz:null,last:null}),ret:[RET_NEW,RET_UU,RET_QU],ax:RET_AX,ccy:CCY,
+    leg:()=>retNote(d.rows,src&&src.rows?src.cc:'',C)}:null;
+  const more=!all&&groups.length>shown.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-more="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-more="all">Show all ${groups.length}</button><span class="roi-note">${shown.length} of ${groups.length}</span></div>`:'';
   return `${src&&src.top||''}<div class="roi-ctl">${src&&src.ctl||''}${seg('grain',GRAIN,[['day','Day'],['week','Week'],['month','Month']])}${seg('met',MET,[['roas','ROAS %'],['rev','Revenue'],['ltv','Per install'],['delta','Delta']])}</div>`
     +`<div class="roi-tw"><table class="roi-t roi-heat"><thead>${head}</thead><tbody>${body}</tbody></table></div>${more}`
     +(xx?'':retNote(d.rows,src&&src.rows?src.cc:'',C))
@@ -7285,12 +7292,16 @@ function zx(x,cd,cc,T){ const unk=inUnk(x,cd), bl=!!(cd.geo||{}).billed; if(!(dD
 // the pack the page needs right now ('' = none): a pack that lands for an earlier pick never repaints the view on screen
 function ccWant(){ const r=root(), a=r&&appPtr(r.dataset.aid), dd=a&&AF[a.file], c=dd&&cdOf(dd), x=c&&CTY&&c.c.find(z=>z[0]===CTY), p=x&&c.packs[x[4]];
   return VIEW==='day'&&Array.isArray(p)?p[0]+'?'+p[1]:''; }
+// 🧪 both cards' (the cohort card's, the Benchmark's): a pack that lands repaints the card(s) waiting for it — the cohort
+// card's: the block as before (the Benchmark kept as it is when nothing of it changed); only the Benchmark's: only it
+const ccWants=()=>[ccWant(),asCard(BN,ccWant)];
+function ccLand(k){ const w=ccWants(); if(w[0]===k) repaint(); else if(w[1]===k) benchPaint(); }
 // a pack file is served as its newest copy whatever ?v= says: one of another build than the index in hand (its "b") is never read
 function ensurePack(f,sha,b,cb){ const k=f+'?'+sha; if(PK[k]&&(PK[k].busy||PK[k].j||PK[k].stale)) return; PK[k]={busy:true};
   fetchGzJson(f+'?v='+encodeURIComponent(sha)).then(j=>{ if(!j||j.v!==1||!j.c||typeof j.c!=='object') throw new Error('format');
       if(j.b!==b){ PK[k]={stale:true}; return; }
-      PK[k]={j}; PKL.push(k); const w=ccWant();
-      for(let i=0;PKL.length>PK_KEEP&&i<PKL.length;){ const o=PKL[i]; if(o===k||o===w){ i++; continue; } PKL.splice(i,1); delete PK[o];
+      PK[k]={j}; PKL.push(k); const w=ccWants();
+      for(let i=0;PKL.length>PK_KEEP&&i<PKL.length;){ const o=PKL[i]; if(o===k||w.includes(o)){ i++; continue; } PKL.splice(i,1); delete PK[o];
         Object.keys(CR).forEach(z=>{ if(z.startsWith(o+'|')) delete CR[z]; }); } })
     .catch(e=>{ PK[k]={err:true,gone:/^http 404$/.test(String(e&&e.message))}; }).then(()=>{ cb&&cb(k); }); }
 // a country's rows (null: not in its pack; false: a short row the index cannot expand — another build's)
@@ -7380,17 +7391,17 @@ function ccNote(d,cd,x){ const cc=x[0], g=cd.geo||{}, k=cd.kc||{}, lo=cd.loss||{
 const CC_BUSY='<span class="roi-mini" role="group" aria-label="Country"><button type="button" disabled title="GA4 cube poora padhne ke baad country-wise table">🌍 Country · after GA4 cube read</button></span>';
 function ccSrc(d){ const cd=cdOf(d);
   if(!cd){ const busy=!!(d.late&&d.late.busy); if(!CTY) return busy?{ctl:CC_BUSY}:null;
-    return {ctl:busy?CC_BUSY:'',cc:CTY,miss:1,top:`<p class="roi-note roi-ccm0">Is app me ${ccLab(CTY)} ki country-wise table ${busy?'abhi nahi — GA4 cube poora padhne ke baad banegi':'nahi (GA4 cube se banti hai; is app ke liye abhi nahi bani)'} — neeche All countries. <button type="button" class="roi-lnk roi-ccgo" data-roi-ccx="1">✕ All countries</button></p>`}; }
+    return {ctl:busy?CC_BUSY:'',cc:CTY,miss:1,top:`<p class="roi-note roi-ccm0">Is app me ${ccLab(CTY)} ki country-wise table ${busy?'abhi nahi — GA4 cube poora padhne ke baad banegi':'nahi (GA4 cube se banti hai; is app ke liye abhi nahi bani)'} — neeche All countries. <button type="button" class="roi-lnk roi-ccgo" data-roi-ccx="${CARD?CARD.x:1}">✕ All countries</button></p>`}; }
   const ctl=ccPick(cd); if(!CTY) return {ctl};
   const x=cd.c.find(z=>z[0]===CTY), lab=ccLab(CTY);
   if(!x) return {ctl,cc:CTY,miss:1,msg:`<p class="roi-note">Is app me ${lab} ka data nahi — upar se doosra country chuniye, ya 🌍 All countries.</p>`};
   const pk=cd.packs[x[4]];
   if(!Array.isArray(pk)||!PACK_RE.test(String(pk[0]))) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} ka data file nahi mila.</p>`};
   const key=pk[0]+'?'+pk[1], P=PK[key], wait={ctl,cc:CTY,ld:1,msg:`<p class="roi-note">⏳ ${lab} ka data load ho raha hai…</p>`};
-  const again=`<button type="button" class="roi-lnk" data-roi-ccr="1">Try again</button>`;
+  const again=`<button type="button" class="roi-lnk" data-roi-ccr="${CARD?CARD.x:1}">Try again</button>`;   // (🧪 the Benchmark's: its own mark — never a twin of the cohort card's for the stay-put layer)
   if(P&&(P.stale||P.gone)) return ccReload(d,cd)?wait:{ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} ka data abhi badal raha hai (site pe naya build aa raha hai). ${again}</p>`};
   if(P&&P.err) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} ka data load nahi hua. ${again}</p>`};
-  if(!P||!P.j){ ensurePack(pk[0],pk[1],cd.b,k=>{ if(ccWant()===k) repaint(); }); return wait; }
+  if(!P||!P.j){ ensurePack(pk[0],pk[1],cd.b,ccLand); return wait; }
   const rows=ccRows(cd,pk,CTY,d.T||[0,1,3,7,14,30,60,90,180,365]);
   if(rows===false){ PK[key]={stale:true}; return ccSrc(d); }
   if(!rows) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} is file me nahi mila.</p>`};
@@ -7502,10 +7513,73 @@ function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[
     +t('Installs',nn&&!xx?N(n):no,xx?'Not split: installs nahi':'GA4 · ads + organic')
     +t('Install days',rows&&!xx?N(D):no,xx?'Not split: install din nahi':rows&&D?`${E(fdy(lo))} – ${E(fdy(hi))}`:'')
     +`</div><p class="roi-note roi-ckb">${bl}</p><p class="roi-note roi-ckm">${ln}</p><p class="roi-note roi-ckn">Poori history ka jod — Profit / loss = Total revenue − Total spend, ROAS = Total revenue ÷ Total spend; country chuno to sirf us country ka. Avg breakeven = ${m$}+ spend wale jo install din BE tak pahunch gaye, unke Breakeven din ka avg (≤ day = us din ya pehle; koi ≤ ho to avg bhi ≤); unke median ke ${Math.round(BE_FAST_SHARE*100)}% se pehle BE wale (achanak jaldi) avg me nahi, aur jo din abhi BE tak nahi pahunche wo alag gine.</p></div>`; }
-function cohCard(d){ const cs=ccSrc(d);
-  if(!cs) return `<div class="roi-card"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${(()=>{ const C=cols(d,d.rows||[]); return C.length?C[C.length-1].a:365; })()} tak</h3><span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohKpi(d,null)}${cohortTable(d)}</div>`;
+// the card's frame: the cohort card's own, or (🧪 CARD: the card being drawn) the Benchmark's id, title word, line and mark
+function cohCard(d){ const cs=ccSrc(d), o=CARD, hd=o?o.pre:'', nt=o?o.note:'sabse naya upar · cell pe ruko = detail';
+  if(!cs) return `<div class="roi-card"${o?` id="${o.id}"`:''}><div class="roi-ct"><h3>${hd}Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${(()=>{ const C=cols(d,d.rows||[]); return C.length?C[C.length-1].a:365; })()} tak</h3><span class="roi-note">${nt}</span></div>${cohKpi(d,null)}${cohortTable(d)}</div>`;
   const rs=cs.rows||d.rows||[], C=cols(cs.rows&&cs.cc!=='XX'?Object.assign({},d,{rows:rs}):d,rs), on=!!cs.cc&&!cs.miss;
-  return `<div class="roi-card" id="roi-coh"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${C.length?C[C.length-1].a:365} tak${on?` · ${ccLab(cs.cc)}`:''}</h3>${on?'<button type="button" class="roi-lnk roi-ccx" data-roi-ccx="1">✕ All countries</button>':''}<span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohKpi(d,cs)}${cohortTable(d,cs)}</div>`; }
+  return `<div class="roi-card" id="${o?o.id:'roi-coh'}"><div class="roi-ct"><h3>${hd}Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${C.length?C[C.length-1].a:365} tak${on?` · ${ccLab(cs.cc)}`:''}</h3>${on?`<button type="button" class="roi-lnk roi-ccx" data-roi-ccx="${o?o.x:1}">✕ All countries</button>`:''}<span class="roi-note">${nt}</span></div>${cohKpi(d,cs)}${cohortTable(d,cs)}</div>`; }
+// ---- 🧪 Benchmark (owner, 22 Oct 2026: "pehle yaha pe hi benchmark karke bantate he ak option banao … ye hoga month wise
+// country wise sab same table vala lao"; how: "tum same table vaha dalo — all time ka — no skip — same to same kro, fir vaha
+// me bolu vo change karenge"; columns: "pura table lao same"). Right under the "Every install day" card: the SAME card —
+// cohCard → cohKpi / ccSrc / ccPick / cohortTable, their code, not a copy — drawn with its OWN state BN: grain (Month to
+// start: "month wise"), mode, country (All to start) and the country pack it waits for (ccWants / ccLand). A tap in one
+// card never changes the other: the Benchmark's taps paint only it (benchPaint); the cohort card's repaint the block as
+// before and keep the Benchmark's box as it was (rows added, its scroll) when its HTML comes out the same (benchKeep).
+// Its ✕ All countries / Try again carry BN.x, not "1": never a twin of the cohort card's for the stay-put layer (SP finds
+// a gone control by its twins: one left in the other card = a jump there).
+// "no skip": every install day / week / month of the whole history, no "Show 60 more" — its columns from every row, the
+// first 60 rows drawn, the rest added as the reader scrolls the table's box (LZ_STEP rows whenever the box's end is less
+// than LZ_NEAR px away), so every row is reachable without a button. Why not all at once (measured, synthetic, headless
+// Chrome): 1,000 install days at Day × 70 columns = 6.4 MB of HTML, ~0.7 s to build + ~0.6 s to lay out at 1280 px (at 4×
+// CPU, a phone: ~2.8 s + ~2 s) — on every repaint of the block, i.e. on any tap in it. This way: the block's first paint
+// ~90 ms (~340 ms at 4×), Month → Day ~50 ms (~190 ms), each 60 rows more ~55–140 ms (~0.2–0.7 s at 4×, more as the
+// table grows), a cohort-card tap with all 1,000 rows in ~65 ms (~240 ms); a Mode switch redraws the rows down to the
+// reader's row (+60) to keep it in place — at the very end ~1.3 s (~4.9 s at 4×), as the cohort card's after "Show all".
+// A later Benchmark-only change = a flag on BN, read through CARD (null while the cohort card draws).
+const BN={grain:'month',met:'roas',show:60,cty:'',all:true,id:'roi-bmk',x:'b',pre:'Benchmark · ',
+  note:'Abhi ye upar wale table ki copy hai — aap jo badlav bolenge woh sirf yahan honge · sabse naya upar · cell pe ruko = detail',lz:null,last:null};
+const LZ_STEP=60, LZ_NEAR=900;
+let CARD=null;
+// draw / read with a card's own state in GRAIN / MET / SHOW / CTY (K null: the cohort card's, as they are)
+function asCard(K,fn){ if(!K) return fn(); const o=[GRAIN,MET,SHOW,CTY,CARD]; GRAIN=K.grain; MET=K.met; SHOW=K.show; CTY=K.cty; CARD=K;
+  try{ return fn(); } finally{ GRAIN=o[0]; MET=o[1]; SHOW=o[2]; CTY=o[3]; CARD=o[4]; } }
+// a tap's change of state: the Benchmark's (K) or the cohort card's
+function setK(K,o){ if(K){ Object.assign(K,o); return; } if('grain' in o) GRAIN=o.grain; if('met' in o) MET=o.met; if('show' in o) SHOW=o.show; if('cty' in o) CTY=o.cty; }
+const cardOf=el=>el&&el.closest&&el.closest('#'+BN.id)?BN:null;
+const paint=(K,n)=>K?benchPaint(n):repaint();
+// the Benchmark card's HTML; BN.last = what it was drawn from (its HTML, the file, its rows still to add)
+function benchCard(d){ BN.lz=null; const s=asCard(BN,()=>cohCard(d)); BN.last={s,d,lz:BN.lz}; return s; }
+// the next k rows of a table drawn in part → {h: their HTML, leg: the retention legend again when they marked a new kind
+// of ≈ (retQL's "kinds the table on screen marked"), else null}; drawn with the state and the per-table values (RET_*, CCY)
+// the table was drawn with; null once every row is in
+function lzNext(z,k){ if(!z||z.n>=z.g.length) return null; let h='', leg=null;
+  asCard(z.K,()=>{ const c0=CCY; RET_NEW=z.ret[0]; RET_UU=z.ret[1]; RET_QU=z.ret[2]; RET_AX=z.ax; CCY=z.ccy;
+    try{ h=z.g.slice(z.n,z.n+k).map(z.row).join(''); z.n=Math.min(z.g.length,z.n+k); if(RET_AX!==z.ax){ z.ax=RET_AX; leg=z.leg(); } } finally{ CCY=c0; } });
+  return {h,leg}; }
+const benchEl=()=>{ const r=root(); return r&&r.querySelector?r.querySelector('#'+BN.id):null; };
+// a Benchmark box drawn by block() (the page's first paint) knows nothing yet: the last drawing is its own when its rows match
+function benchOwn(bn){ const L=BN.last; if(bn&&!bn._b&&L&&bn.querySelectorAll('tr[data-roi-k]').length===(L.s.match(/<tr data-roi-k=/g)||[]).length) bn._b=L; return bn; }
+// the Benchmark alone, painted again (its own tap, its pack): nothing else in the block is touched; n: then rows added up
+// to n (a Mode switch: as many as the reader had)
+function benchPaint(n){ const r=root(), o=benchEl(), a=r&&appPtr(r.dataset.aid), d=a&&AF[a.file];
+  if(!o||!d||VIEW!=='day'){ repaint(); return; }
+  CCY=d.ccy||null; o.outerHTML=benchCard(d); const nb=benchEl(); if(!nb) return; nb._b=BN.last; if(n) benchAdd(nb,n); }
+// a repaint of the block: when the Benchmark's HTML comes out the same (the same file too), only what is around it is
+// drawn again — its box never leaves the page: its added rows, its scroll and its layout stay (put back after a full redraw,
+// 1,000 Day rows took ~0.6 s to lay out again in Chrome, ~2.5 s at 4× CPU); → false: draw the block whole
+function benchKeep(b,ob,h){ const L=BN.last; if(!ob||!L||!ob._b||ob._b.s!==L.s||ob._b.d!==L.d||ob.parentElement!==b||!ob.insertAdjacentHTML) return false;
+  const i=h.indexOf(L.s); if(i<0||h.indexOf(L.s,i+1)>=0) return false;
+  Array.prototype.slice.call(b.childNodes).forEach(n=>{ if(n!==ob) b.removeChild(n); });
+  ob.insertAdjacentHTML('beforebegin',h.slice(0,i)); ob.insertAdjacentHTML('afterend',h.slice(i+L.s.length)); BN.last=ob._b; return true; }
+// rows into a Benchmark table: up to `upto` (a Mode switch), else while the box's end is less than LZ_NEAR px away
+function benchAdd(bn,upto){ benchOwn(bn); const z=bn&&bn._b&&bn._b.lz, w=z&&bn.querySelector('.roi-tw'), tb=w&&w.querySelector('tbody'); if(!tb) return;
+  for(let i=0;i<500&&z.n<z.g.length;i++){ if(upto?z.n>=upto:w.scrollTop+w.clientHeight<w.scrollHeight-LZ_NEAR) break;
+    const x=lzNext(z,upto?upto-z.n:LZ_STEP); if(!x) break; tb.insertAdjacentHTML('beforeend',x.h);
+    if(x.leg){ const l=bn.querySelector('.roi-rtl'); if(l) l.outerHTML=x.leg; } } }
+// a Mode switch's rows to draw again: down to the reader's row (p: boxAt's) and LZ_STEP more — the rest come back by scrolling
+const benchRows=(bn,p)=>{ const rs=bn?bn.querySelectorAll('tr[data-roi-k]'):[]; let i=rs.length-1;
+  if(p) for(let j=0;j<rs.length;j++) if(rs[j].getAttribute('data-roi-k')===p.k){ i=j; break; }
+  return Math.min(rs.length,i+1+LZ_STEP); };
 function monthCurves(d){ const T=d.T, ms=(d.months||[]).filter(m=>m[2]>0).slice(-6);
   if(!ms.length) return '<p class="roi-note">Abhi kisi install mahine pe Google Ads spend nahi.</p>';
   const cls=['c1','c2','c3','c4','c5','c6'];
@@ -7532,7 +7606,7 @@ function dayView(d){ const s=d.sum||{}, pl=s.pools||{}, g=a=>(pl[a]||{}), r=a=>(
     +tile('Back next day',vs((s.ret||{})['1']&&s.ret['1'].r,(s.ret||{})['1']&&s.ret['1'].u),'D1 retention')+`</div>`;
   return kp
     +(()=>{ const dc=deltaChart(d); return `<div class="${dc?'roi-g2':''}"><div class="roi-card"><div class="roi-ct"><h3>ROAS by day · har install mahina</h3><span class="roi-note">dashed = 100% (breakeven) · point pe tap = number</span></div>${monthCurves(d)}</div>${dc}</div>`; })()
-    +cohCard(d)
+    +cohCard(d)+benchCard(d)                                     // 🧪 the Benchmark right under it (its own state)
     +`<p class="roi-note">${cov} Spend = Google Ads (₹ me jitna bill hua; $ me us din ke rate se). ROAS % = us din ke rate se. Installs = GA4 ke naye users (ads + organic) — isliye ROAS "blended" hai (paid-only / incremental / marginal upar ⚖️ 4 kinds of ROI me). Aakhri ${d.consts?d.consts.final_lag:3} din final nahi.${s.tie&&s.tie.off?` ≈ = ${s.tie.off} din ka GA4 read match nahi hua.`:''}</p>`; }
 // ---- 🌍 Countries: keep / cut ----
 function ctyView(d){ const c=d.cty||{}, rows=(c.rows||[]).slice(), cdc=cdOf(d); if(!rows.length) return `<div class="roi-card"><p class="roi-note">Is app ka country data abhi nahi.</p></div>`;
@@ -8278,23 +8352,30 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     const l=document.getElementById('roi-fc-ml'); if(l) l.textContent=(FCM>=0?'+':'−')+Math.abs(Math.round(FCM*100))+'%';
     const r=root(), o=document.getElementById('roi-fc-out'); if(r&&o){ const a=appPtr(r.dataset.aid), d=a?AF[a.file]:null; if(d) o.innerHTML=fcOut(d); } });
   document.addEventListener('change',ev=>{ const t=ev.target; if(!t||!t.closest||!t.closest('[data-roi-ccs]')) return; const r=t.closest('#roi-root'); if(!r) return;
-    const v=String(t.value||''); keepAt(r,t,'[data-roi-ccs]',()=>{ CTY=v; SHOW=60; repaint(); }); });   // 🌍 the full country list
+    const v=String(t.value||''), K=cardOf(t), sc=K?'#'+K.id+' ':'';                // 🧪 the card it is in: its own state, only it painted
+    keepAt(r,t,sc+'[data-roi-ccs]',()=>{ setK(K,{cty:v,show:60}); paint(K); }); });   // 🌍 the full country list
+  // 🧪 the Benchmark's rows past the first 60: added as the reader scrolls its box (scroll does not bubble: caught on the way down)
+  document.addEventListener('scroll',ev=>{ const w=ev.target; if(!w||!w.classList||!w.classList.contains('roi-tw')||!w.closest) return;
+    const bn=w.closest('#'+BN.id); if(bn) benchAdd(bn,0); },{capture:true,passive:true});
   document.addEventListener('click',ev=>{ const t=ev.target; const r=t&&t.closest&&t.closest('#roi-root'); if(!r) return; const at=(sel)=>t.closest(sel);
     const h=at('[data-tip]'); if(h){ show(ev,h.getAttribute('data-tip')); return; }
     const keep=(el,fn)=>{ const y0=el.getBoundingClientRect().top; hold(r); fn(); const sel=el.getAttribute('data-roi-sel'); const b=sel?r.querySelector(sel):null; if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };
+    const K=cardOf(t), sc=K?'#'+K.id+' ':'';                                     // 🧪 the card tapped: the Benchmark (its state, only it painted) or the cohort card
     let b;
     if((b=at('[data-roi-view]'))){ b.setAttribute('data-roi-sel',`[data-roi-view="${b.dataset.roiView}"]`); keep(b,()=>{ VIEW=b.dataset.roiView; r.querySelectorAll('[data-roi-view]').forEach(x=>x.setAttribute('aria-selected',String(x.dataset.roiView===VIEW))); repaint(); }); return; }
-    if((b=at('[data-roi-grain]'))){ b.setAttribute('data-roi-sel',`[data-roi-grain="${b.dataset.roiGrain}"]`); keep(b,()=>{ GRAIN=b.dataset.roiGrain; SHOW=60; repaint(); }); return; }
-    if((b=at('[data-roi-met]'))){ b.setAttribute('data-roi-sel',`[data-roi-met="${b.dataset.roiMet}"]`); const w=metBox(b), p=w?boxAt(w):null;
-      keep(b,()=>{ MET=b.dataset.roiMet; repaint(); if(p) boxBack(r,p); }); return; }   // the box keeps its row + column too
+    if((b=at('[data-roi-grain]'))){ b.setAttribute('data-roi-sel',`${sc}[data-roi-grain="${b.dataset.roiGrain}"]`); keep(b,()=>{ setK(K,{grain:b.dataset.roiGrain,show:60}); paint(K); }); return; }
+    if((b=at('[data-roi-met]'))){ b.setAttribute('data-roi-sel',`${sc}[data-roi-met="${b.dataset.roiMet}"]`); const w=metBox(b), p=w?boxAt(w):null, n=K?benchRows(benchEl(),p):0;
+      keep(b,()=>{ setK(K,{met:b.dataset.roiMet}); paint(K,n); if(p) boxBack(K?benchEl():r,p); }); return; }   // the box keeps its row + column too (🧪 the Benchmark: its rows drawn again first)
     if((b=at('[data-roi-lg]'))){ b.setAttribute('data-roi-sel',`[data-roi-lg="${b.dataset.roiLg}"]`); keep(b,()=>{ LG=b.dataset.roiLg; LSHOW=60; repaint(); }); return; }
     if((b=at('[data-roi-more]'))){ const v=b.dataset.roiMore; keepRows(r,b,()=>{ SHOW=v==='all'?1e9:SHOW+60; repaint(); }); return; }       // the reader's row stays put
     if((b=at('[data-roi-lmore]'))){ const v=b.dataset.roiLmore; keepRows(r,b,()=>{ LSHOW=v==='all'?1e9:LSHOW+60; repaint(); }); return; }
     if((b=at('[data-roi-csort]'))){ const k=b.dataset.roiCsort; b.setAttribute('data-roi-sel',`[data-roi-csort="${k}"]`); keep(b,()=>{ CSORT={k,dir:CSORT.k===k?-CSORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-asort]'))){ const k=b.dataset.roiAsort; b.setAttribute('data-roi-sel',`[data-roi-asort="${k}"]`); keep(b,()=>{ ASORT={k,dir:ASORT.k===k?-ASORT.dir:1}; repaint(); }); return; }
-    if((b=at('[data-roi-cc]'))){ const cc=b.dataset.roiCc; keepAt(r,b,`[data-roi-cc="${cc}"]`,()=>{ CTY=cc; SHOW=60; repaint(); }); return; }
-    if((b=at('[data-roi-ccx]'))){ const h=r.querySelector('#roi-coh h3')||b; keepAt(r,h,'#roi-coh h3',()=>{ CTY=''; SHOW=60; repaint(); }); return; }
-    if((b=at('[data-roi-ccr]'))){ Object.keys(PK).forEach(k=>{ if(PK[k].err||PK[k].stale) delete PK[k]; }); Object.keys(RLD).forEach(k=>{ delete RLD[k]; }); repaint(); return; }
+    if((b=at('[data-roi-cc]'))){ const cc=b.dataset.roiCc; keepAt(r,b,`${sc}[data-roi-cc="${cc}"]`,()=>{ setK(K,{cty:cc,show:60}); paint(K); }); return; }
+    if((b=at('[data-roi-ccx]'))){ const hs=K?'#'+K.id+' h3':'#roi-coh h3', h=r.querySelector(hs)||b; keepAt(r,h,hs,()=>{ setK(K,{cty:'',show:60}); paint(K); }); return; }
+    // Try again: the packs this card waits for read again — never the other card's (🧪 the Benchmark's when only it waits for it)
+    if((b=at('[data-roi-ccr]'))){ const w=ccWants(), mine=k=>K?k===w[1]:k!==w[1]||k===w[0];
+      Object.keys(PK).forEach(k=>{ if((PK[k].err||PK[k].stale)&&mine(k)) delete PK[k]; }); Object.keys(RLD).forEach(k=>{ delete RLD[k]; }); paint(K); return; }
     if((b=at('[data-roi-pick]'))){ const cc=b.dataset.roiPick; keepAt(r,b,'#roi-coh',()=>{ VIEW='day'; CTY=cc; SHOW=60;   // 🌍 Countries → that country's day-wise table
         r.querySelectorAll('[data-roi-view]').forEach(x=>x.setAttribute('aria-selected',String(x.dataset.roiView===VIEW))); repaint(); }); return; }
     if((b=at('[data-roi-cty]'))){ const cc=b.dataset.roiCty; b.setAttribute('data-roi-sel',`[data-roi-cty="${cc}"]`); keep(b,()=>{ CTYO=CTYO===cc?'':cc; repaint(); }); return; }
@@ -8321,7 +8402,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, benchCard, lzNext, BN, LZ_STEP, st:()=>({GRAIN,MET,SHOW,CTY}), ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)

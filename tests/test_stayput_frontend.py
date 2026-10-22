@@ -87,6 +87,21 @@ def test_the_control_is_found_again(report):
 
 
 @needs_node
+def test_twin_cards_stay_put(report):
+    # 🧪 ROI's "Every install day" card and its Benchmark copy right under it (22 Oct 2026) carry the same controls: a tap in
+    # the second card comes back where it was (its index among the twins)
+    r = report["twin_cards_second"]
+    same_place(r)
+    assert r["n"] == 2
+    # a ✕ All countries that goes with the tap while the other card still shows its own: the Benchmark's carries its own
+    # mark ("b") — no twin, the page stays, either card tapped
+    for k in ("twin_gone_marked", "twin_gone_marked_coh"):
+        assert report[k]["y"] == report[k]["want"], k
+    # (the hazard that mark avoids: with one mark on both the layer takes the other card's ✕ for it and scrolls there)
+    assert report["twin_gone_same_mark"]["y"] != report["twin_gone_same_mark"]["want"]
+
+
+@needs_node
 def test_the_ecpm_comparison_row_stays_put(report):
     # 📈 eCPM tables' "Yesterday vs … / Month vs month ‹ ›" (owner, 21 Oct): a tap repaints the view; the tapped ‹ › (the
     # Countries card's twin, now disabled) and the mode chip come back exactly where they were

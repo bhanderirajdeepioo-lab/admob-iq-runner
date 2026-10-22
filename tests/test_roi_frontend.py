@@ -14,7 +14,12 @@ limits), 🧮 the cohort card's totals strip for All or the picked country — o
 spend = Σ the Spend column, Total revenue = Σ the So far column, Profit / loss = printed revenue − printed spend to the
 last digit, ROAS blended, 🎯 Avg breakeven, installs, install days; days with no spend data / so far not read counted,
 never 0): hand recounts, the owner's case in its shape, the same for every grain / mode, '…' while loading, one height in every state,
-no value cut at any width, the page otherwise byte for byte as before), "Show 60 more" / "Show
+no value cut at any width, the page otherwise byte for byte as before), 🧪 the Benchmark card right under the cohort
+card (22 Oct 2026: the same table by the same functions with its own state — Month / All countries to start; for the same
+state the cohort card's HTML byte for byte but its frame and ✕ / Try again mark, every file × country × grain × mode; every
+row, the first 60 drawn and the rest added as its box scrolls, never a button; a tap in one card never changes the other —
+node, HTML, box scroll, state —; no page jump at 375 / 1280 px; each card's pack / Try again its own; GOLDEN_BENCH; every
+other golden with exactly that card cut out, unchanged), "Show 60 more" / "Show
 all" keeping the reader's row and the table box's scroll (every grain × mode, every country, the lifetime table, 375 and
 1280 px, with the stay-put layer: no second scroll) — sideways by column (the Day table's columns change with the rows
 shown), Mode switches keeping the box's row and column too — and the wiring into the page. Skipped where node is not
@@ -250,6 +255,11 @@ GOLDEN_DEFAULT_NOK = "8ea8ca3eb5c377e83fec7ce75a4ad64e74429daec4c1a87690161261e7
 GOLDEN_DEFAULT_NOKPI = "98ae0afdcb42a1e9d258ef5fe660fba126dad93f9b7b6c83e4f801eca78514eb"
 GOLDEN_PRE_KPI = "fb638f026d2a902459c3287cb620536bbb6474fecb17809c9799ba6264ac0a86"
 GOLDEN_NO_BE = "acabb725b05aa314e38c4f97b7880196122d333a0bdd823a0db9c1bc7d1d23b6"
+# 🧪 Not changed on 22 Oct 2026 by the Benchmark card right under the cohort card: the Day view's parts are taken with
+# exactly that card's HTML cut out (tests/roi_frontend.js noBench — it must sit once, right after the cohort card's), and
+# every golden above is the same — the cohort card and the rest of the page byte for byte as before. GOLDEN_BENCH = the
+# Benchmark card itself: both default files × every grain × mode, its first HTML and the whole table once every row is in.
+GOLDEN_BENCH = "269e25d5aba75236d2db5833e904d9a3dd8ee2d98a21c7bb11dbe5348581e044"
 
 
 def test_breakeven_column(out):
@@ -1121,6 +1131,86 @@ def test_retention_users_marks(out):
     assert "RET_UU=!xx&&src&&src.rows?retRuns(src.uu):null; RET_QU=src&&src.rows?null:((d0.late||{}).u||null); RET_AX=0;" in p
 
 
+def test_benchmark_same_table(out):
+    """🧪 Benchmark (owner, 22 Oct 2026: "pehle yaha pe hi benchmark karke bantate he ak option banao … month wise country
+    wise sab same table vala lao"; "same table vaha dalo — all time ka — no skip — same to same kro"; "pura table lao
+    same"): right under the cohort card, drawn by the same functions with its own state. For the same state it is the
+    cohort card's table byte for byte (the totals strip, chips, More countries, Day / Week / Month, the four modes, every
+    column, retention lines, Breakeven, the notes) — only its frame differs (id, title, its line) and its ✕ / Try again
+    mark ("b": see the stay-put test) — every file × country (All, two countries, Unknown, Not split) × grain × mode."""
+    h = out["bn_html"]
+    assert h["def"] == ["month", "roas", "", 60, True,                 # its own state: Month (the owner: "month wise"), All
+                        True, True, True, True, True]                   # … on screen, its title, its Hinglish line
+    assert h["diff"] == [] and len(h["same"]) == (5 + 1 + 1) * 12
+    assert h["more"] == 0                                               # no "Show 60 more" / "Show all", ever
+    # the first 60 rows drawn = the cohort card's first 60 (70 install days): only its Show-more row not there
+    assert h["first60"] == [[f"app All day {m}", True, True] for m in ("roas", "rev", "ltv", "delta")]
+    assert h["golden"] == GOLDEN_BENCH
+    # the retention legend's ≈ line: drawn again when rows added later mark a kind the first 60 did not (then the whole
+    # table = the cohort card's "Show all" one, legend included)
+    assert h["leg"] == [False, True, True, True, 0, 36]
+
+
+def test_benchmark_every_row(out):
+    """🧪 "no skip": every install day / week / month of the history — no button. 1,000 install days × 70 columns at Day:
+    the first HTML holds 60 rows (~250 KB instead of 6.4 MB: measured in Chrome, all at once costs ~0.7 s to build + ~0.6 s
+    to lay out at 1280 px on every repaint, ~5 s at 4× CPU), the rest are added as the reader scrolls the table's box; once
+    in, the whole table is the cohort card's "Show all" one."""
+    rows = out["bn_html"]["rows"]
+    assert [r[:5] for r in rows] == [["day", 60, 1000, 1000, 1000], ["week", 60, 144, 144, 144], ["month", 34, 34, 34, 34]]
+    assert rows[0][5] == 70 and all(r[8] for r in rows)                # Day: 70 columns; the whole = the cohort card's
+    assert rows[0][6] * 20 < rows[0][7] and rows[1][6] * 3 < rows[1][7]   # the first HTML a small part of the whole
+    for w, n in (("w375", 70), ("w1280", 70), ("long375", 334), ("long1280", 334)):
+        sc = out["bn_dom"][w]["scroll"]
+        assert sc["n0"] == 60 and sc["n"] == n and sc["same"] and sc["legs"] == 1 and not sc["more"], (w, sc)
+        # each scroll to the box's end: the next 60 (the rest at the end), below the reader — the reader's row, the box's
+        # scroll and the page never move, no page scroll call; at the end nothing more; at the box's top nothing
+        want = [[k, min(k + 60, n), 0, 0, 0, 0] for k in range(60, n, 60)] + [[n, n, 0, 0, 0, 0]]
+        assert sc["steps"] == want and sc["nTop"] == [n, n], (w, sc["steps"])
+        assert sc["kept"]                                               # the cohort card's "Show all": the Benchmark's box kept
+
+
+def test_benchmark_own_state_and_no_jump(out):
+    """🧪 Its own state: a tap in one card never changes the other — the other card the same node, the same HTML, its box's
+    scroll, its state — and no page jump on any tap (375 / 1280 px, the page's own stay-put layer): the tapped control (a
+    gone ✕: the card's title) where it was right after the handlers and after the layer's checks / a pack landing."""
+    bn = ["day", "week", "week", "week", "week", "month", "month", "month", "month", "month", "month", "month", "day"]
+    bm = ["roas", "roas", "rev", "ltv", "ltv", "ltv", "ltv", "ltv", "ltv", "delta", "delta", "roas", "roas"]
+    bc = ["", "", "", "", "AA", "AA", "GG", "", "BB", "BB", "", "", ""]
+    bx = [0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0]                      # a country control (none without the country part)
+    cc = [("week", "roas", ""), ("week", "rev", ""), ("week", "rev", "AA"), ("week", "rev", "GG"), ("week", "rev", ""),
+          ("day", "rev", ""), ("day", "roas", "")]
+    cx = [0, 0, 1, 1, 1, 0, 0]
+    for w, full in (("w375", True), ("w1280", True), ("long375", False), ("long1280", False)):
+        r = out["bn_dom"][w]
+        assert r["firstKept"], w                                        # the page's first Benchmark box kept by the first repaint
+        for t in r["bench"] + r["coh"]:
+            assert abs(t["move0"]) <= 1 and abs(t["move"]) <= 1 and t["calls"] <= 1, (w, t)
+            assert t["other"] == [True, True, True, True], (w, t)       # the other card untouched
+        keep = [i for i in range(len(bc)) if full or not bx[i]]
+        assert [json.loads(t["st"]) for t in r["bench"]] == [[bn[i], bm[i], bc[i] if full else "", 60] for i in keep], w
+        keep = [i for i in range(len(cc)) if full or not cx[i]]
+        assert [json.loads(t["st"]) for t in r["coh"]] == [{"GRAIN": cc[i][0], "MET": cc[i][1], "SHOW": 60, "CTY": cc[i][2]} for i in keep], w
+        # a Mode switch with the reader deep in its rows: the rows drawn again down to the reader's row + 60 (the rest come
+        # back by scrolling), the row in place; the cohort card's mode as it was
+        m = r["met"]
+        assert m["rows"][1] == min(m["rows"][0], m["idx"] + 61) and m["move"] == 0 and m["calls"] <= 1 and m["met"] == "rev" and m["coh"] == "roas", (w, m)
+        k = r["keep"]                                                   # a cohort card tap: the Benchmark's box as it was
+        assert k["node"] and k["rows"][0] == k["rows"][1] and k["other"] == [True, True, True, True] and k["move"] == 0, (w, k)
+
+
+def test_benchmark_packs(out):
+    """🧪 The country pack each card waits for: each card's error its own "Try again" (the Benchmark's mark "b"), which
+    reads again only the pack that card waits for and paints only that card; a pack that lands after the Benchmark moved
+    on never paints it again."""
+    for w in ("w375", "w1280"):
+        p = out["bn_packs"][w]
+        assert p["err"] == [True, True, True, True], w
+        assert p["bRetry"] == [["roi_aaaaaaaaaaaa_c01.json.gz"], True, True], w
+        assert p["cRetry"] == [["roi_aaaaaaaaaaaa_c00.json.gz"], True, True], w
+        assert p["late"] == [True, True, "AA", "AA"], w
+
+
 def test_wiring():
     with open(PAGE, encoding="utf-8") as f:
         p = f.read()
@@ -1135,8 +1225,8 @@ def test_wiring():
     assert "keep(b,()=>{" in seg and "fcPlan(dd)" in seg                                  # −/+, Keep total, Reset: in place
     for a in ("data-roi-cc", "data-roi-ccx", "data-roi-pick"):                          # 🌍 every country control too
         assert "keepAt(r," in p.split("if((b=at('[%s]'))){ " % a)[1].split("\n")[0]
-    assert "keepAt(r,t,'[data-roi-ccs]'," in p                                          # … and the full list's change
-    assert "if(PK[k].err||PK[k].stale) delete PK[k]; }); Object.keys(RLD).forEach(k=>{ delete RLD[k]; }); repaint();" in p   # Try again
+    assert "keepAt(r,t,sc+'[data-roi-ccs]'," in p                                       # … and the full list's change
+    assert "if((PK[k].err||PK[k].stale)&&mine(k)) delete PK[k]; }); Object.keys(RLD).forEach(k=>{ delete RLD[k]; }); paint(K);" in p   # Try again
     assert "/^roi_[0-9a-f]{12}_c\\d{2,3}\\.json\\.gz$/" in p                           # a pack name the build writes only
     assert "@media (max-width:760px){.roi-ccs{font-size:16px}}" in p                     # iOS: no zoom on the list
     # 🎯 Breakeven: its head right after CPI, none after "So far" (both fail on the page before the move)
@@ -1187,6 +1277,21 @@ def test_wiring():
     assert "if((b=at('[data-roi-more]'))){ const v=b.dataset.roiMore; keepRows(r,b,()=>{ SHOW=v==='all'?1e9:SHOW+60; repaint(); }); return; }" in p
     assert "if((b=at('[data-roi-lmore]'))){ const v=b.dataset.roiLmore; keepRows(r,b,()=>{ LSHOW=v==='all'?1e9:LSHOW+60; repaint(); }); return; }" in p
     # Mode: the page keeps the tapped button (keep), the box its row + column (boxAt / boxBack)
-    assert "const w=metBox(b), p=w?boxAt(w):null;\n      keep(b,()=>{ MET=b.dataset.roiMet; repaint(); if(p) boxBack(r,p); }); return; }" in p
+    assert ("const w=metBox(b), p=w?boxAt(w):null, n=K?benchRows(benchEl(),p):0;\n"
+            "      keep(b,()=>{ setK(K,{met:b.dataset.roiMet}); paint(K,n); if(p) boxBack(K?benchEl():r,p); }); return; }") in p
     assert '<tr data-roi-k="${E(gr.k)}"><td class="roi-nm">' in p and '<tr data-roi-k="${E(x[0])}"><td class="roi-nm">' in p
     assert p.count("SHOW+60; repaint(); return;") == 0                     # never a bare repaint (the box back at the top)
+    # 🧪 the Benchmark: right under the cohort card in the Day view, its own state (Month, ROAS %, All countries, 60 rows
+    # first, every row, its own ✕ / Try again mark), drawn by cohCard under asCard — no second copy of the card's code
+    assert "+cohCard(d)+benchCard(d)" in p and p.count("benchCard(d)") == 3        # defined; dayView; benchPaint
+    assert ("const BN={grain:'month',met:'roas',show:60,cty:'',all:true,id:'roi-bmk',x:'b',pre:'Benchmark · ',\n"
+            "  note:'Abhi ye upar wale table ki copy hai — aap jo badlav bolenge woh sirf yahan honge · sabse naya upar · cell pe ruko = detail'") in p
+    assert "function benchCard(d){ BN.lz=null; const s=asCard(BN,()=>cohCard(d));" in p
+    assert p.count("function cohortTable(") == 1 and p.count("function cohCard(") == 1 and p.count("function cohKpi(") == 1
+    assert "const LZ_STEP=60, LZ_NEAR=900;" in p
+    # its rows past the first 60: added as its box scrolls (scroll does not bubble: a capture listener)
+    assert "document.addEventListener('scroll',ev=>{" in p and "if(bn) benchAdd(bn,0); },{capture:true,passive:true});" in p
+    # each tap acts on the card it is in: its state, only it painted; the cohort card's lines as before through setK / paint
+    assert "const K=cardOf(t), sc=K?'#'+K.id+' ':'';" in p and "const paint=(K,n)=>K?benchPaint(n):repaint();" in p
+    # a pack that lands repaints the card(s) waiting for it; the packs both cards wait for are kept
+    assert "ensurePack(pk[0],pk[1],cd.b,ccLand); return wait; }" in p and "if(o===k||w.includes(o)){ i++; continue; }" in p

@@ -20,6 +20,8 @@
 //     of those days, a fast lucky day left out (before 50% of it), "≤" kept; '—' under 3 reached; how many reached of how
 //     many ads days, and every day left out counted by why — not even yet, 100%+ back with no day, not read, under $5 —
 //     (an independent recount);
+//   * 🧪 the Benchmark card right under the cohort card (22 Oct 2026): the same table by the same functions, its own state,
+//     every row (60 first, the rest as its box scrolls), the other card untouched by any tap, no page jump, its own packs;
 //   * "Show 60 more" / "Show all" (the install-day tables and the lifetime "Every day" table): on a parsed DOM with a layout
 //     model + the page's own stay-put layer, the reader's row stays put, the box keeps its scroll, no second scroll;
 //     sideways by column (the Day table's columns change with the rows shown), and a Mode switch keeps the box's place too.
@@ -121,6 +123,9 @@ const kpiCut = s => s.replace(KPI_RE, '');
 // the page before it byte for byte (the GOLDEN_DEFAULT before: nothing else moved — every grain × mode's own values).
 const RT_RE = /<span class="roi-rt[^"]*"(?: title="[^"]*")?>[^<]*<\/span>/g, RTL_RE = /<p class="roi-note roi-rtl">[^]*?<\/p>/g;
 const retCut = s => s.replace(RT_RE, '').replace(RTL_RE, '');
+function noBench(U, x) { const v = U.dayView(x), bc = U.benchCard(x);
+  if (!v.includes(U.cohCard(x) + bc) || v.indexOf(bc) !== v.lastIndexOf(bc)) throw new Error('the Benchmark is not right under the cohort card');
+  return v.replace(bc, () => ''); }
 function defaultDigest() {
   const c3 = Object.assign({}, CTX0, { DATA: null, window: {} });
   vm.createContext(c3);
@@ -130,7 +135,10 @@ function defaultDigest() {
   for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) {
     U.set('GRAIN', g); U.set('MET', m); parts.push(U.cohortTable(d0), U.cohortTable(dm)); }
   U.set('GRAIN', 'day'); U.set('MET', 'roas');
-  parts.push(U.dayView(d0), U.dayView(dm), U.ctyView(d0));
+  // 🧪 the Benchmark card (22 Oct 2026) sits right under the cohort card in the Day view: cut out here — exactly its own
+  // HTML (benchCard), once, right after the cohort card's — so every golden is the page without it byte for byte (the
+  // cohort card and the rest untouched); GOLDEN_BENCH pins the Benchmark card itself
+  parts.push(noBench(U, d0), noBench(U, dm), U.ctyView(d0));
   U.set('SHOW', 1e9); parts.push(U.cohortTable(dm));
   const pr = parts.map(retCut);
   return [h(parts.join('\u0001')), h(pr.map(x => beStrip(kpiCut(x))).join('\u0001')), h(pr.map(kpiCut).join('\u0001')),
@@ -200,13 +208,14 @@ async function noJump(width, file, packs, failOnce, mode) {
   const flush = () => new Promise(r => setTimeout(r, 5));
   const fire = (t, e) => (L[t] || []).forEach(f => f(Object.assign({ clientX: 0, clientY: 0 }, e)));
   const moves = [];
+  const PB = () => P.body.split('<div class="roi-card" id="roi-bmk"')[0];   // 🧪 the cohort card's part (the Benchmark below has the same controls)
   if (mode === 'late') {                                                    // a pack that lands after the reader moved on:
     fire('click', { target: find('[data-roi-cc="AA"]') }); await flush();   // AA's pack in hand
     const sel = find('[data-roi-ccs]'); sel.value = 'GG'; fire('change', { target: sel });   // GG: its pack on its way…
     fire('click', { target: find('[data-roi-cc="AA"]') });                  // … AA again at once (its table from memory)
-    const n0 = SETS.body, aaNow = P.body.includes('[AA] Country AA</h3>');
+    const n0 = SETS.body, aaNow = PB().includes('[AA] Country AA</h3>');
     await flush();                                                          // GG's pack lands: the AA table is not painted again
-    return { late: [aaNow, SETS.body - n0, P.body.includes('[AA] Country AA</h3>')] };
+    return { late: [aaNow, SETS.body - n0, PB().includes('[AA] Country AA</h3>')] };
   }
   const tap = async (sel, after, ev) => {                                  // a control mid-screen; where it is after
     let b = find(sel); W.scrollY = Math.max(0, b._i * k - 300); b = find(sel); const y0 = b.getBoundingClientRect().top;
@@ -218,28 +227,28 @@ async function noJump(width, file, packs, failOnce, mode) {
   if (mode && mode.taps) {                                                  // just these taps ([selector, list value]): moves + where it ended
     const seen = [];
     for (const [s, v] of mode.taps) { await tap(s, null, v);
-      seen.push([U.getCTY(), (P.body.match(/data-roi-cc="([^"]*)" aria-pressed="true"/) || [])[1], (P.body.match(/<option value="([^"]*)" ?selected>/) || [])[1],
-        (P.body.match(/<span class="roi-ccv" aria-hidden="true">([^<]*)<\/span>/) || [])[1]]); }
+      seen.push([U.getCTY(), (PB().match(/data-roi-cc="([^"]*)" aria-pressed="true"/) || [])[1], (PB().match(/<option value="([^"]*)" ?selected>/) || [])[1],
+        (PB().match(/<span class="roi-ccv" aria-hidden="true">([^<]*)<\/span>/) || [])[1]]); }
     return { moves, seen };
   }
   await tap('[data-roi-cc="AA"]');                                          // a chip: the title grows above it
   await tap('[data-roi-grain="week"]');                                     // the grain keeps the country
-  const keptWeek = P.body.includes('[AA] Country AA</h3>');
+  const keptWeek = PB().includes('[AA] Country AA</h3>');
   await tap('[data-roi-grain="day"]');
   await tap('[data-roi-ccs]', null, 'GG');                                  // the full list (another pack)
   const h3 = find('#roi-coh h3'), y3 = h3.getBoundingClientRect().top;
   fire('click', { target: find('[data-roi-ccx]') });                        // ✕ All countries: the title row stays
   moves.push(Math.round(find('#roi-coh h3').getBoundingClientRect().top - y3));
-  const backAll = !P.body.includes('✕ All countries') && U.getCTY() === '';
+  const backAll = !PB().includes('✕ All countries') && U.getCTY() === '';
   fire('click', { target: find('[data-roi-view="cty"]') });                 // 🌍 Countries → "📅 Day-wise" of BB
   await tap('[data-roi-pick="BB"]', '#roi-coh');
-  const picked = U.getCTY() === 'BB' && P.body.includes('[BB] Country BB</h3>');
+  const picked = U.getCTY() === 'BB' && PB().includes('[BB] Country BB</h3>');
   // a pack that does not load: "Try again" in the table area reads it again (and only then)
   await tap('[data-roi-cc="EE"]');
-  const errShown = P.body.includes('data-roi-ccr="1">Try again') && P.body.includes('[EE] Country EE ka data load nahi hua');
+  const errShown = PB().includes('data-roi-ccr="1">Try again') && PB().includes('[EE] Country EE ka data load nahi hua');
   fire('click', { target: find('[data-roi-ccr]') });
   await flush();
-  const retried = P.body.includes('[EE] Country EE</h3>') && !P.body.includes('Try again') && /<td class="roi-[gwb]/.test(P.body);
+  const retried = PB().includes('[EE] Country EE</h3>') && !P.body.includes('Try again') && /<td class="roi-[gwb]/.test(PB());
   return { moves, keptWeek, backAll, picked, errShown, retried };
 }
 // ── "Show 60 more" / "Show all" keep the reader's row (owner, 21 Oct 2026: "show 60 more krte he to table pehle se scroll
@@ -301,6 +310,18 @@ function miniDom(VW, VH) {
     append(n) { n.parentElement = this; this.childNodes.push(n); dirty = true; return n; }
     get innerHTML() { return ''; }
     set innerHTML(h) { if (hooks.set) h = hooks.set(this, h); this.childNodes.forEach(n => { n.parentElement = null; }); this.childNodes = []; parse(h).forEach(n => this.append(n)); dirty = true; }
+    // 🧪 the Benchmark paints itself alone (outerHTML), keeps its old box (replaceWith) and adds rows (insertAdjacentHTML)
+    get outerHTML() { return ser(this); }
+    set outerHTML(h) { const p = this.parentElement; if (!p) return; if (hooks.set) h = hooks.set(this, h); const i = p.childNodes.indexOf(this), ns = parse(h);
+      ns.forEach(n => { n.parentElement = p; }); p.childNodes.splice(i, 1, ...ns); this.parentElement = null; dirty = true; }
+    replaceWith(n) { const p = this.parentElement; if (!p) return; if (n.parentElement) n.parentElement.childNodes.splice(n.parentElement.childNodes.indexOf(n), 1);
+      p.childNodes[p.childNodes.indexOf(this)] = n; n.parentElement = p; this.parentElement = null; dirty = true; }
+    insertAdjacentHTML(pos, h) { if (hooks.set) h = hooks.set(this, h); const ns = parse(h);
+      if (pos === 'beforeend') { ns.forEach(n => this.append(n)); return; }
+      const p = this.parentElement, i = p ? p.childNodes.indexOf(this) : -1; if (i < 0) return;
+      if (pos !== 'beforebegin' && pos !== 'afterend') throw new Error('insertAdjacentHTML ' + pos + ' not modelled');
+      ns.forEach(n => { n.parentElement = p; }); p.childNodes.splice(pos === 'afterend' ? i + 1 : i, 0, ...ns); dirty = true; }
+    removeChild(n) { const i = this.childNodes.indexOf(n); if (i >= 0) { this.childNodes.splice(i, 1); n.parentElement = null; dirty = true; } return n; }
     contains(x) { for (; x; x = x.parentElement) if (x === this) return true; return false; }
     get isConnected() { let x = this; while (x.parentElement) x = x.parentElement; return x === DOC; }
     matches(sel) { return compile(sel)(this); }
@@ -327,6 +348,8 @@ function miniDom(VW, VH) {
     scrollIntoView() {}
     focus() {}
   }
+  const ser = e => e.nodeType === 3 ? e.data : '<' + e.tagName.toLowerCase() + e._a.map(([k, v]) => ` ${k}="${v}"`).join('') + '>'
+    + (VOID.has(e.tagName) ? '' : e.childNodes.map(ser).join('') + '</' + e.tagName.toLowerCase() + '>');
   function parse(h) {
     const root = new El('#F'), st = [root];
     const re = /<!--[^]*?-->|<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:[^>"']|"[^"]*"|'[^']*')*)>|([^<]+)/g; let m;
@@ -426,12 +449,12 @@ function longFile(mFrom) {
     life, life_till: day(newest, -1), late: { days: 200, from: '2021-04-23', till: newest }, consts: { final_lag: 3 } };
 }
 // one vm per (width, file): the block painted inside a screen (made-up text above and below it), the reader's taps
-async function keepHarness(VW, file, packs) {
+async function keepHarness(VW, file, packs, asked) {
   const VH = VW <= 760 ? 740 : 900, D = miniDom(VW, VH), Q = { t: [], raf: [], now: 0, n: 0 };
   const c = Object.assign({}, CTX0, { document: D.doc, window: D.win, Element: D.El, HTMLElement: D.El, getComputedStyle: D.gcs,
     setTimeout: (f, ms) => { Q.t.push({ at: Q.now + (ms || 0), f, n: Q.n++ }); return Q.n; }, requestAnimationFrame: f => { Q.raf.push(f); return Q.raf.length; },
     DATA: { roi: { file: 'roi.json.gz', v: 'v1', apps: { 'id-c': { file: 'roi_cccccccccccc.json.gz', st: 'Watch' } } } },
-    fetchGzJson: u => { const f = u.split('?')[0]; return packs && packs[f] ? Promise.resolve(JSON.parse(JSON.stringify(packs[f]))) : Promise.reject(new Error('x')); } });
+    fetchGzJson: u => { const f = u.split('?')[0]; if (asked) asked.push(f); return packs && packs[f] ? Promise.resolve(JSON.parse(JSON.stringify(packs[f]))) : Promise.reject(new Error('x')); } });
   vm.createContext(c);
   vm.runInContext(SPSRC + '\n' + src + '\nthis.__SP=SP;', c);
   const R = c.ROI, U = R._, SP = c.__SP;
@@ -484,7 +507,8 @@ async function keepHarness(VW, file, packs) {
       if (gn) D.hooks.set = (el, h) => el.id === 'roi-hero' ? h + '<div class="grown">' + 'grown above '.repeat(gn) + '</div>' : h;
       D.fire('pointerdown', b); D.fire('click', b); await drain(500);
       D.hooks.set = null;
-      const trs2 = D.q('#roi-body').querySelectorAll('tbody tr'), a2 = trs2.find(tr => lab(tr) === L0), box2 = a2 && a2.closest('.roi-tw');
+      // (🧪 the cohort card's rows: not the Benchmark's below it)
+      const trs2 = D.q('#roi-body').querySelectorAll('tbody tr').filter(tr => !tr.closest('#roi-bmk')), a2 = trs2.find(tr => lab(tr) === L0), box2 = a2 && a2.closest('.roi-tw');
       const h1 = new Map(box2 ? colsOf(box2).map(c => [c[0], c[1]]) : []), kc = vis.find(c => h1.has(c[0]));
       taps.push({ w, label: L0, move: a2 ? r1(a2.getBoundingClientRect().top - y0) : 'gone', sl: [sl0, box2 ? box2.scrollLeft : null],
         dy: D.W.y - sy0, calls: D.W.calls - c0, rows: [n0, trs2.length], idx: [i0, a2 ? trs2.indexOf(a2) : -1], key: a2 ? a2.getAttribute('data-roi-k') : null,
@@ -496,7 +520,7 @@ async function keepHarness(VW, file, packs) {
     }
     return { name, taps };
   }
-  return { run, D, U, SP };
+  return { run, D, U, SP, R, drain };
 }
 async function moreKeepAll(dc, packs) {
   const res = { coh: [], cty: [], life: [], grow: [], side: [], met: [] };
@@ -528,6 +552,186 @@ async function moreKeepAll(dc, packs) {
     for (const cc of ['AA', 'XX'])
       res.met.push(await MC.run({ VIEW: 'day', GRAIN: 'day', MET: 'roas', CTY: cc }, 'met', ['rev', 'ltv', 'delta', 'roas'], `${VW} ${cc} met`, { pre: ['all'], sx: { edge: 'D14' } }));
   }
+  return res;
+}
+// ── 🧪 Benchmark (owner, 22 Oct 2026: "pehle yaha pe hi benchmark karke bantate he ak option banao … month wise country
+// wise sab same table vala lao"; "same table vaha dalo — all time ka — no skip — same to same kro"; "pura table lao same")
+// The card right under the cohort card: the same functions, its own state (BN), every row (the first 60 drawn, the rest
+// added as its box is scrolled). benchFull = the table as the page ends up with it once the reader has scrolled to its
+// end: its first HTML + every row lzNext adds (into its tbody) + the retention legend as lzNext draws it again.
+function benchFull(U, d) {
+  let s = U.benchCard(d), x; const z = U.BN.lz;
+  while ((x = U.lzNext(z, U.LZ_STEP))) { s = s.replace('</tbody>', () => x.h + '</tbody>'); if (x.leg) s = s.replace(/<p class="roi-note roi-rtl">[^]*?<\/p>/, () => x.leg); }
+  return s;
+}
+// a card without its frame (its own tag + title row: id, title, line) and with the Benchmark's own mark on ✕ All
+// countries / Try again read as the cohort card's "1" — what must be the same in both cards, byte for byte
+const unframe = s => s.replace(/^<div class="roi-card"(?: id="[^"]*")?><div class="roi-ct">[^]*?<\/div>/, '').replace(/data-roi-cc([xr])="b"/g, 'data-roi-cc$1="1"');
+const MORE_RE = /<div class="roi-more">[^]*?<\/div>/;
+// 1,000 install days, every one day by day (D0 … D30 + users), past D30 every 30 days (m / mu): Day = 1,000 rows × 70 columns
+function bigFile(n) {
+  const rows = [], newest = '2026-10-13';
+  for (let age = n - 1; age >= 0; age--) {
+    const X = day(newest, -age), obs = Math.min(30, age), df = Math.max(0, Math.min(obs, age - 3) + 1);
+    const dd = Array.from({ length: obs + 1 }, (_, L) => 0.5 * (L + 1) + (age % 7) * 0.13), u = dd.map((_, L) => L ? Math.round(1000 / (L + 1)) : 1000);
+    const r = [X, 1000, 800, 20 + (age % 11), dd, df, u, T.map(a => (a <= age - 3 ? a + 1 : null)), dd[dd.length - 1], X, age > 20 ? [20, age % 3 === 0] : null, 'Normal', 0, 1600];
+    const nm = Math.floor(age / 30) - 1;
+    if (nm > 0) { r.push(Array.from({ length: nm }, (_, k) => 16 + 3 * (k + 1)), Array.from({ length: nm }, (_, k) => k).filter(k => 30 * (k + 2) <= age - 3).length,
+      Array.from({ length: nm }, (_, k) => Math.round(100 / (k + 1)))); r[8] = r[14][nm - 1]; }
+    rows.push(r);
+  }
+  return { v: 1, app: 'Big File', T, lags: 31, newest, rows, months: [], sum: { today: rows.slice(-2), pools: {} }, late: { days: n, till: newest }, consts: { final_lag: 3 } };
+}
+// the HTML: a FRESH module (packs read through a made-up fetch) — the same table in both cards for the same state, every
+// file × country × grain × mode; its first 60 rows = the cohort card's 60 (only the Show-more row not there); no "Show
+// more" ever; every row in; its own state's defaults; GOLDEN_BENCH (the card itself, every grain × mode, both default files)
+async function benchHtml(files, packs) {
+  const c = Object.assign({}, CTX0, { DATA: null, window: {}, setTimeout,
+    fetchGzJson: u => new Promise((ok_, no) => setTimeout(() => { const f = u.split('?')[0]; return packs[f] ? ok_(JSON.parse(JSON.stringify(packs[f]))) : no(new Error('x')); }, 0)) });
+  vm.createContext(c); vm.runInContext(src, c);
+  const U = c.ROI._, BN = U.BN, flush = () => new Promise(r => setTimeout(r, 5)), crypto = require('crypto');
+  const res = { def: [BN.grain, BN.met, BN.cty, BN.show, BN.all], same: [], diff: [], more: 0, first60: [], rows: [] };
+  const d0 = appFile(), dm = lateFile(), parts = [];
+  const b0 = U.benchCard(files[0][1]);                                     // the defaults on screen: Month, ROAS %, All countries
+  res.def.push(b0.includes('data-roi-grain="month" aria-pressed="true">Month'), b0.includes('data-roi-met="roas" aria-pressed="true">ROAS %'),
+    b0.includes('data-roi-cc="" aria-pressed="true">🌍 All countries'), b0.startsWith('<div class="roi-card" id="roi-bmk"><div class="roi-ct"><h3>Benchmark · Every install month · D0 se D'),
+    b0.includes('<span class="roi-note">Abhi ye upar wale table ki copy hai — aap jo badlav bolenge woh sirf yahan honge · sabse naya upar · cell pe ruko = detail</span></div>'));
+  for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) {
+    Object.assign(BN, { grain: g, met: m, cty: '' }); for (const d of [d0, dm]) parts.push(U.benchCard(d), benchFull(U, d)); }
+  res.golden = crypto.createHash('sha256').update(parts.join('\u0001')).digest('hex');
+  for (const [nm, d, ccs] of files) for (const cc of ccs) for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) {
+    U.set('GRAIN', g); U.set('MET', m); U.set('SHOW', 1e9); U.setCTY(cc); Object.assign(BN, { grain: g, met: m, cty: cc });
+    U.cohCard(d); U.benchCard(d); await flush();                            // a country's pack read (once: both cards wait for it)
+    const a = U.cohCard(d), b = benchFull(U, d), b1 = U.benchCard(d), nm_ = `${nm} ${cc || 'All'} ${g} ${m}`;
+    (unframe(a) === unframe(b) && a.includes('<tbody><tr') ? res.same : res.diff).push(nm_);
+    res.more += /data-roi-more/.test(b + b1);
+    if (g === 'day' && nm === 'app') { U.set('SHOW', 60); const a60 = U.cohCard(d);   // 70 install days: the cohort card's first 60 + its buttons
+      res.first60.push([nm_, MORE_RE.test(a60), unframe(a60).replace(MORE_RE, '') === unframe(b1)]); }
+  }
+  // the retention legend's ≈ line drawn again when rows added later mark a kind the first 60 did not (retQL says the kinds
+  // "the table on screen marked"): a country whose GA4 "(other)" days lie only under its oldest install days
+  { const nw = '2026-10-13', rs = [];
+    for (let age = 69; age >= 0; age--) { const X = day(nw, -age), obs = Math.min(30, age), df = Math.max(0, Math.min(obs, age - 3) + 1), dd = Array.from({ length: obs + 1 }, (_, L) => L + 1);
+      rs.push([X, 100, null, 10, dd, df, dd.map((_, L) => L ? 40 : 100), T.map(a => (a <= 30 && a < df ? dd[a] : null)), dd[obs], day(X, obs), null, 'Normal', 0, 10]); }
+    const pk = 'roi_bbbbbbbbbbbb_c00.json.gz'; packs[pk] = { v: 1, b: 'b1b1b1b1b1b1', c: { AA: rs } };
+    const dU = Object.assign(appFile(), { cd: { v: 1, b: 'b1b1b1b1b1b1', packs: [[pk, '00000000000a']], c: [['AA', 7000, 700, null, 0, 0, 0, 0]], thru: nw, fthru: day(nw, -3),
+      newest: nw, geo: { unk: [], billed: 1 }, uu: { ou_r: [[day(nw, -69), day(nw, -61)]], ou: 77 } } });
+    U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 1e9); U.setCTY('AA'); Object.assign(BN, { grain: 'day', met: 'roas', cty: 'AA' });
+    U.cohCard(dU); U.benchCard(dU); await flush();
+    const a = U.cohCard(dU), b1 = U.benchCard(dU), bf = benchFull(U, dU), q = '≈ (chhota number) = 9 din GA4 ne kuch users (din-wise jod 77)';
+    res.leg = [b1.includes(q), bf.includes(q), a.includes(q), unframe(a) === unframe(bf), (b1.match(/≈ \d/g) || []).length, (bf.match(/≈ \d/g) || []).length]; }
+  // every row: Day / Week / Month of a 1,000-day file (70 columns at Day) — the first HTML holds 60, every row once scrolled
+  const big = bigFile(1000); U.setCTY(''); U.set('MET', 'roas'); Object.assign(BN, { met: 'roas', cty: '' });
+  for (const g of ['day', 'week', 'month']) { BN.grain = g; U.set('GRAIN', g); U.set('SHOW', 1e9);
+    const b1 = U.benchCard(big), bf = benchFull(U, big), a = U.cohCard(big), n = h => (h.match(/<tr data-roi-k=/g) || []).length;
+    res.rows.push([g, n(b1), n(bf), n(a), U.groupRows(big).length, (bf.match(/<th>/g) || []).length, b1.length, bf.length, unframe(a) === unframe(bf)]); }
+  return res;
+}
+// the page: the block in a parsed DOM with the layout model and the stay-put layer, the real listeners (keepHarness). The
+// reader taps every control of the Benchmark mid-screen, then the cohort card's; per tap: how far the tapped control (a
+// gone ✕: the card's title) moved on screen, the page's scroll calls; the OTHER card: the same node, the same HTML, its
+// box's scroll, its state. Then the Benchmark at Day: its box scrolled to its end again and again (no button) until every
+// install day is in — the reader's row and the page never move; a Mode switch deep down keeps the row; the cohort
+// card's taps keep the Benchmark's box as it was (its rows added, its scroll).
+async function benchDom(VW, file, packs, o) {
+  o = o || {};
+  const H = await keepHarness(VW, file, packs), { D, U, SP, R, drain } = H, VH = VW <= 760 ? 740 : 900, BN = U.BN;
+  // the totals strip is ONE height in every state ('…' while a pack loads, its values after — the page's CSS, pinned in
+  // test_roi_frontend.py); the layout model sizes blocks by their text, so here it is one fixed block (as in noJump)
+  D.hooks.set = (el, h) => h.replace(KPI_RE, '<div class="roi-cks">' + '.'.repeat(400) + '</div>');
+  U.set('VIEW', 'day'); U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60); U.setCTY('');
+  const b0 = D.q('#roi-bmk');                                               // drawn by block() (the page's first paint)
+  R.repaint(); await drain(0);
+  const firstKept = D.q('#roi-bmk') === b0;                                 // the first repaint keeps it (its scroll too)
+  const coh = () => D.q('#roi-body').children.find(e => e.classList.contains('roi-card') && e.querySelector('[data-roi-grain]') && !e.closest('#roi-bmk') && e.id !== 'roi-bmk');
+  const bm = () => D.q('#roi-bmk'), boxIn = e => e.querySelector('.roi-tw'), lab = tr => tr.children[0].textContent.replace(/\s+/g, ' ').trim();
+  const keys = e => boxIn(e).querySelectorAll('tbody tr').map(tr => tr.getAttribute('data-roi-k'));
+  const lastSeen = bx => { D.lay(); const br = bx.getBoundingClientRect(), lo = Math.max(0, br.top), hi = Math.min(VH, br.bottom);
+    const s = bx.querySelectorAll('tbody tr').filter(tr => { const q = tr.getBoundingClientRect(); return q.bottom > lo && q.top < hi; }); return s[s.length - 1]; };
+  const bnSt = () => JSON.stringify([BN.grain, BN.met, BN.cty, BN.show]);
+  // the other card, as the tap left it: [same node, same HTML, its box's scroll kept, its state kept]
+  const other = (pick, st) => { const e = pick(), bx = e && boxIn(e); if (bx) { bx.scrollTop = 150; bx.scrollLeft = 90; }
+    const html = e ? e.outerHTML : null, sc = bx ? [bx.scrollTop, bx.scrollLeft] : null, s0 = st();
+    return () => { const e2 = pick(), bx2 = e2 && boxIn(e2); return [e2 === e, e2 ? e2.outerHTML === html : false, bx2 ? JSON.stringify([bx2.scrollTop, bx2.scrollLeft]) === JSON.stringify(sc) : sc === null, st() === s0]; }; };
+  const tap = async (sel, after, val, pick, st) => {
+    let b = D.q(sel); if (!b) return { sel, gone: true };
+    D.lay(); D.W.y = Math.max(0, b._L.top - VH / 2); D.lay(); b = D.q(sel);
+    const an = D.q(after || sel), y0 = an.getBoundingClientRect().top, c0 = D.W.calls, chk = other(pick, st);
+    if (val != null) { b.setAttribute('value', val); D.fire('change', b); } else { D.fire('pointerdown', b); D.fire('click', b); }
+    const a0 = D.q(after || sel), m0 = a0 ? Math.round(a0.getBoundingClientRect().top - y0) : 'gone';   // right after the handlers
+    await drain(500);                                                       // the stay-put layer's checks; a pack lands
+    const a = D.q(after || sel);
+    return { sel, move0: m0, move: a ? Math.round(a.getBoundingClientRect().top - y0) : 'gone', calls: D.W.calls - c0, other: chk() };
+  };
+  const cohSt = () => JSON.stringify(U.st()), res = { firstKept, bench: [], coh: [], scroll: null, met: null, keep: null };
+  const B = s => '#roi-bmk ' + s, TB = (s, a, v) => tap(B(s), a && B(a), v, coh, cohSt);
+  // 🧪 taps in the Benchmark: grain, mode, a chip, the full list, ✕ All countries, a chip again, back to All by the list
+  for (const [s, a, v] of [['[data-roi-grain="day"]'], ['[data-roi-grain="week"]'], ['[data-roi-met="rev"]'], ['[data-roi-met="ltv"]'],
+    ['[data-roi-cc="AA"]'], ['[data-roi-grain="month"]'], ['[data-roi-ccs]', null, 'GG'], ['[data-roi-ccx]', 'h3'], ['[data-roi-cc="BB"]'],
+    ['[data-roi-met="delta"]'], ['[data-roi-ccs]', null, ''], ['[data-roi-met="roas"]'], ['[data-roi-grain="day"]']]) {
+    if (!o.cc && /data-roi-cc/.test(s)) continue;
+    res.bench.push(Object.assign(await TB(s, a, v), { st: bnSt() })); }
+  // the cohort card's taps: the Benchmark (Day, All, ROAS %) stays as it is — the same box
+  const TC = (s, a, v) => tap(s, a, v, bm, bnSt);
+  for (const [s, a, v] of [['[data-roi-grain="week"]'], ['[data-roi-met="rev"]'], ['[data-roi-cc="AA"]'], ['[data-roi-ccs]', null, 'GG'],
+    ['[data-roi-ccx]', '#roi-coh h3'], ['[data-roi-grain="day"]'], ['[data-roi-met="roas"]']]) {
+    if (!o.cc && /data-roi-cc/.test(s)) continue;
+    res.coh.push(Object.assign(await TC(s, a, v), { st: cohSt() })); }
+  // the Benchmark at Day: scrolled to its box's end again and again — no button — until every install day is in
+  { const e = bm(), bx = boxIn(e), n0 = keys(e).length, steps = []; D.lay(); D.W.y = Math.max(0, bx._L.top - 100); D.lay();
+    for (let i = 0; i < 40; i++) {
+      bx.scrollTop = bx.scrollHeight; D.lay(); const a = lastSeen(bx), L0 = lab(a), y0 = a.getBoundingClientRect().top, sy = D.W.y, st0 = bx.scrollTop, c0 = D.W.calls, n1 = keys(e).length;
+      D.fire('scroll', bx); await drain(0);
+      const a2 = bx.querySelectorAll('tbody tr').find(tr => lab(tr) === L0), n2 = keys(e).length;
+      steps.push([n1, n2, a2 ? Math.round(a2.getBoundingClientRect().top - y0) : 'gone', D.W.y - sy, bx.scrollTop - st0, D.W.calls - c0]);
+      if (n2 === n1) break; }
+    bx.scrollTop = 0; const nTop = keys(e).length; D.fire('scroll', bx); await drain(0);    // at the box's top: nothing more
+    // the same rows as the cohort card's "Show all" (Day, All countries), in the same order
+    const full = keys(e), legs = e.querySelectorAll('.roi-rtl').length;
+    U.set('SHOW', 1e9); R.repaint(); await drain(0);
+    const ck = keys(coh());
+    res.scroll = { n0, steps, nTop: [nTop, keys(bm()).length], same: JSON.stringify(full) === JSON.stringify(ck), n: full.length, legs,
+      kept: bm() === e, more: !!bm().querySelector('[data-roi-more]') };
+    U.set('SHOW', 60); R.repaint(); await drain(0); }
+  // a Mode switch with the reader deep in the Benchmark's rows (its box half way down): the same rows, the row in place
+  { const e = bm(), bx = boxIn(e), n = keys(e).length; bx.scrollTop = Math.floor((bx.scrollHeight - bx.clientHeight) / 2);
+    const b = e.querySelector('[data-roi-met="rev"]'); D.lay(); D.W.y = Math.max(0, b._L.top - 60); D.lay();
+    const a = lastSeen(bx), L0 = lab(a), y0 = a.getBoundingClientRect().top, c0 = D.W.calls, i0 = bx.querySelectorAll('tbody tr').indexOf(a);
+    D.fire('pointerdown', b); D.fire('click', b); await drain(500);
+    const e2 = bm(), a2 = boxIn(e2).querySelectorAll('tbody tr').find(tr => lab(tr) === L0);
+    res.met = { rows: [n, keys(e2).length], idx: i0, move: a2 ? Math.round(a2.getBoundingClientRect().top - y0) : 'gone', calls: D.W.calls - c0, met: BN.met, coh: U.st().MET }; }
+  // the cohort card's taps keep the Benchmark's box as it was: its rows added (all of them now) and its scroll (other)
+  { const e = bm(), n = keys(e).length, t = await TC('[data-roi-met="ltv"]'), e2 = bm();
+    res.keep = { node: e2 === e, rows: [n, keys(e2).length], other: t.other, move: t.move }; }
+  return res;
+}
+// a pack each card waits for on its own (both packs fail at first, then are on the site): the Benchmark's error and the
+// cohort card's, each with its own "Try again" (the Benchmark's mark "b"); each Try again reads again only the pack its
+// card waits for and paints only what changed — the other card the same node, the same HTML. A pack that lands after the
+// Benchmark moved on (EE asked, then AA at once) never paints it again.
+async function benchPacks(VW, file, packs) {
+  const P2 = {}, asked = [], H = await keepHarness(VW, file, P2, asked), { D, U, R, drain } = H;
+  U.set('VIEW', 'day'); U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60); U.setCTY(''); R.repaint(); await drain(0);
+  const coh = () => D.q('#roi-coh'), bm = () => D.q('#roi-bmk'), click = async b => { D.fire('pointerdown', b); D.fire('click', b); await drain(500); };
+  const res = {};
+  await click(D.q('#roi-bmk [data-roi-cc="EE"]'));                       // the Benchmark: EE (pack c01, not on the site yet)
+  await click(D.q('#roi-coh [data-roi-cc="AA"]'));                       // the cohort card: AA (pack c00, not there either)
+  const be = bm().outerHTML, ce = coh().outerHTML;
+  res.err = [be.includes('data-roi-ccr="b">Try again') && be.includes('[EE] Country EE ka data load nahi hua'), !be.includes('data-roi-ccr="1"'),
+    ce.includes('data-roi-ccr="1">Try again') && ce.includes('[AA] Country AA ka data load nahi hua'), !ce.includes('data-roi-ccr="b"')];
+  Object.assign(P2, packs);                                                // both packs on the site now
+  let c0 = coh(), n0 = asked.length;
+  await click(D.q('#roi-bmk [data-roi-ccr]'));                           // the Benchmark's Try again: only c01 read again
+  res.bRetry = [asked.slice(n0), bm().outerHTML.includes('[EE] Country EE</h3>') && !bm().outerHTML.includes('Try again'), coh() === c0 && coh().outerHTML === ce];
+  const b1 = bm(), bh = b1.outerHTML; n0 = asked.length;
+  await click(D.q('#roi-coh [data-roi-ccr]'));                           // the cohort card's: only c00; the Benchmark's box kept
+  res.cRetry = [asked.slice(n0), coh().outerHTML.includes('[AA] Country AA</h3>') && !coh().outerHTML.includes('Try again'), bm() === b1 && bm().outerHTML === bh];
+  // late: the Benchmark asks GG (c01, read again), then at once AA (c00 in hand): GG's pack landing never paints it again
+  for (const k of Object.keys(H.U.PK)) if (k.startsWith('roi_aaaaaaaaaaaa_c01')) { delete H.U.PK[k]; H.U.PKL.splice(H.U.PKL.indexOf(k), 1); }
+  const g = D.q('#roi-bmk [data-roi-ccs]'); g.setAttribute('value', 'GG'); D.fire('change', g);
+  const a = D.q('#roi-bmk [data-roi-cc="AA"]'); D.fire('pointerdown', a); D.fire('click', a);
+  const b2 = bm(), h2 = b2.outerHTML; await drain(500);
+  res.late = [h2.includes('[AA] Country AA</h3>'), bm() === b2 && bm().outerHTML === h2, U.BN.cty, U.getCTY()];
   return res;
 }
 (async () => {
@@ -1572,7 +1776,7 @@ async function moreKeepAll(dc, packs) {
     out.cc_all_same = ccAll.includes(tAll.replace('<div class="roi-ctl">', '<div class="roi-ctl">' + pick))
       && U.cohortTable(dc, { ctl: pick }) === tAll.replace('<div class="roi-ctl">', '<div class="roi-ctl">' + pick)
       && ccAll.indexOf('data-roi-cc=""') < ccAll.indexOf('data-roi-grain="day"') && !fetched.length
-      && U.dayView(dc).replace(pick, '').replace(' id="roi-coh"', '') === U.dayView(appFile());
+      && noBench(U, dc).replace(pick, '').replace(' id="roi-coh"', '') === noBench(U, appFile());
     // picking a country: its pack is fetched once (?v=its sha), "loading" only inside the table area
     U.setCTY('AA');
     const ld = U.cohCard(dc);
@@ -1887,7 +2091,7 @@ async function moreKeepAll(dc, packs) {
       // where it sits: under the title row, right above the control row (country chips · grain · mode), above the table;
       // its one group (no group heads), its fixed note
       out.k_place = [hk.includes('cell pe ruko = detail</span></div>' + kOf(hk) + '<div class="roi-ctl">'), (hk.match(/class="roi-cks"/g) || []).length,
-        hk.indexOf('roi-cks') < hk.indexOf('<table'), (U.dayView(dk).match(/class="roi-cks"/g) || []).length, U.ctyView(appFile()).includes('roi-cks'),
+        hk.indexOf('roi-cks') < hk.indexOf('<table'), (noBench(U, dk).match(/class="roi-cks"/g) || []).length, U.ctyView(appFile()).includes('roi-cks'),
         kOf(hk).includes('<p class="roi-note roi-ckn">Poori history ka jod — Profit / loss = Total revenue − Total spend, ROAS = Total revenue ÷ Total spend; country chuno to sirf us country ka. Avg breakeven = $5+ spend wale jo install din BE tak pahunch gaye, unke Breakeven din ka avg (≤ day = us din ya pehle; koi ≤ ho to avg bhi ≤); unke median ke 50% se pehle BE wale (achanak jaldi) avg me nahi, aur jo din abhi BE tak nahi pahunche wo alag gine.</p>'),
         (kOf(hk).match(/<div class="roi-ckg">/g) || []).length, /roi-ck[hqx]/.test(kOf(hk)),
         // 🎯 the two fixed lines under the tiles: Avg breakeven's first, then the days with no spend data, then the note
@@ -2224,6 +2428,12 @@ async function moreKeepAll(dc, packs) {
       w375: await noJump(375, dS, PACKS, F1), w1280: await noJump(1280, dS, PACKS, F1),
       t375: await noJump(375, dS, PACKS, [], nT), t1280: await noJump(1280, dS, PACKS, [], nT) };
     out.more_keep = await moreKeepAll(dc, PACKS);
+    // 🧪 the Benchmark card: the same table as the cohort card (every file × country × grain × mode), its own state, every
+    // row, no page jump, each card's pack / Try again its own
+    out.bn_html = await benchHtml([['cty', dc, ['', 'AA', 'EE', '--', 'XX']], ['app', appFile(), ['']], ['late', lateFile(), ['']]], PACKS);
+    out.bn_dom = { w375: await benchDom(375, dc, PACKS, { cc: 1 }), w1280: await benchDom(1280, dc, PACKS, { cc: 1 }),
+      long375: await benchDom(375, longFile(), null), long1280: await benchDom(1280, longFile(), null) };
+    out.bn_packs = { w375: await benchPacks(375, dc, PACKS), w1280: await benchPacks(1280, dc, PACKS) };
     }
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };

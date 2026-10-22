@@ -205,6 +205,33 @@ const rebuildJump = (shift) => () => { SCR.replaceChildren(...screenKids(shift =
     await tap(second(), () => { SCR.replaceChildren(...twins().map(t => { t.top += 500; return t; })); W.scrollY = 0; });
     return { before, after: onScreen(second()) };
   });
+  // 🧪 two cards with the same controls one under the other (ROI's "Every install day" card and its Benchmark copy, 22 Oct
+  // 2026): a control of the SECOND card, the view rebuilt with more above it → back where it was (its index among twins)
+  const all = (root, pred) => { const hit = []; const walk = e => e.children.forEach(c => { if (pred(c)) hit.push(c); walk(c); }); walk(root); return hit; };
+  const ccx = (v, top) => el('button', { type: 'button', class: 'roi-lnk roi-ccx', 'data-roi-ccx': v, top, text: '✕ All countries' });
+  const twinCards = (shift, xa, xb) => [el('div', { top: 100, text: 'chart' }),
+    el('div', { class: 'roi-card', id: 'roi-coh', top: 1500 }, [el('h3', { top: 1500, text: 'Every install day' })].concat(xa ? [ccx(xa, 1510)] : [],
+      [el('button', { type: 'button', 'data-roi-grain': 'week', top: 1600, text: 'Week' })])),
+    el('div', { class: 'roi-card', id: 'roi-bmk', top: 2600 + shift }, [el('h3', { top: 2600 + shift, text: 'Benchmark · Every install day' })].concat(xb ? [ccx(xb, 2610 + shift)] : [],
+      [el('button', { type: 'button', 'data-roi-grain': 'week', top: 2700 + shift, text: 'Week' })]))];
+  await step('twin_cards_second', async () => {
+    SCR.replaceChildren(...twinCards(0)); W.scrollY = 2300;
+    const wk = () => all(SCR, x => x.getAttribute('data-roi-grain') === 'week'); const before = onScreen(wk()[1]);
+    await tap(wk()[1], () => { SCR.replaceChildren(...twinCards(180)); W.scrollY = 0; });
+    return { before, after: onScreen(wk()[1]), n: wk().length };
+  });
+  // a ✕ that goes with the tap while the OTHER card still shows its own ✕: with one mark on both, the layer takes the other
+  // card's for it and scrolls the page there (the hazard: twin_gone_same_mark); the Benchmark's ✕ carries its own mark
+  // ("b"): no twin, the page stays (twin_gone_marked) — and the cohort card's ✕ the same way round
+  const gone = (xa, xb, tapB) => async () => {
+    SCR.replaceChildren(...twinCards(0, xa, xb)); W.scrollY = tapB ? 2300 : 1200;
+    const x = all(SCR, e => e.getAttribute('data-roi-ccx') != null)[tapB ? 1 : 0];
+    await tap(x, () => { SCR.replaceChildren(...twinCards(0, tapB ? xa : null, tapB ? null : xb)); });
+    return { y: W.scrollY, want: tapB ? 2300 : 1200 };
+  };
+  await step('twin_gone_marked', gone('1', 'b', true));
+  await step('twin_gone_marked_coh', gone('1', 'b', false));
+  await step('twin_gone_same_mark', gone('1', '1', true));
   await step('top_bar_keeps_scrollY', async () => {   // ₹/$ in the sticky top bar: the page shrinks, rebuilds, keeps scrollY
     W.scrollY = 2600;
     await tap(CUR, () => { SCR.replaceChildren(); W.scrollY = 0; SCR.replaceChildren(...screenKids(0)); });
@@ -252,7 +279,6 @@ const rebuildJump = (shift) => () => { SCR.replaceChildren(...screenKids(shift =
   });
   // 📈 the eCPM tables' comparison row (the page's own attributes): a tap repaints the whole view (ecPaint) — the title above
   // the row can grow a line, the ‹ › / chip can turn disabled, the twin rows (Ad units + Countries cards) are both rebuilt
-  const all = (root, pred) => { const hit = []; const walk = e => e.children.forEach(c => { if (pred(c)) hit.push(c); walk(c); }); walk(root); return hit; };
   const ecCtl = (top, mode, hiOff) => el('div', { class: 'ec-cmp', top }, [
     el('div', { class: 'ec-seg', role: 'group', 'aria-label': 'Compare', top }, [
       el('button', { type: 'button', class: mode === 'y' ? 'on' : '', 'aria-pressed': String(mode === 'y'), onclick: "ecCmpM('y')", top, text: 'Yesterday vs' }),
