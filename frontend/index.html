@@ -7475,17 +7475,17 @@ function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[
     :!(sp>0)?`spend 0 — ${k?'ROAS':'profit / loss'} nahi`:tn?`spend ≈ 0 — ${k?'ROAS':'profit / loss'} nahi`:'kamai abhi nahi padhi';
   const ln=rows&&M?`${N(M)} din ka spend data nahi (${rg}) — unka spend jod me nahi${xx?'':', revenue hai'}.`:'';
   // 🎯 Avg breakeven: '—' with its reason (Not split / Unknown country / no ads day / fewer than BE_MIN_N days reached:
-  // none — not even yet, or 100%+ back with no day —, or only one or two), else "D<n>" ("≤ D<n>" over any "≤" day) + how
-  // many install days it averages and their median (≤ 40 characters: two lines of the narrowest tile, 116 px at 900 beside
-  // the sidebar, measured in Chrome with 4-digit counts); its line: how many ads days reached breakeven, then each day left
-  // out with its count (≤ 192 characters with 4-digit counts: 4 lines up to 430 px, 3 to 899, 2 from 900 — its fixed box,
-  // measured in Chrome)
+  // none — said by the larger count of not even yet / 100%+ back with no day, a tie → not even yet —, or only one or two),
+  // else "D<n>" ("≤ D<n>" over any "≤" day) + how many install days it averages and their median (≤ 40 characters: two
+  // lines of the narrowest tile, 116 px at 900 beside the sidebar, measured in Chrome with 4-digit counts); its line: how
+  // many ads days reached breakeven, then each day left out with its count (≤ 192 characters with 4-digit counts: 4 lines
+  // up to 430 px, 3 to 899, 2 from 900 — its fixed box, measured in Chrome)
   const ms=d&&d.consts&&ok(d.consts.min_spend)&&d.consts.min_spend>0?+d.consts.min_spend:5, m$='$'+ms;
   const ba=rows&&rows.length&&!xx&&!un?beAvg(rows,d.T,{minsp:ms}):null, bok=!!ba&&ba.avg!=null, up=(v,q)=>q?Math.ceil(v-1e-9):Math.round(v);
   const bs=xx?'Not split: koi kamai nahi':un?'Google Ads me ye country nahi':!ba?'ads din ke Breakeven ka avg'
     :!ba.ads?(ba.lo?`${N(ba.lo)} din, sab spend &lt;${m$}`:nsp?'koi ads din nahi — BE nahi':'spend nahi — BE nahi')
     :bok?`${N(ba.kept)} install din ka avg · median ${ba.mq}D${up(ba.med,ba.mq)}`:ba.nr?`sirf ${N(ba.nr)} din BE hue (${N(ba.ads)} ads din)`
-    :ba.pend?`BE din pakka nahi (${N(ba.ads)} ads din)`:ba.wait?`abhi koi din BE nahi hua (${N(ba.ads)} ads din)`:'kamai abhi nahi padhi';
+    :ba.wait||ba.pend?(ba.wait>=ba.pend?`abhi koi din BE nahi hua (${N(ba.ads)} ads din)`:`BE din pakka nahi (${N(ba.ads)} ads din)`):'kamai abhi nahi padhi';
   const bl=!ba?'':!ba.ads?(ba.lo?`Avg BE sirf ${m$}+ spend wale din ka (Status ki tarah) — yahan ${N(ba.lo)} din, sab ${m$} se kam.`:'')
     :[`${N(ba.nr)} din BE hue (${N(ba.ads)} ads din me)`,ba.fast?`${N(ba.fast)} jaldi BE (&lt;D${Math.ceil(ba.cut-1e-9)}) avg se bahar`:'',
       ba.wait?`${N(ba.wait)} din abhi BE tak nahi pahunche`:'',ba.pend?`${N(ba.pend)} 100%+ back, din pakka nahi`:'',

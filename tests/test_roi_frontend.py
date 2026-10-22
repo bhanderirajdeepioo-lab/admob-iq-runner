@@ -376,7 +376,7 @@ def test_totals_strip(out):
     # $0 + $6 = $20, Total revenue $30 + $5 + $0 + $3 = $38 → +$18 (= $38 − $20), ROAS 190%; 200 installs, 5 days
     k, line, (s, r, p, roas, exact) = out["k_usd"]
     assert k == _tiles("$20", "$38", "+$18", "190%", "200", ["5", "1 Jan 2026 – 5 Jan 2026"],
-                       "1 din ka spend data nahi", "1 din ki kamai abhi nahi padhi", ("—", "BE din pakka nahi (2 ads din)")) and _holds(k) and exact
+                       "1 din ka spend data nahi", "1 din ki kamai abhi nahi padhi", ("—", "abhi koi din BE nahi hua (2 ads din)")) and _holds(k) and exact
     assert line == "1 din ka spend data nahi (2 Jan 26) — unka spend jod me nahi, revenue hai."
     assert out["k_usd_cls"] == [["", ""], ["", ""], ["roi-kg", "roi-up"], ["", "roi-g"], ["roi-cka", ""], ["", ""], ["", ""]]   # profit green, ROAS ≥ 100% green
     # = the table's own columns: Σ Spend, Σ So far, Σ Installs
@@ -386,7 +386,7 @@ def test_totals_strip(out):
     # (the ₹ view says "₹ aaj ka rate" on Total revenue with the unread count too: spend as billed, revenue at today's rate)
     k, line, (s, r, p, roas, exact), table, rc = out["k_inr"]
     assert k == _tiles("₹1,800", "₹3,800", "+₹2,000", "211%", "200", ["5", "1 Jan 2026 – 5 Jan 2026"],
-                       "1 din ka spend data nahi", "₹ aaj ka rate; 1 din nahi padhe", ("—", "BE din pakka nahi (2 ads din)")) and _holds(k, rc) and exact
+                       "1 din ka spend data nahi", "₹ aaj ka rate; 1 din nahi padhe", ("—", "abhi koi din BE nahi hua (2 ads din)")) and _holds(k, rc) and exact
     assert table == [s, r] == [rc["S"], rc["R"]] and p == rc["P"] and line == out["k_usd"][1]
     # a ₹ view of a file not billed in ₹: $ × 100 on both sides — ₹2,000 / ₹3,800 → +₹1,800, the $ view's 190%
     k, (s, r, p, roas, exact), table, rc = out["k_inr_usd"]
@@ -404,7 +404,7 @@ def test_totals_strip_owner_case(out):
     # 3 × $30 = $770 (the 2 newest left out, said) → +$270, ROAS 154%
     k, cls, line, (s, r, p, roas, exact), rc, table = out["k_own_usd"]
     assert k == _tiles("$500", "$770", "+$270", "154%", "600", ["60", "1 Mar 2025 – 29 Apr 2025"],
-                       "30 din ka spend data nahi", "2 din ki kamai abhi nahi padhi", ("—", "BE din pakka nahi (25 ads din)"))
+                       "30 din ka spend data nahi", "2 din ki kamai abhi nahi padhi", ("—", "abhi koi din BE nahi hua (25 ads din)"))
     assert exact and r - s == p and _holds(k, rc) and cls[2:4] == [["roi-kg", "roi-up"], ["", "roi-g"]]
     assert line == "30 din ka spend data nahi (1 Mar 25 – 30 Mar 25) — unka spend jod me nahi, revenue hai."
     assert [rc[x] for x in ("S", "R", "P", "M", "K", "nsp", "nrv")] == [500, 770, 270, 30, 2, 30, 58] and table == [500, 770]
@@ -412,7 +412,7 @@ def test_totals_strip_owner_case(out):
     # column); Total revenue $770 × 88 = ₹67,760 (= Σ the So far column) → +₹26,370 to the rupee, ROAS 164%
     k, cls, line, (s, r, p, roas, exact), rc, table = out["k_own_inr"]
     assert k == _tiles("₹41,390", "₹67,760", "+₹26,370", "164%", "600", ["60", "1 Mar 2025 – 29 Apr 2025"],
-                       "30 din ka spend data nahi", "₹ aaj ka rate; 2 din nahi padhe", ("—", "BE din pakka nahi (25 ads din)"))
+                       "30 din ka spend data nahi", "₹ aaj ka rate; 2 din nahi padhe", ("—", "abhi koi din BE nahi hua (25 ads din)"))
     assert exact and r - s == p == 26370 and _holds(k, rc) and [rc[x] for x in ("S", "R", "P")] == [41390, 67760, 26370]
     assert table == [41390, 67760] and line == out["k_own_usd"][2]
     # a ₹ view of a file not billed in ₹: $ × 88 on both sides — +₹23,760, the $ view's 154%
@@ -487,7 +487,8 @@ def test_totals_strip_states(out):
     assert k == want and cnt == [70, 28, 0, 42, "2026-08-05", "2026-10-13"] and exact and _holds(k, rc)
     # (ROAS from the sums: Σ so far $799.50 ÷ $380 = 210% — the rounded $800 ÷ $380 would say 211%)
     assert [x[1] for x in k] == ["$380", "$800", "+$420", "210%", "—", "1,260", "70"] and k[0][2] == "28 din ka spend data nahi"
-    assert k[4] == ["Avg breakeven", "—", "BE din pakka nahi (38 ads din)"]   # (its rows: no breakeven day; = the recount)
+    # (its rows: no breakeven day, more 100%+ back with no day pinned than not even yet; = the recount)
+    assert k[4] == ["Avg breakeven", "—", "BE din pakka nahi (38 ads din)"]
     # = Σ its Spend / So far columns over every row (each so far printed whole: ≤ $0.50 a row off)
     assert table[0] == 380 and abs(table[1] - 800) <= 0.5 * 70 and same
     assert line == "28 din ka spend data nahi (2 hisson me, 5 Aug 26 – 13 Oct 26) — unka spend jod me nahi, revenue hai."
@@ -507,12 +508,12 @@ def test_totals_strip_states(out):
     k, not_busy, msg, line = out["k_err"]
     assert [x[1] for x in k] == ["—"] * 7 and not_busy and msg and line == ""
     assert out["k_miss"] == [["—"] * 7, True, ""] and out["k_nocd"] == [True, True]
-    # ONE height in every state (67 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, no
+    # ONE height in every state (69 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, no
     # spend data, crore, the owner's case, a few cents of spend, 1,234 days, 🎯 every Avg breakeven case — its longest
     # reason and line too …): the same box — one grid, seven tiles, labels, the two lines' boxes, the note (the CSS pins
     # are in test_wiring; measured in headless Chrome: one height per width over every state, 360 – 2560 px, classic
     # scrollbar too, 22 Oct 2026 after the plain-median rule — no value / reason / line cut)
-    assert out["k_skel"] == [1, 67]
+    assert out["k_skel"] == [1, 69]
     # crore-size ₹ printed in full — 14+ characters a size smaller (roi-ckw), shorter ones not; the arithmetic still exact
     big7, big8, small, n7, n8 = out["k_big"]
     assert big7 == ["₹23,45,76,190", "₹14,08,08,624", "−₹9,37,67,566", "60%", "—", "1,234,577", "2"]
@@ -524,7 +525,7 @@ def test_totals_strip_states(out):
     # 131 px at 360, checked in Chrome) — ≤ 31 on the four tiles 3 columns wide from 900 px (116 px at 900 beside the
     # sidebar: the 31-character ones measured in two lines there); labels one short line
     pr = out["k_print"]
-    assert len(pr) == 67 * 7 and any(v == "−₹93,76,78,576" for _, v, _, _ in pr) and any(v == "≤ D2025" for _, v, _, _ in pr)
+    assert len(pr) == 69 * 7 and any(v == "−₹93,76,78,576" for _, v, _, _ in pr) and any(v == "≤ D2025" for _, v, _, _ in pr)
     assert all(w == (len(v) >= 14) for _, v, w, _ in pr)
     tight = {}
     for w, sb, phone, box in _kpi_boxes():
@@ -645,6 +646,14 @@ def test_avg_breakeven(out):
     assert T["none"] == ["—", "abhi koi din BE nahi hua (2 ads din)"] and L["none"] == "0 din BE hue (2 ads din me) · 2 din abhi BE tak nahi pahunche."
     assert T["pend"] == ["—", "BE din pakka nahi (5 ads din)"]
     assert L["pend"] == "0 din BE hue (5 ads din me) · 2 din abhi BE tak nahi pahunche · 3 100%+ back, din pakka nahi."
+    # none reached, the reason by the LARGER count — never "din pakka nahi" for a young country where nearly every day is
+    # not even yet: 20 not even beside 3 100%+ back and 2 not read → "abhi koi din BE nahi hua"; a tie (2 and 2) → the same
+    assert T["mostWait"] == ["—", "abhi koi din BE nahi hua (25 ads din)"]
+    assert L["mostWait"] == ("0 din BE hue (25 ads din me) · 20 din abhi BE tak nahi pahunche · 3 100%+ back, din pakka nahi · "
+                             "2 kamai nahi padhi.")
+    assert (B["mostWait"]["wait"], B["mostWait"]["pend"], B["mostWait"]["unread"]) == (20, 3, 2)
+    assert T["tie"] == ["—", "abhi koi din BE nahi hua (4 ads din)"] and (B["tie"]["wait"], B["tie"]["pend"]) == (2, 2)
+    assert L["tie"] == "0 din BE hue (4 ads din me) · 2 din abhi BE tak nahi pahunche · 2 100%+ back, din pakka nahi."
     assert T["unread"] == ["—", "kamai abhi nahi padhi"] and L["unread"] == "0 din BE hue (3 ads din me) · 3 kamai nahi padhi."
     # an even count's median (10 … 60: 35, 10 before 17.5 out → D40); a day at exactly half the median stays (only
     # "before" half is out: D18); an odd count's median (40: 1 and 2 out → D50); nothing left out (62.5 → D63)

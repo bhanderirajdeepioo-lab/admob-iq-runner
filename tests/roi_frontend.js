@@ -1994,8 +1994,8 @@ async function moreKeepAll(dc, packs) {
         const line = [`${n(o.nr)} din BE hue (${n(o.ads)} ads din me)`, o.fast ? `${n(o.fast)} jaldi BE (&lt;D${Math.ceil(o.cut - 1e-9)}) avg se bahar` : '',
           o.wait ? `${n(o.wait)} din abhi BE tak nahi pahunche` : '', o.pend ? `${n(o.pend)} 100%+ back, din pakka nahi` : '', o.unread ? `${n(o.unread)} kamai nahi padhi` : '',
           o.lo ? `${n(o.lo)} spend &lt;${m$}` : ''].filter(Boolean).join(' · ') + '.';
-        if (o.avg == null) return [[L, '—', o.nr ? `sirf ${n(o.nr)} din BE hue (${n(o.ads)} ads din)` : o.pend ? `BE din pakka nahi (${n(o.ads)} ads din)`
-          : o.wait ? `abhi koi din BE nahi hua (${n(o.ads)} ads din)` : 'kamai abhi nahi padhi'], line];
+        if (o.avg == null) return [[L, '—', o.nr ? `sirf ${n(o.nr)} din BE hue (${n(o.ads)} ads din)` : !o.wait && !o.pend ? 'kamai abhi nahi padhi'
+          : o.wait >= o.pend ? `abhi koi din BE nahi hua (${n(o.ads)} ads din)` : `BE din pakka nahi (${n(o.ads)} ads din)`], line];
         return [[L, `${o.inexact ? '≤ ' : ''}D${up(o.avg, o.inexact)}`, `${n(o.kept)} install din ka avg · median ${o.mq}D${up(o.med, o.mq)}`], line]; };
       const expBE = (rows, cc) => { const L = 'Avg breakeven'; if (cc === 'XX') return [L, '—', 'Not split: koi kamai nahi'];
         if (cc === '--') return [L, '—', 'Google Ads me ye country nahi'];
@@ -2136,6 +2136,10 @@ async function moreKeepAll(dc, packs) {
           three: beSet([10, 40, 50]), two: beSet([30, 60]).concat(run('2025-03-01', 5, null, 10, 4)),
           none: run('2025-02-02', 2, null, 10, 4), pend: run('2025-02-02', 3, null, 10, 12).concat(run('2025-03-01', 2, null, 10, 4)),
           unread: run('2025-02-02', 3, null, 10, null),
+          // none reached, the reason by the larger count: 20 not even beside 3 100%+ back and 2 not read → not even yet; a tie
+          // (2 and 2) → not even yet too
+          mostWait: run('2025-02-02', 20, null, 10, 4).concat(run('2025-03-01', 3, null, 10, 12), run('2025-03-10', 2, null, 10, null)),
+          tie: run('2025-02-02', 2, null, 10, 4).concat(run('2025-03-01', 2, null, 10, 12)),
           // an even count's median (10 … 60: 35, 10 before 17.5 out → D40); a day at exactly half the median stays (only
           // "before" half is out: D18); an odd count's median (40: 1 and 2 out → D50); nothing left out (62.5 → D63)
           five: beSet([10, 20, 30, 40, 50, 60]), half: beSet([20, 20, 20, 20, 10]), odd: beSet([1, 2, 30, 40, 50, 60, 70]), all: beSet([60, 61, 62, 63, 64, 65]),
