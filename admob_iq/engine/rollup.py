@@ -19,9 +19,25 @@ corrupt a month's range. The account's genuinely-partial FIRST month is still in
 (the window covers it; the data just starts mid-month).
 """
 
+from datetime import timedelta
+
 from . import metrics
 
 _METS = ("ctr", "match", "show", "ecpm")
+
+
+def first_kept_day(window_start, today):
+    """The first report day whose rows RollupAccumulator(today).finish(window_start) keeps — every earlier row of a
+    run is thrown away by the coverage guard (its month started before the window, so that month's full rollup
+    already exists). Rows of today's month are ALWAYS kept (as the current month's daily rows, whatever the window
+    start), so the answer is never after the 1st of today's month. None = nothing is dropped (window_start None: a
+    full-history pull). Rows from this day on all land in a rollup or in the current month's daily rows. The
+    ad-unit × country pull uses it to skip asking for pieces that end before it (AcPlan); test_ac_plan checks it
+    against add() + finish() for every window start of several years, inside today's month too."""
+    if window_start is None:
+        return None
+    kf = window_start if window_start.day == 1 else (window_start.replace(day=1) + timedelta(days=32)).replace(day=1)
+    return min(kf, today.replace(day=1))
 
 
 def _daily_metrics(r):

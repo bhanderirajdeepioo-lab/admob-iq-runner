@@ -274,11 +274,12 @@ def test_every_speed_switch_is_a_repo_variable_of_the_build_step():
     with open(os.path.join(root, ".github", "workflows", "refresh.yml"), encoding="utf-8") as f:
         wf = yaml.safe_load(f)
     step = [s for s in wf["jobs"]["refresh"]["steps"] if s.get("name", "").startswith("Build dashboard")][0]
-    for name in ("REPO_FAST_WRITE", "REPO_SKIP_UNCHANGED", "SNAPSHOT_PARTS"):
+    for name in ("REPO_FAST_WRITE", "REPO_SKIP_UNCHANGED", "SNAPSHOT_PARTS", "AC_SKIP_DROPPED", "AC_PRESPLIT",
+                 "AC_ACCOUNT_WORKERS"):
         assert step["env"][name] == "${{ vars.%s }}" % name             # empty → the code's default
     for v, want in (("", True), ("false", False), ("0", False), ("off", False), ("true", True), ("typo", True)):
         os.environ["REPO_X_TEST"] = v
         try:
-            assert db._switch("REPO_X_TEST") is want
+            assert db._switch("REPO_X_TEST") is want and fetcher._switch("REPO_X_TEST") is want
         finally:
             del os.environ["REPO_X_TEST"]

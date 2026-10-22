@@ -202,15 +202,20 @@ jobs:
           IMPACT_ANY_WORKERS:   ${{ vars.IMPACT_ANY_WORKERS }}
           GA4_FIRSTOPEN_CC_BATCH: ${{ vars.GA4_FIRSTOPEN_CC_BATCH }}
           GA4_FIRSTOPEN_CC_WORKERS: ${{ vars.GA4_FIRSTOPEN_CC_WORKERS }}
-          # ⏱ History files (the same data either way; empty: the new path) — each a rollback without a code push:
-          # REPO_FAST_WRITE=false writes the history files with json.dump, REPO_SKIP_UNCHANGED=false rewrites every one
-          # each run, SNAPSHOT_PARTS=false keeps the snapshot history as ONE data/snapshots.json.gz again (that file grows
-          # past GitHub's 100 MB push limit, so only briefly).
+          # ⏱ AdMob pull + history files (the same data either way; empty: the new path) — each a rollback without a code
+          # push: REPO_FAST_WRITE=false writes the history files with json.dump, REPO_SKIP_UNCHANGED=false rewrites every
+          # one each run, SNAPSHOT_PARTS=false keeps the snapshot history as ONE data/snapshots.json.gz again (that file
+          # grows past GitHub's 100 MB push limit, so only briefly), AC_SKIP_DROPPED=false and
+          # AC_PRESPLIT=false ask AdMob for the ad-unit × country pieces as before; AC_ACCOUNT_WORKERS=3 pulls the
+          # accounts' ad-unit × country reports side by side (off until set: 1).
           # The snapshot layout's rollback is SNAPSHOT_PARTS=false, NEVER a git revert of the code: once the history is
           # in data/snapshots/, a build without the parts reader finds no snapshots.json.gz and shows an empty history.
           REPO_FAST_WRITE:      ${{ vars.REPO_FAST_WRITE }}
           REPO_SKIP_UNCHANGED:  ${{ vars.REPO_SKIP_UNCHANGED }}
           SNAPSHOT_PARTS:       ${{ vars.SNAPSHOT_PARTS }}
+          AC_SKIP_DROPPED:      ${{ vars.AC_SKIP_DROPPED }}
+          AC_PRESPLIT:          ${{ vars.AC_PRESPLIT }}
+          AC_ACCOUNT_WORKERS:   ${{ vars.AC_ACCOUNT_WORKERS }}
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On

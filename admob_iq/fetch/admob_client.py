@@ -8,6 +8,7 @@ Both clients yield RAW rows (counts + earnings in micros); derived metrics are
 computed in fetcher.py so the two clients stay interchangeable.
 """
 
+import itertools
 from datetime import date, timedelta
 from typing import Dict, Iterator, List
 
@@ -97,6 +98,48 @@ def _filter_app_ids(dim_filters):
         if f.get("dimension") == "APP":
             ids.update((f.get("matchesAny") or {}).get("values") or [])
     return ids or None
+
+
+def _raise(err):
+    """A row source that raises `err` when it is read (an AdMob error kept for the point the plain splitter hits it)."""
+    raise err
+    yield  # pragma: no cover  (makes this a generator)
+
+
+class AcPlan:
+    """How ONE account's ad-unit × country pull (run_once's ongoing window) may ask AdMob less while every row the
+    rollup keeps — and its order — stays exactly what the plain splitter gives. Built by fetcher.run_once; both parts
+    have their own rollback switch there.
+
+    A'  keep_from = rollup.first_kept_day(window start, today): the rollup throws away every row before it, so a split
+        piece that ENDS before it is not asked for at all. Those days all lie in ONE month (the window start's), whose
+        full rollup is already stored; old_max = the biggest number of (ad unit, country) entries one of this
+        account's apps has in that stored month. A report row is one (ad unit, country) of an app-day, so no app-day
+        of that month has more rows than old_max — and a truncation record needs an app-day with at least the cap's
+        number of rows. So A' skips only while old_max × MARGIN is under the cap (old_max None — the month is not
+        stored for this account, or a big app of it could not be placed — keeps every piece): a skipped piece then
+        has no truncation record to give (an over-cap app-day leaves at least the cap's entries in the rollup).
+    B'' rows_per_day (this account's rows a day in the stored current-month daily file): a piece predicted at
+        MARGIN × the cap or more goes straight to its two halves, without the call that would come back over the
+        cap and be thrown away. The halves' own answers must then PROVE the old call was over the cap (a half over the
+        cap, or their row counts adding up to it); when they do not, the whole piece is asked for exactly as before.
+        So a wrong prediction costs calls, never a row or its order (the pieces below are the old splitter's pieces).
+        An AdMob error while the halves are asked first gives the plain splitter's rows up to that same error
+        (AdMobClient._pfailed).
+    """
+    MARGIN = 1.3
+
+    def __init__(self, keep_from=None, rows_per_day=None, old_max=None):
+        self.keep_from, self.rows_per_day, self.old_max = keep_from, rows_per_day, old_max
+        self.calls = self.skipped = self.presplit = self.unconfirmed = self.failed = 0   # counts only (the build log)
+
+    def skip(self, s, e, cap):
+        return (self.keep_from is not None and e < self.keep_from
+                and self.old_max is not None and self.old_max * self.MARGIN < cap)
+
+    def split_first(self, s, e, cap):
+        return (s < e and self.rows_per_day is not None
+                and self.rows_per_day * ((e - s).days + 1) >= self.MARGIN * cap)
 
 
 class MockAdMobClient:
@@ -231,7 +274,8 @@ class MockAdMobClient:
                            "currency_code": "USD", **raw}
 
     def adunit_country_report(self, start: date, end: date,
-                              dim_filters: List[Dict] = None) -> Iterator[Dict]:
+                              dim_filters: List[Dict] = None, plan=None) -> Iterator[Dict]:
+        # plan (AcPlan) is accepted and ignored: the mock never splits, and the rollup drops rows before keep_from
         keep = None                                    # honor an APP scope so tests can verify it
         if dim_filters:
             keep = set()
@@ -377,11 +421,16 @@ class AdMobClient:
              record it in self.truncations so the build surfaces the gap LOUDLY, and
              yield what we have — never a silent partial.
         AdMob allows ~900 report reads/minute, so the extra splits are effectively free."""
-        import sys
         spec = build_report_spec(start, end, dimensions, metrics, self.tz,
                                  max_rows=self.MAX_ROWS, currency=self.currency,
                                  dim_filters=dim_filters)
         rows, mrc = self._run_report(method, spec)
+        yield from self._after_call(method, start, end, dimensions, metrics, dim_filters, rows, mrc)
+
+    def _after_call(self, method: str, start: date, end: date, dimensions: List[str], metrics: List[str],
+                    dim_filters, rows, mrc) -> Iterator[Dict]:
+        """_fetch_range after its one report call: the call's rows when they fit, else the splitting ladder."""
+        import sys
         # Truncation signal: AdMob CAPS matchingRowCount at maxReportRows, so mrc alone hides an
         # overflow (that silently truncated the ad_unit×country report to only the alphabetically
         # first countries). The reliable tell is that we got back the CAP number of rows — if a
@@ -416,6 +465,78 @@ class AdMobClient:
               f"cannot split further; this slice is INCOMPLETE (recorded in truncations).",
               file=sys.stderr)
         yield from rows
+
+    def _planned(self, method: str, start: date, end: date, dimensions: List[str], metrics: List[str],
+                 plan: "AcPlan") -> Iterator[Dict]:
+        """_fetch_range's rows for [start, end] — the same rows in the same order with the same truncation records,
+        for every row the ad-unit × country rollup keeps — asking AdMob less (see AcPlan)."""
+        yield from self._pnode(method, start, end, dimensions, metrics, plan)[2]
+
+    def _prows(self, method, s, e, dimensions, metrics, plan):
+        yield from self._pnode(method, s, e, dimensions, metrics, plan)[2]
+
+    def _pnode(self, method, s, e, dimensions, metrics, plan):
+        """What _fetch_range(s, e) would yield, as ("skip", 0, ()) — a piece ending before plan.keep_from (only rows
+        the rollup drops) | ("under", n, rows) — one call that fit | ("over", None, lazy rows) — a piece the old
+        splitter splits at its midpoint, with the same pieces below it."""
+        cap = self.MAX_ROWS
+        if plan.skip(s, e, cap):                                     # A'
+            plan.skipped += 1
+            return ("skip", 0, ())
+        if plan.split_first(s, e, cap):                              # B'': predicted far over the cap
+            mid = s + (e - s) // 2
+            nxt = mid + timedelta(days=1)
+            left = None
+            try:
+                left = self._pnode(method, s, mid, dimensions, metrics, plan)
+                if left[0] == "over":                                # a half over the cap: so was the whole
+                    plan.presplit += 1
+                    return ("over", None, itertools.chain(left[2], self._prows(method, nxt, e, dimensions,
+                                                                               metrics, plan)))
+                right = self._pnode(method, nxt, e, dimensions, metrics, plan)
+            except Exception as err:                                 # an AdMob error while asking the halves first
+                return self._pfailed(method, s, e, dimensions, metrics, plan, left, err)
+            if right[0] == "over" or (left[0] == "under" and left[1] + right[1] >= cap):
+                plan.presplit += 1                                   # the halves' own counts: the whole was over
+                return ("over", None, itertools.chain(left[2], right[2]))
+            plan.unconfirmed += 1                                    # not shown over the cap: ask as before
+            return self._pcall(method, s, e, dimensions, metrics, plan, halves=(left, right))
+        return self._pcall(method, s, e, dimensions, metrics, plan)
+
+    def _pfailed(self, method, s, e, dimensions, metrics, plan, left, err):
+        """B'' asked for the halves of [s, e] first and an AdMob call in them failed (`err`). Give exactly what the
+        plain splitter gives with that same failing call. It asks for the whole piece FIRST: under the cap → those rows
+        (it never asks for the halves); over → the left half's rows, then the right half up to the failing call.
+        A _pnode raises only when the FIRST call the plain splitter makes for its piece fails (a B'' node's own error
+        comes back here instead), so the plain splitter gives no row of a half whose _pnode raised: `left` None (the
+        left half raised) → no row before `err`; `left` done (under / skip) and the right half raised → the left
+        half's rows. So: the whole call (if it fails, that is the plain splitter's first error too), then those rows,
+        then `err` again. No half is asked again, so the kept rows are the plain splitter's even when the error was a
+        one-off. Nothing asked so far holds a truncation record (a record is made only while lazy rows are read)."""
+        done = left if left is not None else ("skip", 0, ())
+        plan.failed += 1
+        return self._pcall(method, s, e, dimensions, metrics, plan, halves=(done, ("raise", None, _raise(err))))
+
+    def _pcall(self, method, s, e, dimensions, metrics, plan, halves=None):
+        """One report call for [s, e], then _fetch_range's ladder: fits → its rows; over the cap → the two halves
+        (already asked for when `halves` is given); one day over the cap → per app / truncation record, as before."""
+        import sys
+        spec = build_report_spec(s, e, dimensions, metrics, self.tz, max_rows=self.MAX_ROWS,
+                                 currency=self.currency)
+        rows, mrc = self._run_report(method, spec)
+        plan.calls += 1
+        if not (mrc > self.MAX_ROWS or len(rows) >= self.MAX_ROWS):
+            return ("under", len(rows), rows)
+        if s < e:
+            mid = s + (e - s) // 2
+            nxt = mid + timedelta(days=1)
+            print(f"split {method} {s}..{e}: {len(rows)} rows hit {self.MAX_ROWS} cap → "
+                  f"[{s}..{mid}] + [{nxt}..{e}]", file=sys.stderr)
+            if halves is not None:
+                return ("over", None, itertools.chain(halves[0][2], halves[1][2]))
+            return ("over", None, itertools.chain(self._prows(method, s, mid, dimensions, metrics, plan),
+                                                  self._prows(method, nxt, e, dimensions, metrics, plan)))
+        return ("over", None, self._after_call(method, s, e, dimensions, metrics, None, rows, mrc))
 
     def _app_ids_for(self, method: str, day: date, metrics: List[str]) -> List[str]:
         """Cheap helper: list the APP ids that have data on `day` (a tiny APP-only report),
@@ -524,15 +645,21 @@ class AdMobClient:
             yield r
 
     def adunit_country_report(self, start: date, end: date,
-                              dim_filters: List[Dict] = None) -> Iterator[Dict]:
+                              dim_filters: List[Dict] = None, plan: "AcPlan" = None) -> Iterator[Dict]:
         """Per (date, app, ad_unit, country) DAILY — the granular source for per-placement,
         per-geo baselines. From the mediation report (per-country revenue complete across all
         ad sources), and safe-fetch splits it so the high cardinality never truncates.
         dim_filters (optional) scopes the pull to specific apps — used by the new-account
-        backfill so only the user's SELECTED apps are fetched (less AdMob load, respects the pick)."""
-        for r in self._fetch_range("mediationReport", start, end,
-                                   ADUNIT_COUNTRY_DIMENSIONS, ADUNIT_COUNTRY_METRICS,
-                                   dim_filters=dim_filters):
+        backfill so only the user's SELECTED apps are fetched (less AdMob load, respects the pick).
+        plan (optional, run_once's ongoing window only): AcPlan — fewer calls, the same kept rows."""
+        if plan is not None and not dim_filters:
+            src = self._planned("mediationReport", start, end,
+                                ADUNIT_COUNTRY_DIMENSIONS, ADUNIT_COUNTRY_METRICS, plan)
+        else:
+            src = self._fetch_range("mediationReport", start, end,
+                                    ADUNIT_COUNTRY_DIMENSIONS, ADUNIT_COUNTRY_METRICS,
+                                    dim_filters=dim_filters)
+        for r in src:
             r["account_id"] = self.account_id
             r["currency_code"] = self.currency
             yield r
