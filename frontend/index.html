@@ -2488,15 +2488,19 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-ks b{color:var(--ink2)}
 .roi-kg{border-color:#1f6b52}.roi-kb{border-color:#6b2a2e}
 /* 🧮 the cohort card's totals strip: one height in every state (a country pick / its rows landing never moves the chips under it) */
-/* one group over every install day, 6 tiles a row by width so a value box is never under ~150 px beside the sidebar (2 / 3 / 6;
-   a phone 2 at 15.5 px); a value of 14+ characters (₹ crore with a sign) a size smaller in the same line box: printed in full,
-   the height unchanged; the line under the tiles (the days with no spend data): two fixed lines, empty or not */
-.roi-cks{margin:0 0 12px}.roi-ckg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+/* one group over every install day, 7 tiles (the 6 totals + 🎯 Avg breakeven), no tile alone in a row and a value box never
+   under ~115 px beside the sidebar: a phone 2 a row (15.5 px) with Avg breakeven across both (2 · 2 · 1 · 2); from 900 px
+   the three money tiles a row (each 4 of 12), then ROAS · Avg breakeven · Installs · Install days (each 3 of 12); from
+   1600 px all 7 in one row. A value of 14+ characters (₹ crore with a sign) a size smaller in the same line box: printed
+   in full, the height unchanged; the two lines under the tiles (Avg breakeven's left-out days, then the days with no
+   spend data): two fixed lines each, empty or not */
+.roi-cks{margin:0 0 12px}.roi-ckg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.roi-cka{grid-column:span 2}
 .roi-ckm{height:3em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.roi-ckb{height:3em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 .roi-ck{padding:9px 11px}.roi-ck .roi-kl,.roi-ck .roi-kv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.roi-ck .roi-kv{font-size:17px}.roi-ck .roi-ckw{font-size:14px}
 .roi-ck .roi-ks{height:2.8em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
-@media (min-width:900px){.roi-ckg{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (min-width:1400px){.roi-ckg{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media (min-width:900px){.roi-ckg{grid-template-columns:repeat(12,minmax(0,1fr))}.roi-ckg>.roi-ck{grid-column:span 3}.roi-ckg>.roi-ck:nth-child(-n+3){grid-column:span 4}}
+@media (min-width:1600px){.roi-ckg{grid-template-columns:repeat(7,minmax(0,1fr))}.roi-ckg>.roi-ck:nth-child(n){grid-column:auto}}
 @media (max-width:760px){.roi-ck .roi-kv{font-size:15.5px}.roi-ck .roi-ckw{font-size:13px}}
 .roi-up{color:var(--good)}.roi-dn{color:var(--bad)}
 .roi-g2{display:grid;grid-template-columns:minmax(0,1fr);gap:0 14px}
@@ -7348,6 +7352,23 @@ function ccSrc(d){ const cd=cdOf(d);
   if(rows===false){ PK[key]={stale:true}; return ccSrc(d); }
   if(!rows) return {ctl,cc:CTY,msg:`<p class="roi-note">⚠️ ${lab} is file me nahi mila.</p>`};
   return {ctl,cc:CTY,x,rows,qt:qb=>ccQ(qb,cd),note:ccNote(d,cd,x)}; }
+// 🎯 Avg breakeven (owner, 22 Oct 2026: "average breakeven day ka KPI add kar do — jo country wise filter pe vo country ka
+// milega … koi koi din ese ho jate he jo us din ka BE 2–5–10 din hota he — usko avg BE me exclude karna he taki muje actual
+// BE mile … manlo 100 BE day he to 50% se kam din vale date ko count hi nahi karna"): over EVERY install day of the table's
+// source (All countries or the picked country's rows; grain / mode / "Show more" never change it) with ads — spend > 0 and
+// known —, each day's own breakeven exactly as the Day table's Breakeven column prints it (beDay: the build's [day, exact?],
+// "≤" = that column's day; only the day is read here — its faded flag needs the columns on screen). Spend and revenue are
+// both USD there, so the ₹ / $ view never moves a day. reached = the days that broke even; typical = their median; a day
+// that broke even before BE_FAST_SHARE × typical (one lucky day: "day 1 achanak achha ROI") is left out and counted; Avg
+// breakeven = the mean of the rest. Fewer than BE_MIN_N reached: too early ('—'). Days not even yet: counted, never a day.
+// → {ads, nr, med, fast, kept, avg, wait} (med / avg null when nothing reached)
+const BE_FAST_SHARE=0.5, BE_MIN_N=5;
+function beAvg(rows,T){ const be=[]; let ads=0;
+  for(const r of rows||[]){ const sp=r[R.sp]; if(!(ok(sp)&&sp>0)) continue; ads++;
+    const b=beDay(r,[],T); if(b&&ok(b[0])) be.push(+b[0]); }
+  be.sort((a,b)=>a-b); const nr=be.length, h=nr>>1, med=nr?(nr&1?be[h]:(be[h-1]+be[h])/2):null;
+  const keep=nr?be.filter(x=>!(x<BE_FAST_SHARE*med)):[], avg=keep.length?keep.reduce((a,x)=>a+x,0)/keep.length:null;
+  return {ads,nr,med,fast:nr-keep.length,kept:keep.length,avg,wait:ads-nr}; }
 // 🧮 the totals strip (owner, 21 Oct 2026: "kpi add karo yaha pe ki kitna total spend gaya he kitna total revenue aaya he —
 // all country and jo country select kru uska kpi change ho jayega — total hi aayega"; then, shown two groups: "poori history
 // vala hi sahi he — spend pata wale din nikal do — profit loss total puri history pe hi hona chaiye"): ONE group over EVERY
@@ -7361,9 +7382,12 @@ function ccSrc(d){ const cd=cdOf(d);
 //    exact to the last digit; a spend > 0 never printed as 0), ROAS = Total revenue ÷ Total spend (blended, from the sums,
 //    not the rounded tiles); both '—' unless Total spend > 0 (no ads: spend 0; under a cent: ≈ 0).
 //  * Installs (GA4, ads + organic), Install days (first – last).
+//  * 🎯 Avg breakeven (22 Oct 2026, beAvg above): "D<n>", its median + how many days it averages; the days left out (a
+//    lucky fast day, not even yet) said in their own line under the tiles.
 // Not split: spend only; Unknown country: no Google Ads spend ('—'), its revenue; '…' while a country's rows load, '—' when
-// there are none. One height in every state (6 tiles, one-line values — 14+ characters a size smaller, never cut —, two-
-// line subs, the line under the tiles two fixed lines, a note that never changes): a pick never moves the chips under it.
+// there are none. One height in every state (7 tiles, one-line values — 14+ characters a size smaller, never cut —, two-
+// line subs, the two lines under the tiles two fixed lines each, a note that never changes): a pick never moves the chips
+// under it.
 function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[]), cc=cs&&cs.rows?cs.cc:'', xx=cc==='XX', un=cc==='--', ld=!rows&&!!(cs&&cs.ld);
   const inr=curView()==='INR', who=cc?'country':'app', sq=[];
   let sp=0, nsp=0, rv=0, nrv=0, n=0, nn=0, lo='', hi='';
@@ -7392,6 +7416,14 @@ function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[
   const why=k=>xx?'Not split: sirf spend':!rows||has?(k?'revenue ÷ spend · blended':'revenue − spend'):!hs?`spend nahi — ${k?'ROAS':'profit / loss'} nahi`
     :!(sp>0)?`spend 0 — ${k?'ROAS':'profit / loss'} nahi`:tn?`spend ≈ 0 — ${k?'ROAS':'profit / loss'} nahi`:'kamai abhi nahi padhi';
   const ln=rows&&M?`${N(M)} din ka spend data nahi (${rg}) — unka spend jod me nahi${xx?'':', revenue hai'}.`:'';
+  // 🎯 Avg breakeven: '—' with its reason (Not split / Unknown country / no ads day / too early), else D<n> + its median;
+  // its line: what it leaves out, each with its count (≤ 97 characters up to 9,999 days: two lines at 360 px)
+  const ba=rows&&rows.length&&!xx&&!un?beAvg(rows,d.T):null, bok=!!ba&&ba.nr>=BE_MIN_N, bm=bok?Math.round(ba.med):0, fs=Math.round(BE_FAST_SHARE*100);
+  const bs=xx?'Not split: koi kamai nahi':un?'Google Ads me ye country nahi':!ba?'ads din ke Breakeven ka avg':!ba.ads?(nsp?'koi ads din nahi — BE nahi':'spend nahi — BE nahi')
+    :!bok?(ba.nr?`Too early · ${N(ba.nr)} din hi BE hue`:'Too early · koi din BE nahi hua'):`median D${bm} · ${N(ba.kept)} din ka avg`;
+  const bl=!ba||!ba.ads?'':!bok?`Avg BE: ${N(ba.nr)} din BE hue, ${N(ba.wait)} abhi nahi — avg ke liye kam se kam ${BE_MIN_N} chahiye.`
+    :ba.fast||ba.wait?`Avg BE me nahi: ${[ba.fast?`${N(ba.fast)} din median D${bm} ke ${fs}% se pehle BE (bahut jaldi)`:'',ba.wait?`${N(ba.wait)} din abhi BE nahi hue`:''].filter(Boolean).join('; ')}.`
+    :`Avg BE me sab ${N(ba.nr)} BE wale ads din — koi median ke ${fs}% se pehle nahi.`;
   return `<div class="roi-cks" role="group" aria-label="Totals"${ld?' aria-busy="true"':''}><div class="roi-ckg">`
     +t('Total spend',hs?MD(S):no,un?'Google Ads me ye country nahi':rows&&M?`${N(M)} din ka spend data nahi`:xx?'Not split · Google Ads':hs&&!(sp>0)?`Is ${who} me koi ads din nahi`:'Google Ads')
     // the ₹ view: revenue at today's rate (the spend as billed) said whether or not some days are unread (≤ 35 characters
@@ -7400,9 +7432,10 @@ function cohKpi(d,cs){ const rows=cs&&cs.rows?cs.rows:cs&&cs.msg?null:(d.rows||[
       :rows&&K?`${N(K)} din ki kamai abhi nahi padhi`:'so far · AdMob-matched')
     +t('Profit / loss',has?`<span class="${net>=0?'roi-up':'roi-dn'}">${MD(net,true)}</span>`:no,why(0),has?(net>=0?'roi-kg':'roi-kb'):'')
     +t('ROAS',has?`<span class="${roasCls(ro)}">${P(ro)}</span>`:no,why(1))
+    +t('Avg breakeven',bok?`D${Math.round(ba.avg)}`:no,bs,'roi-cka')
     +t('Installs',nn&&!xx?N(n):no,xx?'Not split: installs nahi':'GA4 · ads + organic')
     +t('Install days',rows&&!xx?N(D):no,xx?'Not split: install din nahi':rows&&D?`${E(fdy(lo))} – ${E(fdy(hi))}`:'')
-    +`</div><p class="roi-note roi-ckm">${ln}</p><p class="roi-note roi-ckn">Poori history ka jod — Profit / loss = Total revenue − Total spend, ROAS = Total revenue ÷ Total spend; country chuno to sirf us country ka.</p></div>`; }
+    +`</div><p class="roi-note roi-ckb">${bl}</p><p class="roi-note roi-ckm">${ln}</p><p class="roi-note roi-ckn">Poori history ka jod — Profit / loss = Total revenue − Total spend, ROAS = Total revenue ÷ Total spend; country chuno to sirf us country ka. Avg breakeven = ads wale har install din ka Breakeven din (≤ = us column ka din) ka avg — median ke ${Math.round(BE_FAST_SHARE*100)}% se pehle BE wale din (achanak jaldi) avg me nahi.</p></div>`; }
 function cohCard(d){ const cs=ccSrc(d);
   if(!cs) return `<div class="roi-card"><div class="roi-ct"><h3>Every install ${GRAIN==='day'?'day':GRAIN} · D0 se D${(()=>{ const C=cols(d,d.rows||[]); return C.length?C[C.length-1].a:365; })()} tak</h3><span class="roi-note">sabse naya upar · cell pe ruko = detail</span></div>${cohKpi(d,null)}${cohortTable(d)}</div>`;
   const rs=cs.rows||d.rows||[], C=cols(cs.rows&&cs.cc!=='XX'?Object.assign({},d,{rows:rs}):d,rs), on=!!cs.cc&&!cs.miss;
@@ -8222,7 +8255,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, lateNote, zx, ccSrc, ccPick, cohCard, ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)

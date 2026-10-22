@@ -12,8 +12,8 @@ expanded exactly as the build's _zrow, no page jump at 375 and 1280 px; a pack o
 the app file read again once; a late pack never repaints; only 3 packs kept; Not split's columns; the notes' measured
 limits), 🧮 the cohort card's totals strip for All or the picked country — one group over every install day (Total
 spend = Σ the Spend column, Total revenue = Σ the So far column, Profit / loss = printed revenue − printed spend to the
-last digit, ROAS blended, installs, install days; days with no spend data / so far not read counted, never 0): hand
-recounts, the owner's case in its shape, the same for every grain / mode, '…' while loading, one height in every state,
+last digit, ROAS blended, 🎯 Avg breakeven, installs, install days; days with no spend data / so far not read counted,
+never 0): hand recounts, the owner's case in its shape, the same for every grain / mode, '…' while loading, one height in every state,
 no value cut at any width, the page otherwise byte for byte as before), "Show 60 more" / "Show
 all" keeping the reader's row and the table box's scroll (every grain × mode, every country, the lifetime table, 375 and
 1280 px, with the stay-put layer: no second scroll) — sideways by column (the Day table's columns change with the rows
@@ -221,9 +221,14 @@ def test_forecast_view(out):
 # same day (review fixes): a "·" cell keeps its line ("—" when not measured) like every other mode, T's checkpoint columns
 # past D30 have no line (no users source), the week / month line is final only once every day with users is, and the
 # legend says so — GOLDEN_RET_CUT unchanged (nothing outside the lines and the legend moved).
-GOLDEN_DEFAULT = "ccdfb0c09129b3f94c3ccbd51c736db73ae099662cac105189f3ded81687225e"
-GOLDEN_RET_CUT = "a58589ba371a9cfb3b64cafbb2f169cf2ca28182c5ade16f343d486a51b7cfbe"
-GOLDEN_DEFAULT_NOK = "3072f1658c636ddad28ba3b475175a25e9e8438973ce08bcde75d2d5bdca12d7"
+# 🎯 Changed ON PURPOSE again on 22 Oct 2026 when the strip got its 7th tile, Avg breakeven (the owner: "average breakeven
+# day ka KPI add kar do"), its line under the tiles and a sentence in its note: again only the strip — GOLDEN_DEFAULT_NOKPI,
+# GOLDEN_PRE_KPI and GOLDEN_NO_BE (the strip cut out) the same; the one-group page gave GOLDEN_DEFAULT
+# a58589ba371a9cfb3b64cafbb2f169cf2ca28182c5ade16f343d486a51b7cfbe and GOLDEN_DEFAULT_NOK
+# 3072f1658c636ddad28ba3b475175a25e9e8438973ce08bcde75d2d5bdca12d7.
+GOLDEN_DEFAULT = "TBD-DEFAULT"
+GOLDEN_RET_CUT = "TBD-RETCUT"
+GOLDEN_DEFAULT_NOK = "TBD-NOK"
 GOLDEN_DEFAULT_NOKPI = "98ae0afdcb42a1e9d258ef5fe660fba126dad93f9b7b6c83e4f801eca78514eb"
 GOLDEN_PRE_KPI = "fb638f026d2a902459c3287cb620536bbb6474fecb17809c9799ba6264ac0a86"
 GOLDEN_NO_BE = "acabb725b05aa314e38c4f97b7880196122d333a0bdd823a0db9c1bc7d1d23b6"
@@ -270,24 +275,37 @@ def test_breakeven_column(out):
     assert all(out["be_note"])                                      # the Hinglish line under the table, per grain
 
 
-# 🧮 the strip's value boxes, worked out from the page's own CSS (pinned in test_wiring) and checked in headless Chrome
-# (21 Oct 2026, one group: 360 → 131 px, 375 → 139, 761 → 194–202, 900 → 165–170, 1400 → 150–152, 2560 → 343–346; every
-# state one height per width, no value / label / reason / line cut, 360–2560 px): 6 tiles, 2 a row up to 899 px, 3 from
-# 900, 6 from 1400; the card's and the tile's padding + border; beside the sidebar a classic 15 px scrollbar is taken off
-# too. → (width, scrollbar, value box, phone?)
+# 🧮 the strip's value boxes, worked out from the page's own CSS (pinned in test_wiring) and checked in headless Chrome.
+# 22 Oct 2026, 7 tiles (🎯 Avg breakeven joined; every one of the 52 states below, one height per width, no value / label /
+# reason / line cut, no tile alone in a row, 360–2560 px): up to 899 px 2 a row with Avg breakeven across both (rows
+# 2 · 2 · 1 · 2; 360 → 131 px, its own 292); from 900 px a 12-column grid — the three money tiles 4 columns each, ROAS ·
+# Avg breakeven · Installs · Install days 3 each (rows 3 · 4; 900 → 165–170 / 116–120 px, 1599 → 398 / 291); from 1600 px
+# 7 a row (1600 → 152–155, 2560 → 292). (The one-group page before it: 6 tiles, 2 / 3 / 6 a row from 900 / 1400 px.) The
+# card's and the tile's padding + border; beside the sidebar a classic 15 px scrollbar is taken off too.
+# → (width, scrollbar, phone?, the value box of a tile by its label)
+_MONEY = ("Total spend", "Total revenue", "Profit / loss")
+
+
 def _kpi_boxes():
     for w in range(360, 761):                                    # the phone / tablet layout: no sidebar, 2 a row
         pad = 10 if w <= 430 else 12                             # .content (≤430 px: 10, ≤760 px: 12) · .roi-card 12 + 1
-        yield w, 0, ((w - 2 * pad - 26) - 8) / 2 - 22, True      # tile: 9px 10px + 1 px border
+        inner = w - 2 * pad - 26                                 # tile: 9px 10px + 1 px border; Avg breakeven spans both
+        yield w, 0, True, lambda lab, i=inner: (i if lab == "Avg breakeven" else (i - 8) / 2) - 22
     for w in range(761, 2561):
-        cols = 6 if w >= 1400 else 3 if w >= 900 else 2
         for sb in (0, 15):                                       # aside 220 · .content 24 · .roi-card 16 + 1 · tile 11 + 1
-            yield w, sb, ((w - 220 - 48 - sb - 34) - 8 * (cols - 1)) / cols - 24, False
+            inner = w - 220 - 48 - sb - 34
+            if w < 900:
+                yield w, sb, False, lambda lab, i=inner: (i if lab == "Avg breakeven" else (i - 8) / 2) - 24
+            elif w < 1600:                                       # 12 columns, 11 gaps of 8
+                yield w, sb, False, lambda lab, c=(inner - 88) / 12: (4 * c + 24 if lab in _MONEY else 3 * c + 16) - 24
+            else:
+                yield w, sb, False, lambda lab, i=inner: (i - 48) / 7 - 24
 
 
 # advance widths (em) of the value font (weight 800, tabular figures) measured in headless Chrome; the largest of 13 /
-# 14 / 15.5 / 17 px for every size (the system font is a little wider at small sizes)
-_EM = dict({c: 0.68 for c in "0123456789+−₹$"}, **{",": 0.36, ".": 0.36, "%": 1.07, "—": 0.92, "…": 1.0})
+# 14 / 15.5 / 17 px for every size (the system font is a little wider at small sizes); "D" (Avg breakeven's "D77"):
+# 0.749 at weight 800, measured the same way (22 Oct 2026)
+_EM = dict({c: 0.68 for c in "0123456789+−₹$"}, **{",": 0.36, ".": 0.36, "%": 1.07, "—": 0.92, "…": 1.0, "D": 0.75})
 
 
 def _px(text, size):
@@ -309,9 +327,11 @@ def _holds(k, rc=None):
     return round((r - s) * 100) == round(p * 100) and k[3][1] == f"{int(rr / rs * 100 + 0.5)}%"
 
 
-def _tiles(spend, rev, profit, roas, installs, days, sub_s="Google Ads", sub_r="so far · AdMob-matched"):
+def _tiles(spend, rev, profit, roas, installs, days, sub_s="Google Ads", sub_r="so far · AdMob-matched",
+           be=("—", "Too early · koi din BE nahi hua")):
     return [["Total spend", spend, sub_s], ["Total revenue", rev, sub_r], ["Profit / loss", profit, "revenue − spend"],
-            ["ROAS", roas, "revenue ÷ spend · blended"], ["Installs", installs, "GA4 · ads + organic"], ["Install days", *days]]
+            ["ROAS", roas, "revenue ÷ spend · blended"], ["Avg breakeven", *be], ["Installs", installs, "GA4 · ads + organic"],
+            ["Install days", *days]]
 
 
 def test_totals_strip(out):
@@ -327,8 +347,10 @@ def test_totals_strip(out):
     assert out["cc_default_nokpi"] == GOLDEN_DEFAULT_NOKPI and out["cc_default_kpis"] == 2
     assert out["cc_default_nokpi_nok"] == GOLDEN_PRE_KPI
     # under the title row, right above the control row (one per card, above the table; the Day view has one, the
-    # Countries board none); its fixed Hinglish note; ONE grid, no group heads / two-group wrapper left
-    assert out["k_place"] == [True, 1, True, 1, False, True, 1, False]
+    # Countries board none); its fixed Hinglish note; ONE grid, no group heads / two-group wrapper left; 🎯 Avg breakeven
+    # right after ROAS (the only tile with a class of its own: its span), its line first under the tiles
+    assert out["k_place"] == [True, 1, True, 1, False, True, 1, False, True, True,
+                              "Total spend · Total revenue · Profit / loss · ROAS · Avg breakeven · Installs · Install days", 1]
     # a hand recount (5 install days): 2 Jan has no spend data (out of Total spend, said — its $5 revenue in), 3 Jan's so
     # far is not read yet (out of Total revenue, said — its $4 spend in), 4 Jan ads paused ($0, $0). Total spend $10 + $4 +
     # $0 + $6 = $20, Total revenue $30 + $5 + $0 + $3 = $38 → +$18 (= $38 − $20), ROAS 190%; 200 installs, 5 days
@@ -336,7 +358,7 @@ def test_totals_strip(out):
     assert k == _tiles("$20", "$38", "+$18", "190%", "200", ["5", "1 Jan 2026 – 5 Jan 2026"],
                        "1 din ka spend data nahi", "1 din ki kamai abhi nahi padhi") and _holds(k) and exact
     assert line == "1 din ka spend data nahi (2 Jan 26) — unka spend jod me nahi, revenue hai."
-    assert out["k_usd_cls"] == [["", ""], ["", ""], ["roi-kg", "roi-up"], ["", "roi-g"], ["", ""], ["", ""]]   # profit green, ROAS ≥ 100% green
+    assert out["k_usd_cls"] == [["", ""], ["", ""], ["roi-kg", "roi-up"], ["", "roi-g"], ["roi-cka", ""], ["", ""], ["", ""]]   # profit green, ROAS ≥ 100% green
     # = the table's own columns: Σ Spend, Σ So far, Σ Installs
     assert out["k_usd_table"] == [20, 38, 200] == [s, r, 200]
     # ₹ billed (₹90 a $ on every day, today ₹100): the bill ₹900 + ₹360 + ₹0 + ₹540 = ₹1,800 (= Σ the Spend column), the so
@@ -382,7 +404,7 @@ def test_totals_strip_owner_case(out):
     # columns' sums agree up to each printed row's rounding
     k, line, (s, r, p, roas, exact), rc, (ts, tr) = out["k_cty_inr"]
     assert exact and _holds(k, rc) and [s, r, p] == [rc["S"], rc["R"], rc["P"]] and (rc["M"], rc["K"], rc["nsp"]) == (15, 2, 25)
-    assert k[0][2] == "15 din ka spend data nahi" and k[1][2] == "₹ aaj ka rate; 2 din nahi padhe" and k[5] == ["Install days", "40", "1 Jun 2025 – 10 Jul 2025"]
+    assert k[0][2] == "15 din ka spend data nahi" and k[1][2] == "₹ aaj ka rate; 2 din nahi padhe" and k[6] == ["Install days", "40", "1 Jun 2025 – 10 Jul 2025"]
     assert abs(ts - s) <= 0.5 * 25 and abs(tr - r) <= 0.5 * 38
     assert line == "15 din ka spend data nahi (1 Jun 25 – 15 Jun 25) — unka spend jod me nahi, revenue hai."
     k, (s, r, p, roas, exact), rc, want = out["k_cty_usd"]
@@ -414,15 +436,16 @@ def test_totals_strip_states(out):
     k, cls, line = out["k_org"]
     assert k == [["Total spend", "$0", "Is app me koi ads din nahi"], ["Total revenue", "$60", "so far · AdMob-matched"],
                  ["Profit / loss", "—", "spend 0 — profit / loss nahi"], ["ROAS", "—", "spend 0 — ROAS nahi"],
+                 ["Avg breakeven", "—", "koi ads din nahi — BE nahi"],
                  ["Installs", "20", "GA4 · ads + organic"], ["Install days", "2", "1 Jan 2026 – 2 Jan 2026"]]
     assert cls == [["", ""], ["", ""]] and line == ""
     # no spend data on any day: '—' (never $0), its revenue, no profit / ROAS, the days said
     k, line = out["k_nosp"]
-    assert [x[1] for x in k] == ["—", "$60", "—", "—", "20", "2"] and k[0][2] == "2 din ka spend data nahi"
+    assert [x[1] for x in k] == ["—", "$60", "—", "—", "—", "20", "2"] and k[0][2] == "2 din ka spend data nahi"
     assert k[2][2] == "spend nahi — profit / loss nahi" and k[3][2] == "spend nahi — ROAS nahi"
     assert line == "2 din ka spend data nahi (1 Jan 26 – 2 Jan 26) — unka spend jod me nahi, revenue hai."
     k, line = out["k_none"]
-    assert [x[1] for x in k] == ["—"] * 5 + ["0"] and line == ""
+    assert [x[1] for x in k] == ["—"] * 6 + ["0"] and line == ""
     # a few paise of ₹-billed spend (its own ₹); a ₹-billed file whose rows have no ₹ spend (= the Spend column: today's rate)
     k, a = out["k_tiny"]
     assert k[:2] == [["Total spend", "₹1,760", "Google Ads"], ["Total revenue", "₹3,520", "so far · ₹ aaj ke rate se"]] and a[2] == 1760 and a[4]
@@ -431,18 +454,19 @@ def test_totals_strip_states(out):
     # All countries (the made-up app: spend known on all 70 days) = an independent recount; whatever the grain / mode /
     # "Show more"
     k, line, rc, (s, r, p, roas, exact) = out["k_all"]
-    assert k == _tiles("$700", "$1,915", "+$1,215", "274%", "7,000", ["70", "5 Aug 2026 – 13 Oct 2026"]) and _holds(k, rc) and exact
+    assert k == _tiles("$700", "$1,915", "+$1,215", "274%", "7,000", ["70", "5 Aug 2026 – 13 Oct 2026"],
+                       be=["D9", "median D9 · 28 din ka avg"]) and _holds(k, rc) and exact
     assert [rc[x] for x in ("S", "R", "P", "M", "K")] == [700, 1915, 1215, 0, 0] and line == ""
     assert out["k_inv"] == [True] * 24 and out["k_allcd"] == [True]
     # 🌍 a pick: '…' while its rows load (aria-busy), then its own totals = a recount of the rows its table shows (28 days
     # with no spend data in 2 runs: out of Total spend, their revenue in); the same every grain / mode; another country of
     # the same pack at once
     k, busy, done, msg, line = out["k_load"]
-    assert [x[1] for x in k] == ["…"] * 6 and busy and done and msg and line == ""
+    assert [x[1] for x in k] == ["…"] * 7 and busy and done and msg and line == ""
     k, want, line, cnt, (s, r, p, roas, exact), table, same, rc = out["k_aa"]
     assert k == want and cnt == [70, 28, 0, 42, "2026-08-05", "2026-10-13"] and exact and _holds(k, rc)
     # (ROAS from the sums: Σ so far $799.50 ÷ $380 = 210% — the rounded $800 ÷ $380 would say 211%)
-    assert [x[1] for x in k] == ["$380", "$800", "+$420", "210%", "1,260", "70"] and k[0][2] == "28 din ka spend data nahi"
+    assert [x[1] for x in k] == ["$380", "$800", "+$420", "210%", "—", "1,260", "70"] and k[0][2] == "28 din ka spend data nahi"
     # = Σ its Spend / So far columns over every row (each so far printed whole: ≤ $0.50 a row off)
     assert table[0] == 380 and abs(table[1] - 800) <= 0.5 * 70 and same
     assert line == "28 din ka spend data nahi (2 hisson me, 5 Aug 26 – 13 Oct 26) — unka spend jod me nahi, revenue hai."
@@ -456,40 +480,46 @@ def test_totals_strip_states(out):
     # "Not split": spend only (its days with no spend data said); the rest '—'
     k, want, line, unk, n_rev = out["k_xx"]
     assert k == want and unk == 28 and n_rev == 0 and k[0] == ["Total spend", "$28", "28 din ka spend data nahi"]
-    assert [x[1] for x in k[1:]] == ["—"] * 5 and k[1][2] == "Not split: koi kamai nahi"
+    assert [x[1] for x in k[1:]] == ["—"] * 6 and k[1][2] == "Not split: koi kamai nahi"
     assert line == "28 din ka spend data nahi (2 hisson me, 5 Aug 26 – 13 Oct 26) — unka spend jod me nahi."
     # a pack that failed / a country the app does not have: '—' (no busy flag); an app without the country part: All's own
     k, not_busy, msg, line = out["k_err"]
-    assert [x[1] for x in k] == ["—"] * 6 and not_busy and msg and line == ""
-    assert out["k_miss"] == [["—"] * 6, True, ""] and out["k_nocd"] == [True, True]
-    # ONE height in every state (39 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, no
-    # spend data, crore, the owner's case, a few cents of spend, 1,234 days …): the same box — one grid, six tiles, labels, the line's box, the note (the CSS
-    # pins are in test_wiring; measured in headless Chrome: one height per width over every state, 360 – 2560 px)
-    assert out["k_skel"] == [1, 39]
+    assert [x[1] for x in k] == ["—"] * 7 and not_busy and msg and line == ""
+    assert out["k_miss"] == [["—"] * 7, True, ""] and out["k_nocd"] == [True, True]
+    # ONE height in every state (52 made: loading, loaded, error, missing, ₹ / $, Unknown, Not split, loss, no ads, no
+    # spend data, crore, the owner's case, a few cents of spend, 1,234 days, 🎯 every Avg breakeven case …): the same box —
+    # one grid, seven tiles, labels, the two lines' boxes, the note (the CSS pins are in test_wiring; measured in headless
+    # Chrome: one height per width over every state, 360 – 2560 px)
+    assert out["k_skel"] == [1, 52]
     # crore-size ₹ printed in full — 14+ characters a size smaller (roi-ckw), shorter ones not; the arithmetic still exact
     big7, big8, small, n7, n8 = out["k_big"]
-    assert big7 == ["₹23,45,76,190", "₹14,08,08,624", "−₹9,37,67,566", "60%", "1,234,577", "2"]
-    assert big8 == ["₹2,34,56,87,200", "₹1,40,80,08,624", "−₹93,76,78,576", "60%", "1,234,577", "2"]
-    assert small == [[False] * 6, [True, True, True, False, False, False]]
+    assert big7 == ["₹23,45,76,190", "₹14,08,08,624", "−₹9,37,67,566", "60%", "—", "1,234,577", "2"]
+    assert big8 == ["₹2,34,56,87,200", "₹1,40,80,08,624", "−₹93,76,78,576", "60%", "—", "1,234,577", "2"]
+    assert small == [[False] * 7, [True, True, True, False, False, False, False]]
     assert n7[4] and n8[4] and n8[1] - n8[0] == n8[2]
     # every value printed in those states fits its box at EVERY width 360–2560 px (₹ crore, a classic scrollbar too), at its
     # own size (17 / 15.5 px, a 14+ character one 14 / 13 px); reasons ≤ 35 characters (two lines of the narrowest tile,
-    # 131 px at 360, checked in Chrome); labels one short line
+    # 131 px at 360, checked in Chrome) — ≤ 31 on the four tiles 3 columns wide from 900 px (116 px at 900 beside the
+    # sidebar: the 31-character ones measured in two lines there); labels one short line
     pr = out["k_print"]
-    assert len(pr) == 39 * 6 and any(v == "−₹93,76,78,576" for _, v, _, _ in pr)
+    assert len(pr) == 52 * 7 and any(v == "−₹93,76,78,576" for _, v, _, _ in pr)
     assert all(w == (len(v) >= 14) for _, v, w, _ in pr)
     tight = {}
-    for w, sb, box, phone in _kpi_boxes():
+    for w, sb, phone, box in _kpi_boxes():
         for lab, v, small, sub in pr:
             size = (13 if small else 15.5) if phone else (14 if small else 17)
-            room = box - _px(v, size)
+            room = box(lab) - _px(v, size)
             if room < tight.get("room", 1e9):
-                tight = {"room": room, "w": w, "sb": sb, "v": v}
+                tight = {"room": room, "w": w, "sb": sb, "v": v, "lab": lab}
     assert tight["room"] >= 2, tight
     assert all(len(sub) <= 35 and "<" not in sub and len(lab) <= 13 for lab, _, _, sub in pr)
+    assert all(len(sub) <= 31 for lab, _, _, sub in pr if lab not in _MONEY)
+    assert max(len(sub) for lab, _, _, sub in pr if lab not in _MONEY) == 31
     # the line under the tiles in every state: within its two fixed lines (Chrome: a 103-character line — 365 days, 12
-    # runs — in two lines at 360 px and every width up to 2560)
+    # runs — in two lines at 360 px and every width up to 2560); 🎯 Avg breakeven's line above it the same (≤ 97: 4-digit
+    # counts and a 3-digit median, measured in two lines at 360 px)
     assert all(len(x) <= 103 for x in out["k_lines"]) and max(map(len, out["k_lines"])) > 90
+    assert all(len(x) <= 97 for x in out["k_blines"]) and max(map(len, out["k_blines"])) == 97
 
 
 
@@ -522,7 +552,65 @@ def test_totals_strip_small_spend(out):
     # the ₹ view, 1,234 install days, the newest 1,200 not read: "₹ aaj ka rate" with the 4-digit count, in 35 characters
     k, line = out["k_k4"]
     assert k[1] == ["Total revenue", "₹5,984", "₹ aaj ka rate; 1,200 din nahi padhe"] and len(k[1][2]) == 35
-    assert [x[1] for x in k] == ["₹1,08,592", "₹5,984", "−₹1,02,608", "6%", "12,340", "1,234"] and line == ""
+    assert [x[1] for x in k] == ["₹1,08,592", "₹5,984", "−₹1,02,608", "6%", "—", "12,340", "1,234"] and line == ""
+
+def test_avg_breakeven(out):
+    """🎯 Avg breakeven (owner, 22 Oct 2026: "average breakeven day ka KPI add kar do — jo country wise filter pe vo country
+    ka milega … koi koi din ese ho jate he jo us din ka BE 2–5–10 din hota he — usko avg BE me exclude karna he taki muje
+    actual BE mile … manlo 100 BE day he to 50% se kam din vale date ko count hi nahi karna"): over every install day with
+    ads (spend > 0, known) of the table's source, each day's breakeven exactly as the Breakeven column prints it; the
+    median of the days that broke even; a day that broke even before half of it is left out (counted, said); the mean of the
+    rest = "D<n>". Too few: '—'. The same in $ / ₹, every grain / mode; a country's own; on made-up rows."""
+    # the hand case: 8 days broke even on 3, 5, 40, 50, 60, ≤ 90, 100, ≤ 120 (a "≤": that column's day — the Breakeven
+    # column's own cells, read back from the table), 2 ads days not even yet, 1 ads-paused day + 1 with no spend data (no
+    # ads day: in neither count). Median (50 + 60) / 2 = 55 → 3 and 5 broke even before 27.5 (50%): out; the other 6 →
+    # (40 + 50 + 60 + 90 + 100 + 120) / 6 = 76.7 → D77
+    tile, line, ba, col, (med, fast, avg), sline = out["abe_hand"]
+    assert col == [3, 5, 40, 50, 60, 90, 100, 120] and (med, fast) == (55, 2) and round(avg, 6) == round(460 / 6, 6)
+    assert ba == {"ads": 10, "nr": 8, "med": 55, "fast": 2, "kept": 6, "avg": ba["avg"], "wait": 2} and round(ba["avg"], 6) == round(avg, 6)
+    assert tile == ["Avg breakeven", "D77", "median D55 · 6 din ka avg"]
+    assert line == "Avg BE me nahi: 2 din median D55 ke 50% se pehle BE (bahut jaldi); 2 din abhi BE nahi hue."
+    assert sline == "1 din ka spend data nahi (12 Jan 25) — unka spend jod me nahi, revenue hai."    # its own line, below
+    # the same day in every grain × mode × "Show more" (24), in ₹ as billed and ₹ at today's rate (the ₹ view really on)
+    inv, inr, inr_usd, spend_inr = out["abe_inv"]
+    assert inv == [True] * 24 and inr == inr_usd == [tile, line] and spend_inr.startswith("₹")
+    # 4 reached: too early ('—', the counts said); exactly 5: shown (10 broke even before 15: out → (20+30+40+50)/4 = D35);
+    # a day at exactly half the median stays (only "before" half is out: D18); an odd count's median (30: 1 and 2 out →
+    # D40); nothing reached; nothing left out (the median 62.5 → D63, printed whole)
+    (t1, l1, b1), (t2, l2, b2), (t3, l3, b3), (t4, l4, b4), (t5, l5, b5), (t6, l6, b6) = out["abe_cases"]
+    assert t1 == ["Avg breakeven", "—", "Too early · 4 din hi BE hue"] and (b1["nr"], b1["wait"]) == (4, 3)
+    assert l1 == "Avg BE: 4 din BE hue, 3 abhi nahi — avg ke liye kam se kam 5 chahiye."
+    assert t2 == ["Avg breakeven", "D35", "median D30 · 4 din ka avg"] and l2 == "Avg BE me nahi: 1 din median D30 ke 50% se pehle BE (bahut jaldi)."
+    assert t3 == ["Avg breakeven", "D18", "median D20 · 5 din ka avg"] and b3["fast"] == 0
+    assert l3 == "Avg BE me sab 5 BE wale ads din — koi median ke 50% se pehle nahi."
+    assert t4 == ["Avg breakeven", "D40", "median D30 · 3 din ka avg"] and (b4["med"], b4["fast"], b4["avg"]) == (30, 2, 40)
+    assert t5 == ["Avg breakeven", "—", "Too early · koi din BE nahi hua"] and l5 == "Avg BE: 0 din BE hue, 2 abhi nahi — avg ke liye kam se kam 5 chahiye."
+    assert b5["med"] is None and b5["avg"] is None
+    assert t6 == ["Avg breakeven", "D63", "median D63 · 6 din ka avg"] and b6["med"] == b6["avg"] == 62.5
+    # 9,999 ads days (4,000 not even yet, 300 lucky ones on day 2, 5,699 on day 100–149): 4-digit counts said in full
+    tile, line, n = out["abe_big"]
+    assert tile == ["Avg breakeven", "D124", "median D123 · 5,699 din ka avg"] and n == 97
+    assert line == "Avg BE me nahi: 300 din median D123 ke 50% se pehle BE (bahut jaldi); 4,000 din abhi BE nahi hue."
+    # no avg: no ads (spend 0 every day), no spend data, nothing at all — '—' with its reason, no line; All countries of the
+    # made-up app: 28 days broke even on day 9, 42 not yet
+    g, gl, q, ql, z, zl, a, al = out["abe_none"]
+    assert g == ["Avg breakeven", "—", "koi ads din nahi — BE nahi"] and q == ["Avg breakeven", "—", "spend nahi — BE nahi"]
+    assert z == ["Avg breakeven", "—", "ads din ke Breakeven ka avg"] and gl == ql == zl == ""
+    assert a == ["Avg breakeven", "D9", "median D9 · 28 din ka avg"] and al == "Avg BE me nahi: 42 din abhi BE nahi hue."
+    # 🌍 a country: '…' while its rows load, then ITS days (2, 10, 12, 14, 16, 18 + 1 not yet: median 13 → 2 out → D14),
+    # the same in ₹ and every grain / mode; All again: All's own D77
+    ld, busy, c, cl, ci, civ, A, Al, (cmed, cfast, cavg) = out["abe_cty"]
+    assert ld == ["Avg breakeven", "…", "ads din ke Breakeven ka avg"] and busy
+    assert c == ["Avg breakeven", "D14", "median D13 · 5 din ka avg"] and (cmed, cfast, cavg) == (13, 1, 14)
+    assert cl == "Avg BE me nahi: 1 din median D13 ke 50% se pehle BE (bahut jaldi); 1 din abhi BE nahi hue."
+    assert ci == [c, cl] and civ == [True] * 4
+    assert A == ["Avg breakeven", "D77", "median D55 · 6 din ka avg"] and Al == out["abe_hand"][1]
+    # Unknown country / Not split: '—' with why; a pack that failed / a country the app does not have: '—'; loading: '…'
+    un, unl, xx, xxl, er, erl, ms, ldg, ldl = out["abe_cty_sp"]
+    assert un == ["Avg breakeven", "—", "Google Ads me ye country nahi"] and xx == ["Avg breakeven", "—", "Not split: koi kamai nahi"]
+    assert er == ms == ["Avg breakeven", "—", "ads din ke Breakeven ka avg"] and ldg == ["Avg breakeven", "…", "ads din ke Breakeven ka avg"]
+    assert unl == xxl == erl == ldl == ""
+
 
 def test_country_filter(out):
     # "All countries" (the default): every grain × mode, the Day view, the Countries board as pinned above
@@ -897,16 +985,23 @@ def test_wiring():
     # box), tiles a row by width only; called once per card path, right before the table's own HTML
     assert ".roi-ck .roi-kl,.roi-ck .roi-kv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" in p
     assert ".roi-ck .roi-ks{height:2.8em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" in p
-    # one group (21 Oct, the owner: "spend pata wale din nikal do"): 6 tiles, 2 a row up to 899 px, 3 from 900, 6 from 1400 —
-    # the value box never under ~150 px beside the sidebar; the sizes test_totals_strip_states' width model uses
-    assert ".roi-ckg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}" in p
+    # 🎯 7 tiles (22 Oct, Avg breakeven joined), none alone in a row: 2 a row up to 899 px with Avg breakeven across both;
+    # from 900 a 12-column grid — the first three (the money tiles) 4 columns each, the other four 3 each; from 1600 7 a
+    # row (the one-group page: 2 / 3 / 6 from 900 / 1400) — the sizes test_totals_strip_states' width model uses
+    assert ".roi-ckg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.roi-cka{grid-column:span 2}" in p
     assert ".roi-ck{padding:9px 11px}" in p and ".roi-ck .roi-kv{font-size:17px}.roi-ck .roi-ckw{font-size:14px}" in p
-    assert "@media (min-width:900px){.roi-ckg{grid-template-columns:repeat(3,minmax(0,1fr))}}" in p
-    assert "@media (min-width:1400px){.roi-ckg{grid-template-columns:repeat(6,minmax(0,1fr))}}" in p
+    assert ("@media (min-width:900px){.roi-ckg{grid-template-columns:repeat(12,minmax(0,1fr))}.roi-ckg>.roi-ck{grid-column:span 3}"
+            ".roi-ckg>.roi-ck:nth-child(-n+3){grid-column:span 4}}") in p
+    assert "@media (min-width:1600px){.roi-ckg{grid-template-columns:repeat(7,minmax(0,1fr))}.roi-ckg>.roi-ck:nth-child(n){grid-column:auto}}" in p
     assert "@media (max-width:760px){.roi-ck .roi-kv{font-size:15.5px}.roi-ck .roi-ckw{font-size:13px}}" in p
-    assert p.count(".roi-ckg{") == 3 and "@media (min-width:1100px){.roi-ckg" not in p and "@media (min-width:1600px){.roi-ck" not in p
-    # the line under the tiles: two fixed lines, empty or not (its texts ≤ 103 characters: measured in Chrome to fit at 360 px)
+    assert p.count(".roi-ckg{") == 3 and "@media (min-width:1400px){.roi-ckg" not in p and p.count("roi-cka") == 2
+    # the two lines under the tiles: two fixed lines each, empty or not (the spend line ≤ 103 characters, Avg breakeven's
+    # ≤ 97: measured in Chrome to fit at 360 px)
     assert ".roi-ckm{height:3em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" in p
+    assert ".roi-ckb{height:3em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" in p
+    # Avg breakeven: the owner's 50% rule and the too-early floor are named constants; each day read through beDay (the
+    # Breakeven column's own), never a second breakeven
+    assert "const BE_FAST_SHARE=0.5, BE_MIN_N=5;" in p and "const b=beDay(r,[],T);" in p and p.count("beAvg(") == 2
     # the two-group code and CSS are gone: no group heads / wrapper class, no group titles
     assert not any(c in p for c in ("roi-ckh", "roi-ckq", "roi-ckx", "Spend pata wale din", "<b>Poori history</b>", "Do group kyun"))
     # the layout numbers the model takes from the rest of the page (unchanged by this work)

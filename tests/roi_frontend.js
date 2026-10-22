@@ -14,8 +14,9 @@
 //     gap first, flagged rows, ✓ GA4 rows, spend-weighted total, ₹ as billed, sorting); a paused app (whatever its call)
 //     out of the total and of the ⚖️ hero card, "✓ GA4" only where GA4 measured, the premium range's own age named;
 //   * 🧮 the cohort card's totals strip, one group over every install day (Total spend, Total revenue, Profit / loss =
-//     revenue − spend, ROAS, Installs, Install days): All / a country (Unknown, Not split), the owner's case in its shape,
-//     a few cents of spend, loading / error / missing, ₹ / $, its skeleton the same in every state;
+//     revenue − spend, ROAS, 🎯 Avg breakeven, Installs, Install days): All / a country (Unknown, Not split), the owner's
+//     case in its shape, a few cents of spend, loading / error / missing, ₹ / $, its skeleton the same in every state;
+//     Avg breakeven = the Breakeven column's own days, a fast lucky day left out (before 50% of the median), counted;
 //   * "Show 60 more" / "Show all" (the install-day tables and the lifetime "Every day" table): on a parsed DOM with a layout
 //     model + the page's own stay-put layer, the reader's row stays put, the box keeps its scroll, no second scroll;
 //     sideways by column (the Day table's columns change with the rows shown), and a Mode switch keeps the box's place too.
@@ -1755,15 +1756,16 @@ async function moreKeepAll(dc, packs) {
     {
       const kOf = h => { const i = h.indexOf('<div class="roi-cks"'); if (i < 0) return null;
         return h.slice(i, h.indexOf('</p></div>', h.indexOf('<p class="roi-note roi-ckn">', i)) + 10); };
-      const kT = h => [...kOf(h).matchAll(/<div class="roi-k roi-ck( roi-k[gb])?"><div class="roi-kl">([^<]*)<\/div><div class="roi-kv">([^]*?)<\/div><div class="roi-ks">([^<]*)<\/div><\/div>/g)]
+      const kT = h => [...kOf(h).matchAll(/<div class="roi-k roi-ck( roi-k[gb]| roi-cka)?"><div class="roi-kl">([^<]*)<\/div><div class="roi-kv">([^]*?)<\/div><div class="roi-ks">([^<]*)<\/div><\/div>/g)]
         .map(m => [m[2], m[3].replace(/<[^>]+>/g, ''), m[4]]);
-      const kCls = h => [...kOf(h).matchAll(/<div class="roi-k roi-ck( roi-k[gb])?"><div class="roi-kl">[^<]*<\/div><div class="roi-kv">(?:<span class="([^"]*)">)?/g)].map(m => [(m[1] || '').trim(), m[2] || '']);
-      // the line under the tiles (the days with no spend data)
+      const kCls = h => [...kOf(h).matchAll(/<div class="roi-k roi-ck( roi-k[gb]| roi-cka)?"><div class="roi-kl">[^<]*<\/div><div class="roi-kv">(?:<span class="([^"]*)">)?/g)].map(m => [(m[1] || '').trim(), m[2] || '']);
+      // the line under the tiles (the days with no spend data); 🎯 the line above it (Avg breakeven's left-out days)
       const kL = h => (/<p class="roi-note roi-ckm">([^<]*)<\/p>/.exec(kOf(h)) || [])[1];
+      const kB = h => (/<p class="roi-note roi-ckb">([^<]*)<\/p>/.exec(kOf(h)) || [])[1];
       // the box without its numbers / reasons / line text: the same in every state (one grid, six tiles, labels, the line's
       // box, the note) — with the CSS pins (one-line values, two-line reasons, the line two fixed lines), one height
       const kSk = h => kOf(h).replace(/<div class="roi-kv">[^]*?<\/div>/g, '<div class="roi-kv"></div>').replace(/<div class="roi-ks">[^<]*<\/div>/g, '<div class="roi-ks"></div>')
-        .replace(/(<p class="roi-note roi-ckm">)[^<]*/, '$1').replace(/ roi-k[gb]"/g, '"').replace(' aria-busy="true"', '');
+        .replace(/(<p class="roi-note roi-ckm">)[^<]*/, '$1').replace(/(<p class="roi-note roi-ckb">)[^<]*/, '$1').replace(/ roi-k[gb]"/g, '"').replace(' aria-busy="true"', '');
       const KS = [], seen = h => { KS.push(h); return h; };
       const fm = (x, sg, dp, sym) => { const a = Math.abs(x); return (x < 0 ? '−' : sg && x > 0 ? '+' : '') + (sym || '$') + a.toLocaleString(sym === '₹' ? 'en-IN' : 'en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }); };
       const pm = v => (v.startsWith('−') ? -1 : 1) * +v.replace(/[^0-9.]/g, '');          // a printed money value → its number
@@ -1800,8 +1802,12 @@ async function moreKeepAll(dc, packs) {
       // its one group (no group heads), its fixed note
       out.k_place = [hk.includes('cell pe ruko = detail</span></div>' + kOf(hk) + '<div class="roi-ctl">'), (hk.match(/class="roi-cks"/g) || []).length,
         hk.indexOf('roi-cks') < hk.indexOf('<table'), (U.dayView(dk).match(/class="roi-cks"/g) || []).length, U.ctyView(appFile()).includes('roi-cks'),
-        kOf(hk).includes('<p class="roi-note roi-ckn">Poori history ka jod — Profit / loss = Total revenue − Total spend, ROAS = Total revenue ÷ Total spend; country chuno to sirf us country ka.</p>'),
-        (kOf(hk).match(/<div class="roi-ckg">/g) || []).length, /roi-ck[hqx]/.test(kOf(hk))];
+        kOf(hk).includes('<p class="roi-note roi-ckn">Poori history ka jod — Profit / loss = Total revenue − Total spend, ROAS = Total revenue ÷ Total spend; country chuno to sirf us country ka. Avg breakeven = ads wale har install din ka Breakeven din (≤ = us column ka din) ka avg — median ke 50% se pehle BE wale din (achanak jaldi) avg me nahi.</p>'),
+        (kOf(hk).match(/<div class="roi-ckg">/g) || []).length, /roi-ck[hqx]/.test(kOf(hk)),
+        // 🎯 the two fixed lines under the tiles: Avg breakeven's first, then the days with no spend data, then the note
+        kOf(hk).includes('</div><p class="roi-note roi-ckb">'), kOf(hk).indexOf('roi-ckb') < kOf(hk).indexOf('roi-ckm') && kOf(hk).indexOf('roi-ckm') < kOf(hk).indexOf('roi-ckn'),
+        // Avg breakeven right after ROAS, the only tile with its own class (its span); 7 tiles
+        kT(hk).map(x => x[0]).join(' · '), (kOf(hk).match(/ roi-cka"/g) || []).length];
       // ₹ billed (₹90 a $ on every day, today ₹100): the bill (= the Spend column's own ₹), the so far at today's rate (= the
       // So far column); a ₹ view of a file not billed in ₹: $ × 100 on both sides
       ctx.curView = () => 'INR'; ctx.cfx = () => 100; ctx.csym = () => '₹';
@@ -1882,6 +1888,15 @@ async function moreKeepAll(dc, packs) {
       const P0 = 'roi_aaaaaaaaaaaa_c00.json.gz', P1 = 'roi_aaaaaaaaaaaa_c01.json.gz';
       const dkc = Object.assign(appFile(), { cd: Object.assign(cdx(), { packs: [[P0, 'k0k0k0k0k0k0'], [P1, 'k1k1k1k1k1k1']] }) });
       const fd4 = x => { const p_ = x.split('-'); return (+p_[2]) + ' ' + MON[+p_[1] - 1] + ' ' + p_[0]; };
+      // 🎯 Avg breakeven worked out here from the rows' own breakeven (r[10]): the ads days (spend > 0), the median of the
+      // reached ones, out = before half of it, the mean of the rest; '—' + its reason otherwise
+      const expBE = (rows, cc) => { const L = 'Avg breakeven'; if (cc === 'XX') return [L, '—', 'Not split: koi kamai nahi'];
+        if (cc === '--') return [L, '—', 'Google Ads me ye country nahi'];
+        const ads = rows.filter(q => q[3] != null && q[3] > 0), dd = ads.filter(q => q[10]).map(q => q[10][0]).sort((a, b) => a - b), n = dd.length;
+        if (!ads.length) return [L, '—', rows.some(q => q[3] != null) ? 'koi ads din nahi — BE nahi' : 'spend nahi — BE nahi'];
+        if (n < 5) return [L, '—', n ? `Too early · ${n} din hi BE hue` : 'Too early · koi din BE nahi hua'];
+        const med = n % 2 ? dd[(n - 1) / 2] : (dd[n / 2 - 1] + dd[n / 2]) / 2, keep = dd.filter(x => x >= med / 2);
+        return [L, 'D' + Math.round(keep.reduce((a, b) => a + b, 0) / keep.length), `median D${Math.round(med)} · ${keep.length.toLocaleString('en-US')} din ka avg`]; };
       // what the strip must print for a country's rows ($ view), worked out here from the rows: the recount + every reason
       const exp = (rows, cc) => { const o = rc(rows, 'usd'), xx = cc === 'XX', un = cc === '--', D = rows.length;
         const hs = o.nsp > 0 && !un, hr = o.nrv > 0 && !xx, dp = dpOf(Math.max(hs ? o.s : 0, hr ? o.r : 0), hs ? o.s : 0), f = 10 ** dp;
@@ -1892,7 +1907,7 @@ async function moreKeepAll(dc, packs) {
             : hs && !(o.s > 0) ? 'Is country me koi ads din nahi' : 'Google Ads'],
           ['Total revenue', hr ? fm(R, false, dp) : '—', xx ? 'Not split: koi kamai nahi' : o.K ? `${o.K} din ki kamai abhi nahi padhi` : 'so far · AdMob-matched'],
           ['Profit / loss', has ? fm((Math.round(R * f) - Math.round(S * f)) / f, true, dp) : '—', why(0)],
-          ['ROAS', has ? Math.round(o.r / o.s * 100) + '%' : '—', why(1)],
+          ['ROAS', has ? Math.round(o.r / o.s * 100) + '%' : '—', why(1)], expBE(rows, cc),
           ['Installs', o.nn && !xx ? o.n.toLocaleString('en-US') : '—', xx ? 'Not split: installs nahi' : 'GA4 · ads + organic'],
           ['Install days', xx ? '—' : String(D), xx ? 'Not split: install din nahi' : `${fd4(rows[0][0])} – ${fd4(rows[D - 1][0])}`]]; };
       // a few cents of spend under whole-unit revenue (stray Google Ads clicks + organic revenue): the spend printed with
@@ -1959,13 +1974,68 @@ async function moreKeepAll(dc, packs) {
       const kno = seen(U.cohCard(appFile()));
       out.k_nocd = [kOf(kno) === kb, kno.includes('ki country-wise table nahi')];
       U.setCTY('');
-      // one height in every state: the same box (one grid, six tiles, labels, the line's box, the note)
+      // ── 🎯 Avg breakeven (owner, 22 Oct 2026: "average breakeven day ka KPI add kar do — jo country wise filter pe vo
+      // country ka milega … koi koi din ese ho jate he jo us din ka BE 2–5–10 din hota he — usko avg BE me exclude karna
+      // he … manlo 100 BE day he to 50% se kam din vale date ko count hi nahi karna") ──────────────────────────────────
+      {
+        // a made-up install day: spend (USD, billed at ₹83), its build breakeven, its so far
+        const br = (X, sp, be, s_) => [X, 10, null, sp, null, 0, null, T.map(() => null), s_, X, be, 'Normal', 0, sp == null ? null : sp * 83];
+        const beSet = (days, from) => days.map((b, i) => br(day(from || '2025-01-01', i), 10, Array.isArray(b) ? b : [b, true], 20));
+        const bf = rows => ({ v: 1, T, lags: 31, newest: rows[rows.length - 1][0], rows });
+        const bTile = h => kT(h).find(x => x[0] === 'Avg breakeven');
+        // an independent recount: median of the reached days, out = before half of it, mean of the rest
+        const rcBE = days => { const a = days.slice().sort((x, y) => x - y), n = a.length, med = n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2,
+          keep = a.filter(x => x >= med / 2); return [med, a.length - keep.length, keep.reduce((x, y) => x + y, 0) / keep.length]; };
+        // the hand case: 8 install days broke even on day 3, 5, 40, 50, 60, ≤ 90, 100, ≤ 120 (a "≤": that column's day);
+        // 2 ads days not even yet (one not read yet); an ads-paused day (spend 0) and a day with no spend data: no ads day
+        const hr8 = beSet([3, 5, 40, 50, 60, [90, false], 100, [120, false]]).concat([br('2025-01-09', 10, null, 4), br('2025-01-10', 10, null, null),
+          br('2025-01-11', 0, null, 5), br('2025-01-12', null, null, 5)]);
+        const fh = bf(hr8), hb = seen(U.cohCard(fh));
+        U.set('SHOW', 1e9); const tb = U.cohCard(fh); U.set('SHOW', 60);
+        // the Breakeven column as the Day table prints it (its own cells): the 8 days, nothing else
+        const colDays = trs(tb).map(r => /(?:≤ )?day (\d+)<\/td>$/.exec(r[5])).filter(Boolean).map(m => +m[1]);
+        out.abe_hand = [bTile(hb), kB(hb), U.beAvg(hr8, T), colDays.sort((a, b) => a - b), rcBE(colDays), kL(hb)];
+        // the same day in every grain × mode, "Show all", and in the ₹ views (₹ as billed, ₹ at today's rate)
+        const b0 = [bTile(hb), kB(hb)], inv = [];
+        for (const g of ['day', 'week', 'month']) for (const m of ['roas', 'rev', 'ltv', 'delta']) for (const sh of [60, 1e9]) {
+          U.set('GRAIN', g); U.set('MET', m); U.set('SHOW', sh); const h = U.cohCard(fh); inv.push(JSON.stringify([bTile(h), kB(h)]) === JSON.stringify(b0)); }
+        U.set('GRAIN', 'day'); U.set('MET', 'roas'); U.set('SHOW', 60);
+        ctx.curView = () => 'INR'; ctx.cfx = () => 88; ctx.csym = () => '₹'; U.lifeView([], null, { ccy: 'INR' });
+        const hbi = seen(U.cohCard(fh)); U.lifeView([], null, {}); const hbu = U.cohCard(fh);
+        ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
+        out.abe_inv = [inv, [bTile(hbi), kB(hbi)], [bTile(hbu), kB(hbu)], kT(hbi)[0][1]];
+        // too few reached (4: '—', said), exactly 5 (shown), exactly half the median (kept: "before" half only), an odd
+        // count's median, nothing reached, nothing left out
+        const cases = [beSet([10, 20, 30, 40]).concat([1, 2, 3].map(i => br(day('2025-02-01', i), 10, null, 4))), beSet([10, 20, 30, 40, 50]),
+          beSet([20, 20, 20, 20, 10]), beSet([1, 2, 30, 40, 50]), [1, 2].map(i => br(day('2025-02-01', i), 10, null, 4)), beSet([60, 61, 62, 63, 64, 65])];
+        out.abe_cases = cases.map(rs => { const h = seen(U.cohCard(bf(rs))); return [bTile(h), kB(h), U.beAvg(rs, T)]; });
+        // a big app: 9,999 ads days (4-digit counts, a 3-digit median) — the line in its two lines, the reason in its two
+        const big = []; for (let i = 0; i < 9999; i++) big.push(br(day('2000-01-01', i), 10, i < 4000 ? null : i < 4300 ? [2, true] : [100 + (i % 50), false], 20));
+        const hg9 = seen(U.cohCard(bf(big)));
+        out.abe_big = [bTile(hg9), kB(hg9), kB(hg9).length];
+        // the states with no avg: no ads (spend 0 everywhere), no spend data at all, nothing — and the strip's own cases
+        out.abe_none = [bTile(hg), kB(hg), bTile(hq), kB(hq), bTile(hn), kB(hn), bTile(hall), kB(hall)];
+        // 🌍 a country: the picked country's own days ('…' while its rows load), All again its own; Unknown / Not split '—'
+        const PBE = 'roi_ffffffffffff_c00.json.gz';
+        PACKS[PBE] = { v: 1, b: 'b0b0b0b0b0b0', key: 'ffffffffffff', ix: 0, c: { AA: beSet([10, 12, 14, 16, 18, 2]).concat([br('2025-01-07', 3, null, 1)]) } };
+        const fcb = Object.assign(bf(hr8), { cd: Object.assign(cdx(), { packs: [[PBE, 'bebebebebebe'], [P1, 'k1k1k1k1k1k1']] }) });
+        U.setCTY('AA'); const hcl = seen(U.cohCard(fcb)); await flush(); const hca = seen(U.cohCard(fcb));
+        ctx.curView = () => 'INR'; ctx.cfx = () => 88; ctx.csym = () => '₹'; U.lifeView([], null, { ccy: 'INR' });
+        const hci = seen(U.cohCard(fcb)); U.lifeView([], null, {}); ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
+        const civ = []; for (const g of ['week', 'month']) for (const m of ['rev', 'delta']) { U.set('GRAIN', g); U.set('MET', m); civ.push(JSON.stringify(bTile(U.cohCard(fcb))) === JSON.stringify(bTile(hca))); }
+        U.set('GRAIN', 'day'); U.set('MET', 'roas');
+        U.setCTY(''); const hcA = seen(U.cohCard(fcb));
+        out.abe_cty = [bTile(hcl), kOf(hcl).includes('aria-busy="true"'), bTile(hca), kB(hca), [bTile(hci), kB(hci)], civ, bTile(hcA), kB(hcA), rcBE([10, 12, 14, 16, 18, 2])];
+        out.abe_cty_sp = [bTile(kn), kB(kn), bTile(kx), kB(kx), bTile(ke), kB(ke), bTile(kq), bTile(kl), kB(kl)];
+      }
+      // one height in every state: the same box (one grid, seven tiles, labels, the two lines' boxes, the note)
       out.k_skel = [new Set(KS.map(kSk)).size, KS.length];
       // every label / value / reason printed in those states (crore-size ₹ included), each value with its size (roi-ckw or
       // not): test_roi_frontend.py measures them against each width's value box (the page's own CSS numbers)
       out.k_print = KS.flatMap(h => [...kOf(h).matchAll(/<div class="roi-kl">([^<]*)<\/div><div class="roi-kv">([^]*?)<\/div><div class="roi-ks">([^<]*)<\/div>/g)]
         .map(m => [m[1], m[2].replace(/<[^>]+>/g, ''), m[2].startsWith('<span class="roi-ckw">'), m[3]]));
       out.k_lines = KS.map(kL);
+      out.k_blines = KS.map(kB);
     }
     const F1 = ['roi_aaaaaaaaaaaa_c01.json.gz'];
     out.cc_nojump = { w375: await noJump(375, dc, PACKS, F1), w1280: await noJump(1280, dc, PACKS, F1) };
