@@ -20,7 +20,7 @@ START, END = "2026-01-01", "2026-01-12"
 FX = {"USD": 1.0, "EUR": 1.1, "INR": 0.012}
 NE = "HTTP 403: authorizationError=CUSTOMER_NOT_ENABLED — The customer account can't be accessed"
 D0_KEYS = ("d1_final_till", "d1_next_fix_utc", "d1_lag_h", "d1_zones", "d1_ok",    # fetch_app_spend's D0 finality
-           "d1_unread")                                                           # of the read (unread: when any)
+           "d1_unread", "d1_ended")                                               # of the read (these two: when any)
 
 
 def _h(*parts):
@@ -174,7 +174,7 @@ def test_same_cache_rows_and_lines_as_one_after_another(mcc, capsys, workers):
     assert js["daily"] and js["installs"] and js["convval"] and js["convval_day1"] and "EUR" in js["fx"]
     # one asked account refuses day-1 (a 403 that is not CUSTOMER_NOT_ENABLED): the read fixes no D0 date
     # (it answered cost, so it is not "unread": the whole read is incomplete)
-    assert f.d0["d1_ok"] is False and f.d0["d1_lag_h"] == 4 and set(f.d0) == set(D0_KEYS) - {"d1_unread"}
+    assert f.d0["d1_ok"] is False and f.d0["d1_lag_h"] == 4 and set(f.d0) == set(D0_KEYS) - {"d1_unread", "d1_ended"}
     # the not-enabled accounts (403 CUSTOMER_NOT_ENABLED on spend) are no longer asked for installs / day-1 …
     gone = {a for a, k in f0.calls if k == "spend" and a in f0.off}
     assert gone and len(gone) == len(f0.off)

@@ -598,10 +598,11 @@ def _d0_zone(tz):
     return timezone(timedelta(hours=-12))
 
 
-def _d0_moment(zones, x, lag):
+def _d0_moment(zones, x, lag, ended=()):
     """The UTC moment click date x (a date) is final in every zone of `zones` (tzinfos or zone names): its last click's
     24 h end at the later of (x+2 00:00 local) and (x+1 00:00 local) + 24 h — the second when x+1 is a 23-hour day
-    (summer time starting) — and Google Ads reports `lag` hours late."""
+    (summer time starting) — and Google Ads reports `lag` hours late. ended: zones of accounts with no click left to
+    wait for (d0_final) — there x only has to have ended (x+1 00:00 local) `lag` hours ago (a late cost row shows)."""
     from datetime import datetime, time, timedelta, timezone
     end = None
     for z in zones:
@@ -610,6 +611,10 @@ def _d0_moment(zones, x, lag):
         day2 = datetime.combine(x + timedelta(days=2), time(0), tzinfo=z).astimezone(timezone.utc)
         t = max(day2, day1 + timedelta(hours=24))
         end = t if end is None or t > end else end
+    for z in ended:
+        z = _d0_zone(z) if isinstance(z, str) else z
+        t = datetime.combine(x + timedelta(days=1), time(0), tzinfo=z).astimezone(timezone.utc)
+        end = t if end is None or t > end else end
     return end + timedelta(hours=lag)
 
 
@@ -617,35 +622,63 @@ def _iso_z(t):
     return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def d0_final(accounts, now=None, lag_h=None):
-    """The last click date whose D0 is complete in EVERY account of `accounts` (each in its own a["tz"]; the latest
-    moment wins) → {"final_till": ISO date, "next_fix_utc": the moment final_till moves on one day (ISO, UTC, "Z"),
-    "lag_h", "zones": the zone names used (merge_spend works out the moment of any other date with them)}.
+def d0_final(accounts, now=None, lag_h=None, last=None):
+    """The last click date whose D0 is complete in every account of `accounts` that still has clicks to wait for (each
+    in its own a["tz"]; the latest moment wins) → {"final_till": ISO date, "next_fix_utc": the moment final_till moves
+    on one day (ISO, UTC, "Z"), "lag_h", "zones": the zone names used, "ended": the zones of the accounts left out
+    (when any; merge_spend works out the moment of any other date with them: _d0_moment)}.
+    last: {account id: its last day with a click in the read (a cost row, or a conversion)} — an account whose last
+    click day is already final in its own zone has no D0 left to wait for, so its zone holds nobody back (an account
+    that stopped spending in a later zone would otherwise delay every app by hours); an account missing from `last`
+    (no click in the read) waits for nothing either. Its zone ("ended") only caps the date at its own last day that
+    ended lag h ago: "no cost row" stands for "no click" only once a late cost row would show. last None: every account
+    counts. No account left: the accounts with the latest click day count (not every zone: the latest-ending one would
+    hold the date back again, past the moment already promised); none with a click at all: every zone.
     now: a tz-aware datetime (default: the clock); lag_h: default GADS_D0_LAG_HOURS / D0_LAG_HOURS."""
     from datetime import datetime, timedelta, timezone
     lag = _d0_lag_h() if lag_h is None else max(0, int(lag_h))
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    zones = {}
+
+    def fin(z):     # (now − L h, in z).date() − 2 days; a day earlier while a 23-hour day after it is not 24 h on yet
+        f = (now - timedelta(hours=lag)).astimezone(z).date() - timedelta(days=2)
+        return f - timedelta(days=1) if _d0_moment([z], f, lag) > now else f
+
+    def cap(z):     # the last day in z that ended lag h ago
+        f = (now - timedelta(hours=lag)).astimezone(z).date() - timedelta(days=1)
+        return f - timedelta(days=1) if _d0_moment((), f, lag, [z]) > now else f
+
+    every, zones, idle, seen = {}, {}, {}, []
     for a in accounts or [{}]:
         z = _d0_zone((a or {}).get("tz"))
+        every[str(z)] = z
+        if last is not None:
+            d = str(last.get(str((a or {}).get("id"))) or "")
+            seen += [(d, str(z), z)] if d else []
+            if not d or d <= fin(z).isoformat():
+                idle[str(z)] = z        # no click after its own final day: nothing of it to wait for
+                continue
         zones[str(z)] = z
-    # (now − L h, in the earliest zone).date() − 2 days; a day earlier while a 23-hour day after it is not 24 h on yet
-    final = min((now - timedelta(hours=lag)).astimezone(z).date() for z in zones.values()) - timedelta(days=2)
-    if _d0_moment(zones.values(), final, lag) > now:
-        final -= timedelta(days=1)
-    at = _d0_moment(zones.values(), final + timedelta(days=1), lag)
-    return {"final_till": final.isoformat(), "next_fix_utc": _iso_z(at), "lag_h": lag, "zones": sorted(zones)}
+    if not zones:                       # nobody to wait for: the accounts with the latest click day count
+        top = max((d for d, _, _ in seen), default="")
+        zones = {k: z for d, k, z in seen if d == top} or every
+    ended = {k: z for k, z in idle.items() if k not in zones}
+    final = min([fin(z) for z in zones.values()] + [cap(z) for z in ended.values()])
+    at = _d0_moment(zones.values(), final + timedelta(days=1), lag, ended.values())
+    out = {"final_till": final.isoformat(), "next_fix_utc": _iso_z(at), "lag_h": lag, "zones": sorted(zones)}
+    if ended:
+        out["ended"] = sorted(ended)
+    return out
 
 
 def fetch_app_spend(s, start, end, *, mode="live", now=None):
     """Return {daily:{store_id:{date:usd_micros}}, campaigns:{store_id:[...]}, currency_src, fx} or
     None when Google Ads isn't configured / a call fails. `s` is config.settings().
     Also the D0 finality of this read (d0_final over the accounts asked for the day-1 query, at `now` — tz-aware,
-    default the clock read before the day-1 queries): d1_final_till, d1_next_fix_utc, d1_lag_h, d1_zones; d1_ok =
-    every asked account answered the day-1 query, an account with no click in the window (no cost rows) aside
-    (merge_spend fixes dates only from a complete read); d1_unread = the accounts that could not answer at all (a 403
-    on cost and day-1, not CUSTOMER_NOT_ENABLED; only when any) — merge_spend keeps their stores' dates unfixed (they
-    may have clicks), while every other store is fixed."""
+    default the clock read before the day-1 queries): d1_final_till, d1_next_fix_utc, d1_lag_h, d1_zones, d1_ended
+    (when any); d1_ok = every asked account answered the day-1 query, an account with no click in the window (no cost
+    rows) aside (merge_spend fixes dates only from a complete read); d1_unread = the accounts that could not answer at
+    all (a 403 on cost and day-1, not CUSTOMER_NOT_ENABLED; only when any) — merge_spend keeps their stores' dates
+    unfixed (they may have clicks), while every other store is fixed."""
     global _TAKEN
     _TAKEN = {}
     if mode == "mock":
@@ -686,18 +719,22 @@ def fetch_app_spend(s, start, end, *, mode="live", now=None):
     # Each of the three queries goes to the accounts side by side (_per_account); the answers are taken in account
     # order, so every row, error and log line is in the same order as when asked one account after another.
     workers = _spend_workers()
-    rows, errs, gone, idle, denied = [], [], set(), set(), set()
+    rows, errs, gone, idle, denied, last = [], [], set(), set(), set(), {}
     for i, (a, got, e) in enumerate(_per_account(
             accounts, lambda a: _app_spend_for(a["id"], mcc, dev, token, start, end), workers)):
         if e is not None:
             errs.append(str(e)[:220])
             if _not_enabled(e):
                 gone.add(i)                  # a not-enabled account answers 403 to installs / day-1 too: not asked
-            elif str(e).startswith("HTTP 403"):
-                denied.add(a["id"])          # any other 403 (e.g. USER_PERMISSION_DENIED): it cannot answer at all
+            else:
+                last[a["id"]] = "9999-12-31"   # its clicks are unknown: its zone counts for D0 finality (d0_final)
+                if str(e).startswith("HTTP 403"):
+                    denied.add(a["id"])      # any other 403 (e.g. USER_PERMISSION_DENIED): it cannot answer at all
             continue
         if not got:
             idle.add(a["id"])                # no app-campaign cost in the window = no click, so no D0 to miss either
+        else:
+            last[a["id"]] = max(str(r.get("date") or "") for r in got)   # its last day with a click (d0_final)
         for r in got:
             r["currency"] = a["currency"]; r["account"] = a["id"]; r["account_name"] = a.get("name") or ""
             rows.append(r)
@@ -744,8 +781,13 @@ def fetch_app_spend(s, start, end, *, mode="live", now=None):
         for r in got:
             r["currency"] = a["currency"]; r["account"] = a["id"]; d1_rows.append(r)
     agg["convval_day1"] = _aggregate_convval(d1_rows, base=agg["currency_src"])
-    # D0 finality of this read: the dates complete in every asked account's own time zone (merge_spend fixes them)
-    agg.update({"d1_" + k: v for k, v in d0_final(asked, read_at).items()})
+    for r in inst_rows + d1_rows:   # a conversion on a click date is a click there too, cost row or not (yet)
+        d = str(r.get("date") or "")
+        if d and (r.get("installs") or r.get("convval")) and d > last.get(r["account"], ""):
+            last[r["account"]] = d
+    # D0 finality of this read: the dates complete in the own time zone of every asked account that still has clicks
+    # to wait for (merge_spend fixes them)
+    agg.update({"d1_" + k: v for k, v in d0_final(asked, read_at, last=last).items()})
     agg["d1_ok"] = d1_ok
     if unread:
         agg["d1_unread"] = unread
@@ -947,16 +989,17 @@ def _merge_d0(cd, fd, old, fixed, fin, spend=None, lo=None, opened=None, unread=
 
 def _d0_next_fix(cached, fresh, fixed):
     """The merged cache's d1_next_fix_utc: the moment `fixed` + 1 is final, for this read's zones and lag (d1_zones,
-    d1_lag_h: d0_final's rule exactly). A read without its zones: its own moment (for ITS d1_final_till + 1) moved by
-    whole days to `fixed` + 1; a read without one either: the cache's (such a read moves nothing). Nothing fixed →
-    None."""
+    d1_ended, d1_lag_h: d0_final's rule exactly). A read without its zones: its own moment (for ITS d1_final_till + 1)
+    moved by whole days to `fixed` + 1; a read without one either: the cache's (such a read moves nothing). Nothing
+    fixed → None."""
     from datetime import date, datetime, timedelta
     if not fixed:
         return None
     zones, lag = fresh.get("d1_zones"), fresh.get("d1_lag_h")
     try:
         if zones and lag is not None:
-            return _iso_z(_d0_moment(zones, date.fromisoformat(fixed) + timedelta(days=1), int(lag)))
+            return _iso_z(_d0_moment(zones, date.fromisoformat(fixed) + timedelta(days=1), int(lag),
+                                      _d0_list(fresh.get("d1_ended"))))
         at, fin = fresh.get("d1_next_fix_utc"), fresh.get("d1_final_till")
         if at and fin:
             t = datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ")
@@ -984,7 +1027,7 @@ def _d0_fix_at(cached, fresh, fixed, still):
                     + [date.fromisoformat(d) for e in (still or {}).values() for d in e.get("days") or ()])
         first = max(first, last - timedelta(days=D0_FIX_AT_DAYS - 1))
         return {(first + timedelta(days=i)).isoformat():
-                _iso_z(_d0_moment(zones, first + timedelta(days=i), int(lag)))
+                _iso_z(_d0_moment(zones, first + timedelta(days=i), int(lag), _d0_list(fresh.get("d1_ended"))))
                 for i in range((last - first).days + 1)}
     except (TypeError, ValueError):
         return None

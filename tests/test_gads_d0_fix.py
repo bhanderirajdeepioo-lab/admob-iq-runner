@@ -111,6 +111,91 @@ def test_several_accounts_the_earliest_wins_and_the_next_fix_is_the_last_one():
     assert google_ads.d0_final([], now) == google_ads.d0_final([{}], now)        # nobody asked: the conservative zone
 
 
+def test_an_account_with_no_click_left_to_wait_for_holds_nobody_back():
+    """last: {account: its last click day}. An account in a later zone that stopped spending before its own final
+    day has no D0 left to wait for: the earlier zone's dates are fixed on time (else one idle account in a later zone
+    would hold every earlier-zone app back by hours). It counts again as soon as it has a click on a date not final in
+    its zone; an account missing from `last` (no click in the read) counts for nothing; nobody left: the accounts with
+    the latest click day; no click anywhere: all of them."""
+    now = utc("2026-01-03T00:00")                    # IST has 1 Jan final, LA not yet
+    ist, la = dict(IST, id="1"), dict(LA, id="2")
+    got = google_ads.d0_final([ist, la], now, last={"1": "2026-01-02", "2": "2025-12-20"})
+    assert got["final_till"] == "2026-01-01" and got["zones"] == ["Asia/Calcutta"]
+    assert got["ended"] == ["America/Los_Angeles"]
+    assert got["next_fix_utc"] == "2026-01-03T22:30:00Z"                       # IST's moment for 2 Jan
+    late = google_ads.d0_final([ist, la], now, last={"1": "2026-01-02", "2": "2026-01-01"})   # LA clicked on 1 Jan
+    assert late["final_till"] == "2025-12-31" and late["zones"] == ["America/Los_Angeles", "Asia/Calcutta"]
+    assert "ended" not in late
+    assert google_ads.d0_final([ist, la], now, last={"1": "2026-01-02"}) == got                # LA: no cost at all
+    assert google_ads.d0_final([ist, la], now, last={}) == google_ads.d0_final([ist, la], now)   # no click: all of them
+    assert google_ads.d0_final([ist, la], now, last=None)["final_till"] == "2025-12-31"
+    # IST's last click (1 Jan) is final too: nobody waits — IST's zone still decides, not LA's (which ends later)
+    assert google_ads.d0_final([ist, la], now, last={"1": "2026-01-01", "2": "2025-12-20"}) == got
+
+
+def test_the_promised_moment_is_kept_when_the_last_waiting_account_stops():
+    """The IST account stops after 8 Jan, the New York one stopped on 2 Jan. The read before IST's moment for 8 Jan
+    promises it (next_fix_utc); with no new data, the read at that moment fixes 8 Jan — the idle New York zone does
+    not come back and hold it until 10 Jan 09:00 UTC (an account that stops is not fixed later than one that goes on)."""
+    accs = [{"id": "i", "tz": "Asia/Calcutta"}, {"id": "n", "tz": "America/New_York"}]
+    last = {"i": "2026-01-08", "n": "2026-01-02"}
+    before = google_ads.d0_final(accs, utc("2026-01-09T22:00"), 4, last=last)
+    assert before["final_till"] == "2026-01-07" and before["next_fix_utc"] == "2026-01-09T22:30:00Z"
+    at = google_ads.d0_final(accs, utc("2026-01-09T22:30"), 4, last=last)
+    assert at["final_till"] == "2026-01-08" and at["zones"] == ["Asia/Calcutta"]
+    assert at == google_ads.d0_final(accs, utc("2026-01-09T22:30"), 4, last=dict(last, i="2026-01-09"))
+    fresh = _fresh({}, final=before["final_till"], **{"d1_" + k: v for k, v in before.items() if k != "final_till"})
+    m = google_ads.merge_spend(None, fresh, "2026-01-01")
+    assert m["d1_next_fix_utc"] == m["d1_fix_at"]["2026-01-08"] == "2026-01-09T22:30:00Z"
+
+
+@pytest.mark.parametrize("zones", [("Asia/Calcutta", "America/New_York"), ("Pacific/Kiritimati", "Pacific/Pago_Pago"),
+                                   ("Pacific/Auckland", "Pacific/Honolulu"), ("Asia/Calcutta", None)])
+def test_with_last_the_moment_is_exact_and_the_date_never_moves_back(zones):
+    """No new data, every 50 min over 6 days, accounts stopping on the way: final_till moves on exactly at next_fix_utc
+    (by one day, not a minute before) and never back."""
+    accs = [{"id": str(i), "tz": z} for i, z in enumerate(zones)]
+    for last in ({"0": "2026-01-05", "1": "2025-12-30"}, {"0": "2026-01-04", "1": "2026-01-06"},
+                 {"0": "2026-01-06"}, {"0": "2025-12-30", "1": "2025-12-30"}, {"0": "9999-12-31", "1": "2025-12-30"}):
+        t, prev = utc("2026-01-03T00:00"), None
+        while t < utc("2026-01-09T00:00"):
+            r = google_ads.d0_final(accs, t, 4, last=last)
+            nf, nxt = utc(r["next_fix_utc"][:-1]), date.fromisoformat(r["final_till"]) + timedelta(days=1)
+            assert nf > t and google_ads.d0_final(accs, nf - timedelta(minutes=1), 4, last=last)["final_till"] == \
+                r["final_till"], (zones, last, t)
+            assert google_ads.d0_final(accs, nf, 4, last=last)["final_till"] == nxt.isoformat(), (zones, last, t)
+            assert prev is None or r["final_till"] >= prev, (zones, last, t)
+            prev = r["final_till"]
+            t += timedelta(minutes=50)
+
+
+def test_a_left_out_zone_a_day_behind_still_caps_the_date_until_its_day_ended_lag_hours_ago():
+    """Kiritimati (UTC+14) spends, Pago Pago (UTC−11, 25 h behind) has been idle. "No cost row" stands for "no click"
+    only once a late cost row would show: 8 Jan is fixed once it ended in Pago Pago lag h ago (9 Jan 15:00 UTC), not at
+    Kiritimati's moment (14:00 UTC, before Pago Pago's 8 Jan has ended + 4 h). merge_spend's moments follow it."""
+    accs = [{"id": "k", "tz": "Pacific/Kiritimati"}, {"id": "p", "tz": "Pacific/Pago_Pago"}]
+    last = {"k": "9999-12-31", "p": "2025-12-20"}
+    r = google_ads.d0_final(accs, utc("2026-01-09T14:30"), 4, last=last)
+    assert google_ads.d0_final(accs[:1], utc("2026-01-09T14:30"), 4)["final_till"] == "2026-01-08"
+    assert r["final_till"] == "2026-01-07" and r["zones"] == ["Pacific/Kiritimati"]
+    assert r["ended"] == ["Pacific/Pago_Pago"]
+    assert r["next_fix_utc"] == "2026-01-09T15:00:00Z"
+    assert google_ads.d0_final(accs, utc("2026-01-09T15:00"), 4, last=last)["final_till"] == "2026-01-08"
+    lag0 = google_ads.d0_final(accs, utc("2026-01-09T10:30"), 0, last=last)        # no lag: not before the day ended
+    assert lag0["final_till"] == "2026-01-07" and lag0["next_fix_utc"] == "2026-01-09T11:00:00Z"
+    fresh = _fresh({}, final=r["final_till"], **{"d1_" + k: v for k, v in r.items() if k != "final_till"})
+    m = google_ads.merge_spend(_cache({}, fixed="2026-01-07"), fresh, "2026-01-01")
+    assert m["d1_next_fix_utc"] == m["d1_fix_at"]["2026-01-08"] == "2026-01-09T15:00:00Z"
+    assert m["d1_fix_at"]["2026-01-09"] == "2026-01-10T15:00:00Z"
+    # IST + New York (9.5-10.5 h apart): the cap never binds — the rule as without it
+    ist_ny = [{"id": "i", "tz": "Asia/Calcutta"}, {"id": "n", "tz": "America/New_York"}]
+    t = utc("2026-01-05T00:00")
+    while t < utc("2026-01-07T00:00"):
+        assert google_ads.d0_final(ist_ny, t, 4, last={"i": "9999-12-31", "n": "2025-12-20"})["final_till"] == \
+            google_ads.d0_final(ist_ny[:1], t, 4)["final_till"]
+        t += timedelta(minutes=30)
+
+
 def test_lag_hours_from_the_environment(monkeypatch):
     b = utc("2026-01-02T22:30")
     monkeypatch.setenv("GADS_D0_LAG_HOURS", "3")
@@ -139,6 +224,49 @@ def test_fetch_says_which_dates_are_final_over_the_accounts_asked(monkeypatch):
     assert out["convval_day1"] and out["daily"]
     fake.accounts[A1]["tz"] = "America/Los_Angeles"   # an asked account whose day ends later: it holds the date back
     assert _fetch(monkeypatch, fake, now)["d1_final_till"] == "2026-01-08"
+
+
+def test_fetch_an_account_that_stopped_spending_in_a_later_zone_holds_nobody_back(monkeypatch):
+    fake = FakeAds()
+    fake.accounts[A1]["tz"] = "America/Los_Angeles"
+    for c in fake.camps[A1].values():
+        c["hi"] = "2026-01-04"                        # A1's last click: 4 Jan, long final in its own zone
+    now = utc("2026-01-10T23:00")
+    out = _fetch(monkeypatch, fake, now)
+    assert out["d1_final_till"] == "2026-01-09" and out["d1_zones"] == ["Asia/Calcutta"]
+    for c in fake.camps[A1].values():
+        c["hi"] = "2026-12-31"                        # A1 clicks again: its later zone holds the date back
+    assert _fetch(monkeypatch, fake, now)["d1_final_till"] == "2026-01-08"
+    fake.fail = lambda acct, kind, q: "HTTP 500: synthetic" if acct == A1 and kind == "SPEND" else None
+    assert _fetch(monkeypatch, fake, now)["d1_final_till"] == "2026-01-08"      # its clicks unknown: it counts
+
+
+@pytest.mark.parametrize("hide, zero, final", [
+    (("SPEND",), (), "2026-01-08"),                   # its D0 and installs rows go on past its last cost row
+    (("SPEND", "D1"), (), "2026-01-08"),              # installs / conversion value alone: a click too
+    (("SPEND", "INST"), (), "2026-01-08"),            # D0 alone
+    (("SPEND", "D1"), ("INST",), "2026-01-09"),       # an installs row with nothing in it is no click
+    (("SPEND", "D1", "INST"), (), "2026-01-09"),      # nothing after 4 Jan: it holds nobody back
+])
+def test_fetch_a_conversion_on_a_date_without_a_cost_row_is_a_click_too(monkeypatch, hide, zero, final):
+    """A later-zone account's last cost row is 4 Jan, but Google shows D0 / installs on later click dates (a cost row
+    late or never there): those dates count as its clicks, so its zone holds them back as for any spending account."""
+    fake = FakeAds()
+    fake.accounts[A1]["tz"] = "America/Los_Angeles"
+    rows = fake.metric_rows
+
+    def metric_rows(acct, kind, a, b):
+        out = rows(acct, kind, a, b)
+        if acct != A1:
+            return out
+        if kind in zero:
+            out = [dict(r, metrics={k: 0 for k in r["metrics"]}) if r["segments"]["date"] > "2026-01-04" else r
+                   for r in out]
+        return [r for r in out if kind not in hide or r["segments"]["date"] <= "2026-01-04"]
+    monkeypatch.setattr(fake, "metric_rows", metric_rows)
+    out = _fetch(monkeypatch, fake, utc("2026-01-10T23:00"))
+    assert out["d1_ok"] is True and out["d1_final_till"] == final
+    assert out["d1_zones"] == (["America/Los_Angeles", "Asia/Calcutta"] if final == "2026-01-08" else ["Asia/Calcutta"])
 
 
 def test_one_accounts_day1_error_makes_the_read_incomplete(monkeypatch, capsys):
@@ -183,9 +311,9 @@ def test_the_finality_clock_is_read_before_the_d0_numbers(monkeypatch):
         seen["q"].append(datetime.now(timezone.utc))
         return real_lag(*a, **k)
 
-    def final(acc, now=None, lag_h=None):
+    def final(acc, now=None, lag_h=None, last=None):
         seen["final"].append(now)
-        return real_final(acc, now, lag_h)
+        return real_final(acc, now, lag_h, last)
     monkeypatch.setattr(google_ads, "_app_convval_lag_for", lag_for)
     monkeypatch.setattr(google_ads, "d0_final", final)
     google_ads.fetch_app_spend(dict(SETTINGS, gads_archive=False), "2026-01-01", "2026-01-12", mode="live")
