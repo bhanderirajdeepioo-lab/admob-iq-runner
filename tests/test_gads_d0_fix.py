@@ -1385,6 +1385,7 @@ def test_day_on_the_first_run_and_through_a_failed_fetch():
     fresh = _fresh({"com.x.a": {"2026-01-05": 7.5}}, daily={"com.x.a": {"2026-01-05": 100}}, d1_day=_day("2026-01-05"))
     first = google_ads.merge_spend(None, fresh, "2026-01-01")
     assert first is fresh and first["convval_d0day"] == {"com.x.a": {"2026-01-05": 7.5}}
+    assert "d1_day" not in first                     # this read's own moments are merged, never cached
     assert first["d1_day_read"] == {"2026-01-05": "2026-01-05T22:40:00Z"}
     assert first["d1_day_next"]["date"] == "2026-01-06"
     assert "convval_d0day" not in google_ads.merge_spend(None, _fresh({}, d1_day=_day(ok=False)), "2026-01-01")
@@ -1417,6 +1418,36 @@ def test_an_odd_day_value_in_the_cache_never_raises(odd):
     if "convval_d0day" not in odd:
         assert m["convval_d0day"]["com.x.b"] == {"2026-01-01": 4.0}                 # the good ones stay
     build_roas(_spend_to_usd(m, 0.01), {"app-a": "com.x.a"}, [{"app_id": "app-a", "app_name": "App A", "rev": 1}])
+
+
+@pytest.mark.parametrize("odd", [
+    {"convval_d0day": {"com.x.a": "x"}},
+    {"convval_d0day": {"com.x.a": {"2026-01-02": None, "2026-01-03": "5", "2026-01-04": float("nan")}}},
+    {"convval_d0day": ["com.x.a"]},
+    {"d1_day_read": "x"},
+    {"d1_day_read": {"x": "y", "2026-01-02": 5}},
+    {"d1_day_next": True},
+    {"d1_day_next": "2026-01-06"},
+    {"d1_day_at": ["x"]},
+    {"d1_day_at": {"com.x.b": "x", "com.x.c": {"date": "bad", "at": 5}}},
+])
+@pytest.mark.parametrize("fixed", ["2026-01-02", None])
+def test_an_odd_day_value_through_a_failed_fetch_never_raises(odd, fixed):
+    """A failed fetch hands the cache back to the page: an odd Day value is dropped there too (the good ones stay)."""
+    cached = _cache({}, fixed=fixed, daily={"com.x.b": {"2026-01-01": 100}},
+                    convval_d0day={"com.x.b": {"2026-01-01": 4.0}}, d1_day_read={"2026-01-01": "2026-01-01T22:40:00Z"})
+    if fixed is None:
+        cached.pop("d1_fixed_till", None)
+    cached.update(odd)
+    m = google_ads.merge_spend(json.loads(json.dumps(cached)), {"error": "boom"}, "2026-01-01")
+    json.dumps(m, allow_nan=False)
+    assert m.get("d1_incomplete") is (True if fixed else None)
+    if "convval_d0day" not in odd:
+        assert m["convval_d0day"] == {"com.x.b": {"2026-01-01": 4.0}}
+    if "d1_day_read" not in odd:
+        assert m["d1_day_read"] == {"2026-01-01": "2026-01-01T22:40:00Z"}
+    assert _no_day(m) == _no_day(dict(cached, **({"d1_incomplete": True} if fixed else {})))   # the rest: whole
+    build_roas(_spend_to_usd(m, 0.01), {"app-b": "com.x.b"}, [{"app_id": "app-b", "app_name": "App B", "rev": 1}])
 
 
 def test_day_log_lines_are_counts_only(capsys):

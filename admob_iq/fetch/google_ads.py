@@ -740,8 +740,11 @@ def _d0_day_stores(accounts, own, now):
     day that ended lag h ago in any of its accounts' zones) — an account that left the store, clicks it only some
     days, or clicks only other stores does not move the store's moment (the d0_final "last" rule looks at every store
     of the account: its answer flips between two moments, and neither is on time); none on x0: the ones with its
-    latest row → {store: {"date", "at", "next", "ok"}} — one d0_day per distinct set of accounts. (A later-zone
-    account whose first click of the store on X comes after the earlier zone's moment misses that one date's part.)"""
+    latest row → {store: {"date", "at", "next", "ok"}} — one d0_day per distinct set of accounts. (Known limit: a
+    later-zone account that starts or resumes the store on X so late in its own day that its row is not in a read
+    yet at the earlier zone's moment — Google's cost rows lag — misses that one date's part; its next dates are
+    whole. The key is taken on x0, not on the date x d0_day gives: with zones 21 h or more apart an account further
+    west that clicked x but not x0 is left out.)"""
     lag = _d0_lag_h()
     by_id, memo, out = {str((a or {}).get("id")): a for a in accounts or ()}, {}, {}
     for sid, ds in own.items():
@@ -926,10 +929,12 @@ def merge_spend(cached, fresh, refetch_start):
     convval_d0day (the install-day "Day" D0, RAW like convval_day1) + d1_day_read ({date: the first read that took
     it}) + d1_day_next + d1_day_at (each store's next Day moment): taken once per store-day at its own accounts'
     morning, never changed or dropped afterwards (_merge_d0day); copied forward on every path (a failed fetch keeps
-    the cache whole). Only when there is something: a cache without them merges as before."""
+    the cache whole, an odd Day value dropped: _d0day_clean). Only when there is something: a cache without them
+    merges as before."""
     if fresh is None:
         return None
     if fresh.get("error"):
+        cached = _d0day_clean(cached)                    # the page reads the Day keys: an odd one counts as absent
         if cached and cached.get("d1_fixed_till"):
             return dict(cached, d1_incomplete=True)      # nothing read: the page must not promise "next refresh"
         return cached or fresh
@@ -948,6 +953,7 @@ def merge_spend(cached, fresh, refetch_start):
                 fresh[k] = v
             else:
                 fresh.pop(k, None)
+        fresh.pop("d1_day", None)                        # this read's own moments: merged above, never cached
         _d0_log(fresh, fixed, n, still, took)
         return fresh
     out = {"v": SPEND_CACHE_V,
@@ -1143,6 +1149,16 @@ def _d0_fix_at(cached, fresh, fixed, still):
 D0_DAY_KEYS = ("convval_d0day", "d1_day_read", "d1_day_next", "d1_day_at")    # merge_spend's install-day keys
 
 
+def _d0day_clean(cached):
+    """The cache with its install-day keys as _merge_d0day reads them (an odd value or field dropped), for a failed
+    fetch that hands the cache back to the page; the cache itself when they already are (or it has none)."""
+    if not isinstance(cached, dict) or not any(k in cached for k in D0_DAY_KEYS):
+        return cached
+    day = _merge_d0day(cached, {}, None, None, None)[0]
+    out = dict({k: v for k, v in cached.items() if k not in D0_DAY_KEYS}, **{k: v for k, v in day.items() if v})
+    return cached if out == cached else out
+
+
 def _merge_d0day(cached, fresh, d1, daily, still):
     """merge_spend's install-day ("Day") D0. cached / fresh: the cache (None on a first run) and this read (its
     "d1_day": fetch_app_spend); d1: this read's own convval_day1 (RAW); daily: the merged spend; still: the new d1_open
@@ -1152,7 +1168,9 @@ def _merge_d0day(cached, fresh, d1, daily, still):
     after its moment) and the store has no Day number of X yet: its D0 of X in this read, else 0.0 when it has cost on
     X (no value within the install day) — but no number for a store waiting for an unread account (d1_open "wait": it
     would miss that account's part), nor at all on a first run with an unread account (no cache campaigns: the stores it
-    shares are unknown). A store-day not taken yet may still be taken by a later read on time for it; after that never.
+    shares are unknown; an account unread since the cache began stays unknown on the next runs too, and its part of a
+    shared store is then missed, as in the D0 fix — blocking instead would stop every Day number while it is denied).
+    A store-day not taken yet may still be taken by a later read on time for it; after that never.
     → ({"convval_d0day", "d1_day_read": {X: the first read that took X for any store}, "d1_day_next": {"date": X+1,
     "at": its Day moment, "late_h"} over every asked account (the page's fallback), "d1_day_at": {store: {"date",
     "at"}: its next Day moment} (the page's per-app moment)} — this read's, else the cache's —, [(X, stores taken)])."""
