@@ -5,8 +5,10 @@ for its read (and whether every asked account answered the day-1 query); merge_s
 good, measures how far Google's later number drifts (a percentage only), and logs counts only; build_roas carries
 "d0" to the page; the per-campaign store compares day-1 only on the days not fixed yet. Frontend: the Overview
 "Revenue by app" table's "D0 rev" column (number, D0 ROAS = Σ D0 ÷ Σ one-rate spend, "⏳ filling" + the Hinglish
-tooltip) run for real by tests/roas_fx_frontend.js. Every name, id, rate and amount is SYNTHETIC; the expected
-numbers are worked out by hand below."""
+tooltip) run for real by tests/roas_fx_frontend.js. Its second line ("Do line, ek box"): the install-day "Day" D0 —
+Google Ads' same <1-day value as it stood the next morning ((date+1 00:00) + the lag: google_ads.d0_day), taken ONCE by
+merge_spend from the first complete read at most GADS_D0_DAY_MAX_LATE_H after it and never changed (sections 8-9).
+Every name, id, rate and amount is SYNTHETIC; the expected numbers are worked out by hand below."""
 
 import json
 import os
@@ -21,7 +23,7 @@ from admob_iq.build_static import _spend_daily_dated, _spend_to_usd
 from admob_iq.engine.roas import build_roas
 from admob_iq.fetch import gads_campaign_day as gcd
 from admob_iq.fetch import google_ads
-from tests.gads_fake import A1, A2, A3, SETTINGS, TOK, FakeAds
+from tests.gads_fake import A1, A2, A3, S1, S2, SETTINGS, TOK, FakeAds
 from tests.test_roas_fx_dated import CATALOG, DAYS, IDS, NOW, SERIES, TODAY, _dash
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,7 +31,8 @@ NODE = shutil.which("node")
 TAG = re.compile(r"<[^>]*>")
 IST, LA = {"tz": "Asia/Calcutta"}, {"tz": "America/Los_Angeles"}
 LINE = re.compile(r"^roas: D0 fixed till (\d{4}-\d{2}-\d{2}|none) · \d+ store-days fixed this run"
-                  r"( · \d+ store-days still open)?( \(day-1 read incomplete: not moved\))?$")
+                  r"( · \d+ store-days still open)?( · Day \d{4}-\d{2}-\d{2} captured: \d+ stores)*"
+                  r"( \(day-1 read incomplete: not moved\))?$")
 
 
 def utc(s):
@@ -39,6 +42,7 @@ def utc(s):
 @pytest.fixture(autouse=True)
 def _lag(monkeypatch):
     monkeypatch.delenv("GADS_D0_LAG_HOURS", raising=False)
+    monkeypatch.delenv("GADS_D0_DAY_MAX_LATE_H", raising=False)
 
 
 # ── 1. when a click date's D0 is final ────────────────────────────────────────────────────────────────────────────────
@@ -788,6 +792,29 @@ def _roas(tmp, final=None, next_fix=None, fixed="2026-01-04", ok=True):
     return build_roas(_spend_to_usd(sp, NOW), IDS, CATALOG, daily_dated=_spend_daily_dated(sp, str(d)))
 
 
+# the install-day ("Day") D0 the cache took on earlier mornings (₹): Demo's 2 and 4 Jan were not taken (its store waited
+# for an unread account then), Puzzle has every one of its spend days; each date's read: X+1 04:0i IST
+DAY_CACHE = {DEMO: {"2026-01-03": 2_430.0, "2026-01-05": 2_520.0},
+             PUZ: {"2026-01-02": 1_620.0, "2026-01-03": 1_710.0, "2026-01-04": 1_530.0, "2026-01-05": 1_440.0}}
+DAY_READ = {"2026-01-0%d" % i: "2026-01-0%dT22:3%d:00Z" % (i, i) for i in range(2, 6)}
+
+
+def _roas_day(tmp, final, next_fix, day_next, taken=True):
+    """_roas's real build path with the Day D0: the cache holds DAY_CACHE / DAY_READ, and this read is 6 Jan's
+    morning read (complete and on time: Demo's ₹2,700 is taken; Puzzle has no 6 Jan). day_next: 7 Jan's Day moment (the
+    page runs on the real clock). taken False: nothing taken yet — no Day number in the cache, and this read is too late
+    for 6 Jan (the page's "Day number abhi shuru nahi hua")."""
+    d = tmp / "data"
+    d.mkdir(exist_ok=True)
+    (d / "fx_series.json").write_text(json.dumps({"INR": SERIES, "_ts": 1}))
+    cache = _raw(fixed="2026-01-04", **({"convval_d0day": DAY_CACHE, "d1_day_read": DAY_READ} if taken else {}))
+    e = {"date": "2026-01-06", "at": "2026-01-06T22:30:00Z", "next": _iso(day_next), "ok": taken}
+    day = dict(e, late_h=3, read="2026-01-06T22:41:00Z", stores={DEMO: dict(e), PUZ: dict(e)})
+    sp = google_ads.merge_spend(cache, _raw(plus=0.01, d1_final_till=final, d1_ok=True, d1_next_fix_utc=next_fix,
+                                            d1_lag_h=4, d1_day=day), DAYS[0])
+    return build_roas(_spend_to_usd(sp, NOW), IDS, CATALOG, daily_dated=_spend_daily_dated(sp, str(d)))
+
+
 SOLO = "Solo Notes"                                  # an organic app: AdMob revenue, no Google Ads at all
 
 
@@ -832,6 +859,8 @@ def _waitfwd(dash):
 # final_till 5 Jan; its moment for 6 Jan is 12 h from now → 3–5 Jan are final already (the next complete refresh
 # fixes them), 7 Jan is final 36 h from now. The node page runs on the real clock, so the moments are relative to it.
 PART_NEXT = datetime.now(timezone.utc).replace(second=0, microsecond=0) + timedelta(hours=12)
+# 7 Jan's Day moment passed an hour ago (its morning read can still come: the limit is 3 h) / 4 h ago (missed)
+DAY_LATE, DAY_MISS = (PART_NEXT - timedelta(hours=h) for h in (13, 16))
 
 
 @pytest.fixture(scope="module")
@@ -856,12 +885,33 @@ def ov(tmp_path_factory):
           # (fix_at) an hour after the 24 h step; Puzzle waits for an account that cannot answer (d1_open "wait")
           "wait": _held(fill),
           # Demo waits for an unread account too, and its last pending date (7 Jan) is after fixed_till, not final yet
-          "waitfwd": _waitfwd(fill)}
+          "waitfwd": _waitfwd(fill),
+          # the Day D0 (_roas_day): 24h filling as "fill" + 7 Jan's Day still to come; 24h fixed + 7 Jan's Day to come,
+          # its moment passed but the morning read can still come, or missed; no Day number taken yet
+          "day": _dash(_roas_day(tmp, "2026-01-05", "2099-01-06T22:30:00Z", PART_NEXT)),
+          "dayfixed": _dash(_roas_day(tmp, "2026-01-07", "2026-01-08T22:30:00Z", PART_NEXT)),
+          "daylate": _dash(_roas_day(tmp, "2026-01-07", "2026-01-08T22:30:00Z", DAY_LATE)),
+          "daymiss": _dash(_roas_day(tmp, "2026-01-07", "2026-01-08T22:30:00Z", DAY_MISS)),
+          "nostart": _dash(_roas_day(tmp, "2026-01-05", "2099-01-06T22:30:00Z", PART_NEXT, taken=False))}
+    # Day: Demo with 5 Jan not taken too (4 missed dates, not in a row); Demo's stores in a later zone (its own moment
+    # for 7 Jan still ahead) while every account's passed; realistic zones' moments (a later zone; one ahead of IST)
+    fx["dayholes"] = json.loads(json.dumps(fx["daymiss"]))
+    del fx["dayholes"]["roas"]["by_app"]["Demo Gallery"]["convval_d0day_daily"]["2026-01-05"]
+    fx["dayzone"] = json.loads(json.dumps(fx["daymiss"]))
+    fx["dayzone"]["roas"]["by_app"]["Demo Gallery"]["d0day_next"] = {"date": "2026-01-07", "at": _iso(PART_NEXT)}
+    fx["daylater"] = json.loads(json.dumps(fx["daymiss"]))
+    by = fx["daylater"]["roas"]["by_app"]
+    by["Demo Gallery"]["d0day_next"] = {"date": "2026-01-07", "at": "2026-01-08T12:00:00Z"}     # 17:30 IST, 8 Jan
+    by["Puzzle Quest"]["d0day_next"] = {"date": "2026-01-06", "at": "2026-01-06T17:00:00Z"}     # 22:30 IST, 6 Jan
     assert "d0" not in fx["nod0"]["roas"] and fx["fill"]["roas"]["d0"]["drift"]["pct"] == 1.0
     assert fx["nofixed"]["roas"]["d0"] == {"lag_h": 4, "incomplete": True}
     assert "incomplete" not in fx["fill"]["roas"]["d0"] and fx["partial"]["roas"]["d0"]["incomplete"] is True
     assert fx["partial"]["roas"]["d0"]["fixed_till"] == "2026-01-02"
     assert fx["partial"]["roas"]["d0"]["next_fix_utc"] == _iso(PART_NEXT - timedelta(days=3))     # 3 Jan's moment
+    assert not any(k.startswith("day_") for k in fx["fill"]["roas"]["d0"])                       # no Day number yet
+    assert fx["day"]["roas"]["d0"]["day_since"] == "2026-01-02" and "day_read" not in fx["nostart"]["roas"]["d0"]
+    assert fx["nostart"]["roas"]["d0"]["day_next"] == {"date": "2026-01-07", "at": _iso(PART_NEXT), "late_h": 3}
+    assert fx["day"]["roas"]["by_app"]["Demo Gallery"]["d0day_next"] == {"date": "2026-01-07", "at": _iso(PART_NEXT)}
     (tmp / "fx.json").write_text(json.dumps(fx))
     with open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8") as f:
         script = max(re.findall(r"<script>(.*?)</script>", f.read(), re.S), key=len)
@@ -886,56 +936,81 @@ def _cells(h):
     return out
 
 
+PRE = "24h = har install ke click ke 24 ghante ki value (Google Ads). "        # the tooltip's 24h part starts so
+DAY_PRE = "Day = install ke din raat 12 baje tak — agle din subah ka Google Ads number."   # (no Day read time known)
+
+
+def _t24(tip):
+    """The tooltip's 24h part (its first line)."""
+    return tip.split("\n")[0]
+
+
+def _tday(tip):
+    """The tooltip's Day part (its last line)."""
+    return tip.split("\n")[-1]
+
+
 def _d0_roas(fx, app):
     e = fx["roas"]["by_app"][app]
     return sum(e["convval_day1_daily"].get(d, 0) for d in WIN) / (sum(e["daily"].get(d, 0) for d in WIN) / 1e6)
 
 
 def test_overview_heads_say_d0(ov):
-    for k in ("fill", "nod0"):
-        for view in ("USD", "INR"):
+    for k, sub in (("fill", "24h / Day"), ("day", "24h / Day"), ("nod0", "first 24h")):     # data before the D0 fix:
+        for view in ("USD", "INR"):                                                         # as before
             h = ov[f"{k}|{view}"]
-            assert "<th>D0 rev<div" in h and ">Google Ads · first 24h</div>" in h
+            assert "<th>D0 rev<div" in h and ">Google Ads · %s</div>" % sub in h
             assert "Day-1" not in h and "frozen" not in h
             assert h.count("Rev − D0") == 3            # the Old revenue tile, the app table, the date-wise table
 
 
 def test_d0_number_and_roas_in_both_views(ov):
-    for k in ("fill", "fixed", "nod0"):
+    for k in ("fill", "fixed", "day", "nod0"):
         fx = ov["_fx"][k]
         usd, inr = _cells(ov[f"{k}|USD"]), _cells(ov[f"{k}|INR"])
         # by hand (₹90 a dollar): Demo ₹2,700 × 8 days = ₹21,600 ($240) ÷ ₹72,000 spend → 0.30×; Puzzle ₹1,800 × 4 =
-        # ₹7,200 ($80) ÷ ₹18,000 → 0.40× — Google Ads' own ₹ ÷ ₹, in both views
-        assert usd["Demo Gallery"][1][:2] == ["$240", "0.30×"] and inr["Demo Gallery"][1][:2] == ["₹21,600", "0.30×"]
-        assert usd["Puzzle Quest"][1][:2] == ["$80", "0.40×"] and inr["Puzzle Quest"][1][:2] == ["₹7,200", "0.40×"]
+        # ₹7,200 ($80) ÷ ₹18,000 → 0.40× — Google Ads' own ₹ ÷ ₹, in both views. Line 1 ("24h"); before the D0 fix
+        # (nod0): the number and the ROAS on lines of their own, as before
+        one = (lambda c, a: c[a][1][:2]) if k == "nod0" else (lambda c, a: c[a][1][0].split(" ")[1::2])
+        assert one(usd, "Demo Gallery") == ["$240", "0.30×"] and one(inr, "Demo Gallery") == ["₹21,600", "0.30×"]
+        assert one(usd, "Puzzle Quest") == ["$80", "0.40×"] and one(inr, "Puzzle Quest") == ["₹7,200", "0.40×"]
         for app in ("Demo Gallery", "Puzzle Quest"):
-            assert usd[app][1][1] == "%.2f×" % _d0_roas(fx, app)                 # Σ D0 ÷ Σ one-rate spend
+            assert one(usd, app)[1] == "%.2f×" % _d0_roas(fx, app)                 # Σ D0 ÷ Σ one-rate spend
+            if k != "nod0":
+                assert usd[app][1][0] == "24h %s · %s" % tuple(one(usd, app))
     # the Spend + ROAS cell in $ reads the dated view (each day at its own rate: another ROAS); the D0 ROAS does not
     spend_roas = lambda h: re.search(r'<td style="font-weight:700">[^<]*<div class="(?:up|down)"[^>]*>([\d.]+×)</div>', h).group(1)
     assert spend_roas(ov["fill|USD"]) != spend_roas(ov["fill|INR"])
-    assert re.search(r'<div class="muted" style="font-size:11px;margin-top:2px">0\.30×</div>', ov["fill|USD"])    # neutral
+    assert re.search(r'<span class="muted" style="font-size:11px">· 0\.30×</span>', ov["fill|USD"])    # neutral
+    assert re.search(r'<div class="muted" style="font-size:11px;margin-top:2px">0\.30×</div>', ov["nod0|USD"])
 
 
 def test_filling_line_and_tooltip(ov):
     c = _cells(ov["fill|USD"])
     tip, lines = c["Demo Gallery"]
-    assert lines[2:] == ["⏳ filling"]
-    assert tip == ("Google Ads ka D0 = click ke pehle 24 ghante ki value. 2 din (6 Jan–7 Jan) abhi bhar raha hai — "
-                   "~8 Jan, 04:00 IST ke baad fix, phir ye number nahi badlega.")
+    assert lines[1:] == ["Day —", "⏳ 24h filling"]                # data without a Day number yet: only 24h fills
+    assert _t24(tip) == (PRE + "2 din (6 Jan–7 Jan) abhi bhar raha hai — "
+                         "~8 Jan, 04:00 IST ke baad fix, phir ye number nahi badlega.")
+    # data from before the Day number (no moment, nothing taken): no date named — today's still has its morning ahead
+    assert _tday(tip) == (DAY_PRE + " Day number abhi shuru nahi hua (Google Ads subah wala purana number nahi rakhta) "
+                          "— pehla number agli subah ke read se aayega.")
     tip, lines = c["Puzzle Quest"]                                  # its dates end 5 Jan: all fixed
     # the drift is all apps' together (merge_spend measures it so) — the tooltip says so, never as this app's own
-    assert len(lines) == 2 and tip == ("Fixed — ye number ab nahi badlega. Fix ke baad Google Ads ne (sab apps milake, "
-                                       "pichhle 5 fixed din) +1.0% aur joda (late events); fix wala number nahi badla.")
-    assert _cells(ov["fill|INR"])["Demo Gallery"] == (c["Demo Gallery"][0], ["₹21,600", "0.30×", "⏳ filling"])
+    assert lines == ["24h $80 · 0.40×", "Day —"] and _t24(tip) == (
+        PRE + "Fixed — ye number ab nahi badlega. Fix ke baad Google Ads ne (sab apps milake, "
+        "pichhle 5 fixed din) +1.0% aur joda (late events); fix wala number nahi badla.")
+    assert _cells(ov["fill|INR"])["Demo Gallery"] == (c["Demo Gallery"][0], ["24h ₹21,600 · 0.30×", "Day —",
+                                                                             "⏳ 24h filling"])
     late = _cells(ov["late|USD"])["Demo Gallery"]
-    assert late[1][2:] == ["⏳ filling"] and late[0].endswith("abhi bhar raha hai — agle refresh me fix, phir ye number nahi badlega.")
+    assert late[1][2:] == ["⏳ 24h filling"]
+    assert _t24(late[0]).endswith("abhi bhar raha hai — agle refresh me fix, phir ye number nahi badlega.")
 
 
 def test_all_fixed_and_no_d0_payload(ov):
     for view in ("USD", "INR"):
         c = _cells(ov[f"fixed|{view}"])
         for app in ("Demo Gallery", "Puzzle Quest"):
-            assert len(c[app][1]) == 2 and c[app][0].startswith("Fixed — ye number ab nahi badlega.")
+            assert len(c[app][1]) == 2 and c[app][0].startswith(PRE + "Fixed — ye number ab nahi badlega.")
         assert "⏳" not in ov[f"fixed|{view}"]
         n = _cells(ov[f"nod0|{view}"])
         assert all(t is None and len(lines) == 2 for t, lines in n.values())
@@ -950,23 +1025,23 @@ def test_a_plain_dash_gets_no_tooltip(ov):
         c = _cells(h)
         assert c[SOLO] == (None, ["—"])
         assert re.search(r'<td>—</td>', h)
-        assert c["Demo Gallery"][1][2:] == ["⏳ filling"] and c["Puzzle Quest"][0].startswith("Fixed")
+        assert c["Demo Gallery"][1][2:] == ["⏳ 24h filling"] and c["Puzzle Quest"][0].startswith(PRE + "Fixed")
 
 
 def test_an_incomplete_read_never_puts_the_fix_time_days_late(ov):
     c = _cells(ov["partial|USD"])
     tip, lines = c["Puzzle Quest"]                  # 3–5 Jan pending, all final by Google's clock already
-    assert lines[2:] == ["⏳ filling"]
-    # … but the latest read fixed nothing (incomplete): no "agle refresh me fix" promise — it holds only with a full read
-    assert tip == ("Google Ads ka D0 = click ke pehle 24 ghante ki value. 3 din (3 Jan–5 Jan) abhi bhar raha hai — "
-                   "pichhle refresh me Google Ads ka poora D0 read nahi mila; poora read milte hi fix, phir ye number "
-                   "nahi badlega.")
+    assert lines[2:] == ["⏳ 24h filling"]
+    # … but the latest read fixed nothing (incomplete): no "agle refresh me fix" promise — only with a full read
+    assert _t24(tip) == (PRE + "3 din (3 Jan–5 Jan) abhi bhar raha hai — "
+                         "pichhle refresh me Google Ads ka poora D0 read nahi mila; poora read milte hi fix, phir ye "
+                         "number nahi badlega.")
     at = PART_NEXT + timedelta(days=1, hours=5, minutes=30)            # 7 Jan's moment (6 Jan's + 1 day), in IST
     tip, lines = c["Demo Gallery"]
-    assert lines[2:] == ["⏳ filling"]
-    assert tip == ("Google Ads ka D0 = click ke pehle 24 ghante ki value. 5 din (3 Jan–7 Jan) abhi bhar raha hai — "
-                   "~%d %s, %s IST ke baad fix, phir ye number nahi badlega." % (at.day, at.strftime("%b"),
-                                                                                at.strftime("%H:%M")))
+    assert lines[2:] == ["⏳ 24h filling"]
+    assert _t24(tip) == (PRE + "5 din (3 Jan–7 Jan) abhi bhar raha hai — "
+                         "~%d %s, %s IST ke baad fix, phir ye number nahi badlega." % (at.day, at.strftime("%b"),
+                                                                                      at.strftime("%H:%M")))
 
 
 def test_nothing_fixed_yet_says_so(ov):
@@ -975,10 +1050,9 @@ def test_nothing_fixed_yet_says_so(ov):
     for view in ("USD", "INR"):
         h = ov[f"nofixed|{view}"]
         c = _cells(h)
-        assert c["Puzzle Quest"][0] == ("Google Ads ka D0 = click ke pehle 24 ghante ki value. Abhi tak koi din fix nahi "
-                                        "hua (Google Ads ka poora read abhi nahi mila) — 4 din (2 Jan–5 Jan) ka number "
-                                        "abhi badal sakta hai.")
-        assert all(lines[2:] == ["⏳ filling"] for _, lines in c.values()), c
+        assert _t24(c["Puzzle Quest"][0]) == (PRE + "Abhi tak koi din fix nahi hua (Google Ads ka poora read abhi "
+                                              "nahi mila) — 4 din (2 Jan–5 Jan) ka number abhi badal sakta hai.")
+        assert all(lines[2:] == ["⏳ 24h filling"] for _, lines in c.values()), c
         assert "Fixed" not in h and "ke baad fix" not in h
 
 
@@ -986,9 +1060,9 @@ def test_a_paid_app_fixed_at_zero_shows_zero(ov):
     for view, z in (("USD", "$0"), ("INR", "₹0")):
         c = _cells(ov[f"zero|{view}"])
         tip, lines = c["Puzzle Quest"]
-        assert lines == [z, "0.00×"]
-        assert tip == ("Fixed — ye number ab nahi badlega. Fix ke baad Google Ads ka number (sab apps milake, pichhle 5 "
-                       "fixed din) nahi badla.")
+        assert lines == ["24h %s · 0.00×" % z, "Day —"]
+        assert _t24(tip) == (PRE + "Fixed — ye number ab nahi badlega. Fix ke baad Google Ads ka number (sab apps "
+                             "milake, pichhle 5 fixed din) nahi badla.")
     org = _cells(ov["organic|USD"])[SOLO]
     assert org == (None, ["—"])                                     # no spend: '—' as before
 
@@ -997,14 +1071,13 @@ def test_open_dates_a_waiting_account_and_the_backends_moment(ov):
     for view in ("USD", "INR"):
         c = _cells(ov[f"wait|{view}"])
         tip, lines = c["Demo Gallery"]                              # 4–5 Jan ≤ fixed_till but still open for it
-        assert lines[2:] == ["⏳ filling"]
-        assert tip == ("Google Ads ka D0 = click ke pehle 24 ghante ki value. 4 din (4 Jan–7 Jan) abhi bhar raha hai — "
-                       "~8 Jan, 05:00 IST ke baad fix, phir ye number nahi badlega.")       # fix_at, not the 24 h step
+        assert lines[2:] == ["⏳ 24h filling"]
+        assert _t24(tip) == (PRE + "4 din (4 Jan–7 Jan) abhi bhar raha hai — "
+                             "~8 Jan, 05:00 IST ke baad fix, phir ye number nahi badlega.")   # fix_at, not 24 h step
         tip, lines = c["Puzzle Quest"]
-        assert lines[2:] == ["⏳ filling"]
-        assert tip == ("Google Ads ka D0 = click ke pehle 24 ghante ki value. 5 Jan abhi bhar raha hai — is app ka ek "
-                       "Google Ads account abhi read nahi ho raha (access); wapas read hote hi fix, phir ye number nahi "
-                       "badlega.")
+        assert lines[2:] == ["⏳ 24h filling"]
+        assert _t24(tip) == (PRE + "5 Jan abhi bhar raha hai — is app ka ek Google Ads account abhi read nahi ho raha "
+                             "(access); wapas read hote hi fix, phir ye number nahi badlega.")
     assert "~8 Jan, 04:00 IST ke baad fix" in _cells(ov["fill|USD"])["Demo Gallery"][0]    # no fix_at: the 24 h step
 
 
@@ -1014,8 +1087,586 @@ def test_a_waiting_app_with_a_date_not_final_yet_gives_its_time(ov):
     for view in ("USD", "INR"):
         c = _cells(ov[f"waitfwd|{view}"])
         tip, lines = c["Demo Gallery"]
-        assert lines[2:] == ["⏳ filling"]
-        assert tip == ("Google Ads ka D0 = click ke pehle 24 ghante ki value. 4 din (4 Jan–7 Jan) abhi bhar raha hai — "
-                       "is app ka ek Google Ads account abhi read nahi ho raha (access); account wapas read hone par aur "
-                       "~8 Jan, 05:00 IST ke baad fix, phir ye number nahi badlega.")
-        assert c["Puzzle Quest"][0].endswith("(access); wapas read hote hi fix, phir ye number nahi badlega.")
+        assert lines[2:] == ["⏳ 24h filling"]
+        assert _t24(tip) == (PRE + "4 din (4 Jan–7 Jan) abhi bhar raha hai — is app ka ek Google Ads account abhi "
+                             "read nahi ho raha (access); account wapas read hone par aur ~8 Jan, 05:00 IST ke baad "
+                             "fix, phir ye number nahi badlega.")
+        assert _t24(c["Puzzle Quest"][0]).endswith("(access); wapas read hote hi fix, phir ye number nahi badlega.")
+
+
+# ── 8. the install-day ("Day") D0: Google Ads' same <1-day value as it stood the next morning, taken once ─────────────
+def _z(t):
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+@pytest.mark.parametrize("acc, moment, ok", [
+    (IST, "2026-01-01T22:30", True),  # 1 Jan's install day ends 2 Jan 00:00 IST (= 1 Jan 18:30 UTC) + 4 h = 04:00 IST
+    (LA, "2026-01-02T12:00", True),   # 2 Jan 00:00 PST (UTC−8) = 08:00 UTC + 4 h
+    # no time zone → UTC−12 (2 Jan 12:00 UTC + 4 h): a guess, hours after the real morning maybe — never "ok"
+    ({}, "2026-01-02T16:00", False),
+    ({"tz": "Not/AZone"}, "2026-01-02T16:00", False),
+])
+def test_day_moment_one_minute_before_and_after(acc, moment, ok):
+    b = utc(moment)
+    before, at = google_ads.d0_day([acc], b - timedelta(minutes=1)), google_ads.d0_day([acc], b)
+    assert before["date"] == "2025-12-31" and at["date"] == "2026-01-01"
+    assert at["at"] == before["next"] == _z(b) and at["next"] == _z(b + timedelta(days=1))
+    assert at["ok"] is ok and at["late_h"] == 3
+    # the 24 h D0 of the same date is final a day later (its last click's 24 h): the Day number comes first
+    assert google_ads.d0_final([acc], b)["final_till"] == "2025-12-31"
+
+
+def test_day_moment_is_the_zones_own_through_summer_time():
+    b = utc("2026-07-02T11:00")                       # 2 Jul 00:00 PDT (UTC−7) = 07:00 UTC + 4 h
+    assert google_ads.d0_day([LA], b - timedelta(minutes=1))["date"] == "2026-06-30"
+    assert google_ads.d0_day([LA], b)["date"] == "2026-07-01"
+    # every 30 min through the 2026 changes of a few zones (Santiago's at midnight): the date moves on exactly at "next"
+    for tz, st in (("America/Los_Angeles", "2026-03-05"), ("Europe/Paris", "2026-03-26"),
+                   ("America/Los_Angeles", "2026-10-29"), ("America/Santiago", "2026-09-03")):
+        t = utc(st + "T00:00")
+        for _ in range(6 * 48):
+            r = google_ads.d0_day([{"tz": tz}], t)
+            nxt = utc(r["next"][:-1])
+            assert utc(r["at"][:-1]) <= t < nxt, (tz, t)
+            assert google_ads.d0_day([{"tz": tz}], nxt - timedelta(minutes=1))["date"] == r["date"], (tz, t)
+            assert google_ads.d0_day([{"tz": tz}], nxt)["date"] == \
+                (date.fromisoformat(r["date"]) + timedelta(days=1)).isoformat(), (tz, t)
+            t += timedelta(minutes=30)
+
+
+def test_day_moment_over_the_accounts_that_count():
+    """d0_final's accounts that count (the "last" rule) — fetch_app_spend asks per store, over the accounts that own it:
+    an idle account in a later zone does not hold the morning read back; a store whose counted accounts are in two
+    zones: its install day ends at the later zone's midnight (the latest moment wins, as in d0_final). An account
+    without a known time zone that counts: never "ok"; idle: it does not matter."""
+    ist, la = dict(IST, id="1"), dict(LA, id="2")
+    now = utc("2026-01-02T00:00")                     # IST's moment for 1 Jan (1 Jan 22:30 UTC) passed 1.5 h ago
+    got = google_ads.d0_day([ist, la], now, last={"1": "2026-01-02", "2": "2025-12-20"})
+    assert got == google_ads.d0_day([ist], now) and got["date"] == "2026-01-01" and got["ok"] is True
+    assert got["at"] == "2026-01-01T22:30:00Z" and got["next"] == "2026-01-02T22:30:00Z"
+    assert google_ads.d0_day([ist, la], now, last={"1": "2026-01-02"}) == got      # LA: no click at all
+    both = {"1": "2026-01-02", "2": "2026-01-02"}                                  # LA clicks too
+    assert google_ads.d0_day([ist, la], now, last=both)["date"] == "2025-12-31"
+    late = google_ads.d0_day([ist, la], utc("2026-01-02T12:00"), last=both)
+    assert late["date"] == "2026-01-01" and late["at"] == "2026-01-02T12:00:00Z" and late["ok"] is True
+    assert google_ads.d0_day([ist, la], utc("2026-01-02T15:01"), last=both)["ok"] is False      # 3 h 1 min late
+    assert google_ads.d0_day([ist, la], now)["date"] == "2025-12-31"               # last None: every account counts
+    assert google_ads.d0_day([ist, dict(IST, id="3")], now, last={"1": "2026-01-02", "3": "2026-01-02"}) == got
+    nz = {"id": "4"}                                                               # no time zone
+    assert google_ads.d0_day([ist, nz], now, last={"1": "2026-01-02", "4": "2026-01-02"})["ok"] is False
+    assert google_ads.d0_day([ist, nz], now, last={"1": "2026-01-02", "4": "2025-12-20"}) == got   # idle: no matter
+
+
+def test_each_store_at_its_own_accounts_morning():
+    """_d0_day_stores: a store is read at the Day moment of the accounts that clicked it on its date — an IST store at
+    04:00 IST, a store of an account in a later zone at that zone's morning, a store both click at the later one — so
+    a busy account in a later zone never holds another store's morning read back (nor blocks it)."""
+    ist, la, ist2 = dict(IST, id="1"), dict(LA, id="2"), dict(IST, id="3")
+    d = {"2026-01-01"}
+    own = {"s.i": {"1": d}, "s.l": {"2": d}, "s.both": {"1": d, "2": d}, "s.ii": {"1": d, "3": d}, "s.gone": {"9": d}}
+    at_ist = google_ads._d0_day_stores([ist, la, ist2], own, utc("2026-01-01T23:00"))
+    assert set(at_ist) == {"s.i", "s.l", "s.both", "s.ii"}                      # an account not asked: no moment
+    assert at_ist["s.i"] == at_ist["s.ii"] == {"date": "2026-01-01", "at": "2026-01-01T22:30:00Z",
+                                               "next": "2026-01-02T22:30:00Z", "ok": True}
+    assert at_ist["s.l"] == at_ist["s.both"] == {"date": "2025-12-31", "at": "2026-01-01T12:00:00Z",
+                                                 "next": "2026-01-02T12:00:00Z", "ok": False}   # 11 h late
+    at_la = google_ads._d0_day_stores([ist, la, ist2], own, utc("2026-01-02T12:30"))
+    assert at_la["s.l"] == at_la["s.both"] == {"date": "2026-01-01", "at": "2026-01-02T12:00:00Z",
+                                               "next": "2026-01-03T12:00:00Z", "ok": True}
+    assert at_la["s.i"]["date"] == "2026-01-01" and at_la["s.i"]["ok"] is False  # IST's 1 Jan: 14 h ago
+    # the later-zone account has no click OF THIS STORE on 1 Jan (it left it, or clicks it again only on 2 Jan; its
+    # other stores do not matter): the store is IST's that day; nobody clicked it on 1 Jan: the ones with its latest row
+    gone = {"s.both": {"1": d, "2": {"2025-12-20"}}, "s.old": {"1": {"2025-12-01"}, "2": {"2025-12-20"}},
+            "s.skip": {"1": d, "2": {"2025-12-31", "2026-01-02"}}}
+    got = google_ads._d0_day_stores([ist, la], gone, utc("2026-01-01T23:00"))
+    assert got["s.both"] == got["s.skip"] == at_ist["s.i"] and got["s.old"] == at_ist["s.l"]
+    assert google_ads._d0_day_stores([ist, la], gone, utc("2026-01-02T12:30"))["s.skip"]["ok"] is False
+
+
+def _at(x, tz):
+    """(x + 1 day, 00:00 in tz) + 4 h, ISO UTC "Z": click date x's Day moment in zone tz."""
+    from zoneinfo import ZoneInfo
+    m = datetime.combine(date.fromisoformat(x) + timedelta(days=1), datetime.min.time(), ZoneInfo(tz))
+    return _z((m + timedelta(hours=4)).astimezone(timezone.utc))
+
+
+@pytest.mark.parametrize("b_days", [
+    ("2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29"),     # the later-zone account stops after 29 Oct
+    ("2026-10-28",),                                             # clicks the store one day only
+    ("2026-10-26", "2026-10-28", "2026-10-30", "2026-11-01"),     # every other day (US summer time ends 1 Nov)
+    (),                                                          # left the store long ago (clicks other stores)
+])
+@pytest.mark.parametrize("tz", ["America/Los_Angeles", "America/New_York"])
+def test_a_shared_store_takes_every_date_once_at_its_clickers_moment(b_days, tz):
+    """An IST account clicks the store every day, a later-zone one only on b_days: read every 30 min, each date is on
+    time in exactly one window — at the later zone's morning on its click days, else at 04:00 IST (the "last" rule
+    over every store of the account flipped between the two and missed the first date after it stopped)."""
+    from zoneinfo import ZoneInfo
+    ist, b = dict(IST, id="1"), {"tz": tz, "id": "2"}
+    seen, t = {}, utc("2026-10-25T00:00")
+    while t < utc("2026-11-04T00:00"):
+        bl, il = (t.astimezone(ZoneInfo(z)).date().isoformat() for z in (tz, "Asia/Calcutta"))
+        every = ((date(2026, 10, 1) + timedelta(days=i)).isoformat() for i in range(40))
+        own = {"s": {"1": {x for x in every if x <= il}, "2": {x for x in b_days if x <= bl} | {"2026-10-01"}}}
+        r = google_ads._d0_day_stores([ist, b], own, t)["s"]
+        if r["ok"]:
+            seen.setdefault(r["date"], set()).add(r["at"])
+        t += timedelta(minutes=30)
+    for i in range(8):
+        x = (date(2026, 10, 25) + timedelta(days=i)).isoformat()
+        assert seen.get(x) == {_at(x, tz if x in b_days else "Asia/Calcutta")}, x
+
+
+def test_day_ok_only_up_to_the_late_limit(monkeypatch):
+    b = utc("2026-01-01T22:30")
+    on = google_ads.d0_day([IST], b + timedelta(hours=3))
+    off = google_ads.d0_day([IST], b + timedelta(hours=3, minutes=1))
+    assert on["ok"] is True and off["ok"] is False and on["date"] == off["date"] == "2026-01-01"
+    assert google_ads.d0_day([IST], b, late_h=0)["ok"] is True
+    assert google_ads.d0_day([IST], b + timedelta(minutes=1), late_h=0)["ok"] is False
+    monkeypatch.setenv("GADS_D0_DAY_MAX_LATE_H", "5")
+    got = google_ads.d0_day([IST], b + timedelta(hours=5))
+    assert got["ok"] is True and got["late_h"] == 5
+    monkeypatch.setenv("GADS_D0_DAY_MAX_LATE_H", "x")
+    assert google_ads.d0_day([IST], b)["late_h"] == 3
+    monkeypatch.setenv("GADS_D0_LAG_HOURS", "3")                                  # the lag moves the moment too
+    assert google_ads.d0_day([IST], b - timedelta(hours=1))["at"] == "2026-01-01T21:30:00Z"
+
+
+def test_fetch_carries_the_day_of_its_read(monkeypatch):
+    from zoneinfo import ZoneInfo
+    now = datetime(2026, 1, 11, 4, 30, tzinfo=ZoneInfo("Asia/Calcutta"))         # 10 Jan's moment (04:00 IST) + 30 min
+    out = _fetch(monkeypatch, FakeAds(), now)
+    ist = {"date": "2026-01-10", "at": "2026-01-10T22:30:00Z", "next": "2026-01-11T22:30:00Z", "ok": True}
+    assert out["d1_day"] == dict(ist, late_h=3, read="2026-01-10T23:00:00Z", stores={S1: ist, S2: ist})
+    assert out["d1_final_till"] == "2026-01-09"                                   # the 24 h D0: a day behind
+    late = _fetch(monkeypatch, FakeAds(), utc("2026-01-11T01:31"))["d1_day"]      # 3 h 1 min late
+    assert late["ok"] is False and not any(e["ok"] for e in late["stores"].values())
+    # A2 in a later zone, clicking every day: its store at its own morning, A1's at 04:00 IST as before
+    fake = FakeAds()
+    fake.accounts[A2]["tz"] = "America/Los_Angeles"
+    out = _fetch(monkeypatch, fake, now)
+    assert out["d1_day"]["stores"] == {S1: ist, S2: {"date": "2026-01-09", "at": "2026-01-10T12:00:00Z",
+                                                      "next": "2026-01-11T12:00:00Z", "ok": False}}
+    assert out["d1_day"]["date"] == "2026-01-09"                                  # every account: the page's fallback
+    at_la = _fetch(monkeypatch, fake, utc("2026-01-11T12:30"))["d1_day"]["stores"]
+    assert at_la[S2] == {"date": "2026-01-10", "at": "2026-01-11T12:00:00Z", "next": "2026-01-12T12:00:00Z", "ok": True}
+    assert at_la[S1]["ok"] is False                                               # IST's 10 Jan: 14 h ago
+
+
+@pytest.mark.parametrize("hi", ["2026-01-09", "2026-01-03"])
+def test_fetch_a_store_the_later_zone_account_left_is_read_at_ist_morning(monkeypatch, hi):
+    """A2 (New York) clicks its own store every day and A1's store S1 too up to `hi` (it stopped / left it long ago):
+    S1 is read at 04:00 IST from the first date A2 has no click of it on — not at New York's morning 9.5 h later
+    (A2's clicks on other stores do not matter); a date A2 clicked S1 on: at New York's morning."""
+    fake = FakeAds()
+    fake.accounts[A2]["tz"] = "America/New_York"
+    fake.camps[A2]["22"] = dict(fake.camp("22", S1, 7), hi=hi)
+    ist = {"date": "2026-01-10", "at": "2026-01-10T22:30:00Z", "next": "2026-01-11T22:30:00Z", "ok": True}
+    ny9 = {"date": "2026-01-09", "at": "2026-01-10T09:00:00Z", "next": "2026-01-11T09:00:00Z"}
+    st = _fetch(monkeypatch, fake, utc("2026-01-10T22:40"))["d1_day"]["stores"]
+    assert st == {S1: ist, S2: dict(ny9, ok=False)}
+    at9 = _fetch(monkeypatch, fake, utc("2026-01-10T09:30"))["d1_day"]["stores"]   # NY's morning of 9 Jan
+    assert at9[S2] == dict(ny9, ok=True)
+    assert at9[S1] == (dict(ny9, ok=True) if hi == "2026-01-09" else
+                       {"date": "2026-01-09", "at": "2026-01-09T22:30:00Z", "next": "2026-01-10T22:30:00Z",
+                        "ok": False})
+
+
+DAY_STORES = ("s.a", "s.b", "s.c", "s.d", "s.e", "s.a2", "s.one", "s.two", "s.split", "com.x.a", "com.x.b")
+
+
+def _day(x="2026-01-05", ok=True, read=None, nxt=None, late_h=3, stores=DAY_STORES):
+    """A read's d1_day for click date x (IST, lag 4 h: its moment is x 22:30 UTC); stores: the ones with a row in the
+    read (each owned by IST accounts only: the same moment)."""
+    n = (date.fromisoformat(x) + timedelta(days=1)).isoformat()
+    e = {"date": x, "at": x + "T22:30:00Z", "next": nxt or n + "T22:30:00Z", "ok": ok}
+    return dict(e, late_h=late_h, read=read or x + "T22:40:00Z", stores={s: dict(e) for s in stores})
+
+
+DAY_KEYS = ("convval_d0day", "d1_day_read", "d1_day_next", "d1_day_at")
+
+
+def _no_day(m):
+    return {k: v for k, v in m.items() if k not in DAY_KEYS + ("d1_day",)}
+
+
+def test_day_is_taken_once_and_never_changed():
+    cost = {"s.a": {"2026-01-05": 100, "2026-01-06": 30}, "s.b": {"2026-01-05": 50}}
+    cached = _cache({}, fixed="2026-01-03", daily={"s.a": {"2026-01-04": 100}})
+    fresh = _fresh({"s.a": {"2026-01-05": 7.5, "2026-01-06": 1.0}, "s.c": {"2026-01-05": 2.0}}, daily=cost,
+                   d1_day=_day("2026-01-05"))
+    m = google_ads.merge_spend(json.loads(json.dumps(cached)), fresh, "2026-01-01")
+    # s.b: cost on 5 Jan and no D0 row → 0.0 (no value within the install day); s.c: a D0 row without cost: its value
+    assert m["convval_d0day"] == {"s.a": {"2026-01-05": 7.5}, "s.b": {"2026-01-05": 0.0}, "s.c": {"2026-01-05": 2.0}}
+    assert m["d1_day_read"] == {"2026-01-05": "2026-01-05T22:40:00Z"}
+    assert m["d1_day_next"] == {"date": "2026-01-06", "at": "2026-01-06T22:30:00Z", "late_h": 3}
+    assert m["d1_day_at"] == {s: {"date": "2026-01-06", "at": "2026-01-06T22:30:00Z"} for s in DAY_STORES}
+    # every other key: exactly the merge without the Day read
+    plain = google_ads.merge_spend(json.loads(json.dumps(cached)), {k: v for k, v in fresh.items() if k != "d1_day"},
+                                   "2026-01-01")
+    assert json.dumps(_no_day(m), sort_keys=True) == json.dumps(plain, sort_keys=True)
+    assert not any(k in plain for k in DAY_KEYS)                                    # nothing to keep: no key at all
+    # later reads the same morning and after: Google's <1-day value of 5 Jan grows (later revenue) — a taken number
+    # stays (a read still on time for it included); a store-day not taken yet (s.d: its first row now) is taken by a
+    # read still on time for its store, never by a late one (s.e)
+    on = _fresh({"s.a": {"2026-01-05": 9.9}, "s.b": {"2026-01-05": 4.0}, "s.d": {"2026-01-05": 1.5}},
+                final="2026-01-05", daily=cost, d1_day=_day("2026-01-05", read="2026-01-06T00:10:00Z"))
+    m2 = google_ads.merge_spend(m, on, "2026-01-01")
+    assert m2["convval_d0day"] == dict(m["convval_d0day"], **{"s.d": {"2026-01-05": 1.5}})
+    assert m2["d1_day_read"] == m["d1_day_read"]                                    # the first read that took 5 Jan
+    off = _fresh({"s.a": {"2026-01-05": 12.0}, "s.e": {"2026-01-05": 3.0}}, final="2026-01-05", daily=cost,
+                 d1_day=_day("2026-01-05", ok=False, read="2026-01-06T01:31:00Z"))
+    assert google_ads.merge_spend(m2, off, "2026-01-01")["convval_d0day"] == m2["convval_d0day"]
+    # the next morning: 6 Jan is taken, 5 Jan kept
+    m3 = google_ads.merge_spend(m2, _fresh({"s.a": {"2026-01-05": 13.0, "2026-01-06": 3.0}}, final="2026-01-05",
+                                           daily=cost, d1_day=_day("2026-01-06")), "2026-01-01")
+    assert m3["convval_d0day"] == {"s.a": {"2026-01-05": 7.5, "2026-01-06": 3.0}, "s.b": {"2026-01-05": 0.0},
+                                   "s.c": {"2026-01-05": 2.0}, "s.d": {"2026-01-05": 1.5}}
+    assert m3["d1_day_read"] == {"2026-01-05": "2026-01-05T22:40:00Z", "2026-01-06": "2026-01-06T22:40:00Z"}
+    assert m3["d1_day_next"]["date"] == "2026-01-07"
+    # a read without a Day part (an older build) or a mock read: copied forward as it is
+    old = google_ads.merge_spend(m3, _fresh({"s.a": {"2026-01-07": 1.0}}, final="2026-01-05"), "2026-01-01")
+    assert {k: old[k] for k in DAY_KEYS} == {k: m3[k] for k in DAY_KEYS}
+
+
+def test_a_late_read_takes_no_day_number():
+    """No complete read within the late limit after 5 Jan's moment: 5 Jan gets no Day number at all (a late read holds
+    later revenue — never a wrong number); the next morning's read takes 6 Jan as usual."""
+    cost = {"s.a": {"2026-01-05": 100, "2026-01-06": 100}}
+    late = google_ads.merge_spend(_cache({}, fixed="2026-01-03"),
+                                  _fresh({"s.a": {"2026-01-05": 7.5}}, daily=cost, d1_day=_day("2026-01-05", ok=False)),
+                                  "2026-01-01")
+    assert not any(k in late for k in ("convval_d0day", "d1_day_read"))
+    assert late["d1_day_next"] == {"date": "2026-01-06", "at": "2026-01-06T22:30:00Z", "late_h": 3}   # the page's
+    m = google_ads.merge_spend(late, _fresh({"s.a": {"2026-01-05": 9.0, "2026-01-06": 4.0}}, final="2026-01-05",
+                                            daily=cost, d1_day=_day("2026-01-06")), "2026-01-01")
+    assert m["convval_d0day"] == {"s.a": {"2026-01-06": 4.0}} and list(m["d1_day_read"]) == ["2026-01-06"]
+
+
+def test_an_incomplete_read_takes_nothing_and_a_complete_one_in_time_does():
+    cost = {"s.a": {"2026-01-05": 100}, "s.b": {"2026-01-05": 100}}
+    part = _fresh({"s.a": {"2026-01-05": 7.5}}, ok=False, daily=cost, d1_day=_day("2026-01-05"))
+    m = google_ads.merge_spend(_cache({}, fixed="2026-01-03", daily=cost), part, "2026-01-01")
+    assert "convval_d0day" not in m and "d1_day_read" not in m                    # s.b's part may be missing: no 0.0
+    m2 = google_ads.merge_spend(m, _fresh({"s.a": {"2026-01-05": 7.9}, "s.b": {"2026-01-05": 2.0}}, daily=cost,
+                                          d1_day=_day("2026-01-05", read="2026-01-06T00:50:00Z")), "2026-01-01")
+    assert m2["convval_d0day"] == {"s.a": {"2026-01-05": 7.9}, "s.b": {"2026-01-05": 2.0}}
+    assert m2["d1_day_read"] == {"2026-01-05": "2026-01-06T00:50:00Z"}
+
+
+def test_a_store_waiting_for_an_unread_account_gets_no_day_number():
+    """Account "2" answers 403 to every query (d1_unread): its own store and the store it shares with "1" get no Day
+    number from that read (it would miss "2"'s part); "1"'s own store is taken. "2" back while still on time for the
+    date: its stores are taken then (Google's number at that read); back only after the limit: never. A first run (no
+    cache campaigns: which stores "2" shares is unknown) with an unread account takes nothing."""
+    camps = {"s.one": [_c("c1", "1")], "s.two": [_c("c2", "2")], "s.split": [_c("c3", "1"), _c("c4", "2")]}
+    cost = {s: {"2026-01-05": 100} for s in camps}
+    one = {"s.one": [_c("c1", "1")], "s.split": [_c("c3", "1")]}
+    r1 = _fresh({"s.one": {"2026-01-05": 6.0}, "s.split": {"2026-01-05": 3.0}}, campaigns=one, d1_unread=["2"],
+                daily={s: cost[s] for s in one}, d1_day=_day("2026-01-05", stores=("s.one", "s.split")))
+    m = google_ads.merge_spend(_cache({}, fixed="2026-01-03", campaigns=camps, daily=cost), r1, "2026-01-01")
+    assert m["convval_d0day"] == {"s.one": {"2026-01-05": 6.0}} and list(m["d1_day_read"]) == ["2026-01-05"]
+    back = lambda **kw: _fresh({"s.one": {"2026-01-05": 6.5}, "s.two": {"2026-01-05": 4.0},
+                                "s.split": {"2026-01-05": 5.0}}, campaigns=camps, daily=cost,
+                               d1_day=_day("2026-01-05", stores=tuple(camps), **kw))
+    on = google_ads.merge_spend(m, back(read="2026-01-06T00:00:00Z"), "2026-01-01")
+    assert on["convval_d0day"] == {"s.one": {"2026-01-05": 6.0}, "s.two": {"2026-01-05": 4.0},
+                                   "s.split": {"2026-01-05": 5.0}}
+    assert on["d1_day_read"] == m["d1_day_read"]
+    late = google_ads.merge_spend(m, back(ok=False, read="2026-01-06T01:31:00Z"), "2026-01-01")
+    assert late["convval_d0day"] == m["convval_d0day"]
+    first = google_ads.merge_spend(None, json.loads(json.dumps(dict(r1, campaigns=camps))), "2026-01-01")
+    assert first["convval_day1"] and "convval_d0day" not in first and "d1_day_read" not in first
+    assert first["d1_day_next"]["date"] == "2026-01-06" and set(first["d1_day_at"]) == {"s.one", "s.split"}
+
+
+def test_day_on_the_first_run_and_through_a_failed_fetch():
+    fresh = _fresh({"com.x.a": {"2026-01-05": 7.5}}, daily={"com.x.a": {"2026-01-05": 100}}, d1_day=_day("2026-01-05"))
+    first = google_ads.merge_spend(None, fresh, "2026-01-01")
+    assert first is fresh and first["convval_d0day"] == {"com.x.a": {"2026-01-05": 7.5}}
+    assert first["d1_day_read"] == {"2026-01-05": "2026-01-05T22:40:00Z"}
+    assert first["d1_day_next"]["date"] == "2026-01-06"
+    assert "convval_d0day" not in google_ads.merge_spend(None, _fresh({}, d1_day=_day(ok=False)), "2026-01-01")
+    # a failed fetch keeps the cache whole — the Day numbers with it (whether anything was fixed or not)
+    assert google_ads.merge_spend(first, {"error": "boom"}, "2026-01-01") == dict(first, d1_incomplete=True)
+    never = {k: v for k, v in first.items() if k != "d1_fixed_till"}
+    assert google_ads.merge_spend(never, {"error": "boom"}, "2026-01-01") is never
+    m = google_ads.merge_spend(first, _fresh({}, ok=False), "2026-01-01")        # an incomplete read: kept
+    assert {k: m[k] for k in DAY_KEYS} == {k: first[k] for k in DAY_KEYS}
+
+
+@pytest.mark.parametrize("odd", [
+    {"convval_d0day": {"com.x.a": {"2026-01-02": None, "2026-01-03": "5", "2026-01-04": float("nan")}}},
+    {"convval_d0day": {"com.x.a": ["2026-01-02"]}},
+    {"convval_d0day": ["com.x.a"]},
+    {"d1_day_read": {"x": "y", "2026-01-02": 5}},
+    {"d1_day_read": ["2026-01-02"]},
+    {"d1_day_next": "2026-01-06"},
+    {"d1_day_at": {"com.x.b": "x", "com.x.c": {"date": "bad", "at": 5}, "com.x.d": {"date": "2026-01-02"}}},
+    {"d1_day_at": ["com.x.a"]},
+])
+def test_an_odd_day_value_in_the_cache_never_raises(odd):
+    cached = _cache({}, fixed="2026-01-02", convval_d0day={"com.x.b": {"2026-01-01": 4.0}},
+                    d1_day_read={"2026-01-01": "2026-01-01T22:40:00Z"})
+    cached.update(odd)
+    m = google_ads.merge_spend(cached, _fresh({"com.x.a": {"2026-01-05": 7.5}}, daily={"com.x.a": {"2026-01-05": 1}},
+                                              d1_day=_day("2026-01-05")), "2026-01-01")
+    json.dumps(m, allow_nan=False)
+    assert m["convval_d0day"]["com.x.a"] == {"2026-01-05": 7.5} and "2026-01-05" in m["d1_day_read"]
+    if "convval_d0day" not in odd:
+        assert m["convval_d0day"]["com.x.b"] == {"2026-01-01": 4.0}                 # the good ones stay
+    build_roas(_spend_to_usd(m, 0.01), {"app-a": "com.x.a"}, [{"app_id": "app-a", "app_name": "App A", "rev": 1}])
+
+
+def test_day_log_lines_are_counts_only(capsys):
+    cost = {"com.x.a": {"2026-01-05": 100}, "com.x.b": {"2026-01-05": 100}}
+    fresh = _fresh({"com.x.a": {"2026-01-05": 12345.67}}, daily=cost, d1_day=_day("2026-01-05"))
+    m = google_ads.merge_spend(_cache({}, fixed="2026-01-03", daily=cost), fresh, "2026-01-01")
+    google_ads.merge_spend(m, fresh, "2026-01-01")                                  # taken already: no Day part
+    google_ads.merge_spend(None, json.loads(json.dumps(fresh)), "2026-01-01")
+    two = _fresh({"com.x.a": {"2026-01-05": 1.5}, "com.x.b": {"2026-01-04": 2.5}}, daily=cost,
+                 d1_day=_day("2026-01-05"))
+    two["d1_day"]["stores"]["com.x.b"]["date"] = "2026-01-04"                      # a store in another zone
+    google_ads.merge_spend(_cache({}, fixed="2026-01-03", daily=cost), two, "2026-01-01")
+    lines = capsys.readouterr().err.splitlines()
+    assert lines == ["roas: D0 fixed till 2026-01-04 · 0 store-days fixed this run · Day 2026-01-05 captured: 2 stores",
+                     "roas: D0 fixed till 2026-01-04 · 0 store-days fixed this run",
+                     "roas: D0 fixed till 2026-01-04 · 0 store-days fixed this run · Day 2026-01-05 captured: 2 stores",
+                     "roas: D0 fixed till 2026-01-04 · 1 store-days fixed this run · Day 2026-01-04 captured: 1 stores"
+                     " · Day 2026-01-05 captured: 1 stores"]
+    for ln in lines:
+        assert LINE.match(ln), ln
+        rest = re.sub(r"\d{4}-\d{2}-\d{2}", "", ln)
+        assert "%" not in ln and "com.x" not in ln and not re.search(r"\d{3,}|\d\.\d", rest), ln
+
+
+def test_day_to_usd_and_to_the_page():
+    cost = {"s.a": {"2026-01-05": 100}, "s.a2": {"2026-01-05": 100, "2026-01-06": 100}, "s.b": {"2026-01-05": 100}}
+    camps = {"s.a": [_c("c1", "acct-synth-7")]}
+    m = google_ads.merge_spend(_cache({}, fixed="2026-01-03", daily=cost, campaigns=camps),
+                               _fresh({"s.a": {"2026-01-05": 750.0}, "s.a2": {"2026-01-05": 250.0}, "s.b": {}},
+                                      daily=cost, d1_day=_day("2026-01-05")), "2026-01-01")
+    m = google_ads.merge_spend(m, _fresh({"s.a2": {"2026-01-06": 90.0}}, final="2026-01-05", daily=cost,
+                                         d1_day=_day("2026-01-06", stores=("s.a2", "s.b"))), "2026-01-01")
+    m["d1_day_at"]["s.a2"] = {"date": "2026-01-07", "at": "2026-01-08T09:00:00Z"}    # s.a2 in a later zone
+    usd = _spend_to_usd(m, 0.01)                       # the same ONE rate as convval_day1, 2 decimals
+    assert usd["convval_d0day"] == {"s.a": {"2026-01-05": 7.5}, "s.a2": {"2026-01-05": 2.5, "2026-01-06": 0.9},
+                                    "s.b": {"2026-01-05": 0.0}}
+    assert m["convval_d0day"]["s.a"] == {"2026-01-05": 750.0}                      # the cache itself stays RAW
+    cat = [{"app_id": "app-a", "app_name": "App A", "rev": 2}, {"app_id": "app-b", "app_name": "App B", "rev": 1}]
+    r = build_roas(usd, {"app-a": "s.a", "app-b": "s.b"}, cat, aliases={"s.a2": "App A"})
+    assert r["by_app"]["App A"]["convval_d0day_daily"] == {"2026-01-05": 10.0, "2026-01-06": 0.9}   # its two stores
+    assert r["by_app"]["App B"]["convval_d0day_daily"] == {"2026-01-05": 0.0}
+    assert r["d0"]["day_read"] == {"2026-01-05": "2026-01-05T22:40:00Z", "2026-01-06": "2026-01-06T22:40:00Z"}
+    assert r["d0"]["day_since"] == "2026-01-05"
+    assert r["d0"]["day_next"] == {"date": "2026-01-07", "at": "2026-01-07T22:30:00Z", "late_h": 3}
+    # each app's own next Day moment: its stores' latest (App A's s.a2 is in a later zone)
+    assert r["by_app"]["App A"]["d0day_next"] == {"date": "2026-01-07", "at": "2026-01-08T09:00:00Z"}
+    assert r["by_app"]["App B"]["d0day_next"] == {"date": "2026-01-07", "at": "2026-01-07T22:30:00Z"}
+    assert not re.search(r"acct|s\.a|s\.b", json.dumps(r["d0"]))                       # dates and times only
+    assert not re.search(r"acct|s\.a|s\.b", json.dumps([e["d0day_next"] for e in r["by_app"].values()]))
+    # a cache without Day keys: the payload exactly as before (no key at all)
+    plain = build_roas(_spend_to_usd(_no_day(m), 0.01), {"app-a": "s.a", "app-b": "s.b"}, cat,
+                       aliases={"s.a2": "App A"})
+    assert "convval_d0day" not in _spend_to_usd(_no_day(m), 0.01)
+    assert not any(k.startswith("day_") for k in plain["d0"])
+    assert all("convval_d0day_daily" not in e and "d0day_next" not in e for e in plain["by_app"].values())
+    strip = lambda p: {**{k: v for k, v in p.items() if k != "d0"},
+                       "by_app": {a: {k: v for k, v in e.items() if k not in ("convval_d0day_daily", "d0day_next")}
+                                  for a, e in p["by_app"].items()}}
+    assert json.dumps(strip(r), sort_keys=True) == json.dumps(strip(plain), sort_keys=True)
+
+
+def test_an_app_date_a_store_of_it_was_not_taken_for_is_not_covered():
+    """An app with two stores (an alias) where one store with cost on 5 Jan got no Day number (it waited for an unread
+    account at its morning read): 5 Jan is not covered for the app (Σ of one store over both stores' spend would read
+    as a low ROAS for good) — the page counts it as missing; 6 Jan (only s.a has cost) is. An app with no date left:
+    no key."""
+    usd = {"daily": {"s.a": {"2026-01-05": 100_000_000, "2026-01-06": 100_000_000}, "s.b": {"2026-01-05": 50_000_000},
+                     "s.c": {"2026-01-05": 100_000_000}, "s.c2": {"2026-01-05": 100_000_000}},
+           "convval_d0day": {"s.a": {"2026-01-05": 20.0, "2026-01-06": 10.0}, "s.c": {"2026-01-05": 5.0}},
+           "d1_day_at": {"s.a": {"date": "2026-01-07", "at": "2026-01-07T22:30:00Z"}, "s.b": "odd"}}
+    cat = [{"app_id": "app-a", "app_name": "App A", "rev": 2}, {"app_id": "app-c", "app_name": "App C", "rev": 1}]
+    r = build_roas(usd, {"app-a": "s.a", "app-c": "s.c"}, cat, aliases={"s.b": "App A", "s.c2": "App C"})
+    assert r["by_app"]["App A"]["convval_d0day_daily"] == {"2026-01-06": 10.0}
+    assert r["by_app"]["App A"]["d0day_next"] == {"date": "2026-01-07", "at": "2026-01-07T22:30:00Z"}   # odd: absent
+    assert "convval_d0day_daily" not in r["by_app"]["App C"] and "d0day_next" not in r["by_app"]["App C"]
+
+
+def test_two_zones_each_store_is_taken_at_its_own_morning(monkeypatch):
+    """A1 in IST and A2 in Los Angeles, both clicking every day, read every 30 min for 3 days through the real
+    fetch_app_spend → merge_spend → build_roas: each store's date is taken once, by the first read at or after ITS OWN
+    accounts' Day moment (A1's store at 04:00 IST = 22:30 UTC, A2's at 04:00 Los Angeles time = 12:00 UTC) — the busy
+    later zone never blocks or delays the IST store, and a date whose first read came over 3 h late (7 Jan, both) is
+    never taken. The number is that read's D0; each app's next moment is its own."""
+    from zoneinfo import ZoneInfo
+    fake = FakeAds()
+    fake.accounts[A2]["tz"] = "America/Los_Angeles"
+    zone = {A1: ZoneInfo("Asia/Calcutta"), A2: ZoneInfo("America/Los_Angeles")}
+    t, cache, first, d1 = utc("2026-01-08T15:10"), None, {}, {}
+    while t < utc("2026-01-11T15:10"):
+        for a, z in zone.items():                                               # clicks up to its own today
+            for c in fake.camps[a].values():
+                c["hi"] = t.astimezone(z).date().isoformat()
+        fresh = _fetch(monkeypatch, fake, t, end=t.astimezone(zone[A1]).date().isoformat())
+        took = {(s, x): v for s, dd in (fresh.get("convval_day1") or {}).items() for x, v in dd.items()}
+        cache = google_ads.merge_spend(cache, fresh, "2026-01-01")
+        for s, dd in cache.get("convval_d0day", {}).items():
+            for x, v in dd.items():
+                if (s, x) not in first:
+                    first[s, x], d1[s, x] = t, took[s, x]
+        t += timedelta(minutes=30)
+    assert {k: _z(v) for k, v in first.items()} == {
+        (S1, "2026-01-08"): "2026-01-08T22:40:00Z", (S1, "2026-01-09"): "2026-01-09T22:40:00Z",
+        (S1, "2026-01-10"): "2026-01-10T22:40:00Z", (S2, "2026-01-08"): "2026-01-09T12:10:00Z",
+        (S2, "2026-01-09"): "2026-01-10T12:10:00Z", (S2, "2026-01-10"): "2026-01-11T12:10:00Z"}
+    assert all(cache["convval_d0day"][s][x] == v > 0 for (s, x), v in d1.items())      # the D0 that read had
+    assert cache["d1_day_read"] == {d: d + "T22:40:00Z" for d in ("2026-01-08", "2026-01-09", "2026-01-10")}
+    cat = [{"app_id": "app-1", "app_name": "App One", "rev": 2}, {"app_id": "app-2", "app_name": "App Two", "rev": 1}]
+    by = build_roas(_spend_to_usd(cache, 0.012), {"app-1": S1, "app-2": S2}, cat)["by_app"]
+    assert by["App One"]["d0day_next"] == {"date": "2026-01-11", "at": "2026-01-11T22:30:00Z"}
+    assert by["App Two"]["d0day_next"] == {"date": "2026-01-11", "at": "2026-01-12T12:00:00Z"}
+    assert sorted(by["App Two"]["convval_d0day_daily"]) == ["2026-01-08", "2026-01-09", "2026-01-10"]
+
+
+def test_the_campaign_store_never_reads_the_day_keys(tmp_path):
+    mf = gcd.months(str(tmp_path))
+    days = ["2026-01-0%d" % i for i in range(1, 5)]
+    gcd.overlay(mf, "cv1", [{"campaign_id": "1", "store_id": "com.x.a", "date": d, "convval": 5.0, "account": "1"}
+                            for d in days], {"1": "INR"})
+    spend = {"currency_src": "INR", "fx": {}, "daily": {}, "d1_fixed_till": "2026-01-02",
+             "convval_day1": {"com.x.a": {"2026-01-01": 4.0, "2026-01-02": 5.0, "2026-01-03": 5.0, "2026-01-04": 5.0}}}
+    day = dict(spend, convval_d0day={"com.x.a": {d: 1.0 for d in days}}, d1_day_read={d: "x" for d in days},
+               d1_day_next={"date": "2026-01-05", "at": "x"}, d1_day_at={"com.x.a": {"date": "2026-01-05", "at": "x"}})
+    assert gcd.ties(mf, day, days[0], days[-1]) == gcd.ties(mf, spend, days[0], days[-1])
+
+
+# ── 9. the Day line on the page, run for real ─────────────────────────────────────────────────────────────────────────
+def _day_tip(hh, rest, when="agle din"):
+    h = int(hh[:2])
+    return "Day = install ke din raat 12 baje tak — %s%s ~%s IST ka Google Ads number.%s" % (
+        when, " subah" if 4 <= h < 12 else " raat" if h < 4 or h >= 21 else "", hh, rest)
+
+
+def _hh(t):
+    """t's IST clock time (the page's moments run on the real clock, so a test's moment is relative to it)."""
+    return (t + timedelta(hours=5, minutes=30)).strftime("%H:%M")
+
+
+def _ist(t):
+    t += timedelta(hours=5, minutes=30)
+    return "%d %s, %s IST" % (t.day, t.strftime("%b"), t.strftime("%H:%M"))
+
+
+OLD = (" Day number 2 Jan se hai (Google Ads subah wala purana number nahi rakhta) — 2 din (31 Dec 2025–1 Jan 2026)"
+       " ka nahi hai.")
+GONE = " — us subah Google Ads ka poora read nahi mila, isliye Day number nahi hai."   # any cause: no run, late, an
+                                                                                        # incomplete or unread account
+
+
+def test_day_two_lines_and_roas_in_both_views(ov):
+    """By hand (₹90 a dollar): Demo's Day numbers 3, 5, 6 Jan = ₹2,430 + ₹2,520 + ₹2,700 = ₹7,650 ($85) over those 3
+    of its 8 spend days (₹27,000) → 0.28×, "· 3/8 days"; Puzzle's 2–5 Jan = ₹1,620 + ₹1,710 + ₹1,530 + ₹1,440 = ₹6,300
+    ($70) over all 4 spend days (₹18,000) → 0.35×. Line 1 (24h) as before; both ROAS the same in ₹ and $."""
+    for k in ("day", "dayfixed"):
+        usd, inr = _cells(ov[f"{k}|USD"]), _cells(ov[f"{k}|INR"])
+        assert usd["Demo Gallery"][1][:2] == ["24h $240 · 0.30×", "Day $85 · 0.28× · 3/8 days"]
+        assert inr["Demo Gallery"][1][:2] == ["24h ₹21,600 · 0.30×", "Day ₹7,650 · 0.28× · 3/8 days"]
+        assert usd["Puzzle Quest"][1] == ["24h $80 · 0.40×", "Day $70 · 0.35×"]
+        assert inr["Puzzle Quest"][1] == ["24h ₹7,200 · 0.40×", "Day ₹6,300 · 0.35×"]
+        for app, n in (("Demo Gallery", 3), ("Puzzle Quest", 4)):                 # Σ Day ÷ Σ one-rate spend, same dates
+            e = ov["_fx"][k]["roas"]["by_app"][app]
+            got = [d for d in WIN if d in e["convval_d0day_daily"]]
+            assert len(got) == n
+            r = sum(e["convval_d0day_daily"][d] for d in got) / (sum(e["daily"][d] for d in got) / 1e6)
+            assert usd[app][1][1].split(" ")[3] == "%.2f×" % r
+    assert ov["_fx"]["day"]["roas"]["by_app"]["Demo Gallery"]["convval_d0day_daily"]["2026-01-06"] == 30.0   # taken now
+
+
+def test_day_line_wraps_only_between_its_parts(ov):
+    """Each part of a line ("Day $85", "· 0.28×", "· 3/8 days") is unbreakable, the line is not: a whole-line nowrap
+    widened the D0 column by ~95 px and pushed the table into a horizontal scroll at 1366–1440 px."""
+    nw = '<span style="white-space:nowrap">%s</span>'
+    sm = '<span class="%s" style="font-size:%dpx">%s</span>'
+    for k in ("day", "fill", "dayfixed"):
+        for view in ("USD", "INR"):
+            tr = next(t for t in re.findall(r'<tr class="clk"[^>]*>(.*?)</tr>', ov[f"{k}|{view}"], re.S)
+                      if "Demo Gallery" in t)
+            td = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)[4]
+            assert "nowrap;" not in td and '<div style="white-space:nowrap' not in td   # (the td is nowrap: CSS)
+            assert td.startswith('<div style="white-space:normal"><span style="white-space:nowrap">'
+                                 + sm % ("faint", 10, "24h") + " ")
+            assert nw % (sm % ("muted", 11, "· 0.30×")) in td
+    td = re.findall(r"<td[^>]*>(.*?)</td>", next(t for t in re.findall(r'<tr class="clk"[^>]*>(.*?)</tr>',
+                                                                      ov["day|USD"], re.S) if "Demo Gallery" in t))[4]
+    assert ('<div style="white-space:normal;margin-top:2px">' + nw % (sm % ("faint", 10, "Day") + " $85") + " "
+            + nw % (sm % ("muted", 11, "· 0.28×")) + " " + nw % (sm % ("faint", 10, "· 3/8 days")) + "</div>") in td
+
+
+def test_day_the_three_filling_lines(ov):
+    assert _cells(ov["day|USD"])["Demo Gallery"][1][2:] == ["⏳ filling"]           # 24h 6–7 Jan + Day 7 Jan
+    assert _cells(ov["fill|USD"])["Demo Gallery"][1][2:] == ["⏳ 24h filling"]      # no Day number to wait for
+    assert _cells(ov["dayfixed|USD"])["Demo Gallery"][1][2:] == ["⏳ Day filling"]  # 24h all fixed
+    assert _cells(ov["daylate|INR"])["Demo Gallery"][1][2:] == ["⏳ Day filling"]   # its morning read can still come
+    assert len(_cells(ov["daymiss|USD"])["Demo Gallery"][1]) == 2                  # missed: nothing filling
+    for k in ("day", "dayfixed", "daylate", "daymiss"):
+        assert len(_cells(ov[f"{k}|USD"])["Puzzle Quest"][1]) == 2                 # every date taken, 24h fixed
+
+
+def test_day_tooltip_says_what_each_line_is_and_when_it_fixes(ov):
+    for view in ("USD", "INR"):
+        c = _cells(ov[f"day|{view}"])
+        tip = c["Demo Gallery"][0]
+        assert tip.split("\n")[0] == _t24(_cells(ov[f"fill|{view}"])["Demo Gallery"][0])    # the 24h part as before
+        # the clock time: the app's Day moment (its stores' zone; the same each day); 7 Jan fixes at its moment; the
+        # missed 2 and 4 Jan named (3 Jan has a number)
+        assert _tday(tip) == _day_tip(_hh(PART_NEXT), " 3/8 din ka number fixed hai. 7 Jan abhi bhar raha hai — ~%s ke "
+                                      "baad fix, phir ye number nahi badlega.%s 2 Jan, 4 Jan%s"
+                                      % (_ist(PART_NEXT), OLD, GONE))
+        assert _tday(c["Puzzle Quest"][0]) == _day_tip(_hh(PART_NEXT), " Fixed — ye number ab nahi badlega.")
+        assert len(c["Puzzle Quest"][0].split("\n")) == 2
+    late = _tday(_cells(ov["daylate|USD"])["Demo Gallery"][0])
+    assert late == _day_tip(_hh(DAY_LATE), " 3/8 din ka number fixed hai. 7 Jan abhi bhar raha hai — agle refresh me "
+                            "fix (~%s tak), phir ye number nahi badlega.%s 2 Jan, 4 Jan%s"
+                            % (_ist(DAY_LATE + timedelta(hours=3)), OLD, GONE))
+    miss = _tday(_cells(ov["daymiss|USD"])["Demo Gallery"][0])
+    assert miss == _day_tip(_hh(DAY_MISS), " 3/8 din ka number fixed hai.%s 2 Jan, 4 Jan, 7 Jan%s" % (OLD, GONE))
+    # more than 3 dates that do not follow each other: counted, "me se"
+    holes = _tday(_cells(ov["dayholes|USD"])["Demo Gallery"][0])
+    assert holes == _day_tip(_hh(DAY_MISS), " 2/8 din ka number fixed hai.%s 4 din (2 Jan–7 Jan me se)%s"
+                             % (OLD, GONE))
+
+
+def test_day_each_app_at_its_own_moment(ov):
+    """by_app[app].d0day_next (its stores' zone) over d0.day_next: Demo's stores in a later zone — 7 Jan's morning is
+    still ahead for Demo although every account's moment passed 4 h ago ("daymiss"); a moment that is still the
+    install date in IST: "usi din raat"; one in the IST evening: "agle din", no "subah"."""
+    c = _cells(ov["dayzone|USD"])
+    tip, lines = c["Demo Gallery"]
+    assert lines[2:] == ["⏳ Day filling"]
+    assert _tday(tip) == _day_tip(_hh(PART_NEXT), " 3/8 din ka number fixed hai. 7 Jan abhi bhar raha hai — ~%s ke "
+                                  "baad fix, phir ye number nahi badlega.%s 2 Jan, 4 Jan%s"
+                                  % (_ist(PART_NEXT), OLD, GONE))
+    c = _cells(ov["daylater|USD"])
+    assert _tday(c["Puzzle Quest"][0]) == _day_tip("22:30", " Fixed — ye number ab nahi badlega.", when="usi din")
+    assert _tday(c["Demo Gallery"][0]).startswith("Day = install ke din raat 12 baje tak — agle din ~17:30 IST ka ")
+
+
+def test_day_before_the_first_number(ov):
+    """Day keys with nothing taken yet (just switched on): "Day —", 7 Jan filling at its moment, every earlier date
+    "abhi shuru nahi hua"; the 24h line unchanged."""
+    hh = (PART_NEXT + timedelta(hours=5, minutes=30)).strftime("%H:%M")
+    for view in ("USD", "INR"):
+        c = _cells(ov[f"nostart|{view}"])
+        tip, lines = c["Demo Gallery"]
+        assert lines[1:] == ["Day —", "⏳ filling"] and lines[0] == _cells(ov[f"fill|{view}"])["Demo Gallery"][1][0]
+        assert _tday(tip) == _day_tip(hh, " 7 Jan abhi bhar raha hai — ~%s ke baad fix, phir ye number nahi badlega. "
+                                      "Day number abhi shuru nahi hua (Google Ads subah wala purana number nahi "
+                                      "rakhta) — 7 din (31 Dec 2025–6 Jan 2026) ka nahi hai." % _ist(PART_NEXT))
+        tip, lines = c["Puzzle Quest"]
+        assert lines == [lines[0], "Day —"] and _tday(tip) == _day_tip(
+            hh, " Day number abhi shuru nahi hua (Google Ads subah wala purana number nahi rakhta) — 4 din "
+                "(2 Jan–5 Jan) ka nahi hai.")
+    for view in ("USD", "INR"):                                                    # no roas.d0: as before
+        assert all(t is None and not any("Day" in x for x in ln) for t, ln in _cells(ov[f"nod0|{view}"]).values())

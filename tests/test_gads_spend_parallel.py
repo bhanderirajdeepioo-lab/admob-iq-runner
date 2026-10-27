@@ -20,7 +20,7 @@ START, END = "2026-01-01", "2026-01-12"
 FX = {"USD": 1.0, "EUR": 1.1, "INR": 0.012}
 NE = "HTTP 403: authorizationError=CUSTOMER_NOT_ENABLED — The customer account can't be accessed"
 D0_KEYS = ("d1_final_till", "d1_next_fix_utc", "d1_lag_h", "d1_zones", "d1_ok",    # fetch_app_spend's D0 finality
-           "d1_unread", "d1_ended")                                               # of the read (these two: when any)
+           "d1_day", "d1_unread", "d1_ended")                                     # of the read (these two: when any)
 
 
 def _h(*parts):

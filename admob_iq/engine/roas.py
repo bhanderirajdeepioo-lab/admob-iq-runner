@@ -68,8 +68,10 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None, daily_dated=Non
     installs_by_sid = spend.get("installs") or {}        # store_id -> {date: campaign-attributed installs}
     convval_by_sid = spend.get("convval") or {}          # store_id -> {date: Google Ads conversion value (USD)}
     convval_d1_by_sid = spend.get("convval_day1") or {}  # store_id -> {date: D0 conversion value (USD), fixed once complete}
+    convval_dd_by_sid = spend.get("convval_d0day") or {}  # store_id -> {date: install-day ("Day") D0 (USD), taken once}
     d0_open = spend.get("d1_open") or {}                 # store_id -> {"days": D0 dates ≤ d1_fixed_till not fixed yet, "wait"}
-    by_app, unmatched = {}, 0
+    day_at = spend.get("d1_day_at") or {}                # store_id -> {"date", "at"}: its next install-day moment
+    by_app, unmatched, sids_of = {}, 0, {}
     unmatched_detail = {}                                # store_id -> {spend, campaigns} we couldn't attribute
     for sid, dd in (spend.get("daily") or {}).items():
         app = by_store_app.get(sid)
@@ -100,12 +102,17 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None, daily_dated=Non
             e["convval_daily"][d] = e["convval_daily"].get(d, 0) + v
         for d, v in (convval_d1_by_sid.get(sid) or {}).items(): # D0 conversion value (USD), same window
             e["convval_day1_daily"][d] = e["convval_day1_daily"].get(d, 0) + v
+        for d, v in (convval_dd_by_sid.get(sid) or {}).items(): # install-day D0 (USD), same window; only when any
+            ed = e.setdefault("convval_d0day_daily", {})
+            ed[d] = ed.get(d, 0) + v
+        sids_of.setdefault(app, []).append(sid)
         e["campaigns"].extend(camps_by_sid.get(sid, []))
         o = d0_open.get(sid) or {}
         if o.get("days"):                                       # the page's "⏳ filling" for these dates too
             e["d0_open"] = sorted(set(e.get("d0_open") or []) | set(o["days"]))
         if o.get("wait"):                                       # waits for an account that cannot answer (no ids here)
             e["d0_wait"] = True
+    _d0day_per_app(by_app, sids_of, spend.get("daily") or {}, convval_dd_by_sid, day_at)
     # surface the biggest unmatched store ids so coverage gaps are visible + diagnosable (not a black-box sum)
     top_unmatched = sorted(unmatched_detail.values(), key=lambda x: -x["spend_usd_micros"])[:30]
     out = {"configured": True, "by_app": by_app, "note": spend.get("note"),
@@ -117,9 +124,46 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None, daily_dated=Non
     # D0 (convval_day1) fixed once complete (google_ads.merge_spend): the last fixed date, when the next one is fixed
     # (and each date not fixed yet: fix_at), Google's reporting lag used, the measured late drift (all stores together),
     # incomplete (the latest read could fix nothing) — only the keys the cache has; none → no "d0" at all. Per app:
-    # d0_open / d0_wait above
+    # d0_open / d0_wait above. The install-day ("Day") D0 (convval_d0day, taken once): day_read {date: the first read
+    # that took it}, day_next (the next date to come over every account: its moment, the late limit), day_since (the
+    # first date taken) — dates and times only, when the cache has them. Per app: convval_d0day_daily / d0day_next
+    # (_d0day_per_app)
     d0 = {k: spend.get("d1_" + k) for k in ("fixed_till", "next_fix_utc", "fix_at", "lag_h", "drift", "incomplete")}
     d0 = {k: v for k, v in d0.items() if v is not None}
+    if spend.get("d1_day_read"):
+        d0["day_read"] = dict(spend["d1_day_read"])
+        d0["day_since"] = min(spend["d1_day_read"])
+    if spend.get("d1_day_next"):
+        d0["day_next"] = dict(spend["d1_day_next"])
     if d0:
         out["d0"] = d0
     return out
+
+
+def _d0day_per_app(by_app, sids_of, daily, dd_by_sid, day_at):
+    """The install-day ("Day") D0 per app (build_roas). convval_d0day_daily keeps a date only when every store of the
+    app with cost that day has its Day number (one skipped at its morning read — it waited for an unread account —
+    would leave a partial sum over the full spend: the page counts that date as not covered); none left → no key.
+    d0day_next: the app's next Day moment {"date", "at"} — its stores' latest (the moment its date can be complete),
+    from d1_day_at; only when any. Dates and times only (no store id)."""
+    from datetime import datetime
+    for app, sids in sids_of.items():
+        e = by_app[app]
+        ed = e.get("convval_d0day_daily")
+        if ed:
+            for d in [d for d in ed if any((daily.get(s) or {}).get(d) and d not in (dd_by_sid.get(s) or {})
+                                           for s in sids)]:
+                del ed[d]
+            if not ed:
+                del e["convval_d0day_daily"]
+        best = None
+        for s in sids:
+            n = day_at.get(s)
+            try:
+                off = datetime.strptime(n["at"], "%Y-%m-%dT%H:%M:%SZ") - datetime.strptime(n["date"], "%Y-%m-%d")
+            except (TypeError, KeyError, ValueError):
+                continue                                 # an odd cache entry counts as absent
+            if best is None or off > best[0]:
+                best = (off, {"date": n["date"], "at": n["at"]})
+        if best:
+            e["d0day_next"] = best[1]

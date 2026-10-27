@@ -63,6 +63,9 @@ def _spend_to_usd(spend, rate):
                       for sid, dd in (spend.get("convval") or {}).items()}
     out["convval_day1"] = {sid: {d: round(v * rate, 2) for d, v in dd.items()}
                            for sid, dd in (spend.get("convval_day1") or {}).items()}
+    if "convval_d0day" in spend:           # the install-day ("Day") D0 (merge_spend): the same ONE rate as convval_day1
+        out["convval_d0day"] = {sid: {d: round(v * rate, 2) for d, v in dd.items()}
+                                for sid, dd in (spend.get("convval_d0day") or {}).items()}
     out["campaigns"] = {sid: [{**c, "cost_micros": int(round((c.get("cost_micros") or 0) * rate))}
                              for c in lst]
                         for sid, lst in (spend.get("campaigns") or {}).items()}

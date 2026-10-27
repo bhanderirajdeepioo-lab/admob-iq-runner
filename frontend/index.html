@@ -5354,14 +5354,31 @@ function renderOverview(){
   const dwRows=dateWiseRows(dwDates);
   const roasCell=(rv,sp)=>{ if(!(sp>0))return '<td><span class="faint">organic</span></td>';
     const r=rv/sp; return `<td style="font-weight:700">${money(sp)}<div class="${r>=1?'up':'down'}" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div></td>`; };
-  // D0 rev: Google Ads' first-24h value + its D0 ROAS (neutral: below 1 is normal) + "⏳ filling" while a date of the
-  // period is not fixed yet (the Hinglish tooltip says when it is; once fixed the number never changes). An app with
-  // spend in the period shows its D0 even at 0 (0.00×: no value within 24 h — once fixed, final) when the data has D0
-  // fixing (roas.d0). A plain '—' (no spend, no D0, nothing filling: an organic app, or no Google Ads day in the
-  // period) gets no tooltip, as before
-  const d0Cell=(app,d0)=>{ const st=d0State(app,winSet), sr=d0Roas(app,winSet,d0), show=d0>0||(sr!=null&&!!st), r=show?sr:null,
-      tip=(show||(st&&st.pend.length))?d0Tip(st):'';
-    return `<td${tip?` title="${hAttr(tip)}" style="cursor:help"`:''}>${show?money(d0):'—'}${r!=null?`<div class="muted" style="font-size:11px;margin-top:2px">${r.toFixed(2)}×</div>`:''}${st&&st.pend.length?'<div class="faint" style="font-size:10px;margin-top:1px">⏳ filling</div>':''}</td>`; };
+  // D0 rev, two lines in one box (owner: "Do line, ek box"). "24h": Google Ads' first-24h value + its D0 ROAS (neutral:
+  // below 1 is normal), each date fixed once complete. "Day": the install-day D0 — Google Ads' SAME value as it stood
+  // the next morning (taken once, never changed: d0DayState) over the period's dates that have it, its ROAS over those
+  // same dates, "· k/n days" when some spend dates have none. A third tiny line says what is still filling; the Hinglish
+  // tooltip explains both lines and when each fixes. An app with spend in the period shows its 24h D0 even at 0 (0.00×:
+  // no value within 24 h — once fixed, final). Data without roas.d0 (built before the D0 fix): the number + ROAS only,
+  // as before. A plain '—' (no spend, no D0, nothing filling: an organic app, or no Google Ads day in the period) gets
+  // no tooltip, as before
+  const d0Cell=(app,d0)=>{ const st=d0State(app,winSet), sr=d0Roas(app,winSet,d0), show=d0>0||(sr!=null&&!!st),
+      r=show?sr:null;
+    if(!st) return `<td>${show?money(d0):'—'}${r!=null?`<div class="muted" style="font-size:11px;margin-top:2px">`
+      +`${r.toFixed(2)}×</div>`:''}</td>`;
+    const dy=d0DayState(app,winSet), p24=st.pend.length>0, pDay=dy.pend.length>0;
+    if(!show&&!p24&&!dy.has&&!dy.n) return '<td>—</td>';
+    const tip=[(show||p24)?d0Tip(st):'',d0DayTip(dy)].filter(Boolean).join('\n'),
+      sm=(c,px,s)=>`<span class="${c}" style="font-size:${px}px">${s}</span>`,
+      nw=h=>`<span style="white-space:nowrap">${h}</span>`,   // each part unbreakable; the line wraps between them
+      // (normal: the td itself is nowrap, .ov-apps CSS)
+      ln=(lab,v,x,more,mt)=>`<div style="white-space:normal${mt?';margin-top:2px':''}">${nw(sm('faint',10,lab)+' '+v)}`
+        +`${x!=null?' '+nw(sm('muted',11,'· '+x.toFixed(2)+'×')):''}${more||''}</div>`,
+      kn=dy.has&&dy.k<dy.n?' '+nw(sm('faint',10,'· '+dy.k+'/'+dy.n+' days')):'',
+      fill=p24&&pDay?'filling':p24?'24h filling':'Day filling';
+    return `<td title="${hAttr(tip)}" style="cursor:help">${ln('24h',show?money(d0):'—',r)}`
+      +`${ln('Day',dy.has?money(dy.val):'—',dy.has?dy.roas:null,kn,1)}`
+      +`${p24||pDay?`<div class="faint" style="font-size:10px;margin-top:1px">⏳ ${fill}</div>`:''}</td>`; };
   const appRows=appsShown.slice().sort((a,b)=>((appAgg[b.name]||{e:0}).e)-((appAgg[a.name]||{e:0}).e)).map(ap2=>{const g=appAgg[ap2.name]||{e:0,i:0};const ec=g.i?g.e/(g.i*1000):0;const pl=g.e/1e6-(SPA[ap2.name]||0);const newr=CVAL[ap2.name]||0;const oldr=g.e/1e6-(CVAL1[ap2.name]||0);const d1=CVAL1[ap2.name]||0;
     return `<tr class="clk" onclick="openAppDetail('${ap2.name.replace(/'/g,'')}')"><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(ap2.name,22)}<span>${ap2.name}${storeLnk(ap2.name)}${appAccTag(ap2.name)}</span></span></td>${SHOWSP?`<td>${INST[ap2.name]!=null?Math.round(INST[ap2.name]).toLocaleString():'—'}</td>`+roasCell(g.e/1e6,SPA[ap2.name]||0):''}<td>${money(g.e/1e6)}</td>${SHOWSP?`${d0Cell(ap2.name,d1)}<td>${money(newr)}</td><td class="${oldr<0?'down':''}">${plFmt(oldr)}</td><td class="${pl>=0?'up':'down'}">${plFmt(pl)}</td>`:''}<td>${g.i?cm(ec):'—'}</td><td>${ap2.placements}</td><td><span class="hs ${hb(ap2.avg_health)}">${ap2.avg_health}</span></td></tr>`;}).join('');
   // mobile card-list of the SAME apps (shown ≤760px; desktop keeps the table). Nothing dropped.
@@ -5389,7 +5406,7 @@ function renderOverview(){
       </div>
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.${roasFxRule()} Installs yahan <b>sirf Google Ads</b> wale hain — 💸 Install value tab <b>all installs</b> (ads + organic) ginta hai, isliye wahan number bada.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'This app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe tap = poori report · ↗ = Play Store</span></div>
-        <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Google Ads installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">ads only · not all installs</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>D0 rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads · first 24h</div></th><th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users · live</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − D0</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
+        <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Google Ads installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">ads only · not all installs</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>D0 rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads · '+(DATA.roas.d0?'24h / Day':'first 24h')+'</div></th><th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users · live</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − D0</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
       <div class="ov-datewise card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${dwRows.length} days</span></h3><span class="lnk" onclick="openDateWise('')">View more →</span></div>${dateWiseTable(dwRows)}</div>
       <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0',spend:SHOWSP?spendSeries:null,spendColor:'#e6b84e'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span>${SHOWSP?'<span><i class="dot" style="background:#e6b84e"></i> Ad spend</span>':''}<span class="faint" style="font-size:11px">· tap / hover a day for its numbers</span></div></div>
       <div class="ov-movers card ov-coll${OVOPEN.movers?' open':''}"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
@@ -9699,9 +9716,67 @@ function d0State(app,winSet){ const D=(DATA.roas||{}).d0; if(!D) return null;
 function d0FixAt(D,d){ let t=Date.parse((D.fix_at||{})[d]||'');
   if(!isFinite(t)){ const t0=Date.parse(D.next_fix_utc||''), n=(Date.parse(d)-Date.parse(D.fixed_till))/864e5-1; t=t0+n*864e5; }
   if(!isFinite(t)||t<=Date.now()) return null;
-  const x=new Date(t+330*60000).toISOString(); return fmtD(x.slice(0,10))+', '+x.slice(11,16)+' IST'; }
+  return d0Ist(t); }
+function d0Ist(t){ const x=new Date(t+330*60000).toISOString(); return fmtD(x.slice(0,10))+', '+x.slice(11,16)+' IST'; }
+// The install-day ("Day") D0 of an app over the period vs DATA.roas.d0's Day keys: the backend (merge_spend) takes a
+// store's click date ONCE, from a complete read at most day_next.late_h after its Day moment ((date+1 00:00 in its
+// accounts' zone) + Google's lag: the next morning), and never changes it. by_app[app].d0day_next: the app's own next
+// moment (date, at); d0.day_next: every account's (the fallback); day_since: the first date taken. val / roas: Σ Day
+// and Σ Day ÷ Σ one-rate spend over the period's dates that HAVE a Day value (days; the backend keeps a date only when
+// every store of the app with spend has it); k of n: the spend dates covered. pend: spend dates without one whose
+// morning read can still come (now before their moment + late_h); miss: the rest (before day_since, that morning's
+// read missed, or the app skipped in it). null without roas.d0. Known limit: pend vs miss uses the app's LATEST store
+// moment (d0day_next) — an app whose stores' accounts are in different zones shows a date its earlier-zone store
+// already missed as filling until that latest moment + late_h passes (every account in one zone: exact).
+function d0DayState(app,winSet){ const D=(DATA.roas||{}).d0; if(!D) return null;
+  const e=((DATA.roas.by_app)||{})[app]||{}, dv=e.convval_d0day_daily||{}, sp=e.daily||{},
+    late=d0DayLate(D), now=Date.now(), st={D, e, val:0, roas:null, k:0, n:0, has:false, days:[], pend:[], miss:[]};
+  let s=0;
+  new Set([...Object.keys(sp),...Object.keys(dv)]).forEach(d=>{ if(!winSet.has(d)) return;
+    const hv=typeof dv[d]==='number'&&isFinite(dv[d]), c=sp[d]||0;
+    if(hv){ st.has=true; st.val+=dv[d]; s+=c; st.days.push(d); }
+    if(!(c>0)) return;
+    st.n++;
+    if(hv){ st.k++; return; }
+    const t=d0DayAt(D,d,e); (isFinite(t)&&now<t+late?st.pend:st.miss).push(d); });
+  st.roas=s>0?st.val/(s/1e6):null; [st.days,st.pend,st.miss].forEach(a=>a.sort()); return st; }
+// date d's Day moment (ms) for an app (e: its by_app entry): its d0day_next, else d0.day_next — that moment, a day per
+// date from its date (NaN when neither: the Day number never started); its morning read may come up to
+// day_next.late_h later (ms; the backend's limit, 3 h when the data does not say)
+function d0DayAt(D,d,e){ const nx=(e&&e.d0day_next)||D.day_next||{}, t0=Date.parse(nx.at||''),
+    x0=Date.parse(nx.date||'');
+  return isFinite(t0)&&isFinite(x0)?t0+(Date.parse(d)-x0):NaN; }
+function d0DayLate(D){ const h=(D.day_next||{}).late_h; return (typeof h==='number'&&isFinite(h)?h:3)*36e5; }
+// the Day line's part of the tooltip: what the number is (the clock time: the app's Day moment of its latest date in
+// the period, in IST — "usi din" when that is still the install date in IST, "subah" 04–12, "raat" 21–04), then what
+// is fixed, still filling (with its time) or missing (and why). Dates: by name up to 3, else "k din (first–last)" —
+// "me se" when they do not follow each other. Data without any Day moment or date taken (built before the Day
+// number started): no date is named — the next morning's read takes the first one
+function d0DayTip(st){ if(!st) return '';
+  const D=st.D, e=st.e||{}, since=D.day_since||'',
+    span=a=>{ const run=a.every((d,i)=>!i||Date.parse(d)-Date.parse(a[i-1])===864e5);
+      return a.length===1?fmtD(a[0]):!run&&a.length<=3?a.map(fmtD).join(', ')
+        :a.length+' din ('+fmtDy(a[0],a)+'–'+fmtDy(a[a.length-1],a)+(run?')':' me se)'); },
+    fmtDy=(d,a)=>fmtD(d)+(a[0].slice(0,4)!==a[a.length-1].slice(0,4)?' '+d.slice(0,4):''),
+    ref=[st.days,st.pend,st.miss].map(a=>a[a.length-1]).find(Boolean)||(e.d0day_next||D.day_next||{}).date||'',
+    tt=ref?d0DayAt(D,ref,e):NaN, x=isFinite(tt)?new Date(tt+330*60000).toISOString():'', h=x?+x.slice(11,13):-1,
+    part=!x||(h>=4&&h<12)?' subah':h<4||h>=21?' raat':'';
+  let t='Day = install ke din raat 12 baje tak — '+(x&&x.slice(0,10)===ref?'usi din':'agle din')+part
+    +(x?' ~'+x.slice(11,16)+' IST':'')+' ka Google Ads number.';
+  if(st.has) t+=st.pend.length||st.miss.length?' '+st.k+'/'+st.n+' din ka number fixed hai.'
+    :' Fixed — ye number ab nahi badlega.';
+  if(st.pend.length){ const at=d0DayAt(D,st.pend[st.pend.length-1],e);
+    t+=' '+span(st.pend)+' abhi bhar raha hai — '+(at>Date.now()?'~'+d0Ist(at)+' ke baad fix'
+      :'agle refresh me fix (~'+d0Ist(at+d0DayLate(D))+' tak)')+', phir ye number nahi badlega.'; }
+  if(!since&&!(e.d0day_next||D.day_next)) return t+(st.miss.length?' Day number abhi shuru nahi hua (Google Ads subah'
+    +' wala purana number nahi rakhta) — pehla number agli subah ke read se aayega.':'');
+  const old=st.miss.filter(d=>!since||d<since), gone=st.miss.filter(d=>since&&d>=since);
+  if(old.length) t+=' '+(since?'Day number '+fmtD(since)+' se hai':'Day number abhi shuru nahi hua')
+    +' (Google Ads subah wala purana number nahi rakhta) — '+span(old)+' ka nahi hai.';
+  if(gone.length) t+=' '+span(gone)+' — us subah Google Ads ka poora read nahi mila, isliye Day number nahi hai.';
+  return t; }
 function d0Tip(st){ if(!st) return '';
-  const D=st.D, pre='Google Ads ka D0 = click ke pehle 24 ghante ki value. ';
+  const D=st.D, pre='24h = har install ke click ke 24 ghante ki value (Google Ads). ';
   if(st.pend.length){ const a=st.pend[0], b=st.pend[st.pend.length-1], n=st.pend.length, span=n===1?fmtD(a):n+' din ('+fmtD(a)+'–'+fmtD(b)+')';
     if(!D.fixed_till) return pre+'Abhi tak koi din fix nahi hua (Google Ads ka poora read abhi nahi mila) — '+span+' ka number abhi badal sakta hai.';
     // at: the last pending date's own moment while still ahead (a waiting app's date after fixed_till needs it too);
@@ -9710,7 +9785,7 @@ function d0Tip(st){ if(!st) return '';
     if(st.wait) return pre+span+' abhi bhar raha hai — is app ka ek Google Ads account abhi read nahi ho raha (access); '+(at?'account wapas read hone par aur ~'+at+' ke baad fix':'wapas read hote hi fix')+', phir ye number nahi badlega.';
     return pre+span+' abhi bhar raha hai — '+(at?'~'+at+' ke baad fix':D.incomplete?'pichhle refresh me Google Ads ka poora D0 read nahi mila; poora read milte hi fix':'agle refresh me fix')+', phir ye number nahi badlega.'; }
   // the drift is measured over ALL apps' fixed dates together (merge_spend), never this app alone: said so
-  const r=D.drift; let t='Fixed — ye number ab nahi badlega.';
+  const r=D.drift; let t=pre+'Fixed — ye number ab nahi badlega.';
   if(r&&r.days&&isFinite(r.pct)){ const w=' (sab apps milake, pichhle '+r.days+' fixed din)';
     t+=Math.abs(r.pct)<0.05?' Fix ke baad Google Ads ka number'+w+' nahi badla.'
       :' Fix ke baad Google Ads ne'+w+' '+(r.pct>0?'+'+r.pct.toFixed(1)+'% aur joda (late events)':Math.abs(r.pct).toFixed(1)+'% kam kiya (baad ke sudhaar)')+'; fix wala number nahi badla.'; }
