@@ -7,7 +7,8 @@ into the store × day spend cache (roas_spend_cache.json, unchanged). This keeps
   capture   every build: google_ads.take_rows() (what fetch_app_spend kept aside — 0 extra calls) is laid over the store
             exactly like merge_spend lays the fresh window over the spend cache: per metric, a store-day present in the
             fresh rows replaces ALL that store-day's campaign cells; store-days not in the fresh rows keep theirs. So
-            Σ campaigns of a store-day = the spend cache's number for it (the "ties" of the public line).
+            Σ campaigns of a store-day = the spend cache's number for it (the "ties" of the public line; day-1: the
+            days the cache has not fixed yet — a fixed D0 day keeps its number there, this store Google's current one).
   backfill  newest → oldest in CD_CHUNK_DAYS chunks (≤ CD_BACKFILL_CHUNKS a build, inside the archive step's call
             budget), down to the spend cache's first day: the days below the newest covered range not covered yet
             (state "cov": the day ranges captured or backfilled — so a capture after a pause, which leaves a gap below
@@ -133,8 +134,11 @@ def load(data_dir, first=None, last=None):
 
 def ties(mf, spend, first, last):
     """Store-days of [first, last] in the spend cache whose number = Σ of their campaigns here, converted to the cache's
-    base currency the way google_ads._aggregate does → {metric: [equal, of]}."""
+    base currency the way google_ads._aggregate does → {metric: [equal, of]}. Day-1 (cv1): only the days after the
+    cache's d1_fixed_till — a fixed D0 day keeps the number read when it was fixed (merge_spend), while this store keeps
+    Google's current one, so it is not compared."""
     base, fx = spend.get("currency_src") or "USD", spend.get("fx") or {}
+    fixed = str(spend.get("d1_fixed_till") or "")
 
     def rate(a, ccy):
         c = ccy.get(a) or base
@@ -160,7 +164,7 @@ def ties(mf, spend, first, last):
         ok = n = 0
         for sid, dd in sorted((spend.get(CACHE_KEY[k]) or {}).items()):
             for day, want in dd.items():
-                if not first <= day <= last:
+                if not first <= day <= last or (k == "cv1" and day <= fixed):
                     continue
                 n += 1
                 tot = 0 if k == "cost" else 0.0

@@ -67,7 +67,8 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None, daily_dated=Non
     camps_by_sid = spend.get("campaigns") or {}
     installs_by_sid = spend.get("installs") or {}        # store_id -> {date: campaign-attributed installs}
     convval_by_sid = spend.get("convval") or {}          # store_id -> {date: Google Ads conversion value (USD)}
-    convval_d1_by_sid = spend.get("convval_day1") or {}  # store_id -> {date: FROZEN day-1 conversion value (USD)}
+    convval_d1_by_sid = spend.get("convval_day1") or {}  # store_id -> {date: D0 conversion value (USD), fixed once complete}
+    d0_open = spend.get("d1_open") or {}                 # store_id -> {"days": D0 dates ≤ d1_fixed_till not fixed yet, "wait"}
     by_app, unmatched = {}, 0
     unmatched_detail = {}                                # store_id -> {spend, campaigns} we couldn't attribute
     for sid, dd in (spend.get("daily") or {}).items():
@@ -97,9 +98,14 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None, daily_dated=Non
             e["installs_daily"][d] = e["installs_daily"].get(d, 0) + v
         for d, v in (convval_by_sid.get(sid) or {}).items():    # Google Ads conversion value (USD), same window
             e["convval_daily"][d] = e["convval_daily"].get(d, 0) + v
-        for d, v in (convval_d1_by_sid.get(sid) or {}).items(): # FROZEN day-1 conversion value (USD), same window
+        for d, v in (convval_d1_by_sid.get(sid) or {}).items(): # D0 conversion value (USD), same window
             e["convval_day1_daily"][d] = e["convval_day1_daily"].get(d, 0) + v
         e["campaigns"].extend(camps_by_sid.get(sid, []))
+        o = d0_open.get(sid) or {}
+        if o.get("days"):                                       # the page's "⏳ filling" for these dates too
+            e["d0_open"] = sorted(set(e.get("d0_open") or []) | set(o["days"]))
+        if o.get("wait"):                                       # waits for an account that cannot answer (no ids here)
+            e["d0_wait"] = True
     # surface the biggest unmatched store ids so coverage gaps are visible + diagnosable (not a black-box sum)
     top_unmatched = sorted(unmatched_detail.values(), key=lambda x: -x["spend_usd_micros"])[:30]
     out = {"configured": True, "by_app": by_app, "note": spend.get("note"),
@@ -108,4 +114,12 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None, daily_dated=Non
            "unmatched_count": len(unmatched_detail)}
     if daily_dated is not None:
         out["spend_fx"] = "dated"
+    # D0 (convval_day1) fixed once complete (google_ads.merge_spend): the last fixed date, when the next one is fixed
+    # (and each date not fixed yet: fix_at), Google's reporting lag used, the measured late drift (all stores together),
+    # incomplete (the latest read could fix nothing) — only the keys the cache has; none → no "d0" at all. Per app:
+    # d0_open / d0_wait above
+    d0 = {k: spend.get("d1_" + k) for k in ("fixed_till", "next_fix_utc", "fix_at", "lag_h", "drift", "incomplete")}
+    d0 = {k: v for k, v in d0.items() if v is not None}
+    if d0:
+        out["d0"] = d0
     return out

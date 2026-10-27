@@ -15,7 +15,7 @@ import gzip
 import json
 import os
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -29,6 +29,9 @@ from admob_iq.fetch import google_ads
 from tests.gads_fake import A1, A2, A3, A4, DEV, M, MCC, S1, S2, S3, SETTINGS, TOK, Clock, FakeAds
 
 TODAY = date(2026, 9, 24)
+# the spend fetch's clock (its D0 finality): 24 Sep 06:00 UTC → fixed till 22 Sep in IST, so the fixture's last days
+# are still open and the day-1 ties really compare something (a fixed D0 day is not compared: merge_spend keeps it)
+NOW = datetime(2026, 9, 24, 6, tzinfo=timezone.utc)
 T0 = 1_800_000_000
 H = 3600
 FX = {"INR": 0.012, "USD": 1.0}
@@ -54,12 +57,13 @@ def gz(path):
         return json.loads(f.read().decode("utf-8"))
 
 
-def live(monkeypatch, fake, start, end, archive=True, cached=None):
+def live(monkeypatch, fake, start, end, archive=True, cached=None, now=NOW):
     """The ROAS step's spend fetch against the fake → (merged spend cache, the rows kept aside)."""
     monkeypatch.setattr(google_ads, "_search", fake.search)
     monkeypatch.setattr(google_ads, "_access_token", lambda *a: TOK)
     monkeypatch.setattr(google_ads, "_fx_to_usd", FX.get)
-    fresh = google_ads.fetch_app_spend(dict(SETTINGS, gads_archive=archive), str(start), str(end), mode="live")
+    monkeypatch.delenv("GADS_D0_LAG_HOURS", raising=False)
+    fresh = google_ads.fetch_app_spend(dict(SETTINGS, gads_archive=archive), str(start), str(end), mode="live", now=now)
     return google_ads.merge_spend(cached, fresh, str(start)), google_ads.take_rows()
 
 
@@ -410,6 +414,7 @@ def test_campaign_capture_ties_the_spend_cache_exactly(data, monkeypatch):
     m = re.search(r"ties cost (\d+)/(\d+), installs (\d+)/(\d+), value (\d+)/(\d+), day1 (\d+)/(\d+)", cl)
     nums = list(map(int, m.groups()))
     assert nums[1] > 100 and all(nums[i] == nums[i + 1] for i in range(0, 8, 2)), cl
+    assert spend["d1_fixed_till"] == "2026-09-22" and nums[7] > 0, cl          # the open D0 days are compared
     got = gcd.load(data)
     for sid in (S1, S2):
         for dd, v in spend["daily"][sid].items():
@@ -435,7 +440,7 @@ def test_campaign_overlay_is_merge_spends_store_day_rule(data, monkeypatch):
         assert spend2["daily"][S1][dd] == spend["daily"][S1][dd] == got["cost"]["12"][dd] + got["cost"]["11"].get(dd, 0)
     assert [dd for dd in got["cost"]["12"] if dd < "2026-09-01"]                        # older days kept
     t = gcd.ties(gcd.months(data), spend2, "2026-08-01", "2026-09-25")
-    assert all(ok == n for ok, n in t.values())
+    assert all(ok == n for ok, n in t.values()) and t["cv1"][1] > 0
 
 
 def test_campaign_backfill_to_the_first_spend_day(data, monkeypatch):

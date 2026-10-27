@@ -1,6 +1,7 @@
 """Google Ads spend fetch, accounts asked side by side (google_ads.fetch_app_spend, GADS_SPEND_WORKERS) and the roster
 skip (needs_campaign_accounts): the same cache, rows kept aside and log lines as the one-account-after-another code —
-in a synthetic MCC whose answers come back in a shuffled order. All data is synthetic."""
+in a synthetic MCC whose answers come back in a shuffled order (the read's D0 finality keys, which the one-after-another
+code did not have, are compared on their own: tests/test_gads_d0_fix.py). All data is synthetic."""
 
 import hashlib
 import json
@@ -18,6 +19,8 @@ SETTINGS = {"google_ads_dev_token": DEV, "google_ads_login_customer_id": MCC, "g
 START, END = "2026-01-01", "2026-01-12"
 FX = {"USD": 1.0, "EUR": 1.1, "INR": 0.012}
 NE = "HTTP 403: authorizationError=CUSTOMER_NOT_ENABLED — The customer account can't be accessed"
+D0_KEYS = ("d1_final_till", "d1_next_fix_utc", "d1_lag_h", "d1_zones", "d1_ok",    # fetch_app_spend's D0 finality
+           "d1_unread")                                                           # of the read (unread: when any)
 
 
 def _h(*parts):
@@ -151,6 +154,7 @@ def mcc(monkeypatch):
             monkeypatch.setenv("GADS_SPEND_WORKERS", str(workers))
             out = google_ads.fetch_app_spend(s, START, END, mode="live")
             taken = google_ads.take_rows()
+            fake.d0 = {k: out.pop(k) for k in D0_KEYS if k in out}      # the rest: byte-compared with the old code
         return json.dumps(out), json.dumps(taken), fake
     return run
 
@@ -168,6 +172,9 @@ def test_same_cache_rows_and_lines_as_one_after_another(mcc, capsys, workers):
     assert out == out0 and taken == taken0                    # the very same bytes (order included)
     js = json.loads(out)
     assert js["daily"] and js["installs"] and js["convval"] and js["convval_day1"] and "EUR" in js["fx"]
+    # one asked account refuses day-1 (a 403 that is not CUSTOMER_NOT_ENABLED): the read fixes no D0 date
+    # (it answered cost, so it is not "unread": the whole read is incomplete)
+    assert f.d0["d1_ok"] is False and f.d0["d1_lag_h"] == 4 and set(f.d0) == set(D0_KEYS) - {"d1_unread"}
     # the not-enabled accounts (403 CUSTOMER_NOT_ENABLED on spend) are no longer asked for installs / day-1 …
     gone = {a for a, k in f0.calls if k == "spend" and a in f0.off}
     assert gone and len(gone) == len(f0.off)

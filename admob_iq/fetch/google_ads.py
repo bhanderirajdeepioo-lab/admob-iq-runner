@@ -160,9 +160,10 @@ def _app_installs_for(customer_id, login_customer_id, dev_token, access_token, s
 
 def _app_convval_lag_for(customer_id, login_customer_id, dev_token, access_token, start, end, search=None):
     """DAY-1 conversion value per store/date: the value from conversions that happened WITHIN ONE DAY
-    of the click (segments.conversion_lag_bucket = LESS_THAN_ONE_DAY). Google keeps this lag breakdown
-    for PAST dates too, so it's retroactive — it survives the later restatement of the full value, which
-    is exactly the 'day-1 vs matured' the UI wants. Best-effort + SEPARATE query (a version/field
+    of the click (segments.conversion_lag_bucket = LESS_THAN_ONE_DAY) — Google Ads' D0 (the dashboard's
+    "D0 rev"). Google keeps this lag breakdown for PAST dates too, so it's retroactive — it survives the
+    later restatement of the full value, which is exactly the 'D0 vs matured' the UI wants (merge_spend
+    fixes a date's number once it is complete: d0_final). Best-effort + SEPARATE query (a version/field
     problem here can never touch spend, installs, or the live convval). campaign.id: as in _app_installs_for."""
     q = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, metrics.conversions_value, segments.date, "
          "segments.conversion_lag_bucket "
@@ -566,9 +567,85 @@ def _not_enabled(e):
     return s.startswith("HTTP 403") and "CUSTOMER_NOT_ENABLED" in s
 
 
-def fetch_app_spend(s, start, end, *, mode="live"):
+# ── D0 (the day-1 lag bucket above): when a click date's number is complete ──────────────────────────────────────────
+# Click date X (the account's time zone): the last click of X has its 24 h until X+2 00:00 local (an hour later when
+# summer time starts on X+1: _d0_moment), and Google Ads reports conversions some hours late (the owner's figure: 3-4 h)
+# → X is final from then + D0_LAG_HOURS on. From then merge_spend keeps the number it read and never takes Google's
+# later one (owner: "fix D0").
+D0_LAG_HOURS = 4                 # GADS_D0_LAG_HOURS overrides
+D0_NO_TZ = "Etc/GMT+12"          # an account without a time zone: UTC−12, the zone whose days end last (never early)
+
+
+def _d0_lag_h():
+    import os
+    try:
+        n = int(os.getenv("GADS_D0_LAG_HOURS") or D0_LAG_HOURS)
+    except ValueError:
+        n = D0_LAG_HOURS
+    return max(0, n)
+
+
+def _d0_zone(tz):
+    """An account's time zone (IANA name) → tzinfo; none / unknown → D0_NO_TZ (the conservative one)."""
+    from zoneinfo import ZoneInfo
+    for name in (tz, D0_NO_TZ):
+        try:
+            if name:
+                return ZoneInfo(str(name))
+        except Exception:
+            continue
+    from datetime import timedelta, timezone
+    return timezone(timedelta(hours=-12))
+
+
+def _d0_moment(zones, x, lag):
+    """The UTC moment click date x (a date) is final in every zone of `zones` (tzinfos or zone names): its last click's
+    24 h end at the later of (x+2 00:00 local) and (x+1 00:00 local) + 24 h — the second when x+1 is a 23-hour day
+    (summer time starting) — and Google Ads reports `lag` hours late."""
+    from datetime import datetime, time, timedelta, timezone
+    end = None
+    for z in zones:
+        z = _d0_zone(z) if isinstance(z, str) else z
+        day1 = datetime.combine(x + timedelta(days=1), time(0), tzinfo=z).astimezone(timezone.utc)
+        day2 = datetime.combine(x + timedelta(days=2), time(0), tzinfo=z).astimezone(timezone.utc)
+        t = max(day2, day1 + timedelta(hours=24))
+        end = t if end is None or t > end else end
+    return end + timedelta(hours=lag)
+
+
+def _iso_z(t):
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def d0_final(accounts, now=None, lag_h=None):
+    """The last click date whose D0 is complete in EVERY account of `accounts` (each in its own a["tz"]; the latest
+    moment wins) → {"final_till": ISO date, "next_fix_utc": the moment final_till moves on one day (ISO, UTC, "Z"),
+    "lag_h", "zones": the zone names used (merge_spend works out the moment of any other date with them)}.
+    now: a tz-aware datetime (default: the clock); lag_h: default GADS_D0_LAG_HOURS / D0_LAG_HOURS."""
+    from datetime import datetime, timedelta, timezone
+    lag = _d0_lag_h() if lag_h is None else max(0, int(lag_h))
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    zones = {}
+    for a in accounts or [{}]:
+        z = _d0_zone((a or {}).get("tz"))
+        zones[str(z)] = z
+    # (now − L h, in the earliest zone).date() − 2 days; a day earlier while a 23-hour day after it is not 24 h on yet
+    final = min((now - timedelta(hours=lag)).astimezone(z).date() for z in zones.values()) - timedelta(days=2)
+    if _d0_moment(zones.values(), final, lag) > now:
+        final -= timedelta(days=1)
+    at = _d0_moment(zones.values(), final + timedelta(days=1), lag)
+    return {"final_till": final.isoformat(), "next_fix_utc": _iso_z(at), "lag_h": lag, "zones": sorted(zones)}
+
+
+def fetch_app_spend(s, start, end, *, mode="live", now=None):
     """Return {daily:{store_id:{date:usd_micros}}, campaigns:{store_id:[...]}, currency_src, fx} or
-    None when Google Ads isn't configured / a call fails. `s` is config.settings()."""
+    None when Google Ads isn't configured / a call fails. `s` is config.settings().
+    Also the D0 finality of this read (d0_final over the accounts asked for the day-1 query, at `now` — tz-aware,
+    default the clock read before the day-1 queries): d1_final_till, d1_next_fix_utc, d1_lag_h, d1_zones; d1_ok =
+    every asked account answered the day-1 query, an account with no click in the window (no cost rows) aside
+    (merge_spend fixes dates only from a complete read); d1_unread = the accounts that could not answer at all (a 403
+    on cost and day-1, not CUSTOMER_NOT_ENABLED; only when any) — merge_spend keeps their stores' dates unfixed (they
+    may have clicks), while every other store is fixed."""
     global _TAKEN
     _TAKEN = {}
     if mode == "mock":
@@ -609,14 +686,18 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     # Each of the three queries goes to the accounts side by side (_per_account); the answers are taken in account
     # order, so every row, error and log line is in the same order as when asked one account after another.
     workers = _spend_workers()
-    rows, errs, gone = [], [], set()
+    rows, errs, gone, idle, denied = [], [], set(), set(), set()
     for i, (a, got, e) in enumerate(_per_account(
             accounts, lambda a: _app_spend_for(a["id"], mcc, dev, token, start, end), workers)):
         if e is not None:
             errs.append(str(e)[:220])
             if _not_enabled(e):
                 gone.add(i)                  # a not-enabled account answers 403 to installs / day-1 too: not asked
+            elif str(e).startswith("HTTP 403"):
+                denied.add(a["id"])          # any other 403 (e.g. USER_PERMISSION_DENIED): it cannot answer at all
             continue
+        if not got:
+            idle.add(a["id"])                # no app-campaign cost in the window = no click, so no D0 to miss either
         for r in got:
             r["currency"] = a["currency"]; r["account"] = a["id"]; r["account_name"] = a.get("name") or ""
             rows.append(r)
@@ -644,15 +725,30 @@ def fetch_app_spend(s, start, end, *, mode="live"):
     agg["convval"] = _aggregate_convval(inst_rows, base=agg["currency_src"])   # same base as spend
     # Day-1 conversion value (retroactive, via conversion-lag bucket) — best-effort + separate, so a
     # field/version problem here can never break spend/installs/convval above.
-    d1_rows = []
+    from datetime import datetime, timezone
+    read_at = now or datetime.now(timezone.utc)  # finality's clock: before the D0 numbers are read, never after them
+    d1_rows, d1_ok, unread = [], True, []
     for a, got, e in _per_account(asked, lambda a: _app_convval_lag_for(a["id"], mcc, dev, token, start, end),
                                   workers):
         if e is not None:
+            # an incomplete D0 read never fixes a date (merge_spend) — unless this account has no D0 this read could
+            # miss (idle above: no click in the window), else one such account would block the fixing of every app
+            # for good. An account that cannot answer at all (a 403 on cost too) may have clicks: only ITS stores
+            # wait (d1_unread → merge_spend), every other store is fixed
+            if a["id"] in denied:
+                unread.append(a["id"])
+            elif a["id"] not in idle:
+                d1_ok = False
             print("roas: day-1 convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
             continue
         for r in got:
             r["currency"] = a["currency"]; r["account"] = a["id"]; d1_rows.append(r)
     agg["convval_day1"] = _aggregate_convval(d1_rows, base=agg["currency_src"])
+    # D0 finality of this read: the dates complete in every asked account's own time zone (merge_spend fixes them)
+    agg.update({"d1_" + k: v for k, v in d0_final(asked, read_at).items()})
+    agg["d1_ok"] = d1_ok
+    if unread:
+        agg["d1_unread"] = unread
     if s.get("gads_archive"):                    # the per-campaign store's input (never part of the returned cache)
         _TAKEN = {"start": str(start), "end": str(end), "accounts": [dict(a) for a in accounts],
                   "spend": rows, "inst": inst_rows, "d1": d1_rows}
@@ -668,17 +764,49 @@ def merge_spend(cached, fresh, refetch_start):
 
     - fresh is None      → Google Ads not configured: no ROAS (never serve stale cache).
     - fresh has 'error'  → transient failure: keep the settled history we already have.
-    - cached is None     → first run / full backfill: just use fresh."""
+    - cached is None     → first run / full backfill: just use fresh.
+
+    convval_day1 (Google Ads' D0) is the one exception: a click date's D0 is FIXED once complete (owner: the number
+    never changes after that). d1_fixed_till = the last fixed date: it moves on only with a complete read (fresh
+    d1_ok) to that read's d1_final_till (fetch_app_spend / d0_final). Per store-day (_merge_d0): a date fixed before
+    this read keeps the cached number; any other date takes this read's number (the cached one if this read lacks it)
+    and is fixed by this read only when final for it — a complete read, the date ≤ this read's own d1_final_till, and
+    none of the store's accounts unread (d1_unread: a 403 on every query; the store's accounts from its campaigns,
+    and the ones it already waits for until a complete read shows them read). A store-day ≤ d1_fixed_till this read
+    cannot fix — with a D0 number or only with cost — stays live in d1_open ({store: {"days", "wait"}}) until a read
+    that can. A store-day with cost that a complete read covered (≥ refetch_start) but brought no D0 for is fixed at
+    0.0 the same way (no value within 24 h: a late one never slips in afterwards). d1_incomplete: true when the latest
+    read could fix nothing (incomplete, or a failed fetch: the page then does not promise "the next refresh"). An odd
+    D0 value or field in the cache counts as absent (never raises). d1_next_fix_utc: the moment
+    d1_fixed_till + 1 is final, d1_fix_at: {date: that moment} for the dates not fixed yet (_d0_next_fix, _d0_fix_at:
+    this read's zones and lag). d1_drift: how far Google's CURRENT number of the latest 30 fixed dates this read also
+    has is from the fixed one, all stores together ({"days", "from", "to", "pct"}; the measured size of what fixing
+    leaves out; a complete read only and no waiting store, else the cached one). The log is counts only."""
     if fresh is None:
         return None
     if fresh.get("error"):
+        if cached and cached.get("d1_fixed_till"):
+            return dict(cached, d1_incomplete=True)      # nothing read: the page must not promise "next refresh"
         return cached or fresh
     if not cached:
+        fixed = _d0_date(fresh.get("d1_final_till")) if fresh.get("d1_ok") else None
+        fresh["convval_day1"], still, n, _ = _merge_d0(
+            {}, fresh.get("convval_day1") or {}, None, fixed, fixed, spend=fresh.get("daily"), lo=refetch_start,
+            unread=fresh.get("d1_unread"), owners=_d0_owners(fresh.get("campaigns")))
+        fresh["d1_fixed_till"] = fixed
+        for k, v in (("d1_open", still), ("d1_next_fix_utc", _d0_next_fix(None, fresh, fixed)),
+                     ("d1_fix_at", _d0_fix_at(None, fresh, fixed, still)),
+                     ("d1_incomplete", not fresh.get("d1_ok"))):
+            if v:
+                fresh[k] = v
+            else:
+                fresh.pop(k, None)
+        _d0_log(fresh, fixed, n, still)
         return fresh
     out = {"v": SPEND_CACHE_V,
            "currency_src": fresh.get("currency_src") or cached.get("currency_src", "USD"),
            "fx": fresh.get("fx") or cached.get("fx", {}), "note": fresh.get("note")}
-    for key in ("daily", "installs", "convval", "convval_day1"):
+    for key in ("daily", "installs", "convval"):
         cd = cached.get(key) or {}
         fd = fresh.get(key) or {}
         merged = {}
@@ -691,11 +819,184 @@ def merge_spend(cached, fresh, refetch_start):
             if m:
                 merged[sid] = m
         out[key] = merged
+    old = _d0_date(cached.get("d1_fixed_till"))        # None: a cache written before D0 was fixed
+    fin = _d0_date(fresh.get("d1_final_till")) if fresh.get("d1_ok") else None    # what this read can fix
+    fixed = max((x for x in (old, fin) if x), default=None)
     cc = cached.get("campaigns") or {}
     fc = fresh.get("campaigns") or {}
+    out["convval_day1"], still, n_fixed, drift = _merge_d0(
+        cached.get("convval_day1") or {}, fresh.get("convval_day1") or {}, old, fixed, fin, spend=out["daily"],
+        lo=refetch_start, opened=cached.get("d1_open"), unread=fresh.get("d1_unread"), owners=_d0_owners(cc, fc))
+    out["d1_fixed_till"] = fixed
+    for k, v in (("d1_open", still or None), ("d1_next_fix_utc", _d0_next_fix(cached, fresh, fixed)),
+                 ("d1_fix_at", _d0_fix_at(cached, fresh, fixed, still)),
+                 ("d1_lag_h", fresh["d1_lag_h"] if fresh.get("d1_lag_h") is not None else cached.get("d1_lag_h")),
+                 ("d1_drift", drift or cached.get("d1_drift")),
+                 ("d1_incomplete", None if fresh.get("d1_ok") else True)):
+        if v is not None:
+            out[k] = v
+    _d0_log(fresh, fixed, n_fixed, still)
     out["campaigns"] = {sid: (fc.get(sid) or cc.get(sid) or []) for sid in set(cc) | set(fc)}
     return out
 
+
+D0_DRIFT_DATES = 30              # the latest fixed dates the measured drift (d1_drift) is taken over
+D0_FIX_AT_DAYS = 45              # the most dates d1_fix_at lists (the latest; the page steps a day from next_fix_utc)
+
+
+def _d0_date(x):
+    """x when it is an ISO date ("YYYY-MM-DD"), else None (an odd cache value never raises)."""
+    from datetime import date
+    try:
+        return x if isinstance(x, str) and date.fromisoformat(x).isoformat() == x else None
+    except ValueError:
+        return None
+
+
+def _d0_list(x):
+    return x if isinstance(x, (list, tuple)) else ()
+
+
+def _d0_vals(dd):
+    """{date: value} with finite numbers only: a corrupt / hand-edited value (None, text, NaN) counts as absent."""
+    import math
+    if not isinstance(dd, dict):
+        return {}
+    return {d: v for d, v in dd.items()
+            if isinstance(d, str) and isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)}
+
+
+def _d0_owners(*camps):
+    """{store: {account ids}} from campaign maps ({store: [{"account": id, ...}]}: the cache's and this read's)."""
+    out = {}
+    for cm in camps:
+        for sid, lst in (cm.items() if isinstance(cm, dict) else ()):
+            for c in _d0_list(lst):
+                a = (c or {}).get("account") if isinstance(c, dict) else None
+                if a:
+                    out.setdefault(sid, set()).add(str(a))
+    return out
+
+
+def _merge_d0(cd, fd, old, fixed, fin, spend=None, lo=None, opened=None, unread=(), owners=None):
+    """merge_spend's convval_day1 rule. cd / fd: {store: {date: value}} of the cache / this read; old: the last date
+    fixed before this read (None = none), fixed: after it; fin: this read's own d1_final_till when it is complete, else
+    None (it fixes nothing). opened: the cache's d1_open, {store: {"days": [store-days ≤ old not fixed yet], "wait":
+    [accounts]}}; unread: this read's d1_unread; owners: {store: {accounts}} (_d0_owners).
+    A store-day ≤ old the cache holds and d1_open does not list is fixed: kept (Google's number now is only measured,
+    as drift). Any other one takes this read's number (else keeps the cached one), and this read fixes it when it can
+    for that store: d ≤ fin and none of the store's accounts (owners + the ones it already waits for) unread — else,
+    when d ≤ fixed, it stays live in the new d1_open (with the unread accounts as "wait"). A store's "wait" ends only
+    with a complete read that does not list the account as unread (it answered the day-1 query, or it has no click in
+    the window); an incomplete read keeps it. A complete read also fixes at 0.0 every store-day ≤ fin with cost in
+    `spend` ({store: {date: micros}}) from `lo` on (the read's first date) and no D0, for a store it can fix: this read
+    covered it and Google had none within 24 h. Such a store-day this read cannot fix (no D0 yet) is live in d1_open
+    too — the page never calls a date fixed while its number can still move. Below lo nothing was read, so an absent
+    day stays absent. A value or field of an odd type (a corrupt / hand-edited cache) counts as absent: never raises.
+    → (merged, d1_open, store-days fixed by this read, drift | None — measured only from a complete read and never on
+    a waiting store: a store missing an account's part would read as a false drop)."""
+    cd, fd = (x if isinstance(x, dict) else {} for x in (cd, fd))
+    opened, spend = (x if isinstance(x, dict) else {} for x in (opened, spend))
+    owners = owners or {}
+    unread = {str(a) for a in unread} if isinstance(unread, (list, tuple, set)) else set()
+    merged, still, n, pairs = {}, {}, 0, []
+    for sid in set(cd) | set(fd) | set(opened) | set(spend):
+        c, f, e = _d0_vals(cd.get(sid)), _d0_vals(fd.get(sid)), opened.get(sid)
+        e = e if isinstance(e, dict) else {}
+        live = {d for d in _d0_list(e.get("days")) if _d0_date(d)}
+        prev = {str(a) for a in _d0_list(e.get("wait"))}
+        # an incomplete read (fin None) does not show the waited-for accounts answered: their wait stays
+        wait = sorted(((set(owners.get(sid) or ()) | prev) & unread) | (set() if fin else prev))
+        can = None if wait else fin                  # this read fixes this store's dates up to `can`
+
+        def done(d):                                 # fixed before this read
+            return bool(old) and d <= old and d in c and d not in live
+        m = dict(c)
+        for d, v in f.items():
+            if done(d):
+                if fin and not wait:
+                    pairs.append((d, c[d], v))       # fixed: kept; Google's number now is only measured (drift)
+                continue
+            m[d] = v
+        cost = {d for d, v in _d0_vals(spend.get(sid)).items() if v and (not lo or d >= str(lo))}
+        if can:
+            for d in cost:
+                if d <= can and d not in m:
+                    m[d] = 0.0
+        days = []
+        for d in set(m) | live | cost:
+            if not fixed or d > fixed or done(d):
+                continue
+            if can and d <= can:
+                if d in m:
+                    n += 1                           # fixed by this read (an open day below lo it cannot see: let go)
+            else:
+                days.append(d)                       # ≤ d1_fixed_till, not final for this store yet: live
+        if m:
+            merged[sid] = m
+        if days or wait:
+            still[sid] = {"days": sorted(days), "wait": wait}
+    days = sorted({d for d, _, _ in pairs})[-D0_DRIFT_DATES:]
+    keep = set(days)
+    was = sum(v for d, v, _ in pairs if d in keep)
+    now = sum(v for d, _, v in pairs if d in keep)
+    drift = {"days": len(days), "from": days[0], "to": days[-1], "pct": round((now / was - 1) * 100, 2)} \
+        if days and was > 0 else None
+    return merged, still, n, drift
+
+
+def _d0_next_fix(cached, fresh, fixed):
+    """The merged cache's d1_next_fix_utc: the moment `fixed` + 1 is final, for this read's zones and lag (d1_zones,
+    d1_lag_h: d0_final's rule exactly). A read without its zones: its own moment (for ITS d1_final_till + 1) moved by
+    whole days to `fixed` + 1; a read without one either: the cache's (such a read moves nothing). Nothing fixed →
+    None."""
+    from datetime import date, datetime, timedelta
+    if not fixed:
+        return None
+    zones, lag = fresh.get("d1_zones"), fresh.get("d1_lag_h")
+    try:
+        if zones and lag is not None:
+            return _iso_z(_d0_moment(zones, date.fromisoformat(fixed) + timedelta(days=1), int(lag)))
+        at, fin = fresh.get("d1_next_fix_utc"), fresh.get("d1_final_till")
+        if at and fin:
+            t = datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ")
+            t -= timedelta(days=(date.fromisoformat(fin) - date.fromisoformat(fixed)).days)
+            return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError):
+        pass
+    return (cached or {}).get("d1_next_fix_utc") if (cached or {}).get("d1_fixed_till") == fixed else None
+
+
+def _d0_fix_at(cached, fresh, fixed, still):
+    """{date: the UTC moment its D0 is final} for the dates not fixed yet — fixed + 1 (or the earliest date still open,
+    d1_open) up to 4 days after this read's final_till, at most D0_FIX_AT_DAYS, the latest — with this read's zones and
+    lag: the page's "⏳ filling" tooltip, exact across a summer-time change. A read without its zones: the cache's when
+    `fixed` did not move; nothing fixed → None."""
+    from datetime import date, timedelta
+    zones, lag, fin = fresh.get("d1_zones"), fresh.get("d1_lag_h"), fresh.get("d1_final_till")
+    if not fixed:
+        return None
+    if not (zones and lag is not None and fin):
+        return (cached or {}).get("d1_fix_at") if (cached or {}).get("d1_fixed_till") == fixed else None
+    try:
+        last = date.fromisoformat(max(fixed, fin)) + timedelta(days=4)
+        first = min([date.fromisoformat(fixed) + timedelta(days=1)]
+                    + [date.fromisoformat(d) for e in (still or {}).values() for d in e.get("days") or ()])
+        first = max(first, last - timedelta(days=D0_FIX_AT_DAYS - 1))
+        return {(first + timedelta(days=i)).isoformat():
+                _iso_z(_d0_moment(zones, first + timedelta(days=i), int(lag)))
+                for i in range((last - first).days + 1)}
+    except (TypeError, ValueError):
+        return None
+
+
+def _d0_log(fresh, fixed, n, still=None):
+    """The public runner's line: dates and counts only (no amount, no percentage, no app / store / account)."""
+    why = "" if fresh.get("d1_ok") else " (day-1 read incomplete: not moved)"
+    k = sum(len(e.get("days") or ()) for e in (still or {}).values())
+    more = " · %d store-days still open" % k if k else ""
+    print("roas: D0 fixed till %s · %d store-days fixed this run%s%s" % (fixed or "none", n, more, why),
+          file=sys.stderr)
 
 def resolve_store_ids(accounts, data_dir, catalog, *, client_id, client_secret, currency,
                       make_client, mode):

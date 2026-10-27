@@ -52,7 +52,8 @@ def _spend_to_usd(spend, rate):
     """Scale a RAW source-currency spend cache (v2) into USD (AdMob's base) with a single `rate`
     (source→USD). installs are counts (untouched); daily / convval / campaign costs scale by `rate`.
     The display USD⇄INR toggle is derived from this SAME rate, so INR spend round-trips to the exact
-    rupee Google Ads reports — no fetch-time-vs-display-time FX drift."""
+    rupee Google Ads reports — no fetch-time-vs-display-time FX drift. Every other key (the D0 dates,
+    lag and drift percentage: d1_fixed_till & co.) rides along unchanged."""
     if not isinstance(spend, dict) or spend.get("error") or not rate:
         return spend
     out = dict(spend)
@@ -1732,7 +1733,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             except Exception as _ce2:
                 print(f"campaign account backfill skipped: {_ce2}", file=sys.stderr)
             # (day-1 conversion value now comes RETROACTIVELY from Google's conversion-lag bucket in
-            # fetch_app_spend — no forward-only snapshot needed.)
+            # fetch_app_spend — no forward-only snapshot needed. It is Google Ads' D0: merge_spend fixes each
+            # date's number once complete, d1_fixed_till & co. ride along in the cache.)
             if spend is not None and not spend.get("error"):
                 try:
                     os.makedirs(data_dir, exist_ok=True)

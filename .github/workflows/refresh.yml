@@ -213,6 +213,9 @@ jobs:
           # Every change split into "installs ki wajah se" / "asli badlaav": SPLIT=false (repo variable) turns the
           # split off without a code push (the page and the alerts as before)
           SPLIT:                ${{ vars.SPLIT || 'true' }}
+          # Overview "D0 rev": a click date's Google Ads D0 is fixed at (date + 2 days, 00:00 in the account's time zone)
+          # + GADS_D0_LAG_HOURS (Google Ads reports late; empty: the code's 4 h)
+          GADS_D0_LAG_HOURS:    ${{ vars.GADS_D0_LAG_HOURS }}
           # ⏱ Speed only (the same files either way; empty: the code's defaults) — each a rollback without a code push:
           # GADS_SPEND_WORKERS=1 asks the Google Ads accounts one after another, IMPACT_ANY_WORKERS=0 builds "compare
           # any date" in the build's own process, GA4_FIRSTOPEN_CC_BATCH=1 reads First open by country one call at a time
