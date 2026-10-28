@@ -4,10 +4,11 @@ final from (X+2 00:00 local) + GADS_D0_LAG_HOURS on (google_ads.d0_final); fetch
 for its read (and whether every asked account answered the day-1 query); merge_spend keeps a fixed date's number for
 good, measures how far Google's later number drifts (a percentage only), and logs counts only; build_roas carries
 "d0" to the page; the per-campaign store compares day-1 only on the days not fixed yet. Frontend: the Overview
-"Revenue by app" table's "D0 rev" column (number, D0 ROAS = Σ D0 ÷ Σ one-rate spend, "⏳ filling" + the Hinglish
-tooltip) run for real by tests/roas_fx_frontend.js. Its second line ("Do line, ek box"): the install-day "Day" D0 —
-Google Ads' same <1-day value as it stood the next morning ((date+1 00:00) + the lag: google_ads.d0_day), taken ONCE by
-merge_spend from the first complete read at most GADS_D0_DAY_MAX_LATE_H after it and never changed (sections 8-9).
+"Revenue by app" table's "D0 rev" column (number, D0 ROAS = Σ D0 ÷ Σ one-rate spend, ⏳ on a filling row + the Hinglish
+tooltip) run for real by tests/roas_fx_frontend.js. One box, two aligned rows ("ak hi box me rakhna he dono"): "By date"
+— the install-day D0, Google Ads' same <1-day value as it stood the next morning ((date+1 00:00) + the lag:
+google_ads.d0_day), taken ONCE by merge_spend from the first complete read at most GADS_D0_DAY_MAX_LATE_H after it and
+never changed (sections 8-9) — then "By 24h", the 24 h D0.
 Every name, id, rate and amount is SYNTHETIC; the expected numbers are worked out by hand below."""
 
 import json
@@ -903,6 +904,19 @@ def ov(tmp_path_factory):
     by = fx["daylater"]["roas"]["by_app"]
     by["Demo Gallery"]["d0day_next"] = {"date": "2026-01-07", "at": "2026-01-08T12:00:00Z"}     # 17:30 IST, 8 Jan
     by["Puzzle Quest"]["d0day_next"] = {"date": "2026-01-06", "at": "2026-01-06T17:00:00Z"}     # 22:30 IST, 6 Jan
+    # By date partial by ONE date that is still filling, none missed: Demo's 31 Dec–2 Jan and 4 Jan taken too ($27 =
+    # ₹2,430 each, the first taken 31 Dec) — only 7 Jan open (its moment still ahead): 7/8
+    fx["daypend"] = json.loads(json.dumps(fx["day"]))
+    fx["daypend"]["roas"]["d0"]["day_since"] = "2025-12-31"
+    fx["daypend"]["roas"]["by_app"]["Demo Gallery"]["convval_d0day_daily"].update(
+        {d: 27.0 for d in ("2025-12-31", "2026-01-01", "2026-01-02", "2026-01-04")})
+    # a Google Ads app with no spend and no D0 in the period whose 24h date is still open (an unread account): the grid
+    # with '—' on both rows — the By 24h one filling
+    fx["nospend"] = json.loads(json.dumps(fx["dayfixed"]))
+    pz = fx["nospend"]["roas"]["by_app"]["Puzzle Quest"]
+    for key in ("daily", "convval_day1_daily", "convval_d0day_daily"):
+        pz[key] = {d: v for d, v in pz.get(key, {}).items() if d not in WIN}
+    pz["d0_open"] = ["2026-01-05"]
     assert "d0" not in fx["nod0"]["roas"] and fx["fill"]["roas"]["d0"]["drift"]["pct"] == 1.0
     assert fx["nofixed"]["roas"]["d0"] == {"lag_h": 4, "incomplete": True}
     assert "incomplete" not in fx["fill"]["roas"]["d0"] and fx["partial"]["roas"]["d0"]["incomplete"] is True
@@ -923,31 +937,92 @@ def ov(tmp_path_factory):
     return {k: v["ov"] for k, v in rep["other"].items()} | {"_fx": fx}
 
 
-def _cells(h):
-    """{app: (title attr | None, [line texts]) of the D0 rev cell} of the Revenue-by-app table."""
+def _tds(h):
+    """{app: (title attr | None, inner html) of the D0 rev cell} of the Revenue-by-app table."""
     out = {}
     for tr in re.findall(r'<tr class="clk"[^>]*>(.*?)</tr>', h, re.S):
         tds = re.findall(r"<td([^>]*)>(.*?)</td>", tr, re.S)
         name = next(n for n in ("Demo Gallery", "Puzzle Quest", SOLO) if n in TAG.sub("", tds[0][1]))
         attrs, body = tds[4]
         t = re.search(r'title="([^"]*)"', attrs)
-        lines = [TAG.sub("", x).strip() for x in re.split(r"<div[^>]*>", body)]
-        out[name] = (t.group(1) if t else None, [x for x in lines if x])
+        out[name] = (t.group(1) if t else None, body)
     return out
 
 
-PRE = "24h = har install ke click ke 24 ghante ki value (Google Ads). "        # the tooltip's 24h part starts so
-DAY_PRE = "Day = install ke din raat 12 baje tak — agle din subah ka Google Ads number."   # (no Day read time known)
+# the D0 grid, pinned exactly: always 3 columns (label | amount | ROAS), gap 2px 4px — no ⏳ or k/n column
+GRID = re.compile(r'^<div style="display:grid;grid-template-columns:repeat\(3,auto\);gap:2px 4px;'
+                  r'align-items:baseline;justify-content:start">(.*)</div>$', re.S)
+# one grid row = exactly 3 cells: the label; the amount — with a small faint "*" (By date partial) and then a small
+# " ⏳" (the row still filling) INSIDE its span; the ROAS (neutral, as before; empty when none)
+ROW = re.compile(r'<span class="faint" style="font-size:10px">([^<]*)</span>'
+                 r'<span style="text-align:right">([^<]*)(<span class="faint" style="font-size:10px">\*</span>)?'
+                 r'(<span style="font-size:10px"> ⏳</span>)?</span>'
+                 r'<span class="muted" style="font-size:11px;text-align:right">([^<]*)</span>')
+
+
+def _grid_rows(body):
+    """The grid's two rows as ROW matches (None: not the grid). Nothing else in the box: the two rows cover it."""
+    m = GRID.match(body)
+    if not m:
+        return None
+    rows = list(ROW.finditer(m.group(1)))
+    assert "".join(r.group(0) for r in rows) == m.group(1) and len(rows) == 2, body
+    return rows
+
+
+def _rows(h):
+    """{app: [By date row, By 24h row]} of a D0 cell on the grid (data with roas.d0; None: not a grid). A row: {lab,
+    amt (the bare amount), fill (a ⏳ inside the amount), roas ("" when none), star (a "*" inside the amount: By date
+    partial — the tooltip says k/n)}."""
+    out = {}
+    for app, (_, body) in _tds(h).items():
+        rows = _grid_rows(body)
+        if rows is None:
+            out[app] = None
+            continue
+        out[app] = [{"lab": r.group(1), "amt": r.group(2), "fill": r.group(4) is not None, "roas": r.group(5),
+                     "star": r.group(3) is not None} for r in rows]
+        assert all("*" not in r["amt"] and "⏳" not in r["amt"] for r in out[app]), body
+    return out
+
+
+def _cells(h):
+    """{app: (title attr | None, [line texts]) of the D0 rev cell}: on the grid, one line per row — its non-empty cells'
+    text joined by a space ("By date $85* 0.28×", "By 24h $240 ⏳ 0.30×"); else the cell's <div> lines, as before."""
+    out = {}
+    for app, (t, body) in _tds(h).items():
+        rows = _grid_rows(body)
+        if rows is not None:
+            # the amount cell's text as shown: "$85", "$85*", "$240 ⏳", "— ⏳"
+            out[app] = (t, [" ".join(x for x in (r.group(1), r.group(2) + TAG.sub("", (r.group(3) or "")
+                                                                                 + (r.group(4) or "")), r.group(5))
+                                     if x) for r in rows])
+        else:
+            lines = [TAG.sub("", x).strip() for x in re.split(r"<div[^>]*>", body)]
+            out[app] = (t, [x for x in lines if x])
+    return out
+
+
+def _fills(h, app):
+    """[By date row filling?, By 24h row filling?]: where the ⏳ sits."""
+    return [r["fill"] for r in _rows(h)[app]]
+
+
+PRE = "By 24h = har install ke click se 24 ghante ki kamai (Google Ads). "      # the tooltip's By 24h part starts so
+DAY_HEAD = "By date = install ki date ka D0: raat 12 baje tak ki kamai — "         # … and its By date part (first)
+DAY_PRE = DAY_HEAD + "agle din subah ka Google Ads number, phir fix."             # (no Day read time known)
 
 
 def _t24(tip):
-    """The tooltip's 24h part (its first line)."""
-    return tip.split("\n")[0]
+    """The tooltip's By 24h part: its second (last) line, after the By date part."""
+    lines = tip.split("\n")
+    assert len(lines) == 2 and lines[0].startswith(DAY_HEAD), lines
+    return lines[1]
 
 
 def _tday(tip):
-    """The tooltip's Day part (its last line)."""
-    return tip.split("\n")[-1]
+    """The tooltip's By date part (its first line)."""
+    return tip.split("\n")[0]
 
 
 def _d0_roas(fx, app):
@@ -956,7 +1031,8 @@ def _d0_roas(fx, app):
 
 
 def test_overview_heads_say_d0(ov):
-    for k, sub in (("fill", "24h / Day"), ("day", "24h / Day"), ("nod0", "first 24h")):     # data before the D0 fix:
+    for k, sub in (("fill", "by date / by 24h"), ("day", "by date / by 24h"),               # the rows, in order
+                   ("nod0", "first 24h")):                                                  # data before the D0 fix:
         for view in ("USD", "INR"):                                                         # as before
             h = ov[f"{k}|{view}"]
             assert "<th>D0 rev<div" in h and ">Google Ads · %s</div>" % sub in h
@@ -969,40 +1045,55 @@ def test_d0_number_and_roas_in_both_views(ov):
         fx = ov["_fx"][k]
         usd, inr = _cells(ov[f"{k}|USD"]), _cells(ov[f"{k}|INR"])
         # by hand (₹90 a dollar): Demo ₹2,700 × 8 days = ₹21,600 ($240) ÷ ₹72,000 spend → 0.30×; Puzzle ₹1,800 × 4 =
-        # ₹7,200 ($80) ÷ ₹18,000 → 0.40× — Google Ads' own ₹ ÷ ₹, in both views. Line 1 ("24h"); before the D0 fix
-        # (nod0): the number and the ROAS on lines of their own, as before
-        one = (lambda c, a: c[a][1][:2]) if k == "nod0" else (lambda c, a: c[a][1][0].split(" ")[1::2])
+        # ₹7,200 ($80) ÷ ₹18,000 → 0.40× — Google Ads' own ₹ ÷ ₹, in both views. The "By 24h" row (the second);
+        # before the D0 fix (nod0): the number and the ROAS on lines of their own, as before
+        usd, inr = ((_cells if k == "nod0" else _rows)(ov[f"{k}|{v}"]) for v in ("USD", "INR"))
+
+        def one(c, a):
+            return c[a][1][:2] if k == "nod0" else [c[a][1]["amt"], c[a][1]["roas"]]
         assert one(usd, "Demo Gallery") == ["$240", "0.30×"] and one(inr, "Demo Gallery") == ["₹21,600", "0.30×"]
         assert one(usd, "Puzzle Quest") == ["$80", "0.40×"] and one(inr, "Puzzle Quest") == ["₹7,200", "0.40×"]
         for app in ("Demo Gallery", "Puzzle Quest"):
             assert one(usd, app)[1] == "%.2f×" % _d0_roas(fx, app)                 # Σ D0 ÷ Σ one-rate spend
             if k != "nod0":
-                assert usd[app][1][0] == "24h %s · %s" % tuple(one(usd, app))
+                assert [r["lab"] for r in usd[app]] == ["By date", "By 24h"] and usd[app][1]["star"] is False
     # the Spend + ROAS cell in $ reads the dated view (each day at its own rate: another ROAS); the D0 ROAS does not
     spend_roas = lambda h: re.search(r'<td style="font-weight:700">[^<]*<div class="(?:up|down)"[^>]*>([\d.]+×)</div>', h).group(1)
     assert spend_roas(ov["fill|USD"]) != spend_roas(ov["fill|INR"])
-    assert re.search(r'<span class="muted" style="font-size:11px">· 0\.30×</span>', ov["fill|USD"])    # neutral
+    neutral = r'<span class="muted" style="font-size:11px;text-align:right">0\.30×</span>'      # neutral, as before
+    assert re.search(neutral, ov["fill|USD"])
     assert re.search(r'<div class="muted" style="font-size:11px;margin-top:2px">0\.30×</div>', ov["nod0|USD"])
+    # data before the D0 fix: the cell and the head byte for byte as before
+    for view, demo in (("USD", "$240"), ("INR", "₹21,600")):
+        tr = next(t for t in re.findall(r'<tr class="clk"[^>]*>(.*?)</tr>', ov[f"nod0|{view}"], re.S)
+                  if "Demo Gallery" in t)
+        assert re.findall(r"<td[^>]*>.*?</td>", tr, re.S)[4] == (
+            "<td>" + demo + '<div class="muted" style="font-size:11px;margin-top:2px">0.30×</div></td>')
+        assert ('<th>D0 rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads · '
+                'first 24h</div></th>') in ov[f"nod0|{view}"]
 
 
-def test_filling_line_and_tooltip(ov):
+def test_filling_row_and_tooltip(ov):
     c = _cells(ov["fill|USD"])
     tip, lines = c["Demo Gallery"]
-    assert lines[1:] == ["Day —", "⏳ 24h filling"]                # data without a Day number yet: only 24h fills
+    # data without a Day number yet: By date '—' with no ROAS and no "*"; only By 24h fills — its ⏳ inside its amount,
+    # no status line of its own
+    assert lines == ["By date —", "By 24h $240 ⏳ 0.30×"] and _fills(ov["fill|USD"], "Demo Gallery") == [False, True]
+    assert _rows(ov["fill|USD"])["Demo Gallery"][0] == {"lab": "By date", "amt": "—", "fill": False, "roas": "",
+                                                        "star": False}
     assert _t24(tip) == (PRE + "2 din (6 Jan–7 Jan) abhi bhar raha hai — "
                          "~8 Jan, 04:00 IST ke baad fix, phir ye number nahi badlega.")
     # data from before the Day number (no moment, nothing taken): no date named — today's still has its morning ahead
-    assert _tday(tip) == (DAY_PRE + " Day number abhi shuru nahi hua (Google Ads subah wala purana number nahi rakhta) "
-                          "— pehla number agli subah ke read se aayega.")
+    assert _tday(tip) == (DAY_PRE + " By date number abhi shuru nahi hua (Google Ads subah wala purana number nahi "
+                          "rakhta) — pehla number agli subah ke read se aayega.")
     tip, lines = c["Puzzle Quest"]                                  # its dates end 5 Jan: all fixed
     # the drift is all apps' together (merge_spend measures it so) — the tooltip says so, never as this app's own
-    assert lines == ["24h $80 · 0.40×", "Day —"] and _t24(tip) == (
+    assert lines == ["By date —", "By 24h $80 0.40×"] and _t24(tip) == (
         PRE + "Fixed — ye number ab nahi badlega. Fix ke baad Google Ads ne (sab apps milake, "
         "pichhle 5 fixed din) +1.0% aur joda (late events); fix wala number nahi badla.")
-    assert _cells(ov["fill|INR"])["Demo Gallery"] == (c["Demo Gallery"][0], ["24h ₹21,600 · 0.30×", "Day —",
-                                                                             "⏳ 24h filling"])
+    assert _cells(ov["fill|INR"])["Demo Gallery"] == (c["Demo Gallery"][0], ["By date —", "By 24h ₹21,600 ⏳ 0.30×"])
     late = _cells(ov["late|USD"])["Demo Gallery"]
-    assert late[1][2:] == ["⏳ 24h filling"]
+    assert _fills(ov["late|USD"], "Demo Gallery") == [False, True]
     assert _t24(late[0]).endswith("abhi bhar raha hai — agle refresh me fix, phir ye number nahi badlega.")
 
 
@@ -1010,7 +1101,8 @@ def test_all_fixed_and_no_d0_payload(ov):
     for view in ("USD", "INR"):
         c = _cells(ov[f"fixed|{view}"])
         for app in ("Demo Gallery", "Puzzle Quest"):
-            assert len(c[app][1]) == 2 and c[app][0].startswith(PRE + "Fixed — ye number ab nahi badlega.")
+            assert len(c[app][1]) == 2 and _t24(c[app][0]).startswith(PRE + "Fixed — ye number ab nahi badlega.")
+            assert _fills(ov[f"fixed|{view}"], app) == [False, False]
         assert "⏳" not in ov[f"fixed|{view}"]
         n = _cells(ov[f"nod0|{view}"])
         assert all(t is None and len(lines) == 2 for t, lines in n.values())
@@ -1025,34 +1117,34 @@ def test_a_plain_dash_gets_no_tooltip(ov):
         c = _cells(h)
         assert c[SOLO] == (None, ["—"])
         assert re.search(r'<td>—</td>', h)
-        assert c["Demo Gallery"][1][2:] == ["⏳ 24h filling"] and c["Puzzle Quest"][0].startswith(PRE + "Fixed")
+        assert _fills(h, "Demo Gallery") == [False, True] and _t24(c["Puzzle Quest"][0]).startswith(PRE + "Fixed")
 
 
 def test_an_incomplete_read_never_puts_the_fix_time_days_late(ov):
     c = _cells(ov["partial|USD"])
     tip, lines = c["Puzzle Quest"]                  # 3–5 Jan pending, all final by Google's clock already
-    assert lines[2:] == ["⏳ 24h filling"]
+    assert _fills(ov["partial|USD"], "Puzzle Quest") == [False, True]
     # … but the latest read fixed nothing (incomplete): no "agle refresh me fix" promise — only with a full read
     assert _t24(tip) == (PRE + "3 din (3 Jan–5 Jan) abhi bhar raha hai — "
                          "pichhle refresh me Google Ads ka poora D0 read nahi mila; poora read milte hi fix, phir ye "
                          "number nahi badlega.")
     at = PART_NEXT + timedelta(days=1, hours=5, minutes=30)            # 7 Jan's moment (6 Jan's + 1 day), in IST
     tip, lines = c["Demo Gallery"]
-    assert lines[2:] == ["⏳ 24h filling"]
+    assert _fills(ov["partial|USD"], "Demo Gallery") == [False, True]
     assert _t24(tip) == (PRE + "5 din (3 Jan–7 Jan) abhi bhar raha hai — "
                          "~%d %s, %s IST ke baad fix, phir ye number nahi badlega." % (at.day, at.strftime("%b"),
                                                                                       at.strftime("%H:%M")))
 
 
 def test_nothing_fixed_yet_says_so(ov):
-    """roas.d0 without fixed_till (every read so far incomplete): Google's live number, '⏳ filling' on every app with a
-    D0 or spend day in the period, and a tooltip that claims no fixing time."""
+    """roas.d0 without fixed_till (every read so far incomplete): Google's live number, ⏳ on the By 24h row of every app
+    with a D0 or spend day in the period, and a tooltip that claims no fixing time."""
     for view in ("USD", "INR"):
         h = ov[f"nofixed|{view}"]
         c = _cells(h)
         assert _t24(c["Puzzle Quest"][0]) == (PRE + "Abhi tak koi din fix nahi hua (Google Ads ka poora read abhi "
                                               "nahi mila) — 4 din (2 Jan–5 Jan) ka number abhi badal sakta hai.")
-        assert all(lines[2:] == ["⏳ 24h filling"] for _, lines in c.values()), c
+        assert sorted(c) == ["Demo Gallery", "Puzzle Quest"] and all(_fills(h, a) == [False, True] for a in c), c
         assert "Fixed" not in h and "ke baad fix" not in h
 
 
@@ -1060,7 +1152,7 @@ def test_a_paid_app_fixed_at_zero_shows_zero(ov):
     for view, z in (("USD", "$0"), ("INR", "₹0")):
         c = _cells(ov[f"zero|{view}"])
         tip, lines = c["Puzzle Quest"]
-        assert lines == ["24h %s · 0.00×" % z, "Day —"]
+        assert lines == ["By date —", "By 24h %s 0.00×" % z]
         assert _t24(tip) == (PRE + "Fixed — ye number ab nahi badlega. Fix ke baad Google Ads ka number (sab apps "
                              "milake, pichhle 5 fixed din) nahi badla.")
     org = _cells(ov["organic|USD"])[SOLO]
@@ -1071,11 +1163,11 @@ def test_open_dates_a_waiting_account_and_the_backends_moment(ov):
     for view in ("USD", "INR"):
         c = _cells(ov[f"wait|{view}"])
         tip, lines = c["Demo Gallery"]                              # 4–5 Jan ≤ fixed_till but still open for it
-        assert lines[2:] == ["⏳ 24h filling"]
+        assert _fills(ov[f"wait|{view}"], "Demo Gallery") == [False, True]
         assert _t24(tip) == (PRE + "4 din (4 Jan–7 Jan) abhi bhar raha hai — "
                              "~8 Jan, 05:00 IST ke baad fix, phir ye number nahi badlega.")   # fix_at, not 24 h step
         tip, lines = c["Puzzle Quest"]
-        assert lines[2:] == ["⏳ 24h filling"]
+        assert _fills(ov[f"wait|{view}"], "Puzzle Quest") == [False, True]
         assert _t24(tip) == (PRE + "5 Jan abhi bhar raha hai — is app ka ek Google Ads account abhi read nahi ho raha "
                              "(access); wapas read hote hi fix, phir ye number nahi badlega.")
     assert "~8 Jan, 04:00 IST ke baad fix" in _cells(ov["fill|USD"])["Demo Gallery"][0]    # no fix_at: the 24 h step
@@ -1087,7 +1179,7 @@ def test_a_waiting_app_with_a_date_not_final_yet_gives_its_time(ov):
     for view in ("USD", "INR"):
         c = _cells(ov[f"waitfwd|{view}"])
         tip, lines = c["Demo Gallery"]
-        assert lines[2:] == ["⏳ 24h filling"]
+        assert _fills(ov[f"waitfwd|{view}"], "Demo Gallery") == [False, True]
         assert _t24(tip) == (PRE + "4 din (4 Jan–7 Jan) abhi bhar raha hai — is app ka ek Google Ads account abhi "
                              "read nahi ho raha (access); account wapas read hone par aur ~8 Jan, 05:00 IST ke baad "
                              "fix, phir ye number nahi badlega.")
@@ -1573,10 +1665,10 @@ def test_the_campaign_store_never_reads_the_day_keys(tmp_path):
     assert gcd.ties(mf, day, days[0], days[-1]) == gcd.ties(mf, spend, days[0], days[-1])
 
 
-# ── 9. the Day line on the page, run for real ─────────────────────────────────────────────────────────────────────────
+# ── 9. the By date row on the page, run for real ─────────────────────────────────────────────────────────────────────
 def _day_tip(hh, rest, when="agle din"):
     h = int(hh[:2])
-    return "Day = install ke din raat 12 baje tak — %s%s ~%s IST ka Google Ads number.%s" % (
+    return DAY_HEAD + "%s%s ~%s IST ka Google Ads number, phir fix.%s" % (
         when, " subah" if 4 <= h < 12 else " raat" if h < 4 or h >= 21 else "", hh, rest)
 
 
@@ -1590,66 +1682,128 @@ def _ist(t):
     return "%d %s, %s IST" % (t.day, t.strftime("%b"), t.strftime("%H:%M"))
 
 
-OLD = (" Day number 2 Jan se hai (Google Ads subah wala purana number nahi rakhta) — 2 din (31 Dec 2025–1 Jan 2026)"
+OLD = (" By date number 2 Jan se hai (Google Ads subah wala purana number nahi rakhta) — 2 din (31 Dec 2025–1 Jan 2026)"
        " ka nahi hai.")
-GONE = " — us subah Google Ads ka poora read nahi mila, isliye Day number nahi hai."   # any cause: no run, late, an
-                                                                                        # incomplete or unread account
+GONE = " — us subah Google Ads ka poora read nahi mila, isliye By date number nahi hai."   # any cause: no run, late,
+                                                                                         # an incomplete/unread account
 
 
-def test_day_two_lines_and_roas_in_both_views(ov):
+def test_day_two_rows_and_roas_in_both_views(ov):
     """By hand (₹90 a dollar): Demo's Day numbers 3, 5, 6 Jan = ₹2,430 + ₹2,520 + ₹2,700 = ₹7,650 ($85) over those 3
-    of its 8 spend days (₹27,000) → 0.28×, "· 3/8 days"; Puzzle's 2–5 Jan = ₹1,620 + ₹1,710 + ₹1,530 + ₹1,440 = ₹6,300
-    ($70) over all 4 spend days (₹18,000) → 0.35×. Line 1 (24h) as before; both ROAS the same in ₹ and $."""
+    of its 8 spend days (₹27,000) → 0.28×, partial: a "*" on its amount, the tooltip says "3/8 din"; Puzzle's 2–5 Jan
+    = ₹1,620 + ₹1,710 + ₹1,530 + ₹1,440 = ₹6,300 ($70) over all 4 spend days (₹18,000) → 0.35×, complete: no "*", no
+    k/n. Rows "By date" then "By 24h" (as before); both ROAS the same in ₹ and $."""
+    def no_fill(rows):
+        return [(r["lab"], r["amt"], r["roas"], r["star"]) for r in rows]
+
     for k in ("day", "dayfixed"):
-        usd, inr = _cells(ov[f"{k}|USD"]), _cells(ov[f"{k}|INR"])
-        assert usd["Demo Gallery"][1][:2] == ["24h $240 · 0.30×", "Day $85 · 0.28× · 3/8 days"]
-        assert inr["Demo Gallery"][1][:2] == ["24h ₹21,600 · 0.30×", "Day ₹7,650 · 0.28× · 3/8 days"]
-        assert usd["Puzzle Quest"][1] == ["24h $80 · 0.40×", "Day $70 · 0.35×"]
-        assert inr["Puzzle Quest"][1] == ["24h ₹7,200 · 0.40×", "Day ₹6,300 · 0.35×"]
+        usd, inr = _rows(ov[f"{k}|USD"]), _rows(ov[f"{k}|INR"])
+        assert no_fill(usd["Demo Gallery"]) == [("By date", "$85", "0.28×", True), ("By 24h", "$240", "0.30×", False)]
+        assert no_fill(inr["Demo Gallery"]) == [("By date", "₹7,650", "0.28×", True),
+                                                ("By 24h", "₹21,600", "0.30×", False)]
+        assert no_fill(usd["Puzzle Quest"]) == [("By date", "$70", "0.35×", False), ("By 24h", "$80", "0.40×", False)]
+        assert no_fill(inr["Puzzle Quest"]) == [("By date", "₹6,300", "0.35×", False),
+                                                ("By 24h", "₹7,200", "0.40×", False)]
+        for view in ("USD", "INR"):                                        # the k/n the "*" stands for: the tooltip
+            c = _cells(ov[f"{k}|{view}"])
+            assert " 3/8 din ka number fixed hai." in _tday(c["Demo Gallery"][0])
+            assert " din ka number fixed hai." not in _tday(c["Puzzle Quest"][0])
         for app, n in (("Demo Gallery", 3), ("Puzzle Quest", 4)):                 # Σ Day ÷ Σ one-rate spend, same dates
             e = ov["_fx"][k]["roas"]["by_app"][app]
             got = [d for d in WIN if d in e["convval_d0day_daily"]]
             assert len(got) == n
             r = sum(e["convval_d0day_daily"][d] for d in got) / (sum(e["daily"][d] for d in got) / 1e6)
-            assert usd[app][1][1].split(" ")[3] == "%.2f×" % r
+            assert usd[app][0]["roas"] == inr[app][0]["roas"] == "%.2f×" % r
     assert ov["_fx"]["day"]["roas"]["by_app"]["Demo Gallery"]["convval_d0day_daily"]["2026-01-06"] == 30.0   # taken now
 
 
-def test_day_line_wraps_only_between_its_parts(ov):
-    """Each part of a line ("Day $85", "· 0.28×", "· 3/8 days") is unbreakable, the line is not: a whole-line nowrap
-    widened the D0 column by ~95 px and pushed the table into a horizontal scroll at 1366–1440 px."""
-    nw = '<span style="white-space:nowrap">%s</span>'
-    sm = '<span class="%s" style="font-size:%dpx">%s</span>'
-    for k in ("day", "fill", "dayfixed"):
+def test_one_box_two_rows_on_one_grid(ov):
+    """One box, two aligned rows (owner: "ak hi box me rakhna he dono"): a grid of exactly 3 columns label | amount |
+    ROAS, whatever fills or is partial — the ⏳ (a row still filling) and the "*" (By date partial) sit inside the
+    amount, never a column of their own — so the amounts (right-aligned) and the ROAS line up and no row wraps: no
+    white-space override, no other <div>, no status line. The styles are pinned exactly (GRID, ROW, the two cells below)
+    because this harness has no layout: one line a row makes the column wider than the old wrapped lines (measured
+    headless, synthetic 7–8 digit ₹ over 7 d–all time: this grid still scrolls sideways at 1280 px, ≤28 px at
+    1366/1470, none at 1440; the earlier 4–5 column grid, gap 6px, ~40 px wider, scrolled at every width), so any extra
+    column, gap or padding widens the table further — re-measure at 1280/1366/1440/1470 before changing it."""
+    for k in ("day", "fill", "dayfixed", "daylate", "daymiss", "dayholes", "dayzone", "daypend", "nospend", "nostart",
+              "partial", "zero", "wait"):
         for view in ("USD", "INR"):
-            tr = next(t for t in re.findall(r'<tr class="clk"[^>]*>(.*?)</tr>', ov[f"{k}|{view}"], re.S)
-                      if "Demo Gallery" in t)
-            td = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)[4]
-            assert "nowrap;" not in td and '<div style="white-space:nowrap' not in td   # (the td is nowrap: CSS)
-            assert td.startswith('<div style="white-space:normal"><span style="white-space:nowrap">'
-                                 + sm % ("faint", 10, "24h") + " ")
-            assert nw % (sm % ("muted", 11, "· 0.30×")) in td
-    td = re.findall(r"<td[^>]*>(.*?)</td>", next(t for t in re.findall(r'<tr class="clk"[^>]*>(.*?)</tr>',
-                                                                      ov["day|USD"], re.S) if "Demo Gallery" in t))[4]
-    assert ('<div style="white-space:normal;margin-top:2px">' + nw % (sm % ("faint", 10, "Day") + " $85") + " "
-            + nw % (sm % ("muted", 11, "· 0.28×")) + " " + nw % (sm % ("faint", 10, "· 3/8 days")) + "</div>") in td
+            h = ov[f"{k}|{view}"]
+            for app, (tip, body) in _tds(h).items():
+                rows = _rows(h)[app]                                         # GRID + ROW: 3 columns, 2 rows exactly
+                assert GRID.match(body) and body.count("<div") == 1, body
+                assert "white-space" not in body and "filling" not in body, body
+                assert [r["lab"] for r in rows] == ["By date", "By 24h"] and tip.startswith(DAY_HEAD)
+                # the "*" only on By date and only when it is partial: exactly when the tooltip says k/n
+                partial = re.search(r" \d+/\d+ din ka number fixed hai\.", _tday(tip)) is not None
+                assert rows[0]["star"] == partial and rows[1]["star"] is False and body.count("*") == partial, body
+                assert body.count("⏳") == sum(r["fill"] for r in rows)
+                for r in rows:                                               # a missing value: '—', no ROAS
+                    assert r["amt"] != "—" or (r["roas"] == "" and not r["star"])
+    # the HTML of one cell, by hand: Day 7 Jan and 24h 6–7 Jan both filling, By date partial
+    assert _tds(ov["day|USD"])["Demo Gallery"][1] == (
+        '<div style="display:grid;grid-template-columns:repeat(3,auto);gap:2px 4px;align-items:baseline;'
+        'justify-content:start">'
+        '<span class="faint" style="font-size:10px">By date</span><span style="text-align:right">$85'
+        '<span class="faint" style="font-size:10px">*</span><span style="font-size:10px"> ⏳</span></span>'
+        '<span class="muted" style="font-size:11px;text-align:right">0.28×</span>'
+        '<span class="faint" style="font-size:10px">By 24h</span><span style="text-align:right">$240'
+        '<span style="font-size:10px"> ⏳</span></span>'
+        '<span class="muted" style="font-size:11px;text-align:right">0.30×</span></div>')
+    # nothing filling, By date complete: the same three columns, the amounts bare
+    assert _tds(ov["daymiss|INR"])["Puzzle Quest"][1] == (
+        '<div style="display:grid;grid-template-columns:repeat(3,auto);gap:2px 4px;align-items:baseline;'
+        'justify-content:start">'
+        '<span class="faint" style="font-size:10px">By date</span><span style="text-align:right">₹6,300</span>'
+        '<span class="muted" style="font-size:11px;text-align:right">0.35×</span>'
+        '<span class="faint" style="font-size:10px">By 24h</span><span style="text-align:right">₹7,200</span>'
+        '<span class="muted" style="font-size:11px;text-align:right">0.40×</span></div>')
 
 
-def test_day_the_three_filling_lines(ov):
-    assert _cells(ov["day|USD"])["Demo Gallery"][1][2:] == ["⏳ filling"]           # 24h 6–7 Jan + Day 7 Jan
-    assert _cells(ov["fill|USD"])["Demo Gallery"][1][2:] == ["⏳ 24h filling"]      # no Day number to wait for
-    assert _cells(ov["dayfixed|USD"])["Demo Gallery"][1][2:] == ["⏳ Day filling"]  # 24h all fixed
-    assert _cells(ov["daylate|INR"])["Demo Gallery"][1][2:] == ["⏳ Day filling"]   # its morning read can still come
-    assert len(_cells(ov["daymiss|USD"])["Demo Gallery"][1]) == 2                  # missed: nothing filling
+def test_day_the_hourglass_sits_on_the_filling_row_only(ov):
+    assert _fills(ov["day|USD"], "Demo Gallery") == [True, True]          # Day 7 Jan + 24h 6–7 Jan
+    assert _fills(ov["fill|USD"], "Demo Gallery") == [False, True]        # no Day number to wait for
+    assert _fills(ov["dayfixed|USD"], "Demo Gallery") == [True, False]    # 24h all fixed
+    assert _fills(ov["daylate|INR"], "Demo Gallery") == [True, False]     # its morning read can still come
+    assert _fills(ov["daymiss|USD"], "Demo Gallery") == [False, False]    # missed: nothing filling …
+    assert _cells(ov["daymiss|USD"])["Demo Gallery"][1] == ["By date $85* 0.28×", "By 24h $240 0.30×"]
+    assert "⏳" not in _tds(ov["daymiss|USD"])["Demo Gallery"][1]           # … no ⏳ at all
     for k in ("day", "dayfixed", "daylate", "daymiss"):
-        assert len(_cells(ov[f"{k}|USD"])["Puzzle Quest"][1]) == 2                 # every date taken, 24h fixed
+        assert _fills(ov[f"{k}|USD"], "Puzzle Quest") == [False, False]   # every date taken, 24h fixed
+    # partial By date: a "*" on its amount only (the tooltip says 2/8); complete: no "*" anywhere in the cell
+    assert [r["star"] for r in _rows(ov["dayholes|USD"])["Demo Gallery"]] == [True, False]
+    assert " 2/8 din ka number fixed hai." in _tday(_cells(ov["dayholes|USD"])["Demo Gallery"][0])
+    assert [r["star"] for r in _rows(ov["day|INR"])["Puzzle Quest"]] == [False, False]
+    assert "*" not in _tds(ov["day|INR"])["Puzzle Quest"][1]
 
 
-def test_day_tooltip_says_what_each_line_is_and_when_it_fixes(ov):
+def test_the_star_on_any_open_date_and_no_roas_on_a_missing_24h(ov):
+    """Edges the fixtures above miss. "daypend": By date short by ONE spend date, and that date still filling (none
+    missed) — the "*" all the same (k/n = 7/8), with its ⏳. By hand (₹90 a dollar): 31 Dec–4 Jan $27 each (3 Jan's
+    ₹2,430 too) + 5 Jan $28 + 6 Jan $30 = $193 (₹17,370) over 7 of Demo's 8 spend days ($700) → 0.28×. "nospend": an
+    app with no spend and no D0 in the period, its 24h date still open — both rows '—', no ROAS and no "*" on either;
+    the ⏳ on By 24h only."""
+    for view, amt in (("USD", "$193"), ("INR", "₹17,370")):
+        h = ov[f"daypend|{view}"]
+        tip, lines = _cells(h)["Demo Gallery"]
+        assert _rows(h)["Demo Gallery"][0] == {"lab": "By date", "amt": amt, "fill": True, "roas": "0.28×",
+                                               "star": True}
+        assert _rows(h)["Demo Gallery"][1]["star"] is False and lines[0] == "By date %s* ⏳ 0.28×" % amt
+        assert _tday(tip) == _day_tip(_hh(PART_NEXT), " 7/8 din ka number fixed hai. 7 Jan abhi bhar raha hai — ~%s "
+                                      "ke baad fix, phir ye number nahi badlega." % _ist(PART_NEXT))
+        h = ov[f"nospend|{view}"]
+        assert _rows(h)["Puzzle Quest"] == [{"lab": "By date", "amt": "—", "fill": False, "roas": "", "star": False},
+                                            {"lab": "By 24h", "amt": "—", "fill": True, "roas": "", "star": False}]
+        assert _cells(h)["Puzzle Quest"][1] == ["By date —", "By 24h — ⏳"]
+
+
+def test_day_tooltip_says_what_each_row_is_and_when_it_fixes(ov):
     for view in ("USD", "INR"):
         c = _cells(ov[f"day|{view}"])
         tip = c["Demo Gallery"][0]
-        assert tip.split("\n")[0] == _t24(_cells(ov[f"fill|{view}"])["Demo Gallery"][0])    # the 24h part as before
+        # By date first, then the By 24h part as before (_t24 checks the order)
+        assert _t24(tip) == _t24(_cells(ov[f"fill|{view}"])["Demo Gallery"][0])
         # the clock time: the app's Day moment (its stores' zone; the same each day); 7 Jan fixes at its moment; the
         # missed 2 and 4 Jan named (3 Jan has a number)
         assert _tday(tip) == _day_tip(_hh(PART_NEXT), " 3/8 din ka number fixed hai. 7 Jan abhi bhar raha hai — ~%s ke "
@@ -1675,29 +1829,32 @@ def test_day_each_app_at_its_own_moment(ov):
     install date in IST: "usi din raat"; one in the IST evening: "agle din", no "subah"."""
     c = _cells(ov["dayzone|USD"])
     tip, lines = c["Demo Gallery"]
-    assert lines[2:] == ["⏳ Day filling"]
+    assert _fills(ov["dayzone|USD"], "Demo Gallery") == [True, False]
     assert _tday(tip) == _day_tip(_hh(PART_NEXT), " 3/8 din ka number fixed hai. 7 Jan abhi bhar raha hai — ~%s ke "
                                   "baad fix, phir ye number nahi badlega.%s 2 Jan, 4 Jan%s"
                                   % (_ist(PART_NEXT), OLD, GONE))
     c = _cells(ov["daylater|USD"])
     assert _tday(c["Puzzle Quest"][0]) == _day_tip("22:30", " Fixed — ye number ab nahi badlega.", when="usi din")
-    assert _tday(c["Demo Gallery"][0]).startswith("Day = install ke din raat 12 baje tak — agle din ~17:30 IST ka ")
+    assert _tday(c["Demo Gallery"][0]).startswith(DAY_HEAD + "agle din ~17:30 IST ka ")
 
 
 def test_day_before_the_first_number(ov):
-    """Day keys with nothing taken yet (just switched on): "Day —", 7 Jan filling at its moment, every earlier date
-    "abhi shuru nahi hua"; the 24h line unchanged."""
+    """Day keys with nothing taken yet (just switched on): "By date —" (no ROAS) with ⏳ — 7 Jan filling at its moment —
+    every earlier date "abhi shuru nahi hua"; the By 24h row unchanged."""
     hh = (PART_NEXT + timedelta(hours=5, minutes=30)).strftime("%H:%M")
     for view in ("USD", "INR"):
         c = _cells(ov[f"nostart|{view}"])
         tip, lines = c["Demo Gallery"]
-        assert lines[1:] == ["Day —", "⏳ filling"] and lines[0] == _cells(ov[f"fill|{view}"])["Demo Gallery"][1][0]
+        assert lines == ["By date — ⏳", _cells(ov[f"fill|{view}"])["Demo Gallery"][1][1]]
+        assert _rows(ov[f"nostart|{view}"])["Demo Gallery"][0] == {"lab": "By date", "amt": "—", "fill": True,
+                                                                   "roas": "", "star": False}
         assert _tday(tip) == _day_tip(hh, " 7 Jan abhi bhar raha hai — ~%s ke baad fix, phir ye number nahi badlega. "
-                                      "Day number abhi shuru nahi hua (Google Ads subah wala purana number nahi "
+                                      "By date number abhi shuru nahi hua (Google Ads subah wala purana number nahi "
                                       "rakhta) — 7 din (31 Dec 2025–6 Jan 2026) ka nahi hai." % _ist(PART_NEXT))
         tip, lines = c["Puzzle Quest"]
-        assert lines == [lines[0], "Day —"] and _tday(tip) == _day_tip(
-            hh, " Day number abhi shuru nahi hua (Google Ads subah wala purana number nahi rakhta) — 4 din "
+        assert lines == ["By date —", _cells(ov[f"fill|{view}"])["Puzzle Quest"][1][1]] and _tday(tip) == _day_tip(
+            hh, " By date number abhi shuru nahi hua (Google Ads subah wala purana number nahi rakhta) — 4 din "
                 "(2 Jan–5 Jan) ka nahi hai.")
     for view in ("USD", "INR"):                                                    # no roas.d0: as before
-        assert all(t is None and not any("Day" in x for x in ln) for t, ln in _cells(ov[f"nod0|{view}"]).values())
+        assert all(t is None and not any("Day" in x or "By " in x for x in ln)
+                   for t, ln in _cells(ov[f"nod0|{view}"]).values())
