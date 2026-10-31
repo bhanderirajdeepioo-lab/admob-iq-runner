@@ -142,6 +142,10 @@ jobs:
           # Traffic acquisition by session channel per app per day. GA4_SOURCE=false stops the reads without a code push
           GA4_SOURCE:           ${{ vars.GA4_SOURCE || 'true' }}
           GA4_SOURCE_BUDGET_SEC: ${{ vars.GA4_SOURCE_BUDGET_SEC }}
+          # 📱 Devices (admob_iq/fetch/ga4_device.py; data/ga4_device/ in the private repo): GA4 by phone model × country per
+          # install day for the ROI tab's Devices view. GA4_DEVICE=false stops the reads without a code push
+          GA4_DEVICE:           ${{ vars.GA4_DEVICE || 'true' }}
+          GA4_DEVICE_BUDGET_SEC: ${{ vars.GA4_DEVICE_BUDGET_SEC }}
           # 📈 Day-wise ROI: every day 0 … 30 of each install day's GA4 ad revenue (admob_iq/fetch/ga4_cohort.py;
           # data/ga4_cohort/ in the private repo, kept for good): GA4_COHORT=false stops the reads without a code push;
           # ROI_TAB=false takes the ROI section off the Install value tab

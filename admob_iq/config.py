@@ -132,6 +132,11 @@ def settings() -> dict:
         # GA4_SOURCE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_source": _env("GA4_SOURCE", "false").lower() == "true",
         "ga4_source_budget_sec": _int_env(("GA4_SOURCE_BUDGET_SEC",), 0),
+        # 📱 Devices: GA4 by phone model × country per install day (fetch.ga4_device: installs, paid, back next day and
+        # revenue at 7 / 30 / 90 days, each read once). Off: nothing of it is read, written or printed (the ROI file
+        # then has no "dev" block); GA4_DEVICE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
+        "ga4_device": _env("GA4_DEVICE", "false").lower() == "true",
+        "ga4_device_budget_sec": _int_env(("GA4_DEVICE_BUDGET_SEC",), 0),
         # 📈 Day-wise ROI: every day 0 … 30 of each install day's GA4 ad revenue (fetch.ga4_cohort: a one-time backfill
         # from the GA4 history start, the last 35 days every 6 hours). Off: nothing of it is read, written or printed
         "ga4_cohort": _env("GA4_COHORT", "false").lower() == "true",

@@ -263,6 +263,7 @@ class Acc:
         self.adtz = None                            # … Google Ads store → its accounts' time zones (read once)
         self.packs = set()                          # … the country packs written this build (kept by _clean)
         self.cdn = {"apps": 0, "countries": 0, "packs": 0, "failed": 0, "geo_failed": 0}
+        self.dvn = {"apps": 0, "rows": 0, "failed": 0}  # 📱 Devices: apps with a block, model rows, failures
 
 
 def start(cal=None, adsrc=None, cube=False, cmon=None):
@@ -2007,6 +2008,34 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
     return cd
 
 
+def _dev(dst, P, pre, spend, sids, rows, data_dir):
+    """📱 Devices (device_build): the app's device store + its Google Ads cost by country × install day (the 🌍 Countries
+    cost: _geo_app over its own stores, in USD at each day's rate) + its AdMob ÷ GA4 per install month + its own revenue
+    curve past 30 / 90 days → the ROI file's "dev" block, or None."""
+    from . import device_build as dvb
+    from .fetch import ga4_device as gdv
+    f = _d(dst["F"])
+    win = gdv.windows(f)
+    lo, hi = min(w[0] for w in win.values()), max(w[1] for w in win.values())
+    days = [lo + timedelta(days=i) for i in range((hi - lo).days + 1)]
+    cost_usd, unk = {}, set()
+    if sids and spend:
+        from .fetch import gads_geo_day as gdd
+        geo = gdd.load(data_dir, keep=set(sids)) or {}
+        fxg = val._fx_fn((pre or {}).get("fx"), geo.get("ccy") or spend.get("ccy") or "USD")[0]
+        sdaily = ((pre or {}).get("spend") or {}).get("daily") or {}
+        cost, unk, _ = _geo_app(geo, sids, sdaily, spend, days)
+        for cc, byx in cost.items():
+            if cc == NOT_SPLIT:
+                continue
+            for X, (c, _dl) in byx.items():
+                cost_usd.setdefault(cc, {})[X] = c / 1e6 * (fxg(X) or 0)
+    elif not sids:
+        unk = set()                                     # no Google Ads store: no cost at all (the "No ads" rows)
+    kmap = _appk(P, sorted({_mkey(d) for d in days}))
+    return dvb.dev_block(dst, cost_usd, unk, lambda X: kmap.get(_mkey(X)), dvb.curve_of(rows, list(T)))
+
+
 def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids=None):
     """One app → roi_<key>.json.gz (+ its summary into acc). Never raises. ids: the AdMob apps on its Play package
     (the ⚙️ ad setting changes read their ad units together, as its revenue)."""
@@ -2074,6 +2103,15 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             cty["months"] = _cty_months(P, ida, pre, sids, fxf)
         except Exception:
             cty["months"] = {}
+        dev = None
+        try:                                            # 📱 Devices (GA4_DEVICE's store): its own try — a failure costs
+            from .fetch import ga4_device as gdv        # only this block
+            dst = gdv.load_store(gdv.store_path(data_dir, aid))
+            if dst and str(dst.get("stream_id") or "") == str(store.get("stream_id") or ""):
+                dev = _dev(dst, P, pre, spend, sids, rows, data_dir)
+        except Exception:
+            acc.dvn["failed"] += 1
+            dev = None
         body = {"v": V, "app_id": aid, "app": a["app_name"], "key": key, "tz": P["tz"], "cur": "USD",
                 "ccy": spend["ccy"] if spend else None, "S": _iso(P["S"]), "hs": _iso(P["hs"]),
                 "newest": co.get("read_today") if co else None, "spend_till": spend.get("till") if spend else None,
@@ -2083,6 +2121,10 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
                 "consts": {"n_recent": N_RECENT, "n_usual": N_USUAL, "min_spend": MIN_SPEND, "min_n": MIN_N,
                            "worse": WORSE, "watch": WATCH, "better": BETTER, "final_lag": gco.FINAL_LAG,
                            "f4": f4_consts()}}
+        if dev:
+            body["dev"] = dev
+            acc.dvn["apps"] += 1
+            acc.dvn["rows"] += len(dev["rows"])
         if late is not None:
             body["late"] = late["info"]
         if cv is not None and late is not None and "B" in late:   # 🌍 one country's install-day table (own try:
@@ -2155,7 +2197,9 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
                          "u30": (summ["pools"]["30"]["u"] or {}).get("roas"),
                          "life": [_r(lt[0], 2), _r(lt[1], 2), _r(lt[2], 2)], "cut": cty["cut"]["n"],
                          "cut_save": cty["cut"], "cpi_src": summ["cpi_src"], "nb": summ["nb"], "fc": fcs,
-                         "first": life[0][0] if life else None, "ads": bool(spend and spend.get("sids")), "f4": f4})
+                         "first": life[0][0] if life else None, "ads": bool(spend and spend.get("sids")), "f4": f4,
+                         "dv": ({k: sum(1 for x in dev["rows"] if x["st"] == k)
+                                 for k in ("Loss", "Slow", "Profit", "No ads", "Too little data")} if dev else None)})
         for d, rv, sp, spi in life:
             p = acc.life.setdefault(d, [0.0, 0.0, 0.0])
             p[0] += rv or 0
@@ -2265,6 +2309,8 @@ def finish(acc, dashboard, out_dir):
             c = acc.cdn
             LINE += "; countries: apps %d, countries %d, packs %d, failed %d, ads split unread %d" % (
                 c["apps"], c["countries"], c["packs"], c["failed"], c["geo_failed"])
+        if acc.dvn["apps"] or acc.dvn["failed"]:        # 📱 Devices (counts only)
+            LINE += "; devices: apps %d, rows %d, failed %d" % (acc.dvn["apps"], acc.dvn["rows"], acc.dvn["failed"])
         if acc.fc is not None:
             from . import forecast_build as fob
             fob.finish(acc.fc)
