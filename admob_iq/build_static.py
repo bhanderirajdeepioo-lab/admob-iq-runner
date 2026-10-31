@@ -603,6 +603,27 @@ def _firstopen_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+@_sc.timed("source_tab")
+def _source_step(dashboard, data_dir, out_dir, s):
+    """💰 Revenue by source (admob_iq.source_build, a section of the Install value tab): its lazy files from the private
+    GA4 session-channel stores, its pointer and ONE counts-only line → its _headers path (one splat rule). Switched off
+    (SOURCE_TAB=false) or failing: its files removed, nothing else changes."""
+    try:
+        from . import source_build as sb
+        if not sb.enabled(s):
+            sb.off(out_dir)
+            return []
+        paths = sb.run(dashboard, data_dir, out_dir, s)
+        line = sb.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return list(paths)
+    except Exception as e:
+        dashboard.pop("source", None)
+        print(f"source skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 def _roi_paths(dashboard):
     """📈 ROI (admob_iq.roi_build, written inside the uninstall step): its ONE counts-only line and its _headers path
     (one splat rule) when it wrote its files."""
@@ -1878,6 +1899,9 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # Active users data it leaves no file behind
     aud_paths = _audience_step(dashboard, data_dir, out_dir, s)
     aud_paths = aud_paths + _firstopen_step(dashboard, data_dir, out_dir, s) + _roi_paths(dashboard)
+    # 💰 Revenue by source (a section of the Install value tab): its lazy files from the private GA4 session-channel
+    # stores — OPTIONAL (SOURCE_TAB) and failure-isolated; without a store it leaves no file behind
+    aud_paths = aud_paths + _source_step(dashboard, data_dir, out_dir, s)
 
     _sc.step("intraday")
     # 📈 eCPM "same time yesterday": this build's point of today's totals so far (data/ecpm_intraday.json) — never for

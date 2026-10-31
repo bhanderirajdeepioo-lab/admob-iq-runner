@@ -86,6 +86,9 @@ def settings() -> dict:
         # 🆕 First open tab: first_open → Splash → Home (and Language / Permission / Intro) per app per day, the strict GA4
         # funnel kept for good by fetch.ga4_firstopen (firstopen.json.gz, one lazy file) — off: no file, no pointer
         "firstopen_tab": _env("FIRSTOPEN_TAB", "true").lower() == "true",
+        # 💰 Revenue by source (Install value tab: Paid / Notification / Organic from GA4's session channel): SOURCE_TAB=false
+        # removes its files and pointer without a code push
+        "source_tab": _env("SOURCE_TAB", "true").lower() == "true",
         # 🗂 Review Studio: the Review tab's Studio (review/studio/<day>.json.gz, one lazy file per review day, frozen with
         # that day's cards; never an alert) — off: no file, no pointer, the older Review tab exactly as before
         "review_studio": _env("REVIEW_STUDIO", "true").lower() == "true",
@@ -124,6 +127,11 @@ def settings() -> dict:
         # printed; GA4_FIRSTOPEN_CC_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_firstopen_cc": _env("GA4_FIRSTOPEN_CC", "false").lower() == "true",
         "ga4_firstopen_cc_budget_sec": _int_env(("GA4_FIRSTOPEN_CC_BUDGET_SEC",), 0),
+        # 💰 Revenue by source: GA4 Traffic acquisition by session channel, per app per day (fetch.ga4_source: the last 5
+        # days every hour, the history newest first). Off: nothing of it is read, written or printed;
+        # GA4_SOURCE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
+        "ga4_source": _env("GA4_SOURCE", "false").lower() == "true",
+        "ga4_source_budget_sec": _int_env(("GA4_SOURCE_BUDGET_SEC",), 0),
         # 📈 Day-wise ROI: every day 0 … 30 of each install day's GA4 ad revenue (fetch.ga4_cohort: a one-time backfill
         # from the GA4 history start, the last 35 days every 6 hours). Off: nothing of it is read, written or printed
         "ga4_cohort": _env("GA4_COHORT", "false").lower() == "true",

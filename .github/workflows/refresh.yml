@@ -138,6 +138,10 @@ jobs:
           # kept for good): GA4_FIRSTOPEN_CC=false (repo variable) stops the reads without a code push
           GA4_FIRSTOPEN_CC:     ${{ vars.GA4_FIRSTOPEN_CC || 'true' }}
           GA4_FIRSTOPEN_CC_BUDGET_SEC: ${{ vars.GA4_FIRSTOPEN_CC_BUDGET_SEC }}
+          # 💰 Revenue by source (admob_iq/fetch/ga4_source.py; data/ga4_source/ in the private repo, kept for good): GA4
+          # Traffic acquisition by session channel per app per day. GA4_SOURCE=false stops the reads without a code push
+          GA4_SOURCE:           ${{ vars.GA4_SOURCE || 'true' }}
+          GA4_SOURCE_BUDGET_SEC: ${{ vars.GA4_SOURCE_BUDGET_SEC }}
           # 📈 Day-wise ROI: every day 0 … 30 of each install day's GA4 ad revenue (admob_iq/fetch/ga4_cohort.py;
           # data/ga4_cohort/ in the private repo, kept for good): GA4_COHORT=false stops the reads without a code push;
           # ROI_TAB=false takes the ROI section off the Install value tab
@@ -200,6 +204,8 @@ jobs:
           AUDIENCE_TAB:         ${{ vars.AUDIENCE_TAB || 'true' }}
           # 🆕 First open tab (firstopen.json.gz): FIRSTOPEN_TAB=false turns it off without a code push
           FIRSTOPEN_TAB:        ${{ vars.FIRSTOPEN_TAB || 'true' }}
+          # 💰 Revenue by source (source.json.gz, Install value tab): SOURCE_TAB=false turns it off without a code push
+          SOURCE_TAB:           ${{ vars.SOURCE_TAB || 'true' }}
           # Daily App Review (Review tab): REVIEW_ENABLED=true (repo variable) starts the daily card snapshots — set it
           # only after the Review API (Worker) is live; REVIEW_READY_IST = when the day's cards freeze (IST, empty: 09:00);
           # REVIEW_REBUILD_DAY=<YYYY-MM-DD> rebuilds TODAY's cards once (any other day is ignored).

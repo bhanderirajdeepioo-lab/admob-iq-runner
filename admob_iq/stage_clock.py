@@ -71,11 +71,11 @@ STAGES = (
     "usd_inr",
     "ga4", "account_tzs", "ga4_revenue_prep", "ga4_uninstall_fetch", "ga4_discovery",
     "ga4_iday_load", "ga4_iday", "ga4_iday_save", "ga4_iday_only",
-    "ga4_audience", "ga4_firstopen", "ga4_firstopen_cc", "ga4_cohort", "ga4_cube",
+    "ga4_audience", "ga4_firstopen", "ga4_firstopen_cc", "ga4_source", "ga4_cohort", "ga4_cube",
     "active_prepass", "value_prepass", "uninstall_store_load", "uninstall_eval", "active_apps", "value_apps",
     "roi_apps", "roi_cube", "roi_country", "adcfg", "forecast", "impact_any", "cohort_files",
     "impact_any_finish", "uninstall_asset", "active_finish", "value_finish", "roi_finish",
-    "tabs", "uninstall_studio", "active_studio", "value_studio", "audience_tab", "firstopen_tab",
+    "tabs", "uninstall_studio", "active_studio", "value_studio", "audience_tab", "firstopen_tab", "source_tab",
     "intraday", "dashboard_write", "baseline_write", "mediation_daily", "deductions_daily", "static_files",
     "review", "review_studio", "headers", "alerts", "deploy_guard", "teardown",
 )

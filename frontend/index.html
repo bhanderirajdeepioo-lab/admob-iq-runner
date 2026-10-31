@@ -2528,6 +2528,13 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-mini button{min-height:32px;padding:4px 10px;border:0;border-radius:7px;background:none;color:var(--ink2);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .roi-mini button[aria-pressed="true"]{background:var(--raise);color:#fff;box-shadow:inset 0 0 0 1px var(--line2)}
 .roi-tw{overflow:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--line);max-height:640px}
+/* 💰 Revenue by source (a section of 💸 Install value, under 📈 ROI: everything under #src-root, classes src-*) */
+.src-bar{display:flex;height:26px;border-radius:8px;overflow:hidden;margin:2px 0 6px;background:var(--panel2)}
+.src-bar span{background:var(--c);color:#0b1220;font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;min-width:0}
+.src-lg{margin:0 0 10px}.src-lg b{color:var(--ink2)}
+.src-k{border-top:3px solid var(--c)}
+.src-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c);margin-right:6px;vertical-align:baseline}
+.src-tot td{background:var(--panel2)}.src-tot td:first-child{background:var(--panel2)}
 .roi-t{min-width:640px;font-size:12.5px}
 .roi-t th{white-space:nowrap;text-align:right;padding:8px 10px;position:sticky;top:0;z-index:2;background:var(--panel2)}
 .roi-t th:has(button){padding:0}
@@ -8434,10 +8441,135 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
 return {ptr, appPtr, block, repaint, cardLine, _:{cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, benchCard, lzNext, BN, LZ_STEP, st:()=>({GRAIN,MET,SHOW,CTY}), ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
+// ---- 💰 Revenue by source — a section of the 💸 Install value tab (owner, 31 Oct 2026: notification revenue = GA4 Traffic
+// acquisition → Session primary channel group "Mobile Push Notifications", exactly as his GA4 screen; Paid = Cross-network +
+// Paid Search, Organic = Direct + Organic Search, Other = (other) + Unassigned). source.json.gz: per app per day the four
+// groups' GA4 total revenue (USD) and sessions; source_<key>.json.gz: the GA4 channels themselves. Everything under
+// #src-root, classes src-* (+ the ROI card / table look).
+const SRC=(()=>{
+let ALL=null, ALLV='', ALLBUSY=false, ALLERR=false, PER='30', SHOWD=31, WIRED=false;
+const AF={}, ABUSY={}, AERR={};
+const G=[['Paid','c4'],['Notification','c3'],['Organic','c2'],['Other','c1']];
+const PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['30','30 days'],['tm','This month'],['lm','Last month'],['all','All time']];
+const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ok=v=>v!=null&&isFinite(v);
+function MV(usd){ if(!ok(usd)) return '—'; const x=usd*cfx(), a=Math.abs(x), inr=curView()==='INR';
+  const s=a>=100?Math.round(a).toLocaleString(inr?'en-IN':'en-US'):a>=10?a.toFixed(0):a.toFixed(a>=1?1:2); return (x<0?'−':'')+csym()+s; }
+function P(v,t){ if(!(t>0)||!ok(v)) return '—'; const p=v/t*100; return (p>=10||p===0?Math.round(p):p.toFixed(1))+'%'; }
+const N=v=>ok(v)?Math.round(v).toLocaleString('en-US'):'—';
+const DAY=864e5, t0=s=>Date.parse(s+'T00:00:00Z'), iso=t=>new Date(t).toISOString().slice(0,10);
+const fdy=s=>{ try{ return fmtD(s)+' '+String(s).slice(2,4); }catch(e){ return s; } };
+function ptr(){ const p=(typeof DATA!=='undefined'&&DATA&&DATA.source)||null; return (p&&p.file==='source.json.gz')?p:null; }
+function ensureAll(cb){ const p=ptr(); if(!p||ALLBUSY||(ALL&&ALLV===p.v)) return; ALLBUSY=true;
+  fetchGzJson(p.file+'?v='+encodeURIComponent(p.v)).then(j=>{ if(!j||j.v!==1||!Array.isArray(j.apps)) throw new Error('format'); ALL=j; ALLV=p.v; ALLERR=false; })
+    .catch(()=>{ ALLERR=true; }).then(()=>{ ALLBUSY=false; cb&&cb(); }); }
+function appOf(aid){ return (ALL&&(ALL.apps||[]).find(a=>a.app_id===aid))||null; }
+function chOf(a){ const p=ptr(), pa=p&&p.apps&&p.apps[a.app_id]; const d=a&&AF[a.file]; return (d&&pa&&d._v===pa.v)?d:null; }
+function ensureCh(a,cb){ const p=ptr(), pa=p&&p.apps&&p.apps[a.app_id], f=a.file; if(!pa||ABUSY[f]||chOf(a)) return; ABUSY[f]=true;
+  fetchGzJson(f+'?v='+encodeURIComponent(pa.v)).then(j=>{ if(!j||j.v!==1||!Array.isArray(j.days)) throw new Error('format'); j._v=pa.v; AF[f]=j; AERR[f]=false; })
+    .catch(()=>{ AERR[f]=true; }).then(()=>{ ABUSY[f]=false; cb&&cb(); }); }
+function nameOf(a){ return (((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalog)||[]).find(c=>c.app_id===a.app_id)||{}).app_name||a.app; }
+// a period → the app's row range [i0, i1] (its own days, its timezone's today; 7 / 30 days end yesterday: whole days)
+function rng(a,per){ const n=(a.rev||[]).length, at=d=>Math.round((t0(d)-t0(a.d0))/DAY), ti=at(a.today), m1=a.today.slice(0,8)+'01';
+  let i0, i1;
+  if(per==='today'){ i0=i1=ti; }
+  else if(per==='yday'){ i0=i1=ti-1; }
+  else if(per==='7'){ i0=ti-7; i1=ti-1; }
+  else if(per==='30'){ i0=ti-30; i1=ti-1; }
+  else if(per==='tm'){ i0=at(m1); i1=ti; }
+  else if(per==='lm'){ const e=t0(m1)-DAY, s=iso(e).slice(0,8)+'01'; i0=at(s); i1=at(iso(e)); }
+  else { i0=0; i1=n-1; }
+  return [Math.max(0,i0), Math.min(n-1,i1)]; }
+function sum(a,i0,i1){ const s=[0,0,0,0], ss=[0,0,0,0]; let miss=0, smp=0, n=0;
+  for(let i=i0;i<=i1;i++){ n++; const r=a.rev[i], q=a.ses[i]; if(!r){ miss++; continue; }
+    for(let g=0;g<4;g++){ s[g]+=+r[g]||0; ss[g]+=+(q&&q[g])||0; } if(a.mk&&a.mk[i]) smp++; }
+  return {s, ss, t:s[0]+s[1]+s[2]+s[3], miss, smp, n}; }
+function perLabel(a,per){ const [i0,i1]=rng(a,per); if(i1<i0) return ''; const d=i=>iso(t0(a.d0)+i*DAY);
+  return i0===i1?fdy(d(i0)):fdy(d(i0))+' – '+fdy(d(i1)); }
+const cell=(v,t,b)=>`<td>${b?'<b>':''}${MV(v)}${b?'</b>':''}<small> ${P(v,t)}</small></td>`;
+function chips(){ return `<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-src-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}</span></div>`; }
+function groupsNote(){ const gs=(ALL&&ALL.groups)||[];
+  const part=(i,def)=>{ const g=gs[i]; const l=g&&g[2]&&g[2].length?g[2]:def; return `<b>${G[i][0]}</b> = ${E(l.join(' + '))}`; };
+  return `<p class="roi-note">GA4 → Traffic acquisition → <b>Session primary channel group</b> (aapki GA4 screen wala). ${part(0,['Cross-network','Paid Search'])} · ${part(1,['Mobile Push Notifications'])} · ${part(2,['Direct','Organic Search'])} · ${part(3,['(other)','Unassigned'])}. Revenue = GA4 <b>Total revenue</b> (USD${curView()==='INR'?', ₹ dashboard rate se':''}). Har app apne GA4 timezone ke din se; 7 / 30 days = kal tak ke poore din.</p>`; }
+function wait(msg,retry){ return `<div class="roi-card"><p class="roi-note">${retry?`⚠️ ${msg} <button type="button" class="roi-lnk" data-src-retry="1">Try again</button>`:'⏳ '+msg}</p></div>`; }
+function head(sub){ return `<div class="roi-ct"><h3>💰 Revenue by source</h3><span class="roi-note">${sub}</span></div>`; }
+// ---- All apps: one row per app, the chosen period ----
+function allView(){ const apps=(ALL.apps||[]).map(a=>{ const [i0,i1]=rng(a,PER); return {a, x:sum(a,i0,i1)}; }).filter(o=>o.x.n>0&&(o.x.t>0||o.x.n>o.x.miss));
+  apps.sort((p,q)=>q.x.t-p.x.t);
+  const T=[0,0,0,0]; apps.forEach(o=>o.x.s.forEach((v,g)=>T[g]+=v)); const tt=T[0]+T[1]+T[2]+T[3];
+  const row=o=>{ const x=o.x, nm=nameOf(o.a), part=x.miss?` <small title="${x.miss} din ka data abhi nahi aaya">· ${x.miss} din baaki</small>`:'';
+    return `<tr class="clk" data-src-app="${E(o.a.app_id)}"><td class="roi-nm">${appIcon(nm,16,'ail')}${E(nm)}${part}${x.smp?' <small title="GA4 sampled">≈</small>':''}</td>${cell(x.t,x.t,1)}${x.s.map(v=>cell(v,x.t)).join('')}</tr>`; };
+  const pend=(ALL.apps||[]).filter(a=>!a.bf).length;
+  return `<div class="roi-card">${head(PER==='all'?'poori history':(apps[0]?perLabel(apps[0].a,PER):''))}${chips()}`
+    +bar(T,tt)
+    +`<div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th><th>Total</th>${G.map(g=>`<th>${g[0]}</th>`).join('')}</tr></thead><tbody>`
+    +`<tr class="src-tot"><td class="roi-nm"><b>All apps</b></td>${cell(tt,tt,1)}${T.map(v=>cell(v,tt,1)).join('')}</tr>`
+    +apps.map(row).join('')+`</tbody></table></div>`
+    +(pend?`<p class="roi-note">⏳ ${pend} app ki purani history abhi aa rahi hai (har build me thodi aur).</p>`:'')
+    +groupsNote()+`<p class="roi-note">App pe tap = us app ka month-wise, din-wise aur GA4 channel-wise hisaab.</p></div>`; }
+// a share bar: the four groups side by side, each with its %
+function bar(s,t){ if(!(t>0)) return '';
+  return `<div class="src-bar" role="img" aria-label="${G.map((g,i)=>g[0]+' '+P(s[i],t)).join(', ')}">${G.map((g,i)=>{ const w=s[i]/t*100; return w>0?`<span class="${g[1]}" style="width:${w.toFixed(2)}%" title="${g[0]} ${P(s[i],t)}">${w>=7?g[0]+' '+P(s[i],t):''}</span>`:''; }).join('')}</div>`
+    +`<div class="roi-lg src-lg">${G.map((g,i)=>`<span class="${g[1]}">${g[0]} <b>${P(s[i],t)}</b></span>`).join('')}</div>`; }
+// ---- one app ----
+function tiles(x){ return `<div class="roi-ks6">`+[['Total',x.t,x.ss.reduce((p,q)=>p+q,0)]].concat(G.map((g,i)=>[g[0],x.s[i],x.ss[i]])).map(([l,v,ses],i)=>
+  `<div class="roi-k${i?' src-k '+G[i-1][1]:''}"><div class="roi-kl">${l}</div><div class="roi-kv">${MV(v)}${i?` <small>${P(v,x.t)}</small>`:''}</div><div class="roi-ks">${N(ses)} sessions</div></div>`).join('')+`</div>`; }
+function monthRows(a){ const m=new Map();
+  for(let i=0;i<a.rev.length;i++){ const k=iso(t0(a.d0)+i*DAY).slice(0,7); const e=m.get(k)||{s:[0,0,0,0],miss:0,n:0}; e.n++;
+    const r=a.rev[i]; if(!r) e.miss++; else for(let g=0;g<4;g++) e.s[g]+=+r[g]||0; m.set(k,e); }
+  return [...m.entries()].sort((p,q)=>p[0]<q[0]?1:-1); }
+function appView(a){ const [i0,i1]=rng(a,PER), x=sum(a,i0,i1), cur=a.today.slice(0,7);
+  const top=`<div class="roi-card">${head(PER==='all'?'poori history · '+fdy(a.d0)+' se':perLabel(a,PER))}${chips()}`
+    +(x.n&&x.t>0?tiles(x)+bar(x.s,x.t):`<p class="roi-note">Is period me revenue nahi.</p>`)
+    +(x.miss?`<p class="roi-note">⏳ Is period ke ${x.miss} din ka data abhi aa raha hai.</p>`:'')
+    +(a.bf?'':`<p class="roi-note">⏳ Purani history abhi aa rahi hai — abhi ${fdy(a.d0)} se.</p>`)
+    +groupsNote()+`</div>`;
+  const mr=monthRows(a).map(([k,e])=>{ const t=e.s[0]+e.s[1]+e.s[2]+e.s[3];
+    return `<tr><td class="roi-nm">${E(fmtMon(k))}${k===cur?' <small>so far</small>':''}${e.miss?` <small title="${e.miss} din ka data abhi nahi">· ${e.miss} din baaki</small>`:''}</td>${cell(t,t,1)}${e.s.map(v=>cell(v,t)).join('')}</tr>`; }).join('');
+  const months=`<div class="roi-card"><div class="roi-ct"><h3>Month by month</h3><span class="roi-note">poori history, naya mahina upar</span></div><div class="roi-tw"><table class="roi-t"><thead><tr><th>Month</th><th>Total</th>${G.map(g=>`<th>${g[0]}</th>`).join('')}</tr></thead><tbody>${mr}</tbody></table></div></div>`;
+  const ti=a.rev.length-1, rows=[];
+  for(let i=ti;i>=0&&rows.length<SHOWD;i--){ const d=iso(t0(a.d0)+i*DAY), r=a.rev[i], lab=i===ti?'Today <small>so far</small>':i===ti-1?'Yesterday':fdy(d);
+    if(!r){ rows.push(`<tr><td class="roi-nm">${lab}</td><td colspan="5" class="roi-note" style="text-align:left">⏳ abhi nahi aaya</td></tr>`); continue; }
+    const t=r[0]+r[1]+r[2]+r[3]; rows.push(`<tr><td class="roi-nm">${lab}${a.mk&&a.mk[i]?' <small title="GA4 sampled">≈</small>':''}</td>${cell(t,t,1)}${r.map(v=>cell(v,t)).join('')}</tr>`); }
+  const more=ti+1>SHOWD?`<p class="roi-note"><button type="button" class="roi-lnk" data-src-more="1">Aur ${Math.min(60,ti+1-SHOWD)} din dikhao</button> · ${ti+1} din me se ${Math.min(SHOWD,ti+1)}</p>`:'';
+  const days=`<div class="roi-card"><div class="roi-ct"><h3>Day by day</h3><span class="roi-note">Today / Yesterday upar · ${E(a.tz)}</span></div><div class="roi-tw"><table class="roi-t"><thead><tr><th>Day</th><th>Total</th>${G.map(g=>`<th>${g[0]}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>${more}</div>`;
+  return top+chCard(a,i0,i1)+months+days; }
+// the GA4 channels of the period, as the GA4 screen lists them
+function chCard(a,i0,i1){ const d=chOf(a), hd=`<div class="roi-ct"><h3>GA4 channels</h3><span class="roi-note">${PER==='all'?'poori history':perLabel(a,PER)} · GA4 Traffic acquisition jaisa</span></div>`;
+  if(!d){ if(AERR[a.file]) return `<div class="roi-card">${hd}<p class="roi-note">⚠️ Channels load nahi hue. <button type="button" class="roi-lnk" data-src-retry="1">Try again</button></p></div>`;
+    ensureCh(a,repaint); return `<div class="roi-card">${hd}<p class="roi-note">⏳ Channels load ho rahe hain…</p></div>`; }
+  const off=Math.round((t0(a.d0)-t0(d.d0))/DAY), ch=d.ch||[], S=ch.map(()=>[0,0]);
+  for(let i=i0;i<=i1;i++){ const r=d.days[i+off]; if(!r) continue; r.forEach((v,c)=>{ if(v){ S[c][0]+=+v[0]||0; S[c][1]+=+v[3]||0; } }); }
+  const ts=S.reduce((p,q)=>p+q[0],0), tr=S.reduce((p,q)=>p+q[1],0);
+  const grp=c=>{ const gs=(ALL&&ALL.groups)||[]; for(let i=0;i<gs.length;i++) if((gs[i][2]||[]).includes(c)) return i; return 3; };
+  const rows=ch.map((c,i)=>({c,ses:S[i][0],rev:S[i][1],g:grp(c)})).filter(o=>o.ses||o.rev).sort((p,q)=>q.rev-p.rev||q.ses-p.ses)
+    .map(o=>`<tr><td class="roi-nm">${E(o.c)}</td><td style="text-align:left"><span class="src-dot ${G[o.g][1]}"></span>${G[o.g][0]}</td><td>${N(o.ses)}<small> ${P(o.ses,ts)}</small></td><td>${MV(o.rev)}<small> ${P(o.rev,tr)}</small></td></tr>`).join('');
+  return `<div class="roi-card">${hd}<div class="roi-tw"><table class="roi-t"><thead><tr><th>Channel</th><th style="text-align:left">Group</th><th>Sessions</th><th>Total revenue</th></tr></thead><tbody><tr class="src-tot"><td class="roi-nm"><b>Total</b></td><td></td><td><b>${N(ts)}</b></td><td><b>${MV(tr)}</b></td></tr>${rows}</tbody></table></div></div>`; }
+// ---- the block, its paint and its taps ----
+function inner(aid){
+  if(!ALL){ if(ALLERR) return wait('Revenue by source load nahi hua.',1); ensureAll(repaint); return wait('Revenue by source load ho raha hai…'); }
+  if(!aid) return allView();
+  const a=appOf(aid); if(!a) return `<div class="roi-card">${head('')}<p class="roi-note">Is app ka GA4 source data abhi nahi aaya.</p></div>`;
+  return appView(a); }
+function block(aid){ if(!ptr()) return ''; wire();
+  return `<section class="roi src" id="src-root" data-aid="${E(aid||'')}" aria-label="Revenue by source">${inner(aid)}</section>`; }
+function root(){ return (typeof document!=='undefined'&&document.getElementById)?document.getElementById('src-root'):null; }
+function repaint(){ const r=root(); if(r) r.innerHTML=inner(r.dataset.aid); }
+function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventListener) return; WIRED=true;
+  document.addEventListener('click',ev=>{ const t=ev.target, r=t&&t.closest&&t.closest('#src-root'); if(!r) return;
+    const keep=(el,sel,fn)=>{ const y0=el.getBoundingClientRect().top; fn(); const b=r.querySelector(sel); if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };   // the tapped control stays where it was
+    let b;
+    if((b=t.closest('[data-src-per]'))){ const k=b.dataset.srcPer; keep(b,`[data-src-per="${k}"]`,()=>{ PER=k; repaint(); }); return; }
+    if((b=t.closest('[data-src-more]'))){ keep(b,'[data-src-more]',()=>{ SHOWD+=60; repaint(); }); return; }
+    if((b=t.closest('[data-src-retry]'))){ ALLERR=false; Object.keys(AERR).forEach(k=>AERR[k]=false); repaint(); return; }
+    if((b=t.closest('[data-src-app]'))){ const a=appOf(b.dataset.srcApp); if(a&&typeof setApp==='function') setApp(nameOf(a)); return; } }); }
+return {ptr, block, repaint, _:{rng, sum, monthRows, allView, appView, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='ALL'){ ALL=v; ALLV=(ptr()||{}).v||''; } if(k==='AF') Object.assign(AF,v); }}};
+})();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)
 let VALMORE=false;
-function roiWrap(html,aid){ let b=''; try{ b=ROI.block(aid); }catch(e){ b=''; } if(!b) return html;
+function roiWrap(html,aid){ let b='', sr=''; try{ b=ROI.block(aid); }catch(e){ b=''; } try{ sr=SRC.block(aid); }catch(e){ sr=''; }   // 💰 Revenue by source right under 📈 ROI
+  if(!b) return sr+html; b+=sr;
   const open=VALMORE||(typeof VALJUMP!=='undefined'&&!!VALJUMP);
   return b+`<details id="val-more"${open?' open':''} ontoggle="VALMORE=this.open"><summary><span class="vo-cv">▸</span><span>📊 More details</span><span class="vo-h">Value Studio — week by week, money-back estimate, versions, long-term, engine alerts · 🗂 Old views</span></summary><div class="vo-in">${html}</div></details>`; }
 // ---------- PLACEMENTS (2-level) ----------
