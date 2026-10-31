@@ -7653,7 +7653,8 @@ const DV_CLS={Loss:'bigda',Slow:'dhyan',Profit:'behtar','No ads':'normal','Too l
 const DV_ICON={Loss:'🔴',Slow:'🟡',Profit:'🟢','No ads':'⚪','Too little data':'—'};
 const DV_PB={'7':'≤ 7 din','30':'8–30 din','90':'31–90 din','180':'≈ 91–180 din','365':'≈ 181–365 din','never':'1 saal me nahi'};
 function dvChip(s){ return `<span class="hub-st st-${DV_CLS[s]||'lagu'}">${DV_ICON[s]||''} ${E(s)}</span>`; }
-function dvName(D,m){ const n=(D.names||{})[m]||[], b=n[0]||'', k=n[1]&&n[1]!=='(not set)'?n[1]:''; return {t:(b&&k?b+' '+k:k||b||m), m}; }
+function dvName(D,m){ const n=(D.names||{})[m]||[], b=n[0]&&n[0]!=='(not set)'?n[0]:'', k=n[1]&&n[1]!=='(not set)'?n[1]:'';   // no marketing name: brand + the model code
+  return {t:(b&&k?b+' '+k:b?b+' '+m:k||m), m}; }
 function devView(d){ const D=d.dev;
   if(!D) return `<div class="roi-card"><p class="roi-note">📱 Devices ka data aa raha hai — GA4 se har build me thoda thoda (pehli baar kuch ghante lagenge).</p></div>`;
   const ccs=D.cc||[]; if(DVCC&&!ccs.some(c=>c[0]===DVCC)) DVCC='';
@@ -7671,8 +7672,8 @@ function devView(d){ const D=d.dev;
   const warn=low.length?`<div class="roi-why roi-cut"><span>⚠️ Is app me GA4 ne kuch din ka model-wise data <b>"(other)"</b> me daal diya (sabse zyada <b>${miss}%</b>). Table baaki data par hai — numbers ≈ samjhiye.</span></div>`:'';
   const W=D.win||{}, wl=a=>W[a]?`${fd(W[a][0])}–${fd(W[a][1])}`:'—';
   const body=rows.map(x=>{ const nm=dvName(D,x.m);
-    return `<tr><td class="roi-nm"><b>${E(nm.t)}</b>${nm.t!==x.m?` <small>${E(x.m)}</small>`:''}</td><td>${dvChip(x.st)}${x.on==='30'?' <small title="90 din ka data abhi kam: 30 din se">≈30</small>':''}</td>`
-      +`<td>${N(x.n)}<small> ${ok(x.ps)?Math.round(x.ps*100)+'% paid':''}</small></td><td>${ok(x.cpi)?'≈'+MP(x.cpi):'—'}</td>`
+    return `<tr><td class="roi-nm"><b>${E(nm.t)}</b>${nm.t.includes(x.m)?'':` <small>${E(x.m)}</small>`}</td><td>${dvChip(x.st)}${x.on==='30'?' <small title="90 din ka data abhi kam: 30 din se">≈30</small>':''}</td>`
+      +`<td>${N(x.n)}<small> ${ok(x.ps)?Math.min(100,Math.round(x.ps*100))+'% paid':''}</small></td><td>${ok(x.cpi)?'≈'+MP(x.cpi):'—'}</td>`
       +`<td>${pc(x.r7)}</td><td>${pc(x.r30)}</td><td>${pc(x.r90)}</td><td>${x.pb?(DV_PB[x.pb]||'—'):'—'}</td><td>${ok(x.d1)?Math.round(x.d1*100)+'%':'—'}</td></tr>`; }).join('');
   const rest=L.rest&&L.rest.models?`<p class="roi-note">+ <b>${N(L.rest.models)}</b> aur models (har ek ${D.min_row||30} se kam installs) — ${P(L.rest.share)} installs.</p>`:'';
   return chips+warn+`<div class="roi-card"><div class="roi-ct"><h3>📱 Devices · ${DVCC?E(valFlag(DVCC)+' '+valCtyName(DVCC)):'All countries'}</h3>${sel}</div>`

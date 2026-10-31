@@ -37,6 +37,7 @@ def test_all_countries(out):
     s = out["all"]
     assert "🔴 Loss 1" in s and "🟡 Slow 1" in s and "🟢 Profit 1" in s
     assert s.index("XBrand XM-2") < s.index("XBrand Phone One XM-1")             # Loss first; no marketing name: brand + code
+    assert "XBrand XM-2 XM-2" not in s                                           # the code once
     assert "XBrand Phone One XM-1 🟢 Profit 5,000 90% paid ≈$0.420 20% 90% 130% 31–90 din 45%" in s
     assert "1 saal me nahi" in s and "≈ 181–365 din" in s and "≈30" in s
     assert "+ 15 aur models (har ek 30 se kam installs) — 2% installs." in s
