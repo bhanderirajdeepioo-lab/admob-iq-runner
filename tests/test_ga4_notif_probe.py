@@ -102,6 +102,7 @@ def test_every_read_answers_and_ties_hold(monkeypatch):
     # paid users only: their first-user channel is Cross-network
     assert {r[1] for r in f["t_PAIDM"]} == {"Cross-network"}
     assert f["notif_like"] == ["notification_open"] and {r[1] for r in f["t_EVM"]} == {"notification_open"}
+    assert {r[1] for r in f["t_EVD"]} == {"notification_open"} and len(f["t_EVD"]) == 90 and f["t_EVD"][0][2] == 7
     assert f["events_n"] == 3 and f["events"][0][0] == "screen_view"
     assert a["h0"] == START.isoformat() and a["r0"] == (date.fromisoformat(a["F"]) - timedelta(days=89)).isoformat()
 
@@ -124,3 +125,16 @@ def test_public_log_is_counts_only(monkeypatch, capsys):
         assert re.fullmatch(r"notif probe: \w+ n \d+ ok \d+ refused \d+ other \d+ thresholded \d+ sampled \d+", ln), ln
     assert re.fullmatch(r"notif probe: apps 1, complete 1, stopped 0, apps with push sessions 1, with notification "
                         r"events 1, calls \d+, \d+s", lines[-1]), lines[-1]
+
+
+def test_a_chosen_end_day_and_a_tagged_output(monkeypatch):
+    o = npb.options({"end": "2026-10-12", "tag": "One App/../x"}, {})
+    assert o["end"] == date(2026, 10, 12) and o["tag"] == "oneappx" and npb.out_path(o) == "ga4/notif_probe_oneappx.json"
+    assert npb.out_path(npb.options({}, {})) == npb.OUT_PATH
+    monkeypatch.setattr(ga4, "_call", Fake())
+    monkeypatch.setattr(ga4, "_sleep", lambda s: None)
+    monkeypatch.setattr(ga4, "access_token", lambda cid, sec, rt: TOK)
+    rep = npb.run_probe([unit()], "cid", "sec", [("o", RT)], o, now=NOW, tick=0)
+    a = rep["apps"][KEY]
+    assert a["F"] == "2026-10-12" and rep["rules"]["end"] == "2026-10-12"
+    assert a["facts"]["t_EVD"][-1][0] == "20261012"

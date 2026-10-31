@@ -18,6 +18,14 @@ on:
         description: "only these apps: comma list of file keys (empty = all)"
         required: false
         default: ""
+      end:
+        description: "read up to this day (YYYY-MM-DD; empty = the newest final day)"
+        required: false
+        default: ""
+      tag:
+        description: "write ga4/notif_probe_<tag>.json instead (empty = the main report)"
+        required: false
+        default: ""
       max_calls:
         description: "GA4 calls this run at most"
         required: false

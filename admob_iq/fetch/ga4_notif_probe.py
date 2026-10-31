@@ -20,6 +20,7 @@ totalRevenue):
   SRCN   R  sessionSource, sessionMedium, sessionCampaignName — push sessions only   sessions, activeUsers, revenue
   EV     R  eventName                                                eventCount, totalUsers
   EVM    H  yearMonth, eventName — the notification events only      eventCount, totalUsers
+  EVD    R  date, eventName — the notification events only           eventCount, totalUsers
 Ties: FUM / SEM / XM vs TOTM per month, DAY vs DAY0 per day.
 
 OUTPUT: ga4/notif_probe.json in the PRIVATE repo (write_private; never data/ or site/): per app KEY its reads' records and
@@ -32,11 +33,12 @@ BUDGET_SEC).
 """
 
 import os
+import re
 import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from admob_iq import ga4_probe
 from admob_iq.fetch import ga4
@@ -60,7 +62,7 @@ DMETS = ("sessions", "activeUsers", "totalAdRevenue")
 EMETS = ("eventCount", "totalUsers")
 NOTIF_EVENTS = ("notification_open", "notification_receive", "notification_foreground", "notification_dismiss",
                 "firebase_campaign")
-KINDS = ("TOTM", "FUM", "SEM", "XM", "PAIDM", "DAY", "DAY0", "SRCN", "EV", "EVM")
+KINDS = ("TOTM", "FUM", "SEM", "XM", "PAIDM", "DAY", "DAY0", "SRCN", "EV", "EVM", "EVD")
 TOP_EV = 80                         # events kept by name (the biggest by count) + every notification-like one
 MAX_CALLS = 1000
 APP_CALLS = 40
@@ -86,8 +88,10 @@ class Run(cp.Run):
             self.say("notif progress: calls %d, %ds" % (n, s))
 
 
-def plan_of(u, now):
-    f = ga4.window_end_in(u["tz"], now) - timedelta(days=LATE)
+def plan_of(u, now, end=None):
+    """F = the newest final day (E − LATE), or `end` (the "end" input: a chosen day, e.g. yesterday to compare with a
+    GA4 screen — its numbers may still grow)."""
+    f = end or ga4.window_end_in(u["tz"], now) - timedelta(days=LATE)
     hs = gu._d(u["history_start"]) if u.get("history_start") else None
     h0 = max(hs, f - timedelta(days=HIST_DAYS)) if hs else f - timedelta(days=HIST_DAYS)
     return {"F": f, "h0": h0, "r0": f - timedelta(days=RECENT - 1)}
@@ -122,15 +126,17 @@ def request(kind, p):
     if kind == "EVM":
         return {"body": b(h0, f, ("yearMonth", "eventName"), EMETS),
                 "extra": [ga4._in_list("eventName", NOTIF_EVENTS)]}
+    if kind == "EVD":
+        return {"body": b(r0, f, ("date", "eventName"), EMETS), "extra": [ga4._in_list("eventName", NOTIF_EVENTS)]}
     raise KeyError(kind)
 
 
 DIMS = {"TOTM": ("yearMonth",), "FUM": ("yearMonth", FU), "SEM": ("yearMonth", SE), "XM": ("yearMonth", FU, SE),
         "PAIDM": ("yearMonth", FU), "DAY": ("date", SE), "DAY0": ("date",),
         "SRCN": ("sessionSource", "sessionMedium", "sessionCampaignName"), "EV": ("eventName",),
-        "EVM": ("yearMonth", "eventName")}
+        "EVM": ("yearMonth", "eventName"), "EVD": ("date", "eventName")}
 MOFK = {"TOTM": METS, "FUM": METS, "SEM": METS, "XM": METS, "PAIDM": NR, "DAY": DMETS, "DAY0": DMETS, "SRCN": DMETS,
-        "EV": EMETS, "EVM": EMETS}
+        "EV": EMETS, "EVM": EMETS, "EVD": EMETS}
 
 
 def _r(v):
@@ -165,14 +171,14 @@ def facts(raw):
         out["events_n"] = len(ev)
         out["notif_like"] = sorted({str(r.get("eventName")) for r in ev if any(
             w in str(r.get("eventName")).lower() for w in ("notif", "push", "remind", "fcm", "alarm"))})
-    for k in ("TOTM", "FUM", "SEM", "XM", "PAIDM", "DAY", "DAY0", "SRCN", "EVM"):
+    for k in ("TOTM", "FUM", "SEM", "XM", "PAIDM", "DAY", "DAY0", "SRCN", "EVM", "EVD"):
         if g(k) is not None:
             out["t_" + k] = table(g(k), DIMS[k], MOFK[k])
     return out
 
 
 def probe_app(run, u, token, now, prop, opts):
-    p = plan_of(u, now)
+    p = plan_of(u, now, opts.get("end"))
     res = {"key": u["key"], "tz": u["tz"], "F": p["F"].isoformat(), "h0": p["h0"].isoformat(), "r0": p["r0"].isoformat(),
            "reads": {}}
     if not token:
@@ -250,7 +256,7 @@ def run_probe(units, cid, sec, tokens, opts, now=None, clock=time.monotonic, wor
             list(ex.map(one, pr._groups(units)))
     c = pr._safely(counts, out, run, fallback={"apps": len(out), "calls": run.calls, "seconds": run.elapsed()})
     return {"v": 1, "probe": "ga4_notif", "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "rules": {"late": LATE, "recent": RECENT, "hist_days": HIST_DAYS, "push": PUSH,
+            "rules": {"late": LATE, "end": opts["end"].isoformat() if opts.get("end") else None, "recent": RECENT, "hist_days": HIST_DAYS, "push": PUSH,
                       "notif_events": list(NOTIF_EVENTS), "top_ev": TOP_EV, "max_calls": run.max_calls,
                       "app_calls": opts.get("app_calls", APP_CALLS), "page_rows": PAGE_ROWS},
             "counts": c, "apps": out}
@@ -260,9 +266,17 @@ def options(inputs, env):
     def get(k, e):
         v = inputs.get(k)
         return env.get(e) if v is None or str(v).strip() == "" else v
+    end = str(get("end", "NOTIF_END") or "").strip()
+    tag = re.sub(r"[^a-z0-9_-]", "", str(get("tag", "NOTIF_TAG") or "").strip().lower())[:32]
     return {"max_apps": pr._int(get("max_apps", "NOTIF_MAX_APPS")), "apps": ap.wanted(get("apps", "NOTIF_APPS")),
             "max_calls": pr._int(get("max_calls", "NOTIF_MAX_CALLS")) or MAX_CALLS, "app_calls": APP_CALLS,
-            "budget": pr._int(env.get("NOTIF_BUDGET_SEC")) or BUDGET_SEC}
+            "budget": pr._int(env.get("NOTIF_BUDGET_SEC")) or BUDGET_SEC,
+            "end": date.fromisoformat(end) if end else None, "tag": tag}
+
+
+def out_path(opts):
+    """ga4/notif_probe.json, or ga4/notif_probe_<tag>.json for a tagged (partial / chosen-day) run."""
+    return "ga4/notif_probe_%s.json" % opts["tag"] if opts.get("tag") else OUT_PATH
 
 
 def main(env=None, now=None, clock=time.monotonic):
@@ -272,7 +286,11 @@ def main(env=None, now=None, clock=time.monotonic):
     tokens, _ = ga4_probe.owner_tokens(env)
     if not (cid and sec and tokens):
         sys.exit("GA4 client or refresh tokens missing")
-    opts = options(ap.event_inputs(env), env)
+    try:
+        opts = options(ap.event_inputs(env), env)
+    except ValueError:
+        print("notif probe: the end input is not understood", flush=True)
+        sys.exit(2)
     root = env.get("NOTIF_DATA_DIR") or DATA_DIR
     units = cp.units_from_state(sp.load_state(root))
     if opts["apps"]:
@@ -285,7 +303,7 @@ def main(env=None, now=None, clock=time.monotonic):
     report = run_probe(units, cid, sec, tokens, opts, now=now, clock=clock)
     for line in public_lines(report["counts"]):
         print(line, flush=True)
-    if not pr.write_private(OUT_PATH, pr._dump(report), "ga4 notif probe"):
+    if not pr.write_private(out_path(opts), pr._dump(report), "ga4 notif probe"):
         sys.exit("private repo write failed")            # stderr: hidden by the workflow step
     print("notif probe: report written", flush=True)
 
