@@ -2016,7 +2016,9 @@ def _dev(dst, P, pre, spend, sids, rows, data_dir):
     from .fetch import ga4_device as gdv
     f = _d(dst["F"])
     win = gdv.windows(f)
-    lo, hi = min(w[0] for w in win.values()), max(w[1] for w in win.values())
+    today = _d(dst["today"]) if dst.get("today") else f
+    lo = min(min(w[0] for w in win.values()), today - timedelta(days=gdv.RANGE_DAYS))   # the windows and every period
+    hi = max(max(w[1] for w in win.values()), today)
     days = [lo + timedelta(days=i) for i in range((hi - lo).days + 1)]
     cost_usd, unk = {}, set()
     if sids and spend:

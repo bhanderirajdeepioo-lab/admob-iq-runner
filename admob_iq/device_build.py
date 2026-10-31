@@ -74,6 +74,7 @@ class _Acc:
 
     def __init__(self):
         self.n, self.rev, self.p, self.cost, self.d1 = {}, {}, {}, {}, {}
+        self.pk = {}                                    # paid installs of the install days whose cost is known
 
     @staticmethod
     def add(d, key, v):
@@ -105,9 +106,12 @@ def _window(store, age, a, b, cost, unk, kmon, with_d1, rkind=None):
         s = sum(tot.values())
         cov = (s / float(tr)) if tr else 1.0
         cov = cov if 0 < cov < 1 else 1.0               # a folded day: the cell's paid installs scaled back up
-        if X in unk:
+        if X in unk:                                    # Google Ads has not split this day's cost by country yet
             known = False
             continue
+        for md, cmap in m.items():
+            for cc, v in cmap.items():
+                acc.add(acc.pk, (md, cc), float(v or 0))
         for cc, ptot in tot.items():
             c = (cost.get(cc) or {}).get(X)
             if not c or ptot <= 0:
@@ -130,10 +134,10 @@ def _window(store, age, a, b, cost, unk, kmon, with_d1, rkind=None):
 def _sum_by(acc, keep):
     """(model, cc) sums → the model's, over the countries keep(cc) says yes to: {model: {n, rev, p, cost, d1}}."""
     out = {}
-    for name, d in (("n", acc.n), ("rev", acc.rev), ("p", acc.p), ("cost", acc.cost), ("d1", acc.d1)):
+    for name, d in (("n", acc.n), ("rev", acc.rev), ("p", acc.p), ("cost", acc.cost), ("d1", acc.d1), ("pk", acc.pk)):
         for (md, cc), v in d.items():
             if keep(cc):
-                e = out.setdefault(md, {"n": 0.0, "rev": 0.0, "p": 0.0, "cost": 0.0, "d1": 0.0})
+                e = out.setdefault(md, {"n": 0.0, "rev": 0.0, "p": 0.0, "cost": 0.0, "d1": 0.0, "pk": 0.0})
                 e[name] += v
     return out
 
@@ -194,28 +198,28 @@ def periods(today):
 
 
 def _plist(acc, keep, min_row, cap, d1n):
-    """A period's (model, cc) sums → its rows [model, installs, paid, cost USD, revenue USD, back next day | None], the
-    small models' rest and the list's totals (every model)."""
+    """A period's (model, cc) sums → its rows [model, installs, paid, cost USD, revenue USD, back next day | None, paid
+    installs of the days whose cost is known (the CPI's base)], the small models' rest and the list's totals."""
     by = _sum_by(acc, keep)
     dn = {}
     for (md, cc), v in d1n.items():
         if keep(cc):
             dn[md] = dn.get(md, 0.0) + v
-    rows, tot = [], {"n": 0.0, "p": 0.0, "cost": 0.0, "rev": 0.0, "d1": 0.0, "dn": 0.0}
+    rows, tot = [], {"n": 0.0, "p": 0.0, "cost": 0.0, "rev": 0.0, "d1": 0.0, "dn": 0.0, "pk": 0.0}
     for md, e in by.items():
-        for k in ("n", "p", "cost", "rev", "d1"):
+        for k in ("n", "p", "cost", "rev", "d1", "pk"):
             tot[k] += e[k]
         tot["dn"] += dn.get(md, 0.0)
         if md in ("(other)", "(not set)"):
             continue
         rows.append([md, int(round(e["n"])), int(round(e["p"])), _r(e["cost"], 2), _r(e["rev"], 2),
-                     _r(e["d1"] / dn[md]) if dn.get(md) else None])
+                     _r(e["d1"] / dn[md]) if dn.get(md) else None, int(round(e["pk"]))])
     rows.sort(key=lambda x: -x[1])
     keep_rows = [x for x in rows if x[1] >= min_row][:cap]
     shown = sum(x[1] for x in keep_rows)
     rest_n = tot["n"] - shown
     out_tot = {"n": int(round(tot["n"])), "p": int(round(tot["p"])), "cost": _r(tot["cost"], 2), "rev": _r(tot["rev"], 2),
-               "d1": _r(tot["d1"] / tot["dn"]) if tot["dn"] else None}
+               "d1": _r(tot["d1"] / tot["dn"]) if tot["dn"] else None, "pk": int(round(tot["pk"]))}
     return keep_rows, {"n": int(round(rest_n)), "models": len(rows) - len(keep_rows),
                        "share": _r(rest_n / tot["n"]) if tot["n"] else None}, out_tot
 
@@ -288,7 +292,8 @@ def dev_block(store, cost, unk, kmon, curve):
             by[cc] = {"rows": r, "rest": rs, "tot": tt}
             used.update(x[0] for x in r)
         used.update(x[0] for x in rows)
-        out_p[pid] = {"rows": rows, "rest": rest, "tot": tot, "by": by, "days": len(days), "known": known,
+        nounk = sum(1 for X in days if X in unk)
+        out_p[pid] = {"rows": rows, "rest": rest, "tot": tot, "by": by, "days": len(days), "known": known, "nocost": nounk,
                       "from": pr[pid][0].isoformat(), "to": pr[pid][1].isoformat()}
     V = _verdicts(W, lambda c: True, curve)
     Vc = {cc: {m: v for m, v in _verdicts(W, lambda c, cc=cc: c == cc, curve).items() if m in used} for cc in ccs}

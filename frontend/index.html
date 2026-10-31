@@ -7662,8 +7662,9 @@ function devView(d){ const D=d.dev;
   const pers=D.periods||[]; if(!pers.some(p=>p[0]===DVPER)) DVPER='30';
   const PP=(D.P||{})[DVPER]||{}, L=DVCC?((PP.by||{})[DVCC]||{rows:[],rest:{},tot:{}}):PP, Vm=DVCC?((D.Vc||{})[DVCC]||{}):(D.V||{});
   const rows=(L.rows||[]).map(r=>{ const v=Vm[r[0]]||['Too little data',null,null,false];
+    const pk=r[6]!=null?r[6]:r[2];                    // paid installs of the days whose Google Ads cost is known: the CPI's base
     return {m:r[0], n:r[1], p:r[2], cost:r[3], rev:r[4], d1:r[5], st:v[0], on:v[1], pb:v[2], px:v[3],
-      cpi:r[2]>0&&r[3]>0?r[3]/r[2]:null, rpi:r[1]>0&&ok(r[4])?r[4]/r[1]:null}; });
+      cpi:pk>0&&r[3]>0?r[3]/pk:null, rpi:r[1]>0&&ok(r[4])?r[4]/r[1]:null}; });
   rows.forEach(x=>{ x.vs=ok(x.rpi)&&ok(x.cpi)?x.rpi/x.cpi:null; });
   const cnt=k=>rows.filter(x=>x.st===k).length;
   const key=x=>DVSORT.k==='st'?(DV_RANK[x.st]??9)*1e9-(x.n||0):DVSORT.k==='n'?-(x.n||0):DVSORT.k==='cpi'?-(x.cpi??-1):DVSORT.k==='rev'?-(x.rev??-1)
@@ -7681,7 +7682,8 @@ function devView(d){ const D=d.dev;
   const span=PP.from?(PP.from===PP.to?fd(PP.from):`${fd(PP.from)}–${fd(PP.to)}`):'';
   const want=PP.from?Math.round((Date.parse(PP.to)-Date.parse(PP.from))/864e5)+1:0, gap=Math.max(0,want-(PP.days||0));   // install days of the period not read yet
   const part=gap?`<div class="roi-why"><span>⏳ Is period ke <b>${gap}</b> din ka data GA4 se abhi aa raha hai — numbers abhi adhoore hain (har build me thoda aur).</span></div>`:'';
-  const T=L.tot||{}, tcpi=T.p>0&&T.cost>0?T.cost/T.p:null, trpi=T.n>0&&ok(T.rev)?T.rev/T.n:null, tvs=ok(tcpi)&&ok(trpi)?trpi/tcpi:null;
+  const nc=PP.nocost||0, nocost=nc?`<div class="roi-why"><span>⏳ Is period ke <b>${nc}</b> din ka Google Ads cost (country-wise) abhi nahi aaya — CPI baaki dino se, un dino ke installs CPI me nahi gine.</span></div>`:'';
+  const T=L.tot||{}, tpk=T.pk!=null?T.pk:T.p, tcpi=tpk>0&&T.cost>0?T.cost/tpk:null, trpi=T.n>0&&ok(T.rev)?T.rev/T.n:null, tvs=ok(tcpi)&&ok(trpi)?trpi/tcpi:null;
   const kpis=`<div class="roi-ks6">`
     +tile('Installs',N(T.n),`${T.n?Math.min(100,Math.round(T.p/T.n*100))+'% paid · ':''}${E(span)}`)
     +tile('CPI',ok(tcpi)?MP(tcpi):'—','Google Ads cost ÷ paid installs')
@@ -7696,7 +7698,7 @@ function devView(d){ const D=d.dev;
       +`<td>${x.pb?(DV_PB[x.pb]||'—'):'—'}</td></tr>`; }).join('');
   const rest=L.rest&&L.rest.models?`<p class="roi-note">+ <b>${N(L.rest.models)}</b> aur models (har ek ke kam installs) — ${P(L.rest.share)} installs (upar ke tiles me shamil).</p>`:'';
   return chips+warn+`<div class="roi-card"><div class="roi-ct"><h3>📱 Devices · ${DVCC?E(valFlag(DVCC)+' '+valCtyName(DVCC)):'All countries'}</h3>${sel}</div>`
-    +`<div class="roi-ctl">${perBtns}</div>`+part+kpis
+    +`<div class="roi-ctl">${perBtns}</div>`+part+nocost+kpis
     +(rows.length?`<div class="roi-tw"><table class="roi-t"><thead><tr><th>Device</th>${th('st','Status')}${th('n','Installs')}${th('cpi','CPI')}${th('rev','Revenue')}${th('rpi','Revenue / install')}${th('vs','vs CPI')}${th('d1','Back next day')}<th>Money back</th></tr></thead><tbody>${body}</tbody></table></div>`
       :`<p class="roi-note">Is period / country me abhi kisi model ke kaafi installs nahi.</p>`)
     +rest

@@ -190,3 +190,18 @@ def test_curve_of():
 def test_log_line_counts_only():
     assert gd.log_line({"counts": {"selected": 2, "with_ga4": 2, "fetched": 1, "calls": 9}}) == \
         "ga4 device: apps 2, with GA4 2, fetched 1, fresh 0, failed 0, deferred 0, waiting 0, calls 9, tokens 0"
+
+
+def test_days_without_cost_do_not_lower_the_cpi():
+    store = _full_store()
+    unk = {TODAY, TODAY - timedelta(days=1)}           # Google Ads has not split these days by country yet
+    blk = dvb.dev_block(store, _cost(store), unk, lambda X: 1.0, {})
+    p7 = blk["P"]["7"]
+    assert p7["nocost"] == 1 and p7["known"] is False
+    t = p7["tot"]
+    assert t["p"] == round(115.5 * 7) and t["pk"] == round(115.5 * 6)                  # yesterday's paid installs not in pk
+    assert abs(t["cost"] / t["pk"] - 0.4) < 1e-4                                       # the CPI of the days with a cost
+    one = {r[0]: r for r in p7["rows"]}["XM-1"]
+    assert one[6] == 75 * 6 and abs(one[3] / one[6] - 0.4) < 1e-4
+    td = blk["P"]["today"]
+    assert td["nocost"] == 1 and td["tot"]["cost"] == 0 and td["tot"]["pk"] == 0
