@@ -38,10 +38,22 @@ def test_all_countries(out):
     assert "🔴 Loss 1" in s and "🟡 Slow 1" in s and "🟢 Profit 1" in s
     assert s.index("XBrand XM-2") < s.index("XBrand Phone One XM-1")             # Loss first; no marketing name: brand + code
     assert "XBrand XM-2 XM-2" not in s                                           # the code once
-    assert "XBrand Phone One XM-1 🟢 Profit 5,000 90% paid ≈$0.420 20% 90% 130% 31–90 din 45%" in s
+    # Installs · CPI · Revenue 7d · revenue per user 7 / 30 / 90 days with their ROAS · money back · back next day
+    assert "XBrand Phone One XM-1 🟢 Profit 5,000 90% paid ≈$0.420 $500 $0.100 20% $0.300 90% $0.600 130% 31–90 din 45%" in s
+    assert "XM-3 🟡 Slow ≈30 700 80% paid ≈$0.450 $70 $0.100 10% $0.300 50% — ≈ 181–365 din 40%" in s
     assert "1 saal me nahi" in s and "≈ 181–365 din" in s and "≈30" in s
-    assert "+ 15 aur models (har ek 30 se kam installs) — 2% installs." in s
+    assert "+ 15 aur models (har ek 30 se kam installs) — 2% installs (upar ke tiles me shamil)." in s
     assert "⚠️" not in s and 'class="roi-g"' in out["all_html"] and 'class="roi-b"' in out["all_html"]
+
+
+def test_kpi_tiles(out):
+    s = out["all"]
+    assert "Installs 6,720 89% paid · 25 Sep 26–22 Oct 26" in s
+    assert "CPI $0.400 Google Ads cost ÷ paid installs" in s
+    assert "Revenue / user · 7d $0.100 ROAS 28%" in s and "Revenue / user · 30d $0.300 ROAS 84%" in s
+    assert "Revenue / user · 90d — 90 din ka data abhi aa raha hai" in s and "Revenue · 7d $672 Ads cost $2,400" in s
+    c = out["cc"]
+    assert "CPI $0.500" in c and "Revenue / user · 90d $0.600 ROAS 133%" in c
 
 
 def test_coverage_warning(out):
@@ -53,3 +65,5 @@ def test_country_and_sort(out):
     s = out["sorted_n"]
     assert s.index("XM-1") < s.index("XM-2") < s.index("XM-3")
     assert "Devices · All countries" in out["unknown_cc"]
+    u = out["sorted_u30"]
+    assert u.index("XM-1") < u.index("XM-2")                                       # every row $0.300: installs decide

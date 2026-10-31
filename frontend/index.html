@@ -7658,12 +7658,15 @@ function dvName(D,m){ const n=(D.names||{})[m]||[], b=n[0]&&n[0]!=='(not set)'?n
 function devView(d){ const D=d.dev;
   if(!D) return `<div class="roi-card"><p class="roi-note">📱 Devices ka data aa raha hai — GA4 se har build me thoda thoda (pehli baar kuch ghante lagenge).</p></div>`;
   const ccs=D.cc||[]; if(DVCC&&!ccs.some(c=>c[0]===DVCC)) DVCC='';
-  const L=DVCC?(D.by&&D.by[DVCC])||{rows:[],rest:{}}:{rows:D.rows||[],rest:D.rest||{}};
+  const L=DVCC?(D.by&&D.by[DVCC])||{rows:[],rest:{}}:{rows:D.rows||[],rest:D.rest||{},tot:D.tot};
   const rows=L.rows.slice(), cnt=k=>rows.filter(x=>x.st===k).length;
-  const key=x=>DVSORT.k==='st'?(DV_RANK[x.st]??9)*1e9-(x.n||0):DVSORT.k==='n'?-(x.n||0):DVSORT.k==='r90'?(x.r90??x.r30??9e9):DVSORT.k==='r30'?(x.r30??9e9):DVSORT.k==='r7'?(x.r7??9e9):DVSORT.k==='cpi'?-(x.cpi??-1):DVSORT.k==='d1'?(x.d1??9):0;
+  const upu=(r,n)=>ok(r)&&n>0?r/n:null, u7=x=>upu(x.rev,x.n), u30=x=>upu(x.rev30,x.n30), u90=x=>upu(x.rev90,x.n90);
+  const key=x=>DVSORT.k==='st'?(DV_RANK[x.st]??9)*1e9-(x.n||0):DVSORT.k==='n'?-(x.n||0):DVSORT.k==='r90'?(x.r90??x.r30??9e9):DVSORT.k==='r30'?(x.r30??9e9):DVSORT.k==='r7'?(x.r7??9e9)
+    :DVSORT.k==='cpi'?-(x.cpi??-1):DVSORT.k==='d1'?(x.d1??9):DVSORT.k==='rev'?-(x.rev??-1):DVSORT.k==='u7'?-(u7(x)??-1):DVSORT.k==='u30'?-(u30(x)??-1):DVSORT.k==='u90'?-(u90(x)??-1):0;
   rows.sort((a,b)=>DVSORT.dir*(key(a)-key(b))||(b.n-a.n));
   const th=(k,l)=>`<th aria-sort="${DVSORT.k===k?(DVSORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-roi-dvsort="${k}">${l}</button></th>`;
   const pc=v=>ok(v)?`<span class="${roasCls(v)}">${Math.round(v*100)}%</span>`:'—';
+  const uc=(u,r)=>ok(u)?`${MP(u)}<small> ${pc(r)}</small>`:'—';   // revenue per user, its ROAS beside it
   const sel=`<label class="roi-note" style="display:inline-flex;align-items:center;gap:6px;margin:0">Country <select data-roi-dvcc aria-label="Country">`
     +`<option value=""${DVCC?'':' selected'}>All countries</option>`+ccs.map(([c,n])=>`<option value="${E(c)}"${DVCC===c?' selected':''}>${E(valCtyName(c))} · ${N(n)}</option>`).join('')+`</select></label>`;
   const chips=`<div class="roi-chips">${['Loss','Slow','Profit','No ads','Too little data'].filter(k=>cnt(k)).map(k=>`<span class="roi-cc">${dvChip(k)} <b>${cnt(k)}</b></span>`).join('')}</div>`;
@@ -7671,16 +7674,26 @@ function devView(d){ const D=d.dev;
   const miss=low.length?Math.round((1-Math.min(...low.map(x=>x[1])))*100):0;
   const warn=low.length?`<div class="roi-why roi-cut"><span>⚠️ Is app me GA4 ne kuch din ka model-wise data <b>"(other)"</b> me daal diya (sabse zyada <b>${miss}%</b>). Table baaki data par hai — numbers ≈ samjhiye.</span></div>`:'';
   const W=D.win||{}, wl=a=>W[a]?`${fd(W[a][0])}–${fd(W[a][1])}`:'—';
+  // 📊 the KPI tiles of the list (every model of it, the small ones too): installs, CPI, revenue per user at 7 / 30 / 90 days, revenue
+  const T=L.tot||{}, t7=T['7']||{}, t30=T['30']||{}, t90=T['90']||{}, rt=t=>t&&t.cost>0?t.rev/t.cost:null, pu=t=>t&&t.n>0?t.rev/t.n:null;
+  const kpis=`<div class="roi-ks6">`
+    +tile('Installs',N(t7.n),`${t7.n?Math.min(100,Math.round(t7.p/t7.n*100))+'% paid · ':''}${wl('7')}`)
+    +tile('CPI',t7.p>0&&t7.cost>0?MP(t7.cost/t7.p):'—','Google Ads cost ÷ paid installs')
+    +tile('Revenue / user · 7d',ok(pu(t7))?MP(pu(t7)):'—',ok(rt(t7))?`ROAS ${pc(rt(t7))}`:'',ok(pu(t7))&&t7.p>0&&t7.cost>0&&pu(t7)>=t7.cost/t7.p?'roi-kg':'')
+    +tile('Revenue / user · 30d',ok(pu(t30))?MP(pu(t30)):'—',ok(rt(t30))?`ROAS ${pc(rt(t30))} · ${wl('30')}`:wl('30'))
+    +tile('Revenue / user · 90d',ok(pu(t90))?MP(pu(t90)):'—',ok(rt(t90))?`ROAS ${pc(rt(t90))} · ${wl('90')}`:'90 din ka data abhi aa raha hai')
+    +tile('Revenue · 7d',ok(t7.rev)?M(t7.rev):'—',ok(t7.cost)?`Ads cost ${M(t7.cost)}`:'')+`</div>`;
   const body=rows.map(x=>{ const nm=dvName(D,x.m);
     return `<tr><td class="roi-nm"><b>${E(nm.t)}</b>${nm.t.includes(x.m)?'':` <small>${E(x.m)}</small>`}</td><td>${dvChip(x.st)}${x.on==='30'?' <small title="90 din ka data abhi kam: 30 din se">≈30</small>':''}</td>`
       +`<td>${N(x.n)}<small> ${ok(x.ps)?Math.min(100,Math.round(x.ps*100))+'% paid':''}</small></td><td>${ok(x.cpi)?'≈'+MP(x.cpi):'—'}</td>`
-      +`<td>${pc(x.r7)}</td><td>${pc(x.r30)}</td><td>${pc(x.r90)}</td><td>${x.pb?(DV_PB[x.pb]||'—'):'—'}</td><td>${ok(x.d1)?Math.round(x.d1*100)+'%':'—'}</td></tr>`; }).join('');
-  const rest=L.rest&&L.rest.models?`<p class="roi-note">+ <b>${N(L.rest.models)}</b> aur models (har ek ${D.min_row||30} se kam installs) — ${P(L.rest.share)} installs.</p>`:'';
-  return chips+warn+`<div class="roi-card"><div class="roi-ct"><h3>📱 Devices · ${DVCC?E(valFlag(DVCC)+' '+valCtyName(DVCC)):'All countries'}</h3>${sel}</div>`
-    +(rows.length?`<div class="roi-tw"><table class="roi-t"><thead><tr><th>Device</th>${th('st','Status')}${th('n','Installs')}${th('cpi','Avg cost/install')}${th('r7','ROAS 7d')}${th('r30','ROAS 30d')}${th('r90','ROAS 90d')}<th>Money back</th>${th('d1','Back next day')}</tr></thead><tbody>${body}</tbody></table></div>`
+      +`<td>${ok(x.rev)?M(x.rev):'—'}</td><td>${uc(u7(x),x.r7)}</td><td>${uc(u30(x),x.r30)}</td><td>${uc(u90(x),x.r90)}</td>`
+      +`<td>${x.pb?(DV_PB[x.pb]||'—'):'—'}</td><td>${ok(x.d1)?Math.round(x.d1*100)+'%':'—'}</td></tr>`; }).join('');
+  const rest=L.rest&&L.rest.models?`<p class="roi-note">+ <b>${N(L.rest.models)}</b> aur models (har ek ${D.min_row||30} se kam installs) — ${P(L.rest.share)} installs (upar ke tiles me shamil).</p>`:'';
+  return chips+warn+`<div class="roi-card"><div class="roi-ct"><h3>📱 Devices · ${DVCC?E(valFlag(DVCC)+' '+valCtyName(DVCC)):'All countries'}</h3>${sel}</div>`+kpis
+    +(rows.length?`<div class="roi-tw"><table class="roi-t"><thead><tr><th>Device</th>${th('st','Status')}${th('n','Installs')}${th('cpi','CPI')}${th('rev','Revenue 7d')}${th('u7','Rev / user 7d')}${th('u30','Rev / user 30d')}${th('u90','Rev / user 90d')}<th>Money back</th>${th('d1','Back next day')}</tr></thead><tbody>${body}</tbody></table></div>`
       :`<p class="roi-note">Is country me abhi kisi model ke ${D.min_row||30}+ installs nahi.</p>`)
     +rest
-    +`<p class="roi-note"><b>Installs</b> = ${wl('7')} ke installs · <b>ROAS 7d</b> = unhi installs ki 7 din ki kamai ÷ Google Ads cost · <b>ROAS 30d</b> = ${wl('30')} ke installs · <b>ROAS 90d</b> = ${wl('90')} ke installs. <b>Avg cost/install ≈</b> = us country-din ka Google Ads cost ÷ GA4 paid installs (Google model-wise cost nahi deta — average). Kamai GA4 se, AdMob se matched.</p>`
+    +`<p class="roi-note"><b>Installs</b> = ${wl('7')} ke installs · <b>CPI ≈</b> = us country-din ka Google Ads cost ÷ GA4 paid installs (Google model-wise cost nahi deta — average) · <b>Revenue 7d</b> = unhi installs ki pehle 7 din ki kamai · <b>Rev / user</b> = kamai ÷ installs (paid + organic), saath me ROAS (kamai ÷ Google Ads cost): 7d = ${wl('7')}, 30d = ${wl('30')}, 90d = ${wl('90')} ke installs. Kamai GA4 se, AdMob se matched.</p>`
     +`<p class="roi-note"><b>Profit</b> = 90 din me paisa wapas · <b>Slow</b> = 90 din me nahi, app ke apne curve se saal bhar me wapas · <b>Loss</b> = app ke curve se saal me bhi wapas nahi · <b>No ads</b> = in installs pe Google Ads cost nahi · <b>Too little data</b> = ${D.judge||300} se kam installs. ≈30 = 90 din ka data kam tha, 30 din se judge. ≈ money back = app ke curve se.</p></div>`; }
 // ---- 🌍 Countries: keep / cut ----
 function ctyView(d){ const c=d.cty||{}, rows=(c.rows||[]).slice(), cdc=cdOf(d); if(!rows.length) return `<div class="roi-card"><p class="roi-note">Is app ka country data abhi nahi.</p></div>`;

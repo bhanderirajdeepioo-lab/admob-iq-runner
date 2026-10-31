@@ -132,6 +132,12 @@ def test_dev_block_rows_cost_roas_status():
     assert two["st"] == "Slow" and two["pb"] == "365" and two["px"] is True
     assert [c for c, _ in blk["cc"]] == ["XA", "XB"] and blk["by"]["XA"]["rows"][0]["m"] == "XM-1"
     assert blk["names"]["XM-1"] == ["XBrand", "Phone 1"]
+    # the KPI tiles' sums: every model of the list (XM-3 too); revenue per window for the per-user columns
+    t7 = blk["tot"]["7"]
+    assert t7["n"] == round((60 + 30 + 2) * 1.5 * 28) and t7["p"] == round((50 + 25 + 2) * 1.5 * 28)
+    assert abs(t7["cost"] - 77 * 1.5 * 0.4 * 28) < 0.05 and abs(blk["tot"]["d1"] - 60 / 138) < 1e-3
+    assert abs(one["rev30"] - 60 * 1.5 * 28 * 0.3) < 0.05 and abs(one["rev90"] - 60 * 1.5 * 28 * 0.9) < 0.05
+    assert blk["by"]["XB"]["tot"]["7"]["n"] == round(92 * 0.5 * 28)
 
 
 def test_loss_no_ads_and_too_little_data():

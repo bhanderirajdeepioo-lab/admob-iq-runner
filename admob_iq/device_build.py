@@ -12,7 +12,9 @@ Per phone model, for All countries and for each country with enough installs:
                 A-day window's install days (7: the newest, 30 / 90: older ones whose age is complete)
   money back    the first of 7 / 30 / 90 whose ROAS ≥ 100 %; else the app's own curve beyond 90 days (its install days'
                 revenue at 180 / 365 ÷ at 90) → "≈ 180 din" / "≈ 1 saal" / "1 saal me nahi"
+  revenue       the 7-day window's installs' revenue to day 7; per user: each window's revenue to its age ÷ its installs
   back next day users of the 7-day window back on day 1 ÷ its installs
+  KPI tiles     "tot" of each list (All countries, each country): every model's sums (the small ones too)
   status        Profit (money back by day 90) · No ads (no Google Ads cost on these installs) · Slow (not by 90, by a year on the app's curve — or no
                 curve to tell) · Loss (not by a year on the app's curve) · Too little data (< JUDGE installs in the
                 window judged on) — judged on the 90-day window, else the 30-day one (marked "≈30")
@@ -169,6 +171,23 @@ def status(e30, e90, r30, r90, curve):
     return ("Slow" if r * m >= 1 else "Loss"), on
 
 
+def _tot(e7, e30, e90, d1ok):
+    """The sums of a list (every model, the small ones too): installs, paid, cost and revenue of each window, back next
+    day — the KPI tiles over the table."""
+    z = {"n": 0.0, "rev": 0.0, "p": 0.0, "cost": 0.0, "d1": 0.0}
+    out = {}
+    for age, sums in ((7, e7), (30, e30), (90, e90)):
+        t = dict(z)
+        for e in sums.values():
+            for k in t:
+                t[k] += e[k]
+        out[str(age)] = {"n": int(round(t["n"])), "p": int(round(t["p"])), "cost": _r(t["cost"], 2),
+                         "rev": _r(t["rev"], 2)}
+        if age == 7:
+            out["d1"] = _r(t["d1"] / t["n"]) if t["n"] and d1ok else None
+    return out
+
+
 def _rows(W, keep, curve, min_row):
     s7, s30, s90 = (_sum_by(W[a][0], keep) for a in gd.AGES)
     rows, rest_n, rest_m, tot_n = [], 0.0, 0, 0.0
@@ -188,10 +207,12 @@ def _rows(W, keep, curve, min_row):
                      "cost": _r(e7["cost"], 2) if e7 else None, "rev": _r(e7["rev"], 2) if e7 else None,
                      "r7": _r(r7), "r30": _r(r30), "r90": _r(r90),
                      "n30": int(round(e30["n"])) if e30 else 0, "n90": int(round(e90["n"])) if e90 else 0,
+                     "rev30": _r(e30["rev"], 2) if e30 else None, "rev90": _r(e90["rev"], 2) if e90 else None,
                      "d1": _r(e7["d1"] / n7) if e7 and n7 and W[7][3] else None,
                      "pb": pb, "px": proj, "st": st, "on": on})
     rows.sort(key=lambda x: -x["n"])
-    return rows, {"n": int(round(rest_n)), "models": rest_m, "share": _r(rest_n / tot_n) if tot_n else None}
+    return rows, {"n": int(round(rest_n)), "models": rest_m, "share": _r(rest_n / tot_n) if tot_n else None}, \
+        _tot(s7, s30, s90, W[7][3])
 
 
 def dev_block(store, cost, unk, kmon, curve):
@@ -215,7 +236,7 @@ def dev_block(store, cost, unk, kmon, curve):
     a7, b7 = win[7]
     cov["P"] = coverage(_xs(store, "P", a7, b7))
     cov["D1"] = coverage(_xs(store, "D1", a7, b7))
-    rows, rest = _rows(W, lambda cc: True, curve, MIN_ROW)
+    rows, rest, tot = _rows(W, lambda cc: True, curve, MIN_ROW)
     by_cc = {}
     for (md, cc), v in W[7][0].n.items():
         by_cc[cc] = by_cc.get(cc, 0.0) + v
@@ -223,15 +244,15 @@ def dev_block(store, cost, unk, kmon, curve):
     ccs = ccs[:MAX_CC]
     per = {}
     for cc in ccs:
-        r, rs = _rows(W, lambda c, cc=cc: c == cc, curve, MIN_ROW)
-        per[cc] = {"rows": r, "rest": rs, "n": int(round(by_cc[cc]))}
+        r, rs, tt = _rows(W, lambda c, cc=cc: c == cc, curve, MIN_ROW)
+        per[cc] = {"rows": r, "rest": rs, "tot": tt, "n": int(round(by_cc[cc]))}
     names = store.get("names") or {}
     used = {x["m"] for x in rows} | {x["m"] for v in per.values() for x in v["rows"]}
     return {"F": store["F"], "win": {str(a): [w[0].isoformat(), w[1].isoformat()] for a, w in win.items()},
             "days": {str(a): len(W[a][1]) for a in gd.AGES}, "known": {str(a): W[a][2] for a in gd.AGES},
             "cov": cov, "cov_ok": COV_OK, "judge": JUDGE, "min_row": MIN_ROW,
             "names": {m: names[m] for m in sorted(used) if m in names},
-            "rows": rows, "rest": rest, "cc": [[cc, per[cc]["n"]] for cc in ccs], "by": per,
+            "rows": rows, "rest": rest, "tot": tot, "cc": [[cc, per[cc]["n"]] for cc in ccs], "by": per,
             "curve": {k: _r(v) for k, v in (curve or {}).items()}}
 
 
