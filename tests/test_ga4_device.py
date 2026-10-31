@@ -104,59 +104,80 @@ def test_step_reads_each_once_truths_in_one_call_and_resumes():
     assert all(date.fromisoformat(k) >= F + timedelta(days=200 - gd.KEEP_DAYS) for k in store2["x"])
 
 
+TODAY = F + timedelta(days=3)                       # the property's today (F = its newest final day)
+
+
 def _full_store(fold=None):
     store = {"v": gd.STORE_V}
-    gd.step_app(FakeGA(fold=fold), store, F, NOW)
+    for _ in range(12):                                 # the call cap: as many runs as it takes
+        try:
+            if gd.step_app(FakeGA(fold=fold), store, F, NOW, TODAY) == "fresh":
+                break
+        except gf.Stop:
+            continue
     return store
 
 
-def test_dev_block_rows_cost_roas_status():
+def _cost(store, per_paid=0.4):
+    """$per_paid a paid install on every install day × country of the store."""
+    return {cc: {date.fromisoformat(k): (50 + 25 + 2) * sh * per_paid for k in store["x"]} for cc, sh in CCS.items()}
+
+
+def test_period_reads_today_first_so_far_and_re_read_by_age():
+    store = {"v": gd.STORE_V}
+    due = gd.todo(store, F, TODAY, NOW)
+    assert due[:5] == [("S", TODAY), ("P", TODAY), ("S", TODAY - timedelta(days=1)), ("P", TODAY - timedelta(days=1)),
+                       ("D1", TODAY - timedelta(days=1))]            # today / yesterday first
     store = _full_store()
-    cost = {cc: {} for cc in CCS}
-    for k in store["x"]:
-        X = date.fromisoformat(k)
-        for cc, sh in CCS.items():
-            cost[cc][X] = (50 + 25 + 2) * sh * 0.4     # $0.40 per paid install
+    assert store["today"] == TODAY.isoformat() and gd.todo(store, F, TODAY, NOW) == []
+    s = store["x"][(TODAY - timedelta(days=10)).isoformat()]["S"]
+    assert s["to"] == TODAY.isoformat() and s["t"] == [138, round(1.02 * 11, 4)]      # installs, revenue to today
+    assert store["x"][(TODAY - timedelta(days=10)).isoformat()]["P"]["fin"] is True    # a final day's paid installs
+    assert not store["x"][TODAY.isoformat()]["P"].get("fin")                           # today's: read again
+    # an hour later nothing; three hours later the newest days again; a day later every S up to 31 days old
+    assert gd.todo(store, F, TODAY, NOW + timedelta(hours=1)) == []
+    again = gd.todo(store, F, TODAY, NOW + timedelta(hours=3))
+    assert {k for k, _ in again} == {"S", "P", "D1"} and all((TODAY - x).days <= 2 for _, x in again)
+    day = gd.todo(store, F, TODAY, NOW + timedelta(hours=21))
+    assert sum(1 for k, x in day if k == "S") == 32 and max((TODAY - x).days for k, x in day if k == "S") == 31
+
+
+def test_dev_block_periods_rows_kpis_verdicts():
+    store = _full_store()
     curve = {"90_180": 1.5, "90_365": 2.0, "30_180": 3.0, "30_365": 4.0}
-    blk = dvb.dev_block(store, cost, set(), lambda X: 1.0, curve)
-    assert blk["days"] == {"7": 28, "30": 28, "90": 28} and blk["cov"]["R7"] == 1.0 and blk["cov"]["P"] == 1.0
-    r = {x["m"]: x for x in blk["rows"]}
-    assert set(r) == {"XM-1", "XM-2", "XM-3"} and blk["rest"]["models"] == 0
-    assert r["XM-3"]["st"] == "Too little data"                                  # 84 installs in the 90-day window
-    one = r["XM-1"]
-    assert one["n"] == round(60 * 1.5 * 28) and abs(one["ps"] - 50 / 60) < 1e-4 and abs(one["cpi"] - 0.4) < 1e-4
-    # XM-1: $0.01 a day per install → 7 days $0.07, 30 days $0.30, 90 days $0.90 per install; cost $0.40 × 50/60 per install
-    assert abs(one["r7"] - 0.07 / (0.4 * 50 / 60)) < 1e-3 and abs(one["r90"] - 0.9 / (0.4 * 50 / 60)) < 1e-3
-    assert one["st"] == "Profit" and one["pb"] == "90" and abs(one["d1"] - 0.5) < 1e-4   # 30 days: 90%, 90 days: 270%
-    two = r["XM-2"]                                     # $0.002 a day: 90 days $0.18 vs $0.333 → 54%; × 2.0 by a year → Profit? no: 108% → Slow
-    assert two["st"] == "Slow" and two["pb"] == "365" and two["px"] is True
-    assert [c for c, _ in blk["cc"]] == ["XA", "XB"] and blk["by"]["XA"]["rows"][0]["m"] == "XM-1"
-    assert blk["names"]["XM-1"] == ["XBrand", "Phone 1"]
-    # the KPI tiles' sums: every model of the list (XM-3 too); revenue per window for the per-user columns
-    t7 = blk["tot"]["7"]
-    assert t7["n"] == round((60 + 30 + 2) * 1.5 * 28) and t7["p"] == round((50 + 25 + 2) * 1.5 * 28)
-    assert abs(t7["cost"] - 77 * 1.5 * 0.4 * 28) < 0.05 and abs(blk["tot"]["d1"] - 60 / 138) < 1e-3
-    assert abs(one["rev30"] - 60 * 1.5 * 28 * 0.3) < 0.05 and abs(one["rev90"] - 60 * 1.5 * 28 * 0.9) < 0.05
-    assert blk["by"]["XB"]["tot"]["7"]["n"] == round(92 * 0.5 * 28)
+    blk = dvb.dev_block(store, _cost(store), set(), lambda X: 1.0, curve)
+    assert blk["v"] == 2 and [p for p, _ in blk["periods"]] == ["today", "yday", "7", "30", "tm", "lm", "90"]
+    p30 = blk["P"]["30"]
+    assert p30["days"] == 30 and p30["from"] == (TODAY - timedelta(days=30)).isoformat()
+    t = p30["tot"]
+    assert t["n"] == 138 * 30 and t["p"] == round(115.5 * 30) and abs(t["cost"] - 115.5 * 30 * 0.4) < 0.1
+    rows = {r[0]: r for r in p30["rows"]}
+    one = rows["XM-1"]                                  # [model, installs, paid, cost, revenue so far, back next day]
+    assert one[1] == 2700 and one[2] == 2250 and abs(one[3] - 900) < 0.05 and one[5] == 0.5
+    assert abs(one[4] - 0.9 * sum(j + 1 for j in range(1, 31))) < 0.1                # so far: older days longer
+    assert blk["P"]["today"]["tot"]["n"] == 138 and blk["P"]["today"]["tot"]["d1"] is None
+    assert blk["V"]["XM-1"][0] == "Profit" and blk["V"]["XM-2"][0] == "Slow" and blk["V"]["XM-3"][0] == "Too little data"
+    assert blk["vcount"] == {"Loss": 0, "Slow": 1, "Profit": 1, "No ads": 0, "Too little data": 1}
+    assert [c for c, _ in blk["cc"]] == ["XA", "XB"] and blk["P"]["30"]["by"]["XB"]["tot"]["n"] == 46 * 30
+    assert blk["Vc"]["XA"]["XM-1"][0] == "Profit" and blk["names"]["XM-1"] == ["XBrand", "Phone 1"]
+    assert blk["cov"]["S"] == 1.0 and blk["cov"]["P"] == 1.0
 
 
 def test_loss_no_ads_and_too_little_data():
     store = _full_store()
     blk = dvb.dev_block(store, {}, set(), lambda X: 1.0, {"90_365": 1.1})
-    assert {x["m"]: x["st"] for x in blk["rows"]} == {"XM-1": "No ads", "XM-2": "No ads", "XM-3": "Too little data"}
-    cost = {cc: {date.fromisoformat(k): 77 * sh * 5.0 for k in store["x"]} for cc, sh in CCS.items()}   # $5 a paid install
-    blk = dvb.dev_block(store, cost, set(), lambda X: 1.0, {"90_365": 1.1, "30_365": 1.5})
-    assert {x["m"]: x["st"] for x in blk["rows"] if x["m"] != "XM-3"} == {"XM-1": "Loss", "XM-2": "Loss"}
+    assert {m: v[0] for m, v in blk["V"].items()} == {"XM-1": "No ads", "XM-2": "No ads", "XM-3": "Too little data"}
+    blk = dvb.dev_block(store, _cost(store, 5.0), set(), lambda X: 1.0, {"90_365": 1.1, "30_365": 1.5})
+    assert {m: v[0] for m, v in blk["V"].items() if m != "XM-3"} == {"XM-1": "Loss", "XM-2": "Loss"}
     assert dvb.status(None, {"n": 10, "cost": 1, "rev": 1}, None, 1.0, {}) == ("Too little data", None)
 
 
 def test_a_folded_day_keeps_the_cost_per_install():
     store = _full_store(fold={"XM-2": 0.0})            # GA4 folds XM-2 away: coverage < 1
-    cost = {cc: {date.fromisoformat(k): 77 * sh * 0.4 for k in store["x"]} for cc, sh in CCS.items()}
-    blk = dvb.dev_block(store, cost, set(), lambda X: 1.0, {})
-    assert blk["cov"]["P"] < 0.7 and blk["cov"]["n7"] < 0.7 and blk["cov"]["R7"] < 0.95
-    one = {x["m"]: x for x in blk["rows"]}["XM-1"]
-    assert abs(one["cpi"] - 0.4) < 1e-4                 # not raised by the folded installs
+    blk = dvb.dev_block(store, _cost(store), set(), lambda X: 1.0, {})
+    assert blk["cov"]["P"] < 0.7 and blk["cov"]["n"] < 0.7 and blk["cov"]["S"] < 0.95
+    one = {r[0]: r for r in blk["P"]["30"]["rows"]}["XM-1"]
+    assert abs(one[3] / one[2] - 0.4) < 1e-4            # its cost per paid install: not raised by the folded installs
 
 
 def test_curve_of():

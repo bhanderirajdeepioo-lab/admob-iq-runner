@@ -2124,7 +2124,7 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
         if dev:
             body["dev"] = dev
             acc.dvn["apps"] += 1
-            acc.dvn["rows"] += len(dev["rows"])
+            acc.dvn["rows"] += len(((dev.get("P") or {}).get("30") or {}).get("rows") or [])
         if late is not None:
             body["late"] = late["info"]
         if cv is not None and late is not None and "B" in late:   # 🌍 one country's install-day table (own try:
@@ -2198,8 +2198,7 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
                          "life": [_r(lt[0], 2), _r(lt[1], 2), _r(lt[2], 2)], "cut": cty["cut"]["n"],
                          "cut_save": cty["cut"], "cpi_src": summ["cpi_src"], "nb": summ["nb"], "fc": fcs,
                          "first": life[0][0] if life else None, "ads": bool(spend and spend.get("sids")), "f4": f4,
-                         "dv": ({k: sum(1 for x in dev["rows"] if x["st"] == k)
-                                 for k in ("Loss", "Slow", "Profit", "No ads", "Too little data")} if dev else None)})
+                         "dv": dev.get("vcount") if dev else None})
         for d, rv, sp, spi in life:
             p = acc.life.setdefault(d, [0.0, 0.0, 0.0])
             p[0] += rv or 0

@@ -30,6 +30,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from .. import ga4_probe
 from ..db import write_json_gz_stable
@@ -46,8 +47,14 @@ LATE = gu.IDAY_LATE                 # F = E − 3: the newest final day
 WIN = 28                            # install days a window
 AGES = (7, 30, 90)
 KEEP_DAYS = 130                     # install days kept (the 90-day window ends F − 89, starts F − 116)
+RANGE_DAYS = 92                     # the period view (owner, 31 Oct 2026: "uppar jo time period he uske hisab se"):
+                                    # every install day of today … today − 91 — its installs, paid installs, back next
+                                    # day and its revenue SO FAR (S: to today), re-read while it still changes:
+FRESH_H = 2.0                       #   an install day ≤ 2 days old: S / P / D1 again after this many hours,
+DAILY_H = 20.0                      #   ≤ 31 days old: after this many (once a day),
+WEEKLY_H = 7 * 24.0                 #   older: once a week (its revenue so far grows slowly)
 NAMES_DAYS = 7
-MAX_CALLS = 60                      # per app per run (the rest next run)
+MAX_CALLS = 80                      # per app per run (the rest next run)
 BUDGET_SEC = 180
 RETRY_HOURS = 3.0
 PAGE_ROWS = 100000
@@ -72,8 +79,10 @@ def _paid():
     return {"filter": {"fieldName": CAMP, "stringFilter": {"matchType": "FULL_REGEXP", "value": PAID_RE}}}
 
 
-def spec(kind, x):
-    """kind → (date range a, b, metrics, extra filters)."""
+def spec(kind, x, today=None):
+    """kind → (date range a, b, metrics, extra filters). S: the install day's revenue so far (to `today`)."""
+    if kind == "S":
+        return x, today, ("newUsers", "totalAdRevenue"), [_fsd(x)]
     if kind == "P":
         return x, x, ("newUsers",), [_fsd(x), _paid()]
     if kind == "D1":
@@ -96,10 +105,10 @@ def _flag(ga):
     return None
 
 
-def read(ga, kind, x):
+def read(ga, kind, x, today=None):
     """One kind for install day x → {"m": {model: {cc: value}}, "f": flag} (value: a number for P / D1, [installs,
-    revenue] for R*); its truth ("t") comes from truths()."""
-    a, b, mets, extra = spec(kind, x)
+    revenue] for R* / S); its truth ("t") comes from truths()."""
+    a, b, mets, extra = spec(kind, x, today)
     rows = ga.report_all(body(a, b, (MODEL, CC), mets), extra=extra, page_rows=PAGE_ROWS)
     m = {}
     for r in rows:
@@ -114,7 +123,7 @@ def read(ga, kind, x):
     return {"m": m, "f": _flag(ga)}
 
 
-def truths(ga, kind, xs):
+def truths(ga, kind, xs, today=None):
     """The same reads without the split, for every install day of xs in ONE call (date × firstSessionDate is whole on
     every app) → {X iso: truth} (a number for P / D1, [installs, revenue] for R*)."""
     lo, hi = min(xs), max(xs)
@@ -138,6 +147,19 @@ def truths(ga, kind, xs):
             if x and d == x + timedelta(days=1):
                 out[x.isoformat()] = _r4(out.get(x.isoformat(), 0) + float(r.get("activeUsers") or 0))
         return out
+    if kind == "S":                                     # so far: every day from the install day to today
+        rows = ga.report_all(body(lo, today, ("firstSessionDate", "date"), ("newUsers", "totalAdRevenue")),
+                             extra=[pick], page_rows=PAGE_ROWS)
+        out = {}
+        for r in rows:
+            x, d = ga4._d(r.get("firstSessionDate")), ga4._d(r.get("date"))
+            if not x or not d or not (x <= d <= today):
+                continue
+            cur = out.setdefault(x.isoformat(), [0, 0])
+            if d == x:
+                cur[0] = _r4(cur[0] + float(r.get("newUsers") or 0))
+            cur[1] = _r4(cur[1] + float(r.get("totalAdRevenue") or 0))
+        return out
     age = int(kind[1:])
     rows = ga.report_all(body(lo, hi + timedelta(days=age - 1), ("firstSessionDate", "date"),
                               ("newUsers", "totalAdRevenue")), extra=[pick], page_rows=PAGE_ROWS)
@@ -153,8 +175,21 @@ def truths(ga, kind, xs):
     return out
 
 
-def todo(store, f):
-    """The reads due for the newest final day f, newest install day first: [(kind, X)]."""
+def _stale(rec, x, today, now, final_on):
+    """Is the record of install day x due again? Never read: yes. Read once its days were final (final_on ≤ the newest
+    final day when read — P / D1): no. Else by the install day's age: FRESH_H / DAILY_H / WEEKLY_H since it was read."""
+    if not rec:
+        return True
+    if rec.get("fin"):
+        return False
+    age = (today - x).days
+    h = FRESH_H if age <= 2 else DAILY_H if age <= 31 else WEEKLY_H
+    return gu._hours_since(rec.get("at"), now) >= h
+
+
+def todo(store, f, today=None, now=None):
+    """The reads due → [(kind, X)]: the period view's newest install days first (today, yesterday: what the owner
+    looks at), then the windows' (each once), then the period view's older days."""
     xs = store.get("x") or {}
     w = windows(f)
     need = {}
@@ -164,13 +199,26 @@ def todo(store, f):
             k = d.isoformat()
             need.setdefault(k, set()).update({"P", "R%d" % age} | ({"D1"} if age == 7 else set()))
             d -= timedelta(days=1)
-    out = []
+    win = []
     for k in sorted(need, reverse=True):
         have = xs.get(k) or {}
         for kind in ("P", "R7", "D1", "R30", "R90"):
             if kind in need[k] and kind not in have:
-                out.append((kind, gu._d(k)))
-    return out
+                win.append((kind, gu._d(k)))
+    if today is None:
+        return win
+    fresh, older = [], []
+    for i in range(RANGE_DAYS):
+        x = today - timedelta(days=i)
+        have = xs.get(x.isoformat()) or {}
+        for kind in ("S", "P", "D1"):
+            if kind == "D1" and x + timedelta(days=1) > today:
+                continue
+            if (kind, x) in win:                        # the window reads it already (once, when final)
+                continue
+            if _stale(have.get(kind), x, today, now, None):
+                (fresh if i <= 2 else older).append((kind, x))
+    return fresh + win + older
 
 
 def names_read(ga, f):
@@ -187,10 +235,12 @@ def names_read(ga, f):
     return {k: v[1] for k, v in best.items()}
 
 
-def step_app(ga, store, f, now):
+def step_app(ga, store, f, now, today=None):
     """One app's run on its store → "fetched" or "fresh". Raises gf.Stop (what was read so far is kept)."""
     did = False
     store["F"] = f.isoformat()
+    if today is not None:
+        store["today"] = today.isoformat()
     xs = store.setdefault("x", {})
     for k in [k for k in xs if gu._d(k) < f - timedelta(days=KEEP_DAYS)]:
         del xs[k]
@@ -198,18 +248,25 @@ def step_app(ga, store, f, now):
         store["names"] = names_read(ga, f)
         store["names_at"] = gu._now_iso(now)
         did = True
-    due = todo(store, f)
+    due = todo(store, f, today, now)
     tr = store.setdefault("tr", {})                     # truths read ahead of their split read: {kind: {X: truth}}
-    for kind in ("P", "R7", "D1", "R30", "R90"):
-        need = [x for k, x in due if k == kind and x.isoformat() not in (tr.get(kind) or {})]
+    for kind in ("S", "P", "R7", "D1", "R30", "R90"):
+        need = [x for k, x in due if k == kind and (kind == "S" or x.isoformat() not in (tr.get(kind) or {}))]
         if need:
-            tr.setdefault(kind, {}).update(truths(ga, kind, need))
+            tr.setdefault(kind, {}).update(truths(ga, kind, need, today))
             for x in need:                              # a day GA4 has nothing for: truth 0
                 tr[kind].setdefault(x.isoformat(), 0 if kind in ("P", "D1") else [0, 0])
             did = True
+    now_iso = gu._now_iso(now)
     for kind, x in due:
-        rec = read(ga, kind, x)
+        rec = read(ga, kind, x, today)
         rec["t"] = (tr.get(kind) or {}).pop(x.isoformat(), None)
+        rec["at"] = now_iso
+        last = x if kind == "P" else x + timedelta(days=1) if kind == "D1" else None
+        if kind.startswith("R") or (last is not None and last <= f):
+            rec["fin"] = True                           # its days were final when read: never again
+        if kind == "S":
+            rec["to"] = today.isoformat()
         xs.setdefault(x.isoformat(), {})[kind] = rec
         did = True
     for kind in list(tr):                               # truths of install days no longer due
@@ -261,11 +318,15 @@ def _one_app(a, st, r, prop, token, ust, data_dir, now, now_iso, over, counts, l
     aid, pid = a["app_id"], r["property_id"]
     tz = ust["tz"].get(pid) or "UTC"
     f = ga4.window_end_in(tz, now) - timedelta(days=LATE)
+    try:
+        today = now.astimezone(ZoneInfo(tz)).date()
+    except Exception:
+        today = now.date()
     path = store_path(data_dir, aid)
     store = load_store(path) or {"v": STORE_V}
     ga = gf.App(token, pid, r["stream_id"], prop, over=over, max_calls=MAX_CALLS)
     try:
-        res = step_app(ga, store, f, now)
+        res = step_app(ga, store, f, now, today)
         st.pop("deferred", None)
         st.update(last_try=now_iso, fail=None)
         if res == "fetched":
