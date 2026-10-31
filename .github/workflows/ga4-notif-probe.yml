@@ -1,0 +1,76 @@
+# One-off: the GA4 NOTIFICATION / ORGANIC / PAID revenue probe — revenue by first-user channel (how users were acquired)
+# and by session channel ("Mobile Push Notifications" = sessions opened from a push), the two crossed, the paid users'
+# channels, push sessions' sources and the notification events, each read tied to the same read without the split. See
+# admob_iq/fetch/ga4_notif_probe.py. Read-only against GA4 and against the PRIVATE repo's data; the only write is
+# ga4/notif_probe.json in the PRIVATE repo. This repo's Actions log is PUBLIC: progress counts and one counts-only line
+# per read kind; stderr (which could echo request details) is hidden, and the inputs are read by the probe from the
+# event file only — never put into a step's env or script.
+name: ga4-notif-probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_apps:
+        description: "probe only the first N apps (0 = all)"
+        required: false
+        default: "0"
+      apps:
+        description: "only these apps: comma list of file keys (empty = all)"
+        required: false
+        default: ""
+      max_calls:
+        description: "GA4 calls this run at most"
+        required: false
+        default: "1000"
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-notif-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    # the probe starts no GA4 call 20 min after IT starts, then writes what it has; before it: setup + the clone (capped
+    # at 8 min below); after: the last in-flight calls + the private write. 40 leaves room for all of it.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Read the PRIVATE data (a read-only clone, for the app routes)
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing"; exit 1; }
+          test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
+          # the token goes in a header for this one command only: never into a URL, a file or .git/config; a clone
+          # slower than 8 min is given up (the probe then reads the routes through the API)
+          auth=$(printf 'x-access-token:%s' "$DATA_REPO_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          if timeout 480 git -c http.extraheader="AUTHORIZATION: basic $auth" clone -q --depth=1 \
+               "https://github.com/$DATA_REPO.git" _private > /dev/null 2>&1; then
+            echo "private data: cloned"
+          else
+            rm -rf _private
+            echo "::warning::private data not cloned: routes are read through the API"
+          fi
+      - name: Run
+        env:
+          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          NOTIF_DATA_DIR: _private
+          PYTHONUNBUFFERED: "1"
+        run: python -m admob_iq.fetch.ga4_notif_probe 2>/tmp/notif.err || { echo "::error::notif probe failed (details kept off the public log)"; exit 1; }
