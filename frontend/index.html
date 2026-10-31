@@ -8497,7 +8497,7 @@ const G=[['Paid','c4'],['Notification','c3'],['Organic','c2'],['Other','c1']];
 const PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['30','30 days'],['tm','This month'],['lm','Last month'],['all','All time']];
 const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ok=v=>v!=null&&isFinite(v);
-function MV(usd){ if(!ok(usd)) return '—'; const x=usd*cfx(), a=Math.abs(x), inr=curView()==='INR';
+function MV(usd){ if(!ok(usd)) return '—'; const x=usd*cfx(), a=Math.abs(x), inr=curView()==='INR'; if(a===0) return csym()+'0';
   const s=a>=100?Math.round(a).toLocaleString(inr?'en-IN':'en-US'):a>=10?a.toFixed(0):a.toFixed(a>=1?1:2); return (x<0?'−':'')+csym()+s; }
 function P(v,t){ if(!(t>0)||!ok(v)) return '—'; const p=v/t*100; return (p>=10||p===0?Math.round(p):p.toFixed(1))+'%'; }
 const N=v=>ok(v)?Math.round(v).toLocaleString('en-US'):'—';
@@ -8528,6 +8528,10 @@ function sum(a,i0,i1){ const s=[0,0,0,0], ss=[0,0,0,0]; let miss=0, smp=0, n=0;
   for(let i=i0;i<=i1;i++){ n++; const r=a.rev[i], q=a.ses[i]; if(!r){ miss++; continue; }
     for(let g=0;g<4;g++){ s[g]+=+r[g]||0; ss[g]+=+(q&&q[g])||0; } if(a.mk&&a.mk[i]) smp++; }
   return {s, ss, t:s[0]+s[1]+s[2]+s[3], miss, smp, n}; }
+// today / yesterday while GA4 still splits their sessions into channels: most of it sits in "(other)" for a day or two
+// (measured 31 Oct 2026: 50–100 % on the two newest days, ≤ 1 % from the third)
+function freshIn(a,i0,i1){ const n=a.rev.length; for(let i=Math.max(i0,n-2);i<=i1;i++){ const r=a.rev[i]; if(!r) continue; const t=r[0]+r[1]+r[2]+r[3]; if(t>0&&r[3]/t>=0.2) return true; } return false; }
+const FRESH='<p class="roi-note">⏳ Aaj / kal ke din GA4 abhi channels process kar raha hai — unka bada hissa abhi <b>Other</b> ("(other)") me hai, 1–2 din me asli channels (Paid / Notification / Organic) me chala jata hai.</p>';
 function perLabel(a,per){ const [i0,i1]=rng(a,per); if(i1<i0) return ''; const d=i=>iso(t0(a.d0)+i*DAY);
   return i0===i1?fdy(d(i0)):fdy(d(i0))+' – '+fdy(d(i1)); }
 const cell=(v,t,b)=>`<td>${b?'<b>':''}${MV(v)}${b?'</b>':''}<small> ${P(v,t)}</small></td>`;
@@ -8549,6 +8553,7 @@ function allView(){ const apps=(ALL.apps||[]).map(a=>{ const [i0,i1]=rng(a,PER);
     +`<div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th><th>Total</th>${G.map(g=>`<th>${g[0]}</th>`).join('')}</tr></thead><tbody>`
     +`<tr class="src-tot"><td class="roi-nm"><b>All apps</b></td>${cell(tt,tt,1)}${T.map(v=>cell(v,tt,1)).join('')}</tr>`
     +apps.map(row).join('')+`</tbody></table></div>`
+    +(apps.some(o=>{ const [i0,i1]=rng(o.a,PER); return freshIn(o.a,i0,i1); })?FRESH:'')
     +(pend?`<p class="roi-note">⏳ ${pend} app ki purani history abhi aa rahi hai (har build me thodi aur).</p>`:'')
     +groupsNote()+`<p class="roi-note">App pe tap = us app ka month-wise, din-wise aur GA4 channel-wise hisaab.</p></div>`; }
 // a share bar: the four groups side by side, each with its %
@@ -8566,6 +8571,7 @@ function appView(a){ const [i0,i1]=rng(a,PER), x=sum(a,i0,i1), cur=a.today.slice
   const top=`<div class="roi-card">${head(PER==='all'?'poori history · '+fdy(a.d0)+' se':perLabel(a,PER))}${chips()}`
     +(x.n&&x.t>0?tiles(x)+bar(x.s,x.t):`<p class="roi-note">Is period me revenue nahi.</p>`)
     +(x.miss?`<p class="roi-note">⏳ Is period ke ${x.miss} din ka data abhi aa raha hai.</p>`:'')
+    +(freshIn(a,i0,i1)?FRESH:'')
     +(a.bf?'':`<p class="roi-note">⏳ Purani history abhi aa rahi hai — abhi ${fdy(a.d0)} se.</p>`)
     +groupsNote()+`</div>`;
   const mr=monthRows(a).map(([k,e])=>{ const t=e.s[0]+e.s[1]+e.s[2]+e.s[3];
@@ -8574,7 +8580,7 @@ function appView(a){ const [i0,i1]=rng(a,PER), x=sum(a,i0,i1), cur=a.today.slice
   const ti=a.rev.length-1, rows=[];
   for(let i=ti;i>=0&&rows.length<SHOWD;i--){ const d=iso(t0(a.d0)+i*DAY), r=a.rev[i], lab=i===ti?'Today <small>so far</small>':i===ti-1?'Yesterday':fdy(d);
     if(!r){ rows.push(`<tr><td class="roi-nm">${lab}</td><td colspan="5" class="roi-note" style="text-align:left">⏳ abhi nahi aaya</td></tr>`); continue; }
-    const t=r[0]+r[1]+r[2]+r[3]; rows.push(`<tr><td class="roi-nm">${lab}${a.mk&&a.mk[i]?' <small title="GA4 sampled">≈</small>':''}</td>${cell(t,t,1)}${r.map(v=>cell(v,t)).join('')}</tr>`); }
+    const t=r[0]+r[1]+r[2]+r[3]; rows.push(`<tr><td class="roi-nm">${lab}${a.mk&&a.mk[i]?' <small title="GA4 sampled">≈</small>':''}${i>=ti-1&&t>0&&r[3]/t>=0.2?' <small title="GA4 abhi is din ke channels process kar raha hai">⏳ processing</small>':''}</td>${cell(t,t,1)}${r.map(v=>cell(v,t)).join('')}</tr>`); }
   const more=ti+1>SHOWD?`<p class="roi-note"><button type="button" class="roi-lnk" data-src-more="1">Aur ${Math.min(60,ti+1-SHOWD)} din dikhao</button> · ${ti+1} din me se ${Math.min(SHOWD,ti+1)}</p>`:'';
   const days=`<div class="roi-card"><div class="roi-ct"><h3>Day by day</h3><span class="roi-note">Today / Yesterday upar · ${E(a.tz)}</span></div><div class="roi-tw"><table class="roi-t"><thead><tr><th>Day</th><th>Total</th>${G.map(g=>`<th>${g[0]}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>${more}</div>`;
   return top+chCard(a,i0,i1)+months+days; }

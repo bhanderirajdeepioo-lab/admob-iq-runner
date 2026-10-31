@@ -41,7 +41,7 @@ GROUPS = (("paid", "Paid"), ("notif", "Notification"), ("org", "Organic"), ("oth
 PAID = ("Cross-network", "Paid Search", "Paid Social", "Paid Video", "Paid Shopping", "Paid Other", "Display", "Audio")
 NOTIF = ("Mobile Push Notifications",)
 ORGANIC = ("Direct", "Organic Search", "Organic Social", "Organic Video", "Organic Shopping", "Referral", "Email", "SMS",
-           "Affiliates")
+           "Affiliates", "AI Assistant")
 LINE = None
 
 
