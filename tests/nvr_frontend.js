@@ -19,12 +19,13 @@ let CUR = 'USD', SCROLL = 0, FAIL = false, LOADS = 0;
 const iso = t => new Date(t).toISOString().slice(0, 10), DAY = 864e5, D0 = '2026-09-01';
 const day = i => iso(Date.parse(D0 + 'T00:00:00Z') + i * DAY);
 // 63 days 1 Sep … 2 Nov (final till 31 Oct); 11 Sep not read yet. A day: first session $2 / 1,000 impressions, returning
-// $3 / 3,000 (not set $0.01 / 2); sessions 100 / 500, users 90 / 300; ad units: App open, Banner + 18 tiny ones; XA, XB, none
+// $3 / 3,000 (not set $0.01 / 2); sessions 100 / 500, users 90 / 300; ad units: App open, Banner + 18 tiny ones; XA ($2 / $1
+// eCPM), XB ($4 / $0.50), none named
 const UNITS = [['unit_open', 'App open'], ['unit_banner', 'Banner']].concat(Array.from({ length: 18 }, (_, i) => ['unit_tiny_' + i, 'Native']));
 const F = { v: 1, key: '000000000009', app_id: 'id-x', first_day: D0, last_day: day(62), final_till: day(60), units: UNITS,
   days: Array.from({ length: 63 }, (_, i) => i === 10 ? null : [day(i), [2, 1000, 3, 3000, 0.01, 2], [100, 90, 500, 300],
     Object.assign({ 0: [1.5, 600, 0.5, 500], 1: [0.5, 400, 2.5, 2500] }, ...UNITS.slice(2).map((u, j) => ({ [j + 2]: [0.001, 1, 0, 0] }))),
-    { '--': [0.01, 2, 0, 0], XA: [1.2, 600, 2, 2000], XB: [0.8, 400, 1, 1000] }]) };
+    { '--': [0.01, 2, 0, 0], XA: [1.2, 600, 2, 2000], XB: [0.8, 200, 1, 2000] }]) };
 const ctx = {
   console, Math, JSON, Object, Array, String, Number, Set, Map, Promise, isFinite, encodeURIComponent, Error, Date,
   DATA: { nvr: { v: 1, apps: { 'id-x': { file: 'nvr_000000000009.json.gz', v: 'n1', from: D0, last: day(62) } } } },
@@ -82,6 +83,21 @@ const tbl = (title) => { const i = h().indexOf(`<h3>${title}</h3>`); return i < 
     out.custom = [per2(), h().includes('<input type="date" data-nvr-pf="1" value="2026-10-11" min="2026-09-01" max="2026-11-02">'),
       (h().match(/First session eCPM<\/div><div class="roi-kv">([^<]*)/) || [])[1]];
     function per2() { return (h().match(/<h3>👥 First session vs Returning · eCPM<\/h3><span class="roi-note">([^<]*)<\/span>/) || [])[1]; }
+    // the Country control: All countries + the period's top 5 by revenue + every country in a list; a pick → its own tiles
+    // and chart (its impressions instead of a per-session figure), its row marked, one line saying so; All countries back
+    tap('[data-nvr-per]', { nvrPer: '30' });
+    const ccCtl = (h().match(/<div class="nvr-cc"[\s\S]*?<\/select><\/div>/) || [''])[0];
+    out.cc_chips = [...ccCtl.matchAll(/data-nvr-cc="([^"]*)" aria-pressed="(true|false)"/g)].map(m => [m[1], m[2]]);
+    out.cc_list = [...ccCtl.matchAll(/<option value="([^"]+)">([^<]*)<\/option>/g)].map(m => [m[1], m[2]]);
+    tap('[data-nvr-cc]', { nvrCc: 'XB' });
+    out.cc_xb = { title: (h().match(/<h3>(👥 First session vs Returning · eCPM[^]*?)<\/h3>/) || [])[1],
+      tiles: [...h().matchAll(/<div class="roi-kl">([^<]*)<\/div><div class="roi-kv">([^<]*)<\/div>/g)].map(m => [m[1], m[2]]),
+      chart: h().includes('class="n">$4.00</text>') && h().includes('class="r">$0.50</text>'),
+      row_on: /<tr class="on" aria-current="true"><td class="roi-nm"><span class="nvr-fl">\[XB\]<\/span> Name XB/.test(h()), note: h().includes('<b>Name XB</b> chuna hai') };
+    change('[data-nvr-ccsel]', 'XA');
+    out.cc_xa = (h().match(/First session eCPM<\/div><div class="roi-kv">([^<]*)/) || [])[1];
+    tap('[data-nvr-cc]', { nvrCc: '' });
+    out.cc_all = [(h().match(/First session eCPM<\/div><div class="roi-kv">([^<]*)/) || [])[1], h().includes('chuna hai')];
     // ₹
     CUR = 'INR'; tap('[data-nvr-per]', { nvrPer: '30' });
     out.inr = (h().match(/First session eCPM<\/div><div class="roi-kv">([^<]*)<\/div><div class="roi-ks">([^<]*)/) || []).slice(1);

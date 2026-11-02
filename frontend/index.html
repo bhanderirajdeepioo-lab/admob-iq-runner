@@ -2733,7 +2733,15 @@ body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecust
 #nvr-root .nvr-lg span.n::before,#nvr-root .nvr-lg span.r::before{content:"";display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
 #nvr-root .nvr-lg span.n::before{background:#3dd0f0}#nvr-root .nvr-lg span.r::before{background:#f3c15a}
 #nvr-root .nvr-fl{font-size:15px}
-@media (max-width:760px){#nvr-root .nvr-cus input[type=date]{font-size:16px}}
+#nvr-root .nvr-cc{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin:0 0 12px;min-width:0}
+#nvr-root .nvr-ccl{flex:none;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#nvr-root .nvr-ccr{display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}#nvr-root .nvr-ccr::-webkit-scrollbar{display:none}
+#nvr-root .nvr-ccb{flex:none;display:inline-flex;align-items:center;gap:5px;min-height:34px;padding:4px 12px;border-radius:999px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+#nvr-root .nvr-ccb[aria-pressed="true"]{outline:2px solid var(--cyan);outline-offset:-2px;color:#fff}
+#nvr-root .nvr-ccs{flex:0 1 auto;min-width:140px;max-width:240px;min-height:34px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+#nvr-root .nvr-ccs.on{outline:2px solid var(--cyan);outline-offset:1px;color:#fff}
+#nvr-root .roi-t tbody tr.on td{background:var(--raise)}
+@media (max-width:760px){#nvr-root .nvr-cus input[type=date]{font-size:16px}#nvr-root .nvr-cc{flex-wrap:wrap}#nvr-root .nvr-ccr{flex:1 1 100%;order:3}#nvr-root .nvr-ccs{font-size:16px}}
 /* the By country board's period (owner, 2 Nov 2026: "jo time period select kru uska data aaye", All time + Custom): one row
    of buttons (a strip that scrolls sideways on a phone), the custom dates under it; the board's All countries row */
 .fo-per{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 0 10px;padding:2px}.fo-per::-webkit-scrollbar{display:none}
@@ -8842,6 +8850,7 @@ return {ptr, block, repaint, _:{rng, sum, monthRows, allView, appView, set:(k,v)
 // as every one (Today … Last month, All time, Custom). Everything under #nvr-root, classes nvr-* (+ the ROI card / table look).
 const NVR=(()=>{
 let PER='30', PF='', PTO='', WIRED=false, US={k:'rev',d:-1}, CS={k:'rev',d:-1}, UALL=false, CALL=false, CHP=[];   // CHP: the chart's days (its tooltip)
+let CC='';   // the picked country ('' = All countries; owner, 2 Nov 2026: "isme country ka option add karo … top 5 country revenue wise") — kept across apps and periods
 const AF={}, ABUSY={}, AERR={};
 const PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['30','30 days'],['tm','This month'],['lm','Last month'],['all','All time'],['cus','Custom']];
 const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -8884,19 +8893,21 @@ function sums(d,lo,hi){ const t=[0,0,0,0,0,0], s=[0,0,0,0], u={}, c={}; let n=0,
 function perCtl(d){ const [lo,hi]=rng(d), T=addD(d.final_till,2);
   return `<div class="roi-ctl"><span class="roi-mini nvr-per" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-nvr-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}</span></div>`
     +(PER==='cus'?`<div class="nvr-cus"><label>From <input type="date" data-nvr-pf="1" value="${lo}" min="${d.first_day}" max="${T}"></label><label>To <input type="date" data-nvr-pto="1" value="${hi}" min="${d.first_day}" max="${T}"></label></div>`:''); }
-function tiles(x){ const t=x.t, en=EC(t[0],t[1]), er=EC(t[2],t[3]), rv=t[0]+t[2];
+function tiles(x){ const c=CC?x.c[CC]:null, t=c?[c[0],c[1],c[2],c[3],0,0]:x.t, en=EC(t[0],t[1]), er=EC(t[2],t[3]), rv=t[0]+t[2];
   const tile=(l,v,sub,cls)=>`<div class="roi-k${cls?' '+cls:''}"><div class="roi-kl">${l}</div><div class="roi-kv">${v}</div><div class="roi-ks">${sub}</div></div>`;
   return `<div class="roi-ks6">`
     +tile('First session eCPM',EM(en),`${N(t[1])} impressions · ${MV(t[0])}`,'nvr-k1')
     +tile('Returning eCPM',EM(er),`${N(t[3])} impressions · ${MV(t[2])}`,'nvr-k2')
     +tile('First ÷ Returning',XF(en,er),ok(en)&&ok(er)?(en>=er?'first session ka eCPM zyada':'returning ka eCPM zyada'):'—')
-    +tile('Impressions / session',`${x.s[0]>0?(t[1]/x.s[0]).toFixed(1):'—'} · ${x.s[2]>0?(t[3]/x.s[2]).toFixed(1):'—'}`,'first session · returning')
+    +(c?tile('Impressions',`${N(t[1])} · ${N(t[3])}`,'first session · returning')
+       :tile('Impressions / session',`${x.s[0]>0?(t[1]/x.s[0]).toFixed(1):'—'} · ${x.s[2]>0?(t[3]/x.s[2]).toFixed(1):'—'}`,'first session · returning'))
     +tile('Kamai ka hissa',rv>0?Math.round(t[0]/rv*100)+'% · '+Math.round(t[2]/rv*100)+'%':'—','first session · returning')
     +`</div>`; }
 // the daily chart: both eCPMs on every day of the period (a day under 100 impressions in a group: no point there), the
 // latest value and the period's eCPM printed at each line's end; hover / tap = that day
 function chart(d,lo,hi){ const pts=[]; for(let k=lo;k<=hi;k=addD(k,1)){ const i=Math.round((t0(k)-t0(d.first_day))/DAY), r=d.days[i];
-    pts.push(r?{k,n:r[1][1]>=100?EC(r[1][0],r[1][1]):null,r:r[1][3]>=100?EC(r[1][2],r[1][3]):null,ni:r[1][1],ri:r[1][3],nf:k>d.final_till}:{k,n:null,r:null}); }
+    const v=r?(CC?(r[4][CC]||[0,0,0,0]):r[1]):null;   // the day: a picked country's, else the app's
+    pts.push(v?{k,n:v[1]>=100?EC(v[0],v[1]):null,r:v[3]>=100?EC(v[2],v[3]):null,ni:v[1],ri:v[3],nf:k>d.final_till}:{k,n:null,r:null}); }
   CHP=pts.map(p=>[p.k,p.n,p.r,p.ni||0,p.ri||0,p.nf?1:0]);
   if(pts.filter(p=>p.n!=null||p.r!=null).length<2) return '';
   const W=720, H=220, m={t:14,r:92,b:24,l:44}, ys=pts.flatMap(p=>[p.n,p.r]).filter(ok), mx=Math.max(...ys)*1.08||1, n=pts.length;
@@ -8908,6 +8919,14 @@ function chart(d,lo,hi){ const pts=[]; for(let k=lo;k<=hi;k=addD(k,1)){ const i=
   const lab=(key,cls)=>{ const l=last(key); return l?`<circle cx="${X(l[0]).toFixed(1)}" cy="${Y(l[1]).toFixed(1)}" r="3" class="${cls}"/><text x="${(X(l[0])+6).toFixed(1)}" y="${(Y(l[1])+4).toFixed(1)}" class="${cls}">${E(EM(l[1]))}</text>`:''; };
   return `<div class="nvr-ch" data-nvr-ch="1"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Daily eCPM, first session and returning">${grid}${ticks}<path d="${path('n')}" class="n"/><path d="${path('r')}" class="r"/>${lab('n','n')}${lab('r','r')}<line class="rule" y1="${m.t}" y2="${H-m.b}" x1="0" x2="0" visibility="hidden"/></svg><div class="nvr-tip" hidden></div></div>`
     +`<div class="roi-lg nvr-lg"><span class="n">First session</span><span class="r">Returning</span><span class="faint nvr-nb">din jinme 100 se kam impressions: point nahi</span></div>`; }
+// the Country control: 🌍 All countries, the period's top 5 countries by revenue (first + returning), every country in a
+// list (most revenue first); a country picked outside the top 5 shows in the list
+function ccCtl(x){ const all=Object.keys(x.c).filter(k=>k!=='--'&&(x.c[k][1]||x.c[k][3])).sort((a,b)=>(x.c[b][0]+x.c[b][2])-(x.c[a][0]+x.c[a][2])||a.localeCompare(b));
+  const top=all.slice(0,5), inSel=!!CC&&!top.includes(CC);
+  const b=(cc,txt,ti)=>`<button type="button" class="nvr-ccb" data-nvr-cc="${E(cc)}" aria-pressed="${CC===cc}"${ti?` title="${E(ti)}"`:''}>${txt}</button>`;
+  return `<div class="nvr-cc" role="group" aria-label="Country"><span class="nvr-ccl">Country</span>${b('','🌍 All countries','')}<span class="nvr-ccr">${top.map(k=>b(k,`<span class="nvr-fl">${FL(k)}</span> ${E(k)}`,CN(k))).join('')}</span>`
+    +`<select class="nvr-ccs${inSel?' on':''}" data-nvr-ccsel="1" aria-label="More countries"><option value="" disabled${inSel?'':' selected'}>More countries ▾</option>`
+    +all.map(k=>`<option value="${E(k)}"${inSel&&CC===k?' selected':''}>${E(FL(k)+' '+CN(k)+' · '+MV(x.c[k][0]+x.c[k][2]))}</option>`).join('')+'</select></div>'; }
 // a table of rows {key, label, sub, v:[first rev, first impr, returning rev, returning impr]}: eCPM both + their ratio,
 // impressions and revenue both; sortable; the top 15 first, "Show all" for the rest
 function table(rows,S,kind,all){ const ex=r=>({en:EC(r.v[0],r.v[1]),er:EC(r.v[2],r.v[3])});
@@ -8917,7 +8936,7 @@ function table(rows,S,kind,all){ const ex=r=>({en:EC(r.v[0],r.v[1]),er:EC(r.v[2]
   const cols=[['lab',kind==='c'?'Country':kind==='f'?'Format':'Ad unit'],['en','eCPM · first session'],['er','eCPM · returning'],['x','First ÷ Ret.'],['ni','Impr. · first'],['ri','Impr. · returning'],['nr','Kamai · first'],['rr','Kamai · returning']];
   const head=cols.map(([k,l])=>`<th aria-sort="${S.k===k?(S.d>0?'ascending':'descending'):'none'}"><button type="button" data-nvr-sort="${kind}:${k}">${l}</button></th>`).join('');
   const shown=all||rs.length<=15?rs:rs.slice(0,15);
-  const body=shown.map(r=>{ const x=ex(r); return `<tr><td class="roi-nm">${r.label}${r.sub?` <small>${E(r.sub)}</small>`:''}</td><td><b>${EM(x.en)}</b></td><td>${EM(x.er)}</td><td>${XF(x.en,x.er)}</td><td>${N(r.v[1])}</td><td>${N(r.v[3])}</td><td>${MV(r.v[0])}</td><td>${MV(r.v[2])}</td></tr>`; }).join('')
+  const body=shown.map(r=>{ const x=ex(r); return `<tr${kind==='c'&&r.key===CC?' class="on" aria-current="true"':''}><td class="roi-nm">${r.label}${r.sub?` <small>${E(r.sub)}</small>`:''}</td><td><b>${EM(x.en)}</b></td><td>${EM(x.er)}</td><td>${XF(x.en,x.er)}</td><td>${N(r.v[1])}</td><td>${N(r.v[3])}</td><td>${MV(r.v[0])}</td><td>${MV(r.v[2])}</td></tr>`; }).join('')
     ||`<tr><td colspan="8" class="roi-note" style="text-align:left">Is period me data nahi.</td></tr>`;
   const more=rs.length>15&&kind!=='f'?`<p class="roi-note"><button type="button" class="roi-lnk" data-nvr-all="${kind}">${all?'Sirf top 15 dikhao':`Sab ${rs.length} dikhao`}</button></p>`:'';
   return `<div class="roi-tw"><table class="roi-t nvr-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${more}`; }
@@ -8930,9 +8949,11 @@ function view(aid,d){ const [lo,hi]=rng(d), x=sums(d,lo,hi), t=x.t, nt=t[0]+t[2]
   const fm={}; units.forEach(r=>{ const e=fm[r.sub]||(fm[r.sub]=[0,0,0,0]); for(let j=0;j<4;j++) e[j]+=r.v[j]; });
   const fmts=Object.keys(fm).map(k=>({key:k,label:E(k||'(not set)'),v:fm[k]}));
   const ccs=Object.keys(x.c).map(k=>({key:k,label:`<span class="nvr-fl">${FL(k)}</span> ${E(k==='--'?'Not named':CN(k))}`,v:x.c[k]})).filter(r=>r.v[1]||r.v[3]);
-  return `<div class="roi-card"><div class="roi-ct"><h3>👥 First session vs Returning · eCPM</h3><span class="roi-note">${fdy(lo)}${lo!==hi?' – '+fdy(hi):''} · GA4</span></div>`
-    +perCtl(d)
-    +(x.n&&(t[1]||t[3])?tiles(x)+chart(d,lo,hi):`<p class="roi-note">Is period me ad impressions nahi.</p>`)
+  const cx=CC?x.c[CC]:null, has=CC?!!(cx&&(cx[1]||cx[3])):!!(t[1]||t[3]);
+  return `<div class="roi-card"><div class="roi-ct"><h3>👥 First session vs Returning · eCPM${CC?` · <span class="nvr-fl">${FL(CC)}</span> ${E(CN(CC))}`:''}</h3><span class="roi-note">${fdy(lo)}${lo!==hi?' – '+fdy(hi):''} · GA4</span></div>`
+    +perCtl(d)+ccCtl(x)
+    +(x.n&&has?tiles(x)+chart(d,lo,hi):`<p class="roi-note">Is period me ${CC?E(CN(CC))+' ke ':''}ad impressions nahi.</p>`)
+    +(CC?`<p class="roi-note">🌍 <b>${E(CN(CC))}</b> chuna hai: tiles aur chart sirf is country ke (country ke sessions GA4 se nahi padhe, isliye wahan impressions). Ad units / formats ki tables sab countries ki hain.</p>`:'')
     +(lim.length?`<p class="roi-note nvr-lim">⏳ ${lim.join(' · ')}.</p>`:'')
     +`<p class="roi-note"><b>First session</b> = user ka pehla session (GA4 "new"), <b>Returning</b> = 2nd session aur uske baad (GA4 "returning"). eCPM = GA4 ad revenue ÷ impressions × 1000 (AdMob se GA4 me aaye <code>ad_impression</code>, AdMob tab se thoda farak ho sakta hai).${nt>0&&t[4]>0?` GA4 ne ${Math.max(0.1,Math.round(t[4]/nt*1000)/10)}% kamai kisi session group me nahi daali — wo tiles me nahi.`:''}</p></div>`
     +`<div class="roi-card"><div class="roi-ct"><h3>Ad units</h3><span class="roi-note">har ad unit ka first session vs returning eCPM · column pe tap = sort</span></div>${table(units,US,'u',UALL)}</div>`
@@ -8963,13 +8984,15 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=t.closest('[data-nvr-sort]'))){ const [kind,k]=String(b.dataset.nvrSort).split(':'), S=kind==='c'?CS:US;
       keep(r,`[data-nvr-sort="${kind}:${k}"]`,()=>{ if(S.k===k) S.d=-S.d; else { S.k=k; S.d=k==='lab'?1:-1; } repaint(); }); return; }
     if((b=t.closest('[data-nvr-all]'))){ const kind=b.dataset.nvrAll; keep(r,`[data-nvr-all="${kind}"]`,()=>{ if(kind==='c') CALL=!CALL; else UALL=!UALL; repaint(); }); return; }
+    if((b=t.closest('[data-nvr-cc]'))){ const k=b.dataset.nvrCc||''; keep(r,`[data-nvr-cc="${k}"]`,()=>{ CC=k; repaint(); }); return; }
     if((b=t.closest('[data-nvr-retry]'))){ Object.keys(AERR).forEach(k=>AERR[k]=false); repaint(); return; }
     if(t.closest('[data-nvr-ch]')) tip(ev); });
   document.addEventListener('change',ev=>{ const t=ev.target, r=t&&t.closest&&t.closest('#nvr-root'); if(!r) return;
+    if(t.closest('[data-nvr-ccsel]')){ const v=String(t.value||''); if(v) keep(r,'[data-nvr-ccsel]',()=>{ CC=v; repaint(); }); return; }
     const f=t.closest('[data-nvr-pf]'), to=t.closest('[data-nvr-pto]'); if(!f&&!to) return;
     keep(r,f?'[data-nvr-pf]':'[data-nvr-pto]',()=>{ if(f) PF=String(t.value||''); else PTO=String(t.value||''); PER='cus'; repaint(); }); });
   document.addEventListener('pointermove',ev=>{ const t=ev.target; if(t&&t.closest&&t.closest('#nvr-root [data-nvr-ch]')) tip(ev); },{passive:true}); }
-return {ptr, block, repaint, _:{rng, sums, view, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='PF') PF=v; if(k==='PTO') PTO=v; if(k==='AF') Object.assign(AF,v); }, AF}};
+return {ptr, block, repaint, _:{rng, sums, view, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='PF') PF=v; if(k==='PTO') PTO=v; if(k==='CC') CC=v; if(k==='AF') Object.assign(AF,v); }, AF}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)

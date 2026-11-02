@@ -43,7 +43,7 @@ def test_tiles_chart_and_tables(out):
     assert [x.strip() for x in out["units_rows"][:2]] == ["unit_banner", "unit_open"] and len(out["units_rows"]) == 15
     assert out["unit_open"] and out["units_more"] and out["units_all"] == 20
     assert out["formats"] == [["Banner", "$1.25", "$1.00", "1.3×"], ["App open", "$2.50", "$1.00", "2.5×"], ["Native", "$1.00", "—", "—"]]
-    assert out["countries"] == [["Name XA", "$2.00", "$1.00"], ["Name XB", "$2.00", "$1.00"], ["Not named", "$5.00", "—"]]
+    assert out["countries"] == [["Name XA", "$2.00", "$1.00"], ["Name XB", "$4.00", "$0.50"], ["Not named", "$5.00", "—"]]
     assert [x.strip() for x in out["sort_er"]] == ["unit_open", "unit_banner"]
 
 
@@ -61,3 +61,18 @@ def test_wired_into_the_ecpm_app_page():
     assert "${typeof NVR!=='undefined'&&L.id?NVR.block(L.id):''}`;" in s
     for k in ("today", "yday", "7", "30", "tm", "lm", "all", "cus"):
         assert "['%s'," % k in s[s.index("const NVR=(()=>{"):s.index("// the Install value page: 📈 ROI first")]
+
+
+def test_country_picker(out):
+    """Owner, 2 Nov 2026: "isme country ka option add karo, jo country select krunga uska chart aayega vrna default all
+    country … top 5 country revenue wise bhi rakh dena": All countries (picked by default) + the period's top countries by
+    revenue + every country in a list (most revenue first, its revenue beside); a pick → that country's tiles and chart, its
+    row marked in the Countries table, one line saying so; a pick from the list; All countries back."""
+    assert out["cc_chips"] == [["", "true"], ["XA", "false"], ["XB", "false"]]
+    assert out["cc_list"] == [["XA", "[XA] Name XA · $96"], ["XB", "[XB] Name XB · $54"]]
+    x = out["cc_xb"]
+    assert x["title"] == '👥 First session vs Returning · eCPM · <span class="nvr-fl">[XB]</span> Name XB'
+    assert x["tiles"] == [["First session eCPM", "$4.00"], ["Returning eCPM", "$0.50"], ["First ÷ Returning", "8.0×"],
+                          ["Impressions", "6,000 · 60,000"], ["Kamai ka hissa", "44% · 56%"]]
+    assert x["chart"] and x["row_on"] and x["note"]
+    assert out["cc_xa"] == "$2.00" and out["cc_all"] == ["$2.00", False]
