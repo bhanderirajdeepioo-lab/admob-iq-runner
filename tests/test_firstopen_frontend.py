@@ -108,6 +108,7 @@ def test_country_board(out):
     assert c["board_rows"] == ["XA", "XB", "XC", "XD", "XE", "XF", "XG", "XH", "XI"] and c["board_unnamed_last"]
     assert c["board_chips"] == [["Worse", 1], ["Watch", 1], ["Better", 1], ["Normal", 1], ["Too early", 0], ["N/A", 5]]
     assert c["board_cells_xa"] and c["board_cells_xi"] and c["board_note"] and c["board_no_gap_note"]
+    assert c["board_total_first"] and c["board_period"]
     assert c["sort_s2h"][:3] == ["XB", "XC", "XA"] and c["sort_unnamed_last"]
     assert c["filt_rows"] == ["XE", "XF", "XG", "XH", "XI"] and c["filt_no_unnamed"] and c["filt_minh"] == "900px"
     assert c["filt_empty"] and c["filt_off"] == 9
@@ -262,3 +263,23 @@ def test_in_card_control_css():
     assert ".fo-card .ct .fo-ccx{min-height:30px;padding:2px 10px;font-size:12px}" in css
     assert ".fo-cc .fo-ccw{grid-column:2/-1;grid-row:1}.fo-cc .fo-ccr{grid-column:1/-1;grid-row:2}.fo-cc .fo-ccs{grid-column:3;grid-row:1;width:100%;min-width:0;max-width:none}" in css
     assert "class=\"fo-cc fo-cci\" id=\"fo-cc-${k}\"" in p
+
+
+def test_installs_never_opened_and_the_period(out):
+    """Owner, 2 Nov 2026: "google ads ka install bhi dikhao taki pata chale kitna open hi nahi kar raha he user", "country
+    wise user bhi aye google ads se aaya hua aur firebase me dikh rahaa dono", "jo time period select kru uska data aaye",
+    "period picker up to all time and custom". One app with a country file and an ads file (Google Ads from 20 days before
+    the funnel, GA4 from the funnel's day 1): while the ads file loads only its three columns wait (⏳); the board over the
+    default 7 days up to yesterday — the All countries row first, every country's Ads installs · Opened (Firebase) · Not
+    opened (count + % of installs; 10 %+ red; Google Ads' own first-open count in the tooltip) beside its funnel and its
+    7-day status, the users nobody named a country for last; Every month / Every day carry the three columns, back to Google
+    Ads' first day (those rows: "funnel se pehle"); All time from that day with Not opened only over the days both sources
+    have and one line naming each part's first day; Today / Last month / This month; Custom from / to (reversed → swapped,
+    bounded by All time); a period redraws the board's slot only; a picked country's tables carry its own columns; a failed
+    ads file = one Try again line, Try again loads it."""
+    a = out["ads"]
+    for k in ("wait_board", "wait_tables", "b7_title", "b7_total", "b7_xa", "b7_xb", "b7_unnamed", "b7_no_retry", "m_jul",
+              "m_aug", "d_old", "d_order", "all_title", "all_total", "all_lim", "today", "lm", "tm", "custom", "slot_only",
+              "cc_day", "cc_old", "cc_month_cols", "fail_line", "retry_ok"):
+        assert a[k] is True, k
+    assert a["loads_ads"] == 1 and a["b7_order"] == ["XA", "XB"]

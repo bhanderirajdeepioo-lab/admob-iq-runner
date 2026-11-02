@@ -2708,18 +2708,30 @@ body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecust
 .fo-t tr.fo-gap td{color:var(--watch);background:var(--panel2);font-size:11.5px;font-weight:600;text-align:left;white-space:normal}
 .fo-t tr.fo-old td{color:var(--muted)}.fo-t tr.fo-old td.fo-nm{color:var(--ink2)}.fo-t tr.fo-old small,.fo-t small.fo-mx{color:var(--muted);font-weight:600}
 .fo-ccgap{color:var(--watch)}.fo-ccgap b{color:#f3d48a}
+.fo-plim{color:var(--muted)}
 .fo-lnkb{background:none;border:0;padding:0 2px;min-height:32px;color:var(--cyan);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}
 .fo-cct{font-size:14px;font-weight:800;color:#fff}
 .fo-fl{font-size:16px;line-height:1}
 .fo-t tbody tr.on td{background:var(--raise)}.fo-t tbody tr.on td:first-child{box-shadow:inset 3px 0 0 var(--cyan),1px 0 0 var(--line)}
 .fo-t tr.fo-un td{color:var(--faint)}.fo-t tr.fo-un td.fo-nm{color:var(--muted);font-weight:600}
 .fo-ccm{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}.fo-ccm .fo-note{margin:0}
+/* the By country board's period (owner, 2 Nov 2026: "jo time period select kru uska data aaye", All time + Custom): one row
+   of buttons (a strip that scrolls sideways on a phone), the custom dates under it; the board's All countries row */
+.fo-per{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 0 10px;padding:2px}.fo-per::-webkit-scrollbar{display:none}
+.fo-pb{flex:none;min-height:34px;padding:4px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.fo-pb[aria-pressed="true"]{outline:2px solid var(--cyan);outline-offset:-2px;color:#fff}
+.fo-cus{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 10px;font-size:12px;color:var(--muted)}
+.fo-cus label{display:inline-flex;align-items:center;gap:6px}
+.fo-cus input[type=date]{min-height:34px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px;color-scheme:dark}
+.fo-t tr.fo-tot td{background:var(--panel2);font-weight:700}.fo-t tr.fo-tot td.fo-nm{color:#fff}
+.fo-t td small.fo-np{display:inline;margin-left:5px}
 /* the same control inside Every month / Every day (.fo-cci: the .fo-cc look and one height); the card title's ✕ as the ROI card's */
 .fo-card .ct .fo-ccx{min-height:30px;padding:2px 10px;font-size:12px}
 @media (max-width:760px){.fo-grid{grid-template-columns:minmax(0,1fr)}
   .fo-cc{display:grid;grid-template-columns:auto auto minmax(0,1fr);grid-template-rows:36px 36px;height:80px}
   .fo-cc .fo-ccw{grid-column:2/-1;grid-row:1}.fo-cc .fo-ccr{grid-column:1/-1;grid-row:2}.fo-cc .fo-ccs{grid-column:3;grid-row:1;width:100%;min-width:0;max-width:none}
   .fo-t th:first-child,.fo-t td:first-child{min-width:128px;max-width:150px}.fo-t td{padding:9px 10px}.fo-t th button{padding:6px 10px}
+  .fo-cus input[type=date]{font-size:16px}
   .fo-bar{grid-template-columns:74px minmax(0,1fr) auto;gap:8px}.fo-tip{min-width:0;font-size:11.5px}
   .fo-t.fo-mini{min-width:0}.fo-mini th{white-space:normal;line-height:1.25}.fo-mini th:not(:has(button)),.fo-mini td{padding:8px 6px}
   .fo-mini th:first-child,.fo-mini td:first-child{min-width:80px;max-width:100px}.fo-mini td{font-size:12.5px}.fo-mini th{font-size:10px;letter-spacing:.02em}.fo-wide{display:none}}
@@ -6643,7 +6655,7 @@ let FILT='';   // the status chip tapped ('' = every app)
 // late open per country), from the day the country fetch began (GA4 keeps ~2 months). CC = the picked country ('' = All
 // countries) — kept when the owner switches app. The board: every country, the app's own status rule, + the users GA4
 // named no country for (so it adds up to the app).
-let CC='', CSORT={k:'fo_day',dir:-1}, CFILT='', CHART=null;
+let CC='', CSORT={k:'fo',dir:-1}, CFILT='', CHART=null;
 const CCS={};   // country file → {raw, v, busy, err}
 const FL=cc=>{ try{ return valFlag(cc); }catch(e){ return ''; } };
 const CN=cc=>{ try{ return valCtyName(cc); }catch(e){ return String(cc||''); } };
@@ -6666,6 +6678,79 @@ function ensureCC(a,cb){ const c=ccPtr(a); if(!c) return; const k=c.file, st=CCS
   fetchGzJson(k+'?v='+encodeURIComponent(c.v||'')).then(j=>{ if(!j||j.v!==1||j.key!==a.key||!Array.isArray(j.days)||!Array.isArray(j.summary)) throw new Error('format');
       st.raw=j; st.err=false; })
     .catch(()=>{ st.err=!st.raw; }).then(()=>{ st.v=c.v; st.busy=false; cb&&cb(); }); }
+// ---- installed but never opened (owner, 2 Nov 2026: "google ads ka install bhi dikhao taki pata chale kitna open hi nahi
+// kar raha he user"; "country wise user bhi aye google ads se aaya hua aur firebase me dikh rahaa dono"): one more lazy file
+// per app, firstopen_ads_<key>.json.gz (its pointer: the app's "ads"), loaded only for the open app: per day the totals and
+// per country [Play installs (Google Ads), Google Ads' first opens, GA4 first opens of Google Ads users, GA4 first opens of
+// everyone] — every day either source has (Google Ads from the spend history's first day, GA4 from the app's); null = that
+// source has not read the day. PER = the By country board's period (owner: "jo time period select kru uska data aaye",
+// "period picker up to all time and custom"): 'today' | 'yday' | '7' | '30' | 'tm' | 'lm' | 'all' | 'cus' (PF / PTO = the
+// custom from / to), kept across apps.
+let PER='7', PF='', PTO='';
+const ADS={};   // ads file → {raw, v, busy, err}
+function adsPtr(a){ const c=a&&a.ads; return (c&&typeof c.file==='string'&&/^firstopen_ads_[0-9a-f]{12}\.json\.gz$/.test(c.file))?c:null; }
+function adsData(a){ const c=adsPtr(a), st=c&&ADS[c.file]; return st&&st.raw&&st.raw.key===a.key?st.raw:null; }
+function adsErr(a){ const c=adsPtr(a), st=c&&ADS[c.file]; return !!(st&&st.err&&!st.raw); }
+const AW=a=>!!adsPtr(a)&&!adsData(a)&&!adsErr(a);   // its ads file still loading
+function ensureAds(a,cb){ const c=adsPtr(a); if(!c) return; const k=c.file, st=ADS[k]||(ADS[k]={});
+  if(st.busy||(st.raw&&st.v===c.v)||(st.err&&st.v===c.v)) return; st.busy=true;
+  fetchGzJson(k+'?v='+encodeURIComponent(c.v||'')).then(j=>{ if(!j||j.v!==1||j.key!==a.key||!Array.isArray(j.days)) throw new Error('format');
+      st.raw=j; st.err=false; })
+    .catch(()=>{ st.err=!st.raw; }).then(()=>{ st.v=c.v; st.busy=false; cb&&cb(); }); }
+// the ads file arrived (or failed): a picked country → the view (as ccArrive); All countries → only the board's slot and
+// the two tables' boxes, the reader's place kept (hold)
+function adsArrive(a){ if(!onScreen()) return; const cur=APP&&RAW?appOf(APP):null; if(!cur||cur.key!==a.key) return;
+  if(CC){ paint(); return; }
+  const slot=document.getElementById('fo-ccbx'), m=document.getElementById('fo-mtw'), dw=document.getElementById('fo-dtw'), d=ccData(a);
+  hold(()=>{ if(slot&&d) slot.innerHTML=ccBoard(a,d); if(m) m.innerHTML=monthTable(a); if(dw) dw.innerHTML=dayTable(a); },slot); }
+// the board's period on the app's calendar → [lo, hi] (YYYY-MM-DD): today = the property's today (the file's final till + 2);
+// 7 / 30 days = the complete days up to yesterday; This month = its 1st … today; Last month = the whole calendar month before;
+// All time = from the oldest day any part has (the funnel, Google Ads, GA4); Custom = the picked from / to (swapped when
+// reversed; All time's ends while one is not picked)
+function perEnds(a,ad){ const T=addD(a.final_till,2); return [[a.first_day,ad&&ad.first_day].filter(Boolean).sort()[0]||T,T]; }
+function perRange(a,ad){ const [first,T]=perEnds(a,ad), Y=addD(T,-1), m0=T.slice(0,8)+'01';
+  if(PER==='today') return [T,T]; if(PER==='yday') return [Y,Y]; if(PER==='30') return [addD(T,-30),Y];
+  if(PER==='tm') return [m0,T]; if(PER==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
+  if(PER==='all') return [first,T];
+  if(PER==='cus'){ let f=PF||first, t=PTO||T; if(f>t) [f,t]=[t,f]; return [f,t]; }
+  return [addD(T,-7),Y]; }
+// the period's sums: the country file's funnel (first_open, splash, home — per country and the day totals; n = its days in
+// the period) and the ads file ([installs, Google Ads first opens, GA4 first opens of Google Ads users, of everyone] per
+// country and the totals — a part none of the period's days has = null — then [installs, GA4 first opens of Google Ads users]
+// over only the days that have BOTH (Not opened never sets one source's days against the other's); nd = the days with
+// Google Ads / GA4 numbers)
+function perFunnel(d,lo,hi){ const by={}, tot=[0,0,0]; let n=0;
+  for(const r of (d&&d.days)||[]){ if(r[0]<lo||r[0]>hi) continue; n++; for(let j=0;j<3;j++) tot[j]+=+r[1+j]||0;
+    for(const c in (r[5]||{})){ const v=r[5][c]||[], e=by[c]||(by[c]=[0,0,0]); for(let j=0;j<3;j++) e[j]+=+v[j]||0; } }
+  return {by,tot,n}; }
+function adsAdd(e,v,pair){ for(let j=0;j<4;j++) if(v[j]!=null) e[j]=(e[j]||0)+(+v[j]);
+  if(pair){ e[4]=(e[4]||0)+(+v[0]||0); e[5]=(e[5]||0)+(+v[2]||0); } }
+function perAds(ad,lo,hi){ const by={}, tot=[null,null,null,null,null,null], nd=[0,0];
+  for(const r of (ad&&ad.days)||[]){ if(r[0]<lo||r[0]>hi) continue; const t=r[1]||[], pair=t[0]!=null&&t[2]!=null;
+    if(t[0]!=null) nd[0]++; if(t[3]!=null) nd[1]++;
+    adsAdd(tot,t,pair);
+    for(const c in (r[2]||{})) adsAdd(by[c]||(by[c]=[null,null,null,null,null,null]),r[2][c]||[],pair); }
+  return {by,tot,nd}; }
+// one row from the period's sums: f = the funnel's [first_open, splash, home] (or null), g = the ads part (or null), foT = the
+// app's first opens (the share's whole). First opens = GA4's report (every day it has), else the funnel's; Not opened over
+// the days with both sources (g[4], g[5])
+function perRow(cc,x,f,g,foT){ g=g||[]; const ins=g[0]==null?null:g[0], opf=g[2]==null?null:g[2], fo=g[3]!=null?g[3]:(f?f[0]:null), ip=g[4], op=g[5];
+  return {cc, x, status:x?x.status:null, ins, afo:g[1]==null?null:g[1], opf, no:ip!=null&&op!=null?ip-op:null, nop:ip>0&&op!=null?(ip-op)/ip:null,
+    fo, s2h:f&&f[1]>0?f[2]/f[1]:null, opened:f&&f[0]>0?f[1]/f[0]:null, share:fo!=null&&foT>0?fo/foT:null}; }
+// Not opened = Play installs − GA4's first opens of Google Ads users, as measured (a little minus when GA4 credits Google Ads
+// with more than Google Play counted); 10 %+ of the installs in red; its tooltip = the same by Google Ads' own first opens
+function noCell(r,w){ if(r.no==null) return `<td>${w?'⏳':'—'}</td>`;
+  const t=r.afo!=null&&r.ins>0?` title="Google Ads ke apne first opens: ${N(r.afo)} → not opened ${PS(1-r.afo/r.ins)}"`:'';
+  return `<td class="${r.nop!=null&&r.nop>=0.1?'down':''}"${t}>${N(r.no)}<small class="fo-np">${PS(r.nop)}</small></td>`; }
+// Every month / Every day: the ads file's days for All countries ('') or one country — a day the file has but the country
+// not = 0 for the parts the day has
+function adsDays(ad,cc){ const m={}; for(const r of (ad&&ad.days)||[]){ const t=r[1]||[]; m[r[0]]=cc?((r[2]||{})[cc]||t.map(x=>x==null?null:0)):t; } return m; }
+const nsum=(vs,j)=>{ let t=null; for(const v of vs) if(v&&v[j]!=null) t=(t||0)+(+v[j]); return t; };
+const adsThs=a=>adsPtr(a)?'<th>Ads installs</th><th>Opened · Firebase</th><th>Not opened</th>':'';
+function adsTds(a,vs){ if(!adsPtr(a)) return ''; const w=AW(a), e=[null,null,null,null,null,null], q=v=>v==null&&w?'⏳':N(v);
+  for(const v of vs) if(v) adsAdd(e,v,v[0]!=null&&v[2]!=null);
+  const r=perRow('',null,null,e,null);
+  return `<td>${q(r.ins)}</td><td>${q(r.opf)}</td>`+noCell(r,w); }
 // a country's rows in the app's row layout (first_open / splash / home; a day it had nobody = 0), so every helper below reads them
 function ccRows(d,cc){ return (d.days||[]).map(r=>{ const v=(r[5]&&r[5][cc])||[0,0,0]; return [r[0],+v[0]||0,+v[1]||0,+v[2]||0,null,null,null,null,null,r[4]==null?null:r[4]]; }); }
 // the reader's place kept while a part of the view is filled in late (iOS Safari has no scroll anchoring; the screen opts out of Chrome's):
@@ -6732,20 +6817,36 @@ function appHtml(a,x,top,board,inM,inD){ const rows=a.days||[], fin=rows.filter(
     +`<tr><td>Splash → Home</td><td>${cell(t,sh)}</td><td>${cell(y,sh)}</td><td><b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td></tr>`
     +`<tr><td>Incl. late open</td><td>${cell(t,sa)}</td><td>${cell(y,sa)}</td><td>${P(x.s2h_any)}</td><td>—</td></tr></tbody></table></div>`
     +`<p class="fo-note">Today aur Yesterday abhi final nahi. Screens counted: ${scr}.${x.sample!=null?` <span class="fo-smp">≈</span> = GA4 ne is app ke funnel me sirf ~${Math.max(1,Math.round(x.sample*100))}% data padha (sampling): users ki ginti lagbhag hai, % ka direction sahi.`:''}</p>`;
-  const has=['intro','language','permission'].filter(k=>(a.steps||{})[k]);
-  const mt=`<div class="fo-tw"><table class="fo-t"><thead><tr><th>Month</th><th>First opens</th><th>Splash</th>${has.map(k=>`<th>${STEP_NAME[k]}</th>`).join('')}<th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
-    +months(rows).map(([m,rs])=>`<tr><td class="fo-nm">${fmtMon(m)} <small>· ${rs.length}d</small></td><td>${N(sum(rs,'first_open'))}</td><td>${N(sum(rs,'splash'))}</td>${has.map(k=>`<td>${N(sum(rs,k))}</td>`).join('')}<td>${N(sum(rs,'home'))}</td><td><b>${P(rate(sum(rs,'home'),sum(rs,'splash')))}</b></td><td>${P(rate(sum(rs,'splash'),sum(rs,'first_open')))}</td></tr>`).join('')
-    +`</tbody></table></div>`;
-  const dt=`<div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day</th><th>First opens</th><th>Splash</th>${has.map(k=>`<th>${STEP_NAME[k]}</th>`).join('')}<th>Home</th><th>Splash → Home</th><th>Incl. late open</th></tr></thead><tbody>`
-    +rows.slice().reverse().map(r=>`<tr><td class="fo-nm${r[0]>a.final_till?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(r[0])} ${r[0].slice(0,4)}${r[0]>a.final_till?' · not final':''}</td><td>${N(r[IX.first_open])}</td><td>${N(r[IX.splash])}</td>${has.map(k=>`<td>${r[IX[k]]==null?'—':N(r[IX[k]])}</td>`).join('')}<td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${sa(r)}</td></tr>`).join('')
-    +`</tbody></table></div>`;
   return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''} · history ${fmtD(a.first_day)} ${a.first_day.slice(0,4)} se${(a.steps_changed||[]).length?' · screens badle '+(a.steps_changed||[]).map(c=>fmtD(c.at)).join(', '):''}</span></div>`
     +(top||'')+`<div class="card fo-card"><div class="ct"><h3>Today · Yesterday · last 7 days · usual</h3></div>${mini}</div>`
     +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${stepBars(a,x)}</div>`
     +`<div class="card fo-card"><div class="ct"><h3>Every day · full history</h3><span class="faint" style="font-size:11.5px">hover / tap = us din ke numbers</span></div><div class="fo-chart" id="fo-chart"></div>`
     +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last 2 days)</span></div></div></div>`
-    +(board||'')+`<div class="card fo-card"><div class="ct"><h3>Every month</h3><span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${inM||''}${mt}</div>`
-    +`<div class="card fo-card"><div class="ct"><h3>Every day</h3><span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${inD||''}${dt}</div>`; }
+    +(board||'')+`<div class="card fo-card"><div class="ct"><h3>Every month</h3><span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${inM||''}<div id="fo-mtw">${monthTable(a)}</div></div>`
+    +`<div class="card fo-card"><div class="ct"><h3>Every day</h3><span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${inD||''}<div id="fo-dtw">${dayTable(a)}</div></div>`; }
+// the app's Every month / Every day (All countries): the funnel's months / days and — with an ads file — Ads installs ·
+// Opened (Firebase) · Not opened beside its First opens, back to the oldest day Google Ads / GA4 has (rows before or after
+// the funnel's days: the ads columns, First opens from GA4's report, the funnel's steps "—"). A month's ads columns = every
+// day of it the ads file has
+const STEPS3=a=>['intro','language','permission'].filter(k=>(a.steps||{})[k]);
+function monthTable(a){ const rows=a.days||[], am=adsDays(adsData(a),''), has=STEPS3(a), fm=new Map(), amo=new Map();
+  for(const r of rows){ const k=r[0].slice(0,7); if(!fm.has(k)) fm.set(k,[]); fm.get(k).push(r); }
+  for(const k in am){ const m=k.slice(0,7); if(!amo.has(m)) amo.set(m,[]); amo.get(m).push(am[k]); }
+  const ms=[...new Set([...fm.keys(),...amo.keys()])].sort().reverse(), dash='<td>—</td>'.repeat(has.length+4);
+  return `<div class="fo-tw"><table class="fo-t"><thead><tr><th>Month</th><th>First opens</th>${adsThs(a)}<th>Splash</th>${has.map(k=>`<th>${STEP_NAME[k]}</th>`).join('')}<th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
+    +ms.map(m=>{ const rs=fm.get(m)||[], av=amo.get(m)||[];
+      if(!rs.length) return `<tr class="fo-old"><td class="fo-nm">${fmtMon(m)} <small class="fo-mx">· funnel ${m<a.first_day.slice(0,7)?'se pehle':'abhi nahi'}</small></td><td>${N(nsum(av,3))}</td>${adsTds(a,av)}${dash}</tr>`;
+      return `<tr><td class="fo-nm">${fmtMon(m)} <small>· ${rs.length}d</small></td><td>${N(sum(rs,'first_open'))}</td>${adsTds(a,av)}<td>${N(sum(rs,'splash'))}</td>${has.map(k=>`<td>${N(sum(rs,k))}</td>`).join('')}<td>${N(sum(rs,'home'))}</td><td><b>${P(rate(sum(rs,'home'),sum(rs,'splash')))}</b></td><td>${P(rate(sum(rs,'splash'),sum(rs,'first_open')))}</td></tr>`; }).join('')
+    +`</tbody></table></div>`; }
+function dayTable(a){ const rows=a.days||[], am=adsDays(adsData(a),''), has=STEPS3(a), by={}, dash='<td>—</td>'.repeat(has.length+4);
+  for(const r of rows) by[r[0]]=r;
+  const sh=r=>P(rate(+r[IX.home],+r[IX.splash])), sa=r=>P(rate(+r[IX.home_any],+r[IX.splash_any]));
+  const ds=[...new Set([...rows.map(r=>r[0]),...Object.keys(am)])].sort().reverse();
+  return `<div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day</th><th>First opens</th>${adsThs(a)}<th>Splash</th>${has.map(k=>`<th>${STEP_NAME[k]}</th>`).join('')}<th>Home</th><th>Splash → Home</th><th>Incl. late open</th></tr></thead><tbody>`
+    +ds.map(k=>{ const r=by[k], v=am[k]?[am[k]]:[];
+      if(!r) return `<tr class="fo-old"><td class="fo-nm">${fmtD(k)} ${k.slice(0,4)} <small class="fo-mx">· funnel ${k<a.first_day?'se pehle':'abhi nahi'}</small></td><td>${N(nsum(v,3))}</td>${adsTds(a,v)}${dash}</tr>`;
+      return `<tr><td class="fo-nm${k>a.final_till?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(k)} ${k.slice(0,4)}${k>a.final_till?' · not final':''}</td><td>${N(r[IX.first_open])}</td>${adsTds(a,v)}<td>${N(r[IX.splash])}</td>${has.map(kk=>`<td>${r[IX[kk]]==null?'—':N(r[IX[kk]])}</td>`).join('')}<td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${sa(r)}</td></tr>`; }).join('')
+    +`</tbody></table></div>`; }
 // ---- one app, by country ----
 // the Country control (inside #fo-cc): "All countries" + the top 6 (flag + code) + a native <select> of EVERY country
 function ccCtl(a,d){ const lab='<span class="fo-ccl">Country</span>';
@@ -6771,20 +6872,28 @@ const CC_COLS='🌍 Country view me sirf <b>First open → Splash → Home</b> h
 // card (= that card's control)
 function ccFrom(t){ try{ const w=t&&t.closest?t.closest('.fo-cc'):null; if(w&&w.id) return w.id;
     const c=t&&t.closest?t.closest('.fo-card'):null, q=c&&c.querySelector?c.querySelector('.fo-cci'):null; return (q&&q.id)||''; }catch(e){ return ''; } }
-function ccSort(rows){ const k=CSORT.k, v=x=>k==='rank'?RANK[x.status]:k==='cc'?CN(x.cc):x[k];
+function ccSort(rows){ const k=CSORT.k, v=x=>k==='rank'?(x.status?RANK[x.status]:null):k==='cc'?CN(x.cc):x[k];
   return rows.slice().sort((a,b)=>{ const va=v(a), vb=v(b);
-    if(va==null&&vb==null) return (b.fo_day||0)-(a.fo_day||0); if(va==null) return 1; if(vb==null) return -1;
-    if(typeof va==='string') return CSORT.dir*va.localeCompare(vb)||(b.fo_day||0)-(a.fo_day||0);
-    return CSORT.dir*(va-vb)||(b.fo_day||0)-(a.fo_day||0); }); }
-function ccTable(d){ const cols=[['cc','Country'],['rank','Status'],['s2h','Splash → Home'],['usual','Usual'],['change','Change'],['opened','Opened app'],['fo_day','First opens / day'],['share','Share']];
+    if(va==null&&vb==null) return (b.fo||0)-(a.fo||0); if(va==null) return 1; if(vb==null) return -1;
+    if(typeof va==='string') return CSORT.dir*va.localeCompare(vb)||(b.fo||0)-(a.fo||0);
+    return CSORT.dir*(va-vb)||(b.fo||0)-(a.fo||0); }); }
+// the board's table over the picked period (perRange): every country GA4's funnel named (its 7-day status beside) and every
+// country Google Ads / GA4 counted, the All countries row first, the users nobody named a country for last
+function ccTable(a,d){ const ad=adsData(a), w=AW(a), [lo,hi]=perRange(a,ad), F=perFunnel(d,lo,hi), A=perAds(ad,lo,hi), S=(d&&d.summary)||[], sm={};
+  S.forEach(x=>{ sm[x.cc]=x; });
+  const foT=A.tot[3]!=null?A.tot[3]:F.tot[0], ccs=new Set(S.map(x=>x.cc));
+  Object.keys(A.by).forEach(c=>{ if(c!=='--') ccs.add(c); });
+  const rows=ccSort([...ccs].map(cc=>perRow(cc,sm[cc]||null,F.by[cc]||null,A.by[cc]||null,foT)).filter(r=>!CFILT||r.status===CFILT));
+  const cols=[['cc','Country'],['rank','Status'],['ins','Ads installs'],['opf','Opened · Firebase'],['nop','Not opened'],['fo','First opens'],['s2h','Splash → Home'],['opened','Opened app'],['share','Share']];
   const head=cols.map(([k,l])=>`<th aria-sort="${CSORT.k===k?(CSORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-fo-ccsort="${k}">${l}</button></th>`).join('');
-  const rows=ccSort((d.summary||[]).filter(x=>!CFILT||x.status===CFILT));
-  let body=rows.map(x=>`<tr class="clk${x.cc===CC?' on':''}" data-fo-ccr="${E(x.cc)}"${x.cc===CC?' aria-current="true"':''}><td class="fo-nm"><span class="fo-an"><span class="fo-fl">${FL(x.cc)}</span><span>${E(CN(x.cc))}</span></span></td><td class="fo-stc">${chip(x.status)}${x.why?`<small>${E(x.why)}</small>`:''}</td>`
-    +`<td>${SMP(x.sample)}<b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td><td class="${x.change!=null&&x.change<=-0.02?'down':x.change!=null&&x.change>=0.05?'up':''}">${PT(x.change)}</td>`
-    +`<td>${P(x.opened)}</td><td>${FD(x.fo_day)}</td><td>${PS(x.share)}</td></tr>`).join('')||`<tr><td colspan="8" class="faint">Is status me koi country nahi</td></tr>`;
-  const u=(d.unnamed||{}).summary;
-  if(u&&!CFILT) body+=`<tr class="fo-un"><td class="fo-nm"><span class="fo-an"><span class="fo-fl">❔</span><span>Not named by GA4</span></span></td><td class="fo-stc"><small>no status</small></td>`
-    +`<td>${P(u.s2h)}</td><td>—</td><td>—</td><td>${P(u.opened)}</td><td>${FD(u.fo_day)}</td><td>${PS(u.share)}</td></tr>`;
+  const q=v=>v==null&&w?'⏳':N(v);
+  const tr=(r,cls,nm,stc,attr)=>`<tr class="${cls}"${attr||''}><td class="fo-nm">${nm}</td><td class="fo-stc">${stc}</td><td>${q(r.ins)}</td><td>${q(r.opf)}</td>${noCell(r,w)}<td>${N(r.fo)}</td><td><b>${P(r.s2h)}</b></td><td>${P(r.opened)}</td><td>${PS(r.share)}</td></tr>`;
+  const stc=x=>x?`${SMP(x.sample)}${chip(x.status)}${x.why?`<small>${E(x.why)}</small>`:''}<small>7 din ${P(x.s2h)} · usual ${P(x.usual)}${x.change!=null?' · '+PT(x.change):''}</small>`:'<small>—</small>';
+  let body=CFILT?'':tr(perRow('',null,F.n?F.tot:null,A.tot,foT),'fo-tot','🌍 All countries','<small>period ka total</small>');
+  body+=rows.map(r=>tr(r,'clk'+(r.cc===CC?' on':''),`<span class="fo-an"><span class="fo-fl">${FL(r.cc)}</span><span>${E(CN(r.cc))}</span></span>`,stc(r.x),
+    ` data-fo-ccr="${E(r.cc)}"${r.cc===CC?' aria-current="true"':''}`)).join('')||`<tr><td colspan="9" class="faint">Is status me koi country nahi</td></tr>`;
+  if(!CFILT){ const un=F.n?[0,1,2].map(j=>F.tot[j]-Object.values(F.by).reduce((t,v)=>t+v[j],0)):null, g=A.by['--']||null;
+    if(g||(un&&un.some(v=>v))) body+=tr(perRow('--',null,un,g,foT),'fo-un','<span class="fo-an"><span class="fo-fl">❔</span><span>Not named</span></span>','<small>no status</small>'); }
   return `<table class="fo-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`; }
 // the country file's days: first – last (its days can have holes: the backfill reads the oldest and the newest day in
 // turn, a fetch can fall behind) and, when the status window (final till − 34 … final till) is not whole, ONE warning
@@ -6797,11 +6906,24 @@ function ccGapNote(d){ const m=+d.missing||0, ft=d.final_till; if(!(m>0)||!ft) r
   return `<p class="fo-note fo-ccgap">⚠️ Status ke liye ${fmtD(lo)} – ${fmtD(ft)} ke saare din ka country data chahiye — inme se <b>${m} din</b> abhi nahi padhe (country data ${ccWhen(d)}; backfill chal raha hai ya country fetch peeche hai). Isliye abhi status <b>Too early</b>, aur "last 7 days" / usual sirf ${fmtD(ft)} tak ke lagatar dino ka (beech ka gap kabhi joda nahi).</p>`; }
 // (a picked country's view says the dates once — the note under its Country control — and the missing steps once — the
 // Every day card: the board's note leaves both out there)
-function ccBoard(a,d){ const S=d.summary||[], c=k=>S.filter(x=>x.status===k).length;
-  return `<div class="card fo-card" id="fo-ccb"><div class="ct"><h3>By country · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">country pe tap = us country ka funnel · column pe tap = sort · status chip pe tap = sirf wo countries</span></div>`
-    +ccGapNote(d)+`<div class="fo-chips" role="group" aria-label="Filter countries by status">${['Worse','Watch','Better','Normal','Too early','N/A'].map(k=>`<button type="button" class="fo-chip st-${ST_KEY[k]}" data-fo-ccfilt="${k}" aria-pressed="${CFILT===k}"><span>${WD.sti[ST_KEY[k]]}</span> <b>${c(k)}</b></button>`).join('')}</div>`
-    +`<div class="fo-tw fo-tall" id="fo-ccbw">${ccTable(d)}</div>`
-    +`<p class="fo-note" style="margin-top:10px">${S.length} countries. Har country ka status app wala hi rule hai (pichhle 7 final din vs pehle ke 28 din); chhoti countries me 200 se kam Splash users = N/A. <b>Share</b> = app ke first opens (pichhle 7 final din) me us country ka hissa. <b>Not named by GA4</b> = jin users ki country GA4 ne nahi batayi (din ka total − sab countries; sampling wale din thoda minus bhi aa sakta hai, jaisa mila waisa dikhaya) — isse board app ke total tak judta hai.${CC?'':` Country data <b>${ccWhen(d)}</b> ka hai (GA4 sirf ~2 mahine rakhta hai) aur sirf First open → Splash → Home (Language / Permission / late open country-wise nahi padhe).`}</p></div>`; }
+function perCtl(a,ad){ const L=[['today','Today'],['yday','Yesterday'],['7','7 days'],['30','30 days'],['tm','This month'],['lm','Last month'],['all','All time'],['cus','Custom']];
+  const [first,T]=perEnds(a,ad), [lo,hi]=perRange(a,ad);
+  return `<div class="fo-per" role="group" aria-label="Period">${L.map(([k,l])=>`<button type="button" class="fo-pb" data-fo-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}</div>`
+    +(PER==='cus'?`<div class="fo-cus"><label>From <input type="date" data-fo-pf="1" value="${lo}" min="${first}" max="${T}"></label><label>To <input type="date" data-fo-pto="1" value="${hi}" min="${first}" max="${T}"></label></div>`:''); }
+function ccBoard(a,d){ const S=d.summary||[], c=k=>S.filter(x=>x.status===k).length, ad=adsData(a), p=adsPtr(a), [lo,hi]=perRange(a,ad), T=addD(a.final_till,2);
+  const lim=[];   // what the period reaches before a part's first day — said once, with that day
+  if(p&&ad&&ad.ads_from&&lo<ad.ads_from) lim.push(`Google Ads installs ${yd(ad.ads_from)} se`);
+  if(p&&ad&&ad.ga4_from&&lo<ad.ga4_from) lim.push(`GA4 first opens ${yd(ad.ga4_from)} se`);
+  if(lo<d.first_day) lim.push(`Splash → Home / Opened app country-wise ${yd(d.first_day)} se (GA4 sirf ~2 mahine ka funnel rakhta hai)`);
+  if(hi>=addD(T,-1)) lim.push('Today / Yesterday abhi final nahi (GA4 aur Google Ads dono baad me bhi jodte hain)');
+  const ads=!p?'<p class="fo-note">Google Ads installs ka data abhi nahi bana — agle robot run me aayega.</p>'
+    :adsErr(a)?'<p class="fo-note">⚠️ Google Ads installs load nahi hue. <button type="button" class="fo-lnkb" data-fo-adsretry="1">Try again</button></p>':'';
+  return `<div class="card fo-card" id="fo-ccb"><div class="ct"><h3>By country · ${yd(lo)}${lo!==hi?' – '+yd(hi):''}</h3><span class="faint" style="font-size:11.5px">country pe tap = us country ka funnel · column pe tap = sort · status chip pe tap = sirf wo countries</span></div>`
+    +perCtl(a,ad)+ccGapNote(d)+ads
+    +`<div class="fo-chips" role="group" aria-label="Filter countries by status">${['Worse','Watch','Better','Normal','Too early','N/A'].map(k=>`<button type="button" class="fo-chip st-${ST_KEY[k]}" data-fo-ccfilt="${k}" aria-pressed="${CFILT===k}"><span>${WD.sti[ST_KEY[k]]}</span> <b>${c(k)}</b></button>`).join('')}</div>`
+    +`<div class="fo-tw fo-tall" id="fo-ccbw">${ccTable(a,d)}</div>`
+    +(lim.length?`<p class="fo-note fo-plim" style="margin-top:10px">⏳ ${lim.join(' · ')}.</p>`:'')
+    +`<p class="fo-note" style="${lim.length?'':'margin-top:10px'}"><b>Ads installs</b> = Google Play ne gine installs jo Google Ads campaigns se aaye (ad click ke din, Google Ads account ke time zone me). <b>Opened · Firebase</b> = GA4 me Google Ads se aaye first opens. <b>Not opened</b> = Ads installs − Opened: install karke app khola hi nahi (10%+ laal; mouse / tap = Google Ads ke apne first-open count se). <b>First opens</b> = GA4 ke sab first opens (organic bhi). <b>Share</b> = period ke first opens me us country ka hissa. <b>Status</b> = pichhle 7 final din vs pehle ke 28 din (period se nahi badalta). <b>Not named</b> = jin users ki country GA4 / Google Ads ne nahi batayi.${CC?'':` Country funnel <b>${ccWhen(d)}</b> ka hai, sirf First open → Splash → Home.`}</p></div>`; }
 function ccWait(){ return `<div class="card fo-card"><div class="fo-ccm"><p class="fo-note">🌍 <b>${FL(CC)} ${E(CN(CC))}</b> chuna hai — is app ka country data aate hi uska view khulega; tab tak neeche <b>All countries</b> ke numbers.</p><button type="button" class="fo-back" data-fo-ccx="1">✕ All countries</button></div></div>`; }
 function ccCrumb(a,x){ return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span class="fo-cct">${FL(CC)} ${E(CN(CC))}</span>`
     +(x?`<span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''}</span>`:'')
@@ -6853,28 +6975,34 @@ function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t
   // apart (ccNone): a country row; a day GA4's funnel no longer has (its report's first opens only, the funnel "—"); a
   // day GA4 named no country; a run of days not read yet (one row: the backfill goes on)
   const NO=ccNone(d), start=rows.length&&a.first_day&&a.first_day<rows[0][0]?a.first_day:(rows.length?rows[0][0]:null);
+  const ADY=adsDays(adsData(a),CC), AM=new Map(), ADash='<td>—</td>'.repeat(4);   // this country's ads file days / months
+  for(const k in ADY){ const m=k.slice(0,7); if(!AM.has(m)) AM.set(m,[]); AM.get(m).push(ADY[k]); }
+  const adsOnly=(t,k,vs)=>`<tr class="fo-old"><td class="fo-nm">${t} <small class="fo-mx">· funnel ${k<(start||'')?'se pehle':'abhi nahi'}</small></td><td>${N(nsum(vs,3))}</td>${adsTds(a,vs)}${ADash}</tr>`;
   const cal=[]; if(start) for(let k=start;k<=rows[rows.length-1][0];k=addD(k,1)) cal.push(k);
   const by2={}; for(const r of rows) by2[r[0]]=r;
   const MO=new Map(); for(const k of cal){ const m=k.slice(0,7); if(!MO.has(m)) MO.set(m,{rs:[],gone:0,fo:0,nofo:0,nob:0,wait:0}); const o=MO.get(m);
     if(by2[k]) o.rs.push(by2[k]); else { const w=NO.kind(k); if(w==='gone'){ o.gone++; const f=NO.fo(k,CC); if(f==null) o.nofo++; else o.fo+=f; } else if(w==='nobody') o.nob++; else o.wait++; } }
   const mx=o=>[o.gone&&o.rs.length?`${o.gone}d First opens only`:'',o.nob?`${o.nob}d no country`:'',o.wait?`${o.wait}d not read yet`:''].filter(Boolean).join(' · ');
-  const mt=`<div class="fo-tw"><table class="fo-t"><thead><tr><th>Month</th><th>First opens</th><th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
-    +[...MO.entries()].reverse().map(([m,o])=>{ const rs=o.rs, x=mx(o);
-      if(!rs.length) return `<tr class="fo-old"><td class="fo-nm">${fmtMon(m)}${o.gone?` <small class="fo-mx">· ${o.gone}d First opens only</small>`:''}${x?` <small class="fo-mx">· ${x}</small>`:''}</td><td>${o.gone&&!o.nofo?N(o.fo):'—'}</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
-      return `<tr><td class="fo-nm">${SMP(low(rs))}${fmtMon(m)} <small>· ${rs.length}d</small>${x?` <small class="fo-mx">· ${x}</small>`:''}</td><td>${N(sum(rs,'first_open'))}</td><td>${N(sum(rs,'splash'))}</td><td>${N(sum(rs,'home'))}</td><td><b>${P(rate(sum(rs,'home'),sum(rs,'splash')))}</b></td><td>${P(rate(sum(rs,'splash'),sum(rs,'first_open')))}</td></tr>`; }).join('')
+  const mt=`<div class="fo-tw"><table class="fo-t"><thead><tr><th>Month</th><th>First opens</th>${adsThs(a)}<th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
+    +[...new Set([...MO.keys(),...AM.keys()])].sort().reverse().map(m=>{ const o=MO.get(m); if(!o) return adsOnly(fmtMon(m),m+'-31',AM.get(m)); const rs=o.rs, x=mx(o), av=AM.get(m)||[];
+      if(!rs.length) return `<tr class="fo-old"><td class="fo-nm">${fmtMon(m)}${o.gone?` <small class="fo-mx">· ${o.gone}d First opens only</small>`:''}${x?` <small class="fo-mx">· ${x}</small>`:''}</td><td>${o.gone&&!o.nofo?N(o.fo):'—'}</td>${adsTds(a,av)}<td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
+      return `<tr><td class="fo-nm">${SMP(low(rs))}${fmtMon(m)} <small>· ${rs.length}d</small>${x?` <small class="fo-mx">· ${x}</small>`:''}</td><td>${N(sum(rs,'first_open'))}</td>${adsTds(a,av)}<td>${N(sum(rs,'splash'))}</td><td>${N(sum(rs,'home'))}</td><td><b>${P(rate(sum(rs,'home'),sum(rs,'splash')))}</b></td><td>${P(rate(sum(rs,'splash'),sum(rs,'first_open')))}</td></tr>`; }).join('')
     +`</tbody></table></div>`;
-  const gapRow=(lo,hi)=>`<tr class="fo-gap"><td colspan="6">↕ ${dd(lo,hi)+1} din (${fmtD(lo)} – ${fmtD(hi)}): abhi padhe ja rahe hain (backfill chal raha hai)</td></tr>`;
+  const gapRow=(lo,hi)=>`<tr class="fo-gap"><td colspan="${adsPtr(a)?9:6}">↕ ${dd(lo,hi)+1} din (${fmtD(lo)} – ${fmtD(hi)}): abhi padhe ja rahe hain (backfill chal raha hai)</td></tr>`;
   const dayCell=(k,t)=>`<td class="fo-nm">${fmtD(k)} ${k.slice(0,4)} <small>· ${t}</small></td>`;
   let body='', run=null, nGone=0;   // run = [oldest, newest] of the days not read yet being walked (newest first)
+  const last=cal.length?cal[cal.length-1]:'', av1=k=>ADY[k]?[ADY[k]]:[];
+  Object.keys(ADY).filter(k=>k>last).sort().reverse().forEach(k=>{ body+=adsOnly(`${fmtD(k)} ${k.slice(0,4)}`,k,av1(k)); });   // newer than the country days
   for(let i=cal.length-1;i>=0;i--){ const k=cal[i], r=by2[k], w=r?null:NO.kind(k);
     if(!r&&!w){ run=run?[k,run[1]]:[k,k]; continue; }
     if(run){ body+=gapRow(run[0],run[1]); run=null; }
-    if(r) body+=`<tr><td class="fo-nm${k>ft?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(k)} ${k.slice(0,4)}${k>ft?' · not final':''}</td><td>${N(r[IX.first_open])}</td><td>${N(r[IX.splash])}</td><td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${op(r)}</td></tr>`;
-    else if(w==='gone'){ nGone++; body+=`<tr class="fo-old">${dayCell(k,'First opens only')}<td>${N(NO.fo(k,CC))}</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`; }
-    else body+=`<tr class="fo-old">${dayCell(k,'GA4 named no country')}<td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`; }
+    if(r) body+=`<tr><td class="fo-nm${k>ft?' fo-nf':''}">${SMP(r[IX.sample])}${fmtD(k)} ${k.slice(0,4)}${k>ft?' · not final':''}</td><td>${N(r[IX.first_open])}</td>${adsTds(a,av1(k))}<td>${N(r[IX.splash])}</td><td>${N(r[IX.home])}</td><td><b>${sh(r)}</b></td><td>${op(r)}</td></tr>`;
+    else if(w==='gone'){ nGone++; body+=`<tr class="fo-old">${dayCell(k,'First opens only')}<td>${N(NO.fo(k,CC))}</td>${adsTds(a,av1(k))}<td>—</td><td>—</td><td>—</td><td>—</td></tr>`; }
+    else body+=`<tr class="fo-old">${dayCell(k,'GA4 named no country')}<td>—</td>${adsTds(a,av1(k))}<td>—</td><td>—</td><td>—</td><td>—</td></tr>`; }
   if(run) body+=gapRow(run[0],run[1]);
+  Object.keys(ADY).filter(k=>!start||k<start).sort().reverse().forEach(k=>{ body+=adsOnly(`${fmtD(k)} ${k.slice(0,4)}`,k,av1(k)); });   // older than the app's day 1
   const goneNote=nGone?`<p class="fo-note">⌛ <b>First opens only</b> wale ${nGone} din: GA4 ne un dino ka event data hata diya (wo sirf ~2 mahine rakhta hai), isliye Splash → Home ka funnel country-wise ab nahi padh sakte. First opens GA4 ke normal report se hain (funnel ke First opens se thoda alag ho sakte hain).</p>`:'';
-  const dt=goneNote+`<div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day</th><th>First opens</th><th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
+  const dt=goneNote+`<div class="fo-tw fo-tall"><table class="fo-t"><thead><tr><th>Day</th><th>First opens</th>${adsThs(a)}<th>Splash</th><th>Home</th><th>Splash → Home</th><th>Opened app</th></tr></thead><tbody>`
     +body+`</tbody></table></div>`;
   return ccCrumb(a,x)+ccTop(a)
     +`<p class="fo-note">🌍 Country data <b>${ccWhen(d)}</b> ka hai (GA4 sirf ~2 mahine ka data rakhta hai, ${NO.any?'usse purane dino ke country-wise sirf First opens milte hain':'usse purana country-wise nahi milta'}).</p>`
@@ -6943,16 +7071,31 @@ function wire(){ const s=EL; if(!s||s.dataset.foWired) return; s.dataset.foWired
     const cr=t.closest('tr[data-fo-ccr]'); if(cr){ pick(cr.dataset.foCcr); return; }
     if(t.closest('[data-fo-ccx]')){ pick('',ccFrom(t)); return; }
     const cs=t.closest('[data-fo-ccsort]'); if(cs){ const k=cs.dataset.foCcsort; CSORT={k,dir:CSORT.k===k?-CSORT.dir:(k==='cc'||k==='rank'?1:-1)};
-      const a=APP&&RAW?appOf(APP):null, d=a&&ccData(a), bw=document.getElementById('fo-ccbw'); if(d&&bw) bw.innerHTML=ccTable(d); return; }
+      const a=APP&&RAW?appOf(APP):null, d=a&&ccData(a), bw=document.getElementById('fo-ccbw'); if(d&&bw) bw.innerHTML=ccTable(a,d); return; }
     const cf=t.closest('[data-fo-ccfilt]'); if(cf){ CFILT=CFILT===cf.dataset.foCcfilt?'':cf.dataset.foCcfilt;
       s.style.minHeight=Math.max(s.offsetHeight,parseFloat(s.style.minHeight)||0)+'px';   // a shorter board never pulls the page (and the chip) up
       s.querySelectorAll('[data-fo-ccfilt]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.foCcfilt===CFILT)));
-      const a=APP&&RAW?appOf(APP):null, d=a&&ccData(a), bw=document.getElementById('fo-ccbw'); if(d&&bw) bw.innerHTML=ccTable(d); return; }
+      const a=APP&&RAW?appOf(APP):null, d=a&&ccData(a), bw=document.getElementById('fo-ccbw'); if(d&&bw) bw.innerHTML=ccTable(a,d); return; }
+    const pb=t.closest('[data-fo-per]'); if(pb){ per(pb.dataset.foPer,null,null); return; }
+    if(t.closest('[data-fo-adsretry]')){ const a=APP&&RAW?appOf(APP):null, c=adsPtr(a); if(!c) return; const st=ADS[c.file]||(ADS[c.file]={}); st.err=false; st.v=null;
+      ensureAds(a,()=>adsArrive(a)); return; }
     if(t.closest('[data-fo-ccretry]')){ const a=APP&&RAW?appOf(APP):null, c=ccPtr(a); if(!c) return; const st=CCS[c.file]||(CCS[c.file]={}); st.err=false; st.v=null;
       ensureCC(a,()=>ccArrive(a)); let n=0; CCW.forEach(id=>{ const w=document.getElementById(id); if(w){ w.innerHTML=ccCtl(a,ccData(a)); n++; } }); if(!n) paint(); return; }
     if(t.closest('[data-fo-all]')){ setApp(''); return; }
     const row=t.closest('tr[data-fo-app]'); if(row){ setApp(row.dataset.foApp); } });
-  s.addEventListener('change',e=>{ const t=e.target, se=t&&t.closest&&t.closest('[data-fo-ccsel]'); if(se&&se.value) pick(se.value,ccFrom(t)); }); }
+  s.addEventListener('change',e=>{ const t=e.target, se=t&&t.closest&&t.closest('[data-fo-ccsel]'); if(se&&se.value){ pick(se.value,ccFrom(t)); return; }
+    if(t&&t.closest&&t.closest('[data-fo-pf]')) per('cus',String(t.value||''),null);
+    else if(t&&t.closest&&t.closest('[data-fo-pto]')) per('cus',null,String(t.value||'')); }); }
+// a period (button) or a custom date: only the board's slot is drawn again; the tapped control stays where it was (the page
+// scrolls back by what it moved — the slot's content above it never changes), the board's own box keeps its scroll
+function per(k,f,t){ const a=APP&&RAW?appOf(APP):null, d=a&&ccData(a), slot=document.getElementById('fo-ccbx'); if(f!=null) PF=f; if(t!=null) PTO=t;
+  const sel=f!=null?'[data-fo-pf]':t!=null?'[data-fo-pto]':`[data-fo-per="${k}"]`, b0=slot&&slot.querySelector?slot.querySelector(sel):null;
+  const y0=b0&&b0.getBoundingClientRect?b0.getBoundingClientRect().top:null, bw=document.getElementById('fo-ccbw'), sc=bw?[bw.scrollTop||0,bw.scrollLeft||0]:null;
+  PER=k; if(!a||!d||!slot){ paint(); return; }
+  slot.innerHTML=ccBoard(a,d);
+  const b2=document.getElementById('fo-ccbw'); if(sc&&b2){ b2.scrollTop=sc[0]; b2.scrollLeft=sc[1]; }
+  const b1=y0==null?null:slot.querySelector(sel), dy=b1&&b1.getBoundingClientRect?b1.getBoundingClientRect().top-y0:0;
+  if(Math.abs(dy)>1){ try{ if(typeof SP!=='undefined'&&SP&&SP.quietly) SP.quietly(()=>window.scrollBy(0,dy)); else window.scrollBy(0,dy); }catch(e){} } }
 function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector('.screen[data-screen=firstopen]'); if(!s||typeof DATA==='undefined'||!DATA) return;
   EL=s; wire(); s.style.minHeight='';
   const p=ptr();
@@ -6963,11 +7106,13 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   const head=`<p class="fo-note fo-lead"><b>First open funnel</b> (GA4, sirf sahi kram me): pehli baar app khola → 10 min me <b>Splash</b> → 1 ghante me <b>Home</b>. Isliye Home kabhi Splash se zyada nahi. <b>Opened app</b> = pehli baar chalne walon me se kitno ne turant Splash dekha; <b>incl. late open</b> = baad me pehli baar khola tab bhi.</p>`;
   if(APP&&!a){ s.innerHTML=head+`<div class="card fo-card"><p class="fo-note">Is app ka GA4 funnel data nahi.</p><button type="button" class="fo-back" data-fo-all="1">← All apps</button></div>`; return; }
   if(a&&ccPtr(a)) ensureCC(a,()=>ccArrive(a));   // the country file: only for the open app, after the main file
+  if(a&&adsPtr(a)) ensureAds(a,()=>adsArrive(a));   // the ads file too
   s.innerHTML=head+(a?appView(a,x||{}):allHtml());
   if(a&&CHART) drawChart(CHART); }
 function show(){ paint(); }
 function left(){ }
-return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccIn, ccWait, ccFrom, CC_COLS, pick, ccRows, ccData, ccFill, ccNone, noneTip, hold, cc:()=>CC}};
+return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccIn, ccWait, ccFrom, CC_COLS, pick, ccRows, ccData, ccFill, ccNone, noneTip, hold, cc:()=>CC, ccTable, ccBoard, monthTable, dayTable, perRange, perAds, perFunnel, adsData, per,
+  setPer:(k,f,t)=>{ PER=k; PF=f||''; PTO=t||''; }, ADS}};
 })();
 function renderFirstOpen(){ return FO.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from
