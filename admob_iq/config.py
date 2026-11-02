@@ -89,6 +89,8 @@ def settings() -> dict:
         # 💰 Revenue by source (Install value tab: Paid / Notification / Organic from GA4's session channel): SOURCE_TAB=false
         # removes its files and pointer without a code push
         "source_tab": _env("SOURCE_TAB", "true").lower() == "true",
+        # 📈 eCPM · first session vs returning (a section of the eCPM tab's app page): NVR_TAB=false
+        "nvr_tab": _env("NVR_TAB", "true").lower() == "true",
         # 🗂 Review Studio: the Review tab's Studio (review/studio/<day>.json.gz, one lazy file per review day, frozen with
         # that day's cards; never an alert) — off: no file, no pointer, the older Review tab exactly as before
         "review_studio": _env("REVIEW_STUDIO", "true").lower() == "true",
@@ -141,6 +143,11 @@ def settings() -> dict:
         # GA4_NEWUSERS_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_newusers": _env("GA4_NEWUSERS", "false").lower() == "true",
         "ga4_newusers_budget_sec": _int_env(("GA4_NEWUSERS_BUDGET_SEC",), 0),
+        # 📈 eCPM: GA4 ad revenue and impressions by first session vs returning, per day × ad unit / country
+        # (fetch.ga4_nvr: the last 5 days every hour, the history newest first). Off: nothing of it is read, written or
+        # printed; GA4_NVR_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
+        "ga4_nvr": _env("GA4_NVR", "false").lower() == "true",
+        "ga4_nvr_budget_sec": _int_env(("GA4_NVR_BUDGET_SEC",), 0),
         # 📱 Devices: GA4 by phone model × country per install day (fetch.ga4_device: installs, paid, back next day and
         # revenue at 7 / 30 / 90 days, each read once). Off: nothing of it is read, written or printed (the ROI file
         # then has no "dev" block); GA4_DEVICE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)

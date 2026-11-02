@@ -617,6 +617,27 @@ def _firstopen_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+@_sc.timed("nvr_tab")
+def _nvr_step(dashboard, data_dir, out_dir, s):
+    """📈 eCPM · first session vs returning (admob_iq.nvr_build, a section of the eCPM tab's app page): its lazy files from
+    the private GA4 stores, its pointer and ONE counts-only line → its _headers path (one splat rule). Switched off
+    (NVR_TAB=false) or failing: its files removed, nothing else changes."""
+    try:
+        from . import nvr_build as nvb
+        if not nvb.enabled(s):
+            nvb.off(out_dir)
+            return []
+        paths = nvb.run(dashboard, data_dir, out_dir, s)
+        line = nvb.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return list(paths)
+    except Exception as e:
+        dashboard.pop("nvr", None)
+        print(f"nvr skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 @_sc.timed("source_tab")
 def _source_step(dashboard, data_dir, out_dir, s):
     """💰 Revenue by source (admob_iq.source_build, a section of the Install value tab): its lazy files from the private
@@ -1917,6 +1938,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # 💰 Revenue by source (a section of the Install value tab): its lazy files from the private GA4 session-channel
     # stores — OPTIONAL (SOURCE_TAB) and failure-isolated; without a store it leaves no file behind
     aud_paths = aud_paths + _source_step(dashboard, data_dir, out_dir, s)
+    aud_paths = aud_paths + _nvr_step(dashboard, data_dir, out_dir, s)
 
     _sc.step("intraday")
     # 📈 eCPM "same time yesterday": this build's point of today's totals so far (data/ecpm_intraday.json) — never for

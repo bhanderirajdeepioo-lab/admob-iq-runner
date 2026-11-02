@@ -149,6 +149,10 @@ jobs:
           # the private repo, kept for good). GA4_NEWUSERS=false stops the reads without a code push
           GA4_NEWUSERS:         ${{ vars.GA4_NEWUSERS || 'true' }}
           GA4_NEWUSERS_BUDGET_SEC: ${{ vars.GA4_NEWUSERS_BUDGET_SEC }}
+          # 📈 eCPM first session vs returning (admob_iq/fetch/ga4_nvr.py; data/ga4_nvr/ in the private repo, kept for good):
+          # GA4 ad revenue + impressions by newVsReturning per day × ad unit / country. GA4_NVR=false stops the reads
+          GA4_NVR:              ${{ vars.GA4_NVR || 'true' }}
+          GA4_NVR_BUDGET_SEC:   ${{ vars.GA4_NVR_BUDGET_SEC }}
           # 📱 Devices (admob_iq/fetch/ga4_device.py; data/ga4_device/ in the private repo): GA4 by phone model × country per
           # install day for the ROI tab's Devices view. GA4_DEVICE=false stops the reads without a code push
           GA4_DEVICE:           ${{ vars.GA4_DEVICE || 'true' }}
@@ -217,6 +221,8 @@ jobs:
           FIRSTOPEN_TAB:        ${{ vars.FIRSTOPEN_TAB || 'true' }}
           # 💰 Revenue by source (source.json.gz, Install value tab): SOURCE_TAB=false turns it off without a code push
           SOURCE_TAB:           ${{ vars.SOURCE_TAB || 'true' }}
+          # 📈 eCPM · first session vs returning (nvr_<key>.json.gz, the eCPM tab's app page): NVR_TAB=false turns it off
+          NVR_TAB:              ${{ vars.NVR_TAB || 'true' }}
           # Daily App Review (Review tab): REVIEW_ENABLED=true (repo variable) starts the daily card snapshots — set it
           # only after the Review API (Worker) is live; REVIEW_READY_IST = when the day's cards freeze (IST, empty: 09:00);
           # REVIEW_REBUILD_DAY=<YYYY-MM-DD> rebuilds TODAY's cards once (any other day is ignored).

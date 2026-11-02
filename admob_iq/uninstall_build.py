@@ -293,6 +293,15 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                       file=sys.stderr)
         except Exception as e:
             print("ga4 newusers skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_nvr"):                                # 📈 eCPM first session vs returning (GA4_NVR): ad revenue and
+        try:                                            # impressions by newVsReturning per day × ad unit / country — own
+            from .fetch import ga4_nvr as gnv           # store, a failure costs that step only
+            with _sc.stage("ga4_nvr"):
+                print(gnv.log_line(gnv.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                   budget=s.get("ga4_nvr_budget_sec") or gnv.BUDGET_SEC)),
+                      file=sys.stderr)
+        except Exception as e:
+            print("ga4 nvr skipped: %s" % type(e).__name__, file=sys.stderr)
     if s.get("ga4_device"):                             # 📱 Devices (GA4_DEVICE): GA4 by phone model × country per
         try:                                            # install day — own store, a failure costs that step only
             from .fetch import ga4_device as gdv
