@@ -2719,6 +2719,7 @@ body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecust
    the custom dates, the chart's two lines (first session = cyan, returning = amber) with their values printed */
 #nvr-root{margin-top:16px}
 #nvr-root .nvr-per{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;max-width:100%}#nvr-root .nvr-per::-webkit-scrollbar{display:none}
+#nvr-root .nvr-per button{white-space:nowrap;flex:none}#nvr-root .nvr-lg span.nvr-nb::before{display:none}
 #nvr-root .nvr-cus{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0 0 10px;font-size:12px;color:var(--muted)}#nvr-root .nvr-cus label{display:inline-flex;align-items:center;gap:6px}
 #nvr-root .nvr-cus input[type=date]{min-height:34px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px;color-scheme:dark}
 #nvr-root .nvr-k1 .roi-kv{color:#3dd0f0}#nvr-root .nvr-k2 .roi-kv{color:#f3c15a}
@@ -8906,7 +8907,7 @@ function chart(d,lo,hi){ const pts=[]; for(let k=lo;k<=hi;k=addD(k,1)){ const i=
   const ticks=[0,Math.floor((n-1)/2),n-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>`<text x="${X(i).toFixed(1)}" y="${H-6}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${E(fmtD(pts[i].k))}</text>`).join('');
   const lab=(key,cls)=>{ const l=last(key); return l?`<circle cx="${X(l[0]).toFixed(1)}" cy="${Y(l[1]).toFixed(1)}" r="3" class="${cls}"/><text x="${(X(l[0])+6).toFixed(1)}" y="${(Y(l[1])+4).toFixed(1)}" class="${cls}">${E(EM(l[1]))}</text>`:''; };
   return `<div class="nvr-ch" data-nvr-ch="1"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Daily eCPM, first session and returning">${grid}${ticks}<path d="${path('n')}" class="n"/><path d="${path('r')}" class="r"/>${lab('n','n')}${lab('r','r')}<line class="rule" y1="${m.t}" y2="${H-m.b}" x1="0" x2="0" visibility="hidden"/></svg><div class="nvr-tip" hidden></div></div>`
-    +`<div class="roi-lg nvr-lg"><span class="n">First session</span><span class="r">Returning</span><span class="faint">din jinme 100 se kam impressions: point nahi</span></div>`; }
+    +`<div class="roi-lg nvr-lg"><span class="n">First session</span><span class="r">Returning</span><span class="faint nvr-nb">din jinme 100 se kam impressions: point nahi</span></div>`; }
 // a table of rows {key, label, sub, v:[first rev, first impr, returning rev, returning impr]}: eCPM both + their ratio,
 // impressions and revenue both; sortable; the top 15 first, "Show all" for the rest
 function table(rows,S,kind,all){ const ex=r=>({en:EC(r.v[0],r.v[1]),er:EC(r.v[2],r.v[3])});
