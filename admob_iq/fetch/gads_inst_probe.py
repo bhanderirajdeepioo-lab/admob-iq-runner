@@ -14,7 +14,8 @@ Per account under the MCC (gads_geo_probe's roster; WORKERS accounts in parallel
   CA     conversion_action: id, type, category, app id, status, included in conversions, primary for goal (once more
          without the app id and the two flags on an HTTP 400)
   CONV   campaign × day × conversion action: all_conversions, conversions (MULTI_CHANNEL)
-  GEO    geographic_view (LOCATION_OF_PRESENCE) × day × conversion action: all_conversions (MULTI_CHANNEL)
+  GEO    geographic_view (LOCATION_OF_PRESENCE) × day × conversion action: all_conversions (MULTI_CHANNEL; the channel
+         selected too — Google refuses a WHERE on a field the SELECT lacks: EXPECTED_REFERENCED_FIELD_IN_SELECT_CLAUSE)
 An account whose INST came back with no row asks only CA; one refused as not enabled (HTTP 403) asks nothing more.
 Once: the roster and the country map (gads_geo_probe.g5_map).
 
@@ -52,7 +53,8 @@ Q_CA_MIN = "SELECT conversion_action.id, conversion_action.type, conversion_acti
 Q_CONV = ("SELECT campaign.id, campaign.app_campaign_setting.app_id, segments.date, segments.conversion_action, "
           "metrics.all_conversions, metrics.conversions FROM campaign "
           "WHERE segments.date BETWEEN '{a}' AND '{b}' AND campaign.advertising_channel_type = 'MULTI_CHANNEL'")
-Q_GEO = ("SELECT campaign.app_campaign_setting.app_id, geographic_view.country_criterion_id, "
+Q_GEO = ("SELECT campaign.app_campaign_setting.app_id, campaign.advertising_channel_type, "
+         "geographic_view.country_criterion_id, "
          "geographic_view.location_type, segments.date, segments.conversion_action, metrics.all_conversions "
          "FROM geographic_view WHERE segments.date BETWEEN '{a}' AND '{b}' "
          "AND campaign.advertising_channel_type = 'MULTI_CHANNEL' "

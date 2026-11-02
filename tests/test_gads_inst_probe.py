@@ -38,6 +38,7 @@ class FakeAds:
         if "FROM conversion_action" in q:
             return "CA" if "app_id" in q else "CA_MIN"
         if "FROM geographic_view" in q:
+            assert "campaign.advertising_channel_type, " in q.split("FROM")[0]    # the WHERE's field is selected too
             return "GEO"
         if "segments.conversion_action" in q:
             return "CONV"
