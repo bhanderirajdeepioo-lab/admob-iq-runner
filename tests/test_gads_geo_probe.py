@@ -183,12 +183,17 @@ def test_a_refused_time_zone_asks_the_old_roster_and_spend_is_unchanged(fake, mo
     s = {"google_ads_dev_token": DEV, "google_ads_login_customer_id": MCC, "google_ads_refresh_token": RT,
          "google_ads_client_id": CID, "google_ads_client_secret": CSEC}
     monkeypatch.setattr(google_ads, "_access_token", lambda cid, csec, rt: TOK)
-    refused = google_ads.fetch_app_spend(s, START.isoformat(), END.isoformat(), mode="live")
+    refused = google_ads.fetch_app_spend(s, START.isoformat(), END.isoformat(), mode="live", now=NOW)
     f.tz_refused = False
-    with_tz = google_ads.fetch_app_spend(s, START.isoformat(), END.isoformat(), mode="live")
-    # the spend / installs / convval the build caches are the same with or without the new field — no "tz" leaks in
-    assert json.dumps(refused, sort_keys=True) == json.dumps(with_tz, sort_keys=True)
+    with_tz = google_ads.fetch_app_spend(s, START.isoformat(), END.isoformat(), mode="live", now=NOW)
+    # the spend / installs / convval the build caches are the same with or without the new field — no "tz" leaks in.
+    # Not the read's D0 finality (d1_*): its moments are worked out in each account's own time zone (none known:
+    # D0_NO_TZ) at the read's clock — NOW for both reads, so nothing here depends on when the test runs
+    rest = lambda r: json.dumps({k: v for k, v in r.items() if not k.startswith("d1_")}, sort_keys=True)
+    assert rest(refused) == rest(with_tz)
     assert "tz" not in json.dumps(with_tz) and set(with_tz["daily"]) == {BIG, MID, SMALL}
+    assert refused["d1_zones"] == [google_ads.D0_NO_TZ]                   # the zone whose days end last: never early
+    assert with_tz["d1_zones"] == ["America/Los_Angeles", "Asia/Calcutta"]
 
 
 # ── the probe: requests ─────────────────────────────────────────────────────────────────────────
