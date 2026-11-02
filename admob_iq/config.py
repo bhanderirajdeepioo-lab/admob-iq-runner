@@ -104,6 +104,10 @@ def settings() -> dict:
         # archive (ads_archive/), the rows per campaign × day (ads_campaign_day/), spend by hour (ads_hourly/) and, with
         # GADS_GEO, country × day (ads_geo_day/). Off: nothing of it is asked, written or printed; no existing number moves
         "gads_archive": _env("GADS_ARCHIVE", "false").lower() == "true",
+        # 🆕 First open "installed but never opened" (fetch.gads_inst_day, private data/ only): Google Play's install count
+        # and Google Ads' first opens per app × day × country, every day from the spend history's first. Off: nothing of
+        # it is asked, written or printed
+        "gads_inst": _env("GADS_INST", "false").lower() == "true",
         # the Install value tab's C (new users by app version) and D (long-term by install month) — no new GA4 call,
         # both read the install-day files; off: nothing of them is computed, written or shown (SPEC_CD_GEO §S.1)
         "value_cd": _env("VALUE_CD", "false").lower() == "true",
@@ -132,6 +136,11 @@ def settings() -> dict:
         # GA4_SOURCE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_source": _env("GA4_SOURCE", "false").lower() == "true",
         "ga4_source_budget_sec": _int_env(("GA4_SOURCE_BUDGET_SEC",), 0),
+        # 🆕 First open: GA4 first opens by country × day, every user and Google Ads users (fetch.ga4_newusers: the last 5
+        # days every hour, the history newest first). Off: nothing of it is read, written or printed;
+        # GA4_NEWUSERS_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
+        "ga4_newusers": _env("GA4_NEWUSERS", "false").lower() == "true",
+        "ga4_newusers_budget_sec": _int_env(("GA4_NEWUSERS_BUDGET_SEC",), 0),
         # 📱 Devices: GA4 by phone model × country per install day (fetch.ga4_device: installs, paid, back next day and
         # revenue at 7 / 30 / 90 days, each read once). Off: nothing of it is read, written or printed (the ROI file
         # then has no "dev" block); GA4_DEVICE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)

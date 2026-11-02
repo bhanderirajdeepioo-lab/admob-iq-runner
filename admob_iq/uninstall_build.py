@@ -284,6 +284,15 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                       file=sys.stderr)
         except Exception as e:
             print("ga4 source skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_newusers"):                           # 🆕 First open (GA4_NEWUSERS): first opens by country × day,
+        try:                                            # every user and Google Ads users — own store, a failure costs
+            from .fetch import ga4_newusers as gnu      # that step only
+            with _sc.stage("ga4_newusers"):
+                print(gnu.log_line(gnu.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                   budget=s.get("ga4_newusers_budget_sec") or gnu.BUDGET_SEC)),
+                      file=sys.stderr)
+        except Exception as e:
+            print("ga4 newusers skipped: %s" % type(e).__name__, file=sys.stderr)
     if s.get("ga4_device"):                             # 📱 Devices (GA4_DEVICE): GA4 by phone model × country per
         try:                                            # install day — own store, a failure costs that step only
             from .fetch import ga4_device as gdv

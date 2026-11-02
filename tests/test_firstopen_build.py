@@ -196,7 +196,7 @@ def test_country_part_never_changes_the_app_data(tmp_path, monkeypatch):
     refm = _read(os.path.join(out0, fb.FILE))
     assert "firstopen_cc_" not in json.dumps(refm) and not any(f.startswith("firstopen_cc_") for f in os.listdir(out0))
     line0 = fb.pop_line()
-    assert line0.endswith(", by country: apps 0, countries 0, kb 0")
+    assert line0.endswith(", by country: apps 0, countries 0, kb 0, installs: apps 0, kb 0")
     # an empty country folder and a store with only "none" days change nothing
     os.makedirs(os.path.join(base, fc.DIR))
     write_json_gz_stable(fc.store_path(base, "a~3"), {"v": fc.STORE_V, "app_id": "a~3", "days": {"2026-10-01": {"none": True}}})
@@ -328,3 +328,43 @@ def test_country_file_lists_the_days_ga4_no_longer_has():
     assert body["gone"] == ["2026-08-01", "2026-08-02"] and body["first_day"] == "2026-08-10"
     assert body["gone_fo"] == {"2026-08-01": {"AA": 7, "BB": 1}} and body["nobody"] == ["2026-08-05"]
     assert [d[0] for d in body["days"]] == ["2026-08-10"]               # never a row of zeros for them
+
+
+def test_installs_file_joins_google_ads_and_ga4_by_package(tmp_path):
+    """INSTALLED BUT NEVER OPENED (owner, 2 Nov 2026): the app's Google Ads store-days (by its Play package) and its GA4
+    first opens by country in one lazy file — every day either source has, a source not read for a day = null (never 0),
+    Google Ads' unmapped "XX" and GA4's "(not set)" as one "--"; the "ads" pointer only when written; a stale file removed;
+    an app with neither source gets no file; the app's own data unchanged."""
+    from admob_iq.fetch import gads_inst_day as gi
+    from admob_iq.fetch import ga4_newusers as gn
+    from admob_iq.fetch import ga4_uninstall as gu
+    data, out = _dirs(tmp_path)
+    _store(data, "a~1", 60, 0.5, 0.6)
+    _store(data, "a~2", 60, 0.5, 0.6)
+    fb.run({}, data, out, {}, now=NOW)
+    ref = _read(os.path.join(out, fb.FILE))
+    fb.pop_line()
+    os.makedirs(os.path.join(data, gi.DIR))
+    write_json_gz_stable(os.path.join(data, gi.DIR, "2026-10.json.gz"), {"v": 1, "month": "2026-10", "days": {
+        "com.example.1": {"2026-10-01": {"XA": [10, 9], "XX": [1, 0.5]}, "2026-10-02": {}},
+        "com.example.9": {"2026-10-01": {"XA": [5, 5]}}}})
+    write_json_gz_stable(gn.store_path(data, "a~1"), {"v": gn.STORE_V, "app_id": "a~1", "days": {
+        "2026-10-02": {"a": {"XA": 12, "--": 2}, "p": {"XA": 8}}, "2026-10-03": {"a": {}, "p": {}}}})
+    k1, k2 = gu.file_key("a~1"), gu.file_key("a~2")
+    open(os.path.join(out, "firstopen_ads_0123456789ab.json.gz"), "w").close()
+    dash = {}
+    fb.run(dash, data, out, {}, now=NOW)
+    assert sorted(f for f in os.listdir(out) if f.startswith("firstopen_ads_")) == ["firstopen_ads_%s.json.gz" % k1]
+    body = _read(os.path.join(out, "firstopen_ads_%s.json.gz" % k1))
+    assert body["days"] == [["2026-10-01", [11, 9.5, None, None], {"--": [1, 0.5, None, None], "XA": [10, 9, None, None]}],
+                            ["2026-10-02", [0, 0, 8, 14], {"--": [0, 0, 0, 2], "XA": [0, 0, 8, 12]}],
+                            ["2026-10-03", [None, None, 0, 0], {}]]
+    assert (body["first_day"], body["last_day"], body["ads_from"], body["ga4_from"]) == \
+        ("2026-10-01", "2026-10-03", "2026-10-01", "2026-10-02")
+    got = _read(os.path.join(out, fb.FILE))
+    a1 = next(a for a in got["apps"] if a["key"] == k1)
+    p = a1.pop("ads")
+    assert p["file"] == "firstopen_ads_%s.json.gz" % k1 and (p["from"], p["last"]) == ("2026-10-01", "2026-10-03")
+    assert "ads" not in next(a for a in got["apps"] if a["key"] == k2)
+    assert got == ref                                                    # everything else exactly as without it
+    assert ", installs: apps 1, kb " in fb.pop_line()

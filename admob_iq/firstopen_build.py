@@ -31,6 +31,18 @@ ga4_firstopen_cc, ≥ 1 real day) ONE more lazy file next to it, site/firstopen_
 and the app's entry in firstopen.json.gz gets "cc": {file, v, from, last, n, days} — only when that file was written. A
 failure or a too big file costs only that app's country file; stale country files are removed; the splat rule covers them.
 
+INSTALLED BUT NEVER OPENED (owner, 2 Nov 2026: "google ads ka install bhi dikhao taki pata chale kitna open hi nahi kar
+raha he user"; "google ads se aaya hua aur firebase me dikh rahaa dono"): per app with Google Ads store-days
+(fetch.gads_inst_day, by its Play package) or GA4 first opens by country (fetch.ga4_newusers) ONE more lazy file,
+site/firstopen_ads_<key>.json.gz:
+  {"v", "key", "app_id", "first_day", "last_day", "ads_from" | null, "ga4_from" | null,
+   "days": [[YYYY-MM-DD, [play, ads_fo, ga4_paid, ga4_all] (the day's totals), {cc: [play, ads_fo, ga4_paid, ga4_all]}],
+            …]}   play = Google Play's installs from the app campaigns, ads_fo = Google Ads' first opens (both by the
+           click day, the account's days), ga4_paid / ga4_all = GA4's first opens of Google Ads users / of everyone
+           (the property's days); a part a source has not read for the day = null (never 0); "--" = no country named
+           (Google Ads' unmapped ids and GA4's "(not set)"). Every day either source has, nothing trimmed.
+and the app's entry gets "ads": {file, v, from, last, ads_from, ga4_from} — only when that file was written.
+
 Status, per app: Splash → Home (Home ÷ Splash of the strict funnel) over the last 7 FINAL days (≤ the property's today − 2)
 vs the 28 final days before: down ≥ 5 points Worse, ≥ 2 Watch, up ≥ 5 Better, else Normal; fewer than 35 final days Too
 early; fewer than 200 Splash users in the 7 days (or 400 in the 28) N/A (too little data to judge).
@@ -61,6 +73,8 @@ MIN_DAYS, MIN_SPLASH7, MIN_SPLASH28 = 35, 200, 400
 CC_PREFIX = "firstopen_cc_"
 CC_MAX_GZ = MAX_GZ                  # the same guard, per country file
 CC_RE = re.compile(r"^firstopen_cc_[0-9a-f]{12}\.json\.gz$")
+ADS_PREFIX = "firstopen_ads_"
+ADS_RE = re.compile(r"^firstopen_ads_[0-9a-f]{12}\.json\.gz$")
 CC_KEEP = ("status", "why", "s2h", "usual", "change", "opened", "opened_usual", "fo_day", "fo_day_usual", "final_days",
            "sample")
 LINE = None
@@ -150,6 +164,8 @@ def build_data(dashboard, data_dir, now, counts):
             rows.append([day] + [rec.get(f) if rec.get(f) is not None else (0 if f in ("first_open", "splash", "home")
                                                                           else None) for f in FIELDS] + [rec.get("sample")])
         final_till = (_today(store, now) - timedelta(days=2)).isoformat()
+        if store.get("package"):
+            counts.setdefault("_pkg", {})[key] = str(store["package"])
         apps.append({"key": key, "app": app, "app_id": aid, "steps": store.get("steps"),
                      "steps_changed": store.get("steps_changed") or [], "first_day": rows[0][0], "final_till": final_till,
                      "days": rows})
@@ -319,12 +335,105 @@ def attach_cc(apps, data_dir, out_dir, counts):
     _cc_clean(out_dir, keep)
 
 
+# ── installed but never opened ─────────────────────────────────────────────────────────────────────────────────────
+def ads_file(key):
+    return "%s%s.json.gz" % (ADS_PREFIX, key)
+
+
+def _n2(v):
+    v = round(float(v), 2)
+    return int(v) if v.is_integer() else v
+
+
+def build_ads(key, aid, ads, nu):
+    """One app's Google Ads store-days ({day: {cc: [play, fo]}}, fetch.gads_inst_day) and GA4 first-open store
+    (fetch.ga4_newusers: days {day: {"a": {cc: n}, "p": {cc: n}}}) → its ads file body, or None (neither has a day)."""
+    ad = ads if isinstance(ads, dict) else {}
+    gd = {d: v for d, v in ((nu or {}).get("days") or {}).items() if isinstance(v, dict)}
+    days = sorted(set(ad) | set(gd))
+    if not days:
+        return None
+    cc_ = lambda c: "--" if c in ("XX", "--", "", None) else str(c)
+    out = []
+    for d in days:
+        a_, g = ad.get(d), gd.get(d)
+        base = [0 if a_ is not None else None] * 2 + [0 if g is not None else None] * 2
+        cells = {}
+        for c, v in (a_ or {}).items():
+            e = cells.setdefault(cc_(c), list(base))
+            e[0] += float(v[0] or 0)
+            e[1] += float(v[1] or 0)
+        for j, part in ((2, "p"), (3, "a")):
+            for c, n in ((g or {}).get(part) or {}).items():
+                e = cells.setdefault(cc_(c), list(base))
+                e[j] += int(n or 0)
+        tot = [None if base[j] is None else sum(e[j] for e in cells.values()) for j in range(4)]
+        fix = lambda e: [None if x is None else (_n2(x) if j < 2 else int(x)) for j, x in enumerate(e)]
+        out.append([d, fix(tot), {c: fix(e) for c, e in sorted(cells.items())}])
+    first = lambda src: next((d for d in days if src.get(d) is not None), None)
+    return {"v": V, "key": key, "app_id": aid, "first_day": days[0], "last_day": days[-1], "ads_from": first(ad),
+            "ga4_from": first(gd), "days": out}
+
+
+def _ads_clean(out_dir, keep):
+    try:
+        names = os.listdir(out_dir)
+    except OSError:
+        return
+    for f in names:
+        if ADS_RE.match(f) and f not in keep:
+            try:
+                os.remove(os.path.join(out_dir, f))
+            except OSError:
+                pass
+
+
+def attach_ads(apps, pkgs, data_dir, out_dir, counts):
+    """Every app with Google Ads store-days or GA4 first opens by country: its ads file written, then (only then) its
+    "ads" pointer. One app's failure (or a file over CC_MAX_GZ) costs only that app's file; stale files removed. Never
+    raises."""
+    keep = set()
+    counts.update(ads_apps=0, ads_kb=0, ads_failed=0, ads_big=0)
+    try:
+        from .fetch import gads_inst_day as gi
+        from .fetch import ga4_newusers as gn
+        ads_all = gi.load_all(data_dir)
+        for a in apps:
+            try:
+                nu = gn.load_store(gn.store_path(data_dir, a["app_id"]))
+                body = build_ads(a["key"], a["app_id"], ads_all.get((pkgs or {}).get(a["key"]) or ""), nu)
+                if body is None:
+                    continue
+                raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+                gz = len(gzip.compress(raw, 9, mtime=0))
+                if gz > CC_MAX_GZ:
+                    counts["ads_big"] += 1
+                    continue
+                fn = ads_file(a["key"])
+                write_json_gz_stable(os.path.join(out_dir, fn), body)
+                keep.add(fn)
+                a["ads"] = {"file": fn, "v": hashlib.sha1(raw).hexdigest()[:12], "from": body["first_day"],
+                            "last": body["last_day"], "ads_from": body["ads_from"], "ga4_from": body["ga4_from"]}
+                counts["ads_apps"] += 1
+                counts["ads_kb"] += gz
+            except Exception:
+                a.pop("ads", None)
+                counts["ads_failed"] += 1
+    except Exception:
+        for a in apps:
+            a.pop("ads", None)
+        keep = set()
+        counts["ads_failed"] += 1
+    _ads_clean(out_dir, keep)
+
+
 def _remove(out_dir):
     try:
         os.remove(os.path.join(out_dir, FILE))
     except OSError:
         pass
     _cc_clean(out_dir, set())
+    _ads_clean(out_dir, set())
 
 
 def run(dashboard, data_dir, out_dir, s=None, now=None):
@@ -343,6 +452,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             LINE = "first open: apps 0, skipped %d" % counts.get("skipped", 0)
             return []
         attach_cc(data["apps"], data_dir, out_dir, counts)
+        attach_ads(data["apps"], counts.pop("_pkg", {}), data_dir, out_dir, counts)
         body = dict(data, v=V)
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         gz = len(gzip.compress(raw, 9, mtime=0))
@@ -362,6 +472,9 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                                                                 counts["cc_kb"] // 1024)
         if counts["cc_failed"] or counts["cc_big"]:
             LINE += ", failed %d, too big %d" % (counts["cc_failed"], counts["cc_big"])
+        LINE += ", installs: apps %d, kb %d" % (counts["ads_apps"], counts["ads_kb"] // 1024)
+        if counts["ads_failed"] or counts["ads_big"]:
+            LINE += ", failed %d, too big %d" % (counts["ads_failed"], counts["ads_big"])
         return list(HEADER_PATHS)
     except Exception as e:
         dashboard.pop("firstopen", None)

@@ -147,6 +147,20 @@ def _gads_archive_step(s, data_dir, spend, today):
         print(f"gads archive skipped: {type(_ae).__name__}", file=sys.stderr)
 
 
+@_sc.timed("gads_inst")
+def _gads_inst_step(s, data_dir, spend, today):
+    """The ROAS step, after the archive: Google Play's install count and Google Ads' first opens per app × day × country
+    for the First open tab (fetch.gads_inst_day; private data/ only), only when GADS_INST is on. Its own try — a failure
+    costs only that store's update. `spend` is only read. One counts-only line."""
+    if not s.get("gads_inst"):
+        return
+    try:
+        from .fetch.gads_inst_day import step
+        print(step(s, data_dir, spend, today), file=sys.stderr)
+    except Exception as _ie:
+        print(f"gads inst skipped: {type(_ie).__name__}", file=sys.stderr)
+
+
 def data_quality(repo, totals):
     """Post-fetch integrity check: confirm the stored data has no truncation holes.
     Runs verify_coverage over each report's OWN span (excluding the newest, partial day so a
@@ -1768,6 +1782,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                     print(f"roas cache write skipped: {_ce}", file=sys.stderr)
             _gads_geo_step(s, data_dir, spend, today)          # GADS_GEO only; its own try, reads `spend` only
             _gads_archive_step(s, data_dir, spend, today)      # GADS_ARCHIVE only; its own try, reads `spend` only
+            _gads_inst_step(s, data_dir, spend, today)         # GADS_INST only; its own try, reads `spend` only
             with _sc.stage("gads_store_ids"):
                 store_ids = resolve_store_ids(accounts, data_dir, dashboard.get("apps_catalog"),
                                               client_id=s["google_client_id"], client_secret=s["google_client_secret"],
