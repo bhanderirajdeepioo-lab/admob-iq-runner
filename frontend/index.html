@@ -8396,9 +8396,29 @@ function fcAll(){ const A=ALL, apps=A.apps.filter(x=>uniVis(x.app_id)&&x.fc);
     +`<div class="roi-card"><div class="roi-ct"><h3>Har app · forecast</h3><span class="roi-note">app pe tap = us app ka poora forecast · spend = pichhle 30 din jaisa</span></div><div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th><th>Pichhle 30 din</th><th>Agle 30 din</th><th>Badlav</th><th>Agle 90 din</th><th>Agle 180 din</th><th>Agle N din (max)</th><th>Kitna sahi (30 din)</th></tr></thead><tbody>${body}</tbody></table></div></div>`; }
 // ---- events (one delegated listener on the block; every toggle keeps the tapped control in place) ----
 function hold(r){ r.style.minHeight=Math.max(r.offsetHeight,parseFloat(r.style.minHeight)||0)+'px'; }
+// … and lets it go again (owner, 2 Nov 2026: "iske bad space he lamba blank vo remove kar do" — a shorter view kept the
+// taller one's height: a long blank before 💰 Revenue by source). After the repaint and the scroll back the held height goes
+// down to the content's own as far as the page below the window can give it back: the page below comes up, the tapped
+// control and everything above it stay (a page ending sooner would be scrolled back by the browser — that part stays held).
+// What is left goes as the reader scrolls: each time the blank's part below the window (nothing on screen moves).
+function unhold(r,scroll){ const se=typeof document!=='undefined'&&(document.scrollingElement||document.documentElement), ks=r&&r.children;
+  if(!r||!r.style||!r.style.minHeight||!ks||!se||typeof window==='undefined') return 0;
+  const q=r.getBoundingClientRect(), vh=+window.innerHeight||0; let end=0;
+  for(let i=0;i<ks.length;i++){ const k=ks[i]; if(k.hidden) continue; let cs=null; try{ cs=getComputedStyle(k); }catch(e){}
+    if(cs&&(cs.position==='absolute'||cs.position==='fixed'||cs.display==='none')) continue;   // (the tip)
+    end=Math.max(end,k.getBoundingClientRect().bottom-q.top+((cs&&parseFloat(cs.marginBottom))||0)); }
+  const y=+window.scrollY||0, room=y>0?Math.max(0,(se.scrollHeight||0)-y-vh):Infinity;   // the page below the window (at the top: nothing to scroll back)
+  const x=scroll?Math.min(room,q.top+q.height-Math.max(vh,q.top+end)):room;
+  const h=Math.max(end,q.height-Math.max(0,x));
+  r.style.minHeight=h>end+1?h+'px':'';
+  return r.style.minHeight?1:0; }
+let UNW=false;
+function unholdLater(r){ if(!unhold(r)||UNW||typeof window==='undefined'||!window.addEventListener) return; UNW=true;
+  const on=()=>{ const x=root(); if(x&&x.style.minHeight&&unhold(x,true)) return; UNW=false; window.removeEventListener('scroll',on); };
+  window.addEventListener('scroll',on,{passive:true}); }
 // keep `anchor` where it is on screen across fn() (a repaint): the element `sel` finds afterwards goes back to its top
 function keepAt(r,anchor,sel,fn){ const y0=anchor.getBoundingClientRect().top; hold(r); fn(); const b=sel?r.querySelector(sel):null;
-  if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } }
+  if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } unholdLater(r); }
 // "Show 60 more" / "Show all" (owner, 21 Oct 2026: "show 60 more krte he to table pehle se scroll hoke uppar se start hota
 // he"): the table scrolls inside its own box (.roi-tw: at most 640px high, sideways too) and a repaint draws a new box — at
 // the top and the left again. Before it: the anchor = the last row of the tapped table (its key: data-roi-k) at least partly
@@ -8435,9 +8455,9 @@ function boxBack(r,p){ const rs=r.querySelectorAll('tr[data-roi-k]'); let a=null
 function moreBox(b){ const w=b.closest('.roi-tw'); if(w) return w;                  // the lifetime table: its buttons inside the box
   const m=b.closest('.roi-more'), p=m&&m.previousElementSibling; return p&&p.classList&&p.classList.contains('roi-tw')?p:null; }   // install days: right below it
 function keepRows(r,b,fn){ const w=moreBox(b), p=w?boxAt(w):null;
-  hold(r); fn(); if(!p) return;
-  const a=boxBack(r,p); if(!a) return;
-  const dy=a.getBoundingClientRect().top-p.y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); }
+  hold(r); fn(); const a=p&&boxBack(r,p);
+  if(a){ const dy=a.getBoundingClientRect().top-p.y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); }
+  unholdLater(r); }
 // Mode (ROAS % / Revenue / Per install / Delta): the same rows, the same columns — the page keeps the tapped button (keep),
 // the table's own box keeps the reader's row and column (it used to come back at row 1, column 1 — after "Show all" too)
 function metBox(b){ const c=b.closest('.roi-ctl'), w=c&&c.nextElementSibling; return w&&w.classList&&w.classList.contains('roi-tw')?w:null; }
@@ -8461,7 +8481,7 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     const bn=w.closest('#'+BN.id); if(bn) benchAdd(bn,0); },{capture:true,passive:true});
   document.addEventListener('click',ev=>{ const t=ev.target; const r=t&&t.closest&&t.closest('#roi-root'); if(!r) return; const at=(sel)=>t.closest(sel);
     const h=at('[data-tip]'); if(h){ show(ev,h.getAttribute('data-tip')); return; }
-    const keep=(el,fn)=>{ const y0=el.getBoundingClientRect().top; hold(r); fn(); const sel=el.getAttribute('data-roi-sel'); const b=sel?r.querySelector(sel):null; if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };
+    const keep=(el,fn)=>{ const y0=el.getBoundingClientRect().top; hold(r); fn(); const sel=el.getAttribute('data-roi-sel'); const b=sel?r.querySelector(sel):null; if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } unholdLater(r); };
     const K=cardOf(t), sc=K?'#'+K.id+' ':'';                                     // 🧪 the card tapped: the Benchmark (its state, only it painted) or the cohort card
     let b;
     if((b=at('[data-roi-view]'))){ b.setAttribute('data-roi-sel',`[data-roi-view="${b.dataset.roiView}"]`); keep(b,()=>{ VIEW=b.dataset.roiView; r.querySelectorAll('[data-roi-view]').forEach(x=>x.setAttribute('aria-selected',String(x.dataset.roiView===VIEW))); repaint(); }); return; }

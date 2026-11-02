@@ -913,6 +913,34 @@ def test_show_more_keeps_the_row(out):
             assert abs(t["move"]) <= 1 and t["dy"] > 0 and t["calls"] == 1 and t["intent"] and t["sl"] == [260, 260], (r["name"], t)
 
 
+def test_a_shorter_view_leaves_no_blank(out):
+    """Owner, 2 Nov 2026 ("iske bad space he lamba blank vo remove kar do", an app's Install value): a tap on 📱 Devices after
+    the taller Day-wise view left the Day view's height on the block — a long empty space before 💰 Revenue by source — for
+    good: the tap's held height (no page jump) was never given back. Now, with the page below the block (375 / 1280 px): the
+    tab stays put, no page scroll, the block shrinks to its content right away, nothing held; the same with no page below
+    and the reader at the page's top (nothing for the browser to scroll back). With no page below and the reader at the
+    page's end (the browser would scroll the tab away; 💰 Lifetime P/L after Day-wise): nothing moves and the height stays
+    held; as the reader scrolls up it goes — only the blank's part below the window each step (the part in sight stays, the
+    tab and the page never move), all of it once the blank is below the window. (Before this fix: held for good.)"""
+    u, GAP = out["unhold"], 12          # (the layout model: 6 px after each child — the last one and the hidden tip)
+    for k in ("w375", "w1280", "top375", "top1280", "end375", "end1280"):
+        r = u[k]
+        assert r["view"] == ("life" if k.startswith("end") else "dev") and abs(r["move"]) <= 1 and r["dy"] == 0 and r["calls"] == 0, (k, r)
+    for k in ("w375", "w1280", "top375", "top1280"):
+        r = u[k]
+        assert r["h1"] < r["h0"] - 500 and r["held"] == "" and r["blank"] <= GAP and r["steps"] == [], (k, r)
+    for k in ("end375", "end1280"):
+        r, st = u[k], u[k]["steps"]
+        assert r["held"] and r["h1"] == r["h0"] and r["blank"] > 500, (k, r)       # the page's end: held, nothing moved
+        assert len(st) >= 2 and st[0]["before"] == r["blank"], (k, st)
+        assert any(s["inSight"] > 0 and s["held"] for s in st), (k, st)            # a blank in sight: not pulled away
+        for s in st:
+            assert s["move"] == 0 and s["dy"] == 0 and s["inSight"] <= s["after"] <= s["before"], (k, s)
+            assert s["held"] or s["after"] <= GAP, (k, s)
+        assert st[-1]["held"] == "" and st[-1]["after"] <= GAP, (k, st)
+        assert all(s["held"] for s in st[:-1]) and st[-1]["inSight"] == 0, (k, st)   # gone the step the blank left the window
+
+
 def _side_kept(t):
     """The box's sideways place after a repaint, as the reader sees it: at the left start → still 0; at the right end
     ("So far" in sight) → still at the right end; else the column under the box's visible right edge (gone → the next one

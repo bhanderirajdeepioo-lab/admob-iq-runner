@@ -290,7 +290,8 @@ function miniDom(VW, VH) {
   }
   const walk = (e, fn) => { for (const c of e.childNodes) if (c.nodeType === 1) { fn(c); walk(c, fn); } };
   class El {
-    constructor(tag, at) { this.tagName = tag; this.nodeType = 1; this._a = at || []; this.childNodes = []; this.parentElement = null; this.style = {}; this._st = 0; this._sl = 0; this._L = null; }
+    constructor(tag, at) { this.tagName = tag; this.nodeType = 1; this._a = at || []; this.childNodes = []; this.parentElement = null; this._st = 0; this._sl = 0; this._L = null;
+      this.style = new Proxy({}, { set(o, k, v) { o[k] = v; dirty = true; return true; } }); }   // (a style change: the page laid out again)
     get children() { return this.childNodes.filter(n => n.nodeType === 1); }
     get attributes() { return this._a.map(([name, value]) => ({ name, value })); }
     getAttribute(k) { const x = this._a.find(p => p[0] === k); return x ? x[1] : null; }
@@ -417,6 +418,7 @@ function miniDom(VW, VH) {
     scrollBy(x, y) { lay(); W.calls++; W.y = clampY(W.y + (+((x && typeof x === 'object') ? x.top : y) || 0)); },
     scroll(x, y) { win.scrollTo(x, y); },
     addEventListener(t, f, o) { const s = (o === true || !!(o && o.capture)) ? WL.cap : WL.bub; (s[t] = s[t] || []).push(f); },
+    removeEventListener(t, f) { for (const s of [WL.cap, WL.bub]) if (s[t]) s[t] = s[t].filter(g => g !== f); },
   };
   const doc = {
     get body() { return DOC.getElementsByTagName('BODY')[0]; },
@@ -449,7 +451,7 @@ function longFile(mFrom) {
     life, life_till: day(newest, -1), late: { days: 200, from: '2021-04-23', till: newest }, consts: { final_lag: 3 } };
 }
 // one vm per (width, file): the block painted inside a screen (made-up text above and below it), the reader's taps
-async function keepHarness(VW, file, packs, asked) {
+async function keepHarness(VW, file, packs, asked, belowN) {
   const VH = VW <= 760 ? 740 : 900, D = miniDom(VW, VH), Q = { t: [], raf: [], now: 0, n: 0 };
   const c = Object.assign({}, CTX0, { document: D.doc, window: D.win, Element: D.El, HTMLElement: D.El, getComputedStyle: D.gcs,
     setTimeout: (f, ms) => { Q.t.push({ at: Q.now + (ms || 0), f, n: Q.n++ }); return Q.n; }, requestAnimationFrame: f => { Q.raf.push(f); return Q.raf.length; },
@@ -461,7 +463,7 @@ async function keepHarness(VW, file, packs, asked) {
   const R = c.ROI, U = R._, SP = c.__SP;
   U.data().AF['roi_cccccccccccc.json.gz'] = Object.assign(JSON.parse(JSON.stringify(file)), { _v: 'v1' });
   D.setDoc('<html><head></head><body><main><section class="screen on" data-screen="value"><div class="above">' + 'Install value overview. '.repeat(60)
-    + '</div>' + R.block('id-c') + '<div class="below">' + 'More details below. '.repeat(400) + '</div></section></main></body></html>');
+    + '</div>' + R.block('id-c') + '<div class="below">' + 'More details below. '.repeat(belowN == null ? 400 : belowN) + '</div></section></main></body></html>');
   const micro = () => new Promise(r => setImmediate(r));
   async function drain(ms) {   // microtasks, frames, then the timers in order (SP's 0 / 150 / 400 ms checks)
     await micro(); for (let i = 0; i < 4 && Q.raf.length; i++) { Q.raf.splice(0).forEach(f => f()); await micro(); }
@@ -552,6 +554,34 @@ async function moreKeepAll(dc, packs) {
     res.met.push(await M.run({ VIEW: 'day', GRAIN: 'day', MET: 'roas', CTY: '' }, 'met', ['rev', 'roas'], `${VW} day 60 met`, { sx: 'max' }));   // 60 shown
     for (const cc of ['AA', 'XX'])
       res.met.push(await MC.run({ VIEW: 'day', GRAIN: 'day', MET: 'roas', CTY: cc }, 'met', ['rev', 'ltv', 'delta', 'roas'], `${VW} ${cc} met`, { pre: ['all'], sx: { edge: 'D14' } }));
+  }
+  return res;
+}
+// 📱 a view tab that paints a shorter view (owner, 2 Nov 2026: "iske bad space he lamba blank vo remove kar do" — the block
+// kept the taller view's height for the tap and never gave it back: a long blank before 💰 Revenue by source). The Day view
+// first, then the tab `to`; belowN: the page below the block (400: plenty; 0: none); at: where the reader is when tapping
+// ('tab': the tab 120 px from the window's top; 'top': the page's top; 'end': the page's end). → right after the tap: the
+// tab's move, the page's scroll, the block's height before / after, what stays held and the blank (the block past its
+// content); then the reader scrolling up 300 px at a time (the scroll's own event): the blank before / after, its part in
+// sight, how far the tab and the page moved, what stays held.
+async function unholdRun(VW, belowN, at, to) {
+  const H = await keepHarness(VW, longFile(), null, null, belowN), { D, U, R, drain } = H, VH = VW <= 760 ? 740 : 900;
+  U.set('VIEW', 'day'); U.set('SHOW', 60); R.repaint(); await drain(0);
+  const r = D.q('#roi-root'), tab = () => D.q(`#roi-root [data-roi-view="${to}"]`);
+  const end = () => { const q = r.getBoundingClientRect(); return r.children.filter(k => !k.hidden).reduce((e, k) => Math.max(e, k.getBoundingClientRect().bottom - q.top), 0); };
+  const blank = () => Math.round(r.getBoundingClientRect().height - end());
+  D.lay(); const h0 = r.getBoundingClientRect().height;
+  D.W.y = Math.max(0, at === 'end' ? D.W.docH - VH : at === 'top' ? 0 : tab()._L.top - 120); D.lay();
+  const y0 = tab().getBoundingClientRect().top, sy0 = D.W.y, c0 = D.W.calls;
+  D.fire('pointerdown', tab()); D.fire('click', tab()); await drain(500);
+  const res = { h0, h1: r.getBoundingClientRect().height, move: tab().getBoundingClientRect().top - y0, dy: D.W.y - sy0, calls: D.W.calls - c0,
+    held: r.style.minHeight || '', blank: blank(), view: D.q('#roi-root [data-roi-view][aria-selected="true"]').getAttribute('data-roi-view'), steps: [] };
+  for (let i = 0; i < 40 && D.W.y > 0 && r.style.minHeight; i++) {
+    D.W.y = Math.max(0, D.W.y - 300); D.lay();
+    const q = r.getBoundingClientRect(), b0 = blank(), t0 = tab().getBoundingClientRect().top, y1 = D.W.y;
+    const inSight = Math.round(Math.max(0, Math.min(VH, q.bottom) - Math.max(0, q.top + end())));
+    D.fire('scroll', D.win);
+    res.steps.push({ before: b0, after: blank(), inSight, move: tab().getBoundingClientRect().top - t0, dy: D.W.y - y1, held: r.style.minHeight || '' });
   }
   return res;
 }
@@ -2481,6 +2511,9 @@ async function benchReload(VW, file, packs) {
       w375: await noJump(375, dS, PACKS, F1), w1280: await noJump(1280, dS, PACKS, F1),
       t375: await noJump(375, dS, PACKS, [], nT), t1280: await noJump(1280, dS, PACKS, [], nT) };
     out.more_keep = await moreKeepAll(dc, PACKS);
+    out.unhold = {};
+    for (const VW of [375, 1280]) Object.assign(out.unhold, { ['w' + VW]: await unholdRun(VW, 400, 'tab', 'dev'), ['top' + VW]: await unholdRun(VW, 0, 'top', 'dev'),
+      ['end' + VW]: await unholdRun(VW, 0, 'end', 'life') });
     // 🧪 the Benchmark card: the same table as the cohort card (every file × country × grain × mode), its own state, every
     // row, no page jump, each card's pack / Try again its own
     out.bn_html = await benchHtml([['cty', dc, ['', 'AA', 'EE', '--', 'XX']], ['app', appFile(), ['']], ['late', lateFile(), ['']]], PACKS);
